@@ -4055,7 +4055,8 @@ pub fn profiles_of(us: &UnitStatic, alive: i64, d: f64, sc: &mut Scratch) {
 /// weapon that is within range of it, may fire at it") — rescale the attacks `profiles_of` just filled so a
 /// weapon counts only the models of `a_pos` whose OWN nearest distance to `b_pos` (centre measure, the same as
 /// `geom::dist_in`; `shave` is the inches an advance closes first) is within that weapon's range. A bonus shot
-/// (`extra_attack_q`) never scales with the unit. Callers reach this only with `fire_in_range_only` on; the
+/// (`extra_attack_q`) never scales with the unit. Callers reach this only with `fire_in_range_only` on.
+/// `g` is finite (`max(0.0)` of a distance, never NaN), so `g <= range` equals `!(range < g)`. The
 /// result is never above what `profiles_of` wrote (`models_in_reach <= alive`).
 pub fn reach_rescale(us: &UnitStatic, alive: i64, a_pos: &[[f64; 3]], b_pos: &[[f64; 3]], shave: f64, sc: &mut Scratch) {
     let gaps: Vec<f64> = a_pos
@@ -4067,7 +4068,7 @@ pub fn reach_rescale(us: &UnitStatic, alive: i64, a_pos: &[[f64; 3]], b_pos: &[[
         if p.extra_attack_q > 0 {
             continue;
         }
-        let n = (gaps.iter().filter(|&&g| !((p.range as f64) < g)).count() as i64).min(alive);
+        let n = (gaps.iter().filter(|&&g| g <= p.range as f64).count() as i64).min(alive);
         sc.attacks[k] = effective_attacks(p.attacks, n, us.model_count);
     }
 }
@@ -4075,6 +4076,7 @@ pub fn reach_rescale(us: &UnitStatic, alive: i64, a_pos: &[[f64; 3]], b_pos: &[[
 /// `member_profiles_of` plus the C02 reach rescale, per FIRING member (host and joined heroes each count their
 /// own models) against the target host and, with `hero_attach`, its joined heroes. Knob off = `member_profiles_of`
 /// byte for byte.
+#[allow(clippy::too_many_arguments)]
 pub fn member_profiles_reach(
     statics: &[UnitStatic],
     state: &State,
@@ -4106,9 +4108,11 @@ pub fn member_profiles_reach(
             continue;
         }
         let um = &statics[state.roster.profile[mi]];
-        let mut one = Scratch::default();
-        one.keep = (0..um.shoot.len()).collect();
-        one.attacks = vec![0; um.shoot.len()];
+        let mut one = Scratch {
+            keep: (0..um.shoot.len()).collect(),
+            attacks: vec![0; um.shoot.len()],
+            ..Default::default()
+        };
         reach_rescale(um, state.alive[mi], &state.positions[mi], &b_pos, 0.0, &mut one);
         for (w, p) in um.shoot.iter().enumerate() {
             if let Some(k) = sc.keep.iter().position(|&x| x == idx) {
@@ -5851,6 +5855,7 @@ fn caster_of(statics: &[UnitStatic], state: &State, si: usize, seams: Seams) -> 
 /// The priced pair is the live root ctx (families 2-4 of the blindness
 /// report). Feature reconstruction passes the recording epoch; live callers
 /// use the current epoch through `reply_threat`.
+#[allow(clippy::too_many_arguments)]
 fn volley_ev(
     statics: &[UnitStatic],
     state: &State,
