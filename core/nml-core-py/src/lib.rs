@@ -202,6 +202,13 @@ struct PyLeafValue<'a> {
 
 impl LeafValue for PyLeafValue<'_> {
     fn value(&self, leaves: &[&CoreState], side: i64) -> Result<Vec<f64>, CoreUnsupported> {
+        self.value_for_seat(leaves, side, self.opener_seat)
+    }
+
+    /// `Knobs::reply_by_net`: the opponent's nested reply search asks from ITS seat — the same
+    /// export with that seat's `opener_seat` token.
+    fn value_for_seat(&self, leaves: &[&CoreState], side: i64, opener_seat: bool)
+                      -> Result<Vec<f64>, CoreUnsupported> {
         let (py, mut rows) = (self.fun.py(), self.rows.borrow_mut());
         let batch = PyList::empty(py);
         let park = |e: PyErr| {
@@ -210,7 +217,7 @@ impl LeafValue for PyLeafValue<'_> {
         };
         for st in leaves {
             let t = nmlcore::tokens::build(st, side, self.statics, self.terrain, &mut rows,
-                &[], -1, self.hero_attach, self.opener_seat, self.rules_epoch)?;
+                &[], -1, self.hero_attach, opener_seat, self.rules_epoch)?;
             to_py(py, &t.to_json()).and_then(|d| batch.append(d)).map_err(&park)?;
         }
         self.fun.call1((batch, side)).and_then(|o| o.extract::<Vec<f64>>()).map_err(&park)
@@ -829,6 +836,9 @@ impl Core {
         m.insert("seat_mode".into(), self.knobs.seat_mode.into());
         m.insert("playout_margin".into(), self.knobs.playout_margin.into());
         m.insert("playout_rich".into(), self.knobs.playout_rich.into());
+        m.insert("reply_by_net".into(), self.knobs.reply_by_net.into());
+        m.insert("reply_top_k".into(), self.knobs.reply_top_k.into());
+        m.insert("reply_horizon".into(), self.knobs.reply_horizon.into());
         m.insert("seam_cast".into(), self.knobs.seam_cast.into());
         m.insert("seam_spacing".into(), self.knobs.seam_spacing.into());
         m.insert("seam_path".into(), self.knobs.seam_path.into());

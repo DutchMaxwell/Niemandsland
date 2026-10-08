@@ -212,6 +212,11 @@ fn coordinate_receiver(
     best.map(|(i, _)| i)
 }
 
+/// `Knobs::reply_by_net` — who answers the opponent's FIRST activation after the opener instead of
+/// the scripted brain: given the state and the opponent's seat, its pick (`plan::Search::reply_pick`),
+/// `Ok(None)` when the opponent has nothing left to activate.
+pub type ReplyFn<'r> = dyn FnMut(&State, i64, &mut Scratch) -> Result<Option<Candidate>, Unsupported> + 'r;
+
 /// One rollout's whole configuration: the greedy policy plus the search knobs
 /// the recording ran with (`AiActRecorder._header_line`, act_recorder.gd:118-123).
 #[derive(Clone, Copy)]
@@ -337,6 +342,23 @@ impl<'a> Rollout<'a> {
         horizon_rounds: i64,
         sc: &mut Scratch,
     ) -> Result<(Vec<State>, Stop), Unsupported> {
+        self.rollout_traced_reply(state, first_action, me, horizon_rounds, sc, None)
+    }
+
+    /// `rollout_traced` with the opponent's FIRST reply answered by `reply` instead of the scripted
+    /// brain (`Knobs::reply_by_net`): the first activation after the opener, when it is the
+    /// opponent's, is `reply`'s pick, resolved as the ROOT move it was priced as (`resolve_root`).
+    /// Every later step is today's. A Delayed Action pass in front of it leaves `reply` unasked; an
+    /// opponent with nothing left answers `None` and the round goes on as today. `None` = today.
+    pub fn rollout_traced_reply(
+        &self,
+        state: &State,
+        first_action: &Candidate,
+        me: i64,
+        horizon_rounds: i64,
+        sc: &mut Scratch,
+        mut reply: Option<&mut ReplyFn<'_>>,
+    ) -> Result<(Vec<State>, Stop), Unsupported> {
         let horizon_rounds = if horizon_rounds <= 0 { self.horizon() } else { horizon_rounds };
         let mut out: Vec<State> = Vec::new();
         let mut cur = self.policy.resolve_root(state, first_action)?;
@@ -382,9 +404,18 @@ impl<'a> Rollout<'a> {
             }
             steps += 1;
             // R9: our OWN side steps danger-aware (rich leaf), the imagined
-            // opponent greedily (cheap leaf).
-            let mut a = self.policy.policy_step(&cur, turn, turn == me, sc)?;
+            // opponent greedily (cheap leaf). `reply` answers the FIRST step
+            // only, and only when it is the opponent's (`Knobs::reply_by_net`).
+            let mut forced = false;
+            let mut a = match reply.take() {
+                Some(f) if turn != me => {
+                    forced = true;
+                    f(&cur, turn, sc)?
+                }
+                _ => self.policy.policy_step(&cur, turn, turn == me, sc)?,
+            };
             if a.is_none() {
+                forced = false;
                 turn = other_player(&cur, turn);
                 a = self.policy.policy_step(&cur, turn, turn == me, sc)?;
                 if a.is_none() {
@@ -426,7 +457,7 @@ impl<'a> Rollout<'a> {
                 }
             }
             let a = a.expect("the dry branch returns above");
-            cur = self.policy.resolve(&cur, &a)?;
+            cur = if forced { self.policy.resolve_root(&cur, &a)? } else { self.policy.resolve(&cur, &a)? };
             // Coordinate: the extra activation rides the SAME turn, so the
             // alternation below still flips exactly once. It IS an activation
             // (unlike Delayed Action's pass), so it spends a `steps` of the

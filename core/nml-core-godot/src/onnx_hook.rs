@@ -81,10 +81,15 @@ impl OnnxHook<'_> {
 
 impl LeafValue for OnnxHook<'_> {
     fn value(&self, leaves: &[&State], side: i64) -> Result<Vec<f64>, Unsupported> {
+        self.value_for_seat(leaves, side, self.opener_seat)
+    }
+
+    /// `Knobs::reply_by_net`: the same tokens with another seat's `opener_seat`.
+    fn value_for_seat(&self, leaves: &[&State], side: i64, opener_seat: bool) -> Result<Vec<f64>, Unsupported> {
         let mut rows = self.rows.borrow_mut();
         let tokens = leaves.iter().map(|state| {
             tokens::build(state, side, self.statics, self.terrain, &mut rows,
-                &[], -1, self.hero_attach, self.opener_seat,
+                &[], -1, self.hero_attach, opener_seat,
                 nml_core::acts::CURRENT_RULES_EPOCH)
         }).collect::<Result<Vec<_>, _>>()?;
         Ok(self.run_tokens(&tokens)?.0.into_iter().map(f64::from).collect())
