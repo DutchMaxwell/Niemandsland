@@ -531,7 +531,7 @@ static func _header_line(state: Dictionary, terrain_cb: Callable, school_world: 
 			# exactly the keys above.
 			# Tree plan step 13: the tree search knobs, ONLY those an env var set
 			# (AiPlanner.tree_knobs), so an unset game writes exactly the keys above.
-			"rules_epoch": rules_epoch}.merged(AiPlanner.tree_knobs()).merged(AiPlanner.brain_knob_stamp())}
+			"rules_epoch": rules_epoch}.merged(AiPlanner.tree_knobs()).merged(AiPlanner.brain_knob_stamp()).merged(AiPlanner.points_knob_stamp())}
 	# D8a: additive, and only when the harness armed the rulebook generator — an unset
 	# run's header keeps exactly the keys it had before.
 	if not objectives_stamp.is_empty():
