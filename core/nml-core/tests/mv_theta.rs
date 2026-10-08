@@ -488,3 +488,62 @@ fn the_wall_index_answers_exactly_like_the_scan() {
     assert!(blocked > 1000 && blocked < 59_000, "the draw must exercise both answers, got {blocked}");
 }
 
+/// aifix route lane: the planner's `CostMemo` answers EXACTLY what `terrain_cost_at` answers — same grid, same options,
+/// bit for bit — over 40,000 random points (board and outside), with typed cells, both avoid sets and the debuff flags;
+/// `segment_cost` and the `cspace_blocked` terrain half agree through it as well.
+#[test]
+fn the_cost_memo_answers_exactly_like_terrain_cost_at() {
+    use nml_core::mv::cost::{cspace_blocked, segment_cost, terrain_cost_at, CellSet, CostMemo, WallIndex};
+    use nml_core::mv::geom2::V2;
+    let mut seed = 0x9E37_79B9_7F4A_7C15u64;
+    let mut rnd = move || {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        (seed >> 11) as f64 / (1u64 << 53) as f64
+    };
+    for round in 0..8 {
+        let (mut grid, mut avoid, mut fine) = (Grid::default(), CellSet::default(), CellSet::default());
+        for cx in 0..24 {
+            for cz in 0..16 {
+                if rnd() < 0.45 {
+                    grid.insert((cx, cz), (rnd() * 5.0) as i64);
+                }
+                if round % 2 == 1 && rnd() < 0.05 {
+                    avoid.insert((cx, cz));
+                }
+            }
+        }
+        for fx in 0..72 {
+            for fz in 0..48 {
+                if round >= 4 && rnd() < 0.03 {
+                    fine.insert((fx, fz));
+                }
+            }
+        }
+        let opts = StepOpts {
+            ledges: &[],
+            clearance: 0.5,
+            zones: &[],
+            avoid_cells: &avoid,
+            avoid_fine: &fine,
+            dangerous_debuff: round == 2,
+            difficult_debuff: round == 3,
+        };
+        let mut memo = CostMemo::new(72, 48);
+        for _ in 0..5000 {
+            let p: V2 = [(rnd() * 80.0 - 4.0) as f32, (rnd() * 56.0 - 4.0) as f32];
+            let (a, b) = (memo.cost(p, &grid, &opts), terrain_cost_at(p, &grid, &opts));
+            assert!(a == b, "round {round} point {p:?}: memo {a} vs direct {b}");
+            let q: V2 = [(rnd() * 72.0) as f32, (rnd() * 48.0) as f32];
+            assert_eq!(memo.segment_cost(p, q, &grid, &opts), segment_cost(p, q, &grid, &opts), "round {round} segment");
+            // cspace_blocked = the step test (walls, discs, avoid sets) OR the sampled terrain: the index + the memo's tail
+            let wi = WallIndex::new(&[]);
+            assert_eq!(
+                wi.step_blocked(p, q, &opts) || memo.cspace_tail(p, q, &grid, &opts),
+                cspace_blocked(p, q, &[], &grid, &opts),
+                "round {round} cspace"
+            );
+        }
+    }
+}
