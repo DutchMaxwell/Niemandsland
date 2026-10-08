@@ -46,7 +46,8 @@ a **hard** kill (`SIGKILL` / OOM / power loss), which runs no shutdown code.
 Three ways to read them, all returning the same blob:
 
 - **`GET /stats`** — public JSON over HTTPS (same listener as the WebSocket; no auth, like
-  `list_rooms`): `curl https://niemandsland-relay.fly.dev/stats`.
+  `list_rooms`): `curl https://niemandsland-relay.fly.dev/stats`. It also names the serving instance
+  (`machine` = `FLY_MACHINE_ID`, `region` = `FLY_REGION`; empty off Fly) so a second machine is visible.
 - **`get_stats`** WebSocket control message — used by `relay_stats.py` (`python relay_stats.py`).
 - **Hourly `STATS` log line** — one JSON line at INFO, prefixed `STATS`, captured by Fly's log
   stream so history survives restarts. `stats_digest.py` turns a captured log into a weekly digest:

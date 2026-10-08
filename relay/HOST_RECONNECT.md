@@ -106,6 +106,7 @@ takes a custom relay URL). Host + join, then:
 
 ## Deploy (only after the local test passes)
 
-`fly deploy -c relay/fly.toml` (needs `flyctl`; not installed in the dev sandbox — run
+`fly deploy -c relay/fly.toml --ha=false` (`--ha=false` keeps it to ONE machine: rooms and stats live in
+per-process memory and one volume, so a second machine splits both; needs `flyctl`; not installed in the dev sandbox — run
 it from a machine that has it, or via the relay's CI if configured). Smoke-test one
 host+guest session against fly.dev afterwards.
