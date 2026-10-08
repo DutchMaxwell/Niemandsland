@@ -955,6 +955,9 @@ func _ready() -> void:
 	# data, so they skip the chooser.
 	var table_setup: Dictionary = ProjectSettings.get_setting("niemandsland/pending_table_setup",{})
 	ProjectSettings.set_setting("niemandsland/pending_table_setup",null)
+	var rules_line := RulesAutomation.apply_table_setup(table_setup,opr_army_manager)
+	if rules_line != "":
+		_log_rule_event(BattleLog.Category.GENERAL,rules_line)
 	var joining_client: bool = pending_internet and not ProjectSettings.get_setting("niemandsland/internet_is_host", false)
 	# Headless MP test harness (test/mp/): skip the interactive table-size chooser AND the
 	# cinematic intro and drop straight onto a live, RPC-capable table. Inert in normal play.
