@@ -66,6 +66,15 @@ func test_s05_three_steps_complete(timeout := 120000) -> void:
 	_main.unit_dock.present_unit(alpha)
 	assert_bool(await _wait_index(1)).is_true()   # card presented
 
+	var far := _find("far")
+	assert_object(far).is_not_null()
+	# The further Warriors squad is over 24" away: the targeting gate refuses it, so the shoot step
+	# (shoot:alpha) cannot be satisfied by shooting the wrong squad.
+	assert_str(_main._solo_validate_target(alpha, far, false)) \
+		.override_failure_message("the far squad must be refused as out of range") \
+		.contains("out of range")
+	assert_int(_lesson.current_index()).is_equal(1)   # the refused far shot advanced nothing
+
 	var target := _find("target")
 	assert_object(target).is_not_null()
 	await _main._run_human_attack(alpha, target, false)
