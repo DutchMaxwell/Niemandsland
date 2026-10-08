@@ -222,6 +222,11 @@ pub struct Knobs {
     /// round `rounds_total`). Research knob for the A/B, default OFF.
     #[serde(default)]
     pub no_end_threat: bool,
+    /// Inventory C02 — the AI's imagined volley lets only the models whose own distance to the target is
+    /// within a weapon's range fire it (GF/AoF v3.5.1 p.8), instead of every living model once the nearest
+    /// pair is in range. Research knob for the A/B, default OFF (byte-identical).
+    #[serde(default)]
+    pub fire_in_range_only: bool,
     /// aifix D1 — see `Seams::morale_by_probability`. Research knob, default OFF.
     #[serde(default)]
     pub morale_by_probability: bool,
@@ -1470,6 +1475,7 @@ impl Default for Knobs {
             dangerous_end_morale: false,
             opener_by_finish: false,
             no_end_threat: false,
+            fire_in_range_only: false,
             morale_by_probability: false,
             reply_v2: false,
             reply_skip_activated: false,

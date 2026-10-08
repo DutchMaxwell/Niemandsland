@@ -655,6 +655,10 @@ pub struct Seams {
     /// deterministic dither) instead of the 50 % cliff. Default OFF.
     #[serde(default)]
     pub morale_by_probability: bool,
+    /// Inventory C02 — see `Knobs::fire_in_range_only`: the imagined volley prices only the models within a
+    /// weapon's range. Default OFF.
+    #[serde(default)]
+    pub fire_in_range_only: bool,
     /// aifix D2 — the reply threat also prices charges (`melee_threat`, inside
     /// 12") and skips Shaken enemies. Default OFF.
     #[serde(default)]
@@ -726,6 +730,7 @@ impl Seams {
             v2: self.reply_v2,
             skip_activated: self.reply_skip_activated,
             hold_gate: self.reply_hold_gate,
+            reach_only: self.fire_in_range_only,
         }
     }
 }

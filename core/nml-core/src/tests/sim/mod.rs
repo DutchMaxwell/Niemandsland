@@ -1772,6 +1772,8 @@ mod retreating_strike;
     mod screened_melee;
 
     mod self_destruct;
+
+    mod fire_in_range;
 mod shaken_strikeback;
 mod second_wind;
 mod second_wind_score;
