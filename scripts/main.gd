@@ -9952,10 +9952,17 @@ func _solo_consolidate_melee(charger: GameUnit, defender: GameUnit, auto: bool =
 	var survivor: GameUnit = charger if charger_alive else defender
 	if _solo_is_ai_unit(survivor) or auto:
 		var dang2: int = solo_controller.consolidate_after_melee_win(survivor)
-		if not solo_controller.last_move_paths.is_empty():
-			if battle_log != null:
+		if battle_log != null:
+			# The rule is applied even when the survivor has nowhere to go: then it just holds its
+			# ground, but it still consolidates — so the event must log either way (house rule: every
+			# applied rule logs). A missing line here stalled the Game School S-06 consolidation step.
+			if solo_controller.last_move_paths.is_empty():
+				battle_log.log_event(BattleLog.Category.COMBAT,
+					"%s holds its ground (consolidation — GF v3.5.1 p.9)" % survivor.get_name(), true)
+			else:
 				battle_log.log_event(BattleLog.Category.COMBAT,
 					"%s consolidates up to 3\" (enemy destroyed — GF v3.5.1 p.9)" % survivor.get_name(), true)
+		if not solo_controller.last_move_paths.is_empty():
 			await _solo_animate_move(solo_controller.last_move_paths, false)   # NML-208: always glides
 		if dang2 > 0:
 			await _run_ai_dangerous(survivor, dang2)
