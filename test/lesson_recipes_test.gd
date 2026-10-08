@@ -42,6 +42,14 @@ func test_s03_recipe_is_a_standard_empty_table_with_front_line_zones() -> void:
 	assert_array(recipe.get("sides", [])).is_empty()
 
 
+func test_recipe_schema_names_the_combat_seam_keys() -> void:
+	assert_bool(LessonRecipes.RECIPE_KEYS.has("ai_slots")).is_true()
+	for key in ["shaken", "fatigued", "dead"]:
+		assert_bool(LessonRecipes.UNIT_KEYS.has(key)) \
+			.override_failure_message("unit key '%s' must be part of the recipe schema" % key) \
+			.is_true()
+
+
 func test_every_recipe_pick_exists_in_its_fixture() -> void:
 	for id in ["S-01", "S-02", "S-03"]:
 		var recipe := LessonRecipes.recipe(id)
