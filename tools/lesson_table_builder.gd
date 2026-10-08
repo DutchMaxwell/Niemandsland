@@ -161,8 +161,7 @@ func _apply_cells(layout: Control, cells: Array) -> void:
 		for cx in range(x0, x1 + 1):
 			for cy in range(y0, y1 + 1):
 				layout.free_cells[Vector2i(cx, cy)] = t
-	layout._rebuild_derived()
-	layout._emit_layout_update()
+	layout._rebuild_derived()   # also emits the layout update — no second _emit_layout_update()
 
 
 ## Start a lesson unit in the state its step teaches: Shaken, Fatigued, or with parked casualties.

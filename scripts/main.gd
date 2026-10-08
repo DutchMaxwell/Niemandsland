@@ -4111,8 +4111,6 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s (%s): shot from over 9\" — +1 Defense (saves on %d+)" % [
 				target.get_name(), over9_rule, AiCombatMath.shown_target(base_defense)], true)
 	var covered_defense: int = _solo_cover_defense(target, base_defense)   # +1 Defense if majority in cover
-	if covered_defense < base_defense and battle_log != null:
-		battle_log.log_event(BattleLog.Category.COMBAT, "%s is in cover: +1 Defense vs shooting" % target.get_name(), true)
 	# Resolver wave A — vs-target Marks: the bearer's pick lands on THIS volley's target.
 	_solo_apply_vs_marks(attacker, target, dist_in)
 	# Coverage wave — Piercing Tag: friendly attackers spend the markers for +AP on this volley.
@@ -4136,6 +4134,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 	var landed_extra := 0   # NML-966 gap B: Deadly/Takedown wounds landed outside the regen pool
 	var total_hits := 0
 	var total_caused := 0
+	var cover_logged := false   # I4: log Cover once, only when a shot's save really used it
 	# Unpredictable (generic army-book rule — "when attacking": the SHOOTING leg; the wave-4 melee-only
 	# Unpredictable Fighter lives in the melee path): ONE die per volley for the whole unit —
 	# 1-3 → AP(+1), 4-6 → +1 to hit on every profile it fires (same arithmetic, same visible tray).
@@ -4279,6 +4278,11 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		# DEFENDER is itself AI, the saves auto-roll on the real tray (no human prompt) — the human_defends flag
 		# is derived, never assumed, so an AI-vs-AI game resolves shooting unattended.
 		var save_def: int = shot_base if (int(profile.get("blast", 0)) > 1 or bool(profile.get("indirect", false)) or bool(profile.get("ignores_cover", false))) else shot_cover
+		if td_ctx.is_empty() and not cover_logged and battle_log != null \
+				and AiCombatMath.shot_uses_cover(save_def, shot_cover, shot_base):
+			cover_logged = true   # I4: only claim Cover when the roll truly saved at the covered value
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s is in cover: +1 Defense (saves on %d+)" % [
+				target.get_name(), AiCombatMath.shown_target(save_def)], true)
 		var is_deadly: bool = int(profile.get("deadly", 0)) > 0
 		# TC-023: the saves are the PICKED MODEL's — rolled by its own GameUnit, so a sniped attached
 		# hero blocks on HIS Defense (and his own Fortified / conditional-AP profile), not the host's.
@@ -11866,8 +11870,6 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s (%s): shot from over 9\" — +1 Defense (saves on %d+)" % [
 				target.get_name(), h_over9, AiCombatMath.shown_target(shielded_def)], true)
 	var covered_def: int = _solo_cover_defense(target, shielded_def)
-	if covered_def < shielded_def and battle_log != null:
-		battle_log.log_event(BattleLog.Category.COMBAT, "%s is in cover: +1 Defense vs shooting" % target.get_name(), true)
 	# Resolver wave A parity: your volley places vs-target Marks, SPENDS Piercing-Tag markers and
 	# honours the Reckless-Piercing AP stamps — the AI path had these seams, yours silently didn't.
 	_solo_apply_vs_marks(attacker, target, dist)
@@ -11888,6 +11890,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s: %d/%d model%s with line of sight + range" % [
 			attacker.get_name(), _solo_sighted_count(attacker, target, rng_in, log_indirect), total, ("" if total == 1 else "s")], true)
 	var fired_any := false   # round 7, finding 5: a volley that rolls NOTHING must say so, never end silently
+	var cover_logged := false   # I4: log Cover once, only when a shot's save really used it
 	# Maintainer 31.07.: the attacker CHOOSES how many markers to remove (caster-points style).
 	var spot_hit: int = await _solo_offer_spot_markers(attacker, target)
 	var tag_hit: int = _solo_consume_tag_markers(target)   # Precision Tag: the spot pool's +1-per-removal twin
@@ -12017,6 +12020,11 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 				continue
 			# Blast (GF v3.5.1) and Indirect (wave 5) ignore cover — saves at the Shielded (uncovered) Defense.
 			var save_def: int = shot_base if (int(profile.get("blast", 0)) > 1 or bool(profile.get("indirect", false)) or bool(profile.get("ignores_cover", false))) else shot_cover
+			if td_ctx.is_empty() and not cover_logged and battle_log != null \
+					and AiCombatMath.shot_uses_cover(save_def, shot_cover, shot_base):
+				cover_logged = true   # I4: only claim Cover when the roll truly saved at the covered value
+				battle_log.log_event(BattleLog.Category.COMBAT, "%s is in cover: +1 Defense (saves on %d+)" % [
+					target.get_name(), AiCombatMath.shown_target(save_def)], true)
 			# B5 (test game 2): the HUMAN volley now mirrors the AI's per-model landing — Takedown
 			# wounds go to the model the PLAYER picks (click), Deadly lands ×X on one model with no
 			# carry-over. Both previously pooled into the defender-optimal removal, so the player's

@@ -105,7 +105,7 @@ const _S08_STEPS := [
 		"rule": "p.11", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
 	{"id": "shoot_cover", "text": "Shoot the enemy in cover and watch the +1 in the log. (p.11)",
 		"rule": "p.11", "all": [{"check": "counter_grew", "args": {"key": "shoot:alpha"}}]},
-	{"id": "wall", "text": "The ruins wall is blocking terrain: nobody sees or shoots through it, then press Continue. (p.11)",
+	{"id": "wall", "text": "Ruins are area terrain: units can see into and out of them, but not through — nobody shoots through the ruins, then press Continue. (p.11)",
 		"rule": "p.11", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
 ]
 

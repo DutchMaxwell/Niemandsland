@@ -7,7 +7,7 @@ extends RefCounted
 ## `wounds`: N whole wounds pre-placed on a SINGLE-model Tough unit's model (the Tough(3)
 ## half-strength case) — the pooled `dead` key cannot express a partially-wounded lone model.
 ## `cells`: terrain rectangles painted into the layout's free cells (world-centred inches; type is
-## the TerrainType enum: 1 ruins, 2 forest, 4 dangerous).
+## the TerrainType enum: 1 ruins, 2 forest, 3 container, 4 dangerous).
 const RECIPE_KEYS := ["size_feet", "biome", "deployment", "phase", "round", "sides", "ai_slots", "cells"]
 const UNIT_KEYS := ["name", "nth", "tag", "at_in", "label", "shaken", "fatigued", "dead", "wounds"]
 
