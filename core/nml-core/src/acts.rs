@@ -40,6 +40,7 @@ pub struct Knobs {
     /// own activation and its Coordinate hand-off) and is priced there, mid-round, by the same blend +
     /// net leaf: no scripted opponent reply, no scripted tail. A tail cap cannot say this (0 = no cap,
     /// 1 = one scripted step). Research knob, default OFF (byte-identical).
+    /// Inert under `search_mode` tree: a tree leaf is priced at its own state already (tree.rs).
     #[serde(default)]
     pub leaf_opener_only: bool,
     #[serde(default)]
@@ -57,6 +58,7 @@ pub struct Knobs {
     /// `reply_top_k` / `reply_horizon`, the leaf hook (when wired) priced from the opponent's seat,
     /// instead of the scripted four-option brain; the rest of the tail stays scripted
     /// (`plan::Search::reply_pick`). Research knob, default OFF (byte-identical).
+    /// Inert under `search_mode` tree, which runs no rollout: its opponent nodes search the full menu (tree.rs).
     #[serde(default)]
     pub reply_by_net: bool,
     /// `reply_by_net`'s rollout budget; `<= 0` = `plan::REPLY_TOP_K` (3).

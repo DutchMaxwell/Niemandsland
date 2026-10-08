@@ -2,6 +2,11 @@
 //! default-off tree search knob. This file is its skeleton: the node model
 //! and the activation walk; leaves, chance edges, expansion and selection
 //! land on top of it.
+//!
+//! The one-ply's opponent-model knobs (`leaf_opener_only`, `reply_by_net` and its `reply_*` family) are inert
+//! here: no tree leaf is priced by a rollout (`Blend` = the node's own state, `Terminal` = a uniform playout), and
+//! an opponent node searches its full menu like the searcher's. The scripted brain's one reach into the tree is
+//! the Coordinate receiver's pick (`Rollout::coordinate_hand_off`), as in the one-ply.
 
 use serde_json::Value;
 
