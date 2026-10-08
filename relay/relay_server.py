@@ -171,7 +171,21 @@ class Stats:
         self.peers_per_room = {str(n): 0 for n in range(1, MAX_PEERS_PER_ROOM + 1)}
         self.first_seen = ""
         self.last_updated = ""
+        self._persistence_broken = False  # latch: warn once, not on every counter update
         self._load()
+
+    def _warn_persistence(self, action: str, exc: Exception) -> None:
+        """Report a stats-persistence failure ONCE per process, so a detached or mis-set volume is
+        visible in the Fly log stream instead of silently zeroing the counters on every restart.
+        No PII here: only the action ('reading'/'writing'), the OS error and the file path."""
+        if self._persistence_broken:
+            return
+        self._persistence_broken = True
+        logger.warning(
+            "stats persistence unavailable (%s %r): counters are in-memory only and will reset on "
+            "the next machine start — check the Fly volume mounted at RELAY_STATS_PATH",
+            action, exc,
+        )
 
     def _load(self) -> None:
         if not self.path:
@@ -193,8 +207,12 @@ class Stats:
                         except (ValueError, TypeError):
                             pass
             self.first_seen = str(data.get("first_seen", ""))
-        except (OSError, ValueError, TypeError):
-            pass  # first run / unreadable / corrupt -> start fresh, never crash the relay
+        except FileNotFoundError:
+            pass  # first run: no file yet -> start fresh (expected, not a fault)
+        except (OSError, ValueError, TypeError) as exc:
+            # Unreadable / corrupt / permission-denied: start fresh, never crash — but SAY so, because a
+            # detached or mis-set volume otherwise looks exactly like "the counters reset to zero".
+            self._warn_persistence("reading", exc)
 
     def _save(self) -> None:
         if not self.path:
@@ -205,8 +223,10 @@ class Stats:
             with open(tmp, "w") as f:
                 json.dump(self.snapshot(), f)
             os.replace(tmp, self.path)  # atomic so a crash mid-write can't corrupt the file
-        except OSError:
-            pass  # volume unavailable -> in-memory only
+        except OSError as exc:
+            # Volume unavailable -> in-memory only (never crash), but warn once: otherwise a stopped or
+            # detached volume silently zeroes the counters on the next machine start, with no clue.
+            self._warn_persistence("writing", exc)
 
     def boot(self) -> None:
         """Count one server start (≈ one play session, since the relay scales to zero)."""
@@ -588,8 +608,12 @@ class RelayServer:
     def _stats_payload(self) -> dict:
         """The public aggregate-stats blob (NO PII) shared by the get_stats WS reply, the GET /stats
         HTTP endpoint and the periodic STATS log line: the persisted totals / peaks / histograms plus
-        the live open-rooms and connected-peers counts."""
+        the live open-rooms and connected-peers counts. `machine` / `region` name the serving Fly
+        instance (infrastructure ids, "" off Fly) so a second machine behind one hostname, each with
+        its own stats volume, is visible from a single curl."""
         return {
+            "machine": os.environ.get("FLY_MACHINE_ID", ""),
+            "region": os.environ.get("FLY_REGION", ""),
             "rooms_open": len(self.rooms),
             "peers_connected": len(self.connections),
             **self.stats.snapshot(),

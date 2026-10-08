@@ -11,6 +11,7 @@ var _army_manager: Node
 var _table: Node
 var _map_layout: Node
 var _left_panel: CanvasItem
+var _main: Node
 var _counters: Dictionary = {}
 
 
@@ -21,9 +22,16 @@ func setup(refs: Dictionary) -> void:
 	_table = refs.get("table")
 	_map_layout = refs.get("map_layout")
 	_left_panel = refs.get("left_panel")
+	_main = refs.get("main")
 	if _object_manager != null and _object_manager.has_signal("measurement_finished"):
 		if not _object_manager.measurement_finished.is_connected(_on_measurement_finished):
 			_object_manager.measurement_finished.connect(_on_measurement_finished)
+	if _main != null and _main.has_signal("human_attack_resolved"):
+		if not _main.human_attack_resolved.is_connected(_on_human_attack_resolved):
+			_main.human_attack_resolved.connect(_on_human_attack_resolved)
+	if _main != null and _main.has_signal("human_cast_resolved"):
+		if not _main.human_cast_resolved.is_connected(_on_human_cast_resolved):
+			_main.human_cast_resolved.connect(_on_human_cast_resolved)
 
 func snapshot() -> Dictionary:
 	var facts := {"yaw": 0.0, "cam_dist": 0.0, "pivot": Vector3.ZERO,
@@ -86,6 +94,24 @@ func bump(key: String) -> void:
 
 func _on_measurement_finished(_distance_inches: float) -> void:
 	bump("measure")
+
+
+func _on_human_attack_resolved(attacker: GameUnit, melee: bool) -> void:
+	_bump_tag("melee" if melee else "shoot", attacker)
+
+
+func _on_human_cast_resolved(unit: GameUnit) -> void:
+	_bump_tag("cast", unit)
+
+
+## Count an event against a lesson unit's tag. Untagged (non-lesson) units are not the lesson's business.
+func _bump_tag(prefix: String, unit: GameUnit) -> void:
+	if unit == null:
+		return
+	var tag := String(unit.unit_properties.get("lesson_tag", ""))
+	if tag.is_empty():
+		return
+	bump("%s:%s" % [prefix, tag])
 
 
 ## Free-placed and grid terrain pieces the object manager is responsible for, each counted once.
