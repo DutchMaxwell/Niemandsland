@@ -83,15 +83,20 @@ func test_s07_four_steps_complete(timeout := 60000) -> void:
 	card.continue_pressed.emit()
 	assert_bool(await _wait_index(1)).is_true()   # read the S token
 
+	_main.unit_dock.present_unit(tough)
+	card.continue_pressed.emit()
+	assert_bool(await _wait_index(2)).is_true()   # read the half-strength Tough model card
+
 	_main.radial_menu_controller.card_toggle_activation(shaken)
 	if shaken.is_shaken:
 		_main.radial_menu_controller.card_toggle_shaken(shaken)
-	assert_bool(await _wait_index(2)).is_true()   # idled, activated and recovered
+	card.continue_pressed.emit()
+	assert_bool(await _wait_index(3)).is_true()   # idled, activated and recovered
 
 	var alpha := _find("alpha")
 	assert_object(alpha).is_not_null()
 	await _main._run_human_attack(alpha, target, false)
-	assert_bool(await _wait_index(3)).is_true()   # shot the half-strength squad
+	assert_bool(await _wait_index(4)).is_true()   # the volley forced the morale test
 
 	card.continue_pressed.emit()
 	var progress := SpielschuleProgress.new(TEST_CFG)
@@ -104,6 +109,8 @@ func test_s07_four_steps_complete(timeout := 60000) -> void:
 	assert_bool(progress.is_completed("S-07")) \
 		.override_failure_message("S-07 not completed: index=%d" % _lesson.current_index()) \
 		.is_true()
+	# The lesson must finish inside round 1: Battleborn only recovers at a round START.
+	assert_int(int(_main.opr_army_manager.current_round)).is_equal(1)
 	await Boot.settle(get_tree())
 
 

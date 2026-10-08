@@ -39,13 +39,20 @@ func test_unknown_chapter_has_no_steps() -> void:
 
 func test_step_texts_never_leak_lesson_tags() -> void:
 	# The player sees unit names, not lesson tags (chapter 1 sets the tone: "one of your models").
-	# A stamped display name like "Alpha Squad" is fine; the bare tag is not.
+	# A stamped display name like "Alpha Squad" is fine; the bare tag is not. The rule words
+	# "Shaken"/"Tough(3)" are capitalised game terms and are allowed — only the bare lowercase tag
+	# would be a leak, so the second check is case-sensitive.
 	var leak := RegEx.create_from_string("(?i)\\b(?:alpha|bravo|far|target)\\b(?! squad)")
+	var bare_tag := RegEx.create_from_string("\\b(?:shaken|tough)\\b")
 	for chapter_id in ["S-01", "S-02", "S-03", "S-04", "S-05", "S-06", "S-07"]:
 		for step in SpielschuleLessons.steps_for(chapter_id):
 			var text := String(step.get("text", ""))
 			assert_bool(leak.search(text) != null) \
 				.override_failure_message("%s step '%s' leaks a lesson tag: %s" % [
+					chapter_id, step.get("id", ""), text]) \
+				.is_false()
+			assert_bool(bare_tag.search(text) != null) \
+				.override_failure_message("%s step '%s' leaks a bare tag: %s" % [
 					chapter_id, step.get("id", ""), text]) \
 				.is_false()
 
@@ -77,6 +84,6 @@ func test_s06_has_five_steps_and_holds_the_ai() -> void:
 	assert_str(SpielschuleLessons.ai_mode("S-06")).is_equal("hold")
 
 
-func test_s07_has_four_steps_and_holds_the_ai() -> void:
-	assert_array(SpielschuleLessons.steps_for("S-07")).has_size(4)
+func test_s07_has_five_steps_and_holds_the_ai() -> void:
+	assert_array(SpielschuleLessons.steps_for("S-07")).has_size(5)
 	assert_str(SpielschuleLessons.ai_mode("S-07")).is_equal("hold")

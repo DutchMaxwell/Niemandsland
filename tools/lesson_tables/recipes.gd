@@ -48,10 +48,10 @@ static func recipe(id: String) -> Dictionary:
 	if id == "S-07":
 		return {"size_feet": Vector2(4, 4), "biome": "temperate_grassland",
 			"deployment": -1, "phase": 1, "round": 1, "ai_slots": [2], "sides": [
-				{"player": 1, "fixture": "res://assets/tutorial/tutorial_army_p2.json", "units": [
-					{"name": "Warriors", "nth": 1, "tag": "shaken", "label": "Charlie Squad", "shaken": true, "at_in": Vector2(-8, 14)},
-					{"name": "Warriors", "nth": 2, "tag": "alpha", "label": "Alpha Squad", "at_in": Vector2(8, 10)}]},
-				{"player": 2, "fixture": "res://assets/tutorial/tutorial_army_p1.json", "units": [
-					{"name": "Battle Brothers", "nth": 1, "tag": "target", "label": "Nachtmahr Squad", "dead": 5, "at_in": Vector2(0, -8)},
-					{"name": "Master Brother", "nth": 1, "tag": "tough", "label": "Nachtmahr Leader", "wounds": 2, "at_in": Vector2(6, -12)}]}]}
+				{"player": 1, "fixture": "res://assets/tutorial/tutorial_army_p1.json", "units": [
+					{"name": "Battle Brothers", "nth": 1, "tag": "alpha", "label": "Alpha Squad", "at_in": Vector2(8, 10)},
+					{"name": "Battle Brothers", "nth": 2, "tag": "shaken", "label": "Charlie Squad", "shaken": true, "at_in": Vector2(-8, 14)}]},
+				{"player": 2, "fixture": "res://assets/tutorial/tutorial_army_p2.json", "units": [
+					{"name": "Warriors", "nth": 2, "tag": "target", "label": "Nachtmahr Squad", "dead": 5, "at_in": Vector2(0, -8)},
+					{"name": "Robot Lord", "nth": 1, "tag": "tough", "label": "Nachtmahr Leader", "wounds": 2, "at_in": Vector2(6, -12)}]}]}
 	return {}

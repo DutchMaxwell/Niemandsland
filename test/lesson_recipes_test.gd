@@ -129,7 +129,9 @@ func test_s07_recipe_is_a_playing_morale_table() -> void:
 	assert_array(recipe.get("ai_slots", [])).contains([2])
 	var tags: Array[String] = []
 	var by_tag: Dictionary = {}
+	var fixtures: Array[String] = []
 	for side in recipe.get("sides", []):
+		fixtures.append(String(side.get("fixture", "")))
 		for pick in side.get("units", []):
 			tags.append(String(pick.get("tag", "")))
 			by_tag[String(pick.get("tag", ""))] = pick
@@ -137,7 +139,12 @@ func test_s07_recipe_is_a_playing_morale_table() -> void:
 	assert_bool(by_tag["shaken"].get("shaken", false)).is_true()
 	assert_int(by_tag["target"].get("dead", 0)).is_equal(5)
 	assert_int(by_tag["tough"].get("wounds", 0)).is_equal(2)
-	assert_str(by_tag["tough"].get("name", "")).is_equal("Master Brother")
+	# A: the PLAYER is P1 (Battle Brothers shoot); the morale-test SUBJECT is the enemy Warriors.
+	assert_str(by_tag["alpha"].get("name", "")).is_equal("Battle Brothers")
+	assert_str(by_tag["target"].get("name", "")).is_equal("Warriors")
+	assert_str(by_tag["tough"].get("name", "")).is_equal("Robot Lord")
+	assert_bool(fixtures[0].ends_with("tutorial_army_p1.json")).is_true()
+	assert_bool(fixtures[1].ends_with("tutorial_army_p2.json")).is_true()
 
 
 func test_recipe_schema_names_the_combat_seam_keys() -> void:

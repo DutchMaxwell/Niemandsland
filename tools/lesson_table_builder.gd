@@ -171,4 +171,3 @@ func _apply_unit_state(manager: OPRArmyManager, unit: GameUnit, pick: Dictionary
 		var lone := unit.models[0]
 		lone.wounds_current = maxi(int(lone.wounds_max) - wounds, 0)
 		lone.is_alive = lone.wounds_current > 0
-		unit.unit_properties["regiment_wounds_taken"] = wounds

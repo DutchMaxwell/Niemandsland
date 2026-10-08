@@ -101,12 +101,17 @@ const _S06_STEPS := [
 const _S07_STEPS := [
 	{"id": "shaken_idle", "text": "Charlie Squad carries an S token: Shaken units must spend their activation idle. (p.10)",
 		"rule": "p.10", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
-	{"id": "recover", "text": "Activate Charlie Squad (right-click, then Activate). It idles and recovers — if the S token stays, remove it from the same menu (Shaken).",
+	{"id": "tough_half", "text": "Open the Nachtmahr Leader card: a single Tough(3) model with 2 of 3 wounds lost counts as at half strength, then press Continue. (p.10)",
+		"rule": "p.10", "all": [
+			{"check": "tag_flag", "args": {"tag": "tough", "key": "card_presented", "value": true}},
+			{"check": "counter_grew", "args": {"key": "continue"}}]},
+	{"id": "recover", "text": "Activate Charlie Squad (right-click, then Activate). It idles and recovers — if the S token stays, remove it from the same menu (Shaken) — then press Continue.",
 		"rule": "p.10", "all": [
 			{"check": "tag_flag", "args": {"tag": "shaken", "key": "activated", "value": true}},
-			{"check": "tag_flag", "args": {"tag": "shaken", "key": "shaken", "value": false}}]},
+			{"check": "tag_flag", "args": {"tag": "shaken", "key": "shaken", "value": false}},
+			{"check": "counter_grew", "args": {"key": "continue"}}]},
 	{"id": "morale_test", "text": "The enemy squad is at half strength. Shoot it with Alpha Squad: at the end of the activation it takes a morale test. (p.10)",
-		"rule": "p.10", "all": [{"check": "counter_grew", "args": {"key": "shoot:alpha"}}]},
+		"rule": "p.10", "all": [{"check": "counter_grew", "args": {"key": "log:morale:target"}}]},
 	{"id": "outcome", "text": "A failed morale test makes a unit Shaken — or Routs it when it is at half strength or less. (p.10)",
 		"rule": "p.10", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
 ]
