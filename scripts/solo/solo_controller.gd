@@ -3821,6 +3821,15 @@ func _brain_knobs_on(diff: SoloDifficulty) -> bool:
 	return diff != null and diff.brain_knobs and shipped_brain_ready()
 
 
+## Hand-planner strength_by_points (A/B 08.10.2026, NOT_WORSE): the preset's `points_strength` flag AND no brain
+## (the brain path stamps it through brain_knob_stamp). env NML_POINTS=0/1 forces it either way.
+func _points_strength_on(diff: SoloDifficulty) -> bool:
+	var forced := OS.get_environment("NML_POINTS")
+	if forced != "":
+		return forced == "1"
+	return diff != null and diff.points_strength and not shipped_brain_ready()
+
+
 ## Stamps the six planner statics of the aifix_all bundle for this pick (the header the live core reads carries
 ## them too: act_recorder `_header_line`). eval_variant 4 rides `_eval_variant_for`.
 func _apply_aifix(diff: SoloDifficulty) -> void:
@@ -3832,6 +3841,7 @@ func _apply_aifix(diff: SoloDifficulty) -> void:
 	BattleSim.reply_skip_activated = on
 	BattleSim.reply_hold_gate = on
 	AiPlanner.brain_knobs = _brain_knobs_on(diff)
+	AiPlanner.points_strength = _points_strength_on(diff)
 
 
 ## Ship path (22.09.): true when the core is wanted AND loaded AND the packed brain was
