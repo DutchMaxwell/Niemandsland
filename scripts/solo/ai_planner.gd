@@ -626,6 +626,19 @@ static func points_knob_stamp() -> Dictionary:
 	if not points_strength:
 		return {}
 	return {"strength_by_points": true}
+
+
+## Table fidelity: the seven rule-fidelity core knobs (acts.rs Knobs, plain.rs knobs_of) as ONE switch, brain or hand.
+## Set per pick by SoloController._apply_aifix; {} when off (byte-identical header).
+static var table_fidelity := false
+
+
+static func table_fidelity_stamp() -> Dictionary:
+	if not table_fidelity:
+		return {}
+	return {"table_fidelity": true, "range_by_base_edge": true, "fire_in_range_only": true,
+		"casualties_bearers_last": true, "hero_counts_in_size": true, "reply_threat_by_speed": true,
+		"charge_needs_path": true, "fearless_roll_when_shaken": true}
 static var _seat_env := -1   # research seam: NML_SEAT_DEPTH off/on/inv retunes the vote (lazy env)
 
 
