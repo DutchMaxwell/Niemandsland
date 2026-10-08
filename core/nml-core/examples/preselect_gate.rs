@@ -8,7 +8,7 @@
 //! score drift separately (float tolerance 1e-9 relative).
 //!
 //!   cargo run --release --example preselect_gate -- --games <dir>... [--max-games N] [--top-k 10]
-//!        [--horizon 3] [--shipped] [--leaf-opener-only] [--reply-by-net] [--out file.json] [--compare baseline.json]
+//!        [--horizon 3] [--shipped] [--leaf-opener-only] [--reply-by-net] [--charge-path] [--out file.json] [--compare baseline.json]
 //!
 //! Timing: the planner runs with a never-hit `deadline_us` + `deadline_after_preselect`, which
 //! only makes the pick carry `preselect_us` (phases 0-3); picks do not depend on it.
