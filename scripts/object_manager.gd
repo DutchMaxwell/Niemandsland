@@ -66,6 +66,8 @@ var _hover_glow: HoverGlow = HoverGlow.new()
 
 # Persistent green glow for selected objects (replaces the old base ring).
 var _selection_glow_material: StandardMaterial3D = null
+# Calm-mode variant: muted, non-emissive (built lazily, only while Calm is on).
+var _calm_selection_glow_material: StandardMaterial3D = null
 
 # Clipboard for copy/paste
 var _clipboard: Array[Node3D] = []  # Stores references to copied objects for duplication
@@ -1020,6 +1022,10 @@ func _update_hover(screen_pos: Vector2) -> void:
 	if not selection_enabled:
 		_hover_glow.set_target(null)
 		return
+	if GraphicsSettings.calm_mode:
+		# Calm: no blooming gold hover glow — the selection green stays the only marker.
+		_hover_glow.set_target(null)
+		return
 	var obj: Node3D = _get_object_at_position(screen_pos)
 	if obj != null and obj in _selected_objects:
 		obj = null  # selected objects keep their green glow; no gold hover on top
@@ -1063,6 +1069,8 @@ func _collect_glow_meshes(obj: Node3D) -> Array[MeshInstance3D]:
 func _add_spill_light(obj: Node3D) -> void:
 	if not _spill_lights_enabled():
 		return
+	if GraphicsSettings.calm_mode:
+		return   # Calm: no glowing green light spraying onto the table from the selection
 	if obj.get_node_or_null(NodePath(String(SelectionSpillLight.NODE_NAME))) != null:
 		return
 	# Live count from the tree (not a manual counter) so freeing a selected object
@@ -1133,6 +1141,18 @@ func _object_ground_radius(obj: Node3D) -> float:
 
 
 func _get_selection_glow_material() -> StandardMaterial3D:
+	if GraphicsSettings.calm_mode:
+		# Calm: a muted, non-emissive green tint — readable selection, no bloom.
+		if _calm_selection_glow_material == null:
+			var muted := SelectionSpillLight.GREEN_SELECTION
+			var mmat := StandardMaterial3D.new()
+			mmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			mmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			mmat.albedo_color = Color(muted.r, muted.g, muted.b, 0.28)
+			mmat.grow = true
+			mmat.grow_amount = 0.002
+			_calm_selection_glow_material = mmat
+		return _calm_selection_glow_material
 	if _selection_glow_material == null:
 		var green := SelectionSpillLight.GREEN_SELECTION
 		var mat := StandardMaterial3D.new()

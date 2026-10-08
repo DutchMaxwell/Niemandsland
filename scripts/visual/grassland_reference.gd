@@ -168,6 +168,8 @@ func apply(main: Node) -> void:
 		if not _profile.get("urban_mode",false):   # the urban ground draws no mounds
 			ReferenceMaterials.set_mounds(wall_regions.slice(0,wall_count),drift_points.slice(0,drift_count))
 		_seat_props(overlay)
+		if overlay.has_signal("objects_rebuilt") and not overlay.objects_rebuilt.is_connected(_on_props_rebuilt):
+			overlay.objects_rebuilt.connect(_on_props_rebuilt)
 	var understory: Node3D = preload("res://scripts/visual/reference_jungle.gd").new() if _profile.get("jungle_mode",false) else preload("res://scripts/visual/reference_understory.gd").new()
 	if _profile.get("urban_mode",false):
 		understory.free()
@@ -434,7 +436,7 @@ func _unhandled_input(event: InputEvent) -> void:
 func _process(delta: float) -> void:
 	if table_tier and _main != null:
 		_keep_props_seated(_main.terrain_overlay)
-	if not _dust.is_empty() or _volcanic != null or _jungle_motion != null:
+	if not GraphicsSettings.calm_mode and (not _dust.is_empty() or _volcanic != null or _jungle_motion != null):
 		_wind_time += delta
 		for streams in _dust:
 			streams.material_override.set_shader_parameter("time",_wind_time)
@@ -446,7 +448,7 @@ func _process(delta: float) -> void:
 		_ground.set_shader_parameter("wind_time",_wind_time)
 	if _base != null:
 		_base.set_shader_parameter("wind_time",_wind_time)
-	if _fog != null:
+	if _fog != null and not GraphicsSettings.calm_mode:
 		var t := Time.get_ticks_msec() / 1000.0
 		var span: float = _fog.size.x
 		_fog.position.x = sin(t * 0.05) * span * 0.02
@@ -524,7 +526,7 @@ func _dress_grid_forest(overlay: Node3D) -> void:
 ## raise the mounds themselves (a container's edges are wall segments, the desert piles sand around both), so they
 ## stay at y = 0, sunk in their own mound as in the reference. Display only: cells, footprints and LOS are untouched,
 ## and the overlay's rebuild on teardown puts the markers back at y = 0. A rebuild while dressed (a late panel
-## download) is seated again by _keep_props_seated.
+## download) is seated again in the same frame by _on_props_rebuilt, and _keep_props_seated catches anything else.
 func _seat_props(overlay: Node3D) -> void:
 	_seated_count = overlay._object_instances.size()
 	_seated_first = overlay._object_instances[0].get_instance_id() if _seated_count > 0 and is_instance_valid(overlay._object_instances[0]) else 0
@@ -550,6 +552,13 @@ func _seat_props(overlay: Node3D) -> void:
 		# Absolute: the overlay puts every prop root at y = 0 (it sets x/z only), and a same-biome rebuild keeps its
 		# props (terrain_overlay.gd set_biome returns early), so an additive seat stacked on every rebuild.
 		prop.position.y = lowest
+
+
+## The overlay rebuilt its props (terrain_overlay.gd objects_rebuilt): seat them in that frame. Only while dressed,
+## i.e. in the tree: on teardown _exit_tree unseats them and the overlay's restoring rebuild must keep y = 0.
+func _on_props_rebuilt() -> void:
+	if table_tier and _main != null and is_inside_tree():
+		_seat_props(_main.terrain_overlay)
 
 
 ## Table tier, once per frame: a finished panel download (mines, signs, containers, trees, lava) makes the overlay

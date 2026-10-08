@@ -8,7 +8,7 @@ extends GdUnitTestSuite
 ## console side effects). test_inventory_check_names_a_removed_control proves the presence check can fail.
 
 const PRESETS := ["Day", "Sunset", "Night", "Overcast", "Rain"]
-const TOGGLES := ["War-torn (fires at ruins)", "Distant war sounds", "Reduce Motion", "Fullscreen", "Show Move Trails",
+const TOGGLES := ["War-torn (fires at ruins)", "Distant war sounds", "Calm Mode (Ruhiger Modus)", "Reduce Motion", "Fullscreen", "Show Move Trails",
 	"Show Rule Texts at the Table", "Tilt-Shift (Depth of Field)", "Combat Stage (paces the resolution)",
 	"Enforce Movement Limit", "AI Explanations Stay Up", "Combat Effects"]
 const LABELS := ["ATMOSPHERE:", "PARAMETERS:", "Sun Color", "Ambient Color", "AUDIO:", "DISPLAY:", "UI Scale",
@@ -73,6 +73,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	GraphicsSettings.set_calm_mode(false)
 	_panel.queue_free()
 	_privacy.queue_free()
 	_light.queue_free()
@@ -237,6 +238,23 @@ func test_ui_scale_and_stage_beat_sliders_reach_graphics_settings_and_are_put_ba
 	assert_float(GraphicsSettings.combat_stage_hold_s).is_equal_approx(beat.value, 0.01)
 	assert_str(beat_label.text).is_equal("Stage beat: %.1fs" % beat.value)
 	beat.value = before_beat
+
+
+func test_calm_toggle_is_a_preset_over_the_display_switches_and_is_put_back() -> void:
+	var calm := _toggle("Calm Mode (Ruhiger Modus)")
+	assert_object(calm).is_not_null()
+	var before := {}
+	for f: String in ["show_combat_effects", "idle_motion", "reduce_motion", "tilt_shift"]:
+		before[f] = GraphicsSettings.get(f)
+	calm.toggled.emit(true)
+	assert_bool(GraphicsSettings.calm_mode).override_failure_message("Calm does not reach GraphicsSettings").is_true()
+	assert_bool(GraphicsSettings.show_combat_effects).is_false()
+	assert_bool(GraphicsSettings.reduce_motion).is_true()
+	assert_bool(_toggle("Combat Effects").button_pressed).override_failure_message("the forced switch must show its new state").is_false()
+	calm.toggled.emit(false)
+	assert_bool(GraphicsSettings.calm_mode).is_false()
+	for f: String in before:
+		assert_bool(GraphicsSettings.get(f)).override_failure_message("%s was not restored" % f).is_equal(before[f])
 
 
 func test_privacy_and_data_button_opens_the_privacy_panel() -> void:

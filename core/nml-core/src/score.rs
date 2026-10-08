@@ -433,12 +433,12 @@ fn objective_own(
 /// the held-marker `keep` term), every state variant 3 hands back to the hand
 /// eval gets the held-marker rule below instead.
 fn score_hand_vp_hold(
-    state: &State, statics: &[UnitStatic], player: i64, incoming: Incoming,
+    state: &State, statics: &[UnitStatic], player: i64, incoming: Incoming, by_points: bool,
 ) -> f64 {
     if !state.objectives.is_empty() && &*state.scoring == "round_vp" && !is_destroy_mission(state) {
-        return score_hand_vp(state, statics, player, incoming);
+        return score_hand_vp(state, statics, player, incoming, by_points);
     }
-    score_hand_hold(state, statics, player, incoming)
+    score_hand_hold(state, statics, player, incoming, by_points)
 }
 
 /// The hand eval with a held marker that stays
@@ -450,16 +450,16 @@ fn score_hand_vp_hold(
 /// side that out-weighs the owner. Destroy and role missions are handed back
 /// to variant 0 whole.
 fn score_hand_hold(
-    state: &State, statics: &[UnitStatic], player: i64, incoming: Incoming,
+    state: &State, statics: &[UnitStatic], player: i64, incoming: Incoming, by_points: bool,
 ) -> f64 {
     if state.objectives.is_empty()
         || (!state.markers_meta.is_empty() && is_destroy_mission(state))
         || role_term(state, player).is_some()
     {
-        return score_hand(state, statics, player, incoming);
+        return score_hand_carry(state, statics, player, incoming, true, by_points);
     }
     let total: f64 = (0..state.objectives.len())
-        .map(|i| hold_owner_p(state, objective_p(state, statics, i, player, incoming, true, false), i, player))
+        .map(|i| hold_owner_p(state, objective_p(state, statics, i, player, incoming, true, by_points), i, player))
         .sum();
     total / state.objectives.len() as f64
 }
@@ -483,20 +483,20 @@ fn hold_owner_p(state: &State, share: f64, obj_index: usize, player: i64) -> f64
 /// sabotage branch is NOT this rung's business and is handed back to variant 0
 /// whole.
 fn score_hand_majority(
-    state: &State, statics: &[UnitStatic], player: i64, incoming: Incoming,
+    state: &State, statics: &[UnitStatic], player: i64, incoming: Incoming, by_points: bool,
 ) -> f64 {
     if state.objectives.is_empty() {
         return 0.5;
     }
     if !state.markers_meta.is_empty() && is_destroy_mission(state) {
-        return score_hand(state, statics, player, incoming);
+        return score_hand_carry(state, statics, player, incoming, true, by_points);
     }
     let total_rounds = state.rounds_total.max(1) as f64;
     let left = (state.rounds_total - state.round).max(0) as f64;
     let w = (1.0 - left / total_rounds).clamp(0.0, 1.0);
     let mut total = 0.0f64;
     for i in 0..state.objectives.len() {
-        let share = objective_p(state, statics, i, player, incoming, true, false);
+        let share = objective_p(state, statics, i, player, incoming, true, by_points);
         let own = objective_own(state, statics, i, player, incoming);
         total += (1.0 - w) * share + w * own;
     }
@@ -516,10 +516,10 @@ fn score_hand_majority(
 /// mission — END scoring, sabotage, the demolition flavour, no markers — is
 /// handed back to variant 0 whole, so those states score byte-identical.
 fn score_hand_vp(
-    state: &State, statics: &[UnitStatic], player: i64, incoming: Incoming,
+    state: &State, statics: &[UnitStatic], player: i64, incoming: Incoming, by_points: bool,
 ) -> f64 {
     if state.objectives.is_empty() || &*state.scoring != "round_vp" || is_destroy_mission(state) {
-        return score_hand(state, statics, player, incoming);
+        return score_hand_carry(state, statics, player, incoming, true, by_points);
     }
     let n = state.objectives.len() as f64;
     let vp = vp_of(state.vp.as_deref());
@@ -561,14 +561,26 @@ fn score_hand_vp(
 pub fn score_hand_variant(
     state: &State, statics: &[UnitStatic], player: i64, incoming: Incoming, eval_variant: i64,
 ) -> f64 {
+    score_hand_variant_pts(state, statics, player, incoming, eval_variant, false)
+}
+
+/// `score_hand_variant` with the points weighting (`strength_by_points`)
+/// COMPOSED onto whichever arm 0-4 is selected: `by_points` swaps the unit
+/// strength inside the presence term for the Army Forge cost, nothing else.
+/// Arms 1 and 3 price the marker by `hold_p` (reach, not strength), so only
+/// their hand-eval fallbacks and arm 1's share half move. `by_points = false`
+/// is the frozen path bit for bit. Arm 5 stays as an internal alias for
+/// (arm 0, `by_points = true`); no header can reach it.
+pub fn score_hand_variant_pts(
+    state: &State, statics: &[UnitStatic], player: i64, incoming: Incoming, eval_variant: i64,
+    by_points: bool,
+) -> f64 {
     match eval_variant {
-        0 => score_hand(state, statics, player, incoming),
-        1 => score_hand_majority(state, statics, player, incoming),
-        2 => score_hand_carry(state, statics, player, incoming, false, false),
-        3 => score_hand_vp(state, statics, player, incoming),
-        4 => score_hand_vp_hold(state, statics, player, incoming),
-        // afpoints P1 — the points-weighted presence arm (`strength_by_points`),
-        // the frozen hand eval with `by_points = true`.
+        0 => score_hand_carry(state, statics, player, incoming, true, by_points),
+        1 => score_hand_majority(state, statics, player, incoming, by_points),
+        2 => score_hand_carry(state, statics, player, incoming, false, by_points),
+        3 => score_hand_vp(state, statics, player, incoming, by_points),
+        4 => score_hand_vp_hold(state, statics, player, incoming, by_points),
         5 => score_hand_carry(state, statics, player, incoming, true, true),
         other => unreachable!("eval_variant {other}: read_act_header should have refused this"),
     }
@@ -604,7 +616,7 @@ pub fn score_with(
     incoming: Incoming,
     fit: Option<&Fitted>,
 ) -> f64 {
-    score_with_variant(state, statics, player, incoming, fit, 0)
+    score_with_variant(state, statics, player, incoming, fit, 0, false)
 }
 
 /// `score_with` at an explicit `eval_variant` — the evolved-eval lane's other
@@ -618,19 +630,20 @@ pub fn score_with_variant(
     incoming: Incoming,
     fit: Option<&Fitted>,
     eval_variant: i64,
+    by_points: bool,
 ) -> f64 {
     let Some(fit) = fit else {
-        return score_hand_variant(state, statics, player, incoming, eval_variant);
+        return score_hand_variant_pts(state, statics, player, incoming, eval_variant, by_points);
     };
     match fit.mode {
         FitMode::Residual => combine_residual(
-            score_hand_variant(state, statics, player, incoming, eval_variant),
+            score_hand_variant_pts(state, statics, player, incoming, eval_variant, by_points),
             fit.score_fit(state, statics, player, incoming),
             fit.scale,
         ),
         FitMode::Blend => {
             let fb = fit.blend;
-            (1.0 - fb) * score_hand_variant(state, statics, player, incoming, eval_variant)
+            (1.0 - fb) * score_hand_variant_pts(state, statics, player, incoming, eval_variant, by_points)
                 + fb * fit.score_fit(state, statics, player, incoming)
         }
     }
@@ -717,6 +730,51 @@ mod tests {
         assert!((raw - 10.0 / 19.0).abs() < 1e-9, "raw wounds share, got {raw}");
         assert!(pts < raw, "the 600-pt tank must outweigh 100 pts of levy: {pts} vs {raw}");
         assert!((pts - 100.0 / 700.0).abs() < 1e-9, "points share, got {pts}");
+    }
+
+    /// S02 helper: one arm with the points weighting composed on top.
+    fn at(st: &crate::state::State, statics: &[UnitStatic], var: i64, pts: bool) -> f64 {
+        super::score_hand_variant_pts(st, statics, 1, NO_INCOMING, var, pts)
+    }
+
+    /// S02 fixture: my weak unit (cost 100) on a marker I hold, a strong enemy (cost 600) in reach.
+    fn held_fixture() -> (crate::state::State, [UnitStatic; 2]) {
+        let mut st = vp_state(
+            &[U("p1_0_a", 1, 0.0, 1, false, false), U("p2_0_a", 2, 0.3, 6, false, false)],
+            &[0.0], 2, "end", "{}", [0, 0],
+        );
+        st.objectives[0].owner = 1;
+        let statics = [
+            UnitStatic { cost: 100, wounds_max: vec![1], ..Default::default() },
+            UnitStatic { cost: 600, wounds_max: vec![6], ..Default::default() },
+        ];
+        (st, statics)
+    }
+
+    /// S02 (a)+(b): points OFF is the frozen path for arms 0-4; points ON + arm 0 is today's arm 5.
+    #[test]
+    fn points_compose_identity_off_and_arm_0() {
+        let (st, statics) = held_fixture();
+        assert_eq!(at(&st, &statics, 0, false), score_hand(&st, &statics, 1, NO_INCOMING));
+        assert_eq!(at(&st, &statics, 2, false), super::score_hand_carry(&st, &statics, 1, NO_INCOMING, false, false));
+        assert_eq!(at(&st, &statics, 3, false), super::score_hand_vp(&st, &statics, 1, NO_INCOMING, false));
+        assert_eq!(at(&st, &statics, 4, false), super::score_hand_vp_hold(&st, &statics, 1, NO_INCOMING, false));
+        assert_eq!(at(&st, &statics, 1, false), super::score_hand_majority(&st, &statics, 1, NO_INCOMING, false));
+        assert_eq!(
+            at(&st, &statics, 0, true),
+            super::score_hand_carry(&st, &statics, 1, NO_INCOMING, true, true),
+            "points ON + arm 0 is the old arm 5"
+        );
+    }
+
+    /// S02 (c) RED: points ON must keep arm 4's held-marker rule, not collapse to arm 0.
+    #[test]
+    fn points_on_keeps_the_arm_4_hold_term() {
+        let (st, statics) = held_fixture();
+        let off = at(&st, &statics, 4, false) - at(&st, &statics, 0, false);
+        assert!(off.abs() > 1e-6, "fixture must make the hold term non-zero: {off}");
+        let on = at(&st, &statics, 4, true) - at(&st, &statics, 0, true);
+        assert!(on.abs() > 1e-6, "points ON dropped the hold term: arm 4 == arm 0 ({on})");
     }
 
     /// Wave C G-AB: variant 2 is variant 0 WITHOUT the C7 carry term. My unit
