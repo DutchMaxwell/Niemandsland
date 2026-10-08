@@ -4,6 +4,7 @@ extends Node
 
 signal settings_applied(preset_name: String)
 signal idle_motion_changed()
+signal calm_mode_changed()
 
 enum QualityPreset {
 	PERFORMANCE,  # New: Maximum FPS mode
@@ -133,6 +134,55 @@ var show_combat_stage: bool = true
 var combat_stage_hold_s: float = 2.5
 ## How bloody the combat effects are: 0 Off (dust instead of blood), 1 Normal, 2 Extra. Players and streamers turn it down.
 var gore_level: int = 1
+
+## Calm mode (GH #1634, accessibility): one switch that dials the sensory load down
+## in one click. It is a PRESET over the individual switches below — turning it ON
+## snapshots their values and forces the quiet set, turning it OFF puts the player's
+## choices back exactly. Persisted, default OFF. Effects without a switch of their
+## own (glow/bloom, weather particles, grass sway, selection pulses) read
+## `calm_mode` live through `calm_mode_changed`.
+var calm_mode: bool = false
+var _calm_restore: Dictionary = {}
+## The quiet values Calm forces onto the switches it owns.
+const CALM_VALUES := {"show_combat_effects": false, "idle_motion": false,
+	"reduce_motion": true, "tilt_shift": false}
+## The running VFX nodes that read show_combat_effects once in their _ready(); Calm
+## has to push the new value at them, exactly like the settings panel does.
+const COMBAT_VFX_NODES := ["ResultPips", "VolleyCue", "SpellSeal", "ShotShow",
+	"SpellShow", "CasualtyShow", "ModelAuras"]
+
+
+## Enable/disable Calm mode. ON snapshots the individual switches then forces the
+## quiet values; OFF restores the snapshot. No-op when already in the requested state.
+func set_calm_mode(on: bool) -> void:
+	if on == calm_mode:
+		return
+	if on:
+		_calm_restore = {}
+		for key: String in CALM_VALUES:
+			_calm_restore[key] = get(key)
+		for key: String in CALM_VALUES:
+			set(key, CALM_VALUES[key])
+	else:
+		for key: String in _calm_restore:
+			set(key, _calm_restore[key])
+		_calm_restore = {}
+	calm_mode = on
+	save_settings()
+	apply_environment_settings(PRESETS[current_preset])   # push/strip the calm glow layer
+	_sync_combat_vfx()
+	calm_mode_changed.emit()
+
+## Push show_combat_effects at the running VFX nodes; they read it only at _ready().
+func _sync_combat_vfx() -> void:
+	var tree := get_tree()
+	var main: Node = tree.root.get_node_or_null("Main") if tree != null else null
+	if main == null:
+		return
+	for fx_name: String in COMBAT_VFX_NODES:
+		var fx := main.get_node_or_null(fx_name)
+		if fx != null:
+			fx.enabled = show_combat_effects
 
 ## Strict "dry brush" movement enforcement: hard-stop a movement path-paint / drag at the
 ## model's MAX legal band (Rush/Charge). ON = Strict (the maintainer's default — you learn the
@@ -338,7 +388,8 @@ func apply_ui_scale(factor: float) -> void:
 func apply_preset(preset: QualityPreset) -> void:
 	var settings = PRESETS[preset]
 	if current_preset != preset:
-		idle_motion = preset >= QualityPreset.MEDIUM
+		if not calm_mode:
+			idle_motion = preset >= QualityPreset.MEDIUM
 	current_preset = preset
 
 	# Apply rendering settings
@@ -452,6 +503,12 @@ func apply_environment_settings(settings: Dictionary) -> void:
 		for key: String in values:
 			env.set(key, values[key])
 
+	# Calm mode (GH #1634): the top layer that strips glow/bloom however the preset,
+	# mood or biome reference set them. {} when Calm is off lets the lower layers win.
+	if render_state != null:
+		render_state.set_layer("calm", {"glow_enabled": false, "glow_intensity": 0.0, "glow_bloom": 0.0} \
+			if calm_mode else {})
+
 	# Auto-exposure: disabled for now — it blew the physical-sky scene out to white.
 	# Re-introduce once the fixed-exposure baseline is dialled in.
 	if world_env.camera_attributes:
@@ -520,6 +577,13 @@ func save_settings() -> void:
 	config.set_value("graphics", "gore_level", gore_level)
 	config.set_value("graphics", "enforce_movement_limit", enforce_movement_limit)
 	config.set_value("graphics", "ai_explain_persistent", ai_explain_persistent)
+	config.set_value("graphics", "calm_mode", calm_mode)
+	# Persist the pre-Calm choices so a reload while Calm is ON still knows what to
+	# restore when the player turns it OFF (their real preferences are never lost).
+	config.set_value("graphics", "calm_prev_show_combat_effects", _calm_restore.get("show_combat_effects", show_combat_effects))
+	config.set_value("graphics", "calm_prev_idle_motion", _calm_restore.get("idle_motion", idle_motion))
+	config.set_value("graphics", "calm_prev_reduce_motion", _calm_restore.get("reduce_motion", reduce_motion))
+	config.set_value("graphics", "calm_prev_tilt_shift", _calm_restore.get("tilt_shift", tilt_shift))
 	config.save("user://graphics_settings.cfg")
 
 
@@ -549,3 +613,17 @@ func load_settings() -> void:
 	gore_level = clampi(int(config.get_value("graphics", "gore_level", 1)), 0, 2)
 	enforce_movement_limit = config.get_value("graphics", "enforce_movement_limit", true)
 	ai_explain_persistent = config.get_value("graphics", "ai_explain_persistent", true)
+	calm_mode = bool(config.get_value("graphics", "calm_mode", false))
+	if calm_mode:
+		# Restore the saved pre-Calm choices, then re-force the quiet values so the
+		# calm look survives the reload while the player's real prefs stay recoverable.
+		_calm_restore = {
+			"show_combat_effects": bool(config.get_value("graphics", "calm_prev_show_combat_effects", true)),
+			"idle_motion": bool(config.get_value("graphics", "calm_prev_idle_motion", true)),
+			"reduce_motion": bool(config.get_value("graphics", "calm_prev_reduce_motion", false)),
+			"tilt_shift": bool(config.get_value("graphics", "calm_prev_tilt_shift", true)),
+		}
+		for key: String in CALM_VALUES:
+			set(key, CALM_VALUES[key])
+	else:
+		_calm_restore = {}

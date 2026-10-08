@@ -30,7 +30,12 @@ static func expand(base_url: String) -> String:
 ## the single source (application/config/version); OS.get_name() → "Windows"/"Linux"/"macOS" (bus 037).
 static func user_agent() -> String:
 	var ver: String = str(ProjectSettings.get_setting("application/config/version", "0.0.0"))
-	return "Niemandsland/%s (%s; Godot 4.6)" % [ver, OS.get_name()]
+	var ua: String = "Niemandsland/%s (%s; Godot 4.6)" % [ver, OS.get_name()]
+	# Our own CI runners (GitHub Actions, or a generic CI) get a " CI" suffix so server-side
+	# analytics can tell them from players; the base stays the honest product UA.
+	if OS.get_environment("GITHUB_ACTIONS") == "true" or OS.get_environment("CI") == "true":
+		ua += " CI"
+	return ua
 
 
 ## Request headers for every CDN call: the product UA + an Accept type (application/json for the manifest,
