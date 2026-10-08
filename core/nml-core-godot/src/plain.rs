@@ -974,6 +974,8 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         reply_by_net: dflag(d, "reply_by_net"),
         reply_top_k: dint(d, "reply_top_k", dflt.reply_top_k),
         reply_horizon: dint(d, "reply_horizon", dflt.reply_horizon),
+        reply_pool_cap: dint(d, "reply_pool_cap", dflt.reply_pool_cap),
+        reply_menu_restricted: dflag(d, "reply_menu_restricted"),
         seam_cast: dflag(d, "seam_cast"),
         seam_spacing: dflag(d, "seam_spacing"),
         // NML-1073 M4-7. No recorder writes this key yet (ai_planner.gd:607
@@ -1066,6 +1068,7 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         no_end_threat: d.get("no_end_threat").map(|v| flag(&v)).unwrap_or(dflt.no_end_threat),
         fire_in_range_only: d.get("fire_in_range_only").map(|v| flag(&v)).unwrap_or(dflt.fire_in_range_only),
         hero_counts_in_size: d.get("hero_counts_in_size").map(|v| flag(&v)).unwrap_or(dflt.hero_counts_in_size),
+        casualties_bearers_last: d.get("casualties_bearers_last").map(|v| flag(&v)).unwrap_or(dflt.casualties_bearers_last),
         range_by_base_edge: d.get("range_by_base_edge").map(|v| flag(&v))
             .unwrap_or(dflt.range_by_base_edge),
         morale_by_probability: d.get("morale_by_probability").map(|v| flag(&v))

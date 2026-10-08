@@ -73,3 +73,14 @@ static func apply_table_setup(setup: Dictionary, manager: Object) -> String:
 	if not ui_enabled():
 		return ""
 	return "Rules automation: %s" % label(manager.rules_automation)
+
+
+## Chip beside the round button; a game with an AI slot shows the lock.
+static func chip_text(level: int, ai_designated: bool) -> String:
+	var t := "RULES: %s" % label(effective(level, ai_designated)).to_upper()
+	return t + " (NACHTMAHR)" if ai_designated else t
+
+
+## A switch is refused while a resolution is in flight, and Automatic -> Manual while an AI slot is ticked.
+static func change_allowed(wanted: int, ai_designated: bool, resolving: bool) -> bool:
+	return not resolving and not (ai_designated and wanted == Level.MANUAL)
