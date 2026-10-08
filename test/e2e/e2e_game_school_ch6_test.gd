@@ -79,6 +79,9 @@ func _unit_centre_in(unit: GameUnit) -> Vector2:
 	var sum := Vector2.ZERO
 	var n := 0
 	for model in unit.models:
+		var mi := model as ModelInstance
+		if mi != null and not mi.is_alive:
+			continue   # parked casualties sit on the dead tray, far from the fight
 		if is_instance_valid(model.node):
 			sum += Vector2(model.node.global_position.x, model.node.global_position.z)
 			n += 1
@@ -89,6 +92,9 @@ func _move_unit_to(unit: GameUnit, spot: Vector3) -> void:
 	var nodes: Array[Node3D] = []
 	var centre := Vector3.ZERO
 	for model in unit.models:
+		var mi := model as ModelInstance
+		if mi != null and not mi.is_alive:
+			continue   # parked casualties sit on the dead tray, far from the fight
 		if is_instance_valid(model.node):
 			nodes.append(model.node)
 			centre += model.node.global_position
@@ -122,6 +128,16 @@ func test_s06_five_steps_complete(timeout := 60000) -> void:
 
 	await _main._run_human_attack(alpha, target, true)
 
+	# The whole melee resolves inside that one call: pile-in, strike-back and consolidation all
+	# happened, so the last three steps (each "then press Continue") need three Continue presses.
+	var card := _main.get_node("UI/LessonCard") as LessonCard
+	assert_bool(await _wait_index(2)).is_true()   # the fight resolved, pile-in step is current
+	card.continue_pressed.emit()
+	assert_bool(await _wait_index(3)).is_true()   # pile-in read
+	card.continue_pressed.emit()
+	assert_bool(await _wait_index(4)).is_true()   # strike-back read
+	card.continue_pressed.emit()
+
 	var progress := SpielschuleProgress.new(TEST_CFG)
 	var deadline := Time.get_ticks_msec() + 8000
 	while Time.get_ticks_msec() < deadline:
@@ -139,6 +155,7 @@ func test_idle_s06_stays_unfinished(timeout := 60000) -> void:
 	await get_tree().create_timer(3.0).timeout
 	var progress := SpielschuleProgress.new(TEST_CFG)
 	progress.load_from_disk()
+	assert_array(SpielschuleLessons.steps_for("S-06")).is_not_empty()
 	assert_int(_lesson.current_index()).is_equal(0)
 	assert_bool(progress.is_completed("S-06")).is_false()
 	await Boot.settle(get_tree())

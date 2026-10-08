@@ -80,6 +80,48 @@ func test_s06_recipe_is_a_playing_melee_table() -> void:
 	assert_array(tags).contains(["alpha", "target"])
 
 
+func test_s06_alpha_cannot_wipe_the_target_before_it_strikes_back() -> void:
+	# G4: the defender must survive Alpha's melee to strike back. Alpha's melee is one CCW A1
+	# attack per model and a landed wound removes one Tough(1) Warrior, so Alpha's LIVE model
+	# count (times its per-model melee attacks) must stay below the target's model count — the
+	# parked casualties in the recipe guarantee it.
+	var p1: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://assets/tutorial/tutorial_army_p1.json"))
+	var melee_per_model := 0
+	for w in _first_unit(p1, "Battle Brothers").get("loadout", []):
+		if int(w.get("range", 0)) == 0:
+			melee_per_model += int(w.get("attacks", 1))
+	assert_int(melee_per_model).is_equal(1)
+	var recipe := LessonRecipes.recipe("S-06")
+	var alpha_dead := 0
+	for side in recipe.get("sides", []):
+		for pick in side.get("units", []):
+			if String(pick.get("tag", "")) == "alpha":
+				alpha_dead = int(pick.get("dead", 0))
+	var table: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(Spielschule.chapter("S-06").scenario))
+	var alpha_alive := 0
+	var target_models := 0
+	for u in table.get("game_units", []):
+		var tag := String((u.get("unit_properties", {}) as Dictionary).get("lesson_tag", ""))
+		if tag == "alpha":
+			for m in u.get("models", []):
+				if bool(m.get("is_alive", false)):
+					alpha_alive += 1
+		elif tag == "target":
+			target_models = (u.get("models", []) as Array).size()
+	assert_bool(alpha_dead > 0).is_true()
+	assert_bool(alpha_alive * melee_per_model < target_models) \
+		.override_failure_message("Alpha (%d live x %d attacks) can wipe the %d-model target" % [
+			alpha_alive, melee_per_model, target_models]) \
+		.is_true()
+
+
+func _first_unit(army: Dictionary, unit_name: String) -> Dictionary:
+	for unit in army.get("units", []):
+		if String(unit.get("name", "")) == unit_name:
+			return unit
+	return {}
+
+
 func test_recipe_schema_names_the_combat_seam_keys() -> void:
 	assert_bool(LessonRecipes.RECIPE_KEYS.has("ai_slots")).is_true()
 	for key in ["shaken", "fatigued", "dead"]:
