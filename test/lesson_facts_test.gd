@@ -269,3 +269,17 @@ func test_battle_log_marks_pile_in_and_consolidation() -> void:
 	assert_int(snap.counters.get("log:pile_in", 0)).is_equal(1)
 	assert_int(snap.counters.get("log:consolidate", 0)).is_equal(1)
 	assert_int(snap.counters.get("log:other", 0)).is_equal(0)
+
+
+func test_battle_log_counts_the_strikers_tag() -> void:
+	var log_node: FakeLog = auto_free(FakeLog.new())
+	add_child(log_node)
+	var army: FakeArmy = auto_free(FakeArmy.new())
+	var target := _unit("target", [])
+	target.unit_properties["name"] = "Warriors"
+	army.units = [target]
+	var facts := Facts.new()
+	facts.setup({"battle_log": log_node, "army_manager": army})
+	log_node.entry_added.emit({"text": "Warriors strikes with CCW at Alpha Squad — 6 hits"})
+	var snap := facts.snapshot()
+	assert_int(snap.counters.get("strike:target", 0)).is_equal(1)

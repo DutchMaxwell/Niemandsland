@@ -84,11 +84,11 @@ const _S06_STEPS := [
 	{"id": "fight", "text": "Right-click Alpha Squad, choose Fight, click the enemy squad.",
 		"rule": "", "all": [{"check": "counter_grew", "args": {"key": "melee:alpha"}}]},
 	{"id": "pile_in", "text": "The charged squad piles in up to 3\" — read the log. (p.9)",
-		"rule": "p.9", "all": [{"check": "counter_grew", "args": {"key": "log:pile_in"}}]},
+		"rule": "p.9", "all": [{"check": "counter_at_least", "args": {"key": "log:pile_in", "n": 1}}]},
 	{"id": "strike_back", "text": "The defender strikes back, then both sides are Fatigued. (p.9)",
-		"rule": "p.9", "all": [{"check": "tag_flag", "args": {"tag": "target", "key": "fatigued", "value": true}}]},
+		"rule": "p.9", "all": [{"check": "counter_at_least", "args": {"key": "strike:target", "n": 1}}]},
 	{"id": "consolidate", "text": "The winner consolidates — read the log. (p.9)",
-		"rule": "p.9", "all": [{"check": "counter_grew", "args": {"key": "log:consolidate"}}]},
+		"rule": "p.9", "all": [{"check": "counter_at_least", "args": {"key": "log:consolidate", "n": 1}}]},
 ]
 
 

@@ -12,6 +12,7 @@ const KNOWN := [
 	"camera_zoomed",
 	"camera_panned",
 	"counter_grew",
+	"counter_at_least",
 	"flag",
 	"at_least",
 	"value_changed",
@@ -58,6 +59,10 @@ static func _passes_one(check_name: String, args: Dictionary, now: Dictionary, b
 			var now_counters: Dictionary = now.get("counters", {})
 			var base_counters: Dictionary = base.get("counters", {})
 			return int(now_counters.get(key, 0)) > int(base_counters.get(key, 0))
+		"counter_at_least":
+			var key_abs := String(args.get("key", ""))
+			var now_abs: Dictionary = now.get("counters", {})
+			return int(now_abs.get(key_abs, 0)) >= int(args.get("n", 1))
 		"flag":
 			return bool(now.get(String(args.get("key", "")), false))
 		"at_least":

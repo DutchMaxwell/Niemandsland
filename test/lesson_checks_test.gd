@@ -39,6 +39,14 @@ func test_counter_grew() -> void:
 	assert_bool(LessonChecks.passes(step, now, base)).is_true()
 
 
+func test_counter_at_least() -> void:
+	# Absolute (not delta): an event that fires DURING a step's action can only be gated once the
+	# counter already sits in the step's own base snapshot.
+	var step := _step("counter_at_least", {"key": "log:pile_in", "n": 1})
+	assert_bool(LessonChecks.passes(step, {"counters": {}}, {"counters": {}})).is_false()
+	assert_bool(LessonChecks.passes(step, {"counters": {"log:pile_in": 1}}, {"counters": {"log:pile_in": 1}})).is_true()
+
+
 func test_flag() -> void:
 	var step := _step("flag", {"key": "ready"})
 	var base := {"ready": false}

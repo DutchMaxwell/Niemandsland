@@ -127,10 +127,30 @@ func _on_human_cast_resolved(unit: GameUnit) -> void:
 ## them by their battle-log lines so a lesson step can gate on "the event happened" (counter_grew).
 func _on_battle_log_entry(entry: Dictionary) -> void:
 	var text := String(entry.get("text", ""))
-	if text.contains("pile in"):
+	var low := text.to_lower()
+	if low.contains("pile in"):
 		bump("log:pile_in")
-	if text.contains("consolidat"):
+	if low.contains("consolidat"):
 		bump("log:consolidate")
+	# Melee strike lines read "<unit name> strikes with <weapon> at <target> …". Bump a counter for
+	# the STRIKER's lesson tag, so a lesson can gate "the defender struck back" (strike:target).
+	var marker := " strikes with "
+	var at := text.find(marker)
+	if at > 0:
+		var tag := _tag_for_name(text.substr(0, at))
+		if not tag.is_empty():
+			bump("strike:%s" % tag)
+
+
+## The lesson tag of the tagged unit whose on-screen name is `unit_name`, or "" (untagged units are
+## not the lesson's business). Names are unique in a lesson table.
+func _tag_for_name(unit_name: String) -> String:
+	if _army_manager == null or not _army_manager.has_method("get_all_game_units"):
+		return ""
+	for unit in _army_manager.get_all_game_units():
+		if unit is GameUnit and unit.get_name() == unit_name:
+			return String(unit.unit_properties.get("lesson_tag", ""))
+	return ""
 
 
 ## Base-to-base gap (inches) from `unit` to its nearest enemy, via the solo controller's own melee
