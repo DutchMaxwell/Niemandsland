@@ -2402,6 +2402,12 @@ KNOB_PRESETS: dict[str, dict[str, Any]] = {
     "reply_speed": {"reply_threat_by_speed": True},
     # inventory C01/C27: the imagined shot measures range base edge to base edge, as the table does
     "range_edge": {"range_by_base_edge": True},
+    # the seven table-rule fixes above as one switch (the A/B harness takes candidate overlays only as named presets)
+    "fidelity_all": {
+        "range_by_base_edge": True, "fire_in_range_only": True, "casualties_bearers_last": True,
+        "hero_counts_in_size": True, "reply_threat_by_speed": True, "charge_needs_path": True,
+        "fearless_roll_when_shaken": True,
+    },
     "aifix_all": {
         "opener_by_finish": True, "no_end_threat": True, "morale_by_probability": True,
         "eval_variant": 4, "reply_v2": True, "reply_skip_activated": True, "reply_hold_gate": True,

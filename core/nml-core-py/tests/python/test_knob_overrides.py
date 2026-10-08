@@ -94,3 +94,12 @@ def test_the_stamp_rides_the_asking_seat_only():
         None, sidecars=False, knob_override_player=2, knob_overrides=PRESET, **game,
     )
     assert res["knobs_by_seat"]["p2"] == PRESET and res["knobs_by_seat"]["p1"] == {}
+
+
+def test_fidelity_all_is_the_union_of_the_seven_table_fidelity_presets():
+    names = ["range_edge", "fire_in_range", "bearers_last", "hero_size", "reply_speed", "charge_path", "fearless_shaken"]
+    union = {}
+    for n in names:
+        union.update(sp.KNOB_PRESETS[n])
+    assert len(union) == 7
+    assert sp.KNOB_PRESETS["fidelity_all"] == union
