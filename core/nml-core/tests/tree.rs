@@ -766,3 +766,217 @@ fn tree_puct_off_is_identical_and_on_moves_the_visits_to_the_prior() {
     assert!(raised * 10 >= n * 8, "the prior raised the favoured row's visits on only {raised} of {n} acts");
 }
 
+// ------------- the one-ply's opponent-model knobs in the tree (loop re-run prerequisite) ---
+
+/// `with_roll` over the given knobs instead of the corpus's (tail caps zeroed the same way).
+fn with_knobs<R>(c: &ActCorpus, ai: usize, statics: &[UnitStatic], k: &nml_core::Knobs,
+                 f: impl FnOnce(&Rollout) -> R) -> R {
+    let mut knobs = *k;
+    (knobs.tail_cap_p1, knobs.tail_cap_p2) = (0, 0);
+    let seams = seams_of(&knobs);
+    let reach = if seams.path { reach_index_for_state(&c.acts[ai].state, &c.terrain) } else { None };
+    let mut p = Policy::new(statics, &c.terrain, seams);
+    (p.tuning, p.reach) = (tuning_of(&knobs), reach.as_ref());
+    f(&Rollout::new(p, knobs))
+}
+
+/// The one-ply's opponent-model knobs as the recorder's presets set them (selfplay.py `leaf_opener`,
+/// `reply_net_cap3_restricted`), one family or both.
+fn opponent_model(k: &nml_core::Knobs, leaf_opener: bool, reply_net: bool) -> nml_core::Knobs {
+    let mut k = *k;
+    k.leaf_opener_only = leaf_opener;
+    if reply_net {
+        k.reply_by_net = true;
+        (k.reply_top_k, k.reply_horizon, k.reply_pool_cap, k.reply_menu_restricted) = (3, 1, 3, true);
+    }
+    k
+}
+
+/// The arms every check below runs: (name, `leaf_opener_only`, the `reply_by_net` family).
+const ARMS: [(&str, bool, bool); 3] =
+    [("leaf_opener", true, false), ("reply_net_cap3_restricted", false, true), ("both", true, true)];
+
+/// Map step 1 — the tree prices NO rollout, so `leaf_opener_only` has nothing to cut there. On both fixtures every
+/// root edge's leaf is the edge's own activation (the EV resolve, its Coordinate hand-off, `advance` to the next
+/// decision: rule bookkeeping, no move chosen) priced by the Blend leaf of that ONE state (the referee at a game
+/// end), knob OFF and ON alike. Negative control: the one-ply's scripted-tail value of the same edge differs from
+/// the tree's leaf, so a tree whose leaves played that tail would fail the equality. Reported: the root edges where
+/// the one-ply's `leaf_opener_only` leaf is the very state the tree prices, and the Coordinate hand-offs (the
+/// scripted brain's one reach into the tree).
+#[test]
+fn opponent_model_tree_leaf_is_the_edges_own_activation() {
+    let mut sc = Scratch::default();
+    let (mut edges, mut tail_differs, mut same_leaf, mut coord) = (0usize, 0usize, 0usize, 0usize);
+    for path in [ACTS, WIDE] {
+        let c = load(path);
+        let per_act = act_statics(&c, REPO);
+        for (ai, act) in c.acts.iter().enumerate() {
+            let (p, seat) = (act.player, act.statics.opener_seat);
+            for on in [false, true] {
+                with_knobs(&c, ai, &per_act[ai], &opponent_model(&c.knobs, on, false), |roll| {
+                    let (rows, order) = ranked(roll, &act.state, p, &mut sc).unwrap();
+                    let mut root = Node::new(act.state.clone(), Step::Mover(p), p);
+                    root.children = root_children(&rows, &order, &[]);
+                    let width = root.children.len();
+                    let cfg = TreeCfg { leaf: TreeLeaf::Blend, dice: TreeDice::Ev, samples: 1, batch: 8, budget: width,
+                                        wall_ms: 0, deadline: None, widen: 0.0, puct: 0.0, player: p, opener_seat: seat,
+                                        sig: None, hook: None, w: 0.0 };
+                    let t = run(roll, &cfg, &mut root, &mut GodotRng::new(7), &mut sc).unwrap().1;
+                    assert_eq!((t.completed, root.next_child), (width, width), "act {ai}: one leaf per root edge");
+                    for ch in &root.children {
+                        let leaf = &ch.nodes[0];
+                        let mut cur = roll.policy.resolve(&act.state, &ch.cand).unwrap();
+                        let fired = roll.coordinate_hand_off(&mut cur, &ch.cand, p, &mut sc).unwrap();
+                        let turn = other_player(&cur, p);
+                        let step = advance(roll, &mut cur, turn, None);
+                        assert_eq!(format!("{:?}", leaf.state), format!("{cur:?}"),
+                                   "act {ai} idx {}: the leaf is not the edge's own activation", ch.idx);
+                        let want = match step {
+                            Step::Terminal => referee(&cur, p),
+                            Step::Mover(_) => roll.blend_score_leaf(std::slice::from_ref(&cur), p, seat, &[], 0.0),
+                        };
+                        assert_eq!((leaf.n, leaf.w.to_bits()), (1, want.to_bits()),
+                                   "act {ai} idx {} leaf_opener_only={on}: not the Blend leaf of that state", ch.idx);
+                        let (ends, stop) = roll.rollout_traced(&act.state, &ch.cand, p, -1, &mut sc).unwrap();
+                        if on {
+                            assert_eq!((ends.len(), stop), (1, Stop::TailCap), "act {ai}: the one-ply knob is not live");
+                            same_leaf += usize::from(format!("{:?}", ends[0]) == format!("{cur:?}"));
+                        } else {
+                            tail_differs += usize::from(roll.blend_score(&ends, p, seat).to_bits() != leaf.w.to_bits());
+                            (edges, coord) = (edges + 1, coord + usize::from(fired));
+                        }
+                    }
+                });
+            }
+        }
+    }
+    println!("tree leaf: {edges} root edges priced at their own activation, knob OFF and ON; the scripted-tail value \
+              differs on {tail_differs}; the one-ply's leaf_opener_only leaf is the tree's very state on {same_leaf}; \
+              Coordinate fired on {coord}");
+    assert!(edges > 0 && tail_differs > 0, "no edge where a scripted tail would show: the equality proves nothing");
+}
+
+/// A seat-aware counting leaf hook (`tests/plan.rs` `SeatLog`, with a state-dependent answer so the net leaf moves
+/// the search): every call is logged as `(side, opener_seat, leaves)`; a leaf answers 0.01 x (the side's models
+/// alive minus the other side's).
+struct HookLog {
+    root_seat: bool,
+    calls: std::cell::RefCell<Vec<(i64, bool, usize)>>,
+}
+
+impl HookLog {
+    fn log(&self, leaves: &[&State], side: i64, opener_seat: bool) -> Vec<f64> {
+        self.calls.borrow_mut().push((side, opener_seat, leaves.len()));
+        let lead = |s: &State| (0..s.units()).map(|i| if s.player[i] == side { s.alive[i] } else { -s.alive[i] }).sum::<i64>();
+        leaves.iter().map(|&s| 0.01 * lead(s) as f64).collect()
+    }
+}
+
+impl nml_core::plan::LeafValue for HookLog {
+    fn value(&self, leaves: &[&State], side: i64) -> Result<Vec<f64>, Unsupported> {
+        Ok(self.log(leaves, side, self.root_seat))
+    }
+
+    fn value_for_seat(&self, leaves: &[&State], side: i64, opener_seat: bool) -> Result<Vec<f64>, Unsupported> {
+        Ok(self.log(leaves, side, opener_seat))
+    }
+}
+
+/// A tree pick's deterministic part: the pick, the counts and every root child (idx, visits, mean); the
+/// wall-clock stamps left out.
+fn tree_stats(p: &nml_core::Pick) -> String {
+    let t = p.tree.as_ref().expect("a tree pick carries its trace");
+    format!("{} {:?} {} {} {} {} {} {:?}", p.unit_key, p.action, t.completed, t.batches, t.frontier, t.terminal,
+            t.deadline_hit, t.root)
+}
+
+/// Map step 2 — the tree runs no rollout, so the `reply_by_net` family has no reply to hand the nested search: an
+/// opponent node of the tree searches its full menu itself. Through `Search::run` (the tree knob, budget 64, the net
+/// leaf live at w 1) every arm ON gives OFF's pick, root statistics and hook calls to the bit, and every hook call
+/// comes from the searcher's own seat — no nested search. Negative control: the same act through the ONE-PLY with the
+/// same hook and the family ON logs calls from the opponent's seat, so the log sees a nested search where one runs.
+#[test]
+fn opponent_model_reply_family_runs_no_nested_search_in_the_tree() {
+    let c = load(ACTS);
+    let per_act = act_statics(&c, REPO);
+    let mut tree = c.knobs;
+    (tree.search_mode, tree.tree_budget, tree.tree_wall_ms, tree.deadline_us) = (SearchMode::Tree, 64, 0, 0);
+    let (mut acts, mut tree_calls, mut nested) = (0usize, 0usize, 0usize);
+    for (ai, act) in c.acts.iter().enumerate() {
+        let (p, seat) = (act.player, act.statics.opener_seat);
+        let pick = |k: &nml_core::Knobs| {
+            let log = HookLog { root_seat: seat, calls: Default::default() };
+            let got = with_knobs(&c, ai, &per_act[ai], k, |roll| {
+                let mut s = Search::new(*roll, &act.statics);
+                s.leaf_value = Some(&log as &dyn nml_core::plan::LeafValue);
+                s.leaf_value_w = 1.0;
+                s.run(&act.state, p, &mut Scratch::default(), None)
+            });
+            (got, log.calls.into_inner())
+        };
+        let (off, off_calls) = pick(&tree);
+        let off = off.unwrap_or_else(|e| panic!("act {ai}: {e:?}"));
+        for (name, lo, rn) in ARMS {
+            let (on, on_calls) = pick(&opponent_model(&tree, lo, rn));
+            let on = on.unwrap_or_else(|e| panic!("act {ai} {name}: {e:?}"));
+            assert_eq!(tree_stats(&on), tree_stats(&off), "act {ai} {name}: the tree's pick or root statistics moved");
+            assert_eq!(on_calls, off_calls, "act {ai} {name}: the tree's hook calls moved");
+        }
+        assert!(!off_calls.is_empty() && off_calls.iter().all(|&(side, s, _)| (side, s) == (p, seat)),
+                "act {ai}: a tree hook call from another seat: {off_calls:?}");
+        tree_calls += off_calls.len();
+        let (one, one_ply) = pick(&opponent_model(&c.knobs, false, true));
+        if one.is_ok() {
+            nested += one_ply.iter().filter(|&&(side, _, _)| side != p).count();
+        }
+        acts += 1;
+    }
+    println!("reply_by_net family in the tree: {acts} acts, {tree_calls} tree hook calls, every one from the searcher's \
+              seat in every arm; the one-ply with the family ON logged {nested} nested calls from the opponent's seat");
+    assert!(acts == c.acts.len() && tree_calls > 0, "{acts} acts, {tree_calls} calls");
+    assert!(nested > 0, "the one-ply ran no nested reply search: the log cannot see one, the tree check proves nothing");
+}
+
+/// IDENTITY — the opponent-model knobs are inert in the tree: at a budget past the root width (the search descends
+/// into the opponent's nodes) every arm ON gives the all-OFF pick and root statistics (idx, visits, mean, counts) to
+/// the bit, the Blend leaf on both fixtures and the Terminal leaf on acts_25. No executable line of the tree changes
+/// in this PR, so all-OFF is today's tree by construction.
+#[test]
+fn opponent_model_knobs_leave_the_tree_bit_identical() {
+    let mut sc = Scratch::default();
+    let (mut n, mut deep) = (0usize, 0usize);
+    for (path, leaves) in [(ACTS, &[TreeLeaf::Blend, TreeLeaf::Terminal][..]), (WIDE, &[TreeLeaf::Blend][..])] {
+        let c = load(path);
+        let per_act = act_statics(&c, REPO);
+        for (ai, act) in c.acts.iter().enumerate() {
+            for &leaf in leaves {
+                let mut tree = |k: &nml_core::Knobs| with_knobs(&c, ai, &per_act[ai], k, |roll| {
+                    let width = menu(roll, &act.state, act.player, &mut sc).len();
+                    let (best, t, _) = search(roll, &act.state, act.player, leaf, width + 16, 4, &mut sc);
+                    (format!("{best} {t:?}"), t.root.iter().any(|r| r.1 > 1))
+                });
+                let (off, descended) = tree(&c.knobs);
+                for (name, lo, rn) in ARMS {
+                    assert_eq!(tree(&opponent_model(&c.knobs, lo, rn)).0, off, "act {ai} {leaf:?} {name}: the tree moved");
+                }
+                (n, deep) = (n + 1, deep + usize::from(descended));
+            }
+        }
+    }
+    println!("tree identity: {n} searches x {} arms bit-identical to all knobs OFF, {deep} descended below the root",
+             ARMS.len());
+    assert!(n > 0 && deep > 0, "{n} searches, {deep} descended: the opponent's nodes are untested");
+}
+
+/// The recorder's tree arm with both opponent-model presets on (`--arm L` + `leaf_opener` +
+/// `reply_net_cap3_restricted`) is one header the parser takes as written.
+#[test]
+fn opponent_model_tree_header_parses_as_written() {
+    let head = r#"{"kind":"header","profiles":{},"knobs":{"search_mode":"tree","tree_leaf":"blend","tree_budget":128,
+        "leaf_opener_only":true,"reply_by_net":true,"reply_top_k":3,"reply_horizon":1,"reply_pool_cap":3,
+        "reply_menu_restricted":true}}"#;
+    let k = read_act_header(head).unwrap_or_else(|e| panic!("{e}")).knobs;
+    assert_eq!((k.search_mode, k.tree_leaf, k.tree_budget), (SearchMode::Tree, TreeLeaf::Blend, 128));
+    assert!(k.leaf_opener_only && k.reply_by_net && k.reply_menu_restricted);
+    assert_eq!((k.reply_top_k, k.reply_horizon, k.reply_pool_cap), (3, 1, 3));
+}
