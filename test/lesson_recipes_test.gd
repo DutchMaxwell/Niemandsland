@@ -122,16 +122,33 @@ func _first_unit(army: Dictionary, unit_name: String) -> Dictionary:
 	return {}
 
 
+func test_s07_recipe_is_a_playing_morale_table() -> void:
+	var recipe := LessonRecipes.recipe("S-07")
+	assert_vector(recipe.get("size_feet", Vector2.ZERO)).is_equal(Vector2(4, 4))
+	assert_int(recipe.get("phase", 0)).is_equal(1)
+	assert_array(recipe.get("ai_slots", [])).contains([2])
+	var tags: Array[String] = []
+	var by_tag: Dictionary = {}
+	for side in recipe.get("sides", []):
+		for pick in side.get("units", []):
+			tags.append(String(pick.get("tag", "")))
+			by_tag[String(pick.get("tag", ""))] = pick
+	assert_array(tags).contains(["shaken", "alpha", "target", "tough"])
+	assert_bool(by_tag["shaken"].get("shaken", false)).is_true()
+	assert_int(by_tag["target"].get("dead", 0)).is_equal(5)
+	assert_int(by_tag["tough"].get("wounds", 0)).is_equal(2)
+	assert_str(by_tag["tough"].get("name", "")).is_equal("Master Brother")
+
+
 func test_recipe_schema_names_the_combat_seam_keys() -> void:
 	assert_bool(LessonRecipes.RECIPE_KEYS.has("ai_slots")).is_true()
-	for key in ["shaken", "fatigued", "dead"]:
+	for key in ["shaken", "fatigued", "dead", "wounds"]:
 		assert_bool(LessonRecipes.UNIT_KEYS.has(key)) \
 			.override_failure_message("unit key '%s' must be part of the recipe schema" % key) \
 			.is_true()
 
-
 func test_every_recipe_pick_exists_in_its_fixture() -> void:
-	for id in ["S-01", "S-02", "S-03", "S-04", "S-05", "S-06"]:
+	for id in ["S-01", "S-02", "S-03", "S-04", "S-05", "S-06", "S-07"]:
 		var recipe := LessonRecipes.recipe(id)
 		for side in recipe.get("sides", []):
 			var path := String(side.get("fixture", ""))

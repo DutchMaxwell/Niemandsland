@@ -161,3 +161,14 @@ func _apply_unit_state(manager: OPRArmyManager, unit: GameUnit, pick: Dictionary
 			if mi != null:
 				mi.is_alive = false
 				mi.wounds_current = 0
+	# `wounds` pre-places whole wounds on a SINGLE-model Tough unit (Tough(3) with 2 wounds = below
+	# half strength) — `dead` only parks whole models, so a lone partially-wounded model needs this.
+	var wounds := int(pick.get("wounds", 0))
+	if wounds > 0:
+		if unit.models.size() != 1:
+			_fail("wounds needs a single-model unit: " + unit.get_name())
+			return
+		var lone := unit.models[0]
+		lone.wounds_current = maxi(int(lone.wounds_max) - wounds, 0)
+		lone.is_alive = lone.wounds_current > 0
+		unit.unit_properties["regiment_wounds_taken"] = wounds
