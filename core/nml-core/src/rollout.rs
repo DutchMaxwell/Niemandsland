@@ -58,7 +58,8 @@ pub enum Stop {
     Horizon,
     /// `cur.round >= cur.rounds_total` — the imagined game ended first.
     GameEnd,
-    /// SPEED L2's per-seat activation cap truncated the rollout mid-round.
+    /// SPEED L2's per-seat activation cap truncated the rollout mid-round —
+    /// or `Knobs::leaf_opener_only` stopped it right after the opener.
     TailCap,
     /// The `(units + 2) * rounds_left` backstop ran out: a logic error in the
     /// policy, never the rule path.
@@ -344,6 +345,13 @@ impl<'a> Rollout<'a> {
         // Coordinate trigger like any other. Skipping it here would make the
         // rule invisible to exactly the pick the search is pricing.
         self.coordinate_hand_off(&mut cur, first_action, me, sc)?;
+        // Opponent-model diagnosis (c), `Knobs::leaf_opener_only` (default off): the leaf IS the
+        // post-opener state — no scripted reply, no scripted tail. Priced as it stands, mid-round, with
+        // no round-end bookkeeping (the tail-cap reading, NML-1051), by the blend + net leaf as ever.
+        if self.knobs.leaf_opener_only {
+            out.push(cur);
+            return Ok((out, Stop::TailCap));
+        }
         let mut turn = other_player(state, me);
         let mut rounds_left = horizon_rounds.max(1);
         // Evaluated ONCE, on the OPENING state's unit count and the OPENING
