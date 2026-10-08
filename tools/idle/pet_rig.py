@@ -132,3 +132,30 @@ def make_pose(arm, view):
             turn(f"PetTail{b}", up, (6.0 + 5.0 * b) * math.sin(2 * math.pi * t - 0.5 - 0.45 * b) + 2.0 * math.sin(2 * math.pi * 3 * t - 0.6 * b))
 
     return pose
+
+
+def add_statics(items):
+    """Import rigid composed parts (throne, bearers) and place them: translation, euler, scale of compose_static.py in the composed frame."""
+    out = []
+    for n, item in enumerate(items):
+        before = set(bpy.data.objects)
+        bpy.ops.import_scene.gltf(filepath=item["glb"])
+        new = [o for o in bpy.data.objects if o not in before]
+        placement = (Matrix.Translation(Vector(item["pos"])) @ Euler([math.radians(a) for a in item.get("rot", [0, 0, 0])]).to_matrix().to_4x4()
+                     @ Matrix.Scale(item.get("scale", 1), 4))
+        for o in new:
+            if o.type != "MESH":
+                continue
+            mw = o.matrix_world.copy()
+            o.parent = None
+            o.matrix_world = placement @ mw
+            for x in bpy.context.view_layer.objects:
+                x.select_set(x is o)
+            bpy.context.view_layer.objects.active = o
+            bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+            o.name = f"Static{n}_{o.name}"
+            out.append(o)
+        for o in new:
+            if o.type != "MESH" and o.name in bpy.data.objects:
+                bpy.data.objects.remove(o, do_unlink=True)
+    return out

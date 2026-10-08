@@ -149,10 +149,15 @@ func _apply_unit_state(manager: OPRArmyManager, unit: GameUnit, pick: Dictionary
 	if bool(pick.get("fatigued", false)):
 		unit.is_fatigued = true
 	var dead := int(pick.get("dead", 0))
-	if dead <= 0:
-		return
-	var models := unit.models
-	for i in range(models.size() - 1, maxi(models.size() - 1 - dead, -1), -1):
-		var node: Node3D = models[i].node
-		if is_instance_valid(node):
-			manager.set_loose_model_dead(node, player, true, unit.unit_id)
+	if dead > 0:
+		var models := unit.models
+		for i in range(models.size() - 1, maxi(models.size() - 1 - dead, -1), -1):
+			var node: Node3D = models[i].node
+			if is_instance_valid(node):
+				manager.set_loose_model_dead(node, player, true, unit.unit_id)
+			# set_loose_model_dead parks the NODE (a meta + a dead slot); the saved table reads the
+			# ModelInstance flags, so kill the model itself too or the load shows it alive again.
+			var mi := models[i] as ModelInstance
+			if mi != null:
+				mi.is_alive = false
+				mi.wounds_current = 0

@@ -73,8 +73,28 @@ const _S05_STEPS := [
 		"rule": "p.5", "all": [{"check": "flag", "args": {"key": "card_presented"}}]},
 	{"id": "shoot", "text": "Right-click Alpha Squad, choose Shoot, click the nearer Warriors squad. The further Warriors squad is over 24\" away — out of range.",
 		"rule": "p.5", "all": [{"check": "counter_grew", "args": {"key": "shoot:alpha"}}]},
-	{"id": "read_log", "text": "Read the log: hits roll against Quality, the target blocks with Defense. (p.8)",
+	{"id": "read_log", "text": "Read the log: hits roll against Quality, the enemy blocks with Defense. (p.8)",
 		"rule": "p.8", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
+]
+
+
+const _S06_STEPS := [
+	{"id": "charge", "text": "Move Alpha Squad into base contact with the enemy squad (within 1\"). (p.9)",
+		"rule": "p.9", "all": [{"check": "gap_at_most", "args": {"tag": "target", "inches": 1.0}}]},
+	{"id": "fight", "text": "Right-click Alpha Squad, choose Fight, click the enemy squad.",
+		"rule": "", "all": [{"check": "counter_grew", "args": {"key": "melee:alpha"}}]},
+	{"id": "pile_in", "text": "The charged squad piles in up to 3\" — read the log, then press Continue. (p.9)",
+		"rule": "p.9", "all": [
+			{"check": "counter_at_least", "args": {"key": "log:pile_in", "n": 1}},
+			{"check": "counter_grew", "args": {"key": "continue"}}]},
+	{"id": "strike_back", "text": "The defender strikes back, then both sides are Fatigued — then press Continue. (p.9)",
+		"rule": "p.9", "all": [
+			{"check": "counter_at_least", "args": {"key": "strike:target", "n": 1}},
+			{"check": "counter_grew", "args": {"key": "continue"}}]},
+	{"id": "consolidate", "text": "The winner consolidates — read the log, then press Continue. (p.10)",
+		"rule": "p.10", "all": [
+			{"check": "counter_at_least", "args": {"key": "log:consolidate", "n": 1}},
+			{"check": "counter_grew", "args": {"key": "continue"}}]},
 ]
 
 
@@ -92,6 +112,8 @@ static func steps_for(chapter_id: String) -> Array:
 			return _S04_STEPS
 		"S-05":
 			return _S05_STEPS
+		"S-06":
+			return _S06_STEPS
 	return []
 
 
@@ -108,5 +130,7 @@ static func ai_mode(chapter_id: String) -> String:
 		"S-04":
 			return "hold"
 		"S-05":
+			return "hold"
+		"S-06":
 			return "hold"
 	return "none"
