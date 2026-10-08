@@ -17,14 +17,24 @@ import numpy as np
 RAGGED = ("units", "objs", "terr", "cands")
 FLAT = ("label", "glob", "actor", "target", "hand_score", "pi", "tree_fired", "v_root", "v_pick", "completed",
         "outcome", "side", "round", "seq")
+# Optional columns (recorder flags --explore-seed / --rs-value / --cand-geom): carried when EVERY game has them, refused when only some do.
+# `geom_*` are one ragged group over ALL rows (hand + grid) with `geom_ptr`; the others are per decision or cands-aligned.
+GEOM = ("geom_kind", "geom_x_in", "geom_y_in", "geom_cell", "geom_actor", "geom_target", "geom_grid", "geom_source", "geom_rank",
+        "geom_rs", "geom_hand", "geom_pi")
+EXTRA = ("explored", "rs_value", "label_all", "n_hand") + GEOM
 
 
 def concat(games, game_ids):
     # Packed game arrays -> one packed shard: ptr columns re-based, `game_id` per position.
-    out = {k: np.concatenate([z[k] for z in games]) for k in FLAT}
+    have = [any(k in z.files for z in games) for k in EXTRA]
+    for k, h in zip(EXTRA, have):
+        if h and not all(k in z.files for z in games):
+            raise SystemExit("column %s is in some games but not all: record one shard's games with the same flags" % k)
+    out = {k: np.concatenate([z[k] for z in games]) for k in FLAT + tuple(k for k, h in zip(EXTRA, have) if h)}
     out["game_id"] = np.concatenate([np.full(len(z["label"]), g, np.int32) for z, g in zip(games, game_ids)])
-    for k in RAGGED:
-        out[k] = np.concatenate([z[k] for z in games])
+    for k in RAGGED + (("geom",) if "geom_kind" in out else ()):
+        if k != "geom":
+            out[k] = np.concatenate([z[k] for z in games])
         ptrs, base = [np.zeros(1, np.int64)], 0
         for z in games:
             ptrs.append(z[k + "_ptr"][1:] + base)
@@ -39,10 +49,12 @@ def validate(z, name):
     n = np.diff(ptr)
     if len(pi) != ptr[-1] or len(label) != len(n) or len(z["game_id"]) != len(n):
         raise SystemExit("%s: columns are not aligned (pi %d vs cands %d, labels %d)" % (name, len(pi), ptr[-1], len(label)))
-    bad = np.flatnonzero((label < 0) | (label >= n))
+    # a row whose pick is a grid row (--cand-geom) has no token label (-1): its pick is `label_all` over the geom group
+    grid_pick = (label < 0) & (z["label_all"] >= z["n_hand"]) if "label_all" in z else np.zeros(len(label), bool)
+    bad = np.flatnonzero(((label < 0) & ~grid_pick) | (label >= n))
     if len(bad):
         raise SystemExit("%s: position %d: label %d outside its %d-row menu" % (name, bad[0], label[bad[0]], n[bad[0]]))
-    for i in np.flatnonzero(fired):
+    for i in np.flatnonzero(fired & ~grid_pick):
         seg = pi[ptr[i]:ptr[i + 1]]
         if abs(float(seg.sum()) - 1.0) > 0.02 or seg[label[i]] <= 0:
             raise SystemExit("%s: position %d: pi mass %.3f, mass on the label %.3f" % (name, i, seg.sum(), seg[label[i]]))
