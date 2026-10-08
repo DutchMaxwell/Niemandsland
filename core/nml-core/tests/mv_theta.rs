@@ -440,3 +440,51 @@ fn step_blocked_equals_the_unculled_scan() {
     assert!(blocked > 1000 && blocked < 59_000, "the draw must exercise both answers, got {blocked}");
 }
 
+/// aifix route lane: the `WallIndex` (grid over the walls, built once per search) answers `step_blocked` and
+/// `cspace_blocked` exactly like the plain scans — 60,000 random steps over random wall sets (below and above the index
+/// threshold), clearance 0.5 and 0, with discs and terrain.
+#[test]
+fn the_wall_index_answers_exactly_like_the_scan() {
+    use nml_core::mv::cost::{cspace_blocked, step_blocked, CellSet, WallIndex, Zone};
+    use nml_core::mv::geom2::V2;
+    let mut seed = 0x2545_F491_4F6C_DD1Du64;
+    let mut rnd = move || {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        (seed >> 11) as f64 / (1u64 << 53) as f64
+    };
+    let empty = CellSet::default();
+    let mut blocked = 0usize;
+    for round in 0..12 {
+        let n = if round < 2 { 5 } else { 30 + round * 3 };
+        let walls: Vec<[V2; 2]> = (0..n)
+            .map(|_| {
+                let a: V2 = [(rnd() * 72.0) as f32, (rnd() * 48.0) as f32];
+                [a, [a[0] + (rnd() * 10.0 - 5.0) as f32, a[1] + (rnd() * 10.0 - 5.0) as f32]]
+            })
+            .collect();
+        let zones: Vec<Zone> = (0..3).map(|_| Zone { c: [(rnd() * 72.0) as f32, (rnd() * 48.0) as f32], r: 1.0 + rnd() * 3.0 }).collect();
+        let mut grid = Grid::default();
+        for cx in 0..24 {
+            for cz in 0..16 {
+                if rnd() < 0.3 {
+                    grid.insert((cx, cz), (rnd() * 5.0) as i64);
+                }
+            }
+        }
+        let clearance = if round % 4 == 3 { 0.0 } else { 0.5 };
+        let opts = StepOpts { ledges: &[], clearance, zones: &zones, avoid_cells: &empty, avoid_fine: &empty, dangerous_debuff: false, difficult_debuff: false };
+        let ix = WallIndex::new(&walls);
+        for _ in 0..5000 {
+            let p: V2 = [(rnd() * 80.0 - 4.0) as f32, (rnd() * 56.0 - 4.0) as f32];
+            let c: V2 = [p[0] + (rnd() * 8.0 - 4.0) as f32, p[1] + (rnd() * 8.0 - 4.0) as f32];
+            let plain = step_blocked(p, c, &walls, &opts);
+            assert_eq!(ix.step_blocked(p, c, &opts), plain, "round {round} step {p:?}->{c:?}");
+            assert_eq!(ix.cspace_blocked(p, c, &grid, &opts), cspace_blocked(p, c, &walls, &grid, &opts), "round {round} cspace");
+            blocked += plain as usize;
+        }
+    }
+    assert!(blocked > 1000 && blocked < 59_000, "the draw must exercise both answers, got {blocked}");
+}
+
