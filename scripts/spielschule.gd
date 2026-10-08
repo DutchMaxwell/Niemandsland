@@ -48,7 +48,7 @@ static func chapters() -> Array:
 		{"id": "S-08", "title": "Terrain",
 			"goal": "Use cover, terrain and line of sight.", "scenario": "res://assets/tutorial/scenarios/s08_terrain.nml"},
 		{"id": "S-09", "title": "Mission Objectives",
-			"goal": "Hold objectives and win the mission.", "scenario": ""},
+			"goal": "Hold objectives and win the mission.", "scenario": "res://assets/tutorial/scenarios/s09_objectives.nml"},
 		{"id": "S-10", "title": "Ins Niemandsland — face NACHTMAHR",
 			"goal": "A short real game against the solo AI.", "scenario": ""},
 		# Reserved: the spell lesson arrives with the spell wave (kept visible so players see it is

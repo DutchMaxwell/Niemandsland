@@ -137,6 +137,18 @@ const _S07_STEPS := [
 ]
 
 
+const _S09_STEPS := [
+	{"id": "left_marker", "text": "Move Alpha Squad within 3\" of the left marker. (p.6)",
+		"rule": "p.6", "all": [{"check": "obj_within", "args": {"tag": "alpha", "index": 0, "inches": 3.0}}]},
+	{"id": "right_marker", "text": "Move Bravo Squad within 3\" of the right marker — the enemy stands there too. (p.6)",
+		"rule": "p.6", "all": [{"check": "obj_within", "args": {"tag": "bravo", "index": 2, "inches": 3.0}}]},
+	{"id": "seize", "text": "Activate all your units and end the round: a marker is seized when only one side is within 3\" at the end of a round. (p.6)",
+		"rule": "p.6", "all": [{"check": "value_is", "args": {"key": "objective_owner_0", "value": 1}}]},
+	{"id": "outcome", "text": "The right marker stays contested while both sides are near it. After 4 rounds, the side holding more markers wins, then press Continue. (p.6)",
+		"rule": "p.6", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
+]
+
+
 ## The ordered steps for a chapter id, or [] when the chapter has no lesson data yet (so it can
 ## never fake completion — see LessonRunner).
 static func steps_for(chapter_id: String) -> Array:
@@ -157,6 +169,8 @@ static func steps_for(chapter_id: String) -> Array:
 			return _S07_STEPS
 		"S-08":
 			return _S08_STEPS
+		"S-09":
+			return _S09_STEPS
 	return []
 
 
@@ -179,5 +193,7 @@ static func ai_mode(chapter_id: String) -> String:
 		"S-07":
 			return "hold"
 		"S-08":
+			return "hold"
+		"S-09":
 			return "hold"
 	return "none"
