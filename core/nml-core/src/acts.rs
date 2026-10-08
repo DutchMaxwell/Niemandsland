@@ -97,6 +97,15 @@ pub struct Knobs {
     /// before it, so the default is 1 — byte-identical to today's one candidate.
     #[serde(default = "one")]
     pub menu_advance_k: usize,
+    /// aifix action-space lane (finding 7, C1) — `Tuning::all_targets`: how many EXTRA HOLD+shoot rows (one per
+    /// visible enemy in range, best EV first) the menu appends after the single max-EV one. 0 = off, every
+    /// recorded corpus and shipped game byte-identical.
+    #[serde(default)]
+    pub menu_all_targets: usize,
+    /// aifix action-space lane (finding 7, C3) — `Tuning::advance_obj_shoot`: ADVANCE rows that walk toward the
+    /// nearest objective WITH a shot on a target that stays in range after the move. Default off.
+    #[serde(default)]
+    pub menu_advance_obj_shoot: bool,
     /// Wave 6 (`rushk`) — `Tuning::rush_k`, the PLAYOUT leg: how many of the
     /// nearest objectives the rollout's greedy brain rushes instead of only the
     /// nearest. A MENU knob, not a seam: it widens what the search may choose and
@@ -241,6 +250,13 @@ pub struct Knobs {
     /// exists yet — this field is the registration point, not a new eval.
     #[serde(default)]
     pub eval_variant: i64,
+    /// afpoints P1 — the `strength_by_points` eval arm: a unit's presence is
+    /// its Army Forge cost times its remaining-wounds fraction instead of its
+    /// raw wounds (score.rs `score_hand_variant` arm 5). Research knob for the
+    /// afpoints A/B, default OFF. Read at the same `Rollout::blend_score_leaf`
+    /// site `eval_variant` is.
+    #[serde(default)]
+    pub strength_by_points: bool,
     /// Tree search knob: `"oneply"` (default, today's search) or `"tree"`.
     /// Registration only; absent from every recorded corpus, so it replays
     /// byte-identical.
@@ -283,6 +299,11 @@ pub struct Knobs {
     /// ceil(max(n, 1) ^ tree_widen) children of an n-visit node open.
     #[serde(default)]
     pub tree_widen: f64,
+    /// NachtmahrZero E1 — PUCT prior at the tree root: `mean + c * p * sqrt(N) / (1 + n)` with `p` the softmax of the caller's
+    /// `cand_logits` (index-parallel to the root rows), root children in prior order. 0.0 = off (UCT and the hand order,
+    /// byte-identical); a root without logits keeps UCT whatever `c` is.
+    #[serde(default)]
+    pub tree_puct: f64,
     /// W2 S0 — `Seams::melee_reach`: `"all"` is today's behaviour (every alive
     /// model of the unit strikes); `"table"` is the p.9 rule, scaling by the
     /// models within 2" of an enemy model instead. Absent from every corpus
@@ -1431,6 +1452,8 @@ impl Default for Knobs {
             menu_targets: false,
             menu_holders: false,
             menu_advance_k: 1,
+            menu_all_targets: 0,
+            menu_advance_obj_shoot: false,
             playout_rush_k: 1,
             hero_attach: false,
             charge_landing: false,
@@ -1457,6 +1480,7 @@ impl Default for Knobs {
             // `rows::RULE_VOCAB_VERSION` itself.
             rule_vocab_version: crate::rows::LEGACY_VOCAB_VERSION,
             eval_variant: 0,
+            strength_by_points: false,
             search_mode: SearchMode::OnePly,
             tree_leaf: TreeLeaf::Blend,
             tree_dice: TreeDice::Ev,
@@ -1468,6 +1492,7 @@ impl Default for Knobs {
             deadline_us: 0,
             deadline_after_preselect: false,
             tree_widen: 0.0,
+            tree_puct: 0.0,
             melee_reach: MeleeReach::All,
             consolidate: false,
             cond_ap_dice: false,
@@ -1870,6 +1895,9 @@ pub fn read_act_header(text: &str) -> Result<ActHeader, String> {
     }
     if header.knobs.tree_widen.is_nan() || header.knobs.tree_widen < 0.0 {
         return Err(format!("tree_widen {}: must be >= 0 (0 opens every child first)", header.knobs.tree_widen));
+    }
+    if header.knobs.tree_puct.is_nan() || header.knobs.tree_puct < 0.0 {
+        return Err(format!("tree_puct {}: must be >= 0 (0 = off)", header.knobs.tree_puct));
     }
     if header.knobs.deadline_us < 0 {
         return Err(format!("deadline_us {}: must be >= 0 (0 = off)", header.knobs.deadline_us));

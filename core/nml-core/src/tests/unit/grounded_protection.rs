@@ -60,6 +60,7 @@ fn state_of(in_cover: bool) -> crate::state::State {
         r#"{{"round":0,"rounds_total":1,"units":{{"gp":{{"player":1,"alive":1,"activated":false,"shaken":false,"fatigued":false,"in_cover":{in_cover},"aircraft":false,"dormant":false,"dormant_models":0,"dormant_wounds":[],"casts":0,"morale_bonus":0,"ambush_arrived_round":-1,"earliest_arrival_round":-1,"wound_frac":1.0,"positions":[[0.0,0.0,0.0]],"wounds":[1],"radii":[0.0254],"mods":{{}},"mods_base":{{}},"attached":[],"attached_to":""}}}}}}"#
     );
     let profile = crate::state::Profile {
+        cost: 0,
         unit_id: "gp".into(), name: "Hammer Guard".into(), quality: 3, defense: 3, tough: 1,
         wounds_max: vec![1], model_count: 1, weapons: vec![],
         special_rules: vec!["Grounded Protection".into()], caster_value: 0, base_radius: 0.0,

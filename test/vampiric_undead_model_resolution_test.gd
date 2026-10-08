@@ -129,3 +129,27 @@ func test_werewolves_default_claws_fall_back_to_the_base_model() -> void:
 		"loadout": [{"type": "ArmyBookWeapon", "name": "Heavy Rending Claws", "attacks": 3, "count": 3}]}])
 	var manager := _manager(["vampiric_undead/werewolves", "vampiric_undead/werewolves#heavy_hand_weapon"])
 	assert_array(manager._unit_model_variant_names(army.units[0], "vampiric_undead")).is_equal(["", "", ""])
+
+
+func _corpse_wagon(item: String) -> OPRApiClient.OPRArmy:
+	var loadout: Array = [{"type": "ArmyBookWeapon", "name": "Crew Attacks", "attacks": 8, "count": 1}]
+	if not item.is_empty():
+		loadout.append({"type": "ArmyBookItem", "name": item, "count": 1,
+			"content": [{"type": "ArmyBookRule", "name": "Regeneration"}]})
+	return _army([{"armyId": VU_ARMY, "name": "Corpse Wagon", "size": 1, "bases": {"round": "120x92"},
+		"loadout": loadout}])
+
+
+func test_corpse_wagon_options_resolve_their_machine_bakes() -> void:
+	# Each Corpse Wagon option is its own machine composition (faction doctrine rule 6).
+	var manager := _manager(["vampiric_undead/corpse wagon", "vampiric_undead/corpse wagon#monolith",
+		"vampiric_undead/corpse wagon#brazier", "vampiric_undead/corpse wagon#corpse_pile"])
+	for pair in [["Cursed Monolith", "Corpse Wagon#monolith"], ["Unholy Brazier", "Corpse Wagon#brazier"],
+			["Corpse Pile", "Corpse Wagon#corpse_pile"]]:
+		assert_array(manager._unit_model_variant_names(_corpse_wagon(pair[0]).units[0], "vampiric_undead")) \
+			.is_equal([pair[1]])
+
+
+func test_corpse_wagon_without_an_option_is_the_base_model() -> void:
+	var manager := _manager(["vampiric_undead/corpse wagon", "vampiric_undead/corpse wagon#monolith"])
+	assert_array(manager._unit_model_variant_names(_corpse_wagon("").units[0], "vampiric_undead")).is_equal([""])

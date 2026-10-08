@@ -3096,6 +3096,9 @@ pub(crate) fn with_modifier_sum(mut c: Ctx, rules_epoch: u32) -> Ctx {
 }
 
 pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, melee: bool, rules_epoch: u32) -> Ctx {
+    // Exact shortcut: every grant read below needs a live record with a `grants_rule` somewhere on i's joined chain;
+    // with none, all of them answer false — walk the chain once instead of 33 times (aifix training-speed lane).
+    let grants = mods::chain_has_grants(state, i);
     // Wave 4 (port-entrenched) — the volley's def build is `ctx_live` (5168).
     c.moved_round = state.moved_round[i];
     c.round = state.round;
@@ -3130,7 +3133,7 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
         c.ap_mod = mods::sum_logged(state, i, mods::Role::Ap, melee, un, "AP", |r| r.ap_mod);
         c.defense_mod = -mods::sum_logged(state, i, mods::Role::Defense, melee, un, "defense", |r| r.def_mod + r.defense_mod);
     }
-    c.unstoppable_grant = mods::granted(state, i, "Unstoppable");
+    c.unstoppable_grant = grants && mods::granted(state, i, "Unstoppable");
     // EPOCH 34 UNSTOPPABLE MARK — the mark's CLAMP half rides the SAME
     // once-grant ("Unstoppable", the mark's base name, spent with the
     // exchange like the Regeneration half — one record, never twice), but
@@ -3141,7 +3144,7 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
     // record stops feeding the mark stamp, so it can no longer arm the MELEE
     // clamp (or log the mark's "(once)" line) through the scope-blind union.
     c.unstoppable_mark = if rule_on(rules_epoch, EPOCH_37_UNSTOPPABLE_AURA) {
-        mods::granted_in_scope(state, i, "Unstoppable", false)
+        grants && mods::granted_in_scope(state, i, "Unstoppable", false)
     } else {
         c.unstoppable_grant && rule_on(rules_epoch, EPOCH_34_UNSTOPPABLE_MARK)
     };
@@ -3152,9 +3155,9 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
     // read's final answer (the scope-blind union below 37, the melee half from
     // 37 — the shooting-scoped aura stops bypassing melee Regeneration).
     c.unstoppable_aura = rule_on(rules_epoch, EPOCH_37_UNSTOPPABLE_AURA)
-        && mods::granted_shooting_scoped(state, i, "Unstoppable");
+        && (grants && mods::granted_shooting_scoped(state, i, "Unstoppable"));
     c.unstoppable_regen_melee = if rule_on(rules_epoch, EPOCH_37_UNSTOPPABLE_AURA) {
-        mods::granted_in_scope(state, i, "Unstoppable", false)
+        grants && mods::granted_in_scope(state, i, "Unstoppable", false)
     } else {
         c.unstoppable_grant
     };
@@ -3162,25 +3165,25 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
     // any other rule grant) reaches this round's melee exactly where the
     // static special-rule scan (`unit::ctx_for`) already sets it, and stays
     // out of the EV-only imagination, which never calls `ctx_live` at all.
-    c.furious = c.furious || mods::granted(state, i, "Furious");
+    c.furious = c.furious || (grants && mods::granted(state, i, "Furious"));
     // The rending/thrust legs of the same grant bridge (main.gd:16576-16589),
     // and the Ctx-flag grants the rung E buffs hand out — each lands exactly
     // where the static has-rule test already stamped its flag.
-    c.rending_grant = mods::granted(state, i, "Rending");
-    c.thrust_grant = mods::granted(state, i, "Thrust");
-    c.relentless_grant = mods::granted(state, i, "Relentless");
-    c.shred_grant = mods::granted(state, i, "Shred");
-    c.unpredictable = c.unpredictable || mods::granted(state, i, "Unpredictable Fighter");
-    c.guarded = c.guarded || mods::granted(state, i, "Guarded");
-    c.melee_evasion = c.melee_evasion || mods::granted(state, i, "Melee Evasion");
+    c.rending_grant = grants && mods::granted(state, i, "Rending");
+    c.thrust_grant = grants && mods::granted(state, i, "Thrust");
+    c.relentless_grant = grants && mods::granted(state, i, "Relentless");
+    c.shred_grant = grants && mods::granted(state, i, "Shred");
+    c.unpredictable = c.unpredictable || (grants && mods::granted(state, i, "Unpredictable Fighter"));
+    c.guarded = c.guarded || (grants && mods::granted(state, i, "Guarded"));
+    c.melee_evasion = c.melee_evasion || (grants && mods::granted(state, i, "Melee Evasion"));
     // No Retreat folds HERE for every ctx_live caller; the rolled morale test
     // is not one (tray_morale builds on ctx_of), so it carries its own fold
     // next to the same read below.
-    c.no_retreat = c.no_retreat || mods::granted(state, i, "No Retreat");
+    c.no_retreat = c.no_retreat || (grants && mods::granted(state, i, "No Retreat"));
     // Wave 4 (port-entrenched) — the GRANT leg: a recorded "Entrenched Buff"
     // (`_solo_apply_grant` overlay) feeds the SAME stationary read; the
     // magnitudes are the entry's own (2 / 9). FROZEN `EPOCH_7_TABLE_RULES`.
-    if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) && mods::granted(state, i, "Entrenched")
+    if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) && (grants && mods::granted(state, i, "Entrenched"))
         && c.stationary_alias_penalty < 2
     {
         c.stationary_alias_penalty = 2;
@@ -3203,11 +3206,11 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
     // every pre-wave corpus untouched (spell grants included, Gen-2b's
     // stamping-gap window at rules_epoch 4 included).
     if rule_on(rules_epoch, EPOCH_5_TABLE_RULES) {
-        c.slayer_grant = mods::granted(state, i, "Slayer");
-        c.surge_grant = mods::granted(state, i, "Primal Boost");
-        c.versatile_grant = mods::granted(state, i, "Versatile Attack");
-        c.pierce_shooting_grant = mods::granted(state, i, "AP(+1) when shooting");
-        c.pierce_melee_grant = mods::granted(state, i, "AP(+1) in melee");
+        c.slayer_grant = grants && mods::granted(state, i, "Slayer");
+        c.surge_grant = grants && mods::granted(state, i, "Primal Boost");
+        c.versatile_grant = grants && mods::granted(state, i, "Versatile Attack");
+        c.pierce_shooting_grant = grants && mods::granted(state, i, "AP(+1) when shooting");
+        c.pierce_melee_grant = grants && mods::granted(state, i, "AP(+1) in melee");
         // EPOCH 23 INERT MARKS (MARK_FAMILY_SWEEP_2026-09-14 finding 1): the
         // two Piercing marks' once-grants ride `tray_vs_marks` with the
         // entry's own `grants_rule` string — which the base-name reads above
@@ -3216,11 +3219,11 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
         // recorded no-op.
         if rule_on(rules_epoch, EPOCH_23_INERT_MARKS) {
             c.pierce_shooting_grant = c.pierce_shooting_grant
-                || mods::granted_exact(state, i, "AP(+1) when shooting");
+                || (grants && mods::granted_exact(state, i, "AP(+1) when shooting"));
             c.pierce_melee_grant =
-                c.pierce_melee_grant || mods::granted_exact(state, i, "AP(+1) in melee");
+                c.pierce_melee_grant || (grants && mods::granted_exact(state, i, "AP(+1) in melee"));
         }
-        c.pierce_assault_grant = mods::granted(state, i, "Piercing Assault");
+        c.pierce_assault_grant = grants && mods::granted(state, i, "Piercing Assault");
         // EPOCH 44 SURGE MARK — the mark's once-grant ("Surge", placed by
         // `tray_vs_marks` at the attack seam, spent with the exchange) rides
         // the same attacker-side read the Primal Boost grant uses; the spell
@@ -3228,23 +3231,23 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
         // so they stay unread exactly as before. Gated: below 38 no such
         // record can exist (the entry replays the recorded self-Surge stamp).
         c.surge_mark_grant =
-            rule_on(rules_epoch, EPOCH_44_SURGE_MARK) && mods::granted(state, i, "Surge");
+            rule_on(rules_epoch, EPOCH_44_SURGE_MARK) && (grants && mods::granted(state, i, "Surge"));
         c.unpredictable_shooting =
-            c.unpredictable_shooting || mods::granted(state, i, "Unpredictable Shooter");
+            c.unpredictable_shooting || (grants && mods::granted(state, i, "Unpredictable Shooter"));
         // The Regeneration-primitive boosts: the granted entry's printed
         // targets, folded by the static stamp's own running-MIN rule.
-        if mods::granted(state, i, "Self-Repair Boost") {
+        if grants && mods::granted(state, i, "Self-Repair Boost") {
             c.regeneration = true;
             c.regen_target = fold_min(c.regen_target, SELF_REPAIR_BOOST_TARGET);
             c.regen_target_spell = fold_min(c.regen_target_spell, SELF_REPAIR_BOOST_TARGET);
         }
-        if mods::granted(state, i, "Cursed Undead Boost") {
+        if grants && mods::granted(state, i, "Cursed Undead Boost") {
             c.regeneration = true;
             c.regen_target = fold_min(c.regen_target, CURSED_UNDEAD_BOOST_TARGET);
             c.regen_target_spell = fold_min(c.regen_target_spell, CURSED_UNDEAD_BOOST_TARGET);
         }
         // spell_only: the Angelic stamp folds the spell twin ONLY.
-        c.regen_target_spell = if mods::granted(state, i, "Angelic Blessing Boost") {
+        c.regen_target_spell = if grants && mods::granted(state, i, "Angelic Blessing Boost") {
             fold_min(c.regen_target_spell, ANGELIC_BLESSING_BOOST_TARGET_SPELL)
         } else {
             c.regen_target_spell
@@ -3258,8 +3261,8 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
     // epoch 6 keeps today's inert reading, and the EV imagination (`ctx_of`)
     // stays blind, the sighting seam's own asymmetry.
     if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
-        c.indirect_mark = mods::granted_vs(state, i, "Indirect");
-        c.range_mark_in = if mods::granted_vs(state, i, "+6\" shooting range") {
+        c.indirect_mark = grants && mods::granted_vs(state, i, "Indirect");
+        c.range_mark_in = if grants && mods::granted_vs(state, i, "+6\" shooting range") {
             INCREASED_SHOOTING_RANGE_MARK_IN
         } else {
             0.0
@@ -3283,7 +3286,7 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
             ("Sturdy Boost", ShieldedAlias::SturdyBoost, false),
             ("Grounded Reinforcement", ShieldedAlias::GroundedReinforcement, true),
         ] {
-            if mods::granted(state, i, name) && (!terrain || c.in_cover) {
+            if (grants && mods::granted(state, i, name)) && (!terrain || c.in_cover) {
                 c.shielded = true;
                 if c.shielded_alias == ShieldedAlias::None {
                     c.shielded_alias = alias;
@@ -3316,9 +3319,9 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
     // (AP(-1), no distance gate) folds as one flag-width stamp, the
     // Self-Repair Boost precedent; epoch-5 records replay untouched.
     if rule_on(rules_epoch, EPOCH_6_TABLE_RULES)
-        && (mods::granted(state, i, "Guardian Boost")
-            || mods::granted(state, i, "Warden Boost")
-            || mods::granted(state, i, "Ossified Boost"))
+        && ((grants && mods::granted(state, i, "Guardian Boost"))
+            || (grants && mods::granted(state, i, "Warden Boost"))
+            || (grants && mods::granted(state, i, "Ossified Boost")))
     {
         c.fortified_boost_ap = c.fortified_boost_ap.max(1);
     }
@@ -5790,6 +5793,11 @@ fn volley_ev(
     let us = &statics[state.roster.profile[si]];
     let ut = &statics[state.roster.profile[ti]];
     profiles_of(us, state.alive[si], d, sc);
+    // Exact early-out (aifix training-speed lane): nothing in range and no spell tokens means `shoot_ev` and
+    // `spell_ev_of` are both zero whatever the contexts are — skip the two `ctx_live` builds.
+    if sc.keep.is_empty() && (state.casts[si] <= 0 || !us.is_caster) {
+        return (0.0, 0);
+    }
     let att = ctx_live(ctx_of(us, state, si), statics, state, si, false, rules_epoch);
     let def = ctx_live(ctx_of(ut, state, ti), statics, state, ti, false, rules_epoch);
     let shooting = shoot_ev(&us.shoot, &sc.keep, &sc.attacks, &att, &def, d);

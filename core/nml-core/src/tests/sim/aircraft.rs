@@ -22,6 +22,7 @@ use crate::rules::Registries;
     /// state's `aircraft` flags.
     fn flyer_stamp(special_rules: Vec<String>) -> bool {
         let p = Profile {
+            cost: 0,
             unit_id: "b".into(),
             name: "Flyer".into(),
             quality: 4,

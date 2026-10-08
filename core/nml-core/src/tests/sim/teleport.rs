@@ -6,6 +6,7 @@ use super::*;
     /// read off the REAL registry. The REAL `build_for` product, read at `epoch`.
     fn tp_bearer(rules_epoch: u32, rule: &str, system: &str, faction: &str) -> UnitStatic {
         let p = Profile {
+            cost: 0,
             unit_id: "a".into(),
             name: "a".into(),
             quality: 4,
@@ -179,6 +180,7 @@ use super::*;
             r#"{{"round":0,"rounds_total":1,"units":{{"a":{{"player":1,"alive":1,"activated":false,"shaken":false,"fatigued":false,"in_cover":false,"aircraft":false,"dormant":false,"dormant_models":0,"dormant_wounds":[],"casts":0,"morale_bonus":0,"ambush_arrived_round":-1,"earliest_arrival_round":-1,"wound_frac":1.0,"positions":[[0.0,0.0,0.0]],"wounds":[1],"radii":[0.0254],"mods":{{}},"mods_base":{{}},"attached":[],"attached_to":"","ledger":{{"teleport":{{"used":true,"to":"(0.42, -0.17)"}}}}}}}}}}"#
         );
         let profile = crate::state::Profile {
+            cost: 0,
             unit_id: "a".into(), name: "a".into(), quality: 4, defense: 4, tough: 1,
             wounds_max: vec![1], model_count: 1, weapons: vec![],
             special_rules: vec!["Teleport".into()], caster_value: 0, base_radius: 0.0,

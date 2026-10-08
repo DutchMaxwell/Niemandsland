@@ -57,3 +57,11 @@ func test_weapon_variants_keep_their_bake() -> void:
 	var manager := _manager(["vampiric_undead/ghouls#halberd", "vampiric_undead/ghouls#var2"])
 	assert_array(manager._unit_model_variant_names(_unit("Ghouls", 3, "Halberd"), "vampiric_undead")) \
 		.is_equal(["Ghouls#halberd", "Ghouls#halberd", "Ghouls#halberd"])
+
+
+func test_a_weapon_word_without_its_own_bake_still_varies() -> void:
+	# Ghoul Beast Riders: the book weapon "Lance" maps to a variant word, but the base key IS the lance form (no
+	# `#lance` bake), so the riders fall back to the base model - and every second one takes the winged sculpt.
+	var manager := _manager(["vampiric_undead/ghoul beast riders", "vampiric_undead/ghoul beast riders#var2"])
+	assert_array(manager._unit_model_variant_names(_unit("Ghoul Beast Riders", 3, "Lance"), "vampiric_undead")) \
+		.is_equal(["", "Ghoul Beast Riders#var2", ""])

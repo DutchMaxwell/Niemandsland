@@ -2127,6 +2127,12 @@ def _play_round(
                 "scored": [score_of[i] for i in range(len(trace["cands"]))],
                 "rs": [rs_of.get(i) for i in range(len(trace["cands"]))],
             }
+            # Teacher data (loop prep, 07.10.): a TREE pick's root statistics ride the
+            # row ONLY when the tree fired (the NML-1147a stamp law) — `[build idx,
+            # visits, mean]` per opened root child plus the completed leaf count — so a
+            # record carries the search's own visit distribution and backed-up value.
+            if trace.get("tree") is not None:
+                row["cands"]["tree"] = {k: trace["tree"][k] for k in ("root", "completed", "deadline_hit")}
         if sidecars:
             # `AiMissionEval.features(state, player, BattleSim.reply_threat(
             # state, player), true)` — the RICH vector, which is what
@@ -2365,6 +2371,11 @@ def play_from_state(
 #: 06.10.2026 (E1 opener, D5 game-end threat, D1 morale die, A3 held marker on eval_variant 4,
 #: D2 reply threat, E5 spent enemies skipped mid-round, D2c Immobile hold gate) — farm/aifix/AB_PRESET.md.
 KNOB_PRESETS: dict[str, dict[str, Any]] = {
+    # the strength_by_points eval arm (freeze2 T2c): presence weighted by unit points
+    "afpoints_p1": {"strength_by_points": True},
+    # aifix action-space lane (07.10.2026): the menu opens — up to 3 extra HOLD+shoot targets and one
+    # ADVANCE-toward-the-marker-with-a-shot row. A STRENGTH change (bar = better), see farm/aifix/PREREG_MENU_OPEN.md.
+    "menu_open": {"menu_all_targets": 3, "menu_advance_obj_shoot": True},
     "aifix_all": {
         "opener_by_finish": True, "no_end_threat": True, "morale_by_probability": True,
         "eval_variant": 4, "reply_v2": True, "reply_skip_activated": True, "reply_hold_gate": True,
@@ -2498,6 +2509,7 @@ def play_game(
     eval_variant: int = 0,
     knob_override_player: int = 0,
     knob_overrides: dict[str, Any] | None = None,
+    knob_overrides_other: dict[str, Any] | None = None,
     record_aux: bool = False,
     record_final_state: bool = False,
     cap_share: float = 0.0,
@@ -2761,7 +2773,9 @@ def play_game(
     `KNOB_PRESETS["aifix_all"]`); the other seat keeps the base core. Keys the
     core does not read back are refused (serde would drop a typo silently), the
     seat may not also be the `eval_variant_player`, and the stamp goes into
-    `knobs_by_seat` like the others. Empty/None changes nothing.
+    `knobs_by_seat` like the others. `knob_overrides_other` gives the OTHER seat
+    its own bundle the same way (needs `knob_overrides`; per-seat bundles for the
+    teacher recorder). Empty/None changes nothing.
 
     `record_aux` (expert-iteration step 2) hangs the KataGo-style AUX targets —
     models alive per side, wounds taken per side (`_aux_alive_wounds`) — on
@@ -2787,6 +2801,8 @@ def play_game(
             raise ValueError("knob_overrides needs knob_override_player 1 or 2")
         if knob_override_player == eval_variant_player:
             raise ValueError("a seat takes eval_variant_player OR knob_overrides, not both")
+    if knob_overrides_other and not knob_overrides:
+        raise ValueError("knob_overrides_other needs knob_overrides (the first seat's bundle)")
     # Tree search knobs of the deep seat: only a value that PARTS from the
     # knob's default joins the header and the stamp (NML-1147a pattern).
     tree_seat = {
@@ -3058,15 +3074,17 @@ def play_game(
             seat_knobs[seat_key] = dict(seat_knobs.get(seat_key, {}), eval_variant=eval_variant)
             seat_knobs.setdefault(other_key, {})
     # KNOB-OVERRIDE seam (aifix harness): any planner knob for ONE seat.
-    if knob_overrides:
+    for ko_seat, ko in ((knob_override_player, knob_overrides), (3 - knob_override_player, knob_overrides_other)):
+        if not ko:
+            continue
         ko_core = core_with_knob_overrides(
-            repo_root, header, knobs, knob_overrides, net=net, fit_blend=fit_blend,
+            repo_root, header, knobs, ko, net=net, fit_blend=fit_blend,
             fit_mode=fit_mode, legacy_source_qd=legacy_source_qd,
         )
-        act_cores = {**(act_cores or {}), knob_override_player: ko_core}
-        seat_key, other_key = ("p1", "p2") if knob_override_player == 1 else ("p2", "p1")
+        act_cores = {**(act_cores or {}), ko_seat: ko_core}
+        seat_key, other_key = ("p1", "p2") if ko_seat == 1 else ("p2", "p1")
         seat_knobs = seat_knobs or {"p1": {}, "p2": {}}
-        seat_knobs[seat_key] = dict(seat_knobs.get(seat_key, {}), **knob_overrides)
+        seat_knobs[seat_key] = dict(seat_knobs.get(seat_key, {}), **ko)
         seat_knobs.setdefault(other_key, {})
     # PLAYOUT-CAP (expert-iteration step 2): the per-ACTIVATION second core,
     # same header payload with `cap_top_k`/`cap_horizon` in place of the base

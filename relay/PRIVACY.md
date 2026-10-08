@@ -20,7 +20,7 @@ a client deletes its IP data. It is the reference for `IP_RETENTION_DAYS` in `re
 | --- | --- |
 | IP addresses | In memory for the connection lifetime, at most `IP_RETENTION_DAYS` = 30 days |
 | Rooms and peers | In memory for the connection / session lifetime only; nothing written to disk |
-| Stats file | Aggregate counters, peaks and coarse histograms; contains no IP, room code or player name |
+| Stats file | Aggregate counters, peaks and coarse histograms; contains no IP, room code or player name; `GET /stats` additionally names the serving Fly machine and region (infrastructure ids, not player data) |
 
 ## Deleting your IP data
 

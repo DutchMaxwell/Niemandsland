@@ -227,6 +227,9 @@ pub fn profile_of(d: &VarDictionary) -> Profile {
         quality: dint(d, "quality", 0),
         defense: dint(d, "defense", 0),
         tough: dint(d, "tough", 0),
+        // The army list's own points cost (base + upgrades); absent on a
+        // pre-knob header, so the default keeps the raw-wounds eval.
+        cost: dint(d, "cost", 0),
         wounds_max: darr(d, "wounds_max").iter_shared().map(|v| int(&v)).collect(),
         model_count: dint(d, "model_count", 0),
         weapons: darr(d, "weapons")
@@ -1072,6 +1075,11 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         // never read anything past 0 here. Absent = `Knobs::default()` = 0,
         // and honoured if a header ever does carry it (mirrors `charge_landing`).
         eval_variant: dint(d, "eval_variant", dflt.eval_variant),
+        // afpoints P1. No recorder writes this key: the SHIPPED table plays
+        // only the frozen hand eval, so the in-game seam answers
+        // `Knobs::default()` = OFF and honours the key if a header carries it —
+        // the same shape as `eval_variant` above.
+        strength_by_points: dflag(d, "strength_by_points"),
         // W2 S0. Header-only, like `sighting`: no recorder writes this key yet,
         // so an absent one is `Knobs::default()` = `MeleeReach::All`.
         melee_reach: match d.get("melee_reach").map(|v| v.to_string()).as_deref() {
@@ -1108,6 +1116,8 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         // No recorder wrote the key before it, so an absent one answers
         // `Knobs::default()` = 1 — the single candidate every corpus carries.
         menu_advance_k: dint(d, "menu_advance_k", dflt.menu_advance_k as i64) as usize,
+        menu_all_targets: dint(d, "menu_all_targets", 0).max(0) as usize,
+        menu_advance_obj_shoot: d.get("menu_advance_obj_shoot").map(|v| flag(&v)).unwrap_or(false),
         // Wave 6 (`rushk`). A MENU knob, not a seam (like `menu_advance_k`): the
         // rollout's greedy brain rushes the top-k nearest objectives. No recorder
         // wrote the key before it, so an absent one answers `Knobs::default()` = 1
@@ -1139,6 +1149,7 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
             .map(|v| flag(&v))
             .unwrap_or(dflt.deadline_after_preselect),
         tree_widen: dnum(d, "tree_widen", dflt.tree_widen),
+        tree_puct: dnum(d, "tree_puct", dflt.tree_puct),
     }
 }
 

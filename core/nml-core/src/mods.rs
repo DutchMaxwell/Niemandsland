@@ -13,7 +13,7 @@
 use std::rc::Rc;
 
 use crate::acts::{rule_on, EPOCH_11_SOLO_GRANT_READS, EPOCH_27_TERRAIN_DEBUFF};
-use crate::rules::base_rule_name;
+use crate::rules::base_rule_is;
 use crate::state::State;
 
 /// One `_solo_record_spell_mod` record (main.gd:3649-3670), reduced to the
@@ -157,6 +157,15 @@ pub fn sum_logged(
     total
 }
 
+/// Does ANY record on `i`'s joined chain (bearer, host, attached heroes) carry a `grants_rule`? When not,
+/// every `granted*` read for `i` is false by construction (each requires a non-empty `grants_rule`).
+pub fn chain_has_grants(state: &State, i: usize) -> bool {
+    std::iter::once(i)
+        .chain(state.attached_to[i])
+        .chain(state.attached[i].iter().copied())
+        .any(|u| state.buffs[u].iter().any(|r| !r.grants_rule.is_empty()))
+}
+
 /// Does unit `i` carry a live rule GRANT of `rule`? The overlay
 /// `_solo_apply_grant` (main.gd:3730) writes the granted name onto the whole
 /// JOINED CHAIN — bearer, host and attached heroes — so the read walks all
@@ -247,16 +256,13 @@ fn chain_grant_where(
     attackers: bool,
     scope_ok: impl Fn(&str) -> bool,
 ) -> bool {
-    let mut who: Vec<usize> = vec![i];
-    if let Some(h) = state.attached_to[i] {
-        who.push(h);
-    }
-    who.extend(state.attached[i].iter().copied());
-    who.iter().any(|&u| {
+    // bearer, host, attached heroes — walked without a `Vec` (this runs once per rule per `ctx_live`)
+    let chain = std::iter::once(i).chain(state.attached_to[i]).chain(state.attached[i].iter().copied());
+    chain.into_iter().any(|u| {
         state.buffs[u].iter().any(|r| {
             r.attackers == attackers
                 && !r.grants_rule.is_empty()
-                && base_rule_name(&r.grants_rule) == rule
+                && base_rule_is(&r.grants_rule, rule)
                 && scope_ok(&r.scope)
         })
     })

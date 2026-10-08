@@ -852,6 +852,8 @@ impl Core {
         m.insert("dangerous".into(), self.knobs.dangerous.into());
         m.insert("engage_fold".into(), self.knobs.engage_fold.into());
         m.insert("reply_v2".into(), self.knobs.reply_v2.into());
+        m.insert("menu_all_targets".into(), (self.knobs.menu_all_targets as i64).into());
+        m.insert("menu_advance_obj_shoot".into(), self.knobs.menu_advance_obj_shoot.into());
         m.insert("reply_skip_activated".into(), self.knobs.reply_skip_activated.into());
         m.insert("reply_hold_gate".into(), self.knobs.reply_hold_gate.into());
         m.insert("opener_by_finish".into(), self.knobs.opener_by_finish.into());
@@ -859,6 +861,7 @@ impl Core {
         m.insert("morale_by_probability".into(), self.knobs.morale_by_probability.into());
         m.insert("rule_vocab_version".into(), self.knobs.rule_vocab_version.into());
         m.insert("eval_variant".into(), self.knobs.eval_variant.into());
+        m.insert("strength_by_points".into(), self.knobs.strength_by_points.into());
         m.insert(
             "search_mode".into(),
             Value::String(
@@ -897,6 +900,7 @@ impl Core {
         m.insert("deadline_us".into(), self.knobs.deadline_us.into());
         m.insert("deadline_after_preselect".into(), self.knobs.deadline_after_preselect.into());
         m.insert("tree_widen".into(), self.knobs.tree_widen.into());
+        m.insert("tree_puct".into(), self.knobs.tree_puct.into());
         m.insert(
             "melee_reach".into(),
             Value::String(

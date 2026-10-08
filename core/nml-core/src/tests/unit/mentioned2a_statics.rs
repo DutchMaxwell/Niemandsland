@@ -28,6 +28,7 @@
     /// built through the REAL `build_for` at `epoch`.
     fn carrier(system: &str, faction: &str, rules: &[&str], epoch: u32) -> UnitStatic {
         let p = Profile {
+            cost: 0,
             unit_id: "carrier".into(),
             name: "Carrier".into(),
             quality: 4,

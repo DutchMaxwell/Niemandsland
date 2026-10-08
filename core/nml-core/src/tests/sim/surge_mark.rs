@@ -20,6 +20,7 @@ use crate::state::Weapon;
 /// the GREEN leg the flipped vs_target mark.
 fn surge_carrier(rules: &[&str], rules_epoch: u32) -> UnitStatic {
     let p = Profile {
+        cost: 0,
         unit_id: "a".into(),
         name: "a".into(),
         quality: 4,

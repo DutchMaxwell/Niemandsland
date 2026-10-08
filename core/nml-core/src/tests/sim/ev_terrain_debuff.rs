@@ -30,6 +30,7 @@ use super::*;
     /// between the futile bar and the bar plus the loss.
     fn bearer_profile(faction: &str, attacks: i64) -> Profile {
         Profile {
+            cost: 0,
             unit_id: "a".into(),
             name: "a".into(),
             quality: 4,

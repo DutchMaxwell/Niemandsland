@@ -22,6 +22,7 @@ use nml_core::Registries;
 /// both stamped arrays are non-empty.
 fn carrier(system: &str, faction: &str, rules: &[&str]) -> Profile {
     Profile {
+        cost: 0,
         unit_id: "u".into(),
         name: "u".into(),
         quality: 4,

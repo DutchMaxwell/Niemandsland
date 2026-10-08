@@ -66,6 +66,12 @@ pub fn base_rule_name(rule: &str) -> String {
         .to_string()
 }
 
+/// `base_rule_name(rule) == base` without the `String` it allocates — the grant reads compare one base
+/// name against every live record on every `ctx_live` call, so the allocation was a self-play hotspot.
+pub fn base_rule_is(rule: &str, base: &str) -> bool {
+    rule.trim().split('(').next().unwrap_or("").trim() == base
+}
+
 /// `RulesRegistry.rule_rating` rules_registry.gd:139-145 — "Retaliate(3)" -> 3;
 /// `fallback` when the text between the parentheses is not a plain integer.
 pub fn rule_rating(rule: &str, fallback: i64) -> i64 {

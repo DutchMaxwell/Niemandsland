@@ -26,6 +26,7 @@ use super::*;
     /// Fist so the charge leg's melee EV clears the futile bar.
     fn bearer_profile(faction: &str) -> Profile {
         Profile {
+            cost: 0,
             unit_id: "a".into(),
             name: "a".into(),
             quality: 4,

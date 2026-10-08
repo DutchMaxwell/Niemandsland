@@ -1469,6 +1469,10 @@ def _units_from_list(
         host = by_sel.get(str(ud["joinToUnit"]))
         if host is not None:
             append_selection(host, ud)
+            # `_merge_combined_units` (opr_api_client.gd:1408): the partner
+            # half's own army-list cost folds into the anchor, so the combined
+            # unit's `cost` is the sum the army list states.
+            host["cost"] += int(ud.get("cost", 0))
             # `_merge_combined_units` (opr_api_client.gd:1400-1407): the partner
             # half's rule lines are appended to the anchor if absent, and an
             # item name the anchor already grants under is NOT overwritten.
@@ -1508,6 +1512,13 @@ def _unit_profile(u: dict[str, Any], faction: str, game_system: str,
         "tough": max(_unit_rating(special_rules, "Tough"), 1),
         "wounds_max": list(u["model_tough"]),
         "model_count": model_count,
+        # D7b cost, now surfaced for the `strength_by_points` eval arm: the
+        # army list's own points for this selection (base + selected upgrades,
+        # a combined partner folded in) — `_units_from_list` already carries it.
+        # A split-child template (`_split_child_template`) carries NO cost (a
+        # spawned child is not a list selection), so read it safely: absent = 0
+        # = unpriced, the same reading today.
+        "cost": int(u.get("cost", 0)),
         "weapons": weapons,
         "special_rules": special_rules,
         "caster_value": _caster_value(special_rules, model_count),

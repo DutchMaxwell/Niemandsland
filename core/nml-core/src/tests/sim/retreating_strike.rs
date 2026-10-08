@@ -8,6 +8,7 @@ use super::*;
     /// product, read at `epoch`.
     fn rs_bearer(rules_epoch: u32, rules: &[&str]) -> UnitStatic {
         let p = Profile {
+            cost: 0,
             unit_id: "a".into(),
             name: "a".into(),
             quality: 4,

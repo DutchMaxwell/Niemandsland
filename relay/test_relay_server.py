@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import random
 import struct
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -132,12 +133,19 @@ class TestRoomCodeGeneration:
                 assert char not in ambiguous, f"Ambiguous char '{char}' found"
 
     def test_generated_codes_are_unique_over_1000_runs(self):
-        codes = set()
-        for _ in range(1000):
-            code = self.server.generate_room_code()
-            codes.add(code)
-        # With 729M possibilities, 1000 codes should all be unique
-        assert len(codes) == 1000
+        """1000 codes over a 30^6 = 729M space: a collision is genuinely possible (birthday bound:
+        ~0.0007 expected per run), so exact uniqueness is NOT a property of a correct generator —
+        asserting it flaked on CI at 999/1000. Draw deterministically and bound the collisions."""
+        with patch("relay_server.secrets") as mock_secrets:
+            rng = random.Random(288)  # deterministic; this draw yields the expected single collision
+            mock_secrets.token_bytes.side_effect = (
+                lambda n: bytes(rng.randrange(256) for _ in range(n)))
+            codes = {self.server.generate_room_code() for _ in range(1000)}
+        # Birthday bound: N=1000 draws over M=30^6=729M give E[collisions] = N(N-1)/2M ~= 0.0007,
+        # so 1000/1000 is the norm and a single 999 is legitimate. A broken generator (constant
+        # bytes, truncated entropy, tiny alphabet) collapses far below this bound.
+        expected_collisions = 1000 * 999 / (2 * len(CODE_ALPHABET) ** CODE_LENGTH)
+        assert len(codes) > 1000 - 1 - expected_collisions
 
     def test_code_generation_retries_on_collision(self):
         """If a generated code already exists as a room, retry."""
@@ -840,8 +848,26 @@ class TestStats:
     def test_unwritable_path_degrades_without_crashing(self, tmp_path):
         from relay_server import Stats
         s = Stats(str(tmp_path / "missing_dir" / "stats.json"))
-        s.room_created(rooms_open=1)  # save fails silently
+        s.room_created(rooms_open=1)  # save fails -> warn, never crash
         assert s.rooms_created == 1   # counter still updated in memory
+
+    def test_unwritable_path_warns_once_about_lost_persistence(self, tmp_path, caplog):
+        import logging
+        from relay_server import Stats
+        with caplog.at_level(logging.WARNING, logger="relay"):
+            s = Stats(str(tmp_path / "missing_dir" / "stats.json"))
+            s.room_created(rooms_open=1)          # save fails -> warn once
+            s.peer_connected(peers_connected=1)   # must NOT warn again (no log spam)
+        assert s.rooms_created == 1 and s.peer_connections == 1
+        warnings = [r for r in caplog.records if "persistence unavailable" in r.getMessage()]
+        assert len(warnings) == 1
+
+    def test_first_run_missing_file_is_not_a_warning(self, tmp_path, caplog):
+        import logging
+        from relay_server import Stats
+        with caplog.at_level(logging.WARNING, logger="relay"):
+            Stats(str(tmp_path / "stats.json"))  # dir exists, file absent -> normal first run
+        assert not [r for r in caplog.records if "persistence unavailable" in r.getMessage()]
 
     async def test_get_stats_reports_rooms_and_peers(self, relay):
         server, url = relay
@@ -1104,10 +1130,27 @@ class TestAggregateStats:
             "rooms_open", "peers_connected", "rooms_created", "peer_connections",
             "server_starts", "games_played", "peak_concurrent_peers", "peak_concurrent_rooms",
             "join_failures", "room_lifetime_buckets", "peers_per_room", "first_seen", "last_updated",
+            "machine", "region",
         }
         assert set(data) <= safe_keys
         await host_ws.close()
         await guest_ws.close()
+
+    async def test_http_stats_carries_instance_identity(self, relay, monkeypatch):
+        server, url = relay
+        monkeypatch.setenv("FLY_MACHINE_ID", "148e21ea1d9d89")
+        monkeypatch.setenv("FLY_REGION", "fra")
+        data = json.loads((await http_get(url, "/stats"))[2])
+        assert data["machine"] == "148e21ea1d9d89"
+        assert data["region"] == "fra"
+
+    async def test_http_stats_identity_empty_without_fly_env(self, relay, monkeypatch):
+        server, url = relay
+        monkeypatch.delenv("FLY_MACHINE_ID", raising=False)
+        monkeypatch.delenv("FLY_REGION", raising=False)
+        data = json.loads((await http_get(url, "/stats"))[2])
+        assert data["machine"] == ""
+        assert data["region"] == ""
 
     async def test_http_stats_matches_get_stats_ws(self, relay):
         server, url = relay

@@ -43,6 +43,37 @@ func test_vampiric_undead_foot_families_are_listed_without_tail_bones() -> void:
 	assert_bool(Families.allows("vampiric_undead/ghoulsx", 0)).is_false()
 	assert_bool(Families.allows("vampiric_undead/wolves", 0)).is_false()
 
+func test_night_scouts_keep_their_cloak_skinned_and_carry_no_tail_bones() -> void:
+	for key in ["ratmen/night scouts", "ratmen/night scouts#bow+knives+smokebombs", "ratmen/night scouts#dual"]:
+		assert_bool(Families.allows(key, 0)).is_true()
+		assert_bool(Families.allows(key, 5)).is_false()
+	assert_bool(Families.allows("ratmen/night scoutsx", 0)).is_false()
+
+func test_mummified_skeleton_foot_families_are_listed_without_tail_bones() -> void:
+	for key in ["mummified_undead/skeleton warriors#halberd", "mummified_undead/skeleton archers#horn", "mummified_undead/skeleton leader#dual",
+			"mummified_undead/royal guard#banner+sword", "mummified_undead/royal champion#heavyspear"]:
+		assert_bool(Families.allows(key, 0)).is_true()
+		assert_bool(Families.allows(key, 5)).is_false()
+	assert_bool(Families.allows("mummified_undead/skeleton warriorsx", 0)).is_false()
+	assert_bool(Families.allows("mummified_undead/skeleton champion", 0)).is_false()
+
+func test_mummified_large_rigs_are_listed_without_tail_bones() -> void:
+	for key in ["mummified_undead/guardian statues#royalbow", "mummified_undead/skeleton giant#greatweapon", "mummified_undead/rammit den geddul"]:
+		assert_bool(Families.allows(key, 0)).is_true()
+		assert_bool(Families.allows(key, 5)).is_false()
+	assert_bool(Families.allows("mummified_undead/skeleton giantx", 0)).is_false()
+
+func test_mummies_are_listed_without_tail_bones() -> void:
+	assert_bool(Families.allows("mummified_undead/mummies", 0)).is_true()
+	assert_bool(Families.allows("mummified_undead/mummies", 5)).is_false()
+	assert_bool(Families.allows("mummified_undead/mummiesx", 0)).is_false()
+
+func test_named_ratmen_foot_heroes_are_listed_with_rigid_tails() -> void:
+	for key in ["ratmen/brother hepalit", "ratmen/captain kedseit", "ratmen/getrie veikasip"]:
+		assert_bool(Families.allows(key, 0)).is_true()
+		assert_bool(Families.allows(key, 5)).is_false()
+	assert_bool(Families.allows("ratmen/captain kedseitx", 0)).is_false()
+
 func test_unlisted_families_are_rejected() -> void:
 	assert_bool(Families.allows("ratmen/rat ogres", 0)).is_false()
-	assert_bool(Families.allows("mummified_undead/royal champion", 0)).is_false()
+	assert_bool(Families.allows("mummified_undead/chariot", 0)).is_false()

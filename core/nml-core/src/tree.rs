@@ -42,6 +42,8 @@ pub struct Child {
     pub idx: usize,
     pub cand: Candidate,
     pub nodes: Vec<Node>,
+    /// The policy prior of this edge (root only, E1): `None` = no prior, the node selects by UCT.
+    pub prior: Option<f64>,
 }
 
 /// What the walk found: the side that moves next, or the game's end.
@@ -254,7 +256,7 @@ pub fn ranked(roll: &Rollout, state: &State, player: i64, sc: &mut Scratch)
 /// ORDERS, it never cuts: every row is a child.
 pub fn root_children(rows: &[ScoredRow], order: &[usize], pool: &[usize]) -> Vec<Child> {
     let rest = order.iter().filter(|i| !pool.contains(i));
-    pool.iter().chain(rest).map(|&i| Child { idx: i, cand: rows[i].cand.clone(), nodes: Vec::new() }).collect()
+    pool.iter().chain(rest).map(|&i| Child { idx: i, cand: rows[i].cand.clone(), nodes: Vec::new(), prior: None }).collect()
 }
 
 /// Opens up to `k` more of `node`'s children, in order (progressive
@@ -308,6 +310,8 @@ pub struct TreeCfg<'a> {
     /// descends; > 0 keeps at most ceil(max(n, 1) ^ widen) of an n-visit
     /// node's children open.
     pub widen: f64,
+    /// E1: the PUCT constant (0.0 = UCT everywhere); it only bites at a node whose children carry priors.
+    pub puct: f64,
     pub player: i64,
     pub opener_seat: bool,
     /// The chance streams' root seed (the playout signature); `None`
@@ -363,6 +367,50 @@ pub fn select(node: &Node, player: i64) -> usize {
     best.0
 }
 
+/// The softmax of `logits` as f64 priors (max-shifted); the root prior of E1.
+pub fn softmax_prior(logits: &[f32]) -> Vec<f64> {
+    let m = logits.iter().copied().fold(f32::NEG_INFINITY, f32::max) as f64;
+    let e: Vec<f64> = logits.iter().map(|&l| (f64::from(l) - m).exp()).collect();
+    let s: f64 = e.iter().sum();
+    e.into_iter().map(|x| x / s).collect()
+}
+
+/// Gives the root's children their prior (`prior[child.idx]`) and puts them in prior order (stable: the hand order breaks
+/// ties) — the PUCT root of E1. A prior shorter than a child's `idx` leaves the node unprioritised.
+pub fn apply_root_prior(root: &mut Node, prior: &[f64]) {
+    if root.next_child != 0 || root.children.iter().any(|c| c.idx >= prior.len()) {
+        return;
+    }
+    for c in &mut root.children {
+        c.prior = Some(prior[c.idx]);
+    }
+    root.children.sort_by(|a, b| b.prior.partial_cmp(&a.prior).unwrap_or(std::cmp::Ordering::Equal));
+}
+
+/// PUCT in the searcher's frame: the argmax of `sign * mean + c * p * sqrt(N) / (1 + n)` over the OPENED children (the
+/// opponent's nodes take the argmin side through `sign`; a child without a prior counts p = 0). Ties keep the first child.
+pub fn select_puct(node: &Node, player: i64, c: f64) -> usize {
+    let (sign, sqrt_n) = (if node.mover == player { 1.0 } else { -1.0 }, f64::from(node.n.max(1)).sqrt());
+    let mut best = (0, f64::NEG_INFINITY);
+    for (i, ch) in node.children[..node.next_child].iter().enumerate() {
+        let (mean, n) = child_stat(ch);
+        let u = sign * mean + c * ch.prior.unwrap_or(0.0) * sqrt_n / (1.0 + f64::from(n));
+        if u > best.1 {
+            best = (i, u);
+        }
+    }
+    best.0
+}
+
+/// UCT unless `puct > 0` and the node's children carry priors.
+fn select_with(node: &Node, player: i64, puct: f64) -> usize {
+    if puct > 0.0 && node.children.first().is_some_and(|c| c.prior.is_some()) {
+        select_puct(node, player, puct)
+    } else {
+        select(node, player)
+    }
+}
+
 /// The stream base of a node's sample node `slot` (= child * samples + sample).
 fn child_base(base: Option<i64>, slot: usize) -> Option<i64> {
     base.map(|b| b.wrapping_mul(1_000_003).wrapping_add((slot + 1) as i64))
@@ -404,7 +452,7 @@ pub fn run(roll: &Rollout, cfg: &TreeCfg, root: &mut Node, rng: &mut GodotRng, s
         }
         let (mut node, mut path, mut base) = (&mut *root, Vec::new(), cfg.sig);
         while node.terminal.is_none() && !node.children.is_empty() && node.next_child >= node.children.len().min(cap(node)) {
-            let c = select(node, cfg.player);
+            let c = select_with(node, cfg.player, cfg.puct);
             let s = (0..node.children[c].nodes.len()).min_by_key(|&s| node.children[c].nodes[s].n).unwrap_or(0);
             base = child_base(base, c * per_child + s);
             path.push((c, s));
