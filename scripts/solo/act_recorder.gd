@@ -525,9 +525,13 @@ static func _header_line(state: Dictionary, terrain_cb: Callable, school_world: 
 			# through the legacy branches and the gate's 200/200 proves the OLD rules.
 			# Additive: a header written before this key still parses and still reads
 			# `0`, so every older corpus keeps replaying exactly as it did.
+			# Shipped brain (T2b menu_open, 08.10.2026): menu_all_targets 3 and
+			# menu_advance_obj_shoot (plain.rs knobs_of) ONLY while the brain is wired for this
+			# game and the preset carries `brain_knobs` (AiPlanner.brain_knob_stamp), so a hand-planner game writes
+			# exactly the keys above.
 			# Tree plan step 13: the tree search knobs, ONLY those an env var set
 			# (AiPlanner.tree_knobs), so an unset game writes exactly the keys above.
-			"rules_epoch": rules_epoch}.merged(AiPlanner.tree_knobs())}
+			"rules_epoch": rules_epoch}.merged(AiPlanner.tree_knobs()).merged(AiPlanner.brain_knob_stamp())}
 	# D8a: additive, and only when the harness armed the rulebook generator — an unset
 	# run's header keeps exactly the keys it had before.
 	if not objectives_stamp.is_empty():

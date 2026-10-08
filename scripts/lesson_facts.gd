@@ -13,6 +13,7 @@ var _map_layout: Node
 var _left_panel: CanvasItem
 var _main: Node
 var _unit_dock: Node
+var _battle_log: Node
 var _counters: Dictionary = {}
 
 
@@ -25,9 +26,13 @@ func setup(refs: Dictionary) -> void:
 	_left_panel = refs.get("left_panel")
 	_main = refs.get("main")
 	_unit_dock = refs.get("unit_dock")
+	_battle_log = refs.get("battle_log")
 	if _object_manager != null and _object_manager.has_signal("measurement_finished"):
 		if not _object_manager.measurement_finished.is_connected(_on_measurement_finished):
 			_object_manager.measurement_finished.connect(_on_measurement_finished)
+	if _battle_log != null and _battle_log.has_signal("entry_added"):
+		if not _battle_log.entry_added.is_connected(_on_battle_log_entry):
+			_battle_log.entry_added.connect(_on_battle_log_entry)
 	if _main != null and _main.has_signal("human_attack_resolved"):
 		if not _main.human_attack_resolved.is_connected(_on_human_attack_resolved):
 			_main.human_attack_resolved.connect(_on_human_attack_resolved)
@@ -76,7 +81,8 @@ func snapshot() -> Dictionary:
 		var selected: Array = []
 		if _object_manager != null and _object_manager.has_method("get_selected_objects"):
 			selected = _object_manager.get_selected_objects()
-		for unit in _army_manager.get_all_game_units():
+		var all_units: Array = _army_manager.get_all_game_units()
+		for unit in all_units:
 			if not unit is GameUnit:
 				continue
 			var tag := String(unit.unit_properties.get("lesson_tag", ""))
@@ -96,7 +102,8 @@ func snapshot() -> Dictionary:
 			facts.tags[tag] = {"selected_whole": whole,
 				"centroid_in": sum / float(positioned) / METRES_PER_INCH if positioned > 0 else Vector2.ZERO,
 				"alive": alive.size(), "activated": unit.is_activated,
-				"shaken": unit.is_shaken, "fatigued": unit.is_fatigued}
+				"shaken": unit.is_shaken, "fatigued": unit.is_fatigued,
+				"enemy_gap_in": _enemy_gap_in(unit, all_units)}
 	return facts
 
 
@@ -114,6 +121,55 @@ func _on_human_attack_resolved(attacker: GameUnit, melee: bool) -> void:
 
 func _on_human_cast_resolved(unit: GameUnit) -> void:
 	_bump_tag("cast", unit)
+
+
+## Pile-in and consolidation have no lasting state to read — they are one-shot resolver events. Mark
+## them by their battle-log lines so a lesson step can gate on "the event happened" (counter_grew).
+func _on_battle_log_entry(entry: Dictionary) -> void:
+	var text := String(entry.get("text", ""))
+	var low := text.to_lower()
+	if low.contains("pile in"):
+		bump("log:pile_in")
+	if low.contains("consolidat"):
+		bump("log:consolidate")
+	# Melee strike lines read "<unit name> strikes with <weapon> at <target> …". Bump a counter for
+	# the STRIKER's lesson tag, so a lesson can gate "the defender struck back" (strike:target).
+	var marker := " strikes with "
+	var at := text.find(marker)
+	if at > 0:
+		var tag := _tag_for_name(text.substr(0, at))
+		if not tag.is_empty():
+			bump("strike:%s" % tag)
+
+
+## The lesson tag of the tagged unit whose on-screen name is `unit_name`, or "" (untagged units are
+## not the lesson's business). Names are unique in a lesson table.
+func _tag_for_name(unit_name: String) -> String:
+	if _army_manager == null or not _army_manager.has_method("get_all_game_units"):
+		return ""
+	for unit in _army_manager.get_all_game_units():
+		if unit is GameUnit and unit.get_name() == unit_name:
+			return String(unit.unit_properties.get("lesson_tag", ""))
+	return ""
+
+
+## Base-to-base gap (inches) from `unit` to its nearest enemy, via the solo controller's own melee
+## geometry. INF when there is no controller or no enemy, so a gap gate can never fake completion.
+func _enemy_gap_in(unit: GameUnit, all_units: Array) -> float:
+	if _main == null or not ("solo_controller" in _main):
+		return INF
+	var sc: Node = _main.solo_controller
+	if sc == null or not sc.has_method("nearest_melee_gap_in"):
+		return INF
+	var pid := int(unit.unit_properties.get("player_id", 0))
+	var best := INF
+	for other in all_units:
+		if other == unit or not other is GameUnit:
+			continue
+		if int(other.unit_properties.get("player_id", 0)) == pid:
+			continue
+		best = minf(best, float(sc.nearest_melee_gap_in(unit, other)))
+	return best
 
 
 ## Count an event against a lesson unit's tag. Untagged (non-lesson) units are not the lesson's business.
