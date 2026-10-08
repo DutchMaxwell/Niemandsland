@@ -279,6 +279,11 @@ fn morale_fearless(statics: &[UnitStatic], state: &State, i: usize, seams: Seams
 /// time — the table's die — while one state still answers one way.
 fn morale_fails_expected(state: &State, statics: &[UnitStatic], i: usize, seams: Seams) -> bool {
     if state.shaken[i] {
+        // Inventory C08: an automatic fail is still a failed test; Fearless (all models) rolls its 4+ on it
+        // (`dice::resolve_morale_with_tray`), so the Shaken Fearless unit breaks half the time, the dither standing in for the die.
+        if seams.fearless_roll_when_shaken && morale_fearless(statics, state, i, seams) {
+            return 0.5 > morale_dither(i, state.round);
+        }
         return true;
     }
     let mut fail_p = (morale_target(morale_quality(statics, state, i, seams), state.morale_bonus[i]) - 1) as f64 / 6.0;

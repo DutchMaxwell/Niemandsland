@@ -3832,6 +3832,14 @@ func _brain_knobs_on(diff: SoloDifficulty) -> bool:
 	return diff != null and diff.brain_knobs and shipped_brain_ready()
 
 
+## Search leaf_opener_only: the preset's `leaf_opener` flag AND the brain wired. env NML_LEAF_OPENER=0/1 forces it (A/B arm switch).
+func _leaf_opener_on(diff: SoloDifficulty) -> bool:
+	var forced := OS.get_environment("NML_LEAF_OPENER")
+	if forced != "":
+		return forced == "1"
+	return diff != null and diff.leaf_opener and shipped_brain_ready()
+
+
 ## Hand-planner strength_by_points (A/B 08.10.2026, NOT_WORSE): the preset's `points_strength` flag AND no brain
 ## (the brain path stamps it through brain_knob_stamp). env NML_POINTS=0/1 forces it either way.
 func _points_strength_on(diff: SoloDifficulty) -> bool:
@@ -3852,6 +3860,7 @@ func _apply_aifix(diff: SoloDifficulty) -> void:
 	BattleSim.reply_skip_activated = on
 	BattleSim.reply_hold_gate = on
 	AiPlanner.brain_knobs = _brain_knobs_on(diff)
+	AiPlanner.leaf_opener = _leaf_opener_on(diff)
 	AiPlanner.points_strength = _points_strength_on(diff)
 
 

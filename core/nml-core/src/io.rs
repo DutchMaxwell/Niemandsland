@@ -663,6 +663,10 @@ pub struct Seams {
     /// strength and morale. Needs `hero_attach`. Default OFF.
     #[serde(default)]
     pub hero_counts_in_size: bool,
+    /// Inventory C08 — see `Knobs::fearless_roll_when_shaken`: a Shaken Fearless unit keeps its 4+ roll in the
+    /// imagined morale test. Default OFF.
+    #[serde(default)]
+    pub fearless_roll_when_shaken: bool,
     /// Inventory C03 — see `Knobs::casualties_bearers_last`: special-weapon bearers fall last in the imagined
     /// volley. Default OFF.
     #[serde(default)]
