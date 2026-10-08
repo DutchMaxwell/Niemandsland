@@ -54,6 +54,11 @@ func _build() -> void:
 				_fail("unit not found: %s #%d" % [pick.name, pick.nth])
 				return
 			chosen.append(matches[nth])
+			# A visible custom name (recipe "label") so the lesson text and the unit on the table agree
+			# (the player must never be told a lesson tag — see SpielschuleLessons).
+			var label := String(pick.get("label", ""))
+			if not label.is_empty():
+				matches[nth].custom_name = label
 			pick["player"] = int(side.player)
 			placements[matches[nth]] = pick
 		army.units = chosen
