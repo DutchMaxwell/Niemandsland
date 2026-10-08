@@ -63,8 +63,8 @@ static func recipe(id: String) -> Dictionary:
 			"deployment": -1, "phase": 1, "round": 1, "ai_slots": [2], "cells": [
 				{"type": 2, "from_in": Vector2(-6, 3), "to_in": Vector2(6, 9)},
 				{"type": 2, "from_in": Vector2(-6, -12), "to_in": Vector2(6, -4)},
-				{"type": 1, "from_in": Vector2(-14, -2), "to_in": Vector2(-10, 2)},
-				{"type": 4, "from_in": Vector2(-6, 10), "to_in": Vector2(6, 12)}], "sides": [
+				{"type": 1, "from_in": Vector2(-20, 6), "to_in": Vector2(-16, 10)},
+				{"type": 4, "from_in": Vector2(-24, -3), "to_in": Vector2(24, 3)}], "sides": [
 				{"player": 1, "fixture": "res://assets/tutorial/tutorial_army_p1.json", "units": [
 					{"name": "Battle Brothers", "nth": 1, "tag": "alpha", "label": "Alpha Squad", "at_in": Vector2(0, 14)}]},
 				{"player": 2, "fixture": "res://assets/tutorial/tutorial_army_p2.json", "units": [

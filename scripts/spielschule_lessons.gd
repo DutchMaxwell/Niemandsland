@@ -111,7 +111,7 @@ const _S08_STEPS := [
 		"rule": "p.11", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
 	{"id": "shoot_cover", "text": "Shoot the enemy in cover and watch the +1 in the log. (p.11)",
 		"rule": "p.11", "all": [{"check": "counter_grew", "args": {"key": "shoot:alpha"}}]},
-	{"id": "dangerous", "text": "Right-click Alpha Squad, pick Rush, then click the enemy: the engine runs it through the dangerous ground and rolls one test die per model — a 1 wounds it. (p.12)",
+	{"id": "dangerous", "text": "Right-click Alpha Squad, pick Rush, then click the enemy: the shortest path crosses the dangerous ground between the two forests, and the engine rolls one test die per model — a 1 wounds it. (p.12)",
 		"rule": "p.12", "all": [{"check": "counter_grew", "args": {"key": "log:dangerous"}}]},
 	{"id": "wall", "text": "Ruins are area terrain: units can see into and out of them, but not through — nobody shoots through the ruins, then press Continue. (p.11)",
 		"rule": "p.11", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
