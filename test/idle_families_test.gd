@@ -43,6 +43,12 @@ func test_vampiric_undead_foot_families_are_listed_without_tail_bones() -> void:
 	assert_bool(Families.allows("vampiric_undead/ghoulsx", 0)).is_false()
 	assert_bool(Families.allows("vampiric_undead/wolves", 0)).is_false()
 
+func test_vampiric_undead_scope_v2_foot_families_are_listed_without_tail_bones() -> void:
+	for key in ["vampiric_undead/drained leader#bow+halberd", "vampiric_undead/ghoul champion#greatweapon", "vampiric_undead/captain blackfang", "vampiric_undead/werewolf champion#greatsword"]:
+		assert_bool(Families.allows(key, 0)).is_true()
+		assert_bool(Families.allows(key, 5)).is_false()
+	assert_bool(Families.allows("vampiric_undead/drained leaderx", 0)).is_false()
+
 func test_night_scouts_keep_their_cloak_skinned_and_carry_no_tail_bones() -> void:
 	for key in ["ratmen/night scouts", "ratmen/night scouts#bow+knives+smokebombs", "ratmen/night scouts#dual"]:
 		assert_bool(Families.allows(key, 0)).is_true()
