@@ -62,9 +62,25 @@ def main() -> int:
     ap.add_argument("--preset", choices=sorted(selfplay.KNOB_PRESETS), default=None,
                     help="a named planner-knob bundle for the candidate seat (selfplay.KNOB_PRESETS); "
                          "its eval_variant rides the preset, so --cand-variant must stay 0")
+    ap.add_argument("--base-preset", choices=sorted(selfplay.KNOB_PRESETS), default=None,
+                    help="a named knob bundle applied to BOTH seats (the reference plays it too); the candidate "
+                         "seat overlays --preset on top. Without it the reference plays the core default")
+    ap.add_argument("--base-knobs", default=None,
+                    help="a JSON object overlaid on --base-preset for both seats (e.g. '{\"afpoints\": 1}')")
     a = ap.parse_args()
     if a.preset and a.cand_variant != 0:
         ap.error("--preset carries its own eval_variant; leave --cand-variant at 0")
+    base = {}
+    if a.base_preset:
+        base.update(selfplay.KNOB_PRESETS[a.base_preset])
+    if a.base_knobs:
+        try:
+            base.update(json.loads(a.base_knobs))
+        except ValueError as e:
+            ap.error(f"--base-knobs is not a JSON object: {e}")
+    if base and a.cand_variant != 0:
+        ap.error("a base bundle carries its own eval_variant; leave --cand-variant at 0")
+    cand_knobs = {**base, **(selfplay.KNOB_PRESETS[a.preset] if a.preset else {})}
 
     gr.G["dice"] = a.dice_seed
     deep_on = a.deep_top_k is not None or a.deep_horizon is not None
@@ -84,8 +100,10 @@ def main() -> int:
         )
     if a.cand_variant != 0:
         kwargs.update(eval_variant_player=a.cand_player, eval_variant=a.cand_variant)
-    if a.preset:
-        kwargs.update(knob_override_player=a.cand_player, knob_overrides=selfplay.KNOB_PRESETS[a.preset])
+    if cand_knobs:
+        kwargs.update(knob_override_player=a.cand_player, knob_overrides=cand_knobs)
+        if base:
+            kwargs.update(knob_overrides_other=base)
     if a.mission != "duel":
         kwargs.update(objectives="mission", mission=a.mission)
 
@@ -119,8 +137,9 @@ def main() -> int:
         "knobs_by_seat": (
             {("p1" if a.cand_player == 1 else "p2"): {"eval_variant": a.cand_variant}}
             if a.cand_variant != 0 else
-            ({("p1" if a.cand_player == 1 else "p2"): dict(selfplay.KNOB_PRESETS[a.preset])}
-             if a.preset else None)
+            ({("p1" if a.cand_player == 1 else "p2"): dict(cand_knobs),
+              **({("p2" if a.cand_player == 1 else "p1"): dict(base)} if base else {})}
+             if cand_knobs else None)
         ),
         "knobs": {"charge_gate": "off", "hero_attach": "table",
                   "dice": "table", "charge_landing": "table", "movement": "rigid",
