@@ -5,16 +5,28 @@ const Facts := preload("res://scripts/lesson_facts.gd")
 class FakeObjects extends Node:
 	signal measurement_finished(distance_inches: float)
 	var selected: Array[Node3D] = []
+	var movement_range_controller: Node = null
 	func get_selected_objects() -> Array[Node3D]:
 		return selected
 
 class FakeArmy extends Node:
 	var units: Array[GameUnit] = []
 	var game_phase := 0
+	var current_round := 1
 	func get_all_game_units() -> Array[GameUnit]:
 		return units
 	func get_game_units_for_player(player_id: int) -> Array[GameUnit]:
 		return units if player_id == 1 else []
+
+class FakeMR extends Node:
+	var active := 0
+	func active_count() -> int:
+		return active
+
+class FakeDock extends Node:
+	var presented: GameUnit = null
+	func get_presented_unit() -> GameUnit:
+		return presented
 
 class FakeTable extends Node:
 	var table_size := Vector2(4, 4)
@@ -180,3 +192,40 @@ func test_player_one_units_zone_and_phase() -> void:
 	assert_bool(facts.snapshot().get("p1_all_in_zone", true)).is_false()
 	army.game_phase = 1
 	assert_int(facts.snapshot().get("phase", -1)).is_equal(1)
+
+
+func test_bands_round_and_per_tag_status_flags() -> void:
+	var objects: FakeObjects = auto_free(FakeObjects.new())
+	add_child(objects)
+	var mr: FakeMR = auto_free(FakeMR.new())
+	add_child(mr)
+	objects.movement_range_controller = mr
+	var army: FakeArmy = auto_free(FakeArmy.new())
+	add_child(army)
+	var unit := _unit("alpha", [Vector3.ZERO])
+	army.units = [unit]
+	army.current_round = 2
+	unit.is_activated = true
+	unit.is_shaken = true
+	unit.is_fatigued = false
+	var facts := Facts.new()
+	facts.setup({"army_manager": army, "object_manager": objects})
+	var snap: Dictionary = facts.snapshot()
+	assert_bool(snap.get("bands", true)).is_false()   # no movement rings up yet
+	assert_int(snap.get("round", -1)).is_equal(2)
+	var alpha: Dictionary = snap.tags.get("alpha", {})
+	assert_bool(alpha.get("activated", false)).is_true()
+	assert_bool(alpha.get("shaken", false)).is_true()
+	assert_bool(alpha.get("fatigued", true)).is_false()
+	mr.active = 1
+	assert_bool(facts.snapshot().get("bands", false)).is_true()
+
+
+func test_card_presented_reads_the_unit_dock() -> void:
+	var dock: FakeDock = auto_free(FakeDock.new())
+	add_child(dock)
+	var facts := Facts.new()
+	facts.setup({"unit_dock": dock})
+	assert_bool(facts.snapshot().get("card_presented", true)).is_false()
+	dock.presented = _unit("alpha", [])
+	assert_bool(facts.snapshot().get("card_presented", false)).is_true()

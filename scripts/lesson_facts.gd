@@ -12,6 +12,7 @@ var _table: Node
 var _map_layout: Node
 var _left_panel: CanvasItem
 var _main: Node
+var _unit_dock: Node
 var _counters: Dictionary = {}
 
 
@@ -23,6 +24,7 @@ func setup(refs: Dictionary) -> void:
 	_map_layout = refs.get("map_layout")
 	_left_panel = refs.get("left_panel")
 	_main = refs.get("main")
+	_unit_dock = refs.get("unit_dock")
 	if _object_manager != null and _object_manager.has_signal("measurement_finished"):
 		if not _object_manager.measurement_finished.is_connected(_on_measurement_finished):
 			_object_manager.measurement_finished.connect(_on_measurement_finished)
@@ -38,7 +40,8 @@ func snapshot() -> Dictionary:
 		"counters": _counters.duplicate(), "tags": {},
 		"table_size": Vector2.ZERO, "biome": "", "terrain_pieces": 0,
 		"layout_pieces": 0, "deploy_type": 0, "menu_open": false,
-		"units_p1": 0, "p1_all_in_zone": false, "phase": 0}
+		"units_p1": 0, "p1_all_in_zone": false, "phase": 0,
+		"bands": false, "round": 0, "card_presented": false}
 	if _table != null and "table_size" in _table:
 		facts.table_size = _table.table_size
 	if _table != null and "biome" in _table:
@@ -55,6 +58,14 @@ func snapshot() -> Dictionary:
 	facts.p1_all_in_zone = _p1_all_in_zone(p1_units)
 	if _army_manager != null and "game_phase" in _army_manager:
 		facts.phase = int(_army_manager.game_phase)
+	if _army_manager != null and "current_round" in _army_manager:
+		facts.round = int(_army_manager.current_round)
+	if _object_manager != null and "movement_range_controller" in _object_manager:
+		var mr: Node = _object_manager.movement_range_controller
+		if mr != null and mr.has_method("active_count"):
+			facts.bands = mr.active_count() > 0
+	if _unit_dock != null and _unit_dock.has_method("get_presented_unit"):
+		facts.card_presented = _unit_dock.get_presented_unit() != null
 	if is_instance_valid(_camera_pivot):
 		facts.yaw = _camera_pivot.rotation.y
 		facts.pivot = _camera_pivot.global_position
@@ -84,7 +95,8 @@ func snapshot() -> Dictionary:
 				positioned += 1
 			facts.tags[tag] = {"selected_whole": whole,
 				"centroid_in": sum / float(positioned) / METRES_PER_INCH if positioned > 0 else Vector2.ZERO,
-				"alive": alive.size()}
+				"alive": alive.size(), "activated": unit.is_activated,
+				"shaken": unit.is_shaken, "fatigued": unit.is_fatigued}
 	return facts
 
 
