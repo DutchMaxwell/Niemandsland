@@ -608,6 +608,15 @@ static func brain_knob_stamp() -> Dictionary:
 	return {"menu_all_targets": 3, "menu_advance_obj_shoot": true, "strength_by_points": true}
 
 
+## Core knob leaf_opener_only (plain.rs knobs_of): the search rollout stops after the opener. Own flag, not part of the
+## brain bundle; {} when off (byte-identical header).
+static var leaf_opener := false
+
+
+static func leaf_opener_stamp() -> Dictionary:
+	return {"leaf_opener_only": true} if leaf_opener else {}
+
+
 ## Hand-planner games (no brain): strength_by_points (acts.rs Knobs, plain.rs knobs_of) measured NOT_WORSE
 ## 08.10.2026. Set per pick by SoloController._apply_aifix; {} when off (byte-identical header).
 static var points_strength := false
