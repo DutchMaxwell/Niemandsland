@@ -166,7 +166,7 @@ def _init(cfg):
 def play(w, row, record=True):
     # One manifest row through `lab2_tree_probe.play_row` (the stage-0 path), the Capture armed around it. D-L2: with
     # `--net-cand` / `--net-inc` the candidate net sits on the ROW'S seat and the incumbent's on the other (mirrored by seat).
-    net = SeatNets({row["seat"]: w["nets"][1], 3 - row["seat"]: w["nets"][2]}) if w.get("net_cand") or w.get("net_inc") else w["nets"][1]
+    net = SeatNets({row["seat"]: w["nets"][1], 3 - row["seat"]: w["nets"][2]}) if w.get("net_cand") or w.get("net_inc") or w.get("net_cand_weight", 1.0) != 1.0 or w.get("net_inc_weight", 1.0) != 1.0 else w["nets"][1]
     # The pair/fork sidecars feed no teacher row (only `Capture` reads the picks' traces, and `attach_logged_search` only
     # `row["search"]`): off by default = the same game and the same arrays at ~1/3 of the CPU. A grade file may set it back.
     knobs = {"sidecars": False, **w["knobs"], "record_cands": record}

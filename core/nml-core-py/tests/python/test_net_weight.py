@@ -61,3 +61,18 @@ def test_header_carries_the_weights_only_when_given(tmp_path, monkeypatch):
     assert "net_inc_weight" not in t
     plain = _header(tmp_path, monkeypatch, [])
     assert "net_cand_weight" not in plain and "net_inc_weight" not in plain
+
+
+def test_weight_only_without_a_path_seats_the_weighted_net_on_the_row_seat_only(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(tr.lab, "play_row", lambda nm, sp, row, repo, bank, knobs, net, us, ctx: seen.update(net=net) or {"valid": True})
+    for seat in (1, 2):
+        cand, inc = _net(2.0), _net(1.0)
+        for n in (cand, inc):
+            n.model_sha256 = "s"
+        w = {"nets": {1: cand, 2: inc}, "knobs": {}, "nm": None, "repo": "", "bank": "", "allowance": 0, "ctx": None,
+             "net_cand_weight": 2.0, "net_inc_weight": 1.0}
+        tr.play(w, {"row_id": "g", "seat": seat, "d": 0, "arm": "I"}, record=False)
+        assert isinstance(seen["net"], tr.SeatNets), "one net serves both seats"
+        nets = seen["net"].nets
+        assert nets[seat].weight == 2.0 and nets[3 - seat].weight == 1.0, (seat, nets[1].weight, nets[2].weight)
