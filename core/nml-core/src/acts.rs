@@ -222,6 +222,11 @@ pub struct Knobs {
     /// round `rounds_total`). Research knob for the A/B, default OFF.
     #[serde(default)]
     pub no_end_threat: bool,
+    /// Inventory C01/C27 — the AI's imagination measures shooting range (and the over-9" modifiers)
+    /// base edge to base edge, as the table does, instead of model centre to centre. Research knob
+    /// for the A/B, default OFF (byte-identical).
+    #[serde(default)]
+    pub range_by_base_edge: bool,
     /// aifix D1 — see `Seams::morale_by_probability`. Research knob, default OFF.
     #[serde(default)]
     pub morale_by_probability: bool,
@@ -234,6 +239,10 @@ pub struct Knobs {
     /// aifix D2c — see `Seams::reply_hold_gate`. Research knob, default OFF.
     #[serde(default)]
     pub reply_hold_gate: bool,
+    /// Inventory T03-T06 — see `Seams::reply_threat_by_speed`. Research knob for the A/B, default OFF
+    /// (byte-identical).
+    #[serde(default)]
+    pub reply_threat_by_speed: bool,
     /// NML-1134 — which RULE VOCABULARY this corpus's board rows were slotted
     /// with (`data/encoder_rule_vocab_v1.json`, stamped by `act_recorder.gd`).
     /// THE ONE RULE, and every reader gets it from here: the header says, and a
@@ -1470,10 +1479,12 @@ impl Default for Knobs {
             dangerous_end_morale: false,
             opener_by_finish: false,
             no_end_threat: false,
+            range_by_base_edge: false,
             morale_by_probability: false,
             reply_v2: false,
             reply_skip_activated: false,
             reply_hold_gate: false,
+            reply_threat_by_speed: false,
             // NML-1134: the CORPUS reading — a header with no `knobs` block at
             // all predates the stamp just as surely as one with an unstamped
             // block does. A caller that plays a FRESH game stamps
