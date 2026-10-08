@@ -15,6 +15,8 @@ inline), mirrored by `--seats 1,2`: "the shipped net + one knob vs the shipped n
 decisions of each exploring seat are sampled from 0.75 * root prior + 0.25 * Dirichlet(0.3) (pool softmax without a tree), seeded by
 (row_id, N); rows then carry an `explored` column (1 = that decision was sampled) and the game json `teacher.explored` true; with it
 OFF neither exists (= main's records). A gate/A-B reader drops games with `teacher.explored`.
+  `--rs-value 1` (default 0): rows also carry an `rs_value` column (the search's rollout value per pool candidate, cands-aligned like
+`hand_score`, NaN off-pool, from `trace.rs`) and the game json `teacher.rs_value` true; OFF = today's record.
   teacher_record.py --blocks B.json --arm L|T|L_tray|C|I --out D --bank BANK --repo WT [--knobs grade.json]
                     [--tree-budget 128] [--deadline-us 0] [--deep-pair 10,3] [--seats 1,2] [--dice 0,1] [--workers N]
                     [--net-cand X.onnx --net-inc Y.onnx]
@@ -100,19 +102,21 @@ class Capture:
             v_root = sum(r[1] * r[2] for r in tree["root"]) / n
             v_pick = next((r[2] for r in tree["root"] if r[0] == label), float("nan"))
         f16 = lambda a: np.asarray(a, np.float16)  # noqa: E731
+        rsv = {int(e["idx"]): float(e["rs"]) for e in tr.get("rs", [])} if _W.get("rs_value", False) else None
         return {"units": f16(t["units"][:nu]), "objs": f16(t["objs"][:no]), "terr": f16(t["terr"][:nt]),
                 "cands": f16(t["cands"][:nc]), "glob": f16(t["glob"]), "label": np.int16(label), "pi": pi,
                 "actor": np.asarray(t["actor"][:nc], np.int16), "target": np.asarray(t["target"][:nc], np.int16),
                 "hand_score": f16([score.get(i, float("nan")) for i in range(nc)]), "tree_fired": np.int8(tree is not None),
                 "v_root": np.float16(v_root), "v_pick": np.float16(v_pick), "completed": np.int32(tree["completed"] if tree else 0),
                 "side": np.int8(player), "round": np.int8(rnd), "seq": np.int16(len(self.rows)),
-                **({} if explored is None else {"explored": np.int8(explored)})}
+                **({} if explored is None else {"explored": np.int8(explored)}),
+                **({} if rsv is None else {"rs_value": f16([rsv.get(i, float("nan")) for i in range(nc)])})}
 
 
 def pack(rows, winner):
     # netlab/SHARD_SCHEMA.md packing (ptr-based, live rows only) + the teacher columns; `game_id` is the shard packer's.
     out = {"game_id": np.zeros(len(rows), np.int32), "glob": np.stack([r["glob"] for r in rows])}
-    out.update({k: np.concatenate([np.atleast_1d(r[k]) for r in rows]) for k in FLAT + (("explored",) if "explored" in rows[0] else ())})
+    out.update({k: np.concatenate([np.atleast_1d(r[k]) for r in rows]) for k in FLAT + (("explored",) if "explored" in rows[0] else ()) + (("rs_value",) if "rs_value" in rows[0] else ())})
     for k in RAGGED:
         out[k + "_ptr"] = np.concatenate([[0], np.cumsum([len(r[k]) for r in rows])]).astype(np.int64)
         out[k] = np.concatenate([r[k] for r in rows])
@@ -212,7 +216,8 @@ def _work(w, cid, rows):
                                **({"seat_knobs": {str(s): b for s, b in w["seat_knobs"].items()}, "knobs_by_seat": meta.pop("cand_played", None)}
                                   if w.get("seat_knobs") else {}),
                                **({"explored": True, "explore_seed": w["explore_seed"], "explore_seats": sorted(w["explore_seats"])}
-                                  if w.get("explore_seed", -1) >= 0 else {})}
+                                  if w.get("explore_seed", -1) >= 0 else {}),
+                               **({"rs_value": True} if w.get("rs_value") else {})}
             lab.write_row(w["out"], meta)
         t = json.load(open(base + ".json"))
         out.append({"row_id": row["row_id"], "valid": t["valid"], "rows": t["teacher"]["rows"], "tree_rows": t["teacher"]["tree_rows"]})
@@ -241,7 +246,7 @@ def main(argv=None):
     for k, d in (("--blocks", None), ("--out", None), ("--bank", None), ("--repo", None), ("--arm", "L"), ("--knobs", ""),
                  ("--deep-pair", "10,3"), ("--seats", "1,2"), ("--dice", "0,1"), ("--prereg-sha256", "none"),
                  ("--net-cand", ""), ("--net-inc", ""), ("--cand-knobs", ""), ("--cand-preset", ""), ("--knobs-seat1", ""), ("--knobs-seat2", ""),
-                 ("--explore-seed", -1), ("--explore-seats", "1,2"), ("--tree-budget", 128), ("--deadline-us", 0), ("--workers", 1)):
+                 ("--explore-seed", -1), ("--rs-value", 0), ("--explore-seats", "1,2"), ("--tree-budget", 128), ("--deadline-us", 0), ("--workers", 1)):
         ap.add_argument(k, default=d, required=d is None, **({"type": int} if isinstance(d, int) else {}))
     a = ap.parse_args(argv)
     seats, dice = {int(x) for x in a.seats.split(",")}, {int(x) for x in a.dice.split(",")}
@@ -250,7 +255,7 @@ def main(argv=None):
            "pair": tuple(int(x) for x in a.deep_pair.split(",")), "allowance": a.deadline_us, "prereg": a.prereg_sha256,
            "net_cand": a.net_cand, "net_inc": a.net_inc, "cand_knobs": resolve_cand(a.cand_knobs, a.cand_preset, a.arm),
            "seat_knobs": {s: b for s, b in ((1, resolve_cand(a.knobs_seat1, "", a.arm)), (2, resolve_cand(a.knobs_seat2, "", a.arm))) if b},
-           "explore_seed": a.explore_seed, "explore_seats": tuple(int(x) for x in a.explore_seats.split(","))}
+           "explore_seed": a.explore_seed, "explore_seats": tuple(int(x) for x in a.explore_seats.split(",")), "rs_value": bool(a.rs_value)}
     if cfg["seat_knobs"] and cfg["cand_knobs"]:
         raise SystemExit("--knobs-seat1/2 and --cand-knobs/--cand-preset both set a seat's bundle; pick one")
     os.makedirs(a.out, exist_ok=True)

@@ -161,3 +161,47 @@ def test_play_game_stamps_tree_root_only_where_the_tree_fired():
         else:
             assert "tree" not in r["cands"]
     assert all("tree" not in r["cands"] for r in plain["planner_positions"])
+
+
+@needs_lists
+def test_rs_value_off_is_main_on_equals_trace_rs(tmp_path):
+    row = [r for r in fixture_rows() if r["seat"] == 1 and r["d"] == 0][0]
+    traces, real_row = [], tr.Capture.row
+
+    def spy(self, core, state, player, pick, explored=None):
+        traces.append(pick["trace"])
+        return real_row(self, core, state, player, pick, explored)
+
+    def rec(tag, **over):
+        tr._W.pop("rs_value", None)  # `_init` only updates the module dict: no stale flag from the previous arm
+        w = tr._init(cfg(tmp_path / tag, **over))
+        os.makedirs(w["out"])
+        traces.clear()
+        assert tr._work(w, "x", [row])[0]["valid"]
+        return np.load(tmp_path / tag / (row["row_id"] + ".npz")), json.load(open(tmp_path / tag / (row["row_id"] + ".json"))), list(traces)
+    tr.Capture.row = spy
+    try:
+        main, off, on = rec("main"), rec("off", rs_value=False), rec("on", rs_value=True)
+    finally:
+        tr.Capture.row = real_row
+        tr._W.pop("rs_value", None)
+    # (a) OFF = today's record
+    assert sorted(main[0].files) == sorted(off[0].files) and "rs_value" not in off[0].files and "rs_value" not in off[1]["teacher"]
+    assert all(np.array_equal(main[0][k], off[0][k], equal_nan=True) for k in main[0].files)
+    # (b) ON is additive
+    z = on[0]
+    assert "rs_value" in z.files and on[1]["teacher"]["rs_value"] is True
+    assert len(z["rs_value"]) == len(z["hand_score"]) == z["cands_ptr"][-1]
+    assert sorted(f for f in z.files if f != "rs_value") == sorted(off[0].files)
+    assert all(np.array_equal(z[k], off[0][k], equal_nan=True) for k in off[0].files)
+    # (c) the values are the trace's `rs`, NaN off-pool
+    ptr, rs_col, hand = z["cands_ptr"], z["rs_value"], z["hand_score"]
+    assert len(on[2]) == len(ptr) - 1 > 0
+    mixed = differs = 0
+    for k, trace in enumerate(on[2]):
+        seg, want = rs_col[ptr[k]:ptr[k + 1]], {int(e["idx"]): np.float16(e["rs"]) for e in trace["rs"]}
+        got = {i: v for i, v in enumerate(seg) if not np.isnan(v)}
+        assert set(got) == set(want) and all(got[i] == want[i] for i in want)
+        mixed += bool(want) and len(want) < len(seg)
+        differs += not np.array_equal(seg, hand[ptr[k]:ptr[k + 1]], equal_nan=True)
+    assert mixed > 0 and differs > 0
