@@ -191,6 +191,7 @@ func _download_to(http: HTTPRequest, url: String, sha256: String, path: String, 
 		var okc: bool = int(res[0]) == HTTPRequest.RESULT_SUCCESS and int(res[1]) >= 200 and int(res[1]) < 300
 		if okc and FileAccess.get_sha256(tmp).to_lower() == sha256.to_lower():
 			DirAccess.rename_absolute(tmp, path)
+			print("[AssetCDN] fetched %s (%d bytes)" % [url.get_file(), FileAccess.get_size(path)])
 			download_completed.emit(sha256, path, true)
 			return true
 		if FileAccess.file_exists(tmp):
@@ -250,5 +251,6 @@ func _perform_request(url: String, sha256: String) -> bool:
 		return false
 
 	DirAccess.rename_absolute(tmp, cache_path(sha256))
+	print("[AssetCDN] fetched %s (%d bytes)" % [url.get_file(), FileAccess.get_size(cache_path(sha256))])
 	download_completed.emit(sha256, cache_path(sha256), true)
 	return true
