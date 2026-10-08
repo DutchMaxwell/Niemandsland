@@ -173,6 +173,9 @@ pub struct Tuning {
     /// objective (to its control ring, at most the live advance band) and carries the best shot that stays in range
     /// from where the move ends. Appended last; off = byte-identical.
     pub advance_obj_shoot: bool,
+    /// Inventory C02 — `Knobs::fire_in_range_only`: the shoot legs price only the models within each weapon's
+    /// range (`sim::reach_rescale`). Off = byte-identical.
+    pub reach_only: bool,
     /// Inventory C01 — `Knobs::range_by_base_edge`: the shoot legs measure the target distance base edge
     /// to base edge (`sim::range_gap_in`) instead of centre to centre. Off = byte-identical.
     pub range_edge: bool,
@@ -195,6 +198,7 @@ impl Default for Tuning {
             rush_k: 1,
             all_targets: 0,
             advance_obj_shoot: false,
+            reach_only: false,
             range_edge: false,
             charge_needs_path: false,
         }
@@ -321,6 +325,9 @@ pub fn best_shoot(
             geom::dist_in(&state.positions[i], &state.positions[e])
         };
         profiles_of(us, state.alive[i], d, sc);
+        if tuning.reach_only {
+            crate::sim::reach_rescale(us, state.alive[i], &state.positions[i], &state.positions[e], 0.0, sc);
+        }
         let att = ctx_live(ctx_of(us, state, i), statics, state, i, false, rules_epoch);
         let def = ctx_live(ctx_of(ut, state, e), statics, state, e, false, rules_epoch);
         let ev = shoot_ev(&us.shoot, &sc.keep, &sc.attacks, &att, &def, d);
@@ -355,6 +362,9 @@ pub fn ranked_shoots(
             geom::dist_in(&state.positions[i], &state.positions[e])
         };
         profiles_of(us, state.alive[i], d, sc);
+        if tuning.reach_only {
+            crate::sim::reach_rescale(us, state.alive[i], &state.positions[i], &state.positions[e], 0.0, sc);
+        }
         let att = ctx_live(ctx_of(us, state, i), statics, state, i, false, rules_epoch);
         let def = ctx_live(ctx_of(ut, state, e), statics, state, e, false, rules_epoch);
         let ev = shoot_ev(&us.shoot, &sc.keep, &sc.attacks, &att, &def, d);
@@ -430,6 +440,9 @@ fn advance_objective_shoot(
             geom::dist_in(&moved, &state.positions[e])
         };
         profiles_of(us, state.alive[unit], d, sc);
+        if tuning.reach_only {
+            crate::sim::reach_rescale(us, state.alive[unit], &moved, &state.positions[e], 0.0, sc);
+        }
         let att = ctx_live(ctx_of(us, state, unit), statics, state, unit, false, CURRENT_RULES_EPOCH);
         let def = ctx_live(
             ctx_of(&statics[state.roster.profile[e]], state, e), statics, state, e, false, CURRENT_RULES_EPOCH,
