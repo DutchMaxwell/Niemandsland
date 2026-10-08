@@ -98,9 +98,9 @@ func show_step(index: int, total: int, step: Dictionary) -> void:
 	_stay.hide()
 
 
-func show_complete(title: String) -> void:
+func show_complete(title: String, verdict := "") -> void:
 	_header.text = ("TRIAL BY FIRE · " + title).to_upper()
-	_step_text.text = "Chapter complete ✓"
+	_step_text.text = "Chapter complete ✓" if verdict.is_empty() else "Chapter complete ✓\n%s" % verdict
 	_rule.hide()
 	_progress.hide()
 	_continue.hide()

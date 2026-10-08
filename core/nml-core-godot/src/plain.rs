@@ -962,6 +962,7 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         horizon: dint(d, "horizon", dflt.horizon),
         tail_cap_p1: dint(d, "tail_cap_p1", dflt.tail_cap_p1),
         tail_cap_p2: dint(d, "tail_cap_p2", dflt.tail_cap_p2),
+        leaf_opener_only: dflag(d, "leaf_opener_only"),
         imagined_round_end: d
             .get("imagined_round_end")
             .map(|v| flag(&v))
@@ -970,6 +971,9 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         seat_mode: dint(d, "seat_mode", dflt.seat_mode),
         playout_margin: dnum(d, "playout_margin", dflt.playout_margin),
         playout_rich: d.get("playout_rich").map(|v| flag(&v)).unwrap_or(dflt.playout_rich),
+        reply_by_net: dflag(d, "reply_by_net"),
+        reply_top_k: dint(d, "reply_top_k", dflt.reply_top_k),
+        reply_horizon: dint(d, "reply_horizon", dflt.reply_horizon),
         seam_cast: dflag(d, "seam_cast"),
         seam_spacing: dflag(d, "seam_spacing"),
         // NML-1073 M4-7. No recorder writes this key yet (ai_planner.gd:607
