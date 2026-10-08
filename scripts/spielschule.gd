@@ -46,7 +46,7 @@ static func chapters() -> Array:
 		{"id": "S-07", "title": "Morale & Shaken",
 			"goal": "Pass morale tests and clear Shaken.", "scenario": "res://assets/tutorial/scenarios/s07_morale.nml"},
 		{"id": "S-08", "title": "Terrain",
-			"goal": "Use cover, terrain and line of sight.", "scenario": ""},
+			"goal": "Use cover, terrain and line of sight.", "scenario": "res://assets/tutorial/scenarios/s08_terrain.nml"},
 		{"id": "S-09", "title": "Mission Objectives",
 			"goal": "Hold objectives and win the mission.", "scenario": ""},
 		{"id": "S-10", "title": "Ins Niemandsland — face NACHTMAHR",
