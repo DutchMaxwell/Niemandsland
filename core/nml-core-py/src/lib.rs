@@ -872,6 +872,8 @@ impl Core {
         m.insert("engage_fold".into(), self.knobs.engage_fold.into());
         m.insert("reply_v2".into(), self.knobs.reply_v2.into());
         m.insert("menu_all_targets".into(), (self.knobs.menu_all_targets as i64).into());
+        m.insert("menu_los".into(), self.knobs.menu_los.into());
+        m.insert("menu_advance_k".into(), (self.knobs.menu_advance_k as i64).into());
         m.insert("menu_advance_obj_shoot".into(), self.knobs.menu_advance_obj_shoot.into());
         m.insert("charge_needs_path".into(), self.knobs.charge_needs_path.into());
         m.insert("reply_skip_activated".into(), self.knobs.reply_skip_activated.into());
