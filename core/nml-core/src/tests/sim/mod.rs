@@ -1770,6 +1770,7 @@ mod reckless_piercing;
 mod reposition_artillery;
 mod retaliate;
 mod retreating_strike;
+    mod reply_speed;
     mod screened_melee;
 
     mod self_destruct;
