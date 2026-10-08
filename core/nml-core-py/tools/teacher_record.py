@@ -213,7 +213,7 @@ def _work(w, cid, rows):
                                    "knobs_by_seat": meta.pop("cand_played", None)} if w.get("cand_knobs") else {}),
                                **({"seat_knobs": {str(s): b for s, b in w["seat_knobs"].items()}, "knobs_by_seat": meta.pop("cand_played", None)}
                                   if w.get("seat_knobs") else {}),
-                               **({"explored": True, "explore_seed": w["explore_seed"], "explore_seats": sorted(w["explore_seats"])}
+                               **({"explored": True, "explore_seed": w["explore_seed"], "explore_seats": sorted(w.get("explore_seats", (1, 2)))}
                                   if w.get("explore_seed", -1) >= 0 else {})}
             lab.write_row(w["out"], meta)
         t = json.load(open(base + ".json"))
