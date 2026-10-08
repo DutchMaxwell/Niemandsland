@@ -272,6 +272,7 @@ pub fn seams_of(knobs: &Knobs) -> Seams {
         moved_shoot: knobs.menu_wide || knobs.moved_shoot,
         dangerous_end_morale: knobs.dangerous_end_morale,
         morale_by_probability: knobs.morale_by_probability,
+        range_by_base_edge: knobs.range_by_base_edge,
         reply_v2: knobs.reply_v2,
         reply_skip_activated: knobs.reply_skip_activated,
         reply_hold_gate: knobs.reply_hold_gate,
@@ -339,6 +340,7 @@ pub fn tuning_of(knobs: &Knobs) -> crate::menu::Tuning {
         all_targets: knobs.menu_all_targets,
         advance_obj_shoot: knobs.menu_advance_obj_shoot,
         rush_k: knobs.playout_rush_k,
+        range_edge: knobs.range_by_base_edge,
         ..Default::default()
     }
 }
