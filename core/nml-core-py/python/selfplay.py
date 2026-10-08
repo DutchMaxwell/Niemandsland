@@ -2385,10 +2385,19 @@ KNOB_PRESETS: dict[str, dict[str, Any]] = {
     # opponent-model diagnosis (a) (08.10.2026): the opponent's FIRST rollout reply is the planner's own
     # one-ply search for it at grade 3/1 (the net at its leaves) instead of the scripted brain.
     "reply_net": {"reply_by_net": True, "reply_top_k": 3, "reply_horizon": 1},
+    # reply_net at a capped nested pool (08.10.2026): the opponent's nested reply search prices only the top 3
+    # rows of its own prefilter order, no per-unit coverage / patient-advance rows (reply_net's cost lever).
+    "reply_net_cap3": {"reply_by_net": True, "reply_top_k": 3, "reply_horizon": 1, "reply_pool_cap": 3},
+    # ... and on the scripted brain's own four-option menu and playout seams: only the CHOOSER differs from
+    # the scripted reply (search + net instead of the greedy 1-ply score).
+    "reply_net_cap3_restricted": {"reply_by_net": True, "reply_top_k": 3, "reply_horizon": 1, "reply_pool_cap": 3,
+                                  "reply_menu_restricted": True},
     # inventory C12: a joined hero counts in the unit size for half strength and morale (GF/AoF p.14)
     "hero_size": {"hero_counts_in_size": True},
     # inventory C08: a Shaken Fearless unit keeps its 4+ roll in the imagined morale test (p.13), as the table does
     "fearless_shaken": {"fearless_roll_when_shaken": True},
+    # inventory C03: special-weapon bearers fall last in the imagined volley, as the table assumes
+    "bearers_last": {"casualties_bearers_last": True},
     # inventory T03-T06: the enemy's reply threat by its real charge/advance band, base gap, no Aircraft charge
     "reply_speed": {"reply_threat_by_speed": True},
     # inventory C01/C27: the imagined shot measures range base edge to base edge, as the table does

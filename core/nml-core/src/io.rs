@@ -667,6 +667,10 @@ pub struct Seams {
     /// imagined morale test. Default OFF.
     #[serde(default)]
     pub fearless_roll_when_shaken: bool,
+    /// Inventory C03 — see `Knobs::casualties_bearers_last`: special-weapon bearers fall last in the imagined
+    /// volley. Default OFF.
+    #[serde(default)]
+    pub casualties_bearers_last: bool,
     /// Inventory C01/C27 — see `Knobs::range_by_base_edge`: the imagined volley measures range and
     /// the over-9" modifiers base edge to base edge. Default OFF.
     #[serde(default)]
