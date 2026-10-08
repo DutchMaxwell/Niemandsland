@@ -202,8 +202,9 @@ jobs:
             echo "CDN blob set changed: ${{ steps.blobs_before.outputs.hash }} -> $H"
           fi
 
+      # Main is the only writer: PR-scoped saves would churn the 10 GB repo cache and evict the Rust build caches.
       - name: Save CDN asset blobs (content-addressed)
-        if: always() && steps.blobs_after.outputs.changed == 'true'
+        if: always() && steps.blobs_after.outputs.changed == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/cache/save@v4
         with:
           path: |
