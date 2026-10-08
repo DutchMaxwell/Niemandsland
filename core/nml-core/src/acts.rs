@@ -222,6 +222,10 @@ pub struct Knobs {
     /// round `rounds_total`). Research knob for the A/B, default OFF.
     #[serde(default)]
     pub no_end_threat: bool,
+    /// Inventory C12 — a joined hero counts in the unit's size (GF/AoF v3.5.1 p.14): half strength and the
+    /// morale / rout thresholds read host + hero, not the host alone. Research knob, default OFF (byte-identical).
+    #[serde(default)]
+    pub hero_counts_in_size: bool,
     /// aifix D1 — see `Seams::morale_by_probability`. Research knob, default OFF.
     #[serde(default)]
     pub morale_by_probability: bool,
@@ -1470,6 +1474,7 @@ impl Default for Knobs {
             dangerous_end_morale: false,
             opener_by_finish: false,
             no_end_threat: false,
+            hero_counts_in_size: false,
             morale_by_probability: false,
             reply_v2: false,
             reply_skip_activated: false,

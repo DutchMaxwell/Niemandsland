@@ -1060,6 +1060,7 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
             .unwrap_or(dflt.dangerous_end_morale),
         opener_by_finish: d.get("opener_by_finish").map(|v| flag(&v)).unwrap_or(dflt.opener_by_finish),
         no_end_threat: d.get("no_end_threat").map(|v| flag(&v)).unwrap_or(dflt.no_end_threat),
+        hero_counts_in_size: d.get("hero_counts_in_size").map(|v| flag(&v)).unwrap_or(dflt.hero_counts_in_size),
         morale_by_probability: d.get("morale_by_probability").map(|v| flag(&v))
             .unwrap_or(dflt.morale_by_probability),
         reply_v2: d.get("reply_v2").map(|v| flag(&v)).unwrap_or(dflt.reply_v2),

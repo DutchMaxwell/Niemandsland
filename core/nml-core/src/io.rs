@@ -655,6 +655,10 @@ pub struct Seams {
     /// deterministic dither) instead of the 50 % cliff. Default OFF.
     #[serde(default)]
     pub morale_by_probability: bool,
+    /// Inventory C12 — see `Knobs::hero_counts_in_size`: a joined hero counts in the unit size for half
+    /// strength and morale. Needs `hero_attach`. Default OFF.
+    #[serde(default)]
+    pub hero_counts_in_size: bool,
     /// aifix D2 — the reply threat also prices charges (`melee_threat`, inside
     /// 12") and skips Shaken enemies. Default OFF.
     #[serde(default)]
