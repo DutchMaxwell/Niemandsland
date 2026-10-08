@@ -79,9 +79,9 @@ const _S05_STEPS := [
 
 
 const _S06_STEPS := [
-	{"id": "charge", "text": "Move alpha into base contact with the enemy squad (within 1\"). (p.8)",
+	{"id": "charge", "text": "Move Alpha Squad into base contact with the enemy squad (within 1\"). (p.8)",
 		"rule": "p.8", "all": [{"check": "gap_at_most", "args": {"tag": "target", "inches": 1.0}}]},
-	{"id": "fight", "text": "Right-click alpha, choose Fight, click the enemy squad.",
+	{"id": "fight", "text": "Right-click Alpha Squad, choose Fight, click the enemy squad.",
 		"rule": "", "all": [{"check": "counter_grew", "args": {"key": "melee:alpha"}}]},
 	{"id": "pile_in", "text": "The charged squad piles in up to 3\" — read the log. (p.9)",
 		"rule": "p.9", "all": [{"check": "counter_grew", "args": {"key": "log:pile_in"}}]},
