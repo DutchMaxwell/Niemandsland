@@ -1244,7 +1244,7 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	# the end of an activation"), so it is excluded here. should_test only fires on a real casualty at ≤half.
 	if dangerous_models > 0 and not unit.is_destroyed() \
 			and int(report.get("action", 0)) != AiDecision.Action.CHARGE:
-		await _solo_shooting_morale(unit, alive_before_dangerous, _solo_owner_label(unit), wounds_before_dangerous)
+		await _solo_shooting_morale(unit, alive_before_dangerous, _roller_label(unit), wounds_before_dangerous)
 	if unit != null:
 		await _solo_try_precision_spot(unit)   # wave B: once per activation
 	# Ambush Re-Deployment fires "when a unit ... ENDS its activation" — the very last beat, after
@@ -2569,7 +2569,7 @@ func _solo_secret_reveals(infos: Array, objectives: Array, res: Dictionary) -> v
 
 ## Trap: D6+1 hits on the seizing unit, saved and landed through the normal save seam.
 func _solo_secret_trap_hits(victim: GameUnit) -> void:
-	var faces: Array = await _solo_tray_roll(1, 1, _solo_owner_label(victim), "attack",
+	var faces: Array = await _solo_tray_roll(1, 1, _roller_label(victim), "attack",
 		"Trap: D6+1 hits on %s" % victim.get_name())
 	if faces.is_empty():
 		return
@@ -4344,7 +4344,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 	# NML-966 gap B: Deadly/Takedown wounds bypass the regen pool and never reached `landed` —
 	# a Deadly-only volley silently skipped the half-strength morale test. landed_extra counts them in.
 	if landed + landed_extra > 0:
-		await _solo_shooting_morale(target, alive_before, _solo_owner_label(target), wounds_before)
+		await _solo_shooting_morale(target, alive_before, _roller_label(target), wounds_before)
 		await _solo_stage_phase("Morale")
 	_solo_stage_end()
 	_solo_consume_once_mods(attacker, target, false)   # F4: once-mods spent by this exchange
@@ -4625,7 +4625,7 @@ func _solo_resolve_spell_damage(caster: GameUnit, caster_unit: GameUnit, spell_n
 				spell_name, trigger_ones, ("" if trigger_ones == 1 else "s"), caster_unit.get_name(),
 				trigger_ones, ("" if trigger_ones == 1 else "s")], true)
 	if landed > 0 and not target.is_destroyed():
-		await _solo_shooting_morale(target, alive_before, _solo_owner_label(target), wounds_before)
+		await _solo_shooting_morale(target, alive_before, _roller_label(target), wounds_before)
 
 
 ## Whether a spell's weapon-rule token list carries `rule_name` (facet gate for the dice path).
@@ -5885,7 +5885,7 @@ func _solo_try_reanimation(unit: GameUnit) -> void:
 		"restore_target", SoloController.REANIMATION_TARGET))
 	# Stamp BEFORE the roll: the tray await spans frames, and a second door must not roll again.
 	unit.unit_properties["reanimated_round"] = opr_army_manager.current_round
-	var faces: Array = await _solo_tray_roll(pool, target, _solo_owner_label(unit), "attack",
+	var faces: Array = await _solo_tray_roll(pool, target, _roller_label(unit), "attack",
 		"Reanimation: %d+ restores models/wounds" % target)
 	var successes := 0
 	for f in faces:
@@ -6550,7 +6550,7 @@ func _solo_apply_breath_attack(unit: GameUnit) -> void:
 		_solo_defense_vs(btarget), bprofile, not _solo_is_ai_unit(btarget), false)
 	if w > 0:
 		await _solo_land_wounds(btarget, w, 0)
-	await _solo_shooting_morale(btarget, alive_before, _solo_owner_label(btarget), wounds_before)
+	await _solo_shooting_morale(btarget, alive_before, _roller_label(btarget), wounds_before)
 	_solo_consume_once_mods(unit, btarget, false)   # F4: once-mods spent by this exchange
 
 
@@ -7080,7 +7080,7 @@ func _solo_retreating_strike(unit: GameUnit) -> void:
 			member.unit_properties["retreating_strike_round"] = opr_army_manager.current_round
 			var x := maxi(int(ed.get("rating", 0)), 1)
 			var dice := x * member.get_alive_count()
-			var owner_lbl: String = ("AI (%s)" % member.get_name()) if _solo_is_ai_unit(unit) else "You"
+			var owner_lbl: String = _roller_label(member)
 			var rs_faces: Array = await _solo_tray_roll(dice, AiCombatMath.RAVAGE_WOUND_TARGET, owner_lbl, "ravage")
 			var wounds: int = AiCombatMath.ravage_wounds(rs_faces)
 			if battle_log != null:
@@ -7214,7 +7214,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 	var uf_hit := 0
 	var upr_rule := _solo_unpredictable_rule(striker, true, defender)
 	if not upr_rule.is_empty():
-		var uf_owner: String = ("AI (%s)" % striker.get_name()) if _solo_is_ai_unit(striker) else "You"
+		var uf_owner: String = _roller_label(striker)
 		var uf_face: Array = await _solo_tray_roll(1, AiCombatMath.BEST_HIT_TARGET, uf_owner)
 		if not uf_face.is_empty():
 			var uf_eff: Dictionary = AiCombatMath.unpredictable_fighter_effect(int(uf_face[0]))
@@ -7249,7 +7249,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 			if rx <= 0 or not RulesRegistry.unit_rule_active(rv, "Ravage"):
 				continue
 			var rv_dice: int = rx * rv.get_alive_count()
-			var rv_owner: String = ("AI (%s)" % rv.get_name()) if _solo_is_ai_unit(striker) else "You"
+			var rv_owner: String = _roller_label(rv)
 			var rv_faces: Array = await _solo_tray_roll(rv_dice, AiCombatMath.RAVAGE_WOUND_TARGET, rv_owner, "ravage")
 			var rv_wounds: int = AiCombatMath.ravage_wounds(rv_faces)
 			if battle_log != null:
@@ -7356,13 +7356,13 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 						striker.get_name(), "AP(+1)" if v_ap > 0 else "+1 to hit"], true)
 			if not fatigued:
 				_solo_log_hit_mod(p_mod, strike_unit, to_hit)
-			var roll_owner: String = ("AI (%s)" % str(group.get("name", "?"))) if _solo_is_ai_unit(striker) else "You"
+			var roll_owner: String = _roller_label(group.get("member"))
 			var faces: Array = await _solo_tray_roll(int(profile.get("attacks", 0)), to_hit, roll_owner, "attack",
 				"Melee: %s → %s (%d+)" % [str(profile.get("name", "?")), defender.get_name(), to_hit])
 			if bool(profile.get("limited", false)):
 				solo_controller.mark_limited_used(group.get("member"), profile)   # once per game (wave 5)
 			await _solo_hazardous_self_wounds(striker, profile, faces)   # resolver wave A: natural 1s wound the striker
-			var hits: int = await _solo_hits(faces, to_hit_raw, profile, 0.0, defender, charging, _solo_owner_label(striker))
+			var hits: int = await _solo_hits(faces, to_hit_raw, profile, 0.0, defender, charging, _roller_label(striker))
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s strikes with %s at %s — %d hit%s" % [
 					str(group.get("name", "?")), str(profile.get("name", "?")), defender.get_name(), hits, ("" if hits == 1 else "s")], true)
@@ -7428,7 +7428,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 							bt_name, bt_ones, ("" if bt_ones == 1 else "s"), str(group.get("name", "?")),
 							bt_n, ("" if bt_n == 1 else "s"), str(profile.get("name", "?"))], true)
 					var bt_faces: Array = await _solo_tray_roll(bt_n, to_hit, roll_owner)
-					var bt_hits: int = await _solo_hits(bt_faces, to_hit_raw, profile, 0.0, defender, charging, _solo_owner_label(striker))
+					var bt_hits: int = await _solo_hits(bt_faces, to_hit_raw, profile, 0.0, defender, charging, _roller_label(striker))
 					if bt_hits > 0:
 						# Extra attacks resolve pooled (no Deadly/Takedown special-casing — the aof
 						# bearers carry plain weapons) and NEVER chain (counter reset right after).
@@ -7553,7 +7553,7 @@ func _solo_charge_impact(charger: GameUnit, defender: GameUnit, human_defends: b
 		if int(p["dice"]) <= 0 or _solo_combined_alive(defender) <= 0:
 			continue
 		var faces: Array = await _solo_tray_roll(int(p["dice"]), AiCombatMath.IMPACT_HIT_TARGET,
-			_solo_owner_label(charger), "attack",
+			_roller_label(charger), "attack",
 			"%s hits: %s → %s" % [str(p["label"]), charger.get_name(), defender.get_name()])
 		var hits: int = AiCombatMath.impact_hits(faces)
 		if battle_log != null:
@@ -8657,12 +8657,33 @@ func _solo_model_in_cover(model: ModelInstance) -> bool:
 	return solo_controller != null and solo_controller.model_in_cover(model)
 
 
-## Battle-log / dice-owner label for a unit: "AI (name)" for an AI-controlled unit, the owner's player
-## name for another human's unit (co-op, rules plan 0.1b), else "You".
-func _solo_owner_label(unit: GameUnit) -> String:
-	if _solo_is_ai_unit(unit):
-		return "AI (%s)" % unit.get_name()
-	return "You" if _solo_i_own_unit(unit) else _solo_owner_name(unit)
+## The deterministic core of the roller label (rules plan 2.5 "Names, not You"), pure so the label
+## table is testable without a scene. is_own = the unit belongs to a player at THIS machine;
+## ai_designated = an AI slot is designated (solo vs NACHTMAHR); mp_active = a network session runs.
+static func roller_label_for(unit_name: String, is_ai: bool, ai_designated: bool, is_own: bool,
+		mp_active: bool, peer_name: String, slot_label: String) -> String:
+	if is_ai:
+		return "AI (%s)" % unit_name
+	if is_own and ai_designated:
+		return "You"
+	if mp_active and not peer_name.is_empty():
+		return peer_name
+	return slot_label
+
+
+## Battle-log / tray-roll label for a unit (rules plan 2.5). An AI unit is "AI (unit)" as before; a
+## human unit is "You" while an AI slot is designated (solo vs NACHTMAHR, byte-identical); otherwise
+## (hotseat, or a human-vs-human room) the unit is named by its player slot — the session's display
+## name for that peer when one exists, else "P<slot> (<army>)". A co-op ally keeps its owner's name.
+func _roller_label(unit: GameUnit) -> String:
+	var slot := unit_owner_slot(unit.unit_properties)
+	var peer := _solo_peer_for_slot(slot)
+	var mp_active: bool = network_manager != null and network_manager.is_multiplayer_active()
+	var peer_name := ""
+	if mp_active and network_manager.player_names.has(peer):
+		peer_name = _peer_display_name(peer)
+	return roller_label_for(unit.get_name(), _solo_is_ai_unit(unit), not solo_ai_slots.is_empty(),
+		_solo_i_own_unit(unit), mp_active, peer_name, _solo_player_label(slot))
 
 
 ## The player name of a unit's owner seat (the session's name for its peer, else "player N").
@@ -8684,7 +8705,7 @@ func _run_ai_dangerous(unit: GameUnit, model_count: int) -> void:
 			"%s takes %d Dangerous terrain test dice" % [unit.get_name(), model_count], true)
 	# A1 (NML-202): a player-driven auto intent can land here too (execute_intent's dangerous-terrain
 	# tap doesn't know which side moved) — the tray label must say "You"/the co-op owner, not "AI".
-	var faces: Array = await _solo_tray_roll(model_count, 6, _solo_owner_label(unit), "dangerous",
+	var faces: Array = await _solo_tray_roll(model_count, 6, _roller_label(unit), "dangerous",
 		"Dangerous terrain: %s (a 1 wounds)" % unit.get_name())
 	var wounds := 0
 	for f in faces:
@@ -8856,12 +8877,12 @@ var _solo_remote_save_waiters: Dictionary = {}   # request id -> {"faces": Array
 ## dice) → our tray. Another human's unit → its owner rolls; vacant seat or no answer → a visible
 ## auto-roll. `ask` = what the owner's side needs beyond a plain roll: "what" (the waiting / rolled
 ## wording, default `purpose`), "label" (the caller's own tray label for a LOCAL roll, default
-## `_solo_owner_label`) and, for a save batch, "striker"/"weapon"/"defense"/"ap" (the prompt).
+## `_roller_label`) and, for a save batch, "striker"/"weapon"/"defense"/"ap" (the prompt).
 func _owner_roll(unit: GameUnit, count: int, target: int, roll_kind: String, purpose: String,
 		ask: Dictionary = {}) -> Array:
 	if _solo_is_ai_unit(unit) or _solo_i_own_unit(unit):
 		var label := str(ask.get("label", ""))
-		return await _solo_tray_roll(count, target, label if not label.is_empty() else _solo_owner_label(unit),
+		return await _solo_tray_roll(count, target, label if not label.is_empty() else _roller_label(unit),
 			roll_kind, purpose)
 	var owner_peer := _solo_peer_for_slot(unit_owner_slot(unit.unit_properties))
 	var owner_name := _solo_owner_name(unit)
@@ -8913,7 +8934,7 @@ func _rpc_request_roll(rq: Dictionary, from_peer: int) -> void:
 			int(ask.get("defense", 0)), int(ask.get("ap", 0)))
 	else:
 		faces = await _solo_tray_roll(int(rq.get("count", 0)), int(rq.get("target", 0)),
-			_solo_owner_label(unit), str(rq.get("kind", "attack")), str(rq.get("purpose", "")))
+			_roller_label(unit), str(rq.get("kind", "attack")), str(rq.get("purpose", "")))
 	network_manager.send_command("roll_result", {"req": int(rq.get("req", 0)), "faces": faces}, from_peer)
 
 ## Resolver side: the owner's faces arrived — release the waiting roll.
@@ -8928,18 +8949,22 @@ func _rpc_roll_result(req: int, faces: Array) -> void:
 func _solo_prompt_saves(attacker: GameUnit, target: GameUnit, weapon_name: String, hits: int, defense: int, ap: int) -> Array:
 	# A3 (NML-202): the panel switch (or _run_player_intent's own first-use flip) skips the ask —
 	# the threshold log line and the tray roll are unchanged either way.
+	# Rules plan 2.5: name WHOSE saves these are — "You" in solo (byte-identical), the defending
+	# player's slot label in hotseat ("P2 (Bravo) — incoming fire!").
+	var defender_lbl: String = _roller_label(target)
 	if not _solo_auto_saves:
 		var ap_note: String = (" (AP %d → save on %d+)" % [ap, AiCombatMath.save_target(defense, ap)]) if ap > 0 else " (save on %d+)" % AiCombatMath.shown_target(defense)
 		# Saves are not optional — one clear action, no cancel button. UI audit 2026-07-24: ESC used to
 		# lock the board here (the MOST frequent solo prompt); on the card ESC answers too, and either
 		# way we roll.
-		await _solo_ask("Incoming fire!", "%s hits %s %d time%s with %s.\nRoll your defense saves%s." % [
+		var prompt_title: String = "Incoming fire!" if defender_lbl == "You" else "%s — incoming fire!" % defender_lbl
+		await _solo_ask(prompt_title, "%s hits %s %d time%s with %s.\nRoll your defense saves%s." % [
 			attacker.get_name(), target.get_name(), hits, ("" if hits == 1 else "s"), weapon_name, ap_note],
 			"Roll %d save%s" % [hits, ("" if hits == 1 else "s")], "")
 	# The battle log states the MODIFIED threshold (GF v3.5.1 AP(X): "targets get -X to Defense rolls"),
 	# so the AP arithmetic is auditable after the fact (maintainer field-test finding).
 	_solo_log_save_threshold(target, defense, ap)
-	return await _solo_tray_roll(hits, defense + ap, "You", "defense",
+	return await _solo_tray_roll(hits, defense + ap, defender_lbl, "defense",
 		"Defense save vs %s" % weapon_name)
 
 
@@ -9868,7 +9893,7 @@ func _run_ai_melee(report: Dictionary) -> void:
 	_solo_log_melee_result(unit, ai_caused, ai_score, target, human_caused, human_score)
 	await _solo_stage_phase("Melee result")
 	if loser != null and _solo_combined_alive(loser) > 0:
-		await _solo_morale_test(loser, _solo_owner_label(loser), true)
+		await _solo_morale_test(loser, _roller_label(loser), true)
 	await _solo_stage_phase("Morale")
 	# — Consolidation (GF v3.5.1 p.9, after morale): neither destroyed → the CHARGER (the AI here) moves
 	#   back 1"; one side destroyed → the survivor consolidates up to 3" (round 7, finding 4) —
@@ -11529,7 +11554,7 @@ func _solo_try_precision_spot(unit: GameUnit) -> void:
 		return
 	# NML-980: one die per alive laser-carrying model in the chain, each 4+ its own marker.
 	var dice := maxi(solo_controller.precision_spot_dice_of(unit), 1)
-	var faces: Array = await _solo_tray_roll(dice, 4, _solo_owner_label(unit), "attack",
+	var faces: Array = await _solo_tray_roll(dice, 4, _roller_label(unit), "attack",
 		"Precision Spotter: %d die%s (4+) mark %s" % [dice, ("" if dice == 1 else "s"), best.get_name()])
 	var hits := 0
 	for f in faces:
@@ -11669,7 +11694,7 @@ func _solo_spot_click(target: GameUnit) -> void:
 ## model in the chain, solo_controller.precision_spot_dice_of), each 4+ its own marker.
 func _solo_resolve_spot(spotter: GameUnit, target: GameUnit) -> void:
 	var dice := maxi(solo_controller.precision_spot_dice_of(spotter), 1)
-	var faces: Array = await _solo_tray_roll(dice, 4, _solo_owner_label(spotter), "attack",
+	var faces: Array = await _solo_tray_roll(dice, 4, _roller_label(spotter), "attack",
 		"Precision Spotter: %d die%s (4+) mark %s" % [dice, ("" if dice == 1 else "s"), target.get_name()])
 	var hits := 0
 	for f in faces:
@@ -18387,7 +18412,7 @@ func _resolve_skirmish_drop(mv: Dictionary, unit: GameUnit) -> void:
 		while _solo_tray_busy:
 			await get_tree().process_frame
 		var target := JumpRules.jump_target(model.has_special_rule("Strider") or unit.has_special_rule("Strider"), model.has_special_rule("Flying") or unit.has_special_rule("Flying"))
-		var faces: Array = [] if target == 0 else await _solo_tray_roll(JumpRules.jump_dice(drop.dy_in), target, _solo_owner_label(unit), "jump", "Jump (%s)" % page)
+		var faces: Array = [] if target == 0 else await _solo_tray_roll(JumpRules.jump_dice(drop.dy_in), target, _roller_label(unit), "jump", "Jump (%s)" % page)
 		var fell := faces.any(func(face): return int(face) < target)
 		_log_rule_event(BattleLog.Category.MOVEMENT, "%s jumps %.1f\": %s (%s)" % [unit.get_name(), drop.dy_in, "falls" if fell else "passed", page])
 		if not fell:
@@ -18403,7 +18428,7 @@ func _resolve_skirmish_drop(mv: Dictionary, unit: GameUnit) -> void:
 			model.apply_damage(model.wounds_current)
 			await _solo_remove_dead_models(unit, [model], int(unit.unit_properties.get("player_id", 1)))
 		else:
-			var saves := await _solo_tray_roll(1, AiCombatMath.save_target(unit.get_defense(), ap), _solo_owner_label(unit), "save", "Fall AP(%d) (%s)" % [ap, page])
+			var saves := await _solo_tray_roll(1, AiCombatMath.save_target(unit.get_defense(), ap), _roller_label(unit), "save", "Fall AP(%d) (%s)" % [ap, page])
 			await _solo_land_wounds(unit, AiCombatMath.wounds(1, saves, unit.get_defense(), ap), 0)
 		await _solo_complete_human_attack(unit)
 		return
@@ -19798,7 +19823,7 @@ func _solo_apply_mind_control(unit: GameUnit) -> void:
 			var tgt := _solo_utility_target(member, "enemy", float(sp.get("range_in", 18.0)), bool(sp.get("needs_los", true)))
 			if tgt == null:
 				continue
-			var passed: bool = await _solo_morale_test(tgt, _solo_owner_label(tgt))
+			var passed: bool = await _solo_morale_test(tgt, _roller_label(tgt))
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s forces a morale test on %s — %s" % [
 					n, member.get_name(), tgt.get_name(), ("passed" if passed else "FAILED")], true)
@@ -19861,7 +19886,7 @@ func _solo_apply_piercing_tag(unit: GameUnit) -> void:
 			var markers: int = maxi(int((e as Dictionary).get("rating", 0)), 1)
 			if place_roll > 0:
 				member.unit_properties["piercing_spot_round"] = round_now
-				var faces: Array = await _solo_tray_roll(1, place_roll, _solo_owner_label(member), "attack",
+				var faces: Array = await _solo_tray_roll(1, place_roll, _roller_label(member), "attack",
 					"%s: %d+ marks %s" % [n, place_roll, tgt.get_name()])
 				if faces.is_empty() or int(faces[0]) < place_roll:
 					if battle_log != null:
@@ -20262,7 +20287,7 @@ func _solo_apply_storm_attack(unit: GameUnit) -> void:
 				else:
 					await _solo_land_wounds(tgt, w, 0)
 				# Post-shooting morale, the Breath Attack twin's tail (main.gd:5423).
-				await _solo_shooting_morale(tgt, alive_before, _solo_owner_label(tgt), wounds_before)
+				await _solo_shooting_morale(tgt, alive_before, _roller_label(tgt), wounds_before)
 				if _solo_combined_alive(tgt) <= 0:
 					targets_in_reach.erase(tgt)
 					if targets_in_reach.is_empty():
@@ -20322,7 +20347,7 @@ func _solo_apply_surprise_attack(unit: GameUnit) -> void:
 		if candidates.is_empty():
 			continue
 		var dice := maxi(_solo_unit_rating(bu, "Surprise Attack"), 1)
-		var faces: Array = await _solo_tray_roll(dice, trigger, _solo_owner_label(bu), "attack",
+		var faces: Array = await _solo_tray_roll(dice, trigger, _roller_label(bu), "attack",
 			"Surprise Attack hits: %d+" % trigger)
 		var hits := 0
 		for f in faces:
@@ -20340,7 +20365,7 @@ func _solo_apply_surprise_attack(unit: GameUnit) -> void:
 		var w: int = await _solo_save_batch(bu, tgt, "Surprise Attack", hits,
 			_solo_defense_vs(tgt), ap, profile, not _solo_is_ai_unit(tgt), false, true, false)
 		await _solo_land_wounds(tgt, w, 0)
-		await _solo_shooting_morale(tgt, alive_before, _solo_owner_label(tgt), wounds_before)
+		await _solo_shooting_morale(tgt, alive_before, _roller_label(tgt), wounds_before)
 
 
 ## Teleport / Ethereal (design #816, PR 1 — table side): the BEFORE-ATTACK reposition beat, run
