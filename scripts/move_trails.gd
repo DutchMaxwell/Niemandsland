@@ -93,6 +93,13 @@ func _painting_allowed() -> bool:
 	return user_show_trails and not _deployment_active
 
 
+## Calm mode, read dynamically so this script still compiles from standalone QA tools
+## (where the autoload table is absent). Calm: no pulse/fade animation on the chalk.
+func _calm() -> bool:
+	var gs := get_node_or_null("/root/GraphicsSettings")
+	return gs != null and bool(gs.calm_mode)
+
+
 ## Recompute the node's visibility from the two gates. During deployment nothing shows;
 ## with the preference off nothing shows; otherwise trails are visible.
 func _apply_visibility() -> void:
@@ -282,16 +289,17 @@ func try_proof_at(world_pos: Vector3) -> bool:
 			best = rec
 	if best.is_empty():
 		return false
-	# Pulse the ribbon (brighten and settle back).
-	var mat := (best["mesh"] as MeshInstance3D).material_override as StandardMaterial3D
-	if mat != null:
-		if best["pulse"] is Tween and (best["pulse"] as Tween).is_valid():
-			(best["pulse"] as Tween).kill()
-		mat.albedo_color = Color(1, 1, 1, 1)
-		var tw := create_tween()
-		tw.tween_property(mat, "albedo_color", Color(2.2, 2.2, 2.2, 1.0), 0.15)
-		tw.tween_property(mat, "albedo_color", Color(1, 1, 1, 1), 0.45)
-		best["pulse"] = tw
+	# Pulse the ribbon (brighten and settle back) — Calm: no brightening flash.
+	if not _calm():
+		var mat := (best["mesh"] as MeshInstance3D).material_override as StandardMaterial3D
+		if mat != null:
+			if best["pulse"] is Tween and (best["pulse"] as Tween).is_valid():
+				(best["pulse"] as Tween).kill()
+			mat.albedo_color = Color(1, 1, 1, 1)
+			var tw := create_tween()
+			tw.tween_property(mat, "albedo_color", Color(2.2, 2.2, 2.2, 1.0), 0.15)
+			tw.tween_property(mat, "albedo_color", Color(1, 1, 1, 1), 0.45)
+			best["pulse"] = tw
 	# Transient proof label above the click point (allocated, not pooled — user-paced).
 	var chalk := _chalk_color(int(best["owner"]))
 	var label := _make_label()
@@ -462,6 +470,10 @@ func _chalk_color(owner: int) -> Color:
 
 
 func _fade_record(rec: Dictionary, duration: float) -> void:
+	if _calm():
+		rec["fading"] = true
+		_drop_record.call_deferred(rec)   # Calm: no fade animation — the chalk goes at once
+		return
 	rec["fading"] = true
 	_kill_record_tweens(rec)
 	var mesh := rec["mesh"] as MeshInstance3D

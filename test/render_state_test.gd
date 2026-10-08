@@ -16,6 +16,20 @@ func test_the_higher_layer_wins_whatever_the_call_order() -> void:
 		assert_float(env.ssao_radius).is_equal_approx(0.035, 0.0001)
 
 
+func test_calm_mode_strips_the_glow_over_every_other_layer() -> void:
+	# GH #1634: Calm mode's layer sits on top, so no preset, reference, world or intro glow survives it.
+	var env := Environment.new()
+	var state := RenderState.new(env)
+	state.set_layer("reference", {"glow_enabled": true, "glow_intensity": 0.16, "glow_bloom": 0.1})
+	state.set_layer("intro", {"glow_enabled": true, "glow_intensity": 0.8})
+	state.set_layer("calm", {"glow_enabled": false, "glow_intensity": 0.0, "glow_bloom": 0.0})
+	assert_bool(env.glow_enabled).is_false()
+	assert_float(env.glow_intensity).is_equal_approx(0.0, 0.0001)
+	state.set_layer("calm", {})
+	assert_bool(env.glow_enabled).is_true()
+	assert_float(env.glow_intensity).is_equal_approx(0.8, 0.0001)
+
+
 func test_a_cleared_layer_falls_back_to_the_layer_below_then_to_the_scene_value() -> void:
 	var env := Environment.new()
 	env.glow_bloom = 0.2   # the scene's own value

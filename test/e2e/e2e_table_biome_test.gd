@@ -504,6 +504,9 @@ func test_dressed_table_keeps_its_mounds_and_props_sit_on_them(timeout := 240000
 		# A late panel download (mine/sign/container/tree textures on a cold cache, as on CI and on a fresh install)
 		# rebuilds every overlay prop at y = 0 after the table was dressed (terrain_overlay.gd _fetch_hazard_panels).
 		overlay.update_placed_objects(overlay._last_objects, Vector2(6, 4), 0.0)
+		# Seated in the same frame: a real download finishing (CI's warm asset cache) can rebuild again at any frame,
+		# so a seat that waits for the next _process leaves a window where every marker stands at y = 0.
+		_check_seats(overlay, ground, biome, "in the frame of a late panel download")
 		await _settle_overlay(overlay)
 		_check_seats(overlay, ground, biome, "after a late panel download")
 		var open_worst := 0.0

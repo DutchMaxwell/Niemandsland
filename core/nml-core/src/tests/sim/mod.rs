@@ -1773,6 +1773,8 @@ mod retreating_strike;
     mod screened_melee;
 
     mod self_destruct;
+
+    mod range_edge;
 mod shaken_strikeback;
 mod second_wind;
 mod second_wind_score;

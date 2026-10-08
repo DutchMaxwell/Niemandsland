@@ -319,6 +319,9 @@ signal custom_zone_completed(player: int)
 ## Emitted after the war-torn ruin fires were (re)built (also when cleared), so the
 ## atmosphere layer can re-park its fire-crackle audio emitters.
 signal fires_rebuilt
+## Emitted once update_placed_objects has built the props (a layout change or a finished panel download), so a dressed
+## table can seat the new props in the same frame instead of showing them at y = 0 for a frame.
+signal objects_rebuilt
 
 ## Fine grid (1") for custom zone editing
 var fine_grid_meshes: Array[MeshInstance3D] = []
@@ -2935,6 +2938,7 @@ func update_placed_objects(objects: Array, t_size: Vector2, rot_deg: float) -> v
 			model.rotation.y = randf() * TAU
 		add_child(model)
 		_object_instances.append(model)
+	objects_rebuilt.emit()
 
 
 ## Build a procedural holographic prop for a placed object type.
