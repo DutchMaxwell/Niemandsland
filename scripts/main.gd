@@ -4134,6 +4134,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 	var landed_extra := 0   # NML-966 gap B: Deadly/Takedown wounds landed outside the regen pool
 	var total_hits := 0
 	var total_caused := 0
+	var cover_logged := false   # I4: log Cover once, only when a shot's save really used it
 	# Unpredictable (generic army-book rule — "when attacking": the SHOOTING leg; the wave-4 melee-only
 	# Unpredictable Fighter lives in the melee path): ONE die per volley for the whole unit —
 	# 1-3 → AP(+1), 4-6 → +1 to hit on every profile it fires (same arithmetic, same visible tray).
@@ -4277,6 +4278,11 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		# DEFENDER is itself AI, the saves auto-roll on the real tray (no human prompt) — the human_defends flag
 		# is derived, never assumed, so an AI-vs-AI game resolves shooting unattended.
 		var save_def: int = shot_base if (int(profile.get("blast", 0)) > 1 or bool(profile.get("indirect", false)) or bool(profile.get("ignores_cover", false))) else shot_cover
+		if td_ctx.is_empty() and not cover_logged and battle_log != null \
+				and AiCombatMath.shot_uses_cover(save_def, shot_cover, shot_base):
+			cover_logged = true   # I4: only claim Cover when the roll truly saved at the covered value
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s is in cover: +1 Defense (saves on %d+)" % [
+				target.get_name(), AiCombatMath.shown_target(save_def)], true)
 		var is_deadly: bool = int(profile.get("deadly", 0)) > 0
 		# TC-023: the saves are the PICKED MODEL's — rolled by its own GameUnit, so a sniped attached
 		# hero blocks on HIS Defense (and his own Fortified / conditional-AP profile), not the host's.
@@ -9952,10 +9958,17 @@ func _solo_consolidate_melee(charger: GameUnit, defender: GameUnit, auto: bool =
 	var survivor: GameUnit = charger if charger_alive else defender
 	if _solo_is_ai_unit(survivor) or auto:
 		var dang2: int = solo_controller.consolidate_after_melee_win(survivor)
-		if not solo_controller.last_move_paths.is_empty():
-			if battle_log != null:
+		if battle_log != null:
+			# The rule is applied even when the survivor has nowhere to go: then it just holds its
+			# ground, but it still consolidates — so the event must log either way (house rule: every
+			# applied rule logs). A missing line here stalled the Game School S-06 consolidation step.
+			if solo_controller.last_move_paths.is_empty():
+				battle_log.log_event(BattleLog.Category.COMBAT,
+					"%s holds its ground (consolidation — GF v3.5.1 p.9)" % survivor.get_name(), true)
+			else:
 				battle_log.log_event(BattleLog.Category.COMBAT,
 					"%s consolidates up to 3\" (enemy destroyed — GF v3.5.1 p.9)" % survivor.get_name(), true)
+		if not solo_controller.last_move_paths.is_empty():
 			await _solo_animate_move(solo_controller.last_move_paths, false)   # NML-208: always glides
 		if dang2 > 0:
 			await _run_ai_dangerous(survivor, dang2)
@@ -11884,6 +11897,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s: %d/%d model%s with line of sight + range" % [
 			attacker.get_name(), _solo_sighted_count(attacker, target, rng_in, log_indirect), total, ("" if total == 1 else "s")], true)
 	var fired_any := false   # round 7, finding 5: a volley that rolls NOTHING must say so, never end silently
+	var cover_logged := false   # I4: log Cover once, only when a shot's save really used it
 	# Maintainer 31.07.: the attacker CHOOSES how many markers to remove (caster-points style).
 	var spot_hit: int = await _solo_offer_spot_markers(attacker, target)
 	var tag_hit: int = _solo_consume_tag_markers(target)   # Precision Tag: the spot pool's +1-per-removal twin
@@ -12013,6 +12027,11 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 				continue
 			# Blast (GF v3.5.1) and Indirect (wave 5) ignore cover — saves at the Shielded (uncovered) Defense.
 			var save_def: int = shot_base if (int(profile.get("blast", 0)) > 1 or bool(profile.get("indirect", false)) or bool(profile.get("ignores_cover", false))) else shot_cover
+			if td_ctx.is_empty() and not cover_logged and battle_log != null \
+					and AiCombatMath.shot_uses_cover(save_def, shot_cover, shot_base):
+				cover_logged = true   # I4: only claim Cover when the roll truly saved at the covered value
+				battle_log.log_event(BattleLog.Category.COMBAT, "%s is in cover: +1 Defense (saves on %d+)" % [
+					target.get_name(), AiCombatMath.shown_target(save_def)], true)
 			# B5 (test game 2): the HUMAN volley now mirrors the AI's per-model landing — Takedown
 			# wounds go to the model the PLAYER picks (click), Deadly lands ×X on one model with no
 			# carry-over. Both previously pooled into the defender-optimal removal, so the player's
@@ -17333,7 +17352,7 @@ func _start_lesson(_object_count: int) -> void:
 	facts.setup({"camera_pivot": camera_pivot, "object_manager": object_manager,
 		"army_manager": opr_army_manager, "table": table,
 		"map_layout": map_layout_editor, "left_panel": left_panel_scroll, "main": self,
-		"unit_dock": unit_dock, "battle_log": battle_log})
+		"unit_dock": unit_dock, "battle_log": battle_log, "terrain_overlay": terrain_overlay})
 	if _scenario_mode:
 		# D4: a lesson always plays the gentlest ladder grade, in memory only — the player's saved
 		# grade (SoloGrade.save) is deliberately never written from a lesson.

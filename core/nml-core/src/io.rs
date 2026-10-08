@@ -655,6 +655,10 @@ pub struct Seams {
     /// deterministic dither) instead of the 50 % cliff. Default OFF.
     #[serde(default)]
     pub morale_by_probability: bool,
+    /// Inventory C12 — see `Knobs::hero_counts_in_size`: a joined hero counts in the unit size for half
+    /// strength and morale. Needs `hero_attach`. Default OFF.
+    #[serde(default)]
+    pub hero_counts_in_size: bool,
     /// Inventory C01/C27 — see `Knobs::range_by_base_edge`: the imagined volley measures range and
     /// the over-9" modifiers base edge to base edge. Default OFF.
     #[serde(default)]

@@ -21,6 +21,7 @@ const KNOWN := [
 	"unit_moved",
 	"tag_flag",
 	"gap_at_most",
+	"tag_terrain_is",
 ]
 
 
@@ -99,4 +100,10 @@ static func _passes_one(check_name: String, args: Dictionary, now: Dictionary, b
 			if not now_tags4.has(tag4):
 				return false
 			return float(now_tags4[tag4].get("enemy_gap_in", INF)) <= float(args.get("inches", 0.0))
+		"tag_terrain_is":
+			var tag5 := String(args.get("tag", ""))
+			var now_tags5: Dictionary = now.get("tags", {})
+			if not now_tags5.has(tag5):
+				return false
+			return int(now_tags5[tag5].get("terrain", 0)) == int(args.get("type", 0))
 	return false
