@@ -51,14 +51,27 @@ func _wait_index(target: int) -> bool:
 	return false
 
 
-func _place_one_scenery_piece() -> void:
+func _place_three_pieces_one_forest() -> void:
+	# I2 draft gate: >=3 scenery pieces, at least one a FOREST. Place through the shelf so the
+	# spawned nodes carry their real prop_kind meta (the fact reads that meta).
 	var shelf: SandboxTerrainShelf = _main._sandbox_shelf
 	shelf.open()
 	shelf._refresh_list()
-	if shelf._list.item_count > 0:
-		shelf._on_item_activated(0)
-	else:
-		_main.object_manager.spawn_sandbox_terrain("", 0, Vector3.ZERO)
+	var placed := 0
+	var forest_placed := false
+	for i in shelf._list.item_count:
+		var entry: Dictionary = shelf._list.get_item_metadata(i)
+		var is_forest := int(entry.get("kind", -1)) == ObjectManager.SandboxPropKind.FOREST
+		if is_forest and forest_placed:
+			continue
+		shelf._on_item_activated(i)
+		placed += 1
+		if is_forest:
+			forest_placed = true
+		if placed >= 3 and forest_placed:
+			break
+	assert_int(placed).is_greater_equal(3)
+	assert_bool(forest_placed).is_true()
 
 
 func test_s02_five_state_steps_complete_and_persist(timeout := 60000) -> void:
@@ -74,7 +87,7 @@ func test_s02_five_state_steps_complete_and_persist(timeout := 60000) -> void:
 	assert_str(other).is_not_empty()
 	_main.table.set_biome(other)
 	assert_bool(await _wait_index(2)).is_true()
-	_place_one_scenery_piece()
+	_place_three_pieces_one_forest()
 	assert_bool(await _wait_index(3)).is_true()
 	_main.map_layout_editor._generate_terrain_layout()
 	_main.map_layout_editor._rebuild_derived()

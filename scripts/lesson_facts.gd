@@ -45,7 +45,7 @@ func setup(refs: Dictionary) -> void:
 func snapshot() -> Dictionary:
 	var facts := {"yaw": 0.0, "cam_dist": 0.0, "pivot": Vector3.ZERO,
 		"counters": _counters.duplicate(), "tags": {},
-		"table_size": Vector2.ZERO, "biome": "", "terrain_pieces": 0,
+		"table_size": Vector2.ZERO, "biome": "", "terrain_pieces": 0, "forest_pieces": 0,
 		"layout_pieces": 0, "deploy_type": 0, "menu_open": false,
 		"units_p1": 0, "p1_all_in_zone": false, "phase": 0,
 		"bands": false, "round": 0, "card_presented": false}
@@ -54,6 +54,7 @@ func snapshot() -> Dictionary:
 	if _table != null and "biome" in _table:
 		facts.biome = String(_table.biome)
 	facts.terrain_pieces = _count_terrain()
+	facts.forest_pieces = _count_forest_pieces()
 	if _map_layout != null and "placed_pieces" in _map_layout:
 		facts.layout_pieces = (_map_layout.placed_pieces as Array).size()
 	if _map_layout != null and "deployment_type" in _map_layout:
@@ -230,6 +231,19 @@ func _count_terrain() -> int:
 	var count := 0
 	for obj in _object_manager.get_tree().get_nodes_in_group("terrain"):
 		if obj is Node3D and UnitUtils.is_terrain(obj):
+			count += 1
+	return count
+
+
+## S-02 draft gate: of the placed scenery, how many are FOREST pieces. A shelf/terrain node records
+## its kind in the "prop_kind" meta (ObjectManager.SandboxPropKind).
+func _count_forest_pieces() -> int:
+	if _object_manager == null or not _object_manager.is_inside_tree():
+		return 0
+	var count := 0
+	for obj in _object_manager.get_tree().get_nodes_in_group("terrain"):
+		if obj is Node3D and UnitUtils.is_terrain(obj) \
+				and int(obj.get_meta("prop_kind", -1)) == ObjectManager.SandboxPropKind.FOREST:
 			count += 1
 	return count
 

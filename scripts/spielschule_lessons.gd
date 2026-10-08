@@ -27,8 +27,10 @@ const _S02_STEPS := [
 		"rule": "p.6", "all": [{"check": "value_is", "args": {"key": "table_size", "value": Vector2(6, 4)}}]},
 	{"id": "biome", "text": "Pick a different battlefield biome.",
 		"rule": "", "all": [{"check": "value_changed", "args": {"key": "biome"}}]},
-	{"id": "terrain_piece", "text": "Turn on Terrain Mode and place one piece of scenery.",
-		"rule": "", "all": [{"check": "at_least", "args": {"key": "terrain_pieces", "n": 1}}]},
+	{"id": "terrain_piece", "text": "Turn on Terrain Mode and place at least three pieces of scenery, one of them a forest. (p.12)",
+		"rule": "p.12", "all": [
+			{"check": "at_least", "args": {"key": "terrain_pieces", "n": 3}},
+			{"check": "at_least", "args": {"key": "forest_pieces", "n": 1}}]},
 	{"id": "autogen", "text": "Open Map Layout and press Auto-Generate: the rulebook asks for 15 or more pieces. (p.6, p.12)",
 		"rule": "p.12", "all": [{"check": "at_least", "args": {"key": "layout_pieces", "n": 1}}]},
 	{"id": "deploy_type", "text": "In Map Layout, pick a deployment type.",
