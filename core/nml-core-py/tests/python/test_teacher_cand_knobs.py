@@ -77,7 +77,7 @@ def test_a_cand_bundle_reaches_the_game_call_for_the_rows_seat_only(monkeypatch,
 def test_without_the_flag_the_game_call_carries_the_old_keys_only(monkeypatch):
     w = {"nm": nml_core, "knobs": {"top_k": 10}, "repo": "r", "bank": "b", "allowance": 0, "ctx": {}, "nets": {1: object()}}
     seen = captured_play(monkeypatch, w, {"seat": 1, "arm": "I", "row_id": "x"})
-    assert seen == {"top_k": 10, "record_cands": False}
+    assert seen == {"top_k": 10, "record_cands": False, "sidecars": False}  # sidecars off = the recorder default
 
 
 def test_mirrored_rows_play_the_same_board_with_the_cand_on_each_seat():

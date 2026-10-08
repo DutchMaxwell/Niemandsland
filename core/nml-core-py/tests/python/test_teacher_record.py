@@ -205,3 +205,34 @@ def test_rs_value_off_is_main_on_equals_trace_rs(tmp_path):
         mixed += bool(want) and len(want) < len(seg)
         differs += not np.array_equal(seg, hand[ptr[k]:ptr[k + 1]], equal_nan=True)
     assert mixed > 0 and differs > 0
+
+
+@needs_lists
+def test_sidecars_off_by_default_writes_the_same_record(tmp_path):
+    # GREEN: the pair/fork sidecars feed no teacher row, so OFF (the recorder default) and ON give equal arrays and equal
+    # decision search stamps. RED: a field fed FROM a sidecar (features) differs between the two runs, so the equality
+    # check below can fail and the sidecars are real data, not an empty block.
+    row = [r for r in fixture_rows() if r["seat"] == 1 and r["d"] == 0][0]
+    seen, real = [], sp.play_game
+
+    def spy(*args, **kwargs):
+        seen.append((kwargs.get("sidecars"), real(*args, **kwargs)))
+        return seen[-1][1]
+
+    def rec(tag, **knobs):
+        w = tr._init(cfg(tmp_path / tag, knobs=dict(FAST, **knobs)))
+        os.makedirs(w["out"])
+        assert tr._work(w, "x", [row])[0]["valid"]
+        return np.load(tmp_path / tag / (row["row_id"] + ".npz")), json.load(open(tmp_path / tag / (row["row_id"] + ".json")))
+    sp.play_game = spy
+    try:
+        off, on = rec("off"), rec("on", sidecars=True)
+    finally:
+        sp.play_game = real
+    assert [s for s, _ in seen] == [False, True]
+    assert sorted(off[0].files) == sorted(on[0].files) and all(np.array_equal(off[0][k], on[0][k], equal_nan=True) for k in off[0].files)
+    assert [d.get("search") for d in off[1]["decisions"]] == [d.get("search") for d in on[1]["decisions"]]
+    fed = [np.array([len(r.get("features", ())) for r in res["planner_positions"]]) for _, res in seen]
+    assert not np.array_equal(fed[0], fed[1])  # RED: a sidecar-fed array differs
+    assert all("fork" not in r and "features" not in r for r in seen[0][1]["planner_positions"])
+    assert any("fork" in r for r in seen[1][1]["planner_positions"])
