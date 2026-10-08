@@ -670,6 +670,10 @@ pub struct Seams {
     /// Default OFF.
     #[serde(default)]
     pub reply_hold_gate: bool,
+    /// Inventory T03-T06 — see `Knobs::reply_threat_by_speed`: the v2 reply prices the enemy's charge and
+    /// advance by its own live bands, the base-edge gap, and never charges an Aircraft. Default OFF.
+    #[serde(default)]
+    pub reply_threat_by_speed: bool,
     /// Tray-exact series (maintainer D151 = B, 03.10.): ON from `EPOCH_70_TRAY_EXACT`.
     /// The two builders that read a header (`plan::seams_of`, the trainer's
     /// `nml-core-py` seam) derive it from `rules_epoch`, so a record below 70
@@ -730,6 +734,7 @@ impl Seams {
             v2: self.reply_v2,
             skip_activated: self.reply_skip_activated,
             hold_gate: self.reply_hold_gate,
+            by_speed: self.reply_threat_by_speed,
             range_edge: self.range_by_base_edge,
         }
     }
