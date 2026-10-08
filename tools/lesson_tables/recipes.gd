@@ -8,7 +8,8 @@ extends RefCounted
 ## half-strength case) — the pooled `dead` key cannot express a partially-wounded lone model.
 ## `cells`: terrain rectangles painted into the layout's free cells (world-centred inches; type is
 ## the TerrainType enum: 1 ruins, 2 forest, 3 container, 4 dangerous).
-const RECIPE_KEYS := ["size_feet", "biome", "deployment", "phase", "round", "sides", "ai_slots", "cells"]
+## `objectives_in`: mission-marker positions in table-centred inches (S-09).
+const RECIPE_KEYS := ["size_feet", "biome", "deployment", "phase", "round", "sides", "ai_slots", "cells", "objectives_in"]
 const UNIT_KEYS := ["name", "nth", "tag", "at_in", "label", "shaken", "fatigued", "dead", "wounds"]
 
 static func recipe(id: String) -> Dictionary:
@@ -34,12 +35,14 @@ static func recipe(id: String) -> Dictionary:
 					{"name": "Warriors", "nth": 1, "tag": "target", "at_in": Vector2(0, -18)}]}]}
 	if id == "S-05":
 		return {"size_feet": Vector2(4, 4), "biome": "temperate_grassland",
-			"deployment": -1, "phase": 1, "round": 1, "ai_slots": [2], "sides": [
+			"deployment": -1, "phase": 1, "round": 1, "ai_slots": [2], "cells": [
+				{"type": 3, "from_in": Vector2(-12, -1), "to_in": Vector2(0, 4)}], "sides": [
 				{"player": 1, "fixture": "res://assets/tutorial/tutorial_army_p1.json", "units": [
 					{"name": "Battle Brothers", "nth": 1, "tag": "alpha", "label": "Alpha Squad", "at_in": Vector2(0, 10)}]},
 				{"player": 2, "fixture": "res://assets/tutorial/tutorial_army_p2.json", "units": [
-					{"name": "Warriors", "nth": 1, "tag": "target", "at_in": Vector2(0, -8)},
-					{"name": "Warriors", "nth": 2, "tag": "far", "at_in": Vector2(0, -22)}]}]}
+					{"name": "Warriors", "nth": 1, "tag": "target", "at_in": Vector2(10, -8)},
+					{"name": "Warriors", "nth": 2, "tag": "far", "at_in": Vector2(10, -22)},
+					{"name": "Guardians", "nth": 1, "tag": "blocked", "at_in": Vector2(-9, -4)}]}]}
 	if id == "S-06":
 		return {"size_feet": Vector2(4, 4), "biome": "temperate_grassland",
 			"deployment": -1, "phase": 1, "round": 1, "ai_slots": [2], "sides": [
@@ -61,9 +64,19 @@ static func recipe(id: String) -> Dictionary:
 			"deployment": -1, "phase": 1, "round": 1, "ai_slots": [2], "cells": [
 				{"type": 2, "from_in": Vector2(-6, 3), "to_in": Vector2(6, 9)},
 				{"type": 2, "from_in": Vector2(-6, -12), "to_in": Vector2(6, -4)},
-				{"type": 1, "from_in": Vector2(-14, -2), "to_in": Vector2(-10, 2)}], "sides": [
+				{"type": 1, "from_in": Vector2(-20, 6), "to_in": Vector2(-16, 10)},
+				{"type": 4, "from_in": Vector2(-24, -3), "to_in": Vector2(24, 3)}], "sides": [
 				{"player": 1, "fixture": "res://assets/tutorial/tutorial_army_p1.json", "units": [
 					{"name": "Battle Brothers", "nth": 1, "tag": "alpha", "label": "Alpha Squad", "at_in": Vector2(0, 14)}]},
 				{"player": 2, "fixture": "res://assets/tutorial/tutorial_army_p2.json", "units": [
 					{"name": "Warriors", "nth": 2, "tag": "target", "label": "Nachtmahr Squad", "at_in": Vector2(0, -8)}]}]}
+	if id == "S-09":
+		return {"size_feet": Vector2(4, 4), "biome": "temperate_grassland",
+			"deployment": -1, "phase": 1, "round": 1, "ai_slots": [2],
+			"objectives_in": [Vector2(-12, 0), Vector2(0, 0), Vector2(12, 0)], "sides": [
+				{"player": 1, "fixture": "res://assets/tutorial/tutorial_army_p1.json", "units": [
+					{"name": "Battle Brothers", "nth": 1, "tag": "alpha", "label": "Alpha Squad", "at_in": Vector2(-12, 10)},
+					{"name": "Battle Brothers", "nth": 2, "tag": "bravo", "label": "Bravo Squad", "at_in": Vector2(12, 10)}]},
+				{"player": 2, "fixture": "res://assets/tutorial/tutorial_army_p2.json", "units": [
+					{"name": "Warriors", "nth": 1, "tag": "holder", "at_in": Vector2(12, -3)}]}]}
 	return {}
