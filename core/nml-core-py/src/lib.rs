@@ -737,6 +737,7 @@ impl Core {
             reply_v2: self.knobs.reply_v2,
             reply_skip_activated: self.knobs.reply_skip_activated,
             reply_hold_gate: self.knobs.reply_hold_gate,
+            reply_threat_by_speed: self.knobs.reply_threat_by_speed,
             // Tray-exact series (io.rs `Seams::tray_exact`): on from its one epoch bump.
             tray_exact: nmlcore::acts::rule_on(self.knobs.rules_epoch, nmlcore::acts::EPOCH_70_TRAY_EXACT),
             // Dormant: only the search's root seams will set it (io.rs `Seams::plain_only`).
@@ -857,6 +858,7 @@ impl Core {
         m.insert("menu_advance_obj_shoot".into(), self.knobs.menu_advance_obj_shoot.into());
         m.insert("reply_skip_activated".into(), self.knobs.reply_skip_activated.into());
         m.insert("reply_hold_gate".into(), self.knobs.reply_hold_gate.into());
+        m.insert("reply_threat_by_speed".into(), self.knobs.reply_threat_by_speed.into());
         m.insert("opener_by_finish".into(), self.knobs.opener_by_finish.into());
         m.insert("no_end_threat".into(), self.knobs.no_end_threat.into());
         m.insert("range_by_base_edge".into(), self.knobs.range_by_base_edge.into());
