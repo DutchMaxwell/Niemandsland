@@ -125,6 +125,11 @@ pub struct Knobs {
     /// nearest objective WITH a shot on a target that stays in range after the move. Default off.
     #[serde(default)]
     pub menu_advance_obj_shoot: bool,
+    /// aifix F6 (inventory row M20, p.9 "has a clear path to reach it") — `Tuning::charge_needs_path`: a CHARGE row is
+    /// kept only when the mover's nearest model can walk to the target within the live charge band (containers, units
+    /// in the way). Default off = byte-identical.
+    #[serde(default)]
+    pub charge_needs_path: bool,
     /// Wave 6 (`rushk`) — `Tuning::rush_k`, the PLAYOUT leg: how many of the
     /// nearest objectives the rollout's greedy brain rushes instead of only the
     /// nearest. A MENU knob, not a seam: it widens what the search may choose and
@@ -1495,6 +1500,7 @@ impl Default for Knobs {
             menu_advance_k: 1,
             menu_all_targets: 0,
             menu_advance_obj_shoot: false,
+            charge_needs_path: false,
             playout_rush_k: 1,
             hero_attach: false,
             charge_landing: false,

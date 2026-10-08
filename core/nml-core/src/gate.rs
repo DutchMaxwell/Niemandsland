@@ -63,10 +63,7 @@ pub fn charge_illegal_tuned(
     // `band_in` accumulation) — `charge.unwrap_or(rush)` plus the RUSH-kind
     // delta, the charge inheriting the rush band (movement_range_controller
     // .gd:170-187), so a granted Fast/Slow/Rapid Rush prices the gate.
-    let bands = &state.bands[attacker];
-    let (_, rush_in) = crate::sim::live_bands_of(statics, state, attacker);
-    let band = bands.charge.map_or(rush_in, |c| c + rush_in - bands.rush);
-    if gap_in > melee_shroud_charge_in(band, state, victim) {
+    if gap_in > charge_band_in(state, statics, attacker, victim) {
         return true;
     }
     // `_charge_capped_by_difficult` (solo_controller.gd:2746-2757)
@@ -80,6 +77,15 @@ pub fn charge_illegal_tuned(
     let a = from.unwrap_or_else(|| geom::centre(&state.positions[attacker]));
     let b = to.unwrap_or_else(|| geom::centre(&state.positions[victim]));
     corridor_forced_through(a, b, probe_r, terrain)
+}
+
+/// The live charge reach of `attacker` against `victim` in inches: the spend fold's band (`charge` or the Rush band
+/// with the RUSH-kind delta) with Melee Shrouding folded — the number `charge_illegal_tuned` compares the gap with.
+pub(crate) fn charge_band_in(state: &State, statics: &[UnitStatic], attacker: usize, victim: usize) -> f64 {
+    let bands = &state.bands[attacker];
+    let (_, rush_in) = crate::sim::live_bands_of(statics, state, attacker);
+    let band = bands.charge.map_or(rush_in, |c| c + rush_in - bands.rush);
+    melee_shroud_charge_in(band, state, victim)
 }
 
 /// `BattleSim._melee_shroud_charge_in_plain` battle_sim.gd:1572-1576 — an absent
