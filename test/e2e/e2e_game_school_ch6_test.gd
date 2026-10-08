@@ -115,6 +115,32 @@ func _wait_index(target: int) -> bool:
 	return false
 
 
+## Emit one Continue press and wait (bounded) until the runner leaves `from_index` — either it advanced
+## or the chapter completed. Never fire two Continue presses back-to-back without this wait.
+func _continue_and_wait(from_index: int) -> bool:
+	var card := _main.get_node("UI/LessonCard") as LessonCard
+	card.continue_pressed.emit()
+	var progress := SpielschuleProgress.new(TEST_CFG)
+	var deadline := Time.get_ticks_msec() + 4000
+	while Time.get_ticks_msec() < deadline:
+		if _lesson.current_index() > from_index:
+			return true
+		progress.load_from_disk()
+		if progress.is_completed("S-06"):
+			return true
+		await get_tree().process_frame
+	return false
+
+
+## Battle-log lines that mention a consolidation (the S-06 marker `log:consolidate` reads the same text).
+func _consolidation_lines() -> int:
+	var n := 0
+	for entry in _main.battle_log.entries():
+		if String(entry.get("text", "")).to_lower().contains("consolidat"):
+			n += 1
+	return n
+
+
 func test_s06_five_steps_complete(timeout := 60000) -> void:
 	assert_int(_lesson.current_index()).is_equal(0)
 	var alpha := _find("alpha")
@@ -130,13 +156,11 @@ func test_s06_five_steps_complete(timeout := 60000) -> void:
 
 	# The whole melee resolves inside that one call: pile-in, strike-back and consolidation all
 	# happened, so the last three steps (each "then press Continue") need three Continue presses.
-	var card := _main.get_node("UI/LessonCard") as LessonCard
+	# Each press waits (bounded) for the runner to leave the step, so no two land back-to-back.
 	assert_bool(await _wait_index(2)).is_true()   # the fight resolved, pile-in step is current
-	card.continue_pressed.emit()
-	assert_bool(await _wait_index(3)).is_true()   # pile-in read
-	card.continue_pressed.emit()
-	assert_bool(await _wait_index(4)).is_true()   # strike-back read
-	card.continue_pressed.emit()
+	assert_bool(await _continue_and_wait(2)).is_true()   # pile-in read
+	assert_bool(await _continue_and_wait(3)).is_true()   # strike-back read
+	assert_bool(await _continue_and_wait(4)).is_true()   # the last read; the chapter completes
 
 	var progress := SpielschuleProgress.new(TEST_CFG)
 	var deadline := Time.get_ticks_msec() + 8000
@@ -146,8 +170,31 @@ func test_s06_five_steps_complete(timeout := 60000) -> void:
 			break
 		await get_tree().process_frame
 	assert_bool(progress.is_completed("S-06")) \
-		.override_failure_message("S-06 not completed: index=%d" % _lesson.current_index()) \
+		.override_failure_message("S-06 not completed: index=%d counters=%s base=%s" % [
+			_lesson.current_index(), _lesson._facts.snapshot().counters, _lesson._base.get("counters", {})]) \
 		.is_true()
+	await Boot.settle(get_tree())
+
+
+## The ch6 flake: when the strike-back wipes Alpha, the AI survivor (the enemy squad) often has
+## nowhere to consolidate, and `_solo_consolidate_melee` logged NOTHING on that empty-move branch —
+## so `log:consolidate` never fired and S-06 step 4 could never pass. The rule is applied even with
+## an empty move, so it must still log (house rule: every applied rule logs).
+func test_ai_survivor_without_a_move_still_logs_consolidation(timeout := 60000) -> void:
+	var alpha := _find("alpha")
+	var target := _find("target")
+	assert_object(alpha).is_not_null()
+	assert_object(target).is_not_null()
+	for model in alpha.models:
+		(model as ModelInstance).is_alive = false   # simulate the strike-back wiping Alpha
+	assert_bool(alpha.is_destroyed()).is_true()
+
+	var before := _consolidation_lines()
+	await _main._solo_consolidate_melee(alpha, target)   # the AI survivor has no enemy and no objective
+
+	assert_int(_consolidation_lines()) \
+		.override_failure_message("the held-ground AI survivor must still log a consolidation line") \
+		.is_greater(before)
 	await Boot.settle(get_tree())
 
 
