@@ -4111,6 +4111,8 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s (%s): shot from over 9\" — +1 Defense (saves on %d+)" % [
 				target.get_name(), over9_rule, AiCombatMath.shown_target(base_defense)], true)
 	var covered_defense: int = _solo_cover_defense(target, base_defense)   # +1 Defense if majority in cover
+	if covered_defense < base_defense and battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT, "%s is in cover: +1 Defense vs shooting" % target.get_name(), true)
 	# Resolver wave A — vs-target Marks: the bearer's pick lands on THIS volley's target.
 	_solo_apply_vs_marks(attacker, target, dist_in)
 	# Coverage wave — Piercing Tag: friendly attackers spend the markers for +AP on this volley.
@@ -11864,6 +11866,8 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s (%s): shot from over 9\" — +1 Defense (saves on %d+)" % [
 				target.get_name(), h_over9, AiCombatMath.shown_target(shielded_def)], true)
 	var covered_def: int = _solo_cover_defense(target, shielded_def)
+	if covered_def < shielded_def and battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT, "%s is in cover: +1 Defense vs shooting" % target.get_name(), true)
 	# Resolver wave A parity: your volley places vs-target Marks, SPENDS Piercing-Tag markers and
 	# honours the Reckless-Piercing AP stamps — the AI path had these seams, yours silently didn't.
 	_solo_apply_vs_marks(attacker, target, dist)
@@ -17333,7 +17337,7 @@ func _start_lesson(_object_count: int) -> void:
 	facts.setup({"camera_pivot": camera_pivot, "object_manager": object_manager,
 		"army_manager": opr_army_manager, "table": table,
 		"map_layout": map_layout_editor, "left_panel": left_panel_scroll, "main": self,
-		"unit_dock": unit_dock, "battle_log": battle_log})
+		"unit_dock": unit_dock, "battle_log": battle_log, "terrain_overlay": terrain_overlay})
 	if _scenario_mode:
 		# D4: a lesson always plays the gentlest ladder grade, in memory only — the player's saved
 		# grade (SoloGrade.save) is deliberately never written from a lesson.

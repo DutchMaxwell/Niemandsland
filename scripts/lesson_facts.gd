@@ -14,6 +14,7 @@ var _left_panel: CanvasItem
 var _main: Node
 var _unit_dock: Node
 var _battle_log: Node
+var _terrain_overlay: Node
 var _counters: Dictionary = {}
 
 
@@ -27,6 +28,7 @@ func setup(refs: Dictionary) -> void:
 	_main = refs.get("main")
 	_unit_dock = refs.get("unit_dock")
 	_battle_log = refs.get("battle_log")
+	_terrain_overlay = refs.get("terrain_overlay")
 	if _object_manager != null and _object_manager.has_signal("measurement_finished"):
 		if not _object_manager.measurement_finished.is_connected(_on_measurement_finished):
 			_object_manager.measurement_finished.connect(_on_measurement_finished)
@@ -104,6 +106,7 @@ func snapshot() -> Dictionary:
 				"alive": alive.size(), "activated": unit.is_activated,
 				"shaken": unit.is_shaken, "fatigued": unit.is_fatigued,
 				"card_presented": _is_card_presented(unit),
+				"terrain": _terrain_mode(alive),
 				"enemy_gap_in": _enemy_gap_in(unit, all_units)}
 	return facts
 
@@ -158,6 +161,26 @@ func _is_card_presented(unit: GameUnit) -> bool:
 	if _unit_dock == null or not _unit_dock.has_method("get_presented_unit"):
 		return false
 	return _unit_dock.get_presented_unit() == unit
+
+
+## The terrain type MOST of a unit's alive models stand on (S-08), or 0 (NONE) when there is no
+## overlay. Ties resolve to the last type that took the lead.
+func _terrain_mode(alive: Array[ModelInstance]) -> int:
+	if _terrain_overlay == null or not _terrain_overlay.has_method("get_terrain_at_world_position"):
+		return 0
+	var counts: Dictionary = {}
+	var best := 0
+	var best_n := 0
+	for model in alive:
+		if not is_instance_valid(model.node):
+			continue
+		var t := int(_terrain_overlay.get_terrain_at_world_position(model.node.global_position))
+		var n := int(counts.get(t, 0)) + 1
+		counts[t] = n
+		if n > best_n:
+			best_n = n
+			best = t
+	return best
 
 
 ## The lesson tag of the tagged unit whose on-screen name is `unit_name`, or "" (untagged units are
