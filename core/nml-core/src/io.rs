@@ -655,6 +655,10 @@ pub struct Seams {
     /// deterministic dither) instead of the 50 % cliff. Default OFF.
     #[serde(default)]
     pub morale_by_probability: bool,
+    /// Inventory C01/C27 — see `Knobs::range_by_base_edge`: the imagined volley measures range and
+    /// the over-9" modifiers base edge to base edge. Default OFF.
+    #[serde(default)]
+    pub range_by_base_edge: bool,
     /// aifix D2 — the reply threat also prices charges (`melee_threat`, inside
     /// 12") and skips Shaken enemies. Default OFF.
     #[serde(default)]
@@ -726,6 +730,7 @@ impl Seams {
             v2: self.reply_v2,
             skip_activated: self.reply_skip_activated,
             hold_gate: self.reply_hold_gate,
+            range_edge: self.range_by_base_edge,
         }
     }
 }

@@ -125,6 +125,10 @@ func _ready() -> void:
 	_lightning_timer.timeout.connect(_on_lightning_due)
 	add_child(_lightning_timer)
 
+	# Re-apply the current mood instantly when Calm toggles, so rain/lightning switch at once.
+	GraphicsSettings.calm_mode_changed.connect(func() -> void:
+		apply_atmosphere(_current_name, true))
+
 # === Public ===
 
 ## Wire the scene dependencies (mirrors lighting_controller.initialize).
@@ -180,9 +184,12 @@ func apply_atmosphere(preset_name: String, instant: bool = false) -> void:
 		lighting_to = _lighting.PRESETS.get(preset["lighting"], {})
 
 	# Non-blended layers switch immediately (each fades internally).
-	_rain.set_raining(preset["rain"])
-	_war.set_rain_audio(preset["rain"])
-	if preset["lightning"]:
+	# Calm mode (GH #1634) suppresses the weather layer entirely: no rain streaks, no
+	# rain audio and no lightning flashes, whatever the mood asks for.
+	var calm := GraphicsSettings.calm_mode
+	_rain.set_raining(preset["rain"] and not calm)
+	_war.set_rain_audio(preset["rain"] and not calm)
+	if preset["lightning"] and not calm:
 		_schedule_lightning()
 	else:
 		_lightning_timer.stop()
