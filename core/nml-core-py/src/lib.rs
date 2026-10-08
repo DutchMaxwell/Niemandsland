@@ -742,6 +742,8 @@ impl Core {
             morale_by_probability: self.knobs.morale_by_probability,
             fire_in_range_only: self.knobs.fire_in_range_only,
             hero_counts_in_size: self.knobs.hero_counts_in_size,
+            fearless_roll_when_shaken: self.knobs.fearless_roll_when_shaken,
+            casualties_bearers_last: self.knobs.casualties_bearers_last,
             range_by_base_edge: self.knobs.range_by_base_edge,
             reply_v2: self.knobs.reply_v2,
             reply_skip_activated: self.knobs.reply_skip_activated,
@@ -881,6 +883,8 @@ impl Core {
         m.insert("range_by_base_edge".into(), self.knobs.range_by_base_edge.into());
         m.insert("morale_by_probability".into(), self.knobs.morale_by_probability.into());
         m.insert("hero_counts_in_size".into(), self.knobs.hero_counts_in_size.into());
+        m.insert("fearless_roll_when_shaken".into(), self.knobs.fearless_roll_when_shaken.into());
+        m.insert("casualties_bearers_last".into(), self.knobs.casualties_bearers_last.into());
         m.insert("rule_vocab_version".into(), self.knobs.rule_vocab_version.into());
         m.insert("eval_variant".into(), self.knobs.eval_variant.into());
         m.insert("strength_by_points".into(), self.knobs.strength_by_points.into());

@@ -40,6 +40,7 @@ pub struct Knobs {
     /// own activation and its Coordinate hand-off) and is priced there, mid-round, by the same blend +
     /// net leaf: no scripted opponent reply, no scripted tail. A tail cap cannot say this (0 = no cap,
     /// 1 = one scripted step). Research knob, default OFF (byte-identical).
+    /// Inert under `search_mode` tree: a tree leaf is priced at its own state already (tree.rs).
     #[serde(default)]
     pub leaf_opener_only: bool,
     #[serde(default)]
@@ -57,6 +58,7 @@ pub struct Knobs {
     /// `reply_top_k` / `reply_horizon`, the leaf hook (when wired) priced from the opponent's seat,
     /// instead of the scripted four-option brain; the rest of the tail stays scripted
     /// (`plan::Search::reply_pick`). Research knob, default OFF (byte-identical).
+    /// Inert under `search_mode` tree, which runs no rollout: its opponent nodes search the full menu (tree.rs).
     #[serde(default)]
     pub reply_by_net: bool,
     /// `reply_by_net`'s rollout budget; `<= 0` = `plan::REPLY_TOP_K` (3).
@@ -267,6 +269,17 @@ pub struct Knobs {
     /// morale / rout thresholds read host + hero, not the host alone. Research knob, default OFF (byte-identical).
     #[serde(default)]
     pub hero_counts_in_size: bool,
+    /// Inventory C08 — a Shaken unit "always fails" its morale test, but the failure is still a failed test, so
+    /// Fearless (all models) rolls its 4+ and passes half the time (p.13), as the table's dice already do
+    /// (`dice::resolve_morale_with_tray`). With the knob on the imagined test of a Shaken Fearless unit fails with chance 0.5
+    /// (the dither stands in for the die) instead of for certain. Research knob, default OFF (byte-identical).
+    #[serde(default)]
+    pub fearless_roll_when_shaken: bool,
+    /// Inventory C03 — when a unit loses models, the imagined volley keeps special-weapon bearers alive LAST, as the
+    /// table's dice assumption does (`sim::bearer_scaled_attacks`): a weapon carried by fewer models than the unit
+    /// fires `per-copy x min(copies, alive)`, only the common weapon shrinks pro rata. Research knob, default OFF.
+    #[serde(default)]
+    pub casualties_bearers_last: bool,
     /// Inventory C01/C27 — the AI's imagination measures shooting range (and the over-9" modifiers)
     /// base edge to base edge, as the table does, instead of model centre to centre. Research knob
     /// for the A/B, default OFF (byte-identical).
@@ -1533,6 +1546,8 @@ impl Default for Knobs {
             no_end_threat: false,
             fire_in_range_only: false,
             hero_counts_in_size: false,
+            fearless_roll_when_shaken: false,
+            casualties_bearers_last: false,
             range_by_base_edge: false,
             morale_by_probability: false,
             reply_v2: false,
