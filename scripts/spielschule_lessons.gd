@@ -111,8 +111,8 @@ const _S07_STEPS := [
 			{"check": "tag_flag", "args": {"tag": "shaken", "key": "shaken", "value": false}},
 			{"check": "counter_grew", "args": {"key": "continue"}}]},
 	{"id": "morale_test", "text": "The enemy squad is at half strength. Shoot it with Alpha Squad: at the end of the activation it takes a morale test. (p.10)",
-		"rule": "p.10", "all": [{"check": "counter_grew", "args": {"key": "log:morale:target"}}]},
-	{"id": "outcome", "text": "A failed morale test makes a unit Shaken — or Routs it when it is at half strength or less. (p.10)",
+		"rule": "p.10", "all": [{"check": "counter_grew", "args": {"key": "shoot:alpha"}}]},
+	{"id": "outcome", "text": "Read the log: a unit at half strength that loses models tests morale — fail and it is Shaken, at half strength or less it Routs, then press Continue. (p.10)",
 		"rule": "p.10", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
 ]
 

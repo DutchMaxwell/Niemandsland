@@ -109,8 +109,8 @@ func test_s07_four_steps_complete(timeout := 60000) -> void:
 	assert_bool(progress.is_completed("S-07")) \
 		.override_failure_message("S-07 not completed: index=%d" % _lesson.current_index()) \
 		.is_true()
-	# The lesson must finish inside round 1: Battleborn only recovers at a round START.
-	assert_int(int(_main.opr_army_manager.current_round)).is_equal(1)
+	# The step gate is the SHOT, not the morale outcome: the volley may wipe the half-strength squad
+	# (no morale test) or miss, and the chapter must still complete for every dice outcome.
 	await Boot.settle(get_tree())
 
 

@@ -145,6 +145,27 @@ func test_s07_recipe_is_a_playing_morale_table() -> void:
 	assert_str(by_tag["tough"].get("name", "")).is_equal("Robot Lord")
 	assert_bool(fixtures[0].ends_with("tutorial_army_p1.json")).is_true()
 	assert_bool(fixtures[1].ends_with("tutorial_army_p2.json")).is_true()
+	# H4: the volley must be exactly 4 Heavy Rifles + 1 Plasma. The combined unit's per-model loadout
+	# is [Heavy x9, Plasma x1] and `dead` parks from the FRONT, so parking 5 keeps models 5-9 — four
+	# Heavy Rifles plus the single Plasma carrier. Assert the bundled table's alive loadout agrees.
+	assert_int(by_tag["alpha"].get("dead", 0)).is_equal(5)
+	var table: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(Spielschule.chapter("S-07").scenario))
+	var heavy_alive := 0
+	var plasma_alive := 0
+	for u in table.get("game_units", []):
+		if String((u.get("unit_properties", {}) as Dictionary).get("lesson_tag", "")) != "alpha":
+			continue
+		for m in u.get("models", []):
+			if not bool(m.get("is_alive", false)):
+				continue
+			for w in (m.get("properties", {}) as Dictionary).get("weapons", []):
+				var wn := String(w.get("name", ""))
+				if wn == "Heavy Rifle":
+					heavy_alive += 1
+				elif wn == "Plasma Rifle":
+					plasma_alive += 1
+	assert_int(heavy_alive).is_equal(4)
+	assert_int(plasma_alive).is_equal(1)
 
 
 func test_recipe_schema_names_the_combat_seam_keys() -> void:
