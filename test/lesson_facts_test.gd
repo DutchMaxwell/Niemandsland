@@ -43,6 +43,11 @@ class FakeLayout extends Node:
 	var placed_pieces: Array = []
 	var deployment_type := 0
 
+class FakeTerrain extends Node:
+	var objs: Array = []
+	func get_objectives() -> Array:
+		return objs
+
 
 class FakeMain extends Node:
 	signal human_attack_resolved(attacker: GameUnit, melee: bool)
@@ -92,6 +97,23 @@ func test_snapshot_tracks_camera_selection_and_centroid() -> void:
 	objects.selected = [unit.models[0].node]
 	assert_bool(facts.snapshot().tags.get("alpha", {}).get("selected_whole", false)).is_true()
 	assert_int(facts.snapshot().tags.get("alpha", {}).get("alive", 0)).is_equal(1)
+
+
+func test_obj_distance_uses_the_base_edge_not_the_centre() -> void:
+	# A model centred 3.5" from the marker must read EDGE distance (~3.5" minus its base radius), the
+	# same measure the round-end seize uses — so obj_within never demands more than the real rule.
+	var army: FakeArmy = auto_free(FakeArmy.new())
+	var table: FakeTerrain = auto_free(FakeTerrain.new())
+	add_child(table)
+	table.objs = [Vector3.ZERO]
+	var unit := _unit("alpha", [Vector3(3.5 * Facts.METRES_PER_INCH, 0, 0)])
+	army.units = [unit]
+	var facts := Facts.new()
+	facts.setup({"army_manager": army, "terrain_overlay": table})
+	var dists: Array = facts.snapshot().tags.get("alpha", {}).get("obj_dist_in", [])
+	assert_int(dists.size()).is_equal(1)
+	var r_in := SoloController.model_base_radius_m(unit.models[0]) / Facts.METRES_PER_INCH
+	assert_float(float(dists[0])).is_equal_approx(3.5 - r_in, 0.01)
 
 
 func test_counters_only_grow_after_bump_or_measurement() -> void:

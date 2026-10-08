@@ -20,7 +20,7 @@ func test_world_gate_palette_and_weather_follow_player_choices() -> void:
 		return
 	var script = load(WORLD)
 	for tier in 5:
-		assert_bool(GraphicsSettings.call("world_enabled",tier)).is_equal(tier == 4)
+		assert_bool(GraphicsSettings.call("world_enabled",tier)).is_equal(tier >= 3)   # High and Ultra stand in the landscape
 	var desert: Dictionary = script.sky_values(Biomes.ARID_DESERT,"Sunset")
 	var tundra: Dictionary = script.sky_values(Biomes.FROZEN_TUNDRA,"Sunset")
 	assert_float(desert.biome_tint.r).is_greater(tundra.biome_tint.r)

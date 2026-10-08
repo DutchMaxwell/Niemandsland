@@ -32,6 +32,10 @@ func setup(refs: Dictionary) -> void:
 	if _object_manager != null and _object_manager.has_signal("measurement_finished"):
 		if not _object_manager.measurement_finished.is_connected(_on_measurement_finished):
 			_object_manager.measurement_finished.connect(_on_measurement_finished)
+	# I2: the difficult-terrain cap fires a real drag signal — the S-08 gate reads it.
+	if _object_manager != null and _object_manager.has_signal("movement_capped"):
+		if not _object_manager.movement_capped.is_connected(_on_movement_capped):
+			_object_manager.movement_capped.connect(_on_movement_capped)
 	if _battle_log != null and _battle_log.has_signal("entry_added"):
 		if not _battle_log.entry_added.is_connected(_on_battle_log_entry):
 			_battle_log.entry_added.connect(_on_battle_log_entry)
@@ -45,7 +49,7 @@ func setup(refs: Dictionary) -> void:
 func snapshot() -> Dictionary:
 	var facts := {"yaw": 0.0, "cam_dist": 0.0, "pivot": Vector3.ZERO,
 		"counters": _counters.duplicate(), "tags": {},
-		"table_size": Vector2.ZERO, "biome": "", "terrain_pieces": 0,
+		"table_size": Vector2.ZERO, "biome": "", "terrain_pieces": 0, "forest_pieces": 0,
 		"layout_pieces": 0, "deploy_type": 0, "menu_open": false,
 		"units_p1": 0, "p1_all_in_zone": false, "phase": 0,
 		"bands": false, "round": 0, "card_presented": false}
@@ -54,6 +58,7 @@ func snapshot() -> Dictionary:
 	if _table != null and "biome" in _table:
 		facts.biome = String(_table.biome)
 	facts.terrain_pieces = _count_terrain()
+	facts.forest_pieces = _count_forest_pieces()
 	if _map_layout != null and "placed_pieces" in _map_layout:
 		facts.layout_pieces = (_map_layout.placed_pieces as Array).size()
 	if _map_layout != null and "deployment_type" in _map_layout:
@@ -84,6 +89,9 @@ func snapshot() -> Dictionary:
 		if _object_manager != null and _object_manager.has_method("get_selected_objects"):
 			selected = _object_manager.get_selected_objects()
 		var all_units: Array = _army_manager.get_all_game_units()
+		var objectives := _objectives()
+		for i in range(objectives.size()):
+			facts["objective_owner_%d" % i] = _objective_owner(i)
 		for unit in all_units:
 			if not unit is GameUnit:
 				continue
@@ -107,6 +115,7 @@ func snapshot() -> Dictionary:
 				"shaken": unit.is_shaken, "fatigued": unit.is_fatigued,
 				"card_presented": _is_card_presented(unit),
 				"terrain": _terrain_mode(alive),
+				"obj_dist_in": _obj_dists(alive, objectives),
 				"enemy_gap_in": _enemy_gap_in(unit, all_units)}
 	return facts
 
@@ -117,6 +126,11 @@ func bump(key: String) -> void:
 
 func _on_measurement_finished(_distance_inches: float) -> void:
 	bump("measure")
+
+
+## I2: a drag past the cap fired (ObjectManager.movement_capped) — the difficult-terrain cap fired.
+func _on_movement_capped(_consumed_inches: float, _cap_inches: float, _dry: bool, _reason: String = "") -> void:
+	bump("move_capped")
 
 
 func _on_human_attack_resolved(attacker: GameUnit, melee: bool) -> void:
@@ -136,6 +150,14 @@ func _on_battle_log_entry(entry: Dictionary) -> void:
 		bump("log:pile_in")
 	if low.contains("consolidat"):
 		bump("log:consolidate")
+	# Dangerous-terrain test line ("<name> takes N Dangerous terrain test dice", rolled before the dice
+	# so it fires on the ROLL being made, whatever it shows) — I2 dice-safe gate.
+	if low.contains("dangerous terrain"):
+		bump("log:dangerous")
+	# A refused shot reads "<target>: no model has line of sight…" — the marker fires when the player
+	# picks a target the terrain truly hides (the S-05 blocked-LOS step).
+	if low.contains("no model has line of sight"):
+		bump("log:nolos")
 	# Morale outcome lines read "<name> passes morale" / "<name> fails morale …". Bump a counter for
 	# the TESTED unit's lesson tag so a lesson can gate "the volley forced a morale test"
 	# (log:morale:target).
@@ -161,6 +183,38 @@ func _is_card_presented(unit: GameUnit) -> bool:
 	if _unit_dock == null or not _unit_dock.has_method("get_presented_unit"):
 		return false
 	return _unit_dock.get_presented_unit() == unit
+
+
+## The overlay's mission markers (world metres), or [] when there is no overlay.
+func _objectives() -> Array:
+	if _terrain_overlay == null or not _terrain_overlay.has_method("get_objectives"):
+		return []
+	return _terrain_overlay.get_objectives()
+
+
+## Owner (0 neutral, else player_id) of marker `i`, or 0 when there is no overlay.
+func _objective_owner(i: int) -> int:
+	if _terrain_overlay == null or not _terrain_overlay.has_method("get_objective_owner"):
+		return 0
+	return int(_terrain_overlay.get_objective_owner(i))
+
+
+## Per-marker distance (inches) from a unit's NEAREST alive model to each objective, index-aligned to
+## the overlay's markers (S-09 obj_within). Measured base EDGE to the marker, the SAME measure the
+## round-end seize uses (SoloController.objective_info_in_range / objective_gap_in), so the step can
+## never demand more than the real rule grants. INF for a marker when the unit has no placed model.
+func _obj_dists(alive: Array[ModelInstance], objectives: Array) -> Array:
+	var out: Array = []
+	for pos in objectives:
+		var best := INF
+		for model in alive:
+			if not is_instance_valid(model.node):
+				continue
+			var centre := Vector2(model.node.global_position.x - (pos as Vector3).x,
+				model.node.global_position.z - (pos as Vector3).z).length() / METRES_PER_INCH
+			best = minf(best, centre - SoloController.model_base_radius_m(model) / METRES_PER_INCH)
+		out.append(best)
+	return out
 
 
 ## The terrain type MOST of a unit's alive models stand on (S-08), or 0 (NONE) when there is no
@@ -230,6 +284,19 @@ func _count_terrain() -> int:
 	var count := 0
 	for obj in _object_manager.get_tree().get_nodes_in_group("terrain"):
 		if obj is Node3D and UnitUtils.is_terrain(obj):
+			count += 1
+	return count
+
+
+## S-02 draft gate: of the placed scenery, how many are FOREST pieces. A shelf/terrain node records
+## its kind in the "prop_kind" meta (ObjectManager.SandboxPropKind).
+func _count_forest_pieces() -> int:
+	if _object_manager == null or not _object_manager.is_inside_tree():
+		return 0
+	var count := 0
+	for obj in _object_manager.get_tree().get_nodes_in_group("terrain"):
+		if obj is Node3D and UnitUtils.is_terrain(obj) \
+				and int(obj.get_meta("prop_kind", -1)) == ObjectManager.SandboxPropKind.FOREST:
 			count += 1
 	return count
 

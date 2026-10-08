@@ -10706,8 +10706,7 @@ func _solo_targeting_input(event: InputEvent) -> bool:
 				return true
 			var verdict := _solo_validate_target(attacker, target, melee)
 			if verdict != "":
-				if battle_log != null:
-					battle_log.log_event(BattleLog.Category.GENERAL, "%s: %s" % [target.get_name(), verdict])
+				_solo_log_target_refusal(target, verdict)
 				return true
 			# #226 SPLIT FIRE + maintainer UX (31.07.): the second pick DECLARES — both firing
 			# vectors stand on the table and the dice wait for the explicit Fire! button.
@@ -11008,6 +11007,14 @@ func _solo_ring_pick_at(screen_pos: Vector2) -> Dictionary:
 			best_d = d
 			best = {"unit": sd["unit"], "index": sd["index"]}
 	return best
+
+
+## Logs a refused target pick so the player reads WHY the click did nothing (factored out of the
+## targeting click handler so headless lesson tests replay the exact same log line).
+func _solo_log_target_refusal(target: GameUnit, verdict: String) -> void:
+	if battle_log == null:
+		return
+	battle_log.log_event(BattleLog.Category.GENERAL, "%s: %s" % [target.get_name(), verdict])
 
 
 ## "" when the target is attackable, else the human-readable reason. Shooting validity is PER MODEL
