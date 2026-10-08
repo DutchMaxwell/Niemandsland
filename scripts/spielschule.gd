@@ -44,7 +44,7 @@ static func chapters() -> Array:
 		{"id": "S-08", "title": "Terrain",
 			"goal": "Use cover, terrain and line of sight.", "scenario": "res://assets/tutorial/scenarios/s08_terrain.nml"},
 		{"id": "S-SPELL", "title": "Spellcasting",
-			"goal": "Casters, tokens and spell range.", "scenario": ""},
+			"goal": "Casters, tokens and spell range.", "scenario": "res://assets/tutorial/scenarios/s_spell_casting.nml"},
 		{"id": "S-09", "title": "Mission Objectives",
 			"goal": "Hold objectives and win the mission.", "scenario": "res://assets/tutorial/scenarios/s09_objectives.nml"},
 		{"id": "S-10", "title": "Ins Niemandsland — face NACHTMAHR",

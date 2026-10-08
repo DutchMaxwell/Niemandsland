@@ -186,6 +186,21 @@ func test_s08_recipe_is_a_terrain_table() -> void:
 	assert_array(tags).contains(["alpha", "target"])
 
 
+func test_s_spell_recipe_is_a_caster_table() -> void:
+	var recipe := LessonRecipes.recipe("S-SPELL")
+	assert_vector(recipe.get("size_feet", Vector2.ZERO)).is_equal(Vector2(4, 4))
+	assert_int(recipe.get("phase", 0)).is_equal(1)
+	assert_array(recipe.get("ai_slots", [])).contains([2])
+	var tags: Array[String] = []
+	var fixtures: Array[String] = []
+	for side in recipe.get("sides", []):
+		fixtures.append(String(side.get("fixture", "")))
+		for pick in side.get("units", []):
+			tags.append(String(pick.get("tag", "")))
+	assert_array(tags).contains(["alpha", "target"])
+	assert_bool(fixtures[0].ends_with("tutorial_army_caster.json")).is_true()
+
+
 func test_s09_recipe_is_a_marker_table() -> void:
 	var recipe := LessonRecipes.recipe("S-09")
 	assert_vector(recipe.get("size_feet", Vector2.ZERO)).is_equal(Vector2(4, 4))
@@ -210,7 +225,7 @@ func test_recipe_schema_names_the_combat_seam_keys() -> void:
 			.is_true()
 
 func test_every_recipe_pick_exists_in_its_fixture() -> void:
-	for id in ["S-01", "S-02", "S-03", "S-04", "S-05", "S-06", "S-07", "S-08", "S-09"]:
+	for id in ["S-01", "S-02", "S-03", "S-04", "S-05", "S-06", "S-07", "S-08", "S-SPELL", "S-09"]:
 		var recipe := LessonRecipes.recipe(id)
 		for side in recipe.get("sides", []):
 			var path := String(side.get("fixture", ""))

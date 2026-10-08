@@ -149,6 +149,16 @@ const _S09_STEPS := [
 ]
 
 
+const _SSPELL_STEPS := [
+	{"id": "preview", "text": "Open the Archivist's card and hover a spell: a ring shows its range. (p.13)",
+		"rule": "p.13", "all": [{"check": "flag", "args": {"key": "spell_preview"}}]},
+	{"id": "cast", "text": "Right-click the Archivist, choose Cast, then pick the spell and a squad.",
+		"rule": "p.13", "all": [{"check": "counter_grew", "args": {"key": "cast:alpha"}}]},
+	{"id": "tokens", "text": "Casters gain tokens every round and spend them to cast; a spell succeeds on 4+, then press Continue. (p.13)",
+		"rule": "p.13", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
+]
+
+
 ## The ordered steps for a chapter id, or [] when the chapter has no lesson data yet (so it can
 ## never fake completion — see LessonRunner).
 static func steps_for(chapter_id: String) -> Array:
@@ -169,6 +179,8 @@ static func steps_for(chapter_id: String) -> Array:
 			return _S07_STEPS
 		"S-08":
 			return _S08_STEPS
+		"S-SPELL":
+			return _SSPELL_STEPS
 		"S-09":
 			return _S09_STEPS
 	return []
@@ -193,6 +205,8 @@ static func ai_mode(chapter_id: String) -> String:
 		"S-07":
 			return "hold"
 		"S-08":
+			return "hold"
+		"S-SPELL":
 			return "hold"
 		"S-09":
 			return "hold"

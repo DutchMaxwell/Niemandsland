@@ -16,7 +16,7 @@ func test_s03_has_four_steps() -> void:
 
 
 func test_every_step_has_text_and_at_least_one_check() -> void:
-	for chapter_id in ["S-01", "S-02", "S-03", "S-04", "S-05", "S-06", "S-07", "S-08", "S-09"]:
+	for chapter_id in ["S-01", "S-02", "S-03", "S-04", "S-05", "S-06", "S-07", "S-08", "S-SPELL", "S-09"]:
 		for step in SpielschuleLessons.steps_for(chapter_id):
 			assert_str(String(step.get("text", ""))).is_not_empty()
 			var checks: Array = step.get("all", [])
@@ -24,7 +24,7 @@ func test_every_step_has_text_and_at_least_one_check() -> void:
 
 
 func test_every_check_name_is_known_to_lesson_checks() -> void:
-	for chapter_id in ["S-01", "S-02", "S-03", "S-04", "S-05", "S-06", "S-07", "S-08", "S-09"]:
+	for chapter_id in ["S-01", "S-02", "S-03", "S-04", "S-05", "S-06", "S-07", "S-08", "S-SPELL", "S-09"]:
 		for step in SpielschuleLessons.steps_for(chapter_id):
 			for entry in step.get("all", []):
 				var check_name := String(entry.get("check", ""))
@@ -44,7 +44,7 @@ func test_step_texts_never_leak_lesson_tags() -> void:
 	# would be a leak, so the second check is case-sensitive.
 	var leak := RegEx.create_from_string("(?i)\\b(?:alpha|bravo|far|target)\\b(?! squad)")
 	var bare_tag := RegEx.create_from_string("\\b(?:shaken|tough)\\b")
-	for chapter_id in ["S-01", "S-02", "S-03", "S-04", "S-05", "S-06", "S-07", "S-08", "S-09"]:
+	for chapter_id in ["S-01", "S-02", "S-03", "S-04", "S-05", "S-06", "S-07", "S-08", "S-SPELL", "S-09"]:
 		for step in SpielschuleLessons.steps_for(chapter_id):
 			var text := String(step.get("text", ""))
 			assert_bool(leak.search(text) != null) \
@@ -97,3 +97,8 @@ func test_s08_has_six_steps_and_holds_the_ai() -> void:
 func test_s09_has_four_steps_and_holds_the_ai() -> void:
 	assert_array(SpielschuleLessons.steps_for("S-09")).has_size(4)
 	assert_str(SpielschuleLessons.ai_mode("S-09")).is_equal("hold")
+
+
+func test_s_spell_has_three_steps_and_holds_the_ai() -> void:
+	assert_array(SpielschuleLessons.steps_for("S-SPELL")).has_size(3)
+	assert_str(SpielschuleLessons.ai_mode("S-SPELL")).is_equal("hold")
