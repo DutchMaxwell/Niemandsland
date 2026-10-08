@@ -223,10 +223,16 @@ func test_s10_recipe_is_the_finale() -> void:
 	assert_bool(recipe.has("autogen_seed")).is_true()
 	assert_array(recipe.get("objectives_in", [])).has_size(3)
 	var tags: Array[String] = []
+	var fixtures: Array[String] = []
 	for side in recipe.get("sides", []):
+		fixtures.append(String(side.get("fixture", "")))
 		for pick in side.get("units", []):
 			tags.append(String(pick.get("tag", "")))
 	assert_array(tags).contains(["alpha", "bravo", "commander", "warriors_a", "warriors_b", "snipers"])
+	# D-TUT-8 (b): the player carries the schooled caster list into the finale; NACHTMAHR keeps the P2 list.
+	assert_array(fixtures).has_size(2)
+	assert_bool(fixtures[0].ends_with("tutorial_army_caster.json")).is_true()
+	assert_bool(fixtures[1].ends_with("tutorial_army_p2.json")).is_true()
 
 
 func test_recipe_schema_names_the_combat_seam_keys() -> void:

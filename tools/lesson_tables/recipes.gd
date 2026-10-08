@@ -92,7 +92,7 @@ static func recipe(id: String) -> Dictionary:
 			"deployment": 1, "phase": 1, "round": 1, "ai_slots": [2],
 			"autogen_seed": 20260710,
 			"objectives_in": [Vector2(-12, 0), Vector2(0, 0), Vector2(12, 0)], "sides": [
-				{"player": 1, "fixture": "res://assets/tutorial/tutorial_army_p1.json", "units": [
+				{"player": 1, "fixture": "res://assets/tutorial/tutorial_army_caster.json", "units": [
 					{"name": "Battle Brothers", "nth": 1, "tag": "alpha", "label": "Alpha Squad", "at_in": Vector2(-12, 14)},
 					{"name": "Battle Brothers", "nth": 2, "tag": "bravo", "label": "Bravo Squad", "at_in": Vector2(12, 14)},
 					{"name": "Master Brother", "nth": 1, "tag": "commander", "at_in": Vector2(0, 16)}]},
