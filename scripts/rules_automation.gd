@@ -29,6 +29,12 @@ static func effective(level: int, ai_designated: bool) -> int:
 	return Level.AUTOMATIC if ai_designated else level
 
 
+## Online (plan 1.4): a `sync_rules_automation` value from any peer is accepted only when it is MANUAL
+## (switching back is unilateral); Automatic online waits for the two-player agreement (step 3.0).
+static func accepts_online(level: Variant) -> bool:
+	return (level is int or level is float) and int(level) == Level.MANUAL
+
+
 ## Flipped on by plan step 2.10, when hotseat Automatic works; until then the table-setup row stays hidden.
 const UI_ENABLED := false
 ## Test seam: a suite sets this to exercise the row, the pick and the log line with the flag forced on.
