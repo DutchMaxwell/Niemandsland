@@ -655,6 +655,10 @@ pub struct Seams {
     /// deterministic dither) instead of the 50 % cliff. Default OFF.
     #[serde(default)]
     pub morale_by_probability: bool,
+    /// Inventory C02 — see `Knobs::fire_in_range_only`: the imagined volley prices only the models within a
+    /// weapon's range. Default OFF.
+    #[serde(default)]
+    pub fire_in_range_only: bool,
     /// Inventory C12 — see `Knobs::hero_counts_in_size`: a joined hero counts in the unit size for half
     /// strength and morale. Needs `hero_attach`. Default OFF.
     #[serde(default)]
@@ -742,6 +746,7 @@ impl Seams {
             v2: self.reply_v2,
             skip_activated: self.reply_skip_activated,
             hold_gate: self.reply_hold_gate,
+            reach_only: self.fire_in_range_only,
             by_speed: self.reply_threat_by_speed,
             range_edge: self.range_by_base_edge,
         }

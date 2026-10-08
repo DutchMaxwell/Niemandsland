@@ -1776,6 +1776,7 @@ mod retreating_strike;
 
     mod self_destruct;
 
+    mod fire_in_range;
     mod range_edge;
 mod shaken_strikeback;
 mod second_wind;

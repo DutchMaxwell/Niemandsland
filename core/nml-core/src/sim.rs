@@ -4115,6 +4115,77 @@ fn survivor_attacks(p: &ShootProfile, alive: i64, model_count: i64, bearers_last
         bearer_scaled_attacks(p, alive, model_count, alive)
     } else {
         effective_attacks(p.attacks, alive, model_count)
+/// Inventory C02 (GF/AoF v3.5.1 p.8: "All models in a unit with line of sight to the target, and that have a
+/// weapon that is within range of it, may fire at it") — rescale the attacks `profiles_of` just filled so a
+/// weapon counts only the models of `a_pos` whose OWN nearest distance to `b_pos` (centre measure, the same as
+/// `geom::dist_in`; `shave` is the inches an advance closes first) is within that weapon's range. A bonus shot
+/// (`extra_attack_q`) never scales with the unit. Callers reach this only with `fire_in_range_only` on.
+/// `g` is finite (`max(0.0)` of a distance, never NaN), so `g <= range` equals `!(range < g)`. The
+/// result is never above what `profiles_of` wrote (`models_in_reach <= alive`).
+pub fn reach_rescale(us: &UnitStatic, alive: i64, a_pos: &[[f64; 3]], b_pos: &[[f64; 3]], shave: f64, sc: &mut Scratch) {
+    let gaps: Vec<f64> = a_pos
+        .iter()
+        .map(|p| (geom::dist_in(std::slice::from_ref(p), b_pos) - shave).max(0.0))
+        .collect();
+    for (k, &i) in sc.keep.iter().enumerate() {
+        let p = &us.shoot[i];
+        if p.extra_attack_q > 0 {
+            continue;
+        }
+        let n = (gaps.iter().filter(|&&g| g <= p.range as f64).count() as i64).min(alive);
+        sc.attacks[k] = effective_attacks(p.attacks, n, us.model_count);
+    }
+}
+
+/// `member_profiles_of` plus the C02 reach rescale, per FIRING member (host and joined heroes each count their
+/// own models) against the target host and, with `hero_attach`, its joined heroes. Knob off = `member_profiles_of`
+/// byte for byte.
+#[allow(clippy::too_many_arguments)]
+pub fn member_profiles_reach(
+    statics: &[UnitStatic],
+    state: &State,
+    si: usize,
+    ti: usize,
+    d: f64,
+    seams: Seams,
+    sc: &mut Scratch,
+) {
+    member_profiles_of(statics, state, si, false, d, seams, sc);
+    if !seams.fire_in_range_only {
+        return;
+    }
+    let mut b_pos: Vec<[f64; 3]> = state.positions[ti].clone();
+    if seams.hero_attach {
+        for &h in &state.attached[ti] {
+            b_pos.extend(state.positions[h].iter().copied());
+        }
+    }
+    if sc.fold.is_empty() {
+        let us = &statics[state.roster.profile[si]];
+        reach_rescale(us, state.alive[si], &state.positions[si], &b_pos, 0.0, sc);
+        return;
+    }
+    // Folded list: one entry per (living member, weapon) in member order, `keep` indexes into it.
+    let mut idx = 0usize;
+    for &mi in std::iter::once(&si).chain(state.attached[si].iter()) {
+        if state.alive[mi] <= 0 {
+            continue;
+        }
+        let um = &statics[state.roster.profile[mi]];
+        let mut one = Scratch {
+            keep: (0..um.shoot.len()).collect(),
+            attacks: vec![0; um.shoot.len()],
+            ..Default::default()
+        };
+        reach_rescale(um, state.alive[mi], &state.positions[mi], &b_pos, 0.0, &mut one);
+        for (w, p) in um.shoot.iter().enumerate() {
+            if let Some(k) = sc.keep.iter().position(|&x| x == idx) {
+                if p.extra_attack_q <= 0 {
+                    sc.attacks[k] = one.attacks[w];
+                }
+            }
+            idx += 1;
+        }
     }
 }
 
@@ -5867,6 +5938,7 @@ fn caster_of(statics: &[UnitStatic], state: &State, si: usize, seams: Seams) -> 
 /// The priced pair is the live root ctx (families 2-4 of the blindness
 /// report). Feature reconstruction passes the recording epoch; live callers
 /// use the current epoch through `reply_threat`.
+#[allow(clippy::too_many_arguments)]
 fn volley_ev(
     statics: &[UnitStatic],
     state: &State,
@@ -5875,10 +5947,14 @@ fn volley_ev(
     d: f64,
     sc: &mut Scratch,
     rules_epoch: u32,
+    reach_shave: Option<f64>,
 ) -> (f64, i64) {
     let us = &statics[state.roster.profile[si]];
     let ut = &statics[state.roster.profile[ti]];
     profiles_of(us, state.alive[si], d, sc);
+    if let Some(shave) = reach_shave {
+        reach_rescale(us, state.alive[si], &state.positions[si], &state.positions[ti], shave, sc);
+    }
     // Exact early-out (aifix training-speed lane): nothing in range and no spell tokens means `shoot_ev` and
     // `spell_ev_of` are both zero whatever the contexts are — skip the two `ctx_live` builds.
     if sc.keep.is_empty() && (state.casts[si] <= 0 || !us.is_caster) {
@@ -5974,6 +6050,8 @@ pub struct ReplyOpts {
     pub range_edge: bool,
     pub skip_activated: bool,
     pub hold_gate: bool,
+    /// Inventory C02: the enemy's volley counts only the models within each weapon's range.
+    pub reach_only: bool,
     /// Inventory T03-T06: the enemy's charge threat uses ITS live charge band, the base-edge gap and
     /// never targets an Aircraft; its advance-then-shoot closes ITS live advance band.
     pub by_speed: bool,
@@ -6011,7 +6089,7 @@ fn reply_threat_core(statics: &[UnitStatic], state: &State, player: i64, rules_e
             };
             let mut ev = 0.0f64;
             if state.sees(e, state.key(m)) && los_clear(state, e, m) {
-                ev = volley_ev(statics, state, e, m, d, &mut sc, rules_epoch).0;
+                ev = volley_ev(statics, state, e, m, d, &mut sc, rules_epoch, o.reach_only.then_some(0.0)).0;
             }
             // T03-T06: off = the fixed 12" / 6" bands on the centre distance; on = the enemy's live bands,
             // the base-edge gap for the charge, and no charge against an Aircraft.
@@ -6026,7 +6104,7 @@ fn reply_threat_core(statics: &[UnitStatic], state: &State, player: i64, rules_e
                 ev = ev.max(melee_threat_at_epoch(statics, state, e, m, rules_epoch));
             }
             if v2 && movable && d > adv_in && state.sees(e, state.key(m)) && los_clear(state, e, m) {
-                let after = volley_ev(statics, state, e, m, d - adv_in, &mut sc, rules_epoch).0;
+                let after = volley_ev(statics, state, e, m, d - adv_in, &mut sc, rules_epoch, o.reach_only.then_some(adv_in)).0;
                 ev = ev.max(after);
             }
             if ev > best_ev {
@@ -7717,7 +7795,7 @@ fn resolve_with(
                 let (volley, sp_cost) = {
                     let us = &statics[pi_s];
                     let ut = &statics[next.roster.profile[ti]];
-                    member_profiles_of(statics, &next, si, false, d_ev, seams, &mut sc);
+                    member_profiles_reach(statics, &next, si, ti, d_ev, seams, &mut sc);
                     let att = ctx_of(us, &next, si);
                     let def = ctx_of(ut, &next, ti);
                     let shooting = shoot_ev(

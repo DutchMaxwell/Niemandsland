@@ -246,6 +246,11 @@ pub struct Knobs {
     /// round `rounds_total`). Research knob for the A/B, default OFF.
     #[serde(default)]
     pub no_end_threat: bool,
+    /// Inventory C02 — the AI's imagined volley lets only the models whose own distance to the target is
+    /// within a weapon's range fire it (GF/AoF v3.5.1 p.8), instead of every living model once the nearest
+    /// pair is in range. Research knob for the A/B, default OFF (byte-identical).
+    #[serde(default)]
+    pub fire_in_range_only: bool,
     /// Inventory C12 — a joined hero counts in the unit's size (GF/AoF v3.5.1 p.14): half strength and the
     /// morale / rout thresholds read host + hero, not the host alone. Research knob, default OFF (byte-identical).
     #[serde(default)]
@@ -1517,6 +1522,7 @@ impl Default for Knobs {
             dangerous_end_morale: false,
             opener_by_finish: false,
             no_end_threat: false,
+            fire_in_range_only: false,
             hero_counts_in_size: false,
             casualties_bearers_last: false,
             range_by_base_edge: false,

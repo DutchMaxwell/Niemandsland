@@ -2380,6 +2380,8 @@ KNOB_PRESETS: dict[str, dict[str, Any]] = {
     # aifix action-space lane (07.10.2026): the menu opens — up to 3 extra HOLD+shoot targets and one
     # ADVANCE-toward-the-marker-with-a-shot row. A STRENGTH change (bar = better), see farm/aifix/PREREG_MENU_OPEN.md.
     "menu_open": {"menu_all_targets": 3, "menu_advance_obj_shoot": True},
+    # inventory C02: only models within a weapon's range fire in the imagined volley (GF/AoF p.8)
+    "fire_in_range": {"fire_in_range_only": True},
     # opponent-model diagnosis (a) (08.10.2026): the opponent's FIRST rollout reply is the planner's own
     # one-ply search for it at grade 3/1 (the net at its leaves) instead of the scripted brain.
     "reply_net": {"reply_by_net": True, "reply_top_k": 3, "reply_horizon": 1},
