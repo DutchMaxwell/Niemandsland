@@ -974,6 +974,8 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         reply_by_net: dflag(d, "reply_by_net"),
         reply_top_k: dint(d, "reply_top_k", dflt.reply_top_k),
         reply_horizon: dint(d, "reply_horizon", dflt.reply_horizon),
+        reply_pool_cap: dint(d, "reply_pool_cap", dflt.reply_pool_cap),
+        reply_menu_restricted: dflag(d, "reply_menu_restricted"),
         seam_cast: dflag(d, "seam_cast"),
         seam_spacing: dflag(d, "seam_spacing"),
         // NML-1073 M4-7. No recorder writes this key yet (ai_planner.gd:607
