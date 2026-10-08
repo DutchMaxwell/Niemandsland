@@ -132,7 +132,7 @@ jobs:
       - name: Hash restored CDN blobs
         id: blobs_before
         run: |
-          H=$(cd ~/.local/share/godot/app_userdata/Niemandsland 2>/dev/null && find model_cache biome_cache ambience_cache containers_cache hazards_cache ruins_cache trees_cache reference_terrain_cache -type f ! -name '*.part' ! -name '*.tmp' -printf '%p %s\n' 2>/dev/null | LC_ALL=C sort | sha256sum | cut -c1-16)
+          mkdir -p ~/.local/share/godot/app_userdata/Niemandsland; cd ~/.local/share/godot/app_userdata/Niemandsland; H=$(find model_cache biome_cache ambience_cache containers_cache hazards_cache ruins_cache trees_cache reference_terrain_cache -type f ! -name '*.part' ! -name '*.tmp' -printf '%p %s\n' 2>/dev/null | LC_ALL=C sort | sha256sum | cut -c1-16)
           echo "hash=$H" >> "$GITHUB_OUTPUT"
           echo "restored blob set hash: $H"
 
@@ -192,7 +192,7 @@ jobs:
         id: blobs_after
         if: always()
         run: |
-          H=$(cd ~/.local/share/godot/app_userdata/Niemandsland 2>/dev/null && find model_cache biome_cache ambience_cache containers_cache hazards_cache ruins_cache trees_cache reference_terrain_cache -type f ! -name '*.part' ! -name '*.tmp' -printf '%p %s\n' 2>/dev/null | LC_ALL=C sort | sha256sum | cut -c1-16)
+          mkdir -p ~/.local/share/godot/app_userdata/Niemandsland; cd ~/.local/share/godot/app_userdata/Niemandsland; H=$(find model_cache biome_cache ambience_cache containers_cache hazards_cache ruins_cache trees_cache reference_terrain_cache -type f ! -name '*.part' ! -name '*.tmp' -printf '%p %s\n' 2>/dev/null | LC_ALL=C sort | sha256sum | cut -c1-16)
           echo "hash=$H" >> "$GITHUB_OUTPUT"
           if [ "$H" = "${{ steps.blobs_before.outputs.hash }}" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
