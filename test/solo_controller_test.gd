@@ -85,6 +85,37 @@ func test_ai_unit_advances_toward_nearest_human_and_activates() -> void:
 	assert_object(solo.activate_next_ai_unit()).is_null()
 
 
+func test_lesson_hold_ai_activates_but_does_not_move() -> void:
+	var human := _unit(1, [Vector3(0, 0, 0)])
+	var ai := _unit(2, [Vector3(0.5, 0, 0)])
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {human.unit_id: human, ai.unit_id: ai}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	solo.lesson_hold = true
+	var held := solo.activate_next_ai_unit()
+	assert_object(held).is_equal(ai)
+	assert_bool(ai.is_activated).is_true()   # the puppet still takes its activation
+	assert_float(ai.models[0].node.global_position.x).is_equal_approx(0.5, 0.0001)   # but never moves
+	assert_bool(solo.last_report.get("lesson_hold", false)).is_true()
+	assert_bool(solo.last_report.get("idle_shaken", true)).is_false()
+	assert_int(int(solo.last_report["action"])).is_equal(AiDecision.Action.HOLD)
+	assert_bool(solo.last_report.get("shoot", true)).is_false()
+	assert_bool(solo.last_report.get("can_shoot", true)).is_false()
+
+
+func test_lesson_hold_is_absent_from_arena_and_selfplay() -> void:
+	# D3's flag must stay a tutorial-only seam: arena and selfplay never set it, so their numbers
+	# cannot change. A mention there is the bug this test exists to catch.
+	for path in ["res://tools/arena_match.gd", "res://tools/solo_selfplay.gd"]:
+		var body := FileAccess.get_file_as_string(path)
+		assert_bool(body.contains("lesson_hold")) \
+			.override_failure_message("%s must never mention the lesson_hold seam" % path) \
+			.is_false()
+
+
 func test_targeting_prefers_a_not_yet_activated_human_over_a_nearer_activated_one() -> void:
 	# OPR Solo v3.5.0: nearest valid enemy, but prefer not-yet-activated.
 	var near_active := _unit(1, [Vector3(0.35, 0, 0)])   # closer, but already acted

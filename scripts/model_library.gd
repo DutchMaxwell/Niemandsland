@@ -525,6 +525,13 @@ func _refresh_remote_manifest() -> void:
 			apply_manifest_text(otext)
 			manifest_refreshed.emit(_models.size())
 			return
+	# CI offline fixture: our own runners boot the real scene in every e2e suite (measured 107
+	# live-manifest fetches in one CI run), so with this set we keep the bundled manifest that
+	# _ready() already loaded and skip the default live fetch. An explicit NML_MANIFEST_URL (a
+	# test's local fixture server, dev staging) still wins, so that seam keeps working.
+	if OS.get_environment("NML_SKIP_REMOTE_MANIFEST") == "1" \
+			and OS.get_environment("NML_MANIFEST_URL").strip_edges().is_empty():
+		return
 	# Unique ?t= query busts any CDN/proxy cache so a freshly published manifest is seen at once.
 	var override_url: String = _manifest_override_url()
 	var url: String
