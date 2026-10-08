@@ -98,6 +98,18 @@ const _S06_STEPS := [
 ]
 
 
+const _S08_STEPS := [
+	{"id": "move_forest", "text": "Move Alpha Squad into the forest ahead. Forests are difficult terrain: no model moves more than 6\". (p.11)",
+		"rule": "p.11", "all": [{"check": "tag_terrain_is", "args": {"tag": "alpha", "type": 2}}]},
+	{"id": "cover", "text": "The enemy stands inside a forest: most of it is in cover, so it gets +1 to its Defense rolls against shooting, then press Continue. (p.11)",
+		"rule": "p.11", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
+	{"id": "shoot_cover", "text": "Shoot the enemy in cover and watch the +1 in the log. (p.11)",
+		"rule": "p.11", "all": [{"check": "counter_grew", "args": {"key": "shoot:alpha"}}]},
+	{"id": "wall", "text": "Ruins are area terrain: units can see into and out of them, but not through — nobody shoots through the ruins, then press Continue. (p.11)",
+		"rule": "p.11", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
+]
+
+
 const _S07_STEPS := [
 	{"id": "shaken_idle", "text": "Charlie Squad carries an S token: Shaken units must spend their activation idle. (p.10)",
 		"rule": "p.10", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
@@ -135,6 +147,8 @@ static func steps_for(chapter_id: String) -> Array:
 			return _S06_STEPS
 		"S-07":
 			return _S07_STEPS
+		"S-08":
+			return _S08_STEPS
 	return []
 
 
@@ -155,5 +169,7 @@ static func ai_mode(chapter_id: String) -> String:
 		"S-06":
 			return "hold"
 		"S-07":
+			return "hold"
+		"S-08":
 			return "hold"
 	return "none"

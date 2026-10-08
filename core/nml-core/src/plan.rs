@@ -272,6 +272,7 @@ pub fn seams_of(knobs: &Knobs) -> Seams {
         moved_shoot: knobs.menu_wide || knobs.moved_shoot,
         dangerous_end_morale: knobs.dangerous_end_morale,
         morale_by_probability: knobs.morale_by_probability,
+        hero_counts_in_size: knobs.hero_counts_in_size,
         range_by_base_edge: knobs.range_by_base_edge,
         reply_v2: knobs.reply_v2,
         reply_skip_activated: knobs.reply_skip_activated,

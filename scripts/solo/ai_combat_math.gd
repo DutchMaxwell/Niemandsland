@@ -271,6 +271,13 @@ static func covered_defense(defense: int, in_cover: bool) -> int:
 	return defense - 1 if in_cover else defense
 
 
+## True when a shot's save ACTUALLY used Cover: the covered value is the one rolled AND it is better
+## than the uncovered base. Blast, Indirect and Ignores-Cover profiles roll the base, so the caller
+## must not claim the +1 for them (I4 cover-log honesty).
+static func shot_uses_cover(save_def: int, shot_cover: int, shot_base: int) -> bool:
+	return shot_cover < shot_base and save_def == shot_cover
+
+
 ## Fortified (army-book: "units where all models have this rule take hits that count as having AP(-1),
 ## to a min. of AP(0)"): the defender-side reduction of an incoming hit's AP. Applied per-hit to the
 ## FINAL AP (base + conditional + on-6) so the min-0 clamp is correct for each hit.
