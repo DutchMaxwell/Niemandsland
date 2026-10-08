@@ -79,6 +79,9 @@ var _current_selection: Array = []
 ## _open_regiment_wounds_dialog; checked by _on_wounds_changed.
 var _regiment_wound_dialog_tray: Node3D = null
 var _regiment_wound_dialog_pool_max: int = 0
+## Plan 2.8: the wounds dialog edits the model BEFORE it emits, so the "from" wounds are kept here.
+var _wounds_edit_model: ModelInstance = null
+var _wounds_edit_from: int = 0
 
 ## Is the radial menu scene loaded
 var _menu_scene: PackedScene = null
@@ -404,9 +407,9 @@ func _on_action_selected(action_id: String, context: Dictionary) -> void:
 		"toggle_activate":
 			_toggle_activation(context)
 		"toggle_fatigued":
-			_toggle_fatigued(context)
+			_toggle_fatigued(context, true)
 		"toggle_shaken":
-			_toggle_shaken(context)
+			_toggle_shaken(context, true)
 		"regiment_wounds":
 			_open_regiment_wounds_dialog(context)
 		"regiment_frontage":
@@ -505,6 +508,8 @@ func _open_wounds_dialog(context: Dictionary) -> void:
 	var model = context.get("model_instance") as ModelInstance
 	if not model:
 		return
+	_wounds_edit_model = model
+	_wounds_edit_from = model.wounds_current
 
 	if wounds_dialog:
 		wounds_dialog.open(model)
@@ -567,26 +572,53 @@ func _toggle_activation(context: Dictionary) -> void:
 		network_manager.broadcast_unit_activation(game_unit)
 
 
-func _toggle_fatigued(context: Dictionary) -> void:
+func _toggle_fatigued(context: Dictionary, manual: bool = false) -> void:
 	var game_unit = _get_game_unit_from_context(context)
 	if not game_unit:
 		return
 
 	game_unit.is_fatigued = not game_unit.is_fatigued
 	_update_fatigued_markers(game_unit)
+	if manual:
+		_log_manual_toggle(game_unit, "Fatigued", game_unit.is_fatigued)
 
 	# Broadcast fatigued change to remote peers
 	if network_manager:
 		network_manager.broadcast_unit_marker(game_unit, "FatiguedMarker", game_unit.is_fatigued)
 
 
-func _toggle_shaken(context: Dictionary) -> void:
+func _toggle_shaken(context: Dictionary, manual: bool = false) -> void:
 	var game_unit = _get_game_unit_from_context(context)
 	if not game_unit:
 		return
 
 	game_unit.is_shaken = not game_unit.is_shaken
 	_update_shaken_markers(game_unit)
+	if manual:
+		_log_manual_toggle(game_unit, "Shaken", game_unit.is_shaken)
+
+
+## Plan 2.8: in an Automatic game one "Manual: ..." line via the channel owner's _log_rule_event (main).
+func _log_manual_correction(text: String) -> void:
+	if army_manager == null or army_manager.rules_automation != RulesAutomation.Level.AUTOMATIC:
+		return
+	var n: Node = self
+	while n != null and not n.has_method("_log_rule_event"):
+		n = n.get_parent()
+	if n == null:
+		n = get_node_or_null("/root/Main")
+	if n != null and n.has_method("_log_rule_event"):
+		n._log_rule_event(BattleLog.Category.GENERAL, "Manual: " + text, false)
+
+
+func _log_manual_toggle(game_unit: GameUnit, status: String, on: bool) -> void:
+	var pid: int = int(game_unit.unit_properties.get("player_id", 1))
+	_log_manual_correction("P%d %s %s %s" % [pid, "marks" if on else "clears", game_unit.get_name(), status])
+
+
+func _log_manual_revive(game_unit: GameUnit, scope: String) -> void:
+	var pid: int = int(game_unit.unit_properties.get("player_id", 1))
+	_log_manual_correction("P%d revives %s%s" % [pid, scope, game_unit.get_name()])
 
 	# Broadcast shaken change to remote peers
 	if network_manager:
@@ -878,6 +910,8 @@ func _revive_fallen(context: Dictionary) -> void:
 				var move_peer: int = network_manager.get_my_peer_id() if network_manager else 0
 				undo_manager.push(UndoManager.RegimentWoundAction.new(regiment, from_taken, 0, army_manager, network_manager, move_peer))
 			army_manager.apply_regiment_wounds(regiment, 0)
+			if from_taken != 0:
+				_log_manual_revive(game_unit, "")
 		return
 	# Standard path (loose models + Tough(X>1) units): revive each dead model in place.
 	_revive_unit_models(game_unit)
@@ -886,9 +920,11 @@ func _revive_fallen(context: Dictionary) -> void:
 ## Revive every dead model of a unit in place (visible + collision + boundary + wounds), broadcast.
 func _revive_unit_models(game_unit: GameUnit) -> void:
 	var pid: int = int(game_unit.unit_properties.get("player_id", 1))
+	var revived := 0
 	for model in game_unit.models:
 		if model.is_alive:
 			continue
+		revived += 1
 		model.reset_wounds()
 		# Loose models come back from the tray (restore material + spot); regiment models un-hide.
 		if model.node != null and model.node.has_meta(RegimentTray.MEMBER_META):
@@ -899,6 +935,8 @@ func _revive_unit_models(game_unit: GameUnit) -> void:
 		_reform_regiment_for_model(model)
 		if network_manager:
 			network_manager.broadcast_model_wounds(model)
+	if revived > 0:
+		_log_manual_revive(game_unit, "")
 	# Token re-derivation on revive now runs off the set_loose_model_dead choke-point signal (J9).
 
 
@@ -914,6 +952,7 @@ func _revive_dead(context: Dictionary) -> void:
 	var model = context.get("revive_model")
 	if model != null and model is ModelInstance and not (model as ModelInstance).is_alive:
 		_revive_single_model(model as ModelInstance, unit as GameUnit)
+		_log_manual_revive(unit as GameUnit, "a model of ")
 
 
 ## Revive ALL of a unit's dead models at once (partial-casualty multi-revive from the dead menu, G3).
@@ -936,6 +975,7 @@ func _revive_selected_dead(context: Dictionary) -> void:
 		var mi = UnitUtils.get_model_instance(node)
 		if gu is GameUnit and mi is ModelInstance and not (mi as ModelInstance).is_alive:
 			_revive_single_model(mi as ModelInstance, gu as GameUnit)
+			_log_manual_revive(gu as GameUnit, "a model of ")
 
 
 ## Revive one dead loose model (partial-casualty case): reset wounds, un-park from the tray
@@ -1065,6 +1105,14 @@ func _on_wounds_changed(model: ModelInstance, new_wounds: int) -> void:
 				undo_manager.push(UndoManager.RegimentWoundAction.new(regiment, from_taken, taken, army_manager, network_manager, move_peer))
 			army_manager.apply_regiment_wounds(regiment, taken)
 		return
+
+	# Plan 2.8: one "Manual" log line per real change (the dialog only ever edits through here).
+	var from_wounds: int = _wounds_edit_from if model == _wounds_edit_model else new_wounds
+	_wounds_edit_model = model
+	_wounds_edit_from = new_wounds
+	if from_wounds != new_wounds and model.unit is GameUnit:
+		var owner_unit := model.unit as GameUnit
+		_log_manual_correction("P%d sets %s wounds %d → %d" % [int(owner_unit.unit_properties.get("player_id", 1)), owner_unit.get_name(), from_wounds, new_wounds])
 
 	# Per-model wound path (loose models + Tough(X>1) regiments):
 	# Update visual wound marker
