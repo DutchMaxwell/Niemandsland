@@ -15390,6 +15390,7 @@ func _on_peer_version_validated(peer_id: int) -> void:
 	# solo session that rolled into hosting), BEFORE the state push, so the guest never
 	# receives a table where NACHTMAHR claims its army.
 	_solo_release_slot_to_human(network_manager.slot_for_peer(peer_id))
+	_clamp_rules_online("the online room")   # plan 1.4: before the push, so the guest never receives Automatic
 	_sync_state_to_peer(peer_id)
 	# The peer is registered and validated — hand it the full name roster so it
 	# immediately knows everyone already at the table (including the host).
@@ -15472,6 +15473,7 @@ func _on_internet_room_ready(code: String) -> void:
 	if network_manager and multiplayer.is_server():
 		network_manager.is_host = multiplayer.is_server()
 		network_manager.seed_host_identity()
+	_clamp_rules_online("the online room")   # plan 1.4: a room created from an Automatic local game is Manual
 	_register_local_name()
 
 
@@ -16417,6 +16419,37 @@ func _on_network_command(type: String, payload: Variant, _from_peer: int) -> voi
 		_rpc_roll_result(int(payload.get("req", 0)), payload.get("faces", []))
 	elif type == "vfx_cue" and payload is Dictionary:
 		_vfx_draw(payload, _from_peer)
+	elif type == "sync_rules_automation" and payload is Dictionary:
+		_on_sync_rules_automation((payload as Dictionary).get("level"), _from_peer)
+
+
+## Plan 1.4: a rules-automation value from a peer. MANUAL is unilateral and applies at once; an
+## AUTOMATIC value is ignored (online Automatic needs the later two-player agreement).
+func _on_sync_rules_automation(level: Variant, from_peer: int) -> void:
+	if not RulesAutomation.accepts_online(level):
+		print("[Rules] ignoring online rules-automation value %s from peer %d (rooms stay Manual)" % [str(level), from_peer])
+		return
+	_set_rules_manual_logged(_peer_display_name(from_peer))
+
+
+## Sets the level to MANUAL; logs locally (each side logs its own line, nothing is re-broadcast)
+## only when it actually changed. Returns whether it changed.
+func _set_rules_manual_logged(who: String) -> bool:
+	if opr_army_manager == null or opr_army_manager.rules_automation == RulesAutomation.Level.MANUAL:
+		return false
+	opr_army_manager.rules_automation = RulesAutomation.Level.MANUAL
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL, "Rules automation: Manual (changed by %s)" % who)
+	return true
+
+
+## Plan 1.4: while a network session is live the room's level is MANUAL. Called when a room is created,
+## when the host admits a guest, and after a guest adopts the pushed state; tells the peers once.
+func _clamp_rules_online(who: String) -> void:
+	if network_manager == null or not network_manager.is_multiplayer_active():
+		return
+	if _set_rules_manual_logged(who):
+		network_manager.send_command("sync_rules_automation", {"level": RulesAutomation.Level.MANUAL}, 0)
 
 
 ## #673 co-op: the wire shape of the AI-slot designation sync — sorted player ids, one message
@@ -16622,6 +16655,7 @@ func _rpc_sync_game_state(state: Dictionary) -> void:
 	# happens after any import, so the @rpc broadcast was missed — this is the join-time catch-up).
 	if state.get("solo_ai_slots") is Array:
 		_rpc_sync_ai_slots(state["solo_ai_slots"])
+	_clamp_rules_online("the online room")   # plan 1.4: the pushed level is read, a room stays Manual
 
 
 ## ============================================================================
