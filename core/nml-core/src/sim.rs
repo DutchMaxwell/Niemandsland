@@ -3003,6 +3003,20 @@ fn engage_gap_in(state: &State, si: usize, ti: usize, seams: Seams) -> f64 {
     best
 }
 
+/// Inventory C01/C27 — the nearest BASE-EDGE gap (inches) from `a_pos` (unit `si`'s models, or a moved copy
+/// of them) to unit `ti`'s models, through the recorded base shapes: the table's shooting-range and over-9"
+/// measure. Only read with `Knobs::range_by_base_edge`; empty side = INFINITY like `geom::dist_in`.
+pub fn range_gap_in(state: &State, a_pos: &[[f64; 3]], si: usize, ti: usize) -> f64 {
+    let shape = |u: usize| state.roster.profile.get(u)
+        .and_then(|&p| state.profiles.list.get(p))
+        .map_or(geom::BaseShape::Round, crate::state::Profile::shape);
+    geom::edge_gap_shaped_in(
+        a_pos, &state.radii[si], shape(si),
+        &state.positions[ti], &state.radii[ti], shape(ti),
+        DEFAULT_BASE_RADIUS_M,
+    )
+}
+
 /// Live table modifier distance: nearest alive model bases, including joined
 /// heroes when that seam is active. Older recordings keep the centre measure.
 fn modifier_distance_in(state: &State, si: usize, ti: usize, seams: Seams) -> f64 {
@@ -4229,6 +4243,22 @@ pub fn folded_slice<'a>(own: &'a [ShootProfile], sc: &'a Scratch) -> &'a [ShootP
 /// no models left has an empty array and contributes INF, exactly as an empty side does.
 /// Fold off = the single `dist_in` call, byte for byte.
 pub fn fold_dist_in(state: &State, si: usize, ti: usize, seams: Seams) -> f64 {
+    if seams.range_by_base_edge {
+        let mut best = f64::INFINITY;
+        let hosts = |u: usize| -> Vec<usize> {
+            let mut v = vec![u];
+            if seams.hero_attach {
+                v.extend(state.attached[u].iter().copied());
+            }
+            v
+        };
+        for a in hosts(si) {
+            for b in hosts(ti) {
+                best = best.min(range_gap_in(state, &state.positions[a], a, b));
+            }
+        }
+        return best;
+    }
     if !seams.hero_attach {
         return geom::dist_in(&state.positions[si], &state.positions[ti]);
     }
@@ -5848,6 +5878,28 @@ const REPLY_CHARGE_IN: f64 = 12.0;
 /// The Advance band the v2 reply shoots after (GF p.7: Advance moves 6" and may still fire).
 const REPLY_ADVANCE_IN: f64 = 6.0;
 
+/// Inventory T05 — the nearest BASE-EDGE gap (inches) from `a_pos` (unit `si`'s models) to unit `ti`'s
+/// models through the recorded base shapes: the table's charge-distance measure (p.5). Empty side = INFINITY.
+fn base_gap_in(state: &State, a_pos: &[[f64; 3]], si: usize, ti: usize) -> f64 {
+    let shape = |u: usize| state.roster.profile.get(u)
+        .and_then(|&p| state.profiles.list.get(p))
+        .map_or(geom::BaseShape::Round, crate::state::Profile::shape);
+    geom::edge_gap_shaped_in(
+        a_pos, &state.radii[si], shape(si),
+        &state.positions[ti], &state.radii[ti], shape(ti),
+        DEFAULT_BASE_RADIUS_M,
+    )
+}
+
+/// Inventory T03: the enemy `e`'s live charge reach against `m` — the gate's own band (`charge` or the
+/// Rush band, Fast +4" / Slow -4" already in the bands), Melee-Shrouding folded.
+fn speed_charge_in(statics: &[UnitStatic], state: &State, e: usize, m: usize) -> f64 {
+    let bands = &state.bands[e];
+    let (_, rush_in) = live_bands_of(statics, state, e);
+    let band = bands.charge.map_or(rush_in, |c| c + rush_in - bands.rush);
+    crate::gate::melee_shroud_charge_in(band, state, m)
+}
+
 /// E[max(0, w - X)] for X ~ Poisson(lambda): the wounds a unit of `w` keeps standing against an
 /// expected `lambda` unsaved wounds, as a probability tail instead of `max(0, w - lambda)`.
 fn expected_remaining(w: f64, lambda: f64) -> f64 {
@@ -5875,8 +5927,13 @@ pub fn reply_threat_with(statics: &[UnitStatic], state: &State, player: i64, v2:
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ReplyOpts {
     pub v2: bool,
+    /// Inventory C01: the enemy's volley distance is the base-edge gap (`range_gap_in`).
+    pub range_edge: bool,
     pub skip_activated: bool,
     pub hold_gate: bool,
+    /// Inventory T03-T06: the enemy's charge threat uses ITS live charge band, the base-edge gap and
+    /// never targets an Aircraft; its advance-then-shoot closes ITS live advance band.
+    pub by_speed: bool,
 }
 
 pub fn reply_threat_opts(statics: &[UnitStatic], state: &State, player: i64, o: ReplyOpts) -> Vec<f64> {
@@ -5904,16 +5961,29 @@ fn reply_threat_core(statics: &[UnitStatic], state: &State, player: i64, rules_e
             if state.player[m] != player || state.alive[m] <= 0 {
                 continue;
             }
-            let d = geom::dist_in(&state.positions[e], &state.positions[m]);
+            let d = if o.range_edge {
+                range_gap_in(state, &state.positions[e], e, m)
+            } else {
+                geom::dist_in(&state.positions[e], &state.positions[m])
+            };
             let mut ev = 0.0f64;
             if state.sees(e, state.key(m)) && los_clear(state, e, m) {
                 ev = volley_ev(statics, state, e, m, d, &mut sc, rules_epoch).0;
             }
-            if v2 && movable && d <= REPLY_CHARGE_IN {
+            // T03-T06: off = the fixed 12" / 6" bands on the centre distance; on = the enemy's live bands,
+            // the base-edge gap for the charge, and no charge against an Aircraft.
+            let (charge_gap, charge_reach) = if o.by_speed {
+                (base_gap_in(state, &state.positions[e], e, m).max(0.0), speed_charge_in(statics, state, e, m))
+            } else {
+                (d, REPLY_CHARGE_IN)
+            };
+            let adv_in = if o.by_speed { live_bands_of(statics, state, e).0 } else { REPLY_ADVANCE_IN };
+            let chargeable = !(o.by_speed && state.aircraft[m]);
+            if v2 && movable && chargeable && charge_gap <= charge_reach {
                 ev = ev.max(melee_threat_at_epoch(statics, state, e, m, rules_epoch));
             }
-            if v2 && movable && d > REPLY_ADVANCE_IN && state.sees(e, state.key(m)) && los_clear(state, e, m) {
-                let after = volley_ev(statics, state, e, m, d - REPLY_ADVANCE_IN, &mut sc, rules_epoch).0;
+            if v2 && movable && d > adv_in && state.sees(e, state.key(m)) && los_clear(state, e, m) {
+                let after = volley_ev(statics, state, e, m, d - adv_in, &mut sc, rules_epoch).0;
                 ev = ev.max(after);
             }
             if ev > best_ev {
@@ -7576,7 +7646,11 @@ fn resolve_with(
                     &format!("{} may target {} without line of sight", statics[pi_s].name, statics[next.roster.profile[ti]].name));
             }
             if plan.is_some() || sighted {
-                let d = geom::dist_in(&next.positions[si], &next.positions[ti]);
+                let d = if seams.range_by_base_edge {
+                    range_gap_in(&next, &next.positions[si], si, ti)
+                } else {
+                    geom::dist_in(&next.positions[si], &next.positions[ti])
+                };
                 // The table's epoch-66 nearest-base modifier measure remains
                 // separate from this pooled range-validity distance.
                 let mod_d = modifier_distance_in(&next, si, ti, seams);

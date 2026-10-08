@@ -338,7 +338,7 @@ func _apply_reference_environment(light_values := true) -> void:
 		var graphics := get_node("/root/GraphicsSettings")
 		var policy: Dictionary = graphics.environment_values(preset, graphics.current_preset)
 		for key: String in policy:
-			if key.begins_with("sdfgi_") or key.begins_with("ssil_") or key.begins_with("volumetric_fog_"):
+			if key.begins_with("sdfgi_") or key.begins_with("ssil_") or key.begins_with("ssr_") or key.begins_with("volumetric_fog_"):
 				values[key] = policy[key]
 	if light_values:
 		values.merge({"ssao_intensity": 2.0, "ssr_fade_in": 0.08, "glow_intensity": 0.16})
@@ -436,7 +436,7 @@ func _unhandled_input(event: InputEvent) -> void:
 func _process(delta: float) -> void:
 	if table_tier and _main != null:
 		_keep_props_seated(_main.terrain_overlay)
-	if not _dust.is_empty() or _volcanic != null or _jungle_motion != null:
+	if not GraphicsSettings.calm_mode and (not _dust.is_empty() or _volcanic != null or _jungle_motion != null):
 		_wind_time += delta
 		for streams in _dust:
 			streams.material_override.set_shader_parameter("time",_wind_time)
@@ -448,7 +448,7 @@ func _process(delta: float) -> void:
 		_ground.set_shader_parameter("wind_time",_wind_time)
 	if _base != null:
 		_base.set_shader_parameter("wind_time",_wind_time)
-	if _fog != null:
+	if _fog != null and not GraphicsSettings.calm_mode:
 		var t := Time.get_ticks_msec() / 1000.0
 		var span: float = _fog.size.x
 		_fog.position.x = sin(t * 0.05) * span * 0.02

@@ -44,7 +44,7 @@ static func chapters() -> Array:
 			"goal": "Charge in and resolve close combat.",
 			"scenario": "res://assets/tutorial/scenarios/s06_melee.nml"},
 		{"id": "S-07", "title": "Morale & Shaken",
-			"goal": "Pass morale tests and clear Shaken.", "scenario": ""},
+			"goal": "Pass morale tests and clear Shaken.", "scenario": "res://assets/tutorial/scenarios/s07_morale.nml"},
 		{"id": "S-08", "title": "Terrain",
 			"goal": "Use cover, terrain and line of sight.", "scenario": ""},
 		{"id": "S-09", "title": "Mission Objectives",

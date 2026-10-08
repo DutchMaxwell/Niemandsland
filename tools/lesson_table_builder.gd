@@ -150,8 +150,12 @@ func _apply_unit_state(manager: OPRArmyManager, unit: GameUnit, pick: Dictionary
 		unit.is_fatigued = true
 	var dead := int(pick.get("dead", 0))
 	if dead > 0:
+		# Park from the FRONT (model 0 up): the per-model loadout puts a unit's special weapon on the
+		# last carrier (e.g. the Battle Brothers' single Plasma Rifle sits on model 9 of 10), so parking
+		# the tail would strip the special weapon first. Lessons that keep the special weapon shooting
+		# (S-07's 4 Heavy Rifles + 1 Plasma) rely on the front park. Count-only lessons are unaffected.
 		var models := unit.models
-		for i in range(models.size() - 1, maxi(models.size() - 1 - dead, -1), -1):
+		for i in range(0, mini(dead, models.size())):
 			var node: Node3D = models[i].node
 			if is_instance_valid(node):
 				manager.set_loose_model_dead(node, player, true, unit.unit_id)
@@ -161,3 +165,13 @@ func _apply_unit_state(manager: OPRArmyManager, unit: GameUnit, pick: Dictionary
 			if mi != null:
 				mi.is_alive = false
 				mi.wounds_current = 0
+	# `wounds` pre-places whole wounds on a SINGLE-model Tough unit (Tough(3) with 2 wounds = below
+	# half strength) — `dead` only parks whole models, so a lone partially-wounded model needs this.
+	var wounds := int(pick.get("wounds", 0))
+	if wounds > 0:
+		if unit.models.size() != 1:
+			_fail("wounds needs a single-model unit: " + unit.get_name())
+			return
+		var lone := unit.models[0]
+		lone.wounds_current = maxi(int(lone.wounds_max) - wounds, 0)
+		lone.is_alive = lone.wounds_current > 0
