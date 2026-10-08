@@ -222,6 +222,11 @@ pub struct Knobs {
     /// round `rounds_total`). Research knob for the A/B, default OFF.
     #[serde(default)]
     pub no_end_threat: bool,
+    /// Inventory C01/C27 — the AI's imagination measures shooting range (and the over-9" modifiers)
+    /// base edge to base edge, as the table does, instead of model centre to centre. Research knob
+    /// for the A/B, default OFF (byte-identical).
+    #[serde(default)]
+    pub range_by_base_edge: bool,
     /// aifix D1 — see `Seams::morale_by_probability`. Research knob, default OFF.
     #[serde(default)]
     pub morale_by_probability: bool,
@@ -1470,6 +1475,7 @@ impl Default for Knobs {
             dangerous_end_morale: false,
             opener_by_finish: false,
             no_end_threat: false,
+            range_by_base_edge: false,
             morale_by_probability: false,
             reply_v2: false,
             reply_skip_activated: false,

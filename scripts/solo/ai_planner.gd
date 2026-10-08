@@ -595,6 +595,17 @@ static var opener_seat := false
 ## next-round opener is the side that finished activating first (GF p.7), not
 ## the side with fewer alive units.
 static var opener_by_finish := false
+## Shipped-brain header knobs (T2b menu_open BETTER on Erlkoenig, 08.10.2026):
+## set per pick by SoloController._apply_aifix; `_header_line` merges `brain_knob_stamp()` into the header knobs.
+static var brain_knobs := false
+
+
+## The two keys plain.rs `knobs_of` reads (Python KNOB_PRESETS menu_open); {} when off, so a
+## hand-planner game writes exactly the keys it wrote before.
+static func brain_knob_stamp() -> Dictionary:
+	if not brain_knobs:
+		return {}
+	return {"menu_all_targets": 3, "menu_advance_obj_shoot": true}
 static var _seat_env := -1   # research seam: NML_SEAT_DEPTH off/on/inv retunes the vote (lazy env)
 
 

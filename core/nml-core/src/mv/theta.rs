@@ -27,7 +27,7 @@
 use std::collections::{HashMap, HashSet};
 
 use super::cost::{
-    cspace_blocked, segment_cost, step_blocked, terrain_cost_at, CellBuild, Grid, StepOpts, Wall,
+    segment_cost, terrain_cost_at, CellBuild, Grid, StepOpts, Wall, WallIndex,
 };
 use super::geom2::{distance_to, to_f32, V2};
 use super::io::ThetaPop;
@@ -219,10 +219,11 @@ fn theta_core(
     mut trace: Option<&mut Vec<ThetaPop>>,
 ) -> Vec<V2> {
     let so = &opts.step;
+    let wi = WallIndex::new(walls);
     // :1347-1352 — early-out ONLY when the straight shot is hard-clear AND
     // carries no soft-cost surcharge; a merely-Dangerous line must still be
     // compared against a detour.
-    if !cspace_blocked(start, goal, walls, grid, so)
+    if !wi.cspace_blocked(start, goal, grid, so)
         && segment_cost(start, goal, grid, so) <= distance_to(start, goal) + EPS
     {
         return vec![start, goal];
@@ -308,7 +309,7 @@ fn theta_core(
             if nb != goal_c && terrain_cost_at(nb_pt, grid, so).is_infinite() {
                 continue;
             }
-            if step_blocked(cur_pt, nb_pt, walls, so) {
+            if wi.step_blocked(cur_pt, nb_pt, so) {
                 continue;
             }
             // :1405-1415 — price BOTH the grid step and the taut parent
@@ -318,7 +319,7 @@ fn theta_core(
             let par_pt = pos[&par];
             let mut from_node = cur;
             let mut tentative = g[&cur] + segment_cost(cur_pt, nb_pt, grid, so);
-            if !cspace_blocked(par_pt, nb_pt, walls, grid, so) {
+            if !wi.cspace_blocked(par_pt, nb_pt, grid, so) {
                 let via_par = g[&par] + segment_cost(par_pt, nb_pt, grid, so);
                 if via_par <= tentative + EPS {
                     from_node = par;
@@ -346,7 +347,7 @@ fn theta_core(
     // :1432-1441 — a guard-exhausted search returns its closest-reached stub,
     // unless the straight line is hard-legal AND no dearer than stub+remainder.
     if reach_closest && best_reach != start_c {
-        if !cspace_blocked(start, goal, walls, grid, so) {
+        if !wi.cspace_blocked(start, goal, grid, so) {
             let via_stub = g[&best_reach] + segment_cost(pos[&best_reach], goal, grid, so);
             if segment_cost(start, goal, grid, so) <= via_stub + EPS {
                 return vec![start, goal];
