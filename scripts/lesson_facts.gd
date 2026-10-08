@@ -200,7 +200,9 @@ func _objective_owner(i: int) -> int:
 
 
 ## Per-marker distance (inches) from a unit's NEAREST alive model to each objective, index-aligned to
-## the overlay's markers (S-09 obj_within). INF for a marker when the unit has no placed model.
+## the overlay's markers (S-09 obj_within). Measured base EDGE to the marker, the SAME measure the
+## round-end seize uses (SoloController.objective_info_in_range / objective_gap_in), so the step can
+## never demand more than the real rule grants. INF for a marker when the unit has no placed model.
 func _obj_dists(alive: Array[ModelInstance], objectives: Array) -> Array:
 	var out: Array = []
 	for pos in objectives:
@@ -208,9 +210,9 @@ func _obj_dists(alive: Array[ModelInstance], objectives: Array) -> Array:
 		for model in alive:
 			if not is_instance_valid(model.node):
 				continue
-			var d := Vector2(model.node.global_position.x - (pos as Vector3).x,
+			var centre := Vector2(model.node.global_position.x - (pos as Vector3).x,
 				model.node.global_position.z - (pos as Vector3).z).length() / METRES_PER_INCH
-			best = minf(best, d)
+			best = minf(best, centre - SoloController.model_base_radius_m(model) / METRES_PER_INCH)
 		out.append(best)
 	return out
 

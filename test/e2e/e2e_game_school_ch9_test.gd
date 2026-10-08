@@ -95,14 +95,20 @@ func test_s09_four_steps_complete(timeout := 120000) -> void:
 	_move_unit_to(bravo, objs[2])
 	assert_bool(await _wait_index(2)).is_true()   # Bravo within 3" of the right marker
 
+	# Seed the right marker as ALREADY held by the enemy: the round-end must take it to neutral while
+	# both sides are near it — so "contested -> 0" can actually fail (a fresh marker would be 0 anyway).
+	_main.terrain_overlay.set_objective_owner(2, 2)
 	# The round-end seam Next Round uses: only one side is near the left marker, so Alpha's side
-	# seizes it; the right marker stays neutral while Bravo and the enemy are both near it.
+	# seizes it; the right marker goes neutral while Bravo and the enemy are both near it.
 	_main._solo_auto_seize()
 	assert_int(_main.terrain_overlay.get_objective_owner(0)).is_equal(1)
 	assert_int(_main.terrain_overlay.get_objective_owner(2)).is_equal(0)
-	assert_bool(await _wait_index(3)).is_true()   # the marker was seized
 
-	(_main.get_node("UI/LessonCard") as LessonCard).continue_pressed.emit()
+	var card := _main.get_node("UI/LessonCard") as LessonCard
+	card.continue_pressed.emit()           # the seize explanation is read
+	assert_bool(await _wait_index(3)).is_true()
+	card.continue_pressed.emit()           # the outcome explanation is read
+
 	var progress := SpielschuleProgress.new(TEST_CFG)
 	var deadline := Time.get_ticks_msec() + 8000
 	while Time.get_ticks_msec() < deadline:

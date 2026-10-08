@@ -142,9 +142,9 @@ const _S09_STEPS := [
 		"rule": "p.6", "all": [{"check": "obj_within", "args": {"tag": "alpha", "index": 0, "inches": 3.0}}]},
 	{"id": "right_marker", "text": "Move Bravo Squad within 3\" of the right marker — the enemy stands there too. (p.6)",
 		"rule": "p.6", "all": [{"check": "obj_within", "args": {"tag": "bravo", "index": 2, "inches": 3.0}}]},
-	{"id": "seize", "text": "Activate all your units and end the round: a marker is seized when only one side is within 3\" at the end of a round. (p.6)",
-		"rule": "p.6", "all": [{"check": "value_is", "args": {"key": "objective_owner_0", "value": 1}}]},
-	{"id": "outcome", "text": "The right marker stays contested while both sides are near it. After 4 rounds, the side holding more markers wins, then press Continue. (p.6)",
+	{"id": "seize", "text": "The round ended: the left marker is seized because only your side is within 3\" — the right marker stays contested while both sides are near it, then press Continue. (p.6)",
+		"rule": "p.6", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
+	{"id": "outcome", "text": "A marker is seized when only one side is within 3\" at the end of a round. After 4 rounds, the side holding more markers wins, then press Continue. (p.6)",
 		"rule": "p.6", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
 ]
 
