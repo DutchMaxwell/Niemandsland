@@ -226,6 +226,11 @@ pub struct Knobs {
     /// morale / rout thresholds read host + hero, not the host alone. Research knob, default OFF (byte-identical).
     #[serde(default)]
     pub hero_counts_in_size: bool,
+    /// Inventory C01/C27 — the AI's imagination measures shooting range (and the over-9" modifiers)
+    /// base edge to base edge, as the table does, instead of model centre to centre. Research knob
+    /// for the A/B, default OFF (byte-identical).
+    #[serde(default)]
+    pub range_by_base_edge: bool,
     /// aifix D1 — see `Seams::morale_by_probability`. Research knob, default OFF.
     #[serde(default)]
     pub morale_by_probability: bool,
@@ -1475,6 +1480,7 @@ impl Default for Knobs {
             opener_by_finish: false,
             no_end_threat: false,
             hero_counts_in_size: false,
+            range_by_base_edge: false,
             morale_by_probability: false,
             reply_v2: false,
             reply_skip_activated: false,

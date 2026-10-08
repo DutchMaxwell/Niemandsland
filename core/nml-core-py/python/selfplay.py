@@ -2378,6 +2378,8 @@ KNOB_PRESETS: dict[str, dict[str, Any]] = {
     "menu_open": {"menu_all_targets": 3, "menu_advance_obj_shoot": True},
     # inventory C12: a joined hero counts in the unit size for half strength and morale (GF/AoF p.14)
     "hero_size": {"hero_counts_in_size": True},
+    # inventory C01/C27: the imagined shot measures range base edge to base edge, as the table does
+    "range_edge": {"range_by_base_edge": True},
     "aifix_all": {
         "opener_by_finish": True, "no_end_threat": True, "morale_by_probability": True,
         "eval_variant": 4, "reply_v2": True, "reply_skip_activated": True, "reply_hold_gate": True,
