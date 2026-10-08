@@ -177,7 +177,32 @@ pub trait LeafValue {
     /// One value per leaf, index-parallel to `leaves`. `side` is the searching
     /// player, the frame every leaf is to be judged in.
     fn value(&self, leaves: &[&State], side: i64) -> Result<Vec<f64>, Unsupported>;
+
+    /// The same batch for a search run from ANOTHER seat than the one this hook was built for
+    /// (`Knobs::reply_by_net`: the opponent's nested reply search). `opener_seat` is that seat's
+    /// `ActStatics::opener_seat`, the token a hook bakes into every leaf. The default DECLINES: a
+    /// hook that cannot rebuild its leaves for another seat must not price them as its own.
+    fn value_for_seat(&self, leaves: &[&State], side: i64, opener_seat: bool) -> Result<Vec<f64>, Unsupported> {
+        let _ = (leaves, side, opener_seat);
+        Err(Unsupported::LeafValueBridge("value_for_seat"))
+    }
 }
+
+/// `Knobs::reply_by_net` — the root's leaf hook asked from the OPPONENT's seat.
+struct SeatHook<'h> {
+    inner: &'h dyn LeafValue,
+    opener_seat: bool,
+}
+
+impl LeafValue for SeatHook<'_> {
+    fn value(&self, leaves: &[&State], side: i64) -> Result<Vec<f64>, Unsupported> {
+        self.inner.value_for_seat(leaves, side, self.opener_seat)
+    }
+}
+
+/// `Knobs::reply_by_net`'s default grade: the nested reply search's rollout budget and horizon.
+pub const REPLY_TOP_K: i64 = 3;
+pub const REPLY_HORIZON: i64 = 1;
 
 /// TEST SEAMS. Every shipping call uses `PlanBend::default()`, which is the
 /// GDScript. Each field turns ONE load-bearing decision of the search off, so a
@@ -707,7 +732,7 @@ impl<'a> Search<'a> {
             if deadline.is_some_and(|d| std::time::Instant::now() >= d) {
                 break;
             }
-            ends_of.push(self.roll.rollout_boundaries(state, &scored[i].cand, player, -1, sc)?);
+            ends_of.push(self.rollout_of(state, &scored[i].cand, player, sc)?);
         }
         if deadline.is_some() && ends_of.is_empty() {
             return Ok(self.deadline_fallback(state, player, base, &scored, &order, "deadline_before_first_rollout", t0,
@@ -855,6 +880,48 @@ impl<'a> Search<'a> {
             tree: None,
             deadline: deadline_trace.map(|d| DeadlineTrace { elapsed_us: t0.elapsed().as_micros() as u64, ..d }),
         })
+    }
+
+    /// PHASE 4a's rollout of ONE pool candidate: `Rollout::rollout_boundaries`, or with
+    /// `Knobs::reply_by_net` the same rollout whose first opponent reply is `reply_pick`'s.
+    pub fn rollout_of(&self, state: &State, cand: &Candidate, player: i64, sc: &mut Scratch)
+                      -> Result<Vec<State>, Unsupported> {
+        if !self.roll.knobs.reply_by_net {
+            return self.roll.rollout_boundaries(state, cand, player, -1, sc);
+        }
+        let mut reply = |st: &State, opp: i64, sc: &mut Scratch| self.reply_pick(st, opp, sc);
+        Ok(self.roll.rollout_traced_reply(state, cand, player, -1, sc, Some(&mut reply))?.0)
+    }
+
+    /// `reply_by_net`'s grade, `(top_k, horizon)` — `REPLY_TOP_K` / `REPLY_HORIZON` for an unset knob.
+    pub fn reply_grade(&self) -> (i64, i64) {
+        let k = &self.roll.knobs;
+        (if k.reply_top_k > 0 { k.reply_top_k } else { REPLY_TOP_K },
+         if k.reply_horizon > 0 { k.reply_horizon } else { REPLY_HORIZON })
+    }
+
+    /// `Knobs::reply_by_net` — the opponent's answer on `st` by THIS search's own machinery, run for
+    /// `opp` at `reply_grade`: the full root menu, the pool, one rollout per pooled row, and the
+    /// leaf hook (when wired, same weight) asked from the opponent's seat with its `opener_seat`
+    /// flipped (same round). One level only (its rollouts reply by script), no arbitration, no
+    /// ORDER re-rank, no exploration, no clock. The nested search cannot share the root's leaf
+    /// batch (PHASE 4b runs after every rollout, the reply is needed inside one), so it asks the
+    /// hook in its own sequential call. `None` = the opponent has nothing left to activate.
+    pub fn reply_pick(&self, st: &State, opp: i64, sc: &mut Scratch) -> Result<Option<Candidate>, Unsupported> {
+        let (top_k, horizon) = self.reply_grade();
+        let knobs = Knobs { top_k, horizon, reply_by_net: false, search_mode: SearchMode::OnePly, deadline_us: 0,
+                            deadline_after_preselect: false, pool_wall_ms: 0, ..self.roll.knobs };
+        let act = ActStatics { opener_seat: !self.act.opener_seat, playout_search: false,
+                               policy_mode: PolicyMode::Off, ..self.act.clone() };
+        let seat = self.leaf_value.map(|inner| SeatHook { inner, opener_seat: act.opener_seat });
+        let mut nested = Search::new(Rollout::new(self.roll.policy, knobs), &act);
+        nested.leaf_value = seat.as_ref().map(|h| h as &dyn LeafValue);
+        nested.leaf_value_w = self.leaf_value_w;
+        match nested.run(st, opp, sc, None) {
+            Ok(p) => Ok(Some(p.action)),
+            Err(Unsupported::NoCandidate) => Ok(None),
+            Err(e) => Err(e),
+        }
     }
 
     /// The `deadline_us` fallback when the deadline hit before the first

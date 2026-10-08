@@ -36,6 +36,12 @@ pub struct Knobs {
     pub tail_cap_p1: i64,
     #[serde(default)]
     pub tail_cap_p2: i64,
+    /// Opponent-model diagnosis (c) — every root rollout stops RIGHT AFTER the opener (the candidate's
+    /// own activation and its Coordinate hand-off) and is priced there, mid-round, by the same blend +
+    /// net leaf: no scripted opponent reply, no scripted tail. A tail cap cannot say this (0 = no cap,
+    /// 1 = one scripted step). Research knob, default OFF (byte-identical).
+    #[serde(default)]
+    pub leaf_opener_only: bool,
     #[serde(default)]
     pub imagined_round_end: bool,
     #[serde(default)]
@@ -46,6 +52,19 @@ pub struct Knobs {
     pub playout_margin: f64,
     #[serde(default)]
     pub playout_rich: bool,
+    /// Opponent-model diagnosis (a) — the opponent's FIRST reply inside every root rollout (the step
+    /// right after the opener) is the planner's own one-ply search for the opponent at the grade
+    /// `reply_top_k` / `reply_horizon`, the leaf hook (when wired) priced from the opponent's seat,
+    /// instead of the scripted four-option brain; the rest of the tail stays scripted
+    /// (`plan::Search::reply_pick`). Research knob, default OFF (byte-identical).
+    #[serde(default)]
+    pub reply_by_net: bool,
+    /// `reply_by_net`'s rollout budget; `<= 0` = `plan::REPLY_TOP_K` (3).
+    #[serde(default)]
+    pub reply_top_k: i64,
+    /// `reply_by_net`'s horizon in rounds; `<= 0` = `plan::REPLY_HORIZON` (1).
+    #[serde(default)]
+    pub reply_horizon: i64,
     /// `BattleSim.cast_phase_enabled()` — NML_SIM_CAST.
     #[serde(default)]
     pub seam_cast: bool,
@@ -1456,11 +1475,15 @@ impl Default for Knobs {
             horizon: 2,
             tail_cap_p1: 0,
             tail_cap_p2: 0,
+            leaf_opener_only: false,
             imagined_round_end: true,
             depth_discount: 0.5,
             seat_mode: 0,
             playout_margin: 0.02,
             playout_rich: true,
+            reply_by_net: false,
+            reply_top_k: 0,
+            reply_horizon: 0,
             seam_cast: false,
             seam_spacing: false,
             seam_path: false,

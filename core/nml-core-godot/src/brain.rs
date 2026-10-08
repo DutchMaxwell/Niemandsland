@@ -55,11 +55,16 @@ pub struct Hook<'a> {
 
 impl LeafValue for Hook<'_> {
     fn value(&self, leaves: &[&State], side: i64) -> Result<Vec<f64>, Unsupported> {
+        self.value_for_seat(leaves, side, self.opener_seat)
+    }
+
+    /// `Knobs::reply_by_net`: the same request with another seat's `opener_seat` token.
+    fn value_for_seat(&self, leaves: &[&State], side: i64, opener_seat: bool) -> Result<Vec<f64>, Unsupported> {
         let started = Instant::now();
         let mut rows = self.rows.borrow_mut();
         let batch = leaves.iter().map(|state| {
             nml_core::tokens::build(state, side, self.statics, self.terrain, &mut rows,
-                &[], -1, self.hero_attach, self.opener_seat,
+                &[], -1, self.hero_attach, opener_seat,
                 nml_core::acts::CURRENT_RULES_EPOCH).map(|t| t.to_json())
         }).collect::<Result<Vec<_>, _>>()?;
         let response = exchange(&self.client.url, self.client.timeout_ms, &request(side, batch))?;

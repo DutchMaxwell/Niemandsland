@@ -91,13 +91,13 @@ const PRESETS := {
 	# (pool1_rollout, hero_fold) are DEFAULT ON here — not worse on 298 pairs (four-arm A/B),
 	# ~+14% table time. The four A/B arm presets below (planner_v0_pool1/_herofold/_both) keep
 	# their own explicit combinations for future A/Bs and are untouched by this flip.
-	"planner_v0": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "placement": "rulebook", "pool1_rollout": true, "hero_fold": true, "eval_variant": 3, "aifix": true, "brain_knobs": true},
+	"planner_v0": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "placement": "rulebook", "pool1_rollout": true, "hero_fold": true, "eval_variant": 3, "aifix": true, "brain_knobs": true, "points_strength": true},
 	# NML-1073 M2-4 (working name, never exposed): planner_v0 with the PLAYOUT
 	# ARBITRATION armed and the hand eval kept — the recording arm the Rust port
 	# is gated against. planner_v2 cannot serve: its `eval_fit` is a different
 	# value function, which the port declines rather than approximates.
 	# NML-1073 M5: table-fidelity knobs default on, same as planner_v0 (see above).
-	"planner_v0s": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "placement": "rulebook", "playout_search": true, "pool1_rollout": true, "hero_fold": true, "eval_variant": 3, "aifix": true, "brain_knobs": true},
+	"planner_v0s": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "placement": "rulebook", "playout_search": true, "pool1_rollout": true, "hero_fold": true, "eval_variant": 3, "aifix": true, "brain_knobs": true, "points_strength": true},
 	# E4 (eval-tuning wave): planner_v0 with the FITTED eval as the leaf — the
 	# arena A/B pair for "did the data-derived value function beat the hand one".
 	# NML-1073 M5: table-fidelity knobs default on, same as planner_v0 (see above).
@@ -105,13 +105,13 @@ const PRESETS := {
 	# NML-1073 M5 BUG-3 (working name, never exposed): planner_v0 with the JOINED-HERO FOLD
 	# armed in the imagination. One arm of the four-arm A/B the maintainer gated the promotion
 	# on — nothing here becomes a default before that measurement.
-	"planner_v0_herofold": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "placement": "rulebook", "hero_fold": true, "eval_variant": 3, "aifix": true, "brain_knobs": true},
+	"planner_v0_herofold": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "placement": "rulebook", "hero_fold": true, "eval_variant": 3, "aifix": true, "brain_knobs": true, "points_strength": true},
 	# NML-1073 M5, the other two A/B arms. `planner_v0_pool1` is planner_v0 with the ONE-UNIT
 	# POOL routed through the rollout (#410); `planner_v0_both` arms that AND the joined-hero
 	# fold. With planner_v0 (neither) and planner_v0_herofold above, the four arms of the A/B
 	# the maintainer gated the promotion on are all selectable PER SEAT.
-	"planner_v0_pool1": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "placement": "rulebook", "pool1_rollout": true, "eval_variant": 3, "aifix": true, "brain_knobs": true},
-	"planner_v0_both": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "placement": "rulebook", "pool1_rollout": true, "hero_fold": true, "eval_variant": 3, "aifix": true, "brain_knobs": true},
+	"planner_v0_pool1": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "placement": "rulebook", "pool1_rollout": true, "eval_variant": 3, "aifix": true, "brain_knobs": true, "points_strength": true},
+	"planner_v0_both": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "placement": "rulebook", "pool1_rollout": true, "hero_fold": true, "eval_variant": 3, "aifix": true, "brain_knobs": true, "points_strength": true},
 	# NML-1073 M5: table-fidelity knobs default on, same as planner_v0 (see above).
 	"planner_v2": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "placement": "rulebook", "eval_fit": true, "playout_search": true, "pool1_rollout": true, "hero_fold": true},
 	# The difficulty ladder (grill 25.09.2026, SoloGrade): the three lower grades are tree presets with
@@ -160,6 +160,8 @@ var aifix: bool = false
 ## Shipped-brain knobs (menu_open = menu_all_targets 3 + menu_advance_obj_shoot): measured on the shipped
 ## Erlkoenig (T2b BETTER, 08.10.2026), so planner_v0* stamps them into the header WHEN the brain is wired.
 var brain_knobs: bool = false
+## Hand-planner strength_by_points (A/B 08.10.2026 NOT_WORSE): stamped only when no brain is wired.
+var points_strength: bool = false
 ## NML-1140 step 8: the placement rung this preset places objectives by (rulebook|style|search),
 ## resolved per game by resolve_placement — env override first, else the strongest seat's preset.
 var placement: String = "rulebook"
@@ -197,6 +199,7 @@ static func for_grade(name: String, p_base_seed: int = 0) -> SoloDifficulty:
 	d.eval_variant = int(preset.get("eval_variant", 0))
 	d.aifix = bool(preset.get("aifix", false))
 	d.brain_knobs = bool(preset.get("brain_knobs", false))
+	d.points_strength = bool(preset.get("points_strength", false))
 	d.placement = str(preset.get("placement", "rulebook"))
 	d.base_seed = p_base_seed
 	return d
