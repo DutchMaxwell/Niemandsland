@@ -8,7 +8,7 @@
 //! score drift separately (float tolerance 1e-9 relative).
 //!
 //!   cargo run --release --example preselect_gate -- --games <dir>... [--max-games N] [--top-k 10]
-//!        [--horizon 3] [--shipped] [--out file.json] [--compare baseline.json]
+//!        [--horizon 3] [--shipped] [--leaf-opener-only] [--out file.json] [--compare baseline.json]
 //!
 //! Timing: the planner runs with a never-hit `deadline_us` + `deadline_after_preselect`, which
 //! only makes the pick carry `preselect_us` (phases 0-3); picks do not depend on it.
@@ -34,6 +34,7 @@ fn main() {
     let mut shipped = false;
     let mut all_targets = 0usize;
     let mut adv_obj = false;
+    let mut leaf_opener = false;
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
@@ -52,6 +53,7 @@ fn main() {
             "--horizon" => { i += 1; horizon = args[i].parse().unwrap(); }
             "--shipped" => shipped = true,
             "--adv-obj" => adv_obj = true,
+            "--leaf-opener-only" => leaf_opener = true,
             "--all-targets" => { i += 1; all_targets = args[i].parse().unwrap(); }
             other => panic!("unknown arg {other}"),
         }
@@ -87,6 +89,7 @@ fn main() {
         }
         knobs.menu_all_targets = all_targets;
         knobs.menu_advance_obj_shoot = adv_obj;
+        knobs.leaf_opener_only = leaf_opener;
         knobs.deadline_us = 3_600_000_000;
         knobs.deadline_after_preselect = true;
         let name = g.file_name().unwrap().to_string_lossy().to_string();

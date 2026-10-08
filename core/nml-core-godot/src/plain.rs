@@ -962,6 +962,7 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         horizon: dint(d, "horizon", dflt.horizon),
         tail_cap_p1: dint(d, "tail_cap_p1", dflt.tail_cap_p1),
         tail_cap_p2: dint(d, "tail_cap_p2", dflt.tail_cap_p2),
+        leaf_opener_only: dflag(d, "leaf_opener_only"),
         imagined_round_end: d
             .get("imagined_round_end")
             .map(|v| flag(&v))
