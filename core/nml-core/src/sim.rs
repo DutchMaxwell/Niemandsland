@@ -7661,7 +7661,6 @@ fn resolve_with(
                 // (`sighted_profiles_of`, `main._solo_sighted_count` :4103) and a
                 // folded reach there would let a host weapon fire from a hero's model.
                 let d_ev = if seams.hero_attach { fold_dist_in(&next, si, ti, seams) } else { d };
-                let alive_before = next.alive[ti];
                 let morale_alive_before = morale_alive(&next, ti, seams);
                 let wounds_before = wounds_left(&next, ti);
                 // Seam ON: a plain volley — the cast sub-phase above already
