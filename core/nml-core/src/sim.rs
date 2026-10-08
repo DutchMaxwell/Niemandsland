@@ -32,6 +32,7 @@ use crate::acts::{
     EPOCH_51_CASTER_INTERFERENCE, EPOCH_52_UTILITY_SPELLS, EPOCH_56_GROUNDED_PROTECTION,
     EPOCH_61_PRECISION_MARKERS, EPOCH_62_CASTING_MOD, EPOCH_65_MELEE_TRUTH,
     EPOCH_66_DISTANCE_TRUTH, EPOCH_67_MARKERS_BURSTS, EPOCH_68_MODIFIER_SUM,
+    EPOCH_71_RAPID_CHARGE_MARK,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
@@ -1674,20 +1675,48 @@ fn tray_vs_marks(
                     "{} marks {} — friendly units attacking it gain {} (once)",
                     statics[pb].name, statics[next.roster.profile[ti]].name, grant));
             }
-            next.buffs[si].push(mods::LiveMod {
-                hit_mod: 0,
-                casting_mod: 0,
-                morale_mod: 0,
-                ap_mod: 0,
-                def_mod: 0,
-                defense_mod: 0,
-                move_mod: 0,
-                grants_rule: Rc::from(grant),
-                scope: Rc::from(""),
-                attackers: false,
-                once: true,
-                name: Rc::from(b.name.as_str()),
-            });
+            // #845 option (b) — the core half of the table fix (#870/#1204):
+            // the Rapid Charge Mark is an ATTACKERS-side grant on the MARKED
+            // ENEMY (`_solo_apply_vs_marks` :19544 records the entry's own
+            // scope/beneficiary there), and `rapid_charge_mark_bonus_in`
+            // reads exactly that record off the target. From
+            // `EPOCH_71_RAPID_CHARGE_MARK` the Mark lands on the TARGET; below it
+            // the legacy once-grant stays on the bearer so older corpora
+            // replay byte-exact. Rules-must-log: the placement names itself.
+            if grant == "Rapid Charge" && rule_on(seams.rules_epoch, EPOCH_71_RAPID_CHARGE_MARK) {
+                trace_rule("mark", &b.name, &format!(
+                    "{} marks {} — friendly units attacking it gain {} (once)",
+                    statics[pb].name, statics[next.roster.profile[ti]].name, grant));
+                next.buffs[ti].push(mods::LiveMod {
+                    hit_mod: 0,
+                    casting_mod: 0,
+                    morale_mod: 0,
+                    ap_mod: 0,
+                    def_mod: 0,
+                    defense_mod: 0,
+                    move_mod: 0,
+                    grants_rule: Rc::from(grant.as_str()),
+                    scope: Rc::from(b.scope.as_str()),
+                    attackers: b.beneficiary == "attackers",
+                    once: b.once,
+                    name: Rc::from(b.name.as_str()),
+                });
+            } else {
+                next.buffs[si].push(mods::LiveMod {
+                    hit_mod: 0,
+                    casting_mod: 0,
+                    morale_mod: 0,
+                    ap_mod: 0,
+                    def_mod: 0,
+                    defense_mod: 0,
+                    move_mod: 0,
+                    grants_rule: Rc::from(grant),
+                    scope: Rc::from(""),
+                    attackers: false,
+                    once: true,
+                    name: Rc::from(b.name.as_str()),
+                });
+            }
         }
     }
 }

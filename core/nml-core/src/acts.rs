@@ -708,7 +708,12 @@ pub const EPOCH_69_HERO_FOLD: u32 = 69;
 /// side's melee saves, and Counter walks the joined chain. Below it every record replays the
 /// core's old slot order and flags, byte-exact.
 pub const EPOCH_70_TRAY_EXACT: u32 = 70;
-pub const CURRENT_RULES_EPOCH: u32 = 70;
+/// #845 core half (Rapid Charge Mark): from this epoch `tray_vs_marks` records the Rapid Charge
+/// Mark on the MARKED ENEMY (the entry's own scope and beneficiary), where `rapid_charge_mark_bonus_in`
+/// reads it. Records stamped 66-70 were recorded while that writer was missing and replay byte-exact
+/// with the legacy bearer-side once-grant. Every call site reads THIS constant, not `71`.
+pub const EPOCH_71_RAPID_CHARGE_MARK: u32 = 71;
+pub const CURRENT_RULES_EPOCH: u32 = 71;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -2021,7 +2026,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 70, "the live epoch is EPOCH_70_TRAY_EXACT");
+        assert_eq!(CURRENT_RULES_EPOCH, 71, "the live epoch is EPOCH_71_RAPID_CHARGE_MARK");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -2031,11 +2036,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":70}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":71}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 70"
+            "a fresh play_game() now stamps the bumped epoch, 71"
         );
     }
 
