@@ -107,6 +107,6 @@ use super::*;
         };
         assert_eq!(survivors(crate::acts::EPOCH_69_HERO_FOLD), vec![0, 0], "69: slot 0, the launcher, dies");
         assert_eq!(survivors(crate::acts::EPOCH_70_TRAY_EXACT), vec![1, 0], "70: the end Rifle dies");
-        assert!(crate::acts::CURRENT_RULES_EPOCH >= crate::acts::EPOCH_70_TRAY_EXACT);
+        assert_eq!(survivors(crate::acts::CURRENT_RULES_EPOCH), vec![1, 0], "the live epoch plays the tray-exact order");
     }
 
