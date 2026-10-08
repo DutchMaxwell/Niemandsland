@@ -605,7 +605,18 @@ static var brain_knobs := false
 static func brain_knob_stamp() -> Dictionary:
 	if not brain_knobs:
 		return {}
-	return {"menu_all_targets": 3, "menu_advance_obj_shoot": true}
+	return {"menu_all_targets": 3, "menu_advance_obj_shoot": true, "strength_by_points": true}
+
+
+## Hand-planner games (no brain): strength_by_points (acts.rs Knobs, plain.rs knobs_of) measured NOT_WORSE
+## 08.10.2026. Set per pick by SoloController._apply_aifix; {} when off (byte-identical header).
+static var points_strength := false
+
+
+static func points_knob_stamp() -> Dictionary:
+	if not points_strength:
+		return {}
+	return {"strength_by_points": true}
 static var _seat_env := -1   # research seam: NML_SEAT_DEPTH off/on/inv retunes the vote (lazy env)
 
 

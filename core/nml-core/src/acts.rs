@@ -137,6 +137,11 @@ pub struct Knobs {
     /// nearest objective WITH a shot on a target that stays in range after the move. Default off.
     #[serde(default)]
     pub menu_advance_obj_shoot: bool,
+    /// aifix F6 (inventory row M20, p.9 "has a clear path to reach it") — `Tuning::charge_needs_path`: a CHARGE row is
+    /// kept only when the mover's nearest model can walk to the target within the live charge band (containers, units
+    /// in the way). Default off = byte-identical.
+    #[serde(default)]
+    pub charge_needs_path: bool,
     /// Wave 6 (`rushk`) — `Tuning::rush_k`, the PLAYOUT leg: how many of the
     /// nearest objectives the rollout's greedy brain rushes instead of only the
     /// nearest. A MENU knob, not a seam: it widens what the search may choose and
@@ -253,6 +258,11 @@ pub struct Knobs {
     /// round `rounds_total`). Research knob for the A/B, default OFF.
     #[serde(default)]
     pub no_end_threat: bool,
+    /// Inventory C02 — the AI's imagined volley lets only the models whose own distance to the target is
+    /// within a weapon's range fire it (GF/AoF v3.5.1 p.8), instead of every living model once the nearest
+    /// pair is in range. Research knob for the A/B, default OFF (byte-identical).
+    #[serde(default)]
+    pub fire_in_range_only: bool,
     /// Inventory C12 — a joined hero counts in the unit's size (GF/AoF v3.5.1 p.14): half strength and the
     /// morale / rout thresholds read host + hero, not the host alone. Research knob, default OFF (byte-identical).
     #[serde(default)]
@@ -1504,6 +1514,7 @@ impl Default for Knobs {
             menu_advance_k: 1,
             menu_all_targets: 0,
             menu_advance_obj_shoot: false,
+            charge_needs_path: false,
             playout_rush_k: 1,
             hero_attach: false,
             charge_landing: false,
@@ -1520,6 +1531,7 @@ impl Default for Knobs {
             dangerous_end_morale: false,
             opener_by_finish: false,
             no_end_threat: false,
+            fire_in_range_only: false,
             hero_counts_in_size: false,
             range_by_base_edge: false,
             morale_by_probability: false,

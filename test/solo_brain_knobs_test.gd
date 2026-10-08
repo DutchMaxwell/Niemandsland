@@ -69,6 +69,7 @@ func test_brain_wired_planner_v0_stamps_the_three_measured_knobs() -> void:
 	var k := _knobs()
 	assert_int(int(k.get("menu_all_targets", 0))).is_equal(3)
 	assert_bool(bool(k.get("menu_advance_obj_shoot", false))).is_true()
+	assert_bool(bool(k.get("strength_by_points", false))).is_true()
 
 
 func test_no_brain_writes_none_of_the_three_keys() -> void:

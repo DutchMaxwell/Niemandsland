@@ -9,7 +9,7 @@
 //!
 //!   cargo run --release --example preselect_gate -- --games <dir>... [--max-games N] [--top-k 10]
 //!        [--horizon 3] [--shipped] [--leaf-opener-only] [--reply-by-net] [--reply-pool-cap K]
-//!        [--reply-menu-restricted] [--out file.json] [--compare baseline.json]
+//!        [--reply-menu-restricted] [--charge-path] [--out file.json] [--compare baseline.json]
 //!
 //! Timing: the planner runs with a never-hit `deadline_us` + `deadline_after_preselect`, which
 //! only makes the pick carry `preselect_us` (phases 0-3); picks do not depend on it.
@@ -35,6 +35,7 @@ fn main() {
     let mut shipped = false;
     let mut all_targets = 0usize;
     let mut adv_obj = false;
+    let mut charge_path = false;
     let mut reply_net = false;
     let mut reply_cap = 0i64;
     let mut reply_menu = false;
@@ -57,6 +58,7 @@ fn main() {
             "--horizon" => { i += 1; horizon = args[i].parse().unwrap(); }
             "--shipped" => shipped = true,
             "--adv-obj" => adv_obj = true,
+            "--charge-path" => charge_path = true,
             "--reply-by-net" => reply_net = true,
             "--reply-pool-cap" => { i += 1; reply_cap = args[i].parse().unwrap(); }
             "--reply-menu-restricted" => reply_menu = true,
@@ -96,6 +98,7 @@ fn main() {
         }
         knobs.menu_all_targets = all_targets;
         knobs.menu_advance_obj_shoot = adv_obj;
+        knobs.charge_needs_path = charge_path;
         knobs.reply_by_net = reply_net;
         knobs.reply_pool_cap = reply_cap;
         knobs.reply_menu_restricted = reply_menu;

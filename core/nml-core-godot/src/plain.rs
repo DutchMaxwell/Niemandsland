@@ -1066,6 +1066,7 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
             .unwrap_or(dflt.dangerous_end_morale),
         opener_by_finish: d.get("opener_by_finish").map(|v| flag(&v)).unwrap_or(dflt.opener_by_finish),
         no_end_threat: d.get("no_end_threat").map(|v| flag(&v)).unwrap_or(dflt.no_end_threat),
+        fire_in_range_only: d.get("fire_in_range_only").map(|v| flag(&v)).unwrap_or(dflt.fire_in_range_only),
         hero_counts_in_size: d.get("hero_counts_in_size").map(|v| flag(&v)).unwrap_or(dflt.hero_counts_in_size),
         range_by_base_edge: d.get("range_by_base_edge").map(|v| flag(&v))
             .unwrap_or(dflt.range_by_base_edge),
@@ -1129,6 +1130,7 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         menu_advance_k: dint(d, "menu_advance_k", dflt.menu_advance_k as i64) as usize,
         menu_all_targets: dint(d, "menu_all_targets", 0).max(0) as usize,
         menu_advance_obj_shoot: d.get("menu_advance_obj_shoot").map(|v| flag(&v)).unwrap_or(false),
+        charge_needs_path: d.get("charge_needs_path").map(|v| flag(&v)).unwrap_or(false),
         // Wave 6 (`rushk`). A MENU knob, not a seam (like `menu_advance_k`): the
         // rollout's greedy brain rushes the top-k nearest objectives. No recorder
         // wrote the key before it, so an absent one answers `Knobs::default()` = 1
