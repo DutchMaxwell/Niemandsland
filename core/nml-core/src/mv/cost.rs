@@ -312,6 +312,104 @@ fn non_wall_blocked(p: V2, c: V2, opts: &StepOpts) -> bool {
     false
 }
 
+/// A uniform grid over a wall list, built once per search (aifix route lane): `step_blocked` for one step asks only the
+/// walls whose box overlaps the step's grown box, found through the buckets, instead of scanning all of them. The answer
+/// is an OR over walls, so which walls are asked and in what order cannot change it — the same walls are the only ones
+/// that can answer true (`QueryBox::may_touch` is applied to every candidate).
+pub struct WallIndex<'a> {
+    walls: &'a [Wall],
+    ox: f64,
+    oy: f64,
+    nx: usize,
+    ny: usize,
+    start: Vec<u32>,
+    ids: Vec<u32>,
+}
+
+/// Bucket edge in inches (a step of the planner is 1-3", a wall a few).
+const WALL_BUCKET_IN: f64 = 6.0;
+/// Below this many walls a scan beats the index.
+const WALL_INDEX_MIN: usize = 8;
+
+impl<'a> WallIndex<'a> {
+    pub fn new(walls: &'a [Wall]) -> WallIndex<'a> {
+        let (mut lo_x, mut lo_y, mut hi_x, mut hi_y) = (f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY);
+        for w in walls {
+            for e in w {
+                lo_x = lo_x.min(e[0] as f64);
+                hi_x = hi_x.max(e[0] as f64);
+                lo_y = lo_y.min(e[1] as f64);
+                hi_y = hi_y.max(e[1] as f64);
+            }
+        }
+        if walls.len() < WALL_INDEX_MIN || !lo_x.is_finite() {
+            return WallIndex { walls, ox: 0.0, oy: 0.0, nx: 0, ny: 0, start: Vec::new(), ids: Vec::new() };
+        }
+        let nx = (((hi_x - lo_x) / WALL_BUCKET_IN).floor() as usize + 1).min(64);
+        let ny = (((hi_y - lo_y) / WALL_BUCKET_IN).floor() as usize + 1).min(64);
+        let mut me = WallIndex { walls, ox: lo_x, oy: lo_y, nx, ny, start: vec![0; nx * ny + 1], ids: Vec::new() };
+        for pass in 0..2 {
+            let mut fill = me.start.clone();
+            for (wi, w) in walls.iter().enumerate() {
+                let (x0, x1) = me.span(w[0][0].min(w[1][0]) as f64, w[0][0].max(w[1][0]) as f64, me.ox, me.nx);
+                let (y0, y1) = me.span(w[0][1].min(w[1][1]) as f64, w[0][1].max(w[1][1]) as f64, me.oy, me.ny);
+                for by in y0..=y1 {
+                    for bx in x0..=x1 {
+                        let b = by * me.nx + bx;
+                        if pass == 0 {
+                            me.start[b + 1] += 1;
+                        } else {
+                            me.ids[fill[b] as usize] = wi as u32;
+                            fill[b] += 1;
+                        }
+                    }
+                }
+            }
+            if pass == 0 {
+                for b in 0..me.nx * me.ny {
+                    me.start[b + 1] += me.start[b];
+                }
+                me.ids = vec![0; me.start[me.nx * me.ny] as usize];
+            }
+        }
+        me
+    }
+
+    /// The clamped bucket range of the interval [lo, hi] along one axis.
+    #[inline]
+    fn span(&self, lo: f64, hi: f64, origin: f64, n: usize) -> (usize, usize) {
+        let f = |v: f64| (((v - origin) / WALL_BUCKET_IN).floor().max(0.0) as usize).min(n - 1);
+        (f(lo), f(hi))
+    }
+
+    /// `step_blocked(p, c, walls, opts)` with the walls asked through the buckets.
+    pub fn step_blocked(&self, p: V2, c: V2, opts: &StepOpts) -> bool {
+        if self.nx == 0 || opts.clearance <= 0.0 {
+            return step_blocked(p, c, self.walls, opts);
+        }
+        let q = QueryBox::new(p, c, opts.clearance);
+        let (x0, x1) = self.span(q.lo_x, q.hi_x, self.ox, self.nx);
+        let (y0, y1) = self.span(q.lo_y, q.hi_y, self.oy, self.ny);
+        for by in y0..=y1 {
+            for bx in x0..=x1 {
+                let b = by * self.nx + bx;
+                for &wi in &self.ids[self.start[b] as usize..self.start[b + 1] as usize] {
+                    let w = &self.walls[wi as usize];
+                    if q.may_touch(w) && wall_blocks(p, c, w[0], w[1], opts.clearance) {
+                        return true;
+                    }
+                }
+            }
+        }
+        non_wall_blocked(p, c, opts)
+    }
+
+    /// `cspace_blocked(a, b, walls, grid, opts)` through the index.
+    pub fn cspace_blocked(&self, a: V2, b: V2, grid: &Grid, opts: &StepOpts) -> bool {
+        self.step_blocked(a, b, opts) || cspace_tail(a, b, grid, opts)
+    }
+}
+
 /// `MovementPlanner._terrain_cost_at` — movement_planner.gd:1259. `INF` is a
 /// hard block (an avoided cell, coarse or fine); Dangerous and Difficult only
 /// price a multiplier so the search may still enter them when the detour is
@@ -324,12 +422,18 @@ pub fn terrain_cost_at(p: V2, grid: &Grid, opts: &StepOpts) -> f64 {
     if grid.is_empty() {
         return 1.0;
     }
-    let cell = cell_of(p, CELL_IN);
+    terrain_cost_cells(cell_of(p, CELL_IN), cell_of(p, PLAN_CELL_IN), grid, opts)
+}
+
+/// `terrain_cost_at` for a point whose coarse and fine cells are known — the answer depends on nothing else. The grid
+/// must not be empty (the caller's early return).
+#[inline]
+fn terrain_cost_cells(cell: (i32, i32), fine: (i32, i32), grid: &Grid, opts: &StepOpts) -> f64 {
     let t = *grid.get(&cell).unwrap_or(&T_NONE);
     if opts.avoid_cells.contains(&cell) {
         return f64::INFINITY;
     }
-    if opts.avoid_fine.contains(&cell_of(p, PLAN_CELL_IN)) {
+    if opts.avoid_fine.contains(&fine) {
         return f64::INFINITY;
     }
     if opts.dangerous_debuff || is_dangerous(t) {
@@ -354,6 +458,14 @@ pub fn segment_cost(a: V2, b: V2, grid: &Grid, opts: &StepOpts) -> f64 {
 /// `segment_cost` (`sample_in = PLAN_CELL_IN * 0.5 = 0.5"`). The parameter exists
 /// only so the gate can prove the step count is load-bearing (RED PROOF).
 pub fn segment_cost_at(a: V2, b: V2, grid: &Grid, opts: &StepOpts, sample_in: f64) -> f64 {
+    segment_cost_core(a, b, grid, opts, sample_in, &mut |p| terrain_cost_at(p, grid, opts))
+}
+
+/// `segment_cost_at` over a cost function for the sample points (`terrain_cost_at`, or the planner's memo of it).
+#[inline]
+fn segment_cost_core(
+    a: V2, b: V2, grid: &Grid, opts: &StepOpts, sample_in: f64, cost: &mut impl FnMut(V2) -> f64,
+) -> f64 {
     let span = distance_to(a, b);
     if grid.is_empty() || span <= EPS {
         return span + ledge_cost(a, b, opts.ledges);
@@ -362,11 +474,7 @@ pub fn segment_cost_at(a: V2, b: V2, grid: &Grid, opts: &StepOpts, sample_in: f6
     let sub = span / steps as f64;
     let mut total = 0.0f64;
     for i in 0..steps {
-        let m = terrain_cost_at(
-            lerp(a, b, (i as f64 + 0.5) / steps as f64),
-            grid,
-            opts,
-        );
+        let m = cost(lerp(a, b, (i as f64 + 0.5) / steps as f64));
         total += sub * if m.is_infinite() { 1.0 } else { m };
     }
     total + ledge_cost(a, b, opts.ledges)
@@ -389,9 +497,16 @@ pub fn legs_cost(path: &[V2], i0: usize, i1: usize, grid: &Grid, opts: &StepOpts
 /// cell and escape it. Same `ceil(span / 0.5)` sampling as `_segment_cost`, but
 /// at the interval BOUNDARIES `i/steps`, not the midpoints.
 pub fn cspace_blocked(a: V2, b: V2, walls: &[Wall], grid: &Grid, opts: &StepOpts) -> bool {
-    if step_blocked(a, b, walls, opts) {
-        return true;
-    }
+    step_blocked(a, b, walls, opts) || cspace_tail(a, b, grid, opts)
+}
+
+/// The terrain half of `cspace_blocked`: a hard-blocked cell (INF cost) on the sampled line.
+fn cspace_tail(a: V2, b: V2, grid: &Grid, opts: &StepOpts) -> bool {
+    cspace_tail_core(a, b, grid, &mut |p| terrain_cost_at(p, grid, opts))
+}
+
+#[inline]
+fn cspace_tail_core(a: V2, b: V2, grid: &Grid, cost: &mut impl FnMut(V2) -> f64) -> bool {
     if grid.is_empty() {
         return false;
     }
@@ -401,9 +516,56 @@ pub fn cspace_blocked(a: V2, b: V2, walls: &[Wall], grid: &Grid, opts: &StepOpts
         return false;
     }
     for i in 1..steps {
-        if terrain_cost_at(lerp(a, b, i as f64 / steps as f64), grid, opts).is_infinite() {
+        if cost(lerp(a, b, i as f64 / steps as f64)).is_infinite() {
             return true;
         }
     }
     false
+}
+
+/// A per-search memo of `terrain_cost_at` over the 1" planning cells (aifix route lane). The cost depends on the point
+/// only through its coarse (`CELL_IN`) and fine (`PLAN_CELL_IN`) cell, and `CELL_IN` is a whole multiple of
+/// `PLAN_CELL_IN`, so every point of one fine cell has the same cost: the first sample in a cell fills it, later ones are
+/// an array read. One memo serves ONE grid and ONE `StepOpts` (the avoid sets and debuff flags are part of the answer).
+pub struct CostMemo {
+    w: i32,
+    h: i32,
+    vals: Vec<f64>,
+}
+
+impl CostMemo {
+    /// A memo for `w` x `h` fine cells (the board in inches); points outside it are answered directly.
+    pub fn new(w: usize, h: usize) -> CostMemo {
+        CostMemo { w: w as i32, h: h as i32, vals: vec![f64::NAN; w * h] }
+    }
+
+    /// `terrain_cost_at`, memoised (costs are finite or +inf, never NaN: NaN marks an empty slot).
+    #[inline]
+    pub fn cost(&mut self, p: V2, grid: &Grid, opts: &StepOpts) -> f64 {
+        if grid.is_empty() {
+            return 1.0;
+        }
+        let fine = cell_of(p, PLAN_CELL_IN);
+        if fine.0 < 0 || fine.1 < 0 || fine.0 >= self.w || fine.1 >= self.h {
+            return terrain_cost_at(p, grid, opts);
+        }
+        let slot = (fine.1 * self.w + fine.0) as usize;
+        let v = self.vals[slot];
+        if !v.is_nan() {
+            return v;
+        }
+        let v = terrain_cost_cells(cell_of(p, CELL_IN), fine, grid, opts);
+        self.vals[slot] = v;
+        v
+    }
+
+    /// `segment_cost` over the memo.
+    pub fn segment_cost(&mut self, a: V2, b: V2, grid: &Grid, opts: &StepOpts) -> f64 {
+        segment_cost_core(a, b, grid, opts, PLAN_CELL_IN * 0.5, &mut |p| self.cost(p, grid, opts))
+    }
+
+    /// The terrain half of `cspace_blocked` over the memo.
+    pub fn cspace_tail(&mut self, a: V2, b: V2, grid: &Grid, opts: &StepOpts) -> bool {
+        cspace_tail_core(a, b, grid, &mut |p| self.cost(p, grid, opts))
+    }
 }

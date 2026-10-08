@@ -4,8 +4,14 @@ extends RefCounted
 ## Recipe schema (documentation + tests). RECIPE_KEYS: the top-level keys a recipe may carry.
 ## UNIT_KEYS: the per-unit pick keys. The D1 combat-seam keys let a lesson table start in a
 ## prepared state (a Shaken unit, a Fatigued unit, parked casualties) instead of rolling for it.
-const RECIPE_KEYS := ["size_feet", "biome", "deployment", "phase", "round", "sides", "ai_slots"]
-const UNIT_KEYS := ["name", "nth", "tag", "at_in", "label", "shaken", "fatigued", "dead"]
+## `wounds`: N whole wounds pre-placed on a SINGLE-model Tough unit's model (the Tough(3)
+## half-strength case) — the pooled `dead` key cannot express a partially-wounded lone model.
+## `cells`: terrain rectangles painted into the layout's free cells (world-centred inches; type is
+## the TerrainType enum: 1 ruins, 2 forest, 3 container, 4 dangerous).
+## `objectives_in`: mission-marker positions in table-centred inches (S-09).
+## `autogen_seed`: run the game's OPR terrain autogen frozen on this seed (S-10).
+const RECIPE_KEYS := ["size_feet", "biome", "deployment", "phase", "round", "sides", "ai_slots", "cells", "objectives_in", "autogen_seed"]
+const UNIT_KEYS := ["name", "nth", "tag", "at_in", "label", "shaken", "fatigued", "dead", "wounds"]
 
 static func recipe(id: String) -> Dictionary:
 	if id == "S-01":
@@ -30,12 +36,14 @@ static func recipe(id: String) -> Dictionary:
 					{"name": "Warriors", "nth": 1, "tag": "target", "at_in": Vector2(0, -18)}]}]}
 	if id == "S-05":
 		return {"size_feet": Vector2(4, 4), "biome": "temperate_grassland",
-			"deployment": -1, "phase": 1, "round": 1, "ai_slots": [2], "sides": [
+			"deployment": -1, "phase": 1, "round": 1, "ai_slots": [2], "cells": [
+				{"type": 3, "from_in": Vector2(-12, -1), "to_in": Vector2(0, 4)}], "sides": [
 				{"player": 1, "fixture": "res://assets/tutorial/tutorial_army_p1.json", "units": [
 					{"name": "Battle Brothers", "nth": 1, "tag": "alpha", "label": "Alpha Squad", "at_in": Vector2(0, 10)}]},
 				{"player": 2, "fixture": "res://assets/tutorial/tutorial_army_p2.json", "units": [
-					{"name": "Warriors", "nth": 1, "tag": "target", "at_in": Vector2(0, -8)},
-					{"name": "Warriors", "nth": 2, "tag": "far", "at_in": Vector2(0, -22)}]}]}
+					{"name": "Warriors", "nth": 1, "tag": "target", "at_in": Vector2(10, -8)},
+					{"name": "Warriors", "nth": 2, "tag": "far", "at_in": Vector2(10, -22)},
+					{"name": "Guardians", "nth": 1, "tag": "blocked", "at_in": Vector2(-9, -4)}]}]}
 	if id == "S-06":
 		return {"size_feet": Vector2(4, 4), "biome": "temperate_grassland",
 			"deployment": -1, "phase": 1, "round": 1, "ai_slots": [2], "sides": [
@@ -43,4 +51,53 @@ static func recipe(id: String) -> Dictionary:
 					{"name": "Battle Brothers", "nth": 1, "tag": "alpha", "label": "Alpha Squad", "dead": 5, "at_in": Vector2(0, 7)}]},
 				{"player": 2, "fixture": "res://assets/tutorial/tutorial_army_p2.json", "units": [
 					{"name": "Warriors", "nth": 1, "tag": "target", "at_in": Vector2(0, -1)}]}]}
+	if id == "S-07":
+		return {"size_feet": Vector2(4, 4), "biome": "temperate_grassland",
+			"deployment": -1, "phase": 1, "round": 1, "ai_slots": [2], "sides": [
+				{"player": 1, "fixture": "res://assets/tutorial/tutorial_army_p1.json", "units": [
+					{"name": "Battle Brothers", "nth": 1, "tag": "alpha", "label": "Alpha Squad", "dead": 5, "at_in": Vector2(8, 10)},
+					{"name": "Battle Brothers", "nth": 2, "tag": "shaken", "label": "Charlie Squad", "shaken": true, "at_in": Vector2(-8, 14)}]},
+				{"player": 2, "fixture": "res://assets/tutorial/tutorial_army_p2.json", "units": [
+					{"name": "Warriors", "nth": 2, "tag": "target", "label": "Nachtmahr Squad", "dead": 5, "at_in": Vector2(0, -8)},
+					{"name": "Robot Lord", "nth": 1, "tag": "tough", "label": "Nachtmahr Leader", "wounds": 2, "at_in": Vector2(6, -12)}]}]}
+	if id == "S-08":
+		return {"size_feet": Vector2(4, 4), "biome": "temperate_grassland",
+			"deployment": -1, "phase": 1, "round": 1, "ai_slots": [2], "cells": [
+				{"type": 2, "from_in": Vector2(-6, 3), "to_in": Vector2(6, 9)},
+				{"type": 2, "from_in": Vector2(-6, -12), "to_in": Vector2(6, -4)},
+				{"type": 1, "from_in": Vector2(-20, 6), "to_in": Vector2(-16, 10)},
+				{"type": 4, "from_in": Vector2(-24, -3), "to_in": Vector2(24, 3)}], "sides": [
+				{"player": 1, "fixture": "res://assets/tutorial/tutorial_army_p1.json", "units": [
+					{"name": "Battle Brothers", "nth": 1, "tag": "alpha", "label": "Alpha Squad", "at_in": Vector2(0, 14)}]},
+				{"player": 2, "fixture": "res://assets/tutorial/tutorial_army_p2.json", "units": [
+					{"name": "Warriors", "nth": 2, "tag": "target", "label": "Nachtmahr Squad", "at_in": Vector2(0, -8)}]}]}
+	if id == "S-SPELL":
+		return {"size_feet": Vector2(4, 4), "biome": "temperate_grassland",
+			"deployment": -1, "phase": 1, "round": 1, "ai_slots": [2], "sides": [
+				{"player": 1, "fixture": "res://assets/tutorial/tutorial_army_caster.json", "units": [
+					{"name": "Master Brother", "nth": 1, "tag": "alpha", "label": "Archivist", "at_in": Vector2(0, 10)}]},
+				{"player": 2, "fixture": "res://assets/tutorial/tutorial_army_p2.json", "units": [
+					{"name": "Warriors", "nth": 1, "tag": "target", "at_in": Vector2(0, -6)}]}]}
+	if id == "S-09":
+		return {"size_feet": Vector2(4, 4), "biome": "temperate_grassland",
+			"deployment": -1, "phase": 1, "round": 1, "ai_slots": [2],
+			"objectives_in": [Vector2(-12, 0), Vector2(0, 0), Vector2(12, 0)], "sides": [
+				{"player": 1, "fixture": "res://assets/tutorial/tutorial_army_p1.json", "units": [
+					{"name": "Battle Brothers", "nth": 1, "tag": "alpha", "label": "Alpha Squad", "at_in": Vector2(-12, 10)},
+					{"name": "Battle Brothers", "nth": 2, "tag": "bravo", "label": "Bravo Squad", "at_in": Vector2(12, 10)}]},
+				{"player": 2, "fixture": "res://assets/tutorial/tutorial_army_p2.json", "units": [
+					{"name": "Warriors", "nth": 1, "tag": "holder", "at_in": Vector2(12, -3)}]}]}
+	if id == "S-10":
+		return {"size_feet": Vector2(4, 4), "biome": "temperate_grassland",
+			"deployment": 1, "phase": 1, "round": 1, "ai_slots": [2],
+			"autogen_seed": 20260710,
+			"objectives_in": [Vector2(-12, 0), Vector2(0, 0), Vector2(12, 0)], "sides": [
+				{"player": 1, "fixture": "res://assets/tutorial/tutorial_army_caster.json", "units": [
+					{"name": "Battle Brothers", "nth": 1, "tag": "alpha", "label": "Alpha Squad", "at_in": Vector2(-12, 14)},
+					{"name": "Battle Brothers", "nth": 2, "tag": "bravo", "label": "Bravo Squad", "at_in": Vector2(12, 14)},
+					{"name": "Master Brother", "nth": 1, "tag": "commander", "at_in": Vector2(0, 16)}]},
+				{"player": 2, "fixture": "res://assets/tutorial/tutorial_army_p2.json", "units": [
+					{"name": "Warriors", "nth": 1, "tag": "warriors_a", "at_in": Vector2(-8, -14)},
+					{"name": "Warriors", "nth": 2, "tag": "warriors_b", "at_in": Vector2(8, -14)},
+					{"name": "Snipers", "nth": 1, "tag": "snipers", "at_in": Vector2(0, -16)}]}]}
 	return {}

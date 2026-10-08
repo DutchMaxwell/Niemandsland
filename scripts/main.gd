@@ -2748,6 +2748,21 @@ func _solo_player_label(pid: int) -> String:
 	return "P%d" % pid
 
 
+## The plain human verdict for the finished mission — "Victory", "Defeat" or "Draw" — decided by the
+## SAME referee the result JSON uses (SoloController.end_verdict / BattleSim.mission_winner). The
+## finale lesson card reads this so it can never announce a result the summary contradicts.
+func _solo_lesson_verdict() -> String:
+	var owners: Array = terrain_overlay.get_objective_owners() if terrain_overlay != null else []
+	var winner_side: String = SoloController.winner_side(solo_controller, owners,
+		_solo_side_alive(1), _solo_side_alive(2))
+	var human_slot := 2 if _solo_ai_slot() == 1 else 1
+	if winner_side == ("p%d" % human_slot):
+		return "Victory"
+	elif winner_side == ("p%d" % (2 if human_slot == 1 else 1)):
+		return "Defeat"
+	return "Draw"
+
+
 ## End-of-game summary (goal 003 P2): after SOLO_GAME_ROUNDS the match ends — BattleSim.mission_winner
 ## names the winner from the mission's OWN currency (NML-1048), never from a second count taken here.
 ## A battle-log block + a results dialog; the table stays as-is (the Next-Round button still works for
@@ -2782,9 +2797,8 @@ func _solo_show_game_summary() -> void:
 	# over 633 self-play games, 55 of the 233 round_vp ones named the LOSING side (seed 3003000: board
 	# 1:2 markers, ledger 6:5 VP, referee "p1", summary "P2 wins").
 	var summary_owners: Array = terrain_overlay.get_objective_owners() if terrain_overlay != null else []
-	var winner_side: String = solo_controller.end_verdict(summary_owners, _solo_side_alive(1), _solo_side_alive(2)) \
-		if solo_controller != null else BattleSim.mission_winner(SoloController.mission_scoring, summary_owners,
-			SoloController.mission_vp, SoloController.mission_markers, _solo_side_alive(1), _solo_side_alive(2))   # the referee speaks P1/P2, never "you"/"AI"
+	var winner_side: String = SoloController.winner_side(solo_controller, summary_owners,
+		_solo_side_alive(1), _solo_side_alive(2))   # the referee speaks P1/P2, never "you"/"AI"
 	var human_won: bool = winner_side == ("p%d" % human_slot)
 	var ai_won: bool = winner_side == ("p%d" % ai_slot)
 	var verdict: String = win_a if human_won else (win_b if ai_won else "Draw")
@@ -4134,6 +4148,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 	var landed_extra := 0   # NML-966 gap B: Deadly/Takedown wounds landed outside the regen pool
 	var total_hits := 0
 	var total_caused := 0
+	var cover_logged := false   # I4: log Cover once, only when a shot's save really used it
 	# Unpredictable (generic army-book rule — "when attacking": the SHOOTING leg; the wave-4 melee-only
 	# Unpredictable Fighter lives in the melee path): ONE die per volley for the whole unit —
 	# 1-3 → AP(+1), 4-6 → +1 to hit on every profile it fires (same arithmetic, same visible tray).
@@ -4277,6 +4292,11 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		# DEFENDER is itself AI, the saves auto-roll on the real tray (no human prompt) — the human_defends flag
 		# is derived, never assumed, so an AI-vs-AI game resolves shooting unattended.
 		var save_def: int = shot_base if (int(profile.get("blast", 0)) > 1 or bool(profile.get("indirect", false)) or bool(profile.get("ignores_cover", false))) else shot_cover
+		if td_ctx.is_empty() and not cover_logged and battle_log != null \
+				and AiCombatMath.shot_uses_cover(save_def, shot_cover, shot_base):
+			cover_logged = true   # I4: only claim Cover when the roll truly saved at the covered value
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s is in cover: +1 Defense (saves on %d+)" % [
+				target.get_name(), AiCombatMath.shown_target(save_def)], true)
 		var is_deadly: bool = int(profile.get("deadly", 0)) > 0
 		# TC-023: the saves are the PICKED MODEL's — rolled by its own GameUnit, so a sniped attached
 		# hero blocks on HIS Defense (and his own Fortified / conditional-AP profile), not the host's.
@@ -9099,6 +9119,8 @@ func _solo_spawn_pulse_ring(at: Vector3, color: Color) -> MeshInstance3D:
 	ring.material_override = mat
 	add_child(ring)
 	ring.global_position = at + Vector3(0, 0.01, 0)
+	if GraphicsSettings.calm_mode:
+		return ring   # Calm: a static attention marker, no pulsing scale/alpha
 	var tw := ring.create_tween().set_loops()
 	tw.tween_property(ring, "scale", Vector3(1.25, 1.0, 1.25), 0.4).set_trans(Tween.TRANS_SINE)
 	tw.tween_property(ring, "scale", Vector3.ONE, 0.4).set_trans(Tween.TRANS_SINE)
@@ -9950,10 +9972,17 @@ func _solo_consolidate_melee(charger: GameUnit, defender: GameUnit, auto: bool =
 	var survivor: GameUnit = charger if charger_alive else defender
 	if _solo_is_ai_unit(survivor) or auto:
 		var dang2: int = solo_controller.consolidate_after_melee_win(survivor)
-		if not solo_controller.last_move_paths.is_empty():
-			if battle_log != null:
+		if battle_log != null:
+			# The rule is applied even when the survivor has nowhere to go: then it just holds its
+			# ground, but it still consolidates — so the event must log either way (house rule: every
+			# applied rule logs). A missing line here stalled the Game School S-06 consolidation step.
+			if solo_controller.last_move_paths.is_empty():
+				battle_log.log_event(BattleLog.Category.COMBAT,
+					"%s holds its ground (consolidation — GF v3.5.1 p.9)" % survivor.get_name(), true)
+			else:
 				battle_log.log_event(BattleLog.Category.COMBAT,
 					"%s consolidates up to 3\" (enemy destroyed — GF v3.5.1 p.9)" % survivor.get_name(), true)
+		if not solo_controller.last_move_paths.is_empty():
 			await _solo_animate_move(solo_controller.last_move_paths, false)   # NML-208: always glides
 		if dang2 > 0:
 			await _run_ai_dangerous(survivor, dang2)
@@ -10691,8 +10720,7 @@ func _solo_targeting_input(event: InputEvent) -> bool:
 				return true
 			var verdict := _solo_validate_target(attacker, target, melee)
 			if verdict != "":
-				if battle_log != null:
-					battle_log.log_event(BattleLog.Category.GENERAL, "%s: %s" % [target.get_name(), verdict])
+				_solo_log_target_refusal(target, verdict)
 				return true
 			# #226 SPLIT FIRE + maintainer UX (31.07.): the second pick DECLARES — both firing
 			# vectors stand on the table and the dice wait for the explicit Fire! button.
@@ -10993,6 +11021,14 @@ func _solo_ring_pick_at(screen_pos: Vector2) -> Dictionary:
 			best_d = d
 			best = {"unit": sd["unit"], "index": sd["index"]}
 	return best
+
+
+## Logs a refused target pick so the player reads WHY the click did nothing (factored out of the
+## targeting click handler so headless lesson tests replay the exact same log line).
+func _solo_log_target_refusal(target: GameUnit, verdict: String) -> void:
+	if battle_log == null:
+		return
+	battle_log.log_event(BattleLog.Category.GENERAL, "%s: %s" % [target.get_name(), verdict])
 
 
 ## "" when the target is attackable, else the human-readable reason. Shooting validity is PER MODEL
@@ -11882,6 +11918,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s: %d/%d model%s with line of sight + range" % [
 			attacker.get_name(), _solo_sighted_count(attacker, target, rng_in, log_indirect), total, ("" if total == 1 else "s")], true)
 	var fired_any := false   # round 7, finding 5: a volley that rolls NOTHING must say so, never end silently
+	var cover_logged := false   # I4: log Cover once, only when a shot's save really used it
 	# Maintainer 31.07.: the attacker CHOOSES how many markers to remove (caster-points style).
 	var spot_hit: int = await _solo_offer_spot_markers(attacker, target)
 	var tag_hit: int = _solo_consume_tag_markers(target)   # Precision Tag: the spot pool's +1-per-removal twin
@@ -12011,6 +12048,11 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 				continue
 			# Blast (GF v3.5.1) and Indirect (wave 5) ignore cover — saves at the Shielded (uncovered) Defense.
 			var save_def: int = shot_base if (int(profile.get("blast", 0)) > 1 or bool(profile.get("indirect", false)) or bool(profile.get("ignores_cover", false))) else shot_cover
+			if td_ctx.is_empty() and not cover_logged and battle_log != null \
+					and AiCombatMath.shot_uses_cover(save_def, shot_cover, shot_base):
+				cover_logged = true   # I4: only claim Cover when the roll truly saved at the covered value
+				battle_log.log_event(BattleLog.Category.COMBAT, "%s is in cover: +1 Defense (saves on %d+)" % [
+					target.get_name(), AiCombatMath.shown_target(save_def)], true)
 			# B5 (test game 2): the HUMAN volley now mirrors the AI's per-model landing — Takedown
 			# wounds go to the model the PLAYER picks (click), Deadly lands ×X on one model with no
 			# carry-over. Both previously pooled into the defender-optimal removal, so the player's
@@ -17331,7 +17373,8 @@ func _start_lesson(_object_count: int) -> void:
 	facts.setup({"camera_pivot": camera_pivot, "object_manager": object_manager,
 		"army_manager": opr_army_manager, "table": table,
 		"map_layout": map_layout_editor, "left_panel": left_panel_scroll, "main": self,
-		"unit_dock": unit_dock, "battle_log": battle_log})
+		"unit_dock": unit_dock, "battle_log": battle_log, "terrain_overlay": terrain_overlay,
+		"range_rings": range_ring_controller})
 	if _scenario_mode:
 		# D4: a lesson always plays the gentlest ladder grade, in memory only — the player's saved
 		# grade (SoloGrade.save) is deliberately never written from a lesson.
@@ -17361,7 +17404,9 @@ func _start_lesson(_object_count: int) -> void:
 	card.leave_pressed.connect(_leave_lesson)
 	card.stay_pressed.connect(func() -> void: card.hide())
 	runner.step_changed.connect(card.show_step)
-	runner.chapter_completed.connect(func(_id: String) -> void: card.show_complete(title))
+	runner.chapter_completed.connect(func(id: String) -> void:
+		var verdict := String(facts.snapshot().get("verdict", "")) if id == "S-10" else ""
+		card.show_complete(title, verdict))
 	runner.begin()
 
 

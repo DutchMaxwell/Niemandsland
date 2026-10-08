@@ -176,6 +176,9 @@ pub struct Tuning {
     /// Inventory C02 — `Knobs::fire_in_range_only`: the shoot legs price only the models within each weapon's
     /// range (`sim::reach_rescale`). Off = byte-identical.
     pub reach_only: bool,
+    /// Inventory C01 — `Knobs::range_by_base_edge`: the shoot legs measure the target distance base edge
+    /// to base edge (`sim::range_gap_in`) instead of centre to centre. Off = byte-identical.
+    pub range_edge: bool,
 }
 
 impl Default for Tuning {
@@ -193,6 +196,7 @@ impl Default for Tuning {
             all_targets: 0,
             advance_obj_shoot: false,
             reach_only: false,
+            range_edge: false,
         }
     }
 }
@@ -311,7 +315,11 @@ pub fn best_shoot(
             continue;
         }
         let ut = &statics[state.roster.profile[e]];
-        let d = geom::dist_in(&state.positions[i], &state.positions[e]);
+        let d = if tuning.range_edge {
+            crate::sim::range_gap_in(state, &state.positions[i], i, e)
+        } else {
+            geom::dist_in(&state.positions[i], &state.positions[e])
+        };
         profiles_of(us, state.alive[i], d, sc);
         if tuning.reach_only {
             crate::sim::reach_rescale(us, state.alive[i], &state.positions[i], &state.positions[e], 0.0, sc);
@@ -344,7 +352,11 @@ pub fn ranked_shoots(
             continue;
         }
         let ut = &statics[state.roster.profile[e]];
-        let d = geom::dist_in(&state.positions[i], &state.positions[e]);
+        let d = if tuning.range_edge {
+            crate::sim::range_gap_in(state, &state.positions[i], i, e)
+        } else {
+            geom::dist_in(&state.positions[i], &state.positions[e])
+        };
         profiles_of(us, state.alive[i], d, sc);
         if tuning.reach_only {
             crate::sim::reach_rescale(us, state.alive[i], &state.positions[i], &state.positions[e], 0.0, sc);
@@ -418,7 +430,11 @@ fn advance_objective_shoot(
         if !state.sees(unit, state.key(e)) || (tuning.shoot_los && !state.los_clear(unit, e)) {
             continue;
         }
-        let d = geom::dist_in(&moved, &state.positions[e]);
+        let d = if tuning.range_edge {
+            crate::sim::range_gap_in(state, &moved, unit, e)
+        } else {
+            geom::dist_in(&moved, &state.positions[e])
+        };
         profiles_of(us, state.alive[unit], d, sc);
         if tuning.reach_only {
             crate::sim::reach_rescale(us, state.alive[unit], &moved, &state.positions[e], 0.0, sc);
@@ -493,7 +509,12 @@ pub fn advance_shoots(
         if !state.sees(i, state.key(e)) || (tuning.shoot_los && !state.los_clear(i, e)) {
             continue;
         }
-        let d = (geom::dist_in(&state.positions[i], &state.positions[e]) - advance_in).max(0.0);
+        let gap = if tuning.range_edge {
+            crate::sim::range_gap_in(state, &state.positions[i], i, e)
+        } else {
+            geom::dist_in(&state.positions[i], &state.positions[e])
+        };
+        let d = (gap - advance_in).max(0.0);
         profiles_of(us, state.alive[i], d, sc);
         let att = ctx_live(ctx_of(us, state, i), statics, state, i, false, rules_epoch);
         let def = ctx_live(

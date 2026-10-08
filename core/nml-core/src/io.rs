@@ -659,6 +659,14 @@ pub struct Seams {
     /// weapon's range. Default OFF.
     #[serde(default)]
     pub fire_in_range_only: bool,
+    /// Inventory C12 — see `Knobs::hero_counts_in_size`: a joined hero counts in the unit size for half
+    /// strength and morale. Needs `hero_attach`. Default OFF.
+    #[serde(default)]
+    pub hero_counts_in_size: bool,
+    /// Inventory C01/C27 — see `Knobs::range_by_base_edge`: the imagined volley measures range and
+    /// the over-9" modifiers base edge to base edge. Default OFF.
+    #[serde(default)]
+    pub range_by_base_edge: bool,
     /// aifix D2 — the reply threat also prices charges (`melee_threat`, inside
     /// 12") and skips Shaken enemies. Default OFF.
     #[serde(default)]
@@ -670,6 +678,10 @@ pub struct Seams {
     /// Default OFF.
     #[serde(default)]
     pub reply_hold_gate: bool,
+    /// Inventory T03-T06 — see `Knobs::reply_threat_by_speed`: the v2 reply prices the enemy's charge and
+    /// advance by its own live bands, the base-edge gap, and never charges an Aircraft. Default OFF.
+    #[serde(default)]
+    pub reply_threat_by_speed: bool,
     /// Tray-exact series (maintainer D151 = B, 03.10.): ON from `EPOCH_70_TRAY_EXACT`.
     /// The two builders that read a header (`plan::seams_of`, the trainer's
     /// `nml-core-py` seam) derive it from `rules_epoch`, so a record below 70
@@ -731,6 +743,8 @@ impl Seams {
             skip_activated: self.reply_skip_activated,
             hold_gate: self.reply_hold_gate,
             reach_only: self.fire_in_range_only,
+            by_speed: self.reply_threat_by_speed,
+            range_edge: self.range_by_base_edge,
         }
     }
 }

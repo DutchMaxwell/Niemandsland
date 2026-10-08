@@ -530,11 +530,19 @@ static func environment_values(settings: Dictionary, tier: int) -> Dictionary:
 			"sdfgi_bounce_feedback":0.5, "sdfgi_min_cell_size":0.0125, "sdfgi_energy":1.1,
 			"sdfgi_y_scale":Environment.SDFGI_Y_SCALE_75_PERCENT,
 			"ssil_radius":0.16, "ssil_intensity":1.0,
+			# Miniature-scale reflections: the 0.2 m depth tolerance and 32 steps smeared a wet puddle into a grey sheet
+			"ssr_max_steps":96, "ssr_depth_tolerance":0.03, "ssr_fade_out":0.9,
 			"volumetric_fog_density":0.002, "volumetric_fog_length":6.0,
 			"volumetric_fog_detail_spread":1.3, "volumetric_fog_gi_inject":1.0,
 			"volumetric_fog_ambient_inject":0.16, "volumetric_fog_anisotropy":0.35,
 			"volumetric_fog_sky_affect":0.5})
 	return values
+
+
+## The mood's SSR strength (0..1) as Godot's ssr_fade_in. On High+ a short fade-in lets the reflection start at the
+## reflected object (a model standing in a puddle); the legacy value (0.2-0.9 m) hid every reflection on a 1.2 m table.
+static func ssr_fade_in_for(tier: int, intensity: float) -> float:
+	return 0.12 - 0.10 * clampf(intensity, 0.0, 1.0) if tier >= QualityPreset.HIGH else intensity
 
 
 ## Medium and above keep the tabletop in focus at normal play distance.
@@ -548,9 +556,9 @@ static func rainfall_for(tier: int, mood: String, biome: String) -> float:
 	return 1.0 if mood == "Rain" and tier >= QualityPreset.HIGH and biome != "volcanic_ash" else 0.0
 
 
-## The surrounding world is the optional expensive tier.
+## The surrounding world (landscape, groves, weather-aware sky) instead of the star field: High and Ultra.
 static func world_enabled(tier: int) -> bool:
-	return tier == QualityPreset.ULTRA
+	return tier >= QualityPreset.HIGH
 
 
 ## Get current preset name

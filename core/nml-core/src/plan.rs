@@ -273,9 +273,12 @@ pub fn seams_of(knobs: &Knobs) -> Seams {
         dangerous_end_morale: knobs.dangerous_end_morale,
         morale_by_probability: knobs.morale_by_probability,
         fire_in_range_only: knobs.fire_in_range_only,
+        hero_counts_in_size: knobs.hero_counts_in_size,
+        range_by_base_edge: knobs.range_by_base_edge,
         reply_v2: knobs.reply_v2,
         reply_skip_activated: knobs.reply_skip_activated,
         reply_hold_gate: knobs.reply_hold_gate,
+        reply_threat_by_speed: knobs.reply_threat_by_speed,
         tray_exact: crate::acts::rule_on(knobs.rules_epoch, crate::acts::EPOCH_70_TRAY_EXACT),
         plain_only: false, // dormant: only the search's root seams will set it (io.rs)
         shelf_sight: false, // dormant: free shelf pieces in sight (io.rs `Seams::shelf_sight`)
@@ -341,6 +344,7 @@ pub fn tuning_of(knobs: &Knobs) -> crate::menu::Tuning {
         advance_obj_shoot: knobs.menu_advance_obj_shoot,
         rush_k: knobs.playout_rush_k,
         reach_only: knobs.fire_in_range_only,
+        range_edge: knobs.range_by_base_edge,
         ..Default::default()
     }
 }

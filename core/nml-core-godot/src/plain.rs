@@ -1061,11 +1061,16 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         opener_by_finish: d.get("opener_by_finish").map(|v| flag(&v)).unwrap_or(dflt.opener_by_finish),
         no_end_threat: d.get("no_end_threat").map(|v| flag(&v)).unwrap_or(dflt.no_end_threat),
         fire_in_range_only: d.get("fire_in_range_only").map(|v| flag(&v)).unwrap_or(dflt.fire_in_range_only),
+        hero_counts_in_size: d.get("hero_counts_in_size").map(|v| flag(&v)).unwrap_or(dflt.hero_counts_in_size),
+        range_by_base_edge: d.get("range_by_base_edge").map(|v| flag(&v))
+            .unwrap_or(dflt.range_by_base_edge),
         morale_by_probability: d.get("morale_by_probability").map(|v| flag(&v))
             .unwrap_or(dflt.morale_by_probability),
         reply_v2: d.get("reply_v2").map(|v| flag(&v)).unwrap_or(dflt.reply_v2),
         reply_skip_activated: d.get("reply_skip_activated").map(|v| flag(&v)).unwrap_or(dflt.reply_skip_activated),
         reply_hold_gate: d.get("reply_hold_gate").map(|v| flag(&v)).unwrap_or(dflt.reply_hold_gate),
+        reply_threat_by_speed: d.get("reply_threat_by_speed").map(|v| flag(&v))
+            .unwrap_or(dflt.reply_threat_by_speed),
         // NML-1134. The recorder writes this key (act_recorder.gd `_header_line`,
         // from `BattleSim.RULE_VOCAB_VERSION`); absent = `Knobs::default()` = the
         // pre-stamp version 2. INERT for the in-game seam — nothing in

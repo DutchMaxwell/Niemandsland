@@ -1736,6 +1736,7 @@ mod growth_markers;
 mod growth_markers_epoch6;
 mod growth_place_pins;
 mod half_primitives;
+mod hero_size;
 mod hit_and_run;
 mod hit_and_run_boost_band;
 mod grounded_reinforcement;
@@ -1769,11 +1770,13 @@ mod reckless_piercing;
 mod reposition_artillery;
 mod retaliate;
 mod retreating_strike;
+    mod reply_speed;
     mod screened_melee;
 
     mod self_destruct;
 
     mod fire_in_range;
+    mod range_edge;
 mod shaken_strikeback;
 mod second_wind;
 mod second_wind_score;
