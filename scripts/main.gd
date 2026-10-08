@@ -9099,6 +9099,8 @@ func _solo_spawn_pulse_ring(at: Vector3, color: Color) -> MeshInstance3D:
 	ring.material_override = mat
 	add_child(ring)
 	ring.global_position = at + Vector3(0, 0.01, 0)
+	if GraphicsSettings.calm_mode:
+		return ring   # Calm: a static attention marker, no pulsing scale/alpha
 	var tw := ring.create_tween().set_loops()
 	tw.tween_property(ring, "scale", Vector3(1.25, 1.0, 1.25), 0.4).set_trans(Tween.TRANS_SINE)
 	tw.tween_property(ring, "scale", Vector3.ONE, 0.4).set_trans(Tween.TRANS_SINE)
@@ -17330,7 +17332,8 @@ func _start_lesson(_object_count: int) -> void:
 	var facts := LessonFacts.new()
 	facts.setup({"camera_pivot": camera_pivot, "object_manager": object_manager,
 		"army_manager": opr_army_manager, "table": table,
-		"map_layout": map_layout_editor, "left_panel": left_panel_scroll, "main": self})
+		"map_layout": map_layout_editor, "left_panel": left_panel_scroll, "main": self,
+		"unit_dock": unit_dock, "battle_log": battle_log})
 	if _scenario_mode:
 		# D4: a lesson always plays the gentlest ladder grade, in memory only — the player's saved
 		# grade (SoloGrade.save) is deliberately never written from a lesson.
