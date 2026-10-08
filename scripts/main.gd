@@ -289,6 +289,7 @@ var _solo_interactive_grade: String = SoloGrade.base_preset(SoloGrade.load_saved
 var _solo_grade_logged := ""   # the grade line this game already logged ("" = none yet)
 var _solo_opponent_brain: Dictionary = {}  # the opponent the game really runs (GameRecordCollector.opponent_brain),
                                            # set with the "opponent:" line; {} = no AI seat graded
+var _rules_chip: Label = null                # rules-automation chip beside the round button (plan 1.3)
 var solo_panel_box: VBoxContainer = null     # left-panel "Solo" section (per-army AI toggles)
 var solo_mission_option: OptionButton = null # left-panel Mission picker (MissionCatalog + "Duel (no mission)")
 var _solo_mission_id: String = ""            # "" = Duel (no mission, today's byte-identical behaviour)
@@ -955,6 +956,9 @@ func _ready() -> void:
 	# data, so they skip the chooser.
 	var table_setup: Dictionary = ProjectSettings.get_setting("niemandsland/pending_table_setup",{})
 	ProjectSettings.set_setting("niemandsland/pending_table_setup",null)
+	var rules_line := RulesAutomation.apply_table_setup(table_setup,opr_army_manager)
+	if rules_line != "":
+		_log_rule_event(BattleLog.Category.GENERAL,rules_line)
 	var joining_client: bool = pending_internet and not ProjectSettings.get_setting("niemandsland/internet_is_host", false)
 	# Headless MP test harness (test/mp/): skip the interactive table-size chooser AND the
 	# cinematic intro and drop straight onto a live, RPC-capable table. Inert in normal play.
@@ -13885,6 +13889,51 @@ func _solo_final_round_active() -> bool:
 func _update_round_button() -> void:
 	if next_round_btn and opr_army_manager:
 		next_round_btn.text = next_round_button_label(opr_army_manager.current_round, _solo_final_round_active())
+	_update_rules_chip()
+
+
+## Rules-automation plan 1.3: the level changes only between resolutions; works regardless of the UI flag.
+func set_rules_automation(level: int, who: String) -> bool:
+	if opr_army_manager == null or not RulesAutomation.change_allowed(level, not solo_ai_slots.is_empty(), _solo_resolution_pending()):
+		return false
+	opr_army_manager.rules_automation = level
+	_log_rule_event(BattleLog.Category.GENERAL, "Rules automation: %s (changed by %s)" % [RulesAutomation.label(level), who])
+	_update_rules_chip()
+	return true
+
+
+## The chip beside the round button; built lazily, shown only while the rules-automation UI flag is on.
+func _update_rules_chip() -> void:
+	if next_round_btn == null or opr_army_manager == null:
+		return
+	if _rules_chip == null:
+		_rules_chip = Label.new()
+		_rules_chip.theme_type_variation = HouseStyle.CAPTION
+		_rules_chip.mouse_filter = Control.MOUSE_FILTER_STOP   # labels ignore the mouse by default - needed for the tooltip
+		_rules_chip.tooltip_text = "Automatic: the game rolls and applies the rules. Manual: you use the dice tray."
+		next_round_btn.add_sibling(_rules_chip)
+	_rules_chip.visible = RulesAutomation.ui_enabled()
+	_rules_chip.text = RulesAutomation.chip_text(opr_army_manager.rules_automation, not solo_ai_slots.is_empty())
+
+
+## Game-panel toggle (local games only; online is plan step 1.4). Locked on while an AI slot is ticked.
+func _add_rules_toggle() -> void:
+	if not RulesAutomation.ui_enabled() or solo_panel_box == null or opr_army_manager == null:
+		return
+	if network_manager != null and network_manager.is_multiplayer_active():
+		return
+	var ai: bool = not solo_ai_slots.is_empty()
+	var cb := CheckButton.new()
+	cb.text = "Rules automation"
+	cb.tooltip_text = "Automatic: the game rolls and applies the rules. Locked on while the AI plays." if ai else "Automatic: the game rolls and applies the rules. Manual: you use the dice tray."
+	cb.button_pressed = RulesAutomation.effective(opr_army_manager.rules_automation, ai) == RulesAutomation.Level.AUTOMATIC
+	cb.disabled = ai
+	cb.focus_mode = Control.FOCUS_NONE
+	cb.toggled.connect(func(on: bool) -> void:
+		var lvl: int = RulesAutomation.Level.AUTOMATIC if on else RulesAutomation.Level.MANUAL
+		if not set_rules_automation(lvl, "P1"):
+			cb.set_pressed_no_signal(not on))
+	solo_panel_box.add_child(cb)
 
 
 ## Toggle the left panel menu visibility with slide animation
@@ -15341,6 +15390,7 @@ func _on_peer_version_validated(peer_id: int) -> void:
 	# solo session that rolled into hosting), BEFORE the state push, so the guest never
 	# receives a table where NACHTMAHR claims its army.
 	_solo_release_slot_to_human(network_manager.slot_for_peer(peer_id))
+	_clamp_rules_online("the online room")   # plan 1.4: before the push, so the guest never receives Automatic
 	_sync_state_to_peer(peer_id)
 	# The peer is registered and validated — hand it the full name roster so it
 	# immediately knows everyone already at the table (including the host).
@@ -15423,6 +15473,7 @@ func _on_internet_room_ready(code: String) -> void:
 	if network_manager and multiplayer.is_server():
 		network_manager.is_host = multiplayer.is_server()
 		network_manager.seed_host_identity()
+	_clamp_rules_online("the online room")   # plan 1.4: a room created from an Automatic local game is Manual
 	_register_local_name()
 
 
@@ -16368,6 +16419,37 @@ func _on_network_command(type: String, payload: Variant, _from_peer: int) -> voi
 		_rpc_roll_result(int(payload.get("req", 0)), payload.get("faces", []))
 	elif type == "vfx_cue" and payload is Dictionary:
 		_vfx_draw(payload, _from_peer)
+	elif type == "sync_rules_automation" and payload is Dictionary:
+		_on_sync_rules_automation((payload as Dictionary).get("level"), _from_peer)
+
+
+## Plan 1.4: a rules-automation value from a peer. MANUAL is unilateral and applies at once; an
+## AUTOMATIC value is ignored (online Automatic needs the later two-player agreement).
+func _on_sync_rules_automation(level: Variant, from_peer: int) -> void:
+	if not RulesAutomation.accepts_online(level):
+		print("[Rules] ignoring online rules-automation value %s from peer %d (rooms stay Manual)" % [str(level), from_peer])
+		return
+	_set_rules_manual_logged(_peer_display_name(from_peer))
+
+
+## Sets the level to MANUAL; logs locally (each side logs its own line, nothing is re-broadcast)
+## only when it actually changed. Returns whether it changed.
+func _set_rules_manual_logged(who: String) -> bool:
+	if opr_army_manager == null or opr_army_manager.rules_automation == RulesAutomation.Level.MANUAL:
+		return false
+	opr_army_manager.rules_automation = RulesAutomation.Level.MANUAL
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL, "Rules automation: Manual (changed by %s)" % who)
+	return true
+
+
+## Plan 1.4: while a network session is live the room's level is MANUAL. Called when a room is created,
+## when the host admits a guest, and after a guest adopts the pushed state; tells the peers once.
+func _clamp_rules_online(who: String) -> void:
+	if network_manager == null or not network_manager.is_multiplayer_active():
+		return
+	if _set_rules_manual_logged(who):
+		network_manager.send_command("sync_rules_automation", {"level": RulesAutomation.Level.MANUAL}, 0)
 
 
 ## #673 co-op: the wire shape of the AI-slot designation sync — sorted player ids, one message
@@ -16573,6 +16655,7 @@ func _rpc_sync_game_state(state: Dictionary) -> void:
 	# happens after any import, so the @rpc broadcast was missed — this is the join-time catch-up).
 	if state.get("solo_ai_slots") is Array:
 		_rpc_sync_ai_slots(state["solo_ai_slots"])
+	_clamp_rules_online("the online room")   # plan 1.4: the pushed level is read, a room stays Manual
 
 
 ## ============================================================================
@@ -17660,6 +17743,7 @@ func _init_solo_panel() -> void:
 ## Hidden entirely while no armies are imported.
 func _refresh_solo_panel() -> void:
 	_refresh_host_tools_visibility()
+	_update_rules_chip()   # an AI slot tick changes the lock
 	if solo_panel_box == null or opr_army_manager == null:
 		return
 	for c in solo_panel_box.get_children():
@@ -17674,6 +17758,7 @@ func _refresh_solo_panel() -> void:
 	label.tooltip_text = "Mark the army the AI controls. The AI answers each of your activations with one of its own (alternating activation); after %d rounds the game is scored. F11 runs the whole remaining AI side at once (debug)." % SOLO_GAME_ROUNDS
 	label.mouse_filter = Control.MOUSE_FILTER_STOP   # labels ignore the mouse by default — needed for the tooltip
 	solo_panel_box.add_child(label)
+	_add_rules_toggle()
 	var fast_cb := CheckButton.new()
 	fast_cb.text = "Fast AI (short pauses)"
 	fast_cb.tooltip_text = "Skips the move animation and shrinks the announce/outcome pauses of AI actions."
