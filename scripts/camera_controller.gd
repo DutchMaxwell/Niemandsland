@@ -59,6 +59,8 @@ func _ready() -> void:
 	if graphics != null:
 		_tilt_shift_enabled = graphics.tilt_shift
 		graphics.settings_applied.connect(func(_preset: String) -> void: _update_tilt_shift())
+		# Calm mode forces tilt-shift off; follow it live so the DOF drops at once.
+		graphics.calm_mode_changed.connect(func() -> void: set_tilt_shift_enabled(graphics.tilt_shift))
 	var manager := get_parent().get_node_or_null("ObjectManager")
 	if manager != null and manager.has_signal("selection_changed"):
 		manager.selection_changed.connect(_on_focus_selection)
