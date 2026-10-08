@@ -2376,6 +2376,8 @@ KNOB_PRESETS: dict[str, dict[str, Any]] = {
     # aifix action-space lane (07.10.2026): the menu opens — up to 3 extra HOLD+shoot targets and one
     # ADVANCE-toward-the-marker-with-a-shot row. A STRENGTH change (bar = better), see farm/aifix/PREREG_MENU_OPEN.md.
     "menu_open": {"menu_all_targets": 3, "menu_advance_obj_shoot": True},
+    # inventory T03-T06: the enemy's reply threat by its real charge/advance band, base gap, no Aircraft charge
+    "reply_speed": {"reply_threat_by_speed": True},
     # inventory C01/C27: the imagined shot measures range base edge to base edge, as the table does
     "range_edge": {"range_by_base_edge": True},
     "aifix_all": {

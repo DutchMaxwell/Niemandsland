@@ -422,12 +422,18 @@ pub fn terrain_cost_at(p: V2, grid: &Grid, opts: &StepOpts) -> f64 {
     if grid.is_empty() {
         return 1.0;
     }
-    let cell = cell_of(p, CELL_IN);
+    terrain_cost_cells(cell_of(p, CELL_IN), cell_of(p, PLAN_CELL_IN), grid, opts)
+}
+
+/// `terrain_cost_at` for a point whose coarse and fine cells are known — the answer depends on nothing else. The grid
+/// must not be empty (the caller's early return).
+#[inline]
+fn terrain_cost_cells(cell: (i32, i32), fine: (i32, i32), grid: &Grid, opts: &StepOpts) -> f64 {
     let t = *grid.get(&cell).unwrap_or(&T_NONE);
     if opts.avoid_cells.contains(&cell) {
         return f64::INFINITY;
     }
-    if opts.avoid_fine.contains(&cell_of(p, PLAN_CELL_IN)) {
+    if opts.avoid_fine.contains(&fine) {
         return f64::INFINITY;
     }
     if opts.dangerous_debuff || is_dangerous(t) {
@@ -452,6 +458,14 @@ pub fn segment_cost(a: V2, b: V2, grid: &Grid, opts: &StepOpts) -> f64 {
 /// `segment_cost` (`sample_in = PLAN_CELL_IN * 0.5 = 0.5"`). The parameter exists
 /// only so the gate can prove the step count is load-bearing (RED PROOF).
 pub fn segment_cost_at(a: V2, b: V2, grid: &Grid, opts: &StepOpts, sample_in: f64) -> f64 {
+    segment_cost_core(a, b, grid, opts, sample_in, &mut |p| terrain_cost_at(p, grid, opts))
+}
+
+/// `segment_cost_at` over a cost function for the sample points (`terrain_cost_at`, or the planner's memo of it).
+#[inline]
+fn segment_cost_core(
+    a: V2, b: V2, grid: &Grid, opts: &StepOpts, sample_in: f64, cost: &mut impl FnMut(V2) -> f64,
+) -> f64 {
     let span = distance_to(a, b);
     if grid.is_empty() || span <= EPS {
         return span + ledge_cost(a, b, opts.ledges);
@@ -460,11 +474,7 @@ pub fn segment_cost_at(a: V2, b: V2, grid: &Grid, opts: &StepOpts, sample_in: f6
     let sub = span / steps as f64;
     let mut total = 0.0f64;
     for i in 0..steps {
-        let m = terrain_cost_at(
-            lerp(a, b, (i as f64 + 0.5) / steps as f64),
-            grid,
-            opts,
-        );
+        let m = cost(lerp(a, b, (i as f64 + 0.5) / steps as f64));
         total += sub * if m.is_infinite() { 1.0 } else { m };
     }
     total + ledge_cost(a, b, opts.ledges)
@@ -492,6 +502,11 @@ pub fn cspace_blocked(a: V2, b: V2, walls: &[Wall], grid: &Grid, opts: &StepOpts
 
 /// The terrain half of `cspace_blocked`: a hard-blocked cell (INF cost) on the sampled line.
 fn cspace_tail(a: V2, b: V2, grid: &Grid, opts: &StepOpts) -> bool {
+    cspace_tail_core(a, b, grid, &mut |p| terrain_cost_at(p, grid, opts))
+}
+
+#[inline]
+fn cspace_tail_core(a: V2, b: V2, grid: &Grid, cost: &mut impl FnMut(V2) -> f64) -> bool {
     if grid.is_empty() {
         return false;
     }
@@ -501,9 +516,56 @@ fn cspace_tail(a: V2, b: V2, grid: &Grid, opts: &StepOpts) -> bool {
         return false;
     }
     for i in 1..steps {
-        if terrain_cost_at(lerp(a, b, i as f64 / steps as f64), grid, opts).is_infinite() {
+        if cost(lerp(a, b, i as f64 / steps as f64)).is_infinite() {
             return true;
         }
     }
     false
+}
+
+/// A per-search memo of `terrain_cost_at` over the 1" planning cells (aifix route lane). The cost depends on the point
+/// only through its coarse (`CELL_IN`) and fine (`PLAN_CELL_IN`) cell, and `CELL_IN` is a whole multiple of
+/// `PLAN_CELL_IN`, so every point of one fine cell has the same cost: the first sample in a cell fills it, later ones are
+/// an array read. One memo serves ONE grid and ONE `StepOpts` (the avoid sets and debuff flags are part of the answer).
+pub struct CostMemo {
+    w: i32,
+    h: i32,
+    vals: Vec<f64>,
+}
+
+impl CostMemo {
+    /// A memo for `w` x `h` fine cells (the board in inches); points outside it are answered directly.
+    pub fn new(w: usize, h: usize) -> CostMemo {
+        CostMemo { w: w as i32, h: h as i32, vals: vec![f64::NAN; w * h] }
+    }
+
+    /// `terrain_cost_at`, memoised (costs are finite or +inf, never NaN: NaN marks an empty slot).
+    #[inline]
+    pub fn cost(&mut self, p: V2, grid: &Grid, opts: &StepOpts) -> f64 {
+        if grid.is_empty() {
+            return 1.0;
+        }
+        let fine = cell_of(p, PLAN_CELL_IN);
+        if fine.0 < 0 || fine.1 < 0 || fine.0 >= self.w || fine.1 >= self.h {
+            return terrain_cost_at(p, grid, opts);
+        }
+        let slot = (fine.1 * self.w + fine.0) as usize;
+        let v = self.vals[slot];
+        if !v.is_nan() {
+            return v;
+        }
+        let v = terrain_cost_cells(cell_of(p, CELL_IN), fine, grid, opts);
+        self.vals[slot] = v;
+        v
+    }
+
+    /// `segment_cost` over the memo.
+    pub fn segment_cost(&mut self, a: V2, b: V2, grid: &Grid, opts: &StepOpts) -> f64 {
+        segment_cost_core(a, b, grid, opts, PLAN_CELL_IN * 0.5, &mut |p| self.cost(p, grid, opts))
+    }
+
+    /// The terrain half of `cspace_blocked` over the memo.
+    pub fn cspace_tail(&mut self, a: V2, b: V2, grid: &Grid, opts: &StepOpts) -> bool {
+        cspace_tail_core(a, b, grid, &mut |p| self.cost(p, grid, opts))
+    }
 }

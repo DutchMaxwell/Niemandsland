@@ -338,7 +338,7 @@ func _apply_reference_environment(light_values := true) -> void:
 		var graphics := get_node("/root/GraphicsSettings")
 		var policy: Dictionary = graphics.environment_values(preset, graphics.current_preset)
 		for key: String in policy:
-			if key.begins_with("sdfgi_") or key.begins_with("ssil_") or key.begins_with("volumetric_fog_"):
+			if key.begins_with("sdfgi_") or key.begins_with("ssil_") or key.begins_with("ssr_") or key.begins_with("volumetric_fog_"):
 				values[key] = policy[key]
 	if light_values:
 		values.merge({"ssao_intensity": 2.0, "ssr_fade_in": 0.08, "glow_intensity": 0.16})

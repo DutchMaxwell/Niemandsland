@@ -16,7 +16,7 @@ func test_s03_has_four_steps() -> void:
 
 
 func test_every_step_has_text_and_at_least_one_check() -> void:
-	for chapter_id in ["S-01", "S-02", "S-03", "S-04", "S-05", "S-06", "S-07"]:
+	for chapter_id in ["S-01", "S-02", "S-03", "S-04", "S-05", "S-06", "S-07", "S-08"]:
 		for step in SpielschuleLessons.steps_for(chapter_id):
 			assert_str(String(step.get("text", ""))).is_not_empty()
 			var checks: Array = step.get("all", [])
@@ -24,7 +24,7 @@ func test_every_step_has_text_and_at_least_one_check() -> void:
 
 
 func test_every_check_name_is_known_to_lesson_checks() -> void:
-	for chapter_id in ["S-01", "S-02", "S-03", "S-04", "S-05", "S-06", "S-07"]:
+	for chapter_id in ["S-01", "S-02", "S-03", "S-04", "S-05", "S-06", "S-07", "S-08"]:
 		for step in SpielschuleLessons.steps_for(chapter_id):
 			for entry in step.get("all", []):
 				var check_name := String(entry.get("check", ""))
@@ -44,7 +44,7 @@ func test_step_texts_never_leak_lesson_tags() -> void:
 	# would be a leak, so the second check is case-sensitive.
 	var leak := RegEx.create_from_string("(?i)\\b(?:alpha|bravo|far|target)\\b(?! squad)")
 	var bare_tag := RegEx.create_from_string("\\b(?:shaken|tough)\\b")
-	for chapter_id in ["S-01", "S-02", "S-03", "S-04", "S-05", "S-06", "S-07"]:
+	for chapter_id in ["S-01", "S-02", "S-03", "S-04", "S-05", "S-06", "S-07", "S-08"]:
 		for step in SpielschuleLessons.steps_for(chapter_id):
 			var text := String(step.get("text", ""))
 			assert_bool(leak.search(text) != null) \
@@ -87,3 +87,8 @@ func test_s06_has_five_steps_and_holds_the_ai() -> void:
 func test_s07_has_five_steps_and_holds_the_ai() -> void:
 	assert_array(SpielschuleLessons.steps_for("S-07")).has_size(5)
 	assert_str(SpielschuleLessons.ai_mode("S-07")).is_equal("hold")
+
+
+func test_s08_has_four_steps_and_holds_the_ai() -> void:
+	assert_array(SpielschuleLessons.steps_for("S-08")).has_size(4)
+	assert_str(SpielschuleLessons.ai_mode("S-08")).is_equal("hold")

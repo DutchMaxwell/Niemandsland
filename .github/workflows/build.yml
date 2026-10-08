@@ -108,8 +108,12 @@ jobs:
       # restored across runs. Keyed by the pinned manifest the tests now use, so a warm run
       # downloads 0 blobs; a manifest change re-keys and re-downloads. One key per shard: each
       # shard fetches a different blob set, so a shared key would let one shard's save shadow the rest.
-      - name: Cache CDN asset blobs (content-addressed)
-        uses: actions/cache@v4
+      # Self-healing: restore the newest entry by prefix (the "-restore" key never exists, so the
+      # prefixes always apply), and at the end of the job (even on test failure) save a NEW entry
+      # keyed by the content hash when the blob set grew. Shard reshuffles and blobs a cold run
+      # never reached therefore converge instead of re-downloading forever.
+      - name: Restore CDN asset blobs (content-addressed)
+        uses: actions/cache/restore@v4
         with:
           path: |
             ~/.local/share/godot/app_userdata/Niemandsland/model_cache
@@ -120,9 +124,17 @@ jobs:
             ~/.local/share/godot/app_userdata/Niemandsland/ruins_cache
             ~/.local/share/godot/app_userdata/Niemandsland/trees_cache
             ~/.local/share/godot/app_userdata/Niemandsland/reference_terrain_cache
-          key: nml-asset-cache-shard${{ matrix.shard }}-${{ hashFiles('assets/model_manifest.json') }}
+          key: nml-asset-cache-v2-shard${{ matrix.shard }}-${{ hashFiles('assets/model_manifest.json') }}-restore
           restore-keys: |
-            nml-asset-cache-shard${{ matrix.shard }}-
+            nml-asset-cache-v2-shard${{ matrix.shard }}-${{ hashFiles('assets/model_manifest.json') }}-
+            nml-asset-cache-v2-shard${{ matrix.shard }}-
+
+      - name: Hash restored CDN blobs
+        id: blobs_before
+        run: |
+          mkdir -p ~/.local/share/godot/app_userdata/Niemandsland; cd ~/.local/share/godot/app_userdata/Niemandsland; H=$(find model_cache biome_cache ambience_cache containers_cache hazards_cache ruins_cache trees_cache reference_terrain_cache -type f ! -name '*.part' ! -name '*.tmp' -printf '%p %s\n' 2>/dev/null | LC_ALL=C sort | sha256sum | cut -c1-16)
+          echo "hash=$H" >> "$GITHUB_OUTPUT"
+          echo "restored blob set hash: $H"
 
       - name: Import project (generates .godot/, compile-check)
         run: godot --headless --editor --quit --path .
@@ -173,6 +185,38 @@ jobs:
           if [ -z "$EXECUTED" ] || [ "$EXECUTED" -lt "$FILE_COUNT" ]; then
             echo "::error::gdUnit executed $EXECUTED suite(s) but shard ${{ matrix.shard }} owns $FILE_COUNT *_test.gd file(s) — some suite(s) never ran"; exit 1
           fi
+
+      # Blobs are sha256-verified before the rename into the cache, so the set is safe to save
+      # even when the tests failed. Partial downloads (*.part, *.tmp) are excluded from the hash.
+      - name: Hash CDN blobs after tests
+        id: blobs_after
+        if: always()
+        run: |
+          mkdir -p ~/.local/share/godot/app_userdata/Niemandsland; cd ~/.local/share/godot/app_userdata/Niemandsland; H=$(find model_cache biome_cache ambience_cache containers_cache hazards_cache ruins_cache trees_cache reference_terrain_cache -type f ! -name '*.part' ! -name '*.tmp' -printf '%p %s\n' 2>/dev/null | LC_ALL=C sort | sha256sum | cut -c1-16)
+          echo "hash=$H" >> "$GITHUB_OUTPUT"
+          if [ "$H" = "${{ steps.blobs_before.outputs.hash }}" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "CDN blob set unchanged ($H) - skipping cache save"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "CDN blob set changed: ${{ steps.blobs_before.outputs.hash }} -> $H"
+          fi
+
+      # Main is the only writer: PR-scoped saves would churn the 10 GB repo cache and evict the Rust build caches.
+      - name: Save CDN asset blobs (content-addressed)
+        if: always() && steps.blobs_after.outputs.changed == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/.local/share/godot/app_userdata/Niemandsland/model_cache
+            ~/.local/share/godot/app_userdata/Niemandsland/biome_cache
+            ~/.local/share/godot/app_userdata/Niemandsland/ambience_cache
+            ~/.local/share/godot/app_userdata/Niemandsland/containers_cache
+            ~/.local/share/godot/app_userdata/Niemandsland/hazards_cache
+            ~/.local/share/godot/app_userdata/Niemandsland/ruins_cache
+            ~/.local/share/godot/app_userdata/Niemandsland/trees_cache
+            ~/.local/share/godot/app_userdata/Niemandsland/reference_terrain_cache
+          key: nml-asset-cache-v2-shard${{ matrix.shard }}-${{ hashFiles('assets/model_manifest.json') }}-${{ steps.blobs_after.outputs.hash }}
 
   # Guard for the sharded gdUnit4 test job: recompute the same deterministic
   # assignment the shards use (tools/shard_assign.py --check), and fail unless every
