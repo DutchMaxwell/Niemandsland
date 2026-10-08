@@ -73,10 +73,12 @@ const _S04_STEPS := [
 const _S05_STEPS := [
 	{"id": "card", "text": "Right-click Alpha Squad and open its card: the Heavy Rifle shoots 24\". (p.5)",
 		"rule": "p.5", "all": [{"check": "flag", "args": {"key": "card_presented"}}]},
-	{"id": "shoot", "text": "Right-click Alpha Squad, choose Shoot, click the nearer Warriors squad. The further Warriors squad is over 24\" away — out of range.",
+	{"id": "shoot", "text": "Right-click Alpha Squad, choose Shoot, click the nearer Warriors squad: the Heavy Rifle reaches 24\". (p.5)",
 		"rule": "p.5", "all": [{"check": "counter_grew", "args": {"key": "shoot:alpha"}}]},
 	{"id": "read_log", "text": "Read the log: hits roll against Quality, the enemy blocks with Defense. (p.8)",
 		"rule": "p.8", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
+	{"id": "blocked", "text": "Try to shoot the Guardians squad behind the building: it stands in range, but the building blocks the line of sight — no line of sight, no shot. (p.5)",
+		"rule": "p.5", "all": [{"check": "counter_grew", "args": {"key": "log:nolos"}}]},
 ]
 
 

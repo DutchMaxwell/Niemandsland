@@ -1,7 +1,7 @@
 extends GdUnitTestSuite
 ## E2E walk of Game School chapter 5 (S-05, Shooting) over the real scenes/main.tscn:
-## present alpha's card, shoot the in-range squad and press Continue — the three steps complete
-## the chapter, and an idle boot stays on step 0 and uncompleted.
+## present alpha's card, shoot the in-range squad, read the log, try the hidden squad and press
+## Continue — the four steps complete the chapter, and an idle boot stays on step 0 and uncompleted.
 
 const Boot := preload("res://test/e2e/e2e_boot.gd")
 const TEST_CFG := "user://test_game_school_ch5.cfg"
@@ -58,7 +58,7 @@ func _wait_index(target: int) -> bool:
 	return false
 
 
-func test_s05_three_steps_complete(timeout := 120000) -> void:
+func test_s05_four_steps_complete(timeout := 120000) -> void:
 	assert_int(_lesson.current_index()).is_equal(0)
 	var alpha := _find("alpha")
 	assert_object(alpha).is_not_null()
@@ -80,7 +80,18 @@ func test_s05_three_steps_complete(timeout := 120000) -> void:
 	await _main._run_human_attack(alpha, target, false)
 	assert_bool(await _wait_index(2)).is_true()   # shot resolved
 
+	# The squad behind the building is in range but hidden: the engine refuses the pick for
+	# want of line of sight (log:nolos), which completes the blocked step. The read_log step is
+	# still active at index 2, so press Continue to reach the blocked step first.
 	(_main.get_node("UI/LessonCard") as LessonCard).continue_pressed.emit()
+	assert_bool(await _wait_index(3)).is_true()   # read_log done, blocked step active
+	var blocked := _find("blocked")
+	assert_object(blocked).is_not_null()
+	var verdict: String = _main._solo_validate_target(alpha, blocked, false)
+	assert_str(verdict).override_failure_message("blocked verdict: [%s]" % verdict) \
+		.contains("line of sight")
+	_main._solo_log_target_refusal(blocked, verdict)
+
 	var progress := SpielschuleProgress.new(TEST_CFG)
 	var deadline := Time.get_ticks_msec() + 4000
 	while Time.get_ticks_msec() < deadline:

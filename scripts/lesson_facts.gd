@@ -150,6 +150,10 @@ func _on_battle_log_entry(entry: Dictionary) -> void:
 	# so it fires on the ROLL being made, whatever it shows) — I2 dice-safe gate.
 	if low.contains("dangerous terrain"):
 		bump("log:dangerous")
+	# A refused shot reads "<target>: no model has line of sight…" — the marker fires when the player
+	# picks a target the terrain truly hides (the S-05 blocked-LOS step).
+	if low.contains("no model has line of sight"):
+		bump("log:nolos")
 	# Morale outcome lines read "<name> passes morale" / "<name> fails morale …". Bump a counter for
 	# the TESTED unit's lesson tag so a lesson can gate "the volley forced a morale test"
 	# (log:morale:target).
