@@ -832,6 +832,7 @@ impl Core {
         m.insert("horizon".into(), self.knobs.horizon.into());
         m.insert("tail_cap_p1".into(), self.knobs.tail_cap_p1.into());
         m.insert("tail_cap_p2".into(), self.knobs.tail_cap_p2.into());
+        m.insert("leaf_opener_only".into(), self.knobs.leaf_opener_only.into());
         m.insert("imagined_round_end".into(), self.knobs.imagined_round_end.into());
         m.insert("depth_discount".into(), self.knobs.depth_discount.into());
         m.insert("seat_mode".into(), self.knobs.seat_mode.into());
