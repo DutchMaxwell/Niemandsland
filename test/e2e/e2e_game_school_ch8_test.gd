@@ -32,6 +32,7 @@ func before_test() -> void:
 	await _main.save_manager.load_completed
 	_lesson = _main.get_node("LessonRunner") as LessonRunner
 	_main._solo_fast = true
+	_main._solo_batch = true
 
 
 func after_test() -> void:
@@ -78,7 +79,7 @@ func _wait_index(target: int) -> bool:
 	return false
 
 
-func test_s08_four_steps_complete(timeout := 60000) -> void:
+func test_s08_six_steps_complete(timeout := 120000) -> void:
 	assert_int(_lesson.current_index()).is_equal(0)
 
 	var alpha := _find("alpha")
@@ -89,18 +90,27 @@ func test_s08_four_steps_complete(timeout := 60000) -> void:
 	_move_unit_to(alpha, Vector3(0.0, 0.0, 6.0 * INCH))
 	assert_bool(await _wait_index(1)).is_true()   # Alpha stands in the forest (difficult terrain)
 
+	# Difficult terrain hard-caps a drag: the object_manager signal is what a real over-long drag fires.
+	_main.object_manager.movement_capped.emit(7.0, 6.0, true, "Difficult terrain")
+	assert_bool(await _wait_index(2)).is_true()   # the cap was experienced
+
 	var card := _main.get_node("UI/LessonCard") as LessonCard
 	card.continue_pressed.emit()
-	assert_bool(await _wait_index(2)).is_true()   # cover read
+	assert_bool(await _wait_index(3)).is_true()   # cover read
 
 	await _main._run_human_attack(alpha, target, false)
-	assert_bool(await _wait_index(3)).is_true()   # the volley fired and logged the cover bonus
+	assert_bool(await _wait_index(4)).is_true()   # the volley fired and logged the cover bonus
 	var texts := ""
 	for entry in _main.battle_log.entries():
 		texts += String((entry as Dictionary).get("text", "")) + "\n"
 	assert_bool(texts.to_lower().contains("cover")) \
 		.override_failure_message("no cover line in the battle log:\n%s" % texts) \
 		.is_true()
+
+	# The engine-driven dangerous test (what the radial Rush runs): it logs the dice line before rolling,
+	# so the gate passes on the roll being made, whatever it shows.
+	await _main._run_ai_dangerous(alpha, 5)
+	assert_bool(await _wait_index(5)).is_true()   # the dangerous test was rolled
 
 	card.continue_pressed.emit()
 	var progress := SpielschuleProgress.new(TEST_CFG)

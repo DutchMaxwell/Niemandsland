@@ -103,10 +103,14 @@ const _S06_STEPS := [
 const _S08_STEPS := [
 	{"id": "move_forest", "text": "Move Alpha Squad into the forest ahead. Forests are difficult terrain: no model moves more than 6\". (p.11)",
 		"rule": "p.11", "all": [{"check": "tag_terrain_is", "args": {"tag": "alpha", "type": 2}}]},
+	{"id": "difficult", "text": "Drag a model past 6\" through the forest: difficult terrain hard-caps the move at 6\". (p.11)",
+		"rule": "p.11", "all": [{"check": "counter_grew", "args": {"key": "move_capped"}}]},
 	{"id": "cover", "text": "The enemy stands inside a forest: most of it is in cover, so it gets +1 to its Defense rolls against shooting, then press Continue. (p.11)",
 		"rule": "p.11", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
 	{"id": "shoot_cover", "text": "Shoot the enemy in cover and watch the +1 in the log. (p.11)",
 		"rule": "p.11", "all": [{"check": "counter_grew", "args": {"key": "shoot:alpha"}}]},
+	{"id": "dangerous", "text": "Right-click Alpha Squad, pick Rush, then click the enemy: the engine runs it through the dangerous ground and rolls one test die per model — a 1 wounds it. (p.12)",
+		"rule": "p.12", "all": [{"check": "counter_grew", "args": {"key": "log:dangerous"}}]},
 	{"id": "wall", "text": "Ruins are area terrain: units can see into and out of them, but not through — nobody shoots through the ruins, then press Continue. (p.11)",
 		"rule": "p.11", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
 ]

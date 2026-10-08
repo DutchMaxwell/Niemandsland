@@ -32,6 +32,10 @@ func setup(refs: Dictionary) -> void:
 	if _object_manager != null and _object_manager.has_signal("measurement_finished"):
 		if not _object_manager.measurement_finished.is_connected(_on_measurement_finished):
 			_object_manager.measurement_finished.connect(_on_measurement_finished)
+	# I2: the difficult-terrain cap fires a real drag signal — the S-08 gate reads it.
+	if _object_manager != null and _object_manager.has_signal("movement_capped"):
+		if not _object_manager.movement_capped.is_connected(_on_movement_capped):
+			_object_manager.movement_capped.connect(_on_movement_capped)
 	if _battle_log != null and _battle_log.has_signal("entry_added"):
 		if not _battle_log.entry_added.is_connected(_on_battle_log_entry):
 			_battle_log.entry_added.connect(_on_battle_log_entry)
@@ -120,6 +124,11 @@ func _on_measurement_finished(_distance_inches: float) -> void:
 	bump("measure")
 
 
+## I2: a drag past the cap fired (ObjectManager.movement_capped) — the difficult-terrain cap fired.
+func _on_movement_capped(_consumed_inches: float, _cap_inches: float, _dry: bool, _reason: String = "") -> void:
+	bump("move_capped")
+
+
 func _on_human_attack_resolved(attacker: GameUnit, melee: bool) -> void:
 	_bump_tag("melee" if melee else "shoot", attacker)
 
@@ -137,6 +146,10 @@ func _on_battle_log_entry(entry: Dictionary) -> void:
 		bump("log:pile_in")
 	if low.contains("consolidat"):
 		bump("log:consolidate")
+	# Dangerous-terrain test line ("<name> takes N Dangerous terrain test dice", rolled before the dice
+	# so it fires on the ROLL being made, whatever it shows) — I2 dice-safe gate.
+	if low.contains("dangerous terrain"):
+		bump("log:dangerous")
 	# Morale outcome lines read "<name> passes morale" / "<name> fails morale …". Bump a counter for
 	# the TESTED unit's lesson tag so a lesson can gate "the volley forced a morale test"
 	# (log:morale:target).

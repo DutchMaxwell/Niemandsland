@@ -89,6 +89,6 @@ func test_s07_has_five_steps_and_holds_the_ai() -> void:
 	assert_str(SpielschuleLessons.ai_mode("S-07")).is_equal("hold")
 
 
-func test_s08_has_four_steps_and_holds_the_ai() -> void:
-	assert_array(SpielschuleLessons.steps_for("S-08")).has_size(4)
+func test_s08_has_six_steps_and_holds_the_ai() -> void:
+	assert_array(SpielschuleLessons.steps_for("S-08")).has_size(6)
 	assert_str(SpielschuleLessons.ai_mode("S-08")).is_equal("hold")
