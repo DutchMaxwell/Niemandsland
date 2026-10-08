@@ -3788,16 +3788,18 @@ func _eval_variant_for(diff: SoloDifficulty) -> int:
 	if forced != "":
 		return int(forced)
 	var v := diff.eval_variant if diff != null and not shipped_brain_ready() else 0
-	return 4 if v == 3 and _aifix_on(diff) else v   # A3 composes with variant 3 (score.rs score_hand_vp_hold)
+	if _aifix_on(diff) and (v == 3 or shipped_brain_ready()):
+		return 4   # A3 (score.rs score_hand_vp_hold): composes with 3 on the hand planner; the brain takes it directly (T2a ran 4 over the arm-0 net)
+	return v
 
 
-## aifix_all for this pick: the preset's `aifix` bundle, only while NO brain is wired (measured on the hand planner;
-## the net waits for its own A/B). env NML_AIFIX=0/1 forces it either way (the A/B's arm switch).
+## aifix_all for this pick: the preset's `aifix` bundle, with or without the brain (measured NOT_WORSE on the hand
+## planner (#1631) and on the shipped Erlkoenig (T2a 08.10.2026)). env NML_AIFIX=0/1 forces it either way (the A/B's arm switch).
 func _aifix_on(diff: SoloDifficulty) -> bool:
 	var forced := OS.get_environment("NML_AIFIX")
 	if forced != "":
 		return forced == "1"
-	return diff != null and diff.aifix and not shipped_brain_ready()
+	return diff != null and diff.aifix
 
 
 ## Stamps the six planner statics of the aifix_all bundle for this pick (the header the live core reads carries

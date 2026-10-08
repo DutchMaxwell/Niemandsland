@@ -155,7 +155,7 @@ var hero_fold: bool = false
 var eval_variant: int = 0
 ## aifix_all (rule-fidelity bundle E1+D5+D1+A3+D2, farm/aifix/AB_PRESET.md): measured NOT_WORSE on the HAND planner
 ## (A1 50.97 %, CI [50.05, 51.89], 5,000 paired games, 07.10.), so the hand presets carry it ON; with the shipped
-## brain wired it stays OFF (no net A/B yet) — see SoloController._aifix_on. Stamped per pick.
+## brain it is ON too (T2a 08.10.2026: 49.95 %, LB95 49.10 % on the shipped Erlkoenig) — see SoloController._aifix_on. Stamped per pick.
 var aifix: bool = false
 ## NML-1140 step 8: the placement rung this preset places objectives by (rulebook|style|search),
 ## resolved per game by resolve_placement — env override first, else the strongest seat's preset.
