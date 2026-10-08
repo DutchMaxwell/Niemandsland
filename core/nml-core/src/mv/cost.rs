@@ -238,27 +238,63 @@ pub fn step_blocked(p: V2, c: V2, walls: &[Wall], opts: &StepOpts) -> bool {
         // Exact culling (aifix preselect-speed): a wall whose box lies farther than the clearance
         // (+ an f32 rounding guard) from the step's box can neither cross the step nor come within
         // `clearance` of it, so `wall_blocks` would answer false — skip it without the 4 distance tests.
-        let m = opts.clearance + WALL_CULL_GUARD;
-        let (lo_x, hi_x) = ((p[0].min(c[0]) as f64) - m, (p[0].max(c[0]) as f64) + m);
-        let (lo_y, hi_y) = ((p[1].min(c[1]) as f64) - m, (p[1].max(c[1]) as f64) + m);
+        let q = QueryBox::new(p, c, opts.clearance);
         for w in walls {
-            if (w[0][0].min(w[1][0]) as f64) > hi_x
-                || (w[0][0].max(w[1][0]) as f64) < lo_x
-                || (w[0][1].min(w[1][1]) as f64) > hi_y
-                || (w[0][1].max(w[1][1]) as f64) < lo_y
-            {
-                continue;
-            }
-            if wall_blocks(p, c, w[0], w[1], opts.clearance) {
+            if q.may_touch(w) && wall_blocks(p, c, w[0], w[1], opts.clearance) {
                 return true;
             }
         }
     } else if path_crosses_wall_opt(p, c, walls) {
         return true;
     }
-    for z in opts.zones {
-        if zone_blocks(p, c, z.c, z.r) {
-            return true;
+    non_wall_blocked(p, c, opts)
+}
+
+/// The step's bounding box grown by `clearance` + the f32 guard: a wall outside it cannot block the step.
+struct QueryBox {
+    lo_x: f64,
+    hi_x: f64,
+    lo_y: f64,
+    hi_y: f64,
+}
+
+impl QueryBox {
+    #[inline]
+    fn new(p: V2, c: V2, clearance: f64) -> QueryBox {
+        let m = clearance + WALL_CULL_GUARD;
+        QueryBox {
+            lo_x: (p[0].min(c[0]) as f64) - m,
+            hi_x: (p[0].max(c[0]) as f64) + m,
+            lo_y: (p[1].min(c[1]) as f64) - m,
+            hi_y: (p[1].max(c[1]) as f64) + m,
+        }
+    }
+
+    #[inline]
+    fn may_touch(&self, w: &Wall) -> bool {
+        !((w[0][0].min(w[1][0]) as f64) > self.hi_x
+            || (w[0][0].max(w[1][0]) as f64) < self.lo_x
+            || (w[0][1].min(w[1][1]) as f64) > self.hi_y
+            || (w[0][1].max(w[1][1]) as f64) < self.lo_y)
+    }
+}
+
+/// Everything `step_blocked` asks AFTER the walls: the no-go discs, then the coarse and the fine avoid sets.
+fn non_wall_blocked(p: V2, c: V2, opts: &StepOpts) -> bool {
+    if !opts.zones.is_empty() {
+        // `zone_blocks` answers false whenever the disc centre is `r` or more from the segment; a centre farther than
+        // `r` (+ the f32 guard) from the segment's bounding box is, so those discs are skipped without the distance.
+        let (lo_x, hi_x) = (p[0].min(c[0]) as f64, p[0].max(c[0]) as f64);
+        let (lo_y, hi_y) = (p[1].min(c[1]) as f64, p[1].max(c[1]) as f64);
+        for z in opts.zones {
+            let r = z.r + WALL_CULL_GUARD;
+            let (zx, zy) = (z.c[0] as f64, z.c[1] as f64);
+            if zx < lo_x - r || zx > hi_x + r || zy < lo_y - r || zy > hi_y + r {
+                continue;
+            }
+            if zone_blocks(p, c, z.c, z.r) {
+                return true;
+            }
         }
     }
     if !opts.avoid_cells.is_empty()
