@@ -132,6 +132,18 @@ func test_gap_at_most() -> void:
 	assert_bool(LessonChecks.passes(step, {"tags": {}}, base)).is_false()
 
 
+func test_obj_within() -> void:
+	var step := _step("obj_within", {"tag": "alpha", "index": 0, "inches": 3.0})
+	var base := {"tags": {"alpha": {"obj_dist_in": [8.0, 12.0, 20.0]}}}
+	assert_bool(LessonChecks.passes(step, base, base)).is_false()
+	var now := {"tags": {"alpha": {"obj_dist_in": [2.5, 9.0, 18.0]}}}
+	assert_bool(LessonChecks.passes(step, now, base)).is_true()
+	# A tag or index the snapshot does not carry can never satisfy the check.
+	assert_bool(LessonChecks.passes(step, {"tags": {}}, base)).is_false()
+	var oob := _step("obj_within", {"tag": "alpha", "index": 5, "inches": 3.0})
+	assert_bool(LessonChecks.passes(oob, now, base)).is_false()
+
+
 func test_missing_tag_is_false_for_unit_checks() -> void:
 	var base := {"tags": {}}
 	var now := {"tags": {}}

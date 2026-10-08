@@ -3030,7 +3030,8 @@ fn engage_gap_in(state: &State, si: usize, ti: usize, seams: Seams) -> f64 {
 
 /// Inventory C01/C27 — the nearest BASE-EDGE gap (inches) from `a_pos` (unit `si`'s models, or a moved copy
 /// of them) to unit `ti`'s models, through the recorded base shapes: the table's shooting-range and over-9"
-/// measure. Only read with `Knobs::range_by_base_edge`; empty side = INFINITY like `geom::dist_in`.
+/// measure, and (Inventory T05) the charge-distance measure of the by-speed reply. Empty side = INFINITY like
+/// `geom::dist_in`.
 pub fn range_gap_in(state: &State, a_pos: &[[f64; 3]], si: usize, ti: usize) -> f64 {
     let shape = |u: usize| state.roster.profile.get(u)
         .and_then(|&p| state.profiles.list.get(p))
@@ -5913,19 +5914,6 @@ const REPLY_CHARGE_IN: f64 = 12.0;
 /// The Advance band the v2 reply shoots after (GF p.7: Advance moves 6" and may still fire).
 const REPLY_ADVANCE_IN: f64 = 6.0;
 
-/// Inventory T05 — the nearest BASE-EDGE gap (inches) from `a_pos` (unit `si`'s models) to unit `ti`'s
-/// models through the recorded base shapes: the table's charge-distance measure (p.5). Empty side = INFINITY.
-fn base_gap_in(state: &State, a_pos: &[[f64; 3]], si: usize, ti: usize) -> f64 {
-    let shape = |u: usize| state.roster.profile.get(u)
-        .and_then(|&p| state.profiles.list.get(p))
-        .map_or(geom::BaseShape::Round, crate::state::Profile::shape);
-    geom::edge_gap_shaped_in(
-        a_pos, &state.radii[si], shape(si),
-        &state.positions[ti], &state.radii[ti], shape(ti),
-        DEFAULT_BASE_RADIUS_M,
-    )
-}
-
 /// Inventory T03: the enemy `e`'s live charge reach against `m` — the gate's own band (`charge` or the
 /// Rush band, Fast +4" / Slow -4" already in the bands), Melee-Shrouding folded.
 fn speed_charge_in(statics: &[UnitStatic], state: &State, e: usize, m: usize) -> f64 {
@@ -6008,7 +5996,7 @@ fn reply_threat_core(statics: &[UnitStatic], state: &State, player: i64, rules_e
             // T03-T06: off = the fixed 12" / 6" bands on the centre distance; on = the enemy's live bands,
             // the base-edge gap for the charge, and no charge against an Aircraft.
             let (charge_gap, charge_reach) = if o.by_speed {
-                (base_gap_in(state, &state.positions[e], e, m).max(0.0), speed_charge_in(statics, state, e, m))
+                (range_gap_in(state, &state.positions[e], e, m).max(0.0), speed_charge_in(statics, state, e, m))
             } else {
                 (d, REPLY_CHARGE_IN)
             };

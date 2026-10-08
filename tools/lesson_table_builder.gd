@@ -29,6 +29,11 @@ func _build() -> void:
 	var layout: Control = main.map_layout_editor
 	main._set_table_size(recipe.size_feet)
 	main.table.set_biome(recipe.biome)
+	# S-10: rulebook terrain through the game's own OPR autogen, frozen on a seed so the finale
+	# table is reproducible (the same seam the old board builder uses).
+	if recipe.has("autogen_seed"):
+		seed(int(recipe.autogen_seed))
+		layout._generate_terrain_layout()
 	if recipe.deployment >= 0:
 		layout.deployment_type = recipe.deployment
 		layout._rebuild_derived()
@@ -36,6 +41,9 @@ func _build() -> void:
 		layout.deployment_type_changed.emit(recipe.deployment)
 	if recipe.has("cells"):
 		_apply_cells(layout, recipe.cells)
+	if recipe.has("objectives_in"):
+		layout.set_objectives_from_table_inches(recipe.objectives_in)
+		layout.objectives_changed.emit(layout.mission_objectives)
 	var placements: Dictionary = {}
 	for side in recipe.sides:
 		var body := FileAccess.get_file_as_string(side.fixture)

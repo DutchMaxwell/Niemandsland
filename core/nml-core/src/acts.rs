@@ -36,6 +36,12 @@ pub struct Knobs {
     pub tail_cap_p1: i64,
     #[serde(default)]
     pub tail_cap_p2: i64,
+    /// Opponent-model diagnosis (c) — every root rollout stops RIGHT AFTER the opener (the candidate's
+    /// own activation and its Coordinate hand-off) and is priced there, mid-round, by the same blend +
+    /// net leaf: no scripted opponent reply, no scripted tail. A tail cap cannot say this (0 = no cap,
+    /// 1 = one scripted step). Research knob, default OFF (byte-identical).
+    #[serde(default)]
+    pub leaf_opener_only: bool,
     #[serde(default)]
     pub imagined_round_end: bool,
     #[serde(default)]
@@ -1456,6 +1462,7 @@ impl Default for Knobs {
             horizon: 2,
             tail_cap_p1: 0,
             tail_cap_p2: 0,
+            leaf_opener_only: false,
             imagined_round_end: true,
             depth_discount: 0.5,
             seat_mode: 0,

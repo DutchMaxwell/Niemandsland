@@ -3006,6 +3006,17 @@ func end_verdict(owners: Array, alive1: int, alive2: int) -> String:
 	return BattleSim.mission_winner(mission_scoring, owners, mission_vp, mission_markers, alive1, alive2)
 
 
+## The ONE mission-referee read the finale lesson verdict and the game summary share, so the two can
+## never name different winners (NML-1048 was exactly that drift). A live controller's end_verdict is
+## authoritative — it folds the role missions and the progressive VP ledger; only a room that never
+## built a controller (plain MP/hotseat) falls back to BattleSim's pure referee. `controller` stays
+## untyped so tests can pass a double. Returns "p1" / "p2" / "draw".
+static func winner_side(controller, owners: Array, alive1: int, alive2: int) -> String:
+	if controller != null:
+		return controller.end_verdict(owners, alive1, alive2)
+	return BattleSim.mission_winner(mission_scoring, owners, mission_vp, mission_markers, alive1, alive2)
+
+
 func _is_final_round() -> bool:
 	return game_rounds > 0 and _current_round() >= game_rounds
 

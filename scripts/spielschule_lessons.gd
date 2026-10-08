@@ -27,8 +27,10 @@ const _S02_STEPS := [
 		"rule": "p.6", "all": [{"check": "value_is", "args": {"key": "table_size", "value": Vector2(6, 4)}}]},
 	{"id": "biome", "text": "Pick a different battlefield biome.",
 		"rule": "", "all": [{"check": "value_changed", "args": {"key": "biome"}}]},
-	{"id": "terrain_piece", "text": "Turn on Terrain Mode and place one piece of scenery.",
-		"rule": "", "all": [{"check": "at_least", "args": {"key": "terrain_pieces", "n": 1}}]},
+	{"id": "terrain_piece", "text": "Turn on Terrain Mode and place at least three pieces of scenery, one of them a forest. (p.12)",
+		"rule": "p.12", "all": [
+			{"check": "at_least", "args": {"key": "terrain_pieces", "n": 3}},
+			{"check": "at_least", "args": {"key": "forest_pieces", "n": 1}}]},
 	{"id": "autogen", "text": "Open Map Layout and press Auto-Generate: the rulebook asks for 15 or more pieces. (p.6, p.12)",
 		"rule": "p.12", "all": [{"check": "at_least", "args": {"key": "layout_pieces", "n": 1}}]},
 	{"id": "deploy_type", "text": "In Map Layout, pick a deployment type.",
@@ -71,10 +73,12 @@ const _S04_STEPS := [
 const _S05_STEPS := [
 	{"id": "card", "text": "Right-click Alpha Squad and open its card: the Heavy Rifle shoots 24\". (p.5)",
 		"rule": "p.5", "all": [{"check": "flag", "args": {"key": "card_presented"}}]},
-	{"id": "shoot", "text": "Right-click Alpha Squad, choose Shoot, click the nearer Warriors squad. The further Warriors squad is over 24\" away — out of range.",
+	{"id": "shoot", "text": "Right-click Alpha Squad, choose Shoot, click the nearer Warriors squad: the Heavy Rifle reaches 24\". (p.5)",
 		"rule": "p.5", "all": [{"check": "counter_grew", "args": {"key": "shoot:alpha"}}]},
 	{"id": "read_log", "text": "Read the log: hits roll against Quality, the enemy blocks with Defense. (p.8)",
 		"rule": "p.8", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
+	{"id": "blocked", "text": "Try to shoot the Guardians squad behind the building: it stands in range, but the building blocks the line of sight — no line of sight, no shot. (p.5)",
+		"rule": "p.5", "all": [{"check": "counter_grew", "args": {"key": "log:nolos"}}]},
 ]
 
 
@@ -101,10 +105,14 @@ const _S06_STEPS := [
 const _S08_STEPS := [
 	{"id": "move_forest", "text": "Move Alpha Squad into the forest ahead. Forests are difficult terrain: no model moves more than 6\". (p.11)",
 		"rule": "p.11", "all": [{"check": "tag_terrain_is", "args": {"tag": "alpha", "type": 2}}]},
+	{"id": "difficult", "text": "Drag a model past 6\" through the forest: difficult terrain hard-caps the move at 6\". (p.11)",
+		"rule": "p.11", "all": [{"check": "counter_grew", "args": {"key": "move_capped"}}]},
 	{"id": "cover", "text": "The enemy stands inside a forest: most of it is in cover, so it gets +1 to its Defense rolls against shooting, then press Continue. (p.11)",
 		"rule": "p.11", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
 	{"id": "shoot_cover", "text": "Shoot the enemy in cover and watch the +1 in the log. (p.11)",
 		"rule": "p.11", "all": [{"check": "counter_grew", "args": {"key": "shoot:alpha"}}]},
+	{"id": "dangerous", "text": "Right-click Alpha Squad, pick Rush, then click the enemy: the shortest path crosses the dangerous ground between the two forests, and the engine rolls one test die per model — a 1 wounds it. (p.12)",
+		"rule": "p.12", "all": [{"check": "counter_grew", "args": {"key": "log:dangerous"}}]},
 	{"id": "wall", "text": "Ruins are area terrain: units can see into and out of them, but not through — nobody shoots through the ruins, then press Continue. (p.11)",
 		"rule": "p.11", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
 ]
@@ -129,6 +137,34 @@ const _S07_STEPS := [
 ]
 
 
+const _S09_STEPS := [
+	{"id": "left_marker", "text": "Move Alpha Squad within 3\" of the left marker. (p.6)",
+		"rule": "p.6", "all": [{"check": "obj_within", "args": {"tag": "alpha", "index": 0, "inches": 3.0}}]},
+	{"id": "right_marker", "text": "Move Bravo Squad within 3\" of the right marker — the enemy stands there too. (p.6)",
+		"rule": "p.6", "all": [{"check": "obj_within", "args": {"tag": "bravo", "index": 2, "inches": 3.0}}]},
+	{"id": "seize", "text": "The round ended: the left marker is seized because only your side is within 3\" — the right marker stays contested while both sides are near it, then press Continue. (p.6)",
+		"rule": "p.6", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
+	{"id": "outcome", "text": "A marker is seized when only one side is within 3\" at the end of a round. After 4 rounds, the side holding more markers wins, then press Continue. (p.6)",
+		"rule": "p.6", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
+]
+
+
+const _SSPELL_STEPS := [
+	{"id": "preview", "text": "Open the Archivist's card and hover a spell: a ring shows its range. (p.13)",
+		"rule": "p.13", "all": [{"check": "flag", "args": {"key": "spell_preview"}}]},
+	{"id": "cast", "text": "Right-click the Archivist, choose Cast, then pick the spell and a squad.",
+		"rule": "p.13", "all": [{"check": "counter_grew", "args": {"key": "cast:alpha"}}]},
+	{"id": "tokens", "text": "Explained, nothing to do here: casters gain a token every round and spend one to cast, and a spell succeeds on a 4+. Read it, then press Continue. (p.13)",
+		"rule": "p.13", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
+]
+
+
+const _S10_STEPS := [
+	{"id": "finish", "text": "Play the mission to the end: NACHTMAHR plays for real at its easiest grade, Dämmerung, over 4 rounds with three markers to hold. Win, lose or draw, the lesson ends when the game does. (p.6)",
+		"rule": "p.6", "all": [{"check": "flag", "args": {"key": "game_finished"}}]},
+]
+
+
 ## The ordered steps for a chapter id, or [] when the chapter has no lesson data yet (so it can
 ## never fake completion — see LessonRunner).
 static func steps_for(chapter_id: String) -> Array:
@@ -149,6 +185,12 @@ static func steps_for(chapter_id: String) -> Array:
 			return _S07_STEPS
 		"S-08":
 			return _S08_STEPS
+		"S-SPELL":
+			return _SSPELL_STEPS
+		"S-09":
+			return _S09_STEPS
+		"S-10":
+			return _S10_STEPS
 	return []
 
 
@@ -172,4 +214,10 @@ static func ai_mode(chapter_id: String) -> String:
 			return "hold"
 		"S-08":
 			return "hold"
+		"S-SPELL":
+			return "hold"
+		"S-09":
+			return "hold"
+		"S-10":
+			return "live"
 	return "none"

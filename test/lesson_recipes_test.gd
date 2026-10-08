@@ -186,16 +186,67 @@ func test_s08_recipe_is_a_terrain_table() -> void:
 	assert_array(tags).contains(["alpha", "target"])
 
 
+func test_s_spell_recipe_is_a_caster_table() -> void:
+	var recipe := LessonRecipes.recipe("S-SPELL")
+	assert_vector(recipe.get("size_feet", Vector2.ZERO)).is_equal(Vector2(4, 4))
+	assert_int(recipe.get("phase", 0)).is_equal(1)
+	assert_array(recipe.get("ai_slots", [])).contains([2])
+	var tags: Array[String] = []
+	var fixtures: Array[String] = []
+	for side in recipe.get("sides", []):
+		fixtures.append(String(side.get("fixture", "")))
+		for pick in side.get("units", []):
+			tags.append(String(pick.get("tag", "")))
+	assert_array(tags).contains(["alpha", "target"])
+	assert_bool(fixtures[0].ends_with("tutorial_army_caster.json")).is_true()
+
+
+func test_s09_recipe_is_a_marker_table() -> void:
+	var recipe := LessonRecipes.recipe("S-09")
+	assert_vector(recipe.get("size_feet", Vector2.ZERO)).is_equal(Vector2(4, 4))
+	assert_int(recipe.get("phase", 0)).is_equal(1)
+	assert_array(recipe.get("ai_slots", [])).contains([2])
+	var objs: Array = recipe.get("objectives_in", [])
+	assert_array(objs).contains([Vector2(-12, 0), Vector2(0, 0), Vector2(12, 0)])
+	var tags: Array[String] = []
+	for side in recipe.get("sides", []):
+		for pick in side.get("units", []):
+			tags.append(String(pick.get("tag", "")))
+	assert_array(tags).contains(["alpha", "bravo", "holder"])
+
+
+func test_s10_recipe_is_the_finale() -> void:
+	var recipe := LessonRecipes.recipe("S-10")
+	assert_vector(recipe.get("size_feet", Vector2.ZERO)).is_equal(Vector2(4, 4))
+	assert_int(recipe.get("phase", 0)).is_equal(1)
+	assert_array(recipe.get("ai_slots", [])).contains([2])
+	assert_bool(recipe.has("autogen_seed")).is_true()
+	assert_array(recipe.get("objectives_in", [])).has_size(3)
+	var tags: Array[String] = []
+	var fixtures: Array[String] = []
+	for side in recipe.get("sides", []):
+		fixtures.append(String(side.get("fixture", "")))
+		for pick in side.get("units", []):
+			tags.append(String(pick.get("tag", "")))
+	assert_array(tags).contains(["alpha", "bravo", "commander", "warriors_a", "warriors_b", "snipers"])
+	# D-TUT-8 (b): the player carries the schooled caster list into the finale; NACHTMAHR keeps the P2 list.
+	assert_array(fixtures).has_size(2)
+	assert_bool(fixtures[0].ends_with("tutorial_army_caster.json")).is_true()
+	assert_bool(fixtures[1].ends_with("tutorial_army_p2.json")).is_true()
+
+
 func test_recipe_schema_names_the_combat_seam_keys() -> void:
 	assert_bool(LessonRecipes.RECIPE_KEYS.has("ai_slots")).is_true()
 	assert_bool(LessonRecipes.RECIPE_KEYS.has("cells")).is_true()
+	assert_bool(LessonRecipes.RECIPE_KEYS.has("objectives_in")).is_true()
+	assert_bool(LessonRecipes.RECIPE_KEYS.has("autogen_seed")).is_true()
 	for key in ["shaken", "fatigued", "dead", "wounds"]:
 		assert_bool(LessonRecipes.UNIT_KEYS.has(key)) \
 			.override_failure_message("unit key '%s' must be part of the recipe schema" % key) \
 			.is_true()
 
 func test_every_recipe_pick_exists_in_its_fixture() -> void:
-	for id in ["S-01", "S-02", "S-03", "S-04", "S-05", "S-06", "S-07", "S-08"]:
+	for id in ["S-01", "S-02", "S-03", "S-04", "S-05", "S-06", "S-07", "S-08", "S-SPELL", "S-09", "S-10"]:
 		var recipe := LessonRecipes.recipe(id)
 		for side in recipe.get("sides", []):
 			var path := String(side.get("fixture", ""))
