@@ -17,6 +17,8 @@ decisions of each exploring seat are sampled from 0.75 * root prior + 0.25 * Dir
 OFF neither exists (= main's records). A gate/A-B reader drops games with `teacher.explored`.
   `--rs-value 1` (default 0): rows also carry an `rs_value` column (the search's rollout value per pool candidate, cands-aligned like
 `hand_score`, NaN off-pool, from `trace.rs`) and the game json `teacher.rs_value` true; OFF = today's record.
+  `--net-cand-weight F` / `--net-inc-weight F` (default 1.0): scale that seat's ONNX leaf value (the game's pick = rs + w * net); the game
+json `teacher` carries `net_cand_weight` / `net_inc_weight` only when != 1.0.
   teacher_record.py --blocks B.json --arm L|T|L_tray|C|I --out D --bank BANK --repo WT [--knobs grade.json]
                     [--tree-budget 128] [--deadline-us 0] [--deep-pair 10,3] [--seats 1,2] [--dice 0,1] [--workers N]
                     [--net-cand X.onnx --net-inc Y.onnx]
@@ -156,8 +158,8 @@ lab._PROBE_ARM_KWARGS, lab.arm_kwargs = lab.arm_kwargs, lambda row, us: arm_kwar
 def _init(cfg):
     import nml_core as nm
     _W.update(cfg)
-    nets = {s: lab2_net.ShippedNet(cfg["repo"], **({"onnx": p, "sha256": lab2_net._sha256(p)} if p else {}))
-            for s, p in ((1, cfg.get("net_cand", "")), (2, cfg.get("net_inc", "")))}
+    nets = {s: lab2_net.ShippedNet(cfg["repo"], weight=wt, **({"onnx": p, "sha256": lab2_net._sha256(p)} if p else {}))
+            for s, p, wt in ((1, cfg.get("net_cand", ""), cfg.get("net_cand_weight", 1.0)), (2, cfg.get("net_inc", ""), cfg.get("net_inc_weight", 1.0)))}
     return dict(cfg, nm=nm, nets=nets, ctx=lab.run_context(nm, cfg["prereg"], nets[1]))
 
 
@@ -219,7 +221,9 @@ def _work(w, cid, rows):
                                   if w.get("seat_knobs") else {}),
                                **({"explored": True, "explore_seed": w["explore_seed"], "explore_seats": sorted(w.get("explore_seats", (1, 2)))}
                                   if w.get("explore_seed", -1) >= 0 else {}),
-                               **({"rs_value": True} if w.get("rs_value") else {})}
+                               **({"rs_value": True} if w.get("rs_value") else {}),
+                               **({"net_cand_weight": w["net_cand_weight"]} if w.get("net_cand_weight", 1.0) != 1.0 else {}),
+                               **({"net_inc_weight": w["net_inc_weight"]} if w.get("net_inc_weight", 1.0) != 1.0 else {})}
             lab.write_row(w["out"], meta)
         t = json.load(open(base + ".json"))
         out.append({"row_id": row["row_id"], "valid": t["valid"], "rows": t["teacher"]["rows"], "tree_rows": t["teacher"]["tree_rows"]})
@@ -248,8 +252,8 @@ def main(argv=None):
     for k, d in (("--blocks", None), ("--out", None), ("--bank", None), ("--repo", None), ("--arm", "L"), ("--knobs", ""),
                  ("--deep-pair", "10,3"), ("--seats", "1,2"), ("--dice", "0,1"), ("--prereg-sha256", "none"),
                  ("--net-cand", ""), ("--net-inc", ""), ("--cand-knobs", ""), ("--cand-preset", ""), ("--knobs-seat1", ""), ("--knobs-seat2", ""),
-                 ("--explore-seed", -1), ("--rs-value", 0), ("--explore-seats", "1,2"), ("--tree-budget", 128), ("--deadline-us", 0), ("--workers", 1)):
-        ap.add_argument(k, default=d, required=d is None, **({"type": int} if isinstance(d, int) else {}))
+                 ("--explore-seed", -1), ("--rs-value", 0), ("--net-cand-weight", 1.0), ("--net-inc-weight", 1.0), ("--explore-seats", "1,2"), ("--tree-budget", 128), ("--deadline-us", 0), ("--workers", 1)):
+        ap.add_argument(k, default=d, required=d is None, **({"type": int} if isinstance(d, int) else {"type": float} if isinstance(d, float) else {}))
     a = ap.parse_args(argv)
     seats, dice = {int(x) for x in a.seats.split(",")}, {int(x) for x in a.dice.split(",")}
     rows = [r for r in lab.game_rows(json.load(open(a.blocks)), (a.arm,)) if r["seat"] in seats and r["d"] in dice]
@@ -257,7 +261,8 @@ def main(argv=None):
            "pair": tuple(int(x) for x in a.deep_pair.split(",")), "allowance": a.deadline_us, "prereg": a.prereg_sha256,
            "net_cand": a.net_cand, "net_inc": a.net_inc, "cand_knobs": resolve_cand(a.cand_knobs, a.cand_preset, a.arm),
            "seat_knobs": {s: b for s, b in ((1, resolve_cand(a.knobs_seat1, "", a.arm)), (2, resolve_cand(a.knobs_seat2, "", a.arm))) if b},
-           "explore_seed": a.explore_seed, "explore_seats": tuple(int(x) for x in a.explore_seats.split(",")), "rs_value": bool(a.rs_value)}
+           "explore_seed": a.explore_seed, "explore_seats": tuple(int(x) for x in a.explore_seats.split(",")), "rs_value": bool(a.rs_value),
+           "net_cand_weight": a.net_cand_weight, "net_inc_weight": a.net_inc_weight}
     if cfg["seat_knobs"] and cfg["cand_knobs"]:
         raise SystemExit("--knobs-seat1/2 and --cand-knobs/--cand-preset both set a seat's bundle; pick one")
     os.makedirs(a.out, exist_ok=True)
