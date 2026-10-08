@@ -4115,6 +4115,9 @@ fn survivor_attacks(p: &ShootProfile, alive: i64, model_count: i64, bearers_last
         bearer_scaled_attacks(p, alive, model_count, alive)
     } else {
         effective_attacks(p.attacks, alive, model_count)
+    }
+}
+
 /// Inventory C02 (GF/AoF v3.5.1 p.8: "All models in a unit with line of sight to the target, and that have a
 /// weapon that is within range of it, may fire at it") — rescale the attacks `profiles_of` just filled so a
 /// weapon counts only the models of `a_pos` whose OWN nearest distance to `b_pos` (centre measure, the same as
