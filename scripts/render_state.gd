@@ -8,7 +8,7 @@ extends RefCounted
 ##
 ## Layers, lowest first. A property no layer sets falls back to the value the Environment had when a layer first
 ## touched it (the scene's own value).
-const LAYERS: Array[String] = ["preset", "light", "reference", "world", "grading", "intro"]
+const LAYERS: Array[String] = ["preset", "light", "reference", "world", "grading", "intro", "calm"]
 
 var _env: Environment
 var _base := {}
