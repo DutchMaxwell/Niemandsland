@@ -868,6 +868,7 @@ impl Core {
         m.insert("reply_v2".into(), self.knobs.reply_v2.into());
         m.insert("menu_all_targets".into(), (self.knobs.menu_all_targets as i64).into());
         m.insert("menu_advance_obj_shoot".into(), self.knobs.menu_advance_obj_shoot.into());
+        m.insert("charge_needs_path".into(), self.knobs.charge_needs_path.into());
         m.insert("reply_skip_activated".into(), self.knobs.reply_skip_activated.into());
         m.insert("reply_hold_gate".into(), self.knobs.reply_hold_gate.into());
         m.insert("reply_threat_by_speed".into(), self.knobs.reply_threat_by_speed.into());
