@@ -28,6 +28,13 @@ class FakeDock extends Node:
 	func get_presented_unit() -> GameUnit:
 		return presented
 
+class FakeSC extends Node:
+	func nearest_melee_gap_in(_a: GameUnit, _b: GameUnit) -> float:
+		return 3.0
+
+class FakeLog extends Node:
+	signal entry_added(entry: Dictionary)
+
 class FakeTable extends Node:
 	var table_size := Vector2(4, 4)
 	var biome := "temperate_grassland"
@@ -40,6 +47,7 @@ class FakeLayout extends Node:
 class FakeMain extends Node:
 	signal human_attack_resolved(attacker: GameUnit, melee: bool)
 	signal human_cast_resolved(unit: GameUnit)
+	var solo_controller: Node = null
 
 
 func _unit(tag: String, positions: Array[Vector3]) -> GameUnit:
@@ -229,3 +237,35 @@ func test_card_presented_reads_the_unit_dock() -> void:
 	assert_bool(facts.snapshot().get("card_presented", true)).is_false()
 	dock.presented = _unit("alpha", [])
 	assert_bool(facts.snapshot().get("card_presented", false)).is_true()
+
+
+func test_enemy_gap_in_reads_the_solo_controller() -> void:
+	var sc: FakeSC = auto_free(FakeSC.new())
+	add_child(sc)
+	var main: FakeMain = auto_free(FakeMain.new())
+	main.solo_controller = sc
+	var army: FakeArmy = auto_free(FakeArmy.new())
+	var alpha := _unit("alpha", [Vector3.ZERO])
+	alpha.unit_properties["player_id"] = 1
+	var target := _unit("target", [Vector3(1.0, 0, 0)])
+	target.unit_properties["player_id"] = 2
+	army.units = [alpha, target]
+	var facts := Facts.new()
+	facts.setup({"army_manager": army, "main": main})
+	var snap := facts.snapshot()
+	assert_float(snap.tags.alpha.enemy_gap_in).is_equal(3.0)
+	assert_float(snap.tags.target.enemy_gap_in).is_equal(3.0)
+
+
+func test_battle_log_marks_pile_in_and_consolidation() -> void:
+	var log_node: FakeLog = auto_free(FakeLog.new())
+	add_child(log_node)
+	var facts := Facts.new()
+	facts.setup({"battle_log": log_node})
+	assert_int(facts.snapshot().counters.get("log:pile_in", 0)).is_equal(0)
+	log_node.entry_added.emit({"text": "Warriors: 3 models pile in up to 3\" (GF v3.5.1 p.9)"})
+	log_node.entry_added.emit({"text": "Battle Brothers moves back 1\" (consolidation — GF v3.5.1 p.9)"})
+	var snap := facts.snapshot()
+	assert_int(snap.counters.get("log:pile_in", 0)).is_equal(1)
+	assert_int(snap.counters.get("log:consolidate", 0)).is_equal(1)
+	assert_int(snap.counters.get("log:other", 0)).is_equal(0)

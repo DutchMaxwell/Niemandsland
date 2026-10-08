@@ -114,8 +114,19 @@ func test_tag_flag() -> void:
 	assert_bool(LessonChecks.passes(step, {"tags": {}}, base)).is_false()
 
 
+func test_gap_at_most() -> void:
+	var step := _step("gap_at_most", {"tag": "target", "inches": 1.0})
+	var base := {"tags": {"target": {"enemy_gap_in": 8.0}}}
+	assert_bool(LessonChecks.passes(step, base, base)).is_false()
+	var now := {"tags": {"target": {"enemy_gap_in": 0.5}}}
+	assert_bool(LessonChecks.passes(step, now, base)).is_true()
+	# A tag the snapshot does not carry can never satisfy the check.
+	assert_bool(LessonChecks.passes(step, {"tags": {}}, base)).is_false()
+
+
 func test_missing_tag_is_false_for_unit_checks() -> void:
 	var base := {"tags": {}}
 	var now := {"tags": {}}
 	assert_bool(LessonChecks.passes(_step("unit_selected_whole", {"tag": "alpha"}), now, base)).is_false()
 	assert_bool(LessonChecks.passes(_step("unit_moved", {"tag": "alpha", "inches": 1.0}), now, base)).is_false()
+	assert_bool(LessonChecks.passes(_step("gap_at_most", {"tag": "alpha", "inches": 1.0}), now, base)).is_false()
