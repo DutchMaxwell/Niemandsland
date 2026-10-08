@@ -57,9 +57,12 @@ func _unit_for(pid: int, unit_name: String) -> GameUnit:
 
 func test_human_peer_slot_is_never_the_ai(timeout := 120000) -> void:
 	var u2 := _unit_for(2, "GuestArmy")
-	# SOLO baseline: offline, the implicit "P2 is NACHTMAHR" default stands.
+	# SOLO baseline: offline, an explicitly designated P2 is NACHTMAHR; without the tick nobody is (plan 2.2).
 	_main.solo_ai_slots = {}
+	assert_bool(_main._solo_is_ai_unit(u2)).is_false()
+	_main.solo_ai_slots = {2: true}
 	assert_bool(_main._solo_is_ai_unit(u2)).is_true()
+	_main.solo_ai_slots = {}
 	# Multiplayer, no designation: NOBODY is an AI unit — this implicit branch WAS the hijack.
 	_go_multiplayer({1: 1})
 	assert_bool(_main._solo_is_ai_unit(u2)) \
@@ -88,9 +91,10 @@ func test_no_controller_summoned_in_a_human_room(timeout := 120000) -> void:
 func test_radial_combat_hidden_in_a_human_room(timeout := 120000) -> void:
 	var u1 := _unit_for(1, "HostArmy")
 	var _u2 := _unit_for(2, "GuestArmy")
-	# Solo baseline: Shoot/Fight available against the AI's living units.
-	_main.solo_ai_slots = {}
+	# Solo baseline: Shoot/Fight available against the designated AI's living units.
+	_main.solo_ai_slots = {2: true}
 	assert_bool(_main.solo_combat_available(u1)).is_true()
+	_main.solo_ai_slots = {}
 	# Human room: no automation-driven enemy → the solo entries stay out of the radial.
 	_go_multiplayer({1: 1, GUEST_PEER: 2})
 	assert_bool(_main.solo_combat_available(u1)) \

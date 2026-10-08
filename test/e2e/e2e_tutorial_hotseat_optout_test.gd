@@ -1,17 +1,15 @@
 extends GdUnitTestSuite
 ## Bug lane C2 — the tutorial table is a hotseat table, never a NACHTMAHR game.
-## RULES_AUTOMATION_PLAN §2 B1: with no AI designation, main._solo_is_ai_unit's implicit
-## "no designation -> player 2 is the AI" branch answers true, so on the tutorial board (two
-## armies, no designation) player 1's radial offers solo Shoot/Fight and the first click builds the
-## SoloController, which then activates player 2 as NACHTMAHR. The tutorial-only opt-out
-## (`_solo_hotseat`, set by the tutorial start) switches the IMPLICIT branch off for that table;
-## an explicit designation still wins, and the flag lives on the Main instance, so leaving through
-## the main menu (a scene change) starts every later game without it.
+## RULES_AUTOMATION_PLAN §2 B1 (plan step 2.2): the tutorial-only opt-out (`_solo_hotseat`) became
+## the general rule — with no AI designation nobody is NACHTMAHR, so on the tutorial board (two
+## armies, no designation) player 1's radial offers no solo Shoot/Fight and nothing builds the
+## SoloController. An explicit designation still gets the AI, and a later game on a NEW Main
+## instance (the main menu is a scene change) starts clean.
 ##
 ## Real: scenes/main.tscn, the real _start_tutorial (director + overlay; no bundled board load —
 ## `_tutorial_board_pending` stays false, so the director runs on the constructed units), the real
 ## radial gate solo_combat_available and the real "solo_shoot" entry solo_begin_targeting.
-## Plan B1 itself (hotseat outside the tutorial) stays RED in e2e_local_table_no_implicit_ai_test.gd.
+## The same rule on a plain local table is pinned in e2e_local_table_no_implicit_ai_test.gd.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 
@@ -69,8 +67,7 @@ func test_the_tutorial_table_offers_no_solo_combat_and_summons_no_nachtmahr(time
 	assert_bool(_main._solo_alternation_active()).is_false()
 
 
-## An explicit designation on the tutorial table (ticking P2's NACHTMAHR box) still gets the AI —
-## the opt-out only retires the implicit default.
+## An explicit designation on the tutorial table (ticking P2's NACHTMAHR box) still gets the AI.
 func test_an_explicit_designation_on_the_tutorial_table_still_gets_nachtmahr(timeout := 120000) -> void:
 	var pair: Array = await _tutorial_table()
 	_main.solo_ai_slots = {2: true}
@@ -81,20 +78,17 @@ func test_an_explicit_designation_on_the_tutorial_table_still_gets_nachtmahr(tim
 
 
 ## No leak: tutorial -> main menu -> a solo game. The main menu is a scene change, so the next
-## game runs on a NEW Main instance; it gets NACHTMAHR both by designation and by the implicit
-## solo default, exactly as before this change.
+## game runs on a NEW Main instance; it gets NACHTMAHR only by designation (the tick).
 func test_a_solo_game_after_the_tutorial_still_gets_nachtmahr(timeout := 120000) -> void:
 	await _tutorial_table()
-	assert_bool(_main._solo_hotseat).override_failure_message("fixture: the tutorial start sets the opt-out").is_true()
 	if is_instance_valid(_main._tutorial_director):
 		_main._tutorial_director.queue_free()
 	var runner2 := scene_runner(E2EBoot.MAIN_SCENE)   # what the main menu's change_scene_to_file does
 	var main2: Node = runner2.scene()
 	await runner2.simulate_frames(4)
-	assert_bool(main2._solo_hotseat).override_failure_message("the tutorial opt-out leaked into the next game").is_false()
 	var q1 := _register(main2, 1, "Rifles", Vector3(-0.3, 0.0, 0.0))
 	var q2 := _register(main2, 2, "Raiders", Vector3(0.3, 0.0, 0.0))
-	assert_bool(main2._solo_is_ai_unit(q2)).override_failure_message("the implicit solo default must stand in the next game").is_true()
+	assert_bool(main2._solo_is_ai_unit(q2)).override_failure_message("no implicit NACHTMAHR without the tick in the next game").is_false()
 	main2.solo_ai_slots = {2: true}   # what the Solo quick start's AI-list import writes
 	assert_bool(main2._solo_is_ai_unit(q2)).is_true()
 	assert_bool(main2.solo_combat_available(q1)).is_true()
