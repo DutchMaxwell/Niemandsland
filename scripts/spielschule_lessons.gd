@@ -149,6 +149,22 @@ const _S09_STEPS := [
 ]
 
 
+const _SSPELL_STEPS := [
+	{"id": "preview", "text": "Open the Archivist's card and hover a spell: a ring shows its range. (p.13)",
+		"rule": "p.13", "all": [{"check": "flag", "args": {"key": "spell_preview"}}]},
+	{"id": "cast", "text": "Right-click the Archivist, choose Cast, then pick the spell and a squad.",
+		"rule": "p.13", "all": [{"check": "counter_grew", "args": {"key": "cast:alpha"}}]},
+	{"id": "tokens", "text": "Explained, nothing to do here: casters gain a token every round and spend one to cast, and a spell succeeds on a 4+. Read it, then press Continue. (p.13)",
+		"rule": "p.13", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
+]
+
+
+const _S10_STEPS := [
+	{"id": "finish", "text": "Play the mission to the end: NACHTMAHR plays for real at its easiest grade, Dämmerung, over 4 rounds with three markers to hold. Win, lose or draw, the lesson ends when the game does. (p.6)",
+		"rule": "p.6", "all": [{"check": "flag", "args": {"key": "game_finished"}}]},
+]
+
+
 ## The ordered steps for a chapter id, or [] when the chapter has no lesson data yet (so it can
 ## never fake completion — see LessonRunner).
 static func steps_for(chapter_id: String) -> Array:
@@ -169,8 +185,12 @@ static func steps_for(chapter_id: String) -> Array:
 			return _S07_STEPS
 		"S-08":
 			return _S08_STEPS
+		"S-SPELL":
+			return _SSPELL_STEPS
 		"S-09":
 			return _S09_STEPS
+		"S-10":
+			return _S10_STEPS
 	return []
 
 
@@ -194,6 +214,10 @@ static func ai_mode(chapter_id: String) -> String:
 			return "hold"
 		"S-08":
 			return "hold"
+		"S-SPELL":
+			return "hold"
 		"S-09":
 			return "hold"
+		"S-10":
+			return "live"
 	return "none"

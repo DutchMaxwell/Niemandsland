@@ -2748,6 +2748,21 @@ func _solo_player_label(pid: int) -> String:
 	return "P%d" % pid
 
 
+## The plain human verdict for the finished mission — "Victory", "Defeat" or "Draw" — decided by the
+## SAME referee the result JSON uses (SoloController.end_verdict / BattleSim.mission_winner). The
+## finale lesson card reads this so it can never announce a result the summary contradicts.
+func _solo_lesson_verdict() -> String:
+	var owners: Array = terrain_overlay.get_objective_owners() if terrain_overlay != null else []
+	var winner_side: String = SoloController.winner_side(solo_controller, owners,
+		_solo_side_alive(1), _solo_side_alive(2))
+	var human_slot := 2 if _solo_ai_slot() == 1 else 1
+	if winner_side == ("p%d" % human_slot):
+		return "Victory"
+	elif winner_side == ("p%d" % (2 if human_slot == 1 else 1)):
+		return "Defeat"
+	return "Draw"
+
+
 ## End-of-game summary (goal 003 P2): after SOLO_GAME_ROUNDS the match ends — BattleSim.mission_winner
 ## names the winner from the mission's OWN currency (NML-1048), never from a second count taken here.
 ## A battle-log block + a results dialog; the table stays as-is (the Next-Round button still works for
@@ -2782,9 +2797,8 @@ func _solo_show_game_summary() -> void:
 	# over 633 self-play games, 55 of the 233 round_vp ones named the LOSING side (seed 3003000: board
 	# 1:2 markers, ledger 6:5 VP, referee "p1", summary "P2 wins").
 	var summary_owners: Array = terrain_overlay.get_objective_owners() if terrain_overlay != null else []
-	var winner_side: String = solo_controller.end_verdict(summary_owners, _solo_side_alive(1), _solo_side_alive(2)) \
-		if solo_controller != null else BattleSim.mission_winner(SoloController.mission_scoring, summary_owners,
-			SoloController.mission_vp, SoloController.mission_markers, _solo_side_alive(1), _solo_side_alive(2))   # the referee speaks P1/P2, never "you"/"AI"
+	var winner_side: String = SoloController.winner_side(solo_controller, summary_owners,
+		_solo_side_alive(1), _solo_side_alive(2))   # the referee speaks P1/P2, never "you"/"AI"
 	var human_won: bool = winner_side == ("p%d" % human_slot)
 	var ai_won: bool = winner_side == ("p%d" % ai_slot)
 	var verdict: String = win_a if human_won else (win_b if ai_won else "Draw")
@@ -17359,7 +17373,8 @@ func _start_lesson(_object_count: int) -> void:
 	facts.setup({"camera_pivot": camera_pivot, "object_manager": object_manager,
 		"army_manager": opr_army_manager, "table": table,
 		"map_layout": map_layout_editor, "left_panel": left_panel_scroll, "main": self,
-		"unit_dock": unit_dock, "battle_log": battle_log, "terrain_overlay": terrain_overlay})
+		"unit_dock": unit_dock, "battle_log": battle_log, "terrain_overlay": terrain_overlay,
+		"range_rings": range_ring_controller})
 	if _scenario_mode:
 		# D4: a lesson always plays the gentlest ladder grade, in memory only — the player's saved
 		# grade (SoloGrade.save) is deliberately never written from a lesson.
@@ -17389,7 +17404,9 @@ func _start_lesson(_object_count: int) -> void:
 	card.leave_pressed.connect(_leave_lesson)
 	card.stay_pressed.connect(func() -> void: card.hide())
 	runner.step_changed.connect(card.show_step)
-	runner.chapter_completed.connect(func(_id: String) -> void: card.show_complete(title))
+	runner.chapter_completed.connect(func(id: String) -> void:
+		var verdict := String(facts.snapshot().get("verdict", "")) if id == "S-10" else ""
+		card.show_complete(title, verdict))
 	runner.begin()
 
 

@@ -9,7 +9,8 @@ extends RefCounted
 ## `cells`: terrain rectangles painted into the layout's free cells (world-centred inches; type is
 ## the TerrainType enum: 1 ruins, 2 forest, 3 container, 4 dangerous).
 ## `objectives_in`: mission-marker positions in table-centred inches (S-09).
-const RECIPE_KEYS := ["size_feet", "biome", "deployment", "phase", "round", "sides", "ai_slots", "cells", "objectives_in"]
+## `autogen_seed`: run the game's OPR terrain autogen frozen on this seed (S-10).
+const RECIPE_KEYS := ["size_feet", "biome", "deployment", "phase", "round", "sides", "ai_slots", "cells", "objectives_in", "autogen_seed"]
 const UNIT_KEYS := ["name", "nth", "tag", "at_in", "label", "shaken", "fatigued", "dead", "wounds"]
 
 static func recipe(id: String) -> Dictionary:
@@ -70,6 +71,13 @@ static func recipe(id: String) -> Dictionary:
 					{"name": "Battle Brothers", "nth": 1, "tag": "alpha", "label": "Alpha Squad", "at_in": Vector2(0, 14)}]},
 				{"player": 2, "fixture": "res://assets/tutorial/tutorial_army_p2.json", "units": [
 					{"name": "Warriors", "nth": 2, "tag": "target", "label": "Nachtmahr Squad", "at_in": Vector2(0, -8)}]}]}
+	if id == "S-SPELL":
+		return {"size_feet": Vector2(4, 4), "biome": "temperate_grassland",
+			"deployment": -1, "phase": 1, "round": 1, "ai_slots": [2], "sides": [
+				{"player": 1, "fixture": "res://assets/tutorial/tutorial_army_caster.json", "units": [
+					{"name": "Master Brother", "nth": 1, "tag": "alpha", "label": "Archivist", "at_in": Vector2(0, 10)}]},
+				{"player": 2, "fixture": "res://assets/tutorial/tutorial_army_p2.json", "units": [
+					{"name": "Warriors", "nth": 1, "tag": "target", "at_in": Vector2(0, -6)}]}]}
 	if id == "S-09":
 		return {"size_feet": Vector2(4, 4), "biome": "temperate_grassland",
 			"deployment": -1, "phase": 1, "round": 1, "ai_slots": [2],
@@ -79,4 +87,17 @@ static func recipe(id: String) -> Dictionary:
 					{"name": "Battle Brothers", "nth": 2, "tag": "bravo", "label": "Bravo Squad", "at_in": Vector2(12, 10)}]},
 				{"player": 2, "fixture": "res://assets/tutorial/tutorial_army_p2.json", "units": [
 					{"name": "Warriors", "nth": 1, "tag": "holder", "at_in": Vector2(12, -3)}]}]}
+	if id == "S-10":
+		return {"size_feet": Vector2(4, 4), "biome": "temperate_grassland",
+			"deployment": 1, "phase": 1, "round": 1, "ai_slots": [2],
+			"autogen_seed": 20260710,
+			"objectives_in": [Vector2(-12, 0), Vector2(0, 0), Vector2(12, 0)], "sides": [
+				{"player": 1, "fixture": "res://assets/tutorial/tutorial_army_caster.json", "units": [
+					{"name": "Battle Brothers", "nth": 1, "tag": "alpha", "label": "Alpha Squad", "at_in": Vector2(-12, 14)},
+					{"name": "Battle Brothers", "nth": 2, "tag": "bravo", "label": "Bravo Squad", "at_in": Vector2(12, 14)},
+					{"name": "Master Brother", "nth": 1, "tag": "commander", "at_in": Vector2(0, 16)}]},
+				{"player": 2, "fixture": "res://assets/tutorial/tutorial_army_p2.json", "units": [
+					{"name": "Warriors", "nth": 1, "tag": "warriors_a", "at_in": Vector2(-8, -14)},
+					{"name": "Warriors", "nth": 2, "tag": "warriors_b", "at_in": Vector2(8, -14)},
+					{"name": "Snipers", "nth": 1, "tag": "snipers", "at_in": Vector2(0, -16)}]}]}
 	return {}

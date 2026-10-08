@@ -296,8 +296,8 @@ func _show_tutorial_picker(progress: TutorialProgress, track: Array) -> void:
 
 
 ## GAME SCHOOL (working name "Spielschule") pressed: open the chapter list. The full game-school
-## track — ten isolated, repeatable lessons, each loading its own prepared scene, plus the reserved
-## spell slot. Chapters without a bundled scenario yet stay disabled ("scenario coming soon").
+## track — eleven isolated, repeatable lessons, each loading its own prepared scene. Chapters
+## without a bundled scenario yet stay disabled ("scenario coming soon").
 func _on_spielschule_pressed() -> void:
 	var progress := SpielschuleProgress.new()
 	progress.load_from_disk()
@@ -310,7 +310,7 @@ func _on_spielschule_pressed() -> void:
 	vbox.add_theme_constant_override("separation", HudTokens.SECTION_SEP)
 
 	var intro := Label.new()
-	intro.text = "Ten short lessons — play them in any order, replay any time."
+	intro.text = "Eleven short lessons — play them in any order, replay any time."
 	intro.theme_type_variation = HouseStyle.CAPTION
 	intro.autowrap_mode = TextServer.AUTOWRAP_WORD
 	vbox.add_child(intro)

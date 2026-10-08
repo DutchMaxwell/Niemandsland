@@ -54,6 +54,13 @@ func test_step_and_complete_states() -> void:
 	assert_bool(font.has_char("✓".unicode_at(0))).is_true()
 
 
+func test_complete_state_shows_the_mission_verdict() -> void:
+	var card := _card()
+	card.chapter_title = "Finale"
+	card.show_complete("Finale", "Victory")
+	assert_str(card.get_node("Content/StepText").text).is_equal("Chapter complete ✓\nVictory")
+
+
 func test_each_action_emits_its_signal() -> void:
 	var card := _card()
 	var events: Array[String] = []
