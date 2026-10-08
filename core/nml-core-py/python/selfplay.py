@@ -2387,6 +2387,8 @@ KNOB_PRESETS: dict[str, dict[str, Any]] = {
     "reply_net": {"reply_by_net": True, "reply_top_k": 3, "reply_horizon": 1},
     # inventory C12: a joined hero counts in the unit size for half strength and morale (GF/AoF p.14)
     "hero_size": {"hero_counts_in_size": True},
+    # inventory C08: a Shaken Fearless unit keeps its 4+ roll in the imagined morale test (p.13), as the table does
+    "fearless_shaken": {"fearless_roll_when_shaken": True},
     # inventory T03-T06: the enemy's reply threat by its real charge/advance band, base gap, no Aircraft charge
     "reply_speed": {"reply_threat_by_speed": True},
     # inventory C01/C27: the imagined shot measures range base edge to base edge, as the table does

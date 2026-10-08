@@ -299,6 +299,7 @@ pub fn seams_of(knobs: &Knobs) -> Seams {
         morale_by_probability: knobs.morale_by_probability,
         fire_in_range_only: knobs.fire_in_range_only,
         hero_counts_in_size: knobs.hero_counts_in_size,
+        fearless_roll_when_shaken: knobs.fearless_roll_when_shaken,
         range_by_base_edge: knobs.range_by_base_edge,
         reply_v2: knobs.reply_v2,
         reply_skip_activated: knobs.reply_skip_activated,

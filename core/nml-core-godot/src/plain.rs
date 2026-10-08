@@ -1066,6 +1066,7 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         no_end_threat: d.get("no_end_threat").map(|v| flag(&v)).unwrap_or(dflt.no_end_threat),
         fire_in_range_only: d.get("fire_in_range_only").map(|v| flag(&v)).unwrap_or(dflt.fire_in_range_only),
         hero_counts_in_size: d.get("hero_counts_in_size").map(|v| flag(&v)).unwrap_or(dflt.hero_counts_in_size),
+        fearless_roll_when_shaken: d.get("fearless_roll_when_shaken").map(|v| flag(&v)).unwrap_or(dflt.fearless_roll_when_shaken),
         range_by_base_edge: d.get("range_by_base_edge").map(|v| flag(&v))
             .unwrap_or(dflt.range_by_base_edge),
         morale_by_probability: d.get("morale_by_probability").map(|v| flag(&v))

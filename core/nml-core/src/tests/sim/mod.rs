@@ -1737,6 +1737,7 @@ mod growth_markers_epoch6;
 mod growth_place_pins;
 mod half_primitives;
 mod hero_size;
+mod fearless_shaken;
 mod hit_and_run;
 mod hit_and_run_boost_band;
 mod grounded_reinforcement;

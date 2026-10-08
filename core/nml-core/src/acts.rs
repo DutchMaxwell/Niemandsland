@@ -255,6 +255,12 @@ pub struct Knobs {
     /// morale / rout thresholds read host + hero, not the host alone. Research knob, default OFF (byte-identical).
     #[serde(default)]
     pub hero_counts_in_size: bool,
+    /// Inventory C08 — a Shaken unit "always fails" its morale test, but the failure is still a failed test, so
+    /// Fearless (all models) rolls its 4+ and passes half the time (p.13), as the table's dice already do
+    /// (`dice::resolve_morale_with_tray`). With the knob on the imagined test of a Shaken Fearless unit fails with chance 0.5
+    /// (the dither stands in for the die) instead of for certain. Research knob, default OFF (byte-identical).
+    #[serde(default)]
+    pub fearless_roll_when_shaken: bool,
     /// Inventory C01/C27 — the AI's imagination measures shooting range (and the over-9" modifiers)
     /// base edge to base edge, as the table does, instead of model centre to centre. Research knob
     /// for the A/B, default OFF (byte-identical).
@@ -1519,6 +1525,7 @@ impl Default for Knobs {
             no_end_threat: false,
             fire_in_range_only: false,
             hero_counts_in_size: false,
+            fearless_roll_when_shaken: false,
             range_by_base_edge: false,
             morale_by_probability: false,
             reply_v2: false,
