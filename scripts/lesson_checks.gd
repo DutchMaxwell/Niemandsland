@@ -12,6 +12,7 @@ const KNOWN := [
 	"camera_zoomed",
 	"camera_panned",
 	"counter_grew",
+	"counter_at_least",
 	"flag",
 	"at_least",
 	"value_changed",
@@ -19,6 +20,7 @@ const KNOWN := [
 	"unit_selected_whole",
 	"unit_moved",
 	"tag_flag",
+	"gap_at_most",
 ]
 
 
@@ -57,6 +59,10 @@ static func _passes_one(check_name: String, args: Dictionary, now: Dictionary, b
 			var now_counters: Dictionary = now.get("counters", {})
 			var base_counters: Dictionary = base.get("counters", {})
 			return int(now_counters.get(key, 0)) > int(base_counters.get(key, 0))
+		"counter_at_least":
+			var key_abs := String(args.get("key", ""))
+			var now_abs: Dictionary = now.get("counters", {})
+			return int(now_abs.get(key_abs, 0)) >= int(args.get("n", 1))
 		"flag":
 			return bool(now.get(String(args.get("key", "")), false))
 		"at_least":
@@ -87,4 +93,10 @@ static func _passes_one(check_name: String, args: Dictionary, now: Dictionary, b
 			if not now_tags3.has(tag3):
 				return false
 			return now_tags3[tag3].get(String(args.get("key", "")), null) == args.get("value")
+		"gap_at_most":
+			var tag4 := String(args.get("tag", ""))
+			var now_tags4: Dictionary = now.get("tags", {})
+			if not now_tags4.has(tag4):
+				return false
+			return float(now_tags4[tag4].get("enemy_gap_in", INF)) <= float(args.get("inches", 0.0))
 	return false

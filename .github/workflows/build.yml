@@ -671,16 +671,18 @@ jobs:
           echo "OK: no .debug file in dist"
 
       - name: Package per-platform zips
+        # Fixed names (no version): .../releases/latest/download/Niemandsland-<os>.zip stays valid across releases;
+        # the in-game updater picks the asset by its OS keyword, so it is unaffected.
         run: |
-          (cd dist/linux && zip -r "../Niemandsland-${GITHUB_REF_NAME}-linux.zip" .)
-          (cd dist/windows && zip -r "../Niemandsland-${GITHUB_REF_NAME}-windows.zip" .)
+          (cd dist/linux && zip -r "../Niemandsland-linux.zip" .)
+          (cd dist/windows && zip -r "../Niemandsland-windows.zip" .)
           # The macOS export is already a .zip of the .app bundle — just give it the release name.
-          cp "dist/macos/${EXPORT_NAME}.zip" "dist/Niemandsland-${GITHUB_REF_NAME}-macos.zip"
+          cp "dist/macos/${EXPORT_NAME}.zip" "dist/Niemandsland-macos.zip"
 
       # Say in the run which macOS flavour shipped, so nobody has to open the zip to find out.
       - name: Report the macOS flavour
         run: |
-          unzip -l "dist/Niemandsland-${GITHUB_REF_NAME}-macos.zip" > /tmp/macos_zip_list.txt
+          unzip -l "dist/Niemandsland-macos.zip" > /tmp/macos_zip_list.txt
           if grep -q 'Contents/Frameworks/libnml_core_godot.dylib' /tmp/macos_zip_list.txt; then
             echo "::notice::the macOS zip carries the Rust core (NACHTMAHR plays Erlkönig there)"
           else
@@ -710,9 +712,9 @@ jobs:
           body_path: release_notes.md
           prerelease: ${{ env.IS_PRERELEASE }}
           files: |
-            dist/Niemandsland-${{ github.ref_name }}-linux.zip
-            dist/Niemandsland-${{ github.ref_name }}-windows.zip
-            dist/Niemandsland-${{ github.ref_name }}-macos.zip
+            dist/Niemandsland-linux.zip
+            dist/Niemandsland-windows.zip
+            dist/Niemandsland-macos.zip
 
       - name: Verify published prerelease metadata matches the tag
         # Self-check the softprops output rather than trusting the input echoed back: catches a
