@@ -4068,6 +4068,10 @@ pub struct Scratch {
     /// when the fold ran. EMPTY means "the unit's own slice is the answer", which
     /// is what `folded_slice` reads; every other filler clears it.
     pub fold: Vec<ShootProfile>,
+    /// Inventory C03 (`Seams::casualties_bearers_last`): `profiles_of` scales a special weapon's attacks by the
+    /// living BEARERS (the table's order) instead of the whole unit's survivors. Carried here so no shared
+    /// signature widens; the default (false) is today's pro-rata scaling for every caller that never sets it.
+    pub bearers_last: bool,
     /// The caller's `Seams::rules_epoch`, carried so a member-level profile
     /// read can gate a wave-3 mark consumer (`acts::rule_on` off a struct the
     /// call already passes — no shared signature widened, the wave-3 rule).
@@ -4096,8 +4100,21 @@ pub fn profiles_of(us: &UnitStatic, alive: i64, d: f64, sc: &mut Scratch) {
         sc.attacks.push(if p.extra_attack_q > 0 {
             p.attacks
         } else {
-            effective_attacks(p.attacks, alive, us.model_count)
+            survivor_attacks(p, alive, us.model_count, sc.bearers_last)
         });
+    }
+}
+
+/// Inventory C03 — one weapon's imagined attacks after casualties. Off: the pro-rata `effective_attacks`. On: the
+/// table's own order (`bearer_scaled_attacks`, the special-weapon bearers fall LAST): a weapon carried by fewer
+/// models than the unit fires `per-copy x min(copies, alive)`, the common weapon keeps the pro-rata ratio. Any
+/// reach filter (`fire_in_range_only`) is applied AFTER this, on the bearers that are alive.
+#[inline]
+fn survivor_attacks(p: &ShootProfile, alive: i64, model_count: i64, bearers_last: bool) -> i64 {
+    if bearers_last {
+        bearer_scaled_attacks(p, alive, model_count, alive)
+    } else {
+        effective_attacks(p.attacks, alive, model_count)
     }
 }
 
@@ -4222,6 +4239,7 @@ pub fn member_profiles_of(
         if melee {
             melee_profiles_of(us, state.alive[si], sc);
         } else {
+            sc.bearers_last = seams.casualties_bearers_last;
             profiles_of(us, state.alive[si], d, sc);
         }
         return;
@@ -4242,6 +4260,8 @@ pub fn member_profiles_of(
             // the melee Limited precedent, EV drops nothing).
             let a = if !melee && p.extra_attack_q > 0 {
                 p.attacks
+            } else if !melee {
+                survivor_attacks(p, state.alive[mi], um.model_count, seams.casualties_bearers_last)
             } else {
                 effective_attacks(p.attacks, state.alive[mi], um.model_count)
             };
@@ -7823,6 +7843,7 @@ fn resolve_with(
                                 let um = &statics[next.roster.profile[mi]];
                                 let mut msc = Scratch::default();
                                 msc.rules_epoch = seams.rules_epoch;
+                                msc.bearers_last = seams.casualties_bearers_last;
                                 if seams.sighting {
                                     sighted_profiles_of(
                                         um, &next, statics, mi, g.ti, &zones, g.d, &mut msc,
