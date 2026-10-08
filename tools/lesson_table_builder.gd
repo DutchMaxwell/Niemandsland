@@ -5,6 +5,7 @@ extends SceneTree
 const MAX_BOOT_FRAMES := 900
 const DROP_SETTLE_S := 4.0
 const INCH := 0.0254
+const CELL_IN := 3.0   # terrain grid cell size (TerrainOverlay.GRID_SIZE_INCHES)
 var _id := ""
 
 func _initialize() -> void:
@@ -33,6 +34,8 @@ func _build() -> void:
 		layout._rebuild_derived()
 		layout._emit_layout_update()
 		layout.deployment_type_changed.emit(recipe.deployment)
+	if recipe.has("cells"):
+		_apply_cells(layout, recipe.cells)
 	var placements: Dictionary = {}
 	for side in recipe.sides:
 		var body := FileAccess.get_file_as_string(side.fixture)
@@ -140,6 +143,26 @@ func _move_unit_to(unit: GameUnit, spot: Vector3) -> void:
 func _fail(reason: String) -> void:
 	printerr("LESSON-FAIL %s: %s" % [_id, reason])
 	quit(1)
+
+
+## Paint the recipe's terrain rectangles (world-centred inches) into the layout's free cells — the
+## painting source of truth — then rebuild the derived grid/overlay (as the old board builder does).
+func _apply_cells(layout: Control, cells: Array) -> void:
+	var dims: Vector2i = layout._calculate_grid_dimensions()
+	var half := Vector2(dims) / 2.0
+	for rect in cells:
+		var t := int(rect.get("type", 0))
+		var a: Vector2 = rect.get("from_in", Vector2.ZERO)
+		var b: Vector2 = rect.get("to_in", Vector2.ZERO)
+		var x0 := int(floor(minf(a.x, b.x) / CELL_IN) + half.x)
+		var x1 := int(floor(maxf(a.x, b.x) / CELL_IN) + half.x)
+		var y0 := int(floor(minf(a.y, b.y) / CELL_IN) + half.y)
+		var y1 := int(floor(maxf(a.y, b.y) / CELL_IN) + half.y)
+		for cx in range(x0, x1 + 1):
+			for cy in range(y0, y1 + 1):
+				layout.free_cells[Vector2i(cx, cy)] = t
+	layout._rebuild_derived()
+	layout._emit_layout_update()
 
 
 ## Start a lesson unit in the state its step teaches: Shaken, Fatigued, or with parked casualties.
