@@ -41,7 +41,7 @@ def _schema(text):
 
 
 class ShippedNet:
-    def __init__(self, repo, onnx=None, sha256=None):
+    def __init__(self, repo, onnx=None, sha256=None, weight=1.0):
         import numpy as np
         import onnxruntime as ort
         self.np = np
@@ -62,7 +62,7 @@ class ShippedNet:
         # A static export (the shipped model: 32) pads every call to its batch; a dynamic-batch export (batch axis a name or
         # None) packs exactly the live leaves, in chunks of at most MAX_DYNAMIC_BATCH.
         self.static_batch = batch_dim if isinstance(batch_dim, int) else None
-        self.weight = 1.0
+        self.weight = float(weight)
         self.counts = {}
 
     def values(self, tokens):
@@ -99,7 +99,8 @@ class ShippedNet:
             values = self.values(leaves)
             self.counts[side]["calls"] += 1
             self.counts[side]["leaves"] += len(leaves)
-            return values
+            # the shipped game's pick = argmax(rs + w * net); w == 1.0 stays an untouched no-op
+            return values if self.weight == 1.0 else [self.weight * v for v in values]
         return fn
 
     def proof(self):
