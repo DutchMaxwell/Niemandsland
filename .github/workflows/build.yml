@@ -25,6 +25,11 @@ concurrency:
 env:
   GODOT_VERSION: "4.6"
   EXPORT_NAME: Niemandsland
+  # CI must not re-download the live model library on every run. The ~1 MB live manifest was fetched
+  # on every real-scene boot (measured 107 fetches in one CI run); with this set the game keeps the
+  # bundled assets/model_manifest.json (the offline fixture) and skips the CDN entirely. The blob
+  # cache below then makes warm runs download 0 model blobs too.
+  NML_SKIP_REMOTE_MANIFEST: "1"
 
 jobs:
   # Fast lane: a PR that only touches core/**, tools/*.py (root tools) or docs/** cannot
@@ -97,6 +102,27 @@ jobs:
         uses: ./.github/actions/setup-godot
         with:
           version: ${{ env.GODOT_VERSION }}
+
+      # Asset blobs are content-addressed (sha256) and immutable, so the CDN cache dirs under
+      # user:// (~/.local/share/godot/app_userdata/Niemandsland/ on the Linux runner) can be
+      # restored across runs. Keyed by the pinned manifest the tests now use, so a warm run
+      # downloads 0 blobs; a manifest change re-keys and re-downloads. One key per shard: each
+      # shard fetches a different blob set, so a shared key would let one shard's save shadow the rest.
+      - name: Cache CDN asset blobs (content-addressed)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.local/share/godot/app_userdata/Niemandsland/model_cache
+            ~/.local/share/godot/app_userdata/Niemandsland/biome_cache
+            ~/.local/share/godot/app_userdata/Niemandsland/ambience_cache
+            ~/.local/share/godot/app_userdata/Niemandsland/containers_cache
+            ~/.local/share/godot/app_userdata/Niemandsland/hazards_cache
+            ~/.local/share/godot/app_userdata/Niemandsland/ruins_cache
+            ~/.local/share/godot/app_userdata/Niemandsland/trees_cache
+            ~/.local/share/godot/app_userdata/Niemandsland/reference_terrain_cache
+          key: nml-asset-cache-shard${{ matrix.shard }}-${{ hashFiles('assets/model_manifest.json') }}
+          restore-keys: |
+            nml-asset-cache-shard${{ matrix.shard }}-
 
       - name: Import project (generates .godot/, compile-check)
         run: godot --headless --editor --quit --path .
