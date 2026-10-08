@@ -16,6 +16,7 @@ import os
 
 DESIGN_FIELDS = 88
 V1_UNITS = 90
+MAX_DYNAMIC_BATCH = 128
 TOKEN_TAIL = ",objs6x12,terr18x12,glob16,vocab1017,bag17"
 BRAINS = os.path.join("assets", "solo", "brains")
 
@@ -57,16 +58,21 @@ class ShippedNet:
         self.session = ort.InferenceSession(self.onnx, sess_options=opts, providers=["CPUExecutionProvider"])
         meta = self.session.get_modelmeta().custom_metadata_map
         self.rows, self.width = _schema(meta["nml.token_schema"])
-        self.static_batch = self.session.get_inputs()[0].shape[0]
+        batch_dim = self.session.get_inputs()[0].shape[0]
+        # A static export (the shipped model: 32) pads every call to its batch; a dynamic-batch export (batch axis a name or
+        # None) packs exactly the live leaves, in chunks of at most MAX_DYNAMIC_BATCH.
+        self.static_batch = batch_dim if isinstance(batch_dim, int) else None
         self.weight = 1.0
         self.counts = {}
 
     def values(self, tokens):
         """One value per token dict, in order; the same packing as `OnnxHook::run_tokens`."""
-        np, rows, width, wide = self.np, self.rows, self.width, self.static_batch
+        np, rows, width = self.np, self.rows, self.width
+        cap = self.static_batch or MAX_DYNAMIC_BATCH
         out = []
-        for start in range(0, len(tokens), wide):
-            chunk = tokens[start:start + wide]
+        for start in range(0, len(tokens), cap):
+            chunk = tokens[start:start + cap]
+            wide = self.static_batch or len(chunk)
             for t in chunk:
                 live = int(sum(1 for m in t["units_mask"] if m))
                 if live > rows:
