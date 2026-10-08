@@ -51,6 +51,12 @@ def test_every_named_preset_reaches_the_seat_core():
             assert base.knobs()[key] != want, f"{name}: {key} already on in the base core"
 
 
+def test_menu_los_and_menu_advance_k_read_back():
+    seat = sp.core_with_knob_overrides(REPO, HEADER, {}, {"menu_los": True, "menu_advance_k": 3})
+    assert seat.knobs()["menu_los"] is True
+    assert seat.knobs()["menu_advance_k"] == 3
+
+
 def test_a_knob_the_core_does_not_read_back_is_refused():
     with pytest.raises(ValueError, match="not read back"):
         sp.core_with_knob_overrides(REPO, HEADER, {}, {"opener_by_finnish": True})
