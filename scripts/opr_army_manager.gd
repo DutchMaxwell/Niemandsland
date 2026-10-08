@@ -179,6 +179,10 @@ var current_round: int = 1
 enum GamePhase { DEPLOYMENT, PLAYING }
 var game_phase: int = GamePhase.DEPLOYMENT
 
+## Rules-automation level (RulesAutomation.Level; stored and saved, not read by gameplay yet).
+## Default MANUAL; the "new games start Automatic" default belongs to the table setup.
+var rules_automation: int = RulesAutomation.Level.MANUAL
+
 ## NML-949 — match-level RULE state that is not per-unit: once-per-game / per-round
 ## bookkeeping that used to live only in Main or in the SoloController and was therefore
 ## lost on a load, on an MP rejoin, and on every controller rebuild (AI-slot change,

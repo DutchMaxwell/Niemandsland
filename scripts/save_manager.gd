@@ -319,6 +319,8 @@ func _serialize_game_state() -> Dictionary:
 		# NML-949: match-level rule bookkeeping (once-per-game / per-round counters that are
 		# not per-unit). Carried on the MP full-state push too, since that reuses this serializer.
 		"rule_state": army_manager.rule_state.duplicate(true) if army_manager else {},
+		# Rules-automation level (Manual/Automatic). Optional key, rides the MP full-state push too.
+		RulesAutomation.SAVE_KEY: army_manager.rules_automation if army_manager else RulesAutomation.Level.MANUAL,
 		# S1-15: the Solo mission (id + SoloController's live scoring state), so a loaded game keeps scoring
 		# by its own mission's rule. Rides the MP full-state push too, since that reuses this serializer.
 		"solo_mission": SoloController.mission_state_to_dict(
@@ -1006,6 +1008,9 @@ func _deserialize_game_state(state_data: Dictionary) -> void:
 		# older build reading a newer save ignores the key for the same reason.
 		var rs: Variant = state_data.get("rule_state", {})
 		army_manager.rule_state = (rs as Dictionary).duplicate(true) if rs is Dictionary else {}
+		# Rules-automation level: optional key, no SAVE_VERSION bump (same reasoning as rule_state);
+		# a save without it loads as Manual.
+		army_manager.rules_automation = RulesAutomation.from_game_state(state_data)
 	# S1-15: a load REPLACES the Solo mission state whole (before load_completed fires). Optional key, no
 	# SAVE_VERSION bump (the rule_state reasoning above): a save without it carried no mission, and "no
 	# mission" with the default scoring is how such a save has always played.
