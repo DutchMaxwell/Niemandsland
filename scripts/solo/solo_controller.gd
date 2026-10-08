@@ -3849,6 +3849,14 @@ func _points_strength_on(diff: SoloDifficulty) -> bool:
 	return diff != null and diff.points_strength and not shipped_brain_ready()
 
 
+## Table fidelity (seven rule-fix knobs, not brain-dependent): the preset's `table_fidelity` flag. env NML_TABLE_FIDELITY=0/1 forces it.
+func _table_fidelity_on(diff: SoloDifficulty) -> bool:
+	var forced := OS.get_environment("NML_TABLE_FIDELITY")
+	if forced != "":
+		return forced == "1"
+	return diff != null and diff.table_fidelity
+
+
 ## Stamps the six planner statics of the aifix_all bundle for this pick (the header the live core reads carries
 ## them too: act_recorder `_header_line`). eval_variant 4 rides `_eval_variant_for`.
 func _apply_aifix(diff: SoloDifficulty) -> void:
@@ -3862,6 +3870,7 @@ func _apply_aifix(diff: SoloDifficulty) -> void:
 	AiPlanner.brain_knobs = _brain_knobs_on(diff)
 	AiPlanner.leaf_opener = _leaf_opener_on(diff)
 	AiPlanner.points_strength = _points_strength_on(diff)
+	AiPlanner.table_fidelity = _table_fidelity_on(diff)
 
 
 ## Ship path (22.09.): true when the core is wanted AND loaded AND the packed brain was
