@@ -88,6 +88,15 @@ func _activate(unit: GameUnit) -> bool:
 	return await _wait_activated(unit)
 
 
+func _wait_round(target: int) -> bool:
+	var deadline := Time.get_ticks_msec() + 8000
+	while Time.get_ticks_msec() < deadline:
+		if int(_main.opr_army_manager.current_round) == target:
+			return true
+		await get_tree().process_frame
+	return false
+
+
 func test_s04_five_steps_complete(timeout := 120000) -> void:
 	assert_int(_lesson.current_index()).is_equal(0)
 	var alpha := _find("alpha")
@@ -102,24 +111,25 @@ func test_s04_five_steps_complete(timeout := 120000) -> void:
 	assert_bool(await _activate(alpha)).is_true()
 	var target := _find("target")
 	assert_object(target).is_not_null()
-	if not await _wait_activated(target):   # the held AI's owed reply
-		await _main._solo_activate_one_ai()
-	assert_bool(await _wait_index(3)).is_true()   # alpha advanced+activated, AI replied
+	assert_bool(await _wait_index(3)).is_true()   # alpha advanced+activated, the held AI's owed reply
 
 	var bravo := _find("bravo")
 	assert_object(bravo).is_not_null()
 	_move_unit_to(bravo, Vector3(8.0 * INCH, 0, 23.0 * INCH))
-	var bravo_ok := await _activate(bravo)
-	assert_bool(bravo_ok) \
-		.override_failure_message("bravo did not activate (index=%d)" % _lesson.current_index()) \
+	_main.radial_menu_controller.card_toggle_activation(bravo)
+	# Activating the LAST unit ends round 1 in the same pump — no Next Round press. The round is the
+	# persistent signal (bravo's own activated flag resets with the round).
+	assert_bool(await _wait_round(2)) \
+		.override_failure_message("round 2 not reached: index=%d round=%d bravo_activated=%s" % [
+			_lesson.current_index(), _main.opr_army_manager.current_round, str(bravo.is_activated)]) \
 		.is_true()
 	var reached := await _wait_index(4)
 	assert_bool(reached) \
-		.override_failure_message("step3 not reached: index=%d bravo_activated=%s round=%d" % [
-			_lesson.current_index(), str(bravo.is_activated), _main.opr_army_manager.current_round]) \
-		.is_true()   # bravo rushed+activated
+		.override_failure_message("index 4 (round advanced) not reached: index=%d round=%d" % [
+			_lesson.current_index(), _main.opr_army_manager.current_round]) \
+		.is_true()
 
-	await _main._do_next_round()   # the Next Round button's action
+	(_main.get_node("UI/LessonCard") as LessonCard).continue_pressed.emit()
 	var progress := SpielschuleProgress.new(TEST_CFG)
 	var deadline := Time.get_ticks_msec() + 4000
 	while Time.get_ticks_msec() < deadline:

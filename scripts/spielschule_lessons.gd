@@ -62,9 +62,9 @@ const _S04_STEPS := [
 	{"id": "rush_bravo", "text": "Rush: drag Bravo Squad more than 6\" (up to 12\") and activate it. A rushing unit may not shoot.",
 		"rule": "", "all": [
 			{"check": "unit_moved", "args": {"tag": "bravo", "inches": 6.5}},
-			{"check": "tag_flag", "args": {"key": "activated", "tag": "bravo", "value": true}}]},
-	{"id": "next_round", "text": "Every unit has acted: press Next Round.",
-		"rule": "", "all": [{"check": "at_least", "args": {"key": "round", "n": 2}}]},
+			{"check": "at_least", "args": {"key": "round", "n": 2}}]},
+	{"id": "next_round", "text": "Every unit has acted, so the round ends by itself: round 2 begins and all units may act again.",
+		"rule": "", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
 ]
 
 
