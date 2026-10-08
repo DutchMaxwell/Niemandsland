@@ -140,6 +140,23 @@ func test_platform_asset_url_picks_matching_zip() -> void:
 		assert_str(checker._platform_asset_url(release)).is_equal("https://example.com/releases/tag/v1")
 
 
+func test_platform_asset_url_matches_the_fixed_unversioned_names() -> void:
+	# Release zips carry fixed names (Niemandsland-<os>.zip) so the README's /releases/latest/download links never rot.
+	var checker := _make_checker()
+	var urls := {"windows": "https://example.com/win.zip", "linux": "https://example.com/lin.zip",
+		"macos": "https://example.com/mac.zip"}
+	var release := {
+		"html_url": "https://example.com/releases/tag/v1",
+		"assets": [
+			{"name": "Niemandsland-windows.zip", "browser_download_url": urls["windows"]},
+			{"name": "Niemandsland-linux.zip", "browser_download_url": urls["linux"]},
+			{"name": "Niemandsland-macos.zip", "browser_download_url": urls["macos"]},
+		],
+	}
+	var key: String = checker._os_asset_keyword()
+	assert_str(checker._platform_asset_url(release)).is_equal(urls.get(key, "https://example.com/releases/tag/v1"))
+
+
 func test_platform_asset_url_falls_back_to_page_without_match() -> void:
 	var checker := _make_checker()
 	var release := {
