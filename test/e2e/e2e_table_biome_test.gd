@@ -471,6 +471,22 @@ func _check_seats(overlay: Node3D, ground: ShaderMaterial, biome: String, when: 
 		assert_int(raised).override_failure_message("%s %s: no prop sits up on a mound or ridge — the seating is not exercised" % [biome, when]).is_greater(0)
 
 
+## A panel download can rebuild every overlay prop at y = 0 in the frame's idle step, AFTER the presenter's per-frame seat
+## pass (grassland_reference.gd _keep_props_seated), so a check right after simulate_frames sees unseated props. On a
+## cold CDN cache (a CI shard whose blob set changed) that landed exactly on the check. Wait until the live prop set
+## stays unchanged across a frame pair, so the next seat pass has run on the final props.
+func _settle_overlay(overlay: Node3D) -> void:
+	for _attempt in 60:
+		var before: Array = overlay._object_instances
+		var count := before.size()
+		var first: int = before[0].get_instance_id() if count > 0 and is_instance_valid(before[0]) else 0
+		await _runner.simulate_frames(2)
+		var after: Array = overlay._object_instances
+		var first_after: int = after[0].get_instance_id() if after.size() > 0 and is_instance_valid(after[0]) else 0
+		if after.size() == count and first_after == first:
+			return
+
+
 func test_dressed_table_keeps_its_mounds_and_props_sit_on_them(timeout := 240000) -> void:
 	await _paint_minefield()
 	var overlay: Node3D = _main.terrain_overlay
@@ -482,13 +498,13 @@ func test_dressed_table_keeps_its_mounds_and_props_sit_on_them(timeout := 240000
 		# overlay's props (terrain_overlay.gd set_biome returns early). On CI's slow cold start the presenter's own
 		# delayed "start" build landed after the test's build and stacked the seat (the sign stood 4.45 mm up).
 		await presenter.rebuild()
-		await _runner.simulate_frames(2)
+		await _settle_overlay(overlay)
 		var ground := (_main.table.get_node("TableMesh") as MeshInstance3D).material_override as ShaderMaterial
 		_check_seats(overlay, ground, biome, "after a second build")
 		# A late panel download (mine/sign/container/tree textures on a cold cache, as on CI and on a fresh install)
 		# rebuilds every overlay prop at y = 0 after the table was dressed (terrain_overlay.gd _fetch_hazard_panels).
 		overlay.update_placed_objects(overlay._last_objects, Vector2(6, 4), 0.0)
-		await _runner.simulate_frames(2)
+		await _settle_overlay(overlay)
 		_check_seats(overlay, ground, biome, "after a late panel download")
 		var open_worst := 0.0
 		var mismatch := 0.0
