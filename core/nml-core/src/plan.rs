@@ -341,6 +341,7 @@ pub fn tuning_of(knobs: &Knobs) -> crate::menu::Tuning {
         advance_k: knobs.menu_advance_k,
         all_targets: knobs.menu_all_targets,
         advance_obj_shoot: knobs.menu_advance_obj_shoot,
+        charge_needs_path: knobs.charge_needs_path,
         rush_k: knobs.playout_rush_k,
         range_edge: knobs.range_by_base_edge,
         ..Default::default()

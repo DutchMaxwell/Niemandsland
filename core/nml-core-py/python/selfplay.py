@@ -2373,6 +2373,7 @@ def play_from_state(
 KNOB_PRESETS: dict[str, dict[str, Any]] = {
     # the strength_by_points eval arm (freeze2 T2c): presence weighted by unit points
     "afpoints_p1": {"strength_by_points": True},
+    "charge_path": {"charge_needs_path": True},
     # aifix action-space lane (07.10.2026): the menu opens — up to 3 extra HOLD+shoot targets and one
     # ADVANCE-toward-the-marker-with-a-shot row. A STRENGTH change (bar = better), see farm/aifix/PREREG_MENU_OPEN.md.
     "menu_open": {"menu_all_targets": 3, "menu_advance_obj_shoot": True},
