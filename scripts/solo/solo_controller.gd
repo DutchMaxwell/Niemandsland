@@ -3800,6 +3800,15 @@ func _aifix_on(diff: SoloDifficulty) -> bool:
 	return diff != null and diff.aifix and not shipped_brain_ready()
 
 
+## Shipped-brain header knobs for this pick: the preset's `brain_knobs` flag AND the brain wired for this game.
+## env NML_BRAIN_KNOBS=0/1 forces it either way (the A/B's arm switch).
+func _brain_knobs_on(diff: SoloDifficulty) -> bool:
+	var forced := OS.get_environment("NML_BRAIN_KNOBS")
+	if forced != "":
+		return forced == "1"
+	return diff != null and diff.brain_knobs and shipped_brain_ready()
+
+
 ## Stamps the six planner statics of the aifix_all bundle for this pick (the header the live core reads carries
 ## them too: act_recorder `_header_line`). eval_variant 4 rides `_eval_variant_for`.
 func _apply_aifix(diff: SoloDifficulty) -> void:
@@ -3810,6 +3819,7 @@ func _apply_aifix(diff: SoloDifficulty) -> void:
 	BattleSim.reply_v2 = on
 	BattleSim.reply_skip_activated = on
 	BattleSim.reply_hold_gate = on
+	AiPlanner.brain_knobs = _brain_knobs_on(diff)
 
 
 ## Ship path (22.09.): true when the core is wanted AND loaded AND the packed brain was
