@@ -18,6 +18,7 @@ const KNOWN := [
 	"value_is",
 	"unit_selected_whole",
 	"unit_moved",
+	"tag_flag",
 ]
 
 
@@ -80,4 +81,10 @@ static func _passes_one(check_name: String, args: Dictionary, now: Dictionary, b
 			var now_centroid: Vector2 = now_tags2[tag2].get("centroid_in", Vector2.ZERO)
 			var base_centroid: Vector2 = base_tags2[tag2].get("centroid_in", Vector2.ZERO)
 			return now_centroid.distance_to(base_centroid) >= float(args.get("inches", 0.0))
+		"tag_flag":
+			var tag3 := String(args.get("tag", ""))
+			var now_tags3: Dictionary = now.get("tags", {})
+			if not now_tags3.has(tag3):
+				return false
+			return now_tags3[tag3].get(String(args.get("key", "")), null) == args.get("value")
 	return false

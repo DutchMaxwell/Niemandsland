@@ -50,6 +50,34 @@ const _S03_STEPS := [
 ]
 
 
+const _S04_STEPS := [
+	{"id": "bands", "text": "Select Alpha Squad and press M: the rings show Advance 6\" and Rush 12\". (p.7)",
+		"rule": "p.7", "all": [{"check": "flag", "args": {"key": "bands"}}]},
+	{"id": "advance_alpha", "text": "Advance: drag Alpha Squad up to 6\", then right-click it and choose Activate.",
+		"rule": "", "all": [
+			{"check": "unit_moved", "args": {"tag": "alpha", "inches": 1.0}},
+			{"check": "tag_flag", "args": {"key": "activated", "tag": "alpha", "value": true}}]},
+	{"id": "ai_turn", "text": "Now NACHTMAHR activates one unit — turns alternate, one unit each. (p.7)",
+		"rule": "p.7", "all": [{"check": "tag_flag", "args": {"key": "activated", "tag": "target", "value": true}}]},
+	{"id": "rush_bravo", "text": "Rush: drag Bravo Squad more than 6\" (up to 12\") and activate it. A rushing unit may not shoot.",
+		"rule": "", "all": [
+			{"check": "unit_moved", "args": {"tag": "bravo", "inches": 6.5}},
+			{"check": "at_least", "args": {"key": "round", "n": 2}}]},
+	{"id": "next_round", "text": "Every unit has acted, so the round ends by itself: round 2 begins and all units may act again.",
+		"rule": "", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
+]
+
+
+const _S05_STEPS := [
+	{"id": "card", "text": "Right-click Alpha Squad and open its card: the Heavy Rifle shoots 24\". (p.5)",
+		"rule": "p.5", "all": [{"check": "flag", "args": {"key": "card_presented"}}]},
+	{"id": "shoot", "text": "Right-click Alpha Squad, choose Shoot, click the nearer Warriors squad. The further Warriors squad is over 24\" away — out of range.",
+		"rule": "p.5", "all": [{"check": "counter_grew", "args": {"key": "shoot:alpha"}}]},
+	{"id": "read_log", "text": "Read the log: hits roll against Quality, the target blocks with Defense. (p.8)",
+		"rule": "p.8", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
+]
+
+
 ## The ordered steps for a chapter id, or [] when the chapter has no lesson data yet (so it can
 ## never fake completion — see LessonRunner).
 static func steps_for(chapter_id: String) -> Array:
@@ -60,6 +88,10 @@ static func steps_for(chapter_id: String) -> Array:
 			return _S02_STEPS
 		"S-03":
 			return _S03_STEPS
+		"S-04":
+			return _S04_STEPS
+		"S-05":
+			return _S05_STEPS
 	return []
 
 
@@ -73,4 +105,8 @@ static func ai_mode(chapter_id: String) -> String:
 			return "none"
 		"S-03":
 			return "none"
+		"S-04":
+			return "hold"
+		"S-05":
+			return "hold"
 	return "none"

@@ -17330,7 +17330,8 @@ func _start_lesson(_object_count: int) -> void:
 	var facts := LessonFacts.new()
 	facts.setup({"camera_pivot": camera_pivot, "object_manager": object_manager,
 		"army_manager": opr_army_manager, "table": table,
-		"map_layout": map_layout_editor, "left_panel": left_panel_scroll, "main": self})
+		"map_layout": map_layout_editor, "left_panel": left_panel_scroll, "main": self,
+		"unit_dock": unit_dock})
 	if _scenario_mode:
 		# D4: a lesson always plays the gentlest ladder grade, in memory only — the player's saved
 		# grade (SoloGrade.save) is deliberately never written from a lesson.
