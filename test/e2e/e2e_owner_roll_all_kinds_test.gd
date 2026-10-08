@@ -4,7 +4,7 @@ extends GdUnitTestSuite
 ## the Bane save re-roll, Regeneration, the morale die, Fearless and No Retreat. Each production entry
 ## point is driven against the guest's unit and must put exactly one `request_roll` of its kind on the
 ## wire; the test answers as the owner would (roll_result), so the flow finishes and its rule line is
-## written. `_solo_owner_label` names the owner's player for another human's unit instead of "You".
+## written. `_roller_label` (rules plan 2.5) names the owner's player for another human's unit instead of "You".
 ## Same NetworkManager double as e2e_owner_roll_seam_test.gd (active session, this client = slot 1,
 ## guest peer 42 on slot 2, send_command recorded).
 
@@ -105,7 +105,7 @@ func _drive_regeneration(target: GameUnit) -> void:
 
 
 func _drive_morale(target: GameUnit) -> void:
-	await _main._solo_morale_test(target, _main._solo_owner_label(target), false)
+	await _main._solo_morale_test(target, _main._roller_label(target), false)
 	_flow_done = true
 
 
@@ -173,7 +173,9 @@ func test_the_no_retreat_dice_go_to_the_owner(timeout := 120000) -> void:
 func test_the_owner_label_names_the_guest_not_you(timeout := 120000) -> void:
 	var guard := _unit(2, "Guard", [])
 	var mine := _unit(1, "Blades", [])
-	assert_str(_main._solo_owner_label(guard)) \
+	assert_str(_main._roller_label(guard)) \
 		.override_failure_message("0.1b — another human's unit is labelled with its owner's name, not \"You\"") \
 		.is_equal("Guest")
-	assert_str(_main._solo_owner_label(mine)).is_equal("You")
+	# Rules plan 2.5: with no AI designated (a human-vs-human room) the local player is named by its
+	# slot too, since the line reaches both screens; "You" stays for solo vs NACHTMAHR.
+	assert_str(_main._roller_label(mine)).is_equal(_main._solo_player_label(1))
