@@ -16,7 +16,7 @@ func test_s03_has_four_steps() -> void:
 
 
 func test_every_step_has_text_and_at_least_one_check() -> void:
-	for chapter_id in ["S-01", "S-02", "S-03", "S-04", "S-05"]:
+	for chapter_id in ["S-01", "S-02", "S-03", "S-04", "S-05", "S-06"]:
 		for step in SpielschuleLessons.steps_for(chapter_id):
 			assert_str(String(step.get("text", ""))).is_not_empty()
 			var checks: Array = step.get("all", [])
@@ -24,7 +24,7 @@ func test_every_step_has_text_and_at_least_one_check() -> void:
 
 
 func test_every_check_name_is_known_to_lesson_checks() -> void:
-	for chapter_id in ["S-01", "S-02", "S-03", "S-04", "S-05"]:
+	for chapter_id in ["S-01", "S-02", "S-03", "S-04", "S-05", "S-06"]:
 		for step in SpielschuleLessons.steps_for(chapter_id):
 			for entry in step.get("all", []):
 				var check_name := String(entry.get("check", ""))
@@ -70,3 +70,8 @@ func test_s04_has_five_steps_and_holds_the_ai() -> void:
 func test_s05_has_three_steps_and_holds_the_ai() -> void:
 	assert_array(SpielschuleLessons.steps_for("S-05")).has_size(3)
 	assert_str(SpielschuleLessons.ai_mode("S-05")).is_equal("hold")
+
+
+func test_s06_has_five_steps_and_holds_the_ai() -> void:
+	assert_array(SpielschuleLessons.steps_for("S-06")).has_size(5)
+	assert_str(SpielschuleLessons.ai_mode("S-06")).is_equal("hold")

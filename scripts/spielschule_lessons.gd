@@ -78,6 +78,20 @@ const _S05_STEPS := [
 ]
 
 
+const _S06_STEPS := [
+	{"id": "charge", "text": "Move alpha into base contact with the enemy squad (within 1\"). (p.8)",
+		"rule": "p.8", "all": [{"check": "gap_at_most", "args": {"tag": "target", "inches": 1.0}}]},
+	{"id": "fight", "text": "Right-click alpha, choose Fight, click the enemy squad.",
+		"rule": "", "all": [{"check": "counter_grew", "args": {"key": "melee:alpha"}}]},
+	{"id": "pile_in", "text": "The charged squad piles in up to 3\" — read the log. (p.9)",
+		"rule": "p.9", "all": [{"check": "counter_grew", "args": {"key": "log:pile_in"}}]},
+	{"id": "strike_back", "text": "The defender strikes back, then both sides are Fatigued. (p.9)",
+		"rule": "p.9", "all": [{"check": "tag_flag", "args": {"tag": "target", "key": "fatigued", "value": true}}]},
+	{"id": "consolidate", "text": "The winner consolidates — read the log. (p.9)",
+		"rule": "p.9", "all": [{"check": "counter_grew", "args": {"key": "log:consolidate"}}]},
+]
+
+
 ## The ordered steps for a chapter id, or [] when the chapter has no lesson data yet (so it can
 ## never fake completion — see LessonRunner).
 static func steps_for(chapter_id: String) -> Array:
@@ -92,6 +106,8 @@ static func steps_for(chapter_id: String) -> Array:
 			return _S04_STEPS
 		"S-05":
 			return _S05_STEPS
+		"S-06":
+			return _S06_STEPS
 	return []
 
 
@@ -108,5 +124,7 @@ static func ai_mode(chapter_id: String) -> String:
 		"S-04":
 			return "hold"
 		"S-05":
+			return "hold"
+		"S-06":
 			return "hold"
 	return "none"
