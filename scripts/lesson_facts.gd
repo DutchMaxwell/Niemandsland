@@ -54,9 +54,12 @@ func snapshot() -> Dictionary:
 		"table_size": Vector2.ZERO, "biome": "", "terrain_pieces": 0, "forest_pieces": 0,
 		"layout_pieces": 0, "deploy_type": 0, "menu_open": false,
 		"units_p1": 0, "p1_all_in_zone": false, "phase": 0,
-		"bands": false, "round": 0, "card_presented": false, "spell_preview": false}
+		"bands": false, "round": 0, "card_presented": false, "spell_preview": false,
+		"game_finished": false}
 	if _range_rings != null and _range_rings.has_method("has_spell_preview"):
 		facts.spell_preview = bool(_range_rings.has_spell_preview())
+	if _main != null and "_solo_game_finished" in _main:
+		facts.game_finished = bool(_main._solo_game_finished)
 	if _table != null and "table_size" in _table:
 		facts.table_size = _table.table_size
 	if _table != null and "biome" in _table:

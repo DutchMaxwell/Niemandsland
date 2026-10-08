@@ -48,7 +48,7 @@ static func chapters() -> Array:
 		{"id": "S-09", "title": "Mission Objectives",
 			"goal": "Hold objectives and win the mission.", "scenario": "res://assets/tutorial/scenarios/s09_objectives.nml"},
 		{"id": "S-10", "title": "Ins Niemandsland — face NACHTMAHR",
-			"goal": "A short real game against the solo AI.", "scenario": ""},
+			"goal": "A short real game against the solo AI.", "scenario": "res://assets/tutorial/scenarios/s10_finale.nml"},
 	]
 
 

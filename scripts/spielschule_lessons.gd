@@ -159,6 +159,12 @@ const _SSPELL_STEPS := [
 ]
 
 
+const _S10_STEPS := [
+	{"id": "win", "text": "Win the mission: NACHTMAHR plays for real at its easiest grade, Dämmerung, over 4 rounds and holds the markers. (p.6)",
+		"rule": "p.6", "all": [{"check": "flag", "args": {"key": "game_finished"}}]},
+]
+
+
 ## The ordered steps for a chapter id, or [] when the chapter has no lesson data yet (so it can
 ## never fake completion — see LessonRunner).
 static func steps_for(chapter_id: String) -> Array:
@@ -183,6 +189,8 @@ static func steps_for(chapter_id: String) -> Array:
 			return _SSPELL_STEPS
 		"S-09":
 			return _S09_STEPS
+		"S-10":
+			return _S10_STEPS
 	return []
 
 
@@ -210,4 +218,6 @@ static func ai_mode(chapter_id: String) -> String:
 			return "hold"
 		"S-09":
 			return "hold"
+		"S-10":
+			return "live"
 	return "none"
