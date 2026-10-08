@@ -247,6 +247,9 @@ fn theta_core(
     let mut pos: HashMap<Cell, V2, CellBuild> = HashMap::default();
     pos.insert(start_c, start);
     let mut open: Vec<Cell> = vec![start_c];
+    // `open_f[k]` = `g[open[k]] + distance_to(pos[open[k]], goal)`, computed with the very expression the scan used to
+    // recompute (two hash reads and a distance per entry per pop): refreshed whenever a node's g/pos change.
+    let mut open_f: Vec<f64> = vec![0.0 + distance_to(start, goal)];
     let mut open_set: HashSet<Cell, CellBuild> = HashSet::default();
     open_set.insert(start_c);
     let mut closed: HashSet<Cell, CellBuild> = HashSet::default();
@@ -271,7 +274,7 @@ fn theta_core(
         let mut best_f = f64::INFINITY;
         for k in 0..open.len() {
             let c = open[k];
-            let f = g[&c] + distance_to(pos[&c], goal);
+            let f = open_f[k];
             let take = if bend.strict_open {
                 f < best_f
             } else {
@@ -300,6 +303,7 @@ fn theta_core(
             return theta_reconstruct(&parent, &pos, cur);
         }
         open.remove(best_i);
+        open_f.remove(best_i);
         open_set.remove(&cur);
         closed.insert(cur);
         let cur_pt = pos[&cur];
@@ -340,9 +344,13 @@ fn theta_core(
                         best_reach = nb;
                     }
                 }
+                let f = tentative + distance_to(nb_pt, goal);
                 if !open_set.contains(&nb) {
                     open.push(nb);
+                    open_f.push(f);
                     open_set.insert(nb);
+                } else if let Some(k) = open.iter().position(|&c| c == nb) {
+                    open_f[k] = f;
                 }
             }
         }

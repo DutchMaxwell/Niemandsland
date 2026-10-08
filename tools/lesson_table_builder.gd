@@ -36,6 +36,9 @@ func _build() -> void:
 		layout.deployment_type_changed.emit(recipe.deployment)
 	if recipe.has("cells"):
 		_apply_cells(layout, recipe.cells)
+	if recipe.has("objectives_in"):
+		layout.set_objectives_from_table_inches(recipe.objectives_in)
+		layout.objectives_changed.emit(layout.mission_objectives)
 	var placements: Dictionary = {}
 	for side in recipe.sides:
 		var body := FileAccess.get_file_as_string(side.fixture)

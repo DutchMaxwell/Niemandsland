@@ -22,6 +22,7 @@ const KNOWN := [
 	"tag_flag",
 	"gap_at_most",
 	"tag_terrain_is",
+	"obj_within",
 ]
 
 
@@ -106,4 +107,14 @@ static func _passes_one(check_name: String, args: Dictionary, now: Dictionary, b
 			if not now_tags5.has(tag5):
 				return false
 			return int(now_tags5[tag5].get("terrain", 0)) == int(args.get("type", 0))
+		"obj_within":
+			var tag6 := String(args.get("tag", ""))
+			var now_tags6: Dictionary = now.get("tags", {})
+			if not now_tags6.has(tag6):
+				return false
+			var dists: Array = now_tags6[tag6].get("obj_dist_in", [])
+			var idx := int(args.get("index", 0))
+			if idx < 0 or idx >= dists.size():
+				return false
+			return float(dists[idx]) <= float(args.get("inches", 0.0))
 	return false

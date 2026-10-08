@@ -2379,6 +2379,8 @@ KNOB_PRESETS: dict[str, dict[str, Any]] = {
     # opponent-model diagnosis (a) (08.10.2026): the opponent's FIRST rollout reply is the planner's own
     # one-ply search for it at grade 3/1 (the net at its leaves) instead of the scripted brain.
     "reply_net": {"reply_by_net": True, "reply_top_k": 3, "reply_horizon": 1},
+    # inventory C12: a joined hero counts in the unit size for half strength and morale (GF/AoF p.14)
+    "hero_size": {"hero_counts_in_size": True},
     # inventory T03-T06: the enemy's reply threat by its real charge/advance band, base gap, no Aircraft charge
     "reply_speed": {"reply_threat_by_speed": True},
     # inventory C01/C27: the imagined shot measures range base edge to base edge, as the table does
