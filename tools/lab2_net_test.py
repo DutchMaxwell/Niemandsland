@@ -95,3 +95,51 @@ def test_too_many_live_units_raises_and_hook_counts():
     with pytest.raises(net.TooManyUnits):
         h([full], 1)
     assert n.proof()[1] == {"calls": 1, "leaves": 3}
+
+
+class _DynSession:
+    """The standin session behind a dynamic-batch face: the batch axis is a name, run() takes ANY batch (the real
+    model's 32 slots are filled slice by slice inside) and logs the batch it was handed."""
+
+    def __init__(self, real):
+        self.real, self.batches = real, []
+
+    def get_inputs(self):
+        ins = self.real.get_inputs()
+        return [type("I", (), {"shape": ["N"] + list(ins[0].shape[1:])})()] + list(ins[1:])
+
+    def get_modelmeta(self):
+        return self.real.get_modelmeta()
+
+    def run(self, names, feed):
+        import numpy as np
+        b = feed["units"].shape[0]
+        self.batches.append(b)
+        outs = []
+        for i in range(0, b, 32):
+            part = {k: v[i:i + 32] for k, v in feed.items()}
+            n = part["units"].shape[0]
+            pad = {k: np.concatenate([v, np.zeros((32 - n,) + v.shape[1:], v.dtype)]) for k, v in part.items()}
+            outs.append([o[:n] for o in self.real.run(names, pad)])
+        return [np.concatenate([o[j] for o in outs]) for j in range(len(outs[0]))]
+
+
+@needs_ort
+def test_dynamic_batch_packs_exact_rows_and_matches_the_static_values():
+    # GREEN: a dynamic-batch model gets exactly len(leaves) rows per call (chunks of <= MAX_DYNAMIC_BATCH) and the same
+    # values as the padded static path. RED: the static model (the shipped one) is still padded to 32 -- the packing
+    # branch is the only thing that moved.
+    leaves = gen.load_leaves(gen.Path(FIX) / "parity_base_standin-v2x2.json")
+    toks = [core_token(gen.row_of(leaves, p)) for p in range(7)]
+    static, dyn = standin_net(), standin_net()
+    spy = _DynSession(dyn.session)
+    dyn.session, dyn.static_batch = spy, None
+    want = static.values(toks)
+    assert dyn.values(toks) == want and spy.batches == [7]
+    dyn.values(toks * 20)  # 140 leaves -> 128 + 12
+    assert spy.batches == [7, 128, 12]
+    seen = []
+    real_run = static.session.run
+    static.session.run = lambda n, f: (seen.append(f["units"].shape[0]), real_run(n, f))[1]
+    static.values(toks)
+    assert seen == [32]

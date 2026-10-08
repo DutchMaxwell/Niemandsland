@@ -848,8 +848,26 @@ class TestStats:
     def test_unwritable_path_degrades_without_crashing(self, tmp_path):
         from relay_server import Stats
         s = Stats(str(tmp_path / "missing_dir" / "stats.json"))
-        s.room_created(rooms_open=1)  # save fails silently
+        s.room_created(rooms_open=1)  # save fails -> warn, never crash
         assert s.rooms_created == 1   # counter still updated in memory
+
+    def test_unwritable_path_warns_once_about_lost_persistence(self, tmp_path, caplog):
+        import logging
+        from relay_server import Stats
+        with caplog.at_level(logging.WARNING, logger="relay"):
+            s = Stats(str(tmp_path / "missing_dir" / "stats.json"))
+            s.room_created(rooms_open=1)          # save fails -> warn once
+            s.peer_connected(peers_connected=1)   # must NOT warn again (no log spam)
+        assert s.rooms_created == 1 and s.peer_connections == 1
+        warnings = [r for r in caplog.records if "persistence unavailable" in r.getMessage()]
+        assert len(warnings) == 1
+
+    def test_first_run_missing_file_is_not_a_warning(self, tmp_path, caplog):
+        import logging
+        from relay_server import Stats
+        with caplog.at_level(logging.WARNING, logger="relay"):
+            Stats(str(tmp_path / "stats.json"))  # dir exists, file absent -> normal first run
+        assert not [r for r in caplog.records if "persistence unavailable" in r.getMessage()]
 
     async def test_get_stats_reports_rooms_and_peers(self, relay):
         server, url = relay
@@ -1112,10 +1130,27 @@ class TestAggregateStats:
             "rooms_open", "peers_connected", "rooms_created", "peer_connections",
             "server_starts", "games_played", "peak_concurrent_peers", "peak_concurrent_rooms",
             "join_failures", "room_lifetime_buckets", "peers_per_room", "first_seen", "last_updated",
+            "machine", "region",
         }
         assert set(data) <= safe_keys
         await host_ws.close()
         await guest_ws.close()
+
+    async def test_http_stats_carries_instance_identity(self, relay, monkeypatch):
+        server, url = relay
+        monkeypatch.setenv("FLY_MACHINE_ID", "148e21ea1d9d89")
+        monkeypatch.setenv("FLY_REGION", "fra")
+        data = json.loads((await http_get(url, "/stats"))[2])
+        assert data["machine"] == "148e21ea1d9d89"
+        assert data["region"] == "fra"
+
+    async def test_http_stats_identity_empty_without_fly_env(self, relay, monkeypatch):
+        server, url = relay
+        monkeypatch.delenv("FLY_MACHINE_ID", raising=False)
+        monkeypatch.delenv("FLY_REGION", raising=False)
+        data = json.loads((await http_get(url, "/stats"))[2])
+        assert data["machine"] == ""
+        assert data["region"] == ""
 
     async def test_http_stats_matches_get_stats_ws(self, relay):
         server, url = relay

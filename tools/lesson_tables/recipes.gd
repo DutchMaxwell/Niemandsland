@@ -1,6 +1,12 @@
 class_name LessonRecipes
 extends RefCounted
 
+## Recipe schema (documentation + tests). RECIPE_KEYS: the top-level keys a recipe may carry.
+## UNIT_KEYS: the per-unit pick keys. The D1 combat-seam keys let a lesson table start in a
+## prepared state (a Shaken unit, a Fatigued unit, parked casualties) instead of rolling for it.
+const RECIPE_KEYS := ["size_feet", "biome", "deployment", "phase", "round", "sides", "ai_slots"]
+const UNIT_KEYS := ["name", "nth", "tag", "at_in", "shaken", "fatigued", "dead"]
+
 static func recipe(id: String) -> Dictionary:
 	if id == "S-01":
 		return {"size_feet": Vector2(4, 4), "biome": "temperate_grassland",
