@@ -63,6 +63,9 @@ var _hero: Control
 var _margin: MarginContainer
 var _cards: Array[TextureRect] = []
 var _valid := true
+var online := false   # set before add_child: a Create-room dialog locks the rules row to Manual
+var selected_rules := RulesAutomation.Level.MANUAL
+var _rules_buttons: Dictionary = {}
 
 class Footprint extends Control:
 	var inches := Vector2(72,48)
@@ -87,6 +90,7 @@ class Footprint extends Control:
 
 func _ready() -> void:
 	title = "Prepare your table"
+	selected_rules = RulesAutomation.default_pick(online)
 	borderless = true
 	unresizable = true
 	exclusive = true
@@ -250,6 +254,7 @@ func _build_ui() -> void:
 	_error = _label("",12,Color("eab2a2"),true)
 	left.add_child(_error)
 	left.add_child(_label("Table size is fixed once you create it.",11,HouseStyle.MUTED))
+	_build_rules_row(left)
 	_add_left_air(left)
 	left.add_child(HSeparator.new())
 	left.add_child(_label("+   Your terrain. Your layout.",14,HouseStyle.ACCENT))
@@ -324,6 +329,33 @@ func _build_ui() -> void:
 	_create.pressed.connect(_confirm)
 	_footer.add_child(_create)
 	_style(_create,true,true)
+
+
+## "Rules" row (hidden until RulesAutomation.ui_enabled): two toggle buttons; online only Manual is allowed.
+func _build_rules_row(column: VBoxContainer) -> void:
+	if not RulesAutomation.ui_enabled():
+		return
+	column.add_child(_label("03   Rules",17))
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation",10)
+	column.add_child(row)
+	for spec in [[RulesAutomation.Level.AUTOMATIC,"Automatic — the game rolls and applies the rules"],[RulesAutomation.Level.MANUAL,"Manual — you use the dice tray"]]:
+		var button := _button(spec[1])
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.disabled = online and spec[0] == RulesAutomation.Level.AUTOMATIC
+		button.pressed.connect(_select_rules.bind(spec[0]))
+		row.add_child(button)
+		_rules_buttons[spec[0]] = button
+	if online:
+		column.add_child(_label("Automatic online: both players will have to agree (coming later)",11,HouseStyle.MUTED,true))
+
+
+func _select_rules(level: int) -> void:
+	if online and level == RulesAutomation.Level.AUTOMATIC:
+		return
+	selected_rules = level
+	if is_node_ready():
+		_refresh()
 
 
 ## An expanding gap in the left column: when the right column grew taller, the left column's slack is
@@ -410,6 +442,8 @@ func _refresh() -> void:
 		_style(_biome_buttons[key],key == selected_biome)
 	for key in _size_buttons:
 		_style(_size_buttons[key],key == selected_size)
+	for level in _rules_buttons:
+		_style(_rules_buttons[level],level == selected_rules)
 	_size_labels.standard.text = _size_text(Vector2(72,48))
 	_size_labels.square.text = _size_text(Vector2(48,48))
 	_custom.visible = selected_size == "custom"

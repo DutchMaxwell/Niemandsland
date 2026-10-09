@@ -15,6 +15,10 @@ var sliders: Dictionary = {}
 var color_pickers: Dictionary = {}
 var volume_sliders: Dictionary = {}
 var _main_vbox: VBoxContainer = null
+## Accessibility preset (GH #1634): the Calm toggle plus the individual switches it
+## forces, kept in sync so the panel never shows a stale state.
+var _calm_cb: CheckButton = null
+var _switch_toggles: Dictionary = {}
 
 ## True while _sync_ui_from_controller is pushing controller values INTO the widgets.
 ## Setting slider.value / picker.color emits value_changed/color_changed, which would
@@ -205,6 +209,20 @@ func _build_ui() -> void:
 	display_label.add_theme_font_size_override("font_size", 16)
 	vbox.add_child(display_label)
 
+	# Calm mode (GH #1634, accessibility, from a player with ADHD): one switch that dials
+	# the sensory load down — it is a preset over the switches below, snapshotting the
+	# player's choices and restoring them when switched off. DEFAULT OFF.
+	var calm_cb := CheckButton.new()
+	calm_cb.text = "Calm Mode (Ruhiger Modus)"
+	calm_cb.tooltip_text = "Turns down combat effects, motion and pulsing selection aids in one click. / Reduziert Effekte, Bewegung und pulsierende Auswahl in einem Klick."
+	calm_cb.button_pressed = GraphicsSettings.calm_mode
+	calm_cb.toggled.connect(func(on: bool) -> void:
+		GraphicsSettings.set_calm_mode(on))
+	calm_cb.set_meta("calm", true)
+	_calm_cb = calm_cb
+	vbox.add_child(calm_cb)
+	GraphicsSettings.calm_mode_changed.connect(_on_calm_changed)
+
 	_add_ui_scale_slider(vbox)
 
 	# Reduce Motion (accessibility) — collapses UI micro-interactions.
@@ -215,6 +233,7 @@ func _build_ui() -> void:
 		GraphicsSettings.reduce_motion = on
 		GraphicsSettings.save_settings())
 	vbox.add_child(reduce_cb)
+	_switch_toggles["reduce_motion"] = reduce_cb
 
 	var idle_cb := CheckButton.new()
 	idle_cb.text = "Miniature Idle Motion"
@@ -224,6 +243,7 @@ func _build_ui() -> void:
 		GraphicsSettings.idle_motion = on
 		GraphicsSettings.save_settings())
 	vbox.add_child(idle_cb)
+	_switch_toggles["idle_motion"] = idle_cb
 
 	# Fullscreen (safe borderless mode, not the crash-prone exclusive fullscreen).
 	var fs_cb := CheckButton.new()
@@ -301,6 +321,7 @@ func _build_ui() -> void:
 			if fx != null:
 				fx.enabled = on)
 	vbox.add_child(vfx_cb)
+	_switch_toggles["show_combat_effects"] = vfx_cb
 
 	# Tilt-Shift (cinematic depth of field): sharp while zoomed out, softly blurred in
 	# the foreground/background as the camera zooms towards the models. On by default;
@@ -315,6 +336,7 @@ func _build_ui() -> void:
 		if pivot != null and pivot.has_method("set_tilt_shift_enabled"):
 			pivot.set_tilt_shift_enabled(on))
 	vbox.add_child(tilt_cb)
+	_switch_toggles["tilt_shift"] = tilt_cb
 	var frame := OptionButton.new()
 	frame.name = "TableFrameOption"
 	for title in ["Frame: Today's look", "Frame: Walnut", "Frame: Oak", "Frame: Ivory"]:
@@ -390,6 +412,18 @@ func _build_ui() -> void:
 		GraphicsSettings.ai_explain_persistent = on
 		GraphicsSettings.save_settings())
 	vbox.add_child(explain_cb)
+
+
+## Calm mode changed (from this panel or elsewhere): reflect the toggle and the
+## individual switches it forces, WITHOUT re-emitting (set_pressed_no_signal), so the
+## panel never shows a stale state and the handlers do not bounce.
+func _on_calm_changed() -> void:
+	if _calm_cb != null and is_instance_valid(_calm_cb):
+		_calm_cb.set_pressed_no_signal(GraphicsSettings.calm_mode)
+	for field: String in _switch_toggles:
+		var cb := _switch_toggles[field] as CheckButton
+		if cb != null and is_instance_valid(cb):
+			cb.set_pressed_no_signal(bool(GraphicsSettings.get(field)))
 
 
 ## UI Scale slider (content_scale_factor) — reachability/HiDPI. Bound to GraphicsSettings.

@@ -191,6 +191,7 @@ func _show_table_setup(host_settings: Dictionary = {}) -> void:
 	if is_instance_valid(_table_setup):
 		return
 	_table_setup = TableSizeDialog.new()
+	_table_setup.online = not host_settings.is_empty()   # Create room: online stays Manual
 	add_child(_table_setup)
 	_table_setup.set_biomes(MenuDiorama.Battlefield.BIOMES,diorama.biome)
 	_table_setup.size_chosen.connect(_on_table_setup_chosen.bind(host_settings))
@@ -200,7 +201,9 @@ func _show_table_setup(host_settings: Dictionary = {}) -> void:
 
 
 func _on_table_setup_chosen(size_feet: Vector2, host_settings: Dictionary) -> void:
-	ProjectSettings.set_setting("niemandsland/pending_table_setup",{"size":size_feet,"biome":_table_setup.selected_biome})
+	ProjectSettings.set_setting("niemandsland/pending_table_setup",{"size":size_feet,"biome":_table_setup.selected_biome,"rules":_table_setup.selected_rules})
+	if RulesAutomation.ui_enabled() and not _table_setup.online:
+		RulesAutomation.remember_pick(_table_setup.selected_rules)
 	for key in host_settings:
 		ProjectSettings.set_setting(key,host_settings[key])
 	_table_setup.hide()
@@ -296,8 +299,8 @@ func _show_tutorial_picker(progress: TutorialProgress, track: Array) -> void:
 
 
 ## GAME SCHOOL (working name "Spielschule") pressed: open the chapter list. The full game-school
-## track — ten isolated, repeatable lessons, each loading its own prepared scene, plus the reserved
-## spell slot. Chapters without a bundled scenario yet stay disabled ("scenario coming soon").
+## track — eleven isolated, repeatable lessons, each loading its own prepared scene. Chapters
+## without a bundled scenario yet stay disabled ("scenario coming soon").
 func _on_spielschule_pressed() -> void:
 	var progress := SpielschuleProgress.new()
 	progress.load_from_disk()
@@ -310,7 +313,7 @@ func _on_spielschule_pressed() -> void:
 	vbox.add_theme_constant_override("separation", HudTokens.SECTION_SEP)
 
 	var intro := Label.new()
-	intro.text = "Ten short lessons — play them in any order, replay any time."
+	intro.text = "Eleven short lessons — play them in any order, replay any time."
 	intro.theme_type_variation = HouseStyle.CAPTION
 	intro.autowrap_mode = TextServer.AUTOWRAP_WORD
 	vbox.add_child(intro)

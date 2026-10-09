@@ -330,6 +330,10 @@ var network_manager: Node = null
 var movement_range: MovementRangeController = null
 var human_slot: int = 1
 var ai_slot: int = 2
+## Lesson seam (D3, default OFF): when true, every AI activation is a HOLD — the unit is marked
+## activated but does not move or shoot. Arena and selfplay never set it, so their numbers are
+## unchanged; only a tutorial step sets it (main._start_lesson, ai_mode == "hold").
+var lesson_hold := false
 ## Units held back by their Ambush rule during deploy_army — they arrive at the start of round 2
 ## following the same deployment rules (goal 003 P1: arrive_ambush_reserve wires the arrival).
 var ambush_reserve: Array = []
@@ -741,7 +745,13 @@ func activate_next_ai_unit() -> GameUnit:
 	var _ph_act := 0
 	if act_wall_enabled():
 		_ph_act = _phase_enter()
-	if unit.is_shaken:
+	if lesson_hold:
+		# Tutorial puppet (D3): the AI takes its activation but holds — no move, no shot — so a
+		# lesson unit stays a stationary target. Same shape as the Shaken idle, flagged lesson_hold.
+		last_report = {"unit": unit, "target": null, "action": AiDecision.Action.HOLD,
+			"toward": AiDecision.Toward.ENEMY, "shoot": false, "can_shoot": false,
+			"dist_in": INF, "dangerous_models": 0, "idle_shaken": false, "lesson_hold": true}
+	elif unit.is_shaken:
 		# OPR (p.10): a Shaken unit spends its activation idle, which lets it recover. An AIRCRAFT still
 		# makes its MANDATORY straight move first (GF v3.5.1: the move happens even Shaken, and it does
 		# not break the staying-idle requirement) — _act_aircraft skips targeting/shooting while Shaken.
@@ -2996,6 +3006,17 @@ func end_verdict(owners: Array, alive1: int, alive2: int) -> String:
 	return BattleSim.mission_winner(mission_scoring, owners, mission_vp, mission_markers, alive1, alive2)
 
 
+## The ONE mission-referee read the finale lesson verdict and the game summary share, so the two can
+## never name different winners (NML-1048 was exactly that drift). A live controller's end_verdict is
+## authoritative — it folds the role missions and the progressive VP ledger; only a room that never
+## built a controller (plain MP/hotseat) falls back to BattleSim's pure referee. `controller` stays
+## untyped so tests can pass a double. Returns "p1" / "p2" / "draw".
+static func winner_side(controller, owners: Array, alive1: int, alive2: int) -> String:
+	if controller != null:
+		return controller.end_verdict(owners, alive1, alive2)
+	return BattleSim.mission_winner(mission_scoring, owners, mission_vp, mission_markers, alive1, alive2)
+
+
 func _is_final_round() -> bool:
 	return game_rounds > 0 and _current_round() >= game_rounds
 
@@ -3788,16 +3809,63 @@ func _eval_variant_for(diff: SoloDifficulty) -> int:
 	if forced != "":
 		return int(forced)
 	var v := diff.eval_variant if diff != null and not shipped_brain_ready() else 0
-	return 4 if v == 3 and _aifix_on(diff) else v   # A3 composes with variant 3 (score.rs score_hand_vp_hold)
+	if _aifix_on(diff) and (v == 3 or shipped_brain_ready()):
+		return 4   # A3 (score.rs score_hand_vp_hold): composes with 3 on the hand planner; the brain takes it directly (T2a ran 4 over the arm-0 net)
+	return v
 
 
-## aifix_all for this pick: the preset's `aifix` bundle, only while NO brain is wired (measured on the hand planner;
-## the net waits for its own A/B). env NML_AIFIX=0/1 forces it either way (the A/B's arm switch).
+## aifix_all for this pick: the preset's `aifix` bundle, with or without the brain (measured NOT_WORSE on the hand
+## planner (#1631) and on the shipped Erlkoenig (T2a 08.10.2026)). env NML_AIFIX=0/1 forces it either way (the A/B's arm switch).
 func _aifix_on(diff: SoloDifficulty) -> bool:
 	var forced := OS.get_environment("NML_AIFIX")
 	if forced != "":
 		return forced == "1"
-	return diff != null and diff.aifix and not shipped_brain_ready()
+	return diff != null and diff.aifix
+
+
+## Shipped-brain header knobs for this pick: the preset's `brain_knobs` flag AND the brain wired for this game.
+## env NML_BRAIN_KNOBS=0/1 forces it either way (the A/B's arm switch).
+func _brain_knobs_on(diff: SoloDifficulty) -> bool:
+	var forced := OS.get_environment("NML_BRAIN_KNOBS")
+	if forced != "":
+		return forced == "1"
+	return diff != null and diff.brain_knobs and shipped_brain_ready()
+
+
+## Search leaf_opener_only: the preset's `leaf_opener` flag AND the brain wired. env NML_LEAF_OPENER=0/1 forces it (A/B arm switch).
+func _leaf_opener_on(diff: SoloDifficulty) -> bool:
+	var forced := OS.get_environment("NML_LEAF_OPENER")
+	if forced != "":
+		return forced == "1"
+	return diff != null and diff.leaf_opener and shipped_brain_ready()
+
+
+## Shipped-brain search breadth: the preset's `brain_breadth` AND the brain wired (the hand planner keeps the core default 10/3,
+## its breadth was not measured). env NML_BRAIN_BREADTH=<int> forces it (0 = core default).
+func _brain_breadth(diff: SoloDifficulty) -> int:
+	var forced := OS.get_environment("NML_BRAIN_BREADTH")
+	if forced != "":
+		return maxi(int(forced), 0)
+	if diff != null and diff.brain_knobs and shipped_brain_ready():
+		return diff.brain_breadth
+	return 0
+
+
+## Hand-planner strength_by_points (A/B 08.10.2026, NOT_WORSE): the preset's `points_strength` flag AND no brain
+## (the brain path stamps it through brain_knob_stamp). env NML_POINTS=0/1 forces it either way.
+func _points_strength_on(diff: SoloDifficulty) -> bool:
+	var forced := OS.get_environment("NML_POINTS")
+	if forced != "":
+		return forced == "1"
+	return diff != null and diff.points_strength and not shipped_brain_ready()
+
+
+## Table fidelity (seven rule-fix knobs, not brain-dependent): the preset's `table_fidelity` flag. env NML_TABLE_FIDELITY=0/1 forces it.
+func _table_fidelity_on(diff: SoloDifficulty) -> bool:
+	var forced := OS.get_environment("NML_TABLE_FIDELITY")
+	if forced != "":
+		return forced == "1"
+	return diff != null and diff.table_fidelity
 
 
 ## Stamps the six planner statics of the aifix_all bundle for this pick (the header the live core reads carries
@@ -3810,6 +3878,11 @@ func _apply_aifix(diff: SoloDifficulty) -> void:
 	BattleSim.reply_v2 = on
 	BattleSim.reply_skip_activated = on
 	BattleSim.reply_hold_gate = on
+	AiPlanner.brain_knobs = _brain_knobs_on(diff)
+	AiPlanner.leaf_opener = _leaf_opener_on(diff)
+	AiPlanner.brain_breadth = _brain_breadth(diff)
+	AiPlanner.points_strength = _points_strength_on(diff)
+	AiPlanner.table_fidelity = _table_fidelity_on(diff)
 
 
 ## Ship path (22.09.): true when the core is wanted AND loaded AND the packed brain was

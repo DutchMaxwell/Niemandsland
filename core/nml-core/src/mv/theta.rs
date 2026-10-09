@@ -27,7 +27,7 @@
 use std::collections::{HashMap, HashSet};
 
 use super::cost::{
-    cspace_blocked, segment_cost, step_blocked, terrain_cost_at, CellBuild, Grid, StepOpts, Wall,
+    segment_cost, CellBuild, CostMemo, Grid, StepOpts, Wall, WallIndex,
 };
 use super::geom2::{distance_to, to_f32, V2};
 use super::io::ThetaPop;
@@ -219,10 +219,11 @@ fn theta_core(
     mut trace: Option<&mut Vec<ThetaPop>>,
 ) -> Vec<V2> {
     let so = &opts.step;
+    let wi = WallIndex::new(walls);
     // :1347-1352 — early-out ONLY when the straight shot is hard-clear AND
     // carries no soft-cost surcharge; a merely-Dangerous line must still be
     // compared against a detour.
-    if !cspace_blocked(start, goal, walls, grid, so)
+    if !wi.cspace_blocked(start, goal, grid, so)
         && segment_cost(start, goal, grid, so) <= distance_to(start, goal) + EPS
     {
         return vec![start, goal];
@@ -235,6 +236,9 @@ fn theta_core(
     // :1360-1361 — the fine planning grid, PER AXIS (#215).
     let nx = ((board[0] as f64 / PLAN_CELL_IN).ceil() as i64).max(1) as i32;
     let ny = ((board[1] as f64 / PLAN_CELL_IN).ceil() as i64).max(1) as i32;
+    // From here on every terrain-cost sample goes through the per-search memo (the straight-shot early-out above is cheap
+    // enough to stay direct).
+    let mut memo = CostMemo::new(nx as usize, ny as usize);
 
     let mut g: HashMap<Cell, f64, CellBuild> = HashMap::default();
     g.insert(start_c, 0.0);
@@ -243,6 +247,9 @@ fn theta_core(
     let mut pos: HashMap<Cell, V2, CellBuild> = HashMap::default();
     pos.insert(start_c, start);
     let mut open: Vec<Cell> = vec![start_c];
+    // `open_f[k]` = `g[open[k]] + distance_to(pos[open[k]], goal)`, computed with the very expression the scan used to
+    // recompute (two hash reads and a distance per entry per pop): refreshed whenever a node's g/pos change.
+    let mut open_f: Vec<f64> = vec![0.0 + distance_to(start, goal)];
     let mut open_set: HashSet<Cell, CellBuild> = HashSet::default();
     open_set.insert(start_c);
     let mut closed: HashSet<Cell, CellBuild> = HashSet::default();
@@ -267,7 +274,7 @@ fn theta_core(
         let mut best_f = f64::INFINITY;
         for k in 0..open.len() {
             let c = open[k];
-            let f = g[&c] + distance_to(pos[&c], goal);
+            let f = open_f[k];
             let take = if bend.strict_open {
                 f < best_f
             } else {
@@ -296,6 +303,7 @@ fn theta_core(
             return theta_reconstruct(&parent, &pos, cur);
         }
         open.remove(best_i);
+        open_f.remove(best_i);
         open_set.remove(&cur);
         closed.insert(cur);
         let cur_pt = pos[&cur];
@@ -305,10 +313,10 @@ fn theta_core(
                 continue;
             }
             let nb_pt = if nb == goal_c { goal } else { cell_center_fine(nb) };
-            if nb != goal_c && terrain_cost_at(nb_pt, grid, so).is_infinite() {
+            if nb != goal_c && memo.cost(nb_pt, grid, so).is_infinite() {
                 continue;
             }
-            if step_blocked(cur_pt, nb_pt, walls, so) {
+            if wi.step_blocked(cur_pt, nb_pt, so) {
                 continue;
             }
             // :1405-1415 — price BOTH the grid step and the taut parent
@@ -317,9 +325,9 @@ fn theta_core(
             let par = parent[&cur];
             let par_pt = pos[&par];
             let mut from_node = cur;
-            let mut tentative = g[&cur] + segment_cost(cur_pt, nb_pt, grid, so);
-            if !cspace_blocked(par_pt, nb_pt, walls, grid, so) {
-                let via_par = g[&par] + segment_cost(par_pt, nb_pt, grid, so);
+            let mut tentative = g[&cur] + memo.segment_cost(cur_pt, nb_pt, grid, so);
+            if !(wi.step_blocked(par_pt, nb_pt, so) || memo.cspace_tail(par_pt, nb_pt, grid, so)) {
+                let via_par = g[&par] + memo.segment_cost(par_pt, nb_pt, grid, so);
                 if via_par <= tentative + EPS {
                     from_node = par;
                     tentative = via_par;
@@ -336,9 +344,13 @@ fn theta_core(
                         best_reach = nb;
                     }
                 }
+                let f = tentative + distance_to(nb_pt, goal);
                 if !open_set.contains(&nb) {
                     open.push(nb);
+                    open_f.push(f);
                     open_set.insert(nb);
+                } else if let Some(k) = open.iter().position(|&c| c == nb) {
+                    open_f[k] = f;
                 }
             }
         }
@@ -346,9 +358,9 @@ fn theta_core(
     // :1432-1441 — a guard-exhausted search returns its closest-reached stub,
     // unless the straight line is hard-legal AND no dearer than stub+remainder.
     if reach_closest && best_reach != start_c {
-        if !cspace_blocked(start, goal, walls, grid, so) {
-            let via_stub = g[&best_reach] + segment_cost(pos[&best_reach], goal, grid, so);
-            if segment_cost(start, goal, grid, so) <= via_stub + EPS {
+        if !(wi.step_blocked(start, goal, so) || memo.cspace_tail(start, goal, grid, so)) {
+            let via_stub = g[&best_reach] + memo.segment_cost(pos[&best_reach], goal, grid, so);
+            if memo.segment_cost(start, goal, grid, so) <= via_stub + EPS {
                 return vec![start, goal];
             }
         }

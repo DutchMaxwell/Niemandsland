@@ -2373,9 +2373,45 @@ def play_from_state(
 KNOB_PRESETS: dict[str, dict[str, Any]] = {
     # the strength_by_points eval arm (freeze2 T2c): presence weighted by unit points
     "afpoints_p1": {"strength_by_points": True},
+    "charge_path": {"charge_needs_path": True},
+    # opponent-model diagnosis (c) (08.10.2026): every root rollout stops right after the opener and is
+    # priced there by the blend + net leaf — no scripted opponent reply, no scripted tail.
+    "leaf_opener": {"leaf_opener_only": True},
     # aifix action-space lane (07.10.2026): the menu opens — up to 3 extra HOLD+shoot targets and one
     # ADVANCE-toward-the-marker-with-a-shot row. A STRENGTH change (bar = better), see farm/aifix/PREREG_MENU_OPEN.md.
     "menu_open": {"menu_all_targets": 3, "menu_advance_obj_shoot": True},
+    # inventory C02: only models within a weapon's range fire in the imagined volley (GF/AoF p.8)
+    "fire_in_range": {"fire_in_range_only": True},
+    # opponent-model diagnosis (a) (08.10.2026): the opponent's FIRST rollout reply is the planner's own
+    # one-ply search for it at grade 3/1 (the net at its leaves) instead of the scripted brain.
+    "reply_net": {"reply_by_net": True, "reply_top_k": 3, "reply_horizon": 1},
+    # reply_net at a capped nested pool (08.10.2026): the opponent's nested reply search prices only the top 3
+    # rows of its own prefilter order, no per-unit coverage / patient-advance rows (reply_net's cost lever).
+    "reply_net_cap3": {"reply_by_net": True, "reply_top_k": 3, "reply_horizon": 1, "reply_pool_cap": 3},
+    # ... and on the scripted brain's own four-option menu and playout seams: only the CHOOSER differs from
+    # the scripted reply (search + net instead of the greedy 1-ply score).
+    "reply_net_cap3_restricted": {"reply_by_net": True, "reply_top_k": 3, "reply_horizon": 1, "reply_pool_cap": 3,
+                                  "reply_menu_restricted": True},
+    # D7 (09.10.2026): under search_mode tree, the opponent's nodes order and select their replies by the
+    # opponent's OWN leaf (priced from its seat) instead of the argmin of the searcher's leaf; the backed-up value
+    # stays the searcher's. Read only by the tree.
+    "tree_opp_own": {"tree_opponent_own_leaf": True},
+    # inventory C12: a joined hero counts in the unit size for half strength and morale (GF/AoF p.14)
+    "hero_size": {"hero_counts_in_size": True},
+    # inventory C08: a Shaken Fearless unit keeps its 4+ roll in the imagined morale test (p.13), as the table does
+    "fearless_shaken": {"fearless_roll_when_shaken": True},
+    # inventory C03: special-weapon bearers fall last in the imagined volley, as the table assumes
+    "bearers_last": {"casualties_bearers_last": True},
+    # inventory T03-T06: the enemy's reply threat by its real charge/advance band, base gap, no Aircraft charge
+    "reply_speed": {"reply_threat_by_speed": True},
+    # inventory C01/C27: the imagined shot measures range base edge to base edge, as the table does
+    "range_edge": {"range_by_base_edge": True},
+    # the seven table-rule fixes above as one switch (the A/B harness takes candidate overlays only as named presets)
+    "fidelity_all": {
+        "range_by_base_edge": True, "fire_in_range_only": True, "casualties_bearers_last": True,
+        "hero_counts_in_size": True, "reply_threat_by_speed": True, "charge_needs_path": True,
+        "fearless_roll_when_shaken": True,
+    },
     "aifix_all": {
         "opener_by_finish": True, "no_end_threat": True, "morale_by_probability": True,
         "eval_variant": 4, "reply_v2": True, "reply_skip_activated": True, "reply_hold_gate": True,

@@ -202,6 +202,13 @@ struct PyLeafValue<'a> {
 
 impl LeafValue for PyLeafValue<'_> {
     fn value(&self, leaves: &[&CoreState], side: i64) -> Result<Vec<f64>, CoreUnsupported> {
+        self.value_for_seat(leaves, side, self.opener_seat)
+    }
+
+    /// `Knobs::reply_by_net`: the opponent's nested reply search asks from ITS seat — the same
+    /// export with that seat's `opener_seat` token.
+    fn value_for_seat(&self, leaves: &[&CoreState], side: i64, opener_seat: bool)
+                      -> Result<Vec<f64>, CoreUnsupported> {
         let (py, mut rows) = (self.fun.py(), self.rows.borrow_mut());
         let batch = PyList::empty(py);
         let park = |e: PyErr| {
@@ -210,7 +217,7 @@ impl LeafValue for PyLeafValue<'_> {
         };
         for st in leaves {
             let t = nmlcore::tokens::build(st, side, self.statics, self.terrain, &mut rows,
-                &[], -1, self.hero_attach, self.opener_seat, self.rules_epoch)?;
+                &[], -1, self.hero_attach, opener_seat, self.rules_epoch)?;
             to_py(py, &t.to_json()).and_then(|d| batch.append(d)).map_err(&park)?;
         }
         self.fun.call1((batch, side)).and_then(|o| o.extract::<Vec<f64>>()).map_err(&park)
@@ -733,9 +740,15 @@ impl Core {
             // stays OFF.
             dangerous_end_morale: self.knobs.dangerous_end_morale,
             morale_by_probability: self.knobs.morale_by_probability,
+            fire_in_range_only: self.knobs.fire_in_range_only,
+            hero_counts_in_size: self.knobs.hero_counts_in_size,
+            fearless_roll_when_shaken: self.knobs.fearless_roll_when_shaken,
+            casualties_bearers_last: self.knobs.casualties_bearers_last,
+            range_by_base_edge: self.knobs.range_by_base_edge,
             reply_v2: self.knobs.reply_v2,
             reply_skip_activated: self.knobs.reply_skip_activated,
             reply_hold_gate: self.knobs.reply_hold_gate,
+            reply_threat_by_speed: self.knobs.reply_threat_by_speed,
             // Tray-exact series (io.rs `Seams::tray_exact`): on from its one epoch bump.
             tray_exact: nmlcore::acts::rule_on(self.knobs.rules_epoch, nmlcore::acts::EPOCH_70_TRAY_EXACT),
             // Dormant: only the search's root seams will set it (io.rs `Seams::plain_only`).
@@ -822,11 +835,17 @@ impl Core {
         m.insert("horizon".into(), self.knobs.horizon.into());
         m.insert("tail_cap_p1".into(), self.knobs.tail_cap_p1.into());
         m.insert("tail_cap_p2".into(), self.knobs.tail_cap_p2.into());
+        m.insert("leaf_opener_only".into(), self.knobs.leaf_opener_only.into());
         m.insert("imagined_round_end".into(), self.knobs.imagined_round_end.into());
         m.insert("depth_discount".into(), self.knobs.depth_discount.into());
         m.insert("seat_mode".into(), self.knobs.seat_mode.into());
         m.insert("playout_margin".into(), self.knobs.playout_margin.into());
         m.insert("playout_rich".into(), self.knobs.playout_rich.into());
+        m.insert("reply_by_net".into(), self.knobs.reply_by_net.into());
+        m.insert("reply_top_k".into(), self.knobs.reply_top_k.into());
+        m.insert("reply_horizon".into(), self.knobs.reply_horizon.into());
+        m.insert("reply_pool_cap".into(), self.knobs.reply_pool_cap.into());
+        m.insert("reply_menu_restricted".into(), self.knobs.reply_menu_restricted.into());
         m.insert("seam_cast".into(), self.knobs.seam_cast.into());
         m.insert("seam_spacing".into(), self.knobs.seam_spacing.into());
         m.insert("seam_path".into(), self.knobs.seam_path.into());
@@ -853,12 +872,21 @@ impl Core {
         m.insert("engage_fold".into(), self.knobs.engage_fold.into());
         m.insert("reply_v2".into(), self.knobs.reply_v2.into());
         m.insert("menu_all_targets".into(), (self.knobs.menu_all_targets as i64).into());
+        m.insert("menu_los".into(), self.knobs.menu_los.into());
+        m.insert("menu_advance_k".into(), (self.knobs.menu_advance_k as i64).into());
         m.insert("menu_advance_obj_shoot".into(), self.knobs.menu_advance_obj_shoot.into());
+        m.insert("charge_needs_path".into(), self.knobs.charge_needs_path.into());
         m.insert("reply_skip_activated".into(), self.knobs.reply_skip_activated.into());
         m.insert("reply_hold_gate".into(), self.knobs.reply_hold_gate.into());
+        m.insert("reply_threat_by_speed".into(), self.knobs.reply_threat_by_speed.into());
         m.insert("opener_by_finish".into(), self.knobs.opener_by_finish.into());
         m.insert("no_end_threat".into(), self.knobs.no_end_threat.into());
+        m.insert("fire_in_range_only".into(), self.knobs.fire_in_range_only.into());
+        m.insert("range_by_base_edge".into(), self.knobs.range_by_base_edge.into());
         m.insert("morale_by_probability".into(), self.knobs.morale_by_probability.into());
+        m.insert("hero_counts_in_size".into(), self.knobs.hero_counts_in_size.into());
+        m.insert("fearless_roll_when_shaken".into(), self.knobs.fearless_roll_when_shaken.into());
+        m.insert("casualties_bearers_last".into(), self.knobs.casualties_bearers_last.into());
         m.insert("rule_vocab_version".into(), self.knobs.rule_vocab_version.into());
         m.insert("eval_variant".into(), self.knobs.eval_variant.into());
         m.insert("strength_by_points".into(), self.knobs.strength_by_points.into());
@@ -901,6 +929,7 @@ impl Core {
         m.insert("deadline_after_preselect".into(), self.knobs.deadline_after_preselect.into());
         m.insert("tree_widen".into(), self.knobs.tree_widen.into());
         m.insert("tree_puct".into(), self.knobs.tree_puct.into());
+        m.insert("tree_opponent_own_leaf".into(), self.knobs.tree_opponent_own_leaf.into());
         m.insert(
             "melee_reach".into(),
             Value::String(

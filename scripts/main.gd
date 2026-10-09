@@ -130,6 +130,11 @@ var _top_bar: TopBar = null
 ## count / success / modifier / reroll / movecap. The tutorial director gates T-05 steps on it;
 ## display-consumers only, no game logic reads it back.
 signal dice_controls_changed(kind: StringName, value: int)
+## Lesson seam: a human attack has finished resolving, so a lesson step can count it. melee
+## distinguishes the charge/pile-in leg from a shooting volley. Display-consumers only.
+signal human_attack_resolved(attacker: GameUnit, melee: bool)
+## Lesson seam: a human cast has finished resolving (tokens spent, effects applied).
+signal human_cast_resolved(unit: GameUnit)
 
 var _dice_count: int = DEFAULT_DICE_COUNT
 var _dice_preset_buttons: Array[Button] = []
@@ -214,7 +219,6 @@ var battle_log: BattleLog = null              # narrative event log (collector)
 var battle_log_panel: BattleLogPanel = null   # collapsible HUD panel (top-centre, collapsed by default)
 var game_record_collector: GameRecordCollector = null   # in-memory opt-in game record (PR B1, local only)
 var _tutorial_mode: bool = false              # guided tutorial: set from the startup-menu flag, drives _start_tutorial
-var _solo_hotseat: bool = false               # tutorial table = two humans: retires the implicit "P2 is NACHTMAHR" default (plan B1)
 var _tutorial_director: TutorialDirector = null
 var _tutorial_start_lesson: String = ""       # chapter-picker lesson id ("" = assessment/resume flow)
 var _tutorial_board_pending: bool = false     # the bundled tutorial board was queued on the pending-load path
@@ -284,6 +288,9 @@ var _solo_interactive_grade: String = SoloGrade.base_preset(SoloGrade.load_saved
 var _solo_grade_logged := ""   # the grade line this game already logged ("" = none yet)
 var _solo_opponent_brain: Dictionary = {}  # the opponent the game really runs (GameRecordCollector.opponent_brain),
                                            # set with the "opponent:" line; {} = no AI seat graded
+var _rules_chip: Label = null                # rules-automation chip beside the round button (plan 1.3)
+var _turn_chip: Label = null                 # hotseat turn chip beside the rules chip (plan 2.T2a)
+var _hotseat_turn: TwoHumanTurn = null       # enforced alternation on a hotseat Automatic table (plan 2.T2a)
 var solo_panel_box: VBoxContainer = null     # left-panel "Solo" section (per-army AI toggles)
 var solo_mission_option: OptionButton = null # left-panel Mission picker (MissionCatalog + "Duel (no mission)")
 var _solo_mission_id: String = ""            # "" = Duel (no mission, today's byte-identical behaviour)
@@ -876,7 +883,6 @@ func _ready() -> void:
 	if tutorial_mode:
 		ProjectSettings.set_setting("niemandsland/tutorial_mode", false)
 		_tutorial_mode = true
-		_solo_hotseat = true   # from the first frame: the board loads before the director starts
 		_tutorial_start_lesson = str(ProjectSettings.get_setting("niemandsland/tutorial_lesson", ""))
 		ProjectSettings.set_setting("niemandsland/tutorial_lesson", "")
 		if str(ProjectSettings.get_setting("niemandsland/pending_load_path", "")).is_empty() \
@@ -950,6 +956,9 @@ func _ready() -> void:
 	# data, so they skip the chooser.
 	var table_setup: Dictionary = ProjectSettings.get_setting("niemandsland/pending_table_setup",{})
 	ProjectSettings.set_setting("niemandsland/pending_table_setup",null)
+	var rules_line := RulesAutomation.apply_table_setup(table_setup,opr_army_manager)
+	if rules_line != "":
+		_log_rule_event(BattleLog.Category.GENERAL,rules_line)
 	var joining_client: bool = pending_internet and not ProjectSettings.get_setting("niemandsland/internet_is_host", false)
 	# Headless MP test harness (test/mp/): skip the interactive table-size chooser AND the
 	# cinematic intro and drop straight onto a live, RPC-capable table. Inert in normal play.
@@ -998,7 +1007,7 @@ func _dismiss_transition_overlay() -> void:
 ## Solo/AI (F11, debug fallback): run the WHOLE remaining AI side — every eligible unit of the designated
 ## AI army activates in sequence (goal 003 P2; the normal flow is alternating activation via
 ## _on_solo_human_activated). The AI army is whichever slot is marked in solo_ai_slots (import checkbox /
-## Solo panel); with no designation it falls back to player 2 (backward compat).
+## Solo panel); with no designation the F11 press designates player 2 explicitly (plan 2.2: no implicit AI).
 func _run_solo_ai_turn() -> void:
 	# F11 is a FOURTH door into play, and it is player-facing — the import dialog and the Solo panel both
 	# advertise it. Ungated it was the worst of them: _solo_ensure_playing_phase() below deploys the AI's
@@ -1010,8 +1019,10 @@ func _run_solo_ai_turn() -> void:
 	if opr_army_manager == null or movement_range_controller == null:
 		push_warning("[Solo/AI] not ready — import armies first")
 		return
+	if solo_ai_slots.is_empty():
+		_on_solo_ai_toggled(true, 2)   # F11 is an explicit "run the AI": designate player 2 (plan 2.2)
 	_ensure_solo_controller()
-	if _solo_ai_busy:
+	if solo_controller == null or _solo_ai_busy:
 		return
 	_solo_ai_busy = true
 	# Community #163: F11 gets the same "NACHTMAHR dreams…" indicator the alternation pump
@@ -1235,7 +1246,7 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	# the end of an activation"), so it is excluded here. should_test only fires on a real casualty at ≤half.
 	if dangerous_models > 0 and not unit.is_destroyed() \
 			and int(report.get("action", 0)) != AiDecision.Action.CHARGE:
-		await _solo_shooting_morale(unit, alive_before_dangerous, _solo_owner_label(unit), wounds_before_dangerous)
+		await _solo_shooting_morale(unit, alive_before_dangerous, _roller_label(unit), wounds_before_dangerous)
 	if unit != null:
 		await _solo_try_precision_spot(unit)   # wave B: once per activation
 	# Ambush Re-Deployment fires "when a unit ... ENDS its activation" — the very last beat, after
@@ -1684,6 +1695,8 @@ func solo_begin_pass(unit: GameUnit) -> void:
 	var u: GameUnit = _solo_combat_unit(unit)   # a joined hero passes with its host unit
 	if u == null or _solo_is_ai_unit(u):
 		return
+	if _hotseat_verb_refused(u):
+		return
 	if _deployment_gate_refuses_start():
 		return   # the gate writes its own refusal line
 	_solo_ensure_playing_phase()
@@ -1742,6 +1755,9 @@ func solo_spend_speed_feat(unit: GameUnit) -> void:
 ## non-blocking "NACHTMAHR is taking its turn" banner so the player stays oriented.
 func _solo_pump() -> void:
 	if solo_controller == null or _solo_ai_busy:
+		return
+	# Step 2.4: a geometry-only controller (hotseat Automatic, no AI seat) must never play an AI turn.
+	if solo_ai_slots.is_empty():
 		return
 	# Coordinate: the receiver activates IMMEDIATELY — the AI's owed reply waits behind it. The
 	# hold releases itself the moment the receiver has acted (or died / left the table), so an
@@ -1890,9 +1906,11 @@ func _hide_dream_overlay() -> void:
 	_solo_dream_overlay = null
 
 
-## Whether a solo game is engaged (an army is marked for the AI, or F11 already built the controller).
+## Whether the AI alternation is engaged: an army is marked for the AI (F11 marks one too, and the
+## both-AI arena marks both). Step 2.4: a controller built ONLY for hotseat geometry does NOT count —
+## no NACHTMAHR turn may follow a human attack on a table with no AI seat.
 func _solo_alternation_active() -> bool:
-	return solo_controller != null or not solo_ai_slots.is_empty()
+	return not solo_ai_slots.is_empty()
 
 
 ## Gate for the alternation trigger: solo engaged, managers ready, and the activated unit is the HUMAN's.
@@ -2560,7 +2578,7 @@ func _solo_secret_reveals(infos: Array, objectives: Array, res: Dictionary) -> v
 
 ## Trap: D6+1 hits on the seizing unit, saved and landed through the normal save seam.
 func _solo_secret_trap_hits(victim: GameUnit) -> void:
-	var faces: Array = await _solo_tray_roll(1, 1, _solo_owner_label(victim), "attack",
+	var faces: Array = await _solo_tray_roll(1, 1, _roller_label(victim), "attack",
 		"Trap: D6+1 hits on %s" % victim.get_name())
 	if faces.is_empty():
 		return
@@ -2743,6 +2761,21 @@ func _solo_player_label(pid: int) -> String:
 	return "P%d" % pid
 
 
+## The plain human verdict for the finished mission — "Victory", "Defeat" or "Draw" — decided by the
+## SAME referee the result JSON uses (SoloController.end_verdict / BattleSim.mission_winner). The
+## finale lesson card reads this so it can never announce a result the summary contradicts.
+func _solo_lesson_verdict() -> String:
+	var owners: Array = terrain_overlay.get_objective_owners() if terrain_overlay != null else []
+	var winner_side: String = SoloController.winner_side(solo_controller, owners,
+		_solo_side_alive(1), _solo_side_alive(2))
+	var human_slot := 2 if _solo_ai_slot() == 1 else 1
+	if winner_side == ("p%d" % human_slot):
+		return "Victory"
+	elif winner_side == ("p%d" % (2 if human_slot == 1 else 1)):
+		return "Defeat"
+	return "Draw"
+
+
 ## End-of-game summary (goal 003 P2): after SOLO_GAME_ROUNDS the match ends — BattleSim.mission_winner
 ## names the winner from the mission's OWN currency (NML-1048), never from a second count taken here.
 ## A battle-log block + a results dialog; the table stays as-is (the Next-Round button still works for
@@ -2777,9 +2810,8 @@ func _solo_show_game_summary() -> void:
 	# over 633 self-play games, 55 of the 233 round_vp ones named the LOSING side (seed 3003000: board
 	# 1:2 markers, ledger 6:5 VP, referee "p1", summary "P2 wins").
 	var summary_owners: Array = terrain_overlay.get_objective_owners() if terrain_overlay != null else []
-	var winner_side: String = solo_controller.end_verdict(summary_owners, _solo_side_alive(1), _solo_side_alive(2)) \
-		if solo_controller != null else BattleSim.mission_winner(SoloController.mission_scoring, summary_owners,
-			SoloController.mission_vp, SoloController.mission_markers, _solo_side_alive(1), _solo_side_alive(2))   # the referee speaks P1/P2, never "you"/"AI"
+	var winner_side: String = SoloController.winner_side(solo_controller, summary_owners,
+		_solo_side_alive(1), _solo_side_alive(2))   # the referee speaks P1/P2, never "you"/"AI"
 	var human_won: bool = winner_side == ("p%d" % human_slot)
 	var ai_won: bool = winner_side == ("p%d" % ai_slot)
 	var verdict: String = win_a if human_won else (win_b if ai_won else "Draw")
@@ -2845,15 +2877,157 @@ func _solo_ai_slot() -> int:
 	return 2
 
 
+## Step 2.4: a LOCAL table with the switch on Automatic and no AI seat still wants the controller for
+## its GEOMETRY (cover, LOS, sandbox terrain) — the resolvers borrow it. Online stays Manual until
+## Phase 3 and a designated AI slot takes the other branch, so this is the hotseat case only.
+func _solo_hotseat_automatic() -> bool:
+	if opr_army_manager == null or not solo_ai_slots.is_empty():
+		return false
+	if network_manager != null and network_manager.is_multiplayer_active():
+		return false
+	return opr_army_manager.rules_automation == RulesAutomation.Level.AUTOMATIC
+
+
+## Step 2.T2a: the side on turn on a hotseat Automatic table (two humans, no AI seat). P1 opens the
+## first round until TwoHumanTurn records an activation.
+func _hotseat_side_on_turn() -> int:
+	if _hotseat_turn == null or _hotseat_turn.side_on_turn == TwoHumanTurn.NONE:
+		return 1
+	return _hotseat_turn.side_on_turn
+
+
+## The eligible-unit count per side (alive, unactivated, not in reserve) for TwoHumanTurn.
+func _hotseat_eligible_counts() -> Dictionary:
+	var counts := {1: 0, 2: 0}
+	if opr_army_manager == null:
+		return counts
+	for u in opr_army_manager.get_all_game_units():
+		if u == null or u.is_activated or u.get_alive_count() <= 0:
+			continue
+		if SoloController.unit_in_reserve(u):
+			continue
+		var slot: int = unit_owner_slot(u.unit_properties)
+		if counts.has(slot):
+			counts[slot] += 1
+	return counts
+
+
+## Step 2.6a: true when neither side has an eligible unit left, so the hotseat round closes by itself.
+func _hotseat_round_spent() -> bool:
+	var counts := _hotseat_eligible_counts()
+	return int(counts.get(1, 0)) <= 0 and int(counts.get(2, 0)) <= 0
+
+
+## The off-turn refusal line for `slot`, or "" when the side may act. Only a hotseat Automatic
+## table alternates; Manual and solo-vs-AI tables are untouched (an AI seat keeps the SoloController
+## alternation, step 2.4).
+func hotseat_turn_refusal(slot: int) -> String:
+	if not _solo_hotseat_automatic():
+		return ""
+	if slot == _hotseat_side_on_turn():
+		return ""
+	return "It is P%d's turn" % _hotseat_side_on_turn()
+
+
+## Record an activation by `slot` and hand the turn to the other side (TwoHumanTurn, TAIL-aware).
+func hotseat_record_activation(slot: int) -> void:
+	if not _solo_hotseat_automatic():
+		return
+	if _hotseat_turn == null:
+		_hotseat_turn = TwoHumanTurn.new()
+	if _hotseat_turn.side_on_turn == TwoHumanTurn.NONE:
+		_hotseat_turn.side_on_turn = _hotseat_turn.slot_a
+	_hotseat_turn.after_activation(slot, _hotseat_eligible_counts())
+	if _hotseat_turn.side_on_turn == TwoHumanTurn.NONE:
+		_hotseat_end_round()
+		return
+	_hotseat_handover_line(slot)
+	_update_round_button()
+
+
+## Step 2.T3: the one line that announces the passing turn — or the TAIL when the other side is spent
+## (the round end is step 2.6a and logs nothing here).
+func _hotseat_handover_line(just_acted: int) -> void:
+	if battle_log == null or _hotseat_turn == null:
+		return
+	var next: int = _hotseat_turn.side_on_turn
+	if next == TwoHumanTurn.NONE:
+		return
+	if next == just_acted:
+		_log_rule_event(BattleLog.Category.GENERAL,
+			"P%d has no units left — P%d keeps activating" % [_hotseat_turn.other(just_acted), just_acted])
+		return
+	_log_rule_event(BattleLog.Category.GENERAL, "P%d to activate" % next)
+
+
+## Step 2.6a: the hotseat round end — the SAME end-of-round truth as solo (`_solo_end_round`) without
+## the solo opener pump: seize objectives, book mission VP (with a mission picked) and the summary
+## after SOLO_GAME_ROUNDS, then advance and let the side that did NOT take the last activation open.
+func _hotseat_end_round() -> void:
+	if opr_army_manager == null:
+		return
+	_solo_auto_seize()
+	_solo_book_mission_vp(opr_army_manager.current_round >= _solo_total_rounds())
+	if opr_army_manager.current_round >= _solo_total_rounds():
+		if not _solo_game_finished:
+			_solo_game_finished = true
+			_solo_show_game_summary()
+		return
+	var opener: int = _hotseat_turn.next_round_opener() if _hotseat_turn != null else TwoHumanTurn.NONE
+	opr_army_manager.advance_round()
+	_refresh_round_visuals()
+	if network_manager != null:
+		network_manager.broadcast_round_advance()
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL, "Round %d begins" % opr_army_manager.current_round, true)
+	_hotseat_start_round(opener)
+
+
+## Begin a hotseat round: the opener takes the turn (a wiped opener yields to the other side).
+func _hotseat_start_round(opener: int) -> void:
+	if _hotseat_turn == null:
+		_hotseat_turn = TwoHumanTurn.new()
+	if opener == TwoHumanTurn.NONE:
+		opener = _hotseat_turn.slot_a
+	_hotseat_turn.start_round(opener, _hotseat_eligible_counts())
+	_update_round_button()
+
+
+## Log an off-turn refusal (shared by the radial Activate door and the combat verbs).
+func hotseat_log_refusal(text: String) -> void:
+	if battle_log != null and text != "":
+		battle_log.log_event(BattleLog.Category.GENERAL, text)
+
+
+## Guard for the combat verbs (Shoot/Fight/Cast/Pass): true means the caller must stop.
+func _hotseat_verb_refused(unit: GameUnit) -> bool:
+	var refusal := hotseat_turn_refusal(unit_owner_slot(unit.unit_properties))
+	if refusal == "":
+		return false
+	hotseat_log_refusal(refusal)
+	return true
+
+
+## Step 2.T2b (Q7): whether an off-turn unit's DRAG must snap back — only during the PLAYING phase, so
+## deployment stays free. Logs the line and toasts; true means the drag commits nothing.
+func hotseat_off_turn_drag(unit: GameUnit) -> bool:
+	if unit == null or opr_army_manager == null \
+			or opr_army_manager.game_phase != OPRArmyManager.GamePhase.PLAYING:
+		return false
+	if hotseat_turn_refusal(unit_owner_slot(unit.unit_properties)) == "":
+		return false
+	var text := "%s is not on turn — moved back" % unit.get_name()
+	hotseat_log_refusal(text)
+	_show_toast(text)
+	return true
+
 ## (Re)build the SoloController for the currently designated AI slot (setup wires TurnManager once).
 func _ensure_solo_controller() -> void:
 	# #196 belt-and-braces: in multiplayer the controller exists only for an EXPLICITLY
 	# designated AI slot — a cast/targeting click in a human-vs-human room must not summon
-	# NACHTMAHR (the controller's existence alone arms the alternation pump).
-	if solo_ai_slots.is_empty() and network_manager != null and network_manager.is_multiplayer_active():
-		return
-	# Plan B1, tutorial only: same rule on the tutorial table — no designation, no controller.
-	if solo_ai_slots.is_empty() and _solo_hotseat:
+	# NACHTMAHR. Step 2.4 adds ONE exception: a hotseat Automatic table builds it for GEOMETRY
+	# only; the alternation stays off (no AI seat), so no NACHTMAHR turn can follow.
+	if solo_ai_slots.is_empty() and not _solo_hotseat_automatic():
 		return
 	var ai_slot := _solo_ai_slot()
 	# In native both-AI mode the driver flips solo_controller.ai_slot per activation, so a slot-mismatch is
@@ -2999,7 +3173,7 @@ func _on_solo_deploy_pressed() -> void:
 	# the controller — the guided flow would null-crash right here. The rulebook deployment
 	# in multiplayer is the players' own alternating placement (free drags), not this flow.
 	if solo_controller == null:
-		_solo_show_toast("Guided deployment is a solo-game flow — in multiplayer, deploy freely by dragging from the trays")
+		_solo_show_toast("Guided deployment needs an AI army (tick NACHTMAHR on the import) — otherwise deploy freely by dragging from the trays")
 		return
 	var w: float = table.table_size.x * 0.3048
 	var d: float = table.table_size.y * 0.3048
@@ -4129,6 +4303,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 	var landed_extra := 0   # NML-966 gap B: Deadly/Takedown wounds landed outside the regen pool
 	var total_hits := 0
 	var total_caused := 0
+	var cover_logged := false   # I4: log Cover once, only when a shot's save really used it
 	# Unpredictable (generic army-book rule — "when attacking": the SHOOTING leg; the wave-4 melee-only
 	# Unpredictable Fighter lives in the melee path): ONE die per volley for the whole unit —
 	# 1-3 → AP(+1), 4-6 → +1 to hit on every profile it fires (same arithmetic, same visible tray).
@@ -4272,6 +4447,11 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		# DEFENDER is itself AI, the saves auto-roll on the real tray (no human prompt) — the human_defends flag
 		# is derived, never assumed, so an AI-vs-AI game resolves shooting unattended.
 		var save_def: int = shot_base if (int(profile.get("blast", 0)) > 1 or bool(profile.get("indirect", false)) or bool(profile.get("ignores_cover", false))) else shot_cover
+		if td_ctx.is_empty() and not cover_logged and battle_log != null \
+				and AiCombatMath.shot_uses_cover(save_def, shot_cover, shot_base):
+			cover_logged = true   # I4: only claim Cover when the roll truly saved at the covered value
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s is in cover: +1 Defense (saves on %d+)" % [
+				target.get_name(), AiCombatMath.shown_target(save_def)], true)
 		var is_deadly: bool = int(profile.get("deadly", 0)) > 0
 		# TC-023: the saves are the PICKED MODEL's — rolled by its own GameUnit, so a sniped attached
 		# hero blocks on HIS Defense (and his own Fortified / conditional-AP profile), not the host's.
@@ -4318,7 +4498,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 	# NML-966 gap B: Deadly/Takedown wounds bypass the regen pool and never reached `landed` —
 	# a Deadly-only volley silently skipped the half-strength morale test. landed_extra counts them in.
 	if landed + landed_extra > 0:
-		await _solo_shooting_morale(target, alive_before, _solo_owner_label(target), wounds_before)
+		await _solo_shooting_morale(target, alive_before, _roller_label(target), wounds_before)
 		await _solo_stage_phase("Morale")
 	_solo_stage_end()
 	_solo_consume_once_mods(attacker, target, false)   # F4: once-mods spent by this exchange
@@ -4599,7 +4779,7 @@ func _solo_resolve_spell_damage(caster: GameUnit, caster_unit: GameUnit, spell_n
 				spell_name, trigger_ones, ("" if trigger_ones == 1 else "s"), caster_unit.get_name(),
 				trigger_ones, ("" if trigger_ones == 1 else "s")], true)
 	if landed > 0 and not target.is_destroyed():
-		await _solo_shooting_morale(target, alive_before, _solo_owner_label(target), wounds_before)
+		await _solo_shooting_morale(target, alive_before, _roller_label(target), wounds_before)
 
 
 ## Whether a spell's weapon-rule token list carries `rule_name` (facet gate for the dice path).
@@ -5859,7 +6039,7 @@ func _solo_try_reanimation(unit: GameUnit) -> void:
 		"restore_target", SoloController.REANIMATION_TARGET))
 	# Stamp BEFORE the roll: the tray await spans frames, and a second door must not roll again.
 	unit.unit_properties["reanimated_round"] = opr_army_manager.current_round
-	var faces: Array = await _solo_tray_roll(pool, target, _solo_owner_label(unit), "attack",
+	var faces: Array = await _solo_tray_roll(pool, target, _roller_label(unit), "attack",
 		"Reanimation: %d+ restores models/wounds" % target)
 	var successes := 0
 	for f in faces:
@@ -6524,7 +6704,7 @@ func _solo_apply_breath_attack(unit: GameUnit) -> void:
 		_solo_defense_vs(btarget), bprofile, not _solo_is_ai_unit(btarget), false)
 	if w > 0:
 		await _solo_land_wounds(btarget, w, 0)
-	await _solo_shooting_morale(btarget, alive_before, _solo_owner_label(btarget), wounds_before)
+	await _solo_shooting_morale(btarget, alive_before, _roller_label(btarget), wounds_before)
 	_solo_consume_once_mods(unit, btarget, false)   # F4: once-mods spent by this exchange
 
 
@@ -7054,7 +7234,7 @@ func _solo_retreating_strike(unit: GameUnit) -> void:
 			member.unit_properties["retreating_strike_round"] = opr_army_manager.current_round
 			var x := maxi(int(ed.get("rating", 0)), 1)
 			var dice := x * member.get_alive_count()
-			var owner_lbl: String = ("AI (%s)" % member.get_name()) if _solo_is_ai_unit(unit) else "You"
+			var owner_lbl: String = _roller_label(member)
 			var rs_faces: Array = await _solo_tray_roll(dice, AiCombatMath.RAVAGE_WOUND_TARGET, owner_lbl, "ravage")
 			var wounds: int = AiCombatMath.ravage_wounds(rs_faces)
 			if battle_log != null:
@@ -7188,7 +7368,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 	var uf_hit := 0
 	var upr_rule := _solo_unpredictable_rule(striker, true, defender)
 	if not upr_rule.is_empty():
-		var uf_owner: String = ("AI (%s)" % striker.get_name()) if _solo_is_ai_unit(striker) else "You"
+		var uf_owner: String = _roller_label(striker)
 		var uf_face: Array = await _solo_tray_roll(1, AiCombatMath.BEST_HIT_TARGET, uf_owner)
 		if not uf_face.is_empty():
 			var uf_eff: Dictionary = AiCombatMath.unpredictable_fighter_effect(int(uf_face[0]))
@@ -7223,7 +7403,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 			if rx <= 0 or not RulesRegistry.unit_rule_active(rv, "Ravage"):
 				continue
 			var rv_dice: int = rx * rv.get_alive_count()
-			var rv_owner: String = ("AI (%s)" % rv.get_name()) if _solo_is_ai_unit(striker) else "You"
+			var rv_owner: String = _roller_label(rv)
 			var rv_faces: Array = await _solo_tray_roll(rv_dice, AiCombatMath.RAVAGE_WOUND_TARGET, rv_owner, "ravage")
 			var rv_wounds: int = AiCombatMath.ravage_wounds(rv_faces)
 			if battle_log != null:
@@ -7330,13 +7510,13 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 						striker.get_name(), "AP(+1)" if v_ap > 0 else "+1 to hit"], true)
 			if not fatigued:
 				_solo_log_hit_mod(p_mod, strike_unit, to_hit)
-			var roll_owner: String = ("AI (%s)" % str(group.get("name", "?"))) if _solo_is_ai_unit(striker) else "You"
+			var roll_owner: String = _roller_label(group.get("member"))
 			var faces: Array = await _solo_tray_roll(int(profile.get("attacks", 0)), to_hit, roll_owner, "attack",
 				"Melee: %s → %s (%d+)" % [str(profile.get("name", "?")), defender.get_name(), to_hit])
 			if bool(profile.get("limited", false)):
 				solo_controller.mark_limited_used(group.get("member"), profile)   # once per game (wave 5)
 			await _solo_hazardous_self_wounds(striker, profile, faces)   # resolver wave A: natural 1s wound the striker
-			var hits: int = await _solo_hits(faces, to_hit_raw, profile, 0.0, defender, charging, _solo_owner_label(striker))
+			var hits: int = await _solo_hits(faces, to_hit_raw, profile, 0.0, defender, charging, _roller_label(striker))
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s strikes with %s at %s — %d hit%s" % [
 					str(group.get("name", "?")), str(profile.get("name", "?")), defender.get_name(), hits, ("" if hits == 1 else "s")], true)
@@ -7402,7 +7582,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 							bt_name, bt_ones, ("" if bt_ones == 1 else "s"), str(group.get("name", "?")),
 							bt_n, ("" if bt_n == 1 else "s"), str(profile.get("name", "?"))], true)
 					var bt_faces: Array = await _solo_tray_roll(bt_n, to_hit, roll_owner)
-					var bt_hits: int = await _solo_hits(bt_faces, to_hit_raw, profile, 0.0, defender, charging, _solo_owner_label(striker))
+					var bt_hits: int = await _solo_hits(bt_faces, to_hit_raw, profile, 0.0, defender, charging, _roller_label(striker))
 					if bt_hits > 0:
 						# Extra attacks resolve pooled (no Deadly/Takedown special-casing — the aof
 						# bearers carry plain weapons) and NEVER chain (counter reset right after).
@@ -7527,7 +7707,7 @@ func _solo_charge_impact(charger: GameUnit, defender: GameUnit, human_defends: b
 		if int(p["dice"]) <= 0 or _solo_combined_alive(defender) <= 0:
 			continue
 		var faces: Array = await _solo_tray_roll(int(p["dice"]), AiCombatMath.IMPACT_HIT_TARGET,
-			_solo_owner_label(charger), "attack",
+			_roller_label(charger), "attack",
 			"%s hits: %s → %s" % [str(p["label"]), charger.get_name(), defender.get_name()])
 		var hits: int = AiCombatMath.impact_hits(faces)
 		if battle_log != null:
@@ -8631,12 +8811,33 @@ func _solo_model_in_cover(model: ModelInstance) -> bool:
 	return solo_controller != null and solo_controller.model_in_cover(model)
 
 
-## Battle-log / dice-owner label for a unit: "AI (name)" for an AI-controlled unit, the owner's player
-## name for another human's unit (co-op, rules plan 0.1b), else "You".
-func _solo_owner_label(unit: GameUnit) -> String:
-	if _solo_is_ai_unit(unit):
-		return "AI (%s)" % unit.get_name()
-	return "You" if _solo_i_own_unit(unit) else _solo_owner_name(unit)
+## The deterministic core of the roller label (rules plan 2.5 "Names, not You"), pure so the label
+## table is testable without a scene. is_own = the unit belongs to a player at THIS machine;
+## ai_designated = an AI slot is designated (solo vs NACHTMAHR); mp_active = a network session runs.
+static func roller_label_for(unit_name: String, is_ai: bool, ai_designated: bool, is_own: bool,
+		mp_active: bool, peer_name: String, slot_label: String) -> String:
+	if is_ai:
+		return "AI (%s)" % unit_name
+	if is_own and ai_designated:
+		return "You"
+	if mp_active and not peer_name.is_empty():
+		return peer_name
+	return slot_label
+
+
+## Battle-log / tray-roll label for a unit (rules plan 2.5). An AI unit is "AI (unit)" as before; a
+## human unit is "You" while an AI slot is designated (solo vs NACHTMAHR, byte-identical); otherwise
+## (hotseat, or a human-vs-human room) the unit is named by its player slot — the session's display
+## name for that peer when one exists, else "P<slot> (<army>)". A co-op ally keeps its owner's name.
+func _roller_label(unit: GameUnit) -> String:
+	var slot := unit_owner_slot(unit.unit_properties)
+	var peer := _solo_peer_for_slot(slot)
+	var mp_active: bool = network_manager != null and network_manager.is_multiplayer_active()
+	var peer_name := ""
+	if mp_active and network_manager.player_names.has(peer):
+		peer_name = _peer_display_name(peer)
+	return roller_label_for(unit.get_name(), _solo_is_ai_unit(unit), not solo_ai_slots.is_empty(),
+		_solo_i_own_unit(unit), mp_active, peer_name, _solo_player_label(slot))
 
 
 ## The player name of a unit's owner seat (the session's name for its peer, else "player N").
@@ -8658,7 +8859,7 @@ func _run_ai_dangerous(unit: GameUnit, model_count: int) -> void:
 			"%s takes %d Dangerous terrain test dice" % [unit.get_name(), model_count], true)
 	# A1 (NML-202): a player-driven auto intent can land here too (execute_intent's dangerous-terrain
 	# tap doesn't know which side moved) — the tray label must say "You"/the co-op owner, not "AI".
-	var faces: Array = await _solo_tray_roll(model_count, 6, _solo_owner_label(unit), "dangerous",
+	var faces: Array = await _solo_tray_roll(model_count, 6, _roller_label(unit), "dangerous",
 		"Dangerous terrain: %s (a 1 wounds)" % unit.get_name())
 	var wounds := 0
 	for f in faces:
@@ -8830,12 +9031,12 @@ var _solo_remote_save_waiters: Dictionary = {}   # request id -> {"faces": Array
 ## dice) → our tray. Another human's unit → its owner rolls; vacant seat or no answer → a visible
 ## auto-roll. `ask` = what the owner's side needs beyond a plain roll: "what" (the waiting / rolled
 ## wording, default `purpose`), "label" (the caller's own tray label for a LOCAL roll, default
-## `_solo_owner_label`) and, for a save batch, "striker"/"weapon"/"defense"/"ap" (the prompt).
+## `_roller_label`) and, for a save batch, "striker"/"weapon"/"defense"/"ap" (the prompt).
 func _owner_roll(unit: GameUnit, count: int, target: int, roll_kind: String, purpose: String,
 		ask: Dictionary = {}) -> Array:
 	if _solo_is_ai_unit(unit) or _solo_i_own_unit(unit):
 		var label := str(ask.get("label", ""))
-		return await _solo_tray_roll(count, target, label if not label.is_empty() else _solo_owner_label(unit),
+		return await _solo_tray_roll(count, target, label if not label.is_empty() else _roller_label(unit),
 			roll_kind, purpose)
 	var owner_peer := _solo_peer_for_slot(unit_owner_slot(unit.unit_properties))
 	var owner_name := _solo_owner_name(unit)
@@ -8887,7 +9088,7 @@ func _rpc_request_roll(rq: Dictionary, from_peer: int) -> void:
 			int(ask.get("defense", 0)), int(ask.get("ap", 0)))
 	else:
 		faces = await _solo_tray_roll(int(rq.get("count", 0)), int(rq.get("target", 0)),
-			_solo_owner_label(unit), str(rq.get("kind", "attack")), str(rq.get("purpose", "")))
+			_roller_label(unit), str(rq.get("kind", "attack")), str(rq.get("purpose", "")))
 	network_manager.send_command("roll_result", {"req": int(rq.get("req", 0)), "faces": faces}, from_peer)
 
 ## Resolver side: the owner's faces arrived — release the waiting roll.
@@ -8902,18 +9103,22 @@ func _rpc_roll_result(req: int, faces: Array) -> void:
 func _solo_prompt_saves(attacker: GameUnit, target: GameUnit, weapon_name: String, hits: int, defense: int, ap: int) -> Array:
 	# A3 (NML-202): the panel switch (or _run_player_intent's own first-use flip) skips the ask —
 	# the threshold log line and the tray roll are unchanged either way.
+	# Rules plan 2.5: name WHOSE saves these are — "You" in solo (byte-identical), the defending
+	# player's slot label in hotseat ("P2 (Bravo) — incoming fire!").
+	var defender_lbl: String = _roller_label(target)
 	if not _solo_auto_saves:
 		var ap_note: String = (" (AP %d → save on %d+)" % [ap, AiCombatMath.save_target(defense, ap)]) if ap > 0 else " (save on %d+)" % AiCombatMath.shown_target(defense)
 		# Saves are not optional — one clear action, no cancel button. UI audit 2026-07-24: ESC used to
 		# lock the board here (the MOST frequent solo prompt); on the card ESC answers too, and either
 		# way we roll.
-		await _solo_ask("Incoming fire!", "%s hits %s %d time%s with %s.\nRoll your defense saves%s." % [
+		var prompt_title: String = "Incoming fire!" if defender_lbl == "You" else "%s — incoming fire!" % defender_lbl
+		await _solo_ask(prompt_title, "%s hits %s %d time%s with %s.\nRoll your defense saves%s." % [
 			attacker.get_name(), target.get_name(), hits, ("" if hits == 1 else "s"), weapon_name, ap_note],
 			"Roll %d save%s" % [hits, ("" if hits == 1 else "s")], "")
 	# The battle log states the MODIFIED threshold (GF v3.5.1 AP(X): "targets get -X to Defense rolls"),
 	# so the AP arithmetic is auditable after the fact (maintainer field-test finding).
 	_solo_log_save_threshold(target, defense, ap)
-	return await _solo_tray_roll(hits, defense + ap, "You", "defense",
+	return await _solo_tray_roll(hits, defense + ap, defender_lbl, "defense",
 		"Defense save vs %s" % weapon_name)
 
 
@@ -9094,6 +9299,8 @@ func _solo_spawn_pulse_ring(at: Vector3, color: Color) -> MeshInstance3D:
 	ring.material_override = mat
 	add_child(ring)
 	ring.global_position = at + Vector3(0, 0.01, 0)
+	if GraphicsSettings.calm_mode:
+		return ring   # Calm: a static attention marker, no pulsing scale/alpha
 	var tw := ring.create_tween().set_loops()
 	tw.tween_property(ring, "scale", Vector3(1.25, 1.0, 1.25), 0.4).set_trans(Tween.TRANS_SINE)
 	tw.tween_property(ring, "scale", Vector3.ONE, 0.4).set_trans(Tween.TRANS_SINE)
@@ -9840,7 +10047,7 @@ func _run_ai_melee(report: Dictionary) -> void:
 	_solo_log_melee_result(unit, ai_caused, ai_score, target, human_caused, human_score)
 	await _solo_stage_phase("Melee result")
 	if loser != null and _solo_combined_alive(loser) > 0:
-		await _solo_morale_test(loser, _solo_owner_label(loser), true)
+		await _solo_morale_test(loser, _roller_label(loser), true)
 	await _solo_stage_phase("Morale")
 	# — Consolidation (GF v3.5.1 p.9, after morale): neither destroyed → the CHARGER (the AI here) moves
 	#   back 1"; one side destroyed → the survivor consolidates up to 3" (round 7, finding 4) —
@@ -9945,10 +10152,17 @@ func _solo_consolidate_melee(charger: GameUnit, defender: GameUnit, auto: bool =
 	var survivor: GameUnit = charger if charger_alive else defender
 	if _solo_is_ai_unit(survivor) or auto:
 		var dang2: int = solo_controller.consolidate_after_melee_win(survivor)
-		if not solo_controller.last_move_paths.is_empty():
-			if battle_log != null:
+		if battle_log != null:
+			# The rule is applied even when the survivor has nowhere to go: then it just holds its
+			# ground, but it still consolidates — so the event must log either way (house rule: every
+			# applied rule logs). A missing line here stalled the Game School S-06 consolidation step.
+			if solo_controller.last_move_paths.is_empty():
+				battle_log.log_event(BattleLog.Category.COMBAT,
+					"%s holds its ground (consolidation — GF v3.5.1 p.9)" % survivor.get_name(), true)
+			else:
 				battle_log.log_event(BattleLog.Category.COMBAT,
 					"%s consolidates up to 3\" (enemy destroyed — GF v3.5.1 p.9)" % survivor.get_name(), true)
+		if not solo_controller.last_move_paths.is_empty():
 			await _solo_animate_move(solo_controller.last_move_paths, false)   # NML-208: always glides
 		if dang2 > 0:
 			await _run_ai_dangerous(survivor, dang2)
@@ -10185,11 +10399,11 @@ func solo_combat_available(unit: GameUnit) -> bool:
 		return false
 	if u.is_activated:
 		return false
-	for au in opr_army_manager.get_game_units_for_player(_solo_ai_slot()):
-		# #196: the prospective enemy must actually BE automation-driven — in a human-vs-human
-		# multiplayer room nothing is, so the solo Shoot/Fight entries stay out of the radial
-		# and combat is manual (dice tray), as multiplayer always was.
-		if au != null and au.get_alive_count() > 0 and _solo_is_ai_unit(au):
+	for au in opr_army_manager.get_all_game_units():
+		# #196 / 2.3: the prospective enemy must be one the ENGINE may resolve against — an AI unit
+		# always, the other human's unit only with the switch on Automatic. In a manual human-vs-human
+		# room nothing is, so the Shoot/Fight entries stay out of the radial (dice tray, as always).
+		if _engine_enemy(u, au):
 			return true
 	return false
 
@@ -10198,7 +10412,10 @@ func solo_combat_available(unit: GameUnit) -> bool:
 ## co-op rooms hide them in this version (grilled decision 2: V1 is solo) — a multiplayer session's
 ## players still move and attack by hand, same as today.
 func solo_auto_available(unit: GameUnit) -> bool:
-	return solo_combat_available(unit) and (network_manager == null or not network_manager.is_multiplayer_active())
+	# The engine-executed MOVE verbs need a controller without an AI side (step 2.4): until then they
+	# stay behind an AI designation, so a hotseat Automatic table grows only the combat verbs.
+	return solo_combat_available(unit) and not solo_ai_slots.is_empty() \
+		and (network_manager == null or not network_manager.is_multiplayer_active())
 
 
 ## The pre-attack cast-window ask (decision "Vorfrage"): true → the player casts first. Asked at
@@ -10257,16 +10474,41 @@ func _solo_is_ai_unit(unit: GameUnit) -> bool:
 		return false
 	if solo_ai_slots.has(pid):
 		return true
-	# The implicit "no designation → P2 is the AI" default is a SOLO-mode convention. In
-	# multiplayer nobody is an AI unit unless explicitly designated — this implicit branch
-	# is what let NACHTMAHR hijack the guest's army in a human-vs-human room.
-	if network_manager != null and network_manager.is_multiplayer_active():
+	# Plan 2.2 ("no AI without its tick"): no designation means nobody is an AI unit — the
+	# old implicit "player 2 is NACHTMAHR" default is retired (local, tutorial and multiplayer alike).
+	return false
+
+
+## Step 2.3 "Enemy under the engine": the target an automated attack may resolve against. An
+## AI-designated unit always is one (solo vs NACHTMAHR). With the switch on Automatic any living
+## enemy-side unit is one too — so two humans at one table automate the same way (Road 2). A target
+## in reserve, of the attacker's own slot, or the attacker itself never is.
+func _engine_enemy(attacker: GameUnit, target: GameUnit) -> bool:
+	if attacker == null or target == null or target == attacker:
 		return false
-	# Plan B1, tutorial only: the tutorial table is two humans at one screen — an explicit
-	# designation (above) still wins, the implicit default does not apply there.
-	if _solo_hotseat:
+	if _solo_is_ai_unit(target):
+		return true
+	if opr_army_manager == null or RulesAutomation.effective(
+			opr_army_manager.rules_automation, not solo_ai_slots.is_empty()) != RulesAutomation.Level.AUTOMATIC:
 		return false
-	return solo_ai_slots.is_empty() and pid == _solo_ai_slot()
+	return unit_owner_slot(target.unit_properties) != unit_owner_slot(attacker.unit_properties) \
+		and _solo_combined_alive(target) > 0 and not SoloController.unit_in_reserve(target)
+
+
+## #196, DISPLAY only: whether the hovered unit lights the live LOS line. It is a superset of
+## _engine_enemy because the line is feedback, not resolution: in a live multiplayer session the other
+## player's unit lights it whatever the automation level (an online room stays Manual until step 3.0),
+## which the AUTOMATIC-gated resolution predicate would hide. Solo, tutorial and hotseat are decided by
+## _engine_enemy alone. No caller resolves anything from this.
+func _solo_hover_enemy(attacker: GameUnit, hovered: GameUnit) -> bool:
+	if attacker == null or hovered == null:
+		return false
+	if _engine_enemy(attacker, hovered):
+		return true
+	if network_manager == null or not network_manager.is_multiplayer_active():
+		return false
+	return _solo_combined_alive(hovered) > 0 \
+		and int(hovered.unit_properties.get("player_id", 0)) != int(attacker.unit_properties.get("player_id", 0))
 
 
 ## #673 co-op: the player slot that owns a unit — a PER-UNIT lookup, because co-op has TWO
@@ -10324,6 +10566,8 @@ func solo_begin_targeting(unit: GameUnit, melee: bool) -> void:
 		solo_begin_cast(unit)
 		return
 	_ensure_solo_controller()
+	if _hotseat_verb_refused(unit):
+		return
 	# Wave 4 side fix: the Utility-Buff family is "once per activation, BEFORE attacking" — for the
 	# human that moment is declaring the attack. Round-stamped inside, so the second door
 	# (_on_solo_human_activated, for a unit that never attacks) cannot apply it twice.
@@ -10355,6 +10599,8 @@ func solo_begin_auto(unit: GameUnit, verb: int) -> void:
 		solo_begin_cast(unit)
 		return
 	_ensure_solo_controller()
+	if _hotseat_verb_refused(unit):
+		return
 	await _solo_apply_utility_buffs(unit)
 	_solo_target_mode = {"unit": unit, "auto_verb": verb}
 	var bands: Dictionary = SoloController.move_bands_for_unit(unit, solo_controller.movement_range)
@@ -10463,6 +10709,8 @@ func solo_begin_cast(unit: GameUnit) -> void:
 				"%s has already activated this round — one activation per unit (GF v3.5.1)" % unit.get_name())
 		return
 	_ensure_solo_controller()
+	if _hotseat_verb_refused(unit):
+		return
 	# No activation door here (D23): the spell picker commits nothing — _run_human_cast begins it.
 	var member := RadialMenu._caster_member_of(unit)
 	if member == null:
@@ -10583,6 +10831,7 @@ func _run_human_cast(unit: GameUnit, member: GameUnit, entry: Dictionary, picked
 		"name": spell_name, "targets": targets, "boost": boost, "interference": interference,
 		"base_target": AiSpell.CAST_BASE_TARGET, "threshold": threshold,
 		"owner_label": "You", "human_cast": true})
+	human_cast_resolved.emit(unit)
 
 
 func _solo_end_targeting() -> void:
@@ -10673,8 +10922,7 @@ func _solo_targeting_input(event: InputEvent) -> bool:
 			if _solo_target_mode.has("auto_verb") and target == attacker:
 				target = _solo_target_mode.get("suggested") as GameUnit
 			var melee: bool = bool(_solo_target_mode.get("melee", false))
-			if target == null or not _solo_is_ai_unit(target) or _solo_combined_alive(target) <= 0 \
-					or SoloController.unit_in_reserve(target):
+			if target == null or not _engine_enemy(attacker, target):
 				return true   # swallow the click; stay in targeting mode (a reserve unit is off-table)
 			# A1 (NML-202): an auto_verb click hands off to the engine executor, not the manual attack
 			# flow — the melee/shoot split above never applies to it.
@@ -10685,8 +10933,7 @@ func _solo_targeting_input(event: InputEvent) -> bool:
 				return true
 			var verdict := _solo_validate_target(attacker, target, melee)
 			if verdict != "":
-				if battle_log != null:
-					battle_log.log_event(BattleLog.Category.GENERAL, "%s: %s" % [target.get_name(), verdict])
+				_solo_log_target_refusal(target, verdict)
 				return true
 			# #226 SPLIT FIRE + maintainer UX (31.07.): the second pick DECLARES — both firing
 			# vectors stand on the table and the dice wait for the explicit Fire! button.
@@ -10989,6 +11236,14 @@ func _solo_ring_pick_at(screen_pos: Vector2) -> Dictionary:
 	return best
 
 
+## Logs a refused target pick so the player reads WHY the click did nothing (factored out of the
+## targeting click handler so headless lesson tests replay the exact same log line).
+func _solo_log_target_refusal(target: GameUnit, verdict: String) -> void:
+	if battle_log == null:
+		return
+	battle_log.log_event(BattleLog.Category.GENERAL, "%s: %s" % [target.get_name(), verdict])
+
+
 ## "" when the target is attackable, else the human-readable reason. Shooting validity is PER MODEL
 ## (GF v3.5.1 p.8): the target is valid when at least ONE of the attacker's models has range + LOS.
 func _solo_validate_target(attacker: GameUnit, target: GameUnit, melee: bool) -> String:
@@ -11215,10 +11470,7 @@ func _solo_update_los_line(screen_pos: Vector2) -> void:
 	# (_los_unit_centre, SoloController.alive_positions), so MP hover draws the same live LOS
 	# feedback solo does — no controller instance summoned.
 	var is_valid_target: bool = hovered != null and attacker != null \
-		and SoloController.combined_alive(attacker) > 0 and SoloController.combined_alive(hovered) > 0 and (
-		_solo_is_ai_unit(hovered)
-		or (network_manager != null and network_manager.is_multiplayer_active()
-			and int(hovered.unit_properties.get("player_id", 0)) != int(attacker.unit_properties.get("player_id", 0))))
+		and SoloController.combined_alive(attacker) > 0 and _solo_hover_enemy(attacker, hovered)
 	if attacker == null or hovered == null or not is_valid_target:
 		if _solo_los_line != null and is_instance_valid(_solo_los_line):
 			_solo_los_line.visible = false
@@ -11448,6 +11700,7 @@ func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool, auto: 
 	# toggle path does the full job (GameUnit.activate marks host + heroes, marker, MP broadcast, log,
 	# alternation reply via unit_activated). A pre-toggled unit falls through to the normal pump so a
 	# mis-click fix never queues a second AI answer.
+	human_attack_resolved.emit(attacker, melee)
 	await _solo_complete_human_attack(attacker)
 
 
@@ -11492,7 +11745,7 @@ func _solo_try_precision_spot(unit: GameUnit) -> void:
 		return
 	# NML-980: one die per alive laser-carrying model in the chain, each 4+ its own marker.
 	var dice := maxi(solo_controller.precision_spot_dice_of(unit), 1)
-	var faces: Array = await _solo_tray_roll(dice, 4, _solo_owner_label(unit), "attack",
+	var faces: Array = await _solo_tray_roll(dice, 4, _roller_label(unit), "attack",
 		"Precision Spotter: %d die%s (4+) mark %s" % [dice, ("" if dice == 1 else "s"), best.get_name()])
 	var hits := 0
 	for f in faces:
@@ -11632,7 +11885,7 @@ func _solo_spot_click(target: GameUnit) -> void:
 ## model in the chain, solo_controller.precision_spot_dice_of), each 4+ its own marker.
 func _solo_resolve_spot(spotter: GameUnit, target: GameUnit) -> void:
 	var dice := maxi(solo_controller.precision_spot_dice_of(spotter), 1)
-	var faces: Array = await _solo_tray_roll(dice, 4, _solo_owner_label(spotter), "attack",
+	var faces: Array = await _solo_tray_roll(dice, 4, _roller_label(spotter), "attack",
 		"Precision Spotter: %d die%s (4+) mark %s" % [dice, ("" if dice == 1 else "s"), target.get_name()])
 	var hits := 0
 	for f in faces:
@@ -11677,6 +11930,7 @@ func _run_human_attack_split(attacker: GameUnit, target_a: GameUnit, target_b: G
 			attacker.get_name(), target_a.get_name(), target_b.get_name()], false)
 	await _run_human_shooting(attacker, target_a, b_names, true)
 	await _run_human_shooting(attacker, target_b, b_names, false)
+	human_attack_resolved.emit(attacker, false)
 	await _solo_complete_human_attack(attacker)
 
 
@@ -11874,6 +12128,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s: %d/%d model%s with line of sight + range" % [
 			attacker.get_name(), _solo_sighted_count(attacker, target, rng_in, log_indirect), total, ("" if total == 1 else "s")], true)
 	var fired_any := false   # round 7, finding 5: a volley that rolls NOTHING must say so, never end silently
+	var cover_logged := false   # I4: log Cover once, only when a shot's save really used it
 	# Maintainer 31.07.: the attacker CHOOSES how many markers to remove (caster-points style).
 	var spot_hit: int = await _solo_offer_spot_markers(attacker, target)
 	var tag_hit: int = _solo_consume_tag_markers(target)   # Precision Tag: the spot pool's +1-per-removal twin
@@ -12003,6 +12258,11 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 				continue
 			# Blast (GF v3.5.1) and Indirect (wave 5) ignore cover — saves at the Shielded (uncovered) Defense.
 			var save_def: int = shot_base if (int(profile.get("blast", 0)) > 1 or bool(profile.get("indirect", false)) or bool(profile.get("ignores_cover", false))) else shot_cover
+			if td_ctx.is_empty() and not cover_logged and battle_log != null \
+					and AiCombatMath.shot_uses_cover(save_def, shot_cover, shot_base):
+				cover_logged = true   # I4: only claim Cover when the roll truly saved at the covered value
+				battle_log.log_event(BattleLog.Category.COMBAT, "%s is in cover: +1 Defense (saves on %d+)" % [
+					target.get_name(), AiCombatMath.shown_target(save_def)], true)
 			# B5 (test game 2): the HUMAN volley now mirrors the AI's per-model landing — Takedown
 			# wounds go to the model the PLAYER picks (click), Deadly lands ×X on one model with no
 			# carry-over. Both previously pooled into the defender-optimal removal, so the player's
@@ -13835,6 +14095,67 @@ func _solo_final_round_active() -> bool:
 func _update_round_button() -> void:
 	if next_round_btn and opr_army_manager:
 		next_round_btn.text = next_round_button_label(opr_army_manager.current_round, _solo_final_round_active())
+		# Step 2.6a: on a hotseat Automatic table the round ends by itself, so the manual lever is
+		# disabled while any unit still has to act (exactly as solo) and says why.
+		var hotseat_waiting: bool = _solo_hotseat_automatic() and not _hotseat_round_spent()
+		next_round_btn.disabled = hotseat_waiting
+		if not next_round_btn.has_meta("_nml_default_tooltip"):
+			next_round_btn.set_meta("_nml_default_tooltip", next_round_btn.tooltip_text)
+		next_round_btn.tooltip_text = ("the round ends when every unit has acted" if hotseat_waiting
+			else String(next_round_btn.get_meta("_nml_default_tooltip")))
+	_update_rules_chip()
+
+
+## Rules-automation plan 1.3: the level changes only between resolutions; works regardless of the UI flag.
+func set_rules_automation(level: int, who: String) -> bool:
+	if opr_army_manager == null or not RulesAutomation.change_allowed(level, not solo_ai_slots.is_empty(), _solo_resolution_pending()):
+		return false
+	opr_army_manager.rules_automation = level
+	_log_rule_event(BattleLog.Category.GENERAL, "Rules automation: %s (changed by %s)" % [RulesAutomation.label(level), who])
+	_update_rules_chip()
+	return true
+
+
+## The chip beside the round button; built lazily, shown only while the rules-automation UI flag is on.
+func _update_rules_chip() -> void:
+	if next_round_btn == null or opr_army_manager == null:
+		return
+	if _rules_chip == null:
+		_rules_chip = Label.new()
+		_rules_chip.theme_type_variation = HouseStyle.CAPTION
+		_rules_chip.mouse_filter = Control.MOUSE_FILTER_STOP   # labels ignore the mouse by default - needed for the tooltip
+		_rules_chip.tooltip_text = "Automatic: the game rolls and applies the rules. Manual: you use the dice tray."
+		next_round_btn.add_sibling(_rules_chip)
+	_rules_chip.visible = RulesAutomation.ui_enabled()
+	_rules_chip.text = RulesAutomation.chip_text(opr_army_manager.rules_automation, not solo_ai_slots.is_empty())
+	if _turn_chip == null:
+		_turn_chip = Label.new()
+		_turn_chip.theme_type_variation = HouseStyle.CAPTION
+		_turn_chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_turn_chip.tooltip_text = "Hotseat Automatic: one unit per side in turn."
+		next_round_btn.add_sibling(_turn_chip)
+	_turn_chip.visible = RulesAutomation.ui_enabled() and _solo_hotseat_automatic()
+	_turn_chip.text = "Turn: P%d" % _hotseat_side_on_turn()
+
+
+## Game-panel toggle (local games only; online is plan step 1.4). Locked on while an AI slot is ticked.
+func _add_rules_toggle() -> void:
+	if not RulesAutomation.ui_enabled() or solo_panel_box == null or opr_army_manager == null:
+		return
+	if network_manager != null and network_manager.is_multiplayer_active():
+		return
+	var ai: bool = not solo_ai_slots.is_empty()
+	var cb := CheckButton.new()
+	cb.text = "Rules automation"
+	cb.tooltip_text = "Automatic: the game rolls and applies the rules. Locked on while the AI plays." if ai else "Automatic: the game rolls and applies the rules. Manual: you use the dice tray."
+	cb.button_pressed = RulesAutomation.effective(opr_army_manager.rules_automation, ai) == RulesAutomation.Level.AUTOMATIC
+	cb.disabled = ai
+	cb.focus_mode = Control.FOCUS_NONE
+	cb.toggled.connect(func(on: bool) -> void:
+		var lvl: int = RulesAutomation.Level.AUTOMATIC if on else RulesAutomation.Level.MANUAL
+		if not set_rules_automation(lvl, "P1"):
+			cb.set_pressed_no_signal(not on))
+	solo_panel_box.add_child(cb)
 
 
 ## Toggle the left panel menu visibility with slide animation
@@ -15291,6 +15612,7 @@ func _on_peer_version_validated(peer_id: int) -> void:
 	# solo session that rolled into hosting), BEFORE the state push, so the guest never
 	# receives a table where NACHTMAHR claims its army.
 	_solo_release_slot_to_human(network_manager.slot_for_peer(peer_id))
+	_clamp_rules_online("the online room")   # plan 1.4: before the push, so the guest never receives Automatic
 	_sync_state_to_peer(peer_id)
 	# The peer is registered and validated — hand it the full name roster so it
 	# immediately knows everyone already at the table (including the host).
@@ -15373,6 +15695,7 @@ func _on_internet_room_ready(code: String) -> void:
 	if network_manager and multiplayer.is_server():
 		network_manager.is_host = multiplayer.is_server()
 		network_manager.seed_host_identity()
+	_clamp_rules_online("the online room")   # plan 1.4: a room created from an Automatic local game is Manual
 	_register_local_name()
 
 
@@ -16226,7 +16549,6 @@ func _on_load_file_selected(path: String) -> void:
 	if _scenario_loader != null and not path.begins_with(ScenarioLoader.SCENARIO_DIR):
 		_scenario_loader.leave_lesson_for_external_load()
 		_scenario_mode = false
-	_solo_hotseat = false   # a loaded battle is not the tutorial table: the solo default applies again
 	var error = await save_manager.load_game(path)
 	if error != OK:
 		push_error("Failed to load game: %d" % error)
@@ -16318,6 +16640,37 @@ func _on_network_command(type: String, payload: Variant, _from_peer: int) -> voi
 		_rpc_roll_result(int(payload.get("req", 0)), payload.get("faces", []))
 	elif type == "vfx_cue" and payload is Dictionary:
 		_vfx_draw(payload, _from_peer)
+	elif type == "sync_rules_automation" and payload is Dictionary:
+		_on_sync_rules_automation((payload as Dictionary).get("level"), _from_peer)
+
+
+## Plan 1.4: a rules-automation value from a peer. MANUAL is unilateral and applies at once; an
+## AUTOMATIC value is ignored (online Automatic needs the later two-player agreement).
+func _on_sync_rules_automation(level: Variant, from_peer: int) -> void:
+	if not RulesAutomation.accepts_online(level):
+		print("[Rules] ignoring online rules-automation value %s from peer %d (rooms stay Manual)" % [str(level), from_peer])
+		return
+	_set_rules_manual_logged(_peer_display_name(from_peer))
+
+
+## Sets the level to MANUAL; logs locally (each side logs its own line, nothing is re-broadcast)
+## only when it actually changed. Returns whether it changed.
+func _set_rules_manual_logged(who: String) -> bool:
+	if opr_army_manager == null or opr_army_manager.rules_automation == RulesAutomation.Level.MANUAL:
+		return false
+	opr_army_manager.rules_automation = RulesAutomation.Level.MANUAL
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL, "Rules automation: Manual (changed by %s)" % who)
+	return true
+
+
+## Plan 1.4: while a network session is live the room's level is MANUAL. Called when a room is created,
+## when the host admits a guest, and after a guest adopts the pushed state; tells the peers once.
+func _clamp_rules_online(who: String) -> void:
+	if network_manager == null or not network_manager.is_multiplayer_active():
+		return
+	if _set_rules_manual_logged(who):
+		network_manager.send_command("sync_rules_automation", {"level": RulesAutomation.Level.MANUAL}, 0)
 
 
 ## #673 co-op: the wire shape of the AI-slot designation sync — sorted player ids, one message
@@ -16523,6 +16876,7 @@ func _rpc_sync_game_state(state: Dictionary) -> void:
 	# happens after any import, so the @rpc broadcast was missed — this is the join-time catch-up).
 	if state.get("solo_ai_slots") is Array:
 		_rpc_sync_ai_slots(state["solo_ai_slots"])
+	_clamp_rules_online("the online room")   # plan 1.4: the pushed level is read, a room stays Manual
 
 
 ## ============================================================================
@@ -17269,7 +17623,6 @@ const TUTORIAL_BOARD_TIMEOUT_S := 120.0
 func _start_tutorial() -> void:
 	if is_instance_valid(_tutorial_director):
 		return  # already running (guard against a double call_deferred)
-	_solo_hotseat = true   # plan B1: the tutorial table never hands player 2 to NACHTMAHR
 	# The board .nml deserializes asynchronously (unit-by-unit): wait for its
 	# load_completed/load_failed gate, with a hard timeout so a broken board never
 	# hangs the tutorial (it then runs degraded: banner spotlights, no unit target).
@@ -17322,7 +17675,21 @@ func _start_lesson(_object_count: int) -> void:
 	var facts := LessonFacts.new()
 	facts.setup({"camera_pivot": camera_pivot, "object_manager": object_manager,
 		"army_manager": opr_army_manager, "table": table,
-		"map_layout": map_layout_editor, "left_panel": left_panel_scroll})
+		"map_layout": map_layout_editor, "left_panel": left_panel_scroll, "main": self,
+		"unit_dock": unit_dock, "battle_log": battle_log, "terrain_overlay": terrain_overlay,
+		"range_rings": range_ring_controller})
+	if _scenario_mode:
+		# D4: a lesson always plays the gentlest ladder grade, in memory only — the player's saved
+		# grade (SoloGrade.save) is deliberately never written from a lesson.
+		_solo_interactive_grade = "daemmerung"
+	# D3 lesson puppet: only a "hold"/"live" chapter may own a controller — a "none" lesson must never
+	# summon one, because the controller's existence alone arms the alternation pump (see
+	# _ensure_solo_controller). lesson_hold is in-memory only and only means anything with an AI seat.
+	var lesson_ai_mode := SpielschuleLessons.ai_mode(_scenario_chapter)
+	if lesson_ai_mode != "none":
+		_ensure_solo_controller()
+		if solo_controller != null:
+			solo_controller.lesson_hold = lesson_ai_mode == "hold"
 	var progress := SpielschuleProgress.new(_lesson_progress_path)
 	progress.load_from_disk()
 	var runner := LessonRunner.new()
@@ -17340,7 +17707,9 @@ func _start_lesson(_object_count: int) -> void:
 	card.leave_pressed.connect(_leave_lesson)
 	card.stay_pressed.connect(func() -> void: card.hide())
 	runner.step_changed.connect(card.show_step)
-	runner.chapter_completed.connect(func(_id: String) -> void: card.show_complete(title))
+	runner.chapter_completed.connect(func(id: String) -> void:
+		var verdict := String(facts.snapshot().get("verdict", "")) if id == "S-10" else ""
+		card.show_complete(title, verdict))
 	runner.begin()
 
 
@@ -17594,6 +17963,7 @@ func _init_solo_panel() -> void:
 ## Hidden entirely while no armies are imported.
 func _refresh_solo_panel() -> void:
 	_refresh_host_tools_visibility()
+	_update_rules_chip()   # an AI slot tick changes the lock
 	if solo_panel_box == null or opr_army_manager == null:
 		return
 	for c in solo_panel_box.get_children():
@@ -17608,6 +17978,7 @@ func _refresh_solo_panel() -> void:
 	label.tooltip_text = "Mark the army the AI controls. The AI answers each of your activations with one of its own (alternating activation); after %d rounds the game is scored. F11 runs the whole remaining AI side at once (debug)." % SOLO_GAME_ROUNDS
 	label.mouse_filter = Control.MOUSE_FILTER_STOP   # labels ignore the mouse by default — needed for the tooltip
 	solo_panel_box.add_child(label)
+	_add_rules_toggle()
 	var fast_cb := CheckButton.new()
 	fast_cb.text = "Fast AI (short pauses)"
 	fast_cb.tooltip_text = "Skips the move animation and shrinks the announce/outcome pauses of AI actions."
@@ -18248,7 +18619,7 @@ func _resolve_skirmish_drop(mv: Dictionary, unit: GameUnit) -> void:
 		while _solo_tray_busy:
 			await get_tree().process_frame
 		var target := JumpRules.jump_target(model.has_special_rule("Strider") or unit.has_special_rule("Strider"), model.has_special_rule("Flying") or unit.has_special_rule("Flying"))
-		var faces: Array = [] if target == 0 else await _solo_tray_roll(JumpRules.jump_dice(drop.dy_in), target, _solo_owner_label(unit), "jump", "Jump (%s)" % page)
+		var faces: Array = [] if target == 0 else await _solo_tray_roll(JumpRules.jump_dice(drop.dy_in), target, _roller_label(unit), "jump", "Jump (%s)" % page)
 		var fell := faces.any(func(face): return int(face) < target)
 		_log_rule_event(BattleLog.Category.MOVEMENT, "%s jumps %.1f\": %s (%s)" % [unit.get_name(), drop.dy_in, "falls" if fell else "passed", page])
 		if not fell:
@@ -18264,7 +18635,7 @@ func _resolve_skirmish_drop(mv: Dictionary, unit: GameUnit) -> void:
 			model.apply_damage(model.wounds_current)
 			await _solo_remove_dead_models(unit, [model], int(unit.unit_properties.get("player_id", 1)))
 		else:
-			var saves := await _solo_tray_roll(1, AiCombatMath.save_target(unit.get_defense(), ap), _solo_owner_label(unit), "save", "Fall AP(%d) (%s)" % [ap, page])
+			var saves := await _solo_tray_roll(1, AiCombatMath.save_target(unit.get_defense(), ap), _roller_label(unit), "save", "Fall AP(%d) (%s)" % [ap, page])
 			await _solo_land_wounds(unit, AiCombatMath.wounds(1, saves, unit.get_defense(), ap), 0)
 		await _solo_complete_human_attack(unit)
 		return
@@ -19659,7 +20030,7 @@ func _solo_apply_mind_control(unit: GameUnit) -> void:
 			var tgt := _solo_utility_target(member, "enemy", float(sp.get("range_in", 18.0)), bool(sp.get("needs_los", true)))
 			if tgt == null:
 				continue
-			var passed: bool = await _solo_morale_test(tgt, _solo_owner_label(tgt))
+			var passed: bool = await _solo_morale_test(tgt, _roller_label(tgt))
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s forces a morale test on %s — %s" % [
 					n, member.get_name(), tgt.get_name(), ("passed" if passed else "FAILED")], true)
@@ -19722,7 +20093,7 @@ func _solo_apply_piercing_tag(unit: GameUnit) -> void:
 			var markers: int = maxi(int((e as Dictionary).get("rating", 0)), 1)
 			if place_roll > 0:
 				member.unit_properties["piercing_spot_round"] = round_now
-				var faces: Array = await _solo_tray_roll(1, place_roll, _solo_owner_label(member), "attack",
+				var faces: Array = await _solo_tray_roll(1, place_roll, _roller_label(member), "attack",
 					"%s: %d+ marks %s" % [n, place_roll, tgt.get_name()])
 				if faces.is_empty() or int(faces[0]) < place_roll:
 					if battle_log != null:
@@ -20123,7 +20494,7 @@ func _solo_apply_storm_attack(unit: GameUnit) -> void:
 				else:
 					await _solo_land_wounds(tgt, w, 0)
 				# Post-shooting morale, the Breath Attack twin's tail (main.gd:5423).
-				await _solo_shooting_morale(tgt, alive_before, _solo_owner_label(tgt), wounds_before)
+				await _solo_shooting_morale(tgt, alive_before, _roller_label(tgt), wounds_before)
 				if _solo_combined_alive(tgt) <= 0:
 					targets_in_reach.erase(tgt)
 					if targets_in_reach.is_empty():
@@ -20183,7 +20554,7 @@ func _solo_apply_surprise_attack(unit: GameUnit) -> void:
 		if candidates.is_empty():
 			continue
 		var dice := maxi(_solo_unit_rating(bu, "Surprise Attack"), 1)
-		var faces: Array = await _solo_tray_roll(dice, trigger, _solo_owner_label(bu), "attack",
+		var faces: Array = await _solo_tray_roll(dice, trigger, _roller_label(bu), "attack",
 			"Surprise Attack hits: %d+" % trigger)
 		var hits := 0
 		for f in faces:
@@ -20201,7 +20572,7 @@ func _solo_apply_surprise_attack(unit: GameUnit) -> void:
 		var w: int = await _solo_save_batch(bu, tgt, "Surprise Attack", hits,
 			_solo_defense_vs(tgt), ap, profile, not _solo_is_ai_unit(tgt), false, true, false)
 		await _solo_land_wounds(tgt, w, 0)
-		await _solo_shooting_morale(tgt, alive_before, _solo_owner_label(tgt), wounds_before)
+		await _solo_shooting_morale(tgt, alive_before, _roller_label(tgt), wounds_before)
 
 
 ## Teleport / Ethereal (design #816, PR 1 — table side): the BEFORE-ATTACK reposition beat, run

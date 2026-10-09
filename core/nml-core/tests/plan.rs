@@ -26,10 +26,10 @@
 use std::cell::Cell;
 use std::collections::{BTreeMap, BTreeSet};
 
-use nml_core::acts::{PickRec, PolicyMode};
+use nml_core::acts::{Knobs, PickRec, PolicyMode};
 use nml_core::menu::Candidate;
-use nml_core::plan::{build_pool, rank, LeafValue, PlanBend, ScoredRow, Search};
-use nml_core::playout::Policy;
+use nml_core::plan::{build_pool, rank, LeafValue, PlanBend, ScoredRow, Search, REPLY_TOP_K};
+use nml_core::playout::{other_player, Policy};
 use nml_core::policy::{Policy as PolicyHarness, PolicyNet};
 use nml_core::rollout::Rollout;
 use nml_core::sim::{Scratch, Unsupported, HOLD, RUSH};
@@ -1356,4 +1356,483 @@ fn leaf_value_is_inert_at_weight_zero() {
     }
     assert_eq!(hook.calls.get(), 0, "an unarmed hook was called anyway");
     assert!(checked > 0, "the corpus declined everywhere — the gate proves nothing");
+}
+
+// ------------------------------- opponent-model diagnosis (a): `Knobs::reply_by_net` ---
+
+/// A seat-aware counting hook: every call is logged as `(side, opener_seat, leaves)` and every leaf
+/// answers 0.0, so at any weight the counts measure the net WORK a search asks for and nothing else.
+struct SeatLog {
+    root_seat: bool,
+    calls: std::cell::RefCell<Vec<(i64, bool, usize)>>,
+}
+
+impl SeatLog {
+    fn new(root_seat: bool) -> SeatLog {
+        SeatLog { root_seat, calls: std::cell::RefCell::new(Vec::new()) }
+    }
+}
+
+impl LeafValue for SeatLog {
+    fn value(&self, leaves: &[&nml_core::State], side: i64) -> Result<Vec<f64>, Unsupported> {
+        self.value_for_seat(leaves, side, self.root_seat)
+    }
+
+    fn value_for_seat(&self, leaves: &[&nml_core::State], side: i64, opener_seat: bool)
+                      -> Result<Vec<f64>, Unsupported> {
+        self.calls.borrow_mut().push((side, opener_seat, leaves.len()));
+        Ok(vec![0.0; leaves.len()])
+    }
+}
+
+fn reply_knobs(c: &ActCorpus, on: bool, tail_cap: i64) -> Knobs {
+    let mut k = c.knobs;
+    k.reply_by_net = on;
+    (k.tail_cap_p1, k.tail_cap_p2) = (tail_cap, tail_cap);
+    k
+}
+
+/// ON: with ONE scripted step allowed (`tail_cap 1`) the rollout's only step after the opener IS
+/// the nested search's answer for the opponent (`Search::reply_pick` on the post-opener state,
+/// resolved as a root move); OFF it is the scripted brain's. A knob that never reaches the rollout
+/// leaves the scripted reply in place wherever the two disagree — the RED.
+#[test]
+fn reply_by_net_the_first_opponent_reply_is_the_nested_search_pick() {
+    let c = corpus();
+    let statics = build_act_statics(&c, REPO);
+    let policy = Policy::new(&statics, &c.terrain, seams_of(&c));
+    let (on_roll, off_roll) =
+        (Rollout::new(policy, reply_knobs(&c, true, 1)), Rollout::new(policy, reply_knobs(&c, false, 1)));
+    let mut sc = Scratch::default();
+    let dbg = |s: &nml_core::State| format!("{s:?}");
+    let (mut n, mut asked, mut nested_won, mut scripted_differs) = (0usize, 0usize, 0usize, 0usize);
+    for (ai, act) in c.acts.iter().enumerate() {
+        let (on, off) = (Search::new(on_roll, &act.statics), Search::new(off_roll, &act.statics));
+        let Ok(hand) = off.run(&act.state, act.player, &mut sc, None) else { continue };
+        let opp = other_player(&act.state, act.player);
+        for &i in &hand.pool_idx {
+            let cand = &hand.cands[i];
+            let got_on = on.rollout_of(&act.state, cand, act.player, &mut sc).unwrap_or_else(|e| panic!("act {ai}: {e:?}"));
+            let got_off = off.rollout_of(&act.state, cand, act.player, &mut sc).unwrap();
+            let mut opened = policy.resolve_root(&act.state, cand).unwrap();
+            on_roll.coordinate_hand_off(&mut opened, cand, act.player, &mut sc).unwrap();
+            n += 1;
+            let Some(r) = on.reply_pick(&opened, opp, &mut sc).unwrap() else { continue };
+            asked += 1;
+            let mut want = policy.resolve_root(&opened, &r).unwrap();
+            on_roll.coordinate_hand_off(&mut want, &r, act.player, &mut sc).unwrap();
+            nested_won += usize::from(got_on.len() == 1 && dbg(&got_on[0]) == dbg(&want));
+            scripted_differs += usize::from(dbg(&got_off[0]) != dbg(&want));
+        }
+    }
+    println!(
+        "reply_by_net: {n} pooled rollouts, {asked} with an opponent reply; ON plays the nested pick in {nested_won}; \
+         the scripted reply differs from it in {scripted_differs}"
+    );
+    assert!(asked > 0, "no rollout had an opponent reply — the test proves nothing");
+    assert!(scripted_differs > 0, "the nested search agreed with the script everywhere — no contrast");
+    assert_eq!(nested_won, asked, "ON: the first opponent reply must be the nested search's pick");
+}
+
+/// OFF is today's search: the knob explicitly false, even with a grade set, answers every fixture act
+/// with the default search's pick and values to the bit, and asks the hook ONE batch per act.
+#[test]
+fn reply_by_net_off_is_todays_search() {
+    let c = corpus();
+    let statics = build_act_statics(&c, REPO);
+    let policy = Policy::new(&statics, &c.terrain, seams_of(&c));
+    let base_roll = Rollout::new(policy, c.knobs);
+    let mut k = reply_knobs(&c, false, c.knobs.tail_cap_p1);
+    (k.reply_top_k, k.reply_horizon) = (7, 2);
+    let off_roll = Rollout::new(policy, k);
+    let mut sc = Scratch::default();
+    let mut checked = 0usize;
+    for (ai, act) in c.acts.iter().enumerate() {
+        let (h_base, h_off) = (SeatLog::new(act.statics.opener_seat), SeatLog::new(act.statics.opener_seat));
+        let mut base = Search::new(base_roll, &act.statics);
+        base.leaf_value = Some(&h_base);
+        base.leaf_value_w = 1.0;
+        let Ok(want) = base.run(&act.state, act.player, &mut sc, None) else { continue };
+        let mut off = Search::new(off_roll, &act.statics);
+        off.leaf_value = Some(&h_off);
+        off.leaf_value_w = 1.0;
+        let got = off.run(&act.state, act.player, &mut sc, None).unwrap_or_else(|e| panic!("act {ai}: {e:?}"));
+        assert_eq!(got.pool_idx, want.pool_idx, "act {ai}: OFF moved the pool");
+        for (g, w) in got.rs.iter().zip(&want.rs) {
+            assert_eq!((g.0, g.1.to_bits()), (w.0, w.1.to_bits()), "act {ai}: OFF moved a rollout value");
+        }
+        assert_eq!(got.unit_key, want.unit_key, "act {ai}: OFF moved the pick");
+        assert!(same_action(&got.action, &want.action).is_ok(), "act {ai}: OFF moved the action");
+        assert_eq!(*h_off.calls.borrow(), *h_base.calls.borrow(), "act {ai}: OFF changed the hook calls");
+        assert_eq!(h_off.calls.borrow().len(), 1, "act {ai}: OFF asks ONE leaf batch per activation");
+        checked += 1;
+    }
+    assert!(checked > 0, "the corpus declined everywhere — the gate proves nothing");
+}
+
+/// ON — the seats and the cost. The root still asks ONE batch from its own seat, and it is the LAST
+/// call (PHASE 4b follows every rollout); every earlier call is a nested reply search asking from
+/// the OPPONENT's side with the flipped `opener_seat`, at most one per pooled rollout (one level
+/// only). Reported: hook calls and leaves per decision, ON vs OFF — the net work the knob adds.
+#[test]
+fn reply_by_net_asks_the_hook_from_the_opponent_seat_one_level_only() {
+    let c = corpus();
+    let statics = build_act_statics(&c, REPO);
+    let policy = Policy::new(&statics, &c.terrain, seams_of(&c));
+    let tail = c.knobs.tail_cap_p1;
+    let (on_roll, off_roll) =
+        (Rollout::new(policy, reply_knobs(&c, true, tail)), Rollout::new(policy, reply_knobs(&c, false, tail)));
+    let mut sc = Scratch::default();
+    let (mut decisions, mut nested_calls) = (0usize, 0usize);
+    let (mut calls_off, mut calls_on, mut leaves_off, mut leaves_on) = (0usize, 0usize, 0usize, 0usize);
+    for (ai, act) in c.acts.iter().enumerate() {
+        let (h_off, h_on) = (SeatLog::new(act.statics.opener_seat), SeatLog::new(act.statics.opener_seat));
+        let mut off = Search::new(off_roll, &act.statics);
+        off.leaf_value = Some(&h_off);
+        off.leaf_value_w = 1.0;
+        if off.run(&act.state, act.player, &mut sc, None).is_err() {
+            continue;
+        }
+        let mut on = Search::new(on_roll, &act.statics);
+        on.leaf_value = Some(&h_on);
+        on.leaf_value_w = 1.0;
+        let pick = on.run(&act.state, act.player, &mut sc, None).unwrap_or_else(|e| panic!("act {ai}: {e:?}"));
+        let calls = h_on.calls.borrow();
+        let (root, nested) = calls.split_last().expect("the root batch");
+        assert_eq!((root.0, root.1), (act.player, act.statics.opener_seat), "act {ai}: the root batch moved seat");
+        let opp = other_player(&act.state, act.player);
+        for &(side, seat, _) in nested {
+            assert_eq!((side, seat), (opp, !act.statics.opener_seat), "act {ai}: a nested batch from the wrong seat");
+        }
+        assert!(nested.len() <= pick.pool_idx.len(), "act {ai}: more nested searches than pooled rollouts");
+        decisions += 1;
+        nested_calls += nested.len();
+        calls_off += h_off.calls.borrow().len();
+        calls_on += calls.len();
+        leaves_off += h_off.calls.borrow().iter().map(|c| c.2).sum::<usize>();
+        leaves_on += calls.iter().map(|c| c.2).sum::<usize>();
+    }
+    let per = |x: usize| x as f64 / decisions.max(1) as f64;
+    println!(
+        "reply_by_net cost on {decisions} fixture decisions (grade 3/1, top_k {} horizon {}): hook calls/decision \
+         OFF {:.2} ON {:.2}; leaves/decision OFF {:.1} ON {:.1} (x{:.2})",
+        c.knobs.top_k, c.knobs.horizon, per(calls_off), per(calls_on), per(leaves_off), per(leaves_on),
+        leaves_on as f64 / leaves_off.max(1) as f64
+    );
+    assert!(decisions > 0 && nested_calls > 0, "no nested reply search ran — the test proves nothing");
+}
+
+/// The three knobs parse from a header; absent = OFF at the default grade (`REPLY_TOP_K` 3,
+/// `REPLY_HORIZON` 1).
+#[test]
+fn reply_by_net_parses_from_a_header_and_defaults_off() {
+    let head = |knobs: &str| format!(r#"{{"kind":"header","profiles":{{}},"knobs":{{{knobs}}}}}"#);
+    let on = nml_core::read_act_header(&head(r#""reply_by_net":true,"reply_top_k":5,"reply_horizon":2"#)).unwrap().knobs;
+    let off = nml_core::read_act_header(&head("")).unwrap().knobs;
+    assert!(on.reply_by_net && (on.reply_top_k, on.reply_horizon) == (5, 2));
+    assert!(!off.reply_by_net && (off.reply_top_k, off.reply_horizon) == (0, 0));
+    let d = Knobs::default();
+    assert!(!d.reply_by_net && (d.reply_top_k, d.reply_horizon) == (0, 0));
+    let c = corpus();
+    let statics = build_act_statics(&c, REPO);
+    let policy = Policy::new(&statics, &c.terrain, seams_of(&c));
+    let act = &c.acts[0].statics;
+    assert_eq!(Search::new(Rollout::new(policy, off), act).reply_grade(), (3, 1));
+    assert_eq!(Search::new(Rollout::new(policy, on), act).reply_grade(), (5, 2));
+}
+
+// --------------- reply_by_net's cost: `Knobs::reply_pool_cap` / `Knobs::reply_menu_restricted` ---
+
+/// Every nested reply search the fixture asks for, run directly: for each act, each ROOT pool row's
+/// post-opener state (the opener resolved as a root move plus its Coordinate hand-off, where
+/// `rollout_traced_reply` asks) and the opponent's `Search::reply_search` on it under `tweak`'s knobs
+/// (laid over `reply_knobs(on)`). `f` sees (act, the opened state, the opponent, the nested pick);
+/// returns how many nested searches answered.
+fn each_nested_reply(c: &ActCorpus, tweak: impl Fn(&mut Knobs),
+                     mut f: impl FnMut(usize, &nml_core::State, i64, &Pick)) -> usize {
+    let statics = build_act_statics(c, REPO);
+    let policy = Policy::new(&statics, &c.terrain, seams_of(c));
+    let tail = c.knobs.tail_cap_p1;
+    let mut k = reply_knobs(c, true, tail);
+    tweak(&mut k);
+    let (roll, off_roll) = (Rollout::new(policy, k), Rollout::new(policy, reply_knobs(c, false, tail)));
+    let mut sc = Scratch::default();
+    let mut n = 0usize;
+    for (ai, act) in c.acts.iter().enumerate() {
+        let Ok(root) = Search::new(off_roll, &act.statics).run(&act.state, act.player, &mut sc, None) else { continue };
+        let on = Search::new(roll, &act.statics);
+        let opp = other_player(&act.state, act.player);
+        for &i in &root.pool_idx {
+            let cand = &root.cands[i];
+            let mut opened = policy.resolve_root(&act.state, cand).unwrap();
+            roll.coordinate_hand_off(&mut opened, cand, act.player, &mut sc).unwrap();
+            match on.reply_search(&opened, opp, &mut sc) {
+                Ok(p) => {
+                    n += 1;
+                    f(ai, &opened, opp, &p);
+                }
+                Err(Unsupported::NoCandidate) => {}
+                Err(e) => panic!("act {ai}: {e:?}"),
+            }
+        }
+    }
+    n
+}
+
+/// One arm of #1705's counting-hook probe: every fixture act the default search answers, searched ON
+/// under `tweak` with `SeatLog` at weight 1. Returns (decisions, hook calls, leaves, the largest NESTED
+/// batch, wall ms of the ON searches).
+fn reply_cost(c: &ActCorpus, tweak: impl Fn(&mut Knobs)) -> (usize, usize, usize, usize, f64) {
+    let statics = build_act_statics(c, REPO);
+    let policy = Policy::new(&statics, &c.terrain, seams_of(c));
+    let tail = c.knobs.tail_cap_p1;
+    let mut k = reply_knobs(c, true, tail);
+    tweak(&mut k);
+    let (roll, off_roll) = (Rollout::new(policy, k), Rollout::new(policy, reply_knobs(c, false, tail)));
+    let mut sc = Scratch::default();
+    let (mut decisions, mut calls, mut leaves, mut nested_max, mut ms) = (0usize, 0usize, 0usize, 0usize, 0.0f64);
+    for (ai, act) in c.acts.iter().enumerate() {
+        if Search::new(off_roll, &act.statics).run(&act.state, act.player, &mut sc, None).is_err() {
+            continue;
+        }
+        let hook = SeatLog::new(act.statics.opener_seat);
+        let mut s = Search::new(roll, &act.statics);
+        s.leaf_value = Some(&hook);
+        s.leaf_value_w = 1.0;
+        let t = std::time::Instant::now();
+        s.run(&act.state, act.player, &mut sc, None).unwrap_or_else(|e| panic!("act {ai}: {e:?}"));
+        ms += t.elapsed().as_secs_f64() * 1e3;
+        let log = hook.calls.borrow();
+        let (_, nested) = log.split_last().expect("the root batch");
+        nested_max = nested_max.max(nested.iter().map(|b| b.2).max().unwrap_or(0));
+        decisions += 1;
+        calls += log.len();
+        leaves += log.iter().map(|b| b.2).sum::<usize>();
+    }
+    (decisions, calls, leaves, nested_max, ms)
+}
+
+/// RED (a) — `reply_pool_cap` K = 3: every nested reply search prices at most 3 rows, and they are the
+/// top 3 of ITS OWN prefilter order (no per-unit coverage, patient-advance or second-wave row on top).
+/// The counting hook sees the same through the real search: at the reply horizon 1 a nested batch
+/// carries one leaf per priced row, so no nested batch exceeds 3. Cap 0 (#1705's pool) is the contrast
+/// that proves the bar can fail: its nested pools carry every opponent unit.
+#[test]
+fn reply_pool_cap_prices_at_most_k_rows_in_every_nested_search() {
+    let c = corpus();
+    let mut max0 = 0usize;
+    let n0 = each_nested_reply(&c, |_| {}, |_, _, _, p| max0 = max0.max(p.pool_idx.len()));
+    let (mut max3, mut not_top) = (0usize, 0usize);
+    let n3 = each_nested_reply(&c, |k| k.reply_pool_cap = 3, |ai, _, _, p| {
+        max3 = max3.max(p.pool_idx.len());
+        let top: Vec<usize> = p.scored.iter().take(3).map(|s| s.0 as usize).collect();
+        if p.pool_idx != top {
+            not_top += 1;
+            if not_top == 1 {
+                println!("act {ai}: nested pool {:?}, the top-3 prefilter rows {top:?}", p.pool_idx);
+            }
+        }
+    });
+    let (_, _, _, hook0, _) = reply_cost(&c, |_| {});
+    let (d, calls, _, hook3, _) = reply_cost(&c, |k| k.reply_pool_cap = 3);
+    println!(
+        "reply_pool_cap: {n0} nested searches; largest nested pool cap 0 {max0} / cap 3 {max3} ({not_top} not the \
+         top-3 rows); counting hook over {d} decisions ({calls} calls): largest nested batch cap 0 {hook0} / cap 3 {hook3}"
+    );
+    assert!(n0 > 0 && max0 > 3 && hook0 > 3, "cap 0 never prices more than 3 rows — the bar cannot fail");
+    assert_eq!(n3, n0, "the cap moved how many nested searches answer");
+    assert!(max3 <= 3, "cap 3: a nested search priced {max3} rows");
+    assert_eq!(not_top, 0, "cap 3: the nested pool must be the top 3 rows of its own prefilter order");
+    assert!(hook3 <= 3, "cap 3: a nested hook batch carried {hook3} leaves");
+}
+
+/// (b) cap 0 IS #1705's nested search: every nested pool at cap 0 is `build_pool`'s four guarantees over
+/// that search's own prefilter at the reply top_k, and the whole ON search at cap 0 and at a negative cap
+/// (which reads as 0) answers every fixture act like the knob-absent ON search: pool, rs to the bit,
+/// pick, hook calls. (The box gate repeats the bit-for-bit bar against #1705's own binary, 515 picks.)
+#[test]
+fn reply_pool_cap_zero_is_reply_by_nets_guaranteed_pool() {
+    let c = corpus();
+    let mut bad = 0usize;
+    let n = each_nested_reply(&c, |k| k.reply_pool_cap = 0, |ai, _, _, p| {
+        let order: Vec<usize> = p.scored.iter().map(|s| s.0 as usize).collect();
+        let mut rows: Vec<ScoredRow> = p.cands.iter().enumerate()
+            .map(|(idx, cand)| ScoredRow { idx, unit_key: String::new(), cand: cand.clone(), score: f64::NAN })
+            .collect();
+        for s in &p.scored {
+            (rows[s.0 as usize].unit_key, rows[s.0 as usize].score) = (s.1.clone(), s.3);
+        }
+        let (_, want) = build_pool(&rows, &order, REPLY_TOP_K, PlanBend::default());
+        if p.pool_idx != want {
+            bad += 1;
+            if bad == 1 {
+                println!("act {ai}: nested pool {:?}, the four guarantees' {want:?}", p.pool_idx);
+            }
+        }
+    });
+    assert!(n > 0, "no nested search ran — the test proves nothing");
+    assert_eq!(bad, 0, "cap 0 moved a nested pool off build_pool's four guarantees");
+    let statics = build_act_statics(&c, REPO);
+    let policy = Policy::new(&statics, &c.terrain, seams_of(&c));
+    let tail = c.knobs.tail_cap_p1;
+    let base_roll = Rollout::new(policy, reply_knobs(&c, true, tail));
+    let mut sc = Scratch::default();
+    let mut checked = 0usize;
+    for cap in [0i64, -1] {
+        let mut k = reply_knobs(&c, true, tail);
+        k.reply_pool_cap = cap;
+        let roll = Rollout::new(policy, k);
+        for (ai, act) in c.acts.iter().enumerate() {
+            let (h_base, h_got) = (SeatLog::new(act.statics.opener_seat), SeatLog::new(act.statics.opener_seat));
+            let mut base = Search::new(base_roll, &act.statics);
+            base.leaf_value = Some(&h_base);
+            base.leaf_value_w = 1.0;
+            let Ok(want) = base.run(&act.state, act.player, &mut sc, None) else { continue };
+            let mut s = Search::new(roll, &act.statics);
+            s.leaf_value = Some(&h_got);
+            s.leaf_value_w = 1.0;
+            let got = s.run(&act.state, act.player, &mut sc, None).unwrap_or_else(|e| panic!("act {ai}: {e:?}"));
+            assert_eq!(got.pool_idx, want.pool_idx, "cap {cap} act {ai}: moved the pool");
+            for (g, w) in got.rs.iter().zip(&want.rs) {
+                assert_eq!((g.0, g.1.to_bits()), (w.0, w.1.to_bits()), "cap {cap} act {ai}: moved a rollout value");
+            }
+            assert_eq!(got.unit_key, want.unit_key, "cap {cap} act {ai}: moved the pick");
+            assert!(same_action(&got.action, &want.action).is_ok(), "cap {cap} act {ai}: moved the action");
+            assert_eq!(*h_got.calls.borrow(), *h_base.calls.borrow(), "cap {cap} act {ai}: moved the hook calls");
+            checked += 1;
+        }
+    }
+    assert!(checked > 0, "the corpus declined everywhere — the gate proves nothing");
+}
+
+/// `reply_menu_restricted`: the nested reply search offers the scripted brain's own menu — its prefilter
+/// rows are exactly `Policy::policy_candidates` of every opponent unit that may activate, in capture
+/// order — and that is NOT the full root menu (the contrast: the widths differ somewhere).
+#[test]
+fn reply_menu_restricted_offers_the_playout_menu_in_the_nested_search() {
+    let c = corpus();
+    let statics = build_act_statics(&c, REPO);
+    let policy = Policy::new(&statics, &c.terrain, seams_of(&c));
+    let mut sc = Scratch::default();
+    let (mut widths, mut bad) = (Vec::new(), 0usize);
+    let lite = |k: &mut Knobs| (k.reply_pool_cap, k.reply_menu_restricted) = (3, true);
+    let n = each_nested_reply(&c, lite, |ai, st, opp, p| {
+        let want: Vec<Candidate> = (0..st.units())
+            .filter(|&u| st.can_activate(u, opp, policy.seams.hero_attach))
+            .flat_map(|u| policy.policy_candidates(st, u, &mut sc))
+            .collect();
+        let same = p.cands.len() == want.len() && p.cands.iter().zip(&want).all(|(g, w)| same_action(g, w).is_ok());
+        if !same {
+            bad += 1;
+            if bad == 1 {
+                println!("act {ai}: nested menu {} rows, the playout menu {} rows", p.cands.len(), want.len());
+            }
+        }
+        widths.push(p.cands.len());
+    });
+    let mut full = Vec::new();
+    each_nested_reply(&c, |k| k.reply_pool_cap = 3, |_, _, _, p| full.push(p.cands.len()));
+    let differ = widths.iter().zip(&full).filter(|(a, b)| a != b).count();
+    println!(
+        "reply_menu_restricted: {n} nested searches, {bad} not the playout menu; the width differs from the full \
+         menu in {differ} (restricted {} rows, full {} rows in all)",
+        widths.iter().sum::<usize>(), full.iter().sum::<usize>()
+    );
+    assert!(n > 0 && widths.len() == full.len(), "no nested search ran, or the two arms ran different ones");
+    assert_eq!(bad, 0, "the nested search must offer the playout menu");
+    assert!(differ > 0, "the restricted menu equals the full menu everywhere — no contrast");
+}
+
+/// Knob OFF identity: with `reply_by_net` OFF, `reply_pool_cap` 3 and `reply_menu_restricted` move nothing
+/// — pool, rs to the bit, pick, ONE hook batch per act; and ON, they leave the ROOT search's own
+/// prefilter and pool untouched (only the nested searches change).
+#[test]
+fn reply_pool_cap_and_menu_are_inert_off_and_never_touch_the_root_pool() {
+    let c = corpus();
+    let statics = build_act_statics(&c, REPO);
+    let policy = Policy::new(&statics, &c.terrain, seams_of(&c));
+    let tail = c.knobs.tail_cap_p1;
+    let lite = |mut k: Knobs| {
+        (k.reply_pool_cap, k.reply_menu_restricted) = (3, true);
+        k
+    };
+    let (base_roll, off_roll) = (Rollout::new(policy, c.knobs), Rollout::new(policy, lite(c.knobs)));
+    let (on0, on3) = (Rollout::new(policy, reply_knobs(&c, true, tail)), Rollout::new(policy, lite(reply_knobs(&c, true, tail))));
+    let mut sc = Scratch::default();
+    let mut checked = 0usize;
+    for (ai, act) in c.acts.iter().enumerate() {
+        let (h_base, h_off) = (SeatLog::new(act.statics.opener_seat), SeatLog::new(act.statics.opener_seat));
+        let mut base = Search::new(base_roll, &act.statics);
+        base.leaf_value = Some(&h_base);
+        base.leaf_value_w = 1.0;
+        let Ok(want) = base.run(&act.state, act.player, &mut sc, None) else { continue };
+        let mut off = Search::new(off_roll, &act.statics);
+        off.leaf_value = Some(&h_off);
+        off.leaf_value_w = 1.0;
+        let got = off.run(&act.state, act.player, &mut sc, None).unwrap_or_else(|e| panic!("act {ai}: {e:?}"));
+        assert_eq!(got.pool_idx, want.pool_idx, "act {ai}: OFF moved the pool");
+        for (g, w) in got.rs.iter().zip(&want.rs) {
+            assert_eq!((g.0, g.1.to_bits()), (w.0, w.1.to_bits()), "act {ai}: OFF moved a rollout value");
+        }
+        assert_eq!(got.unit_key, want.unit_key, "act {ai}: OFF moved the pick");
+        assert!(same_action(&got.action, &want.action).is_ok(), "act {ai}: OFF moved the action");
+        assert_eq!(*h_off.calls.borrow(), *h_base.calls.borrow(), "act {ai}: OFF changed the hook calls");
+        assert_eq!(h_off.calls.borrow().len(), 1, "act {ai}: OFF asks ONE leaf batch per activation");
+        let r0 = Search::new(on0, &act.statics).run(&act.state, act.player, &mut sc, None).unwrap();
+        let r3 = Search::new(on3, &act.statics).run(&act.state, act.player, &mut sc, None).unwrap();
+        assert_eq!(r3.pool_idx, r0.pool_idx, "act {ai}: the nested cap moved the ROOT pool");
+        assert_eq!(r3.scored.len(), r0.scored.len(), "act {ai}: the nested menu moved the ROOT prefilter");
+        for (g, w) in r3.scored.iter().zip(&r0.scored) {
+            assert_eq!((g.0, &g.1, g.2, g.3.to_bits()), (w.0, &w.1, w.2, w.3.to_bits()), "act {ai}: ROOT prefilter row");
+        }
+        checked += 1;
+    }
+    assert!(checked > 0, "the corpus declined everywhere — the gate proves nothing");
+}
+
+/// COST PROBE (#1705's counting hook, per arm): hook calls, leaves and debug-build wall ms per fixture
+/// decision — OFF, ON at cap 0 (#1705: 12.13 calls, 158.9 leaves), cap 3, cap 5, and cap 3 on the
+/// restricted menu. The cap leaves the CALLS alone (one nested search per pooled root rollout with an
+/// opponent reply) and cuts the leaves.
+#[test]
+fn reply_pool_cap_cost_probe() {
+    let c = corpus();
+    type Arm = (&'static str, fn(&mut Knobs));
+    let arms: [Arm; 5] = [
+        ("OFF", |k| k.reply_by_net = false),
+        ("ON cap 0 (#1705)", |_| {}),
+        ("ON cap 3", |k| k.reply_pool_cap = 3),
+        ("ON cap 5", |k| k.reply_pool_cap = 5),
+        ("ON cap 3 + restricted menu", |k| (k.reply_pool_cap, k.reply_menu_restricted) = (3, true)),
+    ];
+    let mut got = Vec::new();
+    for (name, tweak) in arms {
+        let (d, calls, leaves, nested_max, ms) = reply_cost(&c, tweak);
+        let per = |x: f64| x / d.max(1) as f64;
+        println!(
+            "reply cost probe [{name}] over {d} decisions: hook calls/decision {:.2}, leaves/decision {:.1}, \
+             largest nested batch {nested_max}, debug ms/decision {:.1}",
+            per(calls as f64), per(leaves as f64), per(ms)
+        );
+        got.push((d, calls, leaves));
+    }
+    let (off, on, cap3, cap5) = (got[0], got[1], got[2], got[3]);
+    assert!(on.0 > 0 && on.1 > on.0, "no nested reply search ran — the probe measures nothing");
+    assert!(got.iter().all(|g| g.0 == off.0), "the arms answered different acts");
+    assert_eq!((cap3.1, cap5.1, got[4].1), (on.1, on.1, on.1), "the cap moved the number of nested searches");
+    assert!(cap3.2 < on.2 && cap3.2 <= cap5.2, "the cap must cut the leaves: cap 3 {} cap 5 {} cap 0 {}", cap3.2, cap5.2, on.2);
+}
+
+/// The two knobs parse from a header; absent = off (cap 0, the full menu), as `Knobs::default()`.
+#[test]
+fn reply_pool_cap_and_menu_parse_from_a_header_and_default_off() {
+    let head = |knobs: &str| format!(r#"{{"kind":"header","profiles":{{}},"knobs":{{{knobs}}}}}"#);
+    let on = nml_core::read_act_header(&head(r#""reply_by_net":true,"reply_pool_cap":3,"reply_menu_restricted":true"#))
+        .unwrap()
+        .knobs;
+    let off = nml_core::read_act_header(&head("")).unwrap().knobs;
+    assert!(on.reply_by_net && on.reply_pool_cap == 3 && on.reply_menu_restricted);
+    assert!(off.reply_pool_cap == 0 && !off.reply_menu_restricted);
+    let d = Knobs::default();
+    assert!(d.reply_pool_cap == 0 && !d.reply_menu_restricted);
 }

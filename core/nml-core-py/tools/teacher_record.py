@@ -15,6 +15,14 @@ inline), mirrored by `--seats 1,2`: "the shipped net + one knob vs the shipped n
 decisions of each exploring seat are sampled from 0.75 * root prior + 0.25 * Dirichlet(0.3) (pool softmax without a tree), seeded by
 (row_id, N); rows then carry an `explored` column (1 = that decision was sampled) and the game json `teacher.explored` true; with it
 OFF neither exists (= main's records). A gate/A-B reader drops games with `teacher.explored`.
+  `--rs-value 1` (default 0): rows also carry an `rs_value` column (the search's rollout value per pool candidate, cands-aligned like
+`hand_score`, NaN off-pool, from `trace.rs`) and the game json `teacher.rs_value` true; OFF = today's record.
+  `--cand-geom 1` (default 0): the token export keeps to the first `trace.n_hand` rows (grid rows would pass the 160-row cap), and rows
+also carry a ragged group `geom` (+ `geom_ptr`) over ALL the trace's rows: absolute 0-origin table inches (not mirrored), cell id, kind,
+live-row actor / target pointers, grid flag / source / rank, rs / hand score / tree visit share; per decision `label_all` + `n_hand`;
+the game json `teacher.cand_geom` true; OFF = today's record.
+  `--net-cand-weight F` / `--net-inc-weight F` (default 1.0): scale that seat's ONNX leaf value (the game's pick = rs + w * net); the game
+json `teacher` carries `net_cand_weight` / `net_inc_weight` only when != 1.0.
   teacher_record.py --blocks B.json --arm L|T|L_tray|C|I --out D --bank BANK --repo WT [--knobs grade.json]
                     [--tree-budget 128] [--deadline-us 0] [--deep-pair 10,3] [--seats 1,2] [--dice 0,1] [--workers N]
                     [--net-cand X.onnx --net-inc Y.onnx]
@@ -66,6 +74,52 @@ def make_explorer(seed, row_id, seats):
     return Explorer(seed, row_id, seats) if seed is not None and seed >= 0 else None
 
 
+GEOM = ("geom_kind", "geom_x_in", "geom_y_in", "geom_cell", "geom_actor", "geom_target", "geom_grid", "geom_source", "geom_rank",
+        "geom_rs", "geom_hand", "geom_pi")
+BOARD_IN, IN2M = (72, 48), 0.0254  # the 72 x 48 table; trace dests are metres from the table centre
+
+
+def geometry(tr, t, player, nh, label, nu):
+    """`--cand-geom 1`: the absolute geometry of ALL the trace's rows (hand + grid), 0-origin table inches, never mirrored.
+    A row with no dest sits at its actor's centre (the unit token's centroid, un-mirrored). Grid rows carry no token, so their
+    actor / target pointers come from the hand rows of the same unit key; `trace.grid` (when present) gives source / rank."""
+    cands, n = tr["cands"], len(tr["cands"])
+    sign = -1.0 if player == 2 else 1.0
+    key_row = {}
+    for i in range(min(nh, n)):
+        key_row.setdefault(cands[i]["unit"], int(t["actor"][i]))
+        k = cands[i].get("charge") or cands[i].get("shoot")
+        if k is not None and int(t["target"][i]) >= 0:
+            key_row.setdefault(k, int(t["target"][i]))
+    gr = {int(e["idx"]): e for e in ((tr.get("grid") or {}).get("rows") or [])}
+    x, y, kind = np.full(n, np.nan, np.float32), np.full(n, np.nan, np.float32), np.zeros(n, np.int8)
+    actor, target = np.full(n, -1, np.int16), np.full(n, -1, np.int16)
+    for i, c in enumerate(cands):
+        kind[i], actor[i] = c["kind"], key_row.get(c["unit"], -1)
+        k = c.get("charge") or c.get("shoot")
+        target[i] = key_row.get(k, -1) if k is not None else -1
+        if c.get("dest") is not None:
+            x[i], y[i] = c["dest"][0] / IN2M + BOARD_IN[0] / 2, c["dest"][2] / IN2M + BOARD_IN[1] / 2
+        elif 0 <= actor[i] < nu:
+            x[i], y[i] = sign * float(t["units"][actor[i]][0]) * 30 + BOARD_IN[0] / 2, sign * float(t["units"][actor[i]][1]) * 30 + BOARD_IN[1] / 2
+    ok = (x >= 0) & (x < BOARD_IN[0]) & (y >= 0) & (y < BOARD_IN[1])  # NaN compares False -> off board
+    cell = np.where(ok, np.floor(np.where(ok, y, 0)) * BOARD_IN[0] + np.floor(np.where(ok, x, 0)), -1).astype(np.int16)
+    f16 = lambda a: np.asarray(a, np.float16)  # noqa: E731
+    rs, hand = {int(e["idx"]): float(e["rs"]) for e in tr.get("rs", [])}, {int(e["idx"]): float(e["score"]) for e in tr["scored"]}
+    pi, tree = np.zeros(n, np.float16), tr.get("tree")
+    tot = float(sum(r[1] for r in tree["root"])) if tree else 0.0
+    if tot > 0:
+        for idx, visits, _ in tree["root"]:
+            pi[idx] = visits / tot
+    nan = float("nan")
+    return {"geom_kind": kind, "geom_x_in": x, "geom_y_in": y, "geom_cell": cell, "geom_actor": actor, "geom_target": target,
+            "geom_grid": (np.arange(n) >= nh).astype(np.int8),
+            "geom_source": np.array([int(gr[i].get("source", -1)) if i in gr else -1 for i in range(n)], np.int8),
+            "geom_rank": np.array([int(gr[i].get("rank", -1)) if i in gr else -1 for i in range(n)], np.int16),
+            "geom_rs": f16([rs.get(i, nan) for i in range(n)]), "geom_hand": f16([hand.get(i, nan) for i in range(n)]), "geom_pi": pi,
+            "label_all": np.int16(label), "n_hand": np.int16(nh)}
+
+
 class Capture:
     # Wraps the live `_pick_for` (selfplay.forced_picks): one token row per landed pick with a menu; picks untouched
     # (unless an `Explorer` is given: then its sampled decisions are played and stamped `explored`).
@@ -89,30 +143,40 @@ class Capture:
         tr, rnd = pick["trace"], int(state.round)
         label = int(pick.get("played_idx", tr["scored"][tr["best_idx"]]["idx"]))
         # opener_seat = the round's first mover (gen0_replay_shards' `_OPENER` rule, read live)
-        t = core.policy_tokens(state, player, tr["cands"], label, hero_attach=True, opener_seat=self.first.setdefault(rnd, player) == player)
+        # grid rows (idx >= n_hand, a core that widens the pool) stay out of the token export: it refuses over N_CAND rows
+        nh = int(tr.get("n_hand", len(tr["cands"])))
+        t = core.policy_tokens(state, player, tr["cands"][:nh], label if label < nh else -1, hero_attach=True, opener_seat=self.first.setdefault(rnd, player) == player)
         nu, no, nt, nc = (int(sum(t[k + "_mask"])) for k in RAGGED)
         score = {e["idx"]: e["score"] for e in tr["scored"]}
         pi, tree, v_root, v_pick = np.zeros(nc, np.float16), tr.get("tree"), float("nan"), float("nan")
         n = float(sum(r[1] for r in tree["root"])) if tree else 0.0
         if n > 0:
             for idx, visits, mean in tree["root"]:
-                pi[idx] = visits / n
+                if idx < nc:
+                    pi[idx] = visits / n
             v_root = sum(r[1] * r[2] for r in tree["root"]) / n
             v_pick = next((r[2] for r in tree["root"] if r[0] == label), float("nan"))
         f16 = lambda a: np.asarray(a, np.float16)  # noqa: E731
+        rsv = {int(e["idx"]): float(e["rs"]) for e in tr.get("rs", [])} if _W.get("rs_value", False) else None
+        geom = geometry(tr, t, player, nh, label, nu) if _W.get("cand_geom", False) else {}
         return {"units": f16(t["units"][:nu]), "objs": f16(t["objs"][:no]), "terr": f16(t["terr"][:nt]),
-                "cands": f16(t["cands"][:nc]), "glob": f16(t["glob"]), "label": np.int16(label), "pi": pi,
+                "cands": f16(t["cands"][:nc]), "glob": f16(t["glob"]), "label": np.int16(label if label < nh else -1), "pi": pi,
                 "actor": np.asarray(t["actor"][:nc], np.int16), "target": np.asarray(t["target"][:nc], np.int16),
                 "hand_score": f16([score.get(i, float("nan")) for i in range(nc)]), "tree_fired": np.int8(tree is not None),
                 "v_root": np.float16(v_root), "v_pick": np.float16(v_pick), "completed": np.int32(tree["completed"] if tree else 0),
                 "side": np.int8(player), "round": np.int8(rnd), "seq": np.int16(len(self.rows)),
-                **({} if explored is None else {"explored": np.int8(explored)})}
+                **({} if explored is None else {"explored": np.int8(explored)}),
+                **({} if rsv is None else {"rs_value": f16([rsv.get(i, float("nan")) for i in range(nc)])}), **geom}
 
 
 def pack(rows, winner):
     # netlab/SHARD_SCHEMA.md packing (ptr-based, live rows only) + the teacher columns; `game_id` is the shard packer's.
     out = {"game_id": np.zeros(len(rows), np.int32), "glob": np.stack([r["glob"] for r in rows])}
-    out.update({k: np.concatenate([np.atleast_1d(r[k]) for r in rows]) for k in FLAT + (("explored",) if "explored" in rows[0] else ())})
+    out.update({k: np.concatenate([np.atleast_1d(r[k]) for r in rows]) for k in FLAT + (("explored",) if "explored" in rows[0] else ()) + (("rs_value",) if "rs_value" in rows[0] else ())})
+    if "geom_kind" in rows[0]:  # --cand-geom: a ragged `geom` group over ALL rows (hand + grid) + two per-decision columns
+        out.update({k: np.concatenate([r[k] for r in rows]) for k in GEOM})
+        out.update({k: np.concatenate([np.atleast_1d(r[k]) for r in rows]) for k in ("label_all", "n_hand")})
+        out["geom_ptr"] = np.concatenate([[0], np.cumsum([len(r["geom_kind"]) for r in rows])]).astype(np.int64)
     for k in RAGGED:
         out[k + "_ptr"] = np.concatenate([[0], np.cumsum([len(r[k]) for r in rows])]).astype(np.int64)
         out[k] = np.concatenate([r[k] for r in rows])
@@ -152,15 +216,15 @@ lab._PROBE_ARM_KWARGS, lab.arm_kwargs = lab.arm_kwargs, lambda row, us: arm_kwar
 def _init(cfg):
     import nml_core as nm
     _W.update(cfg)
-    nets = {s: lab2_net.ShippedNet(cfg["repo"], **({"onnx": p, "sha256": lab2_net._sha256(p)} if p else {}))
-            for s, p in ((1, cfg.get("net_cand", "")), (2, cfg.get("net_inc", "")))}
+    nets = {s: lab2_net.ShippedNet(cfg["repo"], weight=wt, **({"onnx": p, "sha256": lab2_net._sha256(p)} if p else {}))
+            for s, p, wt in ((1, cfg.get("net_cand", ""), cfg.get("net_cand_weight", 1.0)), (2, cfg.get("net_inc", ""), cfg.get("net_inc_weight", 1.0)))}
     return dict(cfg, nm=nm, nets=nets, ctx=lab.run_context(nm, cfg["prereg"], nets[1]))
 
 
 def play(w, row, record=True):
     # One manifest row through `lab2_tree_probe.play_row` (the stage-0 path), the Capture armed around it. D-L2: with
     # `--net-cand` / `--net-inc` the candidate net sits on the ROW'S seat and the incumbent's on the other (mirrored by seat).
-    net = SeatNets({row["seat"]: w["nets"][1], 3 - row["seat"]: w["nets"][2]}) if w.get("net_cand") or w.get("net_inc") else w["nets"][1]
+    net = SeatNets({row["seat"]: w["nets"][1], 3 - row["seat"]: w["nets"][2]}) if w.get("net_cand") or w.get("net_inc") or w.get("net_cand_weight", 1.0) != 1.0 or w.get("net_inc_weight", 1.0) != 1.0 else w["nets"][1]
     # The pair/fork sidecars feed no teacher row (only `Capture` reads the picks' traces, and `attach_logged_search` only
     # `row["search"]`): off by default = the same game and the same arrays at ~1/3 of the CPU. A grade file may set it back.
     knobs = {"sidecars": False, **w["knobs"], "record_cands": record}
@@ -213,8 +277,12 @@ def _work(w, cid, rows):
                                    "knobs_by_seat": meta.pop("cand_played", None)} if w.get("cand_knobs") else {}),
                                **({"seat_knobs": {str(s): b for s, b in w["seat_knobs"].items()}, "knobs_by_seat": meta.pop("cand_played", None)}
                                   if w.get("seat_knobs") else {}),
-                               **({"explored": True, "explore_seed": w["explore_seed"], "explore_seats": sorted(w["explore_seats"])}
-                                  if w.get("explore_seed", -1) >= 0 else {})}
+                               **({"explored": True, "explore_seed": w["explore_seed"], "explore_seats": sorted(w.get("explore_seats", (1, 2)))}
+                                  if w.get("explore_seed", -1) >= 0 else {}),
+                               **({"rs_value": True} if w.get("rs_value") else {}),
+                               **({"cand_geom": True} if w.get("cand_geom") else {}),
+                               **({"net_cand_weight": w["net_cand_weight"]} if w.get("net_cand_weight", 1.0) != 1.0 else {}),
+                               **({"net_inc_weight": w["net_inc_weight"]} if w.get("net_inc_weight", 1.0) != 1.0 else {})}
             lab.write_row(w["out"], meta)
         t = json.load(open(base + ".json"))
         out.append({"row_id": row["row_id"], "valid": t["valid"], "rows": t["teacher"]["rows"], "tree_rows": t["teacher"]["tree_rows"]})
@@ -243,8 +311,8 @@ def main(argv=None):
     for k, d in (("--blocks", None), ("--out", None), ("--bank", None), ("--repo", None), ("--arm", "L"), ("--knobs", ""),
                  ("--deep-pair", "10,3"), ("--seats", "1,2"), ("--dice", "0,1"), ("--prereg-sha256", "none"),
                  ("--net-cand", ""), ("--net-inc", ""), ("--cand-knobs", ""), ("--cand-preset", ""), ("--knobs-seat1", ""), ("--knobs-seat2", ""),
-                 ("--explore-seed", -1), ("--explore-seats", "1,2"), ("--tree-budget", 128), ("--deadline-us", 0), ("--workers", 1)):
-        ap.add_argument(k, default=d, required=d is None, **({"type": int} if isinstance(d, int) else {}))
+                 ("--explore-seed", -1), ("--rs-value", 0), ("--cand-geom", 0), ("--net-cand-weight", 1.0), ("--net-inc-weight", 1.0), ("--explore-seats", "1,2"), ("--tree-budget", 128), ("--deadline-us", 0), ("--workers", 1)):
+        ap.add_argument(k, default=d, required=d is None, **({"type": int} if isinstance(d, int) else {"type": float} if isinstance(d, float) else {}))
     a = ap.parse_args(argv)
     seats, dice = {int(x) for x in a.seats.split(",")}, {int(x) for x in a.dice.split(",")}
     rows = [r for r in lab.game_rows(json.load(open(a.blocks)), (a.arm,)) if r["seat"] in seats and r["d"] in dice]
@@ -252,7 +320,8 @@ def main(argv=None):
            "pair": tuple(int(x) for x in a.deep_pair.split(",")), "allowance": a.deadline_us, "prereg": a.prereg_sha256,
            "net_cand": a.net_cand, "net_inc": a.net_inc, "cand_knobs": resolve_cand(a.cand_knobs, a.cand_preset, a.arm),
            "seat_knobs": {s: b for s, b in ((1, resolve_cand(a.knobs_seat1, "", a.arm)), (2, resolve_cand(a.knobs_seat2, "", a.arm))) if b},
-           "explore_seed": a.explore_seed, "explore_seats": tuple(int(x) for x in a.explore_seats.split(","))}
+           "explore_seed": a.explore_seed, "explore_seats": tuple(int(x) for x in a.explore_seats.split(",")), "rs_value": bool(a.rs_value), "cand_geom": bool(a.cand_geom),
+           "net_cand_weight": a.net_cand_weight, "net_inc_weight": a.net_inc_weight}
     if cfg["seat_knobs"] and cfg["cand_knobs"]:
         raise SystemExit("--knobs-seat1/2 and --cand-knobs/--cand-preset both set a seat's bundle; pick one")
     os.makedirs(a.out, exist_ok=True)

@@ -173,6 +173,15 @@ pub struct Tuning {
     /// objective (to its control ring, at most the live advance band) and carries the best shot that stays in range
     /// from where the move ends. Appended last; off = byte-identical.
     pub advance_obj_shoot: bool,
+    /// Inventory C02 — `Knobs::fire_in_range_only`: the shoot legs price only the models within each weapon's
+    /// range (`sim::reach_rescale`). Off = byte-identical.
+    pub reach_only: bool,
+    /// Inventory C01 — `Knobs::range_by_base_edge`: the shoot legs measure the target distance base edge
+    /// to base edge (`sim::range_gap_in`) instead of centre to centre. Off = byte-identical.
+    pub range_edge: bool,
+    /// aifix F6 (inventory row M20) — `Knobs::charge_needs_path`: drop a charge target the mover cannot walk to
+    /// within the live charge band (`charge_path_blocked`). Off = byte-identical.
+    pub charge_needs_path: bool,
 }
 
 impl Default for Tuning {
@@ -189,6 +198,9 @@ impl Default for Tuning {
             rush_k: 1,
             all_targets: 0,
             advance_obj_shoot: false,
+            reach_only: false,
+            range_edge: false,
+            charge_needs_path: false,
         }
     }
 }
@@ -307,8 +319,15 @@ pub fn best_shoot(
             continue;
         }
         let ut = &statics[state.roster.profile[e]];
-        let d = geom::dist_in(&state.positions[i], &state.positions[e]);
+        let d = if tuning.range_edge {
+            crate::sim::range_gap_in(state, &state.positions[i], i, e)
+        } else {
+            geom::dist_in(&state.positions[i], &state.positions[e])
+        };
         profiles_of(us, state.alive[i], d, sc);
+        if tuning.reach_only {
+            crate::sim::reach_rescale(us, state.alive[i], &state.positions[i], &state.positions[e], 0.0, sc);
+        }
         let att = ctx_live(ctx_of(us, state, i), statics, state, i, false, rules_epoch);
         let def = ctx_live(ctx_of(ut, state, e), statics, state, e, false, rules_epoch);
         let ev = shoot_ev(&us.shoot, &sc.keep, &sc.attacks, &att, &def, d);
@@ -337,8 +356,15 @@ pub fn ranked_shoots(
             continue;
         }
         let ut = &statics[state.roster.profile[e]];
-        let d = geom::dist_in(&state.positions[i], &state.positions[e]);
+        let d = if tuning.range_edge {
+            crate::sim::range_gap_in(state, &state.positions[i], i, e)
+        } else {
+            geom::dist_in(&state.positions[i], &state.positions[e])
+        };
         profiles_of(us, state.alive[i], d, sc);
+        if tuning.reach_only {
+            crate::sim::reach_rescale(us, state.alive[i], &state.positions[i], &state.positions[e], 0.0, sc);
+        }
         let att = ctx_live(ctx_of(us, state, i), statics, state, i, false, rules_epoch);
         let def = ctx_live(ctx_of(ut, state, e), statics, state, e, false, rules_epoch);
         let ev = shoot_ev(&us.shoot, &sc.keep, &sc.attacks, &att, &def, d);
@@ -408,8 +434,15 @@ fn advance_objective_shoot(
         if !state.sees(unit, state.key(e)) || (tuning.shoot_los && !state.los_clear(unit, e)) {
             continue;
         }
-        let d = geom::dist_in(&moved, &state.positions[e]);
+        let d = if tuning.range_edge {
+            crate::sim::range_gap_in(state, &moved, unit, e)
+        } else {
+            geom::dist_in(&moved, &state.positions[e])
+        };
         profiles_of(us, state.alive[unit], d, sc);
+        if tuning.reach_only {
+            crate::sim::reach_rescale(us, state.alive[unit], &moved, &state.positions[e], 0.0, sc);
+        }
         let att = ctx_live(ctx_of(us, state, unit), statics, state, unit, false, CURRENT_RULES_EPOCH);
         let def = ctx_live(
             ctx_of(&statics[state.roster.profile[e]], state, e), statics, state, e, false, CURRENT_RULES_EPOCH,
@@ -480,7 +513,12 @@ pub fn advance_shoots(
         if !state.sees(i, state.key(e)) || (tuning.shoot_los && !state.los_clear(i, e)) {
             continue;
         }
-        let d = (geom::dist_in(&state.positions[i], &state.positions[e]) - advance_in).max(0.0);
+        let gap = if tuning.range_edge {
+            crate::sim::range_gap_in(state, &state.positions[i], i, e)
+        } else {
+            geom::dist_in(&state.positions[i], &state.positions[e])
+        };
+        let d = (gap - advance_in).max(0.0);
         profiles_of(us, state.alive[i], d, sc);
         let att = ctx_live(ctx_of(us, state, i), statics, state, i, false, rules_epoch);
         let def = ctx_live(
@@ -561,6 +599,7 @@ pub fn best_charge(
     // per-unit constant, so it rides BOTH the futile bar and the score.
     let (_, danger_loss) = crate::sim::terrain_debuff_folds(statics, state, i);
     let centre_us = geom::centre(&state.positions[i]);
+    let path_ix = tuning.charge_needs_path.then(|| crate::sim::reach_index_for_state(state, terrain)).flatten();
     let mut best = None;
     let mut best_score = f64::NEG_INFINITY;
     for e in enemy_keys_tuned(state, i, tuning.target_units) {
@@ -593,6 +632,9 @@ pub fn best_charge(
         {
             continue;
         }
+        if path_ix.as_ref().is_some_and(|ix| charge_path_blocked(state, terrain, statics, ix, i, e)) {
+            continue;
+        }
         let ut = &statics[state.roster.profile[e]];
         let us = ctx_live(ctx_of(us_static, state, i), statics, state, i, true, rules_epoch);
         let them = ctx_live(ctx_of(ut, state, e), statics, state, e, true, rules_epoch);
@@ -609,6 +651,69 @@ pub fn best_charge(
         }
     }
     best
+}
+
+/// aifix F6 (inventory row M20, p.9 "a clear path to reach it") — true when the mover cannot walk to `e` within the
+/// live charge band. The question goes to the tier-2 reach index the rollouts already use: from the nearest model
+/// pair, a route to the target model's CENTRE may spend the charge band plus the two base radii (the last stretch of
+/// that route is the contact itself), around Container cells and the units in the way (`foe` = the victim's group,
+/// no obstacle). Lenient by construction: it asks one model, with the whole unit's largest radius as clearance.
+fn charge_path_blocked(
+    state: &State,
+    terrain: &Terrain,
+    statics: &[UnitStatic],
+    ix: &crate::mv::reach::ReachIndex,
+    i: usize,
+    e: usize,
+) -> bool {
+    let model_r = |u: usize, k: usize| state.radii[u].get(k).copied().unwrap_or(DEFAULT_BASE_RADIUS_M);
+    let mut best = (f64::INFINITY, 0usize, 0usize);
+    for (a, pa) in state.positions[i].iter().enumerate() {
+        for (b, pb) in state.positions[e].iter().enumerate() {
+            let gap = ((pa[0] - pb[0]).hypot(pa[2] - pb[2])) - model_r(i, a) - model_r(e, b);
+            if gap < best.0 {
+                best = (gap, a, b);
+            }
+        }
+    }
+    if !best.0.is_finite() {
+        return false;
+    }
+    let (_, a, b) = best;
+    let group = |u: usize| {
+        let mut m = crate::mv::reach::owner_bit(u);
+        for h in state.attached[u].iter() {
+            m |= crate::mv::reach::owner_bit(*h);
+        }
+        m
+    };
+    let mut mover = group(i);
+    if let Some(host) = state.attached_to[i] {
+        mover |= crate::mv::reach::owner_bit(host);
+    }
+    let r_mover_in = state.radii[i].iter().copied().fold(DEFAULT_BASE_RADIUS_M, f64::max) / IN2M;
+    let radius = r_mover_in + crate::mv::CLEARANCE_EPS_IN;
+    let start = terrain.to_inch(geom::to_f32(state.positions[i][a]));
+    let centre = terrain.to_inch(geom::to_f32(state.positions[e][b]));
+    // The victim's body is an obstacle at its own radius, so the route ends at the CONTACT point: on the line to the
+    // mover, one victim radius + the mover's clearance (+ a hair) out from the victim model's centre.
+    let stand_off = model_r(e, b) / IN2M + radius + 0.05;
+    let (dx, dy) = ((start[0] - centre[0]) as f64, (start[1] - centre[1]) as f64);
+    let d = dx.hypot(dy);
+    if d <= stand_off {
+        return false;
+    }
+    let target = [(centre[0] as f64 + dx / d * stand_off) as f32, (centre[1] as f64 + dy / d * stand_off) as f32];
+    let q = crate::mv::reach::ReachQuery {
+        start,
+        target,
+        radius,
+        band: crate::gate::charge_band_in(state, statics, i, e),
+        cap_in: 0.0,
+        mover,
+        foe: group(e),
+    };
+    !ix.query_memo(&q).reachable
 }
 
 /// NML-1157 — the nearest enemy this unit could actually REACH: the smallest
@@ -642,6 +747,7 @@ pub fn nearest_chargeable(
     melee_profiles_of(us_static, state.alive[i], sc);
     let our_attacks = sc.attacks.clone();
     let us = ctx_live(ctx_of(us_static, state, i), statics, state, i, true, rules_epoch);
+    let path_ix = tuning.charge_needs_path.then(|| crate::sim::reach_index_for_state(state, terrain)).flatten();
     let mut best = None;
     let mut best_gap = f64::INFINITY;
     for e in enemy_keys_tuned(state, i, tuning.target_units) {
@@ -667,6 +773,9 @@ pub fn nearest_chargeable(
             None,
             tuning.honour_no_difficult,
         ) {
+            continue;
+        }
+        if path_ix.as_ref().is_some_and(|ix| charge_path_blocked(state, terrain, statics, ix, i, e)) {
             continue;
         }
         let them = ctx_live(

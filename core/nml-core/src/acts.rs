@@ -36,6 +36,13 @@ pub struct Knobs {
     pub tail_cap_p1: i64,
     #[serde(default)]
     pub tail_cap_p2: i64,
+    /// Opponent-model diagnosis (c) — every root rollout stops RIGHT AFTER the opener (the candidate's
+    /// own activation and its Coordinate hand-off) and is priced there, mid-round, by the same blend +
+    /// net leaf: no scripted opponent reply, no scripted tail. A tail cap cannot say this (0 = no cap,
+    /// 1 = one scripted step). Research knob, default OFF (byte-identical).
+    /// Inert under `search_mode` tree: a tree leaf is priced at its own state already (tree.rs).
+    #[serde(default)]
+    pub leaf_opener_only: bool,
     #[serde(default)]
     pub imagined_round_end: bool,
     #[serde(default)]
@@ -46,6 +53,32 @@ pub struct Knobs {
     pub playout_margin: f64,
     #[serde(default)]
     pub playout_rich: bool,
+    /// Opponent-model diagnosis (a) — the opponent's FIRST reply inside every root rollout (the step
+    /// right after the opener) is the planner's own one-ply search for the opponent at the grade
+    /// `reply_top_k` / `reply_horizon`, the leaf hook (when wired) priced from the opponent's seat,
+    /// instead of the scripted four-option brain; the rest of the tail stays scripted
+    /// (`plan::Search::reply_pick`). Research knob, default OFF (byte-identical).
+    /// Inert under `search_mode` tree, which runs no rollout: its opponent nodes search the full menu (tree.rs).
+    #[serde(default)]
+    pub reply_by_net: bool,
+    /// `reply_by_net`'s rollout budget; `<= 0` = `plan::REPLY_TOP_K` (3).
+    #[serde(default)]
+    pub reply_top_k: i64,
+    /// `reply_by_net`'s horizon in rounds; `<= 0` = `plan::REPLY_HORIZON` (1).
+    #[serde(default)]
+    pub reply_horizon: i64,
+    /// `reply_by_net`'s nested POOL cap: `> 0` = the opponent's nested reply search prices at most this many
+    /// rows, the top of ITS prefilter order, with no per-unit coverage, patient-advance or second-wave row
+    /// on top (`plan::Search::pool_cap`). `<= 0` = the four guarantees (#1705's nested pool). The root
+    /// search's own pool is never capped. Read only with `reply_by_net` on.
+    #[serde(default)]
+    pub reply_pool_cap: i64,
+    /// `reply_by_net`'s nested MENU: on = the opponent's nested reply search offers the scripted brain's own
+    /// four-option menu (`playout::Policy::policy_candidates`) on the playout seams (no `route_root` table
+    /// move) instead of the full root menu, and the reply it picks is played on those seams. Off = #1705's
+    /// full root menu. Read only with `reply_by_net` on.
+    #[serde(default)]
+    pub reply_menu_restricted: bool,
     /// `BattleSim.cast_phase_enabled()` — NML_SIM_CAST.
     #[serde(default)]
     pub seam_cast: bool,
@@ -106,6 +139,11 @@ pub struct Knobs {
     /// nearest objective WITH a shot on a target that stays in range after the move. Default off.
     #[serde(default)]
     pub menu_advance_obj_shoot: bool,
+    /// aifix F6 (inventory row M20, p.9 "has a clear path to reach it") — `Tuning::charge_needs_path`: a CHARGE row is
+    /// kept only when the mover's nearest model can walk to the target within the live charge band (containers, units
+    /// in the way). Default off = byte-identical.
+    #[serde(default)]
+    pub charge_needs_path: bool,
     /// Wave 6 (`rushk`) — `Tuning::rush_k`, the PLAYOUT leg: how many of the
     /// nearest objectives the rollout's greedy brain rushes instead of only the
     /// nearest. A MENU knob, not a seam: it widens what the search may choose and
@@ -222,6 +260,31 @@ pub struct Knobs {
     /// round `rounds_total`). Research knob for the A/B, default OFF.
     #[serde(default)]
     pub no_end_threat: bool,
+    /// Inventory C02 — the AI's imagined volley lets only the models whose own distance to the target is
+    /// within a weapon's range fire it (GF/AoF v3.5.1 p.8), instead of every living model once the nearest
+    /// pair is in range. Research knob for the A/B, default OFF (byte-identical).
+    #[serde(default)]
+    pub fire_in_range_only: bool,
+    /// Inventory C12 — a joined hero counts in the unit's size (GF/AoF v3.5.1 p.14): half strength and the
+    /// morale / rout thresholds read host + hero, not the host alone. Research knob, default OFF (byte-identical).
+    #[serde(default)]
+    pub hero_counts_in_size: bool,
+    /// Inventory C08 — a Shaken unit "always fails" its morale test, but the failure is still a failed test, so
+    /// Fearless (all models) rolls its 4+ and passes half the time (p.13), as the table's dice already do
+    /// (`dice::resolve_morale_with_tray`). With the knob on the imagined test of a Shaken Fearless unit fails with chance 0.5
+    /// (the dither stands in for the die) instead of for certain. Research knob, default OFF (byte-identical).
+    #[serde(default)]
+    pub fearless_roll_when_shaken: bool,
+    /// Inventory C03 — when a unit loses models, the imagined volley keeps special-weapon bearers alive LAST, as the
+    /// table's dice assumption does (`sim::bearer_scaled_attacks`): a weapon carried by fewer models than the unit
+    /// fires `per-copy x min(copies, alive)`, only the common weapon shrinks pro rata. Research knob, default OFF.
+    #[serde(default)]
+    pub casualties_bearers_last: bool,
+    /// Inventory C01/C27 — the AI's imagination measures shooting range (and the over-9" modifiers)
+    /// base edge to base edge, as the table does, instead of model centre to centre. Research knob
+    /// for the A/B, default OFF (byte-identical).
+    #[serde(default)]
+    pub range_by_base_edge: bool,
     /// aifix D1 — see `Seams::morale_by_probability`. Research knob, default OFF.
     #[serde(default)]
     pub morale_by_probability: bool,
@@ -234,6 +297,10 @@ pub struct Knobs {
     /// aifix D2c — see `Seams::reply_hold_gate`. Research knob, default OFF.
     #[serde(default)]
     pub reply_hold_gate: bool,
+    /// Inventory T03-T06 — see `Seams::reply_threat_by_speed`. Research knob for the A/B, default OFF
+    /// (byte-identical).
+    #[serde(default)]
+    pub reply_threat_by_speed: bool,
     /// NML-1134 — which RULE VOCABULARY this corpus's board rows were slotted
     /// with (`data/encoder_rule_vocab_v1.json`, stamped by `act_recorder.gd`).
     /// THE ONE RULE, and every reader gets it from here: the header says, and a
@@ -304,6 +371,14 @@ pub struct Knobs {
     /// byte-identical); a root without logits keeps UCT whatever `c` is.
     #[serde(default)]
     pub tree_puct: f64,
+    /// D7 (the objective is P(win), zero-sum) — tree search: an OPPONENT node orders its children (Blend leaf) and
+    /// selects among them (UCT argmax) by ITS OWN leaf, priced from its seat (`tree::own_leaf`: the blend for the
+    /// opponent with its `opener_seat` token, its hook value asked from that seat), instead of the argmin of the
+    /// searcher's. The value backed up stays the searcher's (means), so the root statistics keep their meaning.
+    /// Costs a second hook batch below every opponent node. Off (default) = today's tree, byte-identical; read only
+    /// under `search_mode` tree.
+    #[serde(default)]
+    pub tree_opponent_own_leaf: bool,
     /// W2 S0 — `Seams::melee_reach`: `"all"` is today's behaviour (every alive
     /// model of the unit strikes); `"table"` is the p.9 rule, scaling by the
     /// models within 2" of an enemy model instead. Absent from every corpus
@@ -1443,11 +1518,17 @@ impl Default for Knobs {
             horizon: 2,
             tail_cap_p1: 0,
             tail_cap_p2: 0,
+            leaf_opener_only: false,
             imagined_round_end: true,
             depth_discount: 0.5,
             seat_mode: 0,
             playout_margin: 0.02,
             playout_rich: true,
+            reply_by_net: false,
+            reply_top_k: 0,
+            reply_horizon: 0,
+            reply_pool_cap: 0,
+            reply_menu_restricted: false,
             seam_cast: false,
             seam_spacing: false,
             seam_path: false,
@@ -1459,6 +1540,7 @@ impl Default for Knobs {
             menu_advance_k: 1,
             menu_all_targets: 0,
             menu_advance_obj_shoot: false,
+            charge_needs_path: false,
             playout_rush_k: 1,
             hero_attach: false,
             charge_landing: false,
@@ -1475,10 +1557,16 @@ impl Default for Knobs {
             dangerous_end_morale: false,
             opener_by_finish: false,
             no_end_threat: false,
+            fire_in_range_only: false,
+            hero_counts_in_size: false,
+            fearless_roll_when_shaken: false,
+            casualties_bearers_last: false,
+            range_by_base_edge: false,
             morale_by_probability: false,
             reply_v2: false,
             reply_skip_activated: false,
             reply_hold_gate: false,
+            reply_threat_by_speed: false,
             // NML-1134: the CORPUS reading — a header with no `knobs` block at
             // all predates the stamp just as surely as one with an unstamped
             // block does. A caller that plays a FRESH game stamps
@@ -1498,6 +1586,7 @@ impl Default for Knobs {
             deadline_after_preselect: false,
             tree_widen: 0.0,
             tree_puct: 0.0,
+            tree_opponent_own_leaf: false,
             melee_reach: MeleeReach::All,
             consolidate: false,
             cond_ap_dice: false,

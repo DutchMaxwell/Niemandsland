@@ -962,6 +962,7 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         horizon: dint(d, "horizon", dflt.horizon),
         tail_cap_p1: dint(d, "tail_cap_p1", dflt.tail_cap_p1),
         tail_cap_p2: dint(d, "tail_cap_p2", dflt.tail_cap_p2),
+        leaf_opener_only: dflag(d, "leaf_opener_only"),
         imagined_round_end: d
             .get("imagined_round_end")
             .map(|v| flag(&v))
@@ -970,6 +971,11 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         seat_mode: dint(d, "seat_mode", dflt.seat_mode),
         playout_margin: dnum(d, "playout_margin", dflt.playout_margin),
         playout_rich: d.get("playout_rich").map(|v| flag(&v)).unwrap_or(dflt.playout_rich),
+        reply_by_net: dflag(d, "reply_by_net"),
+        reply_top_k: dint(d, "reply_top_k", dflt.reply_top_k),
+        reply_horizon: dint(d, "reply_horizon", dflt.reply_horizon),
+        reply_pool_cap: dint(d, "reply_pool_cap", dflt.reply_pool_cap),
+        reply_menu_restricted: dflag(d, "reply_menu_restricted"),
         seam_cast: dflag(d, "seam_cast"),
         seam_spacing: dflag(d, "seam_spacing"),
         // NML-1073 M4-7. No recorder writes this key yet (ai_planner.gd:607
@@ -1060,11 +1066,19 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
             .unwrap_or(dflt.dangerous_end_morale),
         opener_by_finish: d.get("opener_by_finish").map(|v| flag(&v)).unwrap_or(dflt.opener_by_finish),
         no_end_threat: d.get("no_end_threat").map(|v| flag(&v)).unwrap_or(dflt.no_end_threat),
+        fire_in_range_only: d.get("fire_in_range_only").map(|v| flag(&v)).unwrap_or(dflt.fire_in_range_only),
+        hero_counts_in_size: d.get("hero_counts_in_size").map(|v| flag(&v)).unwrap_or(dflt.hero_counts_in_size),
+        fearless_roll_when_shaken: d.get("fearless_roll_when_shaken").map(|v| flag(&v)).unwrap_or(dflt.fearless_roll_when_shaken),
+        casualties_bearers_last: d.get("casualties_bearers_last").map(|v| flag(&v)).unwrap_or(dflt.casualties_bearers_last),
+        range_by_base_edge: d.get("range_by_base_edge").map(|v| flag(&v))
+            .unwrap_or(dflt.range_by_base_edge),
         morale_by_probability: d.get("morale_by_probability").map(|v| flag(&v))
             .unwrap_or(dflt.morale_by_probability),
         reply_v2: d.get("reply_v2").map(|v| flag(&v)).unwrap_or(dflt.reply_v2),
         reply_skip_activated: d.get("reply_skip_activated").map(|v| flag(&v)).unwrap_or(dflt.reply_skip_activated),
         reply_hold_gate: d.get("reply_hold_gate").map(|v| flag(&v)).unwrap_or(dflt.reply_hold_gate),
+        reply_threat_by_speed: d.get("reply_threat_by_speed").map(|v| flag(&v))
+            .unwrap_or(dflt.reply_threat_by_speed),
         // NML-1134. The recorder writes this key (act_recorder.gd `_header_line`,
         // from `BattleSim.RULE_VOCAB_VERSION`); absent = `Knobs::default()` = the
         // pre-stamp version 2. INERT for the in-game seam — nothing in
@@ -1118,6 +1132,7 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         menu_advance_k: dint(d, "menu_advance_k", dflt.menu_advance_k as i64) as usize,
         menu_all_targets: dint(d, "menu_all_targets", 0).max(0) as usize,
         menu_advance_obj_shoot: d.get("menu_advance_obj_shoot").map(|v| flag(&v)).unwrap_or(false),
+        charge_needs_path: d.get("charge_needs_path").map(|v| flag(&v)).unwrap_or(false),
         // Wave 6 (`rushk`). A MENU knob, not a seam (like `menu_advance_k`): the
         // rollout's greedy brain rushes the top-k nearest objectives. No recorder
         // wrote the key before it, so an absent one answers `Knobs::default()` = 1
@@ -1150,6 +1165,7 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
             .unwrap_or(dflt.deadline_after_preselect),
         tree_widen: dnum(d, "tree_widen", dflt.tree_widen),
         tree_puct: dnum(d, "tree_puct", dflt.tree_puct),
+        tree_opponent_own_leaf: dflag(d, "tree_opponent_own_leaf"),
     }
 }
 

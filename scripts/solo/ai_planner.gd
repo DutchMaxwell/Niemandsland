@@ -595,6 +595,61 @@ static var opener_seat := false
 ## next-round opener is the side that finished activating first (GF p.7), not
 ## the side with fewer alive units.
 static var opener_by_finish := false
+## Shipped-brain header knobs (T2b menu_open BETTER on Erlkoenig, 08.10.2026):
+## set per pick by SoloController._apply_aifix; `_header_line` merges `brain_knob_stamp()` into the header knobs.
+static var brain_knobs := false
+
+
+## The two keys plain.rs `knobs_of` reads (Python KNOB_PRESETS menu_open); {} when off, so a
+## hand-planner game writes exactly the keys it wrote before.
+static func brain_knob_stamp() -> Dictionary:
+	if not brain_knobs:
+		return {}
+	return {"menu_all_targets": 3, "menu_advance_obj_shoot": true, "strength_by_points": true}
+
+
+## Core knob leaf_opener_only (plain.rs knobs_of): the search rollout stops after the opener. Own flag, not part of the
+## brain bundle; {} when off (byte-identical header).
+static var leaf_opener := false
+
+
+static func leaf_opener_stamp() -> Dictionary:
+	return {"leaf_opener_only": true} if leaf_opener else {}
+
+
+## Core knobs top_k + horizon (plain.rs knobs_of) for the shipped brain: breadth > 0 stamps top_k = breadth, horizon 3 (A/B of
+## record vs 10/3). Set per pick by SoloController._apply_aifix; {} when 0 (byte-identical header).
+static var brain_breadth := 0
+
+
+static func brain_breadth_stamp() -> Dictionary:
+	if brain_breadth <= 0:
+		return {}
+	return {"brain_breadth": brain_breadth, "top_k": brain_breadth, "horizon": 3}
+
+
+## Hand-planner games (no brain): strength_by_points (acts.rs Knobs, plain.rs knobs_of) measured NOT_WORSE
+## 08.10.2026. Set per pick by SoloController._apply_aifix; {} when off (byte-identical header).
+static var points_strength := false
+
+
+static func points_knob_stamp() -> Dictionary:
+	if not points_strength:
+		return {}
+	return {"strength_by_points": true}
+
+
+## Table fidelity: the seven rule-fidelity core knobs (acts.rs Knobs, plain.rs knobs_of) as ONE switch, brain or hand.
+## Set per pick by SoloController._apply_aifix; {} when off (byte-identical header).
+static var table_fidelity := false
+
+
+static func table_fidelity_stamp() -> Dictionary:
+	if not table_fidelity:
+		return {}
+	return {"table_fidelity": true, "range_by_base_edge": true, "fire_in_range_only": true,
+		"casualties_bearers_last": true, "hero_counts_in_size": true, "reply_threat_by_speed": true,
+		"charge_needs_path": true, "fearless_roll_when_shaken": true}
 static var _seat_env := -1   # research seam: NML_SEAT_DEPTH off/on/inv retunes the vote (lazy env)
 
 

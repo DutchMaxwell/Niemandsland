@@ -16,6 +16,7 @@ import os
 
 DESIGN_FIELDS = 88
 V1_UNITS = 90
+MAX_DYNAMIC_BATCH = 128
 TOKEN_TAIL = ",objs6x12,terr18x12,glob16,vocab1017,bag17"
 BRAINS = os.path.join("assets", "solo", "brains")
 
@@ -40,7 +41,7 @@ def _schema(text):
 
 
 class ShippedNet:
-    def __init__(self, repo, onnx=None, sha256=None):
+    def __init__(self, repo, onnx=None, sha256=None, weight=1.0):
         import numpy as np
         import onnxruntime as ort
         self.np = np
@@ -57,16 +58,20 @@ class ShippedNet:
         self.session = ort.InferenceSession(self.onnx, sess_options=opts, providers=["CPUExecutionProvider"])
         meta = self.session.get_modelmeta().custom_metadata_map
         self.rows, self.width = _schema(meta["nml.token_schema"])
-        self.static_batch = self.session.get_inputs()[0].shape[0]
-        self.weight = 1.0
+        batch_dim = self.session.get_inputs()[0].shape[0]
+        # A static export (the shipped model: 32) pads every call to its batch; a dynamic-batch export (batch axis a name or
+        # None) packs exactly the live leaves, in chunks of at most MAX_DYNAMIC_BATCH.
+        self.static_batch = batch_dim if isinstance(batch_dim, int) else None
+        self.weight = float(weight)
         self.counts = {}
 
-    def values(self, tokens):
-        """One value per token dict, in order; the same packing as `OnnxHook::run_tokens`."""
-        np, rows, width, wide = self.np, self.rows, self.width, self.static_batch
-        out = []
-        for start in range(0, len(tokens), wide):
-            chunk = tokens[start:start + wide]
+    def _feeds(self, tokens):
+        """The packing walk shared by `values` and `member_values`; yields (feed, live_leaf_count)."""
+        np, rows, width = self.np, self.rows, self.width
+        cap = self.static_batch or MAX_DYNAMIC_BATCH
+        for start in range(0, len(tokens), cap):
+            chunk = tokens[start:start + cap]
+            wide = self.static_batch or len(chunk)
             for t in chunk:
                 live = int(sum(1 for m in t["units_mask"] if m))
                 if live > rows:
@@ -83,8 +88,23 @@ class ShippedNet:
                 feed["objs_mask"][i] = t["objs_mask"]
                 feed["terr"][i] = t["terr"]
                 feed["glob"][i] = t["glob"]
-            out.extend(float(v) for v in self.session.run(None, feed)[0][:len(chunk)])
+            yield feed, len(chunk)
+
+    def values(self, tokens):
+        """One value per token dict, in order; the same packing as `OnnxHook::run_tokens`."""
+        out = []
+        for feed, n in self._feeds(tokens):
+            out.extend(float(v) for v in self.session.run(None, feed)[0][:n])
         return out
+
+    def member_values(self, tokens):
+        """Per-member values per token dict, in order; the exported members graph's output [1] as (n, 2)."""
+        if len(self.session.get_outputs()) < 2:
+            raise NetRefused("graph exposes no output [1] for member values (only %d output(s))" % len(self.session.get_outputs()))
+        out = []
+        for feed, n in self._feeds(tokens):
+            out.extend(row for row in self.session.run(None, feed)[1][:n])
+        return self.np.asarray(out, self.np.float32).reshape(len(tokens), 2)
 
     def hook(self, side):
         self.counts.setdefault(side, {"calls": 0, "leaves": 0})
@@ -93,7 +113,8 @@ class ShippedNet:
             values = self.values(leaves)
             self.counts[side]["calls"] += 1
             self.counts[side]["leaves"] += len(leaves)
-            return values
+            # the shipped game's pick = argmax(rs + w * net); w == 1.0 stays an untouched no-op
+            return values if self.weight == 1.0 else [self.weight * v for v in values]
         return fn
 
     def proof(self):

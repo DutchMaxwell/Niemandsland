@@ -5,7 +5,10 @@ extends Node
 signal step_changed(index: int, total: int, step: Dictionary)
 signal chapter_completed(chapter_id: String)
 
-const POLL_SECONDS := 0.2
+## Poll every frame (0.0). A lesson gate can be TRANSIENT: activating the last unit of a side makes the
+## solo alternation end the round in the same pump, clearing `activated` before a coarse poll would see
+## it (S-04 step 3). Per-frame snapshots are cheap on a lesson table and make every gate observable.
+const POLL_SECONDS := 0.0
 
 var _chapter_id := ""
 var _facts: Variant

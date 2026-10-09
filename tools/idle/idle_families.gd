@@ -43,6 +43,10 @@ const TAIL_BONES := {
 	"vampiric_undead/vampire master": 0,
 	"vampiric_undead/stitched zombies": 0,
 	"vampiric_undead/werewolves": 0,
+	"vampiric_undead/werewolf champion": 0,
+	"vampiric_undead/drained leader": 0,
+	"vampiric_undead/ghoul champion": 0,
+	"vampiric_undead/captain blackfang": 0,
 	"vampiric_undead/stitched butchers": 0,
 }
 

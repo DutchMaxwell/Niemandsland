@@ -4,6 +4,7 @@ extends Node
 
 signal settings_applied(preset_name: String)
 signal idle_motion_changed()
+signal calm_mode_changed()
 
 enum QualityPreset {
 	PERFORMANCE,  # New: Maximum FPS mode
@@ -133,6 +134,55 @@ var show_combat_stage: bool = true
 var combat_stage_hold_s: float = 2.5
 ## How bloody the combat effects are: 0 Off (dust instead of blood), 1 Normal, 2 Extra. Players and streamers turn it down.
 var gore_level: int = 1
+
+## Calm mode (GH #1634, accessibility): one switch that dials the sensory load down
+## in one click. It is a PRESET over the individual switches below — turning it ON
+## snapshots their values and forces the quiet set, turning it OFF puts the player's
+## choices back exactly. Persisted, default OFF. Effects without a switch of their
+## own (glow/bloom, weather particles, grass sway, selection pulses) read
+## `calm_mode` live through `calm_mode_changed`.
+var calm_mode: bool = false
+var _calm_restore: Dictionary = {}
+## The quiet values Calm forces onto the switches it owns.
+const CALM_VALUES := {"show_combat_effects": false, "idle_motion": false,
+	"reduce_motion": true, "tilt_shift": false}
+## The running VFX nodes that read show_combat_effects once in their _ready(); Calm
+## has to push the new value at them, exactly like the settings panel does.
+const COMBAT_VFX_NODES := ["ResultPips", "VolleyCue", "SpellSeal", "ShotShow",
+	"SpellShow", "CasualtyShow", "ModelAuras"]
+
+
+## Enable/disable Calm mode. ON snapshots the individual switches then forces the
+## quiet values; OFF restores the snapshot. No-op when already in the requested state.
+func set_calm_mode(on: bool) -> void:
+	if on == calm_mode:
+		return
+	if on:
+		_calm_restore = {}
+		for key: String in CALM_VALUES:
+			_calm_restore[key] = get(key)
+		for key: String in CALM_VALUES:
+			set(key, CALM_VALUES[key])
+	else:
+		for key: String in _calm_restore:
+			set(key, _calm_restore[key])
+		_calm_restore = {}
+	calm_mode = on
+	save_settings()
+	apply_environment_settings(PRESETS[current_preset])   # push/strip the calm glow layer
+	_sync_combat_vfx()
+	calm_mode_changed.emit()
+
+## Push show_combat_effects at the running VFX nodes; they read it only at _ready().
+func _sync_combat_vfx() -> void:
+	var tree := get_tree()
+	var main: Node = tree.root.get_node_or_null("Main") if tree != null else null
+	if main == null:
+		return
+	for fx_name: String in COMBAT_VFX_NODES:
+		var fx := main.get_node_or_null(fx_name)
+		if fx != null:
+			fx.enabled = show_combat_effects
 
 ## Strict "dry brush" movement enforcement: hard-stop a movement path-paint / drag at the
 ## model's MAX legal band (Rush/Charge). ON = Strict (the maintainer's default — you learn the
@@ -338,7 +388,8 @@ func apply_ui_scale(factor: float) -> void:
 func apply_preset(preset: QualityPreset) -> void:
 	var settings = PRESETS[preset]
 	if current_preset != preset:
-		idle_motion = preset >= QualityPreset.MEDIUM
+		if not calm_mode:
+			idle_motion = preset >= QualityPreset.MEDIUM
 	current_preset = preset
 
 	# Apply rendering settings
@@ -452,6 +503,12 @@ func apply_environment_settings(settings: Dictionary) -> void:
 		for key: String in values:
 			env.set(key, values[key])
 
+	# Calm mode (GH #1634): the top layer that strips glow/bloom however the preset,
+	# mood or biome reference set them. {} when Calm is off lets the lower layers win.
+	if render_state != null:
+		render_state.set_layer("calm", {"glow_enabled": false, "glow_intensity": 0.0, "glow_bloom": 0.0} \
+			if calm_mode else {})
+
 	# Auto-exposure: disabled for now — it blew the physical-sky scene out to white.
 	# Re-introduce once the fixed-exposure baseline is dialled in.
 	if world_env.camera_attributes:
@@ -473,6 +530,8 @@ static func environment_values(settings: Dictionary, tier: int) -> Dictionary:
 			"sdfgi_bounce_feedback":0.5, "sdfgi_min_cell_size":0.0125, "sdfgi_energy":1.1,
 			"sdfgi_y_scale":Environment.SDFGI_Y_SCALE_75_PERCENT,
 			"ssil_radius":0.16, "ssil_intensity":1.0,
+			# Miniature-scale reflections: the 0.2 m depth tolerance and 32 steps smeared a wet puddle into a grey sheet
+			"ssr_max_steps":96, "ssr_depth_tolerance":0.03, "ssr_fade_out":0.9,
 			"volumetric_fog_density":0.002, "volumetric_fog_length":6.0,
 			"volumetric_fog_detail_spread":1.3, "volumetric_fog_gi_inject":1.0,
 			"volumetric_fog_ambient_inject":0.16, "volumetric_fog_anisotropy":0.35,
@@ -480,9 +539,21 @@ static func environment_values(settings: Dictionary, tier: int) -> Dictionary:
 	return values
 
 
+## The mood's SSR strength (0..1) as Godot's ssr_fade_in. On High+ a short fade-in lets the reflection start at the
+## reflected object (a model standing in a puddle); the legacy value (0.2-0.9 m) hid every reflection on a 1.2 m table.
+static func ssr_fade_in_for(tier: int, intensity: float) -> float:
+	return 0.12 - 0.10 * clampf(intensity, 0.0, 1.0) if tier >= QualityPreset.HIGH else intensity
+
+
 ## Medium and above keep the tabletop in focus at normal play distance.
 static func table_focus_amount(tier: int) -> float:
 	return 0.11 if tier >= QualityPreset.MEDIUM else 0.0
+
+
+## Light islands (broken-cloud sunlight) on the table world: High and Ultra, on a sunny Day only. The low Sunset sun
+## burns the ruins white and turns the haze milky, so it stays off there until that is tuned.
+static func cloud_light_enabled(tier: int, mood: String) -> bool:
+	return tier >= QualityPreset.HIGH and mood == "Day"
 
 
 ## Wet-ground policy: the Rain mood soaks the table ground on High/Ultra (0.0 = dry, today's surface everywhere
@@ -491,9 +562,9 @@ static func rainfall_for(tier: int, mood: String, biome: String) -> float:
 	return 1.0 if mood == "Rain" and tier >= QualityPreset.HIGH and biome != "volcanic_ash" else 0.0
 
 
-## The surrounding world is the optional expensive tier.
+## The surrounding world (landscape, groves, weather-aware sky) instead of the star field: High and Ultra.
 static func world_enabled(tier: int) -> bool:
-	return tier == QualityPreset.ULTRA
+	return tier >= QualityPreset.HIGH
 
 
 ## Get current preset name
@@ -520,6 +591,13 @@ func save_settings() -> void:
 	config.set_value("graphics", "gore_level", gore_level)
 	config.set_value("graphics", "enforce_movement_limit", enforce_movement_limit)
 	config.set_value("graphics", "ai_explain_persistent", ai_explain_persistent)
+	config.set_value("graphics", "calm_mode", calm_mode)
+	# Persist the pre-Calm choices so a reload while Calm is ON still knows what to
+	# restore when the player turns it OFF (their real preferences are never lost).
+	config.set_value("graphics", "calm_prev_show_combat_effects", _calm_restore.get("show_combat_effects", show_combat_effects))
+	config.set_value("graphics", "calm_prev_idle_motion", _calm_restore.get("idle_motion", idle_motion))
+	config.set_value("graphics", "calm_prev_reduce_motion", _calm_restore.get("reduce_motion", reduce_motion))
+	config.set_value("graphics", "calm_prev_tilt_shift", _calm_restore.get("tilt_shift", tilt_shift))
 	config.save("user://graphics_settings.cfg")
 
 
@@ -549,3 +627,17 @@ func load_settings() -> void:
 	gore_level = clampi(int(config.get_value("graphics", "gore_level", 1)), 0, 2)
 	enforce_movement_limit = config.get_value("graphics", "enforce_movement_limit", true)
 	ai_explain_persistent = config.get_value("graphics", "ai_explain_persistent", true)
+	calm_mode = bool(config.get_value("graphics", "calm_mode", false))
+	if calm_mode:
+		# Restore the saved pre-Calm choices, then re-force the quiet values so the
+		# calm look survives the reload while the player's real prefs stay recoverable.
+		_calm_restore = {
+			"show_combat_effects": bool(config.get_value("graphics", "calm_prev_show_combat_effects", true)),
+			"idle_motion": bool(config.get_value("graphics", "calm_prev_idle_motion", true)),
+			"reduce_motion": bool(config.get_value("graphics", "calm_prev_reduce_motion", false)),
+			"tilt_shift": bool(config.get_value("graphics", "calm_prev_tilt_shift", true)),
+		}
+		for key: String in CALM_VALUES:
+			set(key, CALM_VALUES[key])
+	else:
+		_calm_restore = {}

@@ -164,6 +164,126 @@ def test_play_game_stamps_tree_root_only_where_the_tree_fired():
 
 
 @needs_lists
+def test_rs_value_off_is_main_on_equals_trace_rs(tmp_path):
+    row = [r for r in fixture_rows() if r["seat"] == 1 and r["d"] == 0][0]
+    traces, real_row = [], tr.Capture.row
+
+    def spy(self, core, state, player, pick, explored=None):
+        traces.append(pick["trace"])
+        return real_row(self, core, state, player, pick, explored)
+
+    def rec(tag, **over):
+        tr._W.pop("rs_value", None)  # `_init` only updates the module dict: no stale flag from the previous arm
+        w = tr._init(cfg(tmp_path / tag, **over))
+        os.makedirs(w["out"])
+        traces.clear()
+        assert tr._work(w, "x", [row])[0]["valid"]
+        return np.load(tmp_path / tag / (row["row_id"] + ".npz")), json.load(open(tmp_path / tag / (row["row_id"] + ".json"))), list(traces)
+    tr.Capture.row = spy
+    try:
+        main, off, on = rec("main"), rec("off", rs_value=False), rec("on", rs_value=True)
+    finally:
+        tr.Capture.row = real_row
+        tr._W.pop("rs_value", None)
+    # (a) OFF = today's record
+    assert sorted(main[0].files) == sorted(off[0].files) and "rs_value" not in off[0].files and "rs_value" not in off[1]["teacher"]
+    assert all(np.array_equal(main[0][k], off[0][k], equal_nan=True) for k in main[0].files)
+    # (b) ON is additive
+    z = on[0]
+    assert "rs_value" in z.files and on[1]["teacher"]["rs_value"] is True
+    assert len(z["rs_value"]) == len(z["hand_score"]) == z["cands_ptr"][-1]
+    assert sorted(f for f in z.files if f != "rs_value") == sorted(off[0].files)
+    assert all(np.array_equal(z[k], off[0][k], equal_nan=True) for k in off[0].files)
+    # (c) the values are the trace's `rs`, NaN off-pool
+    ptr, rs_col, hand = z["cands_ptr"], z["rs_value"], z["hand_score"]
+    assert len(on[2]) == len(ptr) - 1 > 0
+    mixed = differs = 0
+    for k, trace in enumerate(on[2]):
+        seg, want = rs_col[ptr[k]:ptr[k + 1]], {int(e["idx"]): np.float16(e["rs"]) for e in trace["rs"]}
+        got = {i: v for i, v in enumerate(seg) if not np.isnan(v)}
+        assert set(got) == set(want) and all(got[i] == want[i] for i in want)
+        mixed += bool(want) and len(want) < len(seg)
+        differs += not np.array_equal(seg, hand[ptr[k]:ptr[k + 1]], equal_nan=True)
+    assert mixed > 0 and differs > 0
+
+
+@needs_lists
+def test_cand_geom_off_is_main_on_records_every_rows_absolute_geometry_and_keeps_grid_rows_out_of_the_tokens(tmp_path):
+    import teacher_shards as shards
+    row = [r for r in fixture_rows() if r["seat"] == 1 and r["d"] == 0][0]
+    real_row, stub = tr.Capture.row, {}
+
+    def spy(self, core, state, player, pick, explored=None):
+        if "nh" not in stub and len(pick["trace"]["cands"]) > 1:  # one decision re-played with a 170-row trace: 30 hand rows + 140 grid rows
+            t, nh = pick["trace"], min(30, len(pick["trace"]["cands"]))
+            moves = [c for c in t["cands"] if c.get("dest")]
+            grid = [dict(moves[i % len(moves)], dest=[moves[i % len(moves)]["dest"][0] + 0.0254 * (i // len(moves) + 1), 0.0, moves[i % len(moves)]["dest"][2]])
+                    for i in range(170 - nh)]
+            fake = dict(pick, played_idx=nh + 5, trace=dict(t, cands=t["cands"][:nh] + grid, n_hand=nh, tree=None,
+                                                           rs=[{"idx": nh + 5, "rs": 0.5}],
+                                                           grid={"rows": [{"idx": nh + i, "source": i % 3, "rank": i} for i in range(170 - nh)]}))
+            stub["nh"] = nh
+            try:
+                stub["out"] = real_row(self, core, state, player, fake, None)
+            except Exception as e:  # main: TooManyCandidates (the token export refuses > 160 rows)
+                stub["err"] = repr(e)
+        return real_row(self, core, state, player, pick, explored)
+
+    def rec(tag, **over):
+        tr._W.pop("cand_geom", None)
+        w = tr._init(cfg(tmp_path / tag, **over))
+        os.makedirs(w["out"])
+        assert tr._work(w, "x", [row])[0]["valid"]
+        return np.load(tmp_path / tag / (row["row_id"] + ".npz")), json.load(open(tmp_path / tag / (row["row_id"] + ".json")))
+    tr.Capture.row = spy
+    try:
+        main, off = rec("main"), rec("off", cand_geom=False)
+        stub.clear()
+        on = rec("on", cand_geom=True)
+    finally:
+        tr.Capture.row = real_row
+        tr._W.pop("cand_geom", None)
+    assert "err" not in stub, stub["err"]  # main: TooManyCandidates(170) from the token export
+    # (a) OFF = today's record; ON only adds the geom group, label_all / n_hand, and the json stamp
+    assert sorted(main[0].files) == sorted(off[0].files) and "cand_geom" not in off[1]["teacher"] and not any(k.startswith("geom") for k in off[0].files)
+    assert all(np.array_equal(main[0][k], off[0][k], equal_nan=True) for k in main[0].files)
+    z = on[0]
+    assert on[1]["teacher"]["cand_geom"] is True
+    assert sorted(f for f in z.files if not f.startswith("geom") and f not in ("label_all", "n_hand")) == sorted(off[0].files)
+    assert all(np.array_equal(z[k], off[0][k], equal_nan=True) for k in off[0].files)
+    # (b) geometry: no grid rows here, so geom rows == token rows; kind = argmax cands[:, 0:4], delta = the un-mirrored cands[:, 9:11] x 30
+    ptr, gp = z["cands_ptr"], z["geom_ptr"]
+    assert np.array_equal(ptr, gp) and (z["n_hand"] == np.diff(ptr)).all() and (z["geom_grid"] == 0).all() and (z["geom_rank"] == -1).all()
+    assert np.array_equal(z["geom_kind"], np.argmax(z["cands"][:, 0:4], axis=1))
+    cells = z["geom_cell"]
+    assert ((cells >= 0) & (cells < 72 * 48)).sum() > 0 and (cells < 72 * 48).all()
+    checked = 0
+    for k in range(len(ptr) - 1):
+        sl, side = slice(ptr[k], ptr[k + 1]), z["side"][k]
+        ax = np.array([z["units"][z["units_ptr"][k] + a][0:2] for a in z["geom_actor"][sl]], np.float32) if (z["geom_actor"][sl] >= 0).all() else None
+        if ax is None:
+            continue
+        got = np.stack([z["geom_x_in"][sl], z["geom_y_in"][sl]], 1) - np.array([36.0, 24.0])
+        delta = z["cands"][sl, 9:11].astype(np.float32) * 30
+        sign = -1.0 if side == 2 else 1.0
+        assert np.allclose(got, sign * (ax * 30 + delta), atol=0.35)
+        checked += 1
+    assert checked > 0
+    # (c) the 170-row stub: tokens only for the 30 hand rows (main raises TooManyCandidates here), geom over all 170
+    out, nh = stub["out"], stub["nh"]
+    assert len(out["cands"]) == nh and out["label"] == -1 and out["label_all"] == nh + 5 and out["n_hand"] == nh
+    assert len(out["geom_kind"]) == 170 and (out["geom_grid"] == (np.arange(170) >= nh)).all()
+    assert out["geom_rank"][nh + 7] == 7 and out["geom_source"][nh + 7] == 7 % 3 and (out["geom_rank"][:nh] == -1).all() and (out["geom_source"][:nh] == -1).all()
+    assert out["geom_x_in"][nh + 140 - 1] > out["geom_x_in"][nh] and float(out["geom_rs"][nh + 5]) == 0.5
+    # (d) a shard whose pick is a grid row validates and carries the group, rebased
+    np.savez(tmp_path / "g.npz", **tr.pack([out], "p1"))
+    g = np.load(tmp_path / "g.npz")
+    sh = shards.concat([g, g], [0, 1])
+    assert shards.validate(sh, "t")["positions"] == 2 and list(sh["geom_ptr"]) == [0, 170, 340] and len(sh["geom_x_in"]) == 340
+    assert list(sh["label_all"]) == [nh + 5] * 2 and "explored" not in sh
+
+
+@needs_lists
 def test_sidecars_off_by_default_writes_the_same_record(tmp_path):
     # GREEN: the pair/fork sidecars feed no teacher row, so OFF (the recorder default) and ON give equal arrays and equal
     # decision search stamps. RED: a field fed FROM a sidecar (features) differs between the two runs, so the equality

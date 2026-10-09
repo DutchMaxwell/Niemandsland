@@ -179,6 +179,10 @@ var current_round: int = 1
 enum GamePhase { DEPLOYMENT, PLAYING }
 var game_phase: int = GamePhase.DEPLOYMENT
 
+## Rules-automation level (RulesAutomation.Level; stored and saved, not read by gameplay yet).
+## Default MANUAL; the "new games start Automatic" default belongs to the table setup.
+var rules_automation: int = RulesAutomation.Level.MANUAL
+
 ## NML-949 — match-level RULE state that is not per-unit: once-per-game / per-round
 ## bookkeeping that used to live only in Main or in the SoloController and was therefore
 ## lost on a load, on an MP rejoin, and on every controller rebuild (AI-slot change,
@@ -3017,11 +3021,7 @@ func _brighten_ctex_materials(node: Node) -> void:
 			var mat := mi.get_surface_override_material(surface_idx) as StandardMaterial3D
 			if mat == null:
 				continue
-			mat.metallic = 0.0
-			mat.metallic_texture = null
-			mat.roughness = 0.7
-			mat.roughness_texture = null
-			mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+			CtexLoader.brighten_once(mat)
 
 
 ## Returns a copy of [param tex] with a generated mipmap chain, for runtime GLTF

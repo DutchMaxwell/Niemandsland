@@ -66,6 +66,8 @@ var _hover_glow: HoverGlow = HoverGlow.new()
 
 # Persistent green glow for selected objects (replaces the old base ring).
 var _selection_glow_material: StandardMaterial3D = null
+# Calm-mode variant: muted, non-emissive (built lazily, only while Calm is on).
+var _calm_selection_glow_material: StandardMaterial3D = null
 
 # Clipboard for copy/paste
 var _clipboard: Array[Node3D] = []  # Stores references to copied objects for duplication
@@ -1020,6 +1022,10 @@ func _update_hover(screen_pos: Vector2) -> void:
 	if not selection_enabled:
 		_hover_glow.set_target(null)
 		return
+	if GraphicsSettings.calm_mode:
+		# Calm: no blooming gold hover glow — the selection green stays the only marker.
+		_hover_glow.set_target(null)
+		return
 	var obj: Node3D = _get_object_at_position(screen_pos)
 	if obj != null and obj in _selected_objects:
 		obj = null  # selected objects keep their green glow; no gold hover on top
@@ -1063,6 +1069,8 @@ func _collect_glow_meshes(obj: Node3D) -> Array[MeshInstance3D]:
 func _add_spill_light(obj: Node3D) -> void:
 	if not _spill_lights_enabled():
 		return
+	if GraphicsSettings.calm_mode:
+		return   # Calm: no glowing green light spraying onto the table from the selection
 	if obj.get_node_or_null(NodePath(String(SelectionSpillLight.NODE_NAME))) != null:
 		return
 	# Live count from the tree (not a manual counter) so freeing a selected object
@@ -1133,6 +1141,18 @@ func _object_ground_radius(obj: Node3D) -> float:
 
 
 func _get_selection_glow_material() -> StandardMaterial3D:
+	if GraphicsSettings.calm_mode:
+		# Calm: a muted, non-emissive green tint — readable selection, no bloom.
+		if _calm_selection_glow_material == null:
+			var muted := SelectionSpillLight.GREEN_SELECTION
+			var mmat := StandardMaterial3D.new()
+			mmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			mmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			mmat.albedo_color = Color(muted.r, muted.g, muted.b, 0.28)
+			mmat.grow = true
+			mmat.grow_amount = 0.002
+			_calm_selection_glow_material = mmat
+		return _calm_selection_glow_material
 	if _selection_glow_material == null:
 		var green := SelectionSpillLight.GREEN_SELECTION
 		var mat := StandardMaterial3D.new()
@@ -1364,6 +1384,11 @@ func _stop_dragging() -> void:
 	# The drop ends the origin preview whatever else happens below (ghost is drag-scoped).
 	if pickup_ghosts != null:
 		pickup_ghosts.end()
+	# Step 2.T2b (Q7): on a hotseat Automatic table an off-turn drag snaps back on release — no trail,
+	# undo, wound, marker or activation change (corrections go through Manual). Emits nothing.
+	if _is_dragging and not _selected_objects.is_empty() and _snapback_off_turn_drag():
+		_reset_drag_state()
+		return
 	if _is_dragging and not _selected_objects.is_empty():
 		# Anti-stacking + charge-snap: nudge dropped bases out of any overlap with other
 		# units and snap a near-miss to enemy contact. Done BEFORE the batch / undo below
@@ -1470,6 +1495,40 @@ func _stop_dragging() -> void:
 		drag_ended.emit()
 		AudioManager.play_sfx(AudioManager.SFXType.MODEL_PLACE)
 
+	_reset_drag_state()
+
+
+## The GameUnit behind a dragged node (its "game_unit" meta), or null for terrain / props.
+func _drag_unit_of(node: Node3D) -> GameUnit:
+	if node == null or not is_instance_valid(node) or not node.has_meta("game_unit"):
+		return null
+	return node.get_meta("game_unit") as GameUnit
+
+
+## Step 2.T2b (Q7): a drag of a unit whose side is not on turn on a hotseat Automatic table restores
+## every dragged model to its pre-drag position on release (the same restore the drop refusal uses).
+## main owns the turn state + the log/toast; this only restores, and returns true when it snapped back.
+func _snapback_off_turn_drag() -> bool:
+	var main := get_node_or_null("/root/Main")
+	if main == null or not main.has_method("hotseat_off_turn_drag"):
+		return false
+	var gu: GameUnit = _drag_unit_of(_drag_anchor_object)
+	if gu == null or not bool(main.call("hotseat_off_turn_drag", gu)):
+		return false
+	for obj in _selected_objects:
+		if not is_instance_valid(obj) or not _drag_start_positions.has(obj):
+			continue
+		obj.global_position = _drag_start_positions[obj]
+		obj.rotation.y = float(_drag_start_rotations.get(obj, obj.rotation.y))
+		if obj.has_meta("drag_lift"):
+			obj.remove_meta("drag_lift")
+		if obj is RigidBody3D:
+			obj.freeze = false
+	return true
+
+
+## Clear every per-drag field: the end of an ordinary drop, or right after a snap-back.
+func _reset_drag_state() -> void:
 	_is_dragging = false
 	_move_broadcast_timer = 0.0
 	_coherency_update_timer = 0.0

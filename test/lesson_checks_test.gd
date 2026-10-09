@@ -39,6 +39,14 @@ func test_counter_grew() -> void:
 	assert_bool(LessonChecks.passes(step, now, base)).is_true()
 
 
+func test_counter_at_least() -> void:
+	# Absolute (not delta): an event that fires DURING a step's action can only be gated once the
+	# counter already sits in the step's own base snapshot.
+	var step := _step("counter_at_least", {"key": "log:pile_in", "n": 1})
+	assert_bool(LessonChecks.passes(step, {"counters": {}}, {"counters": {}})).is_false()
+	assert_bool(LessonChecks.passes(step, {"counters": {"log:pile_in": 1}}, {"counters": {"log:pile_in": 1}})).is_true()
+
+
 func test_flag() -> void:
 	var step := _step("flag", {"key": "ready"})
 	var base := {"ready": false}
@@ -104,8 +112,41 @@ func test_unit_moved() -> void:
 	assert_bool(LessonChecks.passes(step, now, base)).is_true()
 
 
+func test_tag_flag() -> void:
+	var step := _step("tag_flag", {"key": "activated", "tag": "alpha", "value": true})
+	var base := {"tags": {"alpha": {"activated": false}}}
+	assert_bool(LessonChecks.passes(step, base, base)).is_false()
+	var now := {"tags": {"alpha": {"activated": true}}}
+	assert_bool(LessonChecks.passes(step, now, base)).is_true()
+	# A tag the snapshot does not carry can never satisfy the check.
+	assert_bool(LessonChecks.passes(step, {"tags": {}}, base)).is_false()
+
+
+func test_gap_at_most() -> void:
+	var step := _step("gap_at_most", {"tag": "target", "inches": 1.0})
+	var base := {"tags": {"target": {"enemy_gap_in": 8.0}}}
+	assert_bool(LessonChecks.passes(step, base, base)).is_false()
+	var now := {"tags": {"target": {"enemy_gap_in": 0.5}}}
+	assert_bool(LessonChecks.passes(step, now, base)).is_true()
+	# A tag the snapshot does not carry can never satisfy the check.
+	assert_bool(LessonChecks.passes(step, {"tags": {}}, base)).is_false()
+
+
+func test_obj_within() -> void:
+	var step := _step("obj_within", {"tag": "alpha", "index": 0, "inches": 3.0})
+	var base := {"tags": {"alpha": {"obj_dist_in": [8.0, 12.0, 20.0]}}}
+	assert_bool(LessonChecks.passes(step, base, base)).is_false()
+	var now := {"tags": {"alpha": {"obj_dist_in": [2.5, 9.0, 18.0]}}}
+	assert_bool(LessonChecks.passes(step, now, base)).is_true()
+	# A tag or index the snapshot does not carry can never satisfy the check.
+	assert_bool(LessonChecks.passes(step, {"tags": {}}, base)).is_false()
+	var oob := _step("obj_within", {"tag": "alpha", "index": 5, "inches": 3.0})
+	assert_bool(LessonChecks.passes(oob, now, base)).is_false()
+
+
 func test_missing_tag_is_false_for_unit_checks() -> void:
 	var base := {"tags": {}}
 	var now := {"tags": {}}
 	assert_bool(LessonChecks.passes(_step("unit_selected_whole", {"tag": "alpha"}), now, base)).is_false()
 	assert_bool(LessonChecks.passes(_step("unit_moved", {"tag": "alpha", "inches": 1.0}), now, base)).is_false()
+	assert_bool(LessonChecks.passes(_step("gap_at_most", {"tag": "alpha", "inches": 1.0}), now, base)).is_false()

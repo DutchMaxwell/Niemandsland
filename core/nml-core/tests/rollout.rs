@@ -608,3 +608,95 @@ fn the_oracle_names_what_the_rollout_does_not_cover() {
     assert_eq!(caster_groups, 0);
     assert_eq!(refresh_rules, 0);
 }
+
+/// The corpus's recorded seams — the literal `sweep_board` builds, for the tests below that need the
+/// `Rollout` itself rather than a sweep report.
+fn corpus_seams(c: &ActCorpus) -> Seams {
+    Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, hero_last: c.knobs.hero_last, path: c.knobs.seam_path,
+        hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing,
+        movement: c.knobs.movement, move_rigid: c.knobs.move_rigid, no_engage_fold: !c.knobs.engage_fold, los_model: c.knobs.los_model, dangerous_end_morale: c.knobs.dangerous_end_morale, consolidate: c.knobs.consolidate, ..Seams::default() }
+}
+
+/// Opponent-model diagnosis (c), knob `leaf_opener_only` — per pool rollout: did it stop at ONE
+/// mid-round boundary, and is that boundary the post-opener state itself (`resolve_root` + the
+/// opener's own Coordinate hand-off, the two steps `rollout_traced` takes before its loop)?
+struct OpenerLeaves {
+    n: usize,
+    one_tail_cap: usize,
+    at_opener: usize,
+}
+
+fn opener_leaves(c: &ActCorpus, bend: impl Fn(&mut Knobs)) -> OpenerLeaves {
+    let statics = build_act_statics(c, REPO);
+    let policy = Policy::new(&statics, &c.terrain, corpus_seams(c));
+    let mut knobs = c.knobs;
+    bend(&mut knobs);
+    let roll = Rollout::new(policy, knobs);
+    let mut sc = Scratch::default();
+    let mut r = OpenerLeaves { n: 0, one_tail_cap: 0, at_opener: 0 };
+    for (ai, act) in c.acts.iter().enumerate() {
+        let flat = flat_build_order(act);
+        for rv in &act.rs {
+            let cand = flat[rv.idx as usize].cand;
+            let (ends, stop) = roll
+                .rollout_traced(&act.state, cand, act.player, -1, &mut sc)
+                .unwrap_or_else(|u| panic!("act {ai} idx {}: unsupported {u:?}", rv.idx));
+            let mut opened = roll.policy.resolve_root(&act.state, cand).unwrap();
+            roll.coordinate_hand_off(&mut opened, cand, act.player, &mut sc).unwrap();
+            r.n += 1;
+            r.one_tail_cap += usize::from(ends.len() == 1 && stop == Stop::TailCap);
+            r.at_opener += usize::from(ends.len() == 1 && format!("{:?}", ends[0]) == format!("{opened:?}"));
+        }
+    }
+    r
+}
+
+/// (c) ON: every rollout IS the opener — one mid-round boundary, equal to the post-opener state, no
+/// scripted reply after it. OFF (today) and `tail_cap 1` (the nearest existing knob: ONE scripted
+/// step) both play on past it, which is why the knob exists.
+#[test]
+fn leaf_opener_only_stops_the_rollout_right_after_the_opener() {
+    let c = corpus();
+    let on = opener_leaves(&c, |k| k.leaf_opener_only = true);
+    let off = opener_leaves(&c, |_| {});
+    let cap1 = opener_leaves(&c, |k| (k.tail_cap_p1, k.tail_cap_p2) = (1, 1));
+    println!(
+        "leaf_opener_only ON: {} rollouts, {} stop at one mid-round boundary, {} end AT the post-opener state \
+         | OFF: {} at the post-opener state | tail_cap 1: {} single tail-cap stops, {} at the post-opener state",
+        on.n, on.one_tail_cap, on.at_opener, off.at_opener, cap1.one_tail_cap, cap1.at_opener
+    );
+    assert_eq!(on.n, 266, "the recorded pool size is part of the contract");
+    assert_eq!(on.one_tail_cap, on.n, "ON: every rollout must stop at ONE mid-round boundary");
+    assert_eq!(on.at_opener, on.n, "ON: the leaf must be the post-opener state, no scripted step after it");
+    assert!(off.at_opener < off.n, "OFF: today's rollout plays on past the opener");
+    assert!(cap1.at_opener < cap1.n, "tail_cap 1 plays one scripted reply — the knob is not a tail cap");
+}
+
+/// (c) OFF is today's rollout value: the knob explicitly false reproduces every recorded `rs` (the G3
+/// bar), and the corpus header, which does not name it, reads OFF. ON moves values — reported.
+#[test]
+fn leaf_opener_only_off_is_todays_rollout_value() {
+    let c = corpus();
+    assert!(!c.knobs.leaf_opener_only, "a header that does not name the knob must read OFF");
+    let base = sweep(&c, |_| {});
+    let off = sweep(&c, |k| k.leaf_opener_only = false);
+    let on = sweep(&c, |k| k.leaf_opener_only = true);
+    println!(
+        "leaf_opener_only OFF: {}/{} rs within {RS_EPS:.0e} ({} exact, default {} exact); ON: {} of {} differ, \
+         max |diff| {:.3e}",
+        off.within, off.n, off.exact, base.exact, on.n - on.within, on.n, on.max_diff
+    );
+    assert_eq!(off.n, 266, "the recorded pool size is part of the contract");
+    assert_eq!(off.within, off.n, "OFF must reproduce every recorded rs; worst: {}", off.worst);
+    assert_eq!(off.exact, base.exact, "OFF must be bit-identical to the default");
+    assert!(on.n - on.within > 0, "ON moved no rollout value");
+}
+
+/// (c) The knob parses from a header and defaults OFF.
+#[test]
+fn leaf_opener_only_parses_from_a_header_and_defaults_off() {
+    let head = |knobs: &str| format!(r#"{{"kind":"header","profiles":{{}},"knobs":{{{knobs}}}}}"#);
+    assert!(read_act_header(&head(r#""leaf_opener_only":true"#)).unwrap().knobs.leaf_opener_only);
+    assert!(!read_act_header(&head("")).unwrap().knobs.leaf_opener_only);
+    assert!(!Knobs::default().leaf_opener_only);
+}

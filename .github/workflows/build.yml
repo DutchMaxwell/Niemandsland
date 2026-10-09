@@ -25,6 +25,11 @@ concurrency:
 env:
   GODOT_VERSION: "4.6"
   EXPORT_NAME: Niemandsland
+  # CI must not re-download the live model library on every run. The ~1 MB live manifest was fetched
+  # on every real-scene boot (measured 107 fetches in one CI run); with this set the game keeps the
+  # bundled assets/model_manifest.json (the offline fixture) and skips the CDN entirely. The blob
+  # cache below then makes warm runs download 0 model blobs too.
+  NML_SKIP_REMOTE_MANIFEST: "1"
 
 jobs:
   # Fast lane: a PR that only touches core/**, tools/*.py (root tools) or docs/** cannot
@@ -98,6 +103,39 @@ jobs:
         with:
           version: ${{ env.GODOT_VERSION }}
 
+      # Asset blobs are content-addressed (sha256) and immutable, so the CDN cache dirs under
+      # user:// (~/.local/share/godot/app_userdata/Niemandsland/ on the Linux runner) can be
+      # restored across runs. Keyed by the pinned manifest the tests now use, so a warm run
+      # downloads 0 blobs; a manifest change re-keys and re-downloads. One key per shard: each
+      # shard fetches a different blob set, so a shared key would let one shard's save shadow the rest.
+      # Self-healing: restore the newest entry by prefix (the "-restore" key never exists, so the
+      # prefixes always apply), and at the end of the job (even on test failure) save a NEW entry
+      # keyed by the content hash when the blob set grew. Shard reshuffles and blobs a cold run
+      # never reached therefore converge instead of re-downloading forever.
+      - name: Restore CDN asset blobs (content-addressed)
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.local/share/godot/app_userdata/Niemandsland/model_cache
+            ~/.local/share/godot/app_userdata/Niemandsland/biome_cache
+            ~/.local/share/godot/app_userdata/Niemandsland/ambience_cache
+            ~/.local/share/godot/app_userdata/Niemandsland/containers_cache
+            ~/.local/share/godot/app_userdata/Niemandsland/hazards_cache
+            ~/.local/share/godot/app_userdata/Niemandsland/ruins_cache
+            ~/.local/share/godot/app_userdata/Niemandsland/trees_cache
+            ~/.local/share/godot/app_userdata/Niemandsland/reference_terrain_cache
+          key: nml-asset-cache-v2-shard${{ matrix.shard }}-${{ hashFiles('assets/model_manifest.json') }}-restore
+          restore-keys: |
+            nml-asset-cache-v2-shard${{ matrix.shard }}-${{ hashFiles('assets/model_manifest.json') }}-
+            nml-asset-cache-v2-shard${{ matrix.shard }}-
+
+      - name: Hash restored CDN blobs
+        id: blobs_before
+        run: |
+          mkdir -p ~/.local/share/godot/app_userdata/Niemandsland; cd ~/.local/share/godot/app_userdata/Niemandsland; H=$(find model_cache biome_cache ambience_cache containers_cache hazards_cache ruins_cache trees_cache reference_terrain_cache -type f ! -name '*.part' ! -name '*.tmp' -printf '%p %s\n' 2>/dev/null | LC_ALL=C sort | sha256sum | cut -c1-16)
+          echo "hash=$H" >> "$GITHUB_OUTPUT"
+          echo "restored blob set hash: $H"
+
       - name: Import project (generates .godot/, compile-check)
         run: godot --headless --editor --quit --path .
 
@@ -147,6 +185,38 @@ jobs:
           if [ -z "$EXECUTED" ] || [ "$EXECUTED" -lt "$FILE_COUNT" ]; then
             echo "::error::gdUnit executed $EXECUTED suite(s) but shard ${{ matrix.shard }} owns $FILE_COUNT *_test.gd file(s) — some suite(s) never ran"; exit 1
           fi
+
+      # Blobs are sha256-verified before the rename into the cache, so the set is safe to save
+      # even when the tests failed. Partial downloads (*.part, *.tmp) are excluded from the hash.
+      - name: Hash CDN blobs after tests
+        id: blobs_after
+        if: always()
+        run: |
+          mkdir -p ~/.local/share/godot/app_userdata/Niemandsland; cd ~/.local/share/godot/app_userdata/Niemandsland; H=$(find model_cache biome_cache ambience_cache containers_cache hazards_cache ruins_cache trees_cache reference_terrain_cache -type f ! -name '*.part' ! -name '*.tmp' -printf '%p %s\n' 2>/dev/null | LC_ALL=C sort | sha256sum | cut -c1-16)
+          echo "hash=$H" >> "$GITHUB_OUTPUT"
+          if [ "$H" = "${{ steps.blobs_before.outputs.hash }}" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "CDN blob set unchanged ($H) - skipping cache save"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "CDN blob set changed: ${{ steps.blobs_before.outputs.hash }} -> $H"
+          fi
+
+      # Main is the only writer: PR-scoped saves would churn the 10 GB repo cache and evict the Rust build caches.
+      - name: Save CDN asset blobs (content-addressed)
+        if: always() && steps.blobs_after.outputs.changed == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/.local/share/godot/app_userdata/Niemandsland/model_cache
+            ~/.local/share/godot/app_userdata/Niemandsland/biome_cache
+            ~/.local/share/godot/app_userdata/Niemandsland/ambience_cache
+            ~/.local/share/godot/app_userdata/Niemandsland/containers_cache
+            ~/.local/share/godot/app_userdata/Niemandsland/hazards_cache
+            ~/.local/share/godot/app_userdata/Niemandsland/ruins_cache
+            ~/.local/share/godot/app_userdata/Niemandsland/trees_cache
+            ~/.local/share/godot/app_userdata/Niemandsland/reference_terrain_cache
+          key: nml-asset-cache-v2-shard${{ matrix.shard }}-${{ hashFiles('assets/model_manifest.json') }}-${{ steps.blobs_after.outputs.hash }}
 
   # Guard for the sharded gdUnit4 test job: recompute the same deterministic
   # assignment the shards use (tools/shard_assign.py --check), and fail unless every
@@ -645,16 +715,18 @@ jobs:
           echo "OK: no .debug file in dist"
 
       - name: Package per-platform zips
+        # Fixed names (no version): .../releases/latest/download/Niemandsland-<os>.zip stays valid across releases;
+        # the in-game updater picks the asset by its OS keyword, so it is unaffected.
         run: |
-          (cd dist/linux && zip -r "../Niemandsland-${GITHUB_REF_NAME}-linux.zip" .)
-          (cd dist/windows && zip -r "../Niemandsland-${GITHUB_REF_NAME}-windows.zip" .)
+          (cd dist/linux && zip -r "../Niemandsland-linux.zip" .)
+          (cd dist/windows && zip -r "../Niemandsland-windows.zip" .)
           # The macOS export is already a .zip of the .app bundle — just give it the release name.
-          cp "dist/macos/${EXPORT_NAME}.zip" "dist/Niemandsland-${GITHUB_REF_NAME}-macos.zip"
+          cp "dist/macos/${EXPORT_NAME}.zip" "dist/Niemandsland-macos.zip"
 
       # Say in the run which macOS flavour shipped, so nobody has to open the zip to find out.
       - name: Report the macOS flavour
         run: |
-          unzip -l "dist/Niemandsland-${GITHUB_REF_NAME}-macos.zip" > /tmp/macos_zip_list.txt
+          unzip -l "dist/Niemandsland-macos.zip" > /tmp/macos_zip_list.txt
           if grep -q 'Contents/Frameworks/libnml_core_godot.dylib' /tmp/macos_zip_list.txt; then
             echo "::notice::the macOS zip carries the Rust core (NACHTMAHR plays Erlkönig there)"
           else
@@ -684,9 +756,9 @@ jobs:
           body_path: release_notes.md
           prerelease: ${{ env.IS_PRERELEASE }}
           files: |
-            dist/Niemandsland-${{ github.ref_name }}-linux.zip
-            dist/Niemandsland-${{ github.ref_name }}-windows.zip
-            dist/Niemandsland-${{ github.ref_name }}-macos.zip
+            dist/Niemandsland-linux.zip
+            dist/Niemandsland-windows.zip
+            dist/Niemandsland-macos.zip
 
       - name: Verify published prerelease metadata matches the tag
         # Self-check the softprops output rather than trusting the input echoed back: catches a
