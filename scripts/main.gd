@@ -1752,6 +1752,9 @@ func solo_spend_speed_feat(unit: GameUnit) -> void:
 func _solo_pump() -> void:
 	if solo_controller == null or _solo_ai_busy:
 		return
+	# Step 2.4: a geometry-only controller (hotseat Automatic, no AI seat) must never play an AI turn.
+	if solo_ai_slots.is_empty():
+		return
 	# Coordinate: the receiver activates IMMEDIATELY — the AI's owed reply waits behind it. The
 	# hold releases itself the moment the receiver has acted (or died / left the table), so an
 	# abandoned hand-off can never strand the alternation.
@@ -1899,9 +1902,11 @@ func _hide_dream_overlay() -> void:
 	_solo_dream_overlay = null
 
 
-## Whether a solo game is engaged (an army is marked for the AI, or F11 already built the controller).
+## Whether the AI alternation is engaged: an army is marked for the AI (F11 marks one too, and the
+## both-AI arena marks both). Step 2.4: a controller built ONLY for hotseat geometry does NOT count —
+## no NACHTMAHR turn may follow a human attack on a table with no AI seat.
 func _solo_alternation_active() -> bool:
-	return solo_controller != null or not solo_ai_slots.is_empty()
+	return not solo_ai_slots.is_empty()
 
 
 ## Gate for the alternation trigger: solo engaged, managers ready, and the activated unit is the HUMAN's.
@@ -2868,12 +2873,24 @@ func _solo_ai_slot() -> int:
 	return 2
 
 
+## Step 2.4: a LOCAL table with the switch on Automatic and no AI seat still wants the controller for
+## its GEOMETRY (cover, LOS, sandbox terrain) — the resolvers borrow it. Online stays Manual until
+## Phase 3 and a designated AI slot takes the other branch, so this is the hotseat case only.
+func _solo_hotseat_automatic() -> bool:
+	if opr_army_manager == null or not solo_ai_slots.is_empty():
+		return false
+	if network_manager != null and network_manager.is_multiplayer_active():
+		return false
+	return opr_army_manager.rules_automation == RulesAutomation.Level.AUTOMATIC
+
+
 ## (Re)build the SoloController for the currently designated AI slot (setup wires TurnManager once).
 func _ensure_solo_controller() -> void:
 	# #196 belt-and-braces: in multiplayer the controller exists only for an EXPLICITLY
 	# designated AI slot — a cast/targeting click in a human-vs-human room must not summon
-	# NACHTMAHR (the controller's existence alone arms the alternation pump).
-	if solo_ai_slots.is_empty():
+	# NACHTMAHR. Step 2.4 adds ONE exception: a hotseat Automatic table builds it for GEOMETRY
+	# only; the alternation stays off (no AI seat), so no NACHTMAHR turn can follow.
+	if solo_ai_slots.is_empty() and not _solo_hotseat_automatic():
 		return
 	var ai_slot := _solo_ai_slot()
 	# In native both-AI mode the driver flips solo_controller.ai_slot per activation, so a slot-mismatch is
@@ -10245,11 +10262,11 @@ func solo_combat_available(unit: GameUnit) -> bool:
 		return false
 	if u.is_activated:
 		return false
-	for au in opr_army_manager.get_game_units_for_player(_solo_ai_slot()):
-		# #196: the prospective enemy must actually BE automation-driven — in a human-vs-human
-		# multiplayer room nothing is, so the solo Shoot/Fight entries stay out of the radial
-		# and combat is manual (dice tray), as multiplayer always was.
-		if au != null and au.get_alive_count() > 0 and _solo_is_ai_unit(au):
+	for au in opr_army_manager.get_all_game_units():
+		# #196 / 2.3: the prospective enemy must be one the ENGINE may resolve against — an AI unit
+		# always, the other human's unit only with the switch on Automatic. In a manual human-vs-human
+		# room nothing is, so the Shoot/Fight entries stay out of the radial (dice tray, as always).
+		if _engine_enemy(u, au):
 			return true
 	return false
 
@@ -10258,7 +10275,10 @@ func solo_combat_available(unit: GameUnit) -> bool:
 ## co-op rooms hide them in this version (grilled decision 2: V1 is solo) — a multiplayer session's
 ## players still move and attack by hand, same as today.
 func solo_auto_available(unit: GameUnit) -> bool:
-	return solo_combat_available(unit) and (network_manager == null or not network_manager.is_multiplayer_active())
+	# The engine-executed MOVE verbs need a controller without an AI side (step 2.4): until then they
+	# stay behind an AI designation, so a hotseat Automatic table grows only the combat verbs.
+	return solo_combat_available(unit) and not solo_ai_slots.is_empty() \
+		and (network_manager == null or not network_manager.is_multiplayer_active())
 
 
 ## The pre-attack cast-window ask (decision "Vorfrage"): true → the player casts first. Asked at
@@ -10320,6 +10340,38 @@ func _solo_is_ai_unit(unit: GameUnit) -> bool:
 	# Plan 2.2 ("no AI without its tick"): no designation means nobody is an AI unit — the
 	# old implicit "player 2 is NACHTMAHR" default is retired (local, tutorial and multiplayer alike).
 	return false
+
+
+## Step 2.3 "Enemy under the engine": the target an automated attack may resolve against. An
+## AI-designated unit always is one (solo vs NACHTMAHR). With the switch on Automatic any living
+## enemy-side unit is one too — so two humans at one table automate the same way (Road 2). A target
+## in reserve, of the attacker's own slot, or the attacker itself never is.
+func _engine_enemy(attacker: GameUnit, target: GameUnit) -> bool:
+	if attacker == null or target == null or target == attacker:
+		return false
+	if _solo_is_ai_unit(target):
+		return true
+	if opr_army_manager == null or RulesAutomation.effective(
+			opr_army_manager.rules_automation, not solo_ai_slots.is_empty()) != RulesAutomation.Level.AUTOMATIC:
+		return false
+	return unit_owner_slot(target.unit_properties) != unit_owner_slot(attacker.unit_properties) \
+		and _solo_combined_alive(target) > 0 and not SoloController.unit_in_reserve(target)
+
+
+## #196, DISPLAY only: whether the hovered unit lights the live LOS line. It is a superset of
+## _engine_enemy because the line is feedback, not resolution: in a live multiplayer session the other
+## player's unit lights it whatever the automation level (an online room stays Manual until step 3.0),
+## which the AUTOMATIC-gated resolution predicate would hide. Solo, tutorial and hotseat are decided by
+## _engine_enemy alone. No caller resolves anything from this.
+func _solo_hover_enemy(attacker: GameUnit, hovered: GameUnit) -> bool:
+	if attacker == null or hovered == null:
+		return false
+	if _engine_enemy(attacker, hovered):
+		return true
+	if network_manager == null or not network_manager.is_multiplayer_active():
+		return false
+	return _solo_combined_alive(hovered) > 0 \
+		and int(hovered.unit_properties.get("player_id", 0)) != int(attacker.unit_properties.get("player_id", 0))
 
 
 ## #673 co-op: the player slot that owns a unit — a PER-UNIT lookup, because co-op has TWO
@@ -10727,8 +10779,7 @@ func _solo_targeting_input(event: InputEvent) -> bool:
 			if _solo_target_mode.has("auto_verb") and target == attacker:
 				target = _solo_target_mode.get("suggested") as GameUnit
 			var melee: bool = bool(_solo_target_mode.get("melee", false))
-			if target == null or not _solo_is_ai_unit(target) or _solo_combined_alive(target) <= 0 \
-					or SoloController.unit_in_reserve(target):
+			if target == null or not _engine_enemy(attacker, target):
 				return true   # swallow the click; stay in targeting mode (a reserve unit is off-table)
 			# A1 (NML-202): an auto_verb click hands off to the engine executor, not the manual attack
 			# flow — the melee/shoot split above never applies to it.
@@ -11276,10 +11327,7 @@ func _solo_update_los_line(screen_pos: Vector2) -> void:
 	# (_los_unit_centre, SoloController.alive_positions), so MP hover draws the same live LOS
 	# feedback solo does — no controller instance summoned.
 	var is_valid_target: bool = hovered != null and attacker != null \
-		and SoloController.combined_alive(attacker) > 0 and SoloController.combined_alive(hovered) > 0 and (
-		_solo_is_ai_unit(hovered)
-		or (network_manager != null and network_manager.is_multiplayer_active()
-			and int(hovered.unit_properties.get("player_id", 0)) != int(attacker.unit_properties.get("player_id", 0))))
+		and SoloController.combined_alive(attacker) > 0 and _solo_hover_enemy(attacker, hovered)
 	if attacker == null or hovered == null or not is_valid_target:
 		if _solo_los_line != null and is_instance_valid(_solo_los_line):
 			_solo_los_line.visible = false
