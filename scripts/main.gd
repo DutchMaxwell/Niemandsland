@@ -1752,6 +1752,9 @@ func solo_spend_speed_feat(unit: GameUnit) -> void:
 func _solo_pump() -> void:
 	if solo_controller == null or _solo_ai_busy:
 		return
+	# Step 2.4: a geometry-only controller (hotseat Automatic, no AI seat) must never play an AI turn.
+	if solo_ai_slots.is_empty():
+		return
 	# Coordinate: the receiver activates IMMEDIATELY — the AI's owed reply waits behind it. The
 	# hold releases itself the moment the receiver has acted (or died / left the table), so an
 	# abandoned hand-off can never strand the alternation.
@@ -1899,9 +1902,11 @@ func _hide_dream_overlay() -> void:
 	_solo_dream_overlay = null
 
 
-## Whether a solo game is engaged (an army is marked for the AI, or F11 already built the controller).
+## Whether the AI alternation is engaged: an army is marked for the AI (F11 marks one too, and the
+## both-AI arena marks both). Step 2.4: a controller built ONLY for hotseat geometry does NOT count —
+## no NACHTMAHR turn may follow a human attack on a table with no AI seat.
 func _solo_alternation_active() -> bool:
-	return solo_controller != null or not solo_ai_slots.is_empty()
+	return not solo_ai_slots.is_empty()
 
 
 ## Gate for the alternation trigger: solo engaged, managers ready, and the activated unit is the HUMAN's.
@@ -2868,12 +2873,24 @@ func _solo_ai_slot() -> int:
 	return 2
 
 
+## Step 2.4: a LOCAL table with the switch on Automatic and no AI seat still wants the controller for
+## its GEOMETRY (cover, LOS, sandbox terrain) — the resolvers borrow it. Online stays Manual until
+## Phase 3 and a designated AI slot takes the other branch, so this is the hotseat case only.
+func _solo_hotseat_automatic() -> bool:
+	if opr_army_manager == null or not solo_ai_slots.is_empty():
+		return false
+	if network_manager != null and network_manager.is_multiplayer_active():
+		return false
+	return opr_army_manager.rules_automation == RulesAutomation.Level.AUTOMATIC
+
+
 ## (Re)build the SoloController for the currently designated AI slot (setup wires TurnManager once).
 func _ensure_solo_controller() -> void:
 	# #196 belt-and-braces: in multiplayer the controller exists only for an EXPLICITLY
 	# designated AI slot — a cast/targeting click in a human-vs-human room must not summon
-	# NACHTMAHR (the controller's existence alone arms the alternation pump).
-	if solo_ai_slots.is_empty():
+	# NACHTMAHR. Step 2.4 adds ONE exception: a hotseat Automatic table builds it for GEOMETRY
+	# only; the alternation stays off (no AI seat), so no NACHTMAHR turn can follow.
+	if solo_ai_slots.is_empty() and not _solo_hotseat_automatic():
 		return
 	var ai_slot := _solo_ai_slot()
 	# In native both-AI mode the driver flips solo_controller.ai_slot per activation, so a slot-mismatch is
