@@ -1,18 +1,27 @@
 extends GdUnitTestSuite
-## Broken-cloud sunlight (light islands): High and Ultra, Day only. A spot along the sun projects a cloud mask and the
-## sun dims under the clouds; every other mood, Medium and below stay as they were.
+## Broken-cloud sunlight (light islands): High and Ultra, Day and the tuned Sunset. A spot along the sun projects a
+## cloud mask and the sun dims under the clouds; every other mood, Medium and below stay as they were.
 
 const Settings := preload("res://scripts/graphics_settings.gd")
 const LightingScript := preload("res://scripts/lighting_controller.gd")
 const WorldScript := preload("res://scripts/visual/table_world.gd")
 
 
-func test_islands_only_on_high_and_ultra_in_the_day() -> void:
+func test_islands_only_on_high_and_ultra_in_the_day_or_the_tuned_sunset() -> void:
 	for tier in 5:
 		for mood in ["Day", "Sunset", "Night", "Overcast", "Rain"]:
 			assert_bool(Settings.cloud_light_enabled(tier, mood)) \
 				.override_failure_message("tier %d %s" % [tier, mood]) \
-				.is_equal(tier >= Settings.QualityPreset.HIGH and mood == "Day")
+				.is_equal(tier >= Settings.QualityPreset.HIGH and mood in ["Day", "Sunset"])
+
+
+func test_sunset_uses_the_milder_no_fog_parameters() -> void:
+	var day: Dictionary = WorldScript.cloud_params("Day")
+	var sunset: Dictionary = WorldScript.cloud_params("Sunset")
+	assert_float(sunset["energy"]).is_less(day["energy"])           # milder spot: the low sun must not wash the ruins
+	assert_float(sunset["fog"]).is_equal(0.0)                        # no spot volumetric fog: kills the milky haze
+	assert_float(day["fog"]).is_greater(0.0)
+	assert_float(sunset["sun_scale"]).is_greater(day["sun_scale"])   # keep more of the low sun than at Day
 
 
 func test_the_sun_scale_dims_every_mood_value_and_restores_it() -> void:

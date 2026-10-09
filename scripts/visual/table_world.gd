@@ -18,6 +18,11 @@ static var _cloud_mask: ImageTexture
 ## Light islands: the cloud spot sits this far from the table along the sun, and the sun keeps this share of its energy.
 const CLOUD_DISTANCE_M := 4.5
 const CLOUD_SUN_SCALE := 0.4
+const CLOUD_ENERGY := 10.0
+## Sunset tune (maintainer verdict S4_mild_nofog): a milder spot, no spot volumetric fog, so the low sun does not wash
+## the ruins white or turn the haze milky.
+const CLOUD_SUN_SCALE_SUNSET := 0.45
+const CLOUD_ENERGY_SUNSET := 6.0
 
 func setup(main: Node, profile: Dictionary) -> void:
 	_main = main
@@ -46,12 +51,25 @@ func _on_mood(mood: String) -> void:
 
 ## Broken-cloud sunlight on a sunny day (GraphicsSettings.cloud_light_enabled): a spot along the sun projects a soft
 ## cloud mask and the sun dims, so the gaps read as light islands and the rest as cloud shadow.
+## Per-mood island parameters: Day is the approved look; Sunset is the S4 tune (milder spot, no spot volumetric fog).
+static func cloud_params(mood: String) -> Dictionary:
+	var sunset := mood == "Sunset"
+	return {"energy": CLOUD_ENERGY_SUNSET if sunset else CLOUD_ENERGY,
+		"sun_scale": CLOUD_SUN_SCALE_SUNSET if sunset else CLOUD_SUN_SCALE,
+		"fog": 0.0 if sunset else 1.0}
+
 func _update_clouds(mood: String) -> void:
 	var graphics := get_node_or_null("/root/GraphicsSettings")
 	var on: bool = graphics != null and graphics.cloud_light_enabled(int(graphics.current_preset), mood)
 	_clouds.visible = on
 	set_process(on)
-	_set_sun_scale(CLOUD_SUN_SCALE if on else 1.0)
+	if on:
+		var params := cloud_params(mood)
+		_clouds.light_energy = params["energy"]
+		_clouds.light_volumetric_fog_energy = params["fog"]
+		_set_sun_scale(params["sun_scale"])
+	else:
+		_set_sun_scale(1.0)
 
 func _set_sun_scale(scale: float) -> void:
 	var lighting: Object = _main.get("lighting_controller") if _main != null else null
