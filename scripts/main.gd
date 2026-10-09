@@ -2932,7 +2932,23 @@ func hotseat_record_activation(slot: int) -> void:
 	if _hotseat_turn.side_on_turn == TwoHumanTurn.NONE:
 		_hotseat_turn.side_on_turn = _hotseat_turn.slot_a
 	_hotseat_turn.after_activation(slot, _hotseat_eligible_counts())
+	_hotseat_handover_line(slot)
 	_update_rules_chip()
+
+
+## Step 2.T3: the one line that announces the passing turn — or the TAIL when the other side is spent
+## (the round end is step 2.6a and logs nothing here).
+func _hotseat_handover_line(just_acted: int) -> void:
+	if battle_log == null or _hotseat_turn == null:
+		return
+	var next: int = _hotseat_turn.side_on_turn
+	if next == TwoHumanTurn.NONE:
+		return
+	if next == just_acted:
+		_log_rule_event(BattleLog.Category.GENERAL,
+			"P%d has no units left — P%d keeps activating" % [_hotseat_turn.other(just_acted), just_acted])
+		return
+	_log_rule_event(BattleLog.Category.GENERAL, "P%d to activate" % next)
 
 
 ## Log an off-turn refusal (shared by the radial Activate door and the combat verbs).
