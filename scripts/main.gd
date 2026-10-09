@@ -14099,7 +14099,10 @@ func _update_round_button() -> void:
 		# disabled while any unit still has to act (exactly as solo) and says why.
 		var hotseat_waiting: bool = _solo_hotseat_automatic() and not _hotseat_round_spent()
 		next_round_btn.disabled = hotseat_waiting
-		next_round_btn.tooltip_text = "the round ends when every unit has acted" if hotseat_waiting else ""
+		if not next_round_btn.has_meta("_nml_default_tooltip"):
+			next_round_btn.set_meta("_nml_default_tooltip", next_round_btn.tooltip_text)
+		next_round_btn.tooltip_text = ("the round ends when every unit has acted" if hotseat_waiting
+			else String(next_round_btn.get_meta("_nml_default_tooltip")))
 	_update_rules_chip()
 
 
