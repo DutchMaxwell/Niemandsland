@@ -40,6 +40,8 @@ LISTS = Path(os.path.expanduser("~/nml-mission/farm/ai_lists"))
 ARMY1, ARMY2 = LISTS / "robot_legions_1000.json", LISTS / "blessed_sisters_1000.json"
 needs_lists = pytest.mark.skipif(not (BANK.is_dir() and ARMY1.exists() and ARMY2.exists()),
                                  reason="private fixtures (terrain bank + lists) not on this box")
+MEMBERS_ONNX = REPO / "assets/solo/brains/erlkoenig.onnx"  # in-repo 2-member net (nml.members: 2, output[1] [32,2])
+needs_members = pytest.mark.skipif(not MEMBERS_ONNX.exists(), reason="in-repo members onnx missing")
 FAST = {"top_k": 2, "horizon": 1}
 
 
@@ -312,3 +314,37 @@ def test_sidecars_off_by_default_writes_the_same_record(tmp_path):
     assert not np.array_equal(fed[0], fed[1])  # RED: a sidecar-fed array differs
     assert all("fork" not in r and "features" not in r for r in seen[0][1]["planner_positions"])
     assert any("fork" in r for r in seen[1][1]["planner_positions"])
+
+
+@needs_lists
+@needs_members
+def test_members_off_is_main_on_records_leaf_member_values(tmp_path):
+    # `--members X.onnx`: per candidate, resolve its leaf state and read the exported members graph's output [1] as
+    # member0/member1 (cands-aligned). RED: OFF differs from ON only by the two columns + the json stamp.
+    row = [r for r in fixture_rows() if r["seat"] == 1 and r["d"] == 0][0]
+
+    def rec(tag, **over):
+        tr._W.pop("members", None)
+        w = tr._init(cfg(tmp_path / tag, **over))
+        os.makedirs(w["out"])
+        assert tr._work(w, "x", [row])[0]["valid"]
+        return np.load(tmp_path / tag / (row["row_id"] + ".npz")), json.load(open(tmp_path / tag / (row["row_id"] + ".json")))
+    main, off = rec("main"), rec("off", members="")
+    on = rec("on", members=str(MEMBERS_ONNX))
+    # (a) OFF = today's record
+    assert sorted(main[0].files) == sorted(off[0].files) and "member0" not in off[0].files and "members" not in off[1]["teacher"]
+    assert all(np.array_equal(main[0][k], off[0][k], equal_nan=True) for k in main[0].files)
+    # (b) ON is additive
+    z = on[0]
+    assert "member0" in z.files and "member1" in z.files and on[1]["teacher"]["members"] is True
+    assert len(z["member0"]) == len(z["member1"]) == len(z["hand_score"]) == z["cands_ptr"][-1]
+    assert sorted(f for f in z.files if f not in ("member0", "member1")) == sorted(off[0].files)
+    assert all(np.array_equal(z[k], off[0][k], equal_nan=True) for k in off[0].files)
+    # (c) the columns are the members graph's output [1] at the candidate leaf states: erlkoenig carries two distinct
+    #     members (nml.members: 2), so the pair must not collapse to one value; every value is finite
+    m0, m1 = z["member0"], z["member1"]
+    fin = np.isfinite(m0) & np.isfinite(m1)
+    assert fin.sum() > 0 and not np.array_equal(m0[fin], m1[fin])
+    # (d) reproducible: same seeds, same columns
+    on2 = rec("on2", members=str(MEMBERS_ONNX))
+    assert all(np.array_equal(z[k], on2[0][k], equal_nan=True) for k in z.files)
