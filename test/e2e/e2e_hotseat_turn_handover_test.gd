@@ -67,6 +67,10 @@ func test_the_turn_passes_with_one_line(timeout := 120000) -> void:
 func test_the_same_side_keeps_activating_when_the_other_is_empty(timeout := 120000) -> void:
 	var p1a := _register(1, "Alpha Squad", Vector3(-0.3, 0.0, 0.0))
 	var p1b := _register(1, "Guards", Vector3(0.0, 0.0, -0.3))
+	# Step 2.6a: the round now ends by itself once BOTH sides are spent. A third P1 unit keeps the
+	# round alive while p1b activates, so the TAIL (P2 empty -> P1 keeps activating) is still the
+	# thing under test here; the auto round end has its own suite.
+	_register(1, "Militia", Vector3(0.0, 0.0, 0.3))
 	_hotseat_automatic()
 	await _activate(p1a)
 	assert_int(_count_lines("P2 has no units left — P1 keeps activating")) \

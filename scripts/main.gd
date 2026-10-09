@@ -2912,6 +2912,12 @@ func _hotseat_eligible_counts() -> Dictionary:
 	return counts
 
 
+## Step 2.6a: true when neither side has an eligible unit left, so the hotseat round closes by itself.
+func _hotseat_round_spent() -> bool:
+	var counts := _hotseat_eligible_counts()
+	return int(counts.get(1, 0)) <= 0 and int(counts.get(2, 0)) <= 0
+
+
 ## The off-turn refusal line for `slot`, or "" when the side may act. Only a hotseat Automatic
 ## table alternates; Manual and solo-vs-AI tables are untouched (an AI seat keeps the SoloController
 ## alternation, step 2.4).
@@ -2932,8 +2938,11 @@ func hotseat_record_activation(slot: int) -> void:
 	if _hotseat_turn.side_on_turn == TwoHumanTurn.NONE:
 		_hotseat_turn.side_on_turn = _hotseat_turn.slot_a
 	_hotseat_turn.after_activation(slot, _hotseat_eligible_counts())
+	if _hotseat_turn.side_on_turn == TwoHumanTurn.NONE:
+		_hotseat_end_round()
+		return
 	_hotseat_handover_line(slot)
-	_update_rules_chip()
+	_update_round_button()
 
 
 ## Step 2.T3: the one line that announces the passing turn — or the TAIL when the other side is spent
@@ -2949,6 +2958,39 @@ func _hotseat_handover_line(just_acted: int) -> void:
 			"P%d has no units left — P%d keeps activating" % [_hotseat_turn.other(just_acted), just_acted])
 		return
 	_log_rule_event(BattleLog.Category.GENERAL, "P%d to activate" % next)
+
+
+## Step 2.6a: the hotseat round end — the SAME end-of-round truth as solo (`_solo_end_round`) without
+## the solo opener pump: seize objectives, book mission VP (with a mission picked) and the summary
+## after SOLO_GAME_ROUNDS, then advance and let the side that did NOT take the last activation open.
+func _hotseat_end_round() -> void:
+	if opr_army_manager == null:
+		return
+	_solo_auto_seize()
+	_solo_book_mission_vp(opr_army_manager.current_round >= _solo_total_rounds())
+	if opr_army_manager.current_round >= _solo_total_rounds():
+		if not _solo_game_finished:
+			_solo_game_finished = true
+			_solo_show_game_summary()
+		return
+	var opener: int = _hotseat_turn.next_round_opener() if _hotseat_turn != null else TwoHumanTurn.NONE
+	opr_army_manager.advance_round()
+	_refresh_round_visuals()
+	if network_manager != null:
+		network_manager.broadcast_round_advance()
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL, "Round %d begins" % opr_army_manager.current_round, true)
+	_hotseat_start_round(opener)
+
+
+## Begin a hotseat round: the opener takes the turn (a wiped opener yields to the other side).
+func _hotseat_start_round(opener: int) -> void:
+	if _hotseat_turn == null:
+		_hotseat_turn = TwoHumanTurn.new()
+	if opener == TwoHumanTurn.NONE:
+		opener = _hotseat_turn.slot_a
+	_hotseat_turn.start_round(opener, _hotseat_eligible_counts())
+	_update_round_button()
 
 
 ## Log an off-turn refusal (shared by the radial Activate door and the combat verbs).
@@ -14053,6 +14095,14 @@ func _solo_final_round_active() -> bool:
 func _update_round_button() -> void:
 	if next_round_btn and opr_army_manager:
 		next_round_btn.text = next_round_button_label(opr_army_manager.current_round, _solo_final_round_active())
+		# Step 2.6a: on a hotseat Automatic table the round ends by itself, so the manual lever is
+		# disabled while any unit still has to act (exactly as solo) and says why.
+		var hotseat_waiting: bool = _solo_hotseat_automatic() and not _hotseat_round_spent()
+		next_round_btn.disabled = hotseat_waiting
+		if not next_round_btn.has_meta("_nml_default_tooltip"):
+			next_round_btn.set_meta("_nml_default_tooltip", next_round_btn.tooltip_text)
+		next_round_btn.tooltip_text = ("the round ends when every unit has acted" if hotseat_waiting
+			else String(next_round_btn.get_meta("_nml_default_tooltip")))
 	_update_rules_chip()
 
 
