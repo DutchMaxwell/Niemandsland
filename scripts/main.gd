@@ -289,6 +289,8 @@ var _solo_grade_logged := ""   # the grade line this game already logged ("" = n
 var _solo_opponent_brain: Dictionary = {}  # the opponent the game really runs (GameRecordCollector.opponent_brain),
                                            # set with the "opponent:" line; {} = no AI seat graded
 var _rules_chip: Label = null                # rules-automation chip beside the round button (plan 1.3)
+var _turn_chip: Label = null                 # hotseat turn chip beside the rules chip (plan 2.T2a)
+var _hotseat_turn: TwoHumanTurn = null       # enforced alternation on a hotseat Automatic table (plan 2.T2a)
 var solo_panel_box: VBoxContainer = null     # left-panel "Solo" section (per-army AI toggles)
 var solo_mission_option: OptionButton = null # left-panel Mission picker (MissionCatalog + "Duel (no mission)")
 var _solo_mission_id: String = ""            # "" = Duel (no mission, today's byte-identical behaviour)
@@ -1693,6 +1695,8 @@ func solo_begin_pass(unit: GameUnit) -> void:
 	var u: GameUnit = _solo_combat_unit(unit)   # a joined hero passes with its host unit
 	if u == null or _solo_is_ai_unit(u):
 		return
+	if _hotseat_verb_refused(u):
+		return
 	if _deployment_gate_refuses_start():
 		return   # the gate writes its own refusal line
 	_solo_ensure_playing_phase()
@@ -2883,6 +2887,67 @@ func _solo_hotseat_automatic() -> bool:
 		return false
 	return opr_army_manager.rules_automation == RulesAutomation.Level.AUTOMATIC
 
+
+## Step 2.T2a: the side on turn on a hotseat Automatic table (two humans, no AI seat). P1 opens the
+## first round until TwoHumanTurn records an activation.
+func _hotseat_side_on_turn() -> int:
+	if _hotseat_turn == null or _hotseat_turn.side_on_turn == TwoHumanTurn.NONE:
+		return 1
+	return _hotseat_turn.side_on_turn
+
+
+## The eligible-unit count per side (alive, unactivated, not in reserve) for TwoHumanTurn.
+func _hotseat_eligible_counts() -> Dictionary:
+	var counts := {1: 0, 2: 0}
+	if opr_army_manager == null:
+		return counts
+	for u in opr_army_manager.get_all_game_units():
+		if u == null or u.is_activated or u.get_alive_count() <= 0:
+			continue
+		if SoloController.unit_in_reserve(u):
+			continue
+		var slot: int = unit_owner_slot(u.unit_properties)
+		if counts.has(slot):
+			counts[slot] += 1
+	return counts
+
+
+## The off-turn refusal line for `slot`, or "" when the side may act. Only a hotseat Automatic
+## table alternates; Manual and solo-vs-AI tables are untouched (an AI seat keeps the SoloController
+## alternation, step 2.4).
+func hotseat_turn_refusal(slot: int) -> String:
+	if not _solo_hotseat_automatic():
+		return ""
+	if slot == _hotseat_side_on_turn():
+		return ""
+	return "It is P%d's turn" % _hotseat_side_on_turn()
+
+
+## Record an activation by `slot` and hand the turn to the other side (TwoHumanTurn, TAIL-aware).
+func hotseat_record_activation(slot: int) -> void:
+	if not _solo_hotseat_automatic():
+		return
+	if _hotseat_turn == null:
+		_hotseat_turn = TwoHumanTurn.new()
+	if _hotseat_turn.side_on_turn == TwoHumanTurn.NONE:
+		_hotseat_turn.side_on_turn = _hotseat_turn.slot_a
+	_hotseat_turn.after_activation(slot, _hotseat_eligible_counts())
+	_update_rules_chip()
+
+
+## Log an off-turn refusal (shared by the radial Activate door and the combat verbs).
+func hotseat_log_refusal(text: String) -> void:
+	if battle_log != null and text != "":
+		battle_log.log_event(BattleLog.Category.GENERAL, text)
+
+
+## Guard for the combat verbs (Shoot/Fight/Cast/Pass): true means the caller must stop.
+func _hotseat_verb_refused(unit: GameUnit) -> bool:
+	var refusal := hotseat_turn_refusal(unit_owner_slot(unit.unit_properties))
+	if refusal == "":
+		return false
+	hotseat_log_refusal(refusal)
+	return true
 
 ## (Re)build the SoloController for the currently designated AI slot (setup wires TurnManager once).
 func _ensure_solo_controller() -> void:
@@ -10429,6 +10494,8 @@ func solo_begin_targeting(unit: GameUnit, melee: bool) -> void:
 		solo_begin_cast(unit)
 		return
 	_ensure_solo_controller()
+	if _hotseat_verb_refused(unit):
+		return
 	# Wave 4 side fix: the Utility-Buff family is "once per activation, BEFORE attacking" — for the
 	# human that moment is declaring the attack. Round-stamped inside, so the second door
 	# (_on_solo_human_activated, for a unit that never attacks) cannot apply it twice.
@@ -10460,6 +10527,8 @@ func solo_begin_auto(unit: GameUnit, verb: int) -> void:
 		solo_begin_cast(unit)
 		return
 	_ensure_solo_controller()
+	if _hotseat_verb_refused(unit):
+		return
 	await _solo_apply_utility_buffs(unit)
 	_solo_target_mode = {"unit": unit, "auto_verb": verb}
 	var bands: Dictionary = SoloController.move_bands_for_unit(unit, solo_controller.movement_range)
@@ -10568,6 +10637,8 @@ func solo_begin_cast(unit: GameUnit) -> void:
 				"%s has already activated this round — one activation per unit (GF v3.5.1)" % unit.get_name())
 		return
 	_ensure_solo_controller()
+	if _hotseat_verb_refused(unit):
+		return
 	# No activation door here (D23): the spell picker commits nothing — _run_human_cast begins it.
 	var member := RadialMenu._caster_member_of(unit)
 	if member == null:
@@ -13977,6 +14048,14 @@ func _update_rules_chip() -> void:
 		next_round_btn.add_sibling(_rules_chip)
 	_rules_chip.visible = RulesAutomation.ui_enabled()
 	_rules_chip.text = RulesAutomation.chip_text(opr_army_manager.rules_automation, not solo_ai_slots.is_empty())
+	if _turn_chip == null:
+		_turn_chip = Label.new()
+		_turn_chip.theme_type_variation = HouseStyle.CAPTION
+		_turn_chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_turn_chip.tooltip_text = "Hotseat Automatic: one unit per side in turn."
+		next_round_btn.add_sibling(_turn_chip)
+	_turn_chip.visible = RulesAutomation.ui_enabled() and _solo_hotseat_automatic()
+	_turn_chip.text = "Turn: P%d" % _hotseat_side_on_turn()
 
 
 ## Game-panel toggle (local games only; online is plan step 1.4). Locked on while an AI slot is ticked.

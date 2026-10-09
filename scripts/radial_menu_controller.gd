@@ -560,10 +560,20 @@ func _toggle_activation(context: Dictionary) -> void:
 		_update_activated_markers(game_unit)
 		unit_deactivated.emit(game_unit)
 	else:
+		# Step 2.T2a: on a hotseat Automatic table only the side on turn may activate.
+		var main_node := get_node_or_null("/root/Main")
+		var slot: int = int(game_unit.unit_properties.get("player_id", 1))
+		if main_node != null and main_node.has_method("hotseat_turn_refusal"):
+			var refusal: String = main_node.call("hotseat_turn_refusal", slot)
+			if refusal != "":
+				main_node.call("hotseat_log_refusal", refusal)
+				return
 		# The manual toggle is the catch-all activation door (free dragging has none) — the
 		# activation-triggered rules get their shot before the unit counts as spent.
 		await _solo_activation_rules(game_unit)
 		game_unit.activate(1)
+		if main_node != null and main_node.has_method("hotseat_record_activation"):
+			main_node.call("hotseat_record_activation", slot)
 		_update_activated_markers(game_unit)
 		unit_activated.emit(game_unit)
 
