@@ -7,6 +7,13 @@
 //! here: no tree leaf is priced by a rollout (`Blend` = the node's own state, `Terminal` = a uniform playout), and
 //! an opponent node searches its full menu like the searcher's. The scripted brain's one reach into the tree is
 //! the Coordinate receiver's pick (`Rollout::coordinate_hand_off`), as in the one-ply.
+//!
+//! `Knobs::tree_opponent_own_leaf` (D7: the objective is P(win), zero-sum) moves the OPPONENT's nodes into its own
+//! frame: an opponent node orders its children (Blend leaf) by its own leaf and selects among them by the UCT
+//! argmax of its own mean (`Node::wo`), instead of the argmin of the searcher's mean. Its own leaf is priced from
+//! its seat (`own_leaf`: the blend for the opponent with its `opener_seat` token, its hook value asked from that
+//! seat). Unchanged: the value backed up for the searcher (`Node::w`, means), the root, the chance edges and the
+//! Coordinate hand-off. Off (default) = today's tree, byte-identical.
 
 use serde_json::Value;
 
@@ -38,6 +45,9 @@ pub struct Node {
     pub n: u32,
     pub w: f64,
     pub terminal: Option<f64>,
+    /// `Knobs::tree_opponent_own_leaf`: summed value in the OPPONENT's own frame (its leaf, priced from its seat),
+    /// kept below an opponent node, where that node's selection reads it; 0 when the knob is off.
+    pub wo: f64,
 }
 
 /// One edge out of a decision node: `idx` is the row's build index in the
@@ -49,6 +59,9 @@ pub struct Child {
     pub nodes: Vec<Node>,
     /// The policy prior of this edge (root only, E1): `None` = no prior, the node selects by UCT.
     pub prior: Option<f64>,
+    /// `Knobs::tree_opponent_own_leaf`: the own leaf of this edge's EV state for the opponent who moves it, from the
+    /// ordering of its node (`own_children`); `None` = not priced (every edge with the knob off).
+    pub own: Option<f64>,
 }
 
 /// What the walk found: the side that moves next, or the game's end.
@@ -112,7 +125,7 @@ impl Node {
             Step::Mover(m) => (m, None),
             Step::Terminal => (0, Some(referee(&state, player))),
         };
-        Node { state, mover, children: Vec::new(), next_child: 0, n: 0, w: 0.0, terminal }
+        Node { state, mover, children: Vec::new(), next_child: 0, n: 0, w: 0.0, terminal, wo: 0.0 }
     }
 }
 
@@ -206,6 +219,56 @@ pub fn leaf_value(roll: &Rollout, node: &Node, mode: TreeLeaf, player: i64, open
     }
 }
 
+/// `Knobs::tree_opponent_own_leaf` — a frontier node's value for the searcher's OPPONENT `opp`, in its own frame: a
+/// reached game end is the referee's for `opp`; `Blend` is `blend_score_leaf` for `opp` with ITS `opener_seat`
+/// token `opp_seat` and its hook value `vals` (asked from its seat, empty = the hand leaf); `Terminal` is `1 - v`,
+/// the searcher's uniform-playout verdict `v` seen from the other side (the referee is zero-sum: 1 / 0.5 / 0).
+#[allow(clippy::too_many_arguments)]
+pub fn own_leaf(roll: &Rollout, node: &Node, mode: TreeLeaf, opp: i64, opp_seat: bool, vals: &[f64], w: f64, v: f64)
+                -> f64 {
+    if node.terminal.is_some() {
+        return referee(&node.state, opp);
+    }
+    match mode {
+        TreeLeaf::Blend => roll.blend_score_leaf(std::slice::from_ref(&node.state), opp, opp_seat, vals, w),
+        TreeLeaf::Terminal => 1.0 - v,
+    }
+}
+
+/// `Knobs::tree_opponent_own_leaf` — an OPPONENT node's children (its mover = the opponent of the searching
+/// `player`) in the order of ITS OWN leaf: every `ranked` row taken through its edge under EV (resolve, the
+/// Coordinate hand-off, `advance`), priced by `own_leaf` with the hook asked ONCE, for the whole menu, from the
+/// opponent's seat `opp_seat`; best first, `ranked`'s order on ties. Every child keeps its value (`Child::own`).
+/// Also returns the leaves the hook was asked for (0 without a hook).
+pub fn own_children(roll: &Rollout, node: &Node, player: i64, opp_seat: bool, hook: Option<&dyn LeafValue>, w: f64,
+                    sc: &mut Scratch) -> Result<(Vec<Child>, usize), Unsupported> {
+    let (rows, order) = ranked(roll, &node.state, node.mover, sc)?;
+    let mut kids = root_children(&rows, &order, &[]);
+    let mut ends = Vec::with_capacity(kids.len());
+    for k in &kids {
+        let mut cur = roll.policy.resolve(&node.state, &k.cand)?;
+        roll.coordinate_hand_off(&mut cur, &k.cand, player, sc)?;
+        let turn = other_player(&cur, node.mover);
+        let step = advance(roll, &mut cur, turn, None);
+        ends.push(Node::new(cur, step, player));
+    }
+    let states: Vec<&State> = ends.iter().filter(|x| x.terminal.is_none()).map(|x| &x.state).collect();
+    let hv = match hook.filter(|_| !states.is_empty()) {
+        Some(h) => h.value_for_seat(&states, node.mover, opp_seat)?,
+        None => Vec::new(),
+    };
+    if !hv.is_empty() && hv.len() != states.len() {
+        return Err(Unsupported::LeafValue(hv.len(), states.len()));
+    }
+    let mut j = 0;
+    for (k, x) in kids.iter_mut().zip(&ends) {
+        let own = if hv.is_empty() || x.terminal.is_some() { &[][..] } else { j += 1; &hv[j - 1..j] };
+        k.own = Some(own_leaf(roll, x, TreeLeaf::Blend, node.mover, opp_seat, own, w, 0.0));
+    }
+    kids.sort_by(|a, b| b.own.partial_cmp(&a.own).unwrap_or(std::cmp::Ordering::Equal));
+    Ok((kids, hv.len()))
+}
+
 /// Sample `k` of a chance edge draws `Rng(base + k)` and `Tray(base + k +
 /// TRAY_OFFSET)` — the S2 continuation layout.
 pub const TRAY_OFFSET: i64 = 50_000;
@@ -261,7 +324,9 @@ pub fn ranked(roll: &Rollout, state: &State, player: i64, sc: &mut Scratch)
 /// ORDERS, it never cuts: every row is a child.
 pub fn root_children(rows: &[ScoredRow], order: &[usize], pool: &[usize]) -> Vec<Child> {
     let rest = order.iter().filter(|i| !pool.contains(i));
-    pool.iter().chain(rest).map(|&i| Child { idx: i, cand: rows[i].cand.clone(), nodes: Vec::new(), prior: None }).collect()
+    pool.iter().chain(rest)
+        .map(|&i| Child { idx: i, cand: rows[i].cand.clone(), nodes: Vec::new(), prior: None, own: None })
+        .collect()
 }
 
 /// Opens up to `k` more of `node`'s children, in order (progressive
@@ -346,6 +411,8 @@ pub struct TreeTrace {
     /// `deadline_after_preselect`: microseconds of the root preselection before the
     /// search clock started — `Some` ONLY when that knob is on (set by `Search::run`).
     pub preselect_us: Option<u64>,
+    /// `Knobs::tree_opponent_own_leaf`: leaves the hook was asked for from the opponent's seat (0 when off).
+    pub own_leaves: usize,
 }
 
 /// A child's mean over its sample nodes (equally likely chance outcomes)
@@ -354,6 +421,28 @@ fn child_stat(c: &Child) -> (f64, u32) {
     let n = c.nodes.iter().map(|x| x.n).sum();
     let seen = c.nodes.iter().filter(|x| x.n > 0);
     (seen.clone().map(|x| x.w / x.n as f64).sum::<f64>() / seen.count().max(1) as f64, n)
+}
+
+/// A child's mean in the opponent's own frame (`Node::wo`) over its sample nodes, and its visits.
+fn child_own(c: &Child) -> (f64, u32) {
+    let n = c.nodes.iter().map(|x| x.n).sum();
+    let seen = c.nodes.iter().filter(|x| x.n > 0);
+    (seen.clone().map(|x| x.wo / x.n as f64).sum::<f64>() / seen.count().max(1) as f64, n)
+}
+
+/// `Knobs::tree_opponent_own_leaf` at an OPPONENT node: UCT in the mover's OWN frame, the argmax of
+/// `own mean + c * sqrt(ln N / n)` over the OPENED children; ties keep the first child in order.
+pub fn select_own(node: &Node) -> usize {
+    let ln_n = (node.n.max(1) as f64).ln();
+    let mut best = (0, f64::NEG_INFINITY);
+    for (i, c) in node.children[..node.next_child].iter().enumerate() {
+        let (mean, n) = child_own(c);
+        let u = mean + UCT_C * (ln_n / n.max(1) as f64).sqrt();
+        if u > best.1 {
+            best = (i, u);
+        }
+    }
+    best.0
 }
 
 /// UCT in the searcher's frame: the searcher's nodes take the argmax of
@@ -407,9 +496,11 @@ pub fn select_puct(node: &Node, player: i64, c: f64) -> usize {
     best.0
 }
 
-/// UCT unless `puct > 0` and the node's children carry priors.
-fn select_with(node: &Node, player: i64, puct: f64) -> usize {
-    if puct > 0.0 && node.children.first().is_some_and(|c| c.prior.is_some()) {
+/// `select_own` at an opponent node when `own`; else UCT unless `puct > 0` and the node's children carry priors.
+fn select_with(node: &Node, player: i64, puct: f64, own: bool) -> usize {
+    if own && node.mover != player {
+        select_own(node)
+    } else if puct > 0.0 && node.children.first().is_some_and(|c| c.prior.is_some()) {
         select_puct(node, player, puct)
     } else {
         select(node, player)
@@ -429,7 +520,10 @@ fn child_base(base: Option<i64>, slot: usize) -> Option<i64> {
 /// evaluations completed; a chance child's samples are never split, so the
 /// last batch may overshoot by fewer than `samples`. Every child of a node
 /// is opened before the search descends below it, unless `widen` caps the
-/// open children (progressive widening). Streams: the root's base is `sig`, a sample node's base
+/// open children (progressive widening). `Knobs::tree_opponent_own_leaf`: an opponent node builds its children by
+/// `own_children` (Blend leaf) and selects by `select_own`; every leaf below an opponent node is also priced in the
+/// opponent's own frame (one more hook batch from its seat, an EV child of an opponent node reusing its `own`), and
+/// that value is added to `Node::wo` along the path beside the searcher's. Streams: the root's base is `sig`, a sample node's base
 /// derives from its parent's and its (child, sample) index (`child_base`). The
 /// Terminal playouts resolve with EV under `Ev` and through the tray off the
 /// leaf node's own stream base under `Tray`. The pick is the opened root
@@ -444,6 +538,11 @@ pub fn run(roll: &Rollout, cfg: &TreeCfg, root: &mut Node, rng: &mut GodotRng, s
     };
     let (start, mut completed, mut deadline_hit) = (std::time::Instant::now(), 0, false);
     let (mut batches, mut frontier, mut terminal) = (0, 0, 0);
+    // `Knobs::tree_opponent_own_leaf`: the opponent's seat, its `opener_seat` token, the hook as the leaf reads it.
+    let own_on = roll.knobs.tree_opponent_own_leaf;
+    let (opp, opp_seat) = (other_player(&root.state, cfg.player), !cfg.opener_seat);
+    let hook = cfg.hook.filter(|_| cfg.leaf == TreeLeaf::Blend && cfg.w != 0.0);
+    let mut own_leaves = 0;
     while completed < cfg.budget {
         if cfg.deadline.is_some_and(|d| std::time::Instant::now() >= d) {
             deadline_hit = true;
@@ -456,18 +555,31 @@ pub fn run(roll: &Rollout, cfg: &TreeCfg, root: &mut Node, rng: &mut GodotRng, s
             break;
         }
         let (mut node, mut path, mut base) = (&mut *root, Vec::new(), cfg.sig);
+        let is_opp = |x: &Node| x.terminal.is_none() && x.mover != cfg.player;
+        let mut below_opp = is_opp(&*node);
         while node.terminal.is_none() && !node.children.is_empty() && node.next_child >= node.children.len().min(cap(node)) {
-            let c = select_with(node, cfg.player, cfg.puct);
+            let c = select_with(node, cfg.player, cfg.puct, own_on);
             let s = (0..node.children[c].nodes.len()).min_by_key(|&s| node.children[c].nodes[s].n).unwrap_or(0);
             base = child_base(base, c * per_child + s);
             path.push((c, s));
             node = &mut node.children[c].nodes[s];
+            below_opp |= is_opp(&*node);
         }
-        let mut vals = Vec::new();
+        // The own frame is priced only where an opponent node's selection will read it.
+        let own_here = own_on && below_opp;
+        let (mut vals, mut owns) = (Vec::new(), Vec::new());
         if let Some(v) = node.terminal {
             vals.push(v);
+            if own_here {
+                owns.push(referee(&node.state, opp));
+            }
             terminal += 1;
         } else {
+            if own_on && cfg.leaf == TreeLeaf::Blend && node.children.is_empty() && node.mover != cfg.player {
+                let (kids, asked) = own_children(roll, node, cfg.player, opp_seat, hook, cfg.w, sc)?;
+                node.children = kids;
+                own_leaves += asked;
+            }
             let from = node.next_child;
             let k = cfg.batch.min((cfg.budget - completed).div_ceil(per_child)).min(cap(node) - from);
             expand(roll, node, k, cfg.dice, cfg.samples, base, cfg.player, sc)?;
@@ -480,14 +592,42 @@ pub fn run(roll: &Rollout, cfg: &TreeCfg, root: &mut Node, rng: &mut GodotRng, s
             if !hv.is_empty() && hv.len() != states.len() {
                 return Err(Unsupported::LeafValue(hv.len(), states.len()));
             }
-            let mut j = 0;
+            // The opponent's own frame: one batch from its seat for the leaves its node did not price already.
+            let cached = |c: &Child| c.own.filter(|_| cfg.dice == TreeDice::Ev);
+            let os: Vec<&State> = if own_here {
+                node.children[from..node.next_child].iter().filter(|&c| cached(c).is_none()).flat_map(|c| &c.nodes)
+                    .filter(|x| x.terminal.is_none()).map(|x| &x.state).collect()
+            } else {
+                Vec::new()
+            };
+            let ho = match hook.filter(|_| !os.is_empty()) {
+                Some(h) => h.value_for_seat(&os, opp, opp_seat)?,
+                None => Vec::new(),
+            };
+            if !ho.is_empty() && ho.len() != os.len() {
+                return Err(Unsupported::LeafValue(ho.len(), os.len()));
+            }
+            own_leaves += ho.len();
+            let (mut j, mut jo) = (0, 0);
             for c in from..node.next_child {
+                let kept = cached(&node.children[c]);
                 for (s, x) in node.children[c].nodes.iter_mut().enumerate() {
                     let own = if hv.is_empty() || x.terminal.is_some() { &[][..] } else { j += 1; &hv[j - 1..j] };
                     let tb = if cfg.dice == TreeDice::Tray { child_base(base, c * per_child + s) } else { None };
                     let v = leaf_value(roll, x, cfg.leaf, cfg.player, cfg.opener_seat, own, cfg.w, rng, tb, sc)?;
                     (x.n, x.w) = (1, v);
                     vals.push(v);
+                    if own_here {
+                        let o = match kept {
+                            Some(o) => o,
+                            None => {
+                                let ov = if ho.is_empty() || x.terminal.is_some() { &[][..] } else { jo += 1; &ho[jo - 1..jo] };
+                                own_leaf(roll, x, cfg.leaf, opp, opp_seat, ov, cfg.w, v)
+                            }
+                        };
+                        x.wo = o;
+                        owns.push(o);
+                    }
                     if x.terminal.is_some() { terminal += 1 } else { frontier += 1 }
                 }
             }
@@ -496,12 +636,12 @@ pub fn run(roll: &Rollout, cfg: &TreeCfg, root: &mut Node, rng: &mut GodotRng, s
             break;
         }
         batches += 1;
-        let (cnt, sum) = (vals.len() as u32, vals.iter().sum::<f64>());
+        let (cnt, sum, osum) = (vals.len() as u32, vals.iter().sum::<f64>(), owns.iter().sum::<f64>());
         let mut cur = &mut *root;
-        (cur.n, cur.w) = (cur.n + cnt, cur.w + sum);
+        (cur.n, cur.w, cur.wo) = (cur.n + cnt, cur.w + sum, cur.wo + osum);
         for &(c, s) in &path {
             cur = &mut cur.children[c].nodes[s];
-            (cur.n, cur.w) = (cur.n + cnt, cur.w + sum);
+            (cur.n, cur.w, cur.wo) = (cur.n + cnt, cur.w + sum, cur.wo + osum);
         }
         completed += vals.len();
     }
@@ -514,5 +654,5 @@ pub fn run(roll: &Rollout, cfg: &TreeCfg, root: &mut Node, rng: &mut GodotRng, s
         }
     }
     Ok((best.0, TreeTrace { completed, deadline_hit, root: trace, fallback: None, batches, frontier, terminal, elapsed_us: 0,
-                            preselect_us: None }))
+                            preselect_us: None, own_leaves }))
 }

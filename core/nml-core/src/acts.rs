@@ -371,6 +371,14 @@ pub struct Knobs {
     /// byte-identical); a root without logits keeps UCT whatever `c` is.
     #[serde(default)]
     pub tree_puct: f64,
+    /// D7 (the objective is P(win), zero-sum) — tree search: an OPPONENT node orders its children (Blend leaf) and
+    /// selects among them (UCT argmax) by ITS OWN leaf, priced from its seat (`tree::own_leaf`: the blend for the
+    /// opponent with its `opener_seat` token, its hook value asked from that seat), instead of the argmin of the
+    /// searcher's. The value backed up stays the searcher's (means), so the root statistics keep their meaning.
+    /// Costs a second hook batch below every opponent node. Off (default) = today's tree, byte-identical; read only
+    /// under `search_mode` tree.
+    #[serde(default)]
+    pub tree_opponent_own_leaf: bool,
     /// W2 S0 — `Seams::melee_reach`: `"all"` is today's behaviour (every alive
     /// model of the unit strikes); `"table"` is the p.9 rule, scaling by the
     /// models within 2" of an enemy model instead. Absent from every corpus
@@ -1573,6 +1581,7 @@ impl Default for Knobs {
             deadline_after_preselect: false,
             tree_widen: 0.0,
             tree_puct: 0.0,
+            tree_opponent_own_leaf: false,
             melee_reach: MeleeReach::All,
             consolidate: false,
             cond_ap_dice: false,

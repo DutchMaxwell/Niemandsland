@@ -2392,6 +2392,10 @@ KNOB_PRESETS: dict[str, dict[str, Any]] = {
     # the scripted reply (search + net instead of the greedy 1-ply score).
     "reply_net_cap3_restricted": {"reply_by_net": True, "reply_top_k": 3, "reply_horizon": 1, "reply_pool_cap": 3,
                                   "reply_menu_restricted": True},
+    # D7 (09.10.2026): under search_mode tree, the opponent's nodes order and select their replies by the
+    # opponent's OWN leaf (priced from its seat) instead of the argmin of the searcher's leaf; the backed-up value
+    # stays the searcher's. Read only by the tree.
+    "tree_opp_own": {"tree_opponent_own_leaf": True},
     # inventory C12: a joined hero counts in the unit size for half strength and morale (GF/AoF p.14)
     "hero_size": {"hero_counts_in_size": True},
     # inventory C08: a Shaken Fearless unit keeps its 4+ roll in the imagined morale test (p.13), as the table does

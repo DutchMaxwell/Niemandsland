@@ -1165,6 +1165,7 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
             .unwrap_or(dflt.deadline_after_preselect),
         tree_widen: dnum(d, "tree_widen", dflt.tree_widen),
         tree_puct: dnum(d, "tree_puct", dflt.tree_puct),
+        tree_opponent_own_leaf: dflag(d, "tree_opponent_own_leaf"),
     }
 }
 
