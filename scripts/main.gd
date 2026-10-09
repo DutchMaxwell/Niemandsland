@@ -10341,6 +10341,22 @@ func _engine_enemy(attacker: GameUnit, target: GameUnit) -> bool:
 		and _solo_combined_alive(target) > 0 and not SoloController.unit_in_reserve(target)
 
 
+## #196, DISPLAY only: whether the hovered unit lights the live LOS line. It is a superset of
+## _engine_enemy because the line is feedback, not resolution: in a live multiplayer session the other
+## player's unit lights it whatever the automation level (an online room stays Manual until step 3.0),
+## which the AUTOMATIC-gated resolution predicate would hide. Solo, tutorial and hotseat are decided by
+## _engine_enemy alone. No caller resolves anything from this.
+func _solo_hover_enemy(attacker: GameUnit, hovered: GameUnit) -> bool:
+	if attacker == null or hovered == null:
+		return false
+	if _engine_enemy(attacker, hovered):
+		return true
+	if network_manager == null or not network_manager.is_multiplayer_active():
+		return false
+	return _solo_combined_alive(hovered) > 0 \
+		and int(hovered.unit_properties.get("player_id", 0)) != int(attacker.unit_properties.get("player_id", 0))
+
+
 ## #673 co-op: the player slot that owns a unit — a PER-UNIT lookup, because co-op has TWO
 ## humans plus one AI and a single `human_slot` int cannot model that.
 static func unit_owner_slot(props: Dictionary) -> int:
@@ -11294,7 +11310,7 @@ func _solo_update_los_line(screen_pos: Vector2) -> void:
 	# (_los_unit_centre, SoloController.alive_positions), so MP hover draws the same live LOS
 	# feedback solo does — no controller instance summoned.
 	var is_valid_target: bool = hovered != null and attacker != null \
-		and SoloController.combined_alive(attacker) > 0 and _engine_enemy(attacker, hovered)
+		and SoloController.combined_alive(attacker) > 0 and _solo_hover_enemy(attacker, hovered)
 	if attacker == null or hovered == null or not is_valid_target:
 		if _solo_los_line != null and is_instance_valid(_solo_los_line):
 			_solo_los_line.visible = false
