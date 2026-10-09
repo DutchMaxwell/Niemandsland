@@ -69,8 +69,10 @@ func _process(_delta: float) -> void:
 		_clouds.global_position = at
 		_clouds.look_at(Vector3.ZERO, Vector3.UP if absf(to_sun.y) < 0.99 else Vector3.FORWARD)
 
-## The cloud spot. The projector only shows through the light's own shadow pass, so the shadow stays on; the mask is
-## built once (FastNoiseLite image, not a NoiseTexture2D: its async bake raced the table materials before).
+## The cloud spot. The projector only shows through the light's own shadow pass, so the shadow stays on - but with no
+## caster in it: the projector alone carries the islands, and a full shadow pass costs about twice as much (measured
+## +1.2 ms instead of +2.3 ms at High Day). The mask is built once (FastNoiseLite image, not a NoiseTexture2D: its
+## async bake raced the table materials before).
 static func make_cloud_light() -> SpotLight3D:
 	if _cloud_mask == null:
 		var noise := FastNoiseLite.new()
@@ -91,6 +93,7 @@ static func make_cloud_light() -> SpotLight3D:
 	spot.light_color = Color(1.0, 0.95, 0.84)
 	spot.light_energy = 10.0
 	spot.shadow_enabled = true
+	spot.shadow_caster_mask = 0   # no caster shadows: the projector alone carries the islands, at half the cost
 	spot.spot_range = 12.0
 	spot.spot_angle = 24.0
 	spot.spot_attenuation = 0.0

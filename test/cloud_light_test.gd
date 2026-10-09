@@ -32,6 +32,7 @@ func test_the_sun_scale_dims_every_mood_value_and_restores_it() -> void:
 func test_the_cloud_light_projects_a_soft_mask_through_its_shadow_pass() -> void:
 	var spot: SpotLight3D = auto_free(WorldScript.make_cloud_light())
 	assert_bool(spot.shadow_enabled).is_true()   # without its shadow pass the projector shows nothing
+	assert_int(spot.shadow_caster_mask).is_equal(0)   # no caster in it: the projector alone carries the islands
 	assert_object(spot.light_projector).is_not_null()
 	var mask: Image = spot.light_projector.get_image()
 	var lit := 0
