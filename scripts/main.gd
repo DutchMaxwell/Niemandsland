@@ -2949,6 +2949,20 @@ func _hotseat_verb_refused(unit: GameUnit) -> bool:
 	hotseat_log_refusal(refusal)
 	return true
 
+
+## Step 2.T2b (Q7): whether an off-turn unit's DRAG must snap back — only during the PLAYING phase, so
+## deployment stays free. Logs the line and toasts; true means the drag commits nothing.
+func hotseat_off_turn_drag(unit: GameUnit) -> bool:
+	if unit == null or opr_army_manager == null \
+			or opr_army_manager.game_phase != OPRArmyManager.GamePhase.PLAYING:
+		return false
+	if hotseat_turn_refusal(unit_owner_slot(unit.unit_properties)) == "":
+		return false
+	var text := "%s is not on turn — moved back" % unit.get_name()
+	hotseat_log_refusal(text)
+	_show_toast(text)
+	return true
+
 ## (Re)build the SoloController for the currently designated AI slot (setup wires TurnManager once).
 func _ensure_solo_controller() -> void:
 	# #196 belt-and-braces: in multiplayer the controller exists only for an EXPLICITLY
