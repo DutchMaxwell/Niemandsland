@@ -190,8 +190,9 @@ const EPOCH_63_MELEE_HEIGHT := 63
 ## batch E to 68 with EPOCH_68_MODIFIER_SUM (D21 modifier arithmetic), B8 to 69 with
 ## EPOCH_69_HERO_FOLD (the trainer's arena hero fold; this table's capture already matched it), the
 ## tray-exact series to 70 with EPOCH_70_TRAY_EXACT (the core now plays this table's casualty order,
-## Takedown, Guarded over 9" and Counter) and turns the AI climb on (heights B2, SoloController.climb_on).
-static var rules_epoch: int = 70
+## Takedown, Guarded over 9" and Counter) and turns the AI climb on (heights B2, SoloController.climb_on),
+## and the Rapid Charge Mark writer to 71 with EPOCH_71_RAPID_CHARGE_MARK (#845, the Mark lands on the marked enemy).
+static var rules_epoch: int = 71
 ## The tray-exact series' one bump, mirrored for the table-side gate it carries (the AI climb).
 const EPOCH_70_TRAY_EXACT := 70
 const SPAWN_PROFILES_EPOCH := 8
