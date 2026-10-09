@@ -17,6 +17,7 @@ pub mod gate;
 pub mod fitted;
 pub mod geom;
 pub mod grid;
+pub mod grid_order;
 pub mod io;
 pub mod menu;
 pub mod mission;

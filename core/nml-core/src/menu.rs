@@ -405,6 +405,41 @@ const OBJ_STOP_IN: f64 = 2.0;
 /// displaced by the straight step (at most the live advance band, stopping `OBJ_STOP_IN` from the marker); the
 /// best target by `shoot_ev` from the displaced models (same sight gates and `ev > 0` bar as `best_shoot`) rides
 /// the row. No target in range after the move = no row (RUSH already covers walking without a shot).
+/// The shoot leg's enemy pick, scored from an arbitrary `moved` formation: the best enemy key whose
+/// `shoot_ev` is highest under the HOLD-shoot gates (`State::sees`, plus `State::los_clear` under
+/// `Tuning::shoot_los`). `advance_objective_shoot` calls it with its post-advance `moved`; the grid knob
+/// (step 9) will call it with a candidate cell's formation. Pure extraction — no behaviour change.
+fn best_shoot_from(
+    state: &State, statics: &[UnitStatic], unit: usize, moved: &[[f64; 3]], sc: &mut Scratch, tuning: Tuning,
+) -> Option<usize> {
+    let us = &statics[state.roster.profile[unit]];
+    let (mut best, mut best_ev) = (None, 0.0f64);
+    for e in enemy_keys_tuned(state, unit, tuning.target_units) {
+        if !state.sees(unit, state.key(e)) || (tuning.shoot_los && !state.los_clear(unit, e)) {
+            continue;
+        }
+        let d = if tuning.range_edge {
+            crate::sim::range_gap_in(state, moved, unit, e)
+        } else {
+            geom::dist_in(moved, &state.positions[e])
+        };
+        profiles_of(us, state.alive[unit], d, sc);
+        if tuning.reach_only {
+            crate::sim::reach_rescale(us, state.alive[unit], moved, &state.positions[e], 0.0, sc);
+        }
+        let att = ctx_live(ctx_of(us, state, unit), statics, state, unit, false, CURRENT_RULES_EPOCH);
+        let def = ctx_live(
+            ctx_of(&statics[state.roster.profile[e]], state, e), statics, state, e, false, CURRENT_RULES_EPOCH,
+        );
+        let ev = shoot_ev(&us.shoot, &sc.keep, &sc.attacks, &att, &def, d);
+        if ev > best_ev {
+            best_ev = ev;
+            best = Some(e);
+        }
+    }
+    best
+}
+
 fn advance_objective_shoot(
     state: &State, statics: &[UnitStatic], unit: usize, sc: &mut Scratch, tuning: Tuning,
 ) -> Option<Candidate> {
@@ -428,32 +463,7 @@ fn advance_objective_shoot(
     }
     let k = step_in * IN2M / dx.hypot(dz);
     let moved: Vec<[f64; 3]> = ps.iter().map(|p| [p[0] + dx * k, p[1], p[2] + dz * k]).collect();
-    let us = &statics[state.roster.profile[unit]];
-    let (mut best, mut best_ev) = (None, 0.0f64);
-    for e in enemy_keys_tuned(state, unit, tuning.target_units) {
-        if !state.sees(unit, state.key(e)) || (tuning.shoot_los && !state.los_clear(unit, e)) {
-            continue;
-        }
-        let d = if tuning.range_edge {
-            crate::sim::range_gap_in(state, &moved, unit, e)
-        } else {
-            geom::dist_in(&moved, &state.positions[e])
-        };
-        profiles_of(us, state.alive[unit], d, sc);
-        if tuning.reach_only {
-            crate::sim::reach_rescale(us, state.alive[unit], &moved, &state.positions[e], 0.0, sc);
-        }
-        let att = ctx_live(ctx_of(us, state, unit), statics, state, unit, false, CURRENT_RULES_EPOCH);
-        let def = ctx_live(
-            ctx_of(&statics[state.roster.profile[e]], state, e), statics, state, e, false, CURRENT_RULES_EPOCH,
-        );
-        let ev = shoot_ev(&us.shoot, &sc.keep, &sc.attacks, &att, &def, d);
-        if ev > best_ev {
-            best_ev = ev;
-            best = Some(e);
-        }
-    }
-    let e = best?;
+    let e = best_shoot_from(state, statics, unit, &moved, sc, tuning)?;
     let mut c = Candidate::new(state.key(unit), ADVANCE);
     c.dest = Some([cx + dx * k, ps[0][1], cz + dz * k]);
     c.shoot = Some(state.key(e).to_string());
