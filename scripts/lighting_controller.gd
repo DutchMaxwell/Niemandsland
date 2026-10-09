@@ -12,6 +12,8 @@ var _render_state: RenderState = null
 
 # Current lighting settings
 var current_preset: Dictionary = {}
+## The table world's clouds dim the sun by this factor (set_sun_scale); 1.0 everywhere else.
+var _sun_scale := 1.0
 
 # Lighting definitions backing each ATMOSPHERE mood (Day->Default, Sunset->Warm
 # Sunset, Night->Night, Overcast->Cool Overcast, Rain->Storm). These are no longer a
@@ -185,8 +187,16 @@ func apply_preset(preset_name: String) -> void:
 ## Individual parameter setters
 func set_sun_energy(value: float) -> void:
 	if _directional_light:
-		_directional_light.light_energy = value
+		_directional_light.light_energy = value * _sun_scale
 		current_preset.sun_energy = value
+
+
+## Dims the sun under the table world's clouds (1.0 = the mood's own value). The mood keeps writing its unscaled
+## energy through set_sun_energy, so a blend or the lighting panel never undoes the clouds.
+func set_sun_scale(scale: float) -> void:
+	_sun_scale = scale
+	if _directional_light and current_preset.has("sun_energy"):
+		_directional_light.light_energy = float(current_preset.sun_energy) * _sun_scale
 
 
 func set_sun_color(color: Color) -> void:
