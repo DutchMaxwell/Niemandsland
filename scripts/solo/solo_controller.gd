@@ -3840,6 +3840,17 @@ func _leaf_opener_on(diff: SoloDifficulty) -> bool:
 	return diff != null and diff.leaf_opener and shipped_brain_ready()
 
 
+## Shipped-brain search breadth: the preset's `brain_breadth` AND the brain wired (the hand planner keeps the core default 10/3,
+## its breadth was not measured). env NML_BRAIN_BREADTH=<int> forces it (0 = core default).
+func _brain_breadth(diff: SoloDifficulty) -> int:
+	var forced := OS.get_environment("NML_BRAIN_BREADTH")
+	if forced != "":
+		return maxi(int(forced), 0)
+	if diff != null and diff.brain_knobs and shipped_brain_ready():
+		return diff.brain_breadth
+	return 0
+
+
 ## Hand-planner strength_by_points (A/B 08.10.2026, NOT_WORSE): the preset's `points_strength` flag AND no brain
 ## (the brain path stamps it through brain_knob_stamp). env NML_POINTS=0/1 forces it either way.
 func _points_strength_on(diff: SoloDifficulty) -> bool:
@@ -3869,6 +3880,7 @@ func _apply_aifix(diff: SoloDifficulty) -> void:
 	BattleSim.reply_hold_gate = on
 	AiPlanner.brain_knobs = _brain_knobs_on(diff)
 	AiPlanner.leaf_opener = _leaf_opener_on(diff)
+	AiPlanner.brain_breadth = _brain_breadth(diff)
 	AiPlanner.points_strength = _points_strength_on(diff)
 	AiPlanner.table_fidelity = _table_fidelity_on(diff)
 

@@ -617,6 +617,17 @@ static func leaf_opener_stamp() -> Dictionary:
 	return {"leaf_opener_only": true} if leaf_opener else {}
 
 
+## Core knobs top_k + horizon (plain.rs knobs_of) for the shipped brain: breadth > 0 stamps top_k = breadth, horizon 3 (A/B of
+## record vs 10/3). Set per pick by SoloController._apply_aifix; {} when 0 (byte-identical header).
+static var brain_breadth := 0
+
+
+static func brain_breadth_stamp() -> Dictionary:
+	if brain_breadth <= 0:
+		return {}
+	return {"brain_breadth": brain_breadth, "top_k": brain_breadth, "horizon": 3}
+
+
 ## Hand-planner games (no brain): strength_by_points (acts.rs Knobs, plain.rs knobs_of) measured NOT_WORSE
 ## 08.10.2026. Set per pick by SoloController._apply_aifix; {} when off (byte-identical header).
 static var points_strength := false
