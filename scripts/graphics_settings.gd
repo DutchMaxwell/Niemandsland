@@ -550,10 +550,11 @@ static func table_focus_amount(tier: int) -> float:
 	return 0.11 if tier >= QualityPreset.MEDIUM else 0.0
 
 
-## Light islands (broken-cloud sunlight) on the table world: High and Ultra, on a sunny Day only. The low Sunset sun
-## burns the ruins white and turns the haze milky, so it stays off there until that is tuned.
+## Light islands (broken-cloud sunlight) on the table world: High and Ultra, on a sunny Day or a tuned Sunset. The
+## Sunset run uses milder parameters (TableWorld.cloud_params): the first, untuned version burned the ruins white and
+## turned the haze milky.
 static func cloud_light_enabled(tier: int, mood: String) -> bool:
-	return tier >= QualityPreset.HIGH and mood == "Day"
+	return tier >= QualityPreset.HIGH and mood in ["Day", "Sunset"]
 
 
 ## Wet-ground policy: the Rain mood soaks the table ground on High/Ultra (0.0 = dry, today's surface everywhere
