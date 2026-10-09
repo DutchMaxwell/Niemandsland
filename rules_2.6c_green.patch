@@ -1,0 +1,51 @@
+diff --git a/scripts/main.gd b/scripts/main.gd
+index 3255775c..06d1ea4c 100644
+--- a/scripts/main.gd
++++ b/scripts/main.gd
+@@ -2992,10 +2992,46 @@ func _hotseat_start_round(opener: int) -> void:
+ 	if opener == TwoHumanTurn.NONE:
+ 		opener = _hotseat_turn.slot_a
+ 	await _solo_battleborn_recovery()
++	# Step 2.6c: the two-human Ambush arrival step, ordered by the opener — there is no AI seat to
++	# arrive its own reserves, so both sides are asked here instead.
++	if opr_army_manager.current_round >= 2:
++		await _hotseat_ambush_arrivals(opr_army_manager.current_round, opener)
+ 	_hotseat_turn.start_round(opener, _hotseat_eligible_counts())
+ 	_update_round_button()
+ 
+ 
++## Step 2.6c: the hotseat round-start Ambush step. There is no AI seat to pace its own arrivals, so
++## both human sides are asked to place their reserve units, ordered by the turn state — the opener's
++## side first, then the other (GF/AoF v3.5.1 p.13: "starting with the player that activates next").
++## Solo (human vs NACHTMAHR) keeps `_solo_alternate_ambush_arrivals`; the AI beat is untouched.
++func _hotseat_ambush_arrivals(round_number: int, opener: int) -> void:
++	if not _solo_hotseat_automatic() or solo_controller == null or table == null or opr_army_manager == null:
++		return
++	if round_number < 2:
++		return
++	await _solo_mission_reserve_rolls(round_number)   # D8a: a roles mission's reserve dice; no-op otherwise
++	var saved_human: int = solo_controller.human_slot
++	var saved_ai: int = solo_controller.ai_slot
++	for slot in [opener, 3 - opener]:
++		# The real per-side prompt reuses the tested "human Ambush turn" with the controller's slots
++		# pointed at `slot` (its owner tray, its beacons, the other side as the enemy), restored after.
++		solo_controller.human_slot = slot
++		solo_controller.ai_slot = 3 - slot
++		var pool: Array = []
++		for u in solo_controller.human_reserve_units():
++			var gu := u as GameUnit
++			if gu != null and SoloController.may_arrive_this_round(gu, round_number):
++				pool.append(gu)
++		if pool.is_empty():
++			continue
++		if battle_log != null:
++			_log_rule_event(BattleLog.Category.GENERAL,
++				"P%d Ambush (round %d): place one reserve unit from the tray" % [slot, round_number], true)
++		await _solo_ambush_human_turn(round_number, pool)
++	solo_controller.human_slot = saved_human
++	solo_controller.ai_slot = saved_ai
++
++
+ ## Log an off-turn refusal (shared by the radial Activate door and the combat verbs).
+ func hotseat_log_refusal(text: String) -> void:
+ 	if battle_log != null and text != "":
