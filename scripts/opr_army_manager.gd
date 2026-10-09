@@ -3021,11 +3021,7 @@ func _brighten_ctex_materials(node: Node) -> void:
 			var mat := mi.get_surface_override_material(surface_idx) as StandardMaterial3D
 			if mat == null:
 				continue
-			mat.metallic = 0.0
-			mat.metallic_texture = null
-			mat.roughness = 0.7
-			mat.roughness_texture = null
-			mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+			CtexLoader.brighten_once(mat)
 
 
 ## Returns a copy of [param tex] with a generated mipmap chain, for runtime GLTF
