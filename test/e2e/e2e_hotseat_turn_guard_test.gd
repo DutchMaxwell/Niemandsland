@@ -76,6 +76,9 @@ func test_p1_activates_then_p1_second_unit_is_refused(timeout := 120000) -> void
 func test_p2_may_activate_on_its_turn(timeout := 120000) -> void:
 	var p1a := _register(1, "Rifles", Vector3(-0.3, 0.0, 0.0))
 	var p2 := _register(2, "Raiders", Vector3(0.3, 0.0, 0.0))
+	# A second P2 unit keeps the round alive: from step 2.6a the round ends by itself once BOTH
+	# sides are spent, so a lone P2 unit would close the round on its first activation.
+	_register(2, "Bikes", Vector3(0.3, 0.0, 0.3))
 	_hotseat_automatic()
 	await _activate(p1a)
 	await _activate(p2)
