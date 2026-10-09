@@ -2939,7 +2939,7 @@ func hotseat_record_activation(slot: int) -> void:
 		_hotseat_turn.side_on_turn = _hotseat_turn.slot_a
 	_hotseat_turn.after_activation(slot, _hotseat_eligible_counts())
 	if _hotseat_turn.side_on_turn == TwoHumanTurn.NONE:
-		_hotseat_end_round()
+		await _hotseat_end_round()
 		return
 	_hotseat_handover_line(slot)
 	_update_round_button()
@@ -2980,15 +2980,18 @@ func _hotseat_end_round() -> void:
 		network_manager.broadcast_round_advance()
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL, "Round %d begins" % opr_army_manager.current_round, true)
-	_hotseat_start_round(opener)
+	await _hotseat_start_round(opener)
 
 
-## Begin a hotseat round: the opener takes the turn (a wiped opener yields to the other side).
+## Begin a hotseat round: the opener takes the turn (a wiped opener yields to the other side). Step 2.6b:
+## the round-start Battleborn/Steadfast Shaken-recovery for BOTH sides runs here too — `_solo_round_start`
+## is not reached on a table with no AI seat.
 func _hotseat_start_round(opener: int) -> void:
 	if _hotseat_turn == null:
 		_hotseat_turn = TwoHumanTurn.new()
 	if opener == TwoHumanTurn.NONE:
 		opener = _hotseat_turn.slot_a
+	await _solo_battleborn_recovery()
 	_hotseat_turn.start_round(opener, _hotseat_eligible_counts())
 	_update_round_button()
 
@@ -12708,10 +12711,11 @@ func _reinforcement_human_ghost(original: GameUnit, radii: Array, trect: Rect2, 
 
 ## Round-start Shaken recovery — wave-4 Battleborn (army-book rule, Battle Brothers) and the quick-win
 ## Steadfast, whose official texts are byte-identical: "If a unit where all models have this rule is
-## Shaken at the beginning of the round, roll one die. On a 4+, it stops being Shaken." At round start,
-## every AI Shaken unit with such a rule rolls one real tray die and recovers at the (registry-tuned)
-## target (NOT spending its activation). The human's own units are surfaced as a reminder (the
-## automation never touches the player's markers).
+## Shaken at the beginning of the round, roll one die. On a 4+, it stops being Shaken." At round start
+## every Shaken unit with such a rule rolls one die on its OWNER's tray and recovers at the
+## (registry-tuned) target, NOT spending its activation. Step 2.6b: the human side rolls too, through
+## the `_owner_roll` seam, and gets the same result line — the old human reminder is gone. This changes
+## the human side of solo on purpose.
 func _solo_battleborn_recovery() -> void:
 	if opr_army_manager == null:
 		return
@@ -12732,9 +12736,18 @@ func _solo_battleborn_recovery() -> void:
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s %s" % [
 					rule, gu.get_name(), ("recovers from Shaken (%d+)" % target if recovered else "stays Shaken")], true)
-		elif battle_log != null:
-			battle_log.log_event(BattleLog.Category.COMBAT,
-				"%s: roll for %s to recover from Shaken (%d+)" % [rule, gu.get_name(), target], true)
+		else:
+			# Step 2.6b: the human side rolls too — on its OWN owner's tray (`_owner_roll`: our tray
+			# locally, the remote owner's online, a visible auto-roll when the seat is empty) and logs
+			# the same one result line as the AI.
+			var face: Array = await _owner_roll(gu, 1, target, "battleborn", "%s recovery" % rule)
+			var recovered: bool = not face.is_empty() and AiCombatMath.battleborn_recovers(int(face[0]), target)
+			if recovered and radial_menu_controller != null:
+				radial_menu_controller.card_toggle_shaken(gu)   # clears Shaken via the state+marker+MP seam
+				_solo_mirror_shaken(gu)
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s %s" % [
+					rule, gu.get_name(), ("recovers from Shaken (%d+)" % target if recovered else "stays Shaken")], true)
 
 
 ## The round-start Shaken-recovery rule a unit benefits from ("" when none). Battleborn keeps its wave-4

@@ -573,7 +573,9 @@ func _toggle_activation(context: Dictionary) -> void:
 		await _solo_activation_rules(game_unit)
 		game_unit.activate(1)
 		if main_node != null and main_node.has_method("hotseat_record_activation"):
-			main_node.call("hotseat_record_activation", slot)
+			# 2.6b: awaiting the door lets a round end (and its round-start recovery roll) finish
+			# before the activation is closed out.
+			await main_node.call("hotseat_record_activation", slot)
 		_update_activated_markers(game_unit)
 		unit_activated.emit(game_unit)
 
