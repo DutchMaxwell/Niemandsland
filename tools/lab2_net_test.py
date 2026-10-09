@@ -32,6 +32,13 @@ except ImportError:
     NEED = "onnxruntime not installed (CI); the laptop gate runs this in ~/.cache/nml-stage0/venv"
 needs_ort = pytest.mark.skipif(NEED is not None, reason=NEED or "")
 
+try:
+    import numpy  # noqa: F401
+    NEED_NP = None
+except ImportError:
+    NEED_NP = "numpy not installed"
+needs_np = pytest.mark.skipif(NEED_NP is not None, reason=NEED_NP or "")
+
 
 def core_token(row):
     """A flat parity-corpus row as the core's own token dict: 32 x 91 unit window (one 0 pad column)."""
@@ -143,3 +150,56 @@ def test_dynamic_batch_packs_exact_rows_and_matches_the_static_values():
     static.session.run = lambda n, f: (seen.append(f["units"].shape[0]), real_run(n, f))[1]
     static.values(toks)
     assert seen == [32]
+
+
+class _FakeValueSession:
+    """A session whose graph exposes output [0] = mean, and, with members, output [1] = per-member (n, 2).
+
+    No .onnx file, no GPU: `run` fabricates the two outputs for whatever batch it is handed, so the
+    batching walk can be exercised directly.
+    """
+
+    def __init__(self, with_members):
+        self.with_members = with_members
+
+    def get_outputs(self):
+        return [object(), object()] if self.with_members else [object()]
+
+    def run(self, names, feed):
+        n = feed["units"].shape[0]
+        mean = numpy.arange(1, n + 1, dtype=numpy.float32)
+        if not self.with_members:
+            return [mean]
+        return [mean, numpy.stack([mean - 0.25, mean + 0.25], axis=1)]
+
+
+def fake_net(with_members):
+    n = net.ShippedNet.__new__(net.ShippedNet)
+    n.np = numpy
+    n.rows, n.width, n.static_batch = 32, 91, 32
+    n.weight, n.counts = 1.0, {}
+    n.session = _FakeValueSession(with_members)
+    return n
+
+
+def fake_token():
+    return {"units": [[0.0] * 91] * 32, "units_mask": [0] * 32,
+            "objs": [[0.0] * 12] * 6, "objs_mask": [0] * 6,
+            "terr": [[0.0] * 12] * 18, "glob": [0.0] * 16}
+
+
+@needs_np
+def test_member_values_shape_and_mean_match_values():
+    n = fake_net(with_members=True)
+    toks = [fake_token() for _ in range(3)]
+    members = n.member_values(toks)
+    assert members.shape == (3, 2)
+    assert numpy.allclose(members.mean(axis=1), n.values(toks), atol=1e-6)
+
+
+@needs_np
+def test_member_values_refuses_without_output_one():
+    n = fake_net(with_members=False)
+    with pytest.raises(net.NetRefused) as excinfo:
+        n.member_values([fake_token()])
+    assert "output" in str(excinfo.value)

@@ -65,11 +65,10 @@ class ShippedNet:
         self.weight = float(weight)
         self.counts = {}
 
-    def values(self, tokens):
-        """One value per token dict, in order; the same packing as `OnnxHook::run_tokens`."""
+    def _feeds(self, tokens):
+        """The packing walk shared by `values` and `member_values`; yields (feed, live_leaf_count)."""
         np, rows, width = self.np, self.rows, self.width
         cap = self.static_batch or MAX_DYNAMIC_BATCH
-        out = []
         for start in range(0, len(tokens), cap):
             chunk = tokens[start:start + cap]
             wide = self.static_batch or len(chunk)
@@ -89,8 +88,23 @@ class ShippedNet:
                 feed["objs_mask"][i] = t["objs_mask"]
                 feed["terr"][i] = t["terr"]
                 feed["glob"][i] = t["glob"]
-            out.extend(float(v) for v in self.session.run(None, feed)[0][:len(chunk)])
+            yield feed, len(chunk)
+
+    def values(self, tokens):
+        """One value per token dict, in order; the same packing as `OnnxHook::run_tokens`."""
+        out = []
+        for feed, n in self._feeds(tokens):
+            out.extend(float(v) for v in self.session.run(None, feed)[0][:n])
         return out
+
+    def member_values(self, tokens):
+        """Per-member values per token dict, in order; the exported members graph's output [1] as (n, 2)."""
+        if len(self.session.get_outputs()) < 2:
+            raise NetRefused("graph exposes no output [1] for member values (only %d output(s))" % len(self.session.get_outputs()))
+        out = []
+        for feed, n in self._feeds(tokens):
+            out.extend(row for row in self.session.run(None, feed)[1][:n])
+        return self.np.asarray(out, self.np.float32).reshape(len(tokens), 2)
 
     def hook(self, side):
         self.counts.setdefault(side, {"calls": 0, "leaves": 0})
