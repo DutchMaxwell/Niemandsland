@@ -1098,10 +1098,18 @@ impl<'a> Search<'a> {
                     let mut cand = Candidate::new(&key, kind);
                     cand.dest = Some(dest);
                     if kind == crate::sim::ADVANCE {
-                        cand.shoot = crate::menu::best_shoot_from(state, statics, u, &moved, sc, tuning)
-                            .map(|e| state.key(e).to_string());
+                        if let Some(e) = crate::menu::best_shoot_from(state, statics, u, &moved, sc, tuning) {
+                            // LAZARUS M1 step 9d — the moved shot must see the target FROM THE MOVED
+                            // cell; a blocked line drops the candidate, never declines the act.
+                            let blocked = terrain.is_valid() && terrain.los_blocked(
+                                crate::geom::centre(&moved), crate::geom::centre(&state.positions[e]));
+                            if blocked {
+                                continue;
+                            }
+                            cand.shoot = Some(state.key(e).to_string());
+                        }
                     }
-                    let next = self.roll.policy.resolve_root(state, &cand)?;
+                    let Ok(next) = self.roll.policy.resolve_root(state, &cand) else { continue };
                     let s = score_with(&next, statics, player,
                         &reply_threat_opts(statics, &next, player, seams.reply_opts()), fit);
                     let ends = self.rollout_of(state, &cand, player, sc)?;
