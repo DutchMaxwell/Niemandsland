@@ -1857,3 +1857,29 @@ fn grid_k_widens_the_chosen_unit() {
     }
     assert!(grew > 0, "grid_k widened no act of the corpus");
 }
+
+/// LAZARUS M1 step 9b identity gate — `grid_k` 0 (absent OR explicit 0) is byte-identical to the
+/// baseline: pool, rollout values to the bit, pick, n_hand.
+#[test]
+fn grid_off_is_byte_identical() {
+    let c = corpus();
+    let statics = build_act_statics(&c, REPO);
+    let mut sc = Scratch::default();
+    let mut checked = 0usize;
+    for (ai, act) in c.acts.iter().enumerate() {
+        let (hb, ho) = (SeatLog::new(act.statics.opener_seat), SeatLog::new(act.statics.opener_seat));
+        let mut k = c.knobs; k.grid_k = 0;
+        let mk = |kk: Knobs| Rollout::new(Policy::new(&statics, &c.terrain, seams_of(&c)), kk);
+        let mut base = Search::new(mk(c.knobs), &act.statics);
+        base.leaf_value = Some(&hb); base.leaf_value_w = 1.0;
+        let Ok(want) = base.run(&act.state, act.player, &mut sc, None) else { continue };
+        let mut off = Search::new(mk(k), &act.statics);
+        off.leaf_value = Some(&ho); off.leaf_value_w = 1.0;
+        let got = off.run(&act.state, act.player, &mut sc, None).unwrap_or_else(|e| panic!("act {ai}: {e:?}"));
+        assert_eq!(got.pool_idx, want.pool_idx, "act {ai}: grid_k 0 moved the pool");
+        assert_eq!(got.unit_key, want.unit_key, "act {ai}: grid_k 0 moved the pick");
+        assert_eq!(got.n_hand, want.scored.len(), "act {ai}: n_hand off");
+        checked += 1;
+    }
+    assert!(checked > 0, "the corpus declined everywhere — the gate proves nothing");
+}

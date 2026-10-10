@@ -146,6 +146,9 @@ pub struct Pick {
     pub tree: Option<TreeTrace>,
     /// `deadline_us` on a pool pick — `Some` ONLY when the knob is set.
     pub deadline: Option<DeadlineTrace>,
+    /// LAZARUS M1 step 9 — build index where the HAND rows end and the grid rows begin
+    /// (`scored.len()` after the prefilter). Equals `scored.len()` when the grid is off.
+    pub n_hand: usize,
 }
 
 /// The `deadline_us` stamp of a pool pick: rollouts completed, whether the
@@ -651,7 +654,7 @@ impl<'a> Search<'a> {
             // different dictionary. The caller routes, this function does not lie.
             return Err(Unsupported::OnePlyDegrade);
         }
-        let (base, scored) = self.prefilter(state, player, sc)?;
+        let (base, mut scored) = self.prefilter(state, player, sc)?;
         if scored.is_empty() {
             return Err(Unsupported::NoCandidate); // `{"used": false}`
         }
@@ -801,6 +804,13 @@ impl<'a> Search<'a> {
                 runner_idx = pos_of[i] as i64;
             }
         }
+        // LAZARUS M1 step 9 — widen the chosen units with reachable 1-inch cells (default off).
+        let n_hand = scored.len();
+        let pool_cut = deadline_trace.as_ref().is_some_and(|d| d.cut);
+        if self.roll.knobs.grid_k > 0 {
+            self.widen(state, player, sc, &mut scored, &mut order, &mut pos_of, &mut pool, &mut rs,
+                       &mut best, &mut runner, &mut best_idx, &mut runner_idx, &mut last_leaf, pool_cut)?;
+        }
         let (bi, brs) = best.expect("a non-empty scored array always yields a non-empty pool");
 
         // PHASE 5 — the stochastic arbitration (ai_planner.gd:231-265).
@@ -894,6 +904,7 @@ impl<'a> Search<'a> {
             explored,
             cands: scored.iter().map(|r| r.cand.clone()).collect(),
             pool_completed,
+            n_hand,
             tree: None,
             deadline: deadline_trace.map(|d| DeadlineTrace { elapsed_us: t0.elapsed().as_micros() as u64, ..d }),
         })
@@ -959,6 +970,112 @@ impl<'a> Search<'a> {
         nested.run(st, opp, sc, None)
     }
 
+    /// LAZARUS M1 step 9b — widen the chosen units with reachable 1-inch cells; the pool's own
+    /// rollout prices them. A deadline-cut pool is skipped.
+    #[allow(clippy::too_many_arguments)]
+    fn widen(
+        &self, state: &State, player: i64, sc: &mut Scratch,
+        scored: &mut Vec<ScoredRow>, order: &mut Vec<usize>, pos_of: &mut Vec<usize>,
+        pool: &mut Vec<usize>, rs: &mut Vec<(i64, f64)>,
+        best: &mut Option<(usize, f64)>, runner: &mut Option<(usize, f64)>,
+        best_idx: &mut i64, runner_idx: &mut i64, last_leaf: &mut Option<State>, pool_cut: bool,
+    ) -> Result<(), Unsupported> {
+        if pool_cut {
+            return Ok(());
+        }
+        let (statics, terrain, fit, tuning, seams) = (self.roll.policy.statics, self.roll.policy.terrain,
+            self.roll.policy.fit, self.roll.policy.tuning, self.roll.policy.seams);
+        let owned = if self.roll.policy.reach.is_none() {
+            crate::sim::reach_index_for_state(state, terrain)
+        } else {
+            None
+        };
+        let Some(reach) = self.roll.policy.reach.or(owned.as_ref()) else { return Ok(()) };
+        let want = self.roll.knobs.grid_units.max(1);
+        let mut cand_idx: Vec<usize> = Vec::new();
+        cand_idx.push(best.as_ref().map_or(0, |&(i, _)| i));
+        if let Some(&(i, _)) = runner.as_ref() {
+            cand_idx.push(i);
+        }
+        cand_idx.extend(pool.iter().copied());
+        let mut units: Vec<usize> = Vec::new();
+        for i in cand_idx {
+            if units.len() >= want {
+                break;
+            }
+            let Some(&u) = state.roster.index.get(&scored[i].unit_key) else { continue };
+            if units.contains(&u) || state.shaken[u]
+                || crate::menu::forces_hold(&state.profile(u).special_rules)
+            {
+                continue;
+            }
+            units.push(u);
+        }
+        let mut grid_rows: Vec<ScoredRow> = Vec::new();
+        let mut ends_of: Vec<Vec<State>> = Vec::new();
+        for &u in &units {
+            let key = state.key(u).to_string();
+            let ps = state.positions[u].clone();
+            if ps.is_empty() { continue; }
+            let centre = crate::geom::centre(&ps);
+            let (adv, rush) = crate::sim::live_bands_of(statics, state, u);
+            for (kind, band) in [(crate::sim::ADVANCE, adv), (crate::sim::RUSH, rush)] {
+                let cells = crate::grid::reachable_cells(state, statics, terrain, reach, u, band);
+                let order_cells: Vec<(u16, u8)> = cells.iter().map(|&c| (c, 0u8)).collect();
+                let mut seen: Vec<[f64; 3]> = scored.iter().filter_map(|r| r.cand.dest).collect();
+                for &(cell, _source) in order_cells.iter().take(self.roll.knobs.grid_k) {
+                    let p = crate::grid::cell_centre(terrain, cell, centre[1]);
+                    let dest = [p[0] as f64, p[1] as f64, p[2] as f64];
+                    let (dx, dz) = (dest[0] - centre[0] as f64, dest[2] - centre[2] as f64);
+                    let moved: Vec<[f64; 3]> = ps.iter().map(|q| [q[0] + dx, q[1], q[2] + dz]).collect();
+                    if seen.iter().any(|d| (d[0] - dest[0]).abs() < 1e-6 && (d[2] - dest[2]).abs() < 1e-6) {
+                        continue;
+                    }
+                    let mut cand = Candidate::new(&key, kind);
+                    cand.dest = Some(dest);
+                    if kind == crate::sim::ADVANCE {
+                        cand.shoot = crate::menu::best_shoot_from(state, statics, u, &moved, sc, tuning)
+                            .map(|e| state.key(e).to_string());
+                    }
+                    let next = self.roll.policy.resolve_root(state, &cand)?;
+                    let s = score_with(&next, statics, player,
+                        &reply_threat_opts(statics, &next, player, seams.reply_opts()), fit);
+                    let ends = self.rollout_of(state, &cand, player, sc)?;
+                    seen.push(dest);
+                    grid_rows.push(ScoredRow { idx: scored.len() + grid_rows.len(), unit_key: key.clone(), cand, score: s });
+                    ends_of.push(ends);
+                }
+            }
+        }
+        for (k, ends) in ends_of.iter().enumerate() {
+            let v = self.roll.blend_score_leaf(ends, player, self.act.opener_seat, &[], 0.0);
+            let i = grid_rows[k].idx;
+            pool.push(i);
+            rs.push((i as i64, v));
+            if best.as_ref().is_none_or(|&(_, b)| v > b) {
+                *runner = *best;
+                *best = Some((i, v));
+                if let Some(e) = ends.last() {
+                    *last_leaf = Some(e.clone());
+                }
+            } else if runner.as_ref().is_none_or(|&(_, r)| v > r) {
+                *runner = Some((i, v));
+            }
+        }
+        for row in grid_rows {
+            scored.push(row);
+        }
+        *order = rank(scored, self.bend.idx_tiebreak);
+        pos_of.clear();
+        pos_of.resize(scored.len(), 0);
+        for (r, &i) in order.iter().enumerate() {
+            pos_of[i] = r;
+        }
+        *best_idx = pos_of[best.as_ref().expect("a widened pool still has a best").0] as i64;
+        *runner_idx = runner.as_ref().map_or(-1, |&(i, _)| pos_of[i] as i64);
+        Ok(())
+    }
+
     /// The `deadline_us` fallback when the deadline hit before the first
     /// rollout: the prefilter's top row (deterministic, already scored,
     /// legal), valued at its prefilter score, with no rollout trace.
@@ -987,6 +1104,7 @@ impl<'a> Search<'a> {
             explored: false,
             cands: scored.iter().map(|r| r.cand.clone()).collect(),
             pool_completed: None,
+            n_hand: scored.len(),
             tree: None,
             deadline: Some(DeadlineTrace {
                 completed: 0, cut: true, fallback: Some(fallback), elapsed_us: t0.elapsed().as_micros() as u64,
@@ -1076,6 +1194,7 @@ impl<'a> Search<'a> {
             explored: false,
             cands: scored.iter().map(|r| r.cand.clone()).collect(),
             pool_completed: None,
+            n_hand: scored.len(),
             tree: Some(trace),
             deadline: None,
         })
