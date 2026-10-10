@@ -1883,3 +1883,26 @@ fn grid_off_is_byte_identical() {
     }
     assert!(checked > 0, "the corpus declined everywhere — the gate proves nothing");
 }
+
+/// LAZARUS M1 step 9c RED — `grid_k > 0` with no leaf hook must decline: the grid rows are priced by
+/// the pool's own (opener) leaf, so a hookless grid search is refused rather than mispriced.
+#[test]
+fn grid_needs_opener_leaf() {
+    let c = corpus();
+    let statics = build_act_statics(&c, REPO);
+    let mut sc = Scratch::default();
+    let mut seen = 0usize;
+    for (ai, act) in c.acts.iter().enumerate() {
+        let off = Rollout::new(Policy::new(&statics, &c.terrain, seams_of(&c)), c.knobs);
+        let Ok(_) = Search::new(off, &act.statics).run(&act.state, act.player, &mut sc, None) else { continue };
+        let mut k = c.knobs;
+        k.grid_k = 4; k.grid_units = 1;
+        let on = Rollout::new(Policy::new(&statics, &c.terrain, seams_of(&c)), k);
+        if Search::new(on, &act.statics).run(&act.state, act.player, &mut sc, None).is_err() {
+            seen += 1;
+        } else {
+            panic!("act {ai}: grid_k without a leaf hook was not refused");
+        }
+    }
+    assert!(seen > 0, "the corpus declined everywhere — the gate proves nothing");
+}
