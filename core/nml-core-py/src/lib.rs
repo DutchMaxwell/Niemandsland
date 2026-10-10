@@ -927,6 +927,10 @@ impl Core {
         m.insert("pool_wall_ms".into(), self.knobs.pool_wall_ms.into());
         m.insert("deadline_us".into(), self.knobs.deadline_us.into());
         m.insert("deadline_after_preselect".into(), self.knobs.deadline_after_preselect.into());
+        m.insert("grid_k".into(), self.knobs.grid_k.into());
+        m.insert("grid_units".into(), self.knobs.grid_units.into());
+        m.insert("grid_proposer".into(), self.knobs.grid_proposer.into());
+        m.insert("grid_margin".into(), self.knobs.grid_margin.into());
         m.insert("tree_widen".into(), self.knobs.tree_widen.into());
         m.insert("tree_puct".into(), self.knobs.tree_puct.into());
         m.insert("tree_opponent_own_leaf".into(), self.knobs.tree_opponent_own_leaf.into());
