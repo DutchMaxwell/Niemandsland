@@ -463,6 +463,11 @@ pub struct Knobs {
     /// keeps the raw value.
     #[serde(default)]
     pub grid_margin: f64,
+    /// PREREG_C Arm C — the shuffled-judge control. Nonzero = permute this decision's per-cell judge
+    /// values among the widened grid rows before ranking, seeded by this value mixed with `Search::sig`.
+    /// 0 (default) = off, byte-identical to Arm B (`grid_k` alone).
+    #[serde(default)]
+    pub grid_shuffle: u64,
 }
 
 /// The current rule-set generation (see `Knobs`/`Seams::rules_epoch`, `rule_on`).
@@ -1612,6 +1617,7 @@ impl Default for Knobs {
             grid_units: 0,
             grid_proposer: 0,
             grid_margin: 0.0,
+            grid_shuffle: 0,
         }
     }
 }

@@ -943,6 +943,7 @@ impl Core {
         m.insert("grid_units".into(), self.knobs.grid_units.into());
         m.insert("grid_proposer".into(), self.knobs.grid_proposer.into());
         m.insert("grid_margin".into(), self.knobs.grid_margin.into());
+        m.insert("grid_shuffle".into(), self.knobs.grid_shuffle.into());
         m.insert("tree_widen".into(), self.knobs.tree_widen.into());
         m.insert("tree_puct".into(), self.knobs.tree_puct.into());
         m.insert("tree_opponent_own_leaf".into(), self.knobs.tree_opponent_own_leaf.into());

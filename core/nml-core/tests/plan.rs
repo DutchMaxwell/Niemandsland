@@ -1987,3 +1987,106 @@ fn grid_moved_cell_without_los_is_skipped_not_declined() {
     assert!(checked > 0, "the corpus declined everywhere — the gate proves nothing");
     assert_eq!(declined, 0, "grid_k declined an act the hand search answered");
 }
+
+// ------------------------- PREREG_C Arm C — the shuffled-judge control (`Knobs::grid_shuffle`) ---
+
+/// Arm C's judge values: DISTINCT per leaf (index x 1000), so the widened grid rows carry distinct
+/// per-cell values and a permutation among them is visible in `Pick::rs`.
+struct CellValueLog;
+
+impl LeafValue for CellValueLog {
+    fn value(&self, leaves: &[&nml_core::State], _side: i64) -> Result<Vec<f64>, Unsupported> {
+        Ok((0..leaves.len()).map(|j| j as f64 * 1000.0).collect())
+    }
+}
+
+/// PREREG_C Arm C RED — `grid_shuffle` permutes this decision's per-candidate cell values among the
+/// widened grid rows before ranking: two seeds keep the SAME value multiset but a DIFFERENT
+/// row->value (hence winner) assignment. Inert on a tree that ignores the knob.
+#[test]
+fn grid_shuffle_seed_permutes_the_cell_values() {
+    let c = corpus();
+    let statics = build_act_statics(&c, REPO);
+    let mut sc = Scratch::default();
+    let hook = CellValueLog;
+    let mut moved = 0usize;
+    let mut checked = 0usize;
+    for (ai, act) in c.acts.iter().enumerate() {
+        let mut run = |seed: u64| {
+            let mut k = c.knobs; k.grid_k = 4; k.grid_units = 1; k.grid_shuffle = seed;
+            let mut s = Search::new(Rollout::new(Policy::new(&statics, &c.terrain, seams_of(&c)), k), &act.statics);
+            s.leaf_value = Some(&hook); s.leaf_value_w = 1.0;
+            s.run(&act.state, act.player, &mut sc, None)
+        };
+        let (Ok(off), Ok(s1)) = (run(0), run(1)) else { continue };
+        checked += 1;
+        let bits = |p: &Pick| { let mut v: Vec<u64> = p.rs.iter().map(|&(_, x)| x.to_bits()).collect(); v.sort(); v };
+        assert_eq!(bits(&off), bits(&s1), "act {ai}: the shuffle changed the grid value multiset, not just the order");
+        if off.rs != s1.rs { moved += 1; }
+    }
+    assert!(checked > 0, "the corpus declined everywhere — the gate proves nothing");
+    assert!(moved > 0, "grid_shuffle moved no cell value assignment — the shuffle is inert");
+}
+
+/// PREREG_C Arm C identity — `grid_shuffle` 0 (default) is byte-identical to Arm B (`grid_k` alone):
+/// same pool, rows, per-row values to the bit, grid trace and pick.
+#[test]
+fn grid_shuffle_off_is_byte_identical() {
+    let c = corpus();
+    let statics = build_act_statics(&c, REPO);
+    let mut sc = Scratch::default();
+    let hook = CellValueLog;
+    let mut checked = 0usize;
+    for (ai, act) in c.acts.iter().enumerate() {
+        let mk = |k: Knobs| {
+            let mut s = Search::new(Rollout::new(Policy::new(&statics, &c.terrain, seams_of(&c)), k), &act.statics);
+            s.leaf_value = Some(&hook); s.leaf_value_w = 1.0;
+            s
+        };
+        let mut b = c.knobs; b.grid_k = 4; b.grid_units = 1;
+        let mut o = c.knobs; o.grid_k = 4; o.grid_units = 1; o.grid_shuffle = 0;
+        let (Ok(base), Ok(off)) =
+            (mk(b).run(&act.state, act.player, &mut sc, None), mk(o).run(&act.state, act.player, &mut sc, None)) else { continue };
+        checked += 1;
+        assert_eq!(off.pool_idx, base.pool_idx, "act {ai}: grid_shuffle 0 moved the pool");
+        assert_eq!(off.unit_key, base.unit_key, "act {ai}: grid_shuffle 0 moved the pick");
+        assert_eq!(off.scored, base.scored, "act {ai}: grid_shuffle 0 moved the rows");
+        assert_eq!(off.grid, base.grid, "act {ai}: grid_shuffle 0 moved the trace");
+        for (g, w) in off.rs.iter().zip(&base.rs) {
+            assert_eq!((g.0, g.1.to_bits()), (w.0, w.1.to_bits()), "act {ai}: grid_shuffle 0 moved a value");
+        }
+    }
+    assert!(checked > 0, "the corpus declined everywhere — the gate proves nothing");
+}
+
+/// PREREG_C Arm C control that CAN fail — the shuffle only REASSIGNS the grid rows' own values, so it
+/// cannot raise the best grid value (a gainless Arm B stays gainless in C); Arm C built from a copy of
+/// A (`grid_k` 0: Arm B == A) adds nothing at all.
+#[test]
+fn grid_shuffle_cannot_conjure_a_signal() {
+    let c = corpus();
+    let statics = build_act_statics(&c, REPO);
+    let mut sc = Scratch::default();
+    let hook = CellValueLog;
+    let mut checked = 0usize;
+    for (ai, act) in c.acts.iter().enumerate() {
+        let mut run = |k: Knobs| {
+            let mut s = Search::new(Rollout::new(Policy::new(&statics, &c.terrain, seams_of(&c)), k), &act.statics);
+            s.leaf_value = Some(&hook); s.leaf_value_w = 1.0;
+            s.run(&act.state, act.player, &mut sc, None)
+        };
+        let mut on = c.knobs; on.grid_k = 4; on.grid_units = 1; on.grid_shuffle = 1;
+        let mut off = c.knobs; off.grid_k = 4; off.grid_units = 1; off.grid_shuffle = 0;
+        let (Ok(b), Ok(a)) = (run(off), run(on)) else { continue };
+        checked += 1;
+        let maxv = |p: &Pick| p.rs.iter().map(|&(_, v)| v).fold(f64::NEG_INFINITY, f64::max);
+        assert_eq!(maxv(&a).to_bits(), maxv(&b).to_bits(), "act {ai}: the shuffle raised the best grid value");
+        // Arm C built from a copy of A: grid_k 0 (no grid rows) leaves the shuffle nothing to move.
+        let mut c0on = c.knobs; c0on.grid_k = 0; c0on.grid_shuffle = 7;
+        let mut c0off = c.knobs; c0off.grid_k = 0; c0off.grid_shuffle = 0;
+        let (Ok(q), Ok(p)) = (run(c0off), run(c0on)) else { continue };
+        assert_eq!(p.unit_key, q.unit_key, "act {ai}: Arm C from a copy of A moved the pick");
+        assert!(p.grid.is_none(), "act {ai}: Arm C from a copy of A stamped a grid trace");
+    }
+    assert!(checked > 0, "the corpus declined everywhere — the gate proves nothing");
+}
