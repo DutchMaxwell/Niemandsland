@@ -1136,10 +1136,22 @@ impl<'a> Search<'a> {
             }
         }
         let mut off = 0usize;
-        for (k, ends) in ends_of.iter().enumerate() {
+        let mut cell_v: Vec<f64> = Vec::with_capacity(ends_of.len());
+        for ends in ends_of.iter() {
             let slice: &[f64] = if vals.is_empty() { &[] } else { &vals[off..] };
-            let v = self.roll.blend_score_leaf(ends, player, self.act.opener_seat, slice, self.leaf_value_w);
+            cell_v.push(self.roll.blend_score_leaf(ends, player, self.act.opener_seat, slice, self.leaf_value_w));
             off += ends.len();
+        }
+        // PREREG_C Arm C — the shuffled-judge control: permute this decision's per-cell judge values
+        // among the grid rows before ranking; `grid_shuffle` 0 (default) = off, byte-identical to Arm B.
+        if self.roll.knobs.grid_shuffle != 0 && cell_v.len() > 1 {
+            let mut rng = GodotRng::new((self.roll.knobs.grid_shuffle as i64) ^ self.sig.unwrap_or(0));
+            for i in (1..cell_v.len()).rev() {
+                cell_v.swap(i, rng.randi_range(0, i as i64) as usize);
+            }
+        }
+        for (k, ends) in ends_of.iter().enumerate() {
+            let v = cell_v[k];
             let i = grid_rows[k].idx;
             let adj = v - self.roll.knobs.grid_margin;
             pool.push(i);

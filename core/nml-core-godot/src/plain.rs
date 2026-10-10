@@ -1173,6 +1173,7 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         grid_units: dint(d, "grid_units", dflt.grid_units as i64) as usize,
         grid_proposer: dint(d, "grid_proposer", dflt.grid_proposer),
         grid_margin: dnum(d, "grid_margin", dflt.grid_margin),
+        grid_shuffle: dint(d, "grid_shuffle", dflt.grid_shuffle as i64) as u64,
     }
 }
 
