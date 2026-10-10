@@ -149,6 +149,8 @@ pub struct Pick {
     /// LAZARUS M1 step 9 — build index where the HAND rows end and the grid rows begin
     /// (`scored.len()` after the prefilter). Equals `scored.len()` when the grid is off.
     pub n_hand: usize,
+    /// LAZARUS M1 step 9 — the grid-widening trace, `Some` ONLY on a pick the `grid_k` knob widened.
+    pub grid: Option<GridTrace>,
 }
 
 /// The `deadline_us` stamp of a pool pick: rollouts completed, whether the
@@ -164,6 +166,35 @@ pub struct DeadlineTrace {
     /// `deadline_after_preselect`: microseconds the root preselection took (the
     /// planner call to the clock start) — `Some` ONLY when that knob is on.
     pub preselect_us: Option<u64>,
+}
+
+/// LAZARUS M1 step 9 — the grid-widening trace, `Some` ONLY on a pick the `grid_k` knob widened.
+/// `units` widened (best, runner-up, then pool rank); `reachable` cells offered; `proposed` after
+/// the `propose_order` prefix; `deduped` landing duplicates; `landed_far` > 1" from every hand
+/// landing; `completed` priced by the leaf; `cut` pool already deadline-cut; `batches` leaf batches.
+#[derive(Debug, Clone, PartialEq)]
+pub struct GridTrace {
+    pub rows: Vec<GridRow>,
+    pub units: usize,
+    pub reachable: usize,
+    pub proposed: usize,
+    pub deduped: usize,
+    pub landed_far: usize,
+    pub completed: usize,
+    pub cut: bool,
+    pub batches: usize,
+}
+
+/// One widened grid row: build-order `idx` (>= `Pick::n_hand`), cell id, proposer `source`
+/// (0 = ring shell, 1 = uniform tail), rank in the proposal order, and the landing distance (in)
+/// from the hand landing it was derived from.
+#[derive(Debug, Clone, PartialEq)]
+pub struct GridRow {
+    pub idx: i64,
+    pub cell: u16,
+    pub source: u8,
+    pub rank: usize,
+    pub landing: f64,
 }
 
 /// NML-1165 R4 (DESIGN_value_net §7) — the LEAF VALUE seam. `Search::run`
@@ -533,6 +564,14 @@ impl<'a> Search<'a> {
         if self.leaf_value_w != 0.0 && self.leaf_value.is_none() {
             return Err(Unsupported::LeafValueMissing);
         }
+        // LAZARUS M1 step 9 — the grid knobs: the learned prior is declined until step 16, and the
+        // grid rows must be priced by the pool's own (opener) leaf, so a hookless search declines.
+        if self.roll.knobs.grid_proposer != 0 {
+            return Err(Unsupported::GridPriorMissing);
+        }
+        if self.roll.knobs.grid_k > 0 && self.leaf_value.is_none() {
+            return Err(Unsupported::GridNeedsOpenerLeaf);
+        }
         Ok(())
     }
 
@@ -807,10 +846,12 @@ impl<'a> Search<'a> {
         // LAZARUS M1 step 9 — widen the chosen units with reachable 1-inch cells (default off).
         let n_hand = scored.len();
         let pool_cut = deadline_trace.as_ref().is_some_and(|d| d.cut);
-        if self.roll.knobs.grid_k > 0 {
+        let grid = if self.roll.knobs.grid_k > 0 {
             self.widen(state, player, sc, &mut scored, &mut order, &mut pos_of, &mut pool, &mut rs,
-                       &mut best, &mut runner, &mut best_idx, &mut runner_idx, &mut last_leaf, pool_cut)?;
-        }
+                       &mut best, &mut runner, &mut best_idx, &mut runner_idx, &mut last_leaf, pool_cut)?
+        } else {
+            None
+        };
         let (bi, brs) = best.expect("a non-empty scored array always yields a non-empty pool");
 
         // PHASE 5 — the stochastic arbitration (ai_planner.gd:231-265).
@@ -905,6 +946,7 @@ impl<'a> Search<'a> {
             cands: scored.iter().map(|r| r.cand.clone()).collect(),
             pool_completed,
             n_hand,
+            grid,
             tree: None,
             deadline: deadline_trace.map(|d| DeadlineTrace { elapsed_us: t0.elapsed().as_micros() as u64, ..d }),
         })
@@ -970,8 +1012,8 @@ impl<'a> Search<'a> {
         nested.run(st, opp, sc, None)
     }
 
-    /// LAZARUS M1 step 9b — widen the chosen units with reachable 1-inch cells; the pool's own
-    /// rollout prices them. A deadline-cut pool is skipped.
+    /// LAZARUS M1 step 9 — widen the chosen units with reachable 1-inch cells (priced by the pool's
+    /// own leaf); a deadline-cut pool is skipped and stamped (`cut: true`).
     #[allow(clippy::too_many_arguments)]
     fn widen(
         &self, state: &State, player: i64, sc: &mut Scratch,
@@ -979,10 +1021,15 @@ impl<'a> Search<'a> {
         pool: &mut Vec<usize>, rs: &mut Vec<(i64, f64)>,
         best: &mut Option<(usize, f64)>, runner: &mut Option<(usize, f64)>,
         best_idx: &mut i64, runner_idx: &mut i64, last_leaf: &mut Option<State>, pool_cut: bool,
-    ) -> Result<(), Unsupported> {
+    ) -> Result<Option<GridTrace>, Unsupported> {
+        let empty = |cut: bool| Some(GridTrace { rows: Vec::new(), units: 0, reachable: 0, proposed: 0,
+            deduped: 0, landed_far: 0, completed: 0, cut, batches: 0 });
         if pool_cut {
-            return Ok(());
+            return Ok(empty(true));
         }
+        let Some(hook) = self.leaf_value else {
+            return Err(Unsupported::GridNeedsOpenerLeaf);
+        };
         let (statics, terrain, fit, tuning, seams) = (self.roll.policy.statics, self.roll.policy.terrain,
             self.roll.policy.fit, self.roll.policy.tuning, self.roll.policy.seams);
         let owned = if self.roll.policy.reach.is_none() {
@@ -990,7 +1037,7 @@ impl<'a> Search<'a> {
         } else {
             None
         };
-        let Some(reach) = self.roll.policy.reach.or(owned.as_ref()) else { return Ok(()) };
+        let Some(reach) = self.roll.policy.reach.or(owned.as_ref()) else { return Ok(empty(false)) };
         let want = self.roll.knobs.grid_units.max(1);
         let mut cand_idx: Vec<usize> = Vec::new();
         cand_idx.push(best.as_ref().map_or(0, |&(i, _)| i));
@@ -1011,24 +1058,41 @@ impl<'a> Search<'a> {
             }
             units.push(u);
         }
+        let mut hand_cells: Vec<u16> = Vec::new();
+        for row in scored.iter() {
+            if let Some(c) = row.cand.dest
+                .and_then(|d| crate::grid::cell_of(terrain, [d[0] as f32, d[1] as f32, d[2] as f32]))
+            {
+                hand_cells.push(c);
+            }
+        }
+        let nx = crate::grid::grid_nx(terrain);
         let mut grid_rows: Vec<ScoredRow> = Vec::new();
         let mut ends_of: Vec<Vec<State>> = Vec::new();
+        let mut meta: Vec<GridRow> = Vec::new();
+        let (mut reachable, mut proposed, mut deduped, mut landed_far) = (0usize, 0usize, 0usize, 0usize);
         for &u in &units {
             let key = state.key(u).to_string();
             let ps = state.positions[u].clone();
-            if ps.is_empty() { continue; }
+            if ps.is_empty() {
+                continue;
+            }
             let centre = crate::geom::centre(&ps);
             let (adv, rush) = crate::sim::live_bands_of(statics, state, u);
             for (kind, band) in [(crate::sim::ADVANCE, adv), (crate::sim::RUSH, rush)] {
                 let cells = crate::grid::reachable_cells(state, statics, terrain, reach, u, band);
-                let order_cells: Vec<(u16, u8)> = cells.iter().map(|&c| (c, 0u8)).collect();
+                reachable += cells.len();
+                let seed = crate::grid_order::grid_seed(state, u, kind);
+                let order_cells = crate::grid_order::propose_order(&cells, &hand_cells, seed, nx);
                 let mut seen: Vec<[f64; 3]> = scored.iter().filter_map(|r| r.cand.dest).collect();
-                for &(cell, _source) in order_cells.iter().take(self.roll.knobs.grid_k) {
+                for (rank, &(cell, source)) in order_cells.iter().enumerate().take(self.roll.knobs.grid_k) {
+                    proposed += 1;
                     let p = crate::grid::cell_centre(terrain, cell, centre[1]);
                     let dest = [p[0] as f64, p[1] as f64, p[2] as f64];
                     let (dx, dz) = (dest[0] - centre[0] as f64, dest[2] - centre[2] as f64);
                     let moved: Vec<[f64; 3]> = ps.iter().map(|q| [q[0] + dx, q[1], q[2] + dz]).collect();
                     if seen.iter().any(|d| (d[0] - dest[0]).abs() < 1e-6 && (d[2] - dest[2]).abs() < 1e-6) {
+                        deduped += 1;
                         continue;
                     }
                     let mut cand = Candidate::new(&key, kind);
@@ -1041,24 +1105,44 @@ impl<'a> Search<'a> {
                     let s = score_with(&next, statics, player,
                         &reply_threat_opts(statics, &next, player, seams.reply_opts()), fit);
                     let ends = self.rollout_of(state, &cand, player, sc)?;
+                    let landing = (dest[0] - centre[0] as f64).hypot(dest[2] - centre[2] as f64) / crate::IN2M;
+                    let far = scored.iter().filter_map(|r| r.cand.dest)
+                        .all(|d| (dest[0] - d[0]).hypot(dest[2] - d[2]) / crate::IN2M > 1.0);
+                    if far {
+                        landed_far += 1;
+                    }
                     seen.push(dest);
+                    meta.push(GridRow { idx: grid_rows.len() as i64, cell, source, rank, landing });
                     grid_rows.push(ScoredRow { idx: scored.len() + grid_rows.len(), unit_key: key.clone(), cand, score: s });
                     ends_of.push(ends);
                 }
             }
         }
+        let completed = grid_rows.len();
+        let mut vals: Vec<f64> = Vec::new();
+        if completed > 0 && self.leaf_value_w != 0.0 {
+            let leaves: Vec<&State> = ends_of.iter().flatten().collect();
+            vals = hook.value(&leaves, player)?;
+            if vals.len() != leaves.len() {
+                return Err(Unsupported::LeafValue(vals.len(), leaves.len()));
+            }
+        }
+        let mut off = 0usize;
         for (k, ends) in ends_of.iter().enumerate() {
-            let v = self.roll.blend_score_leaf(ends, player, self.act.opener_seat, &[], 0.0);
+            let slice: &[f64] = if vals.is_empty() { &[] } else { &vals[off..] };
+            let v = self.roll.blend_score_leaf(ends, player, self.act.opener_seat, slice, self.leaf_value_w);
+            off += ends.len();
             let i = grid_rows[k].idx;
+            let adj = v - self.roll.knobs.grid_margin;
             pool.push(i);
             rs.push((i as i64, v));
-            if best.as_ref().is_none_or(|&(_, b)| v > b) {
+            if best.as_ref().is_none_or(|&(_, b)| adj > b) {
                 *runner = *best;
                 *best = Some((i, v));
                 if let Some(e) = ends.last() {
                     *last_leaf = Some(e.clone());
                 }
-            } else if runner.as_ref().is_none_or(|&(_, r)| v > r) {
+            } else if runner.as_ref().is_none_or(|&(_, r)| adj > r) {
                 *runner = Some((i, v));
             }
         }
@@ -1073,7 +1157,8 @@ impl<'a> Search<'a> {
         }
         *best_idx = pos_of[best.as_ref().expect("a widened pool still has a best").0] as i64;
         *runner_idx = runner.as_ref().map_or(-1, |&(i, _)| pos_of[i] as i64);
-        Ok(())
+        Ok(Some(GridTrace { rows: meta, units: units.len(), reachable, proposed, deduped, landed_far,
+            completed, cut: false, batches: 1 }))
     }
 
     /// The `deadline_us` fallback when the deadline hit before the first
@@ -1105,6 +1190,7 @@ impl<'a> Search<'a> {
             cands: scored.iter().map(|r| r.cand.clone()).collect(),
             pool_completed: None,
             n_hand: scored.len(),
+            grid: None,
             tree: None,
             deadline: Some(DeadlineTrace {
                 completed: 0, cut: true, fallback: Some(fallback), elapsed_us: t0.elapsed().as_micros() as u64,
@@ -1195,6 +1281,7 @@ impl<'a> Search<'a> {
             cands: scored.iter().map(|r| r.cand.clone()).collect(),
             pool_completed: None,
             n_hand: scored.len(),
+            grid: None,
             tree: Some(trace),
             deadline: None,
         })

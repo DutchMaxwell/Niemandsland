@@ -1851,15 +1851,46 @@ fn grid_k_widens_the_chosen_unit() {
         let Ok(base) = Search::new(run(c.knobs), &act.statics).run(&act.state, act.player, &mut sc, None) else { continue };
         let mut k = c.knobs;
         k.grid_k = 4; k.grid_units = 1;
-        let Ok(grid) = Search::new(run(k), &act.statics).run(&act.state, act.player, &mut sc, None) else { continue };
-        assert_eq!(grid.unit_key, base.unit_key, "act {ai}: the widened pick left the hand argmax's unit");
-        grew += (grid.scored.len() > base.scored.len()) as i32;
+        let hook = SeatLog::new(act.statics.opener_seat);
+        let mut grid = Search::new(run(k), &act.statics);
+        grid.leaf_value = Some(&hook);
+        grid.leaf_value_w = 0.0;
+        let Ok(got) = grid.run(&act.state, act.player, &mut sc, None) else { continue };
+        assert_eq!(got.unit_key, base.unit_key, "act {ai}: the widened pick left the hand argmax's unit");
+        assert_eq!(got.n_hand, base.scored.len(), "act {ai}: n_hand is not the hand row count");
+        if got.scored.len() > base.scored.len() {
+            grew += 1;
+            let g = got.grid.as_ref().expect("a widened pick carries a grid trace");
+            assert!(g.completed > 0 && g.rows.len() == g.completed, "act {ai}: grid trace counts disagree");
+        }
     }
     assert!(grew > 0, "grid_k widened no act of the corpus");
 }
 
+/// LAZARUS M1 step 9b — the widen needs the pool's own leaf hook. On every act the grid-off search
+/// can answer, `grid_k > 0` with no hook declines with `GridNeedsOpenerLeaf`.
+#[test]
+fn grid_needs_opener_leaf() {
+    let c = corpus();
+    let statics = build_act_statics(&c, REPO);
+    let mut sc = Scratch::default();
+    let mut seen = 0usize;
+    for (ai, act) in c.acts.iter().enumerate() {
+        let off = Rollout::new(Policy::new(&statics, &c.terrain, seams_of(&c)), c.knobs);
+        let Ok(_) = Search::new(off, &act.statics).run(&act.state, act.player, &mut sc, None) else { continue };
+        let mut k = c.knobs;
+        k.grid_k = 4; k.grid_units = 1;
+        let on = Rollout::new(Policy::new(&statics, &c.terrain, seams_of(&c)), k);
+        match Search::new(on, &act.statics).run(&act.state, act.player, &mut sc, None) {
+            Err(Unsupported::GridNeedsOpenerLeaf) => seen += 1,
+            other => panic!("act {ai}: grid_k without a leaf hook answered {other:?}, not GridNeedsOpenerLeaf"),
+        }
+    }
+    assert!(seen > 0, "the corpus declined everywhere — the gate proves nothing");
+}
+
 /// LAZARUS M1 step 9b identity gate — `grid_k` 0 (absent OR explicit 0) is byte-identical to the
-/// baseline: pool, rollout values to the bit, pick, n_hand.
+/// baseline: pool, rollout values to the bit, pick, no grid trace stamped.
 #[test]
 fn grid_off_is_byte_identical() {
     let c = corpus();
@@ -1878,7 +1909,54 @@ fn grid_off_is_byte_identical() {
         let got = off.run(&act.state, act.player, &mut sc, None).unwrap_or_else(|e| panic!("act {ai}: {e:?}"));
         assert_eq!(got.pool_idx, want.pool_idx, "act {ai}: grid_k 0 moved the pool");
         assert_eq!(got.unit_key, want.unit_key, "act {ai}: grid_k 0 moved the pick");
+        assert!(got.grid.is_none(), "act {ai}: grid_k 0 stamped a grid trace");
         assert_eq!(got.n_hand, want.scored.len(), "act {ai}: n_hand off");
+        for (g, w) in got.rs.iter().zip(&want.rs) {
+            assert_eq!((g.0, g.1.to_bits()), (w.0, w.1.to_bits()), "act {ai}: grid_k 0 moved a rollout value");
+        }
+        checked += 1;
+    }
+    assert!(checked > 0, "the corpus declined everywhere — the gate proves nothing");
+}
+/// LAZARUS M1 step 9b — the widen is deterministic: two runs rank and pick identically.
+#[test]
+fn grid_is_deterministic() {
+    let c = corpus();
+    let statics = build_act_statics(&c, REPO);
+    let mut sc = Scratch::default();
+    let mut checked = 0usize;
+    for (ai, act) in c.acts.iter().enumerate() {
+        let mut k = c.knobs; k.grid_k = 4; k.grid_units = 1;
+        let hook = SeatLog::new(act.statics.opener_seat);
+        let mut run = || {
+            let mut s = Search::new(Rollout::new(Policy::new(&statics, &c.terrain, seams_of(&c)), k), &act.statics);
+            s.leaf_value = Some(&hook); s.leaf_value_w = 0.0;
+            s.run(&act.state, act.player, &mut sc, None)
+        };
+        let (a, b) = (run(), run());
+        let (Ok(a), Ok(b)) = (a, b) else { continue };
+        assert_eq!(a.scored, b.scored, "act {ai}: two grid runs ranked differently");
+        assert_eq!(a.unit_key, b.unit_key, "act {ai}: two grid runs picked differently");
+        checked += 1;
+    }
+    assert!(checked > 0, "the corpus declined everywhere — the gate proves nothing");
+}
+/// LAZARUS M1 step 9b — a huge `grid_margin` keeps the HAND pick: grid rows can never outrank it.
+#[test]
+fn grid_margin_keeps_the_hand_pick() {
+    let c = corpus();
+    let statics = build_act_statics(&c, REPO);
+    let mut sc = Scratch::default();
+    let mut checked = 0usize;
+    for (ai, act) in c.acts.iter().enumerate() {
+        let base_roll = Rollout::new(Policy::new(&statics, &c.terrain, seams_of(&c)), c.knobs);
+        let Ok(base) = Search::new(base_roll, &act.statics).run(&act.state, act.player, &mut sc, None) else { continue };
+        let mut k = c.knobs; k.grid_k = 4; k.grid_units = 1; k.grid_margin = 1e9;
+        let hook = SeatLog::new(act.statics.opener_seat);
+        let mut on = Search::new(Rollout::new(Policy::new(&statics, &c.terrain, seams_of(&c)), k), &act.statics);
+        on.leaf_value = Some(&hook); on.leaf_value_w = 0.0;
+        let Ok(got) = on.run(&act.state, act.player, &mut sc, None) else { continue };
+        assert_eq!(got.unit_key, base.unit_key, "act {ai}: a huge grid_margin still moved the pick");
         checked += 1;
     }
     assert!(checked > 0, "the corpus declined everywhere — the gate proves nothing");
