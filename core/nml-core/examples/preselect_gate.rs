@@ -9,7 +9,8 @@
 //!
 //!   cargo run --release --example preselect_gate -- --games <dir>... [--max-games N] [--top-k 10]
 //!        [--horizon 3] [--shipped] [--leaf-opener-only] [--reply-by-net] [--reply-pool-cap K]
-//!        [--reply-menu-restricted] [--charge-path] [--out file.json] [--compare baseline.json]
+//!        [--reply-menu-restricted] [--charge-path] [--grid-k N] [--grid-units N] [--grid-margin X]
+//!        [--out file.json] [--compare baseline.json]
 //!
 //! Timing: the planner runs with a never-hit `deadline_us` + `deadline_after_preselect`, which
 //! only makes the pick carry `preselect_us` (phases 0-3); picks do not depend on it.
@@ -40,6 +41,7 @@ fn main() {
     let mut reply_cap = 0i64;
     let mut reply_menu = false;
     let mut leaf_opener = false;
+    let (mut grid_k, mut grid_units, mut grid_margin) = (0usize, 0usize, 0.0f64);
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
@@ -63,6 +65,9 @@ fn main() {
             "--reply-pool-cap" => { i += 1; reply_cap = args[i].parse().unwrap(); }
             "--reply-menu-restricted" => reply_menu = true,
             "--leaf-opener-only" => leaf_opener = true,
+            "--grid-k" => { i += 1; grid_k = args[i].parse().unwrap(); },
+            "--grid-units" => { i += 1; grid_units = args[i].parse().unwrap(); },
+            "--grid-margin" => { i += 1; grid_margin = args[i].parse().unwrap(); },
             "--all-targets" => { i += 1; all_targets = args[i].parse().unwrap(); }
             other => panic!("unknown arg {other}"),
         }
@@ -103,6 +108,9 @@ fn main() {
         knobs.reply_pool_cap = reply_cap;
         knobs.reply_menu_restricted = reply_menu;
         knobs.leaf_opener_only = leaf_opener;
+        knobs.grid_k = grid_k;
+        knobs.grid_units = grid_units;
+        knobs.grid_margin = grid_margin;
         knobs.deadline_us = 3_600_000_000;
         knobs.deadline_after_preselect = true;
         let name = g.file_name().unwrap().to_string_lossy().to_string();

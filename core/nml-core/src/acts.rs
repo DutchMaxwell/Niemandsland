@@ -448,6 +448,21 @@ pub struct Knobs {
     /// `Header::books` and `header_of`.
     #[serde(default)]
     pub bands_prefolded: bool,
+    /// LAZARUS M1 step 9 — grid widening: cells proposed per (widened unit, kind). 0 (default) = off,
+    /// byte-identical; large = all reachable cells. Read only when the knob is set.
+    #[serde(default)]
+    pub grid_k: usize,
+    /// Grid widening: units widened in pool-rank order (0 read as 1).
+    #[serde(default)]
+    pub grid_units: usize,
+    /// Grid widening: the proposer. 0 (default) = ring shells + seeded uniform tail; 1 = learned prior
+    /// (declined until step 16).
+    #[serde(default)]
+    pub grid_proposer: i64,
+    /// Grid widening: a grid row wins the argmax only if it beats the running best by this margin; `rs`
+    /// keeps the raw value.
+    #[serde(default)]
+    pub grid_margin: f64,
 }
 
 /// The current rule-set generation (see `Knobs`/`Seams::rules_epoch`, `rule_on`).
@@ -1593,6 +1608,10 @@ impl Default for Knobs {
             versatile_reach: false,
             rules_epoch: 0,
             bands_prefolded: false,
+            grid_k: 0,
+            grid_units: 0,
+            grid_proposer: 0,
+            grid_margin: 0.0,
         }
     }
 }
