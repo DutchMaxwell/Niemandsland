@@ -1961,3 +1961,29 @@ fn grid_margin_keeps_the_hand_pick() {
     }
     assert!(checked > 0, "the corpus declined everywhere — the gate proves nothing");
 }
+
+/// LAZARUS M1 step 9d RED — a grid ADVANCE+shoot whose MOVED cell has no LOS to its target must be
+/// DROPPED, not declined: the whole act stays searched. Grid path only; the hand menu is unchanged.
+#[test]
+fn grid_moved_cell_without_los_is_skipped_not_declined() {
+    let c = corpus();
+    let statics = build_act_statics(&c, REPO);
+    let mut sc = Scratch::default();
+    let hook = SeatLog::new(true);
+    let mut checked = 0usize;
+    let mut declined = 0usize;
+    for (ai, act) in c.acts.iter().enumerate() {
+        let off = Rollout::new(Policy::new(&statics, &c.terrain, seams_of(&c)), c.knobs);
+        let Ok(_) = Search::new(off, &act.statics).run(&act.state, act.player, &mut sc, None) else { continue };
+        let mut k = c.knobs; k.grid_k = 4; k.grid_units = 1;
+        let on = Rollout::new(Policy::new(&statics, &c.terrain, seams_of(&c)), k);
+        let mut s = Search::new(on, &act.statics);
+        s.leaf_value = Some(&hook); s.leaf_value_w = 0.0;
+        match s.run(&act.state, act.player, &mut sc, None) {
+            Ok(_) => checked += 1,
+            Err(e) => { declined += 1; if declined == 1 { println!("act {ai}: grid declined {e:?}"); } }
+        }
+    }
+    assert!(checked > 0, "the corpus declined everywhere — the gate proves nothing");
+    assert_eq!(declined, 0, "grid_k declined an act the hand search answered");
+}
