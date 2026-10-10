@@ -407,9 +407,9 @@ const OBJ_STOP_IN: f64 = 2.0;
 /// the row. No target in range after the move = no row (RUSH already covers walking without a shot).
 /// The shoot leg's enemy pick, scored from an arbitrary `moved` formation: the best enemy key whose
 /// `shoot_ev` is highest under the HOLD-shoot gates (`State::sees`, plus `State::los_clear` under
-/// `Tuning::shoot_los`). `advance_objective_shoot` calls it with its post-advance `moved`; the grid knob
-/// (step 9) will call it with a candidate cell's formation. Pure extraction — no behaviour change.
-fn best_shoot_from(
+/// `Tuning::shoot_los`). `advance_objective_shoot` calls it with its post-advance `moved`; the grid
+/// knob (step 9) will call it with a candidate cell's formation. Pure extraction — no behaviour change.
+pub(crate) fn best_shoot_from(
     state: &State, statics: &[UnitStatic], unit: usize, moved: &[[f64; 3]], sc: &mut Scratch, tuning: Tuning,
 ) -> Option<usize> {
     let us = &statics[state.roster.profile[unit]];

@@ -1836,3 +1836,50 @@ fn reply_pool_cap_and_menu_parse_from_a_header_and_default_off() {
     let d = Knobs::default();
     assert!(d.reply_pool_cap == 0 && !d.reply_menu_restricted);
 }
+
+// LAZARUS M1 step 9b RED: grid_k widens the chosen unit with reachable 1-inch cells. OFF is
+// byte-identical; ON `scored` grows by that unit's cells as TAIL rows. Main ignores the keys.
+#[test]
+fn grid_k_widens_the_chosen_unit() {
+    let c = corpus();
+    let statics = build_act_statics(&c, REPO);
+    let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, hero_last: c.knobs.hero_last, path: c.knobs.seam_path, hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing, movement: c.knobs.movement, move_rigid: c.knobs.move_rigid, no_engage_fold: !c.knobs.engage_fold, los_model: c.knobs.los_model, dangerous_end_morale: c.knobs.dangerous_end_morale, consolidate: c.knobs.consolidate, ..Seams::default() };
+    let mut sc = Scratch::default();
+    let mut grew = 0;
+    for (ai, act) in c.acts.iter().enumerate() {
+        let run = |k: Knobs| Rollout::new(Policy::new(&statics, &c.terrain, seams), k);
+        let Ok(base) = Search::new(run(c.knobs), &act.statics).run(&act.state, act.player, &mut sc, None) else { continue };
+        let mut k = c.knobs;
+        k.grid_k = 4; k.grid_units = 1;
+        let Ok(grid) = Search::new(run(k), &act.statics).run(&act.state, act.player, &mut sc, None) else { continue };
+        assert_eq!(grid.unit_key, base.unit_key, "act {ai}: the widened pick left the hand argmax's unit");
+        grew += (grid.scored.len() > base.scored.len()) as i32;
+    }
+    assert!(grew > 0, "grid_k widened no act of the corpus");
+}
+
+/// LAZARUS M1 step 9b identity gate — `grid_k` 0 (absent OR explicit 0) is byte-identical to the
+/// baseline: pool, rollout values to the bit, pick, n_hand.
+#[test]
+fn grid_off_is_byte_identical() {
+    let c = corpus();
+    let statics = build_act_statics(&c, REPO);
+    let mut sc = Scratch::default();
+    let mut checked = 0usize;
+    for (ai, act) in c.acts.iter().enumerate() {
+        let (hb, ho) = (SeatLog::new(act.statics.opener_seat), SeatLog::new(act.statics.opener_seat));
+        let mut k = c.knobs; k.grid_k = 0;
+        let mk = |kk: Knobs| Rollout::new(Policy::new(&statics, &c.terrain, seams_of(&c)), kk);
+        let mut base = Search::new(mk(c.knobs), &act.statics);
+        base.leaf_value = Some(&hb); base.leaf_value_w = 1.0;
+        let Ok(want) = base.run(&act.state, act.player, &mut sc, None) else { continue };
+        let mut off = Search::new(mk(k), &act.statics);
+        off.leaf_value = Some(&ho); off.leaf_value_w = 1.0;
+        let got = off.run(&act.state, act.player, &mut sc, None).unwrap_or_else(|e| panic!("act {ai}: {e:?}"));
+        assert_eq!(got.pool_idx, want.pool_idx, "act {ai}: grid_k 0 moved the pool");
+        assert_eq!(got.unit_key, want.unit_key, "act {ai}: grid_k 0 moved the pick");
+        assert_eq!(got.n_hand, want.scored.len(), "act {ai}: n_hand off");
+        checked += 1;
+    }
+    assert!(checked > 0, "the corpus declined everywhere — the gate proves nothing");
+}
