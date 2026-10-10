@@ -351,6 +351,18 @@ fn pick_plain(p: &Pick, cands: bool) -> Value {
         }
         trace.insert("deadline".into(), m);
     }
+    // LAZARUS M1 step 9 — the grid keys ride ONLY a pick the knob widened (the stamp law).
+    if let Some(g) = &p.grid {
+        trace.insert("n_hand".into(), p.n_hand.into());
+        let rows: Vec<Value> = g.rows.iter().map(|r| serde_json::json!({
+            "idx": r.idx, "cell": r.cell, "source": r.source, "rank": r.rank, "landing": r.landing,
+        })).collect();
+        trace.insert("grid".into(), serde_json::json!({
+            "rows": rows, "units": g.units, "reachable": g.reachable, "proposed": g.proposed,
+            "deduped": g.deduped, "landed_far": g.landed_far, "completed": g.completed,
+            "cut": g.cut, "batches": g.batches,
+        }));
+    }
     out.insert("trace".into(), Value::Object(trace));
     out.insert(
         "leaf_state".into(),

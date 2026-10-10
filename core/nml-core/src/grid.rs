@@ -25,6 +25,12 @@ fn ny_of(t: &Terrain) -> i64 {
     (t.board_in()[1] / GRID_IN).ceil() as i64
 }
 
+/// The 1-inch grid's column count (`nx`), exposed for `grid_order::propose_order`.
+#[inline]
+pub fn grid_nx(t: &Terrain) -> u16 {
+    nx_of(t).max(0) as u16
+}
+
 /// The 1-inch cell id holding world point `p` (metres): `floor(x_in) + nx*floor(y_in)` in `to_inch`'s
 /// 0-origin frame. `None` off the table.
 pub fn cell_of(t: &Terrain, p: V3) -> Option<u16> {
