@@ -1166,7 +1166,7 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         tree_widen: dnum(d, "tree_widen", dflt.tree_widen),
         tree_puct: dnum(d, "tree_puct", dflt.tree_puct),
         tree_opponent_own_leaf: dflag(d, "tree_opponent_own_leaf"),
-        // LAZARUS M1 step 9 — the grid-widening knobs. Header/lab only, default
+        // grid-search step 9 — the grid-widening knobs. Header/lab only, default
         // OFF; nothing reads them yet (step 9b), so an absent key is
         // `Knobs::default()` = off and every pick stays byte-identical.
         grid_k: dint(d, "grid_k", dflt.grid_k as i64) as usize,
