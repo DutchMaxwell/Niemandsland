@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """E-B GRADER HEADROOM — the re-simulation oracle worker and scorer.
 
-E-B (pre-registered in ~/nml-mission/PLAN.md, "Pre-registered probes";
+E-B (pre-registered in the mission plan, "Pre-registered probes";
 RSI_RESTART_DESIGN_2026-09-13.md R6) asks one question: if the planner's
 GRADER is replaced by a re-simulation oracle — each finalist candidate is
 PLAYED OUT and scored by its ACTUAL result — does that player gain >= 5
@@ -46,7 +46,7 @@ REPO = str(Path(__file__).resolve().parents[1])
 PUB_PY = os.path.join(REPO, "core", "nml-core-py", "python")
 PUB_TOOLS = os.path.join(REPO, "core", "nml-core-py", "tools")
 BANK_DEFAULT = os.path.expanduser("~/selfplay_out/terrain_bank")
-NETLAB = os.path.expanduser(os.environ.get("NETLAB_DIR", "~/nml-mission/netlab"))
+NETLAB = os.path.expanduser(os.environ.get("NETLAB_DIR", os.environ.get("NETLAB_DIR", "")))
 
 for _p in (PUB_PY, PUB_TOOLS):
     if _p not in sys.path:

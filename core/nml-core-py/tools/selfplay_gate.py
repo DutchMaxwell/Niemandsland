@@ -12,8 +12,8 @@ per-activation oracle next to its result. Then:
 
     ~/venvs/nmlcore/bin/python core/nml-core-py/tools/selfplay_gate.py \\
         --ref ~/selfplay_out/m3_ref_v2 --bank ~/selfplay_out/terrain_bank \\
-        --army1 ~/nml-mission/farm/ai_lists/robot_legions_1000.json \\
-        --army2 ~/nml-mission/farm/ai_lists/blessed_sisters_1000.json \\
+        --army1 $NML_AI_LISTS_DIR/robot_legions_1000.json \\
+        --army2 $NML_AI_LISTS_DIR/blessed_sisters_1000.json \\
         --seeds 27-46
 
 Five quantities per seed, all EXACT — no tolerance anywhere:

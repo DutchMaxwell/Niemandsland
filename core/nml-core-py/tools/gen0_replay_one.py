@@ -22,7 +22,7 @@ from pathlib import Path
 
 REPO = str(Path(__file__).resolve().parents[3])
 BANK = os.path.expanduser("~/selfplay_out/terrain_bank")
-LISTS = os.path.expanduser("~/nml-mission/farm/ai_lists")
+LISTS = os.path.expanduser(os.environ.get("NML_AI_LISTS_DIR", ""))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
 
 import nml_core  # noqa: E402

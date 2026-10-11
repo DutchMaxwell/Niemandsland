@@ -137,7 +137,7 @@ relay/.venv/bin/python test/mp/run_soak.py \
 
 ## Sandbox & `/tmp` gotchas
 
-- **The Flatpak Godot sandbox cannot read `/tmp/claude-*`** (agent scratch paths). When a
+- **The Flatpak Godot sandbox cannot read agent scratch paths under `/tmp`**. When a
   headless run needs an input file (e.g. an Army Forge list JSON for the `opr`/`stress` soak
   workloads), copy it **into the worktree** first, run, then delete it — a path under `/tmp`
   outside the sandbox reads as missing.

@@ -2,7 +2,7 @@
 """Gen-0 training design step 1 (DESIGN_gen0_training_2026-09-02 SS5.1): the
 corpus reader that proves SS1's measured numbers. Read-only, never writes
 into the corpus. gen0_stats.py --corpus DIR [--every K] [--limit N] [--out F]."""
-import argparse, json, re, sys
+import argparse, json, os, re, sys
 from collections import Counter
 from pathlib import Path
 
@@ -179,7 +179,7 @@ def main(argv=None):
                     help="report Ambush/Infiltrate carriers per SS1.5's army lists, not the corpus stats")
     a = ap.parse_args(argv)
     if a.ambush_audit:
-        list_dir = Path.home() / "nml-mission/farm/ai_lists"
+        list_dir = Path(os.environ.get("NML_AI_LISTS_DIR", ""))
         summary = ambush_audit(load_games(a.corpus, a.every, a.limit), list_dir)
     else:
         try:

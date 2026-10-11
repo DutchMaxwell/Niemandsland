@@ -40,7 +40,7 @@ import narrator_render as nr  # noqa: E402
 
 CORPUS = Path(os.path.expanduser("~/selfplay_out/gen0_teacher"))
 BANK = Path(os.path.expanduser("~/selfplay_out/terrain_bank"))
-LISTS = Path(os.path.expanduser("~/nml-mission/farm/ai_lists"))
+LISTS = Path(os.path.expanduser(os.environ.get("NML_AI_LISTS_DIR", "")))
 GAME = "gen0_s302919_d303919.json"
 BAND_TOL_IN = 0.5   # charge landing adds CHARGE_CONTACT_MARGIN_IN, mods add the rest
 

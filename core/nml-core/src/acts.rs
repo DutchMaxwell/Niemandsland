@@ -372,7 +372,7 @@ pub struct Knobs {
     /// ceil(max(n, 1) ^ tree_widen) children of an n-visit node open.
     #[serde(default)]
     pub tree_widen: f64,
-    /// NachtmahrZero E1 — PUCT prior at the tree root: `mean + c * p * sqrt(N) / (1 + n)` with `p` the softmax of the caller's
+    /// search E1 — PUCT prior at the tree root: `mean + c * p * sqrt(N) / (1 + n)` with `p` the softmax of the caller's
     /// `cand_logits` (index-parallel to the root rows), root children in prior order. 0.0 = off (UCT and the hand order,
     /// byte-identical); a root without logits keeps UCT whatever `c` is.
     #[serde(default)]

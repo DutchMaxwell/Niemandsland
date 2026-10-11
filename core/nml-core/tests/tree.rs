@@ -705,7 +705,7 @@ fn the_game_end_boundary_carries_no_reply_threat() {
     assert!(checked >= 20 && differs >= 1, "{checked} {differs}");
 }
 
-/// NachtmahrZero E1 — PUCT at the root. With every mean tied, a prior steers the selection to its heaviest child
+/// search E1 — PUCT at the root. With every mean tied, a prior steers the selection to its heaviest child
 /// (UCT, blind to priors, keeps the first); `puct` 0 or no priors is UCT to the bit; the softmax is a distribution.
 #[test]
 fn puct_follows_the_prior_where_uct_is_blind() {

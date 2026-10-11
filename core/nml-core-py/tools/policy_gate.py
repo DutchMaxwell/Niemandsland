@@ -26,7 +26,7 @@ file:
      trace per act.
 
     P=core/nml-core-py/tools/policy_gate.py; V=~/venvs/nmlpolicy/bin/python
-    NET=~/nml-mission/netlab/nets/policy_v1.json
+    NET=~/netlab/nets/policy_v1.json
     $V $P --doctor <in>/acts.jsonl --out <g>/acts.jsonl
     NML_POLICY_PATH=$NET godot --headless --path <wt> \\
         -s res://tools/act_recheck.gd -- file=<g>/acts.jsonl \\
