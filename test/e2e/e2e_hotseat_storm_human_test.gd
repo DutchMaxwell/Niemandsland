@@ -14,6 +14,7 @@ const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 var _runner: GdUnitSceneRunner
 var _main: Node
 var _root_before: Array
+var _save_pump: Timer
 
 
 func before_test() -> void:
@@ -78,6 +79,28 @@ func _activate(unit: GameUnit) -> void:
 	await E2EBoot.settle(get_tree())
 
 
+## The hotseat defender's save prompt ("P2 — incoming fire!") waits for a human click no headless run
+## can make — a repeating timer presses its OK, the house pattern (e2e_game_school_ch6_test). The
+## production prompt itself is untouched.
+func _arm_save_pump() -> void:
+	_save_pump = Timer.new()
+	_save_pump.name = "StormSavePump"
+	_save_pump.wait_time = 0.02
+	_save_pump.one_shot = false
+	get_tree().root.add_child(_save_pump)
+	_save_pump.timeout.connect(_answer_save_prompt)
+	_save_pump.start()
+
+
+func _answer_save_prompt() -> void:
+	if _main == null or not is_instance_valid(_main):
+		return
+	for c in _main.get_children():
+		var card := c as PromptCard
+		if card != null and card.title.ends_with("incoming fire!"):
+			card.ok_button.pressed.emit()
+
+
 func _lines_with(needle: String) -> int:
 	var n := 0
 	for e in _main.battle_log.entries():
@@ -100,6 +123,7 @@ func test_a_human_bearer_unleashes_the_storm_on_an_enemy(timeout := 120000) -> v
 	foe.unit_properties["defense"] = 6
 	_hotseat_automatic()
 	_main.seed_tray_rng(_seed_trigger_and_failed_save())
+	_arm_save_pump()
 	await _activate(stormer)
 	assert_int(_lines_with("unleashes the storm")) \
 		.override_failure_message("step 2.7c — the human Storm Attack bearer did not fire") \

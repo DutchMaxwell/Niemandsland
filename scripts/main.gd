@@ -1586,6 +1586,10 @@ func _on_solo_human_activated(gu: GameUnit) -> void:
 			# an enemy on its own tray.
 			if _solo_hotseat_automatic():
 				await _solo_apply_breath_attack(gu)
+			# Step 2.7c: the hotseat Storm of X door (Automatic only) — a human bearer unleashes
+			# its storm on an enemy on its own tray.
+			if _solo_hotseat_automatic():
+				await _solo_apply_storm_attack(gu)
 		return
 	# ONE reply per unit per round (round 7, finding 5): the radial activation marker is a TOGGLE, so
 	# un-marking and re-marking a unit (a mis-click fix, or re-marking after an attack) re-emitted
@@ -1616,6 +1620,9 @@ func _on_solo_human_activated(gu: GameUnit) -> void:
 	# Step 2.7b: the human Breath Attack door (solo vs NACHTMAHR) — a human bearer breathes on an enemy
 	# on its own tray, once per activation.
 	await _solo_apply_breath_attack(gu)
+	# Step 2.7c: the human Storm of X door (solo vs NACHTMAHR) — a human bearer unleashes its storm on
+	# an enemy on its own tray, once per game.
+	await _solo_apply_storm_attack(gu)
 	# Ambush Re-Deployment: YOUR unit's activation ends here (the activation marker IS the declaration),
 	# so this is where the once-per-game "may" is offered — before the AI answers with its reply.
 	await _solo_try_ambush_redeploy(gu)
@@ -20544,8 +20551,11 @@ func _solo_growth_incoming_ap(defender: GameUnit) -> Dictionary:
 ## shred / bane ride the save batch, ap1 = AP(1)). Once per game per bearer; AI-side automation
 ## (human bearers keep their manual workflow, like Mend/Breath).
 func _solo_apply_storm_attack(unit: GameUnit) -> void:
-	if unit == null or opr_army_manager == null or solo_controller == null or not _solo_is_ai_unit(unit):
+	if unit == null or opr_army_manager == null:
 		return
+	var ai_side := _solo_is_ai_unit(unit)
+	if ai_side and solo_controller == null:
+		return   # the AI path needs its controller; a human bearer does not (step 2.7c)
 	var bearers: Array = [unit]
 	if unit.has_method("get_attached_heroes"):
 		bearers = bearers + unit.get_attached_heroes()
@@ -20561,9 +20571,20 @@ func _solo_apply_storm_attack(unit: GameUnit) -> void:
 				continue
 			var sp: Dictionary = ed.get("params", {})
 			var range_in := float(sp.get("range_in", 12.0))
+			# Step 2.7c: the AI keeps its hardcoded enemy-slot loop byte-identical; a human bearer
+			# picks among the units whose owner is NOT its own (solo: the AI seat; hotseat: the other
+			# human) — the same procedure the Breath Attack door uses.
+			var candidates: Array = []
+			if ai_side:
+				candidates = opr_army_manager.get_game_units_for_player(solo_controller.enemy_slot_of(bu))
+			else:
+				var bearer_slot := unit_owner_slot(bu.unit_properties)
+				for u in opr_army_manager.get_all_game_units():
+					if u != null and unit_owner_slot(u.unit_properties) != bearer_slot:
+						candidates.append(u)
 			# Fire only when at least one enemy is in reach (don't waste the once-per-game).
 			var targets_in_reach: Array = []
-			for h in opr_army_manager.get_game_units_for_player(solo_controller.enemy_slot_of(bu)):
+			for h in candidates:
 				var hu := h as GameUnit
 				if hu == null or _solo_combined_alive(hu) <= 0 or SoloController.unit_in_reserve(hu):
 					continue
@@ -20576,14 +20597,19 @@ func _solo_apply_storm_attack(unit: GameUnit) -> void:
 			bu.unit_properties[flag] = true
 			var dice := int(sp.get("dice", 3))
 			var trigger := int(sp.get("trigger_target", 2))
-			var faces: Array = await _solo_tray_roll(dice, trigger, "AI (%s)" % bu.get_name())
+			# The trigger dice: the AI keeps its own tray call byte-identical; a human rolls on its OWN tray.
+			var faces: Array
+			if ai_side:
+				faces = await _solo_tray_roll(dice, trigger, "AI (%s)" % bu.get_name())
+			else:
+				faces = await _owner_roll(bu, dice, trigger, "storm", "Storm Attack")
 			var successes := 0
 			for f in faces:
 				if int(f) >= trigger:
 					successes += 1
 			if battle_log != null:
 				_log_rule_event(BattleLog.Category.COMBAT, "%s: %s unleashes the storm — %d of %d dice hit (once per game)" % [
-					n, bu.get_name(), successes, dice], true)
+					n, bu.get_name(), successes, dice], ai_side)
 			var facet := str(sp.get("facet", "ap1"))
 			var profile := {"name": n, "attacks": int(sp.get("hits", 3)),
 				"ap": (1 if facet == "ap1" else 0), "shred": facet == "shred",
@@ -20595,7 +20621,11 @@ func _solo_apply_storm_attack(unit: GameUnit) -> void:
 				var tgt := targets_in_reach[0] as GameUnit
 				var hits := int(sp.get("hits", 3))
 				if facet == "surge":
-					var s_faces: Array = await _solo_tray_roll(hits, 6, "AI (%s)" % bu.get_name())
+					var s_faces: Array
+					if ai_side:
+						s_faces = await _solo_tray_roll(hits, 6, "AI (%s)" % bu.get_name())
+					else:
+						s_faces = await _owner_roll(bu, hits, 6, "storm", "Storm Attack")
 					for sf in s_faces:
 						if int(sf) == 6:
 							hits += 1
