@@ -2914,8 +2914,10 @@ func _offer_spill_ghost(transport: GameUnit, unit: GameUnit) -> void:
 			(state["pos"] as Array).assign(positions)
 			state["done"] = true,
 		func() -> void: state["done"] = true)
-	while not state["done"]:
+	while not state["done"] and is_inside_tree():
 		await get_tree().process_frame
+	if not is_inside_tree():
+		return   # left the tree (End Battle) — keep the automatic formation
 	if (state["pos"] as Array).is_empty():
 		_transport_log("%s keeps its automatic formation beside the wreck" % str(unit.unit_properties.get("name", "unit")))
 		return
