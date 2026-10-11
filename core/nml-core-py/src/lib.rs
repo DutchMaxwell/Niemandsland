@@ -351,7 +351,7 @@ fn pick_plain(p: &Pick, cands: bool) -> Value {
         }
         trace.insert("deadline".into(), m);
     }
-    // LAZARUS M1 step 9 — the grid keys ride ONLY a pick the knob widened (the stamp law).
+    // grid-search step 9 — the grid keys ride ONLY a pick the knob widened (the stamp law).
     if let Some(g) = &p.grid {
         trace.insert("n_hand".into(), p.n_hand.into());
         let rows: Vec<Value> = g.rows.iter().map(|r| serde_json::json!({

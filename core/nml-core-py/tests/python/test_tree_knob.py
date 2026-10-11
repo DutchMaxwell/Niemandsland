@@ -70,6 +70,27 @@ def test_tray_dice_plays_and_stamps():
     assert "knobs_by_seat" in r and r["knobs_by_seat"]["p2"] == {"top_k": 2, "horizon": 1}
 
 
+@needs_lists
+def test_tree_puct_widen_and_opp_leaf_stamp_their_seat():
+    """The PUCT prior / widening rate / opponent-own-leaf knobs join the deep seat's header.
+    Today the three have no seam at all (`deep_tree_puct=1.0` is dropped), so the stamp is
+    absent -> RED; after, each parts from its default and rides `knobs_by_seat`."""
+    r = _play(deep_player=1, deep_search_mode="tree",
+              deep_tree_puct=1.0, deep_tree_widen=0.5, deep_tree_opponent_own_leaf=True)
+    seat = r["knobs_by_seat"]["p1"]
+    assert seat["tree_puct"] == 1.0
+    assert seat["tree_widen"] == 0.5
+    assert seat["tree_opponent_own_leaf"] is True
+
+
+@needs_lists
+def test_tree_puct_defaults_are_unstamped():
+    """Identity: a value EQUAL to the knob's default is not a part and stays unstamped."""
+    r = _play(deep_player=1, deep_search_mode="tree",
+              deep_tree_puct=0.0, deep_tree_widen=0.0, deep_tree_opponent_own_leaf=False)
+    assert r["knobs_by_seat"]["p1"] == {"top_k": 2, "horizon": 1, "search_mode": "tree"}
+
+
 def test_a_tree_knob_without_a_deep_seat_is_refused():
     """The refusal comes before any list or terrain is read, so it needs neither (it runs in CI)."""
     missing = Path("/nonexistent/list.json")
