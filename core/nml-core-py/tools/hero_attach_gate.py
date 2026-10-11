@@ -46,15 +46,16 @@ RED PROOF: `--mode off` runs the SAME comparison with the trainer's default
 gate prints how many do, and refuses to call a vacuous run a proof.
 
     ~/venvs/nmlcore/bin/python core/nml-core-py/tools/hero_attach_gate.py \\
-        --ref ~/selfplay_out/qb_ref --lists ~/nml-mission/farm/ai_lists
+        --ref ~/selfplay_out/qb_ref --lists $NML_AI_LISTS_DIR
     ~/venvs/nmlcore/bin/python core/nml-core-py/tools/hero_attach_gate.py \\
-        --ref ~/selfplay_out/qb_ref --lists ~/nml-mission/farm/ai_lists --mode off
+        --ref ~/selfplay_out/qb_ref --lists $NML_AI_LISTS_DIR --mode off
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from collections import Counter
@@ -169,7 +170,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--ref", required=True, help="directory of <p1>_vs_<p2>_s<seed> dirs")
     ap.add_argument(
         "--lists",
-        default=str(Path("~/nml-mission/farm/ai_lists").expanduser()),
+        default=str(Path(os.environ.get("NML_AI_LISTS_DIR", "")).expanduser()),
         help="directory the army list JSONs live in",
     )
     ap.add_argument(

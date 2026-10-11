@@ -15,6 +15,7 @@ experiments were trained on.
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -142,7 +143,7 @@ def test_the_worker_passes_the_fidelity_knobs_into_the_game(tmp_path):
 
     import pytest
 
-    lists = Path(os.path.expanduser("~/nml-mission/farm/ai_lists"))
+    lists = Path(os.path.expanduser(os.environ.get("NML_AI_LISTS_DIR", "")))
     bank = Path(os.path.expanduser("~/selfplay_out/terrain_bank"))
     repo = Path(__file__).resolve().parents[4]
     seed = 300000

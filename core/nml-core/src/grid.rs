@@ -1,4 +1,4 @@
-//! LAZARUS M1 step 8 — 1-inch grid cells: the reachable destinations of a unit's move for an open action
+//! grid-search step 8 — 1-inch grid cells: the reachable destinations of a unit's move for an open action
 //! space. This module is UNUSED by the planner until the `grid_k` knob (step 9) wires `reachable_cells`
 //! into the one-ply, so adding it changes no existing behaviour. `GRID_IN` is the 1-inch lattice laid
 //! over `Terrain::to_inch`'s 0-origin inch frame — the same frame the movement planner uses.

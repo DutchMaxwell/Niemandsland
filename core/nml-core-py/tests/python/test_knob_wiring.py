@@ -50,8 +50,8 @@ import selfplay as sp  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[4]
 BANK_DIR = Path(os.path.expanduser("~/selfplay_out/terrain_bank"))
-LISTS = Path(os.path.expanduser("~/nml-mission/farm/ai_lists"))
-# Game-playing tests need the private army lists (~/nml-mission/farm/ai_lists);
+LISTS = Path(os.path.expanduser(os.environ.get("NML_AI_LISTS_DIR", "")))
+# Game-playing tests need the army lists (NML_AI_LISTS_DIR);
 # on CI the directory is absent. One module-level guard skips everything except
 # the pure-unit tests listed here — new game-playing tests are covered by
 # default, a new pure-unit test must be added to this set to run on CI too.
@@ -69,7 +69,7 @@ _PURE_UNIT_TESTS = frozenset((
 def _require_private_lists(request):
     if request.function.__name__ in _PURE_UNIT_TESTS:
         return
-    if not LISTS.exists():
+    if not os.environ.get("NML_AI_LISTS_DIR") or not LISTS.is_dir():
         pytest.skip("private ai_lists not present (CI)")
 
 #: seeds tried in order until one produces a different game — the same range

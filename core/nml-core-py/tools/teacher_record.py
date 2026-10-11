@@ -11,7 +11,7 @@ shipped grade, mirrored by seat (proof: test_teacher_ab.py); default = the shipp
   `--cand-knobs JSON|FILE` / `--cand-preset NAME` (--arm I only) give the ROW'S seat one extra knob bundle (selfplay.KNOB_PRESETS or
 inline), mirrored by `--seats 1,2`: "the shipped net + one knob vs the shipped net"; rows record cand_seat / cand_knobs(_sha256).
   `--knobs-seat1 / --knobs-seat2 JSON|FILE` (--arm I): a bundle per ABSOLUTE seat (the two seats may differ).
-  `--explore-seed N` (>= 0; default -1 = off) / `--explore-seats 1,2`: NachtmahrZero E2 root exploration for recording -- the first 8
+  `--explore-seed N` (>= 0; default -1 = off) / `--explore-seats 1,2`: search E2 root exploration for recording -- the first 8
 decisions of each exploring seat are sampled from 0.75 * root prior + 0.25 * Dirichlet(0.3) (pool softmax without a tree), seeded by
 (row_id, N); rows then carry an `explored` column (1 = that decision was sampled) and the game json `teacher.explored` true; with it
 OFF neither exists (= main's records). A gate/A-B reader drops games with `teacher.explored`.
@@ -43,7 +43,7 @@ import selfplay as sp  # noqa: E402
 
 RAGGED = ("units", "objs", "terr", "cands")
 FLAT = ("label", "actor", "target", "hand_score", "pi", "tree_fired", "v_root", "v_pick", "completed", "side", "round", "seq")
-EXPLORE_ALPHA, EXPLORE_MIX, EXPLORE_MOVES = 0.3, 0.25, 8  # NachtmahrZero E2: Dirichlet(0.3) at 25 %, temperature 1 for 8 decisions
+EXPLORE_ALPHA, EXPLORE_MIX, EXPLORE_MOVES = 0.3, 0.25, 8  # search E2: Dirichlet(0.3) at 25 %, temperature 1 for 8 decisions
 _W = {}  # the worker's config (spawn: set by `_init`, read by the arm_kwargs seam)
 
 

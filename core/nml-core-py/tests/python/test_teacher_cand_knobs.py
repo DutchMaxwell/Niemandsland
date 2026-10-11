@@ -1,4 +1,4 @@
-"""`teacher_record --cand-knobs / --cand-preset` (freeze2 SPEC_cand_knobs.md, 07.10.2026): "Erlkoenig + one knob bundle vs Erlkoenig",
+"""`teacher_record --cand-knobs / --cand-preset` (the cand-knobs spec, 07.10.2026): "Erlkoenig + one knob bundle vs Erlkoenig",
 mirrored. The knobs ride `play_game(knob_override_player=<the row's seat>, knob_overrides=<bundle>)` on the candidate seat only; the
 incumbent seat keeps the frozen `--knobs` grade; both seats keep the net. Proofs:
 
@@ -31,7 +31,7 @@ import selfplay as sp  # noqa: E402
 import teacher_record as tr  # noqa: E402
 
 BANK = Path(os.path.expanduser("~/selfplay_out/terrain_bank"))
-LISTS = Path(os.path.expanduser("~/nml-mission/farm/ai_lists"))
+LISTS = Path(os.path.expanduser(os.environ.get("NML_AI_LISTS_DIR", "")))
 ARMY1, ARMY2 = LISTS / "robot_legions_1000.json", LISTS / "blessed_sisters_1000.json"
 needs_lists = pytest.mark.skipif(not (BANK.is_dir() and ARMY1.exists() and ARMY2.exists()),
                                  reason="private fixtures (terrain bank + lists) not on this box")

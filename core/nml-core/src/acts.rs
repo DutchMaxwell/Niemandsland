@@ -344,6 +344,18 @@ pub struct Knobs {
     /// Tree search knob: children opened per expansion batch.
     #[serde(default = "default_tree_batch")]
     pub tree_batch: i64,
+    /// Tree search knob (opponent wide-first batch): at an OPPONENT node the FIRST
+    /// expansion batch opens up to `tree_opp_batch` children instead of
+    /// `tree_batch`, so the reply set is opened wide before the search descends
+    /// below it. 0 (default) = off, `tree_batch` everywhere, byte-identical.
+    #[serde(default)]
+    pub tree_opp_batch: i64,
+    /// Tree search knob (opponent child-order shuffle): at an OPPONENT node the
+    /// first batch permutes the candidate order before the take-first-`k`, so a
+    /// different subset of the reply set opens first at the same width. `0`
+    /// (default) = off, byte-identical; any other value is the shuffle seed.
+    #[serde(default)]
+    pub tree_opp_shuffle: i64,
     /// Tree search knob: wall-clock safety fallback in ms (0 = off).
     #[serde(default)]
     pub tree_wall_ms: i64,
@@ -366,7 +378,7 @@ pub struct Knobs {
     /// ceil(max(n, 1) ^ tree_widen) children of an n-visit node open.
     #[serde(default)]
     pub tree_widen: f64,
-    /// NachtmahrZero E1 — PUCT prior at the tree root: `mean + c * p * sqrt(N) / (1 + n)` with `p` the softmax of the caller's
+    /// search E1 — PUCT prior at the tree root: `mean + c * p * sqrt(N) / (1 + n)` with `p` the softmax of the caller's
     /// `cand_logits` (index-parallel to the root rows), root children in prior order. 0.0 = off (UCT and the hand order,
     /// byte-identical); a root without logits keeps UCT whatever `c` is.
     #[serde(default)]
@@ -448,7 +460,7 @@ pub struct Knobs {
     /// `Header::books` and `header_of`.
     #[serde(default)]
     pub bands_prefolded: bool,
-    /// LAZARUS M1 step 9 — grid widening: cells proposed per (widened unit, kind). 0 (default) = off,
+    /// grid-search step 9 — grid widening: cells proposed per (widened unit, kind). 0 (default) = off,
     /// byte-identical; large = all reachable cells. Read only when the knob is set.
     #[serde(default)]
     pub grid_k: usize,
@@ -1600,6 +1612,8 @@ impl Default for Knobs {
             tree_budget: default_tree_budget(),
             tree_samples: default_tree_samples(),
             tree_batch: default_tree_batch(),
+            tree_opp_batch: 0,
+            tree_opp_shuffle: 0,
             tree_wall_ms: 0,
             pool_wall_ms: 0,
             deadline_us: 0,

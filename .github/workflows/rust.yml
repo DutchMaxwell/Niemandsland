@@ -118,12 +118,12 @@ jobs:
       - name: Fixture-gated tests
         # Private fixtures are not in the repo: run the ignored policy tests
         # only when they are staged into the workspace — never silently green.
-        if: hashFiles('selfplay_out/**') != '' && hashFiles('nml-mission/netlab/nets/policy_v1.json') != ''
+        if: hashFiles('selfplay_out/**') != '' && hashFiles('netlab/nets/policy_v1.json') != ''
         run: cargo test --manifest-path core/nml-core/Cargo.toml --release -- --ignored
         env:
           NML_POLICY_DUMP: selfplay_out/policy_rows_v1/dumps/qbg_ref_all.jsonl
           NML_POLICY_CORPUS: selfplay_out/qbg_ref
-          NML_POLICY_NET: nml-mission/netlab/nets/policy_v1.json
+          NML_POLICY_NET: netlab/nets/policy_v1.json
 
   godot-build:
     name: Build nml-core-godot
@@ -210,9 +210,9 @@ jobs:
         # farm run found 11 other @needs_lists tests whose pinned digest does not
         # reproduce even on an unmodified historical commit rebuilt on today's farm
         # boxes (root cause open, not the rule changes, not epoch, not randomness --
-        # see /root/w3_known_py_failures.txt on the wave-3 boxes). A hardcoded-digest
+        # see the farm failure notes). A hardcoded-digest
         # test here would make this step exactly as fragile; these three are not.
-        if: hashFiles('selfplay_out/terrain_bank/**') != '' && hashFiles('nml-mission/farm/ai_lists/**') != ''
+        if: hashFiles('selfplay_out/terrain_bank/**') != '' && hashFiles('farm/ai_lists/**') != ''
         env:
           HOME: ${{ github.workspace }}
         run: >

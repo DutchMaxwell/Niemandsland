@@ -14,7 +14,7 @@ REPO = os.path.dirname(_HERE)
 sys.path.insert(0, _HERE)
 sys.path.insert(0, os.path.join(REPO, "core", "nml-core-py", "python"))
 BANK = os.path.expanduser("~/selfplay_out/terrain_bank")
-LISTS = os.path.expanduser("~/nml-mission/farm/ai_lists")
+LISTS = os.path.expanduser(os.environ.get("NML_AI_LISTS_DIR", ""))
 NEEDS = [m for m in ("nml_core", "onnxruntime") if importlib.util.find_spec(m) is None]
 if not (os.path.isdir(BANK) and os.path.isdir(LISTS)):
     NEEDS.append("bank/lists")

@@ -458,12 +458,8 @@ mod tests {
     use super::*;
 
     fn net_path() -> String {
-        std::env::var("NML_POLICY_NET").unwrap_or_else(|_| {
-            format!(
-                "{}/nml-mission/netlab/nets/policy_v1.json",
-                std::env::var("HOME").unwrap_or_default()
-            )
-        })
+        // Point NML_POLICY_NET at the private fixture; unset = the tests skip.
+        std::env::var("NML_POLICY_NET").unwrap_or_default()
     }
 
     #[test]
@@ -531,7 +527,7 @@ mod identity {
         let fx = (
             pick("NML_POLICY_DUMP", "selfplay_out/policy_rows_v1/dumps/qbg_ref_all.jsonl"),
             pick("NML_POLICY_CORPUS", "selfplay_out/qbg_ref"),
-            pick("NML_POLICY_NET", "nml-mission/netlab/nets/policy_v1.json"),
+            pick("NML_POLICY_NET", "netlab/nets/policy_v1.json"),
         );
         let corpus_ok = std::path::Path::new(&fx.1).is_dir();
         if !corpus_ok {

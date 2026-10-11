@@ -428,7 +428,7 @@ fn search_widen(roll: &Rollout, st: &State, p: i64, leaf: TreeLeaf, budget: usiz
     let (rows, order) = ranked(roll, st, p, sc).unwrap();
     let mut root = Node::new(st.clone(), Step::Mover(p), p);
     root.children = root_children(&rows, &order, &[]);
-    let cfg = TreeCfg { leaf, dice: TreeDice::Ev, samples: 1, batch, budget, wall_ms: 0, deadline: None, widen, puct: 0.0, player: p,
+    let cfg = TreeCfg { leaf, dice: TreeDice::Ev, samples: 1, batch, opp_batch: 0, opp_shuffle: 0, budget, wall_ms: 0, deadline: None, widen, puct: 0.0, player: p,
                         opener_seat: false, sig: None, hook: None, w: 0.0 };
     let (best, trace) = run(roll, &cfg, &mut root, &mut GodotRng::new(7), sc).unwrap();
     (best, trace, order)
@@ -705,7 +705,7 @@ fn the_game_end_boundary_carries_no_reply_threat() {
     assert!(checked >= 20 && differs >= 1, "{checked} {differs}");
 }
 
-/// NachtmahrZero E1 — PUCT at the root. With every mean tied, a prior steers the selection to its heaviest child
+/// search E1 — PUCT at the root. With every mean tied, a prior steers the selection to its heaviest child
 /// (UCT, blind to priors, keeps the first); `puct` 0 or no priors is UCT to the bit; the softmax is a distribution.
 #[test]
 fn puct_follows_the_prior_where_uct_is_blind() {
@@ -818,7 +818,7 @@ fn opponent_model_tree_leaf_is_the_edges_own_activation() {
                     let mut root = Node::new(act.state.clone(), Step::Mover(p), p);
                     root.children = root_children(&rows, &order, &[]);
                     let width = root.children.len();
-                    let cfg = TreeCfg { leaf: TreeLeaf::Blend, dice: TreeDice::Ev, samples: 1, batch: 8, budget: width,
+                    let cfg = TreeCfg { leaf: TreeLeaf::Blend, dice: TreeDice::Ev, samples: 1, batch: 8, opp_batch: 0, opp_shuffle: 0, budget: width,
                                         wall_ms: 0, deadline: None, widen: 0.0, puct: 0.0, player: p, opener_seat: seat,
                                         sig: None, hook: None, w: 0.0 };
                     let t = run(roll, &cfg, &mut root, &mut GodotRng::new(7), &mut sc).unwrap().1;
@@ -992,7 +992,7 @@ fn search_hooked(roll: &Rollout, st: &State, p: i64, leaf: TreeLeaf, budget: usi
     let (rows, order) = ranked(roll, st, p, sc).unwrap();
     let mut root = Node::new(st.clone(), Step::Mover(p), p);
     root.children = root_children(&rows, &order, &[]);
-    let cfg = TreeCfg { leaf, dice: TreeDice::Ev, samples: 1, batch, budget, wall_ms: 0, deadline: None, widen: 0.0,
+    let cfg = TreeCfg { leaf, dice: TreeDice::Ev, samples: 1, batch, opp_batch: 0, opp_shuffle: 0, budget, wall_ms: 0, deadline: None, widen: 0.0,
                         puct: 0.0, player: p, opener_seat: seat, sig: None, hook, w };
     let (best, trace) = run(roll, &cfg, &mut root, &mut GodotRng::new(7), sc).unwrap();
     (best, trace, root)
@@ -1162,7 +1162,7 @@ fn tree_opponent_own_leaf_selects_the_opponents_own_argmax() {
                     let (rows, order) = ranked(roll, &act.state, p, &mut sc).unwrap();
                     let mut root = Node::new(act.state.clone(), Step::Mover(p), p);
                     root.children = root_children(&rows, &order, &[]);
-                    let mut cfg = TreeCfg { leaf: TreeLeaf::Blend, dice: TreeDice::Ev, samples: 1, batch: 8,
+                    let mut cfg = TreeCfg { leaf: TreeLeaf::Blend, dice: TreeDice::Ev, samples: 1, batch: 8, opp_batch: 0, opp_shuffle: 0,
                                             budget: 4 * width + 32, wall_ms: 0, deadline: None, widen: 0.5, puct: 0.0,
                                             player: p, opener_seat: seat, sig: None, hook, w: 1.0 };
                     run(roll, &cfg, &mut root, &mut GodotRng::new(7), &mut sc).unwrap();

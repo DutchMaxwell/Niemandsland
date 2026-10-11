@@ -18,7 +18,7 @@ import selfplay as sp  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[4]
 BANK_DIR = Path(os.path.expanduser("~/selfplay_out/terrain_bank"))
-LISTS = Path(os.path.expanduser("~/nml-mission/farm/ai_lists"))
+LISTS = Path(os.path.expanduser(os.environ.get("NML_AI_LISTS_DIR", "")))
 ARMY1, ARMY2 = LISTS / "robot_legions_1000.json", LISTS / "blessed_sisters_1000.json"
 needs_lists = pytest.mark.skipif(
     not (BANK_DIR.is_dir() and ARMY1.exists() and ARMY2.exists()),

@@ -146,10 +146,10 @@ pub struct Pick {
     pub tree: Option<TreeTrace>,
     /// `deadline_us` on a pool pick — `Some` ONLY when the knob is set.
     pub deadline: Option<DeadlineTrace>,
-    /// LAZARUS M1 step 9 — build index where the HAND rows end and the grid rows begin
+    /// grid-search step 9 — build index where the HAND rows end and the grid rows begin
     /// (`scored.len()` after the prefilter). Equals `scored.len()` when the grid is off.
     pub n_hand: usize,
-    /// LAZARUS M1 step 9 — the grid-widening trace, `Some` ONLY on a pick the `grid_k` knob widened.
+    /// grid-search step 9 — the grid-widening trace, `Some` ONLY on a pick the `grid_k` knob widened.
     pub grid: Option<GridTrace>,
 }
 
@@ -168,7 +168,7 @@ pub struct DeadlineTrace {
     pub preselect_us: Option<u64>,
 }
 
-/// LAZARUS M1 step 9 — the grid-widening trace, `Some` ONLY on a pick the `grid_k` knob widened.
+/// grid-search step 9 — the grid-widening trace, `Some` ONLY on a pick the `grid_k` knob widened.
 /// `units` widened (best, runner-up, then pool rank); `reachable` cells offered; `proposed` after
 /// the `propose_order` prefix; `deduped` landing duplicates; `landed_far` > 1" from every hand
 /// landing; `completed` priced by the leaf; `cut` pool already deadline-cut; `batches` leaf batches.
@@ -181,7 +181,7 @@ pub struct GridTrace {
     pub deduped: usize,
     pub landed_far: usize,
     pub completed: usize,
-    /// LAZARUS M1 step 9 F3 — grid cells whose rollout DECLINED (`Err`) and were dropped so one bad
+    /// grid-search step 9 F3 — grid cells whose rollout DECLINED (`Err`) and were dropped so one bad
     /// cell costs a row, not the whole act.
     pub dropped: usize,
     pub cut: bool,
@@ -567,7 +567,7 @@ impl<'a> Search<'a> {
         if self.leaf_value_w != 0.0 && self.leaf_value.is_none() {
             return Err(Unsupported::LeafValueMissing);
         }
-        // LAZARUS M1 step 9 — the grid knobs: the learned prior is declined until step 16, and the
+        // grid-search step 9 — the grid knobs: the learned prior is declined until step 16, and the
         // grid rows must be priced by the pool's own (opener) leaf, so a hookless search declines.
         if self.roll.knobs.grid_proposer != 0 {
             return Err(Unsupported::GridPriorMissing);
@@ -699,6 +699,23 @@ impl<'a> Search<'a> {
         let (base, mut scored) = self.prefilter(state, player, sc)?;
         if scored.is_empty() {
             return Err(Unsupported::NoCandidate); // `{"used": false}`
+        }
+        // F3b (candidate-budget) — the HAND prefilter can itself exceed the token
+        // candidate budget (`tokens::build` refuses > `N_CAND` rows at the pyo3
+        // boundary): a wide battle yields one row per unit, per objective, per
+        // edge. Cap the hand menu the same way the grid tail is capped — keep the
+        // top `N_CAND` by the SAME rank the sort uses, restore build order, and
+        // renumber `idx` so the pool, the trace and `Pick::cands` stay aligned.
+        // A menu that already fits is untouched (byte-identical).
+        if scored.len() > crate::tokens::N_CAND {
+            let mut keep = rank(&scored, self.bend.idx_tiebreak);
+            keep.truncate(crate::tokens::N_CAND);
+            keep.sort_unstable();
+            scored = keep
+                .iter()
+                .enumerate()
+                .map(|(new_idx, &old)| ScoredRow { idx: new_idx, ..scored[old].clone() })
+                .collect();
         }
 
         // PHASE 2 — the sort.
@@ -846,7 +863,7 @@ impl<'a> Search<'a> {
                 runner_idx = pos_of[i] as i64;
             }
         }
-        // LAZARUS M1 step 9 — widen the chosen units with reachable 1-inch cells (default off).
+        // grid-search step 9 — widen the chosen units with reachable 1-inch cells (default off).
         let n_hand = scored.len();
         let pool_cut = deadline_trace.as_ref().is_some_and(|d| d.cut);
         let grid = if self.roll.knobs.grid_k > 0 {
@@ -1015,7 +1032,7 @@ impl<'a> Search<'a> {
         nested.run(st, opp, sc, None)
     }
 
-    /// LAZARUS M1 step 9 — widen the chosen units with reachable 1-inch cells (priced by the pool's
+    /// grid-search step 9 — widen the chosen units with reachable 1-inch cells (priced by the pool's
     /// own leaf); a deadline-cut pool is skipped and stamped (`cut: true`).
     #[allow(clippy::too_many_arguments)]
     fn widen(
@@ -1091,7 +1108,7 @@ impl<'a> Search<'a> {
                 let order_cells = crate::grid_order::propose_order(&cells, &hand_cells, seed, nx);
                 let mut seen: Vec<[f64; 3]> = scored.iter().filter_map(|r| r.cand.dest).collect();
                 for (rank, &(cell, source)) in order_cells.iter().enumerate().take(self.roll.knobs.grid_k) {
-                    // LAZARUS M1 step 9 F3 — cap the widened rows so hand + grid stays under the
+                    // grid-search step 9 F3 — cap the widened rows so hand + grid stays under the
                     // token candidate budget (N_CAND), leaving the usual headroom.
                     if grid_rows.len() >= crate::tokens::N_CAND.saturating_sub(n_hand).saturating_sub(4) {
                         break;
@@ -1109,7 +1126,7 @@ impl<'a> Search<'a> {
                     cand.dest = Some(dest);
                     if kind == crate::sim::ADVANCE && seams.moved_shoot {
                         if let Some(e) = crate::menu::best_shoot_from(state, statics, u, &moved, sc, tuning) {
-                            // LAZARUS M1 step 9 F1 — mirror the hand: the moved-cell LOS probe
+                            // grid-search step 9 F1 — mirror the hand: the moved-cell LOS probe
                             // rides ONLY under `shoot_los`; a wall otherwise keeps the row (the hand
                             // never re-probes from the moved point), and a blocked line drops it.
                             let blocked = tuning.shoot_los && terrain.is_valid() && terrain.los_blocked(
@@ -1123,7 +1140,7 @@ impl<'a> Search<'a> {
                     let Ok(next) = self.roll.policy.resolve_root(state, &cand) else { continue };
                     let s = score_with(&next, statics, player,
                         &reply_threat_opts(statics, &next, player, seams.reply_opts()), fit);
-                    // LAZARUS M1 step 9 F3 — one grid cell the recruiter cannot roll costs a ROW,
+                    // grid-search step 9 F3 — one grid cell the recruiter cannot roll costs a ROW,
                     // never the whole act: count it and move on.
                     let ends = match self.rollout_of(state, &cand, player, sc) {
                         Ok(e) => e,
@@ -1256,7 +1273,9 @@ impl<'a> Search<'a> {
         let (t0, deadline, preselect_us) = (clock.0, clock.1.filter(|_| self.bend.tree_budget.is_none()), clock.2);
         let cfg = TreeCfg {
             leaf: k.tree_leaf, dice: k.tree_dice, samples: k.tree_samples.max(1) as usize,
-            batch: k.tree_batch.max(1) as usize, budget: self.bend.tree_budget.unwrap_or(k.tree_budget).max(1) as usize,
+            batch: k.tree_batch.max(1) as usize, opp_batch: k.tree_opp_batch.max(0) as usize,
+            opp_shuffle: k.tree_opp_shuffle,
+            budget: self.bend.tree_budget.unwrap_or(k.tree_budget).max(1) as usize,
             wall_ms: if self.bend.tree_budget.is_some() || deadline.is_some() { 0 } else { k.tree_wall_ms.max(0) as u64 },
             deadline, widen: k.tree_widen, puct: k.tree_puct, player,
             opener_seat: self.act.opener_seat, sig: self.sig, hook: self.leaf_value, w: self.leaf_value_w,
