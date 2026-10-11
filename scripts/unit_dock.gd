@@ -814,10 +814,10 @@ func _card_action(kind: String) -> void:
 				radial_menu_controller.card_start_activation(unit)
 		"fatigued":
 			if radial_menu_controller != null:
-				radial_menu_controller.card_toggle_fatigued(unit)
+				radial_menu_controller.card_toggle_fatigued(unit, true)
 		"shaken":
 			if radial_menu_controller != null:
-				radial_menu_controller.card_toggle_shaken(unit)
+				radial_menu_controller.card_toggle_shaken(unit, true)
 		"casts":
 			if radial_menu_controller != null:
 				radial_menu_controller.card_open_casts(unit)
