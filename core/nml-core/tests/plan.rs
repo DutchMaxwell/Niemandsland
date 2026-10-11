@@ -1837,7 +1837,7 @@ fn reply_pool_cap_and_menu_parse_from_a_header_and_default_off() {
     assert!(d.reply_pool_cap == 0 && !d.reply_menu_restricted);
 }
 
-// LAZARUS M1 step 9b RED: grid_k widens the chosen unit with reachable 1-inch cells. OFF is
+// grid-search step 9b RED: grid_k widens the chosen unit with reachable 1-inch cells. OFF is
 // byte-identical; ON `scored` grows by that unit's cells as TAIL rows. Main ignores the keys.
 #[test]
 fn grid_k_widens_the_chosen_unit() {
@@ -1867,7 +1867,7 @@ fn grid_k_widens_the_chosen_unit() {
     assert!(grew > 0, "grid_k widened no act of the corpus");
 }
 
-/// LAZARUS M1 step 9b — the widen needs the pool's own leaf hook. On every act the grid-off search
+/// grid-search step 9b — the widen needs the pool's own leaf hook. On every act the grid-off search
 /// can answer, `grid_k > 0` with no hook declines with `GridNeedsOpenerLeaf`.
 #[test]
 fn grid_needs_opener_leaf() {
@@ -1889,7 +1889,7 @@ fn grid_needs_opener_leaf() {
     assert!(seen > 0, "the corpus declined everywhere — the gate proves nothing");
 }
 
-/// LAZARUS M1 step 9b identity gate — `grid_k` 0 (absent OR explicit 0) is byte-identical to the
+/// grid-search step 9b identity gate — `grid_k` 0 (absent OR explicit 0) is byte-identical to the
 /// baseline: pool, rollout values to the bit, pick, no grid trace stamped.
 #[test]
 fn grid_off_is_byte_identical() {
@@ -1918,7 +1918,7 @@ fn grid_off_is_byte_identical() {
     }
     assert!(checked > 0, "the corpus declined everywhere — the gate proves nothing");
 }
-/// LAZARUS M1 step 9b — the widen is deterministic: two runs rank and pick identically.
+/// grid-search step 9b — the widen is deterministic: two runs rank and pick identically.
 #[test]
 fn grid_is_deterministic() {
     let c = corpus();
@@ -1941,7 +1941,7 @@ fn grid_is_deterministic() {
     }
     assert!(checked > 0, "the corpus declined everywhere — the gate proves nothing");
 }
-/// LAZARUS M1 step 9b — a huge `grid_margin` keeps the HAND pick: grid rows can never outrank it.
+/// grid-search step 9b — a huge `grid_margin` keeps the HAND pick: grid rows can never outrank it.
 #[test]
 fn grid_margin_keeps_the_hand_pick() {
     let c = corpus();
@@ -1962,7 +1962,7 @@ fn grid_margin_keeps_the_hand_pick() {
     assert!(checked > 0, "the corpus declined everywhere — the gate proves nothing");
 }
 
-/// LAZARUS M1 step 9d RED — a grid ADVANCE+shoot whose MOVED cell has no LOS to its target must be
+/// grid-search step 9d RED — a grid ADVANCE+shoot whose MOVED cell has no LOS to its target must be
 /// DROPPED, not declined: the whole act stays searched. Grid path only; the hand menu is unchanged.
 #[test]
 fn grid_moved_cell_without_los_is_skipped_not_declined() {
@@ -2091,7 +2091,7 @@ fn grid_shuffle_cannot_conjure_a_signal() {
     assert!(checked > 0, "the corpus declined everywhere — the gate proves nothing");
 }
 
-/// LAZARUS M1 step 9 fix (F3) RED — the widened grid rows must respect the token candidate budget.
+/// grid-search step 9 fix (F3) RED — the widened grid rows must respect the token candidate budget.
 /// A huge `grid_k` proposes far more cells than `N_CAND`, so the widen caps the grid tail at
 /// `N_CAND - n_hand - 4` (headroom for the coverage/patient/wave adds). On the 9x tree nothing caps
 /// it and `Pick::scored` blows well past `N_CAND`; the `GridTrace`/`n_hand` counts must still agree.
