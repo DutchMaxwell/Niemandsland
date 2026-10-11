@@ -1491,7 +1491,7 @@ CAP_SEED_STRIDE = 700003
 # to its default is not a part and stays unstamped.
 TREE_KNOB_DEFAULTS = {
     "search_mode": "oneply", "tree_leaf": "blend", "tree_dice": "ev", "tree_budget": 128,
-    "tree_samples": 4, "tree_batch": 8, "tree_opp_batch": 0, "tree_wall_ms": 0, "pool_wall_ms": 0, "deadline_us": 0,
+    "tree_samples": 4, "tree_batch": 8, "tree_opp_batch": 0, "tree_opp_shuffle": 0, "tree_wall_ms": 0, "pool_wall_ms": 0, "deadline_us": 0,
     "deadline_after_preselect": False,
     "tree_puct": 0.0, "tree_widen": 0.0, "tree_opponent_own_leaf": False,
 }
@@ -2545,6 +2545,7 @@ def play_game(
     deep_tree_widen: float | None = None,
     deep_tree_opponent_own_leaf: bool | None = None,
     deep_tree_opp_batch: int | None = None,
+    deep_tree_opp_shuffle: int | None = None,
     record_cands: bool = False,
     eval_variant_player: int = 0,
     eval_variant: int = 0,
@@ -2852,6 +2853,7 @@ def play_game(
             ("tree_dice", deep_tree_dice), ("tree_budget", deep_tree_budget),
             ("tree_samples", deep_tree_samples), ("tree_batch", deep_tree_batch),
             ("tree_opp_batch", deep_tree_opp_batch),
+            ("tree_opp_shuffle", deep_tree_opp_shuffle),
             ("tree_wall_ms", deep_tree_wall_ms), ("pool_wall_ms", deep_pool_wall_ms),
             ("deadline_us", deep_deadline_us), ("deadline_after_preselect", deep_deadline_after_preselect),
             ("tree_puct", deep_tree_puct), ("tree_widen", deep_tree_widen),

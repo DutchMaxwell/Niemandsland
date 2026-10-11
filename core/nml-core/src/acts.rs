@@ -350,6 +350,12 @@ pub struct Knobs {
     /// below it. 0 (default) = off, `tree_batch` everywhere, byte-identical.
     #[serde(default)]
     pub tree_opp_batch: i64,
+    /// Tree search knob (opponent child-order shuffle): at an OPPONENT node the
+    /// first batch permutes the candidate order before the take-first-`k`, so a
+    /// different subset of the reply set opens first at the same width. `0`
+    /// (default) = off, byte-identical; any other value is the shuffle seed.
+    #[serde(default)]
+    pub tree_opp_shuffle: i64,
     /// Tree search knob: wall-clock safety fallback in ms (0 = off).
     #[serde(default)]
     pub tree_wall_ms: i64,
@@ -1607,6 +1613,7 @@ impl Default for Knobs {
             tree_samples: default_tree_samples(),
             tree_batch: default_tree_batch(),
             tree_opp_batch: 0,
+            tree_opp_shuffle: 0,
             tree_wall_ms: 0,
             pool_wall_ms: 0,
             deadline_us: 0,

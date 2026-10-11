@@ -342,8 +342,7 @@ pub fn expand(roll: &Rollout, node: &mut Node, k: usize, dice: TreeDice, samples
         return Ok(0);
     }
     if node.children.is_empty() {
-        let (rows, order) = ranked(roll, &node.state, node.mover, sc)?;
-        node.children = root_children(&rows, &order, &[]);
+        ensure_children(roll, node, sc)?;
     }
     let (from, to) = (node.next_child, (node.next_child + k).min(node.children.len()));
     for c in from..to {
@@ -359,6 +358,32 @@ pub fn expand(roll: &Rollout, node: &mut Node, k: usize, dice: TreeDice, samples
     Ok(to - from)
 }
 
+/// Builds `node`'s children from `ranked` for its mover if it has none yet
+/// (the same build `expand` does on its first call), so a caller can permute
+/// the candidate order BEFORE the take-first-`k`.
+fn ensure_children(roll: &Rollout, node: &mut Node, sc: &mut Scratch) -> Result<(), Unsupported> {
+    if node.terminal.is_none() && node.children.is_empty() {
+        let (rows, order) = ranked(roll, &node.state, node.mover, sc)?;
+        node.children = root_children(&rows, &order, &[]);
+    }
+    Ok(())
+}
+
+/// Fisher–Yates over `node.children`, seeded by `seed` and the node's shuffle
+/// sequence `seq` (its order of first expansion) so each opponent node gets its
+/// own deterministic permutation across runs (the control arm's CRN).
+fn shuffle_children(node: &mut Node, seed: i64, seq: i64) {
+    let n = node.children.len();
+    if n < 2 {
+        return;
+    }
+    let mut rng = GodotRng::new(seed.wrapping_mul(6364136223846793005).wrapping_add(seq));
+    for i in (1..n).rev() {
+        let j = rng.randi_range(0, i as i64) as usize;
+        node.children.swap(i, j);
+    }
+}
+
 /// UCT's exploration constant — the pilot's starting point (plan D-T2).
 pub const UCT_C: f64 = 0.5;
 
@@ -372,6 +397,10 @@ pub struct TreeCfg<'a> {
     /// Opponent wide-first batch: at an OPPONENT node the FIRST expansion batch
     /// opens up to `opp_batch` children instead of `batch`. 0 = off.
     pub opp_batch: usize,
+    /// Opponent child-order shuffle seed: at an OPPONENT node the first batch
+    /// permutes the candidate order before the take-first-`k` (same width, a
+    /// different subset first). 0 = off, byte-identical.
+    pub opp_shuffle: i64,
     pub budget: usize,
     /// The wall-clock SAFETY fallback in ms (0 = off), checked between
     /// expansion batches; the budget stays the leaf count.
@@ -546,6 +575,9 @@ pub fn run(roll: &Rollout, cfg: &TreeCfg, root: &mut Node, rng: &mut GodotRng, s
     let (opp, opp_seat) = (other_player(&root.state, cfg.player), !cfg.opener_seat);
     let hook = cfg.hook.filter(|_| cfg.leaf == TreeLeaf::Blend && cfg.w != 0.0);
     let mut own_leaves = 0;
+    // The shuffle's per-node sequence: opponent nodes are permuted in the order
+    // the search first expands them, so each gets its own deterministic seed.
+    let mut shuffle_seq = 0i64;
     while completed < cfg.budget {
         if cfg.deadline.is_some_and(|d| std::time::Instant::now() >= d) {
             deadline_hit = true;
@@ -585,6 +617,11 @@ pub fn run(roll: &Rollout, cfg: &TreeCfg, root: &mut Node, rng: &mut GodotRng, s
             }
             let from = node.next_child;
             let want = if cfg.opp_batch > 0 && from == 0 && is_opp(&*node) { cfg.opp_batch } else { cfg.batch };
+            if cfg.opp_shuffle != 0 && from == 0 && is_opp(&*node) {
+                ensure_children(roll, node, sc)?;
+                shuffle_seq += 1;
+                shuffle_children(node, cfg.opp_shuffle, shuffle_seq);
+            }
             let k = want.min((cfg.budget - completed).div_ceil(per_child)).min(cap(node) - from);
             expand(roll, node, k, cfg.dice, cfg.samples, base, cfg.player, sc)?;
             let fresh = || node.children[from..node.next_child].iter().flat_map(|c| &c.nodes);
