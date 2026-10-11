@@ -448,7 +448,7 @@ pub struct Knobs {
     /// `Header::books` and `header_of`.
     #[serde(default)]
     pub bands_prefolded: bool,
-    /// LAZARUS M1 step 9 — grid widening: cells proposed per (widened unit, kind). 0 (default) = off,
+    /// grid-search step 9 — grid widening: cells proposed per (widened unit, kind). 0 (default) = off,
     /// byte-identical; large = all reachable cells. Read only when the knob is set.
     #[serde(default)]
     pub grid_k: usize,

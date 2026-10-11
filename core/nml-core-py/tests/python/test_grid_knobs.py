@@ -1,4 +1,4 @@
-"""LAZARUS M1 step 9a — the four `grid_k`-family knobs (default off, byte-identical). This PR only
+"""grid-search step 9a — the four `grid_k`-family knobs (default off, byte-identical). This PR only
 registers them: `Core.knobs()` carries them, a header that sets the keys reads them back, and the
 defaults are the OFF values. The widening that consumes them is step 9b.
 
