@@ -369,6 +369,9 @@ pub struct TreeCfg<'a> {
     pub dice: TreeDice,
     pub samples: usize,
     pub batch: usize,
+    /// Opponent wide-first batch: at an OPPONENT node the FIRST expansion batch
+    /// opens up to `opp_batch` children instead of `batch`. 0 = off.
+    pub opp_batch: usize,
     pub budget: usize,
     /// The wall-clock SAFETY fallback in ms (0 = off), checked between
     /// expansion batches; the budget stays the leaf count.
@@ -581,7 +584,8 @@ pub fn run(roll: &Rollout, cfg: &TreeCfg, root: &mut Node, rng: &mut GodotRng, s
                 own_leaves += asked;
             }
             let from = node.next_child;
-            let k = cfg.batch.min((cfg.budget - completed).div_ceil(per_child)).min(cap(node) - from);
+            let want = if cfg.opp_batch > 0 && from == 0 && is_opp(&*node) { cfg.opp_batch } else { cfg.batch };
+            let k = want.min((cfg.budget - completed).div_ceil(per_child)).min(cap(node) - from);
             expand(roll, node, k, cfg.dice, cfg.samples, base, cfg.player, sc)?;
             let fresh = || node.children[from..node.next_child].iter().flat_map(|c| &c.nodes);
             let states: Vec<&State> = fresh().filter(|x| x.terminal.is_none()).map(|x| &x.state).collect();

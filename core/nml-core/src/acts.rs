@@ -344,6 +344,12 @@ pub struct Knobs {
     /// Tree search knob: children opened per expansion batch.
     #[serde(default = "default_tree_batch")]
     pub tree_batch: i64,
+    /// Tree search knob (opponent wide-first batch): at an OPPONENT node the FIRST
+    /// expansion batch opens up to `tree_opp_batch` children instead of
+    /// `tree_batch`, so the reply set is opened wide before the search descends
+    /// below it. 0 (default) = off, `tree_batch` everywhere, byte-identical.
+    #[serde(default)]
+    pub tree_opp_batch: i64,
     /// Tree search knob: wall-clock safety fallback in ms (0 = off).
     #[serde(default)]
     pub tree_wall_ms: i64,
@@ -1600,6 +1606,7 @@ impl Default for Knobs {
             tree_budget: default_tree_budget(),
             tree_samples: default_tree_samples(),
             tree_batch: default_tree_batch(),
+            tree_opp_batch: 0,
             tree_wall_ms: 0,
             pool_wall_ms: 0,
             deadline_us: 0,
