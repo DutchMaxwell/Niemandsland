@@ -6374,9 +6374,11 @@ func _solo_prompt_reanimation_allocation(unit: GameUnit, successes: int, anchors
 	_solo_deploy_ui_show(_solo_reanimation_strip_text(unit, left),
 		"Auto-allocate the rest", func() -> void: skipped.append(true))
 	while left > 0:
-		while outcome.is_empty() and skipped.is_empty() and not _solo_model_pick.is_empty() and is_inside_tree():
+		while outcome.is_empty() and skipped.is_empty() and not _solo_model_pick.is_empty():
+			if not is_inside_tree():
+				break
 			await get_tree().process_frame
-		if not is_inside_tree():
+		if not is_inside_tree() and outcome.is_empty() and skipped.is_empty() and not _solo_model_pick.is_empty():
 			break   # left the tree (End Battle) — stop waiting, unwind
 		if not skipped.is_empty() or _solo_model_pick.is_empty():
 			break
@@ -8975,10 +8977,10 @@ func _on_transport_spill_dangerous(_transport: GameUnit, spilled: Array) -> void
 			pending.append([unit, dice])
 	if pending.is_empty():
 		return
-	while _solo_tray_busy and is_inside_tree():
+	while _solo_tray_busy:
+		if not is_inside_tree():
+			return   # left the tree (End Battle) — skip the rolls
 		await get_tree().process_frame
-	if not is_inside_tree():
-		return   # left the tree (End Battle) — skip the rolls
 	for p in pending:
 		var unit := (p as Array)[0] as GameUnit
 		if unit == null or unit.is_destroyed():
@@ -13361,9 +13363,11 @@ func _solo_prompt_wound_allocation(target: GameUnit, wounds: int, pid: int, appl
 		"Auto-allocate the rest",
 		func() -> void: skipped.append(true))
 	while left > 0:
-		while outcome.is_empty() and skipped.is_empty() and not _solo_model_pick.is_empty() and is_inside_tree():
+		while outcome.is_empty() and skipped.is_empty() and not _solo_model_pick.is_empty():
+			if not is_inside_tree():
+				break
 			await get_tree().process_frame
-		if not is_inside_tree():
+		if not is_inside_tree() and outcome.is_empty() and skipped.is_empty() and not _solo_model_pick.is_empty():
 			break   # left the tree (End Battle) — stop waiting, unwind
 		if not skipped.is_empty() or _solo_model_pick.is_empty():
 			break
@@ -18700,10 +18704,10 @@ func _resolve_skirmish_drop(mv: Dictionary, unit: GameUnit) -> void:
 		if JumpRules.drop_kind(drop.dy_in) == JumpRules.DropKind.IMPASSABLE:
 			_log_rule_event(BattleLog.Category.MOVEMENT, "%s: drop over 6\", impassable (%s)" % [unit.get_name(), page])
 			return
-		while _solo_tray_busy and is_inside_tree():
+		while _solo_tray_busy:
+			if not is_inside_tree():
+				return
 			await get_tree().process_frame
-		if not is_inside_tree():
-			return
 		var target := JumpRules.jump_target(model.has_special_rule("Strider") or unit.has_special_rule("Strider"), model.has_special_rule("Flying") or unit.has_special_rule("Flying"))
 		var faces: Array = [] if target == 0 else await _solo_tray_roll(JumpRules.jump_dice(drop.dy_in), target, _roller_label(unit), "jump", "Jump (%s)" % page)
 		var fell := faces.any(func(face): return int(face) < target)
@@ -20880,10 +20884,10 @@ func _solo_rule_unit_ghost(shape: Array, zone: Dictionary, blockers: Array, boun
 			chosen.assign(positions)
 			answer["done"] = true,
 		func() -> void: answer["done"] = true)
-	while not answer["done"] and is_inside_tree():
+	while not answer["done"]:
+		if not is_inside_tree():
+			return []   # left the tree (End Battle) — no placement
 		await get_tree().process_frame
-	if not is_inside_tree():
-		return []   # left the tree (End Battle) — no placement
 	ghost.queue_free()
 	return chosen
 
