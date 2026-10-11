@@ -33,10 +33,15 @@ func after_test() -> void:
 	_runner = null
 
 
-func _register(pid: int, unit_name: String, at: Vector3, rules: Array = []) -> GameUnit:
+func _register(pid: int, unit_name: String, at: Vector3, rules: Array = [], faction := "") -> GameUnit:
 	var u := E2EBoot.make_unit(_main, pid, unit_name, [at, at + Vector3(0.03, 0.0, 0.0)])
 	if not rules.is_empty():
 		u.unit_properties["special_rules"] = rules
+	# RulesRegistry.unit_rule_active needs a faction whose book fields the rule: "Mend" is never in the
+	# map's `common` section, only in the faction sections (e.g. battle_brothers). A real imported unit
+	# carries faction_folder; the fixture must too, or the rule reads as unknown and never fires.
+	if not faction.is_empty():
+		u.unit_properties["faction_folder"] = faction
 	_main.opr_army_manager.game_units[u.unit_id] = u
 	return u
 
@@ -74,7 +79,7 @@ func _wounded_ally(pid: int, unit_name: String, at: Vector3) -> GameUnit:
 
 
 func test_a_human_mend_bearer_heals_a_wounded_tough_ally(timeout := 120000) -> void:
-	var healer := _register(1, "Healer", Vector3(-0.3, 0.0, 0.0), ["Mend"])
+	var healer := _register(1, "Healer", Vector3(-0.3, 0.0, 0.0), ["Mend"], "battle_brothers")
 	var ally := _wounded_ally(1, "ToughAlly", Vector3(0.3, 0.0, 0.0))
 	_register(2, "Raiders", Vector3(0.3, 0.0, 0.3))
 	_hotseat_automatic()
@@ -90,7 +95,7 @@ func test_a_human_mend_bearer_heals_a_wounded_tough_ally(timeout := 120000) -> v
 
 
 func test_mend_does_not_fire_on_a_manual_table(timeout := 120000) -> void:
-	var healer := _register(1, "Healer", Vector3(-0.3, 0.0, 0.0), ["Mend"])
+	var healer := _register(1, "Healer", Vector3(-0.3, 0.0, 0.0), ["Mend"], "battle_brothers")
 	var ally := _wounded_ally(1, "ToughAlly", Vector3(0.3, 0.0, 0.0))
 	_register(2, "Raiders", Vector3(0.3, 0.0, 0.3))
 	_manual()
