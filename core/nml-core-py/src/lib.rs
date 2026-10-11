@@ -947,6 +947,8 @@ impl Core {
         m.insert("tree_widen".into(), self.knobs.tree_widen.into());
         m.insert("tree_puct".into(), self.knobs.tree_puct.into());
         m.insert("tree_opponent_own_leaf".into(), self.knobs.tree_opponent_own_leaf.into());
+        m.insert("tree_opp_batch".into(), self.knobs.tree_opp_batch.into());
+        m.insert("tree_opp_shuffle".into(), self.knobs.tree_opp_shuffle.into());
         m.insert(
             "melee_reach".into(),
             Value::String(
