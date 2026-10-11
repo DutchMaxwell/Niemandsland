@@ -360,7 +360,7 @@ fn pick_plain(p: &Pick, cands: bool) -> Value {
         trace.insert("grid".into(), serde_json::json!({
             "rows": rows, "units": g.units, "reachable": g.reachable, "proposed": g.proposed,
             "deduped": g.deduped, "landed_far": g.landed_far, "completed": g.completed,
-            "cut": g.cut, "batches": g.batches,
+            "dropped": g.dropped, "cut": g.cut, "batches": g.batches,
         }));
     }
     out.insert("trace".into(), Value::Object(trace));

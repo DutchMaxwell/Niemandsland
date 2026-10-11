@@ -181,6 +181,9 @@ pub struct GridTrace {
     pub deduped: usize,
     pub landed_far: usize,
     pub completed: usize,
+    /// LAZARUS M1 step 9 F3 — grid cells whose rollout DECLINED (`Err`) and were dropped so one bad
+    /// cell costs a row, not the whole act.
+    pub dropped: usize,
     pub cut: bool,
     pub batches: usize,
 }
@@ -1023,7 +1026,7 @@ impl<'a> Search<'a> {
         best_idx: &mut i64, runner_idx: &mut i64, last_leaf: &mut Option<State>, pool_cut: bool,
     ) -> Result<Option<GridTrace>, Unsupported> {
         let empty = |cut: bool| Some(GridTrace { rows: Vec::new(), units: 0, reachable: 0, proposed: 0,
-            deduped: 0, landed_far: 0, completed: 0, cut, batches: 0 });
+            deduped: 0, landed_far: 0, completed: 0, dropped: 0, cut, batches: 0 });
         if pool_cut {
             return Ok(empty(true));
         }
@@ -1070,7 +1073,9 @@ impl<'a> Search<'a> {
         let mut grid_rows: Vec<ScoredRow> = Vec::new();
         let mut ends_of: Vec<Vec<State>> = Vec::new();
         let mut meta: Vec<GridRow> = Vec::new();
-        let (mut reachable, mut proposed, mut deduped, mut landed_far) = (0usize, 0usize, 0usize, 0usize);
+        let (mut reachable, mut proposed, mut deduped, mut landed_far, mut dropped) =
+            (0usize, 0usize, 0usize, 0usize, 0usize);
+        let n_hand = scored.len();
         for &u in &units {
             let key = state.key(u).to_string();
             let ps = state.positions[u].clone();
@@ -1086,6 +1091,11 @@ impl<'a> Search<'a> {
                 let order_cells = crate::grid_order::propose_order(&cells, &hand_cells, seed, nx);
                 let mut seen: Vec<[f64; 3]> = scored.iter().filter_map(|r| r.cand.dest).collect();
                 for (rank, &(cell, source)) in order_cells.iter().enumerate().take(self.roll.knobs.grid_k) {
+                    // LAZARUS M1 step 9 F3 — cap the widened rows so hand + grid stays under the
+                    // token candidate budget (N_CAND), leaving the usual headroom.
+                    if grid_rows.len() >= crate::tokens::N_CAND.saturating_sub(n_hand).saturating_sub(4) {
+                        break;
+                    }
                     proposed += 1;
                     let p = crate::grid::cell_centre(terrain, cell, centre[1]);
                     let dest = [p[0] as f64, p[1] as f64, p[2] as f64];
@@ -1097,11 +1107,12 @@ impl<'a> Search<'a> {
                     }
                     let mut cand = Candidate::new(&key, kind);
                     cand.dest = Some(dest);
-                    if kind == crate::sim::ADVANCE {
+                    if kind == crate::sim::ADVANCE && seams.moved_shoot {
                         if let Some(e) = crate::menu::best_shoot_from(state, statics, u, &moved, sc, tuning) {
-                            // LAZARUS M1 step 9d — the moved shot must see the target FROM THE MOVED
-                            // cell; a blocked line drops the candidate, never declines the act.
-                            let blocked = terrain.is_valid() && terrain.los_blocked(
+                            // LAZARUS M1 step 9 F1 — mirror the hand: the moved-cell LOS probe
+                            // rides ONLY under `shoot_los`; a wall otherwise keeps the row (the hand
+                            // never re-probes from the moved point), and a blocked line drops it.
+                            let blocked = tuning.shoot_los && terrain.is_valid() && terrain.los_blocked(
                                 crate::geom::centre(&moved), crate::geom::centre(&state.positions[e]));
                             if blocked {
                                 continue;
@@ -1112,7 +1123,15 @@ impl<'a> Search<'a> {
                     let Ok(next) = self.roll.policy.resolve_root(state, &cand) else { continue };
                     let s = score_with(&next, statics, player,
                         &reply_threat_opts(statics, &next, player, seams.reply_opts()), fit);
-                    let ends = self.rollout_of(state, &cand, player, sc)?;
+                    // LAZARUS M1 step 9 F3 — one grid cell the recruiter cannot roll costs a ROW,
+                    // never the whole act: count it and move on.
+                    let ends = match self.rollout_of(state, &cand, player, sc) {
+                        Ok(e) => e,
+                        Err(_) => {
+                            dropped += 1;
+                            continue;
+                        }
+                    };
                     let landing = (dest[0] - centre[0] as f64).hypot(dest[2] - centre[2] as f64) / crate::IN2M;
                     let far = scored.iter().filter_map(|r| r.cand.dest)
                         .all(|d| (dest[0] - d[0]).hypot(dest[2] - d[2]) / crate::IN2M > 1.0);
@@ -1178,7 +1197,7 @@ impl<'a> Search<'a> {
         *best_idx = pos_of[best.as_ref().expect("a widened pool still has a best").0] as i64;
         *runner_idx = runner.as_ref().map_or(-1, |&(i, _)| pos_of[i] as i64);
         Ok(Some(GridTrace { rows: meta, units: units.len(), reachable, proposed, deduped, landed_far,
-            completed, cut: false, batches: 1 }))
+            completed, dropped, cut: false, batches: 1 }))
     }
 
     /// The `deadline_us` fallback when the deadline hit before the first
