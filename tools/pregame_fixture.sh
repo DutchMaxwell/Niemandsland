@@ -8,16 +8,16 @@
 # Per run it prints "PREGAME_DUMP <seed> <order> OK|FAIL"; at the end a final count plus a JSON
 # integrity check (every dump parses, every field non-null, probe_hits present). Exit != 0 on any gap.
 #
-# Env overrides (all optional, private-safe: no secrets, $HOME-relative defaults):
+# Env overrides (no secrets; $HOME-relative defaults unless noted):
 #   NML_PREGAME_GODOT   godot binary                (default $HOME/bin/godot)
 #   NML_PREGAME_REPO    project dir w/ this branch  (default $HOME/openTTS)
-#   NML_AI_LISTS_DIR    army-list dir               (default $HOME/nml-mission/farm/ai_lists)
+#   NML_AI_LISTS_DIR    army-list dir               (required)
 #   NML_PREGAME_OUT     output dir                  (default $HOME/selfplay_out/pregame_fixture)
 #   NML_PREGAME_WORKERS parallel dump runs          (default 1)
 set -uo pipefail
 GODOT="${NML_PREGAME_GODOT:-$HOME/bin/godot}"
 REPO="${NML_PREGAME_REPO:-$HOME/openTTS}"
-LISTS="${NML_AI_LISTS_DIR:-$HOME/nml-mission/farm/ai_lists}"
+LISTS="${NML_AI_LISTS_DIR:?set NML_AI_LISTS_DIR}"
 OUT="${NML_PREGAME_OUT:-$HOME/selfplay_out/pregame_fixture}"
 WORKERS="${NML_PREGAME_WORKERS:-1}"
 mkdir -p "$OUT"

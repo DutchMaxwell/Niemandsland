@@ -2371,7 +2371,7 @@ def play_from_state(
 #: 06.10.2026 (E1 opener, D5 game-end threat, D1 morale die, A3 held marker on eval_variant 4,
 #: D2 reply threat, E5 spent enemies skipped mid-round, D2c Immobile hold gate) — farm/aifix/AB_PRESET.md.
 KNOB_PRESETS: dict[str, dict[str, Any]] = {
-    # the strength_by_points eval arm (freeze2 T2c): presence weighted by unit points
+    # the strength_by_points eval arm (T2c): presence weighted by unit points
     "afpoints_p1": {"strength_by_points": True},
     "charge_path": {"charge_needs_path": True},
     # opponent-model diagnosis (c) (08.10.2026): every root rollout stops right after the opener and is

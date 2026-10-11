@@ -56,7 +56,7 @@ FIXTURES = REPO / "core" / "nml-core" / "tests" / "fixtures"
 #: The out-of-repo halves of the corpus gate.
 REF_DIR = Path(os.path.expanduser("~/selfplay_out/m3_ref_v2"))
 BANK_DIR = Path(os.path.expanduser("~/selfplay_out/terrain_bank"))
-LISTS = Path(os.path.expanduser("~/nml-mission/farm/ai_lists"))
+LISTS = Path(os.path.expanduser(os.environ.get("NML_AI_LISTS_DIR", "")))
 ARMY1 = LISTS / "robot_legions_1000.json"
 ARMY2 = LISTS / "blessed_sisters_1000.json"
 GATE_SEEDS = range(27, 47)

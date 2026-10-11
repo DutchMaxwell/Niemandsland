@@ -50,7 +50,7 @@ whenever the census ran (an instrument, not a gate); usage errors exit 2.
 
     python core/nml-core-py/tools/rule_fire_census.py \
         --qbg ~/selfplay_out/qbg_ref --qag ~/selfplay_out/qag_ref \
-        --coverage ~/nml-mission/plans/RULE_COVERAGE_2026-08-31.json \
+        --coverage $RULE_COVERAGE_JSON \
         --out-json ... --out-md ...
 """
 

@@ -10,7 +10,7 @@ Two layers:
     against every game's header in ~/selfplay_out/m3_oracle/ (the M3-0
     oracle), field by field. That corpus lives outside the repo (Godot
     self-play output, not a committed fixture) and the AI lists it was built
-    from live in the private mission tracker (~/nml-mission/farm/ai_lists),
+    from live in the mission tracker (NML_AI_LISTS_DIR),
     so this half SKIPS wholesale when either directory is absent instead of
     failing a machine that never ran M3-0.
 """
@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import sys
 import warnings
 from pathlib import Path
@@ -43,7 +44,7 @@ from list_to_profile import (  # noqa: E402
 # this port's (correct) weapon-rule strings. m3_oracle stays on disk
 # untouched for another builder's unrelated gate.
 ORACLE_DIR = Path.home() / "selfplay_out" / "m3_oracle_v2"
-AI_LISTS_DIR = Path.home() / "nml-mission" / "farm" / "ai_lists"
+AI_LISTS_DIR = Path(os.environ.get("NML_AI_LISTS_DIR", ""))
 
 #: NML-1097 — base_radius. `tools/core_selfplay.gd:_units_from_list` never
 #: copies a list's "bases" onto `unit_properties`, so every unit in an M3

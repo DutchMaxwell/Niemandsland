@@ -9,7 +9,7 @@ directory of GAME directories, each named `<p1>_vs_<p2>_s<seed>` and carrying th
 
     ~/venvs/nmlcore/bin/python core/nml-core-py/tools/qa_gate.py \\
         --ref ~/selfplay_out/qa_ref --bank ~/selfplay_out/terrain_bank \\
-        --lists ~/nml-mission/farm/ai_lists
+        --lists $NML_AI_LISTS_DIR
 
 The pairing and the seed come from the DIRECTORY NAME — never from inside the
 file — so a reference laid down for one pairing cannot be silently compared
@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 import time
@@ -87,7 +88,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--bank", required=True, help="terrain bank directory")
     ap.add_argument(
         "--lists",
-        default=str(Path("~/nml-mission/farm/ai_lists").expanduser()),
+        default=str(Path(os.environ.get("NML_AI_LISTS_DIR", "")).expanduser()),
         help="directory the army list JSONs live in",
     )
     ap.add_argument("--repo", default=str(Path(__file__).resolve().parents[3]))

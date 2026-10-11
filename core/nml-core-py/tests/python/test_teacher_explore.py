@@ -1,4 +1,4 @@
-"""Root exploration for the teacher recorder (NachtmahrZero E2, 07.10.2026) — `teacher_record.Explorer`, default OFF.
+"""Root exploration for the teacher recorder (search E2, 07.10.2026) — `teacher_record.Explorer`, default OFF.
 
   * OFF = no Explorer is built and `pack` writes no `explored` column: the records are the ones main wrote;
   * ON = the first 8 decisions of an exploring seat sample from `0.75 * root prior + 0.25 * Dirichlet(0.3)`

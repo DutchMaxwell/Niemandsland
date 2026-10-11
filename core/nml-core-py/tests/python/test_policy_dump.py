@@ -25,7 +25,7 @@ from pathlib import Path
 import pytest
 
 DUMP = Path(os.environ.get("NML_POLICY_DUMP",
-                           os.path.expanduser("~/nml-mission/policy_out/policy_dump.jsonl")))
+                           os.environ.get("NML_POLICY_DUMP", "")))
 CORPUS = Path(os.environ.get("NML_POLICY_CORPUS",
                              os.path.expanduser("~/selfplay_out/qbg_ref")))
 IN2M = 0.0254  # BattleSim.IN2M — plain-state positions are meters, menu_tuples divides by it for game-inches
