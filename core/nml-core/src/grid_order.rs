@@ -1,4 +1,4 @@
-//! LAZARUS M1 step 8b — the 1-inch grid's proposal order: ring shells around the hand cells, then a
+//! grid-search step 8b — the 1-inch grid's proposal order: ring shells around the hand cells, then a
 //! seeded uniform tail. UNUSED by the planner until the `grid_k` knob (step 9) consumes `propose_order`;
 //! adding it changes no existing behaviour. The cell ids are the ones `crate::grid` assigns.
 
