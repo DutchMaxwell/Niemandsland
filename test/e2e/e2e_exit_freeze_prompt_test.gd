@@ -117,3 +117,10 @@ func test_a_pending_prompt_loop_returns_when_the_table_leaves_the_tree(timeout :
 	assert_array(out) \
 		.override_failure_message("the prompt loop did not return after the table left the tree") \
 		.is_not_empty()
+
+	# Hand the scene back BEFORE the body ends: gdUnit snapshots orphans right after the test body
+	# and before after_test, so a Main still detached at that point counts as 1391 orphans
+	# (see E2EBoot.settle for the whole story). The after_test re-add alone is provably too late.
+	if is_instance_valid(_main) and is_instance_valid(_parent) and not _main.is_inside_tree():
+		_parent.add_child(_main)
+	await E2EBoot.settle(get_tree())
