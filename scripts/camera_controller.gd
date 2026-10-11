@@ -23,12 +23,12 @@ var _is_panning: bool = false
 var _last_mouse_pos: Vector2 = Vector2.ZERO
 
 ## Cinematic depth of field ("tilt-shift"): production counterpart of the reference
-## scene's zoom-driven DOF. Blur fades in as the camera approaches the table plane.
-## Controlled by GraphicsSettings.tilt_shift.
-const TILT_SHIFT_MAX_AMOUNT := 0.045
+## scene's zoom-driven DOF. On every preset the whole table is sharp while zoomed out;
+## the blur only fades in as the camera zooms in close. Controlled by GraphicsSettings.tilt_shift.
+const TILT_SHIFT_MAX_AMOUNT := 0.045        # Low/Performance peak (unchanged)
+const TILT_SHIFT_MAX_AMOUNT_FOCUS := 0.035  # Medium+ peak: same fade rule, deliberately weaker (maintainer 11.10.)
 const TILT_SHIFT_FADE_NEAR := 0.35  # full blur at/below this camera distance (m)
 const TILT_SHIFT_FADE_FAR := 0.95   # no blur at/above this camera distance (m)
-var _focus_target: Node3D
 
 var _tilt_shift_enabled: bool = false
 var _camera_attributes: CameraAttributesPractical
@@ -61,9 +61,6 @@ func _ready() -> void:
 		graphics.settings_applied.connect(func(_preset: String) -> void: _update_tilt_shift())
 		# Calm mode forces tilt-shift off; follow it live so the DOF drops at once.
 		graphics.calm_mode_changed.connect(func() -> void: set_tilt_shift_enabled(graphics.tilt_shift))
-	var manager := get_parent().get_node_or_null("ObjectManager")
-	if manager != null and manager.has_signal("selection_changed"):
-		manager.selection_changed.connect(_on_focus_selection)
 	set_tilt_shift_enabled(_tilt_shift_enabled)
 	_mark_dirty()
 
@@ -296,35 +293,22 @@ func set_tilt_shift_enabled(enabled: bool) -> void:
 		_camera.attributes = null
 
 
-## Focus only changes the optical band; selection never moves the orbit camera.
-func _on_focus_selection(selected: Array[Node3D]) -> void:
-	_focus_target = selected[0] if not selected.is_empty() else null
-	_update_tilt_shift()
-
-
-## Medium+ focuses at the orbit target/selected figure, including the normal ~2 m table view.
+## Zoom-fade depth of field on every preset: sharp at the normal/overview distance (the
+## table stays readable), the blur fading in only as the camera moves in close. Medium+
+## peaks weaker than Low, and never holds a band at the normal play distance any more.
 func _update_tilt_shift() -> void:
 	if not _tilt_shift_enabled or _camera_attributes == null:
 		return
-	var graphics := get_node_or_null("/root/GraphicsSettings")
-	var amount: float = graphics.table_focus_amount(graphics.current_preset) if graphics != null else 0.0
-	if amount > 0.0:
-		var target := _focus_target.global_position if is_instance_valid(_focus_target) else Vector3(_target_position.x, 0.025, _target_position.z)
-		var depth := maxf(0.06, -_camera.to_local(target).z)
-		var band := 0.16 if _current_zoom < 1.0 else clampf(depth * 0.16, 0.09, 0.32)
-		_camera_attributes.dof_blur_near_distance = maxf(0.0, depth - band)
-		_camera_attributes.dof_blur_far_distance = depth + band
-		_camera_attributes.dof_blur_near_transition = depth * 0.50
-		_camera_attributes.dof_blur_far_transition = depth * 0.50
-		_camera_attributes.dof_blur_amount = 0.095 if _current_zoom < 1.0 else amount
-		return
-	# Restore all legacy values when dropping back to Low/Performance.
 	_camera_attributes.dof_blur_near_distance = 0.10
 	_camera_attributes.dof_blur_near_transition = 0.12
 	_camera_attributes.dof_blur_far_distance = 0.55
 	_camera_attributes.dof_blur_far_transition = 0.55
+	var peak := TILT_SHIFT_MAX_AMOUNT
+	var graphics := get_node_or_null("/root/GraphicsSettings")
+	if graphics != null and int(graphics.current_preset) >= GraphicsSettings.QualityPreset.MEDIUM:
+		peak = TILT_SHIFT_MAX_AMOUNT_FOCUS
 	var fade := 1.0 - smoothstep(TILT_SHIFT_FADE_NEAR, TILT_SHIFT_FADE_FAR, _current_zoom)
-	_camera_attributes.dof_blur_amount = TILT_SHIFT_MAX_AMOUNT * fade
+	_camera_attributes.dof_blur_amount = peak * fade
 
 
 ## Reset camera to default view
