@@ -1578,6 +1578,9 @@ func _on_solo_human_activated(gu: GameUnit) -> void:
 		# NML-939: a room with no AI seat (plain human-vs-human multiplayer) has no alternation to drive, but
 		# the unit's own activation is still the door of its once-per-activation Utility Buff.
 		if not _solo_alternation_active() and gu != null and not _solo_is_ai_unit(gu):
+			# Step 2.7a: the hotseat Mend door (Automatic only) — a human bearer heals on its own tray.
+			if _solo_hotseat_automatic():
+				await _solo_apply_mend(gu)
 			await _solo_apply_utility_buffs(gu)
 			# Step 2.7b: the hotseat Breath Attack door (Automatic only) — a human bearer breathes on
 			# an enemy on its own tray.
@@ -1602,6 +1605,9 @@ func _on_solo_human_activated(gu: GameUnit) -> void:
 	# once-per-activation Utility Buff (round-stamped, so a unit that already bought it at the
 	# attack door is untouched).
 	await _solo_apply_utility_buffs(gu)
+	# Step 2.7a: the human Mend door (solo vs NACHTMAHR) — a human bearer heals a wounded Tough ally
+	# within 3" on its own tray, once per activation.
+	await _solo_apply_mend(gu)
 	# Surprise Attack burst: YOUR bearer's first activation fires it too (STANDALONE_SWEEP_D
 	# 2026-09-14 — the burst lived only in the AI activation body). Same once-per-game latch
 	# (`surprise_attack_used`) and same descending auto pick the AI path uses; one log line
@@ -6655,10 +6661,19 @@ func _solo_reanimation_spot_ok(pos: Vector3, r: float, model: ModelInstance, anc
 ## most wounds lost within 3" of the bearer's unit, hero tiebreak; one visible tray die is the D3
 ## (1-2→1, 3-4→2, 5-6→3); the heal runs through the same wound-marker + MP seams the damage paths use.
 ## Distances are model-centre reads (documented simplification — slightly conservative for the AI).
-## Human bearers apply the rule manually (their normal wound-token workflow). No-op without Mend.
+## Step 2.7a: a Human bearer now gets the SAME auto-pick and rolls its D3 on its OWN tray (_owner_roll) —
+## the wording is a plain instruction (no "may"), so Mend is automatic for humans too, once per
+## activation (round-stamped). No-op without Mend.
 func _solo_apply_mend(unit: GameUnit) -> void:
-	if unit == null or opr_army_manager == null or not _solo_is_ai_unit(unit):
+	if unit == null or opr_army_manager == null:
 		return
+	var ai_side := _solo_is_ai_unit(unit)
+	if not ai_side:
+		# Once per activation, round-stamped: the hotseat door re-emits unit_activated, so a second
+		# pass in the same round must not heal (or roll) again. The AI path calls this once per
+		# activation and keeps its own no-latch flow.
+		if int(unit.unit_properties.get("mend_round", -1)) == opr_army_manager.current_round:
+			return
 	var bearers: Array = [unit]
 	if unit.has_method("get_attached_heroes"):
 		bearers = bearers + unit.get_attached_heroes()
@@ -6673,7 +6688,15 @@ func _solo_apply_mend(unit: GameUnit) -> void:
 	var patient := _solo_mend_pick(unit, bearers)
 	if patient == null:
 		return
-	var face: Array = await _solo_tray_roll(1, 1, "AI (%s)" % unit.get_name())   # a pure D3 value roll
+	if not ai_side:
+		unit.unit_properties["mend_round"] = opr_army_manager.current_round   # stamp before the roll
+	# The D3 value roll: the AI keeps its own tray call byte-identical; a human rolls on its OWN tray
+	# (the _owner_roll seam), so the die lands on the owner's side, not NACHTMAHR's.
+	var face: Array
+	if ai_side:
+		face = await _solo_tray_roll(1, 1, "AI (%s)" % unit.get_name())   # a pure D3 value roll
+	else:
+		face = await _owner_roll(unit, 1, 1, "mend", "Mend")
 	if face.is_empty():
 		return
 	var d3: int = (int(face[0]) + 1) / 2
@@ -6688,7 +6711,7 @@ func _solo_apply_mend(unit: GameUnit) -> void:
 		network_manager.broadcast_model_wounds(patient)
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "Mend: %s heals %d wound%s (D3 rolled %d) — patient now %d/%d" % [
-			unit.get_name(), healed, ("" if healed == 1 else "s"), int(face[0]), patient.wounds_current, patient.wounds_max], true)
+			unit.get_name(), healed, ("" if healed == 1 else "s"), int(face[0]), patient.wounds_current, patient.wounds_max], ai_side)
 
 
 ## Breath Attack (army-book, grill round 2 cut A — official text: "Once per activation, before

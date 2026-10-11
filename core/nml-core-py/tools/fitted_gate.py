@@ -27,7 +27,7 @@ steps, with no change to any shipping file:
      the live encoder, writing its own pick + trace per act.
 
     P=core/nml-core-py/tools/fitted_gate.py; V=~/venvs/nml1142/bin/python
-    NET=~/.cache/nml-rehearsal/rehearsal_net_v3.json
+    NET=${NML_REHEARSAL_NET:?set NML_REHEARSAL_NET}
     $V $P --doctor <in>/acts.jsonl --out <g>/acts.jsonl
     NML_FIT_WEIGHTS=net NML_NET_PATH=$NET godot --headless --path <wt> \\
         -s res://tools/act_recheck.gd -- file=<g>/acts.jsonl \\

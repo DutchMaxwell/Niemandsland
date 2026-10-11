@@ -1491,8 +1491,9 @@ CAP_SEED_STRIDE = 700003
 # to its default is not a part and stays unstamped.
 TREE_KNOB_DEFAULTS = {
     "search_mode": "oneply", "tree_leaf": "blend", "tree_dice": "ev", "tree_budget": 128,
-    "tree_samples": 4, "tree_batch": 8, "tree_wall_ms": 0, "pool_wall_ms": 0, "deadline_us": 0,
+    "tree_samples": 4, "tree_batch": 8, "tree_opp_batch": 0, "tree_opp_shuffle": 0, "tree_wall_ms": 0, "pool_wall_ms": 0, "deadline_us": 0,
     "deadline_after_preselect": False,
+    "tree_puct": 0.0, "tree_widen": 0.0, "tree_opponent_own_leaf": False,
 }
 
 
@@ -2371,7 +2372,7 @@ def play_from_state(
 #: 06.10.2026 (E1 opener, D5 game-end threat, D1 morale die, A3 held marker on eval_variant 4,
 #: D2 reply threat, E5 spent enemies skipped mid-round, D2c Immobile hold gate) — farm/aifix/AB_PRESET.md.
 KNOB_PRESETS: dict[str, dict[str, Any]] = {
-    # the strength_by_points eval arm (freeze2 T2c): presence weighted by unit points
+    # the strength_by_points eval arm (T2c): presence weighted by unit points
     "afpoints_p1": {"strength_by_points": True},
     "charge_path": {"charge_needs_path": True},
     # opponent-model diagnosis (c) (08.10.2026): every root rollout stops right after the opener and is
@@ -2540,6 +2541,11 @@ def play_game(
     deep_pool_wall_ms: int | None = None,
     deep_deadline_us: int | None = None,
     deep_deadline_after_preselect: bool | None = None,
+    deep_tree_puct: float | None = None,
+    deep_tree_widen: float | None = None,
+    deep_tree_opponent_own_leaf: bool | None = None,
+    deep_tree_opp_batch: int | None = None,
+    deep_tree_opp_shuffle: int | None = None,
     record_cands: bool = False,
     eval_variant_player: int = 0,
     eval_variant: int = 0,
@@ -2780,10 +2786,10 @@ def play_game(
     State objects are core-independent (`state_of`/`resolve_*` take them as
     arguments), so the two cores share one game; the other seat keeps the base
     core and every caller that passes nothing (0, the default) plays the
-    identical game the pre-knob code did. The ten `deep_search_mode` /
+    identical game the pre-knob code did. The thirteen `deep_search_mode` /
     `deep_tree_*` / `deep_pool_wall_ms` / `deep_deadline_us` / `deep_deadline_after_preselect` kwargs (None = unset) join
     the deep core's header knobs the same way (the tree search knobs, keys `search_mode`,
-    `tree_leaf`, ... `deadline_us`); a value EQUAL to the knob's default is
+    `tree_leaf`, ... `tree_puct`, `tree_widen`, `tree_opponent_own_leaf`, `deadline_us`); a value EQUAL to the knob's default is
     not a part, and only a value that parted is stamped into that seat's
     `knobs_by_seat` entry. A tree kwarg without `deep_player` raises. A deep
     game whose deep pair EQUALS
@@ -2846,8 +2852,12 @@ def play_game(
             ("search_mode", deep_search_mode), ("tree_leaf", deep_tree_leaf),
             ("tree_dice", deep_tree_dice), ("tree_budget", deep_tree_budget),
             ("tree_samples", deep_tree_samples), ("tree_batch", deep_tree_batch),
+            ("tree_opp_batch", deep_tree_opp_batch),
+            ("tree_opp_shuffle", deep_tree_opp_shuffle),
             ("tree_wall_ms", deep_tree_wall_ms), ("pool_wall_ms", deep_pool_wall_ms),
             ("deadline_us", deep_deadline_us), ("deadline_after_preselect", deep_deadline_after_preselect),
+            ("tree_puct", deep_tree_puct), ("tree_widen", deep_tree_widen),
+            ("tree_opponent_own_leaf", deep_tree_opponent_own_leaf),
         ) if v is not None and v != TREE_KNOB_DEFAULTS[k]
     }
     if tree_seat and deep_player not in (1, 2):

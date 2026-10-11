@@ -15,7 +15,7 @@ flat output `core_s<seed>.json` per seed. This module derives the same
 `tests/python/test_mass_fast.py` against the first 40 seeds of the real run),
 plays each seed through `selfplay.play_game` in a worker pool, and writes the
 same flat, non-recursive directory shape the net-training readers
-(`~/nml-mission/netlab/e1b_run.py`'s `load8`, `fork_train.py`'s
+(`e1b_run.py`'s `load8`, `fork_train.py`'s
 `load_world2`) already glob.
 
 RESUMABILITY. A seed whose `core_s<seed>.json` already exists is never
@@ -65,7 +65,7 @@ FACTIONS = [
 ]
 DEFAULT_SIZES = [1000, 1500, 2000]
 
-DEFAULT_LISTS = Path(os.path.expanduser("~/nml-mission/farm/ai_lists"))
+DEFAULT_LISTS = Path(os.path.expanduser(os.environ.get("NML_AI_LISTS_DIR", "")))
 DEFAULT_BANK = Path(os.path.expanduser("~/selfplay_out/terrain_bank"))
 
 
@@ -440,7 +440,7 @@ def main(argv: list[str]) -> int:
         "wall_played_seconds": round(wall_played, 3),
         "games_per_hour": games_per_h,
     }
-    # `.RUN.json`, not `RUN.json`: `~/nml-mission/netlab/e1b_run.py`'s `load8`
+    # `.RUN.json`, not `RUN.json`: `e1b_run.py`'s `load8`
     # and `fork_train.py`'s `load_world2` glob `DATA + "/*.json"` NON-
     # recursively over this same directory (GATE Q proof (e)) -- Python's
     # glob module never matches a dotfile against a bare `*`, so a plain

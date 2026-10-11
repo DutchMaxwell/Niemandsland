@@ -37,10 +37,10 @@ SMOKE="${SMOKE:-0}"
 BAR="${BAR:-5.0}"
 SITE="${SITE:-$HOME/.cache/nml-main/site}"
 SHA_FILE="$HOME/.cache/nml-main/SHA"
-PIN_FILE="$HOME/nml-mission/farm/YARDSTICK_SHA"
-NETLAB_DIR="${NETLAB_DIR:-$HOME/nml-mission/netlab}"
+PIN_FILE="${NML_YARDSTICK_SHA_FILE:?set NML_YARDSTICK_SHA_FILE}"
+NETLAB_DIR="${NETLAB_DIR:?set NETLAB_DIR}"
 PY="${PY:-$HOME/venvs/netlab-fixed/bin/python}"
-REF_CKPT_DEFAULT="$HOME/nml-mission/netlab/nets/gen2b/c10a_gen2b.pt,$HOME/nml-mission/netlab/nets/gen2/c7_gen2only.pt"
+REF_CKPT_DEFAULT="${NETLAB_DIR:?set NETLAB_DIR}/nets/gen2b/c10a_gen2b.pt,${NETLAB_DIR:?set NETLAB_DIR}/nets/gen2/c7_gen2only.pt"
 if [ "${CKPT2:-}" = "off" ]; then
   REF_CKPT=""                       # net-free hand grader (laptop smoke / blocked-ckpt fallback)
 elif [ -n "${CKPT2:-}" ]; then

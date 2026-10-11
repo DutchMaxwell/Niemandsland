@@ -30,7 +30,7 @@ sys.path.insert(0, str(TOOLS))
 
 CORPUS = Path(os.path.expanduser("~/selfplay_out/gen0_teacher"))
 BANK = Path(os.path.expanduser("~/selfplay_out/terrain_bank"))
-LISTS = Path(os.path.expanduser("~/nml-mission/farm/ai_lists"))
+LISTS = Path(os.path.expanduser(os.environ.get("NML_AI_LISTS_DIR", "")))
 GAMES = ["gen0_s314913_d317913", "gen0_s320488_d320488", "gen0_s1873_d1873",
          "gen0_s302919_d303919", "gen0_s53_d3053"]
 

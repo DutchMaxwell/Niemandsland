@@ -33,7 +33,7 @@ import selfplay as sp  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[4]
 BANK_DIR = Path(os.path.expanduser("~/selfplay_out/terrain_bank"))
-LISTS = Path(os.path.expanduser("~/nml-mission/farm/ai_lists"))
+LISTS = Path(os.path.expanduser(os.environ.get("NML_AI_LISTS_DIR", "")))
 ARMY1 = LISTS / "robot_legions_1000.json"
 ARMY2 = LISTS / "blessed_sisters_1000.json"
 FAST = {"top_k": 2, "horizon": 1}
@@ -61,7 +61,7 @@ def _walk_strings(obj):
 @pytest.mark.skipif(_lists_missing(), reason="needs the terrain bank + the 1000pt lists")
 def test_the_digested_body_carries_no_filesystem_path():
     """RED without the fix: `armies.p1` / `armies.p2` held `str(list_p1)` /
-    `str(list_p2)`, e.g. `/home/<user>/nml-mission/farm/ai_lists/
+    `str(list_p2)`, e.g. `/home/<user>/army-lists/
     robot_legions_1000.json` -- both signals below (a separator, this
     machine's home dir) catch it. GREEN with the fix: `armies` holds only
     `robot_legions_1000.json` and `armies_sha256` a hex digest -- neither

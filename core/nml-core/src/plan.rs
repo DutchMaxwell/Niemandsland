@@ -1273,7 +1273,9 @@ impl<'a> Search<'a> {
         let (t0, deadline, preselect_us) = (clock.0, clock.1.filter(|_| self.bend.tree_budget.is_none()), clock.2);
         let cfg = TreeCfg {
             leaf: k.tree_leaf, dice: k.tree_dice, samples: k.tree_samples.max(1) as usize,
-            batch: k.tree_batch.max(1) as usize, budget: self.bend.tree_budget.unwrap_or(k.tree_budget).max(1) as usize,
+            batch: k.tree_batch.max(1) as usize, opp_batch: k.tree_opp_batch.max(0) as usize,
+            opp_shuffle: k.tree_opp_shuffle,
+            budget: self.bend.tree_budget.unwrap_or(k.tree_budget).max(1) as usize,
             wall_ms: if self.bend.tree_budget.is_some() || deadline.is_some() { 0 } else { k.tree_wall_ms.max(0) as u64 },
             deadline, widen: k.tree_widen, puct: k.tree_puct, player,
             opener_seat: self.act.opener_seat, sig: self.sig, hook: self.leaf_value, w: self.leaf_value_w,

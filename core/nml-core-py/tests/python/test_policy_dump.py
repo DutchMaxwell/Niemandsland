@@ -25,7 +25,7 @@ from pathlib import Path
 import pytest
 
 DUMP = Path(os.environ.get("NML_POLICY_DUMP",
-                           os.path.expanduser("~/nml-mission/policy_out/policy_dump.jsonl")))
+                           os.environ.get("NML_POLICY_DUMP", "")))
 CORPUS = Path(os.environ.get("NML_POLICY_CORPUS",
                              os.path.expanduser("~/selfplay_out/qbg_ref")))
 IN2M = 0.0254  # BattleSim.IN2M — plain-state positions are meters, menu_tuples divides by it for game-inches
@@ -40,7 +40,7 @@ def _header_and_rows() -> tuple[dict, list[dict]]:
     return header, [json.loads(ln) for ln in lines[1:]]
 
 
-@pytest.mark.skipif(not DUMP.exists(), reason="no policy_dump.jsonl artifact on this machine")
+@pytest.mark.skipif(not DUMP.is_file(), reason="no policy_dump.jsonl artifact on this machine")
 def test_header_schema() -> None:
     header, rows = _header_and_rows()
     assert header["kind"] == "header" and header["schema"] == "policy_dump/1"
@@ -54,7 +54,7 @@ def test_header_schema() -> None:
         assert -1 <= row["pick_idx"] < len(row["cands"])
 
 
-@pytest.mark.skipif(not (DUMP.exists() and CORPUS.is_dir()),
+@pytest.mark.skipif(not (DUMP.is_file() and CORPUS.is_dir()),
                     reason="no dump artifact or qbg_ref corpus on this machine")
 def test_candidate_count_matches_recorded_menus() -> None:
     _, rows = _header_and_rows()
@@ -72,7 +72,7 @@ def test_candidate_count_matches_recorded_menus() -> None:
         assert len(row["cands"]) == menus[key], f"candidate count drift at {key}"
 
 
-@pytest.mark.skipif(not DUMP.exists(), reason="no policy_dump.jsonl artifact on this machine")
+@pytest.mark.skipif(not DUMP.is_file(), reason="no policy_dump.jsonl artifact on this machine")
 def test_pick_vec_is_one_of_the_dumped_vecs() -> None:
     _, rows = _header_and_rows()
     picked = [r for r in rows if r["pick_idx"] >= 0]

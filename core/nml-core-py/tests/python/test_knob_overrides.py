@@ -27,7 +27,7 @@ REPO = Path(__file__).resolve().parents[4]
 HEADER = {"profiles": {}}
 PRESET = sp.KNOB_PRESETS["aifix_all"]
 BANK_DIR = Path(os.path.expanduser("~/selfplay_out/terrain_bank"))
-LISTS = Path(os.path.expanduser("~/nml-mission/farm/ai_lists"))
+LISTS = Path(os.path.expanduser(os.environ.get("NML_AI_LISTS_DIR", "")))
 
 
 def test_the_preset_reaches_the_seat_core_and_not_the_base_core():

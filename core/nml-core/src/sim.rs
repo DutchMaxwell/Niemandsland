@@ -172,10 +172,10 @@ pub enum Unsupported {
     /// Tree search asked for an act outside its scope (the playout
     /// arbitration, the ORDER re-rank): declined by name, never half-applied.
     TreeOutOfScope(&'static str),
-    /// LAZARUS M1 step 9 — `grid_k > 0` with no leaf hook wired: the grid rows must be priced by the
+    /// grid-search step 9 — `grid_k > 0` with no leaf hook wired: the grid rows must be priced by the
     /// pool's own leaf, so a hookless search declines rather than price them by the hand alone.
     GridNeedsOpenerLeaf,
-    /// LAZARUS M1 step 9 — `grid_proposer == 1` (the learned prior) is declined until step 16.
+    /// grid-search step 9 — `grid_proposer == 1` (the learned prior) is declined until step 16.
     GridPriorMissing,
 }
 
