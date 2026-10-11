@@ -2090,3 +2090,29 @@ fn grid_shuffle_cannot_conjure_a_signal() {
     }
     assert!(checked > 0, "the corpus declined everywhere — the gate proves nothing");
 }
+
+/// LAZARUS M1 step 9 fix (F3) RED — the widened grid rows must respect the token candidate budget.
+/// A huge `grid_k` proposes far more cells than `N_CAND`, so the widen caps the grid tail at
+/// `N_CAND - n_hand - 4` (headroom for the coverage/patient/wave adds). On the 9x tree nothing caps
+/// it and `Pick::scored` blows well past `N_CAND`; the `GridTrace`/`n_hand` counts must still agree.
+#[test]
+fn grid_rows_are_capped_at_the_candidate_budget() {
+    let c = corpus();
+    let statics = build_act_statics(&c, REPO);
+    let mut sc = Scratch::default();
+    let hook = SeatLog::new(true);
+    let cap = nml_core::tokens::N_CAND - 4;
+    let mut checked = 0usize;
+    for (ai, act) in c.acts.iter().enumerate() {
+        let mut k = c.knobs; k.grid_k = 64; k.grid_units = 4;
+        let mut s = Search::new(Rollout::new(Policy::new(&statics, &c.terrain, seams_of(&c)), k), &act.statics);
+        s.leaf_value = Some(&hook); s.leaf_value_w = 0.0;
+        let Ok(got) = s.run(&act.state, act.player, &mut sc, None) else { continue };
+        assert!(got.scored.len() <= cap,
+            "act {ai}: grid rows overran the candidate budget ({} > {cap})", got.scored.len());
+        let g = got.grid.as_ref().expect("a widened pick carries a grid trace");
+        assert_eq!(got.scored.len(), got.n_hand + g.completed, "act {ai}: the cap and the trace disagree");
+        checked += 1;
+    }
+    assert!(checked > 0, "the corpus declined everywhere — the gate proves nothing");
+}
