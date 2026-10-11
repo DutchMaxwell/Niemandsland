@@ -39,7 +39,7 @@ fn run_opp(roll: &Rollout, st: &State, p: i64, opp_batch: usize, sc: &mut Scratc
     let (rows, order) = ranked(roll, st, p, sc).unwrap();
     let mut root = Node::new(st.clone(), Step::Mover(p), p);
     root.children = root_children(&rows, &order, &[]);
-    let cfg = TreeCfg { leaf: TreeLeaf::Blend, dice: TreeDice::Ev, samples: 1, batch: BATCH, opp_batch, budget: BUDGET,
+    let cfg = TreeCfg { leaf: TreeLeaf::Blend, dice: TreeDice::Ev, samples: 1, batch: BATCH, opp_batch, opp_shuffle: 0, budget: BUDGET,
                         wall_ms: 0, deadline: None, widen: 0.0, puct: 0.0, player: p,
                         opener_seat: false, sig: None, hook: None, w: 0.0 };
     let (best, trace) = run(roll, &cfg, &mut root, &mut GodotRng::new(7), sc).unwrap();
