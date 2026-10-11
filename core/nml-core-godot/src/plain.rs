@@ -1156,6 +1156,7 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         tree_samples: dint(d, "tree_samples", dflt.tree_samples),
         tree_batch: dint(d, "tree_batch", dflt.tree_batch),
         tree_opp_batch: dint(d, "tree_opp_batch", dflt.tree_opp_batch),
+        tree_opp_shuffle: dint(d, "tree_opp_shuffle", dflt.tree_opp_shuffle),
         tree_wall_ms: dint(d, "tree_wall_ms", dflt.tree_wall_ms),
         pool_wall_ms: dint(d, "pool_wall_ms", dflt.pool_wall_ms),
         deadline_us: dint(d, "deadline_us", dflt.deadline_us),

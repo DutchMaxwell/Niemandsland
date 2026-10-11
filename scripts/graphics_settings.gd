@@ -545,11 +545,6 @@ static func ssr_fade_in_for(tier: int, intensity: float) -> float:
 	return 0.12 - 0.10 * clampf(intensity, 0.0, 1.0) if tier >= QualityPreset.HIGH else intensity
 
 
-## Medium and above keep the tabletop in focus at normal play distance.
-static func table_focus_amount(tier: int) -> float:
-	return 0.11 if tier >= QualityPreset.MEDIUM else 0.0
-
-
 ## Light islands (broken-cloud sunlight) on the table world: High and Ultra, on a sunny Day or a tuned Sunset. The
 ## Sunset run uses milder parameters (TableWorld.cloud_params): the first, untuned version burned the ruins white and
 ## turned the haze milky.

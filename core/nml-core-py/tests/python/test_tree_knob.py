@@ -91,6 +91,24 @@ def test_tree_puct_defaults_are_unstamped():
     assert r["knobs_by_seat"]["p1"] == {"top_k": 2, "horizon": 1, "search_mode": "tree"}
 
 
+@needs_lists
+def test_tree_opp_batch_and_shuffle_stamp_their_seat():
+    """The opponent wide-first batch / child-order shuffle knobs join the deep seat's header."""
+    r = _play(deep_player=1, deep_search_mode="tree",
+              deep_tree_opp_batch=4096, deep_tree_opp_shuffle=7)
+    seat = r["knobs_by_seat"]["p1"]
+    assert seat["tree_opp_batch"] == 4096
+    assert seat["tree_opp_shuffle"] == 7
+
+
+@needs_lists
+def test_tree_opp_defaults_are_unstamped():
+    """Identity: a value EQUAL to the knob's default (0) is not a part and stays unstamped."""
+    r = _play(deep_player=1, deep_search_mode="tree",
+              deep_tree_opp_batch=0, deep_tree_opp_shuffle=0)
+    assert r["knobs_by_seat"]["p1"] == {"top_k": 2, "horizon": 1, "search_mode": "tree"}
+
+
 def test_a_tree_knob_without_a_deep_seat_is_refused():
     """The refusal comes before any list or terrain is read, so it needs neither (it runs in CI)."""
     missing = Path("/nonexistent/list.json")
