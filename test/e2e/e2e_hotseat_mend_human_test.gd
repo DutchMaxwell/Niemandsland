@@ -80,7 +80,7 @@ func _wounded_ally(pid: int, unit_name: String, at: Vector3) -> GameUnit:
 
 func test_a_human_mend_bearer_heals_a_wounded_tough_ally(timeout := 120000) -> void:
 	var healer := _register(1, "Healer", Vector3(-0.3, 0.0, 0.0), ["Mend"], "battle_brothers")
-	var ally := _wounded_ally(1, "ToughAlly", Vector3(0.3, 0.0, 0.0))
+	var ally := _wounded_ally(1, "ToughAlly", Vector3(-0.25, 0.0, 0.0))
 	_register(2, "Raiders", Vector3(0.3, 0.0, 0.3))
 	_hotseat_automatic()
 	await _activate(healer)
@@ -96,7 +96,7 @@ func test_a_human_mend_bearer_heals_a_wounded_tough_ally(timeout := 120000) -> v
 
 func test_mend_does_not_fire_on_a_manual_table(timeout := 120000) -> void:
 	var healer := _register(1, "Healer", Vector3(-0.3, 0.0, 0.0), ["Mend"], "battle_brothers")
-	var ally := _wounded_ally(1, "ToughAlly", Vector3(0.3, 0.0, 0.0))
+	var ally := _wounded_ally(1, "ToughAlly", Vector3(-0.25, 0.0, 0.0))
 	_register(2, "Raiders", Vector3(0.3, 0.0, 0.3))
 	_manual()
 	await _activate(healer)
