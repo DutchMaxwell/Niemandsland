@@ -75,7 +75,7 @@ func phase(title: String) -> void:
 	_advance = false
 	_holding = true
 	var waited := 0.0
-	while not _advance and (_paused or _view != -1 or waited < maxf(hold_s, 0.0)):
+	while not _advance and (_paused or _view != -1 or waited < maxf(hold_s, 0.0)) and is_inside_tree():
 		await get_tree().process_frame
 		if not _paused and _view == -1:
 			waited += get_process_delta_time()
