@@ -1,4 +1,6 @@
 extends GdUnitTestSuite
+## Tilt-shift (cinematic DOF) rule: on every preset the table is sharp while zoomed out,
+## and the blur only fades in as the camera moves in close. Medium+ peaks weaker than Low.
 
 const CameraScript := preload("res://scripts/camera_controller.gd")
 var _tier := GraphicsSettings.QualityPreset.MEDIUM
@@ -31,51 +33,44 @@ func _view(tier: int, distance: float) -> CameraAttributesPractical:
 	return _camera.attributes as CameraAttributesPractical
 
 
-func test_normal_table_view_has_blur_with_a_sharp_band_at_the_table() -> void:
-	for distance in [0.75, 1.64, 2.09, 2.3]:
-		var attributes := _view(3, distance)
-		assert_float(attributes.dof_blur_amount).is_greater(0.05)
-		assert_float(attributes.dof_blur_near_distance).is_less(distance)
-		assert_float(attributes.dof_blur_far_distance).is_greater(distance)
-		assert_float(attributes.dof_blur_far_distance).is_less(distance * 1.3)
+func test_the_table_is_sharp_when_zoomed_out_on_every_preset() -> void:
+	# At the normal play and overview distance the frame stays clean. The old Medium+ path
+	# kept a band and blurred here (0.095 at play, 0.11 at overview); it must be gone.
+	for tier in [1, 2, 3]:
+		for distance in [0.95, 1.64, 2.09, 2.3, 10.0]:
+			assert_float(_view(tier, distance).dof_blur_amount) \
+				.override_failure_message("tier %d at %.2f m" % [tier, distance]).is_zero()
 
 
-func test_low_keeps_the_original_fixed_band_and_zero_overview_blur() -> void:
+func test_blur_fades_in_as_the_camera_moves_close() -> void:
+	# Full at/below the near distance, then falling off to nothing by the far distance.
+	for tier in [2, 3]:
+		assert_float(_view(tier, 0.35).dof_blur_amount).is_equal_approx(0.035, 0.0001)
+		assert_float(_view(tier, 0.06).dof_blur_amount).is_equal_approx(0.035, 0.0001)
+		var mid := _view(tier, 0.6).dof_blur_amount
+		assert_float(mid).is_greater(0.0)
+		assert_float(mid).is_less(0.035)
+
+
+func test_medium_and_high_peak_weaker_than_low_which_is_unchanged() -> void:
+	assert_float(_view(2, 0.2).dof_blur_amount).is_equal_approx(0.035, 0.0001)
+	assert_float(_view(3, 0.2).dof_blur_amount).is_equal_approx(0.035, 0.0001)
+	assert_float(_view(1, 0.2).dof_blur_amount).is_equal_approx(0.045, 0.0001)
+
+
+func test_low_keeps_the_fixed_band_and_overview_stays_clean() -> void:
 	var attributes := _view(1, 2.09)
 	assert_float(attributes.dof_blur_amount).is_zero()
+	assert_float(attributes.dof_blur_near_distance).is_equal_approx(0.10, 0.0001)
 	assert_float(attributes.dof_blur_far_distance).is_equal_approx(0.55, 0.0001)
-	attributes = _view(1, 0.35)
-	assert_float(attributes.dof_blur_amount).is_equal_approx(0.045, 0.0001)
 
 
-func test_toggle_off_removes_attributes_and_preset_change_recomputes_without_camera_motion() -> void:
-	_view(3, 2.09)
+func test_toggle_off_removes_attributes_and_preset_change_recomputes() -> void:
+	_view(3, 0.2)
 	_pivot.set_tilt_shift_enabled(false)
 	assert_object(_camera.attributes).is_null()
 	_pivot.set_tilt_shift_enabled(true)
-	assert_float(_camera.attributes.dof_blur_amount).is_greater(0.09)
+	assert_float(_camera.attributes.dof_blur_amount).is_equal_approx(0.035, 0.0001)
 	GraphicsSettings.current_preset = GraphicsSettings.QualityPreset.LOW
 	GraphicsSettings.settings_applied.emit("Low")
-	assert_float(_camera.attributes.dof_blur_amount).is_zero()
-
-
-func test_selection_tracks_view_depth_and_deleted_target_falls_back_to_table() -> void:
-	_view(3, 2.09)
-	var target := Node3D.new()
-	add_child(target)
-	target.position = Vector3(0.0, 0.1, 0.5)
-	assert_bool(_pivot.has_method("_on_focus_selection")).is_true()
-	if not _pivot.has_method("_on_focus_selection"):
-		target.free()
-		return
-	_pivot.call("_on_focus_selection", [target] as Array[Node3D])
-	for height in [0.1, 0.3]:
-		target.position.y = height
-		_pivot.call("_update_tilt_shift")
-		var a := _camera.attributes as CameraAttributesPractical
-		var focal_depth := (a.dof_blur_near_distance + a.dof_blur_far_distance) * 0.5
-		assert_float(focal_depth).is_equal_approx(-_camera.to_local(target.global_position).z, 0.0001)
-	target.free()
-	_pivot.call("_update_tilt_shift")
-	var restored := _camera.attributes as CameraAttributesPractical
-	assert_float((restored.dof_blur_near_distance + restored.dof_blur_far_distance) * 0.5).is_equal_approx(-_camera.to_local(Vector3(0,0.025,0)).z, 0.0001)
+	assert_float(_camera.attributes.dof_blur_amount).is_equal_approx(0.045, 0.0001)

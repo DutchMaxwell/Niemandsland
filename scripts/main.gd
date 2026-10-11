@@ -1582,6 +1582,10 @@ func _on_solo_human_activated(gu: GameUnit) -> void:
 			if _solo_hotseat_automatic():
 				await _solo_apply_mend(gu)
 			await _solo_apply_utility_buffs(gu)
+			# Step 2.7b: the hotseat Breath Attack door (Automatic only) — a human bearer breathes on
+			# an enemy on its own tray.
+			if _solo_hotseat_automatic():
+				await _solo_apply_breath_attack(gu)
 		return
 	# ONE reply per unit per round (round 7, finding 5): the radial activation marker is a TOGGLE, so
 	# un-marking and re-marking a unit (a mis-click fix, or re-marking after an attack) re-emitted
@@ -1609,6 +1613,9 @@ func _on_solo_human_activated(gu: GameUnit) -> void:
 	# (`surprise_attack_used`) and same descending auto pick the AI path uses; one log line
 	# names the rule either way.
 	await _solo_apply_surprise_attack(gu)
+	# Step 2.7b: the human Breath Attack door (solo vs NACHTMAHR) — a human bearer breathes on an enemy
+	# on its own tray, once per activation.
+	await _solo_apply_breath_attack(gu)
 	# Ambush Re-Deployment: YOUR unit's activation ends here (the activation marker IS the declaration),
 	# so this is where the once-per-game "may" is offered — before the AI answers with its reply.
 	await _solo_try_ambush_redeploy(gu)
@@ -5752,10 +5759,11 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 ## the model-to-model range measure of GF v3.5.1 p.8 (round 7, finding 5). Falls back to the caller's
 ## unit-centre distance when either side has no live model positions.
 func _solo_nearest_model_gap_in(member: GameUnit, enemy: GameUnit, fallback_in: float) -> float:
-	if solo_controller == null:
-		return fallback_in
-	var own: Array = solo_controller.alive_positions(member)
-	var theirs: Array = solo_controller.alive_positions(enemy)
+	# Step 2.7b: the position reader is STATIC (SoloController.alive_positions), so this needs no
+	# controller instance — a hotseat table (no AI controller, step 2.4) measures exactly as a solo
+	# table does. (Was `solo_controller.alive_positions` behind a `solo_controller == null` bail.)
+	var own: Array = SoloController.alive_positions(member)
+	var theirs: Array = SoloController.alive_positions(enemy)
 	if own.is_empty() or theirs.is_empty():
 		return fallback_in
 	var best := INF
@@ -6721,8 +6729,13 @@ func _solo_apply_mend(unit: GameUnit) -> void:
 ## path (Regeneration applies), then the post-shooting morale trigger. Human bearers apply the rule
 ## manually. Registry-gated + parameter-tuned; no-op without the rule.
 func _solo_apply_breath_attack(unit: GameUnit) -> void:
-	if unit == null or opr_army_manager == null or solo_controller == null or not _solo_is_ai_unit(unit):
+	if unit == null or opr_army_manager == null:
 		return
+	var ai_side := _solo_is_ai_unit(unit)
+	if ai_side and solo_controller == null:
+		return   # the AI path needs its controller; a human bearer does not (step 2.7b)
+	if not ai_side and int(unit.unit_properties.get("breath_round", -1)) == opr_army_manager.current_round:
+		return   # once per activation (the hotseat door re-emits unit_activated)
 	var bearers: Array = [unit]
 	if unit.has_method("get_attached_heroes"):
 		bearers = bearers + unit.get_attached_heroes()
@@ -6740,7 +6753,17 @@ func _solo_apply_breath_attack(unit: GameUnit) -> void:
 	var trigger: int = int(RulesRegistry.unit_param(unit, "Breath Attack", "trigger_target", 2))
 	var btarget: GameUnit = null
 	var best := 0.0
-	for h in opr_army_manager.get_game_units_for_player(solo_controller.human_slot):
+	# Step 2.7b: the AI keeps its hardcoded human_slot loop byte-identical; a human bearer picks among
+	# the units whose owner is NOT its own (solo: the AI seat; hotseat: the other human).
+	var candidates: Array = []
+	if ai_side:
+		candidates = opr_army_manager.get_game_units_for_player(solo_controller.human_slot)
+	else:
+		var bearer_slot := unit_owner_slot(unit.unit_properties)
+		for u in opr_army_manager.get_all_game_units():
+			if u != null and unit_owner_slot(u.unit_properties) != bearer_slot:
+				candidates.append(u)
+	for h in candidates:
 		var hu := h as GameUnit
 		if hu == null or _solo_combined_alive(hu) <= 0 or SoloController.unit_in_reserve(hu):
 			continue
@@ -6755,18 +6778,25 @@ func _solo_apply_breath_attack(unit: GameUnit) -> void:
 			btarget = hu
 	if btarget == null:
 		return
-	var face: Array = await _solo_tray_roll(1, trigger, "AI (%s)" % unit.get_name())
+	if not ai_side:
+		unit.unit_properties["breath_round"] = opr_army_manager.current_round   # stamp before the roll
+	# The trigger die: the AI keeps its own tray call byte-identical; a human rolls on its OWN tray.
+	var face: Array
+	if ai_side:
+		face = await _solo_tray_roll(1, trigger, "AI (%s)" % unit.get_name())
+	else:
+		face = await _owner_roll(unit, 1, trigger, "breath", "Breath Attack")
 	if face.is_empty() or not DiceRules.is_success(int(face[0]), trigger, 0):
 		if battle_log != null and not face.is_empty():
 			battle_log.log_event(BattleLog.Category.COMBAT, "Breath Attack: %s rolls %d — fizzles (needs %d+)" % [
-				unit.get_name(), int(face[0]), trigger], true)
+				unit.get_name(), int(face[0]), trigger], ai_side)
 		return
 	var alive_before: int = SoloController.combined_alive(btarget)   # NML-966: trigger reads combined
 	var wounds_before: int = _solo_unit_wounds_now(btarget)
 	var bhits: int = maxi(mini(blast_x, _solo_combined_alive(btarget)), 1)
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "Breath Attack: %s breathes on %s — %d hit%s (Blast(%d), AP(%d))" % [
-			unit.get_name(), btarget.get_name(), bhits, ("" if bhits == 1 else "s"), blast_x, b_ap], true)
+			unit.get_name(), btarget.get_name(), bhits, ("" if bhits == 1 else "s"), blast_x, b_ap], ai_side)
 	var bprofile: Dictionary = {"name": "Breath Attack", "ap": b_ap, "deadly": 0, "blast": blast_x, "rules": []}
 	var w: int = await _solo_resolve_saves(unit, btarget, "Breath Attack", [], bhits,
 		_solo_defense_vs(btarget), bprofile, not _solo_is_ai_unit(btarget), false)
