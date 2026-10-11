@@ -81,11 +81,13 @@ func _lines_with(needle: String) -> int:
 
 
 func test_a_human_bearer_breathes_on_an_enemy(timeout := 120000) -> void:
-	var breather := _register(1, "Breather", Vector3(-0.3, 0.0, 0.0), ["Breath Attack"], "alien_hives")
-	# A friendly of the bearer's OWN side sits in range too: a wrong (human_slot) target pick would
-	# breathe on it instead of the enemy, so naming the enemy is the discriminating assertion.
-	_register(1, "Ally", Vector3(-0.3, 0.0, 0.5))
-	_register(2, "Foe", Vector3(0.3, 0.0, 0.0))
+	# Breath Attack reaches 6" (0.152 m). The fixtures must sit INSIDE that, or the green finds no
+	# target and the positive assertion fails for the wrong reason (the 2.7a lesson: 1 m = 39.4").
+	var breather := _register(1, "Breather", Vector3(0.0, 0.0, 0.0), ["Breath Attack"], "alien_hives")
+	# A friendly of the bearer's OWN side sits in range too (0.1 m = 3.9"): a wrong (human_slot) target
+	# pick would breathe on it instead of the enemy, so naming the enemy is the discriminating assertion.
+	_register(1, "Ally", Vector3(0.0, 0.0, 0.1))
+	_register(2, "Foe", Vector3(0.1, 0.0, 0.0))
 	_hotseat_automatic()
 	_main.seed_tray_rng(_seed_with_trigger_success())
 	await _activate(breather)
@@ -102,8 +104,8 @@ func test_a_human_bearer_breathes_on_an_enemy(timeout := 120000) -> void:
 
 
 func test_a_bearer_without_the_rule_does_not_fire(timeout := 120000) -> void:
-	var plain := _register(1, "Rifles", Vector3(-0.3, 0.0, 0.0), [], "alien_hives")
-	_register(2, "Foe", Vector3(0.3, 0.0, 0.0))
+	var plain := _register(1, "Rifles", Vector3(0.0, 0.0, 0.0), [], "alien_hives")
+	_register(2, "Foe", Vector3(0.1, 0.0, 0.0))
 	_hotseat_automatic()
 	await _activate(plain)
 	assert_int(_lines_with("Breath Attack:")) \
@@ -113,8 +115,8 @@ func test_a_bearer_without_the_rule_does_not_fire(timeout := 120000) -> void:
 
 
 func test_breath_does_not_fire_on_a_manual_table(timeout := 120000) -> void:
-	var breather := _register(1, "Breather", Vector3(-0.3, 0.0, 0.0), ["Breath Attack"], "alien_hives")
-	_register(2, "Foe", Vector3(0.3, 0.0, 0.0))
+	var breather := _register(1, "Breather", Vector3(0.0, 0.0, 0.0), ["Breath Attack"], "alien_hives")
+	_register(2, "Foe", Vector3(0.1, 0.0, 0.0))
 	_manual()
 	await _activate(breather)
 	assert_int(_lines_with("Breath Attack:")) \
