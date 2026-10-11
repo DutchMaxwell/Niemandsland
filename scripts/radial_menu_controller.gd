@@ -584,9 +584,27 @@ func _toggle_activation(context: Dictionary) -> void:
 		network_manager.broadcast_unit_activation(game_unit)
 
 
+## Step 2.T2a-ext: the manual Shaken/Fatigued toggles obey the same off-turn gate as Activate. On a
+## hotseat Automatic table (no AI seat) a unit whose owner is not the side on turn may not be marked or
+## cleared by hand; hotseat_turn_refusal already returns "" on every other table. Engine callers pass
+## manual=false, so the rules keep writing markers on either side.
+func _hotseat_manual_toggle_refused(game_unit: GameUnit) -> bool:
+	var main_node := get_node_or_null("/root/Main")
+	if main_node == null or not main_node.has_method("hotseat_turn_refusal"):
+		return false
+	var slot: int = int(game_unit.unit_properties.get("player_id", 1))
+	var refusal: String = main_node.call("hotseat_turn_refusal", slot)
+	if refusal == "":
+		return false
+	main_node.call("hotseat_log_refusal", refusal)
+	return true
+
+
 func _toggle_fatigued(context: Dictionary, manual: bool = false) -> void:
 	var game_unit = _get_game_unit_from_context(context)
 	if not game_unit:
+		return
+	if manual and _hotseat_manual_toggle_refused(game_unit):
 		return
 
 	game_unit.is_fatigued = not game_unit.is_fatigued
@@ -602,6 +620,8 @@ func _toggle_fatigued(context: Dictionary, manual: bool = false) -> void:
 func _toggle_shaken(context: Dictionary, manual: bool = false) -> void:
 	var game_unit = _get_game_unit_from_context(context)
 	if not game_unit:
+		return
+	if manual and _hotseat_manual_toggle_refused(game_unit):
 		return
 
 	game_unit.is_shaken = not game_unit.is_shaken
@@ -1019,14 +1039,14 @@ func card_start_activation(unit: GameUnit) -> void:
 		await _toggle_activation({"game_unit": unit})
 
 
-func card_toggle_fatigued(unit: GameUnit) -> void:
+func card_toggle_fatigued(unit: GameUnit, manual: bool = false) -> void:
 	if unit != null:
-		_toggle_fatigued({"game_unit": unit})
+		_toggle_fatigued({"game_unit": unit}, manual)
 
 
-func card_toggle_shaken(unit: GameUnit) -> void:
+func card_toggle_shaken(unit: GameUnit, manual: bool = false) -> void:
 	if unit != null:
-		_toggle_shaken({"game_unit": unit})
+		_toggle_shaken({"game_unit": unit}, manual)
 
 
 func card_open_casts(unit: GameUnit) -> void:

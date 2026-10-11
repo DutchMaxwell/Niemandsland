@@ -9,8 +9,8 @@ class MockController:
 	extends Node
 	var calls: Array = []
 	func card_toggle_activation(_u: Variant) -> void: calls.append("activation")
-	func card_toggle_fatigued(_u: Variant) -> void: calls.append("fatigued")
-	func card_toggle_shaken(_u: Variant) -> void: calls.append("shaken")
+	func card_toggle_fatigued(_u: Variant, _manual: bool = false) -> void: calls.append("fatigued")
+	func card_toggle_shaken(_u: Variant, _manual: bool = false) -> void: calls.append("shaken")
 	func card_open_casts(_u: Variant) -> void: calls.append("casts")
 	func card_open_wounds(_u: Variant) -> void: calls.append("wounds")
 	func card_revive(_u: Variant) -> void: calls.append("revive")
