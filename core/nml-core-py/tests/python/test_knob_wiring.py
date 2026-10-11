@@ -69,7 +69,7 @@ _PURE_UNIT_TESTS = frozenset((
 def _require_private_lists(request):
     if request.function.__name__ in _PURE_UNIT_TESTS:
         return
-    if not LISTS.exists():
+    if not os.environ.get("NML_AI_LISTS_DIR") or not LISTS.is_dir():
         pytest.skip("private ai_lists not present (CI)")
 
 #: seeds tried in order until one produces a different game — the same range
