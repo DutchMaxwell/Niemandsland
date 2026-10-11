@@ -20,11 +20,12 @@ outside its menu refuses (filter_corpus.classify :107-108 pattern);
 import argparse
 import glob
 import json
+import os
 import sys
 from pathlib import Path
 
 try:  # the private corpus referee, exactly one definition (clone_train.py:33-38)
-    sys.path.insert(0, str(Path("~/nml-mission/tools").expanduser()))
+    sys.path.insert(0, str(Path(os.environ.get("NML_TOOLS_DIR", "")).expanduser()))
     from filter_corpus import classify_action, DEFAULT_SLACK_IN  # noqa: E402
 except ImportError:  # CI has no private mission dir; the label gate is off there
     classify_action, DEFAULT_SLACK_IN = None, 6.0
@@ -32,9 +33,9 @@ except ImportError:  # CI has no private mission dir; the label gate is off ther
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--dump", default="~/nml-mission/policy_out/policy_dump.jsonl")
+    ap.add_argument("--dump", default=os.environ.get("NML_POLICY_DUMP", ""))
     ap.add_argument("--corpus", default="~/selfplay_out/qbg_ref")
-    ap.add_argument("--out", default="~/nml-mission/policy_out/policy_rows.jsonl")
+    ap.add_argument("--out", default=os.environ.get("NML_POLICY_ROWS", ""))
     ap.add_argument("--winner-weight", type=float, default=1.0,
                     help="loser-row weight (clone_train.py:113-115); 1.0 = pure clone")
     ap.add_argument("--advantage", action="store_true",

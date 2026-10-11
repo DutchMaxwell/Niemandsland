@@ -15,7 +15,7 @@ uv pip install --python ~/venvs/nmlcore/bin/python maturin pytest
 # 2. build the module into it
 cd core/nml-core-py
 VIRTUAL_ENV=~/venvs/nmlcore \
-CARGO_TARGET_DIR=~/.cache/nml-m3-1-target \
+CARGO_TARGET_DIR=$PWD/.cargo-target \
   ~/venvs/nmlcore/bin/maturin develop --release
 
 # 3. the gate (23 + 16 recorded activations replayed through Python)
@@ -168,8 +168,8 @@ asking `nml_core` every rule question.
 
 ```sh
 ~/venvs/nmlcore/bin/python core/nml-core-py/python/selfplay.py \
-    --army1 ~/nml-mission/farm/ai_lists/robot_legions_1000.json \
-    --army2 ~/nml-mission/farm/ai_lists/blessed_sisters_1000.json \
+    --army1 $NML_AI_LISTS_DIR/robot_legions_1000.json \
+    --army2 $NML_AI_LISTS_DIR/blessed_sisters_1000.json \
     --seed 27 --games 20 --repo . --bank ~/selfplay_out/terrain_bank \
     --out ~/selfplay_out/m3_py
 ```

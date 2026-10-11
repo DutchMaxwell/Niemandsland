@@ -4213,7 +4213,7 @@ static func _move_seam_on() -> bool:
 
 ## S7 (22.09.): the move seam as a pure switch, the twin of BattleSim.core_wanted — a RELEASE
 ## build routes plan_unit_step through the core unless NML_CORE_MOVE=0; a debug build keeps the
-## explicit =1. Measured 22.09. (DeepSeek's phase instrument, 2 seeds, 57 activations): the GDScript
+## explicit =1. Measured 22.09. (phase instrument, 2 seeds, 57 activations): the GDScript
 ## movement planner owned 76 % of the AI decision time, p90 4,255 ms → 650 ms with the seam; the
 ## self-check (NML_CORE_SELFCHECK) compared 2,532 plan_unit_step calls over 40 games, both grades,
 ## 0 disagreements — same moves, ~15x less waiting.

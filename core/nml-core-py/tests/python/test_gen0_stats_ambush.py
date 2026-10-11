@@ -4,7 +4,7 @@ PR #563): the twin never arrives a reserved Ambush unit (selfplay.py
 Rapid Ambush / Ambush Beacon unit was played short-handed. `ambush_audit`
 resolves each `armies.<side>` box path (`/root/ai_lists/<list>.json`) to a
 local list under a caller-given `list_dir`, so this test never touches the
-private `~/nml-mission/farm/ai_lists` or the read-only corpus.
+`NML_AI_LISTS_DIR` army lists or the read-only corpus.
 
 RED: a synthetic list with one Ambush unit must count 1 affected game;
 removing the rule from that same list must count 0.
