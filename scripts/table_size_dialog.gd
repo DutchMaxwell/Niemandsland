@@ -331,14 +331,20 @@ func _build_ui() -> void:
 	_style(_create,true,true)
 
 
-## "Rules" row (hidden until RulesAutomation.ui_enabled): two toggle buttons; online only Manual is allowed.
+## "Rules" row (hidden until RulesAutomation.ui_enabled): ONE row — the section label plus the
+## Automatic/Manual toggle — so the section costs no page height beyond a single row (step 2.10, konrad
+## ruling). The by-hand caveat and the online-only caveat ride the Automatic button's tooltip (a tooltip
+## adds no widget); online only Manual is offered.
 func _build_rules_row(column: VBoxContainer) -> void:
 	if not RulesAutomation.ui_enabled():
 		return
-	column.add_child(_label("03   Rules",17))
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation",10)
 	column.add_child(row)
+	var title := _label("03   Rules",17)
+	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	title.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(title)
 	for spec in [[RulesAutomation.Level.AUTOMATIC,"Automatic — the game rolls and applies the rules"],[RulesAutomation.Level.MANUAL,"Manual — you use the dice tray"]]:
 		var button := _button(spec[1])
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -346,12 +352,10 @@ func _build_rules_row(column: VBoxContainer) -> void:
 		# Step 2.10 honesty (no layout impact — a tooltip adds no widget): Automatic applies only the
 		# rules the engine models; anything else is listed at game start under "apply by hand".
 		if spec[0] == RulesAutomation.Level.AUTOMATIC:
-			button.tooltip_text = "The game applies only the rules it models; rules the engine does not model are listed at game start under 'apply by hand' and stay yours."
+			button.tooltip_text = "Automatic online: both players will have to agree (coming later)." if online else "The game applies only the rules it models; rules the engine does not model are listed at game start under 'apply by hand' and stay yours."
 		button.pressed.connect(_select_rules.bind(spec[0]))
 		row.add_child(button)
 		_rules_buttons[spec[0]] = button
-	if online:
-		column.add_child(_label("Automatic online: both players will have to agree (coming later)",11,HouseStyle.MUTED,true))
 
 
 func _select_rules(level: int) -> void:
