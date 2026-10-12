@@ -19602,6 +19602,13 @@ func _on_remote_activation_updated(game_unit: GameUnit) -> void:
 		move_trails.on_activation_done(game_unit.unit_id)
 		if undo_manager != null:
 			undo_manager.expire_move_takebacks()   # #162: the game moved on
+	# 3.3a fix: on the host a REMOTE activation FACT for the side on turn advances the token and
+	# broadcasts it — the guest's own hotseat_record_activation early-returns by design, so without
+	# this the turn froze on the guest's activation. Only the on-turn owner advances (3.3c will reject
+	# out-of-turn facts); the local (own) activation already advanced in its own door.
+	if _online_turn_room() and _turn_is_host() and game_unit != null and game_unit.is_activated \
+			and unit_owner_slot(game_unit.unit_properties) == _hotseat_side_on_turn():
+		await hotseat_record_activation(unit_owner_slot(game_unit.unit_properties))
 
 
 ## Called when a remote peer changes a unit marker (Fatigued, Shaken, etc.)
