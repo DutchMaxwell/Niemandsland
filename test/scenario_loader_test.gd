@@ -48,6 +48,11 @@ class _FakeAutosave extends Node:
 		pause_calls += 1
 
 
+## Plan 4.1: the lesson loader pins the table Manual for the lesson and restores the player's level.
+class _FakeArmy extends Node:
+	var rules_automation: int = RulesAutomation.Level.MANUAL
+
+
 # ============================================================================
 # 1. Orchestration
 # ============================================================================
@@ -293,3 +298,35 @@ func test_external_load_leaves_the_lesson_and_resumes_autosave() -> void:
 	assert_bool(loader.has_snapshot()) \
 		.override_failure_message("the stale lesson snapshot must be dropped — restoring it over the freshly loaded battle would double-load") \
 		.is_false()
+
+
+# ============================================================================
+# Plan 4.1 — a lesson pins the table Manual, then restores the player's level
+# ============================================================================
+
+func test_a_lesson_pins_manual_then_restores_the_players_level() -> void:
+	var sm: _FakeSaveManager = auto_free(_FakeSaveManager.new())
+	var army: _FakeArmy = auto_free(_FakeArmy.new())
+	army.rules_automation = RulesAutomation.Level.AUTOMATIC
+	var loader := ScenarioLoader.new()
+	loader.setup(sm, null, null, army)
+	loader.begin_lesson()
+	assert_int(army.rules_automation) \
+		.override_failure_message("4.1 — a lesson must run Manual so the tray and manual wounds it teaches are not automated away") \
+		.is_equal(RulesAutomation.Level.MANUAL)
+	await loader.end_lesson()
+	assert_int(army.rules_automation) \
+		.override_failure_message("4.1 — ending the lesson must hand the table back at the player's own level") \
+		.is_equal(RulesAutomation.Level.AUTOMATIC)
+
+
+func test_a_manual_player_is_left_manual_across_a_lesson() -> void:
+	var sm: _FakeSaveManager = auto_free(_FakeSaveManager.new())
+	var army: _FakeArmy = auto_free(_FakeArmy.new())
+	army.rules_automation = RulesAutomation.Level.MANUAL
+	var loader := ScenarioLoader.new()
+	loader.setup(sm, null, null, army)
+	loader.begin_lesson()
+	assert_int(army.rules_automation).is_equal(RulesAutomation.Level.MANUAL)
+	await loader.end_lesson()
+	assert_int(army.rules_automation).is_equal(RulesAutomation.Level.MANUAL)

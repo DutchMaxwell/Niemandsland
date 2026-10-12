@@ -26,14 +26,17 @@ const SCENARIO_DIR := "res://assets/tutorial/scenarios/"
 var _save_manager: Node = null
 var _autosave: Node = null       # AutosaveController (optional)
 var _move_trails: Node = null    # MoveTrails (optional; chalk-trail cleanup)
+var _rules: Node = null          # plan 4.1: the army manager (optional; lesson Manual pin)
 var _snapshot: Dictionary = {}
 var _captured: bool = false
 
 
-func setup(save_manager: Node, autosave: Node = null, move_trails: Node = null) -> void:
+func setup(save_manager: Node, autosave: Node = null, move_trails: Node = null,
+		army_manager: Node = null) -> void:
 	_save_manager = save_manager
 	_autosave = autosave
 	_move_trails = move_trails
+	_rules = army_manager
 
 
 ## Capture the player's current in-memory table and pause autosave. Call BEFORE load_scenario.
