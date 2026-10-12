@@ -55,7 +55,7 @@ use nmlcore::acts::{
     rule_on, ActHeader, ActStatics, CURRENT_RULES_EPOCH, EPOCH_10_CHARGE_BAND, Knobs, MeleeReach,
     PolicyMode, SearchMode, Sighting, TreeDice, TreeLeaf,
 };
-use nmlcore::arbitration::Arbitration;
+use nmlcore::arbitration::{full_playout as arb_full_playout, Arbitration, PlayoutResult};
 use nmlcore::deployment::{self, Placement, Rect, SettleUnit, SideDeploy, UnitSpec};
 use nmlcore::menu::{candidates_tuned, Candidate, Tuning};
 use nmlcore::objectives;
@@ -142,6 +142,23 @@ fn cand_plain(c: &Candidate) -> Value {
             m.insert("wave".into(), Value::String(w.clone()));
         }
     }
+    Value::Object(m)
+}
+
+/// `PlayoutResult` as the arena's dict — the vocabulary `tools/arena_match.gd`
+/// reports, so a played-out game and a real one compare field for field.
+fn playout_plain(r: &PlayoutResult) -> Value {
+    let mut m = Map::new();
+    m.insert("p1".into(), r.p1.into());
+    m.insert("p2".into(), r.p2.into());
+    m.insert("vp".into(), Value::Array(vec![r.vp[0].into(), r.vp[1].into()]));
+    m.insert(
+        "objectives".into(),
+        Value::Array(vec![r.objectives.0.into(), r.objectives.1.into(), r.objectives.2.into()]),
+    );
+    m.insert("survivors".into(), Value::Array(vec![r.survivors[0].into(), r.survivors[1].into()]));
+    m.insert("rounds_played".into(), r.rounds_played.into());
+    m.insert("winner".into(), Value::String(r.winner.to_string()));
     Value::Object(m)
 }
 
@@ -1507,6 +1524,50 @@ impl Core {
                 m.insert("unsupported".into(), Value::String(format!("{u:?}")));
                 to_py(py, &Value::Object(m))
             }
+        }
+    }
+
+    /// `AiPlanner.full_playout` ai_planner.gd:1338-1417 — play ONE candidate from
+    /// `state` to GAME END under the cheap greedy policy (`policy_step` both
+    /// sides) and report the arena verdict. This is the continuation judge the
+    /// escalation loop uses, exposed directly so a caller can play a decision out
+    /// WITHOUT running the whole search.
+    ///
+    /// `sig` seeds the playout's `GodotRng` — the model's `_playout_sig`, which
+    /// the shipped escalation derives per branch as `sig*31 + i*2` (`arbitrate`).
+    /// It is an INPUT, not a port: a guessed stream is a silent lie.
+    ///
+    /// The dice path is the arbitration's own stochastic resolve (sub-wound
+    /// remainders spent on `randf()` coin flips), NOT the `dice="table"` tray —
+    /// `arbitration.rs` has no tray. A tray-exact playout needs a new resolver in
+    /// the crate, not a binding change.
+    #[pyo3(signature = (state, action, player, sig = 0))]
+    fn full_playout(
+        &mut self,
+        py: Python<'_>,
+        state: PyRef<'_, PyState>,
+        action: &Bound<'_, PyAny>,
+        player: i64,
+        sig: i64,
+    ) -> PyResult<Py<PyAny>> {
+        let cand: Candidate = serde_json::from_value(value_of(action)?)
+            .map_err(|e| Unsupported::new_err(format!("action: {e}")))?;
+        let statics = self.statics_for(&state.inner)?;
+        let seams = self.seams();
+        let index = nmlcore::plan::reach_of(seams, &state.inner, &self.terrain);
+        let tuning = self.tuning();
+        let (seams, root) = nmlcore::plan::route_root_seams(&self.knobs, seams);
+        let mut policy = Policy::new(&statics, &self.terrain, seams);
+        policy.tuning = tuning;
+        policy.reach = index.as_ref();
+        policy.root_seams = root;
+        policy.fit = self.net.as_ref();
+        let roll = Rollout::new(policy, self.knobs);
+        let mut sc = Scratch::default();
+        let mut rng = GodotRng::new(sig);
+        match arb_full_playout(&roll, &state.inner, &cand, player, &mut rng, &mut sc) {
+            Ok(pr) => to_py(py, &playout_plain(&pr)),
+            Err(u) => Err(declined(u)),
         }
     }
 
