@@ -56,7 +56,7 @@ jobs:
         run: godot --headless --editor --quit --path .
 
       - name: Run two-instance multiplayer regressions
-        run: python test/mp/run_two_instance.py --godot godot --run-dir reports/mp-two-instance
+        run: python test/mp/run_two_instance.py --godot godot --include-rules-online --run-dir reports/mp-two-instance
 
       - name: Upload multiplayer artifacts
         if: always()
