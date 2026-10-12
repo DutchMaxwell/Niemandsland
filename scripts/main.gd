@@ -14212,6 +14212,12 @@ func _on_next_round() -> void:
 ## hand-marked Shaken unit) never saw their round-start rolls — which also made the
 ## button useless as a TESTING lever for round-gated rules (maintainer request).
 func _do_next_round() -> void:
+	# 3.3b: in an Automatic online room only the host advances; a guest asks the host instead of
+	# advancing its own state (removes the any_peer double advance).
+	if _online_turn_room() and not _turn_is_host():
+		if network_manager != null:
+			network_manager.send_command("request_next_round", {}, 0)
+		return
 	if _solo_alternation_active():
 		_ensure_solo_controller()
 		await _solo_end_round()
@@ -14283,9 +14289,9 @@ func _solo_final_round_active() -> bool:
 func _update_round_button() -> void:
 	if next_round_btn and opr_army_manager:
 		next_round_btn.text = next_round_button_label(opr_army_manager.current_round, _solo_final_round_active())
-		# Step 2.6a: on a hotseat Automatic table the round ends by itself, so the manual lever is
-		# disabled while any unit still has to act (exactly as solo) and says why.
-		var hotseat_waiting: bool = _solo_hotseat_automatic() and not _hotseat_round_spent()
+		# Step 2.6a: on a hotseat Automatic table / agreed online room the round ends by itself, so the
+		# manual lever is disabled while any unit still has to act (exactly as solo) and says why.
+		var hotseat_waiting: bool = _solo_engine_automatic() and not _hotseat_round_spent()
 		next_round_btn.disabled = hotseat_waiting
 		if not next_round_btn.has_meta("_nml_default_tooltip"):
 			next_round_btn.set_meta("_nml_default_tooltip", next_round_btn.tooltip_text)
@@ -16968,6 +16974,11 @@ func _on_network_command(type: String, payload: Variant, _from_peer: int) -> voi
 		_on_rules_agreement_confirmed(_from_peer)
 	elif type == "decline_rules_automation":
 		_on_rules_agreement_declined(_from_peer)
+	elif type == "request_next_round":
+		# 3.3b: a guest asked the host to advance — only the host runs the end-round path, then
+		# broadcasts sync_round_advance for the guests to apply.
+		if _online_turn_room() and _turn_is_host():
+			_do_next_round()
 
 
 ## Plan 1.4: a rules-automation value from a peer. MANUAL is unilateral and applies at once; an
