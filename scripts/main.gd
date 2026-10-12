@@ -592,6 +592,9 @@ func _ready() -> void:
 	network_manager.remote_unit_deleted.connect(_on_remote_unit_deleted)
 	network_manager.remote_unit_created.connect(_on_remote_unit_created)
 	network_manager.remote_round_advanced.connect(_on_remote_round_advanced)
+	# 3.3a: the host's turn token (guarded — a harness double need not carry the signal).
+	if network_manager.has_signal("turn_state_received"):
+		network_manager.turn_state_received.connect(_on_turn_state_received)
 
 	# Connect presence signals
 	network_manager.remote_cursor_updated.connect(_on_remote_cursor_updated)
@@ -2942,17 +2945,50 @@ func _hotseat_eligible_counts() -> Dictionary:
 	return counts
 
 
+## Plan 3.3a: an agreed online Automatic room (the engine runs, no AI seat). The token gate is LOCAL:
+## this machine refuses its own off-turn actions against the side it believes owns the turn.
+func _online_turn_room() -> bool:
+	return _solo_engine_automatic() and network_manager != null \
+		and network_manager.is_multiplayer_active()
+
+
+## Plan 3.3a: the host owns the token; a guest only mirrors what the host broadcasts.
+func _turn_is_host() -> bool:
+	return network_manager == null or not network_manager.is_multiplayer_active() \
+		or network_manager.is_host
+
+
+## Plan 3.3a: adopt a token value into the local mirror (no advance, no broadcast) — the received
+## `turn_state`, or the full-state push for a late joiner / reconnect.
+func _apply_turn_token(slot: int) -> void:
+	if slot != 1 and slot != 2:
+		return
+	if _hotseat_turn == null:
+		_hotseat_turn = TwoHumanTurn.new()
+	_hotseat_turn.side_on_turn = slot
+	_update_round_button()
+
+
+## Plan 3.3a: the host's token arrived over the wire.
+func _on_turn_state_received(slot: int) -> void:
+	if not _online_turn_room():
+		return
+	if _turn_is_host():
+		return   # the host owns the token and never mirrors one from the wire (lead review, 3.3c owns full authority)
+	_apply_turn_token(slot)
+
+
 ## Step 2.6a: true when neither side has an eligible unit left, so the hotseat round closes by itself.
 func _hotseat_round_spent() -> bool:
 	var counts := _hotseat_eligible_counts()
 	return int(counts.get(1, 0)) <= 0 and int(counts.get(2, 0)) <= 0
 
 
-## The off-turn refusal line for `slot`, or "" when the side may act. Only a hotseat Automatic
-## table alternates; Manual and solo-vs-AI tables are untouched (an AI seat keeps the SoloController
-## alternation, step 2.4).
+## The off-turn refusal line for `slot`, or "" when the side may act. A hotseat Automatic table AND an
+## agreed online Automatic room (3.3a) alternate; Manual and solo-vs-AI tables are untouched (an AI
+## seat keeps the SoloController alternation, step 2.4).
 func hotseat_turn_refusal(slot: int) -> String:
-	if not _solo_hotseat_automatic():
+	if not _solo_engine_automatic():
 		return ""
 	if slot == _hotseat_side_on_turn():
 		return ""
@@ -2961,8 +2997,10 @@ func hotseat_turn_refusal(slot: int) -> String:
 
 ## Record an activation by `slot` and hand the turn to the other side (TwoHumanTurn, TAIL-aware).
 func hotseat_record_activation(slot: int) -> void:
-	if not _solo_hotseat_automatic():
+	if not _solo_engine_automatic():
 		return
+	if _online_turn_room() and not _turn_is_host():
+		return   # 3.3a: a guest mirrors the host's token, it never advances its own
 	if _hotseat_turn == null:
 		_hotseat_turn = TwoHumanTurn.new()
 	if _hotseat_turn.side_on_turn == TwoHumanTurn.NONE:
@@ -2973,6 +3011,9 @@ func hotseat_record_activation(slot: int) -> void:
 		return
 	_hotseat_handover_line(slot)
 	_update_round_button()
+	# 3.3a: the host owns the token — after a completed activation it tells every peer the next side.
+	if _online_turn_room() and network_manager != null and network_manager.has_method("broadcast_turn_state"):
+		network_manager.broadcast_turn_state(_hotseat_turn.side_on_turn)
 
 
 ## Step 2.T3: the one line that announces the passing turn — or the TAIL when the other side is spent
@@ -14273,9 +14314,9 @@ func _update_rules_chip() -> void:
 		_turn_chip = Label.new()
 		_turn_chip.theme_type_variation = HouseStyle.CAPTION
 		_turn_chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_turn_chip.tooltip_text = "Hotseat Automatic: one unit per side in turn."
+		_turn_chip.tooltip_text = "Automatic: one unit per side in turn (local or agreed online)."
 		next_round_btn.add_sibling(_turn_chip)
-	_turn_chip.visible = RulesAutomation.ui_enabled() and _solo_hotseat_automatic()
+	_turn_chip.visible = RulesAutomation.ui_enabled() and _solo_engine_automatic()
 	_turn_chip.text = "Turn: P%d" % _hotseat_side_on_turn()
 
 
@@ -16875,6 +16916,7 @@ func _sync_state_to_peer(peer_id: int) -> void:
 	state["_host_version"] = network_manager.get_game_version()
 	# #673 co-op: late joiners adopt the host's (broadcast-synced) AI-slot designation on join.
 	state["solo_ai_slots"] = ai_slots_sync_payload(solo_ai_slots)
+	state["turn_state"] = _hotseat_side_on_turn()   # 3.3a: the token rides the full-state push
 	var obj_count = state.get("objects", []).size()
 	var unit_count = state.get("game_units", []).size()
 	print("[StateSync] Sending state to peer %d: %d objects, %d game_units" % [peer_id, obj_count, unit_count])
@@ -16891,6 +16933,7 @@ func _sync_loaded_state_to_clients() -> void:
 	# Get current state and broadcast to all clients
 	var state = save_manager.serialize_game_state()  # includes army_names (for tray rebuild)
 	state["_host_version"] = network_manager.get_game_version()
+	state["turn_state"] = _hotseat_side_on_turn()   # 3.3a: the token rides the full-state push
 	network_manager.send_command("sync_game_state", {"state": state}, 0)
 
 
@@ -16908,6 +16951,10 @@ func _rpc_sync_game_state(state: Dictionary) -> void:
 
 	var obj_count = state.get("objects", []).size()
 	var unit_count = state.get("game_units", []).size()
+	# 3.3a: adopt the host's token (it is mirrored, never advanced here) — a late joiner / reconnect
+	# gets the side on turn with the rest of the state.
+	if state.has("turn_state"):
+		_apply_turn_token(int(state["turn_state"]))
 	print("[StateSync] Received game state from host: %d objects, %d game_units" % [obj_count, unit_count])
 
 	# Show the same loading overlay as a self-import while we rebuild the table + download models.
