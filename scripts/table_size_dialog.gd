@@ -339,14 +339,17 @@ func _build_rules_row(column: VBoxContainer) -> void:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation",10)
 	column.add_child(row)
-	for spec in [[RulesAutomation.Level.AUTOMATIC,"Automatic — the game applies the rules it models"],[RulesAutomation.Level.MANUAL,"Manual — you use the dice tray"]]:
+	for spec in [[RulesAutomation.Level.AUTOMATIC,"Automatic — the game rolls and applies the rules"],[RulesAutomation.Level.MANUAL,"Manual — you use the dice tray"]]:
 		var button := _button(spec[1])
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		button.disabled = online and spec[0] == RulesAutomation.Level.AUTOMATIC
+		# Step 2.10 honesty (no layout impact — a tooltip adds no widget): Automatic applies only the
+		# rules the engine models; anything else is listed at game start under "apply by hand".
+		if spec[0] == RulesAutomation.Level.AUTOMATIC:
+			button.tooltip_text = "The game applies only the rules it models; rules the engine does not model are listed at game start under 'apply by hand' and stay yours."
 		button.pressed.connect(_select_rules.bind(spec[0]))
 		row.add_child(button)
 		_rules_buttons[spec[0]] = button
-	column.add_child(_label("Rules the engine does not model stay yours to apply by hand — the list at game start names them.",11,HouseStyle.MUTED,true))
 	if online:
 		column.add_child(_label("Automatic online: both players will have to agree (coming later)",11,HouseStyle.MUTED,true))
 

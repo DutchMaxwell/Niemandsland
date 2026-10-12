@@ -12,6 +12,7 @@ func before_test() -> void:
 
 func after_test() -> void:
 	RulesAutomation.ui_enabled_override = false
+	RulesAutomation.ui_disabled_override = false
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(RulesAutomation.MENU_CFG))
 
 
@@ -45,7 +46,7 @@ func test_create_room_dialog_locks_manual() -> void:
 
 
 func test_flag_off_hides_the_row_and_reports_manual() -> void:
-	RulesAutomation.ui_enabled_override = false
+	RulesAutomation.ui_disabled_override = true
 	var d := _dialog(false)
 	assert_int(d._rules_buttons.size()).is_equal(0)
 	assert_int(d.selected_rules).is_equal(L.MANUAL)
@@ -81,6 +82,6 @@ func test_no_rules_key_changes_nothing() -> void:
 
 
 func test_flag_off_applies_but_logs_nothing() -> void:
-	RulesAutomation.ui_enabled_override = false
+	RulesAutomation.ui_disabled_override = true
 	var mgr := _mgr()
 	assert_str(RulesAutomation.apply_table_setup({"rules": L.AUTOMATIC}, mgr)).is_equal("")

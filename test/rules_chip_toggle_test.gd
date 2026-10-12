@@ -12,6 +12,7 @@ func before_test() -> void:
 
 func after_test() -> void:
 	RulesAutomation.ui_enabled_override = false
+	RulesAutomation.ui_disabled_override = false
 
 
 func _main() -> Node:
@@ -69,7 +70,7 @@ func test_chip_text_follows_the_level_and_the_ai_slot() -> void:
 
 
 func test_flag_off_hides_chip_and_toggle() -> void:
-	RulesAutomation.ui_enabled_override = false
+	RulesAutomation.ui_disabled_override = true
 	var m := _main()
 	m._update_rules_chip()
 	m._add_rules_toggle()
