@@ -290,6 +290,12 @@ var _solo_opponent_brain: Dictionary = {}  # the opponent the game really runs (
                                            # set with the "opponent:" line; {} = no AI seat graded
 var _rules_chip: Label = null                # rules-automation chip beside the round button (plan 1.3)
 var _turn_chip: Label = null                 # hotseat turn chip beside the rules chip (plan 2.T2a)
+var _rules_proposal_pending := false         # online: waiting for the other player's answer (plan 3.0)
+var _rules_agreement_mode := 0               # 0 idle, 1 proposing, 2 confirming (plan 3.0)
+var _rules_proposal_timed_out := false       # the confirm card was closed by the 30 s timer, not by a button
+var _rules_agreement_card: PromptCard = null # the open confirm card, so a timeout can close it
+var _rules_proposal_timer: Timer = null      # one 30 s timer, used by whichever side is waiting
+const RULES_AGREEMENT_TIMEOUT := 30.0
 var _hotseat_turn: TwoHumanTurn = null       # enforced alternation on a hotseat Automatic table (plan 2.T2a)
 var solo_panel_box: VBoxContainer = null     # left-panel "Solo" section (per-army AI toggles)
 var solo_mission_option: OptionButton = null # left-panel Mission picker (MissionCatalog + "Duel (no mission)")
@@ -14251,6 +14257,12 @@ func _update_round_button() -> void:
 func set_rules_automation(level: int, who: String) -> bool:
 	if opr_army_manager == null or not RulesAutomation.change_allowed(level, not solo_ai_slots.is_empty(), _solo_resolution_pending()):
 		return false
+	if network_manager != null and network_manager.is_multiplayer_active():
+		if level == RulesAutomation.Level.AUTOMATIC:
+			return propose_rules_automation()   # plan 3.0: Automatic online needs the other player's confirm
+		_cancel_rules_proposal()                # a pending proposal is dropped when Manual is taken
+		_clamp_rules_online(who)                # Manual online is unilateral and immediate (A1)
+		return true
 	opr_army_manager.rules_automation = level
 	_log_rule_event(BattleLog.Category.GENERAL, "Rules automation: %s (changed by %s)" % [RulesAutomation.label(level), who])
 	_update_rules_chip()
@@ -14277,13 +14289,14 @@ func _update_rules_chip() -> void:
 		next_round_btn.add_sibling(_turn_chip)
 	_turn_chip.visible = RulesAutomation.ui_enabled() and _solo_hotseat_automatic()
 	_turn_chip.text = "Turn: P%d" % _hotseat_side_on_turn()
+	# Plan 3.0: while a proposal is in flight the chip says so, instead of naming a level nobody agreed to.
+	if _rules_proposal_pending:
+		_rules_chip.text = "Asking the other player…"
 
 
 ## Game-panel toggle (local games only; online is plan step 1.4). Locked on while an AI slot is ticked.
 func _add_rules_toggle() -> void:
 	if not RulesAutomation.ui_enabled() or solo_panel_box == null or opr_army_manager == null:
-		return
-	if network_manager != null and network_manager.is_multiplayer_active():
 		return
 	var ai: bool = not solo_ai_slots.is_empty()
 	var cb := CheckButton.new()
@@ -14297,6 +14310,131 @@ func _add_rules_toggle() -> void:
 		if not set_rules_automation(lvl, "P1"):
 			cb.set_pressed_no_signal(not on))
 	solo_panel_box.add_child(cb)
+
+
+## Plan 3.0 (Q6): ask the other player to turn Automatic on. Sends the proposal, shows the waiting chip
+## and arms the 30 s timer; Automatic is applied only when the peer confirms.
+func propose_rules_automation() -> bool:
+	if network_manager == null or not network_manager.is_multiplayer_active() or _rules_proposal_pending:
+		return false
+	_rules_proposal_pending = true
+	_rules_agreement_mode = 1
+	network_manager.send_command("propose_rules_automation", {})
+	_start_rules_agreement_timer()
+	_update_rules_chip()
+	return true
+
+
+func _cancel_rules_proposal() -> void:
+	_rules_proposal_pending = false
+	_rules_agreement_mode = 0
+	_rules_proposal_timed_out = false
+	if _rules_proposal_timer != null:
+		_rules_proposal_timer.stop()
+	_update_rules_chip()
+
+
+func _start_rules_agreement_timer() -> void:
+	if _rules_proposal_timer == null:
+		_rules_proposal_timer = Timer.new()
+		_rules_proposal_timer.one_shot = true
+		_rules_proposal_timer.wait_time = RULES_AGREEMENT_TIMEOUT
+		_rules_proposal_timer.timeout.connect(_on_rules_agreement_timeout)
+		add_child(_rules_proposal_timer)
+	_rules_proposal_timer.start()
+
+
+## 30 s without an answer: the proposal is dead, the room stays Manual, one plain line for both players.
+func _on_rules_agreement_timeout() -> void:
+	var confirming := _rules_agreement_mode == 2
+	_rules_proposal_pending = false
+	_rules_agreement_mode = 0
+	if _rules_proposal_timer != null:
+		_rules_proposal_timer.stop()
+	if confirming and _rules_agreement_card != null and is_instance_valid(_rules_agreement_card):
+		_rules_proposal_timed_out = true
+		_rules_agreement_card.queue_free()
+	_log_rules_line("%s did not confirm, rules stay manual" % _peer_display_name(_other_peer_id()))
+	_update_rules_chip()
+
+
+## A peer asks to turn Automatic on: one plain confirm card; the answer decides.
+func _on_rules_proposal(from_peer: int) -> void:
+	if network_manager == null or not network_manager.is_multiplayer_active():
+		return
+	if _rules_agreement_card != null and is_instance_valid(_rules_agreement_card):
+		return
+	_rules_agreement_mode = 2
+	_rules_proposal_timed_out = false
+	var card := PromptCard.new("Turn on automatic rules?",
+		"%s asks to turn Rules automation on for both players. Both must agree." % _peer_display_name(from_peer),
+		"Agree", "Not now")
+	add_child(card)
+	_rules_agreement_card = card
+	_start_rules_agreement_timer()
+	var accept: Variant = await card.answer(false)
+	_rules_agreement_card = null
+	if _rules_proposal_timed_out:
+		_rules_proposal_timed_out = false
+		return
+	_on_rules_agreement_response(bool(accept), from_peer)
+
+
+## The answer to a proposal: Agree applies Automatic here, logs the agreed line and tells the proposer;
+## Not now stays Manual and tells the proposer so.
+func _on_rules_agreement_response(accept: bool, from_peer: int) -> void:
+	if _rules_proposal_timer != null:
+		_rules_proposal_timer.stop()
+	_rules_agreement_mode = 0
+	if accept:
+		_apply_rules_automatic_agreed()
+		network_manager.send_command("confirm_rules_automation", {})
+	else:
+		network_manager.send_command("decline_rules_automation", {})
+		_log_rules_line("%s did not agree — rules stay manual" % _peer_display_name(from_peer))
+
+
+## The proposer's side of the agreement.
+func _on_rules_agreement_confirmed(_from_peer: int) -> void:
+	if not _rules_proposal_pending:
+		return   # a confirm without our own proposal is ignored (bare Automatic on the wire, rule 1.4)
+	_rules_proposal_pending = false
+	_rules_agreement_mode = 0
+	if _rules_proposal_timer != null:
+		_rules_proposal_timer.stop()
+	_apply_rules_automatic_agreed()
+	_update_rules_chip()
+
+
+func _on_rules_agreement_declined(from_peer: int) -> void:
+	_rules_proposal_pending = false
+	_rules_agreement_mode = 0
+	if _rules_proposal_timer != null:
+		_rules_proposal_timer.stop()
+	_log_rules_line("%s did not agree — rules stay manual" % _peer_display_name(from_peer))
+	_update_rules_chip()
+
+
+func _apply_rules_automatic_agreed() -> void:
+	if opr_army_manager != null:
+		opr_army_manager.rules_automation = RulesAutomation.Level.AUTOMATIC
+	_log_rules_line("Rules automation: Automatic (agreed by P1 and P2)")
+	_update_rules_chip()
+
+
+func _log_rules_line(text: String) -> void:
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL, text)
+
+
+## The one other peer's id (two-player rooms); 2 as a safe fallback.
+func _other_peer_id() -> int:
+	if network_manager != null:
+		var me := multiplayer.get_unique_id()
+		for id in network_manager.player_names:
+			if int(id) != me:
+				return int(id)
+	return 2
 
 
 ## Toggle the left panel menu visibility with slide animation
@@ -16783,6 +16921,12 @@ func _on_network_command(type: String, payload: Variant, _from_peer: int) -> voi
 		_vfx_draw(payload, _from_peer)
 	elif type == "sync_rules_automation" and payload is Dictionary:
 		_on_sync_rules_automation((payload as Dictionary).get("level"), _from_peer)
+	elif type == "propose_rules_automation":
+		_on_rules_proposal(_from_peer)
+	elif type == "confirm_rules_automation":
+		_on_rules_agreement_confirmed(_from_peer)
+	elif type == "decline_rules_automation":
+		_on_rules_agreement_declined(_from_peer)
 
 
 ## Plan 1.4: a rules-automation value from a peer. MANUAL is unilateral and applies at once; an
