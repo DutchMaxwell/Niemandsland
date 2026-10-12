@@ -1,6 +1,7 @@
 extends GdUnitTestSuite
-## Rules-automation plan step 1.2 -- the table-setup "Rules" row. The row is behind
-## RulesAutomation.UI_ENABLED (false until plan step 2.10); these tests force it on via the override seam.
+## Rules-automation plan step 1.2, revised by step 2.10 (konrad ruling): the table-setup chooser no
+## longer shows a "Rules" row — the player's switch is the in-game rules chip/toggle. What remains here
+## is the pick the chooser hands on (default + online lock) and the RulesAutomation table-setup wiring.
 
 const L := RulesAutomation.Level
 
@@ -34,7 +35,6 @@ func test_local_dialog_defaults_automatic_and_reports_the_pick() -> void:
 	assert_int(d.selected_rules).is_equal(L.AUTOMATIC)
 	d._select_rules(L.MANUAL)
 	assert_int(d.selected_rules).is_equal(L.MANUAL)
-	assert_int(d._rules_buttons.size()).is_equal(2)
 
 
 func test_create_room_dialog_locks_manual() -> void:
@@ -42,13 +42,11 @@ func test_create_room_dialog_locks_manual() -> void:
 	assert_int(d.selected_rules).is_equal(L.MANUAL)
 	d._select_rules(L.AUTOMATIC)
 	assert_int(d.selected_rules).is_equal(L.MANUAL)
-	assert_bool(d._rules_buttons[L.AUTOMATIC].disabled).is_true()
 
 
-func test_flag_off_hides_the_row_and_reports_manual() -> void:
+func test_flag_off_reports_manual() -> void:
 	RulesAutomation.ui_disabled_override = true
 	var d := _dialog(false)
-	assert_int(d._rules_buttons.size()).is_equal(0)
 	assert_int(d.selected_rules).is_equal(L.MANUAL)
 
 

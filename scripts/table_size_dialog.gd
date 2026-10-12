@@ -63,9 +63,8 @@ var _hero: Control
 var _margin: MarginContainer
 var _cards: Array[TextureRect] = []
 var _valid := true
-var online := false   # set before add_child: a Create-room dialog locks the rules row to Manual
+var online := false   # set before add_child: a Create-room dialog locks the rules pick to Manual
 var selected_rules := RulesAutomation.Level.MANUAL
-var _rules_buttons: Dictionary = {}
 
 class Footprint extends Control:
 	var inches := Vector2(72,48)
@@ -254,7 +253,6 @@ func _build_ui() -> void:
 	_error = _label("",12,Color("eab2a2"),true)
 	left.add_child(_error)
 	left.add_child(_label("Table size is fixed once you create it.",11,HouseStyle.MUTED))
-	_build_rules_row(left)
 	_add_left_air(left)
 	left.add_child(HSeparator.new())
 	left.add_child(_label("+   Your terrain. Your layout.",14,HouseStyle.ACCENT))
@@ -331,33 +329,8 @@ func _build_ui() -> void:
 	_style(_create,true,true)
 
 
-## "Rules" row (hidden until RulesAutomation.ui_enabled): ONE row — the section label plus the
-## Automatic/Manual toggle — so the section costs no page height beyond a single row (step 2.10, konrad
-## ruling). The by-hand caveat and the online-only caveat ride the Automatic button's tooltip (a tooltip
-## adds no widget); online only Manual is offered.
-func _build_rules_row(column: VBoxContainer) -> void:
-	if not RulesAutomation.ui_enabled():
-		return
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation",10)
-	column.add_child(row)
-	var title := _label("03   Rules",17)
-	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	title.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	row.add_child(title)
-	for spec in [[RulesAutomation.Level.AUTOMATIC,"Automatic — the game rolls and applies the rules"],[RulesAutomation.Level.MANUAL,"Manual — you use the dice tray"]]:
-		var button := _button(spec[1])
-		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		button.disabled = online and spec[0] == RulesAutomation.Level.AUTOMATIC
-		# Step 2.10 honesty (no layout impact — a tooltip adds no widget): Automatic applies only the
-		# rules the engine models; anything else is listed at game start under "apply by hand".
-		if spec[0] == RulesAutomation.Level.AUTOMATIC:
-			button.tooltip_text = "Automatic online: both players will have to agree (coming later)." if online else "The game applies only the rules it models; rules the engine does not model are listed at game start under 'apply by hand' and stay yours."
-		button.pressed.connect(_select_rules.bind(spec[0]))
-		row.add_child(button)
-		_rules_buttons[spec[0]] = button
-
-
+## The pick a fresh table starts on; the visible switch is the in-game rules chip/toggle (step 2.10),
+## not a chooser section — the chooser renders exactly as it did before the flip.
 func _select_rules(level: int) -> void:
 	if online and level == RulesAutomation.Level.AUTOMATIC:
 		return
@@ -450,8 +423,6 @@ func _refresh() -> void:
 		_style(_biome_buttons[key],key == selected_biome)
 	for key in _size_buttons:
 		_style(_size_buttons[key],key == selected_size)
-	for level in _rules_buttons:
-		_style(_rules_buttons[level],level == selected_rules)
 	_size_labels.standard.text = _size_text(Vector2(72,48))
 	_size_labels.square.text = _size_text(Vector2(48,48))
 	_custom.visible = selected_size == "custom"
