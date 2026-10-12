@@ -1176,6 +1176,8 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         grid_proposer: dint(d, "grid_proposer", dflt.grid_proposer),
         grid_margin: dnum(d, "grid_margin", dflt.grid_margin),
         grid_shuffle: dint(d, "grid_shuffle", dflt.grid_shuffle as i64) as u64,
+        // grid-search step 10 — the ANYTIME widen: cells per leaf batch (0 = step 9's one batch).
+        grid_batch: dint(d, "grid_batch", dflt.grid_batch as i64) as usize,
     }
 }
 
