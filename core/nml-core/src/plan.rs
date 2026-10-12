@@ -689,6 +689,9 @@ impl<'a> Search<'a> {
         let t0 = std::time::Instant::now();
         let deadline = (self.roll.knobs.deadline_us > 0)
             .then(|| t0 + std::time::Duration::from_micros(self.roll.knobs.deadline_us as u64));
+        // grid-search step 10 — the widened grid stops at THIS clock, the call-start one;
+        // `deadline_after_preselect` restarts the pool's clock below, never the grid's.
+        let call_deadline = deadline;
         self.admissible()?;
         let top_k = self.top_k();
         if top_k <= 0 {
@@ -868,7 +871,7 @@ impl<'a> Search<'a> {
         let pool_cut = deadline_trace.as_ref().is_some_and(|d| d.cut);
         let grid = if self.roll.knobs.grid_k > 0 {
             self.widen(state, player, sc, &mut scored, &mut order, &mut pos_of, &mut pool, &mut rs,
-                       &mut best, &mut runner, &mut best_idx, &mut runner_idx, &mut last_leaf, pool_cut)?
+                       &mut best, &mut runner, &mut best_idx, &mut runner_idx, &mut last_leaf, pool_cut, call_deadline)?
         } else {
             None
         };
@@ -1041,6 +1044,7 @@ impl<'a> Search<'a> {
         pool: &mut Vec<usize>, rs: &mut Vec<(i64, f64)>,
         best: &mut Option<(usize, f64)>, runner: &mut Option<(usize, f64)>,
         best_idx: &mut i64, runner_idx: &mut i64, last_leaf: &mut Option<State>, pool_cut: bool,
+        deadline: Option<std::time::Instant>,
     ) -> Result<Option<GridTrace>, Unsupported> {
         let empty = |cut: bool| Some(GridTrace { rows: Vec::new(), units: 0, reachable: 0, proposed: 0,
             deduped: 0, landed_far: 0, completed: 0, dropped: 0, cut, batches: 0 });
@@ -1093,7 +1097,11 @@ impl<'a> Search<'a> {
         let (mut reachable, mut proposed, mut deduped, mut landed_far, mut dropped) =
             (0usize, 0usize, 0usize, 0usize, 0usize);
         let n_hand = scored.len();
-        for &u in &units {
+        // grid-search step 10 — the ANYTIME clock: before each batch of `grid_batch` priced cells,
+        // stop if the call-start deadline is gone (batching off = today, no clock).
+        let batch = self.roll.knobs.grid_batch;
+        let mut cut = false;
+        'outer: for &u in &units {
             let key = state.key(u).to_string();
             let ps = state.positions[u].clone();
             if ps.is_empty() {
@@ -1112,6 +1120,11 @@ impl<'a> Search<'a> {
                     // token candidate budget (N_CAND), leaving the usual headroom.
                     if grid_rows.len() >= crate::tokens::N_CAND.saturating_sub(n_hand).saturating_sub(4) {
                         break;
+                    }
+                    if batch > 0 && grid_rows.len() % batch == 0
+                        && deadline.is_some_and(|d| std::time::Instant::now() >= d) {
+                        cut = true;
+                        break 'outer;
                     }
                     proposed += 1;
                     let p = crate::grid::cell_centre(terrain, cell, centre[1]);
@@ -1163,32 +1176,70 @@ impl<'a> Search<'a> {
             }
         }
         let completed = grid_rows.len();
+        // grid-search step 10 — price the collected cells in batches of `grid_batch` (0 = one batch,
+        // step 9's single leaf call); the construction above already honoured the call deadline.
+        let batch = self.roll.knobs.grid_batch;
+        let n = if batch == 0 { ends_of.len().max(1) } else { batch };
+        let mut b = 0usize;
+        while b < ends_of.len() {
+            let e = (b + n).min(ends_of.len());
+            self.grid_price_batch(&grid_rows, &ends_of, b, e, player, pool, rs, best, runner, last_leaf, hook)?;
+            b = e;
+        }
+        let batches = if batch == 0 { 1 } else { ends_of.len().div_ceil(n) };
+        for row in grid_rows {
+            scored.push(row);
+        }
+        *order = rank(scored, self.bend.idx_tiebreak);
+        pos_of.clear();
+        pos_of.resize(scored.len(), 0);
+        for (r, &i) in order.iter().enumerate() {
+            pos_of[i] = r;
+        }
+        *best_idx = pos_of[best.as_ref().expect("a widened pool still has a best").0] as i64;
+        *runner_idx = runner.as_ref().map_or(-1, |&(i, _)| pos_of[i] as i64);
+        Ok(Some(GridTrace { rows: meta, units: units.len(), reachable, proposed, deduped, landed_far,
+            completed, dropped, cut, batches }))
+    }
+
+    /// grid-search step 10 — price ONE batch `[from, to)` of the widened cells: one leaf call for
+    /// the batch, the per-cell blend (and the PREREG_C shuffle), then the best/runner update. The
+    /// `grid_batch` widen calls this per batch so the deadline can stop between them; `grid_batch` 0
+    /// calls it once and is byte-identical to step 9.
+    #[allow(clippy::too_many_arguments)]
+    fn grid_price_batch(
+        &self, grid_rows: &[ScoredRow], ends_of: &[Vec<State>], from: usize, to: usize, player: i64,
+        pool: &mut Vec<usize>, rs: &mut Vec<(i64, f64)>,
+        best: &mut Option<(usize, f64)>, runner: &mut Option<(usize, f64)>,
+        last_leaf: &mut Option<State>, hook: &dyn LeafValue,
+    ) -> Result<(), Unsupported> {
+        if from >= to {
+            return Ok(());
+        }
         let mut vals: Vec<f64> = Vec::new();
-        if completed > 0 && self.leaf_value_w != 0.0 {
-            let leaves: Vec<&State> = ends_of.iter().flatten().collect();
+        if self.leaf_value_w != 0.0 {
+            let leaves: Vec<&State> = ends_of[from..to].iter().flatten().collect();
             vals = hook.value(&leaves, player)?;
             if vals.len() != leaves.len() {
                 return Err(Unsupported::LeafValue(vals.len(), leaves.len()));
             }
         }
         let mut off = 0usize;
-        let mut cell_v: Vec<f64> = Vec::with_capacity(ends_of.len());
-        for ends in ends_of.iter() {
+        let mut cell_v: Vec<f64> = Vec::with_capacity(to - from);
+        for ends in &ends_of[from..to] {
             let slice: &[f64] = if vals.is_empty() { &[] } else { &vals[off..] };
             cell_v.push(self.roll.blend_score_leaf(ends, player, self.act.opener_seat, slice, self.leaf_value_w));
             off += ends.len();
         }
-        // PREREG_C Arm C — the shuffled-judge control: permute this decision's per-cell judge values
-        // among the grid rows before ranking; `grid_shuffle` 0 (default) = off, byte-identical to Arm B.
         if self.roll.knobs.grid_shuffle != 0 && cell_v.len() > 1 {
             let mut rng = GodotRng::new((self.roll.knobs.grid_shuffle as i64) ^ self.sig.unwrap_or(0));
             for i in (1..cell_v.len()).rev() {
                 cell_v.swap(i, rng.randi_range(0, i as i64) as usize);
             }
         }
-        for (k, ends) in ends_of.iter().enumerate() {
+        for (k, ends) in ends_of[from..to].iter().enumerate() {
             let v = cell_v[k];
-            let i = grid_rows[k].idx;
+            let i = grid_rows[from + k].idx;
             let adj = v - self.roll.knobs.grid_margin;
             pool.push(i);
             rs.push((i as i64, v));
@@ -1202,19 +1253,7 @@ impl<'a> Search<'a> {
                 *runner = Some((i, v));
             }
         }
-        for row in grid_rows {
-            scored.push(row);
-        }
-        *order = rank(scored, self.bend.idx_tiebreak);
-        pos_of.clear();
-        pos_of.resize(scored.len(), 0);
-        for (r, &i) in order.iter().enumerate() {
-            pos_of[i] = r;
-        }
-        *best_idx = pos_of[best.as_ref().expect("a widened pool still has a best").0] as i64;
-        *runner_idx = runner.as_ref().map_or(-1, |&(i, _)| pos_of[i] as i64);
-        Ok(Some(GridTrace { rows: meta, units: units.len(), reachable, proposed, deduped, landed_far,
-            completed, dropped, cut: false, batches: 1 }))
+        Ok(())
     }
 
     /// The `deadline_us` fallback when the deadline hit before the first

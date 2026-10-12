@@ -480,6 +480,11 @@ pub struct Knobs {
     /// 0 (default) = off, byte-identical to Arm B (`grid_k` alone).
     #[serde(default)]
     pub grid_shuffle: u64,
+    /// grid-search step 10 — the ANYTIME widen: cells per leaf batch on the widened grid. 0 (default) =
+    /// step 9's single batch, byte-identical; n > 0 = price the widened cells in batches of n, stopping
+    /// at the call-start deadline with the best so far. Read only when `grid_k` is set.
+    #[serde(default)]
+    pub grid_batch: usize,
 }
 
 /// The current rule-set generation (see `Knobs`/`Seams::rules_epoch`, `rule_on`).
@@ -1632,6 +1637,7 @@ impl Default for Knobs {
             grid_proposer: 0,
             grid_margin: 0.0,
             grid_shuffle: 0,
+            grid_batch: 0,
         }
     }
 }
