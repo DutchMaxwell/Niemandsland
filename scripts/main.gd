@@ -3060,6 +3060,12 @@ func _hotseat_end_round() -> void:
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL, "Round %d begins" % opr_army_manager.current_round, true)
 	await _hotseat_start_round(opener)
+	# 3.6 gate fix: the new round's opener holds the token, and online the guest must know it — the
+	# round-advance push carries the number, not the token. Without this the guest kept the previous
+	# side's token and would refuse the opener its own first activation.
+	if _online_turn_room() and network_manager != null and network_manager.has_method("broadcast_turn_state") \
+			and _hotseat_turn != null and _hotseat_turn.side_on_turn != TwoHumanTurn.NONE:
+		network_manager.broadcast_turn_state(_hotseat_turn.side_on_turn)
 
 
 ## Begin a hotseat round: the opener takes the turn (a wiped opener yields to the other side). Step 2.6b:
