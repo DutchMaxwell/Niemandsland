@@ -203,6 +203,7 @@ class Run:
     def __init__(self, args: argparse.Namespace, run_dir: Path):
         self.args = args
         self.run_dir = run_dir
+        self.rules_online = False
         self.seq = {"host": 0, "guest": 0}
         self.relay: subprocess.Popen | None = None
         self.relay_log = None
@@ -275,6 +276,8 @@ class Run:
         ]
         if room:
             cmd += ["--code", room]
+        if self.rules_online:
+            cmd += ["--rules-online"]
         client = Client(role, cmd, env, self.run_dir)
         self.clients[role] = client
         return client
@@ -362,8 +365,8 @@ class Run:
 
     def checkpoint(self, name: str, states: dict[str, dict] | None = None) -> None:
         states = self.stable_states(states)
-        host_core = {key: states["host"].get(key) for key in ("round", "units")}
-        guest_core = {key: states["guest"].get(key) for key in ("round", "units")}
+        host_core = {key: states["host"].get(key) for key in ("round", "units", "rules", "turn")}
+        guest_core = {key: states["guest"].get(key) for key in ("round", "units", "rules", "turn")}
         if host_core != guest_core:
             detail = first_difference(host_core, guest_core)
             raise HarnessFailure(f"{name}: state divergence, {detail}")
@@ -398,6 +401,11 @@ class Run:
             "fixture on both peers", lambda s: all(v.get("fixture_ready") for v in s.values())
         )
         self.checkpoint("fixture", states)
+
+        if self.rules_online:
+            self._rules_online_scenario()
+            atomic_json(self.run_dir / "snapshots.json", self.checkpoints)
+            return
 
         # Combat effects in co-op: five cues from the resolving peer, drawn exactly once on each side.
         self.command("host", "vfx_burst")
@@ -536,6 +544,73 @@ class Run:
 
         atomic_json(self.run_dir / "snapshots.json", self.checkpoints)
 
+    def _rules_online_scenario(self) -> None:
+        """Plan 3.6: the agreed Automatic online room. A full exchange with enforced alternation —
+        out-of-turn refusal, hand-over, TAIL and one automatic round end — peer-state equality after
+        every step. Two units a side at first: P1 x3, P2 x1, so P1 keeps activating once P2 is spent
+        (TAIL) and the round closes on the host."""
+        self.command_both("set_automatic")
+        states = self.wait_condition(
+            "agreed Automatic room on both peers, P1 opens",
+            lambda s: all(v.get("rules") == 1 and v.get("turn") == 1 for v in s.values()),
+            diagnostic=lambda s: "rules/turn: " + repr(
+                {r: (s[r].get("rules"), s[r].get("turn")) for r in s}
+            ),
+        )
+        self.checkpoint("rules-online-automatic", states)
+
+        self.command("host", "activate", {"unit": "mp2_p1a", "slot": 1})
+        states = self.wait_condition(
+            "the token handed to P2 on both peers",
+            lambda s: all(v.get("turn") == 2 for v in s.values())
+            and all("P2 to activate" in v.get("battle_log_tail", []) for v in s.values()),
+            diagnostic=lambda s: "turn: " + repr({r: s[r].get("turn") for r in s}),
+        )
+        self.checkpoint("rules-online-handover", states)
+
+        self.command("host", "activate", {"unit": "mp2_p1b", "slot": 1})
+        states = self.wait_condition(
+            "P1 refused off turn, nothing changed",
+            lambda s: s["host"].get("last_refusal") == "It is P2's turn"
+            and s["host"].get("turn") == 2
+            and self._unit(s, "host", "mp2_p1b").get("activated") is False,
+            diagnostic=lambda s: "host refusal=%r turn=%r p1b=%r" % (
+                s["host"].get("last_refusal"), s["host"].get("turn"),
+                self._unit(s, "host", "mp2_p1b").get("activated"),
+            ),
+        )
+        self.checkpoint("rules-online-out-of-turn-refused", states)
+
+        self.command("guest", "activate", {"unit": "mp2_p2a", "slot": 2})
+        states = self.wait_condition(
+            "the guest's activation fact hand the token back to P1",
+            lambda s: all(v.get("turn") == 1 for v in s.values())
+            and all("P1 to activate" in v.get("battle_log_tail", []) for v in s.values()),
+            diagnostic=lambda s: "turn: " + repr({r: s[r].get("turn") for r in s}),
+        )
+        self.checkpoint("rules-online-handover-back", states)
+
+        self.command("host", "activate", {"unit": "mp2_p1b", "slot": 1})
+        states = self.wait_condition(
+            "P2 spent: P1 keeps activating (TAIL)",
+            lambda s: all(v.get("turn") == 1 for v in s.values())
+            and all("P2 has no units left \u2014 P1 keeps activating" in v.get("battle_log_tail", [])
+                    for v in s.values()),
+            diagnostic=lambda s: "turn: " + repr({r: s[r].get("turn") for r in s}),
+        )
+        self.checkpoint("rules-online-tail", states)
+
+        self.command("host", "activate", {"unit": "mp2_p1c", "slot": 1})
+        states = self.wait_condition(
+            "one automatic round end, opener P2, on both peers",
+            lambda s: all(v.get("round") == 2 for v in s.values())
+            and all(v.get("turn") == 2 for v in s.values()),
+            diagnostic=lambda s: "round/turn: " + repr(
+                {r: (s[r].get("round"), s[r].get("turn")) for r in s}
+            ),
+        )
+        self.checkpoint("rules-online-round-end", states)
+
     def stop(self) -> None:
         for role in ("host", "guest"):
             if role in self.clients and self.clients[role].proc.poll() is None:
@@ -618,6 +693,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Also run the PR #665 transport scenario (expected to fail before that branch).",
     )
+    parser.add_argument(
+        "--include-rules-online",
+        action="store_true",
+        help="Also run the plan 3.6 rules-online alternation gate (agreed Automatic room).",
+    )
     args = parser.parse_args()
     if args.repeat < 1:
         parser.error("--repeat must be at least 1")
@@ -630,29 +710,39 @@ def main() -> int:
     root.mkdir(parents=True, exist_ok=True)
     start = time.monotonic()
     reference: list[dict] | None = None
+
+    def run_once(run_dir: Path, rules_online: bool, ref: list[dict] | None) -> list[dict]:
+        run_dir.mkdir(parents=True, exist_ok=False)
+        run = Run(args, run_dir)
+        run.rules_online = rules_online
+        try:
+            print(f"[mp2] run {run_dir.name}: {run_dir}")
+            run.start()
+            run.scenario()
+            view = deterministic_view(run.checkpoints)
+            atomic_json(run_dir / "deterministic-snapshots.json", view)
+            if ref is None:
+                ref = view
+            elif view != ref:
+                detail = first_difference(ref, view, "snapshots")
+                raise HarnessFailure(f"{run_dir.name}: snapshots differ from the first run: {detail}")
+        finally:
+            run.stop()
+        if run.shutdown_failure:
+            raise HarnessFailure(run.shutdown_failure)
+        return ref if ref is not None else view
+
     try:
         for number in range(1, args.repeat + 1):
-            run_dir = root / f"run-{number:02d}"
-            run_dir.mkdir(parents=True, exist_ok=False)
-            run = Run(args, run_dir)
-            try:
-                print(f"[mp2] run {number}/{args.repeat}: {run_dir}")
-                run.start()
-                run.scenario()
-                view = deterministic_view(run.checkpoints)
-                atomic_json(run_dir / "deterministic-snapshots.json", view)
-                if reference is None:
-                    reference = view
-                elif view != reference:
-                    detail = first_difference(reference, view, "snapshots")
-                    raise HarnessFailure(f"run {number}: snapshots differ from run 1: {detail}")
-            finally:
-                run.stop()
-            if run.shutdown_failure:
-                raise HarnessFailure(run.shutdown_failure)
+            reference = run_once(root / f"run-{number:02d}", False, reference)
+        online_reference: list[dict] | None = None
+        if args.include_rules_online:
+            for number in range(1, args.repeat + 1):
+                online_reference = run_once(root / f"rules-online-{number:02d}", True, online_reference)
         elapsed = time.monotonic() - start
         atomic_json(root / "determinism.json", {
             "runs": args.repeat, "identical": True, "seed": args.seed,
+            "rules_online": bool(args.include_rules_online),
             "elapsed_seconds": round(elapsed, 3), "snapshots": reference,
         })
         print(f"[mp2] RESULT PASS: {args.repeat} identical run(s), {elapsed:.1f}s")
