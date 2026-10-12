@@ -10802,6 +10802,13 @@ func _solo_peer_for_slot(slot: int) -> int:
 	return 0
 
 
+## 3.5: the slot a transport peer id plays (reverse of `_solo_peer_for_slot`).
+func _slot_for_peer(peer_id: int) -> int:
+	if network_manager == null:
+		return 0
+	return int((network_manager.peer_to_slot as Dictionary).get(peer_id, 0))
+
+
 ## Enter targeting mode (P8): the weapon range shows as a ring, the line of sight to the hovered enemy
 ## draws live (green = clear, red = blocked); LMB on a valid AI unit resolves the attack, RMB/ESC cancels.
 func solo_begin_targeting(unit: GameUnit, melee: bool) -> void:
@@ -16095,6 +16102,10 @@ func _on_player_left(peer_id: int) -> void:
 	var player_count = network_manager.connected_peers.size()
 	if network_manager.is_host:
 		network_status_label.text = "Hosting (%d players)" % player_count
+	# 3.5: in an Automatic online room the side on turn keeps the token when its player drops —
+	# the table waits (the off-turn gate already blocks the other player), and the host says so.
+	if _online_turn_room() and _turn_is_host() and _slot_for_peer(peer_id) > 0 and _slot_for_peer(peer_id) == _hotseat_side_on_turn():
+		_log_rule_event(BattleLog.Category.GENERAL, "P%d dropped while on turn — the table waits" % _slot_for_peer(peer_id), true)
 	# Always clean THIS transport id's presence. A stale late close AFTER a rebind is a
 	# no-op here, because _on_peer_remapped already freed the old id's avatar/cursor and
 	# re-keyed presence to the new id; a genuine departure is cleaned correctly. (The

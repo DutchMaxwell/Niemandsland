@@ -114,3 +114,16 @@ def test_a_tree_knob_without_a_deep_seat_is_refused():
     missing = Path("/nonexistent/list.json")
     with pytest.raises(ValueError, match="deep_player"):
         sp.play_game(SEED, missing, missing, REPO, missing, None, deep_search_mode="tree", **FAST)
+
+
+def test_the_readback_returns_the_four_knobs_the_instrument_can_set():
+    """ORDER 2f4f7a13: `core_with_knob_overrides` refuses any override the core does not read
+    back, and `knobs()` omitted `dangerous_end_morale` / `menu_wide` / `playout_rush_k` /
+    `rules_epoch` (the header parser reads all four, plain.rs knobs_of) — so the instrument
+    could not SEE a knob it set. RED before: the call RAISES; after: each reads back equal."""
+    overrides = {"dangerous_end_morale": True, "menu_wide": True,
+                 "playout_rush_k": 2, "rules_epoch": 7}
+    core = sp.core_with_knob_overrides(REPO, {"profiles": {}, "knobs": {}}, {}, overrides)
+    back = core.knobs()
+    for key, want in overrides.items():
+        assert back.get(key) == want, f"{key}: set {want!r}, read back {back.get(key)!r}"
