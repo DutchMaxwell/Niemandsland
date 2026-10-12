@@ -960,6 +960,18 @@ impl Core {
             ),
         );
         m.insert("consolidate".into(), self.knobs.consolidate.into());
+        // The four knobs the read-back used to omit (konrad ORDER 2f4f7a13). The header
+        // parser reads all four (`plain.rs knobs_of`), but `knobs()` did not return them,
+        // so the A/B harness's override read-back (`selfplay.core_with_knob_overrides`)
+        // REJECTED them — the instrument could not see a knob it set. `dangerous_end_morale`,
+        // `menu_wide` and `rules_epoch` are BEHAVIOUR the core reads (rules_epoch gates rules
+        // via `rule_on`, acts.rs:1472); `playout_rush_k` matches its default. The eval header
+        // already stamps them (selfplay.py), so this closes the instrument gap, not a
+        // divergence — but it lets a seat override them again.
+        m.insert("dangerous_end_morale".into(), self.knobs.dangerous_end_morale.into());
+        m.insert("menu_wide".into(), self.knobs.menu_wide.into());
+        m.insert("playout_rush_k".into(), (self.knobs.playout_rush_k as i64).into());
+        m.insert("rules_epoch".into(), self.knobs.rules_epoch.into());
         to_py(py, &Value::Object(m))
     }
 
