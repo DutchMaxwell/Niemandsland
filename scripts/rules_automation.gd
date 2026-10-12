@@ -36,7 +36,7 @@ static func accepts_online(level: Variant) -> bool:
 
 
 ## Flipped on by plan step 2.10, when hotseat Automatic works; until then the table-setup row stays hidden.
-const UI_ENABLED := false
+const UI_ENABLED := true
 ## Test seam: a suite sets this to exercise the row, the pick and the log line with the flag forced on.
 static var ui_enabled_override := false
 const MENU_CFG := "user://menu.cfg"
