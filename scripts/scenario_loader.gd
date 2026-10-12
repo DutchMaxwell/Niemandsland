@@ -27,6 +27,7 @@ var _save_manager: Node = null
 var _autosave: Node = null       # AutosaveController (optional)
 var _move_trails: Node = null    # MoveTrails (optional; chalk-trail cleanup)
 var _rules: Node = null          # plan 4.1: the army manager (optional; lesson Manual pin)
+var _rules_before: int = -1      # the player's level captured at begin_lesson (-1 = none held)
 var _snapshot: Dictionary = {}
 var _captured: bool = false
 
@@ -44,6 +45,9 @@ func begin_lesson() -> void:
 	if _save_manager != null and _save_manager.has_method("serialize_game_state"):
 		_snapshot = _save_manager.serialize_game_state()
 		_captured = true
+	# Plan 4.1: a lesson teaches the dice tray and manual wounds, so it runs MANUAL whatever the
+	# player's own level was; end_lesson (or an external load) hands the level back.
+	_pin_manual()
 	_set_autosave_paused(true)
 
 
@@ -67,6 +71,7 @@ func end_lesson() -> Error:
 		err = await _save_manager.restore_state(_snapshot)
 	_captured = false
 	_snapshot = {}
+	_restore_rules()
 	_set_autosave_paused(false)
 	return err
 
@@ -90,7 +95,22 @@ func leave_lesson_for_external_load() -> void:
 	_clear_trails()
 	_captured = false
 	_snapshot = {}
+	_restore_rules()
 	_set_autosave_paused(false)
+
+
+## Plan 4.1: capture the player's level and force MANUAL for the lesson lifetime.
+func _pin_manual() -> void:
+	if _rules != null and "rules_automation" in _rules:
+		_rules_before = int(_rules.rules_automation)
+		_rules.rules_automation = RulesAutomation.Level.MANUAL
+
+
+## Plan 4.1: hand the captured level back (idempotent; a second call is a no-op).
+func _restore_rules() -> void:
+	if _rules_before >= 0 and _rules != null and "rules_automation" in _rules:
+		_rules.rules_automation = _rules_before
+	_rules_before = -1
 
 
 func _set_autosave_paused(paused: bool) -> void:
