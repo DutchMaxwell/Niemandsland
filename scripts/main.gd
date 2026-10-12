@@ -9927,7 +9927,7 @@ func _solo_decision_rules_for(unit: GameUnit) -> Array:
 ## special rule the designated army carries, classified RESOLVED (mechanically implemented — derived
 ## from SOLO_MODELED_RULES), marked "decision-aware" when it also steers choices, or UN-AUTOMATED
 ## (which additionally keeps flowing through the once-per-session manual-note mechanism).
-func _solo_log_rule_inventory(player_id: int) -> void:
+func _solo_log_rule_inventory(player_id: int, human := false) -> void:
 	if battle_log == null or opr_army_manager == null:
 		return
 	var names: Array = []
@@ -9946,7 +9946,12 @@ func _solo_log_rule_inventory(player_id: int) -> void:
 	# army = one system, so the first unit carries it); the constants remain the no-map fallback.
 	var inv := SoloController.classify_rule_inventory(names,
 		_solo_modeled_rules_for(first_unit), _solo_decision_rules_for(first_unit))
-	battle_log.log_event(BattleLog.Category.GENERAL, "AI rule inventory (P%d): %s | decision-aware: %s | NOT automated (apply manually): %s" % [
+	# Step 2.9: the AI-seat handoff line is unchanged; a hotseat HUMAN army gets the same inventory
+	# under a player-facing header, so each human sees what the engine runs vs. what they apply by hand.
+	var head := "AI rule inventory (P%d): %s | decision-aware: %s | NOT automated (apply manually): %s"
+	if human:
+		head = "Rules the engine applies (P%d): %s | decision-aware: %s | apply by hand: %s"
+	battle_log.log_event(BattleLog.Category.GENERAL, head % [
 		player_id, _solo_inventory_list(inv["resolved"]), _solo_inventory_list(inv["decision"]),
 		_solo_inventory_list(inv["unknown"])], true)
 
@@ -18597,11 +18602,22 @@ func _on_start_game_pressed() -> void:
 
 ## The game phase changed locally (single-player start, MP transition applied, or save/load). Re-derive
 ## the trail-chalk gate and refresh the button/status.
-func _on_game_phase_changed(_phase: int) -> void:
+func _on_game_phase_changed(phase: int) -> void:
 	_sync_move_trails_deployment()
 	_update_game_phase_ui()
 	_solo_grade_logged = ""   # every phase change opens a new game's grade line
 	_solo_log_grade()
+	# Step 2.9: a hotseat Automatic table has no AI-seat handoff to print the rule inventory at, so print
+	# it for EACH human army at game start — what the engine applies vs. what the player applies by hand.
+	if phase == OPRArmyManager.GamePhase.PLAYING and opr_army_manager != null and _solo_hotseat_automatic():
+		var slots: Array = []
+		for gu in opr_army_manager.game_units.values():
+			var pid := int((gu as GameUnit).unit_properties.get("player_id", 0))
+			if pid != 0 and not slots.has(pid):
+				slots.append(pid)
+		slots.sort()
+		for pid in slots:
+			_solo_log_rule_inventory(int(pid), true)
 
 
 ## The host broadcast the authoritative game phase (host applies it here too). Apply it to the army
