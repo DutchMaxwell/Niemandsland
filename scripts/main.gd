@@ -14254,7 +14254,7 @@ func _update_rules_chip() -> void:
 		_rules_chip = Label.new()
 		_rules_chip.theme_type_variation = HouseStyle.CAPTION
 		_rules_chip.mouse_filter = Control.MOUSE_FILTER_STOP   # labels ignore the mouse by default - needed for the tooltip
-		_rules_chip.tooltip_text = "Automatic: the game rolls and applies the rules. Manual: you use the dice tray."
+		_rules_chip.tooltip_text = "Automatic: the game rolls and applies the rules it models. Rules listed at game start under 'apply by hand' stay manual. Manual: you use the dice tray."
 		next_round_btn.add_sibling(_rules_chip)
 	_rules_chip.visible = RulesAutomation.ui_enabled()
 	_rules_chip.text = RulesAutomation.chip_text(opr_army_manager.rules_automation, not solo_ai_slots.is_empty())
@@ -14277,7 +14277,7 @@ func _add_rules_toggle() -> void:
 	var ai: bool = not solo_ai_slots.is_empty()
 	var cb := CheckButton.new()
 	cb.text = "Rules automation"
-	cb.tooltip_text = "Automatic: the game rolls and applies the rules. Locked on while the AI plays." if ai else "Automatic: the game rolls and applies the rules. Manual: you use the dice tray."
+	cb.tooltip_text = "Automatic: the game rolls and applies the rules it models. Rules listed at game start under 'apply by hand' stay manual. Locked on while the AI plays." if ai else "Automatic: the game rolls and applies the rules it models. Rules listed at game start under 'apply by hand' stay manual. Manual: you use the dice tray."
 	cb.button_pressed = RulesAutomation.effective(opr_army_manager.rules_automation, ai) == RulesAutomation.Level.AUTOMATIC
 	cb.disabled = ai
 	cb.focus_mode = Control.FOCUS_NONE
