@@ -64,6 +64,16 @@ func _unit(pid: int, unit_name: String) -> GameUnit:
 	return u
 
 
+## Frees the session double INSIDE the test (gdUnit flags an unparented node still alive at the test's
+## end as an orphan; freeing it here keeps the suite orphan-free).
+func _end_session() -> void:
+	if _main != null:
+		_main.network_manager = _real_net
+	if _net != null:
+		_net.free()
+		_net = null
+
+
 func test_an_agreed_automatic_room_builds_the_engine_controller() -> void:
 	_fake_session()
 	_clear_controller()
@@ -73,6 +83,7 @@ func test_an_agreed_automatic_room_builds_the_engine_controller() -> void:
 	assert_object(_main.solo_controller) \
 		.override_failure_message("3.1 — an agreed online automatic room must build the engine controller") \
 		.is_not_null()
+	_end_session()
 
 
 func test_a_manual_room_builds_no_engine_controller() -> void:
@@ -82,6 +93,7 @@ func test_a_manual_room_builds_no_engine_controller() -> void:
 	_main.opr_army_manager.rules_automation = RulesAutomation.Level.MANUAL
 	_main._ensure_solo_controller()
 	assert_object(_main.solo_controller).is_null()
+	_end_session()
 
 
 func test_the_remote_human_is_an_enemy_only_when_automatic() -> void:
@@ -95,6 +107,7 @@ func test_the_remote_human_is_an_enemy_only_when_automatic() -> void:
 		.is_true()
 	_main.opr_army_manager.rules_automation = RulesAutomation.Level.MANUAL
 	assert_bool(_main._engine_enemy(host, guest)).is_false()
+	_end_session()
 
 
 ## The maintainer's addition: the guest applies nothing on its own (no double engine). The hotseat turn /
@@ -106,3 +119,4 @@ func test_the_non_active_peer_runs_no_turn_engine_online() -> void:
 	assert_bool(_main._solo_hotseat_automatic()) \
 		.override_failure_message("3.1 — the guest must not run its own activation/turn engine online") \
 		.is_false()
+	_end_session()
