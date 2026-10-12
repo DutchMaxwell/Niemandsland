@@ -7,6 +7,12 @@ Rust rules core (`core/nml-core`), which also drives self-play and the AI's roll
 `_solo_log_unmodeled_rules` in `scripts/main.gd`), so field tests
 and the phone review app *show* the gaps instead of hiding them.
 
+> **Where this applies.** The rules below are the ones the **Automatic** engine models. Automatic is how
+> solo against the AI always runs, and it is also what an agreed Automatic **human-vs-human** table uses
+> (local or online) — so these modelled rules resolve there for both sides too, and the "not automated"
+> notes apply to any Automatic table, not solo alone. On a **Manual** table none of it resolves: the
+> players call everything.
+
 ## Sources (authoritative — verified against the PDFs, not memory/web)
 
 - **GF – Advanced Rules v3.5.1** — `<local rulebooks>/GF_-_Advanced_Rules_v3_5_1.pdf`

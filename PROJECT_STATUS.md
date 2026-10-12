@@ -237,10 +237,11 @@ the same measured, base-width corridors with a distance label.
 **Multiplayer** — ENet over LAN and over the internet via the WebSocket relay
 ([`relay/`](relay/README.md)); full state sync (models, terrain, rotation, table
 size) with batch RPCs; shared dice log; player avatars/cursors; multiplayer
-save/load. A **slot a connected human occupies is never driven by the solo
-automation** (hard guard since 0.3.10.1 — human-vs-human play is manual dice, as
-designed; the roster shows "P2: NACHTMAHR" only for genuinely AI-designated
-slots). **Deployment-zone geometry is host-authoritative** and synced on join;
+save/load. A **slot a connected human occupies is never decision-driven by the AI** — only a genuinely
+AI-designated slot plays itself — but an agreed **Automatic** table resolves the rules for both sides
+(turns, shooting, melee, morale and the modelled rules; the host owns the turn and each player rolls on
+their own tray), while **Manual** leaves human-vs-human play on the dice as before; the roster shows
+"P2: NACHTMAHR" only for genuinely AI-designated slots. **Deployment-zone geometry is host-authoritative** and synced on join;
 "Show Deployment Zones" and "Flip Zone Colours" are per-player view preferences
 (strictly local). **Player names** (entered in Host/Join, persisted, host-authoritative
 sync) appear in the dice log, on avatars and in a connected-player **roster**;
@@ -319,28 +320,30 @@ The forward-looking plan and the feature-request pipeline now live in
 sections (Age of Fantasy + Regiments, MP 3+ hardening, UX polish, solo rules coverage
 and Rust-core parity, …).
 
-## Out of scope (by design)
+## Human-vs-human: per table (Automatic or Manual)
 
-For **human-vs-human** play Niemandsland stays a **tool, not an automated game**: in a local
-or multiplayer game between people nothing is resolved for you — no automated combat or damage
-resolution, no forced turn tracking, no automated terrain effects. The only framing device is
-the lightweight **deployment→play phase gate** (a Start-Game affordance with a multiplayer
-ready-sync), which resolves nothing. A few bookkeeping steps also run there: the round-start
-Fatigue clear, spell-token expiry, growth markers, the transport activation mark and the
-line-of-sight line (#662–#665, #667).
+A human-vs-human table runs at one of two levels. **Manual** is the tool: nothing is resolved for you —
+no automated combat or damage resolution, no forced turn tracking, no automated terrain effects. The
+only framing device is the lightweight **deployment→play phase gate** (a Start-Game affordance with a
+multiplayer ready-sync), which resolves nothing. **Automatic** — chosen by the two players in a room
+(one asks, the other confirms), or the standing mode in solo — resolves activations, dice, wounds,
+morale, terrain effects and the modelled special rules for **both** sides: one unit per side in turn,
+the host owns the turn, and each player rolls their own dice on their own tray. A few bookkeeping steps
+run on either level: the round-start Fatigue clear, spell-token expiry, growth markers, the transport
+activation mark and the line-of-sight line, and on Automatic the applied rule lines ride the wire to
+both screens.
 
-**Solo mode is the deliberate exception**, because an opponent that resolves nothing cannot
-play: when an army is marked AI-controlled the game runs activations, dice, wounds, morale and
-special rules for both sides. Those systems only activate in a solo game; a human-vs-human
-table gets only the bookkeeping listed above. The legacy AI system + battle simulator (~5500 lines) was
-removed and was **not** revived — today's solo engine (`scripts/solo/`) was written from
-scratch against OPR's official Solo & Co-Op ruleset, deterministic and explainable by design;
-on Linux and Windows builds NACHTMAHR's move search also scores positions with a trained
+In every level a slot a connected human occupies is never decision-driven by the AI. **Solo mode runs
+Automatic by necessity**, because an opponent that resolves nothing cannot play: when an army is marked
+AI-controlled the game runs activations, dice, wounds, morale and special rules for both sides. Those
+systems are the same engine an agreed Automatic room uses; today's solo engine (`scripts/solo/`) was
+written from scratch against OPR's official Solo & Co-Op ruleset, deterministic and explainable by
+design, and on Linux and Windows builds NACHTMAHR's move search also scores positions with a trained
 neural network (value net) in the bundled Rust rules core.
 
 **Co-op** (two or more people in one multiplayer room against an AI-controlled army) is a
 first version: the AI designation reaches every player, and each player rolls saves for their
-own units (#835, #836).
+own units.
 Still out of scope: campaigns and ladders. The rule-based decision tree stays in every build as
 the fallback and is the only AI on macOS (see
 [`docs/plans/AI_ROLLOUT_WORKFLOW_2026-09-04.md`](docs/plans/AI_ROLLOUT_WORKFLOW_2026-09-04.md)).

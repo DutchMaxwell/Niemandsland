@@ -12,9 +12,10 @@ Fantasy). Built in Godot.
 [![Status](https://img.shields.io/badge/Status-0.3.13.1--alpha-orange.svg)]()
 
 > **Status: public alpha (`0.3.13.1`).** The tabletop sandbox, OPR army import, multiplayer
-> and the 3D-model pipeline work. **Solo play against the built-in AI opponent (NACHTMAHR)**
-> resolves turns, combat, spells and terrain effects automatically; human-vs-human multiplayer
-> is still a manual-rules sandbox. See [`PROJECT_STATUS.md`](PROJECT_STATUS.md) for the honest
+> and the 3D-model pipeline work. Each table runs **Automatic or Manual**: on Automatic the game
+> resolves turns, combat, spells and terrain effects for both sides — solo against the built-in AI
+> (NACHTMAHR) as well as human-vs-human online; on Manual it is a sandbox that shows but does not
+> decide. See [`PROJECT_STATUS.md`](PROJECT_STATUS.md) for the honest
 > done / in-progress / planned breakdown, and [`docs/ROADMAP.md`](docs/ROADMAP.md) for what's
 > planned next.
 
@@ -50,10 +51,10 @@ What the code actually does today:
 - **Measurement** — distance measuring in inches.
 - **Map layout editor** — top-down 3″ grid, terrain pieces (ruins / forest /
   container / dangerous), front-line + custom-polygon deployment zones, objectives,
-  auto-generate, 3D overlay, save/load layouts. (In solo mode terrain is rules-active — line of
-  sight, cover, difficult / dangerous ground; in the sandbox and in multiplayer it stays visual —
-  though since `0.3.12` the measure tool's own LOS verdict is volumetric and height-aware in
-  every mode.)
+  auto-generate, 3D overlay, save/load layouts. (On an **Automatic** table — solo or an agreed
+  online room — terrain is rules-active: line of sight, cover, difficult / dangerous ground; on a
+  **Manual** table it stays visual — though since `0.3.12` the measure tool's own LOS verdict is
+  volumetric and height-aware in every mode.)
 - **OPR units** — import Army Forge lists via the OPR API, per-model wounds, caster
   points, unit coherency check + visualizer, radial context menu, a bottom unit-card
   dock (the whole army as live stat cards) plus an in-game battle log (exportable to a
@@ -74,9 +75,11 @@ What the code actually does today:
   "dry-brush" cap (on by default; Settings → *Enforce Movement Limit*) stops the drag at the selected action band (Advance ~6″ /
   Rush-Charge ~12″). A Deployment → **Start Game** → Playing phase gate (with an MP
   ready-sync) frames setup vs play.
-- **Multiplayer** — manual play: no dice or combat automation, alternate activations like at a real
-  table; only round bookkeeping (Fatigue, spell tokens, growth markers, transport activations) runs
-  automatically.
+- **Multiplayer** — per table: **Automatic** (the two players agree on it) resolves turns, shooting,
+  melee, morale and the modelled rules for both sides, one unit per side in turn — the host owns the
+  turn and each player rolls on their own tray; or **Manual** play, where the dice and combat are
+  yours and activations alternate like at a real table. Either way state, dice, rounds, rule lines and
+  round bookkeeping (Fatigue, spell tokens, growth markers, transport activations) stay in sync.
   ENet over LAN, or over the internet via a WebSocket relay (see [`relay/`](relay/README.md));
   full state sync (models, terrain, table size), shared dice log, player avatars/cursors,
   save/load, and a deployment ready-sync.

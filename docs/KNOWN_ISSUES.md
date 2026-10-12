@@ -7,19 +7,26 @@ not there yet and what to watch for. The full done / in-progress / planned break
 
 ## By design (not bugs)
 
-- **No rules automation between two humans.** In a local or multiplayer game against another
-  person the simulator **shows, it does not decide.** It presents ranges, coherency, movement
-  bands and unit state, but it does **not** resolve turns, shooting, melee or morale, and
-  **terrain has no gameplay effect** there (it's visual + line-of-sight only) — though since
-  `0.3.12` the measure tool's own LOS verdict is volumetric and height-aware in every mode. You
-  play the game; the table assists.
-- **Solo against NACHTMAHR is the exception.** When an army is AI-controlled the game does
-  resolve activations, dice, wounds, morale, terrain effects and hundreds of special rules for
-  both sides (see [`../PROJECT_STATUS.md`](../PROJECT_STATUS.md)). Solo is **alpha**: one
-  difficulty (full strength), co-op against the AI in multiplayer is a first version, the UI is
-  English (the privacy & data screens also come in German), and a small residue
-  of special rules is still manual — the battle log names any rule it applies (or asks for
-  manual handling).
+- **Per table: Automatic or Manual.** Set to **Automatic**, the simulator **decides** — it
+  resolves activations, dice, wounds, morale, terrain effects and the modelled special rules for
+  **both** sides, online as well as local: one unit per side in turn, the host owns the turn, and
+  each player rolls their own dice on their own tray. Set to **Manual**, it **shows, it does not
+  decide** — ranges, coherency, movement bands and unit state are presented, but turns, shooting,
+  melee and morale are yours to call, and **terrain has no gameplay effect** there (visual +
+  line-of-sight only) — though since `0.3.12` the measure tool's own LOS verdict is volumetric and
+  height-aware in every mode. In a room the two players agree on the level (one asks, the other
+  confirms); either can drop back to Manual at once.
+- **Some rules still stay by hand.** Even on Automatic, the rules the game lists at start under
+  "apply by hand" are yours — and the ones that say "may" (Teleport/Ethereal movement, Hit & Run,
+  Guerrilla/Harassing) are deliberately left to you for now. In an online Automatic room the turn
+  is enforced on each machine itself: the host does not yet police an out-of-turn action, so a guest
+  can still drag a unit off turn and the host corrects it by hand. The battle log names every rule
+  it applies — or asks you to apply it.
+- **Solo against NACHTMAHR is the automated baseline.** When an army is AI-controlled the game
+  resolves activations, dice, wounds, morale, terrain effects and hundreds of special rules for
+  both sides (see [`../PROJECT_STATUS.md`](../PROJECT_STATUS.md)). Solo is **alpha**: one difficulty
+  (full strength), co-op against the AI in multiplayer is a first version, and the UI is English
+  (the privacy & data screens also come in German).
 - **Automodus (Charge / Advance & Shoot / Rush) is a first version.** An executed intent has **no
   take-back** — the dice fell, like at the table. Regiments, aircraft and units embarked in a
   transport still move by hand (pick the radial's Shoot/Fight instead, or drag). **Co-op rooms hide

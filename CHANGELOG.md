@@ -29,6 +29,13 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 - **Automatic rules on a two-player table.** A table with no AI can switch Rules automation on for both
   players: the game rolls and applies the rules it knows for each side, and a list at the start of the
   game names every rule that stays yours to apply by hand.
+- **Automatic rules online.** The same agreed automation now works in a room: the two players agree on
+  the level (one asks, the other confirms; either can drop back to Manual at once). One unit per side
+  activates in turn — the host owns the turn, each player rolls their own dice on their own tray, the
+  applied rule lines show on **both** screens, and the round ends when both sides are spent. A player
+  who drops while on turn keeps the turn; the table waits.
+- **Lessons run by hand.** Entering a Game School lesson pins the table to Manual — the lesson teaches
+  the dice tray and manual wounds — and hands your own setting back when the lesson ends.
 
 ### Fixed
 - **A Tough(6+) monster leaves blood, not an oil-and-fire stain.** The battlefield stain treated every
