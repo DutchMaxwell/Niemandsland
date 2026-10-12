@@ -1122,7 +1122,7 @@ impl<'a> Search<'a> {
                     if grid_rows.len() >= crate::tokens::N_CAND.saturating_sub(n_hand).saturating_sub(4) {
                         break;
                     }
-                    if batch > 0 && grid_rows.len() % batch == 0
+                    if batch > 0 && grid_rows.len().is_multiple_of(batch)
                         && deadline.is_some_and(|d| std::time::Instant::now() >= d) {
                         cut = true;
                         break 'outer;
