@@ -297,6 +297,8 @@ var _rules_agreement_card: PromptCard = null # the open confirm card, so a timeo
 var _rules_proposal_timer: Timer = null      # one 30 s timer, used by whichever side is waiting
 const RULES_AGREEMENT_TIMEOUT := 30.0
 var _hotseat_turn: TwoHumanTurn = null       # enforced alternation on a hotseat Automatic table (plan 2.T2a)
+var _ambush_turn_waiters: Dictionary = {}   # 3.4b: slot -> the owner answered its Ambush turn
+var _ambush_turn_timeout_s := 120.0         # 3.4b: tests shorten it; play never does
 var solo_panel_box: VBoxContainer = null     # left-panel "Solo" section (per-army AI toggles)
 var solo_mission_option: OptionButton = null # left-panel Mission picker (MissionCatalog + "Duel (no mission)")
 var _solo_mission_id: String = ""            # "" = Duel (no mission, today's byte-identical behaviour)
@@ -3107,6 +3109,86 @@ func _hotseat_ambush_arrivals(round_number: int, opener: int) -> void:
 		await _solo_ambush_human_turn(round_number, pool)
 	solo_controller.human_slot = saved_human
 	solo_controller.ai_slot = saved_ai
+
+
+## 3.4b: the slot this machine plays (the host's own side), for the Ambush handshake.
+func _local_slot() -> int:
+	if network_manager != null and network_manager.has_method("get_my_player_slot"):
+		var s := int(network_manager.get_my_player_slot())
+		if s > 0:
+			return s
+	return 1
+
+
+## 3.4b: whether `slot` has a reserve unit that may arrive this round (host-side check).
+func _online_side_has_reserve(slot: int) -> bool:
+	if solo_controller == null or opr_army_manager == null:
+		return false
+	var saved: int = solo_controller.human_slot
+	solo_controller.human_slot = slot
+	var has := false
+	for u in solo_controller.human_reserve_units():
+		var gu := u as GameUnit
+		if gu != null and SoloController.may_arrive_this_round(gu, opr_army_manager.current_round):
+			has = true
+			break
+	solo_controller.human_slot = saved
+	return has
+
+
+## 3.4b: the host drives the round-start Ambush for each side, opener first. A side with no reserve is
+## skipped at once; otherwise the owner is asked and the host waits with a bound (labelled auto-skip).
+func _online_ambush_arrivals(round_number: int, opener: int) -> void:
+	if not _online_turn_room() or not _turn_is_host():
+		return
+	if round_number < 2:
+		return
+	for slot in [opener, 3 - opener]:
+		if not _online_side_has_reserve(slot):
+			continue
+		var peer: int = _solo_peer_for_slot(slot)
+		if peer == 0:
+			continue
+		if slot == _local_slot():
+			await _online_ambush_owner_turn({"round": round_number, "slot": slot})
+			continue
+		_ambush_turn_waiters[slot] = false
+		network_manager.send_command("request_ambush_turn", {"round": round_number, "slot": slot}, peer)
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.GENERAL, "Waiting for P%d — Ambush (round %d)" % [slot, round_number], true)
+		var waited := 0.0
+		while not bool(_ambush_turn_waiters.get(slot, false)) and waited < _ambush_turn_timeout_s:
+			await get_tree().create_timer(0.1).timeout
+			waited += 0.1
+		var answered := bool(_ambush_turn_waiters.get(slot, false))
+		_ambush_turn_waiters.erase(slot)
+		if not answered:
+			_log_rule_event(BattleLog.Category.GENERAL, "P%d Ambush (round %d): no answer — skipped" % [slot, round_number], true)
+
+
+## 3.4b: this machine OWNs `slot` — run its own Ambush prompt, then tell the host it is done.
+## Started fire-and-forget from _on_network_command (a bare statement); the host waits on the answer.
+func _online_ambush_owner_turn(payload: Dictionary) -> void:
+	if not _online_turn_room() or solo_controller == null:
+		return
+	var slot := int(payload.get("slot", 0))
+	var round_number := int(payload.get("round", 0))
+	var saved_human: int = solo_controller.human_slot
+	var saved_ai: int = solo_controller.ai_slot
+	solo_controller.human_slot = slot
+	solo_controller.ai_slot = 3 - slot
+	var pool: Array = []
+	for u in solo_controller.human_reserve_units():
+		var gu := u as GameUnit
+		if gu != null and SoloController.may_arrive_this_round(gu, round_number):
+			pool.append(gu)
+	if not pool.is_empty():
+		_log_rule_event(BattleLog.Category.GENERAL, "P%d Ambush (round %d): place one reserve unit from the tray" % [slot, round_number], true)
+		await _solo_ambush_human_turn(round_number, pool)
+	solo_controller.human_slot = saved_human
+	solo_controller.ai_slot = saved_ai
+	if network_manager != null:
+		network_manager.send_command("ambush_turn_done", {"slot": slot}, 0)
 
 
 ## Log an off-turn refusal (shared by the radial Activate door and the combat verbs).
@@ -14237,6 +14319,11 @@ func _do_next_round() -> void:
 	# Each human unit's roll rides its OWNER's tray (`_owner_roll`); the guest only mirrors the result.
 	if _online_turn_room() and _turn_is_host():
 		await _solo_battleborn_recovery()
+		# 3.4b: then the Ambush step, in turn order (the side that did NOT take the last activation opens).
+		var opener: int = _hotseat_turn.next_round_opener() if _hotseat_turn != null else TwoHumanTurn.NONE
+		if opener == TwoHumanTurn.NONE:
+			opener = 1
+		await _online_ambush_arrivals(opr_army_manager.current_round, opener)
 	# Hotseat/MP has no automated round-start sequence, but Reinforcement is not a Solo rule — a copy
 	# promised in the last round must still arrive here, or the rule would silently do nothing off Solo.
 	await _reinforcement_arrivals(opr_army_manager.current_round if opr_army_manager else 1)
@@ -16983,6 +17070,14 @@ func _on_network_command(type: String, payload: Variant, _from_peer: int) -> voi
 		# broadcasts sync_round_advance for the guests to apply.
 		if _online_turn_room() and _turn_is_host():
 			_do_next_round()
+	elif type == "request_ambush_turn" and payload is Dictionary:
+		# 3.4b: the host asked THIS machine (the owner) to run its own Ambush prompt; the bare call
+		# starts the coroutine, which answers with ambush_turn_done when done.
+		_online_ambush_owner_turn(payload)
+	elif type == "ambush_turn_done" and payload is Dictionary:
+		var _slot := int((payload as Dictionary).get("slot", 0))
+		if _ambush_turn_waiters.has(_slot):
+			_ambush_turn_waiters[_slot] = true
 
 
 ## Plan 1.4: a rules-automation value from a peer. MANUAL is unilateral and applies at once; an
