@@ -68,8 +68,14 @@ func test_automatic_needs_the_second_peers_confirm() -> void:
 	_main.opr_army_manager.rules_automation = MANUAL
 	_main._on_network_command("sync_rules_automation", {"level": AUTOMATIC}, 2)
 	assert_int(_main.opr_army_manager.rules_automation).is_equal(MANUAL)
+	# A confirm that answers no proposal of ours is a bare Automatic on the wire too: ignored.
+	_main._on_network_command("confirm_rules_automation", {}, 2)
+	assert_int(_main.opr_army_manager.rules_automation).is_equal(MANUAL)
+	# Only our own proposal, answered by the peer's confirm, turns Automatic on.
+	assert_bool(_main.propose_rules_automation()).is_true()
 	_main._on_network_command("confirm_rules_automation", {}, 2)
 	assert_int(_main.opr_army_manager.rules_automation).is_equal(AUTOMATIC)
+	assert_bool(_main._rules_proposal_pending).is_false()
 	assert_int(_lines("Rules automation: Automatic (agreed by P1 and P2)")).is_equal(1)
 
 
