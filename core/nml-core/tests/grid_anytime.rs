@@ -186,3 +186,51 @@ fn grid_batch_stops_after_the_first_pricing_batch() {
     }
     assert!(widened > 0, "the corpus widened nowhere — the gate proves nothing");
 }
+
+/// grid-search step 10 — the replay seam: `grid_budget n` forces exactly n priced cells with the
+/// clock off, so a deadline-cut decision replays identically from its stamped `grid.completed`.
+#[test]
+fn grid_budget_replays_a_cut_decision() {
+    let c = corpus();
+    let statics = build_act_statics(&c, REPO);
+    let mut sc = Scratch::default();
+    const N: usize = 1;
+    // A cut at one priced cell: `grid_batch` 1 + a 2 s clock, the first grid batch stalled 4 s.
+    let cut_k = nml_core::read_act_header(&grid_head(
+        r#""grid_k":6,"grid_units":1,"grid_batch":1,"deadline_us":2000000"#)).unwrap().knobs;
+    // The replay: the SAME grid, forced to one priced cell, clock off.
+    let budget_k = nml_core::read_act_header(&grid_head(
+        r#""grid_k":6,"grid_units":1,"grid_budget":1"#)).unwrap().knobs;
+    let base_k = nml_core::read_act_header(&grid_head(r#""grid_k":6,"grid_units":1"#)).unwrap().knobs;
+    let mut widened = 0usize;
+    for (ai, act) in c.acts.iter().enumerate() {
+        // find acts that widen more than N cells
+        let hb = StallLeaf { calls: std::cell::Cell::new(0), stall: false };
+        let mut b = Search::new(Rollout::new(Policy::new(&statics, &c.terrain, seams_of(&c.knobs)), base_k), &act.statics);
+        b.leaf_value = Some(&hb); b.leaf_value_w = 1.0;
+        let Ok(full) = b.run(&act.state, act.player, &mut sc, None) else { continue };
+        if full.grid.as_ref().is_none_or(|g| g.completed <= N) {
+            continue;
+        }
+        widened += 1;
+        let ha = StallLeaf { calls: std::cell::Cell::new(0), stall: true };
+        let mut a = Search::new(Rollout::new(Policy::new(&statics, &c.terrain, seams_of(&c.knobs)), cut_k), &act.statics);
+        a.leaf_value = Some(&ha); a.leaf_value_w = 1.0;
+        let cut = a.run(&act.state, act.player, &mut sc, None).unwrap();
+        let ga = cut.grid.as_ref().expect("a grid_k pick carries a trace");
+        assert_eq!(ga.completed, N, "act {ai}: the clock did not cut at {N}");
+        assert!(ga.cut, "act {ai}: a deadline stop must stamp grid.cut");
+        let hc = StallLeaf { calls: std::cell::Cell::new(0), stall: false };
+        let mut z = Search::new(Rollout::new(Policy::new(&statics, &c.terrain, seams_of(&c.knobs)), budget_k), &act.statics);
+        z.leaf_value = Some(&hc); z.leaf_value_w = 1.0;
+        let rep = z.run(&act.state, act.player, &mut sc, None).unwrap();
+        let gz = rep.grid.as_ref().expect("a grid_k pick carries a trace");
+        assert_eq!(gz.completed, N, "act {ai}: grid_budget did not force the count");
+        assert!(gz.cut, "act {ai}: a forced-budget cut must stamp grid.cut");
+        assert_eq!(gz.rows.len(), N, "act {ai}: the replay trace moved");
+        assert_eq!((cut.unit_key.clone(), format!("{:?}", cut.action)),
+                   (rep.unit_key.clone(), format!("{:?}", rep.action)),
+                   "act {ai}: the replay moved the pick");
+    }
+    assert!(widened > 0, "the corpus widened nowhere — the gate proves nothing");
+}
