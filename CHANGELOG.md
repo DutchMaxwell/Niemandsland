@@ -24,6 +24,11 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   same executor NACHTMAHR's own activations run through. A suggested target is named in the log; a
   panel switch (on after your first executed intent) skips the save-roll confirmation. See
   `KNOWN_ISSUES.md` for this version's limits. (NML-202)
+- **No AI without its tick.** NACHTMAHR only takes an army you mark as AI. A plain two-player game
+  never silently hands a side over to it.
+- **Automatic rules on a two-player table.** A table with no AI can switch Rules automation on for both
+  players: the game rolls and applies the rules it knows for each side, and a list at the start of the
+  game names every rule that stays yours to apply by hand.
 
 ### Fixed
 - **A Tough(6+) monster leaves blood, not an oil-and-fire stain.** The battlefield stain treated every
