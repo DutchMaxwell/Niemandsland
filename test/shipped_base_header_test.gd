@@ -76,3 +76,69 @@ func test_the_shipped_header_carries_the_1724_1728_keys() -> void:
 			"charge_needs_path", "fearless_roll_when_shaken"]:
 		assert_bool(bool(k.get(key, false))).override_failure_message(
 			"shipped header lost table-fidelity key %s" % key).is_true()
+
+
+## Second mode (konrad ORDER b16a8cbc): the base the eval actually RUNS is the shipped
+## header MINUS a fixed allow-list of dropped keys, so guard the FILTERED base, not just
+## the raw header. NML_BATCH_BASE_FILTERED=<prep base> is compared to header-minus-list;
+## any OTHER missing/extra key = RED (a 7th drop fails). The 6 allowed drops, by reason:
+const DROPPED_ALLOWLIST := {
+	"brain_breadth": "class A: the core never reads it; redundant with top_k/horizon",
+	"cond_ap": "class A: the core never reads it; a Godot-only constant",
+	"table_fidelity": "class A: the core never reads it; it reads the individual fidelity keys",
+	"dice": "harness-wins: the A/B harness sets the dice itself",
+	"seat_mode": "harness-wins: the A/B harness sets the seat mode itself",
+	"route_root": "harness-wins: the A/B harness sets route_root itself",
+}
+
+
+func test_the_filtered_base_equals_the_header_minus_the_allowlist() -> void:
+	var path := OS.get_environment("NML_BATCH_BASE_FILTERED")
+	if path.is_empty():
+		print("[shipped-base drift] skipped: NML_BATCH_BASE_FILTERED is not set (set it to the prep base)")
+		return
+	var f := FileAccess.open(path, FileAccess.READ)
+	assert_object(f).override_failure_message("cannot open NML_BATCH_BASE_FILTERED=%s" % path).is_not_null()
+	if f == null:
+		return
+	var base: Dictionary = JSON.parse_string(f.get_line())
+	f.close()
+	var want := _shipped()
+	for k in DROPPED_ALLOWLIST:
+		want.erase(k)
+	var missing := []
+	var extra := []
+	var mismatch := []
+	for k in want:
+		if not base.has(k):
+			missing.append(k)
+		elif base[k] != want[k]:
+			mismatch.append("%s base=%s header=%s" % [str(k), str(base[k]), str(want[k])])
+	for k in base:
+		if not want.has(k):
+			extra.append(k)
+	missing.sort()
+	extra.sort()
+	mismatch.sort()
+	assert_bool(missing.is_empty()).override_failure_message(
+		"filtered base is MISSING %d non-allow-listed key(s): %s" % [missing.size(), str(missing)]).is_true()
+	assert_bool(mismatch.is_empty()).override_failure_message(
+		"filtered base VALUE mismatch: %s" % str(mismatch)).is_true()
+	assert_bool(extra.is_empty()).override_failure_message(
+		"filtered base has %d key(s) the header does not: %s" % [extra.size(), str(extra)]).is_true()
+
+
+## Control (must be able to fail): a 7th dropped key is NOT allow-listed, so the diff
+## must flag it. If this ever passes silently, the guard is blind to a real drift.
+func test_a_seventh_dropped_key_is_flagged() -> void:
+	var want := _shipped()
+	for k in DROPPED_ALLOWLIST:
+		want.erase(k)
+	var base := want.duplicate()
+	base.erase("top_k")
+	var missing := []
+	for k in want:
+		if not base.has(k):
+			missing.append(k)
+	assert_bool(missing.has("top_k")).override_failure_message(
+		"the guard would NOT flag a 7th dropped key (top_k)").is_true()
