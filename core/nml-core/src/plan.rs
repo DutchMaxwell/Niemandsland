@@ -262,6 +262,11 @@ pub struct PlanBend {
     /// switches the wall clock off — how a replay reproduces a deadline-cut
     /// record from its stamped `completed`, no clock needed.
     pub tree_budget: Option<i64>,
+    /// grid-search step 10 — the grid replay seam: `None` = the knob. `Some(n)`
+    /// forces the widen to price exactly n cells and switches the call-start
+    /// clock off — how a replay reproduces a deadline-cut grid decision from its
+    /// stamped `grid.completed` (the `tree_budget` precedent).
+    pub grid_budget: Option<usize>,
     /// Sleeps this many microseconds right after the root preselection (0 =
     /// never), so a red proof can make the preselection outlast an allowance
     /// deterministically (`deadline_after_preselect`).
@@ -277,6 +282,7 @@ impl Default for PlanBend {
             top_k_first: false,
             arb: ArbBend::default(),
             tree_budget: None,
+            grid_budget: None,
             preselect_delay_us: 0,
         }
     }
@@ -1051,6 +1057,14 @@ impl<'a> Search<'a> {
         if pool_cut {
             return Ok(empty(true));
         }
+        // grid-search step 10 — the replay seam: `grid_budget` (PlanBend override, else the header
+        // knob) forces the widen to price exactly n cells and switches the call-start clock off, so a
+        // deadline-cut decision replays identically from its stamped `grid.completed` (the
+        // `tree_budget` precedent).
+        let budget = self.bend.grid_budget.or_else(|| {
+            (self.roll.knobs.grid_budget > 0).then_some(self.roll.knobs.grid_budget)
+        });
+        let deadline = if budget.is_some() { None } else { deadline };
         let Some(hook) = self.leaf_value else {
             return Err(Unsupported::GridNeedsOpenerLeaf);
         };
@@ -1175,6 +1189,16 @@ impl<'a> Search<'a> {
                     ends_of.push(ends);
                 }
             }
+        }
+        // `grid_budget` forces the completed count: keep only the first `n` collected cells (the
+        // priority prefix) and stamp the cut, so the pick is the argmax over the hand plus that prefix.
+        if let Some(n) = budget {
+            if grid_rows.len() > n {
+                cut = true;
+            }
+            grid_rows.truncate(n);
+            ends_of.truncate(n);
+            meta.truncate(n);
         }
         // grid-search step 10 — price the collected cells in batches of `grid_batch` (0 = one batch,
         // step 9's single leaf call). Before EACH batch check the call-start deadline: the batch's

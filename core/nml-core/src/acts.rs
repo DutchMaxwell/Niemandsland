@@ -485,6 +485,11 @@ pub struct Knobs {
     /// at the call-start deadline with the best so far. Read only when `grid_k` is set.
     #[serde(default)]
     pub grid_batch: usize,
+    /// grid-search step 10 — the replay seam: force the widen to price exactly this many cells and
+    /// switch the call-start clock off, so a deadline-cut decision replays from its stamped
+    /// `grid.completed` (the `tree_budget` precedent). 0 (default) = off, byte-identical.
+    #[serde(default)]
+    pub grid_budget: usize,
 }
 
 /// The current rule-set generation (see `Knobs`/`Seams::rules_epoch`, `rule_on`).
@@ -1638,6 +1643,7 @@ impl Default for Knobs {
             grid_margin: 0.0,
             grid_shuffle: 0,
             grid_batch: 0,
+            grid_budget: 0,
         }
     }
 }
