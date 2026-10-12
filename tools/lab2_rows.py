@@ -3,7 +3,7 @@
 
 `Recorder` wraps the real `_pick_for` (selfplay.forced_picks) and times every planner call with
 perf_counter_ns; each landed pick becomes one decision {seq, side, arm, allocated_us, elapsed_us, preselect_us,
-overshoot_us, tree, deadline, search, net_calls}. Under `deadline_after_preselect` (stage-0 amendment A3) the
+overshoot_us, tree, deadline, search, net_calls, grid}. Under `deadline_after_preselect` (stage-0 amendment A3) the
 core stamps the root preselection's time: `preselect_us` carries it (None without the knob), elapsed = preselection
 + search, and the overshoot is the SEARCH's over the allowance. `make_row` assembles the row of the shared schema,
 `guarded` turns an Unsupported / timeout into an INVALID row so the run continues (anything else is a
@@ -19,7 +19,7 @@ ROW_KEYS = ("schema", "prereg_sha256", "row_id", "split", "part", "cell", "sourc
             "replicate", "seeds", "build", "model_sha256", "header_sha256", "net", "decisions", "y", "winner", "valid",
             "reason", "wall_s", "rss_hwm_mib", "done")
 DECISION_KEYS = ("seq", "side", "arm", "allocated_us", "elapsed_us", "preselect_us", "overshoot_us", "tree", "deadline",
-                 "search", "net_calls")
+                 "search", "net_calls", "grid")
 TREE_KEYS = ("completed", "deadline_hit", "batches", "frontier", "terminal")
 
 
@@ -72,7 +72,7 @@ class Recorder:
             yield self
 
     def add(self, side, allocated, elapsed, trace, net_calls, sig=None):
-        tree, dl = trace.get("tree"), trace.get("deadline")
+        tree, dl, grid = trace.get("tree"), trace.get("deadline"), trace.get("grid")
         alloc = allocated if allocated and allocated > 0 else None
         pre = (tree or dl or {}).get("preselect_us")
         self.decisions.append({
@@ -81,7 +81,8 @@ class Recorder:
             "overshoot_us": max(0, elapsed - (pre or 0) - alloc) if alloc else None,
             "tree": dict({k: tree[k] for k in TREE_KEYS}, fallback=tree.get("fallback")) if tree else None,
             "deadline": {"completed": dl["completed"], "cut": dl["cut"], "fallback": dl.get("fallback")} if dl else None,
-            "search": None, "net_calls": net_calls})
+            "search": None, "net_calls": net_calls,
+            "grid": {"completed": grid["completed"], "proposed": grid.get("proposed"), "cut": grid["cut"]} if grid else None})
         self._sigs.append(sig)
 
     def attach_search(self, draws):

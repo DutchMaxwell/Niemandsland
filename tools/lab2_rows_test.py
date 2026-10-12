@@ -16,7 +16,7 @@ _SPEC.loader.exec_module(rows)
 
 PRINCIPLES_ROW = ("schema prereg_sha256 row_id split part cell source arm opponent seat replicate seeds build model_sha256 "
                   "header_sha256 net decisions y winner valid reason wall_s rss_hwm_mib done").split()
-PRINCIPLES_DECISION = "seq side arm allocated_us elapsed_us preselect_us overshoot_us tree deadline search net_calls".split()
+PRINCIPLES_DECISION = "seq side arm allocated_us elapsed_us preselect_us overshoot_us tree deadline search net_calls grid".split()
 IDENT = dict(prereg_sha256="p", row_id="r", split="D", part="A", cell="1", source="s", arm="T", opponent="I", seat=1,
              replicate=0, seeds={"eval_general": "1"})
 
@@ -63,6 +63,7 @@ def run(sp, rec, core, player, state=None, **kw):
 
 
 TREE = {"completed": 6, "deadline_hit": True, "batches": 3, "frontier": 5, "terminal": 1, "elapsed_us": 90, "fallback": None}
+GRID = {"completed": 3, "proposed": 10, "cut": True, "batches": 1, "dropped": 0}
 
 
 def test_schema_keys_match_the_principles_list_exactly_and_a_surplus_key_raises():
@@ -163,3 +164,18 @@ def test_a3_the_preselection_time_is_its_own_field_and_the_overshoot_counts_the_
     assert a3_tree["elapsed_us"] >= 2000 and a3_tree["overshoot_us"] == a3_tree["elapsed_us"] - 400 - 1
     assert a3_pool["overshoot_us"] == a3_pool["elapsed_us"] - 300 - 1 and plain["overshoot_us"] == plain["elapsed_us"] - 1
     assert "preselect_us" not in a3_tree["tree"] and "preselect_us" not in a3_pool["deadline"]
+
+
+def test_grid_search_a_cut_decision_carries_grid_completed_and_cut_and_a_plain_one_is_none():
+    """The anytime ladder reads `grid.completed` / `grid.cut` off the row: a cut decision shows
+    completed < proposed with cut true, and a decision whose pick carries no grid trace shows None."""
+    sp, rec = Sp([{"trace": {"grid": GRID}},
+                  {"trace": {"deadline": {"completed": 2, "cut": True, "elapsed_us": 9}}}]), \
+        rows.Recorder(lambda side: "T", Net)
+    run(sp, rec, Core(0), 1)
+    run(sp, rec, Core(0), 2)
+    cut, plain = rec.decisions
+    assert list(cut) == PRINCIPLES_DECISION
+    assert cut["grid"] == {"completed": 3, "proposed": 10, "cut": True}
+    assert cut["grid"]["completed"] < cut["grid"]["proposed"] and cut["grid"]["cut"] is True
+    assert plain["grid"] is None
