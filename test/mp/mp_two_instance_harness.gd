@@ -16,6 +16,10 @@ const SAVE_DEFENDER_UNIT := "mp2_defend"
 const SAVE_WEAPON := "Harness Blade"
 const SPELL_NAME := "Harness Round Buff"
 const GROWTH_KEY := "growth_piercing_growth"
+const P1A_UNIT := "mp2_p1a"
+const P1B_UNIT := "mp2_p1b"
+const P1C_UNIT := "mp2_p1c"
+const P2A_UNIT := "mp2_p2a"
 
 var _args: Dictionary = {}
 var _main: Node = null
@@ -34,6 +38,7 @@ var _failure := ""
 var _room_code := ""
 var _los_result: Dictionary = {"visible": false, "label_visible": false, "text": ""}
 var _remote_save_wounds := -1   # result of the in-flight remote save batch (-1 = none yet)
+var _last_refusal := ""         # 3.6: the last off-turn refusal text, for the alternation gate
 
 
 func _ready() -> void:
@@ -201,6 +206,11 @@ func _run_command(seq: int, action: String, payload: Dictionary) -> void:
 			_main._vfx_emit({"k": "volley", "f": 1, "pairs": [[Vector3.ZERO, Vector3(0, 0, 0.3)]]})
 			_main._vfx_emit({"k": "pip", "t": 1, "at": Vector3(0, 0.03, 0.3), "n": 1})
 			_main._vfx_emit({"k": "seal_end", "sid": sid, "o": 0})
+	elif action == "set_automatic":
+		_main.opr_army_manager.rules_automation = RulesAutomation.Level.AUTOMATIC
+		_main._hotseat_turn = null
+	elif action == "activate":
+		await _activate(str(payload.get("unit", "")), int(payload.get("slot", 0)))
 	elif action == "snapshot":
 		pass
 	elif action == "quit":
@@ -242,18 +252,33 @@ func _setup_fixture() -> bool:
 		[SAVE_DEFENDER_UNIT, 2, "Guest Guard", Vector3(0.42, 0.0, -0.25)],
 	]
 	var net_id := 9100
-	for spec in specs:
-		var unit := _spawn_unit(str(spec[0]), int(spec[1]), str(spec[2]), spec[3], net_id)
-		net_id += 1
-		if unit == null:
-			return false
-		_main.opr_army_manager.game_units[unit.unit_id] = unit
-	var growth := _unit(GROWTH_UNIT)
-	growth.unit_properties["game_system"] = "gf"
-	growth.unit_properties["faction_folder"] = "alien_hives"
-	growth.unit_properties["special_rules"] = ["Piercing Growth"]
-	growth.unit_properties["ambush_reserve"] = true
-	_unit(TRANSPORT_UNIT).unit_properties["special_rules"] = ["Transport(2)"]
+	if not _args.has("rules-online"):
+		for spec in specs:
+			var unit := _spawn_unit(str(spec[0]), int(spec[1]), str(spec[2]), spec[3], net_id)
+			net_id += 1
+			if unit == null:
+				return false
+			_main.opr_army_manager.game_units[unit.unit_id] = unit
+		var growth := _unit(GROWTH_UNIT)
+		growth.unit_properties["game_system"] = "gf"
+		growth.unit_properties["faction_folder"] = "alien_hives"
+		growth.unit_properties["special_rules"] = ["Piercing Growth"]
+		growth.unit_properties["ambush_reserve"] = true
+		_unit(TRANSPORT_UNIT).unit_properties["special_rules"] = ["Transport(2)"]
+	# 3.6: three P1 units and one P2 unit so the rules-online gate can drive a full exchange, an
+	# out-of-turn refusal, a TAIL (P1 keeps activating once P2 is spent) and one round end.
+	if _args.has("rules-online"):
+		for spec in [
+			[P1A_UNIT, 1, "P1 Alpha", Vector3(-0.30, 0.0, 0.15)],
+			[P1B_UNIT, 1, "P1 Bravo", Vector3(-0.20, 0.0, 0.15)],
+			[P1C_UNIT, 1, "P1 Charlie", Vector3(-0.10, 0.0, 0.15)],
+			[P2A_UNIT, 2, "P2 Alpha", Vector3(0.20, 0.0, 0.15)],
+		]:
+			var online := _spawn_unit(str(spec[0]), int(spec[1]), str(spec[2]), spec[3], net_id)
+			net_id += 1
+			if online == null:
+				return false
+			_main.opr_army_manager.game_units[online.unit_id] = online
 	for unit in _main.opr_army_manager.get_all_game_units():
 		_main.radial_menu_controller.initialize_status_markers_for_unit(unit)
 	await get_tree().physics_frame
@@ -358,6 +383,29 @@ func _require_role(required: String, action: String) -> bool:
 	return false
 
 
+## 3.6: the production activation door, exactly as the radial Activate does — an off-turn side is
+## refused and the refusal is logged (nothing on the wire), else the unit is marked, the activation
+## is recorded (which hands the token over / ends the round) and the flag is broadcast.
+func _activate(unit_id: String, slot: int) -> void:
+	var unit := _unit(unit_id)
+	if unit == null:
+		_fail("activate: unknown unit %s" % unit_id)
+		return
+	var refusal := str(_main.call("hotseat_turn_refusal", slot)) if _main.has_method("hotseat_turn_refusal") else ""
+	if refusal != "":
+		_main.call("hotseat_log_refusal", refusal)
+		_last_refusal = refusal
+		return
+	_last_refusal = ""
+	unit.activate(opr_round())
+	await _main.call("hotseat_record_activation", slot)
+	_main.network_manager.broadcast_unit_activation(unit)
+
+
+func opr_round() -> int:
+	return int(_main.opr_army_manager.current_round) if _main != null else 1
+
+
 func _snapshot() -> Dictionary:
 	var lobby = _main.get("internet_lobby") if _main != null else null
 	var nm = _main.get("network_manager") if _main != null else null
@@ -371,6 +419,10 @@ func _snapshot() -> Dictionary:
 		"slot": int(nm.get_my_player_slot()) if nm != null else 0,
 		"occupied_slots": [],
 		"round": int(_main.opr_army_manager.current_round) if _main != null else 0,
+		"rules": int(_main.opr_army_manager.rules_automation) if _main != null else -1,
+		"turn": int(_main.call("_hotseat_side_on_turn")) \
+			if _main != null and _main.has_method("_hotseat_side_on_turn") else -1,
+		"last_refusal": _last_refusal,
 		"units": {},
 		"los": _los_result.duplicate(true),
 		"ai_slots": [],
