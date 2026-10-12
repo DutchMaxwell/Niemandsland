@@ -19721,6 +19721,18 @@ func _on_remote_activation_updated(game_unit: GameUnit) -> void:
 	if _online_turn_room() and _turn_is_host() and game_unit != null and game_unit.is_activated \
 			and unit_owner_slot(game_unit.unit_properties) == _hotseat_side_on_turn():
 		await hotseat_record_activation(unit_owner_slot(game_unit.unit_properties))
+	elif _online_turn_room() and _turn_is_host() and game_unit != null and game_unit.is_activated \
+			and unit_owner_slot(game_unit.unit_properties) != _hotseat_side_on_turn():
+		# 3.3c: the token is authoritative — an OUT-OF-TURN activation fact is refused. The token
+		# stays put, the offending unit is un-activated again on the acting machine, and the off-turn
+		# line shows on both screens. Effects the acting machine already resolved and mirrored (e.g.
+		# wounds) are NOT rolled back — that is plan 3.7 (owner-allocated wounds).
+		_log_rule_event(BattleLog.Category.GENERAL,
+			hotseat_turn_refusal(unit_owner_slot(game_unit.unit_properties)), true)
+		game_unit.is_activated = false
+		game_unit.activation_round = 0
+		if network_manager != null and network_manager.has_method("broadcast_unit_activation"):
+			network_manager.broadcast_unit_activation(game_unit)
 
 
 ## Called when a remote peer changes a unit marker (Fatigued, Shaken, etc.)
