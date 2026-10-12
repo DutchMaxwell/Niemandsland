@@ -14233,6 +14233,10 @@ func _do_next_round() -> void:
 		undo_manager.expire_move_takebacks()   # #162: round advance ends every activation
 	if network_manager:
 		network_manager.broadcast_round_advance()
+	# 3.4a: in an Automatic online room the host runs the round-start Shaken recovery for both sides.
+	# Each human unit's roll rides its OWNER's tray (`_owner_roll`); the guest only mirrors the result.
+	if _online_turn_room() and _turn_is_host():
+		await _solo_battleborn_recovery()
 	# Hotseat/MP has no automated round-start sequence, but Reinforcement is not a Solo rule — a copy
 	# promised in the last round must still arrive here, or the rule would silently do nothing off Solo.
 	await _reinforcement_arrivals(opr_army_manager.current_round if opr_army_manager else 1)
