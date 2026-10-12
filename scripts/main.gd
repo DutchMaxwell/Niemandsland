@@ -2914,6 +2914,16 @@ func _solo_hotseat_automatic() -> bool:
 	return opr_army_manager.rules_automation == RulesAutomation.Level.AUTOMATIC
 
 
+## Step 3.1: the ENGINE (geometry + resolution) runs wherever the table is Automatic with no AI seat — a
+## local hotseat table OR an online room the two players agreed on (3.0). This is NOT the turn logic:
+## `_solo_hotseat_automatic()` stays local-only, so the guest never runs its own activation/round engine
+## (no double engine — wounds land once, on the attacker's machine, and mirror out); the online turn token
+## is 3.3. `_solo_alternation_active()` is false without an AI seat, so nothing pumps.
+func _solo_engine_automatic() -> bool:
+	return opr_army_manager != null and solo_ai_slots.is_empty() \
+		and opr_army_manager.rules_automation == RulesAutomation.Level.AUTOMATIC
+
+
 ## Step 2.T2a: the side on turn on a hotseat Automatic table (two humans, no AI seat). P1 opens the
 ## first round until TwoHumanTurn records an activation.
 func _hotseat_side_on_turn() -> int:
@@ -3091,8 +3101,9 @@ func _ensure_solo_controller() -> void:
 	# #196 belt-and-braces: in multiplayer the controller exists only for an EXPLICITLY
 	# designated AI slot — a cast/targeting click in a human-vs-human room must not summon
 	# NACHTMAHR. Step 2.4 adds ONE exception: a hotseat Automatic table builds it for GEOMETRY
-	# only; the alternation stays off (no AI seat), so no NACHTMAHR turn can follow.
-	if solo_ai_slots.is_empty() and not _solo_hotseat_automatic():
+	# only; the alternation stays off (no AI seat), so no NACHTMAHR turn can follow. Step 3.1
+	# extends that exception to an online room the two players agreed on (Automatic, no AI seat).
+	if solo_ai_slots.is_empty() and not _solo_engine_automatic():
 		return
 	var ai_slot := _solo_ai_slot()
 	# In native both-AI mode the driver flips solo_controller.ai_slot per activation, so a slot-mismatch is
@@ -14266,7 +14277,7 @@ func _update_rules_chip() -> void:
 		_rules_chip = Label.new()
 		_rules_chip.theme_type_variation = HouseStyle.CAPTION
 		_rules_chip.mouse_filter = Control.MOUSE_FILTER_STOP   # labels ignore the mouse by default - needed for the tooltip
-		_rules_chip.tooltip_text = "Automatic: the game rolls and applies the rules. Manual: you use the dice tray."
+		_rules_chip.tooltip_text = "Automatic: the game rolls and applies the rules it models. Rules listed at game start under 'apply by hand' stay manual. Manual: you use the dice tray."
 		next_round_btn.add_sibling(_rules_chip)
 	_rules_chip.visible = RulesAutomation.ui_enabled()
 	_rules_chip.text = RulesAutomation.chip_text(opr_army_manager.rules_automation, not solo_ai_slots.is_empty())
@@ -14290,7 +14301,7 @@ func _add_rules_toggle() -> void:
 	var ai: bool = not solo_ai_slots.is_empty()
 	var cb := CheckButton.new()
 	cb.text = "Rules automation"
-	cb.tooltip_text = "Automatic: the game rolls and applies the rules. Locked on while the AI plays." if ai else "Automatic: the game rolls and applies the rules. Manual: you use the dice tray."
+	cb.tooltip_text = "Automatic: the game rolls and applies the rules it models. Rules listed at game start under 'apply by hand' stay manual. Locked on while the AI plays." if ai else "Automatic: the game rolls and applies the rules it models. Rules listed at game start under 'apply by hand' stay manual. Manual: you use the dice tray."
 	cb.button_pressed = RulesAutomation.effective(opr_army_manager.rules_automation, ai) == RulesAutomation.Level.AUTOMATIC
 	cb.disabled = ai
 	cb.focus_mode = Control.FOCUS_NONE
