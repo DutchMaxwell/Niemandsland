@@ -36,14 +36,16 @@ static func accepts_online(level: Variant) -> bool:
 
 
 ## Flipped on by plan step 2.10, when hotseat Automatic works; until then the table-setup row stays hidden.
-const UI_ENABLED := false
+const UI_ENABLED := true
 ## Test seam: a suite sets this to exercise the row, the pick and the log line with the flag forced on.
 static var ui_enabled_override := false
+## Test seam: a suite forces the pre-flip HIDDEN state (UI_ENABLED is now a build constant, on).
+static var ui_disabled_override := false
 const MENU_CFG := "user://menu.cfg"
 
 
 static func ui_enabled() -> bool:
-	return UI_ENABLED or ui_enabled_override
+	return (UI_ENABLED or ui_enabled_override) and not ui_disabled_override
 
 
 ## The pick a fresh table-setup dialog starts on: the remembered one for a local game (default AUTOMATIC),

@@ -96,7 +96,8 @@ func test_custom_inputs_fit_at_1280x720() -> void:
 	for _i in 3:
 		await get_tree().process_frame
 	assert_float(dialog._page.get_combined_minimum_size().y) \
-		.override_failure_message("Custom needs scrolling").is_less_equal(dialog._scroll.size.y)
+		.override_failure_message("Custom needs scrolling: page needs %d px, the scroll gives %d px" % [int(dialog._page.get_combined_minimum_size().y), int(dialog._scroll.size.y)]) \
+		.is_less_equal(dialog._scroll.size.y)
 	var card: Control = dialog._biome_buttons.values()[0]
 	assert_float(card.size.x / card.size.y).is_between(2.0, 2.8)
 

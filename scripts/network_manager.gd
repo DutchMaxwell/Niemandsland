@@ -28,6 +28,8 @@ signal slot_table_synced
 # Signals for remote state updates (emitted when RPCs arrive)
 signal remote_wounds_updated(model: ModelInstance)
 signal remote_activation_updated(game_unit: GameUnit)
+## Plan 3.3a — the online turn token arrived from the host (the side that now owns the turn).
+signal turn_state_received(slot: int)
 signal remote_unit_marker_updated(game_unit: GameUnit, marker_name: String, add: bool, color: Color, value: int)
 signal remote_model_marker_updated(model: ModelInstance, marker_name: String, add: bool, color: Color, value: int)
 signal remote_unit_marker_value_updated(game_unit: GameUnit, marker_name: String, value: int)
@@ -444,6 +446,7 @@ const ANY_PEER_HANDLERS: PackedStringArray = [
 	"clear_objects_networked",
 	"sync_sort_table",
 	"sync_round_advance",
+	"sync_turn_state",
 	"sync_unit_activation",
 	"sync_model_wounds",
 	"sync_regiment_frontage",
@@ -993,6 +996,12 @@ func sync_unit_activation(unit_id: String, activated: bool, activation_round: in
 		remote_activation_updated.emit(game_unit)
 
 
+## Plan 3.3a — the host's turn token reached this machine. Emitted only; main mirrors it.
+@rpc("any_peer", "call_remote", "reliable")
+func sync_turn_state(slot: int) -> void:
+	turn_state_received.emit(int(slot))
+
+
 ## RPC: Sync round advancement (resets activations + adds caster points on this peer)
 @rpc("any_peer", "call_remote", "reliable")
 func sync_round_advance() -> void:
@@ -1286,6 +1295,16 @@ func rotate_objects_batch_networked(batch: Array) -> void:
 func broadcast_round_advance() -> void:
 	if is_multiplayer_active():
 		_remote_call("sync_round_advance", [], 0)
+
+
+## Plan 3.3a — the host's turn token. Broadcast after a completed activation; the receiver mirrors it
+## (main._on_turn_state_received) and never advances its own.
+func broadcast_turn_state(slot: int) -> void:
+	if not is_multiplayer_active():
+		return
+	if not _validate_rpc_ready("broadcast_turn_state"):
+		return
+	_remote_call("sync_turn_state", [int(slot)], 0)
 
 
 func broadcast_unit_activation(game_unit: GameUnit) -> void:

@@ -290,7 +290,15 @@ var _solo_opponent_brain: Dictionary = {}  # the opponent the game really runs (
                                            # set with the "opponent:" line; {} = no AI seat graded
 var _rules_chip: Label = null                # rules-automation chip beside the round button (plan 1.3)
 var _turn_chip: Label = null                 # hotseat turn chip beside the rules chip (plan 2.T2a)
+var _rules_proposal_pending := false         # online: waiting for the other player's answer (plan 3.0)
+var _rules_agreement_mode := 0               # 0 idle, 1 proposing, 2 confirming (plan 3.0)
+var _rules_proposal_timed_out := false       # the confirm card was closed by the 30 s timer, not by a button
+var _rules_agreement_card: PromptCard = null # the open confirm card, so a timeout can close it
+var _rules_proposal_timer: Timer = null      # one 30 s timer, used by whichever side is waiting
+const RULES_AGREEMENT_TIMEOUT := 30.0
 var _hotseat_turn: TwoHumanTurn = null       # enforced alternation on a hotseat Automatic table (plan 2.T2a)
+var _ambush_turn_waiters: Dictionary = {}   # 3.4b: slot -> the owner answered its Ambush turn
+var _ambush_turn_timeout_s := 120.0         # 3.4b: tests shorten it; play never does
 var solo_panel_box: VBoxContainer = null     # left-panel "Solo" section (per-army AI toggles)
 var solo_mission_option: OptionButton = null # left-panel Mission picker (MissionCatalog + "Duel (no mission)")
 var _solo_mission_id: String = ""            # "" = Duel (no mission, today's byte-identical behaviour)
@@ -592,6 +600,9 @@ func _ready() -> void:
 	network_manager.remote_unit_deleted.connect(_on_remote_unit_deleted)
 	network_manager.remote_unit_created.connect(_on_remote_unit_created)
 	network_manager.remote_round_advanced.connect(_on_remote_round_advanced)
+	# 3.3a: the host's turn token (guarded — a harness double need not carry the signal).
+	if network_manager.has_signal("turn_state_received"):
+		network_manager.turn_state_received.connect(_on_turn_state_received)
 
 	# Connect presence signals
 	network_manager.remote_cursor_updated.connect(_on_remote_cursor_updated)
@@ -2908,6 +2919,16 @@ func _solo_hotseat_automatic() -> bool:
 	return opr_army_manager.rules_automation == RulesAutomation.Level.AUTOMATIC
 
 
+## Step 3.1: the ENGINE (geometry + resolution) runs wherever the table is Automatic with no AI seat — a
+## local hotseat table OR an online room the two players agreed on (3.0). This is NOT the turn logic:
+## `_solo_hotseat_automatic()` stays local-only, so the guest never runs its own activation/round engine
+## (no double engine — wounds land once, on the attacker's machine, and mirror out); the online turn token
+## is 3.3. `_solo_alternation_active()` is false without an AI seat, so nothing pumps.
+func _solo_engine_automatic() -> bool:
+	return opr_army_manager != null and solo_ai_slots.is_empty() \
+		and opr_army_manager.rules_automation == RulesAutomation.Level.AUTOMATIC
+
+
 ## Step 2.T2a: the side on turn on a hotseat Automatic table (two humans, no AI seat). P1 opens the
 ## first round until TwoHumanTurn records an activation.
 func _hotseat_side_on_turn() -> int:
@@ -2932,17 +2953,50 @@ func _hotseat_eligible_counts() -> Dictionary:
 	return counts
 
 
+## Plan 3.3a: an agreed online Automatic room (the engine runs, no AI seat). The token gate is LOCAL:
+## this machine refuses its own off-turn actions against the side it believes owns the turn.
+func _online_turn_room() -> bool:
+	return _solo_engine_automatic() and network_manager != null \
+		and network_manager.is_multiplayer_active()
+
+
+## Plan 3.3a: the host owns the token; a guest only mirrors what the host broadcasts.
+func _turn_is_host() -> bool:
+	return network_manager == null or not network_manager.is_multiplayer_active() \
+		or network_manager.is_host
+
+
+## Plan 3.3a: adopt a token value into the local mirror (no advance, no broadcast) — the received
+## `turn_state`, or the full-state push for a late joiner / reconnect.
+func _apply_turn_token(slot: int) -> void:
+	if slot != 1 and slot != 2:
+		return
+	if _hotseat_turn == null:
+		_hotseat_turn = TwoHumanTurn.new()
+	_hotseat_turn.side_on_turn = slot
+	_update_round_button()
+
+
+## Plan 3.3a: the host's token arrived over the wire.
+func _on_turn_state_received(slot: int) -> void:
+	if not _online_turn_room():
+		return
+	if _turn_is_host():
+		return   # the host owns the token and never mirrors one from the wire (lead review, 3.3c owns full authority)
+	_apply_turn_token(slot)
+
+
 ## Step 2.6a: true when neither side has an eligible unit left, so the hotseat round closes by itself.
 func _hotseat_round_spent() -> bool:
 	var counts := _hotseat_eligible_counts()
 	return int(counts.get(1, 0)) <= 0 and int(counts.get(2, 0)) <= 0
 
 
-## The off-turn refusal line for `slot`, or "" when the side may act. Only a hotseat Automatic
-## table alternates; Manual and solo-vs-AI tables are untouched (an AI seat keeps the SoloController
-## alternation, step 2.4).
+## The off-turn refusal line for `slot`, or "" when the side may act. A hotseat Automatic table AND an
+## agreed online Automatic room (3.3a) alternate; Manual and solo-vs-AI tables are untouched (an AI
+## seat keeps the SoloController alternation, step 2.4).
 func hotseat_turn_refusal(slot: int) -> String:
-	if not _solo_hotseat_automatic():
+	if not _solo_engine_automatic():
 		return ""
 	if slot == _hotseat_side_on_turn():
 		return ""
@@ -2951,8 +3005,10 @@ func hotseat_turn_refusal(slot: int) -> String:
 
 ## Record an activation by `slot` and hand the turn to the other side (TwoHumanTurn, TAIL-aware).
 func hotseat_record_activation(slot: int) -> void:
-	if not _solo_hotseat_automatic():
+	if not _solo_engine_automatic():
 		return
+	if _online_turn_room() and not _turn_is_host():
+		return   # 3.3a: a guest mirrors the host's token, it never advances its own
 	if _hotseat_turn == null:
 		_hotseat_turn = TwoHumanTurn.new()
 	if _hotseat_turn.side_on_turn == TwoHumanTurn.NONE:
@@ -2963,6 +3019,9 @@ func hotseat_record_activation(slot: int) -> void:
 		return
 	_hotseat_handover_line(slot)
 	_update_round_button()
+	# 3.3a: the host owns the token — after a completed activation it tells every peer the next side.
+	if _online_turn_room() and network_manager != null and network_manager.has_method("broadcast_turn_state"):
+		network_manager.broadcast_turn_state(_hotseat_turn.side_on_turn)
 
 
 ## Step 2.T3: the one line that announces the passing turn — or the TAIL when the other side is spent
@@ -3052,6 +3111,86 @@ func _hotseat_ambush_arrivals(round_number: int, opener: int) -> void:
 	solo_controller.ai_slot = saved_ai
 
 
+## 3.4b: the slot this machine plays (the host's own side), for the Ambush handshake.
+func _local_slot() -> int:
+	if network_manager != null and network_manager.has_method("get_my_player_slot"):
+		var s := int(network_manager.get_my_player_slot())
+		if s > 0:
+			return s
+	return 1
+
+
+## 3.4b: whether `slot` has a reserve unit that may arrive this round (host-side check).
+func _online_side_has_reserve(slot: int) -> bool:
+	if solo_controller == null or opr_army_manager == null:
+		return false
+	var saved: int = solo_controller.human_slot
+	solo_controller.human_slot = slot
+	var has := false
+	for u in solo_controller.human_reserve_units():
+		var gu := u as GameUnit
+		if gu != null and SoloController.may_arrive_this_round(gu, opr_army_manager.current_round):
+			has = true
+			break
+	solo_controller.human_slot = saved
+	return has
+
+
+## 3.4b: the host drives the round-start Ambush for each side, opener first. A side with no reserve is
+## skipped at once; otherwise the owner is asked and the host waits with a bound (labelled auto-skip).
+func _online_ambush_arrivals(round_number: int, opener: int) -> void:
+	if not _online_turn_room() or not _turn_is_host():
+		return
+	if round_number < 2:
+		return
+	for slot in [opener, 3 - opener]:
+		if not _online_side_has_reserve(slot):
+			continue
+		var peer: int = _solo_peer_for_slot(slot)
+		if peer == 0:
+			continue
+		if slot == _local_slot():
+			await _online_ambush_owner_turn({"round": round_number, "slot": slot})
+			continue
+		_ambush_turn_waiters[slot] = false
+		network_manager.send_command("request_ambush_turn", {"round": round_number, "slot": slot}, peer)
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.GENERAL, "Waiting for P%d — Ambush (round %d)" % [slot, round_number], true)
+		var waited := 0.0
+		while not bool(_ambush_turn_waiters.get(slot, false)) and waited < _ambush_turn_timeout_s:
+			await get_tree().create_timer(0.1).timeout
+			waited += 0.1
+		var answered := bool(_ambush_turn_waiters.get(slot, false))
+		_ambush_turn_waiters.erase(slot)
+		if not answered:
+			_log_rule_event(BattleLog.Category.GENERAL, "P%d Ambush (round %d): no answer — skipped" % [slot, round_number], true)
+
+
+## 3.4b: this machine OWNs `slot` — run its own Ambush prompt, then tell the host it is done.
+## Started fire-and-forget from _on_network_command (a bare statement); the host waits on the answer.
+func _online_ambush_owner_turn(payload: Dictionary) -> void:
+	if not _online_turn_room() or solo_controller == null:
+		return
+	var slot := int(payload.get("slot", 0))
+	var round_number := int(payload.get("round", 0))
+	var saved_human: int = solo_controller.human_slot
+	var saved_ai: int = solo_controller.ai_slot
+	solo_controller.human_slot = slot
+	solo_controller.ai_slot = 3 - slot
+	var pool: Array = []
+	for u in solo_controller.human_reserve_units():
+		var gu := u as GameUnit
+		if gu != null and SoloController.may_arrive_this_round(gu, round_number):
+			pool.append(gu)
+	if not pool.is_empty():
+		_log_rule_event(BattleLog.Category.GENERAL, "P%d Ambush (round %d): place one reserve unit from the tray" % [slot, round_number], true)
+		await _solo_ambush_human_turn(round_number, pool)
+	solo_controller.human_slot = saved_human
+	solo_controller.ai_slot = saved_ai
+	if network_manager != null:
+		network_manager.send_command("ambush_turn_done", {"slot": slot}, 0)
+
+
 ## Log an off-turn refusal (shared by the radial Activate door and the combat verbs).
 func hotseat_log_refusal(text: String) -> void:
 	if battle_log != null and text != "":
@@ -3085,8 +3224,9 @@ func _ensure_solo_controller() -> void:
 	# #196 belt-and-braces: in multiplayer the controller exists only for an EXPLICITLY
 	# designated AI slot — a cast/targeting click in a human-vs-human room must not summon
 	# NACHTMAHR. Step 2.4 adds ONE exception: a hotseat Automatic table builds it for GEOMETRY
-	# only; the alternation stays off (no AI seat), so no NACHTMAHR turn can follow.
-	if solo_ai_slots.is_empty() and not _solo_hotseat_automatic():
+	# only; the alternation stays off (no AI seat), so no NACHTMAHR turn can follow. Step 3.1
+	# extends that exception to an online room the two players agreed on (Automatic, no AI seat).
+	if solo_ai_slots.is_empty() and not _solo_engine_automatic():
 		return
 	var ai_slot := _solo_ai_slot()
 	# In native both-AI mode the driver flips solo_controller.ai_slot per activation, so a slot-mismatch is
@@ -9927,7 +10067,7 @@ func _solo_decision_rules_for(unit: GameUnit) -> Array:
 ## special rule the designated army carries, classified RESOLVED (mechanically implemented — derived
 ## from SOLO_MODELED_RULES), marked "decision-aware" when it also steers choices, or UN-AUTOMATED
 ## (which additionally keeps flowing through the once-per-session manual-note mechanism).
-func _solo_log_rule_inventory(player_id: int) -> void:
+func _solo_log_rule_inventory(player_id: int, human := false) -> void:
 	if battle_log == null or opr_army_manager == null:
 		return
 	var names: Array = []
@@ -9946,7 +10086,12 @@ func _solo_log_rule_inventory(player_id: int) -> void:
 	# army = one system, so the first unit carries it); the constants remain the no-map fallback.
 	var inv := SoloController.classify_rule_inventory(names,
 		_solo_modeled_rules_for(first_unit), _solo_decision_rules_for(first_unit))
-	battle_log.log_event(BattleLog.Category.GENERAL, "AI rule inventory (P%d): %s | decision-aware: %s | NOT automated (apply manually): %s" % [
+	# Step 2.9: the AI-seat handoff line is unchanged; a hotseat HUMAN army gets the same inventory
+	# under a player-facing header, so each human sees what the engine runs vs. what they apply by hand.
+	var head := "AI rule inventory (P%d): %s | decision-aware: %s | NOT automated (apply manually): %s"
+	if human:
+		head = "Rules the engine applies (P%d): %s | decision-aware: %s | apply by hand: %s"
+	battle_log.log_event(BattleLog.Category.GENERAL, head % [
 		player_id, _solo_inventory_list(inv["resolved"]), _solo_inventory_list(inv["decision"]),
 		_solo_inventory_list(inv["unknown"])], true)
 
@@ -10649,6 +10794,13 @@ func _solo_peer_for_slot(slot: int) -> int:
 		if int(network_manager.peer_to_slot[peer]) == slot:
 			return int(peer)
 	return 0
+
+
+## 3.5: the slot a transport peer id plays (reverse of `_solo_peer_for_slot`).
+func _slot_for_peer(peer_id: int) -> int:
+	if network_manager == null:
+		return 0
+	return int((network_manager.peer_to_slot as Dictionary).get(peer_id, 0))
 
 
 ## Enter targeting mode (P8): the weapon range shows as a ring, the line of sight to the hovered enemy
@@ -14149,6 +14301,12 @@ func _on_next_round() -> void:
 ## hand-marked Shaken unit) never saw their round-start rolls — which also made the
 ## button useless as a TESTING lever for round-gated rules (maintainer request).
 func _do_next_round() -> void:
+	# 3.3b: in an Automatic online room only the host advances; a guest asks the host instead of
+	# advancing its own state (removes the any_peer double advance).
+	if _online_turn_room() and not _turn_is_host():
+		if network_manager != null:
+			network_manager.send_command("request_next_round", {}, 0)
+		return
 	if _solo_alternation_active():
 		_ensure_solo_controller()
 		await _solo_end_round()
@@ -14164,6 +14322,15 @@ func _do_next_round() -> void:
 		undo_manager.expire_move_takebacks()   # #162: round advance ends every activation
 	if network_manager:
 		network_manager.broadcast_round_advance()
+	# 3.4a: in an Automatic online room the host runs the round-start Shaken recovery for both sides.
+	# Each human unit's roll rides its OWNER's tray (`_owner_roll`); the guest only mirrors the result.
+	if _online_turn_room() and _turn_is_host():
+		await _solo_battleborn_recovery()
+		# 3.4b: then the Ambush step, in turn order (the side that did NOT take the last activation opens).
+		var opener: int = _hotseat_turn.next_round_opener() if _hotseat_turn != null else TwoHumanTurn.NONE
+		if opener == TwoHumanTurn.NONE:
+			opener = 1
+		await _online_ambush_arrivals(opr_army_manager.current_round, opener)
 	# Hotseat/MP has no automated round-start sequence, but Reinforcement is not a Solo rule — a copy
 	# promised in the last round must still arrive here, or the rule would silently do nothing off Solo.
 	await _reinforcement_arrivals(opr_army_manager.current_round if opr_army_manager else 1)
@@ -14220,9 +14387,9 @@ func _solo_final_round_active() -> bool:
 func _update_round_button() -> void:
 	if next_round_btn and opr_army_manager:
 		next_round_btn.text = next_round_button_label(opr_army_manager.current_round, _solo_final_round_active())
-		# Step 2.6a: on a hotseat Automatic table the round ends by itself, so the manual lever is
-		# disabled while any unit still has to act (exactly as solo) and says why.
-		var hotseat_waiting: bool = _solo_hotseat_automatic() and not _hotseat_round_spent()
+		# Step 2.6a: on a hotseat Automatic table / agreed online room the round ends by itself, so the
+		# manual lever is disabled while any unit still has to act (exactly as solo) and says why.
+		var hotseat_waiting: bool = _solo_engine_automatic() and not _hotseat_round_spent()
 		next_round_btn.disabled = hotseat_waiting
 		if not next_round_btn.has_meta("_nml_default_tooltip"):
 			next_round_btn.set_meta("_nml_default_tooltip", next_round_btn.tooltip_text)
@@ -14235,6 +14402,12 @@ func _update_round_button() -> void:
 func set_rules_automation(level: int, who: String) -> bool:
 	if opr_army_manager == null or not RulesAutomation.change_allowed(level, not solo_ai_slots.is_empty(), _solo_resolution_pending()):
 		return false
+	if network_manager != null and network_manager.is_multiplayer_active():
+		if level == RulesAutomation.Level.AUTOMATIC:
+			return propose_rules_automation()   # plan 3.0: Automatic online needs the other player's confirm
+		_cancel_rules_proposal()                # a pending proposal is dropped when Manual is taken
+		_clamp_rules_online(who)                # Manual online is unilateral and immediate (A1)
+		return true
 	opr_army_manager.rules_automation = level
 	_log_rule_event(BattleLog.Category.GENERAL, "Rules automation: %s (changed by %s)" % [RulesAutomation.label(level), who])
 	_update_rules_chip()
@@ -14249,7 +14422,7 @@ func _update_rules_chip() -> void:
 		_rules_chip = Label.new()
 		_rules_chip.theme_type_variation = HouseStyle.CAPTION
 		_rules_chip.mouse_filter = Control.MOUSE_FILTER_STOP   # labels ignore the mouse by default - needed for the tooltip
-		_rules_chip.tooltip_text = "Automatic: the game rolls and applies the rules. Manual: you use the dice tray."
+		_rules_chip.tooltip_text = "Automatic: the game rolls and applies the rules it models. Rules listed at game start under 'apply by hand' stay manual. Manual: you use the dice tray."
 		next_round_btn.add_sibling(_rules_chip)
 	_rules_chip.visible = RulesAutomation.ui_enabled()
 	_rules_chip.text = RulesAutomation.chip_text(opr_army_manager.rules_automation, not solo_ai_slots.is_empty())
@@ -14257,22 +14430,23 @@ func _update_rules_chip() -> void:
 		_turn_chip = Label.new()
 		_turn_chip.theme_type_variation = HouseStyle.CAPTION
 		_turn_chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_turn_chip.tooltip_text = "Hotseat Automatic: one unit per side in turn."
+		_turn_chip.tooltip_text = "Automatic: one unit per side in turn (local or agreed online)."
 		next_round_btn.add_sibling(_turn_chip)
-	_turn_chip.visible = RulesAutomation.ui_enabled() and _solo_hotseat_automatic()
+	_turn_chip.visible = RulesAutomation.ui_enabled() and _solo_engine_automatic()
 	_turn_chip.text = "Turn: P%d" % _hotseat_side_on_turn()
+	# Plan 3.0: while a proposal is in flight the chip says so, instead of naming a level nobody agreed to.
+	if _rules_proposal_pending:
+		_rules_chip.text = "Asking the other player…"
 
 
 ## Game-panel toggle (local games only; online is plan step 1.4). Locked on while an AI slot is ticked.
 func _add_rules_toggle() -> void:
 	if not RulesAutomation.ui_enabled() or solo_panel_box == null or opr_army_manager == null:
 		return
-	if network_manager != null and network_manager.is_multiplayer_active():
-		return
 	var ai: bool = not solo_ai_slots.is_empty()
 	var cb := CheckButton.new()
 	cb.text = "Rules automation"
-	cb.tooltip_text = "Automatic: the game rolls and applies the rules. Locked on while the AI plays." if ai else "Automatic: the game rolls and applies the rules. Manual: you use the dice tray."
+	cb.tooltip_text = "Automatic: the game rolls and applies the rules it models. Rules listed at game start under 'apply by hand' stay manual. Locked on while the AI plays." if ai else "Automatic: the game rolls and applies the rules it models. Rules listed at game start under 'apply by hand' stay manual. Manual: you use the dice tray."
 	cb.button_pressed = RulesAutomation.effective(opr_army_manager.rules_automation, ai) == RulesAutomation.Level.AUTOMATIC
 	cb.disabled = ai
 	cb.focus_mode = Control.FOCUS_NONE
@@ -14281,6 +14455,131 @@ func _add_rules_toggle() -> void:
 		if not set_rules_automation(lvl, "P1"):
 			cb.set_pressed_no_signal(not on))
 	solo_panel_box.add_child(cb)
+
+
+## Plan 3.0 (Q6): ask the other player to turn Automatic on. Sends the proposal, shows the waiting chip
+## and arms the 30 s timer; Automatic is applied only when the peer confirms.
+func propose_rules_automation() -> bool:
+	if network_manager == null or not network_manager.is_multiplayer_active() or _rules_proposal_pending:
+		return false
+	_rules_proposal_pending = true
+	_rules_agreement_mode = 1
+	network_manager.send_command("propose_rules_automation", {})
+	_start_rules_agreement_timer()
+	_update_rules_chip()
+	return true
+
+
+func _cancel_rules_proposal() -> void:
+	_rules_proposal_pending = false
+	_rules_agreement_mode = 0
+	_rules_proposal_timed_out = false
+	if _rules_proposal_timer != null:
+		_rules_proposal_timer.stop()
+	_update_rules_chip()
+
+
+func _start_rules_agreement_timer() -> void:
+	if _rules_proposal_timer == null:
+		_rules_proposal_timer = Timer.new()
+		_rules_proposal_timer.one_shot = true
+		_rules_proposal_timer.wait_time = RULES_AGREEMENT_TIMEOUT
+		_rules_proposal_timer.timeout.connect(_on_rules_agreement_timeout)
+		add_child(_rules_proposal_timer)
+	_rules_proposal_timer.start()
+
+
+## 30 s without an answer: the proposal is dead, the room stays Manual, one plain line for both players.
+func _on_rules_agreement_timeout() -> void:
+	var confirming := _rules_agreement_mode == 2
+	_rules_proposal_pending = false
+	_rules_agreement_mode = 0
+	if _rules_proposal_timer != null:
+		_rules_proposal_timer.stop()
+	if confirming and _rules_agreement_card != null and is_instance_valid(_rules_agreement_card):
+		_rules_proposal_timed_out = true
+		_rules_agreement_card.queue_free()
+	_log_rules_line("%s did not confirm, rules stay manual" % _peer_display_name(_other_peer_id()))
+	_update_rules_chip()
+
+
+## A peer asks to turn Automatic on: one plain confirm card; the answer decides.
+func _on_rules_proposal(from_peer: int) -> void:
+	if network_manager == null or not network_manager.is_multiplayer_active():
+		return
+	if _rules_agreement_card != null and is_instance_valid(_rules_agreement_card):
+		return
+	_rules_agreement_mode = 2
+	_rules_proposal_timed_out = false
+	var card := PromptCard.new("Turn on automatic rules?",
+		"%s asks to turn Rules automation on for both players. Both must agree." % _peer_display_name(from_peer),
+		"Agree", "Not now")
+	add_child(card)
+	_rules_agreement_card = card
+	_start_rules_agreement_timer()
+	var accept: Variant = await card.answer(false)
+	_rules_agreement_card = null
+	if _rules_proposal_timed_out:
+		_rules_proposal_timed_out = false
+		return
+	_on_rules_agreement_response(bool(accept), from_peer)
+
+
+## The answer to a proposal: Agree applies Automatic here, logs the agreed line and tells the proposer;
+## Not now stays Manual and tells the proposer so.
+func _on_rules_agreement_response(accept: bool, from_peer: int) -> void:
+	if _rules_proposal_timer != null:
+		_rules_proposal_timer.stop()
+	_rules_agreement_mode = 0
+	if accept:
+		_apply_rules_automatic_agreed()
+		network_manager.send_command("confirm_rules_automation", {})
+	else:
+		network_manager.send_command("decline_rules_automation", {})
+		_log_rules_line("%s did not agree — rules stay manual" % _peer_display_name(from_peer))
+
+
+## The proposer's side of the agreement.
+func _on_rules_agreement_confirmed(_from_peer: int) -> void:
+	if not _rules_proposal_pending:
+		return   # a confirm without our own proposal is ignored (bare Automatic on the wire, rule 1.4)
+	_rules_proposal_pending = false
+	_rules_agreement_mode = 0
+	if _rules_proposal_timer != null:
+		_rules_proposal_timer.stop()
+	_apply_rules_automatic_agreed()
+	_update_rules_chip()
+
+
+func _on_rules_agreement_declined(from_peer: int) -> void:
+	_rules_proposal_pending = false
+	_rules_agreement_mode = 0
+	if _rules_proposal_timer != null:
+		_rules_proposal_timer.stop()
+	_log_rules_line("%s did not agree — rules stay manual" % _peer_display_name(from_peer))
+	_update_rules_chip()
+
+
+func _apply_rules_automatic_agreed() -> void:
+	if opr_army_manager != null:
+		opr_army_manager.rules_automation = RulesAutomation.Level.AUTOMATIC
+	_log_rules_line("Rules automation: Automatic (agreed by P1 and P2)")
+	_update_rules_chip()
+
+
+func _log_rules_line(text: String) -> void:
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL, text)
+
+
+## The one other peer's id (two-player rooms); 2 as a safe fallback.
+func _other_peer_id() -> int:
+	if network_manager != null:
+		var me := multiplayer.get_unique_id()
+		for id in network_manager.player_names:
+			if int(id) != me:
+				return int(id)
+	return 2
 
 
 ## Toggle the left panel menu visibility with slide animation
@@ -15797,6 +16096,10 @@ func _on_player_left(peer_id: int) -> void:
 	var player_count = network_manager.connected_peers.size()
 	if network_manager.is_host:
 		network_status_label.text = "Hosting (%d players)" % player_count
+	# 3.5: in an Automatic online room the side on turn keeps the token when its player drops —
+	# the table waits (the off-turn gate already blocks the other player), and the host says so.
+	if _online_turn_room() and _turn_is_host() and _slot_for_peer(peer_id) > 0 and _slot_for_peer(peer_id) == _hotseat_side_on_turn():
+		_log_rule_event(BattleLog.Category.GENERAL, "P%d dropped while on turn — the table waits" % _slot_for_peer(peer_id), true)
 	# Always clean THIS transport id's presence. A stale late close AFTER a rebind is a
 	# no-op here, because _on_peer_remapped already freed the old id's avatar/cursor and
 	# re-keyed presence to the new id; a genuine departure is cleaned correctly. (The
@@ -16767,6 +17070,25 @@ func _on_network_command(type: String, payload: Variant, _from_peer: int) -> voi
 		_vfx_draw(payload, _from_peer)
 	elif type == "sync_rules_automation" and payload is Dictionary:
 		_on_sync_rules_automation((payload as Dictionary).get("level"), _from_peer)
+	elif type == "propose_rules_automation":
+		_on_rules_proposal(_from_peer)
+	elif type == "confirm_rules_automation":
+		_on_rules_agreement_confirmed(_from_peer)
+	elif type == "decline_rules_automation":
+		_on_rules_agreement_declined(_from_peer)
+	elif type == "request_next_round":
+		# 3.3b: a guest asked the host to advance — only the host runs the end-round path, then
+		# broadcasts sync_round_advance for the guests to apply.
+		if _online_turn_room() and _turn_is_host():
+			_do_next_round()
+	elif type == "request_ambush_turn" and payload is Dictionary:
+		# 3.4b: the host asked THIS machine (the owner) to run its own Ambush prompt; the bare call
+		# starts the coroutine, which answers with ambush_turn_done when done.
+		_online_ambush_owner_turn(payload)
+	elif type == "ambush_turn_done" and payload is Dictionary:
+		var _slot := int((payload as Dictionary).get("slot", 0))
+		if _ambush_turn_waiters.has(_slot):
+			_ambush_turn_waiters[_slot] = true
 
 
 ## Plan 1.4: a rules-automation value from a peer. MANUAL is unilateral and applies at once; an
@@ -16859,6 +17181,7 @@ func _sync_state_to_peer(peer_id: int) -> void:
 	state["_host_version"] = network_manager.get_game_version()
 	# #673 co-op: late joiners adopt the host's (broadcast-synced) AI-slot designation on join.
 	state["solo_ai_slots"] = ai_slots_sync_payload(solo_ai_slots)
+	state["turn_state"] = _hotseat_side_on_turn()   # 3.3a: the token rides the full-state push
 	var obj_count = state.get("objects", []).size()
 	var unit_count = state.get("game_units", []).size()
 	print("[StateSync] Sending state to peer %d: %d objects, %d game_units" % [peer_id, obj_count, unit_count])
@@ -16875,6 +17198,7 @@ func _sync_loaded_state_to_clients() -> void:
 	# Get current state and broadcast to all clients
 	var state = save_manager.serialize_game_state()  # includes army_names (for tray rebuild)
 	state["_host_version"] = network_manager.get_game_version()
+	state["turn_state"] = _hotseat_side_on_turn()   # 3.3a: the token rides the full-state push
 	network_manager.send_command("sync_game_state", {"state": state}, 0)
 
 
@@ -16892,6 +17216,10 @@ func _rpc_sync_game_state(state: Dictionary) -> void:
 
 	var obj_count = state.get("objects", []).size()
 	var unit_count = state.get("game_units", []).size()
+	# 3.3a: adopt the host's token (it is mirrored, never advanced here) — a late joiner / reconnect
+	# gets the side on turn with the rest of the state.
+	if state.has("turn_state"):
+		_apply_turn_token(int(state["turn_state"]))
 	print("[StateSync] Received game state from host: %d objects, %d game_units" % [obj_count, unit_count])
 
 	# Show the same loading overlay as a self-import while we rebuild the table + download models.
@@ -18597,11 +18925,22 @@ func _on_start_game_pressed() -> void:
 
 ## The game phase changed locally (single-player start, MP transition applied, or save/load). Re-derive
 ## the trail-chalk gate and refresh the button/status.
-func _on_game_phase_changed(_phase: int) -> void:
+func _on_game_phase_changed(phase: int) -> void:
 	_sync_move_trails_deployment()
 	_update_game_phase_ui()
 	_solo_grade_logged = ""   # every phase change opens a new game's grade line
 	_solo_log_grade()
+	# Step 2.9: a hotseat Automatic table has no AI-seat handoff to print the rule inventory at, so print
+	# it for EACH human army at game start — what the engine applies vs. what the player applies by hand.
+	if phase == OPRArmyManager.GamePhase.PLAYING and opr_army_manager != null and _solo_hotseat_automatic():
+		var slots: Array = []
+		for gu in opr_army_manager.game_units.values():
+			var pid := int((gu as GameUnit).unit_properties.get("player_id", 0))
+			if pid != 0 and not slots.has(pid):
+				slots.append(pid)
+		slots.sort()
+		for pid in slots:
+			_solo_log_rule_inventory(int(pid), true)
 
 
 ## The host broadcast the authoritative game phase (host applies it here too). Apply it to the army
@@ -19369,6 +19708,13 @@ func _on_remote_activation_updated(game_unit: GameUnit) -> void:
 		move_trails.on_activation_done(game_unit.unit_id)
 		if undo_manager != null:
 			undo_manager.expire_move_takebacks()   # #162: the game moved on
+	# 3.3a fix: on the host a REMOTE activation FACT for the side on turn advances the token and
+	# broadcasts it — the guest's own hotseat_record_activation early-returns by design, so without
+	# this the turn froze on the guest's activation. Only the on-turn owner advances (3.3c will reject
+	# out-of-turn facts); the local (own) activation already advanced in its own door.
+	if _online_turn_room() and _turn_is_host() and game_unit != null and game_unit.is_activated \
+			and unit_owner_slot(game_unit.unit_properties) == _hotseat_side_on_turn():
+		await hotseat_record_activation(unit_owner_slot(game_unit.unit_properties))
 
 
 ## Called when a remote peer changes a unit marker (Fatigued, Shaken, etc.)
