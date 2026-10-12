@@ -118,3 +118,71 @@ fn grid_batch_stops_at_the_call_start_deadline() {
     }
     assert!(widened > 0, "the corpus widened nowhere — the gate proves nothing");
 }
+
+/// A leaf hook that stalls on the first GRID batch (call #2: call #1 is the pool's single leaf
+/// batch), so the call-start clock is gone before the SECOND batch is checked, and prices grid
+/// leaves with a huge first leaf so the first priced cell is the unique argmax against the hand.
+struct StallLeaf {
+    calls: std::cell::Cell<usize>,
+    stall: bool,
+}
+
+impl LeafValue for StallLeaf {
+    fn value(&self, leaves: &[&nml_core::State], _side: i64) -> Result<Vec<f64>, Unsupported> {
+        let call = self.calls.get();
+        self.calls.set(call + 1);
+        if self.stall && call == 1 {
+            std::thread::sleep(std::time::Duration::from_millis(4000));
+        }
+        let mut vals = vec![0.0; leaves.len()];
+        if call > 0 && !vals.is_empty() {
+            vals[0] = 1.0e9;
+        }
+        Ok(vals)
+    }
+}
+
+/// grid-search step 10 — the PRICING loop is the ANYTIME clock too (lead review): a call-start
+/// deadline that expires DURING the first pricing batch prices exactly `grid_batch` cells, drops the
+/// collected-but-unpriced tail (it must not enter the trace or the ranking) and leaves the pick = the
+/// argmax over the hand rows plus those first cells.
+#[test]
+fn grid_batch_stops_after_the_first_pricing_batch() {
+    let c = corpus();
+    let statics = build_act_statics(&c, REPO);
+    let mut sc = Scratch::default();
+    const BATCH: usize = 2;
+    // 2 s call-start clock; the first grid batch stalls 4 s, so the check before the SECOND batch is
+    // the first one to see the clock gone. Pool + collection are far under 2 s even on a loaded box.
+    let cut_k = nml_core::read_act_header(&grid_head(
+        r#""grid_k":6,"grid_units":1,"grid_batch":2,"deadline_us":2000000"#)).unwrap().knobs;
+    let one_k = nml_core::read_act_header(&grid_head(r#""grid_k":1,"grid_units":1"#)).unwrap().knobs;
+    let base_k = nml_core::read_act_header(&grid_head(r#""grid_k":6,"grid_units":1"#)).unwrap().knobs;
+    let mut widened = 0usize;
+    for (ai, act) in c.acts.iter().enumerate() {
+        let hb = StallLeaf { calls: std::cell::Cell::new(0), stall: false };
+        let mut b = Search::new(Rollout::new(Policy::new(&statics, &c.terrain, seams_of(&c.knobs)), base_k), &act.statics);
+        b.leaf_value = Some(&hb); b.leaf_value_w = 1.0;
+        let Ok(full) = b.run(&act.state, act.player, &mut sc, None) else { continue };
+        if full.grid.as_ref().is_none_or(|g| g.completed <= BATCH) {
+            continue; // needs a second batch to cut
+        }
+        widened += 1;
+        let hc = StallLeaf { calls: std::cell::Cell::new(0), stall: true };
+        let mut s = Search::new(Rollout::new(Policy::new(&statics, &c.terrain, seams_of(&c.knobs)), cut_k), &act.statics);
+        s.leaf_value = Some(&hc); s.leaf_value_w = 1.0;
+        let got = s.run(&act.state, act.player, &mut sc, None).unwrap();
+        let g = got.grid.as_ref().expect("a grid_k pick carries a trace");
+        assert_eq!(g.completed, BATCH, "act {ai}: the cut priced {} cells, not {BATCH}", g.completed);
+        assert!(g.cut, "act {ai}: a pricing stop must stamp grid.cut");
+        assert_eq!(g.rows.len(), BATCH, "act {ai}: unpriced cells leaked into the trace");
+        let hr = StallLeaf { calls: std::cell::Cell::new(0), stall: false };
+        let mut r = Search::new(Rollout::new(Policy::new(&statics, &c.terrain, seams_of(&c.knobs)), one_k), &act.statics);
+        r.leaf_value = Some(&hr); r.leaf_value_w = 1.0;
+        let refp = r.run(&act.state, act.player, &mut sc, None).unwrap();
+        assert_eq!((got.unit_key.clone(), format!("{:?}", got.action)),
+                   (refp.unit_key.clone(), format!("{:?}", refp.action)),
+                   "act {ai}: the cut pick is not the argmax over the first priced cells");
+    }
+    assert!(widened > 0, "the corpus widened nowhere — the gate proves nothing");
+}

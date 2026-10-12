@@ -1097,8 +1097,9 @@ impl<'a> Search<'a> {
         let (mut reachable, mut proposed, mut deduped, mut landed_far, mut dropped) =
             (0usize, 0usize, 0usize, 0usize, 0usize);
         let n_hand = scored.len();
-        // grid-search step 10 — the ANYTIME clock: before each batch of `grid_batch` priced cells,
-        // stop if the call-start deadline is gone (batching off = today, no clock).
+        // grid-search step 10 — the ANYTIME clock, part 1: bound the ROLLOUT construction (one
+        // `rollout_of` per cell) at the call-start deadline too, so the expensive rollout work stops
+        // with the pricing below (batching off = today, no clock).
         let batch = self.roll.knobs.grid_batch;
         let mut cut = false;
         'outer: for &u in &units {
@@ -1175,18 +1176,26 @@ impl<'a> Search<'a> {
                 }
             }
         }
-        let completed = grid_rows.len();
         // grid-search step 10 — price the collected cells in batches of `grid_batch` (0 = one batch,
-        // step 9's single leaf call); the construction above already honoured the call deadline.
+        // step 9's single leaf call). Before EACH batch check the call-start deadline: the batch's
+        // leaf call + blend are the per-cell cost, so a hit stops pricing; the collected-but-unpriced
+        // cells are dropped and never enter the ranking, and `completed` counts only priced cells.
         let batch = self.roll.knobs.grid_batch;
         let n = if batch == 0 { ends_of.len().max(1) } else { batch };
-        let mut b = 0usize;
-        while b < ends_of.len() {
-            let e = (b + n).min(ends_of.len());
-            self.grid_price_batch(&grid_rows, &ends_of, b, e, player, pool, rs, best, runner, last_leaf, hook)?;
-            b = e;
+        let mut priced = 0usize;
+        while priced < ends_of.len() {
+            if batch > 0 && deadline.is_some_and(|d| std::time::Instant::now() >= d) {
+                cut = true;
+                break;
+            }
+            let e = (priced + n).min(ends_of.len());
+            self.grid_price_batch(&grid_rows, &ends_of, priced, e, player, pool, rs, best, runner, last_leaf, hook)?;
+            priced = e;
         }
-        let batches = if batch == 0 { 1 } else { ends_of.len().div_ceil(n) };
+        let completed = priced;
+        grid_rows.truncate(completed);
+        meta.truncate(completed);
+        let batches = if batch == 0 { 1 } else { completed.div_ceil(n) };
         for row in grid_rows {
             scored.push(row);
         }
