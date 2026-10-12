@@ -936,7 +936,7 @@ func _ready() -> void:
 			# (and captures the table for a future in-scene restore; the finale/in-game launch that
 			# uses restore is out of this foundation wave).
 			_scenario_loader = ScenarioLoader.new()
-			_scenario_loader.setup(save_manager, _autosave_controller, move_trails)
+			_scenario_loader.setup(save_manager, _autosave_controller, move_trails, opr_army_manager)
 			_scenario_loader.begin_lesson()
 			save_manager.load_completed.connect(_start_lesson, CONNECT_ONE_SHOT)
 
