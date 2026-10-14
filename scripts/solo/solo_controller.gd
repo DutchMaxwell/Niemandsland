@@ -5787,6 +5787,13 @@ func through_toll_verdict(models: Array, trails: Array, trail_radii_m: Array, un
 	return out
 
 
+func _unit_wounds_now(models: Array) -> int:
+	var n := 0
+	for m in models:
+		n += maxi(0, int((m as ModelInstance).wounds_current))
+	return n
+
+
 ## Moves the host's models AND its attached heroes' as ONE formation (GF v3.5.1 "Hero"). Publishes
 ## last_move_paths ({model, path, radius_m}) + last_move_budget_in for the corridor presentation.
 ## Returns the Dangerous-crossing model count (main rolls the real tests).
@@ -5823,7 +5830,9 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 	# DANGEROUS terrain is also routed AROUND when a clear path exists (field-test finding 4). Only Flying
 	# ignores it (Strider ignores Difficult but NOT Dangerous — GF/AoF v3.5.1 p.13/p.14); if the destination
 	# itself is dangerous, going around is impossible, so the model routes in and takes its dangerous test.
-	var avoid_dangerous: bool = not flying and not _targets_in_dangerous(positions, goal, reach, own_r_m)
+	var goal_in_danger: bool = not flying and _targets_in_dangerous(positions, goal, reach, own_r_m)
+	var avoid_dangerous: bool = not flying and not goal_in_danger
+	var stall_through := false   # the stall escalation's through-plan was accepted (logged as the dangerous_why cause)
 	var trails: Array = []
 	var trail_radii_m: Array = []
 	for m in models:
@@ -5868,6 +5877,7 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 			trails = t2
 			avoid = false   # the move goes through — the decision record's label follows suit
 			avoid_dangerous = false   # NML-1027 wave: retries must keep the accepted THROUGH regime
+			stall_through = true
 	# Distance truth (p.7): no model's polyline may exceed the granted budget — the coherency easing is
 	# best-effort and may not stretch a route past its legal length.
 	var budget_m := reach * INCHES_TO_METERS
@@ -6072,17 +6082,21 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 	# the test rolls the model's TOUGH value in dice (p.12), summed into report["dangerous_dice"].
 	var dang := 0
 	var dang_dice := 0
+	var stood_n := 0   # models counted only because they stood in/at the field at activation start
 	if not flying:
 		var cross_flags := _dangerous_trail_flags(trails, trail_radii_m)
 		for i in range(models.size()):
 			# EPOCH_27_TERRAIN_DEBUFF: the carried rule is a hazard the cells never are —
 			# the debuffed unit counts as being in Dangerous Terrain whatever it walks.
 			var affected: bool = dangerous_debuff or (i < cross_flags.size() and bool(cross_flags[i]))
-			if not affected and terrain_type_at.is_valid():
+			if terrain_type_at.is_valid():
 				var p0: Vector3 = positions[i]
 				# Edge-aware (2026-07-22): standing with the base EDGE in the minefield counts.
-				affected = TerrainRules.base_in_terrain(p0, model_base_radius_m(models[i] as ModelInstance),
+				var stood: bool = TerrainRules.base_in_terrain(p0, model_base_radius_m(models[i] as ModelInstance),
 					terrain_type_at, TerrainRules.is_dangerous)
+				if stood:
+					stood_n += 1
+				affected = affected or stood
 			if affected:
 				dang += 1
 				dang_dice += maxi(1, int((models[i] as ModelInstance).wounds_max))
@@ -6143,6 +6157,19 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 		"achieved_in": achieved_arc_m / INCHES_TO_METERS, "centroid_in": centroid_m / INCHES_TO_METERS,
 		"dangerous_models": dang,
 		"goal_gap_in": MoveIntent.distance_inches(MoveIntent.anchor_of(positions), goal)}
+	if dang > 0:
+		# rules-must-log: WHY avoidance was off or did not hold (playtest 14.10., the R2 cause was unreadable).
+		var why_parts: Array = []
+		if goal_in_danger:
+			why_parts.append("goal inside DANGEROUS ground")
+		if stall_through:
+			why_parts.append("stall through-plan (toll %.1f, cap %.1f)" % [float(dang_dice) / 6.0, maxf(1.0, 0.1 * float(_unit_wounds_now(models)))])
+		if stood_n > 0:
+			why_parts.append("stood in/at the field edge at start")
+		if dangerous_debuff:
+			why_parts.append("carries the Dangerous Terrain rule")
+		move_data["dangerous_why"] = "; ".join(why_parts) if not why_parts.is_empty() \
+			else "route crossed despite avoidance"
 	for k in _move_extra:
 		move_data[k] = _move_extra[k]
 	_move_extra = {}
