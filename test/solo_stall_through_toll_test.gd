@@ -89,3 +89,45 @@ func test_small_unit_still_crosses() -> void:
 	var pair := _unit("Pair", 2)
 	_solo._execute_move(pair, Vector3(0, 0, 14.0 * IN2M), 12.0, false)
 	assert_float(_front_z_in(pair)).is_greater(5.0)
+
+
+func _rush(u: GameUnit, source: String) -> void:
+	var intent := {"unit": u, "action": AiDecision.Action.RUSH, "goal": Vector3(0, 0, 14.0 * IN2M),
+		"band_in": 12.0, "source": source, "why": "test"}
+	_solo.execute_intent(intent, ActIntent.blank_report(u))
+
+
+# Whether the stall check fires is decided by the FRONT RANK's progress toward the goal, so these two do not
+# depend on how far a rear model happens to shuffle in the avoiding stub (CI differed from local there).
+func test_player_ordered_rush_crosses_the_field() -> void:
+	var horde := _unit("Horde", 15)
+	_rush(horde, "player")
+	assert_float(_front_z_in(horde)).is_greater(5.0)
+
+
+func test_ai_rush_stops_short_of_the_field() -> void:
+	var horde := _unit("Horde", 15)
+	_rush(horde, "ai")
+	assert_float(_front_z_in(horde)).is_less(3.5)
+
+
+# The unit's centroid can move a lot while its front does not advance (a rear model shuffles sideways in the
+# avoiding stub). That must count as a stall: progress is measured toward the goal at the front rank.
+func test_rear_model_moving_sideways_is_a_stall() -> void:
+	var before: Array = []
+	var after: Array = []
+	for i in 15:
+		var p := Vector3(float(i % 5) * 1.5 * IN2M, 0, float(i / 5) * -1.5 * IN2M)
+		before.append(p)
+		after.append(p)
+	# rear rank (rows 1-2, 10 models) slides 6 in. sideways (centroid 4 in. > 3 in. bar); the front row stays put
+	for i in range(5, 15):
+		after[i] = (before[i] as Vector3) + Vector3(-6.0 * IN2M, 0, 0)
+	var goal := Vector3(0, 0, 14.0 * IN2M)
+	var bar_m := 12.0 * IN2M * SoloController.STALL_REPLAN_FRACTION
+	assert_float(SoloController.stall_progress_m(before, after, goal)).is_less(bar_m)
+	# a front rank that really advances is not a stall
+	var advanced: Array = []
+	for p in before:
+		advanced.append((p as Vector3) + Vector3(0, 0, 4.0 * IN2M))
+	assert_float(SoloController.stall_progress_m(before, advanced, goal)).is_greater(bar_m)

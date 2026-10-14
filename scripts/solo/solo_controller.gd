@@ -5850,7 +5850,7 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 	# the unit ended at ~0" ("GATE-COLLAPSE ... avoid_dang=true" in every diagnosed case). Running it after
 	# BOTH pass-1 variants lets the through-plan (difficult 6" cap + dangerous tests, both legal) rescue.
 	if not allow_contact and (avoid or avoid_dangerous) \
-			and _achieved_m(positions, new_positions) < reach * INCHES_TO_METERS * STALL_REPLAN_FRACTION:
+			and stall_progress_m(positions, new_positions, goal) < reach * INCHES_TO_METERS * STALL_REPLAN_FRACTION:
 		# STALL ESCALATION (round 7, finding 2): routing AROUND difficult/dangerous terrain hemmed the unit
 		# in (avoided cells walling its start) and the whole move collapsed to a token step — the maintainer's
 		# "half an inch toward something". Going THROUGH is always legal — difficult costs the 6" cap (p.11),
@@ -6199,6 +6199,28 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 ## actually go" measure behind the stall re-plan and the achieved_in metric (round 7, finding 2).
 static func _achieved_m(before: Array, after: Array) -> float:
 	return (MoveIntent.anchor_of(after) - MoveIntent.anchor_of(before)).length()
+
+
+## The progress the STALL check measures: how far the FRONT RANK advanced toward the goal (the leading edge of
+## the unit projected on the centroid->goal direction). The centroid displacement used before was fooled by a
+## rear model shuffling sideways in the avoiding stub: the centroid moved past the bar while the front stood
+## still, so the escalation never fired (CI trace 14.10.). Falls back to the centroid displacement when the
+## unit already sits on its goal (no direction).
+static func stall_progress_m(before: Array, after: Array, goal: Vector3) -> float:
+	if before.is_empty() or after.is_empty():
+		return 0.0
+	var dir := goal - MoveIntent.anchor_of(before)
+	dir.y = 0.0
+	if dir.length() < 0.0001:
+		return _achieved_m(before, after)
+	dir = dir.normalized()
+	var front_before := -INF
+	for p: Vector3 in before:
+		front_before = maxf(front_before, p.dot(dir))
+	var front_after := -INF
+	for p: Vector3 in after:
+		front_after = maxf(front_after, p.dot(dir))
+	return maxf(0.0, front_after - front_before)
 
 
 ## One planning pass: rigid clamp to the table, then obstacle-aware per-model planning. Returns the new
