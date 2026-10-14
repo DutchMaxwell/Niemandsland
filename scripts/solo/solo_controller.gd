@@ -6201,10 +6201,26 @@ static func _achieved_m(before: Array, after: Array) -> float:
 	return (MoveIntent.anchor_of(after) - MoveIntent.anchor_of(before)).length()
 
 
-## The progress the STALL check measures: how far the unit's centroid moved (the old measure). RED stand-in,
-## replaced by the front-rank progress toward the goal in the next commit.
-static func stall_progress_m(before: Array, after: Array, _goal: Vector3) -> float:
-	return _achieved_m(before, after)
+## The progress the STALL check measures: how far the FRONT RANK advanced toward the goal (the leading edge of
+## the unit projected on the centroid->goal direction). The centroid displacement used before was fooled by a
+## rear model shuffling sideways in the avoiding stub: the centroid moved past the bar while the front stood
+## still, so the escalation never fired (CI trace 14.10.). Falls back to the centroid displacement when the
+## unit already sits on its goal (no direction).
+static func stall_progress_m(before: Array, after: Array, goal: Vector3) -> float:
+	if before.is_empty() or after.is_empty():
+		return 0.0
+	var dir := goal - MoveIntent.anchor_of(before)
+	dir.y = 0.0
+	if dir.length() < 0.0001:
+		return _achieved_m(before, after)
+	dir = dir.normalized()
+	var front_before := -INF
+	for p: Vector3 in before:
+		front_before = maxf(front_before, p.dot(dir))
+	var front_after := -INF
+	for p: Vector3 in after:
+		front_after = maxf(front_after, p.dot(dir))
+	return maxf(0.0, front_after - front_before)
 
 
 ## One planning pass: rigid clamp to the table, then obstacle-aware per-model planning. Returns the new
