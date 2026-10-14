@@ -37,7 +37,7 @@ func _unit(id: String, n: int) -> GameUnit:
 		m.wounds_current = 1
 		m.node = auto_free(Node3D.new())
 		add_child(m.node)
-		m.node.global_position = Vector3(float(i % 5) * 1.5 * IN2M, 0, float(i / 5) * -1.5 * IN2M + 1.0 * IN2M)
+		m.node.global_position = Vector3(float(i % 5) * 1.5 * IN2M, 0, float(i / 5) * -1.5 * IN2M + 2.0 * IN2M)
 		u.models.append(m)
 	_mgr.game_units[id] = u
 	return u
@@ -89,3 +89,24 @@ func test_small_unit_still_crosses() -> void:
 	var pair := _unit("Pair", 2)
 	_solo._execute_move(pair, Vector3(0, 0, 14.0 * IN2M), 12.0, false)
 	assert_float(_front_z_in(pair)).is_greater(5.0)
+
+
+func _rush(u: GameUnit, source: String) -> void:
+	var intent := {"unit": u, "action": AiDecision.Action.RUSH, "goal": Vector3(0, 0, 14.0 * IN2M),
+		"band_in": 12.0, "source": source, "why": "test"}
+	_solo.execute_intent(intent, ActIntent.blank_report(u))
+
+
+# The front rank starts 2 in. in: the avoiding stub then covers ~1 in., far below the 25 %-of-reach
+# stall bar (3.00 in.), so the stall block is entered on every platform (a 1 in. start sat at 2.31 in.
+# locally but 3.09 in. on CI, i.e. on the bar itself).
+func test_player_ordered_rush_crosses_the_field() -> void:
+	var horde := _unit("Horde", 15)
+	_rush(horde, "player")
+	assert_float(_front_z_in(horde)).is_greater(5.0)
+
+
+func test_ai_rush_stops_short_of_the_field() -> void:
+	var horde := _unit("Horde", 15)
+	_rush(horde, "ai")
+	assert_float(_front_z_in(horde)).is_less(3.5)
