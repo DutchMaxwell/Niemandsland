@@ -48,15 +48,60 @@ func _front_z_in(u: GameUnit) -> float:
 	return z
 
 
-func test_large_unit_does_not_cross_a_forced_minefield() -> void:
+func _rush(u: GameUnit, source: String) -> void:
+	var intent := {"unit": u, "action": AiDecision.Action.RUSH, "goal": Vector3(0, 0, 14.0 * IN2M),
+		"band_in": 12.0, "source": source, "why": "test"}
+	_solo.execute_intent(intent, ActIntent.blank_report(u))
+
+
+func _crossing_trails(n: int) -> Array:
+	var trails: Array = []
+	for i in range(n):
+		trails.append([Vector3(float(i) * IN2M, 0, 0), Vector3(float(i) * IN2M, 0, 12.0 * IN2M)])
+	return trails
+
+
+func _radii(n: int) -> Array:
+	var r: Array = []
+	for _i in range(n):
+		r.append(0.5 * IN2M)
+	return r
+
+
+func test_verdict_refuses_a_big_crossing_for_the_ai() -> void:
 	var horde := _unit("Horde", 15)
-	_solo._execute_move(horde, Vector3(0, 0, 14.0 * IN2M), 12.0, false)
+	var v: Dictionary = _solo.through_toll_verdict(horde.models, _crossing_trails(15), _radii(15), "Horde", false)
+	assert_bool(bool(v["refused"])).is_true()
+	assert_str(str(v["note"])).contains("no crossing through DANGEROUS ground")
+
+
+func test_verdict_never_refuses_a_move_the_player_ordered() -> void:
+	var horde := _unit("Horde", 15)
+	var v: Dictionary = _solo.through_toll_verdict(horde.models, _crossing_trails(15), _radii(15), "Horde", true)
+	assert_bool(bool(v["refused"])).is_false()
+	assert_str(str(v["note"])).contains("as ordered")
+
+
+func test_verdict_lets_a_small_crossing_through() -> void:
+	var pair := _unit("Pair", 2)
+	var v: Dictionary = _solo.through_toll_verdict(pair.models, _crossing_trails(2), _radii(2), "Pair", false)
+	assert_bool(bool(v["refused"])).is_false()
+	assert_str(str(v["note"])).contains("expected toll")
+
+
+func test_ai_rush_with_a_big_unit_stays_short_of_the_minefield() -> void:
+	var horde := _unit("Horde", 15)
+	_rush(horde, "ai")
 	assert_float(_front_z_in(horde)).is_less(3.5)   # stayed short of the strip (z 3" .. 5")
-	assert_str(_solo.last_move_toll_note).contains("no crossing through DANGEROUS ground")
 
 
-func test_small_unit_still_crosses_and_logs_the_toll() -> void:
+func test_player_ordered_rush_still_crosses_the_minefield() -> void:
+	var horde := _unit("Horde", 15)
+	_rush(horde, "player")
+	assert_float(_front_z_in(horde)).is_greater(5.0)   # the player's order is never overridden
+
+
+func test_small_unit_still_crosses() -> void:
 	var pair := _unit("Pair", 2)
 	_solo._execute_move(pair, Vector3(0, 0, 14.0 * IN2M), 12.0, false)
-	assert_float(_front_z_in(pair)).is_greater(5.0)   # went through
-	assert_str(_solo.last_move_toll_note).contains("expected toll")
+	assert_float(_front_z_in(pair)).is_greater(5.0)

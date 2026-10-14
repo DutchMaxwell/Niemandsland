@@ -386,6 +386,7 @@ func move_act_seq() -> int:
 var last_move_budget_in: float = 0.0
 var last_dangerous_dice: int = 0   # Bug 23: Tough-weighted dice for the move's dangerous tests (p.12)
 var last_move_toll_note: String = ""   # stall-escalation crossing verdict of the last move ("" = none), logged by execute_intent
+var _player_move := false   # true while execute_intent runs a player-sourced intent: the toll gate never overrides it
 ## NML-230: model indices whose gate correction was clamped to the band slack during the LAST
 ## _finalize_placement call — the accepted gate call's count feeds the one-line battle log.
 var _gate_clamped_models: Dictionary = {}
@@ -2543,6 +2544,7 @@ func execute_intent(intent: Dictionary, report: Dictionary) -> Dictionary:
 	var source: String = str(intent.get("source", "ai"))
 	var goal_dist := MoveIntent.distance_inches(unit_centre(unit), goal)   # nothing has moved yet
 	var tcentre := unit_centre(target) if target != null else unit_centre(unit)
+	_player_move = (source == "player")
 	var dang := 0
 	var move_inches := 0.0   # A4: what THIS move actually requested — not the raw band (the kite/
 			# arrival branches deliberately ask for less; only a further, gate-driven shortfall is a cap)
@@ -2570,6 +2572,7 @@ func execute_intent(intent: Dictionary, report: Dictionary) -> Dictionary:
 				dang = _move_toward(unit, goal, move_inches, false)
 		_:
 			pass   # HOLD
+	_player_move = false
 	_move_extra = {}
 	# A4 (NML-202): capped-move honesty — a player who watched their unit stop short of the
 	# reach they were shown deserves the reason, not silence. AI intents never source this note
@@ -5753,6 +5756,37 @@ func _dangerous_standing_counts(unit: GameUnit) -> Dictionary:
 	return {"models": models, "dice": dice}
 
 
+## Toll gate of the stall escalation's THROUGH-plan (same currency as charge_dangerous_toll): Tough-weighted
+## dangerous dice / 6 of the models whose route crosses DANGEROUS ground, against max(1.0, 10 % of the unit's
+## current wounds). Returns {refused, toll, cap, note}; note "" = the route crosses nothing. A move the player
+## ordered (`player_ordered`) is only reported, never refused.
+func through_toll_verdict(models: Array, trails: Array, trail_radii_m: Array, unit_name: String,
+		player_ordered: bool) -> Dictionary:
+	var out := {"refused": false, "toll": 0.0, "cap": 0.0, "note": ""}
+	var dice := 0
+	var flags := _dangerous_trail_flags(trails, trail_radii_m)
+	for i in range(models.size()):
+		if i < flags.size() and bool(flags[i]):
+			dice += maxi(1, int((models[i] as ModelInstance).wounds_max))
+	if dice == 0:
+		return out
+	var wounds_now := 0
+	for m in models:
+		wounds_now += maxi(0, int((m as ModelInstance).wounds_current))
+	var toll := float(dice) / 6.0
+	var cap := maxf(1.0, 0.1 * float(wounds_now))
+	out["toll"] = toll
+	out["cap"] = cap
+	if toll >= cap and not player_ordered:
+		out["refused"] = true
+		out["note"] = "%s: no crossing through DANGEROUS ground - expected toll %.1f wounds >= cap %.1f" % [unit_name, toll, cap]
+	elif toll >= cap:
+		out["note"] = "%s: crossing DANGEROUS ground as ordered - expected toll %.1f wounds >= cap %.1f" % [unit_name, toll, cap]
+	else:
+		out["note"] = "%s: crossing DANGEROUS ground - expected toll %.1f wounds < cap %.1f" % [unit_name, toll, cap]
+	return out
+
+
 ## Moves the host's models AND its attached heroes' as ONE formation (GF v3.5.1 "Hero"). Publishes
 ## last_move_paths ({model, path, radius_m}) + last_move_budget_in for the corridor presentation.
 ## Returns the Dangerous-crossing model count (main rolls the real tests).
@@ -5822,24 +5856,12 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 			p2 = _plan_move(unit, models, positions, goal, r2, allow_contact, false, false, t2, charge_target)
 		var through_ok := _achieved_m(positions, p2) > _achieved_m(positions, new_positions) + 0.01
 		if through_ok and not flying:
-			# Toll gate (playtest 14.10.): the same currency as charge_dangerous_toll — Tough-weighted dangerous
-			# dice / 6 — against max(1.0, 10 % of the unit's current wounds). Over the cap the avoiding stub stays.
-			var through_dice := 0
-			var through_flags := _dangerous_trail_flags(t2, trail_radii_m)
-			for i in range(models.size()):
-				if i < through_flags.size() and bool(through_flags[i]):
-					through_dice += maxi(1, int((models[i] as ModelInstance).wounds_max))
-			if through_dice > 0:
-				var wounds_now := 0
-				for m in models:
-					wounds_now += maxi(0, int((m as ModelInstance).wounds_current))
-				var toll := float(through_dice) / 6.0
-				var cap := maxf(1.0, 0.1 * float(wounds_now))
-				if toll >= cap:
-					through_ok = false
-					last_move_toll_note = "%s: no crossing through DANGEROUS ground - expected toll %.1f wounds >= cap %.1f" % [unit.get_name(), toll, cap]
-				else:
-					last_move_toll_note = "%s: crossing DANGEROUS ground - expected toll %.1f wounds < cap %.1f" % [unit.get_name(), toll, cap]
+			# Toll gate (playtest 14.10.): AI-planned moves only. A move the PLAYER ordered is never overridden.
+			var verdict := through_toll_verdict(models, t2, trail_radii_m, unit.get_name(), _player_move)
+			if str(verdict["note"]) != "":
+				last_move_toll_note = str(verdict["note"])
+			if bool(verdict["refused"]):
+				through_ok = false
 		if through_ok:
 			reach = r2
 			new_positions = p2
