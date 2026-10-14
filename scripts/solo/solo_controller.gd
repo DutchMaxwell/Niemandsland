@@ -3846,12 +3846,23 @@ func _leaf_opener_on(diff: SoloDifficulty) -> bool:
 ## Shipped-brain search breadth: the preset's `brain_breadth` AND the brain wired (the hand planner keeps the core default 10/3,
 ## its breadth was not measured). env NML_BRAIN_BREADTH=<int> forces it (0 = core default).
 func _brain_breadth(diff: SoloDifficulty) -> int:
+	return _breadth_of(diff, shipped_brain_ready())
+
+
+static func _breadth_of(diff: SoloDifficulty, brain_ready: bool) -> int:
 	var forced := OS.get_environment("NML_BRAIN_BREADTH")
 	if forced != "":
 		return maxi(int(forced), 0)
-	if diff != null and diff.brain_knobs and shipped_brain_ready():
+	if diff != null and diff.brain_knobs and brain_ready:
 		return diff.brain_breadth
 	return 0
+
+
+## The search breadth the console header announces: the stamped brain breadth when one reaches the core,
+## else the live GDScript/core default (AiPlanner.top_k_default, 10 on the ship budget).
+static func header_top_k(diff: SoloDifficulty, brain_ready: bool) -> int:
+	var b := _breadth_of(diff, brain_ready)
+	return b if b > 0 else AiPlanner.top_k_default()
 
 
 ## Hand-planner strength_by_points (A/B 08.10.2026, NOT_WORSE): the preset's `points_strength` flag AND no brain

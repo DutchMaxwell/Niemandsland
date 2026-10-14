@@ -420,6 +420,7 @@ var _last_wall_rotation := 0.0
 
 ## Placed object instances (trees + containers)
 var _object_instances: Array[Node3D] = []
+var _rebuild_serial := 0   # bumped on every update_placed_objects entry; a moved serial = a nested rebuild ran
 
 ## Always-visible Asgard terrain-effect labels (one Label3D per terrain zone).
 var _terrain_labels: Array[Node3D] = []
@@ -2814,6 +2815,8 @@ func _clear_wall_instances() -> void:
 ## @param t_size: Table size in feet
 ## @param rotation: Grid rotation in degrees
 func update_placed_objects(objects: Array, t_size: Vector2, rot_deg: float) -> void:
+	_rebuild_serial += 1
+	var my_serial := _rebuild_serial
 	_blocker_edges.clear()
 	_blocker_obbs.clear()
 	_los_volumes_dirty = true
@@ -2847,6 +2850,13 @@ func update_placed_objects(objects: Array, t_size: Vector2, rot_deg: float) -> v
 		elif (obj_type == "mine" or obj_type == "warning_sign") and not use_hazard_panels \
 				and hazard_model == "":
 			_request_hazard_panels()
+
+	# The requests above can re-enter this function (cached panels/models make the library's awaits finish
+	# synchronously): that nested call already built the current objects, so building again here would
+	# stack a second, live copy of every object on top of it.
+	if _rebuild_serial != my_serial:
+		print("overlay rebuild superseded by nested rebuild (%d objects)" % objects.size())
+		return
 
 	if objects.is_empty():
 		return
