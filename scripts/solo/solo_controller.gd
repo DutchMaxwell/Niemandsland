@@ -5837,7 +5837,18 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 	var trail_radii_m: Array = []
 	for m in models:
 		trail_radii_m.append(model_base_radius_m(m as ModelInstance))
+	var _tbl_nodes := get_tree().get_nodes_in_group("table") if is_inside_tree() else []
+	var _tbl_first = get_tree().get_first_node_in_group("table") if is_inside_tree() else null
+	print("PROBE_MV start unit=%s n=%d goal_z_in=%.1f inches=%.1f allow_contact=%s player_move=%s flying=%s ignores_difficult=%s avoid=%s avoid_dangerous=%s table_group=%d first_table=%s table_size=%s half_m=%s core_enabled=%s move_seam_on=%s seam_env=%d rules_epoch=%d terrain_valid=%s walls=%d spacing_zones=%d" % [
+		unit.get_name(), models.size(), goal.z / INCHES_TO_METERS, inches, str(allow_contact), str(_player_move), str(flying),
+		str(ignores_difficult), str(avoid), str(avoid_dangerous), _tbl_nodes.size(),
+		str(_tbl_first.get_path()) if _tbl_first != null else "<none>",
+		str(_tbl_first.table_size) if _tbl_first != null and "table_size" in _tbl_first else "<n/a>",
+		str(_table_half_extents()), str(BattleSim.core_enabled()), str(_move_seam_on()), _move_seam_env,
+		AiActRecorder.rules_epoch, str(terrain_type_at.is_valid()), _walls_world().size(),
+		_spacing_zones_world(unit, _move_base_radius_m(models), null).size()])
 	var new_positions := _plan_move(unit, models, positions, goal, reach, allow_contact, avoid, avoid_dangerous, trails, charge_target)
+	print("PROBE_MV pass1 achieved_in=%.2f threshold_in=%.2f" % [_achieved_m(positions, new_positions) / INCHES_TO_METERS, reach * STALL_REPLAN_FRACTION])
 	if not ignores_difficult and (_trails_cross_difficult(trails, trail_radii_m) or difficult_debuff):
 		# The actual route enters difficult terrain → the 6" cap applies (p.11); re-plan through it so the
 		# budget math and the drawn corridor agree. Dangerous is STILL routed around on this pass.
@@ -5864,9 +5875,12 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 			t2 = []
 			p2 = _plan_move(unit, models, positions, goal, r2, allow_contact, false, false, t2, charge_target)
 		var through_ok := _achieved_m(positions, p2) > _achieved_m(positions, new_positions) + 0.01
+		print("PROBE_MV stall ENTERED p2_achieved_in=%.2f stub_achieved_in=%.2f r2=%.1f through_ok_before_gate=%s" % [
+			_achieved_m(positions, p2) / INCHES_TO_METERS, _achieved_m(positions, new_positions) / INCHES_TO_METERS, r2, str(through_ok)])
 		if through_ok and not flying:
 			# Toll gate (playtest 14.10.): AI-planned moves only. A move the PLAYER ordered is never overridden.
 			var verdict := through_toll_verdict(models, t2, trail_radii_m, unit.get_name(), _player_move)
+			print("PROBE_MV verdict player_flag=%s refused=%s note=%s" % [str(_player_move), str(verdict["refused"]), str(verdict["note"])])
 			if str(verdict["note"]) != "":
 				last_move_toll_note = str(verdict["note"])
 			if bool(verdict["refused"]):
@@ -5878,6 +5892,13 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 			avoid = false   # the move goes through — the decision record's label follows suit
 			avoid_dangerous = false   # NML-1027 wave: retries must keep the accepted THROUGH regime
 			stall_through = true
+	if not trails.is_empty():
+		var t0 := trails[0] as Array
+		var legs := []
+		for q in t0:
+			legs.append("(%.2f,%.2f)" % [(q as Vector3).x / INCHES_TO_METERS, (q as Vector3).z / INCHES_TO_METERS])
+		print("PROBE_MV legs_model0 n=%d len_in=%.2f %s" % [t0.size(), MovementPlanner.polyline_length(t0) / INCHES_TO_METERS, " ".join(legs)])
+	print("PROBE_MV after_stall reach=%.1f achieved_in=%.2f avoid=%s avoid_dangerous=%s toll_note=%s" % [reach, _achieved_m(positions, new_positions) / INCHES_TO_METERS, str(avoid), str(avoid_dangerous), last_move_toll_note])
 	# Distance truth (p.7): no model's polyline may exceed the granted budget — the coherency easing is
 	# best-effort and may not stretch a route past its legal length.
 	var budget_m := reach * INCHES_TO_METERS
