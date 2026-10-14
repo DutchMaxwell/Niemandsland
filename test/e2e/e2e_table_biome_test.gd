@@ -16,10 +16,15 @@ const Materials := preload("res://scripts/visual/reference_materials.gd")
 var _runner: GdUnitSceneRunner
 var _main: Node
 var _root_before: Array
+var _preset_before: int = 2
 
 
 func before_test() -> void:
 	E2EBoot.arm_harness_mode()
+	# Own precondition: the presenter dresses only at MEDIUM or above, and current_preset comes from the
+	# player's graphics_settings.cfg (or whatever an earlier suite left). Set directly: apply_preset() persists.
+	_preset_before = int(GraphicsSettings.current_preset)
+	GraphicsSettings.current_preset = GraphicsSettings.QualityPreset.MEDIUM
 	_root_before = E2EBoot.root_children(get_tree())
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
@@ -27,6 +32,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	GraphicsSettings.current_preset = _preset_before
 	TreePass.clear_sources()
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 	Materials.set_tier(false)   # static: a table-tier build leaves its surface in the mirror for later suites
@@ -323,7 +329,29 @@ func _paint_forest(prefix: String) -> TerrainGroupBase:
 	group.position = Vector3(-0.4, 0.0, -0.2)
 	group.build(4242, null)
 	await _runner.simulate_frames(3)
+	await _wait_for_table_trees(group, 3)
 	return group
+
+
+## The overlay's tree models and the forest group's members arrive over several frames (model loads), and the
+## oak swap only dresses the trees present when it runs. Wait until the 3 painted overlay trees exist and the
+## whole set has stopped growing for 30 frames; fail with the numbers instead of asserting on a half-built table.
+func _wait_for_table_trees(group: TerrainGroupBase, overlay_trees: int) -> void:
+	var stable := 0
+	var last := -1
+	for _i in 600:
+		var overlay_n := 0
+		for original in _main.terrain_overlay._object_instances:
+			if is_instance_valid(original) and not original is CollisionObject3D:
+				overlay_n += 1
+		var total := _tree_roots(group).size()
+		stable = stable + 1 if total == last else 0
+		last = total
+		if overlay_n >= overlay_trees and stable >= 30:
+			return
+		await _runner.simulate_frames(1)
+	assert_bool(false).override_failure_message(
+		"the table trees never settled: %d tree roots after 600 frames (wanted >= %d overlay trees and 30 stable frames)" % [last, overlay_trees]).is_true()
 
 
 ## The table's own trees: the overlay's tree models and the forest group's members.
