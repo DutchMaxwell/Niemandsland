@@ -2585,6 +2585,8 @@ func execute_intent(intent: Dictionary, report: Dictionary) -> Dictionary:
 					and achieved_in < last_move_budget_in - 0.05)
 			if capped:
 				_rule_note(report, "Auto: moved %.1f\" of %.1f\" — %s" % [achieved_in, move_inches, why], true)
+	if last_move_toll_note != "":
+		_rule_note(report, last_move_toll_note, true)
 	report["dangerous_models"] = dang
 	report["dangerous_dice"] = last_dangerous_dice   # Bug 23: Tough-weighted (p.12 "as many dice as Tough")
 	# Instrument the objective outcome (field-test finding 1: the harness logged enemy distance but NEVER the
@@ -5746,6 +5748,7 @@ func _dangerous_standing_counts(unit: GameUnit) -> Dictionary:
 func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: bool,
 		charge_target: GameUnit = null) -> int:
 	last_dangerous_dice = 0
+	last_move_toll_note = ""
 	var models := _moving_models(unit)
 	var positions := _positions_of(models)
 	if positions.is_empty():
@@ -5806,7 +5809,27 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 			r2 = minf(inches, DIFFICULT_MOVE_CAP_IN)
 			t2 = []
 			p2 = _plan_move(unit, models, positions, goal, r2, allow_contact, false, false, t2, charge_target)
-		if _achieved_m(positions, p2) > _achieved_m(positions, new_positions) + 0.01:
+		var through_ok := _achieved_m(positions, p2) > _achieved_m(positions, new_positions) + 0.01
+		if through_ok and not flying:
+			# Toll gate (playtest 14.10.): the same currency as charge_dangerous_toll — Tough-weighted dangerous
+			# dice / 6 — against max(1.0, 10 % of the unit's current wounds). Over the cap the avoiding stub stays.
+			var through_dice := 0
+			var through_flags := _dangerous_trail_flags(t2, trail_radii_m)
+			for i in range(models.size()):
+				if i < through_flags.size() and bool(through_flags[i]):
+					through_dice += maxi(1, int((models[i] as ModelInstance).wounds_max))
+			if through_dice > 0:
+				var wounds_now := 0
+				for m in models:
+					wounds_now += maxi(0, int((m as ModelInstance).wounds_current))
+				var toll := float(through_dice) / 6.0
+				var cap := maxf(1.0, 0.1 * float(wounds_now))
+				if toll >= cap:
+					through_ok = false
+					last_move_toll_note = "%s: no crossing through DANGEROUS ground - expected toll %.1f wounds >= cap %.1f" % [unit.get_name(), toll, cap]
+				else:
+					last_move_toll_note = "%s: crossing DANGEROUS ground - expected toll %.1f wounds < cap %.1f" % [unit.get_name(), toll, cap]
+		if through_ok:
 			reach = r2
 			new_positions = p2
 			trails = t2
