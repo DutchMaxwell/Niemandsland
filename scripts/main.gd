@@ -2046,7 +2046,8 @@ func _solo_apply_difficulty() -> void:
 				_solo_opponent_brain = GameRecordCollector.opponent_brain(interactive_grade, dev_brain, solo_controller.shipped_brain_sha)
 			print("opponent: erlkoenig brain=%s top_k=%d horizon=%d move=%s" % [
 				"loopback" if dev_brain else "onnx " + solo_controller.shipped_brain_sha.left(8),
-				AiPlanner.top_k_default(), AiPlanner.horizon(), "core" if SoloController._move_seam_on() else "gdscript"])
+				SoloController.header_top_k(SoloDifficulty.for_grade(interactive_grade, _solo_arena_seed), solo_controller.shipped_brain_ready()),
+				AiPlanner.horizon(), "core" if SoloController._move_seam_on() else "gdscript"])
 		else:
 			print("opponent: tree — core %s, brain %s, move=%s" % ["up" if core_up else "off", "up" if brain_up else "none",
 				"core" if SoloController._move_seam_on() else "gdscript"])
