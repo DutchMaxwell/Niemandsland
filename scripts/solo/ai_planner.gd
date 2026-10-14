@@ -1171,10 +1171,25 @@ static func _describe(state: Dictionary, action: Dictionary) -> String:
 				return "rush objective %d" % (i + 1)
 		return "rush"
 	if kind == AiDecision.Action.ADVANCE:
-		return "fall back"
+		return _advance_label(state, action)
 	if action.has("shoot"):
 		return "hold and shoot %s" % _name_of(state, str(action["shoot"]))
 	return "hold"
+
+
+## ADVANCE covers both the retreat point (away from the nearest enemy) and every move toward
+## the enemy (_safe_advance, _second_wave, ADVANCE+shoot): the label follows the real direction.
+static func _advance_label(state: Dictionary, action: Dictionary) -> String:
+	var key := str(action.get("unit", ""))
+	var dest = action.get("dest")
+	var threat := _nearest_enemy(state, key) if state["units"].has(key) else ""
+	if threat == "" or not (dest is Vector3):
+		return "advance"
+	var from: Vector3 = _centre(state["units"][key])
+	var foe: Vector3 = _centre(state["units"][threat])
+	if (dest as Vector3).distance_to(foe) < from.distance_to(foe):
+		return "advance and shoot %s" % _name_of(state, str(action["shoot"])) if action.has("shoot") else "advance"
+	return "fall back"
 
 
 static func _name_of(state: Dictionary, key: String) -> String:
