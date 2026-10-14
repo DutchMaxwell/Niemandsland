@@ -5850,7 +5850,7 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 	# the unit ended at ~0" ("GATE-COLLAPSE ... avoid_dang=true" in every diagnosed case). Running it after
 	# BOTH pass-1 variants lets the through-plan (difficult 6" cap + dangerous tests, both legal) rescue.
 	if not allow_contact and (avoid or avoid_dangerous) \
-			and _achieved_m(positions, new_positions) < reach * INCHES_TO_METERS * STALL_REPLAN_FRACTION:
+			and stall_progress_m(positions, new_positions, goal) < reach * INCHES_TO_METERS * STALL_REPLAN_FRACTION:
 		# STALL ESCALATION (round 7, finding 2): routing AROUND difficult/dangerous terrain hemmed the unit
 		# in (avoided cells walling its start) and the whole move collapsed to a token step — the maintainer's
 		# "half an inch toward something". Going THROUGH is always legal — difficult costs the 6" cap (p.11),
@@ -6199,6 +6199,12 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 ## actually go" measure behind the stall re-plan and the achieved_in metric (round 7, finding 2).
 static func _achieved_m(before: Array, after: Array) -> float:
 	return (MoveIntent.anchor_of(after) - MoveIntent.anchor_of(before)).length()
+
+
+## The progress the STALL check measures: how far the unit's centroid moved (the old measure). RED stand-in,
+## replaced by the front-rank progress toward the goal in the next commit.
+static func stall_progress_m(before: Array, after: Array, _goal: Vector3) -> float:
+	return _achieved_m(before, after)
 
 
 ## One planning pass: rigid clamp to the table, then obstacle-aware per-model planning. Returns the new
