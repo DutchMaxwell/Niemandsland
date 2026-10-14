@@ -385,6 +385,7 @@ func move_act_seq() -> int:
 ## entered difficult terrain) — the denominator of the corridor's distance label.
 var last_move_budget_in: float = 0.0
 var last_dangerous_dice: int = 0   # Bug 23: Tough-weighted dice for the move's dangerous tests (p.12)
+var last_move_toll_note: String = ""   # stall-escalation crossing verdict of the last move ("" = none), logged by execute_intent
 ## NML-230: model indices whose gate correction was clamped to the band slack during the LAST
 ## _finalize_placement call — the accepted gate call's count feeds the one-line battle log.
 var _gate_clamped_models: Dictionary = {}

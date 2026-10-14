@@ -1,0 +1,62 @@
+extends GdUnitTestSuite
+## Stall escalation (solo_controller _execute_move): the THROUGH-plan that crosses a minefield is kept only
+## when its expected toll (Tough-weighted dangerous dice / 6, the currency of charge_dangerous_toll) is
+## below max(1.0, 10 % of the unit's current wounds). Otherwise the avoiding stub stays.
+
+const IN2M := 0.0254
+
+var _mgr: OPRArmyManager
+var _solo: SoloController
+
+
+func before_test() -> void:
+	_mgr = auto_free(OPRArmyManager.new())
+	_solo = auto_free(SoloController.new())
+	add_child(_solo)
+	_solo.army_manager = _mgr
+	_solo.human_slot = 1
+	_solo.ai_slot = 2
+	# A dangerous band across the whole table at z in [3", 5"] — no detour exists, the goal lies behind it.
+	_solo.terrain_type_at = func(p: Vector3) -> int:
+		var z_in := p.z / IN2M
+		return TerrainRules.TerrainType.DANGEROUS if z_in >= 3.0 and z_in <= 5.0 \
+			else TerrainRules.TerrainType.NONE
+
+
+func _unit(id: String, n: int) -> GameUnit:
+	var u: GameUnit = auto_free(GameUnit.new())
+	u.unit_id = id
+	u.unit_properties = {"player_id": 2, "special_rules": [], "name": id, "quality": 4, "defense": 4}
+	for i in range(n):
+		var m := ModelInstance.new()
+		m.unit = u
+		m.is_alive = true
+		m.wounds_max = 1
+		m.wounds_current = 1
+		m.node = auto_free(Node3D.new())
+		add_child(m.node)
+		m.node.global_position = Vector3(float(i % 5) * 1.5 * IN2M, 0, float(i / 5) * -1.5 * IN2M + 1.0 * IN2M)
+		u.models.append(m)
+	_mgr.game_units[id] = u
+	return u
+
+
+func _front_z_in(u: GameUnit) -> float:
+	var z := -INF
+	for m in u.models:
+		z = maxf(z, (m as ModelInstance).node.global_position.z / IN2M)
+	return z
+
+
+func test_large_unit_does_not_cross_a_forced_minefield() -> void:
+	var horde := _unit("Horde", 15)
+	_solo._execute_move(horde, Vector3(0, 0, 14.0 * IN2M), 12.0, false)
+	assert_float(_front_z_in(horde)).is_less(3.5)   # stayed short of the strip (z 3" .. 5")
+	assert_str(_solo.last_move_toll_note).contains("no crossing through DANGEROUS ground")
+
+
+func test_small_unit_still_crosses_and_logs_the_toll() -> void:
+	var pair := _unit("Pair", 2)
+	_solo._execute_move(pair, Vector3(0, 0, 14.0 * IN2M), 12.0, false)
+	assert_float(_front_z_in(pair)).is_greater(5.0)   # went through
+	assert_str(_solo.last_move_toll_note).contains("expected toll")
