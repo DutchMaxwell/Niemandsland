@@ -142,13 +142,34 @@ func labels_with_available_items(faction: String, unit_name: String, labels: Arr
 ## name ("Heavy Exo-Suit") matches a manifest key generated from a slug-derived name
 ## ("Heavy Exo Suit") — hyphens/underscores/extra spaces in the unit name are folded.
 static func make_key(faction: String, unit_name: String) -> String:
-	return "%s/%s" % [canonical_folder(faction), _normalize_unit(unit_name)]
+	var name := _normalize_unit(unit_name)
+	var prefix: String = str(UNIT_NAME_PREFIXES.get(faction.strip_edges().to_lower(), ""))
+	if not prefix.is_empty() and name.begins_with(prefix):
+		name = name.substr(prefix.length())
+	return "%s/%s" % [canonical_folder(faction), name]
 
 
 ## Book folders whose art was published under another folder name (the live manifest holds Machine
 ## Cults under `machine_cult`). Applied to both the manifest keys and every lookup, so only these
 ## folders change; every other faction resolves exactly as before.
-const FOLDER_ALIASES: Dictionary = {"machine_cults": "machine_cult"}
+const FOLDER_ALIASES: Dictionary = {
+	"machine_cults": "machine_cult",
+	# The four Titan Lords Disciples books field the Titan Lords war machines (no art of their own).
+	"titan_lords_change_disciples": "titan_lords",
+	"titan_lords_lust_disciples": "titan_lords",
+	"titan_lords_plague_disciples": "titan_lords",
+	"titan_lords_war_disciples": "titan_lords",
+}
+
+## Books whose unit names carry a faction prefix the published art does not ("War Duke Titan" is the
+## `titan_lords/duke titan` model). The (normalised) prefix is dropped from the unit name on every key,
+## manifest and lookup alike, and only for the folders listed here.
+const UNIT_NAME_PREFIXES: Dictionary = {
+	"titan_lords_change_disciples": "change ",
+	"titan_lords_lust_disciples": "lust ",
+	"titan_lords_plague_disciples": "plague ",
+	"titan_lords_war_disciples": "war ",
+}
 
 
 static func canonical_folder(faction: String) -> String:

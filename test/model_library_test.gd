@@ -24,7 +24,27 @@ func test_machine_cults_book_folder_resolves_to_the_published_machine_cult_art()
 	assert_str(ModelLibrary.make_key("machine_cults", "Cult Leader")).is_equal("machine_cult/cult leader")
 	# No other folder is touched: a lookalike folder still misses.
 	assert_bool(lib.has_model("machine_cultists", "Cult Leader")).is_false()
-	assert_str(ModelLibrary.make_key("titan_lords_war_disciples", "War Duke Titan")).is_equal("titan_lords_war_disciples/war duke titan")
+	assert_str(ModelLibrary.make_key("titan_lords_wars", "War Duke Titan")).is_equal("titan_lords_wars/war duke titan")
+
+
+func test_titan_lords_disciples_books_resolve_to_the_titan_lords_art() -> void:
+	var lib := _lib()
+	lib.apply_manifest_text(JSON.stringify({
+		"version": 1, "base_url": "",
+		"models": {"titan_lords/duke titan": {"url": "d.glb", "sha256": "abc", "size": 1},
+			"titan_lords/duke titan#axe": {"url": "da.glb", "sha256": "abd", "size": 1},
+			"alien_hives/war duke titan": {"url": "x.glb", "sha256": "def", "size": 1}},
+	}))
+	assert_bool(lib.has_model("titan_lords_war_disciples", "War Duke Titan")).is_true()
+	assert_bool(lib.has_model("titan_lords_war_disciples", "War Duke Titan#axe")).is_true()
+	assert_str(ModelLibrary.make_key("titan_lords_war_disciples", "War Duke Titan")).is_equal("titan_lords/duke titan")
+	# Each book strips its OWN prefix only; an unprefixed unit, another book's prefix and the plain book are unchanged.
+	assert_bool(lib.has_model("titan_lords_change_disciples", "Change Duke Titan")).is_true()
+	assert_bool(lib.has_model("titan_lords_war_disciples", "Plague Duke Titan")).is_false()
+	assert_bool(lib.has_model("titan_lords_war_disciples", "War Paladin Light Titan")).is_false()
+	assert_bool(lib.has_model("titan_lords", "Duke Titan")).is_true()
+	assert_bool(lib.has_model("alien_hives", "War Duke Titan")).is_true()
+	assert_bool(lib.has_model("alien_hives", "Duke Titan")).is_false()
 
 
 func test_manifest_parse_and_has_model() -> void:
