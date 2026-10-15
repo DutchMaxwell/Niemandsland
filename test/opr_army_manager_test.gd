@@ -492,6 +492,49 @@ func test_sergeant_with_weapon_swap_resolves_combined_variant() -> void:
 		.is_equal("Royal Guard#crest+sword")
 
 
+# A default-weapon word that maps to a slug (Heavy Hand Weapon -> heavy) joins every model's slug, but a book may only
+# ship the role / mount bake (`#banner`, `#beast`): the combined key misses, so the resolver must retry without it
+# (leave-one-out, earliest label first) instead of falling to the base look or the fuzzy mount unit.
+const _DEFAULT_WEAPON_LIB: String = """{
+	"version": 1, "base_url": "",
+	"models": {
+		"mummified_undead/royal guard": {"url": "a.glb", "sha256": "a", "size": 1},
+		"mummified_undead/royal guard#banner": {"url": "b.glb", "sha256": "b", "size": 1},
+		"mummified_undead/royal guard#crest+sword": {"url": "c.glb", "sha256": "c", "size": 1},
+		"mummified_undead/royal champion": {"url": "d.glb", "sha256": "d", "size": 1},
+		"mummified_undead/royal champion#beast": {"url": "e.glb", "sha256": "e", "size": 1},
+		"mummified_undead/beast riders": {"url": "f.glb", "sha256": "f", "size": 1}
+	}
+}"""
+
+
+func test_default_weapon_slug_dropped_when_combined_key_not_shipped() -> void:
+	var m := _mgr_with_variant_lib(_DEFAULT_WEAPON_LIB)
+	assert_str(m._resolve_model_variant_name("Royal Guard", ["Heavy Hand Weapon", "Banner"], "mummified_undead")) \
+		.is_equal("Royal Guard#banner")
+
+
+func test_shipped_combined_key_still_wins_over_the_fallback() -> void:
+	var m := _mgr_with_variant_lib(_DEFAULT_WEAPON_LIB)
+	assert_str(m._resolve_model_variant_name("Royal Guard", ["Heavy Great Weapon", "Sergeant"], "mummified_undead")) \
+		.is_equal("Royal Guard#crest+sword")
+
+
+func test_default_weapon_alone_without_its_bake_stays_base() -> void:
+	var m := _mgr_with_variant_lib(_DEFAULT_WEAPON_LIB)
+	assert_str(m._resolve_model_variant_name("Royal Guard", ["Heavy Hand Weapon"], "mummified_undead")).is_equal("")
+	assert_str(m._resolve_model_variant_name("Royal Guard", ["Heavy Hand Weapon", "Musician"], "mummified_undead")).is_equal("")
+
+
+func test_mount_only_champion_picks_its_mount_variant_not_the_mount_unit() -> void:
+	var m := _mgr_with_variant_lib(_DEFAULT_WEAPON_LIB)
+	var labels: Array = OPRArmyManager._labels_with_mount([["Heavy Hand Weapon"]], "Royal Beast")
+	var fuzzy: String = m._find_mount_glb_name("Royal Beast", "mummified_undead")
+	assert_str(fuzzy).is_equal("beast riders")  # the fuzzy mount unit is available...
+	assert_str(m._resolve_carrier_model("Royal Champion", labels[0], "mummified_undead", fuzzy)) \
+		.is_equal("Royal Champion#beast")  # ...but the champion's own mount bake wins
+
+
 # ===== _find_body_node vs the staged blob structures (QA r6) =====
 
 func test_find_body_node_champion_comp_structure_found() -> void:
