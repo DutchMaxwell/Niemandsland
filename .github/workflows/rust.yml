@@ -92,7 +92,12 @@ jobs:
           shared-key: core-release
 
       - name: Test nml-core
+        # Tests build on the cheap release profile: fat LTO + one codegen unit (core/Cargo.toml) would add ~10 min of
+        # test-binary linking for nothing. Shipped artifacts keep fat LTO; its parity is proven by byte-identical games.
         run: cargo test --manifest-path core/nml-core/Cargo.toml --release
+        env:
+          CARGO_PROFILE_RELEASE_LTO: "false"
+          CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
 
   core-ignored:
     name: Fixture-gated nml-core tests
@@ -121,6 +126,8 @@ jobs:
         if: hashFiles('selfplay_out/**') != '' && hashFiles('netlab/nets/policy_v1.json') != ''
         run: cargo test --manifest-path core/nml-core/Cargo.toml --release -- --ignored
         env:
+          CARGO_PROFILE_RELEASE_LTO: "false"  # same cheap test profile as the job above (shared rust-cache key)
+          CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
           NML_POLICY_DUMP: selfplay_out/policy_rows_v1/dumps/qbg_ref_all.jsonl
           NML_POLICY_CORPUS: selfplay_out/qbg_ref
           NML_POLICY_NET: netlab/nets/policy_v1.json
