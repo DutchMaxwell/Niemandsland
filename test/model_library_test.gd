@@ -47,6 +47,25 @@ func test_titan_lords_disciples_books_resolve_to_the_titan_lords_art() -> void:
 	assert_bool(lib.has_model("alien_hives", "Duke Titan")).is_false()
 
 
+func test_rift_daemons_books_resolve_to_the_wormhole_daemons_art() -> void:
+	var lib := _lib()
+	lib.apply_manifest_text(JSON.stringify({
+		"version": 1, "base_url": "",
+		"models": {"wormhole_daemons_of_war/rageclaw": {"url": "r.glb", "sha256": "abc", "size": 1},
+			"wormhole_daemons_of_war/rageclaw#axe": {"url": "ra.glb", "sha256": "abd", "size": 1},
+			"wormhole_daemons_of_lust/lithe": {"url": "l.glb", "sha256": "def", "size": 1}},
+	}))
+	assert_bool(lib.has_model("rift_daemons_of_war", "Rageclaw")).is_true()
+	assert_bool(lib.has_model("rift_daemons_of_war", "Rageclaw#axe")).is_true()
+	assert_str(ModelLibrary.make_key("rift_daemons_of_war", "Rageclaw")).is_equal("wormhole_daemons_of_war/rageclaw")
+	assert_bool(lib.has_model("wormhole_daemons_of_war", "Rageclaw")).is_true()
+	# Each Rift book maps to its OWN Wormhole book; a unit the Wormhole book lacks stays a miss.
+	assert_bool(lib.has_model("rift_daemons_of_lust", "Lithe")).is_true()
+	assert_bool(lib.has_model("rift_daemons_of_war", "Lithe")).is_false()
+	assert_bool(lib.has_model("rift_daemons_of_war", "Ironpride")).is_false()
+	assert_bool(lib.has_model("rift_daemons", "Rageclaw")).is_false()
+
+
 func test_manifest_parse_and_has_model() -> void:
 	var lib := _lib()
 	lib.apply_manifest_text(JSON.stringify({
