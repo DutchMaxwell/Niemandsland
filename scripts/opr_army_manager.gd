@@ -2511,7 +2511,23 @@ func _resolve_model_variant_name(base_name: String, labels: Array, faction_folde
 	if slug.is_empty():
 		return ""
 	var variant: String = "%s#%s" % [base_name, slug]
-	return variant if model_library.has_model(faction_folder, variant) else ""
+	if model_library.has_model(faction_folder, variant):
+		return variant
+	# The combined key is not shipped. A default weapon that maps to a slug (Heavy Hand Weapon -> heavy) joins every
+	# model's slug although the book only ships the role / mount bake (`#banner`, `#beast`): retry without ONE label,
+	# earliest first (weapons precede role and mount in the labels), so the role or mount still shows.
+	var tried: Dictionary = {slug: true}
+	for skip in range(labels.size() - 1):
+		var rest: Array = labels.duplicate()
+		rest.remove_at(skip)
+		var rest_slug: String = model_library.variant_slug(rest, faction_folder)
+		if rest_slug.is_empty() or tried.has(rest_slug):
+			continue
+		tried[rest_slug] = true
+		var rest_variant: String = "%s#%s" % [base_name, rest_slug]
+		if model_library.has_model(faction_folder, rest_variant):
+			return rest_variant
+	return ""
 
 
 ## Shared visual labels for spawn and prefetch. Universal equipment contributes
