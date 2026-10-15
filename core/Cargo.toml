@@ -11,3 +11,12 @@ resolver = "2"
 # (opt-level = 3, the release default anyway) were dropped with this file.
 [profile.release]
 debug = true
+# Whole-program optimisation for OUR crates (the export .so, the Python wheel, the box wheels): the same R2 oracle games run
+# ~6-7 % faster and use 4-8 % less CPU, bit-identical (parity gate on the box commit 345c2bcf). Dependencies keep the default
+# 16 codegen units: one unit for tract made the export build peak above 9 GB at -j4 (7 GB without), the workspace-only
+# setting costs +16 % build time and +9 % peak memory (see the PR that introduced these lines).
+lto = "fat"
+codegen-units = 1
+
+[profile.release.package."*"]
+codegen-units = 16
