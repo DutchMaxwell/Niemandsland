@@ -153,3 +153,57 @@ func test_corpse_wagon_options_resolve_their_machine_bakes() -> void:
 func test_corpse_wagon_without_an_option_is_the_base_model() -> void:
 	var manager := _manager(["vampiric_undead/corpse wagon", "vampiric_undead/corpse wagon#monolith"])
 	assert_array(manager._unit_model_variant_names(_corpse_wagon("").units[0], "vampiric_undead")).is_equal([""])
+
+
+# ===== Hero dragon mounts (Vampire Master: Zombie / Skeleton Dragon, Ghoul Champion: Bat Dragon) =====
+# The mount word folds into the carrier's labels like a weapon, so a composed `<hero>#<weapon>+<mountslug>`
+# bake resolves once the manifest ships it; until then the hero keeps its weapon-only bake.
+
+func _hero_on_dragon(unit: String, weapons: Array, dragon: String) -> OPRApiClient.OPRArmy:
+	var loadout: Array = []
+	for w in weapons:
+		loadout.append({"type": "ArmyBookWeapon", "name": w, "attacks": 3, "count": 1})
+	loadout.append({"type": "ArmyBookItem", "name": dragon, "count": 1,
+		"content": [{"type": "ArmyBookRule", "name": "Flying"}]})
+	return _army([{"armyId": VU_ARMY, "name": unit, "size": 1, "bases": {"round": "120x92"}, "loadout": loadout}])
+
+
+func test_dragon_mount_words_map_to_the_baked_slugs() -> void:
+	var lib: ModelLibrary = auto_free(ModelLibrary.new())
+	lib._load_label_slug_map()
+	assert_str(lib.variant_slug(["Zombie Dragon"], "vampiric_undead")).is_equal("zombie_dragon")
+	assert_str(lib.variant_slug(["Skeleton Dragon"], "vampiric_undead")).is_equal("skeleton_dragon")
+	assert_str(lib.variant_slug(["Bat Dragon"], "vampiric_undead")).is_equal("bat_dragon")
+	# Scoped: other factions do not get the dragon slugs.
+	assert_str(lib.variant_slug(["Zombie Dragon"], "mummified_undead")).is_equal("")
+
+
+func test_vampire_master_on_a_dragon_resolves_the_composed_bake() -> void:
+	var manager := _manager(["vampiric_undead/vampire master#heavy_hand_weapon+zombie_dragon",
+		"vampiric_undead/vampire master#heavy_lance+skeleton_dragon",
+		"vampiric_undead/vampire master#skeleton_dragon+spear"])
+	var zombie := _hero_on_dragon("Vampire Master", ["Heavy Hand Weapon"], "Zombie Dragon")
+	assert_array(manager._unit_model_variant_names(zombie.units[0], "vampiric_undead")) \
+		.is_equal(["Vampire Master#heavy_hand_weapon+zombie_dragon"])
+	var lance := _hero_on_dragon("Vampire Master", ["Heavy Lance"], "Skeleton Dragon")
+	assert_array(manager._unit_model_variant_names(lance.units[0], "vampiric_undead")) \
+		.is_equal(["Vampire Master#heavy_lance+skeleton_dragon"])
+	# Slugs are SORTED: skeleton_dragon sorts before spear.
+	var spear := _hero_on_dragon("Vampire Master", ["Heavy Spear"], "Skeleton Dragon")
+	assert_array(manager._unit_model_variant_names(spear.units[0], "vampiric_undead")) \
+		.is_equal(["Vampire Master#skeleton_dragon+spear"])
+
+
+func test_ghoul_champion_on_a_bat_dragon_resolves_the_composed_bake() -> void:
+	var manager := _manager(["vampiric_undead/ghoul champion#bat_dragon+greatweapon+sling"])
+	var army := _hero_on_dragon("Ghoul Champion", ["Great Weapon", "Sling"], "Bat Dragon")
+	assert_array(manager._unit_model_variant_names(army.units[0], "vampiric_undead")) \
+		.is_equal(["Ghoul Champion#bat_dragon+greatweapon+sling"])
+
+
+func test_dragon_mount_without_a_shipped_bake_keeps_the_weapon_bake() -> void:
+	# The dragon keys are not live yet: the hero must resolve exactly as before (weapon-only bake).
+	var manager := _manager(["vampiric_undead/vampire master#heavy_lance"])
+	var army := _hero_on_dragon("Vampire Master", ["Heavy Lance"], "Zombie Dragon")
+	assert_array(manager._unit_model_variant_names(army.units[0], "vampiric_undead")) \
+		.is_equal(["Vampire Master#heavy_lance"])
