@@ -159,6 +159,11 @@ const FOLDER_ALIASES: Dictionary = {
 	"titan_lords_lust_disciples": "titan_lords",
 	"titan_lords_plague_disciples": "titan_lords",
 	"titan_lords_war_disciples": "titan_lords",
+	# The AoF Rift Daemons books field the same units as the GF Wormhole Daemons books, whose art is live.
+	"rift_daemons_of_change": "wormhole_daemons_of_change",
+	"rift_daemons_of_lust": "wormhole_daemons_of_lust",
+	"rift_daemons_of_plague": "wormhole_daemons_of_plague",
+	"rift_daemons_of_war": "wormhole_daemons_of_war",
 }
 
 ## Books whose unit names carry a faction prefix the published art does not ("War Duke Titan" is the
