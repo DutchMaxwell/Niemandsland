@@ -64,6 +64,26 @@ func test_saurian_veteran_on_a_raptor_never_resolves_the_on_foot_form() -> void:
 		.is_equal(["Saurian Veteran#heavy+raptor"])
 
 
+func _veteran_on_the_tyrannosaur() -> OPRApiClient.OPRArmy:
+	return _army([{"armyId": SAURIAN_ARMY, "name": "Saurian Veteran", "size": 1, "bases": {"round": "120x92"},
+		"loadout": [
+			{"type": "ArmyBookWeapon", "name": "Heavy Hand Weapon", "attacks": 3, "count": 1},
+			{"type": "ArmyBookItem", "name": "Tyrannosaur", "count": 1, "bases": {"round": "120x92", "square": "100x50"},
+				"content": [{"type": "ArmyBookRule", "name": "Tough", "rating": 12}]}]}])
+
+
+func test_saurian_veteran_on_a_tyrannosaur_never_resolves_the_on_foot_form() -> void:
+	# The on-foot #heavy form may be live while the mounted one is not: the rider must not stand on foot.
+	var manager := _manager(["saurians/saurian veteran#heavy"])
+	assert_array(manager._unit_model_variant_names(_veteran_on_the_tyrannosaur().units[0], "saurians")).is_equal([""])
+
+
+func test_saurian_veteran_on_the_tyrannosaur_resolves_the_composed_variant() -> void:
+	var manager := _manager(["saurians/saurian veteran#heavy", "saurians/saurian veteran#heavy+tyrannosaur"])
+	assert_array(manager._unit_model_variant_names(_veteran_on_the_tyrannosaur().units[0], "saurians")) \
+		.is_equal(["Saurian Veteran#heavy+tyrannosaur"])
+
+
 func test_saurian_veteran_obsidian_great_weapon_resolves_its_form() -> void:
 	var manager := _manager(["saurians/saurian veteran#heavy", "saurians/saurian veteran#obsidian"])
 	var army := _army([{"armyId": SAURIAN_ARMY, "name": "Saurian Veteran", "size": 1, "bases": {"round": "32"},
@@ -96,7 +116,8 @@ func test_saurian_upgrade_words_map_to_the_plan_slugs() -> void:
 		"Champion Javelin": "javelin", "Champion Blowpipe": "blowpipe", "Champion Fire Bolas": "bolas",
 		"Deinonychus": "deinonychus", "Pterodactyl": "pterodactyl", "Ripjawdactyl": "ripjawdactyl",
 		"Ancient Palanquin": "palanquin", "Starseer Palanquin": "palanquin",
-		"Queztalcoatl": "skyserpent", "Raptor": "raptor", "Obsidian Great Weapon": "obsidian"}
+		"Queztalcoatl": "skyserpent", "Raptor": "raptor", "Obsidian Great Weapon": "obsidian",
+		"Tyrannosaur": "tyrannosaur"}
 	for word in expected:
 		assert_str(lib.variant_slug([word], "saurians")).is_equal(expected[word])
 	# Scoped: another faction does not read the Saurian words.
