@@ -9,7 +9,6 @@
 //! `Vector2` is `real_t` too (`TerrainRules.point_in_obb`
 //! scripts/solo/terrain_rules.gd:139-144).
 
-use std::collections::HashMap;
 
 use serde::Deserialize;
 
@@ -111,7 +110,10 @@ pub struct PlainTerrain {
 /// it returns the lambda (node_recheck.gd:237-251).
 #[derive(Debug, Clone, Default)]
 pub struct Terrain {
-    cells: HashMap<(i64, i64), i32>,
+    /// Lookup-only on the hot path (`type_at`, `los_blocked`, the move gates). Its iteration order reaches no outcome:
+    /// `painted_cells` feeds callers that re-collect into their own maps (`objectives::Cells`, `sight::zones_of`), and
+    /// `pieces_from_cells` sorts its keys before use.
+    cells: crate::fasthash::FastMap<(i64, i64), i32>,
     sandbox: Vec<Obb>,
     /// NML-1163 — `PlainTerrain::pieces` in the same WORLD-METRE frame
     /// `sandbox` uses, so `Terrain::pieces` can answer with one slice type.
@@ -404,7 +406,7 @@ impl Terrain {
     }
 
     pub fn build(p: &PlainTerrain) -> Terrain {
-        let mut cells = HashMap::with_capacity(p.cells.len());
+        let mut cells = crate::fasthash::FastMap::with_capacity_and_hasher(p.cells.len(), Default::default());
         for c in &p.cells {
             cells.insert((c[0] as i64, c[1] as i64), c[2] as i32);
         }
@@ -485,7 +487,7 @@ impl Terrain {
 /// net saw an empty table. Merge same-type neighbours into rectangles (greedy,
 /// row-major) and answer them as pieces in the world frame, largest first so
 /// the `N_TERR` cut drops the smallest.
-fn pieces_from_cells(cells: &HashMap<(i64, i64), i32>, cell_m: f64, rot_rad: f64, half_grid: f64) -> Vec<Obb> {
+fn pieces_from_cells(cells: &crate::fasthash::FastMap<(i64, i64), i32>, cell_m: f64, rot_rad: f64, half_grid: f64) -> Vec<Obb> {
     let mut keys: Vec<(i64, i64)> = cells.iter().filter(|(_, &k)| k != NONE).map(|(&c, _)| c).collect();
     keys.sort_by_key(|&(x, z)| (z, x));
     let mut used: std::collections::HashSet<(i64, i64)> = std::collections::HashSet::new();
