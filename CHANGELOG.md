@@ -77,9 +77,9 @@ the game, new graphics for every biome, a longer Game School and a stronger NACH
   #1198, #1423, #1426)
 
 ### Added — learning
-- **Game School grows to ten chapters.** New chapters teach Activate & Move, Shooting, Melee,
-  Morale & Shaken, Terrain and Objectives, plus a spell lesson and a finale against NACHTMAHR. Lessons
-  play against the gentlest difficulty. (#1639, #1677, #1684, #1690, #1696, #1697, #1701, #1704)
+- **Game School gains new chapters** on Activate & Move, Shooting, Melee, Morale & Shaken, Terrain
+  and Objectives, plus a spell lesson and a finale against NACHTMAHR. Lessons play against the
+  gentlest difficulty. (#1639, #1677, #1684, #1690, #1696, #1697, #1701, #1704)
 - **Trial by Fire: First Steps** teaches camera controls, squad selection, movement and measuring
   across six steps on a practice table. It can be replayed; the older box-select lesson now requires a
   real selection box. (#1122, #1178)
