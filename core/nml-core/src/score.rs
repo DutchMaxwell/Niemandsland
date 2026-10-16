@@ -61,6 +61,103 @@ pub fn can_hold_marker(state: &State, i: usize, round_no: i64) -> bool {
     state.ambush_arrived_round[i] != round_no
 }
 
+/// One remembered `control_gap_in` answer: the marker's (x, z) and the unit's model (x, z) and base radii it was computed from,
+/// bit for bit, plus the gap.
+#[derive(Default)]
+struct GapEnt {
+    obj: [u64; 2],
+    xz: Vec<[u64; 2]>,
+    radii: Vec<u64>,
+    gap: f64,
+}
+
+thread_local! {
+    /// Per unit index, up to `GAP_SLOTS` remembered markers.
+    static GAP_MEMO: std::cell::RefCell<Vec<Vec<GapEnt>>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+const GAP_SLOTS: usize = 8;
+
+/// `control_gap_in(state, i, obj_pos)` remembered across score calls. The gap is a pure function of the marker's (x, z), the
+/// unit's model (x, z) and its base radii (y is dropped, `radii` beyond the model count are never read); an entry is reused
+/// only when ALL of those equal the stored copy bit for bit, so a hit is the value a fresh call returns whatever state, game
+/// or candidate it was computed in. A policy step scores many candidates that differ in one mover: every other unit hits.
+/// Units under three models are cheaper to compute than to compare.
+fn control_gap_memo(state: &State, i: usize, obj_pos: [f64; 3]) -> f64 {
+    let ps = &state.positions[i];
+    if ps.len() < 3 {
+        return control_gap_in(state, i, obj_pos);
+    }
+    let radii = &state.radii[i];
+    let obj = [obj_pos[0].to_bits(), obj_pos[2].to_bits()];
+    GAP_MEMO.with(|g| {
+        let mut g = g.borrow_mut();
+        if g.len() <= i {
+            g.resize_with(i + 1, Vec::new);
+        }
+        let slots = &mut g[i];
+        let same = |e: &GapEnt| {
+            e.xz.len() == ps.len()
+                && e.radii.len() == radii.len()
+                && e.xz.iter().zip(ps).all(|(a, p)| a[0] == p[0].to_bits() && a[1] == p[2].to_bits())
+                && e.radii.iter().zip(radii).all(|(a, r)| *a == r.to_bits())
+        };
+        let at = slots.iter().position(|e| e.obj == obj);
+        if let Some(k) = at {
+            if same(&slots[k]) {
+                return slots[k].gap;
+            }
+        }
+        let gap = control_gap_in(state, i, obj_pos);
+        let k = at.unwrap_or_else(|| {
+            if slots.len() >= GAP_SLOTS {
+                slots.clear();
+            }
+            slots.push(GapEnt::default());
+            slots.len() - 1
+        });
+        let e = &mut slots[k];
+        e.obj = obj;
+        e.xz.clear();
+        e.xz.extend(ps.iter().map(|p| [p[0].to_bits(), p[2].to_bits()]));
+        e.radii.clear();
+        e.radii.extend(radii.iter().map(|r| r.to_bits()));
+        e.gap = gap;
+        gap
+    })
+}
+
+/// The live Rush band of each unit, read ONCE per score call. `activations_needed` asks `live_bands_of(i)` for every
+/// (unit, marker) pair, but the answer depends only on the state and the unit, never on the marker: with 3-6 markers
+/// that was 3-6 identical reads per unit (the grant fold walks the unit's mods). The cache lives for ONE score call on
+/// ONE immutable state, so a hit is the same value a fresh read returns. `off()` reads through (the `presence` entry
+/// point used by feature reconstruction).
+pub(crate) struct RushCache(Option<std::cell::RefCell<Vec<f64>>>);
+
+impl RushCache {
+    fn new(units: usize) -> Self {
+        RushCache(Some(std::cell::RefCell::new(vec![f64::NAN; units])))
+    }
+
+    fn off() -> Self {
+        RushCache(None)
+    }
+
+    #[inline]
+    fn rush(&self, state: &State, statics: &[UnitStatic], i: usize) -> f64 {
+        match &self.0 {
+            Some(c) => {
+                let mut c = c.borrow_mut();
+                if c[i].is_nan() {
+                    c[i] = crate::sim::live_bands_of(statics, state, i).1;
+                }
+                c[i]
+            }
+            None => crate::sim::live_bands_of(statics, state, i).1,
+        }
+    }
+}
+
 /// The activation count `_presence` (ai_mission_eval.gd:591-614) needs to put
 /// unit `i` inside marker `obj_pos`'s ring, or `None` for every case that
 /// function drops to zero before it ever reads the unit's wounds. Extracted
@@ -68,7 +165,7 @@ pub fn can_hold_marker(state: &State, i: usize, round_no: i64) -> bool {
 /// so `presence` below is unchanged to the bit and variant 1 can ask the same
 /// reachability question without a second, drifting copy of it.
 fn activations_needed(
-    state: &State, statics: &[UnitStatic], i: usize, obj_pos: [f64; 3],
+    state: &State, statics: &[UnitStatic], i: usize, obj_pos: [f64; 3], rc: &RushCache,
 ) -> Option<i64> {
     if state.alive[i] <= 0 {
         return None;
@@ -82,7 +179,7 @@ fn activations_needed(
     if arrived_now && round_now >= rounds_total {
         return None;
     }
-    let d = control_gap_in(state, i, obj_pos);
+    let d = control_gap_memo(state, i, obj_pos);
     // `float(SoloController.sim_move_bands(su["unit"]).get("rush", 12))`
     // (ai_mission_eval.gd:602) — the LIVE read, which is what `State.bands`
     // carries (io.rs falls back to the profile's copy of the same call when a
@@ -90,7 +187,7 @@ fn activations_needed(
     // would answer 12" for a unit that picked up a `Slow` aura mid-game.
     // evmove — and the granted solo family's delta rides the same read
     // (`sim::live_bands_of`, quiet): a Slow/Fast grant moves the reach.
-    let (_, rush) = crate::sim::live_bands_of(statics, state, i);
+    let rush = rc.rush(state, statics, i);
     // An empty position array gives d = INF; the cast then saturates at i64::MAX
     // and `needed > moves_left` drops the unit — the same answer GDScript's
     // int(ceil(INF)) path produces.
@@ -136,16 +233,16 @@ fn unit_strength(state: &State, statics: &[UnitStatic], i: usize, by_points: boo
 pub fn presence(
     state: &State, statics: &[UnitStatic], i: usize, obj_pos: [f64; 3], threat: f64,
 ) -> f64 {
-    presence_weighted(state, statics, i, obj_pos, threat, false)
+    presence_weighted(state, statics, i, obj_pos, threat, false, &RushCache::off())
 }
 
 /// `presence` with the strength term switchable — afpoints P1's
 /// `strength_by_points` arm reads it with `by_points = true`.
 fn presence_weighted(
     state: &State, statics: &[UnitStatic], i: usize, obj_pos: [f64; 3], threat: f64,
-    by_points: bool,
+    by_points: bool, rc: &RushCache,
 ) -> f64 {
-    let Some(needed) = activations_needed(state, statics, i, obj_pos) else {
+    let Some(needed) = activations_needed(state, statics, i, obj_pos, rc) else {
         return 0.0;
     };
     (unit_strength(state, statics, i, by_points) - threat).max(0.0) * DISCOUNT.powf(needed as f64)
@@ -154,9 +251,11 @@ fn presence_weighted(
 /// `AiMissionEval._objective_p` ai_mission_eval.gd:415-431 — the soft control
 /// ratio at one marker; an unreachable marker keeps its owner (seize rule).
 /// `carry_term` = the C7 carrier branch; only `eval_variant = 2` turns it off.
+// 8 arguments: the per-call Rush cache rides the same list as the other eval inputs (a parameter struct here would touch every variant arm).
+#[allow(clippy::too_many_arguments)]
 fn objective_p(
     state: &State, statics: &[UnitStatic], obj_index: usize, player: i64, incoming: Incoming,
-    carry_term: bool, by_points: bool,
+    carry_term: bool, by_points: bool, rc: &RushCache,
 ) -> f64 {
     let obj = state.objectives[obj_index];
     if let Some(marker) = state.markers_meta.get(obj_index).filter(|_| carry_term) {
@@ -174,7 +273,7 @@ fn objective_p(
     let mut mine = 0.0f64;
     let mut theirs = 0.0f64;
     for i in 0..state.units() {
-        let p = presence_weighted(state, statics, i, obj.pos, threat_of(incoming, i), by_points);
+        let p = presence_weighted(state, statics, i, obj.pos, threat_of(incoming, i), by_points, rc);
         if state.player[i] == player {
             mine += p;
         } else {
@@ -218,15 +317,15 @@ fn reserve_presence(state: &State, i: usize) -> f64 {
 /// D13: `objective_p` with the reserves counted — twin of `AiMissionEval._objective_p_roles`.
 fn objective_p_roles(
     state: &State, statics: &[UnitStatic], i: usize, player: i64, incoming: Incoming,
-    by_points: bool,
+    by_points: bool, rc: &RushCache,
 ) -> f64 {
     if state.markers_meta.get(i).is_some_and(|m| m.carry && m.carried_by >= 0) {
-        return objective_p(state, statics, i, player, incoming, true, by_points);
+        return objective_p(state, statics, i, player, incoming, true, by_points, rc);
     }
     let obj = state.objectives[i];
     let (mut mine, mut theirs) = (0.0f64, 0.0f64);
     for u in 0..state.units() {
-        let p = presence_weighted(state, statics, u, obj.pos, threat_of(incoming, u), by_points)
+        let p = presence_weighted(state, statics, u, obj.pos, threat_of(incoming, u), by_points, rc)
             + reserve_presence(state, u);
         if state.player[u] == player { mine += p } else { theirs += p }
     }
@@ -316,6 +415,7 @@ fn score_hand_carry(
     if state.objectives.is_empty() {
         return 0.5;
     }
+    let rc = &RushCache::new(state.units());
     if !state.markers_meta.is_empty() && is_destroy_mission(state) {
         // NML-1010 W3b: destroy missions score my grip on THEIR marker minus
         // their grip on MINE, destroyed states locked at 1/0.
@@ -335,7 +435,7 @@ fn score_hand_carry(
                 }
                 continue;
             }
-            let pctrl = objective_p(state, statics, i, player, incoming, carry_term, by_points);
+            let pctrl = objective_p(state, statics, i, player, incoming, carry_term, by_points, rc);
             if ob == player {
                 deff = 1.0 - pctrl;
             } else {
@@ -347,13 +447,13 @@ fn score_hand_carry(
     if let Some(role) = role_term(state, player) {
         let n = state.objectives.len() as f64;
         let control: f64 = (0..state.objectives.len())
-            .map(|i| objective_p_roles(state, statics, i, player, incoming, by_points))
+            .map(|i| objective_p_roles(state, statics, i, player, incoming, by_points, rc))
             .sum::<f64>() / n;
         return ROLE_TERM_WEIGHT * role + (1.0 - ROLE_TERM_WEIGHT) * control;
     }
     let mut total = 0.0f64;
     for i in 0..state.objectives.len() {
-        total += objective_p(state, statics, i, player, incoming, carry_term, by_points);
+        total += objective_p(state, statics, i, player, incoming, carry_term, by_points, rc);
     }
     total / state.objectives.len() as f64
 }
@@ -376,9 +476,9 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
 /// `incoming` reply threat `presence` subtracts, read as "will any model of
 /// this unit still be standing" instead of "how much strength is left".
 fn hold_p(
-    state: &State, statics: &[UnitStatic], i: usize, obj_pos: [f64; 3], threat: f64,
+    state: &State, statics: &[UnitStatic], i: usize, obj_pos: [f64; 3], threat: f64, rc: &RushCache,
 ) -> f64 {
-    let Some(needed) = activations_needed(state, statics, i, obj_pos) else {
+    let Some(needed) = activations_needed(state, statics, i, obj_pos, rc) else {
         return 0.0;
     };
     let mut strength = 0.0f64;
@@ -403,13 +503,13 @@ fn hold_p(
 /// cancels here exactly the way `mission_winner` (mission.rs:247-257) cancels
 /// it. Same [0, 1] scale as `objective_p`, 0.5 = level.
 fn objective_own(
-    state: &State, statics: &[UnitStatic], obj_index: usize, player: i64, incoming: Incoming,
+    state: &State, statics: &[UnitStatic], obj_index: usize, player: i64, incoming: Incoming, rc: &RushCache,
 ) -> f64 {
     let obj = state.objectives[obj_index];
     let mut mine_absent = 1.0f64;
     let mut theirs_absent = 1.0f64;
     for i in 0..state.units() {
-        let q = hold_p(state, statics, i, obj.pos, threat_of(incoming, i)).clamp(0.0, 1.0);
+        let q = hold_p(state, statics, i, obj.pos, threat_of(incoming, i), rc).clamp(0.0, 1.0);
         if state.player[i] == player {
             mine_absent *= 1.0 - q;
         } else {
@@ -458,8 +558,9 @@ fn score_hand_hold(
     {
         return score_hand_carry(state, statics, player, incoming, true, by_points);
     }
+    let rc = &RushCache::new(state.units());
     let total: f64 = (0..state.objectives.len())
-        .map(|i| hold_owner_p(state, objective_p(state, statics, i, player, incoming, true, by_points), i, player))
+        .map(|i| hold_owner_p(state, objective_p(state, statics, i, player, incoming, true, by_points, rc), i, player))
         .sum();
     total / state.objectives.len() as f64
 }
@@ -494,10 +595,11 @@ fn score_hand_majority(
     let total_rounds = state.rounds_total.max(1) as f64;
     let left = (state.rounds_total - state.round).max(0) as f64;
     let w = (1.0 - left / total_rounds).clamp(0.0, 1.0);
+    let rc = &RushCache::new(state.units());
     let mut total = 0.0f64;
     for i in 0..state.objectives.len() {
-        let share = objective_p(state, statics, i, player, incoming, true, by_points);
-        let own = objective_own(state, statics, i, player, incoming);
+        let share = objective_p(state, statics, i, player, incoming, true, by_points, rc);
+        let own = objective_own(state, statics, i, player, incoming, rc);
         total += (1.0 - w) * share + w * own;
     }
     total / state.objectives.len() as f64
@@ -526,9 +628,10 @@ fn score_hand_vp(
     let banked = (if player == 1 { vp[0] - vp[1] } else { vp[1] - vp[0] }) as f64;
     let open = (0..state.units()).any(|i| state.alive[i] > 0 && !state.activated[i]);
     let left = ((state.rounds_total - state.round).max(0) + i64::from(open)) as f64;
+    let rc = &RushCache::new(state.units());
     let mut sum = 0.0f64;
     for i in 0..state.objectives.len() {
-        sum += 2.0 * objective_own(state, statics, i, player, incoming) - 1.0;
+        sum += 2.0 * objective_own(state, statics, i, player, incoming, rc) - 1.0;
     }
     let lead = (sum / n).clamp(-1.0, 1.0);
     let flavour = state.vp_flavour.as_deref();
@@ -992,6 +1095,91 @@ mod tests {
         let mut cache = ProfileCache::new(header.profiles);
         let mut roster = None;
         state_from_json(&plain, &mut cache, &mut roster).expect("state")
+    }
+
+    /// The Rush-band cache is a pure read-once: for units with DIFFERENT live Rush bands and several markers,
+    /// every objective term and hold probability through ONE shared cache equals the uncached read bit for bit.
+    /// RED: a cache that serves another unit's band (or keeps the first marker's) changes `needed` and fails here.
+    #[test]
+    fn the_rush_cache_answers_exactly_like_a_fresh_read_for_every_unit_and_marker() {
+        let mut st = marker_state(
+            &[
+                U("p1_0_a", 1, 0.9, 5, false, false),
+                U("p1_1_a", 1, 1.6, 4, false, false),
+                U("p2_0_a", 2, 2.2, 6, false, true),
+                U("p2_1_a", 2, 3.1, 3, true, false),
+                U("p2_2_a", 2, 0.4, 2, false, false),
+            ],
+            0,
+            2,
+        );
+        for (i, b) in st.bands.iter_mut().enumerate() {
+            b.rush = 6.0 + 3.5 * i as f64; // 6, 9.5, 13, 16.5, 20: every unit reaches a marker in a different number of moves
+        }
+        for (x, z) in [(14.0, 2.0), (-20.0, 6.0), (40.0, -8.0)] {
+            st.objectives.push(crate::state::Objective { pos: [x * crate::IN2M, 0.0, z * crate::IN2M], owner: 0 });
+        }
+        let inc = threat_on_p2(&st, 1.5);
+        let cache = super::RushCache::new(st.units());
+        for pass in 0..2 {
+            for o in 0..st.objectives.len() {
+                for player in [1, 2] {
+                    let hot = super::objective_p(&st, &[], o, player, &inc, true, false, &cache);
+                    let cold = super::objective_p(&st, &[], o, player, &inc, true, false, &super::RushCache::off());
+                    assert_eq!(hot.to_bits(), cold.to_bits(), "objective_p marker {o} player {player} pass {pass}");
+                    let own_hot = super::objective_own(&st, &[], o, player, &inc, &cache);
+                    let own_cold = super::objective_own(&st, &[], o, player, &inc, &super::RushCache::off());
+                    assert_eq!(own_hot.to_bits(), own_cold.to_bits(), "objective_own marker {o} player {player} pass {pass}");
+                }
+            }
+        }
+        // the rush bands really differ and really matter here (otherwise the test could not fail)
+        let needs: Vec<_> = (0..st.units()).map(|u| super::activations_needed(&st, &[], u, st.objectives[3].pos, &super::RushCache::off())).collect();
+        assert!(needs.windows(2).any(|w| w[0] != w[1]), "{needs:?}");
+    }
+
+    /// `control_gap_memo` always equals a fresh `control_gap_in`: cold, warm, after one model steps in x or in z, after a base
+    /// radius changes, for another marker, for a unit of another size in the same slot, and for tiny units.
+    /// RED: a memo that ignores the z coordinate, or the radii, serves a stale gap here.
+    #[test]
+    fn the_control_gap_memo_always_equals_a_fresh_control_gap_in() {
+        let mut st = marker_state(
+            &[
+                U("p1_0_a", 1, 0.9, 5, false, false),
+                U("p2_0_a", 2, 2.2, 6, false, false),
+            ],
+            0,
+            2,
+        );
+        let want = |st: &crate::state::State, u: usize, o: [f64; 3]| super::control_gap_in(st, u, o).to_bits();
+        let o1 = [0.3, 0.0, 0.2];
+        let o2 = [-0.5, 0.0, 0.9];
+        for round in 0..3 {
+            st.positions[0] = vec![[0.9, 0.0, 0.1], [1.0, 0.0, 0.4], [1.2, 0.0, 0.2], [0.8, 0.0, 0.7]];
+            st.radii[0] = vec![0.016, 0.02, 0.016, 0.03];
+            for o in [o1, o2] {
+                assert_eq!(super::control_gap_memo(&st, 0, o).to_bits(), want(&st, 0, o), "cold/warm r{round}");
+            }
+            let mut prev = want(&st, 0, o1);
+            let mut moved = |st: &crate::state::State, what: &str| {
+                let now = want(st, 0, o1);
+                assert_ne!(now, prev, "{what} must change the gap, or the check proves nothing");
+                prev = now;
+                assert_eq!(super::control_gap_memo(st, 0, o1).to_bits(), now, "{what} r{round}");
+            };
+            st.positions[0][0][2] += 0.5; // z only, on the nearest model
+            moved(&st, "z step");
+            st.positions[0][0][0] -= 0.4; // x only
+            moved(&st, "x step");
+            st.radii[0][0] = 0.2; // a radius only
+            moved(&st, "radius");
+            st.positions[0].push([0.5, 0.0, 0.5]); // another size, radii shorter than models
+            assert_eq!(super::control_gap_memo(&st, 0, o1).to_bits(), want(&st, 0, o1), "size r{round}");
+            st.positions[1] = vec![[3.0, 0.0, 0.0], [3.1, 0.0, 0.0]]; // tiny unit: direct
+            assert_eq!(super::control_gap_memo(&st, 1, o1).to_bits(), want(&st, 1, o1), "tiny r{round}");
+            st.positions[1] = Vec::new();
+            assert_eq!(super::control_gap_memo(&st, 1, o1).to_bits(), want(&st, 1, o1), "empty r{round}");
+        }
     }
 
     /// The reply threat `presence` and `hold_p` both subtract, addressed by
