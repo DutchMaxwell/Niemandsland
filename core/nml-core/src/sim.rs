@@ -6103,6 +6103,60 @@ pub fn reply_threat_opts(statics: &[UnitStatic], state: &State, player: i64, o: 
     reply_threat_core(statics, state, player, CURRENT_RULES_EPOCH, o)
 }
 
+/// One remembered `geom::dist_in` answer: the two position arrays it was computed from, bit for bit, and the result.
+#[derive(Default)]
+struct PairDistEnt {
+    a: Vec<[f64; 3]>,
+    b: Vec<[f64; 3]>,
+    d: f64,
+    ok: bool,
+}
+
+#[derive(Default)]
+struct PairDistMemo {
+    n: usize,
+    ent: Vec<PairDistEnt>,
+}
+
+thread_local! {
+    static PAIR_DIST: std::cell::RefCell<PairDistMemo> = std::cell::RefCell::new(PairDistMemo::default());
+}
+
+fn same_bits(x: &[[f64; 3]], y: &[[f64; 3]]) -> bool {
+    x.len() == y.len() && x.iter().zip(y).all(|(p, q)| p.iter().zip(q).all(|(u, v)| u.to_bits() == v.to_bits()))
+}
+
+/// `geom::dist_in(a, b)` for the pair (e, m) of an `n`-unit roster, remembered across calls. `dist_in` is a pure function of
+/// the two position arrays, and an entry is only reused when BOTH arrays match the stored copies bit for bit, so the
+/// answer is identical to a fresh `dist_in` whatever the slot index means (another state, another game, a moved unit =
+/// a miss). A policy step scores many candidate states that differ in one mover; every other pair is a hit. Pairs of
+/// fewer than 16 model-pairs are cheaper to compute than to compare and go straight to `dist_in`.
+fn pair_dist_memo(n: usize, e: usize, m: usize, a: &[[f64; 3]], b: &[[f64; 3]]) -> f64 {
+    if a.len() * b.len() < 16 || e >= n || m >= n {
+        return geom::dist_in(a, b);
+    }
+    PAIR_DIST.with(|c| {
+        let mut c = c.borrow_mut();
+        if c.n != n {
+            c.n = n;
+            c.ent.clear();
+            c.ent.resize_with(n * n, PairDistEnt::default);
+        }
+        let slot = &mut c.ent[e * n + m];
+        if slot.ok && same_bits(&slot.a, a) && same_bits(&slot.b, b) {
+            return slot.d;
+        }
+        let d = geom::dist_in(a, b);
+        slot.a.clear();
+        slot.a.extend_from_slice(a);
+        slot.b.clear();
+        slot.b.extend_from_slice(b);
+        slot.d = d;
+        slot.ok = true;
+        d
+    })
+}
+
 fn reply_threat_core(statics: &[UnitStatic], state: &State, player: i64, rules_epoch: u32, o: ReplyOpts) -> Vec<f64> {
     let v2 = o.v2;
     let n = state.units();
@@ -6127,7 +6181,7 @@ fn reply_threat_core(statics: &[UnitStatic], state: &State, player: i64, rules_e
             let d = if o.range_edge {
                 range_gap_in(state, &state.positions[e], e, m)
             } else {
-                geom::dist_in(&state.positions[e], &state.positions[m])
+                pair_dist_memo(n, e, m, &state.positions[e], &state.positions[m])
             };
             let mut ev = 0.0f64;
             if state.sees(e, state.key(m)) && los_clear(state, e, m) {
@@ -8507,6 +8561,54 @@ mod d6a_tests {
         // RED for the whole rung: answering `alive` instead of `sighted` gives
         // the count this port drew before D6a, and it is a different number.
         assert_ne!(bearer_scaled_attacks(&rifle, 5, 5, 3), bearer_scaled_attacks(&rifle, 5, 5, 5));
+    }
+}
+
+#[cfg(test)]
+mod pair_dist_memo_tests {
+    use super::*;
+
+    fn arr(seed: u64, n: usize) -> Vec<[f64; 3]> {
+        let mut s = seed | 1;
+        (0..n)
+            .map(|_| {
+                let mut c = [0.0; 3];
+                for v in c.iter_mut() {
+                    s ^= s << 13;
+                    s ^= s >> 7;
+                    s ^= s << 17;
+                    *v = ((s >> 8) % 4000) as f64 / 100.0;
+                }
+                c
+            })
+            .collect()
+    }
+
+    /// The memo returns exactly `dist_in` whether the slot is empty, holds the same arrays, holds a stale pair
+    /// (a moved unit), or belongs to another roster size.
+    #[test]
+    fn the_pair_distance_memo_always_equals_a_fresh_dist_in() {
+        let (a0, b0) = (arr(11, 6), arr(12, 7));
+        let want = |a: &[[f64; 3]], b: &[[f64; 3]]| geom::dist_in(a, b).to_bits();
+        for n in [5usize, 9, 5] {
+            for round in 0..3 {
+                assert_eq!(pair_dist_memo(n, 1, 2, &a0, &b0).to_bits(), want(&a0, &b0), "cold/warm n={n} r={round}");
+                let mut a1 = a0.clone();
+                a1[3][0] += 0.25; // one model stepped: the slot is stale for this pair
+                assert_eq!(pair_dist_memo(n, 1, 2, &a1, &b0).to_bits(), want(&a1, &b0), "stepped n={n} r={round}");
+                let a2: Vec<[f64; 3]> = a0.iter().map(|p| [p[0] + 500.0, p[1], p[2]]).collect(); // the whole unit moved: d changes for certain
+                assert_ne!(want(&a2, &b0), want(&a0, &b0));
+                assert_eq!(pair_dist_memo(n, 1, 2, &a2, &b0).to_bits(), want(&a2, &b0), "a moved n={n} r={round}");
+                let b2: Vec<[f64; 3]> = b0.iter().map(|p| [p[0], p[1] - 300.0, p[2]]).collect();
+                assert_ne!(want(&a2, &b2), want(&a2, &b0));
+                assert_eq!(pair_dist_memo(n, 1, 2, &a2, &b2).to_bits(), want(&a2, &b2), "b moved n={n} r={round}");
+                assert_eq!(pair_dist_memo(n, 1, 2, &a0, &b0).to_bits(), want(&a0, &b0), "back n={n} r={round}");
+                let c = arr(20 + round, 2); // < 16 model pairs: direct
+                assert_eq!(pair_dist_memo(n, 0, 1, &c, &c).to_bits(), want(&c, &c));
+                let z: Vec<[f64; 3]> = Vec::new();
+                assert_eq!(pair_dist_memo(n, 2, 3, &z, &b0).to_bits(), want(&z, &b0), "empty side");
+            }
+        }
     }
 }
 

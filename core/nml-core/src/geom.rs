@@ -85,6 +85,38 @@ pub fn centre(ps: &[[f64; 3]]) -> V3 {
 /// snapshot position arrays in inches. `minf` is an f64 min over f32 lengths,
 /// and the division by `IN2M` is the one f64 step.
 pub fn dist_in(a: &[[f64; 3]], b: &[[f64; 3]]) -> f64 {
+    // Exact reformulation of `min(length(pa - pb))`: `length` is a correctly rounded f32 sqrt of the left-to-right
+    // sum of squares, sqrt is monotone, so the minimum of the roots is the root of the minimum (NaN pairs are
+    // skipped by `<` in both forms; INFINITY for an empty side stays INFINITY). One sqrt instead of |a|*|b|, and
+    // `b` converted to f32 once.
+    let mut best = f32::INFINITY;
+    let mut buf = [[0.0f32; 3]; 32];
+    let heap: Vec<V3>;
+    let bf: &[V3] = if b.len() <= buf.len() {
+        for (o, pb) in buf.iter_mut().zip(b) {
+            *o = to_f32(*pb);
+        }
+        &buf[..b.len()]
+    } else {
+        heap = b.iter().map(|p| to_f32(*p)).collect();
+        &heap
+    };
+    for pa in a {
+        let pa = to_f32(*pa);
+        for pb in bf {
+            let d = sub(pa, *pb);
+            let s = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
+            if s < best {
+                best = s;
+            }
+        }
+    }
+    best.sqrt() as f64 / IN2M
+}
+
+/// The pre-rewrite `dist_in`, kept as the reference the tests hold the fast one to.
+#[cfg(test)]
+fn dist_in_reference(a: &[[f64; 3]], b: &[[f64; 3]]) -> f64 {
     let mut best = f64::INFINITY;
     for pa in a {
         let pa = to_f32(*pa);
@@ -96,6 +128,47 @@ pub fn dist_in(a: &[[f64; 3]], b: &[[f64; 3]]) -> f64 {
         }
     }
     best / IN2M
+}
+
+#[cfg(test)]
+mod dist_tests {
+    use super::*;
+
+    /// xorshift: deterministic, no dependency.
+    fn next(s: &mut u64) -> u64 {
+        *s ^= *s << 13;
+        *s ^= *s >> 7;
+        *s ^= *s << 17;
+        *s
+    }
+
+    fn pt(s: &mut u64, special: bool) -> [f64; 3] {
+        let mut c = [0.0f64; 3];
+        for v in c.iter_mut() {
+            let r = next(s);
+            *v = match (special, r % 23) {
+                (true, 0) => f64::NAN,
+                (true, 1) => f64::INFINITY,
+                (true, 2) => -0.0,
+                (true, 3) => 3.0e19, // x*x overflows f32
+                _ => ((r >> 8) % 20000) as f64 / 100.0 - 100.0,
+            };
+        }
+        c
+    }
+
+    #[test]
+    fn fast_dist_in_is_bit_identical_to_the_reference() {
+        let mut s = 0x9E37_79B9_7F4A_7C15u64;
+        for round in 0..4000 {
+            let special = round % 4 == 0;
+            let (na, nb) = ((next(&mut s) % 40) as usize, (next(&mut s) % 40) as usize); // includes empty sides and > 32 models
+            let a: Vec<_> = (0..na).map(|_| pt(&mut s, special)).collect();
+            let b: Vec<_> = (0..nb).map(|_| pt(&mut s, special)).collect();
+            let (x, y) = (dist_in(&a, &b), dist_in_reference(&a, &b));
+            assert_eq!(x.to_bits(), y.to_bits(), "round {round} {na}x{nb}: {x} vs {y}");
+        }
+    }
 }
 
 /// `MoveIntent.distance_inches(unit_centre(a), unit_centre(b))` — the table's
