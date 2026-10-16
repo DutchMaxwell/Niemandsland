@@ -145,5 +145,9 @@
     "cursed monolith": "monolith",
     "unholy brazier": "brazier",
     "corpse pile": "corpse_pile"
+  },
+  "_faction_mummified_undead": {
+    "wings": "wings",
+    "godly spear": "spear"
   }
 }
