@@ -31,6 +31,7 @@ use super::cost::{
 };
 use super::geom2::{distance_to, to_f32, V2};
 use super::io::ThetaPop;
+use super::theta_memo;
 use super::{cell_of, EPS, FAST_PLANNER_GUARD, PLAN_CELL_IN, THETA_DIAG};
 
 /// A `Vector2i` grid cell.
@@ -207,7 +208,7 @@ pub fn theta_star_traced_bent(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn theta_core(
+pub(super) fn theta_core(
     start: V2,
     goal: V2,
     walls: &[Wall],
@@ -216,7 +217,7 @@ fn theta_core(
     opts: &ThetaOpts,
     cfg: ThetaCfg,
     bend: ThetaBend,
-    mut trace: Option<&mut Vec<ThetaPop>>,
+    trace: Option<&mut Vec<ThetaPop>>,
 ) -> Vec<V2> {
     let so = &opts.step;
     let wi = WallIndex::new(walls);
@@ -233,6 +234,29 @@ fn theta_core(
     if start_c == goal_c {
         return vec![start, goal];
     }
+    // The search proper is a pure function of its arguments: a game-scoped memo answers a repeated question (exact key,
+    // content-verified; see `theta_memo`). Disarmed unless the Python seam started a game.
+    theta_memo::run(start, goal, walls, grid, board, opts, cfg, bend, trace, |trace| {
+        theta_search(start, goal, start_c, goal_c, &wi, grid, board, opts, cfg, bend, trace)
+    })
+}
+
+/// The part of `theta_core` after its early-outs: the grid search itself.
+#[allow(clippy::too_many_arguments)]
+fn theta_search(
+    start: V2,
+    goal: V2,
+    start_c: Cell,
+    goal_c: Cell,
+    wi: &WallIndex,
+    grid: &Grid,
+    board: V2,
+    opts: &ThetaOpts,
+    cfg: ThetaCfg,
+    bend: ThetaBend,
+    mut trace: Option<&mut Vec<ThetaPop>>,
+) -> Vec<V2> {
+    let so = &opts.step;
     // :1360-1361 — the fine planning grid, PER AXIS (#215).
     let nx = ((board[0] as f64 / PLAN_CELL_IN).ceil() as i64).max(1) as i32;
     let ny = ((board[1] as f64 / PLAN_CELL_IN).ceil() as i64).max(1) as i32;

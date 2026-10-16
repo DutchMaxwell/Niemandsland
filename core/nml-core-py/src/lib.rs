@@ -854,6 +854,8 @@ impl Core {
         if let Some(vocab) = vocab {
             self.rows.vocab = vocab;
         }
+        // A new header is a new game (terrain, knobs, roster): the Theta* memo starts empty and armed.
+        nmlcore::mv::theta_memo::begin_game();
         Ok(())
     }
 
