@@ -1396,6 +1396,7 @@ impl Core {
             })
             .collect();
         out.inner.los = rows;
+        out.inner.rebuild_sees();
         out.inner.los_pairs = Some(Rc::new(m));
         out
     }

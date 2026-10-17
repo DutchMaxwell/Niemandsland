@@ -434,6 +434,29 @@ use std::rc::Rc;
             "a sibling rollout retains its original sight matrix");
     }
 
+    /// The dense `sees` table (`sees_idx`) must follow the roster when a spawn grows it: same
+    /// answer as the String rows for every pair, the new slot included.
+    #[test]
+    fn minting_a_spawn_keeps_the_dense_sees_table_in_step() {
+        let (mut st, statics) = line(CURRENT_RULES_EPOCH);
+        let carrier = idx(&st, "p1_0_a");
+        let other = (0..st.units()).find(|&u| u != carrier).unwrap();
+        let row: std::collections::HashMap<String, bool> = [(st.key(other).to_string(), false)].into();
+        st.los[carrier] = Some(Rc::new(row));
+        st.rebuild_sees();
+        assert!(!st.sees_idx(carrier, other), "the recorded blind pair is read back from the table");
+        let template = st.profiles.index["spawn:p1_0_a:Spawn(Rat Swarm [2])"];
+        let born = mint_template_slot(&statics, &mut st, carrier, template, "Spawn(Rat Swarm [2])");
+        assert_eq!(st.sees_tab.as_ref().unwrap().len(), st.units() * st.units(), "the stride follows the roster");
+        assert!(!st.sees_idx(carrier, other), "the old blind pair survives the growth");
+        assert!(st.sees_idx(carrier, born), "an unlisted key defaults to true");
+        for i in 0..st.units() {
+            for j in 0..st.units() {
+                assert_eq!(st.sees_idx(i, j), st.sees(i, st.key(j)), "dense and String answers differ for {i} -> {j}");
+            }
+        }
+    }
+
     #[test]
     fn a_new_spawn_slot_can_be_queried_and_serialized_with_captured_sight() {
         for captured in [false, true] {
