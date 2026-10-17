@@ -18,3 +18,5 @@ pyo3 = { version = "0.29", features = ["extension-module"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
 nmlcore = { package = "nml-core", path = "../nml-core" }
+# Global allocator of the module (see lib.rs). Builds its C sources with the `cc` crate.
+mimalloc = "0.1"
