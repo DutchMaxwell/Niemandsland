@@ -458,6 +458,7 @@ pub fn build_state(
         attached: Rc::new(Vec::new()),
         attached_to: Rc::new(Vec::new()),
         los: Vec::with_capacity(n),
+        sees_tab: None,
         bands: Vec::with_capacity(n),
         shroud: Vec::with_capacity(n),
         charge_no_difficult: Vec::with_capacity(n),
@@ -626,6 +627,7 @@ pub fn build_state(
             fold_ledger(&mut st, ui, l, rules_epoch, alive, !host_keys[ui].is_empty(), arrived);
         }
     }
+    st.rebuild_sees();
     Ok(Captured { state: st, extras, mask, has_los, dropped })
 }
 

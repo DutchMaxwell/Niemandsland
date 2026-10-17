@@ -92,6 +92,7 @@ use super::*;
             attached: Rc::new(attached),
             attached_to: Rc::new(attached_to),
             los: vec![None; n],
+            sees_tab: None,
             los_pairs: None,
             bands: vec![Bands::default(); n],
             shroud: vec![None; n],

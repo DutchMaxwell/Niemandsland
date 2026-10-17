@@ -1017,6 +1017,7 @@ pub(crate) fn state_of(
         attached: Rc::new(Vec::new()),
         attached_to: Rc::new(Vec::new()),
         los: Vec::with_capacity(n),
+        sees_tab: None,
         bands: Vec::with_capacity(n),
         shroud: Vec::with_capacity(n),
         charge_no_difficult: Vec::with_capacity(n),
@@ -1157,6 +1158,7 @@ pub(crate) fn state_of(
     st.attached_to = Rc::new(
         host_keys.iter().map(|k| st.roster.index.get(k.as_str()).copied()).collect(),
     );
+    st.rebuild_sees();
     st
 }
 

@@ -318,6 +318,32 @@ fn the_oracle_names_what_it_does_not_cover() {
     assert_eq!(carriers, 0);
 }
 
+/// The dense `sees` table answers exactly what the String-keyed rows answer, on every recorded
+/// state and every ordered pair (a real act state carries per-unit `los` rows).
+#[test]
+fn the_dense_sees_table_equals_the_string_rows_on_every_recorded_state() {
+    let c = corpus();
+    let (mut pairs, mut blind) = (0usize, 0usize);
+    for a in &c.acts {
+        let st = &a.state;
+        let n = st.units();
+        assert_eq!(st.sees_tab.is_some(), st.los.iter().any(Option::is_some), "the table exists iff a row does");
+        for i in 0..n {
+            for j in 0..n {
+                let want = st.sees(i, st.key(j));
+                assert_eq!(st.sees_idx(i, j), want, "act {}: dense != String for {i} -> {j}", a.state.round);
+                if let Some(t) = &st.sees_tab {
+                    assert_eq!(t[i * n + j], want);
+                }
+                pairs += 1;
+                blind += usize::from(!want);
+            }
+        }
+    }
+    println!("dense sees vs String rows: {pairs} pairs over {} states, {blind} blind", c.acts.len());
+    assert!(pairs > 0 && blind > 0, "the fixture must contain blind pairs or the check proves nothing");
+}
+
 /// NML-1161 GREEN — the knob is INERT on the table. Every recorded ARENA act
 /// carries per-unit `los` rows and NO `los_pairs` (nothing in a real game
 /// stamps `state["los_blocked"]`), so `State::los_clear` answers true for every

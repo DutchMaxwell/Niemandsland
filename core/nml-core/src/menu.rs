@@ -315,7 +315,7 @@ pub fn best_shoot(
                 continue;
             }
         }
-        if !state.sees(i, state.key(e)) || (tuning.shoot_los && !state.los_clear(i, e)) {
+        if !state.sees_idx(i, e) || (tuning.shoot_los && !state.los_clear(i, e)) {
             continue;
         }
         let ut = &statics[state.roster.profile[e]];
@@ -352,7 +352,7 @@ pub fn ranked_shoots(
     let us = &statics[state.roster.profile[i]];
     let mut rows: Vec<(usize, f64)> = Vec::new();
     for e in enemy_keys_tuned(state, i, tuning.target_units) {
-        if !state.sees(i, state.key(e)) || (tuning.shoot_los && !state.los_clear(i, e)) {
+        if !state.sees_idx(i, e) || (tuning.shoot_los && !state.los_clear(i, e)) {
             continue;
         }
         let ut = &statics[state.roster.profile[e]];
@@ -415,7 +415,7 @@ pub(crate) fn best_shoot_from(
     let us = &statics[state.roster.profile[unit]];
     let (mut best, mut best_ev) = (None, 0.0f64);
     for e in enemy_keys_tuned(state, unit, tuning.target_units) {
-        if !state.sees(unit, state.key(e)) || (tuning.shoot_los && !state.los_clear(unit, e)) {
+        if !state.sees_idx(unit, e) || (tuning.shoot_los && !state.los_clear(unit, e)) {
             continue;
         }
         let d = if tuning.range_edge {
@@ -520,7 +520,7 @@ pub fn advance_shoots(
     let (advance_in, _) = crate::sim::live_bands_of(statics, state, i);
     let mut out = Vec::new();
     for e in enemy_keys_tuned(state, i, tuning.target_units) {
-        if !state.sees(i, state.key(e)) || (tuning.shoot_los && !state.los_clear(i, e)) {
+        if !state.sees_idx(i, e) || (tuning.shoot_los && !state.los_clear(i, e)) {
             continue;
         }
         let gap = if tuning.range_edge {

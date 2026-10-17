@@ -967,6 +967,7 @@ pub fn mint_template_slot(
         }
         st.los_pairs = Some(Rc::new(expanded));
     }
+    st.rebuild_sees(); // the roster grew: the dense table's stride changed
     j
 }
 /// The summon half of the S5 seam — `Spawn` (SPAWN_DESIGN_2026-09-08 §3.3).
