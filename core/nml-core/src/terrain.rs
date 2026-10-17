@@ -176,15 +176,30 @@ pub struct Terrain {
     /// `blocker_boxes` key: every bank recorded before step 4d
     /// (default-preserving, like `blockers_m` above).
     blocker_boxes_m: Vec<[f64; 6]>,
+    /// Content identity for memos keyed on a board: every `build` / `absent` / content-changing setter mints a fresh
+    /// value, a clone keeps it. 0 = a bare `Default`, which no memo trusts.
+    uid: u64,
+}
+
+static NEXT_UID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
+fn fresh_uid() -> u64 {
+    NEXT_UID.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
 impl Terrain {
+    /// See the `uid` field: equal non-zero values mean equal content.
+    #[inline]
+    pub fn uid(&self) -> u64 {
+        self.uid
+    }
+
     /// The state of affairs when the recorder found no `TerrainOverlay`
     /// (`AiActRecorder._terrain_line` returns null): the Callable is invalid, so
     /// `_safe_advance`'s cover bonus never fires and `_crosses_difficult_plain`
     /// answers "never crosses" (battle_sim.gd:1595-1596).
     pub fn absent() -> Terrain {
-        Terrain { absent: true, ..Terrain::default() }
+        Terrain { absent: true, uid: fresh_uid(), ..Terrain::default() }
     }
 
     #[inline]
@@ -226,6 +241,7 @@ impl Terrain {
     /// The conversion is `to_inch` itself, so a wall and a model position can
     /// never land in two different frames.
     pub fn set_walls_world_m(&mut self, raw: &[[[f64; 2]; 2]]) {
+        self.uid = fresh_uid();
         self.walls_in = raw
             .iter()
             .map(|w| {
@@ -268,6 +284,7 @@ impl Terrain {
         blockers: &[[f64; 3]],
         blocker_boxes: &[[f64; 6]],
     ) {
+        self.uid = fresh_uid();
         if self.in2m <= 0.0 {
             return;
         }
@@ -449,6 +466,7 @@ impl Terrain {
             walls_world: Vec::new(),
             blockers_m: Vec::new(),
             blocker_boxes_m: Vec::new(),
+            uid: fresh_uid(),
         };
         out.set_walls_world_m(&p.walls);
         out

@@ -828,6 +828,20 @@ struct Threat<'a> {
 /// first, stable on ties by frontier order; empty when even charge safety is
 /// already lost or there is nothing to walk toward.
 pub fn safe_advances(state: &State, terrain: &Terrain, i: usize, tuning: Tuning) -> Vec<Candidate> {
+    let dests = crate::safe_memo::run(state, terrain, i, tuning, || {
+        safe_advances_fresh(state, terrain, i, tuning).iter().filter_map(|c| c.dest).collect()
+    });
+    dests.into_iter().map(|d| advance_candidate(state, i, d)).collect()
+}
+
+fn advance_candidate(state: &State, i: usize, dest: [f64; 3]) -> Candidate {
+    let mut c = Candidate::new(state.key(i), ADVANCE);
+    c.dest = Some(dest);
+    c.patient = true;
+    c
+}
+
+pub(crate) fn safe_advances_fresh(state: &State, terrain: &Terrain, i: usize, tuning: Tuning) -> Vec<Candidate> {
     let centre = geom::centre(&state.positions[i]);
     let mut best_d = f64::INFINITY;
     let mut goal: V3 = [0.0, 0.0, 0.0];
@@ -928,10 +942,7 @@ pub fn safe_advances(state: &State, terrain: &Terrain, i: usize, tuning: Tuning)
             if ft <= 0.001 {
                 continue; // the old `best_t > 0.001` guard: a null move is no candidate
             }
-            let mut c = Candidate::new(state.key(i), ADVANCE);
-            c.dest = Some(geom::to_f64(geom::add(centre, geom::mul(dir, ft))));
-            c.patient = true;
-            out.push(c);
+            out.push(advance_candidate(state, i, geom::to_f64(geom::add(centre, geom::mul(dir, ft)))));
         }
         return out;
     }

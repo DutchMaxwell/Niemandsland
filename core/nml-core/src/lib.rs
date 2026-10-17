@@ -32,6 +32,7 @@ pub mod rng;
 pub mod rollout;
 pub mod rows;
 pub mod rules;
+pub mod safe_memo;
 pub mod score;
 pub mod sight;
 pub mod sim;
