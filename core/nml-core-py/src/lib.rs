@@ -40,6 +40,14 @@
 //! chosen action and `+ 50000` for the runner-up. This module never invents a
 //! seed: a guessed dice stream is a silent lie.
 
+// The Python module allocates through mimalloc instead of the system malloc:
+// glibc malloc/free was ~12 % of the CPU samples of a self-play tranche, and
+// the switch makes the same games ~9 % cheaper in CPU. Only allocation speed
+// changes: no outcome reads an address or an allocation order. The Godot crate
+// keeps the system allocator.
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
