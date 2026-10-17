@@ -36,6 +36,11 @@ jobs:
         with:
           workspaces: core
       - name: Golden vectors (tract)
+        # Fat LTO (core/Cargo.toml) stays, so the goldens test the shipped optimisation level. Debug info off and 2 jobs
+        # keep the four fat-LTO test links under the hosted-runner memory (they were killed with exit 143 since #1804).
+        env:
+          CARGO_PROFILE_RELEASE_DEBUG: "false"
+          CARGO_BUILD_JOBS: "2"
         run: |
           set -o pipefail
           cargo test --release --manifest-path core/nml-core-godot/Cargo.toml \
@@ -207,6 +212,10 @@ jobs:
           rustup target add x86_64-pc-windows-gnu
       - name: Golden vectors (tract, windows-gnu)
         shell: bash
+        # Same reason as the linux tract job: fat LTO stays, debug info off and 2 jobs (the job hit its timeout since #1804).
+        env:
+          CARGO_PROFILE_RELEASE_DEBUG: "false"
+          CARGO_BUILD_JOBS: "2"
         run: |
           set -o pipefail
           cargo test --release --target x86_64-pc-windows-gnu \
