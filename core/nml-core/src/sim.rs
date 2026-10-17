@@ -6870,6 +6870,25 @@ fn solo_move_grant_delta_in(
 /// DIFFICULT_MOVE_CAP_IN)`, mv/step.rs:691) — after the grant delta, on
 /// every arm, the early static one included.
 pub fn live_bands_of(statics: &[UnitStatic], state: &State, i: usize) -> (f64, f64) {
+    // No-grants shortcut (`ctx_live` takes the same one): every `granted*` read needs a record with a
+    // non-empty `grants_rule` on the joined chain, so with none the move-grant delta is exactly `0.0`
+    // (`x + 0.0` is spelled out to keep the bit pattern) and no terrain debuff is carried (`difficult`
+    // is false). ONE `chain_has_grants` walk replaces the twelve `chain_grant` walks of the full body.
+    if !mods::chain_has_grants(state, i) {
+        let b = &state.bands[i];
+        let stamped = statics
+            .get(state.roster.profile[i])
+            .and_then(|us| us.solo_move_grant_mods.as_ref())
+            .is_some();
+        return if stamped { (b.advance + 0.0, b.rush + 0.0) } else { (b.advance, b.rush) };
+    }
+    live_bands_walk(statics, state, i)
+}
+
+/// The full body of `live_bands_of`: one `solo_move_grant_delta_in` per band and the terrain-debuff
+/// fold, each walking the joined buff chain. Reached only when the chain carries a grant record (and,
+/// in the differential tests, as the reference the shortcut must equal bit for bit).
+pub(crate) fn live_bands_walk(statics: &[UnitStatic], state: &State, i: usize) -> (f64, f64) {
     let b = &state.bands[i];
     // The stamp-first gate: an EMPTY statics slice (score()'s doctrine arm)
     // and every pre-fold or number-less profile answer the static bands here,
