@@ -1099,7 +1099,7 @@ mod tests {
         rep!(wound_frac);
         rep!(positions);
         rep!(wounds);
-        rep!(radii);
+        big.radii = Rc::new((0..n).map(|_| base.radii[0].clone()).collect());
         rep!(mods);
         rep!(mods_base);
         rep!(los);
@@ -1118,7 +1118,7 @@ mod tests {
         rep!(growth_round);
         rep!(second_wind_used);
         rep!(reinforcement_used);
-        rep!(feats_used);
+        big.feats_used = Rc::new((0..n).map(|_| base.feats_used[0].clone()).collect());
         big.attached = Rc::new((0..n).map(|_| Vec::new()).collect());
         big.attached_to = Rc::new((0..n).map(|_| None).collect());
         big

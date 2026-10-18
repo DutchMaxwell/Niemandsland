@@ -32,7 +32,7 @@ use super::*;
             vec![[5.0 * IN2M, 0.0, 0.0], [5.02 * IN2M, 0.0, 0.0], [5.04 * IN2M, 0.0, 0.0]],
             vec![],
         ];
-        st.radii = vec![vec![IN2M], vec![], vec![IN2M; 3], vec![]];
+        st.radii = Rc::new(vec![vec![IN2M], vec![], vec![IN2M; 3], vec![]]);
         st.wounds = vec![vec![1], vec![], vec![3, 1, 1], vec![]];
         st.alive = vec![1, 0, 3, 0];
         let mut a = UnitStatic { name: "a".into(), ..Default::default() };
@@ -177,11 +177,11 @@ use super::*;
         });
         st.positions[0] = vec![[0.0, 0.0, 0.0], [0.02 * IN2M, 0.0, 0.0]];
         st.wounds[0] = vec![1, 3];
-        st.radii[0] = vec![IN2M; 2];
+        Rc::make_mut(&mut st.radii)[0] = vec![IN2M; 2];
         st.alive[0] = 2;
         st.positions[1] = vec![[2.0 * IN2M, 0.0, 0.0]];
         st.wounds[1] = vec![1];
-        st.radii[1] = vec![IN2M];
+        Rc::make_mut(&mut st.radii)[1] = vec![IN2M];
         st.alive[1] = 1;
         st.profiles = Rc::new(Profiles {
             list: vec![
@@ -270,10 +270,10 @@ use super::*;
         let mut st = deadly_chain();
         st.wounds[0] = vec![];
         st.positions[0] = vec![];
-        st.radii[0] = vec![];
+        Rc::make_mut(&mut st.radii)[0] = vec![];
         st.alive[0] = 0;
         st.positions[1] = vec![];
-        st.radii[1] = vec![];
+        Rc::make_mut(&mut st.radii)[1] = vec![];
         st.alive[1] = 0; // the ghost: wounds [1], no model on the table
         let s = Seams { rules_epoch: crate::acts::EPOCH_67_MARKERS_BURSTS, hero_attach: true, ..Seams::default() };
         let before = crate::sim::DESYNC_HITS.load(std::sync::atomic::Ordering::Relaxed);

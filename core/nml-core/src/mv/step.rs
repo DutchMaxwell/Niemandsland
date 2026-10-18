@@ -1328,7 +1328,7 @@ mod tests {
                 .iter()
                 .map(|u| u.iter().map(|p| geom::to_f64(*p)).collect())
                 .collect(),
-            radii: radii_m,
+            radii: Rc::new(radii_m),
             kits: Vec::new(),
             kit_names: Vec::new(),
             mods: vec![Mods::default(); n],
@@ -1362,7 +1362,7 @@ mod tests {
             second_wind_round: -1,
             second_wind_uses: 0,
             sidestep_budget: Default::default(),
-            limited_used: vec![Vec::new(); n],
+            limited_used: Rc::new(vec![Vec::new(); n]),
             piercing_tag_used: vec![false; n],
             piercing_tag_markers: vec![0; n],
             piercing_tag_persistent: vec![false; n],
@@ -1370,9 +1370,9 @@ mod tests {
             spot_markers: vec![0; n],
             tag_markers: vec![0; n],
             spot_round: vec![-1; n],
-            precision_used: vec![Vec::new(); n],
-            storm_used: vec![Vec::new(); n],
-            feats_used: vec![Vec::new(); n],
+            precision_used: Rc::new(vec![Vec::new(); n]),
+            storm_used: Rc::new(vec![Vec::new(); n]),
+            feats_used: Rc::new(vec![Vec::new(); n]),
         }
     }
 
@@ -1963,14 +1963,14 @@ mod tests {
             ("positions (mover)", Box::new(|s| s.positions[0][0][0] += 1e-9)),
             ("positions (other unit)", Box::new(|s| s.positions[2][0][2] += 1e-9)),
             ("wounds", Box::new(|s| s.wounds[0][0] = 7)),
-            ("radii", Box::new(|s| s.radii[2][0] += 1e-9)),
+            ("radii", Box::new(|s| Rc::make_mut(&mut s.radii)[2][0] += 1e-9)),
             ("mods", Box::new(|s| s.mods[0].range_in = 1.0)),
             ("bands", Box::new(|s| s.bands[0].advance += 1.0)),
             ("charge_probe_r", Box::new(|s| s.charge_probe_r[0] = 3.0)),
             ("moved_round", Box::new(|s| s.moved_round[0] = 1)),
             ("hit_and_run_round", Box::new(|s| s.hit_and_run_round[0] = 1)),
             ("second_wind_round", Box::new(|s| s.second_wind_round = 4)),
-            ("limited_used", Box::new(|s| s.limited_used[0].push("x".into()))),
+            ("limited_used", Box::new(|s| Rc::make_mut(&mut s.limited_used)[0].push("x".into()))),
             ("teleport_used", Box::new(|s| s.teleport_used[0] = true)),
             ("buffs", Box::new(|s| s.buffs[0].push(LiveMod {
                 hit_mod: 1, casting_mod: 0, morale_mod: 0, ap_mod: 0, def_mod: 0, defense_mod: 0, move_mod: 0,

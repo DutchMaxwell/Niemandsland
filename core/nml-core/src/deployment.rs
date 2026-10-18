@@ -10,6 +10,7 @@ use crate::acts::{rule_on, EPOCH_16_FREE_PLACEMENT, EPOCH_33_REDEPLOYMENT, EPOCH
 use crate::objectives::Zone;
 use crate::rng::GodotRng;
 use std::collections::HashMap;
+use std::rc::Rc;
 use crate::terrain::{CONTAINER, DANGEROUS, RUINS, Terrain};
 
 /// `SoloController.roll_off`'s tie cap (solo_controller.gd:7508).
@@ -3480,7 +3481,7 @@ pub fn withdraw_as_destroyed(st: &mut crate::state::State, i: usize, round_no: i
     st.dormant_wounds[i] = wounds;
     st.positions[i] = Vec::new();
     st.wounds[i] = Vec::new();
-    st.radii[i] = Vec::new();
+    Rc::make_mut(&mut st.radii)[i] = Vec::new();
     st.kits_drop(i); // tray-exact S1b: no models, no kits (an arrival starts with none)
     st.alive[i] = 0;
     st.shaken[i] = false;
@@ -3525,7 +3526,7 @@ pub fn arrive_unit(
     let base_r = us.base_radius;
     st.positions[i] = place_unit_models(spot, n).into_iter().map(|(x, z)| [x, 0.0, z]).collect();
     st.wounds[i] = std::mem::take(&mut st.dormant_wounds[i]);
-    st.radii[i] = vec![base_r; n];
+    Rc::make_mut(&mut st.radii)[i] = vec![base_r; n];
     st.kits_drop(i); // tray-exact S1b: the arriving bodies' kits are unknown here
     st.alive[i] = n as i64;
     st.dormant_models[i] = 0;

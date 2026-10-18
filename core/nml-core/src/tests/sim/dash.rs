@@ -48,7 +48,7 @@ use super::*;
         let (mut st, _) = dangerous_line();
         for j in 1..4 {
             st.positions[j] = vec![];
-            st.radii[j] = vec![];
+            Rc::make_mut(&mut st.radii)[j] = vec![];
             st.wounds[j] = vec![];
             st.alive[j] = 0;
         }
@@ -138,7 +138,7 @@ use super::*;
         let (mut st, mut statics) = dash_line(epoch);
         statics[0].shoot = vec![gun("Rifle", 1, 24)];
         st.positions[2] = vec![[12.0 * IN2M, 0.0, 0.0]];
-        st.radii[2] = vec![IN2M];
+        Rc::make_mut(&mut st.radii)[2] = vec![IN2M];
         st.wounds[2] = vec![1];
         st.alive[2] = 1;
         statics[2] = UnitStatic {

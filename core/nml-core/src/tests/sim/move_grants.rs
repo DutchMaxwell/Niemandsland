@@ -69,7 +69,7 @@ use super::*;
             vec![[40.0 * IN2M, 0.0, 0.0], [40.02 * IN2M, 0.0, 0.0], [40.04 * IN2M, 0.0, 0.0]],
             vec![],
         ];
-        st.radii = vec![vec![IN2M], vec![], vec![IN2M; 3], vec![]];
+        st.radii = Rc::new(vec![vec![IN2M], vec![], vec![IN2M; 3], vec![]]);
         st.wounds = vec![vec![1], vec![], vec![1; 3], vec![]];
         st.alive = vec![1, 0, 3, 0];
         st.buffs[0] = grants.iter().map(|g| grant_row(g)).collect();

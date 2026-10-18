@@ -91,7 +91,7 @@ use super::*;
         let (mut st, statics) = breath_line();
         st.wounds[2] = vec![1]; // b down to 1 alive model
         st.positions[2] = vec![[5.0 * IN2M, 0.0, 0.0]];
-        st.radii[2] = vec![IN2M];
+        Rc::make_mut(&mut st.radii)[2] = vec![IN2M];
         st.alive[2] = 1;
         let terrain = crate::terrain::Terrain::default();
         let mut tray = Tray::seeded(7);

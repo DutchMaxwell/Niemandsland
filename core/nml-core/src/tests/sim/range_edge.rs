@@ -17,7 +17,7 @@
         st.positions[2] = vec![[centre_in * IN2M, 0.0, 0.0]];
         st.positions[3] = vec![[500.0 * IN2M, 0.0, 0.0]];
         for u in 0..4 {
-            st.radii[u] = vec![0.016];
+            Rc::make_mut(&mut st.radii)[u] = vec![0.016];
         }
         (st, statics)
     }

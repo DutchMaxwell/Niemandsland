@@ -80,7 +80,7 @@ fn two_units() -> (nml_core::State, Vec<UnitStatic>) {
         wound_frac: vec![1.0; 2],
         positions: vec![vec![[0.0, 0.0, 0.0]], vec![[12.0 * IN2M, 0.0, 0.0]]],
         wounds: vec![vec![1]; 2],
-        radii: vec![vec![IN2M]; 2],
+        radii: Rc::new(vec![vec![IN2M]; 2]),
         kits: Vec::new(),
         kit_names: Vec::new(),
         mods: vec![Mods::default(); 2],
@@ -115,14 +115,14 @@ fn two_units() -> (nml_core::State, Vec<UnitStatic>) {
         second_wind_round: -1,
         second_wind_uses: 0,
         sidestep_budget: Default::default(),
-        limited_used: vec![Vec::new(); 2],
+        limited_used: Rc::new(vec![Vec::new(); 2]),
         piercing_tag_used: vec![false; 2],
         piercing_tag_markers: vec![0; 2],
         piercing_tag_persistent: vec![false; 2],
         piercing_spot_round: vec![-1; 2],
-        spot_markers: vec![0; 2], tag_markers: vec![0; 2], spot_round: vec![-1; 2], precision_used: vec![Vec::new(); 2],
-        storm_used: vec![Vec::new(); 2],
-        feats_used: vec![Vec::new(); 2],
+        spot_markers: vec![0; 2], tag_markers: vec![0; 2], spot_round: vec![-1; 2], precision_used: Rc::new(vec![Vec::new(); 2]),
+        storm_used: Rc::new(vec![Vec::new(); 2]),
+        feats_used: Rc::new(vec![Vec::new(); 2]),
     };
     (st, vec![UnitStatic::default(), UnitStatic::default()])
 }

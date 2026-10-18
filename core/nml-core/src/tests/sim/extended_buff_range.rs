@@ -68,7 +68,7 @@ use super::*;
         st.alive = vec![1, 0, 1, 0];
         st.wounds = vec![vec![1], vec![], vec![1], vec![]];
         st.positions[2] = vec![[16.0 * IN2M, 0.0, 0.0]];
-        st.radii[2] = vec![IN2M];
+        Rc::make_mut(&mut st.radii)[2] = vec![IN2M];
         st.positions[3] = vec![];
         let ebr = if rules_epoch >= 7 { Some(crate::unit::EbrStamp { relay_range_in: 24.0, hero_link_in: 0.0 }) } else { None };
         let ebr_a = if a_ebr { ebr.clone() } else { None };

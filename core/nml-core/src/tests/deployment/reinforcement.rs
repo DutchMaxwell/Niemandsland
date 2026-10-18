@@ -345,7 +345,7 @@ use super::*;
         st.shaken[i] = false;
         st.positions[i] = Vec::new();
         st.wounds[i] = Vec::new();
-        st.radii[i] = Vec::new();
+        std::rc::Rc::make_mut(&mut st.radii)[i] = Vec::new();
         let st = st;
         let roll = Rollout::new(
             Policy::new(&statics, &board, seams_at(CURRENT_RULES_EPOCH)),

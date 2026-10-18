@@ -37,10 +37,10 @@ use super::*;
         st.attached_to = Rc::new(vec![None, None]);
         st.positions[0] = (1..=10).map(|i| [i as f64 * IN2M, 0.0, 0.0]).collect();
         st.wounds[0] = vec![1; 10];
-        st.radii[0] = vec![IN2M; 10];
+        Rc::make_mut(&mut st.radii)[0] = vec![IN2M; 10];
         st.positions[1] = vec![[0.0, 0.0, 0.0]];
         st.wounds[1] = vec![1];
-        st.radii[1] = vec![IN2M];
+        Rc::make_mut(&mut st.radii)[1] = vec![IN2M];
 
         let all = melee_parts(&statics, &st, 0, 1, Seams::default());
         assert_eq!(all[0].1.attacks[0], 10, "melee_reach=all (default): every model strikes");

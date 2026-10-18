@@ -45,7 +45,7 @@ use crate::menu::{candidates_tuned, Tuning};
         st.attached = Rc::new(vec![vec![1], vec![], vec![], vec![]]);
         st.attached_to = Rc::new(vec![None, Some(0), None, None]);
         st.positions[3] = vec![[12.0 * IN2M, 0.0, 0.0]];
-        st.radii[3] = vec![IN2M];
+        Rc::make_mut(&mut st.radii)[3] = vec![IN2M];
         st.wounds[3] = vec![1];
         st.alive[3] = 1;
         statics[3].model_count = 1;

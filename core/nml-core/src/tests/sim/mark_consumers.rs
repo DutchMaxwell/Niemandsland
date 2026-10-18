@@ -205,7 +205,7 @@ use super::*;
         st.los_pairs = Some(Rc::new(dark));
         st.alive[3] = 1;
         st.positions[3] = vec![[6.0 * IN2M, 0.0, 0.0]];
-        st.radii[3] = vec![IN2M];
+        Rc::make_mut(&mut st.radii)[3] = vec![IN2M];
         st.wounds[3] = vec![1];
         st.attached = Rc::new(vec![vec![1], vec![], vec![], vec![]]);
         st.attached_to = Rc::new(vec![None, Some(0), None, None]);

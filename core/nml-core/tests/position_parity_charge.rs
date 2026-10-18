@@ -104,8 +104,8 @@ fn charge_snap_shared_positive_and_budget_boundary_probes() {
         let start: geom::V3 = serde_json::from_value(probe["start"].clone()).unwrap();
         state.positions[actor] = vec![geom::to_f64(start)];
         state.positions[target] = vec![serde_json::from_value(probe["target"].clone()).unwrap()];
-        state.radii[actor] = vec![probe["radius_m"].as_f64().unwrap()];
-        state.radii[target] = state.radii[actor].clone();
+        Rc::make_mut(&mut state.radii)[actor] = vec![probe["radius_m"].as_f64().unwrap()];
+        Rc::make_mut(&mut state.radii)[target] = state.radii[actor].clone();
         land.movers.truncate(1);
         land.end = vec![start];
         land.budget_in = probe["band_in"].as_f64().unwrap();

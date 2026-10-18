@@ -42,7 +42,7 @@ use super::*;
         st.attached_to = Rc::new(vec![None, None]);
         st.positions = vec![vec![[0.0, 0.0, 0.0]], vec![[5.0 * IN2M, 0.0, 0.0]]];
         st.wounds = vec![vec![1], vec![1]];
-        st.radii = vec![vec![IN2M], vec![IN2M]];
+        st.radii = Rc::new(vec![vec![IN2M], vec![IN2M]]);
         st.bands[0].advance = 12.0;
         let mover = UnitStatic {
             ctx: Ctx { quality: 4, defense: 4, tough: 1, models: 1, ..Default::default() },

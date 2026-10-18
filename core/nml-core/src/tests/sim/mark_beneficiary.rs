@@ -91,7 +91,7 @@ fn precision_fighting_mark_bonus_feeds_the_rolls_against_the_marked_unit_at_15_n
     // bare fixture strikes at 4+.
     let (mut st2, mut statics2) = buff_line();
     st2.positions[2] = vec![[2.5 * IN2M, 0.0, 0.0]];
-    st2.radii[2] = vec![IN2M];
+    Rc::make_mut(&mut st2.radii)[2] = vec![IN2M];
     st2.wounds[2] = vec![1];
     st2.alive[2] = 1;
     statics2[2].model_count = 1;
@@ -121,7 +121,7 @@ fn precision_fighting_mark_bonus_feeds_the_rolls_against_the_marked_unit_at_15_n
 
     let (mut st4, mut statics4) = buff_line();
     st4.positions[2] = vec![[2.5 * IN2M, 0.0, 0.0]];
-    st4.radii[2] = vec![IN2M];
+    Rc::make_mut(&mut st4.radii)[2] = vec![IN2M];
     st4.wounds[2] = vec![1];
     st4.alive[2] = 1;
     statics4[2].model_count = 1;

@@ -36,10 +36,10 @@ use crate::acts::{EPOCH_64_DEPLOY_LARGE_RESPOT, EPOCH_65_MELEE_TRUTH};
         st.attached_to = Rc::new(vec![None, None]);
         st.positions[0] = vec![[IN2M, 0.0, 0.0]];
         st.wounds[0] = vec![1];
-        st.radii[0] = vec![IN2M];
+        Rc::make_mut(&mut st.radii)[0] = vec![IN2M];
         st.positions[1] = vec![[0.0, 0.0, 0.0]; 3];
         st.wounds[1] = vec![1; 3];
-        st.radii[1] = vec![IN2M; 3];
+        Rc::make_mut(&mut st.radii)[1] = vec![IN2M; 3];
 
         let seams = Seams { rules_epoch, ..Default::default() };
         let mut tray = Tray::seeded(27);
