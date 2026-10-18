@@ -5990,6 +5990,7 @@ fn volley_ev(
     sc: &mut Scratch,
     rules_epoch: u32,
     reach_shave: Option<f64>,
+    cache: &mut ReplyCtxCache,
 ) -> (f64, i64) {
     let us = &statics[state.roster.profile[si]];
     let ut = &statics[state.roster.profile[ti]];
@@ -6002,11 +6003,56 @@ fn volley_ev(
     if sc.keep.is_empty() && (state.casts[si] <= 0 || !us.is_caster) {
         return (0.0, 0);
     }
-    let att = ctx_live(ctx_of(us, state, si), statics, state, si, false, rules_epoch);
-    let def = ctx_live(ctx_of(ut, state, ti), statics, state, ti, false, rules_epoch);
-    let shooting = shoot_ev(&us.shoot, &sc.keep, &sc.attacks, &att, &def, d);
-    let (sp_ev, sp_cost) = spell_ev_of(us.is_caster, &us.spells, state.casts[si], &def, d);
+    if !cache.on {
+        cache.slots.clear();
+    }
+    let ai = cache.slot(us, statics, state, si, rules_epoch);
+    let di = cache.slot(ut, statics, state, ti, rules_epoch);
+    let (att, def) = (&cache.slots[ai].1, &cache.slots[di].1);
+    let shooting = shoot_ev(&us.shoot, &sc.keep, &sc.attacks, att, def, d);
+    let (sp_ev, sp_cost) = spell_ev_of(us.is_caster, &us.spells, state.casts[si], def, d);
     (shooting + sp_ev, sp_cost)
+}
+
+/// The volley's live root ctx of each unit, built at most once inside ONE `reply_threat_core` call.
+///
+/// `ctx_live(ctx_of(unit), melee = false)` is a pure function of `(statics, state, unit, rules_epoch)`, and all four are
+/// fixed for the whole call (`state` is a shared borrow, `rules_epoch` a parameter), so the second request for the same
+/// unit returns exactly the value a rebuild would. The attacker and the defender build are the same function of the unit
+/// (the role only says where the result is read), so the key is the unit alone. A call prices ~12 builds over ~6
+/// distinct units. The cache lives on the caller's stack and is dropped with it: nothing crosses a call.
+///
+/// The one effect `ctx_live` has besides its value is the `NML_TRACE_RULES` stderr line; with tracing on the cache is
+/// bypassed (the slots are cleared before every volley) so every build logs exactly as before.
+struct ReplyCtxCache {
+    slots: Vec<(usize, Ctx)>,
+    on: bool,
+}
+
+impl ReplyCtxCache {
+    fn new(on: bool) -> Self {
+        ReplyCtxCache { slots: Vec::new(), on }
+    }
+
+    /// The index in `slots` of unit `i`'s live ctx: found, or built now (the first use computes what it always did).
+    fn slot(&mut self, us: &UnitStatic, statics: &[UnitStatic], state: &State, i: usize, rules_epoch: u32) -> usize {
+        if self.on {
+            if let Some(p) = self.slots.iter().position(|(k, _)| *k == i) {
+                return p;
+            }
+        }
+        if self.slots.capacity() == 0 {
+            self.slots.reserve_exact(8);
+        }
+        self.slots.push((i, ctx_live(ctx_of(us, state, i), statics, state, i, false, rules_epoch)));
+        self.slots.len() - 1
+    }
+}
+
+/// `NML_TRACE_RULES=1`, read once per process (the cache is bypassed while it is on).
+fn trace_rules_on() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var("NML_TRACE_RULES").as_deref() == Ok("1"))
 }
 
 /// `BattleSim.melee_threat` battle_sim.gd:852-853 — `si`'s melee EV onto `ti`,
@@ -6158,7 +6204,21 @@ fn pair_dist_memo(n: usize, e: usize, m: usize, a: &[[f64; 3]], b: &[[f64; 3]]) 
 }
 
 fn reply_threat_core(statics: &[UnitStatic], state: &State, player: i64, rules_epoch: u32, o: ReplyOpts) -> Vec<f64> {
+    reply_threat_core_with(statics, state, player, rules_epoch, o, !trace_rules_on())
+}
+
+/// `reply_threat_core` with the per-call ctx cache switched explicitly (`cache_ctx = false` rebuilds every ctx, the
+/// original behaviour — the reference side of the differential test).
+fn reply_threat_core_with(
+    statics: &[UnitStatic],
+    state: &State,
+    player: i64,
+    rules_epoch: u32,
+    o: ReplyOpts,
+    cache_ctx: bool,
+) -> Vec<f64> {
     let v2 = o.v2;
+    let mut ctxs = ReplyCtxCache::new(cache_ctx);
     let n = state.units();
     let mut incoming = vec![0.0f64; n];
     let mut sc = Scratch::default();
@@ -6185,7 +6245,7 @@ fn reply_threat_core(statics: &[UnitStatic], state: &State, player: i64, rules_e
             };
             let mut ev = 0.0f64;
             if state.sees_idx(e, m) && los_clear(state, e, m) {
-                ev = volley_ev(statics, state, e, m, d, &mut sc, rules_epoch, o.reach_only.then_some(0.0)).0;
+                ev = volley_ev(statics, state, e, m, d, &mut sc, rules_epoch, o.reach_only.then_some(0.0), &mut ctxs).0;
             }
             // T03-T06: off = the fixed 12" / 6" bands on the centre distance; on = the enemy's live bands,
             // the base-edge gap for the charge, and no charge against an Aircraft.
@@ -6200,7 +6260,7 @@ fn reply_threat_core(statics: &[UnitStatic], state: &State, player: i64, rules_e
                 ev = ev.max(melee_threat_at_epoch(statics, state, e, m, rules_epoch));
             }
             if v2 && movable && d > adv_in && state.sees_idx(e, m) && los_clear(state, e, m) {
-                let after = volley_ev(statics, state, e, m, d - adv_in, &mut sc, rules_epoch, o.reach_only.then_some(adv_in)).0;
+                let after = volley_ev(statics, state, e, m, d - adv_in, &mut sc, rules_epoch, o.reach_only.then_some(adv_in), &mut ctxs).0;
                 ev = ev.max(after);
             }
             if ev > best_ev {
