@@ -156,8 +156,14 @@ pub(crate) fn run(
         found
     });
     if let Some((post, answer)) = hit {
+        // Debug builds re-run the step on a COPY of the caller's own Scratch (the key's two inputs plus whatever the
+        // buffers hold) and compare the whole outcome, `Ok` wrapper and post-state included, with the stored one.
         #[cfg(debug_assertions)]
-        debug_assert_eq!(format!("{answer:?}"), format!("{:?}", fresh(&mut Scratch { rules_epoch: ins.3, bearers_last: ins.4, ..Scratch::default() })), "policy_step memo hit != fresh");
+        {
+            let mut shadow = sc.clone();
+            let want = fresh(&mut shadow).map(|a| (a, (shadow.rules_epoch, shadow.bearers_last)));
+            debug_assert_eq!(format!("{:?}", Ok::<_, Unsupported>((&answer, post))), format!("{want:?}"), "policy_step memo hit != fresh");
+        }
         (sc.rules_epoch, sc.bearers_last) = post;
         return Ok(answer);
     }
@@ -173,4 +179,10 @@ pub(crate) fn run(
         m.table.entry(h).or_default().push(Entry { ins, state: state.clone(), post, answer: answer.clone() });
     });
     Ok(answer)
+}
+
+/// TEST ONLY: overwrite every stored answer and post-state, so a test can prove the debug check catches a stale entry.
+#[cfg(test)]
+pub(crate) fn tamper(f: impl Fn(&mut Option<Candidate>, &mut (u32, bool))) {
+    MEMO.with(|m| m.borrow_mut().table.values_mut().flatten().for_each(|e| f(&mut e.answer, &mut e.post)));
 }

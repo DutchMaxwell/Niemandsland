@@ -4098,7 +4098,7 @@ fn ctx_of_melee(us: &UnitStatic, state: &State, i: usize, rules_epoch: u32) -> C
 }
 
 /// Scratch buffers so a threat sweep allocates once per call, not per pair.
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Scratch {
     pub keep: Vec<usize>,
     pub attacks: Vec<i64>,
