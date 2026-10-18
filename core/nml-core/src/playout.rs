@@ -234,6 +234,16 @@ impl<'a> Policy<'a> {
         rich: bool,
         sc: &mut Scratch,
     ) -> Result<Option<Candidate>, Unsupported> {
+        crate::playout_memo::run(self, state, player, rich, sc, |sc| self.policy_step_fresh(state, player, rich, sc))
+    }
+
+    fn policy_step_fresh(
+        &self,
+        state: &State,
+        player: i64,
+        rich: bool,
+        sc: &mut Scratch,
+    ) -> Result<Option<Candidate>, Unsupported> {
         let rich = self.force_leaf.unwrap_or(rich);
         let mut best: Option<Candidate> = None;
         let mut best_s = f64::NEG_INFINITY;

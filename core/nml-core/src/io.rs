@@ -492,7 +492,7 @@ pub struct Node {
 /// header line 1's `"seams"` (ai_planner.gd:483-489, added with M1-3).
 /// A corpus recorded before that (the M1-2 one) has no key and defaults to
 /// both OFF, which is what it was probed to be.
-#[derive(Debug, Clone, Copy, Default, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Deserialize)]
 pub struct Seams {
     /// `BattleSim.spacing_enabled()` — NML_SIM_SPACING, battle_sim.gd:25-31.
     #[serde(default)]

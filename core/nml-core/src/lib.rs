@@ -28,6 +28,7 @@ pub mod objectives;
 pub mod plan;
 pub mod policy;
 pub mod playout;
+pub mod playout_memo;
 pub mod rng;
 pub mod rollout;
 pub mod rows;

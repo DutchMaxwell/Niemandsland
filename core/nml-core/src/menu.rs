@@ -86,7 +86,7 @@ impl Candidate {
 /// can be shown to be earned rather than accidental. Every shipping call uses
 /// `Tuning::default()`, which is the GDScript's own pair of numbers; the tests
 /// perturb one at a time and count the candidates that then stop matching.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Tuning {
     /// `AiPlanner.SAFE_LINE_COVER_BONUS_IN` — 6.0 in the game.
     pub cover_bonus_in: f64,
