@@ -18,7 +18,7 @@ use crate::geom;
 use serde::{Deserialize, Serialize};
 
 /// One weapon line of the static profile — `BattleSim._unit_profile` :1304-1330.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Deserialize)]
 pub struct Weapon {
     pub name: String,
     #[serde(default)]
@@ -35,7 +35,7 @@ pub struct Weapon {
 
 /// Everything `resolve`/`score` read off a live `GameUnit`, flattened once per
 /// game — `BattleSim._unit_profile` battle_sim.gd:1304-1330.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Deserialize)]
 pub struct Profile {
     pub unit_id: String,
     pub name: String,
@@ -98,7 +98,7 @@ pub struct Profile {
     pub move_bands: MoveBands,
 }
 
-#[derive(Debug, Clone, Copy, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Copy, Deserialize)]
 pub struct MoveBands {
     #[serde(default)]
     pub advance: f64,
@@ -158,7 +158,7 @@ impl Default for Bands {
 }
 
 /// The immutable per-game profile table; units index into it.
-#[derive(Debug, Default)]
+#[derive(Debug, PartialEq, Default)]
 pub struct Profiles {
     pub list: Vec<Profile>,
     pub index: HashMap<String, usize>,
@@ -307,7 +307,7 @@ impl ProfileCache {
 
 /// Capture order + the profile index per unit. Never written after capture, so
 /// clones share it (`clone_state` battle_sim.gd:463-505 keeps the GameUnit ref).
-#[derive(Debug, Default)]
+#[derive(Debug, PartialEq, Default)]
 pub struct Roster {
     pub keys: Vec<String>,
     pub index: HashMap<String, usize>,
@@ -334,7 +334,7 @@ fn f64_is_zero(v: &f64) -> bool {
 /// weight times the cast chance — a third of a half. A snapshot that has never
 /// been cast on carries plain `0`, which is why the M1-2 port could type the
 /// first three as ints and get away with it.
-#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize)]
+#[derive(Debug, PartialEq, Clone, Copy, Default, Deserialize, Serialize)]
 
 pub struct Mods {
     #[serde(default)]
@@ -362,7 +362,7 @@ pub struct Mods {
     pub rush: f64,
 }
 
-#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
+#[derive(Debug, PartialEq, Clone, Copy, Deserialize, Serialize)]
 pub struct Objective {
     pub pos: [f64; 3],
     #[serde(default)]
@@ -370,7 +370,7 @@ pub struct Objective {
 }
 
 /// Marker-mission state — `SoloController` :33, read by `_score_hand` :368-380.
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, PartialEq, Clone, Deserialize, Serialize)]
 pub struct Marker {
     #[serde(default)]
     pub owned_by: i64,
@@ -426,7 +426,7 @@ impl Default for Marker {
 
 /// The table controller shares eight small-base sidestep attempts per round.
 /// The arena reuses that controller across both seats, so this is one ledger.
-#[derive(Debug, Clone, Copy, Default, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, PartialEq, Clone, Copy, Default, serde::Serialize, serde::Deserialize)]
 pub struct SidestepBudget {
     pub round: i64,
     pub used: i64,
@@ -458,7 +458,7 @@ pub struct Kit {
 /// markers_meta/destroy_seq are deep, roster + profiles + mods_base + los + the
 /// vp blobs are shared `Rc`s, and `reserves` simply does not exist here — the
 /// GDScript clone drops it, so every rollout node reads it as absent.
-#[derive(Debug, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct State {
     pub sidestep_budget: SidestepBudget,
     pub roster: Rc<Roster>,
