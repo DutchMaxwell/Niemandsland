@@ -5257,6 +5257,75 @@ fn in_unit_group(state: &State, key_i: usize, oi: usize, include_host: bool) -> 
         || (include_host && state.attached_to[key_i] == Some(oi))
 }
 
+/// The obstacle models of one `spacing_fraction` call in capture order, plus one box per unit: `spans[g] = (end, [min x, max x,
+/// min z, max z] of the centres, largest radius + buffer)`. `legal` skips a whole unit when on one axis the gap between its box and
+/// the box of the mover models exceeds `r + own_r + SPACING_SKIP_MARGIN_M`: `length(flat)` is at least `|flat.x|` and `|flat.z|`,
+/// and the margin dominates the f32 error of the subtraction (< 6e-5 m inside the +-1e3 m envelope), so no pair of that unit can
+/// compare below. Boxes outside the envelope (or not finite) and units 64 and up are never skipped.
+#[derive(Default)]
+struct SpacingObstacles {
+    list: Vec<(geom::V3, f64)>,
+    spans: Vec<(usize, [f32; 4], f64)>,
+}
+
+const SPACING_SKIP_MARGIN_M: f64 = 1e-3;
+const SPACING_ENVELOPE_M: f32 = 1.0e3;
+
+impl SpacingObstacles {
+    /// Close the unit whose models were pushed since the last call (a unit without models adds no span).
+    fn end_unit(&mut self) {
+        let from = self.spans.last().map_or(0, |s| s.0);
+        let (mut b, mut rm) = ([f32::INFINITY, f32::NEG_INFINITY, f32::INFINITY, f32::NEG_INFINITY], f64::NEG_INFINITY);
+        for (c, r) in &self.list[from..] {
+            (b, rm) = ([b[0].min(c[0]), b[1].max(c[0]), b[2].min(c[2]), b[3].max(c[2])], rm.max(*r));
+        }
+        if self.list.len() > from {
+            self.spans.push((self.list.len(), b, rm));
+        }
+    }
+
+    /// Bit `g` is clear when unit `g` (< 64) cannot touch any mover model (`own` = f32 centre, radius) moved by `step`.
+    fn live(&self, own: &[(geom::V3, f64)], step: geom::V3) -> u64 {
+        let (mut lo, mut hi, mut ro) = ([f32::INFINITY; 2], [f32::NEG_INFINITY; 2], f64::NEG_INFINITY);
+        for (p, r) in own {
+            let c = geom::add(*p, step);
+            (lo, hi, ro) = ([lo[0].min(c[0]), lo[1].min(c[2])], [hi[0].max(c[0]), hi[1].max(c[2])], ro.max(*r));
+        }
+        let inside = |v: &[f32]| v.iter().all(|x| x.abs() <= SPACING_ENVELOPE_M);
+        let mut live = u64::MAX;
+        if inside(&lo) && inside(&hi) {
+            for (g, (_, b, rm)) in self.spans.iter().enumerate().take(64) {
+                let far = |gap: f32| f64::from(gap) > rm + ro + SPACING_SKIP_MARGIN_M;
+                if inside(b) && (far(b[0] - hi[0]) || far(lo[0] - b[1]) || far(b[2] - hi[1]) || far(lo[1] - b[3])) {
+                    live &= !(1u64 << g);
+                }
+            }
+        }
+        live
+    }
+
+    /// `true` when no mover model moved by `step` is within `r + own_r` of any obstacle model.
+    fn legal(&self, own: &[(geom::V3, f64)], step: geom::V3) -> bool {
+        let live = self.live(own, step);
+        for (p, own_r) in own {
+            let q = geom::add(*p, step);
+            let mut from = 0;
+            for (g, (end, _, _)) in self.spans.iter().enumerate() {
+                if g >= 64 || live >> g & 1 == 1 {
+                    for (oc, r) in &self.list[from..*end] {
+                        let flat: geom::V3 = [q[0] - oc[0], 0.0, q[2] - oc[2]];
+                        if (geom::length(flat) as f64) < r + own_r {
+                            return false;
+                        }
+                    }
+                }
+                from = *end;
+            }
+        }
+        true
+    }
+}
+
 /// `BattleSim._spacing_fraction` battle_sim.gd:550-620 — the largest fraction
 /// of `delta` that leaves every mover model clear of every OTHER alive unit's
 /// models (horizontal distance only, the `control_gap_in` convention).
@@ -5285,7 +5354,7 @@ fn spacing_fraction(state: &State, mi: usize, delta: geom::V3, ci: Option<usize>
         return 1.0;
     }
     let buffer_m = UNIT_SPACING_IN * IN2M;
-    let mut obstacles: Vec<(geom::V3, f64)> = Vec::new();
+    let mut obstacles = SpacingObstacles::default();
     for oi in 0..state.units() {
         if in_unit_group(state, mi, oi, true) {
             continue;
@@ -5300,26 +5369,17 @@ fn spacing_fraction(state: &State, mi: usize, delta: geom::V3, ci: Option<usize>
         let radii = &state.radii[oi];
         for (k, pos) in state.positions[oi].iter().enumerate() {
             let r = radii.get(k).copied().unwrap_or(DEFAULT_BASE_RADIUS_M);
-            obstacles.push((geom::to_f32(*pos), r + o_buffer));
+            obstacles.list.push((geom::to_f32(*pos), r + o_buffer));
         }
+        obstacles.end_unit();
     }
-    if obstacles.is_empty() {
+    if obstacles.list.is_empty() {
         return 1.0;
     }
-    let legal = |t: f64| -> bool {
-        let step = geom::mul(delta, t);
-        for (i, own) in state.positions[mi].iter().enumerate() {
-            let own_r = state.radii[mi].get(i).copied().unwrap_or(DEFAULT_BASE_RADIUS_M);
-            let q = geom::add(geom::to_f32(*own), step);
-            for (oc, r) in &obstacles {
-                let flat: geom::V3 = [q[0] - oc[0], 0.0, q[2] - oc[2]];
-                if (geom::length(flat) as f64) < r + own_r {
-                    return false;
-                }
-            }
-        }
-        true
-    };
+    let own: Vec<(geom::V3, f64)> = (state.positions[mi].iter().enumerate())
+        .map(|(i, p)| (geom::to_f32(*p), state.radii[mi].get(i).copied().unwrap_or(DEFAULT_BASE_RADIUS_M)))
+        .collect();
+    let legal = |t: f64| obstacles.legal(&own, geom::mul(delta, t));
     if legal(1.0) {
         return 1.0;
     }
