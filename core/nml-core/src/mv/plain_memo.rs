@@ -54,7 +54,7 @@ struct Memo {
 }
 
 /// `NML_TRACE_RULES=1`, read once per process.
-fn trace_rules_on() -> bool {
+pub(crate) fn trace_rules_on() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| std::env::var("NML_TRACE_RULES").as_deref() == Ok("1"))
 }

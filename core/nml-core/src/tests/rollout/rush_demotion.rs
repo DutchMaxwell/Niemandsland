@@ -23,7 +23,7 @@ use crate::sim::{ADVANCE, RUSH};
 // objective carrying the shot (the W1 moved-shoot seam on), and an epoch-6
 // record keeps today's menu byte-exact.
 
-const HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
+pub(super) const HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
   "p1_0_a":{"unit_id":"p1_0_a","name":"A","quality":4,"defense":3,"tough":1,
     "wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,
     "game_system":"gf","faction_folder":"human_defense_force","special_rules":[],
@@ -66,7 +66,7 @@ const QUICK_HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
     "item_grants":[],"attached_hero_rules":[],
     "move_bands":{"advance":6.0,"rush":12.0},"weapons":[]}}}"#;
 
-const PLAIN: &str = r#"{"round":2,"rounds_total":4,"scoring":"end","objectives":[
+pub(super) const PLAIN: &str = r#"{"round":2,"rounds_total":4,"scoring":"end","objectives":[
   {"pos":[0.2032,0.0,0.0],"owner":1}],
   "units":{
   "p1_0_a":{"player":1,"alive":1,"wounds":[1],"radii":[0.016],

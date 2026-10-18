@@ -728,6 +728,8 @@ pub struct Core {
     /// wires it in only when the CALLED act's `statics.policy_mode` asks for
     /// `Order`, the same contract `net`/`fit_mode` already keep.
     policy_net: Option<PolicyHarness>,
+    /// `playout_memo` generation: fresh at every `set_header` / `load_net`, 0 before the first header.
+    memo_gen: u64,
 }
 
 impl Core {
@@ -866,6 +868,7 @@ impl Core {
         nmlcore::mv::theta_memo::begin_game();
         nmlcore::safe_memo::begin_game();
         nmlcore::mv::plain_memo::begin_game();
+        self.memo_gen = nmlcore::playout_memo::begin_game();
         Ok(())
     }
 
@@ -1578,6 +1581,7 @@ impl Core {
         policy.root_seams = root;
         policy.fit = self.net.as_ref();
         let roll = Rollout::new(policy, self.knobs);
+        let _memo = nmlcore::playout_memo::enter(self.memo_gen, self.terrain.uid(), &roll.policy, &state.inner);
         let mut sc = Scratch::default();
         let mut rng = GodotRng::new(sig);
         match arb_full_playout(&roll, &state.inner, &cand, player, &mut rng, &mut sc) {
@@ -1812,6 +1816,7 @@ impl Core {
             fit.blend = b;
         }
         self.net = Some(fit);
+        self.memo_gen = nmlcore::playout_memo::begin_game();
         to_py(py, &shape)
     }
 
@@ -2303,6 +2308,7 @@ fn load(repo_root: &str) -> Core {
         rows: RowEncoder::new(repo_root),
         net: None,
         policy_net: None,
+        memo_gen: 0,
     }
 }
 

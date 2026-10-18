@@ -1236,7 +1236,7 @@ fn plain_move_fresh(
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::state::{Bands, Mods, MoveBands, Profile, Profiles, Roster};
     use crate::terrain::{CellParams, Obb, PlainTerrain};
@@ -1841,7 +1841,7 @@ mod tests {
 
     /// `LADDER_DISABLED` / `STALL_DISABLED` are process globals that two tests flip; the memo bypasses while either
     /// is on, so every test that flips them or counts memo hits takes this lock.
-    static KNOB_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    pub(crate) static KNOB_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     /// The recorded cap fixture of `the_p11_cap_replan_lands_the_recorded_plain_move`: state, terrain, dest, band.
     fn memo_fixture() -> (State, Terrain, V3, f64) {
