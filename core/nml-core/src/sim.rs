@@ -5429,9 +5429,9 @@ fn best_spell_target(
         let mut reach: Option<(usize, f64)> = None;
         for &(ou, _) in origins {
             let seen = if ou == si {
-                state.sees(si, state.key(ti)) && los[ti]
+                state.sees_idx(si, ti) && los[ti]
             } else {
-                state.sees(ou, state.key(ti)) && state.los_clear(ou, ti)
+                state.sees_idx(ou, ti) && state.los_clear(ou, ti)
             };
             if !seen {
                 continue;
@@ -6184,7 +6184,7 @@ fn reply_threat_core(statics: &[UnitStatic], state: &State, player: i64, rules_e
                 pair_dist_memo(n, e, m, &state.positions[e], &state.positions[m])
             };
             let mut ev = 0.0f64;
-            if state.sees(e, state.key(m)) && los_clear(state, e, m) {
+            if state.sees_idx(e, m) && los_clear(state, e, m) {
                 ev = volley_ev(statics, state, e, m, d, &mut sc, rules_epoch, o.reach_only.then_some(0.0)).0;
             }
             // T03-T06: off = the fixed 12" / 6" bands on the centre distance; on = the enemy's live bands,
@@ -6199,7 +6199,7 @@ fn reply_threat_core(statics: &[UnitStatic], state: &State, player: i64, rules_e
             if v2 && movable && chargeable && charge_gap <= charge_reach {
                 ev = ev.max(melee_threat_at_epoch(statics, state, e, m, rules_epoch));
             }
-            if v2 && movable && d > adv_in && state.sees(e, state.key(m)) && los_clear(state, e, m) {
+            if v2 && movable && d > adv_in && state.sees_idx(e, m) && los_clear(state, e, m) {
                 let after = volley_ev(statics, state, e, m, d - adv_in, &mut sc, rules_epoch, o.reach_only.then_some(adv_in)).0;
                 ev = ev.max(after);
             }

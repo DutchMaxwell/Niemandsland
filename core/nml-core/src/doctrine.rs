@@ -163,7 +163,7 @@ pub fn synth_state(a: &Value, b: &Value, zone_a: &Zone, zone_b: &Zone, markers: 
         kit_names: Vec::new(),
         mods: vec![Mods::default(); n], mods_base: vec![Rc::new(Mods::default()); n],
         attached: Rc::new(vec![Vec::new(); n]), attached_to: Rc::new(vec![None; n]),
-        los: vec![None; n], los_pairs: None,
+        los: vec![None; n], sees_tab: None, los_pairs: None,
         bands,
         shroud: vec![None; n], charge_no_difficult: vec![false; n], charge_probe_r: vec![0.0; n],
         buffs: vec![Vec::new(); n], vs_mark_round: vec![-1; n], hit_and_run_round: vec![-1; n],

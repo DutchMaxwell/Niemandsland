@@ -523,6 +523,10 @@ pub struct State {
     pub attached: Rc<Vec<Vec<usize>>>,
     pub attached_to: Rc<Vec<Option<usize>>>,
     pub los: Vec<Option<Rc<HashMap<String, bool>>>>,
+    /// Dense n x n copy of `sees` (`sees_tab[i * n + j]` = `sees(i, key(j))`), derived from `los`
+    /// and the roster by `rebuild_sees`; `None` = ask the String rows. Whoever writes `los` or
+    /// grows the roster must call `rebuild_sees` (shared across clones, like `los` itself).
+    pub sees_tab: Option<Rc<Vec<bool>>>,
     /// `BattleSim._los_clear` (battle_sim.gd:666-670) answers for this state, as
     /// a row-major n x n matrix in capture order: `los_pairs[i * n + j]` is true
     /// when the line of fire from unit i to unit j is clear. `None` = the state
@@ -773,6 +777,31 @@ impl State {
             None => true,
             Some(m) => *m.get(other_key).unwrap_or(&true),
         }
+    }
+
+    /// Re-derive `sees_tab` from `los` + roster: the same `unwrap_or(true)` rule as `sees`, once.
+    pub fn rebuild_sees(&mut self) {
+        let n = self.units();
+        self.sees_tab = self.los.iter().any(Option::is_some).then(|| {
+            let mut t = vec![true; n * n];
+            for (i, row) in self.los.iter().enumerate() {
+                if let Some(m) = row {
+                    for j in 0..n {
+                        t[i * n + j] = *m.get(self.key(j)).unwrap_or(&true);
+                    }
+                }
+            }
+            Rc::new(t)
+        });
+    }
+
+    /// `sees(i, key(j))` by index: one table read instead of a String-keyed hash lookup.
+    #[inline]
+    pub fn sees_idx(&self, i: usize, j: usize) -> bool {
+        let Some(t) = &self.sees_tab else { return self.sees(i, self.key(j)) };
+        let v = t[i * self.units() + j];
+        debug_assert_eq!(v, self.sees(i, self.key(j)), "sees_tab is stale: a writer of `los` skipped rebuild_sees");
+        v
     }
 
     /// `BattleSim._los_clear` battle_sim.gd:859-870, read off the recorded

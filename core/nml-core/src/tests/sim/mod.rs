@@ -75,6 +75,7 @@
             attached: Rc::new(vec![vec![1], vec![], vec![3], vec![]]),
             attached_to: Rc::new(vec![None, Some(0), None, Some(2)]),
             los: vec![None, None, None, None],
+            sees_tab: None,
             los_pairs: None,
             bands: vec![Bands::default(); 4],
             shroud: vec![None; 4],

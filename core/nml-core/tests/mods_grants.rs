@@ -88,6 +88,7 @@ fn two_units() -> (nml_core::State, Vec<UnitStatic>) {
         attached: Rc::new(vec![vec![], vec![]]),
         attached_to: Rc::new(vec![None, None]),
         los: vec![None, None],
+        sees_tab: None,
         los_pairs: None,
         bands: vec![Bands::default(); 2],
         shroud: vec![None; 2],
