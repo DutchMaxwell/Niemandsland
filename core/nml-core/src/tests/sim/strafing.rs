@@ -70,7 +70,7 @@ use crate::rules::Registries;
         st.attached_to = Rc::new(vec![None, None]);
         st.positions = vec![vec![[0.0, 0.0, 0.0]], vec![[5.0 * IN2M, 0.0, 0.0]]];
         st.wounds = vec![vec![1], vec![1]];
-        st.radii = vec![vec![IN2M], vec![IN2M]];
+        st.radii = Rc::new(vec![vec![IN2M], vec![IN2M]]);
         st.bands[0].advance = 12.0;
         let carrier = strafe_carrier();
         let target = UnitStatic {

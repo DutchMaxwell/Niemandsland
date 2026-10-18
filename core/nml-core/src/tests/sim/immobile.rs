@@ -37,7 +37,7 @@ use super::*;
             vec![],
         ];
         st.wounds = vec![vec![1], vec![], vec![1], vec![]];
-        st.radii = vec![vec![IN2M], vec![], vec![IN2M], vec![]];
+        st.radii = Rc::new(vec![vec![IN2M], vec![], vec![IN2M], vec![]]);
         st.alive = vec![1, 0, 1, 0];
         st.attached = Rc::new(vec![vec![], vec![], vec![], vec![]]);
         st.attached_to = Rc::new(vec![None, None, None, None]);

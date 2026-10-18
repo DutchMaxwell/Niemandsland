@@ -103,7 +103,7 @@ use super::*;
                 vec![[12.0 * IN2M, 0.0, 0.0]],
                 vec![[20.0 * IN2M, 0.0, 0.0]],
             ],
-            radii: vec![vec![IN2M], vec![IN2M], vec![IN2M]],
+            radii: Rc::new(vec![vec![IN2M], vec![IN2M], vec![IN2M]]),
             kits: Vec::new(),
             kit_names: Vec::new(),
             mods: vec![Mods::default(); n],
@@ -137,7 +137,7 @@ use super::*;
             second_wind_round: -1,
             second_wind_uses: 0,
             sidestep_budget: Default::default(),
-            limited_used: vec![Vec::new(); n],
+            limited_used: Rc::new(vec![Vec::new(); n]),
             piercing_tag_used: vec![false; n],
             piercing_tag_markers: vec![0; n],
             piercing_tag_persistent: vec![false; n],
@@ -145,9 +145,9 @@ use super::*;
             spot_markers: vec![0; n],
             tag_markers: vec![0; n],
             spot_round: vec![-1; n],
-            precision_used: vec![Vec::new(); n],
-            storm_used: vec![Vec::new(); n],
-            feats_used: vec![Vec::new(); n],
+            precision_used: Rc::new(vec![Vec::new(); n]),
+            storm_used: Rc::new(vec![Vec::new(); n]),
+            feats_used: Rc::new(vec![Vec::new(); n]),
         }
     }
 

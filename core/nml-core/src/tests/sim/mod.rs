@@ -67,7 +67,7 @@
             wound_frac: vec![1.0; 4],
             positions: xs.iter().map(|x| vec![[x * IN2M, 0.0, 0.0]]).collect(),
             wounds: vec![vec![1]; 4],
-            radii: vec![vec![IN2M]; 4],
+            radii: Rc::new(vec![vec![IN2M]; 4]),
             kits: Vec::new(),
             kit_names: Vec::new(),
             mods: vec![Mods::default(); 4],
@@ -101,7 +101,7 @@
             second_wind_round: -1,
             second_wind_uses: 0,
             sidestep_budget: Default::default(),
-            limited_used: vec![Vec::new(); 4],
+            limited_used: Rc::new(vec![Vec::new(); 4]),
             piercing_tag_used: vec![false; 4],
             piercing_tag_markers: vec![0; 4],
             piercing_tag_persistent: vec![false; 4],
@@ -109,9 +109,9 @@
             spot_markers: vec![0; 4],
             tag_markers: vec![0; 4],
             spot_round: vec![-1; 4],
-            precision_used: vec![Vec::new(); 4],
-            storm_used: vec![Vec::new(); 4],
-            feats_used: vec![Vec::new(); 4],
+            precision_used: Rc::new(vec![Vec::new(); 4]),
+            storm_used: Rc::new(vec![Vec::new(); 4]),
+            feats_used: Rc::new(vec![Vec::new(); 4]),
         }
     }
 
@@ -119,9 +119,9 @@
     fn modifier_distance_uses_base_gap_from_epoch_66() {
         let mut st = four_unit_line();
         st.positions[0] = vec![[0.0, 0.0, 0.0], [-4.48 * IN2M, 0.0, 0.0]];
-        st.radii[0] = vec![0.016, 0.016];
+        Rc::make_mut(&mut st.radii)[0] = vec![0.016, 0.016];
         st.positions[2] = vec![[(7.0 * IN2M) + 0.032, 0.0, 0.0]];
-        st.radii[2] = vec![0.016];
+        Rc::make_mut(&mut st.radii)[2] = vec![0.016];
         let old = modifier_distance_in(&st, 0, 2, Seams { rules_epoch: 65, ..Seams::default() });
         let new = modifier_distance_in(&st, 0, 2, Seams { rules_epoch: 66, ..Seams::default() });
         assert!((old - 10.5).abs() < 0.1, "old centre modifier: {old}");
@@ -207,7 +207,7 @@
             vec![[5.0 * IN2M, 0.0, 0.0], [5.02 * IN2M, 0.0, 0.0], [5.04 * IN2M, 0.0, 0.0]],
             vec![],
         ];
-        st.radii = vec![vec![IN2M], vec![], vec![IN2M; 3], vec![]];
+        st.radii = Rc::new(vec![vec![IN2M], vec![], vec![IN2M; 3], vec![]]);
         st.wounds = vec![vec![1], vec![], vec![1, 1, 1], vec![]];
         st.alive = vec![1, 0, 3, 0];
         let bearer = storm_bearer(rule, faction, rules_epoch);
@@ -369,7 +369,7 @@
 
         let (st2, statics2) = storm_line("Storm of Change", "wormhole_daemons_of_change", 6);
         let mut spent = st2;
-        spent.storm_used[0] = vec!["Storm of Change".to_string()];
+        Rc::make_mut(&mut spent.storm_used)[0] = vec!["Storm of Change".to_string()];
         let (next2, shot2) = run_storm(&spent, &statics2, 3, 6);
         assert!(shot2.rolls.is_empty(), "already spent this game");
         assert!(shot2.log.is_empty());
@@ -416,7 +416,7 @@
         st.alive[0] = 0;
         st.positions[0].clear();
         st.wounds[0].clear();
-        st.radii[0].clear();
+        Rc::make_mut(&mut st.radii)[0].clear();
         let statics = vec![
             UnitStatic { ctx: Ctx { fear: 2, ..Ctx::default() }, quality: 6, ..UnitStatic::default() },
             UnitStatic { quality: 6, ..UnitStatic::default() },
@@ -452,7 +452,7 @@
         if !host_alive {
             st.wounds[0].clear();
             st.positions[0].clear();
-            st.radii[0].clear();
+            Rc::make_mut(&mut st.radii)[0].clear();
         }
         let statics = vec![
             UnitStatic { name: "Squad".into(), quality: 5, ctx: Ctx { quality: 5, ..Ctx::default() }, model_count: 1, wounds_max: vec![1], ..UnitStatic::default() },
@@ -733,8 +733,8 @@
     /// corpus audit found (qag_ref act 24: edge 7.95" vs centre 14.30").
     fn stealth_split_line() -> (State, Vec<UnitStatic>) {
         let (mut st, mut statics) = split_line();
-        st.radii[0] = vec![2.0 * IN2M];
-        st.radii[2] = vec![2.0 * IN2M];
+        Rc::make_mut(&mut st.radii)[0] = vec![2.0 * IN2M];
+        Rc::make_mut(&mut st.radii)[2] = vec![2.0 * IN2M];
         statics[0].ctx.quality = 4;
         statics[2].ctx = Ctx { defense: 4, stealth: true, ..Default::default() };
         (st, statics)
@@ -807,7 +807,7 @@
             vec![[12.0 * IN2M, 0.0, 0.0], [12.02 * IN2M, 0.0, 0.0], [12.04 * IN2M, 0.0, 0.0]],
             vec![],
         ];
-        st.radii = vec![vec![IN2M; 2], vec![IN2M], vec![IN2M; 3], vec![]];
+        st.radii = Rc::new(vec![vec![IN2M; 2], vec![IN2M], vec![IN2M; 3], vec![]]);
         st.wounds = vec![vec![1; 2], vec![1], vec![1; 3], vec![]];
         st.alive = vec![2, 1, 3, 0];
         let mut a = UnitStatic {
@@ -1023,7 +1023,7 @@
             vec![[5.0 * IN2M, 0.0, 0.0], [5.02 * IN2M, 0.0, 0.0], [5.04 * IN2M, 0.0, 0.0]],
             vec![],
         ];
-        st.radii = vec![vec![IN2M], vec![], vec![IN2M; 3], vec![]];
+        st.radii = Rc::new(vec![vec![IN2M], vec![], vec![IN2M; 3], vec![]]);
         st.wounds = vec![vec![1], vec![], vec![1, 1, 1], vec![]];
         st.alive = vec![1, 0, 3, 0];
         let mut a = UnitStatic { name: "a".into(), ..Default::default() };
@@ -1101,7 +1101,7 @@
             [0.04 * IN2M, 0.0, 0.0],
             [0.06 * IN2M, 0.0, 0.0],
         ];
-        st.radii[0] = vec![IN2M; 4];
+        Rc::make_mut(&mut st.radii)[0] = vec![IN2M; 4];
         st.wounds[0] = vec![1; 4];
         st.alive[0] = 4;
         let mut a = UnitStatic { name: "a".into(), model_count: 4, ..Default::default() };
@@ -1159,7 +1159,7 @@
         st.attached_to = Rc::new(vec![None, None]);
         st.positions = vec![vec![[0.0, 0.0, 0.0]], vec![[(gap_in + 2.0) * IN2M, 0.0, 0.0]]];
         st.wounds = vec![vec![1], vec![1]];
-        st.radii = vec![vec![IN2M], vec![IN2M]];
+        st.radii = Rc::new(vec![vec![IN2M], vec![IN2M]]);
         (st, vec![
             UnitStatic {
                 ctx: Ctx { quality: 4, defense: 4, tough: 1, models: 1, ..Default::default() },
@@ -1278,7 +1278,7 @@
         let mut reg = crate::rules::Registries::new(&repo_root());
         statics[0] = UnitStatic::build_for(&mut reg, &boost_carrier(system, faction, rules), epoch);
         st.positions[0] = vec![[0.0, 0.0, 0.0]];
-        st.radii[0] = vec![IN2M];
+        Rc::make_mut(&mut st.radii)[0] = vec![IN2M];
         st.wounds[0] = vec![1];
         st.alive[0] = 1;
         (st, statics)
@@ -1345,10 +1345,10 @@
         st.attached_to = Rc::new(vec![None, None]);
         st.positions[0] = vec![[0.0, 0.0, 0.0], [0.8, 0.0, 0.0], [1.2, 0.0, 0.0]];
         st.wounds[0] = vec![1, 1, 1];
-        st.radii[0] = vec![IN2M, IN2M, IN2M];
+        Rc::make_mut(&mut st.radii)[0] = vec![IN2M, IN2M, IN2M];
         st.positions[1] = vec![[2.0, 0.0, 0.0], [3.0, 0.0, 0.0], [4.0, 0.0, 0.0]];
         st.wounds[1] = vec![1, 1, 1];
-        st.radii[1] = vec![IN2M, IN2M, IN2M];
+        Rc::make_mut(&mut st.radii)[1] = vec![IN2M, IN2M, IN2M];
         (st, statics)
     }
 
@@ -1583,7 +1583,7 @@
                 vec![at(6.0, 1.5), at(6.0, 9.0)],
                 vec![],
             ];
-            st.radii = vec![vec![0.016; 2], vec![], vec![0.016; 2], vec![]];
+            st.radii = Rc::new(vec![vec![0.016; 2], vec![], vec![0.016; 2], vec![]]);
             st.wounds = vec![vec![1; 2], vec![], vec![1; 2], vec![]];
             st.alive = vec![2, 0, 2, 0];
             statics[2].model_count = 2;
@@ -1724,6 +1724,7 @@ mod dest_side_arms;
 mod entrenched;
 mod ev_live_grants;
 mod ev_move_grants;
+mod ledger_cow;
 mod reply_ctx_cache;
 mod ev_terrain_debuff;
 mod extended_buff_range;

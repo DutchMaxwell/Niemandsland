@@ -911,7 +911,7 @@ pub fn mint_template_slot(
     st.wound_frac.push(0.0);
     st.positions.push(Vec::new());
     st.wounds.push(Vec::new());
-    st.radii.push(Vec::new());
+    Rc::make_mut(&mut st.radii).push(Vec::new());
     st.kits.push(Rc::new(Vec::new()));
     st.kit_names.push(Rc::new(Vec::new()));
     st.mods.push(crate::state::Mods::default());
@@ -944,15 +944,15 @@ pub fn mint_template_slot(
     st.growth_round.push(-1);
     st.second_wind_used.push(false);
     st.reinforcement_used.push(false);
-    st.limited_used.push(Vec::new());
+    Rc::make_mut(&mut st.limited_used).push(Vec::new());
     st.piercing_tag_used.push(false);
     st.piercing_tag_markers.push(0);
     st.spot_markers.push(0);
     st.tag_markers.push(0);
     st.spot_round.push(-1);
-    st.precision_used.push(Vec::new());
-    st.storm_used.push(Vec::new());
-    st.feats_used.push(Vec::new());
+    Rc::make_mut(&mut st.precision_used).push(Vec::new());
+    Rc::make_mut(&mut st.storm_used).push(Vec::new());
+    Rc::make_mut(&mut st.feats_used).push(Vec::new());
     st.teleport_used.push(false);
     if let Some(old) = st.los_pairs.as_ref() {
         // The roster grew, so every captured row now has a different stride.

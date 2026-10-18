@@ -131,7 +131,7 @@ fn piercing_shooting_mark_ap_fires_from_21_and_not_below() {
 fn piercing_fighting_mark_ap_fires_from_21_and_not_below() {
     let (mut st, mut statics) = pierce_line("Piercing Fighting Mark", "AP(+1) in melee", "melee");
     st.positions[2] = vec![[2.5 * IN2M, 0.0, 0.0]];
-    st.radii[2] = vec![IN2M];
+    Rc::make_mut(&mut st.radii)[2] = vec![IN2M];
     st.wounds[2] = vec![1];
     st.alive[2] = 1;
     statics[2].model_count = 1;

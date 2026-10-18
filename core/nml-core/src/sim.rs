@@ -385,7 +385,7 @@ pub fn land_wounds_with(state: &mut State, ti: usize, mut left: i64, exact: bool
             state.kit_remove(ti, s);
             // radii stay aligned with positions or the base-edge measure lies.
             if s < state.radii[ti].len() {
-                state.radii[ti].remove(s);
+                Rc::make_mut(&mut state.radii)[ti].remove(s);
             }
             if !order.is_empty() {
                 order.remove(0);
@@ -460,7 +460,7 @@ fn land_takedown_groups(state: &mut State, ti: usize, shot: &mut ShootResult) {
             remove_position_or_log(state, ti, pick, "land_takedown_groups");
             state.kit_remove(ti, pick);
             if pick < state.radii[ti].len() {
-                state.radii[ti].remove(pick);
+                Rc::make_mut(&mut state.radii)[ti].remove(pick);
             }
         }
         state.alive[ti] = state.positions[ti].len() as i64;
@@ -545,7 +545,7 @@ pub fn land_deadly_wounds(state: &mut State, ti: usize, unsaved: i64, deadly_x: 
             state.kit_remove(m, best);
             // radii stay aligned with positions or the base-edge measure lies.
             if !state.radii[m].is_empty() {
-                state.radii[m].remove(best);
+                Rc::make_mut(&mut state.radii)[m].remove(best);
             }
             if epoch67 && best < max_of[ci].len() {
                 max_of[ci].remove(best);
@@ -938,7 +938,7 @@ pub(crate) fn tray_reanimation(
         let back = cost.min(left).max(1);
         next.wounds[u].insert(0, back);
         next.positions[u].insert(0, spot);
-        next.radii[u].insert(0, DEFAULT_BASE_RADIUS_M);
+        Rc::make_mut(&mut next.radii)[u].insert(0, DEFAULT_BASE_RADIUS_M);
         next.kits_drop(u); // the revived body's kit is unknown: this unit falls back to slot order
         next.alive[u] = next.positions[u].len() as i64;
         left -= back;
@@ -1251,7 +1251,7 @@ pub(crate) fn tray_strafing(
     // absorb, land, Deadly's per-model leg, the post-volley morale die — so
     // the tray stream stays the table's own order.
     for (b, keep, _, _) in &parts {
-        mark_spent_limited(&statics[next.roster.profile[*b]].strafe_shoot, keep, &mut next.limited_used[*b]);
+        mark_spent_limited(&statics[next.roster.profile[*b]].strafe_shoot, keep, &mut next.limited_used, *b);
     }
     let w = shot.absorb(r);
     if !seams.tray_exact {
@@ -1292,7 +1292,7 @@ pub(crate) fn tray_storm_attack(
                 .collect();
             // no enemy in reach — the once-per-game is NOT spent
             if targets.is_empty() { continue; }
-            next.storm_used[b].push(spec.name.clone());
+            Rc::make_mut(&mut next.storm_used)[b].push(spec.name.clone());
             let faces = tray.roll(spec.dice.max(1) as usize);
             shot.rolls.push(crate::dice::Roll {
                 kind: "attack", count: spec.dice, target: spec.trigger,
@@ -2292,7 +2292,7 @@ fn tray_precision_markers(
                     ..UtilityBuff::default()
                 };
                 let Some(ti) = utility_targets(statics, next, bearer, &probe, seams).into_iter().next() else { continue; };
-                next.precision_used[bearer].push(b.name.clone());
+                Rc::make_mut(&mut next.precision_used)[bearer].push(b.name.clone());
                 let tn = statics[next.roster.profile[ti]].name.clone();
                 if b.bonus == "per_placed_marker" {
                     // TARGET — the +X is a PERSISTENT record: every friendly
@@ -4267,11 +4267,11 @@ fn drop_spent_limited(profiles: &[ShootProfile], used: &[String], sc: &mut Scrat
 /// `SoloController.mark_limited_used` (solo_controller.gd:7700-7708,
 /// main.gd:3207-3208): called AFTER the dice actually rolled, win or lose —
 /// every Limited profile that fired is spent for the rest of the game.
-fn mark_spent_limited(profiles: &[ShootProfile], keep: &[usize], used: &mut Vec<String>) {
+fn mark_spent_limited(profiles: &[ShootProfile], keep: &[usize], ledger: &mut Rc<Vec<Vec<String>>>, unit: usize) {
     for &i in keep {
         let p = &profiles[i];
-        if p.limited && !used.iter().any(|n| n == &p.name) {
-            used.push(p.name.clone());
+        if p.limited && !ledger[unit].iter().any(|n| n == &p.name) {
+            Rc::make_mut(ledger)[unit].push(p.name.clone());
         }
     }
 }
@@ -4593,7 +4593,7 @@ fn expected_melee_morale(
         drop_carried(state, li);
         state.wounds[li].clear();
         state.positions[li].clear();
-        state.radii[li].clear();
+        Rc::make_mut(&mut state.radii)[li].clear();
         state.kits_drop(li);
         state.alive[li] = 0;
     } else {
@@ -4754,7 +4754,7 @@ fn strike_phase(
                 && !next.feats_used[*mi].iter().any(|n| n == "Piercing Feat")
             {
                 att.feat_ap_bonus += uf.piercing_feat_ap;
-                next.feats_used[*mi].push("Piercing Feat".to_string());
+                Rc::make_mut(&mut next.feats_used)[*mi].push("Piercing Feat".to_string());
                 shot.log.push(format!("[feat] Piercing Feat spent by {}", uf.name));
             }
         }
@@ -4838,7 +4838,7 @@ fn strike_phase(
     }
     for (mi, sc, _) in &parts {
         let melee = &statics[next.roster.profile[*mi]].melee;
-        mark_spent_limited(melee, &sc.keep, &mut next.limited_used[*mi]);
+        mark_spent_limited(melee, &sc.keep, &mut next.limited_used, *mi);
     }
     let mut caused = r.caused;
     // rules-wave3-growthmark (epoch 6) — Regenerative Strength: wounds this
@@ -5111,7 +5111,7 @@ fn tray_morale(
             drop_carried(state, i);
             state.wounds[i].clear();
             state.positions[i].clear();
-            state.radii[i].clear();
+            Rc::make_mut(&mut state.radii)[i].clear();
             state.kits_drop(i);
             state.alive[i] = 0;
         }
@@ -7475,7 +7475,7 @@ fn resolve_with(
     );
     let rapid_mark_in = rapid_charge_mark_bonus_in(statics, &next, si, ci, kind, seams.rules_epoch);
     if feat_in != 0.0 {
-        next.feats_used[si].push(
+        Rc::make_mut(&mut next.feats_used)[si].push(
             statics[pi_s]
                 .speed_feat
                 .as_ref()
@@ -8149,14 +8149,14 @@ fn resolve_with(
                                     if um.precision_feat_hit > 0 && !state.feats_used[mi].iter().any(|n| n == "Precision Feat") {
                                         att.feat_hit_bonus += um.precision_feat_hit;
                                         if !next.feats_used[mi].iter().any(|n| n == "Precision Feat") {
-                                            next.feats_used[mi].push("Precision Feat".to_string());
+                                            Rc::make_mut(&mut next.feats_used)[mi].push("Precision Feat".to_string());
                                             shot.log.push(format!("[feat] Precision Feat spent by {}", um.name));
                                         }
                                     }
                                     if um.piercing_feat_ap > 0 && !state.feats_used[mi].iter().any(|n| n == "Piercing Feat") {
                                         att.feat_ap_bonus += um.piercing_feat_ap;
                                         if !next.feats_used[mi].iter().any(|n| n == "Piercing Feat") {
-                                            next.feats_used[mi].push("Piercing Feat".to_string());
+                                            Rc::make_mut(&mut next.feats_used)[mi].push("Piercing Feat".to_string());
                                             shot.log.push(format!("[feat] Piercing Feat spent by {}", um.name));
                                         }
                                     }
@@ -8170,7 +8170,7 @@ fn resolve_with(
                             // sees the folded name — once per game, never
                             // re-spent.
                             for &mi in &feat_spends {
-                                next.feats_used[mi].push("Takedown Shot".to_string());
+                                Rc::make_mut(&mut next.feats_used)[mi].push("Takedown Shot".to_string());
                             }
                             // Block C5 — Instinctive: the +1 reaches the
                             // shooting fold ONLY when THIS group's target is
@@ -8244,7 +8244,7 @@ fn resolve_with(
                             }
                             for (mi, msc, _) in &parts {
                                 let shoot = &statics[next.roster.profile[*mi]].shoot;
-                                mark_spent_limited(shoot, &msc.keep, &mut next.limited_used[*mi]);
+                                mark_spent_limited(shoot, &msc.keep, &mut next.limited_used, *mi);
                             }
                             // D1-B5a: `absorb`, not `=` — a CHARGE activation
                             // puts several sub-phases into ONE report, and the

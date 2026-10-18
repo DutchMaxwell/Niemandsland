@@ -47,7 +47,7 @@ use super::*;
         });
         st.player = vec![0, 0, 0, 0];
         st.positions[2] = vec![[5.0 * IN2M, 0.0, 0.0]];
-        st.radii[2] = vec![IN2M];
+        Rc::make_mut(&mut st.radii)[2] = vec![IN2M];
         st.wounds[2] = vec![1];
         st.alive = vec![1, 0, 1, 0];
         let mut b = UnitStatic { name: "b".into(), ..Default::default() };

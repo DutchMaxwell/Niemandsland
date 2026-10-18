@@ -63,7 +63,7 @@ use crate::rules::Registries;
         st.attached_to = Rc::new(vec![None, None]);
         st.positions = vec![vec![[0.0, 0.0, 0.0]], vec![[5.0 * IN2M, 0.0, 0.0]]];
         st.wounds = vec![vec![1], vec![1]];
-        st.radii = vec![vec![IN2M], vec![IN2M]];
+        st.radii = Rc::new(vec![vec![IN2M], vec![IN2M]]);
         st.bands[0].advance = 12.0;
         let carrier = crossing_carrier();
         let target = UnitStatic {
@@ -140,13 +140,13 @@ use crate::rules::Registries;
         let zs_in = [-3.0_f64, -0.5, 0.0, 0.5, 3.0];
         before.positions[0] = zs_in.iter().map(|z| [0.0, 0.0, z * IN2M]).collect();
         before.wounds[0] = vec![1; 5];
-        before.radii[0] = vec![IN2M; 5];
+        Rc::make_mut(&mut before.radii)[0] = vec![IN2M; 5];
         before.positions[1] = vec![[0.0, 0.0, 0.0]];
         before.wounds[1] = vec![1];
-        before.radii[1] = vec![IN2M];
+        Rc::make_mut(&mut before.radii)[1] = vec![IN2M];
         before.positions[2] = vec![[6.0 * IN2M, 0.0, 0.0]];
         before.wounds[2] = vec![3];
-        before.radii[2] = vec![IN2M];
+        Rc::make_mut(&mut before.radii)[2] = vec![IN2M];
         before.positions[3] = vec![[0.0, 100.0 * IN2M, 0.0]]; // parked off the corridor, unused
         before.roster = Rc::new(Roster {
             keys: vec!["a".into(), "ah".into(), "b".into(), "bh".into()],

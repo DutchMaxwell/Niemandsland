@@ -500,7 +500,7 @@ pub struct State {
     pub wound_frac: Vec<f64>,
     pub positions: Vec<Vec<[f64; 3]>>,
     pub wounds: Vec<Vec<i64>>,
-    pub radii: Vec<Vec<f64>>,
+    pub radii: Rc<Vec<Vec<f64>>>,
     /// Tray-exact series S1: per living model, what the table's `casualty_order`
     /// reads (`Kit`), slot-aligned with `positions`/`wounds`/`radii`. An EMPTY
     /// list means the state carried none (every record before the key), and so
@@ -651,7 +651,7 @@ pub struct State {
     /// GF v3.5.1 "Limited" — "may only be used once per game"
     /// (`unit_properties["limited_used"]`, solo_controller.gd:7681-7722).
     /// Per unit, weapon names fired this game; never resets on a later round.
-    pub limited_used: Vec<Vec<String>>,
+    pub limited_used: Rc<Vec<Vec<String>>>,
     /// Wave 3 — `unit_properties["piercing_tag_used"]` (main.gd:17015): the
     /// Piercing-Tag family's once-per-GAME placement stamp, per member (the
     /// acting unit or an attached hero), shared across all three family names
@@ -681,7 +681,7 @@ pub struct State {
     /// Storm Attack family's ONCE-per-game flags, per unit the DISPLAY names
     /// already fired this game (the recorder stamps them off the same flags,
     /// act_recorder.gd `_ledger_of`); never resets on a later round.
-    pub storm_used: Vec<Vec<String>>,
+    pub storm_used: Rc<Vec<Vec<String>>>,
     /// Wave 5 group (b) — the once-per-game FEAT latch, the Storm Attack
     /// shape: per unit, the DISPLAY names already declared this game
     /// (`unit_properties["speed_feat_used_<snake>"]`, solo_controller.gd:1712;
@@ -690,7 +690,7 @@ pub struct State {
     /// `uses_per_game` is once per GAME. The move seam's Speed Feat read
     /// (sim.rs) is gated on this latch and on `EPOCH_7_TABLE_RULES`, so a
     /// record below 7 never carries the key.
-    pub feats_used: Vec<Vec<String>>,
+    pub feats_used: Rc<Vec<Vec<String>>>,
     /// Wave 5 — `unit_properties["teleport_used_this_activation"]` (main.gd
     /// :17456; the beat erases it at its start — reset semantics). The beat's
     /// reads sit behind `EPOCH_8_PLANNER_MENU` (#831's epoch-8 move).
@@ -713,7 +713,7 @@ pub struct State {
     /// "Precision Target" (`unit_properties["precision_tag_used"]` /
     /// `["precision_target_used"]`, the recorder stamps them off the same
     /// flags, act_recorder.gd `_ledger_of`). Never resets on a later round.
-    pub precision_used: Vec<Vec<String>>,
+    pub precision_used: Rc<Vec<Vec<String>>>,
 }
 
 impl State {

@@ -49,7 +49,7 @@
     #[test]
     fn a_charge_reads_the_base_gap_not_the_centre_distance() {
         let (mut st, statics) = vr_charge_line(5.0);
-        st.radii = vec![vec![0.016], vec![0.016]];
+        st.radii = Rc::new(vec![vec![0.016], vec![0.016]]);
         st.positions[1] = vec![[(11.5 + 0.032 / IN2M) * IN2M, 0.0, 0.0]];
         assert_eq!(threat(&st, &statics, off()), 0.0, "off: the centre distance is over 12\"");
         assert!(threat(&st, &statics, on()) > 0.0, "on: the base gap is under 12\"");

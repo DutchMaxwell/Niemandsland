@@ -174,7 +174,7 @@ use super::*;
             "an epoch-6 record carries no synthetic"
         );
         let (mut st, statics) = ts_line(6);
-        st.feats_used[0].push("Takedown Shot".to_string());
+        Rc::make_mut(&mut st.feats_used)[0].push("Takedown Shot".to_string());
         let (next, shot) = run_shoot(&st, &statics, 6);
         assert!(
             attack_rolls(&shot).is_empty(),

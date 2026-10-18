@@ -55,7 +55,7 @@ fn volley_line(us: UnitStatic) -> (State, Vec<UnitStatic>) {
     let (mut st, mut statics) = buff_line();
     statics[0] = us;
     st.positions[0] = vec![[0.0, 0.0, 0.0]];
-    st.radii[0] = vec![IN2M];
+    Rc::make_mut(&mut st.radii)[0] = vec![IN2M];
     st.wounds[0] = vec![1];
     st.alive[0] = 1;
     (st, statics)
@@ -168,7 +168,7 @@ fn hop_line(rules: &[&str]) -> (State, Vec<UnitStatic>) {
     let (mut st, _) = dangerous_line();
     for j in 1..4 {
         st.positions[j] = vec![];
-        st.radii[j] = vec![];
+        Rc::make_mut(&mut st.radii)[j] = vec![];
         st.wounds[j] = vec![];
         st.alive[j] = 0;
     }

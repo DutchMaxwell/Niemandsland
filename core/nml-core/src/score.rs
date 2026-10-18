@@ -1156,7 +1156,7 @@ mod tests {
         let o2 = [-0.5, 0.0, 0.9];
         for round in 0..3 {
             st.positions[0] = vec![[0.9, 0.0, 0.1], [1.0, 0.0, 0.4], [1.2, 0.0, 0.2], [0.8, 0.0, 0.7]];
-            st.radii[0] = vec![0.016, 0.02, 0.016, 0.03];
+            std::rc::Rc::make_mut(&mut st.radii)[0] = vec![0.016, 0.02, 0.016, 0.03];
             for o in [o1, o2] {
                 assert_eq!(super::control_gap_memo(&st, 0, o).to_bits(), want(&st, 0, o), "cold/warm r{round}");
             }
@@ -1171,7 +1171,7 @@ mod tests {
             moved(&st, "z step");
             st.positions[0][0][0] -= 0.4; // x only
             moved(&st, "x step");
-            st.radii[0][0] = 0.2; // a radius only
+            std::rc::Rc::make_mut(&mut st.radii)[0][0] = 0.2; // a radius only
             moved(&st, "radius");
             st.positions[0].push([0.5, 0.0, 0.5]); // another size, radii shorter than models
             assert_eq!(super::control_gap_memo(&st, 0, o1).to_bits(), want(&st, 0, o1), "size r{round}");

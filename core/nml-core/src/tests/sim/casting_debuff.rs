@@ -49,7 +49,7 @@ use crate::rules::Registries;
         let (mut st, mut statics) = buff_line();
         statics[0] = debuff_carrier();
         st.positions[0] = vec![[0.0, 0.0, 0.0]];
-        st.radii[0] = vec![IN2M];
+        Rc::make_mut(&mut st.radii)[0] = vec![IN2M];
         st.wounds[0] = vec![1];
         st.alive[0] = 1;
         (st, statics)

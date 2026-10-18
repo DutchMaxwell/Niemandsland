@@ -373,7 +373,7 @@ fn escort_carried_marker_uses_the_carrier_base_edge() {
     st.markers_meta[0].carry = true;
     st.markers_meta[0].carried_by = 2;
     place(&mut st, 2, 0.0, -20.0);
-    st.radii[2] = vec![1.0 * IN2M];
+    Rc::make_mut(&mut st.radii)[2] = vec![1.0 * IN2M];
     assert_eq!(escort_winner(&st, 1, 48.0), "p2", "centre 4\" out, base edge 3\"");
     place(&mut st, 2, 0.0, -17.5);
     assert_eq!(escort_winner(&st, 1, 48.0), "p2", "centre 6.5\" out, base edge 5.5\"");
