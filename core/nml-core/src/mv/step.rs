@@ -1164,6 +1164,23 @@ pub fn plain_move(
     fast_planner: bool,
     guard: i64,
 ) -> Option<Landing> {
+    super::plain_memo::run(self.rules_epoch, state, t, si, dest, band_in, hero_attach, fast_planner, guard, || {
+        self.plain_move_fresh(state, t, si, dest, band_in, hero_attach, fast_planner, guard)
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn plain_move_fresh(
+    self,
+    state: &State,
+    t: &Terrain,
+    si: usize,
+    dest: V3,
+    band_in: f64,
+    hero_attach: bool,
+    fast_planner: bool,
+    guard: i64,
+) -> Option<Landing> {
     let board = t.board_in();
     if !t.is_valid() || board[0] <= 0.0 || board[1] <= 0.0 {
         return None;
@@ -1648,6 +1665,7 @@ mod tests {
     /// 0.05" bar every model lands within once the ladder runs.
     #[test]
     fn the_gate_collapse_ladder_lands_the_recorded_rush() {
+        let _k = KNOB_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         use serde_json::Value;
         let raw = std::fs::read_to_string(concat!(
             env!("CARGO_MANIFEST_DIR"),
@@ -1733,6 +1751,7 @@ mod tests {
     /// 0.05" bar the escalated landing matches the recorded position within.
     #[test]
     fn the_stall_escalation_lands_the_recorded_through_plan() {
+        let _k = KNOB_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         use serde_json::Value;
         let raw = std::fs::read_to_string(concat!(
             env!("CARGO_MANIFEST_DIR"),
@@ -1815,5 +1834,218 @@ mod tests {
             crate::mv::FAST_PLANNER_GUARD,
         );
         assert!(land.is_none(), "no board, no charge move: {land:?}");
+    }
+
+    // ---- plain_move memo (mv/plain_memo.rs) ----
+
+    /// `LADDER_DISABLED` / `STALL_DISABLED` are process globals that two tests flip; the memo bypasses while either
+    /// is on, so every test that flips them or counts memo hits takes this lock.
+    static KNOB_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    /// The recorded cap fixture of `the_p11_cap_replan_lands_the_recorded_plain_move`: state, terrain, dest, band.
+    fn memo_fixture() -> (State, Terrain, V3, f64) {
+        use serde_json::Value;
+        let raw = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/mv_plain_move_call.json"
+        ))
+        .expect("the recorded call");
+        let fx: Value = serde_json::from_str(&raw).expect("valid JSON");
+        let f = |v: &Value| v.as_f64().expect("number");
+        let v2 = |v: &Value| -> V2 { [f(&v[0]) as f32, f(&v[1]) as f32] };
+        let arr = |v: &Value| v.as_array().expect("array").clone();
+        let tr = &fx["terrain"];
+        let cp = &tr["cell_params"];
+        let t = Terrain::build(&PlainTerrain {
+            cells: arr(&tr["cells"]).iter().map(|c| [f(&c[0]), f(&c[1]), f(&c[2])]).collect(),
+            sandbox: Vec::<Obb>::new(),
+            pieces: Vec::new(),
+            walls: arr(&tr["walls"])
+                .iter()
+                .map(|w| [[f(&w[0][0]), f(&w[0][1])], [f(&w[1][0]), f(&w[1][1])]])
+                .collect(),
+            cell_params: CellParams {
+                table_size_feet: [f(&cp["table_size_feet"][0]), f(&cp["table_size_feet"][1])],
+                grid_rotation_degrees: f(&cp["grid_rotation_degrees"]),
+                grid_size_inches: f(&cp["grid_size_inches"]),
+                inches_to_meters: f(&cp["inches_to_meters"]),
+            },
+        });
+        let mradii = arr(&fx["radii_in"]);
+        let world: Vec<V3> =
+            arr(&fx["model_pos_in"]).iter().map(|p| t.from_inch(v2(p), 0.0)).collect();
+        let h = world.len() - 1;
+        let others = arr(&fx["others"]);
+        let state = units_state(
+            vec![
+                world[..h].to_vec(),
+                vec![world[h]],
+                others.iter().map(|o| t.from_inch(v2(&o["c"]), 0.0)).collect(),
+            ],
+            vec![
+                mradii[..h].iter().map(|r| f(r) * IN2M).collect(),
+                vec![f(&mradii[h]) * IN2M],
+                others.iter().map(|o| f(&o["r_in"]) * IN2M).collect(),
+            ],
+            vec![vec![1], vec![], vec![]],
+        );
+        let dest = t.from_inch(v2(&fx["goal_in"]), 0.0);
+        (state, t, dest, f(&fx["band_in"]))
+    }
+
+    /// `plain_memo::run` with a stub that counts how often the real work ran.
+    #[allow(clippy::too_many_arguments)]
+    fn memo_probe(s: &State, t: &Terrain, si: usize, dest: V3, band: f64, hero: bool, fast: bool, guard: i64,
+        epoch: u32, ran: &std::cell::Cell<u32>) {
+        let _ = crate::mv::plain_memo::run(epoch, s, t, si, dest, band, hero, fast, guard, || {
+            ran.set(ran.get() + 1);
+            None
+        });
+    }
+
+    /// Every INPUT of `plain_move`, changed alone, must miss; the unchanged call must hit.
+    /// RED: drop `dest` (or any other field) from `plain_memo::Args` / its `==` and the matching line fails.
+    #[test]
+    fn plain_memo_every_single_input_change_misses() {
+        let _k = KNOB_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        use crate::mods::LiveMod;
+        let (base, t, dest, band) = memo_fixture();
+        let ran = std::cell::Cell::new(0u32);
+        // A hit re-runs the work once in debug builds (the debug_assert recompute), never in release builds.
+        let hit_cost = u32::from(cfg!(debug_assertions));
+        crate::mv::plain_memo::begin_game();
+        let g = crate::mv::FAST_PLANNER_GUARD;
+        memo_probe(&base, &t, 0, dest, band, true, true, g, 0, &ran);
+        memo_probe(&base, &t, 0, dest, band, true, true, g, 0, &ran);
+        assert_eq!(ran.get(), 1 + hit_cost, "the identical call must be a hit");
+        // arguments
+        type Call<'a> = Box<dyn Fn(&std::cell::Cell<u32>) + 'a>;
+        let mut args: Vec<(&str, Call)> = Vec::new();
+        let (b, t2) = (&base, &t);
+        args.push(("si", Box::new(move |r| memo_probe(b, t2, 1, dest, band, true, true, g, 0, r))));
+        args.push(("dest.x", Box::new(move |r| memo_probe(b, t2, 0, [dest[0] + 0.01, dest[1], dest[2]], band, true, true, g, 0, r))));
+        args.push(("dest.y", Box::new(move |r| memo_probe(b, t2, 0, [dest[0], dest[1] + 0.01, dest[2]], band, true, true, g, 0, r))));
+        args.push(("dest.z", Box::new(move |r| memo_probe(b, t2, 0, [dest[0], dest[1], dest[2] + 0.01], band, true, true, g, 0, r))));
+        args.push(("band_in", Box::new(move |r| memo_probe(b, t2, 0, dest, band + 0.5, true, true, g, 0, r))));
+        args.push(("hero_attach", Box::new(move |r| memo_probe(b, t2, 0, dest, band, false, true, g, 0, r))));
+        args.push(("fast_planner", Box::new(move |r| memo_probe(b, t2, 0, dest, band, true, false, g, 0, r))));
+        args.push(("guard", Box::new(move |r| memo_probe(b, t2, 0, dest, band, true, true, g + 1, 0, r))));
+        args.push(("rules_epoch", Box::new(move |r| memo_probe(b, t2, 0, dest, band, true, true, g, 1, r))));
+        let t_other = memo_fixture().1;
+        args.push(("terrain", Box::new(move |r| memo_probe(b, &t_other, 0, dest, band, true, true, g, 0, r))));
+        for (name, call) in &args {
+            let before = ran.get();
+            call(&ran);
+            assert_eq!(ran.get(), before + 1, "argument `{name}` changed alone must miss");
+            call(&ran);
+            assert_eq!(ran.get(), before + 1 + hit_cost, "argument `{name}`: its own repeat must hit");
+        }
+        // state fields
+        type Edit = Box<dyn Fn(&mut State)>;
+        let edits: Vec<(&str, Edit)> = vec![
+            ("round", Box::new(|s| s.round += 1)),
+            ("rounds_total", Box::new(|s| s.rounds_total += 1)),
+            ("attacker", Box::new(|s| s.attacker = 1)),
+            ("objectives", Box::new(|s| s.objectives.push(crate::state::Objective { pos: [1.0, 0.0, 1.0], owner: 0 }))),
+            ("destroy_seq", Box::new(|s| s.destroy_seq.push(3))),
+            ("player", Box::new(|s| s.player[0] += 5)),
+            ("alive", Box::new(|s| s.alive[2] = 0)),
+            ("activated", Box::new(|s| s.activated[0] = true)),
+            ("shaken", Box::new(|s| s.shaken[0] = true)),
+            ("fatigued", Box::new(|s| s.fatigued[1] = true)),
+            ("in_cover", Box::new(|s| s.in_cover[0] = true)),
+            ("aircraft", Box::new(|s| s.aircraft[2] = true)),
+            ("dormant", Box::new(|s| s.dormant[2] = true)),
+            ("dormant_models", Box::new(|s| s.dormant_models[0] = 2)),
+            ("casts", Box::new(|s| s.casts[0] = 1)),
+            ("wound_frac", Box::new(|s| s.wound_frac[0] = 0.5)),
+            ("positions (mover)", Box::new(|s| s.positions[0][0][0] += 1e-9)),
+            ("positions (other unit)", Box::new(|s| s.positions[2][0][2] += 1e-9)),
+            ("wounds", Box::new(|s| s.wounds[0][0] = 7)),
+            ("radii", Box::new(|s| s.radii[2][0] += 1e-9)),
+            ("mods", Box::new(|s| s.mods[0].range_in = 1.0)),
+            ("bands", Box::new(|s| s.bands[0].advance += 1.0)),
+            ("charge_probe_r", Box::new(|s| s.charge_probe_r[0] = 3.0)),
+            ("moved_round", Box::new(|s| s.moved_round[0] = 1)),
+            ("hit_and_run_round", Box::new(|s| s.hit_and_run_round[0] = 1)),
+            ("second_wind_round", Box::new(|s| s.second_wind_round = 4)),
+            ("limited_used", Box::new(|s| s.limited_used[0].push("x".into()))),
+            ("teleport_used", Box::new(|s| s.teleport_used[0] = true)),
+            ("buffs", Box::new(|s| s.buffs[0].push(LiveMod {
+                hit_mod: 1, casting_mod: 0, morale_mod: 0, ap_mod: 0, def_mod: 0, defense_mod: 0, move_mod: 0,
+                grants_rule: Rc::from(""), scope: Rc::from(""), attackers: false, once: false, name: Rc::from("")
+            }))),
+            ("attached", Box::new(|s| Rc::make_mut(&mut s.attached)[2].push(0))),
+            ("attached_to", Box::new(|s| Rc::make_mut(&mut s.attached_to)[2] = Some(0))),
+            ("profiles (special rule of the mover)", Box::new(|s| {
+                let mut list = s.profiles.list.clone();
+                list[0].special_rules.push("Flying".into());
+                s.profiles = Rc::new(Profiles { list, index: s.profiles.index.clone() });
+            })),
+            ("scoring", Box::new(|s| s.scoring = Rc::from("x"))),
+            ("vp", Box::new(|s| s.vp = Some(Rc::new(serde_json::json!(1))))),
+            ("los_pairs", Box::new(|s| s.los_pairs = Some(Rc::new(vec![true; 9])))),
+        ];
+        for (name, edit) in &edits {
+            let mut s2 = base.clone();
+            edit(&mut s2);
+            assert!(s2 != base, "edit `{name}` did not change the state: the test would prove nothing");
+            let before = ran.get();
+            memo_probe(&s2, &t, 0, dest, band, true, true, g, 0, &ran);
+            assert_eq!(ran.get(), before + 1, "state field `{name}` changed alone must miss");
+            memo_probe(&s2, &t, 0, dest, band, true, true, g, 0, &ran);
+            assert_eq!(ran.get(), before + 1 + hit_cost, "state field `{name}`: its own repeat must hit");
+        }
+        // 0.0 and -0.0 compare `==` but are different inputs: positions are checked by bit pattern (a unit other than the
+        // mover, so the bucket hash, which only reads the mover's models, cannot hide a missing check).
+        let mut z = base.clone();
+        z.positions[2][0][0] = 0.0;
+        let mut nz = z.clone();
+        nz.positions[2][0][0] = -0.0;
+        assert!(z == nz, "the premise: `==` cannot tell the two zeros apart");
+        let before = ran.get();
+        memo_probe(&z, &t, 0, dest, band, true, true, g, 0, &ran);
+        memo_probe(&nz, &t, 0, dest, band, true, true, g, 0, &ran);
+        assert_eq!(ran.get(), before + 2, "0.0 vs -0.0 in positions must miss");
+        crate::mv::plain_memo::disarm();
+    }
+
+    /// Memo answer == fresh answer, on the recorded fixture and a spread of dests/bands; the repeat is a hit.
+    #[test]
+    fn plain_memo_answers_equal_fresh_on_recorded_fixture() {
+        let _k = KNOB_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let (state, t, dest, band) = memo_fixture();
+        let rules = MoveRules::default();
+        let g = crate::mv::FAST_PLANNER_GUARD;
+        crate::mv::plain_memo::begin_game();
+        let mut n = 0;
+        for (k, (dx, dz, b)) in [(0.0f32, 0.0f32, 0.0f64), (0.3, 0.0, 0.0), (0.0, -0.4, -2.0), (1.5, 1.5, -6.0)].iter().enumerate() {
+            for hero in [true, false] {
+                let d = [dest[0] + dx, dest[1], dest[2] + dz];
+                let fresh = rules.plain_move_fresh(&state, &t, 0, d, band + b, hero, true, g);
+                let first = rules.plain_move(&state, &t, 0, d, band + b, hero, true, g);
+                let (c0, h0) = crate::mv::plain_memo::stats();
+                let again = rules.plain_move(&state, &t, 0, d, band + b, hero, true, g);
+                let (c1, h1) = crate::mv::plain_memo::stats();
+                assert_eq!((c1, h1), (c0 + 1, h0 + 1), "variant {k}/{hero}: the repeat must be a hit");
+                assert_eq!(format!("{fresh:?}"), format!("{first:?}"), "variant {k}/{hero}: first call != fresh");
+                assert_eq!(format!("{fresh:?}"), format!("{again:?}"), "variant {k}/{hero}: hit != fresh");
+                n += 1;
+            }
+        }
+        assert_eq!(n, 8);
+        crate::mv::plain_memo::disarm();
+    }
+
+    /// A disarmed memo (the default, and what every other caller sees) never stores or answers.
+    #[test]
+    fn plain_memo_disarmed_by_default() {
+        let _k = KNOB_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let (state, t, dest, band) = memo_fixture();
+        let ran = std::cell::Cell::new(0u32);
+        crate::mv::plain_memo::disarm();
+        memo_probe(&state, &t, 0, dest, band, true, true, 0, 0, &ran);
+        memo_probe(&state, &t, 0, dest, band, true, true, 0, 0, &ran);
+        assert_eq!(ran.get(), 2);
     }
 }
