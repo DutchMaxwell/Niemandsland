@@ -3,7 +3,7 @@
 //! player, the config compare ...) and the matching case here fails (see the PR body).
 use super::rush_demotion::{HEADER, PLAIN};
 use super::*;
-use crate::menu::Tuning;
+use crate::menu::{Candidate, Tuning};
 use crate::playout_memo as pm;
 
 fn terrain() -> Terrain {
@@ -193,4 +193,51 @@ fn the_table_is_bounded_and_a_new_game_forgets_everything() {
         pm::begin_game();
         assert_eq!((pm::stored(), pm::stats()), (0, (0, 0)));
     });
+}
+
+/// The Scratch BUFFERS (`keep`, `attacks`, `fold`) are not part of the key: every filler clears them before it reads.
+/// A hit with junk left in them must still equal the fresh answer (in debug the hit's own check re-runs on the junk).
+#[test]
+fn scratch_buffers_are_not_an_input() {
+    mem(|| {
+        let (st, t) = (state(), terrain());
+        let statics = statics_of(&st, CURRENT_RULES_EPOCH);
+        let pol = Policy::new(&statics, &t, seams());
+        let want = fresh(&pol, &st, 1, true, 0);
+        let _s = pm::enter(7, t.uid(), &pol, &st);
+        assert_eq!(step(&pol, &st, 1, true, 0), want);
+        let mut sc = Scratch { keep: vec![9; 7], attacks: vec![-3; 5], fold: vec![Default::default(); 2], ..Scratch::default() };
+        assert_eq!(format!("{:?}", pol.policy_step(&st, 1, true, &mut sc)), want);
+        assert_eq!(pm::stats(), (2, 1), "the junk-buffer call is a hit");
+    });
+}
+
+/// RED for the debug check itself: a stored answer that is NOT the fresh one must panic on its hit. Removing the
+/// check, or weakening it so it compares nothing (the #1819 form compared `Some(..)` with `Ok(Some(..))` and failed
+/// on EVERY hit), fails one of these two or the hit tests above.
+#[cfg(debug_assertions)]
+fn stale_hit_panics(edit: impl Fn(&mut Option<Candidate>, &mut (u32, bool))) {
+    mem(|| {
+        let (st, t) = (state(), terrain());
+        let statics = statics_of(&st, CURRENT_RULES_EPOCH);
+        let pol = Policy::new(&statics, &t, seams());
+        let _s = pm::enter(7, t.uid(), &pol, &st);
+        assert!(step(&pol, &st, 1, true, 0).starts_with("Ok(Some("), "the stored answer is a move");
+        pm::tamper(edit);
+        step(&pol, &st, 1, true, 0);
+    });
+}
+
+#[cfg(debug_assertions)]
+#[test]
+#[should_panic(expected = "policy_step memo hit != fresh")]
+fn debug_check_catches_a_stale_answer() {
+    stale_hit_panics(|a, _| *a = None);
+}
+
+#[cfg(debug_assertions)]
+#[test]
+#[should_panic(expected = "policy_step memo hit != fresh")]
+fn debug_check_catches_a_stale_post_state() {
+    stale_hit_panics(|_, post| post.0 += 1);
 }
