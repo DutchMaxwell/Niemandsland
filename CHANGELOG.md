@@ -113,10 +113,11 @@ the game, new graphics for every biome, a longer Game School and a stronger NACH
 
 ### Added — models
 - **Saurians and Vampiric Undead** pick up many more unit, weapon and mount names (Gecko Champion
-  options, Pterodactyl and Ripjawdactyl mounts, Palanquins, the Queztalcoatl mount, dragon mounts, wings
-  and weapons), and a unit can show per-model variety from a second sculpt. The Mummified, Titan
+  options, Pterodactyl and Ripjawdactyl mounts, Palanquins, the Queztalcoatl mount, dragon, winged and
+  beast mounts for the Vampire Master and Ghoul Champion, wings and weapons), and a unit can show per-model variety from a second sculpt. The Mummified, Titan
   Lords, Rift Daemons and Machine Cults books resolve to their published art. (#1386–#1429, #1442,
-  #1506, #1553, #1555, #1591, #1592, #1598, #1614, #1620, #1656, #1657, #1798–#1802)
+  #1506, #1553, #1555, #1591, #1592, #1598, #1614, #1620, #1656, #1657, #1798–#1802, #1810, #1818,
+  #1822, #1823)
 
 ### Changed — UI
 - **A consistent dark-panel style across the game:** tool rail, top bar, game menu, unit cards, battle
@@ -178,7 +179,7 @@ the game, new graphics for every biome, a longer Game School and a stronger NACH
 - The relay's `/stats` names the serving machine. (#1669)
 - Rules-core speed: fat LTO, faster hashing and distance kernels in the route planner and search make
   AI games cheaper to compute, with identical results. (#1633, #1635, #1647-#1649, #1680, #1688,
-  #1695, #1700, #1803-#1806)
+  #1695, #1700, #1803-#1806, #1808, #1809, #1811-#1817, #1819-#1821)
 - Tooling for AI training and evaluation (teacher-data recorder, experiment knobs, lab tools); no
   player-facing effect. (#1640–#1646, #1658–#1667, #1685–#1694, #1713–#1731, #1742–#1751, #1759–#1760,
   #1763–#1764, #1784–#1787)
