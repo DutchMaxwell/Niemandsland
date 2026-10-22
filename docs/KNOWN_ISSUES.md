@@ -24,8 +24,8 @@ not there yet and what to watch for. The full done / in-progress / planned break
   it applies — or asks you to apply it.
 - **Solo against NACHTMAHR is the automated baseline.** When an army is AI-controlled the game
   resolves activations, dice, wounds, morale, terrain effects and hundreds of special rules for
-  both sides (see [`../PROJECT_STATUS.md`](../PROJECT_STATUS.md)). Solo is **alpha**: one difficulty
-  (full strength), co-op against the AI in multiplayer is a first version, and the UI is English
+  both sides (see [`../PROJECT_STATUS.md`](../PROJECT_STATUS.md)). Solo is **alpha**: four selectable difficulty grades
+  (Dämmerung, Zwielicht, Finsternis, Albtraum; Albtraum is the default), co-op against the AI in multiplayer is a first version, and the UI is English
   (the privacy & data screens also come in German).
 - **Automodus (Charge / Advance & Shoot / Rush) is a first version.** An executed intent has **no
   take-back** — the dice fell, like at the table. Regiments, aircraft and units embarked in a
@@ -64,9 +64,13 @@ not there yet and what to watch for. The full done / in-progress / planned break
 - **macOS is ad-hoc signed but not notarized** (no Apple Developer account): first launch needs
   **right-click → Open**, or the one-time `xattr -dr com.apple.quarantine` fallback — see the
   README's macOS note. The in-browser (web) build is parked (post-Alpha).
-- **macOS plays without the rules core.** The Windows and Linux builds carry the Rust rules core
-  that runs the trained network; the macOS build has no core, so NACHTMAHR plays its decision-tree
-  opponent there, not the stronger Erlkönig model.
+- **macOS: the rules core is verified on GitHub's macOS runners only.** Like Windows and Linux, the
+  macOS build carries the Rust rules core (a universal arm64 + x86_64 library inside the app), so
+  NACHTMAHR plays with Erlkönig. The release build proves on a macOS runner that the exported app
+  loads the core and plays; no person has tried it on a real Mac yet. If the start line or the
+  diagnostics report names the decision tree on your Mac, the core did not load — please report it.
+  (The solo grade picker still says "on macOS still without Erlkönig" next to Albtraum; that text is
+  out of date and is being fixed separately.)
 - **Windows: an in-game update from 0.3.12.0 restarts the game once.** The 0.3.12.0 updater
   replaces only `Niemandsland.exe`; on its first start 0.3.13.0 copies the missing rules-core file
   (`nml_core_godot.dll`) from the downloaded update next to the game and restarts once by itself.

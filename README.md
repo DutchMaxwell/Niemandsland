@@ -24,9 +24,9 @@ Fantasy). Built in Godot.
 What the code actually does today:
 
 - **Solo mode vs NACHTMAHR** — play a whole game against the built-in opponent. NACHTMAHR is a
-  game AI (no LLM) that decides entirely offline and never cheats. In the Windows and Linux builds it
+  game AI (no LLM) that decides entirely offline and never cheats. In the Windows, Linux and macOS builds it
   plays with its new AI model **Erlkönig**: a search guided by a trained neural network (value net)
-  that ships with the game and runs in the Rust rules core; without the core (always on macOS) it plays by the official OPR solo
+  that ships with the game and runs in the Rust rules core; without the core (when it does not load) it plays by the official OPR solo
   decision trees. The game log names which one plays. Mark an imported army as AI-controlled,
   or let NACHTMAHR bring one of its own pre-built lists (fetched at runtime, cached locally).
   Deployment is a click-guided rulebook flow (roll-off, alternating placement, scouts, ambush
@@ -38,7 +38,8 @@ What the code actually does today:
   residue, and the battle log names any rule it applies (or asks for manual handling) per unit, so
   you can apply the rest by hand. When your unit takes wounds and the choice matters (Tough models,
   mixed loadouts), **you allocate them by clicking** — LMB places one wound, RMB auto-allocates
-  the rest. One difficulty (full strength) — selectable grades are on the roadmap.
+  the rest. Four selectable difficulty grades (Dämmerung, Zwielicht, Finsternis, Albtraum; Albtraum, the default,
+  is the Erlkönig-driven one), picked in the solo panel and remembered between games.
 - **3D tabletop** — choose the table size (6×4 ft default, 4×4, or custom 12–240 in) and one of six
   biomes before the match; on the Medium preset and above the biome also dresses the table (display
   only). Orbit/pan/zoom camera.
@@ -86,14 +87,14 @@ What the code actually does today:
 - **Import / export** — Army Forge (OPR) list import; `.nml` save format with OS file
   association, plus autosave (every 5 minutes and at round changes, three rotating slots;
   CONTINUE loads the newest save).
-- **Guided tutorial** — an event-gated course of 64 steps in 11 chapters that teaches on a
+- **Guided tutorial** — an event-gated classic tutorial of 64 steps in 11 chapters that teaches on a
   real bundled board: camera & table, selecting, move/rotate/arrange, measuring & rings, the
   dice tray, unit cards & the radial menu, wounds & casualties, a real army import, table &
   terrain, the map-layout editor, and movement & trails.
 - **Asset pipeline** — the offline pipeline that generates the 3D miniatures
   (image generation → TRELLIS mesh) lives in a separate private repository; the
   game consumes only its R2-delivered outputs.
-- **Presentation** — a built-in Tactical-HUD UI theme (sleek; cyan/amber), atmosphere
+- **Presentation** — a built-in dark-panel UI style (muted teal accents, gold for primary actions), atmosphere
   presets (Day / Sunset / Night / Overcast / Rain), graphics quality presets, SSAO, glow.
 
 ## Quick start
