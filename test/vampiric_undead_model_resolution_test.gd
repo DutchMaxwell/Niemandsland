@@ -292,3 +292,43 @@ func test_ghoul_champion_on_a_bat_beast_without_a_shipped_bake_keeps_the_weapon_
 	var army := _hero_on_dragon("Ghoul Champion", ["Great Weapon"], "Bat Beast")
 	assert_array(manager._unit_model_variant_names(army.units[0], "vampiric_undead")) \
 		.is_equal(["Ghoul Champion#greatweapon"])
+
+
+# ===== Ghoul Champion on a Winged Beast =====
+# Same pattern as the dragon / winged steed / winged terror words: the book word folds into the carrier's labels, so a composed
+# `ghoul champion#<weapons>+winged_beast` bake resolves once the manifest ships it. Slugs are SORTED: greatweapon, lance and sling
+# sort BEFORE winged_beast (unlike bat_beast).
+
+func test_winged_beast_mount_word_maps_to_the_baked_slug() -> void:
+	var lib: ModelLibrary = auto_free(ModelLibrary.new())
+	lib._load_label_slug_map()
+	assert_str(lib.variant_slug(["Winged Beast"], "vampiric_undead")).is_equal("winged_beast")
+	assert_str(lib.variant_slug(["Great Weapon", "Winged Beast", "Sling"], "vampiric_undead")).is_equal("greatweapon+sling+winged_beast")
+	# Scoped: other factions do not get the slug.
+	assert_str(lib.variant_slug(["Winged Beast"], "mummified_undead")).is_equal("")
+
+
+func test_ghoul_champion_on_a_winged_beast_resolves_the_six_composed_bakes() -> void:
+	var manager := _manager(["vampiric_undead/ghoul champion#winged_beast", "vampiric_undead/ghoul champion#greatweapon+winged_beast",
+		"vampiric_undead/ghoul champion#lance+winged_beast", "vampiric_undead/ghoul champion#sling+winged_beast",
+		"vampiric_undead/ghoul champion#greatweapon+sling+winged_beast", "vampiric_undead/ghoul champion#lance+sling+winged_beast"])
+	var cases := {
+		"Ghoul Champion#winged_beast": [],
+		"Ghoul Champion#greatweapon+winged_beast": ["Great Weapon"],
+		"Ghoul Champion#lance+winged_beast": ["Lance"],
+		"Ghoul Champion#sling+winged_beast": ["Sling"],
+		"Ghoul Champion#greatweapon+sling+winged_beast": ["Great Weapon", "Sling"],
+		"Ghoul Champion#lance+sling+winged_beast": ["Lance", "Sling"],
+	}
+	for want in cases:
+		var army := _hero_on_dragon("Ghoul Champion", cases[want], "Winged Beast")
+		assert_array(manager._unit_model_variant_names(army.units[0], "vampiric_undead")).is_equal([want])
+
+
+func test_ghoul_champion_on_a_winged_beast_without_a_shipped_bake_keeps_the_weapon_bake() -> void:
+	# The winged_beast keys are not shipped: the variant-name list still falls back to the weapon-only name. (The tier the whole resolver assigns
+	# in that state is a separate question: exact_check against the live manifest puts these forms on another unit's mount model until the keys ship.)
+	var manager := _manager(["vampiric_undead/ghoul champion#greatweapon"])
+	var army := _hero_on_dragon("Ghoul Champion", ["Great Weapon"], "Winged Beast")
+	assert_array(manager._unit_model_variant_names(army.units[0], "vampiric_undead")) \
+		.is_equal(["Ghoul Champion#greatweapon"])
