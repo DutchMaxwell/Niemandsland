@@ -17,6 +17,7 @@ signal biome_changed(biome_name: String)
 var _default_texture: Texture2D = null
 var _battlemap_biome := ""    # the biome whose battlemap is on the table ("" = the fallback surface)
 var _battlemap_loading := ""  # the biome whose battlemap is being fetched right now
+var _battlemap_jobs: Array[Dictionary] = []  # battlemap image work on the worker pool (see _start_battlemap_job)
 
 ## Detail noise is biome-independent — generated ONCE and reused. NoiseTexture2D
 ## fills in on a background thread; regenerating it per material rebuild (twice per
@@ -219,26 +220,57 @@ func get_biomes() -> Array:
 
 
 ## Resolve the biome's battlemap from R2 (cached locally), then swap it onto the table.
-## The bundled fallback stays visible while the download runs / if the biome is
-## unavailable (e.g. before the first R2 publish).
+## The bundled fallback stays visible while the download and the image work run / if the
+## biome is unavailable (e.g. before the first R2 publish).
 func _apply_biome(biome_name: String) -> void:
 	mesh_instance.material_override = _build_ground_material()  # show fallback immediately
 	if not is_instance_valid(_biome_library):
 		return
 	_battlemap_loading = biome_name
 	var path: String = await _biome_library.ensure_biome(biome_name)
-	if _battlemap_loading == biome_name:
-		_battlemap_loading = ""
-	if biome != biome_name:
-		return  # selection changed during the download; drop this stale result
-	if path.is_empty():
-		return  # not available yet — keep the fallback surface
-	var tex: Texture2D = _texture_from_file(path)
-	if tex == null:
-		return
-	_default_texture = tex
-	_battlemap_biome = biome_name
-	mesh_instance.material_override = _build_ground_material()
+	if biome != biome_name or path.is_empty():
+		if _battlemap_loading == biome_name:
+			_battlemap_loading = ""
+		return  # selection changed during the download / not available yet — keep the current surface
+	_start_battlemap_job(biome_name, path)
+
+
+## The image work of a delivered battlemap (decode + scale + convert + mipmaps) took ~2.3 s in ONE
+## main-thread frame: a 2.3-2.8 s freeze after every table load. It runs on the worker pool; _process
+## collects it and only the texture upload stays on the main thread. No await holds the job, so a table
+## freed mid-decode leaks nothing. Outside the tree (unit tests) the result is collected at once.
+func _start_battlemap_job(biome_name: String, path: String) -> void:
+	var job := {"biome": biome_name, "out": [null], "started": Time.get_ticks_msec()}
+	job.task = WorkerThreadPool.add_task(_battlemap_image_into.bind(path, job.out), false, "battlemap " + biome_name)
+	_battlemap_jobs.append(job)
+	_collect_battlemaps(not is_inside_tree())
+
+
+func _process(_delta: float) -> void:
+	_collect_battlemaps(false)
+
+
+func _collect_battlemaps(wait: bool) -> void:
+	for job in _battlemap_jobs.duplicate():
+		if not wait and not WorkerThreadPool.is_task_completed(job.task):
+			continue
+		WorkerThreadPool.wait_for_task_completion(job.task)
+		_battlemap_jobs.erase(job)
+		print("TABLE battlemap %s prepared off the main thread in %d ms" % [job.biome, Time.get_ticks_msec() - job.started])
+		if _battlemap_loading == job.biome:
+			_battlemap_loading = ""
+		if biome != job.biome or job.out[0] == null:
+			continue  # selection changed meanwhile (stale) or the file was unreadable
+		_default_texture = ImageTexture.create_from_image(job.out[0])   # the upload stays on the main thread
+		_battlemap_biome = job.biome
+		mesh_instance.material_override = _build_ground_material()
+	set_process(not _battlemap_jobs.is_empty())
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_PREDELETE:
+		for job in _battlemap_jobs:   # every worker task is waited for, even when the table goes mid-decode
+			WorkerThreadPool.wait_for_task_completion(job.task)
 
 
 ## Battlemaps are delivered very large (up to ~7.5k px); cap the GPU texture at this
@@ -248,12 +280,13 @@ func _apply_biome(biome_name: String) -> void:
 const BATTLEMAP_MAX_WIDTH := 4096
 
 
-## Build a Texture2D (with mipmaps) from a cached image file on disk (user://).
-func _texture_from_file(path: String) -> Texture2D:
+## The battlemap image (scaled, RGBA8, with mipmaps) from a cached file on disk (user://), into out[0].
+## Thread-safe: touches nothing but the image, so it runs on the worker pool.
+static func _battlemap_image_into(path: String, out: Array) -> void:
 	var img := Image.new()
 	if img.load(path) != OK:
 		push_warning("Table: failed to load biome image %s" % path)
-		return null
+		return
 	if img.get_width() > BATTLEMAP_MAX_WIDTH:
 		var scaled_height := int(round(img.get_height() * float(BATTLEMAP_MAX_WIDTH) / float(img.get_width())))
 		img.resize(BATTLEMAP_MAX_WIDTH, scaled_height, Image.INTERPOLATE_LANCZOS)
@@ -263,7 +296,7 @@ func _texture_from_file(path: String) -> Texture2D:
 	if img.get_format() != Image.FORMAT_RGBA8:
 		img.convert(Image.FORMAT_RGBA8)
 	img.generate_mipmaps()
-	return ImageTexture.create_from_image(img)
+	out[0] = img
 
 
 ## UV scale mapping the fixed 6x4 ft battlemap onto the current table, centred. A 6x4
