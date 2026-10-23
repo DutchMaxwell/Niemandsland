@@ -204,6 +204,7 @@ class Run:
         self.args = args
         self.run_dir = run_dir
         self.rules_online = False
+        self.start_question = ""  # "yes" / "no": the host's rules-automation start question
         self.leave = ""  # "menu" = End Battle, "close" = the game window is closed
         self.seq = {"host": 0, "guest": 0}
         self.relay: subprocess.Popen | None = None
@@ -224,6 +225,7 @@ class Run:
         wait_for_memory(self.args.memory_timeout)
         port = self.args.port or free_port()
         relay_url = f"ws://127.0.0.1:{port}"
+        self.relay_url = relay_url
         self.relay_log = (self.run_dir / "relay.log").open("w", encoding="utf-8")
         self.relay = subprocess.Popen(
             [self.args.relay_python, str(REPO / "relay" / "relay_server.py"), "--port", str(port)],
@@ -255,7 +257,7 @@ class Run:
         )
 
     def _start_client(self, role: str, relay_url: str, room: str = "") -> Client:
-        xdg = self.run_dir / f".xdg-{role}"
+        xdg = self.run_dir / f".xdg-{role}-{len(self.xdg_dirs)}"
         xdg.mkdir()
         self.xdg_dirs.append(xdg)
         env = os.environ.copy()
@@ -399,6 +401,9 @@ class Run:
 
     def scenario(self) -> None:
         self.scenario_deadline = time.monotonic() + self.args.timeout
+        if self.start_question:
+            self._start_question_scenario()
+            return
         if self.leave:
             self.leave_scenario() if self.leave == "menu" else self.close_scenario()
             return
@@ -596,6 +601,54 @@ class Run:
             raise HarnessFailure(f"close: guest notice after {lag:.2f}s (inf = never; limit 2 s)")
         print(f"[mp2] PASS host-closes-window (guest notice after {lag:.2f}s)")
 
+    def _start_question_scenario(self) -> None:
+        """Bug 6c: the host is asked ONCE whether to play with rules automation when the second player
+        sits down. Yes -> the guest gets the confirm card -> both Automatic; Not now -> both Manual and
+        no card on the guest; a guest rejoin never asks again."""
+        yes = self.start_question == "yes"
+        self.wait_condition(
+            "the host is asked, the guest is not",
+            lambda s: s["host"].get("start_question_visible") and not s["guest"].get("start_question_visible"),
+            diagnostic=lambda s: "host asked: " + repr(s["host"].get("start_question_count")),
+        )
+        self.command("host", "answer_start_question", {"yes": yes})
+        if yes:
+            self.wait_condition(
+                "the guest sees the confirm card",
+                lambda s: s["guest"].get("rules_card_visible") and not s["host"].get("start_question_visible"),
+            )
+            self.command("guest", "answer_rules_card", {"yes": True})
+            self.wait_condition(
+                "both sides Automatic",
+                lambda s: all(v.get("rules") == 1 for v in s.values()),
+                diagnostic=lambda s: "rules: " + repr({r: s[r].get("rules") for r in s}),
+            )
+        else:
+            time.sleep(2.0)
+            states = self.states()
+            if states["guest"].get("rules_card_visible") or any(v.get("rules") != 0 for v in states.values()):
+                raise HarnessFailure("Not now must leave both Manual with no card on the guest: " + repr(
+                    {r: (v.get("rules"), v.get("rules_card_visible")) for r, v in states.items()}))
+        # The guest leaves and comes back: same room, no second question.
+        room = self.states()["host"]["room"]
+        self.command("guest", "close_window")
+        old = self.clients["guest"]
+        old.proc.wait(timeout=15)
+        for suffix in (".state.json", ".ack.json", ".command.json"):
+            (self.run_dir / f"guest{suffix}").unlink(missing_ok=True)
+        old.close_log()
+        self.seq["guest"] = 0
+        self._start_client("guest", self.relay_url, str(room))
+        self.wait_condition(
+            "the guest is back at the table",
+            lambda s: s["guest"].get("session_ready") and s["host"].get("occupied_slots") == [1, 2],
+        )
+        time.sleep(3.0)
+        states = self.states()
+        if states["host"].get("start_question_count") != 1 or states["host"].get("start_question_visible"):
+            raise HarnessFailure("a rejoin asked again: count=%r" % states["host"].get("start_question_count"))
+        print(f"[mp2] PASS start-question-{self.start_question} (asked once, rejoin silent)")
+
     def _rules_online_scenario(self) -> None:
         """Plan 3.6: the agreed Automatic online room. A full exchange with enforced alternation —
         out-of-turn refusal, hand-over, TAIL and one automatic round end — peer-state equality after
@@ -750,6 +803,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Also run the plan 3.6 rules-online alternation gate (agreed Automatic room).",
     )
+    parser.add_argument(
+        "--start-question",
+        action="store_true",
+        help="Run only the bug 6c scenarios (host start question: yes, no; guest rejoin).",
+    )
     args = parser.parse_args()
     if args.repeat < 1:
         parser.error("--repeat must be at least 1")
@@ -786,6 +844,18 @@ def main() -> int:
         return ref if ref is not None else view
 
     try:
+        if args.start_question:
+            for answer in ("yes", "no"):
+                run = Run(args, root / f"start-question-{answer}")
+                run.run_dir.mkdir(parents=True, exist_ok=False)
+                run.start_question = answer
+                try:
+                    run.start()
+                    run.scenario()
+                finally:
+                    run.stop()
+            print("[mp2] RESULT PASS: start question")
+            return 0
         for number in range(1, args.repeat + 1):
             reference = run_once(root / f"run-{number:02d}", False, reference)
         online_reference: list[dict] | None = None

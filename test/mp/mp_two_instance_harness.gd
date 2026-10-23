@@ -41,6 +41,8 @@ var _remote_save_wounds := -1   # result of the in-flight remote save batch (-1 
 var _last_refusal := ""         # 3.6: the last off-turn refusal text, for the alternation gate
 var _was_ready := false         # the session was up once (a deliberate leave ends it later)
 var _left: Dictionary = {}      # bugs 9+10: what the scene after End Battle inherits (host)
+var _start_q_up := false        # the host's start question was on screen last snapshot
+var _start_q_count := 0         # how many times it appeared (asked once per room)
 var _host_left_at := 0.0        # bugs 9+10: unix time the guest's "host left" notice appeared
 
 
@@ -145,7 +147,7 @@ func _run_command(seq: int, action: String, payload: Dictionary) -> void:
 	if action not in ["quit", "snapshot", "leave_to_menu"] and not _session_ready():
 		ok = false
 		error = "session is not ready"
-	elif action not in ["setup", "quit", "snapshot", "leave_to_menu", "close_window"] and not _fixture_ready:
+	elif action not in ["setup", "quit", "snapshot", "leave_to_menu", "close_window", "answer_start_question", "answer_rules_card"] and not _fixture_ready:
 		ok = false
 		error = "fixture is not ready"
 	elif action == "setup":
@@ -210,6 +212,12 @@ func _run_command(seq: int, action: String, payload: Dictionary) -> void:
 			_main._vfx_emit({"k": "volley", "f": 1, "pairs": [[Vector3.ZERO, Vector3(0, 0, 0.3)]]})
 			_main._vfx_emit({"k": "pip", "t": 1, "at": Vector3(0, 0.03, 0.3), "n": 1})
 			_main._vfx_emit({"k": "seal_end", "sid": sid, "o": 0})
+	elif action == "answer_start_question" or action == "answer_rules_card":
+		var card := _find_card("Play with rules automation?" if action == "answer_start_question" \
+				else "Turn on automatic rules?")
+		ok = card != null
+		if ok:
+			card.resolve(bool(payload.get("yes", false)))
 	elif action == "set_automatic":
 		_main.opr_army_manager.rules_automation = RulesAutomation.Level.AUTOMATIC
 		_main._hotseat_turn = null
@@ -220,6 +228,7 @@ func _run_command(seq: int, action: String, payload: Dictionary) -> void:
 	elif action == "snapshot":
 		pass
 	elif action == "close_window":
+		_args["leave"] = "true"   # a deliberate leave: the disconnect that follows is not a failure
 		# What closing the window does (headless has none to click): the close request reaches every node,
 		# then the engine quits (auto-accept quit).
 		get_tree().root.propagate_notification(NOTIFICATION_WM_CLOSE_REQUEST)
@@ -240,6 +249,15 @@ func _run_command(seq: int, action: String, payload: Dictionary) -> void:
 	_write_ack(seq, ok, error)
 	_write_state()
 	_command_busy = false
+
+
+func _find_card(card_title: String) -> PromptCard:
+	if not is_instance_valid(_main):
+		return null
+	for c in _main.get_children():
+		if c is PromptCard and (c as PromptCard).title == card_title:
+			return c as PromptCard
+	return null
 
 
 func _setup_fixture() -> bool:
@@ -472,7 +490,16 @@ func _snapshot() -> Dictionary:
 		"battle_log_tail": [],
 		"vfx_cues": (_main._vfx_seen as Dictionary).size() if _main != null else 0,
 		"host_left_at": _host_left_at,
+		"start_question_visible": false,
+		"start_question_count": _start_q_count,
+		"rules_card_visible": _find_card("Turn on automatic rules?") != null,
 	}
+	var sq_up := _find_card("Play with rules automation?") != null
+	if sq_up and not _start_q_up:
+		_start_q_count += 1
+	_start_q_up = sq_up
+	state.start_question_visible = sq_up
+	state.start_question_count = _start_q_count
 	if nm != null:
 		var slots: Array[int] = []
 		for peer_id in nm.peer_to_slot:

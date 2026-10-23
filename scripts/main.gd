@@ -295,6 +295,7 @@ var _rules_agreement_mode := 0               # 0 idle, 1 proposing, 2 confirming
 var _rules_proposal_timed_out := false       # the confirm card was closed by the 30 s timer, not by a button
 var _rules_agreement_card: PromptCard = null # the open confirm card, so a timeout can close it
 var _rules_proposal_timer: Timer = null      # one 30 s timer, used by whichever side is waiting
+var _rules_start_asked := false              # the host's start question was shown once in this room
 const RULES_AGREEMENT_TIMEOUT := 30.0
 var _hotseat_turn: TwoHumanTurn = null       # enforced alternation on a hotseat Automatic table (plan 2.T2a)
 var _ambush_turn_waiters: Dictionary = {}   # 3.4b: slot -> the owner answered its Ambush turn
@@ -16168,6 +16169,28 @@ func _on_peer_version_validated(peer_id: int) -> void:
 	# Replay the current pinned rulers so the late-joiner sees existing measurements
 	# (session-only state, not part of the .nml save).
 	network_manager.sync_rulers_to_peer(peer_id)
+	if _rules_start_question_due():
+		_ask_rules_start_question()
+
+
+## Host, second player seated: is the one-time "play with rules automation?" question due? Never on a local
+## table, with an AI seat ticked (automation is locked on there), once Automatic is on, or twice in a room.
+func _rules_start_question_due() -> bool:
+	return RulesAutomation.ui_enabled() and not _rules_start_asked and solo_ai_slots.is_empty() \
+		and network_manager != null and network_manager.is_multiplayer_active() and opr_army_manager != null \
+		and opr_army_manager.rules_automation == RulesAutomation.Level.MANUAL
+
+
+## Yes sends the usual proposal (the guest gets the confirm card); Not now leaves the room Manual - the
+## Rules switch changes it later. A rejoin or reconnect finds the flag set and never asks again.
+func _ask_rules_start_question() -> void:
+	_rules_start_asked = true
+	var card := PromptCard.new("Play with rules automation?",
+		"The game can roll and apply the rules it models for both players. The other player has to agree too.",
+		"Yes", "Not now")
+	add_child(card)
+	if bool(await card.answer(false)):
+		propose_rules_automation()
 
 
 ## #196 — a human peer occupies `slot`: any AI designation on it is void. Logged, because a
