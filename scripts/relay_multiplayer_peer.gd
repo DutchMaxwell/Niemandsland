@@ -52,6 +52,16 @@ const HEARTBEAT_TIMEOUT: float = 35.0
 ## second ~18 has already torn itself down while the relay would still restore the
 ## room, needlessly ending the session (RC5).
 const RECONNECT_TIMEOUT: float = 25.0
+## Bug 4: a Wi-Fi flow can go silent in both directions for 13-28 s while a fresh socket works at once. On a
+## relay that can hand our seat to a new socket ("takeover" in its join reply) this much inbound silence (two
+## heartbeat acks missed) is treated as a drop: rejoin now instead of waiting for the relay's 30 s cut.
+const FAST_SILENCE_TIMEOUT: float = 10.0
+## One early rejoin per this window; a second silence inside it falls back to HEARTBEAT_TIMEOUT (no reconnect
+## loop on a link that is merely slow, e.g. one huge frame in transit for > 10 s).
+const FAST_RECONNECT_COOLDOWN: float = 60.0
+## A poll gap longer than this is a main-loop stall: nothing read the socket and no heartbeat went out, so the
+## gap is not link silence (a 7.6 s stall on an idle link would otherwise look like 12.5 s of silence).
+const STALL_PAUSE_MS: int = 1000
 ## Forwarded game frames carry a 1-byte channel marker right after the [peer_id] header so the
 ## engine's @rpc traffic and our own command protocol can share the one relay connection. Channel 0
 ## is fed to SceneMultiplayer (unchanged); channel 1 is surfaced via command_received (no path-cache).
@@ -90,6 +100,11 @@ var _tx_last_log_ms: int = 0              # last time the tx rate was logged (wa
 var _last_heartbeat_ms: int = 0  # when we last SENT a heartbeat
 var _last_ack_ms: int = 0        # when we last RECEIVED a heartbeat_ack (alive marker)
 var _last_poll_ms: int = 0       # for stall detection (large gaps delay heartbeats)
+var _relay_takeover: bool = false  # the relay's join reply said a rejoin may take over our old seat
+var _quiet_since_ms: int = 0     # last inbound frame, moved forward by main-loop stalls (fast detector)
+var _fast_reconnect_ms: int = 0  # when the current early rejoin started (0 = none in flight)
+var _last_fast_ms: int = 0       # when the last early rejoin started (cooldown)
+var _next_connect_retry_ms: int = 0  # an early rejoin re-opens a failed socket no sooner than this
 var _room_code: String = ""
 var _ws_connected: bool = false
 var _pending_action: String = ""  # "create", "join" or "list"
@@ -203,6 +218,11 @@ func _on_connection_lost() -> void:
 	relay_connection_lost.emit()
 
 
+## True while an early rejoin after a silent link is in flight (the notice says "hiccup", not "lost").
+func is_fast_reconnect() -> bool:
+	return _fast_reconnect_ms > 0
+
+
 ## Rejoin the SAME room after a drop. We re-send join_room with the stored code; the
 ## relay decides between a normal guest rejoin (fresh peer id) and a HOST rehost
 ## (reclaim peer id 1) based on whether the room is host-paused. Either way the host
@@ -249,12 +269,17 @@ func _poll() -> void:
 	if _ws_connected and _last_poll_ms > 0 and now_ms - _last_poll_ms > 5000:
 		push_warning("[Relay] main loop stalled %.1fs — heartbeats delayed (can trigger a relay timeout)"
 			% ((now_ms - _last_poll_ms) / 1000.0))
+	if _last_poll_ms > 0 and now_ms - _last_poll_ms > STALL_PAUSE_MS:
+		_quiet_since_ms += now_ms - _last_poll_ms  # a main-loop stall pauses the silence clock
 	_last_poll_ms = now_ms
 
-	# Abort a stuck reconnect (relay unreachable / room gone, no response).
-	if _is_reconnecting and now_ms - _reconnect_start_ms > int(RECONNECT_TIMEOUT * 1000.0):
+	# Abort a stuck reconnect (relay unreachable / room gone, no response). An early rejoin started
+	# HEARTBEAT_TIMEOUT - FAST_SILENCE_TIMEOUT sooner and gets that much longer: same give-up moment as today.
+	var limit_s := RECONNECT_TIMEOUT + (HEARTBEAT_TIMEOUT - FAST_SILENCE_TIMEOUT if _fast_reconnect_ms > 0 else 0.0)
+	if _is_reconnecting and now_ms - _reconnect_start_ms > int(limit_s * 1000.0):
 		# Still "Room not found" at the deadline = the relay closed the room; that is not a time-out.
 		var reason := "the host left, the room is closed" if _awaiting_recreate else "timed out"
+		_end_fast_reconnect("failed: " + reason)
 		_is_reconnecting = false
 		_awaiting_recreate = false
 		relay_reconnect_failed.emit(reason)
@@ -266,6 +291,7 @@ func _poll() -> void:
 			_ws_connected = true
 			_connection_status = MultiplayerPeer.CONNECTION_CONNECTING
 			_last_ack_ms = now_ms       # fresh socket: reset the drop-detection clock
+			_quiet_since_ms = now_ms
 			_last_heartbeat_ms = now_ms
 			_send_tokens = SEND_BURST_MAX  # fresh socket: reset the send budget too
 			_send_refill_ms = now_ms
@@ -279,8 +305,7 @@ func _poll() -> void:
 			elif _pending_action == "join":
 				# Send our stable identity token so the relay can hand a reconnecting guest its OLD
 				# peer id back (stable transport id across a drop -> RPC routing survives the rejoin).
-				_send_json({"type": "join_room", "code": _pending_code,
-					"token": PlayerIdentity.get_or_create_client_token()})
+				_send_json(_join_request(_pending_code))
 			elif _pending_action == "list":
 				_send_json({"type": "list_rooms"})
 			_pending_action = ""
@@ -294,6 +319,7 @@ func _poll() -> void:
 			# clock, not only on heartbeat_ack. A busy game link (the host's ~20 state frames/s) is
 			# then never false-dropped just because a single heartbeat_ack was delayed/starved.
 			_last_ack_ms = now_ms
+			_quiet_since_ms = now_ms
 			_rx_msg_count += 1
 			if _ws.was_string_packet():
 				_process_control_message(packet.get_string_from_utf8())
@@ -311,20 +337,68 @@ func _poll() -> void:
 		# Guest recovery: re-send join_room until the host re-creates the lost room (same code).
 		if _is_reconnecting and _awaiting_recreate and now_ms >= _next_recreate_retry_ms:
 			_next_recreate_retry_ms = now_ms + int(RECREATE_RETRY_INTERVAL * 1000.0)
-			_send_json({"type": "join_room", "code": _room_code,
-				"token": PlayerIdentity.get_or_create_client_token()})
+			_send_json(_join_request(_room_code))
 
+		_check_silence(now_ms)
 		# Drop detection: the relay acks every heartbeat. No ack for HEARTBEAT_TIMEOUT
 		# means the link is dead even if the socket hasn't reported CLOSED yet.
 		if now_ms - _last_ack_ms > int(HEARTBEAT_TIMEOUT * 1000.0):
 			_on_connection_lost()
 
 	elif state == WebSocketPeer.STATE_CLOSED:
+		if _is_reconnecting and _fast_reconnect_ms > 0:
+			# The early rejoin's new socket failed: the whole link is down, not one stalled flow. Retry every
+			# RECREATE_RETRY_INTERVAL until the deadline above instead of idling (today's rejoin never retries).
+			if now_ms >= _next_connect_retry_ms:
+				_next_connect_retry_ms = now_ms + int(RECREATE_RETRY_INTERVAL * 1000.0)
+				_pending_action = "join"
+				_pending_code = _room_code
+				if _connect_to_relay(_relay_url) != OK:
+					_ws = WebSocketPeer.new()  # stays CLOSED: the next interval retries, the deadline still holds
+			return
 		if _ws_connected or _connection_status == MultiplayerPeer.CONNECTION_CONNECTING:
 			var code = _ws.get_close_code()
 			var reason = _ws.get_close_reason()
 			print("[Relay] WebSocket closed: code=%d reason='%s'" % [code, reason])
 			_on_connection_lost()
+
+
+## The join_room request. A REJOIN names the seat we held: a relay that supports it drops our old socket if it
+## is still registered (silent link, before its heartbeat cut) and gives that seat back; older relays ignore it.
+func _join_request(code: String) -> Dictionary:
+	var request := {"type": "join_room", "code": code, "token": PlayerIdentity.get_or_create_client_token()}
+	if _is_reconnecting and _my_peer_id > 0:
+		request["takeover"] = _my_peer_id
+	return request
+
+
+## Bug 4 fast reconnect: FAST_SILENCE_TIMEOUT without any inbound frame on a seated link. With a takeover
+## relay (and outside the cooldown) it is a drop now - the normal rejoin path; otherwise it is only logged
+## (again every FAST_SILENCE_TIMEOUT) and HEARTBEAT_TIMEOUT stays the rule.
+func _check_silence(now_ms: int) -> void:
+	var quiet_s := (now_ms - _quiet_since_ms) / 1000.0
+	if _connection_status != MultiplayerPeer.CONNECTION_CONNECTED or _is_reconnecting \
+			or quiet_s <= FAST_SILENCE_TIMEOUT:
+		return
+	var cooling := _last_fast_ms > 0 and now_ms - _last_fast_ms < int(FAST_RECONNECT_COOLDOWN * 1000.0)
+	if not _relay_takeover or cooling:
+		print("[Relay] link silent %.1fs (peer=%d) - %s, waiting for the %.0fs timeout" % [quiet_s, _my_peer_id,
+			"one early rejoin per minute" if cooling else "this relay cannot take over our seat", HEARTBEAT_TIMEOUT])
+		_quiet_since_ms = now_ms
+		return
+	print("[Relay] link silent %.1fs (peer=%d) - rejoining early, the relay hands our seat to the new socket"
+		% [quiet_s, _my_peer_id])
+	_last_fast_ms = now_ms
+	_fast_reconnect_ms = now_ms
+	_on_connection_lost()
+
+
+## Log how an early rejoin ended (no-op when none is in flight).
+func _end_fast_reconnect(outcome: String) -> void:
+	if _fast_reconnect_ms > 0:
+		print("[Relay] early rejoin %s, %.1fs after the silence was detected" % [
+			outcome, (Time.get_ticks_msec() - _fast_reconnect_ms) / 1000.0])
+	_fast_reconnect_ms = 0
 
 
 func _get_packet_script() -> PackedByteArray:
@@ -424,6 +498,7 @@ func _close() -> void:
 	_rx_msg_count = 0
 	_tx_last_log_ms = 0
 	_known_peers.clear()
+	_fast_reconnect_ms = 0
 	_room_code = ""
 	_ws_connected = false
 	_pending_action = ""
@@ -487,6 +562,8 @@ func _process_control_message(raw: String) -> void:
 		return
 
 	var msg_type = parsed.get("type", "")
+	if msg_type in ["room_created", "room_joined", "room_rejoined_host"]:
+		_relay_takeover = parsed.get("takeover", false) == true  # this relay can hand our seat to a new socket
 
 	match msg_type:
 		"room_created":
@@ -543,6 +620,7 @@ func _process_control_message(raw: String) -> void:
 					_next_recreate_retry_ms = Time.get_ticks_msec() + int(RECREATE_RETRY_INTERVAL * 1000.0)
 			elif _is_reconnecting:
 				# A different error on rejoin — the room can't be recovered.
+				_end_fast_reconnect("failed: " + str(message))
 				_is_reconnecting = false
 				relay_reconnect_failed.emit(message)
 			elif _connection_status == MultiplayerPeer.CONNECTION_CONNECTING:
@@ -567,6 +645,7 @@ func _handle_room_created(code: String, peer_id: int) -> void:
 	_connection_status = MultiplayerPeer.CONNECTION_CONNECTED
 	_is_reconnecting = false
 	_awaiting_recreate = false
+	_end_fast_reconnect("done: re-created room %s as host" % code)
 	if was_reconnecting:
 		# Recovery re-create: the relay had lost our room and we re-created it with the SAME code.
 		# We're hosting again — resume + re-sync to rejoining guests, NOT a fresh room (no reset).
@@ -582,6 +661,7 @@ func _handle_room_joined(peer_id: int) -> void:
 	_connection_status = MultiplayerPeer.CONNECTION_CONNECTED
 	_is_reconnecting = false
 	_awaiting_recreate = false
+	_end_fast_reconnect("done: peer %d" % peer_id)
 	room_joined.emit(peer_id)
 	if was_reconnecting:
 		# A rejoin after our own drop: connected_to_server won't re-fire, so trigger the
@@ -596,6 +676,7 @@ func _handle_room_rejoined_host(peer_id: int) -> void:
 	_my_peer_id = peer_id
 	_connection_status = MultiplayerPeer.CONNECTION_CONNECTED
 	_is_reconnecting = false
+	_end_fast_reconnect("done: peer %d (host)" % peer_id)
 	host_rejoined.emit()
 
 

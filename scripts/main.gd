@@ -16504,7 +16504,11 @@ func _on_relay_connection_lost() -> void:
 func _on_relay_reconnecting() -> void:
 	_is_reconnecting = true
 	_reconnect_failure_shown = false
-	GameMenu.set_status(network_status_label, "Reconnecting…", HouseStyle.TONE_WARN)
+	# Bug 4: an early rejoin after a silent link keeps the seat - a hiccup, not a lost connection.
+	var rp = internet_lobby.relay_peer if internet_lobby != null else null
+	var hiccup: bool = rp != null and rp.is_fast_reconnect()
+	GameMenu.set_status(network_status_label,
+		"Connection hiccup — reconnecting…" if hiccup else "Reconnecting…", HouseStyle.TONE_WARN)
 
 
 ## Rejoin failed (relay unreachable or the room is gone, e.g. host left). End the
