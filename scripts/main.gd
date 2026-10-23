@@ -11014,8 +11014,12 @@ func solo_begin_cast(unit: GameUnit) -> void:
 	var entry: Dictionary = await picker.pick(member.get_name(), member.casts_current, entries)
 	if entry.is_empty():
 		return
-	var cands: Array = solo_controller.spell_candidates(unit, entry,
-		solo_controller.human_slot, solo_controller.ai_slot)
+	var sides: Dictionary = _solo_cast_sides(unit)
+	var cands: Array = []
+	for foe in ((sides["foes"] as Array) if not (sides["foes"] as Array).is_empty() else [0]):
+		for c in solo_controller.spell_candidates(unit, entry, int(sides["own"]), int(foe)):
+			if not cands.has(c):
+				cands.append(c)
 	# Wave 4: name the ONE thing Extended Buff Range does not do, at the moment it would matter.
 	_solo_log_ebr_spell_exclusion(unit, str(entry.get("name", "?")), float(entry.get("range_in", 0)), cands)
 	if cands.is_empty():
@@ -11041,6 +11045,22 @@ func solo_begin_cast(unit: GameUnit) -> void:
 			unit.get_name(), side, str(entry.get("name", "?")), cands.size()])
 
 
+## #1719: a cast's sides. With an AI seat they are the controller's two (solo, co-op: the human seat
+## vs NACHTMAHR). Without one they follow the CASTER — its own slot, and every other slot that fields
+## a unit as an opponent (a local table may import up to four armies) — so P2 casts as P2.
+func _solo_cast_sides(unit: GameUnit) -> Dictionary:
+	if not solo_ai_slots.is_empty():
+		return {"own": solo_controller.human_slot, "foes": [solo_controller.ai_slot]}
+	var own := unit_owner_slot(unit.unit_properties)
+	var foes: Array = []
+	for u in opr_army_manager.get_all_game_units():
+		var slot := unit_owner_slot((u as GameUnit).unit_properties)
+		if slot > 0 and slot != own and not foes.has(slot):
+			foes.append(slot)
+	foes.sort()
+	return {"own": own, "foes": foes}
+
+
 ## Execute the picked human cast (async; fired from the targeting click).
 func _run_human_cast(unit: GameUnit, member: GameUnit, entry: Dictionary, picked_targets) -> void:
 	# #227: `picked_targets` is the PLAYER's pick list (Array) — legacy single-unit calls pass one.
@@ -11060,10 +11080,9 @@ func _run_human_cast(unit: GameUnit, member: GameUnit, entry: Dictionary, picked
 		battle_log.log_event(BattleLog.Category.GENERAL, "%s hits %d targets: %s" % [
 			spell_name, targets.size(), _solo_cast_target_label(targets)])
 	# BOOST tableau (own helpers in 18" LoS; the member's remaining tokens count via the pool).
-	# #1719: with no AI seat the sides are the CASTER's own — on a two-human table P2 casts too.
 	var seated: bool = not solo_ai_slots.is_empty()
-	var own_slot: int = solo_controller.human_slot if seated else unit_owner_slot(unit.unit_properties)
-	var foe_slot: int = solo_controller.ai_slot if seated else 3 - own_slot
+	var sides: Dictionary = _solo_cast_sides(unit)
+	var own_slot: int = int(sides["own"])
 	var boost := 0
 	_solo_log_shaken_lenders(own_slot)
 	var helpers: Array = solo_controller._aura_casters(own_slot, unit, null)
@@ -11088,16 +11107,17 @@ func _run_human_cast(unit: GameUnit, member: GameUnit, entry: Dictionary, picked
 	var interference := 0
 	var ai_helpers: Array = []
 	if seated:
-		_solo_log_shaken_lenders(foe_slot)
-		ai_helpers = solo_controller._aura_casters(foe_slot, unit, null)
+		_solo_log_shaken_lenders(solo_controller.ai_slot)
+		ai_helpers = solo_controller._aura_casters(solo_controller.ai_slot, unit, null)
 	elif network_manager == null or not network_manager.is_multiplayer_active():
-		# No AI without its tick (#1719): the caster's opponent is a human — asked on the shared
+		# No AI without its tick (#1719): the caster's opponents are humans — each asked on the shared
 		# screen like the boost, never NACHTMAHR's calculus spending that player's tokens.
-		interference = await _solo_prompt_interference(member, unit, spell_name, AiSpell.CAST_BASE_TARGET,
-			boost, _solo_cast_target_label(targets), foe_slot)
+		for foe in sides["foes"]:
+			interference += await _solo_prompt_interference(member, unit, spell_name, AiSpell.CAST_BASE_TARGET,
+				boost, _solo_cast_target_label(targets), int(foe))
 	elif battle_log != null:
 		_log_rule_event(BattleLog.Category.COMBAT,
-			"%s resolves without interference — an online room does not offer P%d the choice yet" % [spell_name, foe_slot], true)
+			"%s resolves without interference — an online room does not offer the opponent the choice yet" % spell_name, true)
 	var ai_pool := 0
 	for h in ai_helpers:
 		ai_pool += int((h as Dictionary)["tokens"])

@@ -161,6 +161,54 @@ func test_a_two_human_cast_asks_the_opponent_never_nachtmahr(timeout := 120000) 
 	await E2EBoot.settle(get_tree())
 
 
+func _picker() -> SpellPickerDialog:
+	for n in _main.get_children():
+		if n is SpellPickerDialog and not n.is_queued_for_deletion():
+			return n
+	return null
+
+
+## The legal targets follow the CASTER: P2's friendly spell offers P2's units, its enemy spell P1's.
+func test_a_p2_cast_offers_targets_from_its_own_sides(timeout := 120000) -> void:
+	var shaman := _reg(2, "Shaman", 0.0, 1, ["Caster(2)"])
+	shaman.unit_properties["game_system"] = "aof"
+	shaman.unit_properties["faction_folder"] = "orcs"   # a book with spell data
+	shaman.casts_current = 2
+	_reg(2, "Boyz", -6.0, 3)
+	_reg(1, "Rifles", 6.0, 3)
+	_main._ensure_solo_controller()
+	_main._hotseat_turn = TwoHumanTurn.new()
+	_main._hotseat_turn.side_on_turn = 2   # P2 is on turn
+	var start: int = _main.battle_log.entries().size()
+	_main.solo_begin_cast(shaman)   # not awaited: the picker waits for its click
+	var picker: SpellPickerDialog = null
+	for _i in 120:
+		picker = _picker()
+		if picker != null:
+			break
+		await get_tree().process_frame
+	assert_object(picker).override_failure_message("no spell picker for P2's caster:\n%s" % _log_from(start)).is_not_null()
+	if picker == null:
+		return
+	for b in picker.find_children("*", "Button", true, false):
+		if not (b as Button).disabled and (b as Button).text.contains("token"):   # the first affordable spell
+			(b as Button).pressed.emit()
+			break
+	for _i in 60:
+		if _main._solo_target_mode.has("cast_valid"):
+			break
+		await get_tree().process_frame
+	var spec: Dictionary = (_main._solo_target_mode.get("cast_entry", {}) as Dictionary).get("target", {})
+	var want := 2 if str(spec.get("side", "enemy")) == "friendly" else 1
+	var cands: Array = _main._solo_target_mode.get("cast_valid", [])
+	assert_bool(cands.is_empty()).override_failure_message("P2's spell offered no target:\n%s" % _log_from(start)).is_false()
+	for c in cands:
+		assert_int(int((c as GameUnit).unit_properties["player_id"])).override_failure_message(
+			"P2's %s spell offers %s (P%d)" % [spec.get("side", "enemy"), (c as GameUnit).get_name(),
+			int((c as GameUnit).unit_properties["player_id"])]).is_equal(want)
+	_main._solo_end_targeting()
+
+
 # --- 1. The game-over verdict ---
 
 func _assert_game_over_by_name(path: String) -> void:
