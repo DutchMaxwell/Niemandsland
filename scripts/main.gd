@@ -3374,13 +3374,15 @@ func _solo_apply_mission_if_chosen() -> void:
 func _on_solo_deploy_pressed() -> void:
 	if opr_army_manager == null or table == null:
 		return
-	_ensure_solo_controller()
-	# #196 aftershock (maintainer MP test): in a human-vs-human room the guard above refuses
-	# the controller — the guided flow would null-crash right here. The rulebook deployment
-	# in multiplayer is the players' own alternating placement (free drags), not this flow.
-	if solo_controller == null:
-		_solo_show_toast("Guided deployment needs an AI army (tick NACHTMAHR on the import) — otherwise deploy freely by dragging from the trays")
+	# No AI without its tick (#1719, maintainer test 3): everything below is "you vs NACHTMAHR", so it
+	# runs only for a designated AI seat. A controller alone is none — a local Automatic table builds one
+	# for geometry (step 2.4), and a ticked game earlier in the session leaves its own behind.
+	# #196 aftershock: a human-vs-human room has no seat either; the rulebook deployment there is
+	# the players' own alternating placement (free drags), not this flow.
+	if solo_ai_slots.is_empty():
+		_solo_show_toast("Guided deployment plays against NACHTMAHR — tick an army as AI, or deploy freely by dragging from the trays")
 		return
+	_ensure_solo_controller()
 	var w: float = table.table_size.x * 0.3048
 	var d: float = table.table_size.y * 0.3048
 	var depth: float = 12.0 * 0.0254
