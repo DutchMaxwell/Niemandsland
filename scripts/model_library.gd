@@ -182,9 +182,10 @@ static func canonical_folder(faction: String) -> String:
 	return str(FOLDER_ALIASES.get(f, f))
 
 
-## Lowercase a unit name, fold -/_ to spaces, collapse repeats. Both sides of the lookup.
+## Lowercase a unit name, drop apostrophes (the manifest slugs have none), fold -/_ to spaces,
+## collapse repeats. Both sides of the lookup.
 static func _normalize_unit(s: String) -> String:
-	var t := s.strip_edges().to_lower().replace("-", " ").replace("_", " ")
+	var t := s.strip_edges().to_lower().replace("'", "").replace("\u2019", "").replace("-", " ").replace("_", " ")
 	while t.contains("  "):
 		t = t.replace("  ", " ")
 	return t
