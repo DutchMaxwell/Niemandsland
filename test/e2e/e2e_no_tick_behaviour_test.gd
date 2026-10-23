@@ -86,7 +86,9 @@ func test_a_removed_tick_leaves_no_ai_queue_behind(timeout := 120000) -> void:
 	assert_int(_main.opr_army_manager.game_phase).override_failure_message("fixture: play did not start:\n%s" % text) \
 		.is_equal(OPRArmyManager.GamePhase.PLAYING)
 	_refute(text, "NACHTMAHR deploys", "a leftover AI queue deployed P2's army")
-	_refute(text, "Ambush", "an Ambush step ran on a Manual table without a tick")
+	_refute(text, "AI Ambush", "NACHTMAHR's arrival beat ran on a table without a tick")
+	assert_str(text).override_failure_message("a Manual table does not name the round-1 rule:\n%s" % text) \
+		.contains("Rapid Ambush: Stalkers may arrive at the start of round 1 — the players place it by hand")
 	assert_vector((raiders.models[0] as ModelInstance).node.global_position) \
 		.override_failure_message("P2's hand-placed unit was moved:\n%s" % text).is_equal(before)
 	assert_bool(bool(scouts.unit_properties.get("ambush_reserve", false))) \
@@ -96,24 +98,31 @@ func test_a_removed_tick_leaves_no_ai_queue_behind(timeout := 120000) -> void:
 	assert_bool(bool(stalkers.unit_properties.get("ambush_reserve", false))).is_true()   # P2 still holds it
 
 
-## (a) item 3: on an Automatic table the round-1 Rapid Ambush beat is NACHTMAHR's — it must not run.
-func test_automatic_table_runs_no_rapid_ambush_beat(timeout := 120000) -> void:
-	var rifles := _reg(1, "Rifles", Vector3(0.0, 0.0, -0.3))
+## (a) item 3: two humans on an Automatic table — BOTH are asked for their round-1 Rapid Ambush, opener
+## first (the round-2+ Ambush step); NACHTMAHR's beat never runs.
+func test_two_humans_are_both_asked_for_round_one_rapid_ambush(timeout := 120000) -> void:
+	_reg(1, "Rifles", Vector3(0.0, 0.0, -0.3))
 	_reg(2, "Raiders", Vector3(0.0, 0.0, 0.3))
-	var scouts := _reg(1, "Scouts", TRAY, ["Rapid Ambush"])
-	scouts.unit_properties["ambush_reserve"] = true
+	_reg(1, "Scouts", TRAY, ["Rapid Ambush"])
+	_reg(2, "Stalkers", TRAY + Vector3(0.0, 0.0, 0.2), ["Rapid Ambush"])
 	_automatic()
 	var start: int = _main.battle_log.entries().size()
-	await _activate(rifles)
+	_main._on_start_game_pressed()
+	var asked: Array = []
+	for slot in [1, 2]:
+		var line := "P%d Ambush (round 1)" % slot
+		for _i in 120:
+			if _log_from(start).contains(line):
+				break
+			await get_tree().process_frame
+		if _log_from(start).contains(line):
+			asked.append(slot)
+			_main._solo_deploy_ui_btn2.pressed.emit()   # "Keep waiting"
+			await _runner.simulate_frames(4)
 	var text := _log_from(start)
-	assert_int(_main.opr_army_manager.game_phase).override_failure_message("fixture: play did not start:\n%s" % text) \
-		.is_equal(OPRArmyManager.GamePhase.PLAYING)
-	var busy: bool = _main._solo_ai_busy
-	if busy:
-		_main._solo_deploy_ui_btn2.pressed.emit()   # release the (wrong) prompt before failing
-		await E2EBoot.settle(get_tree())
-	_refute(text, "Rapid Ambush:", "the NACHTMAHR arrival beat ran without a tick")
-	assert_bool(busy).override_failure_message("the AI beat holds the table:\n%s" % text).is_false()
+	assert_array(asked).override_failure_message("not both players were asked for round 1:\n%s" % text).is_equal([1, 2])
+	_refute(text, "AI Ambush", "NACHTMAHR's arrival beat ran without a tick")
+	assert_bool(_main._solo_ai_busy).override_failure_message("the AI beat holds the table:\n%s" % text).is_false()
 
 
 ## (a) item 7: Start Game on an Automatic table sets aside BOTH players' off-table Ambush units.

@@ -3097,9 +3097,10 @@ func _hotseat_start_round(opener: int) -> void:
 ## side first, then the other (GF/AoF v3.5.1 p.13: "starting with the player that activates next").
 ## Solo (human vs NACHTMAHR) keeps `_solo_alternate_ambush_arrivals`; the AI beat is untouched.
 func _hotseat_ambush_arrivals(round_number: int, opener: int) -> void:
-	if not _solo_hotseat_automatic() or solo_controller == null or table == null or opr_army_manager == null:
+	if not _solo_hotseat_automatic() or table == null or opr_army_manager == null:
 		return
-	if round_number < 2:
+	_ensure_solo_controller()   # step 2.4's geometry controller — a table that never attacked has none yet
+	if solo_controller == null or round_number < 1:   # round 1: Rapid Ambush only (#1719)
 		return
 	await _solo_mission_reserve_rolls(round_number)   # D8a: a roles mission's reserve dice; no-op otherwise
 	var saved_human: int = solo_controller.human_slot
@@ -18870,12 +18871,14 @@ static func _tray_names(units: Array, cap: int = 6) -> String:
 ## unit in multiplayer. #1719: without an AI seat only a hotseat Automatic table asks for arrivals
 ## (both sides, `_hotseat_ambush_arrivals`), so there BOTH human armies are set aside.
 func _set_aside_offtable_ambush() -> void:
-	if solo_controller == null or opr_army_manager == null or table == null:
+	if opr_army_manager == null or table == null:
 		return
 	if network_manager != null and network_manager.is_multiplayer_active():
 		return
 	var seated: bool = not solo_ai_slots.is_empty()
 	if not seated and not _solo_hotseat_automatic():
+		return
+	if solo_controller == null and seated:
 		return
 	var trect := _table_rect()
 	var by_slot := {}
@@ -18974,6 +18977,36 @@ func _on_game_phase_changed(phase: int) -> void:
 		slots.sort()
 		for pid in slots:
 			_solo_log_rule_inventory(int(pid), true)
+	if phase == OPRArmyManager.GamePhase.PLAYING and solo_ai_slots.is_empty() \
+			and (network_manager == null or not network_manager.is_multiplayer_active()):
+		_hotseat_rapid_ambush_round_one()
+
+
+## #1719: the round-1 Rapid Ambush step on a local table without an AI seat ("may be deployed at the
+## start of any round, including the first"). A hotseat Automatic table asks BOTH players, opener first,
+## through the round-2+ Ambush step; a Manual table leaves the rule to the players and names it. Once
+## per game (the solo beat's flag); started at the game-start flip, so Start Game and a first activation
+## both reach it.
+func _hotseat_rapid_ambush_round_one() -> void:
+	if _solo_rapid_round_one_done or opr_army_manager == null or opr_army_manager.current_round != 1:
+		return
+	var trect := _table_rect()
+	var carriers: PackedStringArray = []
+	for u in opr_army_manager.get_all_game_units():
+		var gu := u as GameUnit
+		if gu != null and not gu.is_destroyed() and SoloController.unit_carries_rule(gu, SoloController.RULE_RAPID_AMBUSH) \
+				and (SoloController.unit_in_reserve(gu) or _unit_is_off_table(gu, trect)):
+			carriers.append(gu.get_name())
+	if carriers.is_empty():
+		return
+	_solo_rapid_round_one_done = true
+	if not _solo_hotseat_automatic():
+		_log_rule_event(BattleLog.Category.GENERAL,
+			"Rapid Ambush: %s may arrive at the start of round 1 — the players place it by hand (Manual table)" % ", ".join(carriers))
+		return
+	_log_rule_event(BattleLog.Category.GENERAL,
+		"Rapid Ambush: reserves may arrive at the start of round 1 (after deployment and the Scout phase)", true)
+	await _hotseat_ambush_arrivals(1, _hotseat_side_on_turn())
 
 
 ## The host broadcast the authoritative game phase (host applies it here too). Apply it to the army
