@@ -724,6 +724,8 @@ func _ready() -> void:
 	opr_army_manager.game_phase_changed.connect(_on_game_phase_changed)
 	# NML-954: the first of a destroyed Transport's three consequences — the cargo's dangerous test.
 	opr_army_manager.transport_cargo_spilled.connect(_on_transport_spill_dangerous)
+	# #1719: a cleared table (Clear Table, a remote clear, a load) keeps no AI queue of the last game.
+	opr_army_manager.armies_cleared.connect(_solo_drop_ai_queues)
 
 	# Set army_manager reference on SaveManager for GameUnit serialization
 	save_manager.army_manager = opr_army_manager
@@ -1284,8 +1286,10 @@ func _solo_activate_one_ai_body() -> GameUnit:
 ## is inert on checkouts that predate the phase gate.
 func _solo_ensure_playing_phase() -> void:
 	# Safety fill-up: the game is starting while the AI still has queued deployments (the human
-	# began fighting mid-deployment) — the remainder deploys at once, logged, panel closed.
-	if solo_controller != null and (solo_controller.deploy_pending() > 0 or solo_controller.deploy_scouts_pending() > 0):
+	# began fighting mid-deployment) — the remainder deploys at once, logged, panel closed. Only for
+	# a designated AI seat (#1719): a queue without one is a ticked game's leftover, never NACHTMAHR's.
+	if solo_controller != null and not solo_ai_slots.is_empty() \
+			and (solo_controller.deploy_pending() > 0 or solo_controller.deploy_scouts_pending() > 0):
 		solo_controller.deploy_remaining()
 		_solo_deploy_fsm["phase"] = "done"
 		_solo_deploy_ui_hide()
@@ -1342,7 +1346,9 @@ var _solo_rapid_round_one_done: bool:
 
 
 func _solo_begin_rapid_ambush_round_one() -> void:
-	if _solo_rapid_round_one_done or solo_controller == null:
+	# No AI without its tick (#1719): the beat paces NACHTMAHR's arrivals — a controller alone (a local
+	# Automatic table's geometry, a ticked game left behind) is no AI seat.
+	if _solo_rapid_round_one_done or solo_controller == null or solo_ai_slots.is_empty():
 		return
 	_solo_rapid_round_one_done = true
 	if solo_controller.ambush_reserve_ready(1) <= 0 and solo_controller.human_reserve_ready(1) <= 0:
@@ -11952,9 +11958,11 @@ func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool, auto: 
 				"%s: all models already in base contact — no pile-in needed (GF v3.5.1 p.9)" % target.get_name(), true)
 		await _run_human_melee(attacker, target, auto)
 		# Hit & Run (cut C): "being in melee" covers the DEFENDER too — the AI's charged unit may take
-		# its once-per-round 3" step after the melee resolves (the human's own bearers move manually).
+		# its once-per-round 3" step after the melee resolves (the human's own bearers move manually —
+		# on a two-human table the defender is one, #1719).
 		# after_shoot=false: the melee leg (covers the Fighter half, never the Shooter half).
-		if target != null and not target.is_destroyed() and solo_controller.hit_and_run_move(target, false):
+		if target != null and not target.is_destroyed() and _solo_is_ai_unit(target) \
+				and solo_controller.hit_and_run_move(target, false):
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.MOVEMENT, "Hit & Run: %s steps up to 3\" out of the melee" % target.get_name(), true)
 			await _solo_retreating_strike(target)   # resolver wave A: the post-melee step may lash out
@@ -18567,9 +18575,18 @@ func _on_solo_ai_toggled(pressed: bool, player_id: int) -> void:
 		_solo_log_rule_inventory(player_id)   # handoff transparency: what the AI understands, black on white
 	else:
 		solo_ai_slots.erase(player_id)
+		if solo_ai_slots.is_empty():
+			_solo_drop_ai_queues()   # #1719: the last tick off leaves no AI deployment/arrival queue behind
 	_solo_sync_difficulty()
 	_rebuild_roster()
 	_refresh_solo_panel.call_deferred()   # the grade picker follows the AI seat's row
+
+
+## No AI without its tick (#1719): the controller outlives its AI seat (the geometry of a local
+## Automatic table borrows it), so the seat's own queues go — whatever a ticked game left in them.
+func _solo_drop_ai_queues() -> void:
+	if solo_controller != null:
+		solo_controller.drop_ai_queues()
 
 
 ## Re-apply the difficulty after an AI designation or Solo-panel grade change. Thin alias of
@@ -18850,28 +18867,37 @@ static func _tray_names(units: Array, cap: int = 6) -> String:
 ## player's Ambush units at their TRAY coordinates. Deliberately NOT set_aside_human_ambush(): that has
 ## no on-table test and would pull back Ambush units he had already deployed ("MAY be set aside").
 ## Solo only — the round-2 arrival prompt is a solo feature, so a flag nobody clears would strand the
-## unit in multiplayer.
+## unit in multiplayer. #1719: without an AI seat only a hotseat Automatic table asks for arrivals
+## (both sides, `_hotseat_ambush_arrivals`), so there BOTH human armies are set aside.
 func _set_aside_offtable_ambush() -> void:
 	if solo_controller == null or opr_army_manager == null or table == null:
 		return
 	if network_manager != null and network_manager.is_multiplayer_active():
 		return
+	var seated: bool = not solo_ai_slots.is_empty()
+	if not seated and not _solo_hotseat_automatic():
+		return
 	var trect := _table_rect()
-	var set_aside: Array = []
-	for u in opr_army_manager.get_game_units_for_player(solo_controller.human_slot):
+	var by_slot := {}
+	for u in opr_army_manager.get_all_game_units():
 		var gu := u as GameUnit
-		if gu == null or gu.is_destroyed() or SoloController.unit_in_reserve(gu):
+		if gu == null or gu.is_destroyed() or SoloController.unit_in_reserve(gu) or _solo_is_ai_unit(gu):
 			continue
 		if gu.has_method("is_attached") and gu.is_attached():
 			continue
 		if not SoloController.unit_has_ambush(gu) or not _unit_is_off_table(gu, trect):
 			continue
 		gu.unit_properties["ambush_reserve"] = true
-		set_aside.append(gu)
-	if not set_aside.is_empty() and battle_log != null:
+		var slot := unit_owner_slot(gu.unit_properties)
+		by_slot[slot] = (by_slot.get(slot, []) as Array) + [gu]
+	if battle_log == null:
+		return
+	for slot in by_slot:
+		var set_aside: Array = by_slot[slot]
 		battle_log.log_event(BattleLog.Category.GENERAL,
-			"You hold %d Ambush unit(s) in reserve on your tray (%s) — placement alternates from round 2 (GF/AoF p.13)." % [
-				set_aside.size(), _tray_names(set_aside, 99)], false)
+			"%s %d Ambush unit(s) in reserve on %s tray (%s) — placement alternates from round 2 (GF/AoF p.13)." % [
+				"You hold" if seated else "%s holds" % _solo_player_label(slot), set_aside.size(),
+				"your" if seated else "its", _tray_names(set_aside, 99)], false)
 
 
 ## The deployment gate (maintainer 2026-07-27: "Ich konnte das Deployment einfach umgehen. Ich habe die
@@ -20065,9 +20091,9 @@ func _solo_apply_utility_buffs(unit: GameUnit) -> void:
 			var range_in := float(sp.get("range_in", 12.0))
 			# Re-Position Artillery: a friendly Artillery model may immediately move up to 9".
 			if float(sp.get("reposition_in", 0.0)) > 0.0:
-				if solo_controller == null:
-					# NML-939: the mover is the AI planner's (controller-only). At a table the player moves the
-					# model by hand, so the rule names itself instead of silently doing nothing.
+				if solo_controller == null or not _solo_is_ai_unit(unit):
+					# NML-939: the mover is the AI planner's (controller-only) and moves NACHTMAHR's guns only
+					# (#1719). A human's gun is moved by hand, so the rule names itself instead.
 					if battle_log != null:
 						_log_rule_event(BattleLog.Category.MOVEMENT,
 							"%s: %s may re-position a friendly Artillery unit within %.0f\" by up to %.0f\" — move it by hand" % [
