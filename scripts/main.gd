@@ -295,6 +295,7 @@ var _rules_agreement_mode := 0               # 0 idle, 1 proposing, 2 confirming
 var _rules_proposal_timed_out := false       # the confirm card was closed by the 30 s timer, not by a button
 var _rules_agreement_card: PromptCard = null # the open confirm card, so a timeout can close it
 var _rules_proposal_timer: Timer = null      # one 30 s timer, used by whichever side is waiting
+var _rules_start_asked := false              # the host's start question was shown once in this room
 const RULES_AGREEMENT_TIMEOUT := 30.0
 var _hotseat_turn: TwoHumanTurn = null       # enforced alternation on a hotseat Automatic table (plan 2.T2a)
 var _ambush_turn_waiters: Dictionary = {}   # 3.4b: slot -> the owner answered its Ambush turn
@@ -16146,7 +16147,11 @@ func _on_peer_version_validated(peer_id: int) -> void:
 	# solo session that rolled into hosting), BEFORE the state push, so the guest never
 	# receives a table where NACHTMAHR claims its army.
 	_solo_release_slot_to_human(network_manager.slot_for_peer(peer_id))
-	_clamp_rules_online("the online room")   # plan 1.4: before the push, so the guest never receives Automatic
+	# A rejoin keeps an agreed Automatic room and the host re-sends it; only a NEW player never agreed.
+	var keep_agreed: bool = network_manager.is_rejoin(peer_id) and solo_ai_slots.is_empty() \
+		and opr_army_manager.rules_automation == RulesAutomation.Level.AUTOMATIC
+	if not keep_agreed:
+		_clamp_rules_online("the online room")   # plan 1.4: before the push, so the guest never receives Automatic
 	_sync_state_to_peer(peer_id)
 	# The peer is registered and validated — hand it the full name roster so it
 	# immediately knows everyone already at the table (including the host).
@@ -16171,6 +16176,30 @@ func _on_peer_version_validated(peer_id: int) -> void:
 	# Replay the current pinned rulers so the late-joiner sees existing measurements
 	# (session-only state, not part of the .nml save).
 	network_manager.sync_rulers_to_peer(peer_id)
+	if keep_agreed:
+		network_manager.send_command("restore_rules_automation", {}, peer_id)
+	if _rules_start_question_due():
+		_ask_rules_start_question()
+
+
+## Host, second player seated: is the one-time "play with rules automation?" question due? Never on a local
+## table, with an AI seat ticked (automation is locked on there), once Automatic is on, or twice in a room.
+func _rules_start_question_due() -> bool:
+	return RulesAutomation.ui_enabled() and not _rules_start_asked and solo_ai_slots.is_empty() \
+		and network_manager != null and network_manager.is_multiplayer_active() and opr_army_manager != null \
+		and opr_army_manager.rules_automation == RulesAutomation.Level.MANUAL
+
+
+## Yes sends the usual proposal (the guest gets the confirm card); Not now leaves the room Manual - the
+## Rules switch changes it later. A rejoin or reconnect finds the flag set and never asks again.
+func _ask_rules_start_question() -> void:
+	_rules_start_asked = true
+	var card := PromptCard.new("Play with rules automation?",
+		"The game can roll and apply the rules it models for both players. The other player has to agree too.",
+		"Yes", "Not now")
+	add_child(card)
+	if bool(await card.answer(false)):
+		propose_rules_automation()
 
 
 ## #196 — a human peer occupies `slot`: any AI designation on it is void. Logged, because a
@@ -17182,6 +17211,8 @@ func _on_network_command(type: String, payload: Variant, _from_peer: int) -> voi
 		_on_peer_session_ended.call_deferred(_from_peer)   # deferred: it closes the socket being polled
 	elif type == "sync_rules_automation" and payload is Dictionary:
 		_on_sync_rules_automation((payload as Dictionary).get("level"), _from_peer)
+	elif type == "restore_rules_automation" and _from_peer == 1:
+		_apply_rules_automatic_agreed()   # the host re-sends the agreed level to a rejoined guest
 	elif type == "propose_rules_automation":
 		_on_rules_proposal(_from_peer)
 	elif type == "confirm_rules_automation":
@@ -17441,7 +17472,7 @@ func _rpc_sync_game_state(state: Dictionary) -> void:
 	# happens after any import, so the @rpc broadcast was missed — this is the join-time catch-up).
 	if state.get("solo_ai_slots") is Array:
 		_rpc_sync_ai_slots(state["solo_ai_slots"])
-	_clamp_rules_online("the online room")   # plan 1.4: the pushed level is read, a room stays Manual
+	_set_rules_manual_logged("the online room")   # plan 1.4: local only - the host clamped a new player already, and re-sends an agreed level to a rejoin
 
 
 ## ============================================================================

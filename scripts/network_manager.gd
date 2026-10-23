@@ -95,6 +95,7 @@ var connected_peers: Array[int] = []
 
 ## Peers (by id) that announced a matching version. Host-only.
 var validated_peers: Dictionary = {}
+var _rejoined_peers: Dictionary = {}   # peer id -> true when its token already held a seat (a rejoin, not a new player)
 
 ## Remote peers (by id) that announced themselves BUSY (loading — e.g. importing an army).
 ## While non-empty the local player's object move/edit input is gated and a banner shows.
@@ -596,10 +597,17 @@ func _rpc_announce_version(client_version: String, client_token: String = "") ->
 	validated_peers[sender] = true
 	# Resolve the stable slot SYNCHRONOUSLY (no await) so concurrent rejoins bind
 	# atomically, BEFORE the state-sync that main.gd runs on peer_version_validated.
+	_rejoined_peers[sender] = not client_token.is_empty() and token_to_slot.has(client_token) \
+		and int(token_to_slot[client_token]) != 1
 	var slot := _resolve_slot_for_token(client_token, sender)
 	_remote_call("_rpc_assign_slot", [slot], sender)  # guest caches it for get_my_player_slot()
 	print("[Network] Peer %d passed handshake (%s) -> slot %d" % [sender, host_version, slot])
 	peer_version_validated.emit(sender)
+
+
+## Host: did this validated peer come back on a token that already held a seat (not a new player)?
+func is_rejoin(peer_id: int) -> bool:
+	return bool(_rejoined_peers.get(peer_id, false))
 
 
 ## RPC (host → client): the host refuses us because our versions differ.
