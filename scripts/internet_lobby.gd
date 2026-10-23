@@ -147,10 +147,10 @@ func _on_list_failed(reason: String) -> void:
 		relay_peer = null
 
 
-## Disconnect from internet game and clean up.
+## Disconnect from internet game and clean up (a clean close: queued frames go out first).
 func disconnect_internet_game() -> void:
 	if relay_peer:
-		relay_peer._close()
+		relay_peer.leave_room()
 		relay_peer = null
 
 	# Clear multiplayer peer if it was our relay

@@ -168,6 +168,21 @@ func debug_force_close() -> void:
 		_ws.close()
 
 
+## A deliberate leave: flush the queue (the "session_ended" notice is last in it), close cleanly and wait
+## up to `timeout_ms` for the relay's reply. Emits no relay_connection_lost, so nothing auto-rejoins.
+func leave_room(timeout_ms: int = 1000) -> void:
+	if _ws != null and _ws.get_ready_state() == WebSocketPeer.STATE_OPEN:
+		for frame in _outgoing_queue:
+			_ws.send(frame)
+		_outgoing_queue.clear()
+		_ws.close(1000, "left the table")
+		var deadline := Time.get_ticks_msec() + timeout_ms
+		while _ws.get_ready_state() != WebSocketPeer.STATE_CLOSED and Time.get_ticks_msec() < deadline:
+			_ws.poll()
+			OS.delay_msec(5)
+	_close()
+
+
 func _on_connection_lost() -> void:
 	if _is_reconnecting:
 		return  # a rejoin is already in flight; the reconnect timer governs the outcome
@@ -237,9 +252,11 @@ func _poll() -> void:
 
 	# Abort a stuck reconnect (relay unreachable / room gone, no response).
 	if _is_reconnecting and now_ms - _reconnect_start_ms > int(RECONNECT_TIMEOUT * 1000.0):
+		# Still "Room not found" at the deadline = the relay closed the room; that is not a time-out.
+		var reason := "the host left, the room is closed" if _awaiting_recreate else "timed out"
 		_is_reconnecting = false
 		_awaiting_recreate = false
-		relay_reconnect_failed.emit("timed out")
+		relay_reconnect_failed.emit(reason)
 
 	var state = _ws.get_ready_state()
 

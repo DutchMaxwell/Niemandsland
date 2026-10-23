@@ -14636,7 +14636,45 @@ func _on_end_battle_pressed() -> void:
 
 ## Confirmed: End Battle and return to Main Menu
 func _on_end_battle_confirmed() -> void:
+	_end_online_session()
 	get_tree().change_scene_to_file("res://scenes/startup_menu.tscn")
+
+
+## Bugs 9+10: every way off an online table ends the session first: tell the others ("session_ended"),
+## close the relay peer, clear the MultiplayerAPI peer, reset NetworkManager. The next scene is offline.
+func _end_online_session(notify: bool = true) -> void:
+	if notify and network_manager != null and network_manager.is_multiplayer_active():
+		network_manager.send_command("session_ended", {}, 0)
+	if internet_lobby:
+		internet_lobby.disconnect_internet_game()
+	if network_manager:
+		network_manager.disconnect_game()
+	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()   # the engine default, not null
+
+
+## Closing the game window on an online table ends the session like End Battle (the engine quits right
+## after this notification): the others are told at once instead of waiting out a drop.
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST and network_manager != null and network_manager.is_multiplayer_active():
+		_end_online_session()
+
+
+## A player left the table on purpose. The host leaving ends the room: close our side now (no 20 s
+## host-paused wait, no rejoin that can only fail) and offer the way back to the menu.
+func _on_peer_session_ended(from_peer: int) -> void:
+	var text := "The host left — you are alone at the table" if from_peer == 1 \
+		else "%s left the table" % _peer_display_name(from_peer)
+	print("[Network] Peer %d ended its session: %s" % [from_peer, text])
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL, text)
+	if from_peer != 1:
+		_solo_show_toast(text)
+		return
+	_end_online_session(false)
+	var card := PromptCard.new("Host left", text + ".", "Back to menu", "Stay")
+	add_child(card)
+	if await card.answer(false):
+		get_tree().change_scene_to_file("res://scenes/startup_menu.tscn")
 
 
 ## Display distance while dragging or measuring
@@ -15839,10 +15877,7 @@ func _prompt_table_size() -> void:
 ## Apply the chosen table size, dissolve the chooser into black, then play the intro.
 func _on_table_setup_cancelled() -> void:
 	# Direct-to-Main entry fallback: unwind any live session before returning.
-	if internet_lobby:
-		internet_lobby.disconnect_internet_game()
-	if network_manager:
-		network_manager.disconnect_game()
+	_end_online_session()
 	get_tree().change_scene_to_file("res://scenes/startup_menu.tscn")
 
 
@@ -17085,6 +17120,8 @@ func _on_network_command(type: String, payload: Variant, _from_peer: int) -> voi
 		_rpc_roll_result(int(payload.get("req", 0)), payload.get("faces", []))
 	elif type == "vfx_cue" and payload is Dictionary:
 		_vfx_draw(payload, _from_peer)
+	elif type == "session_ended":
+		_on_peer_session_ended.call_deferred(_from_peer)   # deferred: it closes the socket being polled
 	elif type == "sync_rules_automation" and payload is Dictionary:
 		_on_sync_rules_automation((payload as Dictionary).get("level"), _from_peer)
 	elif type == "propose_rules_automation":
@@ -18192,6 +18229,7 @@ func _start_lesson(_object_count: int) -> void:
 func _leave_lesson() -> void:
 	await _scenario_loader.end_lesson()
 	ProjectSettings.set_setting("niemandsland/open_game_school", true)
+	_end_online_session()
 	get_tree().change_scene_to_file("res://scenes/startup_menu.tscn")
 
 

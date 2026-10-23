@@ -311,8 +311,8 @@ func _on_peer_connected(id: int) -> void:
 
 
 func _on_peer_disconnected(id: int) -> void:
-	push_warning("[Network] Player disconnected: Peer ID %d (remaining peers: %d, rpc_errors=%d)" % [id, connected_peers.size() - 1, _rpc_error_count])
-	connected_peers.erase(id)
+	connected_peers.erase(id)   # first: an unknown id once logged "remaining peers: -1"
+	push_warning("[Network] Player disconnected: Peer ID %d (remaining peers: %d, rpc_errors=%d)" % [id, connected_peers.size(), _rpc_error_count])
 	validated_peers.erase(id)
 	# Failsafe: a peer that crashed/dropped mid-load must not freeze the table forever.
 	# Clear its busy flag (fires session_busy_changed if it was the last busy peer).
