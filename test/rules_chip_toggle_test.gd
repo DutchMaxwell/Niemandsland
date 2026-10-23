@@ -22,8 +22,8 @@ func _main() -> Node:
 	m.next_round_btn = Button.new()
 	var box := VBoxContainer.new()
 	box.add_child(m.next_round_btn)
-	m.solo_panel_box = VBoxContainer.new()
-	box.add_child(m.solo_panel_box)
+	m.rules_panel_box = VBoxContainer.new()
+	box.add_child(m.rules_panel_box)
 	auto_free(box)
 	add_child(box)
 	auto_free(m)
@@ -75,16 +75,16 @@ func test_flag_off_hides_chip_and_toggle() -> void:
 	m._update_rules_chip()
 	m._add_rules_toggle()
 	assert_bool(m._rules_chip == null or not m._rules_chip.visible).is_true()
-	assert_int(m.solo_panel_box.get_child_count()).is_equal(0)
+	assert_int(m.rules_panel_box.get_child_count()).is_equal(0)
 
 
 func test_toggle_is_added_and_locked_by_an_ai_slot() -> void:
 	var m := _main()
 	m._add_rules_toggle()
-	var cb: CheckButton = m.solo_panel_box.get_child(0)
+	var cb: CheckButton = m.rules_panel_box.get_child(0)
 	assert_bool(cb.disabled).is_false()
 	cb.button_pressed = true
 	assert_int(m.opr_army_manager.rules_automation).is_equal(L.AUTOMATIC)
 	m.solo_ai_slots = {2: true}
 	m._add_rules_toggle()
-	assert_bool((m.solo_panel_box.get_child(1) as CheckButton).disabled).is_true()
+	assert_bool((m.rules_panel_box.get_child(1) as CheckButton).disabled).is_true()
