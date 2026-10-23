@@ -728,6 +728,7 @@ func _ready() -> void:
 	opr_army_manager.transport_cargo_spilled.connect(_on_transport_spill_dangerous)
 	# #1719: a cleared table (Clear Table, a remote clear, a load) keeps no AI queue of the last game.
 	opr_army_manager.armies_cleared.connect(_solo_drop_ai_queues)
+	opr_army_manager.armies_cleared.connect(_solo_drop_mission_state.bind("the table was cleared"))   # …nor its mission
 
 	# Set army_manager reference on SaveManager for GameUnit serialization
 	save_manager.army_manager = opr_army_manager
@@ -5553,6 +5554,37 @@ func _solo_prompt_interference(caster: GameUnit, caster_unit: GameUnit, spell_na
 	return spent
 
 
+## No AI without its tick (#1719), online: the caster's opponent sits at another machine. The owner-roll
+## seam carries the cast (`request_roll` with a "spell" ask, addressed to one of the foe's lending
+## casters); that machine asks its player through `_solo_prompt_interference` (its spends sync as
+## usual) and the one reply face is the token count. A foe seated here is asked here; a vacant seat or
+## no answer in time = no interference, logged.
+func _solo_remote_interference(member: GameUnit, unit: GameUnit, spell_name: String, boost: int,
+		target_label: String, foe: int) -> int:
+	var helpers: Array = solo_controller._aura_casters(foe, unit, null)
+	if helpers.is_empty():
+		return 0
+	var lender := (helpers[0] as Dictionary)["unit"] as GameUnit
+	if _solo_i_own_unit(lender):
+		return await _solo_prompt_interference(member, unit, spell_name, AiSpell.CAST_BASE_TARGET, boost,
+			target_label, foe)
+	var owner_peer := _solo_peer_for_slot(foe)
+	var owner_name := _solo_owner_name(lender)
+	if owner_peer == 0:
+		_log_rule_event(BattleLog.Category.COMBAT, "%s: %s's seat is empty — no interference" % [spell_name, owner_name], true)
+		return 0
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT, "Waiting for %s — interference against %s" % [owner_name, spell_name], true)
+	var reply: Dictionary = await _owner_request(owner_peer, {"unit": lender.unit_id, "kind": "interference",
+		"count": 0, "target": AiSpell.CAST_BASE_TARGET, "purpose": spell_name, "ask": {"spell": spell_name,
+		"caster": member.unit_id, "caster_unit": unit.unit_id, "boost": boost, "targets": target_label}})
+	var faces: Array = reply.get("faces", [])
+	if not bool(reply.get("done", false)) or faces.size() != 1:
+		_log_rule_event(BattleLog.Category.COMBAT, "%s: no answer from %s — no interference" % [spell_name, owner_name], true)
+		return 0
+	return maxi(0, int(faces[0]))
+
+
 ## The joined display label of a cast's target list.
 func _solo_cast_target_label(targets: Array) -> String:
 	var names: PackedStringArray = []
@@ -9318,11 +9350,23 @@ func _owner_roll(unit: GameUnit, count: int, target: int, roll_kind: String, pur
 		battle_log.log_event(BattleLog.Category.COMBAT, "Waiting for %s — %s" % [owner_name, what], true)
 	if owner_peer == 0:
 		return await _owner_roll_fallback(unit, count, target, roll_kind, purpose, ask)
+	var reply: Dictionary = await _owner_request(owner_peer, {"unit": unit.unit_id, "kind": roll_kind,
+		"count": count, "target": target, "purpose": purpose, "ask": ask})
+	if not bool(reply.get("done", false)):
+		return await _owner_roll_fallback(unit, count, target, roll_kind, purpose, ask)
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT, "%s rolled their %s" % [owner_name, what], true)
+	return reply.get("faces", [])
+
+## The seam's wire half: `request_roll` to `owner_peer`, then a bounded wait for its `roll_result`.
+## Returns the reply ({"faces", "done"}); "done" false = no answer within the timeout.
+func _owner_request(owner_peer: int, rq: Dictionary) -> Dictionary:
 	_solo_remote_save_seq += 1
 	var req := _solo_remote_save_seq
 	_solo_remote_save_waiters[req] = {"faces": [], "done": false}
-	network_manager.send_command("request_roll", {"req": req, "unit": unit.unit_id, "kind": roll_kind,
-		"count": count, "target": target, "purpose": purpose, "ask": ask}, owner_peer)
+	var payload := {"req": req}
+	payload.merge(rq)
+	network_manager.send_command("request_roll", payload, owner_peer)
 	var waited := 0.0
 	while not bool((_solo_remote_save_waiters.get(req, {}) as Dictionary).get("done", false)) \
 			and waited < _owner_roll_timeout_s:
@@ -9330,11 +9374,7 @@ func _owner_roll(unit: GameUnit, count: int, target: int, roll_kind: String, pur
 		waited += 0.1
 	var reply: Dictionary = _solo_remote_save_waiters.get(req, {})
 	_solo_remote_save_waiters.erase(req)
-	if not bool(reply.get("done", false)):
-		return await _owner_roll_fallback(unit, count, target, roll_kind, purpose, ask)
-	if battle_log != null:
-		battle_log.log_event(BattleLog.Category.COMBAT, "%s rolled their %s" % [owner_name, what], true)
-	return reply.get("faces", [])
+	return reply
 
 ## The no-reply path (vacant seat, timeout): a VISIBLE auto-roll instead of a hang — the same
 ## tray roll the AI makes, but labelled, so nobody reads it as the owner's dice.
@@ -9345,8 +9385,9 @@ func _owner_roll_fallback(unit: GameUnit, count: int, target: int, roll_kind: St
 	return await _solo_tray_roll(count, target, "AI (%s)" % unit.get_name(), roll_kind,
 		"%s (owner absent — auto-rolled)" % purpose)
 
-## Owner side: a roll request arrived for OUR unit — a save batch opens our prompt, every other
-## kind rolls on our tray (a real roll, same sync as a local one) — and the faces go back.
+## Owner side: a roll request arrived for OUR unit — a save batch opens our prompt, a cast our
+## interference dialog, every other kind rolls on our tray (a real roll, same sync as a local one) —
+## and the faces go back.
 @rpc("any_peer", "call_remote", "reliable")
 func _rpc_request_roll(rq: Dictionary, from_peer: int) -> void:
 	var unit := opr_army_manager.get_game_unit_by_id(str(rq.get("unit", "")))
@@ -9354,7 +9395,16 @@ func _rpc_request_roll(rq: Dictionary, from_peer: int) -> void:
 		return   # not ours (stale state) — the resolver's timeout fallback covers the loss
 	var ask: Dictionary = rq.get("ask", {})
 	var faces: Array
-	if ask.has("weapon"):
+	if ask.has("spell"):
+		# #1719: an online cast at our side — the interference is OUR player's choice (`_solo_remote_interference`).
+		var member := opr_army_manager.get_game_unit_by_id(str(ask.get("caster", "")))
+		var caster_unit := opr_army_manager.get_game_unit_by_id(str(ask.get("caster_unit", "")))
+		_ensure_solo_controller()   # an agreed Automatic room borrows it for geometry (3.1)
+		faces = [0]
+		if member != null and caster_unit != null and solo_controller != null:
+			faces = [await _solo_prompt_interference(member, caster_unit, str(ask["spell"]), AiSpell.CAST_BASE_TARGET,
+				int(ask.get("boost", 0)), str(ask.get("targets", "")), unit_owner_slot(unit.unit_properties))]
+	elif ask.has("weapon"):
 		var attacker := GameUnit.new()
 		attacker.unit_properties = {"name": str(ask.get("striker", ""))}
 		faces = await _solo_prompt_saves(attacker, unit, str(ask["weapon"]), int(rq.get("count", 0)),
@@ -11134,9 +11184,11 @@ func _run_human_cast(unit: GameUnit, member: GameUnit, entry: Dictionary, picked
 		for foe in sides["foes"]:
 			interference += await _solo_prompt_interference(member, unit, spell_name, AiSpell.CAST_BASE_TARGET,
 				boost, _solo_cast_target_label(targets), int(foe))
-	elif battle_log != null:
-		_log_rule_event(BattleLog.Category.COMBAT,
-			"%s resolves without interference — an online room does not offer the opponent the choice yet" % spell_name, true)
+	else:
+		# Online: each opponent decides at ITS machine, asked through the owner-roll seam.
+		for foe in sides["foes"]:
+			interference += await _solo_remote_interference(member, unit, spell_name, boost,
+				_solo_cast_target_label(targets), int(foe))
 	var ai_pool := 0
 	for h in ai_helpers:
 		ai_pool += int((h as Dictionary)["tokens"])
@@ -18732,6 +18784,7 @@ func _on_solo_ai_toggled(pressed: bool, player_id: int) -> void:
 		solo_ai_slots.erase(player_id)
 		if solo_ai_slots.is_empty():
 			_solo_drop_ai_queues()   # #1719: the last tick off leaves no AI deployment/arrival queue behind
+			_solo_drop_mission_state("no AI seat left")
 	_solo_sync_difficulty()
 	_rebuild_roster()
 	_refresh_solo_panel.call_deferred()   # the grade picker follows the AI seat's row
@@ -18742,6 +18795,23 @@ func _on_solo_ai_toggled(pressed: bool, player_id: int) -> void:
 func _solo_drop_ai_queues() -> void:
 	if solo_controller != null:
 		solo_controller.drop_ai_queues()
+
+
+## No AI without its tick (#1719): the mission Start Deployment applied for NACHTMAHR's game lives in
+## SoloController's statics (scoring, VP ledger, marker metadata, roles). The last tick off and a cleared
+## table drop them, so a two-human game never books a mission it did not set up; the next Start Deployment
+## applies the picked mission again, and a load restores its own after the clear.
+func _solo_drop_mission_state(reason: String) -> void:
+	if SoloController.mission_scoring == "end" and SoloController.mission_markers.is_empty() \
+			and SoloController.mission_roles.is_empty() and SoloController.mission_vp == [0, 0]:
+		return
+	for i in range(SoloController.mission_markers.size()):
+		if terrain_overlay != null and not str((SoloController.mission_markers[i] as Dictionary).get("carried_by", "")).is_empty():
+			terrain_overlay.set_objective_carried(i, false)   # a carried marker shows again where it stands
+	SoloController.mission_reset("end", {})
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL,
+			"Mission state dropped (%s) — objectives held decide; Start Deployment applies the picked mission again" % reason, true)
 
 
 ## Re-apply the difficulty after an AI designation or Solo-panel grade change. Thin alias of
