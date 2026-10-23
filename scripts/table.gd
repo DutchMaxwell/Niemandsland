@@ -15,6 +15,8 @@ signal biome_changed(biome_name: String)
 @export var default_texture_path: String = "res://assets/terrain/table_surface_default.png"
 
 var _default_texture: Texture2D = null
+var _battlemap_biome := ""    # the biome whose battlemap is on the table ("" = the fallback surface)
+var _battlemap_loading := ""  # the biome whose battlemap is being fetched right now
 
 ## Detail noise is biome-independent — generated ONCE and reused. NoiseTexture2D
 ## fills in on a background thread; regenerating it per material rebuild (twice per
@@ -190,13 +192,16 @@ func _load_fallback_texture() -> void:
 
 ## Switch the play-surface biome and resolve its battlemap (async, from R2 + cache).
 ## Also re-themes the terrain props (ruin walls, trees) to the biome's set. The biome already on the table
-## is a no-op unless `force`: each re-push re-decoded the battlemap (~2 s on the main thread) and rebuilt
-## the presentation (every online state sync pushed it, twice per join).
+## rebuilds nothing unless `force`: each re-push re-decoded the battlemap (~2 s on the main thread) and
+## rebuilt the presentation (every online state sync pushed it, twice per join). Only a battlemap that
+## never arrived (a failed download on a flaky link) is fetched again, without the rebuild.
 func set_biome(biome_name: String, force: bool = false) -> void:
 	if not BIOMES.has(biome_name):
 		push_warning("Unknown biome '%s' (known: %s)" % [biome_name, ", ".join(BIOMES)])
 		return
 	if biome_name == biome and not force:
+		if _battlemap_biome != biome_name and _battlemap_loading != biome_name:
+			_apply_biome(biome_name)
 		return
 	biome = biome_name
 	_apply_biome(biome_name)
@@ -220,7 +225,10 @@ func _apply_biome(biome_name: String) -> void:
 	mesh_instance.material_override = _build_ground_material()  # show fallback immediately
 	if not is_instance_valid(_biome_library):
 		return
+	_battlemap_loading = biome_name
 	var path: String = await _biome_library.ensure_biome(biome_name)
+	if _battlemap_loading == biome_name:
+		_battlemap_loading = ""
 	if biome != biome_name:
 		return  # selection changed during the download; drop this stale result
 	if path.is_empty():
@@ -229,6 +237,7 @@ func _apply_biome(biome_name: String) -> void:
 	if tex == null:
 		return
 	_default_texture = tex
+	_battlemap_biome = biome_name
 	mesh_instance.material_override = _build_ground_material()
 
 
