@@ -2832,10 +2832,13 @@ func _solo_show_game_summary() -> void:
 	# Slot orientation: human_slot/ai_slot are the controller's two sides in either mode.
 	# NACHTMAHR is the solo AI's persona (maintainer decision 2026-07-16) — the human-facing verdict
 	# carries the name; the kill-screen line is the release identity ("Dark Souls for OPR").
-	var side_a_label: String = _solo_player_label(human_slot) if _solo_both_ai else "you"
-	var side_b_label: String = _solo_player_label(ai_slot) if _solo_both_ai else "NACHTMAHR"
-	var win_a: String = "%s wins" % side_a_label if _solo_both_ai else "You win — NACHTMAHR yields."
-	var win_b: String = "%s wins" % side_b_label if _solo_both_ai else "NACHTMAHR claims the field."
+	# No AI without its tick (#1719): a table with no AI seat (two humans) has no "you" and no
+	# NACHTMAHR either — it names its players the both-AI way.
+	var by_name: bool = _solo_both_ai or solo_ai_slots.is_empty()
+	var side_a_label: String = _solo_player_label(human_slot) if by_name else "you"
+	var side_b_label: String = _solo_player_label(ai_slot) if by_name else "NACHTMAHR"
+	var win_a: String = "%s wins" % side_a_label if by_name else "You win — NACHTMAHR yields."
+	var win_b: String = "%s wins" % side_b_label if by_name else "NACHTMAHR claims the field."
 	# NML-1048: the verdict comes from the SAME referee the result JSON uses — BattleSim.mission_winner.
 	# The old line counted the markers still held at the buzzer and never opened the mission VP ledger
 	# _solo_book_mission_vp fills every round, so on the four progressive missions the two drifted apart:
@@ -2868,10 +2871,10 @@ func _solo_show_game_summary() -> void:
 		privacy_menu.set_last_game_record(game_record_collector.build_record())
 		game_record_collector.reset()
 	var obj_block: String = ("Objectives held:\n  %s: %d\n  %s: %d\n  Neutral: %d\n\n" % [
-		(side_a_label.capitalize() if not _solo_both_ai else side_a_label), human_held, side_b_label, ai_held, neutral]) \
+		(side_a_label.capitalize() if not by_name else side_a_label), human_held, side_b_label, ai_held, neutral]) \
 		if not objectives.is_empty() else "No objective markers were on the table.\n\n"
 	var vp_block: String = ("Mission VP (decides):\n  %s: %d\n  %s: %d\n\n" % [
-		(side_a_label.capitalize() if not _solo_both_ai else side_a_label), vp_a, side_b_label, vp_b]) \
+		(side_a_label.capitalize() if not by_name else side_a_label), vp_a, side_b_label, vp_b]) \
 		if scored_by_vp else ""
 	GameOverPanel.open(self, "%d rounds played.\n\n%s%s%s" % [_solo_total_rounds(), obj_block, vp_block, verdict],
 		_maybe_prompt_for_evaluation_sharing)
@@ -5501,9 +5504,13 @@ func _solo_expire_spell_tokens() -> void:
 ## keeps the rest — the wave-6 "basic prompt" (full counter-casting UX is a later wave). Returns the
 ## interference total; the tokens are spent from the nearest eligible caster and MP-synced.
 func _solo_prompt_interference(caster: GameUnit, caster_unit: GameUnit, spell_name: String,
-		base_target: int = AiSpell.CAST_BASE_TARGET, boost: int = 0, target_label: String = "") -> int:
-	_solo_log_shaken_lenders(solo_controller.human_slot)
-	var helpers: Array = solo_controller._aura_casters(solo_controller.human_slot, caster_unit, null)
+		base_target: int = AiSpell.CAST_BASE_TARGET, boost: int = 0, target_label: String = "",
+		slot: int = -1) -> int:
+	# `slot` = the interfering side: the human seat by default (solo), the caster's opponent on a
+	# two-human table (#1719).
+	var side: int = solo_controller.human_slot if slot < 0 else slot
+	_solo_log_shaken_lenders(side)
+	var helpers: Array = solo_controller._aura_casters(side, caster_unit, null)
 	if helpers.is_empty():
 		return 0
 	var pool := 0
@@ -8207,7 +8214,8 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 				"striker": striker.get_name(), "weapon": weapon_name, "defense": base_defense, "ap": ap})
 	else:
 		_solo_log_save_threshold(defender, base_defense, ap)
-		save_faces = await _solo_tray_roll(count, base_defense + ap, "AI (%s)" % defender.get_name(), "defense",
+		# #1719: "AI (X)" only for an AI seat — a human volley at the other player's unit names that player.
+		save_faces = await _solo_tray_roll(count, base_defense + ap, _roller_label(defender), "defense",
 			"Defense save vs %s" % weapon_name)
 	# Resolver wave A — Bloodthirsty Fighter reads the blocker's unmodified 1s of this batch (the
 	# melee strike loop resets the counter before its resolve and consumes it right after).
@@ -11052,9 +11060,13 @@ func _run_human_cast(unit: GameUnit, member: GameUnit, entry: Dictionary, picked
 		battle_log.log_event(BattleLog.Category.GENERAL, "%s hits %d targets: %s" % [
 			spell_name, targets.size(), _solo_cast_target_label(targets)])
 	# BOOST tableau (own helpers in 18" LoS; the member's remaining tokens count via the pool).
+	# #1719: with no AI seat the sides are the CASTER's own — on a two-human table P2 casts too.
+	var seated: bool = not solo_ai_slots.is_empty()
+	var own_slot: int = solo_controller.human_slot if seated else unit_owner_slot(unit.unit_properties)
+	var foe_slot: int = solo_controller.ai_slot if seated else 3 - own_slot
 	var boost := 0
-	_solo_log_shaken_lenders(solo_controller.human_slot)
-	var helpers: Array = solo_controller._aura_casters(solo_controller.human_slot, unit, null)
+	_solo_log_shaken_lenders(own_slot)
+	var helpers: Array = solo_controller._aura_casters(own_slot, unit, null)
 	var pool := 0
 	for h in helpers:
 		pool += int((h as Dictionary)["tokens"])
@@ -11074,8 +11086,18 @@ func _run_human_cast(unit: GameUnit, member: GameUnit, entry: Dictionary, picked
 	# AI COUNTER-INTERFERENCE (decided default: shown AFTER the player commits — rules-sequential,
 	# no leak): the AI's 18"-LoS pool spends per the marginal calculus, value-proxied by the cost.
 	var interference := 0
-	_solo_log_shaken_lenders(solo_controller.ai_slot)
-	var ai_helpers: Array = solo_controller._aura_casters(solo_controller.ai_slot, unit, null)
+	var ai_helpers: Array = []
+	if seated:
+		_solo_log_shaken_lenders(foe_slot)
+		ai_helpers = solo_controller._aura_casters(foe_slot, unit, null)
+	elif network_manager == null or not network_manager.is_multiplayer_active():
+		# No AI without its tick (#1719): the caster's opponent is a human — asked on the shared
+		# screen like the boost, never NACHTMAHR's calculus spending that player's tokens.
+		interference = await _solo_prompt_interference(member, unit, spell_name, AiSpell.CAST_BASE_TARGET,
+			boost, _solo_cast_target_label(targets), foe_slot)
+	elif battle_log != null:
+		_log_rule_event(BattleLog.Category.COMBAT,
+			"%s resolves without interference — an online room does not offer P%d the choice yet" % [spell_name, foe_slot], true)
 	var ai_pool := 0
 	for h in ai_helpers:
 		ai_pool += int((h as Dictionary)["tokens"])
@@ -11096,7 +11118,7 @@ func _run_human_cast(unit: GameUnit, member: GameUnit, entry: Dictionary, picked
 	await _solo_resolve_one_cast({"caster": member, "caster_unit": unit, "spell": entry,
 		"name": spell_name, "targets": targets, "boost": boost, "interference": interference,
 		"base_target": AiSpell.CAST_BASE_TARGET, "threshold": threshold,
-		"owner_label": "You", "human_cast": true})
+		"owner_label": _roller_label(member), "human_cast": true})
 	human_cast_resolved.emit(unit)
 
 
@@ -12408,7 +12430,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 	var upr_hit := 0
 	var upr_name := _solo_unpredictable_rule(attacker, false, target)
 	if not upr_name.is_empty():
-		var upr_face: Array = await _solo_tray_roll(1, AiCombatMath.BEST_HIT_TARGET, "You")
+		var upr_face: Array = await _solo_tray_roll(1, AiCombatMath.BEST_HIT_TARGET, _roller_label(attacker))
 		if not upr_face.is_empty():
 			var upr_eff: Dictionary = AiCombatMath.unpredictable_fighter_effect(int(upr_face[0]))
 			upr_ap = int(upr_eff["ap"])
@@ -12509,12 +12531,12 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 			_solo_log_hit_mod(p_mod, target, to_hit)
 			_vfx_player_volley(group.get("member"), target, profile, bool(profile.get("indirect", false))
 				or h_granted_indirect or _solo_target_grants_indirect(target))
-			var faces: Array = await _solo_tray_roll(int(profile.get("attacks", 0)), to_hit, "You", "attack",
+			var faces: Array = await _solo_tray_roll(int(profile.get("attacks", 0)), to_hit, _roller_label(attacker), "attack",
 				"Shooting: %s → %s (%d+)" % [str(profile.get("name", "?")), target.get_name(), to_hit])
 			if bool(profile.get("limited", false)):
 				solo_controller.mark_limited_used(group.get("member"), profile)   # once per game (wave 5)
 			await _solo_hazardous_self_wounds(attacker, profile, faces)   # resolver wave A: natural 1s wound the firer
-			var hits: int = await _solo_hits(faces, to_hit_raw, profile, dist, target, false, "You")
+			var hits: int = await _solo_hits(faces, to_hit_raw, profile, dist, target, false, _roller_label(attacker))
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s fires %s at %s — %d hit%s" % [
 					str(group.get("name", "?")), str(profile.get("name", "?")), target.get_name(), hits, ("" if hits == 1 else "s")])
@@ -12565,8 +12587,9 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 		_solo_growth_on_kill(attacker)   # Defensive Frenzy: your volley kill counts too (symmetry)
 		_solo_vengeance_on_destroyed(target, attacker)
 	await _solo_stage_phase("Result")
-	# The AI's unit tests morale if your volley dropped it to half strength or less (goal 003 P1).
-	await _solo_shooting_morale(target, target_alive_before, "AI (%s)" % target.get_name(), target_wounds_before)
+	# The target tests morale if the volley dropped it to half strength or less (goal 003 P1). Its roll
+	# carries its owner's label — "AI (X)" only for an AI seat; a two-human table names the player (#1719).
+	await _solo_shooting_morale(target, target_alive_before, _roller_label(target), target_wounds_before)
 	await _solo_stage_phase("Morale")
 	_solo_stage_end()
 	_solo_consume_once_mods(attacker, target, false)   # F4: once-mods spent by this exchange
@@ -12640,7 +12663,7 @@ func _run_human_melee(attacker: GameUnit, target: GameUnit, auto: bool = false) 
 	_solo_log_melee_result(attacker, human_caused, human_score, target, ai_caused, ai_score)
 	await _solo_stage_phase("Melee result")
 	if loser != null and _solo_combined_alive(loser) > 0:
-		await _solo_morale_test(loser, "You" if loser == attacker else "AI (%s)" % target.get_name(), true)
+		await _solo_morale_test(loser, _roller_label(loser), true)   # "Names, not You" (rules plan 2.5)
 	await _solo_stage_phase("Morale")
 	# — Consolidation (GF v3.5.1 p.9, round 7 finding 4): neither destroyed → the human charger's 1"
 	#   back-step is surfaced as a reminder; one side destroyed → the survivor consolidates up to 3"
