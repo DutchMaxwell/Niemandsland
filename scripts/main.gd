@@ -10667,10 +10667,18 @@ func solo_combat_available(unit: GameUnit) -> bool:
 	return false
 
 
+## 0.3.14: the player's Charge / Advance & Shoot / Rush verbs are hidden — the executor gives no
+## landing preview and the target pick is invisible. The 0.3.15 rework (landing preview + a real
+## target selection) flips this back on. The AI's own use of execute_intent is unaffected.
+const PLAYER_AUTO_VERBS_ENABLED := false
+
+
 ## Radial gate for the engine-executed verbs (A1, NML-202): the same eligibility as Shoot/Fight, but
 ## co-op rooms hide them in this version (grilled decision 2: V1 is solo) — a multiplayer session's
 ## players still move and attack by hand, same as today.
 func solo_auto_available(unit: GameUnit) -> bool:
+	if not PLAYER_AUTO_VERBS_ENABLED:
+		return false
 	# The engine-executed MOVE verbs need a controller without an AI side (step 2.4): until then they
 	# stay behind an AI designation, so a hotseat Automatic table grows only the combat verbs.
 	return solo_combat_available(unit) and not solo_ai_slots.is_empty() \
