@@ -189,10 +189,14 @@ func _load_fallback_texture() -> void:
 
 
 ## Switch the play-surface biome and resolve its battlemap (async, from R2 + cache).
-## Also re-themes the terrain props (ruin walls, trees) to the biome's set.
-func set_biome(biome_name: String) -> void:
+## Also re-themes the terrain props (ruin walls, trees) to the biome's set. The biome already on the table
+## is a no-op unless `force`: each re-push re-decoded the battlemap (~2 s on the main thread) and rebuilt
+## the presentation (every online state sync pushed it, twice per join).
+func set_biome(biome_name: String, force: bool = false) -> void:
 	if not BIOMES.has(biome_name):
 		push_warning("Unknown biome '%s' (known: %s)" % [biome_name, ", ".join(BIOMES)])
+		return
+	if biome_name == biome and not force:
 		return
 	biome = biome_name
 	_apply_biome(biome_name)

@@ -31,7 +31,7 @@ func test_each_biome_keeps_its_grade_through_moods_and_restores_low(timeout := 1
 		"urban_ruins": 1.8, "volcanic_ash": 0.65, "alien_jungle": 1.8}
 	for biome in table.BIOMES:
 		main.atmosphere_controller.apply_atmosphere("Day", true)
-		table.set_biome(biome)
+		table.set_biome(biome, true)   # forced: the first biome is already on the table, and must still dress
 		await get_tree().create_timer(0.7).timeout
 		await runner.simulate_frames(2)
 		var lut := env.adjustment_color_correction as GradientTexture1D

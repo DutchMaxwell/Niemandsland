@@ -401,6 +401,11 @@ class Run:
             "fixture on both peers", lambda s: all(v.get("fixture_ready") for v in s.values())
         )
         self.checkpoint("fixture", states)
+        # Bug 5: one join = one handshake (the guest announced on connected_to_server AND room_joined,
+        # and each pass pushed the full state and the biome again).
+        passes = [line for line in self.clients["host"].lines if "passed handshake" in line]
+        if len(passes) != 1:
+            raise HarnessFailure(f"one join must be one handshake; the host logged {len(passes)}: {passes}")
 
         if self.rules_online:
             self._rules_online_scenario()

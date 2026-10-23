@@ -588,6 +588,11 @@ func _rpc_announce_version(client_version: String, client_token: String = "") ->
 		# Let the reject RPC flush, then drop the peer host-side.
 		get_tree().create_timer(0.5).timeout.connect(_disconnect_peer_safe.bind(sender))
 		return
+	# One join = one handshake: a repeat announce from a peer already validated in its unchanged slot
+	# re-ran the whole state sync + biome push. A rejoin clears the validation first, so it re-syncs.
+	if is_peer_validated(sender) and int(slot_to_peer.get(int(token_to_slot.get(client_token, 0)), -1)) == sender:
+		print("[Network] Peer %d re-announced, already validated in slot %d — ignored" % [sender, slot_for_peer(sender)])
+		return
 	validated_peers[sender] = true
 	# Resolve the stable slot SYNCHRONOUSLY (no await) so concurrent rejoins bind
 	# atomically, BEFORE the state-sync that main.gd runs on peer_version_validated.
@@ -659,6 +664,11 @@ func _rpc_assign_slot(slot: int) -> void:
 	_my_assigned_slot = slot
 	peer_to_slot[get_my_peer_id()] = slot
 	slot_assigned.emit(slot)
+	# A ready flag reported into a dying socket was lost and nothing re-sent it: the handshake that just
+	# passed is a live link, so report it again (the host files it under this slot).
+	if _local_ready and not is_host and (army_manager == null or army_manager.is_deployment_phase()):
+		print("[Network] Handshake passed while ready — re-reporting ready to the host (slot %d)" % slot)
+		_remote_call("_rpc_report_ready", [true], 1)
 
 
 ## RPC (host → all): a returning token rebound its slot from old_peer to new_peer.
