@@ -57,11 +57,6 @@ the game, new graphics for every biome, a longer Game School and a stronger NACH
   up to 3", and sees painted terrain. Its stall check, Dangerous-ground decision and battle-log
   intent line were corrected. (#1207, #1484, #1485, #1600, #1674, #1678, #1706, #1728, #1788–#1791,
   #1797)
-- **Order a whole activation with Charge, Advance & Shoot or Rush.** Choose the action and click an
-  enemy; your unit follows a legal path and the engine rolls the attacks, saves and morale for you,
-  the same executor NACHTMAHR's own activations run through. Suggested targets appear in the log, and
-  automatic save confirmation is optional. These actions currently exclude co-op rooms, regiments,
-  aircraft and embarked units. (#1173, #1183, #1185, #1186)
 - **macOS can use the neural opponent on Apple Silicon and Intel.** Builds with a working rules core
   and model use it at the strongest level. A build without the core, or a load failure, falls back to
   the decision tree; check the engine named in the game log. (#1133, #1136)
