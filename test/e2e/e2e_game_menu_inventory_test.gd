@@ -652,7 +652,7 @@ func test_rows_5_and_6_wear_the_house_style(timeout := 120000) -> void:
 	var width: float = _scroll().offset_right - _scroll().offset_left
 	assert_float(_scroll().get_combined_minimum_size().x).override_failure_message("the column needs %d px, it has %d: %s" % [
 		_scroll().get_combined_minimum_size().x, width, _widest()]).is_less_equal(width)
-	for section: String in ["SoloPanel", "DeploymentPanel", "GamePhasePanel", "HostToolsPanel"]:
+	for section: String in ["RulesPanel", "SoloPanel", "DeploymentPanel", "GamePhasePanel", "HostToolsPanel"]:
 		var box := _scroll().get_node("LeftPanelVBox/" + section) as Control
 		assert_object(box.theme).override_failure_message("%s is not a house section" % section).is_same(HouseStyle.theme())
 		var first := true

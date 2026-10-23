@@ -27,15 +27,15 @@ func after_test() -> void:
 
 
 func _switch() -> CheckButton:
-	for c in _main.solo_panel_box.get_children():
+	for c in _main.rules_panel_box.get_children():
 		if c is CheckButton and (c as CheckButton).text == "Rules automation":
 			return c
 	return null
 
 
 func _assert_section_with_switch(what: String) -> void:
-	assert_bool(_main.solo_panel_box.visible) \
-		.override_failure_message("%s: the left-panel section is hidden" % what).is_true()
+	assert_bool(_main.rules_panel_box.visible) \
+		.override_failure_message("%s: the Rules section is hidden" % what).is_true()
 	assert_object(_switch()) \
 		.override_failure_message("%s: the Rules automation switch is missing" % what).is_not_null()
 

@@ -300,6 +300,7 @@ var _hotseat_turn: TwoHumanTurn = null       # enforced alternation on a hotseat
 var _ambush_turn_waiters: Dictionary = {}   # 3.4b: slot -> the owner answered its Ambush turn
 var _ambush_turn_timeout_s := 120.0         # 3.4b: tests shorten it; play never does
 var solo_panel_box: VBoxContainer = null     # left-panel "Solo" section (per-army AI toggles)
+var rules_panel_box: VBoxContainer = null    # left-panel "Rules" section (the Rules automation switch)
 var solo_mission_option: OptionButton = null # left-panel Mission picker (MissionCatalog + "Duel (no mission)")
 var _solo_mission_id: String = ""            # "" = Duel (no mission, today's byte-identical behaviour)
 var _solo_target_mode: Dictionary = {}       # {unit, melee} while the player picks an attack target (P8)
@@ -14506,16 +14507,18 @@ func _update_rules_chip() -> void:
 	# Plan 3.0: while a proposal is in flight the chip says so, instead of naming a level nobody agreed to.
 	if _rules_proposal_pending:
 		_rules_chip.text = "Asking the other player…"
+	_update_game_phase_ui()   # the deployment line names the real level
 
 
-## Game-panel toggle (local games only; online is plan step 1.4). Locked on while an AI slot is ticked.
+## The Rules automation switch, in the "Rules" section. Local: immediate. Online: Automatic is proposed and the
+## other player confirms (Manual is immediate). Locked on while an AI slot is ticked.
 func _add_rules_toggle() -> void:
-	if not RulesAutomation.ui_enabled() or solo_panel_box == null or opr_army_manager == null:
+	if not RulesAutomation.ui_enabled() or rules_panel_box == null or opr_army_manager == null:
 		return
 	var ai: bool = not solo_ai_slots.is_empty()
 	var cb := CheckButton.new()
 	cb.text = "Rules automation"
-	cb.tooltip_text = "Automatic: the game rolls and applies the rules it models. Rules listed at game start under 'apply by hand' stay manual. Locked on while the AI plays." if ai else "Automatic: the game rolls and applies the rules it models. Rules listed at game start under 'apply by hand' stay manual. Manual: you use the dice tray."
+	cb.tooltip_text = "Automatic: the game rolls and applies the rules it models. Rules listed at game start under 'apply by hand' stay manual. Locked on while the AI plays." if ai else "Automatic: the game rolls and applies the rules it models. Rules listed at game start under 'apply by hand' stay manual. Manual: you use the dice tray. Online, turning Automatic on asks the other player to agree."
 	cb.button_pressed = RulesAutomation.effective(opr_army_manager.rules_automation, ai) == RulesAutomation.Level.AUTOMATIC
 	cb.disabled = ai
 	cb.focus_mode = Control.FOCUS_NONE
@@ -14523,7 +14526,7 @@ func _add_rules_toggle() -> void:
 		var lvl: int = RulesAutomation.Level.AUTOMATIC if on else RulesAutomation.Level.MANUAL
 		if not set_rules_automation(lvl, "P1"):
 			cb.set_pressed_no_signal(not on))
-	solo_panel_box.add_child(cb)
+	rules_panel_box.add_child(cb)
 
 
 ## Plan 3.0 (Q6): ask the other player to turn Automatic on. Sends the proposal, shows the waiting chip
@@ -18525,7 +18528,27 @@ func _init_solo_panel() -> void:
 	solo_panel_box = VBoxContainer.new()
 	solo_panel_box.name = "SoloPanel"
 	left_panel_vbox.add_child(solo_panel_box)
+	rules_panel_box = VBoxContainer.new()
+	rules_panel_box.name = "RulesPanel"
+	left_panel_vbox.add_child(rules_panel_box)
+	left_panel_vbox.move_child(rules_panel_box, solo_panel_box.get_index())   # "Rules" sits above "NACHTMAHR:"
 	_refresh_solo_panel()
+
+
+## The "Rules" section: a header and the Rules automation switch; shown wherever an army is on the table.
+func _refresh_rules_panel(has_army: bool) -> void:
+	if rules_panel_box == null:
+		return
+	for c in rules_panel_box.get_children():
+		c.queue_free()
+	rules_panel_box.visible = has_army and RulesAutomation.ui_enabled()
+	if not rules_panel_box.visible:
+		return
+	var title := Label.new()
+	title.text = "Rules"
+	rules_panel_box.add_child(title)
+	_add_rules_toggle()
+	GameMenu.section(rules_panel_box)
 
 
 ## Rebuild the Solo section: a header + one "AI plays P<n> — <army>" CheckButton per imported army.
@@ -18539,6 +18562,7 @@ func _refresh_solo_panel() -> void:
 		c.queue_free()
 	var pids: Array = opr_army_manager.armies.keys()
 	pids.sort()
+	_refresh_rules_panel(not pids.is_empty())
 	solo_panel_box.visible = not pids.is_empty()
 	if pids.is_empty():
 		return
@@ -18547,7 +18571,6 @@ func _refresh_solo_panel() -> void:
 	label.tooltip_text = "Mark the army the AI controls. The AI answers each of your activations with one of its own (alternating activation); after %d rounds the game is scored. F11 runs the whole remaining AI side at once (debug)." % SOLO_GAME_ROUNDS
 	label.mouse_filter = Control.MOUSE_FILTER_STOP   # labels ignore the mouse by default — needed for the tooltip
 	solo_panel_box.add_child(label)
-	_add_rules_toggle()
 	var fast_cb := CheckButton.new()
 	fast_cb.text = "Fast AI (short pauses)"
 	fast_cb.tooltip_text = "Skips the move animation and shrinks the announce/outcome pauses of AI actions."
@@ -19120,10 +19143,13 @@ func _on_remote_game_phase_changed(phase: int) -> void:
 	# moves forward" confusion actually strikes. Toast for the moment, log line for the record.
 	if was_deploying and not opr_army_manager.is_deployment_phase() \
 			and network_manager != null and network_manager.is_multiplayer_active():
-		_show_toast("Round 1 — multiplayer is manual: take turns like at a real table")
+		var auto_mp: bool = _solo_engine_automatic()
+		_show_toast("Round 1 — rules automation is on: the game applies the rules it models" if auto_mp
+			else "Round 1 — multiplayer is manual: take turns like at a real table")
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.GENERAL,
-				"Multiplayer is manual play — no automation drives the turns; alternate activations like at a real table", true)
+				"Multiplayer is Automatic play — the game rolls and applies the rules it models" if auto_mp
+				else "Multiplayer is manual play — no automation drives the turns; alternate activations like at a real table", true)
 
 
 ## Host-side ready tally changed (a player readied/un-readied). Refresh the waiting readout.
@@ -19162,7 +19188,9 @@ func _update_game_phase_ui() -> void:
 				# #322 — multiplayer is manual-first BY DESIGN, but nothing said so, and new MP
 				# pairs read the quiet post-Ready table as a hang. The notice stands for the whole
 				# MP deployment so it is read BEFORE both players are waiting on each other.
-				_game_phase_status_label.text = "Multiplayer is manual play — deploy, ready up,\nthen take turns like at a real table (no automation)"
+				_game_phase_status_label.text = ("Rules automation is on — deploy, ready up,\nthen the game applies the rules it models"
+					if _solo_engine_automatic()
+					else "Multiplayer is manual play — deploy, ready up,\nthen take turns like at a real table (no automation)")
 				_game_phase_status_label.visible = true
 	else:
 		_start_game_button.text = "Start Game"
