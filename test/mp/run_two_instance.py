@@ -204,6 +204,7 @@ class Run:
         self.args = args
         self.run_dir = run_dir
         self.rules_online = False
+        self.leave = False
         self.seq = {"host": 0, "guest": 0}
         self.relay: subprocess.Popen | None = None
         self.relay_log = None
@@ -278,6 +279,8 @@ class Run:
             cmd += ["--code", room]
         if self.rules_online:
             cmd += ["--rules-online"]
+        if self.leave:
+            cmd += ["--leave"]
         client = Client(role, cmd, env, self.run_dir)
         self.clients[role] = client
         return client
@@ -396,6 +399,9 @@ class Run:
 
     def scenario(self) -> None:
         self.scenario_deadline = time.monotonic() + self.args.timeout
+        if self.leave:
+            self.leave_scenario()
+            return
         self.command_both("setup")
         states = self.wait_condition(
             "fixture on both peers", lambda s: all(v.get("fixture_ready") for v in s.values())
@@ -543,6 +549,33 @@ class Run:
             self.checkpoint("transport-second-move-refused", states)
 
         atomic_json(self.run_dir / "snapshots.json", self.checkpoints)
+
+    def leave_scenario(self) -> None:
+        """Bugs 9+10: the host leaves to the menu (End Battle): the guest is told within 2 s, the host's
+        relay peer is closed, a saved-game load works in the next scene, no peer count goes negative."""
+        sent = time.time()
+        self.command("host", "leave_to_menu")
+        deadline = time.monotonic() + 5
+        while not self.states()["guest"].get("host_left_at") and time.monotonic() < deadline:
+            time.sleep(0.05)
+        guest, left = self.states()["guest"], self.states()["host"].get("left_state", {})
+        lag = (guest.get("host_left_at") or float("inf")) - sent
+        # The guest goes too: a host relay peer that outlived the scene would hand the next scene's
+        # NetworkManager a peer_disconnected it never saw connect ("remaining peers: -1").
+        self.seq["guest"] += 1
+        atomic_json(self.clients["guest"].command_path, {"seq": self.seq["guest"], "action": "quit"})
+        self.clients["guest"].proc.wait(timeout=15)
+        time.sleep(1.0)
+        problems = [msg for bad, msg in (
+            (not 0 < lag <= 2.0, f"guest notice after {lag:.2f}s (inf = never; limit 2 s)"),
+            (left.get("relay_connected") or left.get("mp_peer_relay"), f"host relay peer survived: {left}"),
+            (left.get("load_gate") != 7, f"load after leaving returned {left.get('load_gate')} (7 = allowed, 4 = host-only)"),
+            (any("remaining peers: -" in line for c in self.clients.values() for line in c.lines),
+             "a peer count went negative"),
+        ) if bad]
+        if problems:
+            raise HarnessFailure("leave: " + "; ".join(problems))
+        print(f"[mp2] PASS host-leaves-to-menu (guest notice after {lag:.2f}s)")
 
     def _rules_online_scenario(self) -> None:
         """Plan 3.6: the agreed Automatic online room. A full exchange with enforced alternation —
@@ -711,10 +744,11 @@ def main() -> int:
     start = time.monotonic()
     reference: list[dict] | None = None
 
-    def run_once(run_dir: Path, rules_online: bool, ref: list[dict] | None) -> list[dict]:
+    def run_once(run_dir: Path, rules_online: bool, ref: list[dict] | None, leave: bool = False) -> list[dict]:
         run_dir.mkdir(parents=True, exist_ok=False)
         run = Run(args, run_dir)
         run.rules_online = rules_online
+        run.leave = leave
         try:
             print(f"[mp2] run {run_dir.name}: {run_dir}")
             run.start()
@@ -739,6 +773,7 @@ def main() -> int:
         if args.include_rules_online:
             for number in range(1, args.repeat + 1):
                 online_reference = run_once(root / f"rules-online-{number:02d}", True, online_reference)
+        run_once(root / "leave-01", False, None, leave=True)
         elapsed = time.monotonic() - start
         atomic_json(root / "determinism.json", {
             "runs": args.repeat, "identical": True, "seed": args.seed,

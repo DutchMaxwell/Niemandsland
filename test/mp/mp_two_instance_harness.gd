@@ -39,6 +39,9 @@ var _room_code := ""
 var _los_result: Dictionary = {"visible": false, "label_visible": false, "text": ""}
 var _remote_save_wounds := -1   # result of the in-flight remote save batch (-1 = none yet)
 var _last_refusal := ""         # 3.6: the last off-turn refusal text, for the alternation gate
+var _was_ready := false         # the session was up once (a deliberate leave ends it later)
+var _left: Dictionary = {}      # bugs 9+10: what the scene after End Battle inherits (host)
+var _host_left_at := 0.0        # bugs 9+10: unix time the guest's "host left" notice appeared
 
 
 func _ready() -> void:
@@ -91,14 +94,15 @@ func _wire_signals() -> void:
 	lobby.relay_reconnect_failed.connect(func(reason: String) -> void:
 		_fail("reconnect failed: %s" % reason))
 	lobby.internet_disconnected.connect(func() -> void:
-		if not _failed:
+		if not _failed and not _args.has("leave"):
 			_fail("internet session disconnected"))
 	_write_state()
 
 
 func _process(_delta: float) -> void:
 	var now := Time.get_ticks_msec()
-	if not _failed and not _session_ready() \
+	_was_ready = _was_ready or _session_ready()
+	if not _failed and not _was_ready \
 			and float(now - _started_ms) / 1000.0 > CONNECT_TIMEOUT_S:
 		_fail("two occupied slots not ready within %.0fs" % CONNECT_TIMEOUT_S)
 	if now - _last_state_ms >= int(STATE_WRITE_INTERVAL_S * 1000.0):
@@ -109,7 +113,7 @@ func _process(_delta: float) -> void:
 
 
 func _session_ready() -> bool:
-	if _main == null:
+	if not is_instance_valid(_main):
 		return false
 	var nm = _main.get("network_manager")
 	var lobby = _main.get("internet_lobby")
@@ -138,10 +142,10 @@ func _poll_command() -> void:
 func _run_command(seq: int, action: String, payload: Dictionary) -> void:
 	var ok := true
 	var error := ""
-	if action != "quit" and action != "snapshot" and not _session_ready():
+	if action not in ["quit", "snapshot", "leave_to_menu"] and not _session_ready():
 		ok = false
 		error = "session is not ready"
-	elif action != "setup" and action != "quit" and action != "snapshot" and not _fixture_ready:
+	elif action not in ["setup", "quit", "snapshot", "leave_to_menu"] and not _fixture_ready:
 		ok = false
 		error = "fixture is not ready"
 	elif action == "setup":
@@ -211,6 +215,8 @@ func _run_command(seq: int, action: String, payload: Dictionary) -> void:
 		_main._hotseat_turn = null
 	elif action == "activate":
 		await _activate(str(payload.get("unit", "")), int(payload.get("slot", 0)))
+	elif action == "leave_to_menu":
+		ok = await _leave_to_menu()
 	elif action == "snapshot":
 		pass
 	elif action == "quit":
@@ -342,6 +348,29 @@ func _hover_los() -> bool:
 	return bool(_los_result.visible) and bool(_los_result.label_visible)
 
 
+## Bugs 9+10: leave through the production End Battle path, then record what the next scene inherits:
+## the relay peer, the SceneTree's multiplayer peer and a fresh SaveManager's load gate.
+func _leave_to_menu() -> bool:
+	var relay: RelayMultiplayerPeer = _main.internet_lobby.relay_peer
+	UpdateChecker.set_enabled(false)   # the menu scene must not reach the network from a test
+	_main.call("_on_end_battle_confirmed")
+	var deadline := Time.get_ticks_msec() + 20000
+	while is_instance_valid(_main) and Time.get_ticks_msec() < deadline:
+		await get_tree().process_frame
+	var nm: Node = load("res://scripts/network_manager.gd").new()
+	var sm := SaveManager.new()
+	sm.network_manager = nm
+	add_child(nm)
+	add_child(sm)
+	var gate: int = await sm.load_game("user://mp2_no_such_save.nml")
+	_left = {"left": not is_instance_valid(_main), "load_gate": gate,
+		"relay_connected": relay.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED,
+		"mp_peer_relay": get_tree().get_multiplayer().multiplayer_peer is RelayMultiplayerPeer}
+	sm.queue_free()   # nm stays: the next scene's NetworkManager, listening to whatever peer survived
+	_log("left to the menu: %s" % JSON.stringify(_left))
+	return bool(_left.left)
+
+
 func _unit(unit_id: String) -> GameUnit:
 	if _main == null or _main.get("opr_army_manager") == null:
 		return null
@@ -407,6 +436,11 @@ func opr_round() -> int:
 
 
 func _snapshot() -> Dictionary:
+	if not is_instance_valid(_main):
+		return {"role": _role, "failed": _failed, "failure": _failure, "left_state": _left}
+	if _host_left_at == 0.0 and _main.get_children().any(
+			func(c: Node) -> bool: return c is PromptCard and (c as PromptCard).title == "Host left"):
+		_host_left_at = Time.get_unix_time_from_system()
 	var lobby = _main.get("internet_lobby") if _main != null else null
 	var nm = _main.get("network_manager") if _main != null else null
 	var state := {
@@ -430,6 +464,7 @@ func _snapshot() -> Dictionary:
 		"save_prompt_visible": false,
 		"battle_log_tail": [],
 		"vfx_cues": (_main._vfx_seen as Dictionary).size() if _main != null else 0,
+		"host_left_at": _host_left_at,
 	}
 	if nm != null:
 		var slots: Array[int] = []
