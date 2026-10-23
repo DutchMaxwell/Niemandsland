@@ -16144,7 +16144,11 @@ func _on_peer_version_validated(peer_id: int) -> void:
 	# solo session that rolled into hosting), BEFORE the state push, so the guest never
 	# receives a table where NACHTMAHR claims its army.
 	_solo_release_slot_to_human(network_manager.slot_for_peer(peer_id))
-	_clamp_rules_online("the online room")   # plan 1.4: before the push, so the guest never receives Automatic
+	# A rejoin keeps an agreed Automatic room and the host re-sends it; only a NEW player never agreed.
+	var keep_agreed: bool = network_manager.is_rejoin(peer_id) and solo_ai_slots.is_empty() \
+		and opr_army_manager.rules_automation == RulesAutomation.Level.AUTOMATIC
+	if not keep_agreed:
+		_clamp_rules_online("the online room")   # plan 1.4: before the push, so the guest never receives Automatic
 	_sync_state_to_peer(peer_id)
 	# The peer is registered and validated — hand it the full name roster so it
 	# immediately knows everyone already at the table (including the host).
@@ -16169,6 +16173,8 @@ func _on_peer_version_validated(peer_id: int) -> void:
 	# Replay the current pinned rulers so the late-joiner sees existing measurements
 	# (session-only state, not part of the .nml save).
 	network_manager.sync_rulers_to_peer(peer_id)
+	if keep_agreed:
+		network_manager.send_command("restore_rules_automation", {}, peer_id)
 	if _rules_start_question_due():
 		_ask_rules_start_question()
 
@@ -17202,6 +17208,8 @@ func _on_network_command(type: String, payload: Variant, _from_peer: int) -> voi
 		_on_peer_session_ended.call_deferred(_from_peer)   # deferred: it closes the socket being polled
 	elif type == "sync_rules_automation" and payload is Dictionary:
 		_on_sync_rules_automation((payload as Dictionary).get("level"), _from_peer)
+	elif type == "restore_rules_automation" and _from_peer == 1:
+		_apply_rules_automatic_agreed()   # the host re-sends the agreed level to a rejoined guest
 	elif type == "propose_rules_automation":
 		_on_rules_proposal(_from_peer)
 	elif type == "confirm_rules_automation":
@@ -17461,7 +17469,7 @@ func _rpc_sync_game_state(state: Dictionary) -> void:
 	# happens after any import, so the @rpc broadcast was missed — this is the join-time catch-up).
 	if state.get("solo_ai_slots") is Array:
 		_rpc_sync_ai_slots(state["solo_ai_slots"])
-	_clamp_rules_online("the online room")   # plan 1.4: the pushed level is read, a room stays Manual
+	_set_rules_manual_logged("the online room")   # plan 1.4: local only - the host clamped a new player already, and re-sends an agreed level to a rejoin
 
 
 ## ============================================================================

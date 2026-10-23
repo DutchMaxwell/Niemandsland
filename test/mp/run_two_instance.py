@@ -647,6 +647,13 @@ class Run:
         states = self.states()
         if states["host"].get("start_question_count") != 1 or states["host"].get("start_question_visible"):
             raise HarnessFailure("a rejoin asked again: count=%r" % states["host"].get("start_question_count"))
+        if yes:
+            states = self.wait_condition(
+                "the agreed Automatic level survives the rejoin on both sides",
+                lambda s: all(v.get("rules") == 1 for v in s.values()),
+                timeout=15,
+                diagnostic=lambda s: "rules: " + repr({r: s[r].get("rules") for r in s}),
+            )
         print(f"[mp2] PASS start-question-{self.start_question} (asked once, rejoin silent)")
 
     def _rules_online_scenario(self) -> None:
