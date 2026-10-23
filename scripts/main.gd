@@ -15283,6 +15283,10 @@ func _log_battle_activation(gu, _remote: bool) -> void:
 	if is_ai and solo_controller != null:
 		reason = solo_controller.plain_reason_for(gu)
 	var who := "AI" if is_ai else "you"
+	# No AI without its tick (#1719): a table with no AI seat has no "you" either — the line names the
+	# owner's slot like the rolls do (`_roller_label`); online, a seated peer's name replaces it below.
+	if not is_ai and solo_ai_slots.is_empty():
+		who = _solo_player_label(unit_owner_slot(gu.unit_properties))
 	# Maintainer MP test: both sides read "(you)" — in multiplayer the line names the slot's
 	# PLAYER instead (both clients then log identical lines; solo keeps its you/AI voice).
 	if not is_ai and network_manager != null and network_manager.is_multiplayer_active():

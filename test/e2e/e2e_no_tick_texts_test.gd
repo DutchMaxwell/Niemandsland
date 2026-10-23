@@ -232,3 +232,27 @@ func test_automatic_table_game_over_names_the_players(timeout := 120000) -> void
 func test_a_removed_tick_game_over_names_the_players(timeout := 120000) -> void:
 	_untick_after_a_ticked_game()
 	await _assert_game_over_by_name("(b) tick removed")
+
+
+# --- 4. The activation line ---
+
+## The radial activation's battle-log line names the unit's player ("Rifles activated (P1)"), never
+## "(you)": a table without an AI seat has no "you" at its shared screen.
+func _assert_activation_by_name(path: String) -> void:
+	var p1 := _reg(1, "Rifles", -10.0, 3)
+	var start: int = _main.battle_log.entries().size()
+	await _activate(p1)
+	var text := _log_from(start)
+	assert_str(text).override_failure_message("%s: the activation line names no player:\n%s" % [path, text]) \
+		.contains("Rifles activated (P1")
+	assert_str(text).override_failure_message("%s: the activation line says 'you' without a tick:\n%s" % [path, text]) \
+		.not_contains("(you)")
+
+
+func test_automatic_table_activation_names_the_player(timeout := 120000) -> void:
+	await _assert_activation_by_name("(a) Automatic table")
+
+
+func test_a_removed_tick_activation_names_the_player(timeout := 120000) -> void:
+	_untick_after_a_ticked_game()
+	await _assert_activation_by_name("(b) tick removed")
