@@ -145,7 +145,7 @@ func _run_command(seq: int, action: String, payload: Dictionary) -> void:
 	if action not in ["quit", "snapshot", "leave_to_menu"] and not _session_ready():
 		ok = false
 		error = "session is not ready"
-	elif action not in ["setup", "quit", "snapshot", "leave_to_menu"] and not _fixture_ready:
+	elif action not in ["setup", "quit", "snapshot", "leave_to_menu", "close_window"] and not _fixture_ready:
 		ok = false
 		error = "fixture is not ready"
 	elif action == "setup":
@@ -219,6 +219,13 @@ func _run_command(seq: int, action: String, payload: Dictionary) -> void:
 		ok = await _leave_to_menu()
 	elif action == "snapshot":
 		pass
+	elif action == "close_window":
+		# What closing the window does (headless has none to click): the close request reaches every node,
+		# then the engine quits (auto-accept quit).
+		get_tree().root.propagate_notification(NOTIFICATION_WM_CLOSE_REQUEST)
+		_write_ack(seq, true, "")
+		get_tree().quit()
+		return
 	elif action == "quit":
 		_write_ack(seq, true, "")
 		_write_state()

@@ -204,7 +204,7 @@ class Run:
         self.args = args
         self.run_dir = run_dir
         self.rules_online = False
-        self.leave = False
+        self.leave = ""  # "menu" = End Battle, "close" = the game window is closed
         self.seq = {"host": 0, "guest": 0}
         self.relay: subprocess.Popen | None = None
         self.relay_log = None
@@ -400,7 +400,7 @@ class Run:
     def scenario(self) -> None:
         self.scenario_deadline = time.monotonic() + self.args.timeout
         if self.leave:
-            self.leave_scenario()
+            self.leave_scenario() if self.leave == "menu" else self.close_scenario()
             return
         self.command_both("setup")
         states = self.wait_condition(
@@ -577,6 +577,20 @@ class Run:
             raise HarnessFailure("leave: " + "; ".join(problems))
         print(f"[mp2] PASS host-leaves-to-menu (guest notice after {lag:.2f}s)")
 
+    def close_scenario(self) -> None:
+        """The host closes the game window on the table: the guest is told within 2 s, as for End Battle."""
+        sent = time.time()
+        self.seq["host"] += 1
+        atomic_json(self.clients["host"].command_path, {"seq": self.seq["host"], "action": "close_window"})
+        self.clients["host"].proc.wait(timeout=20)
+        deadline = time.monotonic() + 5
+        while not self.states()["guest"].get("host_left_at") and time.monotonic() < deadline:
+            time.sleep(0.05)
+        lag = (self.states()["guest"].get("host_left_at") or float("inf")) - sent
+        if not 0 < lag <= 2.0:
+            raise HarnessFailure(f"close: guest notice after {lag:.2f}s (inf = never; limit 2 s)")
+        print(f"[mp2] PASS host-closes-window (guest notice after {lag:.2f}s)")
+
     def _rules_online_scenario(self) -> None:
         """Plan 3.6: the agreed Automatic online room. A full exchange with enforced alternation —
         out-of-turn refusal, hand-over, TAIL and one automatic round end — peer-state equality after
@@ -744,7 +758,7 @@ def main() -> int:
     start = time.monotonic()
     reference: list[dict] | None = None
 
-    def run_once(run_dir: Path, rules_online: bool, ref: list[dict] | None, leave: bool = False) -> list[dict]:
+    def run_once(run_dir: Path, rules_online: bool, ref: list[dict] | None, leave: str = "") -> list[dict]:
         run_dir.mkdir(parents=True, exist_ok=False)
         run = Run(args, run_dir)
         run.rules_online = rules_online
@@ -773,7 +787,8 @@ def main() -> int:
         if args.include_rules_online:
             for number in range(1, args.repeat + 1):
                 online_reference = run_once(root / f"rules-online-{number:02d}", True, online_reference)
-        run_once(root / "leave-01", False, None, leave=True)
+        run_once(root / "leave-01", False, None, leave="menu")
+        run_once(root / "close-01", False, None, leave="close")
         elapsed = time.monotonic() - start
         atomic_json(root / "determinism.json", {
             "runs": args.repeat, "identical": True, "seed": args.seed,

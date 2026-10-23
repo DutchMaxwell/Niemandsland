@@ -14642,6 +14642,13 @@ func _end_online_session(notify: bool = true) -> void:
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()   # the engine default, not null
 
 
+## Closing the game window on an online table ends the session like End Battle (the engine quits right
+## after this notification): the others are told at once instead of waiting out a drop.
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST and network_manager != null and network_manager.is_multiplayer_active():
+		_end_online_session()
+
+
 ## A player left the table on purpose. The host leaving ends the room: close our side now (no 20 s
 ## host-paused wait, no rejoin that can only fail) and offer the way back to the menu.
 func _on_peer_session_ended(from_peer: int) -> void:
