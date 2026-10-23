@@ -44,6 +44,8 @@ static func sky_values(profile: Dictionary, mood: String) -> Dictionary:
 		"biome_tint":profile.fog_color / Biomes.GRASSLAND.fog_color}
 
 func _on_mood(mood: String) -> void:
+	if not is_inside_tree():
+		return   # a world torn down by a rebuild still hears the mood signal; its /root lookup would fail
 	var values := sky_values(_profile, mood)
 	for key in values:
 		_material.set_shader_parameter(key,values[key])

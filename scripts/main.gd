@@ -16050,7 +16050,10 @@ func _on_network_connected() -> void:
 	GameMenu.set_status(network_status_label, "Connected (Peer %d)" % network_manager.get_my_peer_id(), HouseStyle.TONE_OK)
 	# Announce our version so the host can validate us; on a match it then pushes
 	# the full state (gated on the handshake). No explicit state request needed.
-	network_manager.announce_version_to_host()
+	# One join = one handshake: a relay (re)join already announced from _on_internet_connected
+	# (room_joined), and connected_to_server re-fires on every relay (re)join — a second full sync.
+	if not (multiplayer.multiplayer_peer is RelayMultiplayerPeer):
+		network_manager.announce_version_to_host()
 	_register_local_name()
 
 
