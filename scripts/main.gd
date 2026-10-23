@@ -17633,6 +17633,7 @@ func _on_opr_army_imported(army: OPRApiClient.OPRArmy, player_id: int, ai_contro
 
 	# Store army
 	opr_army_manager.armies[player_id] = army
+	_refresh_solo_panel()   # the deferred refresh above ran BEFORE this store and saw no army: the section stayed hidden
 
 	# Spawn the army on tray (position determined by player ID).
 	# Awaitable: on-demand models are downloaded up front before spawning.
@@ -17806,6 +17807,11 @@ func _on_remote_army_complete(player_id: int, rule_descriptions: Dictionary) -> 
 	var units: Array = buf.get("units", [])
 	var object_groups: Array = buf.get("objects", [])
 	print("[ArmySync] Complete: building %d units (player_id=%d)" % [units.size(), player_id])
+	# A remote army has no OPRArmy here, but its slot still counts: register it (null = "Army" row) and refresh
+	# the left panel, otherwise a side that imported nothing itself never gets the section / Rules automation switch.
+	if not opr_army_manager.armies.has(player_id):
+		opr_army_manager.armies[player_id] = null
+	_refresh_solo_panel()
 
 	# Tell other peers we are loading so their object move/edit input is gated while we build
 	# the incoming army (mirrors begin_restore/end_restore; cleared after end_restore below).
