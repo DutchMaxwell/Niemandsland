@@ -122,3 +122,17 @@ func test_waiting_state_reverts_on_timeout() -> void:
 	_main._update_rules_chip()
 	if _main._rules_chip != null:
 		assert_bool(_main._rules_chip.text.to_lower().contains("other player")).is_false()
+
+
+func test_the_start_question_is_due_once_per_online_room_without_an_ai_seat() -> void:
+	_main.opr_army_manager.rules_automation = MANUAL
+	_main.solo_ai_slots = {}
+	assert_bool(_main._rules_start_question_due()).is_true()
+	_main.solo_ai_slots = {2: true}
+	assert_bool(_main._rules_start_question_due()).is_false()   # an AI seat: automation is locked on
+	_main.solo_ai_slots = {}
+	_fake.active = false
+	assert_bool(_main._rules_start_question_due()).is_false()   # a local table
+	_fake.active = true
+	_main._rules_start_asked = true
+	assert_bool(_main._rules_start_question_due()).is_false()   # asked once in this room

@@ -56,3 +56,31 @@ func test_alpha_is_monotonic_closer_is_fainter() -> void:
 	assert_float(near).is_less(far)
 	assert_float(near).is_greater_equal(AvatarScript.GHOST_ALPHA)
 	assert_float(far).is_less_equal(1.0)
+
+
+# ===== near-camera fade (the other player's head sits at our own camera on the default view) =====
+
+func test_camera_distance_alpha_hides_close_and_keeps_far() -> void:
+	assert_float(AvatarScript.alpha_for_camera_distance(0.0)).is_equal_approx(0.0, 0.001)
+	assert_float(AvatarScript.alpha_for_camera_distance(AvatarScript.NEAR_HIDE_M)).is_equal_approx(0.0, 0.001)
+	assert_float(AvatarScript.alpha_for_camera_distance(AvatarScript.NEAR_FULL_M)).is_equal_approx(1.0, 0.001)
+	assert_float(AvatarScript.alpha_for_camera_distance(5.0)).is_equal_approx(1.0, 0.001)
+
+
+func test_avatar_at_the_local_camera_is_invisible_and_one_across_the_table_is_not() -> void:
+	# Real avatar + real current camera: the eye spheres 3-6 cm in front of the lens must not be drawn.
+	var cam: Camera3D = auto_free(Camera3D.new())
+	add_child(cam)
+	cam.global_position = Vector3(0.0, 1.5, 2.0)
+	cam.make_current()
+	var a := _avatar()
+	a.global_position = cam.global_position
+	await await_idle_frame()
+	await await_idle_frame()
+	for mi: MeshInstance3D in a._mesh_instances:
+		assert_float(mi.transparency).is_greater(0.95)
+	a.global_position = cam.global_position + Vector3(0.0, 0.0, -3.0)
+	await await_idle_frame()
+	await await_idle_frame()
+	for mi: MeshInstance3D in a._mesh_instances:
+		assert_float(mi.transparency).is_less(0.05)

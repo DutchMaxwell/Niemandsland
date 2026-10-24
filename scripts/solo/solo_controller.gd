@@ -10871,6 +10871,14 @@ static func scout_extended_zone(zone: Rect2, forward_y: float) -> Rect2:
 	return Rect2(zone.position - Vector2(0.0, ext), zone.size + Vector2(0.0, ext))
 
 
+## No AI without its tick (#1719): forget the AI side's deployment queues, its paced Ambush list and
+## the recorded deployment zones — main calls this when the last tick comes off and on a cleared table.
+func drop_ai_queues() -> void:
+	_deploy_alt = {}
+	ambush_reserve.clear()
+	_deploy_zone_of = {}
+
+
 ## How many AI units still wait in the MAIN deployment queue (scouts have their own phase/queue).
 func deploy_pending() -> int:
 	return (_deploy_alt.get("queue", []) as Array).size()

@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import re
+import select
 import shlex
 import shutil
 import signal
@@ -33,6 +34,11 @@ STALL_RE = re.compile(r"\[Relay\] main loop stalled ([0-9.]+)\s*s")
 # 30 s peer timeout — the point where the warning itself says a drop becomes likely.
 STALL_LIMIT_S = 15.0
 MIN_AVAILABLE_MB = 3500
+# Bug 4: one peer's live connection goes silent both ways this long (the live stalls were 13-28 s; a fresh
+# socket worked at once). With a takeover relay the peer rejoins after its 10 s silence threshold, so a change
+# made during the silence must reach both peers within FAST_LIMIT_S (threshold + a few seconds).
+SILENCE_S = 20.0
+FAST_LIMIT_S = 15.0
 
 
 class HarnessFailure(RuntimeError):
@@ -134,6 +140,74 @@ def kill_group(proc: subprocess.Popen | None) -> None:
             pass
 
 
+class StallProxy:
+    """A TCP proxy between one peer and the relay. freeze(s) stops the CURRENT connection in both directions
+    for s seconds (bytes wait in the kernel buffers, as in a stalled Wi-Fi flow); a new connection flows.
+    freeze(s, outage=True) also refuses new connections for s seconds (the whole link is down)."""
+
+    def __init__(self, target_port: int):
+        self.target_port = target_port
+        self.listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.listener.bind(("127.0.0.1", 0))
+        self.listener.listen(8)
+        self.port = int(self.listener.getsockname()[1])
+        self.links: list[dict] = []
+        self.refuse_until = 0.0
+        threading.Thread(target=self._accept, daemon=True).start()
+
+    def _accept(self) -> None:
+        while True:
+            try:
+                client, _ = self.listener.accept()
+                if time.monotonic() < self.refuse_until:
+                    client.close()  # link down: the new socket fails at once
+                    continue
+                upstream = socket.create_connection(("127.0.0.1", self.target_port))
+            except OSError:
+                return
+            link = {"frozen_until": 0.0, "socks": (client, upstream)}
+            self.links.append(link)
+            for src, dst in ((client, upstream), (upstream, client)):
+                threading.Thread(target=self._pump, args=(link, src, dst), daemon=True).start()
+
+    @staticmethod
+    def _pump(link: dict, src: socket.socket, dst: socket.socket) -> None:
+        try:
+            while True:
+                if time.monotonic() < link["frozen_until"]:
+                    time.sleep(0.02)
+                    continue
+                if not select.select([src], [], [], 0.05)[0]:
+                    continue
+                data = src.recv(65536)
+                if not data:
+                    break
+                dst.sendall(data)
+        except OSError:
+            pass
+        for sock in link["socks"]:
+            try:
+                sock.close()
+            except OSError:
+                pass
+
+    def freeze(self, seconds: float, outage: bool = False) -> None:
+        if not self.links:
+            raise HarnessFailure("stall proxy: the peer has no connection to freeze")
+        self.links[-1]["frozen_until"] = time.monotonic() + seconds
+        if outage:
+            self.refuse_until = time.monotonic() + seconds
+
+    def close(self) -> None:
+        self.listener.close()
+        for link in self.links:
+            for sock in link["socks"]:
+                try:
+                    sock.close()
+                except OSError:
+                    pass
+
+
 class Client:
     def __init__(self, role: str, cmd: list[str], env: dict[str, str], run_dir: Path):
         self.role = role
@@ -204,6 +278,11 @@ class Run:
         self.args = args
         self.run_dir = run_dir
         self.rules_online = False
+        self.start_question = ""  # "yes" / "no": the host's rules-automation start question
+        self.leave = ""  # "menu" = End Battle, "close" = the game window is closed
+        self.silence = ""  # bug 4: "host" / "guest" = that peer's connection goes silent (stall proxy)
+        self.outage = False  # bug 4: the whole link is down too (new connections fail during the silence)
+        self.proxy: StallProxy | None = None
         self.seq = {"host": 0, "guest": 0}
         self.relay: subprocess.Popen | None = None
         self.relay_log = None
@@ -223,6 +302,7 @@ class Run:
         wait_for_memory(self.args.memory_timeout)
         port = self.args.port or free_port()
         relay_url = f"ws://127.0.0.1:{port}"
+        self.relay_url = relay_url
         self.relay_log = (self.run_dir / "relay.log").open("w", encoding="utf-8")
         self.relay = subprocess.Popen(
             [self.args.relay_python, str(REPO / "relay" / "relay_server.py"), "--port", str(port)],
@@ -234,15 +314,19 @@ class Run:
         )
         wait_for_port(port)
         print(f"[mp2] relay: {relay_url}")
+        if self.silence:
+            self.proxy = StallProxy(port)
+        urls = {role: f"ws://127.0.0.1:{self.proxy.port}" if role == self.silence else relay_url
+                for role in ("host", "guest")}
 
-        host = self._start_client("host", relay_url)
+        host = self._start_client("host", urls["host"])
         room = self.wait_value(
             "host room code",
             lambda: host.room_code,
             timeout=40,
             clients=(host,),
         )
-        guest = self._start_client("guest", relay_url, str(room))
+        guest = self._start_client("guest", urls["guest"], str(room))
         self.wait_condition(
             "both peers report the same room and slots [1, 2]",
             lambda states: (
@@ -254,7 +338,7 @@ class Run:
         )
 
     def _start_client(self, role: str, relay_url: str, room: str = "") -> Client:
-        xdg = self.run_dir / f".xdg-{role}"
+        xdg = self.run_dir / f".xdg-{role}-{len(self.xdg_dirs)}"
         xdg.mkdir()
         self.xdg_dirs.append(xdg)
         env = os.environ.copy()
@@ -278,6 +362,8 @@ class Run:
             cmd += ["--code", room]
         if self.rules_online:
             cmd += ["--rules-online"]
+        if self.leave:
+            cmd += ["--leave"]
         client = Client(role, cmd, env, self.run_dir)
         self.clients[role] = client
         return client
@@ -396,11 +482,25 @@ class Run:
 
     def scenario(self) -> None:
         self.scenario_deadline = time.monotonic() + self.args.timeout
+        if self.start_question:
+            self._start_question_scenario()
+            return
+        if self.leave:
+            self.leave_scenario() if self.leave == "menu" else self.close_scenario()
+            return
+        if self.silence:
+            self.silence_scenario()
+            return
         self.command_both("setup")
         states = self.wait_condition(
             "fixture on both peers", lambda s: all(v.get("fixture_ready") for v in s.values())
         )
         self.checkpoint("fixture", states)
+        # Bug 5: one join = one handshake (the guest announced on connected_to_server AND room_joined,
+        # and each pass pushed the full state and the biome again).
+        passes = [line for line in self.clients["host"].lines if "passed handshake" in line]
+        if len(passes) != 1:
+            raise HarnessFailure(f"one join must be one handshake; the host logged {len(passes)}: {passes}")
 
         if self.rules_online:
             self._rules_online_scenario()
@@ -544,6 +644,171 @@ class Run:
 
         atomic_json(self.run_dir / "snapshots.json", self.checkpoints)
 
+    def leave_scenario(self) -> None:
+        """Bugs 9+10: the host leaves to the menu (End Battle): the guest is told within 2 s, the host's
+        relay peer is closed, a saved-game load works in the next scene, no peer count goes negative."""
+        sent = time.time()
+        self.command("host", "leave_to_menu")
+        deadline = time.monotonic() + 5
+        while not self.states()["guest"].get("host_left_at") and time.monotonic() < deadline:
+            time.sleep(0.05)
+        guest, left = self.states()["guest"], self.states()["host"].get("left_state", {})
+        lag = (guest.get("host_left_at") or float("inf")) - sent
+        # The guest goes too: a host relay peer that outlived the scene would hand the next scene's
+        # NetworkManager a peer_disconnected it never saw connect ("remaining peers: -1").
+        self.seq["guest"] += 1
+        atomic_json(self.clients["guest"].command_path, {"seq": self.seq["guest"], "action": "quit"})
+        self.clients["guest"].proc.wait(timeout=15)
+        time.sleep(1.0)
+        problems = [msg for bad, msg in (
+            (not 0 < lag <= 2.0, f"guest notice after {lag:.2f}s (inf = never; limit 2 s)"),
+            (left.get("relay_connected") or left.get("mp_peer_relay"), f"host relay peer survived: {left}"),
+            (left.get("load_gate") != 7, f"load after leaving returned {left.get('load_gate')} (7 = allowed, 4 = host-only)"),
+            (any("remaining peers: -" in line for c in self.clients.values() for line in c.lines),
+             "a peer count went negative"),
+        ) if bad]
+        if problems:
+            raise HarnessFailure("leave: " + "; ".join(problems))
+        print(f"[mp2] PASS host-leaves-to-menu (guest notice after {lag:.2f}s)")
+
+    def close_scenario(self) -> None:
+        """The host closes the game window on the table: the guest is told within 2 s, as for End Battle."""
+        sent = time.time()
+        self.seq["host"] += 1
+        atomic_json(self.clients["host"].command_path, {"seq": self.seq["host"], "action": "close_window"})
+        self.clients["host"].proc.wait(timeout=20)
+        deadline = time.monotonic() + 5
+        while not self.states()["guest"].get("host_left_at") and time.monotonic() < deadline:
+            time.sleep(0.05)
+        lag = (self.states()["guest"].get("host_left_at") or float("inf")) - sent
+        if not 0 < lag <= 2.0:
+            raise HarnessFailure(f"close: guest notice after {lag:.2f}s (inf = never; limit 2 s)")
+        print(f"[mp2] PASS host-closes-window (guest notice after {lag:.2f}s)")
+
+    def silence_scenario(self) -> None:
+        """Bug 4: one peer's live connection goes silent in both directions for SILENCE_S. On a relay that can
+        take over a seat the peer rejoins early: a round advanced 1 s into the silence reaches both peers within
+        FAST_LIMIT_S, with the same transport ids and seats, equal state, no extra peer and the hiccup notice.
+        On an older relay the client keeps today's behaviour (it waits; nothing else may break).
+        Outage: new connections fail too until the silence ends; an early rejoin must keep retrying and the
+        session must survive no worse than today (round on both peers within SILENCE_S + 8 s).
+        State after the rejoin's full re-sync = round, rules, turn and the table objects by network id on both
+        peers. Not the guest's GameUnit list: the fixture's units are plain miniatures, which the state sync
+        carries without their GameUnit link (_serialize_object writes game_unit_id only for opr_unit objects)."""
+        role = self.silence
+        name = f"silence-{role}" + ("-outage" if self.outage else "")
+        self.command_both("setup")
+        before = self.wait_condition(
+            "fixture on both peers", lambda s: all(v.get("fixture_ready") for v in s.values())
+        )
+        self.checkpoint(f"{name}-fixture", before)
+        expect = self.args.silence_expect
+        if expect == "auto":
+            expect = "fast" if before["host"].get("relay_takeover") else "fallback"
+        ids = {r: before[r].get("peer_id") for r in ("host", "guest")}
+        units = len(before["host"].get("units", {}))
+        objects = before["host"].get("objects", [])
+        print(f"[mp2] {name} for {SILENCE_S:.0f}s, expecting {expect} (ids {ids})")
+        started = time.monotonic()
+        assert self.proxy is not None
+        self.proxy.freeze(SILENCE_S, outage=self.outage)
+        time.sleep(1.0)
+        self.command("host", "advance_round")
+        self.wait_condition(
+            "the round advanced during the silence reaches both peers",
+            lambda s: all(v.get("round") == 2 and v.get("session_ready") for v in s.values()),
+            timeout=SILENCE_S + 30.0,
+            diagnostic=lambda s: "rounds: " + repr({r: s[r].get("round") for r in s}),
+        )
+        latency = time.monotonic() - started
+        limit = SILENCE_S + 8.0 if self.outage else FAST_LIMIT_S
+        lines = self.clients[role].lines
+        early = [line for line in lines if "rejoining early" in line]
+        print(f"[mp2] {name}: round on both peers after {latency:.1f}s; "
+              + " | ".join(line for line in lines if "[Relay] link silent" in line or "early rejoin" in line))
+        time.sleep(max(0.0, started + SILENCE_S + 5.0 - time.monotonic()))  # the old flow resumes meanwhile
+        after = self.stable_states()
+        seen = after[role].get("net_status_seen", [])
+        hiccup = "Connection hiccup \u2014 reconnecting\u2026"
+        problems = [msg for bad, msg in (
+            ({r: after[r].get("peer_id") for r in ids} != ids, f"transport ids changed: {ids} -> "
+             + repr({r: after[r].get("peer_id") for r in ids})),
+            (after["host"].get("peers") != {"1": 1, "2": 2}, f"host seats: {after['host'].get('peers')}"),
+            (any(after[r].get("slot") != (1 if r == "host" else 2) for r in ids), "a seat changed"),
+            (len(after["host"].get("units", {})) != units, f"host unit count {units} -> "
+             + str(len(after["host"].get("units", {})))),
+            (any(after[r].get("objects") != objects for r in ids), f"table objects {objects} -> "
+             + repr({r: after[r].get("objects") for r in ids})),
+            (any(after["host"].get(k) != after["guest"].get(k) for k in ("round", "rules", "turn")),
+             "round/rules/turn differ: " + repr({r: [after[r].get(k) for k in ("round", "rules", "turn")]
+                                                 for r in ids})),
+            (expect == "fast" and latency > limit, f"round reached both peers after {latency:.1f}s "
+             f"(limit {limit:.0f}s)"),
+            (expect == "fast" and not early, "no early rejoin logged"),
+            (expect == "fast" and "Reconnected" not in seen[seen.index(hiccup) + 1:] if hiccup in seen
+             else expect == "fast", f"no hiccup notice followed by Reconnected: {seen}"),
+            (expect == "fallback" and bool(early), "an early rejoin on a relay without takeover"),
+        ) if bad]
+        if problems:
+            raise HarnessFailure(f"{name} ({expect}): " + "; ".join(problems))
+        atomic_json(self.run_dir / f"{name}-after.json", {"name": f"{name}-after", **after})
+        print(f"[mp2] PASS {name} ({expect}): round on both peers after {latency:.1f}s, ids {ids} kept")
+
+    def _start_question_scenario(self) -> None:
+        """Bug 6c: the host is asked ONCE whether to play with rules automation when the second player
+        sits down. Yes -> the guest gets the confirm card -> both Automatic; Not now -> both Manual and
+        no card on the guest; a guest rejoin never asks again."""
+        yes = self.start_question == "yes"
+        self.wait_condition(
+            "the host is asked, the guest is not",
+            lambda s: s["host"].get("start_question_visible") and not s["guest"].get("start_question_visible"),
+            diagnostic=lambda s: "host asked: " + repr(s["host"].get("start_question_count")),
+        )
+        self.command("host", "answer_start_question", {"yes": yes})
+        if yes:
+            self.wait_condition(
+                "the guest sees the confirm card",
+                lambda s: s["guest"].get("rules_card_visible") and not s["host"].get("start_question_visible"),
+            )
+            self.command("guest", "answer_rules_card", {"yes": True})
+            self.wait_condition(
+                "both sides Automatic",
+                lambda s: all(v.get("rules") == 1 for v in s.values()),
+                diagnostic=lambda s: "rules: " + repr({r: s[r].get("rules") for r in s}),
+            )
+        else:
+            time.sleep(2.0)
+            states = self.states()
+            if states["guest"].get("rules_card_visible") or any(v.get("rules") != 0 for v in states.values()):
+                raise HarnessFailure("Not now must leave both Manual with no card on the guest: " + repr(
+                    {r: (v.get("rules"), v.get("rules_card_visible")) for r, v in states.items()}))
+        # The guest leaves and comes back: same room, no second question.
+        room = self.states()["host"]["room"]
+        self.command("guest", "close_window")
+        old = self.clients["guest"]
+        old.proc.wait(timeout=15)
+        for suffix in (".state.json", ".ack.json", ".command.json"):
+            (self.run_dir / f"guest{suffix}").unlink(missing_ok=True)
+        old.close_log()
+        self.seq["guest"] = 0
+        self._start_client("guest", self.relay_url, str(room))
+        self.wait_condition(
+            "the guest is back at the table",
+            lambda s: s["guest"].get("session_ready") and s["host"].get("occupied_slots") == [1, 2],
+        )
+        time.sleep(3.0)
+        states = self.states()
+        if states["host"].get("start_question_count") != 1 or states["host"].get("start_question_visible"):
+            raise HarnessFailure("a rejoin asked again: count=%r" % states["host"].get("start_question_count"))
+        if yes:
+            states = self.wait_condition(
+                "the agreed Automatic level survives the rejoin on both sides",
+                lambda s: all(v.get("rules") == 1 for v in s.values()),
+                timeout=15,
+                diagnostic=lambda s: "rules: " + repr({r: s[r].get("rules") for r in s}),
+            )
+        print(f"[mp2] PASS start-question-{self.start_question} (asked once, rejoin silent)")
+
     def _rules_online_scenario(self) -> None:
         """Plan 3.6: the agreed Automatic online room. A full exchange with enforced alternation —
         out-of-turn refusal, hand-over, TAIL and one automatic round end — peer-state equality after
@@ -637,6 +902,8 @@ class Run:
                     f"{client.role}: main-loop stall {stall:.1f}s exceeds the "
                     f"{STALL_LIMIT_S:.0f}s baseline (relay drops peers near 30s)"
                 )
+        if self.proxy is not None:
+            self.proxy.close()
         kill_group(self.relay)
         if self.relay_log:
             self.relay_log.close()
@@ -675,6 +942,8 @@ def deterministic_view(checkpoints: list[dict]) -> list[dict]:
                     for line in checkpoint[role].get("battle_log_tail", [])
                 ]
             checkpoint[role]["room"] = "<room>"
+            checkpoint[role].pop("net_status_seen", None)  # timing-dependent connect texts
+            checkpoint[role].pop("objects", None)  # bug 4 silence scenario only
     return value
 
 
@@ -698,6 +967,22 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Also run the plan 3.6 rules-online alternation gate (agreed Automatic room).",
     )
+    parser.add_argument(
+        "--start-question",
+        action="store_true",
+        help="Run only the bug 6c scenarios (host start question: yes, no; guest rejoin).",
+    )
+    parser.add_argument(
+        "--silence-only",
+        action="store_true",
+        help="Run only the bug 4 silence scenarios (host, guest).",
+    )
+    parser.add_argument(
+        "--silence-expect",
+        choices=("auto", "fast", "fallback"),
+        default="auto",
+        help="auto = fast when the relay advertises seat takeover, else today's behaviour.",
+    )
     args = parser.parse_args()
     if args.repeat < 1:
         parser.error("--repeat must be at least 1")
@@ -711,10 +996,14 @@ def main() -> int:
     start = time.monotonic()
     reference: list[dict] | None = None
 
-    def run_once(run_dir: Path, rules_online: bool, ref: list[dict] | None) -> list[dict]:
+    def run_once(run_dir: Path, rules_online: bool, ref: list[dict] | None, leave: str = "",
+                 silence: str = "", outage: bool = False) -> list[dict]:
         run_dir.mkdir(parents=True, exist_ok=False)
         run = Run(args, run_dir)
         run.rules_online = rules_online
+        run.leave = leave
+        run.silence = silence
+        run.outage = outage
         try:
             print(f"[mp2] run {run_dir.name}: {run_dir}")
             run.start()
@@ -733,12 +1022,35 @@ def main() -> int:
         return ref if ref is not None else view
 
     try:
+        if args.start_question:
+            for answer in ("yes", "no"):
+                run = Run(args, root / f"start-question-{answer}")
+                run.run_dir.mkdir(parents=True, exist_ok=False)
+                run.start_question = answer
+                try:
+                    run.start()
+                    run.scenario()
+                finally:
+                    run.stop()
+            print("[mp2] RESULT PASS: start question")
+            return 0
+        if args.silence_only:
+            for role in ("host", "guest"):
+                run_once(root / f"silence-{role}", False, None, silence=role)
+            run_once(root / "silence-host-outage", False, None, silence="host", outage=True)
+            print("[mp2] RESULT PASS: silence")
+            return 0
         for number in range(1, args.repeat + 1):
             reference = run_once(root / f"run-{number:02d}", False, reference)
         online_reference: list[dict] | None = None
         if args.include_rules_online:
             for number in range(1, args.repeat + 1):
                 online_reference = run_once(root / f"rules-online-{number:02d}", True, online_reference)
+        run_once(root / "leave-01", False, None, leave="menu")
+        run_once(root / "close-01", False, None, leave="close")
+        for role in ("host", "guest"):
+            run_once(root / f"silence-{role}", False, None, silence=role)
+        run_once(root / "silence-host-outage", False, None, silence="host", outage=True)
         elapsed = time.monotonic() - start
         atomic_json(root / "determinism.json", {
             "runs": args.repeat, "identical": True, "seed": args.seed,

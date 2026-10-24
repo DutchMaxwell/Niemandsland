@@ -33,9 +33,9 @@ func after_test() -> void:
 
 
 func _rules_toggle() -> CheckButton:
-	if _main.solo_panel_box == null:
+	if _main.rules_panel_box == null:
 		return null
-	for c in _main.solo_panel_box.get_children():
+	for c in _main.rules_panel_box.get_children():
 		if c is CheckButton and (c as CheckButton).text == "Rules automation":
 			return c
 	return null
@@ -49,8 +49,8 @@ func test_the_ui_flag_is_on() -> void:
 
 func test_the_switch_is_visible_and_names_the_manual_limit() -> void:
 	# The solo panel is built at _ready; the Rules-automation checkbox is added only while the flag is on.
-	assert_object(_main.solo_panel_box) \
-		.override_failure_message("step 2.10 — the solo panel was not built") \
+	assert_object(_main.rules_panel_box) \
+		.override_failure_message("step 2.10 — the Rules panel was not built") \
 		.is_not_null()
 	_main._add_rules_toggle()
 	var cb := _rules_toggle()

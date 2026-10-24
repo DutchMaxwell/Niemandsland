@@ -27,11 +27,10 @@ not there yet and what to watch for. The full done / in-progress / planned break
   both sides (see [`../PROJECT_STATUS.md`](../PROJECT_STATUS.md)). Solo is **alpha**: four selectable difficulty grades
   (Dämmerung, Zwielicht, Finsternis, Albtraum; Albtraum is the default), co-op against the AI in multiplayer is a first version, and the UI is English
   (the privacy & data screens also come in German).
-- **Automodus (Charge / Advance & Shoot / Rush) is a first version.** An executed intent has **no
-  take-back** — the dice fell, like at the table. Regiments, aircraft and units embarked in a
-  transport still move by hand (pick the radial's Shoot/Fight instead, or drag). **Co-op rooms hide
-  the three verbs** — a multiplayer session is solo-only for this version; move and attack by hand
-  there, same as today.
+- **Automodus (Charge / Advance & Shoot / Rush) is switched off in this version.** The radial does not
+  offer the three verbs while their move preview and target selection are reworked (issue #1828);
+  move and attack by hand (the radial's Shoot / Fight, or drag). NACHTMAHR's own activations are
+  unaffected.
 - **AI thinking time has been measured on one machine only** (a developer laptop). On a slower PC
   the opponent may take longer per decision — if it feels slow, send a diagnostics report (below);
   its header names which AI path your machine ran.

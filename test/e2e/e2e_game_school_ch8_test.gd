@@ -1,12 +1,11 @@
 extends GdUnitTestSuite
 ## E2E walk of Game School chapter 8 (S-08, Terrain) over the real scenes/main.tscn:
 ## move Alpha into the forest, burn the difficult cap with a real drag, read cover, shoot the enemy
-## (the log names the +1), then Rush through the dangerous ground via the real radial action — the six
+## (the log names the +1), then read the dangerous-ground step and Continue — the six
 ## steps complete the chapter, and an idle boot stays on step 0.
 ##
-## The cap and the dangerous test are driven through the PLAYER'S OWN paths (ObjectManager's strict
-## drag cap; the radial "solo_auto_rush" id + a real targeting click), never by hand-emitted signals
-## or the _run_ai_dangerous resolver — that is what this walk is here to pin.
+## The cap is driven through the PLAYER'S OWN path (ObjectManager's strict drag cap), never by
+## hand-emitted signals — that is what this walk is here to pin.
 
 const Boot := preload("res://test/e2e/e2e_boot.gd")
 const INCH := 0.0254
@@ -198,7 +197,7 @@ func test_s08_six_steps_complete(timeout := 120000) -> void:
 
 	# Difficult terrain hard-caps a drag: the SHIPPED strict cap governs a real drag of the unit —
 	# ObjectManager._update_drag fires movement_capped off its own (capped) measurement. The hand
-	# pushes well past the cap and corrects back, so Alpha keeps its lane for the Rush below.
+	# pushes well past the cap and corrects back, so Alpha keeps its lane.
 	await _drag_unit(alpha, [Vector2(0, -3), Vector2(0, -8), Vector2(0, -14), Vector2(0, -7), Vector2.ZERO])
 	assert_bool(await _wait_index(2)).is_true()   # the cap was experienced
 
@@ -217,23 +216,10 @@ func test_s08_six_steps_complete(timeout := 120000) -> void:
 		.override_failure_message("no cover line in the battle log:\n%s" % _log_text()) \
 		.is_true()
 
-	# The volley consumed Alpha's activation and NACHTMAHR answered; with only these two units the
-	# round turns over, which frees Alpha for the Rush the next step commands.
-	assert_bool(await _wait_free(alpha)) \
-		.override_failure_message("Alpha stays activated after its volley — the round never advanced, so the commanded Rush would be refused") \
-		.is_true()
-
-	# Dangerous ground: the radial's "solo_auto_rush" id + a real click on the enemy runs the ENGINE
-	# rush (player_intent -> execute_intent), whose route crosses the full-width band.
-	_press("solo_auto_rush", alpha)
-	assert_bool(await _wait_armed("auto_verb")).is_true()
-	var rush_pt := _pick_point(target)
-	assert_vector(rush_pt).override_failure_message("fixture: no clickable enemy point for the Rush").is_not_equal(Vector2.INF)
-	await _click_target(rush_pt)
-	assert_bool(await _wait_index(5)).is_true()   # the dangerous test was rolled
-	assert_bool(_log_text().to_lower().contains("dangerous terrain")) \
-		.override_failure_message("the player's Rush never crossed the dangerous ground:\n%s" % _log_text()) \
-		.is_true()
+	# Dangerous ground is a read-and-Continue step in 0.3.14 (the player's Rush verb is hidden until the
+	# 0.3.15 preview rework), so the card is dismissed instead of a commanded Rush.
+	card.continue_pressed.emit()
+	assert_bool(await _wait_index(5)).is_true()
 
 	card.continue_pressed.emit()
 	var progress := SpielschuleProgress.new(TEST_CFG)

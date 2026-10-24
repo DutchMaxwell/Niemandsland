@@ -274,8 +274,8 @@ between similar targets round after round ([#319](../../../issues/319)); a holdi
 why it did nothing ([#320](../../../issues/320)); attacker-side spell buffs (e.g. Calculated
 Foresight) finally reach the attack they were meant to boost (NML-987); a vehicle-and-walker
 keyword clash resolves to the vehicle base size again (NML-993). **Multiplayer**: a persistent
-status line and a toast make clear that multiplayer is manual play — no rules automation
-([#322](../../../issues/322)).
+status line and a toast make clear that multiplayer starts as manual play; they follow the
+rules-automation level once both players agree to Automatic ([#322](../../../issues/322)).
 
 **`0.3.11.1-alpha` (2026-08-04):** hotfix — a once-per-game move feat (e.g. Speed Feat) no longer
 doubled its Advance/Rush bonus into the unit's permanent move bands (NML-982); split fire no

@@ -24,3 +24,16 @@ func test_has_model_matches_unit_across_separators() -> void:
 	assert_bool(lib.has_model("battle_brothers", "Heavy Exo-Suit")).is_true()
 	assert_bool(lib.has_model("battle_brothers", "heavy exo-suit")).is_true()
 	assert_bool(lib.has_model("battle_brothers", "Totally Different Unit")).is_false()
+
+
+func test_make_key_drops_apostrophes_like_the_manifest_generator() -> void:
+	# Manifest keys come from slugs that drop apostrophes ("Foo'bar Baz" -> "foobar baz").
+	assert_str(ModelLibraryScript.make_key("some_faction", "Foo'bar Baz")).is_equal("some_faction/foobar baz")
+	assert_str(ModelLibraryScript.make_key("some_faction", "Foo’bar Baz")).is_equal("some_faction/foobar baz")
+
+
+func test_has_model_matches_unit_name_with_apostrophe() -> void:
+	var lib = auto_free(ModelLibraryScript.new())
+	lib.apply_manifest_text(
+		'{"base_url":"https://x/","models":{"some_faction/foobar baz":{"url":"a.glb","sha256":"a"}}}')
+	assert_bool(lib.has_model("some_faction", "Foo'bar Baz")).is_true()
