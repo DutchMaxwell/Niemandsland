@@ -44,6 +44,7 @@ var _left: Dictionary = {}      # bugs 9+10: what the scene after End Battle inh
 var _start_q_up := false        # the host's start question was on screen last snapshot
 var _start_q_count := 0         # how many times it appeared (asked once per room)
 var _host_left_at := 0.0        # bugs 9+10: unix time the guest's "host left" notice appeared
+var _net_status_seen: Array = []  # bug 4: every network status text shown, in order (the hiccup notice)
 
 
 func _ready() -> void:
@@ -103,6 +104,9 @@ func _wire_signals() -> void:
 
 func _process(_delta: float) -> void:
 	var now := Time.get_ticks_msec()
+	var net_label = _main.get("network_status_label") if is_instance_valid(_main) else null
+	if net_label is Label and (_net_status_seen.is_empty() or _net_status_seen[-1] != net_label.text):
+		_net_status_seen.append(net_label.text)
 	_was_ready = _was_ready or _session_ready()
 	if not _failed and not _was_ready \
 			and float(now - _started_ms) / 1000.0 > CONNECT_TIMEOUT_S:
@@ -493,7 +497,21 @@ func _snapshot() -> Dictionary:
 		"start_question_visible": false,
 		"start_question_count": _start_q_count,
 		"rules_card_visible": _find_card("Turn on automatic rules?") != null,
+		# Bug 4 (silence scenario): our transport id, the relay's takeover capability, the host's peer -> slot
+		# map (a phantom seat shows up here), the table objects by network id (a duplicate shows up here) and
+		# the status texts shown so far.
+		"peer_id": lobby.relay_peer.get_unique_id() if lobby != null and lobby.relay_peer != null else 0,
+		"relay_takeover": lobby != null and lobby.relay_peer != null \
+			and lobby.relay_peer.get("_relay_takeover") == true,
+		"peers": {},
+		"objects": [],
+		"net_status_seen": _net_status_seen.duplicate(),
 	}
+	if _main != null and _main.get("object_manager") != null:
+		for child in _main.object_manager.get_children():
+			if child is Node3D and child.has_meta("network_id") and not child.is_queued_for_deletion():
+				state.objects.append(int(child.get_meta("network_id")))
+		state.objects.sort()
 	var sq_up := _find_card("Play with rules automation?") != null
 	if sq_up and not _start_q_up:
 		_start_q_count += 1
@@ -508,6 +526,8 @@ func _snapshot() -> Dictionary:
 				slots.append(slot)
 		slots.sort()
 		state.occupied_slots = slots
+		for peer_id in nm.peer_to_slot:
+			state.peers[str(peer_id)] = int(nm.peer_to_slot[peer_id])
 	if _fixture_ready:
 		var ai_slots: Array = []
 		for slot in _main.solo_ai_slots:
