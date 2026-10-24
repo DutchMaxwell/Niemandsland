@@ -14383,8 +14383,25 @@ func _do_clear_all() -> void:
 	object_manager.clear_all_objects()
 	_clear_dice_log()
 	_update_round_button()  # clear_all_objects() resets the round to 1
+	_clear_map_objectives()
 	if _table_biome_presenter != null:
 		_table_biome_presenter.request_rebuild("layout")   # terrain pieces are gone: re-dress the empty table
+
+
+## Clear Table removes the Map Layout objectives and who holds them with the rest of the table (terrain,
+## models and armies are gone too). The editor's list is the owner; its change signal rebuilds the overlay
+## and tells the other peers.
+func _clear_map_objectives() -> void:
+	if map_layout_editor == null or map_layout_editor.mission_objectives.is_empty():
+		return
+	var n: int = map_layout_editor.mission_objectives.size()
+	map_layout_editor.mission_objectives.clear()
+	map_layout_editor._update_objectives_status()
+	map_layout_editor.grid_container.queue_redraw()
+	map_layout_editor.objectives_changed.emit(map_layout_editor.mission_objectives)
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL,
+			"Objectives cleared (Clear Table): %d marker%s and their holders removed" % [n, "s" if n != 1 else ""], true)
 
 
 func _on_sort_table() -> void:
