@@ -10742,16 +10742,26 @@ func solo_combat_available(unit: GameUnit) -> bool:
 const PLAYER_AUTO_VERBS_ENABLED := false
 
 
-## Radial gate for the engine-executed verbs (A1, NML-202): the same eligibility as Shoot/Fight, but
-## co-op rooms hide them in this version (grilled decision 2: V1 is solo) — a multiplayer session's
-## players still move and attack by hand, same as today.
+## Radial gate for the engine-executed verbs (A1, NML-202): the same eligibility as Shoot/Fight, plus
+## solo_auto_eligible (step 3.1: solo, co-op, Automatic online rooms, hotseat Automatic tables).
 func solo_auto_available(unit: GameUnit) -> bool:
 	if not PLAYER_AUTO_VERBS_ENABLED:
 		return false
-	# The engine-executed MOVE verbs need a controller without an AI side (step 2.4): until then they
-	# stay behind an AI designation, so a hotseat Automatic table grows only the combat verbs.
-	return solo_combat_available(unit) and not solo_ai_slots.is_empty() \
-		and (network_manager == null or not network_manager.is_multiplayer_active())
+	return solo_auto_eligible(unit)
+
+
+## Who may be offered the verbs once the hide switch is off (the switch is checked above, so a test
+## can pin this rule while the verbs stay hidden). Step 3.1: wherever the ENGINE resolves — co-op (an
+## AI seat) and an agreed online Automatic room, for the peer's OWN units; and a local hotseat
+## Automatic table, for the side holding the turn. The preview stays local; nothing is sent here.
+func solo_auto_eligible(unit: GameUnit) -> bool:
+	if not solo_combat_available(unit):
+		return false
+	if network_manager != null and network_manager.is_multiplayer_active():
+		return _solo_i_own_unit(unit) and (not solo_ai_slots.is_empty() or _online_turn_room())
+	if not solo_ai_slots.is_empty():
+		return true
+	return _solo_engine_automatic() and hotseat_turn_refusal(unit_owner_slot(unit.unit_properties)) == ""
 
 
 ## The pre-attack cast-window ask (decision "Vorfrage"): true → the player casts first. Asked at
