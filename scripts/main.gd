@@ -15337,13 +15337,20 @@ func _log_battle_activation(gu, _remote: bool) -> void:
 	var who := "AI" if is_ai else "you"
 	# Maintainer MP test: both sides read "(you)" — in multiplayer the line names the slot's
 	# PLAYER instead (both clients then log identical lines; solo keeps its you/AI voice).
-	if not is_ai and network_manager != null and network_manager.is_multiplayer_active():
+	var mp: bool = network_manager != null and network_manager.is_multiplayer_active()
+	if not is_ai and mp:
 		var pid: int = int(gu.unit_properties.get("player_id", 0))
 		for p in network_manager.peer_to_slot:
 			if int(network_manager.peer_to_slot[p]) == pid:
 				who = _peer_display_name(int(p))
 				break
-	battle_log.on_unit_activated(gu.get_name(), who, is_ai, reason)
+	# No AI without its tick (#1719): a local table with no AI seat has no "you" — the line names the
+	# owner the way the other player lines do ("Objective 1 seized by P1 (Army)").
+	if not is_ai and not mp and solo_ai_slots.is_empty():
+		battle_log.log_event(BattleLog.Category.GENERAL, "%s activated by %s" % [gu.get_name(),
+			_solo_player_label(unit_owner_slot(gu.unit_properties))])
+	else:
+		battle_log.on_unit_activated(gu.get_name(), who, is_ai, reason)
 	if game_record_collector != null:
 		game_record_collector.on_unit_activated(gu)   # PR B1: same funnel as the Battle Log
 

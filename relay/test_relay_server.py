@@ -431,6 +431,99 @@ class TestRoomManagement:
         await guest_ws.close()
 
 
+async def _connect_json(url: str, msg: dict) -> tuple:
+    """Open a socket, send one control message, return (ws, first reply)."""
+    ws = await websockets.connect(url)
+    await ws.send(json.dumps(msg))
+    return ws, json.loads(await ws.recv())
+
+
+async def _recv_types(ws, count: int) -> list:
+    """The next `count` control messages as (type, peer_id) pairs."""
+    out = []
+    for _ in range(count):
+        msg = json.loads(await asyncio.wait_for(ws.recv(), timeout=2.0))
+        out.append((msg["type"], msg.get("peer_id")))
+    return out
+
+
+@pytest.mark.asyncio
+class TestSeatTakeover:
+    """Bug 4: a client whose link went silent rejoins BEFORE the relay's heartbeat cut removed its old
+    socket. `takeover` = its old peer id; with the same token the relay hands that seat to the new socket."""
+
+    async def _room_with_guest(self, url: str) -> tuple:
+        host_ws, created = await _connect_json(url, {"type": "create_room", "token": "host-tok"})
+        code = created["code"]
+        guest_ws, joined = await _connect_json(
+            url, {"type": "join_room", "code": code, "token": "guest-tok"})
+        assert joined["peer_id"] == 2
+        assert await _recv_types(host_ws, 1) == [("peer_connected", 2)]
+        assert await _recv_types(guest_ws, 1) == [("peer_connected", 1)]
+        return host_ws, guest_ws, code, created, joined
+
+    async def test_replies_advertise_the_takeover_capability(self, relay):
+        _server, url = relay
+        host_ws, guest_ws, _code, created, joined = await self._room_with_guest(url)
+        assert created.get("takeover") is True
+        assert joined.get("takeover") is True
+        await host_ws.close()
+        await guest_ws.close()
+
+    async def test_guest_takes_over_its_silent_socket_and_keeps_its_id(self, relay):
+        server, url = relay
+        host_ws, old_guest, code, _c, _j = await self._room_with_guest(url)
+        # The old guest socket is still registered (silent, never closed) when the guest rejoins.
+        new_guest, resp = await _connect_json(
+            url, {"type": "join_room", "code": code, "token": "guest-tok", "takeover": 2})
+        assert (resp["type"], resp["peer_id"]) == ("room_joined", 2), resp
+        assert resp.get("takeover") is True
+        # The host sees today's reclaim sequence: the old seat leaves, the same id comes back.
+        assert await _recv_types(host_ws, 2) == [("peer_disconnected", 2), ("peer_connected", 2)]
+        room = server.rooms[code]
+        assert sorted(room.peers) == [1, 2]
+        assert old_guest not in server.connections
+        await asyncio.wait_for(old_guest.wait_closed(), timeout=3.0)
+        assert old_guest.close_code == 4000
+        await host_ws.close()
+        await new_guest.close()
+
+    async def test_host_takes_over_its_silent_socket_and_the_room_survives(self, relay):
+        server, url = relay
+        old_host, guest_ws, code, _c, _j = await self._room_with_guest(url)
+        new_host, resp = await _connect_json(
+            url, {"type": "join_room", "code": code, "token": "host-tok", "takeover": 1})
+        assert (resp["type"], resp["peer_id"]) == ("room_rejoined_host", 1), resp
+        assert resp.get("takeover") is True
+        assert await _recv_types(new_host, 1) == [("peer_connected", 2)]
+        # The guest hears today's rehost sequence, which makes it re-announce to the host.
+        assert await _recv_types(guest_ws, 2) == [("host_paused", None), ("peer_connected", 1)]
+        room = server.rooms[code]
+        assert room.host_disconnected_at == 0.0
+        assert sorted(room.peers) == [1, 2]
+        assert old_host not in server.connections
+        await asyncio.wait_for(old_host.wait_closed(), timeout=3.0)
+        assert old_host.close_code == 4000
+        await new_host.close()
+        await guest_ws.close()
+
+    async def test_takeover_needs_the_same_token_and_the_old_id(self, relay):
+        server, url = relay
+        host_ws, guest_ws, code, _c, _j = await self._room_with_guest(url)
+        # Another token naming seat 2, and the guest's token naming the host's seat: nobody is evicted.
+        intruder, resp = await _connect_json(
+            url, {"type": "join_room", "code": code, "token": "other-tok", "takeover": 2})
+        assert (resp["type"], resp["peer_id"]) == ("room_joined", 3)
+        twin, resp = await _connect_json(
+            url, {"type": "join_room", "code": code, "token": "guest-tok", "takeover": 1})
+        assert (resp["type"], resp["peer_id"]) == ("room_joined", 4)
+        room = server.rooms[code]
+        assert room.peers[1].token == "host-tok" and room.peers[2].token == "guest-tok"
+        assert room.host_disconnected_at == 0.0
+        for ws in (host_ws, guest_ws, intruder, twin):
+            await ws.close()
+
+
 # ============================================================================
 # Step 3: Security
 # ============================================================================

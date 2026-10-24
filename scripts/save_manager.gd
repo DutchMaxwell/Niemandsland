@@ -85,6 +85,10 @@ func _army_names_by_player() -> Dictionary:
 func restore_army_trays_after_load(army_names: Dictionary) -> void:
 	if not army_manager:
 		return
+	# A JSON save keys the names by STRING ("1"), a live state sync by int: normalise once, accept both.
+	var names_by_pid := {}
+	for k in army_names:
+		names_by_pid[int(k)] = str(army_names[k])
 	var seen := {}
 	for unit_id in _loaded_game_units:
 		var gu = _loaded_game_units[unit_id].get("game_unit")
@@ -93,7 +97,7 @@ func restore_army_trays_after_load(army_names: Dictionary) -> void:
 		var pid := int(gu.unit_properties.get("player_id", 0))
 		if pid > 0 and not seen.has(pid):
 			seen[pid] = true
-			var aname := str(army_names.get(pid, "Army"))
+			var aname: String = names_by_pid.get(pid, "Army")
 			var acol = OPRArmyManager.army_color(pid, Color.GRAY)
 			army_manager._create_army_tray(pid, aname, acol)
 
