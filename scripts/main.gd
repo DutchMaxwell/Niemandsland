@@ -10959,11 +10959,39 @@ func solo_begin_auto(unit: GameUnit, verb: int) -> void:
 		_:
 			band = float(bands.get("advance", 6))
 			verb_label = "Advance & Shoot"
+	# Automodus 1.6: light up exactly the enemies player_intent accepts for this verb; with none, say
+	# why (the first refusal) and do not enter the mode.
+	var valid: Array = []
+	var first_reason := ""
+	for g in opr_army_manager.get_all_game_units():
+		var cand := g as GameUnit
+		if cand == null or cand.is_destroyed() or SoloController.unit_in_reserve(cand) \
+				or (cand.has_method("is_attached") and cand.is_attached()) or not _engine_enemy(unit, cand):
+			continue
+		var verdict: Dictionary = solo_controller.player_intent(unit, verb, cand)
+		if verdict.has("refused"):
+			if first_reason == "":
+				first_reason = str(verdict["refused"])
+		else:
+			valid.append(cand)
+	if valid.is_empty():
+		_solo_target_mode = {}
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.GENERAL, "Auto: %s — no valid target for %s (%s)" % [
+				unit.get_name(), verb_label, first_reason if first_reason != "" else "no enemy on the table"])
+		return
+	var rings: Array = []
+	for cu in valid:
+		rings.append(_solo_spawn_pulse_ring(solo_controller.unit_centre(cu), Color(1.0, 0.7, 0.2)))
+	_solo_target_mode["auto_valid"] = valid
+	_solo_target_mode["cast_rings"] = rings   # freed by _solo_end_targeting
+	_solo_target_mode["auto_previews"] = {}
 	if band > 0 and range_ring_controller != null and range_ring_controller.has_method("show_spell_preview"):
 		range_ring_controller.show_spell_preview(_solo_unit_nodes(unit), band)
 	if battle_log != null:
-		battle_log.log_event(BattleLog.Category.GENERAL, "%s: pick a target for %s — right-click cancels" % [
-			unit.get_name(), verb_label])
+		battle_log.log_event(BattleLog.Category.GENERAL,
+			"%s: %d target(s) lit for %s — hover one to see where your models land, click it to go; right-click or Esc cancels" % [
+				unit.get_name(), valid.size(), verb_label])
 	# A2 (NML-202): name a suggestion so the player isn't guessing which enemy is worth the click —
 	# a PICK on the unit's OWN base (in _solo_targeting_input) takes it.
 	var suggested: GameUnit = solo_controller.suggest_target(unit, verb)
