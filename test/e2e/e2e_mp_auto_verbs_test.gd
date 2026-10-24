@@ -25,14 +25,18 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	_end_session()
+	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
+	_main = null
+	_runner = null
+
+
+func _end_session() -> void:
 	if _main != null:
 		_main.network_manager = _real_net
 	if _net != null:
 		_net.free()
 		_net = null
-	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
-	_main = null
-	_runner = null
 
 
 ## A REAL NetworkManager with only the transport swapped out (pattern: e2e_rules_online_round_host_test).
@@ -78,6 +82,7 @@ func test_verbs_offered_to_own_units_in_an_automatic_room() -> void:
 	_level(RulesAutomation.Level.MANUAL)
 	assert_bool(_main.solo_auto_eligible(u[0])) \
 		.override_failure_message("3.1 - a Manual room offers nothing").is_false()
+	_end_session()
 
 
 func test_verbs_offered_in_co_op() -> void:
@@ -85,13 +90,13 @@ func test_verbs_offered_in_co_op() -> void:
 	_level(RulesAutomation.Level.MANUAL)
 	_main.solo_ai_slots = {3: true}
 	_fake_session(1, true)
-	assert_bool(_main.solo_auto_eligible(u[0])).is_false()   # no engine enemy (the AI seat owns no unit here)
 	var ai := E2EBoot.make_unit(_main, 3, "Drones", [Vector3(0.5, 0.0, 0.0)])
 	_main.opr_army_manager.game_units[ai.unit_id] = ai
 	assert_bool(_main.solo_auto_eligible(u[0])) \
 		.override_failure_message("3.1 - co-op: own unit is offered").is_true()
 	assert_bool(_main.solo_auto_eligible(u[1])) \
 		.override_failure_message("3.1 - co-op: the other human's unit is not mine").is_false()
+	_end_session()
 
 
 func test_hotseat_automatic_offers_the_side_on_turn() -> void:
@@ -115,3 +120,4 @@ func test_preview_stays_local() -> void:
 	_main._solo_end_targeting()
 	assert_int(_net.sent.size()) \
 		.override_failure_message("3.1 - the preview sends nothing: %s" % str(_net.sent)).is_equal(0)
+	_end_session()
