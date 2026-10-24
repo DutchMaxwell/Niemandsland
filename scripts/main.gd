@@ -476,6 +476,8 @@ var _reconnect_failure_shown: bool = false
 ## manager has one shared HTTPRequest, so per-unit concurrent downloads collide). Keyed by
 ## player_id -> { army_name, units: Array, objects: Array }.
 var _incoming_armies: Dictionary = {}
+## player_id -> army name of a REMOTE army (its armies[] slot holds null here); the left panel's "AI plays P<n>" row reads it.
+var _remote_army_names: Dictionary = {}
 ## Inactivity window (seconds) a guest waits between remote army-import RPCs before it gives up.
 ## The host paces unit batches ~250 ms apart (ARMY_BATCH_DELAY_MS), so even a large army never
 ## has a multi-second gap; this generous silence budget only trips when the host truly went away
@@ -18010,6 +18012,7 @@ func _on_remote_army_complete(player_id: int, rule_descriptions: Dictionary) -> 
 	# the left panel, otherwise a side that imported nothing itself never gets the section / Rules automation switch.
 	if not opr_army_manager.armies.has(player_id):
 		opr_army_manager.armies[player_id] = null
+	_remote_army_names[player_id] = str(buf.get("army_name", ""))
 	_refresh_solo_panel()
 
 	# Tell other peers we are loading so their object move/edit input is gated while we build
@@ -18645,6 +18648,18 @@ func _refresh_rules_panel(has_army: bool) -> void:
 	GameMenu.section(rules_panel_box)
 
 
+## The name a remote army's panel row shows: its army name, else the name of the player seated there, else "Army".
+func _remote_seat_label(player_id: int) -> String:
+	var army_name := str(_remote_army_names.get(player_id, ""))
+	if not army_name.is_empty():
+		return army_name
+	if network_manager != null:
+		for peer in network_manager.peer_to_slot:
+			if int(network_manager.peer_to_slot[peer]) == player_id and network_manager.player_names.has(peer):
+				return str(network_manager.player_names[peer])
+	return "Army"
+
+
 ## Rebuild the Solo section: a header + one "AI plays P<n> — <army>" CheckButton per imported army.
 ## Hidden entirely while no armies are imported.
 func _refresh_solo_panel() -> void:
@@ -18696,7 +18711,7 @@ func _refresh_solo_panel() -> void:
 	for pid in pids:
 		var army = opr_army_manager.armies[pid]
 		var cb := CheckButton.new()
-		cb.text = "AI plays P%d — %s" % [int(pid), (str(army.name) if army != null else "Army")]
+		cb.text = "AI plays P%d — %s" % [int(pid), (str(army.name) if army != null else _remote_seat_label(int(pid)))]
 		cb.button_pressed = solo_ai_slots.has(int(pid))
 		cb.focus_mode = Control.FOCUS_NONE
 		cb.toggled.connect(_on_solo_ai_toggled.bind(int(pid)))
