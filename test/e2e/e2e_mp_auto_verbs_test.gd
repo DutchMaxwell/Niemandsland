@@ -118,6 +118,10 @@ func test_preview_stays_local() -> void:
 	await _main.solo_begin_auto(u[0], AiDecision.Action.CHARGE)
 	await _runner.simulate_frames(2)
 	_main._solo_end_targeting()
-	assert_int(_net.sent.size()) \
-		.override_failure_message("3.1 - the preview sends nothing: %s" % str(_net.sent)).is_equal(0)
+	var sent: Array = []
+	for e in _net.sent:   # the live cursor ping is background traffic, not the preview
+		if str((e as Dictionary).get("m", "")) != "sync_cursor_position":
+			sent.append(e)
+	assert_int(sent.size()) \
+		.override_failure_message("3.1 - the preview sends nothing: %s" % str(sent)).is_equal(0)
 	_end_session()
