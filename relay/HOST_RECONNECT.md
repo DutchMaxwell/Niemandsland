@@ -36,6 +36,16 @@ relay head-of-line block → bilateral heartbeat false-drops → reconnect storm
 Regression coverage: a relay head-of-line unit test (a wedged peer must not block the recv loop), a
 "non-host token cannot seize the host slot" test, and a legacy-tokenless-host-rejoin test.
 
+## Seat takeover (0.3.14, bug 4) - a rejoin before the heartbeat cut
+
+A Wi-Fi flow can go silent both ways for 13-28 s while a fresh socket works at once. A client that notices
+the silence rejoins early with `join_room` + `"takeover": <its old peer id>`. If that seat is still registered
+AND carries the same token, the relay detaches the old socket exactly as if it had closed (`_detach_peer`: a
+guest's id goes to `departed`, a host pauses the room) and the normal join hands the seat back: the same id
+for a guest, `room_rejoined_host` for the host. The old socket is closed in the background (code 4000).
+Without the key, or with another id or token, nothing changes. `room_created` / `room_joined` /
+`room_rejoined_host` carry `"takeover": true`; the client rejoins early only when it saw that capability.
+
 ## Why this is separate from the client reconnect (already shipped)
 
 Guest reconnect already works without any relay change: a guest whose link drops
