@@ -283,6 +283,8 @@ func _poll() -> void:
 		_is_reconnecting = false
 		_awaiting_recreate = false
 		relay_reconnect_failed.emit(reason)
+		if _ws == null:
+			return  # the handler left the room inside the emit (leave_room -> _close nulled the socket)
 
 	var state = _ws.get_ready_state()
 

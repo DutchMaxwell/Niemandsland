@@ -40,6 +40,12 @@ const FADE_ZOOM_MIN := 0.06   # fully zoomed in (matches camera min_zoom) -> gho
 const FADE_ZOOM_FULL := 6.0   # at/beyond this distance the avatar is fully opaque
 const GHOST_ALPHA := 0.12     # faintest the avatar gets
 
+# Fade the avatar as it nears the LOCAL camera. Two players on the default view put the remote head
+# at (almost) our own camera; we then sit inside it and see only its eye spheres, 3-6 cm from the lens,
+# as two huge white discs over the trays. Invisible at/below NEAR_HIDE_M, fully opaque from NEAR_FULL_M.
+const NEAR_HIDE_M := 0.35
+const NEAR_FULL_M := 0.9
+
 # ===== Variables =====
 
 var peer_id: int = 0
@@ -52,6 +58,8 @@ var _right_eyelid: MeshInstance3D
 
 # Zoom-based transparency (issue: avatar fades as its owner zooms in).
 var _current_alpha: float = 1.0
+var _zoom_alpha: float = 1.0
+var _near_alpha: float = 1.0
 var _mesh_instances: Array[MeshInstance3D] = []
 
 # Smooth interpolation for head rotation
@@ -91,6 +99,12 @@ func _process(delta: float) -> void:
 	# Smooth position interpolation (follows remote camera in 3D)
 	if _position_initialized:
 		position = position.lerp(_target_position, delta * 5.0)
+
+	# Near-camera fade: never a head or eye sphere filling the local view
+	var cam := get_viewport().get_camera_3d() if is_inside_tree() else null
+	if cam:
+		_near_alpha = alpha_for_camera_distance(global_position.distance_to(cam.global_position))
+		_apply_alpha(_zoom_alpha * _near_alpha)
 
 	# Blink animation
 	_update_blink(delta)
@@ -154,13 +168,19 @@ func update_position(pos_x: float, pos_y: float, pos_z: float) -> void:
 ## Fade the avatar based on its owner's camera zoom (distance from the table): fully opaque when
 ## zoomed out, a faint ghost when fully zoomed in, so it doesn't hide the spot they're inspecting.
 func update_zoom(zoom: float) -> void:
-	_apply_alpha(alpha_for_zoom(zoom))
+	_zoom_alpha = alpha_for_zoom(zoom)
+	_apply_alpha(_zoom_alpha * _near_alpha)
 
 
 ## Maps a camera zoom-distance (metres) to the avatar's alpha (GHOST_ALPHA..1.0). Static + pure.
 static func alpha_for_zoom(zoom: float) -> float:
 	var t: float = clampf((zoom - FADE_ZOOM_MIN) / (FADE_ZOOM_FULL - FADE_ZOOM_MIN), 0.0, 1.0)
 	return lerpf(GHOST_ALPHA, 1.0, t)
+
+
+## Maps the distance to the local camera (metres) to an alpha (0..1). Static + pure.
+static func alpha_for_camera_distance(dist: float) -> float:
+	return clampf((dist - NEAR_HIDE_M) / (NEAR_FULL_M - NEAR_HIDE_M), 0.0, 1.0)
 
 
 ## Apply an alpha (0..1) to the whole avatar — every mesh via GeometryInstance3D.transparency, plus
