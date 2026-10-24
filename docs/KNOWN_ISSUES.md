@@ -19,8 +19,8 @@ not there yet and what to watch for. The full done / in-progress / planned break
 - **Some rules still stay by hand.** Even on Automatic, the rules the game lists at start under
   "apply by hand" are yours — and the ones that say "may" (Teleport/Ethereal movement, Hit & Run,
   Guerrilla/Harassing) are deliberately left to you for now. In an online Automatic room the turn
-  is enforced on each machine itself: the host does not yet police an out-of-turn action, so a guest
-  can still drag a unit off turn and the host corrects it by hand. The battle log names every rule
+  is enforced on each machine, and the host refuses an out-of-turn activation message (an out-of-turn
+  drag snaps back). The battle log names every rule
   it applies — or asks you to apply it.
 - **Solo against NACHTMAHR is the automated baseline.** When an army is AI-controlled the game
   resolves activations, dice, wounds, morale, terrain effects and hundreds of special rules for
