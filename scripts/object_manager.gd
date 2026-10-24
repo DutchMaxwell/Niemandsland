@@ -1551,6 +1551,32 @@ func _reset_drag_state() -> void:
 ##     exempts a charge); Phase 1 alone leaves same-unit / mutually-dragged stacks, which
 ##     this closes.
 ## Local-only geometry; no RPC of its own (the standard move broadcast carries it).
+## While true, _resolve_drop_separation stays silent (no drop_separated): preview_drop_landing runs
+## the real resolver only to read where the bases would settle, then puts every node back.
+var _drop_preview: bool = false
+
+
+## Where a drop NOW would leave each dragged node: the unchanged drop resolver (enemy snap, 1" push,
+## anti-stacking) runs, x/z and the settled y (as _stop_dragging reads it) are read, and every node
+## goes back to its position. Returns {node: Vector3}. Display only: nothing is emitted or synced.
+func preview_drop_landing() -> Dictionary:
+	var movable := _movable_selection()
+	var before: Dictionary = {}
+	for obj in movable:
+		before[obj] = obj.global_position
+	_drop_preview = true
+	_resolve_drop_separation()
+	_drop_preview = false
+	var out: Dictionary = {}
+	for obj in movable:
+		var y: float = obj.global_position.y - drag_lift_height if obj is RigidBody3D \
+			else _surface_y_under(obj.global_position, _dragged_body_rids(), _drag_probe_top_y)
+		out[obj] = Vector3(obj.global_position.x, y, obj.global_position.z)
+	for obj in movable:
+		obj.global_position = before[obj]
+	return out
+
+
 func _resolve_drop_separation() -> void:
 	var army := get_node_or_null("/root/Main/OPRArmyManager")
 	if army == null or not army.has_method("get_all_game_units"):
@@ -1609,7 +1635,7 @@ func _resolve_drop_separation() -> void:
 
 	# Tutorial seam: report the 1" rule actually engaging on this drop (enemy contact snap /
 	# other-unit push). Listeners other than the tutorial ignore it.
-	if separated_applied:
+	if separated_applied and not _drop_preview:
 		drop_separated.emit(true)
 
 
