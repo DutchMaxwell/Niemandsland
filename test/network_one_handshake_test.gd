@@ -7,6 +7,17 @@ const NetworkManagerScript := preload("res://scripts/network_manager.gd")
 const GUEST := 2
 
 
+## The host checks below need the tree's default offline peer (id 1, `is_server()`), but the tree's
+## MultiplayerAPI outlives a suite: an earlier one that ran `disconnect_game()` leaves the peer null
+## (network_manager_test before this suite failed both announce cases). Set it fresh around each test.
+func before_test() -> void:
+	get_tree().get_multiplayer().multiplayer_peer = OfflineMultiplayerPeer.new()
+
+
+func after_test() -> void:
+	get_tree().get_multiplayer().multiplayer_peer = OfflineMultiplayerPeer.new()
+
+
 ## Records what would go on the wire instead of needing a relay transport.
 class RecordingManager extends "res://scripts/network_manager.gd":
 	var sent: Array = []
