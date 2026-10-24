@@ -1127,9 +1127,9 @@ def _manifest_base_overrides() -> dict[str, dict[str, Any]]:
 
 
 def _normalize_unit(s: str) -> str:
-    """model_library.gd:_normalize_unit — lowercase, -/_ folded to spaces,
-    space repeats collapsed; both sides of the manifest lookup."""
-    t = s.strip().lower().replace("-", " ").replace("_", " ")
+    """model_library.gd:_normalize_unit — lowercase, apostrophes dropped,
+    -/_ folded to spaces, space repeats collapsed; both sides of the manifest lookup."""
+    t = s.strip().lower().replace("'", "").replace("\u2019", "").replace("-", " ").replace("_", " ")
     while "  " in t:
         t = t.replace("  ", " ")
     return t

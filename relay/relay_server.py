@@ -281,6 +281,7 @@ class RelayServer:
         self.connections: dict[ServerConnection, Peer] = {}
         self.ip_connection_counts: dict[str, int] = {}
         self.stats = Stats(os.environ.get("RELAY_STATS_PATH", ""))
+        self._closing: set = set()  # background closes of taken-over sockets (held so they are not GC'd)
 
     def generate_room_code(self) -> str:
         """Generate a cryptographically random room code.
@@ -371,7 +372,10 @@ class RelayServer:
             token = msg.get("token", "")
             if not isinstance(token, str):
                 token = ""
-            await self._handle_join_room(websocket, code, ip, token)
+            takeover = msg.get("takeover", 0)
+            if not isinstance(takeover, int) or isinstance(takeover, bool):
+                takeover = 0
+            await self._handle_join_room(websocket, code, ip, token, takeover)
         elif msg_type == "list_rooms":
             await self._handle_list_rooms(websocket)
         elif msg_type == "get_stats":
@@ -439,11 +443,12 @@ class RelayServer:
             "type": "room_created",
             "code": code,
             "peer_id": 1,
+            "takeover": True,  # capability: a rejoin may take over its still-registered old socket
         }))
         logger.info("Room %s created", code)
 
     async def _handle_join_room(
-        self, websocket: ServerConnection, code: str, ip: str, token: str = ""
+        self, websocket: ServerConnection, code: str, ip: str, token: str = "", takeover: int = 0
     ) -> None:
         """Join an existing room by code."""
         # Check if this connection already has a room
@@ -456,6 +461,20 @@ class RelayServer:
         code = code.upper().strip()
 
         room = self.rooms.get(code)
+        # Seat takeover (bug 4): a client whose link went silent rejoins BEFORE the heartbeat cut removed its
+        # old socket. Its old peer id plus the same token prove the seat is its own: detach the old socket as
+        # if it had closed, then the join below hands the seat back (a guest's id via `departed`, the host via
+        # the rehost branch). Id AND token, because two instances on one machine can share a token.
+        stale = room.peers.get(takeover) if room and takeover > 0 else None
+        if stale is not None and token and stale.token == token:
+            logger.info("Peer %d in room %s takes over its silent old socket", takeover, code)
+            self.connections.pop(stale.websocket, None)
+            await self._detach_peer(stale)
+            # Not awaited: close() on a stalled flow waits for close_timeout and would delay this reply.
+            closing = asyncio.create_task(stale.websocket.close(4000, "Replaced by reconnect"))
+            self._closing.add(closing)
+            closing.add_done_callback(self._closing.discard)
+            room = self.rooms.get(code)  # a host alone closed its room; the client re-creates the code
         if not room:
             self.stats.join_failed("room_not_found")
             await self._send_error(websocket, "Room not found")
@@ -492,6 +511,7 @@ class RelayServer:
             await websocket.send(json.dumps({
                 "type": "room_rejoined_host",
                 "peer_id": 1,
+                "takeover": True,
             }))
             for guest in list(room.peers.values()):
                 if guest.peer_id == 1:
@@ -556,6 +576,7 @@ class RelayServer:
         await websocket.send(json.dumps({
             "type": "room_joined",
             "peer_id": peer_id,
+            "takeover": True,
         }))
 
         # Notify existing peers about the new peer
@@ -775,7 +796,10 @@ class RelayServer:
         peer = self.connections.pop(websocket, None)
         if not peer:
             return
+        await self._detach_peer(peer)
 
+    async def _detach_peer(self, peer: Peer) -> None:
+        """Take a peer out of its room as if its socket closed (a socket close, or a seat takeover)."""
         room = self.rooms.get(peer.room_code)
         if not room:
             return

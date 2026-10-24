@@ -232,3 +232,34 @@ func test_automatic_table_game_over_names_the_players(timeout := 120000) -> void
 func test_a_removed_tick_game_over_names_the_players(timeout := 120000) -> void:
 	_untick_after_a_ticked_game()
 	await _assert_game_over_by_name("(b) tick removed")
+
+
+# --- 4. The activation line ---
+
+## The radial activation's battle-log line names the unit's player the way the other player lines do
+## ("Objective 1 seized by P1 (Alpha Company)"): "Rifles activated by P1 (Alpha Company)" — never
+## "(you)" (a table without an AI seat has no "you" at its shared screen), never nested parentheses.
+func _assert_activation_by_name(path: String) -> void:
+	var army := OPRApiClient.OPRArmy.new()
+	army.name = "Alpha Company"
+	_main.opr_army_manager.armies[1] = army
+	var p1 := _reg(1, "Rifles", -10.0, 3)
+	var start: int = _main.battle_log.entries().size()
+	await _activate(p1)
+	var text := _log_from(start)
+	var lines: PackedStringArray = text.split("\n")
+	assert_bool(lines.has("Rifles activated by P1 (Alpha Company)")).override_failure_message(
+		"%s: the activation line is not 'Rifles activated by P1 (Alpha Company)':\n%s" % [path, text]).is_true()
+	assert_str(text).override_failure_message("%s: the activation line says 'you' without a tick:\n%s" % [path, text]) \
+		.not_contains("(you)")
+	assert_bool(text.contains("((") or text.contains("))")).override_failure_message(
+		"%s: nested parentheses in the log:\n%s" % [path, text]).is_false()
+
+
+func test_automatic_table_activation_names_the_player(timeout := 120000) -> void:
+	await _assert_activation_by_name("(a) Automatic table")
+
+
+func test_a_removed_tick_activation_names_the_player(timeout := 120000) -> void:
+	_untick_after_a_ticked_game()
+	await _assert_activation_by_name("(b) tick removed")
