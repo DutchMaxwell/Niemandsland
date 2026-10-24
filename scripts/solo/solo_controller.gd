@@ -386,6 +386,8 @@ func move_act_seq() -> int:
 var last_move_budget_in: float = 0.0
 var last_dangerous_dice: int = 0   # Bug 23: Tough-weighted dice for the move's dangerous tests (p.12)
 var last_move_toll_note: String = ""   # stall-escalation crossing verdict of the last move ("" = none), logged by execute_intent
+## > 0 while preview_intent runs the executor in a sandbox: no broadcast, no recorded decision, no move record.
+var _preview_depth := 0
 var _player_move := false   # true while execute_intent runs a player-sourced intent: the toll gate never overrides it
 ## NML-230: model indices whose gate correction was clamped to the band slack during the LAST
 ## _finalize_placement call — the accepted gate call's count feeds the one-line battle log.
@@ -7277,7 +7279,8 @@ func _apply_model_positions(models: Array, new_positions: Array) -> void:
 			batch.append(node.global_position.x)
 			batch.append(node.global_position.y)
 			batch.append(node.global_position.z)
-	if network_manager != null and not batch.is_empty() and network_manager.has_method("broadcast_move_batch"):
+	if _preview_depth == 0 and network_manager != null and not batch.is_empty() \
+			and network_manager.has_method("broadcast_move_batch"):
 		network_manager.broadcast_move_batch(batch)
 
 
@@ -7428,7 +7431,7 @@ func _plan_positions(unit: GameUnit, models: Array, positions: Array, delta: Vec
 			charge_arc_in, avoid_difficult, avoid_dangerous, allow_contact],
 		"model_pos": mpos, "delta": mdelta, "walls": walls_in, "grid": sampled["grid"],
 		"allow_contact": allow_contact, "board_in": board_in, "opts": opts, "terrain_cb": terrain_type_at}
-	var mrec := MoveRecorder.begin(mctx) if not dry_run else {}
+	var mrec := MoveRecorder.begin(mctx) if not dry_run and _preview_depth == 0 else {}
 	var _prof_mv_t0 := BattleSim.prof_t0() if not dry_run else 0
 	var trace_before: bool = MovementPlanner.trace_on
 	if dry_run:
@@ -8757,6 +8760,8 @@ func _draw_traced(lo: int, hi: int, tag: String) -> int:
 
 
 func record_decision(rec: Dictionary) -> void:
+	if _preview_depth > 0:
+		return
 	if decision_sink.is_valid():
 		decision_sink.call(rec)
 	decision_log.append(rec)
