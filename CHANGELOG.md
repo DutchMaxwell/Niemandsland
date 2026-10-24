@@ -6,60 +6,203 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 
 ## [Unreleased]
 
-### Added
+## [0.3.14.0-alpha] — DRAFT (date set at release)
+
+A big one: combat effects at the table, rules automation for two human players (also online), four
+solo difficulty levels, eight more missions, a rebuilt Map Layout editor, a dark-panel look across
+the game, new graphics for every biome, a longer Game School and a stronger NACHTMAHR.
+
+### Added — combat & effects
 - **Combat effects, on by default.** What a resolved attack or cast did is now visible at the table,
   drawn only from the rules' own results and never deciding one:
   - **marks** over the models (wound ticks, a blood marker on a casualty, hits and saves over the unit);
   - **shots** per weapon type along the exact line of sight: tracers, machine-gun bursts, arrows and
-    javelins on an arc, flamer gouts, energy bolts, beams, and lobbed shells with a Blast ring;
-  - **falls**: blood, sparks and oil, or bone dust, and a falling model;
+    javelins on an arc, flamer gouts, energy bolts, beams, and lobbed shells with a Blast ring (indirect
+    fire arcs over walls, with no chalk line);
+  - **falls**: blood, sparks and oil, or bone dust, and a falling model with a small shake;
   - **spells**: a charge at the caster and a release per element (arcane, fire, lightning, frost,
-    shadow), or a collapse on a fail;
-  - a lightning **aura** on the Frog-Mage.
+    shadow), runes, a meteor and chain lightning, or a collapse on a fail; a lightning **aura** on the
+    Frog-Mage.
   - **Gore** (Off / Normal / Extra) sets how bloody it gets, and one **Combat Effects** switch in the
     graphics settings turns everything off.
-  - Every player in an online game sees the same effects once; nothing replays after a load or rejoin.
-- **Automodus: Charge, Advance & Shoot and Rush on the solo radial.** Pick the verb, click the enemy —
-  the engine moves your unit along a legal path and rolls the attack, saves and morale for you, the
-  same executor NACHTMAHR's own activations run through. A suggested target is named in the log; a
-  panel switch (on after your first executed intent) skips the save-roll confirmation. See
-  `KNOWN_ISSUES.md` for this version's limits. (NML-202)
+  - Every player in an online game sees the same effects once; nothing replays after a load, a rejoin
+    or an undo/redo. (#1459–#1465, #1511–#1539, #1557–#1583)
+- **Calm Mode**, an accessibility switch in Settings (off by default): one click turns down combat
+  effects, idle motion, tilt-shift, the selection glow, rain, lightning and grass sway; switching it
+  off restores exactly what you had chosen. (#1672, #1679)
+- **Skirmish jumps and falls resolve when you drop a model** that jumps or falls. (#1540)
+
+### Added — rules automation & the solo opponent
+- **Rules automation for two players at one table.** A table with no AI can switch Rules
+  automation on for both players, from the in-game chip: the game rolls and applies the rules it
+  knows for each side, the round ends by itself, the turn chip follows and a hand-over line names who
+  is next. Out-of-turn actions are refused, and an out-of-turn drag snaps back. A list at the start
+  of the game names every rule that stays yours to apply by hand; manual corrections are logged. The
+  game names the roller by player, not "You". (#1708, #1710, #1711, #1715, #1717, #1718, #1721, #1729,
+  #1730, #1733, #1734, #1736, #1739, #1740, #1753, #1766, #1767, #1781, #1836)
+- **Rules automation online.** The two players agree on the level (one asks, the other confirms;
+  either can drop back to Manual at once). One unit per side activates in turn, the host owns the turn
+  and advances the round, each player rolls on their own tray, and the applied rule lines show on
+  **both** screens. Ambush and the round-start recovery run in turn order. A player who drops while on
+  turn keeps the turn; the table waits. The host is asked once, when the second player sits down,
+  whether to play with rules automation; the switch has its own "Rules" section in the left panel
+  that appears after any army import (also online), and the multiplayer texts name the real level.
+  An online spell asks the other player, on their own machine, whether to interfere. (#1768–#1775,
+  #1777, #1778, #1783, #1831, #1836, #1837, #1842)
+- **More rules have a human door** on tables without an AI: Mend, Breath Attack and Storm of X
+  are offered to the player, and both sides are asked for their Ambushers. (#1743, #1752, #1762, #1765)
 - **No AI without its tick.** NACHTMAHR only takes an army you mark as AI. A plain two-player game
-  never silently hands a side over to it.
-- **Automatic rules on a two-player table.** A table with no AI can switch Rules automation on for both
-  players: the game rolls and applies the rules it knows for each side, and a list at the start of the
-  game names every rule that stays yours to apply by hand.
-- **Automatic rules online.** The same agreed automation now works in a room: the two players agree on
-  the level (one asks, the other confirms; either can drop back to Manual at once). One unit per side
-  activates in turn — the host owns the turn, each player rolls their own dice on their own tray, the
-  applied rule lines show on **both** screens, and the round ends when both sides are spent. A player
-  who drops while on turn keeps the turn; the table waits.
-- **Lessons run by hand.** Entering a Game School lesson pins the table to Manual — the lesson teaches
-  the dice tray and manual wounds — and hands your own setting back when the lesson ends.
+  never silently hands a side over to it: Start Deployment, the game-over verdict, roll labels, the
+  activation line ("activated by P1 (Army)") and other texts on such a table name the players, never
+  NACHTMAHR. (#1719, #1830, #1834, #1835, #1841)
+- **Four selectable difficulty levels** — Dämmerung, Zwielicht, Finsternis and Albtraum — with your
+  choice remembered between games. Albtraum, the strongest level, is the default; the game log names
+  the opponent actually used. (#1126, #1127)
+- **A stronger NACHTMAHR:** at the strongest level it searches a wider set of options and weighs
+  units by their army-list cost; it plans its movement per model, including climbing container ledges
+  up to 3", and sees painted terrain. Its stall check, Dangerous-ground decision and battle-log
+  intent line were corrected. (#1207, #1484, #1485, #1600, #1674, #1678, #1706, #1728, #1788–#1791,
+  #1797)
+- **macOS can use the neural opponent on Apple Silicon and Intel.** Builds with a working rules core
+  and model use it at the strongest level. A build without the core, or a load failure, falls back to
+  the decision tree; check the engine named in the game log. (#1133, #1136)
+
+### Added — missions
+- **Eight more missions:** Relic Hunt, Capture & Hold, The Raid, Ambush, Last Stand, VIP Escort,
+  The Rescue and Smash & Grab. Setup follows each mission's roles, deployment zones, reserves and
+  round limit; escort, extraction, hidden markers and returning defenders follow the chosen mission.
+  Attack & Defend setup also shows points advice. (#1214, #1328, #1409–#1427)
+- **Carried relics stay with their carriers and survive save/load.** Players can choose legal drop
+  positions; The Rescue restricts carrying to the attacker. Solo saves also retain the mission and
+  scoring state, and owned markers follow the deployment-side choice. (#1119, #1124, #1193, #1195,
+  #1198, #1423, #1426)
+
+### Added — learning
+- **Game School gains new chapters** on Activate & Move, Shooting, Melee, Morale & Shaken, Terrain
+  and Objectives, plus a spell lesson and a finale against NACHTMAHR. Lessons play against the
+  gentlest difficulty. (#1639, #1677, #1684, #1690, #1696, #1697, #1701, #1704)
+- **Trial by Fire: First Steps** teaches camera controls, squad selection, movement and measuring
+  across six steps on a practice table. It can be replayed; the older box-select lesson now requires a
+  real selection box. (#1122, #1178)
+- **Lessons run by hand.** Entering a Game School lesson pins the table to Manual (the lessons teach
+  the dice tray and manual wounds) and hands your own setting back when the lesson ends. (#1780)
+- **"What's new" sheet.** After an update the start menu shows a short bilingual (English / Deutsch)
+  release sheet once; Help & feedback reopens it any time. (#1584, #1651, #1653)
+
+### Added — terrain, map builder & graphics
+- **Ruined Borderland in one click** under Auto-Generate Layout: a complete table with ruins, woods
+  and worn paths, laid as one undo step. The table's biome decides the look of woods, ruins, paths and
+  wall-foot scatter; the theme follows a biome change in place and is refused while models stand where
+  its pieces would go. (#1536, #1543, #1556, #1562–#1564, #1567, #1609–#1612, #1616)
+- **Free-standing solid terrain in every biome:** place a stone-grey block, slab-roof storehouse or
+  heather outcrop from the shelf, with soft contact shadows. The storehouse and outcrop support
+  their detailed downloadable models, with bundled simpler looks available. (#1474, #1491,
+  #1503–#1505, #1507, #1508)
+- **A rebuilt Map Layout editor** with clear editing modes, a docked terrain shelf, placement ghost,
+  guidance and themed file dialogs. The wheel zooms the editor; it opens in Place mode. Clear terrain
+  and Load ask first; loading and size changes preserve an undo step; undo also covers objectives
+  and custom-zone vertices. (#1263–#1266, #1268–#1297)
+- **New looks for every biome:** a sunset rig with a mood-aware grade, a readable full-moon Night
+  mood, desert sand with more contrast, biome-true ground dressing and worn paths, muted felt army
+  trays, a walnut table frame, light islands (broken-cloud sunlight) at Sunset, rain that soaks the
+  ground, miniature-scale reflections, volumetric table mist and global illumination (High and Ultra), and
+  a biome landscape and sky around the table on Ultra. Tilt-shift is now a zoom-fade that is weaker on
+  Medium and above. These effects are display only; line of sight and rules are unchanged.
+  (#1551, #1552, #1593–#1597, #1599, #1602, #1605, #1606, #1611, #1612, #1617, #1636, #1670, #1699, #1732, #1741, #1757)
+- **Menu trees load in the background**, with temporary billboards while their models are prepared.
+  (#1099)
+
+### Added — models
+- **Saurians and Vampiric Undead** pick up many more unit, weapon and mount names (Gecko Champion
+  options, Pterodactyl and Ripjawdactyl mounts, Palanquins, the Queztalcoatl mount, dragon, winged and
+  beast mounts for the Vampire Master and Ghoul Champion, wings and weapons), and a unit can show per-model variety from a second sculpt. The Mummified, Titan
+  Lords, Rift Daemons and Machine Cults books resolve to their published art. (#1386–#1429, #1442,
+  #1506, #1553, #1555, #1591, #1592, #1598, #1614, #1620, #1656, #1657, #1798–#1802, #1810, #1818,
+  #1822, #1823, #1840)
+
+Unit names with an apostrophe now find their 3D model. (#1840)
+
+### Changed — UI
+- **A consistent dark-panel style across the game:** tool rail, top bar, game menu, unit cards, battle
+  log, chat, settings, import/download windows, multiplayer dialogs and tutorial overlays. Combat
+  prompts, spell selection, interference and tokens share the same controls. (#1138–#1146,
+  #1224–#1259, #1435–#1454)
+- **Connection status stays visible**, including a failed reconnect. Esc opens the game menu when
+  there is nothing else to close. Regiment frontage uses **B**; **Shift+F** clears sight/range fans.
+  (#1140, #1310, #1316, #1440)
+- **Activate from the unit card**, and spend the once-per-game Speed Feat from the radial menu.
+  Crowded radial menus keep key actions accessible; dropdowns no longer select an entry on the
+  opening click. (#1134, #1135, #1147, #1149, #1150, #1194, #1253–#1255, #1313)
+
+### Changed — rules
+- **Combat modifiers are combined before the final limit is applied.** For example, Defense 2+
+  in cover against AP(1) saves on 2+. Shooting range modifiers use the nearest base-edge gap.
+  (#1202, #1250, #1251)
+- **Counter-Attack strikes first when charged** and its aliases reduce Impact; Thrust's hit bonus
+  applies only on a charge. Shaken strike-back, melee wipes, joined-hero morale, Fearless and Mind
+  Control resolve more consistently. (#1113, #1114, #1172, #1179–#1184, #1189)
+- **Deadly respects Tough models and wound allocation.** Printed Unstoppable and Bane correctly bypass
+  Regeneration. (#1115, #1132, #1159, #1190, #1230)
+- **Corrected special-rule timing and dice:** Rapid Rush affects Rush only; Teleport is a separate
+  reposition; Rapid Charge Mark extends charge reach and lands on the marked enemy; Piercing Spotter,
+  Precision Spotter, Piercing Target, Surprise Attack and Crossing Attack follow their individual
+  triggers. (#1197, #1200, #1204, #1208, #1209, #1216, #1223, #1231, #1232, #1673)
+- **Cover requires models to be fully inside the terrain**, and a joined hero sees through its own
+  squad. Stationary AI activations no longer trigger movement-only Dangerous tests. (#1117, #1129,
+  #1131)
+- **Climbing spends movement distance**, including up and down ruin floors (a step over 3" is
+  refused); the mouse wheel selects which floor of a multi-storey ruin a drag lands on. Melee also
+  checks its 4" vertical reach, and the 3" coherency allowance uses real elevation instead of a drag
+  lift. (#1154, #1155, #1157, #1160)
 
 ### Fixed
-- **A Tough(6+) monster leaves blood, not an oil-and-fire stain.** The battlefield stain treated every
-  Tough(6+) unit as a vehicle, so a Carnivo-Rex burned like a tank. Machine and undead keywords now
-  decide; a big unit stays a vehicle only when nothing marks it as a creature.
-- **The Vampiric Undead Butcher Titan stands on the rulebook's giant base, not a vehicle oval.** Army
-  Forge gives it no base, and the size fallback read the keyword-less Tough(18) giant as a vehicle: a
-  105×170 mm oval that scaled the model to about 21 cm. It now gets the 120×92 mm oval the AoF rules
-  give giants (Advanced Rules v3.5.1 p.4); every other unit named Titan keeps its base.
-- **Unit coherency's 3" allowance now triggers on real elevation, not a drag lift.** The
-  threshold was 3" tall, so a model on a 2.5" container roof and its mate on the ground
-  counted as "same level" and had to stand 1" apart, which the wall face makes
-  impossible; it is now GF p.11's own 1" floor, and a drag pickup is never mistaken for
-  standing on elevated terrain. (NML-972, phase B1)
-- **Melee "Who Can Strike" also measures 4" vertically (GF/AoF p.9).** A unit standing on
-  a 6" ruin floor could strike, and be struck by, infantry at the wall foot. (NML-972,
-  phase B1)
-- **A human move pays its climb cost, and the player can pick a ruin floor.** Climbing a
-  container or a ruin's floor slab now spends its height (up and down, GF p.11), a step
-  over 3" is refused under the movement limit, and the mouse wheel steps which floor of a
-  multi-storey ruin a drag lands on. (NML-972, phase B1)
+- **Co-op defensive rolls go to the unit's owner.** Utility buffs also work in human-vs-human rooms,
+  and attacker-side spell grants no longer benefit or get consumed by the enemy target. (#1100,
+  #1116, #1125)
+- **Free terrain has the correct type** for sight and movement aids in every mode; solid pieces keep
+  their type through saves and multiplayer sync. Deleted free pieces stop blocking sight, movement and
+  placement, stay out of saved files, and undo restores them, including on multiplayer peers; an
+  invalid drop returns to its starting position. (#1443, #1460, #1467, #1483, #1489, #1509, #1538,
+  #1566)
+- **A Tough(6+) monster leaves blood, not an oil-and-fire stain**, and the Vampiric Undead Butcher
+  Titan stands on the rulebook's giant base instead of an oversized vehicle oval. (#1403)
+- **Graphics presets keep their intended render scale** when switching from a dressed biome to
+  Performance; game start reapplies window settings. (#1445, #1447, #1453, #1455, #1456)
+- **Leaving a game while a prompt is pending no longer freezes the exit**, and a rebuild of the
+  tabletop trees no longer doubles them. (#1761, #1794)
+- **Safer map editing:** clearing zones reaches the table, custom zones need three points, and empty
+  paint strokes no longer clutter the undo history. (#1289, #1291, #1293–#1297)
+- **Duplicated army models become independent copies**, and the unit-card Wounds button respects
+  Tough(1). (#1120, #1121, #1123)
+- **The host rejects an out-of-turn activation message** in a room with rules automation. (#1783)
 
-### Added
-- **Trial by Fire: First Steps** teaches the camera, squad selection, movement and measuring on a small table; completion follows the sixth step and the chapter can be replayed.
+- **Leaving to the menu ends the online session**, and the other player is told at once instead of
+  waiting for a timeout; a Game School lesson or saved game can be opened right afterwards. (#1832)
+- **Online joins are lighter and steadier:** one handshake per join, no rebuild of an unchanged
+  biome, and a "Ready" that survives a rejoin. A connection that goes silent reconnects on its own
+  within seconds and keeps your seat; a failed reconnect no longer raises a script error.
+  (#1833, #1846, #1847, #1848)
+- **The battlemap loads without a freeze** after a table load (it used to stall the game for
+  about 2.5 seconds). (#1845)
+- **Loading a save keeps every army tray's name** instead of showing "Army". (#1839)
+- **The other player's avatar never covers your army trays.** (#1843)
+- **Linux players get the rules core again:** the shipped Linux library is built against an older
+  system library, so current distributions (for example Fedora 43) can load it instead of silently
+  playing without it. (#1827)
+
+### Internal
+- The release job publishes the platform zips under fixed names, and CI is faster (self-healing CDN
+  cache, no re-download of the live model library). (#1668, #1676, #1687)
+- The relay's `/stats` names the serving machine. (#1669)
+- Rules-core speed: fat LTO, faster hashing and distance kernels in the route planner and search make
+  AI games cheaper to compute, with identical results. (#1633, #1635, #1647-#1649, #1680, #1688,
+  #1695, #1700, #1803-#1806, #1808, #1809, #1811-#1817, #1819-#1821)
+- Tooling for AI training and evaluation (teacher-data recorder, experiment knobs, lab tools); no
+  player-facing effect. (#1640–#1646, #1658–#1667, #1685–#1694, #1713–#1731, #1742–#1751, #1759–#1760,
+  #1763–#1764, #1784–#1787)
+- Test and CI work: a check that the shipped Linux library stays within the system-library floor
+  (#1827); a test-order fix in the multiplayer handshake suite (#1844).
+- Repository hygiene: internal working files, codenames and private paths removed. (#1755, #1758)
 
 ## [0.3.13.1-alpha] — 2026-09-25
 
