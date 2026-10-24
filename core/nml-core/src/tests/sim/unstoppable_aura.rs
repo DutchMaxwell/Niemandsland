@@ -65,7 +65,7 @@ use super::*;
         let (mut mst, mut mstatics) = buff_line();
         mstatics[0].utility_buffs = statics[0].utility_buffs.clone();
         mst.positions[2] = vec![[2.5 * IN2M, 0.0, 0.0]];
-        mst.radii[2] = vec![IN2M];
+        Rc::make_mut(&mut mst.radii)[2] = vec![IN2M];
         mst.wounds[2] = vec![1];
         mst.alive[2] = 1;
         mstatics[2].model_count = 1;

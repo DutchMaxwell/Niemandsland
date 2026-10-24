@@ -86,7 +86,7 @@ impl Candidate {
 /// can be shown to be earned rather than accidental. Every shipping call uses
 /// `Tuning::default()`, which is the GDScript's own pair of numbers; the tests
 /// perturb one at a time and count the candidates that then stop matching.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Tuning {
     /// `AiPlanner.SAFE_LINE_COVER_BONUS_IN` — 6.0 in the game.
     pub cover_bonus_in: f64,
@@ -315,7 +315,7 @@ pub fn best_shoot(
                 continue;
             }
         }
-        if !state.sees(i, state.key(e)) || (tuning.shoot_los && !state.los_clear(i, e)) {
+        if !state.sees_idx(i, e) || (tuning.shoot_los && !state.los_clear(i, e)) {
             continue;
         }
         let ut = &statics[state.roster.profile[e]];
@@ -352,7 +352,7 @@ pub fn ranked_shoots(
     let us = &statics[state.roster.profile[i]];
     let mut rows: Vec<(usize, f64)> = Vec::new();
     for e in enemy_keys_tuned(state, i, tuning.target_units) {
-        if !state.sees(i, state.key(e)) || (tuning.shoot_los && !state.los_clear(i, e)) {
+        if !state.sees_idx(i, e) || (tuning.shoot_los && !state.los_clear(i, e)) {
             continue;
         }
         let ut = &statics[state.roster.profile[e]];
@@ -415,7 +415,7 @@ pub(crate) fn best_shoot_from(
     let us = &statics[state.roster.profile[unit]];
     let (mut best, mut best_ev) = (None, 0.0f64);
     for e in enemy_keys_tuned(state, unit, tuning.target_units) {
-        if !state.sees(unit, state.key(e)) || (tuning.shoot_los && !state.los_clear(unit, e)) {
+        if !state.sees_idx(unit, e) || (tuning.shoot_los && !state.los_clear(unit, e)) {
             continue;
         }
         let d = if tuning.range_edge {
@@ -520,7 +520,7 @@ pub fn advance_shoots(
     let (advance_in, _) = crate::sim::live_bands_of(statics, state, i);
     let mut out = Vec::new();
     for e in enemy_keys_tuned(state, i, tuning.target_units) {
-        if !state.sees(i, state.key(e)) || (tuning.shoot_los && !state.los_clear(i, e)) {
+        if !state.sees_idx(i, e) || (tuning.shoot_los && !state.los_clear(i, e)) {
             continue;
         }
         let gap = if tuning.range_edge {
@@ -828,6 +828,20 @@ struct Threat<'a> {
 /// first, stable on ties by frontier order; empty when even charge safety is
 /// already lost or there is nothing to walk toward.
 pub fn safe_advances(state: &State, terrain: &Terrain, i: usize, tuning: Tuning) -> Vec<Candidate> {
+    let dests = crate::safe_memo::run(state, terrain, i, tuning, || {
+        safe_advances_fresh(state, terrain, i, tuning).iter().filter_map(|c| c.dest).collect()
+    });
+    dests.into_iter().map(|d| advance_candidate(state, i, d)).collect()
+}
+
+fn advance_candidate(state: &State, i: usize, dest: [f64; 3]) -> Candidate {
+    let mut c = Candidate::new(state.key(i), ADVANCE);
+    c.dest = Some(dest);
+    c.patient = true;
+    c
+}
+
+pub(crate) fn safe_advances_fresh(state: &State, terrain: &Terrain, i: usize, tuning: Tuning) -> Vec<Candidate> {
     let centre = geom::centre(&state.positions[i]);
     let mut best_d = f64::INFINITY;
     let mut goal: V3 = [0.0, 0.0, 0.0];
@@ -928,10 +942,7 @@ pub fn safe_advances(state: &State, terrain: &Terrain, i: usize, tuning: Tuning)
             if ft <= 0.001 {
                 continue; // the old `best_t > 0.001` guard: a null move is no candidate
             }
-            let mut c = Candidate::new(state.key(i), ADVANCE);
-            c.dest = Some(geom::to_f64(geom::add(centre, geom::mul(dir, ft))));
-            c.patient = true;
-            out.push(c);
+            out.push(advance_candidate(state, i, geom::to_f64(geom::add(centre, geom::mul(dir, ft)))));
         }
         return out;
     }

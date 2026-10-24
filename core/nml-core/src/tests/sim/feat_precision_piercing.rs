@@ -142,7 +142,7 @@ use super::*;
         st.alive[2] = 1;
         st.wounds[2] = vec![1];
         st.positions[2] = vec![[1.2 * IN2M, 0.0, 0.0]];
-        st.radii[2] = vec![IN2M];
+        Rc::make_mut(&mut st.radii)[2] = vec![IN2M];
         let shot = strike(&mut st, &statics);
         assert!(
             shot.rolls.iter().any(|r| r.kind == "defense" && r.target == 5),
@@ -174,7 +174,7 @@ use super::*;
     fn below_epoch_seven_nothing_fires_and_the_replay_is_byte_identical() {
         let (mut stf, statics) = fp_line(6, "ghostly_undead", &["Precision Feat"]);
         let (stc, _) = fp_line(6, "ghostly_undead", &["Precision Feat"]);
-        stf.feats_used[0].push("Precision Feat".to_string());
+        Rc::make_mut(&mut stf.feats_used)[0].push("Precision Feat".to_string());
         let (next, shot) = run_shoot(&stf, &statics, 6);
         assert!(
             attack_targets(&shot).iter().all(|&x| x == 4),

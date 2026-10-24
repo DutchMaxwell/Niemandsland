@@ -79,7 +79,7 @@ use super::*;
     fn precision_fighter_buff_reaches_the_melee_to_hit_target() {
         let (mut st, mut statics) = buff_line();
         st.positions[2] = vec![[2.5 * IN2M, 0.0, 0.0]];
-        st.radii[2] = vec![IN2M];
+        Rc::make_mut(&mut st.radii)[2] = vec![IN2M];
         st.wounds[2] = vec![1];
         st.alive[2] = 1;
         statics[2].model_count = 1;
@@ -133,7 +133,7 @@ use super::*;
         far.positions[2] = vec![[30.0 * IN2M, 0.0, 0.0]];
         far.alive[2] = 1;
         far.wounds[2] = vec![1];
-        far.radii[2] = vec![IN2M];
+        Rc::make_mut(&mut far.radii)[2] = vec![IN2M];
         let (next, _) = run_buff(&far, &statics, &buff_action(None), 11);
         assert!(next.buffs.iter().all(|v| v.is_empty()));
 
@@ -245,7 +245,7 @@ use super::*;
     fn granted_unstoppable_mark_strikes_an_evasive_target_at_the_unmodified_quality_in_melee() {
         let (mut st, mut statics) = buff_line();
         st.positions[2] = vec![[2.5 * IN2M, 0.0, 0.0]];
-        st.radii[2] = vec![IN2M];
+        Rc::make_mut(&mut st.radii)[2] = vec![IN2M];
         st.wounds[2] = vec![1];
         st.alive[2] = 1;
         statics[2].model_count = 1;

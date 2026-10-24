@@ -43,7 +43,7 @@ use super::*;
             [0.02 * IN2M, 0.0, 0.0],
             [0.04 * IN2M, 0.0, 0.0],
         ];
-        st.radii[0] = vec![IN2M; 3];
+        Rc::make_mut(&mut st.radii)[0] = vec![IN2M; 3];
         st.wounds[0] = vec![1; 3];
         st.alive[0] = 3;
         let mut a = gs_bearer(rules_epoch);

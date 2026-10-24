@@ -48,7 +48,7 @@ use super::*;
         let (mut st, _) = dangerous_line();
         for j in 1..4 {
             st.positions[j] = vec![];
-            st.radii[j] = vec![];
+            Rc::make_mut(&mut st.radii)[j] = vec![];
             st.wounds[j] = vec![];
             st.alive[j] = 0;
         }
@@ -191,7 +191,7 @@ use super::*;
         let (mut st, _) = dangerous_line();
         for j in 1..4 {
             st.positions[j] = vec![];
-            st.radii[j] = vec![];
+            Rc::make_mut(&mut st.radii)[j] = vec![];
             st.wounds[j] = vec![];
             st.alive[j] = 0;
         }
@@ -299,7 +299,7 @@ use super::*;
         let (mut st, _) = dangerous_line();
         for j in 1..4 {
             st.positions[j] = vec![];
-            st.radii[j] = vec![];
+            Rc::make_mut(&mut st.radii)[j] = vec![];
             st.wounds[j] = vec![];
             st.alive[j] = 0;
         }

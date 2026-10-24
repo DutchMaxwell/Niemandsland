@@ -13,7 +13,7 @@ use super::*;
             let f = |v: &serde_json::Value| v.as_f64().unwrap();
             st.positions[0] = ms.iter().map(|m| [f(&m["pos"][0]), f(&m["pos"][1]), f(&m["pos"][2])]).collect();
             st.wounds[0] = ms.iter().map(|m| m["wounds"].as_i64().unwrap()).collect();
-            st.radii[0] = vec![f(&c["base_mm"]) / 2000.0; ms.len()];
+            Rc::make_mut(&mut st.radii)[0] = vec![f(&c["base_mm"]) / 2000.0; ms.len()];
             st.alive[0] = ms.len() as i64;
             let mut names: Vec<String> = Vec::new();
             let mut kits = Vec::new();
@@ -31,7 +31,7 @@ use super::*;
                 kits.push(crate::state::Kit { weapons, equipment: e, wounds_max: x });
             }
             st.kits = vec![Rc::new(kits)];
-            (st.positions[1], st.radii[1], st.wounds[1], st.alive[1]) = (vec![], vec![], vec![], 0);
+            (st.positions[1], Rc::make_mut(&mut st.radii)[1], st.wounds[1], st.alive[1]) = (vec![], vec![], vec![], 0);
             let want: Vec<usize> =
                 c["expected"].as_array().unwrap().iter().map(|x| x.as_u64().unwrap() as usize).collect();
             assert_eq!(crate::casualty::chain_casualty_order(&st, 0, None), Some(want), "{}", c["name"]);
@@ -48,10 +48,10 @@ use super::*;
             let mut st = four_unit_line();
             let s = 0.0574; // 32 mm bases, 1-inch edge gaps
             st.positions[0] = vec![[0.0, 0.0, 0.0], [s, 0.0, 0.0], [2.0 * s, 0.0, 0.0]];
-            (st.wounds[0], st.radii[0], st.alive[0]) = (vec![1, 1, 1], vec![0.016; 3], 3);
+            (st.wounds[0], Rc::make_mut(&mut st.radii)[0], st.alive[0]) = (vec![1, 1, 1], vec![0.016; 3], 3);
             let k = |w: Vec<u16>| crate::state::Kit { weapons: w, equipment: 0, wounds_max: 1 };
             st.kits = vec![Rc::new(vec![k(vec![1]), k(vec![0]), k(vec![0])])]; // 1 = the launcher
-            (st.positions[1], st.radii[1], st.wounds[1], st.alive[1]) = (vec![], vec![], vec![], 0);
+            (st.positions[1], Rc::make_mut(&mut st.radii)[1], st.wounds[1], st.alive[1]) = (vec![], vec![], vec![], 0);
             st
         };
         let kit_ids = |st: &State| st.kits[0].iter().map(|k| k.weapons[0]).collect::<Vec<_>>();
@@ -77,7 +77,7 @@ use super::*;
         let board = forest_bar_board();
         let mut st = four_unit_line();
         st.positions[0] = vec![[4.0 * IN2M, 0.0, 0.0], [7.0 * IN2M, 0.0, 0.0], [8.0 * IN2M, 0.0, 0.0]];
-        (st.wounds[0], st.radii[0], st.alive[0]) = (vec![2, 1, 1], vec![0.016; 3], 3);
+        (st.wounds[0], Rc::make_mut(&mut st.radii)[0], st.alive[0]) = (vec![2, 1, 1], vec![0.016; 3], 3);
         let k = |w: u16, x: i64| crate::state::Kit { weapons: vec![w], equipment: 0, wounds_max: x };
         st.kits = vec![Rc::new(vec![k(1, 2), k(0, 1), k(0, 1)])];
         let at = |groups: &[i64]| takedown_pick_cover_after(&st, 0, Cover::Board(&board), false, groups);
@@ -98,10 +98,10 @@ use super::*;
             let mut st = four_unit_line();
             let s = 0.0574; // 32 mm bases, 1-inch edge gaps
             st.positions[0] = vec![[0.0, 0.0, 0.0], [s, 0.0, 0.0], [2.0 * s, 0.0, 0.0]];
-            (st.wounds[0], st.radii[0], st.alive[0]) = (vec![1, 1, 1], vec![0.016; 3], 3);
+            (st.wounds[0], Rc::make_mut(&mut st.radii)[0], st.alive[0]) = (vec![1, 1, 1], vec![0.016; 3], 3);
             let k = |w: Vec<u16>| crate::state::Kit { weapons: w, equipment: 0, wounds_max: 1 };
             st.kits = vec![Rc::new(vec![k(vec![1]), k(vec![0]), k(vec![0])])]; // 1 = the launcher
-            (st.positions[1], st.radii[1], st.wounds[1], st.alive[1]) = (vec![], vec![], vec![], 0);
+            (st.positions[1], Rc::make_mut(&mut st.radii)[1], st.wounds[1], st.alive[1]) = (vec![], vec![], vec![], 0);
             crate::sim::land_wounds_with(&mut st, 0, 1, exact_at(e));
             st.kits[0].iter().map(|k| k.weapons[0]).collect::<Vec<_>>()
         };

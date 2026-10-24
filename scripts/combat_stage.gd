@@ -5,7 +5,7 @@ extends CanvasLayer
 ## and makes the SOLO resolution WAIT there. Auto-beat (GraphicsSettings.combat_stage_hold_s,
 ## default 2.5 s), click on the card = next phase now, SPACE = pause to read, ◂/▸ browse the
 ## RUNNING activation (older history lives in the battle log's expandable lines). Solo-only
-## by design — the grill ruled MP out: there is no automation to pace there. Floats stay in
+## by design — the grill ruled MP out: the stage paces the solo AI, and an online table has no AI seat to pace. Floats stay in
 ## parallel: they anchor AT the model, the stage explains centrally, same event stream.
 ## Headless is inert unless a test forces it; batch sweeps (selfplay) are always inert.
 

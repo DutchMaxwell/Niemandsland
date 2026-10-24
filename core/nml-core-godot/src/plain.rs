@@ -450,7 +450,7 @@ pub fn build_state(
         wound_frac: Vec::with_capacity(n),
         positions: Vec::with_capacity(n),
         wounds: Vec::with_capacity(n),
-        radii: Vec::with_capacity(n),
+        radii: Rc::new(Vec::with_capacity(n)),
         kits: Vec::with_capacity(n),
         kit_names: Vec::with_capacity(n),
         mods: Vec::with_capacity(n),
@@ -458,6 +458,7 @@ pub fn build_state(
         attached: Rc::new(Vec::new()),
         attached_to: Rc::new(Vec::new()),
         los: Vec::with_capacity(n),
+        sees_tab: None,
         bands: Vec::with_capacity(n),
         shroud: Vec::with_capacity(n),
         charge_no_difficult: Vec::with_capacity(n),
@@ -486,17 +487,17 @@ pub fn build_state(
             round: dint(&sub_dict(plain, "sidestep_budget"), "round", 0),
             used: dint(&sub_dict(plain, "sidestep_budget"), "used", 0),
         },
-        limited_used: vec![Vec::new(); n],
+        limited_used: Rc::new(vec![Vec::new(); n]),
         // Wave 3 — the Piercing-Tag ledger keys start empty/false: the Godot
         // host never writes them (the recorder stamps neither key yet).
         piercing_tag_used: vec![false; n],
         piercing_tag_markers: vec![0; n],
         piercing_tag_persistent: vec![false; n],
         piercing_spot_round: vec![-1; n],
-        spot_markers: vec![0; n], tag_markers: vec![0; n], spot_round: vec![-1; n], precision_used: vec![Vec::new(); n],
+        spot_markers: vec![0; n], tag_markers: vec![0; n], spot_round: vec![-1; n], precision_used: Rc::new(vec![Vec::new(); n]),
         // Precision marker trio (epoch 61): the same fresh-game shape doctrine.rs:181-183 builds.
-        storm_used: vec![Vec::new(); n],
-        feats_used: vec![Vec::new(); n],
+        storm_used: Rc::new(vec![Vec::new(); n]),
+        feats_used: Rc::new(vec![Vec::new(); n]),
         los_pairs,
     };
     let mut mask: Vec<u32> = Vec::with_capacity(n);
@@ -546,7 +547,7 @@ pub fn build_state(
         st.wound_frac.push(dnum(&u, "wound_frac", 0.0));
         st.positions.push(darr(&u, "positions").iter_shared().map(|v| vec3(&v)).collect());
         st.wounds.push(darr(&u, "wounds").iter_shared().map(|v| int(&v)).collect());
-        st.radii.push(darr(&u, "radii").iter_shared().map(|v| num(&v)).collect());
+        Rc::make_mut(&mut st.radii).push(darr(&u, "radii").iter_shared().map(|v| num(&v)).collect());
         // Tray-exact S1: the table's capture does not write `kits` yet (S2) — none carried.
         st.kits.push(Rc::new(Vec::new()));
         st.kit_names.push(Rc::new(Vec::new()));
@@ -626,6 +627,7 @@ pub fn build_state(
             fold_ledger(&mut st, ui, l, rules_epoch, alive, !host_keys[ui].is_empty(), arrived);
         }
     }
+    st.rebuild_sees();
     Ok(Captured { state: st, extras, mask, has_los, dropped })
 }
 

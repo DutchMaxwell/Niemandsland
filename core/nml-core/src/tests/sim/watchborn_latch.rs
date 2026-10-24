@@ -42,7 +42,7 @@ fn watchborn_volley_line() -> (State, Vec<UnitStatic>) {
         vec![[14.0 * IN2M, 12.0 * IN2M, 0.0]],
     ];
     st.wounds = vec![vec![1], vec![1], vec![1]];
-    st.radii = vec![vec![IN2M], vec![IN2M], vec![IN2M]];
+    st.radii = Rc::new(vec![vec![IN2M], vec![IN2M], vec![IN2M]]);
     (st, vec![
         UnitStatic {
             ctx: Ctx { quality: 4, defense: 4, tough: 1, models: 1, ..Default::default() },
@@ -201,7 +201,7 @@ fn a_charge_over_nine_inches_carries_the_pick_into_the_melee_fold() {
     st.attached_to = Rc::new(vec![None, None]);
     st.positions = vec![vec![[0.0, 0.0, 0.0]], vec![[14.0 * IN2M, 0.0, 0.0]]];
     st.wounds = vec![vec![1], vec![1]];
-    st.radii = vec![vec![IN2M], vec![IN2M]];
+    st.radii = Rc::new(vec![vec![IN2M], vec![IN2M]]);
     let statics = vec![
         UnitStatic {
             ctx: Ctx { quality: 4, defense: 4, tough: 1, models: 1, ..Default::default() },

@@ -37,7 +37,7 @@ use super::*;
         st.player = player;
         st.alive = alive;
         st.positions = positions;
-        st.radii = radii;
+        st.radii = Rc::new(radii);
         st.wounds = wounds;
         st.attached = Rc::new(vec![vec![], vec![], vec![], vec![]]);
         st.attached_to = Rc::new(vec![None; 4]);

@@ -216,3 +216,24 @@ func test_send_rate_cap_stays_under_relay_limit() -> void:
 	var steady := RelayMultiplayerPeer.MAX_SENDS_PER_SECOND
 	var burst := RelayMultiplayerPeer.SEND_BURST_MAX
 	assert_that(steady + burst < 300.0).is_true()
+
+
+## Regression: a reconnect that runs past RECONNECT_TIMEOUT emits relay_reconnect_failed from inside _poll, and the
+## game's handler leaves the room right there (internet_lobby.disconnect_internet_game -> leave_room -> _close), which
+## nulls _ws inside the emit. _poll then called get_ready_state() on the closed socket: SCRIPT ERROR on every timed-out
+## reconnect (acceptance run 23.10.). The poll must return cleanly instead.
+func test_timed_out_reconnect_whose_handler_leaves_never_touches_the_closed_socket() -> void:
+	var peer = RelayMultiplayerPeer.new()
+	peer._room_code = "ABC123"
+	peer._ws = WebSocketPeer.new()
+	peer._is_reconnecting = true
+	peer._reconnect_start_ms = Time.get_ticks_msec() - int(RelayMultiplayerPeer.RECONNECT_TIMEOUT * 1000.0) - 1000
+	var reasons: Array = []
+	peer.relay_reconnect_failed.connect(func(reason: String) -> void:
+		reasons.append(reason)
+		peer.leave_room())   # what the game does on a failed reconnect
+	@warning_ignore("redundant_await")   # the interface declares is_success() plainly; the impl is a coroutine
+	await assert_error(func() -> void: peer._poll()).is_success()
+	assert_array(reasons).is_equal(["timed out"])
+	assert_object(peer._ws).is_null()
+	assert_that(peer.get_connection_status()).is_equal(MultiplayerPeer.CONNECTION_DISCONNECTED)

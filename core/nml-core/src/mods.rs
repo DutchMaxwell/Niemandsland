@@ -29,7 +29,7 @@ use crate::state::State;
 /// `defense_mod` / `ap_mod` are carried since seam 4 step 1 (epoch 7) — the
 /// RECORD shape only; their READS are step 2 (PR 2), so nothing here folds
 /// them yet.
-#[derive(Debug, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct LiveMod {
     pub hit_mod: i64,
     pub casting_mod: i64,

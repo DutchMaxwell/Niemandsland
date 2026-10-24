@@ -40,6 +40,14 @@
 //! chosen action and `+ 50000` for the runner-up. This module never invents a
 //! seed: a guessed dice stream is a silent lie.
 
+// The Python module allocates through mimalloc instead of the system malloc:
+// glibc malloc/free was ~12 % of the CPU samples of a self-play tranche, and
+// the switch makes the same games ~9 % cheaper in CPU. Only allocation speed
+// changes: no outcome reads an address or an allocation order. The Godot crate
+// keeps the system allocator.
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -720,6 +728,8 @@ pub struct Core {
     /// wires it in only when the CALLED act's `statics.policy_mode` asks for
     /// `Order`, the same contract `net`/`fit_mode` already keep.
     policy_net: Option<PolicyHarness>,
+    /// `playout_memo` generation: fresh at every `set_header` / `load_net`, 0 before the first header.
+    memo_gen: u64,
 }
 
 impl Core {
@@ -854,6 +864,11 @@ impl Core {
         if let Some(vocab) = vocab {
             self.rows.vocab = vocab;
         }
+        // A new header is a new game (terrain, knobs, roster): the Theta* memo starts empty and armed.
+        nmlcore::mv::theta_memo::begin_game();
+        nmlcore::safe_memo::begin_game();
+        nmlcore::mv::plain_memo::begin_game();
+        self.memo_gen = nmlcore::playout_memo::begin_game();
         Ok(())
     }
 
@@ -1393,6 +1408,7 @@ impl Core {
             })
             .collect();
         out.inner.los = rows;
+        out.inner.rebuild_sees();
         out.inner.los_pairs = Some(Rc::new(m));
         out
     }
@@ -1565,6 +1581,7 @@ impl Core {
         policy.root_seams = root;
         policy.fit = self.net.as_ref();
         let roll = Rollout::new(policy, self.knobs);
+        let _memo = nmlcore::playout_memo::enter(self.memo_gen, self.terrain.uid(), &roll.policy, &state.inner);
         let mut sc = Scratch::default();
         let mut rng = GodotRng::new(sig);
         match arb_full_playout(&roll, &state.inner, &cand, player, &mut rng, &mut sc) {
@@ -1799,6 +1816,7 @@ impl Core {
             fit.blend = b;
         }
         self.net = Some(fit);
+        self.memo_gen = nmlcore::playout_memo::begin_game();
         to_py(py, &shape)
     }
 
@@ -2290,6 +2308,7 @@ fn load(repo_root: &str) -> Core {
         rows: RowEncoder::new(repo_root),
         net: None,
         policy_net: None,
+        memo_gen: 0,
     }
 }
 

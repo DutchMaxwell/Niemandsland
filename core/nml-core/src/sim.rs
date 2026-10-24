@@ -385,7 +385,7 @@ pub fn land_wounds_with(state: &mut State, ti: usize, mut left: i64, exact: bool
             state.kit_remove(ti, s);
             // radii stay aligned with positions or the base-edge measure lies.
             if s < state.radii[ti].len() {
-                state.radii[ti].remove(s);
+                Rc::make_mut(&mut state.radii)[ti].remove(s);
             }
             if !order.is_empty() {
                 order.remove(0);
@@ -460,7 +460,7 @@ fn land_takedown_groups(state: &mut State, ti: usize, shot: &mut ShootResult) {
             remove_position_or_log(state, ti, pick, "land_takedown_groups");
             state.kit_remove(ti, pick);
             if pick < state.radii[ti].len() {
-                state.radii[ti].remove(pick);
+                Rc::make_mut(&mut state.radii)[ti].remove(pick);
             }
         }
         state.alive[ti] = state.positions[ti].len() as i64;
@@ -545,7 +545,7 @@ pub fn land_deadly_wounds(state: &mut State, ti: usize, unsaved: i64, deadly_x: 
             state.kit_remove(m, best);
             // radii stay aligned with positions or the base-edge measure lies.
             if !state.radii[m].is_empty() {
-                state.radii[m].remove(best);
+                Rc::make_mut(&mut state.radii)[m].remove(best);
             }
             if epoch67 && best < max_of[ci].len() {
                 max_of[ci].remove(best);
@@ -938,7 +938,7 @@ pub(crate) fn tray_reanimation(
         let back = cost.min(left).max(1);
         next.wounds[u].insert(0, back);
         next.positions[u].insert(0, spot);
-        next.radii[u].insert(0, DEFAULT_BASE_RADIUS_M);
+        Rc::make_mut(&mut next.radii)[u].insert(0, DEFAULT_BASE_RADIUS_M);
         next.kits_drop(u); // the revived body's kit is unknown: this unit falls back to slot order
         next.alive[u] = next.positions[u].len() as i64;
         left -= back;
@@ -1251,7 +1251,7 @@ pub(crate) fn tray_strafing(
     // absorb, land, Deadly's per-model leg, the post-volley morale die — so
     // the tray stream stays the table's own order.
     for (b, keep, _, _) in &parts {
-        mark_spent_limited(&statics[next.roster.profile[*b]].strafe_shoot, keep, &mut next.limited_used[*b]);
+        mark_spent_limited(&statics[next.roster.profile[*b]].strafe_shoot, keep, &mut next.limited_used, *b);
     }
     let w = shot.absorb(r);
     if !seams.tray_exact {
@@ -1292,7 +1292,7 @@ pub(crate) fn tray_storm_attack(
                 .collect();
             // no enemy in reach — the once-per-game is NOT spent
             if targets.is_empty() { continue; }
-            next.storm_used[b].push(spec.name.clone());
+            Rc::make_mut(&mut next.storm_used)[b].push(spec.name.clone());
             let faces = tray.roll(spec.dice.max(1) as usize);
             shot.rolls.push(crate::dice::Roll {
                 kind: "attack", count: spec.dice, target: spec.trigger,
@@ -2292,7 +2292,7 @@ fn tray_precision_markers(
                     ..UtilityBuff::default()
                 };
                 let Some(ti) = utility_targets(statics, next, bearer, &probe, seams).into_iter().next() else { continue; };
-                next.precision_used[bearer].push(b.name.clone());
+                Rc::make_mut(&mut next.precision_used)[bearer].push(b.name.clone());
                 let tn = statics[next.roster.profile[ti]].name.clone();
                 if b.bonus == "per_placed_marker" {
                     // TARGET — the +X is a PERSISTENT record: every friendly
@@ -4098,7 +4098,7 @@ fn ctx_of_melee(us: &UnitStatic, state: &State, i: usize, rules_epoch: u32) -> C
 }
 
 /// Scratch buffers so a threat sweep allocates once per call, not per pair.
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Scratch {
     pub keep: Vec<usize>,
     pub attacks: Vec<i64>,
@@ -4267,11 +4267,11 @@ fn drop_spent_limited(profiles: &[ShootProfile], used: &[String], sc: &mut Scrat
 /// `SoloController.mark_limited_used` (solo_controller.gd:7700-7708,
 /// main.gd:3207-3208): called AFTER the dice actually rolled, win or lose —
 /// every Limited profile that fired is spent for the rest of the game.
-fn mark_spent_limited(profiles: &[ShootProfile], keep: &[usize], used: &mut Vec<String>) {
+fn mark_spent_limited(profiles: &[ShootProfile], keep: &[usize], ledger: &mut Rc<Vec<Vec<String>>>, unit: usize) {
     for &i in keep {
         let p = &profiles[i];
-        if p.limited && !used.iter().any(|n| n == &p.name) {
-            used.push(p.name.clone());
+        if p.limited && !ledger[unit].iter().any(|n| n == &p.name) {
+            Rc::make_mut(ledger)[unit].push(p.name.clone());
         }
     }
 }
@@ -4593,7 +4593,7 @@ fn expected_melee_morale(
         drop_carried(state, li);
         state.wounds[li].clear();
         state.positions[li].clear();
-        state.radii[li].clear();
+        Rc::make_mut(&mut state.radii)[li].clear();
         state.kits_drop(li);
         state.alive[li] = 0;
     } else {
@@ -4754,7 +4754,7 @@ fn strike_phase(
                 && !next.feats_used[*mi].iter().any(|n| n == "Piercing Feat")
             {
                 att.feat_ap_bonus += uf.piercing_feat_ap;
-                next.feats_used[*mi].push("Piercing Feat".to_string());
+                Rc::make_mut(&mut next.feats_used)[*mi].push("Piercing Feat".to_string());
                 shot.log.push(format!("[feat] Piercing Feat spent by {}", uf.name));
             }
         }
@@ -4838,7 +4838,7 @@ fn strike_phase(
     }
     for (mi, sc, _) in &parts {
         let melee = &statics[next.roster.profile[*mi]].melee;
-        mark_spent_limited(melee, &sc.keep, &mut next.limited_used[*mi]);
+        mark_spent_limited(melee, &sc.keep, &mut next.limited_used, *mi);
     }
     let mut caused = r.caused;
     // rules-wave3-growthmark (epoch 6) — Regenerative Strength: wounds this
@@ -5111,7 +5111,7 @@ fn tray_morale(
             drop_carried(state, i);
             state.wounds[i].clear();
             state.positions[i].clear();
-            state.radii[i].clear();
+            Rc::make_mut(&mut state.radii)[i].clear();
             state.kits_drop(i);
             state.alive[i] = 0;
         }
@@ -5257,6 +5257,75 @@ fn in_unit_group(state: &State, key_i: usize, oi: usize, include_host: bool) -> 
         || (include_host && state.attached_to[key_i] == Some(oi))
 }
 
+/// The obstacle models of one `spacing_fraction` call in capture order, plus one box per unit: `spans[g] = (end, [min x, max x,
+/// min z, max z] of the centres, largest radius + buffer)`. `legal` skips a whole unit when on one axis the gap between its box and
+/// the box of the mover models exceeds `r + own_r + SPACING_SKIP_MARGIN_M`: `length(flat)` is at least `|flat.x|` and `|flat.z|`,
+/// and the margin dominates the f32 error of the subtraction (< 6e-5 m inside the +-1e3 m envelope), so no pair of that unit can
+/// compare below. Boxes outside the envelope (or not finite) and units 64 and up are never skipped.
+#[derive(Default)]
+struct SpacingObstacles {
+    list: Vec<(geom::V3, f64)>,
+    spans: Vec<(usize, [f32; 4], f64)>,
+}
+
+const SPACING_SKIP_MARGIN_M: f64 = 1e-3;
+const SPACING_ENVELOPE_M: f32 = 1.0e3;
+
+impl SpacingObstacles {
+    /// Close the unit whose models were pushed since the last call (a unit without models adds no span).
+    fn end_unit(&mut self) {
+        let from = self.spans.last().map_or(0, |s| s.0);
+        let (mut b, mut rm) = ([f32::INFINITY, f32::NEG_INFINITY, f32::INFINITY, f32::NEG_INFINITY], f64::NEG_INFINITY);
+        for (c, r) in &self.list[from..] {
+            (b, rm) = ([b[0].min(c[0]), b[1].max(c[0]), b[2].min(c[2]), b[3].max(c[2])], rm.max(*r));
+        }
+        if self.list.len() > from {
+            self.spans.push((self.list.len(), b, rm));
+        }
+    }
+
+    /// Bit `g` is clear when unit `g` (< 64) cannot touch any mover model (`own` = f32 centre, radius) moved by `step`.
+    fn live(&self, own: &[(geom::V3, f64)], step: geom::V3) -> u64 {
+        let (mut lo, mut hi, mut ro) = ([f32::INFINITY; 2], [f32::NEG_INFINITY; 2], f64::NEG_INFINITY);
+        for (p, r) in own {
+            let c = geom::add(*p, step);
+            (lo, hi, ro) = ([lo[0].min(c[0]), lo[1].min(c[2])], [hi[0].max(c[0]), hi[1].max(c[2])], ro.max(*r));
+        }
+        let inside = |v: &[f32]| v.iter().all(|x| x.abs() <= SPACING_ENVELOPE_M);
+        let mut live = u64::MAX;
+        if inside(&lo) && inside(&hi) {
+            for (g, (_, b, rm)) in self.spans.iter().enumerate().take(64) {
+                let far = |gap: f32| f64::from(gap) > rm + ro + SPACING_SKIP_MARGIN_M;
+                if inside(b) && (far(b[0] - hi[0]) || far(lo[0] - b[1]) || far(b[2] - hi[1]) || far(lo[1] - b[3])) {
+                    live &= !(1u64 << g);
+                }
+            }
+        }
+        live
+    }
+
+    /// `true` when no mover model moved by `step` is within `r + own_r` of any obstacle model.
+    fn legal(&self, own: &[(geom::V3, f64)], step: geom::V3) -> bool {
+        let live = self.live(own, step);
+        for (p, own_r) in own {
+            let q = geom::add(*p, step);
+            let mut from = 0;
+            for (g, (end, _, _)) in self.spans.iter().enumerate() {
+                if g >= 64 || live >> g & 1 == 1 {
+                    for (oc, r) in &self.list[from..*end] {
+                        let flat: geom::V3 = [q[0] - oc[0], 0.0, q[2] - oc[2]];
+                        if (geom::length(flat) as f64) < r + own_r {
+                            return false;
+                        }
+                    }
+                }
+                from = *end;
+            }
+        }
+        true
+    }
+}
+
 /// `BattleSim._spacing_fraction` battle_sim.gd:550-620 — the largest fraction
 /// of `delta` that leaves every mover model clear of every OTHER alive unit's
 /// models (horizontal distance only, the `control_gap_in` convention).
@@ -5285,7 +5354,7 @@ fn spacing_fraction(state: &State, mi: usize, delta: geom::V3, ci: Option<usize>
         return 1.0;
     }
     let buffer_m = UNIT_SPACING_IN * IN2M;
-    let mut obstacles: Vec<(geom::V3, f64)> = Vec::new();
+    let mut obstacles = SpacingObstacles::default();
     for oi in 0..state.units() {
         if in_unit_group(state, mi, oi, true) {
             continue;
@@ -5300,26 +5369,17 @@ fn spacing_fraction(state: &State, mi: usize, delta: geom::V3, ci: Option<usize>
         let radii = &state.radii[oi];
         for (k, pos) in state.positions[oi].iter().enumerate() {
             let r = radii.get(k).copied().unwrap_or(DEFAULT_BASE_RADIUS_M);
-            obstacles.push((geom::to_f32(*pos), r + o_buffer));
+            obstacles.list.push((geom::to_f32(*pos), r + o_buffer));
         }
+        obstacles.end_unit();
     }
-    if obstacles.is_empty() {
+    if obstacles.list.is_empty() {
         return 1.0;
     }
-    let legal = |t: f64| -> bool {
-        let step = geom::mul(delta, t);
-        for (i, own) in state.positions[mi].iter().enumerate() {
-            let own_r = state.radii[mi].get(i).copied().unwrap_or(DEFAULT_BASE_RADIUS_M);
-            let q = geom::add(geom::to_f32(*own), step);
-            for (oc, r) in &obstacles {
-                let flat: geom::V3 = [q[0] - oc[0], 0.0, q[2] - oc[2]];
-                if (geom::length(flat) as f64) < r + own_r {
-                    return false;
-                }
-            }
-        }
-        true
-    };
+    let own: Vec<(geom::V3, f64)> = (state.positions[mi].iter().enumerate())
+        .map(|(i, p)| (geom::to_f32(*p), state.radii[mi].get(i).copied().unwrap_or(DEFAULT_BASE_RADIUS_M)))
+        .collect();
+    let legal = |t: f64| obstacles.legal(&own, geom::mul(delta, t));
     if legal(1.0) {
         return 1.0;
     }
@@ -5429,9 +5489,9 @@ fn best_spell_target(
         let mut reach: Option<(usize, f64)> = None;
         for &(ou, _) in origins {
             let seen = if ou == si {
-                state.sees(si, state.key(ti)) && los[ti]
+                state.sees_idx(si, ti) && los[ti]
             } else {
-                state.sees(ou, state.key(ti)) && state.los_clear(ou, ti)
+                state.sees_idx(ou, ti) && state.los_clear(ou, ti)
             };
             if !seen {
                 continue;
@@ -5990,6 +6050,7 @@ fn volley_ev(
     sc: &mut Scratch,
     rules_epoch: u32,
     reach_shave: Option<f64>,
+    cache: &mut ReplyCtxCache,
 ) -> (f64, i64) {
     let us = &statics[state.roster.profile[si]];
     let ut = &statics[state.roster.profile[ti]];
@@ -6002,11 +6063,56 @@ fn volley_ev(
     if sc.keep.is_empty() && (state.casts[si] <= 0 || !us.is_caster) {
         return (0.0, 0);
     }
-    let att = ctx_live(ctx_of(us, state, si), statics, state, si, false, rules_epoch);
-    let def = ctx_live(ctx_of(ut, state, ti), statics, state, ti, false, rules_epoch);
-    let shooting = shoot_ev(&us.shoot, &sc.keep, &sc.attacks, &att, &def, d);
-    let (sp_ev, sp_cost) = spell_ev_of(us.is_caster, &us.spells, state.casts[si], &def, d);
+    if !cache.on {
+        cache.slots.clear();
+    }
+    let ai = cache.slot(us, statics, state, si, rules_epoch);
+    let di = cache.slot(ut, statics, state, ti, rules_epoch);
+    let (att, def) = (&cache.slots[ai].1, &cache.slots[di].1);
+    let shooting = shoot_ev(&us.shoot, &sc.keep, &sc.attacks, att, def, d);
+    let (sp_ev, sp_cost) = spell_ev_of(us.is_caster, &us.spells, state.casts[si], def, d);
     (shooting + sp_ev, sp_cost)
+}
+
+/// The volley's live root ctx of each unit, built at most once inside ONE `reply_threat_core` call.
+///
+/// `ctx_live(ctx_of(unit), melee = false)` is a pure function of `(statics, state, unit, rules_epoch)`, and all four are
+/// fixed for the whole call (`state` is a shared borrow, `rules_epoch` a parameter), so the second request for the same
+/// unit returns exactly the value a rebuild would. The attacker and the defender build are the same function of the unit
+/// (the role only says where the result is read), so the key is the unit alone. A call prices ~12 builds over ~6
+/// distinct units. The cache lives on the caller's stack and is dropped with it: nothing crosses a call.
+///
+/// The one effect `ctx_live` has besides its value is the `NML_TRACE_RULES` stderr line; with tracing on the cache is
+/// bypassed (the slots are cleared before every volley) so every build logs exactly as before.
+struct ReplyCtxCache {
+    slots: Vec<(usize, Ctx)>,
+    on: bool,
+}
+
+impl ReplyCtxCache {
+    fn new(on: bool) -> Self {
+        ReplyCtxCache { slots: Vec::new(), on }
+    }
+
+    /// The index in `slots` of unit `i`'s live ctx: found, or built now (the first use computes what it always did).
+    fn slot(&mut self, us: &UnitStatic, statics: &[UnitStatic], state: &State, i: usize, rules_epoch: u32) -> usize {
+        if self.on {
+            if let Some(p) = self.slots.iter().position(|(k, _)| *k == i) {
+                return p;
+            }
+        }
+        if self.slots.capacity() == 0 {
+            self.slots.reserve_exact(8);
+        }
+        self.slots.push((i, ctx_live(ctx_of(us, state, i), statics, state, i, false, rules_epoch)));
+        self.slots.len() - 1
+    }
+}
+
+/// `NML_TRACE_RULES=1`, read once per process (the cache is bypassed while it is on).
+fn trace_rules_on() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var("NML_TRACE_RULES").as_deref() == Ok("1"))
 }
 
 /// `BattleSim.melee_threat` battle_sim.gd:852-853 — `si`'s melee EV onto `ti`,
@@ -6158,7 +6264,21 @@ fn pair_dist_memo(n: usize, e: usize, m: usize, a: &[[f64; 3]], b: &[[f64; 3]]) 
 }
 
 fn reply_threat_core(statics: &[UnitStatic], state: &State, player: i64, rules_epoch: u32, o: ReplyOpts) -> Vec<f64> {
+    reply_threat_core_with(statics, state, player, rules_epoch, o, !trace_rules_on())
+}
+
+/// `reply_threat_core` with the per-call ctx cache switched explicitly (`cache_ctx = false` rebuilds every ctx, the
+/// original behaviour — the reference side of the differential test).
+fn reply_threat_core_with(
+    statics: &[UnitStatic],
+    state: &State,
+    player: i64,
+    rules_epoch: u32,
+    o: ReplyOpts,
+    cache_ctx: bool,
+) -> Vec<f64> {
     let v2 = o.v2;
+    let mut ctxs = ReplyCtxCache::new(cache_ctx);
     let n = state.units();
     let mut incoming = vec![0.0f64; n];
     let mut sc = Scratch::default();
@@ -6184,8 +6304,8 @@ fn reply_threat_core(statics: &[UnitStatic], state: &State, player: i64, rules_e
                 pair_dist_memo(n, e, m, &state.positions[e], &state.positions[m])
             };
             let mut ev = 0.0f64;
-            if state.sees(e, state.key(m)) && los_clear(state, e, m) {
-                ev = volley_ev(statics, state, e, m, d, &mut sc, rules_epoch, o.reach_only.then_some(0.0)).0;
+            if state.sees_idx(e, m) && los_clear(state, e, m) {
+                ev = volley_ev(statics, state, e, m, d, &mut sc, rules_epoch, o.reach_only.then_some(0.0), &mut ctxs).0;
             }
             // T03-T06: off = the fixed 12" / 6" bands on the centre distance; on = the enemy's live bands,
             // the base-edge gap for the charge, and no charge against an Aircraft.
@@ -6199,8 +6319,8 @@ fn reply_threat_core(statics: &[UnitStatic], state: &State, player: i64, rules_e
             if v2 && movable && chargeable && charge_gap <= charge_reach {
                 ev = ev.max(melee_threat_at_epoch(statics, state, e, m, rules_epoch));
             }
-            if v2 && movable && d > adv_in && state.sees(e, state.key(m)) && los_clear(state, e, m) {
-                let after = volley_ev(statics, state, e, m, d - adv_in, &mut sc, rules_epoch, o.reach_only.then_some(adv_in)).0;
+            if v2 && movable && d > adv_in && state.sees_idx(e, m) && los_clear(state, e, m) {
+                let after = volley_ev(statics, state, e, m, d - adv_in, &mut sc, rules_epoch, o.reach_only.then_some(adv_in), &mut ctxs).0;
                 ev = ev.max(after);
             }
             if ev > best_ev {
@@ -6870,6 +6990,25 @@ fn solo_move_grant_delta_in(
 /// DIFFICULT_MOVE_CAP_IN)`, mv/step.rs:691) — after the grant delta, on
 /// every arm, the early static one included.
 pub fn live_bands_of(statics: &[UnitStatic], state: &State, i: usize) -> (f64, f64) {
+    // No-grants shortcut (`ctx_live` takes the same one): every `granted*` read needs a record with a
+    // non-empty `grants_rule` on the joined chain, so with none the move-grant delta is exactly `0.0`
+    // (`x + 0.0` is spelled out to keep the bit pattern) and no terrain debuff is carried (`difficult`
+    // is false). ONE `chain_has_grants` walk replaces the twelve `chain_grant` walks of the full body.
+    if !mods::chain_has_grants(state, i) {
+        let b = &state.bands[i];
+        let stamped = statics
+            .get(state.roster.profile[i])
+            .and_then(|us| us.solo_move_grant_mods.as_ref())
+            .is_some();
+        return if stamped { (b.advance + 0.0, b.rush + 0.0) } else { (b.advance, b.rush) };
+    }
+    live_bands_walk(statics, state, i)
+}
+
+/// The full body of `live_bands_of`: one `solo_move_grant_delta_in` per band and the terrain-debuff
+/// fold, each walking the joined buff chain. Reached only when the chain carries a grant record (and,
+/// in the differential tests, as the reference the shortcut must equal bit for bit).
+pub(crate) fn live_bands_walk(statics: &[UnitStatic], state: &State, i: usize) -> (f64, f64) {
     let b = &state.bands[i];
     // The stamp-first gate: an EMPTY statics slice (score()'s doctrine arm)
     // and every pre-fold or number-less profile answer the static bands here,
@@ -7396,7 +7535,7 @@ fn resolve_with(
     );
     let rapid_mark_in = rapid_charge_mark_bonus_in(statics, &next, si, ci, kind, seams.rules_epoch);
     if feat_in != 0.0 {
-        next.feats_used[si].push(
+        Rc::make_mut(&mut next.feats_used)[si].push(
             statics[pi_s]
                 .speed_feat
                 .as_ref()
@@ -8070,14 +8209,14 @@ fn resolve_with(
                                     if um.precision_feat_hit > 0 && !state.feats_used[mi].iter().any(|n| n == "Precision Feat") {
                                         att.feat_hit_bonus += um.precision_feat_hit;
                                         if !next.feats_used[mi].iter().any(|n| n == "Precision Feat") {
-                                            next.feats_used[mi].push("Precision Feat".to_string());
+                                            Rc::make_mut(&mut next.feats_used)[mi].push("Precision Feat".to_string());
                                             shot.log.push(format!("[feat] Precision Feat spent by {}", um.name));
                                         }
                                     }
                                     if um.piercing_feat_ap > 0 && !state.feats_used[mi].iter().any(|n| n == "Piercing Feat") {
                                         att.feat_ap_bonus += um.piercing_feat_ap;
                                         if !next.feats_used[mi].iter().any(|n| n == "Piercing Feat") {
-                                            next.feats_used[mi].push("Piercing Feat".to_string());
+                                            Rc::make_mut(&mut next.feats_used)[mi].push("Piercing Feat".to_string());
                                             shot.log.push(format!("[feat] Piercing Feat spent by {}", um.name));
                                         }
                                     }
@@ -8091,7 +8230,7 @@ fn resolve_with(
                             // sees the folded name — once per game, never
                             // re-spent.
                             for &mi in &feat_spends {
-                                next.feats_used[mi].push("Takedown Shot".to_string());
+                                Rc::make_mut(&mut next.feats_used)[mi].push("Takedown Shot".to_string());
                             }
                             // Block C5 — Instinctive: the +1 reaches the
                             // shooting fold ONLY when THIS group's target is
@@ -8165,7 +8304,7 @@ fn resolve_with(
                             }
                             for (mi, msc, _) in &parts {
                                 let shoot = &statics[next.roster.profile[*mi]].shoot;
-                                mark_spent_limited(shoot, &msc.keep, &mut next.limited_used[*mi]);
+                                mark_spent_limited(shoot, &msc.keep, &mut next.limited_used, *mi);
                             }
                             // D1-B5a: `absorb`, not `=` — a CHARGE activation
                             // puts several sub-phases into ONE report, and the

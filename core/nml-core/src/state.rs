@@ -18,7 +18,7 @@ use crate::geom;
 use serde::{Deserialize, Serialize};
 
 /// One weapon line of the static profile — `BattleSim._unit_profile` :1304-1330.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Deserialize)]
 pub struct Weapon {
     pub name: String,
     #[serde(default)]
@@ -35,7 +35,7 @@ pub struct Weapon {
 
 /// Everything `resolve`/`score` read off a live `GameUnit`, flattened once per
 /// game — `BattleSim._unit_profile` battle_sim.gd:1304-1330.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Deserialize)]
 pub struct Profile {
     pub unit_id: String,
     pub name: String,
@@ -98,7 +98,7 @@ pub struct Profile {
     pub move_bands: MoveBands,
 }
 
-#[derive(Debug, Clone, Copy, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Copy, Deserialize)]
 pub struct MoveBands {
     #[serde(default)]
     pub advance: f64,
@@ -158,7 +158,7 @@ impl Default for Bands {
 }
 
 /// The immutable per-game profile table; units index into it.
-#[derive(Debug, Default)]
+#[derive(Debug, PartialEq, Default)]
 pub struct Profiles {
     pub list: Vec<Profile>,
     pub index: HashMap<String, usize>,
@@ -307,7 +307,7 @@ impl ProfileCache {
 
 /// Capture order + the profile index per unit. Never written after capture, so
 /// clones share it (`clone_state` battle_sim.gd:463-505 keeps the GameUnit ref).
-#[derive(Debug, Default)]
+#[derive(Debug, PartialEq, Default)]
 pub struct Roster {
     pub keys: Vec<String>,
     pub index: HashMap<String, usize>,
@@ -334,7 +334,7 @@ fn f64_is_zero(v: &f64) -> bool {
 /// weight times the cast chance — a third of a half. A snapshot that has never
 /// been cast on carries plain `0`, which is why the M1-2 port could type the
 /// first three as ints and get away with it.
-#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize)]
+#[derive(Debug, PartialEq, Clone, Copy, Default, Deserialize, Serialize)]
 
 pub struct Mods {
     #[serde(default)]
@@ -362,7 +362,7 @@ pub struct Mods {
     pub rush: f64,
 }
 
-#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
+#[derive(Debug, PartialEq, Clone, Copy, Deserialize, Serialize)]
 pub struct Objective {
     pub pos: [f64; 3],
     #[serde(default)]
@@ -370,7 +370,7 @@ pub struct Objective {
 }
 
 /// Marker-mission state — `SoloController` :33, read by `_score_hand` :368-380.
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, PartialEq, Clone, Deserialize, Serialize)]
 pub struct Marker {
     #[serde(default)]
     pub owned_by: i64,
@@ -426,7 +426,7 @@ impl Default for Marker {
 
 /// The table controller shares eight small-base sidestep attempts per round.
 /// The arena reuses that controller across both seats, so this is one ledger.
-#[derive(Debug, Clone, Copy, Default, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, PartialEq, Clone, Copy, Default, serde::Serialize, serde::Deserialize)]
 pub struct SidestepBudget {
     pub round: i64,
     pub used: i64,
@@ -458,7 +458,7 @@ pub struct Kit {
 /// markers_meta/destroy_seq are deep, roster + profiles + mods_base + los + the
 /// vp blobs are shared `Rc`s, and `reserves` simply does not exist here — the
 /// GDScript clone drops it, so every rollout node reads it as absent.
-#[derive(Debug, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct State {
     pub sidestep_budget: SidestepBudget,
     pub roster: Rc<Roster>,
@@ -500,7 +500,7 @@ pub struct State {
     pub wound_frac: Vec<f64>,
     pub positions: Vec<Vec<[f64; 3]>>,
     pub wounds: Vec<Vec<i64>>,
-    pub radii: Vec<Vec<f64>>,
+    pub radii: Rc<Vec<Vec<f64>>>,
     /// Tray-exact series S1: per living model, what the table's `casualty_order`
     /// reads (`Kit`), slot-aligned with `positions`/`wounds`/`radii`. An EMPTY
     /// list means the state carried none (every record before the key), and so
@@ -523,6 +523,10 @@ pub struct State {
     pub attached: Rc<Vec<Vec<usize>>>,
     pub attached_to: Rc<Vec<Option<usize>>>,
     pub los: Vec<Option<Rc<HashMap<String, bool>>>>,
+    /// Dense n x n copy of `sees` (`sees_tab[i * n + j]` = `sees(i, key(j))`), derived from `los`
+    /// and the roster by `rebuild_sees`; `None` = ask the String rows. Whoever writes `los` or
+    /// grows the roster must call `rebuild_sees` (shared across clones, like `los` itself).
+    pub sees_tab: Option<Rc<Vec<bool>>>,
     /// `BattleSim._los_clear` (battle_sim.gd:666-670) answers for this state, as
     /// a row-major n x n matrix in capture order: `los_pairs[i * n + j]` is true
     /// when the line of fire from unit i to unit j is clear. `None` = the state
@@ -647,7 +651,7 @@ pub struct State {
     /// GF v3.5.1 "Limited" — "may only be used once per game"
     /// (`unit_properties["limited_used"]`, solo_controller.gd:7681-7722).
     /// Per unit, weapon names fired this game; never resets on a later round.
-    pub limited_used: Vec<Vec<String>>,
+    pub limited_used: Rc<Vec<Vec<String>>>,
     /// Wave 3 — `unit_properties["piercing_tag_used"]` (main.gd:17015): the
     /// Piercing-Tag family's once-per-GAME placement stamp, per member (the
     /// acting unit or an attached hero), shared across all three family names
@@ -677,7 +681,7 @@ pub struct State {
     /// Storm Attack family's ONCE-per-game flags, per unit the DISPLAY names
     /// already fired this game (the recorder stamps them off the same flags,
     /// act_recorder.gd `_ledger_of`); never resets on a later round.
-    pub storm_used: Vec<Vec<String>>,
+    pub storm_used: Rc<Vec<Vec<String>>>,
     /// Wave 5 group (b) — the once-per-game FEAT latch, the Storm Attack
     /// shape: per unit, the DISPLAY names already declared this game
     /// (`unit_properties["speed_feat_used_<snake>"]`, solo_controller.gd:1712;
@@ -686,7 +690,7 @@ pub struct State {
     /// `uses_per_game` is once per GAME. The move seam's Speed Feat read
     /// (sim.rs) is gated on this latch and on `EPOCH_7_TABLE_RULES`, so a
     /// record below 7 never carries the key.
-    pub feats_used: Vec<Vec<String>>,
+    pub feats_used: Rc<Vec<Vec<String>>>,
     /// Wave 5 — `unit_properties["teleport_used_this_activation"]` (main.gd
     /// :17456; the beat erases it at its start — reset semantics). The beat's
     /// reads sit behind `EPOCH_8_PLANNER_MENU` (#831's epoch-8 move).
@@ -709,7 +713,7 @@ pub struct State {
     /// "Precision Target" (`unit_properties["precision_tag_used"]` /
     /// `["precision_target_used"]`, the recorder stamps them off the same
     /// flags, act_recorder.gd `_ledger_of`). Never resets on a later round.
-    pub precision_used: Vec<Vec<String>>,
+    pub precision_used: Rc<Vec<Vec<String>>>,
 }
 
 impl State {
@@ -773,6 +777,31 @@ impl State {
             None => true,
             Some(m) => *m.get(other_key).unwrap_or(&true),
         }
+    }
+
+    /// Re-derive `sees_tab` from `los` + roster: the same `unwrap_or(true)` rule as `sees`, once.
+    pub fn rebuild_sees(&mut self) {
+        let n = self.units();
+        self.sees_tab = self.los.iter().any(Option::is_some).then(|| {
+            let mut t = vec![true; n * n];
+            for (i, row) in self.los.iter().enumerate() {
+                if let Some(m) = row {
+                    for j in 0..n {
+                        t[i * n + j] = *m.get(self.key(j)).unwrap_or(&true);
+                    }
+                }
+            }
+            Rc::new(t)
+        });
+    }
+
+    /// `sees(i, key(j))` by index: one table read instead of a String-keyed hash lookup.
+    #[inline]
+    pub fn sees_idx(&self, i: usize, j: usize) -> bool {
+        let Some(t) = &self.sees_tab else { return self.sees(i, self.key(j)) };
+        let v = t[i * self.units() + j];
+        debug_assert_eq!(v, self.sees(i, self.key(j)), "sees_tab is stale: a writer of `los` skipped rebuild_sees");
+        v
     }
 
     /// `BattleSim._los_clear` battle_sim.gd:859-870, read off the recorded

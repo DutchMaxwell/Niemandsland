@@ -207,3 +207,168 @@ func test_dragon_mount_without_a_shipped_bake_keeps_the_weapon_bake() -> void:
 	var army := _hero_on_dragon("Vampire Master", ["Heavy Lance"], "Zombie Dragon")
 	assert_array(manager._unit_model_variant_names(army.units[0], "vampiric_undead")) \
 		.is_equal(["Vampire Master#heavy_lance"])
+
+
+# ===== Hero winged mounts (Vampire Master: Winged Steed / Winged Terror) =====
+# Same pattern as the dragon mounts: the book word folds into the carrier's labels, so a composed
+# `<hero>#<weapon>+<mountslug>` bake resolves once the manifest ships it; until then the hero keeps its weapon-only bake.
+
+func test_winged_mount_words_map_to_the_baked_slugs() -> void:
+	var lib: ModelLibrary = auto_free(ModelLibrary.new())
+	lib._load_label_slug_map()
+	assert_str(lib.variant_slug(["Winged Steed"], "vampiric_undead")).is_equal("winged_steed")
+	assert_str(lib.variant_slug(["Winged Terror"], "vampiric_undead")).is_equal("winged_terror")
+	# Scoped: other factions do not get the winged slugs.
+	assert_str(lib.variant_slug(["Winged Steed"], "mummified_undead")).is_equal("")
+
+
+func test_vampire_master_on_a_winged_steed_resolves_the_composed_bake() -> void:
+	var manager := _manager(["vampiric_undead/vampire master#heavy_hand_weapon+winged_steed",
+		"vampiric_undead/vampire master#dual+winged_steed",
+		"vampiric_undead/vampire master#spear+winged_steed"])
+	var base := _hero_on_dragon("Vampire Master", ["Heavy Hand Weapon"], "Winged Steed")
+	assert_array(manager._unit_model_variant_names(base.units[0], "vampiric_undead")) \
+		.is_equal(["Vampire Master#heavy_hand_weapon+winged_steed"])
+	var spear := _hero_on_dragon("Vampire Master", ["Heavy Spear"], "Winged Steed")
+	assert_array(manager._unit_model_variant_names(spear.units[0], "vampiric_undead")) \
+		.is_equal(["Vampire Master#spear+winged_steed"])
+
+
+func test_vampire_master_on_a_winged_terror_resolves_the_composed_bake() -> void:
+	var manager := _manager(["vampiric_undead/vampire master#heavy_lance+winged_terror",
+		"vampiric_undead/vampire master#great_weapon+winged_terror"])
+	var lance := _hero_on_dragon("Vampire Master", ["Heavy Lance"], "Winged Terror")
+	assert_array(manager._unit_model_variant_names(lance.units[0], "vampiric_undead")) \
+		.is_equal(["Vampire Master#heavy_lance+winged_terror"])
+	# Slugs are SORTED: great_weapon sorts before winged_terror.
+	var great := _hero_on_dragon("Vampire Master", ["Heavy Great Weapon"], "Winged Terror")
+	assert_array(manager._unit_model_variant_names(great.units[0], "vampiric_undead")) \
+		.is_equal(["Vampire Master#great_weapon+winged_terror"])
+
+
+func test_winged_mount_without_a_shipped_bake_keeps_the_weapon_bake() -> void:
+	# The winged keys are not live yet: the hero must resolve exactly as before (weapon-only bake).
+	var manager := _manager(["vampiric_undead/vampire master#heavy_lance"])
+	var army := _hero_on_dragon("Vampire Master", ["Heavy Lance"], "Winged Terror")
+	assert_array(manager._unit_model_variant_names(army.units[0], "vampiric_undead")) \
+		.is_equal(["Vampire Master#heavy_lance"])
+
+
+# ===== Ghoul Champion on a Bat Beast =====
+# Same pattern as the dragon / winged mounts: the book word folds into the carrier's labels, so a composed
+# `ghoul champion#<weapons>+bat_beast` bake resolves once the manifest ships it. Slugs are SORTED:
+# bat_beast sorts before greatweapon, lance and sling.
+
+func test_bat_beast_mount_word_maps_to_the_baked_slug() -> void:
+	var lib: ModelLibrary = auto_free(ModelLibrary.new())
+	lib._load_label_slug_map()
+	assert_str(lib.variant_slug(["Bat Beast"], "vampiric_undead")).is_equal("bat_beast")
+	assert_str(lib.variant_slug(["Great Weapon", "Bat Beast", "Sling"], "vampiric_undead")).is_equal("bat_beast+greatweapon+sling")
+	# Scoped: other factions do not get the slug.
+	assert_str(lib.variant_slug(["Bat Beast"], "mummified_undead")).is_equal("")
+
+
+func test_ghoul_champion_on_a_bat_beast_resolves_the_six_composed_bakes() -> void:
+	var manager := _manager(["vampiric_undead/ghoul champion#bat_beast", "vampiric_undead/ghoul champion#bat_beast+greatweapon",
+		"vampiric_undead/ghoul champion#bat_beast+lance", "vampiric_undead/ghoul champion#bat_beast+sling",
+		"vampiric_undead/ghoul champion#bat_beast+greatweapon+sling", "vampiric_undead/ghoul champion#bat_beast+lance+sling"])
+	var cases := {
+		"Ghoul Champion#bat_beast": [],
+		"Ghoul Champion#bat_beast+greatweapon": ["Great Weapon"],
+		"Ghoul Champion#bat_beast+lance": ["Lance"],
+		"Ghoul Champion#bat_beast+sling": ["Sling"],
+		"Ghoul Champion#bat_beast+greatweapon+sling": ["Great Weapon", "Sling"],
+		"Ghoul Champion#bat_beast+lance+sling": ["Lance", "Sling"],
+	}
+	for want in cases:
+		var army := _hero_on_dragon("Ghoul Champion", cases[want], "Bat Beast")
+		assert_array(manager._unit_model_variant_names(army.units[0], "vampiric_undead")).is_equal([want])
+
+
+func test_ghoul_champion_on_a_bat_beast_without_a_shipped_bake_keeps_the_weapon_bake() -> void:
+	# The bat_beast keys are not shipped: the variant-name list still falls back to the weapon-only name. (The tier the whole resolver assigns
+	# in that state is a separate question: exact_check against the live manifest puts these forms on the bare bat beast model until the keys ship.)
+	var manager := _manager(["vampiric_undead/ghoul champion#greatweapon"])
+	var army := _hero_on_dragon("Ghoul Champion", ["Great Weapon"], "Bat Beast")
+	assert_array(manager._unit_model_variant_names(army.units[0], "vampiric_undead")) \
+		.is_equal(["Ghoul Champion#greatweapon"])
+
+
+# ===== Ghoul Champion on a Winged Beast =====
+# Same pattern as the dragon / winged steed / winged terror words: the book word folds into the carrier's labels, so a composed
+# `ghoul champion#<weapons>+winged_beast` bake resolves once the manifest ships it. Slugs are SORTED: greatweapon, lance and sling
+# sort BEFORE winged_beast (unlike bat_beast).
+
+func test_winged_beast_mount_word_maps_to_the_baked_slug() -> void:
+	var lib: ModelLibrary = auto_free(ModelLibrary.new())
+	lib._load_label_slug_map()
+	assert_str(lib.variant_slug(["Winged Beast"], "vampiric_undead")).is_equal("winged_beast")
+	assert_str(lib.variant_slug(["Great Weapon", "Winged Beast", "Sling"], "vampiric_undead")).is_equal("greatweapon+sling+winged_beast")
+	# Scoped: other factions do not get the slug.
+	assert_str(lib.variant_slug(["Winged Beast"], "mummified_undead")).is_equal("")
+
+
+func test_ghoul_champion_on_a_winged_beast_resolves_the_six_composed_bakes() -> void:
+	var manager := _manager(["vampiric_undead/ghoul champion#winged_beast", "vampiric_undead/ghoul champion#greatweapon+winged_beast",
+		"vampiric_undead/ghoul champion#lance+winged_beast", "vampiric_undead/ghoul champion#sling+winged_beast",
+		"vampiric_undead/ghoul champion#greatweapon+sling+winged_beast", "vampiric_undead/ghoul champion#lance+sling+winged_beast"])
+	var cases := {
+		"Ghoul Champion#winged_beast": [],
+		"Ghoul Champion#greatweapon+winged_beast": ["Great Weapon"],
+		"Ghoul Champion#lance+winged_beast": ["Lance"],
+		"Ghoul Champion#sling+winged_beast": ["Sling"],
+		"Ghoul Champion#greatweapon+sling+winged_beast": ["Great Weapon", "Sling"],
+		"Ghoul Champion#lance+sling+winged_beast": ["Lance", "Sling"],
+	}
+	for want in cases:
+		var army := _hero_on_dragon("Ghoul Champion", cases[want], "Winged Beast")
+		assert_array(manager._unit_model_variant_names(army.units[0], "vampiric_undead")).is_equal([want])
+
+
+func test_ghoul_champion_on_a_winged_beast_without_a_shipped_bake_keeps_the_weapon_bake() -> void:
+	# The winged_beast keys are not shipped: the variant-name list still falls back to the weapon-only name. (The tier the whole resolver assigns
+	# in that state is a separate question: exact_check against the live manifest puts these forms on another unit's mount model until the keys ship.)
+	var manager := _manager(["vampiric_undead/ghoul champion#greatweapon"])
+	var army := _hero_on_dragon("Ghoul Champion", ["Great Weapon"], "Winged Beast")
+	assert_array(manager._unit_model_variant_names(army.units[0], "vampiric_undead")) \
+		.is_equal(["Ghoul Champion#greatweapon"])
+
+
+# ===== Vampire Master on a Stitched Zombie Horde =====
+# Same pattern as the dragon / winged mount words: the book word folds into the carrier's labels, so a composed
+# `vampire master#<weapon>+stitched_zombie_horde` bake resolves once the manifest ships it. Slugs are SORTED: every Vampire Master
+# weapon slug (dual, great_weapon, halberd, heavy_hand_weapon, heavy_lance, spear) sorts BEFORE stitched_zombie_horde.
+
+func test_stitched_zombie_horde_mount_word_maps_to_the_baked_slug() -> void:
+	var lib: ModelLibrary = auto_free(ModelLibrary.new())
+	lib._load_label_slug_map()
+	assert_str(lib.variant_slug(["Stitched Zombie Horde"], "vampiric_undead")).is_equal("stitched_zombie_horde")
+	assert_str(lib.variant_slug(["Heavy Spear", "Stitched Zombie Horde"], "vampiric_undead")).is_equal("spear+stitched_zombie_horde")
+	# Scoped: other factions do not get the slug.
+	assert_str(lib.variant_slug(["Stitched Zombie Horde"], "mummified_undead")).is_equal("")
+
+
+func test_vampire_master_on_a_stitched_zombie_horde_resolves_the_six_composed_bakes() -> void:
+	var manager := _manager(["vampiric_undead/vampire master#heavy_hand_weapon+stitched_zombie_horde",
+		"vampiric_undead/vampire master#dual+stitched_zombie_horde", "vampiric_undead/vampire master#great_weapon+stitched_zombie_horde",
+		"vampiric_undead/vampire master#halberd+stitched_zombie_horde", "vampiric_undead/vampire master#heavy_lance+stitched_zombie_horde",
+		"vampiric_undead/vampire master#spear+stitched_zombie_horde"])
+	var cases := {
+		"Vampire Master#heavy_hand_weapon+stitched_zombie_horde": ["Heavy Hand Weapon"],
+		"Vampire Master#dual+stitched_zombie_horde": ["Dual Heavy Hand Weapons"],
+		"Vampire Master#great_weapon+stitched_zombie_horde": ["Heavy Great Weapon"],
+		"Vampire Master#halberd+stitched_zombie_horde": ["Heavy Halberd"],
+		"Vampire Master#heavy_lance+stitched_zombie_horde": ["Heavy Lance"],
+		"Vampire Master#spear+stitched_zombie_horde": ["Heavy Spear"],
+	}
+	for want in cases:
+		var army := _hero_on_dragon("Vampire Master", cases[want], "Stitched Zombie Horde")
+		assert_array(manager._unit_model_variant_names(army.units[0], "vampiric_undead")).is_equal([want])
+
+
+func test_stitched_zombie_horde_without_a_shipped_bake_keeps_the_weapon_bake() -> void:
+	# The stitched_zombie_horde keys are not shipped: the variant-name list still falls back to the weapon-only name.
+	var manager := _manager(["vampiric_undead/vampire master#halberd"])
+	var army := _hero_on_dragon("Vampire Master", ["Heavy Halberd"], "Stitched Zombie Horde")
+	assert_array(manager._unit_model_variant_names(army.units[0], "vampiric_undead")) \
+		.is_equal(["Vampire Master#halberd"])

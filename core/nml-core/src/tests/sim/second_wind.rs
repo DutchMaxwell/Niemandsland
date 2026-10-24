@@ -182,7 +182,7 @@ use super::*;
         st4.attached_to = Rc::new(vec![None, None, None, None]);
         st4.alive[3] = 1; // "bh" joins the side alive — the fourth carrier
         st4.wounds[3] = vec![1];
-        st4.radii[3] = vec![IN2M];
+        Rc::make_mut(&mut st4.radii)[3] = vec![IN2M];
         st4.positions[3] = vec![[9.0 * IN2M, 0.0, 0.0]];
         for s in statics4.iter_mut() {
             s.second_wind_active = true;

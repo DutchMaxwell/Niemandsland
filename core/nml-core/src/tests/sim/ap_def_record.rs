@@ -55,7 +55,7 @@ use super::*;
         st.alive = vec![1, 0, 1, 0];
         st.wounds = vec![vec![1], vec![], vec![1], vec![]];
         st.positions[2] = vec![[5.0 * IN2M, 0.0, 0.0]];
-        st.radii[2] = vec![IN2M];
+        Rc::make_mut(&mut st.radii)[2] = vec![IN2M];
         st.positions[3] = vec![];
         (
             st,

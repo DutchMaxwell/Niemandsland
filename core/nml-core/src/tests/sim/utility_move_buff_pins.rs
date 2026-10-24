@@ -75,7 +75,7 @@ use super::*;
             vec![[5.0 * IN2M, 0.0, 0.0]],
             vec![[15.0 * IN2M, 4.0 * IN2M, 0.0]],
         ];
-        st.radii = vec![vec![IN2M], vec![], vec![IN2M], vec![IN2M]];
+        st.radii = Rc::new(vec![vec![IN2M], vec![], vec![IN2M], vec![IN2M]]);
         let mut inside = buff_carrier(system, faction, "");
         inside.ctx.tough = 2;
         let mut outside = buff_carrier(system, faction, "");

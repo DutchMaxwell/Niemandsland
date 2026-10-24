@@ -95,6 +95,7 @@ var connected_peers: Array[int] = []
 
 ## Peers (by id) that announced a matching version. Host-only.
 var validated_peers: Dictionary = {}
+var _rejoined_peers: Dictionary = {}   # peer id -> true when its token already held a seat (a rejoin, not a new player)
 
 ## Remote peers (by id) that announced themselves BUSY (loading — e.g. importing an army).
 ## While non-empty the local player's object move/edit input is gated and a banner shows.
@@ -311,8 +312,8 @@ func _on_peer_connected(id: int) -> void:
 
 
 func _on_peer_disconnected(id: int) -> void:
-	push_warning("[Network] Player disconnected: Peer ID %d (remaining peers: %d, rpc_errors=%d)" % [id, connected_peers.size() - 1, _rpc_error_count])
-	connected_peers.erase(id)
+	connected_peers.erase(id)   # first: an unknown id once logged "remaining peers: -1"
+	push_warning("[Network] Player disconnected: Peer ID %d (remaining peers: %d, rpc_errors=%d)" % [id, connected_peers.size(), _rpc_error_count])
 	validated_peers.erase(id)
 	# Failsafe: a peer that crashed/dropped mid-load must not freeze the table forever.
 	# Clear its busy flag (fires session_busy_changed if it was the last busy peer).
@@ -588,13 +589,25 @@ func _rpc_announce_version(client_version: String, client_token: String = "") ->
 		# Let the reject RPC flush, then drop the peer host-side.
 		get_tree().create_timer(0.5).timeout.connect(_disconnect_peer_safe.bind(sender))
 		return
+	# One join = one handshake: a repeat announce from a peer already validated in its unchanged slot
+	# re-ran the whole state sync + biome push. A rejoin clears the validation first, so it re-syncs.
+	if is_peer_validated(sender) and int(slot_to_peer.get(int(token_to_slot.get(client_token, 0)), -1)) == sender:
+		print("[Network] Peer %d re-announced, already validated in slot %d — ignored" % [sender, slot_for_peer(sender)])
+		return
 	validated_peers[sender] = true
 	# Resolve the stable slot SYNCHRONOUSLY (no await) so concurrent rejoins bind
 	# atomically, BEFORE the state-sync that main.gd runs on peer_version_validated.
+	_rejoined_peers[sender] = not client_token.is_empty() and token_to_slot.has(client_token) \
+		and int(token_to_slot[client_token]) != 1
 	var slot := _resolve_slot_for_token(client_token, sender)
 	_remote_call("_rpc_assign_slot", [slot], sender)  # guest caches it for get_my_player_slot()
 	print("[Network] Peer %d passed handshake (%s) -> slot %d" % [sender, host_version, slot])
 	peer_version_validated.emit(sender)
+
+
+## Host: did this validated peer come back on a token that already held a seat (not a new player)?
+func is_rejoin(peer_id: int) -> bool:
+	return bool(_rejoined_peers.get(peer_id, false))
 
 
 ## RPC (host → client): the host refuses us because our versions differ.
@@ -659,6 +672,11 @@ func _rpc_assign_slot(slot: int) -> void:
 	_my_assigned_slot = slot
 	peer_to_slot[get_my_peer_id()] = slot
 	slot_assigned.emit(slot)
+	# A ready flag reported into a dying socket was lost and nothing re-sent it: the handshake that just
+	# passed is a live link, so report it again (the host files it under this slot).
+	if _local_ready and not is_host and (army_manager == null or army_manager.is_deployment_phase()):
+		print("[Network] Handshake passed while ready — re-reporting ready to the host (slot %d)" % slot)
+		_remote_call("_rpc_report_ready", [true], 1)
 
 
 ## RPC (host → all): a returning token rebound its slot from old_peer to new_peer.

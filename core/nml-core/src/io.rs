@@ -492,7 +492,7 @@ pub struct Node {
 /// header line 1's `"seams"` (ai_planner.gd:483-489, added with M1-3).
 /// A corpus recorded before that (the M1-2 one) has no key and defaults to
 /// both OFF, which is what it was probed to be.
-#[derive(Debug, Clone, Copy, Default, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Deserialize)]
 pub struct Seams {
     /// `BattleSim.spacing_enabled()` — NML_SIM_SPACING, battle_sim.gd:25-31.
     #[serde(default)]
@@ -1009,7 +1009,7 @@ pub(crate) fn state_of(
         wound_frac: Vec::with_capacity(n),
         positions: Vec::with_capacity(n),
         wounds: Vec::with_capacity(n),
-        radii: Vec::with_capacity(n),
+        radii: Rc::new(Vec::with_capacity(n)),
         kits: Vec::with_capacity(n),
         kit_names: Vec::with_capacity(n),
         mods: Vec::with_capacity(n),
@@ -1017,6 +1017,7 @@ pub(crate) fn state_of(
         attached: Rc::new(Vec::new()),
         attached_to: Rc::new(Vec::new()),
         los: Vec::with_capacity(n),
+        sees_tab: None,
         bands: Vec::with_capacity(n),
         shroud: Vec::with_capacity(n),
         charge_no_difficult: Vec::with_capacity(n),
@@ -1041,7 +1042,7 @@ pub(crate) fn state_of(
         spot_markers: vec![0; n],
         tag_markers: vec![0; n],
         spot_round: vec![-1; n],
-        precision_used: vec![Vec::new(); n],
+        precision_used: Rc::new(vec![Vec::new(); n]),
         growth_round: vec![-1; n],
         second_wind_used: vec![false; n],
         surprise_attack_used: vec![false; n],
@@ -1049,7 +1050,7 @@ pub(crate) fn state_of(
         second_wind_round: -1,
         second_wind_uses: 0,
         sidestep_budget: plain.sidestep_budget,
-        limited_used: vec![Vec::new(); n],
+        limited_used: Rc::new(vec![Vec::new(); n]),
         // Wave 3 — the `used` flag is still NOT a recorded corpus input:
         // `AiActRecorder._ledger_of` never stamps `piercing_tag_used`, so a
         // captured state always starts that flag false (a bearer could, in
@@ -1061,8 +1062,8 @@ pub(crate) fn state_of(
         piercing_tag_markers: vec![0; n],
         piercing_tag_persistent: vec![false; n],
         piercing_spot_round: vec![-1; n],
-        storm_used: vec![Vec::new(); n],
-        feats_used: vec![Vec::new(); n],
+        storm_used: Rc::new(vec![Vec::new(); n]),
+        feats_used: Rc::new(vec![Vec::new(); n]),
         teleport_used: vec![false; n],
         los_pairs: plain.los_pairs.as_ref().map(|rows| {
             // Read the matrix in its own (key-sorted) order and STORE it in
@@ -1106,7 +1107,7 @@ pub(crate) fn state_of(
         st.wound_frac.push(u.wound_frac);
         st.positions.push(u.positions);
         st.wounds.push(u.wounds);
-        st.radii.push(u.radii);
+        Rc::make_mut(&mut st.radii).push(u.radii);
         let (mut kits, kit_names) = intern_kits(u.kits);
         if !kits.is_empty() && kits.len() != st.positions[ui].len() {
             let n = KIT_MISMATCHES.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
@@ -1157,6 +1158,7 @@ pub(crate) fn state_of(
     st.attached_to = Rc::new(
         host_keys.iter().map(|k| st.roster.index.get(k.as_str()).copied()).collect(),
     );
+    st.rebuild_sees();
     st
 }
 
@@ -1211,8 +1213,8 @@ pub fn fold_ledger(
     st.second_wind_used[ui] = ledger.second_wind_used;
     st.surprise_attack_used[ui] = ledger.surprise_attack_used;
     st.reinforcement_used[ui] = ledger.reinforcement_used;
-    st.storm_used[ui] = ledger.storm_used.clone();
-    st.feats_used[ui] = ledger.feats_used.clone();
+    Rc::make_mut(&mut st.storm_used)[ui] = ledger.storm_used.clone();
+    Rc::make_mut(&mut st.feats_used)[ui] = ledger.feats_used.clone();
     st.teleport_used[ui] = ledger.teleport.as_ref().map(|t| t.used).unwrap_or(false);
     st.growth_markers[ui] = ledger.growth;
     st.vengeance_markers[ui] = ledger.vengeance_markers;
@@ -1227,7 +1229,7 @@ pub fn fold_ledger(
     st.piercing_tag_markers[ui] = ledger.piercing_tag_markers;
     st.piercing_tag_persistent[ui] =
         rule_on(rules_epoch, EPOCH_67_MARKERS_BURSTS) && ledger.piercing_tag_source == "Piercing Target";
-    st.precision_used[ui] = ledger.precision_used.clone();
+    Rc::make_mut(&mut st.precision_used)[ui] = ledger.precision_used.clone();
     // `growth_round` has no key of its own on the wire (see
     // `_ledger_of`'s doc comment, act_recorder.gd): it is DERIVED
     // here from facts every act already carries. `_solo_growth_

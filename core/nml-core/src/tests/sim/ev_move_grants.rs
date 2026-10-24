@@ -224,3 +224,110 @@ use super::*;
         );
         assert_eq!(crate::sim::live_bands_of(&statics, &st, 1), (6.0, 12.0));
     }
+
+    // ---- differential: the no-grants shortcut of `live_bands_of` equals the full body ----
+
+    /// One scenario for the differential: a chain layout and the records on it.
+    struct BandsCase {
+        what: &'static str,
+        faction: &'static str,
+        rules_epoch: u32,
+        /// (unit, grants_rule, attackers, move_mod)
+        records: Vec<(usize, &'static str, bool, i64)>,
+        /// unit 1 joined into unit 0 (host 0, attached hero 1)
+        joined: bool,
+        /// band values written to unit 0, to exercise the `x + 0.0` bit pattern
+        band0: Option<(f64, f64)>,
+    }
+
+    fn bands_case(
+        what: &'static str, faction: &'static str, records: Vec<(usize, &'static str, bool, i64)>,
+    ) -> BandsCase {
+        BandsCase { what, faction, rules_epoch: crate::acts::CURRENT_RULES_EPOCH, records, joined: false, band0: None }
+    }
+
+    /// Both bodies on every unit of the state: the pair must agree bit for bit (`to_bits`, so -0.0 vs +0.0
+    /// and NaN payloads count). Returns how many units took the grant-free shortcut.
+    fn assert_bands_equal(c: &BandsCase) -> usize {
+        let (mut st, statics) = granted_pair_at(c.faction, &[], 13.0, c.rules_epoch);
+        if c.joined {
+            st.attached = Rc::new(vec![vec![1], vec![], vec![], vec![]]);
+            st.attached_to = Rc::new(vec![None, Some(0), None, None]);
+        }
+        if let Some((a, r)) = c.band0 {
+            st.bands[0].advance = a;
+            st.bands[0].rush = r;
+        }
+        for &(u, rule, attackers, mv) in &c.records {
+            let mut row = grant_row(rule);
+            row.attackers = attackers;
+            row.move_mod = mv;
+            st.buffs[u].push(row);
+        }
+        let mut shortcut = 0;
+        for i in 0..4 {
+            let fast = crate::sim::live_bands_of(&statics, &st, i);
+            let full = crate::sim::live_bands_walk(&statics, &st, i);
+            assert_eq!(
+                (fast.0.to_bits(), fast.1.to_bits()),
+                (full.0.to_bits(), full.1.to_bits()),
+                "{}: unit {i}: shortcut {fast:?} vs full body {full:?}",
+                c.what
+            );
+            if !crate::mods::chain_has_grants(&st, i) {
+                shortcut += 1;
+            }
+        }
+        shortcut
+    }
+
+    #[test]
+    fn the_no_grants_shortcut_of_live_bands_of_equals_the_full_body() {
+        let mut cases = vec![
+            bands_case("no records at all", "ogres", vec![]),
+            bands_case("no records, stamp-less faction", "no_such_faction", vec![]),
+            bands_case("Fast grant on the bearer", "ogres", vec![(0, "Fast", false, 0)]),
+            bands_case("Slow grant on the bearer", "dwarves", vec![(0, "Slow", false, 0)]),
+            bands_case("Slow cancelled by granted Swift", "dwarves", vec![(0, "Slow", false, 0), (0, "Swift", false, 0)]),
+            bands_case("Rapid Advance", "ogres", vec![(0, "Rapid Advance", false, 0)]),
+            bands_case("Rapid Rush", "ogres", vec![(0, "Rapid Rush", false, 0)]),
+            bands_case("Difficult Terrain debuff", "ogres", vec![(0, "Difficult Terrain", false, 0)]),
+            bands_case("Dangerous Terrain debuff", "ogres", vec![(0, "Dangerous Terrain", false, 0)]),
+            bands_case("a grant of an unrelated rule", "ogres", vec![(0, "Furious", false, 0)]),
+            bands_case("attackers-side grant only", "ogres", vec![(0, "Fast", true, 0)]),
+            bands_case("parenthesised grant name", "ogres", vec![(0, "Fast (spell)", false, 0)]),
+            bands_case("grant on the other side's unit", "ogres", vec![(2, "Fast", false, 0)]),
+            // records WITHOUT a grants_rule: the shortcut must fire and agree
+            bands_case("modifier-only record", "ogres", vec![(0, "", false, 2)]),
+        ];
+        let mut joined = bands_case("grant on the attached hero", "ogres", vec![(1, "Fast", false, 0)]);
+        joined.joined = true;
+        cases.push(joined);
+        let mut joined = bands_case("joined chain, no records", "ogres", vec![]);
+        joined.joined = true;
+        cases.push(joined);
+        let mut joined = bands_case("grant on the host", "ogres", vec![(0, "Slow", false, 0)]);
+        joined.joined = true;
+        cases.push(joined);
+        let mut pre = bands_case("pre-fold statics (no stamp) with a grant", "ogres", vec![(0, "Fast", false, 0)]);
+        pre.rules_epoch = 18;
+        cases.push(pre);
+        let mut pre = bands_case("pre-fold statics, no records", "ogres", vec![]);
+        pre.rules_epoch = 18;
+        cases.push(pre);
+        for band in [(-0.0, -0.0), (0.0, 0.0), (6.0, 12.0), (f64::MIN_POSITIVE, 1.0e300), (f64::NAN, 3.0)] {
+            let mut c = bands_case("odd band values, no records", "ogres", vec![]);
+            c.band0 = Some(band);
+            cases.push(c);
+            let mut c = bands_case("odd band values, Fast grant", "ogres", vec![(0, "Fast", false, 0)]);
+            c.band0 = Some(band);
+            cases.push(c);
+        }
+        let shortcuts: usize = cases.iter().map(assert_bands_equal).sum();
+        assert!(shortcuts > 40, "the differential must exercise the shortcut path, saw {shortcuts} units");
+        // and the positive control: a grant-bearing state still moves the band (the walk is NOT bypassed)
+        let c = bands_case("control", "ogres", vec![(0, "Fast", false, 0)]);
+        let (mut st, statics) = granted_pair_at(c.faction, &[], 13.0, c.rules_epoch);
+        st.buffs[0].push(grant_row("Fast"));
+        assert_eq!(crate::sim::live_bands_of(&statics, &st, 0), (8.0, 16.0));
+    }

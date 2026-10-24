@@ -25,11 +25,13 @@ pub mod gate;
 pub mod geom2;
 pub mod io;
 pub mod plan;
+pub mod plain_memo;
 pub mod pull;
 pub mod reach;
 pub mod replay;
 pub mod step;
 pub mod theta;
+pub mod theta_memo;
 
 pub use cap::{cap_difficult_polylines, difficult_at_point, trail_crosses_difficult_cells, CapReport};
 pub use charge::{charge_contact_slots, nearest_base_dist};

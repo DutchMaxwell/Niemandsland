@@ -45,10 +45,10 @@
         st.attached_to = Rc::new(vec![None, None]);
         st.positions[0] = vec![[0.0, 0.0, 0.0], [0.8, 0.0, 0.0], [1.2, 0.0, 0.0]];
         st.wounds[0] = vec![1, 1, 1];
-        st.radii[0] = vec![IN2M, IN2M, IN2M];
+        Rc::make_mut(&mut st.radii)[0] = vec![IN2M, IN2M, IN2M];
         st.positions[1] = vec![[2.0, 0.0, 0.0], [3.0, 0.0, 0.0], [4.0, 0.0, 0.0]];
         st.wounds[1] = vec![1, 1, 1];
-        st.radii[1] = vec![IN2M, IN2M, IN2M];
+        Rc::make_mut(&mut st.radii)[1] = vec![IN2M, IN2M, IN2M];
         (st, statics)
     }
 
