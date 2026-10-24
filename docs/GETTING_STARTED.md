@@ -133,6 +133,8 @@ turns, combat and the modelled rules for both sides: one unit per side in turn, 
 their own dice on their own tray. On **Manual** there is no dice or combat automation — you alternate activations and call the
 rules like at a real table; either player can drop back to Manual at once. The rule lines the game applies (or asks you to apply
 by hand) are shared on both screens.
+When the second player sits down, the host is asked once whether to play with rules automation; the
+**Rules** section of the left panel (shown once an army is imported) holds the switch, also for a hot-seat table with no AI.
 It supports **2 players** over LAN or the internet. Both players must run the **same version** — the version handshake will reject a mismatch.
 
 **Host a game**
