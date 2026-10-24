@@ -47,6 +47,10 @@ From the start menu, choose **Learn → Trial by Fire → First Steps** to open 
 Follow the six lesson-card steps to turn, zoom and pan the camera, select and move the squad, then measure a distance.
 The chapter earns a check mark only after the last step; you can replay it or leave early from the lesson card.
 
+### Trial by Fire — the other chapters
+
+The same menu entry lists eleven lessons in total, each on its own prepared table: First Steps, Build the Table, Bring Your Army, Activate & Move, Shooting, Melee, Morale & Shaken, Terrain, Spellcasting, Mission Objectives, and a short game against NACHTMAHR. Play them in any order and replay them any time. A lesson always plays against the gentlest difficulty grade (Dämmerung) and never changes the grade you saved. The older **Learn the controls** entry is the classic 64-step tutorial.
+
 ### Start a game
 
 From the start menu, choose **Prepare a new table**. Pick a biome (six to choose from) and the table size — Standard 6×4 ft (default), Square 4×4 ft or Custom (12–240 in) — then press **Create table**. The size is fixed once the table exists. Terrain comes after that: open **Map Layout…** in the left panel (☰) to lay it out, or generate one automatically.
@@ -64,6 +68,14 @@ To play a full game against the built-in AI opponent:
 3. On **Start Game**, play alternates unit by unit. You act through the **radial menu** — **Shoot**, **Fight** or **Cast**, and you move by hand (the one-click Charge, Advance & Shoot and Rush verbs are switched off in this version while their move preview and target selection are reworked, issue #1828) — with real dice in the tray for both sides; NACHTMAHR takes its own activations, and **every applied rule writes a battle-log line** so you can follow (and audit) each decision. The remaining uncovered special rules are a small residue; the battle log names any rule it applies (or asks for manual handling) per unit, so you can apply the rest by hand.
 
 NACHTMAHR is a game AI (no LLM) that runs entirely offline and never cheats. On Windows and Linux it plays with its new AI model **Erlkönig**, a trained neural network (value net) that ships with the game; without the Rust rules core (always on macOS) it plays by the official OPR solo decision trees. One difficulty ships (full strength); see [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) for the solo caveats.
+
+### Missions, combat effects and Calm Mode
+
+The solo panel has a **Mission** picker: the plain Duel, or one of the catalogue missions (Relic Hunt, Capture & Hold, The Raid, Ambush, Last Stand, VIP Escort, The Rescue, Smash & Grab and more). In **Map Layout…**, the **Ruined Borderland** button next to Auto-Generate lays a complete 6×4 ft table in one step (greyed out on other table sizes; Ctrl+Z takes it back).
+
+What a resolved attack or cast did is drawn at the table: result marks over the models, shots, falls, spell effects and hero auras. They only show what the rules decided. In Settings, **Combat Effects** switches them all off and **Gore** (Off / Normal / Extra) sets how bloody they look. **Calm Mode**, also in Settings and off by default, turns down combat effects, motion, tilt-shift and pulsing selection aids in one click; switching it off restores your own choices.
+
+After an update the start menu shows a short **What's new** sheet once (English / Deutsch button); **Help & feedback → What's new?** reopens it.
 
 ### Camera
 
@@ -121,6 +133,8 @@ turns, combat and the modelled rules for both sides: one unit per side in turn, 
 their own dice on their own tray. On **Manual** there is no dice or combat automation — you alternate activations and call the
 rules like at a real table; either player can drop back to Manual at once. The rule lines the game applies (or asks you to apply
 by hand) are shared on both screens.
+When the second player sits down, the host is asked once whether to play with rules automation; the
+**Rules** section of the left panel (shown once an army is imported) holds the switch, also for a hot-seat table with no AI.
 It supports **2 players** over LAN or the internet. Both players must run the **same version** — the version handshake will reject a mismatch.
 
 **Host a game**

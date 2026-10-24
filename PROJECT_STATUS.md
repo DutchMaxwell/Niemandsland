@@ -270,6 +270,18 @@ spacing, Start-Game phase gate). It ships with a bundled board (official lists, 
 auto-generated terrain), progress persistence and an end assessment. Still open for later
 waves: Settings, hosting/multiplayer, Regiments, and an OPR-rules / solo-play track.
 
+**Combat effects, Calm Mode, missions, Trial by Fire** — resolved attacks and casts are drawn at the
+table (result marks, shots, falls, spells, hero auras; drawn from the rules' own results, one **Combat
+Effects** switch plus **Gore** Off / Normal / Extra in Settings). **Calm Mode** (accessibility, off by
+default) is a preset over the individual switches: it snapshots them, forces combat effects, idle motion
+and tilt-shift off and reduce-motion on, and restores them exactly when switched off
+(`scripts/graphics_settings.gd`). The solo Mission picker lists the 18 missions of the catalogue
+(`assets/solo/missions.json`). **Ruined Borderland** is a one-click table theme under Auto-Generate in Map
+Layout (6×4 ft only). **Trial by Fire** (the Game School, working name Spielschule) offers eleven isolated,
+replayable lessons, each with its own bundled scenario, and plays against the gentlest difficulty grade
+(`scripts/spielschule.gd`). After an update the start menu shows a bilingual **What's new** sheet once
+(`scripts/whats_new_content.gd`, `data/whats_new.json`).
+
 **Presentation** — a built-in Tactical-HUD UI theme (sleek; cyan/amber), atmosphere
 presets (Day/Sunset/Night/Overcast/Rain), graphics quality presets, SSAO + glow, cinematic intro. **Battlefield atmosphere**
 ([`docs/ATMOSPHERE.md`](docs/ATMOSPHERE.md)): one-click Day/Sunset/Night/Overcast/Rain

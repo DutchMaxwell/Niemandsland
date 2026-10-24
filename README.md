@@ -39,6 +39,14 @@ What the code actually does today:
   you can apply the rest by hand. When your unit takes wounds and the choice matters (Tough models,
   mixed loadouts), **you allocate them by clicking** — LMB places one wound, RMB auto-allocates
   the rest. One difficulty (full strength) — selectable grades are on the roadmap.
+- **Missions** — the Mission picker in the solo panel lists 18 catalogue missions (Relic Hunt, Capture & Hold,
+  The Raid, Ambush, Last Stand, VIP Escort, The Rescue, Smash & Grab and more) next to the plain Duel;
+  the setup follows the mission's roles, deployment zones and round limit.
+- **Combat effects** — what a resolved attack or cast did is drawn at the table (result marks, shots,
+  falls, spells, hero auras); it only shows the rules' own results. One **Combat Effects** switch and a
+  **Gore** setting (Off / Normal / Extra) sit in the Settings graphics panel. **Calm Mode**
+  (accessibility, off by default) turns down combat effects, motion, tilt-shift and pulsing selection
+  aids in one click and puts your own choices back when you switch it off.
 - **3D tabletop** — choose the table size (6×4 ft default, 4×4, or custom 12–240 in) and one of six
   biomes before the match; on the Medium preset and above the biome also dresses the table (display
   only). Orbit/pan/zoom camera.
@@ -49,7 +57,7 @@ What the code actually does today:
   rendered in a scaled SubViewport (see [Scaling](#scaling-conventions)); click a die to colour-tag
   it (e.g. red = Rending), with the cup composition and colours synced live in multiplayer.
 - **Measurement** — distance measuring in inches.
-- **Map layout editor** — top-down 3″ grid, terrain pieces (ruins / forest /
+- **Map layout editor** — a one-click **Ruined Borderland** table theme (6×4 ft; ruins, woods, worn paths; Ctrl+Z undoes it), top-down 3″ grid, terrain pieces (ruins / forest /
   container / dangerous), front-line + custom-polygon deployment zones, objectives,
   auto-generate, 3D overlay, save/load layouts. (On an **Automatic** table — solo or an agreed
   online room — terrain is rules-active: line of sight, cover, difficult / dangerous ground; on a
@@ -90,6 +98,12 @@ What the code actually does today:
   real bundled board: camera & table, selecting, move/rotate/arrange, measuring & rings, the
   dice tray, unit cards & the radial menu, wounds & casualties, a real army import, table &
   terrain, the map-layout editor, and movement & trails.
+- **Trial by Fire (Game School)** — eleven short practice lessons you can play in any order and replay,
+  each on its own prepared table: First Steps, Build the Table, Bring Your Army, Activate & Move,
+  Shooting, Melee, Morale & Shaken, Terrain, Spellcasting, Mission Objectives and a short game against
+  NACHTMAHR. Lessons always play against the gentlest difficulty grade.
+- **What's new** — after an update the start menu shows a short release sheet once (English / Deutsch
+  switch); **Help & feedback → What's new?** shows it again.
 - **Asset pipeline** — the offline pipeline that generates the 3D miniatures
   (image generation → TRELLIS mesh) lives in a separate private repository; the
   game consumes only its R2-delivered outputs.
