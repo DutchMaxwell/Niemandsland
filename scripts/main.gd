@@ -11114,12 +11114,14 @@ func solo_begin_cast(unit: GameUnit) -> void:
 			unit.get_name(), side, str(entry.get("name", "?")), cands.size()])
 
 
-## #1719: a cast's sides. With an AI seat they are the controller's two (solo, co-op: the human seat
-## vs NACHTMAHR). Without one they follow the CASTER — its own slot, and every other slot that fields
+## #1719: a cast's sides. With an AI seat the foe is NACHTMAHR and the own side is the CASTER's slot (co-op
+## #673: two humans share the table, each boosts and buffs with its own army; solo: the human seat). Without
+## one they follow the CASTER — its own slot, and every other slot that fields
 ## a unit as an opponent (a local table may import up to four armies) — so P2 casts as P2.
 func _solo_cast_sides(unit: GameUnit) -> Dictionary:
 	if not solo_ai_slots.is_empty():
-		return {"own": solo_controller.human_slot, "foes": [solo_controller.ai_slot]}
+		var mine := unit_owner_slot(unit.unit_properties)
+		return {"own": mine if mine > 0 else solo_controller.human_slot, "foes": [solo_controller.ai_slot]}
 	var own := unit_owner_slot(unit.unit_properties)
 	var foes: Array = []
 	for u in opr_army_manager.get_all_game_units():
@@ -11164,6 +11166,7 @@ func _run_human_cast(unit: GameUnit, member: GameUnit, entry: Dictionary, picked
 		boost = await dlg.ask(member.get_name(), spell_name, _solo_cast_target_label(targets),
 			AiSpell.CAST_BASE_TARGET, 0, pool, "boost")
 		if boost > 0:
+			var payers: PackedStringArray = []
 			for d in SoloController._draw_aura_tokens(helpers, boost):
 				var dd := d as Dictionary
 				var payer := dd["unit"] as GameUnit
@@ -11171,6 +11174,10 @@ func _run_human_cast(unit: GameUnit, member: GameUnit, entry: Dictionary, picked
 					payer.spend_caster_points(1)
 				if network_manager != null and network_manager.has_method("broadcast_unit_casts"):
 					network_manager.broadcast_unit_casts(payer)
+				payers.append("%s ×%d" % [payer.get_name(), int(dd["tokens"])])
+			_log_rule_event(BattleLog.Category.COMBAT, "Boost: %s spend%s %d token%s — the cast roll improves to %d+" % [
+				", ".join(payers), ("s" if payers.size() == 1 else ""), boost, ("" if boost == 1 else "s"),
+				AiSpell.cast_target(boost, 0, AiSpell.CAST_BASE_TARGET)])
 	# AI COUNTER-INTERFERENCE (decided default: shown AFTER the player commits — rules-sequential,
 	# no leak): the AI's 18"-LoS pool spends per the marginal calculus, value-proxied by the cost.
 	var interference := 0
