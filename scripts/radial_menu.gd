@@ -611,8 +611,8 @@ static func create_model_menu(model: ModelInstance) -> Array[RadialMenuItem]:
 ## the whole exchange resolves with real tray dice, mirroring the AI's own combat flow.
 static func solo_combat_items(game_unit: GameUnit = null, auto_ok: bool = false) -> Array[RadialMenuItem]:
 	var out: Array[RadialMenuItem] = []
-	out.append(RadialMenuItem.new("solo_shoot", "Shoot", "»", true, "Shoot at an AI unit — pick a target with line of sight"))
-	out.append(RadialMenuItem.new("solo_fight", "Fight", "⚔", true, "Strike an AI unit in melee contact"))
+	out.append(RadialMenuItem.new("solo_shoot", "Shoot", "»", true, "Shoot at an enemy unit — pick a target with line of sight"))
+	out.append(RadialMenuItem.new("solo_fight", "Fight", "⚔", true, "Strike an enemy unit in melee contact"))
 	# Automodus (A1, NML-202): the engine moves the unit along a legal corridor and rolls the
 	# attack itself — rulebook verbs, no "Auto-" jargon in the wheel (the "Auto:" log prefix marks
 	# an engine-executed activation instead).

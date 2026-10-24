@@ -257,7 +257,8 @@ jobs:
 
   export-linux:
     name: Linux Export
-    runs-on: ubuntu-latest
+    # glibc floor of the shipped Linux core: ubuntu-latest moved to glibc 2.43, players on 2.42 cannot load it
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     needs: [changes]
     if: ${{ !startsWith(github.ref, 'refs/tags/v') && (github.event_name != 'pull_request' || needs.changes.outputs.not_core_only == 'true') }}
@@ -271,6 +272,9 @@ jobs:
         uses: ./.github/actions/build-core-extension
         with:
           target: linux
+
+      - name: Gate - Linux core needs at most GLIBC 2.35
+        run: tools/ci/check_glibc_floor.sh core/target/release/libnml_core_godot.so 2.35
 
       - name: Setup Godot (with export templates)
         uses: ./.github/actions/setup-godot
@@ -603,7 +607,8 @@ jobs:
   # build itself when it is not.
   release:
     name: Publish GitHub Release
-    runs-on: ubuntu-latest
+    # glibc floor of the shipped Linux core: ubuntu-latest moved to glibc 2.43, players on 2.42 cannot load it
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     # gdUnit (test), the relay suite and the Rust workspace checks must all be
     # green for the tagged sha before a release is built and published.
@@ -641,6 +646,10 @@ jobs:
         uses: ./.github/actions/build-core-extension
         with:
           target: linux
+
+      - name: Gate - Linux core needs at most GLIBC 2.35
+        run: tools/ci/check_glibc_floor.sh core/target/release/libnml_core_godot.so 2.35
+
       - name: Build core extension (NmlCore, windows)
         uses: ./.github/actions/build-core-extension
         with:

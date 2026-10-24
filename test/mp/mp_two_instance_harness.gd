@@ -39,6 +39,12 @@ var _room_code := ""
 var _los_result: Dictionary = {"visible": false, "label_visible": false, "text": ""}
 var _remote_save_wounds := -1   # result of the in-flight remote save batch (-1 = none yet)
 var _last_refusal := ""         # 3.6: the last off-turn refusal text, for the alternation gate
+var _was_ready := false         # the session was up once (a deliberate leave ends it later)
+var _left: Dictionary = {}      # bugs 9+10: what the scene after End Battle inherits (host)
+var _start_q_up := false        # the host's start question was on screen last snapshot
+var _start_q_count := 0         # how many times it appeared (asked once per room)
+var _host_left_at := 0.0        # bugs 9+10: unix time the guest's "host left" notice appeared
+var _net_status_seen: Array = []  # bug 4: every network status text shown, in order (the hiccup notice)
 
 
 func _ready() -> void:
@@ -91,14 +97,18 @@ func _wire_signals() -> void:
 	lobby.relay_reconnect_failed.connect(func(reason: String) -> void:
 		_fail("reconnect failed: %s" % reason))
 	lobby.internet_disconnected.connect(func() -> void:
-		if not _failed:
+		if not _failed and not _args.has("leave"):
 			_fail("internet session disconnected"))
 	_write_state()
 
 
 func _process(_delta: float) -> void:
 	var now := Time.get_ticks_msec()
-	if not _failed and not _session_ready() \
+	var net_label = _main.get("network_status_label") if is_instance_valid(_main) else null
+	if net_label is Label and (_net_status_seen.is_empty() or _net_status_seen[-1] != net_label.text):
+		_net_status_seen.append(net_label.text)
+	_was_ready = _was_ready or _session_ready()
+	if not _failed and not _was_ready \
 			and float(now - _started_ms) / 1000.0 > CONNECT_TIMEOUT_S:
 		_fail("two occupied slots not ready within %.0fs" % CONNECT_TIMEOUT_S)
 	if now - _last_state_ms >= int(STATE_WRITE_INTERVAL_S * 1000.0):
@@ -109,7 +119,7 @@ func _process(_delta: float) -> void:
 
 
 func _session_ready() -> bool:
-	if _main == null:
+	if not is_instance_valid(_main):
 		return false
 	var nm = _main.get("network_manager")
 	var lobby = _main.get("internet_lobby")
@@ -138,10 +148,10 @@ func _poll_command() -> void:
 func _run_command(seq: int, action: String, payload: Dictionary) -> void:
 	var ok := true
 	var error := ""
-	if action != "quit" and action != "snapshot" and not _session_ready():
+	if action not in ["quit", "snapshot", "leave_to_menu"] and not _session_ready():
 		ok = false
 		error = "session is not ready"
-	elif action != "setup" and action != "quit" and action != "snapshot" and not _fixture_ready:
+	elif action not in ["setup", "quit", "snapshot", "leave_to_menu", "close_window", "answer_start_question", "answer_rules_card"] and not _fixture_ready:
 		ok = false
 		error = "fixture is not ready"
 	elif action == "setup":
@@ -206,13 +216,29 @@ func _run_command(seq: int, action: String, payload: Dictionary) -> void:
 			_main._vfx_emit({"k": "volley", "f": 1, "pairs": [[Vector3.ZERO, Vector3(0, 0, 0.3)]]})
 			_main._vfx_emit({"k": "pip", "t": 1, "at": Vector3(0, 0.03, 0.3), "n": 1})
 			_main._vfx_emit({"k": "seal_end", "sid": sid, "o": 0})
+	elif action == "answer_start_question" or action == "answer_rules_card":
+		var card := _find_card("Play with rules automation?" if action == "answer_start_question" \
+				else "Turn on automatic rules?")
+		ok = card != null
+		if ok:
+			card.resolve(bool(payload.get("yes", false)))
 	elif action == "set_automatic":
 		_main.opr_army_manager.rules_automation = RulesAutomation.Level.AUTOMATIC
 		_main._hotseat_turn = null
 	elif action == "activate":
 		await _activate(str(payload.get("unit", "")), int(payload.get("slot", 0)))
+	elif action == "leave_to_menu":
+		ok = await _leave_to_menu()
 	elif action == "snapshot":
 		pass
+	elif action == "close_window":
+		_args["leave"] = "true"   # a deliberate leave: the disconnect that follows is not a failure
+		# What closing the window does (headless has none to click): the close request reaches every node,
+		# then the engine quits (auto-accept quit).
+		get_tree().root.propagate_notification(NOTIFICATION_WM_CLOSE_REQUEST)
+		_write_ack(seq, true, "")
+		get_tree().quit()
+		return
 	elif action == "quit":
 		_write_ack(seq, true, "")
 		_write_state()
@@ -227,6 +253,15 @@ func _run_command(seq: int, action: String, payload: Dictionary) -> void:
 	_write_ack(seq, ok, error)
 	_write_state()
 	_command_busy = false
+
+
+func _find_card(card_title: String) -> PromptCard:
+	if not is_instance_valid(_main):
+		return null
+	for c in _main.get_children():
+		if c is PromptCard and (c as PromptCard).title == card_title:
+			return c as PromptCard
+	return null
 
 
 func _setup_fixture() -> bool:
@@ -342,6 +377,29 @@ func _hover_los() -> bool:
 	return bool(_los_result.visible) and bool(_los_result.label_visible)
 
 
+## Bugs 9+10: leave through the production End Battle path, then record what the next scene inherits:
+## the relay peer, the SceneTree's multiplayer peer and a fresh SaveManager's load gate.
+func _leave_to_menu() -> bool:
+	var relay: RelayMultiplayerPeer = _main.internet_lobby.relay_peer
+	UpdateChecker.set_enabled(false)   # the menu scene must not reach the network from a test
+	_main.call("_on_end_battle_confirmed")
+	var deadline := Time.get_ticks_msec() + 20000
+	while is_instance_valid(_main) and Time.get_ticks_msec() < deadline:
+		await get_tree().process_frame
+	var nm: Node = load("res://scripts/network_manager.gd").new()
+	var sm := SaveManager.new()
+	sm.network_manager = nm
+	add_child(nm)
+	add_child(sm)
+	var gate: int = await sm.load_game("user://mp2_no_such_save.nml")
+	_left = {"left": not is_instance_valid(_main), "load_gate": gate,
+		"relay_connected": relay.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED,
+		"mp_peer_relay": get_tree().get_multiplayer().multiplayer_peer is RelayMultiplayerPeer}
+	sm.queue_free()   # nm stays: the next scene's NetworkManager, listening to whatever peer survived
+	_log("left to the menu: %s" % JSON.stringify(_left))
+	return bool(_left.left)
+
+
 func _unit(unit_id: String) -> GameUnit:
 	if _main == null or _main.get("opr_army_manager") == null:
 		return null
@@ -407,6 +465,11 @@ func opr_round() -> int:
 
 
 func _snapshot() -> Dictionary:
+	if not is_instance_valid(_main):
+		return {"role": _role, "failed": _failed, "failure": _failure, "left_state": _left}
+	if _host_left_at == 0.0 and _main.get_children().any(
+			func(c: Node) -> bool: return c is PromptCard and (c as PromptCard).title == "Host left"):
+		_host_left_at = Time.get_unix_time_from_system()
 	var lobby = _main.get("internet_lobby") if _main != null else null
 	var nm = _main.get("network_manager") if _main != null else null
 	var state := {
@@ -430,7 +493,31 @@ func _snapshot() -> Dictionary:
 		"save_prompt_visible": false,
 		"battle_log_tail": [],
 		"vfx_cues": (_main._vfx_seen as Dictionary).size() if _main != null else 0,
+		"host_left_at": _host_left_at,
+		"start_question_visible": false,
+		"start_question_count": _start_q_count,
+		"rules_card_visible": _find_card("Turn on automatic rules?") != null,
+		# Bug 4 (silence scenario): our transport id, the relay's takeover capability, the host's peer -> slot
+		# map (a phantom seat shows up here), the table objects by network id (a duplicate shows up here) and
+		# the status texts shown so far.
+		"peer_id": lobby.relay_peer.get_unique_id() if lobby != null and lobby.relay_peer != null else 0,
+		"relay_takeover": lobby != null and lobby.relay_peer != null \
+			and lobby.relay_peer.get("_relay_takeover") == true,
+		"peers": {},
+		"objects": [],
+		"net_status_seen": _net_status_seen.duplicate(),
 	}
+	if _main != null and _main.get("object_manager") != null:
+		for child in _main.object_manager.get_children():
+			if child is Node3D and child.has_meta("network_id") and not child.is_queued_for_deletion():
+				state.objects.append(int(child.get_meta("network_id")))
+		state.objects.sort()
+	var sq_up := _find_card("Play with rules automation?") != null
+	if sq_up and not _start_q_up:
+		_start_q_count += 1
+	_start_q_up = sq_up
+	state.start_question_visible = sq_up
+	state.start_question_count = _start_q_count
 	if nm != null:
 		var slots: Array[int] = []
 		for peer_id in nm.peer_to_slot:
@@ -439,6 +526,8 @@ func _snapshot() -> Dictionary:
 				slots.append(slot)
 		slots.sort()
 		state.occupied_slots = slots
+		for peer_id in nm.peer_to_slot:
+			state.peers[str(peer_id)] = int(nm.peer_to_slot[peer_id])
 	if _fixture_ready:
 		var ai_slots: Array = []
 		for slot in _main.solo_ai_slots:
