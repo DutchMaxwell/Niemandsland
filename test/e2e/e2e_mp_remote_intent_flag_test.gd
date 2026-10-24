@@ -83,6 +83,7 @@ func test_guest_intent_leaves_host_save_prompt_alone(timeout := 60000) -> void:
 	assert_bool(_main._solo_auto_saves) \
 		.override_failure_message("3.4 - a guest's unit executed on the host must not flip the host's save-prompt switch") \
 		.is_false()
+	_end_session()
 
 
 func test_host_own_intent_still_flips_save_prompt(timeout := 60000) -> void:
@@ -90,6 +91,7 @@ func test_host_own_intent_still_flips_save_prompt(timeout := 60000) -> void:
 	_main._solo_auto_saves = false
 	await _run(1)
 	assert_bool(_main._solo_auto_saves).is_true()
+	_end_session()
 
 
 func test_solo_intent_still_flips_save_prompt(timeout := 60000) -> void:
