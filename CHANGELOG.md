@@ -39,16 +39,22 @@ the game, new graphics for every biome, a longer Game School and a stronger NACH
   is next. Out-of-turn actions are refused, and an out-of-turn drag snaps back. A list at the start
   of the game names every rule that stays yours to apply by hand; manual corrections are logged. The
   game names the roller by player, not "You". (#1708, #1710, #1711, #1715, #1717, #1718, #1721, #1729,
-  #1730, #1733, #1734, #1736, #1739, #1740, #1753, #1766, #1767, #1781)
+  #1730, #1733, #1734, #1736, #1739, #1740, #1753, #1766, #1767, #1781, #1836)
 - **Rules automation online.** The two players agree on the level (one asks, the other confirms;
   either can drop back to Manual at once). One unit per side activates in turn, the host owns the turn
   and advances the round, each player rolls on their own tray, and the applied rule lines show on
   **both** screens. Ambush and the round-start recovery run in turn order. A player who drops while on
-  turn keeps the turn; the table waits. (#1768–#1775, #1777, #1778, #1783)
+  turn keeps the turn; the table waits. The host is asked once, when the second player sits down,
+  whether to play with rules automation; the switch has its own "Rules" section in the left panel
+  that appears after any army import (also online), and the multiplayer texts name the real level.
+  An online spell asks the other player, on their own machine, whether to interfere. (#1768–#1775,
+  #1777, #1778, #1783, #1831, #1836, #1837, #1842)
 - **More rules have a human door** on tables without an AI: Mend, Breath Attack and Storm of X
   are offered to the player, and both sides are asked for their Ambushers. (#1743, #1752, #1762, #1765)
 - **No AI without its tick.** NACHTMAHR only takes an army you mark as AI. A plain two-player game
-  never silently hands a side over to it. (#1719)
+  never silently hands a side over to it: Start Deployment, the game-over verdict, roll labels, the
+  activation line ("activated by P1 (Army)") and other texts on such a table name the players, never
+  NACHTMAHR. (#1719, #1830, #1834, #1835, #1841)
 - **Four selectable difficulty levels** — Dämmerung, Zwielicht, Finsternis and Albtraum — with your
   choice remembered between games. Albtraum, the strongest level, is the default; the game log names
   the opponent actually used. (#1126, #1127)
@@ -112,7 +118,9 @@ the game, new graphics for every biome, a longer Game School and a stronger NACH
   beast mounts for the Vampire Master and Ghoul Champion, wings and weapons), and a unit can show per-model variety from a second sculpt. The Mummified, Titan
   Lords, Rift Daemons and Machine Cults books resolve to their published art. (#1386–#1429, #1442,
   #1506, #1553, #1555, #1591, #1592, #1598, #1614, #1620, #1656, #1657, #1798–#1802, #1810, #1818,
-  #1822, #1823)
+  #1822, #1823, #1840)
+
+Unit names with an apostrophe now find their 3D model. (#1840)
 
 ### Changed — UI
 - **A consistent dark-panel style across the game:** tool rail, top bar, game menu, unit cards, battle
@@ -168,6 +176,20 @@ the game, new graphics for every biome, a longer Game School and a stronger NACH
   Tough(1). (#1120, #1121, #1123)
 - **The host rejects an out-of-turn activation message** in a room with rules automation. (#1783)
 
+- **Leaving to the menu ends the online session**, and the other player is told at once instead of
+  waiting for a timeout; a Game School lesson or saved game can be opened right afterwards. (#1832)
+- **Online joins are lighter and steadier:** one handshake per join, no rebuild of an unchanged
+  biome, and a "Ready" that survives a rejoin. A connection that goes silent reconnects on its own
+  within seconds and keeps your seat; a failed reconnect no longer raises a script error.
+  (#1833, #1846, #1847, #1848)
+- **The battlemap loads without a freeze** after a table load (it used to stall the game for
+  about 2.5 seconds). (#1845)
+- **Loading a save keeps every army tray's name** instead of showing "Army". (#1839)
+- **The other player's avatar never covers your army trays.** (#1843)
+- **Linux players get the rules core again:** the shipped Linux library is built against an older
+  system library, so current distributions (for example Fedora 43) can load it instead of silently
+  playing without it. (#1827)
+
 ### Internal
 - The release job publishes the platform zips under fixed names, and CI is faster (self-healing CDN
   cache, no re-download of the live model library). (#1668, #1676, #1687)
@@ -178,6 +200,8 @@ the game, new graphics for every biome, a longer Game School and a stronger NACH
 - Tooling for AI training and evaluation (teacher-data recorder, experiment knobs, lab tools); no
   player-facing effect. (#1640–#1646, #1658–#1667, #1685–#1694, #1713–#1731, #1742–#1751, #1759–#1760,
   #1763–#1764, #1784–#1787)
+- Test and CI work: a check that the shipped Linux library stays within the system-library floor
+  (#1827); a test-order fix in the multiplayer handshake suite (#1844).
 - Repository hygiene: internal working files, codenames and private paths removed. (#1755, #1758)
 
 ## [0.3.13.1-alpha] — 2026-09-25
