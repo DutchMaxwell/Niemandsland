@@ -7,7 +7,7 @@ Forward+ renderer. Entry scene: `scenes/startup_menu.tscn`.
 
 | Autoload | Script | Responsibility |
 |---|---|---|
-| `ThemeManager` | `theme_manager.gd` | Provides the built-in Tactical-HUD UI theme |
+| `ThemeManager` | `theme_manager.gd` | Provides the built-in glassmorphism UI theme (`glassmorphism_theme.gd`) |
 | `GraphicsSettings` | `graphics_settings.gd` | Quality presets (shadows, SSAO, glow) |
 | `AudioManager` | `audio_manager.gd` | Audio buses / playback |
 | `UiFeedback` | `ui_feedback.gd` | Global hover/press motion + UI sound for every button |
@@ -145,8 +145,9 @@ ruleset (the old root-level `ai_*.gd` / `battle_simulator.gd` were removed and *
   through `VolumetricLos`.
 - `transport_state.gd` (`TransportState`, in `scripts/`) — embark / capacity / disembark-formation / destruction-
   spill state (see [Save format](#save-format-nml)).
-- `solo_difficulty.gd` (`SoloDifficulty`) — the single shipped grade (full strength); every legacy
-  grade name resolves to it. `solo_sim.gd` (`SoloSim`) is the headless self-play harness that runs
+- `solo_grade.gd` (`SoloGrade`) — the player-facing difficulty ladder (Dämmerung, Zwielicht, Finsternis,
+  Albtraum selectable; the choice is stored in `user://solo.cfg`). `solo_difficulty.gd` (`SoloDifficulty`) holds the
+  policy presets the grades resolve to. `solo_sim.gd` (`SoloSim`) is the headless self-play harness that runs
   the same pure modules for balance/regression proofs.
 
 **Play aids & dialogs**
@@ -178,7 +179,7 @@ ruleset (the old root-level `ai_*.gd` / `battle_simulator.gd` were removed and *
   `ambience_synth.gd` / `ambience_library.gd` — one-click weather/mood, rain + lightning,
   war-torn fires and CC0 battlefield ambience (see [`ATMOSPHERE.md`](ATMOSPHERE.md)).
 - `glassmorphism_theme.gd` + `hud/` (`hud_frame`, `hud_tokens`,
-  `state_panel`, `ui_motion`) — the Tactical-HUD UI language and overlay.
+  `state_panel`, `ui_motion`) — the HUD tokens and overlay; `hud/house_style.gd` is the dark-panel house style the in-game windows use.
 - `grass_field.gd`, `atmospheric_clouds.gd`, `cinematic_intro.gd`,
   `opr_stats_tooltip.gd`, `selection_spill_light.gd`.
 
@@ -194,8 +195,11 @@ runs the search planner with the packed ONNX leaf evaluator (`assets/solo/brains
 handed to `NmlCore.set_brain_onnx`) when the extension and the model load, and movement planning goes
 through the core's planner (`NML_CORE_MOVE=0` opts out). Without the built library, with a refused
 model, or with the switch off, the GDScript engine runs unchanged and the game log says which path is
-live (`opponent: erlkoenig … move=core` / `opponent: tree — …`). macOS release builds carry no
-core library, so they always run the GDScript engine. The core reads its rule files and the
+live (`opponent: erlkoenig … move=core` / `opponent: tree — …`). macOS release builds carry a
+universal (arm64 + x86_64) core library: it can only be built on a macOS runner, so the `export-macos` job
+of `build.yml` builds it, exports and ad-hoc signs the app and runs the exported app headless
+(`tools/core_ship_probe.tscn`, judged by `tools/assert_ship_probe.py`) before the release ships that zip; if that job
+failed, the release falls back to a core-less macOS export that runs the GDScript engine. The core reads its rule files and the
 model from a staged copy under `user://nml_core/<version>/` (`CoreAssets`), because a packed export has
 no files on disk. See [`DEV_BRAIN_BRIDGE.md`](DEV_BRAIN_BRIDGE.md) for the developer-only loopback
 evaluator, which still exists for experiments.
