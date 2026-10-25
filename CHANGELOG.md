@@ -189,6 +189,11 @@ Unit names with an apostrophe now find their 3D model. (#1840)
 - **Linux players get the rules core again:** the shipped Linux library is built against an older
   system library, so current distributions (for example Fedora 43) can load it instead of silently
   playing without it. (#1827)
+- **Clear Table also resets the map-layout objectives and who holds them.** (#1849)
+- **The host's panel names the guest's army** instead of the placeholder "Army". (#1850)
+- **In online co-op the opponent's interference against an AI cast is asked on the owning player's
+  machine.** (#1851)
+- **In online co-op a player's own cast is boosted by their own casters.** (#1852)
 
 ### Internal
 - The release job publishes the platform zips under fixed names, and CI is faster (self-healing CDN
@@ -203,6 +208,9 @@ Unit names with an apostrophe now find their 3D model. (#1840)
 - Test and CI work: a check that the shipped Linux library stays within the system-library floor
   (#1827); a test-order fix in the multiplayer handshake suite (#1844).
 - Repository hygiene: internal working files, codenames and private paths removed. (#1755, #1758)
+- Test-only: a two-window acceptance run walks the player's paths. (#1838)
+- The Python-side plan call (`policy_step`) now builds the route seam's index and the route-root split
+  like the other plan entry points; no player-facing effect. (#1860)
 
 ## [0.3.13.1-alpha] — 2026-09-25
 
