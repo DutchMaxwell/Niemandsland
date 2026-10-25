@@ -1850,8 +1850,21 @@ impl Core {
         rich: bool,
     ) -> PyResult<Option<Py<PyAny>>> {
         let statics = self.statics_for(&state.inner)?;
-        let mut policy = Policy::new(&statics, &self.terrain, self.seams());
-        policy.tuning = self.tuning();
+        // The SAME construction `Core.plan_with_rollout` (and the crate's
+        // `plan::policy_of`) uses: the path seam's tier-2 index built from THIS
+        // state, and the `route_root` playout/root seam split. Without them a
+        // header with `seam_path`/`route_root` on answered here exactly like one
+        // with them off, so the Python one-step reply parted from the in-search
+        // reply of the same brain (Issue #1698; the identical omission #1471
+        // fixed for `plan_with_rollout`, #1785 for `full_playout`).
+        let seams = self.seams();
+        let index = nmlcore::plan::reach_of(seams, &state.inner, &self.terrain);
+        let tuning = self.tuning();
+        let (seams, root) = nmlcore::plan::route_root_seams(&self.knobs, seams);
+        let mut policy = Policy::new(&statics, &self.terrain, seams);
+        policy.tuning = tuning;
+        policy.reach = index.as_ref();
+        policy.root_seams = root;
         policy.fit = self.net.as_ref();
         let mut sc = Scratch::default();
         match policy.policy_step(&state.inner, player, rich, &mut sc) {
