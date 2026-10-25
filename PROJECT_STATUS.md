@@ -10,17 +10,17 @@ the full change history is in `git log`.
 
 **Solo mode — a full game against NACHTMAHR** — mark any imported army as AI-controlled
 (checkbox at import, or later in the solo panel), or press **AI Opponent** and let
-NACHTMAHR bring a list of its own (faction and 1000–3000 pts selectable). On Linux and Windows
+NACHTMAHR bring a list of its own (faction and 1000–3000 pts selectable). On Linux, Windows and macOS
 builds NACHTMAHR searches its moves with a **trained neural network (value net)** that ships with
-the game, inside the bundled Rust rules core; on macOS, or when that core does not load, it plays
+the game, inside the bundled Rust rules core; when that core does not load, it plays
 the **rule-based decision tree**. No language model, and **every decision is made offline**: the same inputs produce the same decisions, and
 nothing about a turn leaves the machine. One qualification, because "no network call" was too broad:
 if you let NACHTMAHR bring **its own** list, that list is fetched from the asset CDN the first time
 and cached (see below), so the very first use of **AI Opponent** needs a connection. Your own
 imported armies, and every decision NACHTMAHR makes, need none.
-**A four-grade difficulty ladder is on `main`** (NML-1018, #1126 and
-#1127, merged 2026-09-26, not yet in a tagged release; source: git log): Dämmerung, Zwielicht and Finsternis play the decision tree; **Albtraum**, the default,
-plays with Erlkönig, NACHTMAHR's stronger model, where the core and its model load (on macOS it plays the
+**A four-grade difficulty ladder** (NML-1018, #1126 and
+#1127, merged 2026-09-26; shipping with the next tagged release): Dämmerung, Zwielicht and Finsternis play the decision tree; **Albtraum**, the default,
+plays with Erlkönig, NACHTMAHR's stronger model, where the core and its model load (otherwise the
 tree's ceiling). The picker sits in the solo panel and the choice is remembered
 (`scripts/solo/solo_grade.gd`). Every grade plays by the rules. The match
 runs the rulebook flow end to end: roll-off → the winner picks a table edge and deploys
@@ -261,7 +261,7 @@ three rotating slots that show up in CONTINUE and the load dialog (in multiplaye
 host writes them; each autosave is announced by toast and battle-log line). Older saves
 from removed import paths still load; their units come in as generic units.
 
-**Onboarding — guided tutorial course** — **64 steps in 11 chapters** that teach on the real
+**Onboarding — classic guided tutorial** — **64 steps in 11 chapters** that teach on the real
 table, event-gated (a lesson advances only when the player actually does the action): camera
 & table, selecting, moving/rotating/arranging, measuring and rings, the full dice tray, unit
 cards & the radial menu, wounds/casualties/revive, a real army import, table & casual terrain,
@@ -270,7 +270,19 @@ spacing, Start-Game phase gate). It ships with a bundled board (official lists, 
 auto-generated terrain), progress persistence and an end assessment. Still open for later
 waves: Settings, hosting/multiplayer, Regiments, and an OPR-rules / solo-play track.
 
-**Presentation** — a built-in Tactical-HUD UI theme (sleek; cyan/amber), atmosphere
+**Combat effects, Calm Mode, missions, Trial by Fire** — resolved attacks and casts are drawn at the
+table (result marks, shots, falls, spells, hero auras; drawn from the rules' own results, one **Combat
+Effects** switch plus **Gore** Off / Normal / Extra in Settings). **Calm Mode** (accessibility, off by
+default) is a preset over the individual switches: it snapshots them, forces combat effects, idle motion
+and tilt-shift off and reduce-motion on, and restores them exactly when switched off
+(`scripts/graphics_settings.gd`). The solo Mission picker lists the 18 missions of the catalogue
+(`assets/solo/missions.json`). **Ruined Borderland** is a one-click table theme under Auto-Generate in Map
+Layout (6×4 ft only). **Trial by Fire** (the Game School, working name Spielschule) offers eleven isolated,
+replayable lessons, each with its own bundled scenario, and plays against the gentlest difficulty grade
+(`scripts/spielschule.gd`). After an update the start menu shows a bilingual **What's new** sheet once
+(`scripts/whats_new_content.gd`, `data/whats_new.json`).
+
+**Presentation** — a built-in dark-panel UI style (house style: muted teal accents, gold for primary actions), atmosphere
 presets (Day/Sunset/Night/Overcast/Rain), graphics quality presets, SSAO + glow, cinematic intro. **Battlefield atmosphere**
 ([`docs/ATMOSPHERE.md`](docs/ATMOSPHERE.md)): one-click Day/Sunset/Night/Overcast/Rain
 presets (2 s blends, rain particles, lightning + delayed thunder), a "war-torn" toggle
@@ -283,7 +295,7 @@ camera drift); a still of the finished backdrop covers the view until the live s
 then crossfades away. Entries: **Continue** (the newest save), **Prepare a new table** (biome and
 table size before the match), **Play online**, **Load game**, **Learn to play**; **Help & feedback**,
 **Credits & licenses** and **Quit** below; menu soundscape + CC0 dark-ambient drone.
-**Tilt-shift depth of field** on the table camera (on by default; Settings → lighting panel). The
+**Tilt-shift depth of field** on the table camera (on by default; Settings → lighting panel): sharp at the normal play distance, with the blur fading in only as the camera zooms close, and weaker on Medium and higher graphics presets. The
 **dice window** is built in the new house style (`scripts/hud/house_style.gd`): classic white dice on
 a felt tray with a gold rim, and the window folds to its header.
 Settings window reachable in-game via left panel button or F7. **UI audio**: every
@@ -345,7 +357,7 @@ neural network (value net) in the bundled Rust rules core.
 first version: the AI designation reaches every player, and each player rolls saves for their
 own units.
 Still out of scope: campaigns and ladders. The rule-based decision tree stays in every build as
-the fallback and is the only AI on macOS (see
+the fallback when the core does not load (see
 [`docs/plans/AI_ROLLOUT_WORKFLOW_2026-09-04.md`](docs/plans/AI_ROLLOUT_WORKFLOW_2026-09-04.md)).
 Sharing game records with the developer will only ever be opt-in and is off by default (see
 [`docs/PRIVACY_DATA_SHARING.md`](docs/PRIVACY_DATA_SHARING.md)).
@@ -359,10 +371,10 @@ and `hero_attachment_dialog.gd` were removed as dead code in January 2026 — th
 
 ## Known issues
 
-- **Solo is alpha.** Four selectable difficulty grades (unreleased, see above); co-op against the AI is
+- **Solo is alpha.** Four selectable difficulty grades (see above); co-op against the AI is
   a first version; the rules listed under *Not automated* above must be
-  applied by hand; all solo UI is English-only. macOS builds carry no rules core, so there
-  NACHTMAHR plays the decision tree only; AI thinking time has been measured on one machine.
+  applied by hand; the game UI is English (the What's-new sheet has an English/Deutsch switch). The macOS rules core
+  is verified on GitHub's macOS runners only (no real-Mac test yet); AI thinking time has been measured on one machine.
 - Dice can occasionally jitter at miniature scale (mitigated by the scaled-SubViewport
   dice approach; see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#scaling)).
 - Some TTS texture-loading errors (non-fatal).

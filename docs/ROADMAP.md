@@ -29,8 +29,7 @@ planned and where ideas go. For what already works see
   on wide tables without a frame-cost regression. _M_
 - **Elevation — Phase B/C/D (NML-972).** Heights are rules, not scenery: Phase B1 (climbing pays its
   inches, melee reaches only 4" up/down, coherency's 3" allowance is real elevation, the player can
-  pick a ruin floor) shipped; Phase B2 makes both AI planners climb pieces up to 3", measured on the
-  yardstick; Phase C ports skirmish jump/fall (GFF p.14/p.55); Phase D lets the AI value elevated
+  pick a ruin floor) shipped; Phase B2 lets the AI movement planner climb pieces up to 3"; Phase C ports skirmish jump/fall (GFF p.14/p.55); Phase D lets the AI value elevated
   firing spots by sight gain only. _L_
 - **NACHTMAHR difficulty ladder (NML-1018) — on `main`, unreleased.** Four selectable grades
   (Dämmerung, Zwielicht, Finsternis, Albtraum) with a picker in the solo panel; Albtraum, the default, is
@@ -306,7 +305,7 @@ the AI turn keeps the frame loop alive ([#163](../../../issues/163)); the dice t
 about ([#170](../../../issues/170)); draggable deployment control box ([#159](../../../issues/159)).
 
 **`0.3.10.0-alpha`:** the solo update — **NACHTMAHR**, the built-in
-opponent (rules-based, deterministic, fully offline; one difficulty, full strength) with alternating
+opponent (rules-based, deterministic, fully offline; one difficulty at that release, a four-grade ladder since) with alternating
 activations, its own objective-marker scoring, round plans and look-ahead activation ordering, and a
 battle log that explains every decision; the **AI Opponent** button (NACHTMAHR brings its own list —
 every Grimdark Future faction, 1000–3000 pts, CDN-delivered at runtime, guarded out of the public repo by a CI check,

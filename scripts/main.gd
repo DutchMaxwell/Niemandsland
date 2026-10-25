@@ -476,6 +476,8 @@ var _reconnect_failure_shown: bool = false
 ## manager has one shared HTTPRequest, so per-unit concurrent downloads collide). Keyed by
 ## player_id -> { army_name, units: Array, objects: Array }.
 var _incoming_armies: Dictionary = {}
+## player_id -> army name of a REMOTE army (its armies[] slot holds null here); the left panel's "AI plays P<n>" row reads it.
+var _remote_army_names: Dictionary = {}
 ## Inactivity window (seconds) a guest waits between remote army-import RPCs before it gives up.
 ## The host paces unit batches ~250 ms apart (ARMY_BATCH_DELAY_MS), so even a large army never
 ## has a multi-second gap; this generous silence budget only trips when the host truly went away
@@ -2070,7 +2072,7 @@ func _solo_apply_difficulty() -> void:
 ## Grill 25.09.2026 (every applied rule logs): once the game is PLAYING, one battle-log line names the
 ## grade and the brain NACHTMAHR plays with; again only when that changes (a new game resets it).
 func _solo_log_grade() -> void:
-	var line := SoloGrade.start_line(_solo_opponent_brain, OS.get_name() == "macOS")
+	var line := SoloGrade.start_line(_solo_opponent_brain, _solo_erlkoenig_missing())
 	if opr_army_manager == null or opr_army_manager.is_deployment_phase() or line.is_empty() or line == _solo_grade_logged:
 		return
 	_solo_grade_logged = line
@@ -4869,8 +4871,19 @@ func _solo_resolve_one_cast(cast: Dictionary) -> void:
 	# RESIST (v3.5.1: enemy models with tokens within 18" LoS may spend for -1 each): in a human-vs-AI
 	# game the human is prompted; in native both-AI the controller already planned + spent this.
 	if bool(cast.get("interference_open", false)) and not _solo_both_ai:
-		interference += await _solo_prompt_interference(caster, caster_unit, spell_name,
-			base_target, boost, _solo_cast_target_label(targets))
+		if network_manager == null or not network_manager.is_multiplayer_active():
+			interference += await _solo_prompt_interference(caster, caster_unit, spell_name,
+				base_target, boost, _solo_cast_target_label(targets))
+		else:
+			# Online co-op (#673): every human side may interfere, each at ITS owner's machine — this
+			# machine only resolves the AI's activation; another player's tokens are not its choice.
+			for foe in _solo_ai_cast_foes():
+				if int(foe) == network_manager.get_my_player_slot():
+					interference += await _solo_prompt_interference(caster, caster_unit, spell_name,
+						base_target, boost, _solo_cast_target_label(targets), int(foe))
+				else:
+					interference += await _solo_remote_interference(caster, caster_unit, spell_name, boost,
+						_solo_cast_target_label(targets), int(foe), base_target)
 	if interference > 0 and seal_id > 0:
 		_vfx_emit({"k": "seal_dim", "sid": seal_id})
 	var target_num := AiSpell.cast_target(boost, interference, base_target)
@@ -5560,13 +5573,13 @@ func _solo_prompt_interference(caster: GameUnit, caster_unit: GameUnit, spell_na
 ## usual) and the one reply face is the token count. A foe seated here is asked here; a vacant seat or
 ## no answer in time = no interference, logged.
 func _solo_remote_interference(member: GameUnit, unit: GameUnit, spell_name: String, boost: int,
-		target_label: String, foe: int) -> int:
+		target_label: String, foe: int, base_target: int = AiSpell.CAST_BASE_TARGET) -> int:
 	var helpers: Array = solo_controller._aura_casters(foe, unit, null)
 	if helpers.is_empty():
 		return 0
 	var lender := (helpers[0] as Dictionary)["unit"] as GameUnit
 	if _solo_i_own_unit(lender):
-		return await _solo_prompt_interference(member, unit, spell_name, AiSpell.CAST_BASE_TARGET, boost,
+		return await _solo_prompt_interference(member, unit, spell_name, base_target, boost,
 			target_label, foe)
 	var owner_peer := _solo_peer_for_slot(foe)
 	var owner_name := _solo_owner_name(lender)
@@ -5576,13 +5589,25 @@ func _solo_remote_interference(member: GameUnit, unit: GameUnit, spell_name: Str
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "Waiting for %s — interference against %s" % [owner_name, spell_name], true)
 	var reply: Dictionary = await _owner_request(owner_peer, {"unit": lender.unit_id, "kind": "interference",
-		"count": 0, "target": AiSpell.CAST_BASE_TARGET, "purpose": spell_name, "ask": {"spell": spell_name,
+		"count": 0, "target": base_target, "purpose": spell_name, "ask": {"spell": spell_name,
 		"caster": member.unit_id, "caster_unit": unit.unit_id, "boost": boost, "targets": target_label}})
 	var faces: Array = reply.get("faces", [])
 	if not bool(reply.get("done", false)) or faces.size() != 1:
 		_log_rule_event(BattleLog.Category.COMBAT, "%s: no answer from %s — no interference" % [spell_name, owner_name], true)
 		return 0
 	return maxi(0, int(faces[0]))
+
+
+## Online co-op (#673): the human sides that may interfere with an AI cast — every slot fielding a unit
+## that is not NACHTMAHR's (two humans share the table against one AI), sorted.
+func _solo_ai_cast_foes() -> Array:
+	var foes: Array = []
+	for u in opr_army_manager.get_all_game_units():
+		var slot := unit_owner_slot((u as GameUnit).unit_properties)
+		if slot > 0 and not foes.has(slot) and not _solo_is_ai_unit(u as GameUnit):
+			foes.append(slot)
+	foes.sort()
+	return foes
 
 
 ## The joined display label of a cast's target list.
@@ -9402,7 +9427,7 @@ func _rpc_request_roll(rq: Dictionary, from_peer: int) -> void:
 		_ensure_solo_controller()   # an agreed Automatic room borrows it for geometry (3.1)
 		faces = [0]
 		if member != null and caster_unit != null and solo_controller != null:
-			faces = [await _solo_prompt_interference(member, caster_unit, str(ask["spell"]), AiSpell.CAST_BASE_TARGET,
+			faces = [await _solo_prompt_interference(member, caster_unit, str(ask["spell"]), int(rq.get("target", AiSpell.CAST_BASE_TARGET)),
 				int(ask.get("boost", 0)), str(ask.get("targets", "")), unit_owner_slot(unit.unit_properties))]
 	elif ask.has("weapon"):
 		var attacker := GameUnit.new()
@@ -11114,12 +11139,14 @@ func solo_begin_cast(unit: GameUnit) -> void:
 			unit.get_name(), side, str(entry.get("name", "?")), cands.size()])
 
 
-## #1719: a cast's sides. With an AI seat they are the controller's two (solo, co-op: the human seat
-## vs NACHTMAHR). Without one they follow the CASTER — its own slot, and every other slot that fields
+## #1719: a cast's sides. With an AI seat the foe is NACHTMAHR and the own side is the CASTER's slot (co-op
+## #673: two humans share the table, each boosts and buffs with its own army; solo: the human seat). Without
+## one they follow the CASTER — its own slot, and every other slot that fields
 ## a unit as an opponent (a local table may import up to four armies) — so P2 casts as P2.
 func _solo_cast_sides(unit: GameUnit) -> Dictionary:
 	if not solo_ai_slots.is_empty():
-		return {"own": solo_controller.human_slot, "foes": [solo_controller.ai_slot]}
+		var mine := unit_owner_slot(unit.unit_properties)
+		return {"own": mine if mine > 0 else solo_controller.human_slot, "foes": [solo_controller.ai_slot]}
 	var own := unit_owner_slot(unit.unit_properties)
 	var foes: Array = []
 	for u in opr_army_manager.get_all_game_units():
@@ -11164,6 +11191,7 @@ func _run_human_cast(unit: GameUnit, member: GameUnit, entry: Dictionary, picked
 		boost = await dlg.ask(member.get_name(), spell_name, _solo_cast_target_label(targets),
 			AiSpell.CAST_BASE_TARGET, 0, pool, "boost")
 		if boost > 0:
+			var payers: PackedStringArray = []
 			for d in SoloController._draw_aura_tokens(helpers, boost):
 				var dd := d as Dictionary
 				var payer := dd["unit"] as GameUnit
@@ -11171,6 +11199,10 @@ func _run_human_cast(unit: GameUnit, member: GameUnit, entry: Dictionary, picked
 					payer.spend_caster_points(1)
 				if network_manager != null and network_manager.has_method("broadcast_unit_casts"):
 					network_manager.broadcast_unit_casts(payer)
+				payers.append("%s ×%d" % [payer.get_name(), int(dd["tokens"])])
+			_log_rule_event(BattleLog.Category.COMBAT, "Boost: %s spend%s %d token%s — the cast roll improves to %d+" % [
+				", ".join(payers), ("s" if payers.size() == 1 else ""), boost, ("" if boost == 1 else "s"),
+				AiSpell.cast_target(boost, 0, AiSpell.CAST_BASE_TARGET)])
 	# AI COUNTER-INTERFERENCE (decided default: shown AFTER the player commits — rules-sequential,
 	# no leak): the AI's 18"-LoS pool spends per the marginal calculus, value-proxied by the cost.
 	var interference := 0
@@ -14383,8 +14415,25 @@ func _do_clear_all() -> void:
 	object_manager.clear_all_objects()
 	_clear_dice_log()
 	_update_round_button()  # clear_all_objects() resets the round to 1
+	_clear_map_objectives()
 	if _table_biome_presenter != null:
 		_table_biome_presenter.request_rebuild("layout")   # terrain pieces are gone: re-dress the empty table
+
+
+## Clear Table removes the Map Layout objectives and who holds them with the rest of the table (terrain,
+## models and armies are gone too). The editor's list is the owner; its change signal rebuilds the overlay
+## and tells the other peers.
+func _clear_map_objectives() -> void:
+	if map_layout_editor == null or map_layout_editor.mission_objectives.is_empty():
+		return
+	var n: int = map_layout_editor.mission_objectives.size()
+	map_layout_editor.mission_objectives.clear()
+	map_layout_editor._update_objectives_status()
+	map_layout_editor.grid_container.queue_redraw()
+	map_layout_editor.objectives_changed.emit(map_layout_editor.mission_objectives)
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL,
+			"Objectives cleared (Clear Table): %d marker%s and their holders removed" % [n, "s" if n != 1 else ""], true)
 
 
 func _on_sort_table() -> void:
@@ -18010,6 +18059,7 @@ func _on_remote_army_complete(player_id: int, rule_descriptions: Dictionary) -> 
 	# the left panel, otherwise a side that imported nothing itself never gets the section / Rules automation switch.
 	if not opr_army_manager.armies.has(player_id):
 		opr_army_manager.armies[player_id] = null
+	_remote_army_names[player_id] = str(buf.get("army_name", ""))
 	_refresh_solo_panel()
 
 	# Tell other peers we are loading so their object move/edit input is gated while we build
@@ -18645,6 +18695,18 @@ func _refresh_rules_panel(has_army: bool) -> void:
 	GameMenu.section(rules_panel_box)
 
 
+## The name a remote army's panel row shows: its army name, else the name of the player seated there, else "Army".
+func _remote_seat_label(player_id: int) -> String:
+	var army_name := str(_remote_army_names.get(player_id, ""))
+	if not army_name.is_empty():
+		return army_name
+	if network_manager != null:
+		for peer in network_manager.peer_to_slot:
+			if int(network_manager.peer_to_slot[peer]) == player_id and network_manager.player_names.has(peer):
+				return str(network_manager.player_names[peer])
+	return "Army"
+
+
 ## Rebuild the Solo section: a header + one "AI plays P<n> — <army>" CheckButton per imported army.
 ## Hidden entirely while no armies are imported.
 func _refresh_solo_panel() -> void:
@@ -18696,7 +18758,7 @@ func _refresh_solo_panel() -> void:
 	for pid in pids:
 		var army = opr_army_manager.armies[pid]
 		var cb := CheckButton.new()
-		cb.text = "AI plays P%d — %s" % [int(pid), (str(army.name) if army != null else "Army")]
+		cb.text = "AI plays P%d — %s" % [int(pid), (str(army.name) if army != null else _remote_seat_label(int(pid)))]
 		cb.button_pressed = solo_ai_slots.has(int(pid))
 		cb.focus_mode = Control.FOCUS_NONE
 		cb.toggled.connect(_on_solo_ai_toggled.bind(int(pid)))
@@ -18749,20 +18811,26 @@ func _refresh_solo_panel() -> void:
 	GameMenu.section(solo_panel_box)
 
 
+## The fact behind the picker text: Erlkönig needs the core and the shipped (or developer) brain.
+func _solo_erlkoenig_missing() -> bool:
+	var dev_brain := OS.is_debug_build() and not OS.get_environment("NML_BRAIN_URL").is_empty()
+	return SoloGrade.erlkoenig_missing(BattleSim.core_enabled(), dev_brain or solo_controller == null or solo_controller.shipped_brain_ready())   # no controller yet: not yet known to be missing
+
+
 ## The grade dropdown: name + one-line description per grade, NACHTMAHR greyed "coming" (grill Q5/Q6).
 func _solo_grade_option() -> OptionButton:
 	var opt := OptionButton.new()
-	var macos := OS.get_name() == "macOS"
+	var missing := _solo_erlkoenig_missing()
 	# Closed, the button shows ONLY the grade name; its line goes to the tooltip (maintainer 26.09.2026).
 	var show_closed := func(g: String) -> void:
 		opt.text = SoloGrade.display_name(g)
 		opt.tooltip_text = "%s — %s\nNACHTMAHR's difficulty grade. Your choice is kept for the next game." % [
-			SoloGrade.display_name(g), SoloGrade.description(g, macos)]
+			SoloGrade.display_name(g), SoloGrade.description(g, missing)]
 	opt.focus_mode = Control.FOCUS_NONE
 	opt.fit_to_longest_item = false   # the long descriptions live in the list, not in the panel width
 	opt.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	for g in SoloGrade.GRADES:
-		opt.add_item("%s — %s" % [SoloGrade.display_name(g), SoloGrade.description(g, macos)])
+		opt.add_item("%s — %s" % [SoloGrade.display_name(g), SoloGrade.description(g, missing)])
 		opt.set_item_metadata(opt.item_count - 1, g)
 		opt.set_item_disabled(opt.item_count - 1, not SoloGrade.selectable(g))
 	opt.select(SoloGrade.GRADES.find(SoloGrade.sanitize(_solo_interactive_grade)))
