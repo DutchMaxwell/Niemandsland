@@ -2072,7 +2072,7 @@ func _solo_apply_difficulty() -> void:
 ## Grill 25.09.2026 (every applied rule logs): once the game is PLAYING, one battle-log line names the
 ## grade and the brain NACHTMAHR plays with; again only when that changes (a new game resets it).
 func _solo_log_grade() -> void:
-	var line := SoloGrade.start_line(_solo_opponent_brain, OS.get_name() == "macOS")
+	var line := SoloGrade.start_line(_solo_opponent_brain, _solo_erlkoenig_missing())
 	if opr_army_manager == null or opr_army_manager.is_deployment_phase() or line.is_empty() or line == _solo_grade_logged:
 		return
 	_solo_grade_logged = line
@@ -18811,20 +18811,26 @@ func _refresh_solo_panel() -> void:
 	GameMenu.section(solo_panel_box)
 
 
+## The fact behind the picker text: Erlkönig needs the core and the shipped (or developer) brain.
+func _solo_erlkoenig_missing() -> bool:
+	var dev_brain := OS.is_debug_build() and not OS.get_environment("NML_BRAIN_URL").is_empty()
+	return SoloGrade.erlkoenig_missing(BattleSim.core_enabled(), dev_brain or solo_controller == null or solo_controller.shipped_brain_ready())   # no controller yet: not yet known to be missing
+
+
 ## The grade dropdown: name + one-line description per grade, NACHTMAHR greyed "coming" (grill Q5/Q6).
 func _solo_grade_option() -> OptionButton:
 	var opt := OptionButton.new()
-	var macos := OS.get_name() == "macOS"
+	var missing := _solo_erlkoenig_missing()
 	# Closed, the button shows ONLY the grade name; its line goes to the tooltip (maintainer 26.09.2026).
 	var show_closed := func(g: String) -> void:
 		opt.text = SoloGrade.display_name(g)
 		opt.tooltip_text = "%s — %s\nNACHTMAHR's difficulty grade. Your choice is kept for the next game." % [
-			SoloGrade.display_name(g), SoloGrade.description(g, macos)]
+			SoloGrade.display_name(g), SoloGrade.description(g, missing)]
 	opt.focus_mode = Control.FOCUS_NONE
 	opt.fit_to_longest_item = false   # the long descriptions live in the list, not in the panel width
 	opt.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	for g in SoloGrade.GRADES:
-		opt.add_item("%s — %s" % [SoloGrade.display_name(g), SoloGrade.description(g, macos)])
+		opt.add_item("%s — %s" % [SoloGrade.display_name(g), SoloGrade.description(g, missing)])
 		opt.set_item_metadata(opt.item_count - 1, g)
 		opt.set_item_disabled(opt.item_count - 1, not SoloGrade.selectable(g))
 	opt.select(SoloGrade.GRADES.find(SoloGrade.sanitize(_solo_interactive_grade)))

@@ -103,7 +103,7 @@ func test_start_line_names_grade_and_brain() -> void:
 	assert_str(SoloGrade.start_line({"engine": "erlkoenig", "id": "onnx", "hash": "ab"}, false)).is_equal("NACHTMAHR — Albtraum (Erlkönig)")
 	assert_str(SoloGrade.start_line({"engine": "classic", "id": "nachtmahr", "hash": ""}, false)).is_equal("NACHTMAHR — Albtraum (decision tree)")
 	assert_str(SoloGrade.start_line({"engine": "classic", "id": "nachtmahr", "hash": ""}, true)) \
-		.is_equal("NACHTMAHR — Albtraum (decision tree — on macOS still without Erlkönig)")
+		.is_equal("NACHTMAHR — Albtraum (decision tree — Erlkönig did not load)")
 	assert_str(SoloGrade.start_line({"engine": "classic", "id": "zwielicht", "hash": ""}, true)).is_equal("NACHTMAHR — Zwielicht (decision tree)")
 	assert_str(SoloGrade.start_line({"engine": "classic", "id": "daemmerung", "hash": ""}, false)).is_equal("NACHTMAHR — Dämmerung (decision tree)")
 	assert_str(SoloGrade.start_line({}, false)).is_empty()   # no graded AI seat
