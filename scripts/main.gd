@@ -2795,13 +2795,40 @@ func _solo_secret_apply(kinds: Array) -> void:
 		_solo_player_label(int(SoloController.mission_roles.get("defender", 0))), markers.size()], true)
 
 
-## Player label for logs/summary: "P<n> (<army>)" when the slot has an imported army, else "P<n>".
+## The seats the left panel lists: imported armies plus trays that a load rebuilt when armies[] is
+## empty (a fresh process after CONTINUE never refills armies[]; the tray carries the name).
+func _solo_seat_ids() -> Array:
+	var pids: Array = []
+	if opr_army_manager != null:
+		pids.append_array(opr_army_manager.armies.keys())
+		for pid in opr_army_manager.army_trays.keys():
+			var id := int(pid)
+			if id != 0 and not pids.has(id):
+				pids.append(id)
+	pids.sort()
+	return pids
+
+
+## The army name for a seat: the imported OPRArmy, else the loaded/synced tray's "army_name" meta.
+func _solo_army_name(pid: int) -> String:
+	if opr_army_manager != null:
+		if opr_army_manager.armies.has(pid):
+			var army = opr_army_manager.armies[pid]
+			if army != null:
+				return str(army.name)
+		if opr_army_manager.army_trays.has(pid):
+			var tray = opr_army_manager.army_trays[pid]
+			if tray != null and tray.has_meta("army_name"):
+				var n := str(tray.get_meta("army_name", ""))
+				if not n.is_empty():
+					return n
+	return ""
+
+
+## Player label for logs/summary: "P<n> (<army>)" when the slot has an army (imported or loaded), else "P<n>".
 func _solo_player_label(pid: int) -> String:
-	if opr_army_manager != null and opr_army_manager.armies.has(pid):
-		var army = opr_army_manager.armies[pid]
-		if army != null:
-			return "P%d (%s)" % [pid, str(army.name)]
-	return "P%d" % pid
+	var army_name := _solo_army_name(pid)
+	return "P%d (%s)" % [pid, army_name] if not army_name.is_empty() else "P%d" % pid
 
 
 ## The plain human verdict for the finished mission — "Victory", "Defeat" or "Draw" — decided by the
@@ -17296,6 +17323,7 @@ func _on_load_completed(object_count: int) -> void:
 	_sync_move_trails_deployment()
 	_update_game_phase_ui()
 	solo_rehydrate_spell_state()   # NML-949: rebuild the spell bookkeeping the units carried in
+	_refresh_solo_panel()   # step 17: a fresh-process load leaves armies[] empty; the trays carry the seats
 
 	# Sync to multiplayer clients if hosting
 	if network_manager.is_host and network_manager.connected_peers.size() > 0:
@@ -18759,8 +18787,7 @@ func _refresh_solo_panel() -> void:
 		return
 	for c in solo_panel_box.get_children():
 		c.queue_free()
-	var pids: Array = opr_army_manager.armies.keys()
-	pids.sort()
+	var pids: Array = _solo_seat_ids()
 	_refresh_rules_panel(not pids.is_empty())
 	solo_panel_box.visible = not pids.is_empty()
 	if pids.is_empty():
@@ -18799,9 +18826,9 @@ func _refresh_solo_panel() -> void:
 	# the controller plays — and only where the AI runs (solo, or the co-op host).
 	var mp: bool = network_manager != null and network_manager.is_multiplayer_active()
 	for pid in pids:
-		var army = opr_army_manager.armies[pid]
 		var cb := CheckButton.new()
-		cb.text = "AI plays P%d — %s" % [int(pid), (str(army.name) if army != null else _remote_seat_label(int(pid)))]
+		var seat_name := _solo_army_name(int(pid))
+		cb.text = "AI plays P%d — %s" % [int(pid), seat_name if not seat_name.is_empty() else _remote_seat_label(int(pid))]
 		cb.button_pressed = solo_ai_slots.has(int(pid))
 		cb.focus_mode = Control.FOCUS_NONE
 		cb.toggled.connect(_on_solo_ai_toggled.bind(int(pid)))
