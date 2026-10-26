@@ -10171,6 +10171,17 @@ func _solo_decision_rules_for(unit: GameUnit) -> Array:
 func _solo_log_rule_inventory(player_id: int, human := false) -> void:
 	if battle_log == null or opr_army_manager == null:
 		return
+	var inv := _solo_rule_inventory_for(player_id)
+	# Step 2.9: the AI-seat handoff line is unchanged; a hotseat HUMAN army gets the same inventory
+	# under a player-facing header, so each human sees what the engine runs vs. what they apply by hand.
+	var head := "AI rule inventory (P%d): %s | decision-aware: %s | NOT automated (apply manually): %s"
+	if human:
+		head = "Rules the engine applies (P%d): %s | decision-aware: %s | apply by hand: %s"
+	battle_log.log_event(BattleLog.Category.GENERAL, head % [
+		player_id, inv["resolved"], inv["decision"], inv["unknown"]], true)
+
+
+func _solo_rule_inventory_for(player_id: int) -> Dictionary:
 	var names: Array = []
 	var first_unit: GameUnit = null
 	for u in opr_army_manager.get_game_units_for_player(player_id):
@@ -10183,18 +10194,42 @@ func _solo_log_rule_inventory(player_id: int, human := false) -> void:
 		for w in _solo_all_weapons(gu):
 			if w is Object and (w as Object).get("special_rules") != null:
 				names.append_array((w as Object).special_rules)
-	# Wave 5: the modeled/decision sets are DERIVED from the army's game system's mechanics map (one
-	# army = one system, so the first unit carries it); the constants remain the no-map fallback.
 	var inv := SoloController.classify_rule_inventory(names,
 		_solo_modeled_rules_for(first_unit), _solo_decision_rules_for(first_unit))
-	# Step 2.9: the AI-seat handoff line is unchanged; a hotseat HUMAN army gets the same inventory
-	# under a player-facing header, so each human sees what the engine runs vs. what they apply by hand.
-	var head := "AI rule inventory (P%d): %s | decision-aware: %s | NOT automated (apply manually): %s"
-	if human:
-		head = "Rules the engine applies (P%d): %s | decision-aware: %s | apply by hand: %s"
-	battle_log.log_event(BattleLog.Category.GENERAL, head % [
-		player_id, _solo_inventory_list(inv["resolved"]), _solo_inventory_list(inv["decision"]),
-		_solo_inventory_list(inv["unknown"])], true)
+	var by_hand: Array = (inv["unknown"] as Dictionary).keys()
+	by_hand.sort()
+	return {"resolved": _solo_inventory_list(inv["resolved"]),
+		"decision": _solo_inventory_list(inv["decision"]),
+		"unknown": _solo_inventory_list(inv["unknown"]),
+		"by_hand_names": by_hand}
+
+
+## The human seats on a hotseat table, in player order (step 15: one by-hand card per human army).
+func _solo_human_seats() -> Array:
+	var slots: Array = []
+	if opr_army_manager == null:
+		return slots
+	for gu in opr_army_manager.game_units.values():
+		var pid := int((gu as GameUnit).unit_properties.get("player_id", 0))
+		if pid != 0 and not slots.has(pid):
+			slots.append(pid)
+	slots.sort()
+	return slots
+
+
+## Step 15 (test 4): the "apply by hand" list is READ, not left in a collapsed log — one card per
+## human army at game start, in seat order, OK only. The log line stays as the permanent record.
+func _solo_show_rule_cards(slots: Array) -> void:
+	for pid in slots:
+		var inv := _solo_rule_inventory_for(int(pid))
+		var names: Array = inv["by_hand_names"]
+		var body := "Nothing - the engine runs every rule in this army."
+		if not names.is_empty():
+			body = "\n".join(PackedStringArray(names))
+		body += "\n\nThe engine runs: %s" % str(inv["resolved"])
+		var card := PromptCard.new("Rules you apply by hand (P%d)" % int(pid), body, "OK", "")
+		add_child(card)
+		await card.answer()
 
 
 ## "AP x23, Tough x4, …" — one inventory class as a compact, alphabetical count list ("none" when empty).
@@ -14583,6 +14618,9 @@ func set_rules_automation(level: int, who: String) -> bool:
 	opr_army_manager.rules_automation = level
 	_log_rule_event(BattleLog.Category.GENERAL, "Rules automation: %s (changed by %s)" % [RulesAutomation.label(level), who])
 	_update_rules_chip()
+	if level == RulesAutomation.Level.AUTOMATIC and _solo_hotseat_automatic() \
+			and opr_army_manager.game_phase == OPRArmyManager.GamePhase.PLAYING:
+		_solo_show_rule_cards(_solo_human_seats())
 	return true
 
 
@@ -19272,14 +19310,10 @@ func _on_game_phase_changed(phase: int) -> void:
 	# Step 2.9: a hotseat Automatic table has no AI-seat handoff to print the rule inventory at, so print
 	# it for EACH human army at game start — what the engine applies vs. what the player applies by hand.
 	if phase == OPRArmyManager.GamePhase.PLAYING and opr_army_manager != null and _solo_hotseat_automatic():
-		var slots: Array = []
-		for gu in opr_army_manager.game_units.values():
-			var pid := int((gu as GameUnit).unit_properties.get("player_id", 0))
-			if pid != 0 and not slots.has(pid):
-				slots.append(pid)
-		slots.sort()
+		var slots := _solo_human_seats()
 		for pid in slots:
 			_solo_log_rule_inventory(int(pid), true)
+		_solo_show_rule_cards(slots)
 	if phase == OPRArmyManager.GamePhase.PLAYING and solo_ai_slots.is_empty() \
 			and (network_manager == null or not network_manager.is_multiplayer_active()):
 		_hotseat_rapid_ambush_round_one()
