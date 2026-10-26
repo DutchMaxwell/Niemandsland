@@ -11486,7 +11486,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	var key := event as InputEventKey
 	if key != null and key.pressed and not key.echo and key.keycode == KEY_ESCAPE:
 		if not _esc_owned:
-			_on_hamburger_pressed()
+			# maintainer test 7, 26.10.2026: Esc with a selection deselects first; the menu opens on the next Esc.
+			if not left_panel_scroll.visible and object_manager != null \
+					and not object_manager.get_selected_objects().is_empty():
+				object_manager.deselect_all()
+			else:
+				_on_hamburger_pressed()
 			get_viewport().set_input_as_handled()
 		return
 	if _solo_target_mode.is_empty():
