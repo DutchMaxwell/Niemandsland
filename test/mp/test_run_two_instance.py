@@ -161,5 +161,21 @@ class LinkCutFlagTest(unittest.TestCase):
         self.assertFalse(args.include_link_cut)
 
 
+class GuestAnswersDuringCutFlagTest(unittest.TestCase):
+    def test_flag_implies_the_guest_owed_scenario(self):
+        argv = ["run_two_instance.py", "--run-dir", "/tmp/mp2", "--guest-answers-during-cut"]
+        with mock.patch.object(sys, "argv", argv):
+            args = driver.parse_args()
+        self.assertTrue(args.guest_answers_during_cut)
+        self.assertTrue(args.guest_owed_cut)
+
+    def test_flag_defaults_off(self):
+        argv = ["run_two_instance.py", "--run-dir", "/tmp/mp2"]
+        with mock.patch.object(sys, "argv", argv):
+            args = driver.parse_args()
+        self.assertFalse(args.guest_answers_during_cut)
+        self.assertFalse(args.guest_owed_cut)
+
+
 if __name__ == "__main__":
     unittest.main()
