@@ -5570,6 +5570,7 @@ func _solo_side_has_caster_tokens(slot: int) -> bool:
 					return true
 	return false
 
+
 ## The human's resist prompt (v3.5.1 interference: enemy models with tokens within 18" LoS of the
 ## caster's unit spend any number for -1 each). Iterative and optional: one token per confirm, cancel
 ## keeps the rest — the wave-6 "basic prompt" (full counter-casting UX is a later wave). Returns the
