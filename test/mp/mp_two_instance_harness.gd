@@ -45,6 +45,8 @@ var _start_q_up := false        # the host's start question was on screen last s
 var _start_q_count := 0         # how many times it appeared (asked once per room)
 var _host_left_at := 0.0        # bugs 9+10: unix time the guest's "host left" notice appeared
 var _net_status_seen: Array = []  # bug 4: every network status text shown, in order (the hiccup notice)
+var _expect_link_cut := false     # step 23: a reconnect failure is data, not a test failure
+var _link_events: Array = []      # step 23: relay rejoin signals in order ({"t_ms", "e", "arg"})
 
 
 func _ready() -> void:
@@ -60,6 +62,7 @@ func _ready() -> void:
 	_state_path = _run_dir.path_join("%s.state.json" % _role)
 	_ack_path = _run_dir.path_join("%s.ack.json" % _role)
 	seed(int(_args.get("seed", "240904")))
+	_expect_link_cut = _args.has("expect-link-cut")
 
 	var relay_url := str(_args.get("relay-url", "ws://127.0.0.1:8765"))
 	var code := str(_args.get("code", ""))
@@ -94,9 +97,31 @@ func _wire_signals() -> void:
 		_log("joined room %s" % _room_code))
 	lobby.internet_connection_failed.connect(func(reason: String) -> void:
 		_fail("connection failed: %s" % reason))
+	# Step 23: the link-cut scenario EXPECTS the host's rejoin to fail at least once; the events are
+	# the evidence, so the two production-fatal signals become log lines there.
+	lobby.relay_reconnecting.connect(func() -> void: _link_events.append(
+		{"t_ms": Time.get_ticks_msec(), "e": "relay_reconnecting", "arg": ""}))
+	lobby.relay_reconnected.connect(func() -> void: _link_events.append(
+		{"t_ms": Time.get_ticks_msec(), "e": "relay_reconnected", "arg": ""}))
 	lobby.relay_reconnect_failed.connect(func(reason: String) -> void:
+		_link_events.append({"t_ms": Time.get_ticks_msec(), "e": "relay_reconnect_failed", "arg": reason})
+		if _expect_link_cut:
+			_log("reconnect failed: %s" % reason)
+			return
 		_fail("reconnect failed: %s" % reason))
+	lobby.host_paused.connect(func() -> void: _link_events.append(
+		{"t_ms": Time.get_ticks_msec(), "e": "host_paused", "arg": ""}))
+	lobby.host_rejoined.connect(func() -> void: _link_events.append(
+		{"t_ms": Time.get_ticks_msec(), "e": "host_rejoined", "arg": ""}))
+	var nm = _main.get("network_manager")
+	if nm != null and _expect_link_cut:
+		nm.command_received.connect(func(type: String, _payload: Variant, from_peer: int) -> void:
+			_log("command %s from %d" % [type, from_peer]))
 	lobby.internet_disconnected.connect(func() -> void:
+		_link_events.append({"t_ms": Time.get_ticks_msec(), "e": "internet_disconnected", "arg": ""})
+		if _expect_link_cut:
+			_log("internet session disconnected")
+			return
 		if not _failed and not _args.has("leave"):
 			_fail("internet session disconnected"))
 	_write_state()
@@ -200,10 +225,9 @@ func _run_command(seq: int, action: String, payload: Dictionary) -> void:
 		# #673: the host (slot 1) resolves an attack whose saves belong to the guest's unit —
 		# the exact production save-batch entry the melee/shooting resolver funnels into.
 		# Fire-and-forget: the batch stays in-flight (the driver watches the state file) until
-		# the owner's faces come back.
-		ok = _require_role("host", action)
-		if ok:
-			_run_remote_save_attack()
+		# the owner's faces come back. Step 23: the guest may resolve too (the defender is then
+		# a host unit, so the pending owner roll sits on the host).
+		_run_remote_save_attack()
 	elif action == "confirm_save":
 		ok = _confirm_save_prompt()
 	elif action == "vfx_burst":
@@ -408,9 +432,12 @@ func _unit(unit_id: String) -> GameUnit:
 
 ## #673: the guest must answer the remote save prompt like a human would — the production
 ## dialog (`_solo_prompt_saves`) is confirmed exactly as its Roll button would.
+## Step 23: the resolver is whoever asked; the defender belongs to the OTHER side, so the
+## pending owner roll is the counterpart's to answer (host asks -> guest owes, and vice versa).
 func _run_remote_save_attack() -> void:
-	var wounds: int = await _main._solo_save_batch(_unit(AI_STRIKER_UNIT),
-		_unit(SAVE_DEFENDER_UNIT), SAVE_WEAPON, 3, 4, 0,
+	var attacker: GameUnit = _unit(AI_STRIKER_UNIT) if _role == "host" else _unit(SAVE_DEFENDER_UNIT)
+	var defender: GameUnit = _unit(SAVE_DEFENDER_UNIT) if _role == "host" else _unit(SPELL_UNIT)
+	var wounds: int = await _main._solo_save_batch(attacker, defender, SAVE_WEAPON, 3, 4, 0,
 		{"name": SAVE_WEAPON}, true, false)
 	_remote_save_wounds = wounds
 
@@ -428,8 +455,10 @@ func _visible_save_prompt() -> PromptCard:
 	if _main == null:
 		return null
 	for child in _main.get_children():
+		# The title is "Incoming fire!" when the owner is "You" and "<name> — incoming fire!" in a
+		# human-vs-human room (step 23), so match the suffix, case-insensitively.
 		if child is PromptCard and (child as PromptCard).visible \
-				and (child as PromptCard).title == "Incoming fire!":
+				and (child as PromptCard).title.to_lower().ends_with("incoming fire!"):
 			return child
 	return null
 
@@ -506,6 +535,7 @@ func _snapshot() -> Dictionary:
 		"peers": {},
 		"objects": [],
 		"net_status_seen": _net_status_seen.duplicate(),
+		"link_events": _link_events.duplicate(),
 	}
 	if _main != null and _main.get("object_manager") != null:
 		for child in _main.object_manager.get_children():

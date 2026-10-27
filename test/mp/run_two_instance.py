@@ -39,6 +39,10 @@ MIN_AVAILABLE_MB = 3500
 # made during the silence must reach both peers within FAST_LIMIT_S (threshold + a few seconds).
 SILENCE_S = 20.0
 FAST_LIMIT_S = 15.0
+# Step 23: the host's link is cut for this long (the Windows test lost WLAN for ~10 s); the whole
+# scenario must converge well inside the 120 s owner-request bound, so LINK_CUT_WAIT_S is the ceiling.
+LINK_CUT_S = 10.0
+LINK_CUT_WAIT_S = 40.0
 
 
 class HarnessFailure(RuntimeError):
@@ -143,7 +147,9 @@ def kill_group(proc: subprocess.Popen | None) -> None:
 class StallProxy:
     """A TCP proxy between one peer and the relay. freeze(s) stops the CURRENT connection in both directions
     for s seconds (bytes wait in the kernel buffers, as in a stalled Wi-Fi flow); a new connection flows.
-    freeze(s, outage=True) also refuses new connections for s seconds (the whole link is down)."""
+    freeze(s, outage=True) also refuses new connections for s seconds (the whole link is down).
+    cut(s) is the harder link cut the Windows host saw (WLAN off): every live pair is CLOSED at once and new
+    connections are refused until restore(), so the client sees a closed socket, not a silent one."""
 
     def __init__(self, target_port: int):
         self.target_port = target_port
@@ -174,6 +180,8 @@ class StallProxy:
     def _pump(link: dict, src: socket.socket, dst: socket.socket) -> None:
         try:
             while True:
+                if src.fileno() < 0:
+                    break  # cut(): another thread closed the pair
                 if time.monotonic() < link["frozen_until"]:
                     time.sleep(0.02)
                     continue
@@ -183,7 +191,7 @@ class StallProxy:
                 if not data:
                     break
                 dst.sendall(data)
-        except OSError:
+        except (OSError, ValueError):
             pass
         for sock in link["socks"]:
             try:
@@ -198,14 +206,27 @@ class StallProxy:
         if outage:
             self.refuse_until = time.monotonic() + seconds
 
-    def close(self) -> None:
-        self.listener.close()
-        for link in self.links:
+    def cut(self, seconds: float) -> None:
+        """Cut the link: close every live pair now, refuse new connections for s seconds."""
+        self.refuse_until = time.monotonic() + seconds
+        self._close_links()
+
+    def restore(self) -> None:
+        """Accept connections again (the cut window ends)."""
+        self.refuse_until = 0.0
+
+    def _close_links(self) -> None:
+        links, self.links = self.links, []
+        for link in links:
             for sock in link["socks"]:
                 try:
                     sock.close()
                 except OSError:
                     pass
+
+    def close(self) -> None:
+        self.listener.close()
+        self._close_links()
 
 
 class Client:
@@ -282,6 +303,7 @@ class Run:
         self.leave = ""  # "menu" = End Battle, "close" = the game window is closed
         self.silence = ""  # bug 4: "host" / "guest" = that peer's connection goes silent (stall proxy)
         self.outage = False  # bug 4: the whole link is down too (new connections fail during the silence)
+        self.link_cut = False  # step 23: the host's link is cut and restored (proxy closes the sockets)
         self.proxy: StallProxy | None = None
         self.seq = {"host": 0, "guest": 0}
         self.relay: subprocess.Popen | None = None
@@ -314,9 +336,10 @@ class Run:
         )
         wait_for_port(port)
         print(f"[mp2] relay: {relay_url}")
-        if self.silence:
+        proxied = self.silence or ("host" if self.link_cut else "")
+        if proxied:
             self.proxy = StallProxy(port)
-        urls = {role: f"ws://127.0.0.1:{self.proxy.port}" if role == self.silence else relay_url
+        urls = {role: f"ws://127.0.0.1:{self.proxy.port}" if role == proxied else relay_url
                 for role in ("host", "guest")}
 
         host = self._start_client("host", urls["host"])
@@ -358,6 +381,8 @@ class Run:
             "--seed",
             str(self.args.seed),
         ]
+        if self.link_cut:
+            cmd += ["--expect-link-cut"]
         if room:
             cmd += ["--code", room]
         if self.rules_online:
@@ -490,6 +515,9 @@ class Run:
             return
         if self.silence:
             self.silence_scenario()
+            return
+        if self.link_cut:
+            self.link_cut_scenario()
             return
         self.command_both("setup")
         states = self.wait_condition(
@@ -754,6 +782,82 @@ class Run:
         atomic_json(self.run_dir / f"{name}-after.json", {"name": f"{name}-after", **after})
         print(f"[mp2] PASS {name} ({expect}): round on both peers after {latency:.1f}s, ids {ids} kept")
 
+    def link_cut_scenario(self) -> None:
+        """Step 23 / test 5 on the laptop: the host's link is cut for LINK_CUT_S (the Windows host's
+        WLAN off), then restored. Proven here, on the production code path: the host comes back with
+        the SAME transport id (the early rejoin retries a dead socket, #1866), and the owner roll the
+        guest is waiting for ends well before the 120 s bound (the peer_disconnected release, #1867)."""
+        self.command_both("setup")
+        states = self.wait_condition(
+            "fixture on both peers", lambda s: all(v.get("fixture_ready") for v in s.values())
+        )
+        self.checkpoint("link-cut-fixture", states)
+        self.command("host", "place_spell")
+        states = self.wait_condition(
+            "spell token on both peers before the cut",
+            lambda s: self.require_unit_value(s, "mp2_spell", "spell_records", 1),
+        )
+        self.checkpoint("link-cut-spell-placed", states)
+        ids = {role: states[role].get("peer_id") for role in ("host", "guest")}
+        core = {role: {key: states[role].get(key) for key in ("room", "round", "turn")}
+                for role in ("host", "guest")}
+        print(f"[mp2] link-cut: ids {ids}, core {core}")
+        # The guest resolves an attack on a HOST unit, so the save prompt and the pending owner
+        # request sit on the host; cutting the host's link is the side that owes the answer.
+        self.command("guest", "remote_save_attack")
+        states = self.wait_condition(
+            "the host owes the owner roll",
+            lambda s: s["host"].get("save_prompt_visible") is True
+            and s["guest"].get("remote_save_wounds", -1) == -1,
+            diagnostic=lambda s: "host prompt=%r guest wounds=%r" % (
+                s["host"].get("save_prompt_visible"), s["guest"].get("remote_save_wounds")),
+        )
+        self.checkpoint("link-cut-pending", states)
+        assert self.proxy is not None
+        started = time.monotonic()
+        self.proxy.cut(LINK_CUT_S)
+        print(f"[mp2] link-cut: host link cut for {LINK_CUT_S:.0f}s")
+        time.sleep(LINK_CUT_S)
+        self.proxy.restore()
+        states = self.wait_condition(
+            "the host rejoined and the guest's owner request ended",
+            lambda s: ("relay_reconnected" in [e.get("e") for e in s["host"].get("link_events", [])]
+                       or "host_rejoined" in [e.get("e") for e in s["host"].get("link_events", [])])
+            and s["guest"].get("remote_save_wounds", -1) >= 0
+            and s["guest"].get("session_ready") and s["host"].get("session_ready"),
+            timeout=LINK_CUT_WAIT_S,
+            diagnostic=lambda s: "host events=%r guest wounds=%r ready=%r" % (
+                [e.get("e") for e in s["host"].get("link_events", [])],
+                s["guest"].get("remote_save_wounds"),
+                {r: s[r].get("session_ready") for r in ("host", "guest")}),
+        )
+        elapsed = time.monotonic() - started
+        time.sleep(1.0)
+        after = self.stable_states()
+        events = {role: [e.get("e") for e in after[role].get("link_events", [])]
+                  for role in ("host", "guest")}
+        problems = [msg for bad, msg in (
+            ("relay_reconnecting" not in events["host"], f"no rejoin start on the host: {events['host']}"),
+            ({r: after[r].get("peer_id") for r in ids} != ids,
+             f"transport ids changed: {ids} -> " + repr({r: after[r].get("peer_id") for r in ids})),
+            (after["host"].get("slot") != 1 or after["guest"].get("slot") != 2, "a seat changed"),
+            ({r: {k: after[r].get(k) for k in ("round", "turn")} for r in ids}
+             != {r: {k: core[r][k] for k in ("round", "turn")} for r in ids},
+             "round/turn changed: " + repr({r: (after[r].get("round"), after[r].get("turn"))
+                                           for r in ids})),
+            (any(after[r].get("room") != core[r]["room"] for r in ids),
+             "a room changed: " + repr({r: after[r].get("room") for r in ids})),
+            (after["guest"].get("failed") or "internet_disconnected" in events["guest"],
+             f"the guest lost the session: {events['guest']}"),
+            (elapsed >= LINK_CUT_WAIT_S,
+             f"the pending request ended after {elapsed:.1f}s (limit {LINK_CUT_WAIT_S:.0f}s)"),
+        ) if bad]
+        if problems:
+            raise HarnessFailure("link-cut: " + "; ".join(problems))
+        self.checkpoint("after_link_cut", after)
+        print(f"[mp2] PASS link-cut: host back with id {ids['host']}, request ended after "
+              f"{elapsed:.1f}s, events {events['host']}")
+
     def _start_question_scenario(self) -> None:
         """Bug 6c: the host is asked ONCE whether to play with rules automation when the second player
         sits down. Yes -> the guest gets the confirm card -> both Automatic; Not now -> both Manual and
@@ -944,6 +1048,7 @@ def deterministic_view(checkpoints: list[dict]) -> list[dict]:
             checkpoint[role]["room"] = "<room>"
             checkpoint[role].pop("net_status_seen", None)  # timing-dependent connect texts
             checkpoint[role].pop("objects", None)  # bug 4 silence scenario only
+            checkpoint[role].pop("link_events", None)  # step 23: wall-clock rejoin events
     return value
 
 
@@ -978,6 +1083,16 @@ def parse_args() -> argparse.Namespace:
         help="Run only the bug 4 silence scenarios (host, guest).",
     )
     parser.add_argument(
+        "--include-link-cut",
+        action="store_true",
+        help="Also run step 23: the host's link is cut for LINK_CUT_S and restored (merge proof for #1866/#1867).",
+    )
+    parser.add_argument(
+        "--link-cut-only",
+        action="store_true",
+        help="Run only step 23 (the host's link cut); used for the RED/GREEN proof.",
+    )
+    parser.add_argument(
         "--silence-expect",
         choices=("auto", "fast", "fallback"),
         default="auto",
@@ -997,13 +1112,14 @@ def main() -> int:
     reference: list[dict] | None = None
 
     def run_once(run_dir: Path, rules_online: bool, ref: list[dict] | None, leave: str = "",
-                 silence: str = "", outage: bool = False) -> list[dict]:
+                 silence: str = "", outage: bool = False, link_cut: bool = False) -> list[dict]:
         run_dir.mkdir(parents=True, exist_ok=False)
         run = Run(args, run_dir)
         run.rules_online = rules_online
         run.leave = leave
         run.silence = silence
         run.outage = outage
+        run.link_cut = link_cut
         try:
             print(f"[mp2] run {run_dir.name}: {run_dir}")
             run.start()
@@ -1022,6 +1138,10 @@ def main() -> int:
         return ref if ref is not None else view
 
     try:
+        if args.link_cut_only:
+            run_once(root / "link-cut-01", False, None, link_cut=True)
+            print("[mp2] RESULT PASS: link cut")
+            return 0
         if args.start_question:
             for answer in ("yes", "no"):
                 run = Run(args, root / f"start-question-{answer}")
@@ -1051,10 +1171,13 @@ def main() -> int:
         for role in ("host", "guest"):
             run_once(root / f"silence-{role}", False, None, silence=role)
         run_once(root / "silence-host-outage", False, None, silence="host", outage=True)
+        if args.include_link_cut:
+            run_once(root / "link-cut-01", False, None, link_cut=True)
         elapsed = time.monotonic() - start
         atomic_json(root / "determinism.json", {
             "runs": args.repeat, "identical": True, "seed": args.seed,
             "rules_online": bool(args.include_rules_online),
+            "link_cut": bool(args.include_link_cut),
             "elapsed_seconds": round(elapsed, 3), "snapshots": reference,
         })
         print(f"[mp2] RESULT PASS: {args.repeat} identical run(s), {elapsed:.1f}s")
