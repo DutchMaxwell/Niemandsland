@@ -9415,18 +9415,28 @@ func _owner_roll(unit: GameUnit, count: int, target: int, roll_kind: String, pur
 func _owner_request(owner_peer: int, rq: Dictionary) -> Dictionary:
 	_solo_remote_save_seq += 1
 	var req := _solo_remote_save_seq
-	_solo_remote_save_waiters[req] = {"faces": [], "done": false}
+	_solo_remote_save_waiters[req] = {"faces": [], "done": false, "peer": owner_peer, "aborted": false}
 	var payload := {"req": req}
 	payload.merge(rq)
 	network_manager.send_command("request_roll", payload, owner_peer)
+	var waiter: Dictionary = _solo_remote_save_waiters[req]
 	var waited := 0.0
-	while not bool((_solo_remote_save_waiters.get(req, {}) as Dictionary).get("done", false)) \
+	while not bool(waiter.get("done", false)) and not bool(waiter.get("aborted", false)) \
 			and waited < _owner_roll_timeout_s:
 		await get_tree().create_timer(0.1).timeout
 		waited += 0.1
 	var reply: Dictionary = _solo_remote_save_waiters.get(req, {})
 	_solo_remote_save_waiters.erase(req)
 	return reply
+
+## #1867: end pending owner requests at once when their owner is gone — a departed peer (its id)
+## or a failed rejoin (all). Callers read "done": false as the existing visible fallback.
+func _solo_release_owner_waiters(peer: int = 0) -> void:
+	for req in _solo_remote_save_waiters:
+		var waiter: Dictionary = _solo_remote_save_waiters[req]
+		if peer == 0 or int(waiter.get("peer", 0)) == peer:
+			waiter["aborted"] = true
+
 
 ## The no-reply path (vacant seat, timeout): a VISIBLE auto-roll instead of a hang — the same
 ## tray roll the AI makes, but labelled, so nobody reads it as the owner's dice.
@@ -9471,7 +9481,9 @@ func _rpc_request_roll(rq: Dictionary, from_peer: int) -> void:
 func _rpc_roll_result(req: int, faces: Array) -> void:
 	if not _solo_remote_save_waiters.has(req):
 		return
-	_solo_remote_save_waiters[req] = {"faces": faces, "done": true}
+	var waiter: Dictionary = _solo_remote_save_waiters[req]
+	waiter["faces"] = faces
+	waiter["done"] = true
 
 ## Save prompt (locked decision: prompt + auto-roll for speed): the human confirms and their save dice
 ## roll in the tray, attributed to "You". Returns the rolled faces.
@@ -16410,6 +16422,7 @@ func _on_version_rejected(host_version: String, my_version: String) -> void:
 
 
 func _on_player_left(peer_id: int) -> void:
+	_solo_release_owner_waiters(peer_id)   # #1867: no owner, no reply — the fallback runs now
 	var player_count = network_manager.connected_peers.size()
 	if network_manager.is_host:
 		network_status_label.text = "Hosting (%d players)" % player_count
@@ -16692,6 +16705,7 @@ func _on_relay_reconnecting() -> void:
 ## Rejoin failed (relay unreachable or the room is gone, e.g. host left). End the
 ## session cleanly with a clear message.
 func _on_relay_reconnect_failed(reason: String) -> void:
+	_solo_release_owner_waiters()   # #1867: the link is gone — every pending owner wait ends
 	_is_reconnecting = false
 	push_warning("[Network] Reconnect failed: %s" % reason)
 	GameMenu.set_status(network_status_label, "Reconnect failed (%s)" % reason, HouseStyle.TONE_DANGER)
