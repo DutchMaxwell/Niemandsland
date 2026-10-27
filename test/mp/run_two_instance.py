@@ -820,16 +820,31 @@ class Run:
         time.sleep(LINK_CUT_S)
         self.proxy.restore()
         states = self.wait_condition(
-            "the host rejoined and the guest's owner request ended",
+            "the host rejoined with the owner prompt still open",
             lambda s: ("relay_reconnected" in [e.get("e") for e in s["host"].get("link_events", [])]
                        or "host_rejoined" in [e.get("e") for e in s["host"].get("link_events", [])])
-            and s["guest"].get("remote_save_wounds", -1) >= 0
-            and s["guest"].get("session_ready") and s["host"].get("session_ready"),
+            and s["host"].get("session_ready") and s["guest"].get("session_ready")
+            and s["host"].get("save_prompt_visible") is True
+            and s["guest"].get("remote_save_wounds", -1) == -1,
             timeout=LINK_CUT_WAIT_S,
-            diagnostic=lambda s: "host events=%r guest wounds=%r ready=%r" % (
+            diagnostic=lambda s: "host events=%r prompt=%r guest wounds=%r ready=%r" % (
                 [e.get("e") for e in s["host"].get("link_events", [])],
+                s["host"].get("save_prompt_visible"),
                 s["guest"].get("remote_save_wounds"),
                 {r: s[r].get("session_ready") for r in ("host", "guest")}),
+        )
+        # The owner is BACK, so the request must NOT have been dropped: the host still owes the
+        # roll and answers it now (test 5: "the roll was not made afterwards"). A release without
+        # an answer is only right when the owner is gone for good (_on_relay_reconnect_failed),
+        # covered by e2e_owner_roll_seam_test.
+        self.command("host", "confirm_save")
+        states = self.wait_condition(
+            "the host's faces reach the waiting guest after the rejoin",
+            lambda s: s["guest"].get("remote_save_wounds", -1) >= 0
+            and not s["guest"].get("failed") and not s["host"].get("failed"),
+            timeout=LINK_CUT_WAIT_S,
+            diagnostic=lambda s: "guest wounds=%r failed=%r" % (
+                s["guest"].get("remote_save_wounds"), s["guest"].get("failed")),
         )
         elapsed = time.monotonic() - started
         time.sleep(1.0)
@@ -850,13 +865,13 @@ class Run:
             (after["guest"].get("failed") or "internet_disconnected" in events["guest"],
              f"the guest lost the session: {events['guest']}"),
             (elapsed >= LINK_CUT_WAIT_S,
-             f"the pending request ended after {elapsed:.1f}s (limit {LINK_CUT_WAIT_S:.0f}s)"),
+             f"the request took {elapsed:.1f}s (limit {LINK_CUT_WAIT_S:.0f}s)"),
         ) if bad]
         if problems:
             raise HarnessFailure("link-cut: " + "; ".join(problems))
         self.checkpoint("after_link_cut", after)
-        print(f"[mp2] PASS link-cut: host back with id {ids['host']}, request ended after "
-              f"{elapsed:.1f}s, events {events['host']}")
+        print(f"[mp2] PASS link-cut: host back with id {ids['host']}, the cut request was answered "
+              f"after {elapsed:.1f}s, events {events['host']}")
 
     def _start_question_scenario(self) -> None:
         """Bug 6c: the host is asked ONCE whether to play with rules automation when the second player
