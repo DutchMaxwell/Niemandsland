@@ -1,5 +1,5 @@
 extends GdUnitTestSuite
-## #1875 (step 25) — a rejoined guest's own panel row keeps its army name.
+## Step 25 (P0d) — a rejoined guest's own panel row keeps its army name.
 ##
 ## The host holds no army object for a REMOTE army (its armies[] slot is null), so the army names
 ## that ride the full-state push only covered the host's own army; the guest rebuilt its tray with
