@@ -16445,6 +16445,7 @@ func _on_player_left(peer_id: int) -> void:
 ## Internet multiplayer handlers
 func _on_internet_room_ready(code: String) -> void:
 	_update_network_ui(true, true)
+	_rules_start_asked = false          # new room — the start question must be asked again
 	var display_code = InternetLobby._format_code(code)
 	GameMenu.set_status(network_status_label, "Online: %s" % display_code, HouseStyle.TONE_OK)
 	# Copy code to clipboard for easy sharing
@@ -17462,6 +17463,7 @@ func _clamp_rules_online(who: String) -> void:
 		return
 	if _set_rules_manual_logged(who):
 		network_manager.send_command("sync_rules_automation", {"level": RulesAutomation.Level.MANUAL}, 0)
+	_update_rules_chip()
 
 
 ## #673 co-op: the wire shape of the AI-slot designation sync — sorted player ids, one message

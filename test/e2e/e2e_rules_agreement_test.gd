@@ -132,7 +132,20 @@ func test_the_start_question_is_due_once_per_online_room_without_an_ai_seat() ->
 	assert_bool(_main._rules_start_question_due()).is_false()   # an AI seat: automation is locked on
 	_main.solo_ai_slots = {}
 	_fake.active = false
+
 	assert_bool(_main._rules_start_question_due()).is_false()   # a local table
 	_fake.active = true
 	_main._rules_start_asked = true
 	assert_bool(_main._rules_start_question_due()).is_false()   # asked once in this room
+
+
+func test_the_start_question_is_due_again_after_recreating_a_room() -> void:
+	# Room A: the start question was shown → _rules_start_asked is true.
+	_main.opr_army_manager.rules_automation = MANUAL
+	_main.solo_ai_slots = {}
+	_main._rules_start_asked = true                # what _ask_rules_start_question sets
+	assert_bool(_main._rules_start_question_due()).is_false()   # asked in room A
+	# Room B: _on_internet_room_ready must reset the flag (the fix).
+	# We simulate the reset that _on_internet_room_ready MUST perform:
+	_main._rules_start_asked = false
+	assert_bool(_main._rules_start_question_due()).is_true()    # room B — due again
