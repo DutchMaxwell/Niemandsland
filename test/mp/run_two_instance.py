@@ -349,7 +349,9 @@ class Run:
             proxied = ("host",)
         for role in proxied:
             self.proxies[role] = StallProxy(port)
-        self.proxy = self.proxies.get("host")
+        # The single proxied role's proxy (silence / link-cut); rejoin-race has two and uses
+        # self.proxies directly.
+        self.proxy = next(iter(self.proxies.values()), None)
         urls = {role: (f"ws://127.0.0.1:{self.proxies[role].port}" if role in self.proxies else relay_url)
                 for role in ("host", "guest")}
 
