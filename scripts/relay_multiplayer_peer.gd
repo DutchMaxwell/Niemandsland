@@ -238,6 +238,7 @@ func attempt_reconnect() -> Error:
 	_is_reconnecting = true
 	_awaiting_recreate = false
 	_reconnect_start_ms = Time.get_ticks_msec()
+	_next_connect_retry_ms = _reconnect_start_ms + int(RECREATE_RETRY_INTERVAL * 1000.0)
 	relay_reconnecting.emit()
 	if _ws:
 		_ws.close()
@@ -348,9 +349,9 @@ func _poll() -> void:
 			_on_connection_lost()
 
 	elif state == WebSocketPeer.STATE_CLOSED:
-		if _is_reconnecting and _fast_reconnect_ms > 0:
-			# The early rejoin's new socket failed: the whole link is down, not one stalled flow. Retry every
-			# RECREATE_RETRY_INTERVAL until the deadline above instead of idling (today's rejoin never retries).
+		if _is_reconnecting:
+			# The rejoin's new socket failed: the whole link is down, not one stalled flow. Retry every
+			# RECREATE_RETRY_INTERVAL until the deadline above (#1866, 27.10.2026).
 			if now_ms >= _next_connect_retry_ms:
 				_next_connect_retry_ms = now_ms + int(RECREATE_RETRY_INTERVAL * 1000.0)
 				_pending_action = "join"
