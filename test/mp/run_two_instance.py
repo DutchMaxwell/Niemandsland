@@ -794,6 +794,13 @@ class Run:
             "fixture on both peers", lambda s: all(v.get("fixture_ready") for v in s.values())
         )
         self.checkpoint("link-cut-fixture", states)
+        # #1873: the room's agreed level must survive the cut, not just "a request".
+        self.command_both("set_automatic")
+        states = self.wait_condition(
+            "both peers AUTOMATIC before the cut",
+            lambda s: all(v.get("rules") == 1 for v in s.values()),
+            diagnostic=lambda s: "rules: " + repr({r: s[r].get("rules") for r in s}),
+        )
         self.command("host", "place_spell")
         states = self.wait_condition(
             "spell token on both peers before the cut",
@@ -855,6 +862,8 @@ class Run:
                   for role in ("host", "guest")}
         problems = [msg for bad, msg in (
             ("relay_reconnecting" not in events["host"], f"no rejoin start on the host: {events['host']}"),
+            (any(after[r].get("rules") != 1 for r in ids),
+             "the agreed rules level was lost: " + repr({r: after[r].get("rules") for r in ids})),
             ({r: after[r].get("peer_id") for r in ids} != ids,
              f"transport ids changed: {ids} -> " + repr({r: after[r].get("peer_id") for r in ids})),
             (after["host"].get("slot") != 1 or after["guest"].get("slot") != 2, "a seat changed"),
