@@ -43,6 +43,8 @@ FAST_LIMIT_S = 15.0
 # scenario must converge well inside the 120 s owner-request bound, so LINK_CUT_WAIT_S is the ceiling.
 LINK_CUT_S = 10.0
 LINK_CUT_WAIT_S = 40.0
+## 29(b): how long the guest's link stays dead after the host is already back.
+REJOIN_RACE_GUEST_DELAY_S = 12.0
 
 
 class HarnessFailure(RuntimeError):
@@ -304,7 +306,9 @@ class Run:
         self.silence = ""  # bug 4: "host" / "guest" = that peer's connection goes silent (stall proxy)
         self.outage = False  # bug 4: the whole link is down too (new connections fail during the silence)
         self.link_cut = False  # step 23: the host's link is cut and restored (proxy closes the sockets)
+        self.rejoin_race = False  # 29(b): both links are cut at once, the host returns first
         self.proxy: StallProxy | None = None
+        self.proxies: dict[str, StallProxy] = {}
         self.seq = {"host": 0, "guest": 0}
         self.relay: subprocess.Popen | None = None
         self.relay_log = None
@@ -336,10 +340,17 @@ class Run:
         )
         wait_for_port(port)
         print(f"[mp2] relay: {relay_url}")
-        proxied = self.silence or ("host" if self.link_cut else "")
-        if proxied:
-            self.proxy = StallProxy(port)
-        urls = {role: f"ws://127.0.0.1:{self.proxy.port}" if role == proxied else relay_url
+        proxied: tuple[str, ...] = ()
+        if self.silence:
+            proxied = (self.silence,)
+        elif self.rejoin_race:
+            proxied = ("host", "guest")  # one relay hiccup takes both links down
+        elif self.link_cut:
+            proxied = ("host",)
+        for role in proxied:
+            self.proxies[role] = StallProxy(port)
+        self.proxy = self.proxies.get("host")
+        urls = {role: (f"ws://127.0.0.1:{self.proxies[role].port}" if role in self.proxies else relay_url)
                 for role in ("host", "guest")}
 
         host = self._start_client("host", urls["host"])
@@ -381,7 +392,7 @@ class Run:
             "--seed",
             str(self.args.seed),
         ]
-        if self.link_cut:
+        if self.link_cut or self.rejoin_race:
             cmd += ["--expect-link-cut"]
         if room:
             cmd += ["--code", room]
@@ -520,6 +531,9 @@ class Run:
             return
         if self.link_cut:
             self.link_cut_scenario()
+            return
+        if self.rejoin_race:
+            self.rejoin_race_scenario()
             return
         self.command_both("setup")
         states = self.wait_condition(
@@ -886,6 +900,75 @@ class Run:
         print(f"[mp2] PASS link-cut: host back with id {ids['host']}, the cut request was answered "
               f"after {elapsed:.1f}s, events {events['host']}")
 
+    def rejoin_race_scenario(self) -> None:
+        """29(b): BOTH links die in the same relay hiccup, the host comes back first and the guest is
+        still mid-rejoin — the live order behind "Peer 2 failed version handshake (no announce in
+        8s) — kicking". The guest must end seated on slot 2 with the agreed rules level; the host
+        must not log a kick. The guest's proxy stays closed for REJOIN_RACE_GUEST_DELAY_S after the
+        host is back, so the host really does wait for a peer that cannot announce yet."""
+        self.command_both("setup")
+        states = self.wait_condition(
+            "fixture on both peers", lambda s: all(v.get("fixture_ready") for v in s.values())
+        )
+        self.command_both("set_automatic")
+        states = self.wait_condition(
+            "both peers AUTOMATIC before the cut",
+            lambda s: all(v.get("rules") == 1 for v in s.values()),
+            diagnostic=lambda s: "rules: " + repr({r: s[r].get("rules") for r in s}),
+        )
+        self.checkpoint("rejoin-race-ready", states)
+        ids = {role: states[role].get("peer_id") for role in ("host", "guest")}
+        started = time.monotonic()
+        for role in ("host", "guest"):
+            self.proxies[role].cut(LINK_CUT_S)
+        print(f"[mp2] rejoin-race: both links cut for {LINK_CUT_S:.0f}s")
+        time.sleep(LINK_CUT_S)
+        # The host returns first; the guest's link stays dead, as in the live run.
+        self.proxies["host"].restore()
+        self.wait_condition(
+            "the host rejoined",
+            lambda s: "host_rejoined" in [e.get("e") for e in s["host"].get("link_events", [])]
+            and s["host"].get("session_ready"),
+            timeout=LINK_CUT_WAIT_S,
+            diagnostic=lambda s: "host events=%r ready=%r failed=%r" % (
+                [e.get("e") for e in s["host"].get("link_events", [])],
+                s["host"].get("session_ready"), s["host"].get("failed")),
+        )
+        time.sleep(REJOIN_RACE_GUEST_DELAY_S)
+        self.proxies["guest"].restore()
+        states = self.wait_condition(
+            "both peers seated after the race",
+            lambda s: s["guest"].get("session_ready") and s["guest"].get("slot") == 2
+            and s["host"].get("session_ready") and s["host"].get("slot") == 1,
+            timeout=LINK_CUT_WAIT_S,
+            diagnostic=lambda s: "guest ready=%r slot=%r events=%r host slot=%r" % (
+                s["guest"].get("session_ready"), s["guest"].get("slot"),
+                [e.get("e") for e in s["guest"].get("link_events", [])],
+                s["host"].get("slot")),
+        )
+        elapsed = time.monotonic() - started
+        time.sleep(1.0)
+        after = self.stable_states()
+        kicked = [line for line in self.clients["host"].lines if "failed version handshake" in line]
+        events = {role: [e.get("e") for e in after[role].get("link_events", [])]
+                  for role in ("host", "guest")}
+        problems = [msg for bad, msg in (
+            (bool(kicked), f"the host kicked the rejoining guest: {kicked[:1]}"),
+            (after["guest"].get("slot") != 2, "the guest lost its seat: slot %r"
+             % after["guest"].get("slot")),
+            ({r: after[r].get("peer_id") for r in ids} != ids,
+             "a transport id changed: " + repr({r: after[r].get("peer_id") for r in ids})),
+            (any(after[r].get("rules") != 1 for r in ids),
+             "the agreed rules level was lost: " + repr({r: after[r].get("rules") for r in ids})),
+            (after["host"].get("failed") or after["guest"].get("failed"), "a peer is failed"),
+            (elapsed >= LINK_CUT_WAIT_S, f"the race took {elapsed:.1f}s (limit {LINK_CUT_WAIT_S:.0f}s)"),
+        ) if bad]
+        if problems:
+            raise HarnessFailure("rejoin-race: " + "; ".join(problems))
+        self.checkpoint("after_rejoin_race", after, compare_units=False)
+        print(f"[mp2] PASS rejoin-race: guest seated on slot 2 after {elapsed:.1f}s, "
+              f"events host {events['host']} guest {events['guest']}")
+
     def _start_question_scenario(self) -> None:
         """Bug 6c: the host is asked ONCE whether to play with rules automation when the second player
         sits down. Yes -> the guest gets the confirm card -> both Automatic; Not now -> both Manual and
@@ -1121,6 +1204,11 @@ def parse_args() -> argparse.Namespace:
         help="Run only step 23 (the host's link cut); used for the RED/GREEN proof.",
     )
     parser.add_argument(
+        "--rejoin-race",
+        action="store_true",
+        help="Run only 29(b): both links are cut at once, the host returns first, the guest must stay seated.",
+    )
+    parser.add_argument(
         "--silence-expect",
         choices=("auto", "fast", "fallback"),
         default="auto",
@@ -1140,7 +1228,8 @@ def main() -> int:
     reference: list[dict] | None = None
 
     def run_once(run_dir: Path, rules_online: bool, ref: list[dict] | None, leave: str = "",
-                 silence: str = "", outage: bool = False, link_cut: bool = False) -> list[dict]:
+                 silence: str = "", outage: bool = False, link_cut: bool = False,
+                 rejoin_race: bool = False) -> list[dict]:
         run_dir.mkdir(parents=True, exist_ok=False)
         run = Run(args, run_dir)
         run.rules_online = rules_online
@@ -1148,6 +1237,7 @@ def main() -> int:
         run.silence = silence
         run.outage = outage
         run.link_cut = link_cut
+        run.rejoin_race = rejoin_race
         try:
             print(f"[mp2] run {run_dir.name}: {run_dir}")
             run.start()
@@ -1169,6 +1259,10 @@ def main() -> int:
         if args.link_cut_only:
             run_once(root / "link-cut-01", False, None, link_cut=True)
             print("[mp2] RESULT PASS: link cut")
+            return 0
+        if args.rejoin_race:
+            run_once(root / "rejoin-race-01", False, None, rejoin_race=True)
+            print("[mp2] RESULT PASS: rejoin race")
             return 0
         if args.start_question:
             for answer in ("yes", "no"):

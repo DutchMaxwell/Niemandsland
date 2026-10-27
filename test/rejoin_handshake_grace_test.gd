@@ -28,4 +28,13 @@ func test_a_returning_peer_gets_the_long_window() -> void:
 func test_a_fresh_transport_knows_no_peer() -> void:
 	var peer: RelayMultiplayerPeer = RelayScript.new()
 	assert_bool(peer.is_known_peer(2)).is_false()
-	peer.free()
+
+
+## The reused-id path (relay flushes peer_disconnected + peer_connected) leaves the id KNOWN —
+## that is precisely the reading the host uses to grant the long window instead of the 8 s one.
+func test_a_reused_id_stays_known_after_the_flush() -> void:
+	var peer: RelayMultiplayerPeer = RelayScript.new()
+	peer._emit_peer_connected(2)
+	assert_bool(peer.is_known_peer(2)).is_true()
+	peer._emit_peer_connected(2)
+	assert_bool(peer.is_known_peer(2)).is_true()
