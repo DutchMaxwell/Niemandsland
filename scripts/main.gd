@@ -296,6 +296,9 @@ var _rules_proposal_timed_out := false       # the confirm card was closed by th
 var _rules_agreement_card: PromptCard = null # the open confirm card, so a timeout can close it
 var _rules_proposal_timer: Timer = null      # one 30 s timer, used by whichever side is waiting
 var _rules_start_asked := false              # the host's start question was shown once in this room
+## #1873: the host's agreed-level restore arrived while a full-state sync was still rebuilding; the
+## sync's tail must not clamp the room back to Manual after it.
+var _rules_restored_in_sync := false
 const RULES_AGREEMENT_TIMEOUT := 30.0
 var _hotseat_turn: TwoHumanTurn = null       # enforced alternation on a hotseat Automatic table (plan 2.T2a)
 var _ambush_turn_waiters: Dictionary = {}   # 3.4b: slot -> the owner answered its Ambush turn
@@ -17409,6 +17412,7 @@ func _on_network_command(type: String, payload: Variant, _from_peer: int) -> voi
 	elif type == "sync_rules_automation" and payload is Dictionary:
 		_on_sync_rules_automation((payload as Dictionary).get("level"), _from_peer)
 	elif type == "restore_rules_automation" and _from_peer == 1:
+		_rules_restored_in_sync = true    # #1873: the sync may still be rebuilding — keep this level
 		_apply_rules_automatic_agreed()   # the host re-sends the agreed level to a rejoined guest
 	elif type == "propose_rules_automation":
 		_on_rules_proposal(_from_peer)
@@ -17554,6 +17558,7 @@ func _rpc_sync_game_state(state: Dictionary) -> void:
 		_on_version_rejected(host_version, my_version)
 		return
 
+	_rules_restored_in_sync = false   # #1873: per sync — a restore that lands below must survive the tail
 	var obj_count = state.get("objects", []).size()
 	var unit_count = state.get("game_units", []).size()
 	# 3.3a: adopt the host's token (it is mirrored, never advanced here) — a late joiner / reconnect
@@ -17669,7 +17674,11 @@ func _rpc_sync_game_state(state: Dictionary) -> void:
 	# happens after any import, so the @rpc broadcast was missed — this is the join-time catch-up).
 	if state.get("solo_ai_slots") is Array:
 		_rpc_sync_ai_slots(state["solo_ai_slots"])
-	_set_rules_manual_logged("the online room")   # plan 1.4: local only - the host clamped a new player already, and re-sends an agreed level to a rejoin
+	# plan 1.4: a plain join clamps to Manual locally (the host clamped the newcomer already). A rejoin
+	# is the exception: the host re-sends the agreed level right after this push, and that restore may
+	# have landed while this async sync was rebuilding (#1873) — then the tail must not undo it.
+	if not _rules_restored_in_sync:
+		_set_rules_manual_logged("the online room")
 
 
 ## ============================================================================
