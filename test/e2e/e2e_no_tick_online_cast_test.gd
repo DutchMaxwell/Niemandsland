@@ -196,3 +196,51 @@ func test_an_online_cast_with_the_sight_line_blocked_logs_why_nobody_interferes(
 	assert_int((units[2] as GameUnit).casts_current).is_equal(2)
 	await E2EBoot.settle(get_tree())
 	_end_session()
+
+
+## P1 has only one caster and that caster has no tokens left — no second caster exists at all.
+## The game stays silent: no "no boost" line, because there is nobody to boost with.
+func test_control_a_lone_caster_without_tokens_logs_no_boost_line(timeout := 120000) -> void:
+	_fake_session()
+	var seer := _reg(1, "Seer", 0.0, ["Caster(2)"])
+	seer.casts_current = 2
+	var foe := _reg(2, "Raiders", 10.0)
+	_main._ensure_solo_controller()
+	var start: int = _main.battle_log.entries().size()
+	var done := [false]
+	(func() -> void:
+		await _main._run_human_cast(seer, seer, {"name": "Bolt", "threshold": 2}, [foe])
+		done[0] = true).call()
+	await _wait(func() -> bool: return done[0])
+	var text := _log_from(start)
+	assert_bool(done[0]).override_failure_message("the cast hung:\n%s" % text).is_true()
+	assert_str(text).override_failure_message("unexpected 'no boost' line:\n%s" % text) \
+		.not_contains("no boost")
+	await E2EBoot.settle(get_tree())
+	_end_session()
+
+
+## P1 (Seer) casts at P2 (Raiders); the only other P1 caster (Witch) stands with tokens
+## but beyond 18" LoS from the Seer — the boost pool is 0 and the game must log why.
+func test_a_cast_with_the_friendly_caster_out_of_sight_logs_why_nobody_boosts(timeout := 120000) -> void:
+	_fake_session()
+	var seer := _reg(1, "Seer", 0.0, ["Caster(2)"])
+	seer.casts_current = 2
+	var foe := _reg(2, "Raiders", 10.0)
+	# Second P1 caster WITH tokens but 20" away — beyond 18" aura range
+	var witch := _reg(1, "Witch", -20.0, ["Caster(2)"])
+	witch.casts_current = 2
+	_main._ensure_solo_controller()
+	assert_object(_main.solo_controller).override_failure_message("fixture: no engine controller").is_not_null()
+	var start: int = _main.battle_log.entries().size()
+	var done := [false]
+	(func() -> void:
+		await _main._run_human_cast(seer, seer, {"name": "Bolt", "threshold": 2}, [foe])
+		done[0] = true).call()
+	await _wait(func() -> bool: return done[0])
+	var text := _log_from(start)
+	assert_bool(done[0]).override_failure_message("the cast hung:\n%s" % text).is_true()
+	assert_str(text).override_failure_message("no 'no boost' explanation logged:\n%s" % text) \
+		.contains("no caster of P1 within 18\" and line of sight — no boost")
+	await E2EBoot.settle(get_tree())
+	_end_session()
