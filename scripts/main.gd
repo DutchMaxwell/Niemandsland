@@ -16468,6 +16468,7 @@ func _on_player_left(peer_id: int) -> void:
 ## Internet multiplayer handlers
 func _on_internet_room_ready(code: String) -> void:
 	_update_network_ui(true, true)
+	_rules_start_asked = false          # new room — the start question must be asked again
 	var display_code = InternetLobby._format_code(code)
 	GameMenu.set_status(network_status_label, "Online: %s" % display_code, HouseStyle.TONE_OK)
 	# Copy code to clipboard for easy sharing
@@ -17475,6 +17476,7 @@ func _set_rules_manual_logged(who: String) -> bool:
 	opr_army_manager.rules_automation = RulesAutomation.Level.MANUAL
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL, "Rules automation: Manual (changed by %s)" % who)
+	_update_rules_chip()
 	return true
 
 
