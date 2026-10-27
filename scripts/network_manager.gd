@@ -263,6 +263,8 @@ func get_my_peer_id() -> int:
 ## open on 0, and slot-dependent user actions (army import) await assignment. Outside
 ## multiplayer (single-player) it falls back to the peer id, preserving prior behaviour.
 func get_my_player_slot() -> int:
+	if not multiplayer.has_multiplayer_peer():
+		return 0
 	if multiplayer.is_server():
 		return 1
 	if _my_assigned_slot > 0:
