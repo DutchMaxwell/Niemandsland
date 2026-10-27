@@ -19,6 +19,12 @@ class FakeNet extends "res://scripts/network_manager.gd":
 	func send_command(type: String, payload: Variant = {}, target_peer: int = 0) -> bool:
 		cmds.append({"t": type, "p": payload, "to": target_peer})
 		return true
+	func is_server() -> bool:
+		return true
+	func get_my_peer_id() -> int:
+		return 1
+	func seed_host_identity() -> void:
+		pass
 
 var _runner: GdUnitSceneRunner
 var _main: Node
@@ -132,7 +138,6 @@ func test_the_start_question_is_due_once_per_online_room_without_an_ai_seat() ->
 	assert_bool(_main._rules_start_question_due()).is_false()   # an AI seat: automation is locked on
 	_main.solo_ai_slots = {}
 	_fake.active = false
-
 	assert_bool(_main._rules_start_question_due()).is_false()   # a local table
 	_fake.active = true
 	_main._rules_start_asked = true
@@ -145,7 +150,7 @@ func test_the_start_question_is_due_again_after_recreating_a_room() -> void:
 	_main.solo_ai_slots = {}
 	_main._rules_start_asked = true                # what _ask_rules_start_question sets
 	assert_bool(_main._rules_start_question_due()).is_false()   # asked in room A
-	# Room B: _on_internet_room_ready must reset the flag (the fix).
-	# We simulate the reset that _on_internet_room_ready MUST perform:
-	_main._rules_start_asked = false
-	assert_bool(_main._rules_start_question_due()).is_true()    # room B — due again
+	# Room B: _on_internet_room_ready must reset the flag.
+	# FakeNet now provides is_server() and get_my_peer_id() so this runs headless.
+	_main._on_internet_room_ready("NEW")
+	assert_bool(_main._rules_start_question_due()).is_true()    # room B — question is due again

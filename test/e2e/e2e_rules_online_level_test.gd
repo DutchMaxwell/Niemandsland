@@ -123,5 +123,4 @@ func test_clamp_refreshes_the_rules_chip_to_show_manual() -> void:
 	_main._update_rules_chip()                       # chip created with AUTOMATIC text
 	assert_str(_main._rules_chip.text).contains("AUTOMATIC")
 	_main._clamp_rules_online("the room")            # level → MANUAL, chip must update too
-	_main._update_rules_chip()                       # forced refresh — chip must now say Manual
 	assert_str(_main._rules_chip.text).contains("MANUAL")

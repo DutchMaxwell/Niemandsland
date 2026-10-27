@@ -17453,6 +17453,7 @@ func _set_rules_manual_logged(who: String) -> bool:
 	opr_army_manager.rules_automation = RulesAutomation.Level.MANUAL
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL, "Rules automation: Manual (changed by %s)" % who)
+	_update_rules_chip()
 	return true
 
 
@@ -17463,7 +17464,6 @@ func _clamp_rules_online(who: String) -> void:
 		return
 	if _set_rules_manual_logged(who):
 		network_manager.send_command("sync_rules_automation", {"level": RulesAutomation.Level.MANUAL}, 0)
-	_update_rules_chip()
 
 
 ## #673 co-op: the wire shape of the AI-slot designation sync — sorted player ids, one message
