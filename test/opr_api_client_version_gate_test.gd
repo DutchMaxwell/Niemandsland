@@ -24,8 +24,11 @@ func _client(book_version: String) -> OPRApiClient:
 
 
 func _import(book_version: String) -> OPRApiClient.OPRArmy:
-	return await _client(book_version).import_from_tts_json(
+	var client := _client(book_version)
+	var army: OPRApiClient.OPRArmy = await client.import_from_tts_json(
 		FileAccess.get_file_as_string(LIST_FIXTURE))
+	client.free()
+	return army
 
 
 ## The pinned rules version is the maps' own `_meta.core_version` (single source of truth).
