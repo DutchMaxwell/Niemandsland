@@ -236,3 +236,102 @@ func test_a_failed_reconnect_releases_every_pending_request(timeout := 120000) -
 	assert_bool(_main._solo_remote_save_waiters.has(req)).is_false()
 	assert_bool(bool((_req_result).get("done", true))).is_false()
 	await _drain()
+
+
+## #1882: every reused-id rejoin is reported as peer_disconnected + peer_connected in the SAME frame
+## (relay_multiplayer_peer.gd _emit_peer_connected). A pending owner request must survive that flush
+## and still take the returning owner's real answer; only a peer that stays away is a leave.
+var _flush_result: Dictionary = {}
+var _flush_done := false
+
+
+func _run_flush_request(peer: int) -> void:
+	_flush_result = await _main._owner_request(peer, {"unit": "u1", "kind": "morale", "count": 1,
+		"target": 4, "purpose": "morale test"})
+	_flush_done = true
+
+
+func test_a_rejoin_flush_keeps_the_pending_request_and_takes_the_answer(timeout := 120000) -> void:
+	assert_bool(_seam_exists()).is_true()
+	if not _seam_exists():
+		return
+	_fake_session({1: 1, GUEST_PEER: 2}, {GUEST_PEER: "Guest"})
+	_main._owner_roll_timeout_s = 5.0
+	_run_flush_request(GUEST_PEER)
+	for _i in 4:
+		await get_tree().process_frame
+	var reqs: Array = _main._solo_remote_save_waiters.keys()
+	assert_int(reqs.size()).override_failure_message("the request is pending").is_equal(1)
+	var req := int(reqs[0])
+	# The flush: the relay re-adds the SAME id in the same frame (network_manager.connected_peers),
+	# only the disconnect half reaches _on_player_left. The real manager is needed (its own
+	# handlers walk the tree); no session runs, so setting the list is inert.
+	_end_session()
+	_main.network_manager.connected_peers = Array([GUEST_PEER], TYPE_INT, "", null)
+	_main._on_player_left(GUEST_PEER)
+	for _i in 5:
+		await get_tree().process_frame
+	assert_bool(_flush_done).override_failure_message(
+		"a rejoin flush released the request (the returning owner never got to answer)").is_false()
+	assert_bool(_main._solo_remote_save_waiters.has(req)).override_failure_message(
+		"the waiter is gone").is_true()
+	_main.network_manager.connected_peers.clear()
+	_main._rpc_roll_result(req, [6, 3, 1])
+	for _i in 20:
+		if _flush_done:
+			break
+		await get_tree().create_timer(0.1).timeout
+	assert_bool(_flush_done).is_true()
+	assert_array(_flush_result.get("faces", [])).override_failure_message(
+		"the returning owner's real faces").is_equal([6, 3, 1])
+	assert_bool(bool(_flush_result.get("done", false))).is_true()
+
+
+## #1882, second half: the next owner roll can land between the flush and the re-handshake, when the
+## returning peer is connected but has no slot yet (_solo_peer_for_slot -> 0). A SEATED player must
+## not be auto-rolled in that window; the roll waits for the slot, then asks the owner.
+var _window_faces: Array = []
+var _window_done := false
+
+
+func _run_window_roll(unit: GameUnit) -> void:
+	_window_faces = await _main._owner_roll(unit, 2, 4, "morale", "Morale test: Raiders (4+)",
+		{"what": "morale test"})
+	_window_done = true
+
+
+func test_a_roll_in_the_rejoin_window_waits_for_the_returning_owner(timeout := 120000) -> void:
+	assert_bool(_seam_exists()).is_true()
+	if not _seam_exists():
+		return
+	# The guest is back (connected) but not re-slotted yet: exactly the re-handshake window.
+	_fake_session({1: 1}, {GUEST_PEER: "Guest"})
+	_main._owner_roll_timeout_s = 5.0
+	_net.connected_peers = Array([GUEST_PEER], TYPE_INT, "", null)
+	var raiders := _unit(2, "Raiders")
+	_run_window_roll(raiders)
+	for _i in 8:
+		await get_tree().process_frame
+	assert_bool(_window_done).override_failure_message(
+		"the seated owner was auto-rolled during the re-handshake").is_false()
+	assert_str(_purpose_shown()).not_contains("(owner absent — auto-rolled)")
+	assert_int(_requests().size()).override_failure_message("nobody asked yet").is_equal(0)
+	# The re-handshake lands: slot 2 is bound again -> the request goes to the owner.
+	_net.peer_to_slot = {1: 1, GUEST_PEER: 2}
+	for _i in 30:
+		if _requests().size() > 0:
+			break
+		await get_tree().create_timer(0.1).timeout
+	assert_int(_requests().size()).override_failure_message("the returning owner was asked").is_equal(1)
+	if _requests().is_empty():
+		_end_session()
+		return
+	var rq: Dictionary = _requests()[0][1]
+	_main._on_network_command("roll_result", {"req": int(rq["req"]), "faces": [5, 2]}, GUEST_PEER)
+	for _i in 30:
+		if _window_done:
+			break
+		await get_tree().create_timer(0.1).timeout
+	assert_bool(_window_done).is_true()
+	assert_array(_window_faces).override_failure_message("the owner's faces").is_equal([5, 2])
+	_end_session()
