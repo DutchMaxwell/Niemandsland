@@ -9406,6 +9406,9 @@ func _set_roll_purpose(text: String) -> void:
 ## the whole attack resolution forever.
 const SOLO_REMOTE_SAVE_TIMEOUT_S := 120.0
 var _owner_roll_timeout_s := SOLO_REMOTE_SAVE_TIMEOUT_S   # tests shorten it; play never does
+## #1882: how long a roll waits for a returning owner's re-handshake (peer connected, no slot yet
+## - the relay re-adds the same id before the version handshake rebuilds peer_to_slot).
+const OWNER_REJOIN_WAIT_S := 4.0
 
 var _solo_remote_save_seq := 0
 var _solo_remote_save_waiters: Dictionary = {}   # request id -> {"faces": Array, "done": bool}
@@ -9422,6 +9425,13 @@ func _owner_roll(unit: GameUnit, count: int, target: int, roll_kind: String, pur
 		return await _solo_tray_roll(count, target, label if not label.is_empty() else _roller_label(unit),
 			roll_kind, purpose)
 	var owner_peer := _solo_peer_for_slot(unit_owner_slot(unit.unit_properties))
+	if owner_peer == 0 and _rejoin_handshake_pending():
+		# #1882: the owner is back but not re-slotted yet (the re-handshake window). A SEATED player
+		# must not be auto-rolled here - wait for the slot, bounded, then take the old fallback.
+		var wait_until := Time.get_ticks_msec() + int(OWNER_REJOIN_WAIT_S * 1000.0)
+		while owner_peer == 0 and Time.get_ticks_msec() < wait_until:
+			await get_tree().create_timer(0.1).timeout
+			owner_peer = _solo_peer_for_slot(unit_owner_slot(unit.unit_properties))
 	var owner_name := _solo_owner_name(unit)
 	var what := str(ask.get("what", purpose))
 	if battle_log != null:
@@ -9462,6 +9472,28 @@ func _solo_release_owner_waiters(peer: int = 0) -> void:
 		var waiter: Dictionary = _solo_remote_save_waiters[req]
 		if peer == 0 or int(waiter.get("peer", 0)) == peer:
 			waiter["aborted"] = true
+
+
+## #1882: true while a connected peer has no seat yet - the window between the relay's reused-id
+## flush and the version handshake that rebuilds peer_to_slot. A roll waits through it instead of
+## treating a returning player as absent.
+func _rejoin_handshake_pending() -> bool:
+	if network_manager == null or not network_manager.is_multiplayer_active():
+		return false
+	for peer in network_manager.connected_peers:
+		if not (network_manager.peer_to_slot as Dictionary).has(int(peer)):
+			return true
+	return false
+
+
+## #1882: a reused-id rejoin is reported as peer_disconnected + peer_connected in the SAME frame
+## (relay_multiplayer_peer.gd _emit_peer_connected). One frame later the peer is back, so the
+## request release is deferred: only a peer that stays away is a leave (#1867 still holds).
+func _release_owner_waiters_after_flush(peer_id: int) -> void:
+	await get_tree().process_frame
+	if network_manager != null and network_manager.connected_peers.has(peer_id):
+		return
+	_solo_release_owner_waiters(peer_id)
 
 
 ## The no-reply path (vacant seat, timeout): a VISIBLE auto-roll instead of a hang — the same
@@ -16451,7 +16483,10 @@ func _on_version_rejected(host_version: String, my_version: String) -> void:
 
 
 func _on_player_left(peer_id: int) -> void:
-	_solo_release_owner_waiters(peer_id)   # #1867: no owner, no reply — the fallback runs now
+	# #1882: a reused-id rejoin is disconnect+connect in the same frame — defer the release one
+	# frame; a peer that is back by then never left (#1867's immediate release still holds for a
+	# real departure, one frame later).
+	_release_owner_waiters_after_flush(peer_id)
 	var player_count = network_manager.connected_peers.size()
 	if network_manager.is_host:
 		network_status_label.text = "Hosting (%d players)" % player_count

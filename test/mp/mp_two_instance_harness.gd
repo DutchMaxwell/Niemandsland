@@ -20,6 +20,9 @@ const P1A_UNIT := "mp2_p1a"
 const P1B_UNIT := "mp2_p1b"
 const P1C_UNIT := "mp2_p1c"
 const P2A_UNIT := "mp2_p2a"
+## #1882: the guest's own caster for the interference ask (a seat that can lend tokens).
+const GUEST_CASTER_UNIT := "mp2_guestcaster"
+const INTERFERENCE_SPELL := "Harness Hex"
 
 var _args: Dictionary = {}
 var _main: Node = null
@@ -38,6 +41,7 @@ var _failure := ""
 var _room_code := ""
 var _los_result: Dictionary = {"visible": false, "label_visible": false, "text": ""}
 var _remote_save_wounds := -1   # result of the in-flight remote save batch (-1 = none yet)
+var _interference_spent := -1   # #1882: result of the in-flight interference ask (-1 = none yet)
 var _last_refusal := ""         # 3.6: the last off-turn refusal text, for the alternation gate
 var _was_ready := false         # the session was up once (a deliberate leave ends it later)
 var _left: Dictionary = {}      # bugs 9+10: what the scene after End Battle inherits (host)
@@ -228,6 +232,14 @@ func _run_command(seq: int, action: String, payload: Dictionary) -> void:
 		# the owner's faces come back. Step 23: the guest may resolve too (the defender is then
 		# a host unit, so the pending owner roll sits on the host).
 		_run_remote_save_attack()
+	elif action == "remote_interference":
+		# #1882: the mirror of remote_save_attack for a CAST - the host asks the guest's caster for
+		# interference through the owner-request seam ("spell" ask). Fire-and-forget.
+		ok = _require_role("host", action)
+		if ok:
+			_run_remote_interference()
+	elif action == "answer_interference":
+		ok = _answer_interference()
 	elif action == "confirm_save":
 		ok = _confirm_save_prompt()
 	elif action == "vfx_burst":
@@ -309,6 +321,7 @@ func _setup_fixture() -> bool:
 		[TRANSPORT_UNIT, 1, "Carrier", Vector3(-0.18, 0.0, 0.0)],
 		[AI_STRIKER_UNIT, 3, "AI Striker", Vector3(0.30, 0.0, -0.25)],
 		[SAVE_DEFENDER_UNIT, 2, "Guest Guard", Vector3(0.42, 0.0, -0.25)],
+		[GUEST_CASTER_UNIT, 2, "Guest Witch", Vector3(0.02, 0.0, -0.05)],
 	]
 	var net_id := 9100
 	if not _args.has("rules-online"):
@@ -324,6 +337,10 @@ func _setup_fixture() -> bool:
 		growth.unit_properties["special_rules"] = ["Piercing Growth"]
 		growth.unit_properties["ambush_reserve"] = true
 		_unit(TRANSPORT_UNIT).unit_properties["special_rules"] = ["Transport(2)"]
+		var witch := _unit(GUEST_CASTER_UNIT)
+		if witch != null:
+			witch.unit_properties["special_rules"] = ["Caster(2)"]
+			witch.initialize_caster_points()
 	# 3.6: three P1 units and one P2 unit so the rules-online gate can drive a full exchange, an
 	# out-of-turn refusal, a TAIL (P1 keeps activating once P2 is spent) and one round end.
 	if _args.has("rules-online"):
@@ -442,6 +459,33 @@ func _run_remote_save_attack() -> void:
 	_remote_save_wounds = wounds
 
 
+## #1882: host resolves a cast whose interference belongs to the GUEST (a "spell" owner request).
+func _run_remote_interference() -> void:
+	_main._ensure_solo_controller()   # geometry for the caster auras (no AI seat is designated)
+	var caster: GameUnit = _unit(SPELL_UNIT)
+	var target: GameUnit = _unit(SAVE_DEFENDER_UNIT)
+	_interference_spent = await _main._solo_remote_interference(caster, caster, INTERFERENCE_SPELL, 0,
+		target.get_name() if target != null else "", 2)
+
+
+func _interference_card() -> PromptCard:
+	# The dialog owns the card, so it is a grandchild of main - search deep.
+	for node in _main.find_children("*", "PromptCard", true, false):
+		if (node as PromptCard).visible and (node as PromptCard).title == "Enemy spell!":
+			return node as PromptCard
+	return null
+
+
+## The owner answers the pending interference with ONE token (the guest side of the ask).
+func _answer_interference() -> bool:
+	var card := _interference_card()
+	if card == null:
+		_failure = "no visible interference card to answer"
+		return false
+	card.resolve(1)
+	return true
+
+
 func _confirm_save_prompt() -> bool:
 	var dlg := _visible_save_prompt()
 	if dlg == null:
@@ -519,6 +563,8 @@ func _snapshot() -> Dictionary:
 		"los": _los_result.duplicate(true),
 		"ai_slots": [],
 		"remote_save_wounds": _remote_save_wounds,
+		"interference_spent": _interference_spent,
+		"interference_open": _interference_card() != null,
 		"save_prompt_visible": false,
 		"battle_log_tail": [],
 		"vfx_cues": (_main._vfx_seen as Dictionary).size() if _main != null else 0,
