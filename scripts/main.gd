@@ -17545,6 +17545,11 @@ func _request_game_state() -> void:
 ## Sync full game state to a specific peer
 func _sync_state_to_peer(peer_id: int) -> void:
 	var state = save_manager.serialize_game_state()  # includes army_names (for tray rebuild)
+	# #1875: a REMOTE army has no object here, so only its header name is known. Merge it into the
+	# pushed names — without it the guest rebuilds its own tray (and the "AI plays P<n>" row) as "Army".
+	var pushed_names: Dictionary = state.get("army_names", {})
+	pushed_names.merge(_remote_army_names, true)
+	state["army_names"] = pushed_names
 	state["_host_version"] = network_manager.get_game_version()
 	# #673 co-op: late joiners adopt the host's (broadcast-synced) AI-slot designation on join.
 	state["solo_ai_slots"] = ai_slots_sync_payload(solo_ai_slots)
