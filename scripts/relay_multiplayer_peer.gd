@@ -683,6 +683,13 @@ func _handle_room_rejoined_host(peer_id: int) -> void:
 	host_rejoined.emit()
 
 
+## True when this transport has already registered `peer_id` once: the relay then flushes
+## peer_disconnected + peer_connected for a reconnect that REUSES the id. The host asks this to
+## give a returning peer the long rejoin window instead of the 8 s new-player one (29(b)).
+func is_known_peer(peer_id: int) -> bool:
+	return _known_peers.has(peer_id)
+
+
 ## (Re)register a transport peer with SceneMultiplayer. If the id is ALREADY known, this is a
 ## reconnect that REUSED the id, and SceneMultiplayer's RPC path-cache for it is STALE — emit
 ## peer_disconnected first to purge it, then peer_connected to re-add, so RPCs route again

@@ -71,6 +71,17 @@ const VERSION_SETTING: String = "application/config/version"
 ## host kicks it. Covers a pre-handshake (old) client that never announces.
 const VERSION_HANDSHAKE_TIMEOUT: float = 8.0
 
+## 29(b), 27.10.2026: a peer that comes back on a REUSED transport id is MID-REJOIN, not a new
+## player — the relay flushed its stale RPC cache and re-added it, but the guest's own socket may
+## still be connecting, so the 8 s new-player grace kicked live guests. It gets the same window its
+## own reconnect loop allows before it gives up (relay_multiplayer_peer.gd RECONNECT_TIMEOUT).
+const REJOIN_HANDSHAKE_TIMEOUT: float = 25.0
+
+## Host: the version-handshake grace a peer gets. Returning (a known/reused transport id) -> the
+## long rejoin window; a genuinely new peer -> the 8 s one.
+static func handshake_grace(returning: bool) -> float:
+	return REJOIN_HANDSHAKE_TIMEOUT if returning else VERSION_HANDSHAKE_TIMEOUT
+
 ## Sentinel for slot_to_peer: the slot is RESERVED to its token but currently has no
 ## live peer (the occupant dropped; a rejoin with the same token reclaims it).
 const SLOT_RESERVED_PEER: int = 0
@@ -307,9 +318,13 @@ func _on_peer_connected(id: int) -> void:
 	# State sync is handled by main.gd via the player_connected signal — but only
 	# after the version handshake. Arm the grace-period kick ONLY for a genuinely
 	# new, unvalidated peer: re-arming it for an already-validated guest on a
-	# rehost replay risks a spurious kick (RC6).
+	# rehost replay risks a spurious kick (RC6). 29(b): a REUSED transport id is a
+	# returning player whose socket is still mid-rejoin — it gets the long window.
 	if multiplayer.is_server() and not already and not is_peer_validated(id):
-		get_tree().create_timer(VERSION_HANDSHAKE_TIMEOUT).timeout.connect(
+		var mp: MultiplayerPeer = multiplayer.multiplayer_peer
+		var returning: bool = mp != null and mp.has_method("is_known_peer") \
+			and bool(mp.call("is_known_peer", id))
+		get_tree().create_timer(handshake_grace(returning)).timeout.connect(
 			enforce_version_handshake_timeout.bind(id))
 
 
