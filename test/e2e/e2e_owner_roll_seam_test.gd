@@ -166,3 +166,73 @@ func test_an_owner_who_never_answers_is_auto_rolled_after_the_timeout(timeout :=
 	assert_str(_purpose_shown()).contains("(owner absent — auto-rolled)")
 	assert_str(_log_text()).not_contains("Guest rolled their morale test")
 	_end_session()
+
+
+## #1867: a pending owner request must end as soon as the owner's link is gone, instead of
+## waiting out the 120 s bound in silence (maintainer test 5: the prompt stayed, no roll came).
+var _req_result: Dictionary = {}
+var _req_done := false
+
+
+func _run_request(peer: int) -> void:
+	_req_result = await _main._owner_request(peer, {"unit": "u1", "kind": "morale", "count": 1,
+		"target": 4, "purpose": "morale test"})
+	_req_done = true
+
+
+func _started_request(peer: int) -> int:
+	_main._owner_roll_timeout_s = 3.0   # the 120 s bound, shortened; the release must beat it
+	_req_result = {}
+	_req_done = false
+	_run_request(peer)
+	for _i in 4:
+		await get_tree().process_frame
+	var reqs: Array = _main._solo_remote_save_waiters.keys()
+	assert_int(reqs.size()).override_failure_message("the request is pending").is_equal(1)
+	return int(reqs[0])
+
+
+func _wait_for_request(seconds: float = 0.5) -> void:
+	for _i in int(seconds / 0.1):
+		if _req_done:
+			return
+		await get_tree().create_timer(0.1).timeout
+
+
+## Never leave the request coroutine running after the scene is gone (RED runs wait it out).
+func _drain() -> void:
+	await _wait_for_request(3.2)
+
+
+func test_a_pending_request_ends_when_the_owner_leaves(timeout := 120000) -> void:
+	assert_bool(_seam_exists()).is_true()
+	if not _seam_exists():
+		return
+	_fake_session({1: 1, GUEST_PEER: 2}, {GUEST_PEER: "Guest"})
+	var req := await _started_request(GUEST_PEER)
+	_end_session()   # real net: _on_player_left needs a tree-bound MultiplayerAPI
+	_main._on_player_left(GUEST_PEER)
+	await _wait_for_request(0.5)
+	assert_bool(_req_done).override_failure_message("released without waiting for the 3 s timeout").is_true()
+	assert_bool(bool((_req_result).get("done", true))).is_false()
+	assert_bool(_main._solo_remote_save_waiters.has(req)).is_false()
+	_main._rpc_roll_result(req, [6])   # a late result for a released request is ignored
+	await get_tree().process_frame
+	assert_bool(_main._solo_remote_save_waiters.has(req)).is_false()
+	assert_bool(bool((_req_result).get("done", true))).is_false()
+	await _drain()
+
+
+func test_a_failed_reconnect_releases_every_pending_request(timeout := 120000) -> void:
+	assert_bool(_seam_exists()).is_true()
+	if not _seam_exists():
+		return
+	_fake_session({1: 1, GUEST_PEER: 2}, {GUEST_PEER: "Guest"})
+	var req := await _started_request(GUEST_PEER)
+	_end_session()
+	_main._on_relay_reconnect_failed("timed out")
+	await _wait_for_request(0.5)
+	assert_bool(_req_done).override_failure_message("released on a failed rejoin").is_true()
+	assert_bool(_main._solo_remote_save_waiters.has(req)).is_false()
+	assert_bool(bool((_req_result).get("done", true))).is_false()
+	await _drain()
