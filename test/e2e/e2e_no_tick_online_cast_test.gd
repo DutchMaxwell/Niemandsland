@@ -174,3 +174,25 @@ func test_an_online_cast_at_a_vacant_seat_resolves_without_interference(timeout 
 	assert_int((units[2] as GameUnit).casts_current).is_equal(2)
 	await E2EBoot.settle(get_tree())
 	_end_session()
+
+
+## P1 (Seer) casts at P2 (Raiders); P2 caster (Witch) is behind a Wall Guards blocker, so the
+## Seer has LoS only to the Raiders but not the Witch — the game must log why nobody interferes.
+func test_an_online_cast_with_the_sight_line_blocked_logs_why_nobody_interferes(timeout := 120000) -> void:
+	_fake_session()
+	var units := _cast_setup()
+	_reg(1, "Wall Guards", -3.0)
+	var start: int = _main.battle_log.entries().size()
+	var done := [false]
+	(func() -> void:
+		await _main._run_human_cast(units[0], units[0], {"name": "Bolt", "threshold": 2}, [units[1]])
+		done[0] = true).call()
+	await _wait(func() -> bool: return done[0])
+	var text := _log_from(start)
+	assert_bool(done[0]).override_failure_message("the cast hung on a blocked sight line:\n%s" % text).is_true()
+	assert_array(_sent("request_roll")).override_failure_message("a request went to the blocked caster:\n%s" % text).is_empty()
+	assert_str(text).override_failure_message("no explanation why nobody interfered:\n%s" % text) \
+		.contains("no caster of P2 within 18\" and line of sight — no interference")
+	assert_int((units[2] as GameUnit).casts_current).is_equal(2)
+	await E2EBoot.settle(get_tree())
+	_end_session()
