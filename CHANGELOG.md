@@ -194,6 +194,27 @@ Unit names with an apostrophe now find their 3D model. (#1840)
 - **In online co-op the opponent's interference against an AI cast is asked on the owning player's
   machine.** (#1851)
 - **In online co-op a player's own cast is boosted by their own casters.** (#1852)
+- **A dropped connection is retried instead of waiting out the deadline.** When the new connection
+  a rejoin opens dies as well, the game keeps trying every two seconds until the reconnect window
+  ends, so you get back into the game instead of sitting out the whole 25 seconds. (#1866, #1869)
+- **A pending save or interference question ends when the other player's link is gone.** Instead of
+  waiting two minutes for a player who has already left, the table moves on at once ("owner absent —
+  auto-rolled", "no interference"); a player who comes back in time still answers it. (#1867, #1870)
+- **The agreed Rules level survives a rejoin.** After a relay hiccup the table no longer drops to
+  Manual on its own: both players keep the level they agreed on. (#1873, #1874)
+- **A returning guest keeps the army name in the panel row** instead of falling back to the
+  placeholder "Army". (#1875)
+- **A spell that nobody can interfere with says why** in the battle log (no caster within 18 inches
+  and line of sight), instead of leaving the question out in silence; armies without a caster stay
+  quiet. (#1878)
+- **A guest who is still reconnecting is no longer thrown out by the host after eight seconds.** The
+  host waits the same window the guest's own reconnect allows, so a slow rejoin ends seated instead
+  of kicked. (#1879)
+- **A re-hosted room shows the rules level it really plays** and asks the "Play with rules
+  automation?" question again, instead of keeping a stale AUTOMATIC label. (#1880)
+- **A cast that nobody can boost says why** in the battle log (no caster within 18 inches and line
+  of sight) instead of silently leaving the boost prompt out; armies without a spare caster stay
+  quiet. (#1881)
 
 ### Internal
 - The release job publishes the platform zips under fixed names, and CI is faster (self-healing CDN
@@ -209,6 +230,8 @@ Unit names with an apostrophe now find their 3D model. (#1840)
   (#1827); a test-order fix in the multiplayer handshake suite (#1844).
 - Repository hygiene: internal working files, codenames and private paths removed. (#1755, #1758)
 - Test-only: a two-window acceptance run walks the player's paths. (#1838)
+- The two-window harness can cut the host's link for real, and CI runs that cut on every pull
+  request, so the rejoin path is exercised before a release. (#1871, #1872)
 - The Python-side plan call (`policy_step`) now builds the route seam's index and the route-root split
   like the other plan entry points; no player-facing effect. (#1860)
 
