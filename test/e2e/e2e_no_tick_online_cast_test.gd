@@ -192,7 +192,7 @@ func test_an_online_cast_with_the_sight_line_blocked_logs_why_nobody_interferes(
 	assert_bool(done[0]).override_failure_message("the cast hung on a blocked sight line:\n%s" % text).is_true()
 	assert_array(_sent("request_roll")).override_failure_message("a request went to the blocked caster:\n%s" % text).is_empty()
 	assert_str(text).override_failure_message("no explanation why nobody interfered:\n%s" % text) \
-		.contains("no caster of P2 within 18\" and line of sight \u2014 no interference")
+		.contains("no caster of P2 within 18\" and line of sight — no interference")
 	assert_int((units[2] as GameUnit).casts_current).is_equal(2)
 	await E2EBoot.settle(get_tree())
 	_end_session()

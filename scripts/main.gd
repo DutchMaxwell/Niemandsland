@@ -5554,7 +5554,6 @@ func _solo_expire_spell_tokens() -> void:
 	_solo_mirror_spell_state()   # NML-949: durable half of the record kept in step
 
 
-
 ## #29a: true when `slot` fields at least one living caster with tokens left anywhere on the table -
 ## only then is "nobody may interfere" worth a log line (armies without casters stay quiet).
 func _solo_side_has_caster_tokens(slot: int) -> bool:
@@ -5564,10 +5563,11 @@ func _solo_side_has_caster_tokens(slot: int) -> bool:
 		var unit := u as GameUnit
 		if unit and unit.is_caster() and unit.casts_current > 0 and unit.get_alive_count() > 0:
 			return true
-		for h in unit.get_attached_heroes():
-			var hero := h as GameUnit
-			if hero and hero.is_caster() and hero.casts_current > 0 and hero.get_alive_count() > 0:
-				return true
+		if unit:
+			for h in unit.get_attached_heroes():
+				var hero := h as GameUnit
+				if hero and hero.is_caster() and hero.casts_current > 0 and hero.get_alive_count() > 0:
+					return true
 	return false
 
 ## The human's resist prompt (v3.5.1 interference: enemy models with tokens within 18" LoS of the
@@ -5584,7 +5584,7 @@ func _solo_prompt_interference(caster: GameUnit, caster_unit: GameUnit, spell_na
 	var helpers: Array = solo_controller._aura_casters(side, caster_unit, null)
 	if helpers.is_empty():
 		if _solo_side_has_caster_tokens(side):
-			_log_rule_event(BattleLog.Category.COMBAT, "%s: no caster of P%d within %d\" and line of sight \u2014 no interference" % [
+			_log_rule_event(BattleLog.Category.COMBAT, "%s: no caster of P%d within %d\" and line of sight — no interference" % [
 				spell_name, side, int(AiSpell.AURA_RANGE_IN)], true)
 		return 0
 	var pool := 0
@@ -5626,7 +5626,7 @@ func _solo_remote_interference(member: GameUnit, unit: GameUnit, spell_name: Str
 	var helpers: Array = solo_controller._aura_casters(foe, unit, null)
 	if helpers.is_empty():
 		if _solo_side_has_caster_tokens(foe):
-			_log_rule_event(BattleLog.Category.COMBAT, "%s: no caster of P%d within %d\" and line of sight \u2014 no interference" % [
+			_log_rule_event(BattleLog.Category.COMBAT, "%s: no caster of P%d within %d\" and line of sight — no interference" % [
 				spell_name, foe, int(AiSpell.AURA_RANGE_IN)], true)
 		return 0
 	var lender := (helpers[0] as Dictionary)["unit"] as GameUnit
