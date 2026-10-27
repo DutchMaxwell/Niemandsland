@@ -11303,6 +11303,10 @@ func _run_human_cast(unit: GameUnit, member: GameUnit, entry: Dictionary, picked
 			_log_rule_event(BattleLog.Category.COMBAT, "Boost: %s spend%s %d token%s — the cast roll improves to %d+" % [
 				", ".join(payers), ("s" if payers.size() == 1 else ""), boost, ("" if boost == 1 else "s"),
 				AiSpell.cast_target(boost, 0, AiSpell.CAST_BASE_TARGET)])
+
+	elif pool == 0 and _solo_side_has_caster_tokens(own_slot):
+		_log_rule_event(BattleLog.Category.COMBAT, "%s: no caster of P%d within %d\" and line of sight — no boost" % [
+			spell_name, own_slot, int(AiSpell.AURA_RANGE_IN)], true)
 	# AI COUNTER-INTERFERENCE (decided default: shown AFTER the player commits — rules-sequential,
 	# no leak): the AI's 18"-LoS pool spends per the marginal calculus, value-proxied by the cost.
 	var interference := 0
