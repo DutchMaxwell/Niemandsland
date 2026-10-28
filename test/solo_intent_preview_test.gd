@@ -94,6 +94,30 @@ func test_depth_zero_execution_still_broadcasts_once() -> void:
 	assert_int(net.batches).is_equal(1)
 
 
+## Placed BEFORE the landing test on purpose: a failing array-diff case there silently skips the next one.
+func test_a_charge_held_short_lands_on_the_snap() -> void:
+	var net: FakeNet = auto_free(FakeNet.new())
+	add_child(net)
+	var rig := _rig(net, 8.0)
+	var solo: SoloController = rig[0]
+	var unit: GameUnit = rig[1]
+	# A second enemy's 1" zone holds the charge ~0.8" short of contact: only main's snap closes that gap.
+	var bystander := _unit(1, "Bystander", [Vector3(7 * IN2M, 0, 1.7 * IN2M)])
+	solo.army_manager.game_units[bystander.unit_id] = bystander
+	var intent := solo.player_intent(unit, AiDecision.Action.CHARGE, rig[2])
+	assert_bool(intent.has("refused")).is_false()
+	var preview: Dictionary = solo.preview_intent(intent)
+	var landing: Vector3 = preview["landing"][0]["pos"]
+	solo.execute_intent(intent, ActIntent.blank_report(unit))
+	var short_in := solo.nearest_melee_gap_in(unit, rig[2])
+	var unsnapped: Vector3 = unit.models[0].node.global_position
+	assert_float(short_in).is_greater(0.1)
+	assert_float(short_in).is_less_equal(SoloController.MELEE_ENGAGE_IN)
+	solo.snap_charge(unit, rig[2])
+	assert_float(unit.models[0].node.global_position.distance_to(landing)).is_less_equal(1e-4)   # (a)
+	assert_float(unsnapped.distance_to(landing)).is_greater(0.1 * IN2M)   # (b) the preview's snap ran
+
+
 func _spots(unit: GameUnit) -> Array:
 	return unit.models.map(func(m: ModelInstance) -> Vector3: return m.node.global_position)
 
