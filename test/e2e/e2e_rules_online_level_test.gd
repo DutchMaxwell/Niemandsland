@@ -113,3 +113,14 @@ func test_full_state_push_carries_and_clamps_the_level() -> void:
 	_main.opr_army_manager.rules_automation = RulesAutomation.from_game_state(st["game_state"])
 	_main._clamp_rules_online("the host")
 	assert_int(_main.opr_army_manager.rules_automation).is_equal(MANUAL)
+
+
+func test_clamp_refreshes_the_rules_chip_to_show_manual() -> void:
+	# Simulate the real flow: the chip is created while the level is still AUTOMATIC,
+	# then clamping changes the internal level. The chip must reflect MANUAL afterwards.
+	_main.opr_army_manager.rules_automation = AUTOMATIC
+	_main.solo_ai_slots = {}
+	_main._update_rules_chip()                       # chip created with AUTOMATIC text
+	assert_str(_main._rules_chip.text).contains("AUTOMATIC")
+	_main._clamp_rules_online("the room")            # level → MANUAL, chip must update too
+	assert_str(_main._rules_chip.text).contains("MANUAL")
