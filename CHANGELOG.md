@@ -60,8 +60,9 @@ the game, new graphics for every biome, a longer Game School and a stronger NACH
   the opponent actually used. (#1126, #1127)
 - **A stronger NACHTMAHR:** at the strongest level it searches a wider set of options and weighs
   units by their army-list cost; it plans its movement per model, including climbing container ledges
-  up to 3", and sees painted terrain. Its stall check, Dangerous-ground decision and battle-log
-  intent line were corrected. (#1207, #1484, #1485, #1600, #1674, #1678, #1706, #1728, #1788–#1791,
+  up to 3", and sees painted terrain. It plays the new missions by their roles and never peeks under
+  a hidden marker. Its stall check, Dangerous-ground decision and battle-log intent line were
+  corrected. (#1207, #1380, #1484, #1485, #1600, #1674, #1678, #1706, #1728, #1788–#1791,
   #1797)
 - **macOS can use the neural opponent on Apple Silicon and Intel.** Builds with a working rules core
   and model use it at the strongest level. A build without the core, or a load failure, falls back to
@@ -76,6 +77,8 @@ the game, new graphics for every biome, a longer Game School and a stronger NACH
   positions; The Rescue restricts carrying to the attacker. Solo saves also retain the mission and
   scoring state, and owned markers follow the deployment-side choice. (#1119, #1124, #1193, #1195,
   #1198, #1423, #1426)
+- **VIP Escort sets up with one click:** the defender places the VIP inside a shaded 6" edge band.
+  (#1431, #1433)
 
 ### Added — learning
 - **Game School gains new chapters** on Activate & Move, Shooting, Melee, Morale & Shaken, Terrain
@@ -172,6 +175,8 @@ Unit names with an apostrophe now find their 3D model. (#1840)
   tabletop trees no longer doubles them. (#1761, #1794)
 - **Safer map editing:** clearing zones reaches the table, custom zones need three points, and empty
   paint strokes no longer clutter the undo history. (#1289, #1291, #1293–#1297)
+- **The Map Layout editor's F1 gap meter measures against the table** and shows a dash instead of
+  "inf" where nothing is in reach. (#1262)
 - **Duplicated army models become independent copies**, and the unit-card Wounds button respects
   Tough(1). (#1120, #1121, #1123)
 - **The host rejects an out-of-turn activation message** in a room with rules automation. (#1783)
@@ -184,7 +189,7 @@ Unit names with an apostrophe now find their 3D model. (#1840)
   (#1833, #1846, #1847, #1848)
 - **The battlemap loads without a freeze** after a table load (it used to stall the game for
   about 2.5 seconds). (#1845)
-- **Loading a save keeps every army tray's name** instead of showing "Army". (#1839)
+- **Every army tray shows its army's name on a tag**, also after loading a save. (#1839, #1864)
 - **The other player's avatar never covers your army trays.** (#1843)
 - **Linux players get the rules core again:** the shipped Linux library is built against an older
   system library, so current distributions (for example Fedora 43) can load it instead of silently
@@ -215,6 +220,10 @@ Unit names with an apostrophe now find their 3D model. (#1840)
 - **A cast that nobody can boost says why** in the battle log (no caster within 18 inches and line
   of sight) instead of silently leaving the boost prompt out; armies without a spare caster stay
   quiet. (#1881)
+- **An online host who loses its link and rejoins still gets the other player's dice answer.** A
+  pending save or interference question keeps waiting for the owner instead of rolling on its own; an
+  answer given during the outage is sent again after the rejoin, and a restarted host never rolls
+  old dice. (#1884, #1885)
 
 ### Internal
 - The release job publishes the platform zips under fixed names, and CI is faster (self-healing CDN
@@ -232,6 +241,8 @@ Unit names with an apostrophe now find their 3D model. (#1840)
 - Test-only: a two-window acceptance run walks the player's paths. (#1838)
 - The two-window harness can cut the host's link for real, and CI runs that cut on every pull
   request, so the rejoin path is exercised before a release. (#1871, #1872)
+- The Havoc Warriors get their own label-map section, so their planned model names resolve once
+  those models ship. (#1883)
 - The Python-side plan call (`policy_step`) now builds the route seam's index and the route-root split
   like the other plan entry points; no player-facing effect. (#1860)
 
