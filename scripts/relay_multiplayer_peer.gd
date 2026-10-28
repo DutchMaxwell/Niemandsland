@@ -238,6 +238,7 @@ func attempt_reconnect() -> Error:
 	_is_reconnecting = true
 	_awaiting_recreate = false
 	_reconnect_start_ms = Time.get_ticks_msec()
+	_next_connect_retry_ms = _reconnect_start_ms + int(RECREATE_RETRY_INTERVAL * 1000.0)
 	relay_reconnecting.emit()
 	if _ws:
 		_ws.close()
@@ -348,9 +349,9 @@ func _poll() -> void:
 			_on_connection_lost()
 
 	elif state == WebSocketPeer.STATE_CLOSED:
-		if _is_reconnecting and _fast_reconnect_ms > 0:
-			# The early rejoin's new socket failed: the whole link is down, not one stalled flow. Retry every
-			# RECREATE_RETRY_INTERVAL until the deadline above instead of idling (today's rejoin never retries).
+		if _is_reconnecting:
+			# The rejoin's new socket failed: the whole link is down, not one stalled flow. Retry every
+			# RECREATE_RETRY_INTERVAL until the deadline above (#1866, 27.10.2026).
 			if now_ms >= _next_connect_retry_ms:
 				_next_connect_retry_ms = now_ms + int(RECREATE_RETRY_INTERVAL * 1000.0)
 				_pending_action = "join"
@@ -680,6 +681,13 @@ func _handle_room_rejoined_host(peer_id: int) -> void:
 	_is_reconnecting = false
 	_end_fast_reconnect("done: peer %d (host)" % peer_id)
 	host_rejoined.emit()
+
+
+## True when this transport has already registered `peer_id` once: the relay then flushes
+## peer_disconnected + peer_connected for a reconnect that REUSES the id. The host asks this to
+## give a returning peer the long rejoin window instead of the 8 s new-player one (29(b)).
+func is_known_peer(peer_id: int) -> bool:
+	return _known_peers.has(peer_id)
 
 
 ## (Re)register a transport peer with SceneMultiplayer. If the id is ALREADY known, this is a
