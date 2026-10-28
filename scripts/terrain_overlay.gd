@@ -517,7 +517,8 @@ func update_overlay(cells_data: Dictionary, table_size: Vector2, grid_rotation: 
 		var mesh_instance := _create_cell_mesh(
 				Vector3(rotated_x, TERRAIN_TILE_WORLD_Y - Z_FIGHT_OFFSET, rotated_z),
 				cell_size_meters, color, grid_rotation)
-		mesh_instance.visible = true
+		# #1888, 28.10.2026: a late rebuild must not resurrect the flat tiles while MODELS is active.
+		mesh_instance.visible = overlay_mode != OverlayMode.MODELS
 		add_child(mesh_instance)
 		overlay_meshes.append(mesh_instance)
 

@@ -73,7 +73,7 @@ func test_game_start_logs_albtraum_and_its_brain_once(timeout := 120000) -> void
 	await _boot("")
 	var d := _seat_ai()
 	var want := "NACHTMAHR — Albtraum (Erlkönig)" if d.planner else "NACHTMAHR — Albtraum (decision tree%s)" % (
-		" — on macOS still without Erlkönig" if OS.get_name() == "macOS" else "")
+		" — Erlkönig did not load")
 	_main.opr_army_manager.start_game()
 	await E2EBoot.settle(get_tree())
 	assert_array(_grade_lines()).contains_exactly([want])
@@ -146,7 +146,7 @@ func test_the_ai_row_offers_the_five_grades_with_descriptions(timeout := 120000)
 		"Dämmerung — still learning; makes visible mistakes",
 		"Zwielicht — plays solidly, misses some chances",
 		"Finsternis — plays the rules hard and punishes mistakes",
-		"Albtraum — " + ("on macOS still without Erlkönig" if OS.get_name() == "macOS" else "Erlkönig: thinks several moves ahead"),
+		"Albtraum — " + (SoloGrade.description("albtraum", _main._solo_erlkoenig_missing())),
 		"NACHTMAHR — coming"])
 	assert_bool(opt.is_item_disabled(4)).override_failure_message("NACHTMAHR is selectable").is_true()
 	assert_bool(opt.is_item_disabled(3)).is_false()
@@ -162,7 +162,7 @@ func test_the_closed_picker_shows_only_the_grade_name(timeout := 120000) -> void
 	assert_object(opt).override_failure_message("no grade picker in the solo panel").is_not_null()
 	if opt == null:
 		return
-	var albtraum := SoloGrade.description("albtraum", OS.get_name() == "macOS")
+	var albtraum := SoloGrade.description("albtraum", _main._solo_erlkoenig_missing())
 	assert_str(opt.text).is_equal("Albtraum")
 	assert_str(opt.tooltip_text).contains(albtraum)
 	assert_str(opt.get_item_text(3)).is_equal("Albtraum — " + albtraum)   # the opened list keeps the line
