@@ -45,6 +45,10 @@ func _import(book_version: String) -> OPRApiClient.OPRArmy:
 	var army: OPRApiClient.OPRArmy = await client.import_from_tts_json(
 		FileAccess.get_file_as_string(LIST_FIXTURE))
 	client.free()
+	# No models: the warning is the handler's first step, and the 43 Wolf Brothers models pulled
+	# ~300 MB from the CDN on a fresh CI runner (5 min timeout; a warm laptop cache hid it).
+	if army != null:
+		army.units.clear()
 	return army
 
 
