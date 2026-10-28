@@ -3,14 +3,18 @@ extends GdUnitTestSuite
 ## resolver where a drop would leave the dragged bases, without moving anything or emitting.
 ## Step 2.2: while a model drag runs in the PLAYING phase, LandingPreview shows one ghost base per
 ## model at that landing; the drop and Esc clear it, deployment shows none.
+## Step 2.3b: ONE line per enemy unit the dragged unit reaches and sees from the landing. Ghosts and lines take
+## turns on the throttled tick, a lines-tick checks one enemy, and the ghosts recompute only after a 0.25" move.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const TOL := 1e-4
+const INCH := 0.0254
 
 var _runner: GdUnitSceneRunner
 var _main: Node
 var _root_before: Array
 var _separated_count := 0
+var _aim := Vector3.ZERO   # the cursor's table point; _ticks re-aims at it
 
 
 func before_test() -> void:
@@ -153,3 +157,124 @@ func test_no_ghosts_on_an_off_turn_hotseat_drag() -> void:
 		if str((e as Dictionary)["text"]).find("is not on turn") != -1:
 			lines += 1
 	assert_int(lines).is_equal(1)
+
+
+## Step 2.3 fixture: `uid` over `nodes`, armed with one 12" rifle (the volley reads the OPR weapons).
+func _armed(nodes: Array, uid: String, player: int) -> GameUnit:
+	_unit_of_all(nodes, uid, player)
+	var opr := OPRApiClient.OPRUnit.new()
+	var w := OPRApiClient.OPRWeapon.new()
+	w.name = "Rifle"
+	w.range_value = 12
+	opr.weapons = [w]
+	var unit: GameUnit = _main.get_node("OPRArmyManager").game_units[uid]
+	unit.source_type = "opr"
+	unit.source_data = opr
+	return unit
+
+
+## Pick `models` up through the real drag path and move them `dz` metres (+z); the throttled tick runs once.
+func _drag_by(models: Array, dz: float) -> void:
+	var om: Object = _main.object_manager
+	om.call("select_objects", models)
+	om.call("_start_dragging", _main.get_viewport().get_camera_3d().unproject_position(models[0].global_position))
+	_aim = models[0].global_position + Vector3(0.0, -_drag_lift(), dz)
+	_ticks(1)
+
+
+## `n` throttled drag ticks with the cursor on `_aim`, moved `dz` metres (+z) first.
+func _ticks(n: int, dz := 0.0) -> void:
+	_aim.z += dz
+	var cam := _main.get_viewport().get_camera_3d()
+	for i in n:
+		_main.object_manager.set("_coherency_update_timer", 1.0)
+		_main.object_manager.call("_update_drag", cam.unproject_position(_aim))
+
+
+## Solo table (slot 2 = AI): a 3-model unit with 12" rifles; enemy A 15" ahead (11" after a 4" drag, out of
+## reach before it), enemy B 26" ahead (22" after it). Returns the mover's model nodes.
+func _solo_lines_table() -> Array[Node3D]:
+	_main.solo_ai_slots = {2: true}
+	_main.get_node("OPRArmyManager").call("set_game_phase", OPRArmyManager.GamePhase.PLAYING)
+	var om: Object = _main.object_manager
+	var models: Array[Node3D] = []
+	for i in 3:
+		models.append(om.call("spawn_miniature", Vector3(0.05 * i, 0.0, 0.0), false))
+	var mover := _armed(models, "am23_mover", 1)
+	var foe_a := _armed([om.call("spawn_miniature", Vector3(0.05, 0.0, 15 * INCH), false)], "am23_foe_a", 2)
+	_armed([om.call("spawn_miniature", Vector3(0.05, 0.0, 26 * INCH), false)], "am23_foe_b", 2)
+	assert_int(_main._solo_volley_sighted(mover, foe_a)) \
+		.override_failure_message("A must be out of reach before the drag, else this test proves nothing").is_equal(0)
+	return models
+
+
+## OD 7: while the drag runs, exactly ONE line (for A, from the landing); the drop and Esc clear it.
+func test_drag_shows_one_line_per_enemy_in_range() -> void:
+	var models := _solo_lines_table()
+	var om: Object = _main.object_manager
+	_drag_by(models, 4 * INCH)
+	_ticks(4)   # both enemies checked
+	assert_int(_main.landing_preview.ghost_count()).is_equal(3)
+	assert_int(_main.landing_preview.line_count()).is_equal(1)
+	om.call("_stop_dragging")
+	assert_int(_main.landing_preview.line_count()).is_equal(0)
+
+	_drag_by(models, 0.5 * INCH)
+	_ticks(4)
+	assert_int(_main.landing_preview.line_count()).is_equal(1)
+	om.call("_cancel_drag")
+	assert_int(_main.landing_preview.line_count()).is_equal(0)
+
+
+## Lines only for ONE unit's models: a joined hero is part of its host (GF p.14); another unit makes it mixed.
+func test_lines_only_for_one_units_drag() -> void:
+	var models := _solo_lines_table()
+	var om: Object = _main.object_manager
+	var mover: GameUnit = models[0].get_meta("game_unit")
+	var hero_node: Node3D = om.call("spawn_miniature", Vector3(0.15, 0.0, 0.0), false)
+	var hero := _armed([hero_node], "am23_hero", 1)
+	hero.unit_properties["attached_to"] = mover
+	mover.unit_properties["attached_heroes"] = [hero]
+	_drag_by(models + [hero_node], 4 * INCH)
+	_ticks(4)
+	assert_int(_main.landing_preview.line_count()).is_equal(1)
+	om.call("_cancel_drag")
+
+	var other: Node3D = om.call("spawn_miniature", Vector3(-0.05, 0.0, 0.0), false)
+	_unit_of(other, "am23_other", 1)
+	_drag_by(models + [other], 4 * INCH)
+	_ticks(4)
+	assert_int(_main.landing_preview.ghost_count()).is_equal(4)
+	assert_int(_main.landing_preview.line_count()).is_equal(0)
+
+
+## Frame-time gate: a tick draws the ghosts OR checks ONE enemy unit, taking turns, and the round-robin reaches
+## every enemy in range: A, then B (out of range), then C and D (both in range) - one line more per lines-tick.
+func test_round_robin_reaches_every_enemy_in_range() -> void:
+	var models := _solo_lines_table()
+	var om: Object = _main.object_manager
+	_armed([om.call("spawn_miniature", Vector3(-0.08, 0.0, 15 * INCH), false)], "am23_foe_c", 2)
+	_armed([om.call("spawn_miniature", Vector3(0.18, 0.0, 15 * INCH), false)], "am23_foe_d", 2)
+	_drag_by(models, 4 * INCH)
+	var seen: Array = [_main.landing_preview.line_count()]
+	for i in 9:
+		_ticks(1)
+		seen.append(_main.landing_preview.line_count())
+	assert_array(seen).is_equal([0, 1, 1, 1, 1, 2, 2, 3, 3, 3])
+	assert_int(_main.landing_preview.ghost_count()).is_equal(3)
+
+
+## Frame-time gate: a move under 0.25" keeps the landing (no ghost recompute, the line verdicts stay); a
+## larger one recomputes the ghosts and drops the old landing's lines.
+func test_a_small_move_keeps_the_landing() -> void:
+	var models := _solo_lines_table()
+	_drag_by(models, 4 * INCH)
+	_ticks(1)   # lines-tick: A
+	assert_int(_main.landing_preview.line_count()).is_equal(1)
+	var ghosts := _ghost_xz()
+	_ticks(2, 0.1 * INCH)
+	assert_array(_ghost_xz()).is_equal(ghosts)
+	assert_int(_main.landing_preview.line_count()).is_equal(1)
+	_ticks(1, 0.5 * INCH)   # a ghost turn
+	assert_float((_ghost_xz()[0] as Vector2).distance_to(ghosts[0])).is_greater(0.01)
+	assert_int(_main.landing_preview.line_count()).is_equal(0)
