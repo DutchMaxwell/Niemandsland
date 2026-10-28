@@ -18052,6 +18052,15 @@ func _load_ai_list_manifest() -> Dictionary:
 ## Handle army imported from dialog
 func _on_opr_army_imported(army: OPRApiClient.OPRArmy, player_id: int, ai_controlled: bool = false) -> void:
 	print("Importing army '%s' for Player %d%s" % [army.name, player_id, " (AI-controlled)" if ai_controlled else ""])
+	# D5 (b), 27.10.2026: a book NEWER than the pinned rules imports WITH a visible warning — the
+	# player may play on, the refusal for online rooms and saves follows in 0.3.15. Same major.minor
+	# (3.5.3 on 3.5.1) says nothing. The rules version is the maps' own _meta.core_version, never a
+	# second constant.
+	var version_warning: String = OPRApiClient.rules_version_warning(
+		army.book_version, OPRApiClient.rules_core_version(army.game_system_abbrev))
+	if not version_warning.is_empty():
+		print("VERSION WARNING: %s" % version_warning)
+		_solo_show_toast(version_warning, 8.0)
 	# #196 — a slot a connected human occupies can never be designated as the AI's.
 	if ai_controlled and network_manager != null and network_manager.slot_has_human_peer(player_id):
 		ai_controlled = false
