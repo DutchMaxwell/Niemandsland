@@ -48,7 +48,9 @@ func _fake_session(peer_to_slot: Dictionary, names: Dictionary) -> void:
 		+ "func is_multiplayer_active() -> bool:\n\treturn true\n" \
 		+ "func get_my_player_slot() -> int:\n\treturn 1\n" \
 		+ "func send_command(type: String, payload: Variant = {}, target_peer: int = 0) -> bool:\n" \
-		+ "\tsent.append([type, payload, target_peer])\n\treturn true\n"
+		+ "\tsent.append([type, payload, target_peer])\n\treturn true\n" \
+		+ "func broadcast_log_event(_category: int, _text: String, _ai: bool = false, _detail: String = \"\") -> void:\n" \
+		+ "\tpass\n"
 	assert_int(src.reload()).is_equal(OK)
 	_net = src.new()
 	_net.peer_to_slot = peer_to_slot
@@ -452,4 +454,85 @@ func test_a_duplicate_request_keeps_one_open_card(timeout := 120000) -> void:
 		await get_tree().create_timer(0.1).timeout
 	assert_int(_results().size()).override_failure_message(
 		"the first request still answers exactly once").is_equal(1)
+	_end_session()
+
+
+## #1887 part (1): after the host's rejoin the foe's peer is back but not re-slotted yet
+## (connected, no seat in peer_to_slot). The interference question must wait through that window
+## instead of declaring the SEATED guest's seat empty - same wait `_owner_roll` has had since #1882.
+var _interf_result := -1
+var _interf_done := false
+
+
+func _run_interference(caster: GameUnit) -> void:
+	_interf_result = await _main._solo_remote_interference(caster, caster, "Test Hex", 0, "", 2)
+	_interf_done = true
+
+
+## Geometry for the caster auras: a solo controller plus a Caster(1) on the foe slot within reach.
+func _seed_interference_foe() -> GameUnit:
+	_main.solo_ai_slots = {3: true}
+	_main._ensure_solo_controller()
+	var caster := _unit(1, "Spell Guard")
+	var foe_caster := E2EBoot.make_unit(_main, 2, "Foe Witch", [Vector3(0.05, 0.0, 0.0)])
+	foe_caster.unit_properties["special_rules"] = ["Caster(1)"]
+	foe_caster.initialize_caster_points()
+	_main.opr_army_manager.game_units[foe_caster.unit_id] = foe_caster
+	return caster
+
+
+func test_control_an_empty_seat_still_logs_empty(timeout := 120000) -> void:
+	assert_bool(_main.has_method("_solo_remote_interference")).is_true()
+	if not _main.has_method("_solo_remote_interference"):
+		return
+	_fake_session({1: 1}, {})
+	var caster := _seed_interference_foe()
+	var spent: int = await _main._solo_remote_interference(caster, caster, "Test Hex", 0, "", 2)
+	assert_int(spent).override_failure_message("an empty seat spends nothing").is_equal(0)
+	assert_str(_log_text()).override_failure_message(
+		"nobody is reconnecting - the seat is empty at once").contains("seat is empty")
+	assert_int(_requests().size()).override_failure_message("no request to a vacant seat").is_equal(0)
+	_end_session()
+
+
+func test_interference_waits_for_a_returning_owner(timeout := 120000) -> void:
+	assert_bool(_main.has_method("_solo_remote_interference")).is_true()
+	if not _main.has_method("_solo_remote_interference"):
+		return
+	# The guest is back (connected) but not re-slotted yet: exactly the re-handshake window.
+	_fake_session({1: 1}, {GUEST_PEER: "Guest"})
+	_main._owner_roll_timeout_s = 5.0
+	_net.connected_peers = Array([GUEST_PEER], TYPE_INT, "", null)
+	var caster := _seed_interference_foe()
+	_run_interference(caster)
+	for _i in 8:
+		await get_tree().process_frame
+	assert_bool(_interf_done).override_failure_message(
+		"the seated guest was called an empty seat during the re-handshake").is_false()
+	assert_str(_log_text()).override_failure_message(
+		"a returning owner is not an empty seat").not_contains("seat is empty")
+	assert_int(_requests().size()).override_failure_message("nobody asked yet").is_equal(0)
+	# The re-handshake lands: slot 2 is bound again -> the question goes to the owner.
+	_net.peer_to_slot = {1: 1, GUEST_PEER: 2}
+	for _i in 40:
+		if _requests().size() > 0:
+			break
+		await get_tree().create_timer(0.1).timeout
+	assert_int(_requests().size()).override_failure_message("the returning owner was asked").is_equal(1)
+	if _requests().is_empty():
+		_end_session()
+		return
+	var sent: Array = _requests()[0]
+	assert_int(int(sent[2])).override_failure_message("addressed to the owner's peer").is_equal(GUEST_PEER)
+	var rq: Dictionary = sent[1]
+	assert_str(str(rq["kind"])).is_equal("interference")
+	_main._on_network_command("roll_result", {"req": int(rq["req"]), "faces": [1]}, GUEST_PEER)
+	for _i in 40:
+		if _interf_done:
+			break
+		await get_tree().create_timer(0.1).timeout
+	assert_bool(_interf_done).is_true()
+	assert_int(_interf_result).override_failure_message("the owner's one token").is_equal(1)
+	assert_str(_log_text()).override_failure_message(
+		"a returning owner is not an empty seat").not_contains("seat is empty")
 	_end_session()
