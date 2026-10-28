@@ -223,6 +223,9 @@ class OPRArmy:
 	var faction_name: String = ""  # Faction name from Army Book (e.g., "Alien Hives")
 	var faction_folder: String = ""  # Normalized folder name (e.g., "alien_hives")
 	var game_system_abbrev: String = ""  # Raw form: gf, gff, aof, aofs, aofr (for API calls)
+	## The army book's own `versionString` ("3.5.3", "3.6.0"); "" when the book arrived without one
+	## (an old snapshot, a synthetic payload). The v3.6 gate reads it, nothing else.
+	var book_version: String = ""
 	var rule_descriptions: Dictionary = {}  # special-rule name -> description text
 	## The faction's spell list (from the army book). Each entry:
 	## { "name": String, "threshold": int (spell-token cost to cast), "effect": String }.
@@ -653,6 +656,45 @@ static func _apply_book_index(army: OPRArmy) -> void:
 	army.faction_folder = str(entry.get("faction_folder", ""))
 
 
+## The rules version this build plays: the rule maps' own `_meta.core_version` ("3.5.1"). Read
+## from the SAME files the mechanics use, so a rules bump cannot leave a stale second constant
+## behind. Cached per system; "" while the map is unreadable (a synthetic system, early boot).
+static var _core_versions: Dictionary = {}
+
+static func rules_core_version(system_abbrev: String) -> String:
+	if _core_versions.has(system_abbrev):
+		return _core_versions[system_abbrev]
+	var version := ""
+	var text := FileAccess.get_file_as_string("res://assets/solo/rules_mechanics_%s.json" % system_abbrev)
+	var parsed = JSON.parse_string(text) if not text.is_empty() else null
+	if parsed is Dictionary and parsed.get("_meta") is Dictionary:
+		version = str((parsed["_meta"] as Dictionary).get("core_version", ""))
+	_core_versions[system_abbrev] = version
+	return version
+
+
+## D5 (b), 27.10.2026: a book NEWER than the rules is imported WITH a warning — the player may
+## play on, the refusal for online rooms and saves follows in 0.3.15. Same major.minor = same rules,
+## silent (3.5.3 books are fine on 3.5.1). "" when compatible or when either side says nothing.
+static func rules_version_warning(book_version: String, core_version: String) -> String:
+	if book_version.is_empty() or core_version.is_empty():
+		return ""
+	var book_mm := _major_minor(book_version)
+	var core_mm := _major_minor(core_version)
+	if book_mm.is_empty() or core_mm.is_empty() or book_mm == core_mm:
+		return ""
+	return "Army Forge serves rules %s, this build plays %s — the game runs on the old rules." % [
+		book_version, core_version]
+
+
+## "3.6.0.1" -> "3.6"; "" when there is no dot to compare (a bare "3" says nothing about the rules).
+static func _major_minor(version: String) -> String:
+	var parts := version.strip_edges().split(".")
+	if parts.size() < 2:
+		return ""
+	return "%s.%s" % [parts[0], parts[1]]
+
+
 ## Parse the TTS API response (contains full resolved unit data!)
 func _parse_tts_api_response(json_text: String) -> OPRArmy:
 	var json = JSON.new()
@@ -686,6 +728,7 @@ func _parse_tts_api_response(json_text: String) -> OPRArmy:
 			book_data = await _fetch_army_book(army.army_id, army.game_system_abbrev)
 		if not book_data.is_empty():
 			army.faction_name = book_data.get("name", "")
+			army.book_version = str(book_data.get("versionString", ""))
 			# Normalize faction name for folder: "Alien Hives" -> "alien_hives"
 			army.faction_folder = army.faction_name.to_lower().replace(" ", "_").replace("-", "_")
 			# Army-book special-rule descriptions (faction-specific take precedence).

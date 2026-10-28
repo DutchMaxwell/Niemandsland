@@ -157,5 +157,33 @@
   "_faction_mummified_undead": {
     "wings": "wings",
     "godly spear": "spear"
+  },
+  "_comment_havoc_warriors": "Havoc Warriors (AoF, uid PGxKcq4R571OtwqD, v3.5.3) go-live: Model Forge's gain -> part-slug vocabulary, consulted ONLY for faction folder 'havoc_warriors'. The bakes name the two-hand weapon 'great' (Great Weapon and Heavy Great Weapon share that slug), keep halberd / lance without the shared 'heavy' prefix, and do not slug the default Heavy Hand Weapon at all, so every plain Warriors / Chosen / Master key stays on the base model. Sergeant is a head-socket plume, never the shared crest. Derived from all 212 book forms against BUILD_MANIFEST_havoc.json.",
+  "_faction_havoc_warriors": {
+    "barbed javelin": "javelin",
+    "barbed javelin crew": "javelins",
+    "beast chariot": "beastchariot",
+    "chariot": "chariot",
+    "daemon chain": "chain",
+    "daemon gauntlet": "gauntlet",
+    "daemon hammer": "hammer",
+    "daemon mount": "daemonmount",
+    "daemon spear": "spear",
+    "daemon sword": "sword",
+    "doom fire": "doomfire",
+    "flail": "flail",
+    "great weapon": "great",
+    "havoc dragon": "dragon",
+    "heavy great weapon": "great",
+    "heavy halberd": "halberd",
+    "heavy hand weapon": "",
+    "heavy havoc sword": "sword",
+    "heavy lance": "lance",
+    "horse": "horse",
+    "horse master": "horse",
+    "manticore": "manticore",
+    "sergeant": "plume",
+    "shortbow": "bow",
+    "wings": "wings"
   }
 }
