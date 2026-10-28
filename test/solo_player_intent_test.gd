@@ -169,3 +169,30 @@ func test_shaken_refusal_names_the_idle_rule() -> void:
 	var refused := str(solo.player_intent(attacker, AiDecision.Action.CHARGE, target).get("refused", ""))
 	assert_str(refused).contains("Shaken")
 	assert_str(refused).contains("idle")
+
+
+## "Target only" (Automodus 0.3.15, step 1.3): the player chose ONE target. The AI's post-move
+## retarget (Bug 27/28) must not quietly fire on another enemy that happens to be in reach.
+func test_player_advance_does_not_retarget_to_another_enemy() -> void:
+	var attacker := _unit(2, "Riflemen", [Vector3.ZERO])
+	var opr := OPRApiClient.OPRUnit.new()
+	var weapon := OPRApiClient.OPRWeapon.new()
+	weapon.name = "Rifle"
+	weapon.range_value = 12
+	weapon.attacks = 1
+	opr.weapons = [weapon]
+	attacker.source_type = "opr"
+	attacker.source_data = opr
+	var chosen := _unit(1, "Chosen", [Vector3(40 * IN2M, 0, 0)])
+	var near := _unit(1, "Near", [Vector3(0, 0, 10 * IN2M)])
+	var solo := _controller([attacker, chosen, near])
+	var intent := solo.player_intent(attacker, AiDecision.Action.ADVANCE, chosen)
+	assert_bool(intent.has("refused")).is_false()
+	var report := solo.execute_intent(intent, ActIntent.blank_report(attacker))
+	assert_bool(bool(report["can_shoot"])) \
+		.override_failure_message("a player Advance retargeted to the enemy at 10\"") \
+		.is_false()
+	var notes := ""
+	for n in report.get("rule_notes", []):
+		notes += str((n as Dictionary)["text"]) + "\n"
+	assert_str(notes).contains("no shot")

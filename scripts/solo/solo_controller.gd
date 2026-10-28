@@ -2634,13 +2634,14 @@ func execute_intent(intent: Dictionary, report: Dictionary) -> Dictionary:
 	# now out of range/LOS (or the objective-advance never set do_shoot), but the unit can still hit ANOTHER
 	# enemy from here, shoot that one instead of wasting the volley. A Quick Shot unit's RUSH may shoot
 	# too (army-book); a plain Rush and Charge (melee) are untouched. The move narration keeps its own
-	# target; report["shoot_target"] drives the volley.
+	# target; report["shoot_target"] drives the volley. A PLAYER intent never retargets (Automodus
+	# "target only"): the player chose ONE target, so out of reach means "no shot" with its reason.
 	if not bool(report["can_shoot"]) and shoot_range_in > 0 \
 			and (action == AiDecision.Action.HOLD or action == AiDecision.Action.ADVANCE \
 				or (quick_shot and action == AiDecision.Action.RUSH)):
 		# _run_ai_shooting split-fires — each weapon picks its OWN in-range+LOS target — so opening the
 		# can_shoot gate is enough; no need to thread a specific target through.
-		var retgt := best_shoot_target_now(unit)
+		var retgt: GameUnit = null if source == "player" else best_shoot_target_now(unit)
 		if retgt != null:
 			report["can_shoot"] = true
 			record_decision({"kind": "target", "unit": unit.get_name(),
