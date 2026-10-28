@@ -1583,10 +1583,17 @@ func preview_drop_landing() -> Dictionary:
 
 ## Automodus step 2.2 (the same preview for manual moves): in the PLAYING phase one ghost base per
 ## dragged model sits where a drop now would leave it (the drop's own resolver). Deployment shows none;
-## terrain and dice have no base radius, so they never ghost.
+## terrain and dice have no base radius, so they never ghost. An off-turn hotseat drag snaps back on
+## release, so it shows none either (the side-effect-free turn check; the release logs the refusal).
 func _show_landing_ghosts() -> void:
 	var army := get_node_or_null("/root/Main/OPRArmyManager")
 	if landing_preview == null or army == null or army.is_deployment_phase():
+		return
+	var main := get_node_or_null("/root/Main")
+	var gu := _drag_unit_of(_drag_anchor_object)
+	if gu != null and main != null and main.has_method("hotseat_turn_refusal") \
+			and main.hotseat_turn_refusal(main.unit_owner_slot(gu.unit_properties)) != "":
+		landing_preview.clear()
 		return
 	var landing: Array = []
 	var drop := preview_drop_landing()

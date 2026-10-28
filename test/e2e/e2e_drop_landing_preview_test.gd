@@ -74,19 +74,19 @@ func test_preview_matches_the_drop() -> void:
 	assert_int(_separated_count).is_equal(1)
 
 
-## Step 2.2 fixture: a 3-model unit picked up through the real drag path and dragged 4" (+z), in
-## `phase`. An enemy waits 0.3" outside contact of the third model's end spot, so that model's
+## Step 2.2 fixture: a 3-model unit of `player` picked up through the real drag path and dragged 4"
+## (+z), in `phase`. An enemy waits 0.3" outside contact of the third model's end spot, so that model's
 ## landing is the resolver's snap, not the cursor position. Returns the three model nodes.
-func _drag_three(phase: int) -> Array[Node3D]:
+func _drag_three(phase: int, player: int = 1) -> Array[Node3D]:
 	var om: Object = _main.object_manager
 	_main.get_node("OPRArmyManager").call("set_game_phase", phase)
 	var models: Array[Node3D] = []
 	for i in 3:
 		models.append(om.call("spawn_miniature", Vector3(0.05 * i, 0.0, 0.0), false))
-	_unit_of_all(models, "am22_mover", 1)
+	_unit_of_all(models, "am22_mover", player)
 	var end_z := 0.1016
 	var enemy: Node3D = om.call("spawn_miniature", Vector3(0.1, 0.0, end_z + 0.032 + 0.00762), false)
-	_unit_of(enemy, "am22_enemy", 2)
+	_unit_of(enemy, "am22_enemy", 3 - player)
 	om.call("select_objects", models)
 	var cam := _main.get_viewport().get_camera_3d()
 	om.call("_start_dragging", cam.unproject_position(models[0].global_position))
@@ -139,3 +139,17 @@ func test_no_ghosts_in_deployment() -> void:
 	_drag_three(OPRArmyManager.GamePhase.DEPLOYMENT)
 	assert_bool(bool(_main.object_manager.get("_is_dragging"))).is_true()
 	assert_int(_main.landing_preview.ghost_count()).is_equal(0)
+
+
+## An off-turn drag on a hotseat Automatic table snaps back on release, so no ghost may promise a
+## landing; the ghost tick never logs (the release writes the one "not on turn" line).
+func test_no_ghosts_on_an_off_turn_hotseat_drag() -> void:
+	_main.opr_army_manager.rules_automation = RulesAutomation.Level.AUTOMATIC
+	_drag_three(OPRArmyManager.GamePhase.PLAYING, 2)  # P1 opens the round, so P2 is off-turn
+	assert_int(_main.landing_preview.ghost_count()).is_equal(0)
+	_main.object_manager.call("_stop_dragging")
+	var lines := 0
+	for e in _main.battle_log.entries():
+		if str((e as Dictionary)["text"]).find("is not on turn") != -1:
+			lines += 1
+	assert_int(lines).is_equal(1)
