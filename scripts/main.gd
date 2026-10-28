@@ -11235,8 +11235,9 @@ func _run_player_intent(unit: GameUnit, verb: int, target: GameUnit) -> void:
 				"Auto: %s — %s" % [unit.get_name(), str(intent["refused"])], true)
 		return
 	# A3 (NML-202): the first EXECUTED auto intent switches the save prompt off for the rest of the
-	# game — a refusal above never reaches here, so it never flips the switch.
-	if SoloController.auto_saves_after_intent(_solo_auto_saves, true) and not _solo_auto_saves:
+	# game — a refusal above never reaches here, so it never flips the switch. 0.3.15 (3.4): the switch
+	# is THIS player's own preference, so an intent the host runs for a guest's unit never flips it.
+	if _solo_i_own_unit(unit) and SoloController.auto_saves_after_intent(_solo_auto_saves, true) and not _solo_auto_saves:
 		_solo_auto_saves = true
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.GENERAL,
