@@ -164,6 +164,17 @@ var move_trails: Node = null
 var pickup_ghosts: Node = null
 ## Automodus landing ghosts (LandingPreview): where a drop now would leave each model; injected by main.
 var landing_preview: Node = null
+## Step 2.3b frame-time gate: ghosts and lines take turns on the throttled tick. The ghosts recompute only
+## after the drag head moved >= 0.25" (dropping the old landing's line verdicts); a lines-tick checks ONE enemy.
+const LANDING_REFRESH_M: float = 0.25 * 0.0254
+var _landing_turn := false
+var _landing_head := Vector3.INF
+var _landing: Array = []
+var _landing_drop: Dictionary = {}
+var _line_shooter: GameUnit = null
+var _line_queue: Array = []
+var _line_sight: Dictionary = {}
+var _lines: Array = []
 ## The anchor model's NET traversed path this drag (retrace-erased, budget-refunding —
 ## MoveLedger.extend_path). Feeds the consumed-inches readout, live trail, ledger + log.
 var _drag_path_points: PackedVector2Array = PackedVector2Array()
@@ -1355,6 +1366,7 @@ func _start_dragging(screen_pos: Vector2) -> void:
 	# Path painting: start the traversed-path record at the anchor's start, and open the
 	# live ribbons (one per painted mover) that follow the drag behind the models.
 	_drag_anchor_object = movable[0]
+	_landing_head = Vector3.INF   # step 2.3b: a new drag opens with a ghost tick
 	_drag_path_points = PackedVector2Array(
 		[Vector2(_drag_anchor_position.x, _drag_anchor_position.z)])
 	if move_trails != null:
@@ -1585,6 +1597,7 @@ func preview_drop_landing() -> Dictionary:
 ## dragged model sits where a drop now would leave it (the drop's own resolver). Deployment shows none;
 ## terrain and dice have no base radius, so they never ghost. An off-turn hotseat drag snaps back on
 ## release, so it shows none either (the side-effect-free turn check; the release logs the refusal).
+## Step 2.3b (OD 7): plus one line per enemy unit reached and seen from it; one unit's models only (+ heroes).
 func _show_landing_ghosts() -> void:
 	var army := get_node_or_null("/root/Main/OPRArmyManager")
 	if landing_preview == null or army == null or army.is_deployment_phase():
@@ -1595,13 +1608,47 @@ func _show_landing_ghosts() -> void:
 			and main.hotseat_turn_refusal(main.unit_owner_slot(gu.unit_properties)) != "":
 		landing_preview.clear()
 		return
-	var landing: Array = []
-	var drop := preview_drop_landing()
-	for obj in drop:
+	_landing_turn = not _landing_turn or _landing_head == Vector3.INF
+	if not _landing_turn:
+		_landing_line_step(main)
+		return
+	var head := _drag_anchor_object.global_position
+	if Vector2(head.x - _landing_head.x, head.z - _landing_head.z).length() < LANDING_REFRESH_M:
+		return
+	_landing_head = head
+	_landing = []
+	_landing_drop = preview_drop_landing()
+	var shooter: GameUnit = gu.get_attached_to() if gu != null and gu.is_attached() else gu
+	for obj in _landing_drop:
 		var radius := _trail_radius_for(obj)
 		if radius > 0.0:
-			landing.append({"pos": drop[obj], "radius_m": radius})
-	landing_preview.show_preview(landing, [])
+			_landing.append({"pos": _landing_drop[obj], "radius_m": radius})
+		var ou := _drag_unit_of(obj)
+		if ou == null or (ou != shooter and ou.get_attached_to() != shooter):
+			shooter = null
+	_line_shooter = shooter
+	_line_queue = main.drag_line_targets(shooter) if shooter != null and main.has_method("drag_line_targets") else []
+	_line_sight = {}
+	_lines = []
+	landing_preview.show_preview(_landing, [])
+
+
+## Step 2.3b: ONE enemy unit of the landing's queue per lines-tick (round-robin). Its verdict comes from
+## main's volley sight truth while the dragged bases stand on the landing (put back at once).
+func _landing_line_step(main: Node) -> void:
+	if _line_queue.is_empty() or _line_shooter == null:
+		return
+	var enemy: GameUnit = _line_queue.pop_front()
+	var before: Dictionary = {}
+	for obj in _landing_drop:
+		before[obj] = obj.global_position
+		obj.global_position = _landing_drop[obj]
+	var to: Variant = main.drag_line_to(_line_shooter, enemy, _line_sight)
+	for obj in before:
+		obj.global_position = before[obj]
+	if to != null:
+		_lines.append({"from": MoveIntent.anchor_of(_landing_drop.values()), "to": to})
+		landing_preview.show_preview(_landing, _lines)
 
 
 func _resolve_drop_separation() -> void:

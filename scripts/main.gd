@@ -12849,6 +12849,26 @@ func _solo_log_range_bonus(attacker: GameUnit, target: GameUnit) -> void:
 			member.get_name(), " + ".join(causes), ", ".join(lifted), target.get_name()], true)
 
 
+## Automodus step 2.3b (OD 7): the enemy units a manual drag of `unit` may draw a shooting line to (no sight
+## test): _engine_enemy (none on a Manual table), alive, on the table, not a joined hero; none without a gun.
+func drag_line_targets(unit: GameUnit) -> Array:
+	if opr_army_manager == null or AiArchetype.max_range_inches(_solo_all_weapons(unit)) <= 0:
+		return []
+	return opr_army_manager.get_all_game_units().filter(func(e: GameUnit) -> bool:
+		return e != null and not e.is_destroyed() and not SoloController.unit_in_reserve(e) \
+			and not e.is_attached() and _engine_enemy(unit, e))
+
+
+## The line's end (enemy centre) when `unit`, its dragged bases stood on the landing, has range + sight to `enemy`
+## (the volley's sight truth, 2.3a first hit; `cache` keeps the landing's shared blockers); null otherwise.
+func drag_line_to(unit: GameUnit, enemy: GameUnit, cache: Dictionary) -> Variant:
+	if not cache.has("blockers"):
+		cache["blockers"] = _solo_los_blockers(unit, null)
+	if _solo_volley_sighted(unit, enemy, null, true, cache["blockers"]) <= 0:
+		return null
+	return MoveIntent.anchor_of(SoloController.alive_positions(enemy))
+
+
 ## Automodus step 1.5 (#1828): the volley's own sight truth — how many of `attacker`'s models have range
 ## and line of sight to `target`, the N of _run_human_shooting's "N/M models with line of sight + range"
 ## line. `pairs_out` collects each counted model's [shooter_pos, target_pos] (the landing preview's lines).
