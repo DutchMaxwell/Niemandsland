@@ -2712,7 +2712,7 @@ func preview_intent(intent: Dictionary, probe := Callable()) -> Dictionary:
 ## ActIntent shape _act builds, source "player", so execute_intent runs one gate for both feeders — no
 ## second truth for the move/shoot rules. quick_shot is computed the same way _act does (not listed in
 ## the plan's step 5 field list, but PR 3's Quick-Shot-after-Rush test needs it wired here to fire).
-func player_intent(unit: GameUnit, verb: int, target: GameUnit) -> Dictionary:
+func player_intent(unit: GameUnit, verb: int, target: GameUnit, point: Variant = null) -> Dictionary:
 	if unit.is_shaken:
 		return {"refused": "Shaken — spends its activation idle (GF v3.5.1 p.10)"}
 	if forces_hold(unit.get_special_rules()) and hold_only_param(unit) and verb != AiDecision.Action.HOLD:
@@ -2724,6 +2724,11 @@ func player_intent(unit: GameUnit, verb: int, target: GameUnit) -> Dictionary:
 	var advance := float(bands.get("advance", 6)) + musician_in
 	var rush := float(bands.get("rush", 12)) + musician_in
 	var charge := float(bands.get("charge", bands.get("rush", 12))) + musician_in
+	# Automodus 1.8b (OD 5): a Rush to a FREE POINT is the AI's own move-to-position intent — with
+	# to_objective, execute_intent steers at the goal and stops at the Rush reach or the point, whichever is nearer.
+	if point is Vector3 and verb == AiDecision.Action.RUSH:
+		return ActIntent.make(unit, verb, null, point, rush, false,
+			{"to_objective": true, "source": "player", "why": "player intent: rushes to a point"})
 	var weapons := _unit_weapons(unit)
 	var shoot_range_in := effective_shoot_reach_in(
 		AiArchetype.max_range_inches(weapons) + float(shooting_range_bonus(unit)), target)

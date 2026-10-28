@@ -65,15 +65,14 @@ func test_charge_lights_only_chargeable_enemies(timeout := 60000) -> void:
 	_main._solo_end_targeting()
 
 
-func test_advance_and_rush_light_every_enemy(timeout := 60000) -> void:
+func test_advance_lights_every_enemy(timeout := 60000) -> void:
 	var attacker := _unit(1, "Movers", Vector3.ZERO)
 	_unit(2, "Near", Vector3(8.0 * INCH, 0, 0))
 	_unit(2, "Far", Vector3(20.0 * INCH, 0, 0))
-	for verb in [AiDecision.Action.ADVANCE, AiDecision.Action.RUSH]:
-		await _main.solo_begin_auto(attacker, verb)
-		assert_int((_main._solo_target_mode.get("auto_valid", []) as Array).size()).is_equal(2)
-		assert_int((_main._solo_target_mode.get("cast_rings", []) as Array).size()).is_equal(2)
-		_main._solo_end_targeting()
+	await _main.solo_begin_auto(attacker, AiDecision.Action.ADVANCE)
+	assert_int((_main._solo_target_mode.get("auto_valid", []) as Array).size()).is_equal(2)
+	assert_int((_main._solo_target_mode.get("cast_rings", []) as Array).size()).is_equal(2)
+	_main._solo_end_targeting()
 
 
 func test_shaken_unit_gets_no_mode_and_a_reason(timeout := 60000) -> void:

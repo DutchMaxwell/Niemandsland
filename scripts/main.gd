@@ -11193,7 +11193,12 @@ func solo_begin_auto(unit: GameUnit, verb: int) -> void:
 	# why (the first refusal) and do not enter the mode.
 	var valid: Array = []
 	var first_reason := ""
-	for g in opr_army_manager.get_all_game_units():
+	# Automodus 1.8b (OD 5): Rush goes to a FREE table point — no lit enemies, only the unit's own refusal.
+	var to_point := verb == AiDecision.Action.RUSH
+	if to_point:
+		var here: Vector3 = solo_controller.unit_centre(unit)
+		first_reason = str(solo_controller.player_intent(unit, verb, null, here).get("refused", ""))
+	for g in ([] if to_point else opr_army_manager.get_all_game_units()):
 		var cand := g as GameUnit
 		if cand == null or cand.is_destroyed() or SoloController.unit_in_reserve(cand) \
 				or (cand.has_method("is_attached") and cand.is_attached()) or not _engine_enemy(unit, cand):
@@ -11204,13 +11209,13 @@ func solo_begin_auto(unit: GameUnit, verb: int) -> void:
 				first_reason = str(verdict["refused"])
 		else:
 			valid.append(cand)
-	if valid.is_empty():
+	if valid.is_empty() and (first_reason != "" or not to_point):
 		_solo_target_mode = {}
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.GENERAL, "Auto: %s — no valid target for %s (%s)" % [
 				unit.get_name(), verb_label, first_reason if first_reason != "" else "no enemy on the table"])
 		return
-	var suggested: GameUnit = solo_controller.suggest_target(unit, verb)
+	var suggested: GameUnit = null if to_point else solo_controller.suggest_target(unit, verb)
 	var rings: Array = []
 	for cu in valid:
 		# Automodus 1.8 (OD 11): the suggested target's ring is brighter and larger than the other lit ones.
@@ -11223,9 +11228,13 @@ func solo_begin_auto(unit: GameUnit, verb: int) -> void:
 	_solo_target_mode["auto_label"] = verb_label
 	_solo_target_mode["cast_rings"] = rings   # freed by _solo_end_targeting
 	_solo_target_mode["auto_previews"] = {}
+	if to_point:
+		_solo_target_mode["auto_point"] = true
 	if band > 0 and range_ring_controller != null and range_ring_controller.has_method("show_spell_preview"):
 		range_ring_controller.show_spell_preview(_solo_unit_nodes(unit), band)
-	if battle_log != null:
+	if to_point and battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL, "%s: hover the table to see where your models end, click to rush there; right-click or Esc cancels" % unit.get_name())
+	elif battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL,
 			"%s: %d target(s) lit for %s — hover one to see where your models land, click it to go; right-click or Esc cancels" % [
 				unit.get_name(), valid.size(), verb_label])
@@ -11241,7 +11250,7 @@ func solo_begin_auto(unit: GameUnit, verb: int) -> void:
 ## try again. V1 scope only (no casts, no Mend/Breath/Utility-Buff replay — those stay the AI's own
 ## before-attacking beats; execute_intent's source == "player" branch already skips the spell plan and
 ## the overkill ledger for the same reason).
-func _run_player_intent(unit: GameUnit, verb: int, target: GameUnit) -> void:
+func _run_player_intent(unit: GameUnit, verb: int, target: GameUnit, point: Variant = null) -> void:
 	var ghosted: int = solo_controller._moving_models(unit).size()
 	await begin_activation(unit)
 	# Automodus 1.8 (OD 8): models begin_activation brings back (Reanimation) were not in the preview —
@@ -11250,7 +11259,7 @@ func _run_player_intent(unit: GameUnit, verb: int, target: GameUnit) -> void:
 	if added > 0 and battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL, "Auto: +%d model%s reanimated — not in the preview" % [
 			added, "" if added == 1 else "s"], true)
-	var intent: Dictionary = solo_controller.player_intent(unit, verb, target)
+	var intent: Dictionary = solo_controller.player_intent(unit, verb, target, point)
 	if intent.has("refused"):
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.GENERAL,
@@ -11280,7 +11289,7 @@ func _run_player_intent(unit: GameUnit, verb: int, target: GameUnit) -> void:
 		for note in solo_controller.board_clamp_notes:
 			battle_log.log_event(BattleLog.Category.GENERAL, str(note), true)
 		battle_log.log_event(BattleLog.Category.MOVEMENT, "Auto: %s %s (→ %s)" % [
-			unit.get_name(), AiDecision.action_name(verb), target.get_name()], true)
+			unit.get_name(), AiDecision.action_name(verb), target.get_name() if target != null else "the marked point"], true)
 	var has_move: bool = not solo_controller.last_move_paths.is_empty()
 	if has_move:
 		await _solo_pace_attention()
@@ -11312,8 +11321,8 @@ func _run_player_intent(unit: GameUnit, verb: int, target: GameUnit) -> void:
 ## player_intent comes back as is ({"refused": why}); a legal intent runs through preview_intent (the one
 ## executor in its sandbox), whose probe reads the shooting lines AT THE LANDING through the volley's own
 ## sight truth. Returns {landing: [{model, pos, radius_m}], can_shoot, lines: [{from, to}]}.
-func _solo_preview_for(unit: GameUnit, verb: int, target: GameUnit) -> Dictionary:
-	var intent: Dictionary = solo_controller.player_intent(unit, verb, target)
+func _solo_preview_for(unit: GameUnit, verb: int, target: GameUnit, point: Variant = null) -> Dictionary:
+	var intent: Dictionary = solo_controller.player_intent(unit, verb, target, point)
 	if intent.has("refused"):
 		return intent
 	var probe := func(report: Dictionary) -> Array:
@@ -11600,7 +11609,9 @@ func _solo_targeting_input(event: InputEvent) -> bool:
 			return true
 		SoloController.TargetingRoute.TRACK:
 			var hover_pos := (event as InputEventMouseMotion).position
-			if _solo_target_mode.has("auto_verb"):
+			if _solo_target_mode.has("auto_point"):
+				_solo_show_auto_point(_solo_auto_point_at(hover_pos))   # Automodus 1.8b: Rush to a table point
+			elif _solo_target_mode.has("auto_verb"):
 				_solo_show_auto_preview(_solo_pick_unit_at(hover_pos))   # Automodus 1.7: ghosts, no LOS line
 			else:
 				_solo_update_los_line(hover_pos)
@@ -11625,6 +11636,12 @@ func _solo_targeting_input(event: InputEvent) -> bool:
 			if _solo_target_mode.has("cast_entry"):
 				if target != null:
 					_solo_cast_click(target)
+				return true
+			if _solo_target_mode.has("auto_point"):   # Automodus 1.8b: the click rushes to the table point
+				var goal: Variant = _solo_auto_point_at(mb.position)
+				if goal != null:
+					_solo_end_targeting()
+					await _run_player_intent(attacker, AiDecision.Action.RUSH, null, goal)
 				return true
 			if _solo_target_mode.has("auto_verb"):
 				if target != null:
@@ -11657,6 +11674,37 @@ func _solo_targeting_input(event: InputEvent) -> bool:
 			_solo_split_or_attack(attacker, target, melee)
 			return true
 	return false
+
+
+## Automodus step 1.8b (#1828, OD 5): the table point under the cursor at the acting unit's height,
+## snapped to a 0.5" grid, so hover and click name the SAME goal and each cell plans once. null = no hit.
+func _solo_auto_point_at(screen_pos: Vector2) -> Variant:
+	var camera := get_viewport().get_camera_3d()
+	var unit: GameUnit = _solo_target_mode.get("unit")
+	if camera == null or unit == null:
+		return null
+	var hit: Variant = Plane(Vector3.UP, solo_controller.unit_centre(unit).y).intersects_ray(
+		camera.project_ray_origin(screen_pos), camera.project_ray_normal(screen_pos))
+	if hit == null:
+		return null
+	var cell := 0.5 * 0.0254
+	return Vector3(snappedf((hit as Vector3).x, cell), (hit as Vector3).y, snappedf((hit as Vector3).z, cell))
+
+
+## Automodus step 1.8b: the Rush ghosts for a table point (clamped to the Rush reach along the engine path),
+## one planner run per grid cell (cached in auto_previews), rebuilt only when the hovered cell changes.
+func _solo_show_auto_point(point: Variant) -> void:
+	if landing_preview == null or point == _solo_target_mode.get("auto_hovered"):
+		return
+	_solo_target_mode["auto_hovered"] = point
+	var cache: Dictionary = _solo_target_mode.get("auto_previews", {})
+	if point != null and not cache.has(point):
+		cache[point] = _solo_preview_for(_solo_target_mode.get("unit"), AiDecision.Action.RUSH, null, point)
+	var preview: Dictionary = cache.get(point, {}) if point != null else {}
+	if preview.has("landing"):
+		landing_preview.show_preview(preview["landing"], preview.get("lines", []))
+	else:
+		landing_preview.clear()
 
 
 ## Automodus step 1.8 (#1828, factored for headless tests like _solo_cast_click): only a LIT target

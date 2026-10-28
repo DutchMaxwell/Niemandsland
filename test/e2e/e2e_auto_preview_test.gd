@@ -307,13 +307,31 @@ func test_a_lit_advance_click_lands_on_the_preview(timeout := 60000) -> void:
 	_assert_on_the_ghosts(landing)
 
 
-func test_a_lit_rush_click_lands_on_the_preview(timeout := 60000) -> void:
+## Automodus step 1.8b (OD 5): Rush goes to a FREE table point — no enemy is lit, the hover anywhere shows
+## where the models end (clamped to the Rush reach), and the click there executes.
+func test_rush_previews_and_goes_to_a_free_point(timeout := 60000) -> void:
 	_bystanders()
-	var runner := _shooter(1, "Runners", 0.0, 3)
-	var foe := _pickable(2, "Foe", 24.0)
+	var runners := _shooter(1, "Runners", 0.0, 3)
+	var foe := _shooter(2, "Foe", -24.0)   # an enemy on the table: Rush still lights no ring for it
 	foe.is_activated = true
-	var landing := await _hover_then_click(runner, foe, AiDecision.Action.RUSH)
-	assert_bool(runner.is_activated).override_failure_message("the lit click did not execute").is_true()
+	var start: Vector3 = _main.solo_controller.unit_centre(runners)
+	var pt: Vector2 = _main.get_viewport().get_camera_3d().unproject_position(start + Vector3(30.0 * INCH, 0, 0))
+	await _main.solo_begin_auto(runners, AiDecision.Action.RUSH)
+	assert_array(_main._solo_target_mode.get("cast_rings", ["no mode"])).override_failure_message("Rush lit an enemy").is_empty()
+	await _hover(pt)   # 30" away, beyond the 12" Rush reach
+	var previews: Dictionary = _main._solo_target_mode.get("auto_previews", {})
+	var landing: Array = (previews.get(_main._solo_target_mode.get("auto_hovered"), {}) as Dictionary).get("landing", [])
+	assert_int(_main.landing_preview.ghost_count()).is_equal(3)
+	assert_int(landing.size()).is_equal(3)
+	var centre := Vector3.ZERO
+	for spot in landing:
+		centre += (spot["pos"] as Vector3) / maxf(landing.size(), 1)
+	assert_float(MoveIntent.distance_inches(start, centre)).override_failure_message("ghosts not at the 12\" reach") \
+		.is_between(11.5, 12.01)
+	assert_float(centre.x - start.x).override_failure_message("ghosts not toward the hovered point").is_greater(11.0 * INCH)
+	await _click(pt)
+	await E2EBoot.settle(get_tree())
+	assert_bool(runners.is_activated).override_failure_message("the click on the table did not execute").is_true()
 	_assert_on_the_ghosts(landing)
 
 
@@ -342,7 +360,7 @@ func test_the_suggested_target_wears_the_one_highlighted_ring(timeout := 60000) 
 	var plain: MeshInstance3D = _main._solo_spawn_pulse_ring(Vector3.ZERO, Color.WHITE)
 	var plain_radius: float = (plain.mesh as TorusMesh).outer_radius
 	plain.free()
-	for verb in [AiDecision.Action.CHARGE, AiDecision.Action.ADVANCE, AiDecision.Action.RUSH]:
+	for verb in [AiDecision.Action.CHARGE, AiDecision.Action.ADVANCE]:   # Rush lights no target (1.8b)
 		await _main.solo_begin_auto(unit, verb)
 		var valid: Array = _main._solo_target_mode.get("auto_valid", [])
 		var rings: Array = _main._solo_target_mode.get("cast_rings", [])
@@ -384,7 +402,7 @@ func test_reanimated_models_are_named_in_the_log(timeout := 60000) -> void:
 	foe.is_activated = true
 	_main._solo_batch = true   # tray faces from the seeded tray RNG, no allocation prompt
 	_main.seed_tray_rng(_seed_rolling(SoloController.REANIMATION_TARGET))
-	var landing := await _hover_then_click(bots, foe, AiDecision.Action.RUSH)
+	var landing := await _hover_then_click(bots, foe, AiDecision.Action.ADVANCE)
 	assert_int(landing.size()).is_equal(2)
 	assert_bool(fallen.is_alive).override_failure_message("fixture: the Reanimation roll restored nothing").is_true()
 	assert_str(_log_text()).contains("Auto: +1 model reanimated — not in the preview")
