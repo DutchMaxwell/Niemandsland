@@ -279,6 +279,7 @@ var range_ring_controller: Node = null  # RangeRingController (base-anchored ran
 var sight_fan_controller: Node = null   # SightFanController (summed sight+range fan, F on selection)
 var _sight_fan_unit: GameUnit = null     # unit whose fan is currently shown (F toggles)
 var movement_range_controller: Node = null  # MovementRangeController (Advance/Rush reach)
+var landing_preview: LandingPreview = null  # Automodus landing ghosts + shooting lines (display-only)
 var solo_controller: SoloController = null   # Solo/AI — drives the designated AI army (F11 = whole side)
 var solo_ai_slots: Dictionary = {}           # player_id -> true: armies the Solo AI controls (goal 001)
 var _solo_interactive_grade: String = SoloGrade.base_preset(SoloGrade.load_saved())  # the saved ladder grade's
@@ -20119,6 +20120,10 @@ func _init_radial_menu() -> void:
 	pickup_ghosts.name = "PickupGhostController"
 	add_child(pickup_ghosts)
 	object_manager.pickup_ghosts = pickup_ghosts
+	# Automodus preview display (landing ghosts + shooting lines): local, never synced.
+	landing_preview = LandingPreview.new()
+	landing_preview.name = "LandingPreview"
+	add_child(landing_preview)
 	# Contextual control hints (ROADMAP UX polish): hover an object → its verified hotkeys in a
 	# small dimmed bottom line (dwell-delayed, hides on hover end / drag start). Local display aid.
 	var control_hints := ControlHintsController.new()
