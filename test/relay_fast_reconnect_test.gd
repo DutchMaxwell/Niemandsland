@@ -99,7 +99,7 @@ func _rejoining(fast: bool, started_ago_ms: int) -> RelayMultiplayerPeer:
 	return peer
 
 
-func test_an_early_rejoin_retries_a_failed_socket_today_s_rejoin_does_not() -> void:
+func test_a_rejoin_retries_a_failed_socket() -> void:
 	var fast := _rejoining(true, 1000)
 	var failed_socket := fast._ws
 	fast._poll()
@@ -109,7 +109,7 @@ func test_an_early_rejoin_retries_a_failed_socket_today_s_rejoin_does_not() -> v
 	var normal := _rejoining(false, 1000)
 	var kept := normal._ws
 	normal._poll()
-	assert_bool(normal._ws == kept).is_true()
+	assert_bool(normal._ws != kept).is_true()
 
 
 func test_an_early_rejoin_gives_up_when_today_s_rejoin_would() -> void:

@@ -36,8 +36,9 @@ func test_every_grade_has_a_one_line_description() -> void:
 		assert_bool(SoloGrade.description(g, true).contains("\n")).is_false()
 
 
-func test_macos_albtraum_says_it_plays_without_erlkoenig() -> void:
-	assert_str(SoloGrade.description("albtraum", true)).contains("on macOS still without Erlkönig")
+func test_albtraum_says_erlkoenig_did_not_load_only_when_it_did_not() -> void:
+	assert_str(SoloGrade.description("albtraum", true)).is_equal("Erlkönig did not load; plays the decision tree")
+	assert_str(SoloGrade.description("albtraum", false)).is_equal("Erlkönig: thinks several moves ahead")
 	assert_str(SoloGrade.description("finsternis", true)).is_equal(SoloGrade.description("finsternis", false))
 
 
