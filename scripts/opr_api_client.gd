@@ -674,8 +674,8 @@ static func rules_core_version(system_abbrev: String) -> String:
 
 
 ## D5 (b), 27.10.2026: a book NEWER than the rules is imported WITH a warning — the player may
-## play on, online rooms and saves refuse it. Same major.minor = same rules, silent (3.5.3 books
-## are fine on 3.5.1). "" when compatible or when either side says nothing.
+## play on, the refusal for online rooms and saves follows in 0.3.15. Same major.minor = same rules,
+## silent (3.5.3 books are fine on 3.5.1). "" when compatible or when either side says nothing.
 static func rules_version_warning(book_version: String, core_version: String) -> String:
 	if book_version.is_empty() or core_version.is_empty():
 		return ""
@@ -683,7 +683,7 @@ static func rules_version_warning(book_version: String, core_version: String) ->
 	var core_mm := _major_minor(core_version)
 	if book_mm.is_empty() or core_mm.is_empty() or book_mm == core_mm:
 		return ""
-	return "Army Forge serves rules %s, this build plays %s — the game runs on the old rules; online rooms and saves refuse this book." % [
+	return "Army Forge serves rules %s, this build plays %s — the game runs on the old rules." % [
 		book_version, core_version]
 
 
