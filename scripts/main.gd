@@ -11210,10 +11210,17 @@ func solo_begin_auto(unit: GameUnit, verb: int) -> void:
 			battle_log.log_event(BattleLog.Category.GENERAL, "Auto: %s — no valid target for %s (%s)" % [
 				unit.get_name(), verb_label, first_reason if first_reason != "" else "no enemy on the table"])
 		return
+	var suggested: GameUnit = solo_controller.suggest_target(unit, verb)
 	var rings: Array = []
 	for cu in valid:
-		rings.append(_solo_spawn_pulse_ring(solo_controller.unit_centre(cu), Color(1.0, 0.7, 0.2)))
+		# Automodus 1.8 (OD 11): the suggested target's ring is brighter and larger than the other lit ones.
+		var ring := _solo_spawn_pulse_ring(solo_controller.unit_centre(cu),
+			Color(1.0, 0.9, 0.5) if cu == suggested else Color(1.0, 0.7, 0.2))
+		if cu == suggested:
+			(ring.mesh as TorusMesh).outer_radius = 0.075
+		rings.append(ring)
 	_solo_target_mode["auto_valid"] = valid
+	_solo_target_mode["auto_label"] = verb_label
 	_solo_target_mode["cast_rings"] = rings   # freed by _solo_end_targeting
 	_solo_target_mode["auto_previews"] = {}
 	if band > 0 and range_ring_controller != null and range_ring_controller.has_method("show_spell_preview"):
@@ -11223,12 +11230,9 @@ func solo_begin_auto(unit: GameUnit, verb: int) -> void:
 			"%s: %d target(s) lit for %s — hover one to see where your models land, click it to go; right-click or Esc cancels" % [
 				unit.get_name(), valid.size(), verb_label])
 	# A2 (NML-202): name a suggestion so the player isn't guessing which enemy is worth the click —
-	# a PICK on the unit's OWN base (in _solo_targeting_input) takes it.
-	var suggested: GameUnit = solo_controller.suggest_target(unit, verb)
-	if suggested != null:
-		_solo_target_mode["suggested"] = suggested
-		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.GENERAL, "Suggested: %s" % suggested.get_name())
+	# its ring is the highlighted one; only a click on a lit target executes (Automodus 1.8).
+	if suggested != null and battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL, "Suggested: %s" % suggested.get_name())
 
 
 ## A1 (NML-202, automodus PR 2) — resolves a player's Charge / Advance & Shoot / Rush intent through
@@ -11238,7 +11242,14 @@ func solo_begin_auto(unit: GameUnit, verb: int) -> void:
 ## before-attacking beats; execute_intent's source == "player" branch already skips the spell plan and
 ## the overkill ledger for the same reason).
 func _run_player_intent(unit: GameUnit, verb: int, target: GameUnit) -> void:
+	var ghosted: int = solo_controller._moving_models(unit).size()
 	await begin_activation(unit)
+	# Automodus 1.8 (OD 8): models begin_activation brings back (Reanimation) were not in the preview —
+	# the verb still runs, and the log says so.
+	var added: int = solo_controller._moving_models(unit).size() - ghosted
+	if added > 0 and battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL, "Auto: +%d model%s reanimated — not in the preview" % [
+			added, "" if added == 1 else "s"], true)
 	var intent: Dictionary = solo_controller.player_intent(unit, verb, target)
 	if intent.has("refused"):
 		if battle_log != null:
@@ -11615,20 +11626,13 @@ func _solo_targeting_input(event: InputEvent) -> bool:
 				if target != null:
 					_solo_cast_click(target)
 				return true
-			# A2 (NML-202): a PICK on the unit's own base takes the suggested target — the player
-			# doesn't have to click the far side of the table to accept the engine's own pick.
-			if _solo_target_mode.has("auto_verb") and target == attacker:
-				target = _solo_target_mode.get("suggested") as GameUnit
+			if _solo_target_mode.has("auto_verb"):
+				if target != null:
+					await _solo_auto_click(target)
+				return true
 			var melee: bool = bool(_solo_target_mode.get("melee", false))
 			if target == null or not _engine_enemy(attacker, target):
 				return true   # swallow the click; stay in targeting mode (a reserve unit is off-table)
-			# A1 (NML-202): an auto_verb click hands off to the engine executor, not the manual attack
-			# flow — the melee/shoot split above never applies to it.
-			if _solo_target_mode.has("auto_verb"):
-				var verb: int = int(_solo_target_mode.get("auto_verb"))
-				_solo_end_targeting()
-				await _run_player_intent(attacker, verb, target)
-				return true
 			var verdict := _solo_validate_target(attacker, target, melee)
 			if verdict != "":
 				_solo_log_target_refusal(target, verdict)
@@ -11653,6 +11657,24 @@ func _solo_targeting_input(event: InputEvent) -> bool:
 			_solo_split_or_attack(attacker, target, melee)
 			return true
 	return false
+
+
+## Automodus step 1.8 (#1828, factored for headless tests like _solo_cast_click): only a LIT target
+## executes — through the engine executor, never the manual attack flow. Any other unit (the own base
+## included, which used to take the suggestion) says why, and the mode stays open.
+func _solo_auto_click(target: GameUnit) -> void:
+	var unit: GameUnit = _solo_target_mode.get("unit")
+	var verb: int = int(_solo_target_mode.get("auto_verb"))
+	if not (_solo_target_mode.get("auto_valid", []) as Array).has(target):
+		var why := "not an enemy unit"
+		if _engine_enemy(unit, target):
+			why = str(solo_controller.player_intent(unit, verb, target).get("refused", "not one of the lit targets"))
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.GENERAL, "Auto: %s is not a valid target for %s (%s)" % [
+				target.get_name(), str(_solo_target_mode.get("auto_label", "")), why])
+		return
+	_solo_end_targeting()
+	await _run_player_intent(unit, verb, target)
 
 
 ## Cast-mode click (#227, factored for headless tests): toggle-pick for multi-target spells.

@@ -207,3 +207,185 @@ func test_a_refused_hover_shows_nothing_and_says_why_once(timeout := 60000) -> v
 			said += 1
 	assert_int(said).is_equal(1)
 	_main._solo_end_targeting()
+
+
+# --- Automodus step 1.8: a click on a lit target executes, and nothing else does ---
+
+## A left click on `pt` through the SAME targeting handler main._unhandled_input feeds.
+func _click(pt: Vector2) -> void:
+	var ev := InputEventMouseButton.new()
+	ev.button_index = MOUSE_BUTTON_LEFT
+	ev.pressed = true
+	ev.position = pt
+	ev.global_position = pt
+	await _main._solo_targeting_input(ev)
+
+
+func _log_text() -> String:
+	var text := ""
+	for e in _main.battle_log.entries():
+		text += str((e as Dictionary)["text"]) + "\n"
+	return text
+
+
+## Bystanders so the AI's one owed reply does not exhaust both sides at once (e2e_auto_advance_test.gd).
+func _bystanders() -> void:
+	_shooter(1, "Reserves", 50.0)
+	_shooter(2, "Watchers", -50.0)
+
+
+## Opens `verb` for `unit`, hovers the lit `foe` and clicks it, both through the real pick ray. Returns the
+## landing of the preview the hover showed (read before the click, which clears the ghosts).
+func _hover_then_click(unit: GameUnit, foe: GameUnit, verb: int) -> Array:
+	await _runner.simulate_frames(1)   # the pick is a raycast: let physics register the fresh body
+	var pt := _pick_point(foe)
+	assert_bool(pt.is_finite()).override_failure_message("fixture: the pick ray never hits the foe").is_true()
+	await _main.solo_begin_auto(unit, verb)
+	await _hover(pt)
+	var previews: Dictionary = _main._solo_target_mode.get("auto_previews", {})
+	var landing: Array = (previews.get(foe.get_instance_id(), {}) as Dictionary).get("landing", [])
+	assert_int(landing.size()).override_failure_message("fixture: the hover showed no preview").is_greater(0)
+	await _click(pt)
+	await E2EBoot.settle(get_tree())
+	return landing
+
+
+## Every ghosted model stands within 1 mm of its ghost (`at`: positions recorded mid-flow, else now).
+func _assert_on_the_ghosts(landing: Array, at := {}) -> void:
+	for spot in landing:
+		var m := spot["model"] as ModelInstance
+		var pos: Vector3 = at.get(m, m.node.global_position)
+		assert_float(pos.distance_to(spot["pos"])) \
+			.override_failure_message("%s ends %.4f m from its ghost" % [m.node.name, pos.distance_to(spot["pos"])]) \
+			.is_less_equal(0.001)
+
+
+func test_own_base_click_no_longer_executes(timeout := 60000) -> void:
+	_bystanders()
+	var shooter := _pickable(1, "Riflemen", 0.0)
+	var foe := _shooter(2, "Foe", 16.0)
+	foe.is_activated = true
+	await _runner.simulate_frames(1)
+	var pt := _pick_point(shooter)
+	assert_bool(pt.is_finite()).override_failure_message("fixture: the pick ray never hits Riflemen").is_true()
+	await _main.solo_begin_auto(shooter, AiDecision.Action.ADVANCE)
+	var board_before := _board()
+	await _click(pt)
+	await E2EBoot.settle(get_tree())
+	assert_array(_board()).override_failure_message("the own-base click moved models").is_equal(board_before)
+	assert_bool(shooter.is_activated).is_false()
+	assert_bool(_main._solo_target_mode.has("auto_verb")).override_failure_message("the click closed the mode").is_true()
+	assert_str(_log_text()).contains("Auto: Riflemen is not a valid target for Advance & Shoot (")
+	_main._solo_end_targeting()
+
+
+func test_an_unlit_click_moves_nothing_and_says_why(timeout := 60000) -> void:
+	var charger := _shooter(1, "Chargers", 0.0)
+	_shooter(2, "Near", 8.0)
+	var far := _pickable(2, "Far", 20.0)   # outside the charge reach: not lit
+	await _runner.simulate_frames(1)
+	var pt := _pick_point(far)
+	assert_bool(pt.is_finite()).override_failure_message("fixture: the pick ray never hits Far").is_true()
+	await _main.solo_begin_auto(charger, AiDecision.Action.CHARGE)
+	assert_bool((_main._solo_target_mode.get("auto_valid", []) as Array).has(far)).is_false()
+	var board_before := _board()
+	await _click(pt)
+	await E2EBoot.settle(get_tree())
+	assert_array(_board()).is_equal(board_before)
+	assert_bool(_main._solo_target_mode.has("auto_verb")).override_failure_message("the click closed the mode").is_true()
+	assert_str(_log_text()).contains("Auto: Far is not a valid target for Charge (")
+	_main._solo_end_targeting()
+
+
+func test_a_lit_advance_click_lands_on_the_preview(timeout := 60000) -> void:
+	_bystanders()
+	var shooter := _shooter(1, "Riflemen", 0.0, 3)
+	var foe := _pickable(2, "Foe", 16.0)
+	foe.is_activated = true
+	var landing := await _hover_then_click(shooter, foe, AiDecision.Action.ADVANCE)
+	assert_bool(shooter.is_activated).override_failure_message("the lit click did not execute").is_true()
+	_assert_on_the_ghosts(landing)
+
+
+func test_a_lit_rush_click_lands_on_the_preview(timeout := 60000) -> void:
+	_bystanders()
+	var runner := _shooter(1, "Runners", 0.0, 3)
+	var foe := _pickable(2, "Foe", 24.0)
+	foe.is_activated = true
+	var landing := await _hover_then_click(runner, foe, AiDecision.Action.RUSH)
+	assert_bool(runner.is_activated).override_failure_message("the lit click did not execute").is_true()
+	_assert_on_the_ghosts(landing)
+
+
+func test_a_lit_charge_click_lands_on_the_snapped_preview(timeout := 60000) -> void:
+	_bystanders()
+	var charger := _shooter(1, "Chargers", 0.0)
+	var foe := _pickable(2, "Foe", 8.0)
+	# A friendly 1" zone holds the charge ~0.8" short of contact, so only the snap closes the gap
+	# (fixture: solo_intent_preview_test.gd test_a_charge_held_short_lands_on_the_snap).
+	var blocker := E2EBoot.make_unit(_main, 1, "Blocker", [Vector3(7.0 * INCH, 0, 1.7 * INCH)])
+	_main.opr_army_manager.game_units[blocker.unit_id] = blocker
+	var snapped := {}   # the charger's spots right after the snap, before the melee and consolidation
+	_main.battle_log.entry_added.connect(func(e: Dictionary) -> void:
+		if snapped.is_empty() and str(e.get("text", "")).contains("charges into base contact"):
+			for m in charger.get_alive_models():
+				snapped[m] = (m as ModelInstance).node.global_position)
+	var landing := await _hover_then_click(charger, foe, AiDecision.Action.CHARGE)
+	assert_bool(snapped.is_empty()).override_failure_message("fixture: the charge never snapped").is_false()
+	_assert_on_the_ghosts(landing, snapped)
+
+
+func test_the_suggested_target_wears_the_one_highlighted_ring(timeout := 60000) -> void:
+	var unit := _shooter(1, "Riflemen", 0.0, 3)
+	_shooter(2, "Far", 20.0)   # registered first: the suggestion is not simply the first lit ring
+	_shooter(2, "Near", 8.0)
+	var plain: MeshInstance3D = _main._solo_spawn_pulse_ring(Vector3.ZERO, Color.WHITE)
+	var plain_radius: float = (plain.mesh as TorusMesh).outer_radius
+	plain.free()
+	for verb in [AiDecision.Action.CHARGE, AiDecision.Action.ADVANCE, AiDecision.Action.RUSH]:
+		await _main.solo_begin_auto(unit, verb)
+		var valid: Array = _main._solo_target_mode.get("auto_valid", [])
+		var rings: Array = _main._solo_target_mode.get("cast_rings", [])
+		var highlighted: Array = []
+		for i in mini(rings.size(), valid.size()):
+			if ((rings[i] as MeshInstance3D).mesh as TorusMesh).outer_radius > plain_radius:
+				highlighted.append(valid[i])
+		var suggested: GameUnit = _main.solo_controller.suggest_target(unit, verb)
+		assert_array(highlighted).override_failure_message("verb %d: highlighted %s, suggested %s" % [
+			verb, str(highlighted.map(func(u: GameUnit) -> String: return u.get_name())), suggested.get_name()]) \
+			.is_equal([suggested])
+		assert_str(_log_text()).contains("Suggested: %s" % suggested.get_name())
+		_main._solo_end_targeting()
+
+
+## A tray seed whose first die shows `at_least` or more (batch mode draws the tray's faces from it).
+func _seed_rolling(at_least: int) -> int:
+	var rng := RandomNumberGenerator.new()
+	for s in 1000:
+		rng.seed = s
+		if rng.randi_range(1, 6) >= at_least:
+			return s
+	return -1
+
+
+## The ghosted models are NOT asserted on their ghosts here: the returned model moves the unit centre the
+## engine plans the move from, so the whole landing shifts (measured 9.5 mm for this 3-model Rush).
+func test_reanimated_models_are_named_in_the_log(timeout := 60000) -> void:
+	_bystanders()
+	var bots := _shooter(1, "Bots", 0.0, 3)
+	bots.unit_properties["special_rules"] = ["Reanimation"]
+	bots.unit_properties["faction_folder"] = "robot_legions"
+	var fallen := bots.models[2] as ModelInstance
+	fallen.wounds_max = 1
+	fallen.wounds_current = 0
+	fallen.is_alive = false
+	_main.opr_army_manager.set_loose_model_dead(fallen.node, 1, true, bots.unit_id)
+	var foe := _pickable(2, "Foe", 24.0)
+	foe.is_activated = true
+	_main._solo_batch = true   # tray faces from the seeded tray RNG, no allocation prompt
+	_main.seed_tray_rng(_seed_rolling(SoloController.REANIMATION_TARGET))
+	var landing := await _hover_then_click(bots, foe, AiDecision.Action.RUSH)
+	assert_int(landing.size()).is_equal(2)
+	assert_bool(fallen.is_alive).override_failure_message("fixture: the Reanimation roll restored nothing").is_true()
+	assert_str(_log_text()).contains("Auto: +1 model reanimated — not in the preview")
+	assert_bool(bots.is_activated).override_failure_message("the verb did not run after the Reanimation").is_true()
