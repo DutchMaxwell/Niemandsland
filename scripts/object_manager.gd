@@ -162,6 +162,8 @@ var movement_range_controller: Node = null
 var move_trails: Node = null
 ## Measure-on-pickup ghost (UX polish): origin silhouettes while dragging; injected by main.
 var pickup_ghosts: Node = null
+## Automodus landing ghosts (LandingPreview): where a drop now would leave each model; injected by main.
+var landing_preview: Node = null
 ## The anchor model's NET traversed path this drag (retrace-erased, budget-refunding —
 ## MoveLedger.extend_path). Feeds the consumed-inches readout, live trail, ledger + log.
 var _drag_path_points: PackedVector2Array = PackedVector2Array()
@@ -1384,6 +1386,8 @@ func _stop_dragging() -> void:
 	# The drop ends the origin preview whatever else happens below (ghost is drag-scoped).
 	if pickup_ghosts != null:
 		pickup_ghosts.end()
+	if landing_preview != null:
+		landing_preview.clear()
 	# Step 2.T2b (Q7): on a hotseat Automatic table an off-turn drag snaps back on release — no trail,
 	# undo, wound, marker or activation change (corrections go through Manual). Emits nothing.
 	if _is_dragging and not _selected_objects.is_empty() and _snapback_off_turn_drag():
@@ -1575,6 +1579,29 @@ func preview_drop_landing() -> Dictionary:
 	for obj in movable:
 		obj.global_position = before[obj]
 	return out
+
+
+## Automodus step 2.2 (the same preview for manual moves): in the PLAYING phase one ghost base per
+## dragged model sits where a drop now would leave it (the drop's own resolver). Deployment shows none;
+## terrain and dice have no base radius, so they never ghost. An off-turn hotseat drag snaps back on
+## release, so it shows none either (the side-effect-free turn check; the release logs the refusal).
+func _show_landing_ghosts() -> void:
+	var army := get_node_or_null("/root/Main/OPRArmyManager")
+	if landing_preview == null or army == null or army.is_deployment_phase():
+		return
+	var main := get_node_or_null("/root/Main")
+	var gu := _drag_unit_of(_drag_anchor_object)
+	if gu != null and main != null and main.has_method("hotseat_turn_refusal") \
+			and main.hotseat_turn_refusal(main.unit_owner_slot(gu.unit_properties)) != "":
+		landing_preview.clear()
+		return
+	var landing: Array = []
+	var drop := preview_drop_landing()
+	for obj in drop:
+		var radius := _trail_radius_for(obj)
+		if radius > 0.0:
+			landing.append({"pos": drop[obj], "radius_m": radius})
+	landing_preview.show_preview(landing, [])
 
 
 func _resolve_drop_separation() -> void:
@@ -1828,6 +1855,8 @@ func _cancel_drag() -> void:
 		move_trails.end_live()
 	if pickup_ghosts != null:
 		pickup_ghosts.end()
+	if landing_preview != null:
+		landing_preview.clear()
 
 	_is_dragging = false
 	_move_broadcast_timer = 0.0
@@ -2585,6 +2614,7 @@ func _update_drag(screen_pos: Vector2) -> void:
 			# Repaint the live trail ribbons behind the dragged models (same throttle).
 			if move_trails != null and have_path:
 				move_trails.update_live(_drag_path_points, head)
+			_show_landing_ghosts()
 
 
 ## Start measuring distance from a point on the table

@@ -20193,6 +20193,7 @@ func _init_radial_menu() -> void:
 	landing_preview = LandingPreview.new()
 	landing_preview.name = "LandingPreview"
 	add_child(landing_preview)
+	object_manager.landing_preview = landing_preview
 	# Contextual control hints (ROADMAP UX polish): hover an object → its verified hotkeys in a
 	# small dimmed bottom line (dwell-delayed, hides on hover end / drag start). Local display aid.
 	var control_hints := ControlHintsController.new()
