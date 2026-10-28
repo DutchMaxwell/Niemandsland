@@ -246,6 +246,12 @@ Unit names with an apostrophe now find their 3D model. (#1840)
 - The Python-side plan call (`policy_step`) now builds the route seam's index and the route-root split
   like the other plan entry points; no player-facing effect. (#1860)
 
+### Known issues
+- **Online with rules automation, right after the host's connection drops and comes back:** the next
+  spell can be cast without asking the other player for interference (the battle log says the seat was
+  empty), and a question the host stopped waiting for can stay open on the other screen; close it with
+  ×. A fix is planned for 0.3.14.1. (#1887, #1886)
+
 ## [0.3.13.1-alpha] — 2026-09-25
 
 A quiet follow-up to 0.3.13.0: save/load and multiplayer fixes from a code review, plus the table fixes merged the same day.

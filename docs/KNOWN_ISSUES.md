@@ -54,6 +54,10 @@ not there yet and what to watch for. The full done / in-progress / planned break
 - **Reconnect after a drop isn't seamless yet.** If a guest loses connection mid-game, the
   cleanest recovery is to rejoin the room. The deep reconnect-sync issues are fixed (no more
   "reconnected but nothing syncs"); fully *graceful* guest reconnect is post-Alpha.
+- **Online rules automation after the host's connection drops (#1887, #1886).** Right after the
+  host's link comes back, the next spell can be cast without asking the other player for interference
+  (the battle log says the seat was empty), and a question the host stopped waiting for can stay open
+  on the other screen; close it with ×. A fix is planned for 0.3.14.1.
 - **Import while a guest is mid-join** was a source of missing/duplicated models — fixed; if you
   ever see it, send a diagnostics report (below).
 
