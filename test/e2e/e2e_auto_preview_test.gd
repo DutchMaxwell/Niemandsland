@@ -407,3 +407,57 @@ func test_reanimated_models_are_named_in_the_log(timeout := 60000) -> void:
 	assert_bool(fallen.is_alive).override_failure_message("fixture: the Reanimation roll restored nothing").is_true()
 	assert_str(_log_text()).contains("Auto: +1 model reanimated — not in the preview")
 	assert_bool(bots.is_activated).override_failure_message("the verb did not run after the Reanimation").is_true()
+
+
+# --- Automodus step 1.8c (OD 6): Charge dims the enemies it cannot reach; hovering one names why ---
+
+func test_charge_dims_unreachable_enemies(timeout := 60000) -> void:
+	var charger := _shooter(1, "Chargers", 0.0)
+	var near := _shooter(2, "Near", 8.0)
+	var far := _shooter(2, "Far", 20.0)
+	await _main.solo_begin_auto(charger, AiDecision.Action.CHARGE)
+	assert_array(_main._solo_target_mode.get("auto_valid", [])).contains_exactly([near])
+	var dimmed: Dictionary = _main._solo_target_mode.get("auto_dimmed", {})
+	assert_array(dimmed.keys()).override_failure_message("auto_dimmed missing or wrong: %s" % str(dimmed)) \
+		.contains_exactly([far])
+	var why := str(dimmed.get(far, ""))
+	var gap: float = _main.solo_controller.nearest_melee_gap_in(charger, far)
+	assert_str(why).contains("%.1f\"" % gap)   # the distance
+	assert_str(why).contains("12.0\"")   # the charge reach
+	var lit_rings: Array = (_main._solo_target_mode.get("cast_rings", []) as Array).duplicate()
+	var dim_rings: Array = (_main._solo_target_mode.get("auto_dim_rings", []) as Array).duplicate()
+	assert_int(lit_rings.size()).is_equal(1)
+	assert_int(dim_rings.size()).is_equal(1)
+	_main._solo_show_auto_preview(near)
+	assert_int(_main.landing_preview.ghost_count()).is_equal(1)
+	for t in [far, null, far]:   # hovering the dimmed enemy clears the ghosts and says why, once per mode
+		_main._solo_show_auto_preview(t)
+	assert_int(_main.landing_preview.ghost_count()).is_equal(0)
+	var said := 0
+	for e in _main.battle_log.entries():
+		if str((e as Dictionary)["text"]).begins_with("Auto: Far is not a valid target for Charge (%s" % why):
+			said += 1
+	assert_int(said).is_equal(1)
+	var right_click := InputEventMouseButton.new()
+	right_click.button_index = MOUSE_BUTTON_RIGHT
+	right_click.pressed = true
+	await _main._solo_targeting_input(right_click)
+	await _runner.simulate_frames(2)
+	for r in lit_rings + dim_rings:
+		assert_bool(is_instance_valid(r)).override_failure_message("a ring outlived the cancel").is_false()
+
+
+func test_a_suggestion_that_is_not_lit_is_not_named(timeout := 60000) -> void:
+	var charger := _shooter(1, "Chargers", 0.0)
+	# The hero is listed first (as army lists often do): the host's gap counts the hero's model too, so the
+	# tie goes to the hero and suggest_target names it - but a joined hero is never lit.
+	var hero := _shooter(2, "Hero", 6.0)
+	var host := _shooter(2, "Host", 10.0)
+	EquipmentDistributor.attach_hero_to_unit(hero, host)
+	await _main.solo_begin_auto(charger, AiDecision.Action.CHARGE)
+	var suggested: GameUnit = _main.solo_controller.suggest_target(charger, AiDecision.Action.CHARGE)
+	assert_object(suggested).override_failure_message("fixture: the suggestion is %s, not the joined hero" % (
+		suggested.get_name() if suggested != null else "null")).is_same(hero)
+	assert_bool((_main._solo_target_mode.get("auto_valid", []) as Array).has(hero)).is_false()
+	assert_str(_log_text()).not_contains("Suggested: Hero")
+	_main._solo_end_targeting()
