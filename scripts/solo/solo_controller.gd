@@ -2658,13 +2658,52 @@ func execute_intent(intent: Dictionary, report: Dictionary) -> Dictionary:
 	# the cast plan is drawn from the post-move geometry here; main resolves the cast rolls on the real
 	# dice tray before the shooting/melee it already resolves (spells are ADDITIONAL to the attack).
 	# Player intents (V1, NML-202) skip both: spells stay a manual player action, and the overkill
-	# ledger is the AI's own lookahead bookkeeping — a player click never claims against it.
-	if source != "player":
+	# ledger is the AI's own lookahead bookkeeping — a player click never claims against it. A preview
+	# (step 1.2) skips both too: a cast plan spends tokens and broadcasts them.
+	if source != "player" and _preview_depth == 0:
 		var casts := _plan_casts(unit, report)
 		if not casts.is_empty():
 			report["casts"] = casts
 		_book_attack_claims(unit, report)
 	return report
+
+
+## Automodus step 1.2: the executor scratch fields a preview_intent run may touch, restored afterwards.
+const PREVIEW_STATE := ["last_move_paths", "last_flow_order", "last_move_budget_in", "last_dangerous_dice",
+	"last_move_toll_note", "last_move_climb_in", "board_clamp_notes", "_gate_clamped_models", "_rest_walls_cache",
+	"_rest_walls_frame", "_core_move_warned", "_core_move_checks", "_core_move_diffs", "_move_extra", "_sidestep_budget"]
+
+
+## Automodus step 1.2 (#1828): the landing preview is the ONE executor in a sandbox, never a second
+## truth. execute_intent (plus the charge snap main's _run_human_attack makes when the charge reaches)
+## runs under _preview_depth: no broadcast, no decision record, no move record, no cast plan. The
+## landing is read, `probe` reads its lines while the models still stand there, then the models and
+## every executor scratch field go back. Returns {landing: [{model, pos, radius_m}], can_shoot, lines}.
+func preview_intent(intent: Dictionary, probe := Callable()) -> Dictionary:
+	var unit := intent["unit"] as GameUnit
+	var target := intent.get("target") as GameUnit
+	var models := _moving_models(unit)
+	var spots := _positions_of(models)
+	var saved := {}
+	for field in PREVIEW_STATE:
+		var value: Variant = get(field)
+		saved[field] = value.duplicate(true) if value is Array or value is Dictionary else value
+	_preview_depth += 1
+	var report := execute_intent(intent.duplicate(), ActIntent.blank_report(unit))
+	if int(intent["action"]) == AiDecision.Action.CHARGE and target != null \
+			and nearest_melee_gap_in(unit, target) <= MELEE_ENGAGE_IN:
+		snap_charge(unit, target)
+	var landing: Array = []
+	for m in models:
+		landing.append({"model": m, "pos": (m as ModelInstance).node.global_position,
+			"radius_m": model_base_radius_m(m as ModelInstance)})
+	var lines: Array = probe.call(report) if probe.is_valid() else []
+	for i in models.size():
+		(models[i] as ModelInstance).node.global_position = spots[i]
+	for field in saved:
+		set(field, saved[field])
+	_preview_depth -= 1
+	return {"landing": landing, "can_shoot": bool(report.get("can_shoot", false)), "lines": lines}
 
 
 ## A1 (NML-202, automodus PR 2) — the player's feeder into execute_intent(): one enemy click decides a
