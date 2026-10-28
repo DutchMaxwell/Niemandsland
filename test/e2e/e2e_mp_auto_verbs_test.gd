@@ -125,3 +125,78 @@ func test_preview_stays_local() -> void:
 	assert_int(sent.size()) \
 		.override_failure_message("3.1 - the preview sends nothing: %s" % str(sent)).is_equal(0)
 	_end_session()
+
+
+## A one-model unit with one 12" rifle (pattern: e2e_auto_preview_test.gd _shooter).
+func _rifle_unit(pid: int, unit_name: String, x_m: float) -> GameUnit:
+	var u := E2EBoot.make_unit(_main, pid, unit_name, [Vector3(x_m, 0.0, 0.0)])
+	var opr := OPRApiClient.OPRUnit.new()
+	var w := OPRApiClient.OPRWeapon.new()
+	w.name = "Rifle"
+	w.range_value = 12
+	w.attacks = 10   # with Quality 2+ a volley never misses entirely: the defender's saves always roll
+	opr.weapons = [w]
+	u.source_type = "opr"
+	u.source_data = opr
+	u.unit_properties["quality"] = 2
+	u.models[0].node.set_meta("network_id", 7100 + pid)   # real spawned models carry one; batches key on it
+	_main.opr_army_manager.game_units[u.unit_id] = u
+	return u
+
+
+## Automodus 3.2 (OD 9): the ACTING player runs its own verb, like every online action today. The guest's
+## click moves the guest's models on the guest; the host only receives the move batch (the landing) and the
+## activation sync, never a request to run the intent (the host has no such handler), and the attack dice
+## roll on the guest's tray through the existing volley path (sync_dice_roll).
+func test_guest_verb_runs_on_the_guest_and_replicates(timeout := 60000) -> void:
+	_level(RulesAutomation.Level.AUTOMATIC)
+	var inch := 0.0254
+	var hosts := _rifle_unit(1, "Guards", 0.2 - 16.0 * inch)   # the host's unit, 16" away
+	var mine := _rifle_unit(2, "Raiders", 0.2)
+	_fake_session(2, false)
+	_net.peer_to_slot = {1: 1}   # the host (peer 1) holds slot 1
+	var radial_net: Node = _main.radial_menu_controller.network_manager
+	_main.radial_menu_controller.network_manager = _net   # the activation sync goes out through the radial (same object in play)
+	_main._owner_roll_timeout_s = 0.3
+	_main._solo_fast = true
+	_main._hotseat_turn = TwoHumanTurn.new()   # the online turn token (3.3a): it is the guest's turn
+	_main._hotseat_turn.side_on_turn = 2
+	var start: Vector3 = mine.models[0].node.global_position
+	await _main.solo_begin_auto(mine, AiDecision.Action.ADVANCE)
+	var log_text := ""
+	for e in _main.battle_log.entries():
+		log_text += str((e as Dictionary)["text"]) + " | "
+	assert_array(_main._solo_target_mode.get("auto_valid", [])).override_failure_message(
+		"the guest's verb lit nothing (log: %s)" % log_text).contains_exactly([hosts])
+	if _main._solo_target_mode.has("auto_verb"):   # a closed mode must fail below, not crash the run
+		await _main._solo_auto_click(hosts)
+	await E2EBoot.settle(get_tree())
+	var end: Vector3 = mine.models[0].node.global_position
+	assert_float(MoveIntent.distance_inches(start, end)).override_failure_message(
+		"the guest's models did not move on the guest").is_greater(5.0)
+	var batches: Array = []
+	var activations: Array = []
+	var cmds: Array = []
+	var dice := 0
+	for e in _net.sent:
+		var m := str((e as Dictionary).get("m", ""))
+		dice += int(m == "sync_dice_roll")
+		if m == "move_objects_batch_networked":
+			batches.append(e)
+		elif m == "sync_unit_activation" and str((e["a"] as Array)[0]) == mine.unit_id:
+			activations.append(e)
+		elif (e as Dictionary).has("cmd"):
+			cmds.append(str(e["cmd"]))
+	assert_int(batches.size()).override_failure_message("no move batch went to the host").is_greater(0)
+	var batch: Array = (batches[0]["a"] as Array)[0] if not batches.is_empty() else []
+	var at := batch.find(7102)   # [network_id, x, y, z, ...]: the guest's model at its landing
+	assert_int(at).override_failure_message("the move batch does not carry the guest's model").is_greater_equal(0)
+	if at >= 0:
+		assert_vector(Vector3(batch[at + 1], batch[at + 2], batch[at + 3])).is_equal_approx(end, Vector3.ONE * 1e-4)
+	assert_int(activations.size()).override_failure_message("no activation sync for the guest's unit").is_greater(0)
+	assert_bool(mine.is_activated).is_true()
+	assert_int(dice).override_failure_message("the guest's attack dice never synced out").is_greater(0)
+	assert_int(cmds.size()).override_failure_message("the guest asked the host for more than its roll: %s" % str(cmds)) \
+		.is_equal(cmds.count("request_roll"))
+	_main.radial_menu_controller.network_manager = radial_net
+	_end_session()
