@@ -196,7 +196,7 @@ func _did(id: String, u: GameUnit, lines: String) -> bool:
 		"solo_fight":
 			return lines.contains("pick a target (melee)")
 		"solo_auto_charge", "solo_auto_advance", "solo_auto_rush":
-			return _main._solo_target_mode.has("auto_verb") and lines.contains("pick a target for")
+			return _main._solo_target_mode.has("auto_verb") and lines.contains("lit for")
 		"solo_cast":
 			return _spell_picker() != null or lines.contains("spell")
 		"solo_spot":
