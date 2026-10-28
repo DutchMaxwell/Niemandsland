@@ -9167,8 +9167,9 @@ static func alive_bearers_of(member: GameUnit, weapon_name: String, attacks_per_
 ## the check cheap; range gates before the LOS call (the expensive half).
 ## `pairs_out` (optional, VFX volley cue): receives [shooter_pos, target_pos] for every model that counted —
 ## the very pair whose LOS call said yes, so a tracer follows the segment the rule tested. The count never changes.
+## `first_hit` (step 2.3a, the drag's yes/no): stop at the first model that counts (1 or 0, same verdict).
 static func sighted_models(shooter_positions: Array, target_positions: Array, range_m: float, los: Callable,
-		pairs_out = null) -> int:
+		pairs_out = null, first_hit := false) -> int:
 	if shooter_positions.is_empty() or target_positions.is_empty():
 		return 0
 	var range2 := range_m * range_m
@@ -9190,6 +9191,8 @@ static func sighted_models(shooter_positions: Array, target_positions: Array, ra
 				if pairs_out != null:
 					(pairs_out as Array).append([sp, tp])
 				break
+		if first_hit and n > 0:
+			return n
 	return n
 
 

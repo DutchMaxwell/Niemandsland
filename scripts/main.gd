@@ -5767,8 +5767,9 @@ func _solo_pick_overlay_target(attacker: GameUnit, overlay: int, max_range: floa
 ## Indirect: "may target enemies that are not in line of sight as if in line of sight") keeps the range
 ## gate but waives the sight test.
 ## `pairs_out` (optional) collects each counted model's [shooter_pos, target_pos] (see SoloController.sighted_models).
+## Step 2.3a: `first_hit` stops at the first counted model; `blockers` = shared _solo_los_blockers(shooter, null).
 func _solo_sighted_count(shooter: GameUnit, target: GameUnit, range_in: int, ignore_los: bool = false,
-		pairs_out = null) -> int:
+		pairs_out = null, first_hit := false, blockers = null) -> int:
 	if shooter == null or target == null:
 		return 0
 	var _prof_sight_t0 := BattleSim.prof_t0()   # NML-1072: LOS/sight computation
@@ -5783,14 +5784,14 @@ func _solo_sighted_count(shooter: GameUnit, target: GameUnit, range_in: int, ign
 	if ignore_los:
 		los = func(_sp: Vector3, _tp: Vector3) -> bool: return true
 	else:
-		los = _solo_true_los_callable(shooter, target)
+		los = _solo_true_los_callable(shooter, target, blockers)
 	# B11 (test game 2): range is measured base-EDGE to base-edge like the ruler (GF v3.5.1 p.4
 	# "measure from the closest point"), not model-centre to centre — the centre gate refused shots
 	# the ruler showed in range (~5" off between large bases). Extending the range by both units'
 	# base radii is the centre-space equivalent of subtracting them from every pair distance.
 	var edge_slack_m: float = _solo_unit_base_radius_m(shooter) + _solo_unit_base_radius_m(target)
 	var _sighted := SoloController.sighted_models(SoloController.alive_positions(shooter), target_positions,
-		float(range_in) * MoveIntent.INCHES_TO_METERS + edge_slack_m, los, pairs_out)
+		float(range_in) * MoveIntent.INCHES_TO_METERS + edge_slack_m, los, pairs_out, first_hit)
 	BattleSim.prof_mark("sight", _prof_sight_t0)
 	return _sighted
 
@@ -5814,10 +5815,13 @@ func _solo_sighted_count(shooter: GameUnit, target: GameUnit, range_in: int, ign
 ## built ONCE per pair, and the returned Callable(sp, tp) is what SoloController.sighted_models runs per
 ## shooter-model × target-model pair (findings 2/6/11). Ranged DISTANCE stays flat top-down (G3) — this
 ## Callable only answers "can it see", never "how far".
-func _solo_true_los_callable(shooter: GameUnit, target: GameUnit) -> Callable:
+## Step 2.3a: `shared_blockers` (_solo_los_blockers(shooter, null), built once for many targets) skips the
+## per-target rebuild; the target's own unit is then left out per query by its keys (the same set).
+func _solo_true_los_callable(shooter: GameUnit, target: GameUnit, shared_blockers = null) -> Callable:
 	var overlay := terrain_overlay
 	var volumes: Array = overlay.los_volumes() if overlay != null and overlay.has_method("los_volumes") else []
-	var blockers: Array = _solo_los_blockers(shooter, target)
+	var blockers: Array = _solo_los_blockers(shooter, target) if shared_blockers == null else shared_blockers
+	var exclude: Array = [] if shared_blockers == null else _solo_los_chain_ids(target)
 	var from_h: float = _solo_unit_los_height_m(shooter)   # tallest alive model's volumetric height (P1)
 	var to_h: float = _solo_unit_los_height_m(target)
 	var from_r: float = _solo_unit_base_radius_m(shooter)
@@ -5827,11 +5831,11 @@ func _solo_true_los_callable(shooter: GameUnit, target: GameUnit) -> Callable:
 	# mirror of the blocker flag _solo_los_blockers already sets.
 	var to_air: bool = SoloController.is_aircraft(target)
 	return func(sp: Vector3, tp: Vector3) -> bool:
-		# Blockers already exclude the shooter's and target's own units, so no per-call exclude list is needed.
+		# Own blockers exclude the shooter's and target's units; shared ones leave the target out by `exclude`.
 		return VolumetricLos.has_los(
 			{"c": Vector2(sp.x, sp.z), "r": from_r, "y0": sp.y, "y1": sp.y + from_h},
 			{"c": Vector2(tp.x, tp.z), "r": to_r, "y0": tp.y, "y1": tp.y + to_h, "is_aircraft": to_air},
-			volumes, blockers, [])
+			volumes, blockers, exclude)
 
 
 ## Every OTHER unit's alive models as VolumetricLos blocker cylinders: the base circle where the model
@@ -5844,21 +5848,8 @@ func _solo_los_blockers(exclude_a: GameUnit, exclude_b: GameUnit) -> Array:
 	if opr_army_manager == null:
 		return out
 	var excluded := {}
-	for u in [exclude_a, exclude_b]:
-		if u == null:
-			continue
-		# D10 (Q1): a joined hero counts as part of its host's unit (GF v3.5.1 p.14), so its host squad and the
-		# host's other joined heroes are "their own unit" for the p.5 see-through carve-out too.
-		var chain: Array = [u]
-		var host: Variant = u.get_attached_to() if u.has_method("get_attached_to") else null
-		if host is GameUnit:
-			chain.append(host)
-		for member in chain:
-			excluded[member.get_instance_id()] = true
-			if member.has_method("get_attached_heroes"):
-				for h in member.get_attached_heroes():
-					if h != null:
-						excluded[h.get_instance_id()] = true
+	for id in _solo_los_chain_ids(exclude_a) + _solo_los_chain_ids(exclude_b):
+		excluded[id] = true
 	for g in opr_army_manager.get_all_game_units():
 		var gu := g as GameUnit
 		if gu == null or excluded.has(gu.get_instance_id()) or SoloController.unit_in_reserve(gu):
@@ -5874,6 +5865,26 @@ func _solo_los_blockers(exclude_a: GameUnit, exclude_b: GameUnit) -> Array:
 				"y0": pos.y, "y1": pos.y + _solo_model_los_height_m(m),
 				"unit_key": key, "is_aircraft": air})
 	return out
+
+
+## The unit keys (instance ids) of `u`'s own unit for the p.5 see-through carve-out. D10 (Q1): a joined hero
+## counts as part of its host's unit (GF v3.5.1 p.14), so its host squad and the host's other joined heroes
+## are "their own unit" too. Empty for null.
+func _solo_los_chain_ids(u: GameUnit) -> Array:
+	var ids: Array = []
+	if u == null:
+		return ids
+	var chain: Array = [u]
+	var host: Variant = u.get_attached_to() if u.has_method("get_attached_to") else null
+	if host is GameUnit:
+		chain.append(host)
+	for member in chain:
+		ids.append(member.get_instance_id())
+		if member.has_method("get_attached_heroes"):
+			for h in member.get_attached_heroes():
+				if h != null:
+					ids.append(h.get_instance_id())
+	return ids
 
 
 ## Representative base radius (metres) of a unit — the LARGEST of its alive models — so the sight cylinder
@@ -12771,9 +12782,11 @@ func _solo_log_range_bonus(attacker: GameUnit, target: GameUnit) -> void:
 ## Automodus step 1.5 (#1828): the volley's own sight truth — how many of `attacker`'s models have range
 ## and line of sight to `target`, the N of _run_human_shooting's "N/M models with line of sight + range"
 ## line. `pairs_out` collects each counted model's [shooter_pos, target_pos] (the landing preview's lines).
-func _solo_volley_sighted(attacker: GameUnit, target: GameUnit, pairs_out = null) -> int:
+## Step 2.3a (the drag lines' yes/no): `first_hit` and shared `blockers` pass through to _solo_sighted_count.
+func _solo_volley_sighted(attacker: GameUnit, target: GameUnit, pairs_out = null, first_hit := false,
+		blockers = null) -> int:
 	return _solo_sighted_count(attacker, target, AiArchetype.max_range_inches(_solo_all_weapons(attacker)),
-		_solo_volley_indirect(attacker, target), pairs_out)
+		_solo_volley_indirect(attacker, target), pairs_out, first_hit, blockers)
 
 
 ## The volley's Indirect waiver (#182): an Indirect gun the unit may fire blind, or the target's
