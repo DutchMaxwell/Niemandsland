@@ -11196,6 +11196,7 @@ func solo_begin_auto(unit: GameUnit, verb: int) -> void:
 	# Automodus 1.6: light up exactly the enemies player_intent accepts for this verb; with none, say
 	# why (the first refusal) and do not enter the mode.
 	var valid: Array = []
+	var dimmed: Dictionary = {}   # Automodus 1.8c (OD 6): refused engine enemies -> the reason their hover names
 	var first_reason := ""
 	# Automodus 1.8b (OD 5): Rush goes to a FREE table point — no lit enemies, only the unit's own refusal.
 	var to_point := verb == AiDecision.Action.RUSH
@@ -11211,6 +11212,7 @@ func solo_begin_auto(unit: GameUnit, verb: int) -> void:
 		if verdict.has("refused"):
 			if first_reason == "":
 				first_reason = str(verdict["refused"])
+			dimmed[cand] = str(verdict["refused"])
 		else:
 			valid.append(cand)
 	if valid.is_empty() and (first_reason != "" or not to_point):
@@ -11232,6 +11234,9 @@ func solo_begin_auto(unit: GameUnit, verb: int) -> void:
 	_solo_target_mode["auto_label"] = verb_label
 	_solo_target_mode["cast_rings"] = rings   # freed by _solo_end_targeting
 	_solo_target_mode["auto_previews"] = {}
+	_solo_target_mode["auto_dimmed"] = dimmed
+	_solo_target_mode["auto_dim_rings"] = dimmed.keys().map(func(du: GameUnit) -> Node:   # a dim grey ring each
+		return _solo_spawn_pulse_ring(solo_controller.unit_centre(du), Color(0.6, 0.6, 0.6, 0.35)))
 	if to_point:
 		_solo_target_mode["auto_point"] = true
 	if band > 0 and range_ring_controller != null and range_ring_controller.has_method("show_spell_preview"):
@@ -11243,8 +11248,9 @@ func solo_begin_auto(unit: GameUnit, verb: int) -> void:
 			"%s: %d target(s) lit for %s — hover one to see where your models land, click it to go; right-click or Esc cancels" % [
 				unit.get_name(), valid.size(), verb_label])
 	# A2 (NML-202): name a suggestion so the player isn't guessing which enemy is worth the click —
-	# its ring is the highlighted one; only a click on a lit target executes (Automodus 1.8).
-	if suggested != null and battle_log != null:
+	# its ring is the highlighted one; only a click on a lit target executes (Automodus 1.8), so a suggestion
+	# that is not lit (e.g. a joined hero) is not named (1.8c).
+	if suggested != null and valid.has(suggested) and battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL, "Suggested: %s" % suggested.get_name())
 
 
@@ -11347,6 +11353,14 @@ func _solo_show_auto_preview(target: GameUnit) -> void:
 	if target == null or not (_solo_target_mode.get("auto_valid", []) as Array).has(target):
 		_solo_target_mode.erase("auto_hovered")
 		landing_preview.clear()
+		# Automodus 1.8c (OD 6): a dimmed enemy names why — once per enemy per mode (kept as a refused preview).
+		var dimmed: Dictionary = _solo_target_mode.get("auto_dimmed", {})
+		var said: Dictionary = _solo_target_mode.get("auto_previews", {})
+		if dimmed.has(target) and not said.has(target.get_instance_id()):
+			said[target.get_instance_id()] = {"refused": dimmed[target]}
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.GENERAL, "Auto: %s is not a valid target for %s (%s)" % [
+					target.get_name(), str(_solo_target_mode.get("auto_label", "")), dimmed[target]])
 		return
 	if _solo_target_mode.get("auto_hovered") == target:
 		return
@@ -11552,6 +11566,7 @@ func _run_human_cast(unit: GameUnit, member: GameUnit, entry: Dictionary, picked
 
 func _solo_end_targeting() -> void:
 	_solo_clear_announce(_solo_target_mode.get("cast_rings", []))   # NML-206 candidate markers off
+	_solo_clear_announce(_solo_target_mode.get("auto_dim_rings", []))   # Automodus 1.8c: the dimmed enemies' rings
 	_solo_clear_announce((_solo_target_mode.get("cast_pick_rings", {}) as Dictionary).values())
 	_solo_clear_announce(_solo_target_mode.get("split_visuals", []))
 	_solo_target_mode = {}
