@@ -53,3 +53,19 @@ func test_a_remote_army_alone_shows_the_section_and_the_switch() -> void:
 	await _main._on_remote_army_complete(2, {})
 	await E2EBoot.settle(get_tree())
 	_assert_section_with_switch("after the remote army stream")
+
+
+func _ai_row(player_id: int) -> CheckButton:
+	for c in _main.solo_panel_box.get_children():
+		if c is CheckButton and (c as CheckButton).text.begins_with("AI plays P%d" % player_id):
+			return c
+	return null
+
+
+func test_a_remote_army_row_names_the_army_it_arrived_with() -> void:
+	_main._on_remote_army_header(2, "Synthetic Guest Host", 0)
+	await _main._on_remote_army_complete(2, {})
+	await E2EBoot.settle(get_tree())
+	var row := _ai_row(2)
+	assert_object(row).override_failure_message("no AI row for P2").is_not_null()
+	assert_str(row.text).override_failure_message("row says '%s'" % row.text).is_equal("AI plays P2 — Synthetic Guest Host")
