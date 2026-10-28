@@ -11302,6 +11302,34 @@ func _solo_preview_for(unit: GameUnit, verb: int, target: GameUnit) -> Dictionar
 	return solo_controller.preview_intent(intent, probe)
 
 
+## Automodus step 1.7 (#1828): hovering a lit target shows where every model lands plus the shooting lines;
+## anything else (empty table, own unit, an unlit enemy) clears it. One planner run per target per mode
+## (cached in auto_previews by instance id), and the ghosts are rebuilt only when the hovered target
+## changes, never per mouse-move frame. A refused preview shows nothing and says why once.
+func _solo_show_auto_preview(target: GameUnit) -> void:
+	if landing_preview == null:
+		return
+	if target == null or not (_solo_target_mode.get("auto_valid", []) as Array).has(target):
+		_solo_target_mode.erase("auto_hovered")
+		landing_preview.clear()
+		return
+	if _solo_target_mode.get("auto_hovered") == target:
+		return
+	_solo_target_mode["auto_hovered"] = target
+	var cache: Dictionary = _solo_target_mode.get("auto_previews", {})
+	var key := target.get_instance_id()
+	if not cache.has(key):
+		cache[key] = _solo_preview_for(_solo_target_mode.get("unit"), int(_solo_target_mode.get("auto_verb")), target)
+		if cache[key].has("refused") and battle_log != null:
+			battle_log.log_event(BattleLog.Category.GENERAL,
+				"Auto: no preview for %s (%s)" % [target.get_name(), cache[key]["refused"]])
+	var preview: Dictionary = cache[key]
+	if preview.has("refused"):
+		landing_preview.clear()
+	else:
+		landing_preview.show_preview(preview.get("landing", []), preview.get("lines", []))
+
+
 ## Spell wave F2 — the human cast flow entry (radial "Cast"): spell picker (live army-book text,
 ## affordability-gated) -> targeting mode "cast" with the LEGAL candidates precomputed -> click a
 ## target -> boost tableau -> AI counter-interference (shown AFTER commit, rules-sequential) ->
@@ -11501,6 +11529,8 @@ func _solo_end_targeting() -> void:
 		_solo_los_label.queue_free()
 	_solo_los_label = null
 	_solo_los_cache = {}
+	if landing_preview != null:
+		landing_preview.clear()   # Automodus 1.7: the hover ghosts end with the mode (click, Esc, right-click)
 
 
 ## Targeting-mode input, driven by the pure SoloController.targeting_route router. Mouse events reach it
@@ -11547,7 +11577,11 @@ func _solo_targeting_input(event: InputEvent) -> bool:
 			_solo_end_targeting()
 			return true
 		SoloController.TargetingRoute.TRACK:
-			_solo_update_los_line((event as InputEventMouseMotion).position)
+			var hover_pos := (event as InputEventMouseMotion).position
+			if _solo_target_mode.has("auto_verb"):
+				_solo_show_auto_preview(_solo_pick_unit_at(hover_pos))   # Automodus 1.7: ghosts, no LOS line
+			else:
+				_solo_update_los_line(hover_pos)
 			return false   # motion may pass (camera etc.)
 		SoloController.TargetingRoute.PICK:
 			var mb := event as InputEventMouseButton
