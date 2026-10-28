@@ -43,6 +43,8 @@ FAST_LIMIT_S = 15.0
 # scenario must converge well inside the 120 s owner-request bound, so LINK_CUT_WAIT_S is the ceiling.
 LINK_CUT_S = 10.0
 LINK_CUT_WAIT_S = 40.0
+## 29(b): how long the guest's link stays dead after the host is already back.
+REJOIN_RACE_GUEST_DELAY_S = 12.0
 
 
 class HarnessFailure(RuntimeError):
@@ -304,7 +306,11 @@ class Run:
         self.silence = ""  # bug 4: "host" / "guest" = that peer's connection goes silent (stall proxy)
         self.outage = False  # bug 4: the whole link is down too (new connections fail during the silence)
         self.link_cut = False  # step 23: the host's link is cut and restored (proxy closes the sockets)
+        self.rejoin_race = False  # 29(b): both links are cut at once, the host returns first
+        self.guest_owed_cut = False  # #1882: the host waits on the guest, then cuts its own link
+        self.guest_answers_during_cut = False  # #1882 part 2: the answer is given while the host is away
         self.proxy: StallProxy | None = None
+        self.proxies: dict[str, StallProxy] = {}
         self.seq = {"host": 0, "guest": 0}
         self.relay: subprocess.Popen | None = None
         self.relay_log = None
@@ -336,10 +342,19 @@ class Run:
         )
         wait_for_port(port)
         print(f"[mp2] relay: {relay_url}")
-        proxied = self.silence or ("host" if self.link_cut else "")
-        if proxied:
-            self.proxy = StallProxy(port)
-        urls = {role: f"ws://127.0.0.1:{self.proxy.port}" if role == proxied else relay_url
+        proxied: tuple[str, ...] = ()
+        if self.silence:
+            proxied = (self.silence,)
+        elif self.rejoin_race:
+            proxied = ("host", "guest")  # one relay hiccup takes both links down
+        elif self.link_cut or self.guest_owed_cut:
+            proxied = ("host",)
+        for role in proxied:
+            self.proxies[role] = StallProxy(port)
+        # The single proxied role's proxy (silence / link-cut); rejoin-race has two and uses
+        # self.proxies directly.
+        self.proxy = next(iter(self.proxies.values()), None)
+        urls = {role: (f"ws://127.0.0.1:{self.proxies[role].port}" if role in self.proxies else relay_url)
                 for role in ("host", "guest")}
 
         host = self._start_client("host", urls["host"])
@@ -381,7 +396,7 @@ class Run:
             "--seed",
             str(self.args.seed),
         ]
-        if self.link_cut:
+        if self.link_cut or self.rejoin_race or self.guest_owed_cut:
             cmd += ["--expect-link-cut"]
         if room:
             cmd += ["--code", room]
@@ -520,6 +535,12 @@ class Run:
             return
         if self.link_cut:
             self.link_cut_scenario()
+            return
+        if self.rejoin_race:
+            self.rejoin_race_scenario()
+            return
+        if self.guest_owed_cut:
+            self.guest_owed_cut_scenario()
             return
         self.command_both("setup")
         states = self.wait_condition(
@@ -886,6 +907,158 @@ class Run:
         print(f"[mp2] PASS link-cut: host back with id {ids['host']}, the cut request was answered "
               f"after {elapsed:.1f}s, events {events['host']}")
 
+    def guest_owed_cut_scenario(self) -> None:
+        """#1882: the HOST waits on the GUEST (interference for a cast) and then the HOST's link is
+        cut for LINK_CUT_S. The relay re-adds peer 2 with a reused-id flush when the host rejoins;
+        that flush used to release the pending request (a rejoin read as a leave). With the fix the
+        request survives, the guest's answer still lands, and a seated guest is never auto-rolled."""
+        self.command_both("setup")
+        states = self.wait_condition(
+            "fixture on both peers", lambda s: all(v.get("fixture_ready") for v in s.values())
+        )
+        self.command_both("set_automatic")
+        states = self.wait_condition(
+            "both peers AUTOMATIC before the ask",
+            lambda s: all(v.get("rules") == 1 for v in s.values()),
+            diagnostic=lambda s: "rules: " + repr({r: s[r].get("rules") for r in s}),
+        )
+        self.checkpoint("guest-owed-fixture", states)
+        self.command("host", "remote_interference")
+        states = self.wait_condition(
+            "the guest is asked to interfere",
+            lambda s: s["guest"].get("interference_open") is True,
+            diagnostic=lambda s: "guest card=%r host log tail=%r" % (
+                s["guest"].get("interference_open"), self.clients["host"].lines[-3:]),
+        )
+        self.checkpoint("guest-owed-pending", states, compare_units=False)
+        assert self.proxy is not None
+        started = time.monotonic()
+        self.proxy.cut(LINK_CUT_S)
+        print(f"[mp2] guest-owed-cut: host link cut for {LINK_CUT_S:.0f}s with the ask in flight")
+        if self.guest_answers_during_cut:
+            # #1882 part 2: the guest answers while the host's socket is gone - the relay drops the
+            # reply frame on the floor. The host must re-send the request after its rejoin and take
+            # the guest's stored answer, not wait out the 120 s owner bound.
+            time.sleep(1.0)
+            self.command("guest", "answer_interference")
+            self.wait_condition(
+                "the guest answered during the host outage",
+                lambda s: s["guest"].get("interference_open") is False,
+                timeout=10.0,
+                diagnostic=lambda s: "guest card=%r" % s["guest"].get("interference_open"),
+            )
+            print("[mp2] guest-owed-cut: the guest answered during the host outage")
+            time.sleep(max(0.0, LINK_CUT_S - 1.0))
+        else:
+            time.sleep(LINK_CUT_S)
+        self.proxy.restore()
+        self.wait_condition(
+            "the host rejoined",
+            lambda s: "host_rejoined" in [e.get("e") for e in s["host"].get("link_events", [])]
+            and s["host"].get("session_ready"),
+            timeout=LINK_CUT_WAIT_S,
+            diagnostic=lambda s: "host events=%r ready=%r" % (
+                [e.get("e") for e in s["host"].get("link_events", [])],
+                s["host"].get("session_ready")),
+        )
+        if not self.guest_answers_during_cut:
+            self.command("guest", "answer_interference")
+        states = self.wait_condition(
+            "the host took the guest's stored answer after the rejoin" if self.guest_answers_during_cut
+            else "the host took the guest's interference",
+            lambda s: s["host"].get("interference_spent") == 1,
+            timeout=LINK_CUT_WAIT_S,
+            diagnostic=lambda s: "spent=%r host log tail=%r" % (
+                s["host"].get("interference_spent"), self.clients["host"].lines[-5:]),
+        )
+        elapsed = time.monotonic() - started
+        time.sleep(1.0)
+        after = self.stable_states()
+        # The reply value is the whole proof: 1 = the guest's real token arrived after the rejoin;
+        # the release/timeout paths return 0 ("no answer"), the fallback never asks at all.
+        problems = [msg for bad, msg in (
+            (after["guest"].get("slot") != 2, "the guest lost its seat: %r"
+             % after["guest"].get("slot")),
+            (after["guest"].get("interference_open") is True, "the guest's card stayed open"),
+            (after["host"].get("interference_spent") != 1, "the answer did not reach the cast: %r"
+             % after["host"].get("interference_spent")),
+            (elapsed >= LINK_CUT_WAIT_S, f"the ask took {elapsed:.1f}s (limit {LINK_CUT_WAIT_S:.0f}s)"),
+        ) if bad]
+        if problems:
+            raise HarnessFailure("guest-owed-cut: " + "; ".join(problems))
+        self.checkpoint("after_guest_owed_cut", after, compare_units=False)
+        print(f"[mp2] PASS guest-owed-cut: the guest's interference survived the host rejoin "
+              f"(spent 1) after {elapsed:.1f}s")
+
+    def rejoin_race_scenario(self) -> None:
+        """29(b): BOTH links die in the same relay hiccup, the host comes back first and the guest is
+        still mid-rejoin — the live order behind "Peer 2 failed version handshake (no announce in
+        8s) — kicking". The guest must end seated on slot 2 with the agreed rules level; the host
+        must not log a kick. The guest's proxy stays closed for REJOIN_RACE_GUEST_DELAY_S after the
+        host is back, so the host really does wait for a peer that cannot announce yet."""
+        self.command_both("setup")
+        states = self.wait_condition(
+            "fixture on both peers", lambda s: all(v.get("fixture_ready") for v in s.values())
+        )
+        self.command_both("set_automatic")
+        states = self.wait_condition(
+            "both peers AUTOMATIC before the cut",
+            lambda s: all(v.get("rules") == 1 for v in s.values()),
+            diagnostic=lambda s: "rules: " + repr({r: s[r].get("rules") for r in s}),
+        )
+        self.checkpoint("rejoin-race-ready", states)
+        ids = {role: states[role].get("peer_id") for role in ("host", "guest")}
+        started = time.monotonic()
+        for role in ("host", "guest"):
+            self.proxies[role].cut(LINK_CUT_S)
+        print(f"[mp2] rejoin-race: both links cut for {LINK_CUT_S:.0f}s")
+        time.sleep(LINK_CUT_S)
+        # The host returns first; the guest's link stays dead, as in the live run.
+        self.proxies["host"].restore()
+        self.wait_condition(
+            "the host rejoined",
+            lambda s: "host_rejoined" in [e.get("e") for e in s["host"].get("link_events", [])]
+            and s["host"].get("session_ready"),
+            timeout=LINK_CUT_WAIT_S,
+            diagnostic=lambda s: "host events=%r ready=%r failed=%r" % (
+                [e.get("e") for e in s["host"].get("link_events", [])],
+                s["host"].get("session_ready"), s["host"].get("failed")),
+        )
+        time.sleep(REJOIN_RACE_GUEST_DELAY_S)
+        self.proxies["guest"].restore()
+        states = self.wait_condition(
+            "both peers seated after the race",
+            lambda s: s["guest"].get("session_ready") and s["guest"].get("slot") == 2
+            and s["host"].get("session_ready") and s["host"].get("slot") == 1,
+            timeout=LINK_CUT_WAIT_S,
+            diagnostic=lambda s: "guest ready=%r slot=%r events=%r host slot=%r" % (
+                s["guest"].get("session_ready"), s["guest"].get("slot"),
+                [e.get("e") for e in s["guest"].get("link_events", [])],
+                s["host"].get("slot")),
+        )
+        elapsed = time.monotonic() - started
+        time.sleep(1.0)
+        after = self.stable_states()
+        kicked = [line for line in self.clients["host"].lines if "failed version handshake" in line]
+        events = {role: [e.get("e") for e in after[role].get("link_events", [])]
+                  for role in ("host", "guest")}
+        problems = [msg for bad, msg in (
+            (bool(kicked), f"the host kicked the rejoining guest: {kicked[:1]}"),
+            (after["guest"].get("slot") != 2, "the guest lost its seat: slot %r"
+             % after["guest"].get("slot")),
+            ({r: after[r].get("peer_id") for r in ids} != ids,
+             "a transport id changed: " + repr({r: after[r].get("peer_id") for r in ids})),
+            (any(after[r].get("rules") != 1 for r in ids),
+             "the agreed rules level was lost: " + repr({r: after[r].get("rules") for r in ids})),
+            (after["host"].get("failed") or after["guest"].get("failed"), "a peer is failed"),
+            (elapsed >= LINK_CUT_WAIT_S, f"the race took {elapsed:.1f}s (limit {LINK_CUT_WAIT_S:.0f}s)"),
+        ) if bad]
+        if problems:
+            raise HarnessFailure("rejoin-race: " + "; ".join(problems))
+        self.checkpoint("after_rejoin_race", after, compare_units=False)
+        print(f"[mp2] PASS rejoin-race: guest seated on slot 2 after {elapsed:.1f}s, "
+              f"events host {events['host']} guest {events['guest']}")
+
     def _start_question_scenario(self) -> None:
         """Bug 6c: the host is asked ONCE whether to play with rules automation when the second player
         sits down. Yes -> the guest gets the confirm card -> both Automatic; Not now -> both Manual and
@@ -1121,6 +1294,22 @@ def parse_args() -> argparse.Namespace:
         help="Run only step 23 (the host's link cut); used for the RED/GREEN proof.",
     )
     parser.add_argument(
+        "--guest-owed-cut",
+        action="store_true",
+        help="Run only #1882: the host waits on the guest's interference, then the host's link is cut.",
+    )
+    parser.add_argument(
+        "--guest-answers-during-cut",
+        action="store_true",
+        help="#1882 part 2: the guest answers while the host is cut; after the rejoin the host must "
+             "take the guest's stored answer instead of waiting out the 120 s owner bound.",
+    )
+    parser.add_argument(
+        "--rejoin-race",
+        action="store_true",
+        help="Run only 29(b): both links are cut at once, the host returns first, the guest must stay seated.",
+    )
+    parser.add_argument(
         "--silence-expect",
         choices=("auto", "fast", "fallback"),
         default="auto",
@@ -1129,6 +1318,8 @@ def parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     if args.repeat < 1:
         parser.error("--repeat must be at least 1")
+    if args.guest_answers_during_cut:
+        args.guest_owed_cut = True
     return args
 
 
@@ -1140,7 +1331,9 @@ def main() -> int:
     reference: list[dict] | None = None
 
     def run_once(run_dir: Path, rules_online: bool, ref: list[dict] | None, leave: str = "",
-                 silence: str = "", outage: bool = False, link_cut: bool = False) -> list[dict]:
+                 silence: str = "", outage: bool = False, link_cut: bool = False,
+                 rejoin_race: bool = False, guest_owed_cut: bool = False,
+                 guest_answers_during_cut: bool = False) -> list[dict]:
         run_dir.mkdir(parents=True, exist_ok=False)
         run = Run(args, run_dir)
         run.rules_online = rules_online
@@ -1148,6 +1341,9 @@ def main() -> int:
         run.silence = silence
         run.outage = outage
         run.link_cut = link_cut
+        run.rejoin_race = rejoin_race
+        run.guest_owed_cut = guest_owed_cut
+        run.guest_answers_during_cut = guest_answers_during_cut
         try:
             print(f"[mp2] run {run_dir.name}: {run_dir}")
             run.start()
@@ -1169,6 +1365,15 @@ def main() -> int:
         if args.link_cut_only:
             run_once(root / "link-cut-01", False, None, link_cut=True)
             print("[mp2] RESULT PASS: link cut")
+            return 0
+        if args.rejoin_race:
+            run_once(root / "rejoin-race-01", False, None, rejoin_race=True)
+            print("[mp2] RESULT PASS: rejoin race")
+            return 0
+        if args.guest_owed_cut and not (args.include_rules_online or args.include_link_cut):
+            run_once(root / "guest-owed-cut-01", False, None, guest_owed_cut=True,
+                     guest_answers_during_cut=args.guest_answers_during_cut)
+            print("[mp2] RESULT PASS: guest-owed cut")
             return 0
         if args.start_question:
             for answer in ("yes", "no"):
@@ -1201,6 +1406,10 @@ def main() -> int:
         run_once(root / "silence-host-outage", False, None, silence="host", outage=True)
         if args.include_link_cut:
             run_once(root / "link-cut-01", False, None, link_cut=True)
+        if args.guest_owed_cut:
+            # #1882 part 2: wall-clock timing, so it stays out of the snapshot comparison above.
+            run_once(root / "guest-owed-cut-01", False, None, guest_owed_cut=True,
+                     guest_answers_during_cut=args.guest_answers_during_cut)
         elapsed = time.monotonic() - start
         atomic_json(root / "determinism.json", {
             "runs": args.repeat, "identical": True, "seed": args.seed,

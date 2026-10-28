@@ -66,6 +66,24 @@ func _requests() -> Array:
 	return out
 
 
+## The owner's answers on the double's wire (#1882 part 2: a replay must not roll again).
+func _results() -> Array:
+	var out: Array = []
+	for s in _net.sent:
+		if str((s as Array)[0]) == "roll_result":
+			out.append(s)
+	return out
+
+
+## Visible cards whose title mentions `needle` (the save prompt names the defending seat).
+func _cards(needle: String) -> Array:
+	var out: Array = []
+	for node in _main.find_children("*", "PromptCard", true, false):
+		if (node as PromptCard).visible and str((node as PromptCard).title).to_lower().contains(needle):
+			out.append(node)
+	return out
+
+
 ## The tray's visible purpose line (community #170) — it stays up while the dice lie there.
 func _purpose_shown() -> String:
 	return str(_main.roll_purpose_label.text) if _main.roll_purpose_label != null else ""
@@ -236,3 +254,202 @@ func test_a_failed_reconnect_releases_every_pending_request(timeout := 120000) -
 	assert_bool(_main._solo_remote_save_waiters.has(req)).is_false()
 	assert_bool(bool((_req_result).get("done", true))).is_false()
 	await _drain()
+
+
+## #1882: every reused-id rejoin is reported as peer_disconnected + peer_connected in the SAME frame
+## (relay_multiplayer_peer.gd _emit_peer_connected). A pending owner request must survive that flush
+## and still take the returning owner's real answer; only a peer that stays away is a leave.
+var _flush_result: Dictionary = {}
+var _flush_done := false
+
+
+func _run_flush_request(peer: int) -> void:
+	_flush_result = await _main._owner_request(peer, {"unit": "u1", "kind": "morale", "count": 1,
+		"target": 4, "purpose": "morale test"})
+	_flush_done = true
+
+
+func test_a_rejoin_flush_keeps_the_pending_request_and_takes_the_answer(timeout := 120000) -> void:
+	assert_bool(_seam_exists()).is_true()
+	if not _seam_exists():
+		return
+	_fake_session({1: 1, GUEST_PEER: 2}, {GUEST_PEER: "Guest"})
+	_main._owner_roll_timeout_s = 5.0
+	_run_flush_request(GUEST_PEER)
+	for _i in 4:
+		await get_tree().process_frame
+	var reqs: Array = _main._solo_remote_save_waiters.keys()
+	assert_int(reqs.size()).override_failure_message("the request is pending").is_equal(1)
+	var req := int(reqs[0])
+	# The flush: the relay re-adds the SAME id in the same frame (network_manager.connected_peers),
+	# only the disconnect half reaches _on_player_left. The real manager is needed (its own
+	# handlers walk the tree); no session runs, so setting the list is inert.
+	_end_session()
+	_main.network_manager.connected_peers = Array([GUEST_PEER], TYPE_INT, "", null)
+	_main._on_player_left(GUEST_PEER)
+	for _i in 5:
+		await get_tree().process_frame
+	assert_bool(_flush_done).override_failure_message(
+		"a rejoin flush released the request (the returning owner never got to answer)").is_false()
+	assert_bool(_main._solo_remote_save_waiters.has(req)).override_failure_message(
+		"the waiter is gone").is_true()
+	_main.network_manager.connected_peers.clear()
+	_main._rpc_roll_result(req, [6, 3, 1])
+	for _i in 20:
+		if _flush_done:
+			break
+		await get_tree().create_timer(0.1).timeout
+	assert_bool(_flush_done).is_true()
+	assert_array(_flush_result.get("faces", [])).override_failure_message(
+		"the returning owner's real faces").is_equal([6, 3, 1])
+	assert_bool(bool(_flush_result.get("done", false))).is_true()
+
+
+## #1882, second half: the next owner roll can land between the flush and the re-handshake, when the
+## returning peer is connected but has no slot yet (_solo_peer_for_slot -> 0). A SEATED player must
+## not be auto-rolled in that window; the roll waits for the slot, then asks the owner.
+var _window_faces: Array = []
+var _window_done := false
+
+
+func _run_window_roll(unit: GameUnit) -> void:
+	_window_faces = await _main._owner_roll(unit, 2, 4, "morale", "Morale test: Raiders (4+)",
+		{"what": "morale test"})
+	_window_done = true
+
+
+func test_a_roll_in_the_rejoin_window_waits_for_the_returning_owner(timeout := 120000) -> void:
+	assert_bool(_seam_exists()).is_true()
+	if not _seam_exists():
+		return
+	# The guest is back (connected) but not re-slotted yet: exactly the re-handshake window.
+	_fake_session({1: 1}, {GUEST_PEER: "Guest"})
+	_main._owner_roll_timeout_s = 5.0
+	_net.connected_peers = Array([GUEST_PEER], TYPE_INT, "", null)
+	var raiders := _unit(2, "Raiders")
+	_run_window_roll(raiders)
+	for _i in 8:
+		await get_tree().process_frame
+	assert_bool(_window_done).override_failure_message(
+		"the seated owner was auto-rolled during the re-handshake").is_false()
+	assert_str(_purpose_shown()).not_contains("(owner absent — auto-rolled)")
+	assert_int(_requests().size()).override_failure_message("nobody asked yet").is_equal(0)
+	# The re-handshake lands: slot 2 is bound again -> the request goes to the owner.
+	_net.peer_to_slot = {1: 1, GUEST_PEER: 2}
+	for _i in 30:
+		if _requests().size() > 0:
+			break
+		await get_tree().create_timer(0.1).timeout
+	assert_int(_requests().size()).override_failure_message("the returning owner was asked").is_equal(1)
+	if _requests().is_empty():
+		_end_session()
+		return
+	var rq: Dictionary = _requests()[0][1]
+	_main._on_network_command("roll_result", {"req": int(rq["req"]), "faces": [5, 2]}, GUEST_PEER)
+	for _i in 30:
+		if _window_done:
+			break
+		await get_tree().create_timer(0.1).timeout
+	assert_bool(_window_done).is_true()
+	assert_array(_window_faces).override_failure_message("the owner's faces").is_equal([5, 2])
+	_end_session()
+
+
+## #1882 part 2: the relay drops an answer whose target socket is gone (the host's own outage).
+## After the rejoin the host re-sends the SAME request id; the owner must replay the stored faces
+## at once — no second card, no new roll.
+func _save_request(req: int, unit: GameUnit) -> Dictionary:
+	return {"req": req, "unit": unit.unit_id, "kind": "defense", "count": 2, "target": 4,
+		"purpose": "Defense save", "ask": {"weapon": "Rifles", "striker": "Raiders",
+		"defense": 4, "ap": 0}}
+
+
+func test_a_replayed_request_replays_the_stored_answer(timeout := 120000) -> void:
+	assert_bool(_seam_exists()).is_true()
+	if not _seam_exists():
+		return
+	_fake_session({1: 1, GUEST_PEER: 2}, {GUEST_PEER: "Host"})
+	_main._solo_auto_saves = true
+	var unit := _unit(1, "Rifles")
+	var rq := _save_request(77, unit)
+	_main._rpc_request_roll(rq, GUEST_PEER)
+	for _i in 6:
+		await get_tree().process_frame
+	var first := _results()
+	assert_int(first.size()).override_failure_message("the first answer is on the wire").is_equal(1)
+	if first.is_empty():
+		_end_session()
+		return
+	var faces: Array = (first[0] as Array)[1].get("faces", [])
+	var dice_before: int = _main._dice_log_vbox.get_child_count()
+	_main._rpc_request_roll(rq, GUEST_PEER)
+	for _i in 6:
+		await get_tree().process_frame
+	var again := _results()
+	assert_int(again.size()).override_failure_message(
+		"the re-sent request must be answered from the stored result").is_equal(2)
+	if again.size() > 1:
+		assert_array((again[1] as Array)[1].get("faces", [])).override_failure_message(
+			"the SAME faces, not a new roll").is_equal(faces)
+	assert_int(_main._dice_log_vbox.get_child_count()).override_failure_message(
+		"a replay must not roll again").is_equal(dice_before)
+	_end_session()
+
+
+## #1882 part 2 fix round: the bare request id is NOT unique across host sessions - a restarted
+## host starts counting at 1 again. The owner keys its cache by the resolver's session token too, so
+## an old session's dice are never replayed into a new game.
+func test_a_new_host_session_with_a_reused_id_rolls_fresh(timeout := 120000) -> void:
+	assert_bool(_seam_exists()).is_true()
+	if not _seam_exists():
+		return
+	_fake_session({1: 1, GUEST_PEER: 2}, {GUEST_PEER: "Host"})
+	_main._solo_auto_saves = true
+	var unit := _unit(1, "Rifles")
+	var old_rq := _save_request(77, unit)
+	old_rq["rs"] = "a"
+	_main._rpc_request_roll(old_rq, GUEST_PEER)
+	for _i in 6:
+		await get_tree().process_frame
+	var first := _results()
+	assert_int(first.size()).override_failure_message("the first session's answer").is_equal(1)
+	var dice_before: int = _main._dice_log_vbox.get_child_count()
+	var new_rq := _save_request(77, unit)
+	new_rq["rs"] = "b"
+	_main._rpc_request_roll(new_rq, GUEST_PEER)
+	for _i in 6:
+		await get_tree().process_frame
+	assert_int(_results().size()).override_failure_message(
+		"a new host session's request must be answered").is_equal(2)
+	assert_int(_main._dice_log_vbox.get_child_count()).override_failure_message(
+		"a new session must ROLL again, not replay the old session's dice").is_greater(dice_before)
+	_end_session()
+
+
+## A duplicate that arrives WHILE the first card is still open must not open a second card.
+func test_a_duplicate_request_keeps_one_open_card(timeout := 120000) -> void:
+	assert_bool(_seam_exists()).is_true()
+	if not _seam_exists():
+		return
+	_fake_session({1: 1, GUEST_PEER: 2}, {GUEST_PEER: "Host"})
+	_main._solo_auto_saves = false
+	var rq := _save_request(88, _unit(1, "Rifles"))
+	_main._rpc_request_roll(rq, GUEST_PEER)
+	for _i in 4:
+		await get_tree().process_frame
+	assert_int(_cards("incoming fire").size()).override_failure_message(
+		"the first card is open").is_equal(1)
+	_main._rpc_request_roll(rq, GUEST_PEER)
+	for _i in 4:
+		await get_tree().process_frame
+	assert_int(_cards("incoming fire").size()).override_failure_message(
+		"a duplicate opened a second card").is_equal(1)
+	var card: PromptCard = _cards("incoming fire")[0]
+	card.resolve(true)
+	for _i in 30:
+		if not _results().is_empty():
+			break
+		await get_tree().create_timer(0.1).timeout
+	assert_int(_results().size()).override_failure_message(
+		"the first request still answers exactly once").is_equal(1)
+	_end_session()
