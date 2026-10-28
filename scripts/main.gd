@@ -11286,6 +11286,22 @@ func _run_player_intent(unit: GameUnit, verb: int, target: GameUnit) -> void:
 		await _solo_complete_human_attack(unit)   # the no-shot reason is already a rule note
 
 
+## Automodus step 1.5 (#1828): what the player's verb WOULD do, before anything moves. A refusal from
+## player_intent comes back as is ({"refused": why}); a legal intent runs through preview_intent (the one
+## executor in its sandbox), whose probe reads the shooting lines AT THE LANDING through the volley's own
+## sight truth. Returns {landing: [{model, pos, radius_m}], can_shoot, lines: [{from, to}]}.
+func _solo_preview_for(unit: GameUnit, verb: int, target: GameUnit) -> Dictionary:
+	var intent: Dictionary = solo_controller.player_intent(unit, verb, target)
+	if intent.has("refused"):
+		return intent
+	var probe := func(report: Dictionary) -> Array:
+		var pairs: Array = []
+		if bool(report.get("can_shoot", false)):
+			_solo_volley_sighted(unit, target, pairs)
+		return pairs.map(func(p: Array) -> Dictionary: return {"from": p[0], "to": p[1]})
+	return solo_controller.preview_intent(intent, probe)
+
+
 ## Spell wave F2 — the human cast flow entry (radial "Cast"): spell picker (live army-book text,
 ## affordability-gated) -> targeting mode "cast" with the LEGAL candidates precomputed -> click a
 ## target -> boost tableau -> AI counter-interference (shown AFTER commit, rules-sequential) ->
@@ -12718,6 +12734,22 @@ func _solo_log_range_bonus(attacker: GameUnit, target: GameUnit) -> void:
 			member.get_name(), " + ".join(causes), ", ".join(lifted), target.get_name()], true)
 
 
+## Automodus step 1.5 (#1828): the volley's own sight truth — how many of `attacker`'s models have range
+## and line of sight to `target`, the N of _run_human_shooting's "N/M models with line of sight + range"
+## line. `pairs_out` collects each counted model's [shooter_pos, target_pos] (the landing preview's lines).
+func _solo_volley_sighted(attacker: GameUnit, target: GameUnit, pairs_out = null) -> int:
+	return _solo_sighted_count(attacker, target, AiArchetype.max_range_inches(_solo_all_weapons(attacker)),
+		_solo_volley_indirect(attacker, target), pairs_out)
+
+
+## The volley's Indirect waiver (#182): an Indirect gun the unit may fire blind, or the target's
+## Indirect Mark — the sight test goes, the range gate stays.
+func _solo_volley_indirect(attacker: GameUnit, target: GameUnit) -> bool:
+	return (SoloController.has_indirect_ranged(_solo_all_weapons(attacker)) \
+		and SoloController.indirect_ignores_los(attacker)) \
+		or _solo_target_grants_indirect(target)   # wave 6 — the Indirect Mark's once-grant
+
+
 func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Array = [], skip_named: bool = false) -> void:
 	if SoloController.combined_alive(attacker) <= 0 or SoloController.combined_alive(target) <= 0:
 		return
@@ -12760,9 +12792,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 	if battle_log != null:
 		var rng_in: int = AiArchetype.max_range_inches(_solo_all_weapons(attacker))
 		var total := _solo_combined_alive(attacker)
-		var log_indirect: bool = (SoloController.has_indirect_ranged(_solo_all_weapons(attacker)) \
-			and SoloController.indirect_ignores_los(attacker)) \
-			or _solo_target_grants_indirect(target)   # wave 6 — the Indirect Mark's once-grant
+		var log_indirect: bool = _solo_volley_indirect(attacker, target)
 		# #182 — rules-must-log: when the volley is only legal BECAUSE of Indirect, say so
 		# (the old line read "0/N with line of sight" over a perfectly legal barrage).
 		if log_indirect and _solo_sighted_count(attacker, target, rng_in) <= 0:
@@ -12770,7 +12800,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 				"Indirect: %s targets %s without line of sight (GF v3.5.1)" % [
 				attacker.get_name(), target.get_name()], true)
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s: %d/%d model%s with line of sight + range" % [
-			attacker.get_name(), _solo_sighted_count(attacker, target, rng_in, log_indirect), total, ("" if total == 1 else "s")], true)
+			attacker.get_name(), _solo_volley_sighted(attacker, target), total, ("" if total == 1 else "s")], true)
 	var fired_any := false   # round 7, finding 5: a volley that rolls NOTHING must say so, never end silently
 	var cover_logged := false   # I4: log Cover once, only when a shot's save really used it
 	# Maintainer 31.07.: the attacker CHOOSES how many markers to remove (caster-points style).
