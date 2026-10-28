@@ -9,9 +9,9 @@ Fantasy). Built in Godot.
      (§ Release checklist); never hardcode a version elsewhere in the UI. -->
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Godot](https://img.shields.io/badge/Godot-4.6-blue.svg)](https://godotengine.org/)
-[![Status](https://img.shields.io/badge/Status-0.3.13.1--alpha-orange.svg)]()
+[![Status](https://img.shields.io/badge/Status-0.3.14.0--alpha-orange.svg)]()
 
-> **Status: public alpha (`0.3.13.1`).** The tabletop sandbox, OPR army import, multiplayer
+> **Status: public alpha (`0.3.14.0`).** The tabletop sandbox, OPR army import, multiplayer
 > and the 3D-model pipeline work. Each table runs **Automatic or Manual**: on Automatic the game
 > resolves turns, combat, spells and terrain effects for both sides — solo against the built-in AI
 > (NACHTMAHR) as well as human-vs-human online; on Manual it is a sandbox that shows but does not
