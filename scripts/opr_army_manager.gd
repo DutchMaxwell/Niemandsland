@@ -1037,6 +1037,14 @@ func _create_army_tray(player_id: int, army_name: String, player_color: Color) -
 	# inherits the build-time hide and rides the _animate_tray_drop tween.
 	_add_ambush_scout_band(tray, tray_size, border_color)
 
+	# The tray's name tag on the far (-Z) edge, outside the plate so it never sits under the staged
+	# minis (maintainer test f-trays, 26.10.2026). Parented under the tray: every reconstruction path
+	# (import, .nml load, late join) gets it, and it rides the drop tween and the build-time hide.
+	var name_tag := build_tray_group_header(tray, army_name)
+	name_tag.name = "ArmyNameLabel"
+	name_tag.font_size = int(BAND_LABEL_FONT_SIZE * 1.5)
+	name_tag.position = Vector3(-tray_size.x / 2.0 + 0.012, BAND_LABEL_Y, -tray_size.y / 2.0 - 0.012)
+
 	# Army name label (as 3D text or just metadata for now)
 	tray.set_meta("army_name", army_name)
 	tray.set_meta("player_id", player_id)

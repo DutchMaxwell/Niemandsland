@@ -31,14 +31,19 @@ static func display_name(grade: String) -> String:
 	return str(NAMES.get(grade, grade))
 
 
-## The picker's one line per grade; on macOS Albtraum says honestly that Erlkönig is missing (Q6).
-static func description(grade: String, macos: bool) -> String:
-	return "on macOS still without Erlkönig" if macos and grade == "albtraum" else str(DESCRIPTIONS.get(grade, ""))
+## The picker's one line per grade; Albtraum says honestly when Erlkönig did not load (Q6), on any OS.
+static func description(grade: String, erlkoenig_missing: bool) -> String:
+	return "Erlkönig did not load; plays the decision tree" if erlkoenig_missing and grade == "albtraum" else str(DESCRIPTIONS.get(grade, ""))
 
 
 ## Solo, or the host of a co-op room: the AI runs there, so only there is the grade picked.
 static func picker_visible(multiplayer_active: bool, is_host: bool) -> bool:
 	return not multiplayer_active or is_host
+
+
+## True when Albtraum would fall back to the decision tree: the core or the shipped brain is not up.
+static func erlkoenig_missing(core_up: bool, brain_up: bool) -> bool:
+	return SoloDifficulty.preset_for_nachtmahr(core_up, brain_up) != "planner_v0"
 
 
 ## Albtraum starts from "nachtmahr", the pre-ladder pin main resolves to Erlkönig or the tree ceiling.
@@ -54,12 +59,12 @@ static func preset_for(grade: String, core_up: bool, brain_up: bool) -> String:
 
 
 ## The start line for a resolved opponent (GameRecordCollector.opponent_brain shape); "" = no graded seat.
-static func start_line(brain: Dictionary, macos: bool) -> String:
+static func start_line(brain: Dictionary, erlkoenig_missing: bool) -> String:
 	var id := str(brain.get("id", ""))
 	if str(brain.get("engine", "")) == "erlkoenig":
 		return "NACHTMAHR — Albtraum (Erlkönig)"
 	if id == "nachtmahr":
-		return "NACHTMAHR — Albtraum (decision tree%s)" % (" — on macOS still without Erlkönig" if macos else "")
+		return "NACHTMAHR — Albtraum (decision tree%s)" % (" — Erlkönig did not load" if erlkoenig_missing else "")
 	return "NACHTMAHR — %s (decision tree)" % display_name(id) if selectable(id) else ""
 
 

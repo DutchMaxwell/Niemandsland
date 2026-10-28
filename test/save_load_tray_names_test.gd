@@ -58,3 +58,26 @@ func test_int_keyed_names_still_work() -> void:
 	t["save"]._loaded_game_units[unit.unit_id] = {"game_unit": unit}
 	t["save"].restore_army_trays_after_load({1: "Live Sync Name"})
 	assert_str(_tray_name(t, 1)).is_equal("Live Sync Name")
+
+
+func test_loaded_tray_shows_the_army_name_as_a_3d_label() -> void:
+	var src := _table()
+	for pid in [1, 2]:
+		var army = OPRApiClientScript.OPRArmy.new()
+		army.name = "Synthetic Host %d" % pid
+		src["army"].armies[pid] = army
+		var unit := _unit(pid)
+		src["army"].game_units[unit.unit_id] = unit
+	assert_int(src["save"].save_game(SAVE_PATH)).is_equal(OK)
+
+	var dst := _table()
+	assert_int(await dst["save"].load_game(SAVE_PATH)).is_equal(OK)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE_PATH))
+	var tray = dst["army"].army_trays.get(1)
+	var tag: Label3D = null
+	if tray != null:
+		tag = tray.get_node_or_null("ArmyNameLabel") as Label3D
+	assert_object(tag).override_failure_message("f-trays - a loaded tray carries no visible army name tag").is_not_null()
+	if tag == null:
+		return
+	assert_str(tag.text).is_equal("Synthetic Host 1")
