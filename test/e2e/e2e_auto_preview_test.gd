@@ -318,7 +318,9 @@ func test_rush_previews_and_goes_to_a_free_point(timeout := 60000) -> void:
 	var pt: Vector2 = _main.get_viewport().get_camera_3d().unproject_position(start + Vector3(30.0 * INCH, 0, 0))
 	await _main.solo_begin_auto(runners, AiDecision.Action.RUSH)
 	assert_array(_main._solo_target_mode.get("cast_rings", ["no mode"])).override_failure_message("Rush lit an enemy").is_empty()
+	_clock(0)
 	await _hover(pt)   # 30" away, beyond the 12" Rush reach
+	_clock(500)   # 1.8e: the cell is planned once the cursor rested on it
 	var previews: Dictionary = _main._solo_target_mode.get("auto_previews", {})
 	var landing: Array = (previews.get(_main._solo_target_mode.get("auto_hovered"), {}) as Dictionary).get("landing", [])
 	assert_int(_main.landing_preview.ghost_count()).is_equal(3)
@@ -460,4 +462,50 @@ func test_a_suggestion_that_is_not_lit_is_not_named(timeout := 60000) -> void:
 		suggested.get_name() if suggested != null else "null")).is_same(hero)
 	assert_bool((_main._solo_target_mode.get("auto_valid", []) as Array).has(hero)).is_false()
 	assert_str(_log_text()).not_contains("Suggested: Hero")
+	_main._solo_end_targeting()
+
+
+# --- Automodus step 1.8e: the point-Rush hover plans only the cell the cursor rests on ---
+
+## The test clock (1.8e hook): set it to `ms`, then run the per-frame dwell check once. A no-op on a build
+## without the hook, so main fails on behaviour, not on a missing name.
+func _clock(ms: int) -> void:
+	_main.set("_solo_fake_ms", ms)
+	if _main.has_method("_solo_auto_point_dwell"):
+		_main._solo_auto_point_dwell()
+
+## A sweep across 10 grid cells, 10 ms apart (inside the 120 ms dwell), plans at most one of them (each plan is
+## a full planner run). Resting on the last cell plans it once, and only once. The clock is the test hook.
+func test_a_sweep_plans_nothing_a_rest_plans_once(timeout := 60000) -> void:
+	_bystanders()
+	var runners := _shooter(1, "Runners", 0.0, 3)
+	var start: Vector3 = _main.solo_controller.unit_centre(runners)
+	var cam := _main.get_viewport().get_camera_3d()
+	await _main.solo_begin_auto(runners, AiDecision.Action.RUSH)
+	_clock(1000)
+	for i in 10:
+		await _hover(cam.unproject_position(start + Vector3((8.0 + i) * INCH, 0, 0)))
+		_clock(1010 + 10 * i)
+	var planned: Dictionary = _main._solo_target_mode.get("auto_previews", {})
+	var swept := planned.size()
+	assert_int(swept).override_failure_message("a 10-cell sweep inside the dwell planned %d cells" % swept).is_less_equal(1)
+	_clock(1300)
+	_clock(1300)
+	assert_int(planned.size()).override_failure_message("the rest planned %d times" % (planned.size() - swept)) \
+		.is_equal(swept + 1)
+	assert_int(_main.landing_preview.ghost_count()).is_equal(3)
+	_main._solo_end_targeting()
+
+
+## A click inside the unit's own footprint is no Rush: nothing moves, the activation stays, the mode stays open.
+func test_an_own_spot_click_keeps_the_rush_open(timeout := 60000) -> void:
+	_bystanders()
+	var runners := _shooter(1, "Runners", 0.0, 3)
+	var before := _board()
+	await _main.solo_begin_auto(runners, AiDecision.Action.RUSH)
+	await _click(_main.get_viewport().get_camera_3d().unproject_position(SoloController.alive_positions(runners)[1]))
+	await E2EBoot.settle(get_tree())
+	assert_bool(runners.is_activated).override_failure_message("the own-spot click spent the activation").is_false()
+	assert_array(_board()).is_equal(before)
+	assert_bool(_main._solo_target_mode.has("auto_point")).override_failure_message("the Rush mode closed").is_true()
 	_main._solo_end_targeting()

@@ -309,6 +309,10 @@ var rules_panel_box: VBoxContainer = null    # left-panel "Rules" section (the R
 var solo_mission_option: OptionButton = null # left-panel Mission picker (MissionCatalog + "Duel (no mission)")
 var _solo_mission_id: String = ""            # "" = Duel (no mission, today's byte-identical behaviour)
 var _solo_target_mode: Dictionary = {}       # {unit, melee} while the player picks an attack target (P8)
+## Automodus 1.8e: a point-Rush cell is planned only after the cursor rested on it this long (a planner run is
+## ~65 ms, so planning every swept cell stutters). `_solo_fake_ms` >= 0 is the tests' clock.
+const SOLO_AUTO_DWELL_MS := 120
+var _solo_fake_ms := -1
 var _esc_owned := false   # set at each Esc press: something else owned it (see _esc_owner_active)
 var _solo_model_pick: Dictionary = {}        # B5: {unit, chain, recommended, outcome, spots, strip, armed} while a Takedown / wound / Reanimation pick awaits a model click (strip/armed: NML-1040)
 # TC-023 (Takedown, GF v3.5.1 p.14 "resolved as if it was a unit of [1]"): while this holds the picked
@@ -11625,7 +11629,7 @@ func _solo_targeting_input(event: InputEvent) -> bool:
 		SoloController.TargetingRoute.TRACK:
 			var hover_pos := (event as InputEventMouseMotion).position
 			if _solo_target_mode.has("auto_point"):
-				_solo_show_auto_point(_solo_auto_point_at(hover_pos))   # Automodus 1.8b: Rush to a table point
+				_solo_hover_auto_point(_solo_auto_point_at(hover_pos))   # Automodus 1.8b/1.8e: Rush to a table point
 			elif _solo_target_mode.has("auto_verb"):
 				_solo_show_auto_preview(_solo_pick_unit_at(hover_pos))   # Automodus 1.7: ghosts, no LOS line
 			else:
@@ -11654,7 +11658,8 @@ func _solo_targeting_input(event: InputEvent) -> bool:
 				return true
 			if _solo_target_mode.has("auto_point"):   # Automodus 1.8b: the click rushes to the table point
 				var goal: Variant = _solo_auto_point_at(mb.position)
-				if goal != null:
+				# 1.8e: a click inside the unit's own footprint is no Rush - nothing happens, the mode stays open.
+				if goal != null and target != attacker and not _solo_on_own_base(attacker, goal):
 					_solo_end_targeting()
 					await _run_player_intent(attacker, AiDecision.Action.RUSH, null, goal)
 				return true
@@ -11704,6 +11709,32 @@ func _solo_auto_point_at(screen_pos: Vector2) -> Variant:
 		return null
 	var cell := 0.5 * 0.0254
 	return Vector3(snappedf((hit as Vector3).x, cell), (hit as Vector3).y, snappedf((hit as Vector3).z, cell))
+
+
+## Automodus step 1.8e: TRACK only notes the hovered cell and when the cursor reached it (the last ghosts stay
+## while it moves); _solo_auto_point_dwell, every frame, plans the cell once the cursor rested on it.
+func _solo_hover_auto_point(point: Variant) -> void:
+	if point != _solo_target_mode.get("auto_pending"):
+		_solo_target_mode["auto_pending"] = point
+		_solo_target_mode["auto_pending_ms"] = _solo_now_ms()
+
+
+func _solo_auto_point_dwell() -> void:
+	if _solo_now_ms() - int(_solo_target_mode.get("auto_pending_ms", 0)) >= SOLO_AUTO_DWELL_MS:
+		_solo_show_auto_point(_solo_target_mode.get("auto_pending"))
+
+
+func _solo_now_ms() -> int:
+	return _solo_fake_ms if _solo_fake_ms >= 0 else Time.get_ticks_msec()
+
+
+## Automodus step 1.8e: whether a table point lies on one of `unit`'s own bases (a click there is no Rush).
+func _solo_on_own_base(unit: GameUnit, point: Vector3) -> bool:
+	var r := _solo_unit_base_radius_m(unit)
+	for p in SoloController.alive_positions(unit):
+		if Vector2((p as Vector3).x - point.x, (p as Vector3).z - point.z).length() <= r:
+			return true
+	return false
 
 
 ## Automodus step 1.8b: the Rush ghosts for a table point (clamped to the Rush reach along the engine path),
@@ -14738,6 +14769,8 @@ func _apply_version_to_info_label() -> void:
 
 func _process(delta: float) -> void:
 	_check_fps_advisory()
+	if _solo_target_mode.has("auto_point"):
+		_solo_auto_point_dwell()   # Automodus 1.8e: plan the Rush cell the cursor rests on
 	# Handle continuous group rotation (Shift+R held; add Ctrl to reverse).
 	# Regiment movement-tray blocks rotate by MOUSE control (cursor-follow), not a
 	# continuous spin — object_manager._rotate_regiments_to_cursor handles that path.
