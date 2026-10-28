@@ -9411,7 +9411,15 @@ var _owner_roll_timeout_s := SOLO_REMOTE_SAVE_TIMEOUT_S   # tests shorten it; pl
 const OWNER_REJOIN_WAIT_S := 4.0
 
 var _solo_remote_save_seq := 0
+## #1882 part 2 fix round: a host restart reuses request ids from 1 again, so the owner's answer
+## cache must be keyed by this session token as well - an old session's dice never leak into a new game.
+var _owner_session := "%08x%08x" % [randi(), Time.get_ticks_usec() & 0xffffffff]
 var _solo_remote_save_waiters: Dictionary = {}   # request id -> {"faces": Array, "done": bool}
+## #1882 part 2: the owner keeps its last answers, so a request re-sent after the host's rejoin
+## replays the SAME faces instead of rolling again (or worse, rolling nothing at all).
+const OWNER_ANSWER_HISTORY := 16
+var _solo_owner_answers: Dictionary = {}   # request id -> faces
+var _solo_owner_open: Dictionary = {}      # request id -> true while its card/roll is still running
 
 ## The seam. Local owner (solo, our own slot, an AI unit — the resolving machine rolls NACHTMAHR's
 ## dice) → our tray. Another human's unit → its owner rolls; vacant seat or no answer → a visible
@@ -9451,9 +9459,10 @@ func _owner_roll(unit: GameUnit, count: int, target: int, roll_kind: String, pur
 func _owner_request(owner_peer: int, rq: Dictionary) -> Dictionary:
 	_solo_remote_save_seq += 1
 	var req := _solo_remote_save_seq
-	_solo_remote_save_waiters[req] = {"faces": [], "done": false, "peer": owner_peer, "aborted": false}
-	var payload := {"req": req}
+	var payload := {"req": req, "rs": _owner_session}
 	payload.merge(rq)
+	_solo_remote_save_waiters[req] = {"faces": [], "done": false, "peer": owner_peer, "aborted": false,
+		"slot": _slot_for_peer(owner_peer), "payload": payload}
 	network_manager.send_command("request_roll", payload, owner_peer)
 	var waiter: Dictionary = _solo_remote_save_waiters[req]
 	var waited := 0.0
@@ -9496,6 +9505,25 @@ func _release_owner_waiters_after_flush(peer_id: int) -> void:
 	_solo_release_owner_waiters(peer_id)
 
 
+## #1882 part 2: the relay drops a frame whose target socket is gone, so an owner's answer given
+## during the host's outage dies on the wire. Once the returning peer has its seat back, re-send
+## every still-pending request with the SAME id — the owner replays its stored answer.
+func _resend_pending_owner_requests(peer_id: int) -> void:
+	if network_manager == null or _solo_remote_save_waiters.is_empty():
+		return
+	var slot := _slot_for_peer(peer_id)
+	if slot <= 0:
+		return
+	for req in _solo_remote_save_waiters:
+		var waiter: Dictionary = _solo_remote_save_waiters[req]
+		if int(waiter.get("slot", 0)) != slot:
+			continue
+		waiter["peer"] = peer_id
+		network_manager.send_command("request_roll", waiter.get("payload", {}), peer_id)
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT, "Roll request sent again after the rejoin", true)
+
+
 ## The no-reply path (vacant seat, timeout): a VISIBLE auto-roll instead of a hang — the same
 ## tray roll the AI makes, but labelled, so nobody reads it as the owner's dice.
 func _owner_roll_fallback(unit: GameUnit, count: int, target: int, roll_kind: String, purpose: String,
@@ -9510,9 +9538,21 @@ func _owner_roll_fallback(unit: GameUnit, count: int, target: int, roll_kind: St
 ## and the faces go back.
 @rpc("any_peer", "call_remote", "reliable")
 func _rpc_request_roll(rq: Dictionary, from_peer: int) -> void:
+	var req := int(rq.get("req", 0))
+	var key := "%s:%d" % [str(rq.get("rs", "")), req]
+	if req > 0 and _solo_owner_answers.has(key):
+		# #1882 part 2: the host re-sent after its rejoin — replay the stored answer, no new card.
+		network_manager.send_command("roll_result", {"req": req, "faces": _solo_owner_answers[key]}, from_peer)
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT, "Answer sent again after the host's rejoin", true)
+		return
+	if req > 0 and _solo_owner_open.has(key):
+		return   # a duplicate must not open a second card
 	var unit := opr_army_manager.get_game_unit_by_id(str(rq.get("unit", "")))
 	if unit == null or not _solo_i_own_unit(unit):
 		return   # not ours (stale state) — the resolver's timeout fallback covers the loss
+	if req > 0:
+		_solo_owner_open[key] = true
 	var ask: Dictionary = rq.get("ask", {})
 	var faces: Array
 	if ask.has("spell"):
@@ -9532,7 +9572,12 @@ func _rpc_request_roll(rq: Dictionary, from_peer: int) -> void:
 	else:
 		faces = await _solo_tray_roll(int(rq.get("count", 0)), int(rq.get("target", 0)),
 			_roller_label(unit), str(rq.get("kind", "attack")), str(rq.get("purpose", "")))
-	network_manager.send_command("roll_result", {"req": int(rq.get("req", 0)), "faces": faces}, from_peer)
+	if req > 0:
+		_solo_owner_open.erase(key)
+		_solo_owner_answers[key] = faces
+		while _solo_owner_answers.size() > OWNER_ANSWER_HISTORY:
+			_solo_owner_answers.erase(_solo_owner_answers.keys()[0])
+	network_manager.send_command("roll_result", {"req": req, "faces": faces}, from_peer)
 
 ## Resolver side: the owner's faces arrived — release the waiting roll.
 @rpc("any_peer", "call_remote", "reliable")
@@ -16410,6 +16455,7 @@ func _on_peer_version_validated(peer_id: int) -> void:
 	# Hand it the whole peer→slot table too, so in a 3+-player game it agrees on everyone's slot (hence
 	# colour) immediately, without needing to have witnessed each incremental remap broadcast (bus 036).
 	network_manager.push_slot_table_to_peer(peer_id)
+	_resend_pending_owner_requests(peer_id)   # #1882 part 2: an answer lost during the outage
 	# If anyone is CURRENTLY loading, tell the late joiner so it gates + shows the banner too.
 	network_manager.push_busy_state_to_peer(peer_id)
 	# Hand the joining peer the current biome (host-authoritative table state — the biome

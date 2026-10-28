@@ -308,6 +308,7 @@ class Run:
         self.link_cut = False  # step 23: the host's link is cut and restored (proxy closes the sockets)
         self.rejoin_race = False  # 29(b): both links are cut at once, the host returns first
         self.guest_owed_cut = False  # #1882: the host waits on the guest, then cuts its own link
+        self.guest_answers_during_cut = False  # #1882 part 2: the answer is given while the host is away
         self.proxy: StallProxy | None = None
         self.proxies: dict[str, StallProxy] = {}
         self.seq = {"host": 0, "guest": 0}
@@ -934,7 +935,22 @@ class Run:
         started = time.monotonic()
         self.proxy.cut(LINK_CUT_S)
         print(f"[mp2] guest-owed-cut: host link cut for {LINK_CUT_S:.0f}s with the ask in flight")
-        time.sleep(LINK_CUT_S)
+        if self.guest_answers_during_cut:
+            # #1882 part 2: the guest answers while the host's socket is gone - the relay drops the
+            # reply frame on the floor. The host must re-send the request after its rejoin and take
+            # the guest's stored answer, not wait out the 120 s owner bound.
+            time.sleep(1.0)
+            self.command("guest", "answer_interference")
+            self.wait_condition(
+                "the guest answered during the host outage",
+                lambda s: s["guest"].get("interference_open") is False,
+                timeout=10.0,
+                diagnostic=lambda s: "guest card=%r" % s["guest"].get("interference_open"),
+            )
+            print("[mp2] guest-owed-cut: the guest answered during the host outage")
+            time.sleep(max(0.0, LINK_CUT_S - 1.0))
+        else:
+            time.sleep(LINK_CUT_S)
         self.proxy.restore()
         self.wait_condition(
             "the host rejoined",
@@ -945,9 +961,11 @@ class Run:
                 [e.get("e") for e in s["host"].get("link_events", [])],
                 s["host"].get("session_ready")),
         )
-        self.command("guest", "answer_interference")
+        if not self.guest_answers_during_cut:
+            self.command("guest", "answer_interference")
         states = self.wait_condition(
-            "the host took the guest's interference",
+            "the host took the guest's stored answer after the rejoin" if self.guest_answers_during_cut
+            else "the host took the guest's interference",
             lambda s: s["host"].get("interference_spent") == 1,
             timeout=LINK_CUT_WAIT_S,
             diagnostic=lambda s: "spent=%r host log tail=%r" % (
@@ -1281,6 +1299,12 @@ def parse_args() -> argparse.Namespace:
         help="Run only #1882: the host waits on the guest's interference, then the host's link is cut.",
     )
     parser.add_argument(
+        "--guest-answers-during-cut",
+        action="store_true",
+        help="#1882 part 2: the guest answers while the host is cut; after the rejoin the host must "
+             "take the guest's stored answer instead of waiting out the 120 s owner bound.",
+    )
+    parser.add_argument(
         "--rejoin-race",
         action="store_true",
         help="Run only 29(b): both links are cut at once, the host returns first, the guest must stay seated.",
@@ -1294,6 +1318,8 @@ def parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     if args.repeat < 1:
         parser.error("--repeat must be at least 1")
+    if args.guest_answers_during_cut:
+        args.guest_owed_cut = True
     return args
 
 
@@ -1306,7 +1332,8 @@ def main() -> int:
 
     def run_once(run_dir: Path, rules_online: bool, ref: list[dict] | None, leave: str = "",
                  silence: str = "", outage: bool = False, link_cut: bool = False,
-                 rejoin_race: bool = False, guest_owed_cut: bool = False) -> list[dict]:
+                 rejoin_race: bool = False, guest_owed_cut: bool = False,
+                 guest_answers_during_cut: bool = False) -> list[dict]:
         run_dir.mkdir(parents=True, exist_ok=False)
         run = Run(args, run_dir)
         run.rules_online = rules_online
@@ -1316,6 +1343,7 @@ def main() -> int:
         run.link_cut = link_cut
         run.rejoin_race = rejoin_race
         run.guest_owed_cut = guest_owed_cut
+        run.guest_answers_during_cut = guest_answers_during_cut
         try:
             print(f"[mp2] run {run_dir.name}: {run_dir}")
             run.start()
@@ -1342,8 +1370,9 @@ def main() -> int:
             run_once(root / "rejoin-race-01", False, None, rejoin_race=True)
             print("[mp2] RESULT PASS: rejoin race")
             return 0
-        if args.guest_owed_cut:
-            run_once(root / "guest-owed-cut-01", False, None, guest_owed_cut=True)
+        if args.guest_owed_cut and not (args.include_rules_online or args.include_link_cut):
+            run_once(root / "guest-owed-cut-01", False, None, guest_owed_cut=True,
+                     guest_answers_during_cut=args.guest_answers_during_cut)
             print("[mp2] RESULT PASS: guest-owed cut")
             return 0
         if args.start_question:
@@ -1377,6 +1406,10 @@ def main() -> int:
         run_once(root / "silence-host-outage", False, None, silence="host", outage=True)
         if args.include_link_cut:
             run_once(root / "link-cut-01", False, None, link_cut=True)
+        if args.guest_owed_cut:
+            # #1882 part 2: wall-clock timing, so it stays out of the snapshot comparison above.
+            run_once(root / "guest-owed-cut-01", False, None, guest_owed_cut=True,
+                     guest_answers_during_cut=args.guest_answers_during_cut)
         elapsed = time.monotonic() - start
         atomic_json(root / "determinism.json", {
             "runs": args.repeat, "identical": True, "seed": args.seed,
