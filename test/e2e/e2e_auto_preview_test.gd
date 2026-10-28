@@ -107,3 +107,103 @@ func test_shaken_preview_is_refused_and_moves_nothing(timeout := 60000) -> void:
 	assert_str(str(preview.get("refused", ""))).contains("Shaken")
 	assert_bool(preview.has("landing")).is_false()
 	assert_array(_board()).is_equal(board_before)
+
+
+# --- Automodus step 1.7: hover shows the preview; leaving, Esc or right-click clears it ---
+
+## A one-model rifle unit whose model is a REAL spawned miniature (StaticBody3D + collider), so the
+## real pick ray can hit it (pattern: e2e_mp_los_line_test.gd).
+func _pickable(pid: int, unit_name: String, x_in: float) -> GameUnit:
+	var u := _shooter(pid, unit_name, x_in)
+	var m := u.models[0] as ModelInstance
+	var body: Node3D = (_main.object_manager as Object).call("spawn_miniature", m.node.global_position, false)
+	body.set_meta("game_unit", u)
+	m.node.queue_free()
+	m.node = body
+	return u
+
+
+## A screen point the real pick ray resolves to `u` (INF when none: a fixture failure, asserted).
+func _pick_point(u: GameUnit) -> Vector2:
+	var cam: Camera3D = _main.get_viewport().get_camera_3d()
+	var node: Node3D = (u.models[0] as ModelInstance).node
+	for dy in [0.016, 0.03, 0.0]:
+		var pt: Vector2 = cam.unproject_position(node.global_position + Vector3(0.0, dy, 0.0))
+		if _main._solo_pick_unit_at(pt) == u:
+			return pt
+	return Vector2.INF
+
+
+## The mouse moving over `pt` through the SAME targeting handler main._unhandled_input feeds.
+func _hover(pt: Vector2) -> void:
+	var ev := InputEventMouseMotion.new()
+	ev.position = pt
+	ev.global_position = pt
+	await _main._solo_targeting_input(ev)
+
+
+func test_hover_shows_and_clears_the_preview(timeout := 60000) -> void:
+	var shooter := _shooter(1, "Riflemen", 0.0, 3)
+	var foe := _pickable(2, "Foe", 16.0)   # inside the 12" rifle after a 6" Advance: lines exist
+	await _runner.simulate_frames(1)   # the pick is a raycast: let physics register the fresh body
+	var pt := _pick_point(foe)
+	assert_bool(pt.is_finite()).override_failure_message("fixture: the pick ray never hits Foe").is_true()
+	await _main.solo_begin_auto(shooter, AiDecision.Action.ADVANCE)
+	var ghosts: LandingPreview = _main.landing_preview
+	await _hover(pt)
+	var previews: Dictionary = _main._solo_target_mode.get("auto_previews", {})
+	var lines: Array = (previews.get(foe.get_instance_id(), {}) as Dictionary).get("lines", [])
+	assert_int(ghosts.ghost_count()).is_equal(shooter.get_alive_models().size())
+	assert_int(lines.size()).override_failure_message("fixture: no shooting line at the landing").is_greater(0)
+	assert_int(ghosts.line_count()).is_equal(lines.size())
+	assert_object(_main._solo_los_line).override_failure_message("auto_verb hover drew the LOS line").is_null()
+	var shown := ghosts.get_child(0)
+	await _hover(pt)   # the same target again: no new planner run, no rebuild
+	assert_int(previews.size()).is_equal(1)
+	assert_object(ghosts.get_child(0)).is_same(shown)
+	_main._solo_show_auto_preview(null)   # leaving: the empty table
+	assert_int(ghosts.ghost_count()).is_equal(0)
+	_main._solo_show_auto_preview(shooter)   # the own unit is not a lit target
+	assert_int(ghosts.ghost_count()).is_equal(0)
+	# Back on Foe the CACHED preview shows (a marked entry proves the planner did not run again).
+	previews[foe.get_instance_id()] = {"landing": [{"pos": Vector3.ZERO, "radius_m": 0.0125}], "lines": []}
+	await _hover(pt)
+	assert_int(ghosts.ghost_count()).is_equal(1)
+	var right_click := InputEventMouseButton.new()
+	right_click.button_index = MOUSE_BUTTON_RIGHT
+	right_click.pressed = true
+	await _main._solo_targeting_input(right_click)
+	assert_bool(_main._solo_target_mode.is_empty()).is_true()
+	assert_int(ghosts.ghost_count() + ghosts.line_count()).is_equal(0)
+
+
+func test_esc_clears_the_hover_preview(timeout := 60000) -> void:
+	var shooter := _shooter(1, "Riflemen", 0.0, 3)
+	var foe := _shooter(2, "Foe", 16.0)
+	await _main.solo_begin_auto(shooter, AiDecision.Action.ADVANCE)
+	_main._solo_show_auto_preview(foe)
+	assert_int(_main.landing_preview.ghost_count()).is_equal(3)
+	var esc := InputEventKey.new()
+	esc.keycode = KEY_ESCAPE
+	esc.pressed = true
+	await _main._solo_targeting_input(esc)
+	assert_bool(_main._solo_target_mode.is_empty()).is_true()
+	assert_int(_main.landing_preview.ghost_count()).is_equal(0)
+
+
+func test_a_refused_hover_shows_nothing_and_says_why_once(timeout := 60000) -> void:
+	var shooter := _shooter(1, "Riflemen", 0.0, 3)
+	var foe := _shooter(2, "Foe", 16.0)
+	await _main.solo_begin_auto(shooter, AiDecision.Action.ADVANCE)
+	shooter.is_shaken = true   # lit at entry, refused by the time it is hovered
+	var board_before := _board()
+	for t in [foe, null, foe]:
+		_main._solo_show_auto_preview(t)
+	assert_int(_main.landing_preview.ghost_count()).is_equal(0)
+	assert_array(_board()).is_equal(board_before)
+	var said := 0
+	for e in _main.battle_log.entries():
+		if str((e as Dictionary)["text"]).begins_with("Auto: no preview for Foe (Shaken"):
+			said += 1
+	assert_int(said).is_equal(1)
+	_main._solo_end_targeting()
