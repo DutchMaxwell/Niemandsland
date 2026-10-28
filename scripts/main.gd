@@ -5635,6 +5635,12 @@ func _solo_remote_interference(member: GameUnit, unit: GameUnit, spell_name: Str
 		return await _solo_prompt_interference(member, unit, spell_name, base_target, boost,
 			target_label, foe)
 	var owner_peer := _solo_peer_for_slot(foe)
+	if owner_peer == 0 and _rejoin_handshake_pending():
+		# #1887, 28.10.2026: a returning owner (peer back, seat not rebuilt yet) waits like `_owner_roll`.
+		var wait_until := Time.get_ticks_msec() + int(OWNER_REJOIN_WAIT_S * 1000.0)
+		while owner_peer == 0 and Time.get_ticks_msec() < wait_until:
+			await get_tree().create_timer(0.1).timeout
+			owner_peer = _solo_peer_for_slot(foe)
 	var owner_name := _solo_owner_name(lender)
 	if owner_peer == 0:
 		_log_rule_event(BattleLog.Category.COMBAT, "%s: %s's seat is empty — no interference" % [spell_name, owner_name], true)
