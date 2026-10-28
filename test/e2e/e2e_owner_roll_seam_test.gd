@@ -396,6 +396,36 @@ func test_a_replayed_request_replays_the_stored_answer(timeout := 120000) -> voi
 	_end_session()
 
 
+## #1882 part 2 fix round: the bare request id is NOT unique across host sessions - a restarted
+## host starts counting at 1 again. The owner keys its cache by the resolver's session token too, so
+## an old session's dice are never replayed into a new game.
+func test_a_new_host_session_with_a_reused_id_rolls_fresh(timeout := 120000) -> void:
+	assert_bool(_seam_exists()).is_true()
+	if not _seam_exists():
+		return
+	_fake_session({1: 1, GUEST_PEER: 2}, {GUEST_PEER: "Host"})
+	_main._solo_auto_saves = true
+	var unit := _unit(1, "Rifles")
+	var old_rq := _save_request(77, unit)
+	old_rq["rs"] = "a"
+	_main._rpc_request_roll(old_rq, GUEST_PEER)
+	for _i in 6:
+		await get_tree().process_frame
+	var first := _results()
+	assert_int(first.size()).override_failure_message("the first session's answer").is_equal(1)
+	var dice_before: int = _main._dice_log_vbox.get_child_count()
+	var new_rq := _save_request(77, unit)
+	new_rq["rs"] = "b"
+	_main._rpc_request_roll(new_rq, GUEST_PEER)
+	for _i in 6:
+		await get_tree().process_frame
+	assert_int(_results().size()).override_failure_message(
+		"a new host session's request must be answered").is_equal(2)
+	assert_int(_main._dice_log_vbox.get_child_count()).override_failure_message(
+		"a new session must ROLL again, not replay the old session's dice").is_greater(dice_before)
+	_end_session()
+
+
 ## A duplicate that arrives WHILE the first card is still open must not open a second card.
 func test_a_duplicate_request_keeps_one_open_card(timeout := 120000) -> void:
 	assert_bool(_seam_exists()).is_true()
