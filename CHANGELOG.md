@@ -6,7 +6,7 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 
 ## [Unreleased]
 
-## [0.3.14.0-alpha] — DRAFT (date set at release)
+## [0.3.14.0-alpha] — 2026-10-28
 
 A big one: combat effects at the table, rules automation for two human players (also online), four
 solo difficulty levels, eight more missions, a rebuilt Map Layout editor, a dark-panel look across
@@ -138,6 +138,9 @@ Unit names with an apostrophe now find their 3D model. (#1840)
   opening click. (#1134, #1135, #1147, #1149, #1150, #1194, #1253–#1255, #1313)
 
 ### Changed — rules
+- **Army Forge is moving to rules version 3.6.** This build plays 3.5.1. An army whose book Army Forge
+  already serves in another rules version still imports, but the game shows a notice naming both
+  versions; today's 3.5.x books import silently as before. (#1877)
 - **Combat modifiers are combined before the final limit is applied.** For example, Defense 2+
   in cover against AP(1) saves on 2+. Shooting range modifiers use the nearest base-edge gap.
   (#1202, #1250, #1251)
