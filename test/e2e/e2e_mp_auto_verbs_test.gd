@@ -2,7 +2,7 @@ extends GdUnitTestSuite
 ## Automodus 0.3.15 step 3.1: the Charge / Advance & Shoot / Rush verbs are offered wherever the
 ## engine resolves: co-op (an AI seat), an agreed online Automatic room (own units only), and a
 ## hotseat Automatic table (the side holding the turn). Manual tables never. The landing preview
-## stays on the acting machine: it sends nothing. Pins solo_auto_eligible (the hide switch stays).
+## stays on the acting machine: it sends nothing. Pins solo_auto_eligible, the rule under the switch.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 

@@ -6,6 +6,11 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 
 ## [Unreleased]
 
+### Changed
+- **Charge, Advance & Shoot and Rush are back in the radial, with a landing preview**: the enemies a
+  verb can reach light up, hovering one shows where every model will land and who can shoot, a click
+  executes; Rush goes to a table point. Also in co-op, Automatic online rooms and hotseat. (#1828)
+
 ### Fixed
 - **A volley at the other player's unit lets that player roll the saves**: online on their own tray,
   as melee already did, and on a hotseat table with the defender's save prompt; a charge's Impact
