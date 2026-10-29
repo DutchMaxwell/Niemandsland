@@ -1269,7 +1269,7 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	# END-of-activation morale from DANGEROUS-terrain wounds (GF/AoF v3.5.1 p.10/p.12 — field-test finding
 	# 7): tested only NOW, AFTER the unit has acted, so dangerous damage never stops it shooting. A CHARGE
 	# resolves through the melee comparison instead ("units in melee don't take morale tests from wounds at
-	# the end of an activation"), so it is excluded here. should_test only fires on a real casualty at ≤half.
+	# the end of an activation"), so it is excluded here. It fires on wounds that leave the unit at ≤half.
 	if dangerous_models > 0 and not unit.is_destroyed() \
 			and int(report.get("action", 0)) != AiDecision.Action.CHARGE:
 		await _solo_shooting_morale(unit, alive_before_dangerous, _roller_label(unit), wounds_before_dangerous)
@@ -10740,7 +10740,8 @@ func _solo_consolidate_melee(charger: GameUnit, defender: GameUnit, auto: bool =
 ## OPR rule gap (goal 003 P1): a unit that takes CASUALTIES FROM SHOOTING and is now at half strength or
 ## less must test morale — this trigger was missing entirely (morale only ran after melee). Compares the
 ## unit's own alive count before vs after the volley; `owner` attributes the tray roll (the AI rolls for
-## its own units, "You" for the human's). No-op if the unit was wiped or took no casualties.
+## its own units, "You" for the human's). No-op if the unit was wiped or took no wounds (A2: wounds on a
+## surviving Tough model of a unit at half or less DO test — p.10).
 ## NML-966: the multi-model trigger now counts the COMBINED chain (unit + attached heroes), the same
 ## basis `_solo_below_half_strength` already used for the outcome — wounds clicked onto a joined hero
 ## used to be invisible here because the trigger counted the unit's own models only.
@@ -10760,7 +10761,18 @@ func _solo_shooting_morale(unit: GameUnit, alive_before: int, owner: String, wou
 					unit.get_name(), wounds_now, _solo_unit_wounds_start(unit)], true)
 			await _solo_morale_test(unit, owner)
 		return
-	if AiCombatMath.should_test_shooting_morale(alive_before, SoloController.combined_alive(unit), SoloController.combined_total(unit)):
+	var alive_now: int = SoloController.combined_alive(unit)
+	var total: int = SoloController.combined_total(unit)
+	if AiCombatMath.should_test_shooting_morale(alive_before, alive_now, total):
+		await _solo_morale_test(unit, owner)
+	elif alive_now > 0 and wounds_before >= 0 and _solo_unit_wounds_now(unit) < wounds_before \
+			and AiCombatMath.at_or_below_half(alive_now, total):
+		# A2 (play test 29.10.2026): p.10 triggers on WOUNDS that leave the unit at half or less, not only
+		# on a lost model (p.14: the last hero tests "whenever it takes wounds") — Tough models that survive.
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT,
+				"%s takes wounds at half strength or less (%d/%d models) — morale test (GF v3.5.1 p.10)" % [
+				unit.get_name(), alive_now, total], true)
 		await _solo_morale_test(unit, owner)
 
 
