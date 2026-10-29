@@ -23,6 +23,8 @@ const P2A_UNIT := "mp2_p2a"
 ## #1882: the guest's own caster for the interference ask (a seat that can lend tokens).
 const GUEST_CASTER_UNIT := "mp2_guestcaster"
 const INTERFERENCE_SPELL := "Harness Hex"
+## 3.5: the guest's Advance & Shoot gun (P2 Alpha, three models).
+const AUTO_WEAPON := "Harness Rifle"
 
 var _args: Dictionary = {}
 var _main: Node = null
@@ -51,6 +53,9 @@ var _host_left_at := 0.0        # bugs 9+10: unix time the guest's "host left" n
 var _net_status_seen: Array = []  # bug 4: every network status text shown, in order (the hiccup notice)
 var _expect_link_cut := false     # step 23: a reconnect failure is data, not a test failure
 var _link_events: Array = []      # step 23: relay rejoin signals in order ({"t_ms", "e", "arg"})
+var _auto_preview: Array = []     # 3.5: the guest's previewed landing, one [x, y, z] per model
+var _auto_verb_done := false      # 3.5: the guest's clicked verb ran to its end
+var _tray_rolls: Array = []       # 3.5: every roll this tray showed, "local: <purpose>" / "remote: <purpose>"
 
 
 func _ready() -> void:
@@ -240,6 +245,12 @@ func _run_command(seq: int, action: String, payload: Dictionary) -> void:
 			_run_remote_interference()
 	elif action == "answer_interference":
 		ok = _answer_interference()
+	elif action == "auto_verb":
+		# 3.5 (OD 9): the guest previews Advance & Shoot through the hover path, keeps the landing and clicks.
+		# Fire-and-forget: the volley at the host's unit waits for the host's own save roll (3.6).
+		ok = _require_role("guest", action) and await _auto_verb_preview()
+		if ok:
+			_run_auto_verb_click()
 	elif action == "confirm_save":
 		ok = _confirm_save_prompt()
 	elif action == "vfx_burst":
@@ -348,15 +359,29 @@ func _setup_fixture() -> bool:
 			[P1A_UNIT, 1, "P1 Alpha", Vector3(-0.30, 0.0, 0.15)],
 			[P1B_UNIT, 1, "P1 Bravo", Vector3(-0.20, 0.0, 0.15)],
 			[P1C_UNIT, 1, "P1 Charlie", Vector3(-0.10, 0.0, 0.15)],
-			[P2A_UNIT, 2, "P2 Alpha", Vector3(0.20, 0.0, 0.15)],
+			[P2A_UNIT, 2, "P2 Alpha", Vector3(0.3064, 0.0, 0.15), 3],   # 3.5: 16" from P1 Charlie
 		]:
-			var online := _spawn_unit(str(spec[0]), int(spec[1]), str(spec[2]), spec[3], net_id)
-			net_id += 1
+			var online := _spawn_unit(str(spec[0]), int(spec[1]), str(spec[2]), spec[3], net_id,
+				int(spec[4]) if spec.size() > 4 else 1)
 			if online == null:
 				return false
+			net_id += online.models.size()
 			_main.opr_army_manager.game_units[online.unit_id] = online
+		var rifle := OPRApiClient.OPRWeapon.new()   # 3.5: 12" range, so the Advance must close in to shoot
+		rifle.name = AUTO_WEAPON
+		rifle.range_value = 12
+		rifle.attacks = 3
+		var opr := OPRApiClient.OPRUnit.new()
+		opr.weapons = [rifle]
+		var gun := _unit(P2A_UNIT)
+		gun.source_type = "opr"
+		gun.source_data = opr
+		gun.unit_properties["quality"] = 2
 	for unit in _main.opr_army_manager.get_all_game_units():
 		_main.radial_menu_controller.initialize_status_markers_for_unit(unit)
+	# 3.5: whose tray rolled what (main's own handler runs first and marks the roll local or remote).
+	_main.dice_roller_control.roll_finnished.connect(func(_total: int) -> void: _tray_rolls.append(
+		"%s: %s" % ["local" if _main._last_roll_local else "remote", _main.roll_purpose_label.text]))
 	await get_tree().physics_frame
 	await get_tree().process_frame
 	# Connection/bootstrap lines race independently of the scripted scenario. Start the captured
@@ -369,26 +394,27 @@ func _setup_fixture() -> bool:
 
 
 func _spawn_unit(unit_id: String, player_id: int, display_name: String, pos: Vector3,
-		network_id: int) -> GameUnit:
-	var node: Node3D = _main.object_manager.spawn_miniature(pos, false, network_id)
-	if node == null:
-		return null
+		network_id: int, count := 1) -> GameUnit:
 	var unit := GameUnit.new()
 	unit.unit_id = unit_id
 	unit.unit_properties = {
 		"player_id": player_id, "name": display_name, "quality": 4, "defense": 4,
-		"network_id": unit_id, "size": 1, "special_rules": [],
+		"network_id": unit_id, "size": count, "special_rules": [],
 	}
-	var model := ModelInstance.new()
-	model.unit = unit
-	model.node = node
-	model.model_index = 0
-	model.is_alive = true
-	model.wounds_current = 1
-	model.wounds_max = 1
-	unit.models.append(model)
-	node.set_meta("game_unit", unit)
-	node.set_meta("model_instance", model)
+	for i in count:   # 3.5: more models stand in a coherent file along z
+		var node: Node3D = _main.object_manager.spawn_miniature(pos + Vector3(0.0, 0.0, 0.045 * i), false, network_id + i)
+		if node == null:
+			return null
+		var model := ModelInstance.new()
+		model.unit = unit
+		model.node = node
+		model.model_index = i
+		model.is_alive = true
+		model.wounds_current = 1
+		model.wounds_max = 1
+		unit.models.append(model)
+		node.set_meta("game_unit", unit)
+		node.set_meta("model_instance", model)
 	return unit
 
 
@@ -439,6 +465,28 @@ func _leave_to_menu() -> bool:
 	sm.queue_free()   # nm stays: the next scene's NetworkManager, listening to whatever peer survived
 	_log("left to the menu: %s" % JSON.stringify(_left))
 	return bool(_left.left)
+
+
+## 3.5: light the targets for the guest's Advance & Shoot, hover P1 Charlie (the 1.7 preview) and keep its landing.
+func _auto_verb_preview() -> bool:
+	var target := _unit(P1C_UNIT)
+	await _main.solo_begin_auto(_unit(P2A_UNIT), AiDecision.Action.ADVANCE)
+	if not (_main._solo_target_mode.get("auto_valid", []) as Array).has(target):
+		_failure = "auto_verb: P1 Charlie is not lit (%s)" % str(_main._solo_target_mode)
+		return false
+	_main._solo_show_auto_preview(target)
+	var preview: Dictionary = _main._solo_target_mode.get("auto_previews", {}).get(target.get_instance_id(), {})
+	_auto_preview = preview.get("landing", []).map(func(spot: Dictionary) -> Array: return _rounded(spot["pos"]))
+	return not _auto_preview.is_empty()
+
+
+func _run_auto_verb_click() -> void:
+	await _main._solo_auto_click(_unit(P1C_UNIT))
+	_auto_verb_done = true
+
+
+func _rounded(at: Vector3) -> Array:
+	return [snappedf(at.x, 0.0001), snappedf(at.y, 0.0001), snappedf(at.z, 0.0001)]
 
 
 func _unit(unit_id: String) -> GameUnit:
@@ -582,6 +630,10 @@ func _snapshot() -> Dictionary:
 		"objects": [],
 		"net_status_seen": _net_status_seen.duplicate(),
 		"link_events": _link_events.duplicate(),
+		"auto_preview": _auto_preview.duplicate(true),
+		"auto_verb_done": _auto_verb_done,
+		"tray_rolls": _tray_rolls.duplicate(),
+		"rolled_lines": [],
 	}
 	if _main != null and _main.get("object_manager") != null:
 		for child in _main.object_manager.get_children():
@@ -643,9 +695,14 @@ func _snapshot() -> Dictionary:
 				"spell_records": records.size(),
 				"spell_move_mod": unit.unit_properties.get("spell_move_mod", null),
 				"transport": transport.unit_id if transport != null else "",
+				"positions": unit.models.map(func(m: ModelInstance) -> Array: return _rounded(m.node.global_position) \
+					if m.is_alive and is_instance_valid(m.node) else []),
 			}
 	if _main != null and _main.get("battle_log") != null:
 		var entries: Array = _main.battle_log.entries()
+		for e in entries:   # 3.5: "<owner> rolled their ..." lines anywhere in the log, not only the tail
+			if str((e as Dictionary).get("text", "")).contains(" rolled their "):
+				state.rolled_lines.append(str(e["text"]))
 		for i in range(maxi(0, entries.size() - 8), entries.size()):
 			state.battle_log_tail.append(str((entries[i] as Dictionary).get("text", "")))
 	return state

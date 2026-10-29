@@ -1181,6 +1181,32 @@ class Run:
         )
         self.checkpoint("rules-online-round-end", states)
 
+        # Plan 3.5 (OD 9): P2 opens round 2 with Advance & Shoot. The guest previews it, clicks and runs it;
+        # the host only replicates, and rolls its own saves against the volley (3.6).
+        self.command("guest", "auto_verb")
+        self.wait_condition("the host is asked for its saves", lambda s: s["host"].get("save_prompt_visible") is True,
+                            diagnostic=lambda s: "host_tail=%r" % s["host"].get("battle_log_tail"))
+        self.command("host", "confirm_save")
+        save = "Defense save vs Harness Rifle"
+        states = self.wait_condition(
+            "the guest's verb replicated, the host rolled its saves, the guest's tray none",
+            lambda s: s["guest"].get("auto_verb_done") is True
+            and self.require_unit_value(s, "mp2_p2a", "activated", True)
+            and s["host"].get("tray_rolls", []).count("local: " + save) == 1
+            and "local: " + save not in s["guest"].get("tray_rolls", [])
+            and "MP2-host rolled their defense saves vs Harness Rifle" in s["guest"].get("rolled_lines", []),
+            diagnostic=lambda s: "tray_rolls=%r rolled=%r" % (
+                {r: s[r].get("tray_rolls") for r in s}, s["guest"].get("rolled_lines")),
+        )
+        self.checkpoint("rules-online-auto-verb", states)
+        last = self.checkpoints[-1]
+        preview = last["guest"].get("auto_preview", [])
+        spots = [self._unit(last, role, "mp2_p2a").get("positions", []) for role in ("host", "guest")]
+        offsets = [sum((a - b) ** 2 for a, b in zip(p, q)) ** 0.5 for at in spots for p, q in zip(preview, at)]
+        if not preview or any(len(at) != len(preview) for at in spots) or max(offsets) > 0.001:
+            raise HarnessFailure(f"auto verb: models vs the guest's preview {preview}: offsets {offsets} (limit 1 mm)")
+        print(f"[mp2] auto verb: every model within {max(offsets) * 1000:.3f} mm of the guest's preview")
+
     def stop(self) -> None:
         for role in ("host", "guest"):
             if role in self.clients and self.clients[role].proc.poll() is None:
