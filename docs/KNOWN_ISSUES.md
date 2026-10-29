@@ -27,10 +27,13 @@ not there yet and what to watch for. The full done / in-progress / planned break
   both sides (see [`../PROJECT_STATUS.md`](../PROJECT_STATUS.md)). Solo is **alpha**: four selectable difficulty grades
   (Dämmerung, Zwielicht, Finsternis, Albtraum; Albtraum is the default), co-op against the AI in multiplayer is a first version, and the UI is English
   (the privacy & data screens also come in German).
-- **Automodus (Charge / Advance & Shoot / Rush) is switched off in this version.** The radial does not
-  offer the three verbs while their move preview and target selection are reworked (issue #1828);
-  move and attack by hand (the radial's Shoot / Fight, or drag). NACHTMAHR's own activations are
-  unaffected.
+- **Automodus (Charge / Advance & Shoot / Rush) is back, with a landing preview.** The enemies a verb
+  can reach light up (a Charge dims the ones out of reach and says why on hover); hovering one shows
+  where every model lands, a click executes. Rush goes to the table point you hover and click, and a
+  Quick Shot unit then picks its shot. An executed intent has **no take-back** — the dice fell, like
+  at the table. Regiments, aircraft and units embarked in a transport still move by hand (the
+  radial's Shoot / Fight, or drag). Offered in solo, co-op, agreed Automatic online rooms (your own
+  units) and on a hotseat table with the rules automation on (the side holding the turn).
 - **AI thinking time has been measured on one machine only** (a developer laptop). On a slower PC
   the opponent may take longer per decision — if it feels slow, send a diagnostics report (below);
   its header names which AI path your machine ran.
@@ -51,7 +54,7 @@ not there yet and what to watch for. The full done / in-progress / planned break
   on different builds won't connect. The first log line `[Boot] Niemandsland <version> build
   <hash>` tells you exactly which build you're on.
 - **Built and validated for 2 players.** 3+ players may work but isn't hardened for this Alpha.
-- **Automodus online (once switched back on, see above).** In an agreed Automatic room the player whose
+- **Automodus online.** In an agreed Automatic room the player whose
   turn it is runs the verb on their own machine; only that player sees the landing preview, the other
   player sees the move and rolls their own saves. A two-machine test covers Advance & Shoot only.
 - **Reconnect after a drop isn't seamless yet.** If a guest loses connection mid-game, the
