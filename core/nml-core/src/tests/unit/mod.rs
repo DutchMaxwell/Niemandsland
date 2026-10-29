@@ -1011,6 +1011,7 @@ mod mentioned2_pins;
 mod mentioned2d_pins;
 mod ev_sum_stamp;
 mod mentioned_pins;
+mod playtest_rules;
 mod rending_shooting_aura;
 mod renames;
 mod takedown_strike;

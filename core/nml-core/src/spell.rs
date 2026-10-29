@@ -11,7 +11,7 @@
 //! `EPOCH_48_CASTER_BOOST` on, and the OPPOSING casters' interference from
 //! `EPOCH_51_CASTER_INTERFERENCE` (the pool's opposing-side mirror).
 
-use crate::combat::{block_chance, deadly_multiplier, success_chance, SIX_P};
+use crate::combat::{block_chance, deadly_multiplier, deadly_regen_dealt, success_chance, SIX_P};
 use crate::rules::Spell;
 use crate::unit::Ctx;
 
@@ -187,10 +187,12 @@ pub fn spell_facets(weapon_rules: &[String]) -> Facets {
             "AP" => f.ap = f.ap.max(rating(s)),
             "Blast" => f.blast = rating(s),
             "Deadly" => f.deadly = rating(s),
-            "Bane" | "Lacerate" => {
+            "Bane" => {
                 f.bane = true;
                 f.ignores_regen = true;
             }
+            // A1: Lacerate re-rolls the sixes only; below 72 its `bane` still bypasses (EV below).
+            "Lacerate" => f.bane = true,
             "Shred" => f.shred = true,
             "Surge" => f.surge = true,
             "Crack" => f.on6_ap = f.on6_ap.max(2),
@@ -245,18 +247,26 @@ pub fn spell_damage_ev(hits: i64, def: &Ctx, f: &Facets) -> f64 {
     let ap = effective_ap(f, def);
     let mut unsaved = (h - six_hits) * (1.0 - block_chance(defense, ap, bane))
         + six_hits * (1.0 - block_chance(defense, ap + f.on6_ap, bane));
+    let deadly_cap = def.tough.max(1);
+    let deadly_unsaved = unsaved; // A4: the raw unsaved count, before ×X
     if f.deadly > 0 {
-        unsaved *= deadly_multiplier(f.deadly, def.tough.max(1)) as f64;
+        unsaved *= deadly_multiplier(f.deadly, deadly_cap) as f64;
     }
     if f.shred {
         unsaved += h * SIX_P;
     }
-    if def.regeneration && !(bane || f.ignores_regen) {
+    // A1 (`EPOCH_72_PLAYTEST_RULES`): only Bane / Disintegrate bypass; below 72 Lacerate's `bane` did too.
+    if def.regeneration && !(f.ignores_regen || (bane && !def.playtest_rules)) {
         // Block B10 — the SPELL-wound leg reads the spell twin
         // (`_solo_regen_pick`'s `from_spell` key, main.gd:6595): a whole-unit
         // Resistance carrier ignores on `ignore_target_spell` (2+), every
         // other unit repeats `regen_target` (ctx_for always writes both).
-        unsaved *= 1.0 - success_chance(def.regen_target_spell);
+        let keep = 1.0 - success_chance(def.regen_target_spell);
+        unsaved *= keep;
+        // A4 (`EPOCH_72_PLAYTEST_RULES`, ai_spell.gd): all X wounds are rolled before the cap.
+        if def.playtest_rules && f.deadly > deadly_cap {
+            unsaved += deadly_unsaved * (deadly_regen_dealt(f.deadly, deadly_cap, keep) - deadly_cap as f64 * keep);
+        }
     }
     unsaved
 }

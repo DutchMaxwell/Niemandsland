@@ -1153,12 +1153,16 @@ static func _profiles_of(su: Dictionary, melee: bool, d := 0.0, state := {}) -> 
 	# unit's special_rules (the registry gate would demand faction data the
 	# game's own fallback never asks for).
 	var u_bane := false
+	var u_bypass := false   # A1: the Regeneration-bypass half, its own flag (unit.rs `u_bypass`)
 	var u_rending := false
 	var u_unstop := false
 	for r in u.get_special_rules():
 		var rs := str(r).strip_edges()
 		if rs.begins_with("Bane") or rs.begins_with("Lacerate"):
 			u_bane = true
+			# A1 (EPOCH_72_PLAYTEST_RULES, the table's #1911): a unit-level Lacerate re-rolls the sixes only.
+			u_bypass = u_bypass or not (rs.begins_with("Lacerate") \
+				and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_72_PLAYTEST_RULES)
 		elif rs.begins_with("Rending"):
 			u_rending = true
 		elif rs.begins_with("Unstoppable"):
@@ -1183,6 +1187,10 @@ static func _profiles_of(su: Dictionary, melee: bool, d := 0.0, state := {}) -> 
 		q["attacks"] = SoloController.effective_attacks(int(q.get("attacks", 0)),
 			int(su["alive"]), u.models.size())
 		if u_bane:
+			if u_bypass:
+				q["bypass_regen"] = true
+			elif not bool(q.get("bane", false)):
+				q["bypass_regen"] = false   # A1: the unit's Lacerate brings the re-roll, not the bypass
 			q["bane"] = true
 		if u_rending:
 			q["rending"] = true
@@ -1830,7 +1838,11 @@ static func _expected_shooting_morale(tu: Dictionary, alive_before: int, wounds_
 				and _morale_fails_expected(tu):
 			tu["shaken"] = true
 		return
-	if AiCombatMath.should_test_shooting_morale(alive_before, int(tu["alive"]), u.models.size()) \
+	# A2 (EPOCH_72_PLAYTEST_RULES, the table's #1912): WOUNDS that leave the unit at half or less test too.
+	var wounded: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_72_PLAYTEST_RULES \
+		and int(tu["alive"]) > 0 and _wounds_left(tu) < wounds_before \
+		and AiCombatMath.at_or_below_half(int(tu["alive"]), u.models.size())
+	if (AiCombatMath.should_test_shooting_morale(alive_before, int(tu["alive"]), u.models.size()) or wounded) \
 			and _morale_fails_expected(tu):
 		tu["shaken"] = true
 

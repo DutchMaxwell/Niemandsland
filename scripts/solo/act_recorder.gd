@@ -191,10 +191,15 @@ const EPOCH_63_MELEE_HEIGHT := 63
 ## EPOCH_69_HERO_FOLD (the trainer's arena hero fold; this table's capture already matched it), the
 ## tray-exact series to 70 with EPOCH_70_TRAY_EXACT (the core now plays this table's casualty order,
 ## Takedown, Guarded over 9" and Counter) and turns the AI climb on (heights B2, SoloController.climb_on),
-## and the Rapid Charge Mark writer to 71 with EPOCH_71_RAPID_CHARGE_MARK (#845, the Mark lands on the marked enemy).
-static var rules_epoch: int = 71
+## and the Rapid Charge Mark writer to 71 with EPOCH_71_RAPID_CHARGE_MARK (#845, the Mark lands on the marked enemy),
+## and the 29.10.2026 play-test fixes to 72 with EPOCH_72_PLAYTEST_RULES (A1 Lacerate keeps Regeneration,
+## A2 wounds at half strength test morale, A4 Deadly rolls all X Regeneration dice before the cap).
+static var rules_epoch: int = 72
 ## The tray-exact series' one bump, mirrored for the table-side gate it carries (the AI climb).
 const EPOCH_70_TRAY_EXACT := 70
+## The play-test fixes' mirror for the GDScript twins (AiEv, AiSpell, BattleSim); the core's gate reads the
+## frozen `EPOCH_72_PLAYTEST_RULES` (acts.rs). The table's own dice (#1911/#1912/#1914) are not gated.
+const EPOCH_72_PLAYTEST_RULES := 72
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000

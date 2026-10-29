@@ -32,7 +32,7 @@ use crate::acts::{
     EPOCH_51_CASTER_INTERFERENCE, EPOCH_52_UTILITY_SPELLS, EPOCH_56_GROUNDED_PROTECTION,
     EPOCH_61_PRECISION_MARKERS, EPOCH_62_CASTING_MOD, EPOCH_65_MELEE_TRUTH,
     EPOCH_66_DISTANCE_TRUTH, EPOCH_67_MARKERS_BURSTS, EPOCH_68_MODIFIER_SUM,
-    EPOCH_71_RAPID_CHARGE_MARK,
+    EPOCH_71_RAPID_CHARGE_MARK, EPOCH_72_PLAYTEST_RULES,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
@@ -3133,13 +3133,19 @@ fn shooting_morale_trigger(
     alive_before: i64,
     wounds_before: i64,
 ) -> bool {
+    // A2 (`EPOCH_72_PLAYTEST_RULES`, main.gd `_solo_shooting_morale` since #1912): WOUNDS that leave a
+    // multi-model unit at half or less test too, without a lost model (p.10). `wounds_before` is the
+    // host's own count, so a hit that lands only on a joined hero is not seen here.
+    let wounded = |alive: i64, total: i64| {
+        rule_on(seams.rules_epoch, EPOCH_72_PLAYTEST_RULES)
+            && alive > 0
+            && wounds_left(state, ti) < wounds_before
+            && at_or_below_half(alive, total)
+    };
     if hero_size_on(state, ti, seams) {
         // C12: `alive_before` is the combined snapshot (`morale_alive`).
-        return should_test_shooting_morale(
-            alive_before,
-            combined_alive(state, ti, seams),
-            combined_total(statics, state, ti, us),
-        );
+        let (alive, total) = (combined_alive(state, ti, seams), combined_total(statics, state, ti, us));
+        return should_test_shooting_morale(alive_before, alive, total) || wounded(alive, total);
     }
     if us.model_count == 1 {
         // A single model measures morale in TOUGH WOUNDS, not models (p.10).
@@ -3148,6 +3154,7 @@ fn shooting_morale_trigger(
             && below_half(state, statics, us, ti, seams);
     }
     should_test_shooting_morale(alive_before, state.alive[ti], us.model_count)
+        || wounded(state.alive[ti], us.model_count)
 }
 
 /// `BattleSim._ctx_of(su)` battle_sim.gd:701-712, SHOOTING half: the static

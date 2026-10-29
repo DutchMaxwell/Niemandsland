@@ -269,6 +269,21 @@ pub fn deadly_multiplier(deadly_x: i64, target_tough: i64) -> i64 {
     clampi(deadly_x, 1, target_tough.max(1))
 }
 
+/// `AiCombatMath.deadly_regen_dealt` (A4, #1914): the expected wounds ONE unsaved Deadly(X) wound
+/// deals to a model of `target_tough` against the Regeneration family — all X rolled, each kept
+/// with chance `keep`, the survivors capped: E[min(Binomial(X, keep), cap)]. `powf` = GDScript's `pow`.
+pub fn deadly_regen_dealt(deadly_x: i64, target_tough: i64, keep: f64) -> f64 {
+    let x = deadly_x.max(1);
+    let cap = target_tough.max(1);
+    let mut ev = 0.0;
+    let mut ways = 1.0; // C(x, k)
+    for k in 0..=x {
+        ev += ways * keep.powf(k as f64) * (1.0 - keep).powf((x - k) as f64) * k.min(cap) as f64;
+        ways = ways * (x - k) as f64 / (k + 1) as f64;
+    }
+    ev
+}
+
 /// `AiCombatMath.shrouded_reach` :300-303.
 #[inline]
 pub fn shrouded_reach(reach_in: f64, penalty_in: f64, floor_in: f64) -> f64 {
@@ -633,8 +648,10 @@ pub fn profile_ev(
     let mut unsaved = (hits - six_hits) * (1.0 - block_chance(defense, fortified_ap(ap, fort), bane))
         + six_hits * (1.0 - block_chance(defense, fortified_ap(ap + on6_ap, fort), bane));
     // --- Deadly, Shred, Regeneration (ai_ev.gd:423-436) ---
+    let deadly_cap = def.tough.max(1);
+    let deadly_unsaved = unsaved; // A4: the raw unsaved count, before ×X
     if p.deadly > 0 {
-        unsaved *= deadly_multiplier(p.deadly, def.tough.max(1)) as f64;
+        unsaved *= deadly_multiplier(p.deadly, deadly_cap) as f64;
     }
     if p.shred {
         unsaved += hits * SIX_P;
@@ -643,7 +660,12 @@ pub fn profile_ev(
     // `_profiles_of` stamps (the unit-level prefix scan) here too — EV/tray
     // split, found by #489 caveat 4.
     if def.regeneration && !(p.bypass_regen || p.rending || p.unstoppable_ev) {
-        unsaved *= 1.0 - success_chance(def.regen_target);
+        let keep = 1.0 - success_chance(def.regen_target);
+        unsaved *= keep;
+        // A4 (`EPOCH_72_PLAYTEST_RULES`, ai_ev.gd since #1914): all X wounds are rolled before the cap.
+        if def.playtest_rules && p.deadly > deadly_cap {
+            unsaved += deadly_unsaved * (deadly_regen_dealt(p.deadly, deadly_cap, keep) - deadly_cap as f64 * keep);
+        }
     }
     unsaved
 }
