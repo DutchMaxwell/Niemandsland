@@ -579,8 +579,10 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 		+ six_hits * (1.0 - block_chance(defense, AiCombatMath.fortified_ap(ap + on6_ap, fort), bane))
 	# — Deadly (Tough-capped multiply) —
 	var deadly := int(profile.get("deadly", 0))
+	var deadly_cap := maxi(int(def_ctx.get("tough", 1)), 1)
+	var deadly_unsaved := unsaved   # A4: the raw unsaved count, before ×X
 	if deadly > 0:
-		unsaved *= float(AiCombatMath.deadly_multiplier(deadly, maxi(int(def_ctx.get("tough", 1)), 1)))
+		unsaved *= float(AiCombatMath.deadly_multiplier(deadly, deadly_cap))
 	# — Shred (wave 5): every save die (one per hit) that lands a natural 1 deals +1 wound — expected
 	#   +hits/6, NOT Deadly-multiplied (mirrors the dice path's save-step reading) —
 	if bool(profile.get("shred", false)):
@@ -590,7 +592,12 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 	#   Destructive does NOT bypass, so its wounds are reduced here too) —
 	if bool(def_ctx.get("regeneration", false)) and not ((bane and bool(profile.get("bypass_regen", true))) or bool(profile.get("rending", false)) \
 			or bool(profile.get("unstoppable", false))):
-		unsaved *= 1.0 - AiCombatMath.success_chance(int(def_ctx.get("regen_target", REGENERATION_TARGET)))
+		var keep := 1.0 - AiCombatMath.success_chance(int(def_ctx.get("regen_target", REGENERATION_TARGET)))
+		unsaved *= keep
+		# A4 (maintainer ruling 29.10.2026): all X wounds are rolled before the cap — past the cap that is
+		# worth more than the capped X × keep above. Below it nothing changes (byte-identical).
+		if deadly > deadly_cap:
+			unsaved += deadly_unsaved * (AiCombatMath.deadly_regen_dealt(deadly, deadly_cap, keep) - float(deadly_cap) * keep)
 	return unsaved
 
 
