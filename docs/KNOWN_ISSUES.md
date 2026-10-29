@@ -51,6 +51,9 @@ not there yet and what to watch for. The full done / in-progress / planned break
   on different builds won't connect. The first log line `[Boot] Niemandsland <version> build
   <hash>` tells you exactly which build you're on.
 - **Built and validated for 2 players.** 3+ players may work but isn't hardened for this Alpha.
+- **Automodus online (once switched back on, see above).** In an agreed Automatic room the player whose
+  turn it is runs the verb on their own machine; only that player sees the landing preview, the other
+  player sees the move and rolls their own saves. A two-machine test covers Advance & Shoot only.
 - **Reconnect after a drop isn't seamless yet.** If a guest loses connection mid-game, the
   cleanest recovery is to rejoin the room. The deep reconnect-sync issues are fixed (no more
   "reconnected but nothing syncs"); fully *graceful* guest reconnect is post-Alpha.
