@@ -7,9 +7,14 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 ## [Unreleased]
 
 ### Fixed
+- **Lacerate no longer switches off Regeneration**: wounds from a Lacerate weapon or spell face the
+  target's Regeneration or Self-Repair roll again; only rules that ignore Regeneration (Bane, Rending,
+  Unstoppable, ...) skip it, and the battle log now says when that roll is skipped.
 - **A volley at the other player's unit lets that player roll the saves**: online on their own tray,
   as melee already did, and on a hotseat table with the defender's save prompt; a charge's Impact
   hits too. (#1828)
+- **Wounds that leave a unit at half strength or less trigger its morale test even when no model falls**,
+  for example wounds on a surviving Tough model after shooting, a spell or dangerous terrain.
 
 ### Changed
 - **Deadly against Regeneration or Self-Repair rolls once per wound after the multiplication**: a

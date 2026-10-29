@@ -55,6 +55,7 @@ var _expect_link_cut := false     # step 23: a reconnect failure is data, not a 
 var _link_events: Array = []      # step 23: relay rejoin signals in order ({"t_ms", "e", "arg"})
 var _auto_preview: Array = []     # 3.5: the guest's previewed landing, one [x, y, z] per model
 var _auto_verb_done := false      # 3.5: the guest's clicked verb ran to its end
+var _auto_goal := Vector3.ZERO     # 1.8f: the table point the guest's Advance aims at
 var _tray_rolls: Array = []       # 3.5: every roll this tray showed, "local: <purpose>" / "remote: <purpose>"
 
 
@@ -467,20 +468,25 @@ func _leave_to_menu() -> bool:
 	return bool(_left.left)
 
 
-## 3.5: light the targets for the guest's Advance & Shoot, hover P1 Charlie (the 1.7 preview) and keep its landing.
+## 3.5 + 1.8f: the guest's Advance & Shoot aims at a table point (P1 Charlie's spot; the 6" reach stops 10" short),
+## previews it through the point path (the 1.8b/1.8f ghosts) and keeps the landing.
 func _auto_verb_preview() -> bool:
-	var target := _unit(P1C_UNIT)
-	await _main.solo_begin_auto(_unit(P2A_UNIT), AiDecision.Action.ADVANCE)
-	if not (_main._solo_target_mode.get("auto_valid", []) as Array).has(target):
-		_failure = "auto_verb: P1 Charlie is not lit (%s)" % str(_main._solo_target_mode)
+	var unit := _unit(P2A_UNIT)
+	await _main.solo_begin_auto(unit, AiDecision.Action.ADVANCE)
+	if not _main._solo_target_mode.has("auto_point"):
+		_failure = "auto_verb: no point Advance (%s)" % str(_main._solo_target_mode)
 		return false
-	_main._solo_show_auto_preview(target)
-	var preview: Dictionary = _main._solo_target_mode.get("auto_previews", {}).get(target.get_instance_id(), {})
+	var aim: Vector3 = _main.solo_controller.unit_centre(_unit(P1C_UNIT))
+	_auto_goal = Vector3(aim.x, _main.solo_controller.unit_centre(unit).y, aim.z)
+	_main._solo_show_auto_point(_auto_goal)
+	var preview: Dictionary = _main._solo_target_mode.get("auto_previews", {}).get(_auto_goal, {})
 	_auto_preview = preview.get("landing", []).map(func(spot: Dictionary) -> Array: return _rounded(spot["pos"]))
 	return not _auto_preview.is_empty()
 
 
+## The click on the point moves the unit; the shot pick that follows lights P1 Charlie, and the click on it fires.
 func _run_auto_verb_click() -> void:
+	await _main._solo_auto_point_click(_auto_goal)
 	await _main._solo_auto_click(_unit(P1C_UNIT))
 	_auto_verb_done = true
 

@@ -537,6 +537,8 @@ func setup(p_army_manager: OPRArmyManager, p_network_manager: Node, p_movement_r
 	turn_manager.configure(human_slot, ai_slot, self)
 	if not turn_manager.activation_required.is_connected(_on_activation_required):
 		turn_manager.activation_required.connect(_on_activation_required)
+	if army_manager != null and not army_manager.game_phase_changed.is_connected(_on_army_phase_changed):
+		army_manager.game_phase_changed.connect(_on_army_phase_changed)
 
 
 func _on_activation_required(side: int) -> void:
@@ -776,6 +778,10 @@ func activate_next_ai_unit() -> GameUnit:
 		last_report = _act_disembark(unit)
 	else:
 		last_report = _act(unit)
+	if not last_move_paths.is_empty():   # it moved: face the enemy (a reached charge: the charged unit)
+		var foe := last_report.get("target") as GameUnit
+		face_nearest_enemy(unit, foe if foe != null and int(last_report.get("action", -1)) == AiDecision.Action.CHARGE
+			and nearest_melee_gap_in(unit, foe) <= MELEE_ENGAGE_IN else null)
 	if last_move_paths.is_empty():
 		var standing: Dictionary = _dangerous_standing_counts(unit)
 		last_report["dangerous_models"] = int(standing["models"])
@@ -2724,11 +2730,13 @@ func player_intent(unit: GameUnit, verb: int, target: GameUnit, point: Variant =
 	var advance := float(bands.get("advance", 6)) + musician_in
 	var rush := float(bands.get("rush", 12)) + musician_in
 	var charge := float(bands.get("charge", bands.get("rush", 12))) + musician_in
-	# Automodus 1.8b (OD 5): a Rush to a FREE POINT is the AI's own move-to-position intent — with
-	# to_objective, execute_intent steers at the goal and stops at the Rush reach or the point, whichever is nearer.
-	if point is Vector3 and verb == AiDecision.Action.RUSH:
-		return ActIntent.make(unit, verb, null, point, rush, false,
-			{"to_objective": true, "source": "player", "why": "player intent: rushes to a point"})
+	# Automodus 1.8b/1.8f (OD 5, OD 13): a Rush or an Advance to a FREE POINT is the AI's own move-to-position
+	# intent — with to_objective, execute_intent steers at the goal and stops at the reach or the point, whichever
+	# is nearer. It never shoots by itself: main lights the targets from the landing and the player picks the shot.
+	if point is Vector3 and (verb == AiDecision.Action.RUSH or verb == AiDecision.Action.ADVANCE):
+		var rushes := verb == AiDecision.Action.RUSH
+		return ActIntent.make(unit, verb, null, point, rush if rushes else advance, false, {"to_objective": true,
+			"source": "player", "why": "player intent: rushes to a point" if rushes else "player intent: advances to a point"})
 	var weapons := _unit_weapons(unit)
 	var shoot_range_in := effective_shoot_reach_in(
 		AiArchetype.max_range_inches(weapons) + float(shooting_range_bonus(unit)), target)
@@ -5625,6 +5633,7 @@ func consolidate_after_melee_win(unit: GameUnit) -> int:
 	var dang := _move_toward(unit, goal, CONSOLIDATION_WIN_IN, false)
 	ai_slot = prev_ai
 	human_slot = prev_human
+	face_nearest_enemy(unit)
 	record_decision({"kind": "consolidate", "unit": unit.get_name(),
 		"rule": "GF v3.5.1 p.9 consolidation: enemy destroyed in melee — the survivor may move up to 3\"",
 		"candidates": [], "chosen": why, "why": "melee winner consolidation",
@@ -7327,6 +7336,62 @@ func _apply_model_positions(models: Array, new_positions: Array) -> void:
 	if _preview_depth == 0 and network_manager != null and not batch.is_empty() \
 			and network_manager.has_method("broadcast_move_batch"):
 		network_manager.broadcast_move_batch(batch)
+
+
+## Automodus decision 14 (maintainer play test 29.10.2026): after an AI unit is deployed and after every
+## move, each model turns (yaw only, +Z forward like ObjectManager.facing_rotation_to) to the nearest enemy
+## model on the table plane; in a melee to the nearest model of the `engaged` unit. No enemy on the table:
+## the facing stays. Presentation only, so nothing is logged (OPR has no facing rules): only ROUND bases
+## turn — an oval's footprint turns with its yaw (SeparationChecker.shape_for_model) and a regiment tray's
+## facing is an AoF:R rule, so both keep theirs. Player units and previews are never turned.
+var face_enemy := true   # false = the old path (the outcome-identity test runs both)
+## Callable(slot) -> bool, main wires solo_ai_slots.has: a hotseat/online Automatic table builds this
+## controller for geometry with ai_slot on a HUMAN side. Invalid (tests, tools) = ai_slot is a seat.
+var is_ai_seat := Callable()
+
+
+func face_nearest_enemy(unit: GameUnit, engaged: GameUnit = null) -> void:
+	if not face_enemy or _preview_depth > 0 or unit == null or army_manager == null or _is_regiment(unit) \
+			or unit_in_reserve(unit) or int(unit.unit_properties.get("player_id", 0)) != ai_slot \
+			or (is_ai_seat.is_valid() and not bool(is_ai_seat.call(ai_slot))):
+		return
+	var pool: Array = army_manager.get_all_game_units() if engaged == null else [engaged] + \
+		(engaged.get_attached_heroes() if engaged.has_method("get_attached_heroes") else [])
+	var half := _table_half_extents()
+	var foes: Array = []
+	for g in pool:
+		var gu := g as GameUnit
+		if gu == null or unit_in_reserve(gu) or int(gu.unit_properties.get("player_id", 0)) == ai_slot:
+			continue
+		for p in alive_positions(gu):   # the army trays (reserves, the undeployed, cargo) stand off the table
+			if absf((p as Vector3).x) <= half.x and absf((p as Vector3).z) <= half.y:
+				foes.append(p)
+	if foes.is_empty():
+		return
+	var batch: Array = []
+	for m in _moving_models(unit):   # incl. attached heroes, each judged by its own base
+		var mu: Variant = (m as ModelInstance).unit
+		if bool(((mu as GameUnit) if mu is GameUnit else unit).unit_properties.get("base_is_oval", false)):
+			continue
+		var node := (m as ModelInstance).node
+		var f: Vector3 = foes[nearest_index(node.global_position, foes)]
+		node.rotation.y = atan2(f.x - node.global_position.x, f.z - node.global_position.z)
+		if node.has_meta("network_id"):
+			batch.append_array([node.get_meta("network_id"), node.rotation.y])
+	if network_manager != null and not batch.is_empty() and network_manager.has_method("broadcast_rotation_batch"):
+		network_manager.broadcast_rotation_batch(batch)
+
+
+## Every AI unit faces the enemy: the deployment settled, or the battle begins (all doors start_game()).
+func face_army_at_enemy() -> void:
+	if army_manager != null:
+		for u in army_manager.get_game_units_for_player(ai_slot):
+			face_nearest_enemy(u as GameUnit)
+
+
+func _on_army_phase_changed(phase: int) -> void:
+	if phase == OPRArmyManager.GamePhase.PLAYING:
+		face_army_at_enemy()
 
 
 ## Plan the per-model destination positions for a move by rigid `delta`. A regiment keeps the rigid tray
@@ -10523,6 +10588,7 @@ func snap_charge(charger: GameUnit, target: GameUnit, max_snap_in: float = -1.0)
 	for p in positions:
 		moved.append((p as Vector3) + delta)
 	_apply_model_positions(models, moved)
+	face_nearest_enemy(charger, target)
 	return best_gap
 
 
@@ -10657,6 +10723,7 @@ func pile_in(defender: GameUnit, charger: GameUnit) -> Array:
 			moves.append({"model": mi, "path": [old, chosen], "radius_m": r_i})
 	if not moves.is_empty():
 		_broadcast_positions(defender)
+	face_nearest_enemy(defender, charger)   # engaged now, moved or already in contact
 	return moves
 
 
@@ -11191,6 +11258,7 @@ func deploy_finish() -> void:
 			_resolve_deploy_overlaps()
 		else:
 			break
+	face_army_at_enemy()   # the cleanup nudged models; the human may have placed more since
 
 
 ## Drain BOTH queues (the one-click full deploy, the headless/batch path, and the out-of-units
@@ -12858,6 +12926,7 @@ func _place_unit_at(unit: GameUnit, spot: Vector2) -> void:
 			node.global_position.y,
 			spot.y + (float(row) - float(rows - 1) * 0.5) * DEPLOY_SPACING_M)
 	_broadcast_positions(unit)
+	face_nearest_enemy(unit)   # deployment, Re-Deployment, Ambush arrival
 
 
 ## Broadcast the unit's CURRENT model positions (incl. attached heroes) as one move batch (MP mirror).
@@ -12903,6 +12972,7 @@ func forced_straight_move(unit: GameUnit, dir: Vector2, dist_in: float) -> float
 		planned[i] = Vector3(v0.x + d.x * step_m * scale, v0.y, v0.z + d.y * step_m * scale)
 	_apply_model_positions(models, planned)
 	_broadcast_positions(unit)
+	face_nearest_enemy(unit)
 	return dist_in
 
 

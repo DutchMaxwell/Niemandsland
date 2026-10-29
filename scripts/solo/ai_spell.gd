@@ -119,12 +119,12 @@ static func cast_success_chance(boost_tokens: int, interference_tokens: int, bas
 ## spells_mechanics_<system>.json encoding) into the facet knobs P2 consumes. Unknown tokens are
 ## ignored (conservative: the spell still deals its base hits, the exotic facet adds nothing).
 ##   ap / blast / deadly     — rated facets (AiShooting rating convention);
-##   bane                    — defender re-rolls unmodified Defense 6s (Lacerate is the AoF sibling
-##                             with the same re-roll text; both also bypass Regeneration);
+##   bane                    — defender re-rolls unmodified Defense 6s (Bane, and the army-book Lacerate
+##                             with the same re-roll; only Bane also bypasses Regeneration — A1);
 ##   shred                   — +1 wound per unmodified Defense 1;
 ##   surge                   — +1 hit per 6 on the spell's trigger roll ("Roll as many dice as hits");
 ##   on6_ap                  — AP(+X) upgrade on trigger-roll 6s (Crack +2 / Destructive +4);
-##   ignores_regen           — Bane / Lacerate / Disintegrate wounds bypass Regeneration;
+##   ignores_regen           — Bane / Disintegrate wounds bypass Regeneration (never Lacerate);
 ##   ap_vs_tough3/9, ap_vs_def3 — the conditional AP facets (Shatter / Tear / Disintegrate), resolved
 ##                             against the actual defender by effective_ap().
 static func spell_facets(weapon_rules: Array) -> Dictionary:
@@ -140,9 +140,11 @@ static func spell_facets(weapon_rules: Array) -> Dictionary:
 				f["blast"] = _rating(s)
 			"Deadly":
 				f["deadly"] = _rating(s)
-			"Bane", "Lacerate":
+			"Bane":
 				f["bane"] = true
 				f["ignores_regen"] = true
+			"Lacerate":
+				f["bane"] = true
 			"Shred":
 				f["shred"] = true
 			"Surge":

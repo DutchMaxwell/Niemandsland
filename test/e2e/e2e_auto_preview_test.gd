@@ -142,19 +142,19 @@ func _hover(pt: Vector2) -> void:
 	await _main._solo_targeting_input(ev)
 
 
+## Since 1.8f only Charge picks a lit enemy (Advance and Rush aim at table points); a charge preview has no lines.
 func test_hover_shows_and_clears_the_preview(timeout := 60000) -> void:
 	var shooter := _shooter(1, "Riflemen", 0.0, 3)
-	var foe := _pickable(2, "Foe", 16.0)   # inside the 12" rifle after a 6" Advance: lines exist
+	var foe := _pickable(2, "Foe", 8.0)   # inside the 12" charge reach: lit
 	await _runner.simulate_frames(1)   # the pick is a raycast: let physics register the fresh body
 	var pt := _pick_point(foe)
 	assert_bool(pt.is_finite()).override_failure_message("fixture: the pick ray never hits Foe").is_true()
-	await _main.solo_begin_auto(shooter, AiDecision.Action.ADVANCE)
+	await _main.solo_begin_auto(shooter, AiDecision.Action.CHARGE)
 	var ghosts: LandingPreview = _main.landing_preview
 	await _hover(pt)
 	var previews: Dictionary = _main._solo_target_mode.get("auto_previews", {})
 	var lines: Array = (previews.get(foe.get_instance_id(), {}) as Dictionary).get("lines", [])
 	assert_int(ghosts.ghost_count()).is_equal(shooter.get_alive_models().size())
-	assert_int(lines.size()).override_failure_message("fixture: no shooting line at the landing").is_greater(0)
 	assert_int(ghosts.line_count()).is_equal(lines.size())
 	assert_object(_main._solo_los_line).override_failure_message("auto_verb hover drew the LOS line").is_null()
 	var shown := ghosts.get_child(0)
@@ -179,8 +179,8 @@ func test_hover_shows_and_clears_the_preview(timeout := 60000) -> void:
 
 func test_esc_clears_the_hover_preview(timeout := 60000) -> void:
 	var shooter := _shooter(1, "Riflemen", 0.0, 3)
-	var foe := _shooter(2, "Foe", 16.0)
-	await _main.solo_begin_auto(shooter, AiDecision.Action.ADVANCE)
+	var foe := _shooter(2, "Foe", 8.0)
+	await _main.solo_begin_auto(shooter, AiDecision.Action.CHARGE)
 	_main._solo_show_auto_preview(foe)
 	assert_int(_main.landing_preview.ghost_count()).is_equal(3)
 	var esc := InputEventKey.new()
@@ -193,8 +193,8 @@ func test_esc_clears_the_hover_preview(timeout := 60000) -> void:
 
 func test_a_refused_hover_shows_nothing_and_says_why_once(timeout := 60000) -> void:
 	var shooter := _shooter(1, "Riflemen", 0.0, 3)
-	var foe := _shooter(2, "Foe", 16.0)
-	await _main.solo_begin_auto(shooter, AiDecision.Action.ADVANCE)
+	var foe := _shooter(2, "Foe", 8.0)
+	await _main.solo_begin_auto(shooter, AiDecision.Action.CHARGE)
 	shooter.is_shaken = true   # lit at entry, refused by the time it is hovered
 	var board_before := _board()
 	for t in [foe, null, foe]:
@@ -263,19 +263,19 @@ func _assert_on_the_ghosts(landing: Array, at := {}) -> void:
 func test_own_base_click_no_longer_executes(timeout := 60000) -> void:
 	_bystanders()
 	var shooter := _pickable(1, "Riflemen", 0.0)
-	var foe := _shooter(2, "Foe", 16.0)
+	var foe := _shooter(2, "Foe", 8.0)
 	foe.is_activated = true
 	await _runner.simulate_frames(1)
 	var pt := _pick_point(shooter)
 	assert_bool(pt.is_finite()).override_failure_message("fixture: the pick ray never hits Riflemen").is_true()
-	await _main.solo_begin_auto(shooter, AiDecision.Action.ADVANCE)
+	await _main.solo_begin_auto(shooter, AiDecision.Action.CHARGE)
 	var board_before := _board()
 	await _click(pt)
 	await E2EBoot.settle(get_tree())
 	assert_array(_board()).override_failure_message("the own-base click moved models").is_equal(board_before)
 	assert_bool(shooter.is_activated).is_false()
 	assert_bool(_main._solo_target_mode.has("auto_verb")).override_failure_message("the click closed the mode").is_true()
-	assert_str(_log_text()).contains("Auto: Riflemen is not a valid target for Advance & Shoot (")
+	assert_str(_log_text()).contains("Auto: Riflemen is not a valid target for Charge (")
 	_main._solo_end_targeting()
 
 
@@ -295,16 +295,6 @@ func test_an_unlit_click_moves_nothing_and_says_why(timeout := 60000) -> void:
 	assert_bool(_main._solo_target_mode.has("auto_verb")).override_failure_message("the click closed the mode").is_true()
 	assert_str(_log_text()).contains("Auto: Far is not a valid target for Charge (")
 	_main._solo_end_targeting()
-
-
-func test_a_lit_advance_click_lands_on_the_preview(timeout := 60000) -> void:
-	_bystanders()
-	var shooter := _shooter(1, "Riflemen", 0.0, 3)
-	var foe := _pickable(2, "Foe", 16.0)
-	foe.is_activated = true
-	var landing := await _hover_then_click(shooter, foe, AiDecision.Action.ADVANCE)
-	assert_bool(shooter.is_activated).override_failure_message("the lit click did not execute").is_true()
-	_assert_on_the_ghosts(landing)
 
 
 ## Automodus step 1.8b (OD 5): Rush goes to a FREE table point — no enemy is lit, the hover anywhere shows
@@ -362,7 +352,7 @@ func test_the_suggested_target_wears_the_one_highlighted_ring(timeout := 60000) 
 	var plain: MeshInstance3D = _main._solo_spawn_pulse_ring(Vector3.ZERO, Color.WHITE)
 	var plain_radius: float = (plain.mesh as TorusMesh).outer_radius
 	plain.free()
-	for verb in [AiDecision.Action.CHARGE, AiDecision.Action.ADVANCE]:   # Rush lights no target (1.8b)
+	for verb in [AiDecision.Action.CHARGE]:   # Rush and Advance light no target (1.8b, 1.8f; the shot pick: 1.8f test)
 		await _main.solo_begin_auto(unit, verb)
 		var valid: Array = _main._solo_target_mode.get("auto_valid", [])
 		var rings: Array = _main._solo_target_mode.get("cast_rings", [])
@@ -404,11 +394,12 @@ func test_reanimated_models_are_named_in_the_log(timeout := 60000) -> void:
 	foe.is_activated = true
 	_main._solo_batch = true   # tray faces from the seeded tray RNG, no allocation prompt
 	_main.seed_tray_rng(_seed_rolling(SoloController.REANIMATION_TARGET))
-	var landing := await _hover_then_click(bots, foe, AiDecision.Action.ADVANCE)
-	assert_int(landing.size()).is_equal(2)
+	var shot := await _hover_then_click_point(bots, AiDecision.Action.ADVANCE, Vector3(10.0 * INCH, 0, 0))
+	assert_int((shot["landing"] as Array).size()).is_equal(2)
 	assert_bool(fallen.is_alive).override_failure_message("fixture: the Reanimation roll restored nothing").is_true()
 	assert_str(_log_text()).contains("Auto: +1 model reanimated — not in the preview")
 	assert_bool(bots.is_activated).override_failure_message("the verb did not run after the Reanimation").is_true()
+	assert_str(_log_text()).contains("Advance & Shoot: no enemy in range and sight")
 
 
 # --- Automodus step 1.8c (OD 6): Charge dims the enemies it cannot reach; hovering one names why ---
@@ -539,7 +530,7 @@ func _rush_past(runner: GameUnit, near_x := 20.0) -> Array:
 func test_quick_shot_unit_may_shoot_after_a_point_rush(timeout := 60000) -> void:
 	var runner := _quick_shooter("Skirmishers")
 	var foes: Array = await _rush_past(runner)
-	assert_bool(_main._solo_target_mode.has("auto_quick_shot")) \
+	assert_bool(_main._solo_target_mode.has("auto_shot")) \
 		.override_failure_message("no Quick Shot pick after the point Rush (log: %s)" % _log_text().strip_edges()) \
 		.is_true()
 	assert_array(_main._solo_target_mode.get("auto_valid", [])).contains_exactly([foes[0]])
@@ -549,7 +540,7 @@ func test_quick_shot_unit_may_shoot_after_a_point_rush(timeout := 60000) -> void
 	var far_pt := _pick_point(foes[1])
 	assert_bool(far_pt.is_finite()).override_failure_message("fixture: the pick ray never hits Far").is_true()
 	await _click(far_pt)
-	assert_bool(_main._solo_target_mode.has("auto_quick_shot")).override_failure_message("the unlit click closed the pick").is_true()
+	assert_bool(_main._solo_target_mode.has("auto_shot")).override_failure_message("the unlit click closed the pick").is_true()
 	assert_str(_log_text()).contains("Auto: Far is not a valid target for Quick Shot (not in range and sight)")
 	assert_int(_logged_sighted("Skirmishers")).override_failure_message("the unlit click fired").is_equal(-1)
 	var near_pt := _pick_point(foes[0])
@@ -568,7 +559,7 @@ func test_quick_shot_unit_may_shoot_after_a_point_rush(timeout := 60000) -> void
 func test_esc_after_a_point_rush_holds_the_quick_shot(timeout := 60000) -> void:
 	var runner := _quick_shooter("Skirmishers")
 	await _rush_past(runner)
-	assert_bool(_main._solo_target_mode.has("auto_quick_shot")).override_failure_message("no Quick Shot pick").is_true()
+	assert_bool(_main._solo_target_mode.has("auto_shot")).override_failure_message("no Quick Shot pick").is_true()
 	var rings: Array = (_main._solo_target_mode.get("cast_rings", []) as Array).duplicate()
 	var esc := InputEventKey.new()
 	esc.keycode = KEY_ESCAPE
@@ -602,3 +593,131 @@ func test_a_point_rush_without_quick_shot_completes_as_before(timeout := 60000) 
 	assert_bool(_main._solo_target_mode.is_empty()).override_failure_message("a pick opened without Quick Shot").is_true()
 	assert_str(_log_text()).not_contains("Quick Shot")
 	assert_bool(runner.is_activated).is_true()
+
+
+# --- Automodus step 1.8f (OD 13): Advance & Shoot goes to a free point, then picks its shot ---
+
+## Opens `verb` for `unit`, hovers the table point `offset` (metres) from the unit's centre, rests past the dwell and
+## clicks it, all through the real targeting handler. Returns the landing the hover showed (read before the click,
+## which clears the ghosts), whether a point mode opened and how many enemies were lit before the move.
+func _hover_then_click_point(unit: GameUnit, verb: int, offset: Vector3) -> Dictionary:
+	var at: Vector3 = _main.solo_controller.unit_centre(unit) + offset
+	var pt: Vector2 = _main.get_viewport().get_camera_3d().unproject_position(at)
+	await _main.solo_begin_auto(unit, verb)
+	var entry := {"point_mode": _main._solo_target_mode.has("auto_point"),
+		"lit_at_entry": (_main._solo_target_mode.get("cast_rings", []) as Array).size()}
+	_clock(0)
+	await _hover(pt)
+	_clock(500)   # 1.8e: the cell is planned once the cursor rested on it
+	var previews: Dictionary = _main._solo_target_mode.get("auto_previews", {})
+	entry["landing"] = (previews.get(_main._solo_target_mode.get("auto_hovered"), {}) as Dictionary).get("landing", [])
+	await _click(pt)
+	await _runner.simulate_frames(1)   # the shot pick is a raycast: let physics register the moved bodies
+	return entry
+
+
+## Point-Advances `unit` toward a point 10" along +x (the 6" reach ends it at 6"). Near stands at 16" (10" from the
+## landing, in the rifle's range and sight), Far at -18" (24" away, never lit). Both stay put; Watchers is the AI's reply.
+func _advance_past(unit: GameUnit) -> Array:
+	_bystanders()
+	var near := _pickable(2, "Near", 16.0)
+	var far := _pickable(2, "Far", -18.0)
+	near.is_activated = true
+	far.is_activated = true
+	await _hover_then_click_point(unit, AiDecision.Action.ADVANCE, Vector3(10.0 * INCH, 0, 0))
+	return [near, far]
+
+
+## The hover 10" away shows the ghosts at the 6" Advance reach, the click lands every model on its ghost, then the
+## enemies in range and sight from the landing light up (the engine's suggestion on the highlighted ring) and one
+## click on a lit enemy fires the normal volley. Before the move no enemy is lit: the player picks the destination.
+func test_advance_previews_goes_to_a_free_point_then_shoots(timeout := 60000) -> void:
+	_bystanders()
+	var shooter := _shooter(1, "Riflemen", 0.0, 3)
+	var near := _pickable(2, "Near", 16.0)   # 10" from the landing: in the 12" rifle's range and sight
+	var far := _pickable(2, "Far", -18.0)   # 24" from the landing: never lit
+	near.is_activated = true
+	far.is_activated = true
+	var start: Vector3 = _main.solo_controller.unit_centre(shooter)
+	var shot := await _hover_then_click_point(shooter, AiDecision.Action.ADVANCE, Vector3(10.0 * INCH, 0, 0))
+	assert_bool(shot["point_mode"]).override_failure_message("Advance opened no point mode (log: %s)" % _log_text().strip_edges()) \
+		.is_true()
+	assert_int(shot["lit_at_entry"]).override_failure_message("Advance lit enemies before the move").is_equal(0)
+	var landing: Array = shot["landing"]
+	assert_int(landing.size()).override_failure_message("the hover showed no ghosts").is_equal(3)
+	var centre := Vector3.ZERO
+	for spot in landing:
+		centre += (spot["pos"] as Vector3) / maxf(landing.size(), 1)
+	assert_float(MoveIntent.distance_inches(start, centre)).override_failure_message("ghosts not at the 6\" reach") \
+		.is_between(5.5, 6.01)
+	assert_float(centre.x - start.x).override_failure_message("ghosts not toward the hovered point").is_greater(5.5 * INCH)
+	_assert_on_the_ghosts(landing)
+	assert_bool(shooter.is_activated).override_failure_message("the move completed before the shot").is_false()
+	assert_array(_main._solo_target_mode.get("auto_valid", [])).contains_exactly([near])
+	assert_object(_main._solo_target_mode.get("auto_suggested")).override_failure_message("the suggestion is not pre-marked") \
+		.is_same(_main.solo_controller.suggest_target(shooter, AiDecision.Action.ADVANCE))
+	var rings: Array = _main._solo_target_mode.get("cast_rings", [])
+	var plain: MeshInstance3D = _main._solo_spawn_pulse_ring(Vector3.ZERO, Color.WHITE)
+	var plain_radius: float = (plain.mesh as TorusMesh).outer_radius
+	plain.free()
+	assert_int(rings.size()).is_equal(1)
+	if rings.size() == 1:
+		assert_float(((rings[0] as MeshInstance3D).mesh as TorusMesh).outer_radius) \
+			.override_failure_message("the suggested target's ring is not the highlighted one").is_greater(plain_radius)
+	var text := _log_text()
+	assert_str(text).contains("Riflemen: Advance & Shoot — click a lit enemy to shoot, right-click or Esc for no shot")
+	assert_str(text).contains("Suggested: Near")
+	await _click(_pick_point(far))
+	assert_bool(_main._solo_target_mode.has("auto_shot")).override_failure_message("the unlit click closed the pick").is_true()
+	assert_str(_log_text()).contains("Auto: Far is not a valid target for Advance & Shoot (not in range and sight)")
+	assert_int(_logged_sighted("Riflemen")).override_failure_message("the unlit click fired").is_equal(-1)
+	var near_pt := _pick_point(near)
+	assert_bool(near_pt.is_finite()).override_failure_message("fixture: the pick ray never hits Near").is_true()
+	await _click(near_pt)
+	await E2EBoot.settle(get_tree())
+	text = _log_text()
+	assert_int(_logged_sighted("Riflemen")).override_failure_message("no volley after the lit click").is_greater(0)
+	assert_str(text).contains("fires Rifle at Near")
+	assert_str(text).not_contains("Quick Shot")
+	assert_bool(shooter.is_activated).is_true()
+	assert_bool(_main._solo_target_mode.is_empty()).is_true()
+	assert_int(_main._solo_pending_replies).override_failure_message("the AI's reply was never booked/resolved").is_equal(0)
+
+
+## Enter takes the pre-marked suggestion: the volley fires at it and the activation ends.
+func test_enter_after_a_point_advance_shoots_the_suggestion(timeout := 60000) -> void:
+	var shooter := _shooter(1, "Riflemen", 0.0, 3)
+	var foes: Array = await _advance_past(shooter)
+	assert_object(_main._solo_target_mode.get("auto_suggested")) \
+		.override_failure_message("no suggestion pre-marked (log: %s)" % _log_text().strip_edges()).is_same(foes[0])
+	var enter := InputEventKey.new()
+	enter.keycode = KEY_ENTER
+	enter.pressed = true
+	await _main._solo_targeting_input(enter)
+	await E2EBoot.settle(get_tree())
+	assert_str(_log_text()).contains("fires Rifle at Near")
+	assert_bool(shooter.is_activated).override_failure_message("Enter did not end the activation").is_true()
+	assert_bool(_main._solo_target_mode.is_empty()).is_true()
+	assert_int(_main._solo_pending_replies).is_equal(0)
+
+
+## Right-click/Esc after the point Advance is no shot: nothing is rolled, the activation still ends, the rings go.
+func test_esc_after_a_point_advance_holds_fire(timeout := 60000) -> void:
+	var shooter := _shooter(1, "Riflemen", 0.0, 3)
+	await _advance_past(shooter)
+	assert_bool(_main._solo_target_mode.has("auto_shot")).override_failure_message("no shot pick after the point Advance") \
+		.is_true()
+	var rings: Array = (_main._solo_target_mode.get("cast_rings", []) as Array).duplicate()
+	var esc := InputEventKey.new()
+	esc.keycode = KEY_ESCAPE
+	esc.pressed = true
+	await _main._solo_targeting_input(esc)
+	await E2EBoot.settle(get_tree())
+	var text := _log_text()
+	assert_str(text).contains("Advance & Shoot: Riflemen holds its fire")
+	assert_int(_logged_sighted("Riflemen")).override_failure_message("the hold-fire rolled a volley").is_equal(-1)
+	assert_bool(shooter.is_activated).override_failure_message("Esc did not complete the activation").is_true()
+	assert_bool(_main._solo_target_mode.is_empty()).is_true()
+	assert_int(_main._solo_pending_replies).is_equal(0)
+	for r in rings:
+		assert_bool(is_instance_valid(r)).override_failure_message("a lit ring survived Esc").is_false()

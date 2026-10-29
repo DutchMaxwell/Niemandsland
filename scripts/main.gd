@@ -1269,7 +1269,7 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	# END-of-activation morale from DANGEROUS-terrain wounds (GF/AoF v3.5.1 p.10/p.12 — field-test finding
 	# 7): tested only NOW, AFTER the unit has acted, so dangerous damage never stops it shooting. A CHARGE
 	# resolves through the melee comparison instead ("units in melee don't take morale tests from wounds at
-	# the end of an activation"), so it is excluded here. should_test only fires on a real casualty at ≤half.
+	# the end of an activation"), so it is excluded here. It fires on wounds that leave the unit at ≤half.
 	if dangerous_models > 0 and not unit.is_destroyed() \
 			and int(report.get("action", 0)) != AiDecision.Action.CHARGE:
 		await _solo_shooting_morale(unit, alive_before_dangerous, _roller_label(unit), wounds_before_dangerous)
@@ -3365,6 +3365,10 @@ func _ensure_solo_controller() -> void:
 		solo_controller.round_provider = func() -> int:
 			return int(opr_army_manager.current_round) if opr_army_manager != null else 0
 		solo_controller.game_rounds = _solo_mission_rounds(_solo_mission_id)
+		# Automodus decision 14: only a designated AI seat turns its models to the enemy — read live, since the
+		# controller outlives its seat (#1719) and a hotseat table's geometry controller has ai_slot on a human.
+		solo_controller.is_ai_seat = func(slot: int) -> bool:
+			return solo_ai_slots.has(slot)
 	_solo_apply_difficulty()
 
 
@@ -5031,9 +5035,9 @@ func _solo_resolve_spell_damage(caster: GameUnit, caster_unit: GameUnit, spell_n
 	if total_hits - upgraded > 0:
 		caused += await _solo_save_batch(caster, target, spell_name, total_hits - upgraded,
 			base_defense, ap, profile, human_defends, bane)
-	# Regeneration: only Bane / Lacerate / Disintegrate wounds bypass it (the facets carry this).
+	# Regeneration: only Bane / Disintegrate wounds bypass it (the facets carry this; Lacerate re-rolls only).
 	var landed: int
-	if bane or bool(facets.get("ignores_regen", false)):
+	if bool(facets.get("ignores_regen", false)):
 		landed = await _solo_land_wounds(target, 0, caused)
 	else:
 		# from_spell=true: a unit with Resistance ignores THESE (spell) wounds on 2+, not 6+.
@@ -8376,6 +8380,8 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 		if sixes > 0:
 			if battle_log != null:
 				var bane_name := _solo_bane_facet_name(striker, int(profile.get("range", 0)))
+				if bane_name.is_empty() and _solo_profile_lacerate_only(profile):
+					bane_name = "Lacerate"
 				if win.is_empty():
 					battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s re-rolls %d unmodified Defense 6%s" % [
 						bane_name if not bane_name.is_empty() else "Bane", defender.get_name(), sixes, ("" if sixes == 1 else "s")], true)
@@ -8448,9 +8454,9 @@ func _solo_striker_has_bane(striker: GameUnit, profile: Dictionary, melee: bool)
 		var s := str(r).strip_edges()
 		if s.ends_with("Aura"):
 			continue
-		# Lacerate (AoF Advanced v3.5.1) is a straight data-alias of plain Bane — identical wording
-		# ("when attacking the target must re-roll unmodified Defense results of 6"), no melee/shooting
-		# qualifier — so any non-Aura Lacerate always applies. See special-rules-coverage-plan.
+		# Lacerate (army-book rule, GF and AoF) shares Bane's Defense-6 re-roll, with no melee/shooting
+		# qualifier — so any non-Aura Lacerate always applies here. It does NOT share Bane's
+		# Regeneration bypass (A1, play test 29.10.2026; _solo_ignores_regen).
 		if s.begins_with("Lacerate"):
 			return true
 		if not s.begins_with("Bane"):
@@ -8488,7 +8494,9 @@ func _solo_bane_facet_name(striker: GameUnit, profile_range: int) -> String:
 ## wounds that actually land; units without the rule take full wounds (no roll).
 ## `solo` is the Takedown pick (TC-023) whose unit-of-[1] view decides WHICH rule the roll comes from —
 ## {} for every other wound in the game, which leaves the lookup exactly as it was.
-func _solo_apply_regeneration(target: GameUnit, wounds: int, from_spell: bool = false, solo: Dictionary = {}) -> int:
+## `bypassed`: wounds of the same hit that ignore Regeneration — logged when the unit had a roll to skip.
+func _solo_apply_regeneration(target: GameUnit, wounds: int, from_spell: bool = false, solo: Dictionary = {},
+		bypassed: int = 0) -> int:
 	# PURELY SYNCHRONOUS window: _solo_regen_pick only reads rules, and the flag is down again before the
 	# tray below awaits (a leaked flag would rewrite the next unrelated unit's ignore roll).
 	_solo_takedown_solo = solo
@@ -8501,6 +8509,10 @@ func _solo_apply_regeneration(target: GameUnit, wounds: int, from_spell: bool = 
 	var trace := str(pick.get("trace", ""))
 	if not trace.is_empty() and battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s — %s" % [target.get_name(), trace], true)
+	# A1 rules-must-log: the skip is never silent (Bane / Rending / Unstoppable / ... — never Lacerate).
+	if bypassed > 0 and regen_target > 0 and battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT, "%s: %d wound%s ignore Regeneration — no %s roll" % [
+			target.get_name(), bypassed, ("" if bypassed == 1 else "s"), str(pick.get("name", "regeneration"))], true)
 	if wounds <= 0 or regen_target <= 0:
 		return maxi(wounds, 0)
 	var faces: Array = await _owner_roll(target, wounds, regen_target, "regeneration",
@@ -8596,10 +8608,10 @@ func _solo_morale_bonus(unit: GameUnit) -> int:
 
 
 ## Apply a resolved wound pair to the defender: Regeneration rolls only against the regen-able bucket
-## (Bane / Rending / Lacerate / Unstoppable wounds bypass it — GF Advanced Rules v3.5.1: those rules
-## "ignore Regeneration"), then everything lands through the normal wound machinery. Returns landed wounds.
+## (Bane / Rending / Unstoppable wounds bypass it — GF Advanced Rules v3.5.1: those rules "ignore
+## Regeneration"; Lacerate does not), then everything lands through the normal wound machinery. Returns landed wounds.
 func _solo_land_wounds(target: GameUnit, regenable: int, regen_proof: int, from_spell: bool = false) -> int:
-	var landed: int = maxi(regen_proof, 0) + await _solo_apply_regeneration(target, regenable, from_spell)
+	var landed: int = maxi(regen_proof, 0) + await _solo_apply_regeneration(target, regenable, from_spell, {}, regen_proof)
 	if landed > 0:
 		await _solo_apply_wounds(target, landed)
 	return landed
@@ -8656,6 +8668,8 @@ func _solo_land_deadly_wounds(target: GameUnit, weapon_name: String, deadly_x: i
 		var mult: int = mini(maxi(1, deadly_x), victim.wounds_current)
 		if w_i >= proof:
 			mult = await _solo_apply_regeneration(target, mult)   # one logged die per multiplied wound
+		else:
+			await _solo_apply_regeneration(target, 0, false, {}, mult)   # A1: the skipped roll is logged
 		if mult > 0:
 			acc["dealt"] += SoloController.apply_deadly_hit(victim, mult, on_changed, on_died)
 	var dealt: int = int(acc["dealt"])
@@ -8789,7 +8803,7 @@ func _solo_land_takedown_wounds(target: GameUnit, weapon_name: String, pick: Dic
 		return 0
 	# TC-023: the ignore roll is the PICKED MODEL's unit-of-[1] roll — a Regeneration/medic hero joined to a
 	# plain squad no longer covers the sniped trooper (and the hero's own roll still stands when HE is hit).
-	var landed: int = maxi(regen_proof, 0) + await _solo_apply_regeneration(owner, regenable, false, pick)
+	var landed: int = maxi(regen_proof, 0) + await _solo_apply_regeneration(owner, regenable, false, pick, regen_proof)
 	if landed <= 0:
 		return 0
 	var pid: int = int(owner.unit_properties.get("player_id", target.unit_properties.get("player_id", 1)))
@@ -9004,13 +9018,30 @@ func _solo_shred_facet_name(member: GameUnit, profile_range: int) -> String:
 	return ""
 
 
+## A1: the profile prints Lacerate and no Bane — AiShooting folds Lacerate into the `bane` flag for its
+## Defense-6 re-roll, but only Bane also ignores Regeneration.
+func _solo_profile_lacerate_only(profile: Dictionary) -> bool:
+	var lacerate := false
+	for r in profile.get("rules", []):
+		var s := str(r).strip_edges()
+		if s.begins_with("Bane"):
+			return false
+		lacerate = lacerate or s.begins_with("Lacerate")
+	return lacerate
+
+
 func _solo_ignores_regen(attacker: GameUnit, profile: Dictionary) -> bool:
 	var system := RulesRegistry.system_of_unit(attacker)
 	var faction := RulesRegistry.faction_of_unit(attacker)
 	for r in profile.get("rules", []):
 		var s := str(r).strip_edges()
-		if s.begins_with("Bane") or s.begins_with("Rending") or s.begins_with("Lacerate"):
+		if s.begins_with("Bane") or s.begins_with("Rending"):
 			return true
+		# A1 (play test 29.10.2026): the army-book Lacerate (all 14 GF/AoF books, 3.5.3) only re-rolls
+		# unmodified Defense 6s; unlike Bane (p.13) it never ignores Regeneration. The mechanics maps file
+		# the name under the regen-bypass primitive, so its entry must not answer below either.
+		if s.begins_with("Lacerate"):
+			continue
 		# S1-06: the weapon's own printed Unstoppable ("Ignores Regeneration", GF/AoF v3.5.1 p.15). The
 		# EXACT name (the read that stamps profile.unstoppable): the scoped names stay the registry
 		# facet's below, and the plain entry carries no bypass_regen param.
@@ -9088,6 +9119,8 @@ func _solo_ignores_regen(attacker: GameUnit, profile: Dictionary) -> bool:
 		return true
 	for flag in ["rending", "unstoppable", "bane"]:
 		if bool(profile.get(flag, false)):
+			if flag == "bane" and _solo_profile_lacerate_only(profile):
+				continue   # A1: the flag is the printed Lacerate's re-roll, not a Bane grant
 			if battle_log != null:
 				_log_rule_event(BattleLog.Category.COMBAT,
 					"%s (granted): Regeneration ignored" % flag.capitalize(),
@@ -10746,7 +10779,8 @@ func _solo_consolidate_melee(charger: GameUnit, defender: GameUnit, auto: bool =
 ## OPR rule gap (goal 003 P1): a unit that takes CASUALTIES FROM SHOOTING and is now at half strength or
 ## less must test morale — this trigger was missing entirely (morale only ran after melee). Compares the
 ## unit's own alive count before vs after the volley; `owner` attributes the tray roll (the AI rolls for
-## its own units, "You" for the human's). No-op if the unit was wiped or took no casualties.
+## its own units, "You" for the human's). No-op if the unit was wiped or took no wounds (A2: wounds on a
+## surviving Tough model of a unit at half or less DO test — p.10).
 ## NML-966: the multi-model trigger now counts the COMBINED chain (unit + attached heroes), the same
 ## basis `_solo_below_half_strength` already used for the outcome — wounds clicked onto a joined hero
 ## used to be invisible here because the trigger counted the unit's own models only.
@@ -10766,7 +10800,18 @@ func _solo_shooting_morale(unit: GameUnit, alive_before: int, owner: String, wou
 					unit.get_name(), wounds_now, _solo_unit_wounds_start(unit)], true)
 			await _solo_morale_test(unit, owner)
 		return
-	if AiCombatMath.should_test_shooting_morale(alive_before, SoloController.combined_alive(unit), SoloController.combined_total(unit)):
+	var alive_now: int = SoloController.combined_alive(unit)
+	var total: int = SoloController.combined_total(unit)
+	if AiCombatMath.should_test_shooting_morale(alive_before, alive_now, total):
+		await _solo_morale_test(unit, owner)
+	elif alive_now > 0 and wounds_before >= 0 and _solo_unit_wounds_now(unit) < wounds_before \
+			and AiCombatMath.at_or_below_half(alive_now, total):
+		# A2 (play test 29.10.2026): p.10 triggers on WOUNDS that leave the unit at half or less, not only
+		# on a lost model (p.14: the last hero tests "whenever it takes wounds") — Tough models that survive.
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT,
+				"%s takes wounds at half strength or less (%d/%d models) — morale test (GF v3.5.1 p.10)" % [
+				unit.get_name(), alive_now, total], true)
 		await _solo_morale_test(unit, owner)
 
 
@@ -11208,8 +11253,9 @@ func solo_begin_auto(unit: GameUnit, verb: int) -> void:
 	var valid: Array = []
 	var dimmed: Dictionary = {}   # Automodus 1.8c (OD 6): refused engine enemies -> the reason their hover names
 	var first_reason := ""
-	# Automodus 1.8b (OD 5): Rush goes to a FREE table point — no lit enemies, only the unit's own refusal.
-	var to_point := verb == AiDecision.Action.RUSH
+	# Automodus 1.8b/1.8f (OD 5, OD 13): Rush and Advance go to a FREE table point — no lit enemies, only the unit's
+	# own refusal (the Advance's shot is picked after the move).
+	var to_point := verb == AiDecision.Action.RUSH or verb == AiDecision.Action.ADVANCE
 	if to_point:
 		var here: Vector3 = solo_controller.unit_centre(unit)
 		first_reason = str(solo_controller.player_intent(unit, verb, null, here).get("refused", ""))
@@ -11232,14 +11278,7 @@ func solo_begin_auto(unit: GameUnit, verb: int) -> void:
 				unit.get_name(), verb_label, first_reason if first_reason != "" else "no enemy on the table"])
 		return
 	var suggested: GameUnit = null if to_point else solo_controller.suggest_target(unit, verb)
-	var rings: Array = []
-	for cu in valid:
-		# Automodus 1.8 (OD 11): the suggested target's ring is brighter and larger than the other lit ones.
-		var ring := _solo_spawn_pulse_ring(solo_controller.unit_centre(cu),
-			Color(1.0, 0.9, 0.5) if cu == suggested else Color(1.0, 0.7, 0.2))
-		if cu == suggested:
-			(ring.mesh as TorusMesh).outer_radius = 0.075
-		rings.append(ring)
+	var rings: Array = valid.map(func(cu: GameUnit) -> Node: return _solo_lit_ring(cu, suggested))
 	_solo_target_mode["auto_valid"] = valid
 	_solo_target_mode["auto_label"] = verb_label
 	_solo_target_mode["cast_rings"] = rings   # freed by _solo_end_targeting
@@ -11252,7 +11291,8 @@ func solo_begin_auto(unit: GameUnit, verb: int) -> void:
 	if band > 0 and range_ring_controller != null and range_ring_controller.has_method("show_spell_preview"):
 		range_ring_controller.show_spell_preview(_solo_unit_nodes(unit), band)
 	if to_point and battle_log != null:
-		battle_log.log_event(BattleLog.Category.GENERAL, "%s: hover the table to see where your models end, click to rush there; right-click or Esc cancels" % unit.get_name())
+		battle_log.log_event(BattleLog.Category.GENERAL, "%s: hover the table to see where your models end, click to %s there; right-click or Esc cancels" % [
+			unit.get_name(), "rush" if verb == AiDecision.Action.RUSH else "advance"])
 	elif battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL,
 			"%s: %d target(s) lit for %s — hover one to see where your models land, click it to go; right-click or Esc cancels" % [
@@ -11333,8 +11373,9 @@ func _run_player_intent(unit: GameUnit, verb: int, target: GameUnit, point: Vari
 		await _solo_complete_human_attack(unit)
 	elif bool(report.get("can_shoot", false)):
 		await _run_human_attack(unit, target, false, true)
-	# Automodus 1.8d: a point Rush has no target, so a Quick Shot unit picks its shot now; the pick completes.
-	elif point == null or verb != AiDecision.Action.RUSH or not _solo_open_quick_shot(unit):
+	# Automodus 1.8d/1.8f: a point move has no target, so the unit picks its shot now (after an Advance always,
+	# after a Rush with Quick Shot); the pick completes the activation.
+	elif point == null or not _solo_open_shot_pick(unit, verb):
 		await _solo_complete_human_attack(unit)   # the no-shot reason is already a rule note
 
 
@@ -11600,6 +11641,12 @@ func _solo_end_targeting() -> void:
 func _solo_targeting_input(event: InputEvent) -> bool:
 	if _solo_target_mode.is_empty():
 		return false
+	# Automodus 1.8f: in the shot pick after a point Advance, Enter shoots the pre-marked suggestion.
+	var key := event as InputEventKey
+	if key != null and key.pressed and not key.echo and key.keycode in [KEY_ENTER, KEY_KP_ENTER] \
+			and _solo_target_mode.get("auto_suggested") != null:
+		await _solo_auto_click(_solo_target_mode["auto_suggested"])
+		return true
 	match SoloController.targeting_route(event):
 		SoloController.TargetingRoute.CANCEL:
 			# Declared split (maintainer UX 31.07.): right-click/ESC at the GO stage cancels
@@ -11635,11 +11682,12 @@ func _solo_targeting_input(event: InputEvent) -> bool:
 				_solo_end_targeting()
 				_solo_coordinate_decline(cb)
 				return true
-			# Automodus 1.8d: no Quick Shot after the point Rush — the activation still ends (the AI is owed its reply).
-			if _solo_target_mode.has("auto_quick_shot"):
+			# Automodus 1.8d/1.8f: no shot after the point move — the activation still ends (the AI is owed its reply).
+			if _solo_target_mode.has("auto_shot"):
 				var qs: GameUnit = _solo_target_mode.get("unit")
+				var qs_label := str(_solo_target_mode.get("auto_label", ""))
 				_solo_end_targeting()
-				_log_rule_event(BattleLog.Category.COMBAT, "Quick Shot: %s holds its fire" % qs.get_name(), true)
+				_log_rule_event(BattleLog.Category.COMBAT, "%s: %s holds its fire" % [qs_label, qs.get_name()], true)
 				_solo_complete_human_attack(qs)
 				return true
 			_solo_end_targeting()
@@ -11674,14 +11722,10 @@ func _solo_targeting_input(event: InputEvent) -> bool:
 				if target != null:
 					_solo_cast_click(target)
 				return true
-			if _solo_target_mode.has("auto_point"):   # Automodus 1.8b: the click rushes to the table point
-				var goal: Variant = _solo_auto_point_at(mb.position)
-				# 1.8e: a click inside the unit's own footprint is no Rush - nothing happens, the mode stays open.
-				if goal != null and target != attacker and not _solo_on_own_base(attacker, goal):
-					_solo_end_targeting()
-					await _run_player_intent(attacker, AiDecision.Action.RUSH, null, goal)
+			if _solo_target_mode.has("auto_point"):   # Automodus 1.8b/1.8f: the click moves to the table point
+				await _solo_auto_point_click(_solo_auto_point_at(mb.position), target)
 				return true
-			if _solo_target_mode.has("auto_verb") or _solo_target_mode.has("auto_quick_shot"):
+			if _solo_target_mode.has("auto_verb") or _solo_target_mode.has("auto_shot"):
 				if target != null:
 					await _solo_auto_click(target)
 				return true
@@ -11729,6 +11773,18 @@ func _solo_auto_point_at(screen_pos: Vector2) -> Variant:
 	return Vector3(snappedf((hit as Vector3).x, cell), (hit as Vector3).y, snappedf((hit as Vector3).z, cell))
 
 
+## Automodus steps 1.8b/1.8f (factored for headless tests and the two-instance harness): a click on the table point
+## `goal` runs the mode's verb (Rush or Advance) there. 1.8e: a click inside the unit's own footprint (`on_unit` is
+## what the pick ray hit) is no move — nothing happens, the mode stays open.
+func _solo_auto_point_click(goal: Variant, on_unit: GameUnit = null) -> void:
+	var unit: GameUnit = _solo_target_mode.get("unit")
+	if goal == null or on_unit == unit or _solo_on_own_base(unit, goal):
+		return
+	var verb: int = int(_solo_target_mode.get("auto_verb", AiDecision.Action.RUSH))
+	_solo_end_targeting()
+	await _run_player_intent(unit, verb, null, goal)
+
+
 ## Automodus step 1.8e: TRACK only notes the hovered cell and when the cursor reached it (the last ghosts stay
 ## while it moves); _solo_auto_point_dwell, every frame, plans the cell once the cursor rested on it.
 func _solo_hover_auto_point(point: Variant) -> void:
@@ -11755,7 +11811,7 @@ func _solo_on_own_base(unit: GameUnit, point: Vector3) -> bool:
 	return false
 
 
-## Automodus step 1.8b: the Rush ghosts for a table point (clamped to the Rush reach along the engine path),
+## Automodus steps 1.8b/1.8f: the Rush/Advance ghosts for a table point (clamped to the reach along the engine path),
 ## one planner run per grid cell (cached in auto_previews), rebuilt only when the hovered cell changes.
 func _solo_show_auto_point(point: Variant) -> void:
 	if landing_preview == null or point == _solo_target_mode.get("auto_hovered"):
@@ -11763,7 +11819,8 @@ func _solo_show_auto_point(point: Variant) -> void:
 	_solo_target_mode["auto_hovered"] = point
 	var cache: Dictionary = _solo_target_mode.get("auto_previews", {})
 	if point != null and not cache.has(point):
-		cache[point] = _solo_preview_for(_solo_target_mode.get("unit"), AiDecision.Action.RUSH, null, point)
+		cache[point] = _solo_preview_for(_solo_target_mode.get("unit"),
+			int(_solo_target_mode.get("auto_verb", AiDecision.Action.RUSH)), null, point)
 	var preview: Dictionary = cache.get(point, {}) if point != null else {}
 	if preview.has("landing"):
 		landing_preview.show_preview(preview["landing"], preview.get("lines", []))
@@ -11776,44 +11833,62 @@ func _solo_show_auto_point(point: Variant) -> void:
 ## included, which used to take the suggestion) says why, and the mode stays open.
 func _solo_auto_click(target: GameUnit) -> void:
 	var unit: GameUnit = _solo_target_mode.get("unit")
-	var quick_shot: bool = _solo_target_mode.has("auto_quick_shot")   # Automodus 1.8d: the shot after a point Rush
+	var shot_after: int = int(_solo_target_mode.get("auto_shot", -1))   # Automodus 1.8d/1.8f: the shot after a point move
 	var verb: int = int(_solo_target_mode.get("auto_verb", AiDecision.Action.RUSH))
 	if not (_solo_target_mode.get("auto_valid", []) as Array).has(target):
 		var why := "not an enemy unit"
 		if _engine_enemy(unit, target):
-			why = "not in range and sight" if quick_shot \
+			why = "not in range and sight" if shot_after >= 0 \
 				else str(solo_controller.player_intent(unit, verb, target).get("refused", "not one of the lit targets"))
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.GENERAL, "Auto: %s is not a valid target for %s (%s)" % [
 				target.get_name(), str(_solo_target_mode.get("auto_label", "")), why])
 		return
 	_solo_end_targeting()
-	if quick_shot:
-		_log_rule_event(BattleLog.Category.COMBAT, "Quick Shot: shoots after its Rush action", true)
+	if shot_after >= 0:
+		if shot_after == AiDecision.Action.RUSH:
+			_log_rule_event(BattleLog.Category.COMBAT, "Quick Shot: shoots after its Rush action", true)
 		await _run_human_attack(unit, target, false, true)   # the volley, then the activation and the AI's reply
 		return
 	await _run_player_intent(unit, verb, target)
 
 
-## Automodus step 1.8d (#1828): after a point Rush a Quick Shot unit ("may shoot after Rush") picks its shot from
-## where it now stands: the engine enemies its volley reaches (range + sight, _solo_volley_sighted) light up with the
-## 1.6 ring and the pick waits for a click (right-click/Esc = no shot). False = no Quick Shot, or nothing to light.
-func _solo_open_quick_shot(unit: GameUnit) -> bool:
+## Automodus steps 1.8d/1.8f (#1828): after a point move the unit picks its shot from where it now stands — after an
+## Advance always (OD 13), after a Rush only with Quick Shot ("may shoot after Rush"). The engine enemies its volley
+## reaches (range + sight, _solo_volley_sighted) light up with the 1.6 ring, the Advance's suggestion (suggest_target)
+## wears the highlighted one, and the pick waits for a click (Enter = the suggestion; right-click/Esc = no shot).
+## False = no shot to pick (no Quick Shot, or nothing to light).
+func _solo_open_shot_pick(unit: GameUnit, verb: int) -> bool:
+	var quick := verb == AiDecision.Action.RUSH
 	# The test player_intent uses (solo_controller.gd), with no target yet: the rule active, or spell-granted.
-	if not ((unit.has_special_rule("Quick Shot") and RulesRegistry.unit_rule_active(unit, "Quick Shot")) \
+	if quick and not ((unit.has_special_rule("Quick Shot") and RulesRegistry.unit_rule_active(unit, "Quick Shot")) \
 			or AiSpell.granted_rules_of(unit, null).has("Quick Shot")):
 		return false
+	var label := "Quick Shot" if quick else "Advance & Shoot"
 	var lit: Array = drag_line_targets(unit).filter(func(e: GameUnit) -> bool: return _solo_volley_sighted(unit, e) > 0)
 	if lit.is_empty():
-		_log_rule_event(BattleLog.Category.COMBAT, "Quick Shot: no enemy in range and sight", true)
+		_log_rule_event(BattleLog.Category.COMBAT, "%s: no enemy in range and sight" % label, true)
 		return false
-	_solo_target_mode = {"unit": unit, "auto_quick_shot": true, "auto_valid": lit, "auto_label": "Quick Shot",
-		"cast_rings": lit.map(func(e: GameUnit) -> Node:   # freed by _solo_end_targeting
-			return _solo_spawn_pulse_ring(solo_controller.unit_centre(e), Color(1.0, 0.7, 0.2)))}
+	var suggested: GameUnit = null if quick else solo_controller.suggest_target(unit, verb)
+	suggested = suggested if lit.has(suggested) else null   # 1.8c: a suggestion that is not lit is not named
+	_solo_target_mode = {"unit": unit, "auto_shot": verb, "auto_valid": lit, "auto_label": label,
+		"auto_suggested": suggested, "cast_rings": lit.map(func(e: GameUnit) -> Node:   # freed by _solo_end_targeting
+			return _solo_lit_ring(e, suggested))}
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL,
-			"%s: Quick Shot — click a lit enemy to shoot, right-click or Esc for no shot" % unit.get_name())
+			"%s: %s — click a lit enemy to shoot, right-click or Esc for no shot" % [unit.get_name(), label])
+		if suggested != null:
+			battle_log.log_event(BattleLog.Category.GENERAL, "Suggested: %s — Enter shoots it" % suggested.get_name())
 	return true
+
+
+## Automodus 1.6/1.8 (OD 11): a lit target's amber ring; the suggested target's is brighter and larger.
+func _solo_lit_ring(cu: GameUnit, suggested: GameUnit) -> Node:
+	var ring := _solo_spawn_pulse_ring(solo_controller.unit_centre(cu),
+		Color(1.0, 0.9, 0.5) if cu == suggested else Color(1.0, 0.7, 0.2))
+	if cu == suggested:
+		(ring.mesh as TorusMesh).outer_radius = 0.075
+	return ring
 
 
 ## Cast-mode click (#227, factored for headless tests): toggle-pick for multi-target spells.
