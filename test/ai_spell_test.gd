@@ -111,6 +111,17 @@ func test_spell_damage_ev_ap_deadly_and_regeneration() -> void:
 	assert_float(AiSpell.spell_damage_ev(6, regen, bane)).is_equal_approx(6.0 * (1.0 - p_block_bane), EPS)
 
 
+func test_spell_damage_ev_lacerate_keeps_regeneration() -> void:
+	# A1 (play test 29.10.2026): a Lacerate spell re-rolls the Defense 6s (like Bane) but its wounds still
+	# face the Regeneration roll. 6 hits vs Defense 4+: 6 × (1 − 5/12) through, × 2/3 kept.
+	var regen := {"defense": 4, "regeneration": true, "regen_target": 5}
+	var through := 6.0 * (1.0 - 5.0 / 12.0)
+	var lacerate := AiSpell.spell_facets(["Lacerate"])
+	assert_float(AiSpell.spell_damage_ev(6, regen, lacerate)).is_equal_approx(through * 2.0 / 3.0, EPS)
+	# CONTROL: Bane bypasses it.
+	assert_float(AiSpell.spell_damage_ev(6, regen, AiSpell.spell_facets(["Bane"]))).is_equal_approx(through, EPS)
+
+
 func test_spell_damage_ev_surge_and_on_six_ap() -> void:
 	# Surge: +hits/6 expected extra hits. 6 hits vs Def 4+ → (6+1)×0.5.
 	var surge := AiSpell.spell_facets(["Surge"])

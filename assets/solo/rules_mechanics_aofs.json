@@ -1839,7 +1839,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "bypass_regen": true
+     "bypass_regen": false
     }
    },
    "Melee Evasion": {
@@ -2030,7 +2030,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "bypass_regen": true
+     "bypass_regen": false
     }
    },
    "Melee Evasion": {
@@ -2778,7 +2778,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "bypass_regen": true
+     "bypass_regen": false
     }
    },
    "Melee Slayer": {
@@ -3520,7 +3520,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "bypass_regen": true
+     "bypass_regen": false
     }
    },
    "Lucky": {
