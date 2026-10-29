@@ -10,6 +10,8 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 - **A volley at the other player's unit lets that player roll the saves**: online on their own tray,
   as melee already did, and on a hotseat table with the defender's save prompt; a charge's Impact
   hits too. (#1828)
+- **Wounds that leave a unit at half strength or less trigger its morale test even when no model falls**,
+  for example wounds on a surviving Tough model after shooting, a spell or dangerous terrain.
 
 ## [0.3.14.0-alpha] — 2026-10-28
 
