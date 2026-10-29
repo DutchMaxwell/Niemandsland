@@ -18,8 +18,9 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 
 ### Changed
 - **Deadly against Regeneration or Self-Repair rolls once per wound after the multiplication**: a
-  Deadly(3) wound on a model with three or more wounds left is three wounds and three rolls, not one
-  roll before multiplying (each roll in the battle log). The Tough cap and no carry-over stay.
+  Deadly(3) wound is three wounds and three rolls, not one roll before multiplying, even on a model with
+  fewer wounds left; what the rolls do not stop is then capped at that model (no carry-over). Each roll
+  is in the battle log, and the AI opponent's damage estimate counts the same way.
 
 ## [0.3.14.0-alpha] — 2026-10-28
 

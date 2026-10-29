@@ -8622,9 +8622,10 @@ func _solo_land_wounds(target: GameUnit, regenable: int, regen_proof: int, from_
 ## automatic — SoloController.deadly_pick), a joined hero last; when a FRESH model is about to be hit the
 ## DEFENDER picks: a human defender clicks the model through the same prompt as for normal wounds (#172), the
 ## AI defender / batch / MP take the defender-optimal casualty order.
-## A4 (maintainer ruling 29.10.2026: "pro Wunde einen Reparaturwurf"): each unsaved wound is assigned and
-## multiplied FIRST (capped at what its model has left), then the Regeneration family rolls one die per
-## multiplied wound. Returns the wounds actually dealt (the melee comparison + summary).
+## A4 (maintainer rulings 29.10.2026: "pro Wunde einen Reparaturwurf", "Drei Wuerfe muessen gelingen"): each
+## unsaved wound is assigned and multiplied FIRST, the Regeneration family rolls all X wounds (even past what
+## the model has left), and only the survivors land, capped at the model — the Takedown landing's order.
+## Returns the wounds actually dealt (the melee comparison + summary).
 func _solo_land_deadly_wounds(target: GameUnit, weapon_name: String, deadly_x: int,
 		regenable_unsaved: int, regen_proof_unsaved: int) -> int:
 	var proof: int = maxi(regen_proof_unsaved, 0)
@@ -8665,7 +8666,7 @@ func _solo_land_deadly_wounds(target: GameUnit, weapon_name: String, deadly_x: i
 		var victim := acc["victim"] as ModelInstance
 		if victim == null:
 			victim = (pick["unit"] as GameUnit).models[int(pick["index"])]
-		var mult: int = mini(maxi(1, deadly_x), victim.wounds_current)
+		var mult: int = maxi(1, deadly_x)   # apply_deadly_hit caps what survives at the model
 		if w_i >= proof:
 			mult = await _solo_apply_regeneration(target, mult)   # one logged die per multiplied wound
 		else:
