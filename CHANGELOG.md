@@ -6,6 +6,10 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 
 ## [Unreleased]
 
+### Changed
+- **Windows: the game data ships as its own file** (`Niemandsland.pck` next to `Niemandsland.exe`) -
+  an antivirus heuristic blocked the 0.3.14.0 download, whose executable carried the game data inside.
+
 ### Fixed
 - **A volley at the other player's unit lets that player roll the saves**: online on their own tray,
   as melee already did, and on a hotseat table with the defender's save prompt; a charge's Impact
