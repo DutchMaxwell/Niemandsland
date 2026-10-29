@@ -5031,9 +5031,9 @@ func _solo_resolve_spell_damage(caster: GameUnit, caster_unit: GameUnit, spell_n
 	if total_hits - upgraded > 0:
 		caused += await _solo_save_batch(caster, target, spell_name, total_hits - upgraded,
 			base_defense, ap, profile, human_defends, bane)
-	# Regeneration: only Bane / Lacerate / Disintegrate wounds bypass it (the facets carry this).
+	# Regeneration: only Bane / Disintegrate wounds bypass it (the facets carry this; Lacerate re-rolls only).
 	var landed: int
-	if bane or bool(facets.get("ignores_regen", false)):
+	if bool(facets.get("ignores_regen", false)):
 		landed = await _solo_land_wounds(target, 0, caused)
 	else:
 		# from_spell=true: a unit with Resistance ignores THESE (spell) wounds on 2+, not 6+.
@@ -8376,6 +8376,8 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 		if sixes > 0:
 			if battle_log != null:
 				var bane_name := _solo_bane_facet_name(striker, int(profile.get("range", 0)))
+				if bane_name.is_empty() and _solo_profile_lacerate_only(profile):
+					bane_name = "Lacerate"
 				if win.is_empty():
 					battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s re-rolls %d unmodified Defense 6%s" % [
 						bane_name if not bane_name.is_empty() else "Bane", defender.get_name(), sixes, ("" if sixes == 1 else "s")], true)
@@ -8448,9 +8450,9 @@ func _solo_striker_has_bane(striker: GameUnit, profile: Dictionary, melee: bool)
 		var s := str(r).strip_edges()
 		if s.ends_with("Aura"):
 			continue
-		# Lacerate (AoF Advanced v3.5.1) is a straight data-alias of plain Bane — identical wording
-		# ("when attacking the target must re-roll unmodified Defense results of 6"), no melee/shooting
-		# qualifier — so any non-Aura Lacerate always applies. See special-rules-coverage-plan.
+		# Lacerate (army-book rule, GF and AoF) shares Bane's Defense-6 re-roll, with no melee/shooting
+		# qualifier — so any non-Aura Lacerate always applies here. It does NOT share Bane's
+		# Regeneration bypass (A1, play test 29.10.2026; _solo_ignores_regen).
 		if s.begins_with("Lacerate"):
 			return true
 		if not s.begins_with("Bane"):
@@ -8488,7 +8490,9 @@ func _solo_bane_facet_name(striker: GameUnit, profile_range: int) -> String:
 ## wounds that actually land; units without the rule take full wounds (no roll).
 ## `solo` is the Takedown pick (TC-023) whose unit-of-[1] view decides WHICH rule the roll comes from —
 ## {} for every other wound in the game, which leaves the lookup exactly as it was.
-func _solo_apply_regeneration(target: GameUnit, wounds: int, from_spell: bool = false, solo: Dictionary = {}) -> int:
+## `bypassed`: wounds of the same hit that ignore Regeneration — logged when the unit had a roll to skip.
+func _solo_apply_regeneration(target: GameUnit, wounds: int, from_spell: bool = false, solo: Dictionary = {},
+		bypassed: int = 0) -> int:
 	# PURELY SYNCHRONOUS window: _solo_regen_pick only reads rules, and the flag is down again before the
 	# tray below awaits (a leaked flag would rewrite the next unrelated unit's ignore roll).
 	_solo_takedown_solo = solo
@@ -8501,6 +8505,10 @@ func _solo_apply_regeneration(target: GameUnit, wounds: int, from_spell: bool = 
 	var trace := str(pick.get("trace", ""))
 	if not trace.is_empty() and battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s — %s" % [target.get_name(), trace], true)
+	# A1 rules-must-log: the skip is never silent (Bane / Rending / Unstoppable / ... — never Lacerate).
+	if bypassed > 0 and regen_target > 0 and battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT, "%s: %d wound%s ignore Regeneration — no %s roll" % [
+			target.get_name(), bypassed, ("" if bypassed == 1 else "s"), str(pick.get("name", "regeneration"))], true)
 	if wounds <= 0 or regen_target <= 0:
 		return maxi(wounds, 0)
 	var faces: Array = await _owner_roll(target, wounds, regen_target, "regeneration",
@@ -8596,10 +8604,10 @@ func _solo_morale_bonus(unit: GameUnit) -> int:
 
 
 ## Apply a resolved wound pair to the defender: Regeneration rolls only against the regen-able bucket
-## (Bane / Rending / Lacerate / Unstoppable wounds bypass it — GF Advanced Rules v3.5.1: those rules
-## "ignore Regeneration"), then everything lands through the normal wound machinery. Returns landed wounds.
+## (Bane / Rending / Unstoppable wounds bypass it — GF Advanced Rules v3.5.1: those rules "ignore
+## Regeneration"; Lacerate does not), then everything lands through the normal wound machinery. Returns landed wounds.
 func _solo_land_wounds(target: GameUnit, regenable: int, regen_proof: int, from_spell: bool = false) -> int:
-	var landed: int = maxi(regen_proof, 0) + await _solo_apply_regeneration(target, regenable, from_spell)
+	var landed: int = maxi(regen_proof, 0) + await _solo_apply_regeneration(target, regenable, from_spell, {}, regen_proof)
 	if landed > 0:
 		await _solo_apply_wounds(target, landed)
 	return landed
@@ -8614,7 +8622,7 @@ func _solo_land_wounds(target: GameUnit, regenable: int, regen_proof: int, from_
 ## the wounds actually dealt (the melee comparison + summary).
 func _solo_land_deadly_wounds(target: GameUnit, weapon_name: String, deadly_x: int,
 		regenable_unsaved: int, regen_proof_unsaved: int) -> int:
-	var surviving: int = maxi(regen_proof_unsaved, 0) + await _solo_apply_regeneration(target, regenable_unsaved)
+	var surviving: int = maxi(regen_proof_unsaved, 0) + await _solo_apply_regeneration(target, regenable_unsaved, false, {}, regen_proof_unsaved)
 	if surviving <= 0:
 		return 0
 	var pid: int = int(target.unit_properties.get("player_id", 1))
@@ -8779,7 +8787,7 @@ func _solo_land_takedown_wounds(target: GameUnit, weapon_name: String, pick: Dic
 		return 0
 	# TC-023: the ignore roll is the PICKED MODEL's unit-of-[1] roll — a Regeneration/medic hero joined to a
 	# plain squad no longer covers the sniped trooper (and the hero's own roll still stands when HE is hit).
-	var landed: int = maxi(regen_proof, 0) + await _solo_apply_regeneration(owner, regenable, false, pick)
+	var landed: int = maxi(regen_proof, 0) + await _solo_apply_regeneration(owner, regenable, false, pick, regen_proof)
 	if landed <= 0:
 		return 0
 	var pid: int = int(owner.unit_properties.get("player_id", target.unit_properties.get("player_id", 1)))
@@ -8994,13 +9002,30 @@ func _solo_shred_facet_name(member: GameUnit, profile_range: int) -> String:
 	return ""
 
 
+## A1: the profile prints Lacerate and no Bane — AiShooting folds Lacerate into the `bane` flag for its
+## Defense-6 re-roll, but only Bane also ignores Regeneration.
+func _solo_profile_lacerate_only(profile: Dictionary) -> bool:
+	var lacerate := false
+	for r in profile.get("rules", []):
+		var s := str(r).strip_edges()
+		if s.begins_with("Bane"):
+			return false
+		lacerate = lacerate or s.begins_with("Lacerate")
+	return lacerate
+
+
 func _solo_ignores_regen(attacker: GameUnit, profile: Dictionary) -> bool:
 	var system := RulesRegistry.system_of_unit(attacker)
 	var faction := RulesRegistry.faction_of_unit(attacker)
 	for r in profile.get("rules", []):
 		var s := str(r).strip_edges()
-		if s.begins_with("Bane") or s.begins_with("Rending") or s.begins_with("Lacerate"):
+		if s.begins_with("Bane") or s.begins_with("Rending"):
 			return true
+		# A1 (play test 29.10.2026): the army-book Lacerate (all 14 GF/AoF books, 3.5.3) only re-rolls
+		# unmodified Defense 6s; unlike Bane (p.13) it never ignores Regeneration. The mechanics maps file
+		# the name under the regen-bypass primitive, so its entry must not answer below either.
+		if s.begins_with("Lacerate"):
+			continue
 		# S1-06: the weapon's own printed Unstoppable ("Ignores Regeneration", GF/AoF v3.5.1 p.15). The
 		# EXACT name (the read that stamps profile.unstoppable): the scoped names stay the registry
 		# facet's below, and the plain entry carries no bypass_regen param.
@@ -9078,6 +9103,8 @@ func _solo_ignores_regen(attacker: GameUnit, profile: Dictionary) -> bool:
 		return true
 	for flag in ["rending", "unstoppable", "bane"]:
 		if bool(profile.get(flag, false)):
+			if flag == "bane" and _solo_profile_lacerate_only(profile):
+				continue   # A1: the flag is the printed Lacerate's re-roll, not a Bane grant
 			if battle_log != null:
 				_log_rule_event(BattleLog.Category.COMBAT,
 					"%s (granted): Regeneration ignored" % flag.capitalize(),
