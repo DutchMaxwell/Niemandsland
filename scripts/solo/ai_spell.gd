@@ -226,14 +226,20 @@ static func spell_damage_ev(hits: int, def_ctx: Dictionary, facets: Dictionary =
 		+ six_hits * (1.0 - AiEv.block_chance(defense, ap + int(facets.get("on6_ap", 0)), bane))
 	# Deadly (Tough-capped multiply — one model takes them all, so Tough bounds it).
 	var deadly := int(facets.get("deadly", 0))
+	var deadly_cap := maxi(int(def_ctx.get("tough", 1)), 1)
+	var deadly_unsaved := unsaved   # A4: the raw unsaved count, before ×X
 	if deadly > 0:
-		unsaved *= float(AiCombatMath.deadly_multiplier(deadly, maxi(int(def_ctx.get("tough", 1)), 1)))
+		unsaved *= float(AiCombatMath.deadly_multiplier(deadly, deadly_cap))
 	# Shred: +1 wound per unmodified Defense 1 among the save dice (one per hit) — expected +h/6.
 	if bool(facets.get("shred", false)):
 		unsaved += h * SIX_P
 	# Regeneration family, unless the facets bypass it (Bane / Lacerate / Disintegrate).
 	if bool(def_ctx.get("regeneration", false)) and not (bane or bool(facets.get("ignores_regen", false))):
-		unsaved *= 1.0 - AiCombatMath.success_chance(int(def_ctx.get("regen_target_spell", def_ctx.get("regen_target", AiEv.REGENERATION_TARGET))))
+		var keep := 1.0 - AiCombatMath.success_chance(int(def_ctx.get("regen_target_spell", def_ctx.get("regen_target", AiEv.REGENERATION_TARGET))))
+		unsaved *= keep
+		# A4 (maintainer ruling 29.10.2026), as AiEv.profile_ev: all X wounds are rolled before the cap.
+		if deadly > deadly_cap:
+			unsaved += deadly_unsaved * (AiCombatMath.deadly_regen_dealt(deadly, deadly_cap, keep) - float(deadly_cap) * keep)
 	return unsaved
 
 

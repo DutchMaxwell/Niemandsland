@@ -111,6 +111,18 @@ func test_spell_damage_ev_ap_deadly_and_regeneration() -> void:
 	assert_float(AiSpell.spell_damage_ev(6, regen, bane)).is_equal_approx(6.0 * (1.0 - p_block_bane), EPS)
 
 
+func test_spell_damage_ev_deadly_against_regeneration_rolls_every_wound_before_the_cap() -> void:
+	# A4 for spells (maintainer ruling 29.10.2026, "Drei Wuerfe muessen gelingen"): a Deadly(3) wound on a
+	# 1-wound Regeneration model rolls 3 dice and the model survives only if all 3 succeed (5+ each: 1/27).
+	# 6 hits vs Defense 4+ → 3 unsaved, each worth 1 − (1/3)^3 = 26/27 of a wound.
+	var d3 := AiSpell.spell_facets(["Deadly(3)"])
+	var regen1 := {"defense": 4, "tough": 1, "regeneration": true, "regen_target": 5}
+	assert_float(AiSpell.spell_damage_ev(6, regen1, d3)).is_equal_approx(3.0 * 26.0 / 27.0, EPS)
+	# CONTROL: with Tough(3) the cap never bites — 3 wounds × 2/3 kept, as before.
+	var regen3 := {"defense": 4, "tough": 3, "regeneration": true, "regen_target": 5}
+	assert_float(AiSpell.spell_damage_ev(6, regen3, d3)).is_equal_approx(3.0 * 3.0 * 2.0 / 3.0, EPS)
+
+
 func test_spell_damage_ev_surge_and_on_six_ap() -> void:
 	# Surge: +hits/6 expected extra hits. 6 hits vs Def 4+ → (6+1)×0.5.
 	var surge := AiSpell.spell_facets(["Surge"])
