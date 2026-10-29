@@ -442,6 +442,20 @@ static func deadly_multiplier(deadly_x: int, target_tough: int) -> int:
 	return clampi(deadly_x, 1, cap)
 
 
+## A4 (maintainer ruling 29.10.2026: "Drei Wuerfe muessen gelingen"): the expected wounds ONE unsaved Deadly(X)
+## wound deals to a model of `target_tough` against the Regeneration family — all X wounds are rolled, each kept
+## with chance `keep`, and only the survivors are capped at the model: E[min(Binomial(X, keep), cap)].
+static func deadly_regen_dealt(deadly_x: int, target_tough: int, keep: float) -> float:
+	var x: int = maxi(deadly_x, 1)
+	var cap: int = maxi(target_tough, 1)
+	var ev := 0.0
+	var ways := 1.0   # C(x, k)
+	for k in range(x + 1):
+		ev += ways * pow(keep, k) * pow(1.0 - keep, x - k) * float(mini(k, cap))
+		ways = ways * float(x - k) / float(k + 1)
+	return ev
+
+
 ## Conditional AP — the extra AP a TARGET-PROPERTY weapon rule grants against THIS target, or 0 when the
 ## condition is not met. One helper serves every such rule; the rule's registry params drive it entirely:
 ##   ap_bonus    — the AP increase when the condition holds
