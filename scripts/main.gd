@@ -5015,6 +5015,8 @@ func _solo_resolve_spell_damage(caster: GameUnit, caster_unit: GameUnit, spell_n
 	var profile := {"name": spell_name, "ap": ap, "deadly": int(facets.get("deadly", 0)),
 		"shred": bool(facets.get("shred", false)), "rules": effect.get("weapon_rules", [])}
 	var human_defends: bool = not _solo_is_ai_unit(target)
+	# A4 for spells: a Deadly spell's saves return the RAW unsaved count, which lands per model below.
+	var deadly: int = int(profile["deadly"])
 	var upgraded: int = mini(trigger_sixes if int(facets.get("on6_ap", 0)) > 0 else 0, total_hits)
 	var caused := 0
 	if upgraded > 0:
@@ -5022,13 +5024,18 @@ func _solo_resolve_spell_damage(caster: GameUnit, caster_unit: GameUnit, spell_n
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s: %d hit%s on a 6 → AP(+%d)" % [
 				spell_name, upgraded, ("" if upgraded == 1 else "s"), int(facets.get("on6_ap", 0))], true)
 		caused += await _solo_save_batch(caster, target, "%s (on-6)" % spell_name, upgraded,
-			base_defense, ap + int(facets.get("on6_ap", 0)), profile, human_defends, bane)
+			base_defense, ap + int(facets.get("on6_ap", 0)), profile, human_defends, bane, deadly <= 0)
 	if total_hits - upgraded > 0:
 		caused += await _solo_save_batch(caster, target, spell_name, total_hits - upgraded,
-			base_defense, ap, profile, human_defends, bane)
+			base_defense, ap, profile, human_defends, bane, deadly <= 0)
 	# Regeneration: only Bane / Disintegrate wounds bypass it (the facets carry this; Lacerate re-rolls only).
 	var landed: int
-	if bool(facets.get("ignores_regen", false)):
+	var proof := bool(facets.get("ignores_regen", false))
+	if deadly > 0:
+		# A4 (maintainer rulings 29.10.2026): the weapons' per-model landing — each wound ×X on one model,
+		# all X rolled (Resistance at its spell threshold), the survivors capped at that model.
+		landed = await _solo_land_deadly_wounds(target, spell_name, deadly, 0 if proof else caused, caused if proof else 0, true)
+	elif proof:
 		landed = await _solo_land_wounds(target, 0, caused)
 	else:
 		# from_spell=true: a unit with Resistance ignores THESE (spell) wounds on 2+, not 6+.
@@ -8605,9 +8612,10 @@ func _solo_land_wounds(target: GameUnit, regenable: int, regen_proof: int, from_
 ## A4 (maintainer rulings 29.10.2026: "pro Wunde einen Reparaturwurf", "Drei Wuerfe muessen gelingen"): each
 ## unsaved wound is assigned and multiplied FIRST, the Regeneration family rolls all X wounds (even past what
 ## the model has left), and only the survivors land, capped at the model — the Takedown landing's order.
+## `from_spell`: a damage spell's Deadly wounds (Resistance and its kin roll at their spell threshold).
 ## Returns the wounds actually dealt (the melee comparison + summary).
 func _solo_land_deadly_wounds(target: GameUnit, weapon_name: String, deadly_x: int,
-		regenable_unsaved: int, regen_proof_unsaved: int) -> int:
+		regenable_unsaved: int, regen_proof_unsaved: int, from_spell: bool = false) -> int:
 	var proof: int = maxi(regen_proof_unsaved, 0)
 	var surviving: int = proof + maxi(regenable_unsaved, 0)   # unsaved Deadly wounds, before ×X
 	if surviving <= 0:
@@ -8648,9 +8656,9 @@ func _solo_land_deadly_wounds(target: GameUnit, weapon_name: String, deadly_x: i
 			victim = (pick["unit"] as GameUnit).models[int(pick["index"])]
 		var mult: int = maxi(1, deadly_x)   # apply_deadly_hit caps what survives at the model
 		if w_i >= proof:
-			mult = await _solo_apply_regeneration(target, mult)   # one logged die per multiplied wound
+			mult = await _solo_apply_regeneration(target, mult, from_spell)   # one logged die per multiplied wound
 		else:
-			await _solo_apply_regeneration(target, 0, false, {}, mult)   # A1: the skipped roll is logged
+			await _solo_apply_regeneration(target, 0, from_spell, {}, mult)   # A1: the skipped roll is logged
 		if mult > 0:
 			acc["dealt"] += SoloController.apply_deadly_hit(victim, mult, on_changed, on_died)
 	var dealt: int = int(acc["dealt"])
