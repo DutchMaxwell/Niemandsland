@@ -10000,6 +10000,13 @@ func _solo_present_move_start(move_paths: Array) -> void:
 ## NML-208: mandatory melee moves must visibly glide — a teleport read as "nothing
 ## happened") forces the glide even for sub-inch arcs; regular activation moves snap
 ## into place when even the longest model arc stays under PACE_SNAP_MAX_IN (NML-224).
+## Maintainer play test 29.10.2026 ("in Richtung ihrer Bewegung drehen"): a gliding model turns its +Z front
+## (ObjectManager.facing_rotation_to) to each leg within the leg's first SOLO_GLIDE_TURN_M, and once the unit
+## has glided every turned model turns back to the yaw the executed move left it (the state: the AI's enemy
+## facing, else unchanged). Presentation only — nothing is broadcast, logged or rolled, and an oval's yaw (its
+## footprint) ends exactly as the executor left it. A regiment tray keeps its facing (an AoF:R pivot rule).
+var solo_glide_faces_travel := true   # false = the old glide (sideways/backwards)
+const SOLO_GLIDE_TURN_M := 0.0254
 func _solo_animate_move(move_paths: Array, allow_snap: bool = true) -> void:
 	# Entrenched-family bookkeeping: any executed move stamps the unit's moved_round (the
 	# stationary gate reads it; pile-in/consolidation count as moving per the rule's wording).
@@ -10045,6 +10052,7 @@ func _solo_animate_move(move_paths: Array, allow_snap: bool = true) -> void:
 	# move_paths is already ordered nearest-to-destination first, so the lead models visibly vacate the choke
 	# and the rest FLOW after them (the maintainer's explicit staging). Each model's glide completes before the
 	# next begins; not-yet-moved models wait at their route start (snapped above). Fast-AI compresses `speed`.
+	var end_yaws := {}   # node -> the yaw the executed move left it (restored after the glide)
 	for entry in move_paths:
 		var model := (entry as Dictionary).get("model") as ModelInstance
 		var path: Array = (entry as Dictionary).get("path", [])
@@ -10054,6 +10062,11 @@ func _solo_animate_move(move_paths: Array, allow_snap: bool = true) -> void:
 		var y := node.global_position.y
 		var tw: Tween = null
 		var total := 0.0
+		var yaw := node.rotation.y
+		var turn: bool = solo_glide_faces_travel and not snap and not (solo_controller != null
+			and model.unit is GameUnit and solo_controller._is_regiment(model.unit as GameUnit))
+		if turn:
+			end_yaws[node] = yaw
 		if not snap:
 			tw = node.create_tween()
 			for i in range(1, path.size()):
@@ -10064,6 +10077,9 @@ func _solo_animate_move(move_paths: Array, allow_snap: bool = true) -> void:
 					continue
 				var dur := leg / speed
 				tw.tween_property(node, "global_position", Vector3(b.x, y, b.z), dur)
+				if turn:   # shortest way round to the leg's heading, in parallel with the leg's start
+					yaw += angle_difference(yaw, ObjectManager.facing_rotation_to(a.x, a.z, b.x, b.z))
+					tw.parallel().tween_property(node, "rotation:y", yaw, minf(dur, SOLO_GLIDE_TURN_M / speed))
 				total += dur
 		if total > 0.0:
 			await get_tree().create_timer(total).timeout
@@ -10072,6 +10088,7 @@ func _solo_animate_move(move_paths: Array, allow_snap: bool = true) -> void:
 		# Snap onto the exact final (the tween end) so state and visuals agree to the millimetre.
 		var fin := path.back() as Vector3
 		node.global_position = Vector3(fin.x, node.global_position.y, fin.z)
+	await _solo_glide_turn_back(end_yaws, SOLO_GLIDE_TURN_M / speed)
 	# The corridors fade now that the whole unit has flowed through (persisted corridors faded here, not on spawn).
 	for body in corridors:
 		_solo_fade_corridor(body as MeshInstance3D)
@@ -10093,6 +10110,26 @@ func _solo_animate_move(move_paths: Array, allow_snap: bool = true) -> void:
 			"radius_m": float((entry as Dictionary).get("radius_m", 0.0125))})
 	if not chalk_moves.is_empty():
 		_on_trails_dropped(chalk_moves)
+
+
+## The glide's closing turn: every turned model swings back (headless batch: at once), then gets the exact
+## yaw float the executed move left it — the state, to the bit.
+func _solo_glide_turn_back(end_yaws: Dictionary, secs: float) -> void:
+	var tweens: Array = []
+	for node in end_yaws:
+		if is_instance_valid(node) and not _solo_batch:
+			var n := node as Node3D
+			tweens.append(n.create_tween())
+			(tweens.back() as Tween).tween_property(n, "rotation:y",
+				n.rotation.y + angle_difference(n.rotation.y, float(end_yaws[node])), secs)
+	if not tweens.is_empty():
+		await get_tree().create_timer(secs).timeout
+	for t in tweens:
+		if (t as Tween).is_valid():
+			(t as Tween).kill()
+	for node in end_yaws:
+		if is_instance_valid(node):
+			(node as Node3D).rotation.y = float(end_yaws[node])
 
 
 ## Height offsets keeping the corridor visuals just above the table without z-fighting (metres).
