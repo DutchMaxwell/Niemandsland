@@ -11,6 +11,11 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   as melee already did, and on a hotseat table with the defender's save prompt; a charge's Impact
   hits too. (#1828)
 
+### Changed
+- **Deadly against Regeneration or Self-Repair rolls once per wound after the multiplication**: a
+  Deadly(3) wound on a model with three or more wounds left is three wounds and three rolls, not one
+  roll before multiplying (each roll in the battle log). The Tough cap and no carry-over stay.
+
 ## [0.3.14.0-alpha] — 2026-10-28
 
 A big one: combat effects at the table, rules automation for two human players (also online), four
