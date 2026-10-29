@@ -2730,11 +2730,13 @@ func player_intent(unit: GameUnit, verb: int, target: GameUnit, point: Variant =
 	var advance := float(bands.get("advance", 6)) + musician_in
 	var rush := float(bands.get("rush", 12)) + musician_in
 	var charge := float(bands.get("charge", bands.get("rush", 12))) + musician_in
-	# Automodus 1.8b (OD 5): a Rush to a FREE POINT is the AI's own move-to-position intent — with
-	# to_objective, execute_intent steers at the goal and stops at the Rush reach or the point, whichever is nearer.
-	if point is Vector3 and verb == AiDecision.Action.RUSH:
-		return ActIntent.make(unit, verb, null, point, rush, false,
-			{"to_objective": true, "source": "player", "why": "player intent: rushes to a point"})
+	# Automodus 1.8b/1.8f (OD 5, OD 13): a Rush or an Advance to a FREE POINT is the AI's own move-to-position
+	# intent — with to_objective, execute_intent steers at the goal and stops at the reach or the point, whichever
+	# is nearer. It never shoots by itself: main lights the targets from the landing and the player picks the shot.
+	if point is Vector3 and (verb == AiDecision.Action.RUSH or verb == AiDecision.Action.ADVANCE):
+		var rushes := verb == AiDecision.Action.RUSH
+		return ActIntent.make(unit, verb, null, point, rush if rushes else advance, false, {"to_objective": true,
+			"source": "player", "why": "player intent: rushes to a point" if rushes else "player intent: advances to a point"})
 	var weapons := _unit_weapons(unit)
 	var shoot_range_in := effective_shoot_reach_in(
 		AiArchetype.max_range_inches(weapons) + float(shooting_range_bonus(unit)), target)
