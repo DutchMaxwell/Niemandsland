@@ -8622,11 +8622,14 @@ func _solo_land_wounds(target: GameUnit, regenable: int, regen_proof: int, from_
 ## automatic — SoloController.deadly_pick), a joined hero last; when a FRESH model is about to be hit the
 ## DEFENDER picks: a human defender clicks the model through the same prompt as for normal wounds (#172), the
 ## AI defender / batch / MP take the defender-optimal casualty order.
-## Regeneration rolls on the RAW unsaved wounds first (before the ×X), then the survivors multiply. Returns
-## the wounds actually dealt (the melee comparison + summary).
+## A4 (maintainer rulings 29.10.2026: "pro Wunde einen Reparaturwurf", "Drei Wuerfe muessen gelingen"): each
+## unsaved wound is assigned and multiplied FIRST, the Regeneration family rolls all X wounds (even past what
+## the model has left), and only the survivors land, capped at the model — the Takedown landing's order.
+## Returns the wounds actually dealt (the melee comparison + summary).
 func _solo_land_deadly_wounds(target: GameUnit, weapon_name: String, deadly_x: int,
 		regenable_unsaved: int, regen_proof_unsaved: int) -> int:
-	var surviving: int = maxi(regen_proof_unsaved, 0) + await _solo_apply_regeneration(target, regenable_unsaved, false, {}, regen_proof_unsaved)
+	var proof: int = maxi(regen_proof_unsaved, 0)
+	var surviving: int = proof + maxi(regenable_unsaved, 0)   # unsaved Deadly wounds, before ×X
 	if surviving <= 0:
 		return 0
 	var pid: int = int(target.unit_properties.get("player_id", 1))
@@ -8644,22 +8647,32 @@ func _solo_land_deadly_wounds(target: GameUnit, weapon_name: String, deadly_x: i
 	var on_died := func(m: ModelInstance) -> void:
 		died_models.append(m)
 	# D17: per wound — forced onto a wounded Tough model, else the defender picks a fresh one (a human clicks it).
-	var acc := {"dealt": 0, "forced": 0}
+	# A4: the click only CHOOSES the model; the roll and the ×X land below, for the clicked or the auto pick.
+	var acc := {"dealt": 0, "forced": 0, "victim": null}
 	var take := func(_pu: GameUnit, mi: ModelInstance) -> void:
-		acc["dealt"] += SoloController.apply_deadly_hit(mi, deadly_x, on_changed, on_died)
+		acc["victim"] = mi
 	var auto_rest := false   # a right-click / the strip button = "auto-allocate the rest" of this volley
-	for _w in range(surviving):
+	for w_i in range(surviving):
 		var pick: Dictionary = SoloController.deadly_pick(target)
 		if pick.is_empty():
 			break   # everything in the joined chain is dead — the remaining Deadly wounds are wasted
+		acc["victim"] = null
 		if bool(pick["forced"]):
 			acc["forced"] += 1
 		elif not auto_rest and _solo_wound_choice_matters(target, 1):
 			var left: int = await _solo_prompt_wound_allocation(target, 1, pid, take, "Deadly(%d): " % deadly_x)
-			if left == 0:
-				continue   # the defender clicked the model — the hit is already applied
-			auto_rest = true
-		take.call(pick["unit"], (pick["unit"] as GameUnit).models[int(pick["index"])])
+			if left != 0:
+				auto_rest = true
+		var victim := acc["victim"] as ModelInstance
+		if victim == null:
+			victim = (pick["unit"] as GameUnit).models[int(pick["index"])]
+		var mult: int = maxi(1, deadly_x)   # apply_deadly_hit caps what survives at the model
+		if w_i >= proof:
+			mult = await _solo_apply_regeneration(target, mult)   # one logged die per multiplied wound
+		else:
+			await _solo_apply_regeneration(target, 0, false, {}, mult)   # A1: the skipped roll is logged
+		if mult > 0:
+			acc["dealt"] += SoloController.apply_deadly_hit(victim, mult, on_changed, on_died)
 	var dealt: int = int(acc["dealt"])
 	if battle_log != null and dealt > 0:
 		battle_log.log_event(BattleLog.Category.COMBAT, "Deadly(%d): %d unsaved ×%d, no carry-over → %d wound%s dealt (%s)" % [

@@ -53,6 +53,18 @@ func test_deadly_prefers_tough_targets() -> void:
 		AiEv.profile_ev(w, ATT, DEF_PLAIN, 12.0, false) * 2.0).is_true()
 
 
+func test_deadly_against_regeneration_rolls_every_wound_before_the_cap() -> void:
+	# A4 (maintainer ruling 29.10.2026, "Drei Wuerfe muessen gelingen"): a Deadly(3) wound on a 1-wound
+	# Regeneration model rolls 3 dice and the model survives only if all 3 succeed (5+ each: 1/27).
+	# 10 attacks, hit 4+, save 4+ → 2.5 unsaved, each worth 1 - (1/3)^3 = 26/27 of a wound.
+	var w := _rprof({"deadly": 3})
+	var regen1 := {"defense": 4, "tough": 1, "models": 5, "regeneration": true, "regen_target": 5}
+	assert_float(AiEv.profile_ev(w, ATT, regen1, 12.0, false)).is_equal_approx(2.5 * 26.0 / 27.0, 0.0001)
+	# CONTROL: with Tough(3) the cap never bites — 3 wounds × 2/3 kept, as before.
+	var regen3 := {"defense": 4, "tough": 3, "models": 5, "regeneration": true, "regen_target": 5}
+	assert_float(AiEv.profile_ev(w, ATT, regen3, 12.0, false)).is_equal_approx(2.5 * 3.0 * 2.0 / 3.0, 0.0001)
+
+
 func test_blast_prefers_big_units() -> void:
 	# Blast(3) multiplies each hit by min(X, models): 10-model target doubles+ the 2-model one.
 	var w := _rprof({"blast": 3, "attacks": 2})

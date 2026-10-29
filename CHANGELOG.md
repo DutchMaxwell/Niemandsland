@@ -16,6 +16,12 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 - **Wounds that leave a unit at half strength or less trigger its morale test even when no model falls**,
   for example wounds on a surviving Tough model after shooting, a spell or dangerous terrain.
 
+### Changed
+- **Deadly against Regeneration or Self-Repair rolls once per wound after the multiplication**: a
+  Deadly(3) wound is three wounds and three rolls, not one roll before multiplying, even on a model with
+  fewer wounds left; what the rolls do not stop is then capped at that model (no carry-over). Each roll
+  is in the battle log, and the AI opponent's damage estimate counts the same way.
+
 ## [0.3.14.0-alpha] — 2026-10-28
 
 A big one: combat effects at the table, rules automation for two human players (also online), four
