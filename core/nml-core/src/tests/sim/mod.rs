@@ -1741,6 +1741,7 @@ mod growth_markers_epoch6;
 mod growth_place_pins;
 mod half_primitives;
 mod hero_size;
+mod playtest_morale;
 mod fearless_shaken;
 mod bearers_last;
 mod hit_and_run;

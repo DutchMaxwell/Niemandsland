@@ -1301,8 +1301,7 @@ pub fn resolve_volley_leg(
             out.takedown_groups.push(if ignores_regen { td } else { regen_batch(td, def, def_owner, tray, &mut out.rolls) });
             out.deadly_tally += w;
         } else if deadly_per_model && p.deadly > 0 {
-            let post = if ignores_regen { w } else { regen_batch(w, def, def_owner, tray, &mut out.rolls) };
-            out.deadly_groups.push((post, p.deadly.max(1)));
+            push_deadly_groups(&mut out, w, p.deadly.max(1), ignores_regen, def, def_owner, tray);
             out.deadly_tally += w;
         } else if ignores_regen {
             regen_proof += w;
@@ -1352,6 +1351,24 @@ pub fn resolve_volley_leg(
 /// the volley tail because D1-B5's melee needs it three more times: Ravage lands
 /// at once (:6002), each Impact pool lands at once (:6337), and the strike phase
 /// pools its own (:6161).
+/// A4 (`EPOCH_72_PLAYTEST_RULES`, the table's `_solo_land_deadly_wounds` since #1914): each unsaved
+/// Deadly(X) wound is X wounds, and the Regeneration family rolls all X before the model's cap — one
+/// landing group per wound, a wound whose X are all ignored lands nothing. Below 72 (or with nothing
+/// to roll) the legacy leg: one roll on the RAW unsaved count, then ×X per model.
+fn push_deadly_groups(out: &mut ShootResult, w: i64, x: i64, ignores_regen: bool, def: &Ctx, def_owner: &str, tray: &mut Tray) {
+    if def.playtest_rules && !ignores_regen && def.regeneration && def.regen_target > 0 {
+        for _ in 0..w {
+            let post = regen_batch(x, def, def_owner, tray, &mut out.rolls);
+            if post > 0 {
+                out.deadly_groups.push((1, post));
+            }
+        }
+        return;
+    }
+    let post = if ignores_regen { w } else { regen_batch(w, def, def_owner, tray, &mut out.rolls) };
+    out.deadly_groups.push((post, x));
+}
+
 pub(crate) fn regen_batch(
     w: i64,
     def: &Ctx,
@@ -1979,8 +1996,7 @@ pub fn resolve_melee_leg(
                 out.takedown_groups.push(if ignores_regen { td } else { regen_batch(td, def, def_owner, tray, &mut out.rolls) });
                 out.deadly_tally += w;
             } else if deadly_per_model && p.deadly > 0 {
-                let post = if ignores_regen { w } else { regen_batch(w, def, def_owner, tray, &mut out.rolls) };
-                out.deadly_groups.push((post, p.deadly.max(1)));
+                push_deadly_groups(&mut out, w, p.deadly.max(1), ignores_regen, def, def_owner, tray);
                 out.deadly_tally += w;
             } else if ignores_regen {
                 regen_proof += w;

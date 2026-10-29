@@ -650,6 +650,7 @@ static func _resolve_volley(attacker: Dictionary, target: Dictionary, profiles: 
 	if profiles.is_empty():
 		return
 	var alive_before := alive_models(target)
+	var pool_before: int = int(target["wounds_pool"])
 	var quality: int = int(attacker["quality"])
 	var defense: int = int(target["defense"])
 	# Cover (p.11): a target with the majority of its models in cover gets +1 to block rolls — modelled as a
@@ -659,6 +660,7 @@ static func _resolve_volley(attacker: Dictionary, target: Dictionary, profiles: 
 		defense = maxi(2, defense - 1)
 		log_lines.append("%s is in cover (+1 Defense)" % target["name"])
 	var total := 0
+	var d_out := [0, 0]   # A4: [Deadly wounds caused, landed after their own Regeneration dice]
 	for p in profiles:
 		var profile := p as Dictionary
 		var faces := _roll(rng, _effective_attacks(attacker, int(profile["attacks"])))
@@ -667,18 +669,16 @@ static func _resolve_volley(attacker: Dictionary, target: Dictionary, profiles: 
 			hits += AiCombatMath.relentless_bonus_hits(faces, dist)   # >9": each unmodified 6 adds a hit
 		var save_faces: Array = [] if hits <= 0 else _roll(rng, hits)
 		var w: int = 0 if hits <= 0 else AiCombatMath.wounds(hits, save_faces, defense, int(profile["ap"]))
-		var deadly: int = int(profile.get("deadly", 0))
-		if w > 0 and deadly > 0:
-			w *= AiCombatMath.deadly_multiplier(deadly, int(target["tough"]))
+		w = _deadly(target, w, int(profile.get("deadly", 0)), rng, rolls, d_out)
 		total += w
 		_trace_roll(rolls, "shoot", attacker["name"], target["name"], str(profile["name"]),
 			faces, quality, hits, save_faces, defense + int(profile["ap"]), w, in_cover)
-	total = _apply_regeneration(target, total, rng, log_lines, rolls)   # medic negates some wounds first
+	total = _apply_regeneration(target, total - int(d_out[0]), rng, log_lines, rolls) + int(d_out[1])   # medic negates some wounds first
 	if total > 0:
 		_apply_wounds(target, total)
 		log_lines.append("%s shoots %s → %d wound(s)" % [attacker["name"], target["name"], total])
 	# General morale (p.10): a unit left at half or less by the wounds it just took must test.
-	if AiCombatMath.should_test_shooting_morale(alive_before, alive_models(target), int(target["max_models"])):
+	if _morale_due(target, alive_before, pool_before):
 		_morale(target, rng, log_lines, rolls)
 
 
@@ -763,19 +763,49 @@ static func _apply_regeneration(unit: Dictionary, wounds: int, rng: RandomNumber
 	return wounds - ignored
 
 
+## Deadly(X) (p.13): each unsaved wound ×X, Tough-capped. A4 (play test 29.10.2026, the table's #1914):
+## against Regeneration all X roll first (5+ ignores one), then the survivors are capped; those wounds are
+## counted in `d_out` ([caused, landed]) so the caller's own Regeneration roll skips them.
+static func _deadly(target: Dictionary, w: int, deadly: int, rng: RandomNumberGenerator, rolls: Array,
+		d_out: Array) -> int:
+	if w <= 0 or deadly <= 0:
+		return w
+	var cap := AiCombatMath.deadly_multiplier(deadly, int(target["tough"]))
+	if _has_regeneration(target):
+		for _i in range(w):
+			var kept := 0
+			for _j in range(deadly):
+				var face: int = rng.randi_range(1, 6)
+				_trace_regen(rolls, str(target["name"]), face, face >= 5)
+				kept += 0 if face >= 5 else 1
+			d_out[1] = int(d_out[1]) + mini(kept, cap)
+		d_out[0] = int(d_out[0]) + w * cap
+	return w * cap
+
+
+## A2 (play test 29.10.2026, the table's #1912): wounds that leave a unit at half or less test morale, not
+## only a lost model (p.10).
+static func _morale_due(u: Dictionary, alive_before: int, pool_before: int) -> bool:
+	var alive := alive_models(u)
+	return AiCombatMath.should_test_shooting_morale(alive_before, alive, int(u["max_models"])) \
+		or (alive > 0 and int(u["wounds_pool"]) > pool_before and AiCombatMath.at_or_below_half(alive, int(u["max_models"])))
+
+
 static func _resolve_melee(attacker: Dictionary, target: Dictionary, rng: RandomNumberGenerator,
 		log_lines: Array, rolls: Array = []) -> void:
 	# Wounds CAUSED (post-save) decide who won the melee (p.10); Regeneration only reduces what actually
 	# lands, so we compare caused wounds but apply the post-regeneration amount.
-	var dealt := _strike(attacker, target, rng, log_lines, rolls, "charge")
-	var dealt_applied := _apply_regeneration(target, dealt, rng, log_lines, rolls)
+	var d_out := [0, 0]   # A4: the Deadly wounds already past their own Regeneration dice
+	var dealt := _strike(attacker, target, rng, log_lines, rolls, "charge", d_out)
+	var dealt_applied := _apply_regeneration(target, dealt - int(d_out[0]), rng, log_lines, rolls) + int(d_out[1])
 	if dealt_applied > 0:
 		_apply_wounds(target, dealt_applied)
 	# The defender MAY strike back (Shaken units strike back as fatigued — handled in _strike).
 	var struck_back := 0
 	if is_alive(target):
-		struck_back = _strike(target, attacker, rng, log_lines, rolls, "strike back")
-		var back_applied := _apply_regeneration(attacker, struck_back, rng, log_lines, rolls)
+		var b_out := [0, 0]
+		struck_back = _strike(target, attacker, rng, log_lines, rolls, "strike back", b_out)
+		var back_applied := _apply_regeneration(attacker, struck_back - int(b_out[0]), rng, log_lines, rolls) + int(b_out[1])
 		if back_applied > 0:
 			_apply_wounds(attacker, back_applied)
 	attacker["fatigued"] = true
@@ -792,7 +822,7 @@ static func _resolve_melee(attacker: Dictionary, target: Dictionary, rng: Random
 ## models WITHIN 2" of an enemy model strike (p.9 "Who Can Strike"), so each weapon's attacks scale by the
 ## in-reach model count, not the whole unit. Deadly multiplies unsaved wounds (Tough-capped).
 static func _strike(striker: Dictionary, defender: Dictionary, rng: RandomNumberGenerator,
-		_log_lines: Array = [], rolls: Array = [], kind: String = "melee") -> int:
+		_log_lines: Array = [], rolls: Array = [], kind: String = "melee", d_out: Array = [0, 0]) -> int:
 	var profiles: Array = AiShooting.melee_profiles(striker["weapons"])
 	var to_hit: int = 6 if (bool(striker["fatigued"]) or bool(striker["shaken"])) else int(striker["quality"])
 	var total := 0
@@ -802,9 +832,7 @@ static func _strike(striker: Dictionary, defender: Dictionary, rng: RandomNumber
 		var hits := AiCombatMath.count_hits(faces, to_hit)
 		var save_faces: Array = [] if hits <= 0 else _roll(rng, hits)
 		var w: int = 0 if hits <= 0 else AiCombatMath.wounds(hits, save_faces, int(defender["defense"]), int(profile["ap"]))
-		var deadly: int = int(profile.get("deadly", 0))
-		if w > 0 and deadly > 0:
-			w *= AiCombatMath.deadly_multiplier(deadly, int(defender["tough"]))
+		w = _deadly(defender, w, int(profile.get("deadly", 0)), rng, rolls, d_out)
 		total += w
 		_trace_roll(rolls, kind, striker["name"], defender["name"], str(profile["name"]),
 			faces, to_hit, hits, save_faces, int(defender["defense"]) + int(profile["ap"]), w)
@@ -1056,6 +1084,7 @@ static func _dangerous_test(unit: Dictionary, applied: Vector2, terrain: Diction
 	if applied == Vector2.ZERO:
 		return
 	var before := alive_models(unit)
+	var pool_before: int = int(unit["wounds_pool"])
 	var wounds := 0
 	for m in unit["model_pos"]:
 		var post: Vector2 = m
@@ -1068,7 +1097,7 @@ static func _dangerous_test(unit: Dictionary, applied: Vector2, terrain: Diction
 	if wounds > 0:
 		_apply_wounds(unit, wounds)
 		log_lines.append("%s takes %d wound(s) from dangerous terrain" % [unit["name"], wounds])
-		if AiCombatMath.should_test_shooting_morale(before, alive_models(unit), int(unit["max_models"])):
+		if _morale_due(unit, before, pool_before):
 			_morale(unit, rng, log_lines, rolls)
 
 

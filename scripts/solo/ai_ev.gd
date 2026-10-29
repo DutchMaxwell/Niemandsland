@@ -124,7 +124,10 @@ static func facet_applies(params: Dictionary, profile_range: int) -> bool:
 ## A1 (play test 29.10.2026): the profile prints Lacerate and no Bane. AiShooting folds Lacerate into the
 ## `bane` flag for its Defense-6 re-roll, but the army-book Lacerate never ignores Regeneration (only Bane
 ## does) — so such a profile's `bypass_regen` defaults to OFF. The table's twin: main._solo_profile_lacerate_only.
+## Below EPOCH_72_PLAYTEST_RULES it answers false (the legacy bypass), as the core's stamp does at 71.
 static func lacerate_only(profile: Dictionary) -> bool:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_72_PLAYTEST_RULES:
+		return false
 	var lacerate := false
 	for r in profile.get("rules", []):
 		var s := str(r).strip_edges()
@@ -608,8 +611,9 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 		var keep := 1.0 - AiCombatMath.success_chance(int(def_ctx.get("regen_target", REGENERATION_TARGET)))
 		unsaved *= keep
 		# A4 (maintainer ruling 29.10.2026): all X wounds are rolled before the cap — past the cap that is
-		# worth more than the capped X × keep above. Below it nothing changes (byte-identical).
-		if deadly > deadly_cap:
+		# worth more than the capped X × keep above. Below it nothing changes (byte-identical). The core's
+		# twin (combat.rs) reads the frozen EPOCH_72_PLAYTEST_RULES, so this mirror does too.
+		if deadly > deadly_cap and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_72_PLAYTEST_RULES:
 			unsaved += deadly_unsaved * (AiCombatMath.deadly_regen_dealt(deadly, deadly_cap, keep) - float(deadly_cap) * keep)
 	return unsaved
 

@@ -33,6 +33,7 @@ use crate::acts::{
     EPOCH_50_SURGE_LOW, EPOCH_54_DEFENSE_RATING, EPOCH_55_FORTIFIED_AURA,
     EPOCH_56_GROUNDED_PROTECTION, EPOCH_58_PRECISION_DEBUFF, EPOCH_60_GROUNDED_STEALTH,
     EPOCH_61_PRECISION_MARKERS, EPOCH_65_MELEE_TRUTH, EPOCH_66_DISTANCE_TRUTH,
+    EPOCH_72_PLAYTEST_RULES,
 };
 use crate::combat::{
     armored_defense, BANNER_MORALE_BONUS, LONG_RANGE_IN, REGENERATION_TARGET, RESISTANCE_TARGET,
@@ -507,6 +508,11 @@ pub struct Ctx {
     /// `ctx_of` ctx — EV pricing and dice alike — follows the table from 68 and
     /// an older record replays the old floors. `neutral_defender()` stays false.
     pub modifier_sum: bool,
+    /// `EPOCH_72_PLAYTEST_RULES`, stamped in `ctx_for` off the record's own epoch like
+    /// `modifier_sum`: the DEFENDER's ctx carries it, so the EV (`profile_ev`,
+    /// `spell_damage_ev`) and the dice's Deadly leg roll all X wounds against the
+    /// Regeneration family before the cap (A4), and a spell's Lacerate keeps Regeneration (A1).
+    pub playtest_rules: bool,
     // --- Ambush family (rules-wave2-ambush). ZERO on every `ctx_of` (baked
     // into `ctx_for`), like `growth_ap_mod` — only `sim::ctx_live` reads the
     // arrival stamp and folds it in, so the EV imagination stays blind to it
@@ -2863,6 +2869,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         growth_fortify_ap: 0,
         growth_def_lowers: false,
         modifier_sum: rule_on(rules_epoch, crate::acts::EPOCH_68_MODIFIER_SUM),
+        playtest_rules: rule_on(rules_epoch, EPOCH_72_PLAYTEST_RULES),
         ambush_arrival_ap: 0,
         tag_ap_mod: 0,
         reckless_ap: 0,
@@ -3089,8 +3096,24 @@ fn stamp(
 /// and the Bane-primitive DATA-ALIAS wave (Bestial, Mischievous, Scrapper —
 /// non-"Bane", non-"Aura", `reroll_save_sixes`) joins it, exactly main.gd:
 /// 6553-6560. Every record below that epoch keeps the flat prefix reading.
+/// A1: the weapon prints Lacerate and no Bane — main.gd `_solo_profile_lacerate_only`.
+fn lacerate_only(rules: &[String]) -> bool {
+    let mut lacerate = false;
+    for r in rules {
+        let s = r.trim();
+        if s.starts_with("Bane") {
+            return false;
+        }
+        lacerate |= s.starts_with("Lacerate");
+    }
+    lacerate
+}
+
 fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProfile], rules_epoch: u32) {
     let table_ladder = rule_on(rules_epoch, EPOCH_3_TABLE_RULES);
+    // A1 (`EPOCH_72_PLAYTEST_RULES`, the table's #1911): Lacerate re-rolls the sixes only; it
+    // never ignores Regeneration (only Bane does). Below 72 both names bypass, replay-exact.
+    let playtest = rule_on(rules_epoch, EPOCH_72_PLAYTEST_RULES);
     let mut u_bane = false;
     let mut melee_bane = false;
     let mut shooting_bane = false;
@@ -3126,7 +3149,7 @@ fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
                 }
             } else {
                 u_bane = true;
-                u_bypass = true;
+                u_bypass |= !(playtest && rs.starts_with("Lacerate"));
             }
         } else if rs.starts_with("Rending") {
             // Wave 4 (rules-wave4-condap), gated on the FROZEN
@@ -3265,6 +3288,10 @@ fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
         sp.bane |= u_bane
             || (melee_bane && sp.range <= 0)
             || (shooting_bane && sp.range > 0);
+        // A1: `base_profile` stamps the legacy bypass for a printed Lacerate too.
+        if playtest && lacerate_only(&sp.rules) {
+            sp.bypass_regen = false;
+        }
         sp.bypass_regen |= u_bypass
             || (melee_bypass && sp.range <= 0)
             || (shooting_bypass && sp.range > 0);
