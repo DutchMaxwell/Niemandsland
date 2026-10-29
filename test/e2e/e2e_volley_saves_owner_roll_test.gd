@@ -3,11 +3,11 @@ extends GdUnitTestSuite
 ## owner, so they must go out as a `request_roll` through the owner-roll seam (0.1a) and never roll on the
 ## shooter's tray ("own dice on own tray", Automodus decision 9). Melee already does this; the volley does not.
 ##
-## KNOWN BUG, pinned here (the fix waits for a release decision): _run_human_shooting hands
-## human_defends=false to _solo_resolve_saves, so the volley never asks the owner. The volley case is skipped
-## unless NML_RUN_KNOWN_RED=1 (env-gated do_skip, pattern: rules_registry_test.gd), so CI stays green; set the
-## variable to see it fail. The fix removes the gate. This client is the guest (slot 2); the host (peer 1)
-## holds slot 1. Owner answers are served as in e2e_owner_roll_all_kinds_test.gd.
+## Step 3.6 of the Automodus rework (#1828): _run_human_shooting used to hand human_defends=false to
+## _solo_resolve_saves, so the volley never asked the owner (and a human charge's Impact hits did the same
+## through _solo_charge_impact). Both now derive it as melee does: not _solo_is_ai_unit(defender).
+## This client is the guest (slot 2); the host (peer 1) holds slot 1. Owner answers are served as in
+## e2e_owner_roll_all_kinds_test.gd. The hotseat and solo cases put the real (offline) network manager back.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const HOST_PEER := 1
@@ -19,6 +19,8 @@ var _root_before: Array
 var _real_net: Node
 var _net: Node
 var _flow_done := false
+var _pump: Timer
+var _prompts: Dictionary = {}   # PromptCard instance id -> title, every save prompt the pump answered
 
 
 func before_test() -> void:
@@ -112,22 +114,25 @@ func _drive_volley(shooter: GameUnit, target: GameUnit) -> void:
 	_flow_done = true
 
 
+func _drive_charge(charger: GameUnit, defender: GameUnit) -> void:
+	await _main._run_human_melee(charger, defender, true)   # auto: no consolidation board prompt
+	_flow_done = true
+
+
 func _drive_melee(striker: GameUnit, defender: GameUnit) -> void:
 	await _main._solo_melee_strike_phase(striker, defender, true, 0)   # 0 = SoloStrike.ALL
 	_flow_done = true
 
 
-func test_a_volley_at_the_other_humans_unit_asks_its_owner_to_roll(timeout := 120000,
-		do_skip := OS.get_environment("NML_RUN_KNOWN_RED") != "1",
-		skip_reason := "KNOWN BUG: the volley rolls the other human's saves on the shooter's tray (human_defends=false)") -> void:
+func test_a_volley_at_the_other_humans_unit_asks_its_owner_to_roll(timeout := 120000) -> void:
 	var host_unit := _armed(1, "Guards", -10.0, 12)
 	var mine := _armed(2, "Raiders", 0.0, 12)
 	_drive_volley(mine, host_unit)
 	var seen: Array = await _serve()
 	assert_bool(_flow_done).is_true()
 	var kinds: Array = seen.map(func(s: Array) -> String: return str(s[0]))
-	assert_bool(kinds.has("defense")).override_failure_message(
-		"the saves of the host's unit never went to its owner (requests: %s)" % str(seen)).is_true()
+	assert_int(kinds.count("defense")).override_failure_message(
+		"the saves of the host's unit never went to its owner (requests: %s)" % str(seen)).is_equal(1)
 	assert_str(_log_text()).override_failure_message("the guest rolled the host's saves on its own tray") \
 		.not_contains(" defends: ")
 	assert_str(_log_text()).contains("rolled their defense saves")
@@ -145,3 +150,71 @@ func test_a_melee_strike_at_the_other_humans_unit_asks_its_owner_to_roll(timeout
 		"melee saves of the host's unit did not go to its owner (requests: %s)" % str(seen)).is_true()
 	assert_str(_log_text()).not_contains(" defends: ")
 	assert_str(_log_text()).contains("rolled their defense saves")
+
+
+## Step 3.6 audit: a human charge's Impact hits at the other human's unit are that unit's saves too.
+func test_an_impact_charge_at_the_other_humans_unit_asks_its_owner_to_roll(timeout := 120000) -> void:
+	var host_unit := _armed(1, "Guards", 1.2, 0)
+	var mine := _armed(2, "Raiders", 0.0, 0)
+	mine.unit_properties["special_rules"] = ["Impact(10)"]
+	_drive_charge(mine, host_unit)
+	var seen: Array = await _serve()
+	assert_bool(_flow_done).is_true()
+	var impact: Array = seen.filter(func(s: Array) -> bool:
+		return str(s[0]) == "defense" and str(s[1]).contains("Impact"))
+	assert_int(impact.size()).override_failure_message(
+		"the Impact saves of the host's unit never went to its owner (requests: %s)" % str(seen)).is_equal(1)
+	assert_str(_log_text()).not_contains("Host defends: ")
+
+
+## The save prompt waits for a click no headless run makes: a repeating timer answers every
+## "... incoming fire!" card and records it once (house pattern: e2e_hotseat_storm_human_test).
+func _arm_save_pump() -> void:
+	_prompts = {}
+	_pump = Timer.new()
+	_pump.wait_time = 0.02
+	get_tree().root.add_child(_pump)
+	_pump.timeout.connect(func() -> void:
+		if _main == null or not is_instance_valid(_main):
+			return
+		for c in _main.get_children():
+			var card := c as PromptCard
+			if card != null and card.title.ends_with("incoming fire!"):
+				_prompts[card.get_instance_id()] = card.title
+				card.ok_button.pressed.emit())
+	_pump.start()
+
+
+## Hotseat (two humans on one machine, no AI seat) or solo: the real offline network manager.
+func _offline(ai_slots: Dictionary, auto_saves: bool) -> void:
+	_main.network_manager = _real_net
+	_main.solo_ai_slots = ai_slots
+	_main._solo_auto_saves = auto_saves
+	_arm_save_pump()
+
+
+func test_a_hotseat_volley_prompts_the_defending_side_for_its_saves(timeout := 120000) -> void:
+	_offline({}, false)
+	var shooter := _armed(1, "Raiders", 0.0, 12)
+	var target := _armed(2, "Wardens", -10.0, 12)
+	await _main._run_human_shooting(shooter, target)
+	assert_int(_prompts.size()).override_failure_message(
+		"the defending hotseat side got no save prompt (as melee gives it)").is_equal(1)
+
+
+func test_a_hotseat_volley_with_auto_saves_rolls_without_a_prompt(timeout := 120000) -> void:
+	_offline({}, true)
+	var shooter := _armed(1, "Raiders", 0.0, 12)
+	var target := _armed(2, "Wardens", -10.0, 12)
+	await _main._run_human_shooting(shooter, target)
+	assert_int(_prompts.size()).is_equal(0)
+	assert_str(_log_text()).contains("Wardens saves on")
+
+
+func test_a_solo_volley_at_an_ai_unit_still_auto_rolls(timeout := 120000) -> void:
+	_offline({2: true}, false)
+	var shooter := _armed(1, "Raiders", 0.0, 12)
+	var target := _armed(2, "Wardens", -10.0, 12)
+	await _main._run_human_shooting(shooter, target)
+	assert_int(_prompts.size()).override_failure_message("an AI unit's saves opened a prompt").is_equal(0)
+	assert_str(_log_text()).contains("AI (Wardens) defends: ")

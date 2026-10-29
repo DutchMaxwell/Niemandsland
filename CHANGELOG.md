@@ -6,6 +6,11 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 
 ## [Unreleased]
 
+### Fixed
+- **A volley at the other player's unit lets that player roll the saves**: online on their own tray,
+  as melee already did, and on a hotseat table with the defender's save prompt; a charge's Impact
+  hits too. (#1828)
+
 ## [0.3.14.0-alpha] — 2026-10-28
 
 A big one: combat effects at the table, rules automation for two human players (also online), four
