@@ -13163,7 +13163,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 			var save_unit: GameUnit = target if td_pick.is_empty() else (td_pick["unit"] as GameUnit)
 			if not td_ctx.is_empty():
 				_solo_log_takedown_context(str(profile.get("name", "?")), td_pick, td_ctx, to_hit, save_def, false)
-			var w: int = await _solo_resolve_saves(group.get("member"), save_unit, str(profile.get("name", "?")), faces, hits, save_def, profile, false, false, not (is_deadly or is_takedown), false, dist, td_pick)
+			var w: int = await _solo_resolve_saves(group.get("member"), save_unit, str(profile.get("name", "?")), faces, hits, save_def, profile, not _solo_is_ai_unit(save_unit), false, not (is_deadly or is_takedown), false, dist, td_pick)
 			if is_takedown and w > 0 and not td_pick.is_empty():
 				# Resolver wave A: Deadly multiplies on the picked model (see the AI branch).
 				var td_w: int = w * maxi(int(profile.get("deadly", 0)), 1)
@@ -13228,7 +13228,7 @@ func _run_human_melee(attacker: GameUnit, target: GameUnit, auto: bool = false) 
 	# — Impact(X) auto-hits on your charge (GF/AoF v3.5.1 p.13; reduced by the AI's Counter models). The
 	#   counter-strike may already have wiped your unit — nothing left to roll then. —
 	if _solo_combined_alive(attacker) > 0:
-		human_caused += await _solo_charge_impact(attacker, target, false)
+		human_caused += await _solo_charge_impact(attacker, target, not _solo_is_ai_unit(target))
 	await _solo_stage_phase("Impact")
 	# Resolver wave A — vs-target Marks: your charger's pre-attack pick lands on the defender.
 	_solo_apply_vs_marks(attacker, target, 0.0)
