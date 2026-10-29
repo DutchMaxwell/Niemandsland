@@ -22,6 +22,10 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   Deadly(3) wound is three wounds and three rolls, not one roll before multiplying, even on a model with
   fewer wounds left; what the rolls do not stop is then capped at that model (no carry-over). Each roll
   is in the battle log, and the AI opponent's damage estimate counts the same way.
+- **Deadly damage spells now land like Deadly weapons**: each unsaved wound of a Deadly(X) spell goes
+  to one model as X wounds, all X face the target's Regeneration-family roll (Resistance at its spell
+  value), and only what the rolls do not stop is capped at that model. The AI opponent's spell estimate
+  counts the same way.
 
 ## [0.3.14.0-alpha] — 2026-10-28
 
