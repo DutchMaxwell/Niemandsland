@@ -11202,8 +11202,9 @@ func solo_begin_auto(unit: GameUnit, verb: int) -> void:
 	var valid: Array = []
 	var dimmed: Dictionary = {}   # Automodus 1.8c (OD 6): refused engine enemies -> the reason their hover names
 	var first_reason := ""
-	# Automodus 1.8b (OD 5): Rush goes to a FREE table point — no lit enemies, only the unit's own refusal.
-	var to_point := verb == AiDecision.Action.RUSH
+	# Automodus 1.8b/1.8f (OD 5, OD 13): Rush and Advance go to a FREE table point — no lit enemies, only the unit's
+	# own refusal (the Advance's shot is picked after the move).
+	var to_point := verb == AiDecision.Action.RUSH or verb == AiDecision.Action.ADVANCE
 	if to_point:
 		var here: Vector3 = solo_controller.unit_centre(unit)
 		first_reason = str(solo_controller.player_intent(unit, verb, null, here).get("refused", ""))
@@ -11226,14 +11227,7 @@ func solo_begin_auto(unit: GameUnit, verb: int) -> void:
 				unit.get_name(), verb_label, first_reason if first_reason != "" else "no enemy on the table"])
 		return
 	var suggested: GameUnit = null if to_point else solo_controller.suggest_target(unit, verb)
-	var rings: Array = []
-	for cu in valid:
-		# Automodus 1.8 (OD 11): the suggested target's ring is brighter and larger than the other lit ones.
-		var ring := _solo_spawn_pulse_ring(solo_controller.unit_centre(cu),
-			Color(1.0, 0.9, 0.5) if cu == suggested else Color(1.0, 0.7, 0.2))
-		if cu == suggested:
-			(ring.mesh as TorusMesh).outer_radius = 0.075
-		rings.append(ring)
+	var rings: Array = valid.map(func(cu: GameUnit) -> Node: return _solo_lit_ring(cu, suggested))
 	_solo_target_mode["auto_valid"] = valid
 	_solo_target_mode["auto_label"] = verb_label
 	_solo_target_mode["cast_rings"] = rings   # freed by _solo_end_targeting
@@ -11246,7 +11240,8 @@ func solo_begin_auto(unit: GameUnit, verb: int) -> void:
 	if band > 0 and range_ring_controller != null and range_ring_controller.has_method("show_spell_preview"):
 		range_ring_controller.show_spell_preview(_solo_unit_nodes(unit), band)
 	if to_point and battle_log != null:
-		battle_log.log_event(BattleLog.Category.GENERAL, "%s: hover the table to see where your models end, click to rush there; right-click or Esc cancels" % unit.get_name())
+		battle_log.log_event(BattleLog.Category.GENERAL, "%s: hover the table to see where your models end, click to %s there; right-click or Esc cancels" % [
+			unit.get_name(), "rush" if verb == AiDecision.Action.RUSH else "advance"])
 	elif battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL,
 			"%s: %d target(s) lit for %s — hover one to see where your models land, click it to go; right-click or Esc cancels" % [
@@ -11327,8 +11322,9 @@ func _run_player_intent(unit: GameUnit, verb: int, target: GameUnit, point: Vari
 		await _solo_complete_human_attack(unit)
 	elif bool(report.get("can_shoot", false)):
 		await _run_human_attack(unit, target, false, true)
-	# Automodus 1.8d: a point Rush has no target, so a Quick Shot unit picks its shot now; the pick completes.
-	elif point == null or verb != AiDecision.Action.RUSH or not _solo_open_quick_shot(unit):
+	# Automodus 1.8d/1.8f: a point move has no target, so the unit picks its shot now (after an Advance always,
+	# after a Rush with Quick Shot); the pick completes the activation.
+	elif point == null or not _solo_open_shot_pick(unit, verb):
 		await _solo_complete_human_attack(unit)   # the no-shot reason is already a rule note
 
 
@@ -11594,6 +11590,12 @@ func _solo_end_targeting() -> void:
 func _solo_targeting_input(event: InputEvent) -> bool:
 	if _solo_target_mode.is_empty():
 		return false
+	# Automodus 1.8f: in the shot pick after a point Advance, Enter shoots the pre-marked suggestion.
+	var key := event as InputEventKey
+	if key != null and key.pressed and not key.echo and key.keycode in [KEY_ENTER, KEY_KP_ENTER] \
+			and _solo_target_mode.get("auto_suggested") != null:
+		await _solo_auto_click(_solo_target_mode["auto_suggested"])
+		return true
 	match SoloController.targeting_route(event):
 		SoloController.TargetingRoute.CANCEL:
 			# Declared split (maintainer UX 31.07.): right-click/ESC at the GO stage cancels
@@ -11629,11 +11631,12 @@ func _solo_targeting_input(event: InputEvent) -> bool:
 				_solo_end_targeting()
 				_solo_coordinate_decline(cb)
 				return true
-			# Automodus 1.8d: no Quick Shot after the point Rush — the activation still ends (the AI is owed its reply).
-			if _solo_target_mode.has("auto_quick_shot"):
+			# Automodus 1.8d/1.8f: no shot after the point move — the activation still ends (the AI is owed its reply).
+			if _solo_target_mode.has("auto_shot"):
 				var qs: GameUnit = _solo_target_mode.get("unit")
+				var qs_label := str(_solo_target_mode.get("auto_label", ""))
 				_solo_end_targeting()
-				_log_rule_event(BattleLog.Category.COMBAT, "Quick Shot: %s holds its fire" % qs.get_name(), true)
+				_log_rule_event(BattleLog.Category.COMBAT, "%s: %s holds its fire" % [qs_label, qs.get_name()], true)
 				_solo_complete_human_attack(qs)
 				return true
 			_solo_end_targeting()
@@ -11668,14 +11671,10 @@ func _solo_targeting_input(event: InputEvent) -> bool:
 				if target != null:
 					_solo_cast_click(target)
 				return true
-			if _solo_target_mode.has("auto_point"):   # Automodus 1.8b: the click rushes to the table point
-				var goal: Variant = _solo_auto_point_at(mb.position)
-				# 1.8e: a click inside the unit's own footprint is no Rush - nothing happens, the mode stays open.
-				if goal != null and target != attacker and not _solo_on_own_base(attacker, goal):
-					_solo_end_targeting()
-					await _run_player_intent(attacker, AiDecision.Action.RUSH, null, goal)
+			if _solo_target_mode.has("auto_point"):   # Automodus 1.8b/1.8f: the click moves to the table point
+				await _solo_auto_point_click(_solo_auto_point_at(mb.position), target)
 				return true
-			if _solo_target_mode.has("auto_verb") or _solo_target_mode.has("auto_quick_shot"):
+			if _solo_target_mode.has("auto_verb") or _solo_target_mode.has("auto_shot"):
 				if target != null:
 					await _solo_auto_click(target)
 				return true
@@ -11723,6 +11722,18 @@ func _solo_auto_point_at(screen_pos: Vector2) -> Variant:
 	return Vector3(snappedf((hit as Vector3).x, cell), (hit as Vector3).y, snappedf((hit as Vector3).z, cell))
 
 
+## Automodus steps 1.8b/1.8f (factored for headless tests and the two-instance harness): a click on the table point
+## `goal` runs the mode's verb (Rush or Advance) there. 1.8e: a click inside the unit's own footprint (`on_unit` is
+## what the pick ray hit) is no move — nothing happens, the mode stays open.
+func _solo_auto_point_click(goal: Variant, on_unit: GameUnit = null) -> void:
+	var unit: GameUnit = _solo_target_mode.get("unit")
+	if goal == null or on_unit == unit or _solo_on_own_base(unit, goal):
+		return
+	var verb: int = int(_solo_target_mode.get("auto_verb", AiDecision.Action.RUSH))
+	_solo_end_targeting()
+	await _run_player_intent(unit, verb, null, goal)
+
+
 ## Automodus step 1.8e: TRACK only notes the hovered cell and when the cursor reached it (the last ghosts stay
 ## while it moves); _solo_auto_point_dwell, every frame, plans the cell once the cursor rested on it.
 func _solo_hover_auto_point(point: Variant) -> void:
@@ -11749,7 +11760,7 @@ func _solo_on_own_base(unit: GameUnit, point: Vector3) -> bool:
 	return false
 
 
-## Automodus step 1.8b: the Rush ghosts for a table point (clamped to the Rush reach along the engine path),
+## Automodus steps 1.8b/1.8f: the Rush/Advance ghosts for a table point (clamped to the reach along the engine path),
 ## one planner run per grid cell (cached in auto_previews), rebuilt only when the hovered cell changes.
 func _solo_show_auto_point(point: Variant) -> void:
 	if landing_preview == null or point == _solo_target_mode.get("auto_hovered"):
@@ -11757,7 +11768,8 @@ func _solo_show_auto_point(point: Variant) -> void:
 	_solo_target_mode["auto_hovered"] = point
 	var cache: Dictionary = _solo_target_mode.get("auto_previews", {})
 	if point != null and not cache.has(point):
-		cache[point] = _solo_preview_for(_solo_target_mode.get("unit"), AiDecision.Action.RUSH, null, point)
+		cache[point] = _solo_preview_for(_solo_target_mode.get("unit"),
+			int(_solo_target_mode.get("auto_verb", AiDecision.Action.RUSH)), null, point)
 	var preview: Dictionary = cache.get(point, {}) if point != null else {}
 	if preview.has("landing"):
 		landing_preview.show_preview(preview["landing"], preview.get("lines", []))
@@ -11770,44 +11782,62 @@ func _solo_show_auto_point(point: Variant) -> void:
 ## included, which used to take the suggestion) says why, and the mode stays open.
 func _solo_auto_click(target: GameUnit) -> void:
 	var unit: GameUnit = _solo_target_mode.get("unit")
-	var quick_shot: bool = _solo_target_mode.has("auto_quick_shot")   # Automodus 1.8d: the shot after a point Rush
+	var shot_after: int = int(_solo_target_mode.get("auto_shot", -1))   # Automodus 1.8d/1.8f: the shot after a point move
 	var verb: int = int(_solo_target_mode.get("auto_verb", AiDecision.Action.RUSH))
 	if not (_solo_target_mode.get("auto_valid", []) as Array).has(target):
 		var why := "not an enemy unit"
 		if _engine_enemy(unit, target):
-			why = "not in range and sight" if quick_shot \
+			why = "not in range and sight" if shot_after >= 0 \
 				else str(solo_controller.player_intent(unit, verb, target).get("refused", "not one of the lit targets"))
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.GENERAL, "Auto: %s is not a valid target for %s (%s)" % [
 				target.get_name(), str(_solo_target_mode.get("auto_label", "")), why])
 		return
 	_solo_end_targeting()
-	if quick_shot:
-		_log_rule_event(BattleLog.Category.COMBAT, "Quick Shot: shoots after its Rush action", true)
+	if shot_after >= 0:
+		if shot_after == AiDecision.Action.RUSH:
+			_log_rule_event(BattleLog.Category.COMBAT, "Quick Shot: shoots after its Rush action", true)
 		await _run_human_attack(unit, target, false, true)   # the volley, then the activation and the AI's reply
 		return
 	await _run_player_intent(unit, verb, target)
 
 
-## Automodus step 1.8d (#1828): after a point Rush a Quick Shot unit ("may shoot after Rush") picks its shot from
-## where it now stands: the engine enemies its volley reaches (range + sight, _solo_volley_sighted) light up with the
-## 1.6 ring and the pick waits for a click (right-click/Esc = no shot). False = no Quick Shot, or nothing to light.
-func _solo_open_quick_shot(unit: GameUnit) -> bool:
+## Automodus steps 1.8d/1.8f (#1828): after a point move the unit picks its shot from where it now stands — after an
+## Advance always (OD 13), after a Rush only with Quick Shot ("may shoot after Rush"). The engine enemies its volley
+## reaches (range + sight, _solo_volley_sighted) light up with the 1.6 ring, the Advance's suggestion (suggest_target)
+## wears the highlighted one, and the pick waits for a click (Enter = the suggestion; right-click/Esc = no shot).
+## False = no shot to pick (no Quick Shot, or nothing to light).
+func _solo_open_shot_pick(unit: GameUnit, verb: int) -> bool:
+	var quick := verb == AiDecision.Action.RUSH
 	# The test player_intent uses (solo_controller.gd), with no target yet: the rule active, or spell-granted.
-	if not ((unit.has_special_rule("Quick Shot") and RulesRegistry.unit_rule_active(unit, "Quick Shot")) \
+	if quick and not ((unit.has_special_rule("Quick Shot") and RulesRegistry.unit_rule_active(unit, "Quick Shot")) \
 			or AiSpell.granted_rules_of(unit, null).has("Quick Shot")):
 		return false
+	var label := "Quick Shot" if quick else "Advance & Shoot"
 	var lit: Array = drag_line_targets(unit).filter(func(e: GameUnit) -> bool: return _solo_volley_sighted(unit, e) > 0)
 	if lit.is_empty():
-		_log_rule_event(BattleLog.Category.COMBAT, "Quick Shot: no enemy in range and sight", true)
+		_log_rule_event(BattleLog.Category.COMBAT, "%s: no enemy in range and sight" % label, true)
 		return false
-	_solo_target_mode = {"unit": unit, "auto_quick_shot": true, "auto_valid": lit, "auto_label": "Quick Shot",
-		"cast_rings": lit.map(func(e: GameUnit) -> Node:   # freed by _solo_end_targeting
-			return _solo_spawn_pulse_ring(solo_controller.unit_centre(e), Color(1.0, 0.7, 0.2)))}
+	var suggested: GameUnit = null if quick else solo_controller.suggest_target(unit, verb)
+	suggested = suggested if lit.has(suggested) else null   # 1.8c: a suggestion that is not lit is not named
+	_solo_target_mode = {"unit": unit, "auto_shot": verb, "auto_valid": lit, "auto_label": label,
+		"auto_suggested": suggested, "cast_rings": lit.map(func(e: GameUnit) -> Node:   # freed by _solo_end_targeting
+			return _solo_lit_ring(e, suggested))}
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL,
-			"%s: Quick Shot — click a lit enemy to shoot, right-click or Esc for no shot" % unit.get_name())
+			"%s: %s — click a lit enemy to shoot, right-click or Esc for no shot" % [unit.get_name(), label])
+		if suggested != null:
+			battle_log.log_event(BattleLog.Category.GENERAL, "Suggested: %s — Enter shoots it" % suggested.get_name())
 	return true
+
+
+## Automodus 1.6/1.8 (OD 11): a lit target's amber ring; the suggested target's is brighter and larger.
+func _solo_lit_ring(cu: GameUnit, suggested: GameUnit) -> Node:
+	var ring := _solo_spawn_pulse_ring(solo_controller.unit_centre(cu),
+		Color(1.0, 0.9, 0.5) if cu == suggested else Color(1.0, 0.7, 0.2))
+	if cu == suggested:
+		(ring.mesh as TorusMesh).outer_radius = 0.075
+	return ring
 
 
 ## Cast-mode click (#227, factored for headless tests): toggle-pick for multi-target spells.
