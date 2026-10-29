@@ -65,6 +65,28 @@ func test_deadly_against_regeneration_rolls_every_wound_before_the_cap() -> void
 	assert_float(AiEv.profile_ev(w, ATT, regen3, 12.0, false)).is_equal_approx(2.5 * 3.0 * 2.0 / 3.0, 0.0001)
 
 
+func test_lacerate_keeps_regeneration_in_the_estimate() -> void:
+	# A1 (play test 29.10.2026): Lacerate shares Bane's Defense-6 re-roll but never its Regeneration bypass.
+	# 10 attacks, hit 4+ → 5 hits; Defense 4+ with the 6s re-rolled blocks 2/6 + 1/6 × 1/2 = 5/12.
+	var regen := {"defense": 4, "tough": 1, "models": 5, "regeneration": true, "regen_target": 5}
+	var through := 5.0 * (1.0 - 5.0 / 12.0)
+	var lac := _rprof({"bane": true, "rules": ["Lacerate"]})
+	assert_float(AiEv.profile_ev(lac, ATT, regen, 12.0, false)).is_equal_approx(through * 2.0 / 3.0, 0.0001)
+	# CONTROL: Bane keeps the bypass — the same re-roll, no Regeneration roll.
+	var bane := _rprof({"bane": true, "rules": ["Bane"]})
+	assert_float(AiEv.profile_ev(bane, ATT, regen, 12.0, false)).is_equal_approx(through, 0.0001)
+
+
+func test_a_bane_alias_on_a_lacerate_weapon_stamps_no_regeneration_bypass() -> void:
+	# The registry fold: a Bane-primitive alias (aof beastmen "Bestial", re-roll only) must not turn the
+	# Lacerate weapon's re-roll into a bypass (A1). A Bane weapon keeps its own.
+	var u := _boost_carrier(["Bestial"])
+	var stamped := AiEv.stamp_sergeant([_mprof({"bane": true, "rules": ["Lacerate"]}),
+		_mprof({"bane": true, "rules": ["Bane"]})], u)
+	assert_bool(bool((stamped[0] as Dictionary).get("bypass_regen", true))).is_false()
+	assert_bool(bool((stamped[1] as Dictionary).get("bypass_regen", false))).is_true()
+
+
 func test_blast_prefers_big_units() -> void:
 	# Blast(3) multiplies each hit by min(X, models): 10-model target doubles+ the 2-model one.
 	var w := _rprof({"blast": 3, "attacks": 2})

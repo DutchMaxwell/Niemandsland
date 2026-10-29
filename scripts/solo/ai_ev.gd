@@ -121,6 +121,19 @@ static func facet_applies(params: Dictionary, profile_range: int) -> bool:
 	return true
 
 
+## A1 (play test 29.10.2026): the profile prints Lacerate and no Bane. AiShooting folds Lacerate into the
+## `bane` flag for its Defense-6 re-roll, but the army-book Lacerate never ignores Regeneration (only Bane
+## does) — so such a profile's `bypass_regen` defaults to OFF. The table's twin: main._solo_profile_lacerate_only.
+static func lacerate_only(profile: Dictionary) -> bool:
+	var lacerate := false
+	for r in profile.get("rules", []):
+		var s := str(r).strip_edges()
+		if s.begins_with("Bane"):
+			return false
+		lacerate = lacerate or s.begins_with("Lacerate")
+	return lacerate
+
+
 ## Rating X of a unit-level "Name(X)" special rule (0 if absent) — type-safe against label-only shapes
 ## (the wave-1 _rule_to_string lesson).
 static func unit_rating(unit: GameUnit, rule_name: String) -> int:
@@ -388,7 +401,7 @@ static func stamp_sergeant(profiles: Array, unit: GameUnit) -> Array:
 			var fpd := fp as Dictionary
 			if not facet_applies(sp, int(fpd.get("range", 0))):
 				continue
-			var existing_bypass := bool(fpd.get("bane", false)) and bool(fpd.get("bypass_regen", true))
+			var existing_bypass := bool(fpd.get("bane", false)) and bool(fpd.get("bypass_regen", not lacerate_only(fpd)))
 			fpd["bane"] = true
 			fpd["bypass_regen"] = existing_bypass or bool(sp.get("bypass_regen", false))
 	# Coverage wave: cover-ignore facet (unit-level "Ignores Cover when shooting" and kin — the
@@ -589,8 +602,8 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 		unsaved += hits * SIX_P
 	# — Regeneration family (5+ Regeneration / 6+ Self-Repair ignores; Bane/Rending/UNSTOPPABLE bypass
 	#   it — main.gd:6772/6852, W-P1 parity fix: the unstoppable flag was parsed but never read here.
-	#   Destructive does NOT bypass, so its wounds are reduced here too) —
-	if bool(def_ctx.get("regeneration", false)) and not ((bane and bool(profile.get("bypass_regen", true))) or bool(profile.get("rending", false)) \
+	#   Destructive does NOT bypass, so its wounds are reduced here too; nor does Lacerate, A1) —
+	if bool(def_ctx.get("regeneration", false)) and not ((bane and bool(profile.get("bypass_regen", not lacerate_only(profile)))) or bool(profile.get("rending", false)) \
 			or bool(profile.get("unstoppable", false))):
 		var keep := 1.0 - AiCombatMath.success_chance(int(def_ctx.get("regen_target", REGENERATION_TARGET)))
 		unsaved *= keep
