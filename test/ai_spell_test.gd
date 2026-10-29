@@ -42,10 +42,10 @@ func test_spell_facets_on_six_and_conditional_ap() -> void:
 	assert_int(int(crack["on6_ap"])).is_equal(2)
 	var destructive := AiSpell.spell_facets(["Destructive"])
 	assert_int(int(destructive["on6_ap"])).is_equal(4)
-	# Lacerate = the AoF Bane sibling (re-roll Defense 6s + Regeneration bypass).
+	# Lacerate shares Bane's Defense-6 re-roll but NOT its Regeneration bypass (A1, play test 29.10.2026).
 	var lacerate := AiSpell.spell_facets(["Lacerate"])
 	assert_bool(bool(lacerate["bane"])).is_true()
-	assert_bool(bool(lacerate["ignores_regen"])).is_true()
+	assert_bool(bool(lacerate["ignores_regen"])).is_false()
 	# Conditional AP resolves against the CONCRETE defender.
 	var shatter := AiSpell.spell_facets(["Shatter"])
 	assert_int(AiSpell.effective_ap(shatter, {"defense": 4, "tough": 3})).is_equal(2)
