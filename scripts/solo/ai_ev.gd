@@ -124,7 +124,10 @@ static func facet_applies(params: Dictionary, profile_range: int) -> bool:
 ## A1 (play test 29.10.2026): the profile prints Lacerate and no Bane. AiShooting folds Lacerate into the
 ## `bane` flag for its Defense-6 re-roll, but the army-book Lacerate never ignores Regeneration (only Bane
 ## does) — so such a profile's `bypass_regen` defaults to OFF. The table's twin: main._solo_profile_lacerate_only.
+## Below EPOCH_72_PLAYTEST_RULES it answers false (the legacy bypass), as the core's stamp does at 71.
 static func lacerate_only(profile: Dictionary) -> bool:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_72_PLAYTEST_RULES:
+		return false
 	var lacerate := false
 	for r in profile.get("rules", []):
 		var s := str(r).strip_edges()

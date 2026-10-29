@@ -234,12 +234,14 @@ static func spell_damage_ev(hits: int, def_ctx: Dictionary, facets: Dictionary =
 	if bool(facets.get("shred", false)):
 		unsaved += h * SIX_P
 	# Regeneration family, unless the facets bypass it (Bane / Disintegrate — never Lacerate, A1: its `bane`
-	# facet is the Defense-6 re-roll alone).
-	if bool(def_ctx.get("regeneration", false)) and not bool(facets.get("ignores_regen", false)):
+	# facet is the Defense-6 re-roll alone). Both fixes read the core's frozen gate (spell.rs): below
+	# EPOCH_72_PLAYTEST_RULES Lacerate's `bane` still bypasses and the cap comes before the roll.
+	var playtest := AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_72_PLAYTEST_RULES
+	if bool(def_ctx.get("regeneration", false)) and not (bool(facets.get("ignores_regen", false)) or (bane and not playtest)):
 		var keep := 1.0 - AiCombatMath.success_chance(int(def_ctx.get("regen_target_spell", def_ctx.get("regen_target", AiEv.REGENERATION_TARGET))))
 		unsaved *= keep
 		# A4 (maintainer ruling 29.10.2026), as AiEv.profile_ev: all X wounds are rolled before the cap.
-		if deadly > deadly_cap:
+		if deadly > deadly_cap and playtest:
 			unsaved += deadly_unsaved * (AiCombatMath.deadly_regen_dealt(deadly, deadly_cap, keep) - float(deadly_cap) * keep)
 	return unsaved
 
