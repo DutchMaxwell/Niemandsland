@@ -404,6 +404,11 @@ def params_for(system: str, name: str, primitive: str, mech_params: dict | None 
         params = dict(PRIMITIVE_PARAMS.get(primitive, {}))
     if name in ("Rapid Rush", "Rapid Rush Aura"):
         params["charge_mod"] = 0
+    # A1 (play test 29.10.2026): the army-book Lacerate only makes the target re-roll Defense 6s; it
+    # never ignores Regeneration. The primitive's other names ("Ignores Regeneration", the Unstoppable
+    # scopes) keep the bypass default above.
+    if name == "Lacerate" and primitive == "Lacerate":
+        params["bypass_regen"] = False
     return params
 
 

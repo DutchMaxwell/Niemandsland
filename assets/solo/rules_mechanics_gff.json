@@ -1346,7 +1346,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "bypass_regen": true
+     "bypass_regen": false
     }
    },
    "Melee Shrouding": {
@@ -1894,7 +1894,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "bypass_regen": true
+     "bypass_regen": false
     }
    },
    "Melee Shrouding": {
@@ -3218,7 +3218,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "bypass_regen": true
+     "bypass_regen": false
     }
    },
    "Melee Shrouding": {
@@ -3425,7 +3425,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "bypass_regen": true
+     "bypass_regen": false
     }
    },
    "Martial Prowess": {
@@ -5546,7 +5546,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "bypass_regen": true
+     "bypass_regen": false
     }
    },
    "No Retreat": {
@@ -5923,7 +5923,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "bypass_regen": true
+     "bypass_regen": false
     }
    },
    "Melee Shrouding": {
@@ -6509,7 +6509,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "bypass_regen": true
+     "bypass_regen": false
     }
    },
    "Machine-Fog": {
@@ -8096,7 +8096,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "bypass_regen": true
+     "bypass_regen": false
     }
    },
    "Piercing Tag": {
@@ -8690,7 +8690,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "bypass_regen": true
+     "bypass_regen": false
     }
    },
    "Melee Shrouding": {
@@ -9465,7 +9465,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "bypass_regen": true
+     "bypass_regen": false
     }
    },
    "Melee Shrouding": {
@@ -9860,7 +9860,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "bypass_regen": true
+     "bypass_regen": false
     }
    },
    "Melee Shrouding": {

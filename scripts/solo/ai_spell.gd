@@ -233,8 +233,9 @@ static func spell_damage_ev(hits: int, def_ctx: Dictionary, facets: Dictionary =
 	# Shred: +1 wound per unmodified Defense 1 among the save dice (one per hit) — expected +h/6.
 	if bool(facets.get("shred", false)):
 		unsaved += h * SIX_P
-	# Regeneration family, unless the facets bypass it (Bane / Lacerate / Disintegrate).
-	if bool(def_ctx.get("regeneration", false)) and not (bane or bool(facets.get("ignores_regen", false))):
+	# Regeneration family, unless the facets bypass it (Bane / Disintegrate — never Lacerate, A1: its `bane`
+	# facet is the Defense-6 re-roll alone).
+	if bool(def_ctx.get("regeneration", false)) and not bool(facets.get("ignores_regen", false)):
 		var keep := 1.0 - AiCombatMath.success_chance(int(def_ctx.get("regen_target_spell", def_ctx.get("regen_target", AiEv.REGENERATION_TARGET))))
 		unsaved *= keep
 		# A4 (maintainer ruling 29.10.2026), as AiEv.profile_ev: all X wounds are rolled before the cap.
