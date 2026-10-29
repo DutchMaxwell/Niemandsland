@@ -509,3 +509,96 @@ func test_an_own_spot_click_keeps_the_rush_open(timeout := 60000) -> void:
 	assert_array(_board()).is_equal(before)
 	assert_bool(_main._solo_target_mode.has("auto_point")).override_failure_message("the Rush mode closed").is_true()
 	_main._solo_end_targeting()
+
+
+# --- Automodus step 1.8d: Quick Shot after a point Rush ---
+
+## A one-model 12" rifle unit that may shoot after a Rush. Quick Shot is faction-scoped in the rules mechanics
+## map, so the unit needs a faction where it is a defined primitive (as in e2e_auto_rush_test.gd).
+func _quick_shooter(unit_name: String) -> GameUnit:
+	var u := _shooter(1, unit_name, 0.0)
+	u.unit_properties["special_rules"] = ["Quick Shot"]
+	u.unit_properties["faction_folder"] = "goblin_reclaimers"
+	return u
+
+
+## Point-Rushes `runner` 12" along +x (it ends at 12"). Near stands at `near_x` (20" = ~8" from the landing, in
+## the rifle's range and sight), Far at -18" (30" from the landing). Both stay put; Watchers is the AI's reply.
+func _rush_past(runner: GameUnit, near_x := 20.0) -> Array:
+	_bystanders()
+	var near := _pickable(2, "Near", near_x)
+	var far := _pickable(2, "Far", -18.0)
+	near.is_activated = true
+	far.is_activated = true
+	var goal: Vector3 = _main.solo_controller.unit_centre(runner) + Vector3(12.0 * INCH, 0, 0)
+	await _main._run_player_intent(runner, AiDecision.Action.RUSH, null, goal)
+	await _runner.simulate_frames(1)   # the pick is a raycast: let physics register the fresh bodies
+	return [near, far]
+
+
+func test_quick_shot_unit_may_shoot_after_a_point_rush(timeout := 60000) -> void:
+	var runner := _quick_shooter("Skirmishers")
+	var foes: Array = await _rush_past(runner)
+	assert_bool(_main._solo_target_mode.has("auto_quick_shot")) \
+		.override_failure_message("no Quick Shot pick after the point Rush (log: %s)" % _log_text().strip_edges()) \
+		.is_true()
+	assert_array(_main._solo_target_mode.get("auto_valid", [])).contains_exactly([foes[0]])
+	assert_int((_main._solo_target_mode.get("cast_rings", []) as Array).size()).is_equal(1)
+	assert_bool(runner.is_activated).override_failure_message("the Rush completed before the shot").is_false()
+	assert_str(_log_text()).contains("Skirmishers: Quick Shot — click a lit enemy to shoot, right-click or Esc for no shot")
+	var far_pt := _pick_point(foes[1])
+	assert_bool(far_pt.is_finite()).override_failure_message("fixture: the pick ray never hits Far").is_true()
+	await _click(far_pt)
+	assert_bool(_main._solo_target_mode.has("auto_quick_shot")).override_failure_message("the unlit click closed the pick").is_true()
+	assert_str(_log_text()).contains("Auto: Far is not a valid target for Quick Shot (not in range and sight)")
+	assert_int(_logged_sighted("Skirmishers")).override_failure_message("the unlit click fired").is_equal(-1)
+	var near_pt := _pick_point(foes[0])
+	assert_bool(near_pt.is_finite()).override_failure_message("fixture: the pick ray never hits Near").is_true()
+	await _click(near_pt)
+	await E2EBoot.settle(get_tree())
+	var text := _log_text()
+	assert_str(text).contains("Quick Shot: shoots after its Rush action")
+	assert_int(_logged_sighted("Skirmishers")).override_failure_message("no volley after the lit click").is_equal(1)
+	assert_str(text).contains("fires Rifle at Near")
+	assert_bool(runner.is_activated).is_true()
+	assert_bool(_main._solo_target_mode.is_empty()).is_true()
+	assert_int(_main._solo_pending_replies).override_failure_message("the AI's reply was never booked/resolved").is_equal(0)
+
+
+func test_esc_after_a_point_rush_holds_the_quick_shot(timeout := 60000) -> void:
+	var runner := _quick_shooter("Skirmishers")
+	await _rush_past(runner)
+	assert_bool(_main._solo_target_mode.has("auto_quick_shot")).override_failure_message("no Quick Shot pick").is_true()
+	var rings: Array = (_main._solo_target_mode.get("cast_rings", []) as Array).duplicate()
+	var esc := InputEventKey.new()
+	esc.keycode = KEY_ESCAPE
+	esc.pressed = true
+	await _main._solo_targeting_input(esc)
+	await E2EBoot.settle(get_tree())
+	var text := _log_text()
+	assert_str(text).contains("Quick Shot: Skirmishers holds its fire")
+	assert_str(text).not_contains("fires Rifle at Near")
+	assert_int(_logged_sighted("Skirmishers")).override_failure_message("the hold-fire rolled a volley").is_equal(-1)
+	assert_bool(runner.is_activated).override_failure_message("Esc did not complete the activation").is_true()
+	assert_bool(_main._solo_target_mode.is_empty()).is_true()
+	assert_int(_main._solo_pending_replies).is_equal(0)
+	for r in rings:
+		assert_bool(is_instance_valid(r)).override_failure_message("a lit ring survived Esc").is_false()
+
+
+func test_a_quick_shot_with_no_enemy_in_reach_completes(timeout := 60000) -> void:
+	var runner := _quick_shooter("Skirmishers")
+	await _rush_past(runner, -30.0)   # Near 42" from the landing: nothing to light
+	await E2EBoot.settle(get_tree())
+	assert_bool(_main._solo_target_mode.is_empty()).override_failure_message("a pick opened with nothing lit").is_true()
+	assert_str(_log_text()).contains("Quick Shot: no enemy in range and sight")
+	assert_bool(runner.is_activated).is_true()
+
+
+func test_a_point_rush_without_quick_shot_completes_as_before(timeout := 60000) -> void:
+	var runner := _shooter(1, "Runners", 0.0)
+	await _rush_past(runner)
+	await E2EBoot.settle(get_tree())
+	assert_bool(_main._solo_target_mode.is_empty()).override_failure_message("a pick opened without Quick Shot").is_true()
+	assert_str(_log_text()).not_contains("Quick Shot")
+	assert_bool(runner.is_activated).is_true()

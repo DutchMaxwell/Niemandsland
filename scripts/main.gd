@@ -11323,7 +11323,8 @@ func _run_player_intent(unit: GameUnit, verb: int, target: GameUnit, point: Vari
 		await _solo_complete_human_attack(unit)
 	elif bool(report.get("can_shoot", false)):
 		await _run_human_attack(unit, target, false, true)
-	else:
+	# Automodus 1.8d: a point Rush has no target, so a Quick Shot unit picks its shot now; the pick completes.
+	elif point == null or verb != AiDecision.Action.RUSH or not _solo_open_quick_shot(unit):
 		await _solo_complete_human_attack(unit)   # the no-shot reason is already a rule note
 
 
@@ -11624,6 +11625,13 @@ func _solo_targeting_input(event: InputEvent) -> bool:
 				_solo_end_targeting()
 				_solo_coordinate_decline(cb)
 				return true
+			# Automodus 1.8d: no Quick Shot after the point Rush — the activation still ends (the AI is owed its reply).
+			if _solo_target_mode.has("auto_quick_shot"):
+				var qs: GameUnit = _solo_target_mode.get("unit")
+				_solo_end_targeting()
+				_log_rule_event(BattleLog.Category.COMBAT, "Quick Shot: %s holds its fire" % qs.get_name(), true)
+				_solo_complete_human_attack(qs)
+				return true
 			_solo_end_targeting()
 			return true
 		SoloController.TargetingRoute.TRACK:
@@ -11663,7 +11671,7 @@ func _solo_targeting_input(event: InputEvent) -> bool:
 					_solo_end_targeting()
 					await _run_player_intent(attacker, AiDecision.Action.RUSH, null, goal)
 				return true
-			if _solo_target_mode.has("auto_verb"):
+			if _solo_target_mode.has("auto_verb") or _solo_target_mode.has("auto_quick_shot"):
 				if target != null:
 					await _solo_auto_click(target)
 				return true
@@ -11758,17 +11766,44 @@ func _solo_show_auto_point(point: Variant) -> void:
 ## included, which used to take the suggestion) says why, and the mode stays open.
 func _solo_auto_click(target: GameUnit) -> void:
 	var unit: GameUnit = _solo_target_mode.get("unit")
-	var verb: int = int(_solo_target_mode.get("auto_verb"))
+	var quick_shot: bool = _solo_target_mode.has("auto_quick_shot")   # Automodus 1.8d: the shot after a point Rush
+	var verb: int = int(_solo_target_mode.get("auto_verb", AiDecision.Action.RUSH))
 	if not (_solo_target_mode.get("auto_valid", []) as Array).has(target):
 		var why := "not an enemy unit"
 		if _engine_enemy(unit, target):
-			why = str(solo_controller.player_intent(unit, verb, target).get("refused", "not one of the lit targets"))
+			why = "not in range and sight" if quick_shot \
+				else str(solo_controller.player_intent(unit, verb, target).get("refused", "not one of the lit targets"))
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.GENERAL, "Auto: %s is not a valid target for %s (%s)" % [
 				target.get_name(), str(_solo_target_mode.get("auto_label", "")), why])
 		return
 	_solo_end_targeting()
+	if quick_shot:
+		_log_rule_event(BattleLog.Category.COMBAT, "Quick Shot: shoots after its Rush action", true)
+		await _run_human_attack(unit, target, false, true)   # the volley, then the activation and the AI's reply
+		return
 	await _run_player_intent(unit, verb, target)
+
+
+## Automodus step 1.8d (#1828): after a point Rush a Quick Shot unit ("may shoot after Rush") picks its shot from
+## where it now stands: the engine enemies its volley reaches (range + sight, _solo_volley_sighted) light up with the
+## 1.6 ring and the pick waits for a click (right-click/Esc = no shot). False = no Quick Shot, or nothing to light.
+func _solo_open_quick_shot(unit: GameUnit) -> bool:
+	# The test player_intent uses (solo_controller.gd), with no target yet: the rule active, or spell-granted.
+	if not ((unit.has_special_rule("Quick Shot") and RulesRegistry.unit_rule_active(unit, "Quick Shot")) \
+			or AiSpell.granted_rules_of(unit, null).has("Quick Shot")):
+		return false
+	var lit: Array = drag_line_targets(unit).filter(func(e: GameUnit) -> bool: return _solo_volley_sighted(unit, e) > 0)
+	if lit.is_empty():
+		_log_rule_event(BattleLog.Category.COMBAT, "Quick Shot: no enemy in range and sight", true)
+		return false
+	_solo_target_mode = {"unit": unit, "auto_quick_shot": true, "auto_valid": lit, "auto_label": "Quick Shot",
+		"cast_rings": lit.map(func(e: GameUnit) -> Node:   # freed by _solo_end_targeting
+			return _solo_spawn_pulse_ring(solo_controller.unit_centre(e), Color(1.0, 0.7, 0.2)))}
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL,
+			"%s: Quick Shot — click a lit enemy to shoot, right-click or Esc for no shot" % unit.get_name())
+	return true
 
 
 ## Cast-mode click (#227, factored for headless tests): toggle-pick for multi-target spells.
