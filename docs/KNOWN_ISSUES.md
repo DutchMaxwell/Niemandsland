@@ -27,13 +27,15 @@ not there yet and what to watch for. The full done / in-progress / planned break
   both sides (see [`../PROJECT_STATUS.md`](../PROJECT_STATUS.md)). Solo is **alpha**: four selectable difficulty grades
   (Dämmerung, Zwielicht, Finsternis, Albtraum; Albtraum is the default), co-op against the AI in multiplayer is a first version, and the UI is English
   (the privacy & data screens also come in German).
-- **Automodus (Charge / Advance & Shoot / Rush) is back, with a landing preview.** The enemies a verb
-  can reach light up (a Charge dims the ones out of reach and says why on hover); hovering one shows
-  where every model lands, a click executes. Rush goes to the table point you hover and click, and a
-  Quick Shot unit then picks its shot. An executed intent has **no take-back** — the dice fell, like
-  at the table. Regiments, aircraft and units embarked in a transport still move by hand (the
-  radial's Shoot / Fight, or drag). Offered in solo, co-op, agreed Automatic online rooms (your own
-  units) and on a hotseat table with the rules automation on (the side holding the turn).
+- **Automodus (Charge / Advance & Shoot / Rush) is back, with a landing preview.** A Charge lights up
+  the enemies it can reach (the ones out of reach are dimmed and say why on hover); hovering one shows
+  where every model lands, a click executes. Advance & Shoot and Rush go to the table point you hover
+  and click; after an Advance the enemies in range and sight light up and a click shoots one (Enter
+  shoots the suggested one, Esc holds fire), and a Quick Shot unit picks its shot the same way after
+  a Rush. An executed intent has **no take-back** — the dice fell, like at the table. Regiments,
+  aircraft and units embarked in a transport still move by hand (the radial's Shoot / Fight, or
+  drag). Offered in solo, co-op, agreed Automatic online rooms (your own units) and on a hotseat
+  table with the rules automation on (the side holding the turn).
 - **AI thinking time has been measured on one machine only** (a developer laptop). On a slower PC
   the opponent may take longer per decision — if it feels slow, send a diagnostics report (below);
   its header names which AI path your machine ran.

@@ -197,12 +197,14 @@ func _did(id: String, u: GameUnit, lines: String) -> bool:
 			return lines.contains("pick a target (shooting)")
 		"solo_fight":
 			return lines.contains("pick a target (melee)")
-		# Automodus 1.6-1.8c: the verb's own prompt (its lit enemies; Rush hovers the table) or, with no
-		# reachable enemy, its "no valid target for <verb>" line — the fixture's lone enemy is far off.
+		# Automodus 1.6-1.8f: the verb's own prompt (Charge: its lit enemies; Advance and Rush hover the table
+		# for a point) or, with no reachable enemy, its "no valid target for <verb>" line — the fixture's lone
+		# enemy is far off.
 		"solo_auto_charge":
 			return lines.contains("lit for Charge") or lines.contains("no valid target for Charge")
 		"solo_auto_advance":
-			return lines.contains("lit for Advance & Shoot") or lines.contains("no valid target for Advance & Shoot")
+			return bool(_main._solo_target_mode.get("auto_point", false)) and lines.contains("click to advance there") \
+				or lines.contains("no valid target for Advance & Shoot")
 		"solo_auto_rush":
 			return bool(_main._solo_target_mode.get("auto_point", false)) and lines.contains("hover the table") \
 				or lines.contains("no valid target for Rush")

@@ -11005,7 +11005,7 @@ func solo_combat_available(unit: GameUnit) -> bool:
 
 ## Automodus 1.9 (#1828): the player's Charge / Advance & Shoot / Rush verbs are offered again. 0.3.14
 ## hid them (PR #1829: no landing preview, an invisible target pick); the 0.3.15 rework added both
-## (steps 1.1-1.8e). false hides them again; the AI's own use of execute_intent is unaffected.
+## (steps 1.1-1.8f). false hides them again; the AI's own use of execute_intent is unaffected.
 const PLAYER_AUTO_VERBS_ENABLED := true
 
 
