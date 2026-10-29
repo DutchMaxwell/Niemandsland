@@ -3365,6 +3365,10 @@ func _ensure_solo_controller() -> void:
 		solo_controller.round_provider = func() -> int:
 			return int(opr_army_manager.current_round) if opr_army_manager != null else 0
 		solo_controller.game_rounds = _solo_mission_rounds(_solo_mission_id)
+		# Automodus decision 14: only a designated AI seat turns its models to the enemy — read live, since the
+		# controller outlives its seat (#1719) and a hotseat table's geometry controller has ai_slot on a human.
+		solo_controller.is_ai_seat = func(slot: int) -> bool:
+			return solo_ai_slots.has(slot)
 	_solo_apply_difficulty()
 
 
