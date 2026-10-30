@@ -4642,11 +4642,13 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 				mod_info = td_ctx["mod"] as Dictionary
 				shot_base = int(td_ctx["defense"])
 				shot_cover = int(td_ctx["covered"])
+		var ai_own: int = int(mod_info.get("own", 0)) + upr_hit   # SHO-08: own rules' part (Unstoppable)
 		if moved and (bool(profile.get("indirect", false)) or granted_indirect) \
 				and not bool(RulesRegistry.best_primitive_param(member, "Indirect", "no_moved_penalty", false)):
 			# Quick Readjustment (coverage wave): the bearer ignores the Indirect moved-penalty.
 			var indirect_mod: int = AiCombatMath.indirect_hit_modifier(true,
 				int(RulesRegistry.unit_param(member, "Indirect", "moved_hit_penalty", AiCombatMath.INDIRECT_MOVED_HIT_PENALTY)))
+			ai_own += indirect_mod
 			mod_info = {"mod": int(mod_info.get("mod", 0)) + indirect_mod,
 				"note": _solo_join_note(str(mod_info.get("note", "")), "Indirect moved %d" % indirect_mod)}
 		# NML-970: spent Spot markers fold INTO the note — the To-hit breakdown must name
@@ -4658,10 +4660,11 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 			mod_info = {"mod": int(mod_info.get("mod", 0)) + ai_tag_hit,
 				"note": _solo_join_note(str(mod_info.get("note", "")), "Tagged +%d" % ai_tag_hit)}
 		var ai_mod: int = int(mod_info.get("mod", 0)) + upr_hit
-		if bool(profile.get("unstoppable", false)) and ai_mod < 0:
-			ai_mod = 0   # Unstoppable (GF v3.5.1 p.15): ignores all negative modifiers to this weapon
-			if battle_log != null:
-				battle_log.log_event(BattleLog.Category.COMBAT, "Unstoppable: negative to-hit modifiers ignored", true)
+		if bool(profile.get("unstoppable", false)):
+			var ai_uf: Array = _solo_unstoppable_fold(ai_mod, ai_own)   # Unstoppable: other sources' minus ignored
+			ai_mod = int(ai_uf[0])
+			if battle_log != null and str(ai_uf[1]) != "":
+				battle_log.log_event(BattleLog.Category.COMBAT, str(ai_uf[1]), true)
 		var to_hit_raw: int = AiCombatMath.reliable_quality(int(shot["quality"]), bool(profile.get("reliable", false))) - ai_mod
 		var to_hit: int = AiCombatMath.modified_hit_target(to_hit_raw, 0)
 		if upr_ap > 0:
@@ -7411,6 +7414,7 @@ func _solo_terrain_sampler() -> Callable:
 ## Aura"). Defaulted false, so the shooting and preview call sites are unchanged.
 func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: float, melee: bool,
 		charging: bool = false) -> Dictionary:
+	var own := 0   # SHO-08: the part of "mod" from the attacker's OWN rules (Unstoppable keeps it at 73)
 	var evasive: bool = _solo_rule_on_all_models(target, "Evasive")
 	if not evasive:
 		# Coverage wave (resolver audit): Evasive DATA aliases (Changebound Boost & kin — "enemies
@@ -7488,6 +7492,7 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 				if float(sp3.get("terrain_within_in", 0.0)) > 0.0 and not _solo_majority_in_cover(shooter_member):
 					continue
 				mm += int(sp3.get("hit_bonus", 0))
+				own += int(sp3.get("hit_bonus", 0))
 				base_note = _solo_join_note(base_note, "%s %+d" % [str((e as Dictionary)["name"]), int(sp3.get("hit_bonus", 0))])
 		var sm := _solo_spell_hit_mod(shooter_member, true)
 		var vt := _solo_spell_hit_mod_vs(target, true)
@@ -7499,7 +7504,7 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 		if int(inst_m.get("mod", 0)) != 0:
 			mm += int(inst_m["mod"])
 			base_note = _solo_join_note(base_note, str(inst_m.get("note", "")))
-		return {"mod": mm + int(sm.get("mod", 0)) + int(vt.get("mod", 0)),
+		return {"mod": mm + int(sm.get("mod", 0)) + int(vt.get("mod", 0)), "own": own,
 			"note": _solo_join_note(_solo_join_note(base_note, str(sm.get("note", ""))), str(vt.get("note", "")))}
 	var attacker_artillery: bool = shooter_member != null and shooter_member.has_special_rule("Artillery")
 	var stealth: bool = _solo_rule_on_all_models(target, "Stealth")
@@ -7516,6 +7521,7 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 	var notes: PackedStringArray = []
 	var over_nine: bool = dist_in > AiCombatMath.LONG_RANGE_IN
 	if attacker_artillery and over_nine:
+		own += art_shooter_bonus
 		notes.append("Artillery +%d" % art_shooter_bonus)
 	elif attacker_artillery:
 		# #224 (transparency wave stage 1 — rules-must-log covers NON-application too): the
@@ -7540,6 +7546,7 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 		var gab := _solo_growth_attack_bonus(shooter_member)
 		if int(gab.get("hit", 0)) != 0:
 			mod += int(gab["hit"])
+			own += int(gab["hit"])
 			notes.append("Growth %+d" % int(gab["hit"]))
 	# Coverage wave: attacker-side Shot-Modifier family (Good Shot +1 / Bad Shot -1 / Targeting
 	# Visor +1 over 9" / Grounded Precision terrain-conditional) — data-driven via the layer.
@@ -7562,6 +7569,7 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 			var hb := int(sp2.get("hit_bonus", 0))
 			if hb != 0:
 				mod += hb
+				own += hb
 				notes.append("%s %+d" % [str((e as Dictionary)["name"]), hb])
 	var sm := _solo_spell_hit_mod(shooter_member, false)
 	if int(sm.get("mod", 0)) != 0:
@@ -7577,7 +7585,19 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 	if int(inst2.get("mod", 0)) != 0:
 		mod += int(inst2["mod"])
 		notes.append(str(inst2.get("note", "")))
-	return {"mod": mod + int(sm.get("mod", 0)) + int(vt.get("mod", 0)), "note": ", ".join(notes)}
+	return {"mod": mod + int(sm.get("mod", 0)) + int(vt.get("mod", 0)), "own": own, "note": ", ".join(notes)}
+
+
+## SHO-08, EPOCH_73_V36: Unstoppable ignores only the minus from OTHER sources, the bearer's own rules'
+## modifiers (`own`; 0 below 73 = one clamp over the whole sum) still apply. Returns [mod, log line or ""].
+func _solo_unstoppable_fold(mod: int, own: int) -> Array:
+	own = own if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else 0
+	var rest := mod - own
+	if own >= 0:
+		return [own, "Unstoppable: negative to-hit modifiers ignored"] if rest < 0 else [mod, ""]
+	if rest >= 0:
+		return [mod, "Unstoppable: own rules' %d to hit kept" % own]
+	return [own, "Unstoppable: %d to hit from other sources ignored, own rules' %d kept" % [rest, own]]
 
 
 ## Vengeance (resolver wave A — "friendly units get +X to hit rolls when attacking that unit,
@@ -7889,8 +7909,10 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 			var name_unstop: bool = not weapon_unstop \
 				and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_35_UNSTOPPABLE_MELEE \
 				and AiEv.has_exact_rule(striker, "Unstoppable in Melee")
-			if (weapon_unstop or name_unstop) and m_mod < 0:
-				m_mod = 0
+			# SHO-08 (EPOCH_73_V36): the striker's own rules' part stays outside the clamp.
+			var m_own: int = int(p_mod.get("own", 0)) + uf_hit if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else 0
+			if (weapon_unstop or name_unstop) and m_mod - m_own < 0:
+				m_mod = m_own
 				if battle_log != null:
 					battle_log.log_event(BattleLog.Category.COMBAT,
 						"Unstoppable in Melee: negative to-hit modifiers ignored"
@@ -13217,10 +13239,12 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 			# stamp the Entrenched gate reads — one truth for "moved this round".
 			var h_moved: bool = opr_army_manager != null \
 				and int(attacker.unit_properties.get("moved_round", -1)) == opr_army_manager.current_round
+			var h_own: int = int(p_mod.get("own", 0)) + upr_hit   # SHO-08: own rules' part (Unstoppable)
 			if h_moved and (bool(profile.get("indirect", false)) or h_granted_indirect) \
 					and not bool(RulesRegistry.best_primitive_param(group.get("member"), "Indirect", "no_moved_penalty", false)):
 				var ind_mod: int = AiCombatMath.indirect_hit_modifier(true,
 					int(RulesRegistry.unit_param(group.get("member"), "Indirect", "moved_hit_penalty", AiCombatMath.INDIRECT_MOVED_HIT_PENALTY)))
+				h_own += ind_mod
 				p_mod = {"mod": int(p_mod.get("mod", 0)) + ind_mod,
 					"note": _solo_join_note(str(p_mod.get("note", "")), "Indirect moved %d" % ind_mod)}
 			# Reliable sets the Quality (2+), THEN the roll modifiers apply (GF v3.5.1 p.14: "Reliable only
@@ -13233,11 +13257,13 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 				p_mod = {"mod": int(p_mod.get("mod", 0)) + tag_hit,
 					"note": _solo_join_note(str(p_mod.get("note", "")), "Tagged +%d" % tag_hit)}
 			var h_mod: int = int(p_mod.get("mod", 0)) + upr_hit
-			if bool(profile.get("unstoppable", false)) and h_mod < 0:
-				h_mod = 0   # Unstoppable (GF v3.5.1 p.15): ignores all negative modifiers to this weapon
-				if battle_log != null:
-					battle_log.log_event(BattleLog.Category.COMBAT, "Unstoppable: negative to-hit modifiers ignored", true)
-					_solo_rule_float(target, "Unstoppable: no penalties")
+			if bool(profile.get("unstoppable", false)):
+				var h_uf: Array = _solo_unstoppable_fold(h_mod, h_own)   # Unstoppable: other sources' minus ignored
+				if battle_log != null and str(h_uf[1]) != "":
+					battle_log.log_event(BattleLog.Category.COMBAT, str(h_uf[1]), true)
+					if int(h_uf[0]) != h_mod:
+						_solo_rule_float(target, "Unstoppable: no penalties")
+				h_mod = int(h_uf[0])
 			var to_hit_raw: int = AiCombatMath.reliable_quality(base_quality, bool(profile.get("reliable", false))) - h_mod
 			var to_hit: int = AiCombatMath.modified_hit_target(to_hit_raw, 0)
 			if upr_ap + extra_ap > 0:

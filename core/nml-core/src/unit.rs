@@ -502,6 +502,8 @@ pub struct Ctx {
     /// The mod's own sign stays POSITIVE: the "Defense rolls +N" log lines
     /// name the ladder, not the fold.
     pub growth_def_lowers: bool,
+    /// `EPOCH_73_V36`, stamped in `ctx_for` off the record's own epoch like `playtest_rules`.
+    pub v36_rules: bool,
     /// D21 (`EPOCH_68_MODIFIER_SUM`): the save target is ONE sum clamped once at
     /// `[2, 6]`, not a ladder of per-modifier 2+ floors. Stamped in `ctx_for` off
     /// the record's own epoch (the statics are built per record), so every
@@ -2898,6 +2900,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         growth_def_mod: 0,
         growth_fortify_ap: 0,
         growth_def_lowers: false,
+        v36_rules: rule_on(rules_epoch, crate::acts::EPOCH_73_V36),
         modifier_sum: rule_on(rules_epoch, crate::acts::EPOCH_68_MODIFIER_SUM),
         playtest_rules: rule_on(rules_epoch, EPOCH_72_PLAYTEST_RULES),
         ambush_arrival_ap: 0,
