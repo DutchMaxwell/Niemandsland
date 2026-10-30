@@ -391,6 +391,10 @@ jobs:
           ls -l build/windows
           test -f build/windows/nml_core_godot.dll || {
             echo "::error::nml_core_godot.dll did not land next to the exported executable"; exit 1; }
+          # The game data ships as its own file (embed_pck=false): the 0.3.14.0 .exe, with the game
+          # data appended, was blocked as a virus by an antivirus heuristic on a Windows PC.
+          test -f build/windows/$EXPORT_NAME.pck || {
+            echo "::error::$EXPORT_NAME.pck did not land next to the exported executable"; exit 1; }
 
       # The debug-symbol file is a build artifact only; it must never leak into what players
       # download (export dir here, release zips in the tag-gated release job below).
@@ -698,6 +702,7 @@ jobs:
           mkdir -p dist/linux dist/windows dist/macos
           godot --headless --verbose --export-release "Linux" dist/linux/$EXPORT_NAME.x86_64
           godot --headless --verbose --export-release "Windows Desktop" dist/windows/$EXPORT_NAME.exe
+          test -f "dist/windows/$EXPORT_NAME.pck" || { echo "::error::the Windows release lacks $EXPORT_NAME.pck"; exit 1; }
           if [ -f "dist/macos-core/$EXPORT_NAME.zip" ]; then
             # The export-macos job's zip: universal core dylib in Contents/Frameworks, ad-hoc signed
             # (dylib first, then the .app) and run on a macos-15 runner before it was uploaded.

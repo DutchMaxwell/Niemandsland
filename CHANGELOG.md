@@ -6,6 +6,10 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 
 ## [Unreleased]
 
+### Changed
+- **Windows: the game data ships as its own file** (`Niemandsland.pck` next to `Niemandsland.exe`) -
+  an antivirus heuristic blocked the 0.3.14.0 download, whose executable carried the game data inside.
+
 ### Fixed
 - **Lacerate no longer switches off Regeneration**: wounds from a Lacerate weapon or spell face the
   target's Regeneration or Self-Repair roll again; only rules that ignore Regeneration (Bane, Rending,
