@@ -6334,7 +6334,7 @@ fn reply_threat_core_with(
         {
             continue;
         }
-        let movable = !(o.hold_gate && crate::menu::forces_hold(&state.profile(e).special_rules));
+        let movable = !(o.hold_gate && crate::menu::holds_only(state, statics, e));
         let mut best_key: Option<usize> = None;
         let mut best_ev = 0.0f64;
         for m in 0..n {
