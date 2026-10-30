@@ -1521,7 +1521,7 @@ fn hit_and_run_boost_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> 
     if !rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
         return (0.0, String::new());
     }
-    for name in ["Guerrilla Boost", "Harassing Boost"] {
+    for name in ["Enhanced Guerrilla", "Enhanced Harassing"] {
         if unit_rule_active(reg, p, name) {
             let mv = unit_param_f(reg, p, name, "move_in", 0.0);
             if mv > 0.0 {
@@ -5582,7 +5582,7 @@ fn move_rule_mods_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Opt
     // gate is a per-activation majority read no statics-time stamp can
     // answer, so a flat stamp would be #489's over-credit, not a port.
     if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
-        for name in ["Highborn Boost", "Scurry Boost"] {
+        for name in ["Enhanced Highborn", "Scurry Boost"] {
             if !unit_rule_active(reg, p, name) {
                 continue;
             }
@@ -6038,7 +6038,7 @@ impl UnitStatic {
             // base's two conditional legs when carried — the printed "always
             // … (instead of only when …)" — so the walk knows before it
             // reaches either name.
-            let havoc_boosted = p.special_rules.iter().any(|r| base_rule_name(r) == "Havocbound Boost");
+            let havoc_boosted = p.special_rules.iter().any(|r| base_rule_name(r) == "Enhanced Havocbound");
             for raw in &p.special_rules {
                 let n = base_rule_name(raw);
                 if n.is_empty() || seen.iter().any(|s| *s == n) {
@@ -6081,7 +6081,7 @@ impl UnitStatic {
                             ..Default::default()
                         });
                     }
-                    "Havocbound Boost" => {
+                    "Enhanced Havocbound" => {
                         // Wave 4 — the always leg, the entry's own `upgrades`
                         // coupling ("If this model has Havocbound"); the
                         // volley's and the strike's named cond_ap lines log.

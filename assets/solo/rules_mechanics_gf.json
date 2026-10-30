@@ -87,8 +87,8 @@
   "Fearless",
   "Fearless Aura",
   "Ferocious",
-  "Ferocious Boost",
-  "Ferocious Boost Aura",
+  "Enhanced Ferocious",
+  "Enhanced Ferocious Aura",
   "Flying",
   "Fortified",
   "Fortified Aura",
@@ -107,23 +107,23 @@
   "Guarded",
   "Guarded Buff",
   "Guardian",
-  "Guardian Boost",
-  "Guardian Boost Aura",
+  "Enhanced Guardian",
+  "Enhanced Guardian Aura",
   "Guerrilla",
-  "Guerrilla Boost",
-  "Guerrilla Boost Aura",
+  "Enhanced Guerrilla",
+  "Enhanced Guerrilla Aura",
   "Harassing",
-  "Harassing Boost",
-  "Harassing Boost Aura",
+  "Enhanced Harassing",
+  "Enhanced Harassing Aura",
   "Havocbound",
-  "Havocbound Boost",
-  "Havocbound Boost Aura",
+  "Enhanced Havocbound",
+  "Enhanced Havocbound Aura",
   "Hazardous",
   "Heavy Impact",
   "Hero",
   "Highborn",
-  "Highborn Boost",
-  "Highborn Boost Aura",
+  "Enhanced Highborn",
+  "Enhanced Highborn Aura",
   "Hit & Run",
   "Hit & Run Fighter",
   "Hit & Run Fighter Aura",
@@ -2478,7 +2478,7 @@
      "over_in": 9
     }
    },
-   "Guardian Boost": {
+   "Enhanced Guardian": {
     "primitive": "Fortified",
     "rated": false,
     "book_version": "3.5.3",
@@ -2486,12 +2486,12 @@
      "incoming_ap_reduction": 1
     }
    },
-   "Guardian Boost Aura": {
+   "Enhanced Guardian Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Guardian Boost"
+     "grants": "Enhanced Guardian"
     }
    },
    "Hit & Run": {
@@ -3175,7 +3175,7 @@
      "per_round": true
     }
    },
-   "Harassing Boost": {
+   "Enhanced Harassing": {
     "primitive": "Hit & Run",
     "rated": false,
     "book_version": "3.5.3",
@@ -3184,12 +3184,12 @@
      "upgrades": "Harassing"
     }
    },
-   "Harassing Boost Aura": {
+   "Enhanced Harassing Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Harassing Boost"
+     "grants": "Enhanced Harassing"
     }
    },
    "Infiltrate": {
@@ -4522,7 +4522,7 @@
      "over_in": 9
     }
    },
-   "Havocbound Boost": {
+   "Enhanced Havocbound": {
     "primitive": "Piercing Hunter",
     "rated": false,
     "book_version": "3.5.3",
@@ -4532,12 +4532,12 @@
      "upgrades": "Havocbound"
     }
    },
-   "Havocbound Boost Aura": {
+   "Enhanced Havocbound Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Havocbound Boost"
+     "grants": "Enhanced Havocbound"
     }
    },
    "Mend": {
@@ -4716,7 +4716,7 @@
      "rush_mod": 2
     }
    },
-   "Highborn Boost": {
+   "Enhanced Highborn": {
     "primitive": "Fast",
     "rated": false,
     "book_version": "3.5.3",
@@ -4726,12 +4726,12 @@
      "upgrades": "Highborn"
     }
    },
-   "Highborn Boost Aura": {
+   "Enhanced Highborn Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Highborn Boost"
+     "grants": "Enhanced Highborn"
     }
    },
    "Hit & Run": {
@@ -6792,7 +6792,7 @@
      "bonus_hits_per_six": 1
     }
    },
-   "Ferocious Boost": {
+   "Enhanced Ferocious": {
     "primitive": "Surge",
     "rated": false,
     "book_version": "3.5.3",
@@ -6802,12 +6802,12 @@
      "over_in": 9
     }
    },
-   "Ferocious Boost Aura": {
+   "Enhanced Ferocious Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Ferocious Boost"
+     "grants": "Enhanced Ferocious"
     }
    },
    "Hit & Run": {
@@ -7817,7 +7817,7 @@
      "per_round": true
     }
    },
-   "Guerrilla Boost": {
+   "Enhanced Guerrilla": {
     "primitive": "Hit & Run",
     "rated": false,
     "book_version": "3.5.3",
@@ -7826,12 +7826,12 @@
      "per_round": true
     }
    },
-   "Guerrilla Boost Aura": {
+   "Enhanced Guerrilla Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Guerrilla Boost"
+     "grants": "Enhanced Guerrilla"
     }
    },
    "Lacerate": {

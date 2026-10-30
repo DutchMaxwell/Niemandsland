@@ -3415,7 +3415,7 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
     // (AP(-1), no distance gate) folds as one flag-width stamp, the
     // Self-Repair Boost precedent; epoch-5 records replay untouched.
     if rule_on(rules_epoch, EPOCH_6_TABLE_RULES)
-        && ((grants && mods::granted(state, i, "Guardian Boost"))
+        && ((grants && mods::granted(state, i, "Enhanced Guardian"))
             || (grants && mods::granted(state, i, "Warden Boost"))
             || (grants && mods::granted(state, i, "Ossified Boost")))
     {
@@ -4729,7 +4729,7 @@ fn fortified_log_name(statics: &[UnitStatic], state: &State, ti: usize, over9: b
     if !us.fortified_boost_name.is_empty() {
         return Some(us.fortified_boost_name.clone());
     }
-    ["Guardian Boost", "Warden Boost", "Ossified Boost"]
+    ["Enhanced Guardian", "Warden Boost", "Ossified Boost"]
         .into_iter()
         .find(|n| mods::granted(state, ti, n))
         .map(String::from)
