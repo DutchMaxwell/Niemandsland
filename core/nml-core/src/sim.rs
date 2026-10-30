@@ -2159,7 +2159,15 @@ fn tray_piercing_tag(
             } else {
                 next.piercing_tag_used[bearer] = true;
             }
-            next.piercing_tag_markers[ti] += t.markers;
+            let v36_tag = rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) && t.name == "Piercing Tag";
+            let (hit, per) = tag_picks(statics, next, bearer, &probe, t.markers, v36_tag, seams);
+            for &u in &hit {
+                next.piercing_tag_markers[u] += per;
+            }
+            if v36_tag {
+                shot.log.push(tag_place_line("Piercing Tag", &statics[pb].name, statics, next, &hit, per, "+1 AP"));
+                continue;
+            }
             // D42 (a), EPOCH_67_MARKERS_BURSTS: "Piercing Target" has no removal
             // clause — the spend half (`piercing_tag_spend`) reads this flag and
             // stands the pool instead of zeroing it. Every other family name
@@ -2201,8 +2209,32 @@ fn piercing_tag_spend(next: &mut State, ti: usize, rules_epoch: u32) -> i64 {
     if rule_on(rules_epoch, EPOCH_67_MARKERS_BURSTS) && next.piercing_tag_persistent[ti] {
         return markers;
     }
-    next.piercing_tag_markers[ti] = 0;
-    markers
+    // Rules 3.6 (`EPOCH_73_V36`): a friendly attack spends ONE token for +1.
+    let spent = if rule_on(rules_epoch, crate::acts::EPOCH_73_V36) { markers.min(1) } else { markers };
+    next.piercing_tag_markers[ti] = markers - spent;
+    spent
+}
+
+/// Rules 3.6 (`EPOCH_73_V36`) Tag placement: X tokens stacked on the toughest pick, or, when two or more enemy
+/// units are in reach, one token on each of up to X units. Below the gate only the toughest pick is asked for, so
+/// the stack is the whole answer. Returns the units and the tokens each one gets.
+fn tag_picks(statics: &[UnitStatic], next: &State, bearer: usize, probe: &UtilityBuff, markers: i64, v36: bool, seams: Seams) -> (Vec<usize>, i64) {
+    let picks = utility_targets(statics, next, bearer, &UtilityBuff { max_targets: if v36 { markers } else { 1 }, ..probe.clone() }, seams);
+    let per = if picks.len() >= 2 { 1 } else { markers };
+    (picks, per)
+}
+
+/// The rules-must-log placement line of a rules 3.6 Tag: names the tag, the stack/spread choice and the one-token spend.
+fn tag_place_line(name: &str, owner: &str, statics: &[UnitStatic], next: &State, hit: &[usize], per: i64, effect: &str) -> String {
+    let placed = match hit {
+        [_, _, ..] => format!("1 token each, spread over {} units", hit.len()),
+        _ => format!(
+            "{per} token{}, stacked on {}",
+            if per == 1 { "" } else { "s" },
+            statics[next.roster.profile[hit[0]]].name
+        ),
+    };
+    format!("{name}: {owner} places {placed} — a friendly attack may spend one token for {effect}")
 }
 
 /// Wave 6 — the PRECISION MARKERS family's PLACEMENT half
@@ -2318,7 +2350,15 @@ fn tray_precision_markers(
                         "Precision Target: {} places {} marker{} on {} — friendly units get +{} to hit against it",
                         owner, b.markers, if b.markers == 1 { "" } else { "s" }, tn, b.bonus));
                 } else {
-                    next.tag_markers[ti] += b.markers;
+                    let v36 = rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36);
+                    let (hit, per) = tag_picks(statics, next, bearer, &probe, b.markers, v36, seams);
+                    for &u in &hit {
+                        next.tag_markers[u] += per;
+                    }
+                    if v36 {
+                        shot.log.push(tag_place_line("Precision Tag", &owner, statics, next, &hit, per, "+1 to hit"));
+                        continue;
+                    }
                     shot.log.push(format!(
                         "Precision Tag: {} places {} marker{} on {} — friendly attackers may remove markers for +1 to hit each",
                         owner, b.markers, if b.markers == 1 { "" } else { "s" }, tn));
@@ -2388,11 +2428,18 @@ fn precision_markers_spend(
     }
     let tag = next.tag_markers[ti].max(0);
     if tag > 0 {
-        next.tag_markers[ti] = 0;
-        total += tag;
-        log.push(format!(
-            "Precision Tag: {tag} marker{} removed — +{tag} to hit this volley",
-            if tag == 1 { "" } else { "s" }));
+        // Rules 3.6 (`EPOCH_73_V36`): a friendly attack spends ONE token for +1.
+        let v36 = rule_on(rules_epoch, crate::acts::EPOCH_73_V36);
+        let spent = if v36 { 1 } else { tag };
+        next.tag_markers[ti] = tag - spent;
+        total += spent;
+        log.push(if v36 {
+            format!("Precision Tag: one token spent — +1 to hit this volley ({} left)", tag - 1)
+        } else {
+            format!(
+                "Precision Tag: {tag} marker{} removed — +{tag} to hit this volley",
+                if tag == 1 { "" } else { "s" })
+        });
     }
     total
 }
@@ -8320,6 +8367,9 @@ fn resolve_with(
                                     shot.log.push(format!(
                                         "Piercing Target: +AP({tag_ap}) stands while {tn} lives"
                                     ));
+                                } else if rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) {
+                                    let left = next.piercing_tag_markers[g.ti];
+                                    shot.log.push(format!("Piercing Tag: one token spent — +1 AP on this volley ({left} left)"));
                                 } else {
                                     let s = if tag_ap == 1 { "" } else { "s" };
                                     shot.log.push(format!(
