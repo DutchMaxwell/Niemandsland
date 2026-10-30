@@ -490,7 +490,7 @@ func test_the_growth_siblings_scale_in_both_registry_generations() -> void:
 ## min AP(0)"): unread, so it did nothing at all. The reduction reaches the REAL save batch, and the
 ## log line (written before any die) is the proof.
 func test_fortified_growth_softens_incoming_ap_per_two_markers() -> void:
-	var u := _unit(1, "Seuchenwall", "wormhole_daemons_of_plague", ["Fortified Growth"], 2)
+	var u := _unit(1, "Seuchenwall", "daemons_of_plague", ["Fortified Growth"], 2)
 	u.unit_properties["growth_fortified_growth"] = 4
 	var fg: Dictionary = _main._solo_growth_incoming_ap(u)
 	assert_bool(fg.is_empty()) \
@@ -502,7 +502,7 @@ func test_fortified_growth_softens_incoming_ap_per_two_markers() -> void:
 
 	# The all-models gate: a joined hero WITHOUT the rule switches the unit trigger off.
 	u.unit_properties["growth_fortified_growth"] = 4
-	var hero := _joined_hero(u, "Seuchenfürst", "wormhole_daemons_of_plague", ["Hero"])
+	var hero := _joined_hero(u, "Seuchenfürst", "daemons_of_plague", ["Hero"])
 	assert_object(hero).is_not_null()
 	assert_bool(_main._solo_growth_incoming_ap(u).is_empty()) \
 		.override_failure_message("\"all models have this rule\" is a UNIT trigger — a plain hero breaks it") \

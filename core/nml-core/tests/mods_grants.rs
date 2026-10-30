@@ -471,8 +471,8 @@ fn granted_ctx(
 /// gate).
 #[test]
 fn a_static_plus_one_to_defense_raises_the_save_from_epoch_6() {
-    let on = alias_at_epoch("gf", "wormhole_daemons_of_war", "+1 to Defense", 6);
-    let off = alias_at_epoch("gf", "wormhole_daemons_of_war", "+1 to Defense", 5);
+    let on = alias_at_epoch("gf", "daemons_of_war", "+1 to Defense", 6);
+    let off = alias_at_epoch("gf", "daemons_of_war", "+1 to Defense", 5);
     assert!(
         on.shielded,
         "epoch 6: '+1 to Defense' is the Shielded wording (RED before the fix)"

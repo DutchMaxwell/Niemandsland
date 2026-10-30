@@ -86,7 +86,7 @@ func test_a_spell_granting_a_renamed_upgrade_resolves_its_3_6_name_at_epoch_73()
 	SpellsRegistry.reset_cache()
 	assert_int(AiActRecorder.rules_epoch).is_equal(73)
 	var picks := [["aof", "ghostly_undead", "Ethereal Warding", "Enhanced Empyrean Spirit"],
-		["gf", "saurian_starhost", "Celestial Roar", "Enhanced Primal"]]
+		["gf", "saurian_starhosts", "Celestial Roar", "Enhanced Primal"]]
 	for pick: Array in picks:
 		var effect: Variant = SpellsRegistry.entry_for(pick[0], pick[1], pick[2]).get("effect")
 		var grant := str((effect as Dictionary).get("grants_rule", "")) if effect is Dictionary else ""

@@ -4520,6 +4520,23 @@ func _solo_ai_volley_distance_in(attacker: GameUnit, target: GameUnit) -> float:
 	return MoveIntent.distance_inches(solo_controller.unit_centre(attacker), solo_controller.unit_centre(target))
 
 
+## SHO-PAR-F6: one AI shot's eligibility — the member's models with range + sight to the target (and the
+## pairs they cleared), the bearer-gated attack report (NML-1025) and the living bearers. From EPOCH_73_V36
+## the volley reads it ONCE per shot before the first die (all weapons fire together); before, per shot.
+func _solo_shot_eligibility(member: GameUnit, profile: Dictionary, shot: Dictionary, target: GameUnit,
+		granted_indirect: bool, moved: bool = false) -> Dictionary:
+	var pairs: Array = []
+	var sighted: int = _solo_sighted_count(member, target,
+		int(SoloController.effective_shoot_reach_in(float(shot["reach"]), target)),
+		(bool(profile.get("indirect", false)) and SoloController.indirect_ignores_los(member, not moved)) \
+			or granted_indirect or _solo_target_grants_indirect(target), pairs)   # GH #325
+	var copies: int = maxi(int(profile.get("count", 1)), 1)
+	return {"pairs": pairs, "sighted": sighted, "alive": member.get_alive_count(),
+		"report": SoloController.scaled_attacks_report(member, profile, sighted, int(shot["max"])),
+		"bearers": SoloController.alive_bearers_of(member, str(profile.get("name", "")),
+			maxi(int(profile.get("attacks", 0)) / copies, 0)) if copies < int(shot["max"]) else -1}
+
+
 ## Resolve one split-fire volley (all `shots` aimed at `target`) with real tray dice + the human's saves.
 ## Per-model shooting (GF v3.5.1 p.8 "Who Can Shoot"): each shot's attacks scale by the member's models
 ## that actually have range AND line of sight to the target — not by its whole living count. `moved` is
@@ -4576,6 +4593,18 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 			sprof["ap"] = int(sprof.get("ap", 0)) + tag_ap
 			sd["profile"] = sprof
 			shots[si] = sd
+	# SHO-PAR-F6 (EPOCH_73_V36, lead ruling O1): all weapons of the volley fire together, so every shot's
+	# sighted models and bearers are fixed HERE, before the first die — an earlier weapon's casualties
+	# (Deadly / Takedown land mid-volley) no longer silence a later one; the core fixes its counts at
+	# declaration too. Wounds still resolve in order. EPOCH_72 keeps the per-shot recount in the loop.
+	var granted_indirect: bool = SoloController.granted_indirect_of(attacker)   # GH #325 — own token
+	var at_declaration: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
+	var declared: Array = []
+	if at_declaration:
+		for s in shots:
+			var ds := s as Dictionary
+			declared.append(_solo_shot_eligibility(ds["member"] as GameUnit, _solo_bridge_granted_flags(
+				ds["member"] as GameUnit, ds["profile"] as Dictionary, target), ds, target, granted_indirect, moved))
 	# ANNOUNCE: who shoots at whom — highlights + attack line + toast, held before any die is thrown.
 	var announce := _solo_show_attack_announce(attacker, target, "fires at")
 	_solo_show_fan_for_unit(attacker)   # Bug 17: the volley fan appears automatically — the shot is traceable
@@ -4589,7 +4618,6 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 	# Unpredictable (generic army-book rule — "when attacking": the SHOOTING leg; the wave-4 melee-only
 	# Unpredictable Fighter lives in the melee path): ONE die per volley for the whole unit —
 	# 1-3 → AP(+1), 4-6 → +1 to hit on every profile it fires (same arithmetic, same visible tray).
-	var granted_indirect: bool = SoloController.granted_indirect_of(attacker)   # GH #325 — own token
 	var upr_ap := 0
 	var upr_hit := 0
 	var upr_name := _solo_unpredictable_rule(attacker, false, target)
@@ -4602,8 +4630,8 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s rolls %d → %s" % [
 					upr_name, attacker.get_name(), int(upr_face[0]), ("AP(+1)" if upr_ap > 0 else "+1 to hit")], true)
-	for s in shots:
-		var shot := s as Dictionary
+	for si in range(shots.size()):
+		var shot := shots[si] as Dictionary
 		var member := shot["member"] as GameUnit
 		var profile := _solo_bridge_granted_flags(member, shot["profile"] as Dictionary, target)
 		# Per-model shooting (GF v3.5.1 p.8 "Who Can Shoot") decides the dice count FIRST, so a shot that
@@ -4611,22 +4639,19 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		# of volleys that never roll). Indirect (wave 5) targets as if in line of sight — its per-model
 		# sighting is range-only; the Aircraft penalty (-12") and Ranged Shrouding (-6" min 6") shorten
 		# the reach here too.
-		var sight_pairs: Array = []   # VFX #2: the model pairs the count below cleared (tracer segments)
-		var sighted: int = _solo_sighted_count(member, target,
-			int(SoloController.effective_shoot_reach_in(float(shot["reach"]), target)),
-			(bool(profile.get("indirect", false)) and SoloController.indirect_ignores_los(member, not moved)) \
-				or granted_indirect or _solo_target_grants_indirect(target), sight_pairs)   # GH #325
+		var decl: Dictionary = declared[si] if at_declaration \
+			else _solo_shot_eligibility(member, profile, shot, target, granted_indirect, moved)
+		var sight_pairs: Array = decl["pairs"]   # VFX #2: the model pairs the count cleared (tracer segments)
+		var sighted: int = int(decl["sighted"])
 		# NML-1025: the bearer gate now guards the AI volley too (was human-only).
-		var volley_report: Dictionary = SoloController.scaled_attacks_report(member, profile, sighted, int(shot["max"]))
+		var volley_report: Dictionary = decl["report"]
 		var attacks: int = int(volley_report["attacks"])
 		# NML-1073 M5 D6a-B6: sibling of the dice tap (AiDiceRecorder) — the table-side per-shot
 		# facts the count above used, env NML_SHOT_DUMP, default OFF (byte-identical game either
 		# way; AiShotRecorder.record() no-ops on its own cached env check).
 		var shot_range_in: int = int(SoloController.effective_shoot_reach_in(float(shot["reach"]), target))
 		var shot_max_models: int = int(shot["max"])
-		var shot_copies: int = maxi(int(profile.get("count", 1)), 1)
-		var shot_bearers: int = SoloController.alive_bearers_of(member, str(profile.get("name", "")),
-			maxi(int(profile.get("attacks", 0)) / shot_copies, 0)) if shot_copies < shot_max_models else -1
+		var shot_bearers: int = int(decl["bearers"])
 		AiShotRecorder.record({"act": solo_controller.move_act_seq(), "round": solo_controller._current_round(),
 			"player": solo_controller.ai_slot, "shooter": attacker.get_name(), "member": member.get_name(),
 			"weapon": str(profile.get("name", "?")), "target": target.get_name(),
@@ -4642,6 +4667,11 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s silent — %s" % [
 					member.get_name(), str(profile.get("name", "?")), str(volley_report["silent"])], true)
 			continue
+		# SHO-PAR-F6 rules-must-log: say so whenever casualties since the declaration did not shrink this shot.
+		if at_declaration and battle_log != null and (_solo_combined_alive(target) < models_before
+				or member.get_alive_count() < int(decl["alive"])):
+			battle_log.log_event(BattleLog.Category.COMBAT, "Simultaneous fire: %s fires %s as declared (%d model%s in range and sight before the first roll)" % [
+				member.get_name(), str(profile.get("name", "?")), sighted, ("" if sighted == 1 else "s")], true)
 		# Reliable (GF v3.5.1) sets the Quality (2+); the to-hit roll modifiers (Stealth / Artillery /
 		# Evasive, and Indirect's moved-shooting -1 — wave 5) then apply on top ("Reliable only changes
 		# the Quality value", p.14).
