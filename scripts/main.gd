@@ -6175,6 +6175,8 @@ func _solo_hits(faces: Array, to_hit: int, profile: Dictionary, dist_in: float, 
 	# `to_hit` is the caller's UNCLAMPED summed target (D21): Precise's flat +1 folds into that sum and the
 	# one clamp happens here, so a penalty the old per-step clamp swallowed still counts against the +1.
 	to_hit = AiCombatMath.modified_hit_target(to_hit, 1 if bool(profile.get("precise", false)) else 0)
+	if bool(profile.get("precise", false)) and battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT, "Precise: +1 to hit", true)
 	var hits: int = AiCombatMath.count_hits(faces, to_hit)
 	if bool(profile.get("relentless", false)):
 		var rel_bonus: int = AiCombatMath.relentless_bonus_hits(faces, dist_in)
