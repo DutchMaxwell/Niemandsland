@@ -4,9 +4,10 @@ extends GdUnitTestSuite
 ## resolves them through the common fallback instead of leaving the player to apply them by hand.
 ## The params are the ones every faction entry already carries (one extra wound per unsaved 1, one
 ## bonus hit per 6), so a book that had its own entry resolves exactly as before.
+## Godot's JSON reads every number as a float, so the expected params are floats.
 
-const SHRED_PARAMS := {"extra_wound_per_save_one": 1}
-const SURGE_PARAMS := {"bonus_hits_per_six": 1}
+const SHRED_PARAMS := {"extra_wound_per_save_one": 1.0}
+const SURGE_PARAMS := {"bonus_hits_per_six": 1.0}
 
 
 func before_test() -> void:
