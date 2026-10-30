@@ -4146,7 +4146,7 @@ pub fn profiles_of(us: &UnitStatic, alive: i64, d: f64, sc: &mut Scratch) {
         sc.attacks.push(if p.extra_attack_q > 0 {
             p.attacks
         } else {
-            survivor_attacks(p, alive, us.model_count, sc.bearers_last)
+            survivor_attacks(p, alive, us.model_count, sc.bearers_last, None)
         });
     }
 }
@@ -4156,9 +4156,9 @@ pub fn profiles_of(us: &UnitStatic, alive: i64, d: f64, sc: &mut Scratch) {
 /// models than the unit fires `per-copy x min(copies, alive)`, the common weapon keeps the pro-rata ratio. Any
 /// reach filter (`fire_in_range_only`) is applied AFTER this, on the bearers that are alive.
 #[inline]
-fn survivor_attacks(p: &ShootProfile, alive: i64, model_count: i64, bearers_last: bool) -> i64 {
+fn survivor_attacks(p: &ShootProfile, alive: i64, model_count: i64, bearers_last: bool, living: Option<i64>) -> i64 {
     if bearers_last {
-        bearer_scaled_attacks(p, alive, model_count, alive)
+        bearer_scaled_attacks(p, alive, model_count, alive, living)
     } else {
         effective_attacks(p.attacks, alive, model_count)
     }
@@ -4289,6 +4289,28 @@ fn melee_bearers_rescale(us: &UnitStatic, state: &State, unit: usize, count: i64
     }
 }
 
+/// SHO-PAR-F4 (`EPOCH_73_V36`) — a dead model's ranged weapon is gone. The table (`scaled_attacks_report`) counts a
+/// weapon carried by fewer models than the unit holds off the LIVING models' kits; the core guessed that the
+/// bearers fall last. None = keep that guess (gate off, a weapon every model carries, or no aligned kits).
+fn shot_bearers(p: &ShootProfile, model_count: i64, state: &State, unit: usize, rules_epoch: u32) -> Option<i64> {
+    if !rule_on(rules_epoch, crate::acts::EPOCH_73_V36) || p.count.max(1) >= model_count {
+        return None;
+    }
+    living_bearers(state, unit, &p.name)
+}
+
+/// `shot_bearers` over a `profiles_of` fill (`sc.keep` indexes `us.shoot`, `sc.attacks` parallel to it): the plain
+/// legs call `profiles_of` with no state, so the living bearers are applied here. Knob off (`bearers_last`) = pro rata.
+fn shoot_bearers_rescale(us: &UnitStatic, state: &State, unit: usize, rules_epoch: u32, sc: &mut Scratch) {
+    for (a, &i) in sc.attacks.iter_mut().zip(&sc.keep) {
+        let p = &us.shoot[i];
+        let living = if sc.bearers_last && p.extra_attack_q <= 0 { shot_bearers(p, us.model_count, state, unit, rules_epoch) } else { None };
+        if living.is_some() {
+            *a = bearer_scaled_attacks(p, state.alive[unit], us.model_count, state.alive[unit], living);
+        }
+    }
+}
+
 /// GF v3.5.1 "Limited" — `SoloController.filter_limited` (solo_controller.gd:
 /// 7715-7723): drop an already-fired Limited profile from `sc.keep`/
 /// `sc.attacks` (index-parallel). Resolution only, ranged and melee alike.
@@ -4395,6 +4417,7 @@ pub fn member_profiles_of(
         } else {
             sc.bearers_last = seams.casualties_bearers_last;
             profiles_of(us, state.alive[si], d, sc);
+            shoot_bearers_rescale(us, state, si, seams.rules_epoch, sc);
         }
         return;
     }
@@ -4415,7 +4438,7 @@ pub fn member_profiles_of(
             let a = if !melee && p.extra_attack_q > 0 {
                 p.attacks
             } else if !melee {
-                survivor_attacks(p, state.alive[mi], um.model_count, seams.casualties_bearers_last)
+                survivor_attacks(p, state.alive[mi], um.model_count, seams.casualties_bearers_last, shot_bearers(p, um.model_count, state, mi, seams.rules_epoch))
             } else {
                 melee_bearer_attacks(p, um.model_count, state, mi, state.alive[mi], seams.rules_epoch)
                     .unwrap_or_else(|| effective_attacks(p.attacks, state.alive[mi], um.model_count))
@@ -4506,19 +4529,17 @@ fn sight_reach_in(range_in: f64, def_aircraft: bool, def: &Ctx) -> f64 {
 ///
 /// THE APPROXIMATION, and it is the largest one on this rung: `alive_bearers_of`
 /// (:7720-7739) counts the weapon in LIVING models' hands off the per-model
-/// loadout, which the capture does not carry at all. This port assumes the
-/// special weapons' bearers are the last to fall — `min(copies, alive)`.
-/// Measured on `~/selfplay_out/qbe_ref`: that reproduces the recorded `attacks`
-/// on 919 of the 1052 shots that take this path (and the flat path, 1065 shots,
-/// needs no bearer count). The remaining 133 need the recorder extension the
-/// D6a draft's §3 describes.
-fn bearer_scaled_attacks(p: &ShootProfile, alive: i64, model_count: i64, sighted: i64) -> i64 {
+/// loadout. Without `living` this port assumes the special weapons' bearers are
+/// the last to fall — `min(copies, alive)`. Measured on `~/selfplay_out/qbe_ref`:
+/// that reproduces the recorded `attacks` on 919 of the 1052 shots that take this
+/// path (and the flat path, 1065 shots, needs no bearer count). SHO-PAR-F4: from
+/// `EPOCH_73_V36` the caller passes `living`, the count off the recorded kits
+/// (`shot_bearers`); zero living bearers fire nothing, like the table's silent
+/// "no living bearers" branch.
+fn bearer_scaled_attacks(p: &ShootProfile, alive: i64, model_count: i64, sighted: i64, living: Option<i64>) -> i64 {
     let copies = p.count.max(1);
     if copies < model_count {
-        // `bearers == 0` (the GDScript's honesty-alarm branch) cannot be reached
-        // here: `alive > 0` on every member this port shoots with, so
-        // `min(copies, alive) >= 1`.
-        let bearers = copies.min(alive);
+        let bearers = living.unwrap_or_else(|| copies.min(alive));
         return (p.attacks / copies).max(0) * bearers.min(sighted);
     }
     effective_attacks(p.attacks, sighted, model_count)
@@ -4586,7 +4607,7 @@ fn sighted_profiles_of(
         sc.attacks.push(if p.extra_attack_q > 0 {
             p.attacks
         } else {
-            bearer_scaled_attacks(p, state.alive[mi], us.model_count, seen)
+            bearer_scaled_attacks(p, state.alive[mi], us.model_count, seen, shot_bearers(p, us.model_count, state, mi, sc.rules_epoch))
         });
     }
 }
@@ -8256,6 +8277,7 @@ fn resolve_with(
                                     );
                                 } else {
                                     profiles_of(um, next.alive[mi], g.d, &mut msc);
+                                    shoot_bearers_rescale(um, &next, mi, seams.rules_epoch, &mut msc);
                                 }
                                 drop_spent_limited(&um.shoot, &next.limited_used[mi], &mut msc);
                                 if let Some(aims) = &g.weapons {
@@ -8780,20 +8802,20 @@ mod d6a_tests {
         // 5 models, a rifle each (count == model_count): the ratio path, and it
         // is `round(base * sighted / max)` — 3 of 5 sighted of 10 attacks is 6.
         let rifle = weapon(10, 5, 24);
-        assert_eq!(bearer_scaled_attacks(&rifle, 5, 5, 5), 10);
-        assert_eq!(bearer_scaled_attacks(&rifle, 5, 5, 3), 6);
-        assert_eq!(bearer_scaled_attacks(&rifle, 5, 5, 0), 0);
+        assert_eq!(bearer_scaled_attacks(&rifle, 5, 5, 5, None), 10);
+        assert_eq!(bearer_scaled_attacks(&rifle, 5, 5, 3, None), 6);
+        assert_eq!(bearer_scaled_attacks(&rifle, 5, 5, 0, None), 0);
         // 2 special weapons in a unit of 5, 2 attacks each (merged base 4): the
         // bearer path caps at the copies, so a wide sightline adds nothing...
         let special = weapon(4, 2, 24);
-        assert_eq!(bearer_scaled_attacks(&special, 5, 5, 5), 4);
+        assert_eq!(bearer_scaled_attacks(&special, 5, 5, 5, None), 4);
         // ...and a narrow one binds instead of the copies.
-        assert_eq!(bearer_scaled_attacks(&special, 5, 5, 1), 2);
+        assert_eq!(bearer_scaled_attacks(&special, 5, 5, 1, None), 2);
         // Casualties take bearers with them: 1 model left carries at most 1 copy.
-        assert_eq!(bearer_scaled_attacks(&special, 1, 5, 5), 2);
+        assert_eq!(bearer_scaled_attacks(&special, 1, 5, 5, None), 2);
         // RED for the whole rung: answering `alive` instead of `sighted` gives
         // the count this port drew before D6a, and it is a different number.
-        assert_ne!(bearer_scaled_attacks(&rifle, 5, 5, 3), bearer_scaled_attacks(&rifle, 5, 5, 5));
+        assert_ne!(bearer_scaled_attacks(&rifle, 5, 5, 3, None), bearer_scaled_attacks(&rifle, 5, 5, 5, None));
     }
 }
 
