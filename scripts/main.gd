@@ -7938,6 +7938,8 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s strikes with %s at %s — %d hit%s" % [
 					str(group.get("name", "?")), str(profile.get("name", "?")), defender.get_name(), hits, ("" if hits == 1 else "s")], true)
+				if int(profile.get("printed_range", 0)) > 0:   # MEL-01 (D-ASSAULT): the ranged weapon's melee copy
+					battle_log.log_event(BattleLog.Category.COMBAT, "Assault: %s also strikes in melee" % str(profile.get("name", "?")), true)
 			if hits <= 0:
 				continue
 			var eff: Dictionary = _solo_thrust_profile(profile, charging)   # AP(+1) on charge
