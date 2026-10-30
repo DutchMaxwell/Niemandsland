@@ -1684,8 +1684,12 @@ func test_striking_models_for_counts_a_big_base_in_contact() -> void:
 	add_child(solo)
 	assert_int(solo.striking_models_for(walker, foe)).is_equal(1)
 	assert_int(solo.striking_models_for(foe, walker)).is_equal(1)
-	# The centre-space fallback (kept for the sim) misses the same pair — the documented old bug.
+	# The centre-space fallback (kept for the sim) misses the same pair — the documented old bug, at the
+	# 3.5 records' 2" reach (rules 3.6's 3" reaches this pair, test/v36/mel_08_test.gd).
+	var saved_epoch := AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
 	assert_int(SoloController.striking_models([Vector3(0, 0, 0)], [Vector3(0.09, 0, 0)])).is_equal(0)
+	AiActRecorder.rules_epoch = saved_epoch
 	# Far apart (edge gap ~4.3") neither measure finds a striker.
 	foe.models[0].node.global_position = Vector3(0.172, 0, 0)
 	assert_int(solo.striking_models_for(walker, foe)).is_equal(0)

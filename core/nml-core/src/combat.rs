@@ -361,30 +361,46 @@ pub const BASE_CONTACT_IN: f64 = 1.0;
 /// GF/AoF Advanced Rules v3.5.1 p.9: "... and 4” vertically of an enemy model
 /// ... may attack it." Gated on `EPOCH_63_MELEE_HEIGHT` (see acts.rs).
 pub const MELEE_VERTICAL_IN: f64 = 4.0;
+/// Rules 3.6 strike reach (MEL-08): 3" across and 3" up, from `EPOCH_73_V36`.
+/// The 3.5 pair above stays for every older record.
+pub const MELEE_REACH_IN_V36: f64 = 3.0;
+pub const MELEE_VERTICAL_IN_V36: f64 = 3.0;
 
-/// True when two world Y coordinates (metres) are within the 4" vertical
-/// melee reach — the twin of `SoloController.within_melee_height`.
+/// The epoch's (across, up) strike reach in inches — the twin of
+/// `SoloController.melee_reach_in` / `melee_vertical_in`.
+pub fn melee_reach_in(rules_epoch: u32) -> (f64, f64) {
+    if crate::acts::rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
+        (MELEE_REACH_IN_V36, MELEE_VERTICAL_IN_V36)
+    } else {
+        (MELEE_REACH_IN, MELEE_VERTICAL_IN)
+    }
+}
+
+/// True when two world Y coordinates (metres) are within `vertical_in` of
+/// each other — the twin of `SoloController.within_melee_height`.
 #[inline]
-fn within_melee_height(y_a: f64, y_b: f64) -> bool {
-    (y_a - y_b).abs() <= MELEE_VERTICAL_IN * crate::IN2M
+fn within_melee_height(y_a: f64, y_b: f64, vertical_in: f64) -> bool {
+    (y_a - y_b).abs() <= vertical_in * crate::IN2M
 }
 
 /// Count of `striker`'s models within reach of ANY `enemy` model — the
 /// `melee_reach="table"` knob's own gate. Either side empty keeps today's
 /// behaviour (every striker counts), matching the GDScript fallback. From
-/// `EPOCH_63_MELEE_HEIGHT` a pair must also clear the 4" vertical reach.
+/// `EPOCH_63_MELEE_HEIGHT` a pair must also clear the vertical reach; the
+/// reach itself is the epoch's (`melee_reach_in`).
 pub fn striking_models(striker: &[[f64; 3]], enemy: &[[f64; 3]], rules_epoch: u32) -> i64 {
     if striker.is_empty() || enemy.is_empty() {
         return striker.len() as i64;
     }
     let height_gated = crate::acts::rule_on(rules_epoch, crate::acts::EPOCH_63_MELEE_HEIGHT);
-    let reach_m = (BASE_CONTACT_IN + MELEE_REACH_IN) * crate::IN2M;
+    let (reach_in, vertical_in) = melee_reach_in(rules_epoch);
+    let reach_m = (BASE_CONTACT_IN + reach_in) * crate::IN2M;
     let reach2 = reach_m * reach_m;
     striker
         .iter()
         .filter(|s| {
             enemy.iter().any(|e| {
-                if height_gated && !within_melee_height(s[1], e[1]) {
+                if height_gated && !within_melee_height(s[1], e[1], vertical_in) {
                     return false;
                 }
                 let dx = s[0] - e[0];
@@ -851,35 +867,35 @@ mod tests {
     }
 
     #[test]
-    fn striking_models_counts_only_those_within_2in_of_an_enemy() {
+    fn striking_models_counts_only_those_within_2in_of_an_enemy_at_epoch_72() {
         // Ten models in a line, one inch apart, an enemy at the head of the
         // line: only the first three sit within the 3" (2" reach + 1" base
-        // contact) centre-space threshold.
+        // contact) centre-space threshold. The 3.6 leg is MEL-08's (tests/sim/v36_melee.rs).
         let line: Vec<[f64; 3]> = (1..=10).map(|i| [i as f64 * crate::IN2M, 0.0, 0.0]).collect();
         let enemy = vec![[0.0, 0.0, 0.0]];
-        assert_eq!(striking_models(&line, &enemy, crate::acts::CURRENT_RULES_EPOCH), 3);
+        assert_eq!(striking_models(&line, &enemy, crate::acts::EPOCH_72_PLAYTEST_RULES), 3);
         assert_eq!(
-            striking_models(&line, &[], crate::acts::CURRENT_RULES_EPOCH),
+            striking_models(&line, &[], crate::acts::EPOCH_72_PLAYTEST_RULES),
             10,
             "no enemy positions -> everyone counts"
         );
     }
 
     #[test]
-    fn striking_models_ignores_enemies_beyond_4in_vertically() {
+    fn striking_models_ignores_enemies_beyond_4in_vertically_at_epoch_72() {
         // GF/AoF Advanced Rules v3.5.1 p.9: "within 2” horizontally and 4” vertically of an
         // enemy model ... may attack it." Gated on EPOCH_63_MELEE_HEIGHT (L1: every recorded
         // corpus has y = 0, so a replay at the OLD epoch is unchanged — pinned here).
         let enemy = vec![[0.0, 0.0, 0.0]];
         let five_up = vec![[crate::IN2M, 5.0 * crate::IN2M, 0.0]];
         let three_up = vec![[crate::IN2M, 3.0 * crate::IN2M, 0.0]];
-        assert_eq!(striking_models(&five_up, &enemy, crate::acts::CURRENT_RULES_EPOCH), 0);
+        assert_eq!(striking_models(&five_up, &enemy, crate::acts::EPOCH_72_PLAYTEST_RULES), 0);
         assert_eq!(
             striking_models(&five_up, &enemy, crate::acts::EPOCH_62_CASTING_MOD),
             1,
             "epoch 62 predates the height gate -- no replay changes (L1)"
         );
-        assert_eq!(striking_models(&three_up, &enemy, crate::acts::CURRENT_RULES_EPOCH), 1);
+        assert_eq!(striking_models(&three_up, &enemy, crate::acts::EPOCH_72_PLAYTEST_RULES), 1);
     }
 
     #[test]
