@@ -23,7 +23,8 @@ use super::super::*;
     /// "a" (two models 18" apart across the line of fire) advances 3" east to x = 0, z = -9 / +9 and fires
     /// its rifles at "b", 18" further east with models at z = -9, 0 and +9.
     fn sho_par_f3_volley(terrain: &crate::terrain::Terrain, epoch: u32) -> (State, ShootResult) {
-        let (mut st, statics) = buff_line();
+        let (mut st, mut statics) = buff_line();
+        statics[0].shoot[0].attacks = 2; // the unit's merged total: one die per model
         st.positions[0] = vec![[-3.0 * IN2M, 0.0, 9.0 * IN2M], [-3.0 * IN2M, 0.0, -9.0 * IN2M]];
         st.positions[2] = vec![
             [18.0 * IN2M, 0.0, 9.0 * IN2M], [18.0 * IN2M, 0.0, 0.0], [18.0 * IN2M, 0.0, -9.0 * IN2M],
@@ -56,7 +57,8 @@ use super::super::*;
     #[test]
     fn a_moved_shooter_fires_past_a_wood_it_sees_beside_at_epoch_73() {
         let (_, shot) = sho_par_f3_volley(&sho_par_f3_board(14..=15), crate::acts::EPOCH_73_V36);
-        assert_eq!(sho_par_f3_attack_dice(&shot), 2, "both rifles fire after the advance (RED on main: 0)");
+        assert_eq!(sho_par_f3_attack_dice(&shot), 2, "both rifles fire after the advance (RED on main: 0); rolls {:?} log {:?}",
+            shot.rolls.iter().map(|r| (r.kind, r.count, r.target, r.owner.as_str())).collect::<Vec<_>>(), shot.log);
     }
 
     /// The old leg: epoch 72 keeps the coarse grid centre line, so the same advance rolls nothing.

@@ -7461,11 +7461,13 @@ fn stealth_alias_terrain_gate(
     }
 }
 
+/// `(Terrain::uid, shelf reading, the board's sight volumes)`.
+type BoardZones = Option<(u64, bool, Rc<Vec<sight::Zone>>)>;
+
 thread_local! {
     /// SHO-PAR-F3 — the last board's sight volumes, keyed on its content identity (`Terrain::uid`) and the shelf
     /// reading, so the moved-shooter gate does not flood-fill the board again on every candidate it scores.
-    static BOARD_ZONES: std::cell::RefCell<Option<(u64, bool, Rc<Vec<sight::Zone>>)>> =
-        const { std::cell::RefCell::new(None) };
+    static BOARD_ZONES: std::cell::RefCell<BoardZones> = const { std::cell::RefCell::new(None) };
 }
 
 /// `sight::zones_of_with(t, shelf)`, remembered for the last board. A bare `Default` board (uid 0) has no identity
