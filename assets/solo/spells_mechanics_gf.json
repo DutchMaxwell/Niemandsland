@@ -62,7 +62,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Hive Bond Boost",
+      "grants_rule": "Enhanced Hive Bond",
       "duration": "once"
      },
      "status": "castable"
@@ -366,7 +366,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Devout Boost",
+      "grants_rule": "Enhanced Devout",
       "duration": "once"
      },
      "status": "castable"
@@ -770,7 +770,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Changebound Boost",
+      "grants_rule": "Enhanced Changebound",
       "duration": "once"
      },
      "status": "castable"
@@ -902,7 +902,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Guardian Boost",
+      "grants_rule": "Enhanced Guardian",
       "duration": "once"
      },
      "status": "castable"
@@ -1207,7 +1207,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Harassing Boost",
+      "grants_rule": "Enhanced Harassing",
       "duration": "once"
      },
      "status": "castable"
@@ -1776,7 +1776,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Clan Warrior Boost",
+      "grants_rule": "Enhanced Clan Warrior",
       "duration": "once"
      },
      "status": "castable"
@@ -1864,7 +1864,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Mischievous Boost",
+      "grants_rule": "Enhanced Mischievous",
       "duration": "once"
      },
      "status": "castable"
@@ -2084,7 +2084,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Havocbound Boost",
+      "grants_rule": "Enhanced Havocbound",
       "duration": "once"
      },
      "status": "castable"
@@ -2213,7 +2213,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Highborn Boost",
+      "grants_rule": "Enhanced Highborn",
       "duration": "once"
      },
      "status": "castable"
@@ -2260,7 +2260,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Hold the Line Boost",
+      "grants_rule": "Enhanced Hold the Line",
       "duration": "once"
      },
      "status": "castable"
@@ -2532,7 +2532,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Infected Boost",
+      "grants_rule": "Enhanced Infected",
       "duration": "once"
      },
      "status": "castable"
@@ -3159,7 +3159,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Lustbound Boost",
+      "grants_rule": "Enhanced Lustbound",
       "duration": "once"
      },
      "status": "castable"
@@ -3246,7 +3246,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Machine-Fog Boost",
+      "grants_rule": "Enhanced Machine-Fog",
       "duration": "once"
      },
      "status": "castable"
@@ -3372,7 +3372,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Ferocious Boost",
+      "grants_rule": "Enhanced Ferocious",
       "duration": "once"
      },
      "status": "castable"
@@ -3545,7 +3545,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Plaguebound Boost",
+      "grants_rule": "Enhanced Plaguebound",
       "duration": "once"
      },
      "status": "castable"
@@ -4226,7 +4226,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Primal Boost",
+      "grants_rule": "Enhanced Primal",
       "duration": "once"
      },
      "status": "castable"
@@ -4624,7 +4624,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Changebound Boost",
+      "grants_rule": "Enhanced Changebound",
       "duration": "once"
      },
      "status": "castable"
@@ -4751,7 +4751,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Lustbound Boost",
+      "grants_rule": "Enhanced Lustbound",
       "duration": "once"
      },
      "status": "castable"
@@ -4877,7 +4877,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Plaguebound Boost",
+      "grants_rule": "Enhanced Plaguebound",
       "duration": "once"
      },
      "status": "castable"
@@ -5783,7 +5783,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Changebound Boost",
+      "grants_rule": "Enhanced Changebound",
       "duration": "once"
      },
      "status": "castable"
@@ -5910,7 +5910,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Lustbound Boost",
+      "grants_rule": "Enhanced Lustbound",
       "duration": "once"
      },
      "status": "castable"
@@ -6036,7 +6036,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Plaguebound Boost",
+      "grants_rule": "Enhanced Plaguebound",
       "duration": "once"
      },
      "status": "castable"

@@ -13,7 +13,8 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::combat::{
-    at_or_below_half, block_chance, effective_attacks, melee_ev, morale_target, shielded_defense,
+    at_or_below_half, block_chance, charge_estimate_gap_in, effective_attacks, melee_ev, morale_target,
+    shielded_defense,
     shoot_ev, should_test_shooting_morale, shrouded_reach, RAVAGE_WOUND_TARGET,
     ANGELIC_BLESSING_BOOST_TARGET_SPELL, BEST_HIT_TARGET, CURSED_UNDEAD_BOOST_TARGET,
     HOLD_THE_LINE_BOOST_MORALE_BONUS, SELF_REPAIR_BOOST_TARGET, UNMODIFIED_SIX,
@@ -32,7 +33,7 @@ use crate::acts::{
     EPOCH_51_CASTER_INTERFERENCE, EPOCH_52_UTILITY_SPELLS, EPOCH_56_GROUNDED_PROTECTION,
     EPOCH_61_PRECISION_MARKERS, EPOCH_62_CASTING_MOD, EPOCH_65_MELEE_TRUTH,
     EPOCH_66_DISTANCE_TRUTH, EPOCH_67_MARKERS_BURSTS, EPOCH_68_MODIFIER_SUM,
-    EPOCH_71_RAPID_CHARGE_MARK, EPOCH_72_PLAYTEST_RULES,
+    EPOCH_71_RAPID_CHARGE_MARK, EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
@@ -803,7 +804,7 @@ pub(crate) fn tray_breath_attack(
     let landed = shot.absorb(out);
     land_wounds_with(next, ti, landed, seams.tray_exact);
     if shooting_morale_trigger(next, statics, seams, ut, ti, alive_before, wounds_before) {
-        tray_morale(next, statics, ti, false, seams, tray, shot);
+        tray_morale_for(next, statics, ti, false, Some("Breath Attack"), seams, tray, shot);
     }
 }
 
@@ -1016,7 +1017,7 @@ fn surprise_strike(
     let landed = shot.absorb(crate::dice::resolve_storm_hits_with_tray(successes, spec.ap, false, false, &def, &ut.name, tray));
     land_wounds_with(next, best, landed, seams.tray_exact);
     if shooting_morale_trigger(next, statics, seams, ut, best, ab, wb) {
-        tray_morale(next, statics, best, false, seams, tray, shot);
+        tray_morale_for(next, statics, best, false, Some("Surprise Attack"), seams, tray, shot);
     }
 }
 
@@ -1329,7 +1330,7 @@ pub(crate) fn tray_storm_attack(
                 let landed = shot.absorb(crate::dice::resolve_storm_hits_with_tray(hits, ap, bane, shred, &def, &ut.name, tray));
                 land_wounds_with(next, best, landed, seams.tray_exact);
                 if shooting_morale_trigger(next, statics, seams, ut, best, alive_before, wounds_before) {
-                    tray_morale(next, statics, best, false, seams, tray, shot);
+                    tray_morale_for(next, statics, best, false, Some(&spec.name), seams, tray, shot);
                 }
             }
         }
@@ -1776,7 +1777,8 @@ fn control_morale_passed(
         return faces.first().map(|f| *f as i64 >= quality).unwrap_or(true);
     }
     let us = &statics[next.roster.profile[ti]];
-    let ctx = live_morale_ctx(statics, next, ti, false, seams);
+    let mut ctx = live_morale_ctx(statics, next, ti, false, seams);
+    drop_banner_for_cause(statics, next, ti, Some(source.rule), seams, &mut ctx, shot);
     let (outcome, rolled) = crate::dice::resolve_morale_with_tray(
         &ctx, source.owner, false, false, next.shaken[ti], wounds_left(next, ti), tray,
     );
@@ -2992,18 +2994,36 @@ pub(crate) fn dangerous_dice(
             }
         }
     }
+    // `wounds_max` is the FULL model list and `positions` only the survivors;
+    // this port's casualties come off the FRONT (`land_wounds`), so the living
+    // models are that list's tail.
+    let tough = |u: usize, m: usize| {
+        let w = &statics[state.roster.profile[u]].wounds_max;
+        let off = w.len().saturating_sub(state.positions[u].len());
+        w.get(off + m).copied().unwrap_or(1).max(1)
+    };
     let mut dice = 0;
     for (u, m, crossed) in movers {
         let Some(p0) = state.positions[u].get(m) else { continue };
         if !crossed && !in_dang(p0, radius(state, u, m)) && !debuffed(state, u) {
             continue;
         }
-        // `wounds_max` is the FULL model list and `positions` only the survivors;
-        // this port's casualties come off the FRONT (`land_wounds`), so the living
-        // models are that list's tail.
-        let w = &statics[state.roster.profile[u]].wounds_max;
-        let off = w.len().saturating_sub(state.positions[u].len());
-        dice += w.get(off + m).copied().unwrap_or(1).max(1);
+        dice += tough(u, m);
+    }
+    // UX-20 (`EPOCH_73_V36`, rules 3.6): one affected model is enough, and then
+    // the WHOLE joined unit (host + attached heroes, every living model) takes
+    // ONE test; each model still adds its Tough value here (UX-21 counts the
+    // wounds left). Below 73 only the affected models roll.
+    if dice > 0 && rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) {
+        let mut chain = vec![si];
+        if seams.hero_attach {
+            chain.extend(state.attached[si].iter().copied());
+        }
+        dice = chain.iter().map(|&u| (0..state.positions[u].len()).map(|m| tough(u, m)).sum::<i64>()).sum();
+        shot.log.push(format!(
+            "Dangerous terrain: {} takes one test for the whole unit ({dice} dice)",
+            statics[state.roster.profile[si]].name
+        ));
     }
     dice
 }
@@ -3303,7 +3323,7 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
     // stamping-gap window at rules_epoch 4 included).
     if rule_on(rules_epoch, EPOCH_5_TABLE_RULES) {
         c.slayer_grant = grants && mods::granted(state, i, "Slayer");
-        c.surge_grant = grants && mods::granted(state, i, "Primal Boost");
+        c.surge_grant = grants && mods::granted(state, i, "Enhanced Primal");
         c.versatile_grant = grants && mods::granted(state, i, "Versatile Attack");
         c.pierce_shooting_grant = grants && mods::granted(state, i, "AP(+1) when shooting");
         c.pierce_melee_grant = grants && mods::granted(state, i, "AP(+1) in melee");
@@ -3337,13 +3357,13 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
             c.regen_target = fold_min(c.regen_target, SELF_REPAIR_BOOST_TARGET);
             c.regen_target_spell = fold_min(c.regen_target_spell, SELF_REPAIR_BOOST_TARGET);
         }
-        if grants && mods::granted(state, i, "Cursed Undead Boost") {
+        if grants && mods::granted(state, i, "Enhanced Cursed Undead") {
             c.regeneration = true;
             c.regen_target = fold_min(c.regen_target, CURSED_UNDEAD_BOOST_TARGET);
             c.regen_target_spell = fold_min(c.regen_target_spell, CURSED_UNDEAD_BOOST_TARGET);
         }
         // spell_only: the Angelic stamp folds the spell twin ONLY.
-        c.regen_target_spell = if grants && mods::granted(state, i, "Angelic Blessing Boost") {
+        c.regen_target_spell = if grants && mods::granted(state, i, "Enhanced Angelic Blessing") {
             fold_min(c.regen_target_spell, ANGELIC_BLESSING_BOOST_TARGET_SPELL)
         } else {
             c.regen_target_spell
@@ -3415,9 +3435,9 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
     // (AP(-1), no distance gate) folds as one flag-width stamp, the
     // Self-Repair Boost precedent; epoch-5 records replay untouched.
     if rule_on(rules_epoch, EPOCH_6_TABLE_RULES)
-        && ((grants && mods::granted(state, i, "Guardian Boost"))
+        && ((grants && mods::granted(state, i, "Enhanced Guardian"))
             || (grants && mods::granted(state, i, "Warden Boost"))
-            || (grants && mods::granted(state, i, "Ossified Boost")))
+            || (grants && mods::granted(state, i, "Enhanced Ossified")))
     {
         c.fortified_boost_ap = c.fortified_boost_ap.max(1);
     }
@@ -3946,8 +3966,9 @@ fn modifier_delta_of(
             - shoot_ev(&us.shoot, &sc.keep, &sc.attacks, &att_base, &def_base, dist_in)
     } else {
         melee_profiles_of(us, state.alive[att_i], &mut sc);
-        melee_ev(&us.melee, &sc.attacks, &att2, &def2, charging)
-            - melee_ev(&us.melee, &sc.attacks, &att_base, &def_base, charging)
+        // No pre-charge gap here (`dist_in` is the ranged side's, and the table's `_side_ev` hands none): blind.
+        melee_ev(&us.melee, &sc.attacks, &att2, &def2, charging, 0.0)
+            - melee_ev(&us.melee, &sc.attacks, &att_base, &def_base, charging, 0.0)
     }
 }
 
@@ -4537,6 +4558,7 @@ fn sighted_profiles_of(
     ti: usize,
     zones: &[sight::Zone],
     d: f64,
+    held: bool,
     sc: &mut Scratch,
 ) {
     sc.keep.clear();
@@ -4565,9 +4587,14 @@ fn sighted_profiles_of(
         // Indirect (GF v3.5.1) "may target enemies that are not in line of
         // sight as if in line of sight": the range gate stays, the sight test
         // goes (main.gd:4136-4138).
+        let lost = p.indirect_los_needs_hold && !held; // Rules 3.6 (SHO-01a): the waiver needs Hold
         let seen = sight::sighted_count(state, zones, &blockers, mi, ti, reach,
-            (p.indirect && p.indirect_ignores_los.unwrap_or(true)) || mark_indirect,
+            (p.indirect && p.indirect_ignores_los.unwrap_or(true) && !lost) || mark_indirect,
             rule_on(sc.rules_epoch, EPOCH_66_DISTANCE_TRUTH));
+        if lost && !mark_indirect {
+            trace_rule("volley", "Indirect",
+                &format!("{} did not Hold: {} needs line of sight", statics[state.roster.profile[mi]].name, p.name));
+        }
         // Rules-must-log: the mark fires only where it changes the volley.
         if mark_indirect && !p.indirect && seen > 0 {
             trace_rule("volley", "Indirect Mark",
@@ -4729,7 +4756,7 @@ fn fortified_log_name(statics: &[UnitStatic], state: &State, ti: usize, over9: b
     if !us.fortified_boost_name.is_empty() {
         return Some(us.fortified_boost_name.clone());
     }
-    ["Guardian Boost", "Warden Boost", "Ossified Boost"]
+    ["Enhanced Guardian", "Warden Boost", "Enhanced Ossified"]
         .into_iter()
         .find(|n| mods::granted(state, ti, n))
         .map(String::from)
@@ -4776,6 +4803,16 @@ fn strike_phase(
             }
         }
     }
+    // MEL-01 (D-ASSAULT) rules-must-log: an Assault weapon's melee copy (the
+    // profile carrying its printed range) names itself when it strikes.
+    for (mi, sc, _) in parts.iter() {
+        let melee = &statics[next.roster.profile[*mi]].melee;
+        for &k in &sc.keep {
+            if melee[k].printed_range > 0 {
+                shot.log.push(format!("Assault: {} also strikes in melee", melee[k].name));
+            }
+        }
+    }
     // Block C5 — Instinctive: the +1 reaches the melee fold ONLY when the
     // attacked unit IS the closest enemy (main.gd:5670-5673), per member
     // carrying it — the pick itself is never constrained.
@@ -4807,6 +4844,12 @@ fn strike_phase(
     // D-STEALTH — the def build's terrain gate (the melee leg consumes the
     // same closed alias the shooting fold does).
     stealth_alias_terrain_gate(statics, next, ti, cover, &mut def);
+    // D-GATE6 (`EPOCH_73_V36`): the Screened family's charge leg reads the shared 6" charge gate;
+    // the entry's own `over_in` (9") stays the shooting leg's. This def feeds the melee fold only,
+    // and an ungated alias (`over_in` 0) keeps firing on any measured charge.
+    if rule_on(seams.rules_epoch, EPOCH_73_V36) && def.stealth_alias_over_in > 0.0 {
+        def.stealth_alias_over_in = crate::combat::CHARGE_LONG_RANGE_IN;
+    }
     // rules-wave3-growthmark (epoch 6) — the LOGGING-RULE lines for the
     // defender-side facets this strike is about to fold.
     if rule_on(seams.rules_epoch, EPOCH_6_TABLE_RULES) {
@@ -4870,7 +4913,7 @@ fn strike_phase(
     // own: on from the current rules epoch onward, pre-port corpora replay
     // byte-exact (dice.rs::save_batch's gate).
     let shred_alias_dice = rule_on(seams.rules_epoch, EPOCH_3_TABLE_RULES);
-    let r = crate::dice::resolve_melee_leg(&members, &def, &ut.name, charging, cond_ap_dice, shred_alias_dice, rule_on(seams.rules_epoch, EPOCH_14_DEADLY_LANDING), charge_from_in, rule_on(seams.rules_epoch, EPOCH_22_SCREENED_MELEE), seams.tray_exact, tray);
+    let r = crate::dice::resolve_melee_leg(&members, &def, &ut.name, charging, cond_ap_dice, shred_alias_dice, rule_on(seams.rules_epoch, EPOCH_14_DEADLY_LANDING), charge_from_in, rule_on(seams.rules_epoch, EPOCH_22_SCREENED_MELEE), seams.tray_exact, rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36), tray);
     // WAVE 3, rules-must-log — the melee leg's Boost shape fired (no distance
     // here; the gated aliases never reach a melee save batch, exactly the
     // table's own `dist_in: -1.0` read, main.gd:6119).
@@ -5092,15 +5135,33 @@ fn live_morale_ctx(statics: &[UnitStatic], state: &State, i: usize, melee: bool,
     // granted "Hold the Line Boost" joins the same net, epoch-gated.
     ctx.morale_bonus = state.morale_bonus[i]
         + mods::sum(state, i, mods::Role::Morale, melee, |r| r.morale_mod)
-        + if rule_on(seams.rules_epoch, EPOCH_5_TABLE_RULES) && mods::granted(state, i, "Hold the Line Boost") { HOLD_THE_LINE_BOOST_MORALE_BONUS } else { 0 };
+        + if rule_on(seams.rules_epoch, EPOCH_5_TABLE_RULES) && mods::granted(state, i, "Enhanced Hold the Line") { HOLD_THE_LINE_BOOST_MORALE_BONUS } else { 0 };
     ctx.no_retreat = ctx.no_retreat || mods::granted(state, i, "No Retreat");
     ctx
+}
+
+/// Rules 3.6 Banner (`EPOCH_73_V36`): the Banner family's +1 only helps a
+/// morale test that shooting or melee caused. Any other cause (`Some(rule)`)
+/// takes the Banner share (the capture stamp minus the Morale(X) rating it
+/// also carries) back out of the target and names the cause once. Spell
+/// tokens and a granted Hold the Line Boost stay in.
+fn drop_banner_for_cause(
+    statics: &[UnitStatic], state: &State, i: usize, cause: Option<&str>, seams: Seams,
+    ctx: &mut Ctx, shot: &mut ShootResult,
+) {
+    let Some(cause) = cause else { return };
+    if !rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) || state.shaken[i] { return; }
+    let us = &statics[state.roster.profile[i]];
+    let banner = (state.morale_bonus[i] - us.ctx.morale_rating).max(0);
+    if banner == 0 { return; }
+    ctx.morale_bonus -= banner;
+    shot.log.push(format!("[Banner] {}: no +{} against {} (only shooting or melee)", us.name, banner, cause));
 }
 
 /// `main._solo_morale_test` :8305 on the played path — the tray twin of
 /// `morale_fails_expected`, with No Retreat's self-wounds landed regen-free
 /// ("can't be ignored") and the Rout half clearing the unit off the board
-/// exactly as `expected_melee_morale` does.
+/// exactly as `expected_melee_morale` does. A test shooting or melee caused.
 fn tray_morale(
     state: &mut State,
     statics: &[UnitStatic],
@@ -5110,11 +5171,22 @@ fn tray_morale(
     tray: &mut Tray,
     shot: &mut ShootResult,
 ) {
+    tray_morale_for(state, statics, i, melee, None, seams, tray, shot);
+}
+
+/// `tray_morale` with its cause: `None` = shooting or melee, `Some(rule)` =
+/// any other rule that forced the test (`drop_banner_for_cause`).
+#[allow(clippy::too_many_arguments)]
+fn tray_morale_for(
+    state: &mut State, statics: &[UnitStatic], i: usize, melee: bool, cause: Option<&str>,
+    seams: Seams, tray: &mut Tray, shot: &mut ShootResult,
+) {
     if !morale_side_alive(state, i, seams) {
         return;
     }
     let us = &statics[state.roster.profile[i]];
-    let ctx = live_morale_ctx(statics, state, i, melee, seams);
+    let mut ctx = live_morale_ctx(statics, state, i, melee, seams);
+    drop_banner_for_cause(statics, state, i, cause, seams, &mut ctx, shot);
     // EPOCH_39_MORALE_RATING — rules-must-log (main.gd:8596-8602): the test
     // that adds the rating names it, once per drawn die. A Shaken auto-fail
     // draws no die and adds nothing, so it stays silent.
@@ -5200,8 +5272,15 @@ fn tray_charge(
     // the NON-counter weapons remain for the normal strike-back slot
     // (:8315). Below the epoch the core keeps its marker-only reading.
     let counter_first = epoch13 && (strikes_first(ti) || (seams.tray_exact && hero_counter));
+    // Rules 3.6 (`EPOCH_73_V36`, table twin `_run_ai_melee`/`_run_human_melee`): Impact rolls before
+    // either side strikes, so it moves ahead of the Counter phase, which keeps its alive gates (an
+    // Impact wipe leaves none). The Counter cut of the Impact dice is read before any strike either way.
+    let impact_first = rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36);
     let mut by_su = 0;
     let mut by_tu = 0;
+    if impact_first && next.alive[si] > 0 && next.alive[ti] > 0 {
+        by_su += impact_phase(statics, next, si, ti, tray, shot, seams.rules_epoch, charge_from_in, seams.tray_exact);
+    }
     if counter_first && next.alive[si] > 0 && next.alive[ti] > 0 {
         let (c, rc) = strike_phase(statics, next, ti, si, false, 0.0, seams, tray, shot, StrikeSet::CounterOnly, cover);
         by_tu += c;
@@ -5209,7 +5288,7 @@ fn tray_charge(
     }
     // main.gd:8276's alive gate — a counter phase that wiped the charger
     // closes the card, nothing left to roll.
-    if next.alive[si] > 0 && next.alive[ti] > 0 {
+    if !impact_first && next.alive[si] > 0 && next.alive[ti] > 0 {
         by_su += impact_phase(statics, next, si, ti, tray, shot, seams.rules_epoch, charge_from_in, seams.tray_exact);
     }
     // main.gd:8035 — the charger's Mark lands after Impact and before the
@@ -5461,12 +5540,22 @@ fn spacing_fraction(state: &State, mi: usize, delta: geom::V3, ci: Option<usize>
 /// `None` when the header carried no board: `terrain_at.is_valid()` is false,
 /// there is nothing to rasterise, and the path seam then stays inert.
 ///
-/// WALLS: the act corpus header carries a terrain grid but NO wall segments
-/// (`grep -rn "wall" core/nml-core/src` is empty), so the index is built with
-/// an empty wall list and Impassable CELLS are the only hard obstacle the
-/// imagination sees. The exact solver's 48 wall segments would need a new
-/// header key on the GDScript side — see the M4-7 report.
+/// WALLS: built with an empty wall list, so Impassable CELLS are the only hard
+/// obstacle the imagination sees. `walled_reach_index_for_state` is the sibling
+/// that also blocks on the board's ruin walls.
 pub fn reach_index_for_state(state: &State, terrain: &Terrain) -> Option<ReachIndex> {
+    reach_index_with_walls(state, terrain, &[])
+}
+
+/// MEL-PAR-F8 — `reach_index_for_state` plus the board's ruin walls
+/// (`Terrain::walls_in`) as impassable segments, the way the table's charge
+/// move treats them. Only the menu's charge path check (`charge_needs_path`)
+/// asks for it; every other planner user keeps the wall-less index.
+pub fn walled_reach_index_for_state(state: &State, terrain: &Terrain) -> Option<ReachIndex> {
+    reach_index_with_walls(state, terrain, terrain.walls_in())
+}
+
+fn reach_index_with_walls(state: &State, terrain: &Terrain, walls: &[crate::mv::cost::Wall]) -> Option<ReachIndex> {
     let board = terrain.board_in();
     if !terrain.is_valid() || board[0] <= 0.0 || board[1] <= 0.0 {
         return None;
@@ -5487,7 +5576,7 @@ pub fn reach_index_for_state(state: &State, terrain: &Terrain) -> Option<ReachIn
             });
         }
     }
-    let mut b = ReachBuild::new(board, &[]);
+    let mut b = ReachBuild::new(board, walls);
     b.discs = discs;
     // The stored radii are the OBSTACLE's alone; the mover's own radius is added
     // per query, because it is not known at build time.
@@ -6173,7 +6262,10 @@ pub fn melee_threat_at_epoch(statics: &[UnitStatic], state: &State, si: usize, t
     let def = ctx_live(ctx_of(ut, state, ti), statics, state, ti, true, rules_epoch);
     let mut sc = Scratch::default();
     melee_profiles_of(us, state.alive[si], &mut sc);
-    melee_ev(&us.melee, &sc.attacks, &att, &def, true)
+    let gap = charge_estimate_gap_in(rules_epoch, || {
+        modifier_distance_in(state, si, ti, Seams { rules_epoch, ..Seams::default() })
+    });
+    melee_ev(&us.melee, &sc.attacks, &att, &def, true, gap)
 }
 
 pub fn melee_threat(statics: &[UnitStatic], state: &State, si: usize, ti: usize) -> f64 {
@@ -7461,6 +7553,34 @@ fn stealth_alias_terrain_gate(
     }
 }
 
+/// `(Terrain::uid, shelf reading, the board's sight volumes)`.
+type BoardZones = Option<(u64, bool, Rc<Vec<sight::Zone>>)>;
+
+thread_local! {
+    /// SHO-PAR-F3 — the last board's sight volumes, keyed on its content identity (`Terrain::uid`) and the shelf
+    /// reading, so the moved-shooter gate does not flood-fill the board again on every candidate it scores.
+    static BOARD_ZONES: std::cell::RefCell<BoardZones> = const { std::cell::RefCell::new(None) };
+}
+
+/// `sight::zones_of_with(t, shelf)`, remembered for the last board. A bare `Default` board (uid 0) has no identity
+/// and is built fresh every call; a hit needs the same uid, which `Terrain` mints anew on every content change.
+fn board_zones(t: &Terrain, shelf: bool) -> Rc<Vec<sight::Zone>> {
+    if t.uid() == 0 {
+        return Rc::new(sight::zones_of_with(t, shelf));
+    }
+    BOARD_ZONES.with(|c| {
+        let mut c = c.borrow_mut();
+        match c.as_ref() {
+            Some((uid, sh, z)) if *uid == t.uid() && *sh == shelf => Rc::clone(z),
+            _ => {
+                let z = Rc::new(sight::zones_of_with(t, shelf));
+                *c = Some((t.uid(), shelf, Rc::clone(&z)));
+                z
+            }
+        }
+    })
+}
+
 #[allow(clippy::too_many_arguments)]
 fn resolve_with(
     statics: &[UnitStatic],
@@ -8031,6 +8151,12 @@ fn resolve_with(
                 && mods::granted_vs(&next, ti, "Indirect");
             let sighted = if moved {
                 (match cover {
+                    // SHO-PAR-F3 (EPOCH_73_V36): the table's own per-model 3D sight (`_solo_has_los`), not the
+                    // coarse grid line between the two centres, which refused a shot the outer models see past
+                    // a forest. The EV half runs the same gate, so the search now prices that shot too.
+                    Cover::Board(t) if t.is_valid() && rule_on(sc.rules_epoch, EPOCH_73_V36) => {
+                        sight::unit_sees(&next, &board_zones(t, seams.shelf_sight), si, ti)
+                    }
                     Cover::Board(t) if t.is_valid() => !t.los_blocked(
                         geom::centre(&next.positions[si]),
                         geom::centre(&next.positions[ti]),
@@ -8202,7 +8328,7 @@ fn resolve_with(
                                 msc.bearers_last = seams.casualties_bearers_last;
                                 if seams.sighting {
                                     sighted_profiles_of(
-                                        um, &next, statics, mi, g.ti, &zones, g.d, &mut msc,
+                                        um, &next, statics, mi, g.ti, &zones, g.d, kind == HOLD, &mut msc,
                                     );
                                 } else {
                                     profiles_of(um, next.alive[mi], g.d, &mut msc);
@@ -8265,6 +8391,7 @@ fn resolve_with(
                                     }
                                 }
                                 att.moved_this_round = moved;
+                                att.held = kind == HOLD;
                                 parts.push((mi, msc, att));
                             }
                             // FEAT PR 2 — the deferred stamp: the unspent
@@ -8514,7 +8641,9 @@ fn resolve_with(
                         // NML-1132: the charger's strike phase is the host's melee set
                         // PLUS every alive attached hero's, the way the table builds it.
                         member_profiles_of(statics, &next, si, true, 0.0, seams, &mut sc);
-                        melee_ev(folded_slice(&us.melee, &sc), &sc.attacks, &att, &def, true)
+                        // D-GATE6: priced at the pre-charge gap (`state` is the pre-move snapshot).
+                        let gap = charge_estimate_gap_in(seams.rules_epoch, || modifier_distance_in(state, si, ti, seams));
+                        melee_ev(folded_slice(&us.melee, &sc), &sc.attacks, &att, &def, true, gap)
                     };
                     apply_expected_wounds(&mut next, ti, ev, rng.as_deref_mut());
                     next.fatigued[si] = true;
@@ -8530,7 +8659,7 @@ fn resolve_with(
                             // The strike-back folds too (`_solo_attack_groups` is built
                             // for the DEFENDER the same way, main.gd:4284-4290).
                             member_profiles_of(statics, &next, ti, true, 0.0, seams, &mut sc);
-                            melee_ev(folded_slice(&ut.melee, &sc), &sc.attacks, &att, &def, false)
+                            melee_ev(folded_slice(&ut.melee, &sc), &sc.attacks, &att, &def, false, 0.0)
                         };
                         apply_expected_wounds(&mut next, si, ev_back, rng.as_deref_mut());
                         next.fatigued[ti] = true;
@@ -8598,7 +8727,7 @@ fn resolve_with(
             if let Some((tray, shot)) = dice.as_mut() {
                 let us = &statics[pi_s];
                 if shooting_morale_trigger(&next, statics, seams, us, si, alive_before, wounds_before) {
-                    tray_morale(&mut next, statics, si, false, seams, tray, shot);
+                    tray_morale_for(&mut next, statics, si, false, Some("Dangerous terrain"), seams, tray, shot);
                 }
             }
         }

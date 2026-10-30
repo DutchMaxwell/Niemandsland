@@ -12,11 +12,11 @@ use super::*;
     /// resolves (the Shot-Modifier Boosts' bases live in other factions'
     /// blocks — dao_union — and would not resolve here).
     #[test]
-    fn a_hold_the_line_boost_aura_carrier_captures_at_plus_two_only_at_epoch_6() {
+    fn an_enhanced_hold_the_line_aura_carrier_captures_at_plus_two_only_at_epoch_6() {
         let build = |epoch: u32| {
             let p = boost_aura_profile(
                 "human_defense_force",
-                "[\"Hold the Line Boost Aura\"]",
+                "[\"Enhanced Hold the Line Aura\"]",
                 "[]",
                 epoch,
             );
@@ -36,13 +36,13 @@ use super::*;
     fn a_hero_boost_aura_stamps_the_base_on_host_and_hero_at_epoch_6() {
         let read = |epoch: u32| {
             let (special, heroes) = boost_aura_expanded(
-                "[\"Hold the Line Boost\"]",
-                "[[\"Hold the Line Boost Aura\"]]",
+                "[\"Enhanced Hold the Line\"]",
+                "[[\"Enhanced Hold the Line Aura\"]]",
                 epoch,
             );
             (
-                special.iter().any(|r| r == "Hold the Line Boost"),
-                heroes.iter().any(|h| h.iter().any(|r| r == "Hold the Line Boost")),
+                special.iter().any(|r| r == "Enhanced Hold the Line"),
+                heroes.iter().any(|h| h.iter().any(|r| r == "Enhanced Hold the Line")),
             )
         };
         assert_eq!(read(6), (true, true), "epoch 6: host and hero both carry the base");
@@ -699,11 +699,11 @@ use super::*;
         let primal = header.profiles.get("primal_beast").expect("primal_beast");
         let ps = UnitStatic::build(&mut reg, primal);
         assert!(ps.shoot[0].surge_attack, "Primal is ungated — it reaches the ranged profile too");
-        assert_eq!(ps.shoot[0].surge_attack_low, 5, "Primal Boost's surge_low");
+        assert_eq!(ps.shoot[0].surge_attack_low, 5, "Enhanced Primal's surge_low");
         assert!(ps.melee[0].surge_attack);
         assert_eq!(ps.melee[0].surge_attack_low, 5);
         assert!(
-            ps.unimplemented.iter().all(|u| u.rule != "Primal" && u.rule != "Primal Boost"),
+            ps.unimplemented.iter().all(|u| u.rule != "Primal" && u.rule != "Enhanced Primal"),
             "consumed, not stamped as unimplemented: {:?}", ps.unimplemented
         );
 
@@ -784,7 +784,7 @@ use super::*;
     }
 
     #[test]
-    fn angelic_blessing_boost_is_spell_only_on_2_epoch_gated() {
+    fn enhanced_angelic_blessing_is_spell_only_on_2_epoch_gated() {
         let header = read_act_header(REGEN_FAMILY_HEADER).expect("header");
         assert_eq!(
             regen_pair_at(&header, "angelic_boost", CURRENT_RULES_EPOCH),
@@ -807,7 +807,7 @@ use super::*;
     }
 
     #[test]
-    fn cursed_undead_boost_ignores_on_5_6_epoch_gated() {
+    fn enhanced_cursed_undead_ignores_on_5_6_epoch_gated() {
         let header = read_act_header(REGEN_FAMILY_HEADER).expect("header");
         assert_eq!(
             regen_pair_at(&header, "cursed_boost", CURRENT_RULES_EPOCH),
@@ -830,7 +830,7 @@ use super::*;
     }
 
     #[test]
-    fn plaguebound_boost_ignores_on_5_6_epoch_gated() {
+    fn enhanced_plaguebound_ignores_on_5_6_epoch_gated() {
         let header = read_act_header(REGEN_FAMILY_HEADER).expect("header");
         assert_eq!(regen_pair_at(&header, "plague_boost", CURRENT_RULES_EPOCH), (5, 5));
         assert_eq!(regen_pair_at(&header, "plague_boost", 0), (0, 0), "epoch 0 replays legacy");
@@ -950,7 +950,7 @@ use super::*;
         assert_eq!(ambush_static("repel_carrier").repel_ambushers_dist_in, REPEL_AMBUSHERS_DIST_IN);
         assert_eq!(
             ambush_static("repel_unmapped").repel_ambushers_dist_in, 0.0,
-            "alien_hives fields no Repel Ambushers entry -> unit_rule_active is false"
+            "aof dwarves fields no Repel Ambushers entry -> unit_rule_active is false"
         );
     }
 
@@ -1180,11 +1180,11 @@ use super::*;
     /// epoch 6 on the MELEE leg too (main.gd:6119 passes over9=false there);
     /// ABSENT at epoch 5.
     #[test]
-    fn guardian_boost_is_live_at_epoch_6_and_absent_at_epoch_5() {
+    fn enhanced_guardian_is_live_at_epoch_6_and_absent_at_epoch_5() {
         let us6 = fortified_unit("guardian_boost_unit", 6);
         assert_eq!(us6.ctx.fortified_boost_ap, 1, "the Boost's incoming_ap_reduction");
         assert_eq!(us6.ctx.fortified_alias_ap, 0, "no gated entry carried");
-        assert_eq!(us6.fortified_boost_name, "Guardian Boost");
+        assert_eq!(us6.fortified_boost_name, "Enhanced Guardian");
         let (target6, fired6) = fortified_melee(&us6);
         assert_eq!(target6, 4, "melee AP(1) vs the Boost: saves on 4+ instead of 5+");
         assert!(fired6, "rules-must-log: the melee phase must report the boost");
@@ -1215,10 +1215,10 @@ use super::*;
     /// Ossified Boost (aof/ossified_undead) — the same no-gate shape, live at
     /// 6, absent at 5.
     #[test]
-    fn ossified_boost_is_live_at_epoch_6_and_absent_at_epoch_5() {
+    fn enhanced_ossified_is_live_at_epoch_6_and_absent_at_epoch_5() {
         let us6 = fortified_unit("ossified_boost_unit", 6);
         assert_eq!(us6.ctx.fortified_boost_ap, 1, "the Boost's incoming_ap_reduction");
-        assert_eq!(us6.fortified_boost_name, "Ossified Boost");
+        assert_eq!(us6.fortified_boost_name, "Enhanced Ossified");
         let (target6, fired6) = fortified_melee(&us6);
         assert_eq!(target6, 4, "melee AP(1) vs the Boost: saves on 4+ instead of 5+");
         assert!(fired6, "rules-must-log: the melee phase must report the boost");
@@ -1409,11 +1409,11 @@ use super::*;
         let dev = UnitStatic::build(
             &mut reg, header.profiles.get("devout_boost_unit").expect("devout_boost_unit"),
         );
-        assert_eq!(dev.shoot[0].surge_low, 5, "Devout Boost's surge_low");
-        assert_eq!(dev.shoot[0].surge_over_in, 9.0, "Devout Boost's over_in");
+        assert_eq!(dev.shoot[0].surge_low, 5, "Enhanced Devout's surge_low");
+        assert_eq!(dev.shoot[0].surge_over_in, 9.0, "Enhanced Devout's over_in");
         assert_eq!(dev.melee[0].surge_low, 5, "the boost rides EVERY profile Devout gave surge");
         assert!(
-            dev.unimplemented.iter().all(|u| u.rule != "Devout Boost"),
+            dev.unimplemented.iter().all(|u| u.rule != "Enhanced Devout"),
             "consumed, not stamped as unimplemented: {:?}", dev.unimplemented
         );
         let plain = UnitStatic::build(
@@ -1513,13 +1513,14 @@ use super::*;
         assert_eq!(quickfast_bands("agile_unit", 0), None, "epoch 0 reads the pre-port row");
     }
 
-    /// Highborn = the Quick primitive's +2"/+2" alias. RED: drop the loop's
-    /// "Highborn" literal (or the entry): `None`.
+    /// Highborn (rules 3.6) = a Royal Legion-primitive alias: no Advance
+    /// half, its `charge_mod` (+2") on the rush/charge band, the Reach Hunt
+    /// shape. RED: drop the loop's "Highborn" literal (or the entry): `None`.
     #[test]
-    fn highborn_stamps_the_quick_primitive_bands() {
+    fn highborn_stamps_its_own_charge_mod() {
         assert_eq!(
             quickfast_bands("highborn_unit", CURRENT_RULES_EPOCH),
-            Some(Bands { advance: 2.0, rush: 2.0, ..Default::default() })
+            Some(Bands { advance: 0.0, rush: 2.0, ..Default::default() })
         );
         assert_eq!(
             quickfast_bands("plain_high_elf_fleets", CURRENT_RULES_EPOCH),
@@ -1545,13 +1546,13 @@ use super::*;
         assert_eq!(quickfast_bands("quick_unit", 0), None, "epoch 0 is pre-port");
     }
 
-    /// Scurry = the Quick primitive's ratmen alias (+2"/+2"). RED: drop the
-    /// "Scurry" literal (or the entry): `None`.
+    /// Scurry = the Quick primitive's ratmen alias (rules 3.6: +1"/+2"). RED:
+    /// drop the "Scurry" literal (or the entry): `None`.
     #[test]
     fn scurry_stamps_its_own_entry_params() {
         assert_eq!(
             quickfast_bands("scurry_unit", CURRENT_RULES_EPOCH),
-            Some(Bands { advance: 2.0, rush: 2.0, ..Default::default() })
+            Some(Bands { advance: 1.0, rush: 2.0, ..Default::default() })
         );
         assert_eq!(
             quickfast_bands("plain_ratmen_clans", CURRENT_RULES_EPOCH),
@@ -1642,24 +1643,25 @@ use super::*;
         assert_eq!(royal_legion_halves("rl_boost_aura_unit", 5), (0.0, 0.0));
     }
 
-    /// Lustbound (aof lust_disciples) — the class's data alias, same 4/2
-    /// magnitudes. RED: the fields stay 0.
+    /// Lustbound (aof lust_disciples) left the class in rules 3.6: its entry
+    /// is a Quick-primitive alias (+1"/+2" movement, which reaches this core
+    /// inside the loader's bands), so it lends neither range nor charge here.
     #[test]
-    fn lustbound_stamps_range_and_charge_at_epoch_6() {
-        assert_eq!(royal_legion_halves("lustbound_unit", 6), (4.0, 2.0));
+    fn lustbound_is_no_longer_a_royal_legion_alias() {
+        assert_eq!(royal_legion_halves("lustbound_unit", 6), (0.0, 0.0));
         assert_eq!(royal_legion_halves("plain_lust_disciples", 6), (0.0, 0.0), "no Lustbound, no stamp");
         assert_eq!(royal_legion_halves("lustbound_unit", 5), (0.0, 0.0));
     }
 
     /// Lustbound Boost (aof lust_disciples): +8"/+4". The range half is the
-    /// `_shooting_range_bonus` alias-MAX (8 wins over the base's 4 — the
-    /// rule's own "instead of"), the charge half the band pass's flat per-name
-    /// SUM (2+4=6 — neither twin's pass reads `upgrades`, the move_rule_mods
-    /// precedent). RED: the fields stay 0.
+    /// `_shooting_range_bonus` alias-MAX, the charge half the band pass's flat
+    /// per-name SUM (neither twin's pass reads `upgrades`, the move_rule_mods
+    /// precedent). Since rules 3.6 the base Lustbound is a Quick alias, so a
+    /// unit with both folds the Boost alone. RED: the fields stay 0.
     #[test]
-    fn lustbound_boost_widens_both_halves_over_the_base() {
+    fn enhanced_lustbound_widens_both_halves_over_the_base() {
         assert_eq!(royal_legion_halves("lustbound_boost_unit", 6), (8.0, 4.0));
-        assert_eq!(royal_legion_halves("lustbound_combo_unit", 6), (8.0, 6.0), "range takes the max, charge flat-folds per name — the loaders' own shape");
+        assert_eq!(royal_legion_halves("lustbound_combo_unit", 6), (8.0, 4.0), "the base is a Quick alias since rules 3.6, so only the Boost folds");
         assert_eq!(royal_legion_halves("lustbound_boost_unit", 5), (0.0, 0.0));
     }
 
@@ -1667,7 +1669,7 @@ use super::*;
     /// DESIGN: has_primitive false), so the alias wave cannot reach it; the
     /// raw-name arm expands it to "Lustbound Boost" the way the import does.
     #[test]
-    fn lustbound_boost_aura_expands_to_its_base() {
+    fn enhanced_lustbound_aura_expands_to_its_base() {
         assert_eq!(royal_legion_halves("lustbound_boost_aura_unit", 6), (8.0, 4.0), "the base entry's own magnitudes through the expansion");
         assert_eq!(royal_legion_halves("lustbound_boost_aura_unit", 5), (0.0, 0.0));
     }
@@ -1689,23 +1691,23 @@ use super::*;
     }
 
     /// WAVE 3 (rules-wave3-fastband): Highborn Boost rides its OWN
-    /// Fast-primitive entry (+4"/+4") on top of Highborn's +2"/+2" — the
-    /// per-name stack both band passes fold — and fires only with the base
-    /// rule its entry's `upgrades` param names ("If this model has
-    /// Highborn"). Epoch literals, never a symbol: PRESENT at 6, ABSENT at 5
-    /// (the recording fleet's epoch — the boost arm is off, Highborn's own
-    /// 2/2 stands). RED: drop the epoch-6 arm (or the entry) and the epoch-6
-    /// row falls back to 2/2.
+    /// Fast-primitive entry (+4"/+4") on top of Highborn's own 0/+2 (rules
+    /// 3.6: its charge_mod) — the per-name stack both band passes fold — and
+    /// fires only with the base rule its entry's `upgrades` param names ("If
+    /// this model has Highborn"). Epoch literals, never a symbol: PRESENT at
+    /// 6, ABSENT at 5 (the recording fleet's epoch — the boost arm is off,
+    /// Highborn's own 0/2 stands). RED: drop the epoch-6 arm (or the entry)
+    /// and the epoch-6 row falls back to 0/2.
     #[test]
-    fn highborn_boost_stamps_its_own_entry_over_the_epoch6_gate() {
+    fn enhanced_highborn_stamps_its_own_entry_over_the_epoch6_gate() {
         assert_eq!(
             quickfast_bands("highborn_boost_unit", 6),
-            Some(Bands { advance: 6.0, rush: 6.0, ..Default::default() }),
-            "Highborn 2/2 + Highborn Boost 4/4, the loaders' per-name stack"
+            Some(Bands { advance: 4.0, rush: 6.0, ..Default::default() }),
+            "Highborn 0/2 + Enhanced Highborn 4/4, the loaders' per-name stack"
         );
         assert_eq!(
             quickfast_bands("highborn_boost_unit", 5),
-            Some(Bands { advance: 2.0, rush: 2.0, ..Default::default() }),
+            Some(Bands { advance: 0.0, rush: 2.0, ..Default::default() }),
             "epoch 5 (the recorder): the boost arm is off"
         );
         assert_eq!(
@@ -1716,20 +1718,20 @@ use super::*;
     }
 
     /// WAVE 3 (rules-wave3-fastband): Scurry Boost, same shape — its OWN
-    /// Fast-primitive entry (+4"/+4") over Scurry's +2"/+2", gated on the
-    /// entry's `upgrades` base rule and the epoch-6 gate (literals: present
-    /// at 6, absent at 5). RED: drop the epoch-6 arm and the epoch-6 row
-    /// falls back to 2/2.
+    /// Fast-primitive entry (+4"/+4") over Scurry's +1"/+2" (rules 3.6),
+    /// gated on the entry's `upgrades` base rule and the epoch-6 gate
+    /// (literals: present at 6, absent at 5). RED: drop the epoch-6 arm and
+    /// the epoch-6 row falls back to 1/2.
     #[test]
     fn enhanced_scurry_stamps_its_own_entry_over_the_epoch6_gate() {
         assert_eq!(
             quickfast_bands("scurry_boost_unit", 6),
-            Some(Bands { advance: 6.0, rush: 6.0, ..Default::default() }),
-            "Scurry 2/2 + Enhanced Scurry 4/4, the loaders' per-name stack"
+            Some(Bands { advance: 5.0, rush: 6.0, ..Default::default() }),
+            "Scurry 1/2 + Enhanced Scurry 4/4, the loaders' per-name stack"
         );
         assert_eq!(
             quickfast_bands("scurry_boost_unit", 5),
-            Some(Bands { advance: 2.0, rush: 2.0, ..Default::default() }),
+            Some(Bands { advance: 1.0, rush: 2.0, ..Default::default() }),
             "epoch 5 (the recorder): the boost arm is off"
         );
     }

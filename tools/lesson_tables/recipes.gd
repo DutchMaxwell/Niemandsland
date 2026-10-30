@@ -41,7 +41,7 @@ static func recipe(id: String) -> Dictionary:
 				{"player": 1, "fixture": "res://assets/tutorial/tutorial_army_p1.json", "units": [
 					{"name": "Battle Brothers", "nth": 1, "tag": "alpha", "label": "Alpha Squad", "at_in": Vector2(0, 10)}]},
 				{"player": 2, "fixture": "res://assets/tutorial/tutorial_army_p2.json", "units": [
-					{"name": "Warriors", "nth": 1, "tag": "target", "at_in": Vector2(10, -8)},
+					{"name": "Warriors", "nth": 1, "tag": "target", "at_in": Vector2(10, 0)},
 					{"name": "Warriors", "nth": 2, "tag": "far", "at_in": Vector2(10, -22)},
 					{"name": "Guardians", "nth": 1, "tag": "blocked", "at_in": Vector2(-9, -4)}]}]}
 	if id == "S-06":

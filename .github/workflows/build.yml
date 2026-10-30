@@ -419,7 +419,7 @@ jobs:
           path: build/windows
 
   # macOS core + proof (maintainer decision, board D40, 26.09.2026). tract-linalg assembles hand-written
-  # SIMD kernels per target and needs Apple's toolchain, so the Rust core is built natively on a macos-14
+  # SIMD kernels per target and needs Apple's toolchain, so the Rust core is built natively on a macos-15
   # runner (both darwin triples, lipo'd into ONE universal dylib) and the macOS preset is exported and RUN
   # on the same runner. The job is green only when the exported, ad-hoc-signed .app loads NmlCore and plays
   # `opponent: erlkoenig` (tools/core_ship_probe.tscn, judged by tools/assert_ship_probe.py). The release
@@ -427,7 +427,7 @@ jobs:
   # not, so a failed macOS core never fails a release (the decision tree stays the fallback).
   export-macos:
     name: macOS Export (core + proof)
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 60
     needs: [changes]
     if: ${{ github.event_name != 'pull_request' || (needs.changes.outputs.macos_relevant == 'true' && !github.event.pull_request.draft) }}
@@ -608,7 +608,7 @@ jobs:
   # publishes them as a GitHub Release with permanent, public, direct download links.
   # Self-contained (builds its own Linux + Windows binaries) so it does NOT depend on the best-effort
   # Actions artifact upload, which can hit the account's artifact storage quota. The one exception is
-  # the macOS zip with the Rust core, built and proven by export-macos (a macos-14 runner is the only
+  # the macOS zip with the Rust core, built and proven by export-macos (a macos-15 runner is the only
   # place that can build it): the release takes it when it is there and exports a core-less macOS
   # build itself when it is not.
   release:
@@ -700,7 +700,7 @@ jobs:
           godot --headless --verbose --export-release "Windows Desktop" dist/windows/$EXPORT_NAME.exe
           if [ -f "dist/macos-core/$EXPORT_NAME.zip" ]; then
             # The export-macos job's zip: universal core dylib in Contents/Frameworks, ad-hoc signed
-            # (dylib first, then the .app) and run on a macos-14 runner before it was uploaded.
+            # (dylib first, then the .app) and run on a macos-15 runner before it was uploaded.
             cp "dist/macos-core/$EXPORT_NAME.zip" "dist/macos/$EXPORT_NAME.zip"
             echo "OK: macOS ships the proven build with the Rust core"
           else

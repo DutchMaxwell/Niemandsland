@@ -103,49 +103,49 @@ func test_piercing_assault_aura_channel() -> void:
 func test_aura_slice_1b_channels() -> void:
 	for name in [
 		"Ballistic Vest Boost Aura",
-		"Bestial Boost Aura",
+		"Enhanced Bestial Aura",
 		"Bounding Aura",
-		"Buccaneer Boost Aura",
-		"Changebound Boost Aura",
-		"Clan Warrior Boost Aura",
+		"Enhanced Buccaneer Aura",
+		"Enhanced Changebound Aura",
+		"Enhanced Clan Warrior Aura",
 		"Crazed Boost Aura",
 		"Cyber-Eyes Boost Aura",
 		"Dash Aura",
 		"Defensive Growth Aura",
-		"Destroyer Boost Aura",
-		"Devout Boost Aura",
-		"Empyrean Spirit Boost Aura",
+		"Enhanced Destroyer Aura",
+		"Enhanced Devout Aura",
+		"Enhanced Empyrean Spirit Aura",
 		"Exotic Gear Boost Aura",
 		"Fearless Aura",
-		"Ferocious Boost Aura",
+		"Enhanced Ferocious Aura",
 		"Flying Aura",
 		"Gloom-Mist Boost Aura",
 		"Grounded Precision Aura",
 		"Grounded Protection Aura",
 		"Grounded Reinforcement Aura",
-		"Guardian Boost Aura",
-		"Guerrilla Boost Aura",
-		"Harassing Boost Aura",
-		"Havocbound Boost Aura",
-		"Highborn Boost Aura",
+		"Enhanced Guardian Aura",
+		"Enhanced Guerrilla Aura",
+		"Enhanced Harassing Aura",
+		"Enhanced Havocbound Aura",
+		"Enhanced Highborn Aura",
 		"Hit & Run Fighter Aura",
-		"Hive Bond Boost Aura",
-		"Hold the Line Boost Aura",
+		"Enhanced Hive Bond Aura",
+		"Enhanced Hold the Line Aura",
 		"Ignores Cover Aura",
 		"Ignores Cover when Shooting Aura",
 		"Increased Shooting Range Aura",
 		"Indirect when Shooting Aura",
-		"Infected Boost Aura",
+		"Enhanced Infected Aura",
 		"Infiltrate Aura",
-		"Lucky Boost Aura",
-		"Lustbound Boost Aura",
-		"Machine-Fog Boost Aura",
+		"Enhanced Lucky Aura",
+		"Enhanced Lustbound Aura",
+		"Enhanced Machine-Fog Aura",
 		"Melee Evasion Aura",
 		"Melee Slayer Aura",
-		"Mischievous Boost Aura",
-		"Ossified Boost Aura",
+		"Enhanced Mischievous Aura",
+		"Enhanced Ossified Aura",
 		"Piercing Hunter Aura",
-		"Plaguebound Boost Aura",
+		"Enhanced Plaguebound Aura",
 		"Point-Blank Piercing Aura",
 		"Predator Shooter Aura",
 		"Protected Aura",
@@ -300,10 +300,10 @@ func test_system_scoping_banner_and_musician_params_diverge() -> void:
 
 func test_modeled_tokens_are_system_scoped() -> void:
 	# Royal Legion (Mummified Undead) is an AoF-family army-book rule: modeled in aof — and since
-	# the coverage wave, gf carries the PRIMITIVE too (Lustbound aliases it), so the token appears
-	# there as well. System scoping still holds at LOOKUP level (per (system, faction, name)).
+	# the coverage wave, gf carries the PRIMITIVE too (Highborn aliases it in rules 3.6), so the token
+	# appears there as well. System scoping still holds at LOOKUP level (per (system, faction, name)).
 	assert_bool(RulesRegistry.modeled_tokens("aof").has("Royal Legion")).is_true()
-	assert_bool(RulesRegistry.modeled_tokens("gf").has("Royal Legion")).is_true()   # via the Lustbound alias
+	assert_bool(RulesRegistry.modeled_tokens("gf").has("Royal Legion")).is_true()   # via the Highborn alias
 	assert_bool(RulesRegistry.lookup("gf", "battle_brothers", "Royal Legion").is_empty()).is_true()
 	# The shared core primitives are modeled everywhere, incl. the wave-5 set.
 	for s in RulesRegistry.SYSTEMS:
@@ -363,6 +363,10 @@ func test_committed_maps_carry_no_rule_texts() -> void:
 					var pv: Variant = params[key]
 					if key == "grants" and entry.get("primitive") == "Aura Channel":
 						assert_str(str(pv)).is_equal(str(rule_name).trim_suffix(" Aura"))
+						continue
+					# A carried grant that names a rule of the same section is a name, not prose
+					# (rules 3.6 "Enhanced <X>" names run past 24 characters).
+					if key == "grants_rule" and (section as Dictionary).has(str(pv)):
 						continue
 					if pv is String:
 						assert_bool((pv as String).length() <= 24 and not (pv as String).contains(". ")) \
@@ -553,8 +557,8 @@ func test_regen_alias_params_flow_from_emitted_maps() -> void:
 	# Plaguebound unit regenerates at 6+, never at the Regeneration default 5+.
 	RulesRegistry.reset_cache()
 	var e := RulesRegistry.lookup("gf", "lust_disciples", "Lustbound")
-	assert_str(str(e.get("primitive"))).is_equal("Royal Legion")
-	assert_int(int((e.get("params", {}) as Dictionary).get("range_bonus_in", 0))).is_equal(4)
+	assert_str(str(e.get("primitive"))).is_equal("Quick")
+	assert_int(int((e.get("params", {}) as Dictionary).get("advance_mod", 0))).is_equal(1)
 	var plague := RulesRegistry.lookup("gf", "plague_disciples", "Plaguebound")
 	if plague.is_empty():   # faction slug probe — the rule lives in several chaos books
 		for fac in ["plague_disciples", "wormhole_daemons_of_plague", "havoc_brothers"]:
@@ -760,7 +764,8 @@ func test_only_the_known_upstream_lagging_books_carry_a_stale_version_stamp() ->
 			var rules: Dictionary = factions[faction]
 			for name in rules.keys():
 				var stamp := str((rules[name] as Dictionary).get("book_version", ""))
-				if stamp != "3.5.3":
+				# An entry re-read from a rules 3.6 book carries a 3.6 stamp: current, not lagging.
+				if stamp != "3.5.3" and not stamp.begins_with("3.6"):
 					found["%s/%s" % [system, faction]] = true
 					assert_str(stamp) \
 						.override_failure_message("%s/%s/%s: unexpected stamp" % [system, faction, name]) \

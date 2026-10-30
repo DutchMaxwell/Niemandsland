@@ -41,15 +41,22 @@ static func strafing_profiles(weapons: Array) -> Array:
 
 ## MELEE weapon profiles (range 0) — same shape as profiles_in_range (range 0, never Relentless), for the
 ## melee resolution: each profile rolls as one batch; the defender saves at Defense + that profile's AP.
+## MEL-01 (D-ASSAULT, rules 3.6 epoch): a ranged weapon carrying Assault also yields a melee copy, in weapon
+## order, at range 0 (every melee reader keeps its meaning) with its printed range kept in "printed_range".
 static func melee_profiles(weapons: Array) -> Array:
+	var assault: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
 	var out: Array = []
 	for w in weapons:
-		if _field_i(w, "range_value", 0) > 0:
+		var copy: bool = assault and _field_i(w, "range_value", 0) > 0 and _has_rule(w, "Assault")
+		if _field_i(w, "range_value", 0) > 0 and not copy:
 			continue
 		var attacks: int = maxi(_field_i(w, "attacks", 1), 0) * maxi(_field_i(w, "count", 1), 1)
 		if attacks <= 0:
 			continue
-		out.append(_profile(w, attacks, 0))
+		var p := _profile(w, attacks, 0)
+		if copy:
+			p["printed_range"] = _field_i(w, "range_value", 0)
+		out.append(p)
 	return merge_identical(out)
 
 

@@ -29,7 +29,7 @@ use super::*;
     }
 
     #[test]
-    fn an_infected_boost_carrier_widens_the_save_window_over_nine_inches_at_epoch_4() {
+    fn an_enhanced_infected_carrier_widens_the_save_window_over_nine_inches_at_epoch_4() {
         use crate::acts::rule_on;
         let us = shred_static("infected_boost");
         let base = shred_static("infected");
@@ -59,7 +59,7 @@ use super::*;
     }
 
     #[test]
-    fn a_destroyer_boost_carrier_widens_the_save_window_over_nine_inches_at_epoch_4() {
+    fn an_enhanced_destroyer_carrier_widens_the_save_window_over_nine_inches_at_epoch_4() {
         use crate::acts::rule_on;
         let us = shred_static("destroyer_boost");
         let p = [us.shoot[0].clone()];

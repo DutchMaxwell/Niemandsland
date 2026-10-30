@@ -206,7 +206,9 @@ func test_controls_overlay_lists_every_binding_of_the_old_wall(timeout := 120000
 	# Every line of the list, not only the old ones, and the version line from the one source.
 	assert_int(shown.size()).is_equal(ControlsOverlay.parse(wall.text).size())
 	var version := overlay.root.find_child("Version", true, false) as Label
-	assert_str(version.text).is_equal("Niemandsland v%s" % ProjectSettings.get_setting("application/config/version"))
+	assert_str(version.text).is_equal("Niemandsland v%s · rules %s" % [
+		ProjectSettings.get_setting("application/config/version"),
+		OPRApiClient._major_minor(OPRApiClient.rules_core_version("gf"))])
 	# Glyphs the overlay draws exist in its font.
 	var font: Font = version.get_theme_font(&"font")
 	for ch: String in ["×", "/", "…", "›"]:

@@ -77,7 +77,7 @@ use super::*;
             name: "a".into(),
             model_count: 1,
             is_hero: true,
-            utility_buffs: vec![ub("Hold the Line Boost Buff")],
+            utility_buffs: vec![ub("Enhanced Hold the Line Buff")],
             ebr: ebr_a,
             ..Default::default()
         };

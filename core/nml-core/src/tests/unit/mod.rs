@@ -100,20 +100,20 @@
         };
     }
 
-    boost_aura_test!(a_hold_the_line_boost_aura_grants_its_base_at_epoch_6, "Hold the Line Boost Aura");
+    boost_aura_test!(an_enhanced_hold_the_line_aura_grants_its_base_at_epoch_6, "Enhanced Hold the Line Aura");
     boost_aura_test!(a_targeting_visor_boost_aura_grants_its_base_at_epoch_6, "Targeting Visor Boost Aura");
     boost_aura_test!(a_warden_boost_aura_grants_its_base_at_epoch_6, "Warden Boost Aura");
-    boost_aura_test!(a_lucky_boost_aura_grants_its_base_at_epoch_6, "Lucky Boost Aura");
-    boost_aura_test!(a_buccaneer_boost_aura_grants_its_base_at_epoch_6, "Buccaneer Boost Aura");
+    boost_aura_test!(an_enhanced_lucky_aura_grants_its_base_at_epoch_6, "Enhanced Lucky Aura");
+    boost_aura_test!(an_enhanced_buccaneer_aura_grants_its_base_at_epoch_6, "Enhanced Buccaneer Aura");
     boost_aura_test!(a_vale_oath_boost_aura_grants_its_base_at_epoch_6, "Vale Oath Boost Aura");
     boost_aura_test!(a_wave_step_boost_aura_grants_its_base_at_epoch_6, "Wave-Step Boost Aura");
     boost_aura_test!(an_enhanced_royal_warrior_aura_grants_its_base_at_epoch_6, "Enhanced Royal Warrior Aura");
-    boost_aura_test!(a_bestial_boost_aura_grants_its_base_at_epoch_6, "Bestial Boost Aura");
+    boost_aura_test!(an_enhanced_bestial_aura_grants_its_base_at_epoch_6, "Enhanced Bestial Aura");
     boost_aura_test!(a_vinci_tech_boost_aura_grants_its_base_at_epoch_6, "Vinci Tech Boost Aura");
-    boost_aura_test!(an_ossified_boost_aura_grants_its_base_at_epoch_6, "Ossified Boost Aura");
+    boost_aura_test!(an_enhanced_ossified_aura_grants_its_base_at_epoch_6, "Enhanced Ossified Aura");
     boost_aura_test!(an_enhanced_shadowborn_aura_grants_its_base_at_epoch_6, "Enhanced Shadowborn Aura");
-    boost_aura_test!(a_destroyer_boost_aura_grants_its_base_at_epoch_6, "Destroyer Boost Aura");
-    boost_aura_test!(an_empyrean_spirit_boost_aura_grants_its_base_at_epoch_6, "Empyrean Spirit Boost Aura");
+    boost_aura_test!(an_enhanced_destroyer_aura_grants_its_base_at_epoch_6, "Enhanced Destroyer Aura");
+    boost_aura_test!(an_enhanced_empyrean_spirit_aura_grants_its_base_at_epoch_6, "Enhanced Empyrean Spirit Aura");
     boost_aura_test!(a_wild_veil_boost_aura_grants_its_base_at_epoch_6, "Wild Veil Boost Aura");
 
     /// Two units: `mark_carrier` prints "Unstoppable Mark" as a UNIT-level
@@ -421,7 +421,7 @@
       "primal_beast":{"unit_id":"primal_beast","name":"Primal Beast","quality":4,
         "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
         "base_radius":0.016,"game_system":"gf","faction_folder":"saurian_starhost",
-        "special_rules":["Primal","Primal Boost"],"item_grants":[],
+        "special_rules":["Primal","Enhanced Primal"],"item_grants":[],
         "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
         "weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]},
           {"name":"Claws","range":0,"attacks":2,"count":1,"ap":0,"rules":[]}]},
@@ -531,7 +531,7 @@
       "angelic_boost":{"unit_id":"angelic_boost","name":"Angelic Boost","quality":4,
         "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
         "base_radius":0.016,"game_system":"aof","faction_folder":"kingdom_of_angels",
-        "special_rules":["Angelic Blessing Boost"],"item_grants":[],
+        "special_rules":["Enhanced Angelic Blessing"],"item_grants":[],
         "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
         "weapons":[{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]},
       "cursed":{"unit_id":"cursed","name":"Cursed","quality":4,
@@ -543,7 +543,7 @@
       "cursed_boost":{"unit_id":"cursed_boost","name":"Cursed Boost","quality":4,
         "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
         "base_radius":0.016,"game_system":"aof","faction_folder":"vampiric_undead",
-        "special_rules":["Cursed Undead Boost"],"item_grants":[],
+        "special_rules":["Enhanced Cursed Undead"],"item_grants":[],
         "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
         "weapons":[{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]},
       "plague":{"unit_id":"plague","name":"Plague","quality":4,
@@ -555,7 +555,7 @@
       "plague_boost":{"unit_id":"plague_boost","name":"Plague Boost","quality":4,
         "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
         "base_radius":0.016,"game_system":"aof","faction_folder":"plague_disciples",
-        "special_rules":["Plaguebound Boost"],"item_grants":[],
+        "special_rules":["Enhanced Plaguebound"],"item_grants":[],
         "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
         "weapons":[{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]},
       "plague_partial":{"unit_id":"plague_partial","name":"Plague Partial","quality":4,
@@ -659,10 +659,12 @@
         "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
         "weapons":[{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]}}}"#;
 
-    /// Five gf units chosen so the REGISTRY tells them apart, not a stub.
-    /// `alien_hives` fields an `Infiltrate` entry (`min_enemy_dist_in: 3.0`) and
-    /// NO `Repel Ambushers`; `eternal_dynasty` is the mirror image (a
-    /// `Repel Ambushers` entry at `min_dist_in: 12.0`, no `Infiltrate`).
+    /// Five units chosen so the REGISTRY tells them apart, not a stub.
+    /// gf `alien_hives` fields an `Infiltrate` entry (`min_enemy_dist_in: 3.0`);
+    /// gf `eternal_dynasty` has a `Repel Ambushers` entry at `min_dist_in: 12.0`
+    /// and no `Infiltrate`. gf now resolves `Repel Ambushers` for every book
+    /// through its common entry, so the unmapped repeller is aof `dwarves`:
+    /// no faction entry and no aof common entry for the rule.
     const AMBUSH_HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
       "inf_registry":{"unit_id":"inf_registry","name":"Infiltrator","quality":4,
         "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
@@ -686,7 +688,7 @@
         "move_bands":{"advance":6.0,"rush":12.0},"weapons":[]},
       "repel_unmapped":{"unit_id":"repel_unmapped","name":"Unmapped Repeller","quality":4,
         "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
-        "base_radius":0.016,"game_system":"gf","faction_folder":"alien_hives",
+        "base_radius":0.016,"game_system":"aof","faction_folder":"dwarves",
         "special_rules":["Repel Ambushers"],"item_grants":[],"attached_hero_rules":[],
         "move_bands":{"advance":6.0,"rush":12.0},"weapons":[]}}}"#;
 
@@ -735,12 +737,12 @@
     /// moves exactly one step when the family fires.
     const FORTIFIED_HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
       "guardian_unit":{"unit_id":"guardian_unit","name":"Guardian Bearer","quality":4,"defense":4,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"custodian_brothers","special_rules":["Guardian"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]},{"name":"CCW","range":0,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]}]},
-      "guardian_boost_unit":{"unit_id":"guardian_boost_unit","name":"Guardian Boost Bearer","quality":4,"defense":4,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"custodian_brothers","special_rules":["Guardian Boost"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]},{"name":"CCW","range":0,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]}]},
+      "guardian_boost_unit":{"unit_id":"guardian_boost_unit","name":"Enhanced Guardian Bearer","quality":4,"defense":4,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"custodian_brothers","special_rules":["Enhanced Guardian"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]},{"name":"CCW","range":0,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]}]},
       "primeborn_unit":{"unit_id":"primeborn_unit","name":"Primeborn Bearer","quality":4,"defense":4,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"prime_brothers","special_rules":["Primeborn"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]},{"name":"CCW","range":0,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]}]},
       "warden_unit":{"unit_id":"warden_unit","name":"Warden Bearer","quality":4,"defense":4,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"aof","faction_folder":"eternal_wardens","special_rules":["Warden"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]},{"name":"CCW","range":0,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]}]},
       "warden_boost_unit":{"unit_id":"warden_boost_unit","name":"Warden Boost Bearer","quality":4,"defense":4,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"aof","faction_folder":"eternal_wardens","special_rules":["Warden Boost"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]},{"name":"CCW","range":0,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]}]},
       "ossified_unit":{"unit_id":"ossified_unit","name":"Ossified Bearer","quality":4,"defense":4,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"aof","faction_folder":"ossified_undead","special_rules":["Ossified"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]},{"name":"CCW","range":0,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]}]},
-      "ossified_boost_unit":{"unit_id":"ossified_boost_unit","name":"Ossified Boost Bearer","quality":4,"defense":4,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"aof","faction_folder":"ossified_undead","special_rules":["Ossified Boost"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]},{"name":"CCW","range":0,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]}]},
+      "ossified_boost_unit":{"unit_id":"ossified_boost_unit","name":"Enhanced Ossified Bearer","quality":4,"defense":4,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"aof","faction_folder":"ossified_undead","special_rules":["Enhanced Ossified"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]},{"name":"CCW","range":0,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]}]},
       "plain_unit":{"unit_id":"plain_unit","name":"Plain Bearer","quality":4,"defense":4,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"custodian_brothers","special_rules":[],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]},{"name":"CCW","range":0,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]}]}}}"#;
 
     /// Builds the named carrier at `epoch` — the per-name tests' own build.
@@ -826,7 +828,7 @@
     /// in the entry). RED: drop the stamp arms or the entries — the asserts
     /// fall back to the defaults.
     const SURGE_GATES_HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
-      "devout_boost_unit":{"unit_id":"devout_boost_unit","name":"Devout Boost Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"blessed_sisters","special_rules":["Devout","Devout Boost"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":0,"rules":[]},{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]},
+      "devout_boost_unit":{"unit_id":"devout_boost_unit","name":"Enhanced Devout Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"blessed_sisters","special_rules":["Devout","Enhanced Devout"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":0,"rules":[]},{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]},
       "plain_blessed":{"unit_id":"plain_blessed","name":"Plain","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"blessed_sisters","special_rules":[],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":0,"rules":[]},{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]},
       "point_blank_unit":{"unit_id":"point_blank_unit","name":"Point Blank Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"blessed_sisters","special_rules":["Point-Blank Surge"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":0,"rules":[]},{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]},
       "brutal_fighter_unit":{"unit_id":"brutal_fighter_unit","name":"Brutal Fighter Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"human_inquisition","special_rules":["Brutal Fighter"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":0,"rules":[]},{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]},
@@ -852,8 +854,8 @@
       "rapid_charge_aura_unit":{"unit_id":"rapid_charge_aura_unit","name":"Rapid Charge Aura Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"alien_hives","special_rules":["Rapid Charge Aura"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]},
       "rapid_charge_expanded_unit":{"unit_id":"rapid_charge_expanded_unit","name":"Rapid Charge Expanded","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"alien_hives","special_rules":["Rapid Charge Aura","Rapid Charge"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]},
       "plain_alien_hives_qf":{"unit_id":"plain_alien_hives_qf","name":"Plain","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"alien_hives","special_rules":[],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]},
-      "highborn_boost_unit":{"unit_id":"highborn_boost_unit","name":"Highborn Boost Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"high_elf_fleets","special_rules":["Highborn","Highborn Boost"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]},
-      "highborn_boost_bare_unit":{"unit_id":"highborn_boost_bare_unit","name":"Highborn Boost Bare","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"high_elf_fleets","special_rules":["Highborn Boost"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "highborn_boost_unit":{"unit_id":"highborn_boost_unit","name":"Enhanced Highborn Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"high_elf_fleets","special_rules":["Highborn","Enhanced Highborn"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "highborn_boost_bare_unit":{"unit_id":"highborn_boost_bare_unit","name":"Enhanced Highborn Bare","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"high_elf_fleets","special_rules":["Enhanced Highborn"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]},
       "scurry_boost_unit":{"unit_id":"scurry_boost_unit","name":"Enhanced Scurry Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"ratmen_clans","special_rules":["Scurry","Enhanced Scurry"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]},
       "swift_cancel_slow_unit":{"unit_id":"swift_cancel_slow_unit","name":"Swift Cancel Slow","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"dwarf_guilds","special_rules":["Slow","Swift"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]},
       "slow_only_unit":{"unit_id":"slow_only_unit","name":"Slow Only","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"dwarf_guilds","special_rules":["Slow"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]},
@@ -877,9 +879,9 @@
       "rl_boost_unit":{"unit_id":"rl_boost_unit","name":"Enhanced Royal Legion Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"aof","faction_folder":"mummified_undead","special_rules":["Enhanced Royal Legion"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Blade","range":0,"attacks":2,"count":1,"ap":0,"rules":[]}]},
       "rl_boost_aura_unit":{"unit_id":"rl_boost_aura_unit","name":"Enhanced Royal Legion Aura Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"aof","faction_folder":"mummified_undead","special_rules":["Enhanced Royal Legion Aura"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Blade","range":0,"attacks":2,"count":1,"ap":0,"rules":[]}]},
       "lustbound_unit":{"unit_id":"lustbound_unit","name":"Lustbound Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"aof","faction_folder":"lust_disciples","special_rules":["Lustbound"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Blade","range":0,"attacks":2,"count":1,"ap":0,"rules":[]}]},
-      "lustbound_boost_unit":{"unit_id":"lustbound_boost_unit","name":"Lustbound Boost Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"aof","faction_folder":"lust_disciples","special_rules":["Lustbound Boost"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Blade","range":0,"attacks":2,"count":1,"ap":0,"rules":[]}]},
-      "lustbound_combo_unit":{"unit_id":"lustbound_combo_unit","name":"Lustbound Combo Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"aof","faction_folder":"lust_disciples","special_rules":["Lustbound","Lustbound Boost"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Blade","range":0,"attacks":2,"count":1,"ap":0,"rules":[]}]},
-      "lustbound_boost_aura_unit":{"unit_id":"lustbound_boost_aura_unit","name":"Lustbound Boost Aura Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"aof","faction_folder":"lust_disciples","special_rules":["Lustbound Boost Aura"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Blade","range":0,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "lustbound_boost_unit":{"unit_id":"lustbound_boost_unit","name":"Enhanced Lustbound Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"aof","faction_folder":"lust_disciples","special_rules":["Enhanced Lustbound"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Blade","range":0,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "lustbound_combo_unit":{"unit_id":"lustbound_combo_unit","name":"Lustbound Combo Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"aof","faction_folder":"lust_disciples","special_rules":["Lustbound","Enhanced Lustbound"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Blade","range":0,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "lustbound_boost_aura_unit":{"unit_id":"lustbound_boost_aura_unit","name":"Enhanced Lustbound Aura Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"aof","faction_folder":"lust_disciples","special_rules":["Enhanced Lustbound Aura"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Blade","range":0,"attacks":2,"count":1,"ap":0,"rules":[]}]},
       "plain_lust_disciples":{"unit_id":"plain_lust_disciples","name":"Plain","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"aof","faction_folder":"lust_disciples","special_rules":[],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Blade","range":0,"attacks":2,"count":1,"ap":0,"rules":[]}]},
       "isr_aura_unit":{"unit_id":"isr_aura_unit","name":"Increased Shooting Range Aura Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"aof","faction_folder":"havoc_dwarves","special_rules":["Increased Shooting Range Aura"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]},
       "isr_unit":{"unit_id":"isr_unit","name":"Increased Shooting Range Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"alien_hives","special_rules":["Increased Shooting Range"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]}}}"#;
@@ -1017,12 +1019,20 @@ mod renames;
 mod takedown_strike;
 mod tohit_shroud;
 mod v36_data;
+mod v36_data_rows;
 mod v36_melee;
 mod v36_melee_rows;
+mod v36_mor_05;
+mod v36_mor_06;
+mod v36_mor_07;
+mod v36_mor_19;
+mod v36_mor_spellfacet_a;
+mod v36_mor_spellfacet_b;
 mod v36_morale;
 mod v36_shoot;
 mod v36_shoot_rows;
 mod v36_ux;
+mod v36_ux_18;
 mod v36_w1;
 mod v36_w1_4b_defense;
 mod v36_w1_4b_evasion;

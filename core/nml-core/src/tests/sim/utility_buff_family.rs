@@ -47,8 +47,8 @@ use super::*;
     /// The 13 rows, in the family table's own order.
     fn rows() -> Vec<Row> {
         vec![
-            Row { system: "aof", faction: "kingdom_of_angels", rule: "Angelic Blessing Boost Buff", kind: Kind::Grant("Angelic Blessing Boost") },
-            Row { system: "aof", faction: "vampiric_undead", rule: "Cursed Undead Boost Buff", kind: Kind::Grant("Cursed Undead Boost") },
+            Row { system: "aof", faction: "kingdom_of_angels", rule: "Enhanced Angelic Blessing Buff", kind: Kind::Grant("Enhanced Angelic Blessing") },
+            Row { system: "aof", faction: "vampiric_undead", rule: "Enhanced Cursed Undead Buff", kind: Kind::Grant("Enhanced Cursed Undead") },
             Row { system: "aof", faction: "human_empire", rule: "Furious Buff", kind: Kind::Grant("Furious") },
             Row { system: "gf", faction: "blessed_sisters", rule: "Guarded Buff", kind: Kind::Grant("Guarded") },
             Row { system: "gf", faction: "soul_snatcher_cults", rule: "Increased Shooting Range Buff", kind: Kind::Inert },
