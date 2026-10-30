@@ -1806,6 +1806,7 @@ mod v36_shoot_rows;
 mod v36_ux;
 mod v36_w1;
 mod v36_w1_5b;
+mod v36_w1_trace;
 mod versatile_reach;
 mod watchborn_latch;
 mod weapons;

@@ -1033,4 +1033,5 @@ mod v36_w1_6c;
 mod v36_w1_6d;
 mod v36_w1_6e;
 mod v36_w1_6f;
+mod v36_w1_6g;
 mod v36_w1_7;
