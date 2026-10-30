@@ -1007,5 +1007,42 @@
  "comment_v6": "v6 (06.09., encoder-slot decision memo option c): 226 unit2 names appended as a fourth, trailing band at slots 300+len(spell)..+225 -- every core_ported rule name that had no encoder slot at all (all_layers gap == core_ported gap == 226, measured off the census). unit/weapon/spell are UNCHANGED. APPEND-ONLY; legacy_lengths['5'] marks the v5 end (unit2: 0, since the band did not exist yet).",
  "comment_v7": "v7 (07.09., the encoder-slot gap follow-up #786): the 12 core_ported names still slotless after v6 appended at unit2 slots 989-1000 (the v6 band's 763-988 + 226), in the documented order of docs/plans/ENCODER_SLOT_GAP_2026-09-07.md section 2 (occurrence-descending: Re-Deployment 15, Spell Accumulator 6, Fatigue Debuff / Ranged Slayer / Ranged Slayer Aura 3, Coordinate / Musician / Reanimation / Reanimation Aura 2, Reckless Piercing / Reckless Piercing Aura / Retreating Strike 1 -- 41 book occurrences). unit/weapon/spell are UNCHANGED. APPEND-ONLY; legacy_lengths['6'] marks the v6 end (unit2: 226).",
  "comment_v8": "v8 (10.09., the maintainer's call: land BEFORE the Gen-7 export): the 16 names ported since v7 appended at unit2 slots 1001-1016 (the v7 band's 763-988 + 226 + 12), in ALPHABETICAL order: Defense Buff, Defense Debuff, Entrenched Buff, Grounded Speed, Piercing Debuff, Piercing Feat, Precision Feat, Rapid Advance, Rapid Rush, Rapid Rush Aura, Reinforcement, Spawn, Speed Feat, Surprise Attack, Teleport Aura, Vengeance. None is folded into another slot at encode time (rows.rs rule_pairs :331 unit->unit2 fallback, battle_sim.gd _rule_pairs :188, the import expansions are additive-only), so all 16 take a slot. unit/weapon/spell are UNCHANGED. APPEND-ONLY; legacy_lengths['7'] marks the v7 end (unit2: 238).",
- "comment_v9": "v9 (13.09., the wave-6 encoder-slot batch): the 8 names the census measured core-PORTED and still slotless after v8 appended at unit2 slots 1017-1024 (the v8 band's 763-1016) in ALPHABETICAL order: Rapid Advance Buff 1017, Rapid Charge Mark 1018, Rapid Rush Buff 1019, Speed Buff 1020, Speed Debuff 1021, Swift 1022, Swift Aura 1023, Swift Buff 1024. Measured before (origin/main 8147814d, 2026-09-13 16:35, 89 books): core-ported 446/450, encoder-slot 439/452, all-layers 438/452; after: core-ported 446/450 unchanged (this PR ports nothing), encoder-slot 447/452, all-layers 446/452. Core evidence per name: Rapid Advance Buff / Rapid Rush Buff / Speed Buff / Speed Debuff / Swift Buff primitive 'Utility Buff' token 'utility_buff' at core/nml-core/src/mods.rs:130; Rapid Charge Mark name token 'rapid_charge_mark' at core/nml-core/src/sim.rs:1165; Swift name token 'swift' at core/nml-core/src/mods.rs:192; Swift Aura aura of 'Swift', primitive 'Aura Channel' token 'aura_channel' at core/nml-core/src/unit.rs:1520 with grant follow 'Swift' resolving PORTED. Fold check (#786 rule), per name: Swift Aura survives (the aura expansion _expand_auras is purely additive and deduped, list_to_profile.py and opr_army_manager.gd:2265-2274, precedent Rapid Rush Aura / Teleport Aura); Swift survives (the loader's move-band pass only reads it, list_to_profile.py:532, and special_rules pass through verbatim); Rapid Charge Mark survives (a Mark, no aura expansion touches it); the five Utility-Buff carriers (Rapid Advance Buff, Rapid Rush Buff, Speed Buff, Speed Debuff, Swift Buff) survive (carriers, never grant targets, no expansion path renames a carrier - grep found none). unit/weapon/spell are UNCHANGED. APPEND-ONLY; legacy_lengths['8'] marks the v8 end (unit2: 254)."
+ "comment_v9": "v9 (13.09., the wave-6 encoder-slot batch): the 8 names the census measured core-PORTED and still slotless after v8 appended at unit2 slots 1017-1024 (the v8 band's 763-1016) in ALPHABETICAL order: Rapid Advance Buff 1017, Rapid Charge Mark 1018, Rapid Rush Buff 1019, Speed Buff 1020, Speed Debuff 1021, Swift 1022, Swift Aura 1023, Swift Buff 1024. Measured before (origin/main 8147814d, 2026-09-13 16:35, 89 books): core-ported 446/450, encoder-slot 439/452, all-layers 438/452; after: core-ported 446/450 unchanged (this PR ports nothing), encoder-slot 447/452, all-layers 446/452. Core evidence per name: Rapid Advance Buff / Rapid Rush Buff / Speed Buff / Speed Debuff / Swift Buff primitive 'Utility Buff' token 'utility_buff' at core/nml-core/src/mods.rs:130; Rapid Charge Mark name token 'rapid_charge_mark' at core/nml-core/src/sim.rs:1165; Swift name token 'swift' at core/nml-core/src/mods.rs:192; Swift Aura aura of 'Swift', primitive 'Aura Channel' token 'aura_channel' at core/nml-core/src/unit.rs:1520 with grant follow 'Swift' resolving PORTED. Fold check (#786 rule), per name: Swift Aura survives (the aura expansion _expand_auras is purely additive and deduped, list_to_profile.py and opr_army_manager.gd:2265-2274, precedent Rapid Rush Aura / Teleport Aura); Swift survives (the loader's move-band pass only reads it, list_to_profile.py:532, and special_rules pass through verbatim); Rapid Charge Mark survives (a Mark, no aura expansion touches it); the five Utility-Buff carriers (Rapid Advance Buff, Rapid Rush Buff, Speed Buff, Speed Debuff, Swift Buff) survive (carriers, never grant targets, no expansion path renames a carrier - grep found none). unit/weapon/spell are UNCHANGED. APPEND-ONLY; legacy_lengths['8'] marks the v8 end (unit2: 254).",
+ "comment_alias": "alias (30.10., rules 3.6 renames, read by RowVocab since AI-01a): a 3.6 name with no slot of its own reads the slot(s) of its 3.5 name in the same band (unit keys may target unit or unit2); applied for readings >= v9 only, so every older corpus replays as before. No slot moves, the lists are unchanged, version stays 9. Pure renames only: reused or genuinely new 3.6 names stay unknown until the retrain.",
+ "alias": {
+  "spell": {
+   "Adrenal Booster": ["Weapon Booster"],
+   "Enhanced Serum": ["Enhance Serum"]
+  },
+  "unit": {
+   "Anti-Cover Aura": ["Ignores Cover Aura"],
+   "Anti-Cover when Shooting": ["Ignores Cover when Shooting"],
+   "Anti-Cover when Shooting Aura": ["Ignores Cover when Shooting Aura"],
+   "Bravery": ["Courage"],
+   "Bravery Aura": ["Courage Aura"],
+   "Bravery Buff": ["Courage Buff"],
+   "Counter in Melee Aura": ["Counter-Attack Aura"],
+   "Grounded Defense": ["Grounded Reinforcement"],
+   "Grounded Defense Aura": ["Grounded Reinforcement Aura"],
+   "Grounded Evasion": ["Grounded Stealth"],
+   "Piercing Charge": ["Piercing Assault"],
+   "Piercing Charge Aura": ["Piercing Assault Aura"],
+   "Piercing Charge Buff": ["Piercing Assault Buff"],
+   "Piercing Marksman": ["Piercing Hunter"],
+   "Piercing Marksman Aura": ["Piercing Hunter Aura"],
+   "Quick Throw": ["Quick Readjustment"],
+   "Spell Resistance": ["Resistance"],
+   "Spell Resistance Aura": ["Resistance Aura"],
+   "Unique Hero": ["Unique", "Hero"],
+   "Versatile Warrior": ["Versatile Attack"],
+   "Versatile Warrior Buff": ["Versatile Attack Buff"]
+  },
+  "weapon": {
+   "Anti-Cover": ["Ignores Cover"],
+   "Anti-Regen": ["Ignores Regeneration"],
+   "Crossing Strike": ["Strafing"],
+   "Fracture": ["Crack"],
+   "Puncture": ["Disintegrate"]
+  }
+ }
 }
