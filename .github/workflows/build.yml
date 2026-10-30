@@ -6,6 +6,8 @@ on:
     tags: ["v*"]
   pull_request:
     branches: [main]
+    # ready_for_review: a draft that turns ready gets its full run (exports + MP) at that moment.
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
 
 concurrency:
@@ -261,7 +263,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     needs: [changes]
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') && (github.event_name != 'pull_request' || needs.changes.outputs.not_core_only == 'true') }}
+    # 30.10. (3.6 wave): draft PRs skip the exports - ~20 parallel builders queued 55 runs; the RED/GREEN
+    # proof runs in the test jobs, and every PR gets this job once it is marked ready (and again on update-branch).
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') && (github.event_name != 'pull_request' || (needs.changes.outputs.not_core_only == 'true' && !github.event.pull_request.draft)) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -351,7 +355,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: [changes]
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') && (github.event_name != 'pull_request' || needs.changes.outputs.not_core_only == 'true') }}
+    # 30.10. (3.6 wave): draft PRs skip the exports - ~20 parallel builders queued 55 runs; the RED/GREEN
+    # proof runs in the test jobs, and every PR gets this job once it is marked ready (and again on update-branch).
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') && (github.event_name != 'pull_request' || (needs.changes.outputs.not_core_only == 'true' && !github.event.pull_request.draft)) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -424,7 +430,7 @@ jobs:
     runs-on: macos-14
     timeout-minutes: 60
     needs: [changes]
-    if: ${{ github.event_name != 'pull_request' || needs.changes.outputs.macos_relevant == 'true' }}
+    if: ${{ github.event_name != 'pull_request' || (needs.changes.outputs.macos_relevant == 'true' && !github.event.pull_request.draft) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
