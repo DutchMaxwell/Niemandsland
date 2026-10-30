@@ -5461,12 +5461,22 @@ fn spacing_fraction(state: &State, mi: usize, delta: geom::V3, ci: Option<usize>
 /// `None` when the header carried no board: `terrain_at.is_valid()` is false,
 /// there is nothing to rasterise, and the path seam then stays inert.
 ///
-/// WALLS: the act corpus header carries a terrain grid but NO wall segments
-/// (`grep -rn "wall" core/nml-core/src` is empty), so the index is built with
-/// an empty wall list and Impassable CELLS are the only hard obstacle the
-/// imagination sees. The exact solver's 48 wall segments would need a new
-/// header key on the GDScript side — see the M4-7 report.
+/// WALLS: built with an empty wall list, so Impassable CELLS are the only hard
+/// obstacle the imagination sees. `walled_reach_index_for_state` is the sibling
+/// that also blocks on the board's ruin walls.
 pub fn reach_index_for_state(state: &State, terrain: &Terrain) -> Option<ReachIndex> {
+    reach_index_with_walls(state, terrain, &[])
+}
+
+/// MEL-PAR-F8 — `reach_index_for_state` plus the board's ruin walls
+/// (`Terrain::walls_in`) as impassable segments, the way the table's charge
+/// move treats them. Only the menu's charge path check (`charge_needs_path`)
+/// asks for it; every other planner user keeps the wall-less index.
+pub fn walled_reach_index_for_state(state: &State, terrain: &Terrain) -> Option<ReachIndex> {
+    reach_index_with_walls(state, terrain, terrain.walls_in())
+}
+
+fn reach_index_with_walls(state: &State, terrain: &Terrain, walls: &[crate::mv::cost::Wall]) -> Option<ReachIndex> {
     let board = terrain.board_in();
     if !terrain.is_valid() || board[0] <= 0.0 || board[1] <= 0.0 {
         return None;
@@ -5487,7 +5497,7 @@ pub fn reach_index_for_state(state: &State, terrain: &Terrain) -> Option<ReachIn
             });
         }
     }
-    let mut b = ReachBuild::new(board, &[]);
+    let mut b = ReachBuild::new(board, walls);
     b.discs = discs;
     // The stored radii are the OBSTACLE's alone; the mover's own radius is added
     // per query, because it is not known at build time.
