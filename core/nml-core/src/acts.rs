@@ -837,7 +837,13 @@ pub const EPOCH_71_RAPID_CHARGE_MARK: u32 = 71;
 /// Regeneration family rolls all X dice before the model's cap (the EV prices the same). Below it
 /// every record replays byte-exact. Every call site reads THIS constant, not `72`.
 pub const EPOCH_72_PLAYTEST_RULES: u32 = 72;
-pub const CURRENT_RULES_EPOCH: u32 = 72;
+/// The rules 3.6 wave (release 0.3.15, D-EPOCH): ONE epoch for the whole wave instead of one per
+/// step. Every 3.6 behaviour change in the core and its GDScript twins gates on THIS constant, and
+/// nobody bumps again inside the wave. Records stamped 72 or below replay with every 3.6 gate off.
+/// Corpus recordings from main are frozen from this bump until the release tag, so no corpus mixes
+/// half-ported 3.6 rules under one stamp. Every call site reads THIS constant, not `73`.
+pub const EPOCH_73_V36: u32 = 73;
+pub const CURRENT_RULES_EPOCH: u32 = 73;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -2173,7 +2179,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 72, "the live epoch is EPOCH_72_PLAYTEST_RULES");
+        assert_eq!(CURRENT_RULES_EPOCH, 73, "the live epoch is EPOCH_73_V36");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -2183,11 +2189,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":72}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":73}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 72"
+            "a fresh play_game() now stamps the bumped epoch, 73"
         );
     }
 
