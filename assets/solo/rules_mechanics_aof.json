@@ -836,6 +836,14 @@
     "model_level": true
    }
   },
+  "Shred": {
+   "primitive": "Shred",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "extra_wound_per_save_one": 1
+   }
+  },
   "Shred in Melee": {
    "primitive": "Shred",
    "rated": false,
@@ -876,6 +884,14 @@
    "primitive": "Strider",
    "rated": false,
    "book_version": "3.5.1"
+  },
+  "Surge": {
+   "primitive": "Surge",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "bonus_hits_per_six": 1
+   }
   },
   "Takedown": {
    "primitive": "Takedown",
