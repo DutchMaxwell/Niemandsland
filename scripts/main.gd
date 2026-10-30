@@ -7460,7 +7460,11 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 				and int(target.unit_properties.get("moved_round", -1)) == opr_army_manager.current_round:
 			continue
 		var gate := float(p2.get("over_in", 0.0))
-		var charged_ok := bool(p2.get("applies_charged", false)) and melee and dist_in > gate
+		# D-GATE6 (rules 3.6): the charge leg reads the shared 6" charge gate; `over_in` stays the shot's.
+		var charge_gate := gate
+		if gate > 0.0 and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+			charge_gate = AiCombatMath.CHARGE_LONG_RANGE_IN
+		var charged_ok := bool(p2.get("applies_charged", false)) and melee and dist_in > charge_gate
 		var shot_ok := not melee and (gate <= 0.0 or dist_in > gate)
 		if shot_ok or charged_ok:
 			alias_pen = maxi(alias_pen, int(p2.get("hit_penalty", 0)))
@@ -7769,6 +7773,14 @@ func _solo_take_retaliate_credit() -> int:
 	return c
 
 
+## D-GATE6 (rules 3.6): the distance the melee hit modifier's charge leg (Screened family) reads. From
+## EPOCH_73_V36 a charge hands its pre-charge gap through; below it the melee read stays 0.0 (never fired).
+func _solo_charge_leg_dist_in(charging: bool, charge_from_in: float) -> float:
+	if charging and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		return charge_from_in
+	return 0.0
+
+
 func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: bool, filter: int, charge_from_in: float = 0.0) -> int:
 	var human_defends: bool = not _solo_is_ai_unit(defender)
 	_solo_log_armor(defender)   # Armor(X) "counts as Defense X+" (wave 5) — folded into _solo_defense_vs
@@ -7783,7 +7795,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s (%s): charged from over 9\" — +1 Defense (saves on %d+)" % [
 				defender.get_name(), m_over9, AiCombatMath.shown_target(defense)], true)
-	var mod_info: Dictionary = _solo_hit_mod_info(striker, defender, 0.0, true, charging)
+	var mod_info: Dictionary = _solo_hit_mod_info(striker, defender, _solo_charge_leg_dist_in(charging, charge_from_in), true, charging)
 	# Wave-4 Unpredictable Fighter (Mummified, melee-only) and the generic Unpredictable ("when
 	# attacking" — the same die, shooting AND melee): ONE die per melee for the whole unit —
 	# 1-3 → AP(+1) on its melee weapons, 4-6 → +1 to hit (fatigue's unmodified-6-only overrides the +1).
