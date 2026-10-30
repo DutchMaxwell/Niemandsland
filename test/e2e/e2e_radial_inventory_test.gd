@@ -18,13 +18,15 @@ const FEAT_FLAG := "speed_feat_used_speed_feat"
 ## clicked target. Menu-construction order (solo_combat_items) puts them right after solo_fight.
 const AUTO := ["solo_auto_charge", "solo_auto_advance", "solo_auto_rush"]
 const PLAIN := ["add_marker", "toggle_fatigued", "toggle_shaken", "toggle_activate", "solo_shoot",
-	"solo_fight", "delete_unit"]
+	"solo_fight", "solo_auto_charge", "solo_auto_advance", "solo_auto_rush", "delete_unit"]
 const HERO := ["wounds", "casts", "add_marker", "select_unit", "toggle_fatigued", "toggle_shaken",
-	"toggle_activate", "solo_shoot", "solo_fight", "solo_cast", "solo_spot", "solo_speed_feat", "solo_pass", "reinforce", "delete_model"]
+	"toggle_activate", "solo_shoot", "solo_fight", "solo_auto_charge", "solo_auto_advance", "solo_auto_rush",
+	"solo_cast", "solo_spot", "solo_speed_feat", "solo_pass", "reinforce", "delete_model"]
 const TRUCK := ["add_marker", "select_unit", "toggle_fatigued", "toggle_shaken", "toggle_activate",
-	"solo_shoot", "solo_fight", "unload_cargo_0", "delete_model"]
+	"solo_shoot", "solo_fight", "solo_auto_charge", "solo_auto_advance", "solo_auto_rush",
+	"unload_cargo_0", "delete_model"]
 const WALKERS := ["add_marker", "toggle_fatigued", "toggle_shaken", "toggle_activate", "solo_shoot",
-	"solo_fight", "delete_unit", "embark_0"]
+	"solo_fight", "solo_auto_charge", "solo_auto_advance", "solo_auto_rush", "delete_unit", "embark_0"]
 ## D53 = b: the core verbs a crowded menu keeps on its ring, in PRIORITY order — the ring fills up to
 ## RING_MAX-1 of these before the rest spill to the second tier (radial_menu.gd's own list, mirrored
 ## here so a drift between the two is a test failure, not a silent surprise).
@@ -195,8 +197,15 @@ func _did(id: String, u: GameUnit, lines: String) -> bool:
 			return lines.contains("pick a target (shooting)")
 		"solo_fight":
 			return lines.contains("pick a target (melee)")
-		"solo_auto_charge", "solo_auto_advance", "solo_auto_rush":
-			return _main._solo_target_mode.has("auto_verb") and lines.contains("lit for")
+		# Automodus 1.6-1.8c: the verb's own prompt (its lit enemies; Rush hovers the table) or, with no
+		# reachable enemy, its "no valid target for <verb>" line — the fixture's lone enemy is far off.
+		"solo_auto_charge":
+			return lines.contains("lit for Charge") or lines.contains("no valid target for Charge")
+		"solo_auto_advance":
+			return lines.contains("lit for Advance & Shoot") or lines.contains("no valid target for Advance & Shoot")
+		"solo_auto_rush":
+			return bool(_main._solo_target_mode.get("auto_point", false)) and lines.contains("hover the table") \
+				or lines.contains("no valid target for Rush")
 		"solo_cast":
 			return _spell_picker() != null or lines.contains("spell")
 		"solo_spot":
@@ -306,17 +315,17 @@ func test_a_transport_and_its_neighbour_reach_every_entry(timeout := 240000) -> 
 	assert_array(misses).is_empty()
 
 
-# === 0.3.14: the player's Automodus verbs are hidden ==========================================
+# === Automodus 1.9: the player's verbs are offered again (0.3.14 hid them) ======================
 
-func test_the_auto_verbs_are_hidden_while_the_switch_is_off(timeout := 120000) -> void:
+func test_the_auto_verbs_are_offered_with_the_switch_on(timeout := 120000) -> void:
 	var squad := _unit(1, "Wardens", [Vector3.ZERO, Vector3(1.2 * INCH, 0, 0)])
 	_solo_playing_on()
 	assert_bool(_main.solo_combat_available(squad)).override_failure_message("fixture: the unit must be eligible for Shoot / Fight").is_true()
 	await _open(squad)
 	var offered := _ids() + _tier_ids()
 	for id in AUTO:
-		assert_bool(offered.has(id)).override_failure_message("'%s' is still offered (PLAYER_AUTO_VERBS_ENABLED is false)" % id).is_false()
-	assert_bool(_main.solo_auto_available(squad)).is_false()
+		assert_bool(offered.has(id)).override_failure_message("'%s' is not offered (is PLAYER_AUTO_VERBS_ENABLED false?)" % id).is_true()
+	assert_bool(_main.solo_auto_available(squad)).is_true()
 
 
 # === the check can fail ======================================================================
@@ -479,8 +488,8 @@ func test_a_crowded_menu_keeps_its_verbs_on_the_ring_and_the_rest_in_a_second_ti
 	hero.models[0].node.global_position = Vector3(0.3, 0, 0)
 	_solo_playing_on()
 	var misses: Array = []
-	# The everyday menu (7 raw entries with the Automodus verbs hidden, within RING_MAX) fits whole on
-	# the ring — no "More" wedge, nothing truncated.
+	# The everyday menu (10 raw entries, past RING_MAX) still fits every one of its 6 verbs on the
+	# ring — a "More" wedge appears, but nothing it would carry is actually truncated off the ring.
 	await _open(squad)
 	var want_ring_plain := _expected_ring_ids(PLAIN)
 	for id in PLAIN:

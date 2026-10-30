@@ -11168,10 +11168,10 @@ func solo_combat_available(unit: GameUnit) -> bool:
 	return false
 
 
-## 0.3.14: the player's Charge / Advance & Shoot / Rush verbs are hidden — the executor gives no
-## landing preview and the target pick is invisible. The 0.3.15 rework (landing preview + a real
-## target selection) flips this back on. The AI's own use of execute_intent is unaffected.
-const PLAYER_AUTO_VERBS_ENABLED := false
+## Automodus 1.9 (#1828): the player's Charge / Advance & Shoot / Rush verbs are offered again. 0.3.14
+## hid them (PR #1829: no landing preview, an invisible target pick); the 0.3.15 rework added both
+## (steps 1.1-1.8e). false hides them again; the AI's own use of execute_intent is unaffected.
+const PLAYER_AUTO_VERBS_ENABLED := true
 
 
 ## Radial gate for the engine-executed verbs (A1, NML-202): the same eligibility as Shoot/Fight, plus
@@ -11182,8 +11182,8 @@ func solo_auto_available(unit: GameUnit) -> bool:
 	return solo_auto_eligible(unit)
 
 
-## Who may be offered the verbs once the hide switch is off (the switch is checked above, so a test
-## can pin this rule while the verbs stay hidden). Step 3.1: wherever the ENGINE resolves — co-op (an
+## Who may be offered the verbs: the rule under the switch (the switch is checked above, so a test
+## pins this rule on its own). Step 3.1: wherever the ENGINE resolves — co-op (an
 ## AI seat) and an agreed online Automatic room, for the peer's OWN units; and a local hotseat
 ## Automatic table, for the side holding the turn. The preview stays local; nothing is sent here.
 func solo_auto_eligible(unit: GameUnit) -> bool:
