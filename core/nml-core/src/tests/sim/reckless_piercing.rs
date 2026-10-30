@@ -24,7 +24,7 @@ use super::*;
             base_w_mm: 0.0,
             base_d_mm: 0.0,
             game_system: "aof".into(),
-            faction_folder: "rift_daemons_of_war".into(),
+            faction_folder: "daemons_of_war".into(),
             item_grants: vec![],
             attached_hero_rules: vec![],
             move_bands: MoveBands::default(),

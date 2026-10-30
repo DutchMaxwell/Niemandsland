@@ -6762,7 +6762,7 @@
     }
    }
   },
-  "rift_daemons_of_change": {
+  "daemons_of_change": {
    "Ambush Aura": {
     "primitive": "Aura Channel",
     "rated": false,
@@ -6936,7 +6936,7 @@
     }
    }
   },
-  "rift_daemons_of_lust": {
+  "daemons_of_lust": {
    "Ambush Aura": {
     "primitive": "Aura Channel",
     "rated": false,
@@ -7194,7 +7194,7 @@
     }
    }
   },
-  "rift_daemons_of_plague": {
+  "daemons_of_plague": {
    "Ambush Aura": {
     "primitive": "Aura Channel",
     "rated": false,
@@ -7336,7 +7336,7 @@
     }
    }
   },
-  "rift_daemons_of_war": {
+  "daemons_of_war": {
    "+1 to Defense": {
     "primitive": "Shielded",
     "rated": false,
