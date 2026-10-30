@@ -1,5 +1,7 @@
 //! Rules 3.6 lane melee: one test file per row (MEL-TESTSEED); a row writes only its own file.
+mod mel_01;
 mod mel_02;
+mod mel_03;
 mod mel_04;
 mod mel_04s;
 mod mel_04e;
@@ -9,10 +11,14 @@ mod mel_06;
 mod mel_07b;
 mod mel_07c;
 mod mel_07e;
+mod mel_08;
+mod mel_09;
 mod mel_09e;
 mod mel_10;
 mod mel_10r;
 mod mel_10e;
+mod mel_11;
 mod mel_11b;
 mod mel_12;
+mod mel_13;
 mod mel_par_b14;
