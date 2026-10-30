@@ -2272,7 +2272,7 @@ func _act(unit: GameUnit) -> Dictionary:
 	if forces_hold(unit.get_special_rules()) and hold_only_param(unit):
 		action = AiDecision.Action.HOLD
 		do_shoot = shoot_range > 0
-		action_why = "Immobile/Artillery hold-only"
+		action_why = "%s hold-only" % hold_only_rule(unit.get_special_rules())
 	# COMMANDER RANGED DISCIPLINE (AI plausibility Stage 4, Part B): a ranged-line unit with a clean shot is
 	# NOT dragged off it toward a marker it cannot seize this move — it holds and shoots (the Stage-3 firepower
 	# fix). Standing order, re-validated (continue while the shot holds, abort with a reason when it does not).
@@ -2332,8 +2332,9 @@ func _act(unit: GameUnit) -> Dictionary:
 			action = AiDecision.Action.HOLD
 			do_shoot = shoot_range > 0
 			solver_used = false
-			action_why = "Immobile/Artillery hold-only (re-gated over the adopted plan)"
-			_rule_note(report, "%s: the adopted plan wanted to MOVE an Immobile/Artillery unit — re-gated to Hold (GF v3.5.1 p.13/p.57)" % unit.get_name(), true)
+			var held_by := hold_only_rule(unit.get_special_rules())
+			action_why = "%s hold-only (re-gated over the adopted plan)" % held_by
+			_rule_note(report, "%s: the adopted plan wanted to MOVE an %s unit — re-gated to Hold (GF v3.5.1 p.13/p.57)" % [unit.get_name(), held_by], true)
 		# NML-1026 (body F2): the adopted plan may carry a CHARGE the tree's own
 		# rule gates just refused (they lived tree-side only). Re-gate here; an
 		# illegal charge becomes a RUSH toward the same enemy — the move
@@ -2629,6 +2630,10 @@ func execute_intent(intent: Dictionary, report: Dictionary) -> Dictionary:
 		_rule_note(report, "Traversal: moves through friendly and enemy units", true)   # invisible move-through — travels
 		_rule_note(report, "Traversal: terrain is NOT ignored (unlike Flying)", false)   # local clarification — no travel
 		_rule_note(report, "Traversal: may not end inside another unit — end stays clear", false)   # local clarification — no travel
+	# Rules 3.6 (EPOCH_73_V36): Artillery is no longer held to Hold actions — a moved gun says why it could.
+	if bool(report["moved"]) and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
+			and unit.has_special_rule("Artillery"):
+		_rule_note(report, "Artillery: moves like any unit under rules 3.6", true)
 	report["can_shoot"] = (do_shoot or (quick_shot and action == AiDecision.Action.RUSH)) \
 		and shoot_range_in > 0 and d2 <= shoot_range_in \
 		and (_has_los(unit, target) or (has_indirect_ranged(weapons) and indirect_ignores_los(unit)) \
@@ -8723,13 +8728,23 @@ static func grants_indirect_to_attackers(target: GameUnit) -> bool:
 ## Hold-only unit rules (GF/AoF Advanced Rules v3.5.1 p.13): Immobile — "may only use Hold actions";
 ## Artillery — "May only use Hold actions." (its solo overlay p.57 adds "If they are in range of enemies,
 ## they always use Hold and shoot", which the caller honours by keeping the shoot flag). Pure predicate on
-## the unit's special-rule strings.
+## the unit's special-rule strings. Rules 3.6 (EPOCH_73_V36): Artillery may move like any unit, so
+## from that epoch on only Immobile keeps a unit to Hold (core twin: menu.rs `forces_hold_at`).
 static func forces_hold(unit_rules: Array) -> bool:
+	return hold_only_rule(unit_rules) != ""
+
+
+## The rule name that keeps a unit to Hold actions at the live rules epoch, or "" — the name the
+## hold-only battle-log lines carry, so a rules 3.6 game never blames Artillery.
+static func hold_only_rule(unit_rules: Array) -> String:
+	var artillery_holds := AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36
 	for r in unit_rules:
 		var s := str(r).strip_edges()
-		if s.begins_with("Immobile") or s.begins_with("Artillery"):
-			return true
-	return false
+		if s.begins_with("Immobile"):
+			return "Immobile"
+		if artillery_holds and s.begins_with("Artillery"):
+			return "Artillery"
+	return ""
 
 
 ## Dead-parameter fold (the table twin of core #1006): the registry-driven halves of the

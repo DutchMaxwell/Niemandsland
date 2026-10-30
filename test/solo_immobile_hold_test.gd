@@ -51,6 +51,10 @@ func _kinds(menu: Array) -> Dictionary:
 
 
 func test_immobile_menu_is_hold_only_in_both_builders() -> void:
+	# Pinned at the rules 3.5 epoch (72): from rules 3.6 (73) on Artillery may move
+	# (test/v36/sho_04_test.gd); Immobile keeps to Hold at both.
+	var epoch0: int = AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
 	for rules in [["Immobile"], ["Artillery"]]:
 		var state := _state_with(rules)
 		for menu in [AiPlanner.candidates(state, "Gun"), AiPlanner.candidates_wide(state, "Gun")]:
@@ -61,6 +65,7 @@ func test_immobile_menu_is_hold_only_in_both_builders() -> void:
 				.is_false()
 			assert_bool(kinds.has(AiDecision.Action.CHARGE)).is_false()
 			assert_bool(kinds.has(AiDecision.Action.ADVANCE)).is_false()
+	AiActRecorder.rules_epoch = epoch0   # statics leak across gdUnit tests — restore
 
 
 func test_mobile_unit_menu_still_offers_moves() -> void:
