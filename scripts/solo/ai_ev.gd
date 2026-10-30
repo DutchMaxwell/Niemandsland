@@ -122,6 +122,18 @@ static func most_models_of(with_count: int, total: int) -> bool:
 	return with_count * 2 > total
 
 
+## MOR-05 — the Fortified and Shielded family names whose 3.6 wording says "most models" (the verified P1
+## list). The Guarded family is MOR-05b. The core's twin is unit.rs MOST_MODELS_DEFENCE.
+const MOST_MODELS_DEFENCE := ["Fortified", "Guardian", "Ossified", "Primeborn", "Warden", "Shielded"]
+
+
+## The all-models read of `rule`, except that from EPOCH_73_V36 the names above need only a strict majority.
+static func rule_on_defence_family(unit: GameUnit, rule: String, solo: bool = false) -> bool:
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and rule in MOST_MODELS_DEFENCE:
+		return rule_on_most_models(unit, rule, solo)
+	return rule_on_all_models(unit, rule, solo)
+
+
 ## EXACT unit-rule check — has_special_rule matches by PREFIX, so "Unpredictable" would false-positive
 ## on an "Unpredictable Fighter" unit (the Ferocious-vs-"Ferocious Boost" lesson). Rating stripped.
 static func has_exact_rule(unit: GameUnit, rule: String) -> bool:
@@ -203,13 +215,13 @@ static func ctx_for(unit: GameUnit, in_cover: bool = false, counter_models: int 
 		"stealth": rule_on_all_models(unit, "Stealth"),
 		"evasive": rule_on_all_models(unit, "Evasive"),
 		"melee_evasion": rule_on_all_models(unit, "Melee Evasion"),
-		"fortified": rule_on_all_models(unit, "Fortified"),
+		"fortified": rule_on_defence_family(unit, "Fortified"),
 		"fortified_over_in": _fortified_over_in(unit),
 		# Guarded OR Versatile Defense's consistently-played def-half (both: +1 Def when shot/charged
 		# from over 9" — one EV flag, one dice-path arithmetic).
 		"guarded": rule_on_all_models(unit, "Guarded") or rule_on_all_models(unit, "Versatile Defense"),
 		"ranged_shrouding": rule_on_all_models(unit, "Ranged Shrouding"),
-		"shielded": rule_on_all_models(unit, "Shielded"),
+		"shielded": rule_on_defence_family(unit, "Shielded"),
 		"in_cover": in_cover,
 		"counter_models": counter_models,
 		"regeneration": _regen_target(unit) > 0,
@@ -222,7 +234,7 @@ static func _fortified_over_in(unit: GameUnit) -> float:
 	var best := -1.0
 	for e in RulesRegistry.unit_rules_of_primitive(unit, "Fortified"):
 		var name := str((e as Dictionary).get("name", ""))
-		if name == "Fortified" or not rule_on_all_models(unit, name):
+		if name == "Fortified" or not rule_on_defence_family(unit, name):
 			continue
 		var threshold := float((e as Dictionary).get("params", {}).get("over_in", 0.0))
 		if best < 0.0 or threshold < best:

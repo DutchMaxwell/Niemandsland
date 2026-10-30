@@ -6320,6 +6320,12 @@ func _solo_rule_on_all_models(unit: GameUnit, rule: String) -> bool:
 		not _solo_takedown_solo.is_empty() and unit != null and unit == _solo_takedown_solo.get("unit"))
 
 
+## MOR-05 (rules-must-log): the log-line tail for a Fortified / Shielded family rule that only a majority of
+## the unit's models carry (a joined hero without it is the minority); "" when every model carries it.
+func _solo_most_models_note(unit: GameUnit, rule: String) -> String:
+	return "" if _solo_rule_on_all_models(unit, rule) else " (most of its models carry it)"
+
+
 ## The over-9" +1-defense rule a target projects ("" when none): Guarded (unconditional), or a
 ## Versatile Defense unit (wahl-effect wave — official text: "pick one effect: when shot or charged
 ## from over 9\" away, the unit either gets +1 to defense rolls, or enemy units get -1 to hit rolls
@@ -7222,8 +7228,8 @@ func _solo_defense_parts(target: GameUnit, source: String) -> Array:
 	# Shielded — "+1 to defense rolls against hits that are not from spells": the clause IS the scope.
 	var sh_name := ""
 	var sh_bonus := 0
-	if _solo_rule_on_all_models(target, "Shielded"):
-		sh_name = "Shielded"
+	if AiEv.rule_on_defence_family(target, "Shielded", _solo_takedown_solo.get("unit") == target):
+		sh_name = "Shielded" + _solo_most_models_note(target, "Shielded")
 		sh_bonus = AiCombatMath.SHIELDED_DEFENSE_BONUS
 	else:
 		# Coverage wave: Shielded-family DATA aliases (Grounded Reinforcement — terrain-conditional
@@ -8295,7 +8301,7 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 	# so a "Fortified Growth" carrier answered TRUE here and collected the flat reduction on top of
 	# its own marker one. The base rule needs its EXACT name; the alias loop below keeps naming the
 	# family members it means.
-	if AiEv.has_exact_rule(defender, "Fortified") and _solo_rule_on_all_models(defender, "Fortified"):
+	if AiEv.has_exact_rule(defender, "Fortified") and AiEv.rule_on_defence_family(defender, "Fortified", _solo_takedown_solo.get("unit") == defender):
 		# Sweep F row `Fortified Aura` (epoch 55): the aofs/gff aura entry's
 		# `lost_if_bearer_killed` is READ — a fallen bearer stands the
 		# granted AP(-1) down (rules-must-log), a living one keeps it.
@@ -8307,8 +8313,8 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 			# Maintainer live-test finding: the silent reduction read as "rule not working" — say it
 			# whenever it actually changes the save target.
 			if ap < ap_before and battle_log != null:
-				battle_log.log_event(BattleLog.Category.COMBAT, "Fortified: %s takes the hits at AP(%d) instead of AP(%d) — saves on %d+" % [
-					defender.get_name(), ap, ap_before, base_defense + ap], true)
+				battle_log.log_event(BattleLog.Category.COMBAT, "Fortified: %s takes the hits at AP(%d) instead of AP(%d) — saves on %d+%s" % [
+					defender.get_name(), ap, ap_before, base_defense + ap, _solo_most_models_note(defender, "Fortified")], true)
 				_solo_rule_float(defender, "Fortified AP(%d)" % ap, Color(0.55, 0.85, 1.0))
 		else:
 			_solo_fortified_aura_loss_log(defender, dead_aura)
@@ -8323,7 +8329,7 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 			var gate_in := float((ed.get("params", {}) as Dictionary).get("over_in", 0.0))
 			if gate_in > 0.0 and not over9:
 				continue
-			if not _solo_rule_on_all_models(defender, n):
+			if not AiEv.rule_on_defence_family(defender, n, _solo_takedown_solo.get("unit") == defender):
 				continue
 			# Sweep F row `Fortified Aura` (epoch 55): the walk's aofs/gff
 			# members ("Guardian Boost" granted from "Guardian Boost Aura")
@@ -8338,8 +8344,8 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 			var apb := ap
 			ap = AiCombatMath.fortified_ap(ap, true)
 			if ap < apb and battle_log != null:
-				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s takes the hits at AP(%d) instead of AP(%d) — saves on %d+" % [
-					n, defender.get_name(), ap, apb, base_defense + ap], true)
+				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s takes the hits at AP(%d) instead of AP(%d) — saves on %d+%s" % [
+					n, defender.get_name(), ap, apb, base_defense + ap, _solo_most_models_note(defender, n)], true)
 				_solo_rule_float(defender, "%s AP(%d)" % [n, ap], Color(0.55, 0.85, 1.0))
 			break
 	# NML-937 — Fortified Growth: the growth family's own AP reduction ("enemy AP counts as -1 per
