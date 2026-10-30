@@ -609,7 +609,7 @@ pub fn best_charge(
     // per-unit constant, so it rides BOTH the futile bar and the score.
     let (_, danger_loss) = crate::sim::terrain_debuff_folds(statics, state, i);
     let centre_us = geom::centre(&state.positions[i]);
-    let path_ix = tuning.charge_needs_path.then(|| crate::sim::reach_index_for_state(state, terrain)).flatten();
+    let path_ix = tuning.charge_needs_path.then(|| crate::sim::walled_reach_index_for_state(state, terrain)).flatten();
     let mut best = None;
     let mut best_score = f64::NEG_INFINITY;
     for e in enemy_keys_tuned(state, i, tuning.target_units) {
@@ -666,8 +666,8 @@ pub fn best_charge(
 /// aifix F6 (inventory row M20, p.9 "a clear path to reach it") — true when the mover cannot walk to `e` within the
 /// live charge band. The question goes to the tier-2 reach index the rollouts already use: from the nearest model
 /// pair, a route to the target model's CENTRE may spend the charge band plus the two base radii (the last stretch of
-/// that route is the contact itself), around Container cells and the units in the way (`foe` = the victim's group,
-/// no obstacle). Lenient by construction: it asks one model, with the whole unit's largest radius as clearance.
+/// that route is the contact itself), around Container cells, the board's ruin walls (MEL-PAR-F8) and the units in
+/// the way (`foe` = the victim's group, no obstacle). Lenient by construction: it asks one model, with the whole unit's largest radius as clearance.
 fn charge_path_blocked(
     state: &State,
     terrain: &Terrain,
@@ -757,7 +757,7 @@ pub fn nearest_chargeable(
     melee_profiles_of(us_static, state.alive[i], sc);
     let our_attacks = sc.attacks.clone();
     let us = ctx_live(ctx_of(us_static, state, i), statics, state, i, true, rules_epoch);
-    let path_ix = tuning.charge_needs_path.then(|| crate::sim::reach_index_for_state(state, terrain)).flatten();
+    let path_ix = tuning.charge_needs_path.then(|| crate::sim::walled_reach_index_for_state(state, terrain)).flatten();
     let mut best = None;
     let mut best_gap = f64::INFINITY;
     for e in enemy_keys_tuned(state, i, tuning.target_units) {
