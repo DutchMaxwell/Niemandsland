@@ -395,8 +395,8 @@ fn wild_veil_shrouds_only_from_epoch_6() {
 }
 
 #[test]
-fn wild_veil_boost_shrouds_only_from_epoch_6() {
-    shrouds_only_from_epoch_6("aof", "wood_elves", "Wild Veil Boost", 8.0);
+fn enhanced_wild_veil_shrouds_only_from_epoch_6() {
+    shrouds_only_from_epoch_6("aof", "wood_elves", "Enhanced Wild Veil", 8.0);
 }
 
 /// The effect end to end on the tray: an 8" rifle against a Darkborn

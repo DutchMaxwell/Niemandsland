@@ -341,8 +341,8 @@
   "Takedown Shot",
   "Takedown Strike",
   "Targeting Visor",
-  "Targeting Visor Boost",
-  "Targeting Visor Boost Aura",
+  "Enhanced Targeting Visor",
+  "Enhanced Targeting Visor Aura",
   "Tear",
   "Teleport",
   "Teleport Aura",
@@ -375,8 +375,8 @@
   "Versatile Reach",
   "Versatile Reach Aura",
   "Warbound",
-  "Warbound Boost",
-  "Warbound Boost Aura",
+  "Enhanced Warbound",
+  "Enhanced Warbound Aura",
   "Watchborn",
   "Wolfborn"
  ],
@@ -2898,7 +2898,7 @@
      "over_in": 9
     }
    },
-   "Targeting Visor Boost": {
+   "Enhanced Targeting Visor": {
     "primitive": "Shot Modifier",
     "rated": false,
     "book_version": "3.5.3",
@@ -2906,12 +2906,12 @@
      "hit_bonus": 1
     }
    },
-   "Targeting Visor Boost Aura": {
+   "Enhanced Targeting Visor Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Targeting Visor Boost"
+     "grants": "Enhanced Targeting Visor"
     }
    }
   },
@@ -8992,7 +8992,7 @@
      "extra_wound_per_save_one": 1
     }
    },
-   "Warbound Boost": {
+   "Enhanced Warbound": {
     "primitive": "Shred",
     "rated": false,
     "book_version": "3.5.2",
@@ -9179,7 +9179,7 @@
      "extra_wound_per_save_one": 1
     }
    },
-   "Warbound Boost": {
+   "Enhanced Warbound": {
     "primitive": "Shred",
     "rated": false,
     "book_version": "3.5.3",
@@ -9189,12 +9189,12 @@
      "upgrades": "Warbound"
     }
    },
-   "Warbound Boost Aura": {
+   "Enhanced Warbound Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Warbound Boost"
+     "grants": "Enhanced Warbound"
     }
    }
   },
@@ -10854,7 +10854,7 @@
      "extra_wound_per_save_one": 1
     }
    },
-   "Warbound Boost": {
+   "Enhanced Warbound": {
     "primitive": "Shred",
     "rated": false,
     "book_version": "3.5.3",
@@ -10864,12 +10864,12 @@
      "upgrades": "Warbound"
     }
    },
-   "Warbound Boost Aura": {
+   "Enhanced Warbound Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Warbound Boost"
+     "grants": "Enhanced Warbound"
     }
    }
   }

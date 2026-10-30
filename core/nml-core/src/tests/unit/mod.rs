@@ -101,20 +101,20 @@
     }
 
     boost_aura_test!(a_hold_the_line_boost_aura_grants_its_base_at_epoch_6, "Hold the Line Boost Aura");
-    boost_aura_test!(a_targeting_visor_boost_aura_grants_its_base_at_epoch_6, "Targeting Visor Boost Aura");
-    boost_aura_test!(a_warden_boost_aura_grants_its_base_at_epoch_6, "Warden Boost Aura");
+    boost_aura_test!(an_enhanced_targeting_visor_aura_grants_its_base_at_epoch_6, "Enhanced Targeting Visor Aura");
+    boost_aura_test!(an_enhanced_warden_aura_grants_its_base_at_epoch_6, "Enhanced Warden Aura");
     boost_aura_test!(a_lucky_boost_aura_grants_its_base_at_epoch_6, "Lucky Boost Aura");
     boost_aura_test!(a_buccaneer_boost_aura_grants_its_base_at_epoch_6, "Buccaneer Boost Aura");
-    boost_aura_test!(a_vale_oath_boost_aura_grants_its_base_at_epoch_6, "Vale Oath Boost Aura");
-    boost_aura_test!(a_wave_step_boost_aura_grants_its_base_at_epoch_6, "Wave-Step Boost Aura");
+    boost_aura_test!(an_enhanced_vale_oath_aura_grants_its_base_at_epoch_6, "Enhanced Vale Oath Aura");
+    boost_aura_test!(an_enhanced_wave_step_aura_grants_its_base_at_epoch_6, "Enhanced Wave-Step Aura");
     boost_aura_test!(a_royal_warrior_boost_aura_grants_its_base_at_epoch_6, "Royal Warrior Boost Aura");
     boost_aura_test!(a_bestial_boost_aura_grants_its_base_at_epoch_6, "Bestial Boost Aura");
-    boost_aura_test!(a_vinci_tech_boost_aura_grants_its_base_at_epoch_6, "Vinci Tech Boost Aura");
+    boost_aura_test!(an_enhanced_vinci_tech_aura_grants_its_base_at_epoch_6, "Enhanced Vinci Tech Aura");
     boost_aura_test!(an_ossified_boost_aura_grants_its_base_at_epoch_6, "Ossified Boost Aura");
     boost_aura_test!(a_shadowborn_boost_aura_grants_its_base_at_epoch_6, "Shadowborn Boost Aura");
     boost_aura_test!(a_destroyer_boost_aura_grants_its_base_at_epoch_6, "Destroyer Boost Aura");
     boost_aura_test!(an_empyrean_spirit_boost_aura_grants_its_base_at_epoch_6, "Empyrean Spirit Boost Aura");
-    boost_aura_test!(a_wild_veil_boost_aura_grants_its_base_at_epoch_6, "Wild Veil Boost Aura");
+    boost_aura_test!(an_enhanced_wild_veil_aura_grants_its_base_at_epoch_6, "Enhanced Wild Veil Aura");
 
     /// Two units: `mark_carrier` prints "Unstoppable Mark" as a UNIT-level
     /// special rule and its Rifle carries no weapon rule at all; `real_unstop`
@@ -738,7 +738,7 @@
       "guardian_boost_unit":{"unit_id":"guardian_boost_unit","name":"Guardian Boost Bearer","quality":4,"defense":4,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"custodian_brothers","special_rules":["Guardian Boost"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]},{"name":"CCW","range":0,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]}]},
       "primeborn_unit":{"unit_id":"primeborn_unit","name":"Primeborn Bearer","quality":4,"defense":4,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"prime_brothers","special_rules":["Primeborn"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]},{"name":"CCW","range":0,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]}]},
       "warden_unit":{"unit_id":"warden_unit","name":"Warden Bearer","quality":4,"defense":4,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"aof","faction_folder":"eternal_wardens","special_rules":["Warden"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]},{"name":"CCW","range":0,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]}]},
-      "warden_boost_unit":{"unit_id":"warden_boost_unit","name":"Warden Boost Bearer","quality":4,"defense":4,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"aof","faction_folder":"eternal_wardens","special_rules":["Warden Boost"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]},{"name":"CCW","range":0,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]}]},
+      "warden_boost_unit":{"unit_id":"warden_boost_unit","name":"Enhanced Warden Bearer","quality":4,"defense":4,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"aof","faction_folder":"eternal_wardens","special_rules":["Enhanced Warden"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]},{"name":"CCW","range":0,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]}]},
       "ossified_unit":{"unit_id":"ossified_unit","name":"Ossified Bearer","quality":4,"defense":4,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"aof","faction_folder":"ossified_undead","special_rules":["Ossified"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]},{"name":"CCW","range":0,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]}]},
       "ossified_boost_unit":{"unit_id":"ossified_boost_unit","name":"Ossified Boost Bearer","quality":4,"defense":4,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"aof","faction_folder":"ossified_undead","special_rules":["Ossified Boost"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]},{"name":"CCW","range":0,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]}]},
       "plain_unit":{"unit_id":"plain_unit","name":"Plain Bearer","quality":4,"defense":4,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"custodian_brothers","special_rules":[],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]},{"name":"CCW","range":0,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]}]}}}"#;

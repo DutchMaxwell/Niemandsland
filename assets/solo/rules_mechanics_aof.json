@@ -345,8 +345,8 @@
   "Unwieldy Debuff",
   "Utility Buff",
   "Vale Oath",
-  "Vale Oath Boost",
-  "Vale Oath Boost Aura",
+  "Enhanced Vale Oath",
+  "Enhanced Vale Oath Aura",
   "Vanguard",
   "Vengeance",
   "Versatile Attack",
@@ -355,20 +355,20 @@
   "Versatile Defense Aura",
   "Versatile Reach",
   "Vinci Tech",
-  "Vinci Tech Boost",
-  "Vinci Tech Boost Aura",
+  "Enhanced Vinci Tech",
+  "Enhanced Vinci Tech Aura",
   "Warbound",
-  "Warbound Boost",
-  "Warbound Boost Aura",
+  "Enhanced Warbound",
+  "Enhanced Warbound Aura",
   "Warden",
-  "Warden Boost",
-  "Warden Boost Aura",
+  "Enhanced Warden",
+  "Enhanced Warden Aura",
   "Wave-Step",
-  "Wave-Step Boost",
-  "Wave-Step Boost Aura",
+  "Enhanced Wave-Step",
+  "Enhanced Wave-Step Aura",
   "Wild Veil",
-  "Wild Veil Boost",
-  "Wild Veil Boost Aura"
+  "Enhanced Wild Veil",
+  "Enhanced Wild Veil Aura"
  ],
  "decision": [
   "AP",
@@ -1604,7 +1604,7 @@
      "recover_target": 4
     }
    },
-   "Vale Oath Boost": {
+   "Enhanced Vale Oath": {
     "primitive": "Battleborn",
     "rated": false,
     "book_version": "3.5.3",
@@ -1613,12 +1613,12 @@
      "upgrades": "Vale Oath"
     }
    },
-   "Vale Oath Boost Aura": {
+   "Enhanced Vale Oath Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Vale Oath Boost"
+     "grants": "Enhanced Vale Oath"
     }
    },
    "Vanguard": {
@@ -2047,7 +2047,7 @@
      "place_d3_plus": 0
     }
    },
-   "Wave-Step Boost": {
+   "Enhanced Wave-Step": {
     "primitive": "Bounding",
     "rated": false,
     "book_version": "3.5.3",
@@ -2056,12 +2056,12 @@
      "upgrades": "Wave-Step"
     }
    },
-   "Wave-Step Boost Aura": {
+   "Enhanced Wave-Step Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Wave-Step Boost"
+     "grants": "Enhanced Wave-Step"
     }
    }
   },
@@ -2622,7 +2622,7 @@
      "pick_one": true
     }
    },
-   "Vinci Tech Boost": {
+   "Enhanced Vinci Tech": {
     "primitive": "Versatile Attack",
     "rated": false,
     "book_version": "3.5.3",
@@ -2633,12 +2633,12 @@
      "pick_one": false
     }
    },
-   "Vinci Tech Boost Aura": {
+   "Enhanced Vinci Tech Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Vinci Tech Boost"
+     "grants": "Enhanced Vinci Tech"
     }
    }
   },
@@ -2977,7 +2977,7 @@
      "over_in": 9
     }
    },
-   "Warden Boost": {
+   "Enhanced Warden": {
     "primitive": "Fortified",
     "rated": false,
     "book_version": "3.5.3",
@@ -2985,12 +2985,12 @@
      "incoming_ap_reduction": 1
     }
    },
-   "Warden Boost Aura": {
+   "Enhanced Warden Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Warden Boost"
+     "grants": "Enhanced Warden"
     }
    }
   },
@@ -3550,7 +3550,7 @@
      "extra_wound_per_save_one": 1
     }
    },
-   "Warbound Boost": {
+   "Enhanced Warbound": {
     "primitive": "Shred",
     "rated": false,
     "book_version": "3.5.2",
@@ -7515,7 +7515,7 @@
      "extra_wound_per_save_one": 1
     }
    },
-   "Warbound Boost": {
+   "Enhanced Warbound": {
     "primitive": "Shred",
     "rated": false,
     "book_version": "3.5.3",
@@ -7525,12 +7525,12 @@
      "upgrades": "Warbound"
     }
    },
-   "Warbound Boost Aura": {
+   "Enhanced Warbound Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Warbound Boost"
+     "grants": "Enhanced Warbound"
     }
    }
   },
@@ -8891,7 +8891,7 @@
      "extra_wound_per_save_one": 1
     }
    },
-   "Warbound Boost": {
+   "Enhanced Warbound": {
     "primitive": "Shred",
     "rated": false,
     "book_version": "3.5.3",
@@ -8901,12 +8901,12 @@
      "upgrades": "Warbound"
     }
    },
-   "Warbound Boost Aura": {
+   "Enhanced Warbound Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Warbound Boost"
+     "grants": "Enhanced Warbound"
     }
    }
   },
@@ -9197,7 +9197,7 @@
      "melee_floor_in": 6
     }
    },
-   "Wild Veil Boost": {
+   "Enhanced Wild Veil": {
     "primitive": "Ranged Shrouding",
     "rated": false,
     "book_version": "3.5.3",
@@ -9208,12 +9208,12 @@
      "melee_floor_in": 6
     }
    },
-   "Wild Veil Boost Aura": {
+   "Enhanced Wild Veil Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Wild Veil Boost"
+     "grants": "Enhanced Wild Veil"
     }
    }
   }

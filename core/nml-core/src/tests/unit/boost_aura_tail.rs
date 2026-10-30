@@ -262,14 +262,14 @@ use super::*;
     /// `recover_target` 3 at epoch 6 — the 3+-instead-of-4+ text —; epoch 5
     /// and the rule-less carrier stay 0.
     #[test]
-    fn a_vale_oath_boost_stamps_recover_target_3_at_epoch_6() {
+    fn an_enhanced_vale_oath_stamps_recover_target_3_at_epoch_6() {
         assert_eq!(
-            battleborn_target_of("Vale Oath Boost", "aof", "chivalrous_kingdoms", 6),
+            battleborn_target_of("Enhanced Vale Oath", "aof", "chivalrous_kingdoms", 6),
             3,
             "the registry's own recover_target — the 3+ extension"
         );
         assert_eq!(
-            battleborn_target_of("Vale Oath Boost", "aof", "chivalrous_kingdoms", 5),
+            battleborn_target_of("Enhanced Vale Oath", "aof", "chivalrous_kingdoms", 5),
             0,
             "the wave is epoch-gated: rules_epoch 5 replays the free-clear reading, RED before the fix"
         );
@@ -1198,10 +1198,10 @@ use super::*;
     /// Warden Boost (aof/eternal_wardens) — the same no-gate shape, live at 6,
     /// absent at 5.
     #[test]
-    fn warden_boost_is_live_at_epoch_6_and_absent_at_epoch_5() {
+    fn enhanced_warden_is_live_at_epoch_6_and_absent_at_epoch_5() {
         let us6 = fortified_unit("warden_boost_unit", 6);
         assert_eq!(us6.ctx.fortified_boost_ap, 1, "the Boost's incoming_ap_reduction");
-        assert_eq!(us6.fortified_boost_name, "Warden Boost");
+        assert_eq!(us6.fortified_boost_name, "Enhanced Warden");
         let (target6, fired6) = fortified_melee(&us6);
         assert_eq!(target6, 4, "melee AP(1) vs the Boost: saves on 4+ instead of 5+");
         assert!(fired6, "rules-must-log: the melee phase must report the boost");

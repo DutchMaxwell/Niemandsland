@@ -178,17 +178,17 @@ func test_aura_slice_1c_channels() -> void:
 		"Strider Aura",
 		"Sturdy Boost Aura",
 		"Swift Aura",
-		"Targeting Visor Boost Aura",
+		"Enhanced Targeting Visor Aura",
 		"Teleport Aura",
 		"Tenacious Boost Aura",
-		"Vale Oath Boost Aura",
+		"Enhanced Vale Oath Aura",
 		"Versatile Attack Aura",
 		"Versatile Reach Aura",
-		"Vinci Tech Boost Aura",
-		"Warbound Boost Aura",
-		"Warden Boost Aura",
-		"Wave-Step Boost Aura",
-		"Wild Veil Boost Aura",
+		"Enhanced Vinci Tech Aura",
+		"Enhanced Warbound Aura",
+		"Enhanced Warden Aura",
+		"Enhanced Wave-Step Aura",
+		"Enhanced Wild Veil Aura",
 	]:
 		_assert_aura_channel(name, AURA_1C_LEGACY)
 
@@ -781,7 +781,7 @@ func test_the_lagging_books_encode_the_same_mechanics_as_their_current_siblings(
 		["gf", "titan_lords_war_disciples", "war_disciples"],
 	]
 	for p in pairs:
-		for rule_name in ["Warbound", "Warbound Boost"]:
+		for rule_name in ["Warbound", "Enhanced Warbound"]:
 			var lagging := RulesRegistry.lookup(str((p as Array)[0]), str((p as Array)[1]), rule_name)
 			var current := RulesRegistry.lookup(str((p as Array)[0]), str((p as Array)[2]), rule_name)
 			assert_str(str(lagging.get("primitive", ""))) \

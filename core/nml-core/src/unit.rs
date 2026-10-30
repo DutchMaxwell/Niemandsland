@@ -1660,7 +1660,7 @@ fn battleborn_recover_target_of(reg: &mut Registries, p: &Profile, rules_epoch: 
         has_special_rule(&p.special_rules, name) || has_special_rule(&p.item_grants, name)
     };
     let mut best = 0u32;
-    for name in ["Honor Code", "Vale Oath", "Vale Oath Boost", "Unmovable"] {
+    for name in ["Honor Code", "Vale Oath", "Enhanced Vale Oath", "Unmovable"] {
         if !carried(name) {
             continue;
         }
@@ -3484,20 +3484,20 @@ fn aura_name_of(p: &Profile, base: &str) -> String {
 // `LEGACY_CORE_SELFPLAY` returns from `_expand_auras` before it runs.
 pub(crate) const BOOST_AURA_CHANNEL_NAMES: &[&str] = &[
     "Hold the Line Boost Aura",
-    "Targeting Visor Boost Aura",
-    "Warden Boost Aura",
+    "Enhanced Targeting Visor Aura",
+    "Enhanced Warden Aura",
     "Lucky Boost Aura",
     "Buccaneer Boost Aura",
-    "Vale Oath Boost Aura",
-    "Wave-Step Boost Aura",
+    "Enhanced Vale Oath Aura",
+    "Enhanced Wave-Step Aura",
     "Royal Warrior Boost Aura",
     "Bestial Boost Aura",
-    "Vinci Tech Boost Aura",
+    "Enhanced Vinci Tech Aura",
     "Ossified Boost Aura",
     "Shadowborn Boost Aura",
     "Destroyer Boost Aura",
     "Empyrean Spirit Boost Aura",
-    "Wild Veil Boost Aura",
+    "Enhanced Wild Veil Aura",
 ];
 
 /// The loader's own base-name cut (`rule[:-len(" Aura")].strip()`), kept only
@@ -3600,7 +3600,7 @@ fn stamp_shot_modifier(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
         "Good Shot",
         "Bad Shot",
         "Targeting Visor",
-        "Targeting Visor Boost",
+        "Enhanced Targeting Visor",
         "Precision Shooter Aura",
         "Buccaneer",
         "Buccaneer Boost",
@@ -5351,8 +5351,8 @@ fn bounding_boost_dice_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -
     }
     let map = reg.rules_for(&p.game_system);
     let Some(e) = map
-        .lookup(&p.faction_folder, "Wave-Step Boost")
-        .filter(|_| has_exact_rule(&p.special_rules, "Wave-Step Boost"))
+        .lookup(&p.faction_folder, "Enhanced Wave-Step")
+        .filter(|_| has_exact_rule(&p.special_rules, "Enhanced Wave-Step"))
     else {
         return 0;
     };
@@ -6245,12 +6245,12 @@ impl UnitStatic {
                 }
                 match n.as_str() {
                     "Watchborn" | "Vinci Tech" => name = Some(n.clone()),
-                    "Vinci Tech Boost" => boost = true,
+                    "Enhanced Vinci Tech" => boost = true,
                     _ => {}
                 }
             }
             if boost && has_vinci {
-                name = Some("Vinci Tech Boost".to_string());
+                name = Some("Enhanced Vinci Tech".to_string());
                 both = true;
             }
             if let Some(vn) = name {

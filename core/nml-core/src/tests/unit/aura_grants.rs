@@ -79,7 +79,7 @@ use super::*;
         ("Screened Aura", "gf", "wormhole_daemons_of_plague", "Screened", true),
         ("Scurry Boost Aura", "aof", "ratmen", "Scurry Boost", false),
         ("Sturdy Boost Aura", "aof", "dwarves", "Sturdy Boost", true),
-        ("Warbound Boost Aura", "aof", "rift_daemons_of_war", "Warbound Boost", true),
+        ("Enhanced Warbound Aura", "aof", "rift_daemons_of_war", "Enhanced Warbound", true),
     ];
 
     /// One Rifle+Blade carrier in `system/faction` printing `rules`, built

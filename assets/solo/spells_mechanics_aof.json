@@ -323,7 +323,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Vale Oath Boost",
+      "grants_rule": "Enhanced Vale Oath",
       "duration": "once"
      },
      "status": "castable"
@@ -585,7 +585,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Wave-Step Boost",
+      "grants_rule": "Enhanced Wave-Step",
       "duration": "once"
      },
      "status": "castable"
@@ -896,7 +896,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Vinci Tech Boost",
+      "grants_rule": "Enhanced Vinci Tech",
       "duration": "once"
      },
      "status": "castable"
@@ -1153,7 +1153,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Warden Boost",
+      "grants_rule": "Enhanced Warden",
       "duration": "once"
      },
      "status": "castable"
@@ -1940,7 +1940,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Warbound Boost",
+      "grants_rule": "Enhanced Warbound",
       "duration": "once"
      },
      "status": "castable"
@@ -4283,7 +4283,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Warbound Boost",
+      "grants_rule": "Enhanced Warbound",
       "duration": "once"
      },
      "status": "castable"
@@ -5045,7 +5045,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Warbound Boost",
+      "grants_rule": "Enhanced Warbound",
       "duration": "once"
      },
      "status": "castable"

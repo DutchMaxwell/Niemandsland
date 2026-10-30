@@ -230,7 +230,7 @@ func test_bounding_dice_count_reads_both_registry_shapes() -> void:
 	assert_int(SoloController.bounding_dice_count({"dice_count": 0})).is_equal(1)
 	# The emitted maps really do carry the v3.5.3 upgrade — in both encodings.
 	assert_int(int(RulesRegistry.param("gf", "elven_jesters", "Rapid Blink Boost", "dice_count", 0))).is_equal(2)
-	assert_str(str(RulesRegistry.param("aof", "deep_sea_elves", "Wave-Step Boost", "place_die", ""))).is_equal("2d3")
+	assert_str(str(RulesRegistry.param("aof", "deep_sea_elves", "Enhanced Wave-Step", "place_die", ""))).is_equal("2d3")
 
 
 ## The rule in the real activation: a boosted blinker rolls TWO dice, and the note says 2D3. The

@@ -178,14 +178,14 @@ use super::*;
     /// this core precomputed through the RECORDED `bounding_d3` faces. 0 at
     /// epoch 6, 0 without the Boost, 0 without the base.
     #[test]
-    fn wave_step_boost_reads_its_own_two_dice_placement_at_epoch_7() {
+    fn enhanced_wave_step_reads_its_own_two_dice_placement_at_epoch_7() {
         assert_eq!(
-            boostbases2_unit("deep_sea_elves", &["Wave-Step", "Wave-Step Boost"], 7).bounding_dice,
+            boostbases2_unit("deep_sea_elves", &["Wave-Step", "Enhanced Wave-Step"], 7).bounding_dice,
             2,
             "epoch 7: the entry's own place_die \"2d3\" (RED before the fix)"
         );
         assert_eq!(
-            boostbases2_unit("deep_sea_elves", &["Wave-Step", "Wave-Step Boost"], 6).bounding_dice,
+            boostbases2_unit("deep_sea_elves", &["Wave-Step", "Enhanced Wave-Step"], 6).bounding_dice,
             0,
             "epoch 6: pre-port records read the base single die"
         );
@@ -195,7 +195,7 @@ use super::*;
             "no Boost, no second die"
         );
         assert_eq!(
-            boostbases2_unit("deep_sea_elves", &["Wave-Step Boost"], 7).bounding_dice,
+            boostbases2_unit("deep_sea_elves", &["Enhanced Wave-Step"], 7).bounding_dice,
             0,
             "the `upgrades` coupling: the Boost alone is not carried"
         );
@@ -214,7 +214,7 @@ use super::*;
         assert!(!spirit.ctx.evasive, "epoch 6: the -1 keeps its over-9\" gate");
         assert_eq!(spirit.ctx.evasive_alias_name, "", "epoch 6: nothing to name");
         assert_eq!(
-            boostbases2_unit("deep_sea_elves", &["Wave-Step", "Wave-Step Boost"], 6).bounding_dice,
+            boostbases2_unit("deep_sea_elves", &["Wave-Step", "Enhanced Wave-Step"], 6).bounding_dice,
             0,
             "epoch 6: the base single-die placement"
         );

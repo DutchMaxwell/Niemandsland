@@ -989,7 +989,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Targeting Visor Boost",
+      "grants_rule": "Enhanced Targeting Visor",
       "duration": "once"
      },
      "status": "castable"
@@ -4999,7 +4999,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Warbound Boost",
+      "grants_rule": "Enhanced Warbound",
       "duration": "once"
      },
      "status": "castable"
@@ -5123,7 +5123,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Warbound Boost",
+      "grants_rule": "Enhanced Warbound",
       "duration": "once"
      },
      "status": "castable"
@@ -6158,7 +6158,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Warbound Boost",
+      "grants_rule": "Enhanced Warbound",
       "duration": "once"
      },
      "status": "castable"
