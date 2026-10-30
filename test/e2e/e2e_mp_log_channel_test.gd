@@ -542,7 +542,8 @@ func _blanket_edge_strip(window: Rect2 = Rect2()) -> void:
 				wall.append(Vector3(x, 0.0, z))
 			z += step
 		x += step
-	var blockers := E2EBoot.make_unit(_main, 2, "Wall", wall)
+	# Friendly bases: an ENEMY wall would ring (rules 3.6) and close the window by itself.
+	var blockers := E2EBoot.make_unit(_main, 1, "Wall", wall)
 	_main.opr_army_manager.game_units[blockers.unit_id] = blockers
 	for m in blockers.models:
 		(m as ModelInstance).wounds_max = 1
