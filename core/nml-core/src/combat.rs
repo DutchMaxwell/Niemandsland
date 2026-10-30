@@ -426,6 +426,7 @@ pub fn versatile_best_mode(hit_target: i64, defense: i64, ap: i64, bane: bool) -
 /// `charge_only` is an extra gate on top of the condition (Melee Slayer), and the
 /// `ranged_over_or_charge` GATE (Slayer) adds "charging OR shot from over 9 in".
 /// `dist_in < 0` means the caller has no range context: the ranged legs stay shut.
+///
 /// Rules 3.6 hook (no 3.5 entry spells these, so no epoch gate):
 ///   * `over_half_range` — shooting from beyond half the weapon's range
 ///   * `def_5_6`         — the target's Defense value is 5+ or 6+
