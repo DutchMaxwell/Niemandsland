@@ -465,8 +465,11 @@ static func deadly_regen_dealt(deadly_x: int, target_tough: int, keep: float) ->
 ##   charge_only — the bonus applies only when the bearer is charging (Melee Slayer)
 ## Examples (official AoF/GF text): Shatter {2, vs_tough_ge, 3}, Tear {4, vs_tough_ge, 9},
 ## Melee Slayer {2, vs_tough_ge, 3, charge_only}, Disintegrate {2, vs_armor, 3}.
+## Rules 3.6 hook (twin of core/nml-core/src/combat.rs conditional_ap_bonus_vs): "over_half_range" (shooting
+## from beyond half the weapon's range) and "def_5_6" (target Defense 5+ or 6+). `target` is the twin of the
+## core's CondApTarget: {"weapon_range_in"}; later 3.6 target conditions add their keys there.
 static func conditional_ap_bonus(params: Dictionary, target_tough: int, target_defense: int, is_charging: bool,
-		dist_in: float = -1.0, melee: bool = false) -> int:
+		dist_in: float = -1.0, melee: bool = false, target: Dictionary = {}) -> int:
 	var bonus: int = int(params.get("ap_bonus", 0))
 	if bonus <= 0:
 		return 0
@@ -509,8 +512,25 @@ static func conditional_ap_bonus(params: Dictionary, target_tough: int, target_d
 			# Point-Blank Piercing: "shooting enemies within 12\"" — the cap is INCLUSIVE and an
 			# unknown distance (< 0) stays shut, mirroring core/nml-core/src/combat.rs:389 exactly.
 			return bonus if (not melee and within_in > 0.0 and dist_in >= 0.0 and dist_in <= within_in) else 0
+		"over_half_range":
+			# Exactly half the range is not beyond it; no range or no distance stays shut.
+			var range_in := float(target.get("weapon_range_in", 0.0))
+			return bonus if (not melee and range_in > 0.0 and dist_in >= 0.0 and dist_in > range_in / 2.0) else 0
+		"def_5_6":
+			return bonus if target_defense >= 5 else 0
 		_:
 			return 0
+
+
+## Rules-must-log: the words naming a rules 3.6 condition that fired, "" for every older spelling (their log
+## lines stay byte-identical). Twin of combat.rs cond_ap_why.
+static func conditional_ap_why(params: Dictionary) -> String:
+	match str(params.get("condition", "")):
+		"over_half_range":
+			return "target beyond half the weapon's range"
+		"def_5_6":
+			return "target defends on 5+ or 6+"
+	return ""
 
 
 ## Deadly(X) per-model resolution (GF v3.5.1 p.14, wording verified — the rule-true replacement for the
