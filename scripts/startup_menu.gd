@@ -929,9 +929,14 @@ func _unhandled_key_input(event: InputEvent) -> void:
 
 # ===== Static (testable) =====
 
-## Version string for the footer, bound to the project config (single source).
+## Version string for the footer: the game version from the project config plus the rules version
+## the maps declare (major.minor). An unreadable map leaves today's text unchanged.
 static func version_string() -> String:
-	return "v%s" % ProjectSettings.get_setting("application/config/version", "?")
+	var version := "v%s" % ProjectSettings.get_setting("application/config/version", "?")
+	var rules := OPRApiClient._major_minor(OPRApiClient.rules_core_version("gf"))
+	if rules.is_empty():
+		return version
+	return "%s · rules %s" % [version, rules]
 
 func _start_menu_music() -> void:
 	_music_player = AudioStreamPlayer.new()

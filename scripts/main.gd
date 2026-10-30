@@ -15047,17 +15047,21 @@ func _delete_selected_objects() -> void:
 	object_manager.deselect_all()
 
 
-## Replace the HUD shortcuts label's first line with "Niemandsland v<config/version>", so the
-## displayed version is derived from the single source of truth and never needs a manual edit.
+## Replace the HUD shortcuts label's first line with "Niemandsland v<config/version> · rules <major.minor>",
+## so the displayed versions are derived from their single sources and never need a manual edit: the game
+## from the project config, the rules from the maps' `_meta.core_version`. An unreadable map keeps today's line.
 func _apply_version_to_info_label() -> void:
 	var info := get_node_or_null("UI/HUD/InfoLabel") as Label
 	if info == null:
 		return
 	var version := str(ProjectSettings.get_setting("application/config/version", "?"))
+	var rules := OPRApiClient._major_minor(OPRApiClient.rules_core_version("gf"))
 	var lines := info.text.split("\n")
 	if lines.is_empty():
 		return
 	lines[0] = "Niemandsland v%s" % version
+	if not rules.is_empty():
+		lines[0] += " · rules %s" % rules
 	info.text = "\n".join(lines)
 
 
