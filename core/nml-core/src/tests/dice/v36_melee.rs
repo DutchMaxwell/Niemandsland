@@ -17,7 +17,7 @@ mod mel_07a {
         let mut tray = Tray::seeded(7360);
         tray.set_zero_draws(true);
         let r = resolve_melee_leg(&[striker(&weapons, &[0, 1], &[4, 4], &att)], &defender(4, 10), "Foe",
-            false, true, true, true, 0.0, true, true, rule_on(epoch, EPOCH_73_V36), &mut tray);
+            false, true, true, true, 0.0, true, true, rule_on(epoch, EPOCH_73_V36), false, &mut tray);
         r.rolls.iter().map(|x| (x.kind, x.faces.clone())).collect()
     }
 

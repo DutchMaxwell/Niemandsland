@@ -7880,6 +7880,9 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 			var group := item[0] as Dictionary
 			var base_quality: int = int(group.get("quality", 4))
 			var fatigued: bool = bool(group.get("fatigued", false))
+			# Row MEL-09 (EPOCH_73_V36): a fatigued striker (a Shaken strike-back counts as one) still hits
+			# on its sixes, but they fire no rule — the core's `trig` switch. Save dice stay untouched.
+			var mute_sixes: bool = fatigued and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
 			if bool(item[2]) and bool(group.get("shaken", false)) and battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT,
 					"Shaken: %s strikes back counting as fatigued (6+)" % str(group.get("name", "?")), true)
@@ -7971,7 +7974,20 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 			if bool(profile.get("limited", false)):
 				solo_controller.mark_limited_used(group.get("member"), profile)   # once per game (wave 5)
 			await _solo_hazardous_self_wounds(striker, profile, faces)   # resolver wave A: natural 1s wound the striker
-			var hits: int = await _solo_hits(faces, to_hit_raw, profile, 0.0, defender, charging, _roller_label(striker))
+			# MEL-09: the hit-six rules read `hit_profile` (bonus hits) and `six_faces` (AP on 6s).
+			var hit_profile: Dictionary = profile
+			var six_faces: Array = [] if mute_sixes else faces
+			if mute_sixes:
+				hit_profile = profile.duplicate()
+				for six_rule in ["relentless", "surge", "surge_attack", "furious"]:
+					hit_profile[six_rule] = false
+				hit_profile["sergeant_attacks"] = 0
+				var n6: int = AiCombatMath.unmodified_sixes(faces)
+				if n6 > 0 and battle_log != null:
+					battle_log.log_event(BattleLog.Category.COMBAT,
+						"Fatigued: %s — %d unmodified 6%s hit but trigger no special rules" % [
+						str(group.get("name", "?")), n6, ("" if n6 == 1 else "s")], true)
+			var hits: int = await _solo_hits(faces, to_hit_raw, hit_profile, 0.0, defender, charging, _roller_label(striker))
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s strikes with %s at %s — %d hit%s" % [
 					str(group.get("name", "?")), str(profile.get("name", "?")), defender.get_name(), hits, ("" if hits == 1 else "s")], true)
@@ -7980,7 +7996,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 			if hits <= 0:
 				continue
 			m_pending.append([group, profile, td_pick, td_ctx, p_defense, strike_unit, faces, hits, m_takedown,
-				v_ap, to_hit, to_hit_raw, roll_owner])
+				v_ap, to_hit, to_hit_raw, roll_owner, six_faces, hit_profile, mute_sixes])
 		# MEL-07c hook — Parry reads `m_pending` here: every hit rolled, no save yet.
 		for pend in m_pending:
 			var group := pend[0] as Dictionary
@@ -7996,6 +8012,9 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 			var to_hit: int = pend[10]
 			var to_hit_raw: int = pend[11]
 			var roll_owner: String = pend[12]
+			var six_faces: Array = pend[13]
+			var hit_profile: Dictionary = pend[14]
+			var mute_sixes: bool = pend[15]
 			var eff: Dictionary = _solo_thrust_profile(profile, charging)   # AP(+1) on charge
 			if uf_ap > 0 or v_ap > 0 or extra_ap > 0:   # Unpredictable Fighter / Versatile / Reckless AP (never mutate source)
 				eff = eff.duplicate()
@@ -8006,7 +8025,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 				_solo_log_takedown_context(str(profile.get("name", "?")), td_pick, td_ctx, to_hit, p_defense, true)
 			# dist_in stays -1.0 (melee: the range-gated conditional AP legs stay off, as before) — it is
 			# spelled out only so the Takedown pick can ride the trailing `solo` argument.
-			var w: int = await _solo_resolve_saves(group.get("member"), strike_unit, str(profile.get("name", "?")), faces, hits, p_defense, eff, human_defends, true, not (m_deadly or m_takedown), charging, -1.0, td_pick)
+			var w: int = await _solo_resolve_saves(group.get("member"), strike_unit, str(profile.get("name", "?")), six_faces, hits, p_defense, eff, human_defends, true, not (m_deadly or m_takedown), charging, -1.0, td_pick)
 			if m_takedown and w > 0 and not td_pick.is_empty():
 				# Takedown Strike (resolver wave A): the wounds go to the model picked BEFORE the roll
 				# (TC-023), multiplied by the profile's Deadly.
@@ -8056,11 +8075,11 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 							bt_name, bt_ones, ("" if bt_ones == 1 else "s"), str(group.get("name", "?")),
 							bt_n, ("" if bt_n == 1 else "s"), str(profile.get("name", "?"))], true)
 					var bt_faces: Array = await _solo_tray_roll(bt_n, to_hit, roll_owner)
-					var bt_hits: int = await _solo_hits(bt_faces, to_hit_raw, profile, 0.0, defender, charging, _roller_label(striker))
+					var bt_hits: int = await _solo_hits(bt_faces, to_hit_raw, hit_profile, 0.0, defender, charging, _roller_label(striker))
 					if bt_hits > 0:
 						# Extra attacks resolve pooled (no Deadly/Takedown special-casing — the aof
 						# bearers carry plain weapons) and NEVER chain (counter reset right after).
-						var bt_w: int = await _solo_resolve_saves(group.get("member"), defender, str(profile.get("name", "?")), bt_faces, bt_hits, defense, eff, human_defends, true, true, charging)
+						var bt_w: int = await _solo_resolve_saves(group.get("member"), defender, str(profile.get("name", "?")), [] if mute_sixes else bt_faces, bt_hits, defense, eff, human_defends, true, true, charging)
 						_solo_last_save_ones = 0
 						caused += bt_w
 						if _solo_ignores_regen(group.get("member"), eff):
