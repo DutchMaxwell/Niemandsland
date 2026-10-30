@@ -791,35 +791,35 @@ mod tests {
     }
 
     #[test]
-    fn striking_models_counts_only_those_within_2in_of_an_enemy() {
+    fn striking_models_counts_only_those_within_2in_of_an_enemy_at_epoch_72() {
         // Ten models in a line, one inch apart, an enemy at the head of the
         // line: only the first three sit within the 3" (2" reach + 1" base
-        // contact) centre-space threshold.
+        // contact) centre-space threshold. The 3.6 leg is MEL-08's (tests/sim/v36_melee.rs).
         let line: Vec<[f64; 3]> = (1..=10).map(|i| [i as f64 * crate::IN2M, 0.0, 0.0]).collect();
         let enemy = vec![[0.0, 0.0, 0.0]];
-        assert_eq!(striking_models(&line, &enemy, crate::acts::CURRENT_RULES_EPOCH), 3);
+        assert_eq!(striking_models(&line, &enemy, crate::acts::EPOCH_72_PLAYTEST_RULES), 3);
         assert_eq!(
-            striking_models(&line, &[], crate::acts::CURRENT_RULES_EPOCH),
+            striking_models(&line, &[], crate::acts::EPOCH_72_PLAYTEST_RULES),
             10,
             "no enemy positions -> everyone counts"
         );
     }
 
     #[test]
-    fn striking_models_ignores_enemies_beyond_4in_vertically() {
+    fn striking_models_ignores_enemies_beyond_4in_vertically_at_epoch_72() {
         // GF/AoF Advanced Rules v3.5.1 p.9: "within 2” horizontally and 4” vertically of an
         // enemy model ... may attack it." Gated on EPOCH_63_MELEE_HEIGHT (L1: every recorded
         // corpus has y = 0, so a replay at the OLD epoch is unchanged — pinned here).
         let enemy = vec![[0.0, 0.0, 0.0]];
         let five_up = vec![[crate::IN2M, 5.0 * crate::IN2M, 0.0]];
         let three_up = vec![[crate::IN2M, 3.0 * crate::IN2M, 0.0]];
-        assert_eq!(striking_models(&five_up, &enemy, crate::acts::CURRENT_RULES_EPOCH), 0);
+        assert_eq!(striking_models(&five_up, &enemy, crate::acts::EPOCH_72_PLAYTEST_RULES), 0);
         assert_eq!(
             striking_models(&five_up, &enemy, crate::acts::EPOCH_62_CASTING_MOD),
             1,
             "epoch 62 predates the height gate -- no replay changes (L1)"
         );
-        assert_eq!(striking_models(&three_up, &enemy, crate::acts::CURRENT_RULES_EPOCH), 1);
+        assert_eq!(striking_models(&three_up, &enemy, crate::acts::EPOCH_72_PLAYTEST_RULES), 1);
     }
 
     #[test]
