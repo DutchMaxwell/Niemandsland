@@ -28,7 +28,7 @@
 #[cfg(test)]
 use crate::combat::modified_hit_target;
 use crate::combat::{
-    conditional_ap_bonus, covered_defense, deadly_multiplier, fortified_ap, guarded_defense,
+    cond_ap_why, conditional_ap_bonus, conditional_ap_bonus_vs, covered_defense, deadly_multiplier, fortified_ap, guarded_defense, CondApTarget,
     impact_total_dice, melee_hit_modifier, fold_hit, reliable_quality, save_target,
     shielded_defense, morale_target, shooting_hit_modifier, shrouded_reach, thrust_to_hit,
     versatile_best_mode, BEST_HIT_TARGET, FEARLESS_RECOVER_TARGET, HEAVY_IMPACT_AP,
@@ -1223,13 +1223,14 @@ pub fn resolve_volley_leg(
         // range gap.
             if cond_ap_dice {
             for c in &p.cond_ap {
-                let d = conditional_ap_bonus(c, def.tough.max(1), def.defense, false, mod_dist_in, false);
+                let d = conditional_ap_bonus_vs(c, &CondApTarget::of(def, p.range as f64), false, mod_dist_in, false);
                 ap += d;
                 // Rules-must-log: the wave-3 NAMED forms log their own AP
                 // (rule, unit, what changed). The generic pass's specs carry
-                // no name — old replays log nothing, byte-identical.
+                // no name — old replays log nothing, byte-identical. A rules
+                // 3.6 spelling is named at the stamp and adds its condition.
                 if d > 0 && !c.name.is_empty() {
-                    out.log.push(format!("{}: AP(+{}) on {}'s volley", c.name, d, sh.owner));
+                    out.log.push(format!("{}: AP(+{}) on {}'s volley{}", c.name, d, sh.owner, cond_ap_why(&c.condition)));
                 }
             }
             // Wave 2 — the Slayer mark's granted conditional (epoch-gated).

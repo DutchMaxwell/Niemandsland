@@ -4811,6 +4811,9 @@ fn cond_ap_of(reg: &mut Registries, p: &Profile, base: &str) -> (Option<CondAp>,
             bypass_regen: e.param_b("bypass_regen"),
             melee_only: e.param_b("melee_only"),
             shooting_only: e.param_b("shooting_only"),
+            // Rules 3.6 hook: a new spelling carries its rule name, so the dice
+            // folds' rules-must-log line names it; older spellings stay unnamed.
+            name: if crate::combat::cond_ap_why(e.param_s("condition")).is_empty() { String::new() } else { base.to_string() },
             ..Default::default()
         }),
         on6,
