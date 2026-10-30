@@ -4108,6 +4108,20 @@ func _solo_human_main_units() -> Array:
 
 ## D7a: a human placement outside the phase's zone ("" = fine).
 func _solo_phase_zone_violation(gu: GameUnit) -> String:
+	# UX-13: in the Scout phase at 73 the spot must clear the 9" gap to every non-Scout enemy unit.
+	if str(_solo_deploy_fsm.get("phase", "")) == "scout" and SoloController.scout_gap_in() > 0.0:
+		var models: Array = []
+		for m in gu.get_alive_models():
+			var mi := m as ModelInstance
+			if mi != null and mi.node != null:
+				models.append({"pos": Vector2(mi.node.global_position.x, mi.node.global_position.z),
+					"radius": solo_controller.model_base_radius_m(mi)})
+		var gap := SoloController.gate_violation({"min_from_enemy_in": SoloController.scout_gap_in()}, models,
+			solo_controller.bases_of_slot(solo_controller.ai_slot, null, true), [], [])
+		if not gap.is_empty():
+			return gap.replace("enemy units", "enemy units that are not Scouts")
+	if not _solo_deploy_fsm.has("phases"):
+		return ""
 	var phases: Array = _solo_deploy_fsm["phases"]
 	var zone := _solo_phase_zone(phases[int(_solo_deploy_fsm["phase_i"])] as Array, solo_controller.human_slot)
 	var c := solo_controller.unit_centre(gu)
@@ -4119,7 +4133,16 @@ func _solo_phase_zone_violation(gu: GameUnit) -> String:
 ## UX-12: how far ahead of its zone a scout may stand, in the scout-phase texts — the epoch's band from
 ## the AI's own selector (9" under rules 3.6, 12" below).
 static func solo_scout_band_words() -> String:
-	return "up to %d\" ahead of" % int(SoloController.scout_band_in())
+	var words := "up to %d\" ahead of your zone" % int(SoloController.scout_band_in())
+	if SoloController.scout_gap_in() > 0.0:
+		words += ", more than %d\" from enemy units that are not Scouts" % int(SoloController.scout_gap_in())
+	return words
+
+
+## UX-13: the Scout phase alternates from the SAME player who takes round 1's first turn (the
+## deployment roll-off winner, `winner_is_ai`). A side without scouts is skipped.
+static func solo_scout_starts_with_first_turn(winner_is_ai: bool, human_has_scouts: bool) -> bool:
+	return winner_is_ai or not human_has_scouts
 
 
 ## The human's MAIN/SCOUT-phase turn panel: place ONE unit, then hand over by click.
@@ -4130,7 +4153,7 @@ func _solo_deploy_show_human_turn() -> void:
 		return
 	var phase := str(_solo_deploy_fsm.get("phase", "main"))
 	var ai_left: int = solo_controller.deploy_pending() if phase == "main" else solo_controller.deploy_scouts_pending()
-	var what := "one unit" if phase == "main" else "one SCOUT unit (%s your zone)" % solo_scout_band_words()
+	var what := "one unit" if phase == "main" else "one SCOUT unit (%s)" % solo_scout_band_words()
 	if ai_left > 0:
 		_solo_deploy_ui_show("Your turn: place %s on your side, then hand over.\n(NACHTMAHR has %d left.)" % [what, ai_left],
 			"✓ Unit placed", func() -> void: _solo_deploy_human_done_one(),
@@ -4158,7 +4181,7 @@ func _solo_deploy_human_done_one() -> void:
 			_solo_show_toast("%s %s — move it, then ✓" % [(gu as GameUnit).get_name(), broken])
 			_solo_deploy_show_human_turn()
 			return
-	if _solo_deploy_fsm.has("phases"):   # D7a: the unit must stand in the phase's zone
+	if _solo_deploy_fsm.has("phases") or str(_solo_deploy_fsm.get("phase", "main")) == "scout":
 		for gu in placed:
 			var outside := _solo_phase_zone_violation(gu as GameUnit)
 			if not outside.is_empty():
@@ -4262,8 +4285,9 @@ func _solo_deploy_phase_advance() -> void:
 			_solo_deploy_fsm["human_out"] = human_scouts.is_empty()
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.GENERAL,
-					"SCOUT phase: players alternate placing scouts %s their zone (GF v3.5.1)" % solo_scout_band_words(), false)
-			if bool(_solo_deploy_fsm.get("winner_is_ai", false)) or human_scouts.is_empty():
+					"SCOUT phase: players alternate placing scouts — %s (GF v3.5.1)" % solo_scout_band_words(), false)
+			if solo_scout_starts_with_first_turn(bool(_solo_deploy_fsm.get("winner_is_ai", false)),
+					not human_scouts.is_empty()):
 				_solo_deploy_ai_turn()
 			else:
 				_solo_deploy_show_human_turn()

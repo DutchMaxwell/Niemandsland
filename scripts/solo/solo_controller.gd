@@ -11035,6 +11035,21 @@ static func scout_band_in() -> float:
 	return 9.0 if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else 12.0
 
 
+## UX-13 (EPOCH_73_V36): the 9" Scout gap to enemy units that are not Scouts (deployment.rs).
+static func scout_gap_in() -> float:
+	return 9.0 if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else 0.0
+
+
+## True when no candidate base clears the Scout gap (`enemy` = [{"pos", "radius"}]).
+static func scout_gap_clear(spot: Vector2, footprint: Array, base_r: float, enemy: Array) -> bool:
+	var gap := scout_gap_in() * INCHES_TO_METERS
+	for off in (footprint if not footprint.is_empty() else [Vector2.ZERO]):
+		for e in enemy:
+			if (spot + (off as Vector2)).distance_to((e as Dictionary)["pos"]) - base_r - float((e as Dictionary)["radius"]) <= gap:
+				return false
+	return true
+
+
 ## B9: the deployment zone extended toward the table centre by the Scout band (scout_band_in).
 static func scout_extended_zone(zone: Rect2, forward_y: float) -> Rect2:
 	var ext := scout_band_in() * INCHES_TO_METERS
@@ -11159,10 +11174,12 @@ func _deploy_place_id(id: int) -> GameUnit:
 	# B9 Scout: a scout searches the zone EXTENDED forward by its band (scout_band_in), whole-width — it
 	# deploys after all others (queue order) and its forward edge is the band's edge.
 	var is_scout: bool = (_deploy_alt.get("scout_ids", {}) as Dictionary).has(id)
-	if is_scout:
+	var scout_gap_fallback := bool(_deploy_alt.get("_scout_gap_fallback", false))
+	var own_zone: Rect2 = zone
+	if is_scout and not scout_gap_fallback:
 		zone = scout_extended_zone(zone, forward_y)
 		forward_y = zone.position.y if absf(zone.position.y) < absf(zone.end.y) else zone.end.y
-	var sec := zone if is_scout else AiDeployment.section_rect(zone, int(section_of.get(id, 2)))
+	var sec := zone if (is_scout and not scout_gap_fallback) else AiDeployment.section_rect(zone, int(section_of.get(id, 2)))
 	# Deployment REFORMS the unit into a compact grid at its spot — measuring the staging import
 	# rows made wide units never fit their section and they were skipped silently (field test:
 	# "only a few miniatures deploy"). The footprint is the grid the unit WILL take.
@@ -11207,6 +11224,13 @@ func _deploy_place_id(id: int) -> GameUnit:
 					if p.distance_to((f as Dictionary)["pos"]) <= radius + float((f as Dictionary)["radius"]) + g_friend:
 						return bool(inner_blocked.call(p)) if inner_blocked.is_valid() else false
 				return true
+	# UX-13: a Scout's search rejects spots within 9" of a non-Scout enemy; an enemy Scout does not count.
+	var gap_enemy: Array = []
+	if is_scout and not scout_gap_fallback and scout_gap_in() > 0.0:
+		gap_enemy = bases_of_slot(human_slot, null, true)
+		for e in gap_enemy:
+			gate_occ.append({"pos": e["pos"], "radius": scout_gap_in() * INCHES_TO_METERS + float(e["radius"])})
+	var occ_len := occupied.size()
 	var threat := _deploy_threat_cb(unit)
 	var threat_w := deploy_threat_in * INCHES_TO_METERS if threat.is_valid() else 0.0
 	var spot := AiDeployment.best_spot(sec, objectives, occupied + gate_occ, radius, blocked, 0.025, radius, footprint, base_r, forward_y, threat, threat_w)
@@ -11253,6 +11277,14 @@ func _deploy_place_id(id: int) -> GameUnit:
 		# 1: the old last resort dumped the unit blindly at the section centre, which sat inside a ruin).
 		spot = AiDeployment.least_blocked_spot(zone, objectives, radius, blocked, 0.05, base_r, footprint)
 		spot_why = "terrain-choked — clearest (least-blocked) ground in the zone"
+	# UX-13: no band spot clears the gap — set up in its own zone (gap off); roll back search marks.
+	if is_scout and not scout_gap_fallback and not gap_enemy.is_empty() \
+			and not scout_gap_clear(spot, footprint, base_r, gap_enemy):
+		occupied.resize(occ_len)
+		_deploy_alt["_scout_gap_fallback"] = true
+		var fallback := _deploy_place_id(id)
+		_deploy_alt.erase("_scout_gap_fallback")
+		return fallback
 	_place_unit_at(unit, spot)
 	_deploy_zone_of[unit] = zone   # containment for the cleanup (Bug 8)
 	# Vanguard (sweeps A/C — official text: "After this model is deployed, it may be
@@ -11288,8 +11320,13 @@ func _deploy_place_id(id: int) -> GameUnit:
 				"data": {"x_m": v_spot.x, "z_m": v_spot.y}})
 			spot = v_spot
 	var deploy_rule := "Solo v3.5.0 AI deployment: objective-near spot in the unit's section; Scout/Ambush overlays"
-	if is_scout:   # rules-must-log: the Scout band this placement used, in the epoch's inches
-		deploy_rule += " — Scout: set up after the other units, at most %d\" ahead of its own zone" % int(scout_band_in())
+	if is_scout:   # rules-must-log: the Scout band and gap this placement used, in the epoch's inches
+		if scout_gap_fallback:
+			deploy_rule += " — Scout gap: no spot more than %d\" from enemy units that are not Scouts in the band; set up in its own zone" % int(scout_gap_in())
+		else:
+			deploy_rule += " — Scout: set up after the other units, at most %d\" ahead of its own zone" % int(scout_band_in())
+			if scout_gap_in() > 0.0:
+				deploy_rule += ", more than %d\" from enemy units that are not Scouts" % int(scout_gap_in())
 	record_decision({"kind": "deploy", "unit": unit.get_name(), "unit_id": id,
 		"rule": deploy_rule,
 		"candidates": [], "chosen": "", "why": spot_why,
@@ -11548,13 +11585,15 @@ static func _gate_in(v: float) -> String:
 
 
 ## Live bases of one slot's units on the table as [{"pos", "radius"}], optionally without one unit.
-func bases_of_slot(slot: int, except_unit: GameUnit = null) -> Array:
+func bases_of_slot(slot: int, except_unit: GameUnit = null, non_scout_only: bool = false) -> Array:
 	var out: Array = []
 	if army_manager == null:
 		return out
 	for u in army_manager.get_game_units_for_player(slot):
 		var gu := u as GameUnit
 		if gu == null or gu == except_unit or gu.get_alive_count() <= 0 or unit_in_reserve(gu):
+			continue
+		if non_scout_only and unit_has_scout(gu):
 			continue
 		for m in gu.get_alive_models():
 			var mi := m as ModelInstance
