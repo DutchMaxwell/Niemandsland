@@ -68,12 +68,12 @@ fn enhanced_guerrilla_moves_six_inches_like_its_3_5_boost() {
     assert_eq!(us.hit_and_run_rule, "Enhanced Guerrilla", "the band names the 3.6 rule");
 }
 
-/// W1.6b, code literal (unit.rs Fast band): +4"/+4" on top of the base's +2"/+2".
+/// W1.6b, code literal (unit.rs Fast band): +4"/+4" on top of the base's +0"/+2" (DAT-10).
 #[test]
 fn enhanced_highborn_stacks_its_band_like_its_3_5_boost() {
     let us = enhanced_unit("gf", "high_elf_fleets", &["Highborn", "Enhanced Highborn"]);
     let bands = us.move_rule_mods.expect("a move band");
-    assert_eq!((bands.advance, bands.rush), (6.0, 6.0), "Highborn 2/2 + Enhanced Highborn 4/4");
+    assert_eq!((bands.advance, bands.rush), (4.0, 6.0), "Highborn 0/2 + Enhanced Highborn 4/4");
 }
 
 /// W1.6b, map-only name (no code literal): the Surge upgrade counts 5s past 9".
