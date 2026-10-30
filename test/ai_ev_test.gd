@@ -513,7 +513,7 @@ func test_ferocious_stamps_surge_onto_every_profile() -> void:
 	assert_bool(bool((profs[0] as Dictionary).get("surge", false))).is_true()
 	assert_bool(bool((profs[1] as Dictionary).get("surge", false))).is_true()
 	var u2 := GameUnit.new()
-	u2.unit_properties = {"player_id": 2, "name": "U2", "quality": 4, "special_rules": ["Ferocious Boost"]}
+	u2.unit_properties = {"player_id": 2, "name": "U2", "quality": 4, "special_rules": ["Enhanced Ferocious"]}
 	var mi2 := ModelInstance.new(); mi2.is_alive = true; u2.models.append(mi2)
 	var profs2 := [_rprof()]
 	AiEv.stamp_sergeant(profs2, u2)

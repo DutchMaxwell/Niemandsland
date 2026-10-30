@@ -86,8 +86,8 @@ fn forms_with<'a>(us: &'a UnitStatic, cond: &str) -> Vec<&'a CondAp> {
 /// conditional legs (never stacks), while without the Boost those legs stamp
 /// exactly as the piercehunt wave shipped them.
 #[test]
-fn havocbound_boost_stamps_the_always_leg_from_epoch_6() {
-    let on = build_at("gf", "havoc_brothers", &["Havocbound", "Havocbound Boost"], 6);
+fn enhanced_havocbound_stamps_the_always_leg_from_epoch_6() {
+    let on = build_at("gf", "havoc_brothers", &["Havocbound", "Enhanced Havocbound"], 6);
     let always = forms_with(&on, "always");
     assert_eq!(
         always.len(),
@@ -95,7 +95,7 @@ fn havocbound_boost_stamps_the_always_leg_from_epoch_6() {
         "epoch 6: the always leg on both stamped profiles (RED before the fix)"
     );
     assert_eq!(always[0].ap_bonus, 1, "epoch 6: AP(+1)");
-    assert_eq!(always[0].name, "Havocbound Boost", "the named form logs itself");
+    assert_eq!(always[0].name, "Enhanced Havocbound", "the named form logs itself");
     assert!(
         forms_with(&on, "on_charge").is_empty(),
         "the Boost replaces the charge leg, never stacks"
@@ -105,7 +105,7 @@ fn havocbound_boost_stamps_the_always_leg_from_epoch_6() {
         "the Boost replaces the ranged leg, never stacks"
     );
 
-    let off = build_at("gf", "havoc_brothers", &["Havocbound", "Havocbound Boost"], 5);
+    let off = build_at("gf", "havoc_brothers", &["Havocbound", "Enhanced Havocbound"], 5);
     assert!(
         forms_with(&off, "always").is_empty(),
         "epoch 5: pre-port records stay inert (RED before the fix)"
