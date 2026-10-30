@@ -77,3 +77,32 @@ func test_the_3_6_names_are_modeled_tokens() -> void:
 	for token: String in ["Enhanced Ferocious", "Enhanced Harassing Aura", "Enhanced Havocbound",
 			"Enhanced Highborn Aura"]:
 		assert_bool(aof.has(token)).override_failure_message("aof does not model '%s'" % token).is_true()
+
+
+## The spell maps hand out the 3.6 names too: a gf / aof spell that granted a batch 3.5 name now
+## grants its 3.6 name, and that name resolves in the caster's own faction of the live (epoch 73)
+## rules map, so the granted upgrade works when the spell lands. No spell grants a 3.5 name.
+func test_a_spell_granting_a_renamed_upgrade_resolves_its_3_6_name_at_epoch_73() -> void:
+	SpellsRegistry.reset_cache()
+	assert_int(AiActRecorder.rules_epoch).is_equal(73)
+	var picks := [["gf", "havoc_brothers", "Havoc Boon", "Enhanced Havocbound"],
+		["aof", "orcs", "Way-Clan Chant", "Enhanced Ferocious"]]
+	for pick: Array in picks:
+		var effect: Variant = SpellsRegistry.entry_for(pick[0], pick[1], pick[2]).get("effect")
+		var grant := str((effect as Dictionary).get("grants_rule", "")) if effect is Dictionary else ""
+		assert_str(grant).override_failure_message(
+			"%s %s '%s' grants '%s'" % [pick[0], pick[1], pick[2], grant]).is_equal(pick[3])
+	var granted := 0
+	for system: String in ["gf", "aof"]:
+		var factions: Dictionary = SpellsRegistry.map_for(system).get("factions", {})
+		for faction: String in factions:
+			for sp: Variant in (factions[faction] as Dictionary).get("spells", []):
+				var eff: Variant = (sp as Dictionary).get("effect")
+				var grant := str((eff as Dictionary).get("grants_rule", "")) if eff is Dictionary else ""
+				assert_bool(RENAMED.values().has(grant)).override_failure_message(
+					"%s %s: a spell still grants the 3.5 name '%s'" % [system, faction, grant]).is_false()
+				if RENAMED.has(grant):
+					granted += 1
+					assert_bool(RulesRegistry.lookup(system, faction, grant).is_empty()).override_failure_message(
+						"%s %s: the granted '%s' does not resolve" % [system, faction, grant]).is_false()
+	assert_int(granted).override_failure_message("no spell grants a batch 3.6 name").is_equal(10)
