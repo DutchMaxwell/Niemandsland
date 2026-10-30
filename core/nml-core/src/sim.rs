@@ -5206,8 +5206,15 @@ fn tray_charge(
     // the NON-counter weapons remain for the normal strike-back slot
     // (:8315). Below the epoch the core keeps its marker-only reading.
     let counter_first = epoch13 && (strikes_first(ti) || (seams.tray_exact && hero_counter));
+    // Rules 3.6 (`EPOCH_73_V36`, table twin `_run_ai_melee`/`_run_human_melee`): Impact rolls before
+    // either side strikes, so it moves ahead of the Counter phase, which keeps its alive gates (an
+    // Impact wipe leaves none). The Counter cut of the Impact dice is read before any strike either way.
+    let impact_first = rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36);
     let mut by_su = 0;
     let mut by_tu = 0;
+    if impact_first && next.alive[si] > 0 && next.alive[ti] > 0 {
+        by_su += impact_phase(statics, next, si, ti, tray, shot, seams.rules_epoch, charge_from_in, seams.tray_exact);
+    }
     if counter_first && next.alive[si] > 0 && next.alive[ti] > 0 {
         let (c, rc) = strike_phase(statics, next, ti, si, false, 0.0, seams, tray, shot, StrikeSet::CounterOnly, cover);
         by_tu += c;
@@ -5215,7 +5222,7 @@ fn tray_charge(
     }
     // main.gd:8276's alive gate — a counter phase that wiped the charger
     // closes the card, nothing left to roll.
-    if next.alive[si] > 0 && next.alive[ti] > 0 {
+    if !impact_first && next.alive[si] > 0 && next.alive[ti] > 0 {
         by_su += impact_phase(statics, next, si, ti, tray, shot, seams.rules_epoch, charge_from_in, seams.tray_exact);
     }
     // main.gd:8035 — the charger's Mark lands after Impact and before the
