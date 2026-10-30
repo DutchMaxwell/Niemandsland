@@ -5270,7 +5270,9 @@ pub(crate) fn profiles_in_range(weapons: &[Weapon], dist_in: f64) -> Vec<ShootPr
 /// `AiShooting.melee_profiles` ai_shooting.gd:44-56 — every range-0 weapon, also
 /// UNSTAMPED. Strafing is NOT excluded here: that filter lives in
 /// `profiles_in_range` alone, and a melee weapon never carries the move-through
-/// trigger. The epoch-free reading (no Assault copy) — the row encoder's.
+/// trigger. The epoch-free reading (no Assault copy), kept for callers that
+/// replay a pre-epoch record; the row encoder now reads `melee_profiles_at`.
+#[allow(dead_code)]
 pub(crate) fn melee_profiles(weapons: &[Weapon]) -> Vec<ShootProfile> {
     melee_profiles_at(weapons, 0)
 }

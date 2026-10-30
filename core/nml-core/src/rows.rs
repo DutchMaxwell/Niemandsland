@@ -40,7 +40,7 @@ use crate::rules::has_special_rule;
 use crate::score::{can_hold_marker, control_gap_in, presence, Incoming};
 use crate::sim::{melee_threat_at_epoch, reply_threat_at_epoch, CONTACT_IN};
 use crate::state::{Profile, State};
-use crate::unit::{melee_profiles, profiles_in_range, Ctx, UnitStatic};
+use crate::unit::{melee_profiles_at, profiles_in_range, Ctx, UnitStatic};
 use crate::{IN2M, OBJECTIVE_CONTROL_IN};
 
 /// `BattleSim.EV_REF_DIST_IN` battle_sim.gd:75 — the reference distance the
@@ -287,7 +287,7 @@ pub fn unit_sev_mev(p: &Profile, us: &UnitStatic, def: &Ctx) -> (f64, f64) {
     let keep: Vec<usize> = (0..shoot.len()).collect();
     let s_attacks: Vec<i64> = shoot.iter().map(|s| s.attacks).collect();
     let sev = snappedf(shoot_ev(&shoot, &keep, &s_attacks, &att, def, EV_REF_DIST_IN), 0.01);
-    let mel = melee_profiles(&p.weapons);
+    let mel = melee_profiles_at(&p.weapons, us.rules_epoch);
     let m_attacks: Vec<i64> = mel.iter().map(|s| s.attacks).collect();
     // A reference row against the neutral defender: no charge, so no gap (the table's `board_rows` hands none).
     let mev = snappedf(melee_ev(&mel, &m_attacks, &att, def, true, 0.0), 0.01);
