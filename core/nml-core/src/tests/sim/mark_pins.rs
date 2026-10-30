@@ -176,14 +176,14 @@ fn furious_mark_pays_the_extra_six_hits_once_on_the_marked_charge() {
 fn quick_shot_mark_lands_its_shooting_scoped_record_on_the_marked_enemy_once() {
     use crate::acts::CURRENT_RULES_EPOCH;
     let e = CURRENT_RULES_EPOCH;
-    let stamp = mark_carrier("Quick Shot Mark", "wormhole_daemons_of_lust", e);
+    let stamp = mark_carrier("Quick Shot Mark", "daemons_of_lust", e);
     assert_eq!(stamp.utility_buffs.len(), 1, "the mark reads as the Utility Buff pick");
     assert!(!stamp.utility_buffs[0].vs_target, "the pick kind — the record rides the utility seam");
     assert_eq!(stamp.utility_buffs[0].grants_rule, "Quick Shot", "the entry's grants_rule");
     assert_eq!(stamp.utility_buffs[0].scope, "shooting", "the entry's own scope");
     assert_eq!(stamp.utility_buffs[0].range_in, 18.0, "the entry's pick range");
 
-    let (st, statics) = mark_line("Quick Shot Mark", "wormhole_daemons_of_lust", e);
+    let (st, statics) = mark_line("Quick Shot Mark", "daemons_of_lust", e);
     let (next, _) = run_marks_epoch(&st, &statics, &buff_action(None), 9, e);
     assert_eq!(
         next.buffs[2].len(),
