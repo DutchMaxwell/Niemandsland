@@ -8,9 +8,12 @@ use super::*;
     /// `dangerous_line`'s unit "a" grown to ten one-wound models in a column at x = 4": model k stands at
     /// z = 3.5" + 2" * k, so only model 0's 1" base edge reaches into `dangerous_bar_board`'s bar
     /// (z below 3") and the other nine stand clear of it. Nobody moves (`next` = `state`), so this is the
-    /// activated-in-it half of the trigger, read model by model exactly like a crossing.
+    /// activated-in-it half of the trigger, read model by model exactly like a crossing. `four_unit_line`'s
+    /// hero (unit 1, at x = 2", its base edge on the bar) is NOT joined here: the unit is the ten models alone.
     fn ten_models_one_clipping() -> (State, Vec<UnitStatic>) {
         let (mut st, mut statics) = dangerous_line();
+        Rc::make_mut(&mut st.attached)[0].clear();
+        Rc::make_mut(&mut st.attached_to)[1] = None;
         st.positions[0] = (0..10).map(|k| [4.0 * IN2M, 0.0, (3.5 + 2.0 * k as f64) * IN2M]).collect();
         Rc::make_mut(&mut st.radii)[0] = vec![IN2M; 10];
         st.wounds[0] = vec![1; 10];
@@ -20,10 +23,12 @@ use super::*;
         (st, statics)
     }
 
-    /// The same ten models all stepped 2" clear of the bar, and `four_unit_line`'s joined hero (unit 1,
-    /// attached to unit 0) as ONE Tough(3) model whose base edge clips it: only the hero is affected.
+    /// The same ten models all stepped 2" clear of the bar, and unit 1 joined to them as a hero: ONE Tough(3)
+    /// model whose base edge clips the bar, so only the hero is affected.
     fn hero_alone_clipping() -> (State, Vec<UnitStatic>) {
         let (mut st, mut statics) = ten_models_one_clipping();
+        Rc::make_mut(&mut st.attached)[0] = vec![1];
+        Rc::make_mut(&mut st.attached_to)[1] = Some(0);
         st.positions[0] = (0..10).map(|k| [4.0 * IN2M, 0.0, (5.5 + 2.0 * k as f64) * IN2M]).collect();
         st.positions[1] = vec![[7.0 * IN2M, 0.0, 3.5 * IN2M]];
         st.wounds[1] = vec![3];
