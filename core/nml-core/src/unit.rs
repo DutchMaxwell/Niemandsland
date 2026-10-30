@@ -1119,7 +1119,7 @@ pub struct UnitStatic {
     pub ebr: Option<EbrStamp>,
     /// The Teleport/Ethereal read (epoch 8) — `teleport_of`; None below 8.
     pub teleport: Option<TeleportSpec>,
-    /// `GameUnit.is_hero()` game_unit.gd:273-275 — "Hero" in the rule list.
+    /// `GameUnit.is_hero()` game_unit.gd:274-275 — "Hero" or "Unique Hero" in the rule list.
     /// Mend's patient tiebreak prefers heroes (main.gd:5361).
     pub is_hero: bool,
     /// NML-1152 B14 step 1 (Bounding): `unit_rule_active(gu, "Bounding")`'s own
@@ -1477,6 +1477,32 @@ fn rule_on_all_models(p: &Profile, rule: &str) -> bool {
     p.attached_hero_rules
         .iter()
         .all(|hr| has_special_rule(hr, rule))
+}
+
+/// `AiEv.most_models_of` — the ONE strict-majority test every "most models"
+/// read shares (ruling D-MOST): more than half, so an exact half and an empty
+/// unit are both false.
+pub(crate) fn most_models_of(with: i64, total: i64) -> bool {
+    with * 2 > total
+}
+
+/// `AiEv.rule_on_most_models` — whether MOST living models of the unit carry
+/// `rule` (ruling D-MOST): a strict majority, models not wounds, every living
+/// joined hero one model however Tough. Rules live per unit, so all
+/// `host_alive` host models (`State::alive`) carry `p.special_rules` and each
+/// hero in `attached_hero_rules` (the living ones only) its own. `solo` is the
+/// unit-of-[1] collapse `AiEv.rule_on_all_models` makes: the picked model's
+/// own unit answers alone.
+#[allow(dead_code)] // no caller yet: the rules 3.6 rows wire it in
+pub(crate) fn rule_on_most_models(p: &Profile, host_alive: i64, rule: &str, solo: bool) -> bool {
+    let host_alive = host_alive.max(0);
+    let host_with = if has_special_rule(&p.special_rules, rule) { host_alive } else { 0 };
+    if solo {
+        return host_with > 0;
+    }
+    let heroes = &p.attached_hero_rules;
+    let heroes_with = heroes.iter().filter(|hr| has_special_rule(hr, rule)).count() as i64;
+    most_models_of(host_with + heroes_with, host_alive + heroes.len() as i64)
 }
 
 /// The two "Hit & Run" Boost spellings (gf/rebel_guerrillas "Guerrilla Boost",
@@ -6413,7 +6439,11 @@ impl UnitStatic {
             battleborn_recover_target: battleborn_recover_target_of(reg, p, rules_epoch),
             mend_active: unit_rule_active(reg, p, "Mend"),
             breath_attack_active: unit_rule_active(reg, p, "Breath Attack"),
-            is_hero: has_special_rule(&p.special_rules, "Hero"),
+            // Rules 3.6 named heroes carry "Unique Hero" in place of "Hero"
+            // (a Hero for every purpose). No epoch gate: the name is absent
+            // from every 3.5 book, so no recorded game changes.
+            is_hero: has_special_rule(&p.special_rules, "Hero")
+                || has_special_rule(&p.special_rules, "Unique Hero"),
             bounding: bounding_of(reg, p),
             bounding_dice: bounding_boost_dice_of(reg, p, rules_epoch),
             bounding_place: bounding_place_of(reg, p, rules_epoch),
