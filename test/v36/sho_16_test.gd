@@ -28,13 +28,11 @@ func _unit_with(rules: Array, system: String) -> GameUnit:
 	return u
 
 
-## main.gd's static helpers are looked up by name, so a tree without them fails on the assertion
-## below, not on a missing symbol.
+## main.gd's static helpers are called by name on a bare instance, so a tree without them fails on
+## the assertion below, not on a missing symbol.
 func _main_static(fn: String, args: Array, fallback: Variant) -> Variant:
-	for m in MainScript.get_script_method_list():
-		if str((m as Dictionary).get("name", "")) == fn:
-			return MainScript.callv(fn, args)
-	return fallback
+	var main: Node = auto_free(MainScript.new())
+	return main.callv(fn, args) if main.has_method(fn) else fallback
 
 
 func test_cumbersome_resolves_from_the_map_in_both_systems() -> void:
