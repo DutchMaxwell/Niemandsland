@@ -4898,6 +4898,15 @@ fn strike_phase(
         if att.instinctive_hit_bonus > 0 && instinctive_applies(next, *mi, ti) {
             att.hit_mod += att.instinctive_hit_bonus;
         }
+        // Rules 3.6 (`EPOCH_73_V36`) — Infiltrating Precision Strike: +1 to hit on the round the carrier arrived
+        // (`ambush_arrived_round`, the stamp the arrival writes). A fatigued striker rolls a flat 6, so it
+        // never gets the bonus (and no line). Every strike phase of the round applies and logs it.
+        let ips = &statics[next.roster.profile[*mi]];
+        if ips.infiltrating_precision_strike && next.ambush_arrived_round[*mi] == next.round && !att.fatigued {
+            att.hit_mod += 1;
+            shot.log.push(format!("Infiltrating Precision Strike: {} gets +1 to hit in melee this round", ips.name));
+            trace_rule("infiltrating-precision-strike", &ips.name, "+1 to hit in melee (arrived this round)");
+        }
         // Reckless Piercing (epoch 7, main.gd:6017): the chain's buff stamp
         // and the TARGET's backfire stamp both ride the +AP fold —
         // `_solo_reckless_ap(attacker, target)`'s net read.

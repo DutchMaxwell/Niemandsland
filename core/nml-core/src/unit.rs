@@ -1304,6 +1304,10 @@ pub struct UnitStatic {
     /// `EPOCH_7_TABLE_RULES` and reading the ALIAS entry's own ring first
     /// (`best_primitive_param` reading) — see the stamp arm.
     pub infiltrate_min_enemy_dist_in: f64,
+    /// Rules 3.6 (`EPOCH_73_V36`, row MEL-IPS) — carries "Infiltrating Precision Strike": its melee strikes
+    /// hit one better in the round it arrived (`sim::strike_phase` reads `ambush_arrived_round`). The name
+    /// also rides the Infiltrate ring above. False below epoch 73 and for every non-carrier.
+    pub infiltrating_precision_strike: bool,
     /// Ambush family (rules-wave2-ambush) — the four registry names that ride
     /// the "Ambush" primitive, each read at its OWN literal with the entry's
     /// own params (`ambush_family_of`). Every field is its zero-value when the
@@ -6582,9 +6586,18 @@ impl UnitStatic {
                 let infiltrate_ring =
                     unit_param_f(reg, p, "Infiltrate", "min_enemy_dist_in", INFILTRATE_MIN_ENEMY_DIST_IN);
                 unit_param_f(reg, p, "Surprise Attack", "min_enemy_dist_in", infiltrate_ring)
+            } else if rule_on(rules_epoch, crate::acts::EPOCH_73_V36)
+                && has_special_rule(&p.special_rules, "Infiltrating Precision Strike")
+            {
+                // Rules 3.6: counts as Infiltrate, Surprise Attack's alias shape; its own entry's ring wins.
+                let infiltrate_ring =
+                    unit_param_f(reg, p, "Infiltrate", "min_enemy_dist_in", INFILTRATE_MIN_ENEMY_DIST_IN);
+                unit_param_f(reg, p, "Infiltrating Precision Strike", "min_enemy_dist_in", infiltrate_ring)
             } else {
                 0.0
             },
+            infiltrating_precision_strike: rule_on(rules_epoch, crate::acts::EPOCH_73_V36)
+                && has_special_rule(&p.special_rules, "Infiltrating Precision Strike"),
             repel_ambushers_dist_in: if unit_rule_active(reg, p, "Repel Ambushers") {
                 unit_param_f(reg, p, "Repel Ambushers", "min_dist_in", REPEL_AMBUSHERS_DIST_IN)
             } else {

@@ -7572,6 +7572,10 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 		if int(inst_m.get("mod", 0)) != 0:
 			mm += int(inst_m["mod"])
 			base_note = _solo_join_note(base_note, str(inst_m.get("note", "")))
+		var ips_m := _solo_ips_melee_mod(shooter_member)
+		if int(ips_m.get("mod", 0)) != 0:
+			mm += int(ips_m["mod"])
+			base_note = _solo_join_note(base_note, str(ips_m.get("note", "")))
 		return {"mod": mm + int(sm.get("mod", 0)) + int(vt.get("mod", 0)), "own": own,
 			"note": _solo_join_note(_solo_join_note(base_note, str(sm.get("note", ""))), str(vt.get("note", "")))}
 	var attacker_artillery: bool = shooter_member != null and shooter_member.has_special_rule("Artillery")
@@ -7714,6 +7718,19 @@ func _solo_instinctive_mod(shooter_member: GameUnit, target: GameUnit) -> Dictio
 		if MoveIntent.distance_inches(from, solo_controller.unit_centre(eu)) < td - 0.5:
 			return {}   # a closer valid target exists — no bonus for this attack
 	return {"mod": bonus, "note": "%s +%d (closest target)" % [n, bonus]}
+
+
+## Infiltrating Precision Strike (rules 3.6, EPOCH_73_V36; gf elven_jesters): +1 to hit in melee on the round the
+## carrier arrived — the arrival stamp an Ambush/Infiltrate arrival writes equals the current round. The core's
+## twin is sim.rs `strike_phase`; a fatigued striker never reaches the note (its to-hit is a flat 6). {} = no bonus.
+func _solo_ips_melee_mod(striker: GameUnit) -> Dictionary:
+	if striker == null or opr_army_manager == null or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return {}
+	if not striker.has_special_rule("Infiltrating Precision Strike"):
+		return {}
+	if int(striker.unit_properties.get("ambush_arrived_round", -1)) != opr_army_manager.current_round:
+		return {}
+	return {"mod": 1, "note": "Infiltrating Precision Strike: +1 to hit in melee this round"}
 
 
 ## Retreating Strike (resolver wave A — "once per round, when this unit ends its move within 3\"
