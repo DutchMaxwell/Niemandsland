@@ -7844,6 +7844,19 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 			var rx: int = _solo_unit_rating(rv, "Ravage")
 			if rx <= 0 or not RulesRegistry.unit_rule_active(rv, "Ravage"):
 				continue
+			# MEL-11 (rules 3.6): once per round, never while Fatigued (a Shaken strike-back counts; the
+			# host's state covers its joined heroes, the core's `strike_phase` gate). Round stamp per member.
+			if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+				var rv_skip := ""
+				if rv.is_fatigued or rv.is_shaken or striker.is_fatigued or striker.is_shaken:
+					rv_skip = "is Fatigued - no Ravage"
+				elif int(rv.unit_properties.get("ravage_round", -1)) == opr_army_manager.current_round:
+					rv_skip = "already used it this round"
+				if not rv_skip.is_empty():
+					if battle_log != null:
+						battle_log.log_event(BattleLog.Category.COMBAT, "Ravage: %s %s" % [rv.get_name(), rv_skip], true)
+					continue
+				rv.unit_properties["ravage_round"] = opr_army_manager.current_round
 			var rv_dice: int = rx * rv.get_alive_count()
 			var rv_owner: String = _roller_label(rv)
 			var rv_faces: Array = await _solo_tray_roll(rv_dice, AiCombatMath.RAVAGE_WOUND_TARGET, rv_owner, "ravage")

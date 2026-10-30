@@ -4122,6 +4122,11 @@ fn interference_pool(
 fn ctx_of_melee(us: &UnitStatic, state: &State, i: usize, rules_epoch: u32) -> Ctx {
     let mut c = ctx_of(us, state, i);
     c.fatigued = state.fatigued[i] || (rule_on(rules_epoch, EPOCH_65_MELEE_TRUTH) && state.shaken[i]);
+    // MEL-11 (`EPOCH_73_V36`): a Fatigued unit rolls no Ravage. The tray and
+    // the EV both read the rating off this ctx, so one zero gates both.
+    if c.fatigued && rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
+        c.ravage = 0;
+    }
     c
 }
 
@@ -4810,6 +4815,22 @@ fn strike_phase(
         for &k in &sc.keep {
             if melee[k].printed_range > 0 {
                 shot.log.push(format!("Assault: {} also strikes in melee", melee[k].name));
+            }
+        }
+    }
+    // MEL-11 (`EPOCH_73_V36`) — Ravage once per round, never while Fatigued.
+    // The table fatigues a host's joined heroes with it, so a tired host stops
+    // theirs too; the Counter-only pre-phase leaves the one roll to the
+    // strike-back that follows (the table's slot). Every skip is logged once.
+    if rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) {
+        let host_tired = next.fatigued[si] || next.shaken[si];
+        for (mi, _, att) in parts.iter_mut() {
+            let um = &statics[next.roster.profile[*mi]];
+            if host_tired || set == StrikeSet::CounterOnly {
+                att.ravage = 0;
+            }
+            if set != StrikeSet::CounterOnly && um.ctx.ravage > 0 && att.ravage == 0 {
+                shot.log.push(format!("Ravage: {} is Fatigued - no Ravage", um.name));
             }
         }
     }

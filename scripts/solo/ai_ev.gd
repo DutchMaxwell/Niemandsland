@@ -739,6 +739,9 @@ static func melee_ev(profiles: Array, att: Dictionary, def_ctx: Dictionary, char
 ## Expected Ravage(X) wounds of a melee turn (army-book rule): X dice per alive bearer model, each 6+
 ## one DIRECT wound — no hit roll, no save; only Regeneration thins it (no bypass clause).
 static func ravage_ev(att: Dictionary, def_ctx: Dictionary) -> float:
+	# MEL-11 (rules 3.6): a Fatigued attacker rolls no Ravage (the core zeroes it in `ctx_of_melee`).
+	if bool(att.get("fatigued", false)) and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		return 0.0
 	var dice := int(att.get("ravage", 0)) * maxi(int(att.get("models", 0)), 0)
 	if dice <= 0:
 		return 0.0
