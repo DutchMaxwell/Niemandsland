@@ -4719,12 +4719,12 @@
     }
    },
    "Highborn": {
-    "primitive": "Quick",
+    "primitive": "Royal Legion",
     "rated": false,
-    "book_version": "3.5.3",
+    "book_version": "3.6.0",
     "params": {
-     "advance_mod": 2,
-     "rush_mod": 2
+     "range_bonus_in": 4,
+     "charge_mod": 2
     }
    },
    "Highborn Boost": {
@@ -6363,12 +6363,12 @@
     }
    },
    "Lustbound": {
-    "primitive": "Royal Legion",
+    "primitive": "Quick",
     "rated": false,
-    "book_version": "3.5.3",
+    "book_version": "3.6.0",
     "params": {
-     "range_bonus_in": 4,
-     "charge_mod": 2
+     "advance_mod": 1,
+     "rush_mod": 2
     }
    },
    "Lustbound Boost": {
@@ -7657,9 +7657,9 @@
    "Scurry": {
     "primitive": "Quick",
     "rated": false,
-    "book_version": "3.5.3",
+    "book_version": "3.6.0",
     "params": {
-     "advance_mod": 2,
+     "advance_mod": 1,
      "rush_mod": 2
     }
    },
@@ -8834,12 +8834,12 @@
     }
    },
    "Lustbound": {
-    "primitive": "Royal Legion",
+    "primitive": "Quick",
     "rated": false,
-    "book_version": "3.5.2",
+    "book_version": "3.6.0",
     "params": {
-     "range_bonus_in": 4,
-     "charge_mod": 2
+     "advance_mod": 1,
+     "rush_mod": 2
     }
    },
    "Lustbound Boost": {
@@ -10336,12 +10336,12 @@
     }
    },
    "Lustbound": {
-    "primitive": "Royal Legion",
+    "primitive": "Quick",
     "rated": false,
-    "book_version": "3.5.3",
+    "book_version": "3.6.0",
     "params": {
-     "range_bonus_in": 4,
-     "charge_mod": 2
+     "advance_mod": 1,
+     "rush_mod": 2
     }
    },
    "Lustbound Boost": {
