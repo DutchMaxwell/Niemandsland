@@ -4256,6 +4256,39 @@ pub fn melee_profiles_of(us: &UnitStatic, alive: i64, sc: &mut Scratch) {
     }
 }
 
+/// MEL-PAR-F5 — the table's `SoloController.alive_bearers_of`: how many entries naming `weapon_name` the
+/// LIVING models' kits of `unit` hold (duplicates count, like the table's array). None when the state carries
+/// no kits aligned one per living model (no record key, a hand-built fixture, `kits_drop`): the caller keeps
+/// its pro-rata path. Shared with the shooting twin.
+pub(crate) fn living_bearers(state: &State, unit: usize, weapon_name: &str) -> Option<i64> {
+    let kits = state.kits.get(unit).filter(|k| !k.is_empty() && k.len() as i64 == state.alive[unit])?;
+    let names = state.kit_names.get(unit)?;
+    let named = |w: &&u16| names.get(**w as usize).is_some_and(|n| n == weapon_name);
+    Some(kits.iter().flat_map(|k| k.weapons.iter()).filter(named).count() as i64)
+}
+
+/// MEL-PAR-F5 (`EPOCH_73_V36`) — a dead model's melee weapon is gone. The table (`_solo_attack_groups`) rolls a
+/// weapon carried by fewer models than the unit holds as `per-copy x min(living bearers, strikers)`. The core
+/// follows only when every living model strikes (`count >= alive`): with partial contact it does not know WHICH
+/// models touch, so the pro-rata number stays. None = keep the pro-rata number (gate off, a bonus attack, a
+/// weapon every model carries, or no aligned kits).
+fn melee_bearer_attacks(p: &ShootProfile, model_count: i64, state: &State, unit: usize, count: i64, rules_epoch: u32) -> Option<i64> {
+    let copies = p.count.max(1);
+    if !rule_on(rules_epoch, crate::acts::EPOCH_73_V36) || count < state.alive[unit] || p.extra_attack_q > 0 || copies >= model_count {
+        return None;
+    }
+    living_bearers(state, unit, &p.name).map(|b| (p.attacks / copies).max(0) * b.min(count))
+}
+
+/// `melee_bearer_attacks` over a `melee_profiles_of` fill (`sc.attacks` still index-parallel to `us.melee`).
+fn melee_bearers_rescale(us: &UnitStatic, state: &State, unit: usize, count: i64, rules_epoch: u32, sc: &mut Scratch) {
+    for (a, p) in sc.attacks.iter_mut().zip(&us.melee) {
+        if let Some(n) = melee_bearer_attacks(p, us.model_count, state, unit, count, rules_epoch) {
+            *a = n;
+        }
+    }
+}
+
 /// GF v3.5.1 "Limited" — `SoloController.filter_limited` (solo_controller.gd:
 /// 7715-7723): drop an already-fired Limited profile from `sc.keep`/
 /// `sc.attacks` (index-parallel). Resolution only, ranged and melee alike.
@@ -4358,6 +4391,7 @@ pub fn member_profiles_of(
     {
         if melee {
             melee_profiles_of(us, state.alive[si], sc);
+            melee_bearers_rescale(us, state, si, state.alive[si], seams.rules_epoch, sc);
         } else {
             sc.bearers_last = seams.casualties_bearers_last;
             profiles_of(us, state.alive[si], d, sc);
@@ -4383,7 +4417,8 @@ pub fn member_profiles_of(
             } else if !melee {
                 survivor_attacks(p, state.alive[mi], um.model_count, seams.casualties_bearers_last)
             } else {
-                effective_attacks(p.attacks, state.alive[mi], um.model_count)
+                melee_bearer_attacks(p, um.model_count, state, mi, state.alive[mi], seams.rules_epoch)
+                    .unwrap_or_else(|| effective_attacks(p.attacks, state.alive[mi], um.model_count))
             };
             // MELEE has no range gate and `melee_ev` no `keep`, so its `attacks` must
             // stay parallel to the whole list; SHOOTING keeps `profiles_of`'s filter
@@ -4635,6 +4670,7 @@ fn melee_parts(statics: &[UnitStatic], state: &State, i: usize, ti: usize, seams
             state.alive[mi]
         };
         melee_profiles_of(um, count, &mut sc);
+        melee_bearers_rescale(um, state, mi, count, seams.rules_epoch, &mut sc);
         sc.keep = (0..um.melee.len()).collect();
         drop_spent_limited(&um.melee, &state.limited_used[mi], &mut sc);
         // rules-wave3-growthmark (epoch 6) — Regenerative Strength's melee

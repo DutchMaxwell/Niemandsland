@@ -1598,7 +1598,7 @@ func _overlay_descriptor(td: Dictionary) -> Dictionary:
 	var alive: int = maxi(hu.get_alive_count(), 1)
 	return {"dist": float(td["d"]), "activated": bool(td.get("activated", false)),
 		"in_cover": majority_in_cover(hu), "defense": hu.get_defense(),
-		"is_hero": hu.has_special_rule("Hero"), "has_upgrade": false, "upgrade_cost": 0,
+		"is_hero": hu.is_hero(), "has_upgrade": false, "upgrade_cost": 0,
 		"single_tough": alive == 1 and tough > 1, "has_tough": tough > 1,
 		"remaining_tough": tough * alive,
 		# #339: the unit-level tie path has no single weapon profile, so the Blast

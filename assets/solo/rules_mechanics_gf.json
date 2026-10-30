@@ -587,6 +587,15 @@
     "impact_reduction_per_model": 1
    }
   },
+  "Crossing Attack": {
+   "primitive": "Crossing Attack",
+   "rated": true,
+   "book_version": "3.6.0",
+   "params": {
+    "rating": "X",
+    "wound_target": 6
+   }
+  },
   "Deadly": {
    "primitive": "Deadly",
    "rated": false,
@@ -651,6 +660,16 @@
    "params": {
     "bonus_hits_per_six": 1,
     "charge_only": true
+   }
+  },
+  "Heavy Impact": {
+   "primitive": "Heavy Impact",
+   "rated": true,
+   "book_version": "3.6.0",
+   "params": {
+    "rating": "X",
+    "ap": 1,
+    "counts_as": "Impact"
    }
   },
   "Hero": {
@@ -759,6 +778,14 @@
     "scope": "unit"
    }
   },
+  "Precise": {
+   "primitive": "Precise",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "hit_bonus": 1
+   }
+  },
   "Regeneration": {
    "primitive": "Regeneration",
    "rated": false,
@@ -827,6 +854,14 @@
     "model_level": true
    }
   },
+  "Shred": {
+   "primitive": "Shred",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "extra_wound_per_save_one": 1
+   }
+  },
   "Shred in Melee": {
    "primitive": "Shred",
    "rated": false,
@@ -867,6 +902,14 @@
    "primitive": "Strider",
    "rated": false,
    "book_version": "3.5.1"
+  },
+  "Surge": {
+   "primitive": "Surge",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "bonus_hits_per_six": 1
+   }
   },
   "Surge when Shooting": {
    "primitive": "Surge",
@@ -913,6 +956,26 @@
    "rated": false,
    "book_version": "3.5.1"
   },
+  "Unpredictable Fighter": {
+   "primitive": "Unpredictable Fighter",
+   "rated": false,
+   "book_version": "3.6.0"
+  },
+  "Unpredictable Fighter Mark": {
+   "primitive": "Utility Buff",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "beneficiary": "attackers",
+    "grants_rule": "Unpredictable Fighter",
+    "max_targets": 1,
+    "needs_los": true,
+    "once": true,
+    "range_in": 18,
+    "target": "enemy",
+    "vs_target": true
+   }
+  },
   "Unstoppable": {
    "primitive": "Unstoppable",
    "rated": false,
@@ -934,6 +997,15 @@
    "params": {
     "bypass_regen": true,
     "shooting_only": true
+   }
+  },
+  "Unwieldy": {
+   "primitive": "Unwieldy",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "strikes_last": true,
+    "condition": "charging"
    }
   },
   "Piercing Fighter": {

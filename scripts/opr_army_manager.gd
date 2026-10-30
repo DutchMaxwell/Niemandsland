@@ -2171,7 +2171,7 @@ const BUFF_TOKEN_RULES := {
 
 ## Passive / always-on rules that should NOT spawn a token (avoid palette spam). Caster has its
 ## own dedicated marker, so it is excluded here too.
-const PASSIVE_BUFF_RULES := ["Tough", "Fearless", "Fast", "Slow", "Strider", "Hero", "Flying",
+const PASSIVE_BUFF_RULES := ["Tough", "Fearless", "Fast", "Slow", "Strider", "Hero", "Unique Hero", "Flying",
 	"Hover", "Impact", "Parry", "Regeneration", "Caster", "Scout", "Ambush", "Mobile Artillery",
 	"Hold the Line"]
 
