@@ -10617,8 +10617,8 @@ func _run_ai_melee(report: Dictionary) -> void:
 	var announce := _solo_show_attack_announce(unit, target, "charges")
 	await _solo_stage_phase("Charge", SoloController.Pace.ANNOUNCE)
 	# — Counter (GF/AoF v3.5.1 p.13: "Strikes first with this weapon when charged"): the human defender's
-	#   Counter weapons resolve BEFORE the charger's attacks (incl. Impact — Counter's Impact reduction
-	#   presumes the counter-attack precedes it; the PDF pins no finer order). One strike-back choice
+	#   Counter weapons resolve BEFORE the charger's attacks; up to epoch 72 also before Impact, from rules 3.6
+	#   after it (the Impact cut by Counter models is counted first either way). One strike-back choice
 	#   covers the whole melee: Counter weapons now, remaining weapons in the normal slot, or neither. —
 	# Native both-AI (AI ARENA): when the DEFENDER is AI, it ALWAYS strikes back (Solo & Co-Op v3.5.0 p.57:
 	# "the AI always strikes back") and auto-rolls its saves — no human ConfirmationDialog. The human defender
@@ -10628,9 +10628,18 @@ func _run_ai_melee(report: Dictionary) -> void:
 	# The strike-first half of the Counter gate is the entry's param (dead-parameter fold, twin of
 	# #1006, core `strikes_first.unwrap_or(true)`); the recorded true replays byte-identically.
 	var counter_first: bool = _solo_has_counter(target) and SoloController.counter_strikes_first(target)
+	# Rules 3.6 (core twin `tray_charge`): Impact rolls before either side strikes, so its block and card
+	# move ahead of Counter and of the strike-back prompt; a defender wiped by Impact gets neither.
+	var impact_first: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
+	if impact_first:
+		ai_caused += await _solo_charge_impact(unit, target, not defender_is_ai, float(report.get("charge_from_in", 0.0)))
+		await _solo_stage_phase("Impact")
 	if counter_first and _solo_combined_alive(target) > 0:
 		strike_back = 1 if defender_is_ai or await _solo_confirm_strike_back(target, unit, true) else 0
 		if strike_back == 1:
+			if impact_first and battle_log != null:
+				battle_log.log_event(BattleLog.Category.COMBAT,
+					"Counter: %s strikes first, after the Impact dice (rules 3.6)" % target.get_name(), true)
 			human_caused += await _solo_melee_strike_phase(target, unit, false, SoloStrike.COUNTER_ONLY)
 			ai_caused += _solo_take_retaliate_credit()
 	# Stage seam: the boundary sits OUTSIDE the Counter branches, so a declined (or absent)
@@ -10639,9 +10648,10 @@ func _run_ai_melee(report: Dictionary) -> void:
 	# — Impact(X) auto-hits fire BEFORE the normal strikes (GF/AoF v3.5.1 p.13; reduced by Counter models);
 	#   applied + tallied inside. The charger may already be wiped by Counter — nothing left to roll then.
 	#   human_defends is derived (false when the AI defends → saves auto-roll on the tray). —
-	if _solo_combined_alive(unit) > 0:
+	if not impact_first and _solo_combined_alive(unit) > 0:
 		ai_caused += await _solo_charge_impact(unit, target, not defender_is_ai, float(report.get("charge_from_in", 0.0)))
-	await _solo_stage_phase("Impact")
+	if not impact_first:
+		await _solo_stage_phase("Impact")
 	# Resolver wave A — vs-target Marks: the charger's pre-attack pick lands on this melee's defender.
 	_solo_apply_vs_marks(unit, target, 0.0)
 	# Unwieldy (resolver wave A — "strikes last when charging"): the CHARGER's strikes swap behind
@@ -13347,12 +13357,17 @@ func _run_human_melee(attacker: GameUnit, target: GameUnit, auto: bool = false) 
 			attacker.get_name(), target.get_name()], true)
 	await _solo_stage_phase("Charge")
 	# — Counter (GF/AoF v3.5.1 p.13 "Strikes first with this weapon when charged"): before your attacks,
-	#   including Impact (Counter's Impact reduction presumes the counter-strike precedes it); the
-	#   strike-first half is the entry's param (dead-parameter fold, twin of #1006)
+	#   up to epoch 72 also before Impact, from rules 3.6 after it (the Impact cut is counted first either
+	#   way); the strike-first half is the entry's param (dead-parameter fold, twin of #1006)
 	var ai_counter: bool = _solo_has_counter(target) and SoloController.counter_strikes_first(target)
-	if ai_counter:
+	var impact_first: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
+	if impact_first:   # rules 3.6 (core twin `tray_charge`): Impact rolls before either side strikes
+		human_caused += await _solo_charge_impact(attacker, target, not _solo_is_ai_unit(target))
+		await _solo_stage_phase("Impact")
+	if ai_counter and _solo_combined_alive(target) > 0:
 		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.COMBAT, "Counter: %s strikes first" % target.get_name(), true)
+			battle_log.log_event(BattleLog.Category.COMBAT, ("Counter: %s strikes first, after the Impact dice (rules 3.6)"
+				if impact_first else "Counter: %s strikes first") % target.get_name(), true)
 		ai_caused += await _solo_melee_strike_phase(target, attacker, false, SoloStrike.COUNTER_ONLY)
 		human_caused += _solo_take_retaliate_credit()
 	# Stage seam: the boundary sits OUTSIDE the branch — no Counter simply means an empty phase,
@@ -13360,9 +13375,10 @@ func _run_human_melee(attacker: GameUnit, target: GameUnit, auto: bool = false) 
 	await _solo_stage_phase("Counter")
 	# — Impact(X) auto-hits on your charge (GF/AoF v3.5.1 p.13; reduced by the AI's Counter models). The
 	#   counter-strike may already have wiped your unit — nothing left to roll then. —
-	if _solo_combined_alive(attacker) > 0:
+	if not impact_first and _solo_combined_alive(attacker) > 0:
 		human_caused += await _solo_charge_impact(attacker, target, not _solo_is_ai_unit(target))
-	await _solo_stage_phase("Impact")
+	if not impact_first:
+		await _solo_stage_phase("Impact")
 	# Resolver wave A — vs-target Marks: your charger's pre-attack pick lands on the defender.
 	_solo_apply_vs_marks(attacker, target, 0.0)
 	# Unwieldy (resolver wave A): a charging Unwieldy unit strikes LAST — the AI's strike-back
