@@ -21,7 +21,7 @@ fn banner_target_line(rules_epoch: u32) -> (State, Vec<UnitStatic>) {
 
 /// The first seed whose first tray face is a 3: a pass only with the Banner's +1.
 fn seed_rolling_a_three() -> i64 {
-    (0..500).find(|&s| Tray::seeded(s).roll(1)[0] == 3).expect("some seed rolls a 3") as i64
+    (0..500).find(|&s| Tray::seeded(s).roll(1)[0] == 3).expect("some seed rolls a 3")
 }
 
 /// The Mind Control test die: one die, signed by the bearer.
