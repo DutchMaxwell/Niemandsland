@@ -209,20 +209,21 @@ use super::*;
     }
 
     /// "Sergeant" (gf+aof+the rest `common`, primitive Sergeant,
-    /// bonus_hits_per_six 1): its share needs the LIVE alive count, so the
-    /// static stamp REPORTS the gap by the exact name instead of guessing a
-    /// number — the report is the rule's honest core output, and the melee
-    /// share stays 0.
+    /// ap_bonus 1): from rules 3.6 the static stamp names the rule and its
+    /// AP bonus on the first profile with attacks; the live share is taken at
+    /// the strike, so the static carries no attack count.
     #[test]
-    fn a_sergeant_reports_its_live_count_gap_at_the_current_epoch() {
+    fn a_sergeant_strikes_at_ap_plus_1_at_the_current_epoch() {
         let e = crate::acts::CURRENT_RULES_EPOCH;
         let us = pin_unit("gf", "knight_brothers", &["Sergeant"], e);
         assert_eq!(
             us.unimplemented.iter().filter(|u| u.rule == "Sergeant").count(),
-            1,
-            "exactly one report, by the exact name"
+            0,
+            "the core plays the rule from 73"
         );
-        assert_eq!(us.melee[0].sergeant_attacks, 0, "the share is never guessed on the static");
+        assert_eq!(us.melee[0].sergeant_attacks, 0, "the share stays off the static");
+        assert_eq!(us.melee[0].sergeant_ap, 1, "Sergeant strikes at AP(+1)");
+        assert_eq!(us.shoot[0].sergeant_rule, "Sergeant", "the log names the rule");
         assert!(
             pin_unit("gf", "knight_brothers", &[], e)
                 .unimplemented

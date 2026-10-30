@@ -694,7 +694,20 @@ pub fn profile_ev(
     }
     let bane = p.bane;
     let fort = def.fortified;
-    let mut unsaved = (hits - six_hits) * (1.0 - block_chance(defense, fortified_ap(ap, fort), bane))
+    // Rules 3.6 row MOR-12c (ai_ev.gd:648-655): the bearer's share of the plain
+    // hits (its attacks over the profile's, the dice path's same fraction) saves
+    // at AP(+sergeant_ap); 0 below the stamp's epoch.
+    let sgt_ap = p.sergeant_ap;
+    let sgt_frac = if sgt_ap > 0 {
+        let alive = att.models.max(1) as f64;
+        let share = (attacks_f / alive).round().max(1.0);
+        share.min(attacks_f) / attacks_f.max(1.0)
+    } else {
+        0.0
+    };
+    let plain = hits - six_hits;
+    let mut unsaved = plain * (1.0 - sgt_frac) * (1.0 - block_chance(defense, fortified_ap(ap, fort), bane))
+        + plain * sgt_frac * (1.0 - block_chance(defense, fortified_ap(ap + sgt_ap, fort), bane))
         + six_hits * (1.0 - block_chance(defense, fortified_ap(ap + on6_ap, fort), bane));
     // --- Deadly, Shred, Regeneration (ai_ev.gd:423-436) ---
     let deadly_cap = def.tough.max(1);

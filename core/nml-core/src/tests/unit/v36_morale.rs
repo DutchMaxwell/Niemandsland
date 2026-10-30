@@ -26,15 +26,16 @@ mod mor_12 {
     }
 
     /// Rules 3.6: Great Sergeant's 5-6 extra-hit window is gone; the bearer strikes at AP(+2)
-    /// instead. That share needs the live alive count (Sergeant's own gap), so the static stamp
-    /// reports it by name rather than surging.
+    /// instead, so the static stamp names the rule and its bonus instead of reporting it.
     #[test]
-    fn a_great_sergeant_leaves_the_surge_window_and_reports_its_gap_at_epoch_73() {
+    fn a_great_sergeant_leaves_the_surge_window_and_strikes_at_ap_plus_2_at_epoch_73() {
         let us = great_sergeant("\"Great Sergeant\"", EPOCH_73_V36);
         assert!(!us.shoot[0].surge, "no extra hits when shooting from 73");
         assert!(!us.melee[0].surge, "no extra hits in melee from 73");
         assert_eq!(us.shoot[0].surge_low, 6, "no 5-6 window from 73");
-        assert_eq!(reports(&us, "Great Sergeant"), 1, "exactly one report, by the exact name");
+        assert_eq!(reports(&us, "Great Sergeant"), 0, "the core plays the rule from 73");
+        assert_eq!(us.shoot[0].sergeant_ap, 2, "Great Sergeant strikes at AP(+2)");
+        assert_eq!(us.melee[0].sergeant_rule, "Great Sergeant");
     }
 
     /// The rules 3.5 leg: every game recorded at 72 replays the 5-6 window, no report.
@@ -46,14 +47,20 @@ mod mor_12 {
         assert_eq!(reports(&us, "Great Sergeant"), 0, "no report at 72");
     }
 
-    /// Sergeant keeps its live-count report at BOTH epochs: the core never guesses the share.
+    /// Sergeant keeps its report below the gate; from 73 the static names its AP(+1) instead.
     #[test]
-    fn a_sergeant_reports_its_live_count_gap_at_epoch_72_and_epoch_73() {
+    fn a_sergeant_reports_its_gap_at_epoch_72_and_strikes_at_ap_plus_1_at_epoch_73() {
+        let old = great_sergeant("\"Sergeant\"", EPOCH_72_PLAYTEST_RULES);
+        assert_eq!(reports(&old, "Sergeant"), 1, "epoch 72: one report, by the exact name");
+        assert_eq!(old.melee[0].sergeant_attacks, 0, "the share is never guessed");
+        assert_eq!(old.melee[0].sergeant_ap, 0, "no AP share below the gate");
+        let live = great_sergeant("\"Sergeant\"", EPOCH_73_V36);
+        assert_eq!(reports(&live, "Sergeant"), 0, "the core plays the rule from 73");
+        assert_eq!(live.shoot[0].sergeant_ap, 1, "Sergeant strikes at AP(+1)");
+        assert_eq!(live.melee[0].sergeant_ap, 1, "the melee set carries the same bonus");
         for e in [EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36] {
-            let us = great_sergeant("\"Sergeant\"", e);
-            assert_eq!(reports(&us, "Sergeant"), 1, "epoch {e}: one report, by the exact name");
-            assert_eq!(us.melee[0].sergeant_attacks, 0, "epoch {e}: the share is never guessed");
             assert_eq!(reports(&great_sergeant("", e), "Sergeant"), 0, "epoch {e}: no rule, no report");
         }
+    }
     }
 }

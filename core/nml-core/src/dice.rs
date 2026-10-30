@@ -224,6 +224,22 @@ fn sixes(faces: &[u8]) -> i64 {
     faces.iter().filter(|&&f| f == 6).count() as i64
 }
 
+/// Rules 3.6 row MOR-12c — `AiEv.stamp_sergeant`'s bearer share, applied at the
+/// strike: `max(1, round(attacks / alive models))` of this profile's attack
+/// dice, and that share's fraction of the plain hits
+/// `min(normal, round(normal * share / attacks))`. `att.models` is the live
+/// alive count (`ctx_of` writes `state.alive`), the Ctx twin of the table's
+/// `GameUnit.get_alive_count()`. 0 without the rules 3.6 stamp.
+fn sergeant_hits(p: &ShootProfile, attacks: i64, normal: i64, att: &Ctx) -> i64 {
+    if p.sergeant_ap <= 0 || attacks <= 0 || normal <= 0 {
+        return 0;
+    }
+    let alive = att.models.max(1) as f64;
+    let share = (attacks as f64 / alive).round().max(1.0);
+    let hits = (normal as f64 * share / attacks as f64).round() as i64;
+    hits.min(normal).max(0)
+}
+
 /// The Shielded-family alias's rules-must-log line, the volley and melee
 /// resolves' shared twin: the +1 kinds name the rule and the floored rung
 /// ("{name}: {owner} — +1 to defense rolls (saves on N+)"), while the rating
@@ -1244,8 +1260,18 @@ pub fn resolve_volley_leg(
                 ap += conditional_ap_bonus(&slayer_grant_cond(), def.tough.max(1), def.defense, false, mod_dist_in, false);
             }
         }
+        let normal = hits - ap4;
+        // Rules 3.6 row MOR-12c: the bearer's share of the plain hits saves as
+        // its own batch at AP(+sergeant_ap), the table's band (`main.gd:8372-8387`).
+        let sgt_hits = sergeant_hits(p, n, normal, att);
         let mut w = save_batch(p, def, def_owner, ap4, save_def, ap + on6, att.shred_grant, shred_alias_dice, shred_low, deadly_per_model, tray, &mut out);
-        w += save_batch(p, def, def_owner, hits - ap4, save_def, ap, att.shred_grant, shred_alias_dice, shred_low, deadly_per_model, tray, &mut out);
+        if sgt_hits > 0 {
+            out.log.push(format!(
+                "{}: {} strikes {} hit{} with AP(+{})",
+                p.sergeant_rule, sh.owner, sgt_hits, if sgt_hits == 1 { "" } else { "s" }, p.sergeant_ap));
+            w += save_batch(p, def, def_owner, sgt_hits, save_def, ap + p.sergeant_ap, att.shred_grant, shred_alias_dice, shred_low, deadly_per_model, tray, &mut out);
+        }
+        w += save_batch(p, def, def_owner, normal - sgt_hits, save_def, ap, att.shred_grant, shred_alias_dice, shred_low, deadly_per_model, tray, &mut out);
         // `_solo_ignores_regen` :6927-6933 — Bane / Rending (and Unstoppable,
         // ai_ev.gd:433) cut through Regeneration; everything else is poolable.
         // B2b: `_solo_ignores_regen`'s last line (main.gd:6941) also answers
@@ -1853,10 +1879,10 @@ pub fn resolve_melee_leg(
             if hits <= 0 {
                 continue;
             }
-            pending.push((sh, p, faces, hits, count_target, versatile_ap));
+            pending.push((sh, p, faces, hits, count_target, versatile_ap, n));
         }
         // MEL-07c hook — Parry reads `pending` here: every hit rolled, no save yet.
-        for (sh, p, faces, hits, count_target, versatile_ap) in pending {
+        for (sh, p, faces, hits, count_target, versatile_ap, n) in pending {
             let on6 = if p.on6_ap > 0 {
                 p.on6_ap
             } else if p.rending || p.destructive || sh.att.rending_grant {
@@ -1916,14 +1942,24 @@ pub fn resolve_melee_leg(
             // Boost's charge half needs a pre-charge gap this port never
             // measured (see the NOT-PORTED list on resolve_melee_with_tray).
             let idx_ap = out.rolls.len();
+            // Rules 3.6 row MOR-12c: the bearer's share of the plain hits, the
+            // volley leg's twin (main.gd:8372-8387).
+            let normal = hits - ap4;
+            let sgt_hits = sergeant_hits(p, n, normal, sh.att);
             let mut w = save_batch(p, def, def_owner, ap4, save_def, ap + on6, sh.att.shred_grant, shred_alias_dice, 1, deadly_per_model, tray, &mut out);
+            if sgt_hits > 0 {
+                out.log.push(format!(
+                    "{}: {} strikes {} hit{} with AP(+{})",
+                    p.sergeant_rule, sh.owner, sgt_hits, if sgt_hits == 1 { "" } else { "s" }, p.sergeant_ap));
+                w += save_batch(p, def, def_owner, sgt_hits, save_def, ap + p.sergeant_ap, sh.att.shred_grant, shred_alias_dice, 1, deadly_per_model, tray, &mut out);
+            }
             // Wave 4 follow-up — the batch's OWN blocked unmodified 1s (the
             // FIRST "defense" slot of the batch, never Bane's re-rolls: a 6
             // re-rolled into a 1 is not an unmodified 1), Bloodthirsty
             // Fighter's table counter read (main.gd:6505-6509).
             let ones_ap = fresh_save_ones(&out, idx_ap);
             let idx_rest = out.rolls.len();
-            w += save_batch(p, def, def_owner, hits - ap4, save_def, ap, sh.att.shred_grant, shred_alias_dice, 1, deadly_per_model, tray, &mut out);
+            w += save_batch(p, def, def_owner, normal - sgt_hits, save_def, ap, sh.att.shred_grant, shred_alias_dice, 1, deadly_per_model, tray, &mut out);
             let ones_rest = fresh_save_ones(&out, idx_rest);
             // Wave 4 follow-up — Bloodthirsty Fighter (aof/war_disciples):
             // each unmodified 1 the DEFENDER rolled blocking this weapon pays

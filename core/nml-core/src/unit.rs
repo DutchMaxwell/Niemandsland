@@ -852,6 +852,14 @@ pub struct ShootProfile {
     /// `AiEv.stamp_sergeant` :267-274 writes the bearer's own attack share here.
     /// ALWAYS 0 in this port — see `UnitStatic::unimplemented`.
     pub sergeant_attacks: i64,
+    /// Rules 3.6 (`EPOCH_73_V36`, row MOR-12c): the entry's `ap_bonus`
+    /// (Sergeant 1, Great Sergeant 2) stamped on the FIRST profile with
+    /// attacks. The live bearer share is taken at the strike (the Ctx's
+    /// alive count), exactly like `AiEv.stamp_sergeant`. 0 below the gate.
+    pub sergeant_ap: i64,
+    /// The rules 3.6 rule name the bearer share logs under ("Sergeant" /
+    /// "Great Sergeant"). Empty below the gate.
+    pub sergeant_rule: String,
     /// NML-1103 — `AiEv.stamp_conditional_ap` ai_ev.gd:296-313, read by
     /// `combat::profile_ev`. Stamped AFTER the merge, like every other facet.
     pub cond_ap: Vec<CondAp>,
@@ -2965,13 +2973,9 @@ fn stamp(
         if hit.name == "Surge" || hit.name == "Ferocious" || !hit.upgrades.is_empty() {
             continue;
         }
-        // Row MOR-12 (rules 3.6): the 5-6 window became the bearer's AP(+2) share,
-        // which reads the live alive count like Sergeant's (step 7): reported, never guessed.
+        // Row MOR-12 (rules 3.6): the 5-6 window became the bearer's AP(+2) share
+        // (stamp step 7), so the alias leaves the Surge walk from 73.
         if hit.name == "Great Sergeant" && rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
-            unimplemented.push(Unimplemented {
-                rule: hit.name.clone(),
-                why: "the bearer's AP(+2) share needs GameUnit.get_alive_count() at the call (ai_ev.gd stamp_sergeant)".into(),
-            });
             continue;
         }
         // EPOCH_17_SURGE_SCOPE (sweep B, row "Surge when Shooting"): the entry
@@ -3130,9 +3134,25 @@ fn stamp(
             }
         }
     }
-    // 7. Sergeant (ai_ev.gd:282-291). Its share reads the LIVE alive count,
-    //    which the static profile does not carry — reported, never guessed.
-    if unit_rule_active(reg, p, "Sergeant") {
+    // 7. Sergeant / Great Sergeant (ai_ev.gd:282-291). From rules 3.6 the
+    //    FIRST profile with attacks carries the entry's AP bonus; the live
+    //    bearer share is taken at the strike, off the Ctx's alive count
+    //    (dice.rs / combat.rs), so the static only names the rule. Below the
+    //    gate the old report stays: the core never guesses the 3.5 share.
+    if rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
+        let sgt_rule = if unit_rule_active(reg, p, "Great Sergeant") {
+            "Great Sergeant"
+        } else {
+            "Sergeant"
+        };
+        if unit_rule_active(reg, p, sgt_rule) {
+            let ap = unit_param_i(reg, p, sgt_rule, "ap_bonus", 1);
+            if let Some(sp) = shoot.iter_mut().find(|sp| sp.attacks > 0) {
+                sp.sergeant_ap = ap;
+                sp.sergeant_rule = sgt_rule.into();
+            }
+        }
+    } else if unit_rule_active(reg, p, "Sergeant") {
         unimplemented.push(Unimplemented {
             rule: "Sergeant".into(),
             why: "sergeant_attacks needs GameUnit.get_alive_count() at the moment of the call (ai_ev.gd:284) — not in the static profile".into(),
