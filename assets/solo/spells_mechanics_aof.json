@@ -3805,7 +3805,7 @@
     }
    ]
   },
-  "rift_daemons_of_change": {
+  "daemons_of_change": {
    "book_uid": "yxVDySKYQYRhdEgA",
    "book_version": "3.5.3",
    "spells": [
@@ -3939,7 +3939,7 @@
     }
    ]
   },
-  "rift_daemons_of_lust": {
+  "daemons_of_lust": {
    "book_uid": "CuyCCyZTIHo5rc0Z",
    "book_version": "3.5.3",
    "spells": [
@@ -4067,7 +4067,7 @@
     }
    ]
   },
-  "rift_daemons_of_plague": {
+  "daemons_of_plague": {
    "book_uid": "vJuokTQpJWj3_MrJ",
    "book_version": "3.5.3",
    "spells": [
@@ -4190,7 +4190,7 @@
     }
    ]
   },
-  "rift_daemons_of_war": {
+  "daemons_of_war": {
    "book_uid": "Q59-nh6A1AhRBrLR",
    "book_version": "3.5.3",
    "spells": [

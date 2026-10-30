@@ -4119,7 +4119,7 @@
     }
    ]
   },
-  "saurian_starhost": {
+  "saurian_starhosts": {
    "book_uid": "U6hwlur14RpnInZr",
    "book_version": "3.5.3",
    "spells": [
@@ -5680,7 +5680,7 @@
     }
    ]
   },
-  "wormhole_daemons_of_change": {
+  "daemons_of_change": {
    "book_uid": "04z57ua0bwth37zh",
    "book_version": "3.5.3",
    "spells": [
@@ -5814,7 +5814,7 @@
     }
    ]
   },
-  "wormhole_daemons_of_lust": {
+  "daemons_of_lust": {
    "book_uid": "9qvy1oufoangt2gl",
    "book_version": "3.5.3",
    "spells": [
@@ -5942,7 +5942,7 @@
     }
    ]
   },
-  "wormhole_daemons_of_plague": {
+  "daemons_of_plague": {
    "book_uid": "fmuqw5lr5l6dq0mq",
    "book_version": "3.5.3",
    "spells": [
@@ -6065,7 +6065,7 @@
     }
    ]
   },
-  "wormhole_daemons_of_war": {
+  "daemons_of_war": {
    "book_uid": "prsajf5ot936qznk",
    "book_version": "3.5.3",
    "spells": [
