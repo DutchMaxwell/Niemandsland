@@ -133,3 +133,113 @@ use crate::state::{Objective, Weapon};
         assert!(crate::menu::forces_hold_at(&names("Artillery"), 0));
         assert!(!crate::menu::forces_hold_at(&names("Ethereal"), EPOCH_72_PLAYTEST_RULES));
     }
+
+
+// SHO-22 — Piercing Tag and Precision Tag carry TOKENS: the bearer stacks X tokens on one enemy unit or puts
+// one token on each of up to X enemy units, and each friendly attack spends ONE token for +1 (rules 3.6).
+// Rules 3.5 (the EPOCH_72 leg) piled every marker on one unit and let the first attack spend them all.
+
+/// `tag_line`'s tagger with a second living enemy (unit 3, 9" out) in reach; `lone` empties that second unit.
+fn two_enemy_tag_line(rule: &str, markers: i64, lone: bool) -> (State, Vec<UnitStatic>) {
+    let (mut st, statics) = tag_line(rule, markers, 24.0);
+    if lone {
+        st.alive[3] = 0;
+    }
+    (st, statics)
+}
+
+fn seams_at(epoch: u32) -> Seams {
+    Seams { rules_epoch: epoch, ..Seams::default() }
+}
+
+#[test]
+fn piercing_tag_spreads_one_token_on_each_of_two_units_at_epoch_73() {
+    let (st, statics) = two_enemy_tag_line("Piercing Tag", 2, false);
+    let (next, shot) = tag_volley(&statics, &st, seams_at(EPOCH_73_V36));
+    assert_eq!(next.piercing_tag_markers[2..], [0, 1], "one token each; the attack spent one, the other unit keeps its token");
+    assert_eq!(shot.rolls[1].target, 5, "ONE token spent: AP(+1) on the save (Defense 4)");
+    assert!(
+        shot.log.iter().any(|l| l.starts_with("Piercing Tag: tagger places 1 token each, spread over 2 units")),
+        "the placement names the spread choice — got {:#?}",
+        shot.log
+    );
+    assert!(
+        shot.log.iter().any(|l| l.starts_with("Piercing Tag: one token spent — +1 AP")),
+        "the spend names the tag and one token, +1 — got {:#?}",
+        shot.log
+    );
+}
+
+#[test]
+fn piercing_tag_stacks_when_only_one_unit_is_in_reach_at_epoch_73() {
+    let (st, statics) = two_enemy_tag_line("Piercing Tag", 2, true);
+    let (next, shot) = tag_volley(&statics, &st, seams_at(EPOCH_73_V36));
+    assert_eq!(next.piercing_tag_markers[2], 1, "two tokens stacked, the attack spent one");
+    assert_eq!(shot.rolls[1].target, 5, "ONE token spent: AP(+1), not AP(+2)");
+    assert!(
+        shot.log.iter().any(|l| l.starts_with("Piercing Tag: tagger places 2 tokens, stacked on b")),
+        "the placement names the stack choice — got {:#?}",
+        shot.log
+    );
+}
+
+#[test]
+fn piercing_tag_still_piles_everything_on_one_unit_and_spends_it_all_at_epoch_72() {
+    let (st, statics) = two_enemy_tag_line("Piercing Tag", 2, false);
+    let (next, shot) = tag_volley(&statics, &st, seams_at(EPOCH_72_PLAYTEST_RULES));
+    assert_eq!(next.piercing_tag_markers[2..], [0, 0], "3.5: both markers on the toughest unit, spent whole");
+    assert_eq!(shot.rolls[1].target, 6, "3.5: AP(+2) from the two markers");
+}
+
+/// `buff_line` with Precision Tag (X = 2, 24") and a second living enemy (unit 3) beside the victim.
+fn precision_tag_two_enemy_line() -> (State, Vec<UnitStatic>) {
+    let (mut st, mut statics) = buff_line();
+    statics[0].shoot = vec![gun("Rifle", 1, 24)];
+    statics[0].utility_buffs = vec![UtilityBuff {
+        bonus: "per_removed_marker".into(),
+        markers: 2,
+        uses_per_game: 1,
+        range_in: 24.0,
+        target: "enemy".into(),
+        ..ub("Precision Tag")
+    }];
+    st.alive[3] = 1;
+    st.positions[3] = vec![[9.0 * IN2M, 0.0, 0.0]];
+    Rc::make_mut(&mut st.radii)[3] = vec![IN2M];
+    st.wounds[3] = vec![1];
+    (st, statics)
+}
+
+fn precision_volley(st: &State, statics: &[UnitStatic], epoch: u32) -> (State, ShootResult) {
+    let terrain = crate::terrain::Terrain::default();
+    let mut tray = Tray::seeded(13);
+    let mut rng = crate::rng::GodotRng::new(0);
+    resolve_stochastic_tray_on_board(statics, st, &buff_action(Some("b")), &terrain, seams_at(epoch), &mut rng, &mut tray)
+        .unwrap()
+}
+
+#[test]
+fn precision_tag_spreads_and_each_attack_spends_one_token_at_epoch_73() {
+    let (st, statics) = precision_tag_two_enemy_line();
+    let (next, volley) = precision_volley(&st, &statics, EPOCH_73_V36);
+    assert_eq!(next.tag_markers[2..], [0, 1], "one token each; the attack spent one, the other unit keeps its token");
+    assert_eq!(volley.rolls[0].target, 3, "Quality 4 + ONE spent token");
+    assert!(
+        volley.log.iter().any(|l| l.starts_with("Precision Tag: a places 1 token each, spread over 2 units")),
+        "the placement names the spread choice — got {:#?}",
+        volley.log
+    );
+    assert!(
+        volley.log.iter().any(|l| l.starts_with("Precision Tag: one token spent — +1 to hit")),
+        "the spend names the tag and one token, +1 — got {:#?}",
+        volley.log
+    );
+}
+
+#[test]
+fn precision_tag_still_spends_every_marker_at_epoch_72() {
+    let (st, statics) = precision_tag_two_enemy_line();
+    let (next, volley) = precision_volley(&st, &statics, EPOCH_72_PLAYTEST_RULES);
+    assert_eq!(next.tag_markers[2..], [0, 0], "3.5: both markers on the toughest unit, removed whole");
+    assert_eq!(volley.rolls[0].target, 2, "3.5: Quality 4 + two removed markers");
+}
