@@ -1272,7 +1272,8 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	# the end of an activation"), so it is excluded here. It fires on wounds that leave the unit at ≤half.
 	if dangerous_models > 0 and not unit.is_destroyed() \
 			and int(report.get("action", 0)) != AiDecision.Action.CHARGE:
-		await _solo_shooting_morale(unit, alive_before_dangerous, _roller_label(unit), wounds_before_dangerous)
+		await _solo_shooting_morale(unit, alive_before_dangerous, _roller_label(unit), wounds_before_dangerous,
+			"Dangerous terrain")
 	if unit != null:
 		await _solo_try_precision_spot(unit)   # wave B: once per activation
 	# Ambush Re-Deployment fires "when a unit ... ENDS its activation" — the very last beat, after
@@ -5066,7 +5067,7 @@ func _solo_resolve_spell_damage(caster: GameUnit, caster_unit: GameUnit, spell_n
 				spell_name, trigger_ones, ("" if trigger_ones == 1 else "s"), caster_unit.get_name(),
 				trigger_ones, ("" if trigger_ones == 1 else "s")], true)
 	if landed > 0 and not target.is_destroyed():
-		await _solo_shooting_morale(target, alive_before, _roller_label(target), wounds_before)
+		await _solo_shooting_morale(target, alive_before, _roller_label(target), wounds_before, spell_name)
 
 
 ## Whether a spell's weapon-rule token list carries `rule_name` (facet gate for the dice path).
@@ -7122,7 +7123,7 @@ func _solo_apply_breath_attack(unit: GameUnit) -> void:
 		_solo_defense_vs(btarget), bprofile, not _solo_is_ai_unit(btarget), false)
 	if w > 0:
 		await _solo_land_wounds(btarget, w, 0)
-	await _solo_shooting_morale(btarget, alive_before, _roller_label(btarget), wounds_before)
+	await _solo_shooting_morale(btarget, alive_before, _roller_label(btarget), wounds_before, "Breath Attack")
 	_solo_consume_once_mods(unit, btarget, false)   # F4: once-mods spent by this exchange
 
 
@@ -10926,7 +10927,8 @@ func _solo_consolidate_melee(charger: GameUnit, defender: GameUnit, auto: bool =
 ## NML-966: the multi-model trigger now counts the COMBINED chain (unit + attached heroes), the same
 ## basis `_solo_below_half_strength` already used for the outcome — wounds clicked onto a joined hero
 ## used to be invisible here because the trigger counted the unit's own models only.
-func _solo_shooting_morale(unit: GameUnit, alive_before: int, owner: String, wounds_before: int = -1) -> void:
+func _solo_shooting_morale(unit: GameUnit, alive_before: int, owner: String, wounds_before: int = -1,
+		cause: String = "") -> void:
 	if unit == null:
 		return
 	# Single-model units measure morale in TOUGH WOUNDS, not models (GF v3.5.1 p.10: "...half or less
@@ -10940,12 +10942,12 @@ func _solo_shooting_morale(unit: GameUnit, alive_before: int, owner: String, wou
 				battle_log.log_event(BattleLog.Category.COMBAT,
 					"%s is at half its tough value (%d/%d) — morale test (GF v3.5.1 p.10)" % [
 					unit.get_name(), wounds_now, _solo_unit_wounds_start(unit)], true)
-			await _solo_morale_test(unit, owner)
+			await _solo_morale_test(unit, owner, false, cause)
 		return
 	var alive_now: int = SoloController.combined_alive(unit)
 	var total: int = SoloController.combined_total(unit)
 	if AiCombatMath.should_test_shooting_morale(alive_before, alive_now, total):
-		await _solo_morale_test(unit, owner)
+		await _solo_morale_test(unit, owner, false, cause)
 	elif alive_now > 0 and wounds_before >= 0 and _solo_unit_wounds_now(unit) < wounds_before \
 			and AiCombatMath.at_or_below_half(alive_now, total):
 		# A2 (play test 29.10.2026): p.10 triggers on WOUNDS that leave the unit at half or less, not only
@@ -10954,7 +10956,7 @@ func _solo_shooting_morale(unit: GameUnit, alive_before: int, owner: String, wou
 			battle_log.log_event(BattleLog.Category.COMBAT,
 				"%s takes wounds at half strength or less (%d/%d models) — morale test (GF v3.5.1 p.10)" % [
 				unit.get_name(), alive_now, total], true)
-		await _solo_morale_test(unit, owner)
+		await _solo_morale_test(unit, owner, false, cause)
 
 
 ## Combined CURRENT wounds of a unit's alive models incl. joined heroes (the p.10 tough-value scale).
@@ -11045,7 +11047,8 @@ func _solo_ask_hero_morale_once(unit: GameUnit) -> void:
 		"Let a living Hero test morale for %s from now on?" % unit.get_name(), "Use Hero", "Use unit", true)
 
 
-func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false) -> bool:
+## `cause` names the rule that forced the test; "" = shooting or melee (Rules 3.6 Banner, MOR-08).
+func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false, cause: String = "") -> bool:
 	await _solo_ask_hero_morale_once(unit)
 	var below_half := _solo_below_half_strength(unit)   # single models: tough-wounds scale (p.10)
 	var result: int
@@ -11062,6 +11065,14 @@ func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false) -> bo
 		# picked-units variant still covers the bearer's own unit) lowers the roll target, clamped to
 		# [2,6] (a natural 1 always fails). Without Banner this is the plain Quality target.
 		var morale_bonus: int = _solo_morale_bonus(unit)
+		# Rules 3.6 Banner: the Banner family's +1 only helps a test that shooting or melee caused. Any
+		# other cause takes the Banner share back out; the Morale(X) rating and spell tokens stay.
+		if cause != "" and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+			var banner_share: int = morale_bonus - SoloController.morale_rating_of(unit)
+			if banner_share > 0:
+				morale_bonus -= banner_share
+				_log_rule_event(BattleLog.Category.COMBAT, "Banner: %s gets no +%d against %s (only shooting or melee)" % [
+					unit.get_name(), banner_share, cause], true)
 		# NML-006 morale_mod: active spell tokens ("+1/-1 to morale test rolls", once) join the
 		# Banner bonus in the [2,6]-clamped target; spent right after the test die (rules-must-log).
 		var spell_morale := 0
@@ -21643,7 +21654,7 @@ func _solo_apply_mind_control(unit: GameUnit) -> void:
 			var tgt := _solo_utility_target(member, "enemy", float(sp.get("range_in", 18.0)), bool(sp.get("needs_los", true)))
 			if tgt == null:
 				continue
-			var passed: bool = await _solo_morale_test(tgt, _roller_label(tgt))
+			var passed: bool = await _solo_morale_test(tgt, _roller_label(tgt), false, n)
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s forces a morale test on %s — %s" % [
 					n, member.get_name(), tgt.get_name(), ("passed" if passed else "FAILED")], true)
@@ -22130,7 +22141,7 @@ func _solo_apply_storm_attack(unit: GameUnit) -> void:
 				else:
 					await _solo_land_wounds(tgt, w, 0)
 				# Post-shooting morale, the Breath Attack twin's tail (main.gd:5423).
-				await _solo_shooting_morale(tgt, alive_before, _roller_label(tgt), wounds_before)
+				await _solo_shooting_morale(tgt, alive_before, _roller_label(tgt), wounds_before, n)
 				if _solo_combined_alive(tgt) <= 0:
 					targets_in_reach.erase(tgt)
 					if targets_in_reach.is_empty():
@@ -22208,7 +22219,7 @@ func _solo_apply_surprise_attack(unit: GameUnit) -> void:
 		var w: int = await _solo_save_batch(bu, tgt, "Surprise Attack", hits,
 			_solo_defense_vs(tgt), ap, profile, not _solo_is_ai_unit(tgt), false, true, false)
 		await _solo_land_wounds(tgt, w, 0)
-		await _solo_shooting_morale(tgt, alive_before, _roller_label(tgt), wounds_before)
+		await _solo_shooting_morale(tgt, alive_before, _roller_label(tgt), wounds_before, "Surprise Attack")
 
 
 ## Teleport / Ethereal (design #816, PR 1 — table side): the BEFORE-ATTACK reposition beat, run
