@@ -165,6 +165,29 @@ static func lacerate_only(profile: Dictionary) -> bool:
 	return lacerate
 
 
+## AI-08a (EPOCH_73_V36): a weapon rule read through its map entry, not its 3.5 name (the core's
+## stamp_map_cover_regen twin); the profile keeps the rule's name for the log line, a unit's cover-only rule too.
+static func _stamp_map_cover_regen(fpd: Dictionary, unit: GameUnit) -> void:
+	var rng := int(fpd.get("range", 0))
+	for r in fpd.get("rules", []):
+		var n := RulesRegistry.base_rule_name(str(r))
+		var e := RulesRegistry.lookup(RulesRegistry.system_of_unit(unit), RulesRegistry.faction_of_unit(unit), n)
+		var p: Dictionary = e.get("params", {})
+		var prim := str(e.get("primitive", "")) if facet_applies(p, rng) else ""
+		if prim == "Indirect" and n != "Indirect" and rng > 0 and p.get("cover_only", false) and p.get("ignores_cover", false):
+			fpd["ignores_cover"] = true
+			fpd["cover_rule"] = n
+		elif prim == "Lacerate" and not n.begins_with("Lacerate") and bool(p.get("bypass_regen", false)):
+			fpd["bypass_regen"] = true
+			fpd["regen_bypass_rule"] = n
+	if str(fpd.get("cover_rule", "")).is_empty() and bool(fpd.get("ignores_cover", false)) and rng > 0:
+		for e in RulesRegistry.unit_rules_of_primitive(unit, "Indirect"):
+			var ep: Dictionary = (e as Dictionary).get("params", {})
+			if str(e["name"]) != "Indirect" and ep.get("cover_only", false) and ep.get("ignores_cover", false):
+				fpd["cover_rule"] = str(e["name"])
+				break
+
+
 ## Rating X of a unit-level "Name(X)" special rule (0 if absent) — type-safe against label-only shapes
 ## (the wave-1 _rule_to_string lesson).
 static func unit_rating(unit: GameUnit, rule_name: String) -> int:
@@ -445,6 +468,9 @@ static func stamp_sergeant(profiles: Array, unit: GameUnit) -> Array:
 				var fpd := fp as Dictionary
 				if int(fpd.get("range", 0)) > 0:
 					fpd["ignores_cover"] = true
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		for fp in profiles:
+			_stamp_map_cover_regen(fp as Dictionary, unit)
 	# "Indirect when Shooting" (unit-level name, gf/aof books: "This model gets Indirect when
 	# shooting"): stamp the PLAIN `indirect` facet on the ranged profiles — the table mirror of the
 	# core's unit.rs build_for epoch-6 walk (unit.rs:5119-5138), which the save gate, EV and sight
@@ -456,9 +482,6 @@ static func stamp_sergeant(profiles: Array, unit: GameUnit) -> Array:
 			var fpd := fp as Dictionary
 			if int(fpd.get("range", 0)) > 0:
 				fpd["indirect"] = true
-	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
-		for fp in profiles:
-			_stamp_map_cover_regen(fp as Dictionary, unit)
 	if not RulesRegistry.unit_rule_active(unit, "Sergeant"):
 		return profiles
 	var alive: int = maxi(unit.get_alive_count(), 1)
@@ -470,29 +493,6 @@ static func stamp_sergeant(profiles: Array, unit: GameUnit) -> Array:
 		profile["sergeant_attacks"] = maxi(1, roundi(float(attacks) / float(alive)))
 		break
 	return profiles
-
-
-## AI-08a (EPOCH_73_V36): a weapon rule read through its map entry, not its 3.5 name (the core's
-## stamp_map_cover_regen twin); the profile keeps the rule's name for the log line, a unit's cover-only rule too.
-static func _stamp_map_cover_regen(fpd: Dictionary, unit: GameUnit) -> void:
-	var rng := int(fpd.get("range", 0))
-	for r in fpd.get("rules", []):
-		var n := RulesRegistry.base_rule_name(str(r))
-		var e := RulesRegistry.lookup(RulesRegistry.system_of_unit(unit), RulesRegistry.faction_of_unit(unit), n)
-		var p: Dictionary = e.get("params", {})
-		var prim := str(e.get("primitive", "")) if facet_applies(p, rng) else ""
-		if prim == "Indirect" and n != "Indirect" and rng > 0 and p.get("cover_only", false) and p.get("ignores_cover", false):
-			fpd["ignores_cover"] = true
-			fpd["cover_rule"] = n
-		elif prim == "Lacerate" and not n.begins_with("Lacerate") and bool(p.get("bypass_regen", false)):
-			fpd["bypass_regen"] = true
-			fpd["regen_bypass_rule"] = n
-	if str(fpd.get("cover_rule", "")).is_empty() and bool(fpd.get("ignores_cover", false)) and rng > 0:
-		for e in RulesRegistry.unit_rules_of_primitive(unit, "Indirect"):
-			var ep: Dictionary = (e as Dictionary).get("params", {})
-			if str(e["name"]) != "Indirect" and ep.get("cover_only", false) and ep.get("ignores_cover", false):
-				fpd["cover_rule"] = str(e["name"])
-				break
 
 
 ## Stamp each profile with its target-property conditional-AP specs (Shatter/Tear/Melee Slayer/
