@@ -46,17 +46,21 @@ func ask(caster_name: String, spell_name: String, target_label: String,
 	_boost = boost
 	_count = 0
 	var info := ""
+	# Rules 3.6 (EPOCH_73_V36, lead ruling D-SPELL-LOS, MOR-13): casters within 18" boost or resist whether
+	# they see the caster or not; rules 3.5 asked for a line of sight and keeps its words.
+	var reach := "of casters within 18\" (no sight needed)" \
+		if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else "in 18\" line of sight"
 	if _mode == "interfere":
-		info = "%s is casting %s at %s.\nSpell tokens in 18\" line of sight: %d — each spent token gives -1 to the cast roll." % [
-			caster_name, spell_name, target_label, _pool]
+		info = "%s is casting %s at %s.\nSpell tokens %s: %d — each spent token gives -1 to the cast roll." % [
+			caster_name, spell_name, target_label, reach, _pool]
 	elif _mode == "spot":
 		# Spotter UX (maintainer 31.07.): removing the target's spot markers is the ATTACKER's
 		# choice, caster-points style — each removed marker is +1 to hit this volley.
 		info = "%s attacks %s.\nSpot markers on the target: %d — each removed marker gives +1 to hit this volley." % [
 			caster_name, target_label, _pool]
 	else:
-		info = "%s casts %s at %s.\nFriendly spell tokens in 18\" line of sight: %d — each spent token gives +1 to the cast roll." % [
-			caster_name, spell_name, target_label, _pool]
+		info = "%s casts %s at %s.\nFriendly spell tokens %s: %d — each spent token gives +1 to the cast roll." % [
+			caster_name, spell_name, target_label, reach, _pool]
 	# On the house card (PromptCard, maintainer D98 = a): the stepper, then the live preview line.
 	var card := PromptCard.new("Enemy spell!" if _mode == "interfere" \
 		else ("Spotted target!" if _mode == "spot" else "Boost your cast?"), info, "OK",
