@@ -21279,6 +21279,8 @@ func _solo_takedown_bonus_groups(unit: GameUnit, melee: bool) -> Array:
 ## Hazardous self-wound half (resolver wave A): every unmodified 1 rolled to hit with a Hazardous
 ## weapon wounds the FIRER's unit ("this model's unit takes one wound on unmodified rolls of 1 to
 ## hit"). Direct wounds — no save, same as Dangerous terrain; fires at all three hit-roll seams.
+## Rules 3.6 (EPOCH_73_V36): the wound lands on the BEARER model instead, X wounds when the weapon
+## also has Blast(X) or Deadly(X) (_solo_hazardous_bearer_wounds).
 func _solo_hazardous_self_wounds(owner_unit: GameUnit, profile: Dictionary, faces: Array) -> void:
 	if owner_unit == null or not bool(profile.get("hazardous", false)):
 		return
@@ -21288,11 +21290,63 @@ func _solo_hazardous_self_wounds(owner_unit: GameUnit, profile: Dictionary, face
 			ones += 1
 	if ones <= 0:
 		return
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		await _solo_hazardous_bearer_wounds(owner_unit, profile, ones)
+		return
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT,
 			"Hazardous: %s rolls %d unmodified 1%s to hit — takes %d wound%s" % [
 			owner_unit.get_name(), ones, ("" if ones == 1 else "s"), ones, ("" if ones == 1 else "s")], true)
 	await _solo_apply_wounds(owner_unit, ones)
+
+
+## Rules 3.6 Hazardous (EPOCH_73_V36): each unmodified 1 wounds the BEARER model — a joined hero his own, a
+## firing model of a Tough unit itself — for X wounds when the weapon also has Blast(X) or Deadly(X) (the
+## larger of the two if it has both), capped at the model like Deadly (no carry-over). When the bearer falls,
+## the next 1 goes to the next living bearer. With no bearer on record (pooled regiment, older save) the
+## unit takes the X-scaled wounds, as before.
+func _solo_hazardous_bearer_wounds(owner_unit: GameUnit, profile: Dictionary, ones: int) -> void:
+	var x: int = maxi(maxi(int(profile.get("blast", 0)), int(profile.get("deadly", 0))), 1)
+	var weapon: String = str(profile.get("name", "?"))
+	var pooled: bool = opr_army_manager != null and opr_army_manager.regiments.has(owner_unit.unit_id)
+	var pid: int = int(owner_unit.unit_properties.get("player_id", 1))
+	var on_changed := func(m: ModelInstance) -> void:
+		if radial_menu_controller != null:
+			radial_menu_controller._update_wound_marker(m)
+		if network_manager != null and network_manager.has_method("broadcast_model_wounds"):
+			network_manager.broadcast_model_wounds(m)
+	for _i in range(ones):
+		var bearer: ModelInstance = null if pooled else _solo_hazardous_bearer(owner_unit, weapon)
+		if bearer == null:
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.COMBAT, "Hazardous: %s has no bearer on record — the unit takes %d wound%s (%s)" % [
+					owner_unit.get_name(), x, ("" if x == 1 else "s"), weapon], true)
+			await _solo_apply_wounds(owner_unit, x)
+			continue
+		var bearer_unit: GameUnit = (bearer.unit as GameUnit) if bearer.unit != null else owner_unit
+		var died_models: Array[ModelInstance] = []
+		var dealt: int = SoloController.apply_deadly_hit(bearer, x, on_changed, func(m: ModelInstance) -> void: died_models.append(m))
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT, "Hazardous: %s model %d takes %d wound%s (%s%s)" % [
+				bearer_unit.get_name(), bearer.model_index + 1, dealt, ("" if dealt == 1 else "s"),
+				("Blast/Deadly %d, " % x if x > 1 else ""), weapon], true)
+		if not died_models.is_empty():
+			await _solo_remove_dead_models(bearer_unit, died_models, pid)
+	_solo_hero_carries_on(owner_unit)
+
+
+## The first living model of the firing unit's joined chain whose pinned loadout carries `weapon`, or null.
+func _solo_hazardous_bearer(owner_unit: GameUnit, weapon: String) -> ModelInstance:
+	for cu in _solo_joined_chain(owner_unit):
+		for m in (cu as GameUnit).models:
+			var mi := m as ModelInstance
+			if mi == null or not mi.is_alive:
+				continue
+			for w in mi.get_weapons():
+				var w_name: String = str((w as Dictionary).get("name", "")) if w is Dictionary else (str(w.name) if "name" in w else "")
+				if w_name == weapon:
+					return mi
+	return null
 
 
 ## Unwieldy (resolver wave A — "strikes last when charging"): any chain member carrying the rule
