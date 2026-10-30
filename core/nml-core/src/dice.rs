@@ -777,6 +777,8 @@ pub fn resolve_volley_leg(
     // that fired is `def.evasive_alias_name` ("Machine-Fog Boost" at epoch 6,
     // "Empyrean Spirit Boost" at epoch 7).
     let mut evasive_boost_fired = false;
+    // Rules 3.6 (D-MOST) — Stealth's -1 rode the most-models read: one line per volley.
+    let mut stealth_most_fired = false;
     // Wave 4 — and the widened Bane window's own rule name, sticky once a
     // weapon opened it ("Mischievous Boost" at epoch 6, "Bestial Boost" at
     // epoch 7); "" = the base 6s-only window fired nothing.
@@ -940,6 +942,7 @@ pub fn resolve_volley_leg(
         // unconditional -1 rode this weapon's to-hit sum (the defender-side
         // alias marker, Ctx::evasive_alias).
         evasive_boost_fired |= def.evasive_alias;
+        stealth_most_fired |= def.stealth_most_models && mod_dist_in > LONG_RANGE_IN;
         // EPOCH 34 UNSTOPPABLE MARK — the granted mark's CLAMP half: the
         // once-grant the mark seam leaves on the bearer (`ctx_live`'s
         // `unstoppable_mark`) counts like the weapon's own `p.unstoppable`,
@@ -1331,6 +1334,9 @@ pub fn resolve_volley_leg(
             "{}: {def_owner} — attackers get -1 to hit (always)",
             def.evasive_alias_name
         ));
+    }
+    if stealth_most_fired {
+        out.log.push(format!("Stealth: {def_owner} — -1 to hit past 9\", most models carry it"));
     }
     if out.bane_rerolled > 0 {
         out.log.push(format!(

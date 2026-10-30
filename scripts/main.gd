@@ -6320,6 +6320,26 @@ func _solo_rule_on_all_models(unit: GameUnit, rule: String) -> bool:
 		not _solo_takedown_solo.is_empty() and unit != null and unit == _solo_takedown_solo.get("unit"))
 
 
+## Rules 3.6 (ruling D-MOST): the "most models" twin of _solo_rule_on_all_models, with the same Takedown
+## unit-of-[1] collapse. Below EPOCH_73_V36 it is the all-models read unchanged.
+func _solo_rule_on_most_models(unit: GameUnit, rule: String) -> bool:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return _solo_rule_on_all_models(unit, rule)
+	return AiEv.rule_on_most_models(unit, rule,
+		not _solo_takedown_solo.is_empty() and unit != null and unit == _solo_takedown_solo.get("unit"))
+
+
+## The Stealth-family names whose 3.6 text reads "most models" (the core's STEALTH_MOST_MODELS twin); every
+## other alias keeps the all-models read. Empyrean Spirit is on that list too but rides row MOR-06.
+const SOLO_STEALTH_MOST_MODELS: Array[String] = ["Stealth", "Changebound", "Machine-Fog", "Screened"]
+
+
+func _solo_stealth_family_on(unit: GameUnit, rule: String) -> bool:
+	if rule in SOLO_STEALTH_MOST_MODELS:
+		return _solo_rule_on_most_models(unit, rule)
+	return _solo_rule_on_all_models(unit, rule)
+
+
 ## The over-9" +1-defense rule a target projects ("" when none): Guarded (unconditional), or a
 ## Versatile Defense unit (wahl-effect wave — official text: "pick one effect: when shot or charged
 ## from over 9\" away, the unit either gets +1 to defense rolls, or enemy units get -1 to hit rolls
@@ -7440,7 +7460,7 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 	for e in RulesRegistry.unit_rules_of_primitive(target, "Stealth"):
 		var ed := e as Dictionary
 		var n := str(ed["name"])
-		if n == "Stealth" or not _solo_rule_on_all_models(target, n):
+		if n == "Stealth" or not _solo_stealth_family_on(target, n):
 			continue
 		# The stand-down: the Boost's unconditional Evasive replaces the base's own conditional
 		# alias — the two never stack (the core's named gate skips the same name, unit.rs:2199-2201).
@@ -7502,7 +7522,7 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 		return {"mod": mm + int(sm.get("mod", 0)) + int(vt.get("mod", 0)),
 			"note": _solo_join_note(_solo_join_note(base_note, str(sm.get("note", ""))), str(vt.get("note", "")))}
 	var attacker_artillery: bool = shooter_member != null and shooter_member.has_special_rule("Artillery")
-	var stealth: bool = _solo_rule_on_all_models(target, "Stealth")
+	var stealth: bool = _solo_stealth_family_on(target, "Stealth")
 	var target_artillery: bool = target.has_special_rule("Artillery")
 	# The Artillery magnitudes are the entries' params (dead-parameter fold, twin of #1006): the
 	# fallback is the recorded constant, so a real-book replay is byte-identical.
@@ -7523,7 +7543,8 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 		# read the silent short-range case as a missing rule.
 		notes.append("Artillery: no +%d (target within 9\")" % art_shooter_bonus)
 	if stealth and over_nine:
-		notes.append("Stealth -1")
+		# Rules-must-log (D-MOST): name the majority read when a member lacks Stealth.
+		notes.append("Stealth -1" if _solo_rule_on_all_models(target, "Stealth") else "Stealth -1 (most models carry it)")
 	elif stealth:
 		notes.append("Stealth: no -1 (within 9\")")   # #224 sweep: name the non-application
 	if alias_pen > 0 and not (stealth and over_nine):

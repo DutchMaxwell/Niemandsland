@@ -171,6 +171,9 @@ pub struct Ctx {
     pub heavy_impact: i64,
     pub ravage: i64,
     pub stealth: bool,
+    /// Rules 3.6 (D-MOST): `stealth` holds through the most-models read while
+    /// not every model carries it — only the volley's log line reads it.
+    pub stealth_most_models: bool,
     /// The DEFENDER's best Stealth-primitive DATA ALIAS (Changebound et al.)
     /// OTHER than the literal "Stealth" name, which `stealth` above (and the
     /// fixed `STEALTH_HIT_PENALTY`/`LONG_RANGE_IN` constants) already cover
@@ -1575,11 +1578,27 @@ fn stealth_alias_of_excluding(reg: &mut Registries, p: &Profile, skip: &str) -> 
     }
     (best_penalty, best_over_in, best_applies_charged)
 }
+
+/// Rules 3.6 (ruling D-MOST) — the Stealth-family names whose 3.6 text reads
+/// "most models" (the verified P1 list); every other alias keeps the
+/// all-models read. Empyrean Spirit is on that list too but rides row MOR-06.
+const STEALTH_MOST_MODELS: [&str; 4] = ["Stealth", "Changebound", "Machine-Fog", "Screened"];
+
+/// The Stealth-family quantifier: from `EPOCH_73_V36` a listed name holds when
+/// most models carry it (`p.model_count` = the host's models when the profile
+/// is built), else, and below the gate, only when every model does.
+fn stealth_family_on(p: &Profile, rule: &str, rules_epoch: u32) -> bool {
+    if rule_on(rules_epoch, crate::acts::EPOCH_73_V36) && STEALTH_MOST_MODELS.contains(&rule) {
+        return rule_on_most_models(p, p.model_count, rule, false);
+    }
+    rule_on_all_models(p, rule)
+}
+
 /// Wave 4 (port-entrenched) — `stealth_alias_of_excluding` SPLIT by
 /// `requires_stationary`: true keeps the flagged entries (Entrenched),
 /// false only the unconditional ones, below the FROZEN gate never called.
 fn stealth_alias_split_walk(
-    reg: &mut Registries, p: &Profile, skip: &str, want_stationary: bool,
+    reg: &mut Registries, p: &Profile, skip: &str, want_stationary: bool, rules_epoch: u32,
 ) -> (i64, f64, bool, bool) {
     let mut best_penalty = 0;
     let mut best_over_in = 0.0;
@@ -1588,7 +1607,7 @@ fn stealth_alias_split_walk(
     let map = reg.rules_for(&p.game_system);
     for r in &p.special_rules {
         let name = base_rule_name(r);
-        if name.is_empty() || name == "Stealth" || name == skip || !rule_on_all_models(p, &name) {
+        if name.is_empty() || name == "Stealth" || name == skip || !stealth_family_on(p, &name, rules_epoch) {
             continue;
         }
         let Some(e) = map.lookup(&p.faction_folder, &name) else {
@@ -1621,8 +1640,8 @@ fn stealth_alias_split_walk(
 pub(crate) const STEALTH_ALIAS_TERRAIN_WITHIN_IN: f64 = 1.0;
 
 /// The split's SIBLING fn — the `requires_stationary` members only.
-fn stationary_alias_of(reg: &mut Registries, p: &Profile) -> (i64, f64, bool) {
-    let (pen, over, charged, _) = stealth_alias_split_walk(reg, p, "", true);
+fn stationary_alias_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (i64, f64, bool) {
+    let (pen, over, charged, _) = stealth_alias_split_walk(reg, p, "", true, rules_epoch);
     (pen, over, charged)
 }
 /// Battleborn family wave 3 (rules-wave3-battleborn) — main.gd
@@ -2611,8 +2630,8 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
             let skip = if machine_fog_boost { "Machine-Fog" }
                 else if empyrean_spirit_boost { "Empyrean Spirit" } else { "" };
-            let (ap, ao, ac, near) = stealth_alias_split_walk(reg, p, skip, false);
-            let (sp, so, _) = stationary_alias_of(reg, p);
+            let (ap, ao, ac, near) = stealth_alias_split_walk(reg, p, skip, false, rules_epoch);
+            let (sp, so, _) = stationary_alias_of(reg, p, rules_epoch);
             (ap, ao, ac, near, sp, so)
         } else {
             let (ap, ao, ac) = if machine_fog_boost { stealth_alias_of_excluding(reg, p, "Machine-Fog") }
@@ -2764,7 +2783,9 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         impact: unit_rating(&p.special_rules, "Impact"),
         heavy_impact: unit_rating(&p.special_rules, "Heavy Impact"),
         ravage: unit_rating(&p.special_rules, "Ravage"),
-        stealth: rule_on_all_models(p, "Stealth"),
+        stealth: stealth_family_on(p, "Stealth", rules_epoch),
+        stealth_most_models: stealth_family_on(p, "Stealth", rules_epoch)
+            && !rule_on_all_models(p, "Stealth"),
         stealth_alias_penalty,
         stealth_alias_over_in,
         stealth_alias_applies_charged,

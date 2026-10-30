@@ -200,7 +200,8 @@ static func ctx_for(unit: GameUnit, in_cover: bool = false, counter_models: int 
 		"impact": unit_rating(unit, "Impact"),
 		"heavy_impact": unit_rating(unit, "Heavy Impact"),
 		"ravage": unit_rating(unit, "Ravage"),
-		"stealth": rule_on_all_models(unit, "Stealth"),
+		"stealth": rule_on_most_models(unit, "Stealth") if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
+			else rule_on_all_models(unit, "Stealth"),
 		"evasive": rule_on_all_models(unit, "Evasive"),
 		"melee_evasion": rule_on_all_models(unit, "Melee Evasion"),
 		"fortified": rule_on_all_models(unit, "Fortified"),
