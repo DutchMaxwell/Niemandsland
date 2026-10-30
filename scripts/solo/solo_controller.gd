@@ -8794,6 +8794,21 @@ static func indirect_needs_hold(unit: GameUnit, key: String) -> bool:
 	return true
 
 
+## Rules 3.6 (SHO-01b): the cover half of the Indirect waiver needs a Hold (`cover_needs_hold`, the
+## SHO-01a sight half's shape above). Core twin: unit.rs build_for's EPOCH_73_V36 stamp.
+static func indirect_ignores_cover(unit: GameUnit, held: bool = true) -> bool:
+	return held or not indirect_needs_hold(unit, "cover_needs_hold")
+
+
+## The volley's cover decision (main.gd's AI and human save paths): Blast and Ignores Cover always
+## drop the target's cover; an Indirect weapon drops it only after a Hold at rules 3.6.
+## Core twin: dice.rs resolve_volley_leg's save fold.
+static func shot_ignores_cover(profile: Dictionary, unit: GameUnit, held: bool = true) -> bool:
+	if int(profile.get("blast", 0)) > 1 or bool(profile.get("ignores_cover", false)):
+		return true
+	return bool(profile.get("indirect", false)) and indirect_ignores_cover(unit, held)
+
+
 ## The Counter strike-first half (core `strikes_first.unwrap_or(true)`): the entry can opt a
 ## Counter weapon OUT of the strike-first slot (default true = strikes first when charged).
 static func counter_strikes_first(unit: GameUnit) -> bool:

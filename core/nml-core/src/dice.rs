@@ -760,6 +760,8 @@ pub fn resolve_volley_leg(
     // alias-marked profile's cover skip actually lands on an in-cover target
     // (`shroud_shortened`'s shape) — one line per volley below.
     let mut alias_cover_logged = false;
+    // Rules 3.6 (SHO-01b) — the kept-cover line's once-per-volley flag.
+    let mut indirect_cover_logged = false;
     // Wave 3 — the Shot Modifier family's two runtime-gated members name
     // themselves once per volley per firing member (rules-must-log): the
     // member's owner, its hit bonus and (Mobile Artillery only) its own
@@ -1156,14 +1158,19 @@ pub fn resolve_volley_leg(
         // table makes for THIS profile, after the volley's earlier Takedown groups landed (it re-picks
         // per profile, main.gd:4171) — the caller answers from the groups so far.
         let td_own = unit_of_one && takedown_cover(&out.takedown_groups);
-        let save_def = if p.blast > 1 || p.indirect || p.ignores_cover {
+        // Rules 3.6 (SHO-01b): an Indirect shot drops cover only after a Hold; Blast and
+        // Ignores Cover keep dropping it at every epoch (`indirect_cover_needs_hold` is stamped
+        // only from EPOCH_73_V36, so older records keep their unconditional skip).
+        let indirect_keeps_cover = p.indirect && p.indirect_cover_needs_hold && !sh.att.held;
+        let skips_cover = p.blast > 1 || p.ignores_cover || (p.indirect && !indirect_keeps_cover);
+        let save_def = if skips_cover {
             base
         } else {
             covered_defense(base, if unit_of_one { td_own } else { def.in_cover }, def.def_floor())
         };
         if unit_of_one {
             // Tray-exact S10 — `_solo_log_takedown_context`: the save the pick really rolls, and why.
-            let why = if p.blast > 1 || p.indirect || p.ignores_cover { "cover ignored" }
+            let why = if skips_cover { "cover ignored" }
                 else if td_own { "in cover of its own" } else { "no cover of its own" };
             out.log.push(format!("Takedown ({}): the pick saves on {save_def}+ ({why})", p.name));
         }
@@ -1175,6 +1182,7 @@ pub fn resolve_volley_leg(
         // carries no markers and stays silent.
         if !alias_cover_logged
             && def.in_cover
+            && skips_cover
             && p.blast <= 1
             && (p.indirect_alias || p.ignores_cover_alias)
         {
@@ -1186,6 +1194,12 @@ pub fn resolve_volley_leg(
             };
             out.log
                 .push(format!("{rule}: {} — {}'s cover save is skipped", sh.owner, def_owner));
+        }
+        // Rules 3.6 (SHO-01b) — rules-must-log: a moved Indirect shooter's target KEEPS its cover.
+        if !indirect_cover_logged && indirect_keeps_cover && def.in_cover && p.blast <= 1 {
+            indirect_cover_logged = true;
+            out.log.push(format!(
+                "Indirect: {} moved — {}'s cover counts (only a Hold ignores it)", sh.owner, def_owner));
         }
         // Block B7 — Piercing Growth: main.gd:4287's marker-driven AP delta,
         // shooting and melee both (`_solo_attack_groups` adds it to `prof

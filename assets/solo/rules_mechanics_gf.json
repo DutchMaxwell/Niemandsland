@@ -767,7 +767,8 @@
     "ignores_cover": true,
     "ignores_los": true,
     "hold_and_shoot": true,
-    "los_needs_hold": true
+    "los_needs_hold": true,
+    "cover_needs_hold": true
    }
   },
   "Indirect when Shooting": {

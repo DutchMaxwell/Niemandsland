@@ -798,6 +798,8 @@ pub struct ShootProfile {
     pub indirect_ignores_los: Option<bool>,
     /// Rules 3.6 (SHO-01a): the sight waiver needs Hold (`los_needs_hold`, from `EPOCH_73_V36`).
     pub indirect_los_needs_hold: bool,
+    /// Rules 3.6 (SHO-01b): the cover waiver needs Hold (`cover_needs_hold`, from `EPOCH_73_V36`).
+    pub indirect_cover_needs_hold: bool,
     /// The unit-level "Indirect when Shooting" stamp (`build_for`'s epoch-6
     /// named walk below) — set ALONGSIDE `indirect` so the volley log
     /// (dice.rs) can name the RULE, not the weapon tag, when its cover skip
@@ -6393,8 +6395,10 @@ impl UnitStatic {
                     })
             };
             let los = needs_hold("los_needs_hold");
+            let cover = needs_hold("cover_needs_hold");
             for sp in shoot.iter_mut().filter(|sp| sp.indirect) {
                 sp.indirect_los_needs_hold = los;
+                sp.indirect_cover_needs_hold = cover;
             }
         }
 

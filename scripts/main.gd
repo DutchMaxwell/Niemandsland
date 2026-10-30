@@ -4579,6 +4579,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 	var total_hits := 0
 	var total_caused := 0
 	var cover_logged := false   # I4: log Cover once, only when a shot's save really used it
+	var indirect_cover_logged := false   # Rules 3.6 (SHO-01b): name a moved Indirect shooter's kept cover once
 	# Unpredictable (generic army-book rule — "when attacking": the SHOOTING leg; the wave-4 melee-only
 	# Unpredictable Fighter lives in the melee path): ONE die per volley for the whole unit —
 	# 1-3 → AP(+1), 4-6 → +1 to hit on every profile it fires (same arithmetic, same visible tray).
@@ -4722,7 +4723,13 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		# save-step rules) resolve inside _solo_resolve_saves. Native both-AI (AI ARENA): when the
 		# DEFENDER is itself AI, the saves auto-roll on the real tray (no human prompt) — the human_defends flag
 		# is derived, never assumed, so an AI-vs-AI game resolves shooting unattended.
-		var save_def: int = shot_base if (int(profile.get("blast", 0)) > 1 or bool(profile.get("indirect", false)) or bool(profile.get("ignores_cover", false))) else shot_cover
+		var save_def: int = shot_base if SoloController.shot_ignores_cover(profile, attacker, _solo_unit_held(attacker)) else shot_cover
+		if not indirect_cover_logged and bool(profile.get("indirect", false)) \
+				and not SoloController.indirect_ignores_cover(attacker, _solo_unit_held(attacker)) \
+				and battle_log != null and AiCombatMath.shot_uses_cover(save_def, shot_cover, shot_base):
+			indirect_cover_logged = true   # the rule applied: the target keeps cover because the shooter moved
+			battle_log.log_event(BattleLog.Category.COMBAT, "Indirect: %s moved — %s's cover counts (only a Hold ignores it)" % [
+				attacker.get_name(), target.get_name()], true)
 		if td_ctx.is_empty() and not cover_logged and battle_log != null \
 				and AiCombatMath.shot_uses_cover(save_def, shot_cover, shot_base):
 			cover_logged = true   # I4: only claim Cover when the roll truly saved at the covered value
@@ -13267,6 +13274,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 			attacker.get_name(), _solo_volley_sighted(attacker, target), total, ("" if total == 1 else "s")], true)
 	var fired_any := false   # round 7, finding 5: a volley that rolls NOTHING must say so, never end silently
 	var cover_logged := false   # I4: log Cover once, only when a shot's save really used it
+	var indirect_cover_logged := false   # Rules 3.6 (SHO-01b): name a moved Indirect shooter's kept cover once
 	# Maintainer 31.07.: the attacker CHOOSES how many markers to remove (caster-points style).
 	var spot_hit: int = await _solo_offer_spot_markers(attacker, target)
 	var tag_hit: int = _solo_consume_tag_markers(target)   # Precision Tag: the spot pool's +1-per-removal twin
@@ -13395,7 +13403,13 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 				await _solo_stage_phase(str(profile.get("name", "weapon")))
 				continue
 			# Blast (GF v3.5.1) and Indirect (wave 5) ignore cover — saves at the Shielded (uncovered) Defense.
-			var save_def: int = shot_base if (int(profile.get("blast", 0)) > 1 or bool(profile.get("indirect", false)) or bool(profile.get("ignores_cover", false))) else shot_cover
+			var save_def: int = shot_base if SoloController.shot_ignores_cover(profile, attacker, _solo_unit_held(attacker)) else shot_cover
+			if not indirect_cover_logged and bool(profile.get("indirect", false)) \
+					and not SoloController.indirect_ignores_cover(attacker, _solo_unit_held(attacker)) \
+					and battle_log != null and AiCombatMath.shot_uses_cover(save_def, shot_cover, shot_base):
+				indirect_cover_logged = true   # the rule applied: the target keeps cover because the shooter moved
+				battle_log.log_event(BattleLog.Category.COMBAT, "Indirect: %s moved — %s's cover counts (only a Hold ignores it)" % [
+					attacker.get_name(), target.get_name()], true)
 			if td_ctx.is_empty() and not cover_logged and battle_log != null \
 					and AiCombatMath.shot_uses_cover(save_def, shot_cover, shot_base):
 				cover_logged = true   # I4: only claim Cover when the roll truly saved at the covered value

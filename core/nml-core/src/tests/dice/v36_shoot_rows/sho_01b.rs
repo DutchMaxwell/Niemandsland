@@ -97,7 +97,7 @@ fn blast_drops_cover_at_both_epochs_whether_moved_or_held() {
             let att = Ctx { held, ..shooter(4) };
             let mut tray = Tray::seeded(27);
             let out = resolve_shooting_with_tray(
-                &std::slice::from_ref(&blast), &[0], &[6], &att, &covered_defender(), 12.0, &mut tray);
+                std::slice::from_ref(&blast), &[0], &[6], &att, &covered_defender(), 12.0, &mut tray);
             assert_eq!(save_target_of(&out), 4, "Blast(3) drops cover (epoch {epoch}, held {held})");
         }
     }
