@@ -9336,8 +9336,10 @@ func _run_ai_dangerous(unit: GameUnit, model_count: int) -> void:
 	if unit == null or dice_roller_control == null or model_count <= 0:
 		return
 	if battle_log != null:
-		_log_rule_event(BattleLog.Category.COMBAT,
-			"%s takes %d Dangerous terrain test dice" % [unit.get_name(), model_count], true)
+		# UX-20 (EPOCH_73_V36, rules 3.6): the dice are ONE test of the whole joined unit.
+		var line: String = "%s takes one Dangerous terrain test for the whole unit (%d dice)" \
+			if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else "%s takes %d Dangerous terrain test dice"
+		_log_rule_event(BattleLog.Category.COMBAT, line % [unit.get_name(), model_count], true)
 	# A1 (NML-202): a player-driven auto intent can land here too (execute_intent's dangerous-terrain
 	# tap doesn't know which side moved) — the tray label must say "You"/the co-op owner, not "AI".
 	var faces: Array = await _solo_tray_roll(model_count, 6, _roller_label(unit), "dangerous",
