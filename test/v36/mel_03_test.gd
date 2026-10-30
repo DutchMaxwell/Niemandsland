@@ -35,8 +35,9 @@ func after_test() -> void:
 	_runner = null
 
 
-## `models` one-wound models at `x` inches, one melee weapon, the given unit rules and Defense.
-func _unit(pid: int, unit_name: String, x: float, models: int, weapon: String, rules: Array, defense: int) -> GameUnit:
+## `models` models of `tough` wounds each at `x` inches, one melee weapon, the given unit rules and Defense.
+func _unit(pid: int, unit_name: String, x: float, models: int, weapon: String, rules: Array, defense: int,
+		tough: int = 1) -> GameUnit:
 	var positions: Array = []
 	for i in range(models):
 		positions.append(Vector3(x * INCH, 0.0, 0.02 * i))
@@ -50,8 +51,11 @@ func _unit(pid: int, unit_name: String, x: float, models: int, weapon: String, r
 	opr.weapons = ws
 	u.source_type = "opr"
 	u.source_data = opr
-	u.unit_properties["special_rules"] = rules
+	u.unit_properties["special_rules"] = rules + (["Tough(%d)" % tough] if tough > 1 else [])
 	u.unit_properties["defense"] = defense
+	for m in u.models:
+		(m as ModelInstance).wounds_max = tough
+		(m as ModelInstance).wounds_current = tough
 	_main.opr_army_manager.game_units[u.unit_id] = u
 	return u
 
@@ -65,12 +69,12 @@ func _line_of(needle: String) -> int:
 	return -1
 
 
-## The AI charges a Counter defender: 2 chargers x Impact(4) minus 4 Counter models = 4 Impact dice,
-## and a 2+ save keeps the defender standing for its Counter strike.
+## The AI charges a Counter defender: 2 chargers x Impact(4) minus 2 Counter models = 6 Impact dice.
+## Tough(9) on both sides means no model can fall in either order, so neither leg depends on the dice.
 func _ai_charge(epoch: int) -> void:
 	AiActRecorder.rules_epoch = epoch
-	var charger := _unit(2, "Charger", 0.0, 2, "Blade", ["Impact(4)"], 4)
-	var defender := _unit(1, "Defender", 1.0, 4, "Spikes", ["Counter"], 2)
+	var charger := _unit(2, "Charger", 0.0, 2, "Blade", ["Impact(4)"], 4, 9)
+	var defender := _unit(1, "Defender", 1.0, 2, "Spikes", ["Counter"], 4, 9)
 	_main.seed_tray_rng(7)
 	await _main._run_ai_melee({"unit": charger, "target": defender, "charge_from_in": 1.0})
 
@@ -119,8 +123,8 @@ func test_an_impact_wipe_leaves_no_counter_strike_at_epoch_73(timeout := 90000) 
 ## Your charge: the AI defender's Counter strike and its stage card both follow the Impact card.
 func test_your_charge_rolls_impact_before_the_counter_card_at_epoch_73(timeout := 90000) -> void:
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
-	var charger := _unit(1, "Charger", 0.0, 2, "Blade", ["Impact(4)"], 4)
-	var defender := _unit(2, "Defender", 1.0, 4, "Spikes", ["Counter"], 2)
+	var charger := _unit(1, "Charger", 0.0, 2, "Blade", ["Impact(4)"], 4, 9)
+	var defender := _unit(2, "Defender", 1.0, 2, "Spikes", ["Counter"], 4, 9)
 	_main.combat_stage.force_for_tests = true
 	GraphicsSettings.combat_stage_hold_s = 0.0
 	_main.seed_tray_rng(7)
