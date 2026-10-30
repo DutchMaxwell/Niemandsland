@@ -1092,6 +1092,10 @@ pub struct UnitStatic {
     /// `EPOCH_6_TABLE_RULES`): the menu keeps the gate, the recorded
     /// constant. Read only by `menu::candidates_tuned` — never recorded.
     pub hold_only: Option<bool>,
+    /// The `rules_epoch` this static was built under — carried for the
+    /// readers that get no epoch of their own (`menu::holds_only`). 0 (the
+    /// `Default`) is a hand-built static: every gate keeps its oldest leg.
+    pub rules_epoch: u32,
     /// FEAT PR 3 — the two aof latch feats' windows, read BY NAME off the
     /// registry (the design's `hit_bonus: 1, all_attacks: true` /
     /// `ap_bonus: 1, condition: any_attack`, both `uses_per_game: 1` —
@@ -6344,6 +6348,7 @@ impl UnitStatic {
             fortified_alias_name: fa.alias_name,
             fortified_boost_name: fa.boost_name,
             hold_only,
+            rules_epoch,
             shoot,
             melee,
             strafe_shoot,

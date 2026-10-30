@@ -110,3 +110,26 @@ use crate::state::{Objective, Weapon};
         let incoming = reply_threat_opts(&statics, &st, 1, o);
         assert!(incoming[2] > 0.0, "rules 3.6: the gun advances and fires, got {}", incoming[2]);
     }
+
+    /// The grid pool (AI-02): `plan.rs` drops a hold-only unit from the cells it
+    /// widens through `menu::holds_only`, the read the menu and the reply model
+    /// share — the gun is held out at epoch 72 and pooled at epoch 73.
+    #[test]
+    fn the_grid_pool_read_keeps_the_gun_out_at_epoch_72_and_in_at_epoch_73() {
+        let (st72, statics72) = gun_line(EPOCH_72_PLAYTEST_RULES, 16.0);
+        assert!(crate::menu::holds_only(&st72, &statics72, 0), "rules 3.5: the gun stays out of the pool");
+        let (st73, statics73) = gun_line(EPOCH_73_V36, 16.0);
+        assert!(!crate::menu::holds_only(&st73, &statics73, 0), "rules 3.6: the gun joins the pool");
+    }
+
+    /// Immobile keeps to Hold at both epochs; a hand-built static (epoch 0)
+    /// keeps the oldest leg.
+    #[test]
+    fn immobile_holds_at_both_epochs_and_epoch_0_keeps_the_old_gate() {
+        let names = |n: &str| vec![n.to_string()];
+        for epoch in [EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36] {
+            assert!(crate::menu::forces_hold_at(&names("Immobile"), epoch), "Immobile at {epoch}");
+        }
+        assert!(crate::menu::forces_hold_at(&names("Artillery"), 0));
+        assert!(!crate::menu::forces_hold_at(&names("Ethereal"), EPOCH_72_PLAYTEST_RULES));
+    }
