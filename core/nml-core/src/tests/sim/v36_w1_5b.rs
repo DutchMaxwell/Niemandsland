@@ -30,8 +30,8 @@ use super::*;
     /// The gate itself, both legs: the edge gap passes through from the wave, the record leg stays blind.
     #[test]
     fn the_charge_estimate_gap_is_the_edge_gap_at_epoch_73_and_zero_at_epoch_72() {
-        assert_eq!(crate::combat::charge_estimate_gap_in(E72, 5.0), 0.0);
-        assert_eq!(crate::combat::charge_estimate_gap_in(E73, 5.0), 5.0);
+        assert_eq!(crate::combat::charge_estimate_gap_in(E72, || 5.0), 0.0);
+        assert_eq!(crate::combat::charge_estimate_gap_in(E73, || 5.0), 5.0);
     }
 
     /// `melee_ev` hands its charge distance on to the profile EV: a charge from 10" prices Versatile

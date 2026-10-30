@@ -5,6 +5,7 @@
 //! :497-505 and the melee branch of `profile_ev` :330-350) arrived with M1-3;
 //! `resolve()` reaches it only on a CHARGE (battle_sim.gd:631-646).
 
+use crate::acts::{rule_on, EPOCH_73_V36};
 use crate::unit::{CondAp, Ctx, ShootProfile};
 
 /// `AiEv.SIX_P` ai_ev.gd:27 — P(one specific d6 face).
@@ -625,8 +626,8 @@ pub fn profile_ev(
     }
     six_hits = six_hits.min(hits);
     // --- saves: Shielded, then Cover, then Guarded (ai_ev.gd:403-411) ---
-    // Cover and Guarded are SHOOTING-only reads: melee EV always values at
-    // dist 0, so the charge halves of both live in the dice path only.
+    // Cover and Guarded are SHOOTING-only reads: the charge halves of both
+    // live in the dice path only (a charge's `dist_in` reaches Versatile Attack alone).
     let mut defense = shielded_defense(def.defense, def.shielded_bonus(), def.def_floor());
     if !melee && p.blast <= 1 && !p.indirect && !p.ignores_cover {
         defense = covered_defense(defense, def.in_cover, def.def_floor());
@@ -748,23 +749,34 @@ pub fn impact_ev(att: &Ctx, def: &Ctx) -> f64 {
     wounds
 }
 
+/// D-GATE6 (rules 3.6, `EPOCH_73_V36`): the pre-charge distance a charge EV is handed — the closest-model
+/// base-edge gap (lazily, so a record below the wave never pays for the measure) from the wave, the
+/// blind 0.0 below it (every older record prices byte-exact).
+#[inline]
+pub fn charge_estimate_gap_in(rules_epoch: u32, edge_gap_in: impl FnOnce() -> f64) -> f64 {
+    if rule_on(rules_epoch, EPOCH_73_V36) { edge_gap_in() } else { 0.0 }
+}
+
 /// `AiEv.melee_ev` ai_ev.gd:485-495 — every melee profile strikes (profile
 /// order, additive), then the charge's Impact hits, then Ravage.
 ///
 /// `profiles` is the unit's whole merged MELEE set and `attacks[k]` the
 /// survivor-scaled count of `profiles[k]` — the same split as `shoot_ev`, minus
 /// the range filter (every melee profile is range 0, so all of them strike).
+/// `charge_from_in` is `charge_dist_in` (ai_ev.gd:695): the distance a CHARGE's
+/// strikes are priced at, 0.0 for a strike that is not a charge.
 pub fn melee_ev(
     profiles: &[ShootProfile],
     attacks: &[i64],
     att: &Ctx,
     def: &Ctx,
     charging: bool,
+    charge_from_in: f64,
 ) -> f64 {
     let mut total = 0.0;
     for (k, p) in profiles.iter().enumerate() {
         if p.range <= 0 {
-            total += profile_ev(p, attacks[k], att, def, 0.0, charging);
+            total += profile_ev(p, attacks[k], att, def, if charging { charge_from_in } else { 0.0 }, charging);
         }
     }
     if charging {

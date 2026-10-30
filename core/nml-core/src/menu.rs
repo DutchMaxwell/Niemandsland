@@ -21,7 +21,7 @@
 use serde::Deserialize;
 
 use crate::acts::{rule_on, CURRENT_RULES_EPOCH, EPOCH_73_V36};
-use crate::combat::{melee_ev, profile_ev, shoot_ev, SIX_P};
+use crate::combat::{charge_estimate_gap_in, melee_ev, profile_ev, shoot_ev, SIX_P};
 use crate::geom::{self, V3};
 use crate::sim::{
     ctx_of, ctx_live, melee_profiles_of, profiles_of, teleport_probe, Scratch, ADVANCE, CHARGE,
@@ -569,8 +569,9 @@ fn charge_score(
     theirs: &[ShootProfile],
     their_attacks: &[i64],
     them: &Ctx,
+    charge_from_in: f64,
 ) -> f64 {
-    let mut dealt = melee_ev(ours, our_attacks, us, them, true);
+    let mut dealt = melee_ev(ours, our_attacks, us, them, true, charge_from_in);
     let mut counter_first = 0.0f64;
     for (k, p) in theirs.iter().enumerate() {
         if p.range <= 0 && p.counter {
@@ -579,7 +580,7 @@ fn charge_score(
     }
     let pool = (us.models as f64 * us.tough.max(1) as f64).max(1.0);
     dealt *= (1.0 - counter_first / pool).clamp(0.0, 1.0);
-    let taken = melee_ev(theirs, their_attacks, them, us, false);
+    let taken = melee_ev(theirs, their_attacks, them, us, false, 0.0);
     let mut risk_weight = if us.fearless { 0.5 } else { 1.0 };
     risk_weight *= (1.0 - us.morale_bonus as f64 * SIX_P).max(0.0);
     dealt - taken * risk_weight
@@ -665,12 +666,14 @@ pub fn best_charge(
         let ut = &statics[state.roster.profile[e]];
         let us = ctx_live(ctx_of(us_static, state, i), statics, state, i, true, rules_epoch);
         let them = ctx_live(ctx_of(ut, state, e), statics, state, e, true, rules_epoch);
-        let raw = melee_ev(&us_static.melee, &our_attacks, &us, &them, true);
+        // D-GATE6: the charge is priced at the pre-charge edge gap from `EPOCH_73_V36`.
+        let charge_from_in = charge_estimate_gap_in(rules_epoch, || gap_in);
+        let raw = melee_ev(&us_static.melee, &our_attacks, &us, &them, true, charge_from_in);
         if raw - danger_loss < FUTILE_CHARGE_EV {
             continue;
         }
         melee_profiles_of(ut, state.alive[e], sc);
-        let s = charge_score(&us_static.melee, &our_attacks, &us, &ut.melee, &sc.attacks, &them)
+        let s = charge_score(&us_static.melee, &our_attacks, &us, &ut.melee, &sc.attacks, &them, charge_from_in)
             - danger_loss;
         if s > best_score {
             best_score = s;
@@ -809,7 +812,8 @@ pub fn nearest_chargeable(
             ctx_of(&statics[state.roster.profile[e]], state, e),
             statics, state, e, true, rules_epoch,
         );
-        if melee_ev(&us_static.melee, &our_attacks, &us, &them, true) < FUTILE_CHARGE_EV {
+        let charge_from_in = charge_estimate_gap_in(rules_epoch, || gap_in);
+        if melee_ev(&us_static.melee, &our_attacks, &us, &them, true, charge_from_in) < FUTILE_CHARGE_EV {
             continue;
         }
         best_gap = gap_in;
