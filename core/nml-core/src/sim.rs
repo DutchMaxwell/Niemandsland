@@ -2578,7 +2578,8 @@ pub const RETREATING_STRIKE_REACH_IN: f64 = 3.0;
 ///
 /// FIRE GATE: the ACTING unit's OWN rule only — unlike Mend/Breath Attack, the
 /// table's function body never reads an attached hero's rules (it moves the
-/// WHOLE joined formation, not one member of it). Once per ROUND
+/// WHOLE joined formation, not one member of it); from `EPOCH_73_V36` every
+/// joined hero must carry it too (`hit_and_run_mixed`). Once per ROUND
 /// (`unit_properties["hit_and_run_round"]`, :9685), consumed only on an actual
 /// move — no bearer, no living enemy, or a board-clamped zero step all leave
 /// it unspent.
@@ -2747,6 +2748,7 @@ fn tray_hit_and_run(
         || !(us.hit_and_run_active
             || (after_shoot && us.hit_and_run_shooter_active)
             || (!after_shoot && us.hit_and_run_fighter_active))
+        || hit_and_run_mixed(statics, next, si, after_shoot, seams.rules_epoch)
     {
         return false;
     }
@@ -2827,6 +2829,28 @@ fn tray_hit_and_run(
     next.hit_and_run_round[si] = next.round;
     next.moved_round[si] = next.round;
     true
+}
+
+/// UX-19 (F10, ruling D-PERMODEL) — the table's `hit_and_run_move` gate: from
+/// `EPOCH_73_V36` EVERY model must carry the family for this trigger, living
+/// joined heroes included (`State::attached`, read whatever `hero_attach` says:
+/// the table always moves the whole formation). True = some but not all carry
+/// it, so no step and the caller logs the refusal. Below the epoch: false, so
+/// the host-only gate stays byte-identical.
+fn hit_and_run_mixed(statics: &[UnitStatic], st: &State, si: usize, after_shoot: bool, rules_epoch: u32) -> bool {
+    if !rule_on(rules_epoch, crate::acts::EPOCH_73_V36) || st.alive[si] <= 0 {
+        return false;
+    }
+    let carries = |u: usize| {
+        let s = &statics[st.roster.profile[u]];
+        s.hit_and_run_active
+            || (after_shoot && s.hit_and_run_shooter_active)
+            || (!after_shoot && s.hit_and_run_fighter_active)
+    };
+    let heroes: Vec<usize> =
+        st.attached.get(si).into_iter().flatten().copied().filter(|&h| st.alive[h] > 0).collect();
+    let carriers = usize::from(carries(si)) + heroes.iter().filter(|&&h| carries(h)).count();
+    carriers > 0 && carriers < 1 + heroes.len()
 }
 
 /// BLOCK B8 — `SoloController.second_wind_candidate`/`spend_second_wind`
@@ -8617,6 +8641,13 @@ fn resolve_with(
                     tray_retreating_strike(statics, &mut next, si, seams, tray, shot);
                 }
             }
+        } else if hnr_attacked && hit_and_run_mixed(statics, &next, si, shot_leg, seams.rules_epoch) {
+            // UX-19: the refusal's rules-must-log line (`SoloController.last_hit_and_run_note`).
+            let (_, shot) = dice.as_mut().unwrap();
+            shot.log.push(format!(
+                "Hit & Run: {} stays put - not every model in the unit has the rule",
+                statics[next.roster.profile[si]].name
+            ));
         }
     }
 

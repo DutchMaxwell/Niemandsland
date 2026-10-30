@@ -1266,6 +1266,9 @@ func _solo_activate_one_ai_body() -> GameUnit:
 			battle_log.log_event(BattleLog.Category.MOVEMENT, "Hit & Run: %s steps up to 3\" after its attack" % unit.get_name(), true)
 		if not bool(report.get("can_shoot", false)):
 			await _solo_retreating_strike(unit)   # resolver wave A: the post-MELEE step may lash out
+	elif hnr_attacked and not unit.is_destroyed() and battle_log != null \
+			and not solo_controller.last_hit_and_run_note.is_empty():   # UX-19: only some models carry it
+		battle_log.log_event(BattleLog.Category.MOVEMENT, solo_controller.last_hit_and_run_note, true)
 	# END-of-activation morale from DANGEROUS-terrain wounds (GF/AoF v3.5.1 p.10/p.12 — field-test finding
 	# 7): tested only NOW, AFTER the unit has acted, so dangerous damage never stops it shooting. A CHARGE
 	# resolves through the melee comparison instead ("units in melee don't take morale tests from wounds at
@@ -12681,6 +12684,9 @@ func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool, auto: 
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.MOVEMENT, "Hit & Run: %s steps up to 3\" out of the melee" % target.get_name(), true)
 			await _solo_retreating_strike(target)   # resolver wave A: the post-melee step may lash out
+		elif target != null and not target.is_destroyed() and _solo_is_ai_unit(target) and battle_log != null \
+				and not solo_controller.last_hit_and_run_note.is_empty():   # UX-19: only some models carry it
+			battle_log.log_event(BattleLog.Category.MOVEMENT, solo_controller.last_hit_and_run_note, true)
 	else:
 		await _run_human_shooting(attacker, target)
 	# X1 (test game 2, double-shoot exploit): a resolved attack IS the unit's activation — it completes

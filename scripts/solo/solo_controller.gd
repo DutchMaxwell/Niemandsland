@@ -11994,9 +11994,10 @@ func _deploy_spot_clear(spot: Vector2, occupied: Array, blocked: Callable, radiu
 ## moves). Returns true when the unit moved; the caller logs the battle-log line. Human bearers move
 ## manually (free movement).
 const HIT_AND_RUN_MOVE_IN := 3.0
-func hit_and_run_move(unit: GameUnit, after_shoot: bool = true) -> bool:
+## The Hit & Run family name `unit` ITSELF carries for this trigger ("" = none): its own rules only.
+func _hit_and_run_pick(unit: GameUnit, after_shoot: bool) -> String:
 	if unit == null or army_manager == null or unit.is_destroyed() or unit.get_alive_count() <= 0:
-		return false
+		return ""
 	# Full rule OR the matching half-variant (autonomous wave 2026-07-19: "Hit & Run Shooter" fires
 	# only after shooting, "Hit & Run Fighter" only after melee). EXACT names — has_special_rule
 	# matches by prefix, so a Shooter unit must never pass as the full rule (the Ferocious lesson).
@@ -12019,6 +12020,30 @@ func hit_and_run_move(unit: GameUnit, after_shoot: bool = true) -> bool:
 			if after.is_empty() or (after == "shoot") == after_shoot:
 				rule = n
 				break
+	return rule
+
+
+## UX-19 (F10, ruling D-PERMODEL): from EPOCH_73_V36 EVERY model must carry the family, living joined heroes
+## included (they move with the host); a unit where only some do stays put and leaves the refusal line in
+## `last_hit_and_run_note` for main.gd's battle log. Below it the host's own rules decide alone, as before.
+## The core's twin: sim.rs `hit_and_run_mixed`.
+var last_hit_and_run_note: String = ""
+func hit_and_run_move(unit: GameUnit, after_shoot: bool = true) -> bool:
+	last_hit_and_run_note = ""
+	if unit == null or army_manager == null or unit.is_destroyed() or unit.get_alive_count() <= 0:
+		return false
+	var rule := _hit_and_run_pick(unit, after_shoot)
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		var carriers := 0 if rule.is_empty() else 1
+		var models := 1
+		for h in unit.get_attached_heroes():
+			var hero := h as GameUnit
+			if hero != null and hero.get_alive_count() > 0:
+				models += 1
+				carriers += 0 if _hit_and_run_pick(hero, after_shoot).is_empty() else 1
+		if carriers > 0 and carriers < models:
+			last_hit_and_run_note = "Hit & Run: %s stays put - not every model in the unit has the rule" % unit.get_name()
+			return false
 	if rule.is_empty():
 		return false
 	var round_no := _current_round()

@@ -71,10 +71,10 @@ func test_host_with_hit_and_run_and_a_joined_hero_without_it_stays_put_and_says_
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
 	var j := _joined(["Hit & Run"], [])
 	var hero := j[2] as GameUnit
-	var before: Vector3 = hero.models[0].node.global_position
+	var hero_at: Vector3 = hero.models[0].node.global_position
 	assert_bool((j[0] as SoloController).hit_and_run_move(j[1], true)) \
 		.override_failure_message("the hero lacks the rule, so the unit may not step").is_false()
-	assert_vector(hero.models[0].node.global_position).is_equal(before)
+	assert_vector(hero.models[0].node.global_position).is_equal(hero_at)
 	assert_int(int((j[1] as GameUnit).unit_properties.get("hit_and_run_round", -1))).is_equal(-1)
 	assert_str(_note(j[0])).is_equal("Hit & Run: Raiders stays put - not every model in the unit has the rule")
 
@@ -99,7 +99,7 @@ func test_hit_and_run_steps_when_every_model_carries_it_at_epoch_73() -> void:
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
 	var j := _joined(["Hit & Run"], ["Hit & Run"])
 	var hero := j[2] as GameUnit
-	var before: Vector3 = hero.models[0].node.global_position
+	var hero_at: Vector3 = hero.models[0].node.global_position
 	assert_bool((j[0] as SoloController).hit_and_run_move(j[1], true)).is_true()
-	assert_float(hero.models[0].node.global_position.distance_to(before)).is_greater(0.001)
+	assert_float(hero.models[0].node.global_position.distance_to(hero_at)).is_greater(0.001)
 	assert_str(_note(j[0])).is_empty()
