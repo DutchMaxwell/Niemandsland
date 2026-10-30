@@ -1032,6 +1032,83 @@ mod tests {
         assert!(enc.unknown.is_empty(), "{:?}", enc.unknown);
     }
 
+    /// AI-01a — a hand-made vocabulary with an `alias` block (the committed
+    /// file carries none yet), read at `want`. Every list is whole at v8 too,
+    /// so the two readings differ ONLY in whether the alias block applies.
+    fn alias_encoder(want: i64) -> RowEncoder {
+        let v = serde_json::json!({
+            "version": RULE_VOCAB_VERSION,
+            "unit": ["Hero", "Unique", "Tough"], "weapon": ["Ignores Cover"],
+            "spell": ["Weapon Booster"], "unit2": [],
+            "legacy_lengths": {"8": {"unit": 3, "weapon": 1, "spell": 1, "unit2": 0}},
+            "alias": {
+                "unit": {"Unique Hero": ["Unique", "Hero"], "Renamed Tough": ["Tough"],
+                         "Lost Name": ["Not Slotted"]},
+                "weapon": {"Anti-Cover": ["Ignores Cover"], "Cross Band": ["Hero"]},
+                "spell": {"Adrenal Booster": ["Weapon Booster"]},
+            },
+        });
+        RowEncoder { vocab: RowVocab::from_value(&v, want), unknown: BTreeSet::new(), source_qd: None }
+    }
+
+    /// One caster with the given unit rules, one rifle with the given weapon
+    /// rules and a spell book of the given names (threshold 2 each).
+    fn alias_unit(rules: &[&str], weapon_rules: &[&str], spells: &[&str]) -> (Profile, UnitStatic) {
+        let p: Profile = serde_json::from_value(serde_json::json!({
+            "unit_id": "p1_0_a", "name": "A", "special_rules": rules,
+            "weapons": [{"name": "Rifle", "range": 24, "attacks": 1, "count": 1, "rules": weapon_rules}],
+        }))
+        .expect("profile");
+        let spells = spells
+            .iter()
+            .map(|n| crate::rules::Spell { name: n.to_string(), threshold: 2, ..Default::default() })
+            .collect();
+        (p, UnitStatic { is_caster: true, spells, ..Default::default() })
+    }
+
+    fn names(xs: &[&str]) -> BTreeSet<String> {
+        xs.iter().map(|s| s.to_string()).collect()
+    }
+
+    /// AI-01a RED-GREEN — a rules-3.6 renamed unit rule, weapon rule and spell
+    /// reach EXACTLY the slots their 3.5 names have (a rename that split one
+    /// name into two lands on both; a rating rides along), so the net reads
+    /// the 3.6 profile like the 3.5 one and nothing is collected as unknown.
+    #[test]
+    fn a_renamed_rule_reaches_its_old_slots_through_the_alias_block() {
+        let (new_p, new_us) = alias_unit(&["Unique Hero", "Renamed Tough(3)"], &["Anti-Cover"], &["Adrenal Booster"]);
+        let (old_p, old_us) = alias_unit(&["Unique", "Hero", "Tough(3)"], &["Ignores Cover"], &["Weapon Booster"]);
+        let mut enc = alias_encoder(RULE_VOCAB_VERSION);
+        let old_pairs = enc.rule_pairs(&old_p, &old_us);
+        assert_eq!(old_pairs, vec![0, 1, 1, 1, 2, 3, 200, 1, 300, 2], "Hero, Unique, Tough(3), Ignores Cover, the spell");
+        assert_eq!(enc.rule_pairs(&new_p, &new_us), old_pairs, "the 3.6 names read like the 3.5 ones");
+        assert!(enc.unknown.is_empty(), "{:?}", enc.unknown);
+    }
+
+    /// AI-01a — the v8 reading (every corpus recorded before the alias block)
+    /// stays byte-identical: the 3.5 names slot as before, the 3.6 names miss
+    /// and are collected loudly, exactly as today.
+    #[test]
+    fn a_legacy_reading_ignores_the_alias_block() {
+        let (new_p, new_us) = alias_unit(&["Unique Hero"], &["Anti-Cover"], &["Adrenal Booster"]);
+        let (old_p, old_us) = alias_unit(&["Unique", "Hero"], &["Ignores Cover"], &["Weapon Booster"]);
+        let mut enc = alias_encoder(8);
+        assert!(enc.vocab.loaded, "{:?}", enc.vocab.error);
+        assert_eq!(enc.rule_pairs(&old_p, &old_us), vec![0, 1, 1, 1, 200, 1, 300, 2]);
+        assert!(enc.rule_pairs(&new_p, &new_us).is_empty());
+        assert_eq!(enc.unknown, names(&["Anti-Cover", "Unique Hero", "spell:Adrenal Booster"]));
+    }
+
+    /// AI-01a — an alias resolves inside its OWN band only, and one whose
+    /// targets all have no slot there keeps the ORIGINAL name in unknown.
+    #[test]
+    fn an_alias_with_no_slotted_target_keeps_the_original_name_unknown() {
+        let (p, us) = alias_unit(&["Lost Name"], &["Cross Band"], &[]);
+        let mut enc = alias_encoder(RULE_VOCAB_VERSION);
+        assert!(enc.rule_pairs(&p, &us).is_empty(), "Hero is a unit slot, not a weapon one");
+        assert_eq!(enc.unknown, names(&["Cross Band", "Lost Name"]));
+    }
+
     /// unit2 (v7, the encoder-slot gap follow-up #786) — the 12 names the
     /// census measures as `core_ported` but still slotless after v6, appended
     /// at 989-1000 (the v6 band's 763-988 + 226) in the DOCUMENTED order of
