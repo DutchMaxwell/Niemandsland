@@ -47,6 +47,18 @@ async def relay():
     await ws_server.wait_closed()
 
 
+@pytest.fixture(params=["warm", "young"])
+def runner_clock(request, monkeypatch):
+    """Run a test at a normal uptime AND as on a CI runner that booted seconds ago (#1961): there
+    time.monotonic() is still below HOST_REJOIN_WINDOW_SECONDS, so "now - window" is negative.
+    Request it BEFORE `relay` so the server lives on the shifted clock from its start."""
+    if request.param == "young":
+        real = time.monotonic
+        offset = real() - 3.0
+        monkeypatch.setattr(time, "monotonic", lambda: real() - offset)
+    return request.param
+
+
 async def http_get(url: str, path: str = "/stats") -> tuple:
     """Minimal HTTP/1.1 GET against the relay's port (the same listener serves WS + /stats).
 
@@ -375,7 +387,7 @@ class TestRoomManagement:
         await rehost_ws.close()
         await guest_ws.close()
 
-    async def test_abandoned_room_expires_after_window(self, relay):
+    async def test_abandoned_room_expires_after_window(self, runner_clock, relay):
         """A preserved room whose host never returns is closed past the window, and
         the waiting guest is told the host did not return."""
         server, url = relay
@@ -1122,7 +1134,7 @@ class TestAggregateStats:
         await host_ws.close()
         await guest_ws.close()
 
-    async def test_abandoned_room_close_records_histogram(self, relay):
+    async def test_abandoned_room_close_records_histogram(self, runner_clock, relay):
         """The host-abandon reaper (host dropped, never rejoined) must record the histograms too."""
         server, url = relay
         host_ws, code, _ = await create_room(url)
