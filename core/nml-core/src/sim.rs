@@ -4537,6 +4537,7 @@ fn sighted_profiles_of(
     ti: usize,
     zones: &[sight::Zone],
     d: f64,
+    held: bool,
     sc: &mut Scratch,
 ) {
     sc.keep.clear();
@@ -4565,9 +4566,14 @@ fn sighted_profiles_of(
         // Indirect (GF v3.5.1) "may target enemies that are not in line of
         // sight as if in line of sight": the range gate stays, the sight test
         // goes (main.gd:4136-4138).
+        let lost = p.indirect_los_needs_hold && !held; // Rules 3.6 (SHO-01a): the waiver needs Hold
         let seen = sight::sighted_count(state, zones, &blockers, mi, ti, reach,
-            (p.indirect && p.indirect_ignores_los.unwrap_or(true)) || mark_indirect,
+            (p.indirect && p.indirect_ignores_los.unwrap_or(true) && !lost) || mark_indirect,
             rule_on(sc.rules_epoch, EPOCH_66_DISTANCE_TRUTH));
+        if lost && !mark_indirect {
+            trace_rule("volley", "Indirect",
+                &format!("{} did not Hold: {} needs line of sight", statics[state.roster.profile[mi]].name, p.name));
+        }
         // Rules-must-log: the mark fires only where it changes the volley.
         if mark_indirect && !p.indirect && seen > 0 {
             trace_rule("volley", "Indirect Mark",
@@ -8202,7 +8208,7 @@ fn resolve_with(
                                 msc.bearers_last = seams.casualties_bearers_last;
                                 if seams.sighting {
                                     sighted_profiles_of(
-                                        um, &next, statics, mi, g.ti, &zones, g.d, &mut msc,
+                                        um, &next, statics, mi, g.ti, &zones, g.d, kind == HOLD, &mut msc,
                                     );
                                 } else {
                                     profiles_of(um, next.alive[mi], g.d, &mut msc);
@@ -8265,6 +8271,7 @@ fn resolve_with(
                                     }
                                 }
                                 att.moved_this_round = moved;
+                                att.held = kind == HOLD;
                                 parts.push((mi, msc, att));
                             }
                             // FEAT PR 2 — the deferred stamp: the unspent

@@ -33,7 +33,7 @@ use crate::acts::{
     EPOCH_50_SURGE_LOW, EPOCH_54_DEFENSE_RATING, EPOCH_55_FORTIFIED_AURA,
     EPOCH_56_GROUNDED_PROTECTION, EPOCH_58_PRECISION_DEBUFF, EPOCH_60_GROUNDED_STEALTH,
     EPOCH_61_PRECISION_MARKERS, EPOCH_65_MELEE_TRUTH, EPOCH_66_DISTANCE_TRUTH,
-    EPOCH_72_PLAYTEST_RULES,
+    EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36,
 };
 use crate::combat::{
     armored_defense, BANNER_MORALE_BONUS, LONG_RANGE_IN, REGENERATION_TARGET, RESISTANCE_TARGET,
@@ -584,6 +584,8 @@ pub struct Ctx {
     /// moved, so the Mobile Artillery bonus stays OFF (#489's direction:
     /// under-credit, never over-credit).
     pub moved_this_round: bool,
+    /// Rules 3.6 (SHO-01a): the activation's action was Hold, stamped at the volley (default false).
+    pub held: bool,
     /// Wave 4 (port-quick-readjustment): the bearer ignores the Indirect
     /// moved to-hit penalty — `no_moved_penalty: true` read off the NAME's
     /// own registry entry (the table's `best_primitive_param(member,
@@ -786,6 +788,8 @@ pub struct ShootProfile {
     /// `EPOCH_7_TABLE_RULES`): the folds keep the waiver, the recorded
     /// constant.
     pub indirect_ignores_los: Option<bool>,
+    /// Rules 3.6 (SHO-01a): the sight waiver needs Hold (`los_needs_hold`, from `EPOCH_73_V36`).
+    pub indirect_los_needs_hold: bool,
     /// The unit-level "Indirect when Shooting" stamp (`build_for`'s epoch-6
     /// named walk below) — set ALONGSIDE `indirect` so the volley log
     /// (dice.rs) can name the RULE, not the weapon tag, when its cover skip
@@ -2813,6 +2817,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         mobile_artillery_over_in,
         grounded_precision_hit,
         moved_this_round: true,
+        held: false,
         // Wave 4 (port-entrenched) — the table's own default (never moved).
         moved_round: -1,
         round: 0,
@@ -6327,6 +6332,20 @@ impl UnitStatic {
                 if sp.indirect {
                     sp.indirect_ignores_los = Some(ignores_los);
                 }
+            }
+        }
+        // Rules 3.6 (SHO-01a): the "Indirect" entry's `*_needs_hold`; a unit rule printing it false lifts it.
+        if rule_on(rules_epoch, EPOCH_73_V36) {
+            let mut needs_hold = |key: &str| {
+                unit_param_b_or(reg, p, "Indirect", key, false)
+                    && !rules_of_primitive(reg, p, "Indirect").iter().any(|h| {
+                        reg.rules_for(&p.game_system).lookup(&p.faction_folder, &h.name)
+                            .is_some_and(|e| !e.param_b_or(key, true))
+                    })
+            };
+            let los = needs_hold("los_needs_hold");
+            for sp in shoot.iter_mut().filter(|sp| sp.indirect) {
+                sp.indirect_los_needs_hold = los;
             }
         }
 
