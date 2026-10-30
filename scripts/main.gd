@@ -382,8 +382,8 @@ var _solo_ai_banner: Label = null            # non-blocking "NACHTMAHR is taking
 var _solo_dream_overlay: Control = null      # centred "NACHTMAHR dreams…" + spinner while the AI computes
 var _ai_opponent_btn: Button = null          # "AI Opponent" — NACHTMAHR builds its own army
 const AI_LISTS_DIR := "res://assets/ai_lists"          # dev/arena bundle — NEVER in the public repo
-const AI_LISTS_CDN_PATH := "ai_lists"                   # <AssetCdn.HOST>/ai_lists/… (S6 runtime delivery)
-const AI_LISTS_CACHE_DIR := "user://ai_lists_cache"     # offline replay of fetched lists
+const AI_LISTS_CDN_PATH := "ai_lists_v36"               # <AssetCdn.HOST>/ai_lists_v36/… (rules 3.6; 0.3.14 keeps ai_lists/)
+const AI_LISTS_CACHE_DIR := "user://ai_lists_cache_v36" # offline replay of fetched 3.6 lists (a 3.5 cache is never read)
 var _solo_fast: bool = false                 # fast-forward: shrink pacing holds + skip move animation
 var _solo_auto_saves: bool = false           # A3 (NML-202): skip _solo_prompt_saves' dialog, roll straight to the tray
 var _solo_batch: bool = false                # headless sweeps: instant (non-physics) dice + zero pacing holds (implies fast)
@@ -18319,7 +18319,19 @@ func _open_ai_opponent_dialog() -> void:
 
 ## The AI Opponent question over an already loaded manifest. `loader(file, slot)` runs on OK
 ## (default: _load_ai_opponent_list) so the dialog can be driven without the network.
+## Only the lists of the system the human army plays are offered (an entry without "system" is "gf");
+## with no human army yet every list is offered, suffixed " (GF)" / " (AoF)" when the manifest mixes both.
 func _show_ai_opponent_dialog(manifest: Dictionary, loader: Callable = Callable()) -> void:
+	var human_army = opr_army_manager.armies.get(solo_controller.human_slot if solo_controller != null else 1) if opr_army_manager != null else null
+	var played := "" if human_army == null else ("aof" if RulesRegistry.normalize_system(human_army.game_system_abbrev).begins_with("aof") else "gf")
+	var system_of := {}
+	for fk in manifest:
+		system_of[fk] = str((manifest[fk] as Dictionary).get("system", "gf"))
+	var fac_keys: Array = manifest.keys().filter(func(fk) -> bool: return played.is_empty() or system_of[fk] == played)
+	if fac_keys.is_empty():
+		_solo_show_toast("No AI lists for this game system yet — import any list with the AI checkbox instead")
+		return
+	var mixed: bool = played.is_empty() and system_of.values().has("gf") and system_of.values().has("aof")
 	var parts := HouseStyle.overlay_sheet("AI Opponent", SOLO_DIALOG_MIN_WIDTH)
 	var layer := CanvasLayer.new()
 	layer.name = "AiOpponentLayer"
@@ -18328,11 +18340,11 @@ func _show_ai_opponent_dialog(manifest: Dictionary, loader: Callable = Callable(
 	box.add_child(HouseStyle.label("NACHTMAHR builds its own list.", HouseStyle.BODY))
 	var fac_opt := OptionButton.new()
 	fac_opt.theme_type_variation = HouseStyle.BUTTON
-	var fac_keys: Array = manifest.keys()
 	fac_keys.sort()
 	for i in fac_keys.size():
 		var fk: String = fac_keys[i]
-		fac_opt.add_item(str((manifest[fk] as Dictionary).get("name", fk)), i)
+		var fac_name := str((manifest[fk] as Dictionary).get("name", fk))
+		fac_opt.add_item(fac_name + ((" (AoF)" if system_of[fk] == "aof" else " (GF)") if mixed else ""), i)
 	box.add_child(HouseStyle.field_row("Faction:", fac_opt))
 
 	var pts_opt := OptionButton.new()
