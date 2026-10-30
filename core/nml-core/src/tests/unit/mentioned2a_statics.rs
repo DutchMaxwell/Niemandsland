@@ -251,19 +251,19 @@
     // the base: the Boost's printed unconditional -1 to hit (Evasive), with
     // the base entry's conditional alias standing down so the two never stack.
     #[test]
-    fn an_empyrean_spirit_boost_aura_makes_the_minus_one_unconditional() {
+    fn an_enhanced_empyrean_spirit_aura_makes_the_minus_one_unconditional() {
         let e = crate::acts::CURRENT_RULES_EPOCH;
         let us = carrier(
             "aof", "ghostly_undead",
-            &["Empyrean Spirit Boost Aura", "Empyrean Spirit"], e,
+            &["Enhanced Empyrean Spirit Aura", "Empyrean Spirit"], e,
         );
         assert!(us.ctx.evasive, "the Boost folds into evasive");
-        assert_eq!(us.ctx.evasive_alias_name, "Empyrean Spirit Boost", "the fold names the rule");
+        assert_eq!(us.ctx.evasive_alias_name, "Enhanced Empyrean Spirit", "the fold names the rule");
         assert_eq!(us.ctx.stealth_alias_penalty, 0, "the base's conditional alias stands down");
         let shot = incoming_volley(&us, 6.0);
         assert_eq!(shot.rolls[0].target, 5, "always -1: Quality 4+ -> 5+");
         assert!(
-            shot.log.iter().any(|l| l.contains("Empyrean Spirit Boost")),
+            shot.log.iter().any(|l| l.contains("Enhanced Empyrean Spirit")),
             "rules-must-log"
         );
     }

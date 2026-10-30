@@ -699,11 +699,11 @@ use super::*;
         let primal = header.profiles.get("primal_beast").expect("primal_beast");
         let ps = UnitStatic::build(&mut reg, primal);
         assert!(ps.shoot[0].surge_attack, "Primal is ungated — it reaches the ranged profile too");
-        assert_eq!(ps.shoot[0].surge_attack_low, 5, "Primal Boost's surge_low");
+        assert_eq!(ps.shoot[0].surge_attack_low, 5, "Enhanced Primal's surge_low");
         assert!(ps.melee[0].surge_attack);
         assert_eq!(ps.melee[0].surge_attack_low, 5);
         assert!(
-            ps.unimplemented.iter().all(|u| u.rule != "Primal" && u.rule != "Primal Boost"),
+            ps.unimplemented.iter().all(|u| u.rule != "Primal" && u.rule != "Enhanced Primal"),
             "consumed, not stamped as unimplemented: {:?}", ps.unimplemented
         );
 
@@ -830,7 +830,7 @@ use super::*;
     }
 
     #[test]
-    fn plaguebound_boost_ignores_on_5_6_epoch_gated() {
+    fn enhanced_plaguebound_ignores_on_5_6_epoch_gated() {
         let header = read_act_header(REGEN_FAMILY_HEADER).expect("header");
         assert_eq!(regen_pair_at(&header, "plague_boost", CURRENT_RULES_EPOCH), (5, 5));
         assert_eq!(regen_pair_at(&header, "plague_boost", 0), (0, 0), "epoch 0 replays legacy");
@@ -1215,10 +1215,10 @@ use super::*;
     /// Ossified Boost (aof/ossified_undead) — the same no-gate shape, live at
     /// 6, absent at 5.
     #[test]
-    fn ossified_boost_is_live_at_epoch_6_and_absent_at_epoch_5() {
+    fn enhanced_ossified_is_live_at_epoch_6_and_absent_at_epoch_5() {
         let us6 = fortified_unit("ossified_boost_unit", 6);
         assert_eq!(us6.ctx.fortified_boost_ap, 1, "the Boost's incoming_ap_reduction");
-        assert_eq!(us6.fortified_boost_name, "Ossified Boost");
+        assert_eq!(us6.fortified_boost_name, "Enhanced Ossified");
         let (target6, fired6) = fortified_melee(&us6);
         assert_eq!(target6, 4, "melee AP(1) vs the Boost: saves on 4+ instead of 5+");
         assert!(fired6, "rules-must-log: the melee phase must report the boost");

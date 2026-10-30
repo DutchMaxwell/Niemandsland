@@ -110,10 +110,10 @@
     boost_aura_test!(a_royal_warrior_boost_aura_grants_its_base_at_epoch_6, "Royal Warrior Boost Aura");
     boost_aura_test!(a_bestial_boost_aura_grants_its_base_at_epoch_6, "Bestial Boost Aura");
     boost_aura_test!(a_vinci_tech_boost_aura_grants_its_base_at_epoch_6, "Vinci Tech Boost Aura");
-    boost_aura_test!(an_ossified_boost_aura_grants_its_base_at_epoch_6, "Ossified Boost Aura");
+    boost_aura_test!(an_enhanced_ossified_aura_grants_its_base_at_epoch_6, "Enhanced Ossified Aura");
     boost_aura_test!(a_shadowborn_boost_aura_grants_its_base_at_epoch_6, "Shadowborn Boost Aura");
     boost_aura_test!(a_destroyer_boost_aura_grants_its_base_at_epoch_6, "Destroyer Boost Aura");
-    boost_aura_test!(an_empyrean_spirit_boost_aura_grants_its_base_at_epoch_6, "Empyrean Spirit Boost Aura");
+    boost_aura_test!(an_enhanced_empyrean_spirit_aura_grants_its_base_at_epoch_6, "Enhanced Empyrean Spirit Aura");
     boost_aura_test!(a_wild_veil_boost_aura_grants_its_base_at_epoch_6, "Wild Veil Boost Aura");
 
     /// Two units: `mark_carrier` prints "Unstoppable Mark" as a UNIT-level
@@ -421,7 +421,7 @@
       "primal_beast":{"unit_id":"primal_beast","name":"Primal Beast","quality":4,
         "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
         "base_radius":0.016,"game_system":"gf","faction_folder":"saurian_starhost",
-        "special_rules":["Primal","Primal Boost"],"item_grants":[],
+        "special_rules":["Primal","Enhanced Primal"],"item_grants":[],
         "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
         "weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]},
           {"name":"Claws","range":0,"attacks":2,"count":1,"ap":0,"rules":[]}]},
@@ -555,7 +555,7 @@
       "plague_boost":{"unit_id":"plague_boost","name":"Plague Boost","quality":4,
         "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
         "base_radius":0.016,"game_system":"aof","faction_folder":"plague_disciples",
-        "special_rules":["Plaguebound Boost"],"item_grants":[],
+        "special_rules":["Enhanced Plaguebound"],"item_grants":[],
         "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
         "weapons":[{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]},
       "plague_partial":{"unit_id":"plague_partial","name":"Plague Partial","quality":4,
@@ -740,7 +740,7 @@
       "warden_unit":{"unit_id":"warden_unit","name":"Warden Bearer","quality":4,"defense":4,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"aof","faction_folder":"eternal_wardens","special_rules":["Warden"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]},{"name":"CCW","range":0,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]}]},
       "warden_boost_unit":{"unit_id":"warden_boost_unit","name":"Warden Boost Bearer","quality":4,"defense":4,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"aof","faction_folder":"eternal_wardens","special_rules":["Warden Boost"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]},{"name":"CCW","range":0,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]}]},
       "ossified_unit":{"unit_id":"ossified_unit","name":"Ossified Bearer","quality":4,"defense":4,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"aof","faction_folder":"ossified_undead","special_rules":["Ossified"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]},{"name":"CCW","range":0,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]}]},
-      "ossified_boost_unit":{"unit_id":"ossified_boost_unit","name":"Ossified Boost Bearer","quality":4,"defense":4,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"aof","faction_folder":"ossified_undead","special_rules":["Ossified Boost"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]},{"name":"CCW","range":0,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]}]},
+      "ossified_boost_unit":{"unit_id":"ossified_boost_unit","name":"Enhanced Ossified Bearer","quality":4,"defense":4,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"aof","faction_folder":"ossified_undead","special_rules":["Enhanced Ossified"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]},{"name":"CCW","range":0,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]}]},
       "plain_unit":{"unit_id":"plain_unit","name":"Plain Bearer","quality":4,"defense":4,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"custodian_brothers","special_rules":[],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]},{"name":"CCW","range":0,"attacks":2,"count":1,"ap":1,"rules":["AP(1)"]}]}}}"#;
 
     /// Builds the named carrier at `epoch` — the per-name tests' own build.

@@ -66,9 +66,9 @@ use super::*;
         ("Infected Boost Aura", "gf", "infected_colonies", "Infected Boost", true),
         ("Infiltrate Aura", "gf", "dwarf_guilds", "Infiltrate", true),
         ("Machine-Fog Boost Aura", "gf", "machine_cults", "Machine-Fog Boost", false),
-        ("Mischievous Boost Aura", "aof", "goblins", "Mischievous Boost", false),
+        ("Enhanced Mischievous Aura", "aof", "goblins", "Enhanced Mischievous", false),
         ("Piercing Assault Aura", "aof", "beastmen", "Piercing Assault", true),
-        ("Plaguebound Boost Aura", "aof", "plague_disciples", "Plaguebound Boost", true),
+        ("Enhanced Plaguebound Aura", "aof", "plague_disciples", "Enhanced Plaguebound", true),
         ("Point-Blank Piercing Aura", "gf", "blessed_sisters", "Point-Blank Piercing", true),
         ("Protection Feat Aura", "aofs", "crazed_zealots", "Protection Feat", true),
         ("Rapid Blink Boost Aura", "gf", "elven_jesters", "Rapid Blink Boost", false),
@@ -160,8 +160,8 @@ use super::*;
                 "Guardian Boost Aura" => {
                     assert_eq!(granted.ctx.fortified_boost_ap, 1, "Guardian Boost's incoming_ap_reduction");
                 }
-                "Plaguebound Boost Aura" => {
-                    assert_eq!(granted.ctx.regen_target, 5, "Plaguebound Boost's ignore_target");
+                "Enhanced Plaguebound Aura" => {
+                    assert_eq!(granted.ctx.regen_target, 5, "Enhanced Plaguebound's ignore_target");
                 }
                 "Protection Feat Aura" => {
                     assert_eq!(granted.ctx.regen_target, 5, "Protection Feat's ignore_target");

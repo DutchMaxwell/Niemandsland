@@ -114,9 +114,9 @@ use super::*;
     /// granted base rides the boost arm — EVERY save batch eats 1 AP; a
     /// rule-less carrier keeps 0.
     #[test]
-    fn an_ossified_boost_aura_reduces_every_incoming_ap_by_one_at_the_current_epoch() {
+    fn an_enhanced_ossified_aura_reduces_every_incoming_ap_by_one_at_the_current_epoch() {
         let epoch = crate::acts::CURRENT_RULES_EPOCH;
-        let us = pin_unit("aof", "ossified_undead", &["Ossified Boost Aura"], epoch);
+        let us = pin_unit("aof", "ossified_undead", &["Enhanced Ossified Aura"], epoch);
         assert_eq!(us.ctx.fortified_boost_ap, 1, "the granted Boost's incoming_ap_reduction");
         let plain = pin_unit("aof", "ossified_undead", &[], epoch);
         assert_eq!(plain.ctx.fortified_boost_ap, 0, "no aura, no reduction");
@@ -193,9 +193,9 @@ use super::*;
     /// wound kinds (no `ignore_target_spell` key — the spell twin repeats
     /// the normal target); a rule-less carrier stays 0.
     #[test]
-    fn a_plaguebound_boost_carrier_ignores_wounds_on_a_five_at_the_current_epoch() {
+    fn an_enhanced_plaguebound_carrier_ignores_wounds_on_a_five_at_the_current_epoch() {
         let epoch = crate::acts::CURRENT_RULES_EPOCH;
-        let us = pin_unit("gf", "plague_disciples", &["Plaguebound Boost"], epoch);
+        let us = pin_unit("gf", "plague_disciples", &["Enhanced Plaguebound"], epoch);
         assert_eq!(us.ctx.regen_target, 5, "the entry's own ignore_target");
         assert_eq!(us.ctx.regen_target_spell, 5, "no spell key: the spell twin repeats 5");
         let plain = pin_unit("gf", "plague_disciples", &[], epoch);

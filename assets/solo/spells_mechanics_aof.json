@@ -1200,7 +1200,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Empyrean Spirit Boost",
+      "grants_rule": "Enhanced Empyrean Spirit",
       "duration": "once"
      },
      "status": "castable"
@@ -1818,7 +1818,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Plaguebound Boost",
+      "grants_rule": "Enhanced Plaguebound",
       "duration": "once"
      },
      "status": "castable"
@@ -1986,7 +1986,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Mischievous Boost",
+      "grants_rule": "Enhanced Mischievous",
       "duration": "once"
      },
      "status": "castable"
@@ -3473,7 +3473,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Ossified Boost",
+      "grants_rule": "Enhanced Ossified",
       "duration": "once"
      },
      "status": "castable"
@@ -3643,7 +3643,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Plaguebound Boost",
+      "grants_rule": "Enhanced Plaguebound",
       "duration": "once"
      },
      "status": "castable"
@@ -4161,7 +4161,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Plaguebound Boost",
+      "grants_rule": "Enhanced Plaguebound",
       "duration": "once"
      },
      "status": "castable"
@@ -4417,7 +4417,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Primal Boost",
+      "grants_rule": "Enhanced Primal",
       "duration": "once"
      },
      "status": "castable"

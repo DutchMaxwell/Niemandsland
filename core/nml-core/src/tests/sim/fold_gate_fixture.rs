@@ -8,7 +8,7 @@ use super::*;
     /// non-family grant folds nothing.
     #[test]
     fn fortified_boost_grants_fold_the_ap_stamp_at_epoch_6_only() {
-        for rule in ["Guardian Boost", "Warden Boost", "Ossified Boost"] {
+        for rule in ["Guardian Boost", "Warden Boost", "Enhanced Ossified"] {
             let on = fold_leg(rule, 6);
             assert_eq!(on.fortified_boost_ap, 1, "{rule} folds its AP(-1) at 6");
         }
@@ -128,7 +128,7 @@ use super::*;
     /// baked weapon profile — so the proof is the record, not a number.
     /// Without the rule on the bearer nothing is written at all.
     #[test]
-    fn casting_and_primal_boost_buffs_land_their_records_on_the_right_pick() {
+    fn casting_and_enhanced_primal_buffs_land_their_records_on_the_right_pick() {
         let (st, mut statics) = buff_line();
         statics[1].is_caster = true;
         statics[0].utility_buffs = vec![UtilityBuff {
@@ -142,11 +142,11 @@ use super::*;
         assert_eq!(next.buffs[1][0].casting_mod, 1);
 
         statics[0].utility_buffs = vec![UtilityBuff {
-            grants_rule: "Primal Boost".into(),
-            ..ub("Primal Boost Buff")
+            grants_rule: "Enhanced Primal".into(),
+            ..ub("Enhanced Primal Buff")
         }];
         let (next, _) = run_buff(&st, &statics, &buff_action(None), 11);
-        assert_eq!(&*next.buffs[0][0].grants_rule, "Primal Boost");
+        assert_eq!(&*next.buffs[0][0].grants_rule, "Enhanced Primal");
         assert!(!crate::mods::granted(&next, 0, "Unstoppable"));
 
         // No rule on the bearer, no record — the ledger stays empty.

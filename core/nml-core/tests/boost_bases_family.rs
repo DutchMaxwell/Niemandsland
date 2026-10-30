@@ -129,8 +129,8 @@ fn havocbound_boost_stamps_the_always_leg_from_epoch_6() {
 /// itself is a wave-3 spelling — an epoch-5 record never banes), and the
 /// base-only carrier keeps the 6s-only window either way.
 #[test]
-fn mischievous_boost_widens_the_bane_window_over_nine_inches_at_epoch_6() {
-    let us = build_at("gf", "goblin_reclaimers", &["Mischievous", "Mischievous Boost"], 6);
+fn enhanced_mischievous_widens_the_bane_window_over_nine_inches_at_epoch_6() {
+    let us = build_at("gf", "goblin_reclaimers", &["Mischievous", "Enhanced Mischievous"], 6);
     let p = [us.shoot[0].clone()];
     let att = Ctx { quality: 4, ..Default::default() };
     let def = Ctx { defense: 5, models: 1, tough: 1, ..Default::default() };
@@ -152,7 +152,7 @@ fn mischievous_boost_widens_the_bane_window_over_nine_inches_at_epoch_6() {
         "epoch 6, 12\": every successful 5-6 re-rolls (the widened window)"
     );
     assert!(
-        on.log.iter().any(|l| l.contains("Mischievous Boost")),
+        on.log.iter().any(|l| l.contains("Enhanced Mischievous")),
         "rules-must-log: the widened window names itself"
     );
 
@@ -167,7 +167,7 @@ fn mischievous_boost_widens_the_bane_window_over_nine_inches_at_epoch_6() {
     // Epoch 5: the record predates the wave — the base 6s-only window,
     // byte-exact ("Mischievous" itself baned since the bane wave; only the
     // WIDENED window is epoch-6 born).
-    let us5 = build_at("gf", "goblin_reclaimers", &["Mischievous", "Mischievous Boost"], 5);
+    let us5 = build_at("gf", "goblin_reclaimers", &["Mischievous", "Enhanced Mischievous"], 5);
     let p5 = [us5.shoot[0].clone()];
     let strikers5 = [Shooter { profiles: &p5, keep: &[0], attacks: &[64], att: &att, owner: "att" }];
     let mut t5 = Tray::seeded(27);
@@ -180,7 +180,7 @@ fn mischievous_boost_widens_the_bane_window_over_nine_inches_at_epoch_6() {
         "epoch 5: the base 6s-only window, byte-exact"
     );
     assert!(
-        !off.log.iter().any(|l| l.contains("Mischievous Boost")),
+        !off.log.iter().any(|l| l.contains("Enhanced Mischievous")),
         "epoch 5: the widened window is not born yet"
     );
 
@@ -198,7 +198,7 @@ fn mischievous_boost_widens_the_bane_window_over_nine_inches_at_epoch_6() {
         "no Boost: only the 6s re-roll, the base window"
     );
     assert!(
-        !without.log.iter().any(|l| l.contains("Mischievous Boost")),
+        !without.log.iter().any(|l| l.contains("Enhanced Mischievous")),
         "no widened window fired, nothing logs"
     );
 }
