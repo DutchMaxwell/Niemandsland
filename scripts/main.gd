@@ -4443,13 +4443,17 @@ func _run_ai_shooting(report: Dictionary) -> void:
 	if shots.is_empty():
 		_solo_log_no_volley(unit, report, "no ready ranged weapon")
 		return
+	if bool(report.get("moved", false)) and battle_log != null and SoloController.has_indirect_ranged(_solo_all_weapons(unit)) \
+			and SoloController.indirect_ignores_los(unit) and not SoloController.indirect_ignores_los(unit, false):
+		battle_log.log_event(BattleLog.Category.COMBAT, "Indirect: %s did not Hold — its Indirect weapons need line of sight" % unit.get_name(), true)
 	# Split fire: assign each shot the best target under its weapon overlay, then group shots by target.
 	# Target validity is PER MODEL (GF v3.5.1 p.8): the shot's MEMBER needs a model with range+LOS.
 	var groups: Dictionary = {}   # target unit_id -> {"target": GameUnit, "shots": Array}
 	var order: Array = []
 	for shot in shots:
 		var overlay: int = AiTargeting.weapon_overlay((shot["profile"] as Dictionary).get("rules", []))
-		var tgt: GameUnit = _solo_pick_overlay_target(shot["member"], overlay, float(shot["reach"]), shot["profile"] as Dictionary)
+		var tgt: GameUnit = _solo_pick_overlay_target(shot["member"], overlay, float(shot["reach"]), shot["profile"] as Dictionary,
+			not bool(report.get("moved", false)))
 		if tgt == null:
 			continue
 		if not groups.has(tgt.unit_id):
@@ -4596,7 +4600,8 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		var sight_pairs: Array = []   # VFX #2: the model pairs the count below cleared (tracer segments)
 		var sighted: int = _solo_sighted_count(member, target,
 			int(SoloController.effective_shoot_reach_in(float(shot["reach"]), target)),
-			bool(profile.get("indirect", false)) or granted_indirect, sight_pairs)   # GH #325
+			(bool(profile.get("indirect", false)) and SoloController.indirect_ignores_los(member, not moved)) \
+				or granted_indirect or _solo_target_grants_indirect(target), sight_pairs)   # GH #325
 		# NML-1025: the bearer gate now guards the AI volley too (was human-only).
 		var volley_report: Dictionary = SoloController.scaled_attacks_report(member, profile, sighted, int(shot["max"]))
 		var attacks: int = int(volley_report["attacks"])
@@ -5709,7 +5714,7 @@ func _solo_refresh_caster_markers() -> void:
 ## target is valid when at least one of the shooting member's models has range + LOS to one of its
 ## models); attached heroes are never separate targets (they are part of their host unit). Null when
 ## nothing is valid.
-func _solo_pick_overlay_target(attacker: GameUnit, overlay: int, max_range: float, profile: Dictionary = {}) -> GameUnit:
+func _solo_pick_overlay_target(attacker: GameUnit, overlay: int, max_range: float, profile: Dictionary = {}, held: bool = true) -> GameUnit:
 	if opr_army_manager == null or solo_controller == null:
 		return null
 	var from := solo_controller.unit_centre(attacker)
@@ -5728,8 +5733,8 @@ func _solo_pick_overlay_target(attacker: GameUnit, overlay: int, max_range: floa
 		# -6" floored at 6" — per CANDIDATE, so a ground target stays reachable while the aircraft
 		# or shrouded unit next to it may not be.
 		var eff_range: int = int(SoloController.effective_shoot_reach_in(max_range, hu))
-		if _solo_sighted_count(attacker, hu, eff_range, bool(profile.get("indirect", false)) \
-				or _solo_target_grants_indirect(hu)) <= 0:   # wave 6 — the Indirect Mark's once-grant
+		if _solo_sighted_count(attacker, hu, eff_range, (bool(profile.get("indirect", false)) \
+				and SoloController.indirect_ignores_los(attacker, held)) or _solo_target_grants_indirect(hu)) <= 0:   # wave 6 — the Indirect Mark's once-grant
 			continue   # no model of the shooter has range + LOS → not a valid target (p.8; Indirect waives LOS)
 		var dist := MoveIntent.distance_inches(from, solo_controller.unit_centre(hu))
 		var in_cover := _solo_majority_in_cover(hu)
@@ -6045,7 +6050,7 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 			if not melee:
 				count = _solo_sighted_count(member, enemy,
 					int(SoloController.effective_shoot_reach_in(float(prof.get("range", 0)) + float(range_bonus), enemy)),
-					bool(prof.get("indirect", false)) and SoloController.indirect_ignores_los(member) or mark_indirect) if enemy != null else member.get_alive_count()
+					bool(prof.get("indirect", false)) and SoloController.indirect_ignores_los(member, _solo_unit_held(unit)) or mark_indirect) if enemy != null else member.get_alive_count()
 			# X2 (test game 2, B15): a dead bearer's weapon dies with it. Special weapons (fewer copies
 			# than models) are pinned to specific models by EquipmentDistributor — fire per-copy attacks
 			# × LIVING bearers (capped by the reach/sight count) instead of the unit-wide alive/max
@@ -12273,7 +12278,7 @@ func _solo_validate_target(attacker: GameUnit, target: GameUnit, melee: bool) ->
 	# The weapon-indirect term is the entry's ignores_los param (dead-parameter fold, twin of
 	# #1006); spell/mark grants stay unconditional — they are not weapon Indirect.
 	var indirect: bool = (SoloController.has_indirect_ranged(_solo_all_weapons(attacker)) \
-		and SoloController.indirect_ignores_los(attacker)) \
+		and SoloController.indirect_ignores_los(attacker, _solo_unit_held(attacker))) \
 		or SoloController.granted_indirect_of(attacker) \
 		or _solo_target_grants_indirect(target)   # wave 6 — the Indirect Mark's once-grant on the target
 	if rng_in <= 0 or _solo_sighted_count(attacker, target, rng_in, indirect) <= 0:
@@ -12288,7 +12293,9 @@ func _solo_validate_target(attacker: GameUnit, target: GameUnit, melee: bool) ->
 					causes.append(str(shroud["name"]))
 				why = " — %s" % ", ".join(causes)
 			return "out of range (%.1f\" edge to edge > %d\"%s)" % [dist, rng_in, why]
-		return "no model has line of sight" + _solo_los_refusal_detail(attacker, target)
+		var hold_note: String = " (Indirect needs Hold: the unit moved this round)" if SoloController.has_indirect_ranged(_solo_all_weapons(attacker)) \
+			and not SoloController.indirect_ignores_los(attacker, _solo_unit_held(attacker)) else ""
+		return "no model has line of sight" + hold_note + _solo_los_refusal_detail(attacker, target)
 	return ""
 
 
@@ -12534,7 +12541,7 @@ func _solo_hover_sighted_count(attacker: GameUnit, hovered: GameUnit) -> int:
 	var rng_in: int = AiArchetype.max_range_inches(_solo_all_weapons(attacker))
 	return _solo_sighted_count(attacker, hovered, rng_in,
 		SoloController.has_indirect_ranged(_solo_all_weapons(attacker)) \
-			and SoloController.indirect_ignores_los(attacker))
+			and SoloController.indirect_ignores_los(attacker, _solo_unit_held(attacker)))
 
 
 ## Resolve the player's declared attack — the mirror of the AI flow: your groups (unit + heroes, own
@@ -13097,7 +13104,7 @@ func _solo_volley_sighted(attacker: GameUnit, target: GameUnit, pairs_out = null
 ## Indirect Mark — the sight test goes, the range gate stays.
 func _solo_volley_indirect(attacker: GameUnit, target: GameUnit) -> bool:
 	return (SoloController.has_indirect_ranged(_solo_all_weapons(attacker)) \
-		and SoloController.indirect_ignores_los(attacker)) \
+		and SoloController.indirect_ignores_los(attacker, _solo_unit_held(attacker))) \
 		or _solo_target_grants_indirect(target)   # wave 6 — the Indirect Mark's once-grant
 
 
@@ -21436,6 +21443,12 @@ func _solo_apply_vs_marks(attacker: GameUnit, target: GameUnit, dist_in: float) 
 			# bearer only while it acts against this enemy. The once-consumption spends it after.
 			_solo_record_spell_mod(target, n, {"grants_rule": grant, "scope": str(sp.get("scope", "")), "beneficiary": "attackers",
 				"duration": "once", "no_live_grant": true})
+
+
+## Rules 3.6 (SHO-01a): a human unit's Hold = not moved this round (the table stores no Hold action).
+func _solo_unit_held(unit: GameUnit) -> bool:
+	return opr_army_manager == null or unit == null \
+		or int(unit.unit_properties.get("moved_round", -1)) != opr_army_manager.current_round
 
 
 ## Indirect Mark (wave 6) — the mark-family consumer (the #936 twin of the Piercing-Mark grant
