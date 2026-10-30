@@ -215,7 +215,17 @@ static func ctx_for(unit: GameUnit, in_cover: bool = false, counter_models: int 
 		"regeneration": _regen_target(unit) > 0,
 		"regen_target": _regen_target(unit),
 		"regen_target_spell": _regen_target(unit, true),
+		"aircraft_hit_penalty": aircraft_hit_penalty(unit),
 	}
+
+
+## Rules 3.6 (EPOCH_73_V36): the to-hit penalty every shot AT `unit` takes because it is an Aircraft (the
+## map's Aircraft `target_hit_penalty`, beside its range penalty); 0 for every other unit and below 73.
+## The table's to-hit breakdown (main._solo_hit_mod_info) reads the same number.
+static func aircraft_hit_penalty(unit: GameUnit) -> int:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 or not RulesRegistry.unit_rule_active(unit, "Aircraft"):
+		return 0
+	return int(RulesRegistry.unit_param(unit, "Aircraft", "target_hit_penalty", 0))
 
 
 static func _fortified_over_in(unit: GameUnit) -> float:
@@ -546,7 +556,8 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 		target = AiCombatMath.reliable_quality(quality, bool(profile.get("reliable", false)))
 		var shoot_mod := AiCombatMath.shooting_hit_modifier(dist_in,
 			bool(att.get("artillery", false)), bool(def_ctx.get("stealth", false)),
-			bool(def_ctx.get("artillery", false)), bool(def_ctx.get("evasive", false))) + spell_mod
+			bool(def_ctx.get("artillery", false)), bool(def_ctx.get("evasive", false))) + spell_mod \
+			- int(def_ctx.get("aircraft_hit_penalty", 0))   # rules 3.6 Aircraft -N, inside the clamp
 		if bool(profile.get("unstoppable", false)) and shoot_mod < 0:
 			shoot_mod = 0   # same clamp as the melee side; Fatigue stays above it (not a modifier)
 		target = target - shoot_mod

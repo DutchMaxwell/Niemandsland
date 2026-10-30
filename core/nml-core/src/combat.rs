@@ -601,7 +601,9 @@ pub fn profile_ev(
             dist_in, att.artillery, def.stealth, def.artillery, def.evasive, 0, 0, 0, 0.0,
             att.artillery_shooter_hit_bonus.unwrap_or(ARTILLERY_SHOOTER_HIT_BONUS),
             def.artillery_target_hit_penalty.unwrap_or(ARTILLERY_TARGET_HIT_PENALTY),
-        ) + att.hit_mod;
+        ) + att.hit_mod
+            // EPOCH_73_V36 — the volley's Aircraft -N, inside the same clamp.
+            - def.aircraft_hit_penalty;
         // EV/tray split (found by #489, caveat 4) — see the melee branch above.
         if p.unstoppable_ev && shoot_mod < 0 {
             shoot_mod = 0; // GF v3.5.1 p.15, head wave 1 — clamp BEFORE weapon bonuses.

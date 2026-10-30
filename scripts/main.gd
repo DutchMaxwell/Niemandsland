@@ -7538,6 +7538,11 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 		notes.append("Artillery target -%d" % art_target_pen)
 	elif target_artillery:
 		notes.append("Artillery target: no -%d (within 9\")" % art_target_pen)   # #224 sweep
+	# Rules 3.6 (EPOCH_73_V36): a shot at an Aircraft is also -N to hit (AiEv reads the same number).
+	var air_pen := AiEv.aircraft_hit_penalty(target)
+	if air_pen > 0:
+		mod -= air_pen
+		notes.append("Aircraft -%d" % air_pen)
 	if evasive:
 		notes.append(evasive_note)
 	# Coverage wave — growth markers (Precision Growth): +1 to hit per two markers.
