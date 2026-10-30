@@ -1119,7 +1119,7 @@ pub struct UnitStatic {
     pub ebr: Option<EbrStamp>,
     /// The Teleport/Ethereal read (epoch 8) — `teleport_of`; None below 8.
     pub teleport: Option<TeleportSpec>,
-    /// `GameUnit.is_hero()` game_unit.gd:273-275 — "Hero" in the rule list.
+    /// `GameUnit.is_hero()` game_unit.gd:274-275 — "Hero" or "Unique Hero" in the rule list.
     /// Mend's patient tiebreak prefers heroes (main.gd:5361).
     pub is_hero: bool,
     /// NML-1152 B14 step 1 (Bounding): `unit_rule_active(gu, "Bounding")`'s own
@@ -6439,7 +6439,11 @@ impl UnitStatic {
             battleborn_recover_target: battleborn_recover_target_of(reg, p, rules_epoch),
             mend_active: unit_rule_active(reg, p, "Mend"),
             breath_attack_active: unit_rule_active(reg, p, "Breath Attack"),
-            is_hero: has_special_rule(&p.special_rules, "Hero"),
+            // Rules 3.6 named heroes carry "Unique Hero" in place of "Hero"
+            // (a Hero for every purpose). No epoch gate: the name is absent
+            // from every 3.5 book, so no recorded game changes.
+            is_hero: has_special_rule(&p.special_rules, "Hero")
+                || has_special_rule(&p.special_rules, "Unique Hero"),
             bounding: bounding_of(reg, p),
             bounding_dice: bounding_boost_dice_of(reg, p, rules_epoch),
             bounding_place: bounding_place_of(reg, p, rules_epoch),
