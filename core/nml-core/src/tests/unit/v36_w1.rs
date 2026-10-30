@@ -88,3 +88,34 @@ fn most_models_of_needs_a_strict_majority() {
     assert!(crate::unit::most_models_of(1, 1), "1 of 1 is most");
     assert!(!crate::unit::most_models_of(2, 5), "2 of 5 is not most");
 }
+
+/// W1.3: a named hero carries "Unique Hero" in place of a separate "Hero" rule, and the profile's
+/// hero stamp answers it like "Hero" (wound order, the relay's hero clause, the net's hero token).
+/// test/v36/w1_3_test.gd pins the same rows on GameUnit.is_hero(). A rule that only contains the
+/// word stays no hero.
+#[test]
+fn a_unique_hero_is_stamped_a_hero() {
+    const HERO_TEMPLATE: &str = r#"{"kind":"header","knobs":{},"profiles":{
+      "carrier":{"unit_id":"carrier","name":"Carrier","quality":4,
+        "defense":4,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"robot_legions",
+        "special_rules":[],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":0,"rules":[]}]}}}"#;
+    let cases: &[(&[&str], bool)] = &[
+        (&["Unique Hero"], true),
+        (&["Unique Hero", "Tough(3)"], true),
+        (&["Hero"], true),
+        (&["Fearless"], false),
+        (&["Hero Hunter Made-Up"], false),
+    ];
+    let mut reg = crate::rules::Registries::new(&super::repo_root());
+    for (rules, want) in cases {
+        let printed = rules.iter().map(|r| format!("\"{r}\"")).collect::<Vec<_>>().join(",");
+        let text = HERO_TEMPLATE.replace("\"special_rules\":[]", &format!("\"special_rules\":[{printed}]"));
+        let header = crate::acts::read_act_header(&text).expect("HERO_TEMPLATE parses");
+        let p = header.profiles.get("carrier").expect("carrier");
+        let us = crate::unit::UnitStatic::build_for(&mut reg, p, CURRENT_RULES_EPOCH);
+        assert_eq!(us.is_hero, *want, "{rules:?}: want is_hero {want}");
+    }
+}
