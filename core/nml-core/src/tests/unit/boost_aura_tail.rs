@@ -1103,38 +1103,48 @@ use super::*;
         assert_eq!(us.ctx.stealth_alias_penalty, 0, "no Screened, no alias");
     }
 
-    /// Guardian (`incoming_ap_reduction: 1, over_in: 9`) — PRESENT at epoch 6:
-    /// the stamp is live, a 12" volley saves one better, the arm reports
-    /// itself; ABSENT at epoch 5 (acts::EPOCH_6_TABLE_RULES's own window).
+    /// Guardian (rules 3.6: `incoming_ap_reduction: 1`, NO `over_in`) — a
+    /// plain Fortified entry, so it rides the ungated boost arm: AP(-1) against
+    /// every hit, both legs. PRESENT at epoch 6: the stamp is live, a 12" and a
+    /// 5" volley each save one better, the arm reports itself; ABSENT at epoch
+    /// 5 (acts::EPOCH_6_TABLE_RULES's own window).
     #[test]
     fn guardian_is_live_at_epoch_6_and_absent_at_epoch_5() {
         let us6 = fortified_unit("guardian_unit", 6);
-        assert_eq!(us6.ctx.fortified_alias_ap, 1, "Guardian's incoming_ap_reduction");
-        assert_eq!(us6.ctx.fortified_alias_over_in, 9.0, "Guardian's own over_in gate");
-        assert_eq!(us6.fortified_alias_name, "Guardian");
+        assert_eq!(us6.ctx.fortified_boost_ap, 1, "Guardian's incoming_ap_reduction");
+        assert_eq!(us6.ctx.fortified_alias_ap, 0, "no gated entry carried");
+        assert_eq!(us6.ctx.fortified_alias_over_in, 0.0, "no distance gate");
+        assert_eq!(us6.fortified_boost_name, "Guardian");
         let (target6, fired6) = fortified_volley(&us6, 12.0);
         assert_eq!(target6, 4, "AP(1) volley past 9\": saves on 4+ instead of 5+");
-        assert!(fired6, "rules-must-log: the volley must report the alias arm");
+        assert!(fired6, "rules-must-log: the volley must report the ungated arm");
+        let (target_near, fired_near) = fortified_volley(&us6, 5.0);
+        assert_eq!(target_near, 4, "rules 3.6: every hit, so within 9\" too");
+        assert!(fired_near, "rules-must-log: the near volley must report the arm");
         let us5 = fortified_unit("guardian_unit", 5);
-        assert_eq!(us5.ctx.fortified_alias_ap, 0, "epoch 5 gets none of wave 3");
+        assert_eq!(us5.ctx.fortified_boost_ap, 0, "epoch 5 gets none of wave 3");
         let (target5, fired5) = fortified_volley(&us5, 12.0);
         assert_eq!(target5, 5, "the plain AP(1) save, unchanged");
         assert!(!fired5);
     }
 
-    /// Primeborn (gf/prime_brothers, same gated shape as Guardian) — live at
-    /// epoch 6, absent at 5.
+    /// Primeborn (gf/prime_brothers, the same ungated shape as Guardian) — live
+    /// at epoch 6, absent at 5.
     #[test]
     fn primeborn_is_live_at_epoch_6_and_absent_at_epoch_5() {
         let us6 = fortified_unit("primeborn_unit", 6);
-        assert_eq!(us6.ctx.fortified_alias_ap, 1, "Primeborn's incoming_ap_reduction");
-        assert_eq!(us6.ctx.fortified_alias_over_in, 9.0);
-        assert_eq!(us6.fortified_alias_name, "Primeborn");
+        assert_eq!(us6.ctx.fortified_boost_ap, 1, "Primeborn's incoming_ap_reduction");
+        assert_eq!(us6.ctx.fortified_alias_ap, 0, "no gated entry carried");
+        assert_eq!(us6.ctx.fortified_alias_over_in, 0.0, "no distance gate");
+        assert_eq!(us6.fortified_boost_name, "Primeborn");
         let (target6, fired6) = fortified_volley(&us6, 12.0);
         assert_eq!(target6, 4, "saves on 4+ instead of 5+");
         assert!(fired6, "rules-must-log");
+        let (target_near, fired_near) = fortified_volley(&us6, 5.0);
+        assert_eq!(target_near, 4, "rules 3.6: every hit, so within 9\" too");
+        assert!(fired_near, "rules-must-log");
         let us5 = fortified_unit("primeborn_unit", 5);
-        assert_eq!(us5.ctx.fortified_alias_ap, 0, "epoch 5 gets none of wave 3");
+        assert_eq!(us5.ctx.fortified_boost_ap, 0, "epoch 5 gets none of wave 3");
         let (target5, fired5) = fortified_volley(&us5, 12.0);
         assert_eq!(target5, 5, "the plain AP(1) save, unchanged");
         assert!(!fired5);
@@ -1145,14 +1155,18 @@ use super::*;
     #[test]
     fn warden_is_live_at_epoch_6_and_absent_at_epoch_5() {
         let us6 = fortified_unit("warden_unit", 6);
-        assert_eq!(us6.ctx.fortified_alias_ap, 1, "Warden's incoming_ap_reduction");
-        assert_eq!(us6.ctx.fortified_alias_over_in, 9.0);
-        assert_eq!(us6.fortified_alias_name, "Warden");
+        assert_eq!(us6.ctx.fortified_boost_ap, 1, "Warden's incoming_ap_reduction");
+        assert_eq!(us6.ctx.fortified_alias_ap, 0, "no gated entry carried");
+        assert_eq!(us6.ctx.fortified_alias_over_in, 0.0, "no distance gate");
+        assert_eq!(us6.fortified_boost_name, "Warden");
         let (target6, fired6) = fortified_volley(&us6, 12.0);
         assert_eq!(target6, 4, "saves on 4+ instead of 5+");
         assert!(fired6, "rules-must-log");
+        let (target_near, fired_near) = fortified_volley(&us6, 5.0);
+        assert_eq!(target_near, 4, "rules 3.6: every hit, so within 9\" too");
+        assert!(fired_near, "rules-must-log");
         let us5 = fortified_unit("warden_unit", 5);
-        assert_eq!(us5.ctx.fortified_alias_ap, 0, "epoch 5 gets none of wave 3");
+        assert_eq!(us5.ctx.fortified_boost_ap, 0, "epoch 5 gets none of wave 3");
         let (target5, fired5) = fortified_volley(&us5, 12.0);
         assert_eq!(target5, 5, "the plain AP(1) save, unchanged");
         assert!(!fired5);
@@ -1163,14 +1177,18 @@ use super::*;
     #[test]
     fn ossified_is_live_at_epoch_6_and_absent_at_epoch_5() {
         let us6 = fortified_unit("ossified_unit", 6);
-        assert_eq!(us6.ctx.fortified_alias_ap, 1, "Ossified's incoming_ap_reduction");
-        assert_eq!(us6.ctx.fortified_alias_over_in, 9.0);
-        assert_eq!(us6.fortified_alias_name, "Ossified");
+        assert_eq!(us6.ctx.fortified_boost_ap, 1, "Ossified's incoming_ap_reduction");
+        assert_eq!(us6.ctx.fortified_alias_ap, 0, "no gated entry carried");
+        assert_eq!(us6.ctx.fortified_alias_over_in, 0.0, "no distance gate");
+        assert_eq!(us6.fortified_boost_name, "Ossified");
         let (target6, fired6) = fortified_volley(&us6, 12.0);
         assert_eq!(target6, 4, "saves on 4+ instead of 5+");
         assert!(fired6, "rules-must-log");
+        let (target_near, fired_near) = fortified_volley(&us6, 5.0);
+        assert_eq!(target_near, 4, "rules 3.6: every hit, so within 9\" too");
+        assert!(fired_near, "rules-must-log");
         let us5 = fortified_unit("ossified_unit", 5);
-        assert_eq!(us5.ctx.fortified_alias_ap, 0, "epoch 5 gets none of wave 3");
+        assert_eq!(us5.ctx.fortified_boost_ap, 0, "epoch 5 gets none of wave 3");
         let (target5, fired5) = fortified_volley(&us5, 12.0);
         assert_eq!(target5, 5, "the plain AP(1) save, unchanged");
         assert!(!fired5);
