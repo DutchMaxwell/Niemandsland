@@ -30,7 +30,7 @@ func _carrier() -> GameUnit:
 	var army := OPRApiClient.OPRArmy.new()
 	army.army_id = "split_fixture"
 	army.game_system_abbrev = "gf"
-	army.faction_folder = "wormhole_daemons_of_change"
+	army.faction_folder = "daemons_of_change"
 	manager.armies[2] = army
 	manager.api_client._army_books[army.army_id] = {"units": [{"id": "hatchlings",
 		"name": "Hatchlings", "size": 3, "quality": 5, "defense": 5, "specialRules": [],
@@ -43,7 +43,7 @@ func _carrier() -> GameUnit:
 	profile.game_system = "gf"
 	profile.base_size_round = 25
 	profile.special_rules.assign(["Split(Hatchlings [3])"])
-	return manager.create_runtime_unit({"opr_unit": profile, "faction_folder": "wormhole_daemons_of_change"},
+	return manager.create_runtime_unit({"opr_unit": profile, "faction_folder": "daemons_of_change"},
 		2, [Vector3.ZERO, Vector3(0.05, 0, 0)], "fixture")
 
 
@@ -108,7 +108,8 @@ func test_split_resolves_from_takedown_casualties() -> void:
 
 func test_split_registry_entries_expose_the_consumed_placement_limit() -> void:
 	for system in ["gf", "gff", "aof", "aofr", "aofs"]:
-		var faction := "wormhole_daemons_of_change" if system in ["gf", "gff"] else "rift_daemons_of_change"
+		var faction: String = {"gf": "daemons_of_change", "gff": "wormhole_daemons_of_change",
+			"aof": "daemons_of_change"}.get(system, "rift_daemons_of_change")
 		assert_bool(RulesRegistry.has_primitive(system, faction, "Split")).is_true()
 		assert_int(int(RulesRegistry.param(system, faction, "Split", "place_in", 0))).is_equal(6)
 

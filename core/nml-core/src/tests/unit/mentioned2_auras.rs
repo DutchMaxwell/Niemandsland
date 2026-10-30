@@ -251,7 +251,7 @@ use super::*;
         );
         assert_eq!(
             regen_pair_at(
-                &pin_header("gf", "wormhole_daemons_of_plague", &["Regeneration Buff"]),
+                &pin_header("gf", "daemons_of_plague", &["Regeneration Buff"]),
                 "carrier",
                 e
             ),

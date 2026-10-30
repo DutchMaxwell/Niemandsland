@@ -76,10 +76,10 @@ use super::*;
         ("Relentless Aura", "aof", "dwarves", "Relentless", false),
         ("Scout Aura", "aof", "change_disciples", "Scout", false),
         ("Enhanced Scrapper Aura", "gf", "jackals", "Enhanced Scrapper", true),
-        ("Screened Aura", "gf", "wormhole_daemons_of_plague", "Screened", true),
+        ("Screened Aura", "gf", "daemons_of_plague", "Screened", true),
         ("Enhanced Scurry Aura", "aof", "ratmen", "Enhanced Scurry", false),
         ("Enhanced Sturdy Aura", "aof", "dwarves", "Enhanced Sturdy", true),
-        ("Warbound Boost Aura", "aof", "rift_daemons_of_war", "Warbound Boost", true),
+        ("Warbound Boost Aura", "aof", "daemons_of_war", "Warbound Boost", true),
     ];
 
     /// One Rifle+Blade carrier in `system/faction` printing `rules`, built
