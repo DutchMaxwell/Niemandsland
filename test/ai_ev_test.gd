@@ -241,9 +241,12 @@ func test_banner_morale_bonus_relaxes_charge_risk() -> void:
 		AiEv.charge_score(our_melee, us, their_melee, them)).is_true()
 
 
-func test_stamp_sergeant_marks_one_profile_with_the_bearers_share() -> void:
+func test_stamp_sergeant_marks_one_profile_with_the_bearers_share_at_epoch_72() -> void:
 	# A 5-model unit with Sergeant (core rule — active in the default system): the FIRST profile with
 	# attacks carries the bearer's per-model share (10 attacks / 5 models = 2); the second stays clean.
+	# The rules 3.5 leg: below EPOCH_73_V36 the share still buys the extra hit on 6s.
+	var epoch0: int = AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
 	var u := GameUnit.new()
 	u.unit_id = "sgt1"
 	u.unit_properties = {"player_id": 2, "name": "S", "quality": 4, "defense": 4,
@@ -263,6 +266,34 @@ func test_stamp_sergeant_marks_one_profile_with_the_bearers_share() -> void:
 	var clean := [_rprof({"attacks": 10})]
 	AiEv.stamp_sergeant(clean, plain_unit)
 	assert_int(int((clean[0] as Dictionary).get("sergeant_attacks", 0))).is_equal(0)
+	assert_int(int((profiles[0] as Dictionary).get("sergeant_ap", 0))).is_equal(0)
+	AiActRecorder.rules_epoch = epoch0   # statics leak across gdUnit tests — restore
+
+
+func test_stamp_sergeant_marks_one_profile_with_the_bearers_ap_share_at_epoch_73() -> void:
+	# Rules 3.6: the same bearer share now strikes one AP better instead of buying extra hits on 6s —
+	# the FIRST profile with attacks carries the share and the AP bonus, the 3.5 extra-hit share is gone.
+	var epoch0: int = AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	var u := GameUnit.new()
+	u.unit_id = "sgt3"
+	u.unit_properties = {"player_id": 2, "name": "S", "quality": 4, "defense": 4,
+		"special_rules": ["Sergeant"]}
+	for i in range(5):
+		var m := ModelInstance.new()
+		m.is_alive = true
+		u.models.append(m)
+	var profiles := [_rprof({"attacks": 10}), _rprof({"attacks": 4, "name": "Pistol"})]
+	AiEv.stamp_sergeant(profiles, u)
+	var first := profiles[0] as Dictionary
+	AiActRecorder.rules_epoch = epoch0   # restore before asserting: a failed assert stops the case
+	assert_int(int(first.get("sergeant_ap_attacks", 0))) \
+		.override_failure_message("the bearer's share (10 / 5 = 2) must carry the AP bonus").is_equal(2)
+	assert_int(int(first.get("sergeant_ap", 0))) \
+		.override_failure_message("a Sergeant bearer strikes at AP(+1) from rules 3.6").is_equal(1)
+	assert_int(int(first.get("sergeant_attacks", 0))) \
+		.override_failure_message("the extra hit on 6s is rules 3.5 only").is_equal(0)
+	assert_int(int((profiles[1] as Dictionary).get("sergeant_ap", 0))).is_equal(0)
 
 
 func test_ctx_for_applies_armor_counts_as_defense() -> void:
@@ -530,13 +561,13 @@ func _boost_carrier(rules: Array) -> GameUnit:
 
 func test_bane_boost_window_reads_the_beastmen_boost_entry() -> void:
 	# Bestial Boost (aof/beastmen): reroll_save_low 5 past over_in 9, behind upgrades "Bestial".
-	var win: Dictionary = AiEv.bane_boost_window(_boost_carrier(["Bestial", "Bestial Boost"]), true)
+	var win: Dictionary = AiEv.bane_boost_window(_boost_carrier(["Bestial", "Enhanced Bestial"]), true)
 	assert_int(int(win.get("low", 0))).is_equal(5)
 	assert_float(float(win.get("over_in", 0.0))).is_equal_approx(9.0, 0.0001)
-	assert_str(str(win.get("rule", ""))).is_equal("Bestial Boost")
+	assert_str(str(win.get("rule", ""))).is_equal("Enhanced Bestial")
 	# ROT: inside 9" never, and without the base rule never.
-	assert_dict(AiEv.bane_boost_window(_boost_carrier(["Bestial", "Bestial Boost"]), false)).is_empty()
-	assert_dict(AiEv.bane_boost_window(_boost_carrier(["Bestial Boost"]), true)).is_empty()
+	assert_dict(AiEv.bane_boost_window(_boost_carrier(["Bestial", "Enhanced Bestial"]), false)).is_empty()
+	assert_dict(AiEv.bane_boost_window(_boost_carrier(["Enhanced Bestial"]), true)).is_empty()
 
 
 func _scrapper_carrier(rules: Array) -> GameUnit:
