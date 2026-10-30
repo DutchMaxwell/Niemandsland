@@ -56,18 +56,18 @@ const CONTEXTS := [["gf", "havoc_brothers"], ["aof", "havoc_dwarves"], ["aof", "
 
 func test_boost_pays_always_ap_and_replaces_the_base_legs() -> void:
 	for context in CONTEXTS:
-		var unit := _unit(["Havocbound", "Havocbound Boost"], context[0], context[1])
+		var unit := _unit(["Havocbound", "Enhanced Havocbound"], context[0], context[1])
 		var foe := _unit([], context[0], context[1])
 		# Shooting at 12": AP +1 — and the trace must name the BOOST (the base's
 		# ranged leg was replaced by the printed "always … instead of only when …").
 		assert_array(_main._solo_conditional_ap_parts({"rules": []}, unit, foe, false, 12.0, false)) \
-			.is_equal([{"name": "Havocbound Boost", "bonus": 1}])
+			.is_equal([{"name": "Enhanced Havocbound", "bonus": 1}])
 		# Shooting at 6": under the base's 9" bound — only the always leg pays.
 		assert_array(_main._solo_conditional_ap_parts({"rules": []}, unit, foe, false, 6.0, false)) \
-			.is_equal([{"name": "Havocbound Boost", "bonus": 1}])
+			.is_equal([{"name": "Enhanced Havocbound", "bonus": 1}])
 		# Swinging WITHOUT a charge: the base's on_charge leg stays shut, the always leg pays.
 		assert_array(_main._solo_conditional_ap_parts({"rules": []}, unit, foe, false, -1.0, true)) \
-			.is_equal([{"name": "Havocbound Boost", "bonus": 1}])
+			.is_equal([{"name": "Enhanced Havocbound", "bonus": 1}])
 
 
 func test_boost_without_the_base_and_the_base_alone_stay_as_printed() -> void:
@@ -75,7 +75,7 @@ func test_boost_without_the_base_and_the_base_alone_stay_as_printed() -> void:
 		var foe := _unit([], context[0], context[1])
 		# The printed coupling ("If this model has Havocbound"): a Boost without the
 		# base pays nothing — the same refusal as the sim's has_exact_rule.
-		var orphan := _unit(["Havocbound Boost"], context[0], context[1])
+		var orphan := _unit(["Enhanced Havocbound"], context[0], context[1])
 		assert_array(_main._solo_conditional_ap_parts({"rules": []}, orphan, foe, false, 12.0, false)).is_empty()
 		# The base alone keeps its two conditional legs (no over-credit, no regression).
 		var base := _unit(["Havocbound"], context[0], context[1])
@@ -88,13 +88,13 @@ func test_boost_without_the_base_and_the_base_alone_stay_as_printed() -> void:
 
 func test_boost_names_the_rule_in_the_ap_trace() -> void:
 	# Rules-must-log: the save step's AP trace names the rule (main.gd:6500-6506).
-	var unit := _unit(["Havocbound", "Havocbound Boost"], "aof", "havoc_dwarves")
+	var unit := _unit(["Havocbound", "Enhanced Havocbound"], "aof", "havoc_dwarves")
 	var foe := _unit([], "aof", "havoc_dwarves")
 	var start: int = _main.battle_log.entries().size()
 	await _main._solo_resolve_saves(unit, foe, "Rifle", [], 1, 4,
 		{"range": 24, "ap": 0, "rules": []}, false, false, true, false, 6.0)
 	var named := 0
 	for entry in _main.battle_log.entries().slice(start):
-		if str(entry["text"]).contains("Havocbound Boost: AP(+1)"):
+		if str(entry["text"]).contains("Enhanced Havocbound: AP(+1)"):
 			named += 1
 	assert_int(named).is_equal(1)

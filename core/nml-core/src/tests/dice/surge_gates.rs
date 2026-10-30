@@ -64,7 +64,7 @@ use super::*;
     /// "over 9"" — and a 5 below the to-hit target is never a "successful" hit
     /// (main.gd:4471's `5 >= to_hit`).
     #[test]
-    fn ferocious_boosts_fives_never_fire_in_melee_or_below_their_target() {
+    fn enhanced_ferocious_fives_never_fire_in_melee_or_below_their_target() {
         use crate::acts::{rule_on, CURRENT_RULES_EPOCH};
         let want = Tray::seeded(6).roll(8);
         assert_eq!(want.iter().filter(|&&f| f == 5).count(), 2, "fixture: seed 6 must roll two 5s");

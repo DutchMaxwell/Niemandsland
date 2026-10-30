@@ -8,11 +8,11 @@ use super::*;
     /// non-family grant folds nothing.
     #[test]
     fn fortified_boost_grants_fold_the_ap_stamp_at_epoch_6_only() {
-        for rule in ["Guardian Boost", "Warden Boost", "Ossified Boost"] {
+        for rule in ["Enhanced Guardian", "Warden Boost", "Ossified Boost"] {
             let on = fold_leg(rule, 6);
             assert_eq!(on.fortified_boost_ap, 1, "{rule} folds its AP(-1) at 6");
         }
-        let off = fold_leg("Guardian Boost", 5);
+        let off = fold_leg("Enhanced Guardian", 5);
         assert_eq!(off.fortified_boost_ap, 0, "epoch 5 replays the Gen-0 set");
         let other = fold_leg("Self-Repair Boost", 6);
         assert_eq!(other.fortified_boost_ap, 0, "only the family's own names fold");

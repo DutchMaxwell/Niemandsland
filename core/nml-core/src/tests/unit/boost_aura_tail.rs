@@ -1198,11 +1198,11 @@ use super::*;
     /// epoch 6 on the MELEE leg too (main.gd:6119 passes over9=false there);
     /// ABSENT at epoch 5.
     #[test]
-    fn guardian_boost_is_live_at_epoch_6_and_absent_at_epoch_5() {
+    fn enhanced_guardian_is_live_at_epoch_6_and_absent_at_epoch_5() {
         let us6 = fortified_unit("guardian_boost_unit", 6);
         assert_eq!(us6.ctx.fortified_boost_ap, 1, "the Boost's incoming_ap_reduction");
         assert_eq!(us6.ctx.fortified_alias_ap, 0, "no gated entry carried");
-        assert_eq!(us6.fortified_boost_name, "Guardian Boost");
+        assert_eq!(us6.fortified_boost_name, "Enhanced Guardian");
         let (target6, fired6) = fortified_melee(&us6);
         assert_eq!(target6, 4, "melee AP(1) vs the Boost: saves on 4+ instead of 5+");
         assert!(fired6, "rules-must-log: the melee phase must report the boost");
@@ -1717,11 +1717,11 @@ use super::*;
     /// Highborn's own 0/2 stands). RED: drop the epoch-6 arm (or the entry)
     /// and the epoch-6 row falls back to 0/2.
     #[test]
-    fn highborn_boost_stamps_its_own_entry_over_the_epoch6_gate() {
+    fn enhanced_highborn_stamps_its_own_entry_over_the_epoch6_gate() {
         assert_eq!(
             quickfast_bands("highborn_boost_unit", 6),
             Some(Bands { advance: 4.0, rush: 6.0, ..Default::default() }),
-            "Highborn 0/2 + Highborn Boost 4/4, the loaders' per-name stack"
+            "Highborn 0/2 + Enhanced Highborn 4/4, the loaders' per-name stack"
         );
         assert_eq!(
             quickfast_bands("highborn_boost_unit", 5),
