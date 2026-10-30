@@ -646,6 +646,16 @@
     "charge_only": true
    }
   },
+  "Heavy Impact": {
+   "primitive": "Heavy Impact",
+   "rated": true,
+   "book_version": "3.6.0",
+   "params": {
+    "rating": "X",
+    "ap": 1,
+    "counts_as": "Impact"
+   }
+  },
   "Hero": {
    "primitive": "Hero",
    "rated": false,
@@ -731,6 +741,14 @@
    "params": {
     "move_bonus_in": 1,
     "scope": "unit"
+   }
+  },
+  "Precise": {
+   "primitive": "Precise",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "hit_bonus": 1
    }
   },
   "Regeneration": {
@@ -899,6 +917,15 @@
    "params": {
     "bypass_regen": true,
     "shooting_only": true
+   }
+  },
+  "Unwieldy": {
+   "primitive": "Unwieldy",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "strikes_last": true,
+    "condition": "charging"
    }
   },
   "Piercing Fighter": {
