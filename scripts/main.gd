@@ -2541,8 +2541,11 @@ func _solo_auto_seize() -> void:
 		# A unit that arrived from Ambush THIS round can neither seize nor contest (GF/AoF v3.5.1 p.13);
 		# an Aircraft never can at all (GF v3.5.1 Aircraft, system-scoped via the mechanics maps).
 		var ambush_locked: bool = int(gu.unit_properties.get("ambush_arrived_round", -1)) == round_no
+		# Rules 3.6 (UX-16): Spawn / Split units carry the same lock; the log names the rule that placed them.
+		var origin := str(gu.unit_properties.get("origin", ""))
 		infos.append({"player": int(gu.unit_properties.get("player_id", 0)), "name": gu.get_name(), "shaken": gu.is_shaken,
-			"ambush_locked": ambush_locked, "aircraft": SoloController.is_aircraft(gu), "unit_id": gu.unit_id,
+			"ambush_locked": ambush_locked, "lock_rule": origin.capitalize() if origin in ["spawn", "split"] else "",
+			"aircraft": SoloController.is_aircraft(gu), "unit_id": gu.unit_id,
 			"positions": solo_controller.alive_positions(gu),
 			"radii": _solo_alive_radii(gu)})
 	var res: Dictionary = SoloController.seize_objectives(infos, objectives, owners,
@@ -2566,8 +2569,12 @@ func _solo_auto_seize() -> void:
 			if not bool(entry.get("ambush_locked", false)) or bool(entry.get("shaken", false)) \
 					or bool(entry.get("aircraft", false)):
 				continue
-			if SoloController.objective_info_in_range(entry, objectives[i]):
+			if not SoloController.objective_info_in_range(entry, objectives[i]):
+				continue
+			if str(entry.get("lock_rule", "")).is_empty():
 				reasons.append("%s arrived from Ambush this round and cannot seize or contest (GF/AoF v3.5.1 p.13)" % str(entry["name"]))
+			else:
+				reasons.append("%s was placed by %s this round and cannot seize or contest (rules 3.6)" % [str(entry["name"]), str(entry["lock_rule"])])
 		if not reasons.is_empty():
 			locked_near[i] = "; ".join(reasons)
 	var changed_indices := {}
@@ -20841,6 +20848,7 @@ func _on_remote_unit_deleted(game_unit: GameUnit) -> void:
 ## thing the log may never be. The acting client writes its own line when the rule fires; this is
 ## the other side of the table being told.
 func _on_remote_unit_created(game_unit: GameUnit, origin: String) -> void:
+	_solo_stamp_rule_unit_arrival(game_unit, origin)
 	if battle_log == null or game_unit == null:
 		return
 	var reason: String = {
@@ -22229,8 +22237,19 @@ func _solo_create_rule_unit(carrier: GameUnit, anchor: ModelInstance, raw: Strin
 		pid, positions, origin)
 	if created == null:
 		return false
+	_solo_stamp_rule_unit_arrival(created, origin)
 	_log_rule_event(BattleLog.Category.GENERAL, "%s: %s places %s [%d]" % [rule, carrier.get_name(), unit_name, count], _solo_is_ai_unit(carrier))
 	return true
+
+
+## Rules 3.6 (row UX-16): a unit Spawn places or Split creates can neither seize nor contest an objective in
+## the round it arrives. It carries the SAME round stamp an Ambush arrival does, so _solo_auto_seize,
+## BattleSim and the core's can_hold_marker read one field; rules 3.5 (below EPOCH_73_V36) had no such limit.
+## `origin_round` rides in the MP unit payload, so the remote side stamps the same round.
+func _solo_stamp_rule_unit_arrival(unit: GameUnit, origin: String) -> void:
+	if unit == null or not (origin in ["spawn", "split"]) or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return
+	unit.unit_properties["ambush_arrived_round"] = int(unit.unit_properties.get("origin_round", -1))
 
 
 ## Spawn PR 1/2 (design docs/plans/SPAWN_DESIGN_2026-09-08.md §3.1): AiActRecorder's
