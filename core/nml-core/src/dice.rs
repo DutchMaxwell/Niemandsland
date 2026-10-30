@@ -946,13 +946,21 @@ pub fn resolve_volley_leg(
         // unconditional -1 rode this weapon's to-hit sum (the defender-side
         // alias marker, Ctx::evasive_alias).
         evasive_boost_fired |= def.evasive_alias;
+        // EPOCH_73_V36 — Unstoppable ignores only the minus from OTHER sources; the shooter's own
+        // rules' modifiers stay outside the clamp (0 below 73 = one clamp over the whole sum).
+        let art = if att.artillery { att.artillery_shooter_hit_bonus.unwrap_or(crate::combat::ARTILLERY_SHOOTER_HIT_BONUS) } else { 0 };
+        let over9 = if mod_dist_in > LONG_RANGE_IN { p.hit_bonus_over9 + art } else { 0 };
+        let own = if att.v36_rules { p.hit_bonus + over9 + att.growth_hit_mod + upr_hit + ma + gp + im } else { 0 };
+        if (p.unstoppable || att.unstoppable_mark || att.unstoppable_aura) && own < 0 {
+            out.log.push(format!("Unstoppable: {} keeps its own {own} to hit", sh.owner));
+        }
         // EPOCH 34 UNSTOPPABLE MARK — the granted mark's CLAMP half: the
         // once-grant the mark seam leaves on the bearer (`ctx_live`'s
         // `unstoppable_mark`) counts like the weapon's own `p.unstoppable`,
         // the same grant the Regeneration split below already reads. The
         // rules-must-log line names the grant the one time the clamp actually
         // bites for it; a weapon's own flag stays silent as before.
-        if (p.unstoppable || att.unstoppable_mark || att.unstoppable_aura) && m < 0 {
+        if (p.unstoppable || att.unstoppable_mark || att.unstoppable_aura) && m - own < 0 {
             if att.unstoppable_mark {
                 out.log.push(format!(
                     "Unstoppable: {} — negative to-hit modifiers ignored (once)", sh.owner));
@@ -965,7 +973,7 @@ pub fn resolve_volley_leg(
                 out.log.push(format!(
                     "Unstoppable: {} — negative to-hit modifiers ignored (aura)", sh.owner));
             }
-            m = 0;
+            m = own;
         }
         let (mut raw, mut target) = fold_hit(def.modifier_sum, target, m);
         let mut versatile_ap = 0;
@@ -1506,8 +1514,11 @@ fn melee_hit_target(
     // the weapon's own `p.unstoppable`. The bool return carries "the GRANT
     // did the clamping" to the caller, which owns the rules-must-log line
     // (this function has no report of its own).
-    if (p.unstoppable || att.unstoppable_mark) && m < 0 {
-        return (fold_hit(def.modifier_sum, base, 0).0, att.unstoppable_mark);
+    // EPOCH_73_V36 — the volley's own-rules split, melee twin; 0 below 73 = one clamp on the sum.
+    let charge_bonus = if charging { att.melee_hit_bonus_charge } else { 0 };
+    let own = if att.v36_rules { uf_hit + att.melee_hit_bonus + charge_bonus + grounded_precision_mod(att) } else { 0 };
+    if (p.unstoppable || att.unstoppable_mark) && m - own < 0 {
+        return (fold_hit(def.modifier_sum, base, own).0, att.unstoppable_mark);
     }
     (fold_hit(def.modifier_sum, base, m).0, false)
 }
