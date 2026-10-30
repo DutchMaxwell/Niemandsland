@@ -1,0 +1,87 @@
+extends GdUnitTestSuite
+## W1.6c (0.3.15, rules 3.6): batch 3 of the Boost -> Enhanced rename (D-ENH, no alias). Rules 3.6
+## books print "Enhanced <X>" where 3.5 books printed "<X> Boost" ("Enhanced <X> Aura" and
+## "Enhanced <X> Buff" for the carried forms). The gf and aof maps resolve each 3.6 name to the same
+## primitive and params the 3.5 entry had, a carried form hands out the 3.6 base name, and the 3.5
+## name is gone from the map. Every case reads the real maps through RulesRegistry.
+
+## The batch's 3.6 names next to the 3.5 names they replace.
+const RENAMED := {
+	"Enhanced Hive Bond": "Hive Bond Boost",
+	"Enhanced Hive Bond Aura": "Hive Bond Boost Aura",
+	"Enhanced Hold the Line": "Hold the Line Boost",
+	"Enhanced Hold the Line Aura": "Hold the Line Boost Aura",
+	"Enhanced Hold the Line Buff": "Hold the Line Boost Buff",
+	"Enhanced Infected": "Infected Boost",
+	"Enhanced Infected Aura": "Infected Boost Aura",
+	"Enhanced Lucky": "Lucky Boost",
+	"Enhanced Lucky Aura": "Lucky Boost Aura",
+	"Enhanced Lustbound": "Lustbound Boost",
+	"Enhanced Lustbound Aura": "Lustbound Boost Aura",
+	"Enhanced Machine-Fog": "Machine-Fog Boost",
+	"Enhanced Machine-Fog Aura": "Machine-Fog Boost Aura",
+	"Enhanced Mischievous": "Mischievous Boost",
+	"Enhanced Mischievous Aura": "Mischievous Boost Aura",
+	"Enhanced Ossified": "Ossified Boost",
+	"Enhanced Ossified Aura": "Ossified Boost Aura",
+}
+
+## [system, faction, 3.6 name, primitive, params] - the params the 3.5 entry carries today, with a
+## carried form's grant spelled with the 3.6 base name. JSON numbers read back as floats.
+const CASES := [
+	["gf", "machine_cults", "Enhanced Machine-Fog", "Evasive", {"hit_penalty": 1.0}],
+	["gf", "infected_colonies", "Enhanced Infected", "Shred",
+		{"upgrades": "Infected", "extra_wound_per_save_one": 1.0, "save_fail_max": 2.0, "over_in": 9.0}],
+	["gf", "alien_hives", "Enhanced Hive Bond", "Banner", {"morale_bonus": 2.0, "trigger": "combat"}],
+	["aof", "halflings", "Enhanced Lucky", "Surge", {"upgrades": "Lucky", "surge_low": 5.0, "over_in": 9.0}],
+	["aof", "human_empire", "Enhanced Hold the Line Buff", "Utility Buff",
+		{"grants_rule": "Enhanced Hold the Line", "target": "friendly", "max_targets": 1.0,
+		"range_in": 12.0, "once": true}],
+	["aof", "ossified_undead", "Enhanced Ossified Aura", "Aura Channel", {"grants": "Enhanced Ossified"}],
+]
+
+
+func before_test() -> void:
+	RulesRegistry.reset_cache()
+
+
+func test_the_3_6_names_resolve_to_the_primitive_and_params_of_their_3_5_boost() -> void:
+	for c: Array in CASES:
+		var entry := RulesRegistry.lookup(c[0], c[1], c[2])
+		assert_str(str(entry.get("primitive", ""))).override_failure_message(
+			"%s %s: '%s' does not resolve to %s" % [c[0], c[1], c[2], c[3]]).is_equal(c[3])
+		assert_dict(entry.get("params", {})).override_failure_message(
+			"%s %s: '%s' params differ from its 3.5 entry: %s" % [c[0], c[1], c[2], entry]).is_equal(c[4])
+		assert_dict(RulesRegistry.lookup(c[0], c[1], RENAMED[c[2]])).override_failure_message(
+			"%s %s: the 3.5 name '%s' still resolves (no alias)" % [c[0], c[1], RENAMED[c[2]]]).is_empty()
+
+
+## No faction entry, carried grant or modeled token of the gf / aof maps still names a batch 3.5 name.
+func test_no_batch_3_5_name_is_left_in_the_gf_and_aof_maps() -> void:
+	for system: String in ["gf", "aof"]:
+		var m := RulesRegistry.map_for(system)
+		var left: Array = []
+		for token: Variant in m.get("modeled", []):
+			if RENAMED.values().has(str(token)):
+				left.append("modeled: %s" % token)
+		for faction: String in m.get("factions", {}):
+			var fmap: Dictionary = m["factions"][faction]
+			for rule: String in fmap:
+				var params: Dictionary = (fmap[rule] as Dictionary).get("params", {})
+				for named: String in [rule, str(params.get("grants", "")), str(params.get("grants_rule", ""))]:
+					if RENAMED.values().has(named):
+						left.append("%s/%s: %s" % [faction, rule, named])
+		assert_array(left).override_failure_message(
+			"%s map still names batch 3.5 names: %s" % [system, left]).is_empty()
+
+
+## Each 3.6 name the code now reads is a modeled token of the maps that field it.
+func test_the_3_6_names_are_modeled_tokens() -> void:
+	var gf := RulesRegistry.modeled_tokens("gf")
+	var aof := RulesRegistry.modeled_tokens("aof")
+	for token: String in ["Enhanced Hive Bond Aura", "Enhanced Infected", "Enhanced Machine-Fog",
+			"Enhanced Mischievous"]:
+		assert_bool(gf.has(token)).override_failure_message("gf does not model '%s'" % token).is_true()
+	for token: String in ["Enhanced Hold the Line Buff", "Enhanced Lucky Aura", "Enhanced Lustbound",
+			"Enhanced Ossified"]:
+		assert_bool(aof.has(token)).override_failure_message("aof does not model '%s'" % token).is_true()
