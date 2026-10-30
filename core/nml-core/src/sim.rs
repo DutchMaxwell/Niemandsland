@@ -803,7 +803,7 @@ pub(crate) fn tray_breath_attack(
     let landed = shot.absorb(out);
     land_wounds_with(next, ti, landed, seams.tray_exact);
     if shooting_morale_trigger(next, statics, seams, ut, ti, alive_before, wounds_before) {
-        tray_morale(next, statics, ti, false, seams, tray, shot);
+        tray_morale_for(next, statics, ti, false, Some("Breath Attack"), seams, tray, shot);
     }
 }
 
@@ -1016,7 +1016,7 @@ fn surprise_strike(
     let landed = shot.absorb(crate::dice::resolve_storm_hits_with_tray(successes, spec.ap, false, false, &def, &ut.name, tray));
     land_wounds_with(next, best, landed, seams.tray_exact);
     if shooting_morale_trigger(next, statics, seams, ut, best, ab, wb) {
-        tray_morale(next, statics, best, false, seams, tray, shot);
+        tray_morale_for(next, statics, best, false, Some("Surprise Attack"), seams, tray, shot);
     }
 }
 
@@ -1329,7 +1329,7 @@ pub(crate) fn tray_storm_attack(
                 let landed = shot.absorb(crate::dice::resolve_storm_hits_with_tray(hits, ap, bane, shred, &def, &ut.name, tray));
                 land_wounds_with(next, best, landed, seams.tray_exact);
                 if shooting_morale_trigger(next, statics, seams, ut, best, alive_before, wounds_before) {
-                    tray_morale(next, statics, best, false, seams, tray, shot);
+                    tray_morale_for(next, statics, best, false, Some(&spec.name), seams, tray, shot);
                 }
             }
         }
@@ -1776,7 +1776,8 @@ fn control_morale_passed(
         return faces.first().map(|f| *f as i64 >= quality).unwrap_or(true);
     }
     let us = &statics[next.roster.profile[ti]];
-    let ctx = live_morale_ctx(statics, next, ti, false, seams);
+    let mut ctx = live_morale_ctx(statics, next, ti, false, seams);
+    drop_banner_for_cause(statics, next, ti, Some(source.rule), seams, &mut ctx, shot);
     let (outcome, rolled) = crate::dice::resolve_morale_with_tray(
         &ctx, source.owner, false, false, next.shaken[ti], wounds_left(next, ti), tray,
     );
@@ -5061,10 +5062,28 @@ fn live_morale_ctx(statics: &[UnitStatic], state: &State, i: usize, melee: bool,
     ctx
 }
 
+/// Rules 3.6 Banner (`EPOCH_73_V36`): the Banner family's +1 only helps a
+/// morale test that shooting or melee caused. Any other cause (`Some(rule)`)
+/// takes the Banner share (the capture stamp minus the Morale(X) rating it
+/// also carries) back out of the target and names the cause once. Spell
+/// tokens and a granted Hold the Line Boost stay in.
+fn drop_banner_for_cause(
+    statics: &[UnitStatic], state: &State, i: usize, cause: Option<&str>, seams: Seams,
+    ctx: &mut Ctx, shot: &mut ShootResult,
+) {
+    let Some(cause) = cause else { return };
+    if !rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) || state.shaken[i] { return; }
+    let us = &statics[state.roster.profile[i]];
+    let banner = (state.morale_bonus[i] - us.ctx.morale_rating).max(0);
+    if banner == 0 { return; }
+    ctx.morale_bonus -= banner;
+    shot.log.push(format!("[Banner] {}: no +{} against {} (only shooting or melee)", us.name, banner, cause));
+}
+
 /// `main._solo_morale_test` :8305 on the played path — the tray twin of
 /// `morale_fails_expected`, with No Retreat's self-wounds landed regen-free
 /// ("can't be ignored") and the Rout half clearing the unit off the board
-/// exactly as `expected_melee_morale` does.
+/// exactly as `expected_melee_morale` does. A test shooting or melee caused.
 fn tray_morale(
     state: &mut State,
     statics: &[UnitStatic],
@@ -5074,11 +5093,22 @@ fn tray_morale(
     tray: &mut Tray,
     shot: &mut ShootResult,
 ) {
+    tray_morale_for(state, statics, i, melee, None, seams, tray, shot);
+}
+
+/// `tray_morale` with its cause: `None` = shooting or melee, `Some(rule)` =
+/// any other rule that forced the test (`drop_banner_for_cause`).
+#[allow(clippy::too_many_arguments)]
+fn tray_morale_for(
+    state: &mut State, statics: &[UnitStatic], i: usize, melee: bool, cause: Option<&str>,
+    seams: Seams, tray: &mut Tray, shot: &mut ShootResult,
+) {
     if !morale_side_alive(state, i, seams) {
         return;
     }
     let us = &statics[state.roster.profile[i]];
-    let ctx = live_morale_ctx(statics, state, i, melee, seams);
+    let mut ctx = live_morale_ctx(statics, state, i, melee, seams);
+    drop_banner_for_cause(statics, state, i, cause, seams, &mut ctx, shot);
     // EPOCH_39_MORALE_RATING — rules-must-log (main.gd:8596-8602): the test
     // that adds the rating names it, once per drawn die. A Shaken auto-fail
     // draws no die and adds nothing, so it stays silent.
@@ -8562,7 +8592,7 @@ fn resolve_with(
             if let Some((tray, shot)) = dice.as_mut() {
                 let us = &statics[pi_s];
                 if shooting_morale_trigger(&next, statics, seams, us, si, alive_before, wounds_before) {
-                    tray_morale(&mut next, statics, si, false, seams, tray, shot);
+                    tray_morale_for(&mut next, statics, si, false, Some("Dangerous terrain"), seams, tray, shot);
                 }
             }
         }
