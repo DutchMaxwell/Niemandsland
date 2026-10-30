@@ -163,7 +163,7 @@ func _run() -> void:
 		# identical. No code fix here — this is a loud diagnostic so a cold fleet box never silently
 		# enters the golden corpus; warm every dir once (any local game/arena run) first.
 		var _cold_caches: Array[String] = []
-		for _cd in ["ai_lists_cache", "ambience_cache", "biome_cache", "containers_cache",
+		for _cd in ["ai_lists_cache", "ai_lists_cache_v36", "ambience_cache", "biome_cache", "containers_cache",
 				"hazards_cache", "model_cache", "ruins_cache", "trees_cache"]:
 			if _dir_is_empty("user://%s" % _cd):
 				_cold_caches.append(_cd)
