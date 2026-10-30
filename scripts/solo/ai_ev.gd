@@ -94,6 +94,34 @@ static func rule_on_all_models(unit: GameUnit, rule: String, solo: bool = false)
 	return found
 
 
+## Whether MOST living models of `unit` carry `rule` — the rules 3.6 majority form (ruling D-MOST): a strict
+## majority, models not wounds, every living joined hero one model however Tough. Rules live per unit, so every
+## living host model carries the host's rules and every living joined hero its own. `solo` is the same
+## unit-of-[1] collapse as in rule_on_all_models: the picked model's own unit answers alone.
+static func rule_on_most_models(unit: GameUnit, rule: String, solo: bool = false) -> bool:
+	if unit == null:
+		return false
+	var alive := unit.get_alive_count()
+	var with_count := alive if unit.has_special_rule(rule) else 0
+	if solo:
+		return with_count > 0
+	var total := alive
+	if unit.has_method("get_attached_heroes"):
+		for h in unit.get_attached_heroes():
+			var hero := h as GameUnit
+			if hero != null and hero.get_alive_count() > 0:
+				total += 1
+				if hero.has_special_rule(rule):
+					with_count += 1
+	return most_models_of(with_count, total)
+
+
+## The ONE strict-majority test every "most models" read shares (ruling D-MOST): more than half, so an exact
+## half and an empty unit are both false. The core's twin is unit.rs `most_models_of`.
+static func most_models_of(with_count: int, total: int) -> bool:
+	return with_count * 2 > total
+
+
 ## EXACT unit-rule check — has_special_rule matches by PREFIX, so "Unpredictable" would false-positive
 ## on an "Unpredictable Fighter" unit (the Ferocious-vs-"Ferocious Boost" lesson). Rating stripped.
 static func has_exact_rule(unit: GameUnit, rule: String) -> bool:
