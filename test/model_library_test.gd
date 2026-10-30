@@ -66,6 +66,28 @@ func test_rift_daemons_books_resolve_to_the_wormhole_daemons_art() -> void:
 	assert_bool(lib.has_model("rift_daemons", "Rageclaw")).is_false()
 
 
+func test_rules_3_6_book_names_resolve_to_the_existing_art_folders() -> void:
+	var lib := _lib()
+	lib.apply_manifest_text(JSON.stringify({
+		"version": 1, "base_url": "",
+		"models": {"wormhole_daemons_of_war/rageclaw": {"url": "r.glb", "sha256": "abc", "size": 1},
+			"wormhole_daemons_of_change/change horrors": {"url": "c.glb", "sha256": "abd", "size": 1},
+			"saurian_starhost/saurian warriors": {"url": "s.glb", "sha256": "def", "size": 1}},
+	}))
+	# The folder an online import derives from the 3.6 book names ("Daemons of War", "Saurian Starhosts").
+	assert_str(ModelLibrary.make_key("daemons_of_war", "Rageclaw")).is_equal("wormhole_daemons_of_war/rageclaw")
+	assert_bool(lib.has_model("daemons_of_war", "Rageclaw")).is_true()
+	assert_bool(lib.has_model("daemons_of_change", "Change Horrors")).is_true()
+	assert_str(ModelLibrary.make_key("daemons_of_lust", "Lithe")).is_equal("wormhole_daemons_of_lust/lithe")
+	assert_str(ModelLibrary.make_key("daemons_of_plague", "Rotclaw")).is_equal("wormhole_daemons_of_plague/rotclaw")
+	assert_bool(lib.has_model("saurian_starhosts", "Saurian Warriors")).is_true()
+	# Each book keeps its own art; a unit another book owns stays a miss, and the 3.5 folders are unchanged.
+	assert_bool(lib.has_model("daemons_of_change", "Rageclaw")).is_false()
+	assert_bool(lib.has_model("wormhole_daemons_of_war", "Rageclaw")).is_true()
+	assert_bool(lib.has_model("saurian_starhost", "Saurian Warriors")).is_true()
+	assert_bool(lib.has_model("daemons_of", "Rageclaw")).is_false()
+
+
 func test_manifest_parse_and_has_model() -> void:
 	var lib := _lib()
 	lib.apply_manifest_text(JSON.stringify({
