@@ -92,8 +92,8 @@
   "Fearless",
   "Fearless Aura",
   "Ferocious",
-  "Ferocious Boost",
-  "Ferocious Boost Aura",
+  "Enhanced Ferocious",
+  "Enhanced Ferocious Aura",
   "Flying",
   "Fortified",
   "Fortified Aura",
@@ -115,17 +115,17 @@
   "Growth Markers",
   "Guarded",
   "Harassing",
-  "Harassing Boost",
-  "Harassing Boost Aura",
+  "Enhanced Harassing",
+  "Enhanced Harassing Aura",
   "Havocbound",
-  "Havocbound Boost",
-  "Havocbound Boost Aura",
+  "Enhanced Havocbound",
+  "Enhanced Havocbound Aura",
   "Hazardous",
   "Heavy Impact",
   "Hero",
   "Highborn",
-  "Highborn Boost",
-  "Highborn Boost Aura",
+  "Enhanced Highborn",
+  "Enhanced Highborn Aura",
   "Hit & Run",
   "Hit & Run Fighter",
   "Hit & Run Fighter Aura",
@@ -1698,7 +1698,7 @@
      "per_round": true
     }
    },
-   "Harassing Boost": {
+   "Enhanced Harassing": {
     "primitive": "Hit & Run",
     "rated": false,
     "book_version": "3.5.3",
@@ -1707,12 +1707,12 @@
      "upgrades": "Harassing"
     }
    },
-   "Harassing Boost Aura": {
+   "Enhanced Harassing Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Harassing Boost"
+     "grants": "Enhanced Harassing"
     }
    },
    "Lacerate": {
@@ -4089,7 +4089,7 @@
      "over_in": 9
     }
    },
-   "Havocbound Boost": {
+   "Enhanced Havocbound": {
     "primitive": "Piercing Hunter",
     "rated": false,
     "book_version": "3.5.3",
@@ -4099,12 +4099,12 @@
      "upgrades": "Havocbound"
     }
    },
-   "Havocbound Boost Aura": {
+   "Enhanced Havocbound Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Havocbound Boost"
+     "grants": "Enhanced Havocbound"
     }
    },
    "Increased Shooting Range Aura": {
@@ -4319,7 +4319,7 @@
      "over_in": 9
     }
    },
-   "Havocbound Boost": {
+   "Enhanced Havocbound": {
     "primitive": "Piercing Hunter",
     "rated": false,
     "book_version": "3.5.3",
@@ -4329,12 +4329,12 @@
      "upgrades": "Havocbound"
     }
    },
-   "Havocbound Boost Aura": {
+   "Enhanced Havocbound Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Havocbound Boost"
+     "grants": "Enhanced Havocbound"
     }
    },
    "Piercing Warrior": {
@@ -4523,7 +4523,7 @@
      "charge_mod": 2
     }
    },
-   "Highborn Boost": {
+   "Enhanced Highborn": {
     "primitive": "Fast",
     "rated": false,
     "book_version": "3.5.3",
@@ -4533,12 +4533,12 @@
      "upgrades": "Highborn"
     }
    },
-   "Highborn Boost Aura": {
+   "Enhanced Highborn Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Highborn Boost"
+     "grants": "Enhanced Highborn"
     }
    },
    "Piercing Tag": {
@@ -5854,7 +5854,7 @@
      "bonus_hits_per_six": 1
     }
    },
-   "Ferocious Boost": {
+   "Enhanced Ferocious": {
     "primitive": "Surge",
     "rated": false,
     "book_version": "3.5.3",
@@ -5864,12 +5864,12 @@
      "over_in": 9
     }
    },
-   "Ferocious Boost Aura": {
+   "Enhanced Ferocious Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Ferocious Boost"
+     "grants": "Enhanced Ferocious"
     }
    },
    "Hit & Run": {

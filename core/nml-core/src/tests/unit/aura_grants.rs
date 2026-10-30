@@ -53,13 +53,13 @@ use super::*;
         ("Dash Aura", "gf", "custodian_brothers", "Dash", false),
         ("Defensive Growth Aura", "gf", "human_inquisition", "Defensive Growth", true),
         ("Enhanced Devout Aura", "gf", "blessed_sisters", "Enhanced Devout", false),
-        ("Ferocious Boost Aura", "aof", "orcs", "Ferocious Boost", false),
+        ("Enhanced Ferocious Aura", "aof", "orcs", "Enhanced Ferocious", false),
         ("Grounded Precision Aura", "aofs", "merchant_unions", "Grounded Precision", false),
-        ("Guardian Boost Aura", "gf", "custodian_brothers", "Guardian Boost", true),
-        ("Guerrilla Boost Aura", "gf", "rebel_guerrillas", "Guerrilla Boost", true),
-        ("Harassing Boost Aura", "aof", "dark_elves", "Harassing Boost", true),
-        ("Havocbound Boost Aura", "aof", "havoc_dwarves", "Havocbound Boost", false),
-        ("Highborn Boost Aura", "aof", "high_elves", "Highborn Boost", false),
+        ("Enhanced Guardian Aura", "gf", "custodian_brothers", "Enhanced Guardian", true),
+        ("Enhanced Guerrilla Aura", "gf", "rebel_guerrillas", "Enhanced Guerrilla", true),
+        ("Enhanced Harassing Aura", "aof", "dark_elves", "Enhanced Harassing", true),
+        ("Enhanced Havocbound Aura", "aof", "havoc_dwarves", "Enhanced Havocbound", false),
+        ("Enhanced Highborn Aura", "aof", "high_elves", "Enhanced Highborn", false),
         ("Hive Bond Boost Aura", "gf", "alien_hives", "Hive Bond Boost", false),
         ("Ignores Cover Aura", "gf", "eternal_dynasty", "Ignores Cover", true),
         ("Ignores Cover when Shooting Aura", "gf", "dwarf_guilds", "Ignores Cover when Shooting", true),
@@ -157,8 +157,8 @@ use super::*;
             // Per-name numbers the base carries, asserted on the granted
             // carrier itself.
             match aura {
-                "Guardian Boost Aura" => {
-                    assert_eq!(granted.ctx.fortified_boost_ap, 1, "Guardian Boost's incoming_ap_reduction");
+                "Enhanced Guardian Aura" => {
+                    assert_eq!(granted.ctx.fortified_boost_ap, 1, "Enhanced Guardian's incoming_ap_reduction");
                 }
                 "Plaguebound Boost Aura" => {
                     assert_eq!(granted.ctx.regen_target, 5, "Plaguebound Boost's ignore_target");
