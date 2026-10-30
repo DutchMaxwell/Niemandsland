@@ -263,20 +263,20 @@
   "Retaliate",
   "Retreating Strike",
   "Royal Legion",
-  "Royal Legion Boost",
-  "Royal Legion Boost Aura",
+  "Enhanced Royal Legion",
+  "Enhanced Royal Legion Aura",
   "Royal Warrior",
-  "Royal Warrior Boost",
-  "Royal Warrior Boost Aura",
+  "Enhanced Royal Warrior",
+  "Enhanced Royal Warrior Aura",
   "Scout",
   "Scout Aura",
   "Scurry",
-  "Scurry Boost",
-  "Scurry Boost Aura",
+  "Enhanced Scurry",
+  "Enhanced Scurry Aura",
   "Sergeant",
   "Shadowborn",
-  "Shadowborn Boost",
-  "Shadowborn Boost Aura",
+  "Enhanced Shadowborn",
+  "Enhanced Shadowborn Aura",
   "Shatter",
   "Shielded",
   "Shielded Aura",
@@ -310,8 +310,8 @@
   "Strider",
   "Strider Aura",
   "Sturdy",
-  "Sturdy Boost",
-  "Sturdy Boost Aura",
+  "Enhanced Sturdy",
+  "Enhanced Sturdy Aura",
   "Surge",
   "Surge Mark",
   "Surprise Attack",
@@ -2202,7 +2202,7 @@
      "extra_attack": true
     }
    },
-   "Royal Warrior Boost": {
+   "Enhanced Royal Warrior": {
     "primitive": "Surge",
     "rated": false,
     "book_version": "3.5.3",
@@ -2212,12 +2212,12 @@
      "surge_low": 5
     }
    },
-   "Royal Warrior Boost Aura": {
+   "Enhanced Royal Warrior Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Royal Warrior Boost"
+     "grants": "Enhanced Royal Warrior"
     }
    },
    "Shielded": {
@@ -2800,7 +2800,7 @@
      "over_in": 9
     }
    },
-   "Sturdy Boost": {
+   "Enhanced Sturdy": {
     "primitive": "Shielded",
     "rated": false,
     "book_version": "3.5.3",
@@ -2809,12 +2809,12 @@
      "upgrades": "Sturdy"
     }
    },
-   "Sturdy Boost Aura": {
+   "Enhanced Sturdy Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Sturdy Boost"
+     "grants": "Enhanced Sturdy"
     }
    },
    "Swift": {
@@ -5496,7 +5496,7 @@
      "charge_mod": 2
     }
    },
-   "Royal Legion Boost": {
+   "Enhanced Royal Legion": {
     "primitive": "Royal Legion",
     "rated": false,
     "book_version": "3.5.3",
@@ -5505,7 +5505,7 @@
      "charge_mod": 2
     }
    },
-   "Royal Legion Boost Aura": {
+   "Enhanced Royal Legion Aura": {
     "primitive": "Royal Legion",
     "rated": false,
     "book_version": "3.5.3",
@@ -6663,7 +6663,7 @@
      "rush_mod": 2
     }
    },
-   "Scurry Boost": {
+   "Enhanced Scurry": {
     "primitive": "Fast",
     "rated": false,
     "book_version": "3.5.3",
@@ -6673,12 +6673,12 @@
      "upgrades": "Scurry"
     }
    },
-   "Scurry Boost Aura": {
+   "Enhanced Scurry Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Scurry Boost"
+     "grants": "Enhanced Scurry"
     }
    },
    "Shielded": {
@@ -7949,7 +7949,7 @@
      "melee_floor_in": 6
     }
    },
-   "Shadowborn Boost": {
+   "Enhanced Shadowborn": {
     "primitive": "Ranged Shrouding",
     "rated": false,
     "book_version": "3.5.3",
@@ -7960,12 +7960,12 @@
      "melee_floor_in": 6
     }
    },
-   "Shadowborn Boost Aura": {
+   "Enhanced Shadowborn Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Shadowborn Boost"
+     "grants": "Enhanced Shadowborn"
     }
    },
    "Shrouded": {

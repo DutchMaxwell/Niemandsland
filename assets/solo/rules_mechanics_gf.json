@@ -249,8 +249,8 @@
   "Rapid Advance Buff",
   "Rapid Ambush",
   "Rapid Blink",
-  "Rapid Blink Boost",
-  "Rapid Blink Boost Aura",
+  "Enhanced Rapid Blink",
+  "Enhanced Rapid Blink Aura",
   "Rapid Charge",
   "Rapid Charge Aura",
   "Rapid Rush",
@@ -283,18 +283,18 @@
   "Scout",
   "Scout Aura",
   "Scrapper",
-  "Scrapper Boost",
-  "Scrapper Boost Aura",
+  "Enhanced Scrapper",
+  "Enhanced Scrapper Aura",
   "Screened",
   "Screened Aura",
   "Scurry",
-  "Scurry Boost",
-  "Scurry Boost Aura",
+  "Enhanced Scurry",
+  "Enhanced Scurry Aura",
   "Second Wind",
   "Self-Destruct",
   "Self-Repair",
-  "Self-Repair Boost",
-  "Self-Repair Boost Buff",
+  "Enhanced Self-Repair",
+  "Enhanced Self-Repair Buff",
   "Sergeant",
   "Shatter",
   "Shielded",
@@ -329,8 +329,8 @@
   "Strider",
   "Strider Aura",
   "Sturdy",
-  "Sturdy Boost",
-  "Sturdy Boost Aura",
+  "Enhanced Sturdy",
+  "Enhanced Sturdy Aura",
   "Surge",
   "Surge when Shooting",
   "Surprise Attack",
@@ -3707,7 +3707,7 @@
      "over_in": 9
     }
    },
-   "Sturdy Boost": {
+   "Enhanced Sturdy": {
     "primitive": "Shielded",
     "rated": false,
     "book_version": "3.5.3",
@@ -3716,12 +3716,12 @@
      "upgrades": "Sturdy"
     }
    },
-   "Sturdy Boost Aura": {
+   "Enhanced Sturdy Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Sturdy Boost"
+     "grants": "Enhanced Sturdy"
     }
    },
    "Surge": {
@@ -3835,7 +3835,7 @@
      "place_d3_plus": 0
     }
    },
-   "Rapid Blink Boost": {
+   "Enhanced Rapid Blink": {
     "primitive": "Bounding",
     "rated": false,
     "book_version": "3.5.3",
@@ -3844,12 +3844,12 @@
      "dice_count": 2
     }
    },
-   "Rapid Blink Boost Aura": {
+   "Enhanced Rapid Blink Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Rapid Blink Boost"
+     "grants": "Enhanced Rapid Blink"
     }
    },
    "Shielded": {
@@ -5753,7 +5753,7 @@
      "bypass_regen": false
     }
    },
-   "Scrapper Boost": {
+   "Enhanced Scrapper": {
     "primitive": "Bane",
     "rated": false,
     "book_version": "3.5.3",
@@ -5765,12 +5765,12 @@
      "bypass_regen": false
     }
    },
-   "Scrapper Boost Aura": {
+   "Enhanced Scrapper Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Scrapper Boost"
+     "grants": "Enhanced Scrapper"
     }
    },
    "Shatter": {
@@ -7652,7 +7652,7 @@
      "rush_mod": 2
     }
    },
-   "Scurry Boost": {
+   "Enhanced Scurry": {
     "primitive": "Fast",
     "rated": false,
     "book_version": "3.5.3",
@@ -7662,12 +7662,12 @@
      "upgrades": "Scurry"
     }
    },
-   "Scurry Boost Aura": {
+   "Enhanced Scurry Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Scurry Boost"
+     "grants": "Enhanced Scurry"
     }
    },
    "Self-Destruct": {
@@ -8115,7 +8115,7 @@
      "all_models": true
     }
    },
-   "Self-Repair Boost": {
+   "Enhanced Self-Repair": {
     "primitive": "Regeneration",
     "rated": false,
     "book_version": "3.5.3",
@@ -8124,12 +8124,12 @@
      "all_models": true
     }
    },
-   "Self-Repair Boost Buff": {
+   "Enhanced Self-Repair Buff": {
     "primitive": "Utility Buff",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants_rule": "Self-Repair Boost",
+     "grants_rule": "Enhanced Self-Repair",
      "range_in": 12,
      "target": "friendly",
      "once": true

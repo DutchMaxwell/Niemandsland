@@ -720,7 +720,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Royal Warrior Boost",
+      "grants_rule": "Enhanced Royal Warrior",
       "duration": "once"
      },
      "status": "castable"
@@ -983,7 +983,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Sturdy Boost",
+      "grants_rule": "Enhanced Sturdy",
       "duration": "once"
      },
      "status": "castable"
@@ -3121,7 +3121,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Royal Legion Boost",
+      "grants_rule": "Enhanced Royal Legion",
       "duration": "once"
      },
      "status": "castable"
@@ -3687,7 +3687,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Scurry Boost",
+      "grants_rule": "Enhanced Scurry",
       "duration": "once"
      },
      "status": "castable"

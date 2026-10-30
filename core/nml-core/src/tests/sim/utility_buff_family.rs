@@ -56,7 +56,7 @@ use super::*;
             Row { system: "gf", faction: "human_defense_force", rule: "No Retreat Buff", kind: Kind::Grant("No Retreat") },
             Row { system: "aof", faction: "dark_elves", rule: "Piercing Assault Buff", kind: Kind::Grant("Piercing Assault") },
             Row { system: "aof", faction: "human_empire", rule: "Precision Shooter Buff", kind: Kind::HitMod(1, "shooting") },
-            Row { system: "gf", faction: "robot_legions", rule: "Self-Repair Boost Buff", kind: Kind::Grant("Self-Repair Boost") },
+            Row { system: "gf", faction: "robot_legions", rule: "Enhanced Self-Repair Buff", kind: Kind::Grant("Enhanced Self-Repair") },
             Row { system: "aof", faction: "havoc_dwarves", rule: "Steadfast Buff", kind: Kind::Grant("Steadfast") },
             Row { system: "aof", faction: "deep_sea_elves", rule: "Stealth Buff", kind: Kind::StealthAlias(1, 9.0) },
             Row { system: "aof", faction: "kingdom_of_angels", rule: "Versatile Attack Buff", kind: Kind::Grant("Versatile Attack") },

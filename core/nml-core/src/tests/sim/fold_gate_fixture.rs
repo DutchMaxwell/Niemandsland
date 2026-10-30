@@ -14,7 +14,7 @@ use super::*;
         }
         let off = fold_leg("Guardian Boost", 5);
         assert_eq!(off.fortified_boost_ap, 0, "epoch 5 replays the Gen-0 set");
-        let other = fold_leg("Self-Repair Boost", 6);
+        let other = fold_leg("Enhanced Self-Repair", 6);
         assert_eq!(other.fortified_boost_ap, 0, "only the family's own names fold");
     }
 
@@ -31,16 +31,16 @@ use super::*;
     }
 
     #[test]
-    fn self_repair_boost_buff_folds_the_regen_target_at_epoch_5_only() {
-        let on = fold_leg("Self-Repair Boost", 5);
+    fn enhanced_self_repair_buff_folds_the_regen_target_at_epoch_5_only() {
+        let on = fold_leg("Enhanced Self-Repair", 5);
         assert!(on.regeneration && on.regen_target == SELF_REPAIR_BOOST_TARGET);
         assert_eq!(on.regen_target_spell, SELF_REPAIR_BOOST_TARGET);
-        let off = fold_leg("Self-Repair Boost", 4);
+        let off = fold_leg("Enhanced Self-Repair", 4);
         assert!(
             !off.regeneration && off.regen_target == 0,
             "rules_epoch 4 (Gen-2b's stamping-gap window) replays the Gen-0 set, RED before the fix"
         );
-        let (statics, st) = fold_legs("Self-Repair Boost");
+        let (statics, st) = fold_legs("Enhanced Self-Repair");
         let regen6 = Ctx { regeneration: true, regen_target: 6, regen_target_spell: 6, ..statics[0].ctx.clone() };
         let mixed = ctx_live(regen6, &statics, &st, 0, false, 5);
         assert_eq!(mixed.regen_target, 5, "the running MIN picks the granted 5+");

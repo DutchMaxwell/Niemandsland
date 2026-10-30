@@ -209,12 +209,12 @@ fn run_hop(st: &State, statics: &[UnitStatic]) -> (State, ShootResult) {
 /// "Rapid Blink Boost". Without the Boost the base alias's single die wins
 /// the scan and the line names "Rapid Blink".
 #[test]
-fn rapid_blink_boost_wins_the_bounding_scan_with_two_dice() {
-    let (st, statics) = hop_line(&["Rapid Blink", "Rapid Blink Boost"]);
+fn enhanced_rapid_blink_wins_the_bounding_scan_with_two_dice() {
+    let (st, statics) = hop_line(&["Rapid Blink", "Enhanced Rapid Blink"]);
     let (next, shot) = run_hop(&st, &statics);
     let moved_in = (next.positions[0][0][0] - st.positions[0][0][0]) / IN2M;
     assert!(
-        shot.log.iter().any(|l| l.starts_with("Rapid Blink Boost:") && l.contains("rolled")),
+        shot.log.iter().any(|l| l.starts_with("Enhanced Rapid Blink:") && l.contains("rolled")),
         "rules-must-log: the Boost wins the longest-reach scan and names itself: {:?}",
         shot.log
     );

@@ -71,14 +71,14 @@ use super::*;
         ("Plaguebound Boost Aura", "aof", "plague_disciples", "Plaguebound Boost", true),
         ("Point-Blank Piercing Aura", "gf", "blessed_sisters", "Point-Blank Piercing", true),
         ("Protection Feat Aura", "aofs", "crazed_zealots", "Protection Feat", true),
-        ("Rapid Blink Boost Aura", "gf", "elven_jesters", "Rapid Blink Boost", false),
+        ("Enhanced Rapid Blink Aura", "gf", "elven_jesters", "Enhanced Rapid Blink", false),
         ("Ravage Aura", "aof", "orcs", "Ravage", false),
         ("Relentless Aura", "aof", "dwarves", "Relentless", false),
         ("Scout Aura", "aof", "change_disciples", "Scout", false),
-        ("Scrapper Boost Aura", "gf", "jackals", "Scrapper Boost", true),
+        ("Enhanced Scrapper Aura", "gf", "jackals", "Enhanced Scrapper", true),
         ("Screened Aura", "gf", "wormhole_daemons_of_plague", "Screened", true),
-        ("Scurry Boost Aura", "aof", "ratmen", "Scurry Boost", false),
-        ("Sturdy Boost Aura", "aof", "dwarves", "Sturdy Boost", true),
+        ("Enhanced Scurry Aura", "aof", "ratmen", "Enhanced Scurry", false),
+        ("Enhanced Sturdy Aura", "aof", "dwarves", "Enhanced Sturdy", true),
         ("Warbound Boost Aura", "aof", "rift_daemons_of_war", "Warbound Boost", true),
     ];
 

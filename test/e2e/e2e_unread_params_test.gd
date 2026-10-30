@@ -229,7 +229,7 @@ func test_bounding_dice_count_reads_both_registry_shapes() -> void:
 	assert_int(SoloController.bounding_dice_count({})).is_equal(1)
 	assert_int(SoloController.bounding_dice_count({"dice_count": 0})).is_equal(1)
 	# The emitted maps really do carry the v3.5.3 upgrade — in both encodings.
-	assert_int(int(RulesRegistry.param("gf", "elven_jesters", "Rapid Blink Boost", "dice_count", 0))).is_equal(2)
+	assert_int(int(RulesRegistry.param("gf", "elven_jesters", "Enhanced Rapid Blink", "dice_count", 0))).is_equal(2)
 	assert_str(str(RulesRegistry.param("aof", "deep_sea_elves", "Wave-Step Boost", "place_die", ""))).is_equal("2d3")
 
 
@@ -238,7 +238,7 @@ func test_bounding_dice_count_reads_both_registry_shapes() -> void:
 ## draw, which for this seed is a different number.
 func test_a_boosted_blink_rolls_two_d3_and_says_so() -> void:
 	_unit(1, "Grenzer", "alien_hives", [], 1, Vector3(-0.3, 0.0, 0.0))   # something to walk toward
-	var jester := _unit(2, "Springer", "elven_jesters", ["Rapid Blink", "Rapid Blink Boost"], 2,
+	var jester := _unit(2, "Springer", "elven_jesters", ["Rapid Blink", "Enhanced Rapid Blink"], 2,
 		Vector3(0.3, 0.0, 0.0))
 	var solo = _main.solo_controller
 	solo._rng.seed = 4242
@@ -259,7 +259,7 @@ func test_a_boosted_blink_rolls_two_d3_and_says_so() -> void:
 		joined += (str((n as Dictionary).get("text", "")) if n is Dictionary else str(n)) + "\n"
 	assert_str(joined) \
 		.override_failure_message("the boosted blink must place within 2D3\", not D3\":\n%s" % joined) \
-		.contains("Rapid Blink Boost: rolled %d\" of 2D3\"" % (d1 + d2))
+		.contains("Enhanced Rapid Blink: rolled %d\" of 2D3\"" % (d1 + d2))
 	await E2EBoot.settle(get_tree())
 
 

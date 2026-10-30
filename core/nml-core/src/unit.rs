@@ -85,7 +85,7 @@ impl ShieldedAlias {
         match self {
             Self::None => "",
             Self::PlusOneToDefense => "+1 to Defense",
-            Self::SturdyBoost => "Sturdy Boost",
+            Self::SturdyBoost => "Enhanced Sturdy",
             Self::SafetyGearBoost => "Safety Gear Boost",
             Self::TenaciousBoost => "Tenacious Boost",
             Self::GroundedReinforcement => "Grounded Reinforcement",
@@ -2243,7 +2243,7 @@ fn shielded_alias_of(
     }
     const ALIASES: [(&str, ShieldedAlias); 3] = [
         ("+1 to Defense", ShieldedAlias::PlusOneToDefense),
-        ("Sturdy Boost", ShieldedAlias::SturdyBoost),
+        ("Enhanced Sturdy", ShieldedAlias::SturdyBoost),
         ("Grounded Reinforcement", ShieldedAlias::GroundedReinforcement),
     ];
     // Audit 2026-09-13 §2.4's skirmish half — "Safety Gear Boost" (gff) and
@@ -3490,11 +3490,11 @@ pub(crate) const BOOST_AURA_CHANNEL_NAMES: &[&str] = &[
     "Buccaneer Boost Aura",
     "Vale Oath Boost Aura",
     "Wave-Step Boost Aura",
-    "Royal Warrior Boost Aura",
+    "Enhanced Royal Warrior Aura",
     "Bestial Boost Aura",
     "Vinci Tech Boost Aura",
     "Ossified Boost Aura",
-    "Shadowborn Boost Aura",
+    "Enhanced Shadowborn Aura",
     "Destroyer Boost Aura",
     "Empyrean Spirit Boost Aura",
     "Wild Veil Boost Aura",
@@ -3747,7 +3747,7 @@ const WAVE2_UTILITY_BUFF_RULES: [&str; 12] = [
     "Piercing Assault Buff",
     "Piercing Shooting Mark",
     "Piercing Fighting Mark",
-    "Self-Repair Boost Buff",
+    "Enhanced Self-Repair Buff",
     "Cursed Undead Boost Buff",
     "Angelic Blessing Boost Buff",
     "Hold the Line Boost Buff",
@@ -5582,7 +5582,7 @@ fn move_rule_mods_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Opt
     // gate is a per-activation majority read no statics-time stamp can
     // answer, so a flat stamp would be #489's over-credit, not a port.
     if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
-        for name in ["Highborn Boost", "Scurry Boost"] {
+        for name in ["Highborn Boost", "Enhanced Scurry"] {
             if !unit_rule_active(reg, p, name) {
                 continue;
             }
@@ -6176,7 +6176,7 @@ impl UnitStatic {
         // NAME, never by iterating the shared primitive. A record below
         // epoch 30 reads the base 6s-only window and replays byte-exact.
         if rule_on(rules_epoch, EPOCH_30_SCRAPPER_BOOST) {
-            stamp_bane_boost(reg, p, &mut shoot, "Scrapper Boost", "reroll_save_from");
+            stamp_bane_boost(reg, p, &mut shoot, "Enhanced Scrapper", "reroll_save_from");
         }
         // Shred wave 3 (rules-wave3-shred3): the family's per-face wound
         // amount is now READ off the carried Shred-primitive entry

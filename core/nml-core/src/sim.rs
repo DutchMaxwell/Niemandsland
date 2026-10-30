@@ -3332,7 +3332,7 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
             c.unpredictable_shooting || (grants && mods::granted(state, i, "Unpredictable Shooter"));
         // The Regeneration-primitive boosts: the granted entry's printed
         // targets, folded by the static stamp's own running-MIN rule.
-        if grants && mods::granted(state, i, "Self-Repair Boost") {
+        if grants && mods::granted(state, i, "Enhanced Self-Repair") {
             c.regeneration = true;
             c.regen_target = fold_min(c.regen_target, SELF_REPAIR_BOOST_TARGET);
             c.regen_target_spell = fold_min(c.regen_target_spell, SELF_REPAIR_BOOST_TARGET);
@@ -3379,7 +3379,7 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
         }
         for (name, alias, terrain) in [
             ("+1 to Defense", ShieldedAlias::PlusOneToDefense, false),
-            ("Sturdy Boost", ShieldedAlias::SturdyBoost, false),
+            ("Enhanced Sturdy", ShieldedAlias::SturdyBoost, false),
             ("Grounded Reinforcement", ShieldedAlias::GroundedReinforcement, true),
         ] {
             if (grants && mods::granted(state, i, name)) && (!terrain || c.in_cover) {

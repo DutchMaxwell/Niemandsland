@@ -1519,7 +1519,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Sturdy Boost",
+      "grants_rule": "Enhanced Sturdy",
       "duration": "once"
      },
      "status": "castable"
@@ -1650,7 +1650,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Rapid Blink Boost",
+      "grants_rule": "Enhanced Rapid Blink",
       "duration": "once"
      },
      "status": "castable"
@@ -2671,7 +2671,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Scrapper Boost",
+      "grants_rule": "Enhanced Scrapper",
       "duration": "once"
      },
      "status": "castable"
@@ -3722,7 +3722,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Scurry Boost",
+      "grants_rule": "Enhanced Scurry",
       "duration": "once"
      },
      "status": "castable"
@@ -4088,7 +4088,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Self-Repair Boost",
+      "grants_rule": "Enhanced Self-Repair",
       "duration": "once"
      },
      "status": "castable"

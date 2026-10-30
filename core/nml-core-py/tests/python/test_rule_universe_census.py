@@ -527,9 +527,9 @@ def test_untracked_primitive_no_longer_trusted_whole(tmp_path):
     "trusted whole" the instant ITS OWN name happens to be a real, separate
     rule reached only through an exact-literal gate elsewhere (Shielded's
     `name == "Shielded"`, Battleborn's own field) - every ALIAS sharing that
-    primitive tag (Sturdy Boost/Shielded, Vale Oath/Battleborn) rides along
+    primitive tag (Enhanced Sturdy/Shielded, Vale Oath/Battleborn) rides along
     even though the alias can never pass that literal gate. The real
-    registry maps Sturdy Boost -> Shielded and Vale Oath -> Battleborn -
+    registry maps Enhanced Sturdy -> Shielded and Vale Oath -> Battleborn -
     neither primitive is a CONSUMED_PARAM_KEYS class (checked against the
     live table so this spot-check keeps failing loudly the day either one
     is ported), so both aliases must drop out of PORTED; the primitive's
@@ -544,7 +544,7 @@ def test_untracked_primitive_no_longer_trusted_whole(tmp_path):
     (root / "assets/solo/rules_mechanics_gf.json").write_text(json.dumps({
         "common": {
             "Shielded": {"primitive": "Shielded", "params": {}},
-            "Sturdy Boost": {"primitive": "Shielded", "params": {"defense_bonus": 1}},
+            "Enhanced Sturdy": {"primitive": "Shielded", "params": {"defense_bonus": 1}},
             "Battleborn": {"primitive": "Battleborn", "params": {}},
             "Vale Oath": {"primitive": "Battleborn", "params": {}},
         },
@@ -562,7 +562,7 @@ def test_untracked_primitive_no_longer_trusted_whole(tmp_path):
     (books / "book_a.json").write_text(json.dumps({
         "name": "Test Faction", "gameSystem": "gf",
         "specialRules": [
-            {"name": "Shielded"}, {"name": "Sturdy Boost"},
+            {"name": "Shielded"}, {"name": "Enhanced Sturdy"},
             {"name": "Battleborn"}, {"name": "Vale Oath"},
         ],
     }))
@@ -571,7 +571,7 @@ def test_untracked_primitive_no_longer_trusted_whole(tmp_path):
     assert per["Shielded"]["per_system"]["gf"]["core"] == "PORTED", (
         "the literal-gated name itself is genuinely PORTED - control"
     )
-    assert per["Sturdy Boost"]["per_system"]["gf"]["core"] == "MISSING", (
+    assert per["Enhanced Sturdy"]["per_system"]["gf"]["core"] == "MISSING", (
         "an untracked primitive must not credit its aliases (audit spot-check)"
     )
     assert per["Vale Oath"]["per_system"]["gf"]["core"] == "MISSING"

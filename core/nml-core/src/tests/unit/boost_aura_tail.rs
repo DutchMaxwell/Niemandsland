@@ -603,13 +603,13 @@ use super::*;
     /// `reroll_save_from` reader landed — see the integration test in
     /// `tests/boost_bases_family.rs`).
     #[test]
-    fn scrapper_boost_joins_through_the_coverage_wave() {
+    fn enhanced_scrapper_joins_through_the_coverage_wave() {
         assert_eq!(
-            bane_stamp_of("Scrapper Boost", "gf", "jackals", crate::acts::CURRENT_RULES_EPOCH),
+            bane_stamp_of("Enhanced Scrapper", "gf", "jackals", crate::acts::CURRENT_RULES_EPOCH),
             (true, true),
             "the gf entry's reroll_save_sixes"
         );
-        assert_eq!(bane_stamp_of("Scrapper Boost", "gf", "jackals", 0), (false, false), "the wave is epoch-gated");
+        assert_eq!(bane_stamp_of("Enhanced Scrapper", "gf", "jackals", 0), (false, false), "the wave is epoch-gated");
     }
 
     /// Lacerate family (rules-wave2-lacerate2) — one test per ported name,
@@ -884,7 +884,7 @@ use super::*;
     }
 
     #[test]
-    fn self_repair_boost_ignores_on_5_6_epoch_gated() {
+    fn enhanced_self_repair_ignores_on_5_6_epoch_gated() {
         let header = read_act_header(REGEN_FAMILY_HEADER).expect("header");
         assert_eq!(regen_pair_at(&header, "self_repair_boost", CURRENT_RULES_EPOCH), (5, 5));
         assert_eq!(regen_pair_at(&header, "self_repair_boost", 0), (0, 0), "epoch 0 replays legacy");
@@ -1629,7 +1629,7 @@ use super::*;
     /// Royal Legion Boost (aof mummified_undead) — the aof entry carries the
     /// base magnitudes (4/2) under the Boost's own name. RED: the fields stay 0.
     #[test]
-    fn royal_legion_boost_stamps_through_its_own_entry() {
+    fn enhanced_royal_legion_stamps_through_its_own_entry() {
         assert_eq!(royal_legion_halves("rl_boost_unit", 6), (4.0, 2.0));
         assert_eq!(royal_legion_halves("rl_boost_unit", 5), (0.0, 0.0));
     }
@@ -1637,7 +1637,7 @@ use super::*;
     /// Royal Legion Boost Aura — its aof entry is primitive-bearing (4/2)
     /// under its own name, so the alias wave reaches it WITHOUT a raw-name arm.
     #[test]
-    fn royal_legion_boost_aura_stamps_through_its_own_entry() {
+    fn enhanced_royal_legion_aura_stamps_through_its_own_entry() {
         assert_eq!(royal_legion_halves("rl_boost_aura_unit", 6), (4.0, 2.0));
         assert_eq!(royal_legion_halves("rl_boost_aura_unit", 5), (0.0, 0.0));
     }
@@ -1721,11 +1721,11 @@ use super::*;
     /// at 6, absent at 5). RED: drop the epoch-6 arm and the epoch-6 row
     /// falls back to 2/2.
     #[test]
-    fn scurry_boost_stamps_its_own_entry_over_the_epoch6_gate() {
+    fn enhanced_scurry_stamps_its_own_entry_over_the_epoch6_gate() {
         assert_eq!(
             quickfast_bands("scurry_boost_unit", 6),
             Some(Bands { advance: 6.0, rush: 6.0, ..Default::default() }),
-            "Scurry 2/2 + Scurry Boost 4/4, the loaders' per-name stack"
+            "Scurry 2/2 + Enhanced Scurry 4/4, the loaders' per-name stack"
         );
         assert_eq!(
             quickfast_bands("scurry_boost_unit", 5),

@@ -279,8 +279,8 @@ fn machine_fog_boost_makes_the_minus_one_unconditional_at_epoch_6() {
 /// constant once the strafing leg's name lands, per the wave protocol.
 /// The base "Scrapper" carrier keeps the 6s-only window either way.
 #[test]
-fn scrapper_boost_widens_the_bane_window_over_nine_inches_at_epoch_30() {
-    let us = build_at("gf", "jackals", &["Scrapper", "Scrapper Boost"], EPOCH_30_SCRAPPER_BOOST);
+fn enhanced_scrapper_widens_the_bane_window_over_nine_inches_at_epoch_30() {
+    let us = build_at("gf", "jackals", &["Scrapper", "Enhanced Scrapper"], EPOCH_30_SCRAPPER_BOOST);
     let p = [us.shoot[0].clone()];
     let att = Ctx { quality: 4, ..Default::default() };
     let def = Ctx { defense: 5, models: 1, tough: 1, ..Default::default() };
@@ -303,7 +303,7 @@ fn scrapper_boost_widens_the_bane_window_over_nine_inches_at_epoch_30() {
         "epoch 30, 12\": every successful 5-6 re-rolls (the widened window, RED before the fix)"
     );
     assert!(
-        on.log.iter().any(|l| l.contains("Scrapper Boost")),
+        on.log.iter().any(|l| l.contains("Enhanced Scrapper")),
         "rules-must-log: the widened window names itself (RED before the fix)"
     );
 
@@ -318,7 +318,7 @@ fn scrapper_boost_widens_the_bane_window_over_nine_inches_at_epoch_30() {
     // The old leg — the epoch immediately below the bump: the record predates
     // the wave, the base 6s-only window, byte-exact ("Scrapper" itself baned
     // since the bane wave; only the WIDENED window is epoch-30 born).
-    let us_old = build_at("gf", "jackals", &["Scrapper", "Scrapper Boost"], EPOCH_27_TERRAIN_DEBUFF);
+    let us_old = build_at("gf", "jackals", &["Scrapper", "Enhanced Scrapper"], EPOCH_27_TERRAIN_DEBUFF);
     let p_old = [us_old.shoot[0].clone()];
     let strikers_old = [Shooter { profiles: &p_old, keep: &[0], attacks: &[64], att: &att, owner: "att" }];
     let mut t_old = Tray::seeded(27);
@@ -331,7 +331,7 @@ fn scrapper_boost_widens_the_bane_window_over_nine_inches_at_epoch_30() {
         "below the bump: the base 6s-only window, byte-exact"
     );
     assert!(
-        !off.log.iter().any(|l| l.contains("Scrapper Boost")),
+        !off.log.iter().any(|l| l.contains("Enhanced Scrapper")),
         "below the bump: the widened window is not born yet"
     );
 
@@ -349,7 +349,7 @@ fn scrapper_boost_widens_the_bane_window_over_nine_inches_at_epoch_30() {
         "no Boost: only the 6s re-roll, the base window"
     );
     assert!(
-        !without.log.iter().any(|l| l.contains("Scrapper Boost")),
+        !without.log.iter().any(|l| l.contains("Enhanced Scrapper")),
         "no widened window fired, nothing logs"
     );
 }
