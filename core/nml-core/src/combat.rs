@@ -16,6 +16,9 @@ pub const UNMODIFIED_SIX: i64 = 6;
 /// `AiCombatMath.LONG_RANGE_IN` :60 — the over-9" gate of Stealth/Artillery/
 /// Relentless/Guarded/Versatile Attack.
 pub const LONG_RANGE_IN: f64 = 9.0;
+/// `AiCombatMath.CHARGE_LONG_RANGE_IN` — D-GATE6 (rules 3.6, `EPOCH_73_V36`): the over-6" gate of a
+/// CHARGE, measured before any model moves, closest model to closest model. Shooting keeps 9".
+pub const CHARGE_LONG_RANGE_IN: f64 = 6.0;
 /// `AiCombatMath.STEALTH_HIT_PENALTY` :64 / `ARTILLERY_SHOOTER_HIT_BONUS` :68 /
 /// `ARTILLERY_TARGET_HIT_PENALTY` :72 / `EVASIVE_HIT_PENALTY` :77.
 pub const STEALTH_HIT_PENALTY: i64 = 1;

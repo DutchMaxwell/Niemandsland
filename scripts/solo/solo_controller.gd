@@ -2552,6 +2552,7 @@ func execute_intent(intent: Dictionary, report: Dictionary) -> Dictionary:
 	var quick_shot: bool = bool(intent.get("quick_shot", false))
 	var source: String = str(intent.get("source", "ai"))
 	var goal_dist := MoveIntent.distance_inches(unit_centre(unit), goal)   # nothing has moved yet
+	var charge_from := charge_from_in(unit, target, enemy_dist_in) if action == AiDecision.Action.CHARGE else enemy_dist_in
 	var tcentre := unit_centre(target) if target != null else unit_centre(unit)
 	_player_move = (source == "player")
 	var dang := 0
@@ -2620,7 +2621,7 @@ func execute_intent(intent: Dictionary, report: Dictionary) -> Dictionary:
 	var weapons := _unit_weapons(unit)
 	var d2 := MoveIntent.distance_inches(unit_centre(unit), unit_centre(target)) if target != null else INF
 	report["dist_in"] = d2
-	report["charge_from_in"] = enemy_dist_in   # pre-move distance — the Versatile Attack >9" melee-charge gate
+	report["charge_from_in"] = charge_from   # pre-move distance — the charge gates' measure (edge gap from 73)
 	report["moved"] = action != AiDecision.Action.HOLD   # Indirect's -1 to hit fires when shooting after moving
 	# Traversal (army-book: "May move through friendly and enemy units"): the move itself crossed bases
 	# the planner/gate would otherwise have routed around or clamped — that is invisible to the opponent,
@@ -10352,6 +10353,16 @@ func nearest_melee_pair_info(a: GameUnit, b: GameUnit, honor_height_reach: bool)
 ## touching). 0 = touching/overlapping; INF when either side has no live models, or no pair is in reach.
 func nearest_melee_gap_in(a: GameUnit, b: GameUnit) -> float:
 	return nearest_melee_pair_info(a, b, true)["gap_in"]
+
+
+## D-GATE6 (rules 3.6): the distance a charge is measured from — before any model moves, closest model to
+## closest model, base edge to base edge (the core's `modifier_distance_in`, no height filter). Below
+## EPOCH_73_V36 the intent's unit-centre distance `centre_in` stands; a pair with no live shapes keeps it too.
+func charge_from_in(unit: GameUnit, target: GameUnit, centre_in: float) -> float:
+	if target == null or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return centre_in
+	var gap: float = nearest_melee_pair_info(unit, target, false)["gap_in"]
+	return gap if gap != INF else centre_in
 
 
 ## The nearest charger-model / enemy-model pair, as the base-to-base gap (inches) to close and the world
