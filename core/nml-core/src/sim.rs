@@ -7216,6 +7216,12 @@ pub(crate) fn terrain_debuff_folds(
         )
     {
         0.0
+    } else if rule_on(us.rules_epoch, crate::acts::EPOCH_73_V36) {
+        // UX-21 (rules 3.6): the whole joined unit tests once, for the wounds it has left.
+        let mut chain = vec![si];
+        chain.extend(state.attached[si].iter().copied());
+        let dice: i64 = chain.iter().map(|&u| wounds_left(state, u)).sum();
+        dice as f64 / 6.0
     } else {
         // `wounds_max` is the FULL model list and `positions` only the
         // survivors — the tail — exactly dangerous_dice's own counting; on a

@@ -3467,6 +3467,9 @@ func charge_dangerous_toll(unit: GameUnit, target_unit: GameUnit, from: Vector3,
 	var dice := 0
 	for m in models:
 		dice += maxi(1, int((m as ModelInstance).wounds_max))
+	# UX-21 (EPOCH_73_V36, rules 3.6): the whole joined unit tests once, for the wounds it has left.
+	if dice > 0 and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		dice = OPRArmyManager.dangerous_dice_for(unit)
 	out["toll"] = float(dice) / 6.0
 	var us := AiEv.ctx_for(unit, false, 0)
 	var them := AiEv.ctx_for(target_unit, majority_in_cover(target_unit), counter_models_of(target_unit))
@@ -5835,6 +5838,9 @@ func through_toll_verdict(models: Array, trails: Array, trail_radii_m: Array, un
 			dice += maxi(1, int((models[i] as ModelInstance).wounds_max))
 	if dice == 0:
 		return out
+	# UX-21 (EPOCH_73_V36, rules 3.6): the whole joined unit tests once, for the wounds it has left.
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		dice = OPRArmyManager.dangerous_dice_for((models[0] as ModelInstance).unit)
 	var wounds_now := 0
 	for m in models:
 		wounds_now += maxi(0, int((m as ModelInstance).wounds_current))
