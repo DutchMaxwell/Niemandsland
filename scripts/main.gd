@@ -2542,8 +2542,11 @@ func _solo_auto_seize() -> void:
 		# A unit that arrived from Ambush THIS round can neither seize nor contest (GF/AoF v3.5.1 p.13);
 		# an Aircraft never can at all (GF v3.5.1 Aircraft, system-scoped via the mechanics maps).
 		var ambush_locked: bool = int(gu.unit_properties.get("ambush_arrived_round", -1)) == round_no
+		# Rules 3.6 (UX-16): Spawn / Split units carry the same lock; the log names the rule that placed them.
+		var origin := str(gu.unit_properties.get("origin", ""))
 		infos.append({"player": int(gu.unit_properties.get("player_id", 0)), "name": gu.get_name(), "shaken": gu.is_shaken,
-			"ambush_locked": ambush_locked, "aircraft": SoloController.is_aircraft(gu), "unit_id": gu.unit_id,
+			"ambush_locked": ambush_locked, "lock_rule": origin.capitalize() if origin in ["spawn", "split"] else "",
+			"aircraft": SoloController.is_aircraft(gu), "unit_id": gu.unit_id,
 			"positions": solo_controller.alive_positions(gu),
 			"radii": _solo_alive_radii(gu)})
 	var res: Dictionary = SoloController.seize_objectives(infos, objectives, owners,
@@ -2567,8 +2570,12 @@ func _solo_auto_seize() -> void:
 			if not bool(entry.get("ambush_locked", false)) or bool(entry.get("shaken", false)) \
 					or bool(entry.get("aircraft", false)):
 				continue
-			if SoloController.objective_info_in_range(entry, objectives[i]):
+			if not SoloController.objective_info_in_range(entry, objectives[i]):
+				continue
+			if str(entry.get("lock_rule", "")).is_empty():
 				reasons.append("%s arrived from Ambush this round and cannot seize or contest (GF/AoF v3.5.1 p.13)" % str(entry["name"]))
+			else:
+				reasons.append("%s was placed by %s this round and cannot seize or contest (rules 3.6)" % [str(entry["name"]), str(entry["lock_rule"])])
 		if not reasons.is_empty():
 			locked_near[i] = "; ".join(reasons)
 	var changed_indices := {}
@@ -4513,6 +4520,23 @@ func _solo_ai_volley_distance_in(attacker: GameUnit, target: GameUnit) -> float:
 	return MoveIntent.distance_inches(solo_controller.unit_centre(attacker), solo_controller.unit_centre(target))
 
 
+## SHO-PAR-F6: one AI shot's eligibility — the member's models with range + sight to the target (and the
+## pairs they cleared), the bearer-gated attack report (NML-1025) and the living bearers. From EPOCH_73_V36
+## the volley reads it ONCE per shot before the first die (all weapons fire together); before, per shot.
+func _solo_shot_eligibility(member: GameUnit, profile: Dictionary, shot: Dictionary, target: GameUnit,
+		granted_indirect: bool, moved: bool = false) -> Dictionary:
+	var pairs: Array = []
+	var sighted: int = _solo_sighted_count(member, target,
+		int(SoloController.effective_shoot_reach_in(float(shot["reach"]), target)),
+		(bool(profile.get("indirect", false)) and SoloController.indirect_ignores_los(member, not moved)) \
+			or granted_indirect or _solo_target_grants_indirect(target), pairs)   # GH #325
+	var copies: int = maxi(int(profile.get("count", 1)), 1)
+	return {"pairs": pairs, "sighted": sighted, "alive": member.get_alive_count(),
+		"report": SoloController.scaled_attacks_report(member, profile, sighted, int(shot["max"])),
+		"bearers": SoloController.alive_bearers_of(member, str(profile.get("name", "")),
+			maxi(int(profile.get("attacks", 0)) / copies, 0)) if copies < int(shot["max"]) else -1}
+
+
 ## Resolve one split-fire volley (all `shots` aimed at `target`) with real tray dice + the human's saves.
 ## Per-model shooting (GF v3.5.1 p.8 "Who Can Shoot"): each shot's attacks scale by the member's models
 ## that actually have range AND line of sight to the target — not by its whole living count. `moved` is
@@ -4569,6 +4593,18 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 			sprof["ap"] = int(sprof.get("ap", 0)) + tag_ap
 			sd["profile"] = sprof
 			shots[si] = sd
+	# SHO-PAR-F6 (EPOCH_73_V36, lead ruling O1): all weapons of the volley fire together, so every shot's
+	# sighted models and bearers are fixed HERE, before the first die — an earlier weapon's casualties
+	# (Deadly / Takedown land mid-volley) no longer silence a later one; the core fixes its counts at
+	# declaration too. Wounds still resolve in order. EPOCH_72 keeps the per-shot recount in the loop.
+	var granted_indirect: bool = SoloController.granted_indirect_of(attacker)   # GH #325 — own token
+	var at_declaration: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
+	var declared: Array = []
+	if at_declaration:
+		for s in shots:
+			var ds := s as Dictionary
+			declared.append(_solo_shot_eligibility(ds["member"] as GameUnit, _solo_bridge_granted_flags(
+				ds["member"] as GameUnit, ds["profile"] as Dictionary, target), ds, target, granted_indirect, moved))
 	# ANNOUNCE: who shoots at whom — highlights + attack line + toast, held before any die is thrown.
 	var announce := _solo_show_attack_announce(attacker, target, "fires at")
 	_solo_show_fan_for_unit(attacker)   # Bug 17: the volley fan appears automatically — the shot is traceable
@@ -4582,7 +4618,6 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 	# Unpredictable (generic army-book rule — "when attacking": the SHOOTING leg; the wave-4 melee-only
 	# Unpredictable Fighter lives in the melee path): ONE die per volley for the whole unit —
 	# 1-3 → AP(+1), 4-6 → +1 to hit on every profile it fires (same arithmetic, same visible tray).
-	var granted_indirect: bool = SoloController.granted_indirect_of(attacker)   # GH #325 — own token
 	var upr_ap := 0
 	var upr_hit := 0
 	var upr_name := _solo_unpredictable_rule(attacker, false, target)
@@ -4595,8 +4630,8 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s rolls %d → %s" % [
 					upr_name, attacker.get_name(), int(upr_face[0]), ("AP(+1)" if upr_ap > 0 else "+1 to hit")], true)
-	for s in shots:
-		var shot := s as Dictionary
+	for si in range(shots.size()):
+		var shot := shots[si] as Dictionary
 		var member := shot["member"] as GameUnit
 		var profile := _solo_bridge_granted_flags(member, shot["profile"] as Dictionary, target)
 		# Per-model shooting (GF v3.5.1 p.8 "Who Can Shoot") decides the dice count FIRST, so a shot that
@@ -4604,22 +4639,19 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		# of volleys that never roll). Indirect (wave 5) targets as if in line of sight — its per-model
 		# sighting is range-only; the Aircraft penalty (-12") and Ranged Shrouding (-6" min 6") shorten
 		# the reach here too.
-		var sight_pairs: Array = []   # VFX #2: the model pairs the count below cleared (tracer segments)
-		var sighted: int = _solo_sighted_count(member, target,
-			int(SoloController.effective_shoot_reach_in(float(shot["reach"]), target)),
-			(bool(profile.get("indirect", false)) and SoloController.indirect_ignores_los(member, not moved)) \
-				or granted_indirect or _solo_target_grants_indirect(target), sight_pairs)   # GH #325
+		var decl: Dictionary = declared[si] if at_declaration \
+			else _solo_shot_eligibility(member, profile, shot, target, granted_indirect, moved)
+		var sight_pairs: Array = decl["pairs"]   # VFX #2: the model pairs the count cleared (tracer segments)
+		var sighted: int = int(decl["sighted"])
 		# NML-1025: the bearer gate now guards the AI volley too (was human-only).
-		var volley_report: Dictionary = SoloController.scaled_attacks_report(member, profile, sighted, int(shot["max"]))
+		var volley_report: Dictionary = decl["report"]
 		var attacks: int = int(volley_report["attacks"])
 		# NML-1073 M5 D6a-B6: sibling of the dice tap (AiDiceRecorder) — the table-side per-shot
 		# facts the count above used, env NML_SHOT_DUMP, default OFF (byte-identical game either
 		# way; AiShotRecorder.record() no-ops on its own cached env check).
 		var shot_range_in: int = int(SoloController.effective_shoot_reach_in(float(shot["reach"]), target))
 		var shot_max_models: int = int(shot["max"])
-		var shot_copies: int = maxi(int(profile.get("count", 1)), 1)
-		var shot_bearers: int = SoloController.alive_bearers_of(member, str(profile.get("name", "")),
-			maxi(int(profile.get("attacks", 0)) / shot_copies, 0)) if shot_copies < shot_max_models else -1
+		var shot_bearers: int = int(decl["bearers"])
 		AiShotRecorder.record({"act": solo_controller.move_act_seq(), "round": solo_controller._current_round(),
 			"player": solo_controller.ai_slot, "shooter": attacker.get_name(), "member": member.get_name(),
 			"weapon": str(profile.get("name", "?")), "target": target.get_name(),
@@ -4635,6 +4667,11 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s silent — %s" % [
 					member.get_name(), str(profile.get("name", "?")), str(volley_report["silent"])], true)
 			continue
+		# SHO-PAR-F6 rules-must-log: say so whenever casualties since the declaration did not shrink this shot.
+		if at_declaration and battle_log != null and (_solo_combined_alive(target) < models_before
+				or member.get_alive_count() < int(decl["alive"])):
+			battle_log.log_event(BattleLog.Category.COMBAT, "Simultaneous fire: %s fires %s as declared (%d model%s in range and sight before the first roll)" % [
+				member.get_name(), str(profile.get("name", "?")), sighted, ("" if sighted == 1 else "s")], true)
 		# Reliable (GF v3.5.1) sets the Quality (2+); the to-hit roll modifiers (Stealth / Artillery /
 		# Evasive, and Indirect's moved-shooting -1 — wave 5) then apply on top ("Reliable only changes
 		# the Quality value", p.14).
@@ -15040,17 +15077,21 @@ func _delete_selected_objects() -> void:
 	object_manager.deselect_all()
 
 
-## Replace the HUD shortcuts label's first line with "Niemandsland v<config/version>", so the
-## displayed version is derived from the single source of truth and never needs a manual edit.
+## Replace the HUD shortcuts label's first line with "Niemandsland v<config/version> · rules <major.minor>",
+## so the displayed versions are derived from their single sources and never need a manual edit: the game
+## from the project config, the rules from the maps' `_meta.core_version`. An unreadable map keeps today's line.
 func _apply_version_to_info_label() -> void:
 	var info := get_node_or_null("UI/HUD/InfoLabel") as Label
 	if info == null:
 		return
 	var version := str(ProjectSettings.get_setting("application/config/version", "?"))
+	var rules := OPRApiClient._major_minor(OPRApiClient.rules_core_version("gf"))
 	var lines := info.text.split("\n")
 	if lines.is_empty():
 		return
 	lines[0] = "Niemandsland v%s" % version
+	if not rules.is_empty():
+		lines[0] += " · rules %s" % rules
 	info.text = "\n".join(lines)
 
 
@@ -20974,6 +21015,7 @@ func _on_remote_unit_deleted(game_unit: GameUnit) -> void:
 ## thing the log may never be. The acting client writes its own line when the rule fires; this is
 ## the other side of the table being told.
 func _on_remote_unit_created(game_unit: GameUnit, origin: String) -> void:
+	_solo_stamp_rule_unit_arrival(game_unit, origin)
 	if battle_log == null or game_unit == null:
 		return
 	var reason: String = {
@@ -21412,6 +21454,8 @@ func _solo_takedown_bonus_groups(unit: GameUnit, melee: bool) -> Array:
 ## Hazardous self-wound half (resolver wave A): every unmodified 1 rolled to hit with a Hazardous
 ## weapon wounds the FIRER's unit ("this model's unit takes one wound on unmodified rolls of 1 to
 ## hit"). Direct wounds — no save, same as Dangerous terrain; fires at all three hit-roll seams.
+## Rules 3.6 (EPOCH_73_V36): the wound lands on the BEARER model instead, X wounds when the weapon
+## also has Blast(X) or Deadly(X) (_solo_hazardous_bearer_wounds).
 func _solo_hazardous_self_wounds(owner_unit: GameUnit, profile: Dictionary, faces: Array) -> void:
 	if owner_unit == null or not bool(profile.get("hazardous", false)):
 		return
@@ -21421,11 +21465,63 @@ func _solo_hazardous_self_wounds(owner_unit: GameUnit, profile: Dictionary, face
 			ones += 1
 	if ones <= 0:
 		return
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		await _solo_hazardous_bearer_wounds(owner_unit, profile, ones)
+		return
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT,
 			"Hazardous: %s rolls %d unmodified 1%s to hit — takes %d wound%s" % [
 			owner_unit.get_name(), ones, ("" if ones == 1 else "s"), ones, ("" if ones == 1 else "s")], true)
 	await _solo_apply_wounds(owner_unit, ones)
+
+
+## Rules 3.6 Hazardous (EPOCH_73_V36): each unmodified 1 wounds the BEARER model — a joined hero his own, a
+## firing model of a Tough unit itself — for X wounds when the weapon also has Blast(X) or Deadly(X) (the
+## larger of the two if it has both), capped at the model like Deadly (no carry-over). When the bearer falls,
+## the next 1 goes to the next living bearer. With no bearer on record (pooled regiment, older save) the
+## unit takes the X-scaled wounds, as before.
+func _solo_hazardous_bearer_wounds(owner_unit: GameUnit, profile: Dictionary, ones: int) -> void:
+	var x: int = maxi(maxi(int(profile.get("blast", 0)), int(profile.get("deadly", 0))), 1)
+	var weapon: String = str(profile.get("name", "?"))
+	var pooled: bool = opr_army_manager != null and opr_army_manager.regiments.has(owner_unit.unit_id)
+	var pid: int = int(owner_unit.unit_properties.get("player_id", 1))
+	var on_changed := func(m: ModelInstance) -> void:
+		if radial_menu_controller != null:
+			radial_menu_controller._update_wound_marker(m)
+		if network_manager != null and network_manager.has_method("broadcast_model_wounds"):
+			network_manager.broadcast_model_wounds(m)
+	for _i in range(ones):
+		var bearer: ModelInstance = null if pooled else _solo_hazardous_bearer(owner_unit, weapon)
+		if bearer == null:
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.COMBAT, "Hazardous: %s has no bearer on record — the unit takes %d wound%s (%s)" % [
+					owner_unit.get_name(), x, ("" if x == 1 else "s"), weapon], true)
+			await _solo_apply_wounds(owner_unit, x)
+			continue
+		var bearer_unit: GameUnit = (bearer.unit as GameUnit) if bearer.unit != null else owner_unit
+		var died_models: Array[ModelInstance] = []
+		var dealt: int = SoloController.apply_deadly_hit(bearer, x, on_changed, func(m: ModelInstance) -> void: died_models.append(m))
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT, "Hazardous: %s model %d takes %d wound%s (%s%s)" % [
+				bearer_unit.get_name(), bearer.model_index + 1, dealt, ("" if dealt == 1 else "s"),
+				("Blast/Deadly %d, " % x if x > 1 else ""), weapon], true)
+		if not died_models.is_empty():
+			await _solo_remove_dead_models(bearer_unit, died_models, pid)
+	_solo_hero_carries_on(owner_unit)
+
+
+## The first living model of the firing unit's joined chain whose pinned loadout carries `weapon`, or null.
+func _solo_hazardous_bearer(owner_unit: GameUnit, weapon: String) -> ModelInstance:
+	for cu in _solo_joined_chain(owner_unit):
+		for m in (cu as GameUnit).models:
+			var mi := m as ModelInstance
+			if mi == null or not mi.is_alive:
+				continue
+			for w in mi.get_weapons():
+				var w_name: String = str((w as Dictionary).get("name", "")) if w is Dictionary else (str(w.name) if "name" in w else "")
+				if w_name == weapon:
+					return mi
+	return null
 
 
 ## Unwieldy (resolver wave A — "strikes last when charging"): any chain member carrying the rule
@@ -22368,8 +22464,19 @@ func _solo_create_rule_unit(carrier: GameUnit, anchor: ModelInstance, raw: Strin
 		pid, positions, origin)
 	if created == null:
 		return false
+	_solo_stamp_rule_unit_arrival(created, origin)
 	_log_rule_event(BattleLog.Category.GENERAL, "%s: %s places %s [%d]" % [rule, carrier.get_name(), unit_name, count], _solo_is_ai_unit(carrier))
 	return true
+
+
+## Rules 3.6 (row UX-16): a unit Spawn places or Split creates can neither seize nor contest an objective in
+## the round it arrives. It carries the SAME round stamp an Ambush arrival does, so _solo_auto_seize,
+## BattleSim and the core's can_hold_marker read one field; rules 3.5 (below EPOCH_73_V36) had no such limit.
+## `origin_round` rides in the MP unit payload, so the remote side stamps the same round.
+func _solo_stamp_rule_unit_arrival(unit: GameUnit, origin: String) -> void:
+	if unit == null or not (origin in ["spawn", "split"]) or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return
+	unit.unit_properties["ambush_arrived_round"] = int(unit.unit_properties.get("origin_round", -1))
 
 
 ## Spawn PR 1/2 (design docs/plans/SPAWN_DESIGN_2026-09-08.md §3.1): AiActRecorder's
