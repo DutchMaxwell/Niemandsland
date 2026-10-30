@@ -4801,6 +4801,17 @@ fn melee_parts(statics: &[UnitStatic], state: &State, i: usize, ti: usize, seams
     parts
 }
 
+/// MEL-PAR-B14 (`EPOCH_73_V36`, table twin `_run_ai_melee`/`_run_human_melee`): a defender whose
+/// living chain (host plus joined heroes) carries no melee profile at all — an Assault weapon's melee
+/// copy counts, `unit::melee_profiles_at` builds it at this epoch — cannot strike back and is not
+/// made Fatigued by the fight.
+fn chain_has_no_melee(statics: &[UnitStatic], state: &State, i: usize) -> bool {
+    std::iter::once(i)
+        .chain(state.attached[i].iter().copied())
+        .filter(|&mi| state.alive[mi] > 0)
+        .all(|mi| statics[state.roster.profile[mi]].melee.is_empty())
+}
+
 /// ONE side's strike phase on the tray, wounds LANDED. The landing is the point:
 /// the table resolves Impact, the charger's strikes and the strike-back as
 /// separate phases, and each later one is survivor-scaled by what the earlier
@@ -5388,10 +5399,19 @@ fn tray_charge(
         } else if next.alive[ti] > 0 && next.alive[si] > 0 {
             // :8100 — and so does the strike-back, in both directions.
             // B13: the strike-back's lash-back credits the charger's tally.
-            let (c, rc) = strike_phase(statics, next, ti, si, false, 0.0, seams, tray, shot, strike_back_set, cover);
-            by_tu += c;
-            by_su += rc;
-            next.fatigued[ti] = true;
+            // MEL-PAR-B14 (`EPOCH_73_V36`, main.gd:10817-10823): a defender with no melee weapon at
+            // all does not strike back and takes no phantom fatigue — the rule logs itself instead.
+            if rule_on(seams.rules_epoch, EPOCH_73_V36) && chain_has_no_melee(statics, next, ti) {
+                shot.log.push(format!(
+                    "{} has no melee weapons - cannot strike back",
+                    statics[next.roster.profile[ti]].name
+                ));
+            } else {
+                let (c, rc) = strike_phase(statics, next, ti, si, false, 0.0, seams, tray, shot, strike_back_set, cover);
+                by_tu += c;
+                by_su += rc;
+                next.fatigued[ti] = true;
+            }
         }
     }
     // Block C4 — the survival half, the table's own order (main.gd:8431-8433):
@@ -8734,18 +8754,24 @@ fn resolve_with(
                         // Survivors strike back, already survivor-scaled by the
                         // updated `alive`. W-P1 parity (p.9): the strike-back
                         // fatigues the DEFENDER too.
-                        let ev_back = {
-                            let ut = &statics[next.roster.profile[ti]];
-                            let us = &statics[pi_s];
-                            let att = ctx_of_melee(ut, &next, ti, seams.rules_epoch);
-                            let def = ctx_of(us, &next, si);
-                            // The strike-back folds too (`_solo_attack_groups` is built
-                            // for the DEFENDER the same way, main.gd:4284-4290).
-                            member_profiles_of(statics, &next, ti, true, 0.0, seams, &mut sc);
-                            melee_ev(folded_slice(&ut.melee, &sc), &sc.attacks, &att, &def, false, 0.0)
-                        };
-                        apply_expected_wounds(&mut next, si, ev_back, rng.as_deref_mut());
-                        next.fatigued[ti] = true;
+                        // MEL-PAR-B14 (`EPOCH_73_V36`): no melee weapon at all means no expected
+                        // strike-back and no expected fatigue either.
+                        if rule_on(seams.rules_epoch, EPOCH_73_V36) && chain_has_no_melee(statics, &next, ti) {
+                            // nothing to strike with — the fight leaves the defender un-Fatigued
+                        } else {
+                            let ev_back = {
+                                let ut = &statics[next.roster.profile[ti]];
+                                let us = &statics[pi_s];
+                                let att = ctx_of_melee(ut, &next, ti, seams.rules_epoch);
+                                let def = ctx_of(us, &next, si);
+                                // The strike-back folds too (`_solo_attack_groups` is built
+                                // for the DEFENDER the same way, main.gd:4284-4290).
+                                member_profiles_of(statics, &next, ti, true, 0.0, seams, &mut sc);
+                                melee_ev(folded_slice(&ut.melee, &sc), &sc.attacks, &att, &def, false, 0.0)
+                            };
+                            apply_expected_wounds(&mut next, si, ev_back, rng.as_deref_mut());
+                            next.fatigued[ti] = true;
+                        }
                     }
                     expected_melee_morale(&mut next, statics, si, su_before, ti, tu_before, seams);
                 }
