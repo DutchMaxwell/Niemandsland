@@ -76,8 +76,8 @@
   "Drakesworn",
   "Drone Laser Gun",
   "Empyrean Spirit",
-  "Enhanced Empyrean Spirit",
-  "Enhanced Empyrean Spirit Aura",
+  "Empyrean Spirit Boost",
+  "Empyrean Spirit Boost Aura",
   "Entrenched",
   "Ethereal",
   "Evasive",
@@ -3034,7 +3034,7 @@
      "applies_charged": true
     }
    },
-   "Enhanced Empyrean Spirit": {
+   "Empyrean Spirit Boost": {
     "primitive": "Evasive",
     "rated": false,
     "book_version": "3.5.3",
@@ -3042,12 +3042,12 @@
      "hit_penalty": 1
     }
    },
-   "Enhanced Empyrean Spirit Aura": {
+   "Empyrean Spirit Boost Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Enhanced Empyrean Spirit"
+     "grants": "Empyrean Spirit Boost"
     }
    },
    "Ethereal": {

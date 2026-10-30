@@ -44,7 +44,7 @@ func _unit(rules: Array) -> GameUnit:
 func test_a_shot_from_twelve_inches_at_a_boosted_wraith_carries_one_minus_one_not_two() -> void:
 	# The defect: the base's over-9" alias subtracted ON TOP of the Boost's
 	# unconditional Evasive — a -2 no book reading supports.
-	var target := _unit(["Empyrean Spirit", "Enhanced Empyrean Spirit"])
+	var target := _unit(["Empyrean Spirit", "Empyrean Spirit Boost"])
 	var shooter := _unit([])
 	var far: Dictionary = _main._solo_hit_mod_info(shooter, target, 12.0, false)
 	assert_int(int(far.get("mod", 0))) \
@@ -52,13 +52,13 @@ func test_a_shot_from_twelve_inches_at_a_boosted_wraith_carries_one_minus_one_no
 		.is_equal(-1)
 	assert_str(str(far.get("note", ""))) \
 		.override_failure_message("the rules-must-log trace must name the rule once (note: %s)" % far.get("note", "")) \
-		.contains("Enhanced Empyrean Spirit: -1 to hit (base Evasive stood down)")
+		.contains("Empyrean Spirit Boost: -1 to hit (base Evasive stood down)")
 
 
 func test_the_single_minus_one_holds_at_any_range() -> void:
 	# "at any range" — inside 9" the base alias never fired; the Boost keeps
 	# exactly one -1 there too.
-	var target := _unit(["Empyrean Spirit", "Enhanced Empyrean Spirit"])
+	var target := _unit(["Empyrean Spirit", "Empyrean Spirit Boost"])
 	var shooter := _unit([])
 	var near: Dictionary = _main._solo_hit_mod_info(shooter, target, 6.0, false)
 	assert_int(int(near.get("mod", 0))) \
@@ -81,7 +81,7 @@ func test_the_base_alias_still_fires_for_a_plain_carrier() -> void:
 func test_melee_keeps_one_minus_one_and_names_the_rule() -> void:
 	# Melee never stacked (best single penalty), but the rules-must-log trace
 	# must name the applied rule, the core's melee seam precedent.
-	var target := _unit(["Empyrean Spirit", "Enhanced Empyrean Spirit"])
+	var target := _unit(["Empyrean Spirit", "Empyrean Spirit Boost"])
 	var shooter := _unit([])
 	var melee: Dictionary = _main._solo_hit_mod_info(shooter, target, 0.0, true)
 	assert_int(int(melee.get("mod", 0))) \
@@ -89,4 +89,4 @@ func test_melee_keeps_one_minus_one_and_names_the_rule() -> void:
 		.is_equal(-1)
 	assert_str(str(melee.get("note", ""))) \
 		.override_failure_message("the melee trace must name the rule once (note: %s)" % melee.get("note", "")) \
-		.contains("Enhanced Empyrean Spirit: -1 to hit (base Evasive stood down)")
+		.contains("Empyrean Spirit Boost: -1 to hit (base Evasive stood down)")

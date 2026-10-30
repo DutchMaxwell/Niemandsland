@@ -150,38 +150,8 @@ mod enhanced_renames {
         UnitStatic::build_for(&mut reg, header.profiles.get("carrier").expect("carrier"), EPOCH_73_V36)
     }
 
-    /// One 64-attack rifle volley AT `us` from `dist_in` (the carrier defends).
-    fn incoming_volley(us: &UnitStatic, dist_in: f64) -> crate::dice::ShootResult {
-        let profiles = [us.shoot[0].clone()];
-        let att = Ctx { quality: 4, ..Default::default() };
-        let strikers = [crate::dice::Shooter {
-            profiles: &profiles, keep: &[0], attacks: &[64], att: &att, owner: "att",
-        }];
-        let mut tray = crate::dice::Tray::seeded(27);
-        crate::dice::resolve_volley_with_tray(
-            &strikers, &us.ctx, "Target", dist_in, dist_in, false, false, false, false, &mut tray,
-        )
-    }
-
-    /// W1.6a, code literal (unit.rs Evasive fold): the always -1 to hit, the base's over-9"
-    /// leg stood down, and the volley log names the 3.6 rule.
-    #[test]
-    fn enhanced_empyrean_spirit_makes_the_minus_one_unconditional_like_its_3_5_boost() {
-        let us = enhanced_unit("aof", "ghostly_undead", &["Empyrean Spirit", "Enhanced Empyrean Spirit"]);
-        assert!(us.ctx.evasive, "the 3.6 name folds into evasive");
-        assert_eq!(us.ctx.stealth_alias_penalty, 0, "the base's conditional leg stands down");
-        assert_eq!(us.ctx.evasive_alias_name, "Enhanced Empyrean Spirit", "the fold names the 3.6 rule");
-        let shot = incoming_volley(&us, 6.0);
-        assert_eq!(shot.rolls[0].target, 5, "inside 9\": Quality 4+ becomes 5+");
-        assert!(
-            shot.log.iter().any(|l| l.contains("Enhanced Empyrean Spirit")),
-            "rules-must-log: the volley log prints the 3.6 name"
-        );
-        let old = enhanced_unit("aof", "ghostly_undead", &["Empyrean Spirit", "Empyrean Spirit Boost"]);
-        assert!(!old.ctx.evasive, "the 3.5 name is gone (no alias)");
-    }
-
-    /// W1.6a, code literal (unit.rs Bane stamp): the widened save re-roll window over 9".
+    /// W1.6a, code literal (unit.rs Bane stamp): the widened save re-roll window over 9", and
+    /// the volley log names the 3.6 rule.
     #[test]
     fn enhanced_bestial_widens_the_bane_window_like_its_3_5_boost() {
         let us = enhanced_unit("aof", "beastmen", &["Bestial", "Enhanced Bestial"]);
@@ -189,6 +159,20 @@ mod enhanced_renames {
         assert_eq!(us.shoot[0].bane_low, 5, "the entry's reroll_save_low");
         assert_eq!(us.shoot[0].bane_over_in, 9.0, "the entry's over_in");
         assert_eq!(us.shoot[0].bane_rule, "Enhanced Bestial", "the window names the 3.6 rule");
+        let p = [us.shoot[0].clone()];
+        let att = Ctx { quality: 4, ..Default::default() };
+        let def = Ctx { defense: 5, models: 1, tough: 1, ..Default::default() };
+        let strikers = [crate::dice::Shooter { profiles: &p, keep: &[0], attacks: &[64], att: &att, owner: "att" }];
+        let mut tray = crate::dice::Tray::seeded(27);
+        let shot = crate::dice::resolve_volley_with_tray(
+            &strikers, &def, "Target", 12.0, 12.0, true, false, false, false, &mut tray,
+        );
+        assert!(
+            shot.log.iter().any(|l| l.contains("Enhanced Bestial")),
+            "rules-must-log: the volley log prints the 3.6 name"
+        );
+        let old = enhanced_unit("aof", "beastmen", &["Bestial", "Bestial Boost"]);
+        assert_eq!(old.shoot[0].bane_rule, "", "the 3.5 name is gone (no alias)");
     }
 
     /// W1.6a, code literals (unit.rs aura channel list + Shot Modifier names): the aura hands

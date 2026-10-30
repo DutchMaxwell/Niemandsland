@@ -2594,14 +2594,14 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     // stands down so the two never stack.
     let empyrean_spirit_boost = rule_on(rules_epoch, EPOCH_7_TABLE_RULES)
         && rule_on_all_models(p, "Empyrean Spirit")
-        && rule_on_all_models(p, "Enhanced Empyrean Spirit");
+        && rule_on_all_models(p, "Empyrean Spirit Boost");
     // The Boost that is the reason `evasive` is on, if any — the dice seams'
     // rules-must-log name ("" = none). Epoch 6 before epoch 7: a carrier can
     // only ever hold one of these two (different systems and factions).
     let evasive_boost = if machine_fog_boost {
         "Machine-Fog Boost"
     } else if empyrean_spirit_boost {
-        "Enhanced Empyrean Spirit"
+        "Empyrean Spirit Boost"
     } else {
         ""
     };
@@ -3492,7 +3492,7 @@ pub(crate) const BOOST_AURA_CHANNEL_NAMES: &[&str] = &[
     "Ossified Boost Aura",
     "Shadowborn Boost Aura",
     "Enhanced Destroyer Aura",
-    "Enhanced Empyrean Spirit Aura",
+    "Empyrean Spirit Boost Aura",
     "Wild Veil Boost Aura",
 ];
 

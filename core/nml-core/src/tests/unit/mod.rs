@@ -113,7 +113,7 @@
     boost_aura_test!(an_ossified_boost_aura_grants_its_base_at_epoch_6, "Ossified Boost Aura");
     boost_aura_test!(a_shadowborn_boost_aura_grants_its_base_at_epoch_6, "Shadowborn Boost Aura");
     boost_aura_test!(an_enhanced_destroyer_aura_grants_its_base_at_epoch_6, "Enhanced Destroyer Aura");
-    boost_aura_test!(an_enhanced_empyrean_spirit_aura_grants_its_base_at_epoch_6, "Enhanced Empyrean Spirit Aura");
+    boost_aura_test!(an_empyrean_spirit_boost_aura_grants_its_base_at_epoch_6, "Empyrean Spirit Boost Aura");
     boost_aura_test!(a_wild_veil_boost_aura_grants_its_base_at_epoch_6, "Wild Veil Boost Aura");
 
     /// Two units: `mark_carrier` prints "Unstoppable Mark" as a UNIT-level

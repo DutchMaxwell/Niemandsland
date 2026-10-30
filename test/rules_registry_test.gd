@@ -114,7 +114,7 @@ func test_aura_slice_1b_channels() -> void:
 		"Defensive Growth Aura",
 		"Enhanced Destroyer Aura",
 		"Enhanced Devout Aura",
-		"Enhanced Empyrean Spirit Aura",
+		"Empyrean Spirit Boost Aura",
 		"Exotic Gear Boost Aura",
 		"Fearless Aura",
 		"Ferocious Boost Aura",

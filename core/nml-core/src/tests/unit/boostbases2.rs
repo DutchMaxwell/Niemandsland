@@ -131,15 +131,15 @@ use super::*;
     /// stands down, so the two never stack. PRESENT at 7, ABSENT at 6 (the
     /// alias leg keeps its over-9" gate, byte-exact).
     #[test]
-    fn enhanced_empyrean_spirit_makes_the_minus_one_unconditional_at_epoch_7() {
-        let on = boostbases2_unit("ghostly_undead", &["Empyrean Spirit", "Enhanced Empyrean Spirit"], 7);
+    fn empyrean_spirit_boost_makes_the_minus_one_unconditional_at_epoch_7() {
+        let on = boostbases2_unit("ghostly_undead", &["Empyrean Spirit", "Empyrean Spirit Boost"], 7);
         assert!(on.ctx.evasive, "epoch 7: the Boost folds into evasive (RED before the fix)");
         assert_eq!(
             on.ctx.stealth_alias_penalty, 0,
             "the base entry's conditional alias leg stands down (never stacks)"
         );
 
-        let off = boostbases2_unit("ghostly_undead", &["Empyrean Spirit", "Enhanced Empyrean Spirit"], 6);
+        let off = boostbases2_unit("ghostly_undead", &["Empyrean Spirit", "Empyrean Spirit Boost"], 6);
         assert!(!off.ctx.evasive, "epoch 6: pre-port records stay inert");
         assert_eq!(
             off.ctx.stealth_alias_penalty, 1,
@@ -153,7 +153,7 @@ use super::*;
             "epoch 7, 6\": the always -1 (4+ minus 1 = 5+) (RED before the fix)"
         );
         assert!(
-            shot.log.iter().any(|l| l.contains("Enhanced Empyrean Spirit")),
+            shot.log.iter().any(|l| l.contains("Empyrean Spirit Boost")),
             "rules-must-log: the Boost names itself at the volley seam"
         );
 
@@ -165,7 +165,7 @@ use super::*;
             "without the Boost the conditional alias stays shut inside 9\""
         );
         assert!(
-            !base_shot.log.iter().any(|l| l.contains("Enhanced Empyrean Spirit")),
+            !base_shot.log.iter().any(|l| l.contains("Empyrean Spirit Boost")),
             "nothing fired, nothing logs"
         );
     }
@@ -210,7 +210,7 @@ use super::*;
         assert_eq!(bane.shoot[0].bane_low, 0, "epoch 6: the base 6s-only window");
         assert_eq!(bane.shoot[0].bane_rule, "", "epoch 6: nothing to name");
         let spirit =
-            boostbases2_unit("ghostly_undead", &["Empyrean Spirit", "Enhanced Empyrean Spirit"], 6);
+            boostbases2_unit("ghostly_undead", &["Empyrean Spirit", "Empyrean Spirit Boost"], 6);
         assert!(!spirit.ctx.evasive, "epoch 6: the -1 keeps its over-9\" gate");
         assert_eq!(spirit.ctx.evasive_alias_name, "", "epoch 6: nothing to name");
         assert_eq!(
