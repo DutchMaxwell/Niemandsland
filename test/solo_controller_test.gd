@@ -3073,11 +3073,11 @@ func test_unit_carries_ebr_reads_the_live_chain_and_the_book() -> void:
 	# rot — the LAST carrier dies: the relay status goes with it.
 	(relay.models[1] as ModelInstance).is_alive = false
 	assert_bool(SoloController.unit_carries_ebr(relay)).is_false()
-	# rot — the same models in a book that does NOT field the rule resolve to nothing (system-scoped
-	# registry gate, no cross-book bleed).
+	# rot — the same models in a book whose system does not field the rule resolve to nothing
+	# (system-scoped registry gate: gf fields it once in common since rules 3.6, aof only per book).
 	var other := _unit(2, [Vector3.ZERO])
-	other.unit_properties["game_system"] = "gf"
-	other.unit_properties["faction_folder"] = "alien_hives"
+	other.unit_properties["game_system"] = "aof"
+	other.unit_properties["faction_folder"] = "ogres"
 	other.unit_properties["special_rules"] = ["Extended Buff Range"]
 	assert_bool(SoloController.unit_carries_ebr(other)).is_false()
 	# A JOINED hero carrying the rule makes its host a relay (the chain, not the host model list).
