@@ -777,6 +777,8 @@ pub fn resolve_volley_leg(
     // that fired is `def.evasive_alias_name` ("Machine-Fog Boost" at epoch 6,
     // "Empyrean Spirit Boost" at epoch 7).
     let mut evasive_boost_fired = false;
+    // EPOCH_73_V36 — the Aircraft to-hit penalty's once-per-volley log flag.
+    let mut aircraft_fired = false;
     // Wave 4 — and the widened Bane window's own rule name, sticky once a
     // weapon opened it ("Mischievous Boost" at epoch 6, "Bestial Boost" at
     // epoch 7); "" = the base 6s-only window fired nothing.
@@ -900,7 +902,11 @@ pub fn resolve_volley_leg(
             + att.feat_hit_bonus
             // Unpredictable's 4-6 half (main.gd:3180): folded into the SAME
             // sum, BEFORE the Unstoppable clamp, like the melee leg.
-            + upr_hit;
+            + upr_hit
+            // EPOCH_73_V36 — rules 3.6: a shot at an Aircraft is -N to hit,
+            // inside the Unstoppable clamp (an enemy-side negative modifier).
+            - def.aircraft_hit_penalty;
+        aircraft_fired |= def.aircraft_hit_penalty > 0;
         // Wave 3 — the Shot Modifier family's runtime-gated members
         // (main.gd:5761-5779) ride the SAME sum: Mobile Artillery's
         // `requires_stationary` gate is the shooter's act-scope `moved`
@@ -1331,6 +1337,9 @@ pub fn resolve_volley_leg(
             "{}: {def_owner} — attackers get -1 to hit (always)",
             def.evasive_alias_name
         ));
+    }
+    if aircraft_fired {
+        out.log.push(format!("Aircraft: {def_owner} — shots at it get -{} to hit", def.aircraft_hit_penalty));
     }
     if out.bane_rerolled > 0 {
         out.log.push(format!(

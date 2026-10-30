@@ -20,7 +20,8 @@ mod sho_07_aircraft_hit {
     }
 
     fn rifle(unstoppable: bool) -> ShootProfile {
-        ShootProfile { name: "Rifle".into(), attacks: 10, count: 1, range: 24, unstoppable, ..Default::default() }
+        // The dice read `unstoppable`, the EV `unstoppable_ev` (the stamp sets both).
+        ShootProfile { name: "Rifle".into(), attacks: 10, count: 1, range: 24, unstoppable, unstoppable_ev: unstoppable, ..Default::default() }
     }
 
     fn gunner() -> Ctx {

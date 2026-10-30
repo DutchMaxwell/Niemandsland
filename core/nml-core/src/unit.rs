@@ -33,7 +33,7 @@ use crate::acts::{
     EPOCH_50_SURGE_LOW, EPOCH_54_DEFENSE_RATING, EPOCH_55_FORTIFIED_AURA,
     EPOCH_56_GROUNDED_PROTECTION, EPOCH_58_PRECISION_DEBUFF, EPOCH_60_GROUNDED_STEALTH,
     EPOCH_61_PRECISION_MARKERS, EPOCH_65_MELEE_TRUTH, EPOCH_66_DISTANCE_TRUTH,
-    EPOCH_72_PLAYTEST_RULES,
+    EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36,
 };
 use crate::combat::{
     armored_defense, BANNER_MORALE_BONUS, LONG_RANGE_IN, REGENERATION_TARGET, RESISTANCE_TARGET,
@@ -513,6 +513,10 @@ pub struct Ctx {
     /// `spell_damage_ev`) and the dice's Deadly leg roll all X wounds against the
     /// Regeneration family before the cap (A4), and a spell's Lacerate keeps Regeneration (A1).
     pub playtest_rules: bool,
+    /// `EPOCH_73_V36`: the to-hit penalty every shot AT this unit takes because it is an
+    /// Aircraft (the map's `Aircraft.target_hit_penalty`, beside the range penalty). Stamped
+    /// in `ctx_for` off the record's own epoch; 0 for every other unit and below 73.
+    pub aircraft_hit_penalty: i64,
     // --- Ambush family (rules-wave2-ambush). ZERO on every `ctx_of` (baked
     // into `ctx_for`), like `growth_ap_mod` — only `sim::ctx_live` reads the
     // arrival stamp and folds it in, so the EV imagination stays blind to it
@@ -2696,6 +2700,13 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         } else {
             0
         };
+    // EPOCH_73_V36 — rules 3.6: a shot at an Aircraft is also -N to hit (the map's new key).
+    let aircraft_hit_penalty = if rule_on(rules_epoch, EPOCH_73_V36) && unit_rule_active(reg, p, "Aircraft") {
+        reg.rules_for(&p.game_system).lookup(&p.faction_folder, "Aircraft")
+            .map_or(0, |e| e.param_i("target_hit_penalty", 0))
+    } else {
+        0
+    };
     // The Artillery hit modifiers' own params (dead-parameter recount
     // 2026-09-15), behind the FROZEN `EPOCH_7_TABLE_RULES` like the
     // neighbouring Indirect param read: below 7 the Options stay None and
@@ -2896,6 +2907,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         growth_def_lowers: false,
         modifier_sum: rule_on(rules_epoch, crate::acts::EPOCH_68_MODIFIER_SUM),
         playtest_rules: rule_on(rules_epoch, EPOCH_72_PLAYTEST_RULES),
+        aircraft_hit_penalty,
         ambush_arrival_ap: 0,
         tag_ap_mod: 0,
         reckless_ap: 0,
