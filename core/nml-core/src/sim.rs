@@ -3764,12 +3764,20 @@ fn caster_boost_pool(
             continue;
         }
         // "in line of sight of the caster's unit" (:4606): the caster's own
-        // unit needs no check (the table's `cu != caster_unit` guard).
-        if u != si && !state.attached[si].contains(&u) && !los[u] { continue; }
+        // unit needs no check (the table's `cu != caster_unit` guard). Rules
+        // 3.6 (D-SPELL-LOS) drops the sight line: the reach alone decides.
+        if !rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36)
+            && u != si && !state.attached[si].contains(&u) && !los[u] { continue; }
         found.push((u, d, state.casts[u]));
     }
     found.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
     found.into_iter().map(|(u, _, t)| (u, t)).collect()
+}
+
+/// Rules-must-log for the boost/resist pool's reach from rules 3.6 on
+/// (D-SPELL-LOS): the pool's token line names it; empty below the gate.
+fn aura_pool_note(rules_epoch: u32) -> &'static str {
+    if rule_on(rules_epoch, crate::acts::EPOCH_73_V36) { " (casters within 18\", no line of sight needed)" } else { "" }
 }
 
 
@@ -4107,8 +4115,10 @@ fn interference_pool(
             continue;
         }
         // "in line of sight of the caster's unit" (:4606): the caster's own
-        // unit needs no check (the table's `cu != caster_unit` guard).
-        if u != si && !state.attached[si].contains(&u) && !los[u] { continue; }
+        // unit needs no check (the table's `cu != caster_unit` guard). Rules
+        // 3.6 (D-SPELL-LOS) drops the sight line: the reach alone decides.
+        if !rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36)
+            && u != si && !state.attached[si].contains(&u) && !los[u] { continue; }
         found.push((u, d, state.casts[u]));
     }
     found.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
@@ -6118,7 +6128,8 @@ fn cast_phase(
                 bleft -= take;
                 state.casts[*u] = (state.casts[*u] - take).max(0);
             }
-            let line = format!("Caster: {} tokens spent (own {}, helpers {}), target 4+ -> {}+", boost, bown, boost - bown, target);
+            let note = if bhelp > 0 { aura_pool_note(seams.rules_epoch) } else { "" };
+            let line = format!("Caster: {} tokens spent (own {}, helpers {}), target 4+ -> {}+{}", boost, bown, boost - bown, target, note);
             trace_rule("cast", "Caster", &line);
             state.cast_events.push(Rc::new(serde_json::json!({ "rule": "Caster", "log": line })));
         }
@@ -6140,8 +6151,8 @@ fn cast_phase(
                 from.push(statics[state.roster.profile[*u]].name.as_str());
             }
             let line = format!(
-                "Caster: interference {} tokens from {}, target {}+ -> {}+",
-                inter, from.join(", "), itarget, ifinal
+                "Caster: interference {} tokens from {}, target {}+ -> {}+{}",
+                inter, from.join(", "), itarget, ifinal, aura_pool_note(seams.rules_epoch)
             );
             trace_rule("cast", "Caster", &line);
             state.cast_events.push(Rc::new(serde_json::json!({ "rule": "Caster", "log": line })));
