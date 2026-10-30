@@ -31,3 +31,24 @@ fn dat_01_a_book_with_its_own_entry_resolves_shred_and_surge_unchanged() {
         assert_resolves(&mut reg, system, book, "Surge", json!({"bonus_hits_per_six": 1}));
     }
 }
+
+/// DAT-10: in the rules 3.6 maps Lustbound is a Quick-shaped movement rule (+1" Advance, +2"
+/// Rush and Charge). The core's own move-band stamp reads it from the entry's params, the way
+/// the table's band pass does, from the frozen rules 3.6 epoch on; a 72 record leaves it out.
+#[test]
+fn dat_10_lustbound_stamps_its_own_movement_bands_in_the_core() {
+    use crate::acts::{EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36};
+    for (system, book) in [("gf", "lust_disciples"), ("aof", "lust_disciples")] {
+        assert_eq!(
+            wave3_static_of("Lustbound", system, book, EPOCH_73_V36).move_rule_mods,
+            Some(Bands { advance: 1.0, rush: 2.0, ..Default::default() }),
+            "{system} / {book}: the entry's own advance_mod / rush_mod"
+        );
+        assert_eq!(
+            wave3_static_of("Lustbound", system, book, EPOCH_72_PLAYTEST_RULES).move_rule_mods,
+            None,
+            "{system} / {book}: epoch 72 predates the rules 3.6 stamp"
+        );
+        assert_eq!(wave3_static_of("", system, book, EPOCH_73_V36).move_rule_mods, None, "no Lustbound, no stamp");
+    }
+}
