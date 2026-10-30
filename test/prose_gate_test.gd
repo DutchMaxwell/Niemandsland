@@ -52,7 +52,7 @@ func test_reading_is_blind_to_a_prose_only_modifier() -> void:
 
 func test_reading_keeps_the_name_and_registry_passes() -> void:
 	# The counter-case: what the bands DO read still reads. Ratmen Clans "Scurry" is registry data
-	# (primitive "Quick", advance_mod/rush_mod 2) and needs no text at all.
+	# (primitive "Quick", advance_mod 1, rush_mod 2 in rules 3.6) and needs no text at all.
 	assert_array(ProseGate._reading(_unit({
 		"game_system": "gf", "faction_folder": "ratmen_clans", "special_rules": ["Scurry"]}))) \
-		.is_equal([8, 14, 0])
+		.is_equal([7, 14, 0])
