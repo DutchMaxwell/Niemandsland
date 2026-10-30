@@ -8643,11 +8643,12 @@ fn resolve_with(
             }
         } else if hnr_attacked && hit_and_run_mixed(statics, &next, si, shot_leg, seams.rules_epoch) {
             // UX-19: the refusal's rules-must-log line (`SoloController.last_hit_and_run_note`).
-            let (_, shot) = dice.as_mut().unwrap();
-            shot.log.push(format!(
-                "Hit & Run: {} stays put - not every model in the unit has the rule",
-                statics[next.roster.profile[si]].name
-            ));
+            if let Some((_, shot)) = dice.as_mut() {
+                shot.log.push(format!(
+                    "Hit & Run: {} stays put - not every model in the unit has the rule",
+                    statics[next.roster.profile[si]].name
+                ));
+            }
         }
     }
 
