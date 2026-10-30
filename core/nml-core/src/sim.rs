@@ -3337,13 +3337,13 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
             c.regen_target = fold_min(c.regen_target, SELF_REPAIR_BOOST_TARGET);
             c.regen_target_spell = fold_min(c.regen_target_spell, SELF_REPAIR_BOOST_TARGET);
         }
-        if grants && mods::granted(state, i, "Cursed Undead Boost") {
+        if grants && mods::granted(state, i, "Enhanced Cursed Undead") {
             c.regeneration = true;
             c.regen_target = fold_min(c.regen_target, CURSED_UNDEAD_BOOST_TARGET);
             c.regen_target_spell = fold_min(c.regen_target_spell, CURSED_UNDEAD_BOOST_TARGET);
         }
         // spell_only: the Angelic stamp folds the spell twin ONLY.
-        c.regen_target_spell = if grants && mods::granted(state, i, "Angelic Blessing Boost") {
+        c.regen_target_spell = if grants && mods::granted(state, i, "Enhanced Angelic Blessing") {
             fold_min(c.regen_target_spell, ANGELIC_BLESSING_BOOST_TARGET_SPELL)
         } else {
             c.regen_target_spell

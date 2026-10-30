@@ -366,7 +366,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Devout Boost",
+      "grants_rule": "Enhanced Devout",
       "duration": "once"
      },
      "status": "castable"
@@ -770,7 +770,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Changebound Boost",
+      "grants_rule": "Enhanced Changebound",
       "duration": "once"
      },
      "status": "castable"
@@ -1776,7 +1776,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Clan Warrior Boost",
+      "grants_rule": "Enhanced Clan Warrior",
       "duration": "once"
      },
      "status": "castable"
@@ -4624,7 +4624,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Changebound Boost",
+      "grants_rule": "Enhanced Changebound",
       "duration": "once"
      },
      "status": "castable"
@@ -5783,7 +5783,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Changebound Boost",
+      "grants_rule": "Enhanced Changebound",
       "duration": "once"
      },
      "status": "castable"

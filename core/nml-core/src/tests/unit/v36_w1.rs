@@ -119,3 +119,83 @@ fn a_unique_hero_is_stamped_a_hero() {
         assert_eq!(us.is_hero, *want, "{rules:?}: want is_hero {want}");
     }
 }
+
+/// W1.6 (D-ENH): rules 3.6 books print "Enhanced <X>" where 3.5 books printed "<X> Boost"
+/// ("Enhanced <X> Aura" / "Enhanced <X> Buff" for the carried forms). The 3.6 name stamps
+/// exactly the effect the 3.5 name stamped; the 3.5 name is gone (no alias). Every carrier is
+/// the REAL `build_for` product through the real registry, read at the 3.6 epoch.
+mod enhanced_renames {
+    use super::super::*;
+    use crate::acts::EPOCH_73_V36;
+
+    /// One rifle and one blade, so both stamped arrays are non-empty.
+    const ENHANCED_HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
+      "carrier":{"unit_id":"carrier","name":"Carrier","quality":4,
+        "defense":4,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"robot_legions",
+        "special_rules":[],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]},
+          {"name":"Blade","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]}}}"#;
+
+    /// A carrier printing `rules` in `<system>/<faction>`, read at `EPOCH_73_V36`.
+    fn enhanced_unit(system: &str, faction: &str, rules: &[&str]) -> UnitStatic {
+        let printed = rules.iter().map(|r| format!("\"{r}\"")).collect::<Vec<_>>().join(",");
+        let tpl = ENHANCED_HEADER
+            .replace("\"game_system\":\"gf\"", &format!("\"game_system\":\"{system}\""))
+            .replace("\"faction_folder\":\"robot_legions\"", &format!("\"faction_folder\":\"{faction}\""))
+            .replace("\"special_rules\":[]", &format!("\"special_rules\":[{printed}]"));
+        let header = read_act_header(&tpl).expect("ENHANCED_HEADER parses");
+        let mut reg = Registries::new(&repo_root());
+        UnitStatic::build_for(&mut reg, header.profiles.get("carrier").expect("carrier"), EPOCH_73_V36)
+    }
+
+    /// W1.6a, code literal (unit.rs Bane stamp): the widened save re-roll window over 9", and
+    /// the volley log names the 3.6 rule.
+    #[test]
+    fn enhanced_bestial_widens_the_bane_window_like_its_3_5_boost() {
+        let us = enhanced_unit("aof", "beastmen", &["Bestial", "Enhanced Bestial"]);
+        assert!(us.shoot[0].bane, "the base still banes");
+        assert_eq!(us.shoot[0].bane_low, 5, "the entry's reroll_save_low");
+        assert_eq!(us.shoot[0].bane_over_in, 9.0, "the entry's over_in");
+        assert_eq!(us.shoot[0].bane_rule, "Enhanced Bestial", "the window names the 3.6 rule");
+        let p = [us.shoot[0].clone()];
+        let att = Ctx { quality: 4, ..Default::default() };
+        let def = Ctx { defense: 5, models: 1, tough: 1, ..Default::default() };
+        let strikers = [crate::dice::Shooter { profiles: &p, keep: &[0], attacks: &[64], att: &att, owner: "att" }];
+        let mut tray = crate::dice::Tray::seeded(27);
+        let shot = crate::dice::resolve_volley_with_tray(
+            &strikers, &def, "Target", 12.0, 12.0, true, false, false, false, &mut tray,
+        );
+        assert!(
+            shot.log.iter().any(|l| l.contains("Enhanced Bestial")),
+            "rules-must-log: the volley log prints the 3.6 name"
+        );
+        let old = enhanced_unit("aof", "beastmen", &["Bestial", "Bestial Boost"]);
+        assert_eq!(old.shoot[0].bane_rule, "", "the 3.5 name is gone (no alias)");
+    }
+
+    /// W1.6a, code literals (unit.rs aura channel list + Shot Modifier names): the aura hands
+    /// its base to the carrier, a flat +1 to hit when shooting.
+    #[test]
+    fn an_enhanced_buccaneer_aura_hands_its_flat_plus_one_like_its_3_5_boost_aura() {
+        let us = enhanced_unit("aof", "sky_city_dwarves", &["Enhanced Buccaneer Aura"]);
+        assert_eq!(us.shoot[0].hit_bonus, 1, "the granted base's flat hit_bonus");
+        assert_eq!(us.shoot[0].hit_bonus_over9, 0, "no over_in on the base");
+        assert_eq!(us.melee[0].hit_bonus, 0, "shooting only");
+    }
+
+    /// W1.6a, map-only name (no code literal): the Shred upgrade stamps from its entry alone.
+    /// Carried bare, so the stamp is its own (with the base carried too, the base entry comes
+    /// first at the same amount and names the shred, exactly as with the 3.5 name).
+    #[test]
+    fn enhanced_destroyer_shreds_like_its_3_5_boost() {
+        let us = enhanced_unit("aof", "ogres", &["Enhanced Destroyer"]);
+        assert!(us.shoot[0].shred_alias, "a Shred carrier");
+        assert_eq!(us.shoot[0].shred_low, 1, "carried bare: its own 1s window");
+        assert_eq!(us.shoot[0].shred_ones_wound_bonus, 1, "the entry's extra_wound_per_save_one");
+        assert_eq!(us.shoot[0].shred_ones_rule, "Enhanced Destroyer", "the stamp names the 3.6 rule");
+        let full = enhanced_unit("aof", "ogres", &["Destroyer", "Enhanced Destroyer"]);
+        assert_eq!(full.shoot[0].shred_low, 2, "with the base: the entry's save_fail_max window");
+    }
+}
