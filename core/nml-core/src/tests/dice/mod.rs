@@ -441,6 +441,7 @@ mod surge_param;
 mod unpredictable_shooter;
 mod unstoppable_melee;
 mod v36_data;
+mod v36_data_rows;
 mod v36_melee;
 mod v36_morale;
 mod v36_shoot;
