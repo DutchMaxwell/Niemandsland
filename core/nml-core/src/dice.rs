@@ -1170,10 +1170,12 @@ pub fn resolve_volley_leg(
         if !alias_cover_logged
             && def.in_cover
             && p.blast <= 1
-            && (p.indirect_alias || p.ignores_cover_alias)
+            && (p.indirect_alias || p.ignores_cover_alias || !p.cover_rule.is_empty())
         {
             alias_cover_logged = true;
-            let rule = if p.ignores_cover_alias {
+            let rule = if !p.cover_rule.is_empty() {
+                p.cover_rule.as_str()
+            } else if p.ignores_cover_alias {
                 "Ignores Cover when Shooting"
             } else {
                 "Indirect when Shooting"

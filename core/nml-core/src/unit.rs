@@ -796,6 +796,9 @@ pub struct ShootProfile {
     /// log-only marker shape as `indirect_alias` for the cover-only name
     /// (whose plain flag block 5 already stamps, ungated).
     pub ignores_cover_alias: bool,
+    /// AI-08a (`EPOCH_73_V36`): the name of the map-read rule that skips cover
+    /// here (Anti-Cover et al.), for the volley log only. Empty below 73.
+    pub cover_rule: String,
     pub limited: bool,
     pub takedown: bool,
     /// Wave 4 (rules-wave4-renames): the UNIT-level Takedown-primitive NAME
@@ -3342,6 +3345,33 @@ fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
             sp.unstoppable = true;
         }
         sp.unstoppable_ev = sp.unstoppable || u_unstop;
+    }
+    stamp_map_cover_regen(reg, p, shoot, rules_epoch);
+}
+
+/// AI-08a (`EPOCH_73_V36`): a weapon rule read through its map entry, not its 3.5 name (Anti-Cover:
+/// Indirect cover-only form; Anti-Regen: Lacerate + `bypass_regen`); each skip keeps the rule's name for
+/// its log line, a unit's cover-only rule names its block-5 skip. Twin: `AiEv._stamp_map_cover_regen`.
+fn stamp_map_cover_regen(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProfile], rules_epoch: u32) {
+    if !rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
+        return;
+    }
+    let unit_cover = rules_of_primitive(reg, p, "Indirect").into_iter()
+        .find(|h| h.name != "Indirect" && h.cover_only && h.ignores_cover).map(|h| h.name);
+    let map = reg.rules_for(&p.game_system);
+    for sp in shoot.iter_mut() {
+        for n in sp.rules.iter().map(|r| base_rule_name(r)).collect::<Vec<_>>() {
+            let Some(e) = map.lookup(&p.faction_folder, &n) else { continue };
+            let (prim, on) = (e.primitive.as_deref(), facet_applies(e.param_b("melee_only"), e.param_b("shooting_only"), sp.range));
+            if on && prim == Some("Indirect") && n != "Indirect" && sp.range > 0 && e.param_b("cover_only") && e.param_b("ignores_cover") {
+                (sp.ignores_cover, sp.cover_rule) = (true, n);
+            } else if on && prim == Some("Lacerate") && !n.starts_with("Lacerate") && e.param_b("bypass_regen") {
+                (sp.bypass_regen, sp.regen_bypass_rule) = (true, n);
+            }
+        }
+        if sp.cover_rule.is_empty() && sp.ignores_cover && sp.range > 0 {
+            sp.cover_rule = unit_cover.clone().unwrap_or_default();
+        }
     }
 }
 

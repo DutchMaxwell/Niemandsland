@@ -456,6 +456,9 @@ static func stamp_sergeant(profiles: Array, unit: GameUnit) -> Array:
 			var fpd := fp as Dictionary
 			if int(fpd.get("range", 0)) > 0:
 				fpd["indirect"] = true
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		for fp in profiles:
+			_stamp_map_cover_regen(fp as Dictionary, unit)
 	if not RulesRegistry.unit_rule_active(unit, "Sergeant"):
 		return profiles
 	var alive: int = maxi(unit.get_alive_count(), 1)
@@ -467,6 +470,29 @@ static func stamp_sergeant(profiles: Array, unit: GameUnit) -> Array:
 		profile["sergeant_attacks"] = maxi(1, roundi(float(attacks) / float(alive)))
 		break
 	return profiles
+
+
+## AI-08a (EPOCH_73_V36): a weapon rule read through its map entry, not its 3.5 name (the core's
+## stamp_map_cover_regen twin); the profile keeps the rule's name for the log line, a unit's cover-only rule too.
+static func _stamp_map_cover_regen(fpd: Dictionary, unit: GameUnit) -> void:
+	var rng := int(fpd.get("range", 0))
+	for r in fpd.get("rules", []):
+		var n := RulesRegistry.base_rule_name(str(r))
+		var e := RulesRegistry.lookup(RulesRegistry.system_of_unit(unit), RulesRegistry.faction_of_unit(unit), n)
+		var p: Dictionary = e.get("params", {})
+		var prim := str(e.get("primitive", "")) if facet_applies(p, rng) else ""
+		if prim == "Indirect" and n != "Indirect" and rng > 0 and p.get("cover_only", false) and p.get("ignores_cover", false):
+			fpd["ignores_cover"] = true
+			fpd["cover_rule"] = n
+		elif prim == "Lacerate" and not n.begins_with("Lacerate") and bool(p.get("bypass_regen", false)):
+			fpd["bypass_regen"] = true
+			fpd["regen_bypass_rule"] = n
+	if str(fpd.get("cover_rule", "")).is_empty() and bool(fpd.get("ignores_cover", false)) and rng > 0:
+		for e in RulesRegistry.unit_rules_of_primitive(unit, "Indirect"):
+			var ep: Dictionary = (e as Dictionary).get("params", {})
+			if str(e["name"]) != "Indirect" and ep.get("cover_only", false) and ep.get("ignores_cover", false):
+				fpd["cover_rule"] = str(e["name"])
+				break
 
 
 ## Stamp each profile with its target-property conditional-AP specs (Shatter/Tear/Melee Slayer/
@@ -634,7 +660,8 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 	# — Regeneration family (5+ Regeneration / 6+ Self-Repair ignores; Bane/Rending/UNSTOPPABLE bypass
 	#   it — main.gd:6772/6852, W-P1 parity fix: the unstoppable flag was parsed but never read here.
 	#   Destructive does NOT bypass, so its wounds are reduced here too; nor does Lacerate, A1) —
-	if bool(def_ctx.get("regeneration", false)) and not ((bane and bool(profile.get("bypass_regen", not lacerate_only(profile)))) or bool(profile.get("rending", false)) \
+	#   AI-08a: an explicit bypass_regen counts without Bane too (the map-read Anti-Regen weapon stamp).
+	if bool(def_ctx.get("regeneration", false)) and not (bool(profile.get("bypass_regen", bane and not lacerate_only(profile))) or bool(profile.get("rending", false)) \
 			or bool(profile.get("unstoppable", false))):
 		var keep := 1.0 - AiCombatMath.success_chance(int(def_ctx.get("regen_target", REGENERATION_TARGET)))
 		unsaved *= keep

@@ -4716,6 +4716,11 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 			cover_logged = true   # I4: only claim Cover when the roll truly saved at the covered value
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s is in cover: +1 Defense (saves on %d+)" % [
 				target.get_name(), AiCombatMath.shown_target(save_def)], true)
+		# AI-08a — rules-must-log: a cover skip by a map-read rule (Anti-Cover et al.) names the rule.
+		elif td_ctx.is_empty() and battle_log != null and shot_cover < shot_base and int(profile.get("blast", 0)) <= 1 \
+				and not str(profile.get("cover_rule", "")).is_empty():
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s — %s's cover save is skipped" % [
+				str(profile["cover_rule"]), shooter_name, target.get_name()], true)
 		var is_deadly: bool = int(profile.get("deadly", 0)) > 0
 		# TC-023: the saves are the PICKED MODEL's — rolled by its own GameUnit, so a sniped attached
 		# hero blocks on HIS Defense (and his own Fortified / conditional-AP profile), not the host's.
@@ -9067,6 +9072,10 @@ func _solo_ignores_regen(attacker: GameUnit, profile: Dictionary) -> bool:
 		if bool(bp.get("bypass_regen", false)):
 			if not AiEv.facet_applies(bp, int(profile.get("range", 0))):
 				continue
+			# AI-08a — rules-must-log: the map-read bypass names the weapon's rule (Anti-Regen et al.).
+			if attacker != null:
+				_log_rule_event(BattleLog.Category.COMBAT, "%s: Regeneration ignored" % RulesRegistry.base_rule_name(s),
+					_solo_is_ai_unit(attacker))
 			return true
 	# Coverage wave: unit-level bypass aliases via the primitive layer ("Ignores Regeneration in
 	# Melee" sits on the MODEL, not the weapon) — melee_only and shooting_only respected per profile.
