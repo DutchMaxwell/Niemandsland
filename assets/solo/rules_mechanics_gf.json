@@ -130,11 +130,11 @@
   "Hit & Run Shooter",
   "Hit & Run Shooter Aura",
   "Hive Bond",
-  "Hive Bond Boost",
-  "Hive Bond Boost Aura",
+  "Enhanced Hive Bond",
+  "Enhanced Hive Bond Aura",
   "Hold the Line",
-  "Hold the Line Boost",
-  "Hold the Line Boost Aura",
+  "Enhanced Hold the Line",
+  "Enhanced Hold the Line Aura",
   "Honor Code",
   "Ignores Cover",
   "Ignores Cover Aura",
@@ -153,8 +153,8 @@
   "Indirect when Shooting",
   "Indirect when Shooting Aura",
   "Infected",
-  "Infected Boost",
-  "Infected Boost Aura",
+  "Enhanced Infected",
+  "Enhanced Infected Aura",
   "Infiltrate",
   "Infiltrate Aura",
   "Inquisitorial Agent",
@@ -163,11 +163,11 @@
   "Lacerate",
   "Limited",
   "Lustbound",
-  "Lustbound Boost",
-  "Lustbound Boost Aura",
+  "Enhanced Lustbound",
+  "Enhanced Lustbound Aura",
   "Machine-Fog",
-  "Machine-Fog Boost",
-  "Machine-Fog Boost Aura",
+  "Enhanced Machine-Fog",
+  "Enhanced Machine-Fog Aura",
   "Martial Prowess",
   "Medical Training",
   "Melee Evasion",
@@ -179,8 +179,8 @@
   "Mend",
   "Mind Control",
   "Mischievous",
-  "Mischievous Boost",
-  "Mischievous Boost Aura",
+  "Enhanced Mischievous",
+  "Enhanced Mischievous Aura",
   "Mobile Artillery",
   "Morale",
   "Morale Debuff",
@@ -1112,7 +1112,7 @@
      "trigger": "combat"
     }
    },
-   "Hive Bond Boost": {
+   "Enhanced Hive Bond": {
     "primitive": "Banner",
     "rated": false,
     "book_version": "3.5.3",
@@ -1121,12 +1121,12 @@
      "trigger": "combat"
     }
    },
-   "Hive Bond Boost Aura": {
+   "Enhanced Hive Bond Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Hive Bond Boost"
+     "grants": "Enhanced Hive Bond"
     }
    },
    "Increased Shooting Range": {
@@ -4328,7 +4328,7 @@
      "bypass_regen": false
     }
    },
-   "Mischievous Boost": {
+   "Enhanced Mischievous": {
     "primitive": "Bane",
     "rated": false,
     "book_version": "3.5.3",
@@ -4339,12 +4339,12 @@
      "upgrades": "Mischievous"
     }
    },
-   "Mischievous Boost Aura": {
+   "Enhanced Mischievous Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Mischievous Boost"
+     "grants": "Enhanced Mischievous"
     }
    },
    "Precision Fighter Aura": {
@@ -4996,7 +4996,7 @@
      "trigger": "combat"
     }
    },
-   "Hold the Line Boost": {
+   "Enhanced Hold the Line": {
     "primitive": "Banner",
     "rated": false,
     "book_version": "3.5.3",
@@ -5005,12 +5005,12 @@
      "trigger": "combat"
     }
    },
-   "Hold the Line Boost Aura": {
+   "Enhanced Hold the Line Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Hold the Line Boost"
+     "grants": "Enhanced Hold the Line"
     }
    },
    "Mobile Artillery": {
@@ -5483,7 +5483,7 @@
      "extra_wound_per_save_one": 1
     }
    },
-   "Infected Boost": {
+   "Enhanced Infected": {
     "primitive": "Shred",
     "rated": false,
     "book_version": "3.5.3",
@@ -5494,12 +5494,12 @@
      "over_in": 9
     }
    },
-   "Infected Boost Aura": {
+   "Enhanced Infected Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Infected Boost"
+     "grants": "Enhanced Infected"
     }
    },
    "Lacerate": {
@@ -6360,7 +6360,7 @@
      "charge_mod": 2
     }
    },
-   "Lustbound Boost": {
+   "Enhanced Lustbound": {
     "primitive": "Royal Legion",
     "rated": false,
     "book_version": "3.5.3",
@@ -6370,12 +6370,12 @@
      "upgrades": "Lustbound"
     }
    },
-   "Lustbound Boost Aura": {
+   "Enhanced Lustbound Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Lustbound Boost"
+     "grants": "Enhanced Lustbound"
     }
    },
    "Melee Evasion": {
@@ -6583,7 +6583,7 @@
      "applies_charged": true
     }
    },
-   "Machine-Fog Boost": {
+   "Enhanced Machine-Fog": {
     "primitive": "Evasive",
     "rated": false,
     "book_version": "3.5.3",
@@ -6591,12 +6591,12 @@
      "hit_penalty": 1
     }
    },
-   "Machine-Fog Boost Aura": {
+   "Enhanced Machine-Fog Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Machine-Fog Boost"
+     "grants": "Enhanced Machine-Fog"
     }
    },
    "Melee Shrouding": {
@@ -8831,7 +8831,7 @@
      "charge_mod": 2
     }
    },
-   "Lustbound Boost": {
+   "Enhanced Lustbound": {
     "primitive": "Royal Legion",
     "rated": false,
     "book_version": "3.5.2",
@@ -10333,7 +10333,7 @@
      "charge_mod": 2
     }
    },
-   "Lustbound Boost": {
+   "Enhanced Lustbound": {
     "primitive": "Royal Legion",
     "rated": false,
     "book_version": "3.5.3",
@@ -10343,12 +10343,12 @@
      "upgrades": "Lustbound"
     }
    },
-   "Lustbound Boost Aura": {
+   "Enhanced Lustbound Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Lustbound Boost"
+     "grants": "Enhanced Lustbound"
     }
    },
    "Melee Evasion": {

@@ -213,16 +213,16 @@ use super::*;
     /// stays shut inside 9"; below the frozen `EPOCH_6_TABLE_RULES` gate the
     /// Boost is not born yet.
     #[test]
-    fn machine_fog_boost_makes_the_minus_one_unconditional_and_stands_the_base_down() {
+    fn enhanced_machine_fog_makes_the_minus_one_unconditional_and_stands_the_base_down() {
         let on = shroud_unit(
-            "machine_cults", &["Machine-Fog", "Machine-Fog Boost"], CURRENT_RULES_EPOCH,
+            "machine_cults", &["Machine-Fog", "Enhanced Machine-Fog"], CURRENT_RULES_EPOCH,
         );
         assert!(
             on.ctx.evasive,
             "epoch 54: the Boost folds into evasive (RED before the fix)"
         );
         assert_eq!(
-            on.ctx.evasive_alias_name, "Machine-Fog Boost",
+            on.ctx.evasive_alias_name, "Enhanced Machine-Fog",
             "rules-must-log names the RULE that fired"
         );
         assert_eq!(
@@ -241,7 +241,7 @@ use super::*;
             "12\": EXACTLY one modifier — alias + fold would read 6+"
         );
         assert!(
-            far.log.iter().any(|l| l.contains("Machine-Fog Boost")),
+            far.log.iter().any(|l| l.contains("Enhanced Machine-Fog")),
             "rules-must-log: the Boost names itself at the volley seam"
         );
 
@@ -252,11 +252,11 @@ use super::*;
             "without the Boost the conditional leg stays shut inside 9\""
         );
         assert!(
-            !base_near.log.iter().any(|l| l.contains("Machine-Fog Boost")),
+            !base_near.log.iter().any(|l| l.contains("Enhanced Machine-Fog")),
             "nothing fired, nothing logs"
         );
 
-        let old = shroud_unit("machine_cults", &["Machine-Fog", "Machine-Fog Boost"], 5);
+        let old = shroud_unit("machine_cults", &["Machine-Fog", "Enhanced Machine-Fog"], 5);
         assert!(!old.ctx.evasive, "epoch 5: pre-port record, byte-exact");
         assert_eq!(old.ctx.evasive_alias_name, "", "epoch 5: nothing to name");
     }

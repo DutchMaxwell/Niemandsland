@@ -84,7 +84,7 @@ use super::*;
     /// Lucky Boost (aof halflings, the third boost twin): the 9" gate is the
     /// strict `dist_in > surge_over_in` — exactly 9" stays shut, 9.5" opens.
     #[test]
-    fn lucky_boosts_five_bonus_opens_only_strictly_past_nine_inches() {
+    fn enhanced_lucky_five_bonus_opens_only_strictly_past_nine_inches() {
         use crate::acts::{rule_on, CURRENT_RULES_EPOCH};
         let want = Tray::seeded(6).roll(8);
         assert_eq!(want.iter().filter(|&&f| f == 6).count(), 1, "fixture: seed 6 must roll one 6");

@@ -12,11 +12,11 @@ use super::*;
     /// resolves (the Shot-Modifier Boosts' bases live in other factions'
     /// blocks — dao_union — and would not resolve here).
     #[test]
-    fn a_hold_the_line_boost_aura_carrier_captures_at_plus_two_only_at_epoch_6() {
+    fn an_enhanced_hold_the_line_aura_carrier_captures_at_plus_two_only_at_epoch_6() {
         let build = |epoch: u32| {
             let p = boost_aura_profile(
                 "human_defense_force",
-                "[\"Hold the Line Boost Aura\"]",
+                "[\"Enhanced Hold the Line Aura\"]",
                 "[]",
                 epoch,
             );
@@ -36,13 +36,13 @@ use super::*;
     fn a_hero_boost_aura_stamps_the_base_on_host_and_hero_at_epoch_6() {
         let read = |epoch: u32| {
             let (special, heroes) = boost_aura_expanded(
-                "[\"Hold the Line Boost\"]",
-                "[[\"Hold the Line Boost Aura\"]]",
+                "[\"Enhanced Hold the Line\"]",
+                "[[\"Enhanced Hold the Line Aura\"]]",
                 epoch,
             );
             (
-                special.iter().any(|r| r == "Hold the Line Boost"),
-                heroes.iter().any(|h| h.iter().any(|r| r == "Hold the Line Boost")),
+                special.iter().any(|r| r == "Enhanced Hold the Line"),
+                heroes.iter().any(|h| h.iter().any(|r| r == "Enhanced Hold the Line")),
             )
         };
         assert_eq!(read(6), (true, true), "epoch 6: host and hero both carry the base");
@@ -1215,10 +1215,10 @@ use super::*;
     /// Ossified Boost (aof/ossified_undead) — the same no-gate shape, live at
     /// 6, absent at 5.
     #[test]
-    fn ossified_boost_is_live_at_epoch_6_and_absent_at_epoch_5() {
+    fn enhanced_ossified_is_live_at_epoch_6_and_absent_at_epoch_5() {
         let us6 = fortified_unit("ossified_boost_unit", 6);
         assert_eq!(us6.ctx.fortified_boost_ap, 1, "the Boost's incoming_ap_reduction");
-        assert_eq!(us6.fortified_boost_name, "Ossified Boost");
+        assert_eq!(us6.fortified_boost_name, "Enhanced Ossified");
         let (target6, fired6) = fortified_melee(&us6);
         assert_eq!(target6, 4, "melee AP(1) vs the Boost: saves on 4+ instead of 5+");
         assert!(fired6, "rules-must-log: the melee phase must report the boost");
@@ -1657,7 +1657,7 @@ use super::*;
     /// SUM (2+4=6 — neither twin's pass reads `upgrades`, the move_rule_mods
     /// precedent). RED: the fields stay 0.
     #[test]
-    fn lustbound_boost_widens_both_halves_over_the_base() {
+    fn enhanced_lustbound_widens_both_halves_over_the_base() {
         assert_eq!(royal_legion_halves("lustbound_boost_unit", 6), (8.0, 4.0));
         assert_eq!(royal_legion_halves("lustbound_combo_unit", 6), (8.0, 6.0), "range takes the max, charge flat-folds per name — the loaders' own shape");
         assert_eq!(royal_legion_halves("lustbound_boost_unit", 5), (0.0, 0.0));
@@ -1667,7 +1667,7 @@ use super::*;
     /// DESIGN: has_primitive false), so the alias wave cannot reach it; the
     /// raw-name arm expands it to "Lustbound Boost" the way the import does.
     #[test]
-    fn lustbound_boost_aura_expands_to_its_base() {
+    fn enhanced_lustbound_aura_expands_to_its_base() {
         assert_eq!(royal_legion_halves("lustbound_boost_aura_unit", 6), (8.0, 4.0), "the base entry's own magnitudes through the expansion");
         assert_eq!(royal_legion_halves("lustbound_boost_aura_unit", 5), (0.0, 0.0));
     }

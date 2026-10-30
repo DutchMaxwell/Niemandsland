@@ -8,7 +8,7 @@ use super::*;
     /// non-family grant folds nothing.
     #[test]
     fn fortified_boost_grants_fold_the_ap_stamp_at_epoch_6_only() {
-        for rule in ["Guardian Boost", "Warden Boost", "Ossified Boost"] {
+        for rule in ["Guardian Boost", "Warden Boost", "Enhanced Ossified"] {
             let on = fold_leg(rule, 6);
             assert_eq!(on.fortified_boost_ap, 1, "{rule} folds its AP(-1) at 6");
         }
@@ -62,8 +62,8 @@ use super::*;
     }
 
     #[test]
-    fn hold_the_line_boost_buff_joins_the_morale_net_at_epoch_5_only() {
-        let (statics, mut st) = fold_legs("Hold the Line Boost");
+    fn enhanced_hold_the_line_buff_joins_the_morale_net_at_epoch_5_only() {
+        let (statics, mut st) = fold_legs("Enhanced Hold the Line");
         let mut tray = Tray::seeded(5);
         let mut mshot = ShootResult::default();
         tray_morale(&mut st.clone(), &statics, 0, false, Seams { rules_epoch: 5, ..Default::default() }, &mut tray, &mut mshot);
@@ -77,7 +77,7 @@ use super::*;
 
         // RED before the fix: rules_epoch 4 (Gen-2b's stamping-gap window)
         // must NOT get the buff either, only 3 did before this change.
-        let (statics2, mut st2) = fold_legs("Hold the Line Boost");
+        let (statics2, mut st2) = fold_legs("Enhanced Hold the Line");
         let mut tray2 = Tray::seeded(5);
         let mut mshot2 = ShootResult::default();
         tray_morale(&mut st2.clone(), &statics2, 0, false, Seams { rules_epoch: 4, ..Default::default() }, &mut tray2, &mut mshot2);

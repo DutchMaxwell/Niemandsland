@@ -2589,7 +2589,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     // Machine-Fog's own -1 (folds into `evasive`, below; the base entry's
     // conditional alias leg stands down so the two never stack).
     let machine_fog_boost = rule_on(rules_epoch, EPOCH_6_TABLE_RULES)
-        && rule_on_all_models(p, "Machine-Fog") && rule_on_all_models(p, "Machine-Fog Boost");
+        && rule_on_all_models(p, "Machine-Fog") && rule_on_all_models(p, "Enhanced Machine-Fog");
     // Wave 4 (rules-wave4-boostbases2) — "Empyrean Spirit Boost" is the
     // aof/ghostly_undead twin of the same shape: the printed unconditional
     // form of Empyrean Spirit's own -1 ("enemies attacking them always get -1
@@ -2603,7 +2603,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     // rules-must-log name ("" = none). Epoch 6 before epoch 7: a carrier can
     // only ever hold one of these two (different systems and factions).
     let evasive_boost = if machine_fog_boost {
-        "Machine-Fog Boost"
+        "Enhanced Machine-Fog"
     } else if empyrean_spirit_boost {
         "Empyrean Spirit Boost"
     } else {
@@ -3483,17 +3483,17 @@ fn aura_name_of(p: &Profile, base: &str) -> String {
 // earlier epoch. What the core gains is the leg the loader twin skips —
 // `LEGACY_CORE_SELFPLAY` returns from `_expand_auras` before it runs.
 pub(crate) const BOOST_AURA_CHANNEL_NAMES: &[&str] = &[
-    "Hold the Line Boost Aura",
+    "Enhanced Hold the Line Aura",
     "Targeting Visor Boost Aura",
     "Warden Boost Aura",
-    "Lucky Boost Aura",
+    "Enhanced Lucky Aura",
     "Buccaneer Boost Aura",
     "Vale Oath Boost Aura",
     "Wave-Step Boost Aura",
     "Royal Warrior Boost Aura",
     "Bestial Boost Aura",
     "Vinci Tech Boost Aura",
-    "Ossified Boost Aura",
+    "Enhanced Ossified Aura",
     "Shadowborn Boost Aura",
     "Destroyer Boost Aura",
     "Empyrean Spirit Boost Aura",
@@ -3750,7 +3750,7 @@ const WAVE2_UTILITY_BUFF_RULES: [&str; 12] = [
     "Self-Repair Boost Buff",
     "Cursed Undead Boost Buff",
     "Angelic Blessing Boost Buff",
-    "Hold the Line Boost Buff",
+    "Enhanced Hold the Line Buff",
     "Primal Boost Buff",
 ];
 
@@ -5840,7 +5840,7 @@ fn royal_legion_family_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -
         charge += e.param_f("charge_mod", 0.0);
         folded.push(hit.name);
     }
-    for (aura, base) in [("Lustbound Boost Aura", "Lustbound Boost")] {
+    for (aura, base) in [("Enhanced Lustbound Aura", "Enhanced Lustbound")] {
         if !has_special_rule(&p.special_rules, aura) || folded.iter().any(|n| n == base) {
             continue;
         }
@@ -6151,7 +6151,7 @@ impl UnitStatic {
         // never widens — no pre-charge gap (the shred2 precedent). Read BY
         // NAME, never by iterating the shared primitive (#489).
         if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
-            stamp_bane_boost(reg, p, &mut shoot, "Mischievous Boost", "reroll_save_low");
+            stamp_bane_boost(reg, p, &mut shoot, "Enhanced Mischievous", "reroll_save_low");
         }
         // Wave 4 (rules-wave4-boostbases2), gated on the FROZEN
         // `EPOCH_7_TABLE_RULES`: "Bestial Boost" is the aof/beastmen twin of

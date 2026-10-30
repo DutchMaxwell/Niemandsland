@@ -129,8 +129,8 @@ fn havocbound_boost_stamps_the_always_leg_from_epoch_6() {
 /// itself is a wave-3 spelling — an epoch-5 record never banes), and the
 /// base-only carrier keeps the 6s-only window either way.
 #[test]
-fn mischievous_boost_widens_the_bane_window_over_nine_inches_at_epoch_6() {
-    let us = build_at("gf", "goblin_reclaimers", &["Mischievous", "Mischievous Boost"], 6);
+fn enhanced_mischievous_widens_the_bane_window_over_nine_inches_at_epoch_6() {
+    let us = build_at("gf", "goblin_reclaimers", &["Mischievous", "Enhanced Mischievous"], 6);
     let p = [us.shoot[0].clone()];
     let att = Ctx { quality: 4, ..Default::default() };
     let def = Ctx { defense: 5, models: 1, tough: 1, ..Default::default() };
@@ -152,7 +152,7 @@ fn mischievous_boost_widens_the_bane_window_over_nine_inches_at_epoch_6() {
         "epoch 6, 12\": every successful 5-6 re-rolls (the widened window)"
     );
     assert!(
-        on.log.iter().any(|l| l.contains("Mischievous Boost")),
+        on.log.iter().any(|l| l.contains("Enhanced Mischievous")),
         "rules-must-log: the widened window names itself"
     );
 
@@ -167,7 +167,7 @@ fn mischievous_boost_widens_the_bane_window_over_nine_inches_at_epoch_6() {
     // Epoch 5: the record predates the wave — the base 6s-only window,
     // byte-exact ("Mischievous" itself baned since the bane wave; only the
     // WIDENED window is epoch-6 born).
-    let us5 = build_at("gf", "goblin_reclaimers", &["Mischievous", "Mischievous Boost"], 5);
+    let us5 = build_at("gf", "goblin_reclaimers", &["Mischievous", "Enhanced Mischievous"], 5);
     let p5 = [us5.shoot[0].clone()];
     let strikers5 = [Shooter { profiles: &p5, keep: &[0], attacks: &[64], att: &att, owner: "att" }];
     let mut t5 = Tray::seeded(27);
@@ -180,7 +180,7 @@ fn mischievous_boost_widens_the_bane_window_over_nine_inches_at_epoch_6() {
         "epoch 5: the base 6s-only window, byte-exact"
     );
     assert!(
-        !off.log.iter().any(|l| l.contains("Mischievous Boost")),
+        !off.log.iter().any(|l| l.contains("Enhanced Mischievous")),
         "epoch 5: the widened window is not born yet"
     );
 
@@ -198,7 +198,7 @@ fn mischievous_boost_widens_the_bane_window_over_nine_inches_at_epoch_6() {
         "no Boost: only the 6s re-roll, the base window"
     );
     assert!(
-        !without.log.iter().any(|l| l.contains("Mischievous Boost")),
+        !without.log.iter().any(|l| l.contains("Enhanced Mischievous")),
         "no widened window fired, nothing logs"
     );
 }
@@ -212,8 +212,8 @@ fn mischievous_boost_widens_the_bane_window_over_nine_inches_at_epoch_6() {
 /// volley's to-hit target shows the -1 inside 9" with the rules-must-log
 /// line.
 #[test]
-fn machine_fog_boost_makes_the_minus_one_unconditional_at_epoch_6() {
-    let on = build_at("gf", "machine_cults", &["Machine-Fog", "Machine-Fog Boost"], 6);
+fn enhanced_machine_fog_makes_the_minus_one_unconditional_at_epoch_6() {
+    let on = build_at("gf", "machine_cults", &["Machine-Fog", "Enhanced Machine-Fog"], 6);
     assert!(
         on.ctx.evasive,
         "epoch 6: the Boost folds into the evasive flag (RED before the fix)"
@@ -223,7 +223,7 @@ fn machine_fog_boost_makes_the_minus_one_unconditional_at_epoch_6() {
         "the base entry's conditional alias leg stands down (never stacks)"
     );
 
-    let off = build_at("gf", "machine_cults", &["Machine-Fog", "Machine-Fog Boost"], 5);
+    let off = build_at("gf", "machine_cults", &["Machine-Fog", "Enhanced Machine-Fog"], 5);
     assert!(!off.ctx.evasive, "epoch 5: pre-port records stay inert");
     assert_eq!(
         off.ctx.stealth_alias_penalty, 1,
@@ -243,7 +243,7 @@ fn machine_fog_boost_makes_the_minus_one_unconditional_at_epoch_6() {
         "epoch 6, 6\": the always -1 (4+ minus 1 = 5+) (RED before the fix)"
     );
     assert!(
-        shot.log.iter().any(|l| l.contains("Machine-Fog Boost")),
+        shot.log.iter().any(|l| l.contains("Enhanced Machine-Fog")),
         "rules-must-log: the Boost names itself at the volley seam"
     );
 
@@ -260,7 +260,7 @@ fn machine_fog_boost_makes_the_minus_one_unconditional_at_epoch_6() {
         "without the Boost the conditional alias stays shut inside 9\""
     );
     assert!(
-        !base_shot.log.iter().any(|l| l.contains("Machine-Fog Boost")),
+        !base_shot.log.iter().any(|l| l.contains("Enhanced Machine-Fog")),
         "nothing fired, nothing logs"
     );
 }

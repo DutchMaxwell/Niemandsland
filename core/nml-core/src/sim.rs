@@ -3417,7 +3417,7 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
     if rule_on(rules_epoch, EPOCH_6_TABLE_RULES)
         && ((grants && mods::granted(state, i, "Guardian Boost"))
             || (grants && mods::granted(state, i, "Warden Boost"))
-            || (grants && mods::granted(state, i, "Ossified Boost")))
+            || (grants && mods::granted(state, i, "Enhanced Ossified")))
     {
         c.fortified_boost_ap = c.fortified_boost_ap.max(1);
     }
@@ -4729,7 +4729,7 @@ fn fortified_log_name(statics: &[UnitStatic], state: &State, ti: usize, over9: b
     if !us.fortified_boost_name.is_empty() {
         return Some(us.fortified_boost_name.clone());
     }
-    ["Guardian Boost", "Warden Boost", "Ossified Boost"]
+    ["Guardian Boost", "Warden Boost", "Enhanced Ossified"]
         .into_iter()
         .find(|n| mods::granted(state, ti, n))
         .map(String::from)
@@ -5092,7 +5092,7 @@ fn live_morale_ctx(statics: &[UnitStatic], state: &State, i: usize, melee: bool,
     // granted "Hold the Line Boost" joins the same net, epoch-gated.
     ctx.morale_bonus = state.morale_bonus[i]
         + mods::sum(state, i, mods::Role::Morale, melee, |r| r.morale_mod)
-        + if rule_on(seams.rules_epoch, EPOCH_5_TABLE_RULES) && mods::granted(state, i, "Hold the Line Boost") { HOLD_THE_LINE_BOOST_MORALE_BONUS } else { 0 };
+        + if rule_on(seams.rules_epoch, EPOCH_5_TABLE_RULES) && mods::granted(state, i, "Enhanced Hold the Line") { HOLD_THE_LINE_BOOST_MORALE_BONUS } else { 0 };
     ctx.no_retreat = ctx.no_retreat || mods::granted(state, i, "No Retreat");
     ctx
 }
