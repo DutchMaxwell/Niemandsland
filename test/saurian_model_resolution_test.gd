@@ -122,3 +122,32 @@ func test_saurian_upgrade_words_map_to_the_plan_slugs() -> void:
 		assert_str(lib.variant_slug([word], "saurians")).is_equal(expected[word])
 	# Scoped: another faction does not read the Saurian words.
 	assert_str(lib.variant_slug(["Serpent Ark"], "ratmen")).is_equal("")
+
+
+# --- Rules 3.6 weapon names: plain renames of the 3.5 words keep their bakes ----------------------------
+
+func _one(unit_name: String, weapons: Array) -> OPRApiClient.OPRArmy:
+	var loadout: Array = []
+	for weapon in weapons:
+		loadout.append({"type": "ArmyBookWeapon", "name": weapon, "range": 12, "attacks": 1, "count": 1})
+	return _army([{"armyId": SAURIAN_ARMY, "name": unit_name, "size": 1, "bases": {"round": "32"}, "loadout": loadout}])
+
+
+func test_rules_3_6_weapon_names_resolve_the_live_variants() -> void:
+	var manager := _manager(["saurians/deinonychus riders#javelin", "saurians/geckos#blowpipe",
+		"saurians/gecko champion#blowpipe", "saurians/gecko champion#deinonychus+javelin", "saurians/triceratops#blowpipe"])
+	var cases := [
+		["Deinonychus Riders", ["Javelins"], "Deinonychus Riders#javelin"],
+		["Geckos", ["Toxin Blowpipe", "Strike"], "Geckos#blowpipe"],
+		["Geckos", ["Scatter Blowpipe", "Strike"], "Geckos#blowpipe"],
+		["Gecko Champion", ["Rapid Toxin Blowpipe", "Strike"], "Gecko Champion#blowpipe"],
+		["Triceratops", ["Stomp", "Giant Toxin Blowpipes"], "Triceratops#blowpipe"],
+		["Triceratops", ["Stomp", "Giant Scatter Blowpipes"], "Triceratops#blowpipe"],
+	]
+	for case in cases:
+		assert_array(manager._unit_model_variant_names(_one(case[0], case[1]).units[0], "saurians")) \
+			.is_equal([case[2]])
+	var lib: ModelLibrary = manager.model_library
+	assert_str(lib.variant_slug(["Javelins", "Toxin Club", "Deinonychus"], "saurians")).is_equal("deinonychus+javelin")
+	# Scoped: another faction does not read the 3.6 Saurian words.
+	assert_str(lib.variant_slug(["Javelins", "Toxin Blowpipe"], "ratmen")).is_equal("")
