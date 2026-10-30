@@ -10983,9 +10983,15 @@ func deploy_begin(zone: Rect2, objectives: Array, blocked_normal: Callable, bloc
 	return main_queue.size() + scout_queue.size()
 
 
-## B9: the deployment zone extended 12" toward the table centre — the Scout band.
+## UX-12 (EPOCH_73_V36): the Scout band's depth in inches — 9" from the rules 3.6 epoch on, 12" below
+## it. One selector for the AI's band, its log line and the human's scout-phase texts (deployment.rs twin).
+static func scout_band_in() -> float:
+	return 9.0 if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else 12.0
+
+
+## B9: the deployment zone extended toward the table centre by the Scout band (scout_band_in).
 static func scout_extended_zone(zone: Rect2, forward_y: float) -> Rect2:
-	var ext := 12.0 * INCHES_TO_METERS
+	var ext := scout_band_in() * INCHES_TO_METERS
 	if absf(forward_y - zone.end.y) < absf(forward_y - zone.position.y):
 		return Rect2(zone.position, zone.size + Vector2(0.0, ext))
 	return Rect2(zone.position - Vector2(0.0, ext), zone.size + Vector2(0.0, ext))
@@ -11086,7 +11092,7 @@ func deploy_place_n(n: int) -> Array:
 	return placed
 
 
-## Place the NEXT queued SCOUT unit (the scout phase's AI turn — 12" band ahead of the zone).
+## Place the NEXT queued SCOUT unit (the scout phase's AI turn — the Scout band ahead of the zone).
 func deploy_next_scout() -> GameUnit:
 	var queue: Array = _deploy_alt.get("scout_queue", [])
 	if queue.is_empty():
@@ -11104,8 +11110,8 @@ func _deploy_place_id(id: int) -> GameUnit:
 	var blocked_normal: Callable = _deploy_alt["blocked_normal"]
 	var blocked_flying: Callable = _deploy_alt["blocked_flying"]
 	var unit: GameUnit = all_units[id]
-	# B9 Scout: a scout searches the zone EXTENDED 12" forward (its band), whole-width — it deploys
-	# after all others (queue order) and its forward edge is the band's edge.
+	# B9 Scout: a scout searches the zone EXTENDED forward by its band (scout_band_in), whole-width — it
+	# deploys after all others (queue order) and its forward edge is the band's edge.
 	var is_scout: bool = (_deploy_alt.get("scout_ids", {}) as Dictionary).has(id)
 	if is_scout:
 		zone = scout_extended_zone(zone, forward_y)
@@ -11235,8 +11241,11 @@ func _deploy_place_id(id: int) -> GameUnit:
 				"candidates": [], "chosen": chosen, "why": why,
 				"data": {"x_m": v_spot.x, "z_m": v_spot.y}})
 			spot = v_spot
+	var deploy_rule := "Solo v3.5.0 AI deployment: objective-near spot in the unit's section; Scout/Ambush overlays"
+	if is_scout:   # rules-must-log: the Scout band this placement used, in the epoch's inches
+		deploy_rule += " — Scout: set up after the other units, at most %d\" ahead of its own zone" % int(scout_band_in())
 	record_decision({"kind": "deploy", "unit": unit.get_name(), "unit_id": id,
-		"rule": "Solo v3.5.0 AI deployment: objective-near spot in the unit's section; Scout/Ambush overlays",
+		"rule": deploy_rule,
 		"candidates": [], "chosen": "", "why": spot_why,
 		"data": {"section": int(section_of.get(id, 2)), "x_m": spot.x, "z_m": spot.y}})
 	occupied.append({"pos": spot, "radius": radius})

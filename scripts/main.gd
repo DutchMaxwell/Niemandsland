@@ -4108,6 +4108,12 @@ func _solo_phase_zone_violation(gu: GameUnit) -> String:
 	return "must be placed inside the marked zone"
 
 
+## UX-12: how far ahead of its zone a scout may stand, in the scout-phase texts — the epoch's band from
+## the AI's own selector (9" under rules 3.6, 12" below).
+static func solo_scout_band_words() -> String:
+	return "up to %d\" ahead of" % int(SoloController.scout_band_in())
+
+
 ## The human's MAIN/SCOUT-phase turn panel: place ONE unit, then hand over by click.
 func _solo_deploy_show_human_turn() -> void:
 	_solo_deploy_fsm["human_turn"] = true
@@ -4116,7 +4122,7 @@ func _solo_deploy_show_human_turn() -> void:
 		return
 	var phase := str(_solo_deploy_fsm.get("phase", "main"))
 	var ai_left: int = solo_controller.deploy_pending() if phase == "main" else solo_controller.deploy_scouts_pending()
-	var what := "one unit" if phase == "main" else "one SCOUT unit (up to 12\" ahead of your zone)"
+	var what := "one unit" if phase == "main" else "one SCOUT unit (%s your zone)" % solo_scout_band_words()
 	if ai_left > 0:
 		_solo_deploy_ui_show("Your turn: place %s on your side, then hand over.\n(NACHTMAHR has %d left.)" % [what, ai_left],
 			"✓ Unit placed", func() -> void: _solo_deploy_human_done_one(),
@@ -4248,7 +4254,7 @@ func _solo_deploy_phase_advance() -> void:
 			_solo_deploy_fsm["human_out"] = human_scouts.is_empty()
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.GENERAL,
-					"SCOUT phase: players alternate placing scouts up to 12\" ahead of their zone (GF v3.5.1)", false)
+					"SCOUT phase: players alternate placing scouts %s their zone (GF v3.5.1)" % solo_scout_band_words(), false)
 			if bool(_solo_deploy_fsm.get("winner_is_ai", false)) or human_scouts.is_empty():
 				_solo_deploy_ai_turn()
 			else:
