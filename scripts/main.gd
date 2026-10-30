@@ -11029,10 +11029,44 @@ func _solo_morale_quality(unit: GameUnit) -> int:
 		if (not host_alive and best_hero == null) or hero.get_quality() < best_quality:
 			best_quality = hero.get_quality()
 			best_hero = hero
+	# Rules 3.6 hero aura (epoch 73); its line stands in for the joined-Hero line when it wins.
+	var aura: Dictionary = _solo_aura_hero_for_morale(unit, best_quality)
+	if not aura.is_empty():
+		best_quality = int(aura["quality"])
+		best_hero = null
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s (Tough 9+) lends its Quality to %s's morale test (Q%d+)" % [
+				(aura["hero"] as GameUnit).get_name(), unit.get_name(), best_quality], true)
 	if best_hero != null and battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "Hero %s tests on behalf of %s (Q%d+)" % [
 			best_hero.get_name(), unit.get_name(), best_quality], true)
 	return best_quality
+
+
+const HERO_AURA_TOUGH := 9
+const HERO_AURA_REACH_IN := 6.0
+
+## Rules 3.6 hero aura (epoch 73): the friendly Hero with the best Quality, if it beats `own_quality`, that
+## lends `unit` its morale test: alive, not Shaken, in play, Tough(9)+, within 6" base edge to base edge
+## (`nearest_melee_gap_in`, the Spell Conduit measure). Such a Hero cannot be joined, so it is its own unit.
+## {} when no Hero helps, else {"hero": GameUnit, "quality": int}.
+func _solo_aura_hero_for_morale(unit: GameUnit, own_quality: int) -> Dictionary:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 or opr_army_manager == null or solo_controller == null:
+		return {}
+	var best: Dictionary = {}
+	for u in opr_army_manager.get_game_units_for_player(int(unit.unit_properties.get("player_id", 0))):
+		var hero := u as GameUnit
+		if hero == null or hero == unit or hero.get_alive_count() <= 0 or hero.is_shaken \
+				or SoloController.unit_in_reserve(hero) or unit.get_attached_heroes().has(hero):
+			continue
+		if not hero.is_hero() or AiEv.unit_rating(hero, "Tough") < HERO_AURA_TOUGH:
+			continue
+		var quality: int = hero.get_quality()
+		if quality >= int(best.get("quality", own_quality)):
+			continue
+		if solo_controller.nearest_melee_gap_in(unit, hero) <= HERO_AURA_REACH_IN:
+			best = {"hero": hero, "quality": quality}
+	return best
 
 
 func _solo_ask_hero_morale_once(unit: GameUnit) -> void:
@@ -11044,6 +11078,9 @@ func _solo_ask_hero_morale_once(unit: GameUnit) -> void:
 		if hero != null and hero.get_alive_count() > 0:
 			has_hero = true
 			break
+	# Rules 3.6 hero aura: the same once-per-unit choice covers a Tough(9)+ Hero close by ("Use unit" = off).
+	if not has_hero and not _solo_aura_hero_for_morale(unit, unit.get_quality()).is_empty():
+		has_hero = true
 	if not has_hero:
 		return
 	if _solo_batch:

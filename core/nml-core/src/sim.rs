@@ -1777,7 +1777,7 @@ fn control_morale_passed(
         return faces.first().map(|f| *f as i64 >= quality).unwrap_or(true);
     }
     let us = &statics[next.roster.profile[ti]];
-    let mut ctx = live_morale_ctx(statics, next, ti, false, seams);
+    let mut ctx = live_morale_ctx(statics, next, ti, false, seams, shot);
     drop_banner_for_cause(statics, next, ti, Some(source.rule), seams, &mut ctx, shot);
     let (outcome, rolled) = crate::dice::resolve_morale_with_tray(
         &ctx, source.owner, false, false, next.shaken[ti], wounds_left(next, ti), tray,
@@ -5116,12 +5116,48 @@ fn self_destruct_post_melee(
     }
 }
 
+const HERO_AURA_TOUGH: i64 = 9;
+const HERO_AURA_REACH_IN: f64 = 6.0;
+
+/// Rules 3.6 hero morale aura (`EPOCH_73_V36`; `main._solo_aura_hero_for_morale` twin): the friendly Hero with
+/// the best Quality, when it beats `own`, that lends unit `i` its morale test — alive, not Shaken, in play,
+/// Tough(9)+, within 6" base edge to base edge (`modifier_distance_in`, the table's `nearest_melee_gap_in`).
+/// Such a Hero cannot be joined, so it is its own unit. A Shaken `i` rolls no die, so no aura is spent.
+fn hero_aura_quality(statics: &[UnitStatic], state: &State, i: usize, own: i64, seams: Seams) -> Option<(usize, i64)> {
+    if !rule_on(seams.rules_epoch, EPOCH_73_V36) || state.shaken[i] {
+        return None;
+    }
+    let mut best: Option<(usize, i64)> = None;
+    for h in 0..state.units() {
+        let hs = &statics[state.roster.profile[h]];
+        if h == i || state.player[h] != state.player[i] || state.alive[h] <= 0 || state.shaken[h] || state.dormant[h]
+            || !hs.is_hero || hs.ctx.tough < HERO_AURA_TOUGH || state.attached[i].contains(&h)
+        {
+            continue;
+        }
+        if hs.quality >= best.map_or(own, |b| b.1) {
+            continue;
+        }
+        if modifier_distance_in(state, i, h, seams) <= HERO_AURA_REACH_IN + CONTROL_EPS {
+            best = Some((h, hs.quality));
+        }
+    }
+    best
+}
+
 /// One live context for ordinary morale and the Mind Control family.
-fn live_morale_ctx(statics: &[UnitStatic], state: &State, i: usize, melee: bool, seams: Seams) -> Ctx {
+fn live_morale_ctx(statics: &[UnitStatic], state: &State, i: usize, melee: bool, seams: Seams, shot: &mut ShootResult) -> Ctx {
     let us = &statics[state.roster.profile[i]];
     let mut ctx = ctx_of(us, state, i);
     if rule_on(seams.rules_epoch, EPOCH_65_MELEE_TRUTH) && seams.hero_attach {
         ctx.quality = morale_quality(statics, state, i, seams);
+    }
+    if let Some((h, quality)) = hero_aura_quality(statics, state, i, ctx.quality, seams) {
+        ctx.quality = quality;
+        shot.log.push(format!(
+            "{} (Tough 9+) lends its Quality to {}'s morale test (Q{}+)",
+            statics[state.roster.profile[h]].name, us.name, quality
+        ));
     }
     if rule_on(seams.rules_epoch, EPOCH_65_MELEE_TRUTH) {
         ctx.fearless = morale_fearless(statics, state, i, seams);
@@ -5185,7 +5221,7 @@ fn tray_morale_for(
         return;
     }
     let us = &statics[state.roster.profile[i]];
-    let mut ctx = live_morale_ctx(statics, state, i, melee, seams);
+    let mut ctx = live_morale_ctx(statics, state, i, melee, seams, shot);
     drop_banner_for_cause(statics, state, i, cause, seams, &mut ctx, shot);
     // EPOCH_39_MORALE_RATING — rules-must-log (main.gd:8596-8602): the test
     // that adds the rating names it, once per drawn die. A Shaken auto-fail
