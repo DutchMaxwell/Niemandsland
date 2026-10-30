@@ -296,7 +296,7 @@
     #[test]
     fn a_grounded_reinforcement_aura_shields_its_unit_terrain_pending() {
         let e = crate::acts::CURRENT_RULES_EPOCH;
-        let us = aura_us("aof", "volcanic_dwarves", "Grounded Reinforcement Aura", e);
+        let us = aura_us("aof", "volcanic_dwarves", "Grounded Defense Aura", e);
         assert_eq!(us.ctx.shielded_alias, ShieldedAlias::GroundedReinforcement);
         assert!(!us.ctx.shielded, "the within-1in condition is the point: held aside");
         assert_eq!(

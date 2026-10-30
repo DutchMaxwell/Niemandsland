@@ -122,7 +122,7 @@ func test_aura_slice_1b_channels() -> void:
 		"Gloom-Mist Boost Aura",
 		"Grounded Precision Aura",
 		"Grounded Protection Aura",
-		"Grounded Reinforcement Aura",
+		"Grounded Defense Aura",
 		"Enhanced Guardian Aura",
 		"Enhanced Guerrilla Aura",
 		"Enhanced Harassing Aura",
@@ -144,7 +144,7 @@ func test_aura_slice_1b_channels() -> void:
 		"Melee Slayer Aura",
 		"Enhanced Mischievous Aura",
 		"Enhanced Ossified Aura",
-		"Piercing Hunter Aura",
+		"Piercing Marksman Aura",
 		"Enhanced Plaguebound Aura",
 		"Point-Blank Piercing Aura",
 		"Predator Shooter Aura",
@@ -466,7 +466,7 @@ func test_conditional_ap_family_resolves_target_property_params() -> void:
 	assert_str(str(RulesRegistry.param("gf", "custodian_brothers", "Hit & Run Shooter", "after", ""))).is_equal("shoot")
 	assert_str(str(RulesRegistry.param("gf", "alien_hives", "Hit & Run Fighter", "after", ""))).is_equal("melee")
 	# Range-gated conditional AP (Piercing Hunter / Slayer).
-	assert_str(str(RulesRegistry.param("gf", "blessed_sisters", "Piercing Hunter", "condition", ""))).is_equal("ranged_over")
+	assert_str(str(RulesRegistry.param("gf", "blessed_sisters", "Piercing Marksman", "condition", ""))).is_equal("ranged_over")
 	assert_str(str(RulesRegistry.param("gf", "dao_union", "Slayer", "gate", ""))).is_equal("ranged_over_or_charge")
 	# Heavy Impact(X): rated second impact pool at AP(1).
 	assert_int(int(RulesRegistry.param("gf", "ratmen_clans", "Heavy Impact", "ap", 0))).is_equal(1)

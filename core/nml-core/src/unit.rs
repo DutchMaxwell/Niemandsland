@@ -88,7 +88,7 @@ impl ShieldedAlias {
             Self::SturdyBoost => "Enhanced Sturdy",
             Self::SafetyGearBoost => "Safety Gear Boost",
             Self::TenaciousBoost => "Tenacious Boost",
-            Self::GroundedReinforcement => "Grounded Reinforcement",
+            Self::GroundedReinforcement => "Grounded Defense",
             Self::DefenseRating => "Defense",
         }
     }
@@ -2257,7 +2257,7 @@ fn shielded_alias_of(
     const ALIASES: [(&str, ShieldedAlias); 3] = [
         ("+1 to Defense", ShieldedAlias::PlusOneToDefense),
         ("Enhanced Sturdy", ShieldedAlias::SturdyBoost),
-        ("Grounded Reinforcement", ShieldedAlias::GroundedReinforcement),
+        ("Grounded Defense", ShieldedAlias::GroundedReinforcement),
     ];
     // Audit 2026-09-13 §2.4's skirmish half — "Safety Gear Boost" (gff) and
     // "Tenacious Boost" (aofs) join the wave at the CURRENT epoch only, so
@@ -3406,7 +3406,7 @@ pub(crate) const AURA_CHANNEL_NAMES: &[&str] = &[
     "Strider Aura",
     "Rending in Melee Aura",
     "Quick Shot Aura",
-    "Piercing Hunter Aura",
+    "Piercing Marksman Aura",
     "Teleport Aura",
     "Hit & Run Fighter Aura",
     "Indirect when Shooting Aura",
@@ -3417,7 +3417,7 @@ pub(crate) const AURA_CHANNEL_NAMES: &[&str] = &[
     "Speed Feat Aura",
     "Reanimation Aura",
     "Piercing Shooter Aura",
-    "Grounded Reinforcement Aura",
+    "Grounded Defense Aura",
     "Grounded Protection Aura",
     "Protected Aura",
 ];

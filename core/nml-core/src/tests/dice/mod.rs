@@ -256,7 +256,7 @@
       "piercing_hunter":{"unit_id":"piercing_hunter","name":"Piercing Hunter","quality":4,
         "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
         "base_radius":0.016,"game_system":"gf","faction_folder":"blessed_sisters",
-        "special_rules":["Piercing Hunter"],"item_grants":[],
+        "special_rules":["Piercing Marksman"],"item_grants":[],
         "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
         "weapons":[{"name":"Rifle","range":24,"attacks":6,"count":1,"ap":0,"rules":[]}]},
       "slayer":{"unit_id":"slayer","name":"Slayer","quality":4,

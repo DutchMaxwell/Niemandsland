@@ -537,7 +537,7 @@ fn a_live_enhanced_sturdy_grant_raises_the_save_from_epoch_6() {
 #[test]
 fn a_live_grounded_reinforcement_grant_folds_only_in_cover_from_epoch_6() {
     let (mut st, statics) = two_units();
-    st.buffs[1].push(grant("Grounded Reinforcement", "", true));
+    st.buffs[1].push(grant("Grounded Defense", "", true));
     st.in_cover[1] = true;
     let covered = granted_ctx(&st, &statics, 1, false, 6);
     let bare = granted_ctx(&st, &statics, 1, false, 5);

@@ -129,7 +129,7 @@ use super::*;
     #[test]
     fn a_piercing_hunter_aura_stamps_ap_one_past_nine_inches_at_the_current_epoch() {
         let epoch = crate::acts::CURRENT_RULES_EPOCH;
-        let us = pin_unit("aof", "orcs", &["Piercing Hunter Aura"], epoch);
+        let us = pin_unit("aof", "orcs", &["Piercing Marksman Aura"], epoch);
         for sp in [us.shoot.first().unwrap(), us.melee.first().unwrap()] {
             let c = sp.cond_ap.first().expect("the granted base stamps the spec");
             assert_eq!(c.ap_bonus, 1, "AP(+1)");

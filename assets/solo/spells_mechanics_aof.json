@@ -2251,7 +2251,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Piercing Hunter",
+      "grants_rule": "Piercing Marksman",
       "duration": "once"
      },
      "status": "castable"
@@ -5173,7 +5173,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Grounded Reinforcement",
+      "grants_rule": "Grounded Defense",
       "duration": "once"
      },
      "status": "castable"

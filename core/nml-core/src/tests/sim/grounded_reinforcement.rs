@@ -34,7 +34,7 @@ use super::*;
     #[test]
     fn a_grounded_reinforcement_carrier_shields_by_one_in_cover_at_the_current_epoch() {
         let epoch = crate::acts::CURRENT_RULES_EPOCH;
-        let built = gr_unit("soul_snatcher_cults", "[\"Grounded Reinforcement\"]", epoch);
+        let built = gr_unit("soul_snatcher_cults", "[\"Grounded Defense\"]", epoch);
         assert_eq!(
             built.ctx.shielded_alias,
             crate::unit::ShieldedAlias::GroundedReinforcement,

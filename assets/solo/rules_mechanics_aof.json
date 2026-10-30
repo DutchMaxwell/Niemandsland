@@ -109,8 +109,8 @@
   "Great Sergeant",
   "Grounded Protection",
   "Grounded Protection Aura",
-  "Grounded Reinforcement",
-  "Grounded Reinforcement Aura",
+  "Grounded Defense",
+  "Grounded Defense Aura",
   "Grounded Speed",
   "Growth Markers",
   "Guarded",
@@ -186,8 +186,8 @@
   "Piercing Fighter Aura",
   "Piercing Fighting Mark",
   "Piercing Frenzy",
-  "Piercing Hunter",
-  "Piercing Hunter Aura",
+  "Piercing Marksman",
+  "Piercing Marksman Aura",
   "Piercing Shooter",
   "Piercing Shooter Aura",
   "Piercing Spotter",
@@ -413,7 +413,7 @@
   "No Retreat",
   "Pass Turn",
   "Piercing Assault",
-  "Piercing Hunter",
+  "Piercing Marksman",
   "Precise",
   "Quick",
   "Quick Shot",
@@ -4164,7 +4164,7 @@
      "needs_los": true
     }
    },
-   "Piercing Hunter": {
+   "Piercing Marksman": {
     "primitive": "Piercing Hunter",
     "rated": false,
     "book_version": "3.5.3",
@@ -5018,7 +5018,7 @@
      "grants": "No Retreat"
     }
    },
-   "Piercing Hunter": {
+   "Piercing Marksman": {
     "primitive": "Piercing Hunter",
     "rated": false,
     "book_version": "3.5.3",
@@ -5028,12 +5028,12 @@
      "over_in": 9.0
     }
    },
-   "Piercing Hunter Aura": {
+   "Piercing Marksman Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Piercing Hunter"
+     "grants": "Piercing Marksman"
     }
    },
    "Precision Debuff": {
@@ -5965,7 +5965,7 @@
      "once": true
     }
    },
-   "Piercing Hunter": {
+   "Piercing Marksman": {
     "primitive": "Piercing Hunter",
     "rated": false,
     "book_version": "3.5.3",
@@ -5975,12 +5975,12 @@
      "over_in": 9.0
     }
    },
-   "Piercing Hunter Aura": {
+   "Piercing Marksman Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Piercing Hunter"
+     "grants": "Piercing Marksman"
     }
    },
    "Ravage": {
@@ -8386,7 +8386,7 @@
      "grants": "No Retreat"
     }
    },
-   "Piercing Hunter": {
+   "Piercing Marksman": {
     "primitive": "Piercing Hunter",
     "rated": false,
     "book_version": "3.5.3",
@@ -8396,12 +8396,12 @@
      "over_in": 9.0
     }
    },
-   "Piercing Hunter Aura": {
+   "Piercing Marksman Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Piercing Hunter"
+     "grants": "Piercing Marksman"
     }
    },
    "Ravage": {
@@ -8567,7 +8567,7 @@
      "grants": "Grounded Protection"
     }
    },
-   "Grounded Reinforcement": {
+   "Grounded Defense": {
     "primitive": "Shielded",
     "rated": false,
     "book_version": "3.5.3",
@@ -8576,12 +8576,12 @@
      "terrain_within_in": 1
     }
    },
-   "Grounded Reinforcement Aura": {
+   "Grounded Defense Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Grounded Reinforcement"
+     "grants": "Grounded Defense"
     }
    },
    "Grounded Speed": {
@@ -8977,7 +8977,7 @@
      "grants": "Grounded Protection"
     }
    },
-   "Grounded Reinforcement": {
+   "Grounded Defense": {
     "primitive": "Shielded",
     "rated": false,
     "book_version": "3.5.3",

@@ -345,7 +345,7 @@
     aura_channel_test!(a_strider_aura_grants_its_base_at_epoch_6, "Strider Aura");
     aura_channel_test!(a_rending_in_melee_aura_grants_its_base_at_epoch_6, "Rending in Melee Aura");
     aura_channel_test!(a_quick_shot_aura_grants_its_base_at_epoch_6, "Quick Shot Aura");
-    aura_channel_test!(a_piercing_hunter_aura_grants_its_base_at_epoch_6, "Piercing Hunter Aura");
+    aura_channel_test!(a_piercing_marksman_aura_grants_its_base_at_epoch_6, "Piercing Marksman Aura");
     aura_channel_test!(a_teleport_aura_grants_its_base_at_epoch_6, "Teleport Aura");
     aura_channel_test!(a_hit_and_run_fighter_aura_grants_its_base_at_epoch_6, "Hit & Run Fighter Aura");
     aura_channel_test!(an_indirect_when_shooting_aura_grants_its_base_at_epoch_6, "Indirect when Shooting Aura");
@@ -356,7 +356,7 @@
     aura_channel_test!(a_speed_feat_aura_grants_its_base_at_epoch_6, "Speed Feat Aura");
     aura_channel_test!(a_reanimation_aura_grants_its_base_at_epoch_6, "Reanimation Aura");
     aura_channel_test!(a_piercing_shooter_aura_grants_its_base_at_epoch_6, "Piercing Shooter Aura");
-    aura_channel_test!(a_grounded_reinforcement_aura_grants_its_base_at_epoch_6, "Grounded Reinforcement Aura");
+    aura_channel_test!(a_grounded_defense_aura_grants_its_base_at_epoch_6, "Grounded Defense Aura");
     aura_channel_test!(a_grounded_protection_aura_grants_its_base_at_epoch_6, "Grounded Protection Aura");
     aura_channel_test!(a_protected_aura_grants_its_base_at_epoch_6, "Protected Aura");
 

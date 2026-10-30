@@ -101,8 +101,8 @@
   "Good Shot",
   "Grounded Precision",
   "Grounded Precision Aura",
-  "Grounded Reinforcement",
-  "Grounded Reinforcement Aura",
+  "Grounded Defense",
+  "Grounded Defense Aura",
   "Grounded Stealth",
   "Growth Markers",
   "Guarded",
@@ -196,8 +196,8 @@
   "Piercing Fighter Aura",
   "Piercing Frenzy",
   "Piercing Growth",
-  "Piercing Hunter",
-  "Piercing Hunter Aura",
+  "Piercing Marksman",
+  "Piercing Marksman Aura",
   "Piercing Shooter Aura",
   "Piercing Shooting Mark",
   "Piercing Spotter",
@@ -425,7 +425,7 @@
   "No Retreat",
   "Pass Turn",
   "Piercing Assault",
-  "Piercing Hunter",
+  "Piercing Marksman",
   "Precise",
   "Quick",
   "Quick Shot",
@@ -1778,7 +1778,7 @@
      "condition": "on_charge"
     }
    },
-   "Piercing Hunter": {
+   "Piercing Marksman": {
     "primitive": "Piercing Hunter",
     "rated": false,
     "book_version": "3.5.3",
@@ -3326,7 +3326,7 @@
      "ap_per_marker": 1
     }
    },
-   "Piercing Hunter": {
+   "Piercing Marksman": {
     "primitive": "Piercing Hunter",
     "rated": false,
     "book_version": "3.5.3",
@@ -3336,12 +3336,12 @@
      "over_in": 9.0
     }
    },
-   "Piercing Hunter Aura": {
+   "Piercing Marksman Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Piercing Hunter"
+     "grants": "Piercing Marksman"
     }
    },
    "Precision Fighting Mark": {
@@ -4149,7 +4149,7 @@
      "grants": "Melee Evasion"
     }
    },
-   "Piercing Hunter": {
+   "Piercing Marksman": {
     "primitive": "Piercing Hunter",
     "rated": false,
     "book_version": "3.5.3",
@@ -4159,12 +4159,12 @@
      "over_in": 9.0
     }
    },
-   "Piercing Hunter Aura": {
+   "Piercing Marksman Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Piercing Hunter"
+     "grants": "Piercing Marksman"
     }
    },
    "Precision Fighter Aura": {
@@ -8575,7 +8575,7 @@
      "grants": "Grounded Precision"
     }
    },
-   "Grounded Reinforcement": {
+   "Grounded Defense": {
     "primitive": "Shielded",
     "rated": false,
     "book_version": "3.5.3",
@@ -8584,12 +8584,12 @@
      "terrain_within_in": 1
     }
    },
-   "Grounded Reinforcement Aura": {
+   "Grounded Defense Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Grounded Reinforcement"
+     "grants": "Grounded Defense"
     }
    },
    "Increased Shooting Range Buff": {

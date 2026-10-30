@@ -3400,7 +3400,7 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
         for (name, alias, terrain) in [
             ("+1 to Defense", ShieldedAlias::PlusOneToDefense, false),
             ("Enhanced Sturdy", ShieldedAlias::SturdyBoost, false),
-            ("Grounded Reinforcement", ShieldedAlias::GroundedReinforcement, true),
+            ("Grounded Defense", ShieldedAlias::GroundedReinforcement, true),
         ] {
             if (grants && mods::granted(state, i, name)) && (!terrain || c.in_cover) {
                 c.shielded = true;
