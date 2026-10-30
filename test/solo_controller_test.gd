@@ -1130,12 +1130,26 @@ func test_shooting_profile_threads_blast_reliable_and_deadly() -> void:
 	assert_int(int(prof["ap"])).is_equal(1)
 
 
-func test_forces_hold_for_immobile_and_artillery() -> void:
+func test_forces_hold_for_immobile_and_artillery_at_epoch_72() -> void:
 	# GF/AoF v3.5.1 p.13: Immobile / Artillery "may only use Hold actions".
+	var epoch0: int = AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
 	assert_bool(SoloController.forces_hold(["Immobile"])).is_true()
 	assert_bool(SoloController.forces_hold(["Artillery"])).is_true()
 	assert_bool(SoloController.forces_hold(["Fearless", "Tough(3)"])).is_false()
 	assert_bool(SoloController.forces_hold([])).is_false()
+	AiActRecorder.rules_epoch = epoch0   # statics leak across gdUnit tests — restore
+
+
+func test_forces_hold_for_immobile_only_at_epoch_73() -> void:
+	# Rules 3.6: Artillery may move like any unit; Immobile still keeps to Hold actions.
+	var epoch0: int = AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	var immobile := SoloController.forces_hold(["Immobile"])
+	var artillery := SoloController.forces_hold(["Artillery"])
+	AiActRecorder.rules_epoch = epoch0   # statics leak across gdUnit tests — restore
+	assert_bool(immobile).is_true()
+	assert_bool(artillery).override_failure_message("rules 3.6: Artillery may move").is_false()
 
 
 func test_has_counter_from_weapon_or_unit_rule() -> void:
