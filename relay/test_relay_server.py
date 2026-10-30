@@ -5,6 +5,7 @@ import json
 import random
 import struct
 import time
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -114,6 +115,20 @@ async def list_rooms(url: str) -> list:
     assert resp["type"] == "rooms_list"
     await ws.close()
     return resp["rooms"]
+
+
+async def expire_host_rejoin_window(server, code: str) -> list:
+    """Helper: run the host-abandon reaper with its clock just past room `code`'s rejoin window.
+
+    Moves the reaper's clock forward from the server's own host-drop stamp instead of backdating
+    the stamp to "now - window": on a runner that booted seconds ago that stamp is negative, which
+    the reaper reads as "host present" and closes nothing (#1961)."""
+    import relay_server
+    stamp = server.rooms[code].host_disconnected_at
+    assert stamp > 0.0, "the host drop is not recorded yet"
+    clock = SimpleNamespace(monotonic=lambda: stamp + HOST_REJOIN_WINDOW_SECONDS + 1)
+    with patch.object(relay_server, "time", clock):
+        return await server._close_abandoned_rooms()
 
 
 # ============================================================================
@@ -397,14 +412,11 @@ class TestRoomManagement:
         await guest_ws.recv()
 
         await host_ws.close()
-        await asyncio.sleep(0.1)
-        await guest_ws.recv()  # drain host_paused
+        msg = json.loads(await asyncio.wait_for(guest_ws.recv(), timeout=2.0))
+        assert msg["type"] == "host_paused"  # sent right after the server stamped the host drop
 
-        # Simulate the host having dropped longer than the rejoin window.
-        server.rooms[code].host_disconnected_at = (
-            time.monotonic() - HOST_REJOIN_WINDOW_SECONDS - 1
-        )
-        closed = await server._close_abandoned_rooms()
+        # The host stays away longer than the rejoin window.
+        closed = await expire_host_rejoin_window(server, code)
         assert code in closed
         assert code not in server.rooms
 
@@ -1142,13 +1154,10 @@ class TestAggregateStats:
         await host_ws.recv()
         await guest_ws.recv()
         await host_ws.close()
-        await asyncio.sleep(0.1)
-        await guest_ws.recv()  # drain host_paused
-        # Simulate the host having dropped longer than the rejoin window.
-        server.rooms[code].host_disconnected_at = (
-            time.monotonic() - HOST_REJOIN_WINDOW_SECONDS - 1
-        )
-        closed = await server._close_abandoned_rooms()
+        msg = json.loads(await asyncio.wait_for(guest_ws.recv(), timeout=2.0))
+        assert msg["type"] == "host_paused"
+        # The host stays away longer than the rejoin window.
+        closed = await expire_host_rejoin_window(server, code)
         assert code in closed
         assert code not in server.rooms
         assert server.stats.peers_per_room["2"] == 1
