@@ -5466,7 +5466,8 @@ func _debuff_value_on_target_defense(cand: GameUnit, effect: Dictionary) -> floa
 
 ## The caster units of `slot` holding spell tokens within the 18" boost/interference aura of
 ## `caster_unit`, in line of sight (v3.5.1: "Models within 18\" in line of sight of the caster's
-## unit may spend any number of spell tokens"). `exclude` drops the casting member itself (the ±1
+## unit may spend any number of spell tokens"); from rules 3.6 (EPOCH_73_V36, lead ruling D-SPELL-LOS)
+## the reach alone decides, seen or not. `exclude` drops the casting member itself (the ±1
 ## comes from OTHER models). Returns [{unit, tokens}] nearest-first (a deterministic draw order).
 const SPELL_ACCUMULATOR_REACH_IN := 12.0   # wave B: the battery's own lend radius
 
@@ -5509,7 +5510,8 @@ func _aura_casters(slot: int, caster_unit: GameUnit, exclude: GameUnit) -> Array
 			var d := MoveIntent.distance_inches(from, unit_centre(member if member.models.size() > 0 else cu))
 			if d > (SPELL_ACCUMULATOR_REACH_IN if (is_battery and not member.is_caster()) else aura_in):
 				continue
-			if cu != caster_unit and not _has_los(caster_unit, cu):
+			if cu != caster_unit and AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 \
+					and not _has_los(caster_unit, cu):
 				continue
 			out.append({"unit": member, "tokens": member.casts_current, "d": d})
 	out.sort_custom(func(a, b) -> bool:

@@ -88,3 +88,74 @@ fn a_melee_morale_test_keeps_the_banner_at_epoch_73() {
     assert_eq!(st.alive[2], 3, "melee: the target holds");
     assert!(!st.shaken[2], "melee: the target holds");
 }
+
+// --- MOR-13 (rules 3.6, lead ruling D-SPELL-LOS): the casters and token
+// batteries that boost a cast, and the enemy casters that resist it, count
+// on their reach alone; line of sight no longer matters. The rules 3.5
+// reading stays pinned at EPOCH_72 in caster_boost.rs and
+// caster_interference.rs (the `_at_epoch_72` cases), on the same boards.
+fn mor13_seams(e: u32) -> Seams {
+    Seams { rules_epoch: e, cast_fold: true, hero_attach: true, ..Seams::default() }
+}
+
+fn mor13_logged(st: &State, needle: &str) -> bool {
+    st.cast_events
+        .iter()
+        .any(|e| e["log"].as_str().map(|l| l.contains(needle)).unwrap_or(false))
+}
+
+/// The battery 2" from the caster, hidden from the caster's unit: at 3.6 it
+/// still lends the boost's second token (own leftover first, then the
+/// battery, the draw order the 3.5 board pins).
+#[test]
+fn a_helper_without_line_of_sight_lends_to_the_boost_at_epoch_73() {
+    let (mut st, statics) = super::caster_boost::caster_and_battery();
+    let los = vec![true, false, true, true];
+    cast_phase(&statics, &mut st, 0, &los, mor13_seams(crate::acts::EPOCH_73_V36), None);
+    assert_eq!(st.casts[0], 0, "the caster's own leftover still pays first: {:?}", st.casts);
+    assert_eq!(st.casts[1], 1, "a hidden helper within reach lends at 3.6: {:?}", st.casts);
+}
+
+/// The enemy caster 9" away, hidden from the caster's unit: at 3.6 it still
+/// spends both tokens against the cast (the spell itself picks the seen 12"
+/// enemy, so only the resist pool reads the hidden foe).
+#[test]
+fn a_foe_without_line_of_sight_resists_the_cast_at_epoch_73() {
+    let (mut st, statics) = super::caster_interference::caster_and_foe();
+    let los = vec![true, true, true, false];
+    cast_phase(&statics, &mut st, 0, &los, mor13_seams(crate::acts::EPOCH_73_V36), None);
+    assert_eq!(st.casts[3], 0, "a hidden foe within 18\" resists at 3.6: {:?}", st.casts);
+}
+
+/// The reach still binds at 3.6: a foe 20" out keeps every token, seen or not.
+#[test]
+fn a_foe_past_the_aura_never_resists_at_epoch_73() {
+    let (mut st, statics) = super::caster_interference::caster_and_foe();
+    st.positions[3] = vec![[20.0 * IN2M, 0.0, 0.0]];
+    let los = vec![true, true, true, false];
+    cast_phase(&statics, &mut st, 0, &los, mor13_seams(crate::acts::EPOCH_73_V36), None);
+    assert_eq!(st.casts[3], 2, "a foe past 18\" keeps every token: {:?}", st.casts);
+}
+
+/// Rules-must-log: at 3.6 the boost line with a helper's share and the
+/// resist line name the reach that let the pool in, sight not needed; at
+/// EPOCH_72 both lines stay as they were.
+#[test]
+fn the_pool_lines_name_the_reach_without_sight_at_epoch_73() {
+    let note = "(casters within 18\", no line of sight needed)";
+    let (mut st, statics) = super::caster_boost::caster_and_battery();
+    let los = vec![true; st.units()];
+    cast_phase(&statics, &mut st, 0, &los, mor13_seams(crate::acts::EPOCH_73_V36), None);
+    assert!(mor13_logged(&st, &format!("helpers 1), target 4+ -> 2+ {note}")), "boost line: {:?}", st.cast_events);
+    let (mut st, statics) = super::caster_interference::caster_and_foe();
+    let los = vec![true; st.units()];
+    cast_phase(&statics, &mut st, 0, &los, mor13_seams(crate::acts::EPOCH_73_V36), None);
+    assert!(mor13_logged(&st, &format!("target 4+ -> 6+ {note}")), "resist line: {:?}", st.cast_events);
+
+    for (mut st, statics) in [super::caster_boost::caster_and_battery(), super::caster_interference::caster_and_foe()] {
+        let los = vec![true; st.units()];
+        cast_phase(&statics, &mut st, 0, &los, mor13_seams(EPOCH_72_PLAYTEST_RULES), None);
+        assert!(mor13_logged(&st, "Caster: "), "epoch 72 still logs the pool line: {:?}", st.cast_events);
+        assert!(!mor13_logged(&st, note), "epoch 72 keeps the 3.5 line: {:?}", st.cast_events);
+    }
+}

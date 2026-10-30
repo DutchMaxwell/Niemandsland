@@ -5650,8 +5650,8 @@ func _solo_prompt_interference(caster: GameUnit, caster_unit: GameUnit, spell_na
 	var helpers: Array = solo_controller._aura_casters(side, caster_unit, null)
 	if helpers.is_empty():
 		if _solo_side_has_caster_tokens(side):
-			_log_rule_event(BattleLog.Category.COMBAT, "%s: no caster of P%d within %d\" and line of sight — no interference" % [
-				spell_name, side, int(AiSpell.AURA_RANGE_IN)], true)
+			_log_rule_event(BattleLog.Category.COMBAT, "%s: no caster of P%d %s — no interference" % [
+				spell_name, side, _solo_aura_reach_words()], true)
 		return 0
 	var pool := 0
 	for h in helpers:
@@ -5676,10 +5676,23 @@ func _solo_prompt_interference(caster: GameUnit, caster_unit: GameUnit, spell_na
 		payers.append("%s ×%d" % [payer.get_name(), take])
 	if battle_log != null:
 		_log_rule_event(BattleLog.Category.COMBAT,
-			"Interference: %s spend%s %d token%s — the cast roll worsens to %d+" % [
+			"Interference: %s spend%s %d token%s — the cast roll worsens to %d+%s" % [
 			", ".join(payers), ("s" if payers.size() == 1 else ""), spent, ("" if spent == 1 else "s"),
-			AiSpell.cast_target(boost, spent, base_target)], true)
+			AiSpell.cast_target(boost, spent, base_target), _solo_aura_pool_note()], true)
 	return spent
+
+
+## The boost/resist pool's reach in the battle log's words (rules-must-log). Rules 3.6 (EPOCH_73_V36, lead
+## ruling D-SPELL-LOS): every caster within 18" counts, seen or not; rules 3.5 also asked for a line of sight.
+func _solo_aura_reach_words() -> String:
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		return "within %d\", no line of sight needed" % int(AiSpell.AURA_RANGE_IN)
+	return "within %d\" and line of sight" % int(AiSpell.AURA_RANGE_IN)
+
+
+## The note a pool's token line ends with from rules 3.6 on: the reach that let those casters in.
+func _solo_aura_pool_note() -> String:
+	return (" (casters %s)" % _solo_aura_reach_words()) if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else ""
 
 
 ## No AI without its tick (#1719), online: the caster's opponent sits at another machine. The owner-roll
@@ -5692,8 +5705,8 @@ func _solo_remote_interference(member: GameUnit, unit: GameUnit, spell_name: Str
 	var helpers: Array = solo_controller._aura_casters(foe, unit, null)
 	if helpers.is_empty():
 		if _solo_side_has_caster_tokens(foe):
-			_log_rule_event(BattleLog.Category.COMBAT, "%s: no caster of P%d within %d\" and line of sight — no interference" % [
-				spell_name, foe, int(AiSpell.AURA_RANGE_IN)], true)
+			_log_rule_event(BattleLog.Category.COMBAT, "%s: no caster of P%d %s — no interference" % [
+				spell_name, foe, _solo_aura_reach_words()], true)
 		return 0
 	var lender := (helpers[0] as Dictionary)["unit"] as GameUnit
 	if _solo_i_own_unit(lender):
@@ -11764,12 +11777,12 @@ func _run_human_cast(unit: GameUnit, member: GameUnit, entry: Dictionary, picked
 				if network_manager != null and network_manager.has_method("broadcast_unit_casts"):
 					network_manager.broadcast_unit_casts(payer)
 				payers.append("%s ×%d" % [payer.get_name(), int(dd["tokens"])])
-			_log_rule_event(BattleLog.Category.COMBAT, "Boost: %s spend%s %d token%s — the cast roll improves to %d+" % [
+			_log_rule_event(BattleLog.Category.COMBAT, "Boost: %s spend%s %d token%s — the cast roll improves to %d+%s" % [
 				", ".join(payers), ("s" if payers.size() == 1 else ""), boost, ("" if boost == 1 else "s"),
-				AiSpell.cast_target(boost, 0, AiSpell.CAST_BASE_TARGET)])
+				AiSpell.cast_target(boost, 0, AiSpell.CAST_BASE_TARGET), _solo_aura_pool_note()])
 	elif _solo_side_has_caster_tokens(own_slot):
-		_log_rule_event(BattleLog.Category.COMBAT, "%s: no caster of P%d within %d\" and line of sight — no boost" % [
-			spell_name, own_slot, int(AiSpell.AURA_RANGE_IN)], true)
+		_log_rule_event(BattleLog.Category.COMBAT, "%s: no caster of P%d %s — no boost" % [
+			spell_name, own_slot, _solo_aura_reach_words()], true)
 	# AI COUNTER-INTERFERENCE (decided default: shown AFTER the player commits — rules-sequential,
 	# no leak): the AI's 18"-LoS pool spends per the marginal calculus, value-proxied by the cost.
 	var interference := 0
@@ -11801,9 +11814,9 @@ func _run_human_cast(unit: GameUnit, member: GameUnit, entry: Dictionary, picked
 					payer.spend_caster_points(1)
 			if battle_log != null:
 				_log_rule_event(BattleLog.Category.COMBAT,
-					"NACHTMAHR interferes with %d token%s — your cast roll worsens to %d+" % [
+					"NACHTMAHR interferes with %d token%s — your cast roll worsens to %d+%s" % [
 					interference, ("" if interference == 1 else "s"),
-					AiSpell.cast_target(boost, interference, AiSpell.CAST_BASE_TARGET)], true)
+					AiSpell.cast_target(boost, interference, AiSpell.CAST_BASE_TARGET), _solo_aura_pool_note()], true)
 	_solo_refresh_caster_markers()
 	await _solo_resolve_one_cast({"caster": member, "caster_unit": unit, "spell": entry,
 		"name": spell_name, "targets": targets, "boost": boost, "interference": interference,
