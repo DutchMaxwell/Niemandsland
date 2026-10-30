@@ -38,4 +38,5 @@
     mod rush_demotion;
     mod steadfast;
     mod v36_ux;
+    mod v36_ux_15;
     mod vengeance;
