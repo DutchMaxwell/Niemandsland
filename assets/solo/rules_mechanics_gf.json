@@ -903,7 +903,7 @@
    "rated": false,
    "book_version": "3.5.1",
    "params": {
-    "bonus_hits_per_six": 1,
+    "ap_bonus": 1,
     "model_level": true
    }
   },
