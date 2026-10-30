@@ -1479,6 +1479,32 @@ fn rule_on_all_models(p: &Profile, rule: &str) -> bool {
         .all(|hr| has_special_rule(hr, rule))
 }
 
+/// `AiEv.most_models_of` — the ONE strict-majority test every "most models"
+/// read shares (ruling D-MOST): more than half, so an exact half and an empty
+/// unit are both false.
+pub(crate) fn most_models_of(with: i64, total: i64) -> bool {
+    with * 2 > total
+}
+
+/// `AiEv.rule_on_most_models` — whether MOST living models of the unit carry
+/// `rule` (ruling D-MOST): a strict majority, models not wounds, every living
+/// joined hero one model however Tough. Rules live per unit, so all
+/// `host_alive` host models (`State::alive`) carry `p.special_rules` and each
+/// hero in `attached_hero_rules` (the living ones only) its own. `solo` is the
+/// unit-of-[1] collapse `AiEv.rule_on_all_models` makes: the picked model's
+/// own unit answers alone.
+#[allow(dead_code)] // no caller yet: the rules 3.6 rows wire it in
+pub(crate) fn rule_on_most_models(p: &Profile, host_alive: i64, rule: &str, solo: bool) -> bool {
+    let host_alive = host_alive.max(0);
+    let host_with = if has_special_rule(&p.special_rules, rule) { host_alive } else { 0 };
+    if solo {
+        return host_with > 0;
+    }
+    let heroes = &p.attached_hero_rules;
+    let heroes_with = heroes.iter().filter(|hr| has_special_rule(hr, rule)).count() as i64;
+    most_models_of(host_with + heroes_with, host_alive + heroes.len() as i64)
+}
+
 /// The two "Hit & Run" Boost spellings (gf/rebel_guerrillas "Guerrilla Boost",
 /// aof|gf dark-elf "Harassing Boost"): the entry's own `move_in` replaces the
 /// shared 3" const when the FROZEN `EPOCH_6_TABLE_RULES` gate is on — wave 4

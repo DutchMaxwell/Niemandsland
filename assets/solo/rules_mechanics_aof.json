@@ -580,6 +580,15 @@
     "impact_reduction_per_model": 1
    }
   },
+  "Crossing Attack": {
+   "primitive": "Crossing Attack",
+   "rated": true,
+   "book_version": "3.6.0",
+   "params": {
+    "rating": "X",
+    "wound_target": 6
+   }
+  },
   "Deadly": {
    "primitive": "Deadly",
    "rated": false,
@@ -644,6 +653,16 @@
    "params": {
     "bonus_hits_per_six": 1,
     "charge_only": true
+   }
+  },
+  "Heavy Impact": {
+   "primitive": "Heavy Impact",
+   "rated": true,
+   "book_version": "3.6.0",
+   "params": {
+    "rating": "X",
+    "ap": 1,
+    "counts_as": "Impact"
    }
   },
   "Hero": {
@@ -716,6 +735,14 @@
     "uses_per_game": 1
    }
   },
+  "Melee Slayer Aura": {
+   "primitive": "Aura Channel",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "grants": "Melee Slayer"
+   }
+  },
   "Morale": {
    "primitive": "Morale",
    "rated": false,
@@ -731,6 +758,14 @@
    "params": {
     "move_bonus_in": 1,
     "scope": "unit"
+   }
+  },
+  "Precise": {
+   "primitive": "Precise",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "hit_bonus": 1
    }
   },
   "Regeneration": {
@@ -894,6 +929,19 @@
    "rated": false,
    "book_version": "3.5.1"
   },
+  "Unpredictable Fighter": {
+   "primitive": "Unpredictable Fighter",
+   "rated": false,
+   "book_version": "3.6.0"
+  },
+  "Unpredictable Fighter Aura": {
+   "primitive": "Aura Channel",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "grants": "Unpredictable Fighter"
+   }
+  },
   "Unstoppable": {
    "primitive": "Unstoppable",
    "rated": false,
@@ -915,6 +963,15 @@
    "params": {
     "bypass_regen": true,
     "shooting_only": true
+   }
+  },
+  "Unwieldy": {
+   "primitive": "Unwieldy",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "strikes_last": true,
+    "condition": "charging"
    }
   },
   "Piercing Fighter": {
