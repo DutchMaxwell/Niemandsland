@@ -48,7 +48,8 @@ class OmStub extends Node3D:
 func _write_minimal_save() -> String:
 	var path := "user://mp_consistency_probe.nml"
 	var f := FileAccess.open(path, FileAccess.WRITE)
-	f.store_string(JSON.stringify({"version": SaveManager.SAVE_VERSION, "table": {}, "game_units": [], "objects": []}))
+	f.store_string(JSON.stringify({"version": SaveManager.SAVE_VERSION, "rules_version": OPRApiClient.rules_core_version("gf"),
+		"table": {}, "game_units": [], "objects": []}))
 	f.close()
 	return path
 
