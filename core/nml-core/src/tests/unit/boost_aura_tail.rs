@@ -950,7 +950,7 @@ use super::*;
         assert_eq!(ambush_static("repel_carrier").repel_ambushers_dist_in, REPEL_AMBUSHERS_DIST_IN);
         assert_eq!(
             ambush_static("repel_unmapped").repel_ambushers_dist_in, 0.0,
-            "alien_hives fields no Repel Ambushers entry -> unit_rule_active is false"
+            "aof dwarves fields no Repel Ambushers entry -> unit_rule_active is false"
         );
     }
 
