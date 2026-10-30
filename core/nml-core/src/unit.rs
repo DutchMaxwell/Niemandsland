@@ -222,6 +222,9 @@ pub struct Ctx {
     pub evasive_alias_name: &'static str,
     /// `Melee Evasion` — the melee twin of Evasive (ai_ev.gd:150).
     pub melee_evasion: bool,
+    /// `Dodge` (rules 3.6) — MOST models carry it. The melee -1 itself is a resolution-time read
+    /// (`sim::strike_phase`: only while the unit is not Fatigued), so the stamp stays static.
+    pub dodge: bool,
     pub fortified: bool,
     /// WAVE 3 — the Fortified family's DATA-ALIAS stamp (`fortified_alias_of`
     /// below, gated `EPOCH_6_TABLE_RULES`; the stamp IS the dice hook's gate).
@@ -1510,7 +1513,6 @@ pub(crate) fn most_models_of(with: i64, total: i64) -> bool {
 /// hero in `attached_hero_rules` (the living ones only) its own. `solo` is the
 /// unit-of-[1] collapse `AiEv.rule_on_all_models` makes: the picked model's
 /// own unit answers alone.
-#[allow(dead_code)] // no caller yet: the rules 3.6 rows wire it in
 pub(crate) fn rule_on_most_models(p: &Profile, host_alive: i64, rule: &str, solo: bool) -> bool {
     let host_alive = host_alive.max(0);
     let host_with = if has_special_rule(&p.special_rules, rule) { host_alive } else { 0 };
@@ -2804,6 +2806,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         evasive_alias: !evasive_boost.is_empty(),
         evasive_alias_name: evasive_boost,
         melee_evasion: rule_on_all_models(p, "Melee Evasion"),
+        dodge: unit_rule_active(reg, p, "Dodge") && rule_on_most_models(p, p.model_count, "Dodge", false),
         fortified: rule_on_all_models(p, "Fortified")
             && fortified_aura_bearer_live(reg, p, rules_epoch),
         // WAVE 3 — stamped above, behind `EPOCH_6_TABLE_RULES`.

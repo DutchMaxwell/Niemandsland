@@ -625,6 +625,17 @@
     "defense_bonus_from_rating": true
    }
   },
+  "Dodge": {
+   "primitive": "Melee Evasion",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "hit_penalty": 1,
+    "melee_only": true,
+    "most_models": true,
+    "not_fatigued": true
+   }
+  },
   "Entrenched": {
    "primitive": "Stealth",
    "rated": false,

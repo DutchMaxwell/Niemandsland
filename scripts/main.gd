@@ -7478,17 +7478,30 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 			alias_name = n
 	if melee:
 		var melee_evasion: bool = _solo_rule_on_all_models(target, "Melee Evasion")
+		var dodge_name := ""
 		if not melee_evasion:
 			for me_e in RulesRegistry.unit_rules_of_primitive(target, "Melee Evasion"):
 				var me_n := str((me_e as Dictionary)["name"])
-				if me_n != "Melee Evasion" and _solo_rule_on_all_models(target, me_n):
+				if me_n == "Melee Evasion":
+					continue
+				# MEL-13 (rules 3.6 Dodge, EPOCH_73_V36): the most-models form; its -1 holds only while the unit
+				# is not Fatigued (the plain flag, like the core's strike_phase). Below 73 the entry stays inert.
+				if bool(((me_e as Dictionary).get("params", {}) as Dictionary).get("most_models", false)):
+					if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and AiEv.rule_on_most_models(target, me_n):
+						dodge_name = me_n
+				elif _solo_rule_on_all_models(target, me_n):
 					melee_evasion = true
 					break
-		var mm: int = AiCombatMath.melee_hit_modifier(evasive, melee_evasion)
-		var base_note: String = ("Melee Evasion -1" if melee_evasion and not evasive else evasive_note) if mm != 0 else ""
+		var dodge_on: bool = not melee_evasion and not dodge_name.is_empty() and not target.is_fatigued
+		var mm: int = AiCombatMath.melee_hit_modifier(evasive, melee_evasion or dodge_on)
+		var base_note := ""
+		if mm != 0:
+			base_note = evasive_note if evasive else ("%s -1" % dodge_name if dodge_on else "Melee Evasion -1")
 		if alias_pen > 0 and mm == 0:
 			mm = -alias_pen
 			base_note = "%s -%d" % [alias_name, alias_pen]
+		if mm == 0 and not dodge_name.is_empty() and not melee_evasion:
+			base_note = "%s: no effect, %s is Fatigued" % [dodge_name, target.get_name()]
 		# Coverage wave: all-attacks Shot Modifiers (Grounded Precision) reach melee too.
 		# Dead-aura wave: so do the MELEE-scoped ones. "Good Fighter" / "Precision Fighter Aura" grant
 		# "+1 to hit in melee" (melee_only) and "Precision Charge Aura" grants it on a charge (when:

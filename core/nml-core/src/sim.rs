@@ -4850,6 +4850,16 @@ fn strike_phase(
     if rule_on(seams.rules_epoch, EPOCH_73_V36) && def.stealth_alias_over_in > 0.0 {
         def.stealth_alias_over_in = crate::combat::CHARGE_LONG_RANGE_IN;
     }
+    // MEL-13 (rules 3.6 Dodge, `EPOCH_73_V36`): the Melee Evasion -1 while the unit is not Fatigued (the plain
+    // flag: Shaken does not switch it off for a defender). Both outcomes are named (rules-must-log).
+    if def.dodge && rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) {
+        if next.fatigued[ti] {
+            shot.log.push(format!("Dodge: no effect, {} is Fatigued", ut.name));
+        } else {
+            def.melee_evasion = true;
+            shot.log.push(format!("Dodge: enemies get -1 to hit {} in melee", ut.name));
+        }
+    }
     // rules-wave3-growthmark (epoch 6) — the LOGGING-RULE lines for the
     // defender-side facets this strike is about to fold.
     if rule_on(seams.rules_epoch, EPOCH_6_TABLE_RULES) {
