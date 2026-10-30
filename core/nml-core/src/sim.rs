@@ -32,7 +32,7 @@ use crate::acts::{
     EPOCH_51_CASTER_INTERFERENCE, EPOCH_52_UTILITY_SPELLS, EPOCH_56_GROUNDED_PROTECTION,
     EPOCH_61_PRECISION_MARKERS, EPOCH_62_CASTING_MOD, EPOCH_65_MELEE_TRUTH,
     EPOCH_66_DISTANCE_TRUTH, EPOCH_67_MARKERS_BURSTS, EPOCH_68_MODIFIER_SUM,
-    EPOCH_71_RAPID_CHARGE_MARK, EPOCH_72_PLAYTEST_RULES,
+    EPOCH_71_RAPID_CHARGE_MARK, EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
@@ -7461,6 +7461,34 @@ fn stealth_alias_terrain_gate(
     }
 }
 
+/// `(Terrain::uid, shelf reading, the board's sight volumes)`.
+type BoardZones = Option<(u64, bool, Rc<Vec<sight::Zone>>)>;
+
+thread_local! {
+    /// SHO-PAR-F3 — the last board's sight volumes, keyed on its content identity (`Terrain::uid`) and the shelf
+    /// reading, so the moved-shooter gate does not flood-fill the board again on every candidate it scores.
+    static BOARD_ZONES: std::cell::RefCell<BoardZones> = const { std::cell::RefCell::new(None) };
+}
+
+/// `sight::zones_of_with(t, shelf)`, remembered for the last board. A bare `Default` board (uid 0) has no identity
+/// and is built fresh every call; a hit needs the same uid, which `Terrain` mints anew on every content change.
+fn board_zones(t: &Terrain, shelf: bool) -> Rc<Vec<sight::Zone>> {
+    if t.uid() == 0 {
+        return Rc::new(sight::zones_of_with(t, shelf));
+    }
+    BOARD_ZONES.with(|c| {
+        let mut c = c.borrow_mut();
+        match c.as_ref() {
+            Some((uid, sh, z)) if *uid == t.uid() && *sh == shelf => Rc::clone(z),
+            _ => {
+                let z = Rc::new(sight::zones_of_with(t, shelf));
+                *c = Some((t.uid(), shelf, Rc::clone(&z)));
+                z
+            }
+        }
+    })
+}
+
 #[allow(clippy::too_many_arguments)]
 fn resolve_with(
     statics: &[UnitStatic],
@@ -8031,6 +8059,12 @@ fn resolve_with(
                 && mods::granted_vs(&next, ti, "Indirect");
             let sighted = if moved {
                 (match cover {
+                    // SHO-PAR-F3 (EPOCH_73_V36): the table's own per-model 3D sight (`_solo_has_los`), not the
+                    // coarse grid line between the two centres, which refused a shot the outer models see past
+                    // a forest. The EV half runs the same gate, so the search now prices that shot too.
+                    Cover::Board(t) if t.is_valid() && rule_on(sc.rules_epoch, EPOCH_73_V36) => {
+                        sight::unit_sees(&next, &board_zones(t, seams.shelf_sight), si, ti)
+                    }
                     Cover::Board(t) if t.is_valid() => !t.los_blocked(
                         geom::centre(&next.positions[si]),
                         geom::centre(&next.positions[ti]),
