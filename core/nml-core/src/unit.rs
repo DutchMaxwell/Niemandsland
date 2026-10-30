@@ -127,6 +127,11 @@ pub struct Ctx {
     /// folds keep the constants, the recorded values.
     pub artillery_shooter_hit_bonus: Option<i64>,
     pub artillery_target_hit_penalty: Option<i64>,
+    /// Rules 3.6 (SHO-05): the shooter's +1 to hit needs a Hold and a target past this many inches
+    /// (the entry's `shooter_over_in` / `shooter_requires_hold`, stamped from `EPOCH_73_V36`).
+    /// 0 = every older epoch: the shared over-9" gate alone.
+    pub artillery_shooter_over_in: f64,
+    pub artillery_shooter_needs_hold: bool,
     pub furious: bool,
     pub fearless: bool,
     /// `Fear(X)` — the melee WINNER comparison and nothing else
@@ -2736,6 +2741,9 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         artillery_entry.as_ref().map(|e| e.param_i("shooter_hit_bonus", 1));
     let artillery_target_hit_penalty =
         artillery_entry.as_ref().map(|e| e.param_i("target_hit_penalty", 2));
+    let v36_artillery = artillery_entry.as_ref().filter(|_| rule_on(rules_epoch, crate::acts::EPOCH_73_V36));
+    let artillery_shooter_over_in = v36_artillery.map_or(0.0, |e| e.param_f("shooter_over_in", 0.0));
+    let artillery_shooter_needs_hold = v36_artillery.is_some_and(|e| e.param_b_or("shooter_requires_hold", false));
     // Unit-wide Counter aliases strip one Impact roll per living model. Keep
     // the older weapon-only stamp unchanged for recordings before epoch 65.
     let counter_unit_reduction = if rule_on(rules_epoch, EPOCH_65_MELEE_TRUTH) {
@@ -2758,6 +2766,8 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         artillery: has_special_rule(&p.special_rules, "Artillery"),
         artillery_shooter_hit_bonus,
         artillery_target_hit_penalty,
+        artillery_shooter_over_in,
+        artillery_shooter_needs_hold,
         furious: has_special_rule(&p.special_rules, "Furious"),
         fearless: if rule_on(rules_epoch, EPOCH_65_MELEE_TRUTH) {
             rule_on_all_models(p, "Fearless")

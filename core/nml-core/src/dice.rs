@@ -779,6 +779,9 @@ pub fn resolve_volley_leg(
     let mut evasive_boost_fired = false;
     // EPOCH_73_V36 — the Aircraft to-hit penalty's once-per-volley log flag.
     let mut aircraft_fired = false;
+    // SHO-05 (rules 3.6) — the Artillery shooter's gated +1 names itself once per
+    // firing member (the `ma_fired` shape).
+    let mut art_shooter_fired: Vec<&str> = Vec::new();
     // Wave 4 — and the widened Bane window's own rule name, sticky once a
     // weapon opened it ("Mischievous Boost" at epoch 6, "Bestial Boost" at
     // epoch 7); "" = the base 6s-only window fired nothing.
@@ -877,11 +880,22 @@ pub fn resolve_volley_leg(
                 ));
             }
         }
+        // SHO-05 (rules 3.6): the shooter's own +1 needs a Hold and a target past
+        // `shooter_over_in`; both stamp 0/false below EPOCH_73_V36, so older
+        // epochs keep the shared over-9" gate alone.
+        let v36_artillery = att.artillery_shooter_needs_hold || att.artillery_shooter_over_in > 0.0;
+        let art_gate_ok = (!att.artillery_shooter_needs_hold || att.held)
+            && (att.artillery_shooter_over_in <= 0.0 || mod_dist_in > att.artillery_shooter_over_in);
+        let art_shooter_bonus = if art_gate_ok {
+            att.artillery_shooter_hit_bonus.unwrap_or(crate::combat::ARTILLERY_SHOOTER_HIT_BONUS)
+        } else {
+            0
+        };
         let mut m = shooting_hit_modifier(
             mod_dist_in, att.artillery, def.stealth, def.artillery, def.evasive,
             p.hit_bonus, p.hit_bonus_over9,
             alias_pen, alias_over,
-            att.artillery_shooter_hit_bonus.unwrap_or(crate::combat::ARTILLERY_SHOOTER_HIT_BONUS),
+            art_shooter_bonus,
             def.artillery_target_hit_penalty.unwrap_or(crate::combat::ARTILLERY_TARGET_HIT_PENALTY),
         )
             // B2b: the LIVE ledger's own nets — `_solo_hit_mod_info`
@@ -907,6 +921,20 @@ pub fn resolve_volley_leg(
             // inside the Unstoppable clamp (an enemy-side negative modifier).
             - def.aircraft_hit_penalty;
         aircraft_fired |= def.aircraft_hit_penalty > 0;
+        if att.artillery && v36_artillery && mod_dist_in > LONG_RANGE_IN
+            && art_shooter_fired.iter().all(|o| *o != sh.owner)
+        {
+            art_shooter_fired.push(sh.owner);
+            let over = att.artillery_shooter_over_in;
+            let line = if art_gate_ok {
+                format!("Artillery: +1 to hit (held, target over {over:.0}in)")
+            } else if !att.artillery_shooter_needs_hold || !att.held {
+                format!("Artillery: no +1 to hit, {} moved", sh.owner)
+            } else {
+                format!("Artillery: no +1 to hit, target within {over:.0}in")
+            };
+            out.log.push(line);
+        }
         // Wave 3 — the Shot Modifier family's runtime-gated members
         // (main.gd:5761-5779) ride the SAME sum: Mobile Artillery's
         // `requires_stationary` gate is the shooter's act-scope `moved`

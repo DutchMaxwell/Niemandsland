@@ -183,7 +183,8 @@ static func unit_rating(unit: GameUnit, rule_name: String) -> int:
 ## Wave 5: `defense` is the Armor(X)-adjusted value ("counts as having Defense X+", best-of — the same
 ## AiCombatMath.armored_defense the dice path uses) and `morale_bonus` carries Banner's +1 (both gated
 ## by the system-scoped RulesRegistry, so a rule only fires where its book fields it).
-static func ctx_for(unit: GameUnit, in_cover: bool = false, counter_models: int = 0) -> Dictionary:
+static func ctx_for(unit: GameUnit, in_cover: bool = false, counter_models: int = 0,
+		held: bool = true) -> Dictionary:
 	if unit == null:
 		return NEUTRAL_DEFENDER.duplicate()
 	return {
@@ -195,6 +196,13 @@ static func ctx_for(unit: GameUnit, in_cover: bool = false, counter_models: int 
 		"tough": maxi(unit_rating(unit, "Tough"), 1),
 		"models": maxi(unit.get_alive_count(), 1),
 		"artillery": unit.has_special_rule("Artillery"),
+		# SHO-05 (rules 3.6): the Artillery shooter's own +1 needs a Hold and a target past
+		# `shooter_over_in`; both read off the entry below epoch 73 (0/false = over-9" alone).
+		"artillery_shooter_over_in": 0.0 if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 \
+			else float(RulesRegistry.unit_param(unit, "Artillery", "shooter_over_in", 0.0)),
+		"artillery_shooter_needs_hold": AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
+			and bool(RulesRegistry.unit_param(unit, "Artillery", "shooter_requires_hold", false)),
+		"held": held,
 		"furious": unit.has_special_rule("Furious"),
 		"fearless": rule_on_all_models(unit, "Fearless"),
 		"impact": unit_rating(unit, "Impact"),
@@ -569,9 +577,17 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 			target = target - melee_mod
 	else:
 		target = AiCombatMath.reliable_quality(quality, bool(profile.get("reliable", false)))
+		# SHO-05 (rules 3.6): gate the shooter's own Artillery +1 the way the dice path does — a
+		# Hold and a target past `shooter_over_in` (0/false below 73 = the over-9" gate alone).
+		var art_bonus: int = AiCombatMath.ARTILLERY_SHOOTER_HIT_BONUS
+		var art_over := float(att.get("artillery_shooter_over_in", 0.0))
+		if bool(att.get("artillery", false)) and (
+				(bool(att.get("artillery_shooter_needs_hold", false)) and not bool(att.get("held", true)))
+				or (art_over > 0.0 and dist_in <= art_over)):
+			art_bonus = 0
 		var shoot_mod := AiCombatMath.shooting_hit_modifier(dist_in,
 			bool(att.get("artillery", false)), bool(def_ctx.get("stealth", false)),
-			bool(def_ctx.get("artillery", false)), bool(def_ctx.get("evasive", false))) + spell_mod \
+			bool(def_ctx.get("artillery", false)), bool(def_ctx.get("evasive", false)), art_bonus) + spell_mod \
 			- int(def_ctx.get("aircraft_hit_penalty", 0))   # rules 3.6 Aircraft -N, inside the clamp
 		if bool(profile.get("unstoppable", false)) and shoot_mod < 0:
 			shoot_mod = 0   # same clamp as the melee side; Fatigue stays above it (not a modifier)

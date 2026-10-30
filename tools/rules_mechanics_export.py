@@ -69,7 +69,7 @@ PRIMITIVE_PARAMS = {
     "Stealth": {"hit_penalty": 1, "over_in": 9.0},
     "Evasive": {"hit_penalty": 1},
     "Shielded": {"defense_bonus": 1},
-    "Artillery": {"shooter_hit_bonus": 1, "target_hit_penalty": 2, "over_in": 9.0, "hold_only": True},
+    "Artillery": {"shooter_hit_bonus": 1, "target_hit_penalty": 2, "over_in": 9.0, "shooter_over_in": 12.0, "shooter_requires_hold": True, "hold_only": True},
     "Immobile": {"hold_only": True},
     "Regeneration": {"ignore_target": 5},
     # Reanimation (army-book): one die per missing model/wound at activation, each 5+ restores one.

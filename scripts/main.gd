@@ -7585,10 +7585,33 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 		art_shooter_bonus = int(RulesRegistry.unit_param(shooter_member, "Artillery", "shooter_hit_bonus", AiCombatMath.ARTILLERY_SHOOTER_HIT_BONUS))
 	if target_artillery:
 		art_target_pen = int(RulesRegistry.unit_param(target, "Artillery", "target_hit_penalty", AiCombatMath.ARTILLERY_TARGET_HIT_PENALTY))
-	var mod: int = AiCombatMath.shooting_hit_modifier(dist_in, attacker_artillery, stealth, target_artillery, evasive, art_shooter_bonus, art_target_pen)
 	var notes: PackedStringArray = []
 	var over_nine: bool = dist_in > AiCombatMath.LONG_RANGE_IN
-	if attacker_artillery and over_nine:
+	# Rules 3.6 (EPOCH_73_V36): the SHOOTER's +1 needs a Hold and a target past `shooter_over_in`
+	# (the entry's own keys, read through RulesRegistry like Indirect's `los_needs_hold`). Below 73
+	# both stamp off, so the older over-9" reading stays byte-exact.
+	var art_gate_over := 0.0
+	var art_gate_hold := false
+	var art_gate_ok := true
+	var art_held := false
+	if attacker_artillery:
+		art_held = _solo_unit_held(shooter_member)
+		if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+			art_gate_over = float(RulesRegistry.unit_param(shooter_member, "Artillery", "shooter_over_in", 0.0))
+			art_gate_hold = bool(RulesRegistry.unit_param(shooter_member, "Artillery", "shooter_requires_hold", false))
+			art_gate_ok = (not art_gate_hold or art_held) \
+				and (art_gate_over <= 0.0 or dist_in > art_gate_over)
+	var mod: int = AiCombatMath.shooting_hit_modifier(dist_in, attacker_artillery, stealth, target_artillery, evasive,
+		art_shooter_bonus if art_gate_ok else 0, art_target_pen)
+	if attacker_artillery and over_nine and (art_gate_hold or art_gate_over > 0.0):
+		if art_gate_ok:
+			own += art_shooter_bonus   # SHO-08: the Artillery +1 is an own-rules part
+			notes.append("Artillery +%d (Held, target over %d\")" % [art_shooter_bonus, int(art_gate_over)])
+		elif art_gate_hold and not art_held:
+			notes.append("Artillery: no +%d (shooter did not Hold)" % art_shooter_bonus)
+		else:
+			notes.append("Artillery: no +%d (target within %d\")" % [art_shooter_bonus, int(art_gate_over)])
+	elif attacker_artillery and over_nine:
 		own += art_shooter_bonus
 		notes.append("Artillery +%d" % art_shooter_bonus)
 	elif attacker_artillery:
