@@ -3012,14 +3012,14 @@ pub(crate) fn dangerous_dice(
     }
     // UX-20 (`EPOCH_73_V36`, rules 3.6): one affected model is enough, and then
     // the WHOLE joined unit (host + attached heroes, every living model) takes
-    // ONE test; each model still adds its Tough value here (UX-21 counts the
-    // wounds left). Below 73 only the affected models roll.
+    // ONE test, and the test rolls one die per WOUND THE UNIT HAS LEFT (UX-21).
+    // Below 73 only the affected models roll their Tough value.
     if dice > 0 && rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) {
         let mut chain = vec![si];
         if seams.hero_attach {
             chain.extend(state.attached[si].iter().copied());
         }
-        dice = chain.iter().map(|&u| (0..state.positions[u].len()).map(|m| tough(u, m)).sum::<i64>()).sum();
+        dice = chain.iter().map(|&u| wounds_left(state, u)).sum();
         shot.log.push(format!(
             "Dangerous terrain: {} takes one test for the whole unit ({dice} dice)",
             statics[state.roster.profile[si]].name

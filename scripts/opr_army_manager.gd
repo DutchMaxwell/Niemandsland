@@ -3399,14 +3399,17 @@ func _spill_destroyed_transport(tr: GameUnit) -> void:
 ## movement path builds into report["dangerous_dice"] (SoloController.last_dangerous_dice), pulled
 ## out here so the destroyed-transport spill asks the rule the same question the move does.
 ## Below EPOCH_73_V36 the unit's OWN alive models only — a joined hero is its own GameUnit and takes its own
-## test. UX-20 (rules 3.6): from 73 the whole joined unit takes ONE test, so its heroes' models count too.
+## test, and each model adds its full Tough value. UX-20 (rules 3.6): from 73 the whole joined unit takes ONE
+## test, so its heroes' models count too. UX-21 (rules 3.6): from 73 the test rolls one die per WOUND THE WHOLE
+## JOINED UNIT HAS LEFT — the sum of every living model's wounds_current — not per model's full Tough value.
 static func dangerous_dice_for(unit: GameUnit) -> int:
 	if unit == null:
 		return 0
 	var dice := 0
 	var whole: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
 	for m in (unit.get_alive_models_with_attached() if whole else unit.get_alive_models()):
-		dice += maxi(1, int((m as ModelInstance).wounds_max))
+		var mi := m as ModelInstance
+		dice += maxi(1, int(mi.wounds_current if whole else mi.wounds_max))
 	return dice
 
 
