@@ -5423,6 +5423,7 @@
 		"Versatile Reach Aura": "This model and its unit get Versatile Reach.",
 		"Warden": "When the hero is activated all friendly units within 6\" of the hero stop being shaken."
 	},
+	"rules_version": "3.6.0",
 	"saved_at": "2026-07-10T14:07:47",
 	"table": {
 		"biome": "temperate_grassland",
