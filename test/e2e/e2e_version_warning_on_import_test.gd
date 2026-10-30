@@ -1,5 +1,5 @@
 extends GdUnitTestSuite
-## D5 (b), step 7 of the v3.6 plan: the game IMPORTS a book that is newer than the rules it plays,
+## D5 (b), step 7 of the v3.6 plan: the game IMPORTS a book on other rules than the ones it plays,
 ## but says so visibly — driven through the REAL import handler and read off the REAL toast.
 ##
 ## The old suite called the gate's own helpers directly, so its RED was a "symbol not found" parse
@@ -69,12 +69,15 @@ func _visible_warning() -> String:
 	return t.text if t.text.contains(WARNING_MARKER) else ""
 
 
-## CONTROL: a book on the pinned major.minor is the same rules and imports silently.
-func test_control_a_35_book_imports_silently() -> void:
-	var army := await _import_and_hide_old_toast("3.5.3")
-	assert_object(army).override_failure_message("a 3.5.3 book did not import").is_not_null()
-	assert_str(_visible_warning()).override_failure_message(
-		"a 3.5.3 book must import silently").is_empty()
+## W1.1a (rules 3.6): a book on the pinned major.minor (gf = 3.6.0) is the same rules and imports
+## silently; a bare "3" says nothing about the rules and stays silent too.
+func test_a_36_book_imports_silently() -> void:
+	for book_version: String in ["3.6.0", "3.6", "3"]:
+		var army := await _import_and_hide_old_toast(book_version)
+		assert_object(army).override_failure_message("a '%s' book did not import" % book_version).is_not_null()
+		var warning := _visible_warning()
+		assert_str(warning).override_failure_message(
+			"a '%s' book must import silently, toast says '%s'" % [book_version, warning]).is_empty()
 
 
 ## CONTROL: a book without a version string must never invent a warning.
@@ -85,9 +88,11 @@ func test_control_a_book_without_a_version_imports_silently() -> void:
 		"a book without a version must import silently").is_empty()
 
 
-## CONTROL: the pinned rules version is the maps' own _meta.core_version (single source of truth).
-func test_control_every_rule_map_pins_351() -> void:
-	for system: String in ["gf", "gff", "aof", "aofs", "aofr"]:
+## The pinned rules version is the maps' own _meta.core_version (single source of truth): GF and AoF
+## play 3.6.0, the spin-off maps stay on 3.5.1 in this release.
+func test_gf_and_aof_maps_pin_360_the_spin_offs_keep_351() -> void:
+	var pins := {"gf": "3.6.0", "gff": "3.5.1", "aof": "3.6.0", "aofs": "3.5.1", "aofr": "3.5.1"}
+	for system: String in pins:
 		var path := "res://assets/solo/rules_mechanics_%s.json" % system
 		var text := FileAccess.get_file_as_string(path)
 		assert_str(text).override_failure_message("cannot read %s" % path).is_not_empty()
@@ -100,36 +105,25 @@ func test_control_every_rule_map_pins_351() -> void:
 		if not (meta is Dictionary):
 			continue
 		assert_str(str(meta.get("core_version", ""))).override_failure_message(
-			"%s does not pin 3.5.1" % path).is_equal("3.5.1")
+			"%s does not pin %s" % [path, pins[system]]).is_equal(pins[system])
 
 
-## THE PROVING CASE: a newer book imports, says so visibly, and does NOT promise something unbuilt.
-func test_a_36_book_imports_with_a_visible_warning() -> void:
-	var army := await _import_and_hide_old_toast("3.6.0")
-	assert_object(army).override_failure_message("a 3.6.0 book did not import").is_not_null()
-	var toast: Label = _main._solo_toast
-	assert_object(toast).override_failure_message("no toast after importing a 3.6.0 book").is_not_null()
-	if not is_instance_valid(toast):
-		return
-	assert_bool(toast.visible).override_failure_message("the version warning toast is hidden").is_true()
-	assert_str(toast.text).contains("3.6.0")
-	assert_str(toast.text).contains("3.5.1")
-	assert_str(toast.text).override_failure_message(
-		"the toast promises a refusal that is not built: %s" % toast.text).not_contains("refuse")
-
-	# A major.minor bump ("3.6") warns too.
-	army = await _import_and_hide_old_toast("3.6")
-	assert_object(army).override_failure_message("a 3.6 book did not import").is_not_null()
-	toast = _main._solo_toast
-	assert_object(toast).override_failure_message("no toast after importing a 3.6 book").is_not_null()
-	if is_instance_valid(toast):
-		assert_bool(toast.visible).override_failure_message("the 3.6 version warning toast is hidden").is_true()
-		assert_str(toast.text).contains("3.6")
-		assert_str(toast.text).contains("3.5.1")
-
-	# A bare "3" says nothing about the rules and stays silent.
-	army = await _import_and_hide_old_toast("3")
-	assert_object(army).override_failure_message("a bare-'3' book did not import").is_not_null()
-	var bare_warning := _visible_warning()
-	assert_str(bare_warning).override_failure_message(
-		"a bare '3' must not warn, toast says '%s'" % bare_warning).is_empty()
+## THE PROVING CASE: an OLD (3.5.x) book on gf imports, says so visibly, names the book as the older
+## side (never "the game runs on the old rules") and does NOT promise something unbuilt.
+func test_an_old_35_book_imports_with_a_visible_warning() -> void:
+	for book_version: String in ["3.5.3", "3.5"]:
+		var army := await _import_and_hide_old_toast(book_version)
+		assert_object(army).override_failure_message("a %s book did not import" % book_version).is_not_null()
+		var toast: Label = _main._solo_toast
+		assert_object(toast).override_failure_message(
+			"no toast after importing a %s book" % book_version).is_not_null()
+		if not is_instance_valid(toast):
+			return
+		assert_bool(toast.visible).override_failure_message(
+			"the %s version warning toast is hidden" % book_version).is_true()
+		assert_str(toast.text).contains(book_version)
+		assert_str(toast.text).contains("3.6.0")
+		assert_str(toast.text).override_failure_message(
+			"an older book is told the game runs on old rules: %s" % toast.text).not_contains("runs on the old rules")
+		assert_str(toast.text).override_failure_message(
+			"the toast promises a refusal that is not built: %s" % toast.text).not_contains("refuse")
