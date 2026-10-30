@@ -55,6 +55,7 @@
     mod deploy_large;
     mod reinforcement;
     mod spawn;
+    mod v36_ux;
     mod vanguard_free;
 
     /// The 6x4 ft board's own rectangle, world metres — the table a circle

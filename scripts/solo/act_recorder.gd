@@ -193,13 +193,18 @@ const EPOCH_63_MELEE_HEIGHT := 63
 ## Takedown, Guarded over 9" and Counter) and turns the AI climb on (heights B2, SoloController.climb_on),
 ## and the Rapid Charge Mark writer to 71 with EPOCH_71_RAPID_CHARGE_MARK (#845, the Mark lands on the marked enemy),
 ## and the 29.10.2026 play-test fixes to 72 with EPOCH_72_PLAYTEST_RULES (A1 Lacerate keeps Regeneration,
-## A2 wounds at half strength test morale, A4 Deadly rolls all X Regeneration dice before the cap).
-static var rules_epoch: int = 72
+## A2 wounds at half strength test morale, A4 Deadly rolls all X Regeneration dice before the cap),
+## and the rules 3.6 wave (0.3.15) to 73 with EPOCH_73_V36, the one epoch of the whole wave.
+static var rules_epoch: int = 73
 ## The tray-exact series' one bump, mirrored for the table-side gate it carries (the AI climb).
 const EPOCH_70_TRAY_EXACT := 70
 ## The play-test fixes' mirror for the GDScript twins (AiEv, AiSpell, BattleSim); the core's gate reads the
 ## frozen `EPOCH_72_PLAYTEST_RULES` (acts.rs). The table's own dice (#1911/#1912/#1914) are not gated.
 const EPOCH_72_PLAYTEST_RULES := 72
+## The rules 3.6 wave's mirror of the core's frozen `EPOCH_73_V36` (acts.rs): every 3.6 behaviour change in
+## the GDScript twins gates on it, nobody bumps again inside the wave, and corpus recordings from main are
+## frozen from this bump until the release tag.
+const EPOCH_73_V36 := 73
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000

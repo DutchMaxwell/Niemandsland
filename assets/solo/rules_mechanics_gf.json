@@ -1,7 +1,7 @@
 {
  "_meta": {
   "system": "gf",
-  "core_version": "3.5.1",
+  "core_version": "3.6.0",
   "faction_books": 47,
   "generator": "tools/rules_mechanics_export.py",
   "contract": "lookup (system, faction, name) -> fallback (system, common, name); never name-only across systems",

@@ -37,4 +37,5 @@
     mod policy_memo;
     mod rush_demotion;
     mod steadfast;
+    mod v36_ux;
     mod vengeance;
