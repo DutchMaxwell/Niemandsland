@@ -22,8 +22,8 @@ func test_curated_rule_creates_token() -> void:
 
 func test_aura_and_buff_names_qualify() -> void:
 	# The HDF army's custom auras aren't in the curated map, but read as aura/buff -> tokens.
-	var t := OPRArmyManager.buff_tokens_from_rules(["Hold the Line Boost Aura", "Precision Shooter Buff"])
-	assert_array(_names(t)).is_equal(["Hold the Line Boost Aura", "Precision Shooter Buff"])
+	var t := OPRArmyManager.buff_tokens_from_rules(["Enhanced Hold the Line Aura", "Precision Shooter Buff"])
+	assert_array(_names(t)).is_equal(["Enhanced Hold the Line Aura", "Precision Shooter Buff"])
 
 
 func test_description_plus_minus_qualifies() -> void:

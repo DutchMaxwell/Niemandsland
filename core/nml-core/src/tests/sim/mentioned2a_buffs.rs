@@ -106,7 +106,7 @@ use super::*;
     fn the_entrenched_and_hold_the_line_buff_rows_stamp_their_records_at_current_epoch() {
         let rows = [
             ("gf", "human_defense_force", "Entrenched Buff", "Entrenched"),
-            ("aof", "human_empire", "Hold the Line Boost Buff", "Hold the Line Boost"),
+            ("aof", "human_empire", "Enhanced Hold the Line Buff", "Enhanced Hold the Line"),
         ];
         for (system, faction, rule, grants) in rows {
             let us = bearer(system, faction, rule, crate::acts::CURRENT_RULES_EPOCH);
@@ -140,7 +140,7 @@ use super::*;
     /// granted Boost's own number in the morale net is the +2 the core folds
     /// at the rolled morale test (sim.rs's tray_morale, epoch-gated).
     #[test]
-    fn a_hold_the_line_boost_buffs_grant_joins_the_morale_net_at_plus_two() {
+    fn an_enhanced_hold_the_line_buffs_grant_joins_the_morale_net_at_plus_two() {
         assert_eq!(
             crate::combat::HOLD_THE_LINE_BOOST_MORALE_BONUS, 2,
             "the granted Boost's morale_bonus"

@@ -385,8 +385,8 @@ fn shadowborn_shrouds_only_from_epoch_6() {
 }
 
 #[test]
-fn shadowborn_boost_shrouds_only_from_epoch_6() {
-    shrouds_only_from_epoch_6("aof", "shadow_stalkers", "Shadowborn Boost", 8.0);
+fn enhanced_shadowborn_shrouds_only_from_epoch_6() {
+    shrouds_only_from_epoch_6("aof", "shadow_stalkers", "Enhanced Shadowborn", 8.0);
 }
 
 #[test]
@@ -484,12 +484,12 @@ fn a_static_plus_one_to_defense_raises_the_save_from_epoch_6() {
 }
 
 #[test]
-fn a_static_sturdy_boost_raises_the_save_from_epoch_6() {
-    let on = alias_at_epoch("gf", "dwarf_guilds", "Sturdy Boost", 6);
-    let off = alias_at_epoch("gf", "dwarf_guilds", "Sturdy Boost", 5);
+fn a_static_enhanced_sturdy_raises_the_save_from_epoch_6() {
+    let on = alias_at_epoch("gf", "dwarf_guilds", "Enhanced Sturdy", 6);
+    let off = alias_at_epoch("gf", "dwarf_guilds", "Enhanced Sturdy", 5);
     assert!(
         on.shielded,
-        "epoch 6: 'Sturdy Boost' is the Shielded wording (RED before the fix)"
+        "epoch 6: 'Enhanced Sturdy' is the Shielded wording (RED before the fix)"
     );
     assert!(
         !off.shielded,
@@ -516,14 +516,14 @@ fn a_live_plus_one_to_defense_grant_raises_the_save_from_epoch_6() {
 }
 
 #[test]
-fn a_live_sturdy_boost_grant_raises_the_save_from_epoch_6() {
+fn a_live_enhanced_sturdy_grant_raises_the_save_from_epoch_6() {
     let (mut st, statics) = two_units();
-    st.buffs[1].push(grant("Sturdy Boost", "", true));
+    st.buffs[1].push(grant("Enhanced Sturdy", "", true));
     let on = granted_ctx(&st, &statics, 1, false, 6);
     let off = granted_ctx(&st, &statics, 1, false, 5);
     assert!(
         on.shielded,
-        "epoch 6: the 'Sturdy Boost' grant reaches the defender's ctx (RED before the fix)"
+        "epoch 6: the 'Enhanced Sturdy' grant reaches the defender's ctx (RED before the fix)"
     );
     assert!(
         !off.shielded,
@@ -619,7 +619,7 @@ fn a_volley_against_a_granted_alias_defender_saves_one_better_from_epoch_6() {
 /// and logs, epoch 6 only.
 #[test]
 fn a_melee_exchange_against_a_granted_alias_defender_saves_one_better_from_epoch_6() {
-    let (st, statics) = shielded_state("Sturdy Boost");
+    let (st, statics) = shielded_state("Enhanced Sturdy");
     let fists = [ShootProfile { range: 0, attacks: 6, ..Default::default() }];
     let melee = |def: &Ctx| {
         resolve_melee_with_tray(
@@ -636,7 +636,7 @@ fn a_melee_exchange_against_a_granted_alias_defender_saves_one_better_from_epoch
         "epoch 6: the +1 lowers the melee save target too (RED before the fix)"
     );
     assert!(
-        raised.log.iter().any(|l| l.contains("Sturdy Boost")),
+        raised.log.iter().any(|l| l.contains("Enhanced Sturdy")),
         "the melee ladder logs the same one line: {:?}",
         raised.log
     );

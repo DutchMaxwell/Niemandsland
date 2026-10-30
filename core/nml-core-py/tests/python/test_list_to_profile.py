@@ -545,13 +545,15 @@ def _aof_profile(faction: str, rules: list[str], **sel_kw) -> dict:
 
 
 def test_a_registry_alias_of_quick_moves_the_bands():
-    """movement_range_controller.gd:164-188 — High Elves' "Highborn" and Human
-    Empire's "Agile" are the SAME primitive (Quick) with different params, and
-    neither name is in the loader's name-based pass. 26 + 2 qag_ref roster
-    units read the table's bands only once this pass exists."""
+    """movement_range_controller.gd:164-188 — High Elves' "Highborn" (rules 3.6:
+    the Royal Legion primitive, +2" on Charge only) and Human Empire's "Agile"
+    (the Quick primitive) are registry aliases, and neither name is in the
+    loader's name-based pass. 26 + 2 qag_ref roster units read the table's
+    bands only once this pass exists."""
     assert _aof_profile("high_elves", ["Highborn"])["move_bands"] == {
-        "advance": 8.0,
-        "rush": 14.0,
+        "advance": 6.0,
+        "rush": 12.0,
+        "charge": 14.0,
     }
     assert _aof_profile("human_empire", ["Agile"])["move_bands"] == {
         "advance": 7.0,
@@ -562,11 +564,12 @@ def test_a_registry_alias_of_quick_moves_the_bands():
         "advance": 6.0,
         "rush": 12.0,
     }
-    # The NAME pass owns a band the registry may not top up: Fast fills both,
-    # so Highborn adds nothing on top (arena `Silver Cavalry` reads 10"/18").
+    # Fast's name pass fills Advance and Rush; Highborn (its own key) still
+    # adds its Charge-only +2" on top (arena `Silver Cavalry` reads 8"/16"/18").
     assert _aof_profile("high_elves", ["Fast", "Highborn"])["move_bands"] == {
-        "advance": 10.0,
-        "rush": 18.0,
+        "advance": 8.0,
+        "rush": 16.0,
+        "charge": 18.0,
     }
 
 

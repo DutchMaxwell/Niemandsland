@@ -77,7 +77,7 @@ func test_effect_labels_name_real_heights_not_categories() -> void:
 	var ruins: String = o._terrain_effect_label(T.RUINS)
 	assert_str(ruins).contains("6\" tall")
 	assert_str(ruins).contains("Cover")
-	assert_str(ruins).contains("Blocks LoS")
+	assert_str(ruins).contains("Dense")
 	assert_str(ruins).not_contains("Height 5")
 	var forest: String = o._terrain_effect_label(T.FOREST)
 	assert_str(forest).contains("3.4\" tall")

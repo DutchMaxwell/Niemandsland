@@ -16,10 +16,11 @@
   "Ambush Aura",
   "Ambush Re-Deployment",
   "Angelic Blessing",
-  "Angelic Blessing Boost",
-  "Angelic Blessing Boost Buff",
+  "Enhanced Angelic Blessing",
+  "Enhanced Angelic Blessing Buff",
   "Armor",
   "Artillery",
+  "Assault",
   "Bane",
   "Bane Mark",
   "Bane in Melee",
@@ -30,23 +31,23 @@
   "Bash",
   "Battleborn",
   "Bestial",
-  "Bestial Boost",
-  "Bestial Boost Aura",
+  "Enhanced Bestial",
+  "Enhanced Bestial Aura",
   "Blast",
   "Bloodthirsty Fighter",
   "Bounding",
   "Bounding Aura",
   "Breath Attack",
   "Buccaneer",
-  "Buccaneer Boost",
-  "Buccaneer Boost Aura",
+  "Enhanced Buccaneer",
+  "Enhanced Buccaneer Aura",
   "Caster",
   "Caster Group",
   "Casting Buff",
   "Casting Debuff",
   "Changebound",
-  "Changebound Boost",
-  "Changebound Boost Aura",
+  "Enhanced Changebound",
+  "Enhanced Changebound Aura",
   "Coordinate",
   "Counter",
   "Counter in Melee",
@@ -57,8 +58,8 @@
   "Crack",
   "Crossing Attack",
   "Cursed Undead",
-  "Cursed Undead Boost",
-  "Cursed Undead Boost Buff",
+  "Enhanced Cursed Undead",
+  "Enhanced Cursed Undead Buff",
   "Dangerous Terrain Debuff",
   "Deadly",
   "Deathstrike",
@@ -68,16 +69,16 @@
   "Defensive Frenzy",
   "Delayed Action",
   "Destroyer",
-  "Destroyer Boost",
-  "Destroyer Boost Aura",
+  "Enhanced Destroyer",
+  "Enhanced Destroyer Aura",
   "Destructive",
   "Difficult Terrain Debuff",
   "Disintegrate",
   "Drakesworn",
   "Drone Laser Gun",
   "Empyrean Spirit",
-  "Empyrean Spirit Boost",
-  "Empyrean Spirit Boost Aura",
+  "Enhanced Empyrean Spirit",
+  "Enhanced Empyrean Spirit Aura",
   "Entrenched",
   "Ethereal",
   "Evasive",
@@ -91,8 +92,8 @@
   "Fearless",
   "Fearless Aura",
   "Ferocious",
-  "Ferocious Boost",
-  "Ferocious Boost Aura",
+  "Enhanced Ferocious",
+  "Enhanced Ferocious Aura",
   "Flying",
   "Fortified",
   "Fortified Aura",
@@ -114,25 +115,25 @@
   "Growth Markers",
   "Guarded",
   "Harassing",
-  "Harassing Boost",
-  "Harassing Boost Aura",
+  "Enhanced Harassing",
+  "Enhanced Harassing Aura",
   "Havocbound",
-  "Havocbound Boost",
-  "Havocbound Boost Aura",
+  "Enhanced Havocbound",
+  "Enhanced Havocbound Aura",
   "Hazardous",
   "Heavy Impact",
   "Hero",
   "Highborn",
-  "Highborn Boost",
-  "Highborn Boost Aura",
+  "Enhanced Highborn",
+  "Enhanced Highborn Aura",
   "Hit & Run",
   "Hit & Run Fighter",
   "Hit & Run Fighter Aura",
   "Hit & Run Shooter",
   "Hit & Run Shooter Aura",
   "Hold the Line",
-  "Hold the Line Boost",
-  "Hold the Line Boost Buff",
+  "Enhanced Hold the Line",
+  "Enhanced Hold the Line Buff",
   "Ignores Cover",
   "Ignores Regeneration",
   "Immobile",
@@ -148,11 +149,11 @@
   "Lacerate",
   "Limited",
   "Lucky",
-  "Lucky Boost",
-  "Lucky Boost Aura",
+  "Enhanced Lucky",
+  "Enhanced Lucky Aura",
   "Lustbound",
-  "Lustbound Boost",
-  "Lustbound Boost Aura",
+  "Enhanced Lustbound",
+  "Enhanced Lustbound Aura",
   "Medical Training",
   "Melee Evasion",
   "Melee Evasion Aura",
@@ -164,8 +165,8 @@
   "Mend",
   "Mind Control",
   "Mischievous",
-  "Mischievous Boost",
-  "Mischievous Boost Aura",
+  "Enhanced Mischievous",
+  "Enhanced Mischievous Aura",
   "Mobile Artillery",
   "Morale",
   "Morale Debuff",
@@ -173,8 +174,8 @@
   "No Retreat",
   "No Retreat Aura",
   "Ossified",
-  "Ossified Boost",
-  "Ossified Boost Aura",
+  "Enhanced Ossified",
+  "Enhanced Ossified Aura",
   "Pass Turn",
   "Phase Through",
   "Piercing Assault",
@@ -193,8 +194,8 @@
   "Piercing Tag",
   "Piercing Target",
   "Plaguebound",
-  "Plaguebound Boost",
-  "Plaguebound Boost Aura",
+  "Enhanced Plaguebound",
+  "Enhanced Plaguebound Aura",
   "Precise",
   "Precision Attacks Buff",
   "Precision Charge Aura",
@@ -213,8 +214,8 @@
   "Precision Target",
   "Predator Fighter",
   "Primal",
-  "Primal Boost",
-  "Primal Boost Buff",
+  "Enhanced Primal",
+  "Enhanced Primal Buff",
   "Protected",
   "Protection Feat",
   "Quick",
@@ -263,20 +264,20 @@
   "Retaliate",
   "Retreating Strike",
   "Royal Legion",
-  "Royal Legion Boost",
-  "Royal Legion Boost Aura",
+  "Enhanced Royal Legion",
+  "Enhanced Royal Legion Aura",
   "Royal Warrior",
-  "Royal Warrior Boost",
-  "Royal Warrior Boost Aura",
+  "Enhanced Royal Warrior",
+  "Enhanced Royal Warrior Aura",
   "Scout",
   "Scout Aura",
   "Scurry",
-  "Scurry Boost",
-  "Scurry Boost Aura",
+  "Enhanced Scurry",
+  "Enhanced Scurry Aura",
   "Sergeant",
   "Shadowborn",
-  "Shadowborn Boost",
-  "Shadowborn Boost Aura",
+  "Enhanced Shadowborn",
+  "Enhanced Shadowborn Aura",
   "Shatter",
   "Shielded",
   "Shielded Aura",
@@ -310,8 +311,8 @@
   "Strider",
   "Strider Aura",
   "Sturdy",
-  "Sturdy Boost",
-  "Sturdy Boost Aura",
+  "Enhanced Sturdy",
+  "Enhanced Sturdy Aura",
   "Surge",
   "Surge Mark",
   "Surprise Attack",
@@ -375,6 +376,7 @@
   "Ambush",
   "Armor",
   "Artillery",
+  "Assault",
   "Bane",
   "Banner",
   "Blast",
@@ -476,6 +478,7 @@
     "cannot_seize": true,
     "cannot_be_charged": true,
     "target_range_penalty_in": 12.0,
+    "target_hit_penalty": 1,
     "ignores_obstacles": true
    }
   },
@@ -483,6 +486,14 @@
    "primitive": "Ambush",
    "rated": false,
    "book_version": "3.5.1"
+  },
+  "Ambush Aura": {
+   "primitive": "Aura Channel",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "grants": "Ambush"
+   }
   },
   "Armor": {
    "primitive": "Armor",
@@ -503,6 +514,14 @@
     "target_hit_penalty": 2,
     "over_in": 9.0,
     "hold_only": true
+   }
+  },
+  "Assault": {
+   "primitive": "Assault",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "melee_copy": true
    }
   },
   "Bane": {
@@ -655,6 +674,14 @@
     "charge_only": true
    }
   },
+  "Good Shot": {
+   "primitive": "Shot Modifier",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "hit_bonus": 1
+   }
+  },
   "Heavy Impact": {
    "primitive": "Heavy Impact",
    "rated": true,
@@ -712,7 +739,8 @@
     "moved_hit_penalty": 1,
     "ignores_cover": true,
     "ignores_los": true,
-    "hold_and_shoot": true
+    "hold_and_shoot": true,
+    "los_needs_hold": true
    }
   },
   "Indirect when Shooting": {
@@ -832,7 +860,7 @@
    "rated": false,
    "book_version": "3.5.1",
    "params": {
-    "bonus_hits_per_six": 1,
+    "ap_bonus": 1,
     "model_level": true
    }
   },
@@ -1012,7 +1040,7 @@
      "bypass_regen": false
     }
    },
-   "Bestial Boost": {
+   "Enhanced Bestial": {
     "primitive": "Bane",
     "rated": false,
     "book_version": "3.5.3",
@@ -1023,12 +1051,12 @@
      "upgrades": "Bestial"
     }
    },
-   "Bestial Boost Aura": {
+   "Enhanced Bestial Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Bestial Boost"
+     "grants": "Enhanced Bestial"
     }
    },
    "Casting Debuff": {
@@ -1231,7 +1259,7 @@
      "applies_charged": true
     }
    },
-   "Changebound Boost": {
+   "Enhanced Changebound": {
     "primitive": "Stealth",
     "rated": false,
     "book_version": "3.5.3",
@@ -1241,12 +1269,12 @@
      "upgrades": "Changebound"
     }
    },
-   "Changebound Boost Aura": {
+   "Enhanced Changebound Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Changebound Boost"
+     "grants": "Enhanced Changebound"
     }
    },
    "Dangerous Terrain Debuff": {
@@ -1670,7 +1698,7 @@
      "per_round": true
     }
    },
-   "Harassing Boost": {
+   "Enhanced Harassing": {
     "primitive": "Hit & Run",
     "rated": false,
     "book_version": "3.5.3",
@@ -1679,12 +1707,12 @@
      "upgrades": "Harassing"
     }
    },
-   "Harassing Boost Aura": {
+   "Enhanced Harassing Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Harassing Boost"
+     "grants": "Enhanced Harassing"
     }
    },
    "Lacerate": {
@@ -2202,7 +2230,7 @@
      "extra_attack": true
     }
    },
-   "Royal Warrior Boost": {
+   "Enhanced Royal Warrior": {
     "primitive": "Surge",
     "rated": false,
     "book_version": "3.5.3",
@@ -2212,12 +2240,12 @@
      "surge_low": 5
     }
    },
-   "Royal Warrior Boost Aura": {
+   "Enhanced Royal Warrior Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Royal Warrior Boost"
+     "grants": "Enhanced Royal Warrior"
     }
    },
    "Shielded": {
@@ -2800,7 +2828,7 @@
      "over_in": 9
     }
    },
-   "Sturdy Boost": {
+   "Enhanced Sturdy": {
     "primitive": "Shielded",
     "rated": false,
     "book_version": "3.5.3",
@@ -2809,12 +2837,12 @@
      "upgrades": "Sturdy"
     }
    },
-   "Sturdy Boost Aura": {
+   "Enhanced Sturdy Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Sturdy Boost"
+     "grants": "Enhanced Sturdy"
     }
    },
    "Swift": {
@@ -3034,7 +3062,7 @@
      "applies_charged": true
     }
    },
-   "Empyrean Spirit Boost": {
+   "Enhanced Empyrean Spirit": {
     "primitive": "Evasive",
     "rated": false,
     "book_version": "3.5.3",
@@ -3042,12 +3070,12 @@
      "hit_penalty": 1
     }
    },
-   "Empyrean Spirit Boost Aura": {
+   "Enhanced Empyrean Spirit Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Empyrean Spirit Boost"
+     "grants": "Enhanced Empyrean Spirit"
     }
    },
    "Ethereal": {
@@ -3260,7 +3288,7 @@
      "applies_charged": true
     }
    },
-   "Changebound Boost": {
+   "Enhanced Changebound": {
     "primitive": "Stealth",
     "rated": false,
     "book_version": "3.5.2",
@@ -3341,15 +3369,15 @@
     }
    },
    "Lustbound": {
-    "primitive": "Royal Legion",
+    "primitive": "Quick",
     "rated": false,
-    "book_version": "3.5.2",
+    "book_version": "3.6.0",
     "params": {
-     "range_bonus_in": 4,
-     "charge_mod": 2
+     "advance_mod": 1,
+     "rush_mod": 2
     }
    },
-   "Lustbound Boost": {
+   "Enhanced Lustbound": {
     "primitive": "Royal Legion",
     "rated": false,
     "book_version": "3.5.2",
@@ -3447,7 +3475,7 @@
      "all_models": true
     }
    },
-   "Plaguebound Boost": {
+   "Enhanced Plaguebound": {
     "primitive": "Regeneration",
     "rated": false,
     "book_version": "3.5.2",
@@ -3631,7 +3659,7 @@
      "bypass_regen": false
     }
    },
-   "Mischievous Boost": {
+   "Enhanced Mischievous": {
     "primitive": "Bane",
     "rated": false,
     "book_version": "3.5.3",
@@ -3642,12 +3670,12 @@
      "upgrades": "Mischievous"
     }
    },
-   "Mischievous Boost Aura": {
+   "Enhanced Mischievous Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Mischievous Boost"
+     "grants": "Enhanced Mischievous"
     }
    },
    "Piercing Fighter": {
@@ -3881,7 +3909,7 @@
      "bonus_hits_per_six": 1
     }
    },
-   "Lucky Boost": {
+   "Enhanced Lucky": {
     "primitive": "Surge",
     "rated": false,
     "book_version": "3.5.3",
@@ -3891,12 +3919,12 @@
      "over_in": 9
     }
    },
-   "Lucky Boost Aura": {
+   "Enhanced Lucky Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Lucky Boost"
+     "grants": "Enhanced Lucky"
     }
    },
    "Melee Evasion": {
@@ -4062,7 +4090,7 @@
      "over_in": 9
     }
    },
-   "Havocbound Boost": {
+   "Enhanced Havocbound": {
     "primitive": "Piercing Hunter",
     "rated": false,
     "book_version": "3.5.3",
@@ -4072,12 +4100,12 @@
      "upgrades": "Havocbound"
     }
    },
-   "Havocbound Boost Aura": {
+   "Enhanced Havocbound Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Havocbound Boost"
+     "grants": "Enhanced Havocbound"
     }
    },
    "Increased Shooting Range Aura": {
@@ -4292,7 +4320,7 @@
      "over_in": 9
     }
    },
-   "Havocbound Boost": {
+   "Enhanced Havocbound": {
     "primitive": "Piercing Hunter",
     "rated": false,
     "book_version": "3.5.3",
@@ -4302,12 +4330,12 @@
      "upgrades": "Havocbound"
     }
    },
-   "Havocbound Boost Aura": {
+   "Enhanced Havocbound Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Havocbound Boost"
+     "grants": "Enhanced Havocbound"
     }
    },
    "Piercing Warrior": {
@@ -4488,15 +4516,15 @@
     }
    },
    "Highborn": {
-    "primitive": "Quick",
+    "primitive": "Royal Legion",
     "rated": false,
-    "book_version": "3.5.3",
+    "book_version": "3.6.0",
     "params": {
-     "advance_mod": 2,
-     "rush_mod": 2
+     "range_bonus_in": 4,
+     "charge_mod": 2
     }
    },
-   "Highborn Boost": {
+   "Enhanced Highborn": {
     "primitive": "Fast",
     "rated": false,
     "book_version": "3.5.3",
@@ -4506,12 +4534,12 @@
      "upgrades": "Highborn"
     }
    },
-   "Highborn Boost Aura": {
+   "Enhanced Highborn Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Highborn Boost"
+     "grants": "Enhanced Highborn"
     }
    },
    "Piercing Tag": {
@@ -4753,7 +4781,7 @@
      "trigger": "combat"
     }
    },
-   "Hold the Line Boost": {
+   "Enhanced Hold the Line": {
     "primitive": "Banner",
     "rated": false,
     "book_version": "3.5.3",
@@ -4762,12 +4790,12 @@
      "trigger": "combat"
     }
    },
-   "Hold the Line Boost Buff": {
+   "Enhanced Hold the Line Buff": {
     "primitive": "Utility Buff",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants_rule": "Hold the Line Boost",
+     "grants_rule": "Enhanced Hold the Line",
      "target": "friendly",
      "max_targets": 1,
      "range_in": 12,
@@ -4907,7 +4935,7 @@
      "all_models": true
     }
    },
-   "Angelic Blessing Boost": {
+   "Enhanced Angelic Blessing": {
     "primitive": "Regeneration",
     "rated": false,
     "book_version": "3.5.3",
@@ -4917,12 +4945,12 @@
      "all_models": true
     }
    },
-   "Angelic Blessing Boost Buff": {
+   "Enhanced Angelic Blessing Buff": {
     "primitive": "Utility Buff",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants_rule": "Angelic Blessing Boost",
+     "grants_rule": "Enhanced Angelic Blessing",
      "target": "friendly",
      "max_targets": 1,
      "range_in": 12,
@@ -5143,15 +5171,15 @@
     }
    },
    "Lustbound": {
-    "primitive": "Royal Legion",
+    "primitive": "Quick",
     "rated": false,
-    "book_version": "3.5.3",
+    "book_version": "3.6.0",
     "params": {
-     "range_bonus_in": 4,
-     "charge_mod": 2
+     "advance_mod": 1,
+     "rush_mod": 2
     }
    },
-   "Lustbound Boost": {
+   "Enhanced Lustbound": {
     "primitive": "Royal Legion",
     "rated": false,
     "book_version": "3.5.3",
@@ -5161,12 +5189,12 @@
      "upgrades": "Lustbound"
     }
    },
-   "Lustbound Boost Aura": {
+   "Enhanced Lustbound Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Lustbound Boost"
+     "grants": "Enhanced Lustbound"
     }
    },
    "Melee Evasion": {
@@ -5496,7 +5524,7 @@
      "charge_mod": 2
     }
    },
-   "Royal Legion Boost": {
+   "Enhanced Royal Legion": {
     "primitive": "Royal Legion",
     "rated": false,
     "book_version": "3.5.3",
@@ -5505,7 +5533,7 @@
      "charge_mod": 2
     }
    },
-   "Royal Legion Boost Aura": {
+   "Enhanced Royal Legion Aura": {
     "primitive": "Royal Legion",
     "rated": false,
     "book_version": "3.5.3",
@@ -5585,7 +5613,7 @@
      "extra_wound_per_save_one": 1
     }
    },
-   "Destroyer Boost": {
+   "Enhanced Destroyer": {
     "primitive": "Shred",
     "rated": false,
     "book_version": "3.5.3",
@@ -5596,12 +5624,12 @@
      "over_in": 9
     }
    },
-   "Destroyer Boost Aura": {
+   "Enhanced Destroyer Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Destroyer Boost"
+     "grants": "Enhanced Destroyer"
     }
    },
    "Destructive": {
@@ -5657,6 +5685,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
+     "ap_bonus": 2,
      "bonus_hits_per_six": 1,
      "surge_low": 5
     }
@@ -5826,7 +5855,7 @@
      "bonus_hits_per_six": 1
     }
    },
-   "Ferocious Boost": {
+   "Enhanced Ferocious": {
     "primitive": "Surge",
     "rated": false,
     "book_version": "3.5.3",
@@ -5836,12 +5865,12 @@
      "over_in": 9
     }
    },
-   "Ferocious Boost Aura": {
+   "Enhanced Ferocious Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Ferocious Boost"
+     "grants": "Enhanced Ferocious"
     }
    },
    "Hit & Run": {
@@ -6143,7 +6172,7 @@
      "over_in": 9
     }
    },
-   "Ossified Boost": {
+   "Enhanced Ossified": {
     "primitive": "Fortified",
     "rated": false,
     "book_version": "3.5.3",
@@ -6151,12 +6180,12 @@
      "incoming_ap_reduction": 1
     }
    },
-   "Ossified Boost Aura": {
+   "Enhanced Ossified Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Ossified Boost"
+     "grants": "Enhanced Ossified"
     }
    },
    "Piercing Shooter": {
@@ -6304,6 +6333,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
+     "ap_bonus": 2,
      "bonus_hits_per_six": 1,
      "surge_low": 5
     }
@@ -6317,7 +6347,7 @@
      "all_models": true
     }
    },
-   "Plaguebound Boost": {
+   "Enhanced Plaguebound": {
     "primitive": "Regeneration",
     "rated": false,
     "book_version": "3.5.3",
@@ -6327,12 +6357,12 @@
      "upgrades": "Plaguebound"
     }
    },
-   "Plaguebound Boost Aura": {
+   "Enhanced Plaguebound Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Plaguebound Boost"
+     "grants": "Enhanced Plaguebound"
     }
    },
    "Precision Fighter Buff": {
@@ -6657,13 +6687,13 @@
    "Scurry": {
     "primitive": "Quick",
     "rated": false,
-    "book_version": "3.5.3",
+    "book_version": "3.6.0",
     "params": {
-     "advance_mod": 2,
+     "advance_mod": 1,
      "rush_mod": 2
     }
    },
-   "Scurry Boost": {
+   "Enhanced Scurry": {
     "primitive": "Fast",
     "rated": false,
     "book_version": "3.5.3",
@@ -6673,12 +6703,12 @@
      "upgrades": "Scurry"
     }
    },
-   "Scurry Boost Aura": {
+   "Enhanced Scurry Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Scurry Boost"
+     "grants": "Enhanced Scurry"
     }
    },
    "Shielded": {
@@ -6779,7 +6809,7 @@
      "applies_charged": true
     }
    },
-   "Changebound Boost": {
+   "Enhanced Changebound": {
     "primitive": "Stealth",
     "rated": false,
     "book_version": "3.5.3",
@@ -6789,12 +6819,12 @@
      "upgrades": "Changebound"
     }
    },
-   "Changebound Boost Aura": {
+   "Enhanced Changebound Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Changebound Boost"
+     "grants": "Enhanced Changebound"
     }
    },
    "Fearless Aura": {
@@ -6960,15 +6990,15 @@
     }
    },
    "Lustbound": {
-    "primitive": "Royal Legion",
+    "primitive": "Quick",
     "rated": false,
-    "book_version": "3.5.3",
+    "book_version": "3.6.0",
     "params": {
-     "range_bonus_in": 4,
-     "charge_mod": 2
+     "advance_mod": 1,
+     "rush_mod": 2
     }
    },
-   "Lustbound Boost": {
+   "Enhanced Lustbound": {
     "primitive": "Royal Legion",
     "rated": false,
     "book_version": "3.5.3",
@@ -6978,12 +7008,12 @@
      "upgrades": "Lustbound"
     }
    },
-   "Lustbound Boost Aura": {
+   "Enhanced Lustbound Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Lustbound Boost"
+     "grants": "Enhanced Lustbound"
     }
    },
    "Melee Evasion": {
@@ -7206,7 +7236,7 @@
      "all_models": true
     }
    },
-   "Plaguebound Boost": {
+   "Enhanced Plaguebound": {
     "primitive": "Regeneration",
     "rated": false,
     "book_version": "3.5.3",
@@ -7216,12 +7246,12 @@
      "upgrades": "Plaguebound"
     }
    },
-   "Plaguebound Boost Aura": {
+   "Enhanced Plaguebound Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Plaguebound Boost"
+     "grants": "Enhanced Plaguebound"
     }
    },
    "Precision Attacks Buff": {
@@ -7671,7 +7701,7 @@
      "extra_attack": true
     }
    },
-   "Primal Boost": {
+   "Enhanced Primal": {
     "primitive": "Surge",
     "rated": false,
     "book_version": "3.5.3",
@@ -7681,12 +7711,12 @@
      "surge_low": 5
     }
    },
-   "Primal Boost Buff": {
+   "Enhanced Primal Buff": {
     "primitive": "Utility Buff",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants_rule": "Primal Boost",
+     "grants_rule": "Enhanced Primal",
      "range_in": 12,
      "target": "friendly",
      "once": true
@@ -7949,7 +7979,7 @@
      "melee_floor_in": 6
     }
    },
-   "Shadowborn Boost": {
+   "Enhanced Shadowborn": {
     "primitive": "Ranged Shrouding",
     "rated": false,
     "book_version": "3.5.3",
@@ -7960,12 +7990,12 @@
      "melee_floor_in": 6
     }
    },
-   "Shadowborn Boost Aura": {
+   "Enhanced Shadowborn Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Shadowborn Boost"
+     "grants": "Enhanced Shadowborn"
     }
    },
    "Shrouded": {
@@ -8041,7 +8071,7 @@
      "over_in": 9
     }
    },
-   "Buccaneer Boost": {
+   "Enhanced Buccaneer": {
     "primitive": "Shot Modifier",
     "rated": false,
     "book_version": "3.5.3",
@@ -8049,12 +8079,12 @@
      "hit_bonus": 1
     }
    },
-   "Buccaneer Boost Aura": {
+   "Enhanced Buccaneer Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Buccaneer Boost"
+     "grants": "Enhanced Buccaneer"
     }
    },
    "Casting Debuff": {
@@ -8260,7 +8290,7 @@
      "all_models": true
     }
    },
-   "Cursed Undead Boost": {
+   "Enhanced Cursed Undead": {
     "primitive": "Regeneration",
     "rated": false,
     "book_version": "3.5.3",
@@ -8269,12 +8299,12 @@
      "all_models": true
     }
    },
-   "Cursed Undead Boost Buff": {
+   "Enhanced Cursed Undead Buff": {
     "primitive": "Utility Buff",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants_rule": "Cursed Undead Boost",
+     "grants_rule": "Enhanced Cursed Undead",
      "target": "friendly",
      "max_targets": 1,
      "range_in": 12,

@@ -135,18 +135,18 @@ use super::*;
         let base = pin_unit("aof", "dragon_empire", &["Royal Warrior"], e);
         assert!(base.melee[0].surge_attack, "the base's extra-attack-die facet");
         assert_eq!(base.melee[0].surge_attack_low, 6, "unboosted, the natural 6s pay");
-        let boosted = pin_unit("aof", "dragon_empire", &["Royal Warrior", "Royal Warrior Boost"], e);
+        let boosted = pin_unit("aof", "dragon_empire", &["Royal Warrior", "Enhanced Royal Warrior"], e);
         assert_eq!(
             boosted.melee[0].surge_attack_low, 5,
             "the Boost entry's own surge_low, read only beside the base"
         );
         let via_aura =
-            pin_unit("aof", "dragon_empire", &["Royal Warrior Boost Aura", "Royal Warrior"], e);
+            pin_unit("aof", "dragon_empire", &["Enhanced Royal Warrior Aura", "Royal Warrior"], e);
         assert_eq!(
             via_aura.melee[0].surge_attack_low, 5,
             "the Aura-Channel grant rides the same upgrade arm"
         );
-        let aura_alone = pin_unit("aof", "dragon_empire", &["Royal Warrior Boost Aura"], e);
+        let aura_alone = pin_unit("aof", "dragon_empire", &["Enhanced Royal Warrior Aura"], e);
         assert!(
             !aura_alone.melee[0].surge_attack,
             "no base rule to upgrade: the Boost alone stamps nothing"
@@ -194,14 +194,14 @@ use super::*;
             Some([2.0, 6.0]),
             "the entry's melee_move_penalty_in/melee_floor_in"
         );
-        let boost = pin_unit("aof", "shadow_stalkers", &["Shadowborn Boost"], e);
+        let boost = pin_unit("aof", "shadow_stalkers", &["Enhanced Shadowborn"], e);
         assert_eq!(boost.ctx.ranged_shroud_penalty_in, 8.0, "the Boost's own -8\"");
         assert_eq!(
-            pin_capture("aof", "shadow_stalkers", &["Shadowborn Boost"], e).shroud,
+            pin_capture("aof", "shadow_stalkers", &["Enhanced Shadowborn"], e).shroud,
             Some([4.0, 6.0]),
             "the Boost's widened melee-move penalty"
         );
-        let via_aura = pin_unit("aof", "shadow_stalkers", &["Shadowborn Boost Aura"], e);
+        let via_aura = pin_unit("aof", "shadow_stalkers", &["Enhanced Shadowborn Aura"], e);
         assert_eq!(via_aura.ctx.ranged_shroud_penalty_in, 8.0, "the grant rides the same read");
         let plain = pin_unit("aof", "shadow_stalkers", &[], e);
         assert!(!plain.ctx.ranged_shrouding, "no rule, no shroud flag");
@@ -270,9 +270,9 @@ use super::*;
     /// range_bonus_in 4 / charge_mod 2 are the aura's numbers; the rule-less
     /// carrier stamps 0/0.
     #[test]
-    fn a_royal_legion_boost_aura_stamps_reach_and_charge_at_the_current_epoch() {
+    fn an_enhanced_royal_legion_aura_stamps_reach_and_charge_at_the_current_epoch() {
         let e = crate::acts::CURRENT_RULES_EPOCH;
-        let us = pin_unit("aof", "mummified_undead", &["Royal Legion Boost Aura"], e);
+        let us = pin_unit("aof", "mummified_undead", &["Enhanced Royal Legion Aura"], e);
         assert_eq!(
             (us.royal_legion_range_in, us.royal_legion_charge_in),
             (4.0, 2.0),

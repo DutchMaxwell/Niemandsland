@@ -3142,6 +3142,13 @@ func transport_used_spaces(transport: GameUnit) -> int:
 	return used
 
 
+## Embark reach (metres, base edge to base edge): one alive model of the joined unit standing this
+## close to a friendly transport model may climb in. Rules 3.6 (EPOCH_73_V36) widens it to 2", the
+## epoch-72 leg keeps the table's old 1". The one selector; the radial's Embark offer reads it.
+static func embark_reach_m() -> float:
+	return 2.0 * 0.0254 if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else 0.0254
+
+
 ## Embark gate — {ok: bool, reason: String}. The reason strings are English UI/battle-log text
 ## (the game has no i18n). Placement legality (the one-model-reaches move, the 6" exit) is the
 ## ACTION layer's job; this gate is pure capacity/state truth.
@@ -3155,6 +3162,10 @@ func can_embark(unit: GameUnit, transport: GameUnit) -> Dictionary:
 		return {"ok": false, "reason": "%s is destroyed" % transport.get_name()}
 	if unit == transport:
 		return {"ok": false, "reason": "a transport cannot embark itself"}
+	# Only a friendly transport takes cargo, at every epoch: the radial only ever listed the unit's own
+	# transports, but this gate never asked, so any other caller could load an enemy vehicle.
+	if int(unit.unit_properties.get("player_id", 0)) != int(transport.unit_properties.get("player_id", 0)):
+		return {"ok": false, "reason": "%s belongs to the other player" % transport.get_name()}
 	if transport_of(unit) != null:
 		return {"ok": false, "reason": "%s is already embarked" % unit.get_name()}
 	if transport_of(transport) != null:
@@ -3387,12 +3398,14 @@ func _spill_destroyed_transport(tr: GameUnit) -> void:
 ## affected model, and a Tough(X) model "rolls as many dice as its Tough value"). Same count the
 ## movement path builds into report["dangerous_dice"] (SoloController.last_dangerous_dice), pulled
 ## out here so the destroyed-transport spill asks the rule the same question the move does.
-## The unit's OWN alive models only — a joined hero is its own GameUnit and takes its own test.
+## Below EPOCH_73_V36 the unit's OWN alive models only — a joined hero is its own GameUnit and takes its own
+## test. UX-20 (rules 3.6): from 73 the whole joined unit takes ONE test, so its heroes' models count too.
 static func dangerous_dice_for(unit: GameUnit) -> int:
 	if unit == null:
 		return 0
 	var dice := 0
-	for m in unit.get_alive_models():
+	var whole: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
+	for m in (unit.get_alive_models_with_attached() if whole else unit.get_alive_models()):
 		dice += maxi(1, int((m as ModelInstance).wounds_max))
 	return dice
 

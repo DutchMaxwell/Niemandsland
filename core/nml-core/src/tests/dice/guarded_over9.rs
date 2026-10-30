@@ -32,7 +32,7 @@ use super::*;
         let blade = [ShootProfile { name: "Blade".into(), attacks: 20, count: 1, ..Default::default() }];
         let melee = |charging: bool, exact: bool| {
             resolve_melee_leg(&[striker(&blade, &[0], &[20], &att)], &guarded(4), "b", charging, true, true,
-                true, 10.0, false, exact, &mut Tray::seeded(3))
+                true, 10.0, false, exact, false, &mut Tray::seeded(3))
         };
         let m = melee(true, true);
         assert_eq!((save_target(&m), m.unported.contains(&"guarded_over9")), (3, false));
