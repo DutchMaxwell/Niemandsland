@@ -90,7 +90,7 @@ fn the_bearers_share_and_the_rest_land_the_tables_wounds_at_epoch_73() {
     let r = resolve_volley_with_tray(&[striker(&p, &[0], &[10], &att)], &def, "Target", 12.0, 12.0, true, true, true, false, &mut tray);
     assert_eq!(r.wounds, want, "bearer share at AP(+1), the rest at AP(0)");
     assert!(
-        r.log.iter().any(|l| l == &format!("Sergeant: Striker strikes {sgt} hits with AP(+1)")),
+        r.log.iter().any(|l| l == &format!("Sergeant: Striker strikes {sgt} hit{} with AP(+1)", if sgt == 1 { "" } else { "s" })),
         "log: {:?}", r.log
     );
 }
