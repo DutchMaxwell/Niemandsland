@@ -5267,17 +5267,8 @@ pub(crate) fn profiles_in_range(weapons: &[Weapon], dist_in: f64) -> Vec<ShootPr
     merge_identical(raw)
 }
 
-/// `AiShooting.melee_profiles` ai_shooting.gd:44-56 — every range-0 weapon, also
-/// UNSTAMPED. Strafing is NOT excluded here: that filter lives in
-/// `profiles_in_range` alone, and a melee weapon never carries the move-through
-/// trigger. The epoch-free reading (no Assault copy), kept for callers that
-/// replay a pre-epoch record; the row encoder now reads `melee_profiles_at`.
-#[allow(dead_code)]
-pub(crate) fn melee_profiles(weapons: &[Weapon]) -> Vec<ShootProfile> {
-    melee_profiles_at(weapons, 0)
-}
-
-/// `melee_profiles` at the record's epoch. MEL-01 (D-ASSAULT, `EPOCH_73_V36`):
+/// The melee list at the record's epoch — `AiShooting.melee_profiles`
+/// ai_shooting.gd:44-56. MEL-01 (D-ASSAULT, `EPOCH_73_V36`):
 /// a ranged weapon carrying Assault also yields a melee copy, in weapon order,
 /// at range 0 with its printed range kept in `printed_range`.
 pub(crate) fn melee_profiles_at(weapons: &[Weapon], rules_epoch: u32) -> Vec<ShootProfile> {
