@@ -1023,3 +1023,8 @@ mod v36_shoot;
 mod v36_shoot_rows;
 mod v36_ux;
 mod v36_w1;
+mod v36_w1_4b_defense;
+mod v36_w1_4b_evasion;
+mod v36_w1_4b_regen;
+mod v36_w1_4b_stealth;
+mod v36_w1_7;
