@@ -7097,16 +7097,40 @@ static func _reanimation_is_hero(model: ModelInstance) -> bool:
 #
 # Maintainer readings pinned here so they are not re-litigated at each call site:
 #  - "IS Shaken", not "becomes Shaken": the offer stands for as long as the unit is Shaken.
-#  - The landing zone is LITERAL — 12" of ANY edge, the enemy's included. The book names a minimum
-#    distance from enemies for Ambush and deliberately does not here, so neither do we.
+#  - The landing zone is LITERAL — the band of ANY edge, the enemy's included. Below rules epoch 73
+#    (3.5) the book names no enemy distance here, so we use none; from 73 (3.6) the copy also stands
+#    over 9" from every enemy model, the Ambush ring.
 #  - "all models have this rule": a joined hero is one of the unit's models, so a hero without the
 #    rule blocks it — loudly, with a log line, never silently.
 #  - The copy loses the rule for real (gone from special_rules, gone from the unit card), rather than
 #    being tracked as an invisible "already used" flag.
 
 const REINFORCEMENT_RULE := "Reinforcement"
-## The landing strip: the copy must stand FULLY within this many inches of some table edge.
-const REINFORCEMENT_EDGE_IN := 12.0
+## The landing strip: the copy must stand FULLY within this many inches of some table edge. The map's
+## `within_in` rules (3.6: 9"); this is only the fallback for a missing map.
+const REINFORCEMENT_EDGE_IN := 9.0
+
+
+## The landing strip's depth for `unit` in metres, read from the map's `within_in`.
+static func reinforcement_edge_m(unit: GameUnit) -> float:
+	return float(RulesRegistry.unit_param(unit, REINFORCEMENT_RULE, "within_in", REINFORCEMENT_EDGE_IN)) * INCHES_TO_METERS
+
+
+## The no-go ring around every enemy model for a returning copy, in metres: 0 below rules epoch 73
+## (3.5 named no enemy distance), the Ambush ring (9") from 73 (3.6).
+static func reinforcement_enemy_ring_m() -> float:
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		return AMBUSH_MIN_ENEMY_DIST_M
+	return 0.0
+
+
+## Where the copy may land, in the battle log's words: `within 9" of a table edge`, plus
+## ` and over 9" from every enemy` once the ring applies.
+static func reinforcement_zone_text(band_m: float) -> String:
+	var text := "within %d\" of a table edge" % roundi(band_m / INCHES_TO_METERS)
+	if reinforcement_enemy_ring_m() > 0.0:
+		text += " and over %d\" from every enemy" % roundi(reinforcement_enemy_ring_m() / INCHES_TO_METERS)
+	return text
 
 ## The chain that must ALL carry the rule: the unit plus every attached hero.
 static func reinforcement_chain(unit: GameUnit) -> Array:
