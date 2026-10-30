@@ -62,5 +62,4 @@ mod mor_12 {
             assert_eq!(reports(&great_sergeant("", e), "Sergeant"), 0, "epoch {e}: no rule, no report");
         }
     }
-    }
 }
