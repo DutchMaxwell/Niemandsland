@@ -1635,7 +1635,7 @@ pub fn resolve_melee_with_tray(
 ) -> ShootResult {
     resolve_melee_leg(
         strikers, def, def_owner, charging, cond_ap_dice, shred_alias_dice,
-        false, 0.0, false, false, tray,
+        false, 0.0, false, false, false, tray,
     )
 }
 
@@ -1654,6 +1654,8 @@ pub fn resolve_melee_leg(
     charge_from_in: f64,
     screened_melee: bool,
     tray_exact: bool,
+    // EPOCH_73_V36 — the strike rolls every hit before any save (see the chunk loop below).
+    hits_first: bool,
     tray: &mut Tray,
 ) -> ShootResult {
     // The alias's charged leg fires on the CHARGER's strikes only — a
@@ -1719,7 +1721,16 @@ pub fn resolve_melee_leg(
         if gp != 0 && gp_fired.iter().all(|(o, _)| *o != sh.owner) {
             gp_fired.push((sh.owner, gp));
         }
-        for (k, &pi) in sh.keep.iter().enumerate() {
+    }
+    // EPOCH_73_V36 — one strike is ONE hits event: pass 1 rolls every
+    // member's every profile to its hit count, pass 2 then runs each
+    // profile's saves, landing and Bloodthirsty extras in the same order.
+    // Below the gate each chunk is one profile: today's interleaved draws.
+    let order: Vec<(&Shooter<'_>, usize, usize)> = strikers.iter()
+        .flat_map(|sh| sh.keep.iter().enumerate().map(move |(k, &pi)| (sh, k, pi))).collect();
+    for part in order.chunks(if hits_first { order.len().max(1) } else { 1 }) {
+        let mut pending = Vec::new();
+        for &(sh, k, pi) in part {
             let p = &sh.profiles[pi];
             let n = sh.attacks[k];
             if n <= 0 {
@@ -1832,6 +1843,10 @@ pub fn resolve_melee_leg(
             if hits <= 0 {
                 continue;
             }
+            pending.push((sh, p, faces, hits, count_target, versatile_ap));
+        }
+        // MEL-07c hook — Parry reads `pending` here: every hit rolled, no save yet.
+        for (sh, p, faces, hits, count_target, versatile_ap) in pending {
             let on6 = if p.on6_ap > 0 {
                 p.on6_ap
             } else if p.rending || p.destructive || sh.att.rending_grant {

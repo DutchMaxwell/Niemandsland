@@ -7835,15 +7835,28 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 	var m_groups: Array = _solo_attack_groups(striker, 0.0, true, defender)
 	if filter != SoloStrike.COUNTER_ONLY and not m_groups.is_empty():
 		m_groups = m_groups + _solo_takedown_bonus_groups(striker, true)
+	# EPOCH_73_V36 — one strike is ONE hits event (the core's `resolve_melee_leg` chunk loop): pass 1 rolls
+	# every group's every profile to its hit count, pass 2 then runs each profile's saves, landing and
+	# Bloodthirsty extras in the same order. Below the gate each chunk is one profile: today's interleaved
+	# order. Items are [group, profile or null, first of its group] so the Shaken line keeps its place.
+	var m_items: Array = []
 	for grp in m_groups:
-		var group := grp as Dictionary
-		var base_quality: int = int(group.get("quality", 4))
-		var fatigued: bool = bool(group.get("fatigued", false))
-		if bool(group.get("shaken", false)) and battle_log != null:
-			battle_log.log_event(BattleLog.Category.COMBAT,
-				"Shaken: %s strikes back counting as fatigued (6+)" % str(group.get("name", "?")), true)
-		for p in group.get("profiles", []):
-			var profile := _solo_bridge_granted_flags(group.get("member"), p as Dictionary, defender)
+		var g_profiles: Array = (grp as Dictionary).get("profiles", [])
+		for gi in maxi(g_profiles.size(), 1):
+			m_items.append([grp, g_profiles[gi] if gi < g_profiles.size() else null, gi == 0])
+	var m_chunk: int = maxi(m_items.size(), 1) if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else 1
+	for m_from in range(0, m_items.size(), m_chunk):
+		var m_pending: Array = []
+		for item in m_items.slice(m_from, m_from + m_chunk):
+			var group := item[0] as Dictionary
+			var base_quality: int = int(group.get("quality", 4))
+			var fatigued: bool = bool(group.get("fatigued", false))
+			if bool(item[2]) and bool(group.get("shaken", false)) and battle_log != null:
+				battle_log.log_event(BattleLog.Category.COMBAT,
+					"Shaken: %s strikes back counting as fatigued (6+)" % str(group.get("name", "?")), true)
+			if item[1] == null:
+				continue
+			var profile := _solo_bridge_granted_flags(group.get("member"), item[1] as Dictionary, defender)
 			if int(profile.get("attacks", 0)) <= 0:
 				continue
 			if filter == SoloStrike.COUNTER_ONLY and not bool(profile.get("counter", false)):
@@ -7935,6 +7948,23 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 					str(group.get("name", "?")), str(profile.get("name", "?")), defender.get_name(), hits, ("" if hits == 1 else "s")], true)
 			if hits <= 0:
 				continue
+			m_pending.append([group, profile, td_pick, td_ctx, p_defense, strike_unit, faces, hits, m_takedown,
+				v_ap, to_hit, to_hit_raw, roll_owner])
+		# MEL-07c hook — Parry reads `m_pending` here: every hit rolled, no save yet.
+		for pend in m_pending:
+			var group := pend[0] as Dictionary
+			var profile := pend[1] as Dictionary
+			var td_pick: Dictionary = pend[2]
+			var td_ctx: Dictionary = pend[3]
+			var p_defense: int = pend[4]
+			var strike_unit: GameUnit = pend[5]
+			var faces: Array = pend[6]
+			var hits: int = pend[7]
+			var m_takedown: bool = pend[8]
+			var v_ap: int = pend[9]
+			var to_hit: int = pend[10]
+			var to_hit_raw: int = pend[11]
+			var roll_owner: String = pend[12]
 			var eff: Dictionary = _solo_thrust_profile(profile, charging)   # AP(+1) on charge
 			if uf_ap > 0 or v_ap > 0 or extra_ap > 0:   # Unpredictable Fighter / Versatile / Reckless AP (never mutate source)
 				eff = eff.duplicate()
