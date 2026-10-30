@@ -426,10 +426,12 @@ pub fn versatile_best_mode(hit_target: i64, defense: i64, ap: i64, bane: bool) -
 /// `charge_only` is an extra gate on top of the condition (Melee Slayer), and the
 /// `ranged_over_or_charge` GATE (Slayer) adds "charging OR shot from over 9 in".
 /// `dist_in < 0` means the caller has no range context: the ranged legs stay shut.
-pub fn conditional_ap_bonus(
+/// Rules 3.6 hook (no 3.5 entry spells these, so no epoch gate):
+///   * `over_half_range` — shooting from beyond half the weapon's range
+///   * `def_5_6`         — the target's Defense value is 5+ or 6+
+pub fn conditional_ap_bonus_vs(
     c: &CondAp,
-    target_tough: i64,
-    target_defense: i64,
+    t: &CondApTarget,
     is_charging: bool,
     dist_in: f64,
     melee: bool,
@@ -458,8 +460,8 @@ pub fn conditional_ap_bonus(
         // (the FROZEN `EPOCH_6_TABLE_RULES`), so every pre-epoch-6 replay
         // stays byte-exact.
         "always" => c.ap_bonus,
-        "vs_tough_ge" if target_tough >= c.threshold => c.ap_bonus,
-        "vs_armor" if target_defense <= c.threshold => c.ap_bonus,
+        "vs_tough_ge" if t.tough >= c.threshold => c.ap_bonus,
+        "vs_armor" if t.defense <= c.threshold => c.ap_bonus,
         "on_charge" if is_charging => c.ap_bonus,
         "ranged_over" if !melee && dist_in > c.over_in => c.ap_bonus,
         // Wave 4 (rules-wave4-condap) — "Point-Blank Piercing"'s printed
@@ -473,7 +475,47 @@ pub fn conditional_ap_bonus(
         "ranged_within" if !melee && c.within_in > 0.0 && dist_in >= 0.0 && dist_in <= c.within_in => {
             c.ap_bonus
         }
+        // Exactly half the range is not beyond it; no range or no distance stays shut.
+        "over_half_range" if !melee && t.weapon_range_in > 0.0 && dist_in >= 0.0 && dist_in > t.weapon_range_in / 2.0 => {
+            c.ap_bonus
+        }
+        "def_5_6" if t.defense >= 5 => c.ap_bonus,
         _ => 0,
+    }
+}
+
+/// The conditional-AP check's view of the target, plus the firing weapon's
+/// range `over_half_range` measures against. `Default` knows nothing, so every
+/// leg reading it stays shut; later 3.6 target conditions add their fields here.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct CondApTarget {
+    pub tough: i64,
+    pub defense: i64,
+    /// The firing weapon's range in inches; 0 = a melee strike or no range known.
+    pub weapon_range_in: f64,
+}
+
+impl CondApTarget {
+    /// The target as the dice and EV folds see it, shot at with a `weapon_range_in` weapon.
+    pub fn of(def: &Ctx, weapon_range_in: f64) -> Self {
+        Self { tough: def.tough.max(1), defense: def.defense, weapon_range_in }
+    }
+}
+
+/// [`conditional_ap_bonus_vs`] without a weapon range: the melee leg and the
+/// granted conditions, whose legs never measure one.
+pub fn conditional_ap_bonus(c: &CondAp, target_tough: i64, target_defense: i64, is_charging: bool, dist_in: f64, melee: bool) -> i64 {
+    let t = CondApTarget { tough: target_tough, defense: target_defense, weapon_range_in: 0.0 };
+    conditional_ap_bonus_vs(c, &t, is_charging, dist_in, melee)
+}
+
+/// Rules-must-log: the words naming a 3.6 condition that fired, "" for every
+/// older spelling (their log lines stay byte-identical).
+pub fn cond_ap_why(condition: &str) -> &'static str {
+    match condition {
+        "over_half_range" => " (target beyond half the weapon's range)",
+        "def_5_6" => " (target defends on 5+ or 6+)",
+        _ => "",
     }
 }
 
@@ -641,7 +683,7 @@ pub fn profile_ev(
     // `def.defense` is the RAW context Defense, not the ladder above.
     let mut ap = p.ap + versatile_ap;
     for c in &p.cond_ap {
-        ap += conditional_ap_bonus(c, def.tough.max(1), def.defense, false, dist_in, melee);
+        ap += conditional_ap_bonus_vs(c, &CondApTarget::of(def, p.range as f64), false, dist_in, melee);
     }
     let bane = p.bane;
     let fort = def.fortified;

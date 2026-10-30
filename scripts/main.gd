@@ -8226,8 +8226,10 @@ func _solo_resolve_saves(striker: GameUnit, defender: GameUnit, weapon_name: Str
 	for cp in cond_parts:
 		cond_ap += int((cp as Dictionary)["bonus"])
 		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.COMBAT, "%s: AP(+%d) against %s" % [
-				str((cp as Dictionary)["name"]), int((cp as Dictionary)["bonus"]), defender.get_name()], true)
+			var why := str((cp as Dictionary).get("why", ""))
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s: AP(+%d) against %s%s" % [
+				str((cp as Dictionary)["name"]), int((cp as Dictionary)["bonus"]), defender.get_name(),
+				"" if why.is_empty() else " (%s)" % why], true)
 	# EPOCH 23 INERT MARKS (MARK_FAMILY_SWEEP_2026-09-14): the Piercing
 	# Fighting/Shooting Mark's attackers-side grant — the mark's once-record on
 	# THIS defender (beneficiary "attackers", the entry's own scope) names
@@ -8921,6 +8923,8 @@ func _solo_conditional_ap_parts(profile: Dictionary, striker: GameUnit, defender
 	var faction := RulesRegistry.faction_of_unit(striker)
 	var d_tough := _solo_unit_tough(defender)
 	var d_defense := int(defender.unit_properties.get("defense", 4))
+	# Rules 3.6 hook: the weapon range over_half_range measures against (the core's CondApTarget twin).
+	var cx := {"weapon_range_in": float(profile.get("range", 0))}
 	var parts: Array = []
 	var seen := {}
 	# The "always" family (Havocbound Boost, GF/AoF 3.5.3: "always gets AP(+1) ... instead of only
@@ -8944,9 +8948,9 @@ func _solo_conditional_ap_parts(profile: Dictionary, striker: GameUnit, defender
 		# "or gate": a GATE-ONLY spec (Ranged Slayer) carries its range leg in "gate" with no
 		# "condition" — the EV stamp (AiEv.stamp_conditional_ap) accepts the same shape.
 		if params.has("condition") or params.has("gate"):
-			var b := AiCombatMath.conditional_ap_bonus(params, d_tough, d_defense, charging, dist_in, melee)
+			var b := AiCombatMath.conditional_ap_bonus(params, d_tough, d_defense, charging, dist_in, melee, cx)
 			if b > 0:
-				parts.append({"name": base, "bonus": b})
+				parts.append(_solo_cond_ap_part(base, b, params))
 	# MODEL-level family members (Slayer / Piercing Hunter: "when this model shoots…") sit on the UNIT,
 	# not the weapon — apply them once per profile too (deduped against the weapon's own rules).
 	for r in striker.get_special_rules():
@@ -8966,9 +8970,9 @@ func _solo_conditional_ap_parts(profile: Dictionary, striker: GameUnit, defender
 		if replaced.has(base):
 			continue   # its conditional legs are replaced -- the always leg above pays instead
 		if params.has("condition") or params.has("gate"):
-			var b := AiCombatMath.conditional_ap_bonus(params, d_tough, d_defense, charging, dist_in, melee)
+			var b := AiCombatMath.conditional_ap_bonus(params, d_tough, d_defense, charging, dist_in, melee, cx)
 			if b > 0:
-				parts.append({"name": base, "bonus": b})
+				parts.append(_solo_cond_ap_part(base, b, params))
 	# GH #325 — spell-granted conditional-AP rules (the defender's attackers-side token, e.g. Veil
 	# of Madness → Slayer) take the SAME registry-driven path: the lookup fires only where the
 	# striker's book actually fields the rule, deduped against the loops above.
@@ -8979,10 +8983,20 @@ func _solo_conditional_ap_parts(profile: Dictionary, striker: GameUnit, defender
 		seen[gname] = true
 		var gparams: Dictionary = RulesRegistry.lookup(system, faction, gname).get("params", {})
 		if gparams.has("condition") or gparams.has("gate"):
-			var gbonus := AiCombatMath.conditional_ap_bonus(gparams, d_tough, d_defense, charging, dist_in, melee)
+			var gbonus := AiCombatMath.conditional_ap_bonus(gparams, d_tough, d_defense, charging, dist_in, melee, cx)
 			if gbonus > 0:
-				parts.append({"name": gname, "bonus": gbonus})
+				parts.append(_solo_cond_ap_part(gname, gbonus, gparams))
 	return parts
+
+
+## One conditional-AP part {name, bonus}; a rules 3.6 condition adds its words ("why") so the battle-log
+## line names what fired. Older spellings keep the two-key shape.
+func _solo_cond_ap_part(rule_name: String, bonus: int, params: Dictionary) -> Dictionary:
+	var part := {"name": rule_name, "bonus": bonus}
+	var why := AiCombatMath.conditional_ap_why(params)
+	if not why.is_empty():
+		part["why"] = why
+	return part
 
 
 ## Whether the unit carries `rule` as its BASE name -- the table twin of the sim's has_exact_rule
