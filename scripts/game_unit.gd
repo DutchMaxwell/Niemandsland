@@ -269,9 +269,10 @@ func has_special_rule(rule: String) -> bool:
 	return false
 
 
-## Checks if this unit is a hero.
+## Checks if this unit is a hero. Rules 3.6 named heroes carry "Unique Hero" in place of "Hero", and it
+## counts as Hero for every purpose (join, hero morale, solo sims); the core's twin is unit.rs `is_hero`.
 func is_hero() -> bool:
-	return has_special_rule("Hero")
+	return has_special_rule("Hero") or has_special_rule("Unique Hero")
 
 
 # ===== Hero Attachment =====

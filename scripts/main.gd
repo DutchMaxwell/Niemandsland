@@ -10320,7 +10320,8 @@ func _solo_spawn_move_label(path: Array, arc_m: float, budget_in: float) -> void
 ## only counts as modeled where its system's books actually field a mapped primitive. The list below is
 ## used when the maps are absent (tests/dev trees without assets).
 const SOLO_MODELED_RULES: Array = ["AP", "Tough", "Deadly", "Takedown", "Relentless", "Blast", "Reliable",
-	"Regeneration", "Medical Training", "Bane", "Rending", "Lacerate", "Unstoppable", "Hero", "Fast", "Slow",
+	"Regeneration", "Medical Training", "Bane", "Rending", "Lacerate", "Unstoppable", "Hero", "Unique Hero",
+	"Fast", "Slow",
 	"Ambush", "Scout", "Strider", "Flying", "Fatigue",
 	# Wave-2 combat special rules (GF/AoF Advanced Rules v3.5.1): "Fear" prefix-covers both Fearless (morale
 	# re-roll) and Fear(X) (melee-winner bonus).
@@ -10373,6 +10374,7 @@ const SOLO_MODELED_RULES: Array = ["AP", "Tough", "Deadly", "Takedown", "Relentl
 const SOLO_DECISION_RULES: Array = ["AP", "Deadly", "Takedown", "Relentless", "Artillery", "Immobile",
 	"Counter", "Fast", "Slow", "Strider", "Flying", "Ambush", "Scout", "Tough", "Blast", "Reliable",
 	"Rending", "Bane", "Stealth", "Evasive", "Shielded", "Fear", "Furious", "Impact", "Thrust", "Hero",
+	"Unique Hero",   # rules 3.6 named heroes: a Hero for every purpose
 	# Wave-4: Destructive/Self-Repair shape the EV, Royal Legion the shoot decision + move bands.
 	"Destructive", "Self-Repair", "Royal Legion",
 	# Wave-5: all seven steer decisions — Indirect (hold overlay + LOS-free targeting), Musician (move
