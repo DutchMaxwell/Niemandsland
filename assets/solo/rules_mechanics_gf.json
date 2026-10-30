@@ -2474,8 +2474,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "incoming_ap_reduction": 1,
-     "over_in": 9
+     "incoming_ap_reduction": 1
     }
    },
    "Guardian Boost": {
@@ -7330,8 +7329,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "incoming_ap_reduction": 1,
-     "over_in": 9
+     "incoming_ap_reduction": 1
     }
    },
    "Rapid Rush": {
