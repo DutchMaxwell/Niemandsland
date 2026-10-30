@@ -860,7 +860,7 @@
    "rated": false,
    "book_version": "3.5.1",
    "params": {
-    "bonus_hits_per_six": 1,
+    "ap_bonus": 1,
     "model_level": true
    }
   },
@@ -5685,6 +5685,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
+     "ap_bonus": 2,
      "bonus_hits_per_six": 1,
      "surge_low": 5
     }
@@ -6332,6 +6333,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
+     "ap_bonus": 2,
      "bonus_hits_per_six": 1,
      "surge_low": 5
     }

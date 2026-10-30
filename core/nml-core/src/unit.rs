@@ -2965,6 +2965,15 @@ fn stamp(
         if hit.name == "Surge" || hit.name == "Ferocious" || !hit.upgrades.is_empty() {
             continue;
         }
+        // Row MOR-12 (rules 3.6): the 5-6 window became the bearer's AP(+2) share,
+        // which reads the live alive count like Sergeant's (step 7): reported, never guessed.
+        if hit.name == "Great Sergeant" && rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
+            unimplemented.push(Unimplemented {
+                rule: hit.name.clone(),
+                why: "the bearer's AP(+2) share needs GameUnit.get_alive_count() at the call (ai_ev.gd stamp_sergeant)".into(),
+            });
+            continue;
+        }
         // EPOCH_17_SURGE_SCOPE (sweep B, row "Surge when Shooting"): the entry
         // carries `shooting_only` now — "when shooting" is the book's own
         // printed scope, so the melee twin must stay silent from 17. Only THIS
@@ -6017,12 +6026,13 @@ impl UnitStatic {
         // Buff now, placed by `tray_vs_marks` and consumed by the Surge folds
         // against the marked target only, so the walk no longer carries the
         // name — the flipped registry cannot answer the Surge primitive.
+        // Row MOR-12: Great Sergeant leaves the walk from rules 3.6 (stamp step 3 reports it).
         if rule_on(rules_epoch, EPOCH_5_TABLE_RULES) {
             for hit in rules_of_primitive(reg, p, "Surge").into_iter().filter(|hit| {
                 matches!(
                     hit.name.as_str(),
                     "Brutal" | "Great Sergeant" | "Devout" | "Surge when Shooting" | "Lucky"
-                )
+                ) && !(hit.name == "Great Sergeant" && rule_on(rules_epoch, crate::acts::EPOCH_73_V36))
             }) {
                 // EPOCH_17_SURGE_SCOPE: "Surge when Shooting" is the only name
                 // of the walk that carries `shooting_only` (sweep B) — honoured
