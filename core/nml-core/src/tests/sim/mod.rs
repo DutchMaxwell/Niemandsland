@@ -251,7 +251,7 @@
     /// natural 1. The epoch-5 control (the fleet stamps 5) draws NOTHING.
     #[test]
     fn storm_of_change_fires_shred_on_activation_at_epoch_six_not_five() {
-        let (st, statics) = storm_line("Storm of Change", "wormhole_daemons_of_change", 6);
+        let (st, statics) = storm_line("Storm of Change", "daemons_of_change", 6);
         let (next, shot) = run_storm(&st, &statics, 37, 6);
         let storm = &shot.rolls[0];
         assert_eq!(
@@ -269,7 +269,7 @@
             "rules must log: the line names the rule, the bearer and the dice"
         );
 
-        let (st5, statics5) = storm_line("Storm of Change", "wormhole_daemons_of_change", 5);
+        let (st5, statics5) = storm_line("Storm of Change", "daemons_of_change", 5);
         let (next5, shot5) = run_storm(&st5, &statics5, 37, 5);
         assert!(shot5.rolls.is_empty(), "epoch 5 predates the wave-3 port");
         assert!(shot5.log.is_empty());
@@ -282,7 +282,7 @@
     /// loses three. Epoch 5: nothing.
     #[test]
     fn storm_of_lust_pays_surge_dice_per_hit_at_epoch_six_not_five() {
-        let (st, statics) = storm_line("Storm of Lust", "wormhole_daemons_of_lust", 6);
+        let (st, statics) = storm_line("Storm of Lust", "daemons_of_lust", 6);
         let (next, shot) = run_storm(&st, &statics, 3, 6);
         let storm = &shot.rolls[0];
         assert_eq!((storm.kind, storm.count, storm.target), ("attack", 3, 2));
@@ -301,7 +301,7 @@
         assert_eq!(shot.caused, 3);
         assert_eq!(next.alive[2], 0);
 
-        let (st5, statics5) = storm_line("Storm of Lust", "wormhole_daemons_of_lust", 5);
+        let (st5, statics5) = storm_line("Storm of Lust", "daemons_of_lust", 5);
         let (next5, shot5) = run_storm(&st5, &statics5, 3, 5);
         assert!(shot5.rolls.is_empty());
         assert_eq!(next5.wounds[2], vec![1, 1, 1]);
@@ -313,7 +313,7 @@
     /// a 3, that failed re-roll wounds. Epoch 5: nothing.
     #[test]
     fn storm_of_plague_forces_the_bane_reroll_at_epoch_six_not_five() {
-        let (st, statics) = storm_line("Storm of Plague", "wormhole_daemons_of_plague", 6);
+        let (st, statics) = storm_line("Storm of Plague", "daemons_of_plague", 6);
         let (_, shot) = run_storm(&st, &statics, 3, 6);
         let storm = &shot.rolls[0];
         assert_eq!((storm.kind, storm.count, storm.target), ("attack", 3, 2));
@@ -327,7 +327,7 @@
         );
         assert_eq!(shot.caused, 1, "the re-rolled six failed into a wound");
 
-        let (st5, statics5) = storm_line("Storm of Plague", "wormhole_daemons_of_plague", 5);
+        let (st5, statics5) = storm_line("Storm of Plague", "daemons_of_plague", 5);
         let (next5, shot5) = run_storm(&st5, &statics5, 3, 5);
         assert!(shot5.rolls.is_empty());
         assert_eq!(next5.wounds[2], vec![1, 1, 1]);
@@ -338,7 +338,7 @@
     /// at target 5 — two failures. Epoch 5: nothing.
     #[test]
     fn storm_of_war_puts_ap_one_on_the_burst_at_epoch_six_not_five() {
-        let (st, statics) = storm_line("Storm of War", "wormhole_daemons_of_war", 6);
+        let (st, statics) = storm_line("Storm of War", "daemons_of_war", 6);
         let (next, shot) = run_storm(&st, &statics, 3, 6);
         let storm = &shot.rolls[0];
         assert_eq!((storm.kind, storm.count, storm.target), ("attack", 3, 2));
@@ -351,7 +351,7 @@
         assert_eq!(shot.caused, 2);
         assert_eq!(next.alive[2], 1);
 
-        let (st5, statics5) = storm_line("Storm of War", "wormhole_daemons_of_war", 5);
+        let (st5, statics5) = storm_line("Storm of War", "daemons_of_war", 5);
         let (next5, shot5) = run_storm(&st5, &statics5, 3, 5);
         assert!(shot5.rolls.is_empty());
         assert_eq!(next5.wounds[2], vec![1, 1, 1]);
@@ -362,12 +362,12 @@
     /// preset flag keeps the burst quiet on a fresh target pool.
     #[test]
     fn storm_is_once_per_game_per_bearer() {
-        let (st, statics) = storm_line("Storm of Change", "wormhole_daemons_of_change", 6);
+        let (st, statics) = storm_line("Storm of Change", "daemons_of_change", 6);
         let (next, shot) = run_storm(&st, &statics, 3, 6);
         assert!(!shot.rolls.is_empty());
         assert_eq!(next.storm_used[0], vec!["Storm of Change".to_string()]);
 
-        let (st2, statics2) = storm_line("Storm of Change", "wormhole_daemons_of_change", 6);
+        let (st2, statics2) = storm_line("Storm of Change", "daemons_of_change", 6);
         let mut spent = st2;
         Rc::make_mut(&mut spent.storm_used)[0] = vec!["Storm of Change".to_string()];
         let (next2, shot2) = run_storm(&spent, &statics2, 3, 6);

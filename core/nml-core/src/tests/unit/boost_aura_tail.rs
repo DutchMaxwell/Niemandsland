@@ -52,10 +52,10 @@ use super::*;
     #[test]
     fn the_four_chaos_storms_stamp_their_own_registry_params_at_epoch_six() {
         let cases: [(&str, &str, StormFacet); 4] = [
-            ("Storm of Change", "wormhole_daemons_of_change", StormFacet::Shred),
-            ("Storm of Lust", "wormhole_daemons_of_lust", StormFacet::Surge),
-            ("Storm of Plague", "wormhole_daemons_of_plague", StormFacet::Bane),
-            ("Storm of War", "wormhole_daemons_of_war", StormFacet::Ap1),
+            ("Storm of Change", "daemons_of_change", StormFacet::Shred),
+            ("Storm of Lust", "daemons_of_lust", StormFacet::Surge),
+            ("Storm of Plague", "daemons_of_plague", StormFacet::Bane),
+            ("Storm of War", "daemons_of_war", StormFacet::Ap1),
         ];
         for (rule, faction, facet) in cases {
             let specs = storm_spec(rule, faction, 6);

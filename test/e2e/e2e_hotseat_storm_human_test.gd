@@ -114,7 +114,7 @@ func test_a_human_bearer_unleashes_the_storm_on_an_enemy(timeout := 120000) -> v
 	# 1 m = 39.4"). The Foe is given Defense 6 so AP(1) puts every save out of reach (7+) except a
 	# natural 6 — the seed then guarantees at least one unsaved hit.
 	var stormer := _register(1, "Stormer", Vector3(0.0, 0.0, 0.0), ["Storm of War"],
-		"wormhole_daemons_of_war")
+		"daemons_of_war")
 	# A friendly of the bearer's OWN side sits in range too: a wrong (enemy-slot / no-owner-filter)
 	# target pick would strike it, so "the Foe takes a wound and the Ally does not" is the
 	# discriminating pair for the owner filter.

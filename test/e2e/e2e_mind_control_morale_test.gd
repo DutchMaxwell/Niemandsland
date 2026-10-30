@@ -95,7 +95,7 @@ func test_fearless_recovery_prevents_mind_control_effect() -> void:
 
 
 func test_fatigue_debuff_failure_also_shakes_the_target() -> void:
-	var pair := _pair("Fatigue Debuff", "wormhole_daemons_of_war")
+	var pair := _pair("Fatigue Debuff", "daemons_of_war")
 	var target := pair[1] as GameUnit
 	target.unit_properties["quality"] = 6
 	_main.seed_tray_rng(_seed_for(6))

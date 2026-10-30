@@ -179,12 +179,12 @@
     #[test]
     fn a_bounding_aura_places_d3_plus_one() {
         let e = crate::acts::CURRENT_RULES_EPOCH;
-        let us = aura_us("gf", "wormhole_daemons_of_change", "Bounding Aura", e);
+        let us = aura_us("gf", "daemons_of_change", "Bounding Aura", e);
         assert_eq!(us.bounding, Some(1.0), "the granted entry's place_d3_plus");
         let place = us.bounding_place.expect("the aura carrier places with Bounding");
         assert_eq!(place.name, "Bounding", "the granted base's own name");
         assert_eq!((place.dice, place.plus), (1, 1.0), "one die, D3+1");
-        assert_eq!(aura_us("gf", "wormhole_daemons_of_change", "Fearless", e).bounding, None);
+        assert_eq!(aura_us("gf", "daemons_of_change", "Fearless", e).bounding, None);
     }
 
     // ------------------------------------------------ Buccaneer Boost Aura ---
@@ -327,14 +327,14 @@
     #[test]
     fn a_hit_and_run_fighter_aura_grants_the_fighter_half_at_current_epoch() {
         let e = crate::acts::CURRENT_RULES_EPOCH;
-        let us = aura_us("gf", "wormhole_daemons_of_lust", "Hit & Run Fighter Aura", e);
+        let us = aura_us("gf", "daemons_of_lust", "Hit & Run Fighter Aura", e);
         assert!(us.hit_and_run_fighter_active, "the granted Fighter's own flag");
         assert!(
-            !aura_us("gf", "wormhole_daemons_of_lust", "Hit & Run Fighter Aura", 5)
+            !aura_us("gf", "daemons_of_lust", "Hit & Run Fighter Aura", 5)
                 .hit_and_run_fighter_active,
             "epoch 5: the gate is off"
         );
-        assert!(!aura_us("gf", "wormhole_daemons_of_lust", "Fearless", e).hit_and_run_fighter_active);
+        assert!(!aura_us("gf", "daemons_of_lust", "Fearless", e).hit_and_run_fighter_active);
     }
 
     // ------------------------------------------ Increased Shooting Range Aura
