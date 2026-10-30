@@ -92,20 +92,20 @@ use crate::state::{Objective, Weapon};
         assert!(menu.iter().any(|c| c.kind == RUSH), "rules 3.6: Artillery may move: {:?}", kinds(&menu));
     }
 
-    /// The reply model with the hold gate on: the ENEMY gun 30" away with a
+    /// The reply model with the hold gate on: the ENEMY gun 28" away with a
     /// 24" cannon. Held in place it cannot reach — zero incoming fire.
     #[test]
     fn enemy_artillery_reply_is_zero_out_of_range_at_epoch_72() {
-        let (st, statics) = gun_line(EPOCH_72_PLAYTEST_RULES, 30.0);
+        let (st, statics) = gun_line(EPOCH_72_PLAYTEST_RULES, 28.0);
         let o = ReplyOpts { v2: true, hold_gate: true, ..ReplyOpts::default() };
         let incoming = reply_threat_opts(&statics, &st, 1, o);
-        assert_eq!(incoming[2], 0.0, "rules 3.5: the gun holds, 30\" is out of its 24\" reach");
+        assert_eq!(incoming[2], 0.0, "rules 3.5: the gun holds, 28\" is out of its 24\" reach");
     }
 
     /// The same enemy gun under rules 3.6: it may advance 6" and fire.
     #[test]
     fn enemy_artillery_reply_fires_after_an_advance_at_epoch_73() {
-        let (st, statics) = gun_line(EPOCH_73_V36, 30.0);
+        let (st, statics) = gun_line(EPOCH_73_V36, 28.0);
         let o = ReplyOpts { v2: true, hold_gate: true, ..ReplyOpts::default() };
         let incoming = reply_threat_opts(&statics, &st, 1, o);
         assert!(incoming[2] > 0.0, "rules 3.6: the gun advances and fires, got {}", incoming[2]);

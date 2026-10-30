@@ -122,20 +122,20 @@ func test_immobile_rush_is_still_refused_at_epoch_73() -> void:
 	assert_str(str(solo.player_intent(turret, AiDecision.Action.RUSH, target).get("refused", ""))).contains("Hold")
 
 
-## The reply model (AI-02): an ENEMY gun 30" away with a 24" cannon, hold gate on.
+## The reply model (AI-02): an ENEMY gun 28" away with a 24" cannon, hold gate on.
 func _gun_reply_at(epoch: int) -> Dictionary:
 	AiActRecorder.rules_epoch = epoch
 	BattleSim.reply_v2 = true
 	BattleSim.reply_hold_gate = true
 	var gun := _unit(1, "Gun", [Vector3.ZERO], ["Artillery"], [{"name": "Cannon", "range": 24}])
-	var squad := _unit(2, "Squad", [Vector3(30.0 * IN2M, 0, 0)], [], [{"name": "CCW", "range": 0}])
+	var squad := _unit(2, "Squad", [Vector3(28.0 * IN2M, 0, 0)], [], [{"name": "CCW", "range": 0}])
 	return BattleSim.reply_threat(_capture([gun, squad]), 2)
 
 
 func test_enemy_artillery_reply_is_zero_out_of_range_at_epoch_72() -> void:
 	var threat := _gun_reply_at(AiActRecorder.EPOCH_72_PLAYTEST_RULES)
 	assert_float(float(threat.get("squad", 0.0))) \
-		.override_failure_message("rules 3.5: the gun holds, 30\" is out of its 24\" reach") \
+		.override_failure_message("rules 3.5: the gun holds, 28\" is out of its 24\" reach") \
 		.is_equal(0.0)
 
 
