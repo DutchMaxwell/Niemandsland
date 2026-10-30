@@ -1195,7 +1195,10 @@ pub(crate) fn tray_strafing(
     let Some((target, tname)) = crossed_enemy_of(statics, state, next, si, si, seams) else { return; };
     // Rules-must-log — ONE line per strafe, the table's own log line
     // (main.gd:3005-3006).
-    shot.log.push(format!("Strafing: {} passes over {tname} — attacks it as if shooting (once per activation)",
+    // The line names the rule the weapon carries: Crossing Strike (3.6) or Strafing (3.5).
+    let rule = crate::unit::strafing_rule_name(bearers.iter().filter(|&&b| next.alive[b] > 0)
+        .flat_map(|&b| statics[next.roster.profile[b]].strafe_shoot.iter()));
+    shot.log.push(format!("{rule}: {} passes over {tname} — attacks it as if shooting (once per activation)",
         statics[next.roster.profile[si]].name));
     // ONE shooting exchange, ONLY the Strafing profiles, through the shared
     // volley resolver — main.gd:3007's `_solo_resolve_ai_volley(unit, target,

@@ -4392,9 +4392,10 @@ func _solo_apply_strafing(unit: GameUnit) -> void:
 			< MoveIntent.distance_inches(solo_controller.unit_centre(unit), solo_controller.unit_centre(b)))
 	var target := crossed[0] as GameUnit
 	if battle_log != null:
+		var rule_name := AiShooting.strafing_rule_name(shots.map(func(s): return s["profile"]))
 		battle_log.log_event(BattleLog.Category.COMBAT,
-			"Strafing: %s passes over %s — attacks it as if shooting (once per activation)" % [
-			unit.get_name(), target.get_name()], true)
+			"%s: %s passes over %s — attacks it as if shooting (once per activation)" % [
+			rule_name, unit.get_name(), target.get_name()], true)
 	await _solo_resolve_ai_volley(unit, target, shots, true)
 
 

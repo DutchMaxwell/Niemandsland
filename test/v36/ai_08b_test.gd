@@ -34,6 +34,25 @@ func test_a_crossing_strike_weapon_is_in_the_move_through_set_with_the_strafing_
 			.override_failure_message("the move-through weapon must carry the strafing flag").is_true()
 
 
+func _defines(script: Script, method: String) -> bool:
+	for m in script.get_script_method_list():
+		if str((m as Dictionary).get("name", "")) == method:
+			return true
+	return false
+
+
+func test_the_move_through_log_names_the_rule_the_weapon_carries() -> void:
+	var script: Script = AiShooting
+	assert_bool(_defines(script, "strafing_rule_name")) \
+		.override_failure_message("the log line has no way to name the rule the weapon carries").is_true()
+	if not _defines(script, "strafing_rule_name"):
+		return
+	var crossing: Array = AiShooting.strafing_profiles([_w("Twin Autocannon", 24, 4, ["Crossing Strike"])])
+	var old: Array = AiShooting.strafing_profiles([_w("Twin Autocannon", 24, 4, ["Strafing"])])
+	assert_str(str(script.call("strafing_rule_name", crossing))).is_equal("Crossing Strike")
+	assert_str(str(script.call("strafing_rule_name", old))).is_equal("Strafing")
+
+
 func test_control_a_strafing_weapon_is_unchanged() -> void:
 	var weapons: Array = [_w("Twin Autocannon", 24, 4, ["Strafing"]), _w("Lash Cannon", 24, 2, [])]
 	assert_array(_names(AiShooting.profiles_in_range(weapons, 6.0))).is_equal(["Lash Cannon"])

@@ -1342,6 +1342,19 @@ fn weapon_has(w: &Weapon, rule: &str) -> bool {
     w.rules.iter().any(|r| r.trim().starts_with(rule))
 }
 
+/// NML-002 Strafing: the weapon attacks only through the move-through trigger.
+/// "Crossing Strike" is its 3.6 name; both names stay until the old one is dropped.
+fn weapon_strafes(w: &Weapon) -> bool {
+    weapon_has(w, "Strafing") || weapon_has(w, "Crossing Strike")
+}
+
+/// The name a move-through attack logs under: the 3.6 name when one of the firing
+/// weapons carries it, else the 3.5 name.
+pub(crate) fn strafing_rule_name<'a>(profiles: impl IntoIterator<Item = &'a ShootProfile>) -> &'static str {
+    let crossing = profiles.into_iter().any(|p| p.rules.iter().any(|r| r.trim().starts_with("Crossing Strike")));
+    if crossing { "Crossing Strike" } else { "Strafing" }
+}
+
 /// `AiShooting._rating_of` ai_shooting.gd:176-182 — no max(0) here, unlike the
 /// unit-level `AiEv.unit_rating`.
 fn weapon_rating(w: &Weapon, rule_name: &str) -> i64 {
@@ -1371,7 +1384,7 @@ fn base_profile(w: &Weapon, attacks: i64, range_in: i64) -> ShootProfile {
         relentless: weapon_has(w, "Relentless"),
         blast: weapon_rating(w, "Blast"),
         reliable: weapon_has(w, "Reliable"),
-        strafing: weapon_has(w, "Strafing"),
+        strafing: weapon_strafes(w),
         ignores_cover: weapon_has(w, "Ignores Cover"),
         precise: weapon_has(w, "Precise"),
         surge: weapon_has(w, "Surge"),
@@ -5217,7 +5230,7 @@ pub(crate) fn profiles_in_range(weapons: &[Weapon], dist_in: f64) -> Vec<ShootPr
         if rng_in <= 0 || (rng_in as f64) < dist_in {
             continue;
         }
-        if weapon_has(w, "Strafing") {
+        if weapon_strafes(w) {
             continue; // NML-002: fires only through the move-through trigger
         }
         let attacks = w.attacks.max(0) * w.count.max(1);
@@ -5249,14 +5262,14 @@ pub(crate) fn melee_profiles(weapons: &[Weapon]) -> Vec<ShootProfile> {
 }
 
 /// `AiShooting.strafing_profiles` ai_shooting.gd:30-39 — the NML-002 move-through
-/// trigger's OWN set: every weapon carrying "Strafing", one profile per weapon,
+/// trigger's OWN set: every weapon carrying "Strafing" or "Crossing Strike", one profile per weapon,
 /// NO merge_identical (the table's function does not merge) and NO range gate
 /// (the trigger's reach test happens at the volley, not at the build). Mirrors
 /// the table exactly; consumed by `sim::tray_strafing` alone.
 pub(crate) fn strafing_profiles(weapons: &[Weapon]) -> Vec<ShootProfile> {
     let mut raw: Vec<ShootProfile> = Vec::new();
     for w in weapons {
-        if !weapon_has(w, "Strafing") {
+        if !weapon_strafes(w) {
             continue;
         }
         let attacks = w.attacks.max(0) * w.count.max(1);

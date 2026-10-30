@@ -59,6 +59,14 @@ fn ai_08b_a_crossing_strike_weapon_is_in_the_move_through_set_with_the_strafing_
     assert!(set[0].strafing, "the move-through weapon must carry the strafing flag");
 }
 
+#[test]
+fn ai_08b_the_move_through_log_names_the_rule_the_weapon_carries() {
+    let new_name = strafing_profiles(&[flagged_weapon("Crossing Strike")]);
+    let old_name = strafing_profiles(&[flagged_weapon("Strafing")]);
+    assert_eq!(strafing_rule_name(&new_name), "Crossing Strike");
+    assert_eq!(strafing_rule_name(&old_name), "Strafing");
+}
+
 /// Control: the 3.5 name keeps behaving exactly as before.
 #[test]
 fn ai_08b_control_a_strafing_weapon_is_unchanged() {
