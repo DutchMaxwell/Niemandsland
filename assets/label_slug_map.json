@@ -155,6 +155,9 @@
     "corpse pile": "corpse_pile"
   },
   "_faction_mummified_undead": {
+    "rapid bow": "bow",
+    "master great weapon": "greatweapon",
+    "sphinx great weapon": "greatweapon",
     "wings": "wings",
     "godly spear": "spear"
   },
