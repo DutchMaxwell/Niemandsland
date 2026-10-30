@@ -159,3 +159,72 @@ fn the_pool_lines_name_the_reach_without_sight_at_epoch_73() {
         assert!(!mor13_logged(&st, note), "epoch 72 keeps the 3.5 line: {:?}", st.cast_events);
     }
 }
+
+use crate::acts::{EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36};
+use crate::combat::FEARLESS_RECOVER_TARGET;
+
+// -------- MOR-01: Fearless counts MOST living models of a joined unit (ruling D-MOST) ----------
+// From rules 3.6 a joined unit is Fearless when a strict majority of its living models carry the rule, a joined
+// hero counting as one model; below EPOCH_73_V36 every living model has to carry it.
+
+/// Unit 0 is a Q4 host of `host` living models with one joined hero (unit 1); `shaken` makes the morale test
+/// fail for certain, so only the Fearless recovery die can save it.
+fn joined_line(host: i64, host_fearless: bool, hero_fearless: bool, shaken: bool) -> (State, Vec<UnitStatic>) {
+    let mut st = four_unit_line();
+    st.roster = Rc::new(Roster { keys: st.roster.keys.clone(), index: HashMap::new(), profile: vec![0, 1, 0, 0] });
+    st.alive[0] = host;
+    st.wounds[0] = vec![1; host as usize];
+    st.shaken[0] = shaken;
+    let statics = vec![
+        UnitStatic {
+            name: "Squad".into(), quality: 4, model_count: host, fearless_own: host_fearless,
+            ctx: Ctx { quality: 4, ..Ctx::default() }, ..UnitStatic::default()
+        },
+        UnitStatic {
+            name: "Captain".into(), quality: 4, model_count: 1, fearless_own: hero_fearless,
+            ctx: Ctx { quality: 4, ..Ctx::default() }, ..UnitStatic::default()
+        },
+    ];
+    (st, statics)
+}
+
+/// The Fearless recovery dice the Shaken host draws in one morale test, and the battle log it writes.
+fn recovery_dice(host: i64, host_fearless: bool, hero_fearless: bool, rules_epoch: u32) -> (usize, Vec<String>) {
+    let (mut st, statics) = joined_line(host, host_fearless, hero_fearless, true);
+    let mut shot = ShootResult::default();
+    let seams = Seams { rules_epoch, hero_attach: true, ..Default::default() };
+    tray_morale(&mut st, &statics, 0, false, seams, &mut Tray::seeded(7), &mut shot);
+    (shot.rolls.iter().filter(|r| r.target == FEARLESS_RECOVER_TARGET).count(), shot.log)
+}
+
+/// The imagined test of the same unit, not Shaken: Q4 fails at a 50 % chance, Fearless halves it and holds.
+fn fails_expected(host: i64, host_fearless: bool, hero_fearless: bool, rules_epoch: u32) -> bool {
+    let (st, statics) = joined_line(host, host_fearless, hero_fearless, false);
+    morale_fails_expected(&st, &statics, 0, Seams { rules_epoch, hero_attach: true, ..Default::default() })
+}
+
+#[test]
+fn most_models_decide_fearless_at_epoch_73() {
+    let (dice, log) = recovery_dice(5, true, false, EPOCH_73_V36);
+    assert_eq!(dice, 1, "5 of 6 models carry Fearless: the Shaken unit rolls its recovery die");
+    assert!(log.iter().any(|l| l.contains("Fearless: 5 of 6 models of Squad")), "the count is logged: {log:?}");
+    assert!(!fails_expected(5, true, false, EPOCH_73_V36), "the imagined test halves the fail chance too");
+    let (dice, log) = recovery_dice(1, true, false, EPOCH_73_V36);
+    assert_eq!(dice, 0, "1 Fearless model and 1 plain hero is an exact half: no die");
+    assert!(!log.iter().any(|l| l.starts_with("Fearless:")), "no count line without the rule: {log:?}");
+    assert!(fails_expected(1, true, false, EPOCH_73_V36));
+    assert_eq!(recovery_dice(3, false, true, EPOCH_73_V36).0, 0, "a Fearless hero in a plain 3-model unit is 1 of 4: no die");
+    assert!(fails_expected(3, false, true, EPOCH_73_V36));
+    let (dice, log) = recovery_dice(5, true, true, EPOCH_73_V36);
+    assert_eq!(dice, 1, "every model Fearless still rolls");
+    assert!(!log.iter().any(|l| l.starts_with("Fearless:")), "no count line when every model has it: {log:?}");
+}
+
+#[test]
+fn fearless_needs_every_model_at_epoch_72() {
+    let (dice, log) = recovery_dice(5, true, false, EPOCH_72_PLAYTEST_RULES);
+    assert_eq!(dice, 0, "a plain joined hero withholds Fearless from the whole unit");
+    assert!(!log.iter().any(|l| l.starts_with("Fearless:")), "{log:?}");
+    assert!(fails_expected(5, true, false, EPOCH_72_PLAYTEST_RULES));
+    assert_eq!(recovery_dice(5, true, true, EPOCH_72_PLAYTEST_RULES).0, 1, "every model Fearless rolls");
+}

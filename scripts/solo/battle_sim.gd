@@ -1816,7 +1816,9 @@ static func _morale_fails_expected(su: Dictionary) -> bool:
 	var u: GameUnit = su["unit"]
 	var fail_p := float(AiCombatMath.morale_target(u.get_quality(),
 		int(su.get("morale_bonus", 0))) - 1) / 6.0
-	if AiEv.rule_on_all_models(u, "Fearless"):
+	# Rules 3.6 (EPOCH_73_V36): most living models are enough (sim.rs `morale_fearless`).
+	if (AiEv.rule_on_most_models(u, "Fearless") if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
+			else AiEv.rule_on_all_models(u, "Fearless")):
 		fail_p *= 0.5
 	if morale_by_probability:
 		return fail_p > _morale_dither(int(su.get("_slot", 0)), _morale_round)

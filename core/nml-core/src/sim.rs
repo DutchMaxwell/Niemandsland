@@ -259,6 +259,10 @@ fn morale_fearless(statics: &[UnitStatic], state: &State, i: usize, seams: Seams
     if !rule_on(seams.rules_epoch, EPOCH_65_MELEE_TRUTH) {
         return own.fearless;
     }
+    if rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) {
+        let (with, total) = fearless_models(statics, state, i, seams);
+        return crate::unit::most_models_of(with, total);
+    }
     let mut found = false;
     if state.alive[i] > 0 {
         found = true;
@@ -273,6 +277,20 @@ fn morale_fearless(statics: &[UnitStatic], state: &State, i: usize, seams: Seams
         }
     }
     found
+}
+
+/// Rules 3.6 (ruling D-MOST): (living models of the joined unit that carry Fearless, all living models). Every
+/// living host model shares the host's rules; every living joined hero is one model however Tough.
+fn fearless_models(statics: &[UnitStatic], state: &State, i: usize, seams: Seams) -> (i64, i64) {
+    let alive = state.alive[i].max(0);
+    let mut counts = (if statics[state.roster.profile[i]].fearless_own { alive } else { 0 }, alive);
+    if seams.hero_attach {
+        for &h in state.attached[i].iter().filter(|&&h| state.alive[h] > 0) {
+            counts.0 += i64::from(statics[state.roster.profile[h]].fearless_own);
+            counts.1 += 1;
+        }
+    }
+    counts
 }
 
 /// `BattleSim._morale_fails_expected` battle_sim.gd:1082-1090 — Shaken always
@@ -5291,6 +5309,14 @@ fn tray_morale_for(
         wounds_left(state, i),
         tray,
     );
+    // Rules 3.6 rules-must-log (main.gd `_solo_morale_test`): a unit Fearless by MOST of its models names the
+    // count when it draws the recovery die - the die follows the test die, or stands alone for a Shaken unit.
+    if rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) && ctx.fearless && r.rolls.len() > usize::from(!state.shaken[i]) {
+        let (with, total) = fearless_models(statics, state, i, seams);
+        if with < total {
+            shot.log.push(format!("Fearless: {with} of {total} models of {} have it — most do, so the whole unit counts", us.name));
+        }
+    }
     mods::spend_once(state, i, &[mods::Role::Morale], melee);
     let self_wounds = shot.absorb(r);
     land_wounds_with(state, i, self_wounds, seams.tray_exact);
