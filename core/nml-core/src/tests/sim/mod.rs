@@ -380,7 +380,7 @@
     /// once-per-game is NOT spent (main.gd:17257's own gate).
     #[test]
     fn storm_out_of_reach_is_not_spent() {
-        let (mut st, statics) = storm_line("Storm of Change", "wormhole_daemons_of_change", 6);
+        let (mut st, statics) = storm_line("Storm of Change", "daemons_of_change", 6);
         st.positions[2] =
             vec![[20.0 * IN2M, 0.0, 0.0], [20.02 * IN2M, 0.0, 0.0], [20.04 * IN2M, 0.0, 0.0]];
         let (next, shot) = run_storm(&st, &statics, 3, 6);
