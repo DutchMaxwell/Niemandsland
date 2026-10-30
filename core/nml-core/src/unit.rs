@@ -1261,6 +1261,9 @@ pub struct UnitStatic {
     /// solo_controller.gd:1846/:4033 — a carrier's move-and-shoot band becomes
     /// its RUSH distance, so RUSH may also shoot (normally HOLD/ADVANCE only).
     pub quick_shot_active: bool,
+    /// Rules 3.6 (SHO-16) — `unit_rule_active(.., "Cumbersome")`: from
+    /// `EPOCH_73_V36` on a unit that moved this activation fires no volley.
+    pub cumbersome: bool,
     /// Block B8 — `RulesRegistry.unit_rules_of_primitive(gu, "Second Wind")`
     /// (solo_controller.gd:10448/:10477). Only two literal names resolve to
     /// this primitive anywhere in the registry (`assets/solo/rules_mechanics_
@@ -6557,6 +6560,7 @@ impl UnitStatic {
             hit_and_run_move_in: hnr_move_in,
             hit_and_run_rule: hnr_rule,
             quick_shot_active: unit_rule_active(reg, p, "Quick Shot"),
+            cumbersome: unit_rule_active(reg, p, "Cumbersome"),
             second_wind_active: unit_rule_active(reg, p, "Second Wind")
                 || unit_rule_active(reg, p, "Inquisitorial Agent")
                 || unit_rule_active(reg, p, "Martial Prowess"),

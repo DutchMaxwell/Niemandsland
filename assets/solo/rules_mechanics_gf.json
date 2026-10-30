@@ -624,6 +624,12 @@
     "wound_target": 6
    }
   },
+  "Cumbersome": {
+   "primitive": "Cumbersome",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {}
+  },
   "Deadly": {
    "primitive": "Deadly",
    "rated": false,
