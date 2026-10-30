@@ -659,10 +659,12 @@
         "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
         "weapons":[{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]}}}"#;
 
-    /// Five gf units chosen so the REGISTRY tells them apart, not a stub.
-    /// `alien_hives` fields an `Infiltrate` entry (`min_enemy_dist_in: 3.0`) and
-    /// NO `Repel Ambushers`; `eternal_dynasty` is the mirror image (a
-    /// `Repel Ambushers` entry at `min_dist_in: 12.0`, no `Infiltrate`).
+    /// Five units chosen so the REGISTRY tells them apart, not a stub.
+    /// gf `alien_hives` fields an `Infiltrate` entry (`min_enemy_dist_in: 3.0`);
+    /// gf `eternal_dynasty` has a `Repel Ambushers` entry at `min_dist_in: 12.0`
+    /// and no `Infiltrate`. gf now resolves `Repel Ambushers` for every book
+    /// through its common entry, so the unmapped repeller is aof `dwarves`:
+    /// no faction entry and no aof common entry for the rule.
     const AMBUSH_HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
       "inf_registry":{"unit_id":"inf_registry","name":"Infiltrator","quality":4,
         "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
@@ -686,7 +688,7 @@
         "move_bands":{"advance":6.0,"rush":12.0},"weapons":[]},
       "repel_unmapped":{"unit_id":"repel_unmapped","name":"Unmapped Repeller","quality":4,
         "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
-        "base_radius":0.016,"game_system":"gf","faction_folder":"alien_hives",
+        "base_radius":0.016,"game_system":"aof","faction_folder":"dwarves",
         "special_rules":["Repel Ambushers"],"item_grants":[],"attached_hero_rules":[],
         "move_bands":{"advance":6.0,"rush":12.0},"weapons":[]}}}"#;
 

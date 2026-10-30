@@ -487,6 +487,14 @@
    "rated": false,
    "book_version": "3.5.1"
   },
+  "Ambush Aura": {
+   "primitive": "Aura Channel",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "grants": "Ambush"
+   }
+  },
   "Armor": {
    "primitive": "Armor",
    "rated": true,
@@ -664,6 +672,14 @@
    "params": {
     "bonus_hits_per_six": 1,
     "charge_only": true
+   }
+  },
+  "Good Shot": {
+   "primitive": "Shot Modifier",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "hit_bonus": 1
    }
   },
   "Heavy Impact": {
