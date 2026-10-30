@@ -515,6 +515,10 @@ pub struct Ctx {
     /// `spell_damage_ev`) and the dice's Deadly leg roll all X wounds against the
     /// Regeneration family before the cap (A4), and a spell's Lacerate keeps Regeneration (A1).
     pub playtest_rules: bool,
+    /// The record's own rules epoch, stamped in `ctx_for`. The dice seams read
+    /// it for rules that are removed from `EPOCH_73_V36` on (SHO-02's Indirect
+    /// moved penalty); 0 on every hand-built context, i.e. the old reading.
+    pub rules_epoch: u32,
     /// `EPOCH_73_V36`: the to-hit penalty every shot AT this unit takes because it is an
     /// Aircraft (the map's `Aircraft.target_hit_penalty`, beside the range penalty). Stamped
     /// in `ctx_for` off the record's own epoch; 0 for every other unit and below 73.
@@ -2925,6 +2929,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         v36_rules: rule_on(rules_epoch, crate::acts::EPOCH_73_V36),
         modifier_sum: rule_on(rules_epoch, crate::acts::EPOCH_68_MODIFIER_SUM),
         playtest_rules: rule_on(rules_epoch, EPOCH_72_PLAYTEST_RULES),
+        rules_epoch,
         aircraft_hit_penalty,
         ambush_arrival_ap: 0,
         tag_ap_mod: 0,
@@ -6369,7 +6374,9 @@ impl UnitStatic {
                 .rules_for(&p.game_system)
                 .lookup(&p.faction_folder, "Indirect");
             let pen = entry.as_ref().map_or(1, |e| e.param_i("moved_hit_penalty", 1));
-            if pen > 0 {
+            // Rules 3.6 (SHO-02): the map key stays the EPOCH_72 leg; from 73
+            // the stamp is 0 and the dice seams never fold the moved penalty.
+            if pen > 0 && !rule_on(rules_epoch, EPOCH_73_V36) {
                 for sp in shoot.iter_mut() {
                     if sp.indirect {
                         sp.indirect_moved_hit_penalty = pen;

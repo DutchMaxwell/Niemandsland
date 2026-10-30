@@ -616,9 +616,13 @@ static func morale_target(quality: int, morale_bonus: int) -> int:
 
 
 ## Indirect's to-hit ROLL modifier for a shooting attack (wave 5, core v3.5.1: "-1 to hit rolls when
-## shooting after moving"). 0 when the shooter held. `penalty` is the data-derived knob (RulesRegistry
-## "Indirect".moved_hit_penalty; fallback INDIRECT_MOVED_HIT_PENALTY).
+## shooting after moving"). 0 when the shooter held, and 0 from EPOCH_73_V36 on (rules 3.6, SHO-02).
+## `penalty` is the data-derived knob (RulesRegistry "Indirect".moved_hit_penalty; fallback
+## INDIRECT_MOVED_HIT_PENALTY).
 static func indirect_hit_modifier(moved: bool, penalty: int = INDIRECT_MOVED_HIT_PENALTY) -> int:
+	# Rules 3.6 (SHO-02): from EPOCH_73_V36 a moved Indirect shooter hits at base quality.
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		return 0
 	return -maxi(penalty, 0) if moved else 0
 
 

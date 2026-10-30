@@ -27,6 +27,7 @@
 
 #[cfg(test)]
 use crate::combat::modified_hit_target;
+use crate::acts::{rule_on, EPOCH_73_V36};
 use crate::combat::{
     cond_ap_why, conditional_ap_bonus, conditional_ap_bonus_vs, covered_defense, deadly_multiplier, fortified_ap, guarded_defense, CondApTarget,
     impact_total_dice, melee_hit_modifier, fold_hit, reliable_quality, save_target,
@@ -931,11 +932,21 @@ pub fn resolve_volley_leg(
         if im != 0 && im_fired.iter().all(|o| *o != sh.owner) {
             im_fired.push(sh.owner);
             out.log.push(format!("Indirect moved {im}: {} shoots after moving", sh.owner));
+        } else if rule_on(att.rules_epoch, EPOCH_73_V36)
+            && p.indirect
+            && att.moved_this_round
+            && im_fired.iter().all(|o| *o != sh.owner)
+        {
+            // Rules 3.6 (SHO-02): the non-application names itself (rules-must-log).
+            im_fired.push(sh.owner);
+            out.log.push(format!(
+                "Indirect: no moved penalty: {} shoots after moving", sh.owner));
         }
         if im == 0
             && p.indirect_moved_hit_penalty > 0
             && att.moved_this_round
             && att.quick_readjustment
+            && !rule_on(att.rules_epoch, EPOCH_73_V36)
             && qr_fired.iter().all(|o| *o != sh.owner)
         {
             qr_fired.push(sh.owner);
@@ -1533,8 +1544,14 @@ fn melee_hit_target(
 /// Readjustment" (Ctx::quick_readjustment, the `no_moved_penalty` opt-out).
 /// The magnitude rides the weapon static
 /// (ShootProfile::indirect_moved_hit_penalty, stamped behind the FROZEN
-/// `EPOCH_7_TABLE_RULES`); 0 = silent.
+/// `EPOCH_7_TABLE_RULES`); 0 = silent. Rules 3.6 (SHO-02, `EPOCH_73_V36`)
+/// removes the penalty: the function answers 0 and neither log line fires.
 fn indirect_moved_mod(att: &Ctx, p: &ShootProfile) -> i64 {
+    // Rules 3.6 (SHO-02): the moved penalty is gone from `EPOCH_73_V36` on —
+    // the same reading the table's `AiCombatMath.indirect_hit_modifier` takes.
+    if rule_on(att.rules_epoch, EPOCH_73_V36) {
+        return 0;
+    }
     if p.indirect
         && att.moved_this_round
         && !att.quick_readjustment

@@ -469,11 +469,15 @@ func test_morale_target_applies_banner_bonus_clamped() -> void:
 	assert_int(AiCombatMath.morale_target(6, -3)).is_equal(6)   # clamp: a 6 still always passes
 
 
-func test_indirect_hit_modifier_only_after_moving() -> void:
+func test_indirect_hit_modifier_only_after_moving_at_epoch_72() -> void:
 	# Indirect (core v3.5.1): "-1 to hit rolls when shooting after moving" — nothing on a Hold.
+	# Rules 3.6 removes it from 73 on (test/v36/sho_02_test.gd pins that leg).
+	var epoch0: int = AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
 	assert_int(AiCombatMath.indirect_hit_modifier(true)).is_equal(-1)
 	assert_int(AiCombatMath.indirect_hit_modifier(false)).is_equal(0)
 	assert_int(AiCombatMath.indirect_hit_modifier(true, 2)).is_equal(-2)
+	AiActRecorder.rules_epoch = epoch0
 
 
 func test_conditional_ap_bonus_target_property_rules() -> void:

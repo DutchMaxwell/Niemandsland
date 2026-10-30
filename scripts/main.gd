@@ -4692,14 +4692,18 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 				shot_base = int(td_ctx["defense"])
 				shot_cover = int(td_ctx["covered"])
 		var ai_own: int = int(mod_info.get("own", 0)) + upr_hit   # SHO-08: own rules' part (Unstoppable)
-		if moved and (bool(profile.get("indirect", false)) or granted_indirect) \
-				and not bool(RulesRegistry.best_primitive_param(member, "Indirect", "no_moved_penalty", false)):
-			# Quick Readjustment (coverage wave): the bearer ignores the Indirect moved-penalty.
-			var indirect_mod: int = AiCombatMath.indirect_hit_modifier(true,
-				int(RulesRegistry.unit_param(member, "Indirect", "moved_hit_penalty", AiCombatMath.INDIRECT_MOVED_HIT_PENALTY)))
-			ai_own += indirect_mod
-			mod_info = {"mod": int(mod_info.get("mod", 0)) + indirect_mod,
-				"note": _solo_join_note(str(mod_info.get("note", "")), "Indirect moved %d" % indirect_mod)}
+		if moved and (bool(profile.get("indirect", false)) or granted_indirect):
+			if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+				# Rules 3.6 (SHO-02): the penalty is gone; the hit-info names the non-application.
+				mod_info = {"mod": int(mod_info.get("mod", 0)),
+					"note": _solo_join_note(str(mod_info.get("note", "")), "Indirect: no moved penalty")}
+			elif not bool(RulesRegistry.best_primitive_param(member, "Indirect", "no_moved_penalty", false)):
+				# Quick Readjustment (coverage wave): the bearer ignores the Indirect moved-penalty.
+				var indirect_mod: int = AiCombatMath.indirect_hit_modifier(true,
+					int(RulesRegistry.unit_param(member, "Indirect", "moved_hit_penalty", AiCombatMath.INDIRECT_MOVED_HIT_PENALTY)))
+				ai_own += indirect_mod
+				mod_info = {"mod": int(mod_info.get("mod", 0)) + indirect_mod,
+					"note": _solo_join_note(str(mod_info.get("note", "")), "Indirect moved %d" % indirect_mod)}
 		# NML-970: spent Spot markers fold INTO the note — the To-hit breakdown must name
 		# every bonus it counts, not only apply it (transparency doctrine).
 		if ai_spot_hit != 0:
@@ -13405,13 +13409,17 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 			var h_moved: bool = opr_army_manager != null \
 				and int(attacker.unit_properties.get("moved_round", -1)) == opr_army_manager.current_round
 			var h_own: int = int(p_mod.get("own", 0)) + upr_hit   # SHO-08: own rules' part (Unstoppable)
-			if h_moved and (bool(profile.get("indirect", false)) or h_granted_indirect) \
-					and not bool(RulesRegistry.best_primitive_param(group.get("member"), "Indirect", "no_moved_penalty", false)):
-				var ind_mod: int = AiCombatMath.indirect_hit_modifier(true,
-					int(RulesRegistry.unit_param(group.get("member"), "Indirect", "moved_hit_penalty", AiCombatMath.INDIRECT_MOVED_HIT_PENALTY)))
-				h_own += ind_mod
-				p_mod = {"mod": int(p_mod.get("mod", 0)) + ind_mod,
-					"note": _solo_join_note(str(p_mod.get("note", "")), "Indirect moved %d" % ind_mod)}
+			if h_moved and (bool(profile.get("indirect", false)) or h_granted_indirect):
+				if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+					# Rules 3.6 (SHO-02): the penalty is gone; the hit-info names the non-application.
+					p_mod = {"mod": int(p_mod.get("mod", 0)),
+						"note": _solo_join_note(str(p_mod.get("note", "")), "Indirect: no moved penalty")}
+				elif not bool(RulesRegistry.best_primitive_param(group.get("member"), "Indirect", "no_moved_penalty", false)):
+					var ind_mod: int = AiCombatMath.indirect_hit_modifier(true,
+						int(RulesRegistry.unit_param(group.get("member"), "Indirect", "moved_hit_penalty", AiCombatMath.INDIRECT_MOVED_HIT_PENALTY)))
+					h_own += ind_mod
+					p_mod = {"mod": int(p_mod.get("mod", 0)) + ind_mod,
+						"note": _solo_join_note(str(p_mod.get("note", "")), "Indirect moved %d" % ind_mod)}
 			# Reliable sets the Quality (2+), THEN the roll modifiers apply (GF v3.5.1 p.14: "Reliable only
 			# changes the Quality value, so the roll can still be modified").
 			# NML-970: the human volley folds its Spot spend into the note the same way.
