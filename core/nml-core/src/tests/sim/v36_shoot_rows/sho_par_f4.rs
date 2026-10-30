@@ -57,7 +57,7 @@ fn squad() -> (State, Vec<UnitStatic>) {
 /// The tray's per-weapon die counts for the host (`sighting` on): the host's four models all see the target.
 fn tray(st: &State, statics: &[UnitStatic], epoch: u32) -> Vec<i64> {
     let mut sc = Scratch { rules_epoch: epoch, bearers_last: true, ..Default::default() };
-    sighted_profiles_of(&statics[0], st, statics, 0, 2, &[], 6.0, &mut sc);
+    sighted_profiles_of(&statics[0], st, statics, 0, 2, &[], 6.0, false, &mut sc);
     sc.attacks
 }
 
