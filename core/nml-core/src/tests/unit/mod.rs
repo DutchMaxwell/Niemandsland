@@ -1021,4 +1021,5 @@ mod v36_melee;
 mod v36_morale;
 mod v36_shoot;
 mod v36_ux;
+mod v36_ux_18;
 mod v36_w1;
