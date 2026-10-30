@@ -142,3 +142,17 @@ func test_other_faction_weapon_team_parses_without_bundle_metadata() -> void:
 		assert_bool(item.has("weapons")).is_false()
 	for weapon in unit.weapons:
 		assert_bool(weapon.to_dict().has("replacement_target")).is_false()
+
+
+# --- Rules 3.6 weapon names: a plain rename of the 3.5 word keeps its bake --------------------------------
+
+func test_rules_3_6_arm_flamer_resolves_the_rat_ogre_flamer_variant() -> void:
+	var manager := _manager(["ratmen/rat ogres#greatweapon", "ratmen/rat ogres#flamer+greatweapon"])
+	var army := _army("aof", [{"armyId": RATMEN_ARMY, "name": "Rat Ogres", "size": 1, "bases": {"round": "40"},
+		"loadout": [
+			{"type": "ArmyBookWeapon", "name": "Great Weapon", "attacks": 3, "count": 1},
+			{"type": "ArmyBookWeapon", "name": "Arm-Flamer", "range": 6, "attacks": 1, "count": 1}]}])
+	assert_str(army.faction_folder).is_equal("ratmen")
+	assert_array(manager._unit_model_variant_names(army.units[0], "ratmen")).is_equal(["Rat Ogres#flamer+greatweapon"])
+	# Scoped: another faction does not read the 3.6 Ratmen word.
+	assert_str(manager.model_library.variant_slug(["Arm-Flamer"], "beastmen")).is_equal("")

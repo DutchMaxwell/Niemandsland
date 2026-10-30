@@ -100,6 +100,7 @@
     "pavise shield": "pavise",
     "rending claws": "claws",
     "flamer-mod": "flamer",
+    "arm-flamer": "flamer",
     "flame-fists": "flame",
     "drill-fists": "drill",
     "shock-fists": "shock",
@@ -136,6 +137,7 @@
     "cursed greatsword": "greatsword",
     "heavy great weapon": "great_weapon",
     "champion cursed crossbow": "crossbow",
+    "rapid bow": "bow",
     "carving tool": "carving_tool",
     "skeletal steed": "skeletal_steed",
     "abyssal beast": "abyssal_beast",
@@ -161,6 +163,9 @@
     "corpse pile": "corpse_pile"
   },
   "_faction_mummified_undead": {
+    "rapid bow": "bow",
+    "master great weapon": "greatweapon",
+    "sphinx great weapon": "greatweapon",
     "wings": "wings",
     "godly spear": "spear"
   },
