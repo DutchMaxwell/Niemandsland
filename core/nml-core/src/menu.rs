@@ -20,7 +20,7 @@
 
 use serde::Deserialize;
 
-use crate::acts::CURRENT_RULES_EPOCH;
+use crate::acts::{rule_on, CURRENT_RULES_EPOCH, EPOCH_73_V36};
 use crate::combat::{melee_ev, profile_ev, shoot_ev, SIX_P};
 use crate::geom::{self, V3};
 use crate::sim::{
@@ -213,6 +213,23 @@ pub fn forces_hold(unit_rules: &[String]) -> bool {
         let s = r.trim();
         s.starts_with("Immobile") || s.starts_with("Artillery")
     })
+}
+
+/// `forces_hold` at a rules epoch: from `EPOCH_73_V36` on (rules 3.6) Artillery
+/// may move like any unit, so only Immobile still keeps a unit to Hold.
+pub fn forces_hold_at(unit_rules: &[String], rules_epoch: u32) -> bool {
+    if !rule_on(rules_epoch, EPOCH_73_V36) {
+        return forces_hold(unit_rules);
+    }
+    unit_rules.iter().any(|r| r.trim().starts_with("Immobile"))
+}
+
+/// The one hold-only read every planner surface shares — the menu gate, the
+/// grid pool (`plan.rs`) and the enemy reply model (`sim.rs`): the unit's names
+/// at the epoch its static was built under (`SoloController.forces_hold`).
+pub fn holds_only(state: &State, statics: &[UnitStatic], u: usize) -> bool {
+    let epoch = statics.get(state.roster.profile[u]).map_or(0, |s| s.rules_epoch);
+    forces_hold_at(&state.profile(u).special_rules, epoch)
 }
 
 /// `AiArchetype.max_range_inches` ai_archetype.gd:60-64 over `_range`
@@ -1120,7 +1137,7 @@ pub fn candidates_tuned(
     }
     // NML-1020 lab half: Immobile/Artillery may only Hold (p.13/p.57) — the menu
     // for carriers ends here, so no playout can ever imagine them moving.
-    if forces_hold(&state.profile(unit).special_rules)
+    if holds_only(state, statics, unit)
         && statics[state.roster.profile[unit]].hold_only.unwrap_or(true)
     {
         // hold-only carriers may still fire at any target
