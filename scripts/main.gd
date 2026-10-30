@@ -21853,11 +21853,25 @@ func _solo_apply_piercing_tag(unit: GameUnit) -> void:
 					continue
 			else:
 				member.unit_properties["piercing_tag_used"] = true
-			tgt.unit_properties["piercing_tag_markers"] = int(tgt.unit_properties.get("piercing_tag_markers", 0)) + markers
-			# D42 (a), EPOCH_67_MARKERS_BURSTS: which name placed the marker, so the spend
-			# half (_solo_spend_piercing_tag) knows whether the pool stands (Piercing
-			# Target, no removal clause) or spends whole (the rest of the family).
-			tgt.unit_properties["piercing_tag_source"] = n
+			# Rules 3.6 (EPOCH_73_V36): X tokens stacked on one unit, or one token on each of up to X units.
+			var v36_tag: bool = n == "Piercing Tag" and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
+			var picks: Array = _solo_utility_targets(member, "enemy", float(sp.get("range_in", 24.0)), bool(sp.get("needs_los", true)), markers) if v36_tag else []
+			var spread: bool = picks.size() >= 2
+			if not spread:
+				picks = [tgt]
+			for p in picks:
+				var pu := p as GameUnit
+				pu.unit_properties["piercing_tag_markers"] = int(pu.unit_properties.get("piercing_tag_markers", 0)) + (1 if spread else markers)
+				# D42 (a), EPOCH_67_MARKERS_BURSTS: which name placed the marker, so the spend
+				# half (_solo_spend_piercing_tag) knows whether the pool stands (Piercing
+				# Target, no removal clause) or spends whole (the rest of the family).
+				pu.unit_properties["piercing_tag_source"] = n
+			if v36_tag:
+				var placed := "1 token each, spread over %d units" % picks.size() if spread \
+					else "%d token%s, stacked on %s" % [markers, ("" if markers == 1 else "s"), tgt.get_name()]
+				_log_rule_event(BattleLog.Category.COMBAT,
+					"%s: %s places %s — a friendly attack may spend one token for +1 AP" % [n, member.get_name(), placed], true)
+				continue
 			if battle_log != null:
 				_log_rule_event(BattleLog.Category.COMBAT,
 					"%s: %s places %d marker%s on %s — friendly attackers may spend them for +AP" % [
@@ -21868,6 +21882,7 @@ func _solo_apply_piercing_tag(unit: GameUnit) -> void:
 ## at once — markers are a shared resource and the first big volley is the best use). Returns bonus.
 ## D42 (a): "Piercing Target" (army-book v3.5.3, no removal clause) STANDS while the target lives —
 ## the pool is read but never zeroed; the rest of the family still spends whole on first use.
+## Rules 3.6 (EPOCH_73_V36): every attack spends exactly ONE token for +1 AP, a stack or a spread alike.
 func _solo_spend_piercing_tag(target: GameUnit) -> int:
 	if target == null:
 		return 0
@@ -21879,6 +21894,11 @@ func _solo_spend_piercing_tag(target: GameUnit) -> int:
 			_log_rule_event(BattleLog.Category.COMBAT,
 				"Piercing Target: +AP(%d) stands while %s lives" % [markers, target.get_name()], true)
 		return markers
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:   # rules 3.6: ONE token per attack, +1
+		target.unit_properties["piercing_tag_markers"] = markers - 1
+		_log_rule_event(BattleLog.Category.COMBAT,
+			"Piercing Tag: one token spent — +1 AP on this volley (%d left)" % (markers - 1), true)
+		return 1
 	target.unit_properties["piercing_tag_markers"] = 0
 	if battle_log != null:
 		_log_rule_event(BattleLog.Category.COMBAT,
@@ -21959,18 +21979,22 @@ func _solo_apply_precision_target(unit: GameUnit) -> void:
 
 ## Spend every Precision-Tag marker on the target for +X to hit on THIS volley (the AI spends all at once —
 ## the spot pool's own headless policy, main.gd:10113). Returns the bonus.
+## Rules 3.6 (EPOCH_73_V36): every attack spends exactly ONE token for +1 to hit.
 func _solo_consume_tag_markers(target: GameUnit) -> int:
 	if target == null:
 		return 0
 	var tm := int(target.unit_properties.get("tag_markers", 0))
 	if tm <= 0:
 		return 0
-	_sync_unit_property(target, "tag_markers", null)
+	var v36: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36   # rules 3.6: ONE token per attack, +1
+	var spent: int = 1 if v36 else tm
+	_sync_unit_property(target, "tag_markers", (tm - spent) if tm > spent else null)
 	if battle_log != null:
 		_log_rule_event(BattleLog.Category.COMBAT,
-			"Precision Tag: %d marker%s removed — +%d to hit this volley" % [tm, ("" if tm == 1 else "s"), tm], true)
-	_solo_rule_float(target, "Markers spent +%d" % tm)
-	return tm
+			("Precision Tag: one token spent — +1 to hit this volley (%d left)" % (tm - 1)) if v36 \
+			else "Precision Tag: %d marker%s removed — +%d to hit this volley" % [tm, ("" if tm == 1 else "s"), tm], true)
+	_solo_rule_float(target, "Markers spent +%d" % spent)
+	return spent
 
 
 ## Coverage wave — Crossing Attack(X) ("once per activation, when this model moves through enemy
