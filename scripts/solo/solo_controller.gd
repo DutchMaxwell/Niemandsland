@@ -191,7 +191,9 @@ static func _ints_from_json(v: Variant) -> Variant:
 const CONTACT_IN := 2.0            # centre-to-centre "in melee" distance a charge closes to
 const MELEE_REACH_IN := 2.0         # OPR "Who Can Strike" (GF Advanced Rules v3.5.1 p.9): only models within 2" strike
 const MELEE_VERTICAL_IN := 4.0      # OPR "Who Can Strike" (GF p.9): ... and within 4" vertically ... may attack it
-const BASE_CONTACT_IN := 1.0        # nominal centre-to-centre gap of two standard ~25 mm bases at contact (~1")
+const MELEE_REACH_IN_V36 := 3.0     # rules 3.6 strike reach across (MEL-08, EPOCH_73_V36)
+const MELEE_VERTICAL_IN_V36 := 3.0  # rules 3.6 strike reach up or down (MEL-08, EPOCH_73_V36)
+const BASE_CONTACT_IN := 1.0       # nominal centre-to-centre gap of two standard ~25 mm bases at contact (~1")
 ## A charge closes the REAL base-to-base gap plus this hair so the nearest models land firmly in contact
 ## (the target's body-only planner zone clamps them to exact contact; snap_charge clears any residual).
 ## Not a rule value — a contact epsilon (field-test finding 3: a charge within band fell short of contact).
@@ -10132,10 +10134,21 @@ static func _live_carrier(unit_infos: Array, markers: Array, i: int) -> Dictiona
 	return {}
 
 
-## True when two world Y coordinates (metres) are within the 4" vertical melee reach (GF p.9).
+## The epoch's strike reach across, in inches: 3" for rules 3.6 records (EPOCH_73_V36), 2" before. Every
+## strike count reads it (twin of combat::melee_reach_in); MELEE_ENGAGE_IN (charge contact) is separate.
+static func melee_reach_in() -> float:
+	return MELEE_REACH_IN_V36 if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else MELEE_REACH_IN
+
+
+## The epoch's strike reach up or down, in inches: 3" for rules 3.6 records (EPOCH_73_V36), 4" before.
+static func melee_vertical_in() -> float:
+	return MELEE_VERTICAL_IN_V36 if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else MELEE_VERTICAL_IN
+
+
+## True when two world Y coordinates (metres) are within the epoch's vertical melee reach (melee_vertical_in).
 ## Static/pure so both layers (and their tests) share one truth.
 static func within_melee_height(y_a_m: float, y_b_m: float) -> bool:
-	return absf(y_a_m - y_b_m) <= MELEE_VERTICAL_IN * INCHES_TO_METERS
+	return absf(y_a_m - y_b_m) <= melee_vertical_in() * INCHES_TO_METERS
 
 
 ## OPR "Who Can Strike" — BASE-EDGE measure (field-test round 7, finding 3): count `member`'s alive models
@@ -10167,7 +10180,7 @@ func striking_models_for(member: GameUnit, enemy: GameUnit) -> int:
 		for i in range(enemy_shapes.size()):
 			if not within_melee_height(my, enemy_ys[i]):
 				continue
-			if SeparationChecker.edge_distance(shape, enemy_shapes[i]) <= MELEE_REACH_IN:
+			if SeparationChecker.edge_distance(shape, enemy_shapes[i]) <= melee_reach_in():
 				n += 1
 				break
 	return n
@@ -10181,7 +10194,7 @@ func striking_models_for(member: GameUnit, enemy: GameUnit) -> int:
 static func striking_models(striker_positions: Array, enemy_positions: Array) -> int:
 	if striker_positions.is_empty() or enemy_positions.is_empty():
 		return striker_positions.size()
-	var reach := (BASE_CONTACT_IN + MELEE_REACH_IN) * INCHES_TO_METERS
+	var reach := (BASE_CONTACT_IN + melee_reach_in()) * INCHES_TO_METERS
 	var reach2 := reach * reach
 	var n := 0
 	for s in striker_positions:

@@ -24,6 +24,11 @@ func test_striking_models_ignores_a_striker_five_inches_above() -> void:
 
 
 func test_striking_models_counts_a_striker_three_inches_above() -> void:
+	# Inside the 3.5 records' 4". Under rules 3.6 a Vector3's single-precision 3" lands a hair above the
+	# 3" reach, so the 3.6 boundary is pinned with plain floats in test/v36/mel_08_test.gd instead.
+	var saved_epoch := AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
 	var enemy := [Vector3(0.0, 0.0, 0.0)]
 	var striker := [Vector3(1.0 * INCH, 3.0 * INCH, 0.0)]
 	assert_int(SoloController.striking_models(striker, enemy)).is_equal(1)
+	AiActRecorder.rules_epoch = saved_epoch
