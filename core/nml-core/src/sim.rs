@@ -5241,7 +5241,10 @@ fn tray_morale_for(
 ///
 /// Returns the loser of the melee — the destroyed side from epoch 65, else
 /// the side that caused fewer wounds (Fear(X) adds to the score only).
-/// `None` on a live tie or mutual wipe: nobody tests.
+/// `None` on a live tie or mutual wipe: nobody tests. From `EPOCH_73_V36` the side
+/// that TOOK more wounds in the activation loses; `charger_self_wounds` is what
+/// the charger's own Dangerous test cost it on the charge move.
+#[cfg(test)]
 #[allow(clippy::too_many_arguments)]
 fn tray_charge(
     statics: &[UnitStatic],
@@ -5253,6 +5256,22 @@ fn tray_charge(
     shot: &mut ShootResult,
     charge_from_in: f64,
     cover: Cover,
+) -> Option<usize> {
+    tray_charge_with_self_wounds(statics, next, si, ti, seams, tray, shot, charge_from_in, cover, 0)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn tray_charge_with_self_wounds(
+    statics: &[UnitStatic],
+    next: &mut State,
+    si: usize,
+    ti: usize,
+    seams: Seams,
+    tray: &mut Tray,
+    shot: &mut ShootResult,
+    charge_from_in: f64,
+    cover: Cover,
+    charger_self_wounds: i64,
 ) -> Option<usize> {
     let strikes_first =
         |u: usize| statics[next.roster.profile[u]].melee.iter().any(|p| p.counter && p.counter_strikes_first.unwrap_or(true));
@@ -5322,7 +5341,16 @@ fn tray_charge(
     self_destruct_post_melee(statics, next, si, ti, seams, tray, shot);
     self_destruct_post_melee(statics, next, ti, si, seams, tray, shot);
     let a = by_su + statics[next.roster.profile[si]].ctx.fear;
-    let b = by_tu + statics[next.roster.profile[ti]].ctx.fear;
+    let mut b = by_tu + statics[next.roster.profile[ti]].ctx.fear;
+    // Rules 3.6 (`EPOCH_73_V36`): the loser TOOK more wounds, so each side scores what its ENEMY took: wounds dealt, the
+    // Fear it bears and the enemy's own self-wounds (the twin rolls no Hazardous, so only the charger adds any).
+    if rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) {
+        b += charger_self_wounds;
+        shot.log.push(format!(
+            "[Melee result] {} took {b} wounds, {} took {a} (Fear and self-inflicted wounds count)",
+            statics[next.roster.profile[si]].name, statics[next.roster.profile[ti]].name
+        ));
+    }
     melee_loser(next, si, ti, a, b, seams)
 }
 
@@ -8603,7 +8631,9 @@ fn resolve_with(
                     // `state` still holds the positions before the charge.
                     let charge_from_in =
                         modifier_distance_in(state, si, ti, seams);
-                    if let Some(li) = tray_charge(statics, &mut next, si, ti, seams, tray, shot, charge_from_in, cover) {
+                    // Rules 3.6: what the charger's own Dangerous test cost it on the charge move counts as taken.
+                    let self_wounds = (wounds_left(state, si) - su_before).max(0);
+                    if let Some(li) = tray_charge_with_self_wounds(statics, &mut next, si, ti, seams, tray, shot, charge_from_in, cover, self_wounds) {
                         // D1-B5b: the melee loser's test is a REAL die now
                         // (:8116-8118), where D1-B5a still asked the
                         // expected-value oracle for the outcome.

@@ -1216,6 +1216,7 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	var wounds_before_dangerous: int = _solo_unit_wounds_now(unit)
 	if dangerous_dice > 0:
 		await _run_ai_dangerous(unit, dangerous_dice)
+	report["dangerous_wounds_taken"] = wounds_before_dangerous - _solo_unit_wounds_now(unit)   # rules 3.6 melee tally
 	if unit.is_destroyed():
 		return unit
 	# Wave 6 — Caster(X): resolve the activation's planned casts BEFORE the attack (v3.5.1: "at any
@@ -7777,6 +7778,7 @@ func _solo_counter_models(unit: GameUnit) -> int:
 ## Fatigue (unmodified-6-only) overrides all to-hit modifiers. Returns wounds caused (melee-winner tally).
 var _solo_retaliate_credit := 0   # Retaliate wounds of the LAST strike phase — the defender's tally credit
 var _solo_last_save_ones := 0   # resolver wave A: unmodified Defense 1s of the LAST save batch (Bloodthirsty Fighter)
+var _solo_hazard_self := {}   # unit instance id -> Hazardous self-wounds since the current melee began (rules 3.6 tally)
 
 
 ## Collect (and reset) the retaliation wounds of the last strike phase — the caller adds them to
@@ -10710,6 +10712,7 @@ func _run_ai_melee(report: Dictionary) -> void:
 			"%s: all models already in base contact — no pile-in needed (GF v3.5.1 p.9)" % target.get_name(), true)
 	var ai_caused := 0
 	var human_caused := 0
+	_solo_hazard_self.clear()
 	var target_models_before: int = _solo_combined_alive(target)
 	# ANNOUNCE: who charges whom — highlights + line + toast, held before the first strike.
 	var announce := _solo_show_attack_announce(unit, target, "charges")
@@ -10792,8 +10795,9 @@ func _run_ai_melee(report: Dictionary) -> void:
 	await _solo_self_destruct_post_melee(target, unit)
 	# — Morale: a destroyed side loses first; otherwise the lower wound score loses (tie = nobody). Fear(X) (GF/AoF
 	#   v3.5.1 p.13) counts as +X dealt wounds for THIS comparison only (never changes wounds applied) —
-	var ai_score: int = AiCombatMath.fear_adjusted_wounds(ai_caused, _solo_unit_rating(unit, "Fear"))
-	var human_score: int = AiCombatMath.fear_adjusted_wounds(human_caused, _solo_unit_rating(target, "Fear"))
+	var scores: Array = _solo_melee_scores(unit, ai_caused, target, human_caused, int(report.get("dangerous_wounds_taken", 0)))
+	var ai_score: int = scores[0]
+	var human_score: int = scores[1]
 	var loser: GameUnit = _solo_melee_loser(unit, ai_score, target, human_score)
 	_solo_log_melee_result(unit, ai_caused, ai_score, target, human_caused, human_score)
 	await _solo_stage_phase("Melee result")
@@ -10810,6 +10814,18 @@ func _run_ai_melee(report: Dictionary) -> void:
 		target_models_before - _solo_combined_alive(target),
 		("" if target_models_before - _solo_combined_alive(target) == 1 else "s")])
 	_solo_stage_end()
+
+
+## Rules 3.6 (EPOCH_73_V36): the loser TOOK more wounds in the activation, so each side scores what its ENEMY took:
+## wounds dealt + the Fear it bears + the enemy's self-wounds (`a_self`: a's Dangerous test on its charge move;
+## the Hazardous tally). Lower loses, as before; below 73 only dealt + Fear count. Returns [a_score, b_score].
+func _solo_melee_scores(a: GameUnit, a_caused: int, b: GameUnit, b_caused: int, a_self: int = 0) -> Array:
+	var a_score: int = AiCombatMath.fear_adjusted_wounds(a_caused, _solo_unit_rating(a, "Fear"))
+	var b_score: int = AiCombatMath.fear_adjusted_wounds(b_caused, _solo_unit_rating(b, "Fear"))
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		a_score += int(_solo_hazard_self.get(b.get_instance_id(), 0))
+		b_score += a_self + int(_solo_hazard_self.get(a.get_instance_id(), 0))
+	return [a_score, b_score]
 
 
 ## Rules-must-log (pacing grill 31.07.): the melee comparison itself was SILENT — the tallies were
@@ -10840,9 +10856,25 @@ func _solo_log_melee_result(a: GameUnit, a_caused: int, a_score: int,
 		verdict = "%s loses the melee" % loser.get_name()
 	elif _solo_combined_alive(a) <= 0 and _solo_combined_alive(b) <= 0:
 		verdict = "both destroyed — no morale test"
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		# Rules 3.6: the comparison is wounds TAKEN, and a side took what its enemy's score holds.
+		battle_log.log_event(BattleLog.Category.COMBAT, "Melee result: %s took %s, %s took %s — %s" % [
+			a.get_name(), _solo_taken_tally(b_caused, b_score, _solo_unit_rating(b, "Fear")),
+			b.get_name(), _solo_taken_tally(a_caused, a_score, _solo_unit_rating(a, "Fear")), verdict], true)
+		return
 	battle_log.log_event(BattleLog.Category.COMBAT, "Melee result: %s dealt %s, %s dealt %s — %s" % [
 		a.get_name(), _solo_melee_tally(a_caused, a_score),
 		b.get_name(), _solo_melee_tally(b_caused, b_score), verdict], true)
+
+
+## Rules 3.6: "4", or "4 (Fear: 1, self-inflicted: 2)" for what sits on top of the `struck` wounds the enemy dealt.
+func _solo_taken_tally(struck: int, taken: int, enemy_fear: int) -> String:
+	var extra: Array = []
+	if enemy_fear > 0:
+		extra.append("Fear: %d" % enemy_fear)
+	if taken - struck - enemy_fear > 0:
+		extra.append("self-inflicted: %d" % (taken - struck - enemy_fear))
+	return str(taken) if extra.is_empty() else "%d (%s)" % [taken, ", ".join(extra)]
 
 
 ## "3" — or "3 (Fear: 4)" where Fear(X) lifted the tally for the comparison only.
@@ -13459,6 +13491,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 func _run_human_melee(attacker: GameUnit, target: GameUnit, auto: bool = false) -> void:
 	var human_caused := 0
 	var ai_caused := 0
+	_solo_hazard_self.clear()
 	_solo_stage_begin("%s charges %s" % [attacker.get_name(), target.get_name()])
 	# Rules-must-log: your charge never named itself in the log (only the AI's announce did), so the
 	# melee opened mid-strike. One declaration line — and the stage's Charge card has its content.
@@ -13520,8 +13553,9 @@ func _run_human_melee(attacker: GameUnit, target: GameUnit, auto: bool = false) 
 	await _solo_self_destruct_post_melee(target, attacker)
 	# — Morale: a destroyed side loses first; otherwise the lower wound score loses. Fear(X) (GF/AoF v3.5.1 p.13) adds
 	#   +X to the bearer's tally for THIS comparison only. —
-	var human_score: int = AiCombatMath.fear_adjusted_wounds(human_caused, _solo_unit_rating(attacker, "Fear"))
-	var ai_score: int = AiCombatMath.fear_adjusted_wounds(ai_caused, _solo_unit_rating(target, "Fear"))
+	var scores: Array = _solo_melee_scores(attacker, human_caused, target, ai_caused)
+	var human_score: int = scores[0]
+	var ai_score: int = scores[1]
 	var loser: GameUnit = _solo_melee_loser(attacker, human_score, target, ai_score)
 	_solo_log_melee_result(attacker, human_caused, human_score, target, ai_caused, ai_score)
 	await _solo_stage_phase("Melee result")
@@ -21435,9 +21469,13 @@ func _solo_hazardous_self_wounds(owner_unit: GameUnit, profile: Dictionary, face
 			ones += 1
 	if ones <= 0:
 		return
+	var hz_id: int = owner_unit.get_instance_id()
 	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		# MEL-10: the tally counts the wounds really taken (each 1 wounds X with Blast/Deadly, as the bearer path does).
+		_solo_hazard_self[hz_id] = int(_solo_hazard_self.get(hz_id, 0)) + ones * maxi(maxi(int(profile.get("blast", 0)), int(profile.get("deadly", 0))), 1)
 		await _solo_hazardous_bearer_wounds(owner_unit, profile, ones)
 		return
+	_solo_hazard_self[hz_id] = int(_solo_hazard_self.get(hz_id, 0)) + ones
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT,
 			"Hazardous: %s rolls %d unmodified 1%s to hit — takes %d wound%s" % [
