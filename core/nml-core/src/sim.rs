@@ -1254,6 +1254,7 @@ pub(crate) fn tray_strafing(
     for (b, keep, _, _) in &parts {
         mark_spent_limited(&statics[next.roster.profile[*b]].strafe_shoot, keep, &mut next.limited_used, *b);
     }
+    let phantom = r.scourge_wounds;
     let w = shot.absorb(r);
     if !seams.tray_exact {
         land_wounds_with(next, target, w, false);
@@ -1266,7 +1267,7 @@ pub(crate) fn tray_strafing(
     if seams.tray_exact {
         land_wounds_with(next, target, w, true); // the table's order: Takedown, Deadly, then the pool
     }
-    if shooting_morale_trigger(next, statics, seams, ut, target, alive_before, wounds_before) {
+    if scourge_morale_trigger(next, statics, seams, ut, target, alive_before, wounds_before, phantom, &mut shot.log) {
         tray_morale(next, statics, target, false, seams, tray, shot);
     }
 }
@@ -3175,6 +3176,25 @@ fn shooting_morale_trigger(
     }
     should_test_shooting_morale(alive_before, state.alive[ti], us.model_count)
         || wounded(state.alive[ti], us.model_count)
+}
+
+/// SHO-15a Scourge (`EPOCH_73_V36`): the phantom wounds count toward this trigger only, read as landed on a
+/// scratch copy (nothing is removed). Table twin: main.gd `_solo_scourge_decides`.
+#[allow(clippy::too_many_arguments)]
+fn scourge_morale_trigger(
+    state: &State, statics: &[UnitStatic], seams: Seams, us: &UnitStatic, ti: usize,
+    alive_before: i64, wounds_before: i64, phantom: i64, log: &mut Vec<String>,
+) -> bool {
+    let real = shooting_morale_trigger(state, statics, seams, us, ti, alive_before, wounds_before);
+    if phantom <= 0 || state.alive[ti] <= 0 || !rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) {
+        return real;
+    }
+    let mut v = state.clone();
+    land_wounds_with(&mut v, ti, phantom, seams.tray_exact);
+    let tips = !real && (v.alive[ti] <= 0 || below_half(&v, statics, us, ti, seams));
+    let verdict = if tips { "they decide its morale test" } else { "they do not decide its morale test" };
+    log.push(format!("Scourge: {phantom} phantom wounds count against {} — {verdict}", us.name));
+    real || tips
 }
 
 /// `BattleSim._ctx_of(su)` battle_sim.gd:701-712, SHOOTING half: the static
@@ -8486,6 +8506,7 @@ fn resolve_with(
                             // The Deadly groups' raw tally rides `caused` but
                             // lands separately below — not an ignored wound.
                             let ignored = r.caused - r.wounds - r.deadly_tally;
+                            let phantom = r.scourge_wounds;
                             let w = shot.absorb(r);
                             if !seams.tray_exact {
                                 land_wounds_with(&mut next, g.ti, w, false);
@@ -8538,8 +8559,8 @@ fn resolve_with(
                             // it undrawn is what put every later activation of
                             // a `dice="table"` game on a different stream than
                             // the recording.
-                            if shooting_morale_trigger(
-                                &next, statics, seams, ut_g, g.ti, morale_alive_g, wounds_before_g,
+                            if scourge_morale_trigger(
+                                &next, statics, seams, ut_g, g.ti, morale_alive_g, wounds_before_g, phantom, &mut shot.log,
                             ) {
                                 tray_morale(&mut next, statics, g.ti, false, seams, tray, shot);
                             }

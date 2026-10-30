@@ -138,6 +138,8 @@ pub struct ShootResult {
     /// Unsaved wounds after Deadly, Shred and Regeneration — handed to the
     /// trainer's OWN casualty machinery, which decides who dies.
     pub wounds: i64,
+    /// SHO-15a Scourge phantom wounds: never landed, only `sim::scourge_morale_trigger` reads them.
+    pub scourge_wounds: i64,
     /// D1-B5: wounds caused BEFORE Regeneration, which is the tally the table's
     /// melee-winner comparison runs on — `caused += w` sits inside the weapon
     /// loop (main.gd:6113/:6148) and `caused += rv_wounds` inside Ravage
@@ -326,6 +328,9 @@ fn blocks_with_bane_from(faces: &[u8], reroll: &[u8], target: i64, from: i64) ->
     blocks
 }
 
+/// Scourge's `phantom_wounds_per_save_one` (rules_mechanics_gf/aof.json `common`; the table reads the map).
+pub const SCOURGE_PHANTOM_WOUNDS: i64 = 2;
+
 /// `AiCombatMath.shred_bonus_wounds` :475-485 — unmodified Defense 1s on the
 /// FINAL faces (a 6 that Bane re-rolled into a 1 counts, the 6 itself never).
 /// The Shred Boost generalizes the window to `low` (failed rolls 1..=low — a
@@ -461,6 +466,10 @@ fn save_batch(
         }
     }
     let unsaved = (count - blocks_with_bane_from(&faces, &reroll, target, bane_from)).max(0);
+    // SHO-15a Scourge: the unmodified 1s on the FINAL faces (Shred's own read), counted, never landed.
+    if p.rules.iter().any(|r| r.trim() == "Scourge") {
+        out.scourge_wounds += shred_faces(&faces, &reroll, 1, target) * SCOURGE_PHANTOM_WOUNDS;
+    }
     let shred = if p.shred || shred_grant || (p.shred_alias && shred_alias_dice) {
         // Wave 3: the per-face wound amount rides the profile's epoch-6
         // stamped `extra_wound_per_save_one` read (0 = unread -> the base

@@ -850,6 +850,14 @@
     "shooting_only": true
    }
   },
+  "Scourge": {
+   "primitive": "Scourge",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "phantom_wounds_per_save_one": 2
+   }
+  },
   "Scout": {
    "primitive": "Scout",
    "rated": false,

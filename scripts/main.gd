@@ -4773,7 +4773,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 	await _solo_stage_phase("Result")
 	# NML-966 gap B: Deadly/Takedown wounds bypass the regen pool and never reached `landed` —
 	# a Deadly-only volley silently skipped the half-strength morale test. landed_extra counts them in.
-	if landed + landed_extra > 0:
+	if landed + landed_extra > 0 or _solo_scourge_wounds > 0:   # SHO-15a: phantom wounds count as taken
 		await _solo_shooting_morale(target, alive_before, _roller_label(target), wounds_before)
 		await _solo_stage_phase("Morale")
 	_solo_stage_end()
@@ -7770,6 +7770,7 @@ func _solo_counter_models(unit: GameUnit) -> int:
 ## Fatigue (unmodified-6-only) overrides all to-hit modifiers. Returns wounds caused (melee-winner tally).
 var _solo_retaliate_credit := 0   # Retaliate wounds of the LAST strike phase — the defender's tally credit
 var _solo_last_save_ones := 0   # resolver wave A: unmodified Defense 1s of the LAST save batch (Bloodthirsty Fighter)
+var _solo_scourge_wounds := 0   # SHO-15a: the volley's Scourge phantom wounds, read once by _solo_shooting_morale
 
 
 ## Collect (and reset) the retaliation wounds of the last strike phase — the caller adds them to
@@ -8477,6 +8478,11 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 		blocks = AiCombatMath.blocks_with_bane_from(save_faces, reroll, base_defense, ap, bane_low)
 	else:
 		blocks = AiCombatMath.count_blocks(save_faces, base_defense, ap)
+	# SHO-15a Scourge: a SHOT's unmodified 1s become phantom wounds for the morale trigger (melee = SHO-15b).
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and int(profile.get("range", 0)) > 0 \
+			and (profile.get("rules", []) as Array).has("Scourge"):
+		_solo_scourge_wounds += AiCombatMath.shred_bonus_wounds(save_faces, reroll) \
+			* int(RulesRegistry.unit_param(striker, "Scourge", "phantom_wounds_per_save_one", 2))
 	# Shred (wave 5, army-book weapon rule): every unmodified Defense 1 deals +1 wound — counted on the
 	# FINAL faces (after Bane's re-rolls), NOT Deadly-multiplied (save-step wounds, documented reading).
 	# Destroyer Boost (the Shred UPGRADE family — the table twin of the core's upgrades-gated stamp,
@@ -10937,6 +10943,8 @@ func _solo_shooting_morale(unit: GameUnit, alive_before: int, owner: String, wou
 		cause: String = "") -> void:
 	if unit == null:
 		return
+	var phantom := _solo_scourge_wounds   # SHO-15a: read once, never carried to the next trigger
+	_solo_scourge_wounds = 0
 	# Single-model units measure morale in TOUGH WOUNDS, not models (GF v3.5.1 p.10: "...half or less
 	# of its starting size or tough value (for units with a single model)" — maintainer 2026-07-22:
 	# a wounded Tough single model never tested because only model DEATH triggered).
@@ -10948,11 +10956,15 @@ func _solo_shooting_morale(unit: GameUnit, alive_before: int, owner: String, wou
 				battle_log.log_event(BattleLog.Category.COMBAT,
 					"%s is at half its tough value (%d/%d) — morale test (GF v3.5.1 p.10)" % [
 					unit.get_name(), wounds_now, _solo_unit_wounds_start(unit)], true)
+			_solo_scourge_decides(unit, phantom, false)
+			await _solo_morale_test(unit, owner, false, cause)
+		elif _solo_scourge_decides(unit, phantom, true):
 			await _solo_morale_test(unit, owner, false, cause)
 		return
 	var alive_now: int = SoloController.combined_alive(unit)
 	var total: int = SoloController.combined_total(unit)
 	if AiCombatMath.should_test_shooting_morale(alive_before, alive_now, total):
+		_solo_scourge_decides(unit, phantom, false)
 		await _solo_morale_test(unit, owner, false, cause)
 	elif alive_now > 0 and wounds_before >= 0 and _solo_unit_wounds_now(unit) < wounds_before \
 			and AiCombatMath.at_or_below_half(alive_now, total):
@@ -10962,7 +10974,32 @@ func _solo_shooting_morale(unit: GameUnit, alive_before: int, owner: String, wou
 			battle_log.log_event(BattleLog.Category.COMBAT,
 				"%s takes wounds at half strength or less (%d/%d models) — morale test (GF v3.5.1 p.10)" % [
 				unit.get_name(), alive_now, total], true)
+		_solo_scourge_decides(unit, phantom, false)
 		await _solo_morale_test(unit, owner, false, cause)
+	elif _solo_scourge_decides(unit, phantom, true):
+		await _solo_morale_test(unit, owner, false, cause)
+
+
+## SHO-15a Scourge: the volley's phantom wounds read as landed in the table's casualty order (nothing is
+## removed); `may_decide` false = the real wounds already called the test. One rules-must-log line per volley.
+func _solo_scourge_decides(unit: GameUnit, phantom: int, may_decide: bool) -> bool:
+	if phantom <= 0 or unit.get_alive_count() <= 0:
+		return false
+	var left := phantom
+	var lost := 0
+	for i in SoloController.chain_casualty_order(unit, phantom):
+		var m := unit.models[int(i)] as ModelInstance
+		if m == null or not m.is_alive or left < m.wounds_current:
+			break
+		left -= m.wounds_current
+		lost += 1
+	var total := SoloController.combined_total(unit)
+	var tips := may_decide and (AiCombatMath.at_or_below_half(_solo_unit_wounds_now(unit) - phantom,
+		_solo_unit_wounds_start(unit)) if total == 1 else AiCombatMath.at_or_below_half(SoloController.combined_alive(unit) - lost, total))
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT, "Scourge: %d phantom wounds count against %s — %s" % [
+			phantom, unit.get_name(), "they decide its morale test" if tips else "they do not decide its morale test"], true)
+	return tips
 
 
 ## Combined CURRENT wounds of a unit's alive models incl. joined heroes (the p.10 tough-value scale).
