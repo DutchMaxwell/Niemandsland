@@ -5650,8 +5650,8 @@ func _solo_prompt_interference(caster: GameUnit, caster_unit: GameUnit, spell_na
 	var helpers: Array = solo_controller._aura_casters(side, caster_unit, null)
 	if helpers.is_empty():
 		if _solo_side_has_caster_tokens(side):
-			_log_rule_event(BattleLog.Category.COMBAT, "%s: no caster of P%d within %d\" and line of sight — no interference" % [
-				spell_name, side, int(AiSpell.AURA_RANGE_IN)], true)
+			_log_rule_event(BattleLog.Category.COMBAT, "%s: no caster of P%d %s — no interference" % [
+				spell_name, side, _solo_aura_reach_words()], true)
 		return 0
 	var pool := 0
 	for h in helpers:
@@ -5676,10 +5676,23 @@ func _solo_prompt_interference(caster: GameUnit, caster_unit: GameUnit, spell_na
 		payers.append("%s ×%d" % [payer.get_name(), take])
 	if battle_log != null:
 		_log_rule_event(BattleLog.Category.COMBAT,
-			"Interference: %s spend%s %d token%s — the cast roll worsens to %d+" % [
+			"Interference: %s spend%s %d token%s — the cast roll worsens to %d+%s" % [
 			", ".join(payers), ("s" if payers.size() == 1 else ""), spent, ("" if spent == 1 else "s"),
-			AiSpell.cast_target(boost, spent, base_target)], true)
+			AiSpell.cast_target(boost, spent, base_target), _solo_aura_pool_note()], true)
 	return spent
+
+
+## The boost/resist pool's reach in the battle log's words (rules-must-log). Rules 3.6 (EPOCH_73_V36, lead
+## ruling D-SPELL-LOS): every caster within 18" counts, seen or not; rules 3.5 also asked for a line of sight.
+func _solo_aura_reach_words() -> String:
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		return "within %d\", no line of sight needed" % int(AiSpell.AURA_RANGE_IN)
+	return "within %d\" and line of sight" % int(AiSpell.AURA_RANGE_IN)
+
+
+## The note a pool's token line ends with from rules 3.6 on: the reach that let those casters in.
+func _solo_aura_pool_note() -> String:
+	return (" (casters %s)" % _solo_aura_reach_words()) if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else ""
 
 
 ## No AI without its tick (#1719), online: the caster's opponent sits at another machine. The owner-roll
@@ -5692,8 +5705,8 @@ func _solo_remote_interference(member: GameUnit, unit: GameUnit, spell_name: Str
 	var helpers: Array = solo_controller._aura_casters(foe, unit, null)
 	if helpers.is_empty():
 		if _solo_side_has_caster_tokens(foe):
-			_log_rule_event(BattleLog.Category.COMBAT, "%s: no caster of P%d within %d\" and line of sight — no interference" % [
-				spell_name, foe, int(AiSpell.AURA_RANGE_IN)], true)
+			_log_rule_event(BattleLog.Category.COMBAT, "%s: no caster of P%d %s — no interference" % [
+				spell_name, foe, _solo_aura_reach_words()], true)
 		return 0
 	var lender := (helpers[0] as Dictionary)["unit"] as GameUnit
 	if _solo_i_own_unit(lender):
@@ -11764,12 +11777,12 @@ func _run_human_cast(unit: GameUnit, member: GameUnit, entry: Dictionary, picked
 				if network_manager != null and network_manager.has_method("broadcast_unit_casts"):
 					network_manager.broadcast_unit_casts(payer)
 				payers.append("%s ×%d" % [payer.get_name(), int(dd["tokens"])])
-			_log_rule_event(BattleLog.Category.COMBAT, "Boost: %s spend%s %d token%s — the cast roll improves to %d+" % [
+			_log_rule_event(BattleLog.Category.COMBAT, "Boost: %s spend%s %d token%s — the cast roll improves to %d+%s" % [
 				", ".join(payers), ("s" if payers.size() == 1 else ""), boost, ("" if boost == 1 else "s"),
-				AiSpell.cast_target(boost, 0, AiSpell.CAST_BASE_TARGET)])
+				AiSpell.cast_target(boost, 0, AiSpell.CAST_BASE_TARGET), _solo_aura_pool_note()])
 	elif _solo_side_has_caster_tokens(own_slot):
-		_log_rule_event(BattleLog.Category.COMBAT, "%s: no caster of P%d within %d\" and line of sight — no boost" % [
-			spell_name, own_slot, int(AiSpell.AURA_RANGE_IN)], true)
+		_log_rule_event(BattleLog.Category.COMBAT, "%s: no caster of P%d %s — no boost" % [
+			spell_name, own_slot, _solo_aura_reach_words()], true)
 	# AI COUNTER-INTERFERENCE (decided default: shown AFTER the player commits — rules-sequential,
 	# no leak): the AI's 18"-LoS pool spends per the marginal calculus, value-proxied by the cost.
 	var interference := 0
@@ -11801,9 +11814,9 @@ func _run_human_cast(unit: GameUnit, member: GameUnit, entry: Dictionary, picked
 					payer.spend_caster_points(1)
 			if battle_log != null:
 				_log_rule_event(BattleLog.Category.COMBAT,
-					"NACHTMAHR interferes with %d token%s — your cast roll worsens to %d+" % [
+					"NACHTMAHR interferes with %d token%s — your cast roll worsens to %d+%s" % [
 					interference, ("" if interference == 1 else "s"),
-					AiSpell.cast_target(boost, interference, AiSpell.CAST_BASE_TARGET)], true)
+					AiSpell.cast_target(boost, interference, AiSpell.CAST_BASE_TARGET), _solo_aura_pool_note()], true)
 	_solo_refresh_caster_markers()
 	await _solo_resolve_one_cast({"caster": member, "caster_unit": unit, "spell": entry,
 		"name": spell_name, "targets": targets, "boost": boost, "interference": interference,
@@ -21840,11 +21853,25 @@ func _solo_apply_piercing_tag(unit: GameUnit) -> void:
 					continue
 			else:
 				member.unit_properties["piercing_tag_used"] = true
-			tgt.unit_properties["piercing_tag_markers"] = int(tgt.unit_properties.get("piercing_tag_markers", 0)) + markers
-			# D42 (a), EPOCH_67_MARKERS_BURSTS: which name placed the marker, so the spend
-			# half (_solo_spend_piercing_tag) knows whether the pool stands (Piercing
-			# Target, no removal clause) or spends whole (the rest of the family).
-			tgt.unit_properties["piercing_tag_source"] = n
+			# Rules 3.6 (EPOCH_73_V36): X tokens stacked on one unit, or one token on each of up to X units.
+			var v36_tag: bool = n == "Piercing Tag" and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
+			var picks: Array = _solo_utility_targets(member, "enemy", float(sp.get("range_in", 24.0)), bool(sp.get("needs_los", true)), markers) if v36_tag else []
+			var spread: bool = picks.size() >= 2
+			if not spread:
+				picks = [tgt]
+			for p in picks:
+				var pu := p as GameUnit
+				pu.unit_properties["piercing_tag_markers"] = int(pu.unit_properties.get("piercing_tag_markers", 0)) + (1 if spread else markers)
+				# D42 (a), EPOCH_67_MARKERS_BURSTS: which name placed the marker, so the spend
+				# half (_solo_spend_piercing_tag) knows whether the pool stands (Piercing
+				# Target, no removal clause) or spends whole (the rest of the family).
+				pu.unit_properties["piercing_tag_source"] = n
+			if v36_tag:
+				var placed := "1 token each, spread over %d units" % picks.size() if spread \
+					else "%d token%s, stacked on %s" % [markers, ("" if markers == 1 else "s"), tgt.get_name()]
+				_log_rule_event(BattleLog.Category.COMBAT,
+					"%s: %s places %s — a friendly attack may spend one token for +1 AP" % [n, member.get_name(), placed], true)
+				continue
 			if battle_log != null:
 				_log_rule_event(BattleLog.Category.COMBAT,
 					"%s: %s places %d marker%s on %s — friendly attackers may spend them for +AP" % [
@@ -21855,6 +21882,7 @@ func _solo_apply_piercing_tag(unit: GameUnit) -> void:
 ## at once — markers are a shared resource and the first big volley is the best use). Returns bonus.
 ## D42 (a): "Piercing Target" (army-book v3.5.3, no removal clause) STANDS while the target lives —
 ## the pool is read but never zeroed; the rest of the family still spends whole on first use.
+## Rules 3.6 (EPOCH_73_V36): every attack spends exactly ONE token for +1 AP, a stack or a spread alike.
 func _solo_spend_piercing_tag(target: GameUnit) -> int:
 	if target == null:
 		return 0
@@ -21866,6 +21894,11 @@ func _solo_spend_piercing_tag(target: GameUnit) -> int:
 			_log_rule_event(BattleLog.Category.COMBAT,
 				"Piercing Target: +AP(%d) stands while %s lives" % [markers, target.get_name()], true)
 		return markers
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:   # rules 3.6: ONE token per attack, +1
+		target.unit_properties["piercing_tag_markers"] = markers - 1
+		_log_rule_event(BattleLog.Category.COMBAT,
+			"Piercing Tag: one token spent — +1 AP on this volley (%d left)" % (markers - 1), true)
+		return 1
 	target.unit_properties["piercing_tag_markers"] = 0
 	if battle_log != null:
 		_log_rule_event(BattleLog.Category.COMBAT,
@@ -21946,18 +21979,22 @@ func _solo_apply_precision_target(unit: GameUnit) -> void:
 
 ## Spend every Precision-Tag marker on the target for +X to hit on THIS volley (the AI spends all at once —
 ## the spot pool's own headless policy, main.gd:10113). Returns the bonus.
+## Rules 3.6 (EPOCH_73_V36): every attack spends exactly ONE token for +1 to hit.
 func _solo_consume_tag_markers(target: GameUnit) -> int:
 	if target == null:
 		return 0
 	var tm := int(target.unit_properties.get("tag_markers", 0))
 	if tm <= 0:
 		return 0
-	_sync_unit_property(target, "tag_markers", null)
+	var v36: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36   # rules 3.6: ONE token per attack, +1
+	var spent: int = 1 if v36 else tm
+	_sync_unit_property(target, "tag_markers", (tm - spent) if tm > spent else null)
 	if battle_log != null:
 		_log_rule_event(BattleLog.Category.COMBAT,
-			"Precision Tag: %d marker%s removed — +%d to hit this volley" % [tm, ("" if tm == 1 else "s"), tm], true)
-	_solo_rule_float(target, "Markers spent +%d" % tm)
-	return tm
+			("Precision Tag: one token spent — +1 to hit this volley (%d left)" % (tm - 1)) if v36 \
+			else "Precision Tag: %d marker%s removed — +%d to hit this volley" % [tm, ("" if tm == 1 else "s"), tm], true)
+	_solo_rule_float(target, "Markers spent +%d" % spent)
+	return spent
 
 
 ## Coverage wave — Crossing Attack(X) ("once per activation, when this model moves through enemy
