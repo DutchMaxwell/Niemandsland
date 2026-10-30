@@ -530,13 +530,13 @@ func _boost_carrier(rules: Array) -> GameUnit:
 
 func test_bane_boost_window_reads_the_beastmen_boost_entry() -> void:
 	# Bestial Boost (aof/beastmen): reroll_save_low 5 past over_in 9, behind upgrades "Bestial".
-	var win: Dictionary = AiEv.bane_boost_window(_boost_carrier(["Bestial", "Bestial Boost"]), true)
+	var win: Dictionary = AiEv.bane_boost_window(_boost_carrier(["Bestial", "Enhanced Bestial"]), true)
 	assert_int(int(win.get("low", 0))).is_equal(5)
 	assert_float(float(win.get("over_in", 0.0))).is_equal_approx(9.0, 0.0001)
-	assert_str(str(win.get("rule", ""))).is_equal("Bestial Boost")
+	assert_str(str(win.get("rule", ""))).is_equal("Enhanced Bestial")
 	# ROT: inside 9" never, and without the base rule never.
-	assert_dict(AiEv.bane_boost_window(_boost_carrier(["Bestial", "Bestial Boost"]), false)).is_empty()
-	assert_dict(AiEv.bane_boost_window(_boost_carrier(["Bestial Boost"]), true)).is_empty()
+	assert_dict(AiEv.bane_boost_window(_boost_carrier(["Bestial", "Enhanced Bestial"]), false)).is_empty()
+	assert_dict(AiEv.bane_boost_window(_boost_carrier(["Enhanced Bestial"]), true)).is_empty()
 
 
 func _scrapper_carrier(rules: Array) -> GameUnit:

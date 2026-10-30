@@ -156,12 +156,12 @@
     // The aura hands "Bestial Boost" to the carrier; the Boost's own widened
     // window (reroll_save_low 5, over 9") rides the Bane save seam past 9".
     #[test]
-    fn a_bestial_boost_aura_widens_the_bane_window_to_5_over_nine_inches() {
+    fn an_enhanced_bestial_aura_widens_the_bane_window_to_5_over_nine_inches() {
         let e = crate::acts::CURRENT_RULES_EPOCH;
-        let us = carrier("aof", "beastmen", &["Bestial Boost Aura", "Bestial"], e);
+        let us = carrier("aof", "beastmen", &["Enhanced Bestial Aura", "Bestial"], e);
         assert_eq!(us.shoot[0].bane_low, 5, "the granted Boost's reroll_save_low");
         assert_eq!(us.shoot[0].bane_over_in, 9.0, "the Boost's own over-in gate");
-        assert_eq!(us.shoot[0].bane_rule, "Bestial Boost", "rules-must-log name");
+        assert_eq!(us.shoot[0].bane_rule, "Enhanced Bestial", "rules-must-log name");
         let bare = carrier("aof", "beastmen", &["Bestial"], e);
         assert_eq!(bare.shoot[0].bane_low, 0, "the base Bestial keeps the 6s-only window");
         let on = bane_volley(&us, 12.0);
@@ -191,9 +191,9 @@
     // The aura hands "Buccaneer Boost" (Shot Modifier hit_bonus 1, no
     // over_in) to the carrier: flat +1 to hit at EVERY range, shooting only.
     #[test]
-    fn a_buccaneer_boost_aura_adds_a_flat_plus_one_to_shooting_only() {
+    fn an_enhanced_buccaneer_aura_adds_a_flat_plus_one_to_shooting_only() {
         let e = crate::acts::CURRENT_RULES_EPOCH;
-        let us = aura_us("aof", "sky_city_dwarves", "Buccaneer Boost Aura", e);
+        let us = aura_us("aof", "sky_city_dwarves", "Enhanced Buccaneer Aura", e);
         assert_eq!(us.shoot[0].hit_bonus, 1, "the granted Boost's flat hit_bonus");
         assert_eq!(us.shoot[0].hit_bonus_over9, 0, "no over_in on the Boost");
         assert_eq!(us.melee[0].hit_bonus, 0, "the Shot Modifier never reaches melee");
@@ -234,14 +234,14 @@
     // save 1 for one extra wound; with the base Destroyer the window widens
     // to failed 2s.
     #[test]
-    fn a_destroyer_boost_aura_shreds_one_extra_wound_per_save_one_and_widens_with_the_base() {
+    fn an_enhanced_destroyer_aura_shreds_one_extra_wound_per_save_one_and_widens_with_the_base() {
         let e = crate::acts::CURRENT_RULES_EPOCH;
-        let bare = carrier("aof", "ogres", &["Destroyer Boost Aura"], e);
+        let bare = carrier("aof", "ogres", &["Enhanced Destroyer Aura"], e);
         assert!(bare.shoot[0].shred_alias, "the granted Boost is a Shred carrier");
         assert_eq!(bare.shoot[0].shred_ones_wound_bonus, 1, "the entry's extra_wound_per_save_one");
-        assert_eq!(bare.shoot[0].shred_ones_rule, "Destroyer Boost", "the rule names itself");
+        assert_eq!(bare.shoot[0].shred_ones_rule, "Enhanced Destroyer", "the rule names itself");
         assert_eq!(bare.shoot[0].shred_low, 1, "the bare Boost keeps its own 1s window");
-        let full = carrier("aof", "ogres", &["Destroyer Boost Aura", "Destroyer"], e);
+        let full = carrier("aof", "ogres", &["Enhanced Destroyer Aura", "Destroyer"], e);
         assert_eq!(full.shoot[0].shred_low, 2, "the granted Boost's save_fail_max window");
         assert_eq!(full.shoot[0].shred_ones_wound_bonus, 1);
     }
