@@ -289,7 +289,8 @@ pub fn unit_sev_mev(p: &Profile, us: &UnitStatic, def: &Ctx) -> (f64, f64) {
     let sev = snappedf(shoot_ev(&shoot, &keep, &s_attacks, &att, def, EV_REF_DIST_IN), 0.01);
     let mel = melee_profiles(&p.weapons);
     let m_attacks: Vec<i64> = mel.iter().map(|s| s.attacks).collect();
-    let mev = snappedf(melee_ev(&mel, &m_attacks, &att, def, true), 0.01);
+    // A reference row against the neutral defender: no charge, so no gap (the table's `board_rows` hands none).
+    let mev = snappedf(melee_ev(&mel, &m_attacks, &att, def, true, 0.0), 0.01);
     (sev, mev)
 }
 
