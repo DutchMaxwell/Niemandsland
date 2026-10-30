@@ -1799,6 +1799,7 @@ mod unstoppable_aura;
 mod utility_move_buff_pins;
 mod v36_data;
 mod v36_melee;
+mod v36_melee_rows;
 mod v36_morale;
 mod v36_shoot;
 mod v36_ux;
