@@ -33,7 +33,7 @@ use crate::acts::{
     EPOCH_50_SURGE_LOW, EPOCH_54_DEFENSE_RATING, EPOCH_55_FORTIFIED_AURA,
     EPOCH_56_GROUNDED_PROTECTION, EPOCH_58_PRECISION_DEBUFF, EPOCH_60_GROUNDED_STEALTH,
     EPOCH_61_PRECISION_MARKERS, EPOCH_65_MELEE_TRUTH, EPOCH_66_DISTANCE_TRUTH,
-    EPOCH_72_PLAYTEST_RULES,
+    EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36,
 };
 use crate::combat::{
     armored_defense, BANNER_MORALE_BONUS, LONG_RANGE_IN, REGENERATION_TARGET, RESISTANCE_TARGET,
@@ -5542,11 +5542,17 @@ fn move_rule_mods_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Opt
         // entry ships with this wave, so a record below
         // `EPOCH_6_TABLE_RULES` keeps NOT seeing it.
         "Reach Hunt",
+        // Rules 3.6 (DAT-10): Lustbound's entry is a Quick-shaped alias (+1"/+2")
+        // the table's band pass already reads; gated on the frozen `EPOCH_73_V36`.
+        "Lustbound",
     ] {
         if !unit_rule_active(reg, p, name) {
             continue;
         }
         if wave3_alias(name) && !rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
+            continue;
+        }
+        if name == "Lustbound" && !rule_on(rules_epoch, EPOCH_73_V36) {
             continue;
         }
         let map = reg.rules_for(&p.game_system);

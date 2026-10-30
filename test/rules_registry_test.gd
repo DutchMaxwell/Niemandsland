@@ -300,10 +300,10 @@ func test_system_scoping_banner_and_musician_params_diverge() -> void:
 
 func test_modeled_tokens_are_system_scoped() -> void:
 	# Royal Legion (Mummified Undead) is an AoF-family army-book rule: modeled in aof — and since
-	# the coverage wave, gf carries the PRIMITIVE too (Lustbound aliases it), so the token appears
-	# there as well. System scoping still holds at LOOKUP level (per (system, faction, name)).
+	# the coverage wave, gf carries the PRIMITIVE too (Highborn aliases it in rules 3.6), so the token
+	# appears there as well. System scoping still holds at LOOKUP level (per (system, faction, name)).
 	assert_bool(RulesRegistry.modeled_tokens("aof").has("Royal Legion")).is_true()
-	assert_bool(RulesRegistry.modeled_tokens("gf").has("Royal Legion")).is_true()   # via the Lustbound alias
+	assert_bool(RulesRegistry.modeled_tokens("gf").has("Royal Legion")).is_true()   # via the Highborn alias
 	assert_bool(RulesRegistry.lookup("gf", "battle_brothers", "Royal Legion").is_empty()).is_true()
 	# The shared core primitives are modeled everywhere, incl. the wave-5 set.
 	for s in RulesRegistry.SYSTEMS:
@@ -553,8 +553,8 @@ func test_regen_alias_params_flow_from_emitted_maps() -> void:
 	# Plaguebound unit regenerates at 6+, never at the Regeneration default 5+.
 	RulesRegistry.reset_cache()
 	var e := RulesRegistry.lookup("gf", "lust_disciples", "Lustbound")
-	assert_str(str(e.get("primitive"))).is_equal("Royal Legion")
-	assert_int(int((e.get("params", {}) as Dictionary).get("range_bonus_in", 0))).is_equal(4)
+	assert_str(str(e.get("primitive"))).is_equal("Quick")
+	assert_int(int((e.get("params", {}) as Dictionary).get("advance_mod", 0))).is_equal(1)
 	var plague := RulesRegistry.lookup("gf", "plague_disciples", "Plaguebound")
 	if plague.is_empty():   # faction slug probe — the rule lives in several chaos books
 		for fac in ["plague_disciples", "wormhole_daemons_of_plague", "havoc_brothers"]:
@@ -760,7 +760,8 @@ func test_only_the_known_upstream_lagging_books_carry_a_stale_version_stamp() ->
 			var rules: Dictionary = factions[faction]
 			for name in rules.keys():
 				var stamp := str((rules[name] as Dictionary).get("book_version", ""))
-				if stamp != "3.5.3":
+				# An entry re-read from a rules 3.6 book carries a 3.6 stamp: current, not lagging.
+				if stamp != "3.5.3" and not stamp.begins_with("3.6"):
 					found["%s/%s" % [system, faction]] = true
 					assert_str(stamp) \
 						.override_failure_message("%s/%s/%s: unexpected stamp" % [system, faction, name]) \
