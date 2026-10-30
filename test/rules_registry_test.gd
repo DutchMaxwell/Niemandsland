@@ -433,10 +433,10 @@ func test_conditional_ap_family_resolves_target_property_params() -> void:
 	# Coverage wave: gff books alias the Guarded primitive now (Sturdy-family), so the TOKEN is
 	# present there too — system scoping keeps holding at lookup level.
 	assert_bool(RulesRegistry.modeled_tokens("gff").has("Guarded")).is_true()
-	# Shrouding family (denial primitives): -6" shooting range / -3" charge movement, floored at 6".
-	assert_float(float(RulesRegistry.param("gf", "custodian_brothers", "Ranged Shrouding", "range_penalty_in", 0.0))).is_equal_approx(6.0, 0.001)
+	# Shrouding family (denial primitives): -4" shooting range / -2" charge movement, floored at 6" (rules 3.6).
+	assert_float(float(RulesRegistry.param("gf", "custodian_brothers", "Ranged Shrouding", "range_penalty_in", 0.0))).is_equal_approx(4.0, 0.001)
 	assert_float(float(RulesRegistry.param("gf", "custodian_brothers", "Ranged Shrouding", "floor_in", 0.0))).is_equal_approx(6.0, 0.001)
-	assert_float(float(RulesRegistry.param("gf", "battle_brothers", "Melee Shrouding", "move_penalty_in", 0.0))).is_equal_approx(3.0, 0.001)
+	assert_float(float(RulesRegistry.param("gf", "battle_brothers", "Melee Shrouding", "move_penalty_in", 0.0))).is_equal_approx(2.0, 0.001)
 	for r in ["Ranged Shrouding", "Melee Shrouding"]:
 		assert_bool(RulesRegistry.modeled_tokens("gf").has(r)).override_failure_message("%s not modeled" % r).is_true()
 	# Data-lag closures: Versatile Attack + Infiltrate ran in code for waves already — the maps now

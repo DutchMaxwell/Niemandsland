@@ -1454,7 +1454,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "move_penalty_in": 3.0,
+     "move_penalty_in": 2.0,
      "floor_in": 6.0
     }
    },
@@ -1889,7 +1889,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "move_penalty_in": 3.0,
+     "move_penalty_in": 2.0,
      "floor_in": 6.0
     }
    },
@@ -2075,7 +2075,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "move_penalty_in": 3.0,
+     "move_penalty_in": 2.0,
      "floor_in": 6.0
     }
    },
@@ -2537,7 +2537,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "range_penalty_in": 6.0,
+     "range_penalty_in": 4.0,
      "floor_in": 6.0
     }
    },
@@ -2774,7 +2774,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "move_penalty_in": 3.0,
+     "move_penalty_in": 2.0,
      "floor_in": 6.0
     }
    },
@@ -2974,7 +2974,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "move_penalty_in": 3.0,
+     "move_penalty_in": 2.0,
      "floor_in": 6.0
     }
    },
@@ -3232,7 +3232,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "move_penalty_in": 3.0,
+     "move_penalty_in": 2.0,
      "floor_in": 6.0
     }
    },
@@ -3389,7 +3389,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "move_penalty_in": 3.0,
+     "move_penalty_in": 2.0,
      "floor_in": 6.0
     }
    },
@@ -5716,7 +5716,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "range_penalty_in": 6.0,
+     "range_penalty_in": 4.0,
      "floor_in": 6.0
     }
    },
@@ -5921,7 +5921,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "move_penalty_in": 3.0,
+     "move_penalty_in": 2.0,
      "floor_in": 6.0
     }
    },
@@ -6136,7 +6136,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "move_penalty_in": 3.0,
+     "move_penalty_in": 2.0,
      "floor_in": 6.0
     }
    },
@@ -6604,7 +6604,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "move_penalty_in": 3.0,
+     "move_penalty_in": 2.0,
      "floor_in": 6.0
     }
    },
@@ -6887,7 +6887,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "range_penalty_in": 6.0,
+     "range_penalty_in": 4.0,
      "floor_in": 6.0
     }
    },
@@ -7284,7 +7284,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "move_penalty_in": 3.0,
+     "move_penalty_in": 2.0,
      "floor_in": 6.0
     }
    },
@@ -9246,7 +9246,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "move_penalty_in": 3.0,
+     "move_penalty_in": 2.0,
      "floor_in": 6.0
     }
    },
@@ -9416,7 +9416,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "move_penalty_in": 3.0,
+     "move_penalty_in": 2.0,
      "floor_in": 6.0
     }
    },
@@ -9666,7 +9666,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "move_penalty_in": 3.0,
+     "move_penalty_in": 2.0,
      "floor_in": 6.0
     }
    },
@@ -9869,7 +9869,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "move_penalty_in": 3.0,
+     "move_penalty_in": 2.0,
      "floor_in": 6.0
     }
    },

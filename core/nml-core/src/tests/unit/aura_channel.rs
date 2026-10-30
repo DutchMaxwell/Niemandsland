@@ -96,7 +96,7 @@ use super::*;
 
     #[test]
     fn a_melee_shrouding_aura_shrouds_the_charge_at_epoch_6() {
-        assert_eq!(aura_capture("Melee Shrouding Aura", "battle_brothers", 6).shroud, Some([3.0, 6.0]));
+        assert_eq!(aura_capture("Melee Shrouding Aura", "battle_brothers", 6).shroud, Some([2.0, 6.0]));
         assert_eq!(aura_capture("Melee Shrouding Aura", "battle_brothers", 5).shroud, None);
         assert_eq!(aura_capture("", "battle_brothers", 6).shroud, None);
     }
