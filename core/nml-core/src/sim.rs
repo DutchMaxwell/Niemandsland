@@ -13,7 +13,8 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::combat::{
-    at_or_below_half, block_chance, effective_attacks, melee_ev, morale_target, shielded_defense,
+    at_or_below_half, block_chance, charge_estimate_gap_in, effective_attacks, melee_ev, morale_target,
+    shielded_defense,
     shoot_ev, should_test_shooting_morale, shrouded_reach, RAVAGE_WOUND_TARGET,
     ANGELIC_BLESSING_BOOST_TARGET_SPELL, BEST_HIT_TARGET, CURSED_UNDEAD_BOOST_TARGET,
     HOLD_THE_LINE_BOOST_MORALE_BONUS, SELF_REPAIR_BOOST_TARGET, UNMODIFIED_SIX,
@@ -3964,8 +3965,9 @@ fn modifier_delta_of(
             - shoot_ev(&us.shoot, &sc.keep, &sc.attacks, &att_base, &def_base, dist_in)
     } else {
         melee_profiles_of(us, state.alive[att_i], &mut sc);
-        melee_ev(&us.melee, &sc.attacks, &att2, &def2, charging)
-            - melee_ev(&us.melee, &sc.attacks, &att_base, &def_base, charging)
+        // No pre-charge gap here (`dist_in` is the ranged side's, and the table's `_side_ev` hands none): blind.
+        melee_ev(&us.melee, &sc.attacks, &att2, &def2, charging, 0.0)
+            - melee_ev(&us.melee, &sc.attacks, &att_base, &def_base, charging, 0.0)
     }
 }
 
@@ -6230,7 +6232,10 @@ pub fn melee_threat_at_epoch(statics: &[UnitStatic], state: &State, si: usize, t
     let def = ctx_live(ctx_of(ut, state, ti), statics, state, ti, true, rules_epoch);
     let mut sc = Scratch::default();
     melee_profiles_of(us, state.alive[si], &mut sc);
-    melee_ev(&us.melee, &sc.attacks, &att, &def, true)
+    let gap = charge_estimate_gap_in(rules_epoch, || {
+        modifier_distance_in(state, si, ti, Seams { rules_epoch, ..Seams::default() })
+    });
+    melee_ev(&us.melee, &sc.attacks, &att, &def, true, gap)
 }
 
 pub fn melee_threat(statics: &[UnitStatic], state: &State, si: usize, ti: usize) -> f64 {
@@ -8606,7 +8611,9 @@ fn resolve_with(
                         // NML-1132: the charger's strike phase is the host's melee set
                         // PLUS every alive attached hero's, the way the table builds it.
                         member_profiles_of(statics, &next, si, true, 0.0, seams, &mut sc);
-                        melee_ev(folded_slice(&us.melee, &sc), &sc.attacks, &att, &def, true)
+                        // D-GATE6: priced at the pre-charge gap (`state` is the pre-move snapshot).
+                        let gap = charge_estimate_gap_in(seams.rules_epoch, || modifier_distance_in(state, si, ti, seams));
+                        melee_ev(folded_slice(&us.melee, &sc), &sc.attacks, &att, &def, true, gap)
                     };
                     apply_expected_wounds(&mut next, ti, ev, rng.as_deref_mut());
                     next.fatigued[si] = true;
@@ -8622,7 +8629,7 @@ fn resolve_with(
                             // The strike-back folds too (`_solo_attack_groups` is built
                             // for the DEFENDER the same way, main.gd:4284-4290).
                             member_profiles_of(statics, &next, ti, true, 0.0, seams, &mut sc);
-                            melee_ev(folded_slice(&ut.melee, &sc), &sc.attacks, &att, &def, false)
+                            melee_ev(folded_slice(&ut.melee, &sc), &sc.attacks, &att, &def, false, 0.0)
                         };
                         apply_expected_wounds(&mut next, si, ev_back, rng.as_deref_mut());
                         next.fatigued[ti] = true;
