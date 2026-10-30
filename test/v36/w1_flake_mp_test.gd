@@ -43,16 +43,14 @@ func test_statuses_set_in_one_frame_are_all_recorded() -> void:
 	assert_array(harness.get("_net_status_seen")).contains_exactly([HICCUP, "Reconnected", "Online (Peer 2)"])
 
 
-## The per-frame sample stays for the few texts main.gd writes straight to the label ("Hosting …"),
-## records each once, and a status line other than the network one is never recorded.
-func test_direct_label_writes_are_sampled_once() -> void:
+## main.gd writes a few texts straight to the label ("Hosting …"); the per-frame sample still records
+## those, once, after the status set earlier in the same frame. Another status line is never recorded.
+func test_direct_label_write_after_a_set_is_sampled_once() -> void:
 	var harness := _harness()
 	var label := _label(harness)
 	GameMenu.set_status(label, "Online: ABC-123", HouseStyle.TONE_OK)
-	harness.call("_process", 0.0)
 	label.text = "Hosting (peer 2 joined)"
-	harness.call("_process", 0.0)
-	harness.call("_process", 0.0)
 	GameMenu.set_status(auto_free(Label.new()), "Some other status line", HouseStyle.TONE_OK)
+	harness.call("_process", 0.0)
 	harness.call("_process", 0.0)
 	assert_array(harness.get("_net_status_seen")).contains_exactly(["Online: ABC-123", "Hosting (peer 2 joined)"])
