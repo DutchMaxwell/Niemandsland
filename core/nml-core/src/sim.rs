@@ -6810,6 +6810,28 @@ fn place_d3_hop(
     ))
 }
 
+/// EPOCH_73_V36 (rules 3.6, UX-17) — the family members whose rolled inches
+/// are a MOVE; the other `Bounding`-primitive aliases still hop.
+const D3_MOVERS_V36: [&str; 3] = ["Bounding", "Nimble", "Dash"];
+
+/// EPOCH_73_V36 — the FRESH-sim arm for `D3_MOVERS_V36`: the same seeded
+/// draws as `place_d3_hop` (one `randi_range(1, 3)` per die, so the stream
+/// stays aligned with the table's `bounding_d3` roll), but the inches widen
+/// every move band this activation — the table's own band model — so the
+/// move keeps the normal path rules. Returns the inches and the
+/// rules-must-log line.
+fn bounding_move_in(spec: &crate::unit::PlaceSpec, rng: Option<&mut GodotRng>) -> Option<(f64, String)> {
+    let rng = rng?;
+    let mut reach_in = spec.plus;
+    for _ in 0..spec.dice.max(1) {
+        reach_in += rng.randi_range(1, 3) as f64;
+    }
+    Some((reach_in, format!(
+        "{}: on activation the unit moves up to the rolled {reach_in:.0}\" — every move band +{reach_in:.0}\" this activation",
+        spec.name
+    )))
+}
+
 /// The Mark's attackers-side grant on the target, priced by the charger's own
 /// registry stamp. One matching record grants the book's +4" once, never once
 /// per duplicate mark; the old epoch remains untouched.
@@ -7551,15 +7573,25 @@ fn resolve_with(
     // (the table rolls it at the activation's head, solo_controller.gd:1688-
     // 1710). A RECORDED act replays the table's band-bonus model byte-exact
     // (`bounding_bonus_in` above) — the hop is the FRESH arm. Below the gate
-    // every corpus replays the plain reading, byte-exact.
+    // every corpus replays the plain reading, byte-exact. From EPOCH_73_V36
+    // Bounding / Nimble / Dash spend the roll as a move instead (UX-17).
+    let mut move_d3_in = 0.0;
     let hop_log = if rule_on(seams.rules_epoch, crate::acts::EPOCH_26_PLACE_D3)
         && bounding_bonus_in(action) == 0.0
         && matches!(kind, ADVANCE | RUSH | CHARGE)
     {
-        statics[pi_s]
-            .bounding_place
-            .as_ref()
-            .and_then(|spec| place_d3_hop(&mut next, si, cover, spec, rng.as_deref_mut()))
+        statics[pi_s].bounding_place.as_ref().and_then(|spec| {
+            if rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36)
+                && D3_MOVERS_V36.contains(&spec.name.as_str())
+            {
+                bounding_move_in(spec, rng.as_deref_mut()).map(|(inches, line)| {
+                    move_d3_in = inches;
+                    line
+                })
+            } else {
+                place_d3_hop(&mut next, si, cover, spec, rng.as_deref_mut())
+            }
+        })
     } else {
         None
     };
@@ -7568,7 +7600,7 @@ fn resolve_with(
     // `SoloController.sim_move_bands(su["unit"])` is a pure read of the unit's
     // rules (bands + the Musician bonus, solo_controller.gd:4966-4982), flattened
     // into the profile table at capture; RUSH and CHARGE share the rush band.
-    let bounding_in = bounding_bonus_in(action);
+    let bounding_in = bounding_bonus_in(action) + move_d3_in;
     // Versatile Reach — the witness policy evaluated at the resolve seam, the
     // same seam Bounding rides (`sim::versatile_reach_charge_in`). CLASS FIX
     // (external review 03.09. item 3 / F9, `acts::rule_on`): a pre-epoch
@@ -7652,8 +7684,9 @@ fn resolve_with(
     }
     // NML-1152 B14 step 1 — rules-must-log: the ONLY table die this port does
     // not draw itself, named here (dice.rs's `ShootResult.log` precedent) the
-    // one time it changes the band.
-    if bounding_in != 0.0 {
+    // one time it changes the band. A fresh EPOCH_73_V36 move logs its own
+    // line (the hop line below).
+    if bounding_in != 0.0 && move_d3_in == 0.0 {
         if let Some((_, shot)) = dice.as_mut() {
             shot.log.push(format!(
                 "Bounding: {} — +{bounding_in:.0}\" every move band this activation",
@@ -7662,7 +7695,8 @@ fn resolve_with(
         }
     }
     // EPOCH_26_PLACE_D3 — rules-must-log: ONE trace line per hop, naming the
-    // rule and the rolled distance (`place_d3_hop` above).
+    // rule and the rolled distance (`place_d3_hop` above), or per EPOCH_73_V36
+    // rolled move (`bounding_move_in`).
     if let Some(line) = hop_log {
         if let Some((_, shot)) = dice.as_mut() {
             shot.log.push(line);

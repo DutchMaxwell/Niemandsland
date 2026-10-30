@@ -1931,8 +1931,13 @@ func _act(unit: GameUnit) -> Dictionary:
 		charge_reach += bounding_in
 		var die_text := "%s%s" % ["%dD3" % bounding_dice if bounding_dice > 1 else "D3",
 			("+%d" % bounding_plus if bounding_plus > 0 else "")]
+		# Rules 3.6 (EPOCH_73_V36, UX-17): Bounding / Nimble / Dash MOVE the rolled inches instead of being
+		# placed. The band bonus above already is that move, so only the record's words change.
+		var moves_d3 := AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
+			and bounding_rule in ["Bounding", "Nimble", "Dash"]
 		record_decision({"kind": "move", "unit": unit.get_name(),
-			"rule": "%s: on activation the unit may be placed within %s\" — valued as a bonus on every move band" % [
+			"rule": ("%s: on activation the unit moves up to %s\" — a bonus on every move band" if moves_d3
+				else "%s: on activation the unit may be placed within %s\" — valued as a bonus on every move band") % [
 				bounding_rule, die_text],
 			"candidates": [], "chosen": "+%.0f\" bands" % bounding_in, "why": "bounding placement",
 			"data": {"bonus_in": bounding_in, "rule": bounding_rule, "dice": bounding_dice, "plus": bounding_plus}})

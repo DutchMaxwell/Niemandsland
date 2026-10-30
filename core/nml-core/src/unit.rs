@@ -1150,7 +1150,8 @@ pub struct UnitStatic {
     /// simulation input: in a FRESH core sim (no recorded `bounding_d3`
     /// trace) the core rolls the dice itself and performs the placement
     /// before the move; a RECORDED act replays the table's band model
-    /// byte-exact and never hops.
+    /// byte-exact and never hops. From EPOCH_73_V36 a Bounding / Nimble /
+    /// Dash roll is a move instead (`sim::bounding_move_in`).
     pub bounding_place: Option<PlaceSpec>,
     /// The Quick/Fast move-band family — the named carriers' own registry
     /// params, summed the way BOTH band passes stack them (per rule NAME:
