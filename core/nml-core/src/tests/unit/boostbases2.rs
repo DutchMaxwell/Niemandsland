@@ -78,8 +78,8 @@ use super::*;
     /// (the base "Bestial" alias itself banes at every epoch — only the
     /// WIDENED window is epoch-7 born), and exactly 9" is not "over".
     #[test]
-    fn bestial_boost_widens_the_bane_window_over_nine_inches_at_epoch_7() {
-        let us = boostbases2_unit("beastmen", &["Bestial", "Bestial Boost"], 7);
+    fn enhanced_bestial_widens_the_bane_window_over_nine_inches_at_epoch_7() {
+        let us = boostbases2_unit("beastmen", &["Bestial", "Enhanced Bestial"], 7);
         assert!(us.shoot[0].bane, "the base alias banes at every epoch");
         let on = bane_volley(&us, 12.0);
         let saves = &on.rolls[1];
@@ -93,7 +93,7 @@ use super::*;
             "epoch 7, 12\": every successful 5-6 re-rolls (the widened window)"
         );
         assert!(
-            on.log.iter().any(|l| l.contains("Bestial Boost")),
+            on.log.iter().any(|l| l.contains("Enhanced Bestial")),
             "rules-must-log: the widened window names itself (RED before the fix)"
         );
 
@@ -106,11 +106,11 @@ use super::*;
         );
 
         // Epoch 6: the record predates this wave — the base 6s-only window.
-        let us6 = boostbases2_unit("beastmen", &["Bestial", "Bestial Boost"], 6);
+        let us6 = boostbases2_unit("beastmen", &["Bestial", "Enhanced Bestial"], 6);
         let off = bane_volley(&us6, 12.0);
         assert_eq!(off.rolls[2].count as usize, sixes, "epoch 6: the base window, byte-exact");
         assert!(
-            !off.log.iter().any(|l| l.contains("Bestial Boost")),
+            !off.log.iter().any(|l| l.contains("Enhanced Bestial")),
             "epoch 6: the widened window is not born yet"
         );
 
@@ -119,7 +119,7 @@ use super::*;
         let without = bane_volley(&base, 12.0);
         assert_eq!(without.rolls[2].count as usize, sixes, "no Boost: only the 6s re-roll");
         assert!(
-            !without.log.iter().any(|l| l.contains("Bestial Boost")),
+            !without.log.iter().any(|l| l.contains("Enhanced Bestial")),
             "no widened window fired, nothing logs"
         );
     }
@@ -206,7 +206,7 @@ use super::*;
     /// reading it had before the wave existed.
     #[test]
     fn an_epoch_six_record_sees_none_of_the_three_wave_four_boosts() {
-        let bane = boostbases2_unit("beastmen", &["Bestial", "Bestial Boost"], 6);
+        let bane = boostbases2_unit("beastmen", &["Bestial", "Enhanced Bestial"], 6);
         assert_eq!(bane.shoot[0].bane_low, 0, "epoch 6: the base 6s-only window");
         assert_eq!(bane.shoot[0].bane_rule, "", "epoch 6: nothing to name");
         let spirit =

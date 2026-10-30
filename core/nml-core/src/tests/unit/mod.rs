@@ -104,15 +104,15 @@
     boost_aura_test!(a_targeting_visor_boost_aura_grants_its_base_at_epoch_6, "Targeting Visor Boost Aura");
     boost_aura_test!(a_warden_boost_aura_grants_its_base_at_epoch_6, "Warden Boost Aura");
     boost_aura_test!(a_lucky_boost_aura_grants_its_base_at_epoch_6, "Lucky Boost Aura");
-    boost_aura_test!(a_buccaneer_boost_aura_grants_its_base_at_epoch_6, "Buccaneer Boost Aura");
+    boost_aura_test!(an_enhanced_buccaneer_aura_grants_its_base_at_epoch_6, "Enhanced Buccaneer Aura");
     boost_aura_test!(a_vale_oath_boost_aura_grants_its_base_at_epoch_6, "Vale Oath Boost Aura");
     boost_aura_test!(a_wave_step_boost_aura_grants_its_base_at_epoch_6, "Wave-Step Boost Aura");
     boost_aura_test!(a_royal_warrior_boost_aura_grants_its_base_at_epoch_6, "Royal Warrior Boost Aura");
-    boost_aura_test!(a_bestial_boost_aura_grants_its_base_at_epoch_6, "Bestial Boost Aura");
+    boost_aura_test!(an_enhanced_bestial_aura_grants_its_base_at_epoch_6, "Enhanced Bestial Aura");
     boost_aura_test!(a_vinci_tech_boost_aura_grants_its_base_at_epoch_6, "Vinci Tech Boost Aura");
     boost_aura_test!(an_ossified_boost_aura_grants_its_base_at_epoch_6, "Ossified Boost Aura");
     boost_aura_test!(a_shadowborn_boost_aura_grants_its_base_at_epoch_6, "Shadowborn Boost Aura");
-    boost_aura_test!(a_destroyer_boost_aura_grants_its_base_at_epoch_6, "Destroyer Boost Aura");
+    boost_aura_test!(an_enhanced_destroyer_aura_grants_its_base_at_epoch_6, "Enhanced Destroyer Aura");
     boost_aura_test!(an_empyrean_spirit_boost_aura_grants_its_base_at_epoch_6, "Empyrean Spirit Boost Aura");
     boost_aura_test!(a_wild_veil_boost_aura_grants_its_base_at_epoch_6, "Wild Veil Boost Aura");
 
@@ -531,7 +531,7 @@
       "angelic_boost":{"unit_id":"angelic_boost","name":"Angelic Boost","quality":4,
         "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
         "base_radius":0.016,"game_system":"aof","faction_folder":"kingdom_of_angels",
-        "special_rules":["Angelic Blessing Boost"],"item_grants":[],
+        "special_rules":["Enhanced Angelic Blessing"],"item_grants":[],
         "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
         "weapons":[{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]},
       "cursed":{"unit_id":"cursed","name":"Cursed","quality":4,
@@ -543,7 +543,7 @@
       "cursed_boost":{"unit_id":"cursed_boost","name":"Cursed Boost","quality":4,
         "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
         "base_radius":0.016,"game_system":"aof","faction_folder":"vampiric_undead",
-        "special_rules":["Cursed Undead Boost"],"item_grants":[],
+        "special_rules":["Enhanced Cursed Undead"],"item_grants":[],
         "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
         "weapons":[{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]},
       "plague":{"unit_id":"plague","name":"Plague","quality":4,
@@ -826,7 +826,7 @@
     /// in the entry). RED: drop the stamp arms or the entries — the asserts
     /// fall back to the defaults.
     const SURGE_GATES_HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
-      "devout_boost_unit":{"unit_id":"devout_boost_unit","name":"Devout Boost Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"blessed_sisters","special_rules":["Devout","Devout Boost"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":0,"rules":[]},{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]},
+      "devout_boost_unit":{"unit_id":"devout_boost_unit","name":"Enhanced Devout Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"blessed_sisters","special_rules":["Devout","Enhanced Devout"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":0,"rules":[]},{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]},
       "plain_blessed":{"unit_id":"plain_blessed","name":"Plain","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"blessed_sisters","special_rules":[],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":0,"rules":[]},{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]},
       "point_blank_unit":{"unit_id":"point_blank_unit","name":"Point Blank Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"blessed_sisters","special_rules":["Point-Blank Surge"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":0,"rules":[]},{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]},
       "brutal_fighter_unit":{"unit_id":"brutal_fighter_unit","name":"Brutal Fighter Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"human_inquisition","special_rules":["Brutal Fighter"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":0,"rules":[]},{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]},

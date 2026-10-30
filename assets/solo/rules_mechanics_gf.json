@@ -42,11 +42,11 @@
   "Casting Buff",
   "Casting Debuff",
   "Changebound",
-  "Changebound Boost",
-  "Changebound Boost Aura",
+  "Enhanced Changebound",
+  "Enhanced Changebound Aura",
   "Clan Warrior",
-  "Clan Warrior Boost",
-  "Clan Warrior Boost Aura",
+  "Enhanced Clan Warrior",
+  "Enhanced Clan Warrior Aura",
   "Coordinate",
   "Counter",
   "Counter-Attack",
@@ -69,8 +69,8 @@
   "Delayed Action",
   "Destructive",
   "Devout",
-  "Devout Boost",
-  "Devout Boost Aura",
+  "Enhanced Devout",
+  "Enhanced Devout Aura",
   "Difficult Terrain Debuff",
   "Disintegrate",
   "Drone Laser Gun",
@@ -1634,7 +1634,7 @@
      "bonus_hits_per_six": 1
     }
    },
-   "Devout Boost": {
+   "Enhanced Devout": {
     "primitive": "Surge",
     "rated": false,
     "book_version": "3.5.3",
@@ -1644,12 +1644,12 @@
      "over_in": 9
     }
    },
-   "Devout Boost Aura": {
+   "Enhanced Devout Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Devout Boost"
+     "grants": "Enhanced Devout"
     }
    },
    "Disintegrate": {
@@ -2291,7 +2291,7 @@
      "applies_charged": true
     }
    },
-   "Changebound Boost": {
+   "Enhanced Changebound": {
     "primitive": "Stealth",
     "rated": false,
     "book_version": "3.5.3",
@@ -2301,12 +2301,12 @@
      "upgrades": "Changebound"
     }
    },
-   "Changebound Boost Aura": {
+   "Enhanced Changebound Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Changebound Boost"
+     "grants": "Enhanced Changebound"
     }
    },
    "Dangerous Terrain Debuff": {
@@ -4008,7 +4008,7 @@
      "extra_attack": true
     }
    },
-   "Clan Warrior Boost": {
+   "Enhanced Clan Warrior": {
     "primitive": "Surge",
     "rated": false,
     "book_version": "3.5.3",
@@ -4018,12 +4018,12 @@
      "extra_attack": true
     }
    },
-   "Clan Warrior Boost Aura": {
+   "Enhanced Clan Warrior Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Clan Warrior Boost"
+     "grants": "Enhanced Clan Warrior"
     }
    },
    "Counter-Attack": {
@@ -8769,7 +8769,7 @@
      "applies_charged": true
     }
    },
-   "Changebound Boost": {
+   "Enhanced Changebound": {
     "primitive": "Stealth",
     "rated": false,
     "book_version": "3.5.2",
@@ -10121,7 +10121,7 @@
      "applies_charged": true
     }
    },
-   "Changebound Boost": {
+   "Enhanced Changebound": {
     "primitive": "Stealth",
     "rated": false,
     "book_version": "3.5.3",
@@ -10131,12 +10131,12 @@
      "upgrades": "Changebound"
     }
    },
-   "Changebound Boost Aura": {
+   "Enhanced Changebound Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Changebound Boost"
+     "grants": "Enhanced Changebound"
     }
    },
    "Fearless Aura": {

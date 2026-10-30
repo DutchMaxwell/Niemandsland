@@ -784,7 +784,7 @@ use super::*;
     }
 
     #[test]
-    fn angelic_blessing_boost_is_spell_only_on_2_epoch_gated() {
+    fn enhanced_angelic_blessing_is_spell_only_on_2_epoch_gated() {
         let header = read_act_header(REGEN_FAMILY_HEADER).expect("header");
         assert_eq!(
             regen_pair_at(&header, "angelic_boost", CURRENT_RULES_EPOCH),
@@ -807,7 +807,7 @@ use super::*;
     }
 
     #[test]
-    fn cursed_undead_boost_ignores_on_5_6_epoch_gated() {
+    fn enhanced_cursed_undead_ignores_on_5_6_epoch_gated() {
         let header = read_act_header(REGEN_FAMILY_HEADER).expect("header");
         assert_eq!(
             regen_pair_at(&header, "cursed_boost", CURRENT_RULES_EPOCH),
@@ -1409,11 +1409,11 @@ use super::*;
         let dev = UnitStatic::build(
             &mut reg, header.profiles.get("devout_boost_unit").expect("devout_boost_unit"),
         );
-        assert_eq!(dev.shoot[0].surge_low, 5, "Devout Boost's surge_low");
-        assert_eq!(dev.shoot[0].surge_over_in, 9.0, "Devout Boost's over_in");
+        assert_eq!(dev.shoot[0].surge_low, 5, "Enhanced Devout's surge_low");
+        assert_eq!(dev.shoot[0].surge_over_in, 9.0, "Enhanced Devout's over_in");
         assert_eq!(dev.melee[0].surge_low, 5, "the boost rides EVERY profile Devout gave surge");
         assert!(
-            dev.unimplemented.iter().all(|u| u.rule != "Devout Boost"),
+            dev.unimplemented.iter().all(|u| u.rule != "Enhanced Devout"),
             "consumed, not stamped as unimplemented: {:?}", dev.unimplemented
         );
         let plain = UnitStatic::build(
