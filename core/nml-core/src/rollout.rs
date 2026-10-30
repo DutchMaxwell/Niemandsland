@@ -1054,7 +1054,8 @@ pub fn spawn_round_start(statics: &[UnitStatic], terrain: &Terrain, seams: Seams
             "round-start",
             "Spawn",
             &format!(
-                "{}: a fresh copy of {} models of {} ({}) stands within {:.1}\" of ({:.2},{:.2})",
+                "{}: a fresh copy of {} models of {} ({}) stands within {:.1}\" of ({:.2},{:.2}); \
+                 it cannot seize or contest objectives this round",
                 st.key(i), n, tp_name, key, us.spawn.place_in, ax, az
             ),
         );
