@@ -86,8 +86,8 @@ fn forms_with<'a>(us: &'a UnitStatic, cond: &str) -> Vec<&'a CondAp> {
 /// conditional legs (never stacks), while without the Boost those legs stamp
 /// exactly as the piercehunt wave shipped them.
 #[test]
-fn havocbound_boost_stamps_the_always_leg_from_epoch_6() {
-    let on = build_at("gf", "havoc_brothers", &["Havocbound", "Havocbound Boost"], 6);
+fn enhanced_havocbound_stamps_the_always_leg_from_epoch_6() {
+    let on = build_at("gf", "havoc_brothers", &["Havocbound", "Enhanced Havocbound"], 6);
     let always = forms_with(&on, "always");
     assert_eq!(
         always.len(),
@@ -95,7 +95,7 @@ fn havocbound_boost_stamps_the_always_leg_from_epoch_6() {
         "epoch 6: the always leg on both stamped profiles (RED before the fix)"
     );
     assert_eq!(always[0].ap_bonus, 1, "epoch 6: AP(+1)");
-    assert_eq!(always[0].name, "Havocbound Boost", "the named form logs itself");
+    assert_eq!(always[0].name, "Enhanced Havocbound", "the named form logs itself");
     assert!(
         forms_with(&on, "on_charge").is_empty(),
         "the Boost replaces the charge leg, never stacks"
@@ -105,7 +105,7 @@ fn havocbound_boost_stamps_the_always_leg_from_epoch_6() {
         "the Boost replaces the ranged leg, never stacks"
     );
 
-    let off = build_at("gf", "havoc_brothers", &["Havocbound", "Havocbound Boost"], 5);
+    let off = build_at("gf", "havoc_brothers", &["Havocbound", "Enhanced Havocbound"], 5);
     assert!(
         forms_with(&off, "always").is_empty(),
         "epoch 5: pre-port records stay inert (RED before the fix)"
@@ -212,8 +212,8 @@ fn enhanced_mischievous_widens_the_bane_window_over_nine_inches_at_epoch_6() {
 /// volley's to-hit target shows the -1 inside 9" with the rules-must-log
 /// line.
 #[test]
-fn machine_fog_boost_makes_the_minus_one_unconditional_at_epoch_6() {
-    let on = build_at("gf", "machine_cults", &["Machine-Fog", "Machine-Fog Boost"], 6);
+fn enhanced_machine_fog_makes_the_minus_one_unconditional_at_epoch_6() {
+    let on = build_at("gf", "machine_cults", &["Machine-Fog", "Enhanced Machine-Fog"], 6);
     assert!(
         on.ctx.evasive,
         "epoch 6: the Boost folds into the evasive flag (RED before the fix)"
@@ -223,7 +223,7 @@ fn machine_fog_boost_makes_the_minus_one_unconditional_at_epoch_6() {
         "the base entry's conditional alias leg stands down (never stacks)"
     );
 
-    let off = build_at("gf", "machine_cults", &["Machine-Fog", "Machine-Fog Boost"], 5);
+    let off = build_at("gf", "machine_cults", &["Machine-Fog", "Enhanced Machine-Fog"], 5);
     assert!(!off.ctx.evasive, "epoch 5: pre-port records stay inert");
     assert_eq!(
         off.ctx.stealth_alias_penalty, 1,
@@ -243,7 +243,7 @@ fn machine_fog_boost_makes_the_minus_one_unconditional_at_epoch_6() {
         "epoch 6, 6\": the always -1 (4+ minus 1 = 5+) (RED before the fix)"
     );
     assert!(
-        shot.log.iter().any(|l| l.contains("Machine-Fog Boost")),
+        shot.log.iter().any(|l| l.contains("Enhanced Machine-Fog")),
         "rules-must-log: the Boost names itself at the volley seam"
     );
 
@@ -260,7 +260,7 @@ fn machine_fog_boost_makes_the_minus_one_unconditional_at_epoch_6() {
         "without the Boost the conditional alias stays shut inside 9\""
     );
     assert!(
-        !base_shot.log.iter().any(|l| l.contains("Machine-Fog Boost")),
+        !base_shot.log.iter().any(|l| l.contains("Enhanced Machine-Fog")),
         "nothing fired, nothing logs"
     );
 }

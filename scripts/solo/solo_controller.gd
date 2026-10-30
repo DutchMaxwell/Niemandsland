@@ -1372,14 +1372,14 @@ func _no_shot_reason(unit: GameUnit, base_range: int) -> String:
 	return "nearest enemy %.1f\" away, weapon reach %d\"" % [nearest, base_range]
 
 
-func best_shoot_target_now(ai_unit: GameUnit) -> GameUnit:
+func best_shoot_target_now(ai_unit: GameUnit, held: bool = true) -> GameUnit:
 	if army_manager == null:
 		return null
 	var weapons := _unit_weapons(ai_unit)
 	var base_range: int = AiArchetype.max_range_inches(weapons) + shooting_range_bonus(ai_unit)
 	if base_range <= 0:
 		return null
-	var indirect: bool = has_indirect_ranged(weapons) and indirect_ignores_los(ai_unit)
+	var indirect: bool = has_indirect_ranged(weapons) and indirect_ignores_los(ai_unit, held)
 	var from := unit_centre(ai_unit)
 	var profiles := AiEv.stamp_sergeant(filter_limited(ai_unit, AiShooting.profiles_in_range(weapons, 0.0)), ai_unit)
 	var us := AiEv.ctx_for(ai_unit, majority_in_cover(ai_unit), counter_models_of(ai_unit))
@@ -2552,6 +2552,7 @@ func execute_intent(intent: Dictionary, report: Dictionary) -> Dictionary:
 	var quick_shot: bool = bool(intent.get("quick_shot", false))
 	var source: String = str(intent.get("source", "ai"))
 	var goal_dist := MoveIntent.distance_inches(unit_centre(unit), goal)   # nothing has moved yet
+	var charge_from := charge_from_in(unit, target, enemy_dist_in) if action == AiDecision.Action.CHARGE else enemy_dist_in
 	var tcentre := unit_centre(target) if target != null else unit_centre(unit)
 	_player_move = (source == "player")
 	var dang := 0
@@ -2620,7 +2621,7 @@ func execute_intent(intent: Dictionary, report: Dictionary) -> Dictionary:
 	var weapons := _unit_weapons(unit)
 	var d2 := MoveIntent.distance_inches(unit_centre(unit), unit_centre(target)) if target != null else INF
 	report["dist_in"] = d2
-	report["charge_from_in"] = enemy_dist_in   # pre-move distance — the Versatile Attack >9" melee-charge gate
+	report["charge_from_in"] = charge_from   # pre-move distance — the charge gates' measure (edge gap from 73)
 	report["moved"] = action != AiDecision.Action.HOLD   # Indirect's -1 to hit fires when shooting after moving
 	# Traversal (army-book: "May move through friendly and enemy units"): the move itself crossed bases
 	# the planner/gate would otherwise have routed around or clamped — that is invisible to the opponent,
@@ -2636,7 +2637,7 @@ func execute_intent(intent: Dictionary, report: Dictionary) -> Dictionary:
 		_rule_note(report, "Artillery: moves like any unit under rules 3.6", true)
 	report["can_shoot"] = (do_shoot or (quick_shot and action == AiDecision.Action.RUSH)) \
 		and shoot_range_in > 0 and d2 <= shoot_range_in \
-		and (_has_los(unit, target) or (has_indirect_ranged(weapons) and indirect_ignores_los(unit)) \
+		and (_has_los(unit, target) or (has_indirect_ranged(weapons) and indirect_ignores_los(unit, action == AiDecision.Action.HOLD)) \
 			or granted_indirect_of(unit)   # GH #325 — the shooter's own Indirect token
 			or grants_indirect_to_attackers(target))   # wave 6 — the Indirect Mark's once-grant
 	if bool(report["can_shoot"]) and quick_shot and action == AiDecision.Action.RUSH:
@@ -2652,7 +2653,7 @@ func execute_intent(intent: Dictionary, report: Dictionary) -> Dictionary:
 				or (quick_shot and action == AiDecision.Action.RUSH)):
 		# _run_ai_shooting split-fires — each weapon picks its OWN in-range+LOS target — so opening the
 		# can_shoot gate is enough; no need to thread a specific target through.
-		var retgt: GameUnit = null if source == "player" else best_shoot_target_now(unit)
+		var retgt: GameUnit = null if source == "player" else best_shoot_target_now(unit, action == AiDecision.Action.HOLD)
 		if retgt != null:
 			report["can_shoot"] = true
 			record_decision({"kind": "target", "unit": unit.get_name(),
@@ -2792,7 +2793,7 @@ func suggest_target(unit: GameUnit, verb: int) -> GameUnit:
 		AiDecision.Action.RUSH:
 			return _nearest_enemy_where(unit, func(_gu: GameUnit) -> bool: return true)
 		_:
-			var shot := best_shoot_target_now(unit)
+			var shot := best_shoot_target_now(unit, verb == AiDecision.Action.HOLD)
 			return shot if shot != null else _nearest_enemy_of(unit)
 
 
@@ -2885,7 +2886,7 @@ func _act_regroup(unit: GameUnit, report: Dictionary) -> Dictionary:
 	var weapons := _unit_weapons(unit)
 	var shoot_range := AiArchetype.max_range_inches(weapons) + shooting_range_bonus(unit)
 	if shoot_range > 0:
-		var retgt := best_shoot_target_now(unit)
+		var retgt := best_shoot_target_now(unit, false)   # a regroup move never Holds
 		if retgt != null:
 			report["target"] = retgt
 			report["can_shoot"] = true
@@ -2928,10 +2929,10 @@ func _act_aircraft(unit: GameUnit, report: Dictionary) -> Dictionary:
 	report["dist_in"] = d2
 	report["shoot"] = shoot_range > 0
 	report["can_shoot"] = shoot_range > 0 and d2 <= float(shoot_range) \
-		and (_has_los(unit, target_unit) or (has_indirect_ranged(weapons) and indirect_ignores_los(unit)))
+		and (_has_los(unit, target_unit) or (has_indirect_ranged(weapons) and indirect_ignores_los(unit, false)))
 	# Post-move retarget for the strafing aircraft too (Bug 27/28): after the mandatory straight run its
 	# decided target may be out of arc — fire on whatever it CAN now reach.
-	if not bool(report["can_shoot"]) and shoot_range > 0 and best_shoot_target_now(unit) != null:
+	if not bool(report["can_shoot"]) and shoot_range > 0 and best_shoot_target_now(unit, false) != null:
 		report["can_shoot"] = true
 	var casts := _plan_casts(unit, report)
 	if not casts.is_empty():
@@ -5814,6 +5815,9 @@ func _dangerous_standing_counts(unit: GameUnit) -> Dictionary:
 				TerrainRules.is_dangerous)):
 			models += 1
 			dice += maxi(1, int(model.wounds_max))
+	# UX-20 (EPOCH_73_V36, rules 3.6): one model in it is enough - the whole joined unit takes ONE test.
+	if models > 0 and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		dice = OPRArmyManager.dangerous_dice_for(unit)
 	return {"models": models, "dice": dice}
 
 
@@ -6161,6 +6165,9 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 			if affected:
 				dang += 1
 				dang_dice += maxi(1, int((models[i] as ModelInstance).wounds_max))
+	# UX-20 (EPOCH_73_V36, rules 3.6): one affected model is enough - the whole joined unit takes ONE test.
+	if dang > 0 and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		dang_dice = OPRArmyManager.dangerous_dice_for(unit)
 	last_dangerous_dice = dang_dice
 	# The decision-log / label arc is the PLANNED within-budget move (pre-gate route), so the move-band audit
 	# and the "X / Y" label stay truthful; the gate's physical un-stack nudge is not counted as extra distance.
@@ -8767,10 +8774,24 @@ static func hold_only_param(unit: GameUnit) -> bool:
 ## The Indirect LOS-waiver half: the entry's ignores_los param (default true) gates the
 ## WEAPON-INDIRECT term only — spell/mark grants stay unconditional (core:
 ## `(p.indirect && indirect_ignores_los.unwrap_or(true)) || mark_indirect`).
-static func indirect_ignores_los(unit: GameUnit) -> bool:
+## Rules 3.6 (SHO-01a): `held` = the activation's action is Hold (the waiver may need it, see below).
+static func indirect_ignores_los(unit: GameUnit, held: bool = true) -> bool:
 	if unit == null:
 		return true
-	return bool(RulesRegistry.unit_param(unit, "Indirect", "ignores_los", true))
+	return bool(RulesRegistry.unit_param(unit, "Indirect", "ignores_los", true)) \
+		and (held or not indirect_needs_hold(unit, "los_needs_hold"))
+
+
+## Rules 3.6 (SHO-01a): an Indirect waiver needs Hold when the "Indirect" entry's `key` says so and no
+## Indirect-family rule of the unit prints it false. Core twin: unit.rs build_for's EPOCH_73_V36 stamp.
+static func indirect_needs_hold(unit: GameUnit, key: String) -> bool:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 or unit == null \
+			or not bool(RulesRegistry.unit_param(unit, "Indirect", key, false)):
+		return false
+	for e in RulesRegistry.unit_rules_of_primitive(unit, "Indirect"):
+		if ((e as Dictionary).get("params", {}) as Dictionary).get(key, true) == false:
+			return false
+	return true
 
 
 ## The Counter strike-first half (core `strikes_first.unwrap_or(true)`): the entry can opt a
@@ -10354,6 +10375,16 @@ func nearest_melee_gap_in(a: GameUnit, b: GameUnit) -> float:
 	return nearest_melee_pair_info(a, b, true)["gap_in"]
 
 
+## D-GATE6 (rules 3.6): the distance a charge is measured from — before any model moves, closest model to
+## closest model, base edge to base edge (the core's `modifier_distance_in`, no height filter). Below
+## EPOCH_73_V36 the intent's unit-centre distance `centre_in` stands; a pair with no live shapes keeps it too.
+func charge_from_in(unit: GameUnit, target: GameUnit, centre_in: float) -> float:
+	if target == null or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return centre_in
+	var gap: float = nearest_melee_pair_info(unit, target, false)["gap_in"]
+	return gap if gap != INF else centre_in
+
+
 ## The nearest charger-model / enemy-model pair, as the base-to-base gap (inches) to close and the world
 ## table-plane direction (normalised Vector2 x,z) from the charger's nearest model toward the enemy's. Uses
 ## the shared SeparationChecker shapes — the ONE base-contact truth behind both the charge move (finding 3)
@@ -10998,9 +11029,15 @@ func deploy_begin(zone: Rect2, objectives: Array, blocked_normal: Callable, bloc
 	return main_queue.size() + scout_queue.size()
 
 
-## B9: the deployment zone extended 12" toward the table centre — the Scout band.
+## UX-12 (EPOCH_73_V36): the Scout band's depth in inches — 9" from the rules 3.6 epoch on, 12" below
+## it. One selector for the AI's band, its log line and the human's scout-phase texts (deployment.rs twin).
+static func scout_band_in() -> float:
+	return 9.0 if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else 12.0
+
+
+## B9: the deployment zone extended toward the table centre by the Scout band (scout_band_in).
 static func scout_extended_zone(zone: Rect2, forward_y: float) -> Rect2:
-	var ext := 12.0 * INCHES_TO_METERS
+	var ext := scout_band_in() * INCHES_TO_METERS
 	if absf(forward_y - zone.end.y) < absf(forward_y - zone.position.y):
 		return Rect2(zone.position, zone.size + Vector2(0.0, ext))
 	return Rect2(zone.position - Vector2(0.0, ext), zone.size + Vector2(0.0, ext))
@@ -11101,7 +11138,7 @@ func deploy_place_n(n: int) -> Array:
 	return placed
 
 
-## Place the NEXT queued SCOUT unit (the scout phase's AI turn — 12" band ahead of the zone).
+## Place the NEXT queued SCOUT unit (the scout phase's AI turn — the Scout band ahead of the zone).
 func deploy_next_scout() -> GameUnit:
 	var queue: Array = _deploy_alt.get("scout_queue", [])
 	if queue.is_empty():
@@ -11119,8 +11156,8 @@ func _deploy_place_id(id: int) -> GameUnit:
 	var blocked_normal: Callable = _deploy_alt["blocked_normal"]
 	var blocked_flying: Callable = _deploy_alt["blocked_flying"]
 	var unit: GameUnit = all_units[id]
-	# B9 Scout: a scout searches the zone EXTENDED 12" forward (its band), whole-width — it deploys
-	# after all others (queue order) and its forward edge is the band's edge.
+	# B9 Scout: a scout searches the zone EXTENDED forward by its band (scout_band_in), whole-width — it
+	# deploys after all others (queue order) and its forward edge is the band's edge.
 	var is_scout: bool = (_deploy_alt.get("scout_ids", {}) as Dictionary).has(id)
 	if is_scout:
 		zone = scout_extended_zone(zone, forward_y)
@@ -11250,8 +11287,11 @@ func _deploy_place_id(id: int) -> GameUnit:
 				"candidates": [], "chosen": chosen, "why": why,
 				"data": {"x_m": v_spot.x, "z_m": v_spot.y}})
 			spot = v_spot
+	var deploy_rule := "Solo v3.5.0 AI deployment: objective-near spot in the unit's section; Scout/Ambush overlays"
+	if is_scout:   # rules-must-log: the Scout band this placement used, in the epoch's inches
+		deploy_rule += " — Scout: set up after the other units, at most %d\" ahead of its own zone" % int(scout_band_in())
 	record_decision({"kind": "deploy", "unit": unit.get_name(), "unit_id": id,
-		"rule": "Solo v3.5.0 AI deployment: objective-near spot in the unit's section; Scout/Ambush overlays",
+		"rule": deploy_rule,
 		"candidates": [], "chosen": "", "why": spot_why,
 		"data": {"section": int(section_of.get(id, 2)), "x_m": spot.x, "z_m": spot.y}})
 	occupied.append({"pos": spot, "radius": radius})

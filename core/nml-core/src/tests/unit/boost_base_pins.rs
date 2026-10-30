@@ -81,8 +81,8 @@ fn outgoing(us: &UnitStatic, attacks: i64) -> crate::dice::ShootResult {
 /// finding, pinned as-is: at 6" no penalty, past 9" the -1, with and without
 /// the Boost alike.
 #[test]
-fn changebound_boost_keeps_the_base_over_nine_inch_window() {
-    let on = boost_unit("change_disciples", &["Changebound", "Changebound Boost"], 8);
+fn enhanced_changebound_keeps_the_base_over_nine_inch_window() {
+    let on = boost_unit("change_disciples", &["Changebound", "Enhanced Changebound"], 8);
     assert_eq!(on.ctx.stealth_alias_penalty, 1, "the alias -1 stamps");
     assert_eq!(
         on.ctx.stealth_alias_over_in, 9.0,
@@ -108,8 +108,8 @@ fn changebound_boost_keeps_the_base_over_nine_inch_window() {
 /// attack faces carry one 6 and two 5s: three extra dice with the Boost,
 /// the six alone without, each rolling at the weapon's own to-hit target.
 #[test]
-fn clan_warrior_boost_draws_the_fives_extra_attack_dice() {
-    let on = boost_unit("eternal_dynasty", &["Clan Warrior", "Clan Warrior Boost"], 8);
+fn enhanced_clan_warrior_draws_the_fives_extra_attack_dice() {
+    let on = boost_unit("eternal_dynasty", &["Clan Warrior", "Enhanced Clan Warrior"], 8);
     assert!(on.shoot[0].surge_attack, "the base rule's extra-attack facet");
     assert_eq!(on.shoot[0].surge_attack_low, 5, "the Boost's printed 5-6 window");
     let on_v = outgoing(&on, 8);
@@ -146,12 +146,12 @@ fn clan_warrior_boost_draws_the_fives_extra_attack_dice() {
 /// returns max(1, 2) = 2 — the book's number"). The morale seam: Quality 4
 /// routs at 2+ with the Boost, 3+ with the base alone, 4+ bare.
 #[test]
-fn hive_bond_boost_lifts_the_banner_bonus_to_two() {
+fn enhanced_hive_bond_lifts_the_banner_bonus_to_two() {
     let on = {
         let mut reg = Registries::new(&repo_root());
         crate::unit::capture_reads_for_epoch(
             &mut reg,
-            &boost_carrier("alien_hives", &["Hive Bond", "Hive Bond Boost"], 2),
+            &boost_carrier("alien_hives", &["Hive Bond", "Enhanced Hive Bond"], 2),
             CURRENT_RULES_EPOCH,
         )
     };

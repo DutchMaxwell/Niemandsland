@@ -28,7 +28,7 @@
 #[cfg(test)]
 use crate::combat::modified_hit_target;
 use crate::combat::{
-    conditional_ap_bonus, covered_defense, deadly_multiplier, fortified_ap, guarded_defense,
+    cond_ap_why, conditional_ap_bonus, conditional_ap_bonus_vs, covered_defense, deadly_multiplier, fortified_ap, guarded_defense, CondApTarget,
     impact_total_dice, melee_hit_modifier, fold_hit, reliable_quality, save_target,
     shielded_defense, morale_target, shooting_hit_modifier, shrouded_reach, thrust_to_hit,
     versatile_best_mode, BEST_HIT_TARGET, FEARLESS_RECOVER_TARGET, HEAVY_IMPACT_AP,
@@ -777,6 +777,8 @@ pub fn resolve_volley_leg(
     // that fired is `def.evasive_alias_name` ("Machine-Fog Boost" at epoch 6,
     // "Empyrean Spirit Boost" at epoch 7).
     let mut evasive_boost_fired = false;
+    // EPOCH_73_V36 — the Aircraft to-hit penalty's once-per-volley log flag.
+    let mut aircraft_fired = false;
     // Wave 4 — and the widened Bane window's own rule name, sticky once a
     // weapon opened it ("Mischievous Boost" at epoch 6, "Bestial Boost" at
     // epoch 7); "" = the base 6s-only window fired nothing.
@@ -900,7 +902,11 @@ pub fn resolve_volley_leg(
             + att.feat_hit_bonus
             // Unpredictable's 4-6 half (main.gd:3180): folded into the SAME
             // sum, BEFORE the Unstoppable clamp, like the melee leg.
-            + upr_hit;
+            + upr_hit
+            // EPOCH_73_V36 — rules 3.6: a shot at an Aircraft is -N to hit,
+            // inside the Unstoppable clamp (an enemy-side negative modifier).
+            - def.aircraft_hit_penalty;
+        aircraft_fired |= def.aircraft_hit_penalty > 0;
         // Wave 3 — the Shot Modifier family's runtime-gated members
         // (main.gd:5761-5779) ride the SAME sum: Mobile Artillery's
         // `requires_stationary` gate is the shooter's act-scope `moved`
@@ -1223,13 +1229,14 @@ pub fn resolve_volley_leg(
         // range gap.
             if cond_ap_dice {
             for c in &p.cond_ap {
-                let d = conditional_ap_bonus(c, def.tough.max(1), def.defense, false, mod_dist_in, false);
+                let d = conditional_ap_bonus_vs(c, &CondApTarget::of(def, p.range as f64), false, mod_dist_in, false);
                 ap += d;
                 // Rules-must-log: the wave-3 NAMED forms log their own AP
                 // (rule, unit, what changed). The generic pass's specs carry
-                // no name — old replays log nothing, byte-identical.
+                // no name — old replays log nothing, byte-identical. A rules
+                // 3.6 spelling is named at the stamp and adds its condition.
                 if d > 0 && !c.name.is_empty() {
-                    out.log.push(format!("{}: AP(+{}) on {}'s volley", c.name, d, sh.owner));
+                    out.log.push(format!("{}: AP(+{}) on {}'s volley{}", c.name, d, sh.owner, cond_ap_why(&c.condition)));
                 }
             }
             // Wave 2 — the Slayer mark's granted conditional (epoch-gated).
@@ -1331,6 +1338,9 @@ pub fn resolve_volley_leg(
             "{}: {def_owner} — attackers get -1 to hit (always)",
             def.evasive_alias_name
         ));
+    }
+    if aircraft_fired {
+        out.log.push(format!("Aircraft: {def_owner} — shots at it get -{} to hit", def.aircraft_hit_penalty));
     }
     if out.bane_rerolled > 0 {
         out.log.push(format!(
@@ -1635,7 +1645,7 @@ pub fn resolve_melee_with_tray(
 ) -> ShootResult {
     resolve_melee_leg(
         strikers, def, def_owner, charging, cond_ap_dice, shred_alias_dice,
-        false, 0.0, false, false, tray,
+        false, 0.0, false, false, false, tray,
     )
 }
 
@@ -1654,6 +1664,8 @@ pub fn resolve_melee_leg(
     charge_from_in: f64,
     screened_melee: bool,
     tray_exact: bool,
+    // EPOCH_73_V36 — the strike rolls every hit before any save (see the chunk loop below).
+    hits_first: bool,
     tray: &mut Tray,
 ) -> ShootResult {
     // The alias's charged leg fires on the CHARGER's strikes only — a
@@ -1719,7 +1731,16 @@ pub fn resolve_melee_leg(
         if gp != 0 && gp_fired.iter().all(|(o, _)| *o != sh.owner) {
             gp_fired.push((sh.owner, gp));
         }
-        for (k, &pi) in sh.keep.iter().enumerate() {
+    }
+    // EPOCH_73_V36 — one strike is ONE hits event: pass 1 rolls every
+    // member's every profile to its hit count, pass 2 then runs each
+    // profile's saves, landing and Bloodthirsty extras in the same order.
+    // Below the gate each chunk is one profile: today's interleaved draws.
+    let order: Vec<(&Shooter<'_>, usize, usize)> = strikers.iter()
+        .flat_map(|sh| sh.keep.iter().enumerate().map(move |(k, &pi)| (sh, k, pi))).collect();
+    for part in order.chunks(if hits_first { order.len().max(1) } else { 1 }) {
+        let mut pending = Vec::new();
+        for &(sh, k, pi) in part {
             let p = &sh.profiles[pi];
             let n = sh.attacks[k];
             if n <= 0 {
@@ -1832,6 +1853,10 @@ pub fn resolve_melee_leg(
             if hits <= 0 {
                 continue;
             }
+            pending.push((sh, p, faces, hits, count_target, versatile_ap));
+        }
+        // MEL-07c hook — Parry reads `pending` here: every hit rolled, no save yet.
+        for (sh, p, faces, hits, count_target, versatile_ap) in pending {
             let on6 = if p.on6_ap > 0 {
                 p.on6_ap
             } else if p.rending || p.destructive || sh.att.rending_grant {

@@ -151,3 +151,39 @@ func test_rules_3_6_weapon_names_resolve_the_live_variants() -> void:
 	assert_str(lib.variant_slug(["Javelins", "Toxin Club", "Deinonychus"], "saurians")).is_equal("deinonychus+javelin")
 	# Scoped: another faction does not read the 3.6 Saurian words.
 	assert_str(lib.variant_slug(["Javelins", "Toxin Blowpipe"], "ratmen")).is_equal("")
+
+
+# --- Rules 3.6 Master weapons: the 3.5 weapon words under their Master names ------------------------------
+
+func _on_a_mount(unit_name: String, weapon: String, mount: String) -> OPRApiClient.OPRArmy:
+	return _army([{"armyId": SAURIAN_ARMY, "name": unit_name, "size": 1, "bases": {"round": "25"}, "loadout": [
+		{"type": "ArmyBookWeapon", "name": weapon, "attacks": 3, "count": 1},
+		{"type": "ArmyBookItem", "name": mount, "count": 1, "bases": {"round": "60x35"},
+			"content": [{"type": "ArmyBookRule", "name": "Fast"}]}]}])
+
+
+func test_rules_3_6_master_weapons_resolve_the_weapon_variants() -> void:
+	# No Gecko Champion #greatweapon bake is live, so on the table that form keeps the base sculpt like the plain
+	# Great Weapon; the key here proves the Master word reaches the great-weapon slug.
+	var manager := _manager(["saurians/gecko champion#lance", "saurians/gecko champion#deinonychus+lance",
+		"saurians/gecko champion#greatweapon", "saurians/saurian veteran#greatweapon+raptor"])
+	var cases := [
+		[_one("Gecko Champion", ["Master Lance"]), "Gecko Champion#lance"],
+		[_on_a_mount("Gecko Champion", "Master Lance", "Deinonychus"), "Gecko Champion#deinonychus+lance"],
+		[_one("Gecko Champion", ["Master Great Weapon"]), "Gecko Champion#greatweapon"],
+		[_on_a_mount("Saurian Veteran", "Master Great Weapon", "Raptor"), "Saurian Veteran#greatweapon+raptor"],
+	]
+	for case in cases:
+		assert_array(manager._unit_model_variant_names(case[0].units[0], "saurians")).is_equal([case[1]])
+
+
+func test_rules_3_6_master_weapons_keep_the_mount_without_a_weapon_bake() -> void:
+	# Live today: the mount bake only. The Master Great Weapon must not cost the Gecko Champion its Deinonychus,
+	# and the Master Toxin Club (no model word, like the Toxin Club) resolves exactly like the Toxin Club.
+	var manager := _manager(["saurians/gecko champion#deinonychus"])
+	for weapon in ["Master Great Weapon", "Toxin Club", "Master Toxin Club"]:
+		assert_array(manager._unit_model_variant_names(_on_a_mount("Gecko Champion", weapon, "Deinonychus").units[0],
+			"saurians")).is_equal(["Gecko Champion#deinonychus"])
+	var lib: ModelLibrary = manager.model_library
+	assert_str(lib.variant_slug(["Toxin Club"], "saurians")).is_equal("")
+	assert_str(lib.variant_slug(["Master Toxin Club"], "saurians")).is_equal("")

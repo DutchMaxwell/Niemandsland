@@ -42,14 +42,14 @@ use super::*;
     /// stays the plain 6 (6 = no boost) and the pre-gate epoch 5 never
     /// expands the aura at all.
     #[test]
-    fn a_lucky_boost_aura_widens_the_surge_window_to_five_over_nine_at_the_current_epoch() {
+    fn an_enhanced_lucky_aura_widens_the_surge_window_to_five_over_nine_at_the_current_epoch() {
         let epoch = crate::acts::CURRENT_RULES_EPOCH;
-        let us = pin_unit("aof", "halflings", &["Lucky Boost Aura", "Lucky"], epoch);
-        assert_eq!(us.shoot[0].surge_low, 5, "the granted Lucky Boost widens the window to 5+");
+        let us = pin_unit("aof", "halflings", &["Enhanced Lucky Aura", "Lucky"], epoch);
+        assert_eq!(us.shoot[0].surge_low, 5, "the granted Enhanced Lucky widens the window to 5+");
         assert_eq!(us.shoot[0].surge_over_in, 9.0, "the 5s count only past 9\"");
         let base_only = pin_unit("aof", "halflings", &["Lucky"], epoch);
         assert_eq!(base_only.shoot[0].surge_low, 6, "without the boost the plain 6 window stands");
-        let pre = pin_unit("aof", "halflings", &["Lucky Boost Aura", "Lucky"], 5);
+        let pre = pin_unit("aof", "halflings", &["Enhanced Lucky Aura", "Lucky"], 5);
         assert_eq!(pre.shoot[0].surge_low, 6, "epoch 5: the aura gate is OFF, no expansion");
     }
 
@@ -58,7 +58,7 @@ use super::*;
     /// +8" shooting range, +4" charge — the base entry's own magnitudes
     /// through the expansion; epoch 5 predates wave 3.
     #[test]
-    fn a_lustbound_boost_aura_stamps_eight_range_and_four_charge_at_the_current_epoch() {
+    fn an_enhanced_lustbound_aura_stamps_eight_range_and_four_charge_at_the_current_epoch() {
         let epoch = crate::acts::CURRENT_RULES_EPOCH;
         assert_eq!(
             royal_legion_halves("lustbound_boost_aura_unit", epoch),

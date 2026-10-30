@@ -151,13 +151,13 @@ func test_move_bands_description_overrides_constant() -> void:
 	assert_int(b["rush"]).is_equal(16)
 
 
-func test_move_bands_scurry_adds_two_each() -> void:
-	# Ratmen Clans "Scurry": +2" Advance AND +2" Rush/Charge (a direct additive rule, +2/+2 —
-	# unlike Fast's +2/+4). REGISTRY data (primitive "Quick", advance_mod/rush_mod 2), so it works
+func test_move_bands_scurry_adds_one_and_two() -> void:
+	# Ratmen Clans "Scurry" (rules 3.6): +1" Advance AND +2" Rush/Charge (a direct additive rule —
+	# unlike Fast's +2/+4). REGISTRY data (primitive "Quick", advance_mod 1, rush_mod 2), so it works
 	# on a list with no description texts at all.
 	var b := _controller().move_bands_for_props({
 		"game_system": "gf", "faction_folder": "ratmen_clans", "special_rules": ["Scurry"]})
-	assert_int(b["advance"]).is_equal(8)   # 6 + 2
+	assert_int(b["advance"]).is_equal(7)   # 6 + 1
 	assert_int(b["rush"]).is_equal(14)      # 12 + 2
 
 

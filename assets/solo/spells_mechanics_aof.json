@@ -21,7 +21,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Bestial Boost",
+      "grants_rule": "Enhanced Bestial",
       "duration": "once"
      },
      "status": "castable"
@@ -237,7 +237,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Changebound Boost",
+      "grants_rule": "Enhanced Changebound",
       "duration": "once"
      },
      "status": "castable"
@@ -416,7 +416,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Harassing Boost",
+      "grants_rule": "Enhanced Harassing",
       "duration": "once"
      },
      "status": "castable"
@@ -1565,7 +1565,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Changebound Boost",
+      "grants_rule": "Enhanced Changebound",
       "duration": "once"
      },
      "status": "castable"
@@ -1692,7 +1692,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Lustbound Boost",
+      "grants_rule": "Enhanced Lustbound",
       "duration": "once"
      },
      "status": "castable"
@@ -2122,7 +2122,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Lucky Boost",
+      "grants_rule": "Enhanced Lucky",
       "duration": "once"
      },
      "status": "castable"
@@ -2291,7 +2291,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Havocbound Boost",
+      "grants_rule": "Enhanced Havocbound",
       "duration": "once"
      },
      "status": "castable"
@@ -2420,7 +2420,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Havocbound Boost",
+      "grants_rule": "Enhanced Havocbound",
       "duration": "once"
      },
      "status": "castable"
@@ -2602,7 +2602,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Highborn Boost",
+      "grants_rule": "Enhanced Highborn",
       "duration": "once"
      },
      "status": "castable"
@@ -2649,7 +2649,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Hold the Line Boost",
+      "grants_rule": "Enhanced Hold the Line",
       "duration": "once"
      },
      "status": "castable"
@@ -2823,7 +2823,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Angelic Blessing Boost",
+      "grants_rule": "Enhanced Angelic Blessing",
       "duration": "once"
      },
      "status": "castable"
@@ -2989,7 +2989,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Lustbound Boost",
+      "grants_rule": "Enhanced Lustbound",
       "duration": "once"
      },
      "status": "castable"
@@ -3208,7 +3208,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Destroyer Boost",
+      "grants_rule": "Enhanced Destroyer",
       "duration": "once"
      },
      "status": "castable"
@@ -3338,7 +3338,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Ferocious Boost",
+      "grants_rule": "Enhanced Ferocious",
       "duration": "once"
      },
      "status": "castable"
@@ -3908,7 +3908,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Changebound Boost",
+      "grants_rule": "Enhanced Changebound",
       "duration": "once"
      },
      "status": "castable"
@@ -4035,7 +4035,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Lustbound Boost",
+      "grants_rule": "Enhanced Lustbound",
       "duration": "once"
      },
      "status": "castable"
@@ -4676,7 +4676,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Buccaneer Boost",
+      "grants_rule": "Enhanced Buccaneer",
       "duration": "once"
      },
      "status": "castable"
@@ -4722,7 +4722,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Cursed Undead Boost",
+      "grants_rule": "Enhanced Cursed Undead",
       "duration": "once"
      },
      "status": "castable"

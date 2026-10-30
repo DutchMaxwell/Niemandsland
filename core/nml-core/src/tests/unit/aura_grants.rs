@@ -48,24 +48,24 @@ use super::*;
     /// — one row per GRANT-channel name, in the ledger's order.
     const GRANT_ROWS: &[(&str, &str, &str, &str, bool)] = &[
         ("Ambush Aura", "aof", "beastmen", "Ambush", false),
-        ("Changebound Boost Aura", "aof", "change_disciples", "Changebound Boost", true),
-        ("Clan Warrior Boost Aura", "gf", "eternal_dynasty", "Clan Warrior Boost", false),
+        ("Enhanced Changebound Aura", "aof", "change_disciples", "Enhanced Changebound", true),
+        ("Enhanced Clan Warrior Aura", "gf", "eternal_dynasty", "Enhanced Clan Warrior", false),
         ("Dash Aura", "gf", "custodian_brothers", "Dash", false),
         ("Defensive Growth Aura", "gf", "human_inquisition", "Defensive Growth", true),
-        ("Devout Boost Aura", "gf", "blessed_sisters", "Devout Boost", false),
-        ("Ferocious Boost Aura", "aof", "orcs", "Ferocious Boost", false),
+        ("Enhanced Devout Aura", "gf", "blessed_sisters", "Enhanced Devout", false),
+        ("Enhanced Ferocious Aura", "aof", "orcs", "Enhanced Ferocious", false),
         ("Grounded Precision Aura", "aofs", "merchant_unions", "Grounded Precision", false),
-        ("Guardian Boost Aura", "gf", "custodian_brothers", "Guardian Boost", true),
-        ("Guerrilla Boost Aura", "gf", "rebel_guerrillas", "Guerrilla Boost", true),
-        ("Harassing Boost Aura", "aof", "dark_elves", "Harassing Boost", true),
-        ("Havocbound Boost Aura", "aof", "havoc_dwarves", "Havocbound Boost", false),
-        ("Highborn Boost Aura", "aof", "high_elves", "Highborn Boost", false),
-        ("Hive Bond Boost Aura", "gf", "alien_hives", "Hive Bond Boost", false),
+        ("Enhanced Guardian Aura", "gf", "custodian_brothers", "Enhanced Guardian", true),
+        ("Enhanced Guerrilla Aura", "gf", "rebel_guerrillas", "Enhanced Guerrilla", true),
+        ("Enhanced Harassing Aura", "aof", "dark_elves", "Enhanced Harassing", true),
+        ("Enhanced Havocbound Aura", "aof", "havoc_dwarves", "Enhanced Havocbound", false),
+        ("Enhanced Highborn Aura", "aof", "high_elves", "Enhanced Highborn", false),
+        ("Enhanced Hive Bond Aura", "gf", "alien_hives", "Enhanced Hive Bond", false),
         ("Ignores Cover Aura", "gf", "eternal_dynasty", "Ignores Cover", true),
         ("Ignores Cover when Shooting Aura", "gf", "dwarf_guilds", "Ignores Cover when Shooting", true),
-        ("Infected Boost Aura", "gf", "infected_colonies", "Infected Boost", true),
+        ("Enhanced Infected Aura", "gf", "infected_colonies", "Enhanced Infected", true),
         ("Infiltrate Aura", "gf", "dwarf_guilds", "Infiltrate", true),
-        ("Machine-Fog Boost Aura", "gf", "machine_cults", "Machine-Fog Boost", false),
+        ("Enhanced Machine-Fog Aura", "gf", "machine_cults", "Enhanced Machine-Fog", false),
         ("Enhanced Mischievous Aura", "aof", "goblins", "Enhanced Mischievous", false),
         ("Piercing Assault Aura", "aof", "beastmen", "Piercing Assault", true),
         ("Enhanced Plaguebound Aura", "aof", "plague_disciples", "Enhanced Plaguebound", true),
@@ -157,8 +157,8 @@ use super::*;
             // Per-name numbers the base carries, asserted on the granted
             // carrier itself.
             match aura {
-                "Guardian Boost Aura" => {
-                    assert_eq!(granted.ctx.fortified_boost_ap, 1, "Guardian Boost's incoming_ap_reduction");
+                "Enhanced Guardian Aura" => {
+                    assert_eq!(granted.ctx.fortified_boost_ap, 1, "Enhanced Guardian's incoming_ap_reduction");
                 }
                 "Enhanced Plaguebound Aura" => {
                     assert_eq!(granted.ctx.regen_target, 5, "Enhanced Plaguebound's ignore_target");
@@ -171,18 +171,18 @@ use super::*;
 
             // (4) The Banner-primitive morale number lives on the capture
             // reads, not the statics — Hive Bond Boost's own number, by name.
-            if aura == "Hive Bond Boost Aura" {
+            if aura == "Enhanced Hive Bond Aura" {
                 let mut reg = Registries::new(&repo_root());
                 let header = read_act_header(
                     &AMBUSH_FAMILY_HEADER
-                        .replace("\"special_rules\":[]", "\"special_rules\":[\"Hive Bond Boost Aura\"]")
+                        .replace("\"special_rules\":[]", "\"special_rules\":[\"Enhanced Hive Bond Aura\"]")
                         .replace("\"faction_folder\":\"robot_legions\"", "\"faction_folder\":\"alien_hives\"")
                         .replace(RIFLE_ONLY, RIFLE_AND_BLADE),
                 )
                 .expect("header");
                 let p = header.profiles.get("carrier").expect("carrier");
                 let reads = crate::unit::capture_reads_for_epoch(&mut reg, p, crate::acts::CURRENT_RULES_EPOCH);
-                assert_eq!(reads.morale_bonus, 2, "Hive Bond Boost's morale_bonus");
+                assert_eq!(reads.morale_bonus, 2, "Enhanced Hive Bond's morale_bonus");
                 let bare = read_act_header(
                     &AMBUSH_FAMILY_HEADER
                         .replace("\"faction_folder\":\"robot_legions\"", "\"faction_folder\":\"alien_hives\"")
