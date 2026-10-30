@@ -52,12 +52,12 @@ fn enhanced_scrapper_widens_the_bane_window_like_its_3_5_boost() {
     assert_eq!(old.shoot[0].bane_rule, "", "the 3.5 name is gone (no alias)");
 }
 
-/// W1.6e, code literal (unit.rs Fast band): +4"/+4" on top of the base's +2"/+2".
+/// W1.6e, code literal (unit.rs Fast band): +4"/+4" on top of the base's +1"/+2" (DAT-10).
 #[test]
 fn enhanced_scurry_stacks_its_band_like_its_3_5_boost() {
     let us = enhanced_unit("gf", "ratmen_clans", &["Scurry", "Enhanced Scurry"]);
     let bands = us.move_rule_mods.expect("a move band");
-    assert_eq!((bands.advance, bands.rush), (6.0, 6.0), "Scurry 2/2 + Enhanced Scurry 4/4");
+    assert_eq!((bands.advance, bands.rush), (5.0, 6.0), "Scurry 1/2 + Enhanced Scurry 4/4");
 }
 
 /// W1.6e, code literals (unit.rs Shielded alias list + its log name): one +1 Defense that
