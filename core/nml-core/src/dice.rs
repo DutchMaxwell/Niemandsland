@@ -1017,6 +1017,9 @@ pub fn resolve_volley_leg(
             owner: sh.owner.into(),
         });
         let count_target = if p.precise { fold_hit(def.modifier_sum, raw, 1).1 } else { target };
+        if p.precise {
+            out.log.push(format!("Precise: +1 to hit on {}'s volley", sh.owner));
+        }
         if p.hazardous {
             out.mark("hazardous");
         }
@@ -1782,6 +1785,9 @@ pub fn resolve_melee_leg(
             // Precise scores one better than it ROLLS — `_solo_hits` :4405-4406
             // applies the +1 when counting, so the recorded target stays raw.
             let count_target = if p.precise { fold_hit(def.modifier_sum, raw, 1).1 } else { target };
+            if p.precise {
+                out.log.push(format!("Precise: +1 to hit on {}'s strikes", sh.owner));
+            }
             let mut hits = faces_to_hits(&faces, count_target as u8) as i64;
             if p.surge {
                 // No flag: at 0.0" this IS the table's gated read (the within
