@@ -155,7 +155,9 @@ func _on_human_cast_resolved(unit: GameUnit) -> void:
 func _on_battle_log_entry(entry: Dictionary) -> void:
 	var text := String(entry.get("text", ""))
 	var low := text.to_lower()
-	if low.contains("pile in"):
+	# "N models pile in …" or, when every model already touches, "… no pile-in needed …" — the
+	# pile-in phase happened either way (#1935: the hyphen form stalled the S-06 pile-in step).
+	if low.contains("pile in") or low.contains("pile-in"):
 		bump("log:pile_in")
 	if low.contains("consolidat"):
 		bump("log:consolidate")
