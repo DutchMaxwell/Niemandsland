@@ -1372,14 +1372,14 @@ func _no_shot_reason(unit: GameUnit, base_range: int) -> String:
 	return "nearest enemy %.1f\" away, weapon reach %d\"" % [nearest, base_range]
 
 
-func best_shoot_target_now(ai_unit: GameUnit) -> GameUnit:
+func best_shoot_target_now(ai_unit: GameUnit, held: bool = true) -> GameUnit:
 	if army_manager == null:
 		return null
 	var weapons := _unit_weapons(ai_unit)
 	var base_range: int = AiArchetype.max_range_inches(weapons) + shooting_range_bonus(ai_unit)
 	if base_range <= 0:
 		return null
-	var indirect: bool = has_indirect_ranged(weapons) and indirect_ignores_los(ai_unit)
+	var indirect: bool = has_indirect_ranged(weapons) and indirect_ignores_los(ai_unit, held)
 	var from := unit_centre(ai_unit)
 	var profiles := AiEv.stamp_sergeant(filter_limited(ai_unit, AiShooting.profiles_in_range(weapons, 0.0)), ai_unit)
 	var us := AiEv.ctx_for(ai_unit, majority_in_cover(ai_unit), counter_models_of(ai_unit))
@@ -2636,7 +2636,7 @@ func execute_intent(intent: Dictionary, report: Dictionary) -> Dictionary:
 		_rule_note(report, "Artillery: moves like any unit under rules 3.6", true)
 	report["can_shoot"] = (do_shoot or (quick_shot and action == AiDecision.Action.RUSH)) \
 		and shoot_range_in > 0 and d2 <= shoot_range_in \
-		and (_has_los(unit, target) or (has_indirect_ranged(weapons) and indirect_ignores_los(unit)) \
+		and (_has_los(unit, target) or (has_indirect_ranged(weapons) and indirect_ignores_los(unit, action == AiDecision.Action.HOLD)) \
 			or granted_indirect_of(unit)   # GH #325 — the shooter's own Indirect token
 			or grants_indirect_to_attackers(target))   # wave 6 — the Indirect Mark's once-grant
 	if bool(report["can_shoot"]) and quick_shot and action == AiDecision.Action.RUSH:
@@ -2652,7 +2652,7 @@ func execute_intent(intent: Dictionary, report: Dictionary) -> Dictionary:
 				or (quick_shot and action == AiDecision.Action.RUSH)):
 		# _run_ai_shooting split-fires — each weapon picks its OWN in-range+LOS target — so opening the
 		# can_shoot gate is enough; no need to thread a specific target through.
-		var retgt: GameUnit = null if source == "player" else best_shoot_target_now(unit)
+		var retgt: GameUnit = null if source == "player" else best_shoot_target_now(unit, action == AiDecision.Action.HOLD)
 		if retgt != null:
 			report["can_shoot"] = true
 			record_decision({"kind": "target", "unit": unit.get_name(),
@@ -2792,7 +2792,7 @@ func suggest_target(unit: GameUnit, verb: int) -> GameUnit:
 		AiDecision.Action.RUSH:
 			return _nearest_enemy_where(unit, func(_gu: GameUnit) -> bool: return true)
 		_:
-			var shot := best_shoot_target_now(unit)
+			var shot := best_shoot_target_now(unit, verb == AiDecision.Action.HOLD)
 			return shot if shot != null else _nearest_enemy_of(unit)
 
 
@@ -2885,7 +2885,7 @@ func _act_regroup(unit: GameUnit, report: Dictionary) -> Dictionary:
 	var weapons := _unit_weapons(unit)
 	var shoot_range := AiArchetype.max_range_inches(weapons) + shooting_range_bonus(unit)
 	if shoot_range > 0:
-		var retgt := best_shoot_target_now(unit)
+		var retgt := best_shoot_target_now(unit, false)   # a regroup move never Holds
 		if retgt != null:
 			report["target"] = retgt
 			report["can_shoot"] = true
@@ -2928,10 +2928,10 @@ func _act_aircraft(unit: GameUnit, report: Dictionary) -> Dictionary:
 	report["dist_in"] = d2
 	report["shoot"] = shoot_range > 0
 	report["can_shoot"] = shoot_range > 0 and d2 <= float(shoot_range) \
-		and (_has_los(unit, target_unit) or (has_indirect_ranged(weapons) and indirect_ignores_los(unit)))
+		and (_has_los(unit, target_unit) or (has_indirect_ranged(weapons) and indirect_ignores_los(unit, false)))
 	# Post-move retarget for the strafing aircraft too (Bug 27/28): after the mandatory straight run its
 	# decided target may be out of arc — fire on whatever it CAN now reach.
-	if not bool(report["can_shoot"]) and shoot_range > 0 and best_shoot_target_now(unit) != null:
+	if not bool(report["can_shoot"]) and shoot_range > 0 and best_shoot_target_now(unit, false) != null:
 		report["can_shoot"] = true
 	var casts := _plan_casts(unit, report)
 	if not casts.is_empty():
@@ -8767,10 +8767,24 @@ static func hold_only_param(unit: GameUnit) -> bool:
 ## The Indirect LOS-waiver half: the entry's ignores_los param (default true) gates the
 ## WEAPON-INDIRECT term only — spell/mark grants stay unconditional (core:
 ## `(p.indirect && indirect_ignores_los.unwrap_or(true)) || mark_indirect`).
-static func indirect_ignores_los(unit: GameUnit) -> bool:
+## Rules 3.6 (SHO-01a): `held` = the activation's action is Hold (the waiver may need it, see below).
+static func indirect_ignores_los(unit: GameUnit, held: bool = true) -> bool:
 	if unit == null:
 		return true
-	return bool(RulesRegistry.unit_param(unit, "Indirect", "ignores_los", true))
+	return bool(RulesRegistry.unit_param(unit, "Indirect", "ignores_los", true)) \
+		and (held or not indirect_needs_hold(unit, "los_needs_hold"))
+
+
+## Rules 3.6 (SHO-01a): an Indirect waiver needs Hold when the "Indirect" entry's `key` says so and no
+## Indirect-family rule of the unit prints it false. Core twin: unit.rs build_for's EPOCH_73_V36 stamp.
+static func indirect_needs_hold(unit: GameUnit, key: String) -> bool:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 or unit == null \
+			or not bool(RulesRegistry.unit_param(unit, "Indirect", key, false)):
+		return false
+	for e in RulesRegistry.unit_rules_of_primitive(unit, "Indirect"):
+		if ((e as Dictionary).get("params", {}) as Dictionary).get(key, true) == false:
+			return false
+	return true
 
 
 ## The Counter strike-first half (core `strikes_first.unwrap_or(true)`): the entry can opt a
