@@ -562,6 +562,14 @@
     "boost_per_token": 1
    }
   },
+  "Caster Group": {
+   "primitive": "Caster",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "pooled": true
+   }
+  },
   "Counter": {
    "primitive": "Counter",
    "rated": false,
@@ -861,6 +869,35 @@
    "params": {
     "advance_mod": -2,
     "rush_mod": -4
+   }
+  },
+  "Spell Accumulator": {
+   "primitive": "Spell Accumulator",
+   "rated": true,
+   "book_version": "3.6.0",
+   "params": {
+    "tokens_per_round": "X",
+    "max_tokens": 6,
+    "share_range_in": 12,
+    "requires_not_shaken": true
+   }
+  },
+  "Spell Conduit": {
+   "primitive": "Spell Conduit",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "range_in": 12,
+    "casting_mod": 1,
+    "requires_not_shaken": true
+   }
+  },
+  "Steadfast Aura": {
+   "primitive": "Aura Channel",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "grants": "Steadfast"
    }
   },
   "Stealth": {
