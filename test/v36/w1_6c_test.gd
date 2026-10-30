@@ -20,10 +20,6 @@ const RENAMED := {
 	"Enhanced Lustbound Aura": "Lustbound Boost Aura",
 	"Enhanced Machine-Fog": "Machine-Fog Boost",
 	"Enhanced Machine-Fog Aura": "Machine-Fog Boost Aura",
-	"Enhanced Mischievous": "Mischievous Boost",
-	"Enhanced Mischievous Aura": "Mischievous Boost Aura",
-	"Enhanced Ossified": "Ossified Boost",
-	"Enhanced Ossified Aura": "Ossified Boost Aura",
 }
 
 ## [system, faction, 3.6 name, primitive, params] - the params the 3.5 entry carries today, with a
@@ -37,7 +33,6 @@ const CASES := [
 	["aof", "human_empire", "Enhanced Hold the Line Buff", "Utility Buff",
 		{"grants_rule": "Enhanced Hold the Line", "target": "friendly", "max_targets": 1.0,
 		"range_in": 12.0, "once": true}],
-	["aof", "ossified_undead", "Enhanced Ossified Aura", "Aura Channel", {"grants": "Enhanced Ossified"}],
 ]
 
 
@@ -79,9 +74,36 @@ func test_no_batch_3_5_name_is_left_in_the_gf_and_aof_maps() -> void:
 func test_the_3_6_names_are_modeled_tokens() -> void:
 	var gf := RulesRegistry.modeled_tokens("gf")
 	var aof := RulesRegistry.modeled_tokens("aof")
-	for token: String in ["Enhanced Hive Bond Aura", "Enhanced Infected", "Enhanced Machine-Fog",
-			"Enhanced Mischievous"]:
+	for token: String in ["Enhanced Hive Bond Aura", "Enhanced Infected", "Enhanced Machine-Fog"]:
 		assert_bool(gf.has(token)).override_failure_message("gf does not model '%s'" % token).is_true()
-	for token: String in ["Enhanced Hold the Line Buff", "Enhanced Lucky Aura", "Enhanced Lustbound",
-			"Enhanced Ossified"]:
+	for token: String in ["Enhanced Hold the Line Buff", "Enhanced Lucky Aura", "Enhanced Lustbound"]:
 		assert_bool(aof.has(token)).override_failure_message("aof does not model '%s'" % token).is_true()
+
+
+## The spell maps hand out the 3.6 names too: a gf / aof spell that granted a batch 3.5 name now
+## grants its 3.6 name, and that name resolves in the caster's own faction of the live (epoch 73)
+## rules map, so the granted upgrade works when the spell lands. No spell grants a 3.5 name.
+func test_a_spell_granting_a_renamed_upgrade_resolves_its_3_6_name_at_epoch_73() -> void:
+	SpellsRegistry.reset_cache()
+	assert_int(AiActRecorder.rules_epoch).is_equal(73)
+	var picks := [["gf", "machine_cults", "Shrouding Incense", "Enhanced Machine-Fog"],
+		["aof", "halflings", "Luck of the Ancients", "Enhanced Lucky"]]
+	for pick: Array in picks:
+		var effect: Variant = SpellsRegistry.entry_for(pick[0], pick[1], pick[2]).get("effect")
+		var grant := str((effect as Dictionary).get("grants_rule", "")) if effect is Dictionary else ""
+		assert_str(grant).override_failure_message(
+			"%s %s '%s' grants '%s'" % [pick[0], pick[1], pick[2], grant]).is_equal(pick[3])
+	var granted := 0
+	for system: String in ["gf", "aof"]:
+		var factions: Dictionary = SpellsRegistry.map_for(system).get("factions", {})
+		for faction: String in factions:
+			for sp: Variant in (factions[faction] as Dictionary).get("spells", []):
+				var eff: Variant = (sp as Dictionary).get("effect")
+				var grant := str((eff as Dictionary).get("grants_rule", "")) if eff is Dictionary else ""
+				assert_bool(RENAMED.values().has(grant)).override_failure_message(
+					"%s %s: a spell still grants the 3.5 name '%s'" % [system, faction, grant]).is_false()
+				if RENAMED.has(grant):
+					granted += 1
+					assert_bool(RulesRegistry.lookup(system, faction, grant).is_empty()).override_failure_message(
+						"%s %s: the granted '%s' does not resolve" % [system, faction, grant]).is_false()
+	assert_int(granted).override_failure_message("no spell grants a batch 3.6 name").is_equal(12)

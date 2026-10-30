@@ -114,9 +114,9 @@ use super::*;
     /// granted base rides the boost arm — EVERY save batch eats 1 AP; a
     /// rule-less carrier keeps 0.
     #[test]
-    fn an_enhanced_ossified_aura_reduces_every_incoming_ap_by_one_at_the_current_epoch() {
+    fn an_ossified_boost_aura_reduces_every_incoming_ap_by_one_at_the_current_epoch() {
         let epoch = crate::acts::CURRENT_RULES_EPOCH;
-        let us = pin_unit("aof", "ossified_undead", &["Enhanced Ossified Aura"], epoch);
+        let us = pin_unit("aof", "ossified_undead", &["Ossified Boost Aura"], epoch);
         assert_eq!(us.ctx.fortified_boost_ap, 1, "the granted Boost's incoming_ap_reduction");
         let plain = pin_unit("aof", "ossified_undead", &[], epoch);
         assert_eq!(plain.ctx.fortified_boost_ap, 0, "no aura, no reduction");

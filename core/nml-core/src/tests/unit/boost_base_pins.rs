@@ -191,12 +191,12 @@ fn enhanced_hive_bond_lifts_the_banner_bonus_to_two() {
 /// (`tests/boost_bases_family.rs`); this pin adds the stamped fields and the
 /// log line by the exact name.
 #[test]
-fn enhanced_mischievous_stamps_the_widened_bane_window_by_name() {
-    let on = boost_unit("goblin_reclaimers", &["Mischievous", "Enhanced Mischievous"], 64);
+fn mischievous_boost_stamps_the_widened_bane_window_by_name() {
+    let on = boost_unit("goblin_reclaimers", &["Mischievous", "Mischievous Boost"], 64);
     assert!(on.shoot[0].bane, "the base alias banes at every epoch");
     assert_eq!(on.shoot[0].bane_low, 5, "the widened window's 5");
     assert_eq!(on.shoot[0].bane_over_in, 9.0, "strictly past 9\"");
-    assert_eq!(on.shoot[0].bane_rule, "Enhanced Mischievous", "the stamped read names the rule (#489)");
+    assert_eq!(on.shoot[0].bane_rule, "Mischievous Boost", "the stamped read names the rule (#489)");
 
     let volley = |us: &UnitStatic, dist_in: f64| {
         let profiles = [us.shoot[0].clone()];
@@ -225,7 +225,7 @@ fn enhanced_mischievous_stamps_the_widened_bane_window_by_name() {
         at12
             .log
             .iter()
-            .any(|l| l == &format!("Enhanced Mischievous: Target — {fives} successful save(s) of 5-6 re-roll")),
+            .any(|l| l == &format!("Mischievous Boost: Target — {fives} successful save(s) of 5-6 re-roll")),
         "rules-must-log: the widened window names itself: {:?}",
         at12.log
     );
@@ -239,7 +239,7 @@ fn enhanced_mischievous_stamps_the_widened_bane_window_by_name() {
     let without = volley(&base, 12.0);
     assert_eq!(without.rolls[2].count as usize, sixes, "no Boost: only the 6s re-roll");
     assert!(
-        !without.log.iter().any(|l| l.contains("Enhanced Mischievous")),
+        !without.log.iter().any(|l| l.contains("Mischievous Boost")),
         "no widened window fired, nothing logs"
     );
 }

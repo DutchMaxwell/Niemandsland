@@ -1215,10 +1215,10 @@ use super::*;
     /// Ossified Boost (aof/ossified_undead) — the same no-gate shape, live at
     /// 6, absent at 5.
     #[test]
-    fn enhanced_ossified_is_live_at_epoch_6_and_absent_at_epoch_5() {
+    fn ossified_boost_is_live_at_epoch_6_and_absent_at_epoch_5() {
         let us6 = fortified_unit("ossified_boost_unit", 6);
         assert_eq!(us6.ctx.fortified_boost_ap, 1, "the Boost's incoming_ap_reduction");
-        assert_eq!(us6.fortified_boost_name, "Enhanced Ossified");
+        assert_eq!(us6.fortified_boost_name, "Ossified Boost");
         let (target6, fired6) = fortified_melee(&us6);
         assert_eq!(target6, 4, "melee AP(1) vs the Boost: saves on 4+ instead of 5+");
         assert!(fired6, "rules-must-log: the melee phase must report the boost");

@@ -1692,7 +1692,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Lustbound Boost",
+      "grants_rule": "Enhanced Lustbound",
       "duration": "once"
      },
      "status": "castable"
@@ -2122,7 +2122,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Lucky Boost",
+      "grants_rule": "Enhanced Lucky",
       "duration": "once"
      },
      "status": "castable"
@@ -2649,7 +2649,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Hold the Line Boost",
+      "grants_rule": "Enhanced Hold the Line",
       "duration": "once"
      },
      "status": "castable"
@@ -2989,7 +2989,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Lustbound Boost",
+      "grants_rule": "Enhanced Lustbound",
       "duration": "once"
      },
      "status": "castable"
@@ -4035,7 +4035,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Lustbound Boost",
+      "grants_rule": "Enhanced Lustbound",
       "duration": "once"
      },
      "status": "castable"

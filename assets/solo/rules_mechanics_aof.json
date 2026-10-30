@@ -164,8 +164,8 @@
   "Mend",
   "Mind Control",
   "Mischievous",
-  "Enhanced Mischievous",
-  "Enhanced Mischievous Aura",
+  "Mischievous Boost",
+  "Mischievous Boost Aura",
   "Mobile Artillery",
   "Morale",
   "Morale Debuff",
@@ -173,8 +173,8 @@
   "No Retreat",
   "No Retreat Aura",
   "Ossified",
-  "Enhanced Ossified",
-  "Enhanced Ossified Aura",
+  "Ossified Boost",
+  "Ossified Boost Aura",
   "Pass Turn",
   "Phase Through",
   "Piercing Assault",
@@ -3631,7 +3631,7 @@
      "bypass_regen": false
     }
    },
-   "Enhanced Mischievous": {
+   "Mischievous Boost": {
     "primitive": "Bane",
     "rated": false,
     "book_version": "3.5.3",
@@ -3642,12 +3642,12 @@
      "upgrades": "Mischievous"
     }
    },
-   "Enhanced Mischievous Aura": {
+   "Mischievous Boost Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Enhanced Mischievous"
+     "grants": "Mischievous Boost"
     }
    },
    "Piercing Fighter": {
@@ -6143,7 +6143,7 @@
      "over_in": 9
     }
    },
-   "Enhanced Ossified": {
+   "Ossified Boost": {
     "primitive": "Fortified",
     "rated": false,
     "book_version": "3.5.3",
@@ -6151,12 +6151,12 @@
      "incoming_ap_reduction": 1
     }
    },
-   "Enhanced Ossified Aura": {
+   "Ossified Boost Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Enhanced Ossified"
+     "grants": "Ossified Boost"
     }
    },
    "Piercing Shooter": {

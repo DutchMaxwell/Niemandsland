@@ -66,7 +66,7 @@ use super::*;
         ("Enhanced Infected Aura", "gf", "infected_colonies", "Enhanced Infected", true),
         ("Infiltrate Aura", "gf", "dwarf_guilds", "Infiltrate", true),
         ("Enhanced Machine-Fog Aura", "gf", "machine_cults", "Enhanced Machine-Fog", false),
-        ("Enhanced Mischievous Aura", "aof", "goblins", "Enhanced Mischievous", false),
+        ("Mischievous Boost Aura", "aof", "goblins", "Mischievous Boost", false),
         ("Piercing Assault Aura", "aof", "beastmen", "Piercing Assault", true),
         ("Plaguebound Boost Aura", "aof", "plague_disciples", "Plaguebound Boost", true),
         ("Point-Blank Piercing Aura", "gf", "blessed_sisters", "Point-Blank Piercing", true),

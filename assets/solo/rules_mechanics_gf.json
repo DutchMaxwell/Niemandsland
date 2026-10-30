@@ -179,8 +179,8 @@
   "Mend",
   "Mind Control",
   "Mischievous",
-  "Enhanced Mischievous",
-  "Enhanced Mischievous Aura",
+  "Mischievous Boost",
+  "Mischievous Boost Aura",
   "Mobile Artillery",
   "Morale",
   "Morale Debuff",
@@ -4328,7 +4328,7 @@
      "bypass_regen": false
     }
    },
-   "Enhanced Mischievous": {
+   "Mischievous Boost": {
     "primitive": "Bane",
     "rated": false,
     "book_version": "3.5.3",
@@ -4339,12 +4339,12 @@
      "upgrades": "Mischievous"
     }
    },
-   "Enhanced Mischievous Aura": {
+   "Mischievous Boost Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Enhanced Mischievous"
+     "grants": "Mischievous Boost"
     }
    },
    "Precision Fighter Aura": {

@@ -62,7 +62,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Hive Bond Boost",
+      "grants_rule": "Enhanced Hive Bond",
       "duration": "once"
      },
      "status": "castable"
@@ -2260,7 +2260,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Hold the Line Boost",
+      "grants_rule": "Enhanced Hold the Line",
       "duration": "once"
      },
      "status": "castable"
@@ -2532,7 +2532,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Infected Boost",
+      "grants_rule": "Enhanced Infected",
       "duration": "once"
      },
      "status": "castable"
@@ -3159,7 +3159,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Lustbound Boost",
+      "grants_rule": "Enhanced Lustbound",
       "duration": "once"
      },
      "status": "castable"
@@ -3246,7 +3246,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Machine-Fog Boost",
+      "grants_rule": "Enhanced Machine-Fog",
       "duration": "once"
      },
      "status": "castable"
@@ -4751,7 +4751,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Lustbound Boost",
+      "grants_rule": "Enhanced Lustbound",
       "duration": "once"
      },
      "status": "castable"
@@ -5910,7 +5910,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Lustbound Boost",
+      "grants_rule": "Enhanced Lustbound",
       "duration": "once"
      },
      "status": "castable"

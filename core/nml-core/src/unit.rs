@@ -3493,7 +3493,7 @@ pub(crate) const BOOST_AURA_CHANNEL_NAMES: &[&str] = &[
     "Royal Warrior Boost Aura",
     "Bestial Boost Aura",
     "Vinci Tech Boost Aura",
-    "Enhanced Ossified Aura",
+    "Ossified Boost Aura",
     "Shadowborn Boost Aura",
     "Destroyer Boost Aura",
     "Empyrean Spirit Boost Aura",
@@ -6151,7 +6151,7 @@ impl UnitStatic {
         // never widens — no pre-charge gap (the shred2 precedent). Read BY
         // NAME, never by iterating the shared primitive (#489).
         if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
-            stamp_bane_boost(reg, p, &mut shoot, "Enhanced Mischievous", "reroll_save_low");
+            stamp_bane_boost(reg, p, &mut shoot, "Mischievous Boost", "reroll_save_low");
         }
         // Wave 4 (rules-wave4-boostbases2), gated on the FROZEN
         // `EPOCH_7_TABLE_RULES`: "Bestial Boost" is the aof/beastmen twin of
