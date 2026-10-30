@@ -8269,6 +8269,20 @@ func _solo_resolve_saves(striker: GameUnit, defender: GameUnit, weapon_name: Str
 		total += await _solo_save_batch(striker, defender, "%s (%s)" % [weapon_name, ap4_label], ap4_hits,
 			base_defense, ap + on6_bonus, profile, human_defends, bane, apply_deadly, dist_in > AiCombatMath.LONG_RANGE_IN, solo)
 	var normal: int = hits - ap4_hits
+	# Row MOR-12 (EPOCH_73_V36, stamped only from 73 by AiEv.stamp_sergeant): the Sergeant bearer's
+	# share of the plain hits (its attacks over the profile's, rounded; the EV metric's same fraction)
+	# saves as its own batch at AP(+sergeant_ap) instead of the 3.5 extra hits on 6s.
+	var sgt_ap := int(profile.get("sergeant_ap", 0))
+	var sgt_hits: int = mini(normal, roundi(float(normal) * float(profile.get("sergeant_ap_attacks", 0))
+		/ float(maxi(int(profile.get("attacks", 1)), 1)))) if sgt_ap > 0 else 0
+	if sgt_hits > 0:
+		var sgt_rule := str(profile.get("sergeant_rule", "Sergeant"))
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s strikes %d hit%s with AP(+%d)" % [
+				sgt_rule, striker.get_name(), sgt_hits, ("" if sgt_hits == 1 else "s"), sgt_ap], true)
+		total += await _solo_save_batch(striker, defender, "%s (%s)" % [weapon_name, sgt_rule], sgt_hits,
+			base_defense, ap + sgt_ap, profile, human_defends, bane, apply_deadly, dist_in > AiCombatMath.LONG_RANGE_IN, solo)
+		normal -= sgt_hits
 	if normal > 0:
 		total += await _solo_save_batch(striker, defender, weapon_name, normal, base_defense, ap, profile, human_defends, bane, apply_deadly, dist_in > AiCombatMath.LONG_RANGE_IN, solo)
 	_vfx_hit_strip(defender, hits, _vfx_saves_made)
