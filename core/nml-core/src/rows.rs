@@ -66,6 +66,10 @@ pub const RULE_VOCAB_VERSION: i64 = 9;
 /// golden_planner*) is one of those, and every one of them is version 2.
 pub const LEGACY_VOCAB_VERSION: i64 = 2;
 
+/// AI-01a — the first reading that honours the file's top-level `alias` block
+/// (rules 3.6 renames); older readings ignore it, so legacy replays stay identical.
+pub const ALIAS_SINCE_VOCAB: i64 = 9;
+
 /// `AiEv.NEUTRAL_DEFENDER` ai_ev.gd:37 — `{"defense": 4, "tough": 1,
 /// "models": 5}`. Every other key is absent, and GDScript's `.get(k, default)`
 /// then answers the reader's own fallback, which is what `Ctx::default()` is.
@@ -125,6 +129,11 @@ pub struct RowVocab {
     weapon: HashMap<String, i64>,
     spell: HashMap<String, i64>,
     unit2: HashMap<String, i64>,
+    /// AI-01a — `alias.unit` / `.weapon` / `.spell`: a slotless name -> the names whose
+    /// slots it reaches in its own band. Empty below `ALIAS_SINCE_VOCAB`.
+    alias_unit: HashMap<String, Vec<String>>,
+    alias_weapon: HashMap<String, Vec<String>>,
+    alias_spell: HashMap<String, Vec<String>>,
 }
 
 impl RowVocab {
@@ -211,6 +220,11 @@ impl RowVocab {
         // read off the committed (uncut) spell array length, the same for
         // every `want`.
         let spell_len = v.get("spell").and_then(|x| x.as_array()).map_or(0, |a| a.len()) as i64;
+        // A malformed band reads as empty: its names then stay loud in `unknown`.
+        let alias = |band: &str| -> HashMap<String, Vec<String>> {
+            let block = v.get("alias").and_then(|a| a.get(band)).filter(|_| want >= ALIAS_SINCE_VOCAB);
+            block.and_then(|b| serde_json::from_value(b.clone()).ok()).unwrap_or_default()
+        };
         RowVocab {
             loaded: true,
             version: want,
@@ -219,6 +233,9 @@ impl RowVocab {
             weapon: list("weapon", 200),
             spell: list("spell", 300),
             unit2: list("unit2", 300 + spell_len),
+            alias_unit: alias("unit"),
+            alias_weapon: alias("weapon"),
+            alias_spell: alias("spell"),
         }
     }
 
@@ -276,6 +293,28 @@ pub fn unit_sev_mev(p: &Profile, us: &UnitStatic, def: &Ctx) -> (f64, f64) {
     (sev, mev)
 }
 
+/// AI-01a — fold one rule name into `vals` at `v` through one band: its own
+/// slot on a direct hit (which always wins), else every slotted target of its
+/// alias, each keeping the max like a direct hit. False = no slot at all, and
+/// the caller collects the ORIGINAL name as unknown.
+fn fold_band(
+    vals: &mut BTreeMap<i64, i64>,
+    name: &str,
+    v: i64,
+    look: impl Fn(&str) -> Option<i64>,
+    alias: &HashMap<String, Vec<String>>,
+) -> bool {
+    let direct = look(name);
+    let targets = if direct.is_some() { None } else { alias.get(name) };
+    let mut hit = false;
+    for slot in direct.into_iter().chain(targets.into_iter().flatten().filter_map(|t| look(t))) {
+        let e = vals.entry(slot).or_insert(0);
+        *e = (*e).max(v);
+        hit = true;
+    }
+    hit
+}
+
 /// The row encoder: the vocabulary plus the loud `unknown_rules` collector
 /// (`BattleSim.unknown_rules` battle_sim.gd:82 — a name that is not in the
 /// committed vocabulary is REPORTED, never silently slotted).
@@ -328,15 +367,10 @@ impl RowEncoder {
             if name.is_empty() {
                 continue;
             }
-            match self.vocab.unit.get(&name).or_else(|| self.vocab.unit2.get(&name)) {
-                Some(&slot) => {
-                    let v = if rating > 0 { rating } else { 1 };
-                    let e = vals.entry(slot).or_insert(0);
-                    *e = (*e).max(v);
-                }
-                None => {
-                    self.unknown.insert(name);
-                }
+            let v = if rating > 0 { rating } else { 1 };
+            let look = |n: &str| self.vocab.unit.get(n).or_else(|| self.vocab.unit2.get(n)).copied();
+            if !fold_band(&mut vals, &name, v, look, &self.vocab.alias_unit) {
+                self.unknown.insert(name);
             }
         }
         // Weapon rules, over EVERY weapon of the unit (melee and Strafing too —
@@ -347,14 +381,9 @@ impl RowEncoder {
                 if name.is_empty() {
                     continue;
                 }
-                match self.vocab.weapon.get(&name) {
-                    Some(&slot) => {
-                        let e = vals.entry(slot).or_insert(0);
-                        *e = (*e).max(rating.max(1));
-                    }
-                    None => {
-                        self.unknown.insert(name);
-                    }
+                let look = |n: &str| self.vocab.weapon.get(n).copied();
+                if !fold_band(&mut vals, &name, rating.max(1), look, &self.vocab.alias_weapon) {
+                    self.unknown.insert(name);
                 }
             }
         }
@@ -365,14 +394,9 @@ impl RowEncoder {
                 if name.is_empty() {
                     continue;
                 }
-                match self.vocab.spell.get(name) {
-                    Some(&slot) => {
-                        let e = vals.entry(slot).or_insert(0);
-                        *e = (*e).max(sp.threshold.max(1));
-                    }
-                    None => {
-                        self.unknown.insert(format!("spell:{name}"));
-                    }
+                let look = |n: &str| self.vocab.spell.get(n).copied();
+                if !fold_band(&mut vals, name, sp.threshold.max(1), look, &self.vocab.alias_spell) {
+                    self.unknown.insert(format!("spell:{name}"));
                 }
             }
         }
