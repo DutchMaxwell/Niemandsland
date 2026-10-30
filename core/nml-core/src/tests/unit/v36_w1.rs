@@ -202,12 +202,16 @@ mod enhanced_renames {
     }
 
     /// W1.6a, map-only name (no code literal): the Shred upgrade stamps from its entry alone.
+    /// Carried bare, so the stamp is its own (with the base carried too, the base entry comes
+    /// first at the same amount and names the shred, exactly as with the 3.5 name).
     #[test]
     fn enhanced_destroyer_shreds_like_its_3_5_boost() {
-        let us = enhanced_unit("aof", "ogres", &["Destroyer", "Enhanced Destroyer"]);
+        let us = enhanced_unit("aof", "ogres", &["Enhanced Destroyer"]);
         assert!(us.shoot[0].shred_alias, "a Shred carrier");
-        assert_eq!(us.shoot[0].shred_low, 2, "the entry's save_fail_max window");
+        assert_eq!(us.shoot[0].shred_low, 1, "carried bare: its own 1s window");
         assert_eq!(us.shoot[0].shred_ones_wound_bonus, 1, "the entry's extra_wound_per_save_one");
         assert_eq!(us.shoot[0].shred_ones_rule, "Enhanced Destroyer", "the stamp names the 3.6 rule");
+        let full = enhanced_unit("aof", "ogres", &["Destroyer", "Enhanced Destroyer"]);
+        assert_eq!(full.shoot[0].shred_low, 2, "with the base: the entry's save_fail_max window");
     }
 }

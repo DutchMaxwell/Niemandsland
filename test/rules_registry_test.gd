@@ -103,18 +103,18 @@ func test_piercing_assault_aura_channel() -> void:
 func test_aura_slice_1b_channels() -> void:
 	for name in [
 		"Ballistic Vest Boost Aura",
-		"Bestial Boost Aura",
+		"Enhanced Bestial Aura",
 		"Bounding Aura",
-		"Buccaneer Boost Aura",
-		"Changebound Boost Aura",
-		"Clan Warrior Boost Aura",
+		"Enhanced Buccaneer Aura",
+		"Enhanced Changebound Aura",
+		"Enhanced Clan Warrior Aura",
 		"Crazed Boost Aura",
 		"Cyber-Eyes Boost Aura",
 		"Dash Aura",
 		"Defensive Growth Aura",
-		"Destroyer Boost Aura",
-		"Devout Boost Aura",
-		"Empyrean Spirit Boost Aura",
+		"Enhanced Destroyer Aura",
+		"Enhanced Devout Aura",
+		"Enhanced Empyrean Spirit Aura",
 		"Exotic Gear Boost Aura",
 		"Fearless Aura",
 		"Ferocious Boost Aura",
@@ -363,6 +363,10 @@ func test_committed_maps_carry_no_rule_texts() -> void:
 					var pv: Variant = params[key]
 					if key == "grants" and entry.get("primitive") == "Aura Channel":
 						assert_str(str(pv)).is_equal(str(rule_name).trim_suffix(" Aura"))
+						continue
+					# A carried grant that names a rule of the same section is a name, not prose
+					# (rules 3.6 "Enhanced <X>" names run past 24 characters).
+					if key == "grants_rule" and (section as Dictionary).has(str(pv)):
 						continue
 					if pv is String:
 						assert_bool((pv as String).length() <= 24 and not (pv as String).contains(". ")) \

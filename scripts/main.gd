@@ -7425,11 +7425,11 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 	# attacking them always get -1 to hit") — it REPLACES the base's over-9" Stealth alias
 	# (one -1 at any range), it does not add a second one.
 	var empyrean_boost: bool = _solo_rule_on_all_models(target, "Empyrean Spirit") \
-			and _solo_rule_on_all_models(target, "Empyrean Spirit Boost")
+			and _solo_rule_on_all_models(target, "Enhanced Empyrean Spirit")
 	var evasive_note := "Evasive -1"
 	if empyrean_boost:
 		# Rules-must-log: the applied rule names itself once — never the stood-down base next to it.
-		evasive_note = "Empyrean Spirit Boost: -1 to hit (base Evasive stood down)"
+		evasive_note = "Enhanced Empyrean Spirit: -1 to hit (base Evasive stood down)"
 	# Coverage wave: the Stealth-family DATA alias that applies to THIS attack — Changebound /
 	# Machine-Fog ("shot or charged from over 9\"" → applies_charged), Grounded Stealth (terrain-
 	# conditional; D-STEALTH: the per-model within-1\" predicate, the cover-cell approximation

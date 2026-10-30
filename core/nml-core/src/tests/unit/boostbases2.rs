@@ -78,8 +78,8 @@ use super::*;
     /// (the base "Bestial" alias itself banes at every epoch — only the
     /// WIDENED window is epoch-7 born), and exactly 9" is not "over".
     #[test]
-    fn bestial_boost_widens_the_bane_window_over_nine_inches_at_epoch_7() {
-        let us = boostbases2_unit("beastmen", &["Bestial", "Bestial Boost"], 7);
+    fn enhanced_bestial_widens_the_bane_window_over_nine_inches_at_epoch_7() {
+        let us = boostbases2_unit("beastmen", &["Bestial", "Enhanced Bestial"], 7);
         assert!(us.shoot[0].bane, "the base alias banes at every epoch");
         let on = bane_volley(&us, 12.0);
         let saves = &on.rolls[1];
@@ -93,7 +93,7 @@ use super::*;
             "epoch 7, 12\": every successful 5-6 re-rolls (the widened window)"
         );
         assert!(
-            on.log.iter().any(|l| l.contains("Bestial Boost")),
+            on.log.iter().any(|l| l.contains("Enhanced Bestial")),
             "rules-must-log: the widened window names itself (RED before the fix)"
         );
 
@@ -106,11 +106,11 @@ use super::*;
         );
 
         // Epoch 6: the record predates this wave — the base 6s-only window.
-        let us6 = boostbases2_unit("beastmen", &["Bestial", "Bestial Boost"], 6);
+        let us6 = boostbases2_unit("beastmen", &["Bestial", "Enhanced Bestial"], 6);
         let off = bane_volley(&us6, 12.0);
         assert_eq!(off.rolls[2].count as usize, sixes, "epoch 6: the base window, byte-exact");
         assert!(
-            !off.log.iter().any(|l| l.contains("Bestial Boost")),
+            !off.log.iter().any(|l| l.contains("Enhanced Bestial")),
             "epoch 6: the widened window is not born yet"
         );
 
@@ -119,7 +119,7 @@ use super::*;
         let without = bane_volley(&base, 12.0);
         assert_eq!(without.rolls[2].count as usize, sixes, "no Boost: only the 6s re-roll");
         assert!(
-            !without.log.iter().any(|l| l.contains("Bestial Boost")),
+            !without.log.iter().any(|l| l.contains("Enhanced Bestial")),
             "no widened window fired, nothing logs"
         );
     }
@@ -131,15 +131,15 @@ use super::*;
     /// stands down, so the two never stack. PRESENT at 7, ABSENT at 6 (the
     /// alias leg keeps its over-9" gate, byte-exact).
     #[test]
-    fn empyrean_spirit_boost_makes_the_minus_one_unconditional_at_epoch_7() {
-        let on = boostbases2_unit("ghostly_undead", &["Empyrean Spirit", "Empyrean Spirit Boost"], 7);
+    fn enhanced_empyrean_spirit_makes_the_minus_one_unconditional_at_epoch_7() {
+        let on = boostbases2_unit("ghostly_undead", &["Empyrean Spirit", "Enhanced Empyrean Spirit"], 7);
         assert!(on.ctx.evasive, "epoch 7: the Boost folds into evasive (RED before the fix)");
         assert_eq!(
             on.ctx.stealth_alias_penalty, 0,
             "the base entry's conditional alias leg stands down (never stacks)"
         );
 
-        let off = boostbases2_unit("ghostly_undead", &["Empyrean Spirit", "Empyrean Spirit Boost"], 6);
+        let off = boostbases2_unit("ghostly_undead", &["Empyrean Spirit", "Enhanced Empyrean Spirit"], 6);
         assert!(!off.ctx.evasive, "epoch 6: pre-port records stay inert");
         assert_eq!(
             off.ctx.stealth_alias_penalty, 1,
@@ -153,7 +153,7 @@ use super::*;
             "epoch 7, 6\": the always -1 (4+ minus 1 = 5+) (RED before the fix)"
         );
         assert!(
-            shot.log.iter().any(|l| l.contains("Empyrean Spirit Boost")),
+            shot.log.iter().any(|l| l.contains("Enhanced Empyrean Spirit")),
             "rules-must-log: the Boost names itself at the volley seam"
         );
 
@@ -165,7 +165,7 @@ use super::*;
             "without the Boost the conditional alias stays shut inside 9\""
         );
         assert!(
-            !base_shot.log.iter().any(|l| l.contains("Empyrean Spirit Boost")),
+            !base_shot.log.iter().any(|l| l.contains("Enhanced Empyrean Spirit")),
             "nothing fired, nothing logs"
         );
     }
@@ -206,11 +206,11 @@ use super::*;
     /// reading it had before the wave existed.
     #[test]
     fn an_epoch_six_record_sees_none_of_the_three_wave_four_boosts() {
-        let bane = boostbases2_unit("beastmen", &["Bestial", "Bestial Boost"], 6);
+        let bane = boostbases2_unit("beastmen", &["Bestial", "Enhanced Bestial"], 6);
         assert_eq!(bane.shoot[0].bane_low, 0, "epoch 6: the base 6s-only window");
         assert_eq!(bane.shoot[0].bane_rule, "", "epoch 6: nothing to name");
         let spirit =
-            boostbases2_unit("ghostly_undead", &["Empyrean Spirit", "Empyrean Spirit Boost"], 6);
+            boostbases2_unit("ghostly_undead", &["Empyrean Spirit", "Enhanced Empyrean Spirit"], 6);
         assert!(!spirit.ctx.evasive, "epoch 6: the -1 keeps its over-9\" gate");
         assert_eq!(spirit.ctx.evasive_alias_name, "", "epoch 6: nothing to name");
         assert_eq!(
