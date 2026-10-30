@@ -481,6 +481,15 @@
     "rating": "X"
    }
   },
+  "Agile": {
+   "primitive": "Quick",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "advance_mod": 1,
+    "rush_mod": 2
+   }
+  },
   "Aircraft": {
    "primitive": "Aircraft",
    "rated": false,
@@ -502,6 +511,14 @@
    "primitive": "Ambush",
    "rated": false,
    "book_version": "3.5.1"
+  },
+  "Ambushing Piercing Shot": {
+   "primitive": "Ambush",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "counts_as": "Ambush"
+   }
   },
   "Armor": {
    "primitive": "Armor",
@@ -798,6 +815,22 @@
     "hit_bonus": 1
    }
   },
+  "Predator": {
+   "primitive": "Surge",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "extra_attack": true
+   }
+  },
+  "Re-Deployment": {
+   "primitive": "Re-Deployment",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "max_units": 2
+   }
+  },
   "Regeneration": {
    "primitive": "Regeneration",
    "rated": false,
@@ -850,6 +883,14 @@
     "on6_ap": 4,
     "bypass_regen": true,
     "shooting_only": true
+   }
+  },
+  "Repel Ambushers": {
+   "primitive": "Repel Ambushers",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "min_dist_in": 12.0
    }
   },
   "Scout": {
@@ -905,6 +946,15 @@
    "primitive": "Stealth",
    "rated": false,
    "book_version": "3.5.1",
+   "params": {
+    "hit_penalty": 1,
+    "over_in": 9.0
+   }
+  },
+  "Stealth Buff": {
+   "primitive": "Stealth",
+   "rated": false,
+   "book_version": "3.6.0",
    "params": {
     "hit_penalty": 1,
     "over_in": 9.0
