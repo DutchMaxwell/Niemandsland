@@ -156,7 +156,7 @@ use super::*;
         let (st, mut statics) = buff_line();
         let fighter = bearer(
             "gf",
-            "wormhole_daemons_of_lust",
+            "daemons_of_lust",
             "Hit & Run Fighter Aura",
             crate::acts::CURRENT_RULES_EPOCH,
         );

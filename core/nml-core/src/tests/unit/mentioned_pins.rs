@@ -79,7 +79,7 @@ use super::*;
     #[test]
     fn a_plus_one_to_defense_carrier_shields_by_one_at_the_current_epoch() {
         let epoch = crate::acts::CURRENT_RULES_EPOCH;
-        let us = mentioned_unit("gf", "wormhole_daemons_of_war", &["+1 to Defense"], "", epoch);
+        let us = mentioned_unit("gf", "daemons_of_war", &["+1 to Defense"], "", epoch);
         assert!(us.ctx.shielded, "the alias fires the shielded half");
         assert_eq!(us.ctx.shielded_alias, ShieldedAlias::PlusOneToDefense);
         assert_eq!(us.ctx.shielded_bonus(), 1, "the +1 the rule produces");
@@ -88,7 +88,7 @@ use super::*;
             3,
             "Defense 4 -> hit on 3+"
         );
-        let plain = mentioned_unit("gf", "wormhole_daemons_of_war", &[], "", epoch);
+        let plain = mentioned_unit("gf", "daemons_of_war", &[], "", epoch);
         assert!(!plain.ctx.shielded && plain.ctx.shielded_bonus() == 0);
         assert_eq!(crate::combat::shielded_defense(plain.ctx.defense, 0, 2), 4, "no rule, plain rung");
         let unmapped = mentioned_unit("gf", "robot_legions", &["+1 to Defense"], "", epoch);
