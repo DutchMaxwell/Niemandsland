@@ -20,6 +20,7 @@
   "Angelic Blessing Boost Buff",
   "Armor",
   "Artillery",
+  "Assault",
   "Bane",
   "Bane Mark",
   "Bane in Melee",
@@ -375,6 +376,7 @@
   "Ambush",
   "Armor",
   "Artillery",
+  "Assault",
   "Bane",
   "Banner",
   "Blast",
@@ -503,6 +505,14 @@
     "target_hit_penalty": 2,
     "over_in": 9.0,
     "hold_only": true
+   }
+  },
+  "Assault": {
+   "primitive": "Assault",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "melee_copy": true
    }
   },
   "Bane": {

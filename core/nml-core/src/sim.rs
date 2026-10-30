@@ -4776,6 +4776,16 @@ fn strike_phase(
             }
         }
     }
+    // MEL-01 (D-ASSAULT) rules-must-log: an Assault weapon's melee copy (the
+    // profile carrying its printed range) names itself when it strikes.
+    for (mi, sc, _) in parts.iter() {
+        let melee = &statics[next.roster.profile[*mi]].melee;
+        for &k in &sc.keep {
+            if melee[k].printed_range > 0 {
+                shot.log.push(format!("Assault: {} also strikes in melee", melee[k].name));
+            }
+        }
+    }
     // Block C5 — Instinctive: the +1 reaches the melee fold ONLY when the
     // attacked unit IS the closest enemy (main.gd:5670-5673), per member
     // carrying it — the pick itself is never constrained.

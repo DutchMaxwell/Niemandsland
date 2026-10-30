@@ -668,6 +668,10 @@ pub struct ShootProfile {
     pub attacks: i64,
     pub count: i64,
     pub range: i64,
+    /// MEL-01 (D-ASSAULT): an Assault weapon's melee copy sits at `range` 0, so
+    /// every melee reader keeps its meaning; its PRINTED range rides here for
+    /// the range-relative gates. 0 on every other profile.
+    pub printed_range: i64,
     pub ap: i64,
     pub deadly: i64,
     pub blast: i64,
@@ -902,6 +906,7 @@ impl ShootProfile {
     fn merges_with(&self, o: &ShootProfile) -> bool {
         self.name == o.name
             && self.range == o.range
+            && self.printed_range == o.printed_range
             && self.ap == o.ap
             && self.deadly == o.deadly
             && self.blast == o.blast
@@ -5236,18 +5241,31 @@ pub(crate) fn profiles_in_range(weapons: &[Weapon], dist_in: f64) -> Vec<ShootPr
 /// `AiShooting.melee_profiles` ai_shooting.gd:44-56 — every range-0 weapon, also
 /// UNSTAMPED. Strafing is NOT excluded here: that filter lives in
 /// `profiles_in_range` alone, and a melee weapon never carries the move-through
-/// trigger.
+/// trigger. The epoch-free reading (no Assault copy) — the row encoder's.
 pub(crate) fn melee_profiles(weapons: &[Weapon]) -> Vec<ShootProfile> {
+    melee_profiles_at(weapons, 0)
+}
+
+/// `melee_profiles` at the record's epoch. MEL-01 (D-ASSAULT, `EPOCH_73_V36`):
+/// a ranged weapon carrying Assault also yields a melee copy, in weapon order,
+/// at range 0 with its printed range kept in `printed_range`.
+pub(crate) fn melee_profiles_at(weapons: &[Weapon], rules_epoch: u32) -> Vec<ShootProfile> {
+    let assault = rule_on(rules_epoch, crate::acts::EPOCH_73_V36);
     let mut raw: Vec<ShootProfile> = Vec::new();
     for w in weapons {
-        if w.range as i64 > 0 {
+        let copy = assault && w.range as i64 > 0 && weapon_has(w, "Assault");
+        if w.range as i64 > 0 && !copy {
             continue;
         }
         let attacks = w.attacks.max(0) * w.count.max(1);
         if attacks <= 0 {
             continue;
         }
-        raw.push(base_profile(w, attacks, 0));
+        let mut p = base_profile(w, attacks, 0);
+        if copy {
+            p.printed_range = w.range as i64;
+        }
+        raw.push(p);
     }
     merge_identical(raw)
 }
@@ -5912,7 +5930,7 @@ impl UnitStatic {
         stamp_unit_strikers(reg, p, &mut shoot, rules_epoch);
         stamp_shot_modifier(reg, p, &mut shoot);
 
-        let mut melee = melee_profiles(&p.weapons);
+        let mut melee = melee_profiles_at(&p.weapons, rules_epoch);
         // NML-002 Strafing — the move-through trigger's own array, stamped
         // UNGATED and UNSTAMPED: the table builds it raw off the weapons
         // (`AiShooting.strafing_profiles`, main.gd:2976-2985) and the
