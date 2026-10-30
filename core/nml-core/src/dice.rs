@@ -2059,6 +2059,9 @@ pub fn resolve_melee_leg(
 /// `unwrap_or(1)` keeps every earlier replay byte-exact. Stripping the
 /// HEAVY dice first, defender-optimal (`_solo_charge_impact`
 /// :6292-6303). A fatigued charger rolls nothing at all (p.13).
+///
+/// Rules 3.6 (`EPOCH_73_V36`) — the `brace_models` x `brace_impact_per_model`
+/// cut joins the same sum (the caller zeroes it while the defender is Fatigued).
 pub fn impact_pools(att: &Ctx, def: &Ctx) -> [(i64, i64); 2] {
     if att.fatigued {
         return [(0, 0), (0, 0)];
@@ -2067,7 +2070,10 @@ pub fn impact_pools(att: &Ctx, def: &Ctx) -> [(i64, i64); 2] {
     let heavy_raw = att.heavy_impact * models;
     let cut = def
         .counter_models
-        .saturating_mul(def.counter_impact_per_model.unwrap_or(1));
+        .saturating_mul(def.counter_impact_per_model.unwrap_or(1))
+        + def
+            .brace_models
+            .saturating_mul(def.brace_impact_per_model.unwrap_or(1));
     let heavy_cut = cut.min(heavy_raw);
     [
         (impact_total_dice(att.impact, models, cut - heavy_cut), 0),

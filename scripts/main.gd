@@ -7762,6 +7762,32 @@ func _solo_counter_models(unit: GameUnit) -> int:
 	return SoloController.counter_models_of(unit)
 
 
+## Rules 3.6 (`EPOCH_73_V36`) — the alive models of a unit (incl. attached heroes) whose weapons carry
+## Brace(X): each takes X Impact dice off a unit charging it. 0 below 73.
+func _solo_brace_models(unit: GameUnit) -> int:
+	if unit == null or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return 0
+	var members: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		members = members + unit.get_attached_heroes()
+	var total := 0
+	for m in members:
+		var member := m as GameUnit
+		if member == null:
+			continue
+		var alive: int = member.get_alive_count()
+		if alive <= 0:
+			continue
+		var weapons: Array = []
+		if member.source_type == "opr" and member.source_data is OPRApiClient.OPRUnit:
+			weapons = (member.source_data as OPRApiClient.OPRUnit).weapons
+		for w in weapons:
+			if w is Object and AiShooting._has_rule(w, "Brace"):
+				total += alive * maxi(AiShooting._rating_of(w, "Brace"), 1)
+				break
+	return total
+
+
 ## Resolve one side's melee strikes against `defender` and LAND the wounds (Regeneration-bucketed): the
 ## striker's groups (unit + attached heroes; attacks pre-scaled by the 2" reach) roll real to-hit dice,
 ## saves resolve via _solo_resolve_saves (prompted when the human defends, AI auto-saves otherwise).
@@ -8166,9 +8192,19 @@ func _solo_charge_impact(charger: GameUnit, defender: GameUnit, human_defends: b
 		return 0
 	var models: int = charger.get_alive_count()
 	var counter_models: int = _solo_counter_models(defender)
-	var heavy_cut: int = mini(counter_models, hx * models)
+	var brace_cut: int = _solo_brace_models(defender)
+	if brace_cut > 0:
+		if defender.is_fatigued:
+			brace_cut = 0
+			if battle_log != null:
+				_log_rule_event(BattleLog.Category.COMBAT, "Brace: no effect, %s is Fatigued" % defender.get_name(), true)
+		elif battle_log != null:
+			_log_rule_event(BattleLog.Category.COMBAT, "Brace: %s takes %d Impact dice off %s" % [
+				defender.get_name(), brace_cut, charger.get_name()], true)
+	var cut_models: int = counter_models + brace_cut
+	var heavy_cut: int = mini(cut_models, hx * models)
 	var heavy_dice: int = hx * models - heavy_cut
-	var dice: int = AiCombatMath.impact_total_dice(x, models, counter_models - heavy_cut)
+	var dice: int = AiCombatMath.impact_total_dice(x, models, cut_models - heavy_cut)
 	if counter_models > 0 and battle_log != null and (x + hx) * models > 0:
 		_log_rule_event(BattleLog.Category.COMBAT, "Counter: -%d Impact dice (%s)" % [
 			counter_models, charger.get_name()], true)

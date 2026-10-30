@@ -3189,6 +3189,8 @@ pub fn ctx_of(us: &UnitStatic, state: &State, i: usize) -> Ctx {
     // stamp carries the full-strength bearer count, this fold trims it as
     // models die. Pre-port records carry 0 and stay 0.
     c.counter_models = c.counter_models.min(state.alive[i].max(0));
+    // Rules 3.6 — Brace's own bearer count follows the same living-model trim.
+    c.brace_models = c.brace_models.min(state.alive[i].max(0));
     c.in_cover = state.in_cover[i];
     c
 }
@@ -5046,6 +5048,23 @@ fn impact_phase(
             .map(|m| { let c = ctx_of(&statics[next.roster.profile[m]], next, m); c.counter_models * c.counter_impact_per_model.unwrap_or(1) })
             .sum();
         cut_by.counter_impact_per_model = Some(1);
+    }
+    if rule_on(rules_epoch, EPOCH_73_V36) {
+        // Rules 3.6 — the Brace walk, host AND living attached heroes; a Fatigued
+        // braced unit removes nothing, and every application logs its own line.
+        let brace: i64 = std::iter::once(ti).chain(next.attached[ti].iter().copied())
+            .filter(|&m| next.alive[m] > 0)
+            .map(|m| { let c = ctx_of(&statics[next.roster.profile[m]], next, m); c.brace_models * c.brace_impact_per_model.unwrap_or(1) })
+            .sum();
+        if brace > 0 {
+            if next.fatigued[ti] {
+                shot.log.push(format!("Brace: no effect, {} is Fatigued", ut.name));
+            } else {
+                shot.log.push(format!("Brace: {} takes {} Impact dice off {}", ut.name, brace, us.name));
+            }
+        }
+        cut_by.brace_models = if next.fatigued[ti] { 0 } else { brace };
+        cut_by.brace_impact_per_model = Some(1);
     }
     let pools = crate::dice::impact_pools(&ctx_of_melee(us, next, si, rules_epoch), &cut_by);
     let mut caused = 0;

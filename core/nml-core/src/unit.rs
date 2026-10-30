@@ -277,6 +277,11 @@ pub struct Ctx {
     /// `impact_reduction_per_model` (registry default 1, stamped behind the
     /// FROZEN `EPOCH_13_WHO_WINS` with `counter_models`).
     pub counter_impact_per_model: Option<i64>,
+    /// Rules 3.6 (`EPOCH_73_V36`) — the living models whose weapons carry
+    /// Brace(X); each takes X Impact dice off a charging unit. 0 below 73.
+    pub brace_models: i64,
+    /// The Brace carrier's own X, read off the weapon's rating (default 1).
+    pub brace_impact_per_model: Option<i64>,
     pub regeneration: bool,
     pub regen_target: i64,
     /// Block B10 — the SPELL-wound twin (`main._solo_regen_pick`'s
@@ -2745,6 +2750,13 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     } else {
         None
     };
+    // Rules 3.6 (`EPOCH_73_V36`) — a Brace(X) weapon bearer blunts a charge:
+    // every living model carrying one takes X Impact dice off the charger.
+    let brace_weapon = if rule_on(rules_epoch, EPOCH_73_V36) {
+        p.weapons.iter().find(|w| weapon_has(w, "Brace"))
+    } else {
+        None
+    };
     Ctx {
         quality: p.quality,
         defense: armored_defense(p.defense, armor),
@@ -2878,6 +2890,9 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         } else {
             None
         },
+        // Rules 3.6 — `sim::ctx_of` trims the stamp to the living models.
+        brace_models: if brace_weapon.is_some() { p.model_count.max(0) } else { 0 },
+        brace_impact_per_model: brace_weapon.map(|w| weapon_rating(w, "Brace").max(1)),
         regeneration: regen_targets.0 > 0,
         regen_target: regen_targets.0,
         regen_target_spell: regen_targets.1,
