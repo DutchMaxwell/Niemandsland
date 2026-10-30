@@ -474,7 +474,7 @@ func test_interference_counts_tokens_with_a_live_preview(timeout := 120000) -> v
 	(func() -> void: out.append(await dlg.ask("Shaman", "Fireball", "Guards", 4, 0, 3))).call()
 	var p := await _await_prompt("Enemy spell!")
 	assert_str(_text_of(p)).contains("Shaman is casting Fireball at Guards.")
-	assert_str(_text_of(p)).contains("Spell tokens in 18\" line of sight: 3")
+	assert_str(_text_of(p)).contains("Spell tokens of casters within 18\" (no sight needed): 3")
 	_assert_controls(p, ["−", "+", "Interfere (-1)", "No interference"])
 	assert_str(_text_of(p)).contains("1 token")
 	assert_str(_text_of(p)).contains(InterferenceDialog.format_preview(4, 0, 1))

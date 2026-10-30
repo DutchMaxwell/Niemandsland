@@ -71,9 +71,9 @@ const _S04_STEPS := [
 
 
 const _S05_STEPS := [
-	{"id": "card", "text": "Right-click Alpha Squad and open its card: the Heavy Rifle shoots 24\". (p.5)",
+	{"id": "card", "text": "Right-click Alpha Squad and open its card: the Heavy Rifle shoots 18\". (p.5)",
 		"rule": "p.5", "all": [{"check": "flag", "args": {"key": "card_presented"}}]},
-	{"id": "shoot", "text": "Right-click Alpha Squad, choose Shoot, click the nearer Warriors squad: the Heavy Rifle reaches 24\". (p.5)",
+	{"id": "shoot", "text": "Right-click Alpha Squad, choose Shoot, click the nearer Warriors squad: the Heavy Rifle reaches 18\". (p.5)",
 		"rule": "p.5", "all": [{"check": "counter_grew", "args": {"key": "shoot:alpha"}}]},
 	{"id": "read_log", "text": "Read the log: hits roll against Quality, the enemy blocks with Defense. (p.8)",
 		"rule": "p.8", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
