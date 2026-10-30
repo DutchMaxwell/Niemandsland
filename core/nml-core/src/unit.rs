@@ -33,7 +33,7 @@ use crate::acts::{
     EPOCH_50_SURGE_LOW, EPOCH_54_DEFENSE_RATING, EPOCH_55_FORTIFIED_AURA,
     EPOCH_56_GROUNDED_PROTECTION, EPOCH_58_PRECISION_DEBUFF, EPOCH_60_GROUNDED_STEALTH,
     EPOCH_61_PRECISION_MARKERS, EPOCH_65_MELEE_TRUTH, EPOCH_66_DISTANCE_TRUTH,
-    EPOCH_72_PLAYTEST_RULES,
+    EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36,
 };
 use crate::combat::{
     armored_defense, BANNER_MORALE_BONUS, LONG_RANGE_IN, REGENERATION_TARGET, RESISTANCE_TARGET,
@@ -513,6 +513,10 @@ pub struct Ctx {
     /// `spell_damage_ev`) and the dice's Deadly leg roll all X wounds against the
     /// Regeneration family before the cap (A4), and a spell's Lacerate keeps Regeneration (A1).
     pub playtest_rules: bool,
+    /// `EPOCH_73_V36`: the to-hit penalty every shot AT this unit takes because it is an
+    /// Aircraft (the map's `Aircraft.target_hit_penalty`, beside the range penalty). Stamped
+    /// in `ctx_for` off the record's own epoch; 0 for every other unit and below 73.
+    pub aircraft_hit_penalty: i64,
     // --- Ambush family (rules-wave2-ambush). ZERO on every `ctx_of` (baked
     // into `ctx_for`), like `growth_ap_mod` — only `sim::ctx_live` reads the
     // arrival stamp and folds it in, so the EV imagination stays blind to it
@@ -584,6 +588,8 @@ pub struct Ctx {
     /// moved, so the Mobile Artillery bonus stays OFF (#489's direction:
     /// under-credit, never over-credit).
     pub moved_this_round: bool,
+    /// Rules 3.6 (SHO-01a): the activation's action was Hold, stamped at the volley (default false).
+    pub held: bool,
     /// Wave 4 (port-quick-readjustment): the bearer ignores the Indirect
     /// moved to-hit penalty — `no_moved_penalty: true` read off the NAME's
     /// own registry entry (the table's `best_primitive_param(member,
@@ -668,6 +674,10 @@ pub struct ShootProfile {
     pub attacks: i64,
     pub count: i64,
     pub range: i64,
+    /// MEL-01 (D-ASSAULT): an Assault weapon's melee copy sits at `range` 0, so
+    /// every melee reader keeps its meaning; its PRINTED range rides here for
+    /// the range-relative gates. 0 on every other profile.
+    pub printed_range: i64,
     pub ap: i64,
     pub deadly: i64,
     pub blast: i64,
@@ -786,6 +796,8 @@ pub struct ShootProfile {
     /// `EPOCH_7_TABLE_RULES`): the folds keep the waiver, the recorded
     /// constant.
     pub indirect_ignores_los: Option<bool>,
+    /// Rules 3.6 (SHO-01a): the sight waiver needs Hold (`los_needs_hold`, from `EPOCH_73_V36`).
+    pub indirect_los_needs_hold: bool,
     /// The unit-level "Indirect when Shooting" stamp (`build_for`'s epoch-6
     /// named walk below) — set ALONGSIDE `indirect` so the volley log
     /// (dice.rs) can name the RULE, not the weapon tag, when its cover skip
@@ -902,6 +914,7 @@ impl ShootProfile {
     fn merges_with(&self, o: &ShootProfile) -> bool {
         self.name == o.name
             && self.range == o.range
+            && self.printed_range == o.printed_range
             && self.ap == o.ap
             && self.deadly == o.deadly
             && self.blast == o.blast
@@ -1521,7 +1534,7 @@ fn hit_and_run_boost_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> 
     if !rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
         return (0.0, String::new());
     }
-    for name in ["Guerrilla Boost", "Harassing Boost"] {
+    for name in ["Enhanced Guerrilla", "Enhanced Harassing"] {
         if unit_rule_active(reg, p, name) {
             let mv = unit_param_f(reg, p, name, "move_in", 0.0);
             if mv > 0.0 {
@@ -2700,6 +2713,13 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         } else {
             0
         };
+    // EPOCH_73_V36 — rules 3.6: a shot at an Aircraft is also -N to hit (the map's new key).
+    let aircraft_hit_penalty = if rule_on(rules_epoch, EPOCH_73_V36) && unit_rule_active(reg, p, "Aircraft") {
+        reg.rules_for(&p.game_system).lookup(&p.faction_folder, "Aircraft")
+            .map_or(0, |e| e.param_i("target_hit_penalty", 0))
+    } else {
+        0
+    };
     // The Artillery hit modifiers' own params (dead-parameter recount
     // 2026-09-15), behind the FROZEN `EPOCH_7_TABLE_RULES` like the
     // neighbouring Indirect param read: below 7 the Options stay None and
@@ -2813,6 +2833,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         mobile_artillery_over_in,
         grounded_precision_hit,
         moved_this_round: true,
+        held: false,
         // Wave 4 (port-entrenched) — the table's own default (never moved).
         moved_round: -1,
         round: 0,
@@ -2900,6 +2921,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         growth_def_lowers: false,
         modifier_sum: rule_on(rules_epoch, crate::acts::EPOCH_68_MODIFIER_SUM),
         playtest_rules: rule_on(rules_epoch, EPOCH_72_PLAYTEST_RULES),
+        aircraft_hit_penalty,
         ambush_arrival_ap: 0,
         tag_ap_mod: 0,
         reckless_ap: 0,
@@ -2941,6 +2963,15 @@ fn stamp(
     //    epoch-gated surge block.
     for hit in rules_of_primitive(reg, p, "Surge") {
         if hit.name == "Surge" || hit.name == "Ferocious" || !hit.upgrades.is_empty() {
+            continue;
+        }
+        // Row MOR-12 (rules 3.6): the 5-6 window became the bearer's AP(+2) share,
+        // which reads the live alive count like Sergeant's (step 7): reported, never guessed.
+        if hit.name == "Great Sergeant" && rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
+            unimplemented.push(Unimplemented {
+                rule: hit.name.clone(),
+                why: "the bearer's AP(+2) share needs GameUnit.get_alive_count() at the call (ai_ev.gd stamp_sergeant)".into(),
+            });
             continue;
         }
         // EPOCH_17_SURGE_SCOPE (sweep B, row "Surge when Shooting"): the entry
@@ -3487,15 +3518,15 @@ pub(crate) const BOOST_AURA_CHANNEL_NAMES: &[&str] = &[
     "Targeting Visor Boost Aura",
     "Warden Boost Aura",
     "Enhanced Lucky Aura",
-    "Buccaneer Boost Aura",
+    "Enhanced Buccaneer Aura",
     "Vale Oath Boost Aura",
     "Wave-Step Boost Aura",
     "Royal Warrior Boost Aura",
-    "Bestial Boost Aura",
+    "Enhanced Bestial Aura",
     "Vinci Tech Boost Aura",
     "Ossified Boost Aura",
     "Shadowborn Boost Aura",
-    "Destroyer Boost Aura",
+    "Enhanced Destroyer Aura",
     "Empyrean Spirit Boost Aura",
     "Wild Veil Boost Aura",
 ];
@@ -3603,7 +3634,7 @@ fn stamp_shot_modifier(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
         "Targeting Visor Boost",
         "Precision Shooter Aura",
         "Buccaneer",
-        "Buccaneer Boost",
+        "Enhanced Buccaneer",
         // Rung C data port (AUDIT_armybook_flanks_2026-09-02.md): Precision
         // Hunter is Targeting Visor's word-for-word twin ("+1 to hit rolls
         // when shooting at enemies over 9\" away") — same primitive, same
@@ -3748,8 +3779,8 @@ const WAVE2_UTILITY_BUFF_RULES: [&str; 12] = [
     "Piercing Shooting Mark",
     "Piercing Fighting Mark",
     "Self-Repair Boost Buff",
-    "Cursed Undead Boost Buff",
-    "Angelic Blessing Boost Buff",
+    "Enhanced Cursed Undead Buff",
+    "Enhanced Angelic Blessing Buff",
     "Enhanced Hold the Line Buff",
     "Primal Boost Buff",
 ];
@@ -4801,6 +4832,9 @@ fn cond_ap_of(reg: &mut Registries, p: &Profile, base: &str) -> (Option<CondAp>,
             bypass_regen: e.param_b("bypass_regen"),
             melee_only: e.param_b("melee_only"),
             shooting_only: e.param_b("shooting_only"),
+            // Rules 3.6 hook: a new spelling carries its rule name, so the dice
+            // folds' rules-must-log line names it; older spellings stay unnamed.
+            name: if crate::combat::cond_ap_why(e.param_s("condition")).is_empty() { String::new() } else { base.to_string() },
             ..Default::default()
         }),
         on6,
@@ -5236,18 +5270,31 @@ pub(crate) fn profiles_in_range(weapons: &[Weapon], dist_in: f64) -> Vec<ShootPr
 /// `AiShooting.melee_profiles` ai_shooting.gd:44-56 — every range-0 weapon, also
 /// UNSTAMPED. Strafing is NOT excluded here: that filter lives in
 /// `profiles_in_range` alone, and a melee weapon never carries the move-through
-/// trigger.
+/// trigger. The epoch-free reading (no Assault copy) — the row encoder's.
 pub(crate) fn melee_profiles(weapons: &[Weapon]) -> Vec<ShootProfile> {
+    melee_profiles_at(weapons, 0)
+}
+
+/// `melee_profiles` at the record's epoch. MEL-01 (D-ASSAULT, `EPOCH_73_V36`):
+/// a ranged weapon carrying Assault also yields a melee copy, in weapon order,
+/// at range 0 with its printed range kept in `printed_range`.
+pub(crate) fn melee_profiles_at(weapons: &[Weapon], rules_epoch: u32) -> Vec<ShootProfile> {
+    let assault = rule_on(rules_epoch, crate::acts::EPOCH_73_V36);
     let mut raw: Vec<ShootProfile> = Vec::new();
     for w in weapons {
-        if w.range as i64 > 0 {
+        let copy = assault && w.range as i64 > 0 && weapon_has(w, "Assault");
+        if w.range as i64 > 0 && !copy {
             continue;
         }
         let attacks = w.attacks.max(0) * w.count.max(1);
         if attacks <= 0 {
             continue;
         }
-        raw.push(base_profile(w, attacks, 0));
+        let mut p = base_profile(w, attacks, 0);
+        if copy {
+            p.printed_range = w.range as i64;
+        }
+        raw.push(p);
     }
     merge_identical(raw)
 }
@@ -5546,11 +5593,17 @@ fn move_rule_mods_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Opt
         // entry ships with this wave, so a record below
         // `EPOCH_6_TABLE_RULES` keeps NOT seeing it.
         "Reach Hunt",
+        // Rules 3.6 (DAT-10): Lustbound's entry is a Quick-shaped alias (+1"/+2")
+        // the table's band pass already reads; gated on the frozen `EPOCH_73_V36`.
+        "Lustbound",
     ] {
         if !unit_rule_active(reg, p, name) {
             continue;
         }
         if wave3_alias(name) && !rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
+            continue;
+        }
+        if name == "Lustbound" && !rule_on(rules_epoch, EPOCH_73_V36) {
             continue;
         }
         let map = reg.rules_for(&p.game_system);
@@ -5582,7 +5635,7 @@ fn move_rule_mods_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Opt
     // gate is a per-activation majority read no statics-time stamp can
     // answer, so a flat stamp would be #489's over-credit, not a port.
     if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
-        for name in ["Highborn Boost", "Scurry Boost"] {
+        for name in ["Enhanced Highborn", "Scurry Boost"] {
             if !unit_rule_active(reg, p, name) {
                 continue;
             }
@@ -5912,7 +5965,7 @@ impl UnitStatic {
         stamp_unit_strikers(reg, p, &mut shoot, rules_epoch);
         stamp_shot_modifier(reg, p, &mut shoot);
 
-        let mut melee = melee_profiles(&p.weapons);
+        let mut melee = melee_profiles_at(&p.weapons, rules_epoch);
         // NML-002 Strafing — the move-through trigger's own array, stamped
         // UNGATED and UNSTAMPED: the table builds it raw off the weapons
         // (`AiShooting.strafing_profiles`, main.gd:2976-2985) and the
@@ -5973,12 +6026,13 @@ impl UnitStatic {
         // Buff now, placed by `tray_vs_marks` and consumed by the Surge folds
         // against the marked target only, so the walk no longer carries the
         // name — the flipped registry cannot answer the Surge primitive.
+        // Row MOR-12: Great Sergeant leaves the walk from rules 3.6 (stamp step 3 reports it).
         if rule_on(rules_epoch, EPOCH_5_TABLE_RULES) {
             for hit in rules_of_primitive(reg, p, "Surge").into_iter().filter(|hit| {
                 matches!(
                     hit.name.as_str(),
                     "Brutal" | "Great Sergeant" | "Devout" | "Surge when Shooting" | "Lucky"
-                )
+                ) && !(hit.name == "Great Sergeant" && rule_on(rules_epoch, crate::acts::EPOCH_73_V36))
             }) {
                 // EPOCH_17_SURGE_SCOPE: "Surge when Shooting" is the only name
                 // of the walk that carries `shooting_only` (sweep B) — honoured
@@ -6038,7 +6092,7 @@ impl UnitStatic {
             // base's two conditional legs when carried — the printed "always
             // … (instead of only when …)" — so the walk knows before it
             // reaches either name.
-            let havoc_boosted = p.special_rules.iter().any(|r| base_rule_name(r) == "Havocbound Boost");
+            let havoc_boosted = p.special_rules.iter().any(|r| base_rule_name(r) == "Enhanced Havocbound");
             for raw in &p.special_rules {
                 let n = base_rule_name(raw);
                 if n.is_empty() || seen.iter().any(|s| *s == n) {
@@ -6081,7 +6135,7 @@ impl UnitStatic {
                             ..Default::default()
                         });
                     }
-                    "Havocbound Boost" => {
+                    "Enhanced Havocbound" => {
                         // Wave 4 — the always leg, the entry's own `upgrades`
                         // coupling ("If this model has Havocbound"); the
                         // volley's and the strike's named cond_ap lines log.
@@ -6161,7 +6215,7 @@ impl UnitStatic {
         // instead of a second mechanism. An epoch-6 record reads the base
         // 6s-only window and replays byte-exact.
         if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
-            stamp_bane_boost(reg, p, &mut shoot, "Bestial Boost", "reroll_save_low");
+            stamp_bane_boost(reg, p, &mut shoot, "Enhanced Bestial", "reroll_save_low");
         }
         // Wave 6 (rules-wave6-scrapper), gated on the FROZEN
         // `EPOCH_30_SCRAPPER_BOOST`: "Scrapper Boost" (gf/jackals) is the Bane
@@ -6327,6 +6381,20 @@ impl UnitStatic {
                 if sp.indirect {
                     sp.indirect_ignores_los = Some(ignores_los);
                 }
+            }
+        }
+        // Rules 3.6 (SHO-01a): the "Indirect" entry's `*_needs_hold`; a unit rule printing it false lifts it.
+        if rule_on(rules_epoch, EPOCH_73_V36) {
+            let mut needs_hold = |key: &str| {
+                unit_param_b_or(reg, p, "Indirect", key, false)
+                    && !rules_of_primitive(reg, p, "Indirect").iter().any(|h| {
+                        reg.rules_for(&p.game_system).lookup(&p.faction_folder, &h.name)
+                            .is_some_and(|e| !e.param_b_or(key, true))
+                    })
+            };
+            let los = needs_hold("los_needs_hold");
+            for sp in shoot.iter_mut().filter(|sp| sp.indirect) {
+                sp.indirect_los_needs_hold = los;
             }
         }
 

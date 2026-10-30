@@ -366,7 +366,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Devout Boost",
+      "grants_rule": "Enhanced Devout",
       "duration": "once"
      },
      "status": "castable"
@@ -770,7 +770,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Changebound Boost",
+      "grants_rule": "Enhanced Changebound",
       "duration": "once"
      },
      "status": "castable"
@@ -902,7 +902,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Guardian Boost",
+      "grants_rule": "Enhanced Guardian",
       "duration": "once"
      },
      "status": "castable"
@@ -1207,7 +1207,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Harassing Boost",
+      "grants_rule": "Enhanced Harassing",
       "duration": "once"
      },
      "status": "castable"
@@ -1776,7 +1776,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Clan Warrior Boost",
+      "grants_rule": "Enhanced Clan Warrior",
       "duration": "once"
      },
      "status": "castable"
@@ -2084,7 +2084,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Havocbound Boost",
+      "grants_rule": "Enhanced Havocbound",
       "duration": "once"
      },
      "status": "castable"
@@ -2213,7 +2213,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Highborn Boost",
+      "grants_rule": "Enhanced Highborn",
       "duration": "once"
      },
      "status": "castable"
@@ -3372,7 +3372,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Ferocious Boost",
+      "grants_rule": "Enhanced Ferocious",
       "duration": "once"
      },
      "status": "castable"
@@ -4624,7 +4624,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Changebound Boost",
+      "grants_rule": "Enhanced Changebound",
       "duration": "once"
      },
      "status": "castable"
@@ -5783,7 +5783,7 @@
      },
      "effect": {
       "kind": "buff",
-      "grants_rule": "Changebound Boost",
+      "grants_rule": "Enhanced Changebound",
       "duration": "once"
      },
      "status": "castable"

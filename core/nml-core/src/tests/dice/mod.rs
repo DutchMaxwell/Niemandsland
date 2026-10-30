@@ -320,10 +320,10 @@
         "special_rules":["Warbound Boost"],"item_grants":[],
         "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
         "weapons":[{"name":"Rifle","range":24,"attacks":6,"count":1,"ap":0,"rules":[]}]},
-      "destroyer_boost":{"unit_id":"destroyer_boost","name":"Destroyer Boost","quality":4,
+      "destroyer_boost":{"unit_id":"destroyer_boost","name":"Enhanced Destroyer","quality":4,
         "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
         "base_radius":0.016,"game_system":"aof","faction_folder":"ogres",
-        "special_rules":["Destroyer","Destroyer Boost"],"item_grants":[],
+        "special_rules":["Destroyer","Enhanced Destroyer"],"item_grants":[],
         "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
         "weapons":[{"name":"Rifle","range":24,"attacks":6,"count":1,"ap":0,"rules":[]}]},
       "infected_boost":{"unit_id":"infected_boost","name":"Enhanced Infected","quality":4,
@@ -441,8 +441,12 @@ mod surge_param;
 mod unpredictable_shooter;
 mod unstoppable_melee;
 mod v36_data;
+mod v36_data_rows;
 mod v36_melee;
 mod v36_melee_rows;
+mod v36_mor_04;
+mod v36_mor_12c;
+mod v36_mor_17;
 mod v36_morale;
 mod v36_shoot;
 mod v36_shoot_rows;

@@ -8,11 +8,11 @@ use super::*;
     /// non-family grant folds nothing.
     #[test]
     fn fortified_boost_grants_fold_the_ap_stamp_at_epoch_6_only() {
-        for rule in ["Guardian Boost", "Warden Boost", "Ossified Boost"] {
+        for rule in ["Enhanced Guardian", "Warden Boost", "Ossified Boost"] {
             let on = fold_leg(rule, 6);
             assert_eq!(on.fortified_boost_ap, 1, "{rule} folds its AP(-1) at 6");
         }
-        let off = fold_leg("Guardian Boost", 5);
+        let off = fold_leg("Enhanced Guardian", 5);
         assert_eq!(off.fortified_boost_ap, 0, "epoch 5 replays the Gen-0 set");
         let other = fold_leg("Self-Repair Boost", 6);
         assert_eq!(other.fortified_boost_ap, 0, "only the family's own names fold");
@@ -48,13 +48,13 @@ use super::*;
     }
 
     #[test]
-    fn cursed_undead_and_angelic_blessing_boost_buffs_fold_their_printed_legs() {
-        let cursed = fold_leg("Cursed Undead Boost", 5);
+    fn enhanced_cursed_undead_and_enhanced_angelic_blessing_buffs_fold_their_printed_legs() {
+        let cursed = fold_leg("Enhanced Cursed Undead", 5);
         assert!(cursed.regeneration && cursed.regen_target == CURSED_UNDEAD_BOOST_TARGET);
-        let angelic = fold_leg("Angelic Blessing Boost", 5);
+        let angelic = fold_leg("Enhanced Angelic Blessing", 5);
         assert_eq!(angelic.regen_target_spell, ANGELIC_BLESSING_BOOST_TARGET_SPELL);
         assert!(!angelic.regeneration, "spell_only never touches the normal leg");
-        let off = fold_leg("Cursed Undead Boost", 4);
+        let off = fold_leg("Enhanced Cursed Undead", 4);
         assert!(
             !off.regeneration && off.regen_target_spell == 0,
             "rules_epoch 4 is Gen-2b's stamping-gap window, RED before the fix"

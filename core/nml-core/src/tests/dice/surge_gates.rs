@@ -35,7 +35,7 @@ use super::*;
     /// the current epoch; epoch 0 keeps the unboosted read; `surge_low` 6 never
     /// counts 5s. Seed 6: one 6 plus two 5s in 8 dice.
     #[test]
-    fn devout_boost_counts_successful_fives_only_past_nine_inches() {
+    fn enhanced_devout_counts_successful_fives_only_past_nine_inches() {
         use crate::acts::{rule_on, CURRENT_RULES_EPOCH};
         let want = Tray::seeded(6).roll(8);
         assert_eq!(want.iter().filter(|&&f| f == 6).count(), 1, "fixture: seed 6 must roll one 6");
@@ -53,7 +53,7 @@ use super::*;
             "epoch 0: the boost is unread, the 6 alone");
         let mut t = Tray::seeded(6);
         assert_eq!(surge_volley(&unboosted, 4, 10.0, fresh, &mut t).rolls[1].count, base + 1,
-            "no Devout Boost (`surge_low` 6): the 5s count for nothing");
+            "no Enhanced Devout (`surge_low` 6): the 5s count for nothing");
         let mut t = Tray::seeded(6);
         assert_eq!(surge_volley(&boosted, 4, 9.0, fresh, &mut t).rolls[1].count, base + 1,
             "exactly 9\" is not over 9\": the gate stays shut");
@@ -64,7 +64,7 @@ use super::*;
     /// "over 9"" — and a 5 below the to-hit target is never a "successful" hit
     /// (main.gd:4471's `5 >= to_hit`).
     #[test]
-    fn ferocious_boosts_fives_never_fire_in_melee_or_below_their_target() {
+    fn enhanced_ferocious_fives_never_fire_in_melee_or_below_their_target() {
         use crate::acts::{rule_on, CURRENT_RULES_EPOCH};
         let want = Tray::seeded(6).roll(8);
         assert_eq!(want.iter().filter(|&&f| f == 5).count(), 2, "fixture: seed 6 must roll two 5s");
