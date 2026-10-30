@@ -59,6 +59,10 @@ const BEST_HIT_TARGET: int = 2
 ## Relentless p.14, Stealth p.14, Artillery p.13 — each reads "over 9\" away", so exactly 9" is NOT over).
 const LONG_RANGE_IN: float = 9.0
 
+## D-GATE6 (rules 3.6, EPOCH_73_V36): the over-6" gate of a CHARGE, measured before any model moves, closest
+## model to closest model. Shooting keeps LONG_RANGE_IN. Twin of combat.rs CHARGE_LONG_RANGE_IN.
+const CHARGE_LONG_RANGE_IN: float = 6.0
+
 ## Stealth to-hit penalty (GF/AoF Advanced Rules v3.5.1, p.14): "When units where all models have this rule
 ## are shot from over 9\" away, enemy units get -1 to hit rolls."
 const STEALTH_HIT_PENALTY: int = 1

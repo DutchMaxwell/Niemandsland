@@ -32,7 +32,7 @@ use crate::acts::{
     EPOCH_51_CASTER_INTERFERENCE, EPOCH_52_UTILITY_SPELLS, EPOCH_56_GROUNDED_PROTECTION,
     EPOCH_61_PRECISION_MARKERS, EPOCH_62_CASTING_MOD, EPOCH_65_MELEE_TRUTH,
     EPOCH_66_DISTANCE_TRUTH, EPOCH_67_MARKERS_BURSTS, EPOCH_68_MODIFIER_SUM,
-    EPOCH_71_RAPID_CHARGE_MARK, EPOCH_72_PLAYTEST_RULES,
+    EPOCH_71_RAPID_CHARGE_MARK, EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
@@ -4771,6 +4771,12 @@ fn strike_phase(
     // D-STEALTH — the def build's terrain gate (the melee leg consumes the
     // same closed alias the shooting fold does).
     stealth_alias_terrain_gate(statics, next, ti, cover, &mut def);
+    // D-GATE6 (`EPOCH_73_V36`): the Screened family's charge leg reads the shared 6" charge gate;
+    // the entry's own `over_in` (9") stays the shooting leg's. This def feeds the melee fold only,
+    // and an ungated alias (`over_in` 0) keeps firing on any measured charge.
+    if rule_on(seams.rules_epoch, EPOCH_73_V36) && def.stealth_alias_over_in > 0.0 {
+        def.stealth_alias_over_in = crate::combat::CHARGE_LONG_RANGE_IN;
+    }
     // rules-wave3-growthmark (epoch 6) — the LOGGING-RULE lines for the
     // defender-side facets this strike is about to fold.
     if rule_on(seams.rules_epoch, EPOCH_6_TABLE_RULES) {
