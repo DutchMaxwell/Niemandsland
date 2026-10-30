@@ -1,0 +1,25 @@
+//! Rules 3.6 lane shoot: one test file per row (SHO-TESTSEED); a row writes only its own file.
+mod sho_01b;
+mod sho_02;
+mod sho_03;
+mod sho_05;
+mod sho_06;
+mod sho_06e;
+mod sho_08e;
+mod sho_09b;
+mod sho_09s;
+mod sho_10;
+mod sho_11;
+mod sho_12;
+mod sho_13;
+mod sho_14;
+mod sho_14e;
+mod sho_15b;
+mod sho_16;
+mod sho_17;
+mod sho_18;
+mod sho_19;
+mod sho_20;
+mod sho_22;
+mod sho_23;
+mod sho_par_f4;
