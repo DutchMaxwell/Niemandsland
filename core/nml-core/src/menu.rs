@@ -20,8 +20,8 @@
 
 use serde::Deserialize;
 
-use crate::acts::CURRENT_RULES_EPOCH;
-use crate::combat::{melee_ev, profile_ev, shoot_ev, SIX_P};
+use crate::acts::{rule_on, CURRENT_RULES_EPOCH, EPOCH_73_V36};
+use crate::combat::{charge_estimate_gap_in, melee_ev, profile_ev, shoot_ev, SIX_P};
 use crate::geom::{self, V3};
 use crate::sim::{
     ctx_of, ctx_live, melee_profiles_of, profiles_of, teleport_probe, Scratch, ADVANCE, CHARGE,
@@ -213,6 +213,23 @@ pub fn forces_hold(unit_rules: &[String]) -> bool {
         let s = r.trim();
         s.starts_with("Immobile") || s.starts_with("Artillery")
     })
+}
+
+/// `forces_hold` at a rules epoch: from `EPOCH_73_V36` on (rules 3.6) Artillery
+/// may move like any unit, so only Immobile still keeps a unit to Hold.
+pub fn forces_hold_at(unit_rules: &[String], rules_epoch: u32) -> bool {
+    if !rule_on(rules_epoch, EPOCH_73_V36) {
+        return forces_hold(unit_rules);
+    }
+    unit_rules.iter().any(|r| r.trim().starts_with("Immobile"))
+}
+
+/// The one hold-only read every planner surface shares — the menu gate, the
+/// grid pool (`plan.rs`) and the enemy reply model (`sim.rs`): the unit's names
+/// at the epoch its static was built under (`SoloController.forces_hold`).
+pub fn holds_only(state: &State, statics: &[UnitStatic], u: usize) -> bool {
+    let epoch = statics.get(state.roster.profile[u]).map_or(0, |s| s.rules_epoch);
+    forces_hold_at(&state.profile(u).special_rules, epoch)
 }
 
 /// `AiArchetype.max_range_inches` ai_archetype.gd:60-64 over `_range`
@@ -552,8 +569,9 @@ fn charge_score(
     theirs: &[ShootProfile],
     their_attacks: &[i64],
     them: &Ctx,
+    charge_from_in: f64,
 ) -> f64 {
-    let mut dealt = melee_ev(ours, our_attacks, us, them, true);
+    let mut dealt = melee_ev(ours, our_attacks, us, them, true, charge_from_in);
     let mut counter_first = 0.0f64;
     for (k, p) in theirs.iter().enumerate() {
         if p.range <= 0 && p.counter {
@@ -562,7 +580,7 @@ fn charge_score(
     }
     let pool = (us.models as f64 * us.tough.max(1) as f64).max(1.0);
     dealt *= (1.0 - counter_first / pool).clamp(0.0, 1.0);
-    let taken = melee_ev(theirs, their_attacks, them, us, false);
+    let taken = melee_ev(theirs, their_attacks, them, us, false, 0.0);
     let mut risk_weight = if us.fearless { 0.5 } else { 1.0 };
     risk_weight *= (1.0 - us.morale_bonus as f64 * SIX_P).max(0.0);
     dealt - taken * risk_weight
@@ -609,7 +627,7 @@ pub fn best_charge(
     // per-unit constant, so it rides BOTH the futile bar and the score.
     let (_, danger_loss) = crate::sim::terrain_debuff_folds(statics, state, i);
     let centre_us = geom::centre(&state.positions[i]);
-    let path_ix = tuning.charge_needs_path.then(|| crate::sim::reach_index_for_state(state, terrain)).flatten();
+    let path_ix = tuning.charge_needs_path.then(|| crate::sim::walled_reach_index_for_state(state, terrain)).flatten();
     let mut best = None;
     let mut best_score = f64::NEG_INFINITY;
     for e in enemy_keys_tuned(state, i, tuning.target_units) {
@@ -648,12 +666,14 @@ pub fn best_charge(
         let ut = &statics[state.roster.profile[e]];
         let us = ctx_live(ctx_of(us_static, state, i), statics, state, i, true, rules_epoch);
         let them = ctx_live(ctx_of(ut, state, e), statics, state, e, true, rules_epoch);
-        let raw = melee_ev(&us_static.melee, &our_attacks, &us, &them, true);
+        // D-GATE6: the charge is priced at the pre-charge edge gap from `EPOCH_73_V36`.
+        let charge_from_in = charge_estimate_gap_in(rules_epoch, || gap_in);
+        let raw = melee_ev(&us_static.melee, &our_attacks, &us, &them, true, charge_from_in);
         if raw - danger_loss < FUTILE_CHARGE_EV {
             continue;
         }
         melee_profiles_of(ut, state.alive[e], sc);
-        let s = charge_score(&us_static.melee, &our_attacks, &us, &ut.melee, &sc.attacks, &them)
+        let s = charge_score(&us_static.melee, &our_attacks, &us, &ut.melee, &sc.attacks, &them, charge_from_in)
             - danger_loss;
         if s > best_score {
             best_score = s;
@@ -666,8 +686,8 @@ pub fn best_charge(
 /// aifix F6 (inventory row M20, p.9 "a clear path to reach it") — true when the mover cannot walk to `e` within the
 /// live charge band. The question goes to the tier-2 reach index the rollouts already use: from the nearest model
 /// pair, a route to the target model's CENTRE may spend the charge band plus the two base radii (the last stretch of
-/// that route is the contact itself), around Container cells and the units in the way (`foe` = the victim's group,
-/// no obstacle). Lenient by construction: it asks one model, with the whole unit's largest radius as clearance.
+/// that route is the contact itself), around Container cells, the board's ruin walls (MEL-PAR-F8) and the units in
+/// the way (`foe` = the victim's group, no obstacle). Lenient by construction: it asks one model, with the whole unit's largest radius as clearance.
 fn charge_path_blocked(
     state: &State,
     terrain: &Terrain,
@@ -757,7 +777,7 @@ pub fn nearest_chargeable(
     melee_profiles_of(us_static, state.alive[i], sc);
     let our_attacks = sc.attacks.clone();
     let us = ctx_live(ctx_of(us_static, state, i), statics, state, i, true, rules_epoch);
-    let path_ix = tuning.charge_needs_path.then(|| crate::sim::reach_index_for_state(state, terrain)).flatten();
+    let path_ix = tuning.charge_needs_path.then(|| crate::sim::walled_reach_index_for_state(state, terrain)).flatten();
     let mut best = None;
     let mut best_gap = f64::INFINITY;
     for e in enemy_keys_tuned(state, i, tuning.target_units) {
@@ -792,7 +812,8 @@ pub fn nearest_chargeable(
             ctx_of(&statics[state.roster.profile[e]], state, e),
             statics, state, e, true, rules_epoch,
         );
-        if melee_ev(&us_static.melee, &our_attacks, &us, &them, true) < FUTILE_CHARGE_EV {
+        let charge_from_in = charge_estimate_gap_in(rules_epoch, || gap_in);
+        if melee_ev(&us_static.melee, &our_attacks, &us, &them, true, charge_from_in) < FUTILE_CHARGE_EV {
             continue;
         }
         best_gap = gap_in;
@@ -1120,7 +1141,7 @@ pub fn candidates_tuned(
     }
     // NML-1020 lab half: Immobile/Artillery may only Hold (p.13/p.57) — the menu
     // for carriers ends here, so no playout can ever imagine them moving.
-    if forces_hold(&state.profile(unit).special_rules)
+    if holds_only(state, statics, unit)
         && statics[state.roster.profile[unit]].hold_only.unwrap_or(true)
     {
         // hold-only carriers may still fire at any target

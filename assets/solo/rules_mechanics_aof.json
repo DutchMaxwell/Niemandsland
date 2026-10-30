@@ -16,10 +16,11 @@
   "Ambush Aura",
   "Ambush Re-Deployment",
   "Angelic Blessing",
-  "Angelic Blessing Boost",
-  "Angelic Blessing Boost Buff",
+  "Enhanced Angelic Blessing",
+  "Enhanced Angelic Blessing Buff",
   "Armor",
   "Artillery",
+  "Assault",
   "Bane",
   "Bane Mark",
   "Bane in Melee",
@@ -30,23 +31,23 @@
   "Bash",
   "Battleborn",
   "Bestial",
-  "Bestial Boost",
-  "Bestial Boost Aura",
+  "Enhanced Bestial",
+  "Enhanced Bestial Aura",
   "Blast",
   "Bloodthirsty Fighter",
   "Bounding",
   "Bounding Aura",
   "Breath Attack",
   "Buccaneer",
-  "Buccaneer Boost",
-  "Buccaneer Boost Aura",
+  "Enhanced Buccaneer",
+  "Enhanced Buccaneer Aura",
   "Caster",
   "Caster Group",
   "Casting Buff",
   "Casting Debuff",
   "Changebound",
-  "Changebound Boost",
-  "Changebound Boost Aura",
+  "Enhanced Changebound",
+  "Enhanced Changebound Aura",
   "Coordinate",
   "Counter",
   "Counter in Melee",
@@ -57,8 +58,8 @@
   "Crack",
   "Crossing Attack",
   "Cursed Undead",
-  "Cursed Undead Boost",
-  "Cursed Undead Boost Buff",
+  "Enhanced Cursed Undead",
+  "Enhanced Cursed Undead Buff",
   "Dangerous Terrain Debuff",
   "Deadly",
   "Deathstrike",
@@ -68,8 +69,8 @@
   "Defensive Frenzy",
   "Delayed Action",
   "Destroyer",
-  "Destroyer Boost",
-  "Destroyer Boost Aura",
+  "Enhanced Destroyer",
+  "Enhanced Destroyer Aura",
   "Destructive",
   "Difficult Terrain Debuff",
   "Disintegrate",
@@ -375,6 +376,7 @@
   "Ambush",
   "Armor",
   "Artillery",
+  "Assault",
   "Bane",
   "Banner",
   "Blast",
@@ -476,6 +478,7 @@
     "cannot_seize": true,
     "cannot_be_charged": true,
     "target_range_penalty_in": 12.0,
+    "target_hit_penalty": 1,
     "ignores_obstacles": true
    }
   },
@@ -483,6 +486,14 @@
    "primitive": "Ambush",
    "rated": false,
    "book_version": "3.5.1"
+  },
+  "Ambush Aura": {
+   "primitive": "Aura Channel",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "grants": "Ambush"
+   }
   },
   "Armor": {
    "primitive": "Armor",
@@ -503,6 +514,14 @@
     "target_hit_penalty": 2,
     "over_in": 9.0,
     "hold_only": true
+   }
+  },
+  "Assault": {
+   "primitive": "Assault",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "melee_copy": true
    }
   },
   "Bane": {
@@ -655,6 +674,14 @@
     "charge_only": true
    }
   },
+  "Good Shot": {
+   "primitive": "Shot Modifier",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "hit_bonus": 1
+   }
+  },
   "Heavy Impact": {
    "primitive": "Heavy Impact",
    "rated": true,
@@ -712,7 +739,8 @@
     "moved_hit_penalty": 1,
     "ignores_cover": true,
     "ignores_los": true,
-    "hold_and_shoot": true
+    "hold_and_shoot": true,
+    "los_needs_hold": true
    }
   },
   "Indirect when Shooting": {
@@ -832,7 +860,7 @@
    "rated": false,
    "book_version": "3.5.1",
    "params": {
-    "bonus_hits_per_six": 1,
+    "ap_bonus": 1,
     "model_level": true
    }
   },
@@ -1012,7 +1040,7 @@
      "bypass_regen": false
     }
    },
-   "Bestial Boost": {
+   "Enhanced Bestial": {
     "primitive": "Bane",
     "rated": false,
     "book_version": "3.5.3",
@@ -1023,12 +1051,12 @@
      "upgrades": "Bestial"
     }
    },
-   "Bestial Boost Aura": {
+   "Enhanced Bestial Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Bestial Boost"
+     "grants": "Enhanced Bestial"
     }
    },
    "Casting Debuff": {
@@ -1231,7 +1259,7 @@
      "applies_charged": true
     }
    },
-   "Changebound Boost": {
+   "Enhanced Changebound": {
     "primitive": "Stealth",
     "rated": false,
     "book_version": "3.5.3",
@@ -1241,12 +1269,12 @@
      "upgrades": "Changebound"
     }
    },
-   "Changebound Boost Aura": {
+   "Enhanced Changebound Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Changebound Boost"
+     "grants": "Enhanced Changebound"
     }
    },
    "Dangerous Terrain Debuff": {
@@ -3260,7 +3288,7 @@
      "applies_charged": true
     }
    },
-   "Changebound Boost": {
+   "Enhanced Changebound": {
     "primitive": "Stealth",
     "rated": false,
     "book_version": "3.5.2",
@@ -3341,12 +3369,12 @@
     }
    },
    "Lustbound": {
-    "primitive": "Royal Legion",
+    "primitive": "Quick",
     "rated": false,
-    "book_version": "3.5.2",
+    "book_version": "3.6.0",
     "params": {
-     "range_bonus_in": 4,
-     "charge_mod": 2
+     "advance_mod": 1,
+     "rush_mod": 2
     }
    },
    "Lustbound Boost": {
@@ -4488,12 +4516,12 @@
     }
    },
    "Highborn": {
-    "primitive": "Quick",
+    "primitive": "Royal Legion",
     "rated": false,
-    "book_version": "3.5.3",
+    "book_version": "3.6.0",
     "params": {
-     "advance_mod": 2,
-     "rush_mod": 2
+     "range_bonus_in": 4,
+     "charge_mod": 2
     }
    },
    "Highborn Boost": {
@@ -4907,7 +4935,7 @@
      "all_models": true
     }
    },
-   "Angelic Blessing Boost": {
+   "Enhanced Angelic Blessing": {
     "primitive": "Regeneration",
     "rated": false,
     "book_version": "3.5.3",
@@ -4917,12 +4945,12 @@
      "all_models": true
     }
    },
-   "Angelic Blessing Boost Buff": {
+   "Enhanced Angelic Blessing Buff": {
     "primitive": "Utility Buff",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants_rule": "Angelic Blessing Boost",
+     "grants_rule": "Enhanced Angelic Blessing",
      "target": "friendly",
      "max_targets": 1,
      "range_in": 12,
@@ -5143,12 +5171,12 @@
     }
    },
    "Lustbound": {
-    "primitive": "Royal Legion",
+    "primitive": "Quick",
     "rated": false,
-    "book_version": "3.5.3",
+    "book_version": "3.6.0",
     "params": {
-     "range_bonus_in": 4,
-     "charge_mod": 2
+     "advance_mod": 1,
+     "rush_mod": 2
     }
    },
    "Lustbound Boost": {
@@ -5585,7 +5613,7 @@
      "extra_wound_per_save_one": 1
     }
    },
-   "Destroyer Boost": {
+   "Enhanced Destroyer": {
     "primitive": "Shred",
     "rated": false,
     "book_version": "3.5.3",
@@ -5596,12 +5624,12 @@
      "over_in": 9
     }
    },
-   "Destroyer Boost Aura": {
+   "Enhanced Destroyer Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Destroyer Boost"
+     "grants": "Enhanced Destroyer"
     }
    },
    "Destructive": {
@@ -5657,6 +5685,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
+     "ap_bonus": 2,
      "bonus_hits_per_six": 1,
      "surge_low": 5
     }
@@ -6304,6 +6333,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
+     "ap_bonus": 2,
      "bonus_hits_per_six": 1,
      "surge_low": 5
     }
@@ -6657,9 +6687,9 @@
    "Scurry": {
     "primitive": "Quick",
     "rated": false,
-    "book_version": "3.5.3",
+    "book_version": "3.6.0",
     "params": {
-     "advance_mod": 2,
+     "advance_mod": 1,
      "rush_mod": 2
     }
    },
@@ -6779,7 +6809,7 @@
      "applies_charged": true
     }
    },
-   "Changebound Boost": {
+   "Enhanced Changebound": {
     "primitive": "Stealth",
     "rated": false,
     "book_version": "3.5.3",
@@ -6789,12 +6819,12 @@
      "upgrades": "Changebound"
     }
    },
-   "Changebound Boost Aura": {
+   "Enhanced Changebound Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Changebound Boost"
+     "grants": "Enhanced Changebound"
     }
    },
    "Fearless Aura": {
@@ -6960,12 +6990,12 @@
     }
    },
    "Lustbound": {
-    "primitive": "Royal Legion",
+    "primitive": "Quick",
     "rated": false,
-    "book_version": "3.5.3",
+    "book_version": "3.6.0",
     "params": {
-     "range_bonus_in": 4,
-     "charge_mod": 2
+     "advance_mod": 1,
+     "rush_mod": 2
     }
    },
    "Lustbound Boost": {
@@ -8041,7 +8071,7 @@
      "over_in": 9
     }
    },
-   "Buccaneer Boost": {
+   "Enhanced Buccaneer": {
     "primitive": "Shot Modifier",
     "rated": false,
     "book_version": "3.5.3",
@@ -8049,12 +8079,12 @@
      "hit_bonus": 1
     }
    },
-   "Buccaneer Boost Aura": {
+   "Enhanced Buccaneer Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Buccaneer Boost"
+     "grants": "Enhanced Buccaneer"
     }
    },
    "Casting Debuff": {
@@ -8260,7 +8290,7 @@
      "all_models": true
     }
    },
-   "Cursed Undead Boost": {
+   "Enhanced Cursed Undead": {
     "primitive": "Regeneration",
     "rated": false,
     "book_version": "3.5.3",
@@ -8269,12 +8299,12 @@
      "all_models": true
     }
    },
-   "Cursed Undead Boost Buff": {
+   "Enhanced Cursed Undead Buff": {
     "primitive": "Utility Buff",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants_rule": "Cursed Undead Boost",
+     "grants_rule": "Enhanced Cursed Undead",
      "target": "friendly",
      "max_targets": 1,
      "range_in": 12,

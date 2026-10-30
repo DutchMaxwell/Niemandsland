@@ -215,7 +215,17 @@ static func ctx_for(unit: GameUnit, in_cover: bool = false, counter_models: int 
 		"regeneration": _regen_target(unit) > 0,
 		"regen_target": _regen_target(unit),
 		"regen_target_spell": _regen_target(unit, true),
+		"aircraft_hit_penalty": aircraft_hit_penalty(unit),
 	}
+
+
+## Rules 3.6 (EPOCH_73_V36): the to-hit penalty every shot AT `unit` takes because it is an Aircraft (the
+## map's Aircraft `target_hit_penalty`, beside its range penalty); 0 for every other unit and below 73.
+## The table's to-hit breakdown (main._solo_hit_mod_info) reads the same number.
+static func aircraft_hit_penalty(unit: GameUnit) -> int:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 or not RulesRegistry.unit_rule_active(unit, "Aircraft"):
+		return 0
+	return int(RulesRegistry.unit_param(unit, "Aircraft", "target_hit_penalty", 0))
 
 
 static func _fortified_over_in(unit: GameUnit) -> float:
@@ -340,6 +350,8 @@ static func stamp_sergeant(profiles: Array, unit: GameUnit) -> Array:
 		var sp: Dictionary = ed.get("params", {})
 		if not str(sp.get("upgrades", "")).is_empty():
 			continue   # upgrade entries (Devout Boost) ride the base facet below, never stamp alone
+		if n == "Great Sergeant" and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+			continue   # rules 3.6: the bearer's AP share below replaces the 5-6 window
 		# EPOCH_17_SURGE_SCOPE (sweep B, row "Surge when Shooting"): the entry
 		# carries `shooting_only` now — the book's own printed scope, so the
 		# melee twin stays silent from 17. Only THIS name's scope is
@@ -456,7 +468,12 @@ static func stamp_sergeant(profiles: Array, unit: GameUnit) -> Array:
 			var fpd := fp as Dictionary
 			if int(fpd.get("range", 0)) > 0:
 				fpd["indirect"] = true
-	if not RulesRegistry.unit_rule_active(unit, "Sergeant"):
+	# EPOCH_73_V36 (row MOR-12): from rules 3.6 the same bearer share strikes at its entry's
+	# `ap_bonus` (Sergeant 1, Great Sergeant 2) instead of buying extra hits on 6s; the dice path
+	# saves it as its own batch (main._solo_resolve_saves). Below 73 the 3.5 extra-hit share stays.
+	var v36 := AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
+	var sgt_rule := "Great Sergeant" if v36 and RulesRegistry.unit_rule_active(unit, "Great Sergeant") else "Sergeant"
+	if not RulesRegistry.unit_rule_active(unit, sgt_rule):
 		return profiles
 	var alive: int = maxi(unit.get_alive_count(), 1)
 	for p in profiles:
@@ -464,7 +481,15 @@ static func stamp_sergeant(profiles: Array, unit: GameUnit) -> Array:
 		var attacks := int(profile.get("attacks", 0))
 		if attacks <= 0:
 			continue
-		profile["sergeant_attacks"] = maxi(1, roundi(float(attacks) / float(alive)))
+		var share := maxi(1, roundi(float(attacks) / float(alive)))
+		if v36:
+			var params: Dictionary = RulesRegistry.lookup(RulesRegistry.system_of_unit(unit),
+				RulesRegistry.faction_of_unit(unit), sgt_rule).get("params", {})
+			profile["sergeant_ap_attacks"] = share
+			profile["sergeant_ap"] = int(params.get("ap_bonus", 1))
+			profile["sergeant_rule"] = sgt_rule
+		else:
+			profile["sergeant_attacks"] = share
 		break
 	return profiles
 
@@ -546,7 +571,8 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 		target = AiCombatMath.reliable_quality(quality, bool(profile.get("reliable", false)))
 		var shoot_mod := AiCombatMath.shooting_hit_modifier(dist_in,
 			bool(att.get("artillery", false)), bool(def_ctx.get("stealth", false)),
-			bool(def_ctx.get("artillery", false)), bool(def_ctx.get("evasive", false))) + spell_mod
+			bool(def_ctx.get("artillery", false)), bool(def_ctx.get("evasive", false))) + spell_mod \
+			- int(def_ctx.get("aircraft_hit_penalty", 0))   # rules 3.6 Aircraft -N, inside the clamp
 		if bool(profile.get("unstoppable", false)) and shoot_mod < 0:
 			shoot_mod = 0   # same clamp as the melee side; Fatigue stays above it (not a modifier)
 		target = target - shoot_mod
@@ -612,14 +638,20 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 	# main._solo_conditional_ap (both read the same registry params via AiCombatMath.conditional_ap_bonus).
 	for cap in profile.get("cond_ap", []):
 		ap += AiCombatMath.conditional_ap_bonus(cap as Dictionary, maxi(int(def_ctx.get("tough", 1)), 1),
-			int(def_ctx.get("defense", 4)), charging, dist_in, melee)
+			int(def_ctx.get("defense", 4)), charging, dist_in, melee, {"weapon_range_in": float(profile.get("range", 0))})
 	var bane := bool(profile.get("bane", false))
 	# Fortified (defender): each incoming hit's FINAL AP counts as -1 (min 0) — applied per sub-batch.
 	var fort := bool(def_ctx.get("fortified", false))
 	var fort_over := float(def_ctx.get("fortified_over_in", -1.0))
 	if fort_over >= 0.0 and (fort_over == 0.0 or (dist_in > fort_over and (not melee or charging))):
 		fort = true
-	var unsaved := (hits - six_hits) * (1.0 - block_chance(defense, AiCombatMath.fortified_ap(ap, fort), bane)) \
+	# — Sergeant from rules 3.6 (row MOR-12): the bearer's share of the plain hits (its attacks over the
+	#   profile's, the dice path's same fraction) saves at AP(+sergeant_ap); 0 below the stamp's epoch —
+	var sgt_ap := int(profile.get("sergeant_ap", 0))
+	var sgt_frac: float = minf(float(profile.get("sergeant_ap_attacks", 0)), attacks) / maxf(attacks, 1.0) if sgt_ap > 0 else 0.0
+	var plain := hits - six_hits
+	var unsaved := plain * (1.0 - sgt_frac) * (1.0 - block_chance(defense, AiCombatMath.fortified_ap(ap, fort), bane)) \
+		+ plain * sgt_frac * (1.0 - block_chance(defense, AiCombatMath.fortified_ap(ap + sgt_ap, fort), bane)) \
 		+ six_hits * (1.0 - block_chance(defense, AiCombatMath.fortified_ap(ap + on6_ap, fort), bane))
 	# — Deadly (Tough-capped multiply) —
 	var deadly := int(profile.get("deadly", 0))

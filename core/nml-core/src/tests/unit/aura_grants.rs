@@ -48,11 +48,11 @@ use super::*;
     /// — one row per GRANT-channel name, in the ledger's order.
     const GRANT_ROWS: &[(&str, &str, &str, &str, bool)] = &[
         ("Ambush Aura", "aof", "beastmen", "Ambush", false),
-        ("Changebound Boost Aura", "aof", "change_disciples", "Changebound Boost", true),
-        ("Clan Warrior Boost Aura", "gf", "eternal_dynasty", "Clan Warrior Boost", false),
+        ("Enhanced Changebound Aura", "aof", "change_disciples", "Enhanced Changebound", true),
+        ("Enhanced Clan Warrior Aura", "gf", "eternal_dynasty", "Enhanced Clan Warrior", false),
         ("Dash Aura", "gf", "custodian_brothers", "Dash", false),
         ("Defensive Growth Aura", "gf", "human_inquisition", "Defensive Growth", true),
-        ("Devout Boost Aura", "gf", "blessed_sisters", "Devout Boost", false),
+        ("Enhanced Devout Aura", "gf", "blessed_sisters", "Enhanced Devout", false),
         ("Ferocious Boost Aura", "aof", "orcs", "Ferocious Boost", false),
         ("Grounded Precision Aura", "aofs", "merchant_unions", "Grounded Precision", false),
         ("Guardian Boost Aura", "gf", "custodian_brothers", "Guardian Boost", true),
