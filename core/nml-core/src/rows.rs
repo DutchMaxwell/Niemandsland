@@ -691,7 +691,7 @@ pub fn features(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::acts::read_act_header;
+    use crate::acts::{read_act_header, EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36};
     use crate::io::state_from_json;
     use crate::rules::Registries;
     use crate::state::ProfileCache;
@@ -1438,6 +1438,56 @@ mod tests {
         let head = read_act_header(HEADER).expect("header");
         assert_eq!(head.knobs.rule_vocab_version, LEGACY_VOCAB_VERSION);
         assert_eq!(vocab_version_of_header(HEADER), head.knobs.rule_vocab_version);
+    }
+
+    const ASSAULT_ONLY: &str = r#"{"kind":"header","knobs":{},"profiles":{
+      "gunner":{"unit_id":"gunner","name":"Gunner","quality":4,"defense":4,"tough":1,
+        "wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,
+        "game_system":"gf","faction_folder":"robot_legions",
+        "special_rules":[],"item_grants":[],"attached_hero_rules":[],
+        "move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Assault Rifle","range":12,"attacks":2,"count":1,"ap":1,
+          "rules":["Assault","AP(1)"]}]}}}"#;
+
+    fn assault_mev(epoch: u32) -> f64 {
+        let header = read_act_header(ASSAULT_ONLY).expect("header");
+        let p = header.profiles.get("gunner").expect("gunner");
+        let mut reg = Registries::new(&repo_root());
+        let us = UnitStatic::build_for(&mut reg, p, epoch);
+        unit_sev_mev(p, &us, &neutral_defender()).1
+    }
+
+    fn plain_mev(epoch: u32) -> f64 {
+        let header = read_act_header(HEADER).expect("header");
+        let p = header.profiles.get("p1_0_a").expect("p1_0_a");
+        let mut reg = Registries::new(&repo_root());
+        let us = UnitStatic::build_for(&mut reg, p, epoch);
+        unit_sev_mev(p, &us, &neutral_defender()).1
+    }
+
+    /// AI-09 — the net's melee input ("mev") must price an Assault weapon's
+    /// melee copy from rules 3.6 on, exactly like the table's
+    /// `AiShooting.melee_profiles`. At 72 a ranged weapon never strikes, so a
+    /// unit armed only with one prices at its bare-hands value: 0.
+    #[test]
+    fn an_assault_weapon_prices_as_bare_hands_in_the_net_at_epoch_72() {
+        assert_eq!(assault_mev(EPOCH_72_PLAYTEST_RULES), 0.0, "72: no melee profile, bare hands");
+    }
+
+    /// The same unit at 73: the Assault copy (2 attacks, AP 1) strikes, so the
+    /// net's mev is larger — 0.67. On main this read the epoch-free list and
+    /// stayed at 0 while the table already counted the copy.
+    #[test]
+    fn an_assault_weapon_prices_its_melee_copy_in_the_net_at_epoch_73() {
+        assert_eq!(assault_mev(EPOCH_73_V36), 0.67, "73: the Assault copy's melee EV");
+    }
+
+    /// A unit with no Assault weapon keeps today's number at 73 — the epoch
+    /// gate must not move anything else.
+    #[test]
+    fn a_unit_without_assault_keeps_its_net_mev_at_epoch_73() {
+        assert_eq!(plain_mev(EPOCH_72_PLAYTEST_RULES), 0.5, "today's number");
+        assert_eq!(plain_mev(EPOCH_73_V36), 0.5, "unchanged at 73");
     }
 
     #[test]
