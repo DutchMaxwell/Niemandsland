@@ -3387,12 +3387,14 @@ func _spill_destroyed_transport(tr: GameUnit) -> void:
 ## affected model, and a Tough(X) model "rolls as many dice as its Tough value"). Same count the
 ## movement path builds into report["dangerous_dice"] (SoloController.last_dangerous_dice), pulled
 ## out here so the destroyed-transport spill asks the rule the same question the move does.
-## The unit's OWN alive models only — a joined hero is its own GameUnit and takes its own test.
+## Below EPOCH_73_V36 the unit's OWN alive models only — a joined hero is its own GameUnit and takes its own
+## test. UX-20 (rules 3.6): from 73 the whole joined unit takes ONE test, so its heroes' models count too.
 static func dangerous_dice_for(unit: GameUnit) -> int:
 	if unit == null:
 		return 0
 	var dice := 0
-	for m in unit.get_alive_models():
+	var whole: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
+	for m in (unit.get_alive_models_with_attached() if whole else unit.get_alive_models()):
 		dice += maxi(1, int((m as ModelInstance).wounds_max))
 	return dice
 

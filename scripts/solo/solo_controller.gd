@@ -5809,6 +5809,9 @@ func _dangerous_standing_counts(unit: GameUnit) -> Dictionary:
 				TerrainRules.is_dangerous)):
 			models += 1
 			dice += maxi(1, int(model.wounds_max))
+	# UX-20 (EPOCH_73_V36, rules 3.6): one model in it is enough - the whole joined unit takes ONE test.
+	if models > 0 and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		dice = OPRArmyManager.dangerous_dice_for(unit)
 	return {"models": models, "dice": dice}
 
 
@@ -6156,6 +6159,9 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 			if affected:
 				dang += 1
 				dang_dice += maxi(1, int((models[i] as ModelInstance).wounds_max))
+	# UX-20 (EPOCH_73_V36, rules 3.6): one affected model is enough - the whole joined unit takes ONE test.
+	if dang > 0 and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		dang_dice = OPRArmyManager.dangerous_dice_for(unit)
 	last_dangerous_dice = dang_dice
 	# The decision-log / label arc is the PLANNED within-budget move (pre-gate route), so the move-band audit
 	# and the "X / Y" label stay truthful; the gate's physical un-stack nudge is not counted as extra distance.

@@ -2992,18 +2992,36 @@ pub(crate) fn dangerous_dice(
             }
         }
     }
+    // `wounds_max` is the FULL model list and `positions` only the survivors;
+    // this port's casualties come off the FRONT (`land_wounds`), so the living
+    // models are that list's tail.
+    let tough = |u: usize, m: usize| {
+        let w = &statics[state.roster.profile[u]].wounds_max;
+        let off = w.len().saturating_sub(state.positions[u].len());
+        w.get(off + m).copied().unwrap_or(1).max(1)
+    };
     let mut dice = 0;
     for (u, m, crossed) in movers {
         let Some(p0) = state.positions[u].get(m) else { continue };
         if !crossed && !in_dang(p0, radius(state, u, m)) && !debuffed(state, u) {
             continue;
         }
-        // `wounds_max` is the FULL model list and `positions` only the survivors;
-        // this port's casualties come off the FRONT (`land_wounds`), so the living
-        // models are that list's tail.
-        let w = &statics[state.roster.profile[u]].wounds_max;
-        let off = w.len().saturating_sub(state.positions[u].len());
-        dice += w.get(off + m).copied().unwrap_or(1).max(1);
+        dice += tough(u, m);
+    }
+    // UX-20 (`EPOCH_73_V36`, rules 3.6): one affected model is enough, and then
+    // the WHOLE joined unit (host + attached heroes, every living model) takes
+    // ONE test; each model still adds its Tough value here (UX-21 counts the
+    // wounds left). Below 73 only the affected models roll.
+    if dice > 0 && rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) {
+        let mut chain = vec![si];
+        if seams.hero_attach {
+            chain.extend(state.attached[si].iter().copied());
+        }
+        dice = chain.iter().map(|&u| (0..state.positions[u].len()).map(|m| tough(u, m)).sum::<i64>()).sum();
+        shot.log.push(format!(
+            "Dangerous terrain: {} takes one test for the whole unit ({dice} dice)",
+            statics[state.roster.profile[si]].name
+        ));
     }
     dice
 }
