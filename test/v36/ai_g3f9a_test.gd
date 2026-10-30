@@ -6,7 +6,6 @@ extends GdUnitTestSuite
 ## climbing is on; the walls themselves stay as they were (a ledge is still a wall for a move that does not
 ## climb). Capture tooling only: it reads the climb flag, it gates on no new rules epoch.
 
-const ArenaMatch := preload("res://tools/arena_match.gd")
 const OverlayScript := preload("res://scripts/terrain_overlay.gd")
 
 ## One container footprint, corners chosen off the 0.0001 m grid so the snapping is visible.
@@ -36,9 +35,10 @@ func _overlay(corners: Array) -> Node3D:
 
 ## The stash through the script's method list, so a missing helper fails on an assertion, not on parsing.
 func _stash(ovl: Node) -> Dictionary:
-	for m in ArenaMatch.get_script_method_list():
+	var arena: Script = load("res://tools/arena_match.gd")
+	for m in arena.get_script_method_list():
 		if str(m["name"]) == "trail_terrain":
-			return ArenaMatch.call("trail_terrain", ovl)
+			return arena.call("trail_terrain", ovl)
 	return {}
 
 
