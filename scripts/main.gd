@@ -4829,17 +4829,17 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 			# before the roll. Resolver wave A: a Takedown weapon's Deadly multiplies on that model
 			# (p.14) — this also fixes book weapons carrying both (the multiply was silently dropped).
 			var td_w: int = w * maxi(int(profile.get("deadly", 0)), 1)
-			if _solo_ignores_regen(member, profile):
+			if _solo_ignores_regen(member, profile, target):
 				landed_extra += await _solo_land_takedown_wounds(target, str(profile.get("name", "?")), td_pick, 0, td_w)
 			else:
 				landed_extra += await _solo_land_takedown_wounds(target, str(profile.get("name", "?")), td_pick, td_w, 0)
 		elif is_deadly and w > 0:
 			# Deadly (GF v3.5.1 p.14): each unsaved wound ×X on one model, no carry-over.
-			if _solo_ignores_regen(member, profile):
+			if _solo_ignores_regen(member, profile, target):
 				landed_extra += await _solo_land_deadly_wounds(target, str(profile.get("name", "?")), int(profile.get("deadly", 0)), 0, w)
 			else:
 				landed_extra += await _solo_land_deadly_wounds(target, str(profile.get("name", "?")), int(profile.get("deadly", 0)), w, 0)
-		elif _solo_ignores_regen(member, profile):
+		elif _solo_ignores_regen(member, profile, target):
 			regen_proof += w
 		else:
 			regenable += w
@@ -8349,7 +8349,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 				# (TC-023), multiplied by the profile's Deadly.
 				var td_w: int = w * maxi(int(eff.get("deadly", 0)), 1)
 				var td_dealt: int
-				if _solo_ignores_regen(group.get("member"), eff):
+				if _solo_ignores_regen(group.get("member"), eff, defender):
 					td_dealt = await _solo_land_takedown_wounds(defender, str(profile.get("name", "?")), td_pick, 0, td_w)
 				else:
 					td_dealt = await _solo_land_takedown_wounds(defender, str(profile.get("name", "?")), td_pick, td_w, 0)
@@ -8358,14 +8358,14 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 				# Deadly (GF v3.5.1 p.14, no carry-over): each unsaved wound ×X on one model; the DEALT
 				# wounds feed the melee wound-comparison so the multiply still decides who wins.
 				var dealt: int
-				if _solo_ignores_regen(group.get("member"), eff):
+				if _solo_ignores_regen(group.get("member"), eff, defender):
 					dealt = await _solo_land_deadly_wounds(defender, str(profile.get("name", "?")), int(eff.get("deadly", 0)), 0, w)
 				else:
 					dealt = await _solo_land_deadly_wounds(defender, str(profile.get("name", "?")), int(eff.get("deadly", 0)), w, 0)
 				caused += dealt
 			else:
 				caused += w
-				if _solo_ignores_regen(group.get("member"), eff):
+				if _solo_ignores_regen(group.get("member"), eff, defender):
 					regen_proof += w
 				else:
 					regenable += w
@@ -8400,7 +8400,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 						var bt_w: int = await _solo_resolve_saves(group.get("member"), defender, str(profile.get("name", "?")), [] if mute_sixes else bt_faces, bt_hits, defense, eff, human_defends, true, true, charging)
 						_solo_last_save_ones = 0
 						caused += bt_w
-						if _solo_ignores_regen(group.get("member"), eff):
+						if _solo_ignores_regen(group.get("member"), eff, defender):
 							regen_proof += bt_w
 						else:
 							regenable += bt_w
@@ -8540,7 +8540,7 @@ func _solo_charge_impact(charger: GameUnit, defender: GameUnit, human_defends: b
 		var profile: Dictionary = {"name": str(p["label"]), "ap": int(p["ap"]), "deadly": 0, "rules": []}
 		var w: int = await _solo_resolve_saves(charger, defender, str(p["label"]), [], hits, impact_defense, profile, human_defends, true)
 		if w > 0:
-			if _solo_ignores_regen(charger, profile):
+			if _solo_ignores_regen(charger, profile, defender):
 				await _solo_land_wounds(defender, 0, w)
 			else:
 				await _solo_land_wounds(defender, w, 0)
@@ -9521,7 +9521,16 @@ func _solo_profile_lacerate_only(profile: Dictionary) -> bool:
 	return lacerate
 
 
-func _solo_ignores_regen(attacker: GameUnit, profile: Dictionary) -> bool:
+## DAT-16b — rules-must-log: a Regeneration bypass names itself only when the hit target really has a
+## Regeneration-family roll to skip (the regen pool's own seam, `_solo_regen_target`). Below rules 3.6
+## the old line stays byte-identical for replay; a direct caller without a target keeps the old line.
+func _solo_regen_bypass_named(target: GameUnit) -> bool:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 or target == null:
+		return true
+	return _solo_regen_target(target) > 0
+
+
+func _solo_ignores_regen(attacker: GameUnit, profile: Dictionary, target: GameUnit = null) -> bool:
 	var system := RulesRegistry.system_of_unit(attacker)
 	var faction := RulesRegistry.faction_of_unit(attacker)
 	for r in profile.get("rules", []):
@@ -9537,7 +9546,7 @@ func _solo_ignores_regen(attacker: GameUnit, profile: Dictionary) -> bool:
 		# EXACT name (the read that stamps profile.unstoppable): the scoped names stay the registry
 		# facet's below, and the plain entry carries no bypass_regen param.
 		if GameUnit.rule_name_matches(s, "Unstoppable"):
-			if attacker != null and battle_log != null:
+			if attacker != null and battle_log != null and _solo_regen_bypass_named(target):
 				_log_rule_event(BattleLog.Category.COMBAT, "Unstoppable: Regeneration ignored", _solo_is_ai_unit(attacker))
 			return true
 		# Registry-driven Regeneration bypass (e.g. Disintegrate "Ignores Regeneration"), system-scoped;
@@ -9550,7 +9559,7 @@ func _solo_ignores_regen(attacker: GameUnit, profile: Dictionary) -> bool:
 			if not AiEv.facet_applies(bp, int(profile.get("range", 0))):
 				continue
 			# AI-08a — rules-must-log: the map-read bypass names the weapon's rule (Anti-Regen et al.).
-			if attacker != null:
+			if attacker != null and _solo_regen_bypass_named(target):
 				_log_rule_event(BattleLog.Category.COMBAT, "%s: Regeneration ignored" % RulesRegistry.base_rule_name(s),
 					_solo_is_ai_unit(attacker))
 			return true
@@ -9591,8 +9600,9 @@ func _solo_ignores_regen(attacker: GameUnit, profile: Dictionary) -> bool:
 				continue
 			var pb: Dictionary = edb.get("params", {})
 			if bool(pb.get("bypass_regen", false)) and int(profile.get("range", 0)) <= 0:
-				_log_rule_event(BattleLog.Category.COMBAT,
-					"%s: Regeneration ignored" % str(edb["name"]), _solo_is_ai_unit(attacker))
+				if _solo_regen_bypass_named(target):
+					_log_rule_event(BattleLog.Category.COMBAT,
+						"%s: Regeneration ignored" % str(edb["name"]), _solo_is_ai_unit(attacker))
 				return true
 	# EXACT name (the Ferocious lesson): has_special_rule matches by PREFIX, so the plain-Unstoppable
 	# fallback also answered for "Unstoppable in Melee" / "Unstoppable when Shooting" — which is how
@@ -9607,7 +9617,7 @@ func _solo_ignores_regen(attacker: GameUnit, profile: Dictionary) -> bool:
 	# sequence (_solo_consume_once_mods), never twice.
 	var from_mark := str(profile.get("_unstoppable_from_spell", ""))
 	if not from_mark.is_empty() and attacker != null:
-		if battle_log != null:
+		if battle_log != null and _solo_regen_bypass_named(target):
 			_log_rule_event(BattleLog.Category.COMBAT,
 				"%s: %s — Regeneration is ignored (once)" % [from_mark, attacker.get_name()],
 				_solo_is_ai_unit(attacker))
@@ -9616,7 +9626,7 @@ func _solo_ignores_regen(attacker: GameUnit, profile: Dictionary) -> bool:
 		if bool(profile.get(flag, false)):
 			if flag == "bane" and _solo_profile_lacerate_only(profile):
 				continue   # A1: the flag is the printed Lacerate's re-roll, not a Bane grant
-			if battle_log != null:
+			if battle_log != null and _solo_regen_bypass_named(target):
 				_log_rule_event(BattleLog.Category.COMBAT,
 					"%s (granted): Regeneration ignored" % flag.capitalize(),
 					attacker != null and _solo_is_ai_unit(attacker))
@@ -13957,6 +13967,15 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 				cover_logged = true   # I4: only claim Cover when the roll truly saved at the covered value
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s is in cover: +1 Defense (saves on %d+)" % [
 					target.get_name(), AiCombatMath.shown_target(save_def)], true)
+			# DAT-16b — rules-must-log: the HUMAN volley names the map-read rule that skips cover,
+			# the AI-08a block's twin (the human path used to skip cover without a word). The line is
+			# epoch-gated so that below 73 the human path stays byte-exact.
+			elif td_ctx.is_empty() and battle_log != null and shot_cover < shot_base \
+					and int(profile.get("blast", 0)) <= 1 \
+					and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
+					and not str(profile.get("cover_rule", "")).is_empty():
+				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s — %s's cover save is skipped" % [
+					str(profile["cover_rule"]), str(group.get("name", "?")), target.get_name()], true)
 			# B5 (test game 2): the HUMAN volley now mirrors the AI's per-model landing — Takedown
 			# wounds go to the model the PLAYER picks (click), Deadly lands ×X on one model with no
 			# carry-over. Both previously pooled into the defender-optimal removal, so the player's
@@ -13969,16 +13988,16 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 			if is_takedown and w > 0 and not td_pick.is_empty():
 				# Resolver wave A: Deadly multiplies on the picked model (see the AI branch).
 				var td_w: int = w * maxi(int(profile.get("deadly", 0)), 1)
-				if _solo_ignores_regen(group.get("member"), profile):
+				if _solo_ignores_regen(group.get("member"), profile, target):
 					await _solo_land_takedown_wounds(target, str(profile.get("name", "?")), td_pick, 0, td_w)
 				else:
 					await _solo_land_takedown_wounds(target, str(profile.get("name", "?")), td_pick, td_w, 0)
 			elif is_deadly and w > 0:
-				if _solo_ignores_regen(group.get("member"), profile):
+				if _solo_ignores_regen(group.get("member"), profile, target):
 					await _solo_land_deadly_wounds(target, str(profile.get("name", "?")), int(profile.get("deadly", 0)), 0, w)
 				else:
 					await _solo_land_deadly_wounds(target, str(profile.get("name", "?")), int(profile.get("deadly", 0)), w, 0)
-			elif _solo_ignores_regen(group.get("member"), profile):
+			elif _solo_ignores_regen(group.get("member"), profile, target):
 				regen_proof += w
 			else:
 				regenable += w
