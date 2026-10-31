@@ -7982,6 +7982,37 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 				struck_any = true
 				caused += rv_wounds   # pre-Regeneration, same basis as the weapon strikes' tally
 				await _solo_land_wounds(defender, rv_wounds, 0)
+	# MEL-12 (rules 3.6): Regenerative Strength pays its banked tokens in DIRECT wounds — one die per
+	# token, each 4+ a wound — instead of extra attacks. On the unit's turn to strike, once per round,
+	# never while Fatigued; the Counter-only pre-phase leaves the roll to the strike-back that follows.
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and filter != SoloStrike.COUNTER_ONLY:
+		var gs_members: Array = [striker]
+		if striker.has_method("get_attached_heroes"):
+			gs_members = gs_members + striker.get_attached_heroes()
+		for gm in gs_members:
+			var gu := gm as GameUnit
+			if gu == null or gu.get_alive_count() <= 0:
+				continue
+			if not RulesRegistry.unit_rule_active(gu, "Regenerative Strength"):
+				continue
+			var gs_tokens: int = _solo_growth_markers(gu, "Regenerative Strength")
+			if gs_tokens <= 0:
+				continue
+			var gs_skip := "is Fatigued - no token dice" if gu.is_fatigued or gu.is_shaken or striker.is_fatigued or striker.is_shaken else "already rolled its dice this round" if int(gu.unit_properties.get("regenerative_strength_round", -1)) == opr_army_manager.current_round else ""
+			if not gs_skip.is_empty():
+				if battle_log != null: battle_log.log_event(BattleLog.Category.COMBAT, "Regenerative Strength: %s %s" % [gu.get_name(), gs_skip], true)
+				continue
+			gu.unit_properties["regenerative_strength_round"] = opr_army_manager.current_round
+			var gs_owner: String = _roller_label(gu)
+			var gs_faces: Array = await _solo_tray_roll(gs_tokens, 4, gs_owner, "attack")
+			var gs_wounds: int = gs_faces.filter(func(f): return int(f) >= 4).size()
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.COMBAT, "Regenerative Strength: %s rolls %d dice, %d wound%s" % [
+					gu.get_name(), gs_tokens, gs_wounds, ("" if gs_wounds == 1 else "s")], true)
+			if gs_wounds > 0:
+				struck_any = true
+				caused += gs_wounds
+				await _solo_land_wounds(defender, gs_wounds, 0)
 	# Resolver wave A — Takedown Strike: the once-per-game extra attack joins the striker's own
 	# turn (never the Counter-only pre-phase; strike-back counts — "its turn to attack in melee").
 	# NML-241/NML-937/NML-940: the Retaliate tally is measured PER CHAIN MEMBER, so the wound pools are

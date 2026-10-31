@@ -96,6 +96,7 @@
             growth_markers: vec![0; 4],
             vengeance_markers: vec![0; 4],
             growth_round: vec![-1; 4],
+            growth_strike_round: vec![-1; 4],
             second_wind_used: vec![false; 4], surprise_attack_used: vec![false; 4], teleport_used: vec![false; 4],
             reinforcement_used: vec![false; 4],
             second_wind_round: -1,

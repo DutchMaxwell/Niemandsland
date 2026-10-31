@@ -1733,6 +1733,23 @@ pub fn resolve_melee_leg(
         out.caused += w;
         out.wounds += regen_batch(w, def, def_owner, tray, &mut out.rolls);
     }
+    // MEL-12 (`EPOCH_73_V36`) — Regenerative Strength's banked tokens: one die
+    // per token, each 4+ a DIRECT wound (no hit roll, no save; Regeneration
+    // applies). Rolled once per round, before the strikes; the gate lives in
+    // `sim::strike_phase`, which zeroes the count and logs every skip.
+    for sh in strikers {
+        let n = sh.att.growth_wound_dice;
+        if n <= 0 {
+            continue;
+        }
+        let faces = tray.roll(n as usize);
+        let w = faces.iter().filter(|&&f| f as i64 >= 4).count() as i64;
+        out.rolls.push(Roll { kind: "attack", count: n, target: 4, faces, owner: sh.owner.into() });
+        out.log.push(format!(
+            "Regenerative Strength: {} rolls {} dice, {} wounds", sh.owner, n, w));
+        out.caused += w;
+        out.wounds += regen_batch(w, def, def_owner, tray, &mut out.rolls);
+    }
     // (3) the strikes :6060-6148. `regenable`/`regen_proof` are the PHASE's, not
     //     the member's — the table declares them before the group loop and lands
     //     them once after it (:6161).
