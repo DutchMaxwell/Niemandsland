@@ -33,6 +33,7 @@
   "Battleborn",
   "Blast",
   "Bloodborn",
+  "Enhanced Bloodborn",
   "Bounding",
   "Bounding Aura",
   "Brace",
@@ -58,6 +59,7 @@
   "Crossing Attack",
   "Dangerous Terrain Debuff",
   "Darkborn",
+  "Enhanced Darkborn",
   "Dash",
   "Dash Aura",
   "Deadly",
@@ -381,7 +383,8 @@
   "Enhanced Warbound",
   "Enhanced Warbound Aura",
   "Watchborn",
-  "Wolfborn"
+  "Wolfborn",
+  "Enhanced Wolfborn"
  ],
  "decision": [
   "AP",
@@ -1982,6 +1985,16 @@
      "extra_attack": true
     }
    },
+   "Enhanced Bloodborn": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "upgrades": "Bloodborn",
+     "extra_attack": true,
+     "surge_low": 5
+    }
+   },
    "Courage Aura": {
     "primitive": "Banner",
     "rated": false,
@@ -2174,6 +2187,16 @@
     "book_version": "3.5.3",
     "params": {
      "extra_attack": true
+    }
+   },
+   "Enhanced Bloodborn": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "upgrades": "Bloodborn",
+     "extra_attack": true,
+     "surge_low": 5
     }
    },
    "Courage Aura": {
@@ -3074,6 +3097,17 @@
      "melee_floor_in": 6
     }
    },
+   "Enhanced Darkborn": {
+    "primitive": "Ranged Shrouding",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "range_penalty_in": 8,
+     "floor_in": 6,
+     "melee_move_penalty_in": 4,
+     "melee_floor_in": 6
+    }
+   },
    "Evasive": {
     "primitive": "Evasive",
     "rated": false,
@@ -3494,6 +3528,17 @@
      "range_penalty_in": 4,
      "floor_in": 6,
      "melee_move_penalty_in": 2,
+     "melee_floor_in": 6
+    }
+   },
+   "Enhanced Darkborn": {
+    "primitive": "Ranged Shrouding",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "range_penalty_in": 8,
+     "floor_in": 6,
+     "melee_move_penalty_in": 4,
      "melee_floor_in": 6
     }
    },
@@ -9930,6 +9975,15 @@
     "params": {
      "place_d3_plus": 0
     }
+   },
+   "Enhanced Wolfborn": {
+    "primitive": "Bounding",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "place_d3_plus": 0,
+     "dice_count": 2
+    }
    }
   },
   "wolf_prime_brothers": {
@@ -10180,6 +10234,15 @@
     "book_version": "3.5.3",
     "params": {
      "place_d3_plus": 0
+    }
+   },
+   "Enhanced Wolfborn": {
+    "primitive": "Bounding",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "place_d3_plus": 0,
+     "dice_count": 2
     }
    }
   },
