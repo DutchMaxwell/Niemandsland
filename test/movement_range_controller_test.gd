@@ -450,7 +450,7 @@ func test_move_bands_royal_legion_charge_bonus_only() -> void:
 ## registry entry is `Fast | rush_mod=4, charge_only=true`. Charge only: the Rush band stays the
 ## plain 12", only the Charge band grows. Same for the aura.
 func test_move_bands_rapid_charge_is_charge_only() -> void:
-	for system_faction in [["gf", "wormhole_daemons_of_war"], ["aof", "dark_elves"]]:
+	for system_faction in [["gf", "daemons_of_war"], ["aof", "dark_elves"]]:
 		for rule_name in ["Rapid Charge", "Rapid Charge Aura"]:
 			var b := _controller().move_bands_for_props({
 				"game_system": system_faction[0], "faction_folder": system_faction[1],

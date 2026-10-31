@@ -85,7 +85,7 @@ func _spawned_unit() -> GameUnit:
 
 
 func _split_unit() -> GameUnit:
-	var carrier := _carrier("Split(Hatchlings [3])", "wormhole_daemons_of_change", 2)
+	var carrier := _carrier("Split(Hatchlings [3])", "daemons_of_change", 2)
 	await _main._solo_apply_wounds(carrier, 1)
 	await _main._solo_apply_wounds(carrier, 1)
 	return _created("split")

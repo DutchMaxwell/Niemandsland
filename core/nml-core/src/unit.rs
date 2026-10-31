@@ -85,10 +85,10 @@ impl ShieldedAlias {
         match self {
             Self::None => "",
             Self::PlusOneToDefense => "+1 to Defense",
-            Self::SturdyBoost => "Sturdy Boost",
+            Self::SturdyBoost => "Enhanced Sturdy",
             Self::SafetyGearBoost => "Safety Gear Boost",
             Self::TenaciousBoost => "Tenacious Boost",
-            Self::GroundedReinforcement => "Grounded Reinforcement",
+            Self::GroundedReinforcement => "Grounded Defense",
             Self::DefenseRating => "Defense",
         }
     }
@@ -1679,7 +1679,7 @@ fn battleborn_recover_target_of(reg: &mut Registries, p: &Profile, rules_epoch: 
         has_special_rule(&p.special_rules, name) || has_special_rule(&p.item_grants, name)
     };
     let mut best = 0u32;
-    for name in ["Honor Code", "Vale Oath", "Vale Oath Boost", "Unmovable"] {
+    for name in ["Honor Code", "Vale Oath", "Enhanced Vale Oath", "Unmovable"] {
         if !carried(name) {
             continue;
         }
@@ -2262,8 +2262,8 @@ fn shielded_alias_of(
     }
     const ALIASES: [(&str, ShieldedAlias); 3] = [
         ("+1 to Defense", ShieldedAlias::PlusOneToDefense),
-        ("Sturdy Boost", ShieldedAlias::SturdyBoost),
-        ("Grounded Reinforcement", ShieldedAlias::GroundedReinforcement),
+        ("Enhanced Sturdy", ShieldedAlias::SturdyBoost),
+        ("Grounded Defense", ShieldedAlias::GroundedReinforcement),
     ];
     // Audit 2026-09-13 §2.4's skirmish half — "Safety Gear Boost" (gff) and
     // "Tenacious Boost" (aofs) join the wave at the CURRENT epoch only, so
@@ -2608,7 +2608,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     // Machine-Fog's own -1 (folds into `evasive`, below; the base entry's
     // conditional alias leg stands down so the two never stack).
     let machine_fog_boost = rule_on(rules_epoch, EPOCH_6_TABLE_RULES)
-        && rule_on_all_models(p, "Machine-Fog") && rule_on_all_models(p, "Machine-Fog Boost");
+        && rule_on_all_models(p, "Machine-Fog") && rule_on_all_models(p, "Enhanced Machine-Fog");
     // Wave 4 (rules-wave4-boostbases2) — "Empyrean Spirit Boost" is the
     // aof/ghostly_undead twin of the same shape: the printed unconditional
     // form of Empyrean Spirit's own -1 ("enemies attacking them always get -1
@@ -2617,14 +2617,14 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     // stands down so the two never stack.
     let empyrean_spirit_boost = rule_on(rules_epoch, EPOCH_7_TABLE_RULES)
         && rule_on_all_models(p, "Empyrean Spirit")
-        && rule_on_all_models(p, "Empyrean Spirit Boost");
+        && rule_on_all_models(p, "Enhanced Empyrean Spirit");
     // The Boost that is the reason `evasive` is on, if any — the dice seams'
     // rules-must-log name ("" = none). Epoch 6 before epoch 7: a carrier can
     // only ever hold one of these two (different systems and factions).
     let evasive_boost = if machine_fog_boost {
-        "Machine-Fog Boost"
+        "Enhanced Machine-Fog"
     } else if empyrean_spirit_boost {
-        "Empyrean Spirit Boost"
+        "Enhanced Empyrean Spirit"
     } else {
         ""
     };
@@ -3413,7 +3413,7 @@ pub(crate) const AURA_CHANNEL_NAMES: &[&str] = &[
     "Strider Aura",
     "Rending in Melee Aura",
     "Quick Shot Aura",
-    "Piercing Hunter Aura",
+    "Piercing Marksman Aura",
     "Teleport Aura",
     "Hit & Run Fighter Aura",
     "Indirect when Shooting Aura",
@@ -3424,7 +3424,7 @@ pub(crate) const AURA_CHANNEL_NAMES: &[&str] = &[
     "Speed Feat Aura",
     "Reanimation Aura",
     "Piercing Shooter Aura",
-    "Grounded Reinforcement Aura",
+    "Grounded Defense Aura",
     "Grounded Protection Aura",
     "Protected Aura",
 ];
@@ -3521,21 +3521,21 @@ fn aura_name_of(p: &Profile, base: &str) -> String {
 // earlier epoch. What the core gains is the leg the loader twin skips —
 // `LEGACY_CORE_SELFPLAY` returns from `_expand_auras` before it runs.
 pub(crate) const BOOST_AURA_CHANNEL_NAMES: &[&str] = &[
-    "Hold the Line Boost Aura",
-    "Targeting Visor Boost Aura",
-    "Warden Boost Aura",
-    "Lucky Boost Aura",
+    "Enhanced Hold the Line Aura",
+    "Enhanced Targeting Visor Aura",
+    "Enhanced Warden Aura",
+    "Enhanced Lucky Aura",
     "Enhanced Buccaneer Aura",
-    "Vale Oath Boost Aura",
-    "Wave-Step Boost Aura",
-    "Royal Warrior Boost Aura",
+    "Enhanced Vale Oath Aura",
+    "Enhanced Wave-Step Aura",
+    "Enhanced Royal Warrior Aura",
     "Enhanced Bestial Aura",
-    "Vinci Tech Boost Aura",
-    "Ossified Boost Aura",
-    "Shadowborn Boost Aura",
+    "Enhanced Vinci Tech Aura",
+    "Enhanced Ossified Aura",
+    "Enhanced Shadowborn Aura",
     "Enhanced Destroyer Aura",
-    "Empyrean Spirit Boost Aura",
-    "Wild Veil Boost Aura",
+    "Enhanced Empyrean Spirit Aura",
+    "Enhanced Wild Veil Aura",
 ];
 
 /// The loader's own base-name cut (`rule[:-len(" Aura")].strip()`), kept only
@@ -3638,7 +3638,7 @@ fn stamp_shot_modifier(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
         "Good Shot",
         "Bad Shot",
         "Targeting Visor",
-        "Targeting Visor Boost",
+        "Enhanced Targeting Visor",
         "Precision Shooter Aura",
         "Buccaneer",
         "Enhanced Buccaneer",
@@ -3785,11 +3785,11 @@ const WAVE2_UTILITY_BUFF_RULES: [&str; 12] = [
     "Piercing Assault Buff",
     "Piercing Shooting Mark",
     "Piercing Fighting Mark",
-    "Self-Repair Boost Buff",
+    "Enhanced Self-Repair Buff",
     "Enhanced Cursed Undead Buff",
     "Enhanced Angelic Blessing Buff",
-    "Hold the Line Boost Buff",
-    "Primal Boost Buff",
+    "Enhanced Hold the Line Buff",
+    "Enhanced Primal Buff",
 ];
 
 
@@ -5405,8 +5405,8 @@ fn bounding_boost_dice_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -
     }
     let map = reg.rules_for(&p.game_system);
     let Some(e) = map
-        .lookup(&p.faction_folder, "Wave-Step Boost")
-        .filter(|_| has_exact_rule(&p.special_rules, "Wave-Step Boost"))
+        .lookup(&p.faction_folder, "Enhanced Wave-Step")
+        .filter(|_| has_exact_rule(&p.special_rules, "Enhanced Wave-Step"))
     else {
         return 0;
     };
@@ -5642,7 +5642,7 @@ fn move_rule_mods_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Opt
     // gate is a per-activation majority read no statics-time stamp can
     // answer, so a flat stamp would be #489's over-credit, not a port.
     if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
-        for name in ["Enhanced Highborn", "Scurry Boost"] {
+        for name in ["Enhanced Highborn", "Enhanced Scurry"] {
             if !unit_rule_active(reg, p, name) {
                 continue;
             }
@@ -5900,7 +5900,7 @@ fn royal_legion_family_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -
         charge += e.param_f("charge_mod", 0.0);
         folded.push(hit.name);
     }
-    for (aura, base) in [("Lustbound Boost Aura", "Lustbound Boost")] {
+    for (aura, base) in [("Enhanced Lustbound Aura", "Enhanced Lustbound")] {
         if !has_special_rule(&p.special_rules, aura) || folded.iter().any(|n| n == base) {
             continue;
         }
@@ -6212,7 +6212,7 @@ impl UnitStatic {
         // never widens — no pre-charge gap (the shred2 precedent). Read BY
         // NAME, never by iterating the shared primitive (#489).
         if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
-            stamp_bane_boost(reg, p, &mut shoot, "Mischievous Boost", "reroll_save_low");
+            stamp_bane_boost(reg, p, &mut shoot, "Enhanced Mischievous", "reroll_save_low");
         }
         // Wave 4 (rules-wave4-boostbases2), gated on the FROZEN
         // `EPOCH_7_TABLE_RULES`: "Bestial Boost" is the aof/beastmen twin of
@@ -6237,7 +6237,7 @@ impl UnitStatic {
         // NAME, never by iterating the shared primitive. A record below
         // epoch 30 reads the base 6s-only window and replays byte-exact.
         if rule_on(rules_epoch, EPOCH_30_SCRAPPER_BOOST) {
-            stamp_bane_boost(reg, p, &mut shoot, "Scrapper Boost", "reroll_save_from");
+            stamp_bane_boost(reg, p, &mut shoot, "Enhanced Scrapper", "reroll_save_from");
         }
         // Shred wave 3 (rules-wave3-shred3): the family's per-face wound
         // amount is now READ off the carried Shred-primitive entry
@@ -6306,12 +6306,12 @@ impl UnitStatic {
                 }
                 match n.as_str() {
                     "Watchborn" | "Vinci Tech" => name = Some(n.clone()),
-                    "Vinci Tech Boost" => boost = true,
+                    "Enhanced Vinci Tech" => boost = true,
                     _ => {}
                 }
             }
             if boost && has_vinci {
-                name = Some("Vinci Tech Boost".to_string());
+                name = Some("Enhanced Vinci Tech".to_string());
                 both = true;
             }
             if let Some(vn) = name {
