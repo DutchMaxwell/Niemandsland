@@ -1,4 +1,6 @@
 //! Shared helper for the tests that replay an IN-REPO act fixture.
+// Each replay binary uses only some of these helpers (the 3.5 spell pin, the no-cond-AP pin).
+#![allow(dead_code)]
 
 use std::sync::atomic::Ordering;
 
