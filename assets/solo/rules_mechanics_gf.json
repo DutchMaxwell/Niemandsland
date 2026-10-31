@@ -6342,6 +6342,14 @@
      "no_gate_v36": true
     }
    },
+   "Enhanced Knightborn Aura": {
+    "primitive": "Aura Channel",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants": "Enhanced Knightborn"
+    }
+   },
    "Lacerate": {
     "primitive": "Lacerate",
     "rated": false,
@@ -6581,6 +6589,14 @@
      "ignore_target_spell_v36": 2,
      "all_models": true,
      "no_gate_v36": true
+    }
+   },
+   "Enhanced Knightborn Aura": {
+    "primitive": "Aura Channel",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants": "Enhanced Knightborn"
     }
    },
    "Melee Shrouding": {
