@@ -8521,10 +8521,11 @@ func _solo_charge_impact(charger: GameUnit, defender: GameUnit, human_defends: b
 	var counter_models: int = _solo_counter_models(defender)
 	var brace_cut: int = _solo_brace_models(defender)
 	if brace_cut > 0:
-		if defender.is_fatigued:
+		if defender.is_fatigued or defender.is_shaken:
 			brace_cut = 0
 			if battle_log != null:
-				_log_rule_event(BattleLog.Category.COMBAT, "Brace: no effect, %s is Fatigued" % defender.get_name(), true)
+				_log_rule_event(BattleLog.Category.COMBAT, "Brace: no effect, %s is %s" % [
+					defender.get_name(), "Shaken" if defender.is_shaken else "Fatigued"], true)
 		elif battle_log != null:
 			_log_rule_event(BattleLog.Category.COMBAT, "Brace: %s takes %d Impact dice off %s" % [
 				defender.get_name(), brace_cut, charger.get_name()], true)
