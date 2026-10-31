@@ -1721,8 +1721,12 @@ static func reply_threat(state: Dictionary, player: int) -> Dictionary:
 				or (mid_round and bool(eu.get("activated", false))):
 			continue
 		var movable := true
-		if reply_hold_gate and eu.get("unit") != null:
-			movable = not SoloController.forces_hold((eu["unit"] as GameUnit).get_special_rules())
+		if eu.get("unit") != null:
+			# Rules 3.6 (SHO-16): a Cumbersome enemy may neither charge nor advance-and-shoot,
+			# so it is not `movable` for those two legs; its standing volley above stays.
+			movable = not SoloController.cumbersome_active(eu["unit"] as GameUnit)
+			if reply_hold_gate:
+				movable = movable and not SoloController.forces_hold((eu["unit"] as GameUnit).get_special_rules())
 		var best_key := ""
 		var best_ev := 0.0
 		for mk in state["units"]:
