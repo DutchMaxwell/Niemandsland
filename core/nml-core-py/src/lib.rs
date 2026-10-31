@@ -1396,7 +1396,7 @@ impl Core {
     fn restamp_los(&self, py: Python<'_>, state: &PyState) -> PyState {
         let mut out = state.copy(py);
         let n = out.inner.units();
-        let m = sight::sight_matrix(&out.inner, &self.terrain);
+        let m = sight::sight_matrix_at(&out.inner, &self.terrain, self.knobs.rules_epoch);
         let rows: Vec<Option<Rc<HashMap<String, bool>>>> = (0..n)
             .map(|i| {
                 Some(Rc::new(

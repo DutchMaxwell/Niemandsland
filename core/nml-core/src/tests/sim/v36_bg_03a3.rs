@@ -77,14 +77,14 @@ use super::*;
     }
 
     /// The sight volumes of the last board are remembered per board; the memo must also know the epoch, or a
-    /// board read at 72 serves its ruin to the next game at 73 (RED on main: the 73 volley rolls nothing).
+    /// board read at 72 serves its ruin to the next read at 73. (The resolve gate only asks from 73 on, so the
+    /// memo is exercised directly.)
     #[test]
-    fn a_board_read_at_epoch_72_is_not_served_stale_to_epoch_73() {
+    fn the_board_zone_memo_is_keyed_on_the_epoch() {
         let board = bg_03a3_board(crate::terrain::RUINS);
-        assert!(bg_03a3_volley(&board, crate::acts::EPOCH_72_PLAYTEST_RULES).rolls.is_empty());
-        let shot = bg_03a3_volley(&board, crate::acts::EPOCH_73_V36);
-        assert_eq!(bg_03a3_attack_dice(&shot), 2, "the 73 read builds its own zones: both rifles fire");
-        assert!(bg_03a3_volley(&board, crate::acts::EPOCH_72_PLAYTEST_RULES).rolls.is_empty(), "and 72 still blocks");
+        assert_eq!(board_zones(&board, false, crate::acts::EPOCH_72_PLAYTEST_RULES).len(), 1);
+        assert!(board_zones(&board, false, crate::acts::EPOCH_73_V36).is_empty(), "the 72 entry is not served at 73");
+        assert_eq!(board_zones(&board, false, crate::acts::EPOCH_72_PLAYTEST_RULES).len(), 1, "and back again");
     }
 
     /// The per-model sight matrix the trainer stamps (`restamp_los`) follows the same rule.

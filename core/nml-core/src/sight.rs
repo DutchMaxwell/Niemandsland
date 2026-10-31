@@ -48,7 +48,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crate::acts::{rule_on, CURRENT_RULES_EPOCH, EPOCH_66_DISTANCE_TRUTH};
+use crate::acts::{rule_on, CURRENT_RULES_EPOCH, EPOCH_66_DISTANCE_TRUTH, EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36};
 use crate::state::State;
 use crate::terrain::{self, Terrain};
 
@@ -78,6 +78,12 @@ fn volume_height_in(kind: i32) -> f64 {
         terrain::CONTAINER => 2.5,
         _ => 0.0,
     }
+}
+
+/// From `EPOCH_73_V36` a ruin still gives cover but is no sight volume: a line may pass through it. A forest and a
+/// container keep their volumes, and every earlier epoch reads the board as before.
+fn ruin_is_open(kind: i32, rules_epoch: u32) -> bool {
+    kind == terrain::RUINS && rule_on(rules_epoch, EPOCH_73_V36)
 }
 
 /// `VolumetricLos.height_in_for_base_mm` — linear between rows, clamped outside.
@@ -453,14 +459,20 @@ pub fn sighted_models(
 /// (`TerrainOverlay._terrain_zones` :1307-1325 flood-fills 4-connected cells of
 /// EQUAL type, and the see-in/out rule keys on the whole zone, so a merged one
 /// would let a model see out of a FOREIGN wood). DANGEROUS is open ground and
-/// never appears (`terrain_blocks_los` :1130-1133).
+/// never appears (`terrain_blocks_los` :1130-1133). The pre-3.6 reading, for
+/// callers that cannot know an epoch (the sight unit tests); a game asks `zones_of_at`.
 pub fn zones_of(t: &Terrain) -> Vec<Zone> {
+    zones_of_at(t, EPOCH_72_PLAYTEST_RULES)
+}
+
+/// `zones_of` as the game at `rules_epoch` reads the board: from `EPOCH_73_V36` a ruin is no volume.
+pub fn zones_of_at(t: &Terrain, rules_epoch: u32) -> Vec<Zone> {
     if !t.is_valid() {
         return Vec::new();
     }
     let cells: HashMap<(i64, i64), i32> = t
         .painted_cells()
-        .filter(|&(_, k)| volume_height_in(k) > 0.0)
+        .filter(|&(_, k)| volume_height_in(k) > 0.0 && !ruin_is_open(k, rules_epoch))
         .map(|(c, k)| ((c.0 - t.half_grid_cells(), c.1 - t.half_grid_cells()), k))
         .collect();
     let (mut seen, mut out) = (HashSet::new(), Vec::new());
@@ -493,11 +505,16 @@ pub fn zones_of(t: &Terrain) -> Vec<Zone> {
 /// placed shelf piece of the header as its own upright box of its type's height —
 /// `TerrainOverlay._sandbox_volumes` (:1283-1300). The header records no floor
 /// slabs (act_recorder.gd keeps c/he/yaw/type), so a multi-storey free ruin's
-/// upper floors are not here.
+/// upper floors are not here. The pre-3.6 reading; a game asks `zones_of_with_at`.
 pub fn zones_of_with(t: &Terrain, shelf: bool) -> Vec<Zone> {
-    let mut out = zones_of(t);
+    zones_of_with_at(t, shelf, EPOCH_72_PLAYTEST_RULES)
+}
+
+/// `zones_of_with` as the game at `rules_epoch` reads the board (a free ruin follows the painted one).
+pub fn zones_of_with_at(t: &Terrain, shelf: bool, rules_epoch: u32) -> Vec<Zone> {
+    let mut out = zones_of_at(t, rules_epoch);
     if shelf && t.is_valid() {
-        for s in t.sandbox().iter().filter(|s| volume_height_in(s.kind) > 0.0) {
+        for s in t.sandbox().iter().filter(|s| volume_height_in(s.kind) > 0.0 && !ruin_is_open(s.kind, rules_epoch)) {
             let solid = !(s.kind == terrain::FOREST || s.kind == terrain::RUINS);
             out.push(Zone::shelf_box(s.c, s.he, s.yaw, 0.0, volume_height_in(s.kind) * IN2M, solid));
         }
@@ -619,10 +636,15 @@ pub fn unit_sees(state: &State, zones: &[Zone], i: usize, j: usize) -> bool {
 /// GDScript writes `matrix[ok]` only where `other["player"] != su["player"]`,
 /// and `BattleSim.sees` reads an unlisted key as `true`. A dormant unit
 /// neither sees nor is seen there either (its whole row is `{}`), and `true`
-/// is what both readers already answer for one.
+/// is what both readers already answer for one. The pre-3.6 reading; a game asks `sight_matrix_at`.
 pub fn sight_matrix(state: &State, terrain: &Terrain) -> Vec<bool> {
+    sight_matrix_at(state, terrain, EPOCH_72_PLAYTEST_RULES)
+}
+
+/// `sight_matrix` as the game at `rules_epoch` reads the board (`zones_of_at`).
+pub fn sight_matrix_at(state: &State, terrain: &Terrain, rules_epoch: u32) -> Vec<bool> {
     let n = state.units();
-    let zones = zones_of(terrain);
+    let zones = zones_of_at(terrain, rules_epoch);
     let mut m = vec![true; n * n];
     for i in 0..n {
         for j in 0..n {
@@ -633,21 +655,6 @@ pub fn sight_matrix(state: &State, terrain: &Terrain) -> Vec<bool> {
         }
     }
     m
-}
-
-/// RED stub: the epoch-aware `sight_matrix`, still the pre-3.6 reading.
-pub fn sight_matrix_at(state: &State, terrain: &Terrain, _rules_epoch: u32) -> Vec<bool> {
-    sight_matrix(state, terrain)
-}
-
-/// RED stub: the epoch-aware `zones_of`, still the pre-3.6 reading.
-pub fn zones_of_at(t: &Terrain, _rules_epoch: u32) -> Vec<Zone> {
-    zones_of(t)
-}
-
-/// RED stub: the epoch-aware `zones_of_with`, still the pre-3.6 reading.
-pub fn zones_of_with_at(t: &Terrain, shelf: bool, _rules_epoch: u32) -> Vec<Zone> {
-    zones_of_with(t, shelf)
 }
 
 #[cfg(test)]
