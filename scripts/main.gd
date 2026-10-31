@@ -6078,6 +6078,11 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 			# BASE-EDGE strike reach (round 7, finding 3): the old centre-space count excluded big bases
 			# (walker/vehicle) from their own melee — the charger rolled nothing, only the defender struck.
 			melee_count = solo_controller.striking_models_for(member, enemy)
+			# MEL-02 (rules-must-log): when fewer models strike than are alive, say how many are in reach.
+			if melee_count < member.get_alive_count() and battle_log != null:
+				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %d of %d models are within %d\" and strike" % [
+					member.get_name(), melee_count, member.get_alive_count(),
+					int(SoloController.melee_reach_in())], true)
 		var scaled: Array = []
 		var growth_ap := int(_solo_growth_attack_bonus(member).get("ap", 0))   # Piercing Growth
 		# Unit-level grant (wave 5); coverage wave: DATA aliases (Warbound, Infected) via the
@@ -8109,6 +8114,9 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 				"Melee: %s → %s (%d+)" % [str(profile.get("name", "?")), defender.get_name(), to_hit])
 			if bool(profile.get("limited", false)):
 				solo_controller.mark_limited_used(group.get("member"), profile)   # once per game (wave 5)
+				if battle_log != null:   # MEL-02 rules-must-log: the melee spend names itself
+					battle_log.log_event(BattleLog.Category.COMBAT,
+						"%s (Limited) is used up in melee" % str(profile.get("name", "?")), true)
 			await _solo_hazardous_self_wounds(striker, profile, faces)   # resolver wave A: natural 1s wound the striker
 			# MEL-09: the hit-six rules read `hit_profile` (bonus hits) and `six_faces` (AP on 6s).
 			var hit_profile: Dictionary = profile

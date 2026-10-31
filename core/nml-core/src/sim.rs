@@ -5075,6 +5075,12 @@ fn strike_phase(
     }
     for (mi, sc, _) in &parts {
         let melee = &statics[next.roster.profile[*mi]].melee;
+        // MEL-02 (rules-must-log): the melee spend names the weapon, like the table's line.
+        for &k in &sc.keep {
+            if melee[k].limited {
+                shot.log.push(format!("{} (Limited) is used up in melee", melee[k].name));
+            }
+        }
         mark_spent_limited(melee, &sc.keep, &mut next.limited_used, *mi);
     }
     let mut caused = r.caused;
