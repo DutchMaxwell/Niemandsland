@@ -85,6 +85,7 @@
   "Evasive",
   "Evasive Aura",
   "Extended Buff Range",
+  "Extra Reach",
   "Fast",
   "Fast Aura",
   "Fatigue",
@@ -182,6 +183,9 @@
   "Piercing Assault",
   "Piercing Assault Aura",
   "Piercing Assault Buff",
+  "Piercing Charge",
+  "Piercing Charge Aura",
+  "Piercing Charge Buff",
   "Piercing Feat",
   "Piercing Fighter",
   "Piercing Fighter Aura",
@@ -669,6 +673,15 @@
     "requires_stationary": true
    }
   },
+  "Extra Reach": {
+   "primitive": "Royal Legion",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "range_bonus_in": 4,
+    "charge_mod": 2
+   }
+  },
   "Fast": {
    "primitive": "Fast",
    "rated": false,
@@ -820,6 +833,35 @@
    "params": {
     "move_bonus_in": 1,
     "scope": "unit"
+   }
+  },
+  "Piercing Charge": {
+   "primitive": "Piercing Assault",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "ap_bonus": 1,
+    "condition": "on_charge"
+   }
+  },
+  "Piercing Charge Aura": {
+   "primitive": "Aura Channel",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "grants": "Piercing Charge"
+   }
+  },
+  "Piercing Charge Buff": {
+   "primitive": "Utility Buff",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "grants_rule": "Piercing Charge",
+    "target": "friendly",
+    "max_targets": 1,
+    "range_in": 12,
+    "once": true
    }
   },
   "Precise": {
