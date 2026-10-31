@@ -87,6 +87,8 @@ pub enum Role {
     Ap,
     Defense,
     Speed,
+    /// Row DAT-17a: `Grant` minus the Regeneration grant, which waits for a wound (`spend_regen_grants`).
+    GrantNoRegen,
 }
 
 /// `AiSpell.mods_for` ai_spell.gd:364-400, one record.
@@ -103,6 +105,7 @@ pub fn matches(r: &LiveMod, role: Role, melee: bool) -> bool {
         Role::Morale => r.morale_mod != 0,
         Role::Grant => !r.attackers && !r.grants_rule.is_empty(),
         Role::GrantVs => r.attackers && !r.grants_rule.is_empty(),
+        Role::GrantNoRegen => !r.attackers && !r.grants_rule.is_empty() && &*r.grants_rule != "Regeneration",
         Role::Ap => !r.attackers && r.ap_mod != 0,
         Role::Defense => !r.attackers && (r.def_mod != 0 || r.defense_mod != 0),
         // NO `attackers` filter — this mirrors `AiSpell.mods_for`'s "speed"
@@ -313,4 +316,19 @@ pub fn spend_once(state: &mut State, i: usize, roles: &[Role], melee: bool) {
         state.buffs[u]
             .retain(|r| !(r.once && roles.iter().any(|&role| matches(r, role, melee))));
     }
+}
+
+/// Row DAT-17a: an exchange wounded `i`, so its once-grants of Regeneration are used up. Returns the spent records' names.
+pub fn spend_regen_grants(state: &mut State, i: usize) -> Vec<Rc<str>> {
+    let mut names = Vec::new();
+    for u in [Some(i), state.attached_to[i]].into_iter().flatten() {
+        state.buffs[u].retain(|r| {
+            let spent = r.once && !r.attackers && &*r.grants_rule == "Regeneration";
+            if spent {
+                names.push(r.name.clone());
+            }
+            !spent
+        });
+    }
+    names
 }

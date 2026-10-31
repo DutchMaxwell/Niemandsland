@@ -87,8 +87,7 @@ fn an_exchange_without_wounds_keeps_the_grant() {
     grant_regeneration(&mut st, 2);
     let quiet = (0..200)
         .map(|seed| (seed, run_at(&st, &statics, seed, EPOCH_73)))
-        .find(|(_, (next, shot))| wounds_taken(next) == 0 && !shot.rolls.is_empty());
-    let (seed, (next, shot)) = quiet.expect("some seed in 0..200 shoots without wounding the target");
-    assert_eq!(regen_rolls(&shot), 0, "seed {seed}: no wound reached the regeneration step");
+        .find(|(_, (next, shot))| wounds_taken(next) == 0 && regen_rolls(shot) == 0 && !shot.rolls.is_empty());
+    let (seed, (next, _)) = quiet.expect("some seed in 0..200 shoots without wounding the target");
     assert_eq!(next.buffs[2].len(), 1, "seed {seed}: the zero-wound exchange leaves the grant alone");
 }

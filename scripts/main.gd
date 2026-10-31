@@ -5554,7 +5554,10 @@ func _solo_spend_once_mods(uu: GameUnit, roles: Array, melee: bool) -> void:
 	var spent: Array = []
 	for role in roles:
 		for rd in AiSpell.mods_for(records, str(role), melee):
-			if str((rd as Dictionary).get("duration", "")) == "once" and not spent.has(rd):
+			# Row DAT-17a: from EPOCH_73_V36 a Regeneration grant is spent only once wounds reached its holder.
+			var waits: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
+					and str((rd as Dictionary).get("grants_rule", "")) == "Regeneration" and not bool(rd.get("used", false))
+			if str((rd as Dictionary).get("duration", "")) == "once" and not waits and not spent.has(rd):
 				spent.append(rd)
 	if spent.is_empty():
 		return
@@ -8815,6 +8818,11 @@ func _solo_apply_regeneration(target: GameUnit, wounds: int, from_spell: bool = 
 	_solo_takedown_solo = solo
 	var pick := _solo_regen_pick(target, from_spell)
 	_solo_takedown_solo = {}
+	# Row DAT-17a: wounds reaching the regeneration step (bypassed ones too) are the "use" of a once-grant of Regeneration.
+	if wounds + bypassed > 0 and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		for rd in _solo_mods_of_chain(target):
+			if str((rd as Dictionary).get("grants_rule", "")) == "Regeneration":
+				rd["used"] = true
 	var regen_target: int = int(pick.get("target", 0))
 	# Rules-must-log: the regen trace names the verdict (the Grounded
 	# Protection family's within-1" condition — fired or refused). Logged
