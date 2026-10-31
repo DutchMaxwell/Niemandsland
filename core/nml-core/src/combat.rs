@@ -562,6 +562,17 @@ pub fn cond_ap_why(condition: &str) -> &'static str {
     }
 }
 
+/// Rules 3.6 (`EPOCH_73_V36`) — the expected hits a Parry(X) defender takes off a strike:
+/// `min(X * living carrier models, expected hits) / 6`, each die cancelling a hit on 6+.
+/// 0 below the wave and for a unit without Parry (both feed the same `Ctx` stamps).
+fn parry_cancels(def: &Ctx, hits: f64) -> f64 {
+    if !def.v36_rules || def.parry_dice <= 0 {
+        return 0.0;
+    }
+    let dice = (def.parry_dice * def.models.max(0)) as f64;
+    dice.min(hits) / 6.0
+}
+
 /// `AiEv.profile_ev` ai_ev.gd:322-437 — both halves. `melee` is the GDScript's
 /// own derivation (`profile.range <= 0`, :330), never a caller's opinion;
 /// `charging` only ever reaches it from `melee_ev(.., true)`.
@@ -708,6 +719,15 @@ pub fn profile_ev(
         hits *= clampi(p.blast, 1, def.models.max(1)) as f64;
     }
     six_hits = six_hits.min(hits);
+    // --- Parry (rules 3.6, `EPOCH_73_V36`): the defender's dice cancel expected hits, the
+    // on-6 AP sub-batch first ("most dangerous first"); 0 below the wave. Melee only — the
+    // defender's Parry is a strike rule, never a volley one.
+    if melee {
+        let cancels = parry_cancels(def, hits);
+        let six_cut = cancels.min(six_hits);
+        six_hits -= six_cut;
+        hits -= cancels;
+    }
     // --- saves: Shielded, then Cover, then Guarded (ai_ev.gd:403-411) ---
     // Cover and Guarded are SHOOTING-only reads: the charge halves of both
     // live in the dice path only (a charge's `dist_in` reaches Versatile Attack alone).
@@ -850,8 +870,16 @@ pub fn impact_ev(att: &Ctx, def: &Ctx) -> f64 {
     }
     let p_hit = success_chance(IMPACT_HIT_TARGET);
     let defense = shielded_defense(def.defense, def.shielded_bonus(), def.def_floor());
-    let mut wounds = dice as f64 * p_hit * (1.0 - block_chance(defense, 0, false))
-        + heavy_dice as f64 * p_hit * (1.0 - block_chance(defense, 1, false));
+    // Rules 3.6 (`EPOCH_73_V36`) — Parry's expected cancels come off the Impact hits before the
+    // saves, the HEAVY pool first (the dice path's `parry_cancel` order, "most dangerous first").
+    let mut plain_hits = dice as f64 * p_hit;
+    let mut heavy_hits = heavy_dice as f64 * p_hit;
+    let cancels = parry_cancels(def, plain_hits + heavy_hits);
+    let heavy_cut = cancels.min(heavy_hits);
+    heavy_hits -= heavy_cut;
+    plain_hits -= (cancels - heavy_cut).min(plain_hits);
+    let mut wounds = plain_hits * (1.0 - block_chance(defense, 0, false))
+        + heavy_hits * (1.0 - block_chance(defense, 1, false));
     if def.regeneration {
         wounds *= 1.0 - success_chance(def.regen_target);
     }
