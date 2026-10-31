@@ -108,8 +108,8 @@ fn a_joined_hero_model_counts_at_epoch_73() {
 /// pushes our unit back.
 fn interleaved_gap(epoch: u32, enemy_vanguard: bool) -> f64 {
     let board = empty_board();
-    let ours_zone = Rect::new(-0.05, -0.35, 0.10, 0.30);
-    let enemy_zone = Rect::new(-0.05, 0.05, 0.10, 0.30);
+    let ours_zone = Rect::new(-0.05, -0.50, 0.10, 0.30);
+    let enemy_zone = Rect::new(-0.05, 0.20, 0.10, 0.30);
     let ours = vanguard_spec("ours");
     let enemy_spec = if enemy_vanguard { vanguard_spec("enemy") } else { plain_spec("enemy") };
     let out = deploy_interleaved_gated(
@@ -119,7 +119,7 @@ fn interleaved_gap(epoch: u32, enemy_vanguard: bool) -> f64 {
         &enemy_zone,
         [None, None],
         [None, None],
-        &[(0.0, 0.07)],
+        &[(0.0, 0.22)],
         &board,
         7,
         11,
