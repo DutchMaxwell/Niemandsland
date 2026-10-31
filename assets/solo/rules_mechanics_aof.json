@@ -177,6 +177,7 @@
   "Ossified",
   "Enhanced Ossified",
   "Enhanced Ossified Aura",
+  "Parry",
   "Pass Turn",
   "Phase Through",
   "Piercing Assault",
@@ -839,6 +840,14 @@
    "params": {
     "move_bonus_in": 1,
     "scope": "unit"
+   }
+  },
+  "Parry": {
+   "primitive": "Parry",
+   "rated": true,
+   "book_version": "3.6.0",
+   "params": {
+    "rating": "X"
    }
   },
   "Precise": {
