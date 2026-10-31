@@ -11473,6 +11473,25 @@ func solo_begin_targeting(unit: GameUnit, melee: bool) -> void:
 		battle_log.log_event(BattleLog.Category.GENERAL, "%s: pick a target (%s) — right-click cancels" % [unit.get_name(), ("melee" if melee else "shooting")])
 
 
+## Rules 3.6 Cumbersome (SHO-16): the unit carries the rule in a game at the 3.6 epoch — it may only Hold or Advance
+## and never shoots after it moved. Core twin: sim.rs `resolve_with` (the moved-volley stand-down).
+static func cumbersome_active(unit: GameUnit) -> bool:
+	return AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and RulesRegistry.unit_rule_active(unit, "Cumbersome")
+
+
+## Why `verb` is closed to a Cumbersome unit, or "" when it is open: Rush and Charge are out; an Advance still moves,
+## its shot stays shut (_solo_open_shot_pick).
+static func cumbersome_refusal(unit: GameUnit, verb: int) -> String:
+	if (verb == AiDecision.Action.RUSH or verb == AiDecision.Action.CHARGE) and cumbersome_active(unit):
+		return "Cumbersome: %s may only Hold or Advance" % unit.get_name()
+	return ""
+
+
+## The shot a Cumbersome unit does not get after moving: one battle-log line, the core's own words (sim.rs).
+func _log_cumbersome_no_shot(unit: GameUnit) -> void:
+	_log_rule_event(BattleLog.Category.COMBAT, "Cumbersome: %s moved, so it cannot shoot this activation" % unit.get_name(), true)
+
+
 ## A1 (NML-202, automodus PR 2) — the player's engine-executed activation entry (radial Charge /
 ## Advance & Shoot / Rush): the SAME guards as solo_begin_targeting, but the PICK closes into
 ## _run_player_intent instead of the manual attack flow — the engine moves the unit along a legal
@@ -11485,6 +11504,11 @@ func solo_begin_auto(unit: GameUnit, verb: int) -> void:
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.GENERAL,
 				"%s has already activated this round — one activation per unit (GF v3.5.1)" % unit.get_name())
+		return
+	var cumbersome_why := cumbersome_refusal(unit, verb)
+	if cumbersome_why != "":
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.GENERAL, cumbersome_why)
 		return
 	if await _solo_confirm_cast_first(unit):
 		solo_begin_cast(unit)
@@ -12118,6 +12142,9 @@ func _solo_auto_click(target: GameUnit) -> void:
 ## wears the highlighted one, and the pick waits for a click (Enter = the suggestion; right-click/Esc = no shot).
 ## False = no shot to pick (no Quick Shot, or nothing to light).
 func _solo_open_shot_pick(unit: GameUnit, verb: int) -> bool:
+	if cumbersome_active(unit):   # rules 3.6: it moved, so it does not shoot
+		_log_cumbersome_no_shot(unit)
+		return false
 	var quick := verb == AiDecision.Action.RUSH
 	# The test player_intent uses (solo_controller.gd), with no target yet: the rule active, or spell-granted.
 	if quick and not ((unit.has_special_rule("Quick Shot") and RulesRegistry.unit_rule_active(unit, "Quick Shot")) \
@@ -13316,6 +13343,11 @@ func _solo_volley_indirect(attacker: GameUnit, target: GameUnit) -> bool:
 
 func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Array = [], skip_named: bool = false) -> void:
 	if SoloController.combined_alive(attacker) <= 0 or SoloController.combined_alive(target) <= 0:
+		return
+	# Rules 3.6 Cumbersome: moved this round (the same moved_round stamp the drop writes) = no volley.
+	if cumbersome_active(attacker) and opr_army_manager != null \
+			and int(attacker.unit_properties.get("moved_round", -1)) == opr_army_manager.current_round:
+		_log_cumbersome_no_shot(attacker)
 		return
 	_solo_stage_begin("%s fires at %s" % [attacker.get_name(), target.get_name()])
 	# B11: ONE measuring truth — the shot distance (feeding the >9" Versatile/Guarded gates and the

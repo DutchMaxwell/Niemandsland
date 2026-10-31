@@ -8252,6 +8252,20 @@ fn resolve_with(
     // Quick Shot RUSH exactly as it already does to a moved ADVANCE.
     let quick_shot_active =
         statics[pi_s].quick_shot_active || mods::granted(&next, si, "Quick Shot");
+    // Rules 3.6 Cumbersome (SHO-16): a unit that moved fires no volley. The key
+    // is dropped here, so the Hit & Run shot leg below sees no attack either.
+    let shoot_key = if !shoot_key.is_empty()
+        && moved
+        && statics[pi_s].cumbersome
+        && rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36)
+    {
+        if let Some((_, shot)) = dice.as_mut() {
+            shot.log.push(format!("Cumbersome: {} moved, so it cannot shoot this activation", statics[pi_s].name));
+        }
+        String::new()
+    } else {
+        shoot_key
+    };
     if !shoot_key.is_empty() && (kind == HOLD || kind == ADVANCE || (kind == RUSH && quick_shot_active)) {
         // W1: the decline stands unless the caller has asked for the moving
         // shot, which is the other half of `Knobs::menu_wide` — the menu may
