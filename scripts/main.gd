@@ -8107,35 +8107,34 @@ func _solo_charge_leg_dist_in(charging: bool, charge_from_in: float) -> float:
 ## Rules 3.6 (EPOCH_73_V36) — one Parry event per strike: roll min(X * carrier models,
 ## hits) dice after every hit roll, then each 6+ cancels the highest-worth hit (AP plus
 ## the on-6 bonus). Only counts shrink; pass 2 keeps its own order.
-func _solo_parry_strike(pending: Array, defender: GameUnit, parry_dice: int, fixed_ap: int, charging: bool) -> void:
-	var taken := 0
-	for pend in pending: taken += int((pend as Array)[7])
-	var n := mini(parry_dice, taken)
-	if n <= 0: return
+func _solo_parry_strike(pending: Array, defender: GameUnit, parry_dice: int, fixed_ap: int, charging: bool) -> Array:
+	var n := mini(parry_dice, pending.reduce(func(acc, p): return acc + int((p as Array)[7]), 0))
+	var cuts: Array = []
+	for i in range(pending.size()): cuts.append([0, 0])
+	if n <= 0: return cuts
 	var faces: Array = await _solo_tray_roll(n, AiCombatMath.UNMODIFIED_SIX, _roller_label(defender), "parry", "%s Parry: %d dice (6+)" % [defender.get_name(), n])
 	var k: int = AiCombatMath.count_hits(faces, AiCombatMath.UNMODIFIED_SIX)
 	if battle_log != null: battle_log.log_event(BattleLog.Category.COMBAT, "Parry: %s rolls %d dice and cancels %d strike hits" % [defender.get_name(), n, k], true)
 	var regen := _solo_regen_target(defender)
 	var dctx := {"defense": _solo_defense_vs(defender, AiCombatMath.HIT_SOURCE_MELEE), "tough": _solo_unit_tough(defender), "regeneration": regen > 0, "regen_target": regen}
 	var cats: Array = []
-	for pend in pending:
-		var pen := pend as Array
+	for i in range(pending.size()):
+		var pen := pending[i] as Array
 		var hits := int(pen[7])
 		var sixes: int = mini(AiCombatMath.unmodified_sixes(pen[13] as Array), hits)
 		var prof: Dictionary = _solo_thrust_profile(pen[1] as Dictionary, charging).duplicate()
 		prof["ap"] = int(prof.get("ap", 0)) + fixed_ap + int(pen[9])
-		cats.append([AiCombatMath.hit_ev(prof, true, dctx), pen, sixes, true])
-		cats.append([AiCombatMath.hit_ev(prof, false, dctx), pen, hits - sixes, false])
+		cats.append([AiCombatMath.hit_ev(prof, true, dctx), i, sixes, true])
+		cats.append([AiCombatMath.hit_ev(prof, false, dctx), i, hits - sixes, false])
 	cats.sort_custom(func(a, b): return float(a[0]) > float(b[0]))
 	for c in cats:
+		var at: int = int((c as Array)[1])
 		var cut: int = mini(k, int((c as Array)[2]))
 		if cut <= 0: continue
-		var pen := (c as Array)[1] as Array
-		pen[7] = int(pen[7]) - cut
-		if bool((c as Array)[3]):
-			for i in range(cut): (pen[13] as Array).erase(AiCombatMath.UNMODIFIED_SIX)
+		cuts[at] = [cuts[at][0] + cut, cuts[at][1] + (cut if bool((c as Array)[3]) else 0)]
 		k -= cut
 		if k <= 0: break
+	return cuts
 
 
 func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: bool, filter: int, charge_from_in: float = 0.0) -> int:
@@ -8406,7 +8405,12 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 					for w in (m.source_data as OPRApiClient.OPRUnit).weapons:
 						if int(w.range_value) <= 0: rating = maxi(rating, AiShooting._rating_of(w, "Parry"))
 				m_parry += rating * maxi((m as GameUnit).get_alive_count(), 0)
-			if m_parry > 0: await _solo_parry_strike(m_pending, defender, m_parry, uf_ap + extra_ap, charging)
+			if m_parry > 0:
+				var cuts: Array = await _solo_parry_strike(m_pending, defender, m_parry, uf_ap + extra_ap, charging)
+				for i in range(m_pending.size()):
+					var pen := m_pending[i] as Array
+					pen[7] = int(pen[7]) - int(cuts[i][0])
+					for j in range(int(cuts[i][1])): (pen[13] as Array).erase(AiCombatMath.UNMODIFIED_SIX)
 		for pend in m_pending:
 			var group := pend[0] as Dictionary
 			var profile := pend[1] as Dictionary
