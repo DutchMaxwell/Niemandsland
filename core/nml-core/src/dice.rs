@@ -1424,8 +1424,13 @@ pub fn resolve_volley_leg(
             || att.unstoppable_grant
             || disintegrate_regen;
         // Rules-must-log: the refusal names the rule — the table's
-        // Bane-in-Melee arm's own line (main.gd:7175-7176).
-        if disintegrate_regen && w > 0 {
+        // Bane-in-Melee arm's own line (main.gd:7175-7176). DAT-16b: from rules 3.6
+        // the line is written only when the target really has a Regeneration-family
+        // roll to skip (the pool's own `regeneration` / `regen_target` seam); below
+        // 73 the old line stays byte-identical for replay.
+        if disintegrate_regen && w > 0
+            && (!att.v36_rules || (def.regeneration && def.regen_target > 0))
+        {
             out.log.push(format!("{}: Regeneration ignored", p.regen_bypass_rule));
         }
         // EPOCH 34 UNSTOPPABLE MARK — rules-must-log, the Regeneration half:
@@ -2246,8 +2251,11 @@ pub fn resolve_melee_leg(
                 || sh.att.unstoppable_regen_melee
                 || disintegrate_regen;
             // Rules-must-log: the refusal names the rule, the volley fold's
-            // twin (main.gd:7175-7176).
-            if disintegrate_regen && w > 0 {
+            // twin (main.gd:7175-7176). DAT-16b: same target gate as the ranged
+            // leg — from 73 only a real Regeneration roll is named.
+            if disintegrate_regen && w > 0
+                && (!sh.att.v36_rules || (def.regeneration && def.regen_target > 0))
+            {
                 out.log.push(format!("{}: Regeneration ignored", p.regen_bypass_rule));
             }
             // EPOCH 34 UNSTOPPABLE MARK — rules-must-log, the melee Regeneration
