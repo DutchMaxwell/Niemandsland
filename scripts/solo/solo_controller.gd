@@ -2630,6 +2630,11 @@ func execute_intent(intent: Dictionary, report: Dictionary) -> Dictionary:
 	report["dist_in"] = d2
 	report["charge_from_in"] = charge_from   # pre-move distance — the charge gates' measure (edge gap from 73)
 	report["moved"] = action != AiDecision.Action.HOLD   # Indirect's -1 to hit fires when shooting after moving
+	# Rules-must-log (DAT-16a): the AI's committed move names the move-band rules that widened it.
+	if bool(report["moved"]):
+		var widened := MovementRangeController.move_band_rule_names_for_props(unit.unit_properties)
+		if not widened.is_empty():
+			_rule_note(report, "%s: move bands widened by %s" % [unit.get_name(), ", ".join(widened)], true)
 	# Traversal (army-book: "May move through friendly and enemy units"): the move itself crossed bases
 	# the planner/gate would otherwise have routed around or clamped — that is invisible to the opponent,
 	# so it travels. Terrain and the rest-position spacing rule are both still enforced (unlike Flying),
@@ -12782,6 +12787,11 @@ func _try_place_reserve_unit(unit: GameUnit, arrival_zone: Rect2, occupied: Arra
 	if spot == Vector2.INF:
 		return false
 	_finish_reserve_arrival(unit, spot, occupied, radius, round_no)
+	# Rules-must-log (DAT-16a): an enemy's Repel Ambushers widened this arrival's no-go ring — name
+	# the rule and the unit that carries it, or the placement reads as an unexplained push-out.
+	var repel_note := _repel_ambush_note(unit, enemy_positions)
+	if not repel_note.is_empty():
+		last_arrival_note = repel_note if last_arrival_note.is_empty() else last_arrival_note + " · " + repel_note
 	var min_in: int = roundi(_reserve_min_enemy_dist_m(unit) / INCHES_TO_METERS)
 	# A beacon that stood near the chosen spot and did NOT apply is NAMED — a rule that quietly does
 	# nothing reads exactly like a broken one (rules-must-log).
@@ -12794,6 +12804,28 @@ func _try_place_reserve_unit(unit: GameUnit, arrival_zone: Rect2, occupied: Arra
 		"candidates": [], "chosen": "", "why": "ambush/infiltrate arrival (does not consume its activation)",
 		"data": {"round": round_no, "x_m": spot.x, "z_m": spot.y, "min_enemy_in": min_in}})
 	return true
+
+
+## Rules-must-log (DAT-16a): the line an arrival owes when an enemy's wider Repel Ambushers ring
+## steered it. Empty when no enemy entry carried a wider distance.
+func _repel_ambush_note(unit: GameUnit, enemy_positions: Array) -> String:
+	var wider := 0.0
+	for e in enemy_positions:
+		if e is Dictionary:
+			wider = maxf(wider, float((e as Dictionary).get("min_dist_m", 0.0)))
+	if wider <= 0.0 or army_manager == null:
+		return ""
+	var my_pid := int(unit.unit_properties.get("player_id", 0))
+	var carriers: Array = []
+	for u in army_manager.get_all_game_units():
+		var gu := u as GameUnit
+		if gu != null and gu != unit and gu.get_alive_count() > 0 and not unit_in_reserve(gu) \
+				and int(gu.unit_properties.get("player_id", 0)) != my_pid and repel_ambush_dist_m(gu) > 0.0:
+			carriers.append(gu.get_name())
+	if carriers.is_empty():
+		return ""
+	return "Repel Ambushers: %s keeps %s's arrival outside its %d\" ring" % [
+		", ".join(carriers), unit.get_name(), int(round(wider / INCHES_TO_METERS))]
 
 
 ## The shared tail of every reserve arrival: place the unit, book its footprint, clear the reserve flag
