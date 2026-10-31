@@ -1817,6 +1817,8 @@ mod v36_ux_17;
 mod v36_ux_19;
 mod v36_ux_21;
 mod v36_bg_03a;
+mod v36_bg_03a2;
+mod v36_bg_03a3;
 mod v36_bg_03c;
 mod v36_w1;
 mod v36_w1_5b;

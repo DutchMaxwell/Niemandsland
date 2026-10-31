@@ -1024,6 +1024,7 @@ mod v36_dat_16b;
 mod v36_melee;
 mod v36_melee_rows;
 mod v36_mor_05;
+mod v36_mor_05b;
 mod v36_mor_06;
 mod v36_mor_07;
 mod v36_mor_19;

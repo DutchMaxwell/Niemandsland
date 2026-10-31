@@ -2280,6 +2280,17 @@ func _act(unit: GameUnit) -> Dictionary:
 		action = AiDecision.Action.HOLD
 		do_shoot = shoot_range > 0
 		action_why = "%s hold-only" % hold_only_rule(unit.get_special_rules())
+	# Rules 3.6 (SHO-16) Cumbersome: Rush, Charge and every other move but a plain Advance are closed;
+	# a chosen Advance keeps its move and loses the shot. Holding stays open (it may shoot from here).
+	if cumbersome_active(unit) and action != AiDecision.Action.HOLD:
+		if action == AiDecision.Action.ADVANCE:
+			do_shoot = false
+			action_why = "Cumbersome: %s advances but fires nothing" % unit.get_name()
+		else:
+			action = AiDecision.Action.HOLD
+			do_shoot = shoot_range > 0
+			action_why = "Cumbersome: %s's move is cut to Hold" % unit.get_name()
+		_rule_note(report, "Cumbersome: %s may only Hold or take a plain Advance without a volley (rules 3.6)" % unit.get_name(), true)
 	# COMMANDER RANGED DISCIPLINE (AI plausibility Stage 4, Part B): a ranged-line unit with a clean shot is
 	# NOT dragged off it toward a marker it cannot seize this move — it holds and shoots (the Stage-3 firepower
 	# fix). Standing order, re-validated (continue while the shot holds, abort with a reason when it does not).
@@ -2342,6 +2353,18 @@ func _act(unit: GameUnit) -> Dictionary:
 			var held_by := hold_only_rule(unit.get_special_rules())
 			action_why = "%s hold-only (re-gated over the adopted plan)" % held_by
 			_rule_note(report, "%s: the adopted plan wanted to MOVE an %s unit — re-gated to Hold (GF v3.5.1 p.13/p.57)" % [unit.get_name(), held_by], true)
+		# Rules 3.6 (SHO-16) Cumbersome: the adopted plan obeys the same Hold-or-plain-Advance limit,
+		# and its advance carries no volley. The move survives, the illegal leg dies loudly.
+		if cumbersome_active(unit) and action != AiDecision.Action.HOLD:
+			if action == AiDecision.Action.ADVANCE:
+				do_shoot = false
+				action_why = "Cumbersome: adopted plan's advance carries no shot"
+			else:
+				action = AiDecision.Action.HOLD
+				do_shoot = shoot_range > 0
+				solver_used = false
+				action_why = "Cumbersome: adopted plan re-gated to Hold"
+			_rule_note(report, "Cumbersome: %s's adopted plan keeps only Hold or a plain Advance without a volley (rules 3.6)" % unit.get_name(), true)
 		# NML-1026 (body F2): the adopted plan may carry a CHARGE the tree's own
 		# rule gates just refused (they lived tree-side only). Re-gate here; an
 		# illegal charge becomes a RUSH toward the same enemy — the move
@@ -2661,6 +2684,7 @@ func execute_intent(intent: Dictionary, report: Dictionary) -> Dictionary:
 	# target; report["shoot_target"] drives the volley. A PLAYER intent never retargets (Automodus
 	# "target only"): the player chose ONE target, so out of reach means "no shot" with its reason.
 	if not bool(report["can_shoot"]) and shoot_range_in > 0 \
+			and not (cumbersome_active(unit) and action != AiDecision.Action.HOLD) \
 			and (action == AiDecision.Action.HOLD or action == AiDecision.Action.ADVANCE \
 				or (quick_shot and action == AiDecision.Action.RUSH)):
 		# _run_ai_shooting split-fires — each weapon picks its OWN in-range+LOS target — so opening the
@@ -2741,6 +2765,8 @@ func player_intent(unit: GameUnit, verb: int, target: GameUnit, point: Variant =
 		return {"refused": "Shaken — spends its activation idle (GF v3.5.1 p.10)"}
 	if forces_hold(unit.get_special_rules()) and hold_only_param(unit) and verb != AiDecision.Action.HOLD:
 		return {"refused": "may only use Hold actions (p.13)"}
+	if cumbersome_active(unit) and verb != AiDecision.Action.HOLD and verb != AiDecision.Action.ADVANCE:
+		return {"refused": "Cumbersome: may only Hold or Advance (rules 3.6)"}
 	if is_aircraft(unit) or _is_regiment(unit) or army_manager.transport_of(unit) != null:
 		return {"refused": "moves by hand in this version"}
 	var bands: Dictionary = move_bands_for_unit(unit, movement_range)
@@ -2780,7 +2806,7 @@ func player_intent(unit: GameUnit, verb: int, target: GameUnit, point: Variant =
 			do_shoot = false
 			extra["charge_band_in"] = charge_band_in
 		AiDecision.Action.ADVANCE:
-			do_shoot = shoot_range_in > 0.0
+			do_shoot = shoot_range_in > 0.0 and not cumbersome_active(unit)
 			band_in = advance
 		AiDecision.Action.RUSH:
 			do_shoot = false
@@ -8798,6 +8824,13 @@ static func forces_hold(unit_rules: Array) -> bool:
 	return hold_only_rule(unit_rules) != ""
 
 
+## Rules 3.6 (SHO-16) Cumbersome: on the map's rule entry, live from the 3.6 epoch on. Such a unit
+## may take Hold or a plain Advance and loses the volley after moving. Twin of the core's
+## `cumbersome_at` (menu.rs) and of main.gd's helper.
+static func cumbersome_active(unit: GameUnit) -> bool:
+	return AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and RulesRegistry.unit_rule_active(unit, "Cumbersome")
+
+
 ## The rule name that keeps a unit to Hold actions at the live rules epoch, or "" — the name the
 ## hold-only battle-log lines carry, so a rules 3.6 game never blames Artillery.
 static func hold_only_rule(unit_rules: Array) -> String:
@@ -8871,6 +8904,8 @@ static func shot_ignores_cover(profile: Dictionary, unit: GameUnit, held: bool =
 static func counter_strikes_first(unit: GameUnit) -> bool:
 	if unit == null:
 		return true
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and (unit.is_fatigued or unit.is_shaken):
+		return false
 	return bool(RulesRegistry.unit_param(unit, "Counter", "strikes_first", true))
 
 
@@ -11123,6 +11158,11 @@ static func scout_gap_in() -> float:
 	return 9.0 if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else 0.0
 
 
+## UX-14 (EPOCH_73_V36): the 9" Vanguard gap to enemy units that do not have Vanguard (deployment.rs).
+static func vanguard_gap_in() -> float:
+	return 9.0 if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else 0.0
+
+
 ## True when no candidate base clears the Scout gap (`enemy` = [{"pos", "radius"}]).
 static func scout_gap_clear(spot: Vector2, footprint: Array, base_r: float, enemy: Array) -> bool:
 	var gap := scout_gap_in() * INCHES_TO_METERS
@@ -11381,11 +11421,17 @@ func _deploy_place_id(id: int) -> GameUnit:
 	if RulesRegistry.unit_rule_active(unit, "Vanguard") \
 			or not RulesRegistry.unit_rules_of_primitive(unit, "Vanguard").is_empty():
 		var v_spot: Vector2
+		# UX-14: from 73 the free placement also keeps the 9" gap to non-Vanguard enemies.
+		var v_occ: Array = occupied
+		if not is_scout and vanguard_gap_in() > 0.0:
+			v_occ = occupied.duplicate()
+			for e in bases_of_slot(human_slot, null, false, true):
+				v_occ.append({"pos": e["pos"], "radius": vanguard_gap_in() * INCHES_TO_METERS + float(e["radius"])})
 		if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_16_FREE_PLACEMENT:
 			var push_m := float(RulesRegistry.unit_param(unit, "Vanguard", "place_in", 9.0)) * INCHES_TO_METERS
-			v_spot = _vanguard_free_place(spot, objectives, occupied, terrain_only, radius, footprint, base_r, push_m)
+			v_spot = _vanguard_free_place(spot, objectives, v_occ, terrain_only, radius, footprint, base_r, push_m)
 		else:
-			v_spot = _vanguard_push(unit, spot, zone, occupied, terrain_only, radius, footprint, base_r)
+			v_spot = _vanguard_push(unit, spot, zone, v_occ, terrain_only, radius, footprint, base_r)
 		if v_spot != spot:
 			_place_unit_at(unit, v_spot)
 			_deploy_zone_of.erase(unit)   # the placed spot MAY legally leave the zone
@@ -11397,6 +11443,8 @@ func _deploy_place_id(id: int) -> GameUnit:
 				rule_text = "Vanguard: after deploying, the unit may be placed within 9\" — pushed toward the enemy side"
 				chosen = "+%.1f\" forward" % (spot.distance_to(v_spot) / INCHES_TO_METERS)
 				why = "vanguard forward placement"
+			if vanguard_gap_in() > 0.0:
+				rule_text += ", more than %d\" from enemy units that do not have Vanguard" % int(vanguard_gap_in())
 			record_decision({"kind": "deploy", "unit": unit.get_name(), "unit_id": id,
 				"rule": rule_text,
 				"candidates": [], "chosen": chosen, "why": why,
@@ -11668,7 +11716,8 @@ static func _gate_in(v: float) -> String:
 
 
 ## Live bases of one slot's units on the table as [{"pos", "radius"}], optionally without one unit.
-func bases_of_slot(slot: int, except_unit: GameUnit = null, non_scout_only: bool = false) -> Array:
+func bases_of_slot(slot: int, except_unit: GameUnit = null, non_scout_only: bool = false,
+		non_vanguard_only: bool = false) -> Array:
 	var out: Array = []
 	if army_manager == null:
 		return out
@@ -11677,6 +11726,8 @@ func bases_of_slot(slot: int, except_unit: GameUnit = null, non_scout_only: bool
 		if gu == null or gu == except_unit or gu.get_alive_count() <= 0 or unit_in_reserve(gu):
 			continue
 		if non_scout_only and unit_has_scout(gu):
+			continue
+		if non_vanguard_only and unit_has_vanguard(gu):
 			continue
 		for m in gu.get_alive_models():
 			var mi := m as ModelInstance
@@ -12950,6 +13001,14 @@ static func unit_has_scout(gu: GameUnit) -> bool:
 			if str(granted).split("(")[0].strip_edges() == "Scout":
 				return true
 	return false
+
+
+## The Vanguard family test for the 3.6 gap (UX-14): the same registry gate the placement reads.
+static func unit_has_vanguard(gu: GameUnit) -> bool:
+	if gu == null:
+		return false
+	return RulesRegistry.unit_rule_active(gu, "Vanguard") \
+		or not RulesRegistry.unit_rules_of_primitive(gu, "Vanguard").is_empty()
 
 
 ## B8 (test game 2, ambush landed ON own units): live per-model no-go footprints of EVERY standing

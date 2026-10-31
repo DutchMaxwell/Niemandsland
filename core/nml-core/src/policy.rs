@@ -162,11 +162,25 @@ pub struct MenuTuple {
 /// (`LOS_NEAREST` ai_clone.gd:96), gathered once per activation — and
 /// `seen_of` is the TRUNCATED count, exactly as the GDScript reassigns
 /// `foes` before it reads its size.
+///
+/// The pre-3.6 reading of `seen` (a ruin blocks the centre line); a game asks `menu_tuples_at`.
 pub fn menu_tuples(
     state: &State,
     terrain: &Terrain,
     unit: usize,
     cands: &[Candidate],
+) -> Vec<MenuTuple> {
+    menu_tuples_at(state, terrain, unit, cands, crate::acts::EPOCH_72_PLAYTEST_RULES)
+}
+
+/// `menu_tuples` as the game at `rules_epoch` reads the board: from rules 3.6 a ruin no longer blocks the
+/// centre line the `seen` count probes, so a ruin no longer hides the foes behind it from the clone.
+pub fn menu_tuples_at(
+    state: &State,
+    terrain: &Terrain,
+    unit: usize,
+    cands: &[Candidate],
+    rules_epoch: u32,
 ) -> Vec<MenuTuple> {
     let mut row_of: HashMap<&str, i64> = HashMap::new();
     let mut row = 0i64;
@@ -206,7 +220,7 @@ pub fn menu_tuples(
             if terrain.is_valid() {
                 let d3 = geom::to_f32(dest);
                 seen = foes.iter()
-                    .filter(|(fp, _)| !terrain.los_blocked(d3, *fp))
+                    .filter(|(fp, _)| !terrain.los_blocked_at(d3, *fp, rules_epoch))
                     .count() as i64;
             }
             MenuTuple {
@@ -426,7 +440,8 @@ impl Policy {
             .map(|r| r.iter().map(|c| c.as_f64()).collect())
             .collect();
         let side = state.player[actor];
-        let tuples = menu_tuples(state, terrain, actor, menu);
+        let rules_epoch = statics.get(state.roster.profile[actor]).map_or(0, |s| s.rules_epoch);
+        let tuples = menu_tuples_at(state, terrain, actor, menu, rules_epoch);
         let phi = state_phi(&board, side, -1);
         let extras = self.net.extras();
         tuples

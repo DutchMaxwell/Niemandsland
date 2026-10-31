@@ -12,6 +12,7 @@
 
 use serde::Deserialize;
 
+use crate::acts::{rule_on, EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36};
 use crate::geom::V3;
 
 /// `TerrainRules.TerrainType` — terrain_rules.gd:24.
@@ -604,7 +605,16 @@ impl Terrain {
     /// `state["los_blocked"]`, read by `BattleSim._los_clear` on every scored
     /// candidate. An ABSENT board has no cells, so it answers "clear" for every
     /// pair — the same fall-open an invalid Callable gives `_los_clear`.
+    ///
+    /// The pre-3.6 reading, for callers that cannot know an epoch (the sight unit tests); a game asks
+    /// `los_blocked_at`.
     pub fn los_blocked(&self, a: V3, b: V3) -> bool {
+        self.los_blocked_at(a, b, EPOCH_72_PLAYTEST_RULES)
+    }
+
+    /// `los_blocked` as the game at `rules_epoch` reads the board (rules 3.6 = `EPOCH_73_V36`): a ruin still
+    /// gives cover but no longer BLOCKS the centre line, while a container and a forest block at every epoch.
+    pub fn los_blocked_at(&self, a: V3, b: V3, rules_epoch: u32) -> bool {
         // `Vector2(a.x / IN2M, a.z / IN2M)`: f64 divide, f32 store.
         let av = [(a[0] as f64 / crate::IN2M) as f32, (a[2] as f64 / crate::IN2M) as f32];
         let bv = [(b[0] as f64 / crate::IN2M) as f32, (b[2] as f64 / crate::IN2M) as f32];
@@ -626,7 +636,7 @@ impl Terrain {
                 continue;
             }
             let t = self.cells.get(&c).copied().unwrap_or(NONE);
-            if t == RUINS || t == CONTAINER || t == FOREST {
+            if (t == RUINS && !rule_on(rules_epoch, EPOCH_73_V36)) || t == CONTAINER || t == FOREST {
                 return true;
             }
         }

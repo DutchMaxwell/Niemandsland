@@ -33,10 +33,14 @@
   "Battleborn",
   "Blast",
   "Bloodborn",
+  "Bravery",
+  "Bravery Aura",
+  "Bravery Buff",
   "Enhanced Bloodborn",
   "Bounding",
   "Bounding Aura",
   "Brace",
+  "Brace in Melee",
   "Breath Attack",
   "Brutal Fighter",
   "Caster",
@@ -52,6 +56,9 @@
   "Enhanced Clan Warrior Aura",
   "Coordinate",
   "Counter",
+  "Counter in Melee",
+  "Counter in Melee Aura",
+  "Counter in Melee Buff",
   "Counter-Attack",
   "Counter-Attack Aura",
   "Courage Aura",
@@ -83,6 +90,7 @@
   "Evasive",
   "Evasive Aura",
   "Extended Buff Range",
+  "Extra Reach",
   "Fanatic",
   "Fast",
   "Fast Aura",
@@ -198,6 +206,8 @@
   "Pass Turn",
   "Piercing Assault",
   "Piercing Assault Aura",
+  "Piercing Charge",
+  "Piercing Charge Aura",
   "Piercing Debuff",
   "Piercing Fighter Aura",
   "Piercing Frenzy",
@@ -358,7 +368,9 @@
   "Teleport",
   "Teleport Aura",
   "Thrust",
+  "Thrust in Melee",
   "Thrust in Melee Aura",
+  "Thrust in Melee Buff",
   "Tough",
   "Transport",
   "Unique",
@@ -658,6 +670,42 @@
     "rating": "X"
    }
   },
+  "Brace in Melee": {
+   "primitive": "Brace",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "rating": 1,
+    "melee_only": true
+   }
+  },
+  "Bravery": {
+   "primitive": "Banner",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "morale_bonus": 1
+   }
+  },
+  "Bravery Aura": {
+   "primitive": "Banner",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "morale_bonus": 1
+   }
+  },
+  "Bravery Buff": {
+   "primitive": "Utility Buff",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "morale_mod": 1,
+    "range_in": 12,
+    "target": "friendly",
+    "once": true
+   }
+  },
   "Caster": {
    "primitive": "Caster",
    "rated": false,
@@ -677,6 +725,35 @@
    "params": {
     "strikes_first": true,
     "impact_reduction_per_model": 1
+   }
+  },
+  "Counter in Melee": {
+   "primitive": "Counter",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "strikes_first": true,
+    "melee_only": true
+   }
+  },
+  "Counter in Melee Aura": {
+   "primitive": "Aura Channel",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "grants": "Counter in Melee"
+   }
+  },
+  "Counter in Melee Buff": {
+   "primitive": "Utility Buff",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "grants_rule": "Counter in Melee",
+    "range_in": 12,
+    "target": "friendly",
+    "max_targets": 1,
+    "once": true
    }
   },
   "Crossing Attack": {
@@ -751,6 +828,15 @@
     "requires_hero": true,
     "excludes_spells": true,
     "hero_link_in": 0.0
+   }
+  },
+  "Extra Reach": {
+   "primitive": "Royal Legion",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "range_bonus_in": 4,
+    "charge_mod": 2
    }
   },
   "Fast": {
@@ -924,6 +1010,31 @@
    "book_version": "3.6.0",
    "params": {
     "rating": "X"
+   }
+  },
+  "Piercing Charge": {
+   "primitive": "Piercing Assault",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "ap_bonus": 1,
+    "condition": "on_charge"
+   }
+  },
+  "Piercing Charge Aura": {
+   "primitive": "Aura Channel",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "grants": "Piercing Charge"
+   }
+  },
+  "Piercing Marksman Aura": {
+   "primitive": "Aura Channel",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "grants": "Piercing Marksman"
    }
   },
   "Precise": {
@@ -1153,6 +1264,17 @@
     "hit_bonus": 1,
     "ap_bonus": 1,
     "charge_only": true
+   }
+  },
+  "Thrust in Melee": {
+   "primitive": "Thrust",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "hit_bonus": 1,
+    "ap_bonus": 1,
+    "charge_only": true,
+    "melee_only": true
    }
   },
   "Tough": {
@@ -2090,6 +2212,14 @@
      "surge_low": 5
     }
    },
+   "Enhanced Bloodborn Aura": {
+    "primitive": "Aura Channel",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants": "Enhanced Bloodborn"
+    }
+   },
    "Courage Aura": {
     "primitive": "Banner",
     "rated": false,
@@ -2292,6 +2422,14 @@
      "upgrades": "Bloodborn",
      "extra_attack": true,
      "surge_low": 5
+    }
+   },
+   "Enhanced Bloodborn Aura": {
+    "primitive": "Aura Channel",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants": "Enhanced Bloodborn"
     }
    },
    "Courage Aura": {
@@ -3203,6 +3341,14 @@
      "melee_floor_in": 6
     }
    },
+   "Enhanced Darkborn Aura": {
+    "primitive": "Aura Channel",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants": "Enhanced Darkborn"
+    }
+   },
    "Evasive": {
     "primitive": "Evasive",
     "rated": false,
@@ -3635,6 +3781,14 @@
      "floor_in": 6,
      "melee_move_penalty_in": 4,
      "melee_floor_in": 6
+    }
+   },
+   "Enhanced Darkborn Aura": {
+    "primitive": "Aura Channel",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants": "Enhanced Darkborn"
     }
    },
    "Evasive": {
@@ -9361,6 +9515,60 @@
      "melee_move_penalty_in": 2,
      "range_penalty_in": 4
     }
+   },
+   "Enhanced Shadowborn": {
+    "primitive": "Ranged Shrouding",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "range_penalty_in": 8,
+     "floor_in": 6,
+     "melee_move_penalty_in": 4,
+     "melee_floor_in": 6
+    }
+   },
+   "Enhanced Shadowborn Aura": {
+    "primitive": "Aura Channel",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants": "Enhanced Shadowborn"
+    }
+   },
+   "Enhanced Shadowborn Buff": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants_rule": "Enhanced Shadowborn",
+     "range_in": 12,
+     "target": "friendly",
+     "max_targets": 1,
+     "once": true
+    }
+   },
+   "Thrust in Melee": {
+    "primitive": "Thrust",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "hit_bonus": 1,
+     "ap_bonus": 1,
+     "charge_only": true,
+     "melee_only": true
+    }
+   },
+   "Thrust in Melee Buff": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants_rule": "Thrust",
+     "range_in": 12,
+     "target": "friendly",
+     "max_targets": 1,
+     "once": true
+    }
    }
   },
   "war_disciples": {
@@ -10179,6 +10387,14 @@
      "place_d3_plus": 0,
      "dice_count": 2
     }
+   },
+   "Enhanced Wolfborn Aura": {
+    "primitive": "Aura Channel",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants": "Enhanced Wolfborn"
+    }
    }
   },
   "wolf_prime_brothers": {
@@ -10438,6 +10654,14 @@
     "params": {
      "place_d3_plus": 0,
      "dice_count": 2
+    }
+   },
+   "Enhanced Wolfborn Aura": {
+    "primitive": "Aura Channel",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants": "Enhanced Wolfborn"
     }
    }
   },

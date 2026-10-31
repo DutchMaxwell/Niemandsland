@@ -422,6 +422,18 @@ pub fn block_chance(defense: i64, ap: i64, bane: bool) -> f64 {
     p.clamp(0.0, 1.0)
 }
 
+/// Rules 3.6 (`EPOCH_73_V36`) — expected wounds of ONE already-rolled hit: the save fails
+/// at that hit's AP, then Deadly's multiply and Regeneration's keep. Ranks Parry's cuts.
+pub fn hit_ev(p: &ShootProfile, hit_is_a_six: bool, def: &Ctx) -> f64 {
+    let ap = p.ap + if hit_is_a_six { p.on6_ap.max(if p.rending || p.destructive { RENDING_AP_BONUS } else { 0 }) } else { 0 };
+    let defense = shielded_defense(def.defense, def.shielded_bonus(), def.def_floor());
+    let deadly = if p.deadly > 0 { deadly_multiplier(p.deadly, def.tough.max(1)) as f64 } else { 1.0 };
+    let keep = if def.regeneration && !(p.bypass_regen || p.rending || p.unstoppable) {
+        1.0 - success_chance(def.regen_target)
+    } else { 1.0 };
+    (1.0 - block_chance(defense, fortified_ap(ap, def.fortified), p.bane)) * deadly * keep
+}
+
 /// `AiEv.versatile_best_mode` ai_ev.gd:454-462 — returns (hit_mod, ap).
 #[inline]
 pub fn versatile_best_mode(hit_target: i64, defense: i64, ap: i64, bane: bool) -> (i64, i64) {

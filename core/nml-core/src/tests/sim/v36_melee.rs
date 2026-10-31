@@ -115,3 +115,75 @@ mod mel_par_f5 {
         assert_eq!(ev_attacks(&st, &statics, EPOCH_72_PLAYTEST_RULES), vec![2, 1]);
     }
 }
+
+mod mel_02e {
+    //! MEL-02e: the charge EV skips a Limited weapon the unit already spent, from epoch 73.
+    use super::super::*;
+    use crate::acts::{EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36};
+    use crate::menu::{best_charge, Tuning};
+
+    fn limited_charge_line() -> (State, Vec<UnitStatic>) {
+        let (st, mut statics) = vr_charge_line(5.0);
+        statics[0].melee[0].limited = true;
+        (st, statics)
+    }
+
+    fn spend_blade(st: &mut State) {
+        Rc::make_mut(&mut st.limited_used)[0].push("Blade".into());
+    }
+
+    fn ev_set(st: &State, statics: &[UnitStatic], epoch: u32) -> (Vec<ShootProfile>, Vec<i64>) {
+        let mut sc = Scratch::default();
+        member_profiles_of(statics, st, 0, true, 0.0, Seams { rules_epoch: epoch, ..Seams::default() }, &mut sc);
+        (folded_slice(&statics[0].melee, &sc).to_vec(), sc.attacks)
+    }
+
+    fn charge(st: &State, statics: &[UnitStatic], epoch: u32) -> Option<usize> {
+        best_charge(st, &small_board(), statics, 0, &mut Scratch::default(), Tuning::default(), epoch, None)
+    }
+
+    /// RED: a spent Limited profile still brings its attacks to the EV set today.
+    #[test]
+    fn a_spent_limited_melee_profile_is_dropped_from_the_charge_ev_at_73() {
+        let (mut st, statics) = limited_charge_line();
+        spend_blade(&mut st);
+        let (profiles, attacks) = ev_set(&st, &statics, EPOCH_73_V36);
+        assert!(profiles.is_empty(), "the spent profile is gone from the EV set");
+        assert!(attacks.is_empty(), "and it brings no attacks");
+    }
+
+    /// CONTROL: an unspent Limited profile still prices normally at 73.
+    #[test]
+    fn an_unspent_limited_melee_profile_still_prices_at_73() {
+        let (st, statics) = limited_charge_line();
+        let (profiles, attacks) = ev_set(&st, &statics, EPOCH_73_V36);
+        assert_eq!(profiles.len(), 1);
+        assert_eq!(attacks, vec![8]);
+    }
+
+    /// The 72 leg is byte-exact: Limited never spanned melee there, so the spent name changes nothing.
+    #[test]
+    fn a_spent_limited_melee_profile_still_prices_at_72() {
+        let (mut st, statics) = limited_charge_line();
+        spend_blade(&mut st);
+        let (profiles, attacks) = ev_set(&st, &statics, EPOCH_72_PLAYTEST_RULES);
+        assert_eq!(profiles.len(), 1);
+        assert_eq!(attacks, vec![8]);
+    }
+
+    /// The menu's charge estimate: a spent-only Limited charger prices no charge at 73, but does at 72.
+    #[test]
+    fn the_charge_menu_skips_a_spent_limited_weapon_at_73_only() {
+        let (mut st, statics) = limited_charge_line();
+        spend_blade(&mut st);
+        assert_eq!(charge(&st, &statics, EPOCH_73_V36), None, "nothing left to strike with");
+        assert_eq!(charge(&st, &statics, EPOCH_72_PLAYTEST_RULES), Some(1), "the 72 leg still prices it");
+    }
+
+    /// CONTROL: an unspent Limited weapon still prices the charge at 73.
+    #[test]
+    fn the_charge_menu_prices_an_unspent_limited_weapon_at_73() {
+        let (st, statics) = limited_charge_line();
+        assert_eq!(charge(&st, &statics, EPOCH_73_V36), Some(1));
+    }
+}

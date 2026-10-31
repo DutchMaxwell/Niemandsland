@@ -15,6 +15,17 @@ const TABLE := Vector2(6, 4)   # feet
 const MID := Vector2i(15, 15)  # a cell near the middle of the 30x30 grid a 6x4 ft table spans
 const NONE := -999.0           # sentinel for "the registry did not publish this field at all"
 
+var _epoch0: int
+
+
+func before_test() -> void:
+	_epoch0 = AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
+
+
+func after_test() -> void:
+	AiActRecorder.rules_epoch = _epoch0   # statics leak across gdUnit tests - restore
+
 
 func _overlay() -> Node3D:
 	var o: Node3D = auto_free(OverlayScript.new())

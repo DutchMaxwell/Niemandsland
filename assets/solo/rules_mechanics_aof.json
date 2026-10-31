@@ -16,6 +16,9 @@
   "Ambush Aura",
   "Ambush Re-Deployment",
   "Angelic Blessing",
+  "Bravery",
+  "Bravery Aura",
+  "Bravery Buff",
   "Crossing Strike",
   "Enhanced Angelic Blessing",
   "Enhanced Angelic Blessing Buff",
@@ -39,6 +42,7 @@
   "Bounding",
   "Bounding Aura",
   "Brace",
+  "Brace in Melee",
   "Breath Attack",
   "Buccaneer",
   "Enhanced Buccaneer",
@@ -53,6 +57,7 @@
   "Coordinate",
   "Counter",
   "Counter in Melee",
+  "Counter in Melee Aura",
   "Counter-Attack",
   "Counter-Attack Aura",
   "Courage Aura",
@@ -86,6 +91,7 @@
   "Evasive",
   "Evasive Aura",
   "Extended Buff Range",
+  "Extra Reach",
   "Fast",
   "Fast Aura",
   "Fatigue",
@@ -185,6 +191,9 @@
   "Piercing Assault",
   "Piercing Assault Aura",
   "Piercing Assault Buff",
+  "Piercing Charge",
+  "Piercing Charge Aura",
+  "Piercing Charge Buff",
   "Piercing Feat",
   "Piercing Fighter",
   "Piercing Fighter Aura",
@@ -602,6 +611,42 @@
     "rating": "X"
    }
   },
+  "Brace in Melee": {
+   "primitive": "Brace",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "rating": 1,
+    "melee_only": true
+   }
+  },
+  "Bravery": {
+   "primitive": "Banner",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "morale_bonus": 1
+   }
+  },
+  "Bravery Aura": {
+   "primitive": "Banner",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "morale_bonus": 1
+   }
+  },
+  "Bravery Buff": {
+   "primitive": "Utility Buff",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "morale_mod": 1,
+    "range_in": 12,
+    "target": "friendly",
+    "once": true
+   }
+  },
   "Caster": {
    "primitive": "Caster",
    "rated": false,
@@ -634,10 +679,18 @@
   "Counter in Melee": {
    "primitive": "Counter",
    "rated": false,
-   "book_version": "3.5.1",
+   "book_version": "3.6.0",
    "params": {
     "strikes_first": true,
-    "impact_reduction_per_model": 1
+    "melee_only": true
+   }
+  },
+  "Counter in Melee Aura": {
+   "primitive": "Aura Channel",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "grants": "Counter in Melee"
    }
   },
   "Crossing Attack": {
@@ -700,6 +753,15 @@
     "hit_penalty": 2,
     "over_in": 9,
     "requires_stationary": true
+   }
+  },
+  "Extra Reach": {
+   "primitive": "Royal Legion",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "range_bonus_in": 4,
+    "charge_mod": 2
    }
   },
   "Fast": {
@@ -870,6 +932,35 @@
    "book_version": "3.6.0",
    "params": {
     "rating": "X"
+   }
+  },
+  "Piercing Charge": {
+   "primitive": "Piercing Assault",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "ap_bonus": 1,
+    "condition": "on_charge"
+   }
+  },
+  "Piercing Charge Aura": {
+   "primitive": "Aura Channel",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "grants": "Piercing Charge"
+   }
+  },
+  "Piercing Charge Buff": {
+   "primitive": "Utility Buff",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "grants_rule": "Piercing Charge",
+    "target": "friendly",
+    "max_targets": 1,
+    "range_in": 12,
+    "once": true
    }
   },
   "Precise": {

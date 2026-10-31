@@ -29,7 +29,7 @@
 use crate::combat::modified_hit_target;
 use crate::acts::{rule_on, EPOCH_73_V36};
 use crate::combat::{
-    cond_ap_why, conditional_ap_bonus, conditional_ap_bonus_vs, covered_defense, deadly_multiplier, fortified_ap, guarded_defense, CondApTarget,
+    cond_ap_why, conditional_ap_bonus, conditional_ap_bonus_vs, covered_defense, deadly_multiplier, fortified_ap, guarded_defense, hit_ev, CondApTarget,
     impact_total_dice, melee_hit_modifier, fold_hit, reliable_quality, save_target,
     shielded_defense, morale_target, shooting_hit_modifier, shrouded_reach, thrust_to_hit,
     versatile_best_mode, BEST_HIT_TARGET, FEARLESS_RECOVER_TARGET, HEAVY_IMPACT_AP,
@@ -38,6 +38,9 @@ use crate::combat::{
 };
 use crate::rng::GodotRng;
 use crate::unit::{CondAp, Ctx, ShieldedAlias, ShootProfile};
+
+/// One entry of the strike's pass-1 hit list (`resolve_melee_leg`'s `pending`).
+type Pending<'a> = (&'a Shooter<'a>, &'a ShootProfile, Vec<u8>, i64, i64, i64, bool, i64);
 
 /// One dice tray: the generator `seed_tray_rng` seeds, and nothing else.
 #[derive(Debug, Clone, Copy)]
@@ -139,7 +142,7 @@ pub struct ShootResult {
     /// Unsaved wounds after Deadly, Shred and Regeneration — handed to the
     /// trainer's OWN casualty machinery, which decides who dies.
     pub wounds: i64,
-    /// SHO-15a Scourge phantom wounds: never landed, only `sim::scourge_morale_trigger` reads them.
+    /// SHO-15a/15b Scourge phantom wounds: never landed. The shooting morale trigger and the melee winner tally read them.
     pub scourge_wounds: i64,
     /// D1-B5: wounds caused BEFORE Regeneration, which is the tally the table's
     /// melee-winner comparison runs on — `caused += w` sits inside the weapon
@@ -148,6 +151,11 @@ pub struct ShootResult {
     /// `wounds`; compare `caused`. Using the landed number instead lets a
     /// Regeneration roll decide who tests morale, which the table never does.
     pub caused: i64,
+    /// MEL-10r (`EPOCH_73_V36`) — the melee-winner tally as wounds actually TAKEN: like `caused`,
+    /// but a wound Regeneration (or its family) cancels does NOT count. On the 73 leg only; below
+    /// it `taken == caused` (the pre-Regeneration tally, pinned byte-exact). `caused` stays
+    /// pre-Regeneration so Regenerative Strength still sees what Regeneration ignored.
+    pub taken: i64,
     /// Every roll drawn, in draw order.
     pub rolls: Vec<Roll>,
     /// Table branches this port does NOT reproduce that THIS activation hit.
@@ -213,6 +221,7 @@ impl ShootResult {
     pub fn absorb(&mut self, other: ShootResult) -> i64 {
         self.rolls.extend(other.rolls);
         self.caused += other.caused;
+        self.taken += other.taken;
         self.log.extend(other.log);
         self.fortified_fired = self.fortified_fired || other.fortified_fired;
         self.bane_rerolled += other.bane_rerolled;
@@ -493,7 +502,8 @@ fn save_batch(
         }
     }
     let unsaved = (count - blocks_with_bane_from(&faces, &reroll, target, bane_from)).max(0);
-    // SHO-15a Scourge: the unmodified 1s on the FINAL faces (Shred's own read), counted, never landed.
+    // SHO-15a/15b Scourge: the unmodified 1s on the FINAL faces (Shred's own read), counted, never landed.
+    // The shooting morale trigger and the melee winner tally both read this one count.
     if p.rules.iter().any(|r| r.trim() == "Scourge") {
         out.scourge_wounds += shred_faces(&faces, &reroll, 1, target) * SCOURGE_PHANTOM_WOUNDS;
     }
@@ -1730,6 +1740,29 @@ fn fresh_save_ones(out: &ShootResult, idx: usize) -> i64 {
         .unwrap_or(0)
 }
 
+/// Rules 3.6 (`EPOCH_73_V36`) — one Parry event per strike: roll min(X * carrier models,
+/// hits) dice; each 6+ cancels the highest-worth hit (its own AP plus the on-6 bonus).
+pub(crate) fn parry_strike(pending: &mut [Pending<'_>], def: &Ctx, def_owner: &str, gated: bool, tray: &mut Tray, out: &mut ShootResult) {
+    let taken: i64 = pending.iter().map(|x| x.3).sum();
+    let n = if gated { (def.parry_dice * def.models).min(taken) } else { 0 };
+    if n <= 0 { return; }
+    let faces = tray.roll(n as usize);
+    let k = faces.iter().filter(|&&f| f >= 6).count() as i64;
+    out.rolls.push(Roll { kind: "parry", count: n, target: 6, faces, owner: def_owner.into() });
+    out.log.push(format!("Parry: {def_owner} rolls {n} dice and cancels {k} strike hits"));
+    let mut cand: Vec<(f64, usize, bool)> = Vec::new();
+    for (i, t) in pending.iter().enumerate() {
+        let (_sh, p, faces, hits, _, _, mute, _) = t;
+        let sixes_hit = if *mute { 0 } else { sixes(faces).min(*hits) };
+        for j in 0..*hits { cand.push((hit_ev(p, j < sixes_hit, def), i, j < sixes_hit)); }
+    }
+    cand.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+    for &(_, i, is_six) in cand.iter().take(k as usize) {
+        pending[i].3 -= 1;
+        if let Some(pos) = if is_six { pending[i].2.iter().position(|&f| f == 6) } else { None } { pending[i].2.remove(pos); }
+    }
+}
+
 /// ONE melee strike phase on the tray — `main._solo_melee_strike_phase` :5941,
 /// in its own draw order (main.gd line in brackets):
 ///
@@ -1803,7 +1836,7 @@ pub fn resolve_melee_with_tray(
 ) -> ShootResult {
     resolve_melee_leg(
         strikers, def, def_owner, charging, cond_ap_dice, shred_alias_dice,
-        false, 0.0, false, false, false, false, tray,
+        false, 0.0, false, false, false, false, false, tray,
     )
 }
 
@@ -1826,6 +1859,8 @@ pub fn resolve_melee_leg(
     hits_first: bool,
     // EPOCH_73_V36 (row MEL-09) — a fatigued striker's sixes fire no rule (see `trig` below).
     fatigue_mutes_sixes: bool,
+    // MEL-10r (`EPOCH_73_V36`) — the melee tally counts only wounds Regeneration did NOT cancel.
+    tally_post_regen: bool,
     tray: &mut Tray,
 ) -> ShootResult {
     // The alias's charged leg fires on the CHARGER's strikes only — a
@@ -2049,7 +2084,8 @@ pub fn resolve_melee_leg(
             }
             pending.push((sh, p, faces, hits, count_target, versatile_ap, mute, n));
         }
-        // MEL-07c hook — Parry reads `pending` here: every hit rolled, no save yet.
+        // MEL-07c — one Parry event per strike, after every hit roll and before any save.
+        parry_strike(&mut pending, def, def_owner, hits_first, tray, &mut out);
         for (sh, p, faces, hits, count_target, versatile_ap, mute, n) in pending {
             let on6 = if mute {
                 0
@@ -2263,7 +2299,10 @@ pub fn resolve_melee_leg(
         out.log.push(shielded_alias_line(def, def_owner));
     }
     out.caused += regen_proof + regenable + out.deadly_tally;
-    out.wounds += regen_proof + regen_batch(regenable, def, def_owner, tray, &mut out.rolls);
+    let landed_regenable = regen_batch(regenable, def, def_owner, tray, &mut out.rolls);
+    out.wounds += regen_proof + landed_regenable;
+    // MEL-10r — a wound Regeneration cancels is not TAKEN: the 73 tally counts what landed.
+    out.taken = if tally_post_regen { out.wounds + out.deadly_tally } else { out.caused };
     out
 }
 

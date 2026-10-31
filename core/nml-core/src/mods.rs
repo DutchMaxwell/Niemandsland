@@ -308,9 +308,19 @@ pub fn solo_move_grants(state: &State, i: usize, rules_epoch: u32) -> Vec<&'stat
 /// AND its host that matches one of `roles` goes. Removing the record IS the
 /// grant revocation here: this port keeps no second overlay to strip.
 pub fn spend_once(state: &mut State, i: usize, roles: &[Role], melee: bool) {
+    spend_once_except(state, i, roles, melee, |_| false);
+}
+
+/// `spend_once` with a keep predicate: a record the predicate accepts survives
+/// the spend. The 3.6 Great Banner skip uses it so a one-shot the test never
+/// counted is not burned by that test (MOR-19).
+pub fn spend_once_except(
+    state: &mut State, i: usize, roles: &[Role], melee: bool, keep: impl Fn(&LiveMod) -> bool,
+) {
     let host = state.attached_to[i];
     for u in [Some(i), host].into_iter().flatten() {
-        state.buffs[u]
-            .retain(|r| !(r.once && roles.iter().any(|&role| matches(r, role, melee))));
+        state.buffs[u].retain(|r| {
+            !(r.once && roles.iter().any(|&role| matches(r, role, melee)) && !keep(r))
+        });
     }
 }
