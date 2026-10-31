@@ -6673,7 +6673,7 @@ fn pair_dist_memo(n: usize, e: usize, m: usize, a: &[[f64; 3]], b: &[[f64; 3]]) 
     })
 }
 
-fn reply_threat_core(statics: &[UnitStatic], state: &State, player: i64, rules_epoch: u32, o: ReplyOpts) -> Vec<f64> {
+pub(crate) fn reply_threat_core(statics: &[UnitStatic], state: &State, player: i64, rules_epoch: u32, o: ReplyOpts) -> Vec<f64> {
     reply_threat_core_with(statics, state, player, rules_epoch, o, !trace_rules_on())
 }
 
@@ -6701,7 +6701,12 @@ fn reply_threat_core_with(
         {
             continue;
         }
-        let movable = !(o.hold_gate && crate::menu::holds_only(state, statics, e));
+        // Rules 3.6 (SHO-16): a Cumbersome enemy may neither charge nor
+        // advance-and-shoot, so it is not `movable` for those two legs; the
+        // standing volley above stays.
+        let cumbersome = statics.get(state.roster.profile[e]).is_some_and(|s| s.cumbersome)
+            && rule_on(rules_epoch, crate::acts::EPOCH_73_V36);
+        let movable = !(o.hold_gate && crate::menu::holds_only(state, statics, e)) && !cumbersome;
         let mut best_key: Option<usize> = None;
         let mut best_ev = 0.0f64;
         for m in 0..n {
