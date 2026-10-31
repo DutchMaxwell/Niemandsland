@@ -5638,7 +5638,7 @@ fn tray_morale(
 /// `tray_morale` with its cause: `None` = shooting or melee, `Some(rule)` =
 /// any other rule that forced the test (`drop_banner_for_cause`).
 #[allow(clippy::too_many_arguments)]
-fn tray_morale_for(
+pub(crate) fn tray_morale_for(
     state: &mut State, statics: &[UnitStatic], i: usize, melee: bool, cause: Option<&str>,
     seams: Seams, tray: &mut Tray, shot: &mut ShootResult,
 ) {
