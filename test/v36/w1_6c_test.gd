@@ -5,6 +5,7 @@ extends GdUnitTestSuite
 ## primitive and params the 3.5 entry had, a carried form hands out the 3.6 base name, and the 3.5
 ## name is gone from the map. Every case reads the real maps through RulesRegistry.
 
+## DAT-12b drops the distance gate from these 3.6 entries, so CASES carries no over_in.
 ## The batch's 3.6 names next to the 3.5 names they replace.
 const RENAMED := {
 	"Enhanced Hive Bond": "Hive Bond Boost",
@@ -27,9 +28,9 @@ const RENAMED := {
 const CASES := [
 	["gf", "machine_cults", "Enhanced Machine-Fog", "Evasive", {"hit_penalty": 1.0}],
 	["gf", "infected_colonies", "Enhanced Infected", "Shred",
-		{"upgrades": "Infected", "extra_wound_per_save_one": 1.0, "save_fail_max": 2.0, "over_in": 9.0}],
+		{"upgrades": "Infected", "extra_wound_per_save_one": 1.0, "save_fail_max": 2.0}],
 	["gf", "alien_hives", "Enhanced Hive Bond", "Banner", {"morale_bonus": 2.0, "trigger": "combat"}],
-	["aof", "halflings", "Enhanced Lucky", "Surge", {"upgrades": "Lucky", "surge_low": 5.0, "over_in": 9.0}],
+	["aof", "halflings", "Enhanced Lucky", "Surge", {"upgrades": "Lucky", "surge_low": 5.0}],
 	["aof", "human_empire", "Enhanced Hold the Line Buff", "Utility Buff",
 		{"grants_rule": "Enhanced Hold the Line", "target": "friendly", "max_targets": 1.0,
 		"range_in": 12.0, "once": true}],

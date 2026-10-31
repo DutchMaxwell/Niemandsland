@@ -6,6 +6,7 @@ extends GdUnitTestSuite
 ## spell that granted the 3.5 name grants the 3.6 one. Every case reads the real maps through
 ## RulesRegistry / SpellsRegistry.
 
+## DAT-12b drops the distance gate from these 3.6 entries, so CASES carries no over_in.
 ## The batch's 3.6 names next to the 3.5 names they replace.
 const RENAMED := {
 	"Enhanced Targeting Visor": "Targeting Visor Boost",
@@ -29,12 +30,12 @@ const RENAMED := {
 const CASES := [
 	["gf", "dao_union", "Enhanced Targeting Visor", "Shot Modifier", {"hit_bonus": 1.0}],
 	["gf", "war_disciples", "Enhanced Warbound", "Shred",
-		{"extra_wound_save_low": 2.0, "over_in": 9.0, "upgrades": "Warbound"}],
+		{"extra_wound_save_low": 2.0, "upgrades": "Warbound"}],
 	["aof", "chivalrous_kingdoms", "Enhanced Vale Oath", "Battleborn",
 		{"recover_target": 3.0, "upgrades": "Vale Oath"}],
 	["aof", "deep_sea_elves", "Enhanced Wave-Step", "Bounding", {"place_die": "2d3", "upgrades": "Wave-Step"}],
 	["aof", "duchies_of_vinci", "Enhanced Vinci Tech", "Versatile Attack",
-		{"ap_bonus": 1.0, "hit_bonus": 1.0, "over_in": 9.0, "pick_one": false}],
+		{"ap_bonus": 1.0, "hit_bonus": 1.0, "pick_one": false}],
 	["aof", "eternal_wardens", "Enhanced Warden Aura", "Aura Channel", {"grants": "Enhanced Warden"}],
 	["aof", "wood_elves", "Enhanced Wild Veil", "Ranged Shrouding", {"range_penalty_in": 8.0,
 		"floor_in": 6.0, "melee_move_penalty_in": 4.0, "melee_floor_in": 6.0}],

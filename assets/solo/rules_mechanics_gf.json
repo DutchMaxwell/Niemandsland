@@ -1971,8 +1971,7 @@
     "book_version": "3.5.3",
     "params": {
      "upgrades": "Devout",
-     "surge_low": 5,
-     "over_in": 9
+     "surge_low": 5
     }
    },
    "Enhanced Devout Aura": {
@@ -4749,7 +4748,6 @@
     "book_version": "3.5.3",
     "params": {
      "reroll_save_low": 5,
-     "over_in": 9,
      "bypass_regen": false,
      "upgrades": "Mischievous"
     }
@@ -5913,8 +5911,7 @@
     "params": {
      "upgrades": "Infected",
      "extra_wound_per_save_one": 1,
-     "save_fail_max": 2,
-     "over_in": 9
+     "save_fail_max": 2
     }
    },
    "Enhanced Infected Aura": {
@@ -6184,7 +6181,6 @@
      "upgrades": "Scrapper",
      "reroll_save_sixes": true,
      "reroll_save_from": 5,
-     "over_in": 9,
      "bypass_regen": false
     }
    },
@@ -7221,8 +7217,7 @@
     "book_version": "3.5.3",
     "params": {
      "upgrades": "Ferocious",
-     "surge_low": 5,
-     "over_in": 9
+     "surge_low": 5
     }
    },
    "Enhanced Ferocious Aura": {
@@ -9428,7 +9423,6 @@
     "book_version": "3.5.2",
     "params": {
      "extra_wound_save_low": 2,
-     "over_in": 9,
      "upgrades": "Warbound"
     }
    }
@@ -9753,7 +9747,6 @@
     "book_version": "3.5.3",
     "params": {
      "extra_wound_save_low": 2,
-     "over_in": 9,
      "upgrades": "Warbound"
     }
    },
@@ -11462,7 +11455,6 @@
     "book_version": "3.5.3",
     "params": {
      "extra_wound_save_low": 2,
-     "over_in": 9,
      "upgrades": "Warbound"
     }
    },
