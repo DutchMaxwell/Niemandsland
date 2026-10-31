@@ -68,8 +68,8 @@ fn build_menu(st: &State, statics: &[UnitStatic]) -> Vec<Candidate> {
     candidates_tuned(st, &Terrain::default(), statics, 0, &mut sc, Tuning::default())
 }
 
-fn fingerprint(menu: &[Candidate]) -> Vec<(i64, Option<[f64; 3]>, Option<String>, Option<String>)> {
-    menu.iter().map(|c| (c.kind, c.dest, c.shoot.clone(), c.charge.clone())).collect()
+fn fingerprint(menu: &[Candidate]) -> Vec<String> {
+    menu.iter().map(|c| format!("{c:?}")).collect()
 }
 
 /// Control: rules 3.5 has no Cumbersome, so the menu still offers a RUSH.
