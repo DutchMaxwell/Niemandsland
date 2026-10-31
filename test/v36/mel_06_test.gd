@@ -12,7 +12,7 @@ const COUNTER_BUFF_PARAMS := {"grants_rule": "Counter in Melee", "range_in": 12.
 	"max_targets": 1.0, "once": true}
 const BRACE_PARAMS := {"rating": 1.0, "melee_only": true}
 const THRUST_PARAMS := {"hit_bonus": 1.0, "ap_bonus": 1.0, "charge_only": true, "melee_only": true}
-const THRUST_BUFF_PARAMS := {"grants_rule": "Thrust in Melee", "range_in": 12.0, "target": "friendly",
+const THRUST_BUFF_PARAMS := {"grants_rule": "Thrust", "range_in": 12.0, "target": "friendly",
 	"max_targets": 1.0, "once": true}
 
 ## [system, book, name, primitive, params] - the complete set of entries this row adds.
