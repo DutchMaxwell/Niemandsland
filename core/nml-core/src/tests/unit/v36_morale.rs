@@ -57,3 +57,71 @@ mod mor_12 {
         }
     }
 }
+
+use super::*;
+use crate::acts::{EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36};
+
+/// Row MOR-02 (ruling D-MOST): a squad of `models` models carrying `special` (a JSON list) with
+/// the joined heroes `heroes` (a JSON list of rule lists), built at `epoch` for (gf, `faction`).
+/// Answers the stamped Regeneration-family read: (rolls at all, the ignore target).
+fn regen_of(faction: &str, special: &str, heroes: &str, models: i64, epoch: u32) -> (bool, i64) {
+    let tpl = r#"{"kind":"header","knobs":{},"profiles":{
+      "rg":{"unit_id":"rg","name":"Regen Squad","quality":4,
+        "defense":4,"tough":1,"wounds_max":WOUNDS,"model_count":MODELS,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"FACTION",
+        "special_rules":SPECIAL,"item_grants":[],
+        "attached_hero_rules":HEROES,"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]}}}"#
+        .replace("WOUNDS", &format!("{:?}", vec![1; models as usize]))
+        .replace("MODELS", &models.to_string())
+        .replace("FACTION", faction)
+        .replace("SPECIAL", special)
+        .replace("HEROES", heroes);
+    let header = read_act_header(&tpl).expect("header");
+    let mut reg = Registries::new(&repo_root());
+    let us = UnitStatic::build_for(&mut reg, header.profiles.get("rg").expect("rg"), epoch);
+    (us.ctx.regeneration, us.ctx.regen_target)
+}
+
+const PLAIN_HERO: &str = r#"[["Hero"]]"#;
+
+/// Self-Repair and the "most models" family names (Plaguebound here) hold for a three-model
+/// squad whose joined hero lacks them; a Boost off that list still needs every model, so the
+/// Plaguebound squad keeps 6+ instead of the Boost's 5+.
+#[test]
+fn self_repair_and_plaguebound_roll_with_a_joined_hero_without_them_at_epoch_73() {
+    let sr = regen_of("robot_legions", r#"["Self-Repair"]"#, PLAIN_HERO, 3, EPOCH_73_V36);
+    assert_eq!(sr, (true, 6), "Self-Repair: 3 of 4 models carry it");
+    let pb = regen_of("plague_disciples", r#"["Plaguebound","Plaguebound Boost"]"#, PLAIN_HERO, 3, EPOCH_73_V36);
+    assert_eq!(pb, (true, 6), "Plaguebound holds on most models; its Boost still needs all of them");
+}
+
+/// Control: below the 3.6 epoch a joined hero without the rule still switches it off.
+#[test]
+fn self_repair_and_plaguebound_need_every_model_at_epoch_72() {
+    let sr = regen_of("robot_legions", r#"["Self-Repair"]"#, PLAIN_HERO, 3, EPOCH_72_PLAYTEST_RULES);
+    assert!(!sr.0, "Self-Repair at 72: the hero withholds it");
+    let pb = regen_of("plague_disciples", r#"["Plaguebound","Plaguebound Boost"]"#, PLAIN_HERO, 3, EPOCH_72_PLAYTEST_RULES);
+    assert!(!pb.0, "Plaguebound at 72: the hero withholds it");
+}
+
+/// One Regeneration model plus a joined hero without it is an exact half: no roll.
+#[test]
+fn a_regeneration_tie_with_a_joined_hero_is_off_at_epoch_73() {
+    assert!(!regen_of("robot_legions", r#"["Regeneration"]"#, PLAIN_HERO, 1, EPOCH_73_V36).0);
+}
+
+/// Control: below the 3.6 epoch the core reads the host's own Regeneration alone.
+#[test]
+fn a_regeneration_tie_with_a_joined_hero_rolls_at_epoch_72() {
+    assert_eq!(regen_of("robot_legions", r#"["Regeneration"]"#, PLAIN_HERO, 1, EPOCH_72_PLAYTEST_RULES), (true, 5));
+}
+
+/// Regeneration on most models keeps its roll; a Regeneration hero in a plain squad of three is
+/// one model of four, so it gives the squad none (the core never read the hero; the table did).
+#[test]
+fn regeneration_counts_most_models_at_epoch_73() {
+    assert_eq!(regen_of("robot_legions", r#"["Regeneration"]"#, PLAIN_HERO, 3, EPOCH_73_V36), (true, 5));
+    let hero_only = regen_of("robot_legions", "[]", r#"[["Hero","Regeneration"]]"#, 3, EPOCH_73_V36);
+    assert!(!hero_only.0, "1 of 4 models carry Regeneration");
+}

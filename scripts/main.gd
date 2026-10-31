@@ -6416,6 +6416,13 @@ func _solo_models_with_rule(unit: GameUnit, rule: String) -> Vector2i:
 	return counts
 
 
+## Row MOR-02: the Regeneration family's whole-unit read (most models from EPOCH_73_V36, AiEv.regen_family_on)
+## with the same Takedown unit-of-[1] collapse as _solo_rule_on_all_models.
+func _solo_regen_family_on(unit: GameUnit, rule: String) -> bool:
+	return AiEv.regen_family_on(unit, rule,
+		not _solo_takedown_solo.is_empty() and unit != null and unit == _solo_takedown_solo.get("unit"))
+
+
 ## The over-9" +1-defense rule a target projects ("" when none): Guarded (unconditional), or a
 ## Versatile Defense unit (wahl-effect wave — official text: "pick one effect: when shot or charged
 ## from over 9\" away, the unit either gets +1 to defense rolls, or enemy units get -1 to hit rolls
@@ -8766,7 +8773,7 @@ func _solo_regen_pick(target: GameUnit, from_spell: bool = false) -> Dictionary:
 	if _solo_has_regeneration(target):
 		best = int(RulesRegistry.unit_param(target, "Regeneration", "ignore_target", 5))
 		best_name = "regeneration"
-	if _solo_rule_on_all_models(target, "Self-Repair"):
+	if _solo_regen_family_on(target, "Self-Repair"):
 		var sr := int(RulesRegistry.unit_param(target, "Self-Repair", "ignore_target", 6))
 		if best == 0 or sr < best:
 			best = sr
@@ -8793,7 +8800,7 @@ func _solo_regen_pick(target: GameUnit, from_spell: bool = false) -> Dictionary:
 		if n == "Regeneration" or n == "Self-Repair" or n == "Resistance":
 			continue   # the named forms above stay the one truth
 		var params: Dictionary = ed.get("params", {})
-		if bool(params.get("all_models", false)) and not _solo_rule_on_all_models(target, n):
+		if bool(params.get("all_models", false)) and not _solo_regen_family_on(target, n):
 			continue
 		var terr_in := float(params.get("terrain_within_in", 0.0))
 		if terr_in > 0.0 and not _solo_majority_in_cover(target):
@@ -8807,10 +8814,14 @@ func _solo_regen_pick(target: GameUnit, from_spell: bool = false) -> Dictionary:
 			best_name = n
 			best_terr = terr_in
 	var trace := ""
+	var best_rule: String = {"regeneration": "Regeneration", "self-repair": "Self-Repair"}.get(best_name, best_name)
 	if best_name != "" and best_terr > 0.0:
 		trace = "%s: within %d\" of terrain -> Regeneration %d+" % [best_name, int(best_terr), best]
 	elif open_refused != "":
 		trace = "%s: in the open -> no Regeneration" % open_refused
+	elif best_name != "" and _solo_regen_family_on(target, best_rule) and not _solo_rule_on_all_models(target, best_rule):
+		# Rules-must-log (row MOR-02): the most-models read kept the roll although not every model carries it.
+		trace = "%s: most models carry it, so a joined hero without it does not switch it off" % best_rule
 	return {"target": best, "name": best_name, "trace": trace}
 
 
@@ -9426,6 +9437,10 @@ func _solo_has_regeneration(unit: GameUnit) -> bool:
 	# medic hero joined to a plain squad nor a bearer standing next to the victim may hand him an ignore roll
 	# a unit of [1] never earns; the unit's own rules still apply, because they ARE the picked model's.
 	var solo: bool = not _solo_takedown_solo.is_empty() and unit != null and unit == _solo_takedown_solo.get("unit")
+	# Row MOR-02 (D-MOST): from EPOCH_73_V36 plain Regeneration counts most models; Medical Training keeps any bearer.
+	var v36 := AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
+	if v36 and _solo_regen_family_on(unit, "Regeneration"):
+		return true
 	var members: Array = [unit]
 	if not solo and unit.has_method("get_attached_heroes"):
 		members = members + unit.get_attached_heroes()
@@ -9434,13 +9449,13 @@ func _solo_has_regeneration(unit: GameUnit) -> bool:
 		if member == null:
 			continue
 		for r in member.get_special_rules():
-			if _solo_is_regen_rule(str(r)):
+			if _solo_is_regen_rule(str(r)) and not (v36 and GameUnit.rule_name_matches(str(r), "Regeneration")):
 				return true
 		for model in member.get_alive_models():
 			var mi := model as ModelInstance
 			if solo and mi != _solo_takedown_solo.get("model"):
 				continue   # a unit of [1] holds exactly the picked model — no other bearer is in it
-			if mi != null and (mi.has_special_rule("Regeneration") or mi.has_special_rule("Medical Training")):
+			if mi != null and ((not v36 and mi.has_special_rule("Regeneration")) or mi.has_special_rule("Medical Training")):
 				return true
 	return false
 

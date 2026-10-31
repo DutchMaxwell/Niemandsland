@@ -122,6 +122,19 @@ static func most_models_of(with_count: int, total: int) -> bool:
 	return with_count * 2 > total
 
 
+## Row MOR-02 (D-MOST): the Regeneration family names whose 3.6 text counts most models (Boosts keep all).
+const REGEN_MOST_MODELS := ["Regeneration", "Self-Repair", "Angelic Blessing", "Cursed Undead",
+	"Grounded Protection", "Knightborn", "Plaguebound", "Protected", "Protection Feat", "Warding"]
+
+
+## Most models for the names above from EPOCH_73_V36, else every model; `solo` = the Takedown unit of [1].
+## The core's twin is unit.rs `regen_family_on`.
+static func regen_family_on(unit: GameUnit, rule: String, solo: bool = false) -> bool:
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and rule in REGEN_MOST_MODELS:
+		return rule_on_most_models(unit, rule, solo)
+	return rule_on_all_models(unit, rule, solo)
+
+
 ## EXACT unit-rule check — has_special_rule matches by PREFIX, so "Unpredictable" would false-positive
 ## on an "Unpredictable Fighter" unit (the Ferocious-vs-"Ferocious Boost" lesson). Rating stripped.
 static func has_exact_rule(unit: GameUnit, rule: String) -> bool:
@@ -269,9 +282,12 @@ static func _fortified_over_in(unit: GameUnit) -> float:
 ## both read the target from the RulesRegistry mechanics map (constants as byte-identical fallback).
 static func _regen_target(unit: GameUnit, from_spell: bool = false) -> int:
 	var best := 0
-	if unit.has_special_rule("Regeneration") or unit.has_special_rule("Medical Training"):
+	var regen := unit.has_special_rule("Regeneration")
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		regen = regen_family_on(unit, "Regeneration")
+	if regen or unit.has_special_rule("Medical Training"):
 		best = int(RulesRegistry.unit_param(unit, "Regeneration", "ignore_target", REGENERATION_TARGET))
-	if rule_on_all_models(unit, "Self-Repair"):
+	if regen_family_on(unit, "Self-Repair"):
 		var target := int(RulesRegistry.unit_param(unit, "Self-Repair", "ignore_target", SELF_REPAIR_TARGET))
 		best = target if best == 0 else mini(best, target)
 	var key := "ignore_target_spell" if from_spell else "ignore_target"
@@ -283,7 +299,7 @@ static func _regen_target(unit: GameUnit, from_spell: bool = false) -> int:
 		if name in ["Regeneration", "Self-Repair", "Resistance"]:
 			continue
 		var params: Dictionary = (e as Dictionary).get("params", {})
-		if bool(params.get("all_models", false)) and not rule_on_all_models(unit, name):
+		if bool(params.get("all_models", false)) and not regen_family_on(unit, name):
 			continue
 		var target := int(params.get(key, params.get("ignore_target", 0)))
 		if target > 0 and (best == 0 or target < best):
