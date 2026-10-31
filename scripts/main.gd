@@ -5579,7 +5579,7 @@ func _solo_consume_once_mods(attacker: GameUnit, defender: GameUnit, melee: bool
 ## F4/NML-006 — spend every once-record on ONE unit that matches `roles` (role- and scope-filtered
 ## exactly like the reads). Reverts the NML-006 side effects (grant overlay off, props stamps
 ## recomputed), removes the paired library token and logs each spend (rules-must-log).
-func _solo_spend_once_mods(uu: GameUnit, roles: Array, melee: bool) -> void:
+func _solo_spend_once_mods(uu: GameUnit, roles: Array, melee: bool, keep_spell: String = "") -> void:
 	var key := uu.get_instance_id()
 	var records: Array = _solo_spell_mods.get(key, [])
 	if records.is_empty():
@@ -5587,6 +5587,8 @@ func _solo_spend_once_mods(uu: GameUnit, roles: Array, melee: bool) -> void:
 	var spent: Array = []
 	for role in roles:
 		for rd in AiSpell.mods_for(records, str(role), melee):
+			if keep_spell != "" and str((rd as Dictionary).get("spell", "")) == keep_spell:
+				continue
 			if str((rd as Dictionary).get("duration", "")) == "once" and not spent.has(rd):
 				spent.append(rd)
 	if spent.is_empty():
@@ -5612,13 +5614,13 @@ func _solo_spend_once_mods(uu: GameUnit, roles: Array, melee: bool) -> void:
 
 ## NML-006 — the event-specific once-consumers (casting after the cast die, morale after the test
 ## die, speed after the executed move): spend the given roles on a member AND its host.
-func _solo_spend_once_kind(member: GameUnit, roles: Array) -> void:
+func _solo_spend_once_kind(member: GameUnit, roles: Array, keep_spell: String = "") -> void:
 	if member == null:
 		return
 	for u in [member, member.get_attached_to() if member.has_method("get_attached_to") else null]:
 		var uu := u as GameUnit
 		if uu != null:
-			_solo_spend_once_mods(uu, roles, false)
+			_solo_spend_once_mods(uu, roles, false, keep_spell)
 
 
 ## Round boundary: every spell token placed this round comes off again (and syncs the removal).
@@ -11735,10 +11737,18 @@ func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false, cause
 		# Banner bonus in the [2,6]-clamped target; spent right after the test die (rules-must-log).
 		var spell_morale := 0
 		var morale_notes: PackedStringArray = []
+		var great_banner_skipped := 0
+		var skip_great_banner: bool = cause != "" and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
 		for mrd in AiSpell.mods_for(_solo_mods_of_chain(unit), "morale", melee):
+			if skip_great_banner and str((mrd as Dictionary).get("spell", "")) == "Great Banner":
+				great_banner_skipped += int((mrd as Dictionary).get("morale_mod", 0))
+				continue
 			spell_morale += int((mrd as Dictionary).get("morale_mod", 0))
 			morale_notes.append("%s %+d" % [str((mrd as Dictionary).get("spell", "")),
 				int((mrd as Dictionary).get("morale_mod", 0))])
+		if great_banner_skipped != 0:
+			_log_rule_event(BattleLog.Category.COMBAT, "Great Banner: %s gets no +%d against %s (only shooting or melee)" % [
+				unit.get_name(), great_banner_skipped, cause], true)
 		var test_target: int = AiCombatMath.morale_target(_solo_morale_quality(unit), morale_bonus + spell_morale)
 		if morale_bonus > 0 and battle_log != null:
 			var rating := SoloController.morale_rating_of(unit)
@@ -11752,7 +11762,7 @@ func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false, cause
 				", ".join(morale_notes), spell_morale, unit.get_name(), test_target], true)
 		var faces: Array = await _owner_roll(unit, 1, test_target, "morale",
 			"Morale test: %s (%d+)" % [unit.get_name(), test_target], {"what": "morale test", "label": owner})
-		_solo_spend_once_kind(unit, ["morale"])   # NML-006: spent by this test
+		_solo_spend_once_kind(unit, ["morale"], "Great Banner" if skip_great_banner else "")   # NML-006: spent by this test
 		if faces.is_empty():
 			return true
 		result = AiCombatMath.morale_result(int(faces[0]), test_target, below_half and melee)
@@ -21760,7 +21770,7 @@ var _solo_ebr_relays: Dictionary = {}
 ## SoloController.spell_candidates), and enemy-side marks/debuffs are not "friendly units", so both
 ## stay at their own printed range.
 func _solo_utility_targets(bearer: GameUnit, kind: String, range_in: float, needs_los: bool,
-		max_targets: int = 1) -> Array:
+		max_targets: int = 1, prefer_model_debuff: bool = false) -> Array:
 	_solo_ebr_relays = {}
 	if opr_army_manager == null or bearer == null:
 		return []
@@ -21805,6 +21815,8 @@ func _solo_utility_targets(bearer: GameUnit, kind: String, range_in: float, need
 		if needs_los and not _solo_has_los(bearer, gu):
 			continue
 		var v := float(gu.get_alive_count()) + float(_solo_unit_tough(gu))
+		if prefer_model_debuff and (gu.get_alive_count() == 1 or not gu.get_attached_heroes().is_empty()):
+			v += 100.0
 		scored.append({"unit": gu, "value": v, "relay_gap": relayed_gap})
 	scored.sort_custom(func(a, b): return float(a["value"]) > float(b["value"]))
 	var out: Array = []
@@ -21975,10 +21987,14 @@ func _solo_apply_utility_buffs(unit: GameUnit) -> void:
 								"%s: %s re-positions %s up to %.0f\" (no firing lane)" % [n, member.get_name(), arty.get_name(), moved], true)
 				continue
 			var kind := str(sp.get("target", "friendly"))
+			# Rules 3.6 Speed Debuff (MOR-19): one enemy MODEL is picked, so prefer
+			# a single-model unit or one whose joined hero keeps the Slow on the unit.
+			var speed_debuff: bool = kind == "enemy" and str(sp.get("grants_rule", "")) == "Slow" \
+				and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
 			# Skirmish books print this family as "pick up to 4"; GF/AoF print "pick one" — data,
 			# not code (params.max_targets, defaulting to the one-target wording).
 			var picks := _solo_utility_targets(member, kind, range_in,
-				bool(sp.get("needs_los", false)), int(sp.get("max_targets", 1)))
+				bool(sp.get("needs_los", false)), int(sp.get("max_targets", 1)), speed_debuff)
 			var relays: Dictionary = _solo_ebr_relays.duplicate()
 			# The negative half of the transparency deal, BEFORE the empty-pick exit: a friendly
 			# carrier that stayed out of reach because the relay clause did not hold is named too.
@@ -21995,6 +22011,17 @@ func _solo_apply_utility_buffs(unit: GameUnit) -> void:
 			var ai_side := _solo_is_ai_unit(unit)
 			for t in picks:
 				var tgt := t as GameUnit
+				# Speed Debuff: an ordinary model of a multi-model unit is no legal
+				# pick; a single-model unit or a joined hero keeps the Slow grant.
+				if speed_debuff:
+					var blocked: bool = tgt.get_alive_count() > 1 and tgt.get_attached_heroes().is_empty()
+					if battle_log != null:
+						_log_rule_event(BattleLog.Category.COMBAT, "Speed Debuff: %s picks %s — %s" % [
+							member.get_name(), tgt.get_name(),
+							"no effect (ordinary model of a multi-model unit)" if blocked \
+								else "Slow on the whole unit (single model or joined hero)"], ai_side)
+					if blocked:
+						continue
 				# #846 Great Musician: the family's move-only knob (`move_mod`) rides the same
 				# advance_in/rush_in record fields every "speed" spell read already consumes, so the
 				# +1" lands on Advance/Rush (and Charge off Rush) with no new record key or core seam.
