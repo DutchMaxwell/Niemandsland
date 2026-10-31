@@ -8549,12 +8549,23 @@ func _solo_resolve_saves(striker: GameUnit, defender: GameUnit, weapon_name: Str
 	var cond_parts: Array = _solo_conditional_ap_parts(profile, striker, defender, charging, dist_in, melee)
 	var cond_ap := 0
 	for cp in cond_parts:
-		cond_ap += int((cp as Dictionary)["bonus"])
+		var cp_name := str((cp as Dictionary)["name"])
+		var cp_bonus := int((cp as Dictionary)["bonus"])
+		cond_ap += cp_bonus
 		if battle_log != null:
 			var why := str((cp as Dictionary).get("why", ""))
-			battle_log.log_event(BattleLog.Category.COMBAT, "%s: AP(+%d) against %s%s" % [
-				str((cp as Dictionary)["name"]), int((cp as Dictionary)["bonus"]), defender.get_name(),
-				"" if why.is_empty() else " (%s)" % why], true)
+			# Rules 3.6 (SHO-20): the Slayer line says why the AP fired (a Hold or the charge),
+			# and says so when a moved shooter's shot was switched off.
+			if cp_name == "Slayer" and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+				if cp_bonus > 0:
+					var who := "it charged" if melee else "%s held" % striker.get_name()
+					battle_log.log_event(BattleLog.Category.COMBAT, "Slayer: AP(+%d) because %s" % [cp_bonus, who], true)
+				else:
+					battle_log.log_event(BattleLog.Category.COMBAT, "Slayer: no AP, %s moved" % striker.get_name(), true)
+			else:
+				battle_log.log_event(BattleLog.Category.COMBAT, "%s: AP(+%d) against %s%s" % [
+					cp_name, cp_bonus, defender.get_name(),
+					"" if why.is_empty() else " (%s)" % why], true)
 	# EPOCH 23 INERT MARKS (MARK_FAMILY_SWEEP_2026-09-14): the Piercing
 	# Fighting/Shooting Mark's attackers-side grant — the mark's once-record on
 	# THIS defender (beneficiary "attackers", the entry's own scope) names
@@ -9267,9 +9278,13 @@ func _solo_conditional_ap_parts(profile: Dictionary, striker: GameUnit, defender
 	var d_tough := _solo_unit_tough(defender)
 	var d_defense := int(defender.unit_properties.get("defense", 4))
 	# Rules 3.6 hook: the weapon range over_half_range measures against (the core's CondApTarget twin).
-	var cx := {"weapon_range_in": float(profile.get("range", 0))}
+	# SHO-20: the striker's Hold state rides the same view -- the 3.6 Slayer gate reads it.
+	var held := _solo_unit_held(striker)
+	var v36 := AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
+	var cx := {"weapon_range_in": float(profile.get("range", 0)), "held": held}
 	var parts: Array = []
 	var seen := {}
+	var moved_logged := false
 	# The "always" family (Havocbound Boost, GF/AoF 3.5.3: "always gets AP(+1) ... instead of only
 	# when ..."): the table twin of the sim's epoch-6 named arm (core/nml-core/src/unit.rs:5444-5515;
 	# the "always" fold combat.rs:402-407). The Boost REPLACES its base's two conditional legs --
@@ -9294,6 +9309,9 @@ func _solo_conditional_ap_parts(profile: Dictionary, striker: GameUnit, defender
 			var b := AiCombatMath.conditional_ap_bonus(params, d_tough, d_defense, charging, dist_in, melee, cx)
 			if b > 0:
 				parts.append(_solo_cond_ap_part(base, b, params))
+			elif v36 and not moved_logged and _solo_slayer_moved(params, d_tough, charging, melee, held, dist_in):
+				parts.append({"name": base, "bonus": 0})
+				moved_logged = true
 	# MODEL-level family members (Slayer / Piercing Hunter: "when this model shoots…") sit on the UNIT,
 	# not the weapon — apply them once per profile too (deduped against the weapon's own rules).
 	for r in striker.get_special_rules():
@@ -9316,6 +9334,9 @@ func _solo_conditional_ap_parts(profile: Dictionary, striker: GameUnit, defender
 			var b := AiCombatMath.conditional_ap_bonus(params, d_tough, d_defense, charging, dist_in, melee, cx)
 			if b > 0:
 				parts.append(_solo_cond_ap_part(base, b, params))
+			elif v36 and not moved_logged and _solo_slayer_moved(params, d_tough, charging, melee, held, dist_in):
+				parts.append({"name": base, "bonus": 0})
+				moved_logged = true
 	# GH #325 — spell-granted conditional-AP rules (the defender's attackers-side token, e.g. Veil
 	# of Madness → Slayer) take the SAME registry-driven path: the lookup fires only where the
 	# striker's book actually fields the rule, deduped against the loops above.
@@ -9329,7 +9350,23 @@ func _solo_conditional_ap_parts(profile: Dictionary, striker: GameUnit, defender
 			var gbonus := AiCombatMath.conditional_ap_bonus(gparams, d_tough, d_defense, charging, dist_in, melee, cx)
 			if gbonus > 0:
 				parts.append(_solo_cond_ap_part(gname, gbonus, gparams))
+			elif v36 and not moved_logged and _solo_slayer_moved(gparams, d_tough, charging, melee, held, dist_in):
+				parts.append({"name": gname, "bonus": 0})
+				moved_logged = true
 	return parts
+
+
+## Rules 3.6 (SHO-20): a moved shooter's shot that the old over-9" leg would have paid gets no AP;
+## the battle log says why it was switched off. Melee and the charge leg never reach this.
+func _solo_slayer_moved(params: Dictionary, target_tough: int, charging: bool, melee: bool,
+		held: bool, dist_in: float) -> bool:
+	if melee or charging or held:
+		return false
+	if str(params.get("gate", "")) != "ranged_over_or_charge":
+		return false
+	if str(params.get("condition", "")) != "vs_tough_ge" or target_tough < int(params.get("threshold", 0)):
+		return false
+	return dist_in > float(params.get("over_in", 9.0))
 
 
 ## One conditional-AP part {name, bonus}; a rules 3.6 condition adds its words ("why") so the battle-log

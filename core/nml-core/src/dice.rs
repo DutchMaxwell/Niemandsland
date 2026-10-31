@@ -1273,21 +1273,44 @@ pub fn resolve_volley_leg(
         // is false here; the `ranged_over`/`ranged_over_or_charge` gates read
         // `mod_dist_in`, the NML-1152 modifier-distance split, not the plain
         // range gap.
+            let cap = CondApTarget { shooter_held: att.held, ..CondApTarget::of(def, p.range as f64) };
             if cond_ap_dice {
             for c in &p.cond_ap {
-                let d = conditional_ap_bonus_vs(c, &CondApTarget::of(def, p.range as f64), false, mod_dist_in, false);
+                let d = conditional_ap_bonus_vs(c, &cap, false, mod_dist_in, false);
                 ap += d;
                 // Rules-must-log: the wave-3 NAMED forms log their own AP
                 // (rule, unit, what changed). The generic pass's specs carry
                 // no name — old replays log nothing, byte-identical. A rules
                 // 3.6 spelling is named at the stamp and adds its condition.
-                if d > 0 && !c.name.is_empty() {
+                // SHO-20: the 3.6 Slayer gate names the Hold (or says why it
+                // was switched off); the pre-73 spelling stays silent.
+                if c.gate == "hold_or_charge" {
+                    if d > 0 {
+                        out.log.push(format!("Slayer: AP(+{}) because {} held", d, sh.owner));
+                    } else if !att.held && mod_dist_in > c.over_in
+                        && c.condition == "vs_tough_ge" && def.tough.max(1) >= c.threshold
+                    {
+                        out.log.push(format!("Slayer: no AP, {} moved", sh.owner));
+                    }
+                } else if d > 0 && !c.name.is_empty() {
                     out.log.push(format!("{}: AP(+{}) on {}'s volley{}", c.name, d, sh.owner, cond_ap_why(&c.condition)));
                 }
             }
             // Wave 2 — the Slayer mark's granted conditional (epoch-gated).
             if att.slayer_grant {
-                ap += conditional_ap_bonus(&slayer_grant_cond(), def.tough.max(1), def.defense, false, mod_dist_in, false);
+                let mut spec = slayer_grant_cond();
+                if att.v36_rules {
+                    spec.gate = "hold_or_charge".to_string();
+                }
+                let d = conditional_ap_bonus_vs(&spec, &cap, false, mod_dist_in, false);
+                ap += d;
+                if att.v36_rules {
+                    if d > 0 {
+                        out.log.push(format!("Slayer: AP(+{}) because {} held", d, sh.owner));
+                    } else if !att.held && mod_dist_in > spec.over_in && def.tough.max(1) >= 3 {
+                        out.log.push(format!("Slayer: no AP, {} moved", sh.owner));
+                    }
+                }
             }
         }
         let mut w = save_batch(p, def, def_owner, ap4, save_def, ap + on6, att.shred_grant, shred_alias_dice, shred_low, deadly_per_model, tray, &mut out);
@@ -1972,14 +1995,23 @@ pub fn resolve_melee_leg(
                     ap += d;
                     // Rules-must-log, the melee half: only the wave-3 NAMED
                     // forms log; unnamed specs stay silent (old replays).
-                    if d > 0 && !c.name.is_empty() {
+                    // SHO-20: the 3.6 charge leg names the charge.
+                    if c.gate == "hold_or_charge" {
+                        if d > 0 {
+                            out.log.push(format!("Slayer: AP(+{}) because it charged", d));
+                        }
+                    } else if d > 0 && !c.name.is_empty() {
                         out.log.push(format!("{}: AP(+{}) on {}'s strike", c.name, d, sh.owner));
                     }
                 }
                 // Wave 2 — the Slayer mark and Piercing Assault on their
                 // granted legs, the same ladder the weapon-stamped conds ride.
                 if sh.att.slayer_grant {
-                    ap += conditional_ap_bonus(&slayer_grant_cond(), def.tough.max(1), def.defense, charging, 0.0, true);
+                    let d = conditional_ap_bonus(&slayer_grant_cond(), def.tough.max(1), def.defense, charging, 0.0, true);
+                    ap += d;
+                    if d > 0 && sh.att.v36_rules {
+                        out.log.push(format!("Slayer: AP(+{}) because it charged", d));
+                    }
                 }
                 if sh.att.pierce_assault_grant {
                     ap += conditional_ap_bonus(&piercing_assault_grant_cond(), def.tough.max(1), def.defense, charging, 0.0, true);

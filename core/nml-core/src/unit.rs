@@ -5017,11 +5017,20 @@ fn stamp_conditional_ap(
     if LEGACY_NO_COND_AP.load(Ordering::Relaxed) {
         return; // frozen-corpus replay — see the flag's own note
     }
+    // Rules 3.6 (SHO-20) — from `EPOCH_73_V36` the Slayer family's shooting leg
+    // reads a HOLD, not the over-9" gap; the stamp carries the new spelling and
+    // every pre-73 record keeps the old one (byte-exact replays).
+    let hold_gate = |mut c: CondAp| -> CondAp {
+        if rule_on(rules_epoch, crate::acts::EPOCH_73_V36) && c.gate == "ranged_over_or_charge" {
+            c.gate = "hold_or_charge".to_string();
+        }
+        c
+    };
     let mut unit_specs: Vec<(String, CondAp)> = Vec::new();
     for r in &p.special_rules {
         let base = base_rule_name(r);
         if let (Some(c), _) = cond_ap_of(reg, p, &base) {
-            unit_specs.push((base, c));
+            unit_specs.push((base, hold_gate(c)));
         }
     }
     for sp in shoot.iter_mut() {
@@ -5043,7 +5052,7 @@ fn stamp_conditional_ap(
                 {
                     sp.regen_bypass_rule = base.clone();
                 }
-                sp.cond_ap.push(c);
+                sp.cond_ap.push(hold_gate(c));
                 seen.push(base);
             }
             // Crack's on-6-to-hit AP upgrade (:305-307) — a plain assignment in
