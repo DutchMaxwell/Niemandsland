@@ -311,7 +311,14 @@ fn morale_fails_expected(state: &State, statics: &[UnitStatic], i: usize, seams:
         }
         return true;
     }
-    let mut fail_p = (morale_target(morale_quality(statics, state, i, seams), state.morale_bonus[i]) - 1) as f64 / 6.0;
+    // Rules 3.6 (EPOCH_73_V36): a nearby Tough(9)+ Hero lifts the ESTIMATE exactly as the live
+    // resolver's `hero_aura_quality` lifts the table's test. No battle-log line: an estimate
+    // applies no rule.
+    let mut quality = morale_quality(statics, state, i, seams);
+    if let Some((_, aura)) = hero_aura_quality(statics, state, i, quality, seams) {
+        quality = aura;
+    }
+    let mut fail_p = (morale_target(quality, state.morale_bonus[i]) - 1) as f64 / 6.0;
     if morale_fearless(statics, state, i, seams) {
         fail_p *= 0.5;
     }
