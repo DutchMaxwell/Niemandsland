@@ -6,6 +6,7 @@ extends GdUnitTestSuite
 ## is gone from the map, and a spell that granted the 3.5 name grants the 3.6 one. Every case reads
 ## the real maps through RulesRegistry / SpellsRegistry.
 
+## DAT-12b drops the distance gate from these 3.6 entries, so CASES carries no over_in.
 ## The batch's 3.6 names next to the 3.5 names they replace.
 const RENAMED := {
 	"Enhanced Empyrean Spirit": "Empyrean Spirit Boost",
@@ -25,7 +26,7 @@ const RENAMED := {
 const CASES := [
 	["aof", "ghostly_undead", "Enhanced Empyrean Spirit", "Evasive", {"hit_penalty": 1.0}],
 	["gf", "goblin_reclaimers", "Enhanced Mischievous", "Bane",
-		{"reroll_save_low": 5.0, "over_in": 9.0, "bypass_regen": false, "upgrades": "Mischievous"}],
+		{"reroll_save_low": 5.0, "bypass_regen": false, "upgrades": "Mischievous"}],
 	["aof", "ossified_undead", "Enhanced Ossified", "Fortified", {"incoming_ap_reduction": 1.0}],
 	["aof", "ossified_undead", "Enhanced Ossified Aura", "Aura Channel", {"grants": "Enhanced Ossified"}],
 	["gf", "plague_disciples", "Enhanced Plaguebound", "Regeneration",

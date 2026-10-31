@@ -5,6 +5,7 @@ extends GdUnitTestSuite
 ## entry had, a carried form hands out the 3.6 base name, and the 3.5 name is gone from the map.
 ## Every case reads the real maps through RulesRegistry.
 
+## DAT-12b drops the distance gate from these 3.6 entries, so CASES carries no over_in.
 ## The batch's 3.6 names next to the 3.5 names they replace.
 const RENAMED := {
 	"Enhanced Ferocious": "Ferocious Boost",
@@ -28,7 +29,7 @@ const CASES := [
 		{"ap_bonus": 1.0, "always": true, "upgrades": "Havocbound"}],
 	["gf", "custodian_brothers", "Enhanced Guardian", "Fortified", {"incoming_ap_reduction": 1.0}],
 	["gf", "rebel_guerrillas", "Enhanced Guerrilla Aura", "Aura Channel", {"grants": "Enhanced Guerrilla"}],
-	["aof", "orcs", "Enhanced Ferocious", "Surge", {"upgrades": "Ferocious", "surge_low": 5.0, "over_in": 9.0}],
+	["aof", "orcs", "Enhanced Ferocious", "Surge", {"upgrades": "Ferocious", "surge_low": 5.0}],
 	["aof", "high_elves", "Enhanced Highborn", "Fast", {"advance_mod": 4.0, "rush_mod": 4.0, "upgrades": "Highborn"}],
 	["aof", "dark_elves", "Enhanced Harassing", "Hit & Run", {"move_in": 6.0, "upgrades": "Harassing"}],
 ]

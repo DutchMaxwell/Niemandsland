@@ -6,6 +6,7 @@ extends GdUnitTestSuite
 ## is gone from the map, and a spell that granted the 3.5 name grants the 3.6 one. Every case reads
 ## the real maps through RulesRegistry / SpellsRegistry.
 
+## DAT-12b drops the distance gate from these 3.6 entries, so CASES carries no over_in.
 ## The batch's 3.6 names next to the 3.5 names they replace.
 const RENAMED := {
 	"Enhanced Rapid Blink": "Rapid Blink Boost",
@@ -30,7 +31,7 @@ const RENAMED := {
 ## carried form's grant spelled with the 3.6 base name. JSON numbers read back as floats.
 const CASES := [
 	["gf", "jackals", "Enhanced Scrapper", "Bane", {"upgrades": "Scrapper", "reroll_save_sixes": true,
-		"reroll_save_from": 5.0, "over_in": 9.0, "bypass_regen": false}],
+		"reroll_save_from": 5.0, "bypass_regen": false}],
 	["gf", "ratmen_clans", "Enhanced Scurry Aura", "Aura Channel", {"grants": "Enhanced Scurry"}],
 	["gf", "robot_legions", "Enhanced Self-Repair Buff", "Utility Buff",
 		{"grants_rule": "Enhanced Self-Repair", "range_in": 12.0, "target": "friendly", "once": true}],

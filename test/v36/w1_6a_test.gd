@@ -5,6 +5,7 @@ extends GdUnitTestSuite
 ## primitive and params the 3.5 entry had, a carried form hands out the 3.6 base name, and the 3.5
 ## name is gone from the map. Every case reads the real maps through RulesRegistry.
 
+## DAT-12b drops the distance gate from these 3.6 entries, so CASES carries no over_in.
 ## The batch's 3.6 names next to the 3.5 names they replace.
 const RENAMED := {
 	"Enhanced Angelic Blessing": "Angelic Blessing Boost",
@@ -29,13 +30,13 @@ const RENAMED := {
 ## carried form's grant spelled with the 3.6 base name. JSON numbers read back as floats.
 const CASES := [
 	["gf", "blessed_sisters", "Enhanced Devout", "Surge",
-		{"upgrades": "Devout", "surge_low": 5.0, "over_in": 9.0}],
+		{"upgrades": "Devout", "surge_low": 5.0}],
 	["gf", "eternal_dynasty", "Enhanced Clan Warrior Aura", "Aura Channel",
 		{"grants": "Enhanced Clan Warrior"}],
 	["aof", "beastmen", "Enhanced Bestial", "Bane",
-		{"reroll_save_low": 5.0, "over_in": 9.0, "bypass_regen": false, "upgrades": "Bestial"}],
+		{"reroll_save_low": 5.0, "bypass_regen": false, "upgrades": "Bestial"}],
 	["aof", "ogres", "Enhanced Destroyer", "Shred",
-		{"upgrades": "Destroyer", "extra_wound_per_save_one": 1.0, "save_fail_max": 2.0, "over_in": 9.0}],
+		{"upgrades": "Destroyer", "extra_wound_per_save_one": 1.0, "save_fail_max": 2.0}],
 	["aof", "vampiric_undead", "Enhanced Cursed Undead Buff", "Utility Buff",
 		{"grants_rule": "Enhanced Cursed Undead", "target": "friendly", "max_targets": 1.0,
 		"range_in": 12.0, "once": true}],
