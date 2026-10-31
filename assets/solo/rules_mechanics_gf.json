@@ -2090,6 +2090,14 @@
      "surge_low": 5
     }
    },
+   "Enhanced Bloodborn Aura": {
+    "primitive": "Aura Channel",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants": "Enhanced Bloodborn"
+    }
+   },
    "Courage Aura": {
     "primitive": "Banner",
     "rated": false,
@@ -2292,6 +2300,14 @@
      "upgrades": "Bloodborn",
      "extra_attack": true,
      "surge_low": 5
+    }
+   },
+   "Enhanced Bloodborn Aura": {
+    "primitive": "Aura Channel",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants": "Enhanced Bloodborn"
     }
    },
    "Courage Aura": {
@@ -3203,6 +3219,14 @@
      "melee_floor_in": 6
     }
    },
+   "Enhanced Darkborn Aura": {
+    "primitive": "Aura Channel",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants": "Enhanced Darkborn"
+    }
+   },
    "Evasive": {
     "primitive": "Evasive",
     "rated": false,
@@ -3635,6 +3659,14 @@
      "floor_in": 6,
      "melee_move_penalty_in": 4,
      "melee_floor_in": 6
+    }
+   },
+   "Enhanced Darkborn Aura": {
+    "primitive": "Aura Channel",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants": "Enhanced Darkborn"
     }
    },
    "Evasive": {
@@ -9361,6 +9393,37 @@
      "melee_move_penalty_in": 2,
      "range_penalty_in": 4
     }
+   },
+   "Enhanced Shadowborn": {
+    "primitive": "Ranged Shrouding",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "range_penalty_in": 8,
+     "floor_in": 6,
+     "melee_move_penalty_in": 4,
+     "melee_floor_in": 6
+    }
+   },
+   "Enhanced Shadowborn Aura": {
+    "primitive": "Aura Channel",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants": "Enhanced Shadowborn"
+    }
+   },
+   "Enhanced Shadowborn Buff": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants_rule": "Enhanced Shadowborn",
+     "range_in": 12,
+     "target": "friendly",
+     "max_targets": 1,
+     "once": true
+    }
    }
   },
   "war_disciples": {
@@ -10179,6 +10242,14 @@
      "place_d3_plus": 0,
      "dice_count": 2
     }
+   },
+   "Enhanced Wolfborn Aura": {
+    "primitive": "Aura Channel",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants": "Enhanced Wolfborn"
+    }
    }
   },
   "wolf_prime_brothers": {
@@ -10438,6 +10509,14 @@
     "params": {
      "place_d3_plus": 0,
      "dice_count": 2
+    }
+   },
+   "Enhanced Wolfborn Aura": {
+    "primitive": "Aura Channel",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants": "Enhanced Wolfborn"
     }
    }
   },
