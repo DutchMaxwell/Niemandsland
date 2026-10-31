@@ -189,6 +189,7 @@
   "No Retreat",
   "No Retreat Aura",
   "No Retreat Buff",
+  "Parry",
   "Pass Turn",
   "Piercing Assault",
   "Piercing Assault Aura",
@@ -811,6 +812,14 @@
    "params": {
     "move_bonus_in": 1,
     "scope": "unit"
+   }
+  },
+  "Parry": {
+   "primitive": "Parry",
+   "rated": true,
+   "book_version": "3.6.0",
+   "params": {
+    "rating": "X"
    }
   },
   "Precise": {

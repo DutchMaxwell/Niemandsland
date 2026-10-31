@@ -7855,6 +7855,20 @@ func _solo_counter_models(unit: GameUnit) -> int:
 	return SoloController.counter_models_of(unit)
 
 
+## Rules 3.6 (EPOCH_73_V36): dice a unit's Parry(X) offers for one hits event.
+func _solo_parry_dice(unit: GameUnit) -> int:
+	var total := 0
+	for m in [unit] + (unit.get_attached_heroes() if unit.has_method("get_attached_heroes") else []):
+		var alive: int = (m as GameUnit).get_alive_count()
+		var rating: int = _solo_unit_rating(m, "Parry") if RulesRegistry.unit_rule_active(m, "Parry") else 0
+		if rating <= 0 and m.source_data is OPRApiClient.OPRUnit:
+			for w in (m.source_data as OPRApiClient.OPRUnit).weapons:
+				if int(w.range_value) <= 0:
+					rating = maxi(rating, AiShooting._rating_of(w, "Parry"))
+		total += rating * maxi(alive, 0)
+	return total
+
+
 ## Resolve one side's melee strikes against `defender` and LAND the wounds (Regeneration-bucketed): the
 ## striker's groups (unit + attached heroes; attacks pre-scaled by the 2" reach) roll real to-hit dice,
 ## saves resolve via _solo_resolve_saves (prompted when the human defends, AI auto-saves otherwise).
@@ -8239,6 +8253,50 @@ func _solo_confirm_strike_back(defender: GameUnit, charger: GameUnit, counter_fi
 	return strike
 
 
+## Rules 3.6 (`EPOCH_73_V36`) — after the Impact hits are known: the defender's Parry dice (capped at
+## the hits taken) cancel hits heavy-pool-first, then the remaining hits are saved.
+func _solo_parry_cancel_and_save(charger: GameUnit, defender: GameUnit, landed: Array,
+		parry_dice: int, impact_defense: int, human_defends: bool) -> int:
+	var taken := 0
+	for e in landed:
+		taken += int((e as Dictionary)["hits"])
+	var n: int = mini(parry_dice, taken)
+	if n > 0:
+		var faces: Array = await _solo_tray_roll(n, AiCombatMath.UNMODIFIED_SIX,
+			_roller_label(defender), "parry", "%s Parry: %d dice (6+)" % [defender.get_name(), n])
+		var k: int = AiCombatMath.count_hits(faces, AiCombatMath.UNMODIFIED_SIX)
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT, "Parry: %s rolls %d dice and ignores %d Impact hits" % [
+				defender.get_name(), n, k], true)
+		for i in [1, 0]:
+			if i < landed.size():
+				var e := landed[i] as Dictionary
+				var cut: int = mini(k, int(e["hits"]))
+				e["hits"] = int(e["hits"]) - cut
+				k -= cut
+	var caused := 0
+	for e in landed:
+		var p := e["bar"] as Dictionary
+		var hits: int = int(e["hits"])
+		if hits <= 0:
+			continue
+		caused += await _solo_impact_apply_pool(charger, defender, p, hits, impact_defense, human_defends)
+	return caused
+
+
+## One Impact pool's saves plus landing, shared by the plain and the Parry path.
+func _solo_impact_apply_pool(charger: GameUnit, defender: GameUnit, pool: Dictionary, hits: int,
+		impact_defense: int, human_defends: bool) -> int:
+	var profile: Dictionary = {"name": str(pool["label"]), "ap": int(pool["ap"]), "deadly": 0, "rules": []}
+	var w: int = await _solo_resolve_saves(charger, defender, str(pool["label"]), [], hits, impact_defense, profile, human_defends, true)
+	if w > 0:
+		if _solo_ignores_regen(charger, profile):
+			await _solo_land_wounds(defender, 0, w)
+		else:
+			await _solo_land_wounds(defender, w, 0)
+	return w
+
+
 ## Impact(X) auto-hits on a charge (GF/AoF v3.5.1 p.13: "Roll X dice when attacking after charging, unless
 ## fatigued. For each 2+ the target takes one hit."). Impact is a per-model rule, so `charger` rolls X per
 ## alive model, MINUS one roll per defender model with Counter (p.13 Counter); the hits carry no AP/Deadly
@@ -8269,9 +8327,12 @@ func _solo_charge_impact(charger: GameUnit, defender: GameUnit, human_defends: b
 			counter_models, charger.get_name()], true)
 	var impact_defense: int = AiCombatMath.guarded_defense(_solo_defense_vs(defender, AiCombatMath.HIT_SOURCE_MELEE),
 		not _solo_over9_defense_rule(defender).is_empty() and charge_from_in > AiCombatMath.LONG_RANGE_IN)
+	var pools: Array = [{"label": "Impact", "rating": x, "dice": dice, "ap": 0},
+			{"label": "Heavy Impact", "rating": hx, "dice": heavy_dice, "ap": heavy_ap}]
+	var parry_dice: int = _solo_parry_dice(defender) if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else 0
 	var caused: int = 0
-	for pool in [{"label": "Impact", "rating": x, "dice": dice, "ap": 0},
-			{"label": "Heavy Impact", "rating": hx, "dice": heavy_dice, "ap": heavy_ap}]:
+	var landed: Array = []
+	for pool in pools:
 		var p := pool as Dictionary
 		if int(p["dice"]) <= 0 or _solo_combined_alive(defender) <= 0:
 			continue
@@ -8285,14 +8346,13 @@ func _solo_charge_impact(charger: GameUnit, defender: GameUnit, human_defends: b
 				("e" if int(p["dice"]) == 1 else "ce"), hits, ("" if hits == 1 else "s")], true)
 		if hits <= 0:
 			continue
-		var profile: Dictionary = {"name": str(p["label"]), "ap": int(p["ap"]), "deadly": 0, "rules": []}
-		var w: int = await _solo_resolve_saves(charger, defender, str(p["label"]), [], hits, impact_defense, profile, human_defends, true)
-		if w > 0:
-			if _solo_ignores_regen(charger, profile):
-				await _solo_land_wounds(defender, 0, w)
-			else:
-				await _solo_land_wounds(defender, w, 0)
-			caused += w
+		if parry_dice > 0:
+			landed.append({"bar": p, "hits": hits})
+			continue
+		caused += await _solo_impact_apply_pool(charger, defender, p, hits, impact_defense, human_defends)
+	if parry_dice > 0:
+		caused += await _solo_parry_cancel_and_save(charger, defender, landed, parry_dice,
+			impact_defense, human_defends)
 	return caused
 
 

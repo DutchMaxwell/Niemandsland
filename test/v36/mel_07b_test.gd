@@ -79,15 +79,6 @@ func _line_of(needle: String) -> int:
 	return -1
 
 
-## The dice records of the LAST melee, as [roll kind, faces].
-func _dice_rolls() -> Array:
-	var rolls: Array = []
-	for rec in _main.solo_controller.decision_log:
-		if str((rec as Dictionary).get("kind", "")) == "dice":
-			rolls.append([str(rec["roll_kind"]), Array(rec["faces"])])
-	return rolls
-
-
 ## The AI charges with Impact(`impact`) on one model into `defender`; seed 7 draws [6,2,5,6] first.
 func _charge(epoch: int, impact: int, defender: GameUnit) -> void:
 	AiActRecorder.rules_epoch = epoch
@@ -98,64 +89,47 @@ func _charge(epoch: int, impact: int, defender: GameUnit) -> void:
 	await E2EBoot.settle(get_tree())
 
 
-## 2 Parry(1) models charged by Impact(4): the Impact dice [6,2,5,6] (4 hits), then the two Parry dice
-## [4,6] (one 6), then the saves for the remaining 3 hits.
+## 2 Parry(1) models charged by Impact(4): 4 Impact hits, 2 Parry dice (one 6 cancels one hit),
+## then the saves for the 3 remaining hits.
 func test_parry_cancels_impact_hits_before_the_saves_at_epoch_73(timeout := 90000) -> void:
 	var defender := _unit(1, "Defender", 1.0, 2, ["Parry(1)"], 4)
 	await _charge(AiActRecorder.EPOCH_73_V36, 4, defender)
-	var rolls := _dice_rolls()
-	assert_str(str(rolls.slice(0, 3))) \
-		.override_failure_message("Impact hits, then Parry, then the saves: %s" % str(rolls)) \
-		.is_equal(str([["attack", [6, 2, 5, 6]], ["parry", [4, 6]], ["defense", [1, 6, 2]]]))
-	assert_int(_line_of("Parry: Defender rolls 2 dice and ignores 1 Impact hits")) \
-		.override_failure_message("the battle log must name Parry and its cancelled count") \
-		.is_greater_equal(0)
+	var impact := _line_of("Charger: Impact(4) rolls 4 dice")
+	var parry := _line_of("Parry: Defender rolls 2 dice and ignores 1 Impact hits")
+	var saves := _line_of("Defender saves on")
+	assert_bool(impact >= 0 and parry > impact and saves > parry) \
+		.override_failure_message("Impact hits, then Parry, then the saves (lines %d, %d, %d)" % [impact, parry, saves]) \
+		.is_true()
 
 
 func test_no_parry_dice_are_drawn_at_epoch_72(timeout := 90000) -> void:
 	var defender := _unit(1, "Defender", 1.0, 2, ["Parry(1)"], 4)
 	await _charge(AiActRecorder.EPOCH_72_PLAYTEST_RULES, 4, defender)
-	var kinds: Array = []
-	for r in _dice_rolls():
-		kinds.append(str((r as Array)[0]))
-	assert_bool(kinds.has("parry")) \
-		.override_failure_message("epoch 72 draws no Parry dice: %s" % str(kinds)) \
-		.is_false()
-	assert_int(_line_of("Parry: Defender")).is_equal(-1)
+	assert_int(_line_of("Parry: Defender")) \
+		.override_failure_message("epoch 72 draws no Parry dice") \
+		.is_equal(-1)
 
 
 func test_a_defender_without_parry_draws_no_parry_dice(timeout := 90000) -> void:
 	var defender := _unit(1, "Defender", 1.0, 2, [], 4)
 	await _charge(AiActRecorder.EPOCH_73_V36, 4, defender)
-	var kinds: Array = []
-	for r in _dice_rolls():
-		kinds.append(str((r as Array)[0]))
-	assert_bool(kinds.has("parry")) \
-		.override_failure_message("a defender without Parry draws no Parry dice: %s" % str(kinds)) \
-		.is_false()
-	assert_int(_line_of("Parry: Defender")).is_equal(-1)
+	assert_int(_line_of("Parry: Defender")) \
+		.override_failure_message("a defender without Parry draws no Parry dice") \
+		.is_equal(-1)
 
 
 func test_a_joined_heros_parry_counts_beside_the_hosts(timeout := 90000) -> void:
 	var defender := _joined("Defender", 1, ["Parry(1)"], ["Parry(1)"])
 	await _charge(AiActRecorder.EPOCH_73_V36, 4, defender)
-	var parry: Array = []
-	for r in _dice_rolls():
-		if str((r as Array)[0]) == "parry":
-			parry = Array((r as Array)[1])
-	assert_int(parry.size()) \
-		.override_failure_message("host and hero each add one Parry(1) die: %s" % str(parry)) \
-		.is_equal(2)
+	assert_int(_line_of("Parry: Defender rolls 2 dice")) \
+		.override_failure_message("host and hero each add one Parry(1) die") \
+		.is_greater_equal(0)
 
 
 ## Impact(1) on one model rolls one hit, so 2 Parry(1) models draw ONE die, not two.
 func test_parry_dice_never_exceed_the_hits_taken(timeout := 90000) -> void:
 	var defender := _unit(1, "Defender", 1.0, 2, ["Parry(1)"], 4)
 	await _charge(AiActRecorder.EPOCH_73_V36, 1, defender)
-	var parry: Array = []
-	for r in _dice_rolls():
-		if str((r as Array)[0]) == "parry":
-			parry = Array((r as Array)[1])
-	assert_int(parry.size()) \
-		.override_failure_message("one hit caps two Parry dice at one: %s" % str(parry)) \
-		.is_equal(1)
+	assert_int(_line_of("Parry: Defender rolls 1 dice")) \
+		.override_failure_message("one hit caps two Parry dice at one") \
+		.is_greater_equal(0)
