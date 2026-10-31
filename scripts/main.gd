@@ -6424,6 +6424,17 @@ func _solo_regen_family_on(unit: GameUnit, rule: String) -> bool:
 		not _solo_takedown_solo.is_empty() and unit != null and unit == _solo_takedown_solo.get("unit"))
 
 
+## The Stealth-family names whose 3.6 text reads "most models" (the core's STEALTH_MOST_MODELS twin); every
+## other alias keeps the all-models read. Empyrean Spirit is on that list too but rides row MOR-06.
+const SOLO_STEALTH_MOST_MODELS: Array[String] = ["Stealth", "Changebound", "Machine-Fog", "Screened"]
+
+
+func _solo_stealth_family_on(unit: GameUnit, rule: String) -> bool:
+	if rule in SOLO_STEALTH_MOST_MODELS:
+		return _solo_rule_on_most_models(unit, rule)
+	return _solo_rule_on_all_models(unit, rule)
+
+
 ## The over-9" +1-defense rule a target projects ("" when none): Guarded (unconditional), or a
 ## Versatile Defense unit (wahl-effect wave — official text: "pick one effect: when shot or charged
 ## from over 9\" away, the unit either gets +1 to defense rolls, or enemy units get -1 to hit rolls
@@ -7545,7 +7556,7 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 	for e in RulesRegistry.unit_rules_of_primitive(target, "Stealth"):
 		var ed := e as Dictionary
 		var n := str(ed["name"])
-		if n == "Stealth" or not _solo_rule_on_all_models(target, n):
+		if n == "Stealth" or not _solo_stealth_family_on(target, n):
 			continue
 		# The stand-down: the Boost's unconditional Evasive replaces the base's own conditional
 		# alias — the two never stack (the core's named gate skips the same name, unit.rs:2199-2201).
@@ -7625,7 +7636,7 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 		return {"mod": mm + int(sm.get("mod", 0)) + int(vt.get("mod", 0)), "own": own,
 			"note": _solo_join_note(_solo_join_note(base_note, str(sm.get("note", ""))), str(vt.get("note", "")))}
 	var attacker_artillery: bool = shooter_member != null and shooter_member.has_special_rule("Artillery")
-	var stealth: bool = _solo_rule_on_all_models(target, "Stealth")
+	var stealth: bool = _solo_stealth_family_on(target, "Stealth")
 	var target_artillery: bool = target.has_special_rule("Artillery")
 	# The Artillery magnitudes are the entries' params (dead-parameter fold, twin of #1006): the
 	# fallback is the recorded constant, so a real-book replay is byte-identical.
@@ -7647,7 +7658,8 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 		# read the silent short-range case as a missing rule.
 		notes.append("Artillery: no +%d (target within 9\")" % art_shooter_bonus)
 	if stealth and over_nine:
-		notes.append("Stealth -1")
+		# Rules-must-log (D-MOST): name the majority read when a member lacks Stealth.
+		notes.append("Stealth -1" if _solo_rule_on_all_models(target, "Stealth") else "Stealth -1 (most models carry it)")
 	elif stealth:
 		notes.append("Stealth: no -1 (within 9\")")   # #224 sweep: name the non-application
 	if alias_pen > 0 and not (stealth and over_nine):
@@ -11264,10 +11276,44 @@ func _solo_morale_quality(unit: GameUnit) -> int:
 		if (not host_alive and best_hero == null) or hero.get_quality() < best_quality:
 			best_quality = hero.get_quality()
 			best_hero = hero
+	# Rules 3.6 hero aura (epoch 73); its line stands in for the joined-Hero line when it wins.
+	var aura: Dictionary = _solo_aura_hero_for_morale(unit, best_quality)
+	if not aura.is_empty():
+		best_quality = int(aura["quality"])
+		best_hero = null
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s (Tough 9+) lends its Quality to %s's morale test (Q%d+)" % [
+				(aura["hero"] as GameUnit).get_name(), unit.get_name(), best_quality], true)
 	if best_hero != null and battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "Hero %s tests on behalf of %s (Q%d+)" % [
 			best_hero.get_name(), unit.get_name(), best_quality], true)
 	return best_quality
+
+
+const HERO_AURA_TOUGH := 9
+const HERO_AURA_REACH_IN := 6.0
+
+## Rules 3.6 hero aura (epoch 73): the friendly Hero with the best Quality, if it beats `own_quality`, that
+## lends `unit` its morale test: alive, not Shaken, in play, Tough(9)+, within 6" base edge to base edge
+## (`nearest_melee_gap_in`, the Spell Conduit measure). Such a Hero cannot be joined, so it is its own unit.
+## {} when no Hero helps, else {"hero": GameUnit, "quality": int}.
+func _solo_aura_hero_for_morale(unit: GameUnit, own_quality: int) -> Dictionary:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 or opr_army_manager == null or solo_controller == null:
+		return {}
+	var best: Dictionary = {}
+	for u in opr_army_manager.get_game_units_for_player(int(unit.unit_properties.get("player_id", 0))):
+		var hero := u as GameUnit
+		if hero == null or hero == unit or hero.get_alive_count() <= 0 or hero.is_shaken \
+				or SoloController.unit_in_reserve(hero) or unit.get_attached_heroes().has(hero):
+			continue
+		if not hero.is_hero() or AiEv.unit_rating(hero, "Tough") < HERO_AURA_TOUGH:
+			continue
+		var quality: int = hero.get_quality()
+		if quality >= int(best.get("quality", own_quality)):
+			continue
+		if solo_controller.nearest_melee_gap_in(unit, hero) <= HERO_AURA_REACH_IN:
+			best = {"hero": hero, "quality": quality}
+	return best
 
 
 func _solo_ask_hero_morale_once(unit: GameUnit) -> void:
@@ -11279,6 +11325,9 @@ func _solo_ask_hero_morale_once(unit: GameUnit) -> void:
 		if hero != null and hero.get_alive_count() > 0:
 			has_hero = true
 			break
+	# Rules 3.6 hero aura: the same once-per-unit choice covers a Tough(9)+ Hero close by ("Use unit" = off).
+	if not has_hero and not _solo_aura_hero_for_morale(unit, unit.get_quality()).is_empty():
+		has_hero = true
 	if not has_hero:
 		return
 	if _solo_batch:

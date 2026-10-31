@@ -7,6 +7,21 @@ extends GdUnitTestSuite
 const IN2M := 0.0254
 
 
+## set_difficulty("planner_v0") stamps the aifix_all statics (SoloController._apply_aifix); without this reset they
+## stay on for every later suite in the same gdUnit process (the shard order made that visible as a red Fearless
+## test in mor_01_test when a batch shifted the shard layout).
+func after_test() -> void:
+	OS.unset_environment("NML_AIFIX")
+	OS.unset_environment("NML_EVAL_VARIANT")
+	BattleSim._core_env = -1
+	AiPlanner.opener_by_finish = false
+	AiPlanner.no_end_threat = false
+	BattleSim.morale_by_probability = false
+	BattleSim.reply_v2 = false
+	BattleSim.reply_skip_activated = false
+	BattleSim.reply_hold_gate = false
+
+
 func _unit(pid: int, positions: Array, uid: String) -> GameUnit:
 	var u := GameUnit.new()
 	u.unit_id = uid
