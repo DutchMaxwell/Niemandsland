@@ -5626,6 +5626,7 @@ fn live_morale_ctx(statics: &[UnitStatic], state: &State, i: usize, melee: bool,
 /// takes the Banner share (the capture stamp minus the Morale(X) rating it
 /// also carries) back out of the target and names the cause once. Spell
 /// tokens and a granted Hold the Line Boost stay in.
+#[allow(clippy::too_many_arguments)] // the cause flag joins the existing parity args
 fn drop_banner_for_cause(
     statics: &[UnitStatic], state: &State, i: usize, melee: bool, cause: Option<&str>, seams: Seams,
     ctx: &mut Ctx, shot: &mut ShootResult,
