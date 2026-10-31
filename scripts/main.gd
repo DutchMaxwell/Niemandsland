@@ -6387,6 +6387,27 @@ func _solo_rule_on_all_models(unit: GameUnit, rule: String) -> bool:
 		not _solo_takedown_solo.is_empty() and unit != null and unit == _solo_takedown_solo.get("unit"))
 
 
+## Rules 3.6 (ruling D-MOST): whether MOST living models of a unit carry `rule` — a strict majority, a joined hero
+## one model — with Takedown's unit of [1] collapsed as above. Below EPOCH_73_V36 it is the all-models read.
+func _solo_rule_on_most_models(unit: GameUnit, rule: String) -> bool:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return _solo_rule_on_all_models(unit, rule)
+	return AiEv.rule_on_most_models(unit, rule,
+		not _solo_takedown_solo.is_empty() and unit != null and unit == _solo_takedown_solo.get("unit"))
+
+
+## Rules 3.6 rules-must-log: (living models of the joined unit that carry `rule`, all living models), a joined hero
+## one model, for a most-models rule's battle-log line. The decision itself stays AiEv.rule_on_most_models.
+func _solo_models_with_rule(unit: GameUnit, rule: String) -> Vector2i:
+	var alive := unit.get_alive_count()
+	var counts := Vector2i(alive if unit.has_special_rule(rule) else 0, alive)
+	for h in unit.get_attached_heroes():
+		var hero := h as GameUnit
+		if hero != null and hero.get_alive_count() > 0:
+			counts += Vector2i(1 if hero.has_special_rule(rule) else 0, 1)
+	return counts
+
+
 ## The over-9" +1-defense rule a target projects ("" when none): Guarded (unconditional), or a
 ## Versatile Defense unit (wahl-effect wave — official text: "pick one effect: when shot or charged
 ## from over 9\" away, the unit either gets +1 to defense rolls, or enemy units get -1 to hit rolls
@@ -11181,7 +11202,12 @@ func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false, cause
 	# Fearless (GF/AoF Advanced Rules v3.5.1 p.13): a unit where all models have this rule rolls a recovery
 	# die once after a FAILED morale test; on a 4+ it counts as passed instead. Rolled visibly on the real
 	# tray. The 4+ is DATA where the mechanics map carries it (RulesRegistry; constant fallback — byte-identical seam).
-	if result != AiCombatMath.Morale.PASSED and AiEv.rule_on_all_models(unit, "Fearless"):
+	# Rules 3.6 (EPOCH_73_V36): most models are enough; a mixed unit's log names the count.
+	if result != AiCombatMath.Morale.PASSED and _solo_rule_on_most_models(unit, "Fearless"):
+		var fearless_models := _solo_models_with_rule(unit, "Fearless")
+		if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and fearless_models.x < fearless_models.y and battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT, "Fearless: %d of %d models of %s have it — most do, so the whole unit counts" % [
+				fearless_models.x, fearless_models.y, unit.get_name()], true)
 		var recover_target: int = int(RulesRegistry.unit_param(unit, "Fearless", "recover_target", AiCombatMath.FEARLESS_RECOVER_TARGET))
 		var recovery_die: Array = await _owner_roll(unit, 1, recover_target, "fearless",
 			"Morale recovery die — Fearless (%d+)" % recover_target, {"what": "Fearless recovery die", "label": owner})
