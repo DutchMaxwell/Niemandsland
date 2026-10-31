@@ -8086,6 +8086,7 @@ var _solo_retaliate_credit := 0   # Retaliate wounds of the LAST strike phase �
 var _solo_last_save_ones := 0   # resolver wave A: unmodified Defense 1s of the LAST save batch (Bloodthirsty Fighter)
 var _solo_hazard_self := {}   # unit instance id -> Hazardous self-wounds since the current melee began (rules 3.6 tally)
 var _solo_scourge_wounds := 0   # SHO-15a: the volley's Scourge phantom wounds, read once by _solo_shooting_morale
+var _solo_melee_scourge := {}   # unit instance id -> Scourge phantom wounds taken in the current melee (SHO-15b tally)
 
 
 ## Collect (and reset) the retaliation wounds of the last strike phase — the caller adds them to
@@ -8884,11 +8885,17 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 		blocks = AiCombatMath.blocks_with_bane_from(save_faces, reroll, base_defense, ap, bane_low)
 	else:
 		blocks = AiCombatMath.count_blocks(save_faces, base_defense, ap)
-	# SHO-15a Scourge: a SHOT's unmodified 1s become phantom wounds for the morale trigger (melee = SHO-15b).
-	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and int(profile.get("range", 0)) > 0 \
+	# SHO-15a/15b Scourge: a SHOT's unmodified 1s become phantom wounds for the morale trigger; a MELEE
+	# strike's 1s count in the defender's melee-winner tally. Nothing is removed either way.
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
 			and (profile.get("rules", []) as Array).has("Scourge"):
-		_solo_scourge_wounds += AiCombatMath.shred_bonus_wounds(save_faces, reroll) \
+		var phantom := AiCombatMath.shred_bonus_wounds(save_faces, reroll) \
 			* int(RulesRegistry.unit_param(striker, "Scourge", "phantom_wounds_per_save_one", 2))
+		if int(profile.get("range", 0)) > 0:
+			_solo_scourge_wounds += phantom
+		else:
+			var sid: int = defender.get_instance_id()
+			_solo_melee_scourge[sid] = int(_solo_melee_scourge.get(sid, 0)) + phantom
 	# Shred (wave 5, army-book weapon rule): every unmodified Defense 1 deals +1 wound — counted on the
 	# FINAL faces (after Bane's re-rolls), NOT Deadly-multiplied (save-step wounds, documented reading).
 	# Destroyer Boost (the Shred UPGRADE family — the table twin of the core's upgrades-gated stamp,
@@ -11154,6 +11161,7 @@ func _run_ai_melee(report: Dictionary) -> void:
 	var ai_caused := 0
 	var human_caused := 0
 	_solo_hazard_self.clear()
+	_solo_melee_scourge.clear()
 	var target_models_before: int = _solo_combined_alive(target)
 	# ANNOUNCE: who charges whom — highlights + line + toast, held before the first strike.
 	var announce := _solo_show_attack_announce(unit, target, "charges")
@@ -11274,6 +11282,9 @@ func _solo_melee_scores(a: GameUnit, a_caused: int, b: GameUnit, b_caused: int, 
 	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
 		a_score += int(_solo_hazard_self.get(b.get_instance_id(), 0))
 		b_score += a_self + int(_solo_hazard_self.get(a.get_instance_id(), 0))
+		# SHO-15b Scourge: the phantom wounds a side TOOK lift the enemy's tally, next to the self-wounds.
+		a_score += int(_solo_melee_scourge.get(b.get_instance_id(), 0))
+		b_score += int(_solo_melee_scourge.get(a.get_instance_id(), 0))
 	return [a_score, b_score]
 
 
@@ -11310,6 +11321,18 @@ func _solo_log_melee_result(a: GameUnit, a_caused: int, a_score: int,
 		battle_log.log_event(BattleLog.Category.COMBAT, "Melee result: %s took %s, %s took %s — %s" % [
 			a.get_name(), _solo_taken_tally(b_caused, b_score, _solo_unit_rating(b, "Fear")),
 			b.get_name(), _solo_taken_tally(a_caused, a_score, _solo_unit_rating(a, "Fear")), verdict], true)
+		# SHO-15b Scourge: name the phantom wounds each side took and whether they decided the melee.
+		var a_ph := int(_solo_melee_scourge.get(a.get_instance_id(), 0))
+		var b_ph := int(_solo_melee_scourge.get(b.get_instance_id(), 0))
+		if a_ph > 0 or b_ph > 0:
+			var loser_without: GameUnit = _solo_melee_loser(a, a_score - b_ph, b, b_score - a_ph)
+			for pair in [[a_ph, a], [b_ph, b]]:
+				var n: int = int(pair[0])
+				var u: GameUnit = pair[1] as GameUnit
+				if n > 0:
+					var decides: bool = loser == u and loser_without != u
+					battle_log.log_event(BattleLog.Category.COMBAT, "Scourge: %d phantom wounds count for %s in the melee result — %s" % [
+						n, u.get_name(), "they decide it" if decides else "they do not decide it"], true)
 		return
 	battle_log.log_event(BattleLog.Category.COMBAT, "Melee result: %s dealt %s, %s dealt %s — %s" % [
 		a.get_name(), _solo_melee_tally(a_caused, a_score),
@@ -14067,6 +14090,7 @@ func _run_human_melee(attacker: GameUnit, target: GameUnit, auto: bool = false) 
 	var human_caused := 0
 	var ai_caused := 0
 	_solo_hazard_self.clear()
+	_solo_melee_scourge.clear()
 	_solo_stage_begin("%s charges %s" % [attacker.get_name(), target.get_name()])
 	# Rules-must-log: your charge never named itself in the log (only the AI's announce did), so the
 	# melee opened mid-strike. One declaration line — and the stage's Charge card has its content.
