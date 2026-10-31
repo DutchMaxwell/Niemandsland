@@ -28,6 +28,17 @@ var _archive: Array = []               # append-only whole game — what the EXP
 var _archive_dropped: int = 0          # only ever non-zero past ARCHIVE_CAP; announced in the header
 var _seq: int = 0
 
+## The collector of the running table. GameUnit is a RefCounted (no tree), so a rule that lives on
+## the unit (Caster Group's refill) writes through this pointer; entry/exit keep it on the live one.
+static var live: BattleLog = null
+
+func _enter_tree() -> void:
+	live = self
+
+func _exit_tree() -> void:
+	if live == self:
+		live = null
+
 
 # === Core ===
 

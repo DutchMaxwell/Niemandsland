@@ -135,6 +135,18 @@ static func regen_family_on(unit: GameUnit, rule: String, solo: bool = false) ->
 	return rule_on_all_models(unit, rule, solo)
 
 
+## MOR-05 — the Fortified and Shielded family names whose 3.6 wording says "most models" (the verified P1
+## list). The Guarded family is MOR-05b. The core's twin is unit.rs MOST_MODELS_DEFENCE.
+const MOST_MODELS_DEFENCE := ["Fortified", "Guardian", "Ossified", "Primeborn", "Warden", "Shielded"]
+
+
+## The all-models read of `rule`, except that from EPOCH_73_V36 the names above need only a strict majority.
+static func rule_on_defence_family(unit: GameUnit, rule: String, solo: bool = false) -> bool:
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and rule in MOST_MODELS_DEFENCE:
+		return rule_on_most_models(unit, rule, solo)
+	return rule_on_all_models(unit, rule, solo)
+
+
 ## EXACT unit-rule check — has_special_rule matches by PREFIX, so "Unpredictable" would false-positive
 ## on an "Unpredictable Fighter" unit (the Ferocious-vs-"Ferocious Boost" lesson). Rating stripped.
 static func has_exact_rule(unit: GameUnit, rule: String) -> bool:
@@ -219,7 +231,8 @@ static func unit_rating(unit: GameUnit, rule_name: String) -> int:
 ## Wave 5: `defense` is the Armor(X)-adjusted value ("counts as having Defense X+", best-of — the same
 ## AiCombatMath.armored_defense the dice path uses) and `morale_bonus` carries Banner's +1 (both gated
 ## by the system-scoped RulesRegistry, so a rule only fires where its book fields it).
-static func ctx_for(unit: GameUnit, in_cover: bool = false, counter_models: int = 0) -> Dictionary:
+static func ctx_for(unit: GameUnit, in_cover: bool = false, counter_models: int = 0,
+		held: bool = true) -> Dictionary:
 	if unit == null:
 		return NEUTRAL_DEFENDER.duplicate()
 	return {
@@ -231,6 +244,13 @@ static func ctx_for(unit: GameUnit, in_cover: bool = false, counter_models: int 
 		"tough": maxi(unit_rating(unit, "Tough"), 1),
 		"models": maxi(unit.get_alive_count(), 1),
 		"artillery": unit.has_special_rule("Artillery"),
+		# SHO-05 (rules 3.6): the Artillery shooter's own +1 needs a Hold and a target past
+		# `shooter_over_in`; both read off the entry below epoch 73 (0/false = over-9" alone).
+		"artillery_shooter_over_in": 0.0 if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 \
+			else float(RulesRegistry.unit_param(unit, "Artillery", "shooter_over_in", 0.0)),
+		"artillery_shooter_needs_hold": AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
+			and bool(RulesRegistry.unit_param(unit, "Artillery", "shooter_requires_hold", false)),
+		"held": held,
 		"furious": unit.has_special_rule("Furious"),
 		"fearless": rule_on_all_models(unit, "Fearless"),
 		"impact": unit_rating(unit, "Impact"),
@@ -240,13 +260,13 @@ static func ctx_for(unit: GameUnit, in_cover: bool = false, counter_models: int 
 			else rule_on_all_models(unit, "Stealth"),
 		"evasive": rule_on_all_models(unit, "Evasive"),
 		"melee_evasion": rule_on_all_models(unit, "Melee Evasion"),
-		"fortified": rule_on_all_models(unit, "Fortified"),
+		"fortified": rule_on_defence_family(unit, "Fortified"),
 		"fortified_over_in": _fortified_over_in(unit),
 		# Guarded OR Versatile Defense's consistently-played def-half (both: +1 Def when shot/charged
 		# from over 9" — one EV flag, one dice-path arithmetic).
 		"guarded": rule_on_all_models(unit, "Guarded") or rule_on_all_models(unit, "Versatile Defense"),
 		"ranged_shrouding": rule_on_all_models(unit, "Ranged Shrouding"),
-		"shielded": rule_on_all_models(unit, "Shielded"),
+		"shielded": rule_on_defence_family(unit, "Shielded"),
 		"in_cover": in_cover,
 		"counter_models": counter_models,
 		"regeneration": _regen_target(unit) > 0,
@@ -269,7 +289,7 @@ static func _fortified_over_in(unit: GameUnit) -> float:
 	var best := -1.0
 	for e in RulesRegistry.unit_rules_of_primitive(unit, "Fortified"):
 		var name := str((e as Dictionary).get("name", ""))
-		if name == "Fortified" or not rule_on_all_models(unit, name):
+		if name == "Fortified" or not rule_on_defence_family(unit, name):
 			continue
 		var threshold := float((e as Dictionary).get("params", {}).get("over_in", 0.0))
 		if best < 0.0 or threshold < best:
@@ -612,9 +632,17 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 			target = target - melee_mod
 	else:
 		target = AiCombatMath.reliable_quality(quality, bool(profile.get("reliable", false)))
+		# SHO-05 (rules 3.6): gate the shooter's own Artillery +1 the way the dice path does — a
+		# Hold and a target past `shooter_over_in` (0/false below 73 = the over-9" gate alone).
+		var art_bonus: int = AiCombatMath.ARTILLERY_SHOOTER_HIT_BONUS
+		var art_over := float(att.get("artillery_shooter_over_in", 0.0))
+		if bool(att.get("artillery", false)) and (
+				(bool(att.get("artillery_shooter_needs_hold", false)) and not bool(att.get("held", true)))
+				or (art_over > 0.0 and dist_in <= art_over)):
+			art_bonus = 0
 		var shoot_mod := AiCombatMath.shooting_hit_modifier(dist_in,
 			bool(att.get("artillery", false)), bool(def_ctx.get("stealth", false)),
-			bool(def_ctx.get("artillery", false)), bool(def_ctx.get("evasive", false))) + spell_mod \
+			bool(def_ctx.get("artillery", false)), bool(def_ctx.get("evasive", false)), art_bonus) + spell_mod \
 			- int(def_ctx.get("aircraft_hit_penalty", 0))   # rules 3.6 Aircraft -N, inside the clamp
 		if bool(profile.get("unstoppable", false)) and shoot_mod < 0:
 			shoot_mod = 0   # same clamp as the melee side; Fatigue stays above it (not a modifier)

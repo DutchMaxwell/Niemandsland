@@ -38,7 +38,7 @@ const TERRAIN_NAMES := {
 ## table can actually see over — and the sight truth no longer uses categories at all. The numbers come
 ## from TerrainRules.volume_height_inches, the one place the heights are declared.
 const TERRAIN_DESCRIPTIONS := {
-	TerrainType.RUINS: "6\" tall, Cover + Dense\nWalls: Impassable (blue lines)\nCan see in/out, not through",
+	TerrainType.RUINS: "6\" tall, Cover + Unstable\nWalls: Impassable (blue lines)\nUnstable: over 6\" of movement into or through it counts as Dangerous",
 	TerrainType.FOREST: "3.4\" tall, Difficult + Cover + Dense\nCan see in/out, not through",
 	TerrainType.CONTAINER: "2.5\" tall, Impassable + Sight Blocking\nCan fly over, cannot land",
 	TerrainType.DANGEROUS: "Open, Dangerous\n(Minefields/Acid/Radiation)"

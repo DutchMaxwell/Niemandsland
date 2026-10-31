@@ -58,6 +58,8 @@ const FIXTURE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/nodes
 const SPACING: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/nodes_200_spacing.jsonl");
 const MELEE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/nodes_melee.jsonl");
 const CAST: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/nodes_cast.jsonl");
+mod common;
+
 const REPO: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../..");
 const EPS: f64 = 1e-9;
 
@@ -127,7 +129,7 @@ fn states_match(got: &State, want: &State) -> bool {
 fn gate_a_every_node_scores_within_1e_9() {
     let corpus = load_nodes(FIXTURE).expect("fixture loads");
     assert_eq!(corpus.nodes.len(), 200, "fixture size");
-    let statics = build_statics(&corpus, REPO);
+    let statics = build_statics(&corpus, &common::pinned_spells_root(REPO));
 
     let mut exact = 0usize;
     let mut rich = 0usize;
@@ -184,7 +186,7 @@ fn gate_a_reddens_when_the_reply_threat_is_dropped() {
 /// composition is pinned so a thinned corpus cannot quietly stop testing a branch.
 fn gate_b_on(path: &str, want: [usize; 4]) {
     let corpus = load_nodes(path).expect("fixture loads");
-    let statics = build_statics(&corpus, REPO);
+    let statics = build_statics(&corpus, &common::pinned_spells_root(REPO));
     let mut per_kind = [(0usize, 0usize); 4];
     for (i, node) in corpus.nodes.iter().enumerate() {
         let got = match resolve(
@@ -240,7 +242,7 @@ fn gate_b_spacing_corpus_resolves_every_kind() {
 #[test]
 fn spacing_clamp_is_load_bearing() {
     let corpus = load_nodes(SPACING).expect("fixture loads");
-    let statics = build_statics(&corpus, REPO);
+    let statics = build_statics(&corpus, &common::pinned_spells_root(REPO));
     let off = Seams::default();
     let mut broken = 0usize;
     for node in &corpus.nodes {
@@ -258,7 +260,7 @@ fn spacing_clamp_is_load_bearing() {
 #[test]
 fn gate_b_melee_charges_reproduce_strike_morale_and_rout() {
     let corpus = load_nodes(MELEE).expect("fixture loads");
-    let statics = build_statics(&corpus, REPO);
+    let statics = build_statics(&corpus, &common::pinned_spells_root(REPO));
     assert!(!corpus.seams.spacing, "the melee slice is the spacing-OFF recording");
     let mut contacts = 0usize;
     let mut routs = 0usize;
@@ -316,7 +318,7 @@ fn gate_b_melee_charges_reproduce_strike_morale_and_rout() {
 #[test]
 fn d5_1_charge_landing_asks_whether_the_snap_still_fits_the_budget() {
     let corpus = load_nodes(MELEE).expect("fixture loads");
-    let statics = build_statics(&corpus, REPO);
+    let statics = build_statics(&corpus, &common::pinned_spells_root(REPO));
     let on = Seams { charge_landing: true, ..corpus.seams };
     let (mut refused, mut still_fights) = (0usize, 0usize);
     for node in &corpus.nodes {
@@ -344,7 +346,7 @@ fn d5_1_charge_landing_asks_whether_the_snap_still_fits_the_budget() {
 #[test]
 fn the_melee_leg_is_load_bearing() {
     let corpus = load_nodes(MELEE).expect("fixture loads");
-    let statics = build_statics(&corpus, REPO);
+    let statics = build_statics(&corpus, &common::pinned_spells_root(REPO));
     let mut broken = 0usize;
     for node in &corpus.nodes {
         let mut as_rush = node.action.clone();
@@ -366,7 +368,7 @@ fn the_melee_leg_is_load_bearing() {
 #[test]
 fn gate_b_shoot_nodes_actually_deal_damage() {
     let corpus = load_nodes(FIXTURE).expect("fixture loads");
-    let statics = build_statics(&corpus, REPO);
+    let statics = build_statics(&corpus, &common::pinned_spells_root(REPO));
     let mut shooters = 0usize;
     let mut changed = 0usize;
     for node in corpus.nodes.iter() {
@@ -395,7 +397,7 @@ fn gate_b_shoot_nodes_actually_deal_damage() {
 #[test]
 fn gate_b_reddens_when_the_cover_answer_is_flipped() {
     let corpus = load_nodes(FIXTURE).expect("fixture loads");
-    let statics = build_statics(&corpus, REPO);
+    let statics = build_statics(&corpus, &common::pinned_spells_root(REPO));
     let mut moved = 0usize;
     let mut flipped = 0usize;
     for node in corpus.nodes.iter().filter(|n| n.action.kind == nml_core::ADVANCE) {
@@ -417,7 +419,7 @@ fn gate_b_reddens_when_the_cover_answer_is_flipped() {
 fn gate_b_cast_subphase_reproduces_every_recorded_cast() {
     let corpus = load_nodes(CAST).expect("fixture loads");
     assert!(corpus.seams.cast, "the cast fixture records cast=on");
-    let statics = build_statics(&corpus, REPO);
+    let statics = build_statics(&corpus, &common::pinned_spells_root(REPO));
     let mut per_kind = [0usize; 4];
     let mut spent = 0i64;
     for (i, node) in corpus.nodes.iter().enumerate() {
@@ -475,7 +477,7 @@ fn the_cast_attempt_comparator_can_fail() {
 #[test]
 fn the_cast_subphase_is_load_bearing() {
     let corpus = load_nodes(CAST).expect("fixture loads");
-    let statics = build_statics(&corpus, REPO);
+    let statics = build_statics(&corpus, &common::pinned_spells_root(REPO));
     let legacy = Seams { spacing: true, ..Seams::default() };
     let mut broken = 0usize;
     for node in &corpus.nodes {
@@ -502,7 +504,7 @@ fn the_cast_subphase_is_load_bearing() {
 #[test]
 fn the_post_move_cast_los_is_a_real_input() {
     let corpus = load_nodes(CAST).expect("fixture loads");
-    let statics = build_statics(&corpus, REPO);
+    let statics = build_statics(&corpus, &common::pinned_spells_root(REPO));
     let mut broken = 0usize;
     for node in &corpus.nodes {
         let got = resolve(
@@ -540,7 +542,7 @@ fn the_official_pick_order_rotates_by_d3_plus_caster_value() {
 #[test]
 fn unimplemented_rules_are_listed_not_hidden() {
     let corpus = load_nodes(FIXTURE).expect("fixture loads");
-    let statics = build_statics(&corpus, REPO);
+    let statics = build_statics(&corpus, &common::pinned_spells_root(REPO));
     let names: Vec<&str> = statics
         .iter()
         .flat_map(|u| u.unimplemented.iter().map(|x| x.rule.as_str()))
@@ -559,7 +561,7 @@ fn unimplemented_rules_are_listed_not_hidden() {
 #[test]
 fn an_unmodelled_rule_is_reported_when_a_unit_fields_it() {
     let corpus = read_nodes(std::io::Cursor::new(SERGEANT_CORPUS), "inline").expect("loads");
-    let statics = build_statics(&corpus, REPO);
+    let statics = build_statics(&corpus, &common::pinned_spells_root(REPO));
     let reported: Vec<&str> = statics[0].unimplemented.iter().map(|u| u.rule.as_str()).collect();
     assert_eq!(reported, ["Sergeant"], "the reporting lane fires");
     assert!(

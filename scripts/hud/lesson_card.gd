@@ -80,7 +80,7 @@ func show_step(index: int, total: int, step: Dictionary) -> void:
 	_header.text = ("TRIAL BY FIRE · " + chapter_title).to_upper()
 	_step_text.text = String(step.get("text", ""))
 	var rule := String(step.get("rule", ""))
-	_rule.text = "Rulebook " + rule
+	_rule.text = "Rules " + OPRApiClient._major_minor(OPRApiClient.rules_core_version("gf"))
 	_rule.visible = not rule.is_empty()
 	_progress.text = "Step %d of %d" % [index + 1, total]
 	_progress.show()

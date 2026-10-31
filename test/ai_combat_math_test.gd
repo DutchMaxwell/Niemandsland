@@ -320,12 +320,16 @@ func test_conditional_ap_range_gates() -> void:
 	assert_int(AiCombatMath.conditional_ap_bonus(ph, 1, 4, false, 8.0, false)).is_equal(0)
 	assert_int(AiCombatMath.conditional_ap_bonus(ph, 1, 4, false, 12.0, true)).is_equal(0)
 	assert_int(AiCombatMath.conditional_ap_bonus(ph, 1, 4, false)).is_equal(0)
-	# Slayer: AP(+2) vs Tough>=3, but ONLY on an over-9" shot or a charge (the situational gate).
+	# Slayer: AP(+2) vs Tough>=3, but from EPOCH_73_V36 only on a HOLD shot or a charge. The old
+	# over-9" leg lives below 73 (pinned by test/v36/sho_20_test.gd); an EV caller with no Hold
+	# state gets nothing.
 	var sl := {"ap_bonus": 2, "condition": "vs_tough_ge", "threshold": 3, "gate": "ranged_over_or_charge", "over_in": 9.0}
-	assert_int(AiCombatMath.conditional_ap_bonus(sl, 3, 4, false, 12.0, false)).is_equal(2)
+	var held := {"held": true}
+	assert_int(AiCombatMath.conditional_ap_bonus(sl, 3, 4, false, 12.0, false, held)).is_equal(2)
+	assert_int(AiCombatMath.conditional_ap_bonus(sl, 3, 4, false, 12.0, false)).is_equal(0)  # Hold unknown
 	assert_int(AiCombatMath.conditional_ap_bonus(sl, 3, 4, true, -1.0, true)).is_equal(2)
-	assert_int(AiCombatMath.conditional_ap_bonus(sl, 3, 4, false, 8.0, false)).is_equal(0)
-	assert_int(AiCombatMath.conditional_ap_bonus(sl, 1, 4, false, 12.0, false)).is_equal(0)
+	assert_int(AiCombatMath.conditional_ap_bonus(sl, 3, 4, false, 6.0, false, held)).is_equal(2)
+	assert_int(AiCombatMath.conditional_ap_bonus(sl, 1, 4, false, 12.0, false, held)).is_equal(0)
 
 
 func test_ranged_slayer_gate_only_ranged_over() -> void:
@@ -341,10 +345,11 @@ func test_ranged_slayer_gate_only_ranged_over() -> void:
 	assert_int(AiCombatMath.conditional_ap_bonus(rs, 1, 4, false, -1.0, false)).is_equal(0)
 	assert_int(AiCombatMath.conditional_ap_bonus(rs, 1, 4, false, 12.0, true)).is_equal(0)
 	# A Slayer-shaped spec WITH a target property keeps its own condition — the gate-only
-	# normalisation must not eat it (Slayer: vs Tough>=3, charged or over-9" shot).
+	# normalisation must not eat it (Slayer: vs Tough>=3, a Hold shot or a charge from 73).
 	var sl := {"ap_bonus": 2, "condition": "vs_tough_ge", "threshold": 3, "gate": "ranged_over_or_charge", "over_in": 9.0}
-	assert_int(AiCombatMath.conditional_ap_bonus(sl, 3, 4, false, 12.0, false)).is_equal(2)
-	assert_int(AiCombatMath.conditional_ap_bonus(sl, 1, 4, false, 12.0, false)).is_equal(0)
+	var held := {"held": true}
+	assert_int(AiCombatMath.conditional_ap_bonus(sl, 3, 4, false, 12.0, false, held)).is_equal(2)
+	assert_int(AiCombatMath.conditional_ap_bonus(sl, 1, 4, false, 12.0, false, held)).is_equal(0)
 
 
 func test_point_blank_piercing_ranged_within_boundary() -> void:
@@ -469,11 +474,15 @@ func test_morale_target_applies_banner_bonus_clamped() -> void:
 	assert_int(AiCombatMath.morale_target(6, -3)).is_equal(6)   # clamp: a 6 still always passes
 
 
-func test_indirect_hit_modifier_only_after_moving() -> void:
+func test_indirect_hit_modifier_only_after_moving_at_epoch_72() -> void:
 	# Indirect (core v3.5.1): "-1 to hit rolls when shooting after moving" — nothing on a Hold.
+	# Rules 3.6 removes it from 73 on (test/v36/sho_02_test.gd pins that leg).
+	var epoch0: int = AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
 	assert_int(AiCombatMath.indirect_hit_modifier(true)).is_equal(-1)
 	assert_int(AiCombatMath.indirect_hit_modifier(false)).is_equal(0)
 	assert_int(AiCombatMath.indirect_hit_modifier(true, 2)).is_equal(-2)
+	AiActRecorder.rules_epoch = epoch0
 
 
 func test_conditional_ap_bonus_target_property_rules() -> void:
