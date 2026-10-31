@@ -9,6 +9,7 @@
 //! (:602-607) on. With `cast` off the LEGACY spell rider inside the shoot
 //! branch runs instead (:621-628), which is what the shipped rollouts still do.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -4273,6 +4274,9 @@ pub struct Scratch {
     /// when the fold ran. EMPTY means "the unit's own slice is the answer", which
     /// is what `folded_slice` reads; every other filler clears it.
     pub fold: Vec<ShootProfile>,
+    /// MEL-02e: `fold` is authoritative even when EMPTY (every melee profile was a spent
+    /// Limited one), so `folded_slice` must not fall back to the unit's own set.
+    pub fold_set: bool,
     /// Inventory C03 (`Seams::casualties_bearers_last`): `profiles_of` scales a special weapon's attacks by the
     /// living BEARERS (the table's order) instead of the whole unit's survivors. Carried here so no shared
     /// signature widens; the default (false) is today's pro-rata scaling for every caller that never sets it.
@@ -4293,6 +4297,7 @@ pub fn profiles_of(us: &UnitStatic, alive: i64, d: f64, sc: &mut Scratch) {
     sc.keep.clear();
     sc.attacks.clear();
     sc.fold.clear();
+    sc.fold_set = false;
     for (i, p) in us.shoot.iter().enumerate() {
         if (p.range as f64) < d {
             continue;
@@ -4403,6 +4408,7 @@ pub fn member_profiles_reach(
 pub fn melee_profiles_of(us: &UnitStatic, alive: i64, sc: &mut Scratch) {
     sc.attacks.clear();
     sc.fold.clear();
+    sc.fold_set = false;
     for p in &us.melee {
         // Wave 4 follow-up (port-takedown-strike) — the once-per-game bonus
         // group is its OWN single attack that "never scales with the unit"
@@ -4552,6 +4558,27 @@ fn drop_spent_limited(profiles: &[ShootProfile], used: &[String], sc: &mut Scrat
     }
 }
 
+/// MEL-02e — the TABLE's `filter_limited` on an EV set (solo_controller.gd:9284): a
+/// Limited profile the unit already spent brings no strikes, so it is dropped before
+/// pricing. Gated at `EPOCH_73_V36`; before it Limited never spanned melee, so the 72
+/// leg is byte-exact. Borrows the caller's slices when nothing is spent.
+pub(crate) fn ev_melee_set<'a>(
+    profiles: &'a [ShootProfile],
+    attacks: &'a [i64],
+    used: &[String],
+    rules_epoch: u32,
+) -> (Cow<'a, [ShootProfile]>, Cow<'a, [i64]>) {
+    let spent = |p: &ShootProfile| p.limited && used.iter().any(|n| n == &p.name);
+    if !rule_on(rules_epoch, EPOCH_73_V36) || !profiles.iter().any(spent) {
+        return (Cow::Borrowed(profiles), Cow::Borrowed(attacks));
+    }
+    let keep: Vec<usize> = profiles.iter().enumerate().filter(|(_, p)| !spent(p)).map(|(i, _)| i).collect();
+    (
+        Cow::Owned(keep.iter().map(|&k| profiles[k].clone()).collect()),
+        Cow::Owned(keep.iter().map(|&k| attacks[k]).collect()),
+    )
+}
+
 /// `SoloController.mark_limited_used` (solo_controller.gd:7700-7708,
 /// main.gd:3207-3208): called AFTER the dice actually rolled, win or lose —
 /// every Limited profile that fired is spent for the rest of the game.
@@ -4640,6 +4667,12 @@ pub fn member_profiles_of(
         if melee {
             melee_profiles_of(us, state.alive[si], sc);
             melee_bearers_rescale(us, state, si, state.alive[si], seams.rules_epoch, sc);
+            let (profiles, attacks) = ev_melee_set(&us.melee, &sc.attacks, &state.limited_used[si], seams.rules_epoch);
+            if let Cow::Owned(profiles) = profiles {
+                sc.fold = profiles;
+                sc.attacks = attacks.into_owned();
+                sc.fold_set = true;
+            }
         } else {
             sc.bearers_last = seams.casualties_bearers_last;
             profiles_of(us, state.alive[si], d, sc);
@@ -4650,6 +4683,7 @@ pub fn member_profiles_of(
     sc.keep.clear();
     sc.attacks.clear();
     sc.fold.clear();
+    sc.fold_set = melee;
     for &mi in std::iter::once(&si).chain(state.attached[si].iter()) {
         if state.alive[mi] <= 0 {
             continue; // main.gd:2915 — a member with no living model brings no shot
@@ -4657,10 +4691,17 @@ pub fn member_profiles_of(
         let um = &statics[state.roster.profile[mi]];
         let set = if melee { &um.melee } else { &um.shoot };
         for p in set {
+            // MEL-02e: a Limited profile the member already spent brings no strikes, so it
+            // leaves the EV set from `EPOCH_73_V36` (the table's `filter_limited`).
+            if melee && rule_on(seams.rules_epoch, EPOCH_73_V36)
+                && p.limited && state.limited_used[mi].iter().any(|n| n == &p.name)
+            {
+                continue;
+            }
             // FEAT PR 2 — the ranged bonus shot never scales with the unit
             // (`profiles_of`'s extra_attack_q leg); the EV layer prices the
             // same single die the tray fires (the spent latch stays priced —
-            // the melee Limited precedent, EV drops nothing).
+            // this row is about Limited, not the Takedown latch).
             let a = if !melee && p.extra_attack_q > 0 {
                 p.attacks
             } else if !melee {
@@ -4687,7 +4728,7 @@ pub fn member_profiles_of(
 /// The profile slice a `member_profiles_of` fill belongs to: the unit's own set when
 /// the fold did not run, `sc.fold` when it did.
 pub fn folded_slice<'a>(own: &'a [ShootProfile], sc: &'a Scratch) -> &'a [ShootProfile] {
-    if sc.fold.is_empty() {
+    if sc.fold.is_empty() && !sc.fold_set {
         own
     } else {
         &sc.fold
