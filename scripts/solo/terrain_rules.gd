@@ -14,10 +14,6 @@ extends RefCounted
 ##   FOREST     Difficult, Cover, Dense (see in/out, not through)       (3.4" tall)
 ##   CONTAINER  Impassable, Blocks LoS (solid — hard-block)             (2.5" tall)
 ##   DANGEROUS  Dangerous Terrain                                       (Ground)
-## A forest is Dense: a sight line is blocked only when it passes all the way THROUGH the zone to a
-## target beyond. Containers are solid Impassable+Blocking buildings and hard-block outright. Ruins
-## blocked sight like forests before 3.6; from EPOCH_73_V36 a line may pass through them (they still
-## give Cover, and their inner walls stay impassable).
 
 enum TerrainType { NONE = 0, RUINS = 1, FOREST = 2, CONTAINER = 3, DANGEROUS = 4 }
 
@@ -35,9 +31,8 @@ const RUIN_ZONE_HEIGHT_INCHES := 6.0
 # === Type predicates (identical to terrain_overlay's classification) ===
 
 static func blocks_los(t: int) -> bool:
-	if t == TerrainType.RUINS:
-		return AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36
-	return t == TerrainType.FOREST or t == TerrainType.CONTAINER
+	return (t == TerrainType.RUINS and AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36) \
+		or t == TerrainType.FOREST or t == TerrainType.CONTAINER
 
 
 ## REAL height (INCHES) of a terrain type as a 3D volume — what the volumetric sight truth extrudes each
@@ -78,10 +73,8 @@ static func base_fully_in_cover(pos: Vector3, radius_m: float, type_at: Callable
 	return true
 
 
-## AREA terrain (Forests, and Ruins before rules 3.6): you see INTO and OUT OF it, but not completely
-## THROUGH it. Containers are solid Impassable+Blocking buildings — NOT area terrain, so they hard-block
-## LOS and the see-in/out zone exception never applies to them (they publish a SOLID volume). From 3.6
-## ruins are no longer Dense and publish no sight volume at all.
+## AREA terrain (forests, and ruins before rules 3.6): seen into and out of, not through. Containers
+## hard-block and are never area terrain. From 3.6 ruins publish no sight volume.
 static func is_area_terrain(t: int) -> bool:
 	return t == TerrainType.RUINS or t == TerrainType.FOREST
 

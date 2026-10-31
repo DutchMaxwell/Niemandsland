@@ -1153,17 +1153,15 @@ func world_to_cell(world_pos: Vector3) -> Vector2i:
 	return Vector2i(grid_x, grid_z)
 
 
-## True if a terrain type blocks a line of sight drawn THROUGH it. From rules 3.6 (EPOCH_73_V36) ruins are
-## Cover + Unstable and see-through, so only forests and containers block: a forest is Dense (see into and
-## out of it, not through), a container is solid Impassable + Blocking. Before 3.6 ruins blocked like an
-## area piece, so games at older epochs stay unchanged. Dangerous terrain is Open and never blocks.
+## True if a terrain type blocks a sight line drawn THROUGH it. From rules 3.6 (EPOCH_73_V36) ruins are
+## Cover + Unstable and see-through; forests stay Dense (not through) and containers hard-block. Older
+## epochs keep the ruin block, and dangerous ground is always open.
 func terrain_blocks_los(terrain_type: int) -> bool:
 	return TerrainRules.blocks_los(terrain_type)
 
 
-## AREA terrain (Forests, and Ruins before rules 3.6): you can see INTO and OUT OF it, but not completely
-## THROUGH it. From 3.6 ruins no longer block sight at all. Solid blockers (Containers) hard-block and are
-## never area terrain. This is the `solid` flag every volume the registry publishes carries.
+## AREA terrain (forests, and ruins before rules 3.6): seen into and out of, not through. Containers
+## hard-block and are never area terrain. From 3.6 ruins block no sight at all.
 func terrain_is_area(terrain_type: int) -> bool:
 	return TerrainRules.is_area_terrain(terrain_type)
 
@@ -1213,10 +1211,8 @@ func _build_los_volumes() -> Array:
 		out.append({"kind": "box", "c": od["c"], "he": od["he"], "yaw": float(od["yaw"]),
 			"y0": 0.0, "y1": CONTAINER_HEIGHT_INCHES * k, "solid": true})
 	# NML-1028 (body campaign F4, #312 regression): ruin walls are MOVEMENT
-	# blockers, never sight volumes. Before rules 3.6 the zone volume gave ruins
-	# their see-in/out-not-through rule; from EPOCH_73_V36 ruins are see-through
-	# and publish no sight volume at all. Registering the 2.5"-solid walls here
-	# blinded every model standing inside a ruin.
+	# blockers, never sight volumes. From EPOCH_73_V36 the zone volume is gone too
+	# (see-through). Registering the 2.5"-solid walls here blinded models inside.
 	# (walls deliberately NOT appended — MovementPlanner reads
 	# get_wall_segments_world, untouched by this registry)
 	out.append_array(_zone_volumes())
@@ -1290,8 +1286,7 @@ func _sandbox_volumes() -> Array:
 				"y1": terrain_volume_height_inches(st) * INCHES_TO_METERS,
 				"solid": not terrain_is_area(st)})
 		# A multi-storey piece also carries its walkable platforms: thin SOLID slabs inside the
-		# area hull, so floor-to-floor sight is blocked by the very floor the model stands on. They
-		# stay sight volumes even when the hull does not (a ruin from rules 3.6 is see-through).
+		# area hull, so floor-to-floor sight is blocked by the floor; they stay when the hull goes.
 		for slab in sd.get("slabs", []):
 			var sl := slab as Dictionary
 			out.append({"kind": "box", "c": sl["c"], "he": sl["he"], "yaw": float(sl["yaw"]),
