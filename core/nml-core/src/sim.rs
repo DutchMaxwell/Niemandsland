@@ -5174,6 +5174,46 @@ fn strike_phase(
 /// pools are resolved SEPARATELY because :6304 re-checks the defender's alive
 /// count before each one: an Impact pool that wipes the defender means the Heavy
 /// pool never rolls. Returns the pre-Regeneration wounds caused.
+/// Rules 3.6 (`EPOCH_73_V36`) — one Impact event with Parry: every pool's hit
+/// dice first, then the defender's Parry dice (capped at the hits taken),
+/// then the saves with the heavy pool's hits cancelled first.
+#[allow(clippy::too_many_arguments)]
+fn impact_with_parry(
+    next: &mut State, ti: usize, us: &UnitStatic, ut: &UnitStatic,
+    pools: [(i64, i64); 2], parry_dice: i64, charge: Option<(f64, bool)>, tray: &mut Tray,
+    shot: &mut ShootResult,
+) -> i64 {
+    let exact = matches!(charge, Some((_, true)));
+    let mut hits: [(i64, i64); 2] = [(0, 0), (0, 0)];
+    for (i, &(dice, ap)) in pools.iter().enumerate() {
+        if dice <= 0 || next.alive[ti] <= 0 { continue; }
+        let (roll, h) = crate::dice::impact_hit_roll(dice, &us.name, tray);
+        shot.rolls.push(roll);
+        hits[i] = (h, ap);
+    }
+    let n = parry_dice.min(hits[0].0 + hits[1].0);
+    if n > 0 {
+        let faces = tray.roll(n as usize);
+        let k = faces.iter().filter(|&&f| f >= 6).count() as i64;
+        shot.rolls.push(crate::dice::Roll {
+            kind: "parry", count: n, target: 6, faces: faces.clone(), owner: ut.name.clone(),
+        });
+        shot.log.push(format!("Parry: {} rolls {} dice and ignores {} Impact hits", ut.name, n, k));
+        hits = crate::dice::parry_cancel(&faces, hits);
+    }
+    let mut caused = 0;
+    for &(h, ap) in &hits {
+        if h <= 0 || next.alive[ti] <= 0 { continue; }
+        let def = ctx_of(ut, next, ti);
+        let r = crate::dice::impact_saves_with_tray(h, ap, &def, &ut.name, charge, tray);
+        caused += r.caused;
+        let w = shot.absorb(r);
+        land_wounds_with(next, ti, w, exact);
+    }
+    caused
+}
+
+/// Impact pool by pool; the caller lands the wounds.
 #[allow(clippy::too_many_arguments)]
 fn impact_phase(
     statics: &[UnitStatic],
@@ -5199,6 +5239,19 @@ fn impact_phase(
         cut_by.counter_impact_per_model = Some(1);
     }
     let pools = crate::dice::impact_pools(&ctx_of_melee(us, next, si, rules_epoch), &cut_by);
+    // Rules 3.6 (`EPOCH_73_V36`) — Parry(X): each living carrier model (host
+    // and joined heroes) contributes X dice against this Impact event.
+    let parry_dice: i64 = if rule_on(rules_epoch, EPOCH_73_V36) {
+        std::iter::once(ti).chain(next.attached[ti].iter().copied())
+            .filter(|&m| next.alive[m] > 0)
+            .map(|m| statics[next.roster.profile[m]].ctx.parry_dice * next.alive[m])
+            .sum()
+    } else {
+        0
+    };
+    if parry_dice > 0 {
+        return impact_with_parry(next, ti, us, ut, pools, parry_dice, Some((charge_from_in, exact)), tray, shot);
+    }
     let mut caused = 0;
     for (dice, ap) in pools {
         if dice <= 0 || next.alive[ti] <= 0 {

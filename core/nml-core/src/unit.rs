@@ -280,6 +280,11 @@ pub struct Ctx {
     /// `impact_reduction_per_model` (registry default 1, stamped behind the
     /// FROZEN `EPOCH_13_WHO_WINS` with `counter_models`).
     pub counter_impact_per_model: Option<i64>,
+    /// Rules 3.6 (`EPOCH_73_V36`) — `Parry(X)`: the dice each LIVING carrier
+    /// model adds to a hits event (0 = no Parry). `sim::impact_phase` sums it
+    /// over the host and its joined heroes and caps the total at the hits
+    /// taken before rolling them.
+    pub parry_dice: i64,
     pub regeneration: bool,
     pub regen_target: i64,
     /// Block B10 — the SPELL-wound twin (`main._solo_regen_pick`'s
@@ -2780,6 +2785,17 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     } else {
         None
     };
+    // Rules 3.6 (`EPOCH_73_V36`) — `Parry(X)`'s dice per living carrier model.
+    let parry_dice = if rule_on(rules_epoch, EPOCH_73_V36) {
+        let by_name = if unit_rule_active(reg, p, "Parry") { unit_rating(&p.special_rules, "Parry") } else { 0 };
+        if by_name > 0 {
+            by_name
+        } else {
+            p.weapons.iter().filter(|w| w.range <= 0.0).map(|w| weapon_rating(w, "Parry")).max().unwrap_or(0)
+        }
+    } else {
+        0
+    };
     Ctx {
         quality: p.quality,
         defense: armored_defense(p.defense, armor),
@@ -2914,6 +2930,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         } else {
             None
         },
+        parry_dice,
         regeneration: regen_targets.0 > 0,
         regen_target: regen_targets.0,
         regen_target_spell: regen_targets.1,
