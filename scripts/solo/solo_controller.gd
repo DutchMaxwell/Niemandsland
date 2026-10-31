@@ -2280,6 +2280,17 @@ func _act(unit: GameUnit) -> Dictionary:
 		action = AiDecision.Action.HOLD
 		do_shoot = shoot_range > 0
 		action_why = "%s hold-only" % hold_only_rule(unit.get_special_rules())
+	# Rules 3.6 (SHO-16) Cumbersome: Rush, Charge and every other move but a plain Advance are closed;
+	# a chosen Advance keeps its move and loses the shot. Holding stays open (it may shoot from here).
+	if cumbersome_active(unit) and action != AiDecision.Action.HOLD:
+		if action == AiDecision.Action.ADVANCE:
+			do_shoot = false
+			action_why = "Cumbersome: %s advances but fires nothing" % unit.get_name()
+		else:
+			action = AiDecision.Action.HOLD
+			do_shoot = shoot_range > 0
+			action_why = "Cumbersome: %s's move is cut to Hold" % unit.get_name()
+		_rule_note(report, "Cumbersome: %s may only Hold or take a plain Advance without a volley (rules 3.6)" % unit.get_name(), true)
 	# COMMANDER RANGED DISCIPLINE (AI plausibility Stage 4, Part B): a ranged-line unit with a clean shot is
 	# NOT dragged off it toward a marker it cannot seize this move — it holds and shoots (the Stage-3 firepower
 	# fix). Standing order, re-validated (continue while the shot holds, abort with a reason when it does not).
@@ -2342,6 +2353,18 @@ func _act(unit: GameUnit) -> Dictionary:
 			var held_by := hold_only_rule(unit.get_special_rules())
 			action_why = "%s hold-only (re-gated over the adopted plan)" % held_by
 			_rule_note(report, "%s: the adopted plan wanted to MOVE an %s unit — re-gated to Hold (GF v3.5.1 p.13/p.57)" % [unit.get_name(), held_by], true)
+		# Rules 3.6 (SHO-16) Cumbersome: the adopted plan obeys the same Hold-or-plain-Advance limit,
+		# and its advance carries no volley. The move survives, the illegal leg dies loudly.
+		if cumbersome_active(unit) and action != AiDecision.Action.HOLD:
+			if action == AiDecision.Action.ADVANCE:
+				do_shoot = false
+				action_why = "Cumbersome: adopted plan's advance carries no shot"
+			else:
+				action = AiDecision.Action.HOLD
+				do_shoot = shoot_range > 0
+				solver_used = false
+				action_why = "Cumbersome: adopted plan re-gated to Hold"
+			_rule_note(report, "Cumbersome: %s's adopted plan keeps only Hold or a plain Advance without a volley (rules 3.6)" % unit.get_name(), true)
 		# NML-1026 (body F2): the adopted plan may carry a CHARGE the tree's own
 		# rule gates just refused (they lived tree-side only). Re-gate here; an
 		# illegal charge becomes a RUSH toward the same enemy — the move
@@ -2661,6 +2684,7 @@ func execute_intent(intent: Dictionary, report: Dictionary) -> Dictionary:
 	# target; report["shoot_target"] drives the volley. A PLAYER intent never retargets (Automodus
 	# "target only"): the player chose ONE target, so out of reach means "no shot" with its reason.
 	if not bool(report["can_shoot"]) and shoot_range_in > 0 \
+			and not (cumbersome_active(unit) and action != AiDecision.Action.HOLD) \
 			and (action == AiDecision.Action.HOLD or action == AiDecision.Action.ADVANCE \
 				or (quick_shot and action == AiDecision.Action.RUSH)):
 		# _run_ai_shooting split-fires — each weapon picks its OWN in-range+LOS target — so opening the
@@ -2741,6 +2765,8 @@ func player_intent(unit: GameUnit, verb: int, target: GameUnit, point: Variant =
 		return {"refused": "Shaken — spends its activation idle (GF v3.5.1 p.10)"}
 	if forces_hold(unit.get_special_rules()) and hold_only_param(unit) and verb != AiDecision.Action.HOLD:
 		return {"refused": "may only use Hold actions (p.13)"}
+	if cumbersome_active(unit) and verb != AiDecision.Action.HOLD and verb != AiDecision.Action.ADVANCE:
+		return {"refused": "Cumbersome: may only Hold or Advance (rules 3.6)"}
 	if is_aircraft(unit) or _is_regiment(unit) or army_manager.transport_of(unit) != null:
 		return {"refused": "moves by hand in this version"}
 	var bands: Dictionary = move_bands_for_unit(unit, movement_range)
@@ -2780,7 +2806,7 @@ func player_intent(unit: GameUnit, verb: int, target: GameUnit, point: Variant =
 			do_shoot = false
 			extra["charge_band_in"] = charge_band_in
 		AiDecision.Action.ADVANCE:
-			do_shoot = shoot_range_in > 0.0
+			do_shoot = shoot_range_in > 0.0 and not cumbersome_active(unit)
 			band_in = advance
 		AiDecision.Action.RUSH:
 			do_shoot = false
@@ -8796,6 +8822,13 @@ static func grants_indirect_to_attackers(target: GameUnit) -> bool:
 ## from that epoch on only Immobile keeps a unit to Hold (core twin: menu.rs `forces_hold_at`).
 static func forces_hold(unit_rules: Array) -> bool:
 	return hold_only_rule(unit_rules) != ""
+
+
+## Rules 3.6 (SHO-16) Cumbersome: on the map's rule entry, live from the 3.6 epoch on. Such a unit
+## may take Hold or a plain Advance and loses the volley after moving. Twin of the core's
+## `cumbersome_at` (menu.rs) and of main.gd's helper.
+static func cumbersome_active(unit: GameUnit) -> bool:
+	return AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and RulesRegistry.unit_rule_active(unit, "Cumbersome")
 
 
 ## The rule name that keeps a unit to Hold actions at the live rules epoch, or "" — the name the
