@@ -79,10 +79,11 @@ mod sho_08_unstoppable_own_minus {
         }
     }
 
-    /// Indirect's moved -1 is the weapon's own rule: ignored at 72, kept at 73.
+    /// Indirect's moved -1 is the weapon's own rule: ignored at 72; at 73 the penalty is gone (SHO-02), so
+    /// there is no own minus to keep and the shot hits at base.
     #[test]
-    fn unstoppable_keeps_the_indirect_moved_minus_at_epoch_73() {
-        for (epoch, want) in [(EPOCH_72_PLAYTEST_RULES, 4), (EPOCH_73_V36, 5)] {
+    fn unstoppable_indirect_has_no_moved_minus_at_epoch_73() {
+        for (epoch, want) in [(EPOCH_72_PLAYTEST_RULES, 4), (EPOCH_73_V36, 4)] {
             let u = gunners("", r#""Unstoppable", "Indirect""#, epoch);
             let moved = Ctx { moved_this_round: true, ..u.ctx };
             assert_eq!(volley(&u, &moved, &defender(4, 5)).0, vec![want], "{epoch}: Indirect moved -1");
