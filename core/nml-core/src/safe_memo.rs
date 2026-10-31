@@ -2,7 +2,8 @@
 //! about the same squares over and over).
 //!
 //! INPUTS THAT FORM THE KEY (every one `safe_advances` reads; none is hashed alone - a hit needs full content equality):
-//! the terrain's content identity (`Terrain::uid`), `tuning.{advance_k, cover_bonus_in}`, `state.los_pairs.is_some()`,
+//! the terrain's content identity (`Terrain::uid`), the caller's `rules_epoch` (the line-of-sight probe reads it,
+//! BG-03a2), `tuning.{advance_k, cover_bonus_in}`, `state.los_pairs.is_some()`,
 //! every objective position, the mover's model positions and `bands.advance`, and for each living enemy (in
 //! `enemy_keys` order) its model positions, `bands.{advance, rush}` and `max_range_inches(profile weapons)`.
 //! Positions enter through `geom::to_f32` in the function, so their f32 bit patterns are the key; the other floats are
@@ -106,12 +107,13 @@ fn push_models(k: &mut Vec<u32>, ps: &[[f64; 3]]) {
 
 /// The key of one call (see the module doc). Every variable-length section is length-prefixed, so equal words mean
 /// equal inputs. `false` = not keyable (a terrain without content identity, a malformed state): never memoised.
-fn build_key(k: &mut Vec<u32>, state: &State, terrain: &Terrain, i: usize, tuning: Tuning) -> bool {
+fn build_key(k: &mut Vec<u32>, state: &State, terrain: &Terrain, i: usize, tuning: Tuning, rules_epoch: u32) -> bool {
     if terrain.uid() == 0 {
         return false;
     }
     k.clear();
     push64(k, terrain.uid());
+    k.push(rules_epoch);
     push64(k, tuning.advance_k as u64);
     push64(k, tuning.cover_bonus_in.to_bits());
     k.push(u32::from(state.los_pairs.is_some()));
@@ -206,6 +208,7 @@ pub fn run(
     terrain: &Terrain,
     i: usize,
     tuning: Tuning,
+    rules_epoch: u32,
     fresh: impl FnOnce() -> Vec<Dest>,
 ) -> Vec<Dest> {
     let taken = MEMO.with(|m| {
@@ -214,7 +217,7 @@ pub fn run(
     });
     let Some(mut k) = taken else { return fresh() };
     let give_back = |k: Vec<u32>| MEMO.with(|m| m.borrow_mut().scratch = k);
-    if !build_key(&mut k, state, terrain, i, tuning) {
+    if !build_key(&mut k, state, terrain, i, tuning, rules_epoch) {
         give_back(k);
         return fresh();
     }
