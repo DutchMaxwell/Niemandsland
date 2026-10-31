@@ -11090,6 +11090,11 @@ static func scout_gap_in() -> float:
 	return 9.0 if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else 0.0
 
 
+## UX-14 (EPOCH_73_V36): the 9" Vanguard gap to enemy units that do not have Vanguard (deployment.rs).
+static func vanguard_gap_in() -> float:
+	return 9.0 if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else 0.0
+
+
 ## True when no candidate base clears the Scout gap (`enemy` = [{"pos", "radius"}]).
 static func scout_gap_clear(spot: Vector2, footprint: Array, base_r: float, enemy: Array) -> bool:
 	var gap := scout_gap_in() * INCHES_TO_METERS
@@ -11348,11 +11353,17 @@ func _deploy_place_id(id: int) -> GameUnit:
 	if RulesRegistry.unit_rule_active(unit, "Vanguard") \
 			or not RulesRegistry.unit_rules_of_primitive(unit, "Vanguard").is_empty():
 		var v_spot: Vector2
+		# UX-14: from 73 the free placement also keeps the 9" gap to non-Vanguard enemies.
+		var v_occ: Array = occupied
+		if not is_scout and vanguard_gap_in() > 0.0:
+			v_occ = occupied.duplicate()
+			for e in bases_of_slot(human_slot, null, false, true):
+				v_occ.append({"pos": e["pos"], "radius": vanguard_gap_in() * INCHES_TO_METERS + float(e["radius"])})
 		if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_16_FREE_PLACEMENT:
 			var push_m := float(RulesRegistry.unit_param(unit, "Vanguard", "place_in", 9.0)) * INCHES_TO_METERS
-			v_spot = _vanguard_free_place(spot, objectives, occupied, terrain_only, radius, footprint, base_r, push_m)
+			v_spot = _vanguard_free_place(spot, objectives, v_occ, terrain_only, radius, footprint, base_r, push_m)
 		else:
-			v_spot = _vanguard_push(unit, spot, zone, occupied, terrain_only, radius, footprint, base_r)
+			v_spot = _vanguard_push(unit, spot, zone, v_occ, terrain_only, radius, footprint, base_r)
 		if v_spot != spot:
 			_place_unit_at(unit, v_spot)
 			_deploy_zone_of.erase(unit)   # the placed spot MAY legally leave the zone
@@ -11364,6 +11375,8 @@ func _deploy_place_id(id: int) -> GameUnit:
 				rule_text = "Vanguard: after deploying, the unit may be placed within 9\" — pushed toward the enemy side"
 				chosen = "+%.1f\" forward" % (spot.distance_to(v_spot) / INCHES_TO_METERS)
 				why = "vanguard forward placement"
+			if vanguard_gap_in() > 0.0:
+				rule_text += ", more than %d\" from enemy units that do not have Vanguard" % int(vanguard_gap_in())
 			record_decision({"kind": "deploy", "unit": unit.get_name(), "unit_id": id,
 				"rule": rule_text,
 				"candidates": [], "chosen": chosen, "why": why,
@@ -11635,7 +11648,8 @@ static func _gate_in(v: float) -> String:
 
 
 ## Live bases of one slot's units on the table as [{"pos", "radius"}], optionally without one unit.
-func bases_of_slot(slot: int, except_unit: GameUnit = null, non_scout_only: bool = false) -> Array:
+func bases_of_slot(slot: int, except_unit: GameUnit = null, non_scout_only: bool = false,
+		non_vanguard_only: bool = false) -> Array:
 	var out: Array = []
 	if army_manager == null:
 		return out
@@ -11644,6 +11658,8 @@ func bases_of_slot(slot: int, except_unit: GameUnit = null, non_scout_only: bool
 		if gu == null or gu == except_unit or gu.get_alive_count() <= 0 or unit_in_reserve(gu):
 			continue
 		if non_scout_only and unit_has_scout(gu):
+			continue
+		if non_vanguard_only and unit_has_vanguard(gu):
 			continue
 		for m in gu.get_alive_models():
 			var mi := m as ModelInstance
@@ -12890,6 +12906,14 @@ static func unit_has_scout(gu: GameUnit) -> bool:
 			if str(granted).split("(")[0].strip_edges() == "Scout":
 				return true
 	return false
+
+
+## The Vanguard family test for the 3.6 gap (UX-14): the same registry gate the placement reads.
+static func unit_has_vanguard(gu: GameUnit) -> bool:
+	if gu == null:
+		return false
+	return RulesRegistry.unit_rule_active(gu, "Vanguard") \
+		or not RulesRegistry.unit_rules_of_primitive(gu, "Vanguard").is_empty()
 
 
 ## B8 (test game 2, ambush landed ON own units): live per-model no-go footprints of EVERY standing
