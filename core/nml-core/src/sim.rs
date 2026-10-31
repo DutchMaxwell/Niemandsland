@@ -17,7 +17,7 @@ use crate::combat::{
     shielded_defense,
     shoot_ev, should_test_shooting_morale, shrouded_reach, RAVAGE_WOUND_TARGET,
     ANGELIC_BLESSING_BOOST_TARGET_SPELL, BEST_HIT_TARGET, CURSED_UNDEAD_BOOST_TARGET,
-    HOLD_THE_LINE_BOOST_MORALE_BONUS, SELF_REPAIR_BOOST_TARGET, UNMODIFIED_SIX,
+    HOLD_THE_LINE_BOOST_MORALE_BONUS, REGENERATION_TARGET, SELF_REPAIR_BOOST_TARGET, UNMODIFIED_SIX,
 };
 // NML-1073 M5 D6a-B4 — the per-model sight twin, used only behind `sighting`.
 use crate::sight;
@@ -1425,6 +1425,11 @@ pub(crate) fn tray_utility_buff(statics: &[UnitStatic], next: &mut State, si: us
             }
             for ti in utility_targets(statics, next, bearer, b, seams) {
                 record_buff(next, ti, b, seams.rules_epoch);
+                // Row DAT-17a rules-must-log: the Regeneration grant names the buff and its holder.
+                if b.grants_rule == "Regeneration" && rule_on(seams.rules_epoch, EPOCH_73_V36) {
+                    trace_rule("utility-buff", &b.name, &format!(
+                        "{} gets Regeneration once", statics[next.roster.profile[ti]].name));
+                }
                 // EPOCH_58_PRECISION_DEBUFF — the fold's rules-must-log line
                 // (`trace_rule`, the ap/def + move-row shape): the debuff
                 // rides the victim's own net, so the line names the -1, the
@@ -1648,9 +1653,23 @@ fn ebr_relay_has_hero(
 /// defender's "defense" role (ai_spell.gd:352 — the `def_mod`/`defense_mod`
 /// roll-bonus pair). The "range"/"speed" roles stay absent — their seams do
 /// not exist yet, the same gap, not a second one.
-fn spend_exchange(state: &mut State, att: usize, def: usize, melee: bool) {
-    mods::spend_once(state, att, &[mods::Role::AttackerOwn, mods::Role::Ap, mods::Role::Grant], melee);
-    mods::spend_once(state, def, &[mods::Role::VsTarget, mods::Role::Defense, mods::Role::Grant, mods::Role::GrantVs], melee);
+fn spend_exchange(state: &mut State, att: usize, def: usize, melee: bool, rules_epoch: u32) {
+    // Row DAT-17a: from the rules 3.6 epoch a Regeneration grant is not spent by the exchange itself.
+    let grant = if rule_on(rules_epoch, EPOCH_73_V36) { mods::Role::GrantNoRegen } else { mods::Role::Grant };
+    mods::spend_once(state, att, &[mods::Role::AttackerOwn, mods::Role::Ap, grant], melee);
+    mods::spend_once(state, def, &[mods::Role::VsTarget, mods::Role::Defense, grant, mods::Role::GrantVs], melee);
+}
+
+/// Row DAT-17a: an exchange wounded `def` (wounds that bypass Regeneration count), so its once-grants of
+/// Regeneration are used up; rules-must-log: each spent record names itself. Other wound sources (Impact, Ravage,
+/// Retreating Strike) do not reach this seam in the core - the table spends there too (a later row closes the gap).
+fn spend_regen_grant(statics: &[UnitStatic], state: &mut State, def: usize, rules_epoch: u32, log: &mut Vec<String>) {
+    if !rule_on(rules_epoch, EPOCH_73_V36) {
+        return;
+    }
+    for name in mods::spend_regen_grants(state, def) {
+        log.push(format!("\"{name}\" on {} is consumed (applies once)", statics[state.roster.profile[def]].name));
+    }
 }
 
 /// `main._solo_apply_vs_marks` :16738-16771 — the ENEMY-side half of the
@@ -3453,6 +3472,13 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
             c.regen_target = fold_min(c.regen_target, CURSED_UNDEAD_BOOST_TARGET);
             c.regen_target_spell = fold_min(c.regen_target_spell, CURSED_UNDEAD_BOOST_TARGET);
         }
+        // Row DAT-17a: from the rules 3.6 epoch a once-grant of Regeneration (the Regeneration Buff, a spell's "once")
+        // rolls the printed 5+ until the first exchange that wounds the holder spends it (`spend_regen_grant`).
+        if rule_on(rules_epoch, EPOCH_73_V36) && grants && mods::granted(state, i, "Regeneration") {
+            c.regeneration = true;
+            c.regen_target = fold_min(c.regen_target, REGENERATION_TARGET);
+            c.regen_target_spell = fold_min(c.regen_target_spell, REGENERATION_TARGET);
+        }
         // spell_only: the Angelic stamp folds the spell twin ONLY.
         c.regen_target_spell = if grants && mods::granted(state, i, "Enhanced Angelic Blessing") {
             fold_min(c.regen_target_spell, ANGELIC_BLESSING_BOOST_TARGET_SPELL)
@@ -5100,6 +5126,7 @@ fn strike_phase(
         mark_spent_limited(melee, &sc.keep, &mut next.limited_used, *mi);
     }
     let mut caused = r.caused;
+    let wounded = caused > 0; // Row DAT-17a: wounds reached the regeneration step
     // rules-wave3-growthmark (epoch 6) — Regenerative Strength: wounds this
     // strike IGNORED (Regeneration's own count) bank the bearer a marker. The
     // Deadly groups' raw tally rides `caused` but lands separately below, so
@@ -5188,7 +5215,10 @@ fn strike_phase(
         );
         land_wounds_with(next, si, landed, seams.tray_exact);
     }
-    spend_exchange(next, si, ti, true); // main.gd:6152, per strike phase
+    spend_exchange(next, si, ti, true, seams.rules_epoch); // main.gd:6152, per strike phase
+    if wounded {
+        spend_regen_grant(statics, next, ti, seams.rules_epoch, &mut shot.log);
+    }
     (caused, retaliated)
 }
 
@@ -8816,6 +8846,7 @@ fn resolve_with(
                             // The Deadly groups' raw tally rides `caused` but
                             // lands separately below — not an ignored wound.
                             let ignored = r.caused - r.wounds - r.deadly_tally;
+                            let wounded = r.caused > 0; // Row DAT-17a
                             let w = shot.absorb(r);
                             if !seams.tray_exact {
                                 land_wounds_with(&mut next, g.ti, w, false);
@@ -8860,7 +8891,10 @@ fn resolve_with(
                             }
                             // main.gd:3244 — the exchange spends its own
                             // once-mods BEFORE the post-volley morale test.
-                            spend_exchange(&mut next, si, g.ti, false);
+                            spend_exchange(&mut next, si, g.ti, false, seams.rules_epoch);
+                            if wounded {
+                                spend_regen_grant(statics, &mut next, g.ti, seams.rules_epoch, &mut shot.log);
+                            }
                             // D1-B5b: the volley's morale test is the NEXT
                             // thing on the table's tray (main.gd:8248-8251),
                             // per group — inside the per-group

@@ -106,7 +106,7 @@ use super::*;
 
         // The exchange that used it spends the once-record (main.gd:3823) —
         // a further volley rolls the plain 4+ again and the ledger is empty.
-        crate::sim::spend_exchange(&mut next, 2, 0, false);
+        crate::sim::spend_exchange(&mut next, 2, 0, false, 0);
         assert!(next.buffs.iter().all(|v| v.is_empty()), "the once-record is spent: {:?}", next.buffs);
         let after = enemy_volley(&next, &statics, 2, 58);
         assert_eq!(after.rolls[0].target, 4, "spent: back to the plain Quality 4+");
