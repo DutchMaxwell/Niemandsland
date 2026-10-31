@@ -514,6 +514,14 @@ pub struct Ctx {
     /// name the ladder, not the fold.
     pub growth_def_lowers: bool,
     /// `EPOCH_73_V36`, stamped in `ctx_for` off the record's own epoch like `playtest_rules`.
+    /// A live "Regenerative Strength" bearer: at epoch 73 its Growth Markers add no attacks
+    /// and instead roll `growth_wound_dice` token dice before the strikes (MEL-12).
+    pub growth_wounds_not_attacks: bool,
+    /// MEL-12 — the token dice this member rolls at its strike (one per banked marker),
+    /// stamped per live melee ctx; 0 everywhere else. Rolled in `dice::resolve_melee_leg`
+    /// after Ravage, never priced by the EV.
+    pub growth_wound_dice: i64,
+    /// `EPOCH_73_V36`, stamped in `ctx_for` off the record's own epoch like `playtest_rules`.
     pub v36_rules: bool,
     /// D21 (`EPOCH_68_MODIFIER_SUM`): the save target is ONE sum clamped once at
     /// `[2, 6]`, not a ladder of per-modifier 2+ floors. Stamped in `ctx_for` off
@@ -2829,6 +2837,10 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     } else {
         0
     };
+    // MEL-12 (`EPOCH_73_V36`) — Regenerative Strength pays in token dice, not attacks;
+    // keyed on the rule NAME so every other Growth Markers rule keeps its payout.
+    let growth_wounds_not_attacks = rule_on(rules_epoch, crate::acts::EPOCH_73_V36)
+        && unit_rule_active(reg, p, "Regenerative Strength");
     // The Artillery hit modifiers' own params (dead-parameter recount
     // 2026-09-15), behind the FROZEN `EPOCH_7_TABLE_RULES` like the
     // neighbouring Indirect param read: below 7 the Options stay None and
@@ -3041,6 +3053,8 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         growth_def_mod: 0,
         growth_fortify_ap: 0,
         growth_def_lowers: false,
+        growth_wounds_not_attacks,
+        growth_wound_dice: 0,
         v36_rules: rule_on(rules_epoch, crate::acts::EPOCH_73_V36),
         modifier_sum: rule_on(rules_epoch, crate::acts::EPOCH_68_MODIFIER_SUM),
         playtest_rules: rule_on(rules_epoch, EPOCH_72_PLAYTEST_RULES),
