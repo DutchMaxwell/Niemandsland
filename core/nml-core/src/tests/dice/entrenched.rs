@@ -26,8 +26,10 @@ use super::*;
     }
 
     /// (a) an Entrenched target that has NOT moved this round takes its own
-    /// -1 past its `over_in: 12` gate — Quality 4+ reads 5+ — and the penalty
-    /// names itself with the gate (rules-must-log).
+    /// -1 past its `over_in: 12` gate — Quality 4+ reads 5+ — and stays
+    /// silent: the battle-log line is rules-3.6 only (`EPOCH_73_V36`), so
+    /// every epoch below 73 prints nothing (the maths is unchanged; the
+    /// 73+ wording is covered in `v36_mor_04.rs`).
     #[test]
     fn an_unmoved_entrenched_target_takes_minus_one_past_twelve_inches() {
         let us = ent_static(7);
@@ -42,8 +44,8 @@ use super::*;
         );
         assert_eq!(out.rolls[0].target, 5, "unmoved Entrenched: Quality 4+ -> 5+ (the -1)");
         assert!(
-            out.log.iter().any(|l| l.contains("[Entrenched]") && l.contains("12")),
-            "the applied rule names itself with the 12\" gate (rules-must-log): {:?}",
+            !out.log.iter().any(|l| l.contains("[Entrenched]")),
+            "below epoch 73 the penalty stays silent: {:?}",
             out.log
         );
     }
