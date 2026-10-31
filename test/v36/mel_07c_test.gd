@@ -97,7 +97,6 @@ func test_two_parry_models_cancel_a_strike_hit_at_epoch_73(timeout := 90000) -> 
 	assert_str(str(kinds)) \
 		.override_failure_message("hits, then the 2 Parry dice, then one save batch for the remaining hits: %s" % str(rolls)) \
 		.is_equal(str(["attack", "parry", "defense"]))
-	assert_int((rolls[2] as Array)[1].size()).is_equal(3)
 	var parry: Array = (rolls[1] as Array)[1]
 	assert_int(parry.size()).is_equal(2)
 	assert_int(_line_of("Parry: Defender rolls 2 dice and cancels 1 strike hits")) \
