@@ -41,7 +41,7 @@ use crate::sim::{reply_threat_core_with, ReplyOpts};
 
     /// Different ledger rows on different units, so a cache keyed on the wrong unit returns another unit's ctx.
     fn with_records(st: &State, salt: usize) -> State {
-        const RULES: [&str; 5] = ["Furious", "Rending", "Unstoppable", "Guardian Boost", ""];
+        const RULES: [&str; 5] = ["Furious", "Rending", "Unstoppable", "Enhanced Guardian", ""];
         let mut b = st.clone();
         for i in 0..b.units() {
             if (i + salt) % 3 == 2 {

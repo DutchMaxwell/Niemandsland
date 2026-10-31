@@ -194,7 +194,7 @@
       "visor_boost":{"unit_id":"visor_boost","name":"Visor Boost","quality":4,
         "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
         "base_radius":0.016,"game_system":"gf","faction_folder":"dao_union",
-        "special_rules":["Targeting Visor Boost"],"item_grants":[],
+        "special_rules":["Enhanced Targeting Visor"],"item_grants":[],
         "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
         "weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":0,"rules":[]}]}}}"#;
 
@@ -256,7 +256,7 @@
       "piercing_hunter":{"unit_id":"piercing_hunter","name":"Piercing Hunter","quality":4,
         "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
         "base_radius":0.016,"game_system":"gf","faction_folder":"blessed_sisters",
-        "special_rules":["Piercing Hunter"],"item_grants":[],
+        "special_rules":["Piercing Marksman"],"item_grants":[],
         "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
         "weapons":[{"name":"Rifle","range":24,"attacks":6,"count":1,"ap":0,"rules":[]}]},
       "slayer":{"unit_id":"slayer","name":"Slayer","quality":4,
@@ -308,28 +308,28 @@
         "special_rules":["Warbound"],"item_grants":[],
         "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
         "weapons":[{"name":"Blade","range":0,"attacks":6,"count":1,"ap":0,"rules":[]}]},
-      "warbound_boost":{"unit_id":"warbound_boost","name":"Warbound Boost","quality":4,
+      "warbound_boost":{"unit_id":"warbound_boost","name":"Enhanced Warbound","quality":4,
         "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
         "base_radius":0.016,"game_system":"gf","faction_folder":"war_disciples",
-        "special_rules":["Warbound","Warbound Boost"],"item_grants":[],
+        "special_rules":["Warbound","Enhanced Warbound"],"item_grants":[],
         "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
         "weapons":[{"name":"Rifle","range":24,"attacks":6,"count":1,"ap":0,"rules":[]}]},
-      "warbound_boost_only":{"unit_id":"warbound_boost_only","name":"Warbound Boost Only","quality":4,
+      "warbound_boost_only":{"unit_id":"warbound_boost_only","name":"Enhanced Warbound Only","quality":4,
         "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
         "base_radius":0.016,"game_system":"gf","faction_folder":"war_disciples",
-        "special_rules":["Warbound Boost"],"item_grants":[],
+        "special_rules":["Enhanced Warbound"],"item_grants":[],
         "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
         "weapons":[{"name":"Rifle","range":24,"attacks":6,"count":1,"ap":0,"rules":[]}]},
-      "destroyer_boost":{"unit_id":"destroyer_boost","name":"Destroyer Boost","quality":4,
+      "destroyer_boost":{"unit_id":"destroyer_boost","name":"Enhanced Destroyer","quality":4,
         "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
         "base_radius":0.016,"game_system":"aof","faction_folder":"ogres",
-        "special_rules":["Destroyer","Destroyer Boost"],"item_grants":[],
+        "special_rules":["Destroyer","Enhanced Destroyer"],"item_grants":[],
         "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
         "weapons":[{"name":"Rifle","range":24,"attacks":6,"count":1,"ap":0,"rules":[]}]},
-      "infected_boost":{"unit_id":"infected_boost","name":"Infected Boost","quality":4,
+      "infected_boost":{"unit_id":"infected_boost","name":"Enhanced Infected","quality":4,
         "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
         "base_radius":0.016,"game_system":"gf","faction_folder":"infected_colonies",
-        "special_rules":["Infected","Infected Boost"],"item_grants":[],
+        "special_rules":["Infected","Enhanced Infected"],"item_grants":[],
         "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
         "weapons":[{"name":"Rifle","range":24,"attacks":6,"count":1,"ap":0,"rules":[]}]},
       "shred_melee":{"unit_id":"shred_melee","name":"Shred in Melee","quality":4,
@@ -441,8 +441,14 @@ mod surge_param;
 mod unpredictable_shooter;
 mod unstoppable_melee;
 mod v36_data;
+mod v36_data_rows;
 mod v36_melee;
+mod v36_melee_rows;
+mod v36_mor_04;
+mod v36_mor_12c;
+mod v36_mor_17;
 mod v36_morale;
 mod v36_shoot;
+mod v36_shoot_rows;
 mod v36_ux;
 mod v36_w1;

@@ -5,6 +5,7 @@
 //! :497-505 and the melee branch of `profile_ev` :330-350) arrived with M1-3;
 //! `resolve()` reaches it only on a CHARGE (battle_sim.gd:631-646).
 
+use crate::acts::{rule_on, EPOCH_73_V36};
 use crate::unit::{CondAp, Ctx, ShootProfile};
 
 /// `AiEv.SIX_P` ai_ev.gd:27 — P(one specific d6 face).
@@ -16,6 +17,9 @@ pub const UNMODIFIED_SIX: i64 = 6;
 /// `AiCombatMath.LONG_RANGE_IN` :60 — the over-9" gate of Stealth/Artillery/
 /// Relentless/Guarded/Versatile Attack.
 pub const LONG_RANGE_IN: f64 = 9.0;
+/// `AiCombatMath.CHARGE_LONG_RANGE_IN` — D-GATE6 (rules 3.6, `EPOCH_73_V36`): the over-6" gate of a
+/// CHARGE, measured before any model moves, closest model to closest model. Shooting keeps 9".
+pub const CHARGE_LONG_RANGE_IN: f64 = 6.0;
 /// `AiCombatMath.STEALTH_HIT_PENALTY` :64 / `ARTILLERY_SHOOTER_HIT_BONUS` :68 /
 /// `ARTILLERY_TARGET_HIT_PENALTY` :72 / `EVASIVE_HIT_PENALTY` :77.
 pub const STEALTH_HIT_PENALTY: i64 = 1;
@@ -357,30 +361,46 @@ pub const BASE_CONTACT_IN: f64 = 1.0;
 /// GF/AoF Advanced Rules v3.5.1 p.9: "... and 4” vertically of an enemy model
 /// ... may attack it." Gated on `EPOCH_63_MELEE_HEIGHT` (see acts.rs).
 pub const MELEE_VERTICAL_IN: f64 = 4.0;
+/// Rules 3.6 strike reach (MEL-08): 3" across and 3" up, from `EPOCH_73_V36`.
+/// The 3.5 pair above stays for every older record.
+pub const MELEE_REACH_IN_V36: f64 = 3.0;
+pub const MELEE_VERTICAL_IN_V36: f64 = 3.0;
 
-/// True when two world Y coordinates (metres) are within the 4" vertical
-/// melee reach — the twin of `SoloController.within_melee_height`.
+/// The epoch's (across, up) strike reach in inches — the twin of
+/// `SoloController.melee_reach_in` / `melee_vertical_in`.
+pub fn melee_reach_in(rules_epoch: u32) -> (f64, f64) {
+    if crate::acts::rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
+        (MELEE_REACH_IN_V36, MELEE_VERTICAL_IN_V36)
+    } else {
+        (MELEE_REACH_IN, MELEE_VERTICAL_IN)
+    }
+}
+
+/// True when two world Y coordinates (metres) are within `vertical_in` of
+/// each other — the twin of `SoloController.within_melee_height`.
 #[inline]
-fn within_melee_height(y_a: f64, y_b: f64) -> bool {
-    (y_a - y_b).abs() <= MELEE_VERTICAL_IN * crate::IN2M
+fn within_melee_height(y_a: f64, y_b: f64, vertical_in: f64) -> bool {
+    (y_a - y_b).abs() <= vertical_in * crate::IN2M
 }
 
 /// Count of `striker`'s models within reach of ANY `enemy` model — the
 /// `melee_reach="table"` knob's own gate. Either side empty keeps today's
 /// behaviour (every striker counts), matching the GDScript fallback. From
-/// `EPOCH_63_MELEE_HEIGHT` a pair must also clear the 4" vertical reach.
+/// `EPOCH_63_MELEE_HEIGHT` a pair must also clear the vertical reach; the
+/// reach itself is the epoch's (`melee_reach_in`).
 pub fn striking_models(striker: &[[f64; 3]], enemy: &[[f64; 3]], rules_epoch: u32) -> i64 {
     if striker.is_empty() || enemy.is_empty() {
         return striker.len() as i64;
     }
     let height_gated = crate::acts::rule_on(rules_epoch, crate::acts::EPOCH_63_MELEE_HEIGHT);
-    let reach_m = (BASE_CONTACT_IN + MELEE_REACH_IN) * crate::IN2M;
+    let (reach_in, vertical_in) = melee_reach_in(rules_epoch);
+    let reach_m = (BASE_CONTACT_IN + reach_in) * crate::IN2M;
     let reach2 = reach_m * reach_m;
     striker
         .iter()
         .filter(|s| {
             enemy.iter().any(|e| {
-                if height_gated && !within_melee_height(s[1], e[1]) {
+                if height_gated && !within_melee_height(s[1], e[1], vertical_in) {
                     return false;
                 }
                 let dx = s[0] - e[0];
@@ -426,10 +446,13 @@ pub fn versatile_best_mode(hit_target: i64, defense: i64, ap: i64, bane: bool) -
 /// `charge_only` is an extra gate on top of the condition (Melee Slayer), and the
 /// `ranged_over_or_charge` GATE (Slayer) adds "charging OR shot from over 9 in".
 /// `dist_in < 0` means the caller has no range context: the ranged legs stay shut.
-pub fn conditional_ap_bonus(
+///
+/// Rules 3.6 hook (no 3.5 entry spells these, so no epoch gate):
+///   * `over_half_range` — shooting from beyond half the weapon's range
+///   * `def_5_6`         — the target's Defense value is 5+ or 6+
+pub fn conditional_ap_bonus_vs(
     c: &CondAp,
-    target_tough: i64,
-    target_defense: i64,
+    t: &CondApTarget,
     is_charging: bool,
     dist_in: f64,
     melee: bool,
@@ -458,8 +481,8 @@ pub fn conditional_ap_bonus(
         // (the FROZEN `EPOCH_6_TABLE_RULES`), so every pre-epoch-6 replay
         // stays byte-exact.
         "always" => c.ap_bonus,
-        "vs_tough_ge" if target_tough >= c.threshold => c.ap_bonus,
-        "vs_armor" if target_defense <= c.threshold => c.ap_bonus,
+        "vs_tough_ge" if t.tough >= c.threshold => c.ap_bonus,
+        "vs_armor" if t.defense <= c.threshold => c.ap_bonus,
         "on_charge" if is_charging => c.ap_bonus,
         "ranged_over" if !melee && dist_in > c.over_in => c.ap_bonus,
         // Wave 4 (rules-wave4-condap) — "Point-Blank Piercing"'s printed
@@ -473,7 +496,47 @@ pub fn conditional_ap_bonus(
         "ranged_within" if !melee && c.within_in > 0.0 && dist_in >= 0.0 && dist_in <= c.within_in => {
             c.ap_bonus
         }
+        // Exactly half the range is not beyond it; no range or no distance stays shut.
+        "over_half_range" if !melee && t.weapon_range_in > 0.0 && dist_in >= 0.0 && dist_in > t.weapon_range_in / 2.0 => {
+            c.ap_bonus
+        }
+        "def_5_6" if t.defense >= 5 => c.ap_bonus,
         _ => 0,
+    }
+}
+
+/// The conditional-AP check's view of the target, plus the firing weapon's
+/// range `over_half_range` measures against. `Default` knows nothing, so every
+/// leg reading it stays shut; later 3.6 target conditions add their fields here.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct CondApTarget {
+    pub tough: i64,
+    pub defense: i64,
+    /// The firing weapon's range in inches; 0 = a melee strike or no range known.
+    pub weapon_range_in: f64,
+}
+
+impl CondApTarget {
+    /// The target as the dice and EV folds see it, shot at with a `weapon_range_in` weapon.
+    pub fn of(def: &Ctx, weapon_range_in: f64) -> Self {
+        Self { tough: def.tough.max(1), defense: def.defense, weapon_range_in }
+    }
+}
+
+/// [`conditional_ap_bonus_vs`] without a weapon range: the melee leg and the
+/// granted conditions, whose legs never measure one.
+pub fn conditional_ap_bonus(c: &CondAp, target_tough: i64, target_defense: i64, is_charging: bool, dist_in: f64, melee: bool) -> i64 {
+    let t = CondApTarget { tough: target_tough, defense: target_defense, weapon_range_in: 0.0 };
+    conditional_ap_bonus_vs(c, &t, is_charging, dist_in, melee)
+}
+
+/// Rules-must-log: the words naming a 3.6 condition that fired, "" for every
+/// older spelling (their log lines stay byte-identical).
+pub fn cond_ap_why(condition: &str) -> &'static str {
+    match condition {
+        "over_half_range" => " (target beyond half the weapon's range)",
+        "def_5_6" => " (target defends on 5+ or 6+)",
+        _ => "",
     }
 }
 
@@ -558,7 +621,9 @@ pub fn profile_ev(
             dist_in, att.artillery, def.stealth, def.artillery, def.evasive, 0, 0, 0, 0.0,
             att.artillery_shooter_hit_bonus.unwrap_or(ARTILLERY_SHOOTER_HIT_BONUS),
             def.artillery_target_hit_penalty.unwrap_or(ARTILLERY_TARGET_HIT_PENALTY),
-        ) + att.hit_mod;
+        ) + att.hit_mod
+            // EPOCH_73_V36 — the volley's Aircraft -N, inside the same clamp.
+            - def.aircraft_hit_penalty;
         // EV/tray split (found by #489, caveat 4) — see the melee branch above.
         if p.unstoppable_ev && shoot_mod < 0 {
             shoot_mod = 0; // GF v3.5.1 p.15, head wave 1 — clamp BEFORE weapon bonuses.
@@ -622,8 +687,8 @@ pub fn profile_ev(
     }
     six_hits = six_hits.min(hits);
     // --- saves: Shielded, then Cover, then Guarded (ai_ev.gd:403-411) ---
-    // Cover and Guarded are SHOOTING-only reads: melee EV always values at
-    // dist 0, so the charge halves of both live in the dice path only.
+    // Cover and Guarded are SHOOTING-only reads: the charge halves of both
+    // live in the dice path only (a charge's `dist_in` reaches Versatile Attack alone).
     let mut defense = shielded_defense(def.defense, def.shielded_bonus(), def.def_floor());
     if !melee && p.blast <= 1 && !p.indirect && !p.ignores_cover {
         defense = covered_defense(defense, def.in_cover, def.def_floor());
@@ -641,7 +706,7 @@ pub fn profile_ev(
     // `def.defense` is the RAW context Defense, not the ladder above.
     let mut ap = p.ap + versatile_ap;
     for c in &p.cond_ap {
-        ap += conditional_ap_bonus(c, def.tough.max(1), def.defense, false, dist_in, melee);
+        ap += conditional_ap_bonus_vs(c, &CondApTarget::of(def, p.range as f64), false, dist_in, melee);
     }
     let bane = p.bane;
     let fort = def.fortified;
@@ -745,23 +810,34 @@ pub fn impact_ev(att: &Ctx, def: &Ctx) -> f64 {
     wounds
 }
 
+/// D-GATE6 (rules 3.6, `EPOCH_73_V36`): the pre-charge distance a charge EV is handed — the closest-model
+/// base-edge gap (lazily, so a record below the wave never pays for the measure) from the wave, the
+/// blind 0.0 below it (every older record prices byte-exact).
+#[inline]
+pub fn charge_estimate_gap_in(rules_epoch: u32, edge_gap_in: impl FnOnce() -> f64) -> f64 {
+    if rule_on(rules_epoch, EPOCH_73_V36) { edge_gap_in() } else { 0.0 }
+}
+
 /// `AiEv.melee_ev` ai_ev.gd:485-495 — every melee profile strikes (profile
 /// order, additive), then the charge's Impact hits, then Ravage.
 ///
 /// `profiles` is the unit's whole merged MELEE set and `attacks[k]` the
 /// survivor-scaled count of `profiles[k]` — the same split as `shoot_ev`, minus
 /// the range filter (every melee profile is range 0, so all of them strike).
+/// `charge_from_in` is `charge_dist_in` (ai_ev.gd:695): the distance a CHARGE's
+/// strikes are priced at, 0.0 for a strike that is not a charge.
 pub fn melee_ev(
     profiles: &[ShootProfile],
     attacks: &[i64],
     att: &Ctx,
     def: &Ctx,
     charging: bool,
+    charge_from_in: f64,
 ) -> f64 {
     let mut total = 0.0;
     for (k, p) in profiles.iter().enumerate() {
         if p.range <= 0 {
-            total += profile_ev(p, attacks[k], att, def, 0.0, charging);
+            total += profile_ev(p, attacks[k], att, def, if charging { charge_from_in } else { 0.0 }, charging);
         }
     }
     if charging {
@@ -791,35 +867,35 @@ mod tests {
     }
 
     #[test]
-    fn striking_models_counts_only_those_within_2in_of_an_enemy() {
+    fn striking_models_counts_only_those_within_2in_of_an_enemy_at_epoch_72() {
         // Ten models in a line, one inch apart, an enemy at the head of the
         // line: only the first three sit within the 3" (2" reach + 1" base
-        // contact) centre-space threshold.
+        // contact) centre-space threshold. The 3.6 leg is MEL-08's (tests/sim/v36_melee.rs).
         let line: Vec<[f64; 3]> = (1..=10).map(|i| [i as f64 * crate::IN2M, 0.0, 0.0]).collect();
         let enemy = vec![[0.0, 0.0, 0.0]];
-        assert_eq!(striking_models(&line, &enemy, crate::acts::CURRENT_RULES_EPOCH), 3);
+        assert_eq!(striking_models(&line, &enemy, crate::acts::EPOCH_72_PLAYTEST_RULES), 3);
         assert_eq!(
-            striking_models(&line, &[], crate::acts::CURRENT_RULES_EPOCH),
+            striking_models(&line, &[], crate::acts::EPOCH_72_PLAYTEST_RULES),
             10,
             "no enemy positions -> everyone counts"
         );
     }
 
     #[test]
-    fn striking_models_ignores_enemies_beyond_4in_vertically() {
+    fn striking_models_ignores_enemies_beyond_4in_vertically_at_epoch_72() {
         // GF/AoF Advanced Rules v3.5.1 p.9: "within 2” horizontally and 4” vertically of an
         // enemy model ... may attack it." Gated on EPOCH_63_MELEE_HEIGHT (L1: every recorded
         // corpus has y = 0, so a replay at the OLD epoch is unchanged — pinned here).
         let enemy = vec![[0.0, 0.0, 0.0]];
         let five_up = vec![[crate::IN2M, 5.0 * crate::IN2M, 0.0]];
         let three_up = vec![[crate::IN2M, 3.0 * crate::IN2M, 0.0]];
-        assert_eq!(striking_models(&five_up, &enemy, crate::acts::CURRENT_RULES_EPOCH), 0);
+        assert_eq!(striking_models(&five_up, &enemy, crate::acts::EPOCH_72_PLAYTEST_RULES), 0);
         assert_eq!(
             striking_models(&five_up, &enemy, crate::acts::EPOCH_62_CASTING_MOD),
             1,
             "epoch 62 predates the height gate -- no replay changes (L1)"
         );
-        assert_eq!(striking_models(&three_up, &enemy, crate::acts::CURRENT_RULES_EPOCH), 1);
+        assert_eq!(striking_models(&three_up, &enemy, crate::acts::EPOCH_72_PLAYTEST_RULES), 1);
     }
 
     #[test]

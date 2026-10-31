@@ -6,7 +6,10 @@
 //! 2 `randi_range(1, 6)` draws per attempt, ties re-roll, cap 100 — trace kept because
 //! the attempt count is data-dependent (the gate compares the FULL attempt list).
 
-use crate::acts::{rule_on, EPOCH_16_FREE_PLACEMENT, EPOCH_33_REDEPLOYMENT, EPOCH_64_DEPLOY_LARGE_RESPOT};
+use crate::acts::{
+    rule_on, EPOCH_16_FREE_PLACEMENT, EPOCH_33_REDEPLOYMENT, EPOCH_64_DEPLOY_LARGE_RESPOT, EPOCH_72_PLAYTEST_RULES,
+    EPOCH_73_V36,
+};
 use crate::objectives::Zone;
 use crate::rng::GodotRng;
 use std::collections::HashMap;
@@ -1482,11 +1485,11 @@ fn deploy_place_next(
     // the derived deploy radius over host + attached heroes (:10263-10267)
     let base_r = deploy_base_radius_of(s);
     let radius = deploy_footprint_radius(s.model_count.max(0) as usize, base_r);
-    // B9 Scout (:9098-9102): a scout searches its zone EXTENDED 12" forward
-    // (whole-width band, `scout_extended_zone`), forward_y recomputed on the
-    // band, and its zone-of-record for the settle containment is the band.
+    // B9 Scout (:9098-9102): a scout searches its zone EXTENDED forward by the
+    // epoch's band (whole-width, `scout_extended_zone_at`), forward_y recomputed
+    // on the band, and its zone-of-record for the settle containment is the band.
     let (unit_zone, sec, fwd) = if s.scout {
-        let ext = scout_extended_zone(&zone, forward_y);
+        let ext = scout_extended_zone_at(&zone, forward_y, rules_epoch);
         let e = ext.end();
         let fwd_ext = if ext.pos.1.abs() < e.1.abs() { ext.pos.1 } else { e.1 };
         (ext, ext, fwd_ext)
@@ -1915,7 +1918,7 @@ pub struct RedeployPass {
 /// into the host), the rule active (`re_deploy`), a recorded deploy zone (a
 /// placement exists). `max_units` read ONCE from the FIRST carrier (:9778).
 /// Per carrier: `best_spot` over the RECORDED zone (the side zone; a scout's
-/// the extended 12" band — `_deploy_place_id` rebinds it before :9496 stores
+/// the epoch's extended band — `_deploy_place_id` rebinds it before :9496 stores
 /// it) at the table's 0.025 m step (:9800), the Strider/Flying blocked law
 /// (:9788-9789), the CURRENT post-deploy occupied truth of every OTHER
 /// on-table unit, both sides (:9792-9799), the VANGUARD scan's own
@@ -1966,11 +1969,11 @@ pub fn redeployment_pass(
             let s = &specs[side][ci];
             let idx = match sides[side].placements.iter().position(|p| p.key == s.key) { Some(i) => i, None => continue };
             let cur = sides[side].placements[idx].spot;
-            // The zone of record (:9784): the side zone; a scout's the extended
-            // 12" band (:9432-9435 rebinds it before :9496 stores it).
+            // The zone of record (:9784): the side zone; a scout's the epoch's
+            // extended band (:9432-9435 rebinds it before :9496 stores it).
             let end = zone.end();
             let forward_y = if zone.pos.1.abs() < end.1.abs() { zone.pos.1 } else { end.1 };
-            let zone_of = if s.scout { scout_extended_zone(zone, forward_y) } else { *zone };
+            let zone_of = if s.scout { scout_extended_zone_at(zone, forward_y, rules_epoch) } else { *zone };
             let base_r = deploy_base_radius_of(s);
             let n = s.model_count.max(0) as usize;
             let radius = deploy_footprint_radius(n, base_r);
@@ -2222,10 +2225,23 @@ fn edge_distance_in(a: &SettleShape, b: &SettleShape) -> f64 {
     (center_dist as f64 - support_extent(a, dir) - support_extent(b, [-dir[0], -dir[1]])) / 0.0254
 }
 
-/// B9: the deployment zone extended 12" toward the table centre — the Scout
-/// band (solo_controller.gd:9051-9055; Rect2 ctor + Vector2 size add f32).
+/// UX-12 (`EPOCH_73_V36`): the Scout band's depth in inches — 9" from the
+/// rules 3.6 epoch on, 12" below it (`SoloController.scout_band_in`).
+pub fn scout_band_in(rules_epoch: u32) -> f64 {
+    if rule_on(rules_epoch, EPOCH_73_V36) { 9.0 } else { 12.0 }
+}
+
+/// B9: the Scout band below the rules 3.6 epoch (12"), for callers that carry
+/// no epoch; `scout_extended_zone_at` is the epoch-aware band.
 pub fn scout_extended_zone(zone: &Rect, forward_y: f64) -> Rect {
-    let ext = 12.0 * 0.0254;
+    scout_extended_zone_at(zone, forward_y, EPOCH_72_PLAYTEST_RULES)
+}
+
+/// B9: the deployment zone extended toward the table centre by the epoch's
+/// Scout band (`scout_band_in`) — solo_controller.gd `scout_extended_zone`
+/// (Rect2 ctor + Vector2 size add f32).
+pub fn scout_extended_zone_at(zone: &Rect, forward_y: f64, rules_epoch: u32) -> Rect {
+    let ext = scout_band_in(rules_epoch) * 0.0254;
     let e = zone.end();
     if (forward_y - e.1).abs() < (forward_y - zone.pos.1).abs() {
         Rect::new(zone.pos.0, zone.pos.1, zone.size.0, zone.size.1 + ext)
@@ -2589,7 +2605,13 @@ fn project_out_forbidden(board: &Terrain, walls: &[WallSeg], p: (f64, f64), r: f
 /// repair's blocked variant rides `ignores_terrain` (= Strider/Flying,
 /// :9246). The f64 placement models re-narrow to the f32 state losslessly
 /// (they were widened from it); the group-sum mismatch fails loudly (6c).
+/// Carries no epoch: a scout's band is the pre-3.6 12" (`settle_units_at`).
 pub fn settle_units(specs: &[UnitSpec], sd: &SideDeploy, zone: &Rect) -> Vec<(usize, SettleUnit)> {
+    settle_units_at(specs, sd, zone, EPOCH_72_PLAYTEST_RULES)
+}
+
+/// `settle_units` with the scouts' zone of record the epoch's Scout band (UX-12).
+pub fn settle_units_at(specs: &[UnitSpec], sd: &SideDeploy, zone: &Rect, rules_epoch: u32) -> Vec<(usize, SettleUnit)> {
     let end = zone.end();
     let forward_y = if zone.pos.1.abs() < end.1.abs() { zone.pos.1 } else { end.1 };
     let place_at: HashMap<String, usize> = sd
@@ -2616,7 +2638,7 @@ pub fn settle_units(specs: &[UnitSpec], sd: &SideDeploy, zone: &Rect) -> Vec<(us
                 SettleUnit {
                     models: p.models.iter().map(|m| [m.0 as f32, m.1 as f32]).collect(),
                     geoms,
-                    zone: if s.scout { scout_extended_zone(zone, forward_y) } else { *zone },
+                    zone: if s.scout { scout_extended_zone_at(zone, forward_y, rules_epoch) } else { *zone },
                     flying: s.ignores_terrain,
                     footprint: s.footprint.clone(),
                 },

@@ -21,7 +21,7 @@
 //! the PR body documents in full.
 
 use crate::acts::CURRENT_RULES_EPOCH;
-use crate::combat::{effective_attacks, melee_ev, shoot_ev};
+use crate::combat::{charge_estimate_gap_in, effective_attacks, melee_ev, shoot_ev};
 use crate::geom;
 use crate::menu::{nearest_enemy, FUTILE_CHARGE_EV};
 use crate::rules::SpellModifier;
@@ -103,7 +103,8 @@ fn charge_usage(
         ctx_of(&statics[state.roster.profile[e]], state, e),
         statics, state, e, true, CURRENT_RULES_EPOCH,
     );
-    let ev = melee_ev(&us.melee, &sc.attacks, &att, &def, true);
+    let charge_from_in = charge_estimate_gap_in(CURRENT_RULES_EPOCH, || gap_in);
+    let ev = melee_ev(&us.melee, &sc.attacks, &att, &def, true, charge_from_in);
     if ev < FUTILE_CHARGE_EV {
         0.0
     } else {

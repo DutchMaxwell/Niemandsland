@@ -3071,15 +3071,20 @@ fn deploy_interleaved(
 /// tray rows `[[x, z, r],..]` (pregame_dump.gd `tray_models` — INPUT state; a
 /// caller without trays, the twin's own self-play, passes empty dicts, the 6e
 /// default-empty guard). Returns `{"1": [placement dicts], "2": [..]}` with
-/// the settled models written back.
+/// the settled models written back. `rules_epoch` (default: the live epoch,
+/// like `deploy_side`) picks the scouts' zone of record, the epoch's Scout
+/// band (`settle_units_at`, UX-12).
 #[pyfunction]
+#[pyo3(signature = (sides, board, trays, first_slot, rules_epoch=None))]
 fn deploy_finish(
     py: Python<'_>,
     sides: &Bound<'_, PyAny>,
     board: PyRef<'_, Board>,
     trays: HashMap<String, Vec<[f64; 3]>>,
     first_slot: i64,
+    rules_epoch: Option<u32>,
 ) -> PyResult<Py<PyAny>> {
+    let rules_epoch = rules_epoch.unwrap_or(CURRENT_RULES_EPOCH);
     let sides: HashMap<String, SideIn> = json_of(sides, "sides")?;
     let (s1, s2) = (
         sides.get("1").ok_or_else(|| Unsupported::new_err("sides[\"1\"] missing"))?,
@@ -3113,7 +3118,7 @@ fn deploy_finish(
     );
     let walls = board.inner.walls_world_m();
     let finish = |specs: &[UnitSpec], sd: &mut SideDeploy, zone: &Rect, tray: &[([f32; 2], f64)]| {
-        let st = deployment::settle_units(specs, sd, zone);
+        let st = deployment::settle_units_at(specs, sd, zone, rules_epoch);
         let mut units: Vec<SettleUnit> = st.iter().map(|p| p.1.clone()).collect();
         deployment::deploy_finish_all(&mut units, &board.inner, walls, tray);
         write_back(&st, 0, &units, sd);
@@ -3132,8 +3137,8 @@ fn deploy_finish(
     }
     // SECOND finish: BOTH rosters, slot-1 roster then slot-2 (the table's
     // get_all_game_units order; tests/deployment.rs:1354-1372).
-    let st1 = deployment::settle_units(&specs1, &sd1, &zone1);
-    let st2 = deployment::settle_units(&specs2, &sd2, &zone2);
+    let st1 = deployment::settle_units_at(&specs1, &sd1, &zone1, rules_epoch);
+    let st2 = deployment::settle_units_at(&specs2, &sd2, &zone2, rules_epoch);
     let mut all: Vec<SettleUnit> = st1.iter().map(|p| p.1.clone()).collect();
     let n1 = all.len();
     all.extend(st2.iter().map(|p| p.1.clone()));

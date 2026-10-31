@@ -113,6 +113,7 @@ var _act_fan: Node = null               # NML_CAPTURE_FAN overlay, kept alive un
 var _act_started := -1                  # activations BEGUN so far — the MOMENT stamp of every capture; -1 = not armed
 var _move_trail_dump: Array = []        # per-activation per-model path polylines (the offline wall-audit's input)
 var _move_trail_walls: Array = []       # wall segments (world XZ metres), stashed at the first activation capture
+var _move_trail_ledges: Variant = null  # climbable ledges [[a], [b], dy_in] stashed with the walls; null = climbing off
 var _all_decisions: Array = []          # EVERY decision record verbatim, annotated {side, round}
 var _log_entries: Array = []            # every battle-log entry (the panel itself caps at 200)
 # Arena margins: how badly each side lost, by points. The start-roster snapshot per slot (taken at game
@@ -163,7 +164,7 @@ func _run() -> void:
 		# identical. No code fix here — this is a loud diagnostic so a cold fleet box never silently
 		# enters the golden corpus; warm every dir once (any local game/arena run) first.
 		var _cold_caches: Array[String] = []
-		for _cd in ["ai_lists_cache", "ambience_cache", "biome_cache", "containers_cache",
+		for _cd in ["ai_lists_cache", "ai_lists_cache_v36", "ambience_cache", "biome_cache", "containers_cache",
 				"hazards_cache", "model_cache", "ruins_cache", "trees_cache"]:
 			if _dir_is_empty("user://%s" % _cd):
 				_cold_caches.append(_cd)
@@ -187,11 +188,9 @@ func _run() -> void:
 				# model's planned polyline + base radius, for the offline wall-crossing AUDIT + re-render.
 				# Finer than per-model screenshots — every single model move gets machine-checked.
 				if _move_trail_walls.is_empty():   # stash once — terrain exists by the first activation
-					var ovl: Node = main.get("terrain_overlay")
-					if ovl != null and ovl.has_method("get_wall_segments_world"):
-						for wseg in ovl.get_wall_segments_world():
-							_move_trail_walls.append([[snappedf((wseg[0] as Vector2).x, 0.0001), snappedf((wseg[0] as Vector2).y, 0.0001)],
-								[snappedf((wseg[1] as Vector2).x, 0.0001), snappedf((wseg[1] as Vector2).y, 0.0001)]])
+					var stash := trail_terrain(main.get("terrain_overlay"))
+					_move_trail_walls = stash["walls"]
+					_move_trail_ledges = stash.get("ledges", null)
 				var solo_node: Node = main.get("solo_controller")
 				if solo_node != null:
 					var rec: Array = []
@@ -680,10 +679,36 @@ func _write_capture_outputs() -> void:
 	if not _move_trail_dump.is_empty():
 		var mv_f := FileAccess.open(_capture_dir.path_join("moves.json"), FileAccess.WRITE)
 		if mv_f != null:
-			mv_f.store_string(JSON.stringify({"walls": _move_trail_walls, "activations": _move_trail_dump}, " "))
+			var moves := {"walls": _move_trail_walls, "activations": _move_trail_dump}
+			if _move_trail_ledges != null:
+				moves["ledges"] = _move_trail_ledges
+			mv_f.store_string(JSON.stringify(moves, " "))
 			mv_f.close()
 			printerr("[ARENA] move trails (%d activations, %d walls) -> %s" % [
 				_move_trail_dump.size(), _move_trail_walls.size(), _capture_dir.path_join("moves.json")])
+
+
+## The wall audit's terrain stash: every wall segment as [[ax, az], [bx, bz]] (world metres, 0.0001 snap) and,
+## while the AI climbs (SoloController.climb_on), every climbable ledge as [[ax, az], [bx, bz], dy_in] at the same
+## snap, so the audit tells a legal climb over a container edge from a clip through a wall. A ledge stays in
+## "walls" too (it still blocks a move that does not climb); with climbing off there is no "ledges" key.
+static func trail_terrain(ovl: Node) -> Dictionary:
+	var walls: Array = []
+	if ovl != null and ovl.has_method("get_wall_segments_world"):
+		for wseg in ovl.get_wall_segments_world():
+			walls.append([_snap_xz(wseg[0]), _snap_xz(wseg[1])])
+	var out := {"walls": walls}
+	if SoloController.climb_on():
+		var ledges: Array = []
+		if ovl != null and ovl.has_method("get_ledges_world"):
+			for l in ovl.get_ledges_world():
+				ledges.append([_snap_xz(l["a"]), _snap_xz(l["b"]), float(l["dy_in"])])
+		out["ledges"] = ledges
+	return out
+
+
+static func _snap_xz(v: Vector2) -> Array:
+	return [snappedf(v.x, 0.0001), snappedf(v.y, 0.0001)]
 
 
 ## The played-truth mission descriptor: catalog-backed when NML_MISSION picked a

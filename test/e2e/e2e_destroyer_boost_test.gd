@@ -65,7 +65,7 @@ func test_boosted_destroyer_shreds_failed_save_2s_from_twelve_inches_plain_shred
 		elif f == 2:
 			twos += 1
 	assert_int(twos).is_greater(0)
-	var boosted := _unit(["Destroyer", "Destroyer Boost"], "destroyer_boosted")
+	var boosted := _unit(["Destroyer", "Enhanced Destroyer"], "destroyer_boosted")
 	var plain := _unit(["Destroyer"], "destroyer_plain")
 	var foe := _unit([], "destroyer_foe")
 	var volley: Dictionary = {"range": 24, "ap": 0, "rules": [],
@@ -95,7 +95,7 @@ func test_boosted_destroyer_shreds_failed_save_2s_from_twelve_inches_plain_shred
 
 func test_boosted_destroyer_shred_log_names_the_rule_and_the_window() -> void:
 	# Rules-must-log: the Shred trace names the Boost rule and the widened window.
-	var boosted := _unit(["Destroyer", "Destroyer Boost"], "destroyer_boosted_log")
+	var boosted := _unit(["Destroyer", "Enhanced Destroyer"], "destroyer_boosted_log")
 	var foe := _unit([], "destroyer_foe_log")
 	var volley: Dictionary = {"range": 24, "ap": 0, "rules": [],
 		"shred": _main._solo_shred_facet_applies(boosted, 24)}
@@ -104,4 +104,4 @@ func test_boosted_destroyer_shred_log_names_the_rule_and_the_window() -> void:
 	await _main._solo_resolve_saves(boosted, foe, "Blade", [], 60, 4,
 		volley, false, false, true, false, 12.0)
 	assert_str(_log_text(log_start)) \
-		.contains("Destroyer Boost: Shred on failed saves of 1-2 (over 9\")")
+		.contains("Enhanced Destroyer: Shred on failed saves of 1-2 (over 9\")")

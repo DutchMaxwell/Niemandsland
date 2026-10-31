@@ -74,7 +74,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
 
 import nml_core  # noqa: E402
 from shoot_replay_gate import (  # noqa: E402
-    burn_prefix, combat_kind, defender_state, first_at_or_after, read_game,
+    burn_prefix, combat_kind, defender_state, first_at_or_after, parted_field, read_game,
     resolve_vintage_flag, successes, vintage_report_line,
 )
 
@@ -293,13 +293,12 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
             verdict, why = "equal", ""
             tally["rolls"] += max(len(got), len(want))
             for i, (g, w) in enumerate(zip(got, want)):
-                if g[:3] != w[:3] or g[4] != w[4]:
+                field = parted_field(g, w) or ("owner" if g[4] != w[4] else None)
+                if field:
                     # WHICH field parted first is the whole diagnosis: `count` is
                     # the attack-scaling class (the table scales melee by the
                     # models within 2", this port by `alive`), `target` the
                     # to-hit class, `kind` a draw-ORDER class.
-                    field = ("kind" if g[0] != w[0] else "count" if g[1] != w[1]
-                             else "target" if g[2] != w[2] else "owner")
                     reasons[field] = reasons.get(field, 0) + 1
                     verdict = "shape"
                     why = ("roll %d %s: %s(%d dice, %d+, %s) vs table %s(%d dice, %d+, %s)"

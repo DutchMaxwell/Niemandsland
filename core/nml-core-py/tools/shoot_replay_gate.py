@@ -114,6 +114,29 @@ def successes(faces, target: int) -> int:
     return sum(1 for f in faces if f >= 6 or (f > 1 and f >= target))
 
 
+def compared_target(kind: str, target: int) -> int:
+    """The `target` a roll is COMPARED at (AI-G4F1, DIAG-PARITY D-A). A DEFENSE
+    target reads clamped to 2..6: the core clamps the summed save target once
+    (dice.rs `save_target(..).clamp(2, 6)`, `EPOCH_68_MODIFIER_SUM`), the table
+    hands the tray the raw `base_defense + ap` (main.gd `_solo_tray_roll`). A 6
+    always saves and a 1 always fails (`successes()`), so a 10+ blocks exactly
+    the faces a 6+ does. Attack targets stay raw. Reports print the raw pair."""
+    return min(max(target, 2), 6) if kind == "defense" else target
+
+
+def parted_field(g: tuple, w: tuple) -> str | None:
+    """The first of kind / count / target where the port's roll `g` and the
+    recorded roll `w` part, the target read through `compared_target()`; None
+    when they agree. Shared by both replay gates."""
+    if g[0] != w[0]:
+        return "kind"
+    if g[1] != w[1]:
+        return "count"
+    if compared_target(g[0], g[2]) != compared_target(w[0], w[2]):
+        return "target"
+    return None
+
+
 def read_game(d: Path) -> tuple[dict, list[dict], list[dict], int]:
     """(header, act lines, dice lines, dice_seed) of one recorded arena game.
 
@@ -486,13 +509,12 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
             why = ""
             tally["rolls"] += max(len(got), len(want))
             for i, (g, w) in enumerate(zip(got, want)):
-                if g[:3] != w[:3]:
+                field = parted_field(g, w)
+                if field:
                     # WHICH field parted first is the whole diagnosis: `count`
                     # is the attack-scaling class (the table scales by SIGHTED
                     # models, main.gd:4109, this port by `alive`), `target` the
                     # to-hit / AP class, `kind` a draw-order class.
-                    field = ("kind" if g[0] != w[0] else
-                             "count" if g[1] != w[1] else "target")
                     reasons[field] = reasons.get(field, 0) + 1
                     if not split:
                         reasons_clean[field] = reasons_clean.get(field, 0) + 1

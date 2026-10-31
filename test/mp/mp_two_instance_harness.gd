@@ -89,6 +89,7 @@ func _ready() -> void:
 	_log("start relay=%s seed=%s" % [relay_url, str(_args.get("seed", "240904"))])
 	_main = load("res://scenes/main.tscn").instantiate()
 	_main.name = "Main"
+	_listen_net_status()
 	get_tree().root.call_deferred("add_child", _main)
 	call_deferred("_wire_signals")
 
@@ -140,8 +141,8 @@ func _wire_signals() -> void:
 func _process(_delta: float) -> void:
 	var now := Time.get_ticks_msec()
 	var net_label = _main.get("network_status_label") if is_instance_valid(_main) else null
-	if net_label is Label and (_net_status_seen.is_empty() or _net_status_seen[-1] != net_label.text):
-		_net_status_seen.append(net_label.text)
+	if net_label is Label:   # fallback for the few texts main.gd writes straight to the label ("Hosting …")
+		_record_net_status(net_label.text)
 	_was_ready = _was_ready or _session_ready()
 	if not _failed and not _was_ready \
 			and float(now - _started_ms) / 1000.0 > CONNECT_TIMEOUT_S:
@@ -151,6 +152,25 @@ func _process(_delta: float) -> void:
 		_write_state()
 	if not _command_busy:
 		_poll_command()
+
+
+## #1958: GameMenu.set_status reports every network status the game sets, so two statuses set inside one
+## frame are both recorded (the per-frame look at the label saw only the last). Set by name, so this file
+## still loads against a GameMenu without the observer (the red/green check puts the game side back).
+func _listen_net_status() -> void:
+	var menu: Script = GameMenu
+	menu.set(&"status_observer", _on_net_status_set)
+
+
+func _on_net_status_set(label: Label, text: String) -> void:
+	if is_instance_valid(_main) and label == _main.get("network_status_label"):
+		_record_net_status(text)
+
+
+## Appends `text` unless it repeats the last entry (the frame sample re-reads what the observer recorded).
+func _record_net_status(text: String) -> void:
+	if _net_status_seen.is_empty() or _net_status_seen[-1] != text:
+		_net_status_seen.append(text)
 
 
 func _session_ready() -> bool:

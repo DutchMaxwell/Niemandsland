@@ -15,6 +15,9 @@ const REPO: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../..");
 fn target(column: Option<i64>, needs_path: bool) -> (Option<String>, String) {
     let fx: Value = serde_json::from_str(FIXTURE).unwrap();
     let mut header = fx["header"].clone();
+    // The recorded ruin walls go: since MEL-PAR-F8 the knob routes around them and two stand on this charge line
+    // (the walled case is pinned in src/tests/menu/v36_melee.rs). This file pins the Container cells alone.
+    header["terrain"]["walls"] = json!([]);
     if let Some(c) = column {
         let cells = header["terrain"]["cells"].as_array_mut().unwrap();
         cells.retain(|cell| cell[0].as_i64() != Some(c));
