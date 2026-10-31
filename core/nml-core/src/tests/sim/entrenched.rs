@@ -118,14 +118,16 @@ use super::*;
     /// over 9" at epoch 7 — the SAME stationary read a statically carried
     /// Entrenched gets (main.gd's grant overlay writes the name onto the
     /// chain, main.gd:3730; the read at :5694-5702 never distinguished).
+    /// The battle-log line is rules-3.6 only (`EPOCH_73_V36`), so below 73
+    /// the applied penalty stays silent.
     #[test]
     fn a_granted_entrenched_takes_the_penalty_while_unmoved() {
         let (st, statics) = buff_line();
         let on = run_granted(&st, &statics, 7, vec![(2, entrenched_grant())]);
         assert_eq!(on.rolls[0].target, 6, "granted Entrenched, unmoved: Quality 4+ -> 6+");
         assert!(
-            on.log.iter().any(|l| l.contains("[Entrenched]")),
-            "the applied rule names itself (rules-must-log): {:?}",
+            !on.log.iter().any(|l| l.contains("[Entrenched]")),
+            "below epoch 73 the penalty stays silent: {:?}",
             on.log
         );
         // The moved twin: the record is on the ledger but the gate is shut.
