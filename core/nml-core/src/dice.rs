@@ -2118,6 +2118,19 @@ pub fn impact_pools(att: &Ctx, def: &Ctx) -> [(i64, i64); 2] {
     ]
 }
 
+/// Rules 3.6 (`EPOCH_73_V36`) — Parry's cancellation: every face of 6 or more
+/// cancels one hit, the HEAVY pool first (the hits carrying AP are worth more),
+/// then the plain pool. `pools` is `impact_pools`'s order: [plain, heavy].
+pub fn parry_cancel(faces: &[u8], pools: [(i64, i64); 2]) -> [(i64, i64); 2] {
+    let mut left = faces.iter().filter(|&&f| f >= 6).count() as i64;
+    let mut out = pools;
+    let heavy = left.min(out[1].0);
+    out[1].0 -= heavy;
+    left -= heavy;
+    out[0].0 -= left.min(out[0].0);
+    out
+}
+
 /// ONE Impact pool on the tray: the hit roll at 2+, then ONE save batch (no
 /// to-hit faces reach it, so no Rending sub-batch and no Bane), then its own
 /// Regeneration roll — the pool LANDS at once (`_solo_land_wounds` :6337).
@@ -2136,6 +2149,18 @@ fn takedown_pick_line(p: &ShootProfile, def_owner: &str) -> String {
     format!("{rule} ({}): targets the most valuable model in {def_owner} — resolved as a unit of [1]", p.name)
 }
 
+/// ONE Impact pool's hit roll — the `attack` slot `resolve_impact_pool_at`
+/// records, split out so a Parry event can roll every pool's hits before any
+/// save. Returns the recorded roll and its hit count.
+pub fn impact_hit_roll(dice: i64, att_owner: &str, tray: &mut Tray) -> (Roll, i64) {
+    let faces = tray.roll(dice as usize);
+    let hits = faces_to_hits(&faces, IMPACT_HIT_TARGET as u8) as i64;
+    (
+        Roll { kind: "attack", count: dice, target: IMPACT_HIT_TARGET, faces, owner: att_owner.into() },
+        hits,
+    )
+}
+
 pub fn resolve_impact_pool_with_tray(
     dice: i64,
     ap: i64,
@@ -2145,6 +2170,28 @@ pub fn resolve_impact_pool_with_tray(
     tray: &mut Tray,
 ) -> ShootResult {
     resolve_impact_pool_at(dice, ap, att_owner, def, def_owner, None, tray)
+}
+
+/// ONE Impact pool's save batch once its hits are known — the tail of
+/// `resolve_impact_pool_at`. A Parry event calls this per pool after its
+/// cancellation, in the pools' own order.
+pub fn impact_saves_with_tray(
+    hits: i64, ap: i64, def: &Ctx, def_owner: &str, charge: Option<(f64, bool)>, tray: &mut Tray,
+) -> ShootResult {
+    let mut out = ShootResult::default();
+    if hits <= 0 { return out; }
+    let over9 = match charge {
+        None => def.guarded,
+        Some((gap_in, _)) => def.guarded && gap_in > LONG_RANGE_IN && !def.sturdy_boost_gates_guarded,
+    };
+    let exact = over9 && matches!(charge, Some((_, true)));
+    if over9 && !exact { out.mark("guarded_over9"); }
+    let bare = ShootProfile { ap, ..Default::default() };
+    let sd = guarded_defense(shielded_defense(def.defense, def.shielded_bonus(), def.def_floor()), exact, def.def_floor());
+    let w = save_batch(&bare, def, def_owner, hits, sd, ap, false, false, 1, false, tray, &mut out);
+    out.caused = w;
+    out.wounds = regen_batch(w, def, def_owner, tray, &mut out.rolls);
+    out
 }
 
 /// `resolve_impact_pool_with_tray` knowing the charge: `charge` = (the pre-charge gap in inches,
@@ -2164,33 +2211,12 @@ pub fn resolve_impact_pool_at(
     if dice <= 0 {
         return out;
     }
-    let over9 = match charge {
-        None => def.guarded,
-        Some((gap_in, _)) => def.guarded && gap_in > LONG_RANGE_IN && !def.sturdy_boost_gates_guarded,
-    };
-    let exact = over9 && matches!(charge, Some((_, true)));
-    if over9 && !exact {
-        out.mark("guarded_over9");
-    }
-    let faces = tray.roll(dice as usize);
-    let hits = faces_to_hits(&faces, IMPACT_HIT_TARGET as u8) as i64;
-    out.rolls.push(Roll {
-        kind: "attack",
-        count: dice,
-        target: IMPACT_HIT_TARGET,
-        faces,
-        owner: att_owner.into(),
-    });
+    let (roll, hits) = impact_hit_roll(dice, att_owner, tray);
+    out.rolls.push(roll);
     if hits <= 0 {
         return out;
     }
-    // "Impact is not a weapon": no Deadly, no Bane, no Shred — a bare profile
-    // carrying only the pool's AP, exactly as :6325 builds it.
-    let bare = ShootProfile { ap, ..Default::default() };
-    let sd = guarded_defense(shielded_defense(def.defense, def.shielded_bonus(), def.def_floor()), exact, def.def_floor());
-    let w = save_batch(&bare, def, def_owner, hits, sd, ap, false, false, 1, false, tray, &mut out);
-    out.caused = w;
-    out.wounds = regen_batch(w, def, def_owner, tray, &mut out.rolls);
+    out.wounds = out.absorb(impact_saves_with_tray(hits, ap, def, def_owner, charge, tray));
     out
 }
 
