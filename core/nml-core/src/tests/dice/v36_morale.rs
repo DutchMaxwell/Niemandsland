@@ -190,13 +190,13 @@ mod mor_17a {
     /// 6+ still rolls at 73, and at 72 it reads exactly like the plain 3.5 entry.
     #[test]
     fn enhanced_knightborn_has_no_gate_at_epoch_73_but_does_nothing_new_at_72() {
-        let now = shot(&knight_squad("[]", r#"["Enhanced Knightborn"]"#, EPOCH_73_V36), 5.0);
+        let now = shot(&knight_squad(r#"["Enhanced Knightborn"]"#, "[]", EPOCH_73_V36), 5.0);
         assert!(regen_dice(&now) > 0, "no gate: the 6+ rolls inside 9in: {:?}", now.rolls);
         let f = spell_facets(&[]);
         let now_spell = spell_damage_ev(
-            10, &knight_squad("[]", r#"["Enhanced Knightborn"]"#, EPOCH_73_V36).ctx, &f);
+            10, &knight_squad(r#"["Enhanced Knightborn"]"#, "[]", EPOCH_73_V36).ctx, &f);
         assert!((now_spell - 5.0 / 6.0).abs() < 1e-9, "the spell leg is 2+ at 73: {now_spell}");
-        let old = knight_squad("[]", r#"["Enhanced Knightborn"]"#, EPOCH_72_PLAYTEST_RULES);
+        let old = knight_squad(r#"["Enhanced Knightborn"]"#, "[]", EPOCH_72_PLAYTEST_RULES);
         let plain = knight_squad(r#"["Knightborn"]"#, "[]", EPOCH_72_PLAYTEST_RULES);
         assert_eq!(shot(&old, 5.0).wounds, shot(&plain, 5.0).wounds, "72 reads the old keys");
         assert!((spell_damage_ev(10, &old.ctx, &f) - spell_damage_ev(10, &plain.ctx, &f)).abs() < 1e-9);

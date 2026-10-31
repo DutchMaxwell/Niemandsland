@@ -172,7 +172,7 @@ mod mor_17a {
 
     #[test]
     fn enhanced_knightborn_stamps_no_gate_at_epoch_73() {
-        let ctx = knight_ctx("[]", r#"["Enhanced Knightborn"]"#, EPOCH_73_V36);
+        let ctx = knight_ctx(r#"["Enhanced Knightborn"]"#, "[]", EPOCH_73_V36);
         assert!(ctx.regeneration);
         assert_eq!((ctx.regen_target, ctx.regen_target_spell), (6, 2));
         assert_eq!((ctx.regen_gate_over_in, ctx.regen_gate_charge_in), (0.0, 0.0), "the grant has no gate");
@@ -180,7 +180,7 @@ mod mor_17a {
 
     #[test]
     fn enhanced_knightborn_does_nothing_new_at_epoch_72() {
-        let ctx = knight_ctx("[]", r#"["Enhanced Knightborn"]"#, EPOCH_72_PLAYTEST_RULES);
+        let ctx = knight_ctx(r#"["Enhanced Knightborn"]"#, "[]", EPOCH_72_PLAYTEST_RULES);
         assert_eq!((ctx.regen_target, ctx.regen_target_spell), (6, 4), "old keys keep the 3.5 meaning");
         assert_eq!((ctx.regen_gate_over_in, ctx.regen_gate_charge_in), (0.0, 0.0));
     }
