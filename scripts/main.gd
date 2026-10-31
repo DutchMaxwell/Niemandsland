@@ -1678,6 +1678,9 @@ func _on_solo_human_activated(gu: GameUnit) -> void:
 ## SoloController.alternation_next would hand the AI two answers in a row.
 func _solo_finish_human_activation(gu: GameUnit) -> void:
 	_solo_ai_took_last_activation = false   # the human just took an activation (finding 7: round-opener tracking)
+	if gu != null:
+		var host := _solo_combat_unit(gu)
+		_solo_activation_wounds_start.erase((host if host != null else gu).get_instance_id())
 	if gu == null or not gu.was_activated_via_coordinate():
 		_solo_pending_replies += 1
 	await _solo_pump()
@@ -6587,7 +6590,39 @@ func _solo_reanimation_mapped(unit: GameUnit) -> bool:
 ## manual activation toggle, embark/disembark, the AI's peeked pick. Opening a window and cancelling
 ## it starts nothing (it used to bank a free Reanimation). Stage 2's "Activate" button calls this too.
 func begin_activation(unit: GameUnit) -> void:
+	_solo_snapshot_activation_wounds(unit)
 	await _solo_try_reanimation(unit)
+
+
+## MEL-10h (rules 3.6): the acting HUMAN unit's wounds at its activation start, so the melee can count
+## the Dangerous terrain it took on the charge move as wounds TAKEN (the AI path reads the move's own
+## delta). The first door of an activation wins; the attack door later in the same activation must not
+## rebase it. Cleared when the activation ends or the round advances.
+func _solo_snapshot_activation_wounds(unit: GameUnit) -> void:
+	if unit == null or _solo_is_ai_unit(unit):
+		return
+	var host := _solo_combat_unit(unit)
+	if host == null:
+		return
+	var id: int = host.get_instance_id()
+	if _solo_activation_wounds_start.has(id):
+		return
+	_solo_activation_wounds_start[id] = _solo_unit_wounds_now(host)
+
+
+## Wounds the human unit lost since its activation start (Dangerous move, Hazardous earlier in the
+## activation, ...). Read BEFORE the melee strikes so only pre-melee self-wounds enter the tally; the
+## melee's own Hazardous ones keep their separate `_solo_hazard_self` leg.
+func _solo_activation_self_wounds(unit: GameUnit) -> int:
+	if unit == null:
+		return 0
+	var host := _solo_combat_unit(unit)
+	if host == null:
+		return 0
+	var d: Dictionary = _solo_activation_wounds_start
+	if not d.has(host.get_instance_id()):
+		return 0
+	return maxi(0, int(d[host.get_instance_id()]) - _solo_unit_wounds_now(host))
 
 
 ## The Spawn + Reanimation trigger behind begin_activation (the only production caller). Rolls the
@@ -8085,6 +8120,7 @@ func _solo_brace_models(unit: GameUnit) -> int:
 var _solo_retaliate_credit := 0   # Retaliate wounds of the LAST strike phase — the defender's tally credit
 var _solo_last_save_ones := 0   # resolver wave A: unmodified Defense 1s of the LAST save batch (Bloodthirsty Fighter)
 var _solo_hazard_self := {}   # unit instance id -> Hazardous self-wounds since the current melee began (rules 3.6 tally)
+var _solo_activation_wounds_start := {}   # human unit instance id -> wounds at ITS activation start (rules 3.6 taken tally)
 var _solo_scourge_wounds := 0   # SHO-15a: the volley's Scourge phantom wounds, read once by _solo_shooting_morale
 
 
@@ -14066,6 +14102,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 func _run_human_melee(attacker: GameUnit, target: GameUnit, auto: bool = false) -> void:
 	var human_caused := 0
 	var ai_caused := 0
+	var self_taken: int = _solo_activation_self_wounds(attacker)   # MEL-10h: pre-melee wounds count as TAKEN at 3.6
 	_solo_hazard_self.clear()
 	_solo_stage_begin("%s charges %s" % [attacker.get_name(), target.get_name()])
 	# Rules-must-log: your charge never named itself in the log (only the AI's announce did), so the
@@ -14136,7 +14173,7 @@ func _run_human_melee(attacker: GameUnit, target: GameUnit, auto: bool = false) 
 	await _solo_self_destruct_post_melee(target, attacker)
 	# — Morale: a destroyed side loses first; otherwise the lower wound score loses. Fear(X) (GF/AoF v3.5.1 p.13) adds
 	#   +X to the bearer's tally for THIS comparison only. —
-	var scores: Array = _solo_melee_scores(attacker, human_caused, target, ai_caused)
+	var scores: Array = _solo_melee_scores(attacker, human_caused, target, ai_caused, self_taken)
 	var human_score: int = scores[0]
 	var ai_score: int = scores[1]
 	var loser: GameUnit = _solo_melee_loser(attacker, human_score, target, ai_score)
@@ -14184,6 +14221,7 @@ func _solo_set_fatigued(unit: GameUnit) -> void:
 func _on_solo_round_advanced(_round_number: int) -> void:
 	_solo_expire_spell_tokens()   # v3.5.1: spell effects end with the round — clear the placed tokens
 	_solo_reset_all_fatigue()
+	_solo_activation_wounds_start.clear()   # MEL-10h: a new round starts every activation snapshot fresh
 	if solo_ai_slots.is_empty():
 		return
 	# Battleborn recovery + Ambush arrivals + the human reserve prompt are the ROUND-START sequence, now driven
