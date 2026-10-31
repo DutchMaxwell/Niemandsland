@@ -40,11 +40,17 @@ static func section(box: VBoxContainer, danger: Array = []) -> void:
 		first = false
 
 
+## #1958: the two-instance multiplayer test hears every status set, in order (a Label has no text signal).
+static var status_observer := Callable()
+
+
 ## The multiplayer status line: `text` in the ink of its connection state — HouseStyle.TONE_MUTED
 ## offline, TONE_OK online, TONE_WARN while reconnecting, TONE_DANGER when it failed.
 static func set_status(label: Label, text: String, tone: StringName) -> void:
 	label.text = text
 	label.add_theme_color_override(&"font_color", HouseStyle.tone_ink(tone))
+	if status_observer.is_valid():
+		status_observer.call(label, text)
 
 
 ## The menu's one main action (maintainer D60: Start Game / Ready) — the gold primary, centred, full height.

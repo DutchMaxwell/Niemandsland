@@ -1325,11 +1325,11 @@ func _height_label(terrain_type: int) -> String:
 func _terrain_effect_label(terrain_type: int) -> String:
 	match terrain_type:
 		TerrainType.RUINS:
-			return "Ruins\n%s\nCover, Blocks LoS (see in/out)" % _height_label(terrain_type)
+			return "Ruins\n%s\nCover, Dense (see in/out, not through)" % _height_label(terrain_type)
 		TerrainType.FOREST:
-			return "Forest\n%s\nDifficult, Cover, Blocks LoS" % _height_label(terrain_type)
+			return "Forest\n%s\nDifficult, Cover, Dense" % _height_label(terrain_type)
 		TerrainType.CONTAINER:
-			return "Container\n%s\nImpassable, Blocks LoS" % _height_label(terrain_type)
+			return "Container\n%s\nImpassable, Sight Blocking" % _height_label(terrain_type)
 		TerrainType.DANGEROUS:
 			return "Dangerous\nGround\nDangerous Terrain"
 	return ""

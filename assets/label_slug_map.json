@@ -69,7 +69,9 @@
     "dread pterodactyl": "pterodactyl",
     "raptor": "raptor",
     "obsidian great weapon": "obsidian",
-    "tyrannosaur": "tyrannosaur"
+    "tyrannosaur": "tyrannosaur",
+    "master lance": "lance",
+    "master great weapon": "greatweapon"
   },
   "_faction_ratmen": {
     "pet giant rat": "petrat",

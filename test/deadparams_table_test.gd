@@ -120,12 +120,16 @@ func test_hold_only_param_reopens_the_immobile_menu() -> void:
 
 
 func test_hold_only_replays_the_hold_only_menu_without_a_param() -> void:
-	# The shipped entry (or no entry): the menu stays hold-only — byte-identical.
+	# The shipped entry (or no entry): the menu stays hold-only — byte-identical. Pinned at the
+	# rules 3.5 epoch (72): from rules 3.6 (73) on Artillery may move (test/v36/sho_04_test.gd).
+	var epoch0: int = AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
 	for rules in [["Immobile"], ["Artillery"]]:
 		RulesRegistry.reset_cache()
 		var state := _state_with(rules, "gf", "testfac")
 		assert_bool(_kinds(AiPlanner.candidates(state, "Gun")).has(AiDecision.Action.RUSH)) \
 			.override_failure_message("%s must keep the hold-only menu" % str(rules)).is_false()
+	AiActRecorder.rules_epoch = epoch0   # statics leak across gdUnit tests — restore
 	RulesRegistry.reset_cache()
 
 

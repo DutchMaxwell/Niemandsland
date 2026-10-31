@@ -1,8 +1,9 @@
 extends SceneTree
 ## Headless probe for the S6 AI-list CDN delivery: performs the EXACT fetch the game's
 ## _fetch_cdn_text does (same host, same browser UA) against a known-existing object and —
-## once the lists are staged — against ai_lists/_manifest.json. Run:
-##   godot --headless -s res://tools/cdn_lists_probe.gd [-- path=ai_lists/_manifest.json]
+## once the lists are staged — against ai_lists_v36/_manifest.json (the rules 3.6 folder; 0.3.14 reads
+## ai_lists/). Run:
+##   godot --headless -s res://tools/cdn_lists_probe.gd [-- path=ai_lists_v36/_manifest.json]
 ## Prints PROBE_OK <bytes> or PROBE_FAIL <result> <code>.
 
 func _init() -> void:

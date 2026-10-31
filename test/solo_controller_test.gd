@@ -1130,12 +1130,26 @@ func test_shooting_profile_threads_blast_reliable_and_deadly() -> void:
 	assert_int(int(prof["ap"])).is_equal(1)
 
 
-func test_forces_hold_for_immobile_and_artillery() -> void:
+func test_forces_hold_for_immobile_and_artillery_at_epoch_72() -> void:
 	# GF/AoF v3.5.1 p.13: Immobile / Artillery "may only use Hold actions".
+	var epoch0: int = AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
 	assert_bool(SoloController.forces_hold(["Immobile"])).is_true()
 	assert_bool(SoloController.forces_hold(["Artillery"])).is_true()
 	assert_bool(SoloController.forces_hold(["Fearless", "Tough(3)"])).is_false()
 	assert_bool(SoloController.forces_hold([])).is_false()
+	AiActRecorder.rules_epoch = epoch0   # statics leak across gdUnit tests — restore
+
+
+func test_forces_hold_for_immobile_only_at_epoch_73() -> void:
+	# Rules 3.6: Artillery may move like any unit; Immobile still keeps to Hold actions.
+	var epoch0: int = AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	var immobile := SoloController.forces_hold(["Immobile"])
+	var artillery := SoloController.forces_hold(["Artillery"])
+	AiActRecorder.rules_epoch = epoch0   # statics leak across gdUnit tests — restore
+	assert_bool(immobile).is_true()
+	assert_bool(artillery).override_failure_message("rules 3.6: Artillery may move").is_false()
 
 
 func test_has_counter_from_weapon_or_unit_rule() -> void:
@@ -1670,8 +1684,12 @@ func test_striking_models_for_counts_a_big_base_in_contact() -> void:
 	add_child(solo)
 	assert_int(solo.striking_models_for(walker, foe)).is_equal(1)
 	assert_int(solo.striking_models_for(foe, walker)).is_equal(1)
-	# The centre-space fallback (kept for the sim) misses the same pair — the documented old bug.
+	# The centre-space fallback (kept for the sim) misses the same pair — the documented old bug, at the
+	# 3.5 records' 2" reach (rules 3.6's 3" reaches this pair, test/v36/mel_08_test.gd).
+	var saved_epoch := AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
 	assert_int(SoloController.striking_models([Vector3(0, 0, 0)], [Vector3(0.09, 0, 0)])).is_equal(0)
+	AiActRecorder.rules_epoch = saved_epoch
 	# Far apart (edge gap ~4.3") neither measure finds a striker.
 	foe.models[0].node.global_position = Vector3(0.172, 0, 0)
 	assert_int(solo.striking_models_for(walker, foe)).is_equal(0)
@@ -2327,15 +2345,19 @@ func test_unit_has_ambush_covers_item_granted_rule() -> void:
 	assert_bool(SoloController.unit_has_ambush(plain)).is_false()
 
 
-func test_scout_extended_zone_grows_toward_table_centre() -> void:
+func test_scout_extended_zone_grows_toward_table_centre_at_epoch_72() -> void:
+	# Below the rules 3.6 epoch the band is 12" (the 9" leg: test/v36/ux_12_test.gd).
+	var epoch0: int = AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
 	# Zone at the -Z edge: forward edge = end.y → the band extends end.y by 12" (0.3048 m).
 	var zone := Rect2(Vector2(-0.5, -0.6), Vector2(1.0, 0.3))
 	var ext := SoloController.scout_extended_zone(zone, zone.end.y)
-	assert_float(ext.end.y).is_equal_approx(zone.end.y + 0.3048, 0.001)
-	assert_float(ext.position.y).is_equal_approx(zone.position.y, 0.001)
 	# Zone at the +Z edge: forward edge = position.y → the band extends position.y by 12".
 	var zone2 := Rect2(Vector2(-0.5, 0.3), Vector2(1.0, 0.3))
 	var ext2 := SoloController.scout_extended_zone(zone2, zone2.position.y)
+	AiActRecorder.rules_epoch = epoch0   # statics leak across gdUnit tests — restore
+	assert_float(ext.end.y).is_equal_approx(zone.end.y + 0.3048, 0.001)
+	assert_float(ext.position.y).is_equal_approx(zone.position.y, 0.001)
 	assert_float(ext2.position.y).is_equal_approx(zone2.position.y - 0.3048, 0.001)
 	assert_float(ext2.end.y).is_equal_approx(zone2.end.y, 0.001)
 
@@ -2421,9 +2443,12 @@ func _deploy_why_for(solo: SoloController, unit_name: String) -> String:
 	return why
 
 
-func test_deploy_scouts_wait_in_their_own_queue_and_land_in_the_band() -> void:
+func test_deploy_scouts_wait_in_their_own_queue_and_land_in_the_band_at_epoch_72() -> void:
 	# Maintainer flow: scouts deploy in their OWN phase after all other units (GF v3.5.1) — the
 	# main queue never contains them, and the scout placement may stand ahead of the zone.
+	# Below the rules 3.6 epoch the band is 12" (the 9" leg: test/v36/ux_12_test.gd).
+	var epoch0: int = AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
 	var human := _unit(1, [Vector3(0, 0, 0.5)])
 	var a := _unit(2, [Vector3(0, 0, -0.5)])
 	a.unit_id = "a"
@@ -2444,8 +2469,10 @@ func test_deploy_scouts_wait_in_their_own_queue_and_land_in_the_band() -> void:
 	assert_object(solo.deploy_next_one()).is_null()        # main phase done — scout NOT drained here
 	assert_int(solo.deploy_scouts_pending()).is_equal(1)
 	var placed: GameUnit = solo.deploy_next_scout()
-	assert_object(placed).is_equal(sc)
 	var band := SoloController.scout_extended_zone(zone, zone.end.y)
+	AiActRecorder.rules_epoch = epoch0   # statics leak across gdUnit tests — restore
+	assert_object(placed).is_equal(sc)
+	assert_float(band.end.y).is_equal_approx(zone.end.y + 0.3048, 0.001)   # the 12" band
 	var c := solo.unit_centre(sc)
 	assert_bool(band.has_point(Vector2(c.x, c.z))).is_true()   # inside zone + 12" band
 

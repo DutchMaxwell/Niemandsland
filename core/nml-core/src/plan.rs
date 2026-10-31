@@ -1090,7 +1090,7 @@ impl<'a> Search<'a> {
             }
             let Some(&u) = state.roster.index.get(&scored[i].unit_key) else { continue };
             if units.contains(&u) || state.shaken[u]
-                || crate::menu::forces_hold(&state.profile(u).special_rules)
+                || crate::menu::holds_only(state, statics, u)
             {
                 continue;
             }

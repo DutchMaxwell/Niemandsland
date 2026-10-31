@@ -31,14 +31,21 @@ func _announce_frame() -> PackedByteArray:
 	return MPCommand.encode("rpc", 1, {"m": "_rpc_announce_version", "a": [version, "guest-token"]})
 
 
+## A guest announces like announce_version_to_host: its rules version first (W1.1d), then the version.
+func _announce(nm: Node) -> void:
+	var rules := OPRApiClient.rules_core_version("gf")
+	nm._on_raw_command(GUEST, MPCommand.encode("rpc", 1, {"m": "_rpc_announce_rules_version", "a": [rules]}))
+	nm._on_raw_command(GUEST, _announce_frame())
+
+
 func test_repeat_announce_from_a_validated_peer_is_one_handshake() -> void:
 	# In the tree without a transport: the offline peer is id 1, so this manager is the host.
 	var nm: Node = auto_free(NetworkManagerScript.new())
 	add_child(nm)
 	var passes: Array = []
 	nm.peer_version_validated.connect(func(peer: int) -> void: passes.append(peer))
-	nm._on_raw_command(GUEST, _announce_frame())   # room_joined -> internet_connected
-	nm._on_raw_command(GUEST, _announce_frame())   # connected_to_server, the same join
+	_announce(nm)   # room_joined -> internet_connected
+	_announce(nm)   # connected_to_server, the same join
 	assert_array(passes).is_equal([GUEST])
 
 
@@ -47,9 +54,9 @@ func test_announce_after_a_rejoin_is_a_new_handshake() -> void:
 	add_child(nm)
 	var passes: Array = []
 	nm.peer_version_validated.connect(func(peer: int) -> void: passes.append(peer))
-	nm._on_raw_command(GUEST, _announce_frame())
-	nm._on_peer_disconnected(GUEST)                # the drop clears the validation
-	nm._on_raw_command(GUEST, _announce_frame())   # the rejoin announces again: full re-sync
+	_announce(nm)
+	nm._on_peer_disconnected(GUEST)   # the drop clears the validation
+	_announce(nm)                     # the rejoin announces again: full re-sync
 	assert_array(passes).is_equal([GUEST, GUEST])
 
 

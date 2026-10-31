@@ -2483,9 +2483,9 @@ func _sync_marker_color_store(model: ModelInstance, marker_name: String, color: 
 var battle_log: BattleLog = null
 
 ## "Reached" gate for the sandbox embark intent: the rule's move has already happened on the
-## table by hand, so one alive model of the JOINED unit standing within this base gap of a
-## transport model counts as "only one model needs to reach the Transport" (GF v3.5.1).
-const EMBARK_REACH_M := 0.0254   # 1"
+## table by hand, so one alive model of the JOINED unit standing within the embark reach of a
+## transport model counts as reaching it. The reach is epoch-selected in ONE place:
+## OPRArmyManager.embark_reach_m() (1" at epoch 72, 2" from rules 3.6 on).
 
 
 ## Fill the menu context and append the transport items — "Embark" when a reachable friendly
@@ -2565,7 +2565,7 @@ func _embark_targets_for(unit: GameUnit) -> Array:
 			continue
 		# ALL candidates, not the first hit — with two trucks in reach the player picks
 		# the vehicle (maintainer find), mirroring the per-cargo unload list.
-		if _joined_gap_to_m(unit, tr) <= EMBARK_REACH_M:
+		if _joined_gap_to_m(unit, tr) <= OPRArmyManager.embark_reach_m():
 			out.append(tr)
 		elif deploying and bool(tr.unit_properties.get("ambush_reserve", false)):
 			out.append(tr)
@@ -2620,9 +2620,14 @@ func _embark_unit(context: Dictionary) -> void:
 	if army_manager.set_unit_embarked(unit, tr, true):
 		if network_manager:
 			network_manager.broadcast_unit_embark(unit.unit_id, tr.unit_id, true)
-		_travel_transport_log("%s embarks into %s (%d/%d spaces used) — GF v3.5.1 Transport" % [
+		# Rules 3.6 (EPOCH_73_V36): the line names the 2" reach the offer was made on; a reserve load has none.
+		var rule_note := "GF v3.5.1 Transport"
+		if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+			rule_note = "Transport, loaded in reserve" if bool(tr.unit_properties.get("ambush_reserve", false)) \
+					else "Transport, a model stood within 2\" of it (base edge to base edge)"
+		_travel_transport_log("%s embarks into %s (%d/%d spaces used) — %s" % [
 			str(unit.unit_properties.get("name", "unit")), str(tr.unit_properties.get("name", "transport")),
-			army_manager.transport_used_spaces(tr), army_manager.transport_capacity(tr)])
+			army_manager.transport_used_spaces(tr), army_manager.transport_capacity(tr), rule_note])
 		_consume_transport_activation(unit, "embark")
 
 

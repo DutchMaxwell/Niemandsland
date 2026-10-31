@@ -484,7 +484,7 @@ def _deploy_arena(
             "placements": placed["placements"], "zone": zones[slot],
         }
         reserved[slot] = list(placed["reserved"])
-    finished = nml_core.deploy_finish(sides, board, {}, opener)
+    finished = nml_core.deploy_finish(sides, board, {}, opener, rules_epoch=int(rules_epoch))
     pos: dict[str, list[list[float]]] = {}
     for slot in ("1", "2"):
         for key in reserved[slot]:

@@ -80,7 +80,7 @@ use super::*;
     /// slot 1, 2" from the caster, holding 2 tokens): the helper half of the
     /// pool. The caster holds 1 token (threshold 0), so a full boost draws
     /// own-first and the battery covers the rest.
-    fn caster_and_battery() -> (State, Vec<UnitStatic>) {
+    pub(super) fn caster_and_battery() -> (State, Vec<UnitStatic>) {
         let mut st = four_unit_line();
         st.casts = vec![1, 2, 0, 0];
         st.attached = Rc::new(vec![vec![], vec![], vec![], vec![]]);
@@ -255,12 +255,13 @@ use super::*;
     }
 
     /// "in line of sight of the caster's unit" (:4606): a helper without LoS
-    /// is out of the pool even at 2".
+    /// is out of the pool even at 2" — the rules 3.5 reading, pinned at the
+    /// frozen EPOCH_72 (rules 3.6 drops the sight line: v36_morale.rs).
     #[test]
-    fn a_helper_without_line_of_sight_is_out_of_the_boost_pool() {
+    fn a_helper_without_line_of_sight_is_out_of_the_boost_pool_at_epoch_72() {
         let (mut st, statics) = caster_and_battery();
         let los = vec![true, false, true, true];
-        cast_phase(&statics, &mut st, 0, &los, epoch(48), None);
+        cast_phase(&statics, &mut st, 0, &los, epoch(EPOCH_72_PLAYTEST_RULES), None);
         assert_eq!(st.casts[1], 2, "no LoS, no lend");
         assert_eq!(st.casts[0], 0, "the own leftover still boosts");
     }

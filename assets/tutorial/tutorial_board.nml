@@ -7,6 +7,31 @@
 		"current_player": 1,
 		"current_round": 1,
 		"game_phase": 0,
+		"rule_state": {
+
+		},
+		"rules_automation": 0,
+		"solo_mission": {
+			"destroy_seq": [
+				0
+			],
+			"id": "",
+			"markers": [],
+			"roles": {
+
+			},
+			"scoring": "end",
+			"vp": [
+				0,
+				0
+			],
+			"vp_flavour": {
+
+			},
+			"vp_memo": {
+
+			}
+		},
 		"token_library": {
 
 		}
@@ -182,7 +207,7 @@
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "CCW",
+								"name": "Strike",
 								"range": 0,
 								"specialRules": []
 							},
@@ -190,7 +215,7 @@
 								"attacks": 1,
 								"count": 9,
 								"name": "Heavy Rifle",
-								"range": 24,
+								"range": 18,
 								"specialRules": [
 									"AP(1)"
 								]
@@ -230,7 +255,7 @@
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "CCW",
+								"name": "Strike",
 								"range": 0,
 								"specialRules": []
 							},
@@ -238,7 +263,7 @@
 								"attacks": 1,
 								"count": 9,
 								"name": "Heavy Rifle",
-								"range": 24,
+								"range": 18,
 								"specialRules": [
 									"AP(1)"
 								]
@@ -278,7 +303,7 @@
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "CCW",
+								"name": "Strike",
 								"range": 0,
 								"specialRules": []
 							},
@@ -286,7 +311,7 @@
 								"attacks": 1,
 								"count": 9,
 								"name": "Heavy Rifle",
-								"range": 24,
+								"range": 18,
 								"specialRules": [
 									"AP(1)"
 								]
@@ -326,7 +351,7 @@
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "CCW",
+								"name": "Strike",
 								"range": 0,
 								"specialRules": []
 							},
@@ -334,7 +359,7 @@
 								"attacks": 1,
 								"count": 9,
 								"name": "Heavy Rifle",
-								"range": 24,
+								"range": 18,
 								"specialRules": [
 									"AP(1)"
 								]
@@ -374,7 +399,7 @@
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "CCW",
+								"name": "Strike",
 								"range": 0,
 								"specialRules": []
 							},
@@ -382,7 +407,7 @@
 								"attacks": 1,
 								"count": 9,
 								"name": "Heavy Rifle",
-								"range": 24,
+								"range": 18,
 								"specialRules": [
 									"AP(1)"
 								]
@@ -422,7 +447,7 @@
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "CCW",
+								"name": "Strike",
 								"range": 0,
 								"specialRules": []
 							},
@@ -430,7 +455,7 @@
 								"attacks": 1,
 								"count": 9,
 								"name": "Heavy Rifle",
-								"range": 24,
+								"range": 18,
 								"specialRules": [
 									"AP(1)"
 								]
@@ -470,7 +495,7 @@
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "CCW",
+								"name": "Strike",
 								"range": 0,
 								"specialRules": []
 							},
@@ -478,7 +503,7 @@
 								"attacks": 1,
 								"count": 9,
 								"name": "Heavy Rifle",
-								"range": 24,
+								"range": 18,
 								"specialRules": [
 									"AP(1)"
 								]
@@ -518,7 +543,7 @@
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "CCW",
+								"name": "Strike",
 								"range": 0,
 								"specialRules": []
 							},
@@ -526,7 +551,7 @@
 								"attacks": 1,
 								"count": 9,
 								"name": "Heavy Rifle",
-								"range": 24,
+								"range": 18,
 								"specialRules": [
 									"AP(1)"
 								]
@@ -566,7 +591,7 @@
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "CCW",
+								"name": "Strike",
 								"range": 0,
 								"specialRules": []
 							},
@@ -574,7 +599,7 @@
 								"attacks": 1,
 								"count": 9,
 								"name": "Heavy Rifle",
-								"range": 24,
+								"range": 18,
 								"specialRules": [
 									"AP(1)"
 								]
@@ -614,17 +639,17 @@
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "CCW",
+								"name": "Strike",
 								"range": 0,
 								"specialRules": []
 							},
 							{
-								"attacks": 1,
+								"attacks": 2,
 								"count": 1,
 								"name": "Plasma Rifle",
 								"range": 24,
 								"specialRules": [
-									"AP(4)"
+									"AP(2)"
 								]
 							}
 						]
@@ -649,7 +674,7 @@
 						"count": 9,
 						"from_item": "",
 						"name": "Heavy Rifle",
-						"range_value": 24,
+						"range_value": 18,
 						"special_rules": [
 							"AP(1)"
 						]
@@ -658,24 +683,24 @@
 						"attacks": 1,
 						"count": 10,
 						"from_item": "",
-						"name": "CCW",
+						"name": "Strike",
 						"range_value": 0,
 						"special_rules": []
 					},
 					{
-						"attacks": 1,
+						"attacks": 2,
 						"count": 1,
 						"from_item": "",
 						"name": "Plasma Rifle",
 						"range_value": 24,
 						"special_rules": [
-							"AP(4)"
+							"AP(2)"
 						]
 					}
 				]
 			},
 			"source_type": "opr",
-			"unit_id": "1783685260.8375_4219020445",
+			"unit_id": "1793359262.20605_2322328277",
 			"unit_properties": {
 				"attached_heroes": [],
 				"attached_to": "",
@@ -686,7 +711,7 @@
 				"base_size_round": 25,
 				"base_size_square": 25,
 				"base_width_mm": 25,
-				"cost": 300,
+				"cost": 270,
 				"custom_name": "",
 				"defense": 3,
 				"display_suffix": " (1)",
@@ -701,8 +726,8 @@
 				"quality": 3,
 				"regiment_mode": false,
 				"rule_descriptions": {
-					"Battleborn": "If a unit where all models have this rule is Shaken at the beginning of the round, roll one die. On a 4+, it stops being Shaken.",
-					"Fearless": "When a unit where all models have this rule fails a morale test, roll one die. On a 4+ it counts as passed instead."
+					"Battleborn": "If a unit where most models have this rule is Shaken at the beginning of the round, roll one die. On a 4+, it stops being Shaken.",
+					"Fearless": "When a unit where most models have this rule fails a Morale Test, roll one die. On a 4+ it counts as passed instead."
 				},
 				"size": 10,
 				"special_rules": [
@@ -881,7 +906,7 @@
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "CCW",
+								"name": "Strike",
 								"range": 0,
 								"specialRules": []
 							},
@@ -889,7 +914,7 @@
 								"attacks": 1,
 								"count": 9,
 								"name": "Heavy Rifle",
-								"range": 24,
+								"range": 18,
 								"specialRules": [
 									"AP(1)"
 								]
@@ -929,7 +954,7 @@
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "CCW",
+								"name": "Strike",
 								"range": 0,
 								"specialRules": []
 							},
@@ -937,7 +962,7 @@
 								"attacks": 1,
 								"count": 9,
 								"name": "Heavy Rifle",
-								"range": 24,
+								"range": 18,
 								"specialRules": [
 									"AP(1)"
 								]
@@ -977,7 +1002,7 @@
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "CCW",
+								"name": "Strike",
 								"range": 0,
 								"specialRules": []
 							},
@@ -985,7 +1010,7 @@
 								"attacks": 1,
 								"count": 9,
 								"name": "Heavy Rifle",
-								"range": 24,
+								"range": 18,
 								"specialRules": [
 									"AP(1)"
 								]
@@ -1025,7 +1050,7 @@
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "CCW",
+								"name": "Strike",
 								"range": 0,
 								"specialRules": []
 							},
@@ -1033,7 +1058,7 @@
 								"attacks": 1,
 								"count": 9,
 								"name": "Heavy Rifle",
-								"range": 24,
+								"range": 18,
 								"specialRules": [
 									"AP(1)"
 								]
@@ -1073,7 +1098,7 @@
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "CCW",
+								"name": "Strike",
 								"range": 0,
 								"specialRules": []
 							},
@@ -1081,7 +1106,7 @@
 								"attacks": 1,
 								"count": 9,
 								"name": "Heavy Rifle",
-								"range": 24,
+								"range": 18,
 								"specialRules": [
 									"AP(1)"
 								]
@@ -1121,7 +1146,7 @@
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "CCW",
+								"name": "Strike",
 								"range": 0,
 								"specialRules": []
 							},
@@ -1129,7 +1154,7 @@
 								"attacks": 1,
 								"count": 9,
 								"name": "Heavy Rifle",
-								"range": 24,
+								"range": 18,
 								"specialRules": [
 									"AP(1)"
 								]
@@ -1169,7 +1194,7 @@
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "CCW",
+								"name": "Strike",
 								"range": 0,
 								"specialRules": []
 							},
@@ -1177,7 +1202,7 @@
 								"attacks": 1,
 								"count": 9,
 								"name": "Heavy Rifle",
-								"range": 24,
+								"range": 18,
 								"specialRules": [
 									"AP(1)"
 								]
@@ -1217,7 +1242,7 @@
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "CCW",
+								"name": "Strike",
 								"range": 0,
 								"specialRules": []
 							},
@@ -1225,7 +1250,7 @@
 								"attacks": 1,
 								"count": 9,
 								"name": "Heavy Rifle",
-								"range": 24,
+								"range": 18,
 								"specialRules": [
 									"AP(1)"
 								]
@@ -1265,7 +1290,7 @@
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "CCW",
+								"name": "Strike",
 								"range": 0,
 								"specialRules": []
 							},
@@ -1273,7 +1298,7 @@
 								"attacks": 1,
 								"count": 9,
 								"name": "Heavy Rifle",
-								"range": 24,
+								"range": 18,
 								"specialRules": [
 									"AP(1)"
 								]
@@ -1313,17 +1338,17 @@
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "CCW",
+								"name": "Strike",
 								"range": 0,
 								"specialRules": []
 							},
 							{
-								"attacks": 1,
+								"attacks": 2,
 								"count": 1,
 								"name": "Plasma Rifle",
 								"range": 24,
 								"specialRules": [
-									"AP(4)"
+									"AP(2)"
 								]
 							}
 						]
@@ -1348,7 +1373,7 @@
 						"count": 9,
 						"from_item": "",
 						"name": "Heavy Rifle",
-						"range_value": 24,
+						"range_value": 18,
 						"special_rules": [
 							"AP(1)"
 						]
@@ -1357,24 +1382,24 @@
 						"attacks": 1,
 						"count": 10,
 						"from_item": "",
-						"name": "CCW",
+						"name": "Strike",
 						"range_value": 0,
 						"special_rules": []
 					},
 					{
-						"attacks": 1,
+						"attacks": 2,
 						"count": 1,
 						"from_item": "",
 						"name": "Plasma Rifle",
 						"range_value": 24,
 						"special_rules": [
-							"AP(4)"
+							"AP(2)"
 						]
 					}
 				]
 			},
 			"source_type": "opr",
-			"unit_id": "1783685260.98966_799451351",
+			"unit_id": "1793359262.22296_2877348417",
 			"unit_properties": {
 				"attached_heroes": [],
 				"attached_to": "",
@@ -1385,7 +1410,7 @@
 				"base_size_round": 25,
 				"base_size_square": 25,
 				"base_width_mm": 25,
-				"cost": 300,
+				"cost": 270,
 				"custom_name": "",
 				"defense": 3,
 				"display_suffix": " (2)",
@@ -1400,8 +1425,8 @@
 				"quality": 3,
 				"regiment_mode": false,
 				"rule_descriptions": {
-					"Battleborn": "If a unit where all models have this rule is Shaken at the beginning of the round, roll one die. On a 4+, it stops being Shaken.",
-					"Fearless": "When a unit where all models have this rule fails a morale test, roll one die. On a 4+ it counts as passed instead."
+					"Battleborn": "If a unit where most models have this rule is Shaken at the beginning of the round, roll one die. On a 4+, it stops being Shaken.",
+					"Fearless": "When a unit where most models have this rule fails a Morale Test, roll one die. On a 4+ it counts as passed instead."
 				},
 				"size": 10,
 				"special_rules": [
@@ -1461,9 +1486,9 @@
 			"models": [
 				{
 					"import_position": [
-						-1.71720004081726,
+						-1.31520009040833,
 						0.0,
-						0.195466667413712
+						-0.246399998664856
 					],
 					"import_rotation": [
 						0.0,
@@ -1481,7 +1506,6 @@
 					"model_index": 0,
 					"properties": {
 						"special_rules": [
-							"Ambush",
 							"Tough(3)",
 							"Battleborn",
 							"Fearless"
@@ -1491,16 +1515,17 @@
 							{
 								"attacks": 3,
 								"count": 3,
-								"name": "Storm Rifle",
-								"range": 24,
+								"name": "Burst Cyclic Rifle",
+								"range": 18,
 								"specialRules": [
-									"AP(1)"
+									"Anti-Cover",
+									"Surge"
 								]
 							},
 							{
 								"attacks": 1,
 								"count": 3,
-								"name": "CCW",
+								"name": "Hand Weapon",
 								"range": 0,
 								"specialRules": []
 							}
@@ -1511,9 +1536,9 @@
 				},
 				{
 					"import_position": [
-						-1.66920006275177,
+						-1.26720011234283,
 						0.0,
-						0.195466667413712
+						-0.246399998664856
 					],
 					"import_rotation": [
 						0.0,
@@ -1531,7 +1556,6 @@
 					"model_index": 1,
 					"properties": {
 						"special_rules": [
-							"Ambush",
 							"Tough(3)",
 							"Battleborn",
 							"Fearless"
@@ -1541,16 +1565,17 @@
 							{
 								"attacks": 3,
 								"count": 3,
-								"name": "Storm Rifle",
-								"range": 24,
+								"name": "Burst Cyclic Rifle",
+								"range": 18,
 								"specialRules": [
-									"AP(1)"
+									"Anti-Cover",
+									"Surge"
 								]
 							},
 							{
 								"attacks": 1,
 								"count": 3,
-								"name": "CCW",
+								"name": "Hand Weapon",
 								"range": 0,
 								"specialRules": []
 							}
@@ -1561,9 +1586,9 @@
 				},
 				{
 					"import_position": [
-						-1.62120008468628,
+						-1.21920013427734,
 						0.0,
-						0.195466667413712
+						-0.246399998664856
 					],
 					"import_rotation": [
 						0.0,
@@ -1581,7 +1606,6 @@
 					"model_index": 2,
 					"properties": {
 						"special_rules": [
-							"Ambush",
 							"Tough(3)",
 							"Battleborn",
 							"Fearless"
@@ -1591,16 +1615,17 @@
 							{
 								"attacks": 3,
 								"count": 3,
-								"name": "Storm Rifle",
-								"range": 24,
+								"name": "Burst Cyclic Rifle",
+								"range": 18,
 								"specialRules": [
-									"AP(1)"
+									"Anti-Cover",
+									"Surge"
 								]
 							},
 							{
 								"attacks": 1,
 								"count": 3,
-								"name": "CCW",
+								"name": "Hand Weapon",
 								"range": 0,
 								"specialRules": []
 							}
@@ -1617,7 +1642,6 @@
 				"base_width_mm": 40,
 				"equipment": [],
 				"special_rules": [
-					"Ambush",
 					"Tough(3)",
 					"Battleborn",
 					"Fearless"
@@ -1627,24 +1651,25 @@
 						"attacks": 3,
 						"count": 3,
 						"from_item": "",
-						"name": "Storm Rifle",
-						"range_value": 24,
+						"name": "Burst Cyclic Rifle",
+						"range_value": 18,
 						"special_rules": [
-							"AP(1)"
+							"Anti-Cover",
+							"Surge"
 						]
 					},
 					{
 						"attacks": 1,
 						"count": 3,
 						"from_item": "",
-						"name": "CCW",
+						"name": "Hand Weapon",
 						"range_value": 0,
 						"special_rules": []
 					}
 				]
 			},
 			"source_type": "opr",
-			"unit_id": "1783685261.05019_3703488610",
+			"unit_id": "1793359262.28896_2321921710",
 			"unit_properties": {
 				"attached_heroes": [],
 				"attached_to": "",
@@ -1655,7 +1680,7 @@
 				"base_size_round": 40,
 				"base_size_square": 40,
 				"base_width_mm": 40,
-				"cost": 225,
+				"cost": 215,
 				"custom_name": "",
 				"defense": 3,
 				"display_suffix": "",
@@ -1670,14 +1695,12 @@
 				"quality": 3,
 				"regiment_mode": false,
 				"rule_descriptions": {
-					"Ambush": "May be set aside before deployment. At the start of any round after the first, may be deployed anywhere over 9” away from enemy units. Players alternate in placing Ambush units, starting with the player that activates next. Units that deploy via Ambush can’t seize or contest objectives on the round they deploy.",
-					"Battleborn": "If a unit where all models have this rule is Shaken at the beginning of the round, roll one die. On a 4+, it stops being Shaken.",
-					"Fearless": "When a unit where all models have this rule fails a morale test, roll one die. On a 4+ it counts as passed instead.",
-					"Tough": "This model must take X wounds before being killed. If a model with tough joins a unit without it, then it is removed last when the unit takes wounds. You must continue to put wounds on the tough model with most wounds in the unit until it is killed, before starting to put them on the next tough model (heroes must be assigned wounds last, even if already wounded)."
+					"Battleborn": "If a unit where most models have this rule is Shaken at the beginning of the round, roll one die. On a 4+, it stops being Shaken.",
+					"Fearless": "When a unit where most models have this rule fails a Morale Test, roll one die. On a 4+ it counts as passed instead.",
+					"Tough": "This model must take X wounds before being killed. If a model with Tough joins a unit without it, then it is removed last when the unit takes wounds. You must continue to put wounds on the Tough model with most wounds in the unit until it is killed, before starting to put them on the next Tough model (Heroes must be assigned wounds last, even if already wounded)."
 				},
 				"size": 3,
 				"special_rules": [
-					"Ambush",
 					"Tough(3)",
 					"Battleborn",
 					"Fearless"
@@ -1709,7 +1732,7 @@
 			"models": [
 				{
 					"import_position": [
-						-1.31520009040833,
+						-1.09920012950897,
 						0.0,
 						-0.246399998664856
 					],
@@ -1737,20 +1760,22 @@
 						"tough": 3,
 						"weapons": [
 							{
-								"attacks": 2,
+								"attacks": 1,
 								"count": 1,
-								"name": "CCW",
-								"range": 0,
-								"specialRules": []
+								"name": "Flamer Pistol",
+								"range": 6,
+								"specialRules": [
+									"Reliable",
+									"Anti-Cover",
+									"Assault"
+								]
 							},
 							{
-								"attacks": 2,
+								"attacks": 3,
 								"count": 1,
-								"name": "Master Heavy Rifle",
-								"range": 24,
-								"specialRules": [
-									"AP(1)"
-								]
+								"name": "Hand Weapon",
+								"range": 0,
+								"specialRules": []
 							}
 						]
 					},
@@ -1772,27 +1797,29 @@
 				],
 				"weapons": [
 					{
-						"attacks": 2,
+						"attacks": 1,
 						"count": 1,
 						"from_item": "",
-						"name": "CCW",
-						"range_value": 0,
-						"special_rules": []
+						"name": "Flamer Pistol",
+						"range_value": 6,
+						"special_rules": [
+							"Reliable",
+							"Anti-Cover",
+							"Assault"
+						]
 					},
 					{
-						"attacks": 2,
+						"attacks": 3,
 						"count": 1,
 						"from_item": "",
-						"name": "Master Heavy Rifle",
-						"range_value": 24,
-						"special_rules": [
-							"AP(1)"
-						]
+						"name": "Hand Weapon",
+						"range_value": 0,
+						"special_rules": []
 					}
 				]
 			},
 			"source_type": "opr",
-			"unit_id": "1783685261.08043_3806866442",
+			"unit_id": "1793359262.35095_751756290",
 			"unit_properties": {
 				"attached_heroes": [],
 				"attached_to": "",
@@ -1803,7 +1830,7 @@
 				"base_size_round": 32,
 				"base_size_square": 30,
 				"base_width_mm": 32,
-				"cost": 60,
+				"cost": 80,
 				"custom_name": "",
 				"defense": 3,
 				"display_suffix": "",
@@ -1818,11 +1845,11 @@
 				"quality": 3,
 				"regiment_mode": false,
 				"rule_descriptions": {
-					"Battleborn": "If a unit where all models have this rule is Shaken at the beginning of the round, roll one die. On a 4+, it stops being Shaken.",
-					"Defense": "This model gets +X to defense rolls.",
-					"Fearless": "When a unit where all models have this rule fails a morale test, roll one die. On a 4+ it counts as passed instead.",
-					"Hero": "Heroes with up to Tough(6) may deploy as part of one multi-model unit without another Hero. The hero may take morale tests on behalf of the unit, but must use the unit’s Defense until all other models have been killed.",
-					"Tough": "This model must take X wounds before being killed. If a model with tough joins a unit without it, then it is removed last when the unit takes wounds. You must continue to put wounds on the tough model with most wounds in the unit until it is killed, before starting to put them on the next tough model (heroes must be assigned wounds last, even if already wounded)."
+					"Battleborn": "If a unit where most models have this rule is Shaken at the beginning of the round, roll one die. On a 4+, it stops being Shaken.",
+					"Defense": "This model gets +X to Defense rolls.",
+					"Fearless": "When a unit where most models have this rule fails a Morale Test, roll one die. On a 4+ it counts as passed instead.",
+					"Hero": "Heroes with up to Tough(6) may deploy as part of one multi-model unit without another Hero, but must use the unit’s Defense until all other models have been killed. The Hero’s unit, and units within 6” of friendly Heroes with Tough(9) or higher, may use the Hero’s Quality for Morale Tests as long as the Hero isn’t Shaken.",
+					"Tough": "This model must take X wounds before being killed. If a model with Tough joins a unit without it, then it is removed last when the unit takes wounds. You must continue to put wounds on the Tough model with most wounds in the unit until it is killed, before starting to put them on the next Tough model (Heroes must be assigned wounds last, even if already wounded)."
 				},
 				"size": 1,
 				"special_rules": [
@@ -2003,18 +2030,18 @@
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "CCW",
-								"range": 0,
-								"specialRules": []
+								"name": "Ion Rifle",
+								"range": 18,
+								"specialRules": [
+									"Shred"
+								]
 							},
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "Gauss Rifle",
-								"range": 24,
-								"specialRules": [
-									"Destructive"
-								]
+								"name": "Strike",
+								"range": 0,
+								"specialRules": []
 							}
 						]
 					},
@@ -2051,18 +2078,18 @@
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "CCW",
-								"range": 0,
-								"specialRules": []
+								"name": "Ion Rifle",
+								"range": 18,
+								"specialRules": [
+									"Shred"
+								]
 							},
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "Gauss Rifle",
-								"range": 24,
-								"specialRules": [
-									"Destructive"
-								]
+								"name": "Strike",
+								"range": 0,
+								"specialRules": []
 							}
 						]
 					},
@@ -2099,18 +2126,18 @@
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "CCW",
-								"range": 0,
-								"specialRules": []
+								"name": "Ion Rifle",
+								"range": 18,
+								"specialRules": [
+									"Shred"
+								]
 							},
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "Gauss Rifle",
-								"range": 24,
-								"specialRules": [
-									"Destructive"
-								]
+								"name": "Strike",
+								"range": 0,
+								"specialRules": []
 							}
 						]
 					},
@@ -2147,18 +2174,18 @@
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "CCW",
-								"range": 0,
-								"specialRules": []
+								"name": "Ion Rifle",
+								"range": 18,
+								"specialRules": [
+									"Shred"
+								]
 							},
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "Gauss Rifle",
-								"range": 24,
-								"specialRules": [
-									"Destructive"
-								]
+								"name": "Strike",
+								"range": 0,
+								"specialRules": []
 							}
 						]
 					},
@@ -2195,18 +2222,18 @@
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "CCW",
-								"range": 0,
-								"specialRules": []
+								"name": "Ion Rifle",
+								"range": 18,
+								"specialRules": [
+									"Shred"
+								]
 							},
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "Gauss Rifle",
-								"range": 24,
-								"specialRules": [
-									"Destructive"
-								]
+								"name": "Strike",
+								"range": 0,
+								"specialRules": []
 							}
 						]
 					},
@@ -2243,18 +2270,18 @@
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "CCW",
-								"range": 0,
-								"specialRules": []
+								"name": "Ion Rifle",
+								"range": 18,
+								"specialRules": [
+									"Shred"
+								]
 							},
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "Gauss Rifle",
-								"range": 24,
-								"specialRules": [
-									"Destructive"
-								]
+								"name": "Strike",
+								"range": 0,
+								"specialRules": []
 							}
 						]
 					},
@@ -2291,18 +2318,18 @@
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "CCW",
-								"range": 0,
-								"specialRules": []
+								"name": "Ion Rifle",
+								"range": 18,
+								"specialRules": [
+									"Shred"
+								]
 							},
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "Gauss Rifle",
-								"range": 24,
-								"specialRules": [
-									"Destructive"
-								]
+								"name": "Strike",
+								"range": 0,
+								"specialRules": []
 							}
 						]
 					},
@@ -2339,18 +2366,18 @@
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "CCW",
-								"range": 0,
-								"specialRules": []
+								"name": "Ion Rifle",
+								"range": 18,
+								"specialRules": [
+									"Shred"
+								]
 							},
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "Gauss Rifle",
-								"range": 24,
-								"specialRules": [
-									"Destructive"
-								]
+								"name": "Strike",
+								"range": 0,
+								"specialRules": []
 							}
 						]
 					},
@@ -2387,18 +2414,18 @@
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "CCW",
-								"range": 0,
-								"specialRules": []
+								"name": "Ion Rifle",
+								"range": 18,
+								"specialRules": [
+									"Shred"
+								]
 							},
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "Gauss Rifle",
-								"range": 24,
-								"specialRules": [
-									"Destructive"
-								]
+								"name": "Strike",
+								"range": 0,
+								"specialRules": []
 							}
 						]
 					},
@@ -2435,18 +2462,18 @@
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "CCW",
-								"range": 0,
-								"specialRules": []
+								"name": "Ion Rifle",
+								"range": 18,
+								"specialRules": [
+									"Shred"
+								]
 							},
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "Gauss Rifle",
-								"range": 24,
-								"specialRules": [
-									"Destructive"
-								]
+								"name": "Strike",
+								"range": 0,
+								"specialRules": []
 							}
 						]
 					},
@@ -2469,29 +2496,32 @@
 						"attacks": 1,
 						"count": 10,
 						"from_item": "",
-						"name": "CCW",
-						"range_value": 0,
-						"special_rules": []
+						"name": "Ion Rifle",
+						"range_value": 18,
+						"special_rules": [
+							"Shred"
+						]
 					},
 					{
 						"attacks": 1,
 						"count": 10,
 						"from_item": "",
-						"name": "Gauss Rifle",
-						"range_value": 24,
-						"special_rules": [
-							"Destructive"
-						]
+						"name": "Strike",
+						"range_value": 0,
+						"special_rules": []
 					}
 				]
 			},
 			"source_type": "opr",
-			"unit_id": "1783685261.53515_3728519486",
+			"unit_id": "1793359271.68949_2120081989",
 			"unit_properties": {
 				"attached_heroes": [
-					"1783685261.65066_584119795"
+					"1793359271.83432_2869420569"
 				],
 				"attached_to": "",
+				"aura_granted": [
+					"Stealth"
+				],
 				"base_depth_mm": 32,
 				"base_from_tough": false,
 				"base_is_oval": false,
@@ -2499,7 +2529,7 @@
 				"base_size_round": 32,
 				"base_size_square": 30,
 				"base_width_mm": 32,
-				"cost": 200,
+				"cost": 170,
 				"custom_name": "",
 				"defense": 4,
 				"display_suffix": " (1)",
@@ -2514,13 +2544,14 @@
 				"quality": 4,
 				"regiment_mode": false,
 				"rule_descriptions": {
-					"Self-Repair": "When a unit where all models have this rule takes wounds, roll one die for each. On a 6+ it is ignored.",
-					"Slow": "Moves -2\" when using Advance, and -4” when using Rush/Charge."
+					"Self-Repair": "When a unit where most models have this rule takes wounds, roll one die for each. On a 6+ it is ignored.",
+					"Slow": "Moves -2” when using Advance, and -4” when using Rush/Charge."
 				},
 				"size": 10,
 				"special_rules": [
 					"Slow",
-					"Self-Repair"
+					"Self-Repair",
+					"Stealth"
 				]
 			}
 		},
@@ -2570,20 +2601,29 @@
 					"properties": {
 						"special_rules": [
 							"Hero",
-							"Self-Repair",
 							"Slow",
 							"Tough(3)",
-							"Combat Shield",
-							"Shielded",
-							"Re-Animator",
-							"Reanimation Aura"
+							"Self-Repair",
+							"Psychomancer",
+							"Stealth Aura"
 						],
 						"tough": 3,
 						"weapons": [
 							{
-								"attacks": 2,
+								"attacks": 1,
 								"count": 1,
-								"name": "CCW",
+								"name": "Wrist-Spark",
+								"range": 6,
+								"specialRules": [
+									"Reliable",
+									"Anti-Cover",
+									"Assault"
+								]
+							},
+							{
+								"attacks": 3,
+								"count": 1,
+								"name": "Hand Weapon",
 								"range": 0,
 								"specialRules": []
 							}
@@ -2601,30 +2641,43 @@
 				"equipment": [],
 				"special_rules": [
 					"Hero",
-					"Self-Repair",
 					"Slow",
 					"Tough(3)",
-					"Combat Shield",
-					"Shielded",
-					"Re-Animator",
-					"Reanimation Aura"
+					"Self-Repair",
+					"Psychomancer",
+					"Stealth Aura"
 				],
 				"weapons": [
 					{
-						"attacks": 2,
+						"attacks": 1,
 						"count": 1,
 						"from_item": "",
-						"name": "CCW",
+						"name": "Wrist-Spark",
+						"range_value": 6,
+						"special_rules": [
+							"Reliable",
+							"Anti-Cover",
+							"Assault"
+						]
+					},
+					{
+						"attacks": 3,
+						"count": 1,
+						"from_item": "",
+						"name": "Hand Weapon",
 						"range_value": 0,
 						"special_rules": []
 					}
 				]
 			},
 			"source_type": "opr",
-			"unit_id": "1783685261.65066_584119795",
+			"unit_id": "1793359271.83432_2869420569",
 			"unit_properties": {
 				"attached_heroes": [],
-				"attached_to": "1783685261.53515_3728519486",
+				"attached_to": "1793359271.68949_2120081989",
+				"aura_granted": [
+					"Stealth"
+				],
 				"base_depth_mm": 32,
 				"base_from_tough": false,
 				"base_is_oval": false,
@@ -2632,18 +2685,15 @@
 				"base_size_round": 32,
 				"base_size_square": 30,
 				"base_width_mm": 32,
-				"cost": 45,
+				"cost": 70,
 				"custom_name": "",
 				"defense": 3,
 				"display_suffix": "",
 				"faction_folder": "robot_legions",
 				"game_system": "gf",
 				"item_grants": {
-					"Combat Shield": [
-						"Shielded"
-					],
-					"Re-Animator": [
-						"Reanimation Aura"
+					"Psychomancer": [
+						"Stealth Aura"
 					]
 				},
 				"mount_name": "",
@@ -2652,24 +2702,23 @@
 				"quality": 3,
 				"regiment_mode": false,
 				"rule_descriptions": {
-					"Hero": "Heroes with up to Tough(6) may deploy as part of one multi-model unit without another Hero. The hero may take morale tests on behalf of the unit, but must use the unit’s Defense until all other models have been killed.",
-					"Reanimation": "When a unit where all models have this rule is activated, roll as many dice as the max. number of models/wounds it could restore. For each 5+ you may restore one model/wound. Note that new models may only be restored if they can be placed in coherency with non-restored models.",
-					"Reanimation Aura": "This model and its unit get Reanimation.",
-					"Self-Repair": "When a unit where all models have this rule takes wounds, roll one die for each. On a 6+ it is ignored.",
-					"Shielded": "Units where all models have this rule get +1 to defense rolls against hits that are not from spells.",
-					"Slow": "Moves -2\" when using Advance, and -4” when using Rush/Charge.",
-					"Tough": "This model must take X wounds before being killed. If a model with tough joins a unit without it, then it is removed last when the unit takes wounds. You must continue to put wounds on the tough model with most wounds in the unit until it is killed, before starting to put them on the next tough model (heroes must be assigned wounds last, even if already wounded)."
+					"Defense": "This model gets +X to Defense rolls.",
+					"Hero": "Heroes with up to Tough(6) may deploy as part of one multi-model unit without another Hero, but must use the unit’s Defense until all other models have been killed. The Hero’s unit, and units within 6” of friendly Heroes with Tough(9) or higher, may use the Hero’s Quality for Morale Tests as long as the Hero isn’t Shaken.",
+					"Self-Repair": "When a unit where most models have this rule takes wounds, roll one die for each. On a 6+ it is ignored.",
+					"Slow": "Moves -2” when using Advance, and -4” when using Rush/Charge.",
+					"Stealth": "When units where most models have this rule are shot from over 9\" away, enemy units get -1 to hit rolls.",
+					"Stealth Aura": "This model and its unit get Stealth.",
+					"Tough": "This model must take X wounds before being killed. If a model with Tough joins a unit without it, then it is removed last when the unit takes wounds. You must continue to put wounds on the Tough model with most wounds in the unit until it is killed, before starting to put them on the next Tough model (Heroes must be assigned wounds last, even if already wounded)."
 				},
 				"size": 1,
 				"special_rules": [
 					"Hero",
-					"Self-Repair",
 					"Slow",
 					"Tough(3)",
-					"Combat Shield",
-					"Shielded",
-					"Re-Animator",
-					"Reanimation Aura"
+					"Self-Repair",
+					"Psychomancer",
+					"Stealth Aura",
+					"Stealth"
 				]
 			}
 		},
@@ -2843,18 +2892,18 @@
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "CCW",
-								"range": 0,
-								"specialRules": []
+								"name": "Ion Rifle",
+								"range": 18,
+								"specialRules": [
+									"Shred"
+								]
 							},
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "Gauss Rifle",
-								"range": 24,
-								"specialRules": [
-									"Destructive"
-								]
+								"name": "Strike",
+								"range": 0,
+								"specialRules": []
 							}
 						]
 					},
@@ -2891,18 +2940,18 @@
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "CCW",
-								"range": 0,
-								"specialRules": []
+								"name": "Ion Rifle",
+								"range": 18,
+								"specialRules": [
+									"Shred"
+								]
 							},
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "Gauss Rifle",
-								"range": 24,
-								"specialRules": [
-									"Destructive"
-								]
+								"name": "Strike",
+								"range": 0,
+								"specialRules": []
 							}
 						]
 					},
@@ -2939,18 +2988,18 @@
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "CCW",
-								"range": 0,
-								"specialRules": []
+								"name": "Ion Rifle",
+								"range": 18,
+								"specialRules": [
+									"Shred"
+								]
 							},
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "Gauss Rifle",
-								"range": 24,
-								"specialRules": [
-									"Destructive"
-								]
+								"name": "Strike",
+								"range": 0,
+								"specialRules": []
 							}
 						]
 					},
@@ -2987,18 +3036,18 @@
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "CCW",
-								"range": 0,
-								"specialRules": []
+								"name": "Ion Rifle",
+								"range": 18,
+								"specialRules": [
+									"Shred"
+								]
 							},
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "Gauss Rifle",
-								"range": 24,
-								"specialRules": [
-									"Destructive"
-								]
+								"name": "Strike",
+								"range": 0,
+								"specialRules": []
 							}
 						]
 					},
@@ -3035,18 +3084,18 @@
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "CCW",
-								"range": 0,
-								"specialRules": []
+								"name": "Ion Rifle",
+								"range": 18,
+								"specialRules": [
+									"Shred"
+								]
 							},
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "Gauss Rifle",
-								"range": 24,
-								"specialRules": [
-									"Destructive"
-								]
+								"name": "Strike",
+								"range": 0,
+								"specialRules": []
 							}
 						]
 					},
@@ -3083,18 +3132,18 @@
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "CCW",
-								"range": 0,
-								"specialRules": []
+								"name": "Ion Rifle",
+								"range": 18,
+								"specialRules": [
+									"Shred"
+								]
 							},
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "Gauss Rifle",
-								"range": 24,
-								"specialRules": [
-									"Destructive"
-								]
+								"name": "Strike",
+								"range": 0,
+								"specialRules": []
 							}
 						]
 					},
@@ -3131,18 +3180,18 @@
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "CCW",
-								"range": 0,
-								"specialRules": []
+								"name": "Ion Rifle",
+								"range": 18,
+								"specialRules": [
+									"Shred"
+								]
 							},
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "Gauss Rifle",
-								"range": 24,
-								"specialRules": [
-									"Destructive"
-								]
+								"name": "Strike",
+								"range": 0,
+								"specialRules": []
 							}
 						]
 					},
@@ -3179,18 +3228,18 @@
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "CCW",
-								"range": 0,
-								"specialRules": []
+								"name": "Ion Rifle",
+								"range": 18,
+								"specialRules": [
+									"Shred"
+								]
 							},
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "Gauss Rifle",
-								"range": 24,
-								"specialRules": [
-									"Destructive"
-								]
+								"name": "Strike",
+								"range": 0,
+								"specialRules": []
 							}
 						]
 					},
@@ -3227,18 +3276,18 @@
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "CCW",
-								"range": 0,
-								"specialRules": []
+								"name": "Ion Rifle",
+								"range": 18,
+								"specialRules": [
+									"Shred"
+								]
 							},
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "Gauss Rifle",
-								"range": 24,
-								"specialRules": [
-									"Destructive"
-								]
+								"name": "Strike",
+								"range": 0,
+								"specialRules": []
 							}
 						]
 					},
@@ -3275,18 +3324,18 @@
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "CCW",
-								"range": 0,
-								"specialRules": []
+								"name": "Ion Rifle",
+								"range": 18,
+								"specialRules": [
+									"Shred"
+								]
 							},
 							{
 								"attacks": 1,
 								"count": 10,
-								"name": "Gauss Rifle",
-								"range": 24,
-								"specialRules": [
-									"Destructive"
-								]
+								"name": "Strike",
+								"range": 0,
+								"specialRules": []
 							}
 						]
 					},
@@ -3309,24 +3358,24 @@
 						"attacks": 1,
 						"count": 10,
 						"from_item": "",
-						"name": "CCW",
-						"range_value": 0,
-						"special_rules": []
+						"name": "Ion Rifle",
+						"range_value": 18,
+						"special_rules": [
+							"Shred"
+						]
 					},
 					{
 						"attacks": 1,
 						"count": 10,
 						"from_item": "",
-						"name": "Gauss Rifle",
-						"range_value": 24,
-						"special_rules": [
-							"Destructive"
-						]
+						"name": "Strike",
+						"range_value": 0,
+						"special_rules": []
 					}
 				]
 			},
 			"source_type": "opr",
-			"unit_id": "1783685261.75641_3496221980",
+			"unit_id": "1793359271.84422_2301507415",
 			"unit_properties": {
 				"attached_heroes": [],
 				"attached_to": "",
@@ -3337,7 +3386,7 @@
 				"base_size_round": 32,
 				"base_size_square": 30,
 				"base_width_mm": 32,
-				"cost": 200,
+				"cost": 170,
 				"custom_name": "",
 				"defense": 4,
 				"display_suffix": " (2)",
@@ -3352,8 +3401,8 @@
 				"quality": 4,
 				"regiment_mode": false,
 				"rule_descriptions": {
-					"Self-Repair": "When a unit where all models have this rule takes wounds, roll one die for each. On a 6+ it is ignored.",
-					"Slow": "Moves -2\" when using Advance, and -4” when using Rush/Charge."
+					"Self-Repair": "When a unit where most models have this rule takes wounds, roll one die for each. On a 6+ it is ignored.",
+					"Slow": "Moves -2” when using Advance, and -4” when using Rush/Charge."
 				},
 				"size": 10,
 				"special_rules": [
@@ -3441,8 +3490,8 @@
 							{
 								"attacks": 1,
 								"count": 3,
-								"name": "D-Mark",
-								"range": 24,
+								"name": "Reaper Sniper Rifle",
+								"range": 30,
 								"specialRules": [
 									"AP(1)",
 									"Reliable",
@@ -3452,7 +3501,7 @@
 							{
 								"attacks": 1,
 								"count": 3,
-								"name": "CCW",
+								"name": "Strike",
 								"range": 0,
 								"specialRules": []
 							}
@@ -3491,8 +3540,8 @@
 							{
 								"attacks": 1,
 								"count": 3,
-								"name": "D-Mark",
-								"range": 24,
+								"name": "Reaper Sniper Rifle",
+								"range": 30,
 								"specialRules": [
 									"AP(1)",
 									"Reliable",
@@ -3502,7 +3551,7 @@
 							{
 								"attacks": 1,
 								"count": 3,
-								"name": "CCW",
+								"name": "Strike",
 								"range": 0,
 								"specialRules": []
 							}
@@ -3541,8 +3590,8 @@
 							{
 								"attacks": 1,
 								"count": 3,
-								"name": "D-Mark",
-								"range": 24,
+								"name": "Reaper Sniper Rifle",
+								"range": 30,
 								"specialRules": [
 									"AP(1)",
 									"Reliable",
@@ -3552,7 +3601,7 @@
 							{
 								"attacks": 1,
 								"count": 3,
-								"name": "CCW",
+								"name": "Strike",
 								"range": 0,
 								"specialRules": []
 							}
@@ -3577,8 +3626,8 @@
 						"attacks": 1,
 						"count": 3,
 						"from_item": "",
-						"name": "D-Mark",
-						"range_value": 24,
+						"name": "Reaper Sniper Rifle",
+						"range_value": 30,
 						"special_rules": [
 							"AP(1)",
 							"Reliable",
@@ -3589,14 +3638,14 @@
 						"attacks": 1,
 						"count": 3,
 						"from_item": "",
-						"name": "CCW",
+						"name": "Strike",
 						"range_value": 0,
 						"special_rules": []
 					}
 				]
 			},
 			"source_type": "opr",
-			"unit_id": "1783685261.84313_1445270813",
+			"unit_id": "1793359271.97234_1159521028",
 			"unit_properties": {
 				"attached_heroes": [],
 				"attached_to": "",
@@ -3607,7 +3656,7 @@
 				"base_size_round": 32,
 				"base_size_square": 30,
 				"base_width_mm": 32,
-				"cost": 110,
+				"cost": 90,
 				"custom_name": "",
 				"defense": 4,
 				"display_suffix": "",
@@ -3622,8 +3671,8 @@
 				"quality": 4,
 				"regiment_mode": false,
 				"rule_descriptions": {
-					"Self-Repair": "When a unit where all models have this rule takes wounds, roll one die for each. On a 6+ it is ignored.",
-					"Slow": "Moves -2\" when using Advance, and -4” when using Rush/Charge."
+					"Self-Repair": "When a unit where most models have this rule takes wounds, roll one die for each. On a 6+ it is ignored.",
+					"Slow": "Moves -2” when using Advance, and -4” when using Rush/Charge."
 				},
 				"size": 3,
 				"special_rules": [
@@ -3686,20 +3735,19 @@
 							{
 								"attacks": 2,
 								"count": 1,
-								"name": "Heavy CCW",
+								"name": "Strike",
 								"range": 0,
-								"specialRules": [
-									"AP(1)"
-								]
+								"specialRules": []
 							},
 							{
-								"attacks": 2,
+								"attacks": 6,
 								"count": 1,
-								"name": "Exterminator Cannon",
-								"range": 30,
+								"name": "Heavy Photon Cannon",
+								"range": 36,
 								"specialRules": [
-									"Blast(3)",
-									"AP(2)"
+									"AP(1)",
+									"Anti-Cover",
+									"Shatter"
 								]
 							}
 						]
@@ -3724,27 +3772,26 @@
 						"attacks": 2,
 						"count": 1,
 						"from_item": "",
-						"name": "Heavy CCW",
+						"name": "Strike",
 						"range_value": 0,
-						"special_rules": [
-							"AP(1)"
-						]
+						"special_rules": []
 					},
 					{
-						"attacks": 2,
+						"attacks": 6,
 						"count": 1,
 						"from_item": "",
-						"name": "Exterminator Cannon",
-						"range_value": 30,
+						"name": "Heavy Photon Cannon",
+						"range_value": 36,
 						"special_rules": [
-							"Blast(3)",
-							"AP(2)"
+							"AP(1)",
+							"Anti-Cover",
+							"Shatter"
 						]
 					}
 				]
 			},
 			"source_type": "opr",
-			"unit_id": "1783685261.96155_3405990619",
+			"unit_id": "1793359272.10722_2089602748",
 			"unit_properties": {
 				"attached_heroes": [],
 				"attached_to": "",
@@ -3755,7 +3802,7 @@
 				"base_size_round": 60,
 				"base_size_square": 50,
 				"base_width_mm": 60,
-				"cost": 195,
+				"cost": 190,
 				"custom_name": "",
 				"defense": 3,
 				"display_suffix": "",
@@ -3770,9 +3817,9 @@
 				"quality": 3,
 				"regiment_mode": false,
 				"rule_descriptions": {
-					"Self-Repair": "When a unit where all models have this rule takes wounds, roll one die for each. On a 6+ it is ignored.",
-					"Strider": "May ignore the effects of difficult terrain when moving. ",
-					"Tough": "This model must take X wounds before being killed. If a model with tough joins a unit without it, then it is removed last when the unit takes wounds. You must continue to put wounds on the tough model with most wounds in the unit until it is killed, before starting to put them on the next tough model (heroes must be assigned wounds last, even if already wounded)."
+					"Self-Repair": "When a unit where most models have this rule takes wounds, roll one die for each. On a 6+ it is ignored.",
+					"Strider": "May ignore the effects of Difficult terrain.",
+					"Tough": "This model must take X wounds before being killed. If a model with Tough joins a unit without it, then it is removed last when the unit takes wounds. You must continue to put wounds on the Tough model with most wounds in the unit until it is killed, before starting to put them on the next Tough model (Heroes must be assigned wounds last, even if already wounded)."
 				},
 				"size": 1,
 				"special_rules": [
@@ -3881,7 +3928,7 @@
 						"special_rules": [
 							"Slow",
 							"Self-Repair",
-							"Jetpacks",
+							"Teleport Jetpack",
 							"Ambush",
 							"Flying",
 							"Swift"
@@ -3891,18 +3938,12 @@
 							{
 								"attacks": 1,
 								"count": 5,
-								"name": "Atom-Caster",
-								"range": 12,
-								"specialRules": [
-									"AP(1)"
-								]
-							},
-							{
-								"attacks": 2,
-								"count": 5,
-								"name": "Void Blade",
+								"name": "Doom Scythe",
 								"range": 0,
-								"specialRules": []
+								"specialRules": [
+									"AP(4)",
+									"Imprecise"
+								]
 							}
 						]
 					},
@@ -3933,7 +3974,7 @@
 						"special_rules": [
 							"Slow",
 							"Self-Repair",
-							"Jetpacks",
+							"Teleport Jetpack",
 							"Ambush",
 							"Flying",
 							"Swift"
@@ -3943,18 +3984,12 @@
 							{
 								"attacks": 1,
 								"count": 5,
-								"name": "Atom-Caster",
-								"range": 12,
-								"specialRules": [
-									"AP(1)"
-								]
-							},
-							{
-								"attacks": 2,
-								"count": 5,
-								"name": "Void Blade",
+								"name": "Doom Scythe",
 								"range": 0,
-								"specialRules": []
+								"specialRules": [
+									"AP(4)",
+									"Imprecise"
+								]
 							}
 						]
 					},
@@ -3985,7 +4020,7 @@
 						"special_rules": [
 							"Slow",
 							"Self-Repair",
-							"Jetpacks",
+							"Teleport Jetpack",
 							"Ambush",
 							"Flying",
 							"Swift"
@@ -3995,18 +4030,12 @@
 							{
 								"attacks": 1,
 								"count": 5,
-								"name": "Atom-Caster",
-								"range": 12,
-								"specialRules": [
-									"AP(1)"
-								]
-							},
-							{
-								"attacks": 2,
-								"count": 5,
-								"name": "Void Blade",
+								"name": "Doom Scythe",
 								"range": 0,
-								"specialRules": []
+								"specialRules": [
+									"AP(4)",
+									"Imprecise"
+								]
 							}
 						]
 					},
@@ -4037,7 +4066,7 @@
 						"special_rules": [
 							"Slow",
 							"Self-Repair",
-							"Jetpacks",
+							"Teleport Jetpack",
 							"Ambush",
 							"Flying",
 							"Swift"
@@ -4047,18 +4076,12 @@
 							{
 								"attacks": 1,
 								"count": 5,
-								"name": "Atom-Caster",
-								"range": 12,
-								"specialRules": [
-									"AP(1)"
-								]
-							},
-							{
-								"attacks": 2,
-								"count": 5,
-								"name": "Void Blade",
+								"name": "Doom Scythe",
 								"range": 0,
-								"specialRules": []
+								"specialRules": [
+									"AP(4)",
+									"Imprecise"
+								]
 							}
 						]
 					},
@@ -4089,7 +4112,7 @@
 						"special_rules": [
 							"Slow",
 							"Self-Repair",
-							"Jetpacks",
+							"Teleport Jetpack",
 							"Ambush",
 							"Flying",
 							"Swift"
@@ -4099,18 +4122,12 @@
 							{
 								"attacks": 1,
 								"count": 5,
-								"name": "Atom-Caster",
-								"range": 12,
-								"specialRules": [
-									"AP(1)"
-								]
-							},
-							{
-								"attacks": 2,
-								"count": 5,
-								"name": "Void Blade",
+								"name": "Doom Scythe",
 								"range": 0,
-								"specialRules": []
+								"specialRules": [
+									"AP(4)",
+									"Imprecise"
+								]
 							}
 						]
 					},
@@ -4127,7 +4144,7 @@
 				"special_rules": [
 					"Slow",
 					"Self-Repair",
-					"Jetpacks",
+					"Teleport Jetpack",
 					"Ambush",
 					"Flying",
 					"Swift"
@@ -4137,24 +4154,17 @@
 						"attacks": 1,
 						"count": 5,
 						"from_item": "",
-						"name": "Atom-Caster",
-						"range_value": 12,
-						"special_rules": [
-							"AP(1)"
-						]
-					},
-					{
-						"attacks": 2,
-						"count": 5,
-						"from_item": "",
-						"name": "Void Blade",
+						"name": "Doom Scythe",
 						"range_value": 0,
-						"special_rules": []
+						"special_rules": [
+							"AP(4)",
+							"Imprecise"
+						]
 					}
 				]
 			},
 			"source_type": "opr",
-			"unit_id": "1783685262.03471_479234676",
+			"unit_id": "1793359272.15724_3486559594",
 			"unit_properties": {
 				"attached_heroes": [],
 				"attached_to": "",
@@ -4165,14 +4175,14 @@
 				"base_size_round": 32,
 				"base_size_square": 30,
 				"base_width_mm": 32,
-				"cost": 125,
+				"cost": 95,
 				"custom_name": "",
 				"defense": 3,
 				"display_suffix": "",
 				"faction_folder": "robot_legions",
 				"game_system": "gf",
 				"item_grants": {
-					"Jetpacks": [
+					"Teleport Jetpack": [
 						"Ambush",
 						"Flying",
 						"Swift"
@@ -4185,16 +4195,16 @@
 				"regiment_mode": false,
 				"rule_descriptions": {
 					"Ambush": "May be set aside before deployment. At the start of any round after the first, may be deployed anywhere over 9” away from enemy units. Players alternate in placing Ambush units, starting with the player that activates next. Units that deploy via Ambush can’t seize or contest objectives on the round they deploy.",
-					"Flying": "May move through units and terrain, and ignores terrain effects whilst moving.",
-					"Self-Repair": "When a unit where all models have this rule takes wounds, roll one die for each. On a 6+ it is ignored.",
-					"Slow": "Moves -2\" when using Advance, and -4” when using Rush/Charge.",
+					"Flying": "May move through units and terrain, and ignores the effects of Difficult and Dangerous terrain.",
+					"Self-Repair": "When a unit where most models have this rule takes wounds, roll one die for each. On a 6+ it is ignored.",
+					"Slow": "Moves -2” when using Advance, and -4” when using Rush/Charge.",
 					"Swift": "This model may ignore the Slow rule."
 				},
 				"size": 5,
 				"special_rules": [
 					"Slow",
 					"Self-Repair",
-					"Jetpacks",
+					"Teleport Jetpack",
 					"Ambush",
 					"Flying",
 					"Swift"
@@ -4205,7 +4215,7 @@
 	"object_counter": 54,
 	"objects": [
 		{
-			"game_unit_id": "1783685260.8375_4219020445",
+			"game_unit_id": "1793359262.20605_2322328277",
 			"glb_name": "Battle Brothers",
 			"model_index": 0,
 			"name": "OPR_Battle_Brothers_(1)",
@@ -4224,10 +4234,10 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685260.8375_4219020445",
+			"game_unit_id": "1793359262.20605_2322328277",
 			"glb_name": "Battle Brothers",
 			"model_index": 1,
-			"name": "@StaticBody3D@1377",
+			"name": "@StaticBody3D@1257",
 			"network_id": 1000002,
 			"position": [
 				-0.665499925613403,
@@ -4243,10 +4253,10 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685260.8375_4219020445",
+			"game_unit_id": "1793359262.20605_2322328277",
 			"glb_name": "Battle Brothers",
 			"model_index": 2,
-			"name": "@StaticBody3D@1380",
+			"name": "@StaticBody3D@1259",
 			"network_id": 1000003,
 			"position": [
 				-0.632499933242798,
@@ -4262,10 +4272,10 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685260.8375_4219020445",
+			"game_unit_id": "1793359262.20605_2322328277",
 			"glb_name": "Battle Brothers",
 			"model_index": 3,
-			"name": "@StaticBody3D@1383",
+			"name": "@StaticBody3D@1261",
 			"network_id": 1000004,
 			"position": [
 				-0.599499940872192,
@@ -4281,10 +4291,10 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685260.8375_4219020445",
+			"game_unit_id": "1793359262.20605_2322328277",
 			"glb_name": "Battle Brothers",
 			"model_index": 4,
-			"name": "@StaticBody3D@1386",
+			"name": "@StaticBody3D@1263",
 			"network_id": 1000005,
 			"position": [
 				-0.566499948501587,
@@ -4300,10 +4310,10 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685260.8375_4219020445",
+			"game_unit_id": "1793359262.20605_2322328277",
 			"glb_name": "Battle Brothers",
 			"model_index": 5,
-			"name": "@StaticBody3D@1389",
+			"name": "@StaticBody3D@1265",
 			"network_id": 1000006,
 			"position": [
 				-0.533499956130981,
@@ -4319,10 +4329,10 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685260.8375_4219020445",
+			"game_unit_id": "1793359262.20605_2322328277",
 			"glb_name": "Battle Brothers",
 			"model_index": 6,
-			"name": "@StaticBody3D@1392",
+			"name": "@StaticBody3D@1267",
 			"network_id": 1000007,
 			"position": [
 				-0.500499963760376,
@@ -4338,10 +4348,10 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685260.8375_4219020445",
+			"game_unit_id": "1793359262.20605_2322328277",
 			"glb_name": "Battle Brothers",
 			"model_index": 7,
-			"name": "@StaticBody3D@1395",
+			"name": "@StaticBody3D@1269",
 			"network_id": 1000008,
 			"position": [
 				-0.467499971389771,
@@ -4357,10 +4367,10 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685260.8375_4219020445",
+			"game_unit_id": "1793359262.20605_2322328277",
 			"glb_name": "Battle Brothers",
 			"model_index": 8,
-			"name": "@StaticBody3D@1398",
+			"name": "@StaticBody3D@1271",
 			"network_id": 1000009,
 			"position": [
 				-0.434499859809875,
@@ -4376,10 +4386,10 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685260.8375_4219020445",
+			"game_unit_id": "1793359262.20605_2322328277",
 			"glb_name": "Battle Brothers",
 			"model_index": 9,
-			"name": "@StaticBody3D@1401",
+			"name": "@StaticBody3D@1273",
 			"network_id": 1000010,
 			"position": [
 				-0.40149986743927,
@@ -4395,7 +4405,7 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685260.98966_799451351",
+			"game_unit_id": "1793359262.22296_2877348417",
 			"glb_name": "Battle Brothers",
 			"model_index": 0,
 			"name": "OPR_Battle_Brothers_(2)",
@@ -4414,10 +4424,10 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685260.98966_799451351",
+			"game_unit_id": "1793359262.22296_2877348417",
 			"glb_name": "Battle Brothers",
 			"model_index": 1,
-			"name": "@StaticBody3D@1406",
+			"name": "@StaticBody3D@1276",
 			"network_id": 1000012,
 			"position": [
 				-0.11549985408783,
@@ -4433,10 +4443,10 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685260.98966_799451351",
+			"game_unit_id": "1793359262.22296_2877348417",
 			"glb_name": "Battle Brothers",
 			"model_index": 2,
-			"name": "@StaticBody3D@1409",
+			"name": "@StaticBody3D@1278",
 			"network_id": 1000013,
 			"position": [
 				-0.0824998617172241,
@@ -4452,10 +4462,10 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685260.98966_799451351",
+			"game_unit_id": "1793359262.22296_2877348417",
 			"glb_name": "Battle Brothers",
 			"model_index": 3,
-			"name": "@StaticBody3D@1412",
+			"name": "@StaticBody3D@1280",
 			"network_id": 1000014,
 			"position": [
 				-0.0494998693466187,
@@ -4471,10 +4481,10 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685260.98966_799451351",
+			"game_unit_id": "1793359262.22296_2877348417",
 			"glb_name": "Battle Brothers",
 			"model_index": 4,
-			"name": "@StaticBody3D@1415",
+			"name": "@StaticBody3D@1282",
 			"network_id": 1000015,
 			"position": [
 				-0.0164998769760132,
@@ -4490,10 +4500,10 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685260.98966_799451351",
+			"game_unit_id": "1793359262.22296_2877348417",
 			"glb_name": "Battle Brothers",
 			"model_index": 5,
-			"name": "@StaticBody3D@1418",
+			"name": "@StaticBody3D@1284",
 			"network_id": 1000016,
 			"position": [
 				0.0165001153945923,
@@ -4509,10 +4519,10 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685260.98966_799451351",
+			"game_unit_id": "1793359262.22296_2877348417",
 			"glb_name": "Battle Brothers",
 			"model_index": 6,
-			"name": "@StaticBody3D@1421",
+			"name": "@StaticBody3D@1286",
 			"network_id": 1000017,
 			"position": [
 				0.0495001077651978,
@@ -4528,10 +4538,10 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685260.98966_799451351",
+			"game_unit_id": "1793359262.22296_2877348417",
 			"glb_name": "Battle Brothers",
 			"model_index": 7,
-			"name": "@StaticBody3D@1424",
+			"name": "@StaticBody3D@1288",
 			"network_id": 1000018,
 			"position": [
 				0.0825001001358032,
@@ -4547,10 +4557,10 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685260.98966_799451351",
+			"game_unit_id": "1793359262.22296_2877348417",
 			"glb_name": "Battle Brothers",
 			"model_index": 8,
-			"name": "@StaticBody3D@1427",
+			"name": "@StaticBody3D@1290",
 			"network_id": 1000019,
 			"position": [
 				0.115500211715698,
@@ -4566,10 +4576,10 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685260.98966_799451351",
+			"game_unit_id": "1793359262.22296_2877348417",
 			"glb_name": "Battle Brothers",
 			"model_index": 9,
-			"name": "@StaticBody3D@1430",
+			"name": "@StaticBody3D@1292",
 			"network_id": 1000020,
 			"position": [
 				0.148500204086304,
@@ -4585,7 +4595,7 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685261.05019_3703488610",
+			"game_unit_id": "1793359262.28896_2321921710",
 			"glb_name": "Destroyers",
 			"model_index": 0,
 			"name": "OPR_Destroyers",
@@ -4604,10 +4614,10 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685261.05019_3703488610",
+			"game_unit_id": "1793359262.28896_2321921710",
 			"glb_name": "Destroyers",
 			"model_index": 1,
-			"name": "@StaticBody3D@1435",
+			"name": "@StaticBody3D@1295",
 			"network_id": 1000022,
 			"position": [
 				0.550000071525574,
@@ -4623,10 +4633,10 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685261.05019_3703488610",
+			"game_unit_id": "1793359262.28896_2321921710",
 			"glb_name": "Destroyers",
 			"model_index": 2,
-			"name": "@StaticBody3D@1438",
+			"name": "@StaticBody3D@1297",
 			"network_id": 1000023,
 			"position": [
 				0.598000049591064,
@@ -4642,7 +4652,7 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685261.08043_3806866442",
+			"game_unit_id": "1793359262.35095_751756290",
 			"glb_name": "Master Brother",
 			"model_index": 0,
 			"name": "OPR_Master_Brother",
@@ -4661,7 +4671,7 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685261.53515_3728519486",
+			"game_unit_id": "1793359271.68949_2120081989",
 			"glb_name": "Warriors",
 			"model_index": 0,
 			"name": "OPR_Warriors_(1)",
@@ -4680,10 +4690,10 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685261.53515_3728519486",
+			"game_unit_id": "1793359271.68949_2120081989",
 			"glb_name": "Warriors",
 			"model_index": 1,
-			"name": "@StaticBody3D@1642",
+			"name": "@StaticBody3D@1510",
 			"network_id": 2000026,
 			"position": [
 				-0.800000190734863,
@@ -4699,10 +4709,10 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685261.53515_3728519486",
+			"game_unit_id": "1793359271.68949_2120081989",
 			"glb_name": "Warriors",
 			"model_index": 2,
-			"name": "@StaticBody3D@1645",
+			"name": "@StaticBody3D@1512",
 			"network_id": 2000027,
 			"position": [
 				-0.760000109672546,
@@ -4718,10 +4728,10 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685261.53515_3728519486",
+			"game_unit_id": "1793359271.68949_2120081989",
 			"glb_name": "Warriors",
 			"model_index": 3,
-			"name": "@StaticBody3D@1648",
+			"name": "@StaticBody3D@1514",
 			"network_id": 2000028,
 			"position": [
 				-0.720000147819519,
@@ -4737,10 +4747,10 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685261.53515_3728519486",
+			"game_unit_id": "1793359271.68949_2120081989",
 			"glb_name": "Warriors",
 			"model_index": 4,
-			"name": "@StaticBody3D@1651",
+			"name": "@StaticBody3D@1516",
 			"network_id": 2000029,
 			"position": [
 				-0.680000185966492,
@@ -4756,10 +4766,10 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685261.53515_3728519486",
+			"game_unit_id": "1793359271.68949_2120081989",
 			"glb_name": "Warriors",
 			"model_index": 5,
-			"name": "@StaticBody3D@1654",
+			"name": "@StaticBody3D@1518",
 			"network_id": 2000030,
 			"position": [
 				-0.640000104904175,
@@ -4775,10 +4785,10 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685261.53515_3728519486",
+			"game_unit_id": "1793359271.68949_2120081989",
 			"glb_name": "Warriors",
 			"model_index": 6,
-			"name": "@StaticBody3D@1657",
+			"name": "@StaticBody3D@1520",
 			"network_id": 2000031,
 			"position": [
 				-0.600000143051147,
@@ -4794,10 +4804,10 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685261.53515_3728519486",
+			"game_unit_id": "1793359271.68949_2120081989",
 			"glb_name": "Warriors",
 			"model_index": 7,
-			"name": "@StaticBody3D@1660",
+			"name": "@StaticBody3D@1522",
 			"network_id": 2000032,
 			"position": [
 				-0.56000018119812,
@@ -4813,10 +4823,10 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685261.53515_3728519486",
+			"game_unit_id": "1793359271.68949_2120081989",
 			"glb_name": "Warriors",
 			"model_index": 8,
-			"name": "@StaticBody3D@1663",
+			"name": "@StaticBody3D@1524",
 			"network_id": 2000033,
 			"position": [
 				-0.520000100135803,
@@ -4832,10 +4842,10 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685261.53515_3728519486",
+			"game_unit_id": "1793359271.68949_2120081989",
 			"glb_name": "Warriors",
 			"model_index": 9,
-			"name": "@StaticBody3D@1666",
+			"name": "@StaticBody3D@1526",
 			"network_id": 2000034,
 			"position": [
 				-0.480000138282776,
@@ -4851,7 +4861,7 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685261.65066_584119795",
+			"game_unit_id": "1793359271.83432_2869420569",
 			"glb_name": "Robot Lord",
 			"model_index": 0,
 			"name": "OPR_Robot_Lord",
@@ -4870,7 +4880,7 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685261.75641_3496221980",
+			"game_unit_id": "1793359271.84422_2301507415",
 			"glb_name": "Warriors",
 			"model_index": 0,
 			"name": "OPR_Warriors_(2)",
@@ -4889,10 +4899,10 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685261.75641_3496221980",
+			"game_unit_id": "1793359271.84422_2301507415",
 			"glb_name": "Warriors",
 			"model_index": 1,
-			"name": "@StaticBody3D@1673",
+			"name": "@StaticBody3D@1530",
 			"network_id": 2000037,
 			"position": [
 				-0.360000252723694,
@@ -4908,10 +4918,10 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685261.75641_3496221980",
+			"game_unit_id": "1793359271.84422_2301507415",
 			"glb_name": "Warriors",
 			"model_index": 2,
-			"name": "@StaticBody3D@1676",
+			"name": "@StaticBody3D@1532",
 			"network_id": 2000038,
 			"position": [
 				-0.320000171661377,
@@ -4927,10 +4937,10 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685261.75641_3496221980",
+			"game_unit_id": "1793359271.84422_2301507415",
 			"glb_name": "Warriors",
 			"model_index": 3,
-			"name": "@StaticBody3D@1679",
+			"name": "@StaticBody3D@1534",
 			"network_id": 2000039,
 			"position": [
 				-0.28000020980835,
@@ -4946,10 +4956,10 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685261.75641_3496221980",
+			"game_unit_id": "1793359271.84422_2301507415",
 			"glb_name": "Warriors",
 			"model_index": 4,
-			"name": "@StaticBody3D@1682",
+			"name": "@StaticBody3D@1536",
 			"network_id": 2000040,
 			"position": [
 				-0.240000247955322,
@@ -4965,10 +4975,10 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685261.75641_3496221980",
+			"game_unit_id": "1793359271.84422_2301507415",
 			"glb_name": "Warriors",
 			"model_index": 5,
-			"name": "@StaticBody3D@1685",
+			"name": "@StaticBody3D@1538",
 			"network_id": 2000041,
 			"position": [
 				-0.200000166893005,
@@ -4984,10 +4994,10 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685261.75641_3496221980",
+			"game_unit_id": "1793359271.84422_2301507415",
 			"glb_name": "Warriors",
 			"model_index": 6,
-			"name": "@StaticBody3D@1688",
+			"name": "@StaticBody3D@1540",
 			"network_id": 2000042,
 			"position": [
 				-0.160000205039978,
@@ -5003,10 +5013,10 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685261.75641_3496221980",
+			"game_unit_id": "1793359271.84422_2301507415",
 			"glb_name": "Warriors",
 			"model_index": 7,
-			"name": "@StaticBody3D@1691",
+			"name": "@StaticBody3D@1542",
 			"network_id": 2000043,
 			"position": [
 				-0.120000243186951,
@@ -5022,10 +5032,10 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685261.75641_3496221980",
+			"game_unit_id": "1793359271.84422_2301507415",
 			"glb_name": "Warriors",
 			"model_index": 8,
-			"name": "@StaticBody3D@1694",
+			"name": "@StaticBody3D@1544",
 			"network_id": 2000044,
 			"position": [
 				-0.0800001621246338,
@@ -5041,10 +5051,10 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685261.75641_3496221980",
+			"game_unit_id": "1793359271.84422_2301507415",
 			"glb_name": "Warriors",
 			"model_index": 9,
-			"name": "@StaticBody3D@1697",
+			"name": "@StaticBody3D@1546",
 			"network_id": 2000045,
 			"position": [
 				-0.0400002002716064,
@@ -5060,7 +5070,7 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685261.84313_1445270813",
+			"game_unit_id": "1793359271.97234_1159521028",
 			"glb_name": "Snipers",
 			"model_index": 0,
 			"name": "OPR_Snipers",
@@ -5079,10 +5089,10 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685261.84313_1445270813",
+			"game_unit_id": "1793359271.97234_1159521028",
 			"glb_name": "Snipers",
 			"model_index": 1,
-			"name": "@StaticBody3D@1702",
+			"name": "@StaticBody3D@1549",
 			"network_id": 2000047,
 			"position": [
 				0.660000026226044,
@@ -5098,10 +5108,10 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685261.84313_1445270813",
+			"game_unit_id": "1793359271.97234_1159521028",
 			"glb_name": "Snipers",
 			"model_index": 2,
-			"name": "@StaticBody3D@1705",
+			"name": "@StaticBody3D@1551",
 			"network_id": 2000048,
 			"position": [
 				0.700000107288361,
@@ -5117,7 +5127,7 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685261.96155_3405990619",
+			"game_unit_id": "1793359272.10722_2089602748",
 			"glb_name": "Heavy Annihilator",
 			"model_index": 0,
 			"name": "OPR_Heavy_Annihilator",
@@ -5136,7 +5146,7 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685262.03471_479234676",
+			"game_unit_id": "1793359272.15724_3486559594",
 			"glb_name": "Guardians",
 			"model_index": 0,
 			"name": "OPR_Guardians",
@@ -5155,10 +5165,10 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685262.03471_479234676",
+			"game_unit_id": "1793359272.15724_3486559594",
 			"glb_name": "Guardians",
 			"model_index": 1,
-			"name": "@StaticBody3D@1712",
+			"name": "@StaticBody3D@1555",
 			"network_id": 2000051,
 			"position": [
 				-0.700000047683716,
@@ -5174,10 +5184,10 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685262.03471_479234676",
+			"game_unit_id": "1793359272.15724_3486559594",
 			"glb_name": "Guardians",
 			"model_index": 2,
-			"name": "@StaticBody3D@1715",
+			"name": "@StaticBody3D@1557",
 			"network_id": 2000052,
 			"position": [
 				-0.659999966621399,
@@ -5193,10 +5203,10 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685262.03471_479234676",
+			"game_unit_id": "1793359272.15724_3486559594",
 			"glb_name": "Guardians",
 			"model_index": 3,
-			"name": "@StaticBody3D@1718",
+			"name": "@StaticBody3D@1559",
 			"network_id": 2000053,
 			"position": [
 				-0.620000004768372,
@@ -5212,10 +5222,10 @@
 			"visible": true
 		},
 		{
-			"game_unit_id": "1783685262.03471_479234676",
+			"game_unit_id": "1793359272.15724_3486559594",
 			"glb_name": "Guardians",
 			"model_index": 4,
-			"name": "@StaticBody3D@1721",
+			"name": "@StaticBody3D@1561",
 			"network_id": 2000054,
 			"position": [
 				-0.580000042915344,
@@ -5234,18 +5244,18 @@
 	"player_spells": {
 		"1": [
 			{
-				"effect": "Pick one enemy unit within 18\", which friendly units gets Unstoppable when shooting against once (next time the effect would apply).",
+				"effect": "Pick one friendly unit within 12\", which gets Evasive once (next time the effect would apply).",
+				"name": "Protective Dome",
+				"threshold": 1
+			},
+			{
+				"effect": "Pick one enemy unit within 6\", which takes 3 hits with Bane.",
+				"name": "Psychic Terror",
+				"threshold": 1
+			},
+			{
+				"effect": "Pick up to two enemy units within 18\" in line of sight, which friendly units gets Unstoppable on their weapons when shooting against once (next time the effect would apply).",
 				"name": "Advanced Sight",
-				"threshold": 1
-			},
-			{
-				"effect": "Pick one enemy unit within 18\", which takes 1 hit with Blast(3) and Lacerate.",
-				"name": "Cerebral Trauma",
-				"threshold": 1
-			},
-			{
-				"effect": "Pick up to two friendly units within 12\", which get Shred when shooting once (next time the effect would apply).",
-				"name": "Blessed Ammo",
 				"threshold": 2
 			},
 			{
@@ -5254,25 +5264,25 @@
 				"threshold": 2
 			},
 			{
-				"effect": "Pick up to three friendly units within 12\", which get Evasive once (next time the effect would apply).",
-				"name": "Protective Dome",
+				"effect": "Pick up to three friendly units within 18\", which get Shred on its weapons when shooting once (next time the effect would apply).",
+				"name": "Blessed Ammo",
 				"threshold": 3
 			},
 			{
-				"effect": "Pick one enemy unit within 6\", which takes 9 hits with Bane.",
-				"name": "Psychic Terror",
+				"effect": "Pick one enemy unit within 24\" in line of sight, which takes 6 hits with AP(1) and Smash.",
+				"name": "Cerebral Trauma",
 				"threshold": 3
 			}
 		],
 		"2": [
 			{
-				"effect": "Pick one enemy unit within 18\", which friendly units gets Indirect when shooting against once (next time the effect would apply).",
+				"effect": "Pick one enemy unit within 18\" in line of sight, which friendly units gets Indirect on their weapons against once (next time the effect would apply).",
 				"name": "Triangulation Bots",
 				"threshold": 1
 			},
 			{
-				"effect": "Pick one enemy unit within 12\", which takes 2 hits with AP(2).",
-				"name": "Piercing Bots",
+				"effect": "Pick one enemy unit within 6\", which takes 3 hits with AP(1) and Shatter. Roll as many dice as hits to see if \"on rolls of 6\" effects trigger.",
+				"name": "Gauss Bots",
 				"threshold": 1
 			},
 			{
@@ -5286,145 +5296,155 @@
 				"threshold": 2
 			},
 			{
-				"effect": "Pick up to three friendly units within 12\", which get Self-Repair Boost once (next time the effect would apply).",
+				"effect": "Pick up to three friendly units within 18\", which get Enhanced Self-Repair once (next time the effect would apply).",
 				"name": "Mending Bots",
 				"threshold": 3
 			},
 			{
-				"effect": "Pick one enemy unit within 6\", which takes 9 hits with Destructive. Roll as many dice as hits to see if \"on rolls of 6\" effects trigger.",
-				"name": "Gauss Bots",
+				"effect": "Pick one enemy unit within 18\" in line of sight, which takes 6 hits with AP(2).",
+				"name": "Piercing Bots",
 				"threshold": 3
 			}
 		]
 	},
 	"rule_descriptions": {
-		"AP": "Targets get -X to Defense rolls when blocking hits.",
-		"Agile": "Moves +1\" on advance and +2” on rush and charge.",
-		"Aircraft": "May only use Advance actions, moving in a straight line, and adding 30” to its total move (even if Shaken). Aircraft ignore all units and terrain when moving and stopping, can’t seize or contest objectives, can’t be charged, and units targeting them get -12” range.",
+		"AP": "AP",
+		"Agile": "Moves +1” on Advance and +2” on Rush/Charge actions.",
+		"Aircraft": "May only use Advance actions, moving in a straight line, and adding 30” to its total move (even if Shaken). Aircraft ignore all units and terrain when moving and stopping, can’t seize or contest objectives, can’t be charged, and units targeting them get -12” range and -1 to hit rolls.",
 		"Ambush": "May be set aside before deployment. At the start of any round after the first, may be deployed anywhere over 9” away from enemy units. Players alternate in placing Ambush units, starting with the player that activates next. Units that deploy via Ambush can’t seize or contest objectives on the round they deploy.",
 		"Ambush Aura": "This model and its unit get Ambush.",
 		"Ambushing Piercing Shot": "Counts as having Ambush, and its weapons get AP(+1) when shooting on the round in which it deploys via this rule.",
-		"Arm Injury": "Gets -1 to rolls when in melee.",
-		"Artillery": "May only use Hold actions. When this model shoots at enemies over 9\" away, it gets +1 to hit rolls. When enemy units shoot at this model from over 9\" away, they get -2 to hit rolls.",
-		"Bane": "Ignores Regeneration, and when attacking the target must re-roll unmodified Defense results of 6.",
-		"Bane in Melee Aura": "This model and its unit get Bane in melee.",
-		"Bane when Shooting Aura": "This model and its unit get Bane when shooting.",
-		"Banner": "This model and its unit get +1 to morale test rolls.",
-		"Battleborn": "If a unit where all models have this rule is Shaken at the beginning of the round, roll one die. On a 4+, it stops being Shaken.",
-		"Berserker": "Enemies get -1 to morale test rolls when in melee with the hero.",
-		"Bitter Rivalry": "Gets +1 to hit against enemy heroes.",
-		"Blast": "Ignores cover, and after resolving other special rules, each hit is multiplied by X, where X is up to as many hits as models in the target unit.",
-		"Blinded Eye": "Gets -1 to rolls when shooting.",
-		"Caster": "Gets X spell tokens at the start of each round, but can’t hold more than 6 tokens at once. At any point before attacking, spend as many tokens as the spell’s value to try casting one or more spells (only one try per spell). Roll one die, on 4+ resolve the effect on a target in line of sight. Models within 18” in line of sight of the caster’s unit may spend any number of spell tokens at the same time before rolling, to give the caster +1/-1 to the roll per token.",
+		"Anti-Cover": "This weapon ignores Cover.",
+		"Anti-Regen": "This weapon ignores Regeneration.",
+		"Armor": "Counts as having Defense X+.",
+		"Artillery": "When this model uses Hold actions and shoots at enemies over 12” away, it gets +1 to hit rolls. If most models in this unit have this rule, as long as they haven't moved during this round, enemy units shooting at them from over 12” away get -1 to hit rolls.",
+		"Assault": "Counts as both a ranged weapon and a melee weapon.",
+		"Bane": "Ignores Regeneration, and when attacking, the target must re-roll unmodified Defense results of 6.",
+		"Bane in Melee Aura": "This model and its unit get Bane on its weapons in melee.",
+		"Bane when Shooting Aura": "This model and its unit get Bane on its weapons when shooting.",
+		"Banner": "This model and its unit get +1 to Morale Test rolls triggered by shooting/melee.",
+		"Battleborn": "If a unit where most models have this rule is Shaken at the beginning of the round, roll one die. On a 4+, it stops being Shaken.",
+		"Berserker": "Once per game, the Hero and its unit may ignore becoming Fatigued.",
+		"Blast": "Ignores Cover, and after resolving other special rules, each hit is multiplied by X, where X is up to as many hits as models in the target unit.",
+		"Blinded": "Gets -1 to hit rolls when using move actions and shooting.",
+		"Brace": "Enemies charging this unit get -X total Impact rolls, unless this unit is Fatigued.",
+		"Bravery Aura": "This model and its unit get +1 to Morale Test rolls.",
+		"Caster": "Gets X spell tokens at the start of each round, but can’t have more than 6 at once. Once per activation, before attacking, spend as many tokens as the spell’s value to try casting one or more spells (only one try per spell). Pick a target and roll one die, and on 4+ resolve the spell’s effect. Models within 18” of the Caster may spend any number of spell tokens at the same time before rolling to give the Caster +1/-1 to the roll per token.",
 		"Casting Buff": "Once per activation, before attacking, pick one friendly model within 12\" with Caster, which gets +1 to casting rolls once (next time the effect would apply).",
-		"Chemist": "Friendly units within 6\" of the Hero get +1 to morale tests when in melee.",
-		"Chest Wound": "Gets -1 to rolls when blocking hits.",
-		"Climber": "The hero ignores difficult terrain effects.",
-		"Counter": "Strikes first with this weapon when charged, and the charging unit gets -1 total Impact rolls per model with Counter.",
-		"Courage Aura": "This model and its unit get +1 to morale test rolls.",
-		"Crazed": "Gets +1 attack in melee when charging.",
-		"Dead": "Remove the hero from your army sheet.",
+		"Chemist": "The Hero and its unit get +1 to Defense rolls when shot.",
+		"Counter": "May strike first with this weapon when charged, unless this unit is Fatigued.",
+		"Crazed": "Gets +1 to hit rolls in melee when charging.",
+		"Crippled": "Moves -1” on Advance and -2” on Rush/Charge actions.",
+		"Cumbersome": "May only use Hold or Advance actions, but can’t shoot when moving.",
+		"Dead": "Remove the Hero from your army.",
 		"Deadly": "Assign each wound to one model, and multiply it by X. Hits from Deadly must be resolved first, and these wounds don’t carry over to other models if the original target is killed.",
-		"Defense": "This model gets +X to defense rolls.",
-		"Destroyer": "The hero gets AP(+1) when shooting.",
-		"Destructive": "On unmodified results of 6 to hit, those hits get AP(+4).",
-		"Duellist": "Enemy units get -1 in melee against the hero.",
+		"Defense": "This model gets +X to Defense rolls.",
+		"Destroyer": "The Hero and its unit get AP(+1) when using move actions and shooting.",
+		"Duellist": "The Hero and its unit get AP(+1) in melee when charged.",
 		"Elite": "May re-roll one roll of any kind once per game.",
-		"Entrenched": "As long as a unit where all models have this rule hasn't moved during the round, enemy units shooting at it from over 9\" away get -2 to hit rolls.",
-		"Evasive": "Enemies get -1 to hit rolls when attacking units where all models have this rule.",
-		"Fanatic": "The hero gets +1 attack when in melee.",
-		"Fast": "Moves +2\" when using Advance, and +4” when using Rush/Charge.",
+		"Enhanced Protected": "If most models in this unit have Protected, they ignore wounds on rolls of 5-6 from Protected (instead of only on 6+).",
+		"Enhanced Self-Repair": "If most models in this unit have Self-Repair, they ignore wounds on rolls of 5-6 from Self-Repair (instead of only on 6+).",
+		"Enhanced Self-Repair Buff": "Once per activation, before attacking, pick one friendly unit within 12\", which gets Enhanced Self-Repair once (next time the effect would apply).",
+		"Evasive": "Enemies get -1 to hit rolls when attacking units where most models have this rule.",
+		"Explorer": "Once per game, the Hero and its unit ignore the effects of Difficult and Dangerous terrain.",
+		"Fanatic": "The Hero and its unit get AP(+1) in melee when charging.",
+		"Fast": "Moves +2” when using Advance, and +4” when using Rush/Charge.",
 		"Fast Learner": "May pick any other trait from the list.",
-		"Fear": "This model counts as having dealt +X wounds when checking who won melee.",
-		"Fearless": "When a unit where all models have this rule fails a morale test, roll one die. On a 4+ it counts as passed instead.",
-		"Flying": "May move through units and terrain, and ignores terrain effects whilst moving.",
-		"Furious": "When charging, unmodified results of 6 to hit in melee deal 1 extra hit (only the original hit counts as a 6 for special rules).",
-		"Headstrong": "Gets +1 to rolls when taking morale tests.",
-		"Herbalist": "Friendly units within 6\" may ignore wounds on a roll of 6+.",
-		"Hero": "Heroes with up to Tough(6) may deploy as part of one multi-model unit without another Hero. The hero may take morale tests on behalf of the unit, but must use the unit’s Defense until all other models have been killed.",
-		"Horrible Scars": "Enemy units get -1 to hit when in melee against the hero.",
-		"Hunter": "The hero may shoot even after rush actions.",
+		"Fear": "When in melee with this model, enemies count as having taken +X wounds when checking who won.",
+		"Fearless": "When a unit where most models have this rule fails a Morale Test, roll one die. On a 4+ it counts as passed instead.",
+		"Flying": "May move through units and terrain, and ignores the effects of Difficult and Dangerous terrain.",
+		"Furious": "When charging, unmodified result of 6 to hit deal 1 extra hit (only the original hit counts as a 6 for special rules).",
+		"Headstrong": "Gets +1 to rolls when taking Morale Tests.",
+		"Healer": "Once per game, when the Hero’s unit is activated, it may restore D3 models/wounds.",
+		"Herbalist": "The Hero and its unit get +1 to Defense rolls in melee.",
+		"Hero": "Heroes with up to Tough(6) may deploy as part of one multi-model unit without another Hero, but must use the unit’s Defense until all other models have been killed. The Hero’s unit, and units within 6” of friendly Heroes with Tough(9) or higher, may use the Hero’s Quality for Morale Tests as long as the Hero isn’t Shaken.",
+		"Idol": "Once per game, the Hero and its unit may ignore becoming Shaken.",
 		"Immobile": "May only use Hold actions.",
-		"Impact": "Roll X dice when attacking after charging, unless fatigued. For each 2+ the target takes one hit.",
-		"Indirect": "Gets -1 to hit rolls when shooting after moving. May target enemies that are not in line of sight as if in line of sight, and ignores cover from sight obstructions.",
-		"Indirect Mark": "Once per activation, before attacking, pick one enemy unit within 18\" in line of sight, which friendly units gets Indirect against once (next time the effect would apply).",
-		"Infiltrate": "Counts as having Ambush, but may be deployed anywhere over 3” away from enemy unit.",
-		"Instigator": "Friendly units that activate within 6\" of the Hero get +1 to hit when in melee.",
-		"Lacerate": "When attacking the target must re-roll unmodified Defense results of 6.",
-		"Leader": "Friendly units within 6\" of the Hero get +1 to morale test rolls.",
+		"Impact": "When charging, before either unit attacks, roll X dice, unless this unit is Fatigued. For each 2+ the target takes 1 hit.",
+		"Imprecise": "Gets -1 to hit when attacking.",
+		"Indirect": "When using Hold actions and shooting, may target enemies that are not in line of sight as if in line of sight, and ignores Cover from Sight Blockers.",
+		"Indirect Mark": "Once per activation, before attacking, pick one enemy unit within 18\" in line of sight, which friendly units gets Indirect on their weapons against once (next time the effect would apply).",
+		"Infiltrate": "Counts as having Ambush, but may be deployed anywhere over 3\" away from enemy unit.",
+		"Leader": "The Hero and its unit get +1 to Morale Test rolls in melee.",
+		"Learned Lesson": "May pick any other trait from the list.",
 		"Limited": "May only be used once per game.",
-		"Mastermind": "Enemy units within 6\" of the Hero get -1 Defense.",
-		"Melee Shrouding": "Enemies get -3\" movement to a min. of 6\" when trying to charge units where all models have this rule.",
+		"Lucky Break": "May pick any other trait from the list.",
+		"Maimed": "Gets -1 to hit rolls when fighting in melee.",
+		"Mastermind": "Once per game, when the Hero’s unit is targeted by an enemy, it may force the enemy to re-roll one roll of any kind.",
+		"Melee Shrouding": "When a unit where most models have this rule is targeted by an enemy unit for charging, that enemy unit gets -2\" range to a min. of 6\".",
 		"Melee Shrouding Aura": "This model and its unit get Melee Shrouding.",
 		"Mend": "Once per activation, before attacking, pick one friendly model within 3\" with Tough, and remove D3 wounds from it.",
-		"Mobile Artillery": "When this model uses a Hold action and shoots at enemies over 9\" away, it gets +1 to hit rolls. As long this model hasn't moved during the round, when enemy units shoot at it from over 9\" away, they get -2 to hit rolls.",
-		"Morale": "Gets +X to morale test rolls.",
-		"Motivated": "Always passes the first morale test of the match.",
+		"Motivated": "Gets +1 to rolls when taking Morale Tests.",
+		"Motivator": "The Hero and its unit get +1 to Morale Test rolls triggered by shooting.",
 		"Musician": "This model and its unit moves +1\" when using move actions.",
-		"Natural Talent": "The hero recovers and gets +1 XP.",
-		"No Retreat": "When a unit where most models have this rule fails a morale test that causes it to be Shaken or Routed, the test counts as passed instead. Then, roll as many dice as the number of wounds it would take to fully destroy it, and for each result of 1-3 the unit takes one wound, which can't be ignored.",
+		"Natural Talent": "Earns +1 XP.",
+		"No Retreat": "When a unit where most models have this rule fails a Morale Test that causes it to be Shaken or Routed, the test counts as passed instead. Then, roll as many dice as the number of wounds it would take to fully destroy it, and for each result of 1-3 the unit takes one wound, which can't be ignored.",
 		"No Retreat Aura": "This model and its unit get No Retreat.",
-		"Piercing Assault": "This model gets AP(+1) when charging.",
-		"Piercing Assault Aura": "This model and its unit get Piercing Assault.",
-		"Protection Feat": "Once per game, when this unit takes wounds and all its models have this rule, you may use this rule and roll one die per wound, and on a 5+ it is ignored.",
+		"Parry": "When this unit takes hits in melee, roll X dice per model with this rule in it, up to as many dice as hits taken. For each 6+ one hit is ignored (defender picks which).",
+		"Piercing Charge": "This model gets AP(+1) on its weapons when charging.",
+		"Piercing Charge Aura": "This model and its unit get Piercing Charge.",
+		"Protected": "When a unit where most models have this rule takes wounds, roll one die for each. On a 6+ it is ignored.",
+		"Protection Feat": "Once per game, when this unit takes wounds and most of its models have this rule, you may use this rule and roll one die per wound, and on a 5+ it is ignored.",
 		"Protection Feat Aura": "This model and its unit get Protection Feat.",
-		"Prowler": "Enemy units further than 12\" get -1 to hit rolls when shooting at the hero.",
+		"Prowler": "The Hero and its unit move +1” on Advance actions.",
 		"Rapid Advance": "This model moves +4\" when using Advance actions.",
 		"Rapid Rush": "This model moves +6\" when using Rush actions.",
 		"Rapid Rush Aura": "This model and its unit get Rapid Rush.",
-		"Ravage": "When it's this model's turn to attack in melee, roll X dice. For each 6+ the target takes one wound.",
+		"Ravage": "Once per round, when it’s this model’s turn to strike in melee, roll X dice before attacking, unless this unit is Fatigued. For each 6+ the target takes one wound.",
 		"Re-Deployment": "After all other units are deployed (excluding units that were set aside), you may remove up to two friendly units from the table and deploy them again. Players alternate in placing Re-Deployment units, starting with the player that activates next.",
-		"Re-Position Artillery": "Once per activation, pick one friendly model within 6\" with Artillery, which may immediately move by up to 9\".\n\n",
 		"Reanimation": "When a unit where all models have this rule is activated, roll as many dice as the max. number of models/wounds it could restore. For each 5+ you may restore one model/wound. Note that new models may only be restored if they can be placed in coherency with non-restored models.",
 		"Reanimation Aura": "This model and its unit get Reanimation.",
-		"Regeneration": "When a unit where all models have this rule takes wounds, roll one die for each. On a 5+ it is ignored.",
+		"Regeneration": "When a unit where most models have this rule takes wounds, roll one die for each. On a 5+ it is ignored.",
 		"Regeneration Aura": "This model and its unit get Regeneration.",
-		"Relentless": "When this model shoots at enemies over 9\" away, unmodified results of 6 to hit deal 1 extra hit (only the original hit counts as a 6 for special rules).",
+		"Relentless": "When this model shoots at enemies over 9” away, unmodified result of 6 to hit deal 1 extra hit (only the original hit counts as a 6 for special rules).",
 		"Relentless Aura": "This model and its unit get Relentless.",
 		"Reliable": "Attacks at Quality 2+.",
-		"Rending": "Ignores Regeneration, and on unmodified results of 6 to hit, those hits get AP(+4).",
-		"Rending in Melee": "This model gets Rending in melee.",
+		"Rending": "Ignores Regeneration, and for each unmodified result of 6 to hit, those hits get AP(+4).",
+		"Rending in Melee": "This model gets Rending on its weapons in melee.",
 		"Repel Ambushers": "Enemy units using Ambush must be set up over 12\" away from this model's unit.",
-		"Resilient": "Gets +1 to rolls when blocking hits.",
-		"Runner": "The hero always moves +2\" (even in terrain).",
-		"Scavenger": "Friendly units that activate within 6\" of the Hero get +6” range when shooting.",
-		"Scout": "May be set aside before deployment. After all other units are deployed, may be deployed anywhere fully within 12” of their deployment zone. Players alternate in placing Scout units, starting with the player that activates next.",
-		"Self-Repair": "When a unit where all models have this rule takes wounds, roll one die for each. On a 6+ it is ignored.",
-		"Self-Repair Boost": "If all models in this unit have Self-Repair, they ignore wounds on rolls of 5-6 from Self-Repair (instead of only on 6+).",
-		"Self-Repair Boost Buff": "Once per activation, before attacking, pick one friendly unit within 12\", which gets Self-Repair Boost once (next time the effect would apply).",
-		"Shielded": "Units where all models have this rule get +1 to defense rolls against hits that are not from spells.",
-		"Shred": "On unmodified results of 1 to block hits, this weapon deals 1 extra wound.",
-		"Slow": "Moves -2\" when using Advance, and -4” when using Rush/Charge.",
-		"Smashed Leg": "Moves -1\" on advance and -2” on rush and charge actions.",
-		"Sniper REMOVE": "Shoots at Quality 2+, and each model with Sniper may pick any model in the target unit as its individual target, which is resolved as if it was a unit of 1. Sniper shooting must be resolved before other weapons.",
-		"Spawn": "Once per game, when this model is activated, you may place a new unit of X fully within 6\" of it.",
-		"Specialist": "Gets +1 to hit rolls in melee or shooting (pick one).",
-		"Stealth": "When units where all models have this rule are shot from over 9\" away, enemy units get -1 to hit rolls.",
+		"Resilient": "Gets +1 to Defense rolls when blocking hits.",
+		"Runner": "The Hero and its unit move +2” on Rush/Charge actions.",
+		"Scout": "May be set aside before deployment. After all other units are deployed, may be deployed anywhere fully within 9” of their deployment zone, over 9” away from non-Scout enemy units. Players alternate in placing Scout units, starting with the player that activates next.",
+		"Self-Repair": "When a unit where most models have this rule takes wounds, roll one die for each. On a 6+ it is ignored.",
+		"Sharpshooter": "Once per game, the Hero and its unit get +12” range when shooting.",
+		"Shatter": "For each unmodified result of 6 to hit, those hits get AP(+3).",
+		"Shred": "For each unmodified result of 1 to block hits, this weapon deals 1 extra wound.",
+		"Slow": "Moves -2” when using Advance, and -4” when using Rush/Charge.",
+		"Smash": "When attacking units over half of this weapon's range away, the target must re-roll unmodified Defense results of 6.",
+		"Spawn": "Once per game, when this model is activated, you may place a new unit of X fully within 6\" of it. Units placed via Spawn can’t seize or contest objectives on the round they are placed.",
+		"Specialist": "Gets +1 to hit rolls when in melee or when shooting (pick one).",
+		"Spell Amplifier": "Gets +1 to casting rolls.",
+		"Steadfast": "If a unit where most models have this rule is Shaken at the beginning of the round, roll one die. On a 4+, it stops being Shaken.",
+		"Stealth": "When units where most models have this rule are shot from over 9\" away, enemy units get -1 to hit rolls.",
 		"Stealth Aura": "This model and its unit get Stealth.",
-		"Strider": "May ignore the effects of difficult terrain when moving. ",
-		"Suppressor": "Enemies that are shot at by the hero get -1 to hit when shooting until the end of the round.",
-		"Surge": "On unmodified results of 6 to hit, this weapon deals 1 extra hits (only the original hit counts as a 6 for special rules).",
+		"Stealth Buff": "Once per activation, before attacking, pick one friendly unit within 12\", which gets Stealth once (next time the effect would apply).",
+		"Strategist": "Once per game, the Hero and its unit may re-roll one roll of any kind when shooting.",
+		"Strider": "May ignore the effects of Difficult terrain.",
+		"Suppressor": "The Hero and its unit get AP(+1) when using Hold and shooting.",
+		"Surge": "For each unmodified result of 6 to hit, this weapon deals 1 extra hit (only the original hit counts as a 6 for special rules).",
 		"Swift": "This model may ignore the Slow rule.",
 		"Swift Buff": "Once per activation, before attacking, pick one friendly unit within 12\", which gets Swift once (next time the effect would apply).",
-		"Tactician": "Friendly units that activate within 6\" of the Hero get +1 to hit when shooting.",
-		"Takedown": "This model may pick any model in the target unit as its individual target, which is resolved as if it was a unit of [1]. Takedown attacks must be resolved before other weapons.",
+		"Tactician": "Once per game, the Hero and its unit may re-roll one roll of any kind in melee.",
+		"Takedown": "This model may pick any model in the target unit as its individual target for this weapon's attacks, which is resolved as if it was a unit of [1]. Takedown attacks must be resolved before other weapons.",
 		"Thrust": "When charging, gets +1 to hit rolls and AP(+1) in melee.",
-		"Tough": "This model must take X wounds before being killed. If a model with tough joins a unit without it, then it is removed last when the unit takes wounds. You must continue to put wounds on the tough model with most wounds in the unit until it is killed, before starting to put them on the next tough model (heroes must be assigned wounds last, even if already wounded).",
-		"Toughened": "Gets Tough(+1).",
-		"Transport": "May transport up to X models or Heroes with up to Tough(6), and non-Heroes with up to Tough(3) which occupy 3 spaces each. Transports may deploy with units inside, and units may enter/exit by using any move action, but must stay fully within 6\" of it when exiting. Units inside/outside transports may not target other units outside/inside transports, but may target the transport itself. When a transport is destroyed, units inside must take a dangerous terrain test, are Shaken, and must be placed fully within 6” of the transport before it’s removed.",
-		"Traumatized": "Gets -1 to rolls when taking morale tests.",
-		"Unique": "This unit may only be taken once per army.",
-		"Unstoppable": "Ignores Regeneration, and ignores all negative modifiers to this weapon.",
-		"Unstoppable Mark": "Once per activation, before attacking, pick one enemy unit within 18\" in line of sight, which friendly units gets Unstoppable against once (next time the effect would apply).",
-		"Unstoppable when Shooting Aura": "This model and its unit get Unstoppable when shooting.",
-		"Vanguard": "Friendly units that activate within 6\" move +4” when using Charge actions.",
-		"Versatile Attack": "When this unit is activated, pick one effect: until the end of the activation, when shooting or charging enemies over 9\" away, all models with this rule in this unit either get AP(+1) or get +1 to hit rolls.",
-		"Versatile Reach": "When this unit is activated, pick one effect: until the end of the activation all models with this rule in it either get +4\" range when shooting, or move +2\" when charging.",
+		"Tough": "This model must take X wounds before being killed. If a model with Tough joins a unit without it, then it is removed last when the unit takes wounds. You must continue to put wounds on the Tough model with most wounds in the unit until it is killed, before starting to put them on the next Tough model (Heroes must be assigned wounds last, even if already wounded).",
+		"Toughened": "Gets Tough(+3).",
+		"Transport": "May transport up to X friendly models or Heroes with up to Tough(6), and non-Heroes with up to Tough(3) which occupy 3 spaces each. Transports may deploy with units inside, and units may enter/exit by using any move action, getting within 2” to enter, and staying fully within 6” when exiting. Units inside/outside transports may not target other units that are outside/inside, but may target the transport itself. When a transport is destroyed, units inside must take a Dangerous Terrain Test, are Shaken, and must be placed fully within 6” of the transport before it’s removed.",
+		"Unique Hero": "Counts as having Hero, and this model may only be taken once per army.",
+		"Unstoppable": "This weapon ignores Regeneration, and ignores all negative modifiers which are not from this model's special rules.",
+		"Unstoppable Mark": "Once per activation, before attacking, pick one enemy unit within 18\" in line of sight, which friendly units gets Unstoppable on their weapons against once (next time the effect would apply).",
+		"Unstoppable when Shooting": "This model gets Unstoppable on its weapons when shooting.",
+		"Unstoppable when Shooting Aura": "This model and its unit get Unstoppable on its weapons when shooting.",
+		"Vanguard": "After this model is deployed, it may be placed anywhere fully within 9\" of its position, over 9\" away from non-Vanguard enemy units.",
+		"Versatile Expert": "When this unit is activated, pick one effect: until the end of the activation all models with this rule in this unit either get AP(+1) when attacking, or get +1 to hit rolls when attacking.",
+		"Versatile Reach": "When this unit is activated, pick one effect: until the end of the activation, all models with this rule in this unit either get +4\" range when shooting or move +2\" when charging.",
 		"Versatile Reach Aura": "This model and its unit get Versatile Reach.",
-		"Warden": "When the hero is activated all friendly units within 6\" of the hero stop being shaken."
+		"Vigilant": "Gets +1 to hit rolls when shooting.",
+		"Weakened": "Gets -1 to Defense rolls when blocking hits."
 	},
 	"rules_version": "3.6.0",
-	"saved_at": "2026-07-10T14:07:47",
+	"saved_at": "2026-10-30T12:21:16",
+	"solo_ai_slots": [],
 	"table": {
 		"biome": "temperate_grassland",
 		"custom_zones": {
@@ -5544,6 +5564,7 @@
 		"grid_rotation": 0.0,
 		"mission_objectives": [],
 		"overlay_mode": 0,
+		"paths": [],
 		"placed_objects": [
 			{
 				"cell_x": 8,
@@ -6513,5 +6534,5 @@
 			}
 		]
 	},
-	"version": "1.5"
+	"version": "1.7"
 }

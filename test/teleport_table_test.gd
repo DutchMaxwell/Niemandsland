@@ -23,7 +23,7 @@ const CONTROLLER := preload("res://scripts/solo/solo_controller.gd")
 func _bearer(rule_names: Array, props: Dictionary = {}) -> GameUnit:
 	var u := GameUnit.new()
 	u.unit_properties = {"player_id": 1, "name": "Teleporter", "special_rules": rule_names,
-		"game_system": "gf", "faction_folder": "wormhole_daemons_of_change"}
+		"game_system": "gf", "faction_folder": "daemons_of_change"}
 	u.unit_properties.merge(props, true)
 	return u
 

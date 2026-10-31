@@ -17,9 +17,11 @@ var _main: Node
 var _root_before: Array
 var _real_net: Node
 var _net: Node
+var _epoch0: int
 
 
 func before_test() -> void:
+	_epoch0 = AiActRecorder.rules_epoch
 	E2EBoot.arm_harness_mode()
 	_root_before = E2EBoot.root_children(get_tree())
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
@@ -32,6 +34,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	AiActRecorder.rules_epoch = _epoch0   # statics leak across gdUnit tests: restore
 	_end_session()
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 	_main = null
@@ -178,7 +181,9 @@ func test_an_online_cast_at_a_vacant_seat_resolves_without_interference(timeout 
 
 ## P1 (Seer) casts at P2 (Raiders); P2 caster (Witch) is behind a Wall Guards blocker, so the
 ## Seer has LoS only to the Raiders but not the Witch — the game must log why nobody interferes.
-func test_an_online_cast_with_the_sight_line_blocked_logs_why_nobody_interferes(timeout := 120000) -> void:
+## Rules 3.5 only: pinned at the frozen EPOCH_72 (rules 3.6 asks the hidden Witch, the twin below).
+func test_an_online_cast_with_the_sight_line_blocked_logs_why_nobody_interferes_at_epoch_72(timeout := 120000) -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
 	_fake_session()
 	var units := _cast_setup()
 	_reg(1, "Wall Guards", -3.0)
@@ -194,6 +199,48 @@ func test_an_online_cast_with_the_sight_line_blocked_logs_why_nobody_interferes(
 	assert_str(text).override_failure_message("no explanation why nobody interfered:\n%s" % text) \
 		.contains("no caster of P2 within 18\" and line of sight — no interference")
 	assert_int((units[2] as GameUnit).casts_current).is_equal(2)
+	await E2EBoot.settle(get_tree())
+	_end_session()
+
+
+## Rules 3.6 (lead ruling D-SPELL-LOS): the same blocked sight line, but an enemy caster within 18" may
+## resist unseen — the Witch's player is asked, spends one token, and the line names the reach it used.
+func test_an_online_cast_asks_the_hidden_remote_caster_at_epoch_73(timeout := 120000) -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	_fake_session()
+	var units := _cast_setup()
+	_reg(1, "Wall Guards", -3.0)
+	var witch: GameUnit = units[2]
+	var start: int = _main.battle_log.entries().size()
+	var done := [false]
+	(func() -> void:
+		await _main._run_human_cast(units[0], units[0], {"name": "Bolt", "threshold": 2}, [units[1]])
+		done[0] = true).call()
+	await _wait(func() -> bool: return done[0] or not _sent("request_roll").is_empty())
+	var asks := _sent("request_roll")
+	assert_bool(asks.is_empty()).override_failure_message(
+		"the hidden Witch within 18\" was never asked to interfere:\n%s" % _log_from(start)).is_false()
+	if asks.is_empty():
+		_end_session()
+		return
+	_net.my_slot = 2
+	(func() -> void: await _main._rpc_request_roll(asks[0][1], 1)).call()
+	await _wait(func() -> bool: return _interference_card() != null)
+	var card := _interference_card()
+	assert_object(card).override_failure_message("the guest's machine showed no interference card").is_not_null()
+	if card != null:
+		card.resolve(1)
+	await _wait(func() -> bool: return not _sent("roll_result").is_empty())
+	var replies := _sent("roll_result")
+	_net.my_slot = 1
+	if not replies.is_empty():
+		_main._rpc_roll_result(int(replies[0][1]["req"]), replies[0][1]["faces"])
+	await _wait(func() -> bool: return done[0])
+	var text := _log_from(start)
+	assert_bool(done[0]).override_failure_message("the cast never resolved:\n%s" % text).is_true()
+	assert_int(witch.casts_current).override_failure_message("the hidden Witch spent no token:\n%s" % text).is_equal(1)
+	assert_str(text).override_failure_message("the resist line does not name the reach:\n%s" % text) \
+		.contains("(casters within 18\", no line of sight needed)")
 	await E2EBoot.settle(get_tree())
 	_end_session()
 
@@ -222,7 +269,9 @@ func test_control_a_lone_caster_without_tokens_logs_no_boost_line(timeout := 120
 
 ## P1 (Seer) casts at P2 (Raiders); the only other P1 caster (Witch) stands with tokens
 ## but beyond 18" LoS from the Seer — the boost pool is 0 and the game must log why.
-func test_a_cast_with_the_friendly_caster_out_of_sight_logs_why_nobody_boosts(timeout := 120000) -> void:
+## Rules 3.5 wording: pinned at the frozen EPOCH_72 (the rules 3.6 line is the twin below).
+func test_a_cast_with_the_friendly_caster_out_of_sight_logs_why_nobody_boosts_at_epoch_72(timeout := 120000) -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
 	_fake_session()
 	var seer := _reg(1, "Seer", 0.0, ["Caster(2)"])
 	seer.casts_current = 2
@@ -242,5 +291,31 @@ func test_a_cast_with_the_friendly_caster_out_of_sight_logs_why_nobody_boosts(ti
 	assert_bool(done[0]).override_failure_message("the cast hung:\n%s" % text).is_true()
 	assert_str(text).override_failure_message("no 'no boost' explanation logged:\n%s" % text) \
 		.contains("no caster of P1 within 18\" and line of sight — no boost")
+	await E2EBoot.settle(get_tree())
+	_end_session()
+
+
+## Rules 3.6 (lead ruling D-SPELL-LOS): the same Witch 20" away is still out of reach, and the line says
+## the reach is 18" alone — sight no longer counts.
+func test_the_no_boost_line_names_the_reach_without_sight_at_epoch_73(timeout := 120000) -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	_fake_session()
+	var seer := _reg(1, "Seer", 0.0, ["Caster(2)"])
+	seer.casts_current = 2
+	var foe := _reg(2, "Raiders", 10.0)
+	var witch := _reg(1, "Witch", -20.0, ["Caster(2)"])
+	witch.casts_current = 2
+	_main._ensure_solo_controller()
+	var start: int = _main.battle_log.entries().size()
+	var done := [false]
+	(func() -> void:
+		await _main._run_human_cast(seer, seer, {"name": "Bolt", "threshold": 2}, [foe])
+		done[0] = true).call()
+	await _wait(func() -> bool: return done[0])
+	var text := _log_from(start)
+	assert_bool(done[0]).override_failure_message("the cast hung:\n%s" % text).is_true()
+	assert_str(text).override_failure_message("the 'no boost' line does not name the 3.6 reach:\n%s" % text) \
+		.contains("no caster of P1 within 18\", no line of sight needed — no boost")
+	assert_int(witch.casts_current).is_equal(2)
 	await E2EBoot.settle(get_tree())
 	_end_session()

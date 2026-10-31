@@ -849,7 +849,9 @@ static func _striking_models(striker: Dictionary, defender: Dictionary) -> int:
 	var dm: Array = defender["model_pos"]
 	if sm.is_empty() or dm.is_empty():
 		return alive_models(striker)
-	var reach2: float = (CONTACT_IN + MELEE_REACH_IN) * (CONTACT_IN + MELEE_REACH_IN)
+	# The epoch's reach (MEL-08): rules 3.6 records reach 3", older ones keep MELEE_REACH_IN's 2".
+	var reach: float = CONTACT_IN + SoloController.melee_reach_in()
+	var reach2: float = reach * reach
 	var n := 0
 	for m in sm:
 		for e in dm:
