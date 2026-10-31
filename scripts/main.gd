@@ -6205,6 +6205,23 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 	return groups
 
 
+## MEL-02b (rules 3.6, EPOCH_73_V36): the strike-back gate's read of the defender's melee weapons.
+## "" = it may strike; "none" = no melee profile at all (B14); "spent" = every profile left is an
+## expended Limited weapon. MEL-02 filters Limited PER PROFILE, so that last case leaves an empty
+## profile list inside a group that is still there. Below epoch 73 the old all-or-nothing read of the
+## group list stays byte-exact.
+func _solo_strike_back_block(unit: GameUnit, enemy: GameUnit) -> String:
+	var groups: Array = _solo_attack_groups(unit, 0.0, true, enemy)
+	if groups.is_empty():
+		return "none"
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return ""
+	for g in groups:
+		if not (g as Dictionary).get("profiles", []).is_empty():
+			return ""
+	return "spent"
+
+
 ## The NEAREST alive-model-to-alive-model distance (inches, table plane) between a member and the enemy —
 ## the model-to-model range measure of GF v3.5.1 p.8 (round 7, finding 5). Falls back to the caller's
 ## unit-centre distance when either side has no live model positions.
@@ -11187,11 +11204,16 @@ func _run_ai_melee(report: Dictionary) -> void:
 				if strike_back == -1:
 					# B14 (test game 2): a defender with NO melee weapons cannot strike back — GF v3.5.1 has
 					# no CCW fallback. No dialog, no phantom fatigue; the rule gets its log line instead.
-					if _solo_attack_groups(target, 0.0, true, unit).is_empty():
+					# MEL-02b: from epoch 73 a defender whose every melee profile is a spent Limited weapon
+					# is in the same spot (the per-profile filter empties the group, not the group list).
+					var block := _solo_strike_back_block(target, unit)
+					if block != "":
 						strike_back = 0
 						if battle_log != null:
-							_log_rule_event(BattleLog.Category.COMBAT,
-								"%s has no melee weapons — cannot strike back (GF v3.5.1)" % target.get_name(), defender_is_ai)
+							var line := "%s has no melee weapons — cannot strike back (GF v3.5.1)" % target.get_name()
+							if block == "spent":
+								line = "%s's melee weapons are all spent (Limited) — cannot strike back (GF v3.5.1)" % target.get_name()
+							_log_rule_event(BattleLog.Category.COMBAT, line, defender_is_ai)
 					else:
 						strike_back = 1 if defender_is_ai or await _solo_confirm_strike_back(target, unit, false) else 0
 				if strike_back == 1:
@@ -14078,10 +14100,17 @@ func _run_human_melee(attacker: GameUnit, target: GameUnit, auto: bool = false) 
 		else:
 			# — The AI's strike-back with its remaining (non-Counter) weapons — mandatory (solo rules p.57) —
 			if _solo_combined_alive(target) > 0 and _solo_combined_alive(attacker) > 0:
-				ai_caused += await _solo_melee_strike_phase(target, attacker, false,
-					SoloStrike.NON_COUNTER if ai_counter else SoloStrike.ALL)
-				human_caused += _solo_take_retaliate_credit()
-				ai_struck = true
+				# MEL-02b (rules 3.6, EPOCH_73_V36): a defender whose every melee profile is a spent
+				# Limited weapon gets no strike-back and no fatigue, exactly like B14's no-weapon case.
+				if _solo_strike_back_block(target, attacker) == "spent":
+					if battle_log != null:
+						_log_rule_event(BattleLog.Category.COMBAT,
+							"%s's melee weapons are all spent (Limited) — cannot strike back (GF v3.5.1)" % target.get_name(), true)
+				else:
+					ai_caused += await _solo_melee_strike_phase(target, attacker, false,
+						SoloStrike.NON_COUNTER if ai_counter else SoloStrike.ALL)
+					human_caused += _solo_take_retaliate_credit()
+					ai_struck = true
 			await _solo_stage_phase("%s strikes back" % target.get_name())
 	if ai_struck and _solo_combined_alive(target) > 0:
 		_solo_set_fatigued(target)
