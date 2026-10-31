@@ -61,7 +61,12 @@ use super::*;
         assert!(p.spot.1 < -0.45, "{rule}: stepped back toward the objective: {p:?}");
         assert_eq!(sd.events.len(), 1, "{rule}: one deploy event: {:?}", sd.events);
         assert_eq!(sd.events[0].unit, "bearer");
-        assert_eq!(sd.events[0].rule, crate::deployment::VANGUARD_FREE_RULE_TEXT);
+        let want = if crate::acts::rule_on(crate::acts::CURRENT_RULES_EPOCH, crate::acts::EPOCH_73_V36) {
+            crate::deployment::VANGUARD_GAP_RULE_TEXT
+        } else {
+            crate::deployment::VANGUARD_FREE_RULE_TEXT
+        };
+        assert_eq!(sd.events[0].rule, want);
         assert_eq!(sd.events[0].why, "vanguard free placement");
         let chosen = sd.events[0].chosen.clone();
         let dist_in: f64 = chosen

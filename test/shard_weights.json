@@ -12,6 +12,7 @@
 "test/v36/dat_16a_cast_test.gd": 0.1,
 "test/v36/dat_16a_move_test.gd": 0.1,
 "test/v36/dat_16b_test.gd": 0.1,
+"test/v36/ux_14_test.gd": 0.1,
 "test/v36/w1_6g_test.gd": 0.1,
 "test/act_intent_test.gd": 0.0,
 "test/act_recorder_mission_stamp_test.gd": 0.1,
