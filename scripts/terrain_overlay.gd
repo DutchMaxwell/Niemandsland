@@ -1285,13 +1285,13 @@ func _sandbox_volumes() -> Array:
 	for s in _sandbox_shapes():
 		var sd := s as Dictionary
 		var st := int(sd["type"])
-		if not terrain_blocks_los(st):
-			continue
-		out.append({"kind": "box", "c": sd["c"], "he": sd["he"], "yaw": float(sd["yaw"]), "y0": 0.0,
-			"y1": terrain_volume_height_inches(st) * INCHES_TO_METERS,
-			"solid": not terrain_is_area(st)})
+		if terrain_blocks_los(st):
+			out.append({"kind": "box", "c": sd["c"], "he": sd["he"], "yaw": float(sd["yaw"]), "y0": 0.0,
+				"y1": terrain_volume_height_inches(st) * INCHES_TO_METERS,
+				"solid": not terrain_is_area(st)})
 		# A multi-storey piece also carries its walkable platforms: thin SOLID slabs inside the
-		# area hull, so floor-to-floor sight is blocked by the very floor the model stands on.
+		# area hull, so floor-to-floor sight is blocked by the very floor the model stands on. They
+		# stay sight volumes even when the hull does not (a ruin from rules 3.6 is see-through).
 		for slab in sd.get("slabs", []):
 			var sl := slab as Dictionary
 			out.append({"kind": "box", "c": sl["c"], "he": sl["he"], "yaw": float(sl["yaw"]),
