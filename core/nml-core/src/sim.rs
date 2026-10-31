@@ -1437,7 +1437,19 @@ pub(crate) fn tray_utility_buff(statics: &[UnitStatic], next: &mut State, si: us
             if b.vs_target || b.reposition_in > 0.0 {
                 continue;
             }
+            let speed_debuff = b.target == "enemy" && crate::rules::base_rule_name(&b.grants_rule) == "Slow";
+            let e73 = rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36);
             for ti in utility_targets(statics, next, bearer, b, seams) {
+                // Rules 3.6 Speed Debuff: an ordinary model of a multi-model
+                // unit is no legal pick; a single-model unit or a joined hero
+                // keeps the unit-level Slow grant.
+                let blocked = speed_debuff && e73 && next.alive[ti] > 1 && next.attached[ti].is_empty();
+                if speed_debuff && e73 {
+                    trace_rule("utility-buff", &b.name, &format!("{}: picks {} — {}", statics[pb].name,
+                        statics[next.roster.profile[ti]].name,
+                        if blocked { "no effect (ordinary model of a multi-model unit)" } else { "Slow on the whole unit (single model or joined hero)" }));
+                }
+                if blocked { continue; }
                 record_buff(next, ti, b, seams.rules_epoch);
                 // EPOCH_58_PRECISION_DEBUFF — the fold's rules-must-log line
                 // (`trace_rule`, the ap/def + move-row shape): the debuff
@@ -1548,6 +1560,10 @@ fn utility_targets(
     let ebr_open = rule_on(seams.rules_epoch, EPOCH_7_TABLE_RULES)
         && b.target == "friendly"
         && (b.range_in - EBR_PICK_RANGE_IN).abs() < 1e-6;
+    // Rules 3.6 Speed Debuff (MOR-19): one enemy MODEL is picked, so prefer a
+    // single-model unit or one whose joined hero keeps the Slow on the unit.
+    let speed_debuff = rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36)
+        && b.target == "enemy" && crate::rules::base_rule_name(&b.grants_rule) == "Slow";
     let mut scored: Vec<(f64, usize)> = Vec::new();
     for u in 0..state.units() {
         if (state.player[u] == own) == enemy || state.alive[u] <= 0 || state.dormant[u] {
@@ -1575,7 +1591,9 @@ fn utility_targets(
         if b.needs_los && !los_clear(state, bearer, u) {
             continue;
         }
-        scored.push((state.alive[u] as f64 + uc.tough as f64, u));
+        let mut v = state.alive[u] as f64 + uc.tough as f64;
+        if speed_debuff && (state.alive[u] == 1 || !state.attached[u].is_empty()) { v += 100.0; }
+        scored.push((v, u));
     }
     scored.sort_by(|a, c| c.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
     scored.truncate(b.max_targets.max(1) as usize);
@@ -1810,11 +1828,13 @@ fn control_morale_passed(
     }
     let us = &statics[next.roster.profile[ti]];
     let mut ctx = live_morale_ctx(statics, next, ti, false, seams, shot);
-    drop_banner_for_cause(statics, next, ti, Some(source.rule), seams, &mut ctx, shot);
+    drop_banner_for_cause(statics, next, ti, false, Some(source.rule), seams, &mut ctx, shot);
     let (outcome, rolled) = crate::dice::resolve_morale_with_tray(
         &ctx, source.owner, false, false, next.shaken[ti], wounds_left(next, ti), tray,
     );
-    mods::spend_once(next, ti, &[mods::Role::Morale], false);
+    mods::spend_once_except(next, ti, &[mods::Role::Morale], false, |r| {
+        rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) && &*r.name == "Great Banner"
+    });
     let self_wounds = shot.absorb(rolled);
     land_wounds_with(next, ti, self_wounds, seams.tray_exact);
     if outcome == Morale::Passed { return true; }
@@ -5607,16 +5627,24 @@ fn live_morale_ctx(statics: &[UnitStatic], state: &State, i: usize, melee: bool,
 /// also carries) back out of the target and names the cause once. Spell
 /// tokens and a granted Hold the Line Boost stay in.
 fn drop_banner_for_cause(
-    statics: &[UnitStatic], state: &State, i: usize, cause: Option<&str>, seams: Seams,
+    statics: &[UnitStatic], state: &State, i: usize, melee: bool, cause: Option<&str>, seams: Seams,
     ctx: &mut Ctx, shot: &mut ShootResult,
 ) {
     let Some(cause) = cause else { return };
     if !rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) || state.shaken[i] { return; }
     let us = &statics[state.roster.profile[i]];
     let banner = (state.morale_bonus[i] - us.ctx.morale_rating).max(0);
-    if banner == 0 { return; }
-    ctx.morale_bonus -= banner;
-    shot.log.push(format!("[Banner] {}: no +{} against {} (only shooting or melee)", us.name, banner, cause));
+    if banner > 0 {
+        ctx.morale_bonus -= banner;
+        shot.log.push(format!("[Banner] {}: no +{} against {} (only shooting or melee)", us.name, banner, cause));
+    }
+    let great_banner = mods::sum(state, i, mods::Role::Morale, melee, |r| {
+        if &*r.name == "Great Banner" { r.morale_mod } else { 0 }
+    });
+    if great_banner != 0 {
+        ctx.morale_bonus -= great_banner;
+        shot.log.push(format!("[Great Banner] {}: no +{} against {} (only shooting or melee)", us.name, great_banner, cause));
+    }
 }
 
 /// `main._solo_morale_test` :8305 on the played path — the tray twin of
@@ -5647,7 +5675,7 @@ pub(crate) fn tray_morale_for(
     }
     let us = &statics[state.roster.profile[i]];
     let mut ctx = live_morale_ctx(statics, state, i, melee, seams, shot);
-    drop_banner_for_cause(statics, state, i, cause, seams, &mut ctx, shot);
+    drop_banner_for_cause(statics, state, i, melee, cause, seams, &mut ctx, shot);
     // EPOCH_39_MORALE_RATING — rules-must-log (main.gd:8596-8602): the test
     // that adds the rating names it, once per drawn die. A Shaken auto-fail
     // draws no die and adds nothing, so it stays silent.
@@ -5682,7 +5710,10 @@ pub(crate) fn tray_morale_for(
             shot.log.push(format!("Fearless: {with} of {total} models of {} have it — most do, so the whole unit counts", us.name));
         }
     }
-    mods::spend_once(state, i, &[mods::Role::Morale], melee);
+    mods::spend_once_except(state, i, &[mods::Role::Morale], melee, |r| {
+        cause.is_some() && rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36)
+            && &*r.name == "Great Banner"
+    });
     let self_wounds = shot.absorb(r);
     land_wounds_with(state, i, self_wounds, seams.tray_exact);
     match outcome {
