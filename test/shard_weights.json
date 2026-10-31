@@ -399,6 +399,7 @@
 "test/rule_description_sync_test.gd": 0.0,
 "test/rule_name_match_test.gd": 0.1,
 "test/rule_state_persistence_test.gd": 0.2,
+"test/v36/mor_17a_test.gd": 0.1,
 "test/rules_registry_test.gd": 4.7,
 "test/sandbox_terrain_shelf_test.gd": 0.1,
 "test/sandbox_terrain_test.gd": 0.4,

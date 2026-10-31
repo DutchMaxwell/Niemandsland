@@ -6025,7 +6025,10 @@
     "params": {
      "ignore_target": 6,
      "ignore_target_spell": 4,
-     "all_models": true
+     "all_models": true,
+     "ignore_target_spell_v36": 2,
+     "ignore_over_in": 9.0,
+     "ignore_over_in_charge": 6.0
     }
    },
    "Lacerate": {
@@ -6202,7 +6205,10 @@
     "params": {
      "ignore_target": 6,
      "ignore_target_spell": 4,
-     "all_models": true
+     "all_models": true,
+     "ignore_target_spell_v36": 2,
+     "ignore_over_in": 9.0,
+     "ignore_over_in_charge": 6.0
     }
    }
   },
@@ -6248,7 +6254,10 @@
     "params": {
      "ignore_target": 6,
      "ignore_target_spell": 4,
-     "all_models": true
+     "all_models": true,
+     "ignore_target_spell_v36": 2,
+     "ignore_over_in": 9.0,
+     "ignore_over_in_charge": 6.0
     }
    },
    "Melee Shrouding": {
@@ -6446,7 +6455,10 @@
     "params": {
      "ignore_target": 6,
      "ignore_target_spell": 4,
-     "all_models": true
+     "all_models": true,
+     "ignore_target_spell_v36": 2,
+     "ignore_over_in": 9.0,
+     "ignore_over_in_charge": 6.0
     }
    }
   },

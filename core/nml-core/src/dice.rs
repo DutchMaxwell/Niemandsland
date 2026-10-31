@@ -801,6 +801,13 @@ pub fn resolve_volley_leg(
         fortified_alias_over9: def.fortified_alias_ap > 0
             && def.fortified_alias_over_in > 0.0
             && mod_dist_in > def.fortified_alias_over_in,
+        // MOR-17a (rules 3.6): Warding's 6+ needs a shot from OVER its gate —
+        // inside it the 6+ die of this kind never rolls (0 = old reading).
+        regen_target: if def.regen_gate_over_in > 0.0 && mod_dist_in <= def.regen_gate_over_in {
+            0
+        } else {
+            def.regen_target
+        },
         ..*def
     };
     // FLATTENED on purpose: one pass over the (member, profile) pairs, so the
@@ -1375,6 +1382,16 @@ pub fn resolve_volley_leg(
     if shielded_alias_fired {
         out.log.push(shielded_alias_line(def, def_owner));
     }
+    // MOR-17a — rules-must-log, once per volley: the gate's verdict, under the
+    // rule's name (Warding, Knightborn and Angelic Blessing are one rule).
+    if def.regen_gate_over_in > 0.0 && (regenable > 0 || out.deadly_tally > 0) {
+        let gate = def.regen_gate_over_in;
+        out.log.push(if def.regen_target > 0 {
+            format!("Warding: {def_owner} ignores wounds on 6+ (shot from over {gate:.0}in)")
+        } else {
+            format!("Warding: no 6+ ignore, {def_owner} was shot from within {gate:.0}in")
+        });
+    }
     out.caused = regen_proof + regenable + out.deadly_tally;
     out.wounds = regen_proof + regen_batch(regenable, def, def_owner, tray, &mut out.rolls);
     out
@@ -1701,6 +1718,18 @@ pub fn resolve_melee_leg(
     // strike-back or counter phase rides 0.0, which never clears the
     // alias's `over_in` gate (the table's `charged_ok and melee` reading).
     let charge_from_in = if charging { charge_from_in } else { 0.0 };
+    // MOR-17a (rules 3.6): Warding's 6+ needs a charge from OVER its gate. A
+    // strike-back rides 0.0 — it did the charging, so the 6+ never rolls.
+    let def = &Ctx {
+        regen_target: if def.regen_gate_charge_in > 0.0
+            && charge_from_in <= def.regen_gate_charge_in
+        {
+            0
+        } else {
+            def.regen_target
+        },
+        ..*def
+    };
     let mut out = ShootResult::default();
     // Wave 3 — the Shielded-family alias's rules-must-log flag, the volley
     // fold's melee twin (Shielded is the whole melee Defense ladder here).
@@ -2085,6 +2114,16 @@ pub fn resolve_melee_leg(
     }
     if shielded_alias_fired {
         out.log.push(shielded_alias_line(def, def_owner));
+    }
+    // MOR-17a — rules-must-log, once per fight: the gate's verdict, the volley
+    // fold's melee twin (same rule name).
+    if def.regen_gate_charge_in > 0.0 && (regenable > 0 || out.deadly_tally > 0) {
+        let gate = def.regen_gate_charge_in;
+        out.log.push(if def.regen_target > 0 {
+            format!("Warding: {def_owner} ignores wounds on 6+ (charged from over {gate:.0}in)")
+        } else {
+            format!("Warding: no 6+ ignore, {def_owner} was charged from within {gate:.0}in")
+        });
     }
     out.caused += regen_proof + regenable + out.deadly_tally;
     out.wounds += regen_proof + regen_batch(regenable, def, def_owner, tray, &mut out.rolls);
