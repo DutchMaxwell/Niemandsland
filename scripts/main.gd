@@ -13968,9 +13968,11 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s is in cover: +1 Defense (saves on %d+)" % [
 					target.get_name(), AiCombatMath.shown_target(save_def)], true)
 			# DAT-16b — rules-must-log: the HUMAN volley names the map-read rule that skips cover,
-			# the AI-08a block's twin (the human path used to skip cover without a word).
+			# the AI-08a block's twin (the human path used to skip cover without a word). The line is
+			# epoch-gated so that below 73 the human path stays byte-exact.
 			elif td_ctx.is_empty() and battle_log != null and shot_cover < shot_base \
 					and int(profile.get("blast", 0)) <= 1 \
+					and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
 					and not str(profile.get("cover_rule", "")).is_empty():
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s — %s's cover save is skipped" % [
 					str(profile["cover_rule"]), str(group.get("name", "?")), target.get_name()], true)
