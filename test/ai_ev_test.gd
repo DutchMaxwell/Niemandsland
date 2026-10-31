@@ -590,3 +590,47 @@ func test_bane_boost_window_reads_the_enhanced_scrapper_entry() -> void:
 	# ROT: inside 9" never, and without the base rule never.
 	assert_dict(AiEv.bane_boost_window(_scrapper_carrier(["Scrapper", "Enhanced Scrapper"]), false)).is_empty()
 	assert_dict(AiEv.bane_boost_window(_scrapper_carrier(["Enhanced Scrapper"]), true)).is_empty()
+
+
+# === MEL-07e: the AI's melee and Impact EV see a Parry unit's cancels ===
+
+func test_melee_ev_subtracts_a_parry_units_expected_cancels() -> void:
+	# 10 attacks at 4+ = 5 expected hits; 2 Parry dice cancel min(2, 5)/6 = 1/3 hit; the Defense 4+
+	# save halves it, so the EV drops by (1/3)/2 = 1/6.
+	var att := {"quality": 4, "models": 1}
+	var plain := {"defense": 4, "tough": 1, "models": 2}
+	var parry := {"defense": 4, "tough": 1, "models": 2, "parry_dice": 1}
+	var with_parry := AiEv.melee_ev([_mprof({"attacks": 10})], att, parry, false)
+	var without := AiEv.melee_ev([_mprof({"attacks": 10})], att, plain, false)
+	assert_float(without - with_parry) \
+		.override_failure_message("Parry must take the expected 1/6 wound off the melee EV") \
+		.is_equal_approx(1.0 / 6.0, 0.0001)
+
+
+func test_impact_ev_subtracts_a_parry_units_expected_cancels() -> void:
+	# Impact(4) hits on 2+ = 10/3 expected hits; 2 Parry dice cancel min(2, 10/3)/6 = 1/3 hit; the
+	# Defense 4+ save halves it, so the EV drops by 1/6.
+	var att := {"quality": 4, "impact": 4, "models": 1}
+	var plain := {"defense": 4, "tough": 1, "models": 2}
+	var parry := {"defense": 4, "tough": 1, "models": 2, "parry_dice": 1}
+	assert_float(AiEv.impact_ev(att, plain) - AiEv.impact_ev(att, parry)) \
+		.override_failure_message("Parry must take the expected 1/6 wound off the Impact EV") \
+		.is_equal_approx(1.0 / 6.0, 0.0001)
+
+
+func test_ctx_for_reads_parry_dice_only_at_epoch_73() -> void:
+	var epoch0: int = AiActRecorder.rules_epoch
+	var u := GameUnit.new()
+	u.unit_id = "par1"
+	u.unit_properties = {"player_id": 2, "name": "P", "game_system": "gf", "quality": 4,
+		"defense": 4, "special_rules": ["Parry(1)"]}
+	var m := ModelInstance.new()
+	m.is_alive = true
+	u.models.append(m)
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	var at73: int = int(AiEv.ctx_for(u).get("parry_dice", 0))
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
+	var at72: int = int(AiEv.ctx_for(u).get("parry_dice", 0))
+	AiActRecorder.rules_epoch = epoch0
+	assert_int(at73).override_failure_message("Parry(1) adds one die per carrier at 73").is_equal(1)
+	assert_int(at72).override_failure_message("the Parry stamp is off below 73").is_equal(0)
