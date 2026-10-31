@@ -148,6 +148,11 @@ pub struct ShootResult {
     /// `wounds`; compare `caused`. Using the landed number instead lets a
     /// Regeneration roll decide who tests morale, which the table never does.
     pub caused: i64,
+    /// MEL-10r (`EPOCH_73_V36`) — the melee-winner tally as wounds actually TAKEN: like `caused`,
+    /// but a wound Regeneration (or its family) cancels does NOT count. On the 73 leg only; below
+    /// it `taken == caused` (the pre-Regeneration tally, pinned byte-exact). `caused` stays
+    /// pre-Regeneration so Regenerative Strength still sees what Regeneration ignored.
+    pub taken: i64,
     /// Every roll drawn, in draw order.
     pub rolls: Vec<Roll>,
     /// Table branches this port does NOT reproduce that THIS activation hit.
@@ -213,6 +218,7 @@ impl ShootResult {
     pub fn absorb(&mut self, other: ShootResult) -> i64 {
         self.rolls.extend(other.rolls);
         self.caused += other.caused;
+        self.taken += other.taken;
         self.log.extend(other.log);
         self.fortified_fired = self.fortified_fired || other.fortified_fired;
         self.bane_rerolled += other.bane_rerolled;
@@ -1798,7 +1804,7 @@ pub fn resolve_melee_with_tray(
 ) -> ShootResult {
     resolve_melee_leg(
         strikers, def, def_owner, charging, cond_ap_dice, shred_alias_dice,
-        false, 0.0, false, false, false, false, tray,
+        false, 0.0, false, false, false, false, false, tray,
     )
 }
 
@@ -1821,6 +1827,8 @@ pub fn resolve_melee_leg(
     hits_first: bool,
     // EPOCH_73_V36 (row MEL-09) — a fatigued striker's sixes fire no rule (see `trig` below).
     fatigue_mutes_sixes: bool,
+    // MEL-10r (`EPOCH_73_V36`) — the melee tally counts only wounds Regeneration did NOT cancel.
+    tally_post_regen: bool,
     tray: &mut Tray,
 ) -> ShootResult {
     // The alias's charged leg fires on the CHARGER's strikes only — a
@@ -2255,7 +2263,10 @@ pub fn resolve_melee_leg(
         out.log.push(shielded_alias_line(def, def_owner));
     }
     out.caused += regen_proof + regenable + out.deadly_tally;
-    out.wounds += regen_proof + regen_batch(regenable, def, def_owner, tray, &mut out.rolls);
+    let landed_regenable = regen_batch(regenable, def, def_owner, tray, &mut out.rolls);
+    out.wounds += regen_proof + landed_regenable;
+    // MEL-10r — a wound Regeneration cancels is not TAKEN: the 73 tally counts what landed.
+    out.taken = if tally_post_regen { out.wounds + out.deadly_tally } else { out.caused };
     out
 }
 
