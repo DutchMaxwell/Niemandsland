@@ -498,6 +498,7 @@
 "test/unit_dock_fan_test.gd": 0.2,
 "test/unit_utils_test.gd": 0.1,
 "test/update_checker_test.gd": 0.2,
+"test/v36/dat_05a_test.gd": 0.1,
 "test/vehicle_base_alignment_test.gd": 0.2,
 "test/volumetric_los_test.gd": 0.1,
 "test/vs_mark_attacker_side_test.gd": 0.3,
