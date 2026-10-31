@@ -37,6 +37,7 @@
   "Bloodthirsty Fighter",
   "Bounding",
   "Bounding Aura",
+  "Brace",
   "Breath Attack",
   "Buccaneer",
   "Enhanced Buccaneer",
@@ -567,6 +568,14 @@
    "params": {
     "rating": "X",
     "ignores_cover": true
+   }
+  },
+  "Brace": {
+   "primitive": "Brace",
+   "rated": true,
+   "book_version": "3.6.0",
+   "params": {
+    "rating": "X"
    }
   },
   "Caster": {

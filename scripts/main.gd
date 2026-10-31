@@ -1216,6 +1216,7 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	var wounds_before_dangerous: int = _solo_unit_wounds_now(unit)
 	if dangerous_dice > 0:
 		await _run_ai_dangerous(unit, dangerous_dice)
+	report["dangerous_wounds_taken"] = wounds_before_dangerous - _solo_unit_wounds_now(unit)   # rules 3.6 melee tally
 	if unit.is_destroyed():
 		return unit
 	# Wave 6 — Caster(X): resolve the activation's planned casts BEFORE the attack (v3.5.1: "at any
@@ -6423,6 +6424,17 @@ func _solo_regen_family_on(unit: GameUnit, rule: String) -> bool:
 		not _solo_takedown_solo.is_empty() and unit != null and unit == _solo_takedown_solo.get("unit"))
 
 
+## The Stealth-family names whose 3.6 text reads "most models" (the core's STEALTH_MOST_MODELS twin); every
+## other alias keeps the all-models read. Empyrean Spirit is on that list too but rides row MOR-06.
+const SOLO_STEALTH_MOST_MODELS: Array[String] = ["Stealth", "Changebound", "Machine-Fog", "Screened"]
+
+
+func _solo_stealth_family_on(unit: GameUnit, rule: String) -> bool:
+	if rule in SOLO_STEALTH_MOST_MODELS:
+		return _solo_rule_on_most_models(unit, rule)
+	return _solo_rule_on_all_models(unit, rule)
+
+
 ## The over-9" +1-defense rule a target projects ("" when none): Guarded (unconditional), or a
 ## Versatile Defense unit (wahl-effect wave — official text: "pick one effect: when shot or charged
 ## from over 9\" away, the unit either gets +1 to defense rolls, or enemy units get -1 to hit rolls
@@ -7544,7 +7556,7 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 	for e in RulesRegistry.unit_rules_of_primitive(target, "Stealth"):
 		var ed := e as Dictionary
 		var n := str(ed["name"])
-		if n == "Stealth" or not _solo_rule_on_all_models(target, n):
+		if n == "Stealth" or not _solo_stealth_family_on(target, n):
 			continue
 		# The stand-down: the Boost's unconditional Evasive replaces the base's own conditional
 		# alias — the two never stack (the core's named gate skips the same name, unit.rs:2199-2201).
@@ -7624,7 +7636,7 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 		return {"mod": mm + int(sm.get("mod", 0)) + int(vt.get("mod", 0)), "own": own,
 			"note": _solo_join_note(_solo_join_note(base_note, str(sm.get("note", ""))), str(vt.get("note", "")))}
 	var attacker_artillery: bool = shooter_member != null and shooter_member.has_special_rule("Artillery")
-	var stealth: bool = _solo_rule_on_all_models(target, "Stealth")
+	var stealth: bool = _solo_stealth_family_on(target, "Stealth")
 	var target_artillery: bool = target.has_special_rule("Artillery")
 	# The Artillery magnitudes are the entries' params (dead-parameter fold, twin of #1006): the
 	# fallback is the recorded constant, so a real-book replay is byte-identical.
@@ -7646,7 +7658,8 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 		# read the silent short-range case as a missing rule.
 		notes.append("Artillery: no +%d (target within 9\")" % art_shooter_bonus)
 	if stealth and over_nine:
-		notes.append("Stealth -1")
+		# Rules-must-log (D-MOST): name the majority read when a member lacks Stealth.
+		notes.append("Stealth -1" if _solo_rule_on_all_models(target, "Stealth") else "Stealth -1 (most models carry it)")
 	elif stealth:
 		notes.append("Stealth: no -1 (within 9\")")   # #224 sweep: name the non-application
 	if alias_pen > 0 and not (stealth and over_nine):
@@ -7883,6 +7896,32 @@ func _solo_counter_models(unit: GameUnit) -> int:
 	return SoloController.counter_models_of(unit)
 
 
+## Rules 3.6 (`EPOCH_73_V36`) — the alive models of a unit (incl. attached heroes) whose weapons carry
+## Brace(X): each takes X Impact dice off a unit charging it. 0 below 73.
+func _solo_brace_models(unit: GameUnit) -> int:
+	if unit == null or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return 0
+	var members: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		members = members + unit.get_attached_heroes()
+	var total := 0
+	for m in members:
+		var member := m as GameUnit
+		if member == null:
+			continue
+		var alive: int = member.get_alive_count()
+		if alive <= 0:
+			continue
+		var weapons: Array = []
+		if member.source_type == "opr" and member.source_data is OPRApiClient.OPRUnit:
+			weapons = (member.source_data as OPRApiClient.OPRUnit).weapons
+		for w in weapons:
+			if w is Object and AiShooting._has_rule(w, "Brace"):
+				total += alive * maxi(AiShooting._rating_of(w, "Brace"), 1)
+				break
+	return total
+
+
 ## Resolve one side's melee strikes against `defender` and LAND the wounds (Regeneration-bucketed): the
 ## striker's groups (unit + attached heroes; attacks pre-scaled by the 2" reach) roll real to-hit dice,
 ## saves resolve via _solo_resolve_saves (prompted when the human defends, AI auto-saves otherwise).
@@ -7891,6 +7930,7 @@ func _solo_counter_models(unit: GameUnit) -> int:
 ## Fatigue (unmodified-6-only) overrides all to-hit modifiers. Returns wounds caused (melee-winner tally).
 var _solo_retaliate_credit := 0   # Retaliate wounds of the LAST strike phase — the defender's tally credit
 var _solo_last_save_ones := 0   # resolver wave A: unmodified Defense 1s of the LAST save batch (Bloodthirsty Fighter)
+var _solo_hazard_self := {}   # unit instance id -> Hazardous self-wounds since the current melee began (rules 3.6 tally)
 
 
 ## Collect (and reset) the retaliation wounds of the last strike phase — the caller adds them to
@@ -8321,9 +8361,19 @@ func _solo_charge_impact(charger: GameUnit, defender: GameUnit, human_defends: b
 		return 0
 	var models: int = charger.get_alive_count()
 	var counter_models: int = _solo_counter_models(defender)
-	var heavy_cut: int = mini(counter_models, hx * models)
+	var brace_cut: int = _solo_brace_models(defender)
+	if brace_cut > 0:
+		if defender.is_fatigued:
+			brace_cut = 0
+			if battle_log != null:
+				_log_rule_event(BattleLog.Category.COMBAT, "Brace: no effect, %s is Fatigued" % defender.get_name(), true)
+		elif battle_log != null:
+			_log_rule_event(BattleLog.Category.COMBAT, "Brace: %s takes %d Impact dice off %s" % [
+				defender.get_name(), brace_cut, charger.get_name()], true)
+	var cut_models: int = counter_models + brace_cut
+	var heavy_cut: int = mini(cut_models, hx * models)
 	var heavy_dice: int = hx * models - heavy_cut
-	var dice: int = AiCombatMath.impact_total_dice(x, models, counter_models - heavy_cut)
+	var dice: int = AiCombatMath.impact_total_dice(x, models, cut_models - heavy_cut)
 	if counter_models > 0 and battle_log != null and (x + hx) * models > 0:
 		_log_rule_event(BattleLog.Category.COMBAT, "Counter: -%d Impact dice (%s)" % [
 			counter_models, charger.get_name()], true)
@@ -10870,6 +10920,7 @@ func _run_ai_melee(report: Dictionary) -> void:
 			"%s: all models already in base contact — no pile-in needed (GF v3.5.1 p.9)" % target.get_name(), true)
 	var ai_caused := 0
 	var human_caused := 0
+	_solo_hazard_self.clear()
 	var target_models_before: int = _solo_combined_alive(target)
 	# ANNOUNCE: who charges whom — highlights + line + toast, held before the first strike.
 	var announce := _solo_show_attack_announce(unit, target, "charges")
@@ -10952,8 +11003,9 @@ func _run_ai_melee(report: Dictionary) -> void:
 	await _solo_self_destruct_post_melee(target, unit)
 	# — Morale: a destroyed side loses first; otherwise the lower wound score loses (tie = nobody). Fear(X) (GF/AoF
 	#   v3.5.1 p.13) counts as +X dealt wounds for THIS comparison only (never changes wounds applied) —
-	var ai_score: int = AiCombatMath.fear_adjusted_wounds(ai_caused, _solo_unit_rating(unit, "Fear"))
-	var human_score: int = AiCombatMath.fear_adjusted_wounds(human_caused, _solo_unit_rating(target, "Fear"))
+	var scores: Array = _solo_melee_scores(unit, ai_caused, target, human_caused, int(report.get("dangerous_wounds_taken", 0)))
+	var ai_score: int = scores[0]
+	var human_score: int = scores[1]
 	var loser: GameUnit = _solo_melee_loser(unit, ai_score, target, human_score)
 	_solo_log_melee_result(unit, ai_caused, ai_score, target, human_caused, human_score)
 	await _solo_stage_phase("Melee result")
@@ -10970,6 +11022,18 @@ func _run_ai_melee(report: Dictionary) -> void:
 		target_models_before - _solo_combined_alive(target),
 		("" if target_models_before - _solo_combined_alive(target) == 1 else "s")])
 	_solo_stage_end()
+
+
+## Rules 3.6 (EPOCH_73_V36): the loser TOOK more wounds in the activation, so each side scores what its ENEMY took:
+## wounds dealt + the Fear it bears + the enemy's self-wounds (`a_self`: a's Dangerous test on its charge move;
+## the Hazardous tally). Lower loses, as before; below 73 only dealt + Fear count. Returns [a_score, b_score].
+func _solo_melee_scores(a: GameUnit, a_caused: int, b: GameUnit, b_caused: int, a_self: int = 0) -> Array:
+	var a_score: int = AiCombatMath.fear_adjusted_wounds(a_caused, _solo_unit_rating(a, "Fear"))
+	var b_score: int = AiCombatMath.fear_adjusted_wounds(b_caused, _solo_unit_rating(b, "Fear"))
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		a_score += int(_solo_hazard_self.get(b.get_instance_id(), 0))
+		b_score += a_self + int(_solo_hazard_self.get(a.get_instance_id(), 0))
+	return [a_score, b_score]
 
 
 ## Rules-must-log (pacing grill 31.07.): the melee comparison itself was SILENT — the tallies were
@@ -11000,9 +11064,25 @@ func _solo_log_melee_result(a: GameUnit, a_caused: int, a_score: int,
 		verdict = "%s loses the melee" % loser.get_name()
 	elif _solo_combined_alive(a) <= 0 and _solo_combined_alive(b) <= 0:
 		verdict = "both destroyed — no morale test"
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		# Rules 3.6: the comparison is wounds TAKEN, and a side took what its enemy's score holds.
+		battle_log.log_event(BattleLog.Category.COMBAT, "Melee result: %s took %s, %s took %s — %s" % [
+			a.get_name(), _solo_taken_tally(b_caused, b_score, _solo_unit_rating(b, "Fear")),
+			b.get_name(), _solo_taken_tally(a_caused, a_score, _solo_unit_rating(a, "Fear")), verdict], true)
+		return
 	battle_log.log_event(BattleLog.Category.COMBAT, "Melee result: %s dealt %s, %s dealt %s — %s" % [
 		a.get_name(), _solo_melee_tally(a_caused, a_score),
 		b.get_name(), _solo_melee_tally(b_caused, b_score), verdict], true)
+
+
+## Rules 3.6: "4", or "4 (Fear: 1, self-inflicted: 2)" for what sits on top of the `struck` wounds the enemy dealt.
+func _solo_taken_tally(struck: int, taken: int, enemy_fear: int) -> String:
+	var extra: Array = []
+	if enemy_fear > 0:
+		extra.append("Fear: %d" % enemy_fear)
+	if taken - struck - enemy_fear > 0:
+		extra.append("self-inflicted: %d" % (taken - struck - enemy_fear))
+	return str(taken) if extra.is_empty() else "%d (%s)" % [taken, ", ".join(extra)]
 
 
 ## "3" — or "3 (Fear: 4)" where Fear(X) lifted the tally for the comparison only.
@@ -11196,10 +11276,44 @@ func _solo_morale_quality(unit: GameUnit) -> int:
 		if (not host_alive and best_hero == null) or hero.get_quality() < best_quality:
 			best_quality = hero.get_quality()
 			best_hero = hero
+	# Rules 3.6 hero aura (epoch 73); its line stands in for the joined-Hero line when it wins.
+	var aura: Dictionary = _solo_aura_hero_for_morale(unit, best_quality)
+	if not aura.is_empty():
+		best_quality = int(aura["quality"])
+		best_hero = null
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s (Tough 9+) lends its Quality to %s's morale test (Q%d+)" % [
+				(aura["hero"] as GameUnit).get_name(), unit.get_name(), best_quality], true)
 	if best_hero != null and battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "Hero %s tests on behalf of %s (Q%d+)" % [
 			best_hero.get_name(), unit.get_name(), best_quality], true)
 	return best_quality
+
+
+const HERO_AURA_TOUGH := 9
+const HERO_AURA_REACH_IN := 6.0
+
+## Rules 3.6 hero aura (epoch 73): the friendly Hero with the best Quality, if it beats `own_quality`, that
+## lends `unit` its morale test: alive, not Shaken, in play, Tough(9)+, within 6" base edge to base edge
+## (`nearest_melee_gap_in`, the Spell Conduit measure). Such a Hero cannot be joined, so it is its own unit.
+## {} when no Hero helps, else {"hero": GameUnit, "quality": int}.
+func _solo_aura_hero_for_morale(unit: GameUnit, own_quality: int) -> Dictionary:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 or opr_army_manager == null or solo_controller == null:
+		return {}
+	var best: Dictionary = {}
+	for u in opr_army_manager.get_game_units_for_player(int(unit.unit_properties.get("player_id", 0))):
+		var hero := u as GameUnit
+		if hero == null or hero == unit or hero.get_alive_count() <= 0 or hero.is_shaken \
+				or SoloController.unit_in_reserve(hero) or unit.get_attached_heroes().has(hero):
+			continue
+		if not hero.is_hero() or AiEv.unit_rating(hero, "Tough") < HERO_AURA_TOUGH:
+			continue
+		var quality: int = hero.get_quality()
+		if quality >= int(best.get("quality", own_quality)):
+			continue
+		if solo_controller.nearest_melee_gap_in(unit, hero) <= HERO_AURA_REACH_IN:
+			best = {"hero": hero, "quality": quality}
+	return best
 
 
 func _solo_ask_hero_morale_once(unit: GameUnit) -> void:
@@ -11211,6 +11325,9 @@ func _solo_ask_hero_morale_once(unit: GameUnit) -> void:
 		if hero != null and hero.get_alive_count() > 0:
 			has_hero = true
 			break
+	# Rules 3.6 hero aura: the same once-per-unit choice covers a Tough(9)+ Hero close by ("Use unit" = off).
+	if not has_hero and not _solo_aura_hero_for_morale(unit, unit.get_quality()).is_empty():
+		has_hero = true
 	if not has_hero:
 		return
 	if _solo_batch:
@@ -13663,6 +13780,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 func _run_human_melee(attacker: GameUnit, target: GameUnit, auto: bool = false) -> void:
 	var human_caused := 0
 	var ai_caused := 0
+	_solo_hazard_self.clear()
 	_solo_stage_begin("%s charges %s" % [attacker.get_name(), target.get_name()])
 	# Rules-must-log: your charge never named itself in the log (only the AI's announce did), so the
 	# melee opened mid-strike. One declaration line — and the stage's Charge card has its content.
@@ -13724,8 +13842,9 @@ func _run_human_melee(attacker: GameUnit, target: GameUnit, auto: bool = false) 
 	await _solo_self_destruct_post_melee(target, attacker)
 	# — Morale: a destroyed side loses first; otherwise the lower wound score loses. Fear(X) (GF/AoF v3.5.1 p.13) adds
 	#   +X to the bearer's tally for THIS comparison only. —
-	var human_score: int = AiCombatMath.fear_adjusted_wounds(human_caused, _solo_unit_rating(attacker, "Fear"))
-	var ai_score: int = AiCombatMath.fear_adjusted_wounds(ai_caused, _solo_unit_rating(target, "Fear"))
+	var scores: Array = _solo_melee_scores(attacker, human_caused, target, ai_caused)
+	var human_score: int = scores[0]
+	var ai_score: int = scores[1]
 	var loser: GameUnit = _solo_melee_loser(attacker, human_score, target, ai_score)
 	_solo_log_melee_result(attacker, human_caused, human_score, target, ai_caused, ai_score)
 	await _solo_stage_phase("Melee result")
@@ -21657,9 +21776,13 @@ func _solo_hazardous_self_wounds(owner_unit: GameUnit, profile: Dictionary, face
 			ones += 1
 	if ones <= 0:
 		return
+	var hz_id: int = owner_unit.get_instance_id()
 	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		# MEL-10: the tally counts the wounds really taken (each 1 wounds X with Blast/Deadly, as the bearer path does).
+		_solo_hazard_self[hz_id] = int(_solo_hazard_self.get(hz_id, 0)) + ones * maxi(maxi(int(profile.get("blast", 0)), int(profile.get("deadly", 0))), 1)
 		await _solo_hazardous_bearer_wounds(owner_unit, profile, ones)
 		return
+	_solo_hazard_self[hz_id] = int(_solo_hazard_self.get(hz_id, 0)) + ones
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT,
 			"Hazardous: %s rolls %d unmodified 1%s to hit — takes %d wound%s" % [
