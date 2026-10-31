@@ -6531,7 +6531,12 @@ fn reply_threat_core_with(
         {
             continue;
         }
-        let movable = !(o.hold_gate && crate::menu::holds_only(state, statics, e));
+        // Rules 3.6 (SHO-16): a Cumbersome enemy may neither charge nor
+        // advance-and-shoot, so it is not `movable` for those two legs; the
+        // standing volley above stays.
+        let cumbersome = statics.get(state.roster.profile[e]).is_some_and(|s| s.cumbersome)
+            && rule_on(rules_epoch, crate::acts::EPOCH_73_V36);
+        let movable = !(o.hold_gate && crate::menu::holds_only(state, statics, e)) && !cumbersome;
         let mut best_key: Option<usize> = None;
         let mut best_ev = 0.0f64;
         for m in 0..n {
