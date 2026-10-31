@@ -6503,7 +6503,7 @@ fn pair_dist_memo(n: usize, e: usize, m: usize, a: &[[f64; 3]], b: &[[f64; 3]]) 
     })
 }
 
-fn reply_threat_core(statics: &[UnitStatic], state: &State, player: i64, rules_epoch: u32, o: ReplyOpts) -> Vec<f64> {
+pub(crate) fn reply_threat_core(statics: &[UnitStatic], state: &State, player: i64, rules_epoch: u32, o: ReplyOpts) -> Vec<f64> {
     reply_threat_core_with(statics, state, player, rules_epoch, o, !trace_rules_on())
 }
 
