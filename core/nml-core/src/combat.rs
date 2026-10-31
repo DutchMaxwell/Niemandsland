@@ -702,6 +702,12 @@ pub fn profile_ev(
     if on6_ap == 0 && (p.rending || p.destructive) {
         on6_ap = RENDING_AP_BONUS;
     }
+    // MEL-09e — EPOCH_73_V36: a fatigued melee striker's sixes still hit but fire
+    // no rule (MEL-09's `fatigue_mutes_sixes`), so the whole on-6 AP sub-batch is
+    // priced at zero, exactly the resolver's `on6 = 0` in `resolve_melee_leg`.
+    if melee && att.fatigued && rule_on(att.rules_epoch, EPOCH_73_V36) {
+        on6_ap = 0;
+    }
     let mut six_hits = if on6_ap > 0 { attacks_f * SIX_P } else { 0.0 };
     // --- Blast (ai_ev.gd:397-400) ---
     if p.blast > 1 {
