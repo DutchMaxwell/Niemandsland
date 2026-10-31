@@ -8685,9 +8685,10 @@ fn resolve_with(
                     Cover::Board(t) if t.is_valid() && rule_on(sc.rules_epoch, EPOCH_73_V36) => {
                         sight::unit_sees(&next, &board_zones(t, seams.shelf_sight, seams.rules_epoch), si, ti)
                     }
-                    Cover::Board(t) if t.is_valid() => !t.los_blocked(
+                    Cover::Board(t) if t.is_valid() => !t.los_blocked_at(
                         geom::centre(&next.positions[si]),
                         geom::centre(&next.positions[ti]),
+                        seams.rules_epoch,
                     ),
                     _ => next.los[si].is_none() && next.los_pairs.is_none(),
                 }) || mark_indirect
@@ -9364,8 +9365,8 @@ fn refresh_los_pairs(next: &mut State, parent: &State, terrain: &Terrain, seams:
     let centres: Vec<V3> = (0..n).map(|i| geom::centre(&next.positions[i])).collect();
     for &i in &moved {
         for j in 0..n {
-            m[i * n + j] = !terrain.los_blocked(centres[i], centres[j]);
-            m[j * n + i] = !terrain.los_blocked(centres[j], centres[i]);
+            m[i * n + j] = !terrain.los_blocked_at(centres[i], centres[j], seams.rules_epoch);
+            m[j * n + i] = !terrain.los_blocked_at(centres[j], centres[i], seams.rules_epoch);
         }
     }
     next.los_pairs = Some(Rc::new(m));

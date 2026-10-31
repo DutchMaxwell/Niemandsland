@@ -1158,8 +1158,9 @@ impl<'a> Search<'a> {
                             // grid-search step 9 F1 — mirror the hand: the moved-cell LOS probe
                             // rides ONLY under `shoot_los`; a wall otherwise keeps the row (the hand
                             // never re-probes from the moved point), and a blocked line drops it.
-                            let blocked = tuning.shoot_los && terrain.is_valid() && terrain.los_blocked(
-                                crate::geom::centre(&moved), crate::geom::centre(&state.positions[e]));
+                            let blocked = tuning.shoot_los && terrain.is_valid() && terrain.los_blocked_at(
+                                crate::geom::centre(&moved), crate::geom::centre(&state.positions[e]),
+                                seams.rules_epoch);
                             if blocked {
                                 continue;
                             }

@@ -20,7 +20,7 @@
 
 use serde::Deserialize;
 
-use crate::acts::{rule_on, CURRENT_RULES_EPOCH, EPOCH_73_V36};
+use crate::acts::{rule_on, CURRENT_RULES_EPOCH, EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36};
 use crate::combat::{charge_estimate_gap_in, melee_ev, profile_ev, shoot_ev, SIX_P};
 use crate::geom::{self, V3};
 use crate::sim::{
@@ -859,8 +859,23 @@ struct Threat<'a> {
 /// first, stable on ties by frontier order; empty when even charge safety is
 /// already lost or there is nothing to walk toward.
 pub fn safe_advances(state: &State, terrain: &Terrain, i: usize, tuning: Tuning) -> Vec<Candidate> {
-    let dests = crate::safe_memo::run(state, terrain, i, tuning, || {
-        safe_advances_fresh(state, terrain, i, tuning).iter().filter_map(|c| c.dest).collect()
+    safe_advances_at(state, terrain, i, tuning, EPOCH_72_PLAYTEST_RULES)
+}
+
+/// `safe_advances` as the game at `rules_epoch` reads the board: the open-fire-line probe (and so the patience
+/// of the advance) follows the same rules-3.6 reading every other sight seam takes.
+pub fn safe_advances_at(
+    state: &State,
+    terrain: &Terrain,
+    i: usize,
+    tuning: Tuning,
+    rules_epoch: u32,
+) -> Vec<Candidate> {
+    let dests = crate::safe_memo::run(state, terrain, i, tuning, rules_epoch, || {
+        safe_advances_fresh_at(state, terrain, i, tuning, rules_epoch)
+            .iter()
+            .filter_map(|c| c.dest)
+            .collect()
     });
     dests.into_iter().map(|d| advance_candidate(state, i, d)).collect()
 }
@@ -873,6 +888,16 @@ fn advance_candidate(state: &State, i: usize, dest: [f64; 3]) -> Candidate {
 }
 
 pub(crate) fn safe_advances_fresh(state: &State, terrain: &Terrain, i: usize, tuning: Tuning) -> Vec<Candidate> {
+    safe_advances_fresh_at(state, terrain, i, tuning, EPOCH_72_PLAYTEST_RULES)
+}
+
+pub(crate) fn safe_advances_fresh_at(
+    state: &State,
+    terrain: &Terrain,
+    i: usize,
+    tuning: Tuning,
+    rules_epoch: u32,
+) -> Vec<Candidate> {
     let centre = geom::centre(&state.positions[i]);
     let mut best_d = f64::INFINITY;
     let mut goal: V3 = [0.0, 0.0, 0.0];
@@ -952,7 +977,7 @@ pub(crate) fn safe_advances_fresh(state: &State, terrain: &Terrain, i: usize, tu
             if state.los_pairs.is_some() && terrain.is_valid() {
                 let mut open_lines = 0i64;
                 for e in enemy_keys(state, i) {
-                    if !terrain.los_blocked(geom::centre(&state.positions[e]), pnt) {
+                    if !terrain.los_blocked_at(geom::centre(&state.positions[e]), pnt, rules_epoch) {
                         open_lines += 1;
                     }
                     if open_lines >= 4 {
@@ -984,7 +1009,18 @@ pub(crate) fn safe_advances_fresh(state: &State, terrain: &Terrain, i: usize, tu
 /// nothing else. `safe_advances(...).into_iter().next()` keeps ONE scoring
 /// routine behind both sites.
 pub fn safe_advance(state: &State, terrain: &Terrain, i: usize, tuning: Tuning) -> Option<Candidate> {
-    safe_advances(state, terrain, i, tuning).into_iter().next()
+    safe_advance_at(state, terrain, i, tuning, EPOCH_72_PLAYTEST_RULES)
+}
+
+/// `safe_advance` as the game at `rules_epoch` reads the board (`safe_advances_at`).
+pub fn safe_advance_at(
+    state: &State,
+    terrain: &Terrain,
+    i: usize,
+    tuning: Tuning,
+    rules_epoch: u32,
+) -> Option<Candidate> {
+    safe_advances_at(state, terrain, i, tuning, rules_epoch).into_iter().next()
 }
 
 /// `AiPlanner._second_wave` ai_planner.gd:1141-1200 (D21/D23) — a follow-up move
@@ -1142,6 +1178,10 @@ pub fn candidates_tuned(
     tuning: Tuning,
 ) -> Vec<Candidate> {
     let key = state.key(unit);
+    // The board probes (the advance's open-fire-line penalty) read the unit's own rules epoch, exactly as
+    // `holds_only` / `cumbersome_at` read it — so a game at 72 keeps the pre-3.6 walls and a game at 73
+    // sees through a ruin.
+    let rules_epoch = statics.get(state.roster.profile[unit]).map_or(0, |s| s.rules_epoch);
     let mut out = vec![Candidate::new(key, HOLD)];
     let shoot = best_shoot(state, statics, unit, sc, tuning, CURRENT_RULES_EPOCH, None);
     if let Some(e) = shoot {
@@ -1206,7 +1246,7 @@ pub fn candidates_tuned(
             out.push(c);
         }
     }
-    for c in safe_advances(state, terrain, unit, tuning) {
+    for c in safe_advances_at(state, terrain, unit, tuning, rules_epoch) {
         out.push(c);
     }
     if let Some(c) = second_wave(state, unit) {
