@@ -668,16 +668,6 @@
     "not_fatigued": true
    }
   },
-  "Entrenched": {
-   "primitive": "Stealth",
-   "rated": false,
-   "book_version": "3.5.1",
-   "params": {
-    "hit_penalty": 2,
-    "over_in": 9,
-    "requires_stationary": true
-   }
-  },
   "Extended Buff Range": {
    "primitive": "Extended Buff Range",
    "rated": false,
@@ -5065,6 +5055,16 @@
     "book_version": "3.5.3",
     "params": {
      "on6_ap": 2
+    }
+   },
+   "Entrenched": {
+    "primitive": "Stealth",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "hit_penalty": 1,
+     "over_in": 12,
+     "requires_stationary": true
     }
    },
    "Entrenched Buff": {
