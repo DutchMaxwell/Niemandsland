@@ -10,6 +10,11 @@ extends RefCounted
 
 const IN2M := 0.0254
 
+## Rules 3.6 hero morale aura (twin of main.gd `_solo_aura_hero_for_morale` and sim.rs
+## `hero_aura_quality`): Tough(9)+ and 6" base edge to base edge.
+const HERO_AURA_TOUGH := 9
+const HERO_AURA_REACH_IN := 6.0
+
 ## CORE track S1: when set, expected wounds round STOCHASTICALLY (mean-
 ## preserving: the fraction becomes a probability) instead of carrying a
 ## fractional ledger — full games get outcome variance without per-die
@@ -1804,6 +1809,30 @@ static func _below_half(su: Dictionary) -> bool:
 	return AiCombatMath.at_or_below_half(int(su["alive"]), u.models.size())
 
 
+## Rules 3.6 (EPOCH_73_V36): stamp the best qualifying friendly Tough(9)+ Hero's Quality on the unit's snapshot as "aura_quality"; absent = no aura (hand-built snapshots stay byte-identical).
+static func _stamp_hero_aura(units: Dictionary) -> void:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return
+	for k in units:
+		var su: Dictionary = units[k]
+		if int(su["alive"]) <= 0 or bool(su.get("shaken", false)):
+			continue
+		var own := int((su["unit"] as GameUnit).get_quality())
+		var best := own
+		for hk in units:
+			var hu: Dictionary = units[hk]
+			if hk == k or int(hu["player"]) != int(su["player"]) or int(hu["alive"]) <= 0 \
+					or bool(hu.get("shaken", false)) or bool(hu.get("dormant", false)) or (su["attached"] as Array).has(hk):
+				continue
+			var hero := hu["unit"] as GameUnit
+			var q := int(hero.get_quality())
+			if hero.is_hero() and AiEv.unit_rating(hero, "Tough") >= HERO_AURA_TOUGH and q < best \
+					and edge_gap_in(su["positions"], su["radii"], hu["positions"], hu["radii"]) <= HERO_AURA_REACH_IN:
+				best = q
+		if best < own:
+			su["aura_quality"] = best
+
+
 ## The EXPECTED morale outcome, deterministically: Shaken always fails (p.10);
 ## otherwise the quality target's fail chance, halved by the Fearless re-roll
 ## (advanced p.13), fails when it reaches 50% — Q4+ crowds break, Q3 elites and
@@ -1814,7 +1843,15 @@ static func _morale_fails_expected(su: Dictionary) -> bool:
 	if bool(su.get("shaken", false)):
 		return true
 	var u: GameUnit = su["unit"]
-	var fail_p := float(AiCombatMath.morale_target(u.get_quality(),
+	var quality: int = u.get_quality()
+	# Rules 3.6 (EPOCH_73_V36): capture() stamps the better Quality of a qualifying Tough(9)+ Hero
+	# within 6" (base edge to base edge), the same aura the table's morale test and the core's live
+	# resolver apply. Hand-built snapshots carry no stamp, so they stay byte-identical.
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		var aura := int(su.get("aura_quality", 0))
+		if aura > 0 and aura < quality:
+			quality = aura
+	var fail_p := float(AiCombatMath.morale_target(quality,
 		int(su.get("morale_bonus", 0))) - 1) / 6.0
 	# Rules 3.6 (EPOCH_73_V36): most living models are enough (sim.rs `morale_fearless`).
 	if (AiEv.rule_on_most_models(u, "Fearless") if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
@@ -1990,6 +2027,7 @@ static func capture(army: OPRArmyManager, objectives_provider: Callable = Callab
 			continue
 		su["attached_to"] = by_sel[join_to]
 		(units[by_sel[join_to]]["attached"] as Array).append(k)
+	_stamp_hero_aura(units)
 	if los_of.is_valid():
 		for k in units:
 			var su: Dictionary = units[k]
