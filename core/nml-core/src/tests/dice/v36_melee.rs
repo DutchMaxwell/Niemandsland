@@ -54,7 +54,7 @@ mod mel_07c {
         let mut tray = Tray::seeded(seed);
         tray.set_zero_draws(true);
         resolve_melee_leg(&[striker(&[p], &[0], &[5], &att)], def, "Foe", false, true, true,
-            true, 0.0, true, true, epoch_gate, false, &mut tray)
+            true, 0.0, true, true, epoch_gate, false, false, &mut tray)
     }
 
     #[test]
