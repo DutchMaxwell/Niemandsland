@@ -887,6 +887,9 @@ fn advance_candidate(state: &State, i: usize, dest: [f64; 3]) -> Candidate {
     c
 }
 
+/// The pre-3.6 reading for the safe-advance memo's own tests (no shipping caller: `candidates_tuned` asks
+/// `safe_advances_at` with the acting unit's epoch, and the memo's `run` goes through it).
+#[cfg(test)]
 pub(crate) fn safe_advances_fresh(state: &State, terrain: &Terrain, i: usize, tuning: Tuning) -> Vec<Candidate> {
     safe_advances_fresh_at(state, terrain, i, tuning, EPOCH_72_PLAYTEST_RULES)
 }
