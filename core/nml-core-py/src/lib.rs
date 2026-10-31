@@ -3192,6 +3192,8 @@ fn nml_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // `play_game()` stamps. See `acts::rule_on`.
     m.add("CURRENT_RULES_EPOCH", nmlcore::CURRENT_RULES_EPOCH)?;
     m.add("EPOCH_66_DISTANCE_TRUTH", nmlcore::acts::EPOCH_66_DISTANCE_TRUTH)?;
+    // Rules 3.6 (MOR-19b): the py-side band fold's gate for Ethereal's optional placement.
+    m.add("EPOCH_73_V36", nmlcore::acts::EPOCH_73_V36)?;
     // 16.09. (window 32): the token layout constants, so python tests and the netlab
     // read the core's window instead of pinning 24 by hand.
     m.add("N_UNITS", nmlcore::tokens::N_UNITS)?;

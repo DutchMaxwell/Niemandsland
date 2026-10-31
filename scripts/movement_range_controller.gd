@@ -168,6 +168,21 @@ static func move_bands_for_props(props: Dictionary, applied: Array = []) -> Dict
 		var rp: Dictionary = entry.get("params", {})
 		if int(rp.get("uses_per_game", 0)) > 0:
 			continue   # once-per-game feats (Speed Feat) never ride the permanent bands
+		# Rules 3.6 (MOR-19b): Ethereal's place-within-6" is optional, so the -6"/-6" band
+		# penalty rides only while the model was placed this activation. The latch is cleared
+		# at activation start, so the penalty drops at the activation's end. Below the epoch
+		# the penalty stays permanently folded (today's 3.5 behaviour).
+		if base2 == "Ethereal" and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+			var placed := bool(props.get("teleport_used_this_activation", false))
+			var trace_board: Dictionary = props.get("activation_board", {})
+			if not trace_board.is_empty():
+				var verdict := "not placed — no movement penalty this activation"
+				if placed:
+					verdict = "placed — -%d\"/-%d\" for this activation" % [
+						abs(int(rp.get("advance_mod", 0))), abs(int(rp.get("rush_mod", 0)))]
+				trace_board["band_trace"] = "%s: %s" % [base2, verdict]
+			if not placed:
+				continue
 		# Grounded Speed (sweep F 2026-09-14): a terrain-gated entry (`terrain_within_in` > 0) adds
 		# its mods ONLY while the unit is within that proximity of terrain AT ACTIVATION — the same
 		# verdict the core answers (sim.rs grounded_speed_bonus_in) over the table's twin query

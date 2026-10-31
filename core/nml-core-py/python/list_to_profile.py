@@ -599,6 +599,14 @@ def _move_bands(
             rp = entry.get("params", {})
             if int(rp.get("uses_per_game", 0)) > 0:
                 continue
+            # Rules 3.6 (MOR-19b): Ethereal's place-within-6" is optional, so the STATIC
+            # profile bands keep the unplaced value at epoch 73; the table re-adds the
+            # -6"/-6" only while the model was placed this activation.
+            if (
+                base == "Ethereal"
+                and rules_epoch >= nml_core.EPOCH_73_V36
+            ):
+                continue
             if not done["advance"]:
                 advance += int(rp.get("advance_mod", 0))
             if not done["rush"]:

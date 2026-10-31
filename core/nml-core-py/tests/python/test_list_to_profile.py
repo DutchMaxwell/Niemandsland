@@ -612,21 +612,28 @@ def test_bounding_answers_the_activation_advance_bonus_and_leaves_the_bands():
 
 
 def test_ethereal_cuts_the_bands_by_six_both_ways():
-    """NML-1121: Ghostly Undead / Shadow Stalkers' "Ethereal" (Army Forge
+    """NML-1121 / MOR-19b: Ghostly Undead / Shadow Stalkers' "Ethereal" (Army Forge
     v3.5.3): "Once per activation, before attacking, place this model
     anywhere fully within 6\" of its position. This model moves -6\" when
     using Advance, and -6\" when using Rush/Charge." — a delta, same shape as
     Fast/Slow, encoded as advance_mod/rush_mod -6/-6 on the "Teleport"
-    primitive (which joined MOVE_PRIMITIVES for exactly this). Before this
-    ticket the registry entry carried only advance_bonus_in/rush_bonus_in
-    0.0/0.0 (the real "Teleport" rule's own shape) and "Teleport" was absent
-    from MOVE_PRIMITIVES, so a units list without description text (this
-    loader) read the full, unmodified 6"/12" bands — the qag_ref gate's 29
-    ghostly_undead move_bands mismatches."""
-    ghost = _aof_profile("ghostly_undead", ["Ethereal"])
-    assert ghost["move_bands"] == {"advance": 0.0, "rush": 6.0}
-    stalker = _aof_profile("shadow_stalkers", ["Ethereal"])
-    assert stalker["move_bands"] == {"advance": 0.0, "rush": 6.0}
+    primitive (which joined MOVE_PRIMITIVES for exactly this). Rules 3.6
+    (MOR-19b) makes the placement optional, so the STATIC profile bands keep
+    the unplaced value at epoch 73; the table re-adds the -6/-6 only while the
+    model was placed. Below 73 the fold stays always-on."""
+    ghost72 = list_to_profile._move_bands(
+        ["Ethereal"], "aof", "ghostly_undead", rules_epoch=72)
+    assert ghost72 == {"advance": 0.0, "rush": 6.0}
+    stalker72 = list_to_profile._move_bands(
+        ["Ethereal"], "aof", "shadow_stalkers", rules_epoch=72)
+    assert stalker72 == {"advance": 0.0, "rush": 6.0}
+    # At 73 the optional placement leaves the static bands at 6"/12".
+    ghost73 = list_to_profile._move_bands(
+        ["Ethereal"], "aof", "ghostly_undead", rules_epoch=73)
+    assert ghost73 == {"advance": 6.0, "rush": 12.0}
+    stalker73 = list_to_profile._move_bands(
+        ["Ethereal"], "aof", "shadow_stalkers", rules_epoch=73)
+    assert stalker73 == {"advance": 6.0, "rush": 12.0}
     # The real "Teleport" rule (a different mechanic entirely — a per-activation
     # +3"/+6" placement bonus, solo_controller.gd) carries no advance_mod/rush_mod,
     # so joining MOVE_PRIMITIVES does not touch its bands.
