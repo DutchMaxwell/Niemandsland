@@ -1,4 +1,5 @@
 use super::*;
+use crate::acts::EPOCH_72_PLAYTEST_RULES;
 
     // ------- wave 4 (port-quick-readjustment): Indirect's moved to-hit penalty + the opt-out ---
 
@@ -31,14 +32,15 @@ use super::*;
         UnitStatic::build_for(&mut reg, p, epoch)
     }
 
-    /// (a) the moved penalty at epoch 7: a moved Indirect shooter's to-hit
-    /// target is the base Quality PLUS the penalty magnitude (Quality 4+ ->
-    /// 5+) and names itself in the log; a shooter that did not move this
-    /// activation hits at base. The gate shape is main.gd:3220-3224's own:
-    /// `moved and (profile.indirect) and not no_moved_penalty`.
+    /// (a) the moved penalty at epoch 72 (rules 3.5): a moved Indirect
+    /// shooter's to-hit target is the base Quality PLUS the penalty magnitude
+    /// (Quality 4+ -> 5+) and names itself in the log; a shooter that did not
+    /// move this activation hits at base. The gate shape is
+    /// main.gd:3220-3224's own: `moved and (profile.indirect) and not
+    /// no_moved_penalty`. Rules 3.6 drops the penalty at 73 (sho_02).
     #[test]
-    fn a_moved_indirect_shooter_hits_at_minus_one_a_still_one_hits_at_base() {
-        let us = im_static("indirect_shooter", 7);
+    fn a_moved_indirect_shooter_hits_at_minus_one_a_still_one_hits_at_base_at_epoch_72() {
+        let us = im_static("indirect_shooter", EPOCH_72_PLAYTEST_RULES);
         let moved = Ctx { moved_this_round: true, ..us.ctx };
         let mut t_moved = Tray::seeded(27);
         let out_moved = resolve_shooting_with_tray(
@@ -60,13 +62,13 @@ use super::*;
         );
     }
 
-    /// (b) the opt-out at epoch 7: a "Quick Readjustment" bearer that moved
+    /// (b) the opt-out at epoch 72: a "Quick Readjustment" bearer that moved
     /// hits at base (the `no_moved_penalty` read off the NAME, the table's
     /// `best_primitive_param(member, "Indirect", "no_moved_penalty", false)`
     /// gate, main.gd:3221-3222) and names itself in the log.
     #[test]
-    fn a_quick_readjustment_bearer_that_moved_hits_at_base() {
-        let us = im_static("quick_readj", 7);
+    fn a_quick_readjustment_bearer_that_moved_hits_at_base_at_epoch_72() {
+        let us = im_static("quick_readj", EPOCH_72_PLAYTEST_RULES);
         let moved = Ctx { moved_this_round: true, ..us.ctx };
         let mut t = Tray::seeded(27);
         let out = resolve_shooting_with_tray(
@@ -106,8 +108,8 @@ use super::*;
     /// "moved_hit_penalty", 1))))` (ai_combat_math.gd:563-565, main.gd:3223
     /// -3224 — the param resolves to 1 off the common mechanics entry).
     #[test]
-    fn the_table_twin_moved_indirect_hit_chance_equals_the_tables() {
-        let us = im_static("indirect_shooter", 7);
+    fn the_table_twin_moved_indirect_hit_chance_equals_the_tables_at_epoch_72() {
+        let us = im_static("indirect_shooter", EPOCH_72_PLAYTEST_RULES);
         let moved = Ctx { moved_this_round: true, ..us.ctx };
         let mut t = Tray::seeded(27);
         let out = resolve_shooting_with_tray(

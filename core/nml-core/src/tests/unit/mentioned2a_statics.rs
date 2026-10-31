@@ -353,12 +353,13 @@
     }
 
     // ------------------------------------------ Indirect when Shooting Aura --
-    // The aura hands "Indirect when Shooting" to the carrier: the volley
+    // The aura hands "Indirect when Shooting" to the carrier: at 72 the volley
     // folds -1 after a move (the granted base's moved_hit_penalty), with the
-    // wave-3 alias marker naming the rule in the volley log.
+    // wave-3 alias marker naming the rule in the volley log. Rules 3.6 drops
+    // the stamp from 73 (the twin lives in v36_shoot_rows/sho_02.rs).
     #[test]
-    fn an_indirect_when_shooting_aura_stamps_the_moved_penalty_at_minus_one() {
-        let e = crate::acts::CURRENT_RULES_EPOCH;
+    fn an_indirect_when_shooting_aura_stamps_the_moved_penalty_at_minus_one_at_epoch_72() {
+        let e = crate::acts::EPOCH_72_PLAYTEST_RULES;
         let us = aura_us("gf", "wormhole_daemons_of_change", "Indirect when Shooting Aura", e);
         assert!(us.shoot[0].indirect, "the granted base stamps the indirect flag");
         assert!(us.shoot[0].indirect_alias, "the wave-3 alias marker rides the flag");
