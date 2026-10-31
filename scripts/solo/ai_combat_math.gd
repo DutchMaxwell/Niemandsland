@@ -481,18 +481,29 @@ static func conditional_ap_bonus(params: Dictionary, target_tough: int, target_d
 		return 0
 	var over_in: float = float(params.get("over_in", LONG_RANGE_IN))
 	var within_in: float = float(params.get("within_in", 0.0))
+	var gate := str(params.get("gate", ""))
+	# Rules 3.6 (SHO-20): from EPOCH_73_V36 the Slayer family's shooting gate asks for a HOLD
+	# instead of the over-9" gap. The stored map keeps the old spelling; this reader translates it
+	# on both legs (table and EV), and a caller without the Hold state (the EV) simply gets none.
+	if gate == "ranged_over_or_charge" and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		gate = "hold_or_charge"
 	# Gate-only spec (Ranged Slayer, gf/dao_union 3.5.3): the mechanics map carries the whole range
 	# leg in "gate" ("ranged_over") with NO target-property "condition". The gate IS the condition
 	# then — mirroring the core's named arm (core/nml-core/src/combat.rs:370) — so the match below
 	# fires instead of falling through to 0.
 	var condition := str(params.get("condition", ""))
-	if condition.is_empty() and str(params.get("gate", "")) == "ranged_over":
+	if condition.is_empty() and gate == "ranged_over":
 		condition = "ranged_over"
 	# Gate "ranged_over_or_charge" (Slayer: "shoots at enemies over 9\" away, or when it charges"):
 	# an ADDITIONAL situational gate on top of the target-property condition. dist_in < 0 = unknown
 	# (a caller without range context) — conservative: the ranged leg never fires blind.
-	if str(params.get("gate", "")) == "ranged_over_or_charge":
+	if gate == "ranged_over_or_charge":
 		if not (is_charging or (not melee and dist_in > over_in)):
+			return 0
+	# Gate "hold_or_charge" (the same rule from EPOCH_73_V36): the shot needs a Hold, the charge
+	# leg is unchanged. `target["held"]` is the firing unit's own Hold state.
+	if gate == "hold_or_charge":
+		if not (is_charging or (not melee and bool(target.get("held", false)))):
 			return 0
 	var threshold: int = int(params.get("threshold", 0))
 	match condition:
@@ -506,6 +517,8 @@ static func conditional_ap_bonus(params: Dictionary, target_tough: int, target_d
 			return bonus if not melee else 0
 		"ranged_over_or_charge":
 			return bonus if is_charging or (not melee and dist_in > over_in) else 0
+		"hold_or_charge":
+			return bonus if is_charging or (not melee and bool(target.get("held", false))) else 0
 		"on_charge":
 			# Charge-gated, no target property (Piercing Assault: "AP(+1) when charging").
 			return bonus if is_charging else 0
@@ -616,9 +629,13 @@ static func morale_target(quality: int, morale_bonus: int) -> int:
 
 
 ## Indirect's to-hit ROLL modifier for a shooting attack (wave 5, core v3.5.1: "-1 to hit rolls when
-## shooting after moving"). 0 when the shooter held. `penalty` is the data-derived knob (RulesRegistry
-## "Indirect".moved_hit_penalty; fallback INDIRECT_MOVED_HIT_PENALTY).
+## shooting after moving"). 0 when the shooter held, and 0 from EPOCH_73_V36 on (rules 3.6, SHO-02).
+## `penalty` is the data-derived knob (RulesRegistry "Indirect".moved_hit_penalty; fallback
+## INDIRECT_MOVED_HIT_PENALTY).
 static func indirect_hit_modifier(moved: bool, penalty: int = INDIRECT_MOVED_HIT_PENALTY) -> int:
+	# Rules 3.6 (SHO-02): from EPOCH_73_V36 a moved Indirect shooter hits at base quality.
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		return 0
 	return -maxi(penalty, 0) if moved else 0
 
 

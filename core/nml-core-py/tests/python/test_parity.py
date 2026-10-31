@@ -77,8 +77,41 @@ def load(name):
     return header, acts
 
 
+_PINNED_ROOT = None
+
+
+def pinned_spells_root():
+    """LEGACY REPLAY ONLY - a repo root whose spells_mechanics_{gf,aof}.json are the frozen rules 3.5 copies
+    (core/nml-core/tests/fixtures/spells_v35/), every other entry a symlink into the real repo.
+
+    The recorded fixtures carry GD-made expectations (EV, scored lists) from the 3.5 spell lists. Rules 3.6
+    re-exported those two maps (DAT-13b), so replaying against them would measure the data change, not the search
+    loop the fixtures pin. Only this replay harness passes this root; the game and the loader never see it. Phase R
+    re-records the fixtures on 3.6 data and drops this pin."""
+    global _PINNED_ROOT
+    if _PINNED_ROOT is None:
+        import tempfile
+        root = Path(tempfile.mkdtemp(prefix="nml_pinned_spells_root_"))
+        (root / "assets" / "solo").mkdir(parents=True)
+        for e in REPO.iterdir():
+            if e.name != "assets":
+                (root / e.name).symlink_to(e)
+        for e in (REPO / "assets").iterdir():
+            if e.name != "solo":
+                (root / "assets" / e.name).symlink_to(e)
+        frozen = REPO / "core" / "nml-core" / "tests" / "fixtures" / "spells_v35"
+        for e in (REPO / "assets" / "solo").iterdir():
+            target = root / "assets" / "solo" / e.name
+            if (frozen / e.name).is_file():
+                target.write_bytes((frozen / e.name).read_bytes())
+            else:
+                target.symlink_to(e)
+        _PINNED_ROOT = root
+    return _PINNED_ROOT
+
+
 def core_for(header):
-    core = nml_core.load(str(REPO))
+    core = nml_core.load(str(pinned_spells_root()))
     core.set_header(header)
     return core
 

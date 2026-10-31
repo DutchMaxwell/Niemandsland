@@ -24,6 +24,7 @@ mod sho_18;
 mod sho_19;
 mod sho_20;
 mod sho_21;
+mod sho_21b;
 mod sho_22;
 mod sho_23;
 mod sho_log_precise;

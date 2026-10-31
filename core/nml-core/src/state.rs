@@ -619,6 +619,10 @@ pub struct State {
     /// once-per-round gate, `_solo_growth_round_start`) — the `hit_and_run_
     /// round` shape, -1 for never.
     pub growth_round: Vec<i64>,
+    /// MEL-12 (`EPOCH_73_V36`) — `unit_properties["regenerative_strength_round"]`:
+    /// the once-per-ROUND latch of the bearer's token dice, per member, -1 for
+    /// never; the `growth_round` shape, no sweep needed.
+    pub growth_strike_round: Vec<i64>,
     /// Wave 4 follow-up — `unit_properties["vengeance_markers"]` (main.gd:
     /// 5898): the Vengeance markers ON this unit, banked by the DESTROYER when
     /// a Vengeance unit fully dies (`sim::vengeance_on_kill`, the

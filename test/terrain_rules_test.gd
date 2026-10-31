@@ -6,6 +6,17 @@ extends GdUnitTestSuite
 
 const T := TerrainRules.TerrainType
 
+var _epoch0: int
+
+
+func before_test() -> void:
+	_epoch0 = AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
+
+
+func after_test() -> void:
+	AiActRecorder.rules_epoch = _epoch0   # statics leak across gdUnit tests - restore
+
 
 func test_type_predicates_match_the_rulebook() -> void:
 	# Ruins: Cover + Blocks LoS. Forest: + Difficult. Container: Impassable + Blocks LoS. Dangerous: only.

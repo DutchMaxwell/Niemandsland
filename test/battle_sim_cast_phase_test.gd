@@ -243,7 +243,9 @@ func test_seam_off_the_melee_caster_holds_and_spends_nothing() -> void:
 func test_seam_off_the_legacy_shoot_rider_still_casts() -> void:
 	OS.set_environment("NML_SIM_CAST", "")
 	BattleSim.new().set("_cast_env", -1)
-	var caster := _unit(1, "Wizard", [Vector3.ZERO], ["Caster(1)"], "robot_legions", 1)
+	# Rules 3.6 re-export: dao_union's one-token spell is Killing Blow (damage, 18 inches); robot_legions' one-token
+	# damage spell, Gauss Bots, now reaches only 6 inches.
+	var caster := _unit(1, "Wizard", [Vector3.ZERO], ["Caster(1)"], "dao_union", 1)
 	var foes: Array = []
 	for i in range(4):
 		foes.append(Vector3((3.0 + float(i)) * IN2M, 0, 0))
@@ -262,15 +264,16 @@ func test_seam_off_the_legacy_shoot_rider_still_casts() -> void:
 ## spell reach from the CASTER but inside the 12" damage spell from a friendly
 ## conduit — caster at 0, conduit at `conduit_gap` (default 10"), squad at 20"
 ## (beyond even the 18" debuff, and beyond the +CONTROL_EPS float guard). The
-## CASTER is robot_legions — with 1 token the affordable spells are the damage
-## "Piercing Bots" (12", cycle index 1, the D3=1 + Caster(1) start) and the 18"
-## debuff; its buffs cost 2 and 3, so an unreachable damage spell HOLDS instead
-## of falling through to a legal buff (the test-(b) discriminator). The CONDUIT
+## CASTER is saurian_starhosts (rules 3.6 data; robot_legions' one-token damage spell shrank to 6") —
+## with 1 token the affordable spells are the damage "Serpent Comet" (12", cycle index 1, the
+## D3=1 + Caster(1) start) and the 18" debuff "Toxin Mist"; every other spell costs 2 or more, so an
+## unreachable damage spell HOLDS instead of falling through to a legal one (the test-(b)
+## discriminator). The CONDUIT
 ## carries alien_hives: the committed gf map resolves "Spell Conduit" there.
 func _conduit_state(conduit_gap: float = 10.0, with_second: bool = false,
 		conduit_shaken: bool = false) -> Dictionary:
 	var units: Array = [
-		_unit(1, "Wizard", [Vector3.ZERO], ["Caster(1)"], "robot_legions", 1),
+		_unit(1, "Wizard", [Vector3.ZERO], ["Caster(1)"], "saurian_starhosts", 1),
 	]
 	var banner := _unit(1, "Banner", [Vector3(conduit_gap * IN2M, 0, 0)],
 		["Spell Conduit"], "alien_hives")

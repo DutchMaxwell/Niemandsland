@@ -1384,7 +1384,7 @@ func best_shoot_target_now(ai_unit: GameUnit, held: bool = true) -> GameUnit:
 	var indirect: bool = has_indirect_ranged(weapons) and indirect_ignores_los(ai_unit, held)
 	var from := unit_centre(ai_unit)
 	var profiles := AiEv.stamp_sergeant(filter_limited(ai_unit, AiShooting.profiles_in_range(weapons, 0.0)), ai_unit)
-	var us := AiEv.ctx_for(ai_unit, majority_in_cover(ai_unit), counter_models_of(ai_unit))
+	var us := AiEv.ctx_for(ai_unit, majority_in_cover(ai_unit), counter_models_of(ai_unit), held)
 	var best: GameUnit = null
 	var best_ev := 0.0
 	for h in army_manager.get_game_units_for_player(enemy_slot_of(ai_unit)):
@@ -1933,10 +1933,10 @@ func _act(unit: GameUnit) -> Dictionary:
 		charge_reach += bounding_in
 		var die_text := "%s%s" % ["%dD3" % bounding_dice if bounding_dice > 1 else "D3",
 			("+%d" % bounding_plus if bounding_plus > 0 else "")]
-		# Rules 3.6 (EPOCH_73_V36, UX-17): Bounding / Nimble / Dash MOVE the rolled inches instead of being
-		# placed. The band bonus above already is that move, so only the record's words change.
-		var moves_d3 := AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
-			and bounding_rule in ["Bounding", "Nimble", "Dash"]
+		# Rules 3.6 (EPOCH_73_V36, UX-17/UX-18): every Bounding-primitive carrier MOVES the rolled
+		# inches instead of being placed. The band bonus above already is that move, so only the
+		# record's words change.
+		var moves_d3 := AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
 		record_decision({"kind": "move", "unit": unit.get_name(),
 			"rule": ("%s: on activation the unit moves up to %s\" — a bonus on every move band" if moves_d3
 				else "%s: on activation the unit may be placed within %s\" — valued as a bonus on every move band") % [
@@ -2630,6 +2630,11 @@ func execute_intent(intent: Dictionary, report: Dictionary) -> Dictionary:
 	report["dist_in"] = d2
 	report["charge_from_in"] = charge_from   # pre-move distance — the charge gates' measure (edge gap from 73)
 	report["moved"] = action != AiDecision.Action.HOLD   # Indirect's -1 to hit fires when shooting after moving
+	# Rules-must-log (DAT-16a): the AI's committed move names the move-band rules that widened it.
+	if bool(report["moved"]):
+		var widened := MovementRangeController.move_band_rule_names_for_props(unit.unit_properties)
+		if not widened.is_empty():
+			_rule_note(report, "%s: move bands widened by %s" % [unit.get_name(), ", ".join(widened)], true)
 	# Traversal (army-book: "May move through friendly and enemy units"): the move itself crossed bases
 	# the planner/gate would otherwise have routed around or clamped — that is invisible to the opponent,
 	# so it travels. Terrain and the rest-position spacing rule are both still enforced (unlike Flying),
@@ -8290,6 +8295,7 @@ func _count_dangerous_trails(trails: Array) -> int:
 ## per-MODEL identity, not just a count — trail order matches the moving-models order).
 func _dangerous_trail_flags(trails: Array, radii_m: Array = []) -> Array:
 	var flags: Array = []
+	var unstable_epoch: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
 	for ti in range(trails.size()):
 		var leg := trails[ti] as Array
 		var r: float = float(radii_m[ti]) if ti < radii_m.size() else 0.0
@@ -8298,6 +8304,15 @@ func _dangerous_trail_flags(trails: Array, radii_m: Array = []) -> Array:
 			if _path_crosses_terrain(leg[i - 1], leg[i], TerrainRules.PathCheck.DANGEROUS, r):
 				hit = true
 				break
+		# Rules 3.6 (EPOCH_73_V36): Unstable ruins — a model whose OWN move is over 6 inches and whose
+		# route goes into or through a ruin takes the same unit-level test. Flying is filtered upstream.
+		# The epsilon keeps a base-exact 6" Advance (float32 Vector3 geometry) on the safe side.
+		if not hit and unstable_epoch \
+				and MovementPlanner.polyline_length(leg) > 6.0 * INCHES_TO_METERS + 1e-6:
+			for i in range(1, leg.size()):
+				if _path_crosses_terrain(leg[i - 1], leg[i], TerrainRules.PathCheck.UNSTABLE, r):
+					hit = true
+					break
 		flags.append(hit)
 	return flags
 
@@ -8312,7 +8327,8 @@ func _path_crosses_terrain(a: Vector3, b: Vector3, check: int, radius_m: float =
 	var steps := maxi(1, int(ceil(span / (cell_m * 0.5))))
 	# Edge-aware (maintainer 2026-07-22): the trigger keys on the base EDGE, not the path centre —
 	# a base grazing difficult/dangerous ground IS in it (same predicate as the rest/target checks).
-	var pred := TerrainRules.is_difficult if check == TerrainRules.PathCheck.DIFFICULT else TerrainRules.is_dangerous
+	var pred := TerrainRules.is_difficult if check == TerrainRules.PathCheck.DIFFICULT \
+		else (TerrainRules.is_unstable if check == TerrainRules.PathCheck.UNSTABLE else TerrainRules.is_dangerous)
 	for i in range(steps + 1):
 		var p := a.lerp(b, float(i) / float(steps))
 		if radius_m > 0.0:
@@ -8331,6 +8347,8 @@ static func _terrain_matches(t: int, check: int) -> bool:
 			return TerrainRules.is_dangerous(t)
 		TerrainRules.PathCheck.IMPASSABLE:
 			return TerrainRules.is_impassable(t)
+		TerrainRules.PathCheck.UNSTABLE:
+			return TerrainRules.is_unstable(t)
 	return false
 
 
@@ -8831,6 +8849,21 @@ static func indirect_needs_hold(unit: GameUnit, key: String) -> bool:
 		if ((e as Dictionary).get("params", {}) as Dictionary).get(key, true) == false:
 			return false
 	return true
+
+
+## Rules 3.6 (SHO-01b): the cover half of the Indirect waiver needs a Hold (`cover_needs_hold`, the
+## SHO-01a sight half's shape above). Core twin: unit.rs build_for's EPOCH_73_V36 stamp.
+static func indirect_ignores_cover(unit: GameUnit, held: bool = true) -> bool:
+	return held or not indirect_needs_hold(unit, "cover_needs_hold")
+
+
+## The volley's cover decision (main.gd's AI and human save paths): Blast and Ignores Cover always
+## drop the target's cover; an Indirect weapon drops it only after a Hold at rules 3.6.
+## Core twin: dice.rs resolve_volley_leg's save fold.
+static func shot_ignores_cover(profile: Dictionary, unit: GameUnit, held: bool = true) -> bool:
+	if int(profile.get("blast", 0)) > 1 or bool(profile.get("ignores_cover", false)):
+		return true
+	return bool(profile.get("indirect", false)) and indirect_ignores_cover(unit, held)
 
 
 ## The Counter strike-first half (core `strikes_first.unwrap_or(true)`): the entry can opt a
@@ -12783,6 +12816,11 @@ func _try_place_reserve_unit(unit: GameUnit, arrival_zone: Rect2, occupied: Arra
 	if spot == Vector2.INF:
 		return false
 	_finish_reserve_arrival(unit, spot, occupied, radius, round_no)
+	# Rules-must-log (DAT-16a): an enemy's Repel Ambushers widened this arrival's no-go ring — name
+	# the rule and the unit that carries it, or the placement reads as an unexplained push-out.
+	var repel_note := _repel_ambush_note(unit, enemy_positions)
+	if not repel_note.is_empty():
+		last_arrival_note = repel_note if last_arrival_note.is_empty() else last_arrival_note + " · " + repel_note
 	var min_in: int = roundi(_reserve_min_enemy_dist_m(unit) / INCHES_TO_METERS)
 	# A beacon that stood near the chosen spot and did NOT apply is NAMED — a rule that quietly does
 	# nothing reads exactly like a broken one (rules-must-log).
@@ -12795,6 +12833,28 @@ func _try_place_reserve_unit(unit: GameUnit, arrival_zone: Rect2, occupied: Arra
 		"candidates": [], "chosen": "", "why": "ambush/infiltrate arrival (does not consume its activation)",
 		"data": {"round": round_no, "x_m": spot.x, "z_m": spot.y, "min_enemy_in": min_in}})
 	return true
+
+
+## Rules-must-log (DAT-16a): the line an arrival owes when an enemy's wider Repel Ambushers ring
+## steered it. Empty when no enemy entry carried a wider distance.
+func _repel_ambush_note(unit: GameUnit, enemy_positions: Array) -> String:
+	var wider := 0.0
+	for e in enemy_positions:
+		if e is Dictionary:
+			wider = maxf(wider, float((e as Dictionary).get("min_dist_m", 0.0)))
+	if wider <= 0.0 or army_manager == null:
+		return ""
+	var my_pid := int(unit.unit_properties.get("player_id", 0))
+	var carriers: Array = []
+	for u in army_manager.get_all_game_units():
+		var gu := u as GameUnit
+		if gu != null and gu != unit and gu.get_alive_count() > 0 and not unit_in_reserve(gu) \
+				and int(gu.unit_properties.get("player_id", 0)) != my_pid and repel_ambush_dist_m(gu) > 0.0:
+			carriers.append(gu.get_name())
+	if carriers.is_empty():
+		return ""
+	return "Repel Ambushers: %s keeps %s's arrival outside its %d\" ring" % [
+		", ".join(carriers), unit.get_name(), int(round(wider / INCHES_TO_METERS))]
 
 
 ## The shared tail of every reserve arrival: place the unit, book its footprint, clear the reserve flag

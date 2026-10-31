@@ -232,6 +232,16 @@ pub fn holds_only(state: &State, statics: &[UnitStatic], u: usize) -> bool {
     forces_hold_at(&state.profile(u).special_rules, epoch)
 }
 
+/// Rules 3.6 (SHO-16) — `unit_rule_active(.., "Cumbersome")` from
+/// `EPOCH_73_V36` on: such a unit may only Hold or Advance, and fires no volley
+/// after moving. Read off the static's own build epoch, like `holds_only`.
+pub(crate) fn cumbersome_at(state: &State, statics: &[UnitStatic], u: usize) -> bool {
+    match statics.get(state.roster.profile[u]) {
+        Some(s) => s.cumbersome && rule_on(s.rules_epoch, EPOCH_73_V36),
+        None => false,
+    }
+}
+
 /// `AiArchetype.max_range_inches` ai_archetype.gd:60-64 over `_range`
 /// (:69-75), which reads `range_value` — the very number
 /// `BattleSim._unit_profile` (:1466) writes as the profile weapon's `range`.
@@ -1147,6 +1157,19 @@ pub fn candidates_tuned(
         // hold-only carriers may still fire at any target
         let extra = all_target_rows(state, statics, unit, sc, tuning, &out);
         out.extend(extra);
+        return out;
+    }
+    // Rules 3.6 (SHO-16): a Cumbersome unit may only Hold or Advance, and fires
+    // no volley after moving. Its menu is the hold rows plus one plain Advance
+    // per objective — never a RUSH, a CHARGE or an ADVANCE that carries a shot.
+    if cumbersome_at(state, statics, unit) {
+        let extra = all_target_rows(state, statics, unit, sc, tuning, &out);
+        out.extend(extra);
+        for o in &state.objectives {
+            let mut c = Candidate::new(key, ADVANCE);
+            c.dest = Some(o.pos);
+            out.push(c);
+        }
         return out;
     }
     for o in &state.objectives {

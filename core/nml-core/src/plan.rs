@@ -1091,6 +1091,7 @@ impl<'a> Search<'a> {
             let Some(&u) = state.roster.index.get(&scored[i].unit_key) else { continue };
             if units.contains(&u) || state.shaken[u]
                 || crate::menu::holds_only(state, statics, u)
+                || crate::menu::cumbersome_at(state, statics, u)
             {
                 continue;
             }

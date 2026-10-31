@@ -4,6 +4,17 @@ extends GdUnitTestSuite
 
 const OverlayScript := preload("res://scripts/terrain_overlay.gd")
 
+var _epoch0: int
+
+
+func before_test() -> void:
+	_epoch0 = AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
+
+
+func after_test() -> void:
+	AiActRecorder.rules_epoch = _epoch0   # statics leak across gdUnit tests - restore
+
 
 func _overlay() -> Node3D:
 	return auto_free(OverlayScript.new())
@@ -77,7 +88,8 @@ func test_effect_labels_name_real_heights_not_categories() -> void:
 	var ruins: String = o._terrain_effect_label(T.RUINS)
 	assert_str(ruins).contains("6\" tall")
 	assert_str(ruins).contains("Cover")
-	assert_str(ruins).contains("Dense")
+	assert_str(ruins).contains("Unstable")
+	assert_str(ruins).not_contains("Dense")
 	assert_str(ruins).not_contains("Height 5")
 	var forest: String = o._terrain_effect_label(T.FOREST)
 	assert_str(forest).contains("3.4\" tall")
