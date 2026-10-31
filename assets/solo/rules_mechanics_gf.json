@@ -86,6 +86,7 @@
   "Evasive",
   "Evasive Aura",
   "Extended Buff Range",
+  "Extra Reach",
   "Fanatic",
   "Fast",
   "Fast Aura",
@@ -201,6 +202,8 @@
   "Pass Turn",
   "Piercing Assault",
   "Piercing Assault Aura",
+  "Piercing Charge",
+  "Piercing Charge Aura",
   "Piercing Debuff",
   "Piercing Fighter Aura",
   "Piercing Frenzy",
@@ -783,6 +786,15 @@
     "hero_link_in": 0.0
    }
   },
+  "Extra Reach": {
+   "primitive": "Royal Legion",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "range_bonus_in": 4,
+    "charge_mod": 2
+   }
+  },
   "Fast": {
    "primitive": "Fast",
    "rated": false,
@@ -954,6 +966,31 @@
    "book_version": "3.6.0",
    "params": {
     "rating": "X"
+   }
+  },
+  "Piercing Charge": {
+   "primitive": "Piercing Assault",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "ap_bonus": 1,
+    "condition": "on_charge"
+   }
+  },
+  "Piercing Charge Aura": {
+   "primitive": "Aura Channel",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "grants": "Piercing Charge"
+   }
+  },
+  "Piercing Marksman Aura": {
+   "primitive": "Aura Channel",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "grants": "Piercing Marksman"
    }
   },
   "Precise": {
