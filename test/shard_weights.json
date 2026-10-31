@@ -511,6 +511,7 @@
 "test/unit_utils_test.gd": 0.1,
 "test/update_checker_test.gd": 0.2,
 "test/v36/mel_02_test.gd": 0.1,
+"test/v36/mel_05_test.gd": 0.1,
 "test/vehicle_base_alignment_test.gd": 0.2,
 "test/volumetric_los_test.gd": 0.1,
 "test/v36/mel_12_test.gd": 0.1,
