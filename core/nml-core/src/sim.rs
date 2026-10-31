@@ -7174,14 +7174,10 @@ fn place_d3_hop(
     ))
 }
 
-/// EPOCH_73_V36 (rules 3.6, UX-17) — the family members whose rolled inches
-/// are a MOVE; the other `Bounding`-primitive aliases still hop.
-const D3_MOVERS_V36: [&str; 3] = ["Bounding", "Nimble", "Dash"];
-
-/// EPOCH_73_V36 — the FRESH-sim arm for `D3_MOVERS_V36`: the same seeded
-/// draws as `place_d3_hop` (one `randi_range(1, 3)` per die, so the stream
-/// stays aligned with the table's `bounding_d3` roll), but the inches widen
-/// every move band this activation — the table's own band model — so the
+/// EPOCH_73_V36 — the FRESH-sim arm for every `Bounding`-primitive carrier: the
+/// same seeded draws as `place_d3_hop` (one `randi_range(1, 3)` per die, so the
+/// stream stays aligned with the table's `bounding_d3` roll), but the inches
+/// widen every move band this activation — the table's own band model — so the
 /// move keeps the normal path rules. Returns the inches and the
 /// rules-must-log line.
 fn bounding_move_in(spec: &crate::unit::PlaceSpec, rng: Option<&mut GodotRng>) -> Option<(f64, String)> {
@@ -7944,16 +7940,14 @@ fn resolve_with(
     // 1710). A RECORDED act replays the table's band-bonus model byte-exact
     // (`bounding_bonus_in` above) — the hop is the FRESH arm. Below the gate
     // every corpus replays the plain reading, byte-exact. From EPOCH_73_V36
-    // Bounding / Nimble / Dash spend the roll as a move instead (UX-17).
+    // Every Bounding-primitive carrier spends the roll as a move instead (UX-17, UX-18).
     let mut move_d3_in = 0.0;
     let hop_log = if rule_on(seams.rules_epoch, crate::acts::EPOCH_26_PLACE_D3)
         && bounding_bonus_in(action) == 0.0
         && matches!(kind, ADVANCE | RUSH | CHARGE)
     {
         statics[pi_s].bounding_place.as_ref().and_then(|spec| {
-            if rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36)
-                && D3_MOVERS_V36.contains(&spec.name.as_str())
-            {
+            if rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) {
                 bounding_move_in(spec, rng.as_deref_mut()).map(|(inches, line)| {
                     move_d3_in = inches;
                     line
