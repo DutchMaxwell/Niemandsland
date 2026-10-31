@@ -64,7 +64,7 @@ fn token_rolls(shot: &ShootResult) -> Vec<&Roll> {
 }
 
 fn weapon_strike(shot: &ShootResult) -> &Roll {
-    shot.rolls.iter().filter(|r| r.owner == "RS").last().expect("the weapon's own to-hit die")
+    shot.rolls.iter().rfind(|r| r.owner == "RS").expect("the weapon's own to-hit die")
 }
 
 #[test]
