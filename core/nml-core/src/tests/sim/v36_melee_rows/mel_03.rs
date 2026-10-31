@@ -1,24 +1,24 @@
 //! MEL-03 tests (rules 3.6, lane melee); empty until the row lands - start with `use super::super::*;`.
 //! From rules 3.6 (`EPOCH_73_V36`) the charger's Impact dice roll before EITHER side strikes, so the
-//! defender's Counter phase moves behind Impact; epoch 72 keeps Counter first. The Counter cut of the
-//! Impact dice stays in this row (Brace takes it over in a later row).
+//! defender's Counter phase moves behind Impact; epoch 72 keeps Counter first. From 73 Counter no
+//! longer cuts the Impact dice (MEL-05); Brace is the only cut.
 use super::super::*;
 
 /// One charge melee: a 5-model Impact(`impact`) charger (unit 0) into a `def_models`-model
 /// defender at Defense `def` (unit 1). The Counter weapon sits on the defender itself, or with
 /// `hero` on a 1-model hero joined to it (unit 2, tray-exact read). Returns the owners of the
 /// attack rolls in tray order, the Impact dice rolled and the defender's survivors.
-fn charge(epoch: u32, impact: i64, def_models: i64, def: i64, hero: bool) -> (Vec<String>, i64, i64) {
+fn charge(epoch: u32, impact: i64, def_models: i64, def: i64, def_tough: i64, hero: bool) -> (Vec<String>, i64, i64) {
     let profile: Profile = serde_json::from_str(r#"{"unit_id":"u","name":"u"}"#).unwrap();
-    let unit = |name: &str, models: i64, impact: i64, def: i64, counter: bool| UnitStatic {
-        ctx: Ctx { quality: 4, defense: def, tough: 1, models, impact, counter_models: if counter { models } else { 0 }, ..Default::default() },
+    let unit = |name: &str, models: i64, impact: i64, def: i64, tough: i64, counter: bool| UnitStatic {
+        ctx: Ctx { quality: 4, defense: def, tough, models, impact, counter_models: if counter { models } else { 0 }, ..Default::default() },
         name: name.into(),
         melee: vec![ShootProfile { name: "Blade".into(), attacks: 1, count: 1, range: 0, counter, ..Default::default() }],
         model_count: models,
-        wounds_max: vec![1; models as usize],
+        wounds_max: vec![tough; models as usize],
         ..Default::default()
     };
-    let statics = vec![unit("Charger", 5, impact, 4, false), unit("Defender", def_models, 0, def, !hero), unit("Hero", 1, 0, 4, hero)];
+    let statics = vec![unit("Charger", 5, impact, 4, 1, false), unit("Defender", def_models, 0, def, def_tough, !hero), unit("Hero", 1, 0, 4, 1, hero)];
     let mut st = four_unit_line();
     st.roster = Rc::new(Roster { keys: vec!["a".into(), "b".into(), "bh".into()], index: HashMap::new(), profile: vec![0, 1, 2] });
     st.profiles = Rc::new(Profiles { list: vec![profile.clone(), profile.clone(), profile], index: HashMap::new() });
@@ -29,7 +29,7 @@ fn charge(epoch: u32, impact: i64, def_models: i64, def: i64, hero: bool) -> (Ve
     let n = def_models as usize;
     st.positions[0] = (1..=5).map(|i| [i as f64 * IN2M, 0.0, 0.0]).collect();
     (st.wounds[0], Rc::make_mut(&mut st.radii)[0]) = (vec![1; 5], vec![IN2M; 5]);
-    (st.positions[1], st.wounds[1], Rc::make_mut(&mut st.radii)[1]) = (vec![[0.0, 0.0, 0.0]; n], vec![1; n], vec![IN2M; n]);
+    (st.positions[1], st.wounds[1], Rc::make_mut(&mut st.radii)[1]) = (vec![[0.0, 0.0, 0.0]; n], vec![def_tough; n], vec![IN2M; n]);
     (st.positions[2], st.wounds[2], Rc::make_mut(&mut st.radii)[2]) = (vec![[0.0, 0.0, 0.0]], vec![1], vec![IN2M]);
     let seams = Seams { rules_epoch: epoch, tray_exact: hero, ..Default::default() };
     let (mut tray, mut shot) = (Tray::seeded(27), ShootResult::default());
@@ -41,14 +41,14 @@ fn charge(epoch: u32, impact: i64, def_models: i64, def: i64, hero: bool) -> (Ve
 
 #[test]
 fn impact_rolls_before_the_counter_phase_at_epoch_73() {
-    let (attacks, impact_dice, _) = charge(crate::acts::EPOCH_73_V36, 1, 3, 4, false);
+    let (attacks, impact_dice, _) = charge(crate::acts::EPOCH_73_V36, 1, 3, 6, 9, false);
     assert_eq!(attacks, ["Charger", "Defender", "Charger"], "Impact, then Counter, then the charger's strikes");
-    assert_eq!(impact_dice, 2, "the three Counter models still cut three of five Impact dice");
+    assert_eq!(impact_dice, 5, "rules 3.6: Counter takes no Impact dice away");
 }
 
 #[test]
 fn counter_strikes_before_impact_at_epoch_72() {
-    let (attacks, impact_dice, _) = charge(crate::acts::EPOCH_72_PLAYTEST_RULES, 1, 3, 4, false);
+    let (attacks, impact_dice, _) = charge(crate::acts::EPOCH_72_PLAYTEST_RULES, 1, 3, 4, 1, false);
     assert_eq!(attacks, ["Defender", "Charger", "Charger"], "the old order replays: Counter, Impact, strikes");
     assert_eq!(impact_dice, 2);
 }
@@ -57,14 +57,14 @@ fn counter_strikes_before_impact_at_epoch_72() {
 /// wiped has nobody left to strike first.
 #[test]
 fn an_impact_wipe_leaves_no_counter_phase_at_epoch_73() {
-    let (attacks, _, survivors) = charge(crate::acts::EPOCH_73_V36, 6, 1, 6, false);
+    let (attacks, _, survivors) = charge(crate::acts::EPOCH_73_V36, 6, 1, 6, 1, false);
     assert_eq!((attacks, survivors), (vec!["Charger".to_string()], 0), "Impact wiped the defender, no Counter strike");
 }
 
 /// The joined hero's Counter (tray-exact read) moves behind Impact too and still cuts one die.
 #[test]
 fn a_joined_heros_counter_strikes_after_impact_at_epoch_73() {
-    let (attacks, impact_dice, _) = charge(crate::acts::EPOCH_73_V36, 2, 3, 4, true);
+    let (attacks, impact_dice, _) = charge(crate::acts::EPOCH_73_V36, 2, 3, 4, 1, true);
     assert_eq!(attacks[..2], ["Charger", "Hero"], "{attacks:?}");
-    assert_eq!(impact_dice, 9, "the hero's one Counter model cuts one of ten Impact dice");
+    assert_eq!(impact_dice, 10, "rules 3.6: the hero's Counter model cuts no Impact die");
 }
