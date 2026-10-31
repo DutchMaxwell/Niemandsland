@@ -496,6 +496,23 @@
     "grants": "Ambush"
    }
   },
+  "Anti-Cover": {
+   "primitive": "Indirect",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "ignores_cover": true,
+    "cover_only": true
+   }
+  },
+  "Anti-Regen": {
+   "primitive": "Lacerate",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "bypass_regen": true
+   }
+  },
   "Armor": {
    "primitive": "Armor",
    "rated": true,
