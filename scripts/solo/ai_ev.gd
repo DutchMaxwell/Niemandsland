@@ -733,6 +733,10 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 	var on6_ap := int(profile.get("on6_ap", 0))
 	if on6_ap == 0 and (bool(profile.get("rending", false)) or bool(profile.get("destructive", false))):
 		on6_ap = AiCombatMath.RENDING_AP_BONUS
+	# MEL-09e (rules 3.6): a Fatigued melee striker's sixes still hit but fire no rule (MEL-09),
+	# so the whole on-6 AP sub-batch is priced at zero — the resolver's `on6 = 0` twin.
+	if melee and bool(att.get("fatigued", false)) and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		on6_ap = 0
 	var six_hits: float = attacks * SIX_P if on6_ap > 0 else 0.0
 	# — Blast (GF v3.5.1: each hit ×min(X, models in target), after other rules) —
 	var blast := int(profile.get("blast", 0))
