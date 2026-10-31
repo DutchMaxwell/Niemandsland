@@ -90,6 +90,13 @@ static func is_dangerous(t: int) -> bool:
 	return t == TerrainType.DANGEROUS
 
 
+## Unstable (rules 3.6): ruins only. A model whose own move is longer than 6 inches and whose route
+## goes into or through a ruin takes the Dangerous test; the caller checks the move length and the
+## Flying exception, this predicate answers only the terrain class.
+static func is_unstable(t: int) -> bool:
+	return t == TerrainType.RUINS
+
+
 static func is_impassable(t: int) -> bool:
 	return t == TerrainType.CONTAINER
 
@@ -255,7 +262,7 @@ static func majority_in_cover(model_positions: Array, grid_cells: Dictionary, ce
 
 ## True if the straight path a->b touches any cell for which `check` holds. `check` is one of the
 ## predicate ids below (avoids Callable overhead in the hot movement path).
-enum PathCheck { DIFFICULT, DANGEROUS, IMPASSABLE }
+enum PathCheck { DIFFICULT, DANGEROUS, IMPASSABLE, UNSTABLE }
 
 
 static func path_crosses(grid_cells: Dictionary, a: Vector2, b: Vector2, check: int,
@@ -275,5 +282,8 @@ static func path_crosses(grid_cells: Dictionary, a: Vector2, b: Vector2, check: 
 					return true
 			PathCheck.IMPASSABLE:
 				if is_impassable(t):
+					return true
+			PathCheck.UNSTABLE:
+				if is_unstable(t):
 					return true
 	return false
