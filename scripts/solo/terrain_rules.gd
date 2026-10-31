@@ -9,14 +9,15 @@ extends RefCounted
 ## semantics here from terrain_overlay.gd. LINE OF SIGHT is no longer here: since the elevation program
 ## there is exactly one sight truth, the volumetric VolumetricLos, which both sides feed from this data.
 ##
-## Terrain effects (GF Advanced Rules v3.5.1 p.11-12; mirrors terrain_overlay._terrain_effect_label):
-##   RUINS      Cover, Blocks LoS (area — see in/out, not through)  (6" tall)
-##   FOREST     Difficult, Cover, Blocks LoS (area — see in/out, not through)  (3.4" tall)
-##   CONTAINER  Impassable, Blocks LoS (solid — hard-block)         (2.5" tall)
-##   DANGEROUS  Dangerous Terrain                                   (Ground)
-## RUINS and FOREST are AREA terrain (p.12 "see into and out of forests, but not through them" — the
-## maintainer applies the same to ruins); a sight line is only blocked when it passes all the way THROUGH
-## the zone to a target beyond. CONTAINERS are solid Impassable+Blocking buildings and hard-block outright.
+## Terrain effects (rules 3.6, EPOCH_73_V36; older epochs keep the earlier classification):
+##   RUINS      Cover + Unstable, see-through (no sight block)          (6" tall)
+##   FOREST     Difficult, Cover, Dense (see in/out, not through)       (3.4" tall)
+##   CONTAINER  Impassable, Blocks LoS (solid — hard-block)             (2.5" tall)
+##   DANGEROUS  Dangerous Terrain                                       (Ground)
+## A forest is Dense: a sight line is blocked only when it passes all the way THROUGH the zone to a
+## target beyond. Containers are solid Impassable+Blocking buildings and hard-block outright. Ruins
+## blocked sight like forests before 3.6; from EPOCH_73_V36 a line may pass through them (they still
+## give Cover, and their inner walls stay impassable).
 
 enum TerrainType { NONE = 0, RUINS = 1, FOREST = 2, CONTAINER = 3, DANGEROUS = 4 }
 
@@ -34,7 +35,9 @@ const RUIN_ZONE_HEIGHT_INCHES := 6.0
 # === Type predicates (identical to terrain_overlay's classification) ===
 
 static func blocks_los(t: int) -> bool:
-	return t == TerrainType.RUINS or t == TerrainType.FOREST or t == TerrainType.CONTAINER
+	if t == TerrainType.RUINS:
+		return AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36
+	return t == TerrainType.FOREST or t == TerrainType.CONTAINER
 
 
 ## REAL height (INCHES) of a terrain type as a 3D volume — what the volumetric sight truth extrudes each
@@ -75,9 +78,10 @@ static func base_fully_in_cover(pos: Vector3, radius_m: float, type_at: Callable
 	return true
 
 
-## AREA terrain (Forests + Ruins): you see INTO and OUT OF it, but not completely THROUGH it (GF/AoF v3.5.1
-## p.12). Containers are solid Impassable+Blocking buildings — NOT area terrain, so they hard-block LOS and
-## the see-in/out zone exception never applies to them (they publish a SOLID volume).
+## AREA terrain (Forests, and Ruins before rules 3.6): you see INTO and OUT OF it, but not completely
+## THROUGH it. Containers are solid Impassable+Blocking buildings — NOT area terrain, so they hard-block
+## LOS and the see-in/out zone exception never applies to them (they publish a SOLID volume). From 3.6
+## ruins are no longer Dense and publish no sight volume at all.
 static func is_area_terrain(t: int) -> bool:
 	return t == TerrainType.RUINS or t == TerrainType.FOREST
 

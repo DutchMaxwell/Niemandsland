@@ -411,6 +411,7 @@ var sandbox_shapes_provider: Callable = Callable()
 ## query, so it is built once per registration instead of per query.
 var _los_volumes_static: Array = []
 var _los_volumes_dirty := true
+var _los_volumes_epoch := -1
 
 
 func _sandbox_shapes() -> Array:
@@ -1152,26 +1153,19 @@ func world_to_cell(world_pos: Vector3) -> Vector2i:
 	return Vector2i(grid_x, grid_z)
 
 
-## True if a terrain type is a line-of-sight blocker when a sight line is drawn THROUGH it. Per the GF/AoF
-## Advanced Rules v3.5.1 terrain guidelines (p.12): "Forests — Difficult + Cover + units can see into and out
-## of forests, but not through them". Ruins are AREA terrain too (maintainer correction to field-test round-4,
-## which over-corrected them to fully see-through): a model sees INTO and OUT OF ruins, but a line passing all
-## the way THROUGH them to a target beyond is blocked — exactly like a forest. FOREST and RUINS therefore both
-## block here and rely on the volume registry's AREA flag for the see-in/out exception. CONTAINERS are solid
-## "Impassable + Blocking" buildings and hard-block LOS outright (no see-in/out). Dangerous terrain is Open and
-## never blocks.
+## True if a terrain type blocks a line of sight drawn THROUGH it. From rules 3.6 (EPOCH_73_V36) ruins are
+## Cover + Unstable and see-through, so only forests and containers block: a forest is Dense (see into and
+## out of it, not through), a container is solid Impassable + Blocking. Before 3.6 ruins blocked like an
+## area piece, so games at older epochs stay unchanged. Dangerous terrain is Open and never blocks.
 func terrain_blocks_los(terrain_type: int) -> bool:
-	return terrain_type == TerrainType.FOREST \
-		or terrain_type == TerrainType.RUINS \
-		or terrain_type == TerrainType.CONTAINER
+	return TerrainRules.blocks_los(terrain_type)
 
 
-## AREA terrain (Forests + Ruins): you can see INTO and OUT OF it, but not completely THROUGH it (GF/AoF
-## v3.5.1 p.12). Solid blockers (Containers = Impassable + Blocking buildings) are NOT area terrain — they
-## hard-block, so the see-in/out exception never applies to them. This is the `solid` flag every volume
-## the registry publishes carries.
+## AREA terrain (Forests, and Ruins before rules 3.6): you can see INTO and OUT OF it, but not completely
+## THROUGH it. From 3.6 ruins no longer block sight at all. Solid blockers (Containers) hard-block and are
+## never area terrain. This is the `solid` flag every volume the registry publishes carries.
 func terrain_is_area(terrain_type: int) -> bool:
-	return terrain_type == TerrainType.FOREST or terrain_type == TerrainType.RUINS
+	return TerrainRules.is_area_terrain(terrain_type)
 
 
 # ==============================================================================
@@ -1183,9 +1177,10 @@ func terrain_is_area(terrain_type: int) -> bool:
 ## The registered part (containers, walls, painted zones) is CACHED and dropped by every registration
 ## site; the freely placed sandbox pieces move between frames, so they are folded in live.
 func los_volumes() -> Array:
-	if _los_volumes_dirty:
+	if _los_volumes_dirty or _los_volumes_epoch != AiActRecorder.rules_epoch:
 		_los_volumes_static = _build_los_volumes()
 		_los_volumes_dirty = false
+		_los_volumes_epoch = AiActRecorder.rules_epoch
 	var live := _sandbox_volumes()
 	return _los_volumes_static if live.is_empty() else _los_volumes_static + live
 
@@ -1218,9 +1213,9 @@ func _build_los_volumes() -> Array:
 		out.append({"kind": "box", "c": od["c"], "he": od["he"], "yaw": float(od["yaw"]),
 			"y0": 0.0, "y1": CONTAINER_HEIGHT_INCHES * k, "solid": true})
 	# NML-1028 (body campaign F4, #312 regression): ruin walls are MOVEMENT
-	# blockers, never sight volumes — ruins are AREA terrain, see-in/out-not-
-	# through comes from the zone volume (the rules decision documented at the
-	# wall-exclusion comment below). Registering the 2.5"-solid walls here
+	# blockers, never sight volumes. Before rules 3.6 the zone volume gave ruins
+	# their see-in/out-not-through rule; from EPOCH_73_V36 ruins are see-through
+	# and publish no sight volume at all. Registering the 2.5"-solid walls here
 	# blinded every model standing inside a ruin.
 	# (walls deliberately NOT appended — MovementPlanner reads
 	# get_wall_segments_world, untouched by this registry)
