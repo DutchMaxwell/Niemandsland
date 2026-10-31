@@ -8055,28 +8055,30 @@ fn stealth_alias_terrain_gate(
     }
 }
 
-/// `(Terrain::uid, shelf reading, the board's sight volumes)`.
-type BoardZones = Option<(u64, bool, Rc<Vec<sight::Zone>>)>;
+/// `(Terrain::uid, shelf reading, rules epoch, the board's sight volumes)`.
+type BoardZones = Option<(u64, bool, u32, Rc<Vec<sight::Zone>>)>;
 
 thread_local! {
-    /// SHO-PAR-F3 — the last board's sight volumes, keyed on its content identity (`Terrain::uid`) and the shelf
-    /// reading, so the moved-shooter gate does not flood-fill the board again on every candidate it scores.
+    /// SHO-PAR-F3 — the last board's sight volumes, keyed on its content identity (`Terrain::uid`), the shelf
+    /// reading and the rules epoch (a ruin is a volume at 72 and none at 73), so the moved-shooter gate does not
+    /// flood-fill the board again on every candidate it scores.
     static BOARD_ZONES: std::cell::RefCell<BoardZones> = const { std::cell::RefCell::new(None) };
 }
 
-/// `sight::zones_of_with(t, shelf)`, remembered for the last board. A bare `Default` board (uid 0) has no identity
-/// and is built fresh every call; a hit needs the same uid, which `Terrain` mints anew on every content change.
-fn board_zones(t: &Terrain, shelf: bool) -> Rc<Vec<sight::Zone>> {
+/// `sight::zones_of_with_at(t, shelf, rules_epoch)`, remembered for the last board. A bare `Default` board (uid 0)
+/// has no identity and is built fresh every call; a hit needs the same uid, which `Terrain` mints anew on every
+/// content change.
+fn board_zones(t: &Terrain, shelf: bool, rules_epoch: u32) -> Rc<Vec<sight::Zone>> {
     if t.uid() == 0 {
-        return Rc::new(sight::zones_of_with(t, shelf));
+        return Rc::new(sight::zones_of_with_at(t, shelf, rules_epoch));
     }
     BOARD_ZONES.with(|c| {
         let mut c = c.borrow_mut();
         match c.as_ref() {
-            Some((uid, sh, z)) if *uid == t.uid() && *sh == shelf => Rc::clone(z),
+            Some((uid, sh, ep, z)) if *uid == t.uid() && *sh == shelf && *ep == rules_epoch => Rc::clone(z),
             _ => {
-                let z = Rc::new(sight::zones_of_with(t, shelf));
-                *c = Some((t.uid(), shelf, Rc::clone(&z)));
+                let z = Rc::new(sight::zones_of_with_at(t, shelf, rules_epoch));
+                *c = Some((t.uid(), shelf, rules_epoch, Rc::clone(&z)));
                 z
             }
         }
@@ -8681,7 +8683,7 @@ fn resolve_with(
                     // coarse grid line between the two centres, which refused a shot the outer models see past
                     // a forest. The EV half runs the same gate, so the search now prices that shot too.
                     Cover::Board(t) if t.is_valid() && rule_on(sc.rules_epoch, EPOCH_73_V36) => {
-                        sight::unit_sees(&next, &board_zones(t, seams.shelf_sight), si, ti)
+                        sight::unit_sees(&next, &board_zones(t, seams.shelf_sight, seams.rules_epoch), si, ti)
                     }
                     Cover::Board(t) if t.is_valid() => !t.los_blocked(
                         geom::centre(&next.positions[si]),
@@ -8769,7 +8771,7 @@ fn resolve_with(
                         // table's own, per member and per WEAPON — the board's
                         // sight volumes are built once for the whole volley.
                         let zones = match (seams.sighting, cover) {
-                            (true, Cover::Board(t)) => sight::zones_of_with(t, seams.shelf_sight),
+                            (true, Cover::Board(t)) => sight::zones_of_with_at(t, seams.shelf_sight, seams.rules_epoch),
                             _ => Vec::new(),
                         };
                         // D1-B4: the table's dice, in the table's draw order —

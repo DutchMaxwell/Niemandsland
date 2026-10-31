@@ -1396,7 +1396,7 @@ impl Core {
     fn restamp_los(&self, py: Python<'_>, state: &PyState) -> PyState {
         let mut out = state.copy(py);
         let n = out.inner.units();
-        let m = sight::sight_matrix(&out.inner, &self.terrain);
+        let m = sight::sight_matrix_at(&out.inner, &self.terrain, self.knobs.rules_epoch);
         let rows: Vec<Option<Rc<HashMap<String, bool>>>> = (0..n)
             .map(|i| {
                 Some(Rc::new(
@@ -1921,7 +1921,7 @@ impl Core {
             st.roster.index.get(k).copied().ok_or_else(|| Unsupported::new_err(format!("no unit {k}")))
         };
         let (mi, ti) = (idx(member)?, idx(target)?);
-        let zones = nmlcore::sight::zones_of(&self.terrain);
+        let zones = nmlcore::sight::zones_of_at(&self.terrain, self.knobs.rules_epoch);
         let blockers = nmlcore::sight::blockers_of(st, mi, ti, self.knobs.rules_epoch);
         let n = nmlcore::sight::sighted_count(st, &zones, &blockers, mi, ti, reach_in,
             indirect, nmlcore::acts::rule_on(self.knobs.rules_epoch,
