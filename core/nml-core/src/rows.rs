@@ -1134,6 +1134,18 @@ mod tests {
         assert_eq!(enc.unknown, names(&["Cross Band", "Lost Name"]));
     }
 
+    /// AI-01b - the committed vocabulary reads a renamed unit rule and weapon rule on the old slots.
+    #[test]
+    fn the_committed_vocab_reads_unique_hero_and_anti_cover_on_their_old_slots() {
+        let (new_p, new_us) = alias_unit(&["Unique Hero"], &["Anti-Cover"], &[]);
+        let (old_p, old_us) = alias_unit(&["Unique", "Hero"], &["Ignores Cover"], &[]);
+        let mut enc = RowEncoder::for_version(&repo_root(), RULE_VOCAB_VERSION);
+        let old_pairs = enc.rule_pairs(&old_p, &old_us);
+        assert!(enc.unknown.is_empty(), "{:?}", enc.unknown);
+        assert_eq!(enc.rule_pairs(&new_p, &new_us), old_pairs, "the new names read like the old ones");
+        assert!(enc.unknown.is_empty(), "{:?}", enc.unknown);
+    }
+
     /// unit2 (v7, the encoder-slot gap follow-up #786) — the 12 names the
     /// census measures as `core_ported` but still slotless after v6, appended
     /// at 989-1000 (the v6 band's 763-988 + 226) in the DOCUMENTED order of
