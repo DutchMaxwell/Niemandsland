@@ -40,6 +40,7 @@
   "Bounding",
   "Bounding Aura",
   "Brace",
+  "Brace in Melee",
   "Breath Attack",
   "Brutal Fighter",
   "Caster",
@@ -55,6 +56,9 @@
   "Enhanced Clan Warrior Aura",
   "Coordinate",
   "Counter",
+  "Counter in Melee",
+  "Counter in Melee Aura",
+  "Counter in Melee Buff",
   "Counter-Attack",
   "Counter-Attack Aura",
   "Courage Aura",
@@ -364,7 +368,9 @@
   "Teleport",
   "Teleport Aura",
   "Thrust",
+  "Thrust in Melee",
   "Thrust in Melee Aura",
+  "Thrust in Melee Buff",
   "Tough",
   "Transport",
   "Unique",
@@ -664,6 +670,15 @@
     "rating": "X"
    }
   },
+  "Brace in Melee": {
+   "primitive": "Brace",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "rating": 1,
+    "melee_only": true
+   }
+  },
   "Bravery": {
    "primitive": "Banner",
    "rated": false,
@@ -710,6 +725,35 @@
    "params": {
     "strikes_first": true,
     "impact_reduction_per_model": 1
+   }
+  },
+  "Counter in Melee": {
+   "primitive": "Counter",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "strikes_first": true,
+    "melee_only": true
+   }
+  },
+  "Counter in Melee Aura": {
+   "primitive": "Aura Channel",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "grants": "Counter in Melee"
+   }
+  },
+  "Counter in Melee Buff": {
+   "primitive": "Utility Buff",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "grants_rule": "Counter in Melee",
+    "range_in": 12,
+    "target": "friendly",
+    "max_targets": 1,
+    "once": true
    }
   },
   "Crossing Attack": {
@@ -1220,6 +1264,17 @@
     "hit_bonus": 1,
     "ap_bonus": 1,
     "charge_only": true
+   }
+  },
+  "Thrust in Melee": {
+   "primitive": "Thrust",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "hit_bonus": 1,
+    "ap_bonus": 1,
+    "charge_only": true,
+    "melee_only": true
    }
   },
   "Tough": {
@@ -9486,6 +9541,29 @@
     "book_version": "3.6.0",
     "params": {
      "grants_rule": "Enhanced Shadowborn",
+     "range_in": 12,
+     "target": "friendly",
+     "max_targets": 1,
+     "once": true
+    }
+   },
+   "Thrust in Melee": {
+    "primitive": "Thrust",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "hit_bonus": 1,
+     "ap_bonus": 1,
+     "charge_only": true,
+     "melee_only": true
+    }
+   },
+   "Thrust in Melee Buff": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants_rule": "Thrust",
      "range_in": 12,
      "target": "friendly",
      "max_targets": 1,
