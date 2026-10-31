@@ -275,7 +275,7 @@ fn flat_slot(act: &Act, idx: i64) -> usize {
 /// One full sweep of the corpus with `bend` applied. `PlanBend::default()` is
 /// the gate; every other bend is a red proof.
 fn sweep(c: &ActCorpus, bend: PlanBend) -> Report {
-    let statics = build_act_statics(c, REPO);
+    let statics = build_act_statics(c, &common::pinned_spells_root(REPO));
     let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, hero_last: c.knobs.hero_last, path: c.knobs.seam_path,
         hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing,
         movement: c.knobs.movement, move_rigid: c.knobs.move_rigid, no_engage_fold: !c.knobs.engage_fold, los_model: c.knobs.los_model, dangerous_end_morale: c.knobs.dangerous_end_morale, consolidate: c.knobs.consolidate, ..Seams::default() };
@@ -577,7 +577,7 @@ fn the_pool_guarantee_order_is_load_bearing() {
 #[test]
 fn the_one_ply_valve_routes_to_plan_and_plan_picks_the_ranked_head() {
     let c = corpus();
-    let statics = build_act_statics(&c, REPO);
+    let statics = build_act_statics(&c, &common::pinned_spells_root(REPO));
     let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, hero_last: c.knobs.hero_last, path: c.knobs.seam_path,
         hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing,
         movement: c.knobs.movement, move_rigid: c.knobs.move_rigid, no_engage_fold: !c.knobs.engage_fold, los_model: c.knobs.los_model, dangerous_end_morale: c.knobs.dangerous_end_morale, consolidate: c.knobs.consolidate, ..Seams::default() };
@@ -746,7 +746,7 @@ fn g4b_a_fallen_hero_stops_lending_its_rules_to_its_host() {
     assert!(a2.state.profile(host).attached_hero_rules.is_empty(), "the hero stopped voting");
 
     // --- and the derived closure flips with it, which is what the search reads ---
-    let statics = act_statics(&c, REPO);
+    let statics = act_statics(&c, &common::pinned_spells_root(REPO));
     assert!(
         !statics[0][a1.state.roster.profile[host]].ctx.shielded,
         "with the hero alive the host is NOT shielded"
@@ -849,7 +849,7 @@ fn the_per_activation_rebuild_is_cheap() {
 fn a_corpus_with_a_moved_profile_read_refuses_a_single_static_closure() {
     common::pin_legacy_no_cond_ap();
     let c = load_acts(HERO_DEAD).unwrap_or_else(|e| panic!("{e}"));
-    let _ = build_act_statics(&c, REPO);
+    let _ = build_act_statics(&c, &common::pinned_spells_root(REPO));
 }
 
 
@@ -863,7 +863,7 @@ fn a_corpus_with_a_moved_profile_read_refuses_a_single_static_closure() {
 /// the way the harness would.
 fn run_corpus(c: &ActCorpus, explore: Option<(f64, i64)>) -> Vec<(usize, Pick)> {
     use nml_core::GodotRng;
-    let statics = build_act_statics(c, REPO);
+    let statics = build_act_statics(c, &common::pinned_spells_root(REPO));
     let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, hero_last: c.knobs.hero_last, path: c.knobs.seam_path,
         hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing,
         movement: c.knobs.movement, move_rigid: c.knobs.move_rigid, no_engage_fold: !c.knobs.engage_fold, los_model: c.knobs.los_model, dangerous_end_morale: c.knobs.dangerous_end_morale, consolidate: c.knobs.consolidate, ..Seams::default() };
@@ -936,7 +936,7 @@ fn kind_ranking_net() -> PolicyNet {
 #[test]
 fn order_mode_off_is_byte_identical_order_reorders_within_unit_only() {
     let c = corpus();
-    let statics = build_act_statics(&c, REPO);
+    let statics = build_act_statics(&c, &common::pinned_spells_root(REPO));
     let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, hero_last: c.knobs.hero_last, path: c.knobs.seam_path,
         hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing,
         movement: c.knobs.movement, move_rigid: c.knobs.move_rigid, no_engage_fold: !c.knobs.engage_fold, los_model: c.knobs.los_model, dangerous_end_morale: c.knobs.dangerous_end_morale, consolidate: c.knobs.consolidate, ..Seams::default() };
@@ -1010,7 +1010,7 @@ fn order_mode_off_is_byte_identical_order_reorders_within_unit_only() {
 #[test]
 fn order_mode_with_no_net_wired_declines() {
     let c = corpus();
-    let statics = build_act_statics(&c, REPO);
+    let statics = build_act_statics(&c, &common::pinned_spells_root(REPO));
     let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, hero_last: c.knobs.hero_last, path: c.knobs.seam_path,
         hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing,
         movement: c.knobs.movement, move_rigid: c.knobs.move_rigid, no_engage_fold: !c.knobs.engage_fold, los_model: c.knobs.los_model, dangerous_end_morale: c.knobs.dangerous_end_morale, consolidate: c.knobs.consolidate, ..Seams::default() };
@@ -1048,7 +1048,7 @@ fn seams_of(c: &ActCorpus) -> Seams {
 #[test]
 fn cand_logits_name_the_pool_and_the_pick_at_top_k_one() {
     let c = corpus();
-    let statics = build_act_statics(&c, REPO);
+    let statics = build_act_statics(&c, &common::pinned_spells_root(REPO));
     let seams = seams_of(&c);
     let roll = Rollout::new(Policy::new(&statics, &c.terrain, seams), c.knobs);
     let mut sc = Scratch::default();
@@ -1111,7 +1111,7 @@ fn cand_logits_name_the_pool_and_the_pick_at_top_k_one() {
 #[test]
 fn cand_logits_of_the_wrong_length_decline() {
     let c = corpus();
-    let statics = build_act_statics(&c, REPO);
+    let statics = build_act_statics(&c, &common::pinned_spells_root(REPO));
     let roll = Rollout::new(Policy::new(&statics, &c.terrain, seams_of(&c)), c.knobs);
     let mut sc = Scratch::default();
     let act = &c.acts[0];
@@ -1132,7 +1132,7 @@ fn cand_logits_of_the_wrong_length_decline() {
 #[test]
 fn cand_logits_are_inert_while_policy_mode_is_off() {
     let c = corpus();
-    let statics = build_act_statics(&c, REPO);
+    let statics = build_act_statics(&c, &common::pinned_spells_root(REPO));
     let roll = Rollout::new(Policy::new(&statics, &c.terrain, seams_of(&c)), c.knobs);
     let mut sc = Scratch::default();
     let mut checked = 0usize;
@@ -1213,7 +1213,7 @@ impl LeafValue for CraftedLeafValue {
 #[test]
 fn leaf_value_flips_the_pick_at_w_one() {
     let c = corpus();
-    let statics = build_act_statics(&c, REPO);
+    let statics = build_act_statics(&c, &common::pinned_spells_root(REPO));
     let roll = Rollout::new(Policy::new(&statics, &c.terrain, seams_of(&c)), c.knobs);
     let mut sc = Scratch::default();
 
@@ -1284,7 +1284,7 @@ fn leaf_value_flips_the_pick_at_w_one() {
 #[test]
 fn leaf_values_of_the_wrong_length_decline() {
     let c = corpus();
-    let statics = build_act_statics(&c, REPO);
+    let statics = build_act_statics(&c, &common::pinned_spells_root(REPO));
     let roll = Rollout::new(Policy::new(&statics, &c.terrain, seams_of(&c)), c.knobs);
     let mut sc = Scratch::default();
     let act = &c.acts[0];
@@ -1305,7 +1305,7 @@ fn leaf_values_of_the_wrong_length_decline() {
 #[test]
 fn leaf_value_weight_with_no_hook_declines() {
     let c = corpus();
-    let statics = build_act_statics(&c, REPO);
+    let statics = build_act_statics(&c, &common::pinned_spells_root(REPO));
     let roll = Rollout::new(Policy::new(&statics, &c.terrain, seams_of(&c)), c.knobs);
     let mut sc = Scratch::default();
     let act = &c.acts[0];
@@ -1324,7 +1324,7 @@ fn leaf_value_weight_with_no_hook_declines() {
 #[test]
 fn leaf_value_is_inert_at_weight_zero() {
     let c = corpus();
-    let statics = build_act_statics(&c, REPO);
+    let statics = build_act_statics(&c, &common::pinned_spells_root(REPO));
     let roll = Rollout::new(Policy::new(&statics, &c.terrain, seams_of(&c)), c.knobs);
     let mut sc = Scratch::default();
     let hook = CraftedLeafValue::bumping(0, usize::MAX);
@@ -1399,7 +1399,7 @@ fn reply_knobs(c: &ActCorpus, on: bool, tail_cap: i64) -> Knobs {
 #[test]
 fn reply_by_net_the_first_opponent_reply_is_the_nested_search_pick() {
     let c = corpus();
-    let statics = build_act_statics(&c, REPO);
+    let statics = build_act_statics(&c, &common::pinned_spells_root(REPO));
     let policy = Policy::new(&statics, &c.terrain, seams_of(&c));
     let (on_roll, off_roll) =
         (Rollout::new(policy, reply_knobs(&c, true, 1)), Rollout::new(policy, reply_knobs(&c, false, 1)));
@@ -1439,7 +1439,7 @@ fn reply_by_net_the_first_opponent_reply_is_the_nested_search_pick() {
 #[test]
 fn reply_by_net_off_is_todays_search() {
     let c = corpus();
-    let statics = build_act_statics(&c, REPO);
+    let statics = build_act_statics(&c, &common::pinned_spells_root(REPO));
     let policy = Policy::new(&statics, &c.terrain, seams_of(&c));
     let base_roll = Rollout::new(policy, c.knobs);
     let mut k = reply_knobs(&c, false, c.knobs.tail_cap_p1);
@@ -1477,7 +1477,7 @@ fn reply_by_net_off_is_todays_search() {
 #[test]
 fn reply_by_net_asks_the_hook_from_the_opponent_seat_one_level_only() {
     let c = corpus();
-    let statics = build_act_statics(&c, REPO);
+    let statics = build_act_statics(&c, &common::pinned_spells_root(REPO));
     let policy = Policy::new(&statics, &c.terrain, seams_of(&c));
     let tail = c.knobs.tail_cap_p1;
     let (on_roll, off_roll) =
@@ -1534,7 +1534,7 @@ fn reply_by_net_parses_from_a_header_and_defaults_off() {
     let d = Knobs::default();
     assert!(!d.reply_by_net && (d.reply_top_k, d.reply_horizon) == (0, 0));
     let c = corpus();
-    let statics = build_act_statics(&c, REPO);
+    let statics = build_act_statics(&c, &common::pinned_spells_root(REPO));
     let policy = Policy::new(&statics, &c.terrain, seams_of(&c));
     let act = &c.acts[0].statics;
     assert_eq!(Search::new(Rollout::new(policy, off), act).reply_grade(), (3, 1));
@@ -1550,7 +1550,7 @@ fn reply_by_net_parses_from_a_header_and_defaults_off() {
 /// returns how many nested searches answered.
 fn each_nested_reply(c: &ActCorpus, tweak: impl Fn(&mut Knobs),
                      mut f: impl FnMut(usize, &nml_core::State, i64, &Pick)) -> usize {
-    let statics = build_act_statics(c, REPO);
+    let statics = build_act_statics(c, &common::pinned_spells_root(REPO));
     let policy = Policy::new(&statics, &c.terrain, seams_of(c));
     let tail = c.knobs.tail_cap_p1;
     let mut k = reply_knobs(c, true, tail);
@@ -1583,7 +1583,7 @@ fn each_nested_reply(c: &ActCorpus, tweak: impl Fn(&mut Knobs),
 /// under `tweak` with `SeatLog` at weight 1. Returns (decisions, hook calls, leaves, the largest NESTED
 /// batch, wall ms of the ON searches).
 fn reply_cost(c: &ActCorpus, tweak: impl Fn(&mut Knobs)) -> (usize, usize, usize, usize, f64) {
-    let statics = build_act_statics(c, REPO);
+    let statics = build_act_statics(c, &common::pinned_spells_root(REPO));
     let policy = Policy::new(&statics, &c.terrain, seams_of(c));
     let tail = c.knobs.tail_cap_p1;
     let mut k = reply_knobs(c, true, tail);
@@ -1672,7 +1672,7 @@ fn reply_pool_cap_zero_is_reply_by_nets_guaranteed_pool() {
     });
     assert!(n > 0, "no nested search ran — the test proves nothing");
     assert_eq!(bad, 0, "cap 0 moved a nested pool off build_pool's four guarantees");
-    let statics = build_act_statics(&c, REPO);
+    let statics = build_act_statics(&c, &common::pinned_spells_root(REPO));
     let policy = Policy::new(&statics, &c.terrain, seams_of(&c));
     let tail = c.knobs.tail_cap_p1;
     let base_roll = Rollout::new(policy, reply_knobs(&c, true, tail));
@@ -1711,7 +1711,7 @@ fn reply_pool_cap_zero_is_reply_by_nets_guaranteed_pool() {
 #[test]
 fn reply_menu_restricted_offers_the_playout_menu_in_the_nested_search() {
     let c = corpus();
-    let statics = build_act_statics(&c, REPO);
+    let statics = build_act_statics(&c, &common::pinned_spells_root(REPO));
     let policy = Policy::new(&statics, &c.terrain, seams_of(&c));
     let mut sc = Scratch::default();
     let (mut widths, mut bad) = (Vec::new(), 0usize);
@@ -1749,7 +1749,7 @@ fn reply_menu_restricted_offers_the_playout_menu_in_the_nested_search() {
 #[test]
 fn reply_pool_cap_and_menu_are_inert_off_and_never_touch_the_root_pool() {
     let c = corpus();
-    let statics = build_act_statics(&c, REPO);
+    let statics = build_act_statics(&c, &common::pinned_spells_root(REPO));
     let policy = Policy::new(&statics, &c.terrain, seams_of(&c));
     let tail = c.knobs.tail_cap_p1;
     let lite = |mut k: Knobs| {
@@ -1842,7 +1842,7 @@ fn reply_pool_cap_and_menu_parse_from_a_header_and_default_off() {
 #[test]
 fn grid_k_widens_the_chosen_unit() {
     let c = corpus();
-    let statics = build_act_statics(&c, REPO);
+    let statics = build_act_statics(&c, &common::pinned_spells_root(REPO));
     let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, hero_last: c.knobs.hero_last, path: c.knobs.seam_path, hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing, movement: c.knobs.movement, move_rigid: c.knobs.move_rigid, no_engage_fold: !c.knobs.engage_fold, los_model: c.knobs.los_model, dangerous_end_morale: c.knobs.dangerous_end_morale, consolidate: c.knobs.consolidate, ..Seams::default() };
     let mut sc = Scratch::default();
     let mut grew = 0;
@@ -1872,7 +1872,7 @@ fn grid_k_widens_the_chosen_unit() {
 #[test]
 fn grid_needs_opener_leaf() {
     let c = corpus();
-    let statics = build_act_statics(&c, REPO);
+    let statics = build_act_statics(&c, &common::pinned_spells_root(REPO));
     let mut sc = Scratch::default();
     let mut seen = 0usize;
     for (ai, act) in c.acts.iter().enumerate() {
@@ -1894,7 +1894,7 @@ fn grid_needs_opener_leaf() {
 #[test]
 fn grid_off_is_byte_identical() {
     let c = corpus();
-    let statics = build_act_statics(&c, REPO);
+    let statics = build_act_statics(&c, &common::pinned_spells_root(REPO));
     let mut sc = Scratch::default();
     let mut checked = 0usize;
     for (ai, act) in c.acts.iter().enumerate() {
@@ -1922,7 +1922,7 @@ fn grid_off_is_byte_identical() {
 #[test]
 fn grid_is_deterministic() {
     let c = corpus();
-    let statics = build_act_statics(&c, REPO);
+    let statics = build_act_statics(&c, &common::pinned_spells_root(REPO));
     let mut sc = Scratch::default();
     let mut checked = 0usize;
     for (ai, act) in c.acts.iter().enumerate() {
@@ -1945,7 +1945,7 @@ fn grid_is_deterministic() {
 #[test]
 fn grid_margin_keeps_the_hand_pick() {
     let c = corpus();
-    let statics = build_act_statics(&c, REPO);
+    let statics = build_act_statics(&c, &common::pinned_spells_root(REPO));
     let mut sc = Scratch::default();
     let mut checked = 0usize;
     for (ai, act) in c.acts.iter().enumerate() {
@@ -1967,7 +1967,7 @@ fn grid_margin_keeps_the_hand_pick() {
 #[test]
 fn grid_moved_cell_without_los_is_skipped_not_declined() {
     let c = corpus();
-    let statics = build_act_statics(&c, REPO);
+    let statics = build_act_statics(&c, &common::pinned_spells_root(REPO));
     let mut sc = Scratch::default();
     let hook = SeatLog::new(true);
     let mut checked = 0usize;
@@ -2006,7 +2006,7 @@ impl LeafValue for CellValueLog {
 #[test]
 fn grid_shuffle_seed_permutes_the_cell_values() {
     let c = corpus();
-    let statics = build_act_statics(&c, REPO);
+    let statics = build_act_statics(&c, &common::pinned_spells_root(REPO));
     let mut sc = Scratch::default();
     let hook = CellValueLog;
     let mut moved = 0usize;
@@ -2033,7 +2033,7 @@ fn grid_shuffle_seed_permutes_the_cell_values() {
 #[test]
 fn grid_shuffle_off_is_byte_identical() {
     let c = corpus();
-    let statics = build_act_statics(&c, REPO);
+    let statics = build_act_statics(&c, &common::pinned_spells_root(REPO));
     let mut sc = Scratch::default();
     let hook = CellValueLog;
     let mut checked = 0usize;
@@ -2065,7 +2065,7 @@ fn grid_shuffle_off_is_byte_identical() {
 #[test]
 fn grid_shuffle_cannot_conjure_a_signal() {
     let c = corpus();
-    let statics = build_act_statics(&c, REPO);
+    let statics = build_act_statics(&c, &common::pinned_spells_root(REPO));
     let mut sc = Scratch::default();
     let hook = CellValueLog;
     let mut checked = 0usize;
@@ -2098,7 +2098,7 @@ fn grid_shuffle_cannot_conjure_a_signal() {
 #[test]
 fn grid_rows_are_capped_at_the_candidate_budget() {
     let c = corpus();
-    let statics = build_act_statics(&c, REPO);
+    let statics = build_act_statics(&c, &common::pinned_spells_root(REPO));
     let mut sc = Scratch::default();
     let hook = SeatLog::new(true);
     let cap = nml_core::tokens::N_CAND - 4;
