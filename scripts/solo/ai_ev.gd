@@ -301,7 +301,12 @@ static func _regen_target(unit: GameUnit, from_spell: bool = false) -> int:
 		var params: Dictionary = (e as Dictionary).get("params", {})
 		if bool(params.get("all_models", false)) and not regen_family_on(unit, name):
 			continue
-		var target := int(params.get(key, params.get("ignore_target", 0)))
+		# MOR-17a: the three shared names read their own 3.6 spell target (2+) from 73.
+		var entry_key := key
+		if from_spell and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
+				and (name == "Warding" or name == "Knightborn" or name == "Angelic Blessing"):
+			entry_key = "ignore_target_spell_v36"
+		var target := int(params.get(entry_key, params.get("ignore_target", 0)))
 		if target > 0 and (best == 0 or target < best):
 			best = target
 	return best

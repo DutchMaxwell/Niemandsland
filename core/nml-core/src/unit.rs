@@ -300,6 +300,15 @@ pub struct Ctx {
     /// The pending kind's SPELL-wound twin (the entry's `ignore_target_spell`,
     /// defaulting to its `ignore_target` like every alias fold).
     pub regen_pending_spell: i64,
+    /// MOR-17a (rules 3.6, `EPOCH_73_V36`) — Warding / Knightborn / Angelic
+    /// Blessing ignore a non-spell wound on a 6+ ONLY when the unit was shot
+    /// from over this many inches. 0.0 = ungated (the old entry, every unit
+    /// without one of the three names, and every record below 73).
+    pub regen_gate_over_in: f64,
+    /// The same pair's CHARGE gate: no 6+ ignore unless the unit was charged
+    /// from over this many inches (a strike-back rides 0.0, which never
+    /// clears it — it did the charging). 0.0 = ungated.
+    pub regen_gate_charge_in: f64,
     /// The DYNAMIC melee flag `BattleSim._ctx_of(su, true)` writes over the
     /// template (battle_sim.gd:705-707): a fatigued striker hits only on 6s.
     pub fatigued: bool,
@@ -2422,7 +2431,9 @@ pub fn capture_reads_for_epoch(
 /// `sim::ctx_live` on the snapshot's own `in_cover` (the Shielded family's
 /// terrain-pending shape, `shielded_alias_of`'s own bool). Below 52 the
 /// recorded flat fold replays and the tail stays zeros.
-fn regen_targets(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (i64, i64, i64, i64) {
+fn regen_targets(
+    reg: &mut Registries, p: &Profile, rules_epoch: u32,
+) -> (i64, i64, i64, i64, f64, f64) {
     let regen = if rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
         regen_family_on(p, "Regeneration", rules_epoch)
     } else {
@@ -2444,6 +2455,13 @@ fn regen_targets(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (i64, i
         0
     };
     let mut picked = (base, base, 0i64, 0i64);
+    // MOR-17a (rules 3.6): the three names that share Warding's distance gate.
+    // `other_min` is the best target NO gated name supplies; `warding` the
+    // gated name's own reading. The gate is stamped only when the gated
+    // target is the one that binds, i.e. nothing else ignores on an equal or
+    // better face (a plain family rule keeps rolling either way).
+    let mut other_min = base;
+    let mut warding: Option<(i64, f64, f64)> = None;
     if rule_on_all_models(p, "Resistance") && unit_rule_active(reg, p, "Resistance") {
         let map = reg.rules_for(&p.game_system);
         let e = map.lookup(&p.faction_folder, "Resistance");
@@ -2508,7 +2526,14 @@ fn regen_targets(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (i64, i
                 continue;
             }
             let normal = e.param_i("ignore_target", 0);
-            let spell = e.param_i("ignore_target_spell", normal);
+            // MOR-17a: the three shared names read their 3.6 spell target (2+)
+            // from their own key; below 73 the entry's recorded 4+ stands.
+            let gated = matches!(n.as_str(), "Warding" | "Knightborn" | "Angelic Blessing");
+            let spell = if gated && rule_on(rules_epoch, EPOCH_73_V36) {
+                e.param_i("ignore_target_spell_v36", e.param_i("ignore_target_spell", normal))
+            } else {
+                e.param_i("ignore_target_spell", normal)
+            };
             // EPOCH 56 GROUNDED PROTECTION — `terrain_within_in > 0` makes the
             // condition the rule's whole point: hold the target ASIDE (the
             // tuple's pending tail) for `sim::ctx_live`'s per-save-moment
@@ -2531,9 +2556,26 @@ fn regen_targets(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (i64, i
             if spell > 0 && (picked.1 == 0 || spell < picked.1) {
                 picked.1 = spell;
             }
+            if gated {
+                if normal > 0 {
+                    warding = Some((normal, e.param_f("ignore_over_in", 0.0),
+                        e.param_f("ignore_over_in_charge", 0.0)));
+                }
+            } else if normal > 0 && (other_min == 0 || normal < other_min) {
+                other_min = normal;
+            }
         }
     }
-    picked
+    // MOR-17a: the distance gates are a 3.6 reading — below 73 the stamp stays 0.0.
+    let mut gates = (0.0, 0.0);
+    if rule_on(rules_epoch, EPOCH_73_V36) {
+        if let Some((normal, over, charge)) = warding {
+            if other_min == 0 || normal < other_min {
+                gates = (over, charge);
+            }
+        }
+    }
+    (picked.0, picked.1, picked.2, picked.3, gates.0, gates.1)
 }
 
 /// The SHOOTING leg's three die params (`ap_bonus`/`hit_bonus`/`low_roll_max`)
@@ -2919,6 +2961,8 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         regen_target_spell: regen_targets.1,
         regen_pending: regen_targets.2,
         regen_pending_spell: regen_targets.3,
+        regen_gate_over_in: regen_targets.4,
+        regen_gate_charge_in: regen_targets.5,
         fatigued: false,
         retaliate_hits_per_wound: retaliate_hits_per_wound(reg, p),
         death_hits_per_kill: death_hits_per_kill(reg, p),

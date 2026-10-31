@@ -4807,7 +4807,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		else:
 			regenable += w
 		await _solo_stage_phase(str(profile.get("name", "weapon")))
-	var landed: int = await _solo_land_wounds(target, regenable, regen_proof)
+	var landed: int = await _solo_land_wounds(target, regenable, regen_proof, false, dist_in)
 	if _solo_combined_alive(target) <= 0:
 		_solo_growth_on_kill(attacker)   # Defensive Frenzy: volley kill credit
 		_solo_vengeance_on_destroyed(target, attacker)
@@ -7988,7 +7988,8 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 			if rv_wounds > 0:
 				struck_any = true
 				caused += rv_wounds   # pre-Regeneration, same basis as the weapon strikes' tally
-				await _solo_land_wounds(defender, rv_wounds, 0)
+				await _solo_land_wounds(defender, rv_wounds, 0, false, -1.0,
+					charge_from_in if charging else 0.0)
 	# Resolver wave A — Takedown Strike: the once-per-game extra attack joins the striker's own
 	# turn (never the Counter-only pre-phase; strike-back counts — "its turn to attack in melee").
 	# NML-241/NML-937/NML-940: the Retaliate tally is measured PER CHAIN MEMBER, so the wound pools are
@@ -8223,7 +8224,9 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 						else:
 							regenable += bt_w
 	if regenable + regen_proof > 0:
-		await _solo_land_wounds(defender, regenable, regen_proof)
+		# MOR-17a: a charge hands its pre-charge gap; a strike-back rides 0.0 (it did the charging).
+		await _solo_land_wounds(defender, regenable, regen_proof, false, -1.0,
+			charge_from_in if charging else 0.0)
 	# Retaliate(X) — wave 7, re-proven against the v3.5.3 army-book wording (NML-937): "When this
 	# model takes a wound in melee, the attacker takes X hits PER WOUND TAKEN". v3.5.2 fired the
 	# trigger once per wound event; v3.5.3 states the scale explicitly, and the registry carries it
@@ -8349,9 +8352,9 @@ func _solo_charge_impact(charger: GameUnit, defender: GameUnit, human_defends: b
 		var w: int = await _solo_resolve_saves(charger, defender, str(p["label"]), [], hits, impact_defense, profile, human_defends, true)
 		if w > 0:
 			if _solo_ignores_regen(charger, profile):
-				await _solo_land_wounds(defender, 0, w)
+				await _solo_land_wounds(defender, 0, w, false, -1.0, charge_from_in)
 			else:
-				await _solo_land_wounds(defender, w, 0)
+				await _solo_land_wounds(defender, w, 0, false, -1.0, charge_from_in)
 			caused += w
 	return caused
 
@@ -8735,12 +8738,16 @@ func _solo_bane_facet_name(striker: GameUnit, profile_range: int) -> String:
 ## {} for every other wound in the game, which leaves the lookup exactly as it was.
 ## `bypassed`: wounds of the same hit that ignore Regeneration — logged when the unit had a roll to skip.
 func _solo_apply_regeneration(target: GameUnit, wounds: int, from_spell: bool = false, solo: Dictionary = {},
-		bypassed: int = 0) -> int:
+		bypassed: int = 0, shot_in: float = -1.0, charged_in: float = -1.0) -> int:
 	# PURELY SYNCHRONOUS window: _solo_regen_pick only reads rules, and the flag is down again before the
 	# tray below awaits (a leaked flag would rewrite the next unrelated unit's ignore roll).
 	_solo_takedown_solo = solo
-	var pick := _solo_regen_pick(target, from_spell)
+	var pick := _solo_regen_pick(target, from_spell, shot_in, charged_in)
 	_solo_takedown_solo = {}
+	# Rules-must-log (MOR-17a): the distance gate's verdict, once per resolution that rolled.
+	var gate_msg := str(pick.get("gate", ""))
+	if not gate_msg.is_empty() and wounds > 0 and battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT, gate_msg, true)
 	var regen_target: int = int(pick.get("target", 0))
 	# Rules-must-log: the regen trace names the verdict (the Grounded
 	# Protection family's within-1" condition — fired or refused). Logged
@@ -8786,7 +8793,10 @@ func _solo_regen_target(target: GameUnit, from_spell: bool = false) -> int:
 
 ## The winning Regeneration-family pick — {target: int (0 = none), name: String} — shared by the
 ## roll and its log line (rules-must-log: the line names the ACTUAL rule, aliases included).
-func _solo_regen_pick(target: GameUnit, from_spell: bool = false) -> Dictionary:
+## `shot_in` / `charged_in` are the DISTANCES of the resolution being resolved (edge to edge, the same
+## reads the charge/shoot gates use); -1.0 = the distance is unknown and the old reading stands.
+func _solo_regen_pick(target: GameUnit, from_spell: bool = false, shot_in: float = -1.0,
+		charged_in: float = -1.0) -> Dictionary:
 	var best := 0   # the most generous (lowest) ignore target the unit fields; 0 = none
 	var best_name := ""
 	if _solo_has_regeneration(target):
@@ -8813,6 +8823,8 @@ func _solo_regen_pick(target: GameUnit, from_spell: bool = false) -> Dictionary:
 	# read its Shielded twin answers (main.gd:5588) — and the verdict is traced (rules-must-log).
 	var best_terr := 0.0
 	var open_refused := ""
+	var gate_refused := ""   # MOR-17a: a gated name whose distance shut its 6+ (rules-must-log)
+	var gate_msg := ""       # MOR-17a: the gate's verdict line, logged where the roll happens
 	for e in RulesRegistry.unit_rules_of_primitive(target, "Regeneration"):
 		var ed := e as Dictionary
 		var n := str(ed["name"])
@@ -8827,11 +8839,28 @@ func _solo_regen_pick(target: GameUnit, from_spell: bool = false) -> Dictionary:
 				open_refused = n
 			continue
 		var key2 := "ignore_target_spell" if from_spell else "ignore_target"
+		var gate_in := 0.0
+		var gated: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
+			and (n == "Warding" or n == "Knightborn" or n == "Angelic Blessing")
+		if gated and from_spell:
+			key2 = "ignore_target_spell_v36"
+		elif gated:
+			# rules 3.6 (MOR-17a): the 6+ only from range — shot from over 9", charged from over 6".
+			# Inside it this entry folds NOTHING (the rest of the family keeps rolling).
+			var charge_leg: bool = charged_in >= 0.0
+			gate_in = float(params.get("ignore_over_in_charge" if charge_leg else "ignore_over_in", 0.0))
+			var d: float = charged_in if charge_leg else shot_in
+			if gate_in > 0.0 and d >= 0.0 and d <= gate_in:
+				gate_refused = n
+				continue
 		var tgt := int(params.get(key2, params.get("ignore_target", 0)))
 		if tgt > 0 and (best == 0 or tgt < best):
 			best = tgt
 			best_name = n
 			best_terr = terr_in
+			if gated and not from_spell and (shot_in >= 0.0 or charged_in >= 0.0):
+				gate_msg = "Warding: %s ignores wounds on 6+ (%s from over %din)" % [
+					target.get_name(), "charged" if charged_in >= 0.0 else "shot", int(gate_in)]
 	var trace := ""
 	var best_rule: String = {"regeneration": "Regeneration", "self-repair": "Self-Repair"}.get(best_name, best_name)
 	if best_name != "" and best_terr > 0.0:
@@ -8841,7 +8870,13 @@ func _solo_regen_pick(target: GameUnit, from_spell: bool = false) -> Dictionary:
 	elif best_name != "" and _solo_regen_family_on(target, best_rule) and not _solo_rule_on_all_models(target, best_rule):
 		# Rules-must-log (row MOR-02): the most-models read kept the roll although not every model carries it.
 		trace = "%s: most models carry it, so a joined hero without it does not switch it off" % best_rule
-	return {"target": best, "name": best_name, "trace": trace}
+	if best_name != "Warding" and best_name != "Knightborn" and best_name != "Angelic Blessing":
+		gate_msg = ""   # another family rule bound the roll — the gate changed nothing
+	if best == 0 and not gate_refused.is_empty():
+		gate_msg = "Warding: no 6+ ignore, %s was %s from within %din" % [
+			target.get_name(), "charged" if charged_in >= 0.0 else "shot",
+			int(float(RulesRegistry.unit_param(target, gate_refused, "ignore_over_in_charge" if charged_in >= 0.0 else "ignore_over_in", 0.0)))]
+	return {"target": best, "name": best_name, "trace": trace, "gate": gate_msg}
 
 
 ## Banner's morale-test bonus for a unit — gap 18a: the body now lives in
@@ -8853,8 +8888,9 @@ func _solo_morale_bonus(unit: GameUnit) -> int:
 ## Apply a resolved wound pair to the defender: Regeneration rolls only against the regen-able bucket
 ## (Bane / Rending / Unstoppable wounds bypass it — GF Advanced Rules v3.5.1: those rules "ignore
 ## Regeneration"; Lacerate does not), then everything lands through the normal wound machinery. Returns landed wounds.
-func _solo_land_wounds(target: GameUnit, regenable: int, regen_proof: int, from_spell: bool = false) -> int:
-	var landed: int = maxi(regen_proof, 0) + await _solo_apply_regeneration(target, regenable, from_spell, {}, regen_proof)
+func _solo_land_wounds(target: GameUnit, regenable: int, regen_proof: int, from_spell: bool = false,
+		shot_in: float = -1.0, charged_in: float = -1.0) -> int:
+	var landed: int = maxi(regen_proof, 0) + await _solo_apply_regeneration(target, regenable, from_spell, {}, regen_proof, shot_in, charged_in)
 	if landed > 0:
 		await _solo_apply_wounds(target, landed)
 	return landed
@@ -13643,7 +13679,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 	if not fired_any and battle_log != null:
 		_log_rule_event(BattleLog.Category.COMBAT,
 			"%s has no weapon in range of %s — no shots" % [attacker.get_name(), target.get_name()], true)
-	await _solo_land_wounds(target, regenable, regen_proof)
+	await _solo_land_wounds(target, regenable, regen_proof, false, dist)
 	if _solo_combined_alive(target) <= 0:
 		_solo_growth_on_kill(attacker)   # Defensive Frenzy: your volley kill counts too (symmetry)
 		_solo_vengeance_on_destroyed(target, attacker)
