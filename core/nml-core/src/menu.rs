@@ -631,7 +631,15 @@ pub fn best_charge(
         return None;
     }
     melee_profiles_of(us_static, state.alive[i], sc);
-    let our_attacks = sc.attacks.clone();
+    let our_sc_attacks = sc.attacks.clone();
+    // MEL-02e: a Limited profile the unit already spent brings no strikes, so the charge
+    // estimate skips it from `EPOCH_73_V36` (the table's `filter_limited`). Nothing left to
+    // strike with means no charge to price, exactly like an empty melee set above.
+    let (our_profiles, our_attacks) =
+        crate::sim::ev_melee_set(&us_static.melee, &our_sc_attacks, &state.limited_used[i], rules_epoch);
+    if our_profiles.is_empty() {
+        return None;
+    }
     // EV_VOCAB_2026-09-15 §4: a live Dangerous Terrain debuff prices the
     // dice/6 expectation of its own movement into the charge — the loss is
     // per-unit constant, so it rides BOTH the futile bar and the score.
@@ -678,12 +686,14 @@ pub fn best_charge(
         let them = ctx_live(ctx_of(ut, state, e), statics, state, e, true, rules_epoch);
         // D-GATE6: the charge is priced at the pre-charge edge gap from `EPOCH_73_V36`.
         let charge_from_in = charge_estimate_gap_in(rules_epoch, || gap_in);
-        let raw = melee_ev(&us_static.melee, &our_attacks, &us, &them, true, charge_from_in);
+        let raw = melee_ev(&our_profiles, &our_attacks, &us, &them, true, charge_from_in);
         if raw - danger_loss < FUTILE_CHARGE_EV {
             continue;
         }
         melee_profiles_of(ut, state.alive[e], sc);
-        let s = charge_score(&us_static.melee, &our_attacks, &us, &ut.melee, &sc.attacks, &them, charge_from_in)
+        let (their_profiles, their_attacks) =
+            crate::sim::ev_melee_set(&ut.melee, &sc.attacks, &state.limited_used[e], rules_epoch);
+        let s = charge_score(&our_profiles, &our_attacks, &us, &their_profiles, &their_attacks, &them, charge_from_in)
             - danger_loss;
         if s > best_score {
             best_score = s;
