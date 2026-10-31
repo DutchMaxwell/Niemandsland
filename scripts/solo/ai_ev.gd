@@ -309,6 +309,10 @@ static func ctx_for(unit: GameUnit, in_cover: bool = false, counter_models: int 
 		"shielded": rule_on_defence_family(unit, "Shielded"),
 		"in_cover": in_cover,
 		"counter_models": counter_models,
+		# Rules 3.6 (`EPOCH_73_V36`): the defender's Counter policy — it Counters first only when
+		# it will strike back at all and is not Fatigued/Shaken. `charge_score` reads this instead of
+		# guessing from the profiles; below the wave it stays unused (old behaviour is unconditional).
+		"counter_strikes_first": SoloController.counter_strikes_first(unit),
 		"brace_models": _brace_cut(unit),
 		"brace_impact_per_model": 1,
 		"regeneration": _regen_target(unit) > 0,
@@ -871,17 +875,20 @@ static func ravage_ev(att: Dictionary, def_ctx: Dictionary) -> float:
 
 
 ## Expected Impact wounds of a charge (GF/AoF v3.5.1 p.13): X dice per charging model minus the
-## defender's Counter models (impact_total_dice), hit on 2+, saved at the Shielded-adjusted Defense
+## defender's Brace models (impact_total_dice), hit on 2+, saved at the Shielded-adjusted Defense
 ## (no AP — Impact is not a weapon), Regeneration applies (no bypass).
 static func impact_ev(att: Dictionary, def_ctx: Dictionary) -> float:
-	# Heavy Impact rides as a SECOND pool whose hits save at AP(1); Counter's denial strips the heavy
-	# dice first (defender-optimal — mirrors the dice path). Rules 3.6 (`EPOCH_73_V36`): Brace joins the
+	# Heavy Impact rides as a SECOND pool whose hits save at AP(1); the cut strips the heavy dice
+	# first (defender-optimal — mirrors the dice path). Rules 3.6 (`EPOCH_73_V36`): Counter takes no
+	# Impact dice away, so the injected `counter_models` is read below the wave only; Brace joins the
 	# same cut, and a Fatigued braced defender removes nothing.
 	var models := maxi(int(att.get("models", 0)), 0)
 	var brace := int(def_ctx.get("brace_models", 0)) * int(def_ctx.get("brace_impact_per_model", 1))
 	if bool(def_ctx.get("fatigued", false)):
 		brace = 0
-	var counter := int(def_ctx.get("counter_models", 0)) + brace
+	var counter := brace
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		counter += int(def_ctx.get("counter_models", 0))
 	var heavy_raw := int(att.get("heavy_impact", 0)) * models
 	var heavy_cut := mini(counter, heavy_raw)
 	var heavy_dice := heavy_raw - heavy_cut
@@ -906,11 +913,16 @@ static func charge_score(our_profiles: Array, us: Dictionary, their_profiles: Ar
 		charge_dist_in: float = 0.0) -> float:
 	var dealt := melee_ev(our_profiles, us, them, true, charge_dist_in)
 	# Counter strikes first (p.13): first-order attacker attrition = counter wounds / our wound pool.
+	# Rules 3.6 (`EPOCH_73_V36`): only a defender that will actually strike back Counters first —
+	# `ctx_for` stamps the policy (fresh, not Fatigued/Shaken, a usable melee weapon). A hand-built
+	# context without the key counts no Counter first; below the wave the old unconditional read stays.
 	var counter_first := 0.0
-	for p in their_profiles:
-		var profile := p as Dictionary
-		if int(profile.get("range", 0)) <= 0 and bool(profile.get("counter", false)):
-			counter_first += profile_ev(profile, them, us, 0.0, false)
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 \
+			or bool(them.get("counter_strikes_first", false)):
+		for p in their_profiles:
+			var profile := p as Dictionary
+			if int(profile.get("range", 0)) <= 0 and bool(profile.get("counter", false)):
+				counter_first += profile_ev(profile, them, us, 0.0, false)
 	var pool := maxf(1.0, float(int(us.get("models", 1))) * float(maxi(int(us.get("tough", 1)), 1)))
 	dealt *= clampf(1.0 - counter_first / pool, 0.0, 1.0)
 	var taken := melee_ev(their_profiles, them, us, false)

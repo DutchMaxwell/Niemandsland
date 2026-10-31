@@ -97,15 +97,22 @@ func test_counter_models_replay_the_old_count_without_a_param() -> void:
 func test_counter_strikes_first_param_gates_the_strike_first_slot() -> void:
 	# The strike-first gate reads the entry (core twin: strikes_first.unwrap_or(true)):
 	# the default true keeps the recorded order, a false opts the unit out.
+	# Rules 3.5 leg: below EPOCH_73_V36 the entry param alone gates the slot; from 73 the
+	# strike-back policy joins it (test/v36/mel_05e_test.gd).
+	var epoch0: int = AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
 	RulesRegistry.reset_cache()
 	var on := _unit_with(["Counter"], "gf", "testfac")
-	assert_bool(SoloController.counter_strikes_first(on)) \
-		.override_failure_message("no param: the recorded strike-first order stands").is_true()
+	var on_first: bool = SoloController.counter_strikes_first(on)
 	_inject("gf", "Counter", "Counter", {"strikes_first": false, "impact_reduction_per_model": 1})
 	var off := _unit_with(["Counter"], "gf", "testfac")
-	assert_bool(SoloController.counter_strikes_first(off)) \
-		.override_failure_message("the entry opted Counter out of the strike-first slot").is_false()
+	var off_first: bool = SoloController.counter_strikes_first(off)
 	RulesRegistry.reset_cache()
+	AiActRecorder.rules_epoch = epoch0   # restore before asserting: a failed assert stops the case
+	assert_bool(on_first) \
+		.override_failure_message("no param: the recorded strike-first order stands").is_true()
+	assert_bool(off_first) \
+		.override_failure_message("the entry opted Counter out of the strike-first slot").is_false()
 
 
 func test_hold_only_param_reopens_the_immobile_menu() -> void:
