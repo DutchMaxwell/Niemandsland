@@ -369,6 +369,7 @@
 "test/player_identity_test.gd": 0.1,
 "test/player_palette_test.gd": 0.0,
 "test/policy_order_test.gd": 0.1,
+"test/v36/mel_04e_test.gd": 0.1,
 "test/policy_order_twin_test.gd": 0.0,
 "test/position_parity_boxed_test.gd": 34.7,
 "test/position_parity_charge_test.gd": 5.7,
