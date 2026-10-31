@@ -10,7 +10,7 @@ fn strike(weapon: ShootProfile, fatigued: bool, epoch: u32) -> (i64, Vec<(i64, i
     let att = Ctx { quality: 4, fatigued, ..Default::default() };
     let w = [weapon];
     let r = resolve_melee_leg(&[striker(&w, &[0], &[12], &att)], &defender(4, 10), "Foe",
-        false, true, true, true, 0.0, true, true, false, rule_on(epoch, EPOCH_73_V36), &mut Tray::seeded(909));
+        false, true, true, true, 0.0, true, true, false, rule_on(epoch, EPOCH_73_V36), false, &mut Tray::seeded(909));
     let sixes = r.rolls[0].faces.iter().filter(|&&f| f == 6).count() as i64;
     let saves = r.rolls.iter().filter(|x| x.kind == "defense").map(|x| (x.count, x.target)).collect();
     (sixes, saves, r.log)
