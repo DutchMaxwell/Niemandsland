@@ -768,12 +768,14 @@ use super::*;
     }
 
     #[test]
-    fn angelic_blessing_ignores_on_6_and_spells_on_4_epoch_gated() {
+    fn angelic_blessing_ignores_on_6_and_spells_on_2_epoch_gated() {
         let header = read_act_header(REGEN_FAMILY_HEADER).expect("header");
+        // MOR-17a: from 73 the shared Warding rule reads its own spell key (2+).
+        assert_eq!(regen_pair_at(&header, "angelic", CURRENT_RULES_EPOCH), (6, 2));
         assert_eq!(
-            regen_pair_at(&header, "angelic", CURRENT_RULES_EPOCH),
+            regen_pair_at(&header, "angelic", crate::acts::EPOCH_72_PLAYTEST_RULES),
             (6, 4),
-            "the registry's ignore_target 6 / ignore_target_spell 4"
+            "the 3.5 entry's recorded ignore_target_spell 4"
         );
         assert_eq!(regen_pair_at(&header, "angelic", 0), (0, 0), "epoch 0 replays legacy");
         assert_eq!(
@@ -876,9 +878,14 @@ use super::*;
     }
 
     #[test]
-    fn knightborn_ignores_on_6_and_spells_on_4_epoch_gated() {
+    fn knightborn_ignores_on_6_and_spells_on_2_epoch_gated() {
         let header = read_act_header(REGEN_FAMILY_HEADER).expect("header");
-        assert_eq!(regen_pair_at(&header, "knightborn", CURRENT_RULES_EPOCH), (6, 4));
+        // MOR-17a: from 73 the shared Warding rule reads its own spell key (2+).
+        assert_eq!(regen_pair_at(&header, "knightborn", CURRENT_RULES_EPOCH), (6, 2));
+        assert_eq!(
+            regen_pair_at(&header, "knightborn", crate::acts::EPOCH_72_PLAYTEST_RULES),
+            (6, 4)
+        );
         assert_eq!(regen_pair_at(&header, "knightborn", 0), (0, 0), "epoch 0 replays legacy");
         assert_eq!(regen_pair_at(&header, "bare_gf", CURRENT_RULES_EPOCH), (0, 0));
     }
