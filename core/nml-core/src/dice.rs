@@ -29,7 +29,7 @@
 use crate::combat::modified_hit_target;
 use crate::acts::{rule_on, EPOCH_73_V36};
 use crate::combat::{
-    cond_ap_why, conditional_ap_bonus, conditional_ap_bonus_vs, covered_defense, deadly_multiplier, fortified_ap, guarded_defense, CondApTarget,
+    cond_ap_why, conditional_ap_bonus, conditional_ap_bonus_vs, covered_defense, deadly_multiplier, fortified_ap, guarded_defense, hit_ev, CondApTarget,
     impact_total_dice, melee_hit_modifier, fold_hit, reliable_quality, save_target,
     shielded_defense, morale_target, shooting_hit_modifier, shrouded_reach, thrust_to_hit,
     versatile_best_mode, BEST_HIT_TARGET, FEARLESS_RECOVER_TARGET, HEAVY_IMPACT_AP,
@@ -38,6 +38,9 @@ use crate::combat::{
 };
 use crate::rng::GodotRng;
 use crate::unit::{CondAp, Ctx, ShieldedAlias, ShootProfile};
+
+/// One entry of the strike's pass-1 hit list (`resolve_melee_leg`'s `pending`).
+type Pending<'a> = (&'a Shooter<'a>, &'a ShootProfile, Vec<u8>, i64, i64, i64, bool, i64);
 
 /// One dice tray: the generator `seed_tray_rng` seeds, and nothing else.
 #[derive(Debug, Clone, Copy)]
@@ -1731,6 +1734,30 @@ fn fresh_save_ones(out: &ShootResult, idx: usize) -> i64 {
         .unwrap_or(0)
 }
 
+/// Rules 3.6 (`EPOCH_73_V36`) — one Parry event per strike: roll min(X * carrier models,
+/// hits) dice; each 6+ cancels the highest-worth hit (its own AP plus the on-6 bonus).
+pub(crate) fn parry_strike(pending: &mut [Pending<'_>], def: &Ctx, def_owner: &str, gated: bool, tray: &mut Tray, out: &mut ShootResult) {
+    let taken: i64 = pending.iter().map(|x| x.3).sum();
+    let n = if gated { (def.parry_dice * def.models).min(taken) } else { 0 };
+    if n <= 0 { return; }
+    let faces = tray.roll(n as usize);
+    let k = faces.iter().filter(|&&f| f >= 6).count() as i64;
+    out.rolls.push(Roll { kind: "parry", count: n, target: 6, faces, owner: def_owner.into() });
+    out.log.push(format!("Parry: {def_owner} rolls {n} dice and cancels {k} strike hits"));
+    let mut cand: Vec<(f64, usize, bool)> = Vec::new();
+    for (i, t) in pending.iter().enumerate() {
+        let (_sh, p, faces, hits, _, _, mute, _) = t;
+        let sixes_hit = if *mute { 0 } else { sixes(faces).min(*hits) };
+        for j in 0..*hits { cand.push((hit_ev(p, j < sixes_hit, def), i, j < sixes_hit)); }
+    }
+    cand.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+    for &(_, i, is_six) in cand.iter().take(k as usize) {
+        pending[i].3 -= 1;
+        let hit_six = if is_six { pending[i].2.iter().position(|&f| f == 6) } else { None };
+        if let Some(pos) = hit_six { pending[i].2.remove(pos); }
+    }
+}
+
 /// ONE melee strike phase on the tray — `main._solo_melee_strike_phase` :5941,
 /// in its own draw order (main.gd line in brackets):
 ///
@@ -2052,7 +2079,8 @@ pub fn resolve_melee_leg(
             }
             pending.push((sh, p, faces, hits, count_target, versatile_ap, mute, n));
         }
-        // MEL-07c hook — Parry reads `pending` here: every hit rolled, no save yet.
+        // MEL-07c — one Parry event per strike, after every hit roll and before any save.
+        parry_strike(&mut pending, def, def_owner, hits_first, tray, &mut out);
         for (sh, p, faces, hits, count_target, versatile_ap, mute, n) in pending {
             let on6 = if mute {
                 0
