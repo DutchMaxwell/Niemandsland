@@ -1562,6 +1562,25 @@ fn regen_family_on(p: &Profile, rule: &str, rules_epoch: u32) -> bool {
     on
 }
 
+/// MOR-05 — the Fortified and Shielded family names whose 3.6 wording says "most models" (the
+/// verified P1 list). The Guarded family is MOR-05b.
+const MOST_MODELS_DEFENCE: [&str; 6] =
+    ["Fortified", "Guardian", "Ossified", "Primeborn", "Warden", "Shielded"];
+
+/// The all-models read of `rule`, except that from `EPOCH_73_V36` the names above need only a
+/// strict majority (D-MOST); the host's count is `p.model_count`, taken at profile-build time.
+/// Rules-must-log: a rule kept on by the majority names itself on the trace.
+fn rule_on_defence_family(p: &Profile, rule: &str, rules_epoch: u32) -> bool {
+    if !rule_on(rules_epoch, crate::acts::EPOCH_73_V36) || !MOST_MODELS_DEFENCE.contains(&rule) {
+        return rule_on_all_models(p, rule);
+    }
+    let on = rule_on_most_models(p, p.model_count, rule, false);
+    if on && !rule_on_all_models(p, rule) {
+        trace_rule("v36-morale", rule, "most models carry it, so a joined hero without it does not switch it off");
+    }
+    on
+}
+
 /// The two "Hit & Run" Boost spellings (gf/rebel_guerrillas "Guerrilla Boost",
 /// aof|gf dark-elf "Harassing Boost"): the entry's own `move_in` replaces the
 /// shared 3" const when the FROZEN `EPOCH_6_TABLE_RULES` gate is on — wave 4
@@ -1799,14 +1818,14 @@ struct FortifiedAlias {
 const FORTIFIED_AURA_RULE: &str = "Fortified Aura";
 const FORTIFIED_AURA_BASE: &str = "Fortified";
 
-fn fortified_alias_of(reg: &mut Registries, p: &Profile) -> FortifiedAlias {
+fn fortified_alias_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> FortifiedAlias {
     let mut out = FortifiedAlias::default();
     let map = reg.rules_for(&p.game_system);
     let mut raws: Vec<&String> = p.special_rules.iter().collect();
     raws.extend(p.item_grants.iter());
     for raw in raws {
         let name = base_rule_name(raw);
-        if name.is_empty() || name == "Fortified" || !rule_on_all_models(p, &name) {
+        if name.is_empty() || name == "Fortified" || !rule_on_defence_family(p, &name, rules_epoch) {
             continue;
         }
         let Some(e) = map.lookup(&p.faction_folder, &name) else {
@@ -2307,7 +2326,7 @@ fn shielded_alias_of(
     p: &Profile,
     rules_epoch: u32,
 ) -> Option<(ShieldedAlias, bool)> {
-    if !rule_on(rules_epoch, EPOCH_6_TABLE_RULES) || rule_on_all_models(p, "Shielded") {
+    if !rule_on(rules_epoch, EPOCH_6_TABLE_RULES) || rule_on_defence_family(p, "Shielded", rules_epoch) {
         return None;
     }
     const ALIASES: [(&str, ShieldedAlias); 3] = [
@@ -2701,7 +2720,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     // window) reads zeros and replays byte-exact; the stamp IS the gate.
     let (fortified_boost_ap, fortified_alias_ap, fortified_alias_over_in) =
         if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
-            let fa = fortified_alias_of(reg, p);
+            let fa = fortified_alias_of(reg, p, rules_epoch);
             (fa.boost_ap, fa.alias_ap, fa.alias_over_in)
         } else {
             (0, 0, 0.0)
@@ -2873,7 +2892,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         evasive_alias_name: evasive_boost,
         melee_evasion: rule_on_all_models(p, "Melee Evasion"),
         dodge: unit_rule_active(reg, p, "Dodge") && rule_on_most_models(p, p.model_count, "Dodge", false),
-        fortified: rule_on_all_models(p, "Fortified")
+        fortified: rule_on_defence_family(p, "Fortified", rules_epoch)
             && fortified_aura_bearer_live(reg, p, rules_epoch),
         // WAVE 3 — stamped above, behind `EPOCH_6_TABLE_RULES`.
         fortified_boost_ap,
@@ -2917,7 +2936,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
                 .rules_for(&p.game_system)
                 .lookup(&p.faction_folder, "Quick Readjustment")
                 .is_some_and(|e| e.param_b_or("no_moved_penalty", false)),
-        shielded: rule_on_all_models(p, "Shielded")
+        shielded: rule_on_defence_family(p, "Shielded", rules_epoch)
             || shielded_alias.as_ref().is_some_and(|(_, pending)| !*pending),
         shielded_alias: shielded_alias.map_or(ShieldedAlias::None, |(a, _)| a),
         shielded_rating,
@@ -6503,7 +6522,7 @@ impl UnitStatic {
         // WAVE 3 — the family's own registry names for the rules-must-log
         // line, stamped behind the same frozen `EPOCH_6_TABLE_RULES` gate.
     let fa = rule_on(rules_epoch, EPOCH_6_TABLE_RULES)
-        .then(|| fortified_alias_of(reg, p))
+        .then(|| fortified_alias_of(reg, p, rules_epoch))
         .unwrap_or_default();
     // Wave 4 (`rules-wave4-boostbases`) — the Hit & Run Boost band, stamped
     // behind the same FROZEN `EPOCH_6_TABLE_RULES` gate (the sim fold reads
