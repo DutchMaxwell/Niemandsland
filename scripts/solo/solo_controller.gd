@@ -8290,6 +8290,7 @@ func _count_dangerous_trails(trails: Array) -> int:
 ## per-MODEL identity, not just a count — trail order matches the moving-models order).
 func _dangerous_trail_flags(trails: Array, radii_m: Array = []) -> Array:
 	var flags: Array = []
+	var unstable_epoch: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
 	for ti in range(trails.size()):
 		var leg := trails[ti] as Array
 		var r: float = float(radii_m[ti]) if ti < radii_m.size() else 0.0
@@ -8298,6 +8299,15 @@ func _dangerous_trail_flags(trails: Array, radii_m: Array = []) -> Array:
 			if _path_crosses_terrain(leg[i - 1], leg[i], TerrainRules.PathCheck.DANGEROUS, r):
 				hit = true
 				break
+		# Rules 3.6 (EPOCH_73_V36): Unstable ruins — a model whose OWN move is over 6 inches and whose
+		# route goes into or through a ruin takes the same unit-level test. Flying is filtered upstream.
+		# The epsilon keeps a base-exact 6" Advance (float32 Vector3 geometry) on the safe side.
+		if not hit and unstable_epoch \
+				and MovementPlanner.polyline_length(leg) > 6.0 * INCHES_TO_METERS + 1e-6:
+			for i in range(1, leg.size()):
+				if _path_crosses_terrain(leg[i - 1], leg[i], TerrainRules.PathCheck.UNSTABLE, r):
+					hit = true
+					break
 		flags.append(hit)
 	return flags
 
@@ -8312,7 +8322,8 @@ func _path_crosses_terrain(a: Vector3, b: Vector3, check: int, radius_m: float =
 	var steps := maxi(1, int(ceil(span / (cell_m * 0.5))))
 	# Edge-aware (maintainer 2026-07-22): the trigger keys on the base EDGE, not the path centre —
 	# a base grazing difficult/dangerous ground IS in it (same predicate as the rest/target checks).
-	var pred := TerrainRules.is_difficult if check == TerrainRules.PathCheck.DIFFICULT else TerrainRules.is_dangerous
+	var pred := TerrainRules.is_difficult if check == TerrainRules.PathCheck.DIFFICULT \
+		else (TerrainRules.is_unstable if check == TerrainRules.PathCheck.UNSTABLE else TerrainRules.is_dangerous)
 	for i in range(steps + 1):
 		var p := a.lerp(b, float(i) / float(steps))
 		if radius_m > 0.0:
@@ -8331,6 +8342,8 @@ static func _terrain_matches(t: int, check: int) -> bool:
 			return TerrainRules.is_dangerous(t)
 		TerrainRules.PathCheck.IMPASSABLE:
 			return TerrainRules.is_impassable(t)
+		TerrainRules.PathCheck.UNSTABLE:
+			return TerrainRules.is_unstable(t)
 	return false
 
 
