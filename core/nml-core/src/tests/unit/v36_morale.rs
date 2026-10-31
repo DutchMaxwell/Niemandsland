@@ -131,3 +131,57 @@ fn regeneration_counts_most_models_at_epoch_73() {
     let hero_only = regen_of("robot_legions", "[]", r#"[["Hero","Regeneration"]]"#, 3, EPOCH_73_V36);
     assert!(!hero_only.0, "1 of 4 models carry Regeneration");
 }
+
+// --- Row MOR-17a: Warding, Knightborn and Angelic Blessing carry the 3.6 distance gate.
+mod mor_17a {
+    use super::super::*;
+    use crate::acts::{EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36};
+
+    /// A gf knight_brothers squad built through the REAL registry at `epoch`.
+    fn knight_ctx(special: &str, grants: &str, epoch: u32) -> Ctx {
+        let tpl = r#"{"kind":"header","knobs":{},"profiles":{
+          "kb":{"unit_id":"kb","name":"Knightborn Squad","quality":4,
+            "defense":4,"tough":1,"wounds_max":[1,1,1,1],"model_count":4,"caster_value":0,
+            "base_radius":0.016,"game_system":"gf","faction_folder":"knight_brothers",
+            "special_rules":SPECIAL,"item_grants":GRANTS,
+            "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+            "weapons":[{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]}}}"#
+            .replace("SPECIAL", special)
+            .replace("GRANTS", grants);
+        let header = read_act_header(&tpl).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        UnitStatic::build_for(&mut reg, header.profiles.get("kb").expect("kb"), epoch).ctx
+    }
+
+    #[test]
+    fn knightborn_stamps_the_36_gate_and_spell_leg_at_epoch_73() {
+        let ctx = knight_ctx(r#"["Knightborn"]"#, "[]", EPOCH_73_V36);
+        assert!(ctx.regeneration);
+        assert_eq!(ctx.regen_target, 6, "the entry's ignore_target");
+        assert_eq!(ctx.regen_target_spell, 2, "the 3.6 spell leg");
+        assert_eq!(ctx.regen_gate_over_in, 9.0, "shot from over 9in");
+        assert_eq!(ctx.regen_gate_charge_in, 6.0, "charged from over 6in");
+    }
+
+    #[test]
+    fn knightborn_keeps_the_35_entry_at_epoch_72() {
+        let ctx = knight_ctx(r#"["Knightborn"]"#, "[]", EPOCH_72_PLAYTEST_RULES);
+        assert_eq!((ctx.regen_target, ctx.regen_target_spell), (6, 4), "old keys keep the 3.5 meaning");
+        assert_eq!((ctx.regen_gate_over_in, ctx.regen_gate_charge_in), (0.0, 0.0), "no gate below 73");
+    }
+
+    #[test]
+    fn enhanced_knightborn_stamps_no_gate_at_epoch_73() {
+        let ctx = knight_ctx(r#"["Enhanced Knightborn"]"#, "[]", EPOCH_73_V36);
+        assert!(ctx.regeneration);
+        assert_eq!((ctx.regen_target, ctx.regen_target_spell), (6, 2));
+        assert_eq!((ctx.regen_gate_over_in, ctx.regen_gate_charge_in), (0.0, 0.0), "the grant has no gate");
+    }
+
+    #[test]
+    fn enhanced_knightborn_does_nothing_new_at_epoch_72() {
+        let ctx = knight_ctx(r#"["Enhanced Knightborn"]"#, "[]", EPOCH_72_PLAYTEST_RULES);
+        assert_eq!((ctx.regen_target, ctx.regen_target_spell), (6, 4), "old keys keep the 3.5 meaning");
+        assert_eq!((ctx.regen_gate_over_in, ctx.regen_gate_charge_in), (0.0, 0.0));
+    }
+}
