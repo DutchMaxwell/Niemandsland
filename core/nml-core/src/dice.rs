@@ -1753,8 +1753,7 @@ pub(crate) fn parry_strike(pending: &mut [Pending<'_>], def: &Ctx, def_owner: &s
     cand.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
     for &(_, i, is_six) in cand.iter().take(k as usize) {
         pending[i].3 -= 1;
-        let hit_six = if is_six { pending[i].2.iter().position(|&f| f == 6) } else { None };
-        if let Some(pos) = hit_six { pending[i].2.remove(pos); }
+        if let Some(pos) = if is_six { pending[i].2.iter().position(|&f| f == 6) } else { None } { pending[i].2.remove(pos); }
     }
 }
 
