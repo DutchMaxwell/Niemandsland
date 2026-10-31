@@ -40,7 +40,7 @@ use crate::rules::has_special_rule;
 use crate::score::{can_hold_marker, control_gap_in, presence, Incoming};
 use crate::sim::{melee_threat_at_epoch, reply_threat_at_epoch, CONTACT_IN};
 use crate::state::{Profile, State};
-use crate::unit::{melee_profiles, profiles_in_range, Ctx, UnitStatic};
+use crate::unit::{melee_profiles_at, profiles_in_range, Ctx, UnitStatic};
 use crate::{IN2M, OBJECTIVE_CONTROL_IN};
 
 /// `BattleSim.EV_REF_DIST_IN` battle_sim.gd:75 — the reference distance the
@@ -287,7 +287,7 @@ pub fn unit_sev_mev(p: &Profile, us: &UnitStatic, def: &Ctx) -> (f64, f64) {
     let keep: Vec<usize> = (0..shoot.len()).collect();
     let s_attacks: Vec<i64> = shoot.iter().map(|s| s.attacks).collect();
     let sev = snappedf(shoot_ev(&shoot, &keep, &s_attacks, &att, def, EV_REF_DIST_IN), 0.01);
-    let mel = melee_profiles(&p.weapons);
+    let mel = melee_profiles_at(&p.weapons, us.rules_epoch);
     let m_attacks: Vec<i64> = mel.iter().map(|s| s.attacks).collect();
     // A reference row against the neutral defender: no charge, so no gap (the table's `board_rows` hands none).
     let mev = snappedf(melee_ev(&mel, &m_attacks, &att, def, true, 0.0), 0.01);
@@ -691,7 +691,7 @@ pub fn features(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::acts::read_act_header;
+    use crate::acts::{read_act_header, EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36};
     use crate::io::state_from_json;
     use crate::rules::Registries;
     use crate::state::ProfileCache;
@@ -1450,6 +1450,56 @@ mod tests {
         let head = read_act_header(HEADER).expect("header");
         assert_eq!(head.knobs.rule_vocab_version, LEGACY_VOCAB_VERSION);
         assert_eq!(vocab_version_of_header(HEADER), head.knobs.rule_vocab_version);
+    }
+
+    const ASSAULT_ONLY: &str = r#"{"kind":"header","knobs":{},"profiles":{
+      "gunner":{"unit_id":"gunner","name":"Gunner","quality":4,"defense":4,"tough":1,
+        "wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,
+        "game_system":"gf","faction_folder":"robot_legions",
+        "special_rules":[],"item_grants":[],"attached_hero_rules":[],
+        "move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Assault Rifle","range":12,"attacks":2,"count":1,"ap":1,
+          "rules":["Assault","AP(1)"]}]}}}"#;
+
+    fn assault_mev(epoch: u32) -> f64 {
+        let header = read_act_header(ASSAULT_ONLY).expect("header");
+        let p = header.profiles.get("gunner").expect("gunner");
+        let mut reg = Registries::new(&repo_root());
+        let us = UnitStatic::build_for(&mut reg, p, epoch);
+        unit_sev_mev(p, &us, &neutral_defender()).1
+    }
+
+    fn plain_mev(epoch: u32) -> f64 {
+        let header = read_act_header(HEADER).expect("header");
+        let p = header.profiles.get("p1_0_a").expect("p1_0_a");
+        let mut reg = Registries::new(&repo_root());
+        let us = UnitStatic::build_for(&mut reg, p, epoch);
+        unit_sev_mev(p, &us, &neutral_defender()).1
+    }
+
+    /// AI-09 — the net's melee input ("mev") must price an Assault weapon's
+    /// melee copy from rules 3.6 on, exactly like the table's
+    /// `AiShooting.melee_profiles`. At 72 a ranged weapon never strikes, so a
+    /// unit armed only with one prices at its bare-hands value: 0.
+    #[test]
+    fn an_assault_weapon_prices_as_bare_hands_in_the_net_at_epoch_72() {
+        assert_eq!(assault_mev(EPOCH_72_PLAYTEST_RULES), 0.0, "72: no melee profile, bare hands");
+    }
+
+    /// The same unit at 73: the Assault copy (2 attacks, AP 1) strikes, so the
+    /// net's mev is larger — 0.67. On main this read the epoch-free list and
+    /// stayed at 0 while the table already counted the copy.
+    #[test]
+    fn an_assault_weapon_prices_its_melee_copy_in_the_net_at_epoch_73() {
+        assert_eq!(assault_mev(EPOCH_73_V36), 0.67, "73: the Assault copy's melee EV");
+    }
+
+    /// A unit with no Assault weapon keeps today's number at 73 — the epoch
+    /// gate must not move anything else.
+    #[test]
+    fn a_unit_without_assault_keeps_its_net_mev_at_epoch_73() {
+        assert_eq!(plain_mev(EPOCH_72_PLAYTEST_RULES), 0.5, "today's number");
+        assert_eq!(plain_mev(EPOCH_73_V36), 0.5, "unchanged at 73");
     }
 
     #[test]
