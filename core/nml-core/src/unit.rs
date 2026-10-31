@@ -1630,6 +1630,25 @@ fn rule_on_defence_family(p: &Profile, rule: &str, rules_epoch: u32) -> bool {
     on
 }
 
+/// MOR-05b — the Guarded family names whose 3.6 wording says "most models" (the verified list). The
+/// core's twin is `AiEv.MOST_MODELS_GUARDED`.
+const MOST_MODELS_GUARDED: [&str; 5] =
+    ["Guarded", "Versatile Defense", "Sturdy", "Safety Gear", "Tenacious"];
+
+/// The all-models read of `rule`, except that from `EPOCH_73_V36` the names above need only a strict
+/// majority (D-MOST); the host's count is `p.model_count`, taken at profile-build time.
+/// Rules-must-log: a rule kept on by the majority names itself on the trace.
+fn guarded_family_on(p: &Profile, rule: &str, rules_epoch: u32) -> bool {
+    if !rule_on(rules_epoch, crate::acts::EPOCH_73_V36) || !MOST_MODELS_GUARDED.contains(&rule) {
+        return rule_on_all_models(p, rule);
+    }
+    let on = rule_on_most_models(p, p.model_count, rule, false);
+    if on && !rule_on_all_models(p, rule) {
+        trace_rule("v36-morale", rule, "most models carry it, so a joined hero without it does not switch it off");
+    }
+    on
+}
+
 /// The two "Hit & Run" Boost spellings (gf/rebel_guerrillas "Guerrilla Boost",
 /// aof|gf dark-elf "Harassing Boost"): the entry's own `move_in` replaces the
 /// shared 3" const when the FROZEN `EPOCH_6_TABLE_RULES` gate is on — wave 4
@@ -2978,11 +2997,11 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         // `EPOCH_7_TABLE_RULES` — the wave-4 accounting's "no remap" call
         // stands: the registry primitive is untouched, only the name read
         // joins this flag.
-        guarded: rule_on_all_models(p, "Guarded")
-            || rule_on_all_models(p, "Versatile Defense")
-            || (rule_on(rules_epoch, EPOCH_7_TABLE_RULES) && rule_on_all_models(p, "Sturdy"))
+        guarded: guarded_family_on(p, "Guarded", rules_epoch)
+            || guarded_family_on(p, "Versatile Defense", rules_epoch)
+            || (rule_on(rules_epoch, EPOCH_7_TABLE_RULES) && guarded_family_on(p, "Sturdy", rules_epoch))
             || (rule_on(rules_epoch, EPOCH_13_WHO_WINS)
-                && (rule_on_all_models(p, "Safety Gear") || rule_on_all_models(p, "Tenacious"))),
+                && (guarded_family_on(p, "Safety Gear", rules_epoch) || guarded_family_on(p, "Tenacious", rules_epoch))),
         ranged_shrouding: ranged_shroud.is_some(),
         ranged_shroud_penalty_in: ranged_shroud.map_or(SHROUD_RANGE_PENALTY_IN, |s| s[0]),
         ranged_shroud_floor_in: ranged_shroud.map_or(SHROUD_FLOOR_IN, |s| s[1]),

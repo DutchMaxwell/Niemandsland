@@ -4605,8 +4605,9 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 	if not over9_rule.is_empty() and dist_in > AiCombatMath.LONG_RANGE_IN:
 		base_defense = AiCombatMath.guarded_defense(base_defense, true)
 		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.COMBAT, "%s (%s): shot from over 9\" — +1 Defense (saves on %d+)" % [
-				target.get_name(), over9_rule, AiCombatMath.shown_target(base_defense)], true)
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s (%s): shot from over 9\" — +1 Defense (saves on %d+)%s" % [
+				target.get_name(), over9_rule, AiCombatMath.shown_target(base_defense),
+				_solo_most_models_note(target, over9_rule)], true)
 	var covered_defense: int = _solo_cover_defense(target, base_defense)   # +1 Defense if majority in cover
 	# Resolver wave A — vs-target Marks: the bearer's pick lands on THIS volley's target.
 	_solo_apply_vs_marks(attacker, target, dist_in)
@@ -6513,6 +6514,17 @@ func _solo_stealth_family_on(unit: GameUnit, rule: String) -> bool:
 	return _solo_rule_on_all_models(unit, rule)
 
 
+## Row MOR-05b: the Guarded family names whose 3.6 text reads "most models" (the core's
+## MOST_MODELS_GUARDED twin); every other alias keeps the all-models read.
+const SOLO_GUARDED_MOST_MODELS: Array[String] = ["Guarded", "Versatile Defense", "Sturdy", "Safety Gear", "Tenacious"]
+
+
+func _solo_guarded_family_on(unit: GameUnit, rule: String) -> bool:
+	if rule in SOLO_GUARDED_MOST_MODELS:
+		return _solo_rule_on_most_models(unit, rule)
+	return _solo_rule_on_all_models(unit, rule)
+
+
 ## MOR-05 (rules-must-log): the log-line tail for a Fortified / Shielded family rule that only a majority of
 ## the unit's models carry (a joined hero without it is the minority); "" when every model carries it.
 func _solo_most_models_note(unit: GameUnit, rule: String) -> String:
@@ -6525,15 +6537,17 @@ func _solo_most_models_note(unit: GameUnit, rule: String) -> String:
 ## against it"). V1 plays the +1-defense half CONSISTENTLY (documented default — it reuses the whole
 ## Guarded machinery; the -1-to-hit half is a future EV-driven switch). Registry-gated.
 func _solo_over9_defense_rule(target: GameUnit) -> String:
-	if _solo_rule_on_all_models(target, "Guarded"):
+	if _solo_guarded_family_on(target, "Guarded"):
 		return "Guarded"
-	if _solo_rule_on_all_models(target, "Versatile Defense") and RulesRegistry.unit_rule_active(target, "Versatile Defense"):
+	if _solo_guarded_family_on(target, "Versatile Defense") and RulesRegistry.unit_rule_active(target, "Versatile Defense"):
 		return "Versatile Defense"
 	# Coverage wave: DATA aliases of the Guarded family (Sturdy, …) — "shot or charged from over 9\"
-	# away → +1 to defense rolls", resolved via the generic primitive layer (all-models rules).
+	# away → +1 to defense rolls", resolved via the generic primitive layer. The names whose 3.6 text
+	# says "most models" follow the majority from EPOCH_73_V36 (MOR-05b); every other alias keeps the
+	# all-models read.
 	for e in RulesRegistry.unit_rules_of_primitive(target, "Guarded"):
 		var n := str((e as Dictionary)["name"])
-		if n != "Guarded" and _solo_rule_on_all_models(target, n):
+		if n != "Guarded" and _solo_guarded_family_on(target, n):
 			return n
 	return ""
 
@@ -8102,8 +8116,9 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 	if charging and not m_over9.is_empty() and charge_from_in > AiCombatMath.LONG_RANGE_IN:
 		defense = AiCombatMath.guarded_defense(defense, true)
 		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.COMBAT, "%s (%s): charged from over 9\" — +1 Defense (saves on %d+)" % [
-				defender.get_name(), m_over9, AiCombatMath.shown_target(defense)], true)
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s (%s): charged from over 9\" — +1 Defense (saves on %d+)%s" % [
+				defender.get_name(), m_over9, AiCombatMath.shown_target(defense),
+				_solo_most_models_note(defender, m_over9)], true)
 	var mod_info: Dictionary = _solo_hit_mod_info(striker, defender, _solo_charge_leg_dist_in(charging, charge_from_in), true, charging)
 	# Wave-4 Unpredictable Fighter (Mummified, melee-only) and the generic Unpredictable ("when
 	# attacking" — the same die, shooting AND melee): ONE die per melee for the whole unit —
@@ -13828,8 +13843,9 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 	if not h_over9.is_empty() and dist > AiCombatMath.LONG_RANGE_IN:
 		shielded_def = AiCombatMath.guarded_defense(shielded_def, true)
 		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.COMBAT, "%s (%s): shot from over 9\" — +1 Defense (saves on %d+)" % [
-				target.get_name(), h_over9, AiCombatMath.shown_target(shielded_def)], true)
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s (%s): shot from over 9\" — +1 Defense (saves on %d+)%s" % [
+				target.get_name(), h_over9, AiCombatMath.shown_target(shielded_def),
+				_solo_most_models_note(target, h_over9)], true)
 	var covered_def: int = _solo_cover_defense(target, shielded_def)
 	# Resolver wave A parity: your volley places vs-target Marks, SPENDS Piercing-Tag markers and
 	# honours the Reckless-Piercing AP stamps — the AI path had these seams, yours silently didn't.
