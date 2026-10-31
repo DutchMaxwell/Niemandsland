@@ -156,7 +156,7 @@ use super::*;
         let (_, before) = line(6);
         let i = idx(&st, "p1_0_a");
         let pi = st.roster.profile[i];
-        assert_eq!(now[pi].reinforcement.within_in, 12.0, "the band's depth, off the entry");
+        assert_eq!(now[pi].reinforcement.within_in, 9.0, "the band's depth, off the entry");
         assert!(now[pi].reinforcement.once, "and the once-per-game param it ships with");
         assert_eq!(before[pi].reinforcement.within_in, 0.0, "epoch 6 reads no carrier");
         // The neighbour that must NOT resolve: `Grounded Reinforcement` is a

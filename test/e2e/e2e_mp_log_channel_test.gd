@@ -542,7 +542,8 @@ func _blanket_edge_strip(window: Rect2 = Rect2()) -> void:
 				wall.append(Vector3(x, 0.0, z))
 			z += step
 		x += step
-	var blockers := E2EBoot.make_unit(_main, 2, "Wall", wall)
+	# Friendly bases: an ENEMY wall would ring (rules 3.6) and close the window by itself.
+	var blockers := E2EBoot.make_unit(_main, 1, "Wall", wall)
 	_main.opr_army_manager.game_units[blockers.unit_id] = blockers
 	for m in blockers.models:
 		(m as ModelInstance).wounds_max = 1
@@ -555,10 +556,10 @@ func test_the_no_free_spot_line_travels(timeout := 120000) -> void:
 	var u := _carrier("Clan Rats", 3)
 	_blanket_edge_strip()
 	await _main._reinforcement_arrive_one(u, 3)
-	assert_int(_logged_containing("no free spot within 12\"")) \
+	assert_int(_logged_containing("no free spot within 9\"")) \
 		.override_failure_message("fixture check: the strip must be fully blocked:\n%s" % _log_text()) \
 		.is_equal(1)
-	assert_int(_sent_containing("no free spot within 12\"")) \
+	assert_int(_sent_containing("no free spot within 9\"")) \
 		.override_failure_message("the due round passed silently on the opponent's screen (sent: %s)" % str(_sent_lines())) \
 		.is_equal(1)
 	await E2EBoot.settle(get_tree())

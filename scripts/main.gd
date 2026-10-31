@@ -13816,13 +13816,15 @@ func _reinforcement_arrive_one(original: GameUnit, round_number: int) -> void:
 	var radii: Array = []
 	for i in range(profile_unit.size):
 		radii.append(_reinforcement_model_radius(original, i))
+	var band_m: float = SoloController.reinforcement_edge_m(original)
+	var zone_text: String = SoloController.reinforcement_zone_text(band_m)
 	var spots: Array = await _reinforcement_pick_spots(original, radii, ai)
 	if spots.is_empty():
 		# No legal spot anywhere in the strip — keep the promise for a later round rather than
 		# swallowing it, and say why nothing happened.
 		if battle_log != null:
 			_log_rule_event(BattleLog.Category.GENERAL,
-				"Reinforcement: %s cannot return this round — no free spot within 12\" of any table edge" % original.get_name(), ai)
+				"Reinforcement: %s cannot return this round — no free spot %s" % [original.get_name(), zone_text], ai)
 		return
 
 	var forfeited: int = maxi(profile_unit.size - spots.size(), 0)
@@ -13857,12 +13859,12 @@ func _reinforcement_arrive_one(original: GameUnit, round_number: int) -> void:
 
 	if battle_log != null:
 		_log_rule_event(BattleLog.Category.GENERAL,
-			"Reinforcement: %s returns with %d model(s) within 12\" of a table edge — it cannot seize or contest objectives this round" % [
-				copy.get_name(), copy.models.size()], ai)
+			"Reinforcement: %s returns with %d model(s) %s — it cannot seize or contest objectives this round" % [
+				copy.get_name(), copy.models.size(), zone_text], ai)
 		if forfeited > 0:
 			_log_rule_event(BattleLog.Category.GENERAL,
-				"Reinforcement: only %d of %d models fit inside the 12\" edge strip — %d forfeited" % [
-					spots.size(), src.size, forfeited], ai)
+				"Reinforcement: only %d of %d models fit %s — %d forfeited" % [
+					spots.size(), src.size, zone_text, forfeited], ai)
 		_log_rule_event(BattleLog.Category.GENERAL,
 			"Reinforcement: the returning %s does not have Reinforcement — the rule does not apply to the new copy" % copy.get_name(), ai)
 	if solo_controller != null and _solo_alternation_active():
@@ -13886,7 +13888,7 @@ func _reinforcement_pick_spots(original: GameUnit, radii: Array, ai: bool) -> Ar
 	var trect: Rect2 = _table_rect()
 	if trect.size == Vector2.ZERO:
 		return []
-	var margin_m: float = SoloController.REINFORCEMENT_EDGE_IN * 0.0254
+	var margin_m: float = SoloController.reinforcement_edge_m(original)
 	var blockers: Array = _reinforcement_blockers(original)
 	var prefer: Vector3 = _reinforcement_prefer_point(original, trect)
 	var step_m: float = OPRArmyManager.INCHES_TO_METERS
@@ -13897,17 +13899,21 @@ func _reinforcement_pick_spots(original: GameUnit, radii: Array, ai: bool) -> Ar
 
 
 ## Every standing base that a returning model may not overlap. The original's own parked casualties
-## are excluded: they sit on the army tray, not on the table.
+## are excluded: they sit on the army tray, not on the table. From rules epoch 73 an ENEMY base blocks
+## out to the 9" ring (Reinforcement 3.6); `original == null` (another caller) keeps plain bases.
 func _reinforcement_blockers(original: GameUnit) -> Array:
 	var blockers: Array = []
 	for g in opr_army_manager.get_all_game_units():
 		var gu := g as GameUnit
 		if gu == null or gu == original or SoloController.unit_in_reserve(gu):
 			continue
+		var ring: float = 0.0
+		if original != null and int(gu.unit_properties.get("player_id", 0)) != int(original.unit_properties.get("player_id", 0)):
+			ring = SoloController.reinforcement_enemy_ring_m()
 		for m in gu.get_alive_models():
 			var mi := m as ModelInstance
 			if mi.node != null and is_instance_valid(mi.node) and not bool(mi.node.get_meta("embarked", false)):
-				blockers.append({"p": mi.node.global_position, "r": SoloController.model_base_radius_m(mi)})
+				blockers.append({"p": mi.node.global_position, "r": SoloController.model_base_radius_m(mi) + ring})
 	return blockers
 
 
@@ -13944,7 +13950,8 @@ func _reinforcement_human_ghost(original: GameUnit, radii: Array, trect: Rect2, 
 			state["done"] = true)
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL,
-			"Reinforcement: place %s within 12\" of any table edge — R rotates, Esc drops it at the first legal spot" % original.get_name(), false)
+			"Reinforcement: place %s %s — R rotates, Esc drops it at the first legal spot" % [
+				original.get_name(), SoloController.reinforcement_zone_text(margin_m)], false)
 	while not state["done"] and is_inside_tree():
 		await get_tree().process_frame
 	if chosen.is_empty():

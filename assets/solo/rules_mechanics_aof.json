@@ -6658,7 +6658,7 @@
     "params": {
      "trigger": "shaken_or_destroyed",
      "redeploy": "table_edge",
-     "within_in": 12,
+     "within_in": 9,
      "timing": "next_round_after_ambush",
      "no_objective_on_arrival": true,
      "once": true
@@ -8647,7 +8647,7 @@
     "params": {
      "trigger": "shaken_or_destroyed",
      "redeploy": "table_edge",
-     "within_in": 12,
+     "within_in": 9,
      "timing": "next_round_after_ambush",
      "no_objective_on_arrival": true,
      "once": true
