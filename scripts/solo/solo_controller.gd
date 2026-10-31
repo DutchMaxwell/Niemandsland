@@ -1384,7 +1384,7 @@ func best_shoot_target_now(ai_unit: GameUnit, held: bool = true) -> GameUnit:
 	var indirect: bool = has_indirect_ranged(weapons) and indirect_ignores_los(ai_unit, held)
 	var from := unit_centre(ai_unit)
 	var profiles := AiEv.stamp_sergeant(filter_limited(ai_unit, AiShooting.profiles_in_range(weapons, 0.0)), ai_unit)
-	var us := AiEv.ctx_for(ai_unit, majority_in_cover(ai_unit), counter_models_of(ai_unit))
+	var us := AiEv.ctx_for(ai_unit, majority_in_cover(ai_unit), counter_models_of(ai_unit), held)
 	var best: GameUnit = null
 	var best_ev := 0.0
 	for h in army_manager.get_game_units_for_player(enemy_slot_of(ai_unit)):
