@@ -1269,7 +1269,6 @@
     "book_version": "3.5.3",
     "params": {
      "reroll_save_low": 5,
-     "over_in": 9,
      "bypass_regen": false,
      "upgrades": "Bestial"
     }
@@ -2888,7 +2887,6 @@
     "params": {
      "ap_bonus": 1,
      "hit_bonus": 1,
-     "over_in": 9,
      "pick_one": false
     }
    },
@@ -3814,7 +3812,6 @@
     "book_version": "3.5.2",
     "params": {
      "extra_wound_save_low": 2,
-     "over_in": 9,
      "upgrades": "Warbound"
     }
    }
@@ -3895,7 +3892,6 @@
     "book_version": "3.5.3",
     "params": {
      "reroll_save_low": 5,
-     "over_in": 9,
      "bypass_regen": false,
      "upgrades": "Mischievous"
     }
@@ -4145,8 +4141,7 @@
     "book_version": "3.5.3",
     "params": {
      "upgrades": "Lucky",
-     "surge_low": 5,
-     "over_in": 9
+     "surge_low": 5
     }
    },
    "Enhanced Lucky Aura": {
@@ -5850,8 +5845,7 @@
     "params": {
      "upgrades": "Destroyer",
      "extra_wound_per_save_one": 1,
-     "save_fail_max": 2,
-     "over_in": 9
+     "save_fail_max": 2
     }
    },
    "Enhanced Destroyer Aura": {
@@ -6091,8 +6085,7 @@
     "book_version": "3.5.3",
     "params": {
      "upgrades": "Ferocious",
-     "surge_low": 5,
-     "over_in": 9
+     "surge_low": 5
     }
    },
    "Enhanced Ferocious Aura": {
@@ -7788,7 +7781,6 @@
     "book_version": "3.5.3",
     "params": {
      "extra_wound_save_low": 2,
-     "over_in": 9,
      "upgrades": "Warbound"
     }
    },
@@ -9164,7 +9156,6 @@
     "book_version": "3.5.3",
     "params": {
      "extra_wound_save_low": 2,
-     "over_in": 9,
      "upgrades": "Warbound"
     }
    },
