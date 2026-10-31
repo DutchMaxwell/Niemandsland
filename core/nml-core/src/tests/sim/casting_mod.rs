@@ -88,19 +88,19 @@ use crate::spell::cast_success_chance;
         );
     }
 
-    /// The catalogue side: "Burn the Heretic" (gf blessed_sisters — the gf
-    /// json's casting_mod rows are this and change_disciples' "Shifting
-    /// Form", both printed -3) parses its `casting_mod: -3` — until now
+    /// The catalogue side: "Burn the Heretic" (gff blessed_sisters — the 3.6
+    /// gf map carries no casting_mod row, the skirmish gff json keeps this
+    /// one and change_disciples' "Shifting Form", both printed -3) parses its `casting_mod: -3` — until now
     /// `modifier_of` dropped the field on the floor.
     #[test]
     fn burn_the_heretic_parses_its_casting_mod() {
         let root = format!("{}/../..", env!("CARGO_MANIFEST_DIR"));
         let mut reg = Registries::new(&root);
-        let spells = reg.spells_for("gf", "blessed_sisters");
+        let spells = reg.spells_for("gff", "blessed_sisters");
         let hex = spells
             .iter()
             .find(|s| s.name == "Burn the Heretic")
-            .expect("Burn the Heretic is in the gf blessed_sisters book");
+            .expect("Burn the Heretic is in the gff blessed_sisters book");
         assert!(hex.modifier.present, "the debuff's modifier dict is non-empty");
         assert_eq!(hex.modifier.casting_mod, -3.0, "the printed -3 finally parses");
         assert_eq!(hex.beneficiary, "target", "the stamp belongs to the bearer of the debuff");
