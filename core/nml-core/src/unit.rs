@@ -6076,14 +6076,27 @@ fn move_rule_mods_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Opt
                 e.param_f("advance_mod", 0.0),
                 e.param_f("rush_mod", e.param_f("charge_mod", 0.0)),
             );
-            acc.advance += adv;
-            acc.rush += rsh;
-            hit = true;
-            crate::sim::trace_rule(
-                "move-bands",
-                "Ethereal",
-                &format!("Ethereal: {adv}\" advance / {rsh}\" rush from the printed rule"),
-            );
+            if rule_on(rules_epoch, EPOCH_73_V36) {
+                // Rules 3.6 (MOR-19b): the place-within-6" is optional, so the STATIC
+                // bands carry the unplaced value; the table re-applies the -6"/-6" only
+                // while `teleport_used_this_activation` is set for the activation.
+                crate::sim::trace_rule(
+                    "move-bands",
+                    "Ethereal",
+                    &format!(
+                        "Ethereal: not placed (static) — 3.6 keeps the {adv}\" advance / {rsh}\" rush only while placed"
+                    ),
+                );
+            } else {
+                acc.advance += adv;
+                acc.rush += rsh;
+                hit = true;
+                crate::sim::trace_rule(
+                    "move-bands",
+                    "Ethereal",
+                    &format!("Ethereal: {adv}\" advance / {rsh}\" rush from the printed rule"),
+                );
+            }
         }
     }
 
