@@ -36,7 +36,7 @@ func _unit(pid: int, positions: Array, rules: Array = []) -> GameUnit:
 ## Returns [gap_in, decisions].
 func _vanguard_gap_at_epoch(epoch: int) -> Array:
 	AiActRecorder.rules_epoch = epoch
-	var human := _unit(1, [Vector3(0.0, 0.0, 0.05)])
+	var human := _unit(1, [Vector3(0.0, 0.0, 0.08)])
 	var van := _unit(2, [Vector3(0.0, 0.0, -0.5)], ["Vanguard"])
 	van.unit_id = "van"
 	van.unit_properties["name"] = "Drakesworn"
