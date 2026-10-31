@@ -147,6 +147,19 @@ static func rule_on_defence_family(unit: GameUnit, rule: String, solo: bool = fa
 	return rule_on_all_models(unit, rule, solo)
 
 
+## Row MOR-05b — the Guarded family names whose 3.6 wording says "most models". The core's twin is
+## unit.rs MOST_MODELS_GUARDED.
+const MOST_MODELS_GUARDED := ["Guarded", "Versatile Defense", "Sturdy", "Safety Gear", "Tenacious"]
+
+
+## Most models for the names above from EPOCH_73_V36, else every model; `solo` = the Takedown unit of [1].
+## The core's twin is unit.rs `guarded_family_on`.
+static func guarded_family_on(unit: GameUnit, rule: String, solo: bool = false) -> bool:
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and rule in MOST_MODELS_GUARDED:
+		return rule_on_most_models(unit, rule, solo)
+	return rule_on_all_models(unit, rule, solo)
+
+
 ## EXACT unit-rule check — has_special_rule matches by PREFIX, so "Unpredictable" would false-positive
 ## on an "Unpredictable Fighter" unit (the Ferocious-vs-"Ferocious Boost" lesson). Rating stripped.
 static func has_exact_rule(unit: GameUnit, rule: String) -> bool:
@@ -264,7 +277,7 @@ static func ctx_for(unit: GameUnit, in_cover: bool = false, counter_models: int 
 		"fortified_over_in": _fortified_over_in(unit),
 		# Guarded OR Versatile Defense's consistently-played def-half (both: +1 Def when shot/charged
 		# from over 9" — one EV flag, one dice-path arithmetic).
-		"guarded": rule_on_all_models(unit, "Guarded") or rule_on_all_models(unit, "Versatile Defense"),
+		"guarded": guarded_family_on(unit, "Guarded") or guarded_family_on(unit, "Versatile Defense"),
 		"ranged_shrouding": rule_on_all_models(unit, "Ranged Shrouding"),
 		"shielded": rule_on_defence_family(unit, "Shielded"),
 		"in_cover": in_cover,
