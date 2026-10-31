@@ -1277,6 +1277,8 @@ pub(crate) fn tray_strafing(
     }
     let phantom = r.scourge_wounds;
     let w = shot.absorb(r);
+    let members: Vec<usize> = parts.iter().map(|(b, _, _, _)| *b).collect();
+    land_hazardous_self(statics, next, &members, seams, shot);
     if !seams.tray_exact {
         land_wounds_with(next, target, w, false);
     }
@@ -4417,6 +4419,73 @@ pub(crate) fn living_bearers(state: &State, unit: usize, weapon_name: &str) -> O
     Some(kits.iter().flat_map(|k| k.weapons.iter()).filter(named).count() as i64)
 }
 
+/// Rules 3.6 (`EPOCH_73_V36`) — the first living model of `unit` whose kit carries `weapon`,
+/// the table's `_solo_hazardous_bearer`; None when the state carries no aligned kits (the
+/// unit-level fallback the table takes for a pooled regiment or an older save).
+fn hazardous_bearer(state: &State, unit: usize, weapon: &str) -> Option<usize> {
+    let kits = state.kits.get(unit).filter(|k| !k.is_empty() && k.len() as i64 == state.alive[unit])?;
+    let names = state.kit_names.get(unit)?;
+    (0..kits.len()).find(|&i| kits[i].weapons.iter().any(|&w| names.get(w as usize).is_some_and(|n| n == weapon)))
+}
+
+/// Rules 3.6 (`EPOCH_73_V36`) — Hazardous self-wounds land on the BEARER model, X
+/// (`max(Blast, Deadly, 1)`) per unmodified 1, capped at the model (no carry-over); the next
+/// 1 goes to the next living bearer. Without kits the unit takes them, as the table's fallback
+/// does. Returns the tally the table keeps (`ones * X`) for the melee-loser comparison, and
+/// writes the rule's own battle-log line (main.gd `_solo_hazardous_bearer_wounds`).
+#[allow(clippy::too_many_arguments)]
+fn hazardous_self_wounds(
+    statics: &[UnitStatic], state: &mut State, unit: usize,
+    weapon: &str, ones: i64, x: i64, seams: Seams, shot: &mut ShootResult,
+) -> i64 {
+    if ones <= 0 { return 0; }
+    let name = statics[state.roster.profile[unit]].name.clone();
+    for _ in 0..ones {
+        match hazardous_bearer(state, unit, weapon) {
+            Some(i) => {
+                let take = x.min(state.wounds[unit][i]);
+                state.wounds[unit][i] -= take;
+                shot.log.push(format!(
+                    "Hazardous: {} model {} takes {} wound{} ({})",
+                    name, i + 1, take, if take == 1 { "" } else { "s" }, weapon));
+                if state.wounds[unit][i] <= 0 {
+                    if state.positions[unit].len() == 1 { drop_carried(state, unit); }
+                    state.wounds[unit].remove(i);
+                    remove_position_or_log(state, unit, i, "hazardous_self");
+                    state.kit_remove(unit, i);
+                    if i < state.radii[unit].len() { Rc::make_mut(&mut state.radii)[unit].remove(i); }
+                    state.alive[unit] = state.positions[unit].len() as i64;
+                }
+            }
+            None => {
+                land_wounds_with(state, unit, x, seams.tray_exact);
+                shot.log.push(format!(
+                    "Hazardous: {} has no bearer on record — the unit takes {} wound{} ({})",
+                    name, x, if x == 1 { "" } else { "s" }, weapon));
+            }
+        }
+    }
+    ones * x
+}
+
+/// Land a result's Hazardous entries on the member that rolled them (matched by its name, the
+/// dice `Roll::owner`) and drop the `hazardous` divergence flag: from `EPOCH_73_V36` the branch
+/// IS ported, so the tray tree must no longer decline the activation for it.
+fn land_hazardous_self(
+    statics: &[UnitStatic], state: &mut State, members: &[usize],
+    seams: Seams, shot: &mut ShootResult,
+) -> i64 {
+    if !rule_on(seams.rules_epoch, EPOCH_73_V36) { return 0; }
+    let mut tally = 0;
+    for (owner, weapon, ones, x) in std::mem::take(&mut shot.hazardous_self) {
+        if let Some(&unit) = members.iter().find(|&&m| statics[state.roster.profile[m]].name == owner) {
+            tally += hazardous_self_wounds(statics, state, unit, &weapon, ones, x, seams, shot);
+        }
+    }
+    shot.unported.retain(|u| *u != "hazardous");
+    tally
+}
+
 /// MEL-PAR-F5 (`EPOCH_73_V36`) — a dead model's melee weapon is gone. The table (`_solo_attack_groups`) rolls a
 /// weapon carried by fewer models than the unit holds as `per-copy x min(living bearers, strikers)`. The core
 /// follows only when every living model strikes (`count >= alive`): with partial contact it does not know WHICH
@@ -4954,7 +5023,7 @@ fn strike_phase(
     shot: &mut ShootResult,
     set: StrikeSet,
     cover: Cover,
-) -> (i64, i64) {
+) -> (i64, i64, i64) {
     let mut parts = melee_parts(statics, next, si, ti, seams);
     if set != StrikeSet::All {
         let want_counter = set == StrikeSet::CounterOnly;
@@ -5158,6 +5227,8 @@ fn strike_phase(
     let ignored = r.caused - r.wounds - r.deadly_tally;
     let raw_deadly = r.deadly_tally;
     let w = shot.absorb(r);
+    let members: Vec<usize> = parts.iter().map(|(mi, _, _)| *mi).collect();
+    let hazard_self = land_hazardous_self(statics, next, &members, seams, shot);
     // B13: the table measures the lash-back on wounds actually TAKEN — the
     // wound-POOL difference (`_solo_retaliate_hits` :4570, NML-937), snapshotted
     // BEFORE the landing like the table's `pools_before` (:6146) — overkill
@@ -5240,7 +5311,7 @@ fn strike_phase(
         land_wounds_with(next, si, landed, seams.tray_exact);
     }
     spend_exchange(next, si, ti, true); // main.gd:6152, per strike phase
-    (caused, retaliated)
+    (caused, retaliated, hazard_self)
 }
 
 /// The charge's Impact, pool by pool — `main._solo_charge_impact` :6292. The
@@ -5611,6 +5682,8 @@ fn tray_charge_with_self_wounds(
     cover: Cover,
     charger_self_wounds: i64,
 ) -> Option<usize> {
+    let mut charger_self_wounds = charger_self_wounds;
+    let mut defender_self_wounds = 0;
     let strikes_first =
         |u: usize| statics[next.roster.profile[u]].melee.iter().any(|p| p.counter && p.counter_strikes_first.unwrap_or(true));
     // The table asks the host AND its living attached heroes (`_solo_has_counter`, main.gd:7050);
@@ -5639,9 +5712,10 @@ fn tray_charge_with_self_wounds(
         by_su += impact_phase(statics, next, si, ti, tray, shot, seams.rules_epoch, charge_from_in, seams.tray_exact);
     }
     if counter_first && next.alive[si] > 0 && next.alive[ti] > 0 {
-        let (c, rc) = strike_phase(statics, next, ti, si, false, 0.0, seams, tray, shot, StrikeSet::CounterOnly, cover);
+        let (c, rc, h) = strike_phase(statics, next, ti, si, false, 0.0, seams, tray, shot, StrikeSet::CounterOnly, cover);
         by_tu += c;
         by_su += rc;
+        defender_self_wounds += h;
     }
     // main.gd:8276's alive gate — a counter phase that wiped the charger
     // closes the card, nothing left to roll.
@@ -5659,9 +5733,10 @@ fn tray_charge_with_self_wounds(
             // an Impact pool that wiped the defender ends the melee here.
             if next.alive[si] > 0 && next.alive[ti] > 0 {
                 // B13: the defender's lash-back credits ITS OWN tally (by_tu).
-                let (c, rc) = strike_phase(statics, next, si, ti, true, charge_from_in, seams, tray, shot, StrikeSet::All, cover);
+                let (c, rc, h) = strike_phase(statics, next, si, ti, true, charge_from_in, seams, tray, shot, StrikeSet::All, cover);
                 by_su += c;
                 by_tu += rc;
+                charger_self_wounds += h;
                 next.fatigued[si] = true;
             }
         } else if next.alive[ti] > 0 && next.alive[si] > 0 {
@@ -5675,9 +5750,10 @@ fn tray_charge_with_self_wounds(
                     statics[next.roster.profile[ti]].name
                 ));
             } else {
-                let (c, rc) = strike_phase(statics, next, ti, si, false, 0.0, seams, tray, shot, strike_back_set, cover);
+                let (c, rc, h) = strike_phase(statics, next, ti, si, false, 0.0, seams, tray, shot, strike_back_set, cover);
                 by_tu += c;
                 by_su += rc;
+                defender_self_wounds += h;
                 next.fatigued[ti] = true;
             }
         }
@@ -5687,12 +5763,13 @@ fn tray_charge_with_self_wounds(
     // sides have finished attacking, BEFORE the melee result / morale test.
     self_destruct_post_melee(statics, next, si, ti, seams, tray, shot);
     self_destruct_post_melee(statics, next, ti, si, seams, tray, shot);
-    let a = by_su + statics[next.roster.profile[si]].ctx.fear;
+    let mut a = by_su + statics[next.roster.profile[si]].ctx.fear;
     let mut b = by_tu + statics[next.roster.profile[ti]].ctx.fear;
     // Rules 3.6 (`EPOCH_73_V36`): the loser TOOK more wounds, so each side scores what its ENEMY took: wounds dealt, the
     // Fear it bears and the enemy's own self-wounds (the twin rolls no Hazardous, so only the charger adds any).
     if rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) {
         b += charger_self_wounds;
+        a += defender_self_wounds;
         shot.log.push(format!(
             "[Melee result] {} took {b} wounds, {} took {a} (Fear and self-inflicted wounds count)",
             statics[next.roster.profile[si]].name, statics[next.roster.profile[ti]].name
@@ -8921,6 +8998,8 @@ fn resolve_with(
                             let ignored = r.caused - r.wounds - r.deadly_tally;
                             let phantom = r.scourge_wounds;
                             let w = shot.absorb(r);
+                            let members: Vec<usize> = parts.iter().map(|(mi, _, _)| *mi).collect();
+                            land_hazardous_self(statics, &mut next, &members, seams, shot);
                             if !seams.tray_exact {
                                 land_wounds_with(&mut next, g.ti, w, false);
                             }

@@ -188,6 +188,10 @@ pub struct ShootResult {
     /// its unsaved wounds x max(Deadly, 1) AFTER the picked model's Regeneration (main.gd:4059-4067);
     /// the drain lands each on ONE model, overkill lost. Their raw count rides `deadly_tally`.
     pub takedown_groups: Vec<i64>,
+    /// Rules 3.6 (`EPOCH_73_V36`) — Hazardous self-wounds the dice legs read off the hit roll:
+    /// `(owner, weapon, unmodified 1s, X)` with X = max(Blast, Deadly, 1). The sim lands them on the
+    /// bearer (main.gd `_solo_hazardous_self_wounds`); below the gate they are ignored.
+    pub hazardous_self: Vec<(String, String, i64, i64)>,
 }
 
 impl ShootResult {
@@ -215,6 +219,7 @@ impl ShootResult {
         self.deadly_groups.extend(other.deadly_groups);
         self.deadly_tally += other.deadly_tally;
         self.takedown_groups.extend(other.takedown_groups);
+        self.hazardous_self.extend(other.hazardous_self);
         for u in other.unported {
             self.mark(u);
         }
@@ -1109,6 +1114,10 @@ pub fn resolve_volley_leg(
             out.log.push(format!("Precise: +1 to hit on {}'s volley", sh.owner));
         }
         if p.hazardous {
+            let ones = faces.iter().filter(|&&f| f == 1).count() as i64;
+            if ones > 0 {
+                out.hazardous_self.push((sh.owner.to_string(), p.name.clone(), ones, p.blast.max(p.deadly).max(1)));
+            }
             out.mark("hazardous");
         }
         if p.strafing {
@@ -1963,6 +1972,12 @@ pub fn resolve_melee_leg(
                 faces: faces.clone(),
                 owner: sh.owner.into(),
             });
+            if p.hazardous {
+                let ones = faces.iter().filter(|&&f| f == 1).count() as i64;
+                if ones > 0 {
+                    out.hazardous_self.push((sh.owner.to_string(), p.name.clone(), ones, p.blast.max(p.deadly).max(1)));
+                }
+            }
             // EPOCH_73_V36 (row MEL-09) — a fatigued striker (a Shaken strike-back
             // counts as one) still hits on its sixes, but they fire no rule: every
             // hit-six reader below sees `trig`, empty when muted. Saves untouched.
