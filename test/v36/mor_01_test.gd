@@ -13,6 +13,9 @@ var _epoch0: int
 
 func before_test() -> void:
 	_epoch0 = AiActRecorder.rules_epoch
+	# The expected-morale read below is deterministic only with the aifix dither OFF (a static another suite may leave on).
+	BattleSim.morale_by_probability = false
+	BattleSim._morale_round = 1
 	Boot.arm_harness_mode()
 	_roots = Boot.root_children(get_tree())
 	_runner = scene_runner(Boot.MAIN_SCENE)
