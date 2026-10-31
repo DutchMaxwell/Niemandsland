@@ -16,6 +16,9 @@
   "Ambush Aura",
   "Ambush Re-Deployment",
   "Angelic Blessing",
+  "Bravery",
+  "Bravery Aura",
+  "Bravery Buff",
   "Crossing Strike",
   "Enhanced Angelic Blessing",
   "Enhanced Angelic Blessing Buff",
@@ -600,6 +603,33 @@
    "book_version": "3.6.0",
    "params": {
     "rating": "X"
+   }
+  },
+  "Bravery": {
+   "primitive": "Banner",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "morale_bonus": 1
+   }
+  },
+  "Bravery Aura": {
+   "primitive": "Banner",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "morale_bonus": 1
+   }
+  },
+  "Bravery Buff": {
+   "primitive": "Utility Buff",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "morale_mod": 1,
+    "range_in": 12,
+    "target": "friendly",
+    "once": true
    }
   },
   "Caster": {
