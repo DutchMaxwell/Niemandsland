@@ -4830,25 +4830,32 @@ fn melee_parts(statics: &[UnitStatic], state: &State, i: usize, ti: usize, seams
         melee_bearers_rescale(um, state, mi, count, seams.rules_epoch, &mut sc);
         sc.keep = (0..um.melee.len()).collect();
         drop_spent_limited(&um.melee, &state.limited_used[mi], &mut sc);
+        let mut ctx = ctx_live_vs(ctx_of_melee(um, state, mi, seams.rules_epoch), statics, state, mi, ti, true, seams.rules_epoch);
         // rules-wave3-growthmark (epoch 6) — Regenerative Strength's melee
         // facet: +X attacks with ONE melee weapon, X = the bearer's own
         // marker count (`scope: "one_melee_weapon"`; the unit's FIRST melee
         // profile is the pick). Gated `EPOCH_6_TABLE_RULES`, so a rules_epoch
-        // 5 record replays byte-exact.
+        // 5 record replays byte-exact. MEL-12 (`EPOCH_73_V36`): the SAME rule
+        // name pays in token dice instead (rolled in `dice::resolve_melee_leg`),
+        // so its attack share is subtracted and every other Growth Markers
+        // rule keeps its own payout.
         if rule_on(seams.rules_epoch, EPOCH_6_TABLE_RULES) && state.growth_markers[mi] > 0 {
-            let atk = um.growth.iter().map(|g| g.attacks_per_marker).sum::<i64>()
-                * state.growth_markers[mi];
+            let markers = state.growth_markers[mi];
+            let mut atk = um.growth.iter().map(|g| g.attacks_per_marker).sum::<i64>() * markers;
+            if ctx.growth_wounds_not_attacks {
+                atk -= um.growth.iter()
+                    .filter(|g| g.name == "Regenerative Strength")
+                    .map(|g| g.attacks_per_marker)
+                    .sum::<i64>() * markers;
+                ctx.growth_wound_dice = markers;
+            }
             if atk != 0 {
                 if let Some(a) = sc.attacks.first_mut() {
                     *a += atk;
                 }
             }
         }
-        parts.push((
-            mi,
-            sc,
-            ctx_live_vs(ctx_of_melee(um, state, mi, seams.rules_epoch), statics, state, mi, ti, true, seams.rules_epoch),
-        ));
+        parts.push((mi, sc, ctx));
     }
     parts
 }
@@ -4967,6 +4974,21 @@ fn strike_phase(
             }
             if set != StrikeSet::CounterOnly && um.ctx.ravage > 0 && att.ravage == 0 {
                 shot.log.push(format!("Ravage: {} is Fatigued - no Ravage", um.name));
+            }
+            if att.growth_wound_dice > 0 {
+                if host_tired || set == StrikeSet::CounterOnly {
+                    att.growth_wound_dice = 0;
+                    if set != StrikeSet::CounterOnly {
+                        shot.log.push(format!(
+                            "Regenerative Strength: {} is Fatigued - no token dice", um.name));
+                    }
+                } else if next.growth_strike_round[*mi] == next.round {
+                    att.growth_wound_dice = 0;
+                    shot.log.push(format!(
+                        "Regenerative Strength: {} already rolled its dice this round", um.name));
+                } else {
+                    next.growth_strike_round[*mi] = next.round;
+                }
             }
         }
     }
