@@ -126,15 +126,20 @@
     }
 
     // ------------------------------------------------ Angelic Blessing --------
-    // The registry's 6+/spells-4+ legs at the CURRENT epoch (the merged
-    // Angelic Blessing test pins them at the same read; this sibling adds
-    // the no-rule control beside it).
+    // The registry's 6+/spells-2+ legs at the CURRENT epoch (MOR-17a moved the
+    // spell leg of the shared Warding rule to its own key; below 73 it stays 4).
     #[test]
-    fn an_angelic_blessing_carrier_ignores_on_6_and_spells_on_4_at_current_epoch() {
+    fn an_angelic_blessing_carrier_ignores_on_6_and_spells_on_2_at_current_epoch() {
         let e = crate::acts::CURRENT_RULES_EPOCH;
         let us = carrier("aof", "kingdom_of_angels", &["Angelic Blessing"], e);
         assert_eq!(us.ctx.regen_target, 6, "the entry's ignore_target");
-        assert_eq!(us.ctx.regen_target_spell, 4, "the entry's ignore_target_spell");
+        assert_eq!(us.ctx.regen_target_spell, 2, "the entry's ignore_target_spell_v36");
+        assert_eq!(
+            carrier("aof", "kingdom_of_angels", &["Angelic Blessing"], crate::acts::EPOCH_72_PLAYTEST_RULES)
+                .ctx.regen_target_spell,
+            4,
+            "below 73 the recorded ignore_target_spell"
+        );
         assert!(us.ctx.regeneration);
         let none = carrier("aof", "kingdom_of_angels", &["Fearless"], e);
         assert_eq!(none.ctx.regen_target, 0, "no Regeneration-family member, no legs");
