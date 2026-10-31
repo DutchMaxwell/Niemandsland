@@ -60,26 +60,26 @@ use super::*;
         ("Enhanced Harassing Aura", "aof", "dark_elves", "Enhanced Harassing", true),
         ("Enhanced Havocbound Aura", "aof", "havoc_dwarves", "Enhanced Havocbound", false),
         ("Enhanced Highborn Aura", "aof", "high_elves", "Enhanced Highborn", false),
-        ("Hive Bond Boost Aura", "gf", "alien_hives", "Hive Bond Boost", false),
+        ("Enhanced Hive Bond Aura", "gf", "alien_hives", "Enhanced Hive Bond", false),
         ("Ignores Cover Aura", "gf", "eternal_dynasty", "Ignores Cover", true),
         ("Ignores Cover when Shooting Aura", "gf", "dwarf_guilds", "Ignores Cover when Shooting", true),
-        ("Infected Boost Aura", "gf", "infected_colonies", "Infected Boost", true),
+        ("Enhanced Infected Aura", "gf", "infected_colonies", "Enhanced Infected", true),
         ("Infiltrate Aura", "gf", "dwarf_guilds", "Infiltrate", true),
-        ("Machine-Fog Boost Aura", "gf", "machine_cults", "Machine-Fog Boost", false),
-        ("Mischievous Boost Aura", "aof", "goblins", "Mischievous Boost", false),
+        ("Enhanced Machine-Fog Aura", "gf", "machine_cults", "Enhanced Machine-Fog", false),
+        ("Enhanced Mischievous Aura", "aof", "goblins", "Enhanced Mischievous", false),
         ("Piercing Assault Aura", "aof", "beastmen", "Piercing Assault", true),
-        ("Plaguebound Boost Aura", "aof", "plague_disciples", "Plaguebound Boost", true),
+        ("Enhanced Plaguebound Aura", "aof", "plague_disciples", "Enhanced Plaguebound", true),
         ("Point-Blank Piercing Aura", "gf", "blessed_sisters", "Point-Blank Piercing", true),
         ("Protection Feat Aura", "aofs", "crazed_zealots", "Protection Feat", true),
-        ("Rapid Blink Boost Aura", "gf", "elven_jesters", "Rapid Blink Boost", false),
+        ("Enhanced Rapid Blink Aura", "gf", "elven_jesters", "Enhanced Rapid Blink", false),
         ("Ravage Aura", "aof", "orcs", "Ravage", false),
         ("Relentless Aura", "aof", "dwarves", "Relentless", false),
         ("Scout Aura", "aof", "change_disciples", "Scout", false),
-        ("Scrapper Boost Aura", "gf", "jackals", "Scrapper Boost", true),
-        ("Screened Aura", "gf", "wormhole_daemons_of_plague", "Screened", true),
-        ("Scurry Boost Aura", "aof", "ratmen", "Scurry Boost", false),
-        ("Sturdy Boost Aura", "aof", "dwarves", "Sturdy Boost", true),
-        ("Warbound Boost Aura", "aof", "rift_daemons_of_war", "Warbound Boost", true),
+        ("Enhanced Scrapper Aura", "gf", "jackals", "Enhanced Scrapper", true),
+        ("Screened Aura", "gf", "daemons_of_plague", "Screened", true),
+        ("Enhanced Scurry Aura", "aof", "ratmen", "Enhanced Scurry", false),
+        ("Enhanced Sturdy Aura", "aof", "dwarves", "Enhanced Sturdy", true),
+        ("Enhanced Warbound Aura", "aof", "daemons_of_war", "Enhanced Warbound", true),
     ];
 
     /// One Rifle+Blade carrier in `system/faction` printing `rules`, built
@@ -160,8 +160,8 @@ use super::*;
                 "Enhanced Guardian Aura" => {
                     assert_eq!(granted.ctx.fortified_boost_ap, 1, "Enhanced Guardian's incoming_ap_reduction");
                 }
-                "Plaguebound Boost Aura" => {
-                    assert_eq!(granted.ctx.regen_target, 5, "Plaguebound Boost's ignore_target");
+                "Enhanced Plaguebound Aura" => {
+                    assert_eq!(granted.ctx.regen_target, 5, "Enhanced Plaguebound's ignore_target");
                 }
                 "Protection Feat Aura" => {
                     assert_eq!(granted.ctx.regen_target, 5, "Protection Feat's ignore_target");
@@ -171,18 +171,18 @@ use super::*;
 
             // (4) The Banner-primitive morale number lives on the capture
             // reads, not the statics — Hive Bond Boost's own number, by name.
-            if aura == "Hive Bond Boost Aura" {
+            if aura == "Enhanced Hive Bond Aura" {
                 let mut reg = Registries::new(&repo_root());
                 let header = read_act_header(
                     &AMBUSH_FAMILY_HEADER
-                        .replace("\"special_rules\":[]", "\"special_rules\":[\"Hive Bond Boost Aura\"]")
+                        .replace("\"special_rules\":[]", "\"special_rules\":[\"Enhanced Hive Bond Aura\"]")
                         .replace("\"faction_folder\":\"robot_legions\"", "\"faction_folder\":\"alien_hives\"")
                         .replace(RIFLE_ONLY, RIFLE_AND_BLADE),
                 )
                 .expect("header");
                 let p = header.profiles.get("carrier").expect("carrier");
                 let reads = crate::unit::capture_reads_for_epoch(&mut reg, p, crate::acts::CURRENT_RULES_EPOCH);
-                assert_eq!(reads.morale_bonus, 2, "Hive Bond Boost's morale_bonus");
+                assert_eq!(reads.morale_bonus, 2, "Enhanced Hive Bond's morale_bonus");
                 let bare = read_act_header(
                     &AMBUSH_FAMILY_HEADER
                         .replace("\"faction_folder\":\"robot_legions\"", "\"faction_folder\":\"alien_hives\"")

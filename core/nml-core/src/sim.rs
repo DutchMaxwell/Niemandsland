@@ -259,6 +259,10 @@ fn morale_fearless(statics: &[UnitStatic], state: &State, i: usize, seams: Seams
     if !rule_on(seams.rules_epoch, EPOCH_65_MELEE_TRUTH) {
         return own.fearless;
     }
+    if rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) {
+        let (with, total) = fearless_models(statics, state, i, seams);
+        return crate::unit::most_models_of(with, total);
+    }
     let mut found = false;
     if state.alive[i] > 0 {
         found = true;
@@ -273,6 +277,20 @@ fn morale_fearless(statics: &[UnitStatic], state: &State, i: usize, seams: Seams
         }
     }
     found
+}
+
+/// Rules 3.6 (ruling D-MOST): (living models of the joined unit that carry Fearless, all living models). Every
+/// living host model shares the host's rules; every living joined hero is one model however Tough.
+fn fearless_models(statics: &[UnitStatic], state: &State, i: usize, seams: Seams) -> (i64, i64) {
+    let alive = state.alive[i].max(0);
+    let mut counts = (if statics[state.roster.profile[i]].fearless_own { alive } else { 0 }, alive);
+    if seams.hero_attach {
+        for &h in state.attached[i].iter().filter(|&&h| state.alive[h] > 0) {
+            counts.0 += i64::from(statics[state.roster.profile[h]].fearless_own);
+            counts.1 += 1;
+        }
+    }
+    counts
 }
 
 /// `BattleSim._morale_fails_expected` battle_sim.gd:1082-1090 — Shaken always
@@ -3370,7 +3388,7 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
     // stamping-gap window at rules_epoch 4 included).
     if rule_on(rules_epoch, EPOCH_5_TABLE_RULES) {
         c.slayer_grant = grants && mods::granted(state, i, "Slayer");
-        c.surge_grant = grants && mods::granted(state, i, "Primal Boost");
+        c.surge_grant = grants && mods::granted(state, i, "Enhanced Primal");
         c.versatile_grant = grants && mods::granted(state, i, "Versatile Attack");
         c.pierce_shooting_grant = grants && mods::granted(state, i, "AP(+1) when shooting");
         c.pierce_melee_grant = grants && mods::granted(state, i, "AP(+1) in melee");
@@ -3399,7 +3417,7 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
             c.unpredictable_shooting || (grants && mods::granted(state, i, "Unpredictable Shooter"));
         // The Regeneration-primitive boosts: the granted entry's printed
         // targets, folded by the static stamp's own running-MIN rule.
-        if grants && mods::granted(state, i, "Self-Repair Boost") {
+        if grants && mods::granted(state, i, "Enhanced Self-Repair") {
             c.regeneration = true;
             c.regen_target = fold_min(c.regen_target, SELF_REPAIR_BOOST_TARGET);
             c.regen_target_spell = fold_min(c.regen_target_spell, SELF_REPAIR_BOOST_TARGET);
@@ -3446,8 +3464,8 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
         }
         for (name, alias, terrain) in [
             ("+1 to Defense", ShieldedAlias::PlusOneToDefense, false),
-            ("Sturdy Boost", ShieldedAlias::SturdyBoost, false),
-            ("Grounded Reinforcement", ShieldedAlias::GroundedReinforcement, true),
+            ("Enhanced Sturdy", ShieldedAlias::SturdyBoost, false),
+            ("Grounded Defense", ShieldedAlias::GroundedReinforcement, true),
         ] {
             if (grants && mods::granted(state, i, name)) && (!terrain || c.in_cover) {
                 c.shielded = true;
@@ -3483,8 +3501,8 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
     // Self-Repair Boost precedent; epoch-5 records replay untouched.
     if rule_on(rules_epoch, EPOCH_6_TABLE_RULES)
         && ((grants && mods::granted(state, i, "Enhanced Guardian"))
-            || (grants && mods::granted(state, i, "Warden Boost"))
-            || (grants && mods::granted(state, i, "Ossified Boost")))
+            || (grants && mods::granted(state, i, "Enhanced Warden"))
+            || (grants && mods::granted(state, i, "Enhanced Ossified")))
     {
         c.fortified_boost_ap = c.fortified_boost_ap.max(1);
     }
@@ -4834,7 +4852,7 @@ fn fortified_log_name(statics: &[UnitStatic], state: &State, ti: usize, over9: b
     if !us.fortified_boost_name.is_empty() {
         return Some(us.fortified_boost_name.clone());
     }
-    ["Enhanced Guardian", "Warden Boost", "Ossified Boost"]
+    ["Enhanced Guardian", "Enhanced Warden", "Enhanced Ossified"]
         .into_iter()
         .find(|n| mods::granted(state, ti, n))
         .map(String::from)
@@ -5213,7 +5231,7 @@ fn live_morale_ctx(statics: &[UnitStatic], state: &State, i: usize, melee: bool,
     // granted "Hold the Line Boost" joins the same net, epoch-gated.
     ctx.morale_bonus = state.morale_bonus[i]
         + mods::sum(state, i, mods::Role::Morale, melee, |r| r.morale_mod)
-        + if rule_on(seams.rules_epoch, EPOCH_5_TABLE_RULES) && mods::granted(state, i, "Hold the Line Boost") { HOLD_THE_LINE_BOOST_MORALE_BONUS } else { 0 };
+        + if rule_on(seams.rules_epoch, EPOCH_5_TABLE_RULES) && mods::granted(state, i, "Enhanced Hold the Line") { HOLD_THE_LINE_BOOST_MORALE_BONUS } else { 0 };
     ctx.no_retreat = ctx.no_retreat || mods::granted(state, i, "No Retreat");
     ctx
 }
@@ -5291,6 +5309,14 @@ fn tray_morale_for(
         wounds_left(state, i),
         tray,
     );
+    // Rules 3.6 rules-must-log (main.gd `_solo_morale_test`): a unit Fearless by MOST of its models names the
+    // count when it draws the recovery die - the die follows the test die, or stands alone for a Shaken unit.
+    if rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) && ctx.fearless && r.rolls.len() > usize::from(!state.shaken[i]) {
+        let (with, total) = fearless_models(statics, state, i, seams);
+        if with < total {
+            shot.log.push(format!("Fearless: {with} of {total} models of {} have it — most do, so the whole unit counts", us.name));
+        }
+    }
     mods::spend_once(state, i, &[mods::Role::Morale], melee);
     let self_wounds = shot.absorb(r);
     land_wounds_with(state, i, self_wounds, seams.tray_exact);
@@ -8226,6 +8252,20 @@ fn resolve_with(
     // Quick Shot RUSH exactly as it already does to a moved ADVANCE.
     let quick_shot_active =
         statics[pi_s].quick_shot_active || mods::granted(&next, si, "Quick Shot");
+    // Rules 3.6 Cumbersome (SHO-16): a unit that moved fires no volley. The key
+    // is dropped here, so the Hit & Run shot leg below sees no attack either.
+    let shoot_key = if !shoot_key.is_empty()
+        && moved
+        && statics[pi_s].cumbersome
+        && rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36)
+    {
+        if let Some((_, shot)) = dice.as_mut() {
+            shot.log.push(format!("Cumbersome: {} moved, so it cannot shoot this activation", statics[pi_s].name));
+        }
+        String::new()
+    } else {
+        shoot_key
+    };
     if !shoot_key.is_empty() && (kind == HOLD || kind == ADVANCE || (kind == RUSH && quick_shot_active)) {
         // W1: the decline stands unless the caller has asked for the moving
         // shot, which is the other half of `Knobs::menu_wide` — the menu may

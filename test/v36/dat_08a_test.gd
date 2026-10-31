@@ -47,8 +47,14 @@ func test_aof_crossing_attack_resolves_in_a_book_without_its_own_entry() -> void
 
 
 func test_aof_unpredictable_fighter_resolves_in_books_without_their_own_entry() -> void:
-	for book: String in ["daemons_of_lust", "daemons_of_war"]:
-		_assert_resolves("aof", book, "Unpredictable Fighter", "Unpredictable Fighter", {}, "3.6.0")
+	_assert_resolves("aof", "daemons_of_lust", "Unpredictable Fighter", "Unpredictable Fighter", {}, "3.6.0")
+
+
+## DAT-02 gave the AoF daemon books their rules 3.6 keys, so daemons_of_war reaches its own section
+## again and answers from its own 3.5.3 entry. Same primitive and knobs as the common entry pinned
+## above, so a drift on either side breaks one of the two cases.
+func test_aof_daemons_of_war_keeps_its_own_unpredictable_fighter_entry() -> void:
+	_assert_resolves("aof", "daemons_of_war", "Unpredictable Fighter", "Unpredictable Fighter", {}, "3.5.3")
 
 
 func test_aof_unpredictable_fighter_aura_resolves_in_a_book_without_its_own_entry() -> void:

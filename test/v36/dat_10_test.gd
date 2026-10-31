@@ -15,8 +15,8 @@ const RANGE_CHARGE_SHAPE := {"range_bonus_in": 4.0, "charge_mod": 2.0}
 const BOOKS := {
 	"Scurry": [["gf", "ratmen_clans"], ["aof", "ratmen"]],
 	"Lustbound": [["gf", "lust_disciples"], ["gf", "titan_lords_lust_disciples"],
-		["gf", "wormhole_daemons_of_lust"], ["aof", "giant_tribes_lust_disciples"],
-		["aof", "lust_disciples"], ["aof", "rift_daemons_of_lust"]],
+		["gf", "daemons_of_lust"], ["aof", "giant_tribes_lust_disciples"],
+		["aof", "lust_disciples"], ["aof", "daemons_of_lust"]],
 	"Highborn": [["gf", "high_elf_fleets"], ["aof", "high_elves"]],
 }
 

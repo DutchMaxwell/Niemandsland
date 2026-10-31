@@ -4768,6 +4768,11 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 			cover_logged = true   # I4: only claim Cover when the roll truly saved at the covered value
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s is in cover: +1 Defense (saves on %d+)" % [
 				target.get_name(), AiCombatMath.shown_target(save_def)], true)
+		# AI-08a — rules-must-log: a cover skip by a map-read rule (Anti-Cover et al.) names the rule.
+		elif td_ctx.is_empty() and battle_log != null and shot_cover < shot_base and int(profile.get("blast", 0)) <= 1 \
+				and not str(profile.get("cover_rule", "")).is_empty():
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s — %s's cover save is skipped" % [
+				str(profile["cover_rule"]), shooter_name, target.get_name()], true)
 		var is_deadly: bool = int(profile.get("deadly", 0)) > 0
 		# TC-023: the saves are the PICKED MODEL's — rolled by its own GameUnit, so a sniped attached
 		# hero blocks on HIS Defense (and his own Fortified / conditional-AP profile), not the host's.
@@ -6387,6 +6392,27 @@ func _solo_rule_on_all_models(unit: GameUnit, rule: String) -> bool:
 		not _solo_takedown_solo.is_empty() and unit != null and unit == _solo_takedown_solo.get("unit"))
 
 
+## Rules 3.6 (ruling D-MOST): whether MOST living models of a unit carry `rule` — a strict majority, a joined hero
+## one model — with Takedown's unit of [1] collapsed as above. Below EPOCH_73_V36 it is the all-models read.
+func _solo_rule_on_most_models(unit: GameUnit, rule: String) -> bool:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return _solo_rule_on_all_models(unit, rule)
+	return AiEv.rule_on_most_models(unit, rule,
+		not _solo_takedown_solo.is_empty() and unit != null and unit == _solo_takedown_solo.get("unit"))
+
+
+## Rules 3.6 rules-must-log: (living models of the joined unit that carry `rule`, all living models), a joined hero
+## one model, for a most-models rule's battle-log line. The decision itself stays AiEv.rule_on_most_models.
+func _solo_models_with_rule(unit: GameUnit, rule: String) -> Vector2i:
+	var alive := unit.get_alive_count()
+	var counts := Vector2i(alive if unit.has_special_rule(rule) else 0, alive)
+	for h in unit.get_attached_heroes():
+		var hero := h as GameUnit
+		if hero != null and hero.get_alive_count() > 0:
+			counts += Vector2i(1 if hero.has_special_rule(rule) else 0, 1)
+	return counts
+
+
 ## The over-9" +1-defense rule a target projects ("" when none): Guarded (unconditional), or a
 ## Versatile Defense unit (wahl-effect wave — official text: "pick one effect: when shot or charged
 ## from over 9\" away, the unit either gets +1 to defense rolls, or enemy units get -1 to hit rolls
@@ -7493,11 +7519,11 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 	# attacking them always get -1 to hit") — it REPLACES the base's over-9" Stealth alias
 	# (one -1 at any range), it does not add a second one.
 	var empyrean_boost: bool = _solo_rule_on_all_models(target, "Empyrean Spirit") \
-			and _solo_rule_on_all_models(target, "Empyrean Spirit Boost")
+			and _solo_rule_on_all_models(target, "Enhanced Empyrean Spirit")
 	var evasive_note := "Evasive -1"
 	if empyrean_boost:
 		# Rules-must-log: the applied rule names itself once — never the stood-down base next to it.
-		evasive_note = "Empyrean Spirit Boost: -1 to hit (base Evasive stood down)"
+		evasive_note = "Enhanced Empyrean Spirit: -1 to hit (base Evasive stood down)"
 	# Coverage wave: the Stealth-family DATA alias that applies to THIS attack — Changebound /
 	# Machine-Fog ("shot or charged from over 9\"" → applies_charged), Grounded Stealth (terrain-
 	# conditional; D-STEALTH: the per-model within-1\" predicate, the cover-cell approximation
@@ -9230,6 +9256,10 @@ func _solo_ignores_regen(attacker: GameUnit, profile: Dictionary) -> bool:
 		if bool(bp.get("bypass_regen", false)):
 			if not AiEv.facet_applies(bp, int(profile.get("range", 0))):
 				continue
+			# AI-08a — rules-must-log: the map-read bypass names the weapon's rule (Anti-Regen et al.).
+			if attacker != null:
+				_log_rule_event(BattleLog.Category.COMBAT, "%s: Regeneration ignored" % RulesRegistry.base_rule_name(s),
+					_solo_is_ai_unit(attacker))
 			return true
 	# Coverage wave: unit-level bypass aliases via the primitive layer ("Ignores Regeneration in
 	# Melee" sits on the MODEL, not the weapon) — melee_only and shooting_only respected per profile.
@@ -11181,7 +11211,12 @@ func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false, cause
 	# Fearless (GF/AoF Advanced Rules v3.5.1 p.13): a unit where all models have this rule rolls a recovery
 	# die once after a FAILED morale test; on a 4+ it counts as passed instead. Rolled visibly on the real
 	# tray. The 4+ is DATA where the mechanics map carries it (RulesRegistry; constant fallback — byte-identical seam).
-	if result != AiCombatMath.Morale.PASSED and AiEv.rule_on_all_models(unit, "Fearless"):
+	# Rules 3.6 (EPOCH_73_V36): most models are enough; a mixed unit's log names the count.
+	if result != AiCombatMath.Morale.PASSED and _solo_rule_on_most_models(unit, "Fearless"):
+		var fearless_models := _solo_models_with_rule(unit, "Fearless")
+		if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and fearless_models.x < fearless_models.y and battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT, "Fearless: %d of %d models of %s have it — most do, so the whole unit counts" % [
+				fearless_models.x, fearless_models.y, unit.get_name()], true)
 		var recover_target: int = int(RulesRegistry.unit_param(unit, "Fearless", "recover_target", AiCombatMath.FEARLESS_RECOVER_TARGET))
 		var recovery_die: Array = await _owner_roll(unit, 1, recover_target, "fearless",
 			"Morale recovery die — Fearless (%d+)" % recover_target, {"what": "Fearless recovery die", "label": owner})
@@ -11447,6 +11482,25 @@ func solo_begin_targeting(unit: GameUnit, melee: bool) -> void:
 		battle_log.log_event(BattleLog.Category.GENERAL, "%s: pick a target (%s) — right-click cancels" % [unit.get_name(), ("melee" if melee else "shooting")])
 
 
+## Rules 3.6 Cumbersome (SHO-16): the unit carries the rule in a game at the 3.6 epoch — it may only Hold or Advance
+## and never shoots after it moved. Core twin: sim.rs `resolve_with` (the moved-volley stand-down).
+static func cumbersome_active(unit: GameUnit) -> bool:
+	return AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and RulesRegistry.unit_rule_active(unit, "Cumbersome")
+
+
+## Why `verb` is closed to a Cumbersome unit, or "" when it is open: Rush and Charge are out; an Advance still moves,
+## its shot stays shut (_solo_open_shot_pick).
+static func cumbersome_refusal(unit: GameUnit, verb: int) -> String:
+	if (verb == AiDecision.Action.RUSH or verb == AiDecision.Action.CHARGE) and cumbersome_active(unit):
+		return "Cumbersome: %s may only Hold or Advance" % unit.get_name()
+	return ""
+
+
+## The shot a Cumbersome unit does not get after moving: one battle-log line, the core's own words (sim.rs).
+func _log_cumbersome_no_shot(unit: GameUnit) -> void:
+	_log_rule_event(BattleLog.Category.COMBAT, "Cumbersome: %s moved, so it cannot shoot this activation" % unit.get_name(), true)
+
+
 ## A1 (NML-202, automodus PR 2) — the player's engine-executed activation entry (radial Charge /
 ## Advance & Shoot / Rush): the SAME guards as solo_begin_targeting, but the PICK closes into
 ## _run_player_intent instead of the manual attack flow — the engine moves the unit along a legal
@@ -11459,6 +11513,11 @@ func solo_begin_auto(unit: GameUnit, verb: int) -> void:
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.GENERAL,
 				"%s has already activated this round — one activation per unit (GF v3.5.1)" % unit.get_name())
+		return
+	var cumbersome_why := cumbersome_refusal(unit, verb)
+	if cumbersome_why != "":
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.GENERAL, cumbersome_why)
 		return
 	if await _solo_confirm_cast_first(unit):
 		solo_begin_cast(unit)
@@ -12092,6 +12151,9 @@ func _solo_auto_click(target: GameUnit) -> void:
 ## wears the highlighted one, and the pick waits for a click (Enter = the suggestion; right-click/Esc = no shot).
 ## False = no shot to pick (no Quick Shot, or nothing to light).
 func _solo_open_shot_pick(unit: GameUnit, verb: int) -> bool:
+	if cumbersome_active(unit):   # rules 3.6: it moved, so it does not shoot
+		_log_cumbersome_no_shot(unit)
+		return false
 	var quick := verb == AiDecision.Action.RUSH
 	# The test player_intent uses (solo_controller.gd), with no target yet: the rule active, or spell-granted.
 	if quick and not ((unit.has_special_rule("Quick Shot") and RulesRegistry.unit_rule_active(unit, "Quick Shot")) \
@@ -13291,6 +13353,11 @@ func _solo_volley_indirect(attacker: GameUnit, target: GameUnit) -> bool:
 func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Array = [], skip_named: bool = false) -> void:
 	if SoloController.combined_alive(attacker) <= 0 or SoloController.combined_alive(target) <= 0:
 		return
+	# Rules 3.6 Cumbersome: moved this round (the same moved_round stamp the drop writes) = no volley.
+	if cumbersome_active(attacker) and opr_army_manager != null \
+			and int(attacker.unit_properties.get("moved_round", -1)) == opr_army_manager.current_round:
+		_log_cumbersome_no_shot(attacker)
+		return
 	_solo_stage_begin("%s fires at %s" % [attacker.get_name(), target.get_name()])
 	# B11: ONE measuring truth — the shot distance (feeding the >9" Versatile/Guarded gates and the
 	# profile range gate's fallback) is the base-EDGE gap of the nearest model pair, like the ruler.
@@ -13790,13 +13857,15 @@ func _reinforcement_arrive_one(original: GameUnit, round_number: int) -> void:
 	var radii: Array = []
 	for i in range(profile_unit.size):
 		radii.append(_reinforcement_model_radius(original, i))
+	var band_m: float = SoloController.reinforcement_edge_m(original)
+	var zone_text: String = SoloController.reinforcement_zone_text(band_m)
 	var spots: Array = await _reinforcement_pick_spots(original, radii, ai)
 	if spots.is_empty():
 		# No legal spot anywhere in the strip — keep the promise for a later round rather than
 		# swallowing it, and say why nothing happened.
 		if battle_log != null:
 			_log_rule_event(BattleLog.Category.GENERAL,
-				"Reinforcement: %s cannot return this round — no free spot within 12\" of any table edge" % original.get_name(), ai)
+				"Reinforcement: %s cannot return this round — no free spot %s" % [original.get_name(), zone_text], ai)
 		return
 
 	var forfeited: int = maxi(profile_unit.size - spots.size(), 0)
@@ -13831,12 +13900,12 @@ func _reinforcement_arrive_one(original: GameUnit, round_number: int) -> void:
 
 	if battle_log != null:
 		_log_rule_event(BattleLog.Category.GENERAL,
-			"Reinforcement: %s returns with %d model(s) within 12\" of a table edge — it cannot seize or contest objectives this round" % [
-				copy.get_name(), copy.models.size()], ai)
+			"Reinforcement: %s returns with %d model(s) %s — it cannot seize or contest objectives this round" % [
+				copy.get_name(), copy.models.size(), zone_text], ai)
 		if forfeited > 0:
 			_log_rule_event(BattleLog.Category.GENERAL,
-				"Reinforcement: only %d of %d models fit inside the 12\" edge strip — %d forfeited" % [
-					spots.size(), src.size, forfeited], ai)
+				"Reinforcement: only %d of %d models fit %s — %d forfeited" % [
+					spots.size(), src.size, zone_text, forfeited], ai)
 		_log_rule_event(BattleLog.Category.GENERAL,
 			"Reinforcement: the returning %s does not have Reinforcement — the rule does not apply to the new copy" % copy.get_name(), ai)
 	if solo_controller != null and _solo_alternation_active():
@@ -13860,7 +13929,7 @@ func _reinforcement_pick_spots(original: GameUnit, radii: Array, ai: bool) -> Ar
 	var trect: Rect2 = _table_rect()
 	if trect.size == Vector2.ZERO:
 		return []
-	var margin_m: float = SoloController.REINFORCEMENT_EDGE_IN * 0.0254
+	var margin_m: float = SoloController.reinforcement_edge_m(original)
 	var blockers: Array = _reinforcement_blockers(original)
 	var prefer: Vector3 = _reinforcement_prefer_point(original, trect)
 	var step_m: float = OPRArmyManager.INCHES_TO_METERS
@@ -13871,17 +13940,21 @@ func _reinforcement_pick_spots(original: GameUnit, radii: Array, ai: bool) -> Ar
 
 
 ## Every standing base that a returning model may not overlap. The original's own parked casualties
-## are excluded: they sit on the army tray, not on the table.
+## are excluded: they sit on the army tray, not on the table. From rules epoch 73 an ENEMY base blocks
+## out to the 9" ring (Reinforcement 3.6); `original == null` (another caller) keeps plain bases.
 func _reinforcement_blockers(original: GameUnit) -> Array:
 	var blockers: Array = []
 	for g in opr_army_manager.get_all_game_units():
 		var gu := g as GameUnit
 		if gu == null or gu == original or SoloController.unit_in_reserve(gu):
 			continue
+		var ring: float = 0.0
+		if original != null and int(gu.unit_properties.get("player_id", 0)) != int(original.unit_properties.get("player_id", 0)):
+			ring = SoloController.reinforcement_enemy_ring_m()
 		for m in gu.get_alive_models():
 			var mi := m as ModelInstance
 			if mi.node != null and is_instance_valid(mi.node) and not bool(mi.node.get_meta("embarked", false)):
-				blockers.append({"p": mi.node.global_position, "r": SoloController.model_base_radius_m(mi)})
+				blockers.append({"p": mi.node.global_position, "r": SoloController.model_base_radius_m(mi) + ring})
 	return blockers
 
 
@@ -13918,7 +13991,8 @@ func _reinforcement_human_ghost(original: GameUnit, radii: Array, trect: Rect2, 
 			state["done"] = true)
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL,
-			"Reinforcement: place %s within 12\" of any table edge — R rotates, Esc drops it at the first legal spot" % original.get_name(), false)
+			"Reinforcement: place %s %s — R rotates, Esc drops it at the first legal spot" % [
+				original.get_name(), SoloController.reinforcement_zone_text(margin_m)], false)
 	while not state["done"] and is_inside_tree():
 		await get_tree().process_frame
 	if chosen.is_empty():

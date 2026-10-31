@@ -85,10 +85,10 @@ impl ShieldedAlias {
         match self {
             Self::None => "",
             Self::PlusOneToDefense => "+1 to Defense",
-            Self::SturdyBoost => "Sturdy Boost",
+            Self::SturdyBoost => "Enhanced Sturdy",
             Self::SafetyGearBoost => "Safety Gear Boost",
             Self::TenaciousBoost => "Tenacious Boost",
-            Self::GroundedReinforcement => "Grounded Reinforcement",
+            Self::GroundedReinforcement => "Grounded Defense",
             Self::DefenseRating => "Defense",
         }
     }
@@ -810,6 +810,9 @@ pub struct ShootProfile {
     /// log-only marker shape as `indirect_alias` for the cover-only name
     /// (whose plain flag block 5 already stamps, ungated).
     pub ignores_cover_alias: bool,
+    /// AI-08a (`EPOCH_73_V36`): the name of the map-read rule that skips cover
+    /// here (Anti-Cover et al.), for the volley log only. Empty below 73.
+    pub cover_rule: String,
     pub limited: bool,
     pub takedown: bool,
     /// Wave 4 (rules-wave4-renames): the UNIT-level Takedown-primitive NAME
@@ -1261,6 +1264,9 @@ pub struct UnitStatic {
     /// solo_controller.gd:1846/:4033 — a carrier's move-and-shoot band becomes
     /// its RUSH distance, so RUSH may also shoot (normally HOLD/ADVANCE only).
     pub quick_shot_active: bool,
+    /// Rules 3.6 (SHO-16) — `unit_rule_active(.., "Cumbersome")`: from
+    /// `EPOCH_73_V36` on a unit that moved this activation fires no volley.
+    pub cumbersome: bool,
     /// Block B8 — `RulesRegistry.unit_rules_of_primitive(gu, "Second Wind")`
     /// (solo_controller.gd:10448/:10477). Only two literal names resolve to
     /// this primitive anywhere in the registry (`assets/solo/rules_mechanics_
@@ -1676,7 +1682,7 @@ fn battleborn_recover_target_of(reg: &mut Registries, p: &Profile, rules_epoch: 
         has_special_rule(&p.special_rules, name) || has_special_rule(&p.item_grants, name)
     };
     let mut best = 0u32;
-    for name in ["Honor Code", "Vale Oath", "Vale Oath Boost", "Unmovable"] {
+    for name in ["Honor Code", "Vale Oath", "Enhanced Vale Oath", "Unmovable"] {
         if !carried(name) {
             continue;
         }
@@ -2259,8 +2265,8 @@ fn shielded_alias_of(
     }
     const ALIASES: [(&str, ShieldedAlias); 3] = [
         ("+1 to Defense", ShieldedAlias::PlusOneToDefense),
-        ("Sturdy Boost", ShieldedAlias::SturdyBoost),
-        ("Grounded Reinforcement", ShieldedAlias::GroundedReinforcement),
+        ("Enhanced Sturdy", ShieldedAlias::SturdyBoost),
+        ("Grounded Defense", ShieldedAlias::GroundedReinforcement),
     ];
     // Audit 2026-09-13 §2.4's skirmish half — "Safety Gear Boost" (gff) and
     // "Tenacious Boost" (aofs) join the wave at the CURRENT epoch only, so
@@ -2605,7 +2611,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     // Machine-Fog's own -1 (folds into `evasive`, below; the base entry's
     // conditional alias leg stands down so the two never stack).
     let machine_fog_boost = rule_on(rules_epoch, EPOCH_6_TABLE_RULES)
-        && rule_on_all_models(p, "Machine-Fog") && rule_on_all_models(p, "Machine-Fog Boost");
+        && rule_on_all_models(p, "Machine-Fog") && rule_on_all_models(p, "Enhanced Machine-Fog");
     // Wave 4 (rules-wave4-boostbases2) — "Empyrean Spirit Boost" is the
     // aof/ghostly_undead twin of the same shape: the printed unconditional
     // form of Empyrean Spirit's own -1 ("enemies attacking them always get -1
@@ -2614,14 +2620,14 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     // stands down so the two never stack.
     let empyrean_spirit_boost = rule_on(rules_epoch, EPOCH_7_TABLE_RULES)
         && rule_on_all_models(p, "Empyrean Spirit")
-        && rule_on_all_models(p, "Empyrean Spirit Boost");
+        && rule_on_all_models(p, "Enhanced Empyrean Spirit");
     // The Boost that is the reason `evasive` is on, if any — the dice seams'
     // rules-must-log name ("" = none). Epoch 6 before epoch 7: a carrier can
     // only ever hold one of these two (different systems and factions).
     let evasive_boost = if machine_fog_boost {
-        "Machine-Fog Boost"
+        "Enhanced Machine-Fog"
     } else if empyrean_spirit_boost {
-        "Empyrean Spirit Boost"
+        "Enhanced Empyrean Spirit"
     } else {
         ""
     };
@@ -3378,6 +3384,33 @@ fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
         }
         sp.unstoppable_ev = sp.unstoppable || u_unstop;
     }
+    stamp_map_cover_regen(reg, p, shoot, rules_epoch);
+}
+
+/// AI-08a (`EPOCH_73_V36`): a weapon rule read through its map entry, not its 3.5 name (Anti-Cover:
+/// Indirect cover-only form; Anti-Regen: Lacerate + `bypass_regen`); each skip keeps the rule's name for
+/// its log line, a unit's cover-only rule names its block-5 skip. Twin: `AiEv._stamp_map_cover_regen`.
+fn stamp_map_cover_regen(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProfile], rules_epoch: u32) {
+    if !rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
+        return;
+    }
+    let unit_cover = rules_of_primitive(reg, p, "Indirect").into_iter()
+        .find(|h| h.name != "Indirect" && h.cover_only && h.ignores_cover).map(|h| h.name);
+    let map = reg.rules_for(&p.game_system);
+    for sp in shoot.iter_mut() {
+        for n in sp.rules.iter().map(|r| base_rule_name(r)).collect::<Vec<_>>() {
+            let Some(e) = map.lookup(&p.faction_folder, &n) else { continue };
+            let (prim, on) = (e.primitive.as_deref(), facet_applies(e.param_b("melee_only"), e.param_b("shooting_only"), sp.range));
+            if on && prim == Some("Indirect") && n != "Indirect" && sp.range > 0 && e.param_b("cover_only") && e.param_b("ignores_cover") {
+                (sp.ignores_cover, sp.cover_rule) = (true, n);
+            } else if on && prim == Some("Lacerate") && !n.starts_with("Lacerate") && e.param_b("bypass_regen") {
+                (sp.bypass_regen, sp.regen_bypass_rule) = (true, n);
+            }
+        }
+        if sp.cover_rule.is_empty() && sp.ignores_cover && sp.range > 0 {
+            sp.cover_rule = unit_cover.clone().unwrap_or_default();
+        }
+    }
 }
 
 // --- Wave 3 "Aura Channel" family (gated `acts::rule_on(.., EPOCH_6_TABLE_RULES)`). ---
@@ -3410,7 +3443,7 @@ pub(crate) const AURA_CHANNEL_NAMES: &[&str] = &[
     "Strider Aura",
     "Rending in Melee Aura",
     "Quick Shot Aura",
-    "Piercing Hunter Aura",
+    "Piercing Marksman Aura",
     "Teleport Aura",
     "Hit & Run Fighter Aura",
     "Indirect when Shooting Aura",
@@ -3421,7 +3454,7 @@ pub(crate) const AURA_CHANNEL_NAMES: &[&str] = &[
     "Speed Feat Aura",
     "Reanimation Aura",
     "Piercing Shooter Aura",
-    "Grounded Reinforcement Aura",
+    "Grounded Defense Aura",
     "Grounded Protection Aura",
     "Protected Aura",
 ];
@@ -3518,21 +3551,21 @@ fn aura_name_of(p: &Profile, base: &str) -> String {
 // earlier epoch. What the core gains is the leg the loader twin skips —
 // `LEGACY_CORE_SELFPLAY` returns from `_expand_auras` before it runs.
 pub(crate) const BOOST_AURA_CHANNEL_NAMES: &[&str] = &[
-    "Hold the Line Boost Aura",
-    "Targeting Visor Boost Aura",
-    "Warden Boost Aura",
-    "Lucky Boost Aura",
+    "Enhanced Hold the Line Aura",
+    "Enhanced Targeting Visor Aura",
+    "Enhanced Warden Aura",
+    "Enhanced Lucky Aura",
     "Enhanced Buccaneer Aura",
-    "Vale Oath Boost Aura",
-    "Wave-Step Boost Aura",
-    "Royal Warrior Boost Aura",
+    "Enhanced Vale Oath Aura",
+    "Enhanced Wave-Step Aura",
+    "Enhanced Royal Warrior Aura",
     "Enhanced Bestial Aura",
-    "Vinci Tech Boost Aura",
-    "Ossified Boost Aura",
-    "Shadowborn Boost Aura",
+    "Enhanced Vinci Tech Aura",
+    "Enhanced Ossified Aura",
+    "Enhanced Shadowborn Aura",
     "Enhanced Destroyer Aura",
-    "Empyrean Spirit Boost Aura",
-    "Wild Veil Boost Aura",
+    "Enhanced Empyrean Spirit Aura",
+    "Enhanced Wild Veil Aura",
 ];
 
 /// The loader's own base-name cut (`rule[:-len(" Aura")].strip()`), kept only
@@ -3635,7 +3668,7 @@ fn stamp_shot_modifier(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
         "Good Shot",
         "Bad Shot",
         "Targeting Visor",
-        "Targeting Visor Boost",
+        "Enhanced Targeting Visor",
         "Precision Shooter Aura",
         "Buccaneer",
         "Enhanced Buccaneer",
@@ -3782,11 +3815,11 @@ const WAVE2_UTILITY_BUFF_RULES: [&str; 12] = [
     "Piercing Assault Buff",
     "Piercing Shooting Mark",
     "Piercing Fighting Mark",
-    "Self-Repair Boost Buff",
+    "Enhanced Self-Repair Buff",
     "Enhanced Cursed Undead Buff",
     "Enhanced Angelic Blessing Buff",
-    "Hold the Line Boost Buff",
-    "Primal Boost Buff",
+    "Enhanced Hold the Line Buff",
+    "Enhanced Primal Buff",
 ];
 
 
@@ -5402,8 +5435,8 @@ fn bounding_boost_dice_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -
     }
     let map = reg.rules_for(&p.game_system);
     let Some(e) = map
-        .lookup(&p.faction_folder, "Wave-Step Boost")
-        .filter(|_| has_exact_rule(&p.special_rules, "Wave-Step Boost"))
+        .lookup(&p.faction_folder, "Enhanced Wave-Step")
+        .filter(|_| has_exact_rule(&p.special_rules, "Enhanced Wave-Step"))
     else {
         return 0;
     };
@@ -5639,7 +5672,7 @@ fn move_rule_mods_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Opt
     // gate is a per-activation majority read no statics-time stamp can
     // answer, so a flat stamp would be #489's over-credit, not a port.
     if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
-        for name in ["Enhanced Highborn", "Scurry Boost"] {
+        for name in ["Enhanced Highborn", "Enhanced Scurry"] {
             if !unit_rule_active(reg, p, name) {
                 continue;
             }
@@ -5897,7 +5930,7 @@ fn royal_legion_family_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -
         charge += e.param_f("charge_mod", 0.0);
         folded.push(hit.name);
     }
-    for (aura, base) in [("Lustbound Boost Aura", "Lustbound Boost")] {
+    for (aura, base) in [("Enhanced Lustbound Aura", "Enhanced Lustbound")] {
         if !has_special_rule(&p.special_rules, aura) || folded.iter().any(|n| n == base) {
             continue;
         }
@@ -6209,7 +6242,7 @@ impl UnitStatic {
         // never widens — no pre-charge gap (the shred2 precedent). Read BY
         // NAME, never by iterating the shared primitive (#489).
         if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
-            stamp_bane_boost(reg, p, &mut shoot, "Mischievous Boost", "reroll_save_low");
+            stamp_bane_boost(reg, p, &mut shoot, "Enhanced Mischievous", "reroll_save_low");
         }
         // Wave 4 (rules-wave4-boostbases2), gated on the FROZEN
         // `EPOCH_7_TABLE_RULES`: "Bestial Boost" is the aof/beastmen twin of
@@ -6234,7 +6267,7 @@ impl UnitStatic {
         // NAME, never by iterating the shared primitive. A record below
         // epoch 30 reads the base 6s-only window and replays byte-exact.
         if rule_on(rules_epoch, EPOCH_30_SCRAPPER_BOOST) {
-            stamp_bane_boost(reg, p, &mut shoot, "Scrapper Boost", "reroll_save_from");
+            stamp_bane_boost(reg, p, &mut shoot, "Enhanced Scrapper", "reroll_save_from");
         }
         // Shred wave 3 (rules-wave3-shred3): the family's per-face wound
         // amount is now READ off the carried Shred-primitive entry
@@ -6303,12 +6336,12 @@ impl UnitStatic {
                 }
                 match n.as_str() {
                     "Watchborn" | "Vinci Tech" => name = Some(n.clone()),
-                    "Vinci Tech Boost" => boost = true,
+                    "Enhanced Vinci Tech" => boost = true,
                     _ => {}
                 }
             }
             if boost && has_vinci {
-                name = Some("Vinci Tech Boost".to_string());
+                name = Some("Enhanced Vinci Tech".to_string());
                 both = true;
             }
             if let Some(vn) = name {
@@ -6557,6 +6590,7 @@ impl UnitStatic {
             hit_and_run_move_in: hnr_move_in,
             hit_and_run_rule: hnr_rule,
             quick_shot_active: unit_rule_active(reg, p, "Quick Shot"),
+            cumbersome: unit_rule_active(reg, p, "Cumbersome"),
             second_wind_active: unit_rule_active(reg, p, "Second Wind")
                 || unit_rule_active(reg, p, "Inquisitorial Agent")
                 || unit_rule_active(reg, p, "Martial Prowess"),

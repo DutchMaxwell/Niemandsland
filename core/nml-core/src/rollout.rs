@@ -25,7 +25,7 @@ use std::rc::Rc;
 
 use serde_json::{json, Value};
 
-use crate::acts::{rule_on, Knobs, EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU};
+use crate::acts::{rule_on, Knobs, EPOCH_73_V36, EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU};
 use crate::deployment::{self, ArrivalZone, Occupied, Rect};
 use crate::io::Seams;
 use crate::menu::Candidate;
@@ -711,7 +711,7 @@ pub fn reinforcement_round_start(
     if !rule_on(seams.rules_epoch, EPOCH_7_TABLE_RULES) {
         return;
     }
-    reinforcement_arrivals(statics, terrain, cur);
+    reinforcement_arrivals(statics, terrain, seams.rules_epoch, cur);
     reinforcement_withdrawals(statics, cur);
 }
 
@@ -763,7 +763,7 @@ fn live_bases(st: &State) -> Vec<Occupied> {
 /// `reinforcement_used` is what marks a dormant unit as a Reinforcement
 /// promise rather than an ambusher waiting its turn — the two share
 /// `State.dormant`, and the plain Ambush arrival is not this driver's beat.
-fn reinforcement_arrivals(statics: &[UnitStatic], terrain: &Terrain, st: &mut State) {
+fn reinforcement_arrivals(statics: &[UnitStatic], terrain: &Terrain, rules_epoch: u32, st: &mut State) {
     let Some(table) = table_rect(terrain) else {
         return;
     };
@@ -793,18 +793,24 @@ fn reinforcement_arrivals(statics: &[UnitStatic], terrain: &Terrain, st: &mut St
         // same two names `arrival_reads` reads (nml-core-py/src/lib.rs:1081).
         let flying = has_special_rule(&p.special_rules, "Flying")
             || has_special_rule(&p.special_rules, "Strider");
-        // NO enemy ring and NO beacon. The maintainer's pinned reading
-        // (solo_controller.gd:5970-5972): "The landing zone is LITERAL — 12" of
-        // ANY edge, the enemy's included. The book names a minimum distance
-        // from enemies for Ambush and deliberately does not here, so neither
-        // do we."
+        // NO beacon. Below EPOCH_73_V36 also NO enemy ring (the maintainer's
+        // pinned reading, solo_controller.gd: the landing zone was literal, the
+        // enemy's own edge included). From 73 the copy stands over 9" from every
+        // standing enemy base — the Ambush arrival's ring, fed to `arrive_one`
+        // the same way: base-edge-true, a reserve enemy projects nothing.
+        let ringed = rule_on(rules_epoch, EPOCH_73_V36);
+        let enemies: Vec<deployment::ArrivalEnemy> = (0..st.units())
+            .filter(|&j| ringed && st.player[j] != st.player[i] && !st.dormant[j] && st.alive[j] > 0)
+            .flat_map(|j| st.positions[j].iter().zip(&st.radii[j]))
+            .map(|(p, r)| deployment::ArrivalEnemy { pos: (p[0], p[2]), min_dist_m: 0.0, pad_m: *r })
+            .collect();
         let spot = deployment::arrive_one(
             &ArrivalZone::EdgeStrip { table, band_m },
             &[reinforcement_prefer(&table, st.player[i])],
             &mut occupied,
+            &enemies,
             &[],
-            &[],
-            0.0,
+            deployment::AMBUSH_MIN_ENEMY_DIST_M,
             terrain,
             radius,
             &footprint,
@@ -816,6 +822,10 @@ fn reinforcement_arrivals(statics: &[UnitStatic], terrain: &Terrain, st: &mut St
         }
         let round = st.round;
         deployment::arrive_unit(st, i, spot, round, &statics[pi]);
+        // Rules-must-log: one stderr line when NML_TRACE_RULES=1.
+        let note = if ringed { " and over 9\" from every enemy" } else { "" };
+        let msg = format!("{}: {} models stand within {:.0}\" of a table edge{}", st.key(i), n, statics[pi].reinforcement.within_in, note);
+        crate::sim::trace_rule("round-start", "Reinforcement", &msg);
     }
 }
 

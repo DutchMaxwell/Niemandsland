@@ -87,7 +87,7 @@ fn forms_with<'a>(us: &'a UnitStatic, cond: &str) -> Vec<&'a CondAp> {
 #[test]
 fn piercing_hunter_reads_as_ranged_over_at_every_epoch() {
     for epoch in [6, 5] {
-        let us = build_at("gf", "blessed_sisters", &["Piercing Hunter"], epoch);
+        let us = build_at("gf", "blessed_sisters", &["Piercing Marksman"], epoch);
         let over = forms_with(&us, "ranged_over");
         assert_eq!(
             over.len(),
