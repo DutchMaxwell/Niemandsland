@@ -127,6 +127,10 @@ func test_regeneration_lowers_ev_but_bane_bypasses_it() -> void:
 
 
 func test_charge_score_counter_reduces_and_fearless_raises() -> void:
+	# Rules 3.5 leg: below EPOCH_73_V36 the Counter strike-first read is unconditional and the
+	# defender's counter_models still cut the Impact pool. The 3.6 legs live in test/v36/mel_05e_test.gd.
+	var epoch0: int = AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
 	var us := {"quality": 4, "defense": 4, "tough": 1, "models": 5}
 	var them := {"quality": 4, "defense": 4, "tough": 1, "models": 5}
 	var them_counter := {"quality": 4, "defense": 4, "tough": 1, "models": 5, "counter_models": 5}
@@ -136,18 +140,28 @@ func test_charge_score_counter_reduces_and_fearless_raises() -> void:
 	# A Counter defender lowers the charge score (strike-first attrition; same weapons otherwise).
 	var vs_plain: float = AiEv.charge_score(our_melee, us, their_plain, them)
 	var vs_counter: float = AiEv.charge_score(our_melee, us, their_counter, them_counter)
-	assert_bool(vs_counter < vs_plain).is_true()
 	# Our Fearless halves the taken-wounds weight (p.13 morale re-roll) → higher score, same matchup.
 	var us_fearless := {"quality": 4, "defense": 4, "tough": 1, "models": 5, "fearless": true}
-	assert_bool(AiEv.charge_score(our_melee, us_fearless, their_plain, them) > vs_plain).is_true()
+	var vs_fearless: float = AiEv.charge_score(our_melee, us_fearless, their_plain, them)
+	AiActRecorder.rules_epoch = epoch0   # restore before asserting: a failed assert stops the case
+	assert_bool(vs_counter < vs_plain).is_true()
+	assert_bool(vs_fearless > vs_plain).is_true()
 
 
 func test_impact_ev_reduced_by_counter_models() -> void:
+	# Rules 3.5 leg: below EPOCH_73_V36 Counter still takes Impact dice away. The 3.6 leg lives in
+	# test/v36/mel_05e_test.gd.
+	var epoch0: int = AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
 	var att := {"quality": 4, "impact": 3, "models": 2}
 	var no_counter := {"defense": 4, "tough": 1, "models": 5}
 	var with_counter := {"defense": 4, "tough": 1, "models": 5, "counter_models": 3}
-	assert_bool(AiEv.impact_ev(att, with_counter) < AiEv.impact_ev(att, no_counter)).is_true()
-	assert_float(AiEv.impact_ev({"impact": 0, "models": 5}, no_counter)).is_equal_approx(0.0, 0.0001)
+	var reduced: float = AiEv.impact_ev(att, with_counter)
+	var plain: float = AiEv.impact_ev(att, no_counter)
+	var no_impact: float = AiEv.impact_ev({"impact": 0, "models": 5}, no_counter)
+	AiActRecorder.rules_epoch = epoch0   # restore before asserting: a failed assert stops the case
+	assert_bool(reduced < plain).is_true()
+	assert_float(no_impact).is_equal_approx(0.0, 0.0001)
 
 
 func test_classify_fills_the_undefined_better_than() -> void:
@@ -482,12 +496,20 @@ func test_versatile_defense_projects_the_guarded_ev_flag() -> void:
 func test_heavy_impact_adds_an_ap1_pool_and_counter_strips_it_first() -> void:
 	# Heavy Impact(1) on 2 models = 2 extra dice saving at AP(1): the charge EV rises above the plain
 	# Impact-only attacker, and 2 Counter models strip exactly the heavy pool (defender-optimal).
+	# Rules 3.5 leg: below EPOCH_73_V36 Counter still strips the heavy pool. The 3.6 leg lives in
+	# test/v36/mel_05e_test.gd.
+	var epoch0: int = AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
 	var plain_def := {"defense": 4, "tough": 1, "models": 5}
 	var att_imp := {"quality": 4, "models": 2, "impact": 1}
 	var att_both := {"quality": 4, "models": 2, "impact": 1, "heavy_impact": 1}
-	assert_bool(AiEv.impact_ev(att_both, plain_def) > AiEv.impact_ev(att_imp, plain_def)).is_true()
+	var heavy_ev: float = AiEv.impact_ev(att_both, plain_def)
+	var impact_only_ev: float = AiEv.impact_ev(att_imp, plain_def)
 	var counter_def := {"defense": 4, "tough": 1, "models": 5, "counter_models": 2}
-	assert_float(AiEv.impact_ev(att_both, counter_def)) 		.is_equal_approx(AiEv.impact_ev(att_imp, plain_def), 0.0001)   # heavy pool fully stripped
+	var stripped_ev: float = AiEv.impact_ev(att_both, counter_def)
+	AiActRecorder.rules_epoch = epoch0   # restore before asserting: a failed assert stops the case
+	assert_bool(heavy_ev > impact_only_ev).is_true()
+	assert_float(stripped_ev).is_equal_approx(impact_only_ev, 0.0001)   # heavy pool fully stripped
 
 
 func test_has_exact_rule_rejects_prefix_match() -> void:

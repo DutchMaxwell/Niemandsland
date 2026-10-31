@@ -8901,12 +8901,36 @@ static func shot_ignores_cover(profile: Dictionary, unit: GameUnit, held: bool =
 
 ## The Counter strike-first half (core `strikes_first.unwrap_or(true)`): the entry can opt a
 ## Counter weapon OUT of the strike-first slot (default true = strikes first when charged).
+## Rules 3.6 (`EPOCH_73_V36`): the AI Counters only when the unit will strike back at all, and
+## never while Fatigued/Shaken (a Shaken strike-back counts as Fatigued).
 static func counter_strikes_first(unit: GameUnit) -> bool:
 	if unit == null:
 		return true
-	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and (unit.is_fatigued or unit.is_shaken):
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
+			and (unit.is_fatigued or unit.is_shaken or not strikes_back_at_all(unit)):
 		return false
 	return bool(RulesRegistry.unit_param(unit, "Counter", "strikes_first", true))
+
+
+## Rules 3.6: an unspent melee weapon on the host or a living attached hero (a unit that cannot
+## strike back never Counters first).
+static func strikes_back_at_all(unit: GameUnit) -> bool:
+	var members: Array = [unit] if unit != null else []
+	if unit != null and unit.has_method("get_attached_heroes"):
+		members = members + unit.get_attached_heroes()
+	for m in members:
+		var member := m as GameUnit
+		if member == null or member.get_alive_count() <= 0:
+			continue
+		var weapons: Array = member.source_data.weapons if member.source_type == "opr" \
+			and member.source_data is OPRApiClient.OPRUnit else []
+		var spent: Array = member.unit_properties.get("limited_used", [])
+		for p in AiShooting.melee_profiles(weapons):
+			var profile := p as Dictionary
+			if bool(profile.get("limited", false)) and spent.has(str(profile.get("name", "?"))):
+				continue
+			return true
+	return false
 
 
 ## Whether a unit fights with Counter (GF/AoF v3.5.1 p.13) — a Counter melee weapon among `melee_profiles`
