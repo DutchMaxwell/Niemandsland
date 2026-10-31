@@ -84,7 +84,6 @@
   "Empyrean Spirit",
   "Enhanced Empyrean Spirit",
   "Enhanced Empyrean Spirit Aura",
-  "Entrenched",
   "Ethereal",
   "Evasive",
   "Evasive Aura",
@@ -724,16 +723,6 @@
     "melee_only": true,
     "most_models": true,
     "not_fatigued": true
-   }
-  },
-  "Entrenched": {
-   "primitive": "Stealth",
-   "rated": false,
-   "book_version": "3.5.1",
-   "params": {
-    "hit_penalty": 2,
-    "over_in": 9,
-    "requires_stationary": true
    }
   },
   "Extra Reach": {

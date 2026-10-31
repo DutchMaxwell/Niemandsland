@@ -912,10 +912,10 @@ pub fn resolve_volley_leg(
         if def.stationary_alias_penalty > alias_pen && def.moved_round != def.round {
             alias_pen = def.stationary_alias_penalty;
             alias_over = def.stationary_alias_over_in;
-            if !ent_fired {
+            if !ent_fired && def.v36_rules {
                 ent_fired = true;
                 out.log.push(format!(
-                    "[{}] -{alias_pen} to hit vs {def_owner}: unmoved this round",
+                    "[{}] -{alias_pen} to hit over {alias_over:.0}\" vs {def_owner}: unmoved this round",
                     def.stationary_alias_name
                 ));
             }

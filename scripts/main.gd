@@ -6487,7 +6487,7 @@ func _solo_regen_family_on(unit: GameUnit, rule: String) -> bool:
 
 ## The Stealth-family names whose 3.6 text reads "most models" (the core's STEALTH_MOST_MODELS twin); every
 ## other alias keeps the all-models read. Empyrean Spirit is on that list too but rides row MOR-06.
-const SOLO_STEALTH_MOST_MODELS: Array[String] = ["Stealth", "Changebound", "Machine-Fog", "Screened"]
+const SOLO_STEALTH_MOST_MODELS: Array[String] = ["Stealth", "Changebound", "Machine-Fog", "Screened", "Entrenched"]
 
 
 func _solo_stealth_family_on(unit: GameUnit, rule: String) -> bool:
@@ -7619,6 +7619,7 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 	# dropped). At most one alias fires (rule effects of one
 	# family don't stack with Stealth's own -1 — best single penalty).
 	var alias_pen := 0
+	var alias_gate := 0.0
 	var alias_name := ""
 	for e in RulesRegistry.unit_rules_of_primitive(target, "Stealth"):
 		var ed := e as Dictionary
@@ -7646,6 +7647,7 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 		var shot_ok := not melee and (gate <= 0.0 or dist_in > gate)
 		if shot_ok or charged_ok:
 			alias_pen = maxi(alias_pen, int(p2.get("hit_penalty", 0)))
+			alias_gate = gate
 			alias_name = n
 	if melee:
 		var melee_evasion: bool = _solo_rule_on_all_models(target, "Melee Evasion")
@@ -7758,7 +7760,10 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 		notes.append("Stealth: no -1 (within 9\")")   # #224 sweep: name the non-application
 	if alias_pen > 0 and not (stealth and over_nine):
 		mod -= alias_pen
-		notes.append("%s -%d" % [alias_name, alias_pen])
+		if alias_gate > 0.0 and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+			notes.append("%s -%d over %d\"" % [alias_name, alias_pen, int(alias_gate)])
+		else:
+			notes.append("%s -%d" % [alias_name, alias_pen])
 	if target_artillery and over_nine:
 		notes.append("Artillery target -%d" % art_target_pen)
 	elif target_artillery:

@@ -454,6 +454,7 @@
 "test/solo_mission_save_test.gd": 0.1,
 "test/solo_modifier_cast_ev_test.gd": 0.1,
 "test/solo_modifier_debuff_ev_test.gd": 0.1,
+"test/v36/mor_04_test.gd": 0.1,
 "test/solo_move_seam_wanted_test.gd": 0.0,
 "test/solo_owner_saves_test.gd": 0.0,
 "test/solo_planner_hook_test.gd": 0.3,

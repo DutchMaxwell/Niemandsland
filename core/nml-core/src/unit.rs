@@ -1703,8 +1703,10 @@ fn stealth_alias_of_excluding(reg: &mut Registries, p: &Profile, skip: &str) -> 
 
 /// Rules 3.6 (ruling D-MOST) — the Stealth-family names whose 3.6 text reads
 /// "most models" (the verified P1 list); every other alias keeps the
-/// all-models read. Empyrean Spirit is on that list too but rides row MOR-06.
-const STEALTH_MOST_MODELS: [&str; 4] = ["Stealth", "Changebound", "Machine-Fog", "Screened"];
+/// all-models read. Empyrean Spirit is on that list too but rides row MOR-06;
+/// Entrenched joined in row MOR-04 (its 3.6 carrier is MOST models).
+const STEALTH_MOST_MODELS: [&str; 5] =
+    ["Stealth", "Changebound", "Machine-Fog", "Screened", "Entrenched"];
 
 /// The Stealth-family quantifier: from `EPOCH_73_V36` a listed name holds when
 /// most models carry it (`p.model_count` = the host's models when the profile
