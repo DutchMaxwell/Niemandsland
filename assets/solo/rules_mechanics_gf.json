@@ -55,6 +55,7 @@
   "Courage Buff",
   "Crack",
   "Crossing Attack",
+  "Crossing Strike",
   "Dangerous Terrain Debuff",
   "Darkborn",
   "Dash",
@@ -94,6 +95,7 @@
   "Fortified",
   "Fortified Aura",
   "Fortified Growth",
+  "Fracture",
   "Furious",
   "Furious Aura",
   "Furious Buff",
@@ -236,6 +238,7 @@
   "Protected Aura",
   "Protection Feat",
   "Protection Feat Aura",
+  "Puncture",
   "Quick",
   "Quick Readjustment",
   "Quick Shot",
@@ -624,6 +627,15 @@
     "wound_target": 6
    }
   },
+  "Crossing Strike": {
+   "primitive": "Strafing",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "move_through_attack": true,
+    "weapon_only": true
+   }
+  },
   "Deadly": {
    "primitive": "Deadly",
    "rated": false,
@@ -680,6 +692,14 @@
    "primitive": "Flying",
    "rated": false,
    "book_version": "3.5.1"
+  },
+  "Fracture": {
+   "primitive": "Crack",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "on6_ap": 2
+   }
   },
   "Furious": {
    "primitive": "Furious",
@@ -821,6 +841,17 @@
    "book_version": "3.6.0",
    "params": {
     "extra_attack": true
+   }
+  },
+  "Puncture": {
+   "primitive": "Disintegrate",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "ap_bonus": 2,
+    "condition": "vs_armor",
+    "threshold": 3,
+    "bypass_regen": true
    }
   },
   "Re-Deployment": {
