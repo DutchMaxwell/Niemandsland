@@ -224,6 +224,11 @@ fn sixes(faces: &[u8]) -> i64 {
     faces.iter().filter(|&&f| f == 6).count() as i64
 }
 
+/// Row MEL-09's rules-must-log line, the table's same text (`_solo_melee_strike_phase`).
+fn fatigued_sixes_line(owner: &str, n: i64) -> String {
+    format!("Fatigued: {owner} — {n} unmodified 6{} hit but trigger no special rules", if n == 1 { "" } else { "s" })
+}
+
 /// The Shielded-family alias's rules-must-log line, the volley and melee
 /// resolves' shared twin: the +1 kinds name the rule and the floored rung
 /// ("{name}: {owner} — +1 to defense rolls (saves on N+)"), while the rating
@@ -779,6 +784,8 @@ pub fn resolve_volley_leg(
     let mut evasive_boost_fired = false;
     // EPOCH_73_V36 — the Aircraft to-hit penalty's once-per-volley log flag.
     let mut aircraft_fired = false;
+    // Rules 3.6 (D-MOST) — Stealth's -1 rode the most-models read: one line per volley.
+    let mut stealth_most_fired = false;
     // Wave 4 — and the widened Bane window's own rule name, sticky once a
     // weapon opened it ("Mischievous Boost" at epoch 6, "Bestial Boost" at
     // epoch 7); "" = the base 6s-only window fired nothing.
@@ -954,6 +961,7 @@ pub fn resolve_volley_leg(
         if (p.unstoppable || att.unstoppable_mark || att.unstoppable_aura) && own < 0 {
             out.log.push(format!("Unstoppable: {} keeps its own {own} to hit", sh.owner));
         }
+        stealth_most_fired |= def.stealth_most_models && mod_dist_in > LONG_RANGE_IN;
         // EPOCH 34 UNSTOPPABLE MARK — the granted mark's CLAMP half: the
         // once-grant the mark seam leaves on the bearer (`ctx_live`'s
         // `unstoppable_mark`) counts like the weapon's own `p.unstoppable`,
@@ -1355,6 +1363,9 @@ pub fn resolve_volley_leg(
     if aircraft_fired {
         out.log.push(format!("Aircraft: {def_owner} — shots at it get -{} to hit", def.aircraft_hit_penalty));
     }
+    if stealth_most_fired {
+        out.log.push(format!("Stealth: {def_owner} — -1 to hit past 9\", most models carry it"));
+    }
     if out.bane_rerolled > 0 {
         out.log.push(format!(
             "{bane_rule}: {def_owner} — {} successful save(s) of 5-6 re-roll",
@@ -1661,7 +1672,7 @@ pub fn resolve_melee_with_tray(
 ) -> ShootResult {
     resolve_melee_leg(
         strikers, def, def_owner, charging, cond_ap_dice, shred_alias_dice,
-        false, 0.0, false, false, false, tray,
+        false, 0.0, false, false, false, false, tray,
     )
 }
 
@@ -1682,6 +1693,8 @@ pub fn resolve_melee_leg(
     tray_exact: bool,
     // EPOCH_73_V36 — the strike rolls every hit before any save (see the chunk loop below).
     hits_first: bool,
+    // EPOCH_73_V36 (row MEL-09) — a fatigued striker's sixes fire no rule (see `trig` below).
+    fatigue_mutes_sixes: bool,
     tray: &mut Tray,
 ) -> ShootResult {
     // The alias's charged leg fires on the CHARGER's strikes only — a
@@ -1816,6 +1829,14 @@ pub fn resolve_melee_leg(
                 faces: faces.clone(),
                 owner: sh.owner.into(),
             });
+            // EPOCH_73_V36 (row MEL-09) — a fatigued striker (a Shaken strike-back
+            // counts as one) still hits on its sixes, but they fire no rule: every
+            // hit-six reader below sees `trig`, empty when muted. Saves untouched.
+            let mute = fatigue_mutes_sixes && sh.att.fatigued;
+            let trig: &[u8] = if mute { &[] } else { &faces };
+            if mute && sixes(&faces) > 0 {
+                out.log.push(fatigued_sixes_line(sh.owner, sixes(&faces)));
+            }
             // Precise scores one better than it ROLLS — `_solo_hits` :4405-4406
             // applies the +1 when counting, so the recorded target stays raw.
             let count_target = if p.precise { fold_hit(def.modifier_sum, raw, 1).1 } else { target };
@@ -1826,7 +1847,7 @@ pub fn resolve_melee_leg(
             if p.surge {
                 // No flag: at 0.0" this IS the table's gated read (the within
                 // cap passes, the low window below opens only for the sentinel).
-                hits += sixes(&faces) * p.bonus_hits_per_six.max(1);
+                hits += sixes(trig) * p.bonus_hits_per_six.max(1);
                 // EPOCH_50 SURGE LOW — the volley fold's twin (:996-1007): the
                 // entry's own printed low window (Great Sergeant's "5 or 6")
                 // pays its successful unmodified 5s in melee too. Melee
@@ -1836,21 +1857,21 @@ pub fn resolve_melee_leg(
                 // `EPOCH_50_SURGE_LOW` — the Boost's 9.0 stays shut here,
                 // exactly like the table (main.gd:4539 at dist 0.0).
                 if p.surge_low < 6 && p.surge_over_in < 0.0 {
-                    hits += faces.iter().filter(|&&f| f == 5 && count_target <= 5).count() as i64;
+                    hits += trig.iter().filter(|&&f| f == 5 && count_target <= 5).count() as i64;
                 }
             }
             // Block B6 — the extra-ATTACK-DIE Surge siblings (Predator Fighter
             // is melee-only, so this is the branch it actually fires on).
-            hits += surge_attack_hits(p, &faces, count_target, sh.owner, tray, &mut out.rolls);
+            hits += surge_attack_hits(p, trig, count_target, sh.owner, tray, &mut out.rolls);
             // Wave 2 — a granted "Primal Boost", the same low-surge form.
             if sh.att.surge_grant {
-                hits += surge_attack_hits(&primal_boost_grant_profile(), &faces, count_target, sh.owner, tray, &mut out.rolls);
+                hits += surge_attack_hits(&primal_boost_grant_profile(), trig, count_target, sh.owner, tray, &mut out.rolls);
             }
             // EPOCH 44 SURGE MARK — the strike fold's twin of the volley leg
             // above: the mark's once-grant adds +1 hit per unmodified 6
             // against the marked target only, named once when it fires.
             if sh.att.surge_mark_grant {
-                let mark_sixes = sixes(&faces);
+                let mark_sixes = sixes(trig);
                 if mark_sixes > 0 {
                     hits += mark_sixes;
                     out.log.push(format!(
@@ -1861,10 +1882,10 @@ pub fn resolve_melee_leg(
             // Furious :4477 — the unit-level rule the table stamps onto every
             // melee profile (main.gd:4343): unmodified 6s, charge only.
             if charging && sh.att.furious {
-                hits += sixes(&faces);
+                hits += sixes(trig);
             }
             if p.sergeant_attacks > 0 {
-                hits += sixes(&faces).min(p.sergeant_attacks);
+                hits += sixes(trig).min(p.sergeant_attacks);
             }
             if hits > 0 && p.blast > 1 {
                 hits *= p.blast.clamp(1, if tray_exact && p.takedown { 1 } else { def.models.max(1) });
@@ -1872,11 +1893,13 @@ pub fn resolve_melee_leg(
             if hits <= 0 {
                 continue;
             }
-            pending.push((sh, p, faces, hits, count_target, versatile_ap));
+            pending.push((sh, p, faces, hits, count_target, versatile_ap, mute));
         }
         // MEL-07c hook — Parry reads `pending` here: every hit rolled, no save yet.
-        for (sh, p, faces, hits, count_target, versatile_ap) in pending {
-            let on6 = if p.on6_ap > 0 {
+        for (sh, p, faces, hits, count_target, versatile_ap, mute) in pending {
+            let on6 = if mute {
+                0
+            } else if p.on6_ap > 0 {
                 p.on6_ap
             } else if p.rending || p.destructive || sh.att.rending_grant {
                 RENDING_AP_BONUS
@@ -1972,15 +1995,16 @@ pub fn resolve_melee_leg(
                         owner: sh.owner.into(),
                     });
                     let mut bt_hits = faces_to_hits(&bt_faces, count_target as u8) as i64;
+                    let bt_trig: &[u8] = if mute { &[] } else { &bt_faces };
                     if p.surge {
-                        bt_hits += sixes(&bt_faces) * p.bonus_hits_per_six.max(1);
+                        bt_hits += sixes(bt_trig) * p.bonus_hits_per_six.max(1);
                         // The one real gap: the table's `_solo_hits` (main.gd:7128)
                         // also pays the sentinel window's 5s on these extra dice.
                         if p.surge_low < 6 && p.surge_over_in < 0.0 {
                             out.mark("surge_gates");
                         }
                     }
-                    bt_hits += surge_attack_hits(p, &bt_faces, count_target, sh.owner, tray, &mut out.rolls);
+                    bt_hits += surge_attack_hits(p, bt_trig, count_target, sh.owner, tray, &mut out.rolls);
                     if bt_hits > 0 {
                         // The table resolves the extras pooled with the same
                         // effective AP (main.gd:6180-6182) — one batch, no
@@ -2078,6 +2102,9 @@ pub fn resolve_melee_leg(
 /// `unwrap_or(1)` keeps every earlier replay byte-exact. Stripping the
 /// HEAVY dice first, defender-optimal (`_solo_charge_impact`
 /// :6292-6303). A fatigued charger rolls nothing at all (p.13).
+///
+/// Rules 3.6 (`EPOCH_73_V36`) — the `brace_models` x `brace_impact_per_model`
+/// cut joins the same sum (the caller zeroes it while the defender is Fatigued).
 pub fn impact_pools(att: &Ctx, def: &Ctx) -> [(i64, i64); 2] {
     if att.fatigued {
         return [(0, 0), (0, 0)];
@@ -2086,7 +2113,10 @@ pub fn impact_pools(att: &Ctx, def: &Ctx) -> [(i64, i64); 2] {
     let heavy_raw = att.heavy_impact * models;
     let cut = def
         .counter_models
-        .saturating_mul(def.counter_impact_per_model.unwrap_or(1));
+        .saturating_mul(def.counter_impact_per_model.unwrap_or(1))
+        + def
+            .brace_models
+            .saturating_mul(def.brace_impact_per_model.unwrap_or(1));
     let heavy_cut = cut.min(heavy_raw);
     [
         (impact_total_dice(att.impact, models, cut - heavy_cut), 0),

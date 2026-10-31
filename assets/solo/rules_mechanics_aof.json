@@ -37,6 +37,7 @@
   "Bloodthirsty Fighter",
   "Bounding",
   "Bounding Aura",
+  "Brace",
   "Breath Attack",
   "Buccaneer",
   "Enhanced Buccaneer",
@@ -569,6 +570,14 @@
     "ignores_cover": true
    }
   },
+  "Brace": {
+   "primitive": "Brace",
+   "rated": true,
+   "book_version": "3.6.0",
+   "params": {
+    "rating": "X"
+   }
+  },
   "Caster": {
    "primitive": "Caster",
    "rated": false,
@@ -579,6 +588,14 @@
     "cast_target": 4,
     "aura_in": 18.0,
     "boost_per_token": 1
+   }
+  },
+  "Caster Group": {
+   "primitive": "Caster",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "pooled": true
    }
   },
   "Counter": {
@@ -629,6 +646,17 @@
    "book_version": "3.5.1",
    "params": {
     "defense_bonus_from_rating": true
+   }
+  },
+  "Dodge": {
+   "primitive": "Melee Evasion",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "hit_penalty": 1,
+    "melee_only": true,
+    "most_models": true,
+    "not_fatigued": true
    }
   },
   "Entrenched": {
@@ -903,6 +931,35 @@
    "params": {
     "advance_mod": -2,
     "rush_mod": -4
+   }
+  },
+  "Spell Accumulator": {
+   "primitive": "Spell Accumulator",
+   "rated": true,
+   "book_version": "3.6.0",
+   "params": {
+    "tokens_per_round": "X",
+    "max_tokens": 6,
+    "share_range_in": 12,
+    "requires_not_shaken": true
+   }
+  },
+  "Spell Conduit": {
+   "primitive": "Spell Conduit",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "range_in": 12,
+    "casting_mod": 1,
+    "requires_not_shaken": true
+   }
+  },
+  "Steadfast Aura": {
+   "primitive": "Aura Channel",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "grants": "Steadfast"
    }
   },
   "Stealth": {

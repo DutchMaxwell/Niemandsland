@@ -171,6 +171,9 @@ pub struct Ctx {
     pub heavy_impact: i64,
     pub ravage: i64,
     pub stealth: bool,
+    /// Rules 3.6 (D-MOST): `stealth` holds through the most-models read while
+    /// not every model carries it — only the volley's log line reads it.
+    pub stealth_most_models: bool,
     /// The DEFENDER's best Stealth-primitive DATA ALIAS (Changebound et al.)
     /// OTHER than the literal "Stealth" name, which `stealth` above (and the
     /// fixed `STEALTH_HIT_PENALTY`/`LONG_RANGE_IN` constants) already cover
@@ -222,6 +225,9 @@ pub struct Ctx {
     pub evasive_alias_name: &'static str,
     /// `Melee Evasion` — the melee twin of Evasive (ai_ev.gd:150).
     pub melee_evasion: bool,
+    /// `Dodge` (rules 3.6) — MOST models carry it. The melee -1 itself is a resolution-time read
+    /// (`sim::strike_phase`: only while the unit is not Fatigued), so the stamp stays static.
+    pub dodge: bool,
     pub fortified: bool,
     /// WAVE 3 — the Fortified family's DATA-ALIAS stamp (`fortified_alias_of`
     /// below, gated `EPOCH_6_TABLE_RULES`; the stamp IS the dice hook's gate).
@@ -277,6 +283,11 @@ pub struct Ctx {
     /// `impact_reduction_per_model` (registry default 1, stamped behind the
     /// FROZEN `EPOCH_13_WHO_WINS` with `counter_models`).
     pub counter_impact_per_model: Option<i64>,
+    /// Rules 3.6 (`EPOCH_73_V36`) — the living models whose weapons carry
+    /// Brace(X); each takes X Impact dice off a charging unit. 0 below 73.
+    pub brace_models: i64,
+    /// The Brace carrier's own X, read off the weapon's rating (default 1).
+    pub brace_impact_per_model: Option<i64>,
     pub regeneration: bool,
     pub regen_target: i64,
     /// Block B10 — the SPELL-wound twin (`main._solo_regen_pick`'s
@@ -1519,7 +1530,6 @@ pub(crate) fn most_models_of(with: i64, total: i64) -> bool {
 /// hero in `attached_hero_rules` (the living ones only) its own. `solo` is the
 /// unit-of-[1] collapse `AiEv.rule_on_all_models` makes: the picked model's
 /// own unit answers alone.
-#[allow(dead_code)] // no caller yet: the rules 3.6 rows wire it in
 pub(crate) fn rule_on_most_models(p: &Profile, host_alive: i64, rule: &str, solo: bool) -> bool {
     let host_alive = host_alive.max(0);
     let host_with = if has_special_rule(&p.special_rules, rule) { host_alive } else { 0 };
@@ -1529,6 +1539,27 @@ pub(crate) fn rule_on_most_models(p: &Profile, host_alive: i64, rule: &str, solo
     let heroes = &p.attached_hero_rules;
     let heroes_with = heroes.iter().filter(|hr| has_special_rule(hr, rule)).count() as i64;
     most_models_of(host_with + heroes_with, host_alive + heroes.len() as i64)
+}
+
+/// Row MOR-02 (D-MOST): the Regeneration family names whose 3.6 text counts most models (their
+/// Boosts keep the every-model read). Twin: `AiEv.REGEN_MOST_MODELS`.
+const REGEN_MOST_MODELS: &[&str] = &[
+    "Regeneration", "Self-Repair", "Angelic Blessing", "Cursed Undead", "Grounded Protection",
+    "Knightborn", "Plaguebound", "Protected", "Protection Feat", "Warding",
+];
+
+/// `AiEv.regen_family_on`: most models for the names above from `EPOCH_73_V36`, else every model.
+/// Read once at profile build, so the host's living models are its `model_count` (at least one).
+fn regen_family_on(p: &Profile, rule: &str, rules_epoch: u32) -> bool {
+    if !rule_on(rules_epoch, crate::acts::EPOCH_73_V36) || !REGEN_MOST_MODELS.contains(&rule) {
+        return rule_on_all_models(p, rule);
+    }
+    let on = rule_on_most_models(p, p.model_count.max(1), rule, false);
+    if on && !rule_on_all_models(p, rule) {
+        trace_rule("regen", rule, &format!(
+            "most models of {} carry {rule}: a joined hero without it does not switch it off", p.name));
+    }
+    on
 }
 
 /// The two "Hit & Run" Boost spellings (gf/rebel_guerrillas "Guerrilla Boost",
@@ -1601,11 +1632,27 @@ fn stealth_alias_of_excluding(reg: &mut Registries, p: &Profile, skip: &str) -> 
     }
     (best_penalty, best_over_in, best_applies_charged)
 }
+
+/// Rules 3.6 (ruling D-MOST) — the Stealth-family names whose 3.6 text reads
+/// "most models" (the verified P1 list); every other alias keeps the
+/// all-models read. Empyrean Spirit is on that list too but rides row MOR-06.
+const STEALTH_MOST_MODELS: [&str; 4] = ["Stealth", "Changebound", "Machine-Fog", "Screened"];
+
+/// The Stealth-family quantifier: from `EPOCH_73_V36` a listed name holds when
+/// most models carry it (`p.model_count` = the host's models when the profile
+/// is built), else, and below the gate, only when every model does.
+fn stealth_family_on(p: &Profile, rule: &str, rules_epoch: u32) -> bool {
+    if rule_on(rules_epoch, crate::acts::EPOCH_73_V36) && STEALTH_MOST_MODELS.contains(&rule) {
+        return rule_on_most_models(p, p.model_count, rule, false);
+    }
+    rule_on_all_models(p, rule)
+}
+
 /// Wave 4 (port-entrenched) — `stealth_alias_of_excluding` SPLIT by
 /// `requires_stationary`: true keeps the flagged entries (Entrenched),
 /// false only the unconditional ones, below the FROZEN gate never called.
 fn stealth_alias_split_walk(
-    reg: &mut Registries, p: &Profile, skip: &str, want_stationary: bool,
+    reg: &mut Registries, p: &Profile, skip: &str, want_stationary: bool, rules_epoch: u32,
 ) -> (i64, f64, bool, bool) {
     let mut best_penalty = 0;
     let mut best_over_in = 0.0;
@@ -1614,7 +1661,7 @@ fn stealth_alias_split_walk(
     let map = reg.rules_for(&p.game_system);
     for r in &p.special_rules {
         let name = base_rule_name(r);
-        if name.is_empty() || name == "Stealth" || name == skip || !rule_on_all_models(p, &name) {
+        if name.is_empty() || name == "Stealth" || name == skip || !stealth_family_on(p, &name, rules_epoch) {
             continue;
         }
         let Some(e) = map.lookup(&p.faction_folder, &name) else {
@@ -1647,8 +1694,8 @@ fn stealth_alias_split_walk(
 pub(crate) const STEALTH_ALIAS_TERRAIN_WITHIN_IN: f64 = 1.0;
 
 /// The split's SIBLING fn — the `requires_stationary` members only.
-fn stationary_alias_of(reg: &mut Registries, p: &Profile) -> (i64, f64, bool) {
-    let (pen, over, charged, _) = stealth_alias_split_walk(reg, p, "", true);
+fn stationary_alias_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (i64, f64, bool) {
+    let (pen, over, charged, _) = stealth_alias_split_walk(reg, p, "", true, rules_epoch);
     (pen, over, charged)
 }
 /// Battleborn family wave 3 (rules-wave3-battleborn) — main.gd
@@ -2400,15 +2447,18 @@ pub fn capture_reads_for_epoch(
 /// terrain-pending shape, `shielded_alias_of`'s own bool). Below 52 the
 /// recorded flat fold replays and the tail stays zeros.
 fn regen_targets(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (i64, i64, i64, i64) {
-    let base = if has_special_rule(&p.special_rules, "Regeneration")
-        || has_special_rule(&p.special_rules, "Medical Training")
-    {
+    let regen = if rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
+        regen_family_on(p, "Regeneration", rules_epoch)
+    } else {
+        has_special_rule(&p.special_rules, "Regeneration")
+    };
+    let base = if regen || has_special_rule(&p.special_rules, "Medical Training") {
         let map = reg.rules_for(&p.game_system);
         match map.lookup(&p.faction_folder, "Regeneration") {
             Some(e) => e.param_i("ignore_target", REGENERATION_TARGET),
             None => REGENERATION_TARGET,
         }
-    } else if rule_on_all_models(p, "Self-Repair") {
+    } else if regen_family_on(p, "Self-Repair", rules_epoch) {
         let map = reg.rules_for(&p.game_system);
         match map.lookup(&p.faction_folder, "Self-Repair") {
             Some(e) => e.param_i("ignore_target", SELF_REPAIR_TARGET),
@@ -2478,7 +2528,7 @@ fn regen_targets(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (i64, i
                         e.param_i("ignore_target", 0), e.param_i("ignore_target_spell", 0)),
                 );
             }
-            if e.param_b("all_models") && !rule_on_all_models(p, &n) {
+            if e.param_b("all_models") && !regen_family_on(p, &n, rules_epoch) {
                 continue;
             }
             let normal = e.param_i("ignore_target", 0);
@@ -2637,8 +2687,8 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
             let skip = if machine_fog_boost { "Machine-Fog" }
                 else if empyrean_spirit_boost { "Empyrean Spirit" } else { "" };
-            let (ap, ao, ac, near) = stealth_alias_split_walk(reg, p, skip, false);
-            let (sp, so, _) = stationary_alias_of(reg, p);
+            let (ap, ao, ac, near) = stealth_alias_split_walk(reg, p, skip, false, rules_epoch);
+            let (sp, so, _) = stationary_alias_of(reg, p, rules_epoch);
             (ap, ao, ac, near, sp, so)
         } else {
             let (ap, ao, ac) = if machine_fog_boost { stealth_alias_of_excluding(reg, p, "Machine-Fog") }
@@ -2754,6 +2804,13 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     } else {
         None
     };
+    // Rules 3.6 (`EPOCH_73_V36`) — a Brace(X) weapon bearer blunts a charge:
+    // every living model carrying one takes X Impact dice off the charger.
+    let brace_weapon = if rule_on(rules_epoch, EPOCH_73_V36) {
+        p.weapons.iter().find(|w| weapon_has(w, "Brace"))
+    } else {
+        None
+    };
     Ctx {
         quality: p.quality,
         defense: armored_defense(p.defense, armor),
@@ -2797,7 +2854,9 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         impact: unit_rating(&p.special_rules, "Impact"),
         heavy_impact: unit_rating(&p.special_rules, "Heavy Impact"),
         ravage: unit_rating(&p.special_rules, "Ravage"),
-        stealth: rule_on_all_models(p, "Stealth"),
+        stealth: stealth_family_on(p, "Stealth", rules_epoch),
+        stealth_most_models: stealth_family_on(p, "Stealth", rules_epoch)
+            && !rule_on_all_models(p, "Stealth"),
         stealth_alias_penalty,
         stealth_alias_over_in,
         stealth_alias_applies_charged,
@@ -2813,6 +2872,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         evasive_alias: !evasive_boost.is_empty(),
         evasive_alias_name: evasive_boost,
         melee_evasion: rule_on_all_models(p, "Melee Evasion"),
+        dodge: unit_rule_active(reg, p, "Dodge") && rule_on_most_models(p, p.model_count, "Dodge", false),
         fortified: rule_on_all_models(p, "Fortified")
             && fortified_aura_bearer_live(reg, p, rules_epoch),
         // WAVE 3 — stamped above, behind `EPOCH_6_TABLE_RULES`.
@@ -2887,6 +2947,9 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         } else {
             None
         },
+        // Rules 3.6 — `sim::ctx_of` trims the stamp to the living models.
+        brace_models: if brace_weapon.is_some() { p.model_count.max(0) } else { 0 },
+        brace_impact_per_model: brace_weapon.map(|w| weapon_rating(w, "Brace").max(1)),
         regeneration: regen_targets.0 > 0,
         regen_target: regen_targets.0,
         regen_target_spell: regen_targets.1,
@@ -5304,15 +5367,8 @@ pub(crate) fn profiles_in_range(weapons: &[Weapon], dist_in: f64) -> Vec<ShootPr
     merge_identical(raw)
 }
 
-/// `AiShooting.melee_profiles` ai_shooting.gd:44-56 — every range-0 weapon, also
-/// UNSTAMPED. Strafing is NOT excluded here: that filter lives in
-/// `profiles_in_range` alone, and a melee weapon never carries the move-through
-/// trigger. The epoch-free reading (no Assault copy) — the row encoder's.
-pub(crate) fn melee_profiles(weapons: &[Weapon]) -> Vec<ShootProfile> {
-    melee_profiles_at(weapons, 0)
-}
-
-/// `melee_profiles` at the record's epoch. MEL-01 (D-ASSAULT, `EPOCH_73_V36`):
+/// The melee list at the record's epoch — `AiShooting.melee_profiles`
+/// ai_shooting.gd:44-56. MEL-01 (D-ASSAULT, `EPOCH_73_V36`):
 /// a ranged weapon carrying Assault also yields a melee copy, in weapon order,
 /// at range 0 with its printed range kept in `printed_range`.
 pub(crate) fn melee_profiles_at(weapons: &[Weapon], rules_epoch: u32) -> Vec<ShootProfile> {
