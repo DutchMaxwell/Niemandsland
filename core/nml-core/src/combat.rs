@@ -825,9 +825,11 @@ pub fn ravage_ev(att: &Ctx, def: &Ctx) -> f64 {
 /// (battle_sim.gd:702, ai_ev.gd:135). Modelled anyway so the function is the
 /// GDScript's, not a specialisation of it.
 ///
-/// Rules 3.6 (`EPOCH_73_V36`): `brace_models` x `brace_impact_per_model` joins
-/// the same cut — it is stamped 0 below the wave, so old records replay
-/// byte-exact. A Fatigued braced defender removes nothing, as in the resolver.
+/// Rules 3.6 (`EPOCH_73_V36`): Counter takes no Impact dice away — `ctx_for`
+/// stamps `counter_models` 0 from the wave on, so this subtraction is the
+/// old-epoch replay path only. Brace is the only 3.6 cut and joins the same
+/// total; it is stamped 0 below the wave, so old records replay byte-exact. A
+/// Fatigued braced defender removes nothing, as in the resolver.
 pub fn impact_ev(att: &Ctx, def: &Ctx) -> f64 {
     let models = att.models.max(0);
     let brace = if def.fatigued {
