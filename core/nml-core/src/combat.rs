@@ -466,6 +466,13 @@ pub fn conditional_ap_bonus_vs(
     if c.gate == "ranged_over_or_charge" && !(is_charging || (!melee && dist_in > c.over_in)) {
         return 0;
     }
+    // Rules 3.6 (SHO-20) — the Slayer family's shooting gate from
+    // `EPOCH_73_V36` ("after a Hold"), stamped by unit.rs and the granted-Slayer
+    // legs. True when the attack is a charge or the shooter held; the ranged
+    // distance no longer opens it. Pre-73 stamps carry the old spelling above.
+    if c.gate == "hold_or_charge" && !(is_charging || (!melee && t.shooter_held)) {
+        return 0;
+    }
     // Wave 4 follow-up (rules-ranged-slayer) — "Ranged Slayer"'s gate, the
     // Slayer family's shooting-only spelling ("AP(+2) … over 9" away", no
     // charge leg). Fires only on the shooting array from beyond `over_in`
@@ -514,19 +521,22 @@ pub struct CondApTarget {
     pub defense: i64,
     /// The firing weapon's range in inches; 0 = a melee strike or no range known.
     pub weapon_range_in: f64,
+    /// Rules 3.6 (SHO-20): the FIRING unit's Hold state, read only by the
+    /// `hold_or_charge` gate. The EV folds cannot know it (`false`).
+    pub shooter_held: bool,
 }
 
 impl CondApTarget {
     /// The target as the dice and EV folds see it, shot at with a `weapon_range_in` weapon.
     pub fn of(def: &Ctx, weapon_range_in: f64) -> Self {
-        Self { tough: def.tough.max(1), defense: def.defense, weapon_range_in }
+        Self { tough: def.tough.max(1), defense: def.defense, weapon_range_in, shooter_held: false }
     }
 }
 
 /// [`conditional_ap_bonus_vs`] without a weapon range: the melee leg and the
 /// granted conditions, whose legs never measure one.
 pub fn conditional_ap_bonus(c: &CondAp, target_tough: i64, target_defense: i64, is_charging: bool, dist_in: f64, melee: bool) -> i64 {
-    let t = CondApTarget { tough: target_tough, defense: target_defense, weapon_range_in: 0.0 };
+    let t = CondApTarget { tough: target_tough, defense: target_defense, weapon_range_in: 0.0, shooter_held: false };
     conditional_ap_bonus_vs(c, &t, is_charging, dist_in, melee)
 }
 
@@ -710,7 +720,20 @@ pub fn profile_ev(
     }
     let bane = p.bane;
     let fort = def.fortified;
-    let mut unsaved = (hits - six_hits) * (1.0 - block_chance(defense, fortified_ap(ap, fort), bane))
+    // Rules 3.6 row MOR-12c (ai_ev.gd:648-655): the bearer's share of the plain
+    // hits (its attacks over the profile's, the dice path's same fraction) saves
+    // at AP(+sergeant_ap); 0 below the stamp's epoch.
+    let sgt_ap = p.sergeant_ap;
+    let sgt_frac = if sgt_ap > 0 {
+        let alive = att.models.max(1) as f64;
+        let share = (attacks_f / alive).round().max(1.0);
+        share.min(attacks_f) / attacks_f.max(1.0)
+    } else {
+        0.0
+    };
+    let plain = hits - six_hits;
+    let mut unsaved = plain * (1.0 - sgt_frac) * (1.0 - block_chance(defense, fortified_ap(ap, fort), bane))
+        + plain * sgt_frac * (1.0 - block_chance(defense, fortified_ap(ap + sgt_ap, fort), bane))
         + six_hits * (1.0 - block_chance(defense, fortified_ap(ap + on6_ap, fort), bane));
     // --- Deadly, Shred, Regeneration (ai_ev.gd:423-436) ---
     let deadly_cap = def.tough.max(1);

@@ -112,4 +112,4 @@ func test_a_spell_granting_a_renamed_upgrade_resolves_its_3_6_name_at_epoch_73()
 					granted += 1
 					assert_bool(RulesRegistry.lookup(system, faction, grant).is_empty()).override_failure_message(
 						"%s %s: the granted '%s' does not resolve" % [system, faction, grant]).is_false()
-	assert_int(granted).override_failure_message("no spell grants a batch 3.6 name").is_equal(11)
+	assert_int(granted).override_failure_message("no spell grants a batch 3.6 name").is_equal(12)

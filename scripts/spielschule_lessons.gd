@@ -17,22 +17,22 @@ const _S01_STEPS := [
 		"rule": "", "all": [{"check": "unit_selected_whole", "args": {"tag": "alpha"}}]},
 	{"id": "move_squad", "text": "Drag the squad about 6 inches forward and let go.",
 		"rule": "", "all": [{"check": "unit_moved", "args": {"tag": "alpha", "inches": 3.0}}]},
-	{"id": "measure", "text": "Hold Shift and drag to measure a distance. (Rulebook p.5)",
+	{"id": "measure", "text": "Hold Shift and drag to measure a distance.",
 		"rule": "p.5", "all": [{"check": "counter_grew", "args": {"key": "measure"}}]},
 ]
 
 
 const _S02_STEPS := [
-	{"id": "table_size", "text": "Open the menu (top left) and set the table to 6' x 4', the standard size. (p.6)",
+	{"id": "table_size", "text": "Open the menu (top left) and set the table to 6' x 4', the standard size.",
 		"rule": "p.6", "all": [{"check": "value_is", "args": {"key": "table_size", "value": Vector2(6, 4)}}]},
 	{"id": "biome", "text": "Pick a different battlefield biome.",
 		"rule": "", "all": [{"check": "value_changed", "args": {"key": "biome"}}]},
-	{"id": "terrain_piece", "text": "Turn on Terrain Mode and place at least three pieces of scenery, one of them a forest. (p.12)",
-		"rule": "p.12", "all": [
+	{"id": "terrain_piece", "text": "Turn on Terrain Mode and place at least three pieces of scenery, one of them a forest.",
+		"rule": "p.11", "all": [
 			{"check": "at_least", "args": {"key": "terrain_pieces", "n": 3}},
 			{"check": "at_least", "args": {"key": "forest_pieces", "n": 1}}]},
-	{"id": "autogen", "text": "Open Map Layout and press Auto-Generate: the rulebook asks for 15 or more pieces. (p.6, p.12)",
-		"rule": "p.12", "all": [{"check": "at_least", "args": {"key": "layout_pieces", "n": 1}}]},
+	{"id": "autogen", "text": "Open Map Layout and press Auto-Generate: the rulebook asks for 15 or more pieces.",
+		"rule": "p.11", "all": [{"check": "at_least", "args": {"key": "layout_pieces", "n": 1}}]},
 	{"id": "deploy_type", "text": "In Map Layout, pick a deployment type.",
 		"rule": "", "all": [{"check": "value_changed", "args": {"key": "deploy_type"}}]},
 ]
@@ -45,7 +45,7 @@ const _S03_STEPS := [
 		"rule": "", "all": [{"check": "at_least", "args": {"key": "units_p1", "n": 1}}],
 		"action": {"label": "Use the practice army",
 			"fixture": "res://assets/tutorial/tutorial_army_p1.json"}},
-	{"id": "deploy", "text": "Drag every unit into your deployment zone, the shaded strip on your side. (p.6)",
+	{"id": "deploy", "text": "Drag every unit into your deployment zone, the shaded strip on your side.",
 		"rule": "p.6", "all": [{"check": "flag", "args": {"key": "p1_all_in_zone"}}]},
 	{"id": "start", "text": "Press Start Game.",
 		"rule": "", "all": [{"check": "value_is", "args": {"key": "phase", "value": 1}}]},
@@ -53,13 +53,13 @@ const _S03_STEPS := [
 
 
 const _S04_STEPS := [
-	{"id": "bands", "text": "Select Alpha Squad and press M: the rings show Advance 6\" and Rush 12\". (p.7)",
+	{"id": "bands", "text": "Select Alpha Squad and press M: the rings show Advance 6\" and Rush 12\".",
 		"rule": "p.7", "all": [{"check": "flag", "args": {"key": "bands"}}]},
 	{"id": "advance_alpha", "text": "Advance: drag Alpha Squad up to 6\", then right-click it and choose Activate.",
 		"rule": "", "all": [
 			{"check": "unit_moved", "args": {"tag": "alpha", "inches": 1.0}},
 			{"check": "tag_flag", "args": {"key": "activated", "tag": "alpha", "value": true}}]},
-	{"id": "ai_turn", "text": "Now NACHTMAHR activates one unit — turns alternate, one unit each. (p.7)",
+	{"id": "ai_turn", "text": "Now NACHTMAHR activates one unit — turns alternate, one unit each.",
 		"rule": "p.7", "all": [{"check": "tag_flag", "args": {"key": "activated", "tag": "target", "value": true}}]},
 	{"id": "rush_bravo", "text": "Rush: drag Bravo Squad more than 6\" (up to 12\") and activate it. A rushing unit may not shoot.",
 		"rule": "", "all": [
@@ -71,31 +71,31 @@ const _S04_STEPS := [
 
 
 const _S05_STEPS := [
-	{"id": "card", "text": "Right-click Alpha Squad and open its card: the Heavy Rifle shoots 18\". (p.5)",
+	{"id": "card", "text": "Right-click Alpha Squad and open its card: the Heavy Rifle shoots 18\".",
 		"rule": "p.5", "all": [{"check": "flag", "args": {"key": "card_presented"}}]},
-	{"id": "shoot", "text": "Right-click Alpha Squad, choose Shoot, click the nearer Warriors squad: the Heavy Rifle reaches 18\". (p.5)",
+	{"id": "shoot", "text": "Right-click Alpha Squad, choose Shoot, click the nearer Warriors squad: the Heavy Rifle reaches 18\".",
 		"rule": "p.5", "all": [{"check": "counter_grew", "args": {"key": "shoot:alpha"}}]},
-	{"id": "read_log", "text": "Read the log: hits roll against Quality, the enemy blocks with Defense. (p.8)",
+	{"id": "read_log", "text": "Read the log: hits roll against Quality, the enemy blocks with Defense.",
 		"rule": "p.8", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
-	{"id": "blocked", "text": "Try to shoot the Guardians squad behind the building: it stands in range, but the building blocks the line of sight — no line of sight, no shot. (p.5)",
+	{"id": "blocked", "text": "Try to shoot the Guardians squad behind the building: it stands in range, but the building blocks the line of sight — no line of sight, no shot.",
 		"rule": "p.5", "all": [{"check": "counter_grew", "args": {"key": "log:nolos"}}]},
 ]
 
 
 const _S06_STEPS := [
-	{"id": "charge", "text": "Move Alpha Squad into base contact with the enemy squad (within 1\"). (p.9)",
+	{"id": "charge", "text": "Move Alpha Squad into base contact with the enemy squad (within 1\").",
 		"rule": "p.9", "all": [{"check": "gap_at_most", "args": {"tag": "target", "inches": 1.0}}]},
 	{"id": "fight", "text": "Right-click Alpha Squad, choose Fight, click the enemy squad.",
 		"rule": "", "all": [{"check": "counter_grew", "args": {"key": "melee:alpha"}}]},
-	{"id": "pile_in", "text": "The charged squad piles in up to 3\" — read the log, then press Continue. (p.9)",
+	{"id": "pile_in", "text": "The charged squad piles in up to 3\" — read the log, then press Continue.",
 		"rule": "p.9", "all": [
 			{"check": "counter_at_least", "args": {"key": "log:pile_in", "n": 1}},
 			{"check": "counter_grew", "args": {"key": "continue"}}]},
-	{"id": "strike_back", "text": "The defender strikes back, then both sides are Fatigued — then press Continue. (p.9)",
+	{"id": "strike_back", "text": "The defender strikes back, then both sides are Fatigued — then press Continue.",
 		"rule": "p.9", "all": [
 			{"check": "counter_at_least", "args": {"key": "strike:target", "n": 1}},
 			{"check": "counter_grew", "args": {"key": "continue"}}]},
-	{"id": "consolidate", "text": "The winner consolidates — read the log, then press Continue. (p.10)",
+	{"id": "consolidate", "text": "The winner consolidates — read the log, then press Continue.",
 		"rule": "p.10", "all": [
 			{"check": "counter_at_least", "args": {"key": "log:consolidate", "n": 1}},
 			{"check": "counter_grew", "args": {"key": "continue"}}]},
@@ -103,25 +103,25 @@ const _S06_STEPS := [
 
 
 const _S08_STEPS := [
-	{"id": "move_forest", "text": "Move Alpha Squad into the forest ahead. Forests are difficult terrain: no model moves more than 6\". (p.11)",
-		"rule": "p.11", "all": [{"check": "tag_terrain_is", "args": {"tag": "alpha", "type": 2}}]},
-	{"id": "difficult", "text": "Drag a model past 6\" through the forest: difficult terrain hard-caps the move at 6\". (p.11)",
-		"rule": "p.11", "all": [{"check": "counter_grew", "args": {"key": "move_capped"}}]},
-	{"id": "cover", "text": "The enemy stands inside a forest: most of it is in cover, so it gets +1 to its Defense rolls against shooting, then press Continue. (p.11)",
-		"rule": "p.11", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
-	{"id": "shoot_cover", "text": "Shoot the enemy in cover and watch the +1 in the log. (p.11)",
-		"rule": "p.11", "all": [{"check": "counter_grew", "args": {"key": "shoot:alpha"}}]},
-	{"id": "dangerous", "text": "Dangerous terrain is a hazard on the table: a unit moving through it rolls one test die per model, and a 1 wounds it. Read the rule, then press Continue. (p.12)",
+	{"id": "move_forest", "text": "Move Alpha Squad into the forest ahead. Forests are difficult terrain: no model moves more than 6\".",
+		"rule": "p.12", "all": [{"check": "tag_terrain_is", "args": {"tag": "alpha", "type": 2}}]},
+	{"id": "difficult", "text": "Drag a model past 6\" through the forest: difficult terrain hard-caps the move at 6\".",
+		"rule": "p.12", "all": [{"check": "counter_grew", "args": {"key": "move_capped"}}]},
+	{"id": "cover", "text": "The enemy stands inside a forest: most of it is in cover, so it gets +1 to its Defense rolls against shooting, then press Continue.",
 		"rule": "p.12", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
-	{"id": "wall", "text": "Ruins are area terrain: units can see into and out of them, but not through — nobody shoots through the ruins, then press Continue. (p.11)",
-		"rule": "p.11", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
+	{"id": "shoot_cover", "text": "Shoot the enemy in cover and watch the +1 in the log.",
+		"rule": "p.12", "all": [{"check": "counter_grew", "args": {"key": "shoot:alpha"}}]},
+	{"id": "dangerous", "text": "Dangerous terrain is a hazard on the table: a unit moving through it rolls one test die per model, and a 1 wounds it. Read the rule, then press Continue.",
+		"rule": "p.12", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
+	{"id": "wall", "text": "Ruins are area terrain: units can see into and out of them, but not through — nobody shoots through the ruins, then press Continue.",
+		"rule": "p.12", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
 ]
 
 
 const _S07_STEPS := [
-	{"id": "shaken_idle", "text": "Charlie Squad carries an S token: Shaken units must spend their activation idle. (p.10)",
+	{"id": "shaken_idle", "text": "Charlie Squad carries an S token: Shaken units must spend their activation idle.",
 		"rule": "p.10", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
-	{"id": "tough_half", "text": "Open the Nachtmahr Leader card: a single Tough(3) model with 2 of 3 wounds lost counts as at half strength, then press Continue. (p.10)",
+	{"id": "tough_half", "text": "Open the Nachtmahr Leader card: a single Tough(3) model with 2 of 3 wounds lost counts as at half strength, then press Continue.",
 		"rule": "p.10", "all": [
 			{"check": "tag_flag", "args": {"tag": "tough", "key": "card_presented", "value": true}},
 			{"check": "counter_grew", "args": {"key": "continue"}}]},
@@ -130,37 +130,37 @@ const _S07_STEPS := [
 			{"check": "tag_flag", "args": {"tag": "shaken", "key": "activated", "value": true}},
 			{"check": "tag_flag", "args": {"tag": "shaken", "key": "shaken", "value": false}},
 			{"check": "counter_grew", "args": {"key": "continue"}}]},
-	{"id": "morale_test", "text": "The enemy squad is at half strength. Shoot it with Alpha Squad: at the end of the activation it takes a morale test. (p.10)",
+	{"id": "morale_test", "text": "The enemy squad is at half strength. Shoot it with Alpha Squad: at the end of the activation it takes a morale test.",
 		"rule": "p.10", "all": [{"check": "counter_grew", "args": {"key": "shoot:alpha"}}]},
-	{"id": "outcome", "text": "Read the log: a unit at half strength that loses models tests morale — fail and it is Shaken, at half strength or less it Routs, then press Continue. (p.10)",
+	{"id": "outcome", "text": "Read the log: a unit at half strength that loses models tests morale — fail and it is Shaken, at half strength or less it Routs, then press Continue.",
 		"rule": "p.10", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
 ]
 
 
 const _S09_STEPS := [
-	{"id": "left_marker", "text": "Move Alpha Squad within 3\" of the left marker. (p.6)",
+	{"id": "left_marker", "text": "Move Alpha Squad within 3\" of the left marker.",
 		"rule": "p.6", "all": [{"check": "obj_within", "args": {"tag": "alpha", "index": 0, "inches": 3.0}}]},
-	{"id": "right_marker", "text": "Move Bravo Squad within 3\" of the right marker — the enemy stands there too. (p.6)",
+	{"id": "right_marker", "text": "Move Bravo Squad within 3\" of the right marker — the enemy stands there too.",
 		"rule": "p.6", "all": [{"check": "obj_within", "args": {"tag": "bravo", "index": 2, "inches": 3.0}}]},
-	{"id": "seize", "text": "The round ended: the left marker is seized because only your side is within 3\" — the right marker stays contested while both sides are near it, then press Continue. (p.6)",
+	{"id": "seize", "text": "The round ended: the left marker is seized because only your side is within 3\" — the right marker stays contested while both sides are near it, then press Continue.",
 		"rule": "p.6", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
-	{"id": "outcome", "text": "A marker is seized when only one side is within 3\" at the end of a round. After 4 rounds, the side holding more markers wins, then press Continue. (p.6)",
+	{"id": "outcome", "text": "A marker is seized when only one side is within 3\" at the end of a round. After 4 rounds, the side holding more markers wins, then press Continue.",
 		"rule": "p.6", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
 ]
 
 
 const _SSPELL_STEPS := [
-	{"id": "preview", "text": "Open the Archivist's card and hover a spell: a ring shows its range. (p.13)",
+	{"id": "preview", "text": "Open the Archivist's card and hover a spell: a ring shows its range.",
 		"rule": "p.13", "all": [{"check": "flag", "args": {"key": "spell_preview"}}]},
 	{"id": "cast", "text": "Right-click the Archivist, choose Cast, then pick the spell and a squad.",
 		"rule": "p.13", "all": [{"check": "counter_grew", "args": {"key": "cast:alpha"}}]},
-	{"id": "tokens", "text": "Explained, nothing to do here: casters gain a token every round and spend one to cast, and a spell succeeds on a 4+. Read it, then press Continue. (p.13)",
+	{"id": "tokens", "text": "Explained, nothing to do here: casters gain a token every round and spend one to cast, and a spell succeeds on a 4+. Read it, then press Continue.",
 		"rule": "p.13", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
 ]
 
 
 const _S10_STEPS := [
-	{"id": "finish", "text": "Play the mission to the end: NACHTMAHR plays for real at its easiest grade, Dämmerung, over 4 rounds with three markers to hold. Win, lose or draw, the lesson ends when the game does. (p.6)",
+	{"id": "finish", "text": "Play the mission to the end: NACHTMAHR plays for real at its easiest grade, Dämmerung, over 4 rounds with three markers to hold. Win, lose or draw, the lesson ends when the game does.",
 		"rule": "p.6", "all": [{"check": "flag", "args": {"key": "game_finished"}}]},
 ]
 

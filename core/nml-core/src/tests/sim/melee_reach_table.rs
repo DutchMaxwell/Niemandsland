@@ -60,7 +60,7 @@ use super::*;
         let def_pool = wounds_left(&st, 1);
         let mut tray = Tray::seeded(2);
         let mut shot = ShootResult::default();
-        let (caused, credit) = strike_phase(&statics, &mut st, 0, 1, false, 0.0, Seams::default(), &mut tray, &mut shot, StrikeSet::All, Cover::Recorded(None));
+        let (caused, credit, _) = strike_phase(&statics, &mut st, 0, 1, false, 0.0, Seams::default(), &mut tray, &mut shot, StrikeSet::All, Cover::Recorded(None));
         let landed = def_pool - wounds_left(&st, 1);
         assert_eq!(landed, 3, "fixture: seed 9 lands exactly 3 wounds (got {landed})");
         assert!(caused >= landed, "the tally is the PRE-Regeneration count");
@@ -81,7 +81,7 @@ use super::*;
         let (mut st, statics) = duel(0);
         let mut tray = Tray::seeded(2);
         let mut shot = ShootResult::default();
-        let (_, credit) = strike_phase(&statics, &mut st, 0, 1, false, 0.0, Seams::default(), &mut tray, &mut shot, StrikeSet::All, Cover::Recorded(None));
+        let (_, credit, _) = strike_phase(&statics, &mut st, 0, 1, false, 0.0, Seams::default(), &mut tray, &mut shot, StrikeSet::All, Cover::Recorded(None));
         assert_eq!(credit, 0, "nothing to credit");
         assert!(shot.log.iter().all(|l| !l.contains("Retaliate")), "nothing logged");
         assert!(shot.rolls.iter().all(|r| !(r.kind == "defense" && r.owner == "Striker")),

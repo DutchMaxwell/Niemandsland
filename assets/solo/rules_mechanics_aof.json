@@ -19,6 +19,7 @@
   "Bravery",
   "Bravery Aura",
   "Bravery Buff",
+  "Crossing Strike",
   "Enhanced Angelic Blessing",
   "Enhanced Angelic Blessing Buff",
   "Armor",
@@ -102,6 +103,7 @@
   "Fortified",
   "Fortified Aura",
   "Fortified Growth",
+  "Fracture",
   "Furious",
   "Furious Aura",
   "Furious Buff",
@@ -180,6 +182,7 @@
   "Ossified",
   "Enhanced Ossified",
   "Enhanced Ossified Aura",
+  "Parry",
   "Pass Turn",
   "Phase Through",
   "Piercing Assault",
@@ -222,11 +225,13 @@
   "Enhanced Primal Buff",
   "Protected",
   "Protection Feat",
+  "Puncture",
   "Quick",
   "Quick Readjustment",
   "Quick Shot",
   "Quick Shot Aura",
   "Quick Shot Mark",
+  "Quick Throw",
   "Ranged Shrouding",
   "Ranged Shrouding Aura",
   "Ranged Slayer",
@@ -499,6 +504,23 @@
     "grants": "Ambush"
    }
   },
+  "Anti-Cover": {
+   "primitive": "Indirect",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "ignores_cover": true,
+    "cover_only": true
+   }
+  },
+  "Anti-Regen": {
+   "primitive": "Lacerate",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "bypass_regen": true
+   }
+  },
   "Armor": {
    "primitive": "Armor",
    "rated": true,
@@ -517,6 +539,8 @@
     "shooter_hit_bonus": 1,
     "target_hit_penalty": 2,
     "over_in": 9.0,
+    "shooter_over_in": 12.0,
+    "shooter_requires_hold": true,
     "hold_only": true
    }
   },
@@ -655,6 +679,15 @@
     "wound_target": 6
    }
   },
+  "Crossing Strike": {
+   "primitive": "Strafing",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "move_through_attack": true,
+    "weapon_only": true
+   }
+  },
   "Cumbersome": {
    "primitive": "Cumbersome",
    "rated": false,
@@ -728,6 +761,14 @@
    "primitive": "Flying",
    "rated": false,
    "book_version": "3.5.1"
+  },
+  "Fracture": {
+   "primitive": "Crack",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "on6_ap": 2
+   }
   },
   "Furious": {
    "primitive": "Furious",
@@ -804,7 +845,8 @@
     "ignores_cover": true,
     "ignores_los": true,
     "hold_and_shoot": true,
-    "los_needs_hold": true
+    "los_needs_hold": true,
+    "cover_needs_hold": true
    }
   },
   "Indirect when Shooting": {
@@ -852,12 +894,31 @@
     "scope": "unit"
    }
   },
+  "Parry": {
+   "primitive": "Parry",
+   "rated": true,
+   "book_version": "3.6.0",
+   "params": {
+    "rating": "X"
+   }
+  },
   "Precise": {
    "primitive": "Precise",
    "rated": false,
    "book_version": "3.6.0",
    "params": {
     "hit_bonus": 1
+   }
+  },
+  "Puncture": {
+   "primitive": "Disintegrate",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "ap_bonus": 2,
+    "condition": "vs_armor",
+    "threshold": 3,
+    "bypass_regen": true
    }
   },
   "Regeneration": {
@@ -912,6 +973,14 @@
     "on6_ap": 4,
     "bypass_regen": true,
     "shooting_only": true
+   }
+  },
+  "Scourge": {
+   "primitive": "Scourge",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "phantom_wounds_per_save_one": 2
    }
   },
   "Scout": {
@@ -2278,6 +2347,14 @@
     "book_version": "3.5.3",
     "params": {
      "no_moved_penalty": true
+    }
+   },
+   "Quick Throw": {
+    "primitive": "Indirect",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "los_needs_hold": false
     }
    },
    "Rapid Rush": {
@@ -6742,6 +6819,14 @@
     "book_version": "3.5.3",
     "params": {
      "no_moved_penalty": true
+    }
+   },
+   "Quick Throw": {
+    "primitive": "Indirect",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "los_needs_hold": false
     }
    },
    "Reinforcement": {

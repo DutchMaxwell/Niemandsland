@@ -3,6 +3,18 @@ extends GdUnitTestSuite
 const Card := preload("res://scripts/hud/lesson_card.gd")
 
 
+func before_test() -> void:
+	OPRApiClient._core_versions.clear()
+
+
+func after_test() -> void:
+	OPRApiClient._core_versions.clear()
+
+
+func _rules_label() -> String:
+	return "Rules " + OPRApiClient._major_minor(OPRApiClient.rules_core_version("gf"))
+
+
 func _card() -> LessonCard:
 	var card: LessonCard = auto_free(Card.new())
 	add_child(card)
@@ -40,7 +52,7 @@ func test_step_and_complete_states() -> void:
 		"all": [{"check": "counter_grew", "args": {"key": "continue"}}]})
 	assert_bool(_button(card, "Content/ContinueButton").visible).is_true()
 	assert_str(card.get_node("Content/Progress").text).is_equal("Step 2 of 6")
-	assert_str(card.get_node("Content/Rule").text).is_equal("Rulebook p.5")
+	assert_str(card.get_node("Content/Rule").text).is_equal(_rules_label())
 	card.show_step(2, 6, {"text": "Move.", "rule": "", "all": [{"check": "unit_moved"}]})
 	assert_bool(_button(card, "Content/ContinueButton").visible).is_false()
 	assert_bool(card.get_node("Content/Rule").visible).is_false()

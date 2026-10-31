@@ -97,14 +97,14 @@ use super::*;
 
     /// The catalogue's own instance counts over the four spells_mechanics
     /// maps — the pin that keeps the batch-1 surface exactly as measured
-    /// (128 instances; a catalogue change breaks this loudly).
+    /// (99 instances after the rules 3.6 re-export; a catalogue change breaks this loudly).
     const CATALOGUE_COUNTS: [(&str, usize); 6] = [
         ("Unstoppable", 28),
-        ("Evasive", 26),
+        ("Evasive", 25),
         ("Melee Evasion", 20),
         ("Rapid Rush", 12),
         ("Regeneration", 10),
-        ("Resistance", 7),
+        ("Resistance", 4),
     ];
 
     #[test]

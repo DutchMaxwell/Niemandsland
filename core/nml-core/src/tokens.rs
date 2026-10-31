@@ -1116,6 +1116,7 @@ mod tests {
         rep!(coordinate_via_round);
         rep!(growth_markers);
         rep!(growth_round);
+        rep!(growth_strike_round);
         rep!(second_wind_used);
         rep!(reinforcement_used);
         big.feats_used = Rc::new((0..n).map(|_| base.feats_used[0].clone()).collect());
