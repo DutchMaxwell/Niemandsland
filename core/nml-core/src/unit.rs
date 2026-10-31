@@ -1533,6 +1533,27 @@ pub(crate) fn rule_on_most_models(p: &Profile, host_alive: i64, rule: &str, solo
     most_models_of(host_with + heroes_with, host_alive + heroes.len() as i64)
 }
 
+/// Row MOR-02 (D-MOST): the Regeneration family names whose 3.6 text counts most models (their
+/// Boosts keep the every-model read). Twin: `AiEv.REGEN_MOST_MODELS`.
+const REGEN_MOST_MODELS: &[&str] = &[
+    "Regeneration", "Self-Repair", "Angelic Blessing", "Cursed Undead", "Grounded Protection",
+    "Knightborn", "Plaguebound", "Protected", "Protection Feat", "Warding",
+];
+
+/// `AiEv.regen_family_on`: most models for the names above from `EPOCH_73_V36`, else every model.
+/// Read once at profile build, so the host's living models are its `model_count` (at least one).
+fn regen_family_on(p: &Profile, rule: &str, rules_epoch: u32) -> bool {
+    if !rule_on(rules_epoch, crate::acts::EPOCH_73_V36) || !REGEN_MOST_MODELS.contains(&rule) {
+        return rule_on_all_models(p, rule);
+    }
+    let on = rule_on_most_models(p, p.model_count.max(1), rule, false);
+    if on && !rule_on_all_models(p, rule) {
+        trace_rule("regen", rule, &format!(
+            "most models of {} carry {rule}: a joined hero without it does not switch it off", p.name));
+    }
+    on
+}
+
 /// The two "Hit & Run" Boost spellings (gf/rebel_guerrillas "Guerrilla Boost",
 /// aof|gf dark-elf "Harassing Boost"): the entry's own `move_in` replaces the
 /// shared 3" const when the FROZEN `EPOCH_6_TABLE_RULES` gate is on — wave 4
@@ -2402,15 +2423,18 @@ pub fn capture_reads_for_epoch(
 /// terrain-pending shape, `shielded_alias_of`'s own bool). Below 52 the
 /// recorded flat fold replays and the tail stays zeros.
 fn regen_targets(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (i64, i64, i64, i64) {
-    let base = if has_special_rule(&p.special_rules, "Regeneration")
-        || has_special_rule(&p.special_rules, "Medical Training")
-    {
+    let regen = if rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
+        regen_family_on(p, "Regeneration", rules_epoch)
+    } else {
+        has_special_rule(&p.special_rules, "Regeneration")
+    };
+    let base = if regen || has_special_rule(&p.special_rules, "Medical Training") {
         let map = reg.rules_for(&p.game_system);
         match map.lookup(&p.faction_folder, "Regeneration") {
             Some(e) => e.param_i("ignore_target", REGENERATION_TARGET),
             None => REGENERATION_TARGET,
         }
-    } else if rule_on_all_models(p, "Self-Repair") {
+    } else if regen_family_on(p, "Self-Repair", rules_epoch) {
         let map = reg.rules_for(&p.game_system);
         match map.lookup(&p.faction_folder, "Self-Repair") {
             Some(e) => e.param_i("ignore_target", SELF_REPAIR_TARGET),
@@ -2480,7 +2504,7 @@ fn regen_targets(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (i64, i
                         e.param_i("ignore_target", 0), e.param_i("ignore_target_spell", 0)),
                 );
             }
-            if e.param_b("all_models") && !rule_on_all_models(p, &n) {
+            if e.param_b("all_models") && !regen_family_on(p, &n, rules_epoch) {
                 continue;
             }
             let normal = e.param_i("ignore_target", 0);
