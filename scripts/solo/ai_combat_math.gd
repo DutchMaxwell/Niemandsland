@@ -168,6 +168,18 @@ static func expected_wounds(attacks: int, quality: int, defense: int, armor_pier
 	return float(attacks) * p_hit * p_through
 
 
+## Rules 3.6 (EPOCH_73_V36) — expected wounds ONE already-rolled hit deals: the save fails
+## at that hit's AP, then Deadly's Tough-capped multiply and the Regeneration keep. Used only
+## to rank Parry's cancellations. block_chance lives in AiEv (one truth, never copied).
+static func hit_ev(profile: Dictionary, hit_is_a_six: bool, defender: Dictionary) -> float:
+	var on6: int = maxi(int(profile.get("on6_ap", 0)), RENDING_AP_BONUS if (bool(profile.get("rending", false)) or bool(profile.get("destructive", false))) else 0)
+	var ap: int = int(profile.get("ap", 0)) + (on6 if hit_is_a_six else 0)
+	var deadly: float = float(deadly_multiplier(int(profile.get("deadly", 0)), maxi(int(defender.get("tough", 1)), 1))) if int(profile.get("deadly", 0)) > 0 else 1.0
+	var keep: float = 1.0 - success_chance(int(defender.get("regen_target", AiEv.REGENERATION_TARGET))) if (bool(defender.get("regeneration", false)) and not (bool(profile.get("bypass_regen", false)) or bool(profile.get("rending", false)) or bool(profile.get("unstoppable", false)))) else 1.0
+	var p_block: float = AiEv.block_chance(int(defender.get("defense", 4)), fortified_ap(ap, bool(defender.get("fortified", false))), bool(profile.get("bane", false)))
+	return (1.0 - p_block) * deadly * keep
+
+
 ## Extra hits Relentless adds (GF Advanced Rules v3.5.1, p.14): "When this model shoots at enemies over 9"
 ## away, unmodified results of 6 to hit deal 1 extra hit." So each unmodified 6 among the to-hit faces adds
 ## one hit — but only when the shot is over 9". Returns 0 at 9" or closer. (Shooting only; not melee.)
