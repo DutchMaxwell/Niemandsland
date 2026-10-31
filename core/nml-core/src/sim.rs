@@ -5434,19 +5434,21 @@ fn impact_phase(
         // Rules 3.6 — Counter no longer cuts Impact dice; Brace is the only cut.
         cut_by.counter_models = 0;
         // The Brace walk, host AND living attached heroes; a Fatigued
-        // braced unit removes nothing, and every application logs its own line.
+        // or Shaken braced unit removes nothing, and every application logs its own line.
         let brace: i64 = std::iter::once(ti).chain(next.attached[ti].iter().copied())
             .filter(|&m| next.alive[m] > 0)
             .map(|m| { let c = ctx_of(&statics[next.roster.profile[m]], next, m); c.brace_models * c.brace_impact_per_model.unwrap_or(1) })
             .sum();
+        let braced = next.fatigued[ti] || next.shaken[ti];
         if brace > 0 {
-            if next.fatigued[ti] {
-                shot.log.push(format!("Brace: no effect, {} is Fatigued", ut.name));
+            if braced {
+                let why = if next.shaken[ti] { "Shaken" } else { "Fatigued" };
+                shot.log.push(format!("Brace: no effect, {} is {}", ut.name, why));
             } else {
                 shot.log.push(format!("Brace: {} takes {} Impact dice off {}", ut.name, brace, us.name));
             }
         }
-        cut_by.brace_models = if next.fatigued[ti] { 0 } else { brace };
+        cut_by.brace_models = if braced { 0 } else { brace };
         cut_by.brace_impact_per_model = Some(1);
     }
     let pools = crate::dice::impact_pools(&ctx_of_melee(us, next, si, rules_epoch), &cut_by);
