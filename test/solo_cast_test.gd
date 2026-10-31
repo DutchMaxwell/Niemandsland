@@ -5,13 +5,14 @@ extends GdUnitTestSuite
 ## illegal cast), the deterministic token economy (boost from OTHER friendly casters in 18" LoS;
 ## auto-interference by the defending AI in native both-AI mode), decision records, and a both-AI
 ## arena smoke where a Caster faction actually casts. Uses the REAL committed spell maps
-## (aof / high_elves — the design-doc reference faction).
+## (aofs / high_elves — the design-doc reference faction; the skirmish map keeps the 3.5 export, rules 3.6
+## re-exported only the gf and aof maps, so these pick-order pins keep their book).
 
 const IN2M := 0.0254
 
 
 func _unit(pid: int, positions: Array, uid: String, rules: Array = [],
-		system: String = "aof", faction: String = "high_elves") -> GameUnit:
+		system: String = "aofs", faction: String = "high_elves") -> GameUnit:
 	var u := GameUnit.new()
 	u.unit_id = uid
 	u.unit_properties = {"player_id": pid, "name": uid, "quality": 4, "defense": 4,
