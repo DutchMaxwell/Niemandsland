@@ -21,7 +21,7 @@
 use crate::acts::{rule_on, EPOCH_8_PLANNER_MENU};
 use crate::gate;
 use crate::io::{Action, Seams};
-use crate::menu::{best_charge, best_shoot, safe_advance, Candidate, Tuning};
+use crate::menu::{best_charge, best_shoot, safe_advance_at, Candidate, Tuning};
 use crate::fitted::Fitted;
 use crate::score::{score_with, NO_INCOMING};
 use crate::mv::reach::ReachIndex;
@@ -210,7 +210,7 @@ impl<'a> Policy<'a> {
             c.charge = Some(state.key(e).to_string());
             out.push(c);
         }
-        if let Some(c) = safe_advance(state, self.terrain, unit, self.tuning) {
+        if let Some(c) = safe_advance_at(state, self.terrain, unit, self.tuning, self.seams.rules_epoch) {
             out.push(c);
         }
         out
