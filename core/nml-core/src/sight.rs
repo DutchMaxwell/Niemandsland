@@ -635,6 +635,21 @@ pub fn sight_matrix(state: &State, terrain: &Terrain) -> Vec<bool> {
     m
 }
 
+/// RED stub: the epoch-aware `sight_matrix`, still the pre-3.6 reading.
+pub fn sight_matrix_at(state: &State, terrain: &Terrain, _rules_epoch: u32) -> Vec<bool> {
+    sight_matrix(state, terrain)
+}
+
+/// RED stub: the epoch-aware `zones_of`, still the pre-3.6 reading.
+pub fn zones_of_at(t: &Terrain, _rules_epoch: u32) -> Vec<Zone> {
+    zones_of(t)
+}
+
+/// RED stub: the epoch-aware `zones_of_with`, still the pre-3.6 reading.
+pub fn zones_of_with_at(t: &Terrain, shelf: bool, _rules_epoch: u32) -> Vec<Zone> {
+    zones_of_with(t, shelf)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -911,5 +926,30 @@ mod tests {
         assert!(zones_of_with(&t, false).is_empty());
         assert!(has_los(&west, &east, false, &zones_of_with(&t, false), &[]));
         assert!(!has_los(&west, &east, false, &zones_of_with(&t, true), &[]));
+    }
+
+    /// Rules 3.6: a ruin gives cover but no longer hides a model behind it, so it is no sight volume at epoch 73;
+    /// a forest and a container keep theirs, and every earlier epoch reads the board as before.
+    #[test]
+    fn a_ruin_is_a_sight_volume_at_epoch_72_and_not_at_epoch_73() {
+        let t = board(&[(15, 15, terrain::RUINS), (20, 20, terrain::FOREST), (10, 10, terrain::CONTAINER)]);
+        assert_eq!(zones_of_at(&t, crate::acts::EPOCH_72_PLAYTEST_RULES).len(), 3);
+        let z73 = zones_of_at(&t, crate::acts::EPOCH_73_V36);
+        assert_eq!(z73.len(), 2, "the forest and the container stay");
+        assert!(z73.iter().all(|v| (v.y1 - 6.0 * M).abs() > 1e-9), "no 6\" ruin volume is left");
+    }
+
+    /// A freely placed ruin follows the same rule (the shelf seam ON).
+    #[test]
+    fn a_free_ruin_piece_is_a_sight_volume_at_epoch_72_and_not_at_epoch_73() {
+        let piece = Obb { c: [0.0, 0.0], he: [3.0 * M, 1.5 * M], yaw: 0.0, kind: terrain::RUINS };
+        let t = board_with(&[], vec![piece]);
+        let (west, east) = (cyl(-8.0, 0.0, 32.0), cyl(8.0, 0.0, 32.0));
+        let z72 = zones_of_with_at(&t, true, crate::acts::EPOCH_72_PLAYTEST_RULES);
+        assert_eq!(z72.len(), 1);
+        assert!(!has_los(&west, &east, false, &z72, &[]));
+        let z73 = zones_of_with_at(&t, true, crate::acts::EPOCH_73_V36);
+        assert!(z73.is_empty(), "the free ruin is no sight volume at 73");
+        assert!(has_los(&west, &east, false, &z73, &[]));
     }
 }
