@@ -37,6 +37,9 @@
   "Bloodthirsty Fighter",
   "Bounding",
   "Bounding Aura",
+  "Bravery",
+  "Bravery Aura",
+  "Bravery Buff",
   "Breath Attack",
   "Buccaneer",
   "Enhanced Buccaneer",
@@ -567,6 +570,33 @@
    "params": {
     "rating": "X",
     "ignores_cover": true
+   }
+  },
+  "Bravery": {
+   "primitive": "Banner",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "morale_bonus": 1
+   }
+  },
+  "Bravery Aura": {
+   "primitive": "Banner",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "morale_bonus": 1
+   }
+  },
+  "Bravery Buff": {
+   "primitive": "Utility Buff",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "morale_mod": 1,
+    "range_in": 12,
+    "target": "friendly",
+    "once": true
    }
   },
   "Caster": {
