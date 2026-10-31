@@ -86,16 +86,21 @@ mod sho_20_slayer_hold {
         assert!(!r.log.iter().any(|l| l == "Slayer: no AP, Slayers moved"), "no changed line below 73");
     }
 
-    /// CONTROL: the charge leg pays at both epochs, and at 73 names the charge.
+    /// CONTROL: the charge leg pays at both epochs.
     #[test]
     fn a_charging_slayer_keeps_its_extra_ap_at_epoch_72_and_73() {
         for epoch in [EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36] {
             let u = slayers(epoch);
             let r = strike(&u);
             assert!(save_targets(&r).iter().all(|&t| t == 6), "{epoch}: charging is AP(+2): {:?}", save_targets(&r));
-            if epoch == EPOCH_73_V36 {
-                assert!(r.log.iter().any(|l| l == "Slayer: AP(+2) because it charged"), "log: {:?}", r.log);
-            }
         }
+    }
+
+    /// At 73 the charge leg's log line names the charge.
+    #[test]
+    fn a_charging_slayer_names_the_charge_at_epoch_73() {
+        let u = slayers(EPOCH_73_V36);
+        let r = strike(&u);
+        assert!(r.log.iter().any(|l| l == "Slayer: AP(+2) because it charged"), "log: {:?}", r.log);
     }
 }
