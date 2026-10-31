@@ -24,3 +24,52 @@ use std::sync::atomic::Ordering;
 pub fn pin_legacy_no_cond_ap() {
     nml_core::unit::LEGACY_NO_COND_AP.store(true, Ordering::Relaxed);
 }
+
+/// LEGACY REPLAY ONLY — a repo root whose `assets/solo/spells_mechanics_{gf,aof}.json` are the frozen rules 3.5
+/// copies in `fixtures/spells_v35/`, every other entry a symlink into the real repo.
+///
+/// The in-repo act fixtures carry GD-recorded expectations (EV, scored lists) made with the 3.5 spell lists. Rules
+/// 3.6 re-exported those two maps (DAT-13b), so a replay that reads them measures the data change, not the search
+/// loop the fixtures pin. The replay tests hand THIS root to `build_act_statics` / `Registries`; the game and the
+/// loader never see it (no env lookup, no loader argument). Phase R re-records the fixtures on 3.6 data and drops
+/// this pin.
+#[cfg(unix)]
+pub fn pinned_spells_root(repo: &str) -> String {
+    static ROOT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    ROOT.get_or_init(|| build_pinned_spells_root(repo)).clone()
+}
+
+#[cfg(unix)]
+fn build_pinned_spells_root(repo: &str) -> String {
+    use std::os::unix::fs::symlink;
+    use std::path::Path;
+    let repo = Path::new(repo).canonicalize().expect("repo root");
+    let root = std::env::temp_dir().join(format!("nml_pinned_spells_root_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("assets/solo")).expect("pinned root");
+    for e in std::fs::read_dir(&repo).expect("repo entries") {
+        let e = e.expect("entry");
+        if e.file_name() != "assets" {
+            symlink(e.path(), root.join(e.file_name())).expect("link");
+        }
+    }
+    for e in std::fs::read_dir(repo.join("assets")).expect("assets entries") {
+        let e = e.expect("entry");
+        if e.file_name() != "solo" {
+            symlink(e.path(), root.join("assets").join(e.file_name())).expect("link");
+        }
+    }
+    let frozen = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/spells_v35");
+    for e in std::fs::read_dir(repo.join("assets/solo")).expect("solo entries") {
+        let e = e.expect("entry");
+        let name = e.file_name();
+        let target = root.join("assets/solo").join(&name);
+        let pinned = frozen.join(&name);
+        if pinned.is_file() {
+            std::fs::copy(&pinned, &target).expect("copy frozen map");
+        } else {
+            symlink(e.path(), target).expect("link");
+        }
+    }
+    root.to_string_lossy().into_owned()
+}
