@@ -15,9 +15,11 @@ const NON_COUNTER := 2    # SoloStrike.NON_COUNTER
 var _runner: GdUnitSceneRunner
 var _main: Node
 var _root_before: Array
+var _epoch0: int
 
 
 func before_test() -> void:
+	_epoch0 = AiActRecorder.rules_epoch
 	E2EBoot.arm_harness_mode()
 	_root_before = E2EBoot.root_children(get_tree())
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
@@ -30,6 +32,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	AiActRecorder.rules_epoch = _epoch0   # statics leak across gdUnit tests
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 	_main = null
 	_runner = null
@@ -124,6 +127,7 @@ func test_unit_without_counter_strikes_in_the_normal_slot() -> void:
 ## Impact(3) x two charging models starts at six dice. Two Counter-Attack defenders
 ## strip one each; the actual charge tray therefore rolls four.
 func test_counter_attack_unit_cuts_impact_dice() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES   # rules 3.6 stops the cut at 73
 	var charger := E2EBoot.make_unit(_main, 2, "Charger", [Vector3.ZERO, Vector3(0, 0, INCH)])
 	charger.unit_properties["special_rules"] = ["Impact(3)"]
 	var defender := E2EBoot.make_unit(_main, 1, "Rat Pack", [Vector3(0.5 * INCH, 0, 0),
