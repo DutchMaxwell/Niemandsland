@@ -622,6 +622,10 @@ pub const VANGUARD_FREE_RULE_TEXT: &str =
 pub const SCOUT_GAP_IN: f64 = 9.0;
 pub const SCOUT_GAP_FALLBACK_RULE_TEXT: &str =
     "Scout gap: no spot more than 9\" from enemy units that are not Scouts in the band — set up in its own zone";
+/// UX-14: the 3.6 Vanguard gap in inches and the free-placement line at 73.
+pub const VANGUARD_GAP_IN: f64 = 9.0;
+pub const VANGUARD_GAP_RULE_TEXT: &str =
+    "Vanguard: after deploying, the unit may be placed anywhere fully within 9\" of its position, more than 9\" from enemy units that do not have Vanguard";
 
 /// The free placement's table-bound margin — the table's own movement law
 /// (`solo_controller.gd:16 BOUNDS_MARGIN_M`, `_clamp_to_bounds` clamps the
@@ -1260,13 +1264,25 @@ pub fn deploy_place_id_gated(
         pushed_from = spot;
         // EPOCH_16_FREE_PLACEMENT: the free choice from 16, the directional
         // push below — the frozen constant, never CURRENT_RULES_EPOCH (#928).
+        // UX-14: from 73 the extended enemy discs keep the 9" Vanguard gap.
+        let gap_occ: Vec<Occupied>;
+        let occ_for_v: &[Occupied] = if rule_on(rules_epoch, EPOCH_73_V36) {
+            gap_occ = occupied
+                .iter()
+                .copied()
+                .chain(enemy.iter().map(|e| Occupied { pos: e.pos, radius: e.radius + VANGUARD_GAP_IN * 0.0254 }))
+                .collect();
+            &gap_occ
+        } else {
+            occupied.as_slice()
+        };
         let v = if rule_on(rules_epoch, EPOCH_16_FREE_PLACEMENT) {
             vanguard_free_place(
-                spot, occupied, objectives, &terrain_only, radius, footprint, base_r, walls, push_m,
+                spot, occ_for_v, objectives, &terrain_only, radius, footprint, base_r, walls, push_m,
                 board,
             )
         } else {
-            vanguard_push(spot, zone, occupied, &terrain_only, radius, footprint, base_r, walls, push_m)
+            vanguard_push(spot, zone, occ_for_v, &terrain_only, radius, footprint, base_r, walls, push_m)
         };
         if v != spot {
             spot = v;
@@ -1549,7 +1565,9 @@ fn deploy_place_next(
         q.out.events.push(DeployEvent {
             kind: "deploy".into(),
             unit: s.key.clone(),
-            rule: if free {
+            rule: if free && rule_on(rules_epoch, EPOCH_73_V36) {
+                VANGUARD_GAP_RULE_TEXT.into()
+            } else if free {
                 VANGUARD_FREE_RULE_TEXT.into()
             } else {
                 VANGUARD_RULE_TEXT.into()
@@ -1718,7 +1736,13 @@ pub fn deploy_phased_reserving(
     let place = |q: &mut [SideQueue; 2], k: usize, cur: &mut [usize; 2], sequence: &mut Vec<(i64, String)>| {
         let i = q[k].main[cur[k]];
         cur[k] += 1;
-        let enemy = if q[k].gates.is_some() { placed_bases(&q[1 - k], specs[1 - k], false) } else { Vec::new() };
+        let enemy = if q[k].gates.is_some() {
+            placed_bases(&q[1 - k], specs[1 - k], BaseFilter::All)
+        } else if rule_on(rules_epoch, EPOCH_73_V36) && specs[k][i].vanguard {
+            placed_bases(&q[1 - k], specs[1 - k], BaseFilter::NonVanguard)
+        } else {
+            Vec::new()
+        };
         deploy_place_next(&mut q[k], specs[k], i, objectives, board, walls, rules_epoch, &enemy);
         sequence.push((k as i64 + 1, specs[k][i].key.clone()));
     };
@@ -1759,8 +1783,10 @@ pub fn deploy_phased_reserving(
             }
             let i = q[k].scouts[sc[k]];
             sc[k] += 1;
-            let enemy = if q[k].gates.is_some() || rule_on(rules_epoch, EPOCH_73_V36) {
-                placed_bases(&q[1 - k], specs[1 - k], true)
+            let enemy = if q[k].gates.is_some() {
+                placed_bases(&q[1 - k], specs[1 - k], BaseFilter::All)
+            } else if rule_on(rules_epoch, EPOCH_73_V36) {
+                placed_bases(&q[1 - k], specs[1 - k], BaseFilter::NonScout)
             } else {
                 Vec::new()
             };
@@ -1816,11 +1842,22 @@ pub fn deploy_interleaved(
 }
 
 /// The footprint bases a side has placed so far, as `Occupied` (spot + footprint offset, base radius).
-fn placed_bases(q: &SideQueue, specs: &[UnitSpec], skip_scouts: bool) -> Vec<Occupied> {
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum BaseFilter {
+    All,
+    NonScout,
+    NonVanguard,
+}
+
+fn placed_bases(q: &SideQueue, specs: &[UnitSpec], filter: BaseFilter) -> Vec<Occupied> {
     let mut out = Vec::new();
     for p in &q.out.placements {
         if let Some(s) = specs.iter().find(|s| s.key == p.key) {
-            if skip_scouts && s.scout { continue; }
+            match filter {
+                BaseFilter::NonScout if s.scout => continue,
+                BaseFilter::NonVanguard if s.vanguard => continue,
+                _ => {}
+            }
             let radius = deploy_base_radius_of(s);
             out.extend(s.footprint.iter().map(|o| Occupied { pos: (p.spot.0 + o.0, p.spot.1 + o.1), radius }));
         }
@@ -1885,8 +1922,16 @@ pub fn deploy_interleaved_gated(
                 }
                 let i = if scouts { q[k].scouts[cur[k]] } else { q[k].main[cur[k]] };
                 cur[k] += 1;
-                let enemy = if q[k].gates.is_some() || (scouts && rule_on(rules_epoch, EPOCH_73_V36)) {
-                    placed_bases(&q[1 - k], specs[1 - k], scouts)
+                let enemy = if q[k].gates.is_some() {
+                    placed_bases(&q[1 - k], specs[1 - k], BaseFilter::All)
+                } else if scouts {
+                    if rule_on(rules_epoch, EPOCH_73_V36) {
+                        placed_bases(&q[1 - k], specs[1 - k], BaseFilter::NonScout)
+                    } else {
+                        Vec::new()
+                    }
+                } else if rule_on(rules_epoch, EPOCH_73_V36) && specs[k][i].vanguard {
+                    placed_bases(&q[1 - k], specs[1 - k], BaseFilter::NonVanguard)
                 } else {
                     Vec::new()
                 };
