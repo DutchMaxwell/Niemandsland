@@ -304,9 +304,11 @@ func test_move_bands_clamps_at_zero() -> void:
 
 func test_move_bands_ethereal_registry_only() -> void:
 	# No description text (a stripped/bundled AI list, e.g. the Godot-free trainer loader) — the
-	# REGISTRY pass alone must still apply the -6/-6.
+	# REGISTRY pass alone must still apply the -6/-6. Rules 3.6 (MOR-19b): the penalty rides only
+	# while the model was placed this activation, so the latch is set here.
 	var b := _controller().move_bands_for_props({
 		"game_system": "aof", "faction_folder": "ghostly_undead", "special_rules": ["Ethereal"],
+		"teleport_used_this_activation": true,
 	})
 	assert_int(b["advance"]).is_equal(0)   # 6 - 6
 	assert_int(b["rush"]).is_equal(6)      # 12 - 6
@@ -317,13 +319,14 @@ func test_move_bands_ethereal_description_and_registry_do_not_double_apply() -> 
 	# marks Ethereal "counted" for both bands (:108-115) before the registry pass runs, and the
 	# registry pass skips any band already counted (:174-176) — so the -6/-6 applies exactly ONCE.
 	# A double-apply would clamp advance to 0 either way (masking the bug there), but rush tells:
-	# 12 - 6 - 6 = 0 (double) vs the correct 12 - 6 = 6 (single).
+	# 12 - 6 - 6 = 0 (double) vs the correct 12 - 6 = 6 (single). Rules 3.6 (MOR-19b): the model
+	# was placed, so the activation's -6/-6 is live.
 	var desc := {"Ethereal": "Once per activation, before attacking, place this model anywhere " \
 		+ "fully within 6\" of its position. This model moves -6\" when using Advance, and -6\" " \
 		+ "when using Rush/Charge."}
 	var b := _controller().move_bands_for_props({
 		"game_system": "aof", "faction_folder": "ghostly_undead", "special_rules": ["Ethereal"],
-		"rule_descriptions": desc,
+		"rule_descriptions": desc, "teleport_used_this_activation": true,
 	})
 	assert_int(b["advance"]).is_equal(0)   # 6 - 6, once (clamp would mask a double-apply here)
 	assert_int(b["rush"]) \
