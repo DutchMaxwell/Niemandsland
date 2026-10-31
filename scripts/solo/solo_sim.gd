@@ -55,7 +55,7 @@ static var _los_volumes_cache: Dictionary = {}
 static func terrain_los_volumes(terrain: Dictionary) -> Array:
 	if terrain.is_empty():
 		return []
-	var key: int = terrain.hash()
+	var key := "%d:%d" % [terrain.hash(), AiActRecorder.rules_epoch]
 	if _los_volumes_cache.has(key):
 		return _los_volumes_cache[key]
 	var k := VolumetricLos.INCHES_TO_METERS
