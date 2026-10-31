@@ -25,10 +25,10 @@ func after_test() -> void:
 	AiActRecorder.rules_epoch = _epoch_before
 
 
-func _unit(name: String) -> GameUnit:
+func _unit(unit_name: String) -> GameUnit:
 	var u: GameUnit = auto_free(GameUnit.new())
-	u.unit_id = "sho15b_%s" % name
-	u.unit_properties = {"player_id": 2, "name": name, "quality": 4, "defense": 4, "special_rules": [],
+	u.unit_id = "sho15b_%s" % unit_name
+	u.unit_properties = {"player_id": 2, "name": unit_name, "quality": 4, "defense": 4, "special_rules": [],
 		"game_system": "gf", "faction_folder": "dwarf_guilds"}
 	var m := ModelInstance.new()
 	m.is_alive = true

@@ -139,7 +139,7 @@ pub struct ShootResult {
     /// Unsaved wounds after Deadly, Shred and Regeneration — handed to the
     /// trainer's OWN casualty machinery, which decides who dies.
     pub wounds: i64,
-    /// SHO-15a Scourge phantom wounds: never landed, only `sim::scourge_morale_trigger` reads them.
+    /// SHO-15a/15b Scourge phantom wounds: never landed. The shooting morale trigger and the melee winner tally read them.
     pub scourge_wounds: i64,
     /// D1-B5: wounds caused BEFORE Regeneration, which is the tally the table's
     /// melee-winner comparison runs on — `caused += w` sits inside the weapon
@@ -499,7 +499,8 @@ fn save_batch(
         }
     }
     let unsaved = (count - blocks_with_bane_from(&faces, &reroll, target, bane_from)).max(0);
-    // SHO-15a Scourge: the unmodified 1s on the FINAL faces (Shred's own read), counted, never landed.
+    // SHO-15a/15b Scourge: the unmodified 1s on the FINAL faces (Shred's own read), counted, never landed.
+    // The shooting morale trigger and the melee winner tally both read this one count.
     if p.rules.iter().any(|r| r.trim() == "Scourge") {
         out.scourge_wounds += shred_faces(&faces, &reroll, 1, target) * SCOURGE_PHANTOM_WOUNDS;
     }
