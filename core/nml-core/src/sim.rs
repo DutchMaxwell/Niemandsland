@@ -5071,7 +5071,7 @@ fn strike_phase(
     shot: &mut ShootResult,
     set: StrikeSet,
     cover: Cover,
-) -> (i64, i64, i64) {
+) -> (i64, i64, i64, i64) {
     let mut parts = melee_parts(statics, next, si, ti, seams);
     if set != StrikeSet::All {
         let want_counter = set == StrikeSet::CounterOnly;
@@ -5273,6 +5273,9 @@ fn strike_phase(
     if rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) {
         caused = r.taken;
     }
+    // SHO-15b Scourge: the phantom wounds this strike's blocks earned, read
+    // before `absorb` folds the sub-phase (which never carries them forward).
+    let scourge_taken = r.scourge_wounds;
     // rules-wave3-growthmark (epoch 6) — Regenerative Strength: wounds this
     // strike IGNORED (Regeneration's own count) bank the bearer a marker. The
     // Deadly groups' raw tally rides `caused` but lands separately below, so
@@ -5364,7 +5367,7 @@ fn strike_phase(
         land_wounds_with(next, si, landed, seams.tray_exact);
     }
     spend_exchange(next, si, ti, true); // main.gd:6152, per strike phase
-    (caused, retaliated, hazard_self)
+    (caused, retaliated, hazard_self, scourge_taken)
 }
 
 /// The charge's Impact, pool by pool — `main._solo_charge_impact` :6292. The
@@ -5779,14 +5782,19 @@ fn tray_charge_with_self_wounds(
     let impact_first = rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36);
     let mut by_su = 0;
     let mut by_tu = 0;
+    // SHO-15b Scourge: phantom wounds each side SUFFERED this melee, added to
+    // the enemy's winner tally at EPOCH_73_V36 only.
+    let mut scourge_on_charger = 0;
+    let mut scourge_on_defender = 0;
     if impact_first && next.alive[si] > 0 && next.alive[ti] > 0 {
         by_su += impact_phase(statics, next, si, ti, tray, shot, seams.rules_epoch, charge_from_in, seams.tray_exact);
     }
     if counter_first && next.alive[si] > 0 && next.alive[ti] > 0 {
-        let (c, rc, h) = strike_phase(statics, next, ti, si, false, 0.0, seams, tray, shot, StrikeSet::CounterOnly, cover);
+        let (c, rc, h, s) = strike_phase(statics, next, ti, si, false, 0.0, seams, tray, shot, StrikeSet::CounterOnly, cover);
         by_tu += c;
         by_su += rc;
         defender_self_wounds += h;
+        scourge_on_charger += s;
     }
     // main.gd:8276's alive gate — a counter phase that wiped the charger
     // closes the card, nothing left to roll.
@@ -5804,10 +5812,11 @@ fn tray_charge_with_self_wounds(
             // an Impact pool that wiped the defender ends the melee here.
             if next.alive[si] > 0 && next.alive[ti] > 0 {
                 // B13: the defender's lash-back credits ITS OWN tally (by_tu).
-                let (c, rc, h) = strike_phase(statics, next, si, ti, true, charge_from_in, seams, tray, shot, StrikeSet::All, cover);
+                let (c, rc, h, s) = strike_phase(statics, next, si, ti, true, charge_from_in, seams, tray, shot, StrikeSet::All, cover);
                 by_su += c;
                 by_tu += rc;
                 charger_self_wounds += h;
+                scourge_on_defender += s;
                 next.fatigued[si] = true;
             }
         } else if next.alive[ti] > 0 && next.alive[si] > 0 {
@@ -5821,10 +5830,11 @@ fn tray_charge_with_self_wounds(
                     statics[next.roster.profile[ti]].name
                 ));
             } else {
-                let (c, rc, h) = strike_phase(statics, next, ti, si, false, 0.0, seams, tray, shot, strike_back_set, cover);
+                let (c, rc, h, s) = strike_phase(statics, next, ti, si, false, 0.0, seams, tray, shot, strike_back_set, cover);
                 by_tu += c;
                 by_su += rc;
                 defender_self_wounds += h;
+                scourge_on_charger += s;
                 next.fatigued[ti] = true;
             }
         }
@@ -5841,10 +5851,27 @@ fn tray_charge_with_self_wounds(
     if rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) {
         b += charger_self_wounds;
         a += defender_self_wounds;
+        // SHO-15b Scourge: phantom wounds a side's blocks earned count as wounds it TOOK, so they lift the enemy's
+        // tally. The verdict without them names whether they decided this melee.
+        let (a_base, b_base) = (a, b);
+        a += scourge_on_defender;
+        b += scourge_on_charger;
+        let loser_without = melee_loser(next, si, ti, a_base, b_base, seams);
+        let loser_with = melee_loser(next, si, ti, a, b, seams);
         shot.log.push(format!(
             "[Melee result] {} took {b} wounds, {} took {a} (Fear and self-inflicted wounds count)",
             statics[next.roster.profile[si]].name, statics[next.roster.profile[ti]].name
         ));
+        for (n, unit) in [(scourge_on_defender, ti), (scourge_on_charger, si)] {
+            if n > 0 {
+                let decides = loser_with == Some(unit) && loser_without != Some(unit);
+                shot.log.push(format!(
+                    "Scourge: {n} phantom wounds count for {} in the melee result — they {}",
+                    statics[next.roster.profile[unit]].name,
+                    if decides { "decide it" } else { "do not decide it" }
+                ));
+            }
+        }
     }
     melee_loser(next, si, ti, a, b, seams)
 }
