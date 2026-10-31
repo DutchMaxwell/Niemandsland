@@ -5390,7 +5390,9 @@ fn impact_phase(
         cut_by.counter_impact_per_model = Some(1);
     }
     if rule_on(rules_epoch, EPOCH_73_V36) {
-        // Rules 3.6 — the Brace walk, host AND living attached heroes; a Fatigued
+        // Rules 3.6 — Counter no longer cuts Impact dice; Brace is the only cut.
+        cut_by.counter_models = 0;
+        // The Brace walk, host AND living attached heroes; a Fatigued
         // braced unit removes nothing, and every application logs its own line.
         let brace: i64 = std::iter::once(ti).chain(next.attached[ti].iter().copied())
             .filter(|&m| next.alive[m] > 0)
@@ -5708,7 +5710,18 @@ fn tray_charge_with_self_wounds(
     // strike phase BEFORE Impact, counted into the defender's tally; only
     // the NON-counter weapons remain for the normal strike-back slot
     // (:8315). Below the epoch the core keeps its marker-only reading.
-    let counter_first = epoch13 && (strikes_first(ti) || (seams.tray_exact && hero_counter));
+    let v36 = rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36);
+    let wants_first = strikes_first(ti) || (seams.tray_exact && hero_counter);
+    let counter_blocked = v36 && (next.fatigued[ti] || next.shaken[ti]);
+    let counter_first = epoch13 && wants_first && !counter_blocked;
+    if v36 && epoch13 && wants_first {
+        let name = &statics[next.roster.profile[ti]].name;
+        if counter_blocked {
+            shot.log.push(format!("Counter: {name} is Fatigued - no strike-first"));
+        } else {
+            shot.log.push(format!("Counter: {name} strikes first"));
+        }
+    }
     // Rules 3.6 (`EPOCH_73_V36`, table twin `_run_ai_melee`/`_run_human_melee`): Impact rolls before
     // either side strikes, so it moves ahead of the Counter phase, which keeps its alive gates (an
     // Impact wipe leaves none). The Counter cut of the Impact dice is read before any strike either way.
