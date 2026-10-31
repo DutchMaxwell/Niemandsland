@@ -223,6 +223,7 @@
   "Quick Shot",
   "Quick Shot Aura",
   "Quick Shot Mark",
+  "Quick Throw",
   "Ranged Shrouding",
   "Ranged Shrouding Aura",
   "Ranged Slayer",
@@ -2185,6 +2186,14 @@
     "book_version": "3.5.3",
     "params": {
      "no_moved_penalty": true
+    }
+   },
+   "Quick Throw": {
+    "primitive": "Indirect",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "los_needs_hold": false
     }
    },
    "Rapid Rush": {
@@ -6649,6 +6658,14 @@
     "book_version": "3.5.3",
     "params": {
      "no_moved_penalty": true
+    }
+   },
+   "Quick Throw": {
+    "primitive": "Indirect",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "los_needs_hold": false
     }
    },
    "Reinforcement": {
