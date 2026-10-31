@@ -40,6 +40,8 @@ func _vanguard_gap_at_epoch(epoch: int) -> Array:
 	var van := _unit(2, [Vector3(0.0, 0.0, -0.5)], ["Vanguard"])
 	van.unit_id = "van"
 	van.unit_properties["name"] = "Drakesworn"
+	van.unit_properties["game_system"] = "gf"
+	van.unit_properties["faction_folder"] = "dark_elf_raiders"   # a book that fields Vanguard (registry gate)
 	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
 	army.game_units = {human.unit_id: human, van.unit_id: van}
 	army.current_round = 1
