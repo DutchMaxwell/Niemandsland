@@ -44,6 +44,13 @@ pub fn is_dangerous(t: i32) -> bool {
     t == DANGEROUS
 }
 
+/// Rules 3.6 (EPOCH_73_V36) — the p.12 terrain class ruins join at 3.6: a
+/// model that walks into or through one risks the Dangerous test.
+#[inline]
+pub fn is_unstable(t: i32) -> bool {
+    t == RUINS
+}
+
 /// The untyped class — "within 1\" of terrain" with NO kind restriction
 /// (aof "Grounded Speed", `rules_mechanics_aof.json`'s own
 /// `terrain_within_in` proximity): any cell type but NONE.

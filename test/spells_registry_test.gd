@@ -48,11 +48,12 @@ func test_an_unresolvable_faction_is_counted_and_warned_once() -> void:
 
 func test_spell_lists_diverge_across_systems_for_the_same_faction() -> void:
 	# THE cross-system divergence proof (the wave-6 §0 invariant, measured on the source data: 77 of
-	# 82 books published for 2+ systems carry parameter-divergent spell lists). Alien Hives' first
-	# spell targets ONE friendly unit in Grimdark Future but UP TO TWO in GF: Firefight — same spell
+	# 82 books published for 2+ systems carry parameter-divergent spell lists). The first
+	# spell targets ONE enemy unit in Grimdark Future but UP TO TWO in GF: Firefight — same spell
 	# name, different mechanics, so a faction-only (system-less) lookup would resolve WRONG data.
-	var gf_first: Dictionary = SpellsRegistry.spells_for("gf", "alien_hives")[0]
-	var gff_first: Dictionary = SpellsRegistry.spells_for("gff", "alien_hives")[0]
+	# (Rules 3.6 re-export: Burn the Heretic of blessed_sisters is first in both lists, 1 target in gf, 2 in gff.)
+	var gf_first: Dictionary = SpellsRegistry.spells_for("gf", "blessed_sisters")[0]
+	var gff_first: Dictionary = SpellsRegistry.spells_for("gff", "blessed_sisters")[0]
 	assert_str(str(gf_first.get("name", ""))).is_equal(str(gff_first.get("name", "")))
 	assert_int(int((gf_first.get("target", {}) as Dictionary).get("count", 0))).is_equal(1)
 	assert_int(int((gff_first.get("target", {}) as Dictionary).get("count", 0))).is_equal(2)

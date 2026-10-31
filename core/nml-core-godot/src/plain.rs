@@ -478,6 +478,7 @@ pub fn build_state(
         growth_markers: vec![0; n],
         vengeance_markers: vec![0; n],
         growth_round: vec![-1; n],
+        growth_strike_round: vec![-1; n],
         second_wind_used: vec![false; n],
         surprise_attack_used: vec![false; n],
         reinforcement_used: vec![false; n],

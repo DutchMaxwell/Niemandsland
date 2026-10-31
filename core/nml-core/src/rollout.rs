@@ -952,6 +952,7 @@ pub fn mint_template_slot(
     st.growth_markers.push(0);
     st.vengeance_markers.push(0);
     st.growth_round.push(-1);
+    st.growth_strike_round.push(-1);
     st.second_wind_used.push(false);
     st.reinforcement_used.push(false);
     Rc::make_mut(&mut st.limited_used).push(Vec::new());

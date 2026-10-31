@@ -26,7 +26,7 @@ use crate::geom::{self, V3};
 use crate::state::State;
 use crate::terrain::{self, Terrain};
 use crate::IN2M;
-use crate::acts::{rule_on, EPOCH_6_TABLE_RULES, EPOCH_8_PLANNER_MENU};
+use crate::acts::{rule_on, EPOCH_6_TABLE_RULES, EPOCH_8_PLANNER_MENU, EPOCH_73_V36};
 
 use super::cost::{CellSet, Grid, Zone};
 use super::entry::plan_unit_step_call;
@@ -46,6 +46,11 @@ const OVERLAP_EPS_M: f64 = 0.0005;
 /// `SoloController.GATE_SLACK_EPS_IN` :159 — the packed-contact epsilon every
 /// gate displacement budget carries on top of its band slack.
 const GATE_SLACK_EPS_IN: f64 = 0.05;
+/// Rules 3.6: a ruin is Unstable for a model whose OWN move is longer than
+/// this (an Advance of 6" never triggers it).
+const UNSTABLE_MOVE_IN: f64 = 6.0;
+/// f32 trail coordinates round: a move of exactly 6" must not read as longer.
+const UNSTABLE_SLACK_IN: f64 = 1e-3;
 
 /// Test-only knob: forces the S6 gate-collapse ladder below off (RED proof).
 pub static LADDER_DISABLED: AtomicBool = AtomicBool::new(false);
@@ -673,6 +678,32 @@ fn has_lateral_room(&self, reach_in: f64) -> bool {
     })
 }
 
+/// The model's OWN move in inches, measured the way `trim_to_band` measures
+/// the p.11 budget: the epoch-6 world frame, the raw inch polyline before it.
+fn trail_inches(&self, leg: &[V2]) -> f64 {
+    if rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES) {
+        let board = self.t.board_in();
+        let world: Vec<V2> = leg.iter().map(|p| super::gate::to_world_f32(*p, board)).collect();
+        g2::polyline_length(&world) / IN2M
+    } else {
+        g2::polyline_length(leg)
+    }
+}
+
+/// The p.12 crossing flag: the route entered a DANGEROUS cell, plus (rules 3.6)
+/// an Unstable ruin when this model's own move is longer than 6".
+fn crosses_dangerous(&self, leg: &[V2], r: f64) -> bool {
+    if self.flying {
+        return false;
+    }
+    if leg_crosses(leg, r, self.t, terrain::is_dangerous) {
+        return true;
+    }
+    rule_on(self.rules_epoch, EPOCH_73_V36)
+        && self.trail_inches(leg) > UNSTABLE_MOVE_IN + UNSTABLE_SLACK_IN
+        && leg_crosses(leg, r, self.t, terrain::is_unstable)
+}
+
 /// `_execute_move` :4813-4855 from the pass-1 plan onward — the p.11 cap
 /// re-plan, the distance-truth trim, the p.12 crossing flags and the retrace.
 /// The table runs ONE body here for a charge and for a plain move; everything
@@ -736,7 +767,7 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
         // not after the retrace below: the table counts the cells the model
         // actually traversed even when the gate nudges its resting spot.
         let r = radii_m.get(i).copied().unwrap_or(0.0);
-        dangerous.push(!self.flying && leg_crosses(leg, r, t, terrain::is_dangerous));
+        dangerous.push(self.crosses_dangerous(leg, r));
     }
     // :4858-4866 — nothing actually moved: the table returns BEFORE the gate,
     // so a unit already stacked where it stands is not re-arranged for free.
@@ -885,7 +916,7 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
     // Dangerous follows the CHOSEN route, before the final retrace, as on the table.
     if rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES) {
         dangerous = trails.iter().enumerate().map(|(i, leg)|
-            !self.flying && leg_crosses(leg, radii_m.get(i).copied().unwrap_or(0.0), t, terrain::is_dangerous)).collect();
+            self.crosses_dangerous(leg, radii_m.get(i).copied().unwrap_or(0.0))).collect();
     }
     for (i, leg) in trails.iter_mut().enumerate() {
         // :5068-5071 — and THEN the trail is retraced to the endpoint, which is
@@ -1357,6 +1388,7 @@ pub(crate) mod tests {
             growth_markers: vec![0; n],
             vengeance_markers: vec![0; n],
             growth_round: vec![-1; n],
+            growth_strike_round: vec![-1; n],
             second_wind_used: vec![false; n], surprise_attack_used: vec![false; n], teleport_used: vec![false; n],
             reinforcement_used: vec![false; n],
             second_wind_round: -1,

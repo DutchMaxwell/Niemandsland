@@ -1044,6 +1044,7 @@ pub(crate) fn state_of(
         spot_round: vec![-1; n],
         precision_used: Rc::new(vec![Vec::new(); n]),
         growth_round: vec![-1; n],
+        growth_strike_round: vec![-1; n],
         second_wind_used: vec![false; n],
         surprise_attack_used: vec![false; n],
         reinforcement_used: vec![false; n],
