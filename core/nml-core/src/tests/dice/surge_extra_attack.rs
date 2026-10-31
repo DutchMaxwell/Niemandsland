@@ -60,7 +60,7 @@ use super::*;
     /// ALSO draws an extra die. Seed 6 at Quality 5+ rolls one 6 and two 5s
     /// (both `>= to_hit`) — unboosted that is one extra die, boosted three.
     #[test]
-    fn primal_boost_also_spawns_an_extra_die_on_a_successful_unmodified_five() {
+    fn enhanced_primal_also_spawns_an_extra_die_on_a_successful_unmodified_five() {
         let primary = Tray::seeded(6).roll(8);
         assert_eq!(primary.iter().filter(|&&f| f == 6).count(), 1, "fixture: seed 6 must roll one 6");
         assert_eq!(primary.iter().filter(|&&f| f == 5).count(), 2, "fixture: seed 6 must roll two 5s");

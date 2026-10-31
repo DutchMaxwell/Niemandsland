@@ -12,11 +12,11 @@ use super::*;
     /// resolves (the Shot-Modifier Boosts' bases live in other factions'
     /// blocks — dao_union — and would not resolve here).
     #[test]
-    fn a_hold_the_line_boost_aura_carrier_captures_at_plus_two_only_at_epoch_6() {
+    fn an_enhanced_hold_the_line_aura_carrier_captures_at_plus_two_only_at_epoch_6() {
         let build = |epoch: u32| {
             let p = boost_aura_profile(
                 "human_defense_force",
-                "[\"Hold the Line Boost Aura\"]",
+                "[\"Enhanced Hold the Line Aura\"]",
                 "[]",
                 epoch,
             );
@@ -36,13 +36,13 @@ use super::*;
     fn a_hero_boost_aura_stamps_the_base_on_host_and_hero_at_epoch_6() {
         let read = |epoch: u32| {
             let (special, heroes) = boost_aura_expanded(
-                "[\"Hold the Line Boost\"]",
-                "[[\"Hold the Line Boost Aura\"]]",
+                "[\"Enhanced Hold the Line\"]",
+                "[[\"Enhanced Hold the Line Aura\"]]",
                 epoch,
             );
             (
-                special.iter().any(|r| r == "Hold the Line Boost"),
-                heroes.iter().any(|h| h.iter().any(|r| r == "Hold the Line Boost")),
+                special.iter().any(|r| r == "Enhanced Hold the Line"),
+                heroes.iter().any(|h| h.iter().any(|r| r == "Enhanced Hold the Line")),
             )
         };
         assert_eq!(read(6), (true, true), "epoch 6: host and hero both carry the base");
@@ -52,10 +52,10 @@ use super::*;
     #[test]
     fn the_four_chaos_storms_stamp_their_own_registry_params_at_epoch_six() {
         let cases: [(&str, &str, StormFacet); 4] = [
-            ("Storm of Change", "wormhole_daemons_of_change", StormFacet::Shred),
-            ("Storm of Lust", "wormhole_daemons_of_lust", StormFacet::Surge),
-            ("Storm of Plague", "wormhole_daemons_of_plague", StormFacet::Bane),
-            ("Storm of War", "wormhole_daemons_of_war", StormFacet::Ap1),
+            ("Storm of Change", "daemons_of_change", StormFacet::Shred),
+            ("Storm of Lust", "daemons_of_lust", StormFacet::Surge),
+            ("Storm of Plague", "daemons_of_plague", StormFacet::Bane),
+            ("Storm of War", "daemons_of_war", StormFacet::Ap1),
         ];
         for (rule, faction, facet) in cases {
             let specs = storm_spec(rule, faction, 6);
@@ -262,14 +262,14 @@ use super::*;
     /// `recover_target` 3 at epoch 6 — the 3+-instead-of-4+ text —; epoch 5
     /// and the rule-less carrier stay 0.
     #[test]
-    fn a_vale_oath_boost_stamps_recover_target_3_at_epoch_6() {
+    fn an_enhanced_vale_oath_stamps_recover_target_3_at_epoch_6() {
         assert_eq!(
-            battleborn_target_of("Vale Oath Boost", "aof", "chivalrous_kingdoms", 6),
+            battleborn_target_of("Enhanced Vale Oath", "aof", "chivalrous_kingdoms", 6),
             3,
             "the registry's own recover_target — the 3+ extension"
         );
         assert_eq!(
-            battleborn_target_of("Vale Oath Boost", "aof", "chivalrous_kingdoms", 5),
+            battleborn_target_of("Enhanced Vale Oath", "aof", "chivalrous_kingdoms", 5),
             0,
             "the wave is epoch-gated: rules_epoch 5 replays the free-clear reading, RED before the fix"
         );
@@ -603,13 +603,13 @@ use super::*;
     /// `reroll_save_from` reader landed — see the integration test in
     /// `tests/boost_bases_family.rs`).
     #[test]
-    fn scrapper_boost_joins_through_the_coverage_wave() {
+    fn enhanced_scrapper_joins_through_the_coverage_wave() {
         assert_eq!(
-            bane_stamp_of("Scrapper Boost", "gf", "jackals", crate::acts::CURRENT_RULES_EPOCH),
+            bane_stamp_of("Enhanced Scrapper", "gf", "jackals", crate::acts::CURRENT_RULES_EPOCH),
             (true, true),
             "the gf entry's reroll_save_sixes"
         );
-        assert_eq!(bane_stamp_of("Scrapper Boost", "gf", "jackals", 0), (false, false), "the wave is epoch-gated");
+        assert_eq!(bane_stamp_of("Enhanced Scrapper", "gf", "jackals", 0), (false, false), "the wave is epoch-gated");
     }
 
     /// Lacerate family (rules-wave2-lacerate2) — one test per ported name,
@@ -699,11 +699,11 @@ use super::*;
         let primal = header.profiles.get("primal_beast").expect("primal_beast");
         let ps = UnitStatic::build(&mut reg, primal);
         assert!(ps.shoot[0].surge_attack, "Primal is ungated — it reaches the ranged profile too");
-        assert_eq!(ps.shoot[0].surge_attack_low, 5, "Primal Boost's surge_low");
+        assert_eq!(ps.shoot[0].surge_attack_low, 5, "Enhanced Primal's surge_low");
         assert!(ps.melee[0].surge_attack);
         assert_eq!(ps.melee[0].surge_attack_low, 5);
         assert!(
-            ps.unimplemented.iter().all(|u| u.rule != "Primal" && u.rule != "Primal Boost"),
+            ps.unimplemented.iter().all(|u| u.rule != "Primal" && u.rule != "Enhanced Primal"),
             "consumed, not stamped as unimplemented: {:?}", ps.unimplemented
         );
 
@@ -830,7 +830,7 @@ use super::*;
     }
 
     #[test]
-    fn plaguebound_boost_ignores_on_5_6_epoch_gated() {
+    fn enhanced_plaguebound_ignores_on_5_6_epoch_gated() {
         let header = read_act_header(REGEN_FAMILY_HEADER).expect("header");
         assert_eq!(regen_pair_at(&header, "plague_boost", CURRENT_RULES_EPOCH), (5, 5));
         assert_eq!(regen_pair_at(&header, "plague_boost", 0), (0, 0), "epoch 0 replays legacy");
@@ -884,7 +884,7 @@ use super::*;
     }
 
     #[test]
-    fn self_repair_boost_ignores_on_5_6_epoch_gated() {
+    fn enhanced_self_repair_ignores_on_5_6_epoch_gated() {
         let header = read_act_header(REGEN_FAMILY_HEADER).expect("header");
         assert_eq!(regen_pair_at(&header, "self_repair_boost", CURRENT_RULES_EPOCH), (5, 5));
         assert_eq!(regen_pair_at(&header, "self_repair_boost", 0), (0, 0), "epoch 0 replays legacy");
@@ -1216,10 +1216,10 @@ use super::*;
     /// Warden Boost (aof/eternal_wardens) — the same no-gate shape, live at 6,
     /// absent at 5.
     #[test]
-    fn warden_boost_is_live_at_epoch_6_and_absent_at_epoch_5() {
+    fn enhanced_warden_is_live_at_epoch_6_and_absent_at_epoch_5() {
         let us6 = fortified_unit("warden_boost_unit", 6);
         assert_eq!(us6.ctx.fortified_boost_ap, 1, "the Boost's incoming_ap_reduction");
-        assert_eq!(us6.fortified_boost_name, "Warden Boost");
+        assert_eq!(us6.fortified_boost_name, "Enhanced Warden");
         let (target6, fired6) = fortified_melee(&us6);
         assert_eq!(target6, 4, "melee AP(1) vs the Boost: saves on 4+ instead of 5+");
         assert!(fired6, "rules-must-log: the melee phase must report the boost");
@@ -1233,10 +1233,10 @@ use super::*;
     /// Ossified Boost (aof/ossified_undead) — the same no-gate shape, live at
     /// 6, absent at 5.
     #[test]
-    fn ossified_boost_is_live_at_epoch_6_and_absent_at_epoch_5() {
+    fn enhanced_ossified_is_live_at_epoch_6_and_absent_at_epoch_5() {
         let us6 = fortified_unit("ossified_boost_unit", 6);
         assert_eq!(us6.ctx.fortified_boost_ap, 1, "the Boost's incoming_ap_reduction");
-        assert_eq!(us6.fortified_boost_name, "Ossified Boost");
+        assert_eq!(us6.fortified_boost_name, "Enhanced Ossified");
         let (target6, fired6) = fortified_melee(&us6);
         assert_eq!(target6, 4, "melee AP(1) vs the Boost: saves on 4+ instead of 5+");
         assert!(fired6, "rules-must-log: the melee phase must report the boost");
@@ -1648,7 +1648,7 @@ use super::*;
     /// Royal Legion Boost (aof mummified_undead) — the aof entry carries the
     /// base magnitudes (4/2) under the Boost's own name. RED: the fields stay 0.
     #[test]
-    fn royal_legion_boost_stamps_through_its_own_entry() {
+    fn enhanced_royal_legion_stamps_through_its_own_entry() {
         assert_eq!(royal_legion_halves("rl_boost_unit", 6), (4.0, 2.0));
         assert_eq!(royal_legion_halves("rl_boost_unit", 5), (0.0, 0.0));
     }
@@ -1656,7 +1656,7 @@ use super::*;
     /// Royal Legion Boost Aura — its aof entry is primitive-bearing (4/2)
     /// under its own name, so the alias wave reaches it WITHOUT a raw-name arm.
     #[test]
-    fn royal_legion_boost_aura_stamps_through_its_own_entry() {
+    fn enhanced_royal_legion_aura_stamps_through_its_own_entry() {
         assert_eq!(royal_legion_halves("rl_boost_aura_unit", 6), (4.0, 2.0));
         assert_eq!(royal_legion_halves("rl_boost_aura_unit", 5), (0.0, 0.0));
     }
@@ -1677,7 +1677,7 @@ use super::*;
     /// precedent). Since rules 3.6 the base Lustbound is a Quick alias, so a
     /// unit with both folds the Boost alone. RED: the fields stay 0.
     #[test]
-    fn lustbound_boost_widens_both_halves_over_the_base() {
+    fn enhanced_lustbound_widens_both_halves_over_the_base() {
         assert_eq!(royal_legion_halves("lustbound_boost_unit", 6), (8.0, 4.0));
         assert_eq!(royal_legion_halves("lustbound_combo_unit", 6), (8.0, 4.0), "the base is a Quick alias since rules 3.6, so only the Boost folds");
         assert_eq!(royal_legion_halves("lustbound_boost_unit", 5), (0.0, 0.0));
@@ -1687,7 +1687,7 @@ use super::*;
     /// DESIGN: has_primitive false), so the alias wave cannot reach it; the
     /// raw-name arm expands it to "Lustbound Boost" the way the import does.
     #[test]
-    fn lustbound_boost_aura_expands_to_its_base() {
+    fn enhanced_lustbound_aura_expands_to_its_base() {
         assert_eq!(royal_legion_halves("lustbound_boost_aura_unit", 6), (8.0, 4.0), "the base entry's own magnitudes through the expansion");
         assert_eq!(royal_legion_halves("lustbound_boost_aura_unit", 5), (0.0, 0.0));
     }
@@ -1741,11 +1741,11 @@ use super::*;
     /// (literals: present at 6, absent at 5). RED: drop the epoch-6 arm and
     /// the epoch-6 row falls back to 1/2.
     #[test]
-    fn scurry_boost_stamps_its_own_entry_over_the_epoch6_gate() {
+    fn enhanced_scurry_stamps_its_own_entry_over_the_epoch6_gate() {
         assert_eq!(
             quickfast_bands("scurry_boost_unit", 6),
             Some(Bands { advance: 5.0, rush: 6.0, ..Default::default() }),
-            "Scurry 1/2 + Scurry Boost 4/4, the loaders' per-name stack"
+            "Scurry 1/2 + Enhanced Scurry 4/4, the loaders' per-name stack"
         );
         assert_eq!(
             quickfast_bands("scurry_boost_unit", 5),

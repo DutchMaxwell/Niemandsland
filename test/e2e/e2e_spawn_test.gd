@@ -84,9 +84,9 @@ func test_spawn_activation_builds_the_book_profile_once_with_legal_bases_and_nam
 
 
 func test_spawn_registry_entries_expose_the_consumed_placement_and_use_limits() -> void:
-	var contexts := {"gf": ["alien_hives", "ratmen_clans", "robot_legions", "wormhole_daemons_of_lust"],
+	var contexts := {"gf": ["alien_hives", "ratmen_clans", "robot_legions", "daemons_of_lust"],
 		"gff": ["wormhole_daemons_of_lust"],
-		"aof": ["dwarves", "rift_daemons_of_lust", "saurians", "vampiric_undead", "wood_elves"],
+		"aof": ["dwarves", "daemons_of_lust", "saurians", "vampiric_undead", "wood_elves"],
 		"aofr": ["dwarves", "rift_daemons_of_lust", "saurians", "vampiric_undead", "wood_elves"],
 		"aofs": ["rift_daemons_of_lust"]}
 	for system in contexts:

@@ -179,12 +179,12 @@
     #[test]
     fn a_bounding_aura_places_d3_plus_one() {
         let e = crate::acts::CURRENT_RULES_EPOCH;
-        let us = aura_us("gf", "wormhole_daemons_of_change", "Bounding Aura", e);
+        let us = aura_us("gf", "daemons_of_change", "Bounding Aura", e);
         assert_eq!(us.bounding, Some(1.0), "the granted entry's place_d3_plus");
         let place = us.bounding_place.expect("the aura carrier places with Bounding");
         assert_eq!(place.name, "Bounding", "the granted base's own name");
         assert_eq!((place.dice, place.plus), (1, 1.0), "one die, D3+1");
-        assert_eq!(aura_us("gf", "wormhole_daemons_of_change", "Fearless", e).bounding, None);
+        assert_eq!(aura_us("gf", "daemons_of_change", "Fearless", e).bounding, None);
     }
 
     // ------------------------------------------------ Buccaneer Boost Aura ---
@@ -251,19 +251,19 @@
     // the base: the Boost's printed unconditional -1 to hit (Evasive), with
     // the base entry's conditional alias standing down so the two never stack.
     #[test]
-    fn an_empyrean_spirit_boost_aura_makes_the_minus_one_unconditional() {
+    fn an_enhanced_empyrean_spirit_aura_makes_the_minus_one_unconditional() {
         let e = crate::acts::CURRENT_RULES_EPOCH;
         let us = carrier(
             "aof", "ghostly_undead",
-            &["Empyrean Spirit Boost Aura", "Empyrean Spirit"], e,
+            &["Enhanced Empyrean Spirit Aura", "Empyrean Spirit"], e,
         );
         assert!(us.ctx.evasive, "the Boost folds into evasive");
-        assert_eq!(us.ctx.evasive_alias_name, "Empyrean Spirit Boost", "the fold names the rule");
+        assert_eq!(us.ctx.evasive_alias_name, "Enhanced Empyrean Spirit", "the fold names the rule");
         assert_eq!(us.ctx.stealth_alias_penalty, 0, "the base's conditional alias stands down");
         let shot = incoming_volley(&us, 6.0);
         assert_eq!(shot.rolls[0].target, 5, "always -1: Quality 4+ -> 5+");
         assert!(
-            shot.log.iter().any(|l| l.contains("Empyrean Spirit Boost")),
+            shot.log.iter().any(|l| l.contains("Enhanced Empyrean Spirit")),
             "rules-must-log"
         );
     }
@@ -296,7 +296,7 @@
     #[test]
     fn a_grounded_reinforcement_aura_shields_its_unit_terrain_pending() {
         let e = crate::acts::CURRENT_RULES_EPOCH;
-        let us = aura_us("aof", "volcanic_dwarves", "Grounded Reinforcement Aura", e);
+        let us = aura_us("aof", "volcanic_dwarves", "Grounded Defense Aura", e);
         assert_eq!(us.ctx.shielded_alias, ShieldedAlias::GroundedReinforcement);
         assert!(!us.ctx.shielded, "the within-1in condition is the point: held aside");
         assert_eq!(
@@ -327,14 +327,14 @@
     #[test]
     fn a_hit_and_run_fighter_aura_grants_the_fighter_half_at_current_epoch() {
         let e = crate::acts::CURRENT_RULES_EPOCH;
-        let us = aura_us("gf", "wormhole_daemons_of_lust", "Hit & Run Fighter Aura", e);
+        let us = aura_us("gf", "daemons_of_lust", "Hit & Run Fighter Aura", e);
         assert!(us.hit_and_run_fighter_active, "the granted Fighter's own flag");
         assert!(
-            !aura_us("gf", "wormhole_daemons_of_lust", "Hit & Run Fighter Aura", 5)
+            !aura_us("gf", "daemons_of_lust", "Hit & Run Fighter Aura", 5)
                 .hit_and_run_fighter_active,
             "epoch 5: the gate is off"
         );
-        assert!(!aura_us("gf", "wormhole_daemons_of_lust", "Fearless", e).hit_and_run_fighter_active);
+        assert!(!aura_us("gf", "daemons_of_lust", "Fearless", e).hit_and_run_fighter_active);
     }
 
     // ------------------------------------------ Increased Shooting Range Aura
