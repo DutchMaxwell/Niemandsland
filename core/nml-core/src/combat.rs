@@ -817,17 +817,28 @@ pub fn ravage_ev(att: &Ctx, def: &Ctx) -> f64 {
 }
 
 /// `AiEv.impact_ev` ai_ev.gd:512-529 — the charge's Impact pool (2+ to hit, no
-/// AP) plus the Heavy Impact pool (saves at AP(1)); the defender's Counter
-/// models strip the HEAVY dice first, defender-optimal.
+/// AP) plus the Heavy Impact pool (saves at AP(1)); the defender's Counter and
+/// Brace models strip the HEAVY dice first, defender-optimal.
 ///
 /// `counter_models` is always 0 in the sim: `BattleSim._ctx_of` calls
 /// `AiEv.ctx_for(unit, in_cover)` and leaves the third argument at its default
 /// (battle_sim.gd:702, ai_ev.gd:135). Modelled anyway so the function is the
 /// GDScript's, not a specialisation of it.
+///
+/// Rules 3.6 (`EPOCH_73_V36`): `brace_models` x `brace_impact_per_model` joins
+/// the same cut — it is stamped 0 below the wave, so old records replay
+/// byte-exact. A Fatigued braced defender removes nothing, as in the resolver.
 pub fn impact_ev(att: &Ctx, def: &Ctx) -> f64 {
     let models = att.models.max(0);
-    let counter =
-        def.counter_models.saturating_mul(def.counter_impact_per_model.unwrap_or(1));
+    let brace = if def.fatigued {
+        0
+    } else {
+        def.brace_models.saturating_mul(def.brace_impact_per_model.unwrap_or(1))
+    };
+    let counter = def
+        .counter_models
+        .saturating_mul(def.counter_impact_per_model.unwrap_or(1))
+        + brace;
     let heavy_raw = att.heavy_impact * models;
     let heavy_cut = counter.min(heavy_raw);
     let heavy_dice = heavy_raw - heavy_cut;

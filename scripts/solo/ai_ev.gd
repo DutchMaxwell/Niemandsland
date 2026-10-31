@@ -239,6 +239,33 @@ static func unit_rating(unit: GameUnit, rule_name: String) -> int:
 	return 0
 
 
+## Rules 3.6 (`EPOCH_73_V36`) — the Impact dice a Braced unit takes off a charge: every living model
+## whose weapon carries Brace(X) counts X, host and joined heroes alike (the table's
+## `_solo_brace_models` counting rule). 0 below the wave.
+static func _brace_cut(unit: GameUnit) -> int:
+	if unit == null or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return 0
+	var members: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		members = members + unit.get_attached_heroes()
+	var total := 0
+	for m in members:
+		var member := m as GameUnit
+		if member == null:
+			continue
+		var alive: int = member.get_alive_count()
+		if alive <= 0:
+			continue
+		var weapons: Array = []
+		if member.source_type == "opr" and member.source_data is OPRApiClient.OPRUnit:
+			weapons = (member.source_data as OPRApiClient.OPRUnit).weapons
+		for w in weapons:
+			if w is Object and AiShooting._has_rule(w, "Brace"):
+				total += alive * maxi(AiShooting._rating_of(w, "Brace"), 1)
+				break
+	return total
+
+
 ## Build the EV context for a live unit. `in_cover` / `counter_models` come from the caller's terrain /
 ## weapon knowledge (cover is a terrain read, counter models a weapon walk — injected, not divined).
 ## Wave 5: `defense` is the Armor(X)-adjusted value ("counts as having Defense X+", best-of — the same
@@ -282,6 +309,8 @@ static func ctx_for(unit: GameUnit, in_cover: bool = false, counter_models: int 
 		"shielded": rule_on_defence_family(unit, "Shielded"),
 		"in_cover": in_cover,
 		"counter_models": counter_models,
+		"brace_models": _brace_cut(unit),
+		"brace_impact_per_model": 1,
 		"regeneration": _regen_target(unit) > 0,
 		"regen_target": _regen_target(unit),
 		"regen_target_spell": _regen_target(unit, true),
@@ -841,9 +870,13 @@ static func ravage_ev(att: Dictionary, def_ctx: Dictionary) -> float:
 ## (no AP — Impact is not a weapon), Regeneration applies (no bypass).
 static func impact_ev(att: Dictionary, def_ctx: Dictionary) -> float:
 	# Heavy Impact rides as a SECOND pool whose hits save at AP(1); Counter's denial strips the heavy
-	# dice first (defender-optimal — mirrors the dice path).
+	# dice first (defender-optimal — mirrors the dice path). Rules 3.6 (`EPOCH_73_V36`): Brace joins the
+	# same cut, and a Fatigued braced defender removes nothing.
 	var models := maxi(int(att.get("models", 0)), 0)
-	var counter := int(def_ctx.get("counter_models", 0))
+	var brace := int(def_ctx.get("brace_models", 0)) * int(def_ctx.get("brace_impact_per_model", 1))
+	if bool(def_ctx.get("fatigued", false)):
+		brace = 0
+	var counter := int(def_ctx.get("counter_models", 0)) + brace
 	var heavy_raw := int(att.get("heavy_impact", 0)) * models
 	var heavy_cut := mini(counter, heavy_raw)
 	var heavy_dice := heavy_raw - heavy_cut
