@@ -8085,6 +8085,7 @@ func _solo_brace_models(unit: GameUnit) -> int:
 var _solo_retaliate_credit := 0   # Retaliate wounds of the LAST strike phase — the defender's tally credit
 var _solo_last_save_ones := 0   # resolver wave A: unmodified Defense 1s of the LAST save batch (Bloodthirsty Fighter)
 var _solo_hazard_self := {}   # unit instance id -> Hazardous self-wounds since the current melee began (rules 3.6 tally)
+var _solo_regen_ignored := 0   # MEL-10r: wounds Regeneration cancelled since the current melee began (rules 3.6 tally)
 var _solo_scourge_wounds := 0   # SHO-15a: the volley's Scourge phantom wounds, read once by _solo_shooting_morale
 
 
@@ -8139,6 +8140,9 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 	var caused := 0
 	var regenable := 0
 	var regen_proof := 0
+	# MEL-10r (`EPOCH_73_V36`): the melee tally counts wounds TAKEN — Regeneration-cancelled wounds
+	# do not count, so each landing swaps the pre-Regeneration count for what actually landed.
+	var v36_tally: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
 	var struck_any := false   # did ANY weapon profile actually roll? (finding 8: surface a silent no-strike)
 	# Resolver wave A — Reckless Piercing's round stamps add AP to every strike of this phase;
 	# Deathstrike/Self-Destruct need the per-member alive counts BEFORE this phase's casualties.
@@ -8184,7 +8188,10 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 			if rv_wounds > 0:
 				struck_any = true
 				caused += rv_wounds   # pre-Regeneration, same basis as the weapon strikes' tally
-				await _solo_land_wounds(defender, rv_wounds, 0)
+				var rv_landed: int = await _solo_land_wounds(defender, rv_wounds, 0)
+				if v36_tally:
+					_solo_regen_ignored += rv_wounds - rv_landed
+					caused += rv_landed - rv_wounds
 	# MEL-12 (rules 3.6): Regenerative Strength pays its banked tokens in DIRECT wounds — one die per
 	# token, each 4+ a wound — instead of extra attacks. On the unit's turn to strike, once per round,
 	# never while Fatigued; the Counter-only pre-phase leaves the roll to the strike-back that follows.
@@ -8215,7 +8222,10 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 			if gs_wounds > 0:
 				struck_any = true
 				caused += gs_wounds
-				await _solo_land_wounds(defender, gs_wounds, 0)
+				var gs_landed: int = await _solo_land_wounds(defender, gs_wounds, 0)
+				if v36_tally:
+					_solo_regen_ignored += gs_wounds - gs_landed
+					caused += gs_landed - gs_wounds
 	# Resolver wave A — Takedown Strike: the once-per-game extra attack joins the striker's own
 	# turn (never the Counter-only pre-phase; strike-back counts — "its turn to attack in melee").
 	# NML-241/NML-937/NML-940: the Retaliate tally is measured PER CHAIN MEMBER, so the wound pools are
@@ -8453,7 +8463,10 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 						else:
 							regenable += bt_w
 	if regenable + regen_proof > 0:
-		await _solo_land_wounds(defender, regenable, regen_proof)
+		var m_landed: int = await _solo_land_wounds(defender, regenable, regen_proof)
+		if v36_tally:
+			_solo_regen_ignored += regenable + regen_proof - m_landed
+			caused += m_landed - (regenable + regen_proof)
 	# Retaliate(X) — wave 7, re-proven against the v3.5.3 army-book wording (NML-937): "When this
 	# model takes a wound in melee, the attacker takes X hits PER WOUND TAKEN". v3.5.2 fired the
 	# trigger once per wound event; v3.5.3 states the scale explicitly, and the registry carries it
@@ -8589,11 +8602,17 @@ func _solo_charge_impact(charger: GameUnit, defender: GameUnit, human_defends: b
 		var profile: Dictionary = {"name": str(p["label"]), "ap": int(p["ap"]), "deadly": 0, "rules": []}
 		var w: int = await _solo_resolve_saves(charger, defender, str(p["label"]), [], hits, impact_defense, profile, human_defends, true)
 		if w > 0:
+			var imp_landed: int
 			if _solo_ignores_regen(charger, profile):
-				await _solo_land_wounds(defender, 0, w)
+				imp_landed = await _solo_land_wounds(defender, 0, w)
 			else:
-				await _solo_land_wounds(defender, w, 0)
-			caused += w
+				imp_landed = await _solo_land_wounds(defender, w, 0)
+			if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+				# MEL-10r: an Impact wound Regeneration cancels is not TAKEN.
+				_solo_regen_ignored += w - imp_landed
+				caused += imp_landed
+			else:
+				caused += w
 	return caused
 
 
@@ -11154,6 +11173,7 @@ func _run_ai_melee(report: Dictionary) -> void:
 	var ai_caused := 0
 	var human_caused := 0
 	_solo_hazard_self.clear()
+	_solo_regen_ignored = 0
 	var target_models_before: int = _solo_combined_alive(target)
 	# ANNOUNCE: who charges whom — highlights + line + toast, held before the first strike.
 	var announce := _solo_show_attack_announce(unit, target, "charges")
@@ -11307,9 +11327,15 @@ func _solo_log_melee_result(a: GameUnit, a_caused: int, a_score: int,
 		verdict = "both destroyed — no morale test"
 	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
 		# Rules 3.6: the comparison is wounds TAKEN, and a side took what its enemy's score holds.
-		battle_log.log_event(BattleLog.Category.COMBAT, "Melee result: %s took %s, %s took %s — %s" % [
+		# MEL-10r: say so only when Regeneration actually cancelled a wound that would have counted.
+		var regen_note := ""
+		if _solo_regen_ignored > 0:
+			regen_note = " (%d wound%s cancelled by Regeneration %s not count)" % [
+				_solo_regen_ignored, ("" if _solo_regen_ignored == 1 else "s"),
+				("do" if _solo_regen_ignored != 1 else "does")]
+		battle_log.log_event(BattleLog.Category.COMBAT, "Melee result: %s took %s, %s took %s — %s%s" % [
 			a.get_name(), _solo_taken_tally(b_caused, b_score, _solo_unit_rating(b, "Fear")),
-			b.get_name(), _solo_taken_tally(a_caused, a_score, _solo_unit_rating(a, "Fear")), verdict], true)
+			b.get_name(), _solo_taken_tally(a_caused, a_score, _solo_unit_rating(a, "Fear")), verdict, regen_note], true)
 		return
 	battle_log.log_event(BattleLog.Category.COMBAT, "Melee result: %s dealt %s, %s dealt %s — %s" % [
 		a.get_name(), _solo_melee_tally(a_caused, a_score),
@@ -14067,6 +14093,7 @@ func _run_human_melee(attacker: GameUnit, target: GameUnit, auto: bool = false) 
 	var human_caused := 0
 	var ai_caused := 0
 	_solo_hazard_self.clear()
+	_solo_regen_ignored = 0
 	_solo_stage_begin("%s charges %s" % [attacker.get_name(), target.get_name()])
 	# Rules-must-log: your charge never named itself in the log (only the AI's announce did), so the
 	# melee opened mid-strike. One declaration line — and the stage's Charge card has its content.
