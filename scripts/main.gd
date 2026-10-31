@@ -7934,7 +7934,23 @@ func _solo_has_counter(unit: GameUnit) -> bool:
 ## Alive models of a unit (incl. attached heroes) that fight with Counter — the shared
 ## SoloController.counter_models_of walk (one truth between the dice resolution and the EV metric).
 func _solo_counter_models(unit: GameUnit) -> int:
+	if unit == null or AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		return 0
 	return SoloController.counter_models_of(unit)
+
+
+## Rules 3.6 (`EPOCH_73_V36`): a Counter unit that strikes back but not first gets its line — Fatigued
+## (a Shaken strike-back counts as Fatigued) or the optional decline. A fresh striker keeps the
+## existing "Counter: X strikes first" line at its phase.
+func _solo_log_counter_first_decision(unit: GameUnit, counter_first: bool) -> void:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 or counter_first or battle_log == null:
+		return
+	if not _solo_has_counter(unit):
+		return
+	if unit.is_fatigued or unit.is_shaken:
+		_log_rule_event(BattleLog.Category.COMBAT, "Counter: %s is Fatigued - no strike-first" % unit.get_name(), true)
+	else:
+		_log_rule_event(BattleLog.Category.COMBAT, "Counter: %s declines to strike first" % unit.get_name(), true)
 
 
 ## Rules 3.6 (`EPOCH_73_V36`) — the alive models of a unit (incl. attached heroes) whose weapons carry
@@ -10978,6 +10994,7 @@ func _run_ai_melee(report: Dictionary) -> void:
 	# The strike-first half of the Counter gate is the entry's param (dead-parameter fold, twin of
 	# #1006, core `strikes_first.unwrap_or(true)`); the recorded true replays byte-identically.
 	var counter_first: bool = _solo_has_counter(target) and SoloController.counter_strikes_first(target)
+	_solo_log_counter_first_decision(target, counter_first)
 	# Rules 3.6 (core twin `tray_charge`): Impact rolls before either side strikes, so its block and card
 	# move ahead of Counter and of the strike-back prompt; a defender wiped by Impact gets neither.
 	var impact_first: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
@@ -10986,6 +11003,8 @@ func _run_ai_melee(report: Dictionary) -> void:
 		await _solo_stage_phase("Impact")
 	if counter_first and _solo_combined_alive(target) > 0:
 		strike_back = 1 if defender_is_ai or await _solo_confirm_strike_back(target, unit, true) else 0
+		if strike_back == 0 and battle_log != null:
+			_log_rule_event(BattleLog.Category.COMBAT, "Counter: %s declines to strike first" % target.get_name(), not defender_is_ai)
 		if strike_back == 1:
 			if impact_first and battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT,
@@ -13833,6 +13852,7 @@ func _run_human_melee(attacker: GameUnit, target: GameUnit, auto: bool = false) 
 	#   up to epoch 72 also before Impact, from rules 3.6 after it (the Impact cut is counted first either
 	#   way); the strike-first half is the entry's param (dead-parameter fold, twin of #1006)
 	var ai_counter: bool = _solo_has_counter(target) and SoloController.counter_strikes_first(target)
+	_solo_log_counter_first_decision(target, ai_counter)
 	var impact_first: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
 	if impact_first:   # rules 3.6 (core twin `tray_charge`): Impact rolls before either side strikes
 		human_caused += await _solo_charge_impact(attacker, target, not _solo_is_ai_unit(target))

@@ -8838,6 +8838,8 @@ static func indirect_needs_hold(unit: GameUnit, key: String) -> bool:
 static func counter_strikes_first(unit: GameUnit) -> bool:
 	if unit == null:
 		return true
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and (unit.is_fatigued or unit.is_shaken):
+		return false
 	return bool(RulesRegistry.unit_param(unit, "Counter", "strikes_first", true))
 
 

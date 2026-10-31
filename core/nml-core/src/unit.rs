@@ -2935,7 +2935,9 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         // count; epoch 65 also recognizes a unit-wide Counter primitive alias.
         // `sim::ctx_of` scales the stamped count to living models. Earlier
         // recordings retain their original weapon-only or hard-zero count.
-        counter_models: if counter_unit_reduction.is_some() {
+        counter_models: if rule_on(rules_epoch, EPOCH_73_V36) {
+            0
+        } else if counter_unit_reduction.is_some() {
             p.model_count.max(0)
         } else if rule_on(rules_epoch, EPOCH_13_WHO_WINS) {
             p.weapons.iter().filter(|w| w.range <= 0.0 && weapon_has(w, "Counter")).map(|w| w.count.max(1)).sum::<i64>().min(p.model_count.max(0))
@@ -2944,7 +2946,9 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         },
         // The unit alias supplies its own per-model magnitude at epoch 65;
         // weapon-only records retain the epoch-13 Counter entry's value.
-        counter_impact_per_model: if counter_unit_reduction.is_some() {
+        counter_impact_per_model: if rule_on(rules_epoch, EPOCH_73_V36) {
+            None
+        } else if counter_unit_reduction.is_some() {
             counter_unit_reduction
         } else if rule_on(rules_epoch, EPOCH_13_WHO_WINS) {
             reg.rules_for(&p.game_system).lookup(&p.faction_folder, "Counter").map(|e| e.param_i("impact_reduction_per_model", 1))
