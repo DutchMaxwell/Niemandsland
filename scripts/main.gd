@@ -5311,6 +5311,26 @@ func _solo_log_shaken_lenders(slot: int) -> void:
 				str(ed["rule"]), lender.get_name()], slot == solo_controller.ai_slot)
 
 
+## Rules-must-log (DAT-16a): a Spell Accumulator battery that paid into this cast names itself,
+## who lent and how many tokens — wording close to the core's cast event (sim.rs). Plain casters
+## lending their own tokens are not this rule's business and stay unlogged here.
+func _solo_log_accumulator_lends(draws: Array, caster_name: String) -> void:
+	if battle_log == null:
+		return
+	for d in draws:
+		var dd := d as Dictionary
+		var lender := dd["unit"] as GameUnit
+		if lender == null:
+			continue
+		var is_battery: bool = lender.has_special_rule("Spell Accumulator") \
+				or not RulesRegistry.unit_rules_of_primitive(lender, "Spell Accumulator").is_empty()
+		if not is_battery:
+			continue
+		_log_rule_event(BattleLog.Category.COMBAT,
+			"Spell Accumulator: %s lends %d token(s) to %s" % [
+				lender.get_name(), int(dd["tokens"]), caster_name])
+
+
 ## MECHANICAL token effect (maintainer 2026-07-22: buff/debuff tokens were decoration — the real
 ## dice never read them). A placed token with modifier data now registers hit_mod/def_mod on the
 ## unit; the hit path (_solo_hit_mod_info) and the defense seam (_solo_defense_parts) read it,
@@ -11983,7 +12003,8 @@ func _run_human_cast(unit: GameUnit, member: GameUnit, entry: Dictionary, picked
 			AiSpell.CAST_BASE_TARGET, 0, pool, "boost")
 		if boost > 0:
 			var payers: PackedStringArray = []
-			for d in SoloController._draw_aura_tokens(helpers, boost):
+			var draws: Array = SoloController._draw_aura_tokens(helpers, boost)
+			for d in draws:
 				var dd := d as Dictionary
 				var payer := dd["unit"] as GameUnit
 				for i in range(int(dd["tokens"])):
@@ -11994,6 +12015,7 @@ func _run_human_cast(unit: GameUnit, member: GameUnit, entry: Dictionary, picked
 			_log_rule_event(BattleLog.Category.COMBAT, "Boost: %s spend%s %d token%s — the cast roll improves to %d+%s" % [
 				", ".join(payers), ("s" if payers.size() == 1 else ""), boost, ("" if boost == 1 else "s"),
 				AiSpell.cast_target(boost, 0, AiSpell.CAST_BASE_TARGET), _solo_aura_pool_note()])
+			_solo_log_accumulator_lends(draws, member.get_name())
 	elif _solo_side_has_caster_tokens(own_slot):
 		_log_rule_event(BattleLog.Category.COMBAT, "%s: no caster of P%d %s — no boost" % [
 			spell_name, own_slot, _solo_aura_reach_words()], true)
