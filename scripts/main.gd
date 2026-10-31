@@ -16722,7 +16722,7 @@ func _on_battle_log_dropped(moves: Array) -> void:
 			continue
 		if not per_unit.has(unit_name):
 			per_unit[unit_name] = {"count": 0, "max_in": 0.0, "climb_in": 0.0,
-				"alive": _battle_log_unit_alive(node), "whole": false}
+				"alive": _battle_log_unit_alive(node), "whole": false, "node": node}
 		var e: Dictionary = per_unit[unit_name]
 		e["count"] = int(e["count"]) + 1
 		# Movement distance = the ACTUAL traveled arc (the ledger's measured net path),
@@ -16746,6 +16746,17 @@ func _on_battle_log_dropped(moves: Array) -> void:
 			_log_rule_event(BattleLog.Category.MOVEMENT,
 				"%s climbs %.1f\" — over 3\", impassable (GF p.11)" % [unit_name, float(e["climb_in"])])
 	_log_move_summaries(summaries)
+	# Rules-must-log (DAT-16a): a move-band rule (Agile, Scurry, Highborn, …) widened this move's
+	# reach silently. ONE line per moved unit, naming the unit's own rules that did it.
+	for unit_name in per_unit:
+		var moved_gu := UnitUtils.get_game_unit((per_unit[unit_name] as Dictionary).get("node") as Node3D)
+		if moved_gu == null:
+			continue
+		var widened := MovementRangeController.move_band_rule_names_for_props(moved_gu.unit_properties)
+		if widened.is_empty():
+			continue
+		battle_log.log_event(BattleLog.Category.MOVEMENT,
+			"%s: move bands widened by %s" % [unit_name, ", ".join(widened)])
 	# The move STREAM is unreliable + continuous (drag), so the other side cannot know when a drop
 	# happened — ship the finished per-unit summary reliably; every peer logs identical lines
 	# (release-test finding C3: only own movements were logged).
