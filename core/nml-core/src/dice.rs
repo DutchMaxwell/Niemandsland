@@ -932,7 +932,7 @@ pub fn resolve_volley_leg(
             if !ent_fired {
                 ent_fired = true;
                 out.log.push(format!(
-                    "[{}] -{alias_pen} to hit vs {def_owner}: unmoved this round",
+                    "[{}] -{alias_pen} to hit over {alias_over:.0}\" vs {def_owner}: unmoved this round",
                     def.stationary_alias_name
                 ));
             }

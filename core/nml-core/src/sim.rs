@@ -3441,13 +3441,19 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
     // next to the same read below.
     c.no_retreat = c.no_retreat || (grants && mods::granted(state, i, "No Retreat"));
     // Wave 4 (port-entrenched) — the GRANT leg: a recorded "Entrenched Buff"
-    // (`_solo_apply_grant` overlay) feeds the SAME stationary read; the
-    // magnitudes are the entry's own (2 / 9). FROZEN `EPOCH_7_TABLE_RULES`.
+    // (`_solo_apply_grant` overlay) feeds the SAME stationary read. Rules 3.6
+    // (row MOR-04) reads -1 over 12" from `EPOCH_73_V36`; below it the old
+    // magnitudes (2 / 9) replay byte-exact. FROZEN `EPOCH_7_TABLE_RULES` below.
+    let (ent_pen, ent_over) = if rule_on(rules_epoch, EPOCH_73_V36) {
+        (1, 12.0)
+    } else {
+        (2, 9.0)
+    };
     if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) && (grants && mods::granted(state, i, "Entrenched"))
-        && c.stationary_alias_penalty < 2
+        && c.stationary_alias_penalty < ent_pen
     {
-        c.stationary_alias_penalty = 2;
-        c.stationary_alias_over_in = 9.0;
+        c.stationary_alias_penalty = ent_pen;
+        c.stationary_alias_over_in = ent_over;
         c.stationary_alias_name = "Entrenched";
     }
     // CENSUS rows 1-5 (evidence-only, non-folding — semantics §11.2/§12):
