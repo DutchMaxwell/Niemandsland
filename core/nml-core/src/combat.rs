@@ -516,6 +516,9 @@ pub fn cond_met(c: &CondAp, t: &CondApTarget, is_charging: bool, dist_in: f64, m
         "above_half_strength" => t.above_half_strength,
         "shaken_or_fatigued" => t.shaken_or_fatigued,
         _ => false,
+        // Rules 3.6 (SHO-09b): MOST of the target's models stand within 1" of terrain.
+        "near_terrain" => t.near_terrain,
+        _ => false,
     }
 }
 
@@ -535,6 +538,8 @@ pub struct CondApTarget {
     /// seams that hold `statics` and `seams`; `Default` keeps every unstamped ctx shut.
     pub above_half_strength: bool,
     pub shaken_or_fatigued: bool,
+    /// Rules 3.6 (SHO-09b): MOST of the target's models stand within 1" of terrain.
+    pub near_terrain: bool,
 }
 
 impl CondApTarget {
@@ -547,6 +552,7 @@ impl CondApTarget {
             shooter_held: false,
             above_half_strength: def.above_half_strength,
             shaken_or_fatigued: def.shaken_or_fatigued,
+            near_terrain: def.near_terrain,
         }
     }
 }
@@ -554,7 +560,7 @@ impl CondApTarget {
 /// [`conditional_ap_bonus_vs`] without a weapon range: the melee leg and the
 /// granted conditions, whose legs never measure one.
 pub fn conditional_ap_bonus(c: &CondAp, target_tough: i64, target_defense: i64, is_charging: bool, dist_in: f64, melee: bool) -> i64 {
-    let t = CondApTarget { tough: target_tough, defense: target_defense, weapon_range_in: 0.0, shooter_held: false, above_half_strength: false, shaken_or_fatigued: false };
+    let t = CondApTarget { tough: target_tough, defense: target_defense, weapon_range_in: 0.0, shooter_held: false, above_half_strength: false, shaken_or_fatigued: false, near_terrain: false };
     conditional_ap_bonus_vs(c, &t, is_charging, dist_in, melee)
 }
 
@@ -566,6 +572,7 @@ pub fn cond_ap_why(condition: &str) -> &'static str {
         "def_5_6" => " (target defends on 5+ or 6+)",
         "above_half_strength" => " (target is above half strength)",
         "shaken_or_fatigued" => " (target is Shaken or Fatigued)",
+        "near_terrain" => " (target stands within 1\" of terrain)",
         _ => "",
     }
 }

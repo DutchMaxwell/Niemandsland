@@ -558,6 +558,8 @@ static func cond_met(condition: String, params: Dictionary, target_tough: int, t
 			return bool(target.get("above_half_strength", false))
 		"shaken_or_fatigued":
 			return bool(target.get("shaken_or_fatigued", false))
+		"near_terrain":
+			return bool(target.get("near_terrain", false))
 	return false
 
 
@@ -573,6 +575,8 @@ static func conditional_ap_why(params: Dictionary) -> String:
 			return "target is above half strength"
 		"shaken_or_fatigued":
 			return "target is Shaken or Fatigued"
+		"near_terrain":
+			return "target stands within 1\" of terrain"
 	return ""
 
 

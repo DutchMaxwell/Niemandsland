@@ -125,6 +125,10 @@ pub struct Ctx {
     /// Rules 3.6 (SHO-09s): the target is Shaken OR Fatigued — also while it is being shot at.
     /// Read only by the conditional-AP arm, never by the fatigue math.
     pub shaken_or_fatigued: bool,
+    /// Rules 3.6 (SHO-09b): MOST of the target's models stand within 1" of terrain. Stamped at
+    /// the volley/melee seams from the same majority sampler the Stealth alias gate uses; a ctx
+    /// no seam stamped carries `false`, so every old answer stays put.
+    pub near_terrain: bool,
     pub artillery: bool,
     /// The Artillery hit modifiers' own registry params (`shooter_hit_bonus`
     /// / `target_hit_penalty`, dead-parameter recount 2026-09-15): the
@@ -3034,6 +3038,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         models: 1, // placeholder; `_ctx_of` always writes the snapshot's alive
         above_half_strength: false,
         shaken_or_fatigued: false,
+        near_terrain: false,
         artillery: has_special_rule(&p.special_rules, "Artillery"),
         artillery_shooter_hit_bonus,
         artillery_target_hit_penalty,

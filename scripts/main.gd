@@ -9647,7 +9647,8 @@ func _solo_conditional_ap_parts(profile: Dictionary, striker: GameUnit, defender
 	var v36 := AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
 	var cx := {"weapon_range_in": float(profile.get("range", 0)), "held": held,
 		"above_half_strength": not _solo_below_half_strength(defender),
-		"shaken_or_fatigued": defender.is_shaken or defender.is_fatigued}
+		"shaken_or_fatigued": defender.is_shaken or defender.is_fatigued,
+		"near_terrain": _solo_stealth_alias_in_terrain(defender, 1.0, _solo_terrain_sampler())}
 	var parts: Array = []
 	var seen := {}
 	var moved_logged := false
