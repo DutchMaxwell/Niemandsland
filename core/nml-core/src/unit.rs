@@ -139,6 +139,12 @@ pub struct Ctx {
     /// 0 = every older epoch: the shared over-9" gate alone.
     pub artillery_shooter_over_in: f64,
     pub artillery_shooter_needs_hold: bool,
+    /// Rules 3.6 (SHO-06): a shot at an Artillery unit takes `target_hit_penalty_v36` only past
+    /// `target_over_in`, only while most models carry the rule and the unit has not moved this
+    /// round. None/0.0/false below `EPOCH_73_V36`: the old over-9" -2 leg.
+    pub artillery_target_hit_penalty_v36: Option<i64>,
+    pub artillery_target_over_in: f64,
+    pub artillery_target_most_models: bool,
     pub furious: bool,
     pub fearless: bool,
     /// `Fear(X)` — the melee WINNER comparison and nothing else
@@ -2977,6 +2983,13 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     let v36_artillery = artillery_entry.as_ref().filter(|_| rule_on(rules_epoch, crate::acts::EPOCH_73_V36));
     let artillery_shooter_over_in = v36_artillery.map_or(0.0, |e| e.param_f("shooter_over_in", 0.0));
     let artillery_shooter_needs_hold = v36_artillery.is_some_and(|e| e.param_b_or("shooter_requires_hold", false));
+    // SHO-06 (rules 3.6): the target-side leg reads its own keys only at the gate; below 73 the
+    // three fields stay None/0.0/false and the old over-9" -2 leg is untouched.
+    let artillery_target_hit_penalty_v36 =
+        v36_artillery.map(|e| e.param_i("target_hit_penalty_v36", 1));
+    let artillery_target_over_in = v36_artillery.map_or(0.0, |e| e.param_f("target_over_in", 0.0));
+    let artillery_target_most_models = v36_artillery.is_some()
+        && rule_on_most_models(p, p.model_count.max(1), "Artillery", false);
     // Unit-wide Counter aliases strip one Impact roll per living model. Keep
     // the older weapon-only stamp unchanged for recordings before epoch 65.
     let counter_unit_reduction = if rule_on(rules_epoch, EPOCH_65_MELEE_TRUTH) {
@@ -3021,6 +3034,9 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         artillery_target_hit_penalty,
         artillery_shooter_over_in,
         artillery_shooter_needs_hold,
+        artillery_target_hit_penalty_v36,
+        artillery_target_over_in,
+        artillery_target_most_models,
         furious: has_special_rule(&p.special_rules, "Furious"),
         fearless: if rule_on(rules_epoch, EPOCH_65_MELEE_TRUTH) {
             rule_on_all_models(p, "Fearless")

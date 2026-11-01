@@ -815,6 +815,8 @@ pub fn resolve_volley_leg(
     let mut ma_fired: Vec<(&str, i64, f64)> = Vec::new();
     // Wave 4 (port-entrenched) — the stationary alias's rules-must-log flag.
     let mut ent_fired = false;
+    // SHO-06 (rules 3.6) — the target-side Artillery penalty's rules-must-log flag.
+    let mut target_art_fired = false;
     let mut gp_fired: Vec<(&str, i64)> = Vec::new();
     // Wave 4 (port-quick-readjustment) — the moved-penalty legs' once-per-
     // member rules-must-log flags (`ma_fired`'s shape).
@@ -948,12 +950,27 @@ pub fn resolve_volley_leg(
         } else {
             0
         };
+        // SHO-06 (rules 3.6): the target-side penalty is -1 past 12" and only while most models
+        // carry the rule and the unit has not moved this round. Below the gate the old over-9"
+        // -2 leg stays byte-exact.
+        let v36_target_art = def.artillery_target_over_in > 0.0;
+        let target_art = if v36_target_art {
+            def.artillery_target_most_models && def.moved_round != def.round
+        } else {
+            def.artillery
+        };
+        let target_pen = if v36_target_art {
+            def.artillery_target_hit_penalty_v36.unwrap_or(1)
+        } else {
+            def.artillery_target_hit_penalty.unwrap_or(crate::combat::ARTILLERY_TARGET_HIT_PENALTY)
+        };
         let mut m = shooting_hit_modifier(
-            mod_dist_in, att.artillery, def.stealth, def.artillery, def.evasive,
+            mod_dist_in, att.artillery, def.stealth,
+            if v36_target_art { false } else { target_art }, def.evasive,
             p.hit_bonus, p.hit_bonus_over9,
             alias_pen, alias_over,
             art_shooter_bonus,
-            def.artillery_target_hit_penalty.unwrap_or(crate::combat::ARTILLERY_TARGET_HIT_PENALTY),
+            target_pen,
         )
             // B2b: the LIVE ledger's own nets — `_solo_hit_mod_info`
             // :5703-5709 adds the shooter's `_solo_spell_hit_mod` and the
@@ -977,6 +994,16 @@ pub fn resolve_volley_leg(
             // EPOCH_73_V36 — rules 3.6: a shot at an Aircraft is -N to hit,
             // inside the Unstoppable clamp (an enemy-side negative modifier).
             - def.aircraft_hit_penalty;
+        if v36_target_art && target_art && mod_dist_in > def.artillery_target_over_in {
+            m -= target_pen;
+            if !target_art_fired {
+                target_art_fired = true;
+                out.log.push(format!(
+                    "Artillery target: -{target_pen} to hit over {:.0}\" (most models, unmoved)",
+                    def.artillery_target_over_in
+                ));
+            }
+        }
         aircraft_fired |= def.aircraft_hit_penalty > 0;
         if att.artillery && v36_artillery && mod_dist_in > LONG_RANGE_IN
             && art_shooter_fired.iter().all(|o| *o != sh.owner)
