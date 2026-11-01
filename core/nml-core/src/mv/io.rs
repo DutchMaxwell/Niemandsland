@@ -191,6 +191,9 @@ pub struct CallOpts {
     /// the gate, so old corpora replay byte-exact.
     pub dangerous_debuff: bool,
     pub difficult_debuff: bool,
+    /// rules 3.6 (EPOCH_73_V36) — ruin ground is Unstable: a leg over 6" prices it Dangerous. Absent
+    /// in every earlier corpus, so old calls default false and replay byte-exact.
+    pub unstable_danger: bool,
     pub difficult_cap_in: Option<f64>,
     pub zones_rest_only: bool,
     pub charge_allowance: Option<f64>,
@@ -229,6 +232,8 @@ struct PlainOpts {
     dangerous_debuff: bool,
     #[serde(default)]
     difficult_debuff: bool,
+    #[serde(default)]
+    unstable_danger: bool,
     #[serde(default)]
     difficult_cap_in: Option<f64>,
     #[serde(default)]
@@ -471,6 +476,7 @@ fn call_of(pc: PlainCall, header: &MoveHeader, path: &str, ln: usize) -> Result<
         board_y_in: o.board_y_in,
         dangerous_debuff: o.dangerous_debuff,
         difficult_debuff: o.difficult_debuff,
+        unstable_danger: o.unstable_danger,
         difficult_cap_in: o.difficult_cap_in,
         zones_rest_only: o.zones_rest_only,
         charge_allowance: o.charge_allowance,

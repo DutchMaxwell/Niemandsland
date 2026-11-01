@@ -230,6 +230,7 @@ fn fill_blob(out: &mut Vec<u64>, walls: &[Wall], board: V2, opts: &ThetaOpts, cf
     out.push(u64::from(opts.reach_closest));
     out.push(u64::from(so.dangerous_debuff));
     out.push(u64::from(so.difficult_debuff));
+    out.push(u64::from(so.unstable_danger));
     out.push(so.clearance.to_bits());
     out.push(bits2(board));
     out.push(walls.len() as u64);
@@ -515,6 +516,7 @@ mod tests {
             avoid_fine: &sc.avoid_fine,
             dangerous_debuff: sc.dd,
             difficult_debuff: sc.df,
+            unstable_danger: false,
         };
         let o = ThetaOpts { step, reach_closest: sc.reach };
         let (p, t) = theta_star_traced_bent(sc.start, sc.goal, &sc.walls, &sc.grid, sc.board, &o, sc.cfg, sc.bend);
@@ -775,6 +777,7 @@ mod tests {
             avoid_fine: &sc.avoid_fine,
             dangerous_debuff: sc.dd,
             difficult_debuff: sc.df,
+            unstable_danger: false,
         };
         let o = ThetaOpts { step, reach_closest: sc.reach };
         let seed = ThetaPop { g: 1.0, parent: -1, open: 1 };
