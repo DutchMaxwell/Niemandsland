@@ -1800,6 +1800,7 @@ mod unstoppable_aura;
 mod utility_move_buff_pins;
 mod v36_data;
 mod v36_data_rows;
+mod v36_dat_17a;
 mod v36_melee;
 mod v36_melee_rows;
 mod v36_mor_09;

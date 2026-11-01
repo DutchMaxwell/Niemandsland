@@ -114,6 +114,19 @@ pub fn matches(r: &LiveMod, role: Role, melee: bool) -> bool {
     }
 }
 
+/// DAT-17a — the "Regeneration Buff" once-grant and its spell siblings carry
+/// `grants_rule: "Regeneration"`. The FIRST wounding exchange of the holder
+/// spends it; a zero-wound exchange leaves it in place (rules 3.6).
+pub fn is_regen_grant(r: &LiveMod) -> bool {
+    r.once && base_rule_is(&r.grants_rule, "Regeneration")
+}
+
+/// `is_regen_grant` as a `spend_once_except` keep predicate: the grant survives
+/// only while the holder took no wounds this exchange.
+pub fn keep_regen(r: &LiveMod, wounded: bool) -> bool {
+    is_regen_grant(r) && !wounded
+}
+
 /// The net of one role over `_solo_mods_of_chain` (main.gd:3812) — the unit's
 /// OWN records plus its host's, because a joined hero shares the unit's tokens.
 pub fn sum(state: &State, i: usize, role: Role, melee: bool, f: impl Fn(&LiveMod) -> i64) -> i64 {

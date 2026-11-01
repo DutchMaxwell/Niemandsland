@@ -5389,6 +5389,8 @@ func _solo_record_spell_mod(tu: GameUnit, spell_name: String, effect: Dictionary
 		"rush_in": int(modifier.get("rush_in", 0)),
 		"grants_rule": grants, "scope": str(effect.get("scope", "")),
 		"beneficiary": str(effect.get("beneficiary", "")), "duration": str(effect.get("duration", "round"))}
+	if _solo_is_regen_grant(rec):
+		rec["used"] = bool(effect.get("used", false))
 	# #845 option (b): a vs-target Mark's record carries NO live overlay of its own — its
 	# grant is read target-aware by whoever attacks the marked unit. Only the Marks set this,
 	# so every existing spell record keeps its exact shape.
@@ -5593,6 +5595,8 @@ func _solo_spend_once_mods(uu: GameUnit, roles: Array, melee: bool, keep_spell: 
 			if keep_spell != "" and str((rd as Dictionary).get("spell", "")) == keep_spell:
 				continue
 			if str((rd as Dictionary).get("duration", "")) == "once" and not spent.has(rd):
+				if _solo_is_regen_grant(rd as Dictionary) and not bool((rd as Dictionary).get("used", false)):
+					continue
 				spent.append(rd)
 	if spent.is_empty():
 		return
@@ -5606,13 +5610,39 @@ func _solo_spend_once_mods(uu: GameUnit, roles: Array, melee: bool, keep_spell: 
 			if (e as Dictionary).get("unit") == uu and str((e as Dictionary).get("token")) == spell:
 				_solo_spell_tokens_active.erase(e)
 		if battle_log != null:
-			_log_rule_event(BattleLog.Category.COMBAT,
-				"\"%s\" on %s is consumed (applies once)" % [spell, uu.get_name()], true)
+			if _solo_is_regen_grant(rd as Dictionary):
+				_log_rule_event(BattleLog.Category.COMBAT,
+					"Regeneration Buff: %s's Regeneration is spent by a wounding exchange" % uu.get_name(), true)
+			else:
+				_log_rule_event(BattleLog.Category.COMBAT,
+					"\"%s\" on %s is consumed (applies once)" % [spell, uu.get_name()], true)
 	if records.is_empty():
 		_solo_spell_mods.erase(key)
 	_solo_refresh_spell_stamps(uu)   # NML-006: stamps follow the surviving records
 	_broadcast_spell_mods(uu)   # NML-929: the CONSUMPTION has to travel too, or the peer keeps the buff
 	_solo_mirror_spell_state()   # NML-949: durable half of the record kept in step
+
+
+## DAT-17a — the "Regeneration Buff" once-grant and its spell siblings carry
+## `grants_rule: "Regeneration"`; base-name match, twin of the Rust `base_rule_is`.
+func _solo_is_regen_grant(rd: Dictionary) -> bool:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return false
+	var grants := str(rd.get("grants_rule", ""))
+	return str(rd.get("duration", "")) == "once" \
+			and grants.strip_edges().split("(")[0].strip_edges() == "Regeneration"
+
+
+## DAT-17a — mark the holder's Regeneration grant spent once an exchange lands
+## wounds on it. Called from the exchange landing path only.
+func _solo_mark_regen_grant_used(uu: GameUnit) -> void:
+	if uu == null:
+		return
+	var records: Array = _solo_spell_mods.get(uu.get_instance_id(), [])
+	for rd in records:
+		var d := rd as Dictionary
+		if _solo_is_regen_grant(d):
+			d["used"] = true
 
 
 ## NML-006 — the event-specific once-consumers (casting after the cast die, morale after the test
@@ -15154,6 +15184,7 @@ func _solo_reset_all_fatigue() -> void:
 func _solo_apply_wounds(target: GameUnit, wounds: int, pips: bool = true) -> void:
 	if wounds <= 0 or opr_army_manager == null:
 		return
+	_solo_mark_regen_grant_used(target)
 	if opr_army_manager.regiments.has(target.unit_id):
 		var reg = opr_army_manager.regiments[target.unit_id]
 		if reg != null:
