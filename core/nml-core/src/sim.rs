@@ -6919,7 +6919,10 @@ impl ReplyCtxCache {
         if self.slots.capacity() == 0 {
             self.slots.reserve_exact(8);
         }
-        self.slots.push((i, ctx_live(ctx_of(us, state, i), statics, state, i, false, rules_epoch)));
+        let mut c = ctx_live(ctx_of(us, state, i), statics, state, i, false, rules_epoch);
+        // SHO-06e: the reply-threat estimate prices the enemy's volley as a Hold shot.
+        c.held = true;
+        self.slots.push((i, c));
         self.slots.len() - 1
     }
 }
@@ -8949,7 +8952,9 @@ fn resolve_with(
                     let us = &statics[pi_s];
                     let ut = &statics[next.roster.profile[ti]];
                     member_profiles_reach(statics, &next, si, ti, d_ev, seams, &mut sc);
-                    let att = ctx_of(us, &next, si);
+                    let mut att = ctx_of(us, &next, si);
+                    // SHO-06e: the volley's own action decides the Artillery shooter's Hold.
+                    att.held = !moved;
                     let def = ctx_of(ut, &next, ti);
                     let shooting = shoot_ev(
                         folded_slice(&us.shoot, &sc), &sc.keep, &sc.attacks, &att, &def, d_ev,

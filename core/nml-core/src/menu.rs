@@ -355,7 +355,9 @@ pub fn best_shoot(
         if tuning.reach_only {
             crate::sim::reach_rescale(us, state.alive[i], &state.positions[i], &state.positions[e], 0.0, sc);
         }
-        let att = ctx_live(ctx_of(us, state, i), statics, state, i, false, rules_epoch);
+        let mut att = ctx_live(ctx_of(us, state, i), statics, state, i, false, rules_epoch);
+        // HOLD+shoot leg: the shot follows a Hold (SHO-06e reads `held` for the Artillery +1).
+        att.held = true;
         let def = ctx_live(ctx_of(ut, state, e), statics, state, e, false, rules_epoch);
         let ev = shoot_ev(&us.shoot, &sc.keep, &sc.attacks, &att, &def, d);
         if ev > best_ev {
@@ -392,7 +394,9 @@ pub fn ranked_shoots(
         if tuning.reach_only {
             crate::sim::reach_rescale(us, state.alive[i], &state.positions[i], &state.positions[e], 0.0, sc);
         }
-        let att = ctx_live(ctx_of(us, state, i), statics, state, i, false, rules_epoch);
+        let mut att = ctx_live(ctx_of(us, state, i), statics, state, i, false, rules_epoch);
+        // HOLD+shoot leg: the shot follows a Hold (SHO-06e reads `held` for the Artillery +1).
+        att.held = true;
         let def = ctx_live(ctx_of(ut, state, e), statics, state, e, false, rules_epoch);
         let ev = shoot_ev(&us.shoot, &sc.keep, &sc.attacks, &att, &def, d);
         if ev > 0.0 {
