@@ -392,6 +392,11 @@ fn shred_faces(faces: &[u8], reroll: &[u8], low: i64, target: i64) -> i64 {
     wounds
 }
 
+/// Rules 3.6 (SHO-14) — `Pierce`: the save ignores POSITIVE Defense modifiers; Armor and negatives stay.
+fn pierce_ignores(p: &ShootProfile, epoch_ctx: &Ctx) -> bool {
+    rule_on(epoch_ctx.rules_epoch, EPOCH_73_V36) && p.rules.iter().any(|r| r.trim() == "Pierce")
+}
+
 /// `main._solo_save_batch` :6385-6483 — ONE batch for the whole defender (not
 /// per model), Fortified first, then the dice, then Bane's re-roll of the
 /// unmodified 6s, then Shred — the pool's Deadly shape is the
@@ -427,6 +432,10 @@ fn save_batch(
     if count <= 0 {
         return 0;
     }
+    // SHO-14 — Pierce drops the positive growth ladder and a buff's negative `defense_mod`.
+    let pierce = pierce_ignores(p, def);
+    let growth_def = if pierce { 0 } else { def.growth_def_mod };
+    let defense_mod = if pierce && def.defense_mod < 0 { 0 } else { def.defense_mod };
     // Plain Fortified first (main.gd:6440-6447), then the WAVE 3 alias arm in
     // its ELSE — Boost ungated, gated aliases past the volley's over-9" flag,
     // both clamped at AP(0) like `fortified_ap`.
@@ -464,15 +473,15 @@ fn save_batch(
     let target = if def.modifier_sum {
         // D21 (`EPOCH_68_MODIFIER_SUM`): every defence step arrives unfloored;
         // the SUM incl. AP is clamped once, a natural 1/6 stay with the die.
-        save_target(defense - def.growth_def_mod + def.defense_mod, (eff_ap + def.growth_fortify_ap).max(0)).clamp(2, 6)
+        save_target(defense - growth_def + defense_mod, (eff_ap + def.growth_fortify_ap).max(0)).clamp(2, 6)
     } else if def.growth_def_lowers {
         save_target(
-            ((defense - def.growth_def_mod).clamp(2, 6) + def.defense_mod).max(BEST_HIT_TARGET),
+            ((defense - growth_def).clamp(2, 6) + defense_mod).max(BEST_HIT_TARGET),
             (eff_ap + def.growth_fortify_ap).max(0),
         )
     } else {
         save_target(
-            (defense + def.growth_def_mod + def.defense_mod).max(BEST_HIT_TARGET),
+            (defense + growth_def + defense_mod).max(BEST_HIT_TARGET),
             (eff_ap + def.growth_fortify_ap).max(0),
         )
     };
@@ -813,6 +822,8 @@ pub fn resolve_volley_leg(
     let mut alias_cover_logged = false;
     // Rules 3.6 (SHO-01b) — the kept-cover line's once-per-volley flag.
     let mut indirect_cover_logged = false;
+    // Rules 3.6 (SHO-14) — the Pierce line's once-per-volley flag.
+    let mut pierce_logged = false;
     // Wave 3 — the Shot Modifier family's two runtime-gated members name
     // themselves once per volley per firing member (rules-must-log): the
     // member's owner, its hit bonus and (Mobile Artillery only) its own
@@ -1292,14 +1303,16 @@ pub fn resolve_volley_leg(
         let ap4 = if on6 > 0 { sixes(&faces).min(hits) } else { 0 };
         // Defense, in main.gd's own order: Shielded, then Guarded (over 9"),
         // then Cover — which Blast / Indirect / Ignores Cover skip (:3221).
-        let mut base = shielded_defense(def.defense, def.shielded_bonus(), def.def_floor());
+        let pierce = pierce_ignores(p, att);
+        let mut base = shielded_defense(def.defense, if pierce { 0 } else { def.shielded_bonus() }, def.def_floor());
         // Audit 2026-09-13 §2.4 — the Sturdy-kind Boost REPLACES the base
         // rule's over-9" condition ("always ... instead of only when shot or
         // charged from over 9\" away"): while one of its aliases supplied the
         // shielded half, the guarded leg's MAX reading is already on the
         // table, so the second -1 must not stack (the Fortified pair's shape
         // at :329-333).
-        base = guarded_defense(base, def.guarded && mod_dist_in > LONG_RANGE_IN && !def.sturdy_boost_gates_guarded, def.def_floor());
+        let guarded_applies = def.guarded && mod_dist_in > LONG_RANGE_IN && !def.sturdy_boost_gates_guarded;
+        base = guarded_defense(base, guarded_applies && !pierce, def.def_floor());
         shielded_alias_fired |= def.shielded && def.shielded_alias != ShieldedAlias::None;
         // Tray-exact S8: a Takedown save reads its pick's OWN square, and the pick is the one the
         // table makes for THIS profile, after the volley's earlier Takedown groups landed (it re-picks
@@ -1313,8 +1326,18 @@ pub fn resolve_volley_leg(
         let save_def = if skips_cover {
             base
         } else {
-            covered_defense(base, if unit_of_one { td_own } else { def.in_cover }, def.def_floor())
+            covered_defense(base, if pierce { false } else if unit_of_one { td_own } else { def.in_cover }, def.def_floor())
         };
+        if pierce && !pierce_logged {
+            pierce_logged = true;
+            let mut ign: Vec<String> = Vec::new();
+            if def.shielded_bonus() > 0 { ign.push(format!("Shielded +{}", def.shielded_bonus())); }
+            if !skips_cover && (if unit_of_one { td_own } else { def.in_cover }) { ign.push("Cover +1".into()); }
+            if guarded_applies { ign.push("Guarded +1".into()); }
+            if def.growth_def_mod > 0 { ign.push(format!("Defensive growth +{}", def.growth_def_mod)); }
+            if def.defense_mod < 0 { ign.push(format!("Defense Buff +{}", -def.defense_mod)); }
+            if !ign.is_empty() { out.log.push(format!("Pierce: {} ignores {}", sh.owner, ign.join(", "))); }
+        }
         if unit_of_one {
             // Tray-exact S10 — `_solo_log_takedown_context`: the save the pick really rolls, and why.
             let why = if skips_cover { "cover ignored" }
@@ -2171,8 +2194,10 @@ pub fn resolve_melee_leg(
             if over9 && !tray_exact {
                 out.mark("guarded_over9");
             }
+            let pierce = pierce_ignores(p, sh.att);
             let save_def = guarded_defense(
-                shielded_defense(def.defense, def.shielded_bonus(), def.def_floor()), over9 && tray_exact, def.def_floor());
+                shielded_defense(def.defense, if pierce { 0 } else { def.shielded_bonus() }, def.def_floor()),
+                over9 && tray_exact && !pierce, def.def_floor());
             shielded_alias_fired |= def.shielded && def.shielded_alias != ShieldedAlias::None;
             // Block B7 — Piercing Growth's AP delta, melee half (see the
             // shooting site's own note above).
