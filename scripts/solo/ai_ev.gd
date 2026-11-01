@@ -376,6 +376,11 @@ static func ctx_for(unit: GameUnit, in_cover: bool = false, counter_models: int 
 		# Guarded OR Versatile Defense's consistently-played def-half (both: +1 Def when shot/charged
 		# from over 9" — one EV flag, one dice-path arithmetic).
 		"guarded": guarded_family_on(unit, "Guarded") or guarded_family_on(unit, "Versatile Defense"),
+		# SHO-17e (rules 3.6): the Guarded family's charge-leg gate — the shared 6" charge threshold
+		# from EPOCH_73_V36, 0.0 below it (the old estimate numbers). The melee EV reads the W1.5b
+		# pre-charge gap against it; the shot leg keeps the over-9" gate.
+		"guarded_charge_over_in": AiCombatMath.CHARGE_LONG_RANGE_IN \
+			if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else 0.0,
 		"ranged_shrouding": most_models_family_on(unit, "Ranged Shrouding"),
 		"shielded": rule_on_defence_family(unit, "Shielded"),
 		"in_cover": in_cover,
@@ -891,12 +896,14 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 		# (main.gd:3131/9755) — the EV judge kept charging it, so covered targets looked
 		# tougher to exactly the weapons built to punish them.
 		defense = AiCombatMath.covered_defense(defense, bool(def_ctx.get("in_cover", false)))
-	# Guarded (quick-win batch: "+1 to defense rolls" when shot or charged from over 9" away) — the
-	# SHOOTING side gates on the volley distance here; the charge side lives only in the dice
-	# resolution, because melee EV always values at dist 0 (the Versatile Attack precedent).
-	if not melee:
+	# Guarded (rules 3.6): the +1 needs the attack to cross the stamped gate — the shot distance
+	# over 9", or (SHO-17e) the W1.5b pre-charge gap over the 6" charge gate; 0.0 below the epoch
+	# keeps the old melee number. The charge side rides `melee_ev`'s `charge_dist_in`.
+	var guard_gate: float = AiCombatMath.LONG_RANGE_IN if not melee \
+		else float(def_ctx.get("guarded_charge_over_in", 0.0))
+	if guard_gate > 0.0:
 		defense = AiCombatMath.guarded_defense(defense,
-			bool(def_ctx.get("guarded", false)) and dist_in > AiCombatMath.LONG_RANGE_IN)
+			bool(def_ctx.get("guarded", false)) and dist_in > guard_gate)
 	var ap := int(profile.get("ap", 0)) + int(versatile.get("ap", 0))   # Versatile Attack AP(+1) mode
 	# Target-property conditional AP (Shatter/Tear/Melee Slayer/Disintegrate): value the extra AP this
 	# weapon gets against THIS target, so the AI's targeting matches the dice resolution. One truth with

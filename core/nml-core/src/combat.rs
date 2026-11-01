@@ -630,21 +630,23 @@ pub fn profile_ev(
             raw = 6;
         } else {
             raw = thrust_to_hit(att.quality, charging && p.thrust, def.def_floor());
-            // The Stealth data-alias pair rides the fold, but the EV
-            // imagination measures NO pre-charge gap (ai_ev.gd:442's melee
-            // branch has no alias leg either) — charge_from_in stays 0.0,
-            // which never clears the alias's `over_in` gate.
-            // The Wave-6 spell-hit net (ai_ev.gd:482): the bearer's own
-            // buff/debuff ±N composes into the SAME net-modifier sum the
-            // clamp then sees, exactly like the GDScript's `+ spell_mod`.
-            // 0 on every ctx_of-built ctx, so the pre-swap EV is unchanged.
+            // SHO-17e (rules 3.6): the Stealth DATA alias's charge leg (Screened et al.) reads its
+            // distance from the W1.5b pre-charge gap the caller hands in. From `EPOCH_73_V36` the
+            // charge leg's gate is the shared 6" charge threshold; below it the alias prices nothing
+            // (the old estimate number). 0.0 = not a charge, which never clears a real gate.
+            let v36 = rule_on(att.rules_epoch, EPOCH_73_V36);
+            let alias_over_in = if v36 && def.stealth_alias_over_in > 0.0 {
+                CHARGE_LONG_RANGE_IN
+            } else {
+                def.stealth_alias_over_in
+            };
             let enemy_mod = melee_hit_modifier(
                 def.evasive,
                 def.melee_evasion,
-                def.stealth_alias_penalty,
-                def.stealth_alias_over_in,
+                if v36 { def.stealth_alias_penalty } else { 0 },
+                alias_over_in,
                 def.stealth_alias_applies_charged,
-                0.0,
+                if v36 { dist_in } else { 0.0 },
             );
             let mut melee_mod = enemy_mod + att.hit_mod;
             // EV/tray split (found by #489, caveat 4): `p.unstoppable_ev` folds
@@ -796,17 +798,22 @@ pub fn profile_ev(
         hits -= cancels;
     }
     // --- saves: Shielded, then Cover, then Guarded (ai_ev.gd:403-411) ---
-    // Cover and Guarded are SHOOTING-only reads: the charge halves of both
-    // live in the dice path only (a charge's `dist_in` reaches Versatile Attack alone).
+    // Cover stays a SHOOTING-only read. The Guarded family's distance gate is the shot distance
+    // against the shared over-9" threshold, or (SHO-17e) the stamped charge gate against the W1.5b
+    // pre-charge gap for a melee strike; 0.0 below `EPOCH_73_V36` keeps the old melee number.
     let mut defense = shielded_defense(def.defense, def.shielded_bonus(), def.def_floor());
     if !melee && p.blast <= 1 && !p.indirect && !p.ignores_cover {
         defense = covered_defense(defense, def.in_cover, def.def_floor());
     }
-    if !melee {
-        // Audit 2026-09-13 §2.4 — the Sturdy-kind Boost replaces the gate; a
-        // MAX over the two readings, never a second -1 (the dice fold's twin).
-        defense = guarded_defense(defense, def.guarded && dist_in > LONG_RANGE_IN && !def.sturdy_boost_gates_guarded, def.def_floor());
-    }
+    // Audit 2026-09-13 §2.4 — the Sturdy-kind Boost replaces the gate; a
+    // MAX over the two readings, never a second -1 (the dice fold's twin).
+    let guarded_over_in = if melee { def.guarded_charge_over_in } else { LONG_RANGE_IN };
+    defense = guarded_defense(
+        defense,
+        def.guarded && guarded_over_in > 0.0 && dist_in > guarded_over_in
+            && !def.sturdy_boost_gates_guarded,
+        def.def_floor(),
+    );
     // NML-1103 — target-property conditional AP (ai_ev.gd:412-417): Shatter,
     // Tear, Disintegrate, Melee Slayer, Piercing Assault, Piercing Hunter. The
     // `is_charging` argument is the GDScript's `def_ctx.get("charging", false)`
