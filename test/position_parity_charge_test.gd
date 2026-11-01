@@ -3,7 +3,21 @@ extends GdUnitTestSuite
 const Parity := preload("res://tools/position_parity.gd")
 const Replay := preload("res://tools/node_recheck.gd")
 
+var _epoch0: int
+
+
+func before_test() -> void:
+	_epoch0 = AiActRecorder.rules_epoch
+
+
+func after_test() -> void:
+	AiActRecorder.rules_epoch = _epoch0   # statics leak across gdUnit tests - restore
+
+
 func test_charge_gate_shape_and_snap_pins_match_the_table() -> void:
+	# These pins are the frozen pre-3.6 charge geometry. From EPOCH_73_V36 the AI
+	# prices a long ruin leg as Dangerous ground (BG-03c), which the pins predate.
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
 	var pins: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(
 		"res://test/fixtures/position_parity/charge_gates.json"))
 	var corpus: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(
