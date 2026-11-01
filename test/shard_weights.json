@@ -456,6 +456,7 @@
 "test/solo_deploy_zone_test.gd": 0.0,
 "test/v36/mor_05_test.gd": 0.1,
 "test/v36/mor_05b_test.gd": 0.1,
+"test/v36/mor_06_test.gd": 0.1,
 "test/solo_difficulty_test.gd": 0.1,
 "test/solo_futile_charge_test.gd": 0.1,
 "test/solo_grade_picker_test.gd": 0.0,

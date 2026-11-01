@@ -161,6 +161,20 @@ static func guarded_family_on(unit: GameUnit, rule: String, solo: bool = false) 
 	return rule_on_all_models(unit, rule, solo)
 
 
+## Row MOR-06 (D-MOST) — the names whose 3.6 text counts most models; the core's twin is unit.rs MOST_MODELS_MOR06.
+const MOST_MODELS_MOR06 := ["Steadfast", "Battleborn", "Honor Code", "Vale Oath",
+	"Enhanced Vale Oath", "Unmovable", "Evasive", "Melee Evasion", "Melee Shrouding",
+	"Ranged Shrouding", "Precision Growth", "Piercing Frenzy", "Regenerative Strength",
+	"Precision Frenzy", "Fortified Growth", "Defensive Frenzy", "Piercing Growth", "Defensive Growth"]
+
+
+## Most models for the names above from EPOCH_73_V36, else every model; core twin: unit.rs `most_models_family_on`.
+static func most_models_family_on(unit: GameUnit, rule: String, solo: bool = false) -> bool:
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and rule in MOST_MODELS_MOR06:
+		return rule_on_most_models(unit, rule, solo)
+	return rule_on_all_models(unit, rule, solo)
+
+
 ## EXACT unit-rule check — has_special_rule matches by PREFIX, so "Unpredictable" would false-positive
 ## on an "Unpredictable Fighter" unit (the Ferocious-vs-"Ferocious Boost" lesson). Rating stripped.
 static func has_exact_rule(unit: GameUnit, rule: String) -> bool:
@@ -330,14 +344,14 @@ static func ctx_for(unit: GameUnit, in_cover: bool = false, counter_models: int 
 		"ravage": unit_rating(unit, "Ravage"),
 		"stealth": rule_on_most_models(unit, "Stealth") if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
 			else rule_on_all_models(unit, "Stealth"),
-		"evasive": rule_on_all_models(unit, "Evasive"),
-		"melee_evasion": rule_on_all_models(unit, "Melee Evasion"),
+		"evasive": most_models_family_on(unit, "Evasive"),
+		"melee_evasion": most_models_family_on(unit, "Melee Evasion"),
 		"fortified": rule_on_defence_family(unit, "Fortified"),
 		"fortified_over_in": _fortified_over_in(unit),
 		# Guarded OR Versatile Defense's consistently-played def-half (both: +1 Def when shot/charged
 		# from over 9" — one EV flag, one dice-path arithmetic).
 		"guarded": guarded_family_on(unit, "Guarded") or guarded_family_on(unit, "Versatile Defense"),
-		"ranged_shrouding": rule_on_all_models(unit, "Ranged Shrouding"),
+		"ranged_shrouding": most_models_family_on(unit, "Ranged Shrouding"),
 		"shielded": rule_on_defence_family(unit, "Shielded"),
 		"in_cover": in_cover,
 		"counter_models": counter_models,
