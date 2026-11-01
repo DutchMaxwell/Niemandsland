@@ -1798,6 +1798,7 @@ mod terrain_debuff;
 mod traversal;
 mod unstoppable_aura;
 mod utility_move_buff_pins;
+mod v36_ai;
 mod v36_data;
 mod v36_data_rows;
 mod v36_dat_17a;
