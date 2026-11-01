@@ -329,6 +329,10 @@ static func ctx_for(unit: GameUnit, in_cover: bool = false, counter_models: int 
 			if RulesRegistry.unit_rule_active(unit, "Banner") else 0,
 		"tough": maxi(unit_rating(unit, "Tough"), 1),
 		"models": maxi(unit.get_alive_count(), 1),
+		# Rules 3.6 (SHO-09s): the two TARGET-STATE facts, on the same basis as BattleSim._below_half
+		# so the snapshot ctx and this live ctx stay dict-identical (sim_parity_core_test).
+		"above_half_strength": not _below_half_live(unit),
+		"shaken_or_fatigued": unit.is_shaken or unit.is_fatigued,
 		"artillery": unit.has_special_rule("Artillery"),
 		# SHO-05 (rules 3.6): the Artillery shooter's own +1 needs a Hold and a target past
 		# `shooter_over_in`; both read off the entry below epoch 73 (0/false = over-9" alone).
@@ -367,6 +371,20 @@ static func ctx_for(unit: GameUnit, in_cover: bool = false, counter_models: int 
 		"regen_target_spell": _regen_target(unit, true),
 		"aircraft_hit_penalty": aircraft_hit_penalty(unit),
 	}
+
+
+## Rules 3.6 (SHO-09s): the LIVE half-strength read, the twin of `BattleSim._below_half`'s snapshot
+## basis — a single model measures Tough wounds left, a multi-model unit its alive models against the
+## starting size. Kept here so `ctx_for` and `BattleSim._ctx_of` carry the same two facts.
+static func _below_half_live(unit: GameUnit) -> bool:
+	if unit.models.size() == 1:
+		var wounds := 0
+		for m in unit.models:
+			var mi := m as ModelInstance
+			if mi != null and mi.is_alive:
+				wounds += mi.wounds_current
+		return AiCombatMath.at_or_below_half(wounds, (unit.models[0] as ModelInstance).wounds_max)
+	return AiCombatMath.at_or_below_half(unit.get_alive_count(), unit.models.size())
 
 
 ## Rules 3.6 (EPOCH_73_V36): the to-hit penalty every shot AT `unit` takes because it is an Aircraft (the
