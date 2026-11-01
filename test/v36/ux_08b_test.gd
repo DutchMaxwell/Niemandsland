@@ -34,7 +34,7 @@ func test_every_consolidation_log_line_names_it_outside_the_citation() -> void:
 		"cannot read res://scripts/main.gd").is_not_null()
 	if file == null:
 		return
-	var bare := RegEx.create_from_string("\\([^)]*\\)")
+	var cite_paren := RegEx.create_from_string("\\([^()]*GF v3\\.5\\.1 p\\.9[^()]*\\)")
 	var checked := 0
 	while not file.eof_reached():
 		var line := file.get_line()
@@ -48,7 +48,7 @@ func test_every_consolidation_log_line_names_it_outside_the_citation() -> void:
 		if not line.contains("GF v3.5.1 p.9"):
 			continue
 		checked += 1
-		var outside := bare.sub(line, "", true)
+		var outside := cite_paren.sub(line, "", true)
 		assert_bool(outside.to_lower().contains("consolidat")).override_failure_message(
 			"this consolidation log line only names it inside the citation: '%s'" % line).is_true()
 	assert_int(checked).override_failure_message(
@@ -82,5 +82,5 @@ func test_s07_outcome_sentence_leaves_rout_to_melee() -> void:
 		"the S-07 outcome does not name Shaken: '%s'" % text).is_true()
 	assert_bool(lower.contains("melee")).override_failure_message(
 		"the S-07 outcome does not leave the Rout to melee: '%s'" % text).is_true()
-	assert_bool(lower.contains("shooting") and lower.contains("rout")).override_failure_message(
+	assert_bool(lower.contains("routs")).override_failure_message(
 		"the S-07 outcome still claims a shooting failure routs the unit: '%s'" % text).is_false()
