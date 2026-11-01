@@ -940,7 +940,7 @@ static func _move_base_radius_of(u: GameUnit) -> float:
 static func _melee_shroud_params(target: GameUnit) -> Array:
 	if target == null:
 		return []
-	if AiEv.rule_on_all_models(target, "Melee Shrouding"):
+	if AiEv.most_models_family_on(target, "Melee Shrouding"):
 		return [float(RulesRegistry.unit_param(target, "Melee Shrouding", "move_penalty_in",
 				AiCombatMath.SHROUD_CHARGE_PENALTY_IN)),
 			float(RulesRegistry.unit_param(target, "Melee Shrouding", "floor_in",
