@@ -3424,6 +3424,10 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
     // Wave 4 (port-entrenched) — the volley's def build is `ctx_live` (5168).
     c.moved_round = state.moved_round[i];
     c.round = state.round;
+    // SHO-17 — the Guarded charge leg's shared 6" gate; 0.0 below the epoch keeps the old read.
+    if melee && rule_on(rules_epoch, EPOCH_73_V36) {
+        c.guarded_charge_over_in = crate::combat::CHARGE_LONG_RANGE_IN;
+    }
     c.hit_mod = mods::sum(state, i, mods::Role::AttackerOwn, melee, |r| r.hit_mod);
     c.vs_hit_mod = mods::sum(state, i, mods::Role::VsTarget, melee, |r| r.hit_mod);
     // Wave 4 follow-up (port-vengeance) — "friendly units get +X to hit rolls
@@ -4351,6 +4355,10 @@ fn interference_pool(
 /// charges, so on the charger's side the flag stays its own fatigue.
 fn ctx_of_melee(us: &UnitStatic, state: &State, i: usize, rules_epoch: u32) -> Ctx {
     let mut c = ctx_of(us, state, i);
+    // SHO-17 — the Guarded charge leg's shared 6" gate; 0.0 below the epoch keeps the old read.
+    if rule_on(rules_epoch, EPOCH_73_V36) {
+        c.guarded_charge_over_in = crate::combat::CHARGE_LONG_RANGE_IN;
+    }
     c.fatigued = state.fatigued[i] || (rule_on(rules_epoch, EPOCH_65_MELEE_TRUTH) && state.shaken[i]);
     // MEL-11 (`EPOCH_73_V36`): a Fatigued unit rolls no Ravage. The tray and
     // the EV both read the rating off this ctx, so one zero gates both.
@@ -5501,7 +5509,7 @@ fn strike_phase(
 fn impact_with_parry(
     next: &mut State, ti: usize, us: &UnitStatic, ut: &UnitStatic,
     pools: [(i64, i64); 2], parry_dice: i64, charge: Option<(f64, bool)>, tray: &mut Tray,
-    shot: &mut ShootResult, tally_post_regen: bool,
+    shot: &mut ShootResult, tally_post_regen: bool, rules_epoch: u32,
 ) -> i64 {
     let exact = matches!(charge, Some((_, true)));
     let mut hits: [(i64, i64); 2] = [(0, 0), (0, 0)];
@@ -5524,7 +5532,7 @@ fn impact_with_parry(
     let mut caused = 0;
     for &(h, ap) in &hits {
         if h <= 0 || next.alive[ti] <= 0 { continue; }
-        let def = ctx_of(ut, next, ti);
+        let def = ctx_of_melee(ut, next, ti, rules_epoch);
         let r = crate::dice::impact_saves_with_tray(h, ap, &def, &ut.name, charge, tray);
         // MEL-10r (`EPOCH_73_V36`) — Impact wounds Regeneration cancels are not TAKEN.
         caused += if tally_post_regen { r.wounds } else { r.caused };
@@ -5593,14 +5601,14 @@ fn impact_phase(
     };
     let tally_post_regen = rule_on(rules_epoch, EPOCH_73_V36);
     if parry_dice > 0 {
-        return impact_with_parry(next, ti, us, ut, pools, parry_dice, Some((charge_from_in, exact)), tray, shot, tally_post_regen);
+        return impact_with_parry(next, ti, us, ut, pools, parry_dice, Some((charge_from_in, exact)), tray, shot, tally_post_regen, rules_epoch);
     }
     let mut caused = 0;
     for (dice, ap) in pools {
         if dice <= 0 || next.alive[ti] <= 0 {
             continue; // :6304 — nothing left to hit, no dice
         }
-        let def = ctx_of(ut, next, ti);
+        let def = ctx_of_melee(ut, next, ti, rules_epoch);
         let r = crate::dice::resolve_impact_pool_at(
             dice, ap, &us.name, &def, &ut.name, Some((charge_from_in, exact)), tray,
         );

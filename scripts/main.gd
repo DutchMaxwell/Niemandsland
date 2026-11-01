@@ -8229,6 +8229,13 @@ func _solo_charge_leg_dist_in(charging: bool, charge_from_in: float) -> float:
 	return 0.0
 
 
+## SHO-17 (rules 3.6): the Guarded family's charge-leg gate — 6" from EPOCH_73_V36, over 9" below.
+func _solo_guarded_charge_gate() -> float:
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		return AiCombatMath.CHARGE_LONG_RANGE_IN
+	return AiCombatMath.LONG_RANGE_IN
+
+
 ## Rules 3.6 (EPOCH_73_V36) — one Parry event per strike: roll min(X * carrier models,
 ## hits) dice after every hit roll, then each 6+ cancels the highest-worth hit (AP plus
 ## the on-6 bonus). Only counts shrink; pass 2 keeps its own order.
@@ -8267,15 +8274,17 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 	_solo_log_armor(defender)   # Armor(X) "counts as Defense X+" (wave 5) — folded into _solo_defense_vs
 	var defense: int = _solo_defense_vs(defender, AiCombatMath.HIT_SOURCE_MELEE)
 	_solo_log_defense_parts(defender, AiCombatMath.HIT_SOURCE_MELEE, defense, true)   # NML-932: each part by name
-	# Guarded / Versatile Defense's def-half: charged from over 9" away → +1 Defense for this melee's
-	# saves. Fires where the charge distance is KNOWN (AI charges pass their pre-charge gap); the
-	# human's manual charge distance is untracked (charge_from_in stays 0), the Versatile precedent.
+	# Guarded / Versatile Defense's def-half: charged from over the gate away → +1 Defense for this
+	# melee's saves (SHO-17: the shared 6" charge gate from EPOCH_73_V36, the old over-9" below it).
+	# Fires where the charge distance is KNOWN (AI charges pass their pre-charge gap); the human's
+	# manual charge distance is untracked (charge_from_in stays 0), the Versatile precedent.
 	var m_over9 := _solo_over9_defense_rule(defender)
-	if charging and not m_over9.is_empty() and charge_from_in > AiCombatMath.LONG_RANGE_IN:
+	var m_gate: float = _solo_guarded_charge_gate()
+	if charging and not m_over9.is_empty() and charge_from_in > m_gate:
 		defense = AiCombatMath.guarded_defense(defense, true)
 		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.COMBAT, "%s (%s): charged from over 9\" — +1 Defense (saves on %d+)%s" % [
-				defender.get_name(), m_over9, AiCombatMath.shown_target(defense),
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s (%s): charged from over %d\" — +1 Defense (saves on %d+)%s" % [
+				defender.get_name(), m_over9, int(m_gate), AiCombatMath.shown_target(defense),
 				_solo_most_models_note(defender, m_over9)], true)
 	var mod_info: Dictionary = _solo_hit_mod_info(striker, defender, _solo_charge_leg_dist_in(charging, charge_from_in), true, charging)
 	# Wave-4 Unpredictable Fighter (Mummified, melee-only) and the generic Unpredictable ("when
@@ -8439,7 +8448,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 				td_pick = await _solo_takedown_pick(striker, defender, str(profile.get("name", "?")), true)
 				if not td_pick.is_empty():
 					td_ctx = _solo_takedown_context(striker, td_pick, 0.0, true,
-						charging and charge_from_in > AiCombatMath.LONG_RANGE_IN)
+						charging and charge_from_in > _solo_guarded_charge_gate())
 					p_mod = td_ctx["mod"] as Dictionary
 					p_defense = int(td_ctx["defense"])
 			var strike_unit: GameUnit = defender if td_pick.is_empty() else (td_pick["unit"] as GameUnit)
@@ -8755,8 +8764,16 @@ func _solo_charge_impact(charger: GameUnit, defender: GameUnit, human_defends: b
 	if counter_models > 0 and battle_log != null and (x + hx) * models > 0:
 		_log_rule_event(BattleLog.Category.COMBAT, "Counter: -%d Impact dice (%s)" % [
 			counter_models, charger.get_name()], true)
+	var impact_rule := _solo_over9_defense_rule(defender)
+	var impact_gate: float = _solo_guarded_charge_gate()
+	var impact_bonus: bool = not impact_rule.is_empty() and charge_from_in > impact_gate
 	var impact_defense: int = AiCombatMath.guarded_defense(_solo_defense_vs(defender, AiCombatMath.HIT_SOURCE_MELEE),
-		not _solo_over9_defense_rule(defender).is_empty() and charge_from_in > AiCombatMath.LONG_RANGE_IN)
+		impact_bonus)
+	# SHO-17 (rules 3.6) — rules-must-log: the gate names the rule and its band (73+ only).
+	if impact_bonus and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and battle_log != null:
+		_log_rule_event(BattleLog.Category.COMBAT, "%s (%s): charged from over %d\" — +1 Defense on Impact (saves on %d+)%s" % [
+			defender.get_name(), impact_rule, int(impact_gate), AiCombatMath.shown_target(impact_defense),
+			_solo_most_models_note(defender, impact_rule)], true)
 	var caused: int = 0
 	for pool in [{"label": "Impact", "rating": x, "dice": dice, "ap": 0},
 			{"label": "Heavy Impact", "rating": hx, "dice": heavy_dice, "ap": heavy_ap}]:
