@@ -1004,6 +1004,15 @@
     "rating": "X"
    }
   },
+  "Pierce": {
+   "primitive": "Pierce",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "ap_bonus": 1,
+    "condition": "over_half_range"
+   }
+  },
   "Piercing Charge": {
    "primitive": "Piercing Assault",
    "rated": false,
