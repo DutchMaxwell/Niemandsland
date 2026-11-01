@@ -6830,7 +6830,7 @@ static func target_range_penalty_in(target: GameUnit) -> float:
 static func ranged_shroud_spec(target: GameUnit) -> Dictionary:
 	if target == null:
 		return {}
-	if AiEv.rule_on_all_models(target, "Ranged Shrouding"):
+	if AiEv.most_models_family_on(target, "Ranged Shrouding"):
 		return {"name": "Ranged Shrouding",
 			"range_penalty_in": RulesRegistry.unit_param(target, "Ranged Shrouding", "range_penalty_in", AiCombatMath.SHROUD_RANGE_PENALTY_IN),
 			"floor_in": RulesRegistry.unit_param(target, "Ranged Shrouding", "floor_in", AiCombatMath.SHROUD_FLOOR_IN)}
@@ -6877,7 +6877,7 @@ static func rapid_charge_reach_bonus_in(unit: GameUnit, target: GameUnit) -> flo
 static func melee_shroud_charge_in(rush_in: float, target: GameUnit) -> float:
 	if target == null:
 		return rush_in
-	if AiEv.rule_on_all_models(target, "Melee Shrouding"):
+	if AiEv.most_models_family_on(target, "Melee Shrouding"):
 		return AiCombatMath.shrouded_reach(rush_in,
 			float(RulesRegistry.unit_param(target, "Melee Shrouding", "move_penalty_in", AiCombatMath.SHROUD_CHARGE_PENALTY_IN)),
 			float(RulesRegistry.unit_param(target, "Melee Shrouding", "floor_in", AiCombatMath.SHROUD_FLOOR_IN)))
