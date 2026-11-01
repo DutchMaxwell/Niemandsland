@@ -54,8 +54,11 @@ fn evasion_state(
     crate::io::state_from_json(&plain, &mut cache, &mut roster).expect("state")
 }
 
-fn live_evasion(host: &UnitStatic, st: &crate::state::State, epoch: u32) -> Ctx {
-    crate::sim::ctx_live(crate::sim::ctx_of(host, st, 0), std::slice::from_ref(host), st, 0, false, epoch)
+fn live_evasion(_host: &UnitStatic, st: &crate::state::State, epoch: u32) -> Ctx {
+    let mut reg = Registries::new(&repo_root());
+    let statics: Vec<UnitStatic> =
+        (0..st.units()).map(|i| UnitStatic::build_for(&mut reg, st.profile(i), epoch)).collect();
+    crate::sim::ctx_live(crate::sim::ctx_of(&statics[0], st, 0), &statics, st, 0, false, epoch)
 }
 
 // --- (a) 3 living models, 2 carry Dodge: still on. ---
