@@ -104,9 +104,9 @@ fn run_bearer(
 /// A seed whose FIRST assimilated face fails Quality 4 (asserted by the caller
 /// so the test is never blind to a tray change).
 fn failing_seed() -> i64 {
-    (0..200)
+    (0..200_i64)
         .find(|&s| Tray::seeded(s).roll(1)[0] < 4)
-        .expect("some seed fails Quality 4") as i64
+        .expect("some seed fails Quality 4")
 }
 
 fn moved_m(from: [f64; 3], to: [f64; 3]) -> f64 {
