@@ -333,6 +333,7 @@ static func ctx_for(unit: GameUnit, in_cover: bool = false, counter_models: int 
 		# so the snapshot ctx and this live ctx stay dict-identical (sim_parity_core_test).
 		"above_half_strength": not _below_half_live(unit),
 		"shaken_or_fatigued": unit.is_shaken or unit.is_fatigued,
+		"near_terrain": false,
 		"artillery": unit.has_special_rule("Artillery"),
 		# SHO-05 (rules 3.6): the Artillery shooter's own +1 needs a Hold and a target past
 		# `shooter_over_in`; both read off the entry below epoch 73 (0/false = over-9" alone).
@@ -871,7 +872,8 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 			int(def_ctx.get("defense", 4)), charging, dist_in, melee, {
 				"weapon_range_in": float(profile.get("range", 0)),
 				"above_half_strength": bool(def_ctx.get("above_half_strength", false)),
-				"shaken_or_fatigued": bool(def_ctx.get("shaken_or_fatigued", false))})
+				"shaken_or_fatigued": bool(def_ctx.get("shaken_or_fatigued", false)),
+				"near_terrain": bool(def_ctx.get("near_terrain", false))})
 	# SHO-10: a re-roll entry's target condition (stamped above, epoch 73 only) can shut the
 	# window; "" on every shipped entry keeps the old EV answer.
 	var bane := bool(profile.get("bane", false)) and bane_applies(profile,

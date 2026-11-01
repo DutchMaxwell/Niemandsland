@@ -1134,6 +1134,9 @@ static func _ctx_of(su: Dictionary, melee := false) -> Dictionary:
 	# snapshot `_below_half` already measures for morale.
 	ctx["above_half_strength"] = not _below_half(su)
 	ctx["shaken_or_fatigued"] = bool(su.get("shaken", false)) or bool(su.get("fatigued", false))
+	# Rules 3.6 (SHO-09b): the snapshot carries no board, so the EV is blind (0) — the same honest
+	# false the core's EV seams read; the live dice path stamps it from the terrain sampler.
+	ctx["near_terrain"] = false
 	# W-P1 parity: the flag rides the ctx — profile_ev hard-sets the natural-6
 	# target itself (the old quality=6 approximation still let modifiers move it).
 	# S1-02 (GF/AoF v3.5.1 p.10): a Shaken unit strikes back counting as fatigued.
