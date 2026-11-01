@@ -3428,6 +3428,46 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
     if melee && rule_on(rules_epoch, EPOCH_73_V36) {
         c.guarded_charge_over_in = crate::combat::CHARGE_LONG_RANGE_IN;
     }
+    // Rules 3.6 (row W1.4b) — the Evasive and Dodge stamps read their
+    // most-models majority from the LIVE living models: the static stamp was
+    // built from the profile's full model count, so a unit that loses carriers
+    // kept the rule. From `EPOCH_73_V36` a live majority that says OFF clears
+    // the stamp; a live majority that still holds leaves the static value
+    // untouched, and the Boost alias leg keeps Evasive on by itself. Below the
+    // gate the helper answers None and nothing changes.
+    if rule_on(rules_epoch, EPOCH_73_V36) {
+        // A synthetic fixture may carry a shorter profile table than the roster
+        // (no Profile to read): keep the static stamp there.
+        let host = state.roster.profile.get(i).and_then(|&pi| state.profiles.list.get(pi));
+        let heroes: Vec<(&crate::state::Profile, i64)> = state.attached[i]
+            .iter()
+            .filter(|&&h| state.alive[h] > 0)
+            .filter_map(|&h| {
+                let pi = *state.roster.profile.get(h)?;
+                state.profiles.list.get(pi).map(|p| (p, state.alive[h]))
+            })
+            .collect();
+        if let Some(host) = host {
+            // Only a stamp the profile's own rules produced is cleared: a
+            // synthetic fixture may force the flag on a profile that carries
+            // no such rule, and that stamp is not ours to touch.
+            if crate::rules::has_special_rule(&host.special_rules, "Dodge")
+                && crate::unit::evasion_rule_live(
+                    host, state.alive[i], &heroes, "Dodge", rules_epoch,
+                ) == Some(false)
+            {
+                c.dodge = false;
+            }
+            if crate::rules::has_special_rule(&host.special_rules, "Evasive")
+                && !c.evasive_alias
+                && crate::unit::evasion_rule_live(
+                    host, state.alive[i], &heroes, "Evasive", rules_epoch,
+                ) == Some(false)
+            {
+                c.evasive = false;
+            }
+        }
+    }
     c.hit_mod = mods::sum(state, i, mods::Role::AttackerOwn, melee, |r| r.hit_mod);
     c.vs_hit_mod = mods::sum(state, i, mods::Role::VsTarget, melee, |r| r.hit_mod);
     // Wave 4 follow-up (port-vengeance) — "friendly units get +X to hit rolls
