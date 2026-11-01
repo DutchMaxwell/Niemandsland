@@ -2656,7 +2656,12 @@ fn regen_targets(
             let Some(e) = map.lookup(&p.faction_folder, &n) else {
                 continue;
             };
-            if e.primitive.as_deref() != Some("Regeneration") {
+            // DAT-17b: the flipped "Regeneration Buff" entry is a Utility Buff
+            // now; below `EPOCH_73_V36` the old-data replay leg still folds its
+            // 5+ onto the carrier, so every recorded corpus stays byte-exact.
+            let legacy_regen_buff =
+                n == "Regeneration Buff" && !rule_on(rules_epoch, EPOCH_73_V36);
+            if e.primitive.as_deref() != Some("Regeneration") && !legacy_regen_buff {
                 continue;
             }
             // Wave 3 (epoch 6): "Warding" is Angelic Blessing/Knightborn's
@@ -2676,7 +2681,11 @@ fn regen_targets(
             if e.param_b("all_models") && !regen_family_on(p, &n, rules_epoch) {
                 continue;
             }
-            let normal = e.param_i("ignore_target", 0);
+            let normal = if legacy_regen_buff {
+                REGENERATION_TARGET
+            } else {
+                e.param_i("ignore_target", 0)
+            };
             // MOR-17a: the shared names read their 3.6 spell target (2+) from
             // their own key; below 73 the entry's recorded 4+ stands.
             let gated = matches!(
@@ -4682,6 +4691,12 @@ fn utility_buffs_of(reg: &mut Registries, p: &Profile, rules_epoch: u32, un: &mu
         // trace). The seam otherwise rode this row ungated at every epoch —
         // the gate is what pins "unchanged below 58".
         if n == "Precision Debuff" && !rule_on(rules_epoch, EPOCH_58_PRECISION_DEBUFF) {
+            continue;
+        }
+        // DAT-17b: the flipped "Regeneration Buff" entry is a Utility Buff that
+        // GRANTS Regeneration from `EPOCH_73_V36` on. Below the gate it read as
+        // the carrier's own Regeneration fold, so it stamps no utility-buff row.
+        if n == "Regeneration Buff" && !rule_on(rules_epoch, EPOCH_73_V36) {
             continue;
         }
         let vs_target = e.param_b("vs_target");

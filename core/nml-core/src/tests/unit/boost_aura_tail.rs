@@ -898,12 +898,17 @@ use super::*;
     }
 
     #[test]
-    fn regeneration_buff_reads_5_epoch_gated() {
+    fn regeneration_buff_folds_on_the_carrier_only_below_73() {
         let header = read_act_header(REGEN_FAMILY_HEADER).expect("header");
         assert_eq!(
             regen_pair_at(&header, "regen_buff", CURRENT_RULES_EPOCH),
+            (0, 0),
+            "DAT-17b: at 73 the entry is a Utility Buff grant, not the carrier's own roll"
+        );
+        assert_eq!(
+            regen_pair_at(&header, "regen_buff", crate::acts::EPOCH_72_PLAYTEST_RULES),
             (5, 5),
-            "table-faithful: the alias layer pays the carrier, the buff flow is unmodelled"
+            "below 73 the old-data replay leg still folds the 5 onto the carrier"
         );
         assert_eq!(regen_pair_at(&header, "regen_buff", 0), (0, 0), "epoch 0 replays legacy");
     }
