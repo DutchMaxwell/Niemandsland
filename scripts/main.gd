@@ -1617,6 +1617,9 @@ func _on_solo_human_activated(gu: GameUnit) -> void:
 			if _solo_hotseat_automatic():
 				await _solo_apply_mend(gu)
 			await _solo_apply_utility_buffs(gu)
+			# SHO-22b: the Precision Tag PLACEMENT is a once-per-game enemy pick ("during this model's
+			# activation"), auto-resolved for the human like the AI path does it (~line 1239).
+			_solo_apply_precision_tag(gu)
 			# Step 2.7b: the hotseat Breath Attack door (Automatic only) — a human bearer breathes on
 			# an enemy on its own tray.
 			if _solo_hotseat_automatic():
@@ -1644,6 +1647,7 @@ func _on_solo_human_activated(gu: GameUnit) -> void:
 	# once-per-activation Utility Buff (round-stamped, so a unit that already bought it at the
 	# attack door is untouched).
 	await _solo_apply_utility_buffs(gu)
+	_solo_apply_precision_tag(gu)
 	# Step 2.7a: the human Mend door (solo vs NACHTMAHR) — a human bearer heals a wounded Tough ally
 	# within 3" on its own tray, once per activation.
 	await _solo_apply_mend(gu)
@@ -12153,6 +12157,7 @@ func solo_begin_targeting(unit: GameUnit, melee: bool) -> void:
 	# human that moment is declaring the attack. Round-stamped inside, so the second door
 	# (_on_solo_human_activated, for a unit that never attacks) cannot apply it twice.
 	await _solo_apply_utility_buffs(unit)
+	_solo_apply_precision_tag(unit)
 	_solo_target_mode = {"unit": unit, "melee": melee}
 	if not melee and range_ring_controller != null and range_ring_controller.has_method("show_spell_preview"):
 		var weapons: Array = _solo_all_weapons(unit)
@@ -12207,6 +12212,7 @@ func solo_begin_auto(unit: GameUnit, verb: int) -> void:
 	if _hotseat_verb_refused(unit):
 		return
 	await _solo_apply_utility_buffs(unit)
+	_solo_apply_precision_tag(unit)
 	_solo_target_mode = {"unit": unit, "auto_verb": verb}
 	var bands: Dictionary = SoloController.move_bands_for_unit(unit, solo_controller.movement_range)
 	var band: float
@@ -22762,13 +22768,30 @@ func _solo_spend_piercing_tag(target: GameUnit) -> int:
 	return markers
 
 
+## The unit's "Utility Buff" entries that carry one display name. SHO-22b: every shipped map entry stamps
+## Precision Tag (and its Spotter/Target siblings) with the "Utility Buff" primitive, so the old
+## `unit_rules_of_primitive(member, "Precision Tag")` found nothing — this walks the same list the core
+## builds in `core/nml-core/src/unit.rs::utility_buffs_of`.
+func _solo_utility_buff_entries_named(member: GameUnit, rule_name: String) -> Array:
+	var out: Array = []
+	for e in RulesRegistry.unit_rules_of_primitive(member, "Utility Buff"):
+		var ed := e as Dictionary
+		if str(ed.get("name", "")) == rule_name:
+			out.append(ed)
+	return out
+
+
 ## Precision Tag (PRECISION_TEXT_2026-09-15 §4 — "Once per game, during this model's activation, pick one
 ## enemy unit within 24\" and in line of sight of it, and place X markers on it. When attacking, friendly
 ## units may remove markers from their target before rolling to hit to get +Y to hit rolls, where Y is the
-## number of removed markers."): the AI tags the TOUGHEST enemy (the _solo_apply_piercing_tag shape); the
-## next friendly volley spends every marker for +1 to hit each (see _solo_consume_tag_markers).
+## number of removed markers."): the bearer tags the TOUGHEST enemy (the _solo_apply_piercing_tag shape);
+## the next friendly volley spends every marker for +1 to hit each (see _solo_consume_tag_markers).
+## SHO-22b: reads the shipped "Utility Buff" entries (`_solo_utility_buff_entries_named`) and runs for both
+## sides — the core's `tray_precision_markers` places it at every epoch, so this is a table bug fix with NO
+## epoch gate. Rules 3.6 (EPOCH_73_V36) mirror SHO-22: X tokens stacked on one unit, or one token on each
+## of up to X units.
 func _solo_apply_precision_tag(unit: GameUnit) -> void:
-	if solo_controller == null or unit == null or not _solo_is_ai_unit(unit):
+	if opr_army_manager == null or unit == null:
 		return
 	var members: Array = [unit]
 	if unit.has_method("get_attached_heroes"):
@@ -22779,21 +22802,41 @@ func _solo_apply_precision_tag(unit: GameUnit) -> void:
 			continue
 		if bool(member.unit_properties.get("precision_tag_used", false)):
 			continue
-		for e in RulesRegistry.unit_rules_of_primitive(member, "Precision Tag"):
+		for e in _solo_utility_buff_entries_named(member, "Precision Tag"):
 			var ed := e as Dictionary
 			if bool(member.unit_properties.get("precision_tag_used", false)):
 				break
 			var sp: Dictionary = ed.get("params", {})
-			var tgt := _solo_utility_target(member, "enemy", float(sp.get("range_in", 24.0)), bool(sp.get("needs_los", true)))
+			var range_in := float(sp.get("range_in", 24.0))
+			var needs_los := bool(sp.get("needs_los", true))
+			var tgt := _solo_utility_target(member, "enemy", range_in, needs_los)
 			if tgt == null:
 				continue
 			member.unit_properties["precision_tag_used"] = true
-			var markers: int = maxi(int(ed.get("rating", 0)), 1)
-			tgt.unit_properties["tag_markers"] = int(tgt.unit_properties.get("tag_markers", 0)) + markers
-			_sync_unit_property(tgt, "tag_markers", int(tgt.unit_properties["tag_markers"]))   # NML-927: the count rides the wire
+			var rating: int = int(ed.get("rating", 0))
+			var markers: int = maxi(rating if rating > 0 else int(sp.get("markers", 1)), 1)
+			var v36_tag: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
+			var picks: Array = _solo_utility_targets(member, "enemy", range_in, needs_los, markers) if v36_tag else []
+			var spread: bool = picks.size() >= 2
+			if not spread:
+				picks = [tgt]
+			var per: int = 1 if spread else markers
+			for p in picks:
+				var pu := p as GameUnit
+				pu.unit_properties["tag_markers"] = int(pu.unit_properties.get("tag_markers", 0)) + per
+				_sync_unit_property(pu, "tag_markers", int(pu.unit_properties["tag_markers"]))   # NML-927: the count rides the wire
+			if v36_tag:
+				var placed := "1 token each, spread over %d units" % picks.size() if spread \
+					else "%d token%s, stacked on %s" % [markers, ("" if markers == 1 else "s"), tgt.get_name()]
+				if battle_log != null:
+					_log_rule_event(BattleLog.Category.COMBAT,
+						"Precision Tag: %s places %s — a friendly attack may spend one token for +1 to hit" % [
+						member.get_name(), placed], true)
+				_solo_rule_float(tgt, "Tagged +%d!" % per)
+				continue
 			if battle_log != null:
 				_log_rule_event(BattleLog.Category.COMBAT,
-					"Precision Tag: %s places %d marker%s on %s — friendly attackers may remove them for +1 to hit each" % [
+					"Precision Tag: %s places %d marker%s on %s — friendly attackers may remove markers for +1 to hit each" % [
 					member.get_name(), markers, ("" if markers == 1 else "s"), tgt.get_name()], true)
 			_solo_rule_float(tgt, "Tagged +%d!" % markers)
 
