@@ -75,9 +75,15 @@ func test_stealth_and_artillery_target_name_their_absence(timeout := 120000) -> 
 	# Stealth bites only over 9": far names -1, near names the absence.
 	assert_str(str(_main._solo_hit_mod_info(shooter, sneak, 14.0, false)["note"])).contains("Stealth -1")
 	assert_str(str(_main._solo_hit_mod_info(shooter, sneak, 6.0, false)["note"])).contains("Stealth: no -1")
-	# Shooting AT an Artillery piece: -2 over 9", named absence below.
+	# Shooting AT an Artillery piece: at 73 the -1 starts beyond 12" (unmoved, most models);
+	# below 73 the old -2 / 9" reading stays.
+	assert_str(str(_main._solo_hit_mod_info(shooter, gun2, 14.0, false)["note"])).contains("Artillery target -1 over 12")
+	assert_str(str(_main._solo_hit_mod_info(shooter, gun2, 6.0, false)["note"])).contains("Artillery target: no -1")
+	var epoch0: int = AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
 	assert_str(str(_main._solo_hit_mod_info(shooter, gun2, 14.0, false)["note"])).contains("Artillery target -2")
 	assert_str(str(_main._solo_hit_mod_info(shooter, gun2, 6.0, false)["note"])).contains("Artillery target: no -2")
+	AiActRecorder.rules_epoch = epoch0
 
 
 func test_hover_label_names_the_aircraft_reach_penalty(timeout := 120000) -> void:
