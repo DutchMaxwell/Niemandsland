@@ -8886,8 +8886,7 @@ func _solo_resolve_saves(striker: GameUnit, defender: GameUnit, weapon_name: Str
 		return 0
 	_vfx_saves_made = 0   # VFX #1: the save batches below add the saves they made
 	# Rules 3.6 (SHO-14): a Pierce save ignores the target's POSITIVE Defense modifiers.
-	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
-			and (profile.get("rules", []) as Array).has("Pierce"):
+	if AiCombatMath.pierce_ignores(profile):
 		var pierce_names: PackedStringArray = []
 		base_defense = _solo_pierce_defense(defender, melee, pierce_names)
 		if battle_log != null and not pierce_names.is_empty():

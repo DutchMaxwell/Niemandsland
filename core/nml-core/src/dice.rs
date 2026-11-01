@@ -393,7 +393,7 @@ fn shred_faces(faces: &[u8], reroll: &[u8], low: i64, target: i64) -> i64 {
 }
 
 /// Rules 3.6 (SHO-14) — `Pierce`: the save ignores POSITIVE Defense modifiers; Armor and negatives stay.
-fn pierce_ignores(p: &ShootProfile, epoch_ctx: &Ctx) -> bool {
+pub(crate) fn pierce_ignores(p: &ShootProfile, epoch_ctx: &Ctx) -> bool {
     rule_on(epoch_ctx.rules_epoch, EPOCH_73_V36) && p.rules.iter().any(|r| r.trim() == "Pierce")
 }
 
