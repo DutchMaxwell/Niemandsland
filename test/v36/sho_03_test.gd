@@ -81,6 +81,22 @@ func test_a_moved_quick_throw_bearer_waives_sight_without_holding_at_epoch_73() 
 		.override_failure_message("epoch 72 keeps the 3.5 waiver for every Indirect bearer").is_true()
 
 
+func test_a_moved_quick_throw_bearer_keeps_cover_and_the_sight_waiver_names_it() -> void:
+	var u := _unit("gf", "human_inquisition", ["Quick Throw"])
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	assert_bool(SoloController.indirect_ignores_los(u, false)) \
+		.override_failure_message("Quick Throw keeps the sight waiver for a moved bearer").is_true()
+	assert_bool(SoloController.indirect_ignores_cover(u, false)) \
+		.override_failure_message("Quick Throw does NOT waive cover: a moved bearer's target keeps it") \
+		.is_false()
+	assert_str(SoloController.indirect_lift_rule(u, "los_needs_hold")) \
+		.override_failure_message("the sight-waiver log names Quick Throw when it is the reason") \
+		.is_equal("Quick Throw")
+	var plain := _unit("gf", "human_inquisition", [])
+	assert_str(SoloController.indirect_lift_rule(plain, "los_needs_hold")) \
+		.override_failure_message("a plain Indirect bearer has no lift rule to name").is_equal("")
+
+
 func test_control_a_moved_plain_indirect_unit_still_needs_sight_at_epoch_73() -> void:
 	var u := _unit("gf", "human_inquisition", [])
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
