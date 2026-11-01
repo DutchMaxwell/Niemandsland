@@ -672,18 +672,44 @@ pub fn profile_ev(
         // (dice.rs) supplies non-zero values. The Wave-6 spell-hit net is
         // the one modifier it does fold (ai_ev.gd:493's `+ spell_mod`): the
         // bearer's own buff/debuff ±N, 0 on every ctx_of-built ctx.
-        let art_own = if att.artillery && dist_in > LONG_RANGE_IN {
+        // SHO-06e (rules 3.6): the shooter's +1 needs a Hold and a target past
+        // `artillery_shooter_over_in`; at epoch 72 both stamp off (false / 0.0) and the
+        // shared over-9" gate alone prices the old reading.
+        let art_gate_ok = !att.artillery_shooter_needs_hold || att.held;
+        let art_over_ok =
+            att.artillery_shooter_over_in <= 0.0 || dist_in > att.artillery_shooter_over_in;
+        let art_own = if att.artillery && dist_in > LONG_RANGE_IN && art_gate_ok && art_over_ok {
             att.artillery_shooter_hit_bonus.unwrap_or(ARTILLERY_SHOOTER_HIT_BONUS)
         } else {
             0
         };
+        // SHO-06e (rules 3.6): the target-side penalty is -1 past `artillery_target_over_in`,
+        // only while most models carry the rule and the unit has NOT moved this round (the
+        // old 9" leg stays below the gate, where the three fields are 0/false).
+        let v36_target_art = def.artillery_target_over_in > 0.0;
+        let target_art = if v36_target_art {
+            def.artillery_target_most_models && def.moved_round != def.round
+        } else {
+            def.artillery
+        };
+        let target_pen = if v36_target_art {
+            def.artillery_target_hit_penalty_v36.unwrap_or(1)
+        } else {
+            def.artillery_target_hit_penalty.unwrap_or(ARTILLERY_TARGET_HIT_PENALTY)
+        };
         let enemy_mod = shooting_hit_modifier(
-            dist_in, att.artillery, def.stealth, def.artillery, def.evasive, 0, 0, 0, 0.0,
+            dist_in, att.artillery, def.stealth,
+            if v36_target_art { false } else { target_art }, def.evasive, 0, 0, 0, 0.0,
             0,
-            def.artillery_target_hit_penalty.unwrap_or(ARTILLERY_TARGET_HIT_PENALTY),
+            target_pen,
         )
             // EPOCH_73_V36 — the volley's Aircraft -N, inside the same clamp.
             - def.aircraft_hit_penalty;
+        let enemy_mod = if v36_target_art && target_art && dist_in > def.artillery_target_over_in {
+            enemy_mod - target_pen
+        } else {
+            enemy_mod
+        };
         let own_mod = att.hit_mod + art_own;
         let mut shoot_mod = own_mod + enemy_mod;
         // EV/tray split (found by #489, caveat 4) — see the melee branch above.
