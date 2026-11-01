@@ -178,6 +178,13 @@ pub fn is_dangerous(t: i64) -> bool {
     t == T_DANGEROUS
 }
 
+/// `TerrainRules.is_unstable` (rules 3.6, EPOCH_73_V36) — terrain_rules.gd:93. Ruins only; the
+/// caller owns the move-length (6") and Flying checks.
+#[inline]
+pub fn is_unstable(t: i64) -> bool {
+    t == T_RUINS
+}
+
 /// `TerrainRules.is_impassable` — terrain_rules.gd:72.
 #[inline]
 pub fn is_impassable(t: i64) -> bool {

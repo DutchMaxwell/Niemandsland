@@ -502,6 +502,7 @@ fn build_call(&self, delta_world: V3, reach_in: f64, avoid_diff: bool, avoid_dan
             board_y_in: board[1],
             dangerous_debuff: dang_debuff,
             difficult_debuff: diff_debuff,
+            unstable_danger: rule_on(self.rules_epoch, EPOCH_73_V36),
             difficult_cap_in: if self.ignores_difficult {
                 None
             } else {
