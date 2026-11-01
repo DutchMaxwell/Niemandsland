@@ -50,8 +50,10 @@ func test_automatic_gives_both_human_armies_the_combat_entries(timeout := 120000
 	assert_bool(_main._engine_enemy(p2, p1)).is_true()
 	assert_bool(_main.solo_combat_available(p1)).is_true()
 	assert_bool(_main.solo_combat_available(p2)).is_true()
-	# The engine-executed MOVE verbs still need a controller without an AI side (step 2.4).
-	assert_bool(_main.solo_auto_available(p1)).is_false()
+	# OD 10 / Automodus 3.1 + 1.9: the engine-executed MOVE verbs go to the side holding the turn (P1
+	# opens the round), not to the other side.
+	assert_bool(_main.solo_auto_available(p1)).is_true()
+	assert_bool(_main.solo_auto_available(p2)).is_false()
 	# Offline the hover line follows the same predicate (its online disjunct is pinned by
 	# e2e_mp_los_line_test).
 	assert_bool(_main._solo_hover_enemy(p1, p2)).is_true()

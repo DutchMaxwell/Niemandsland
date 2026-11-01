@@ -6,6 +6,11 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 
 ## [Unreleased]
 
+### Changed
+- **Charge, Advance & Shoot and Rush are back in the radial, with a landing preview**: the enemies a
+  verb can reach light up, hovering one shows where every model will land and who can shoot, a click
+  executes; Rush goes to a table point. Also in co-op, Automatic online rooms and hotseat. (#1828)
+
 ### Fixed
 - **Lacerate no longer switches off Regeneration**: wounds from a Lacerate weapon or spell face the
   target's Regeneration or Self-Repair roll again; only rules that ignore Regeneration (Bane, Rending,

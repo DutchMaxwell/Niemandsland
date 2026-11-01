@@ -618,14 +618,14 @@ static func solo_combat_items(game_unit: GameUnit = null, auto_ok: bool = false)
 	# an engine-executed activation instead).
 	if auto_ok:
 		out.append(RadialMenuItem.new("solo_auto_charge", "Charge", "⚡", true,
-			"Charge: the engine moves the unit along a legal path into base contact and fights — pick the enemy"))
+			"Charge: the engine moves the unit along a legal path into base contact and fights — hover a lit enemy to see where every model lands, click it to go (a dimmed one is out of reach)"))
 		# The " (& Shoot)" note follows the label's own drop-the-parenthetical convention (see
 		# "Speed Feat (once per game)"): a crowded wedge shows "Advance", the tooltip always says
 		# "Advance & Shoot" in full.
 		out.append(RadialMenuItem.new("solo_auto_advance", "Advance (& Shoot)", "»→", true,
-			"Advance & Shoot: the engine advances toward the enemy (or steps back into range if already close) and fires — pick the enemy"))
+			"Advance & Shoot: the engine advances toward the enemy (or steps back into range if already close) and fires — hover a lit enemy to see where every model lands, click it to go"))
 		out.append(RadialMenuItem.new("solo_auto_rush", "Rush", "→→", true,
-			"Rush: the engine moves the unit its full Rush distance toward the enemy — pick the enemy"))
+			"Rush: the engine moves the unit up to its Rush distance toward a point — hover the table to see where every model ends, click to go"))
 	# Spell wave F2: a unit that fields a caster (itself or a joined hero) with tokens can cast —
 	# spell picker -> target -> boost -> automatic resolution.
 	if game_unit != null and _caster_member_of(game_unit) != null:
