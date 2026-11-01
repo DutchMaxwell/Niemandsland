@@ -74,7 +74,15 @@ func _assert_aura_channel(name: String, preserved: Dictionary = {}) -> void:
 			var channel_params := {"grants": name.trim_suffix(" Aura")}
 			if name == "Rapid Rush Aura":
 				channel_params["charge_mod"] = 0.0  # Same Rush-only grant in full-scale books.
-			if entry.get("primitive") != "Aura Channel" or entry.get("params", {}) != channel_params:
+			var params: Dictionary = entry.get("params", {})
+			var grant := str(params.get("grants", ""))
+			# A rated aura hands its rating to the grant ("Ravage Aura" -> "Ravage(+1)"), so the
+			# grant may carry a "(X)" suffix on top of the base name.
+			var grant_ok: bool = grant == channel_params["grants"] \
+				or grant.begins_with(str(channel_params["grants"]) + "(")
+			if name == "Rapid Rush Aura":
+				grant_ok = grant_ok and params.get("charge_mod") == channel_params["charge_mod"]
+			if entry.get("primitive") != "Aura Channel" or not grant_ok:
 				wrong.append("%s/%s" % [system, name])
 	assert_int(checked).is_greater(0)
 	assert_array(wrong).override_failure_message("missing Aura Channel metadata: %s" % str(wrong)).is_empty()
@@ -362,7 +370,8 @@ func test_committed_maps_carry_no_rule_texts() -> void:
 				for key in params:
 					var pv: Variant = params[key]
 					if key == "grants" and entry.get("primitive") == "Aura Channel":
-						assert_str(str(pv)).is_equal(str(rule_name).trim_suffix(" Aura"))
+						# A rated aura keeps its rating on the grant ("Ravage(+1)"); compare base names.
+						assert_str(RulesRegistry.base_rule_name(str(pv))).is_equal(str(rule_name).trim_suffix(" Aura"))
 						continue
 					# A carried grant that names a rule of the same section is a name, not prose
 					# (rules 3.6 "Enhanced <X>" names run past 24 characters).
