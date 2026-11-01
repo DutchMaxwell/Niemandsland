@@ -3593,6 +3593,40 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
             c.regen_target_spell
         };
     }
+    // Row W1.4b — the family's "most models" majority reads the LIVING models; below 73 unchanged.
+    if rule_on(rules_epoch, EPOCH_73_V36) {
+        if let Some(host) = state.profiles.list.get(state.roster.profile[i]) {
+            let heroes: Vec<_> = state.attached[i].iter().filter(|&&h| state.alive[h] > 0)
+                .filter_map(|&h| {
+                    let hpi = state.roster.profile[h];
+                    let hc = &statics[hpi].ctx;
+                    Some((state.profiles.list.get(hpi)?, state.alive[h], (hc.regen_target, hc.regen_target_spell)))
+                }).collect();
+            match crate::unit::regen_family_live(host, state.alive[i],
+                (c.regen_target, c.regen_target_spell), &heroes, rules_epoch) {
+                Some((target, spell)) => {
+                    c.regeneration = true;
+                    c.regen_target = fold_min(c.regen_target, target);
+                    c.regen_target_spell = fold_min(c.regen_target_spell, spell);
+                }
+                None if !grants || !(mods::granted(state, i, "Regeneration")
+                    || mods::granted(state, i, "Enhanced Self-Repair")
+                    || mods::granted(state, i, "Enhanced Cursed Undead")) => {
+                    let own = ["Resistance", "Medical Training", "Regeneration Buff",
+                        "Self-Repair Boost", "Cursed Undead Boost", "Plaguebound Boost",
+                        "Angelic Blessing Boost"].iter().any(|r| {
+                        crate::rules::has_special_rule(&host.special_rules, r)
+                            || host.item_grants.iter().any(|g| crate::rules::base_rule_name(g) == *r)
+                    });
+                    if !own && crate::unit::REGEN_MOST_MODELS.iter()
+                        .any(|n| crate::unit::regen_family_on(host, n, rules_epoch)) {
+                        c.regeneration = false;
+                    }
+                }
+                None => {}
+            }
+        }
+    }
     // WAVE 3 MARKS (`acts::rule_on`, frozen at `EPOCH_6_TABLE_RULES`): the two
     // enemy-side grant names the pre-attack pick already records on the marked
     // unit (main.gd:16534, `beneficiary: "attackers"`). `indirect_mark` is
