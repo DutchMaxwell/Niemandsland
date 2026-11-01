@@ -7662,7 +7662,7 @@ func _solo_terrain_sampler() -> Callable:
 func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: float, melee: bool,
 		charging: bool = false) -> Dictionary:
 	var own := 0   # SHO-08: the part of "mod" from the attacker's OWN rules (Unstoppable keeps it at 73)
-	var evasive: bool = _solo_rule_on_all_models(target, "Evasive")
+	var evasive: bool = _solo_rule_on_most_models(target, "Evasive")
 	if not evasive:
 		# Coverage wave (resolver audit): Evasive DATA aliases (Changebound Boost & kin — "enemies
 		# attacking them ALWAYS get -1", the ungated upgrade of the Stealth-family bases).
@@ -7716,7 +7716,7 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 			alias_pen = maxi(alias_pen, int(p2.get("hit_penalty", 0)))
 			alias_name = n
 	if melee:
-		var melee_evasion: bool = _solo_rule_on_all_models(target, "Melee Evasion")
+		var melee_evasion: bool = _solo_rule_on_most_models(target, "Melee Evasion")
 		var dodge_name := ""
 		if not melee_evasion:
 			for me_e in RulesRegistry.unit_rules_of_primitive(target, "Melee Evasion"):
@@ -14734,13 +14734,13 @@ func _solo_battleborn_recovery() -> void:
 ## plain-rule check; Steadfast is gated the wave-5 way (fires only where the unit's book fields it).
 ## Coverage wave: DATA aliases (Honor Code, …) resolve through the generic primitive layer.
 func _solo_round_start_recovery_rule(gu: GameUnit) -> String:
-	if _solo_rule_on_all_models(gu, "Battleborn"):
+	if _solo_rule_on_most_models(gu, "Battleborn"):
 		return "Battleborn"
-	if _solo_rule_on_all_models(gu, "Steadfast") and RulesRegistry.unit_rule_active(gu, "Steadfast"):
+	if _solo_rule_on_most_models(gu, "Steadfast") and RulesRegistry.unit_rule_active(gu, "Steadfast"):
 		return "Steadfast"
 	for e in RulesRegistry.unit_rules_of_primitive(gu, "Battleborn"):
 		var n := str((e as Dictionary)["name"])
-		if n != "Battleborn" and n != "Steadfast" and _solo_rule_on_all_models(gu, n):
+		if n != "Battleborn" and n != "Steadfast" and _solo_rule_on_most_models(gu, n):
 			return n
 	return ""
 

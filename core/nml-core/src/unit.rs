@@ -1729,10 +1729,11 @@ fn stealth_alias_of_excluding(reg: &mut Registries, p: &Profile, skip: &str) -> 
     (best_penalty, best_over_in, best_applies_charged)
 }
 
-/// Rules 3.6 (ruling D-MOST) — the Stealth-family names whose 3.6 text reads
-/// "most models" (the verified P1 list); every other alias keeps the
-/// all-models read. Empyrean Spirit is on that list too but rides row MOR-06.
-const STEALTH_MOST_MODELS: [&str; 4] = ["Stealth", "Changebound", "Machine-Fog", "Screened"];
+/// Rules 3.6 (ruling D-MOST) — the Stealth-family names whose 3.6 text reads "most models";
+/// every other alias keeps the all-models read. Empyrean Spirit and Grounded Evasion ride MOR-06.
+const STEALTH_MOST_MODELS: [&str; 6] = [
+    "Stealth", "Changebound", "Machine-Fog", "Screened", "Empyrean Spirit", "Grounded Evasion",
+];
 
 /// The Stealth-family quantifier: from `EPOCH_73_V36` a listed name holds when
 /// most models carry it (`p.model_count` = the host's models when the profile
@@ -1742,6 +1743,29 @@ fn stealth_family_on(p: &Profile, rule: &str, rules_epoch: u32) -> bool {
         return rule_on_most_models(p, p.model_count, rule, false);
     }
     rule_on_all_models(p, rule)
+}
+
+/// Row MOR-06 (D-MOST) — the names whose 3.6 text counts most models; their
+/// Boosts and data aliases keep the all-models read. GD twin: `AiEv.MOST_MODELS_MOR06`.
+const MOST_MODELS_MOR06: [&str; 18] = [
+    "Steadfast", "Battleborn", "Honor Code", "Vale Oath", "Enhanced Vale Oath", "Unmovable",
+    "Evasive", "Melee Evasion", "Melee Shrouding", "Ranged Shrouding",
+    "Precision Growth", "Piercing Frenzy", "Regenerative Strength", "Precision Frenzy",
+    "Fortified Growth", "Defensive Frenzy", "Piercing Growth", "Defensive Growth",
+];
+
+/// Most models for the names above from `EPOCH_73_V36`, else every model; a majority
+/// past a plain joined hero names itself on the trace. GD twin: `AiEv.most_models_family_on`.
+fn most_models_family_on(p: &Profile, rule: &str, rules_epoch: u32) -> bool {
+    if !rule_on(rules_epoch, crate::acts::EPOCH_73_V36) || !MOST_MODELS_MOR06.contains(&rule) {
+        return rule_on_all_models(p, rule);
+    }
+    let on = rule_on_most_models(p, p.model_count.max(1), rule, false);
+    if on && !rule_on_all_models(p, rule) {
+        trace_rule("v36-most", rule,
+            "most models carry it, so a joined hero without it does not switch it off");
+    }
+    on
 }
 
 /// Wave 4 (port-entrenched) — `stealth_alias_of_excluding` SPLIT by
@@ -1822,7 +1846,11 @@ fn battleborn_recover_target_of(reg: &mut Registries, p: &Profile, rules_epoch: 
         return 0;
     }
     let carried = |name: &str| {
-        has_special_rule(&p.special_rules, name) || has_special_rule(&p.item_grants, name)
+        if rule_on(rules_epoch, crate::acts::EPOCH_73_V36) && MOST_MODELS_MOR06.contains(&name) {
+            return rule_on_most_models(p, p.model_count.max(1), name, false);
+        }
+        (has_special_rule(&p.special_rules, name) || has_special_rule(&p.item_grants, name))
+            && p.attached_hero_rules.iter().all(|hr| has_special_rule(hr, name))
     };
     let mut best = 0u32;
     for name in ["Honor Code", "Vale Oath", "Enhanced Vale Oath", "Unmovable"] {
@@ -2316,8 +2344,8 @@ fn morale_rating_stamp(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> i
 
 /// `AiActRecorder._melee_shroud_params` act_recorder.gd:276-295 — the named rule
 /// first, then the DATA aliases of the two Shrouding primitives, in that order.
-fn melee_shroud_params(reg: &mut Registries, p: &Profile) -> Option<[f64; 2]> {
-    if rule_on_all_models(p, "Melee Shrouding") {
+fn melee_shroud_params(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Option<[f64; 2]> {
+    if most_models_family_on(p, "Melee Shrouding", rules_epoch) {
         let map = reg.rules_for(&p.game_system);
         let e = map.lookup(&p.faction_folder, "Melee Shrouding");
         return Some(match e {
@@ -2362,7 +2390,7 @@ fn ranged_shroud_params(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> 
         return rule_on_all_models(p, "Ranged Shrouding")
             .then_some([SHROUD_RANGE_PENALTY_IN, SHROUD_FLOOR_IN]);
     }
-    if rule_on_all_models(p, "Ranged Shrouding") {
+    if most_models_family_on(p, "Ranged Shrouding", rules_epoch) {
         let map = reg.rules_for(&p.game_system);
         let e = map.lookup(&p.faction_folder, "Ranged Shrouding");
         return Some(match e {
@@ -2507,7 +2535,7 @@ pub fn capture_reads_for_epoch(
         aircraft: unit_rule_active(reg, p, "Aircraft"),
         charge_no_difficult: has_special_rule(&p.special_rules, "Strider")
             || has_special_rule(&p.special_rules, "Flying"),
-        shroud: melee_shroud_params(reg, p),
+        shroud: melee_shroud_params(reg, p, rules_epoch),
     }
 }
 
@@ -3029,10 +3057,10 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         stationary_alias_penalty,
         stationary_alias_over_in,
         stationary_alias_name: if stationary_alias_penalty > 0 { "Entrenched" } else { "" },
-        evasive: rule_on_all_models(p, "Evasive") || !evasive_boost.is_empty(),
+        evasive: most_models_family_on(p, "Evasive", rules_epoch) || !evasive_boost.is_empty(),
         evasive_alias: !evasive_boost.is_empty(),
         evasive_alias_name: evasive_boost,
-        melee_evasion: rule_on_all_models(p, "Melee Evasion"),
+        melee_evasion: most_models_family_on(p, "Melee Evasion", rules_epoch),
         dodge: unit_rule_active(reg, p, "Dodge") && rule_on_most_models(p, p.model_count, "Dodge", false),
         fortified: rule_on_defence_family(p, "Fortified", rules_epoch)
             && fortified_aura_bearer_live(reg, p, rules_epoch),
@@ -5049,7 +5077,15 @@ pub struct GrowthRule {
 /// `state.growth_markers` is ONE counter per unit (see `sim::growth_bonus_
 /// of`): the training pool never carries two such rules on one bearer, so a
 /// unit with both would wrongly share one count — out of this block's scope.
+#[cfg(test)]
 fn growth_of(reg: &mut Registries, p: &Profile, un: &mut Vec<Unimplemented>) -> Vec<GrowthRule> {
+    growth_of_epoch(reg, p, 0, un)
+}
+
+/// MOR-06 — epoch-aware twin: from `EPOCH_73_V36` most models suffice, else every model must.
+fn growth_of_epoch(
+    reg: &mut Registries, p: &Profile, rules_epoch: u32, un: &mut Vec<Unimplemented>,
+) -> Vec<GrowthRule> {
     let mut out = Vec::new();
     let mut raws: Vec<&String> = p.special_rules.iter().collect();
     raws.extend(p.item_grants.iter());
@@ -5063,6 +5099,9 @@ fn growth_of(reg: &mut Registries, p: &Profile, un: &mut Vec<Unimplemented>) -> 
         seen.push(n.clone());
         let Some(e) = map.lookup(&p.faction_folder, &n) else { continue };
         if e.primitive.as_deref() != Some("Growth Markers") {
+            continue;
+        }
+        if !most_models_family_on(p, &n, rules_epoch) {
             continue;
         }
         let g = GrowthRule {
@@ -6781,8 +6820,10 @@ impl UnitStatic {
             spell_conduit_needs_steady: unit_param_b_or(
                 reg, p, "Spell Conduit", "requires_not_shaken", true,
             ),
-            battleborn_active: unit_rule_active(reg, p, "Battleborn"),
-            steadfast_active: unit_rule_active(reg, p, "Steadfast"),
+            battleborn_active: unit_rule_active(reg, p, "Battleborn")
+                && most_models_family_on(p, "Battleborn", rules_epoch),
+            steadfast_active: unit_rule_active(reg, p, "Steadfast")
+                && most_models_family_on(p, "Steadfast", rules_epoch),
             // Sweep H row Steadfast — the free-clear gate flag: the round-start
             // Shaken clear for Steadfast stays free only BELOW the FROZEN
             // `EPOCH_40_STEADFAST_ROLL`; from 40 the playout rolls the die
@@ -6917,7 +6958,7 @@ impl UnitStatic {
             retreating_strikes: retreating_strikes_of(reg, p, rules_epoch),
             ebr: ebr_of(reg, p, rules_epoch),
             teleport: teleport_of(reg, p, rules_epoch),
-            growth: growth_of(reg, p, &mut unimplemented),
+            growth: growth_of_epoch(reg, p, rules_epoch, &mut unimplemented),
             piercing_tags: piercing_tags_of(reg, p, rules_epoch),
             unimplemented,
         }
