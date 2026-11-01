@@ -5626,6 +5626,8 @@ func _solo_spend_once_mods(uu: GameUnit, roles: Array, melee: bool, keep_spell: 
 ## DAT-17a — the "Regeneration Buff" once-grant and its spell siblings carry
 ## `grants_rule: "Regeneration"`; base-name match, twin of the Rust `base_rule_is`.
 func _solo_is_regen_grant(rd: Dictionary) -> bool:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return false
 	var grants := str(rd.get("grants_rule", ""))
 	return str(rd.get("duration", "")) == "once" \
 			and grants.strip_edges().split("(")[0].strip_edges() == "Regeneration"
