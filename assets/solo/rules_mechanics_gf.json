@@ -1066,6 +1066,14 @@
     "once": true
    }
   },
+  "Ravage Aura": {
+   "primitive": "Aura Channel",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "grants": "Ravage(+1)"
+   }
+  },
   "Re-Deployment": {
    "primitive": "Re-Deployment",
    "rated": false,

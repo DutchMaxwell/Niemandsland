@@ -55,8 +55,12 @@ const SELF_REPAIR_TARGET := 6
 ## that a set of unit members (the unit + its attached Heroes) grant to the WHOLE unit via any "* Aura"
 ## they carry. The base keeps any qualifier ("Bane in Melee Aura" -> "Bane in Melee"). Pure; used by the
 ## import-time expander so every downstream rule check then sees the granted rule unit-wide.
+## From EPOCH_73_V36 a modelled "Aura Channel" hands its `params.grants` VERBATIM (a rated aura keeps
+## its rating: "Ravage Aura" -> "Ravage(+1)"); the strip-" Aura" read stays the fallback for unmodelled
+## entries, so below the epoch the expansion is byte-identical.
 static func aura_granted_rules(members: Array) -> Array:
 	var granted: Array = []
+	var v36: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
 	for m in members:
 		var gu := m as GameUnit
 		if gu == null:
@@ -65,6 +69,14 @@ static func aura_granted_rules(members: Array) -> Array:
 			var s := str(r).strip_edges()
 			if s.ends_with(" Aura"):
 				var base := s.trim_suffix(" Aura").strip_edges()
+				if v36:
+					var entry := RulesRegistry.lookup(RulesRegistry.system_of_unit(gu),
+						RulesRegistry.faction_of_unit(gu), s)
+					if str(entry.get("primitive", "")) == "Aura Channel":
+						var params: Dictionary = entry.get("params", {})
+						var carried := str(params.get("grants", "")).strip_edges()
+						if not carried.is_empty():
+							base = carried
 				if not base.is_empty() and not granted.has(base):
 					granted.append(base)
 	return granted
