@@ -341,6 +341,14 @@ static func ctx_for(unit: GameUnit, in_cover: bool = false, counter_models: int 
 			else float(RulesRegistry.unit_param(unit, "Artillery", "shooter_over_in", 0.0)),
 		"artillery_shooter_needs_hold": AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
 			and bool(RulesRegistry.unit_param(unit, "Artillery", "shooter_requires_hold", false)),
+		# SHO-06e (rules 3.6): the target-side Artillery keys SHO-06's dice leg reads; 0/0/false
+		# below epoch 73 keeps the old over-9" -2 leg.
+		"artillery_target_over_in": 0.0 if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 \
+			else float(RulesRegistry.unit_param(unit, "Artillery", "target_over_in", 0.0)),
+		"artillery_target_hit_penalty_v36": 0 if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 \
+			else int(RulesRegistry.unit_param(unit, "Artillery", "target_hit_penalty_v36", 1)),
+		"artillery_target_most_models": AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
+			and rule_on_most_models(unit, "Artillery"),
 		"held": held,
 		"furious": unit.has_special_rule("Furious"),
 		"fearless": rule_on_all_models(unit, "Fearless"),
@@ -783,10 +791,24 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 				or (art_over > 0.0 and dist_in <= art_over)):
 			art_bonus = 0
 		var art_own: int = art_bonus if (bool(att.get("artillery", false)) and dist_in > AiCombatMath.LONG_RANGE_IN) else 0
+		# SHO-06e (rules 3.6): the target-side Artillery penalty is -1 past `target_over_in`, only
+		# while most models carry the rule and the target has NOT moved this round (`held` is the
+		# same per-unit no-move stamp SHO-05 reads). Below 73 the keys stamp 0/0/false: old leg.
+		var art_target_over := float(def_ctx.get("artillery_target_over_in", 0.0))
+		var art_target_v36: bool = art_target_over > 0.0
+		var art_target_on: bool = bool(def_ctx.get("artillery", false))
+		if art_target_v36:
+			art_target_on = bool(def_ctx.get("artillery_target_most_models", false)) \
+				and bool(def_ctx.get("held", true))
+		var art_target_pen: int = int(def_ctx.get("artillery_target_hit_penalty_v36", 1))
+		var target_pen_arg: int = art_target_pen if art_target_v36 else AiCombatMath.ARTILLERY_TARGET_HIT_PENALTY
 		var enemy_mod := AiCombatMath.shooting_hit_modifier(dist_in,
 			bool(att.get("artillery", false)), bool(def_ctx.get("stealth", false)),
-			bool(def_ctx.get("artillery", false)), bool(def_ctx.get("evasive", false)), 0) \
+			art_target_on if not art_target_v36 else false, bool(def_ctx.get("evasive", false)),
+			0, target_pen_arg) \
 			- int(def_ctx.get("aircraft_hit_penalty", 0))   # rules 3.6 Aircraft -N, inside the clamp
+		if art_target_v36 and art_target_on and dist_in > art_target_over:
+			enemy_mod -= art_target_pen
 		var own_mod: int = spell_mod + art_own
 		var shoot_mod: int = own_mod + enemy_mod
 		# SHO-08e (EPOCH_73_V36): the Unstoppable split — the bearer's own net and the
