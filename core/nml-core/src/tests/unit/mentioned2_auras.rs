@@ -234,12 +234,13 @@ use super::*;
     }
 
     /// "Regeneration Buff" (aof/ossified_undead; gf/dark_elf_raiders and
-    /// gf/wormhole_daemons_of_plague field their own blocks): the
-    /// Regeneration-primitive alias folds its `ignore_target` 5 into BOTH
-    /// halves — (5, 5) at the current epoch, zeros without the rule.
+    /// gf/wormhole_daemons_of_plague field their own blocks): DAT-17b flipped
+    /// the entry to a Utility Buff grant at 73, so below the gate the old-data
+    /// replay leg still folds its `ignore_target` 5 into BOTH halves —
+    /// (5, 5) at 72, zeros without the rule.
     #[test]
-    fn a_regeneration_buff_folds_a_five_into_both_regen_targets_at_the_current_epoch() {
-        let e = crate::acts::CURRENT_RULES_EPOCH;
+    fn a_regeneration_buff_folds_a_five_into_both_regen_targets_below_73() {
+        let e = crate::acts::EPOCH_72_PLAYTEST_RULES;
         assert_eq!(
             regen_pair_at(&pin_header("aof", "ossified_undead", &["Regeneration Buff"]), "carrier", e),
             (5, 5),
