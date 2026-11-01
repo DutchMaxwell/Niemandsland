@@ -2233,7 +2233,17 @@ fn tray_piercing_tag(
             } else {
                 next.piercing_tag_used[bearer] = true;
             }
-            let v36_tag = rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) && t.name == "Piercing Tag";
+            let v36 = rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36);
+            if v36 && t.name == "Piercing Target" {
+                let (hit, _per) = tag_picks(statics, next, bearer, &probe, t.markers, true, seams);
+                for &u in &hit {
+                    next.piercing_tag_markers[u] += 1;
+                    next.piercing_tag_persistent[u] = true;
+                }
+                shot.log.push(target_place_line("Piercing Target", &statics[pb].name, statics, next, &hit, "+1 AP"));
+                continue;
+            }
+            let v36_tag = v36 && t.name == "Piercing Tag";
             let (hit, per) = tag_picks(statics, next, bearer, &probe, t.markers, v36_tag, seams);
             for &u in &hit {
                 next.piercing_tag_markers[u] += per;
@@ -2281,7 +2291,8 @@ fn piercing_tag_spend(next: &mut State, ti: usize, rules_epoch: u32) -> i64 {
     }
     let markers = next.piercing_tag_markers[ti].max(0);
     if rule_on(rules_epoch, EPOCH_67_MARKERS_BURSTS) && next.piercing_tag_persistent[ti] {
-        return markers;
+        // Rules 3.6: the Target's standing token is a flat +1, never +markers.
+        return if rule_on(rules_epoch, crate::acts::EPOCH_73_V36) { markers.min(1) } else { markers };
     }
     // Rules 3.6 (`EPOCH_73_V36`): a friendly attack spends ONE token for +1.
     let spent = if rule_on(rules_epoch, crate::acts::EPOCH_73_V36) { markers.min(1) } else { markers };
@@ -2309,6 +2320,30 @@ fn tag_place_line(name: &str, owner: &str, statics: &[UnitStatic], next: &State,
         ),
     };
     format!("{name}: {owner} places {placed} — a friendly attack may spend one token for {effect}")
+}
+
+/// One persistent Precision Target record on `u` (the rules 3.6 Target: flat +1 per marked unit).
+fn push_precision_target(next: &mut State, u: usize, hit_mod: i64, name: &str) {
+    next.buffs[u].push(mods::LiveMod {
+        hit_mod,
+        casting_mod: 0,
+        morale_mod: 0,
+        ap_mod: 0,
+        def_mod: 0,
+        defense_mod: 0,
+        move_mod: 0,
+        grants_rule: Rc::from(""),
+        scope: Rc::from(""),
+        attackers: true,
+        once: false,
+        name: Rc::from(name),
+    });
+}
+
+/// The rules 3.6 Target placement line: ONE standing token on each of up to X units, every tagged unit named.
+fn target_place_line(name: &str, owner: &str, statics: &[UnitStatic], next: &State, hit: &[usize], effect: &str) -> String {
+    let names: Vec<&str> = hit.iter().map(|&u| statics[next.roster.profile[u]].name.as_str()).collect();
+    format!("{name}: {owner} places 1 token on each of {} — a friendly attack gets {effect}", names.join(", "))
 }
 
 /// Wave 6 — the PRECISION MARKERS family's PLACEMENT half
@@ -2406,23 +2441,18 @@ fn tray_precision_markers(
                     // TARGET — the +X is a PERSISTENT record: every friendly
                     // attack against the marked unit folds it (both legs,
                     // `vs_hit_mod`), nothing is ever spent.
-                    next.buffs[ti].push(mods::LiveMod {
-                        hit_mod: b.markers,
-                        casting_mod: 0,
-                        morale_mod: 0,
-                        ap_mod: 0,
-                        def_mod: 0,
-                        defense_mod: 0,
-                        move_mod: 0,
-                        grants_rule: Rc::from(""),
-                        scope: Rc::from(""),
-                        attackers: true,
-                        once: false,
-                        name: Rc::from(b.name.as_str()),
+                    let v36 = rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36);
+                    let picks = if v36 { tag_picks(statics, next, bearer, &probe, b.markers, true, seams).0 } else { vec![ti] };
+                    let hit_mod = if v36 { 1 } else { b.markers };
+                    for &u in &picks {
+                        push_precision_target(next, u, hit_mod, &b.name);
+                    }
+                    shot.log.push(if v36 {
+                        target_place_line("Precision Target", &owner, statics, next, &picks, "+1 to hit")
+                    } else {
+                        format!("Precision Target: {} places {} marker{} on {} — friendly units get +{} to hit against it",
+                            owner, b.markers, if b.markers == 1 { "" } else { "s" }, tn, b.bonus)
                     });
-                    shot.log.push(format!(
-                        "Precision Target: {} places {} marker{} on {} — friendly units get +{} to hit against it",
-                        owner, b.markers, if b.markers == 1 { "" } else { "s" }, tn, b.bonus));
                 } else {
                     let v36 = rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36);
                     let (hit, per) = tag_picks(statics, next, bearer, &probe, b.markers, v36, seams);
@@ -8748,6 +8778,10 @@ fn resolve_with(
     // END (main.gd:1127).
     if let Some((tray, shot)) = dice.as_mut() {
         tray_precision_markers(statics, &mut next, si, seams, tray, shot, false);
+        // Rules 3.6: the Spotter rolls BEFORE the bearer's own attacks.
+        if rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) {
+            tray_precision_markers(statics, &mut next, si, seams, tray, shot, true);
+        }
     }
 
     // --- RECKLESS PIERCING (main.gd:1072, the table's own slot between the
@@ -8984,9 +9018,13 @@ fn resolve_with(
                             if tag_ap > 0 {
                                 if next.piercing_tag_persistent[g.ti] {
                                     let tn = statics[next.roster.profile[g.ti]].name.clone();
-                                    shot.log.push(format!(
-                                        "Piercing Target: +AP({tag_ap}) stands while {tn} lives"
-                                    ));
+                                    if rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) {
+                                        shot.log.push(format!("Piercing Target: +1 (Target) stands while {tn} lives"));
+                                    } else {
+                                        shot.log.push(format!(
+                                            "Piercing Target: +AP({tag_ap}) stands while {tn} lives"
+                                        ));
+                                    }
                                 } else if rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) {
                                     let left = next.piercing_tag_markers[g.ti];
                                     shot.log.push(format!("Piercing Tag: one token spent — +1 AP on this volley ({left} left)"));
@@ -9468,7 +9506,9 @@ fn resolve_with(
     // marker lands for the NEXT friendly attack) — tray path only, see
     // `tray_precision_markers`; the 4+ is a real tray draw.
     if let Some((tray, shot)) = dice.as_mut() {
-        tray_precision_markers(statics, &mut next, si, seams, tray, shot, true);
+        if !rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) {
+            tray_precision_markers(statics, &mut next, si, seams, tray, shot, true);
+        }
     }
 
     // --- shaken recovery (battle_sim.gd:648-650) ---
