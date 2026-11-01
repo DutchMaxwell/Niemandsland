@@ -3462,6 +3462,46 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
             }
         }
     }
+    // Rules 3.6 (row W1.4b) — the Evasive and Dodge stamps read their
+    // most-models majority from the LIVE living models: the static stamp was
+    // built from the profile's full model count, so a unit that loses carriers
+    // kept the rule. From `EPOCH_73_V36` a live majority that says OFF clears
+    // the stamp; a live majority that still holds leaves the static value
+    // untouched, and the Boost alias leg keeps Evasive on by itself. Below the
+    // gate the helper answers None and nothing changes.
+    if rule_on(rules_epoch, EPOCH_73_V36) {
+        // A synthetic fixture may carry a shorter profile table than the roster
+        // (no Profile to read): keep the static stamp there.
+        let host = state.roster.profile.get(i).and_then(|&pi| state.profiles.list.get(pi));
+        let heroes: Vec<(&crate::state::Profile, i64)> = state.attached[i]
+            .iter()
+            .filter(|&&h| state.alive[h] > 0)
+            .filter_map(|&h| {
+                let pi = *state.roster.profile.get(h)?;
+                state.profiles.list.get(pi).map(|p| (p, state.alive[h]))
+            })
+            .collect();
+        if let Some(host) = host {
+            // Only a stamp the profile's own rules produced is cleared: a
+            // synthetic fixture may force the flag on a profile that carries
+            // no such rule, and that stamp is not ours to touch.
+            if crate::rules::has_special_rule(&host.special_rules, "Dodge")
+                && crate::unit::evasion_rule_live(
+                    host, state.alive[i], &heroes, "Dodge", rules_epoch,
+                ) == Some(false)
+            {
+                c.dodge = false;
+            }
+            if crate::rules::has_special_rule(&host.special_rules, "Evasive")
+                && !c.evasive_alias
+                && crate::unit::evasion_rule_live(
+                    host, state.alive[i], &heroes, "Evasive", rules_epoch,
+                ) == Some(false)
+            {
+                c.evasive = false;
+            }
+        }
+    }
     c.hit_mod = mods::sum(state, i, mods::Role::AttackerOwn, melee, |r| r.hit_mod);
     c.vs_hit_mod = mods::sum(state, i, mods::Role::VsTarget, melee, |r| r.hit_mod);
     // Wave 4 follow-up (port-vengeance) — "friendly units get +X to hit rolls
@@ -3626,6 +3666,40 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
         } else {
             c.regen_target_spell
         };
+    }
+    // Row W1.4b — the family's "most models" majority reads the LIVING models; below 73 unchanged.
+    if rule_on(rules_epoch, EPOCH_73_V36) {
+        if let Some(host) = state.profiles.list.get(state.roster.profile[i]) {
+            let heroes: Vec<_> = state.attached[i].iter().filter(|&&h| state.alive[h] > 0)
+                .filter_map(|&h| {
+                    let hpi = state.roster.profile[h];
+                    let hc = &statics[hpi].ctx;
+                    Some((state.profiles.list.get(hpi)?, state.alive[h], (hc.regen_target, hc.regen_target_spell)))
+                }).collect();
+            match crate::unit::regen_family_live(host, state.alive[i],
+                (c.regen_target, c.regen_target_spell), &heroes, rules_epoch) {
+                Some((target, spell)) => {
+                    c.regeneration = true;
+                    c.regen_target = fold_min(c.regen_target, target);
+                    c.regen_target_spell = fold_min(c.regen_target_spell, spell);
+                }
+                None if !grants || !(mods::granted(state, i, "Regeneration")
+                    || mods::granted(state, i, "Enhanced Self-Repair")
+                    || mods::granted(state, i, "Enhanced Cursed Undead")) => {
+                    let own = ["Resistance", "Medical Training", "Regeneration Buff",
+                        "Self-Repair Boost", "Cursed Undead Boost", "Plaguebound Boost",
+                        "Angelic Blessing Boost"].iter().any(|r| {
+                        crate::rules::has_special_rule(&host.special_rules, r)
+                            || host.item_grants.iter().any(|g| crate::rules::base_rule_name(g) == *r)
+                    });
+                    if !own && crate::unit::REGEN_MOST_MODELS.iter()
+                        .any(|n| crate::unit::regen_family_on(host, n, rules_epoch)) {
+                        c.regeneration = false;
+                    }
+                }
+                None => {}
+            }
+        }
     }
     // WAVE 3 MARKS (`acts::rule_on`, frozen at `EPOCH_6_TABLE_RULES`): the two
     // enemy-side grant names the pre-attack pick already records on the marked
