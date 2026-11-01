@@ -738,13 +738,19 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 			target = 6
 		else:
 			target = AiCombatMath.thrust_to_hit(quality, charging and bool(profile.get("thrust", false)))
-			var melee_mod := AiCombatMath.melee_hit_modifier(bool(def_ctx.get("evasive", false)),
-				bool(def_ctx.get("melee_evasion", false))) + spell_mod
+			var enemy_mod := AiCombatMath.melee_hit_modifier(bool(def_ctx.get("evasive", false)),
+				bool(def_ctx.get("melee_evasion", false)))
+			var melee_mod := enemy_mod + spell_mod
 			# Unstoppable (GF v3.5.1 p.15, head wave 1): the dice clamp the composed situational
 			# modifier at 0 BEFORE weapon-own bonuses (Precise/Versatile) — main.gd:5946/9712.
 			# The EV judge never knew, so it under-valued Unstoppable strikes into Evasive targets.
-			if bool(profile.get("unstoppable", false)) and melee_mod < 0:
-				melee_mod = 0
+			# SHO-08e (EPOCH_73_V36): the Unstoppable split — the bearer's own net (spell_mod)
+			# stays, only the enemy-side minus is clamped. Below the gate: the old single clamp.
+			if bool(profile.get("unstoppable", false)):
+				if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+					melee_mod = spell_mod + maxi(enemy_mod, 0)
+				elif melee_mod < 0:
+					melee_mod = 0
 			target = target - melee_mod
 	else:
 		target = AiCombatMath.reliable_quality(quality, bool(profile.get("reliable", false)))
@@ -756,12 +762,20 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 				(bool(att.get("artillery_shooter_needs_hold", false)) and not bool(att.get("held", true)))
 				or (art_over > 0.0 and dist_in <= art_over)):
 			art_bonus = 0
-		var shoot_mod := AiCombatMath.shooting_hit_modifier(dist_in,
+		var art_own: int = art_bonus if (bool(att.get("artillery", false)) and dist_in > AiCombatMath.LONG_RANGE_IN) else 0
+		var enemy_mod := AiCombatMath.shooting_hit_modifier(dist_in,
 			bool(att.get("artillery", false)), bool(def_ctx.get("stealth", false)),
-			bool(def_ctx.get("artillery", false)), bool(def_ctx.get("evasive", false)), art_bonus) + spell_mod \
+			bool(def_ctx.get("artillery", false)), bool(def_ctx.get("evasive", false)), 0) \
 			- int(def_ctx.get("aircraft_hit_penalty", 0))   # rules 3.6 Aircraft -N, inside the clamp
-		if bool(profile.get("unstoppable", false)) and shoot_mod < 0:
-			shoot_mod = 0   # same clamp as the melee side; Fatigue stays above it (not a modifier)
+		var own_mod: int = spell_mod + art_own
+		var shoot_mod: int = own_mod + enemy_mod
+		# SHO-08e (EPOCH_73_V36): the Unstoppable split — the bearer's own net and the
+		# Artillery shooter's own +1 stay, only the enemy-side minus is clamped.
+		if bool(profile.get("unstoppable", false)):
+			if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+				shoot_mod = own_mod + maxi(enemy_mod, 0)
+			elif shoot_mod < 0:
+				shoot_mod = 0   # same clamp as the melee side; Fatigue stays above it (not a modifier)
 		target = target - shoot_mod
 	target_raw = target
 	target = AiCombatMath.modified_hit_target(target_raw, 0)
