@@ -6234,9 +6234,9 @@
    "Ravage Aura": {
     "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3",
+    "book_version": "3.6.0",
     "params": {
-     "grants": "Ravage"
+     "grants": "Ravage(+1)"
     }
    },
    "Rending Mark": {
