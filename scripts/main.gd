@@ -14174,9 +14174,18 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 		# #182 — rules-must-log: when the volley is only legal BECAUSE of Indirect, say so
 		# (the old line read "0/N with line of sight" over a perfectly legal barrage).
 		if log_indirect and _solo_sighted_count(attacker, target, rng_in) <= 0:
-			battle_log.log_event(BattleLog.Category.COMBAT,
-				"Indirect: %s targets %s without line of sight (GF v3.5.1)" % [
-				attacker.get_name(), target.get_name()], true)
+			# Rules 3.6 (SHO-03): name the rule that lifted the Hold need (Quick Throw) when the
+			# volley is blind without a Hold; a held or plain bearer keeps the plain line.
+			var lift_rule: String = "" if _solo_unit_held(attacker) \
+				else SoloController.indirect_lift_rule(attacker, "los_needs_hold")
+			if lift_rule.is_empty():
+				battle_log.log_event(BattleLog.Category.COMBAT,
+					"Indirect: %s targets %s without line of sight (GF v3.5.1)" % [
+					attacker.get_name(), target.get_name()], true)
+			else:
+				battle_log.log_event(BattleLog.Category.COMBAT,
+					"%s: %s targets %s without line of sight — no Hold needed" % [
+					lift_rule, attacker.get_name(), target.get_name()], true)
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s: %d/%d model%s with line of sight + range" % [
 			attacker.get_name(), _solo_volley_sighted(attacker, target), total, ("" if total == 1 else "s")], true)
 	var fired_any := false   # round 7, finding 5: a volley that rolls NOTHING must say so, never end silently
