@@ -43,7 +43,8 @@ func _two_armies() -> Array:
 
 
 ## Press "Start Deployment": no flow, no NACHTMAHR line, P2 stays on its tray, the toast says what to do;
-## and no radial entry of either side names the AI or offers an engine move verb.
+## and no radial entry of either side names the AI or offers an engine move verb (OD 10: an Automatic
+## table offers those verbs without a tick, a leftover controller never does).
 func _assert_no_ai_behind(units: Array, path: String) -> void:
 	var log_before: int = _main.battle_log.entries().size()
 	await _main._on_solo_deploy_pressed()
@@ -63,7 +64,7 @@ func _assert_no_ai_behind(units: Array, path: String) -> void:
 	for u in units.slice(0, 2):
 		for it in RadialMenu.create_unit_menu(u, _main.solo_combat_available(u), _main.solo_auto_available(u)):
 			var line := "%s | %s | %s" % [it.id, it.label, it.tooltip]
-			assert_bool(ai_word.search(line) == null and not it.id.begins_with("solo_auto_")) \
+			assert_bool(ai_word.search(line) == null and (not it.id.begins_with("solo_auto_") or _main._solo_engine_automatic())) \
 				.override_failure_message("%s: P%d's radial names the AI without a tick: %s" % [
 					path, int((u as GameUnit).unit_properties["player_id"]), line]).is_true()
 
