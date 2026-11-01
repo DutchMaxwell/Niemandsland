@@ -5390,7 +5390,7 @@ func _solo_record_spell_mod(tu: GameUnit, spell_name: String, effect: Dictionary
 		"grants_rule": grants, "scope": str(effect.get("scope", "")),
 		"beneficiary": str(effect.get("beneficiary", "")), "duration": str(effect.get("duration", "round"))}
 	if _solo_is_regen_grant(rec):
-		rec["used"] = false
+		rec["used"] = bool(effect.get("used", false))
 	# #845 option (b): a vs-target Mark's record carries NO live overlay of its own — its
 	# grant is read target-aware by whoever attacks the marked unit. Only the Marks set this,
 	# so every existing spell record keeps its exact shape.
