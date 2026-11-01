@@ -1021,6 +1021,7 @@ mod tohit_shroud;
 mod v36_data;
 mod v36_data_rows;
 mod v36_dat_16b;
+mod v36_dat_17b;
 mod v36_melee;
 mod v36_melee_rows;
 mod v36_mor_05;

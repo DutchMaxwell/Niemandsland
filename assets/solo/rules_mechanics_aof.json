@@ -6452,11 +6452,15 @@
     }
    },
    "Regeneration Buff": {
-    "primitive": "Regeneration",
+    "primitive": "Utility Buff",
     "rated": false,
-    "book_version": "3.5.3",
+    "book_version": "3.6.0",
     "params": {
-     "ignore_target": 5
+     "grants_rule": "Regeneration",
+     "target": "friendly",
+     "max_targets": 1,
+     "range_in": 12,
+     "once": true
     }
    },
    "Reinforced": {
