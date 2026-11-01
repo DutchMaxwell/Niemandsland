@@ -22590,6 +22590,7 @@ func _solo_apply_mind_control(unit: GameUnit) -> void:
 	var members: Array = [unit]
 	if unit.has_method("get_attached_heroes"):
 		members = members + unit.get_attached_heroes()
+	var round_now: int = opr_army_manager.current_round if opr_army_manager != null else -1
 	for m in members:
 		var member := m as GameUnit
 		if member == null or member.get_alive_count() == 0:
@@ -22618,6 +22619,14 @@ func _solo_apply_mind_control(unit: GameUnit) -> void:
 					_log_rule_event(BattleLog.Category.COMBAT,
 						"%s: %s is FATIGUED (melee hits only on unmodified 6s)" % [n, tgt.get_name()], true)
 				continue
+			# MOR-18, rules 3.6: a unit is MOVED by Mind Control only once per round — the test
+			# above still ran and its Shaken stands, the displacement is skipped.
+			if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
+				and int(tgt.unit_properties.get("mind_control_moved_round", -1)) == round_now:
+				if battle_log != null:
+					battle_log.log_event(BattleLog.Category.MOVEMENT,
+						"%s: %s was already moved by Mind Control this round — it stays put" % [n, tgt.get_name()], true)
+				continue
 			# Displace away from the marker the target is nearest to (denial), else away from us.
 			var c := solo_controller.unit_centre(tgt)
 			var away := Vector2(c.x - solo_controller.unit_centre(member).x, c.z - solo_controller.unit_centre(member).z)
@@ -22625,6 +22634,8 @@ func _solo_apply_mind_control(unit: GameUnit) -> void:
 			if obj != SoloController.NO_OBJECTIVE:
 				away = Vector2(c.x - obj.x, c.z - obj.z)
 			var moved := solo_controller.forced_straight_move(tgt, away, float(sp.get("move_in", 6.0)))
+			if moved > 0.0 and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+				tgt.unit_properties["mind_control_moved_round"] = round_now
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.MOVEMENT,
 					"%s: %s fails the morale test — Shaken, moved %.0f\" in a straight line (away from the marker)" % [n, tgt.get_name(), moved], true)

@@ -1900,6 +1900,10 @@ pub(crate) fn tray_fatigue_debuff(
 /// as ONE rigid translate, the target's joined chain folded with it
 /// (`_moving_models` :5442). GATED `rule_on(rules_epoch,
 /// EPOCH_7_TABLE_RULES)`.
+///
+/// MOR-18 (`EPOCH_73_V36`): a unit is MOVED by Mind Control only once per
+/// round (`mind_control_moved_round`). A second bearer still forces the test
+/// and its Shaken stands; only the displacement is skipped, with its own line.
 pub(crate) fn tray_mind_control(
     statics: &[UnitStatic], next: &mut State, si: usize, seams: Seams,
     tray: &mut Tray, shot: &mut ShootResult, cover: Cover,
@@ -1919,6 +1923,14 @@ pub(crate) fn tray_mind_control(
             let owner = &statics[next.roster.profile[bearer]].name;
             if control_morale_passed(statics, next, ti,
                 ControlMoraleSource { owner, rule: &spec.name }, seams, tray, shot) { continue; }
+            // MOR-18, rules 3.6: the same unit is MOVED by Mind Control only
+            // once per round — the test above still ran and its Shaken stands.
+            if rule_on(seams.rules_epoch, EPOCH_73_V36) && next.mind_control_moved_round[ti] == next.round {
+                shot.log.push(format!(
+                    "{}: {} was already moved by Mind Control this round — it stays put",
+                    spec.name, statics[next.roster.profile[ti]].name));
+                continue;
+            }
             let from = geom::centre(&next.positions[ti]);
             let goal = nearest_uncontrolled_objective(next, next.player[bearer], next.player[ti], from)
                 .unwrap_or(geom::centre(&next.positions[bearer]));
@@ -1936,6 +1948,7 @@ pub(crate) fn tray_mind_control(
                     *p = [p[0] + (dir[0] * step_m) as f64, p[1], p[2] + (dir[1] * step_m) as f64];
                 }
             }
+            if rule_on(seams.rules_epoch, EPOCH_73_V36) { next.mind_control_moved_round[ti] = next.round; }
             if rule_on(seams.rules_epoch, EPOCH_65_MELEE_TRUTH) {
                 shot.log.push(format!("{}: {} fails the morale test — Shaken, moved {:.0}\" in a straight line (away from the marker)",
                     spec.name, statics[next.roster.profile[ti]].name, dist_in));
