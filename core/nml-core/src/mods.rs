@@ -87,6 +87,7 @@ pub enum Role {
     Ap,
     Defense,
     Speed,
+    RegenGrant,
 }
 
 /// `AiSpell.mods_for` ai_spell.gd:364-400, one record.
@@ -111,7 +112,21 @@ pub fn matches(r: &LiveMod, role: Role, melee: bool) -> bool {
         // `beneficiary: ""` (main.gd:16541) so the two readings cannot
         // diverge in practice; match the GDScript anyway.
         Role::Speed => r.move_mod != 0,
+        Role::RegenGrant => is_regen_grant(r),
     }
+}
+
+/// DAT-17a — the "Regeneration Buff" once-grant and its spell siblings carry
+/// `grants_rule: "Regeneration"`. The FIRST wounding exchange of the holder
+/// spends it; a zero-wound exchange leaves it in place (rules 3.6).
+pub fn is_regen_grant(r: &LiveMod) -> bool {
+    r.once && base_rule_is(&r.grants_rule, "Regeneration")
+}
+
+/// `is_regen_grant` as a `spend_once_except` keep predicate: the grant survives
+/// only while the holder took no wounds this exchange.
+pub fn keep_regen(r: &LiveMod, wounded: bool) -> bool {
+    is_regen_grant(r) && !wounded
 }
 
 /// The net of one role over `_solo_mods_of_chain` (main.gd:3812) — the unit's
