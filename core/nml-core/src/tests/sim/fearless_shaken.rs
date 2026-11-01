@@ -54,7 +54,7 @@
             s.roster = Rc::new(Roster { keys: s.roster.keys.clone(), index: HashMap::new(), profile: vec![0, 1, 1, 1] });
             let mut statics = statics.clone();
             statics[0].model_count = 4;
-            expected_melee_morale(&mut s, &statics, 0, 10, 2, 10, sm);
+            expected_melee_morale(&mut s, &statics, 0, 10, 2, 10, 0, sm);
             s.alive[0]
         };
         let routed = (1..=40).filter(|&r| alive_after(r, sm) == 0).count();

@@ -4957,6 +4957,14 @@ fn melee_loser(state: &State, si: usize, ti: usize, score_su: i64, score_tu: i64
 /// (`AiCombatMath.fear_adjusted_wounds`, main.gd:8106-8109/:10035-10038)
 /// always has. Bug fix, not a new knob: each side's own Fear rating lifts
 /// only ITS dealt tally for this comparison, never a wound actually applied.
+///
+/// MEL-10e (`EPOCH_73_V36`) — the estimate reads the same TAKEN tally the table
+/// does: each side's score is what its ENEMY took (the enemy's strikes plus the
+/// enemy's Fear), and `self_wounds` is what the charger's own move cost it. A tie
+/// tests nobody; below 73 the side that dealt fewer still loses and self-wounds
+/// are ignored. `self_wounds` is 0 on the expected-value path today (it rolls no
+/// Dangerous test); the term keeps the estimate and the table's twin in step.
+#[allow(clippy::too_many_arguments)]
 fn expected_melee_morale(
     state: &mut State,
     statics: &[UnitStatic],
@@ -4964,12 +4972,26 @@ fn expected_melee_morale(
     su_before: i64,
     ti: usize,
     tu_before: i64,
+    self_wounds: i64,
     seams: Seams,
 ) {
-    let dealt_by_su = tu_before - wounds_left(state, ti);
-    let dealt_by_tu = su_before - wounds_left(state, si);
-    let score_su = dealt_by_su + statics[state.roster.profile[si]].ctx.fear;
-    let score_tu = dealt_by_tu + statics[state.roster.profile[ti]].ctx.fear;
+    let taken_by_su = su_before - wounds_left(state, si);
+    let taken_by_tu = tu_before - wounds_left(state, ti);
+    let (score_su, score_tu) = if rule_on(seams.rules_epoch, EPOCH_73_V36) {
+        // 73: the loser TOOK more. Fear(X) rides the ENEMY's tally, and the
+        // charger's own charge-move wounds count as taken by it.
+        let su_taken = taken_by_su + self_wounds.max(0);
+        (
+            taken_by_tu + statics[state.roster.profile[si]].ctx.fear,
+            su_taken + statics[state.roster.profile[ti]].ctx.fear,
+        )
+    } else {
+        // Below 73: the side that dealt fewer loses; self-wounds never count.
+        (
+            taken_by_tu + statics[state.roster.profile[si]].ctx.fear,
+            taken_by_su + statics[state.roster.profile[ti]].ctx.fear,
+        )
+    };
     let Some(li) = melee_loser(state, si, ti, score_su, score_tu, seams) else { return };
     let ul = &statics[state.roster.profile[li]];
     if !morale_side_alive(state, li, seams) || !morale_fails_expected(state, statics, li, seams) {
@@ -9353,7 +9375,12 @@ fn resolve_with(
                             next.fatigued[ti] = true;
                         }
                     }
-                    expected_melee_morale(&mut next, statics, si, su_before, ti, tu_before, seams);
+                    // MEL-10e: the charger's own charge-move wounds are part of what
+                    // it TOOK. The expected-value path rolls no Dangerous test, so the
+                    // pre-move delta is 0 today; the term keeps this estimate's twin of
+                    // `tray_charge_with_self_wounds` in step.
+                    let self_wounds = (wounds_left(state, si) - su_before).max(0);
+                    expected_melee_morale(&mut next, statics, si, su_before, ti, tu_before, self_wounds, seams);
                 }
                 // Consolidation Moves (GF v3.5.1 p.9), seam-gated: one side
                 // wiped by the melee just resolved above (wounds or the
