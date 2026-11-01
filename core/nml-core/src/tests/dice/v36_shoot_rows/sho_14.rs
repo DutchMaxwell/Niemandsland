@@ -84,7 +84,7 @@ fn a_plain_weapon_keeps_its_cover_at_epoch_73() {
 fn pierce_keeps_armor_and_drops_shielded_at_epoch_73() {
     let armored = Ctx { defense: 3, shielded: true, ..at(EPOCH_73_V36) };
     let pierce = ShootProfile { name: "Pierce".into(), attacks: 6, range: 24, rules: vec!["Pierce".into()], ..Default::default() };
-    let plain = ShootProfile { name: "Plain".into(), ..pierce.clone() };
+    let plain = ShootProfile { name: "Plain".into(), rules: Vec::new(), ..pierce.clone() };
     let mut t1 = Tray::seeded(27);
     let out = resolve_shooting_with_tray(std::slice::from_ref(&pierce), &[0], &[6], &at(EPOCH_73_V36), &armored, 12.0, &mut t1);
     assert_eq!(save_target_of(&out), 3, "Armor(3) stands; Shielded +1 is ignored");
