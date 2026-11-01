@@ -55,7 +55,12 @@ fn stealth_state(
 }
 
 fn live_stealth(host: &UnitStatic, st: &crate::state::State, epoch: u32) -> Ctx {
-    crate::sim::ctx_live(crate::sim::ctx_of(host, st, 0), std::slice::from_ref(host), st, 0, false, epoch)
+    // `ctx_live` reads the whole statics table by roster index (the live regen fold
+    // looks at every joined hero), not just the host's row.
+    let mut reg = Registries::new(&repo_root());
+    let statics: Vec<UnitStatic> = st.profiles.list.iter()
+        .map(|p| UnitStatic::build_for(&mut reg, p, epoch)).collect();
+    crate::sim::ctx_live(crate::sim::ctx_of(host, st, 0), &statics, st, 0, false, epoch)
 }
 
 // --- (a) 3 living models, 2 carry Stealth: still on. ---
