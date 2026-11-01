@@ -211,6 +211,16 @@ fn below_half(state: &State, statics: &[UnitStatic], us: &UnitStatic, i: usize, 
     at_or_below_half(state.alive[i], us.model_count)
 }
 
+/// Rules 3.6 (SHO-09s): stamp the two TARGET-STATE facts the conditional-AP arms read.
+/// `below_half` needs `statics` and `seams`, so this runs at the volley/melee seams that already
+/// hold both; passing `seams` to every `ctx_of` caller would touch the whole lane for a knob only
+/// this stamp reads. Every field defaults to false, so an unstamped ctx keeps the old answer.
+pub(crate) fn with_cond_ap_state(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, seams: Seams) -> Ctx {
+    c.above_half_strength = !below_half(state, statics, &statics[state.roster.profile[i]], i, seams);
+    c.shaken_or_fatigued = state.shaken[i] || state.fatigued[i];
+    c
+}
+
 /// Inventory C12 — the hero-in-size reading applies: knob on, attachment seam on, a hero joined to `i`.
 #[inline]
 fn hero_size_on(state: &State, i: usize, seams: Seams) -> bool {
@@ -1233,7 +1243,7 @@ pub(crate) fn tray_strafing(
     // defender's live context, the members at their own Quality.
     let d = modifier_distance_in(next, si, target, seams);
     let ut = &statics[next.roster.profile[target]];
-    let mut def = with_modifier_sum(ctx_live(ctx_of(ut, next, target), statics, next, target, false, seams.rules_epoch), seams.rules_epoch);
+    let mut def = with_modifier_sum(with_cond_ap_state(ctx_live(ctx_of(ut, next, target), statics, next, target, false, seams.rules_epoch), statics, next, target, seams), seams.rules_epoch);
     // D-STEALTH — the strafe volley reads the defender's live context the
     // same way the table's `_solo_resolve_ai_volley` does (main.gd:3007), so
     // the def build carries the same terrain gate.
@@ -2803,7 +2813,7 @@ pub(crate) fn tray_retreating_strike(
     );
     if gap > RETREATING_STRIKE_REACH_IN { return; }
     let def_owner = statics[next.roster.profile[ti]].name.clone();
-    let def = with_modifier_sum(ctx_live(ctx_of(&statics[next.roster.profile[ti]], next, ti), statics, next, ti, true, seams.rules_epoch), seams.rules_epoch);
+    let def = with_modifier_sum(with_cond_ap_state(ctx_live(ctx_of(&statics[next.roster.profile[ti]], next, ti), statics, next, ti, true, seams.rules_epoch), statics, next, ti, seams), seams.rules_epoch);
     let mut bearers: Vec<usize> = vec![si];
     if seams.hero_attach { bearers.extend(next.attached[si].iter().copied()); }
     for bearer in bearers {
@@ -5185,7 +5195,7 @@ fn strike_phase(
         }
     }
     let ut = &statics[next.roster.profile[ti]];
-    let mut def = with_modifier_sum(ctx_live(ctx_of(ut, next, ti), statics, next, ti, true, seams.rules_epoch), seams.rules_epoch);
+    let mut def = with_modifier_sum(with_cond_ap_state(ctx_live(ctx_of(ut, next, ti), statics, next, ti, true, seams.rules_epoch), statics, next, ti, seams), seams.rules_epoch);
     // D-STEALTH — the def build's terrain gate (the melee leg consumes the
     // same closed alias the shooting fold does).
     stealth_alias_terrain_gate(statics, next, ti, cover, &mut def);
@@ -6842,7 +6852,7 @@ pub fn melee_threat_at_epoch(statics: &[UnitStatic], state: &State, si: usize, t
     let ut = &statics[state.roster.profile[ti]];
     let att =
         ctx_live(ctx_of_melee(us, state, si, rules_epoch), statics, state, si, true, rules_epoch);
-    let def = ctx_live(ctx_of(ut, state, ti), statics, state, ti, true, rules_epoch);
+    let def = with_cond_ap_state(ctx_live(ctx_of(ut, state, ti), statics, state, ti, true, rules_epoch), statics, state, ti, Seams { rules_epoch, ..Seams::default() });
     let mut sc = Scratch::default();
     melee_profiles_of(us, state.alive[si], &mut sc);
     let gap = charge_estimate_gap_in(rules_epoch, || {
@@ -8942,7 +8952,7 @@ fn resolve_with(
                             // volley (+1 to hit per marker), once per group.
                             let precision_hit = precision_markers_spend(&mut next, g.ti, seams.rules_epoch, &mut shot.log);
                             let ut_g = &statics[next.roster.profile[g.ti]];
-                            let mut def = with_modifier_sum(ctx_live(ctx_of(ut_g, &next, g.ti), statics, &next, g.ti, false, seams.rules_epoch), seams.rules_epoch);
+                            let mut def = with_modifier_sum(with_cond_ap_state(ctx_live(ctx_of(ut_g, &next, g.ti), statics, &next, g.ti, false, seams.rules_epoch), statics, &next, g.ti, seams), seams.rules_epoch);
                             // D-STEALTH — the def build's terrain gate: the alias
                             // applies only while the TARGET stands within 1" of
                             // terrain (per model, the majority fold).
@@ -9285,7 +9295,7 @@ fn resolve_with(
                         let us = &statics[pi_s];
                         let ut = &statics[next.roster.profile[ti]];
                         let att = ctx_of_melee(us, &next, si, seams.rules_epoch);
-                        let def = ctx_of(ut, &next, ti);
+                        let def = with_cond_ap_state(ctx_of(ut, &next, ti), statics, &next, ti, seams);
                         // NML-1132: the charger's strike phase is the host's melee set
                         // PLUS every alive attached hero's, the way the table builds it.
                         member_profiles_of(statics, &next, si, true, 0.0, seams, &mut sc);
@@ -9308,7 +9318,7 @@ fn resolve_with(
                                 let ut = &statics[next.roster.profile[ti]];
                                 let us = &statics[pi_s];
                                 let att = ctx_of_melee(ut, &next, ti, seams.rules_epoch);
-                                let def = ctx_of(us, &next, si);
+                                let def = with_cond_ap_state(ctx_of(us, &next, si), statics, &next, si, seams);
                                 // The strike-back folds too (`_solo_attack_groups` is built
                                 // for the DEFENDER the same way, main.gd:4284-4290).
                                 member_profiles_of(statics, &next, ti, true, 0.0, seams, &mut sc);

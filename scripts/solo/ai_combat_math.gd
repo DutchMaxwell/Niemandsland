@@ -545,6 +545,10 @@ static func conditional_ap_bonus(params: Dictionary, target_tough: int, target_d
 			return bonus if (not melee and range_in > 0.0 and dist_in >= 0.0 and dist_in > range_in / 2.0) else 0
 		"def_5_6":
 			return bonus if target_defense >= 5 else 0
+		"above_half_strength":
+			return bonus if bool(target.get("above_half_strength", false)) else 0
+		"shaken_or_fatigued":
+			return bonus if bool(target.get("shaken_or_fatigued", false)) else 0
 		_:
 			return 0
 
@@ -557,6 +561,10 @@ static func conditional_ap_why(params: Dictionary) -> String:
 			return "target beyond half the weapon's range"
 		"def_5_6":
 			return "target defends on 5+ or 6+"
+		"above_half_strength":
+			return "target is above half strength"
+		"shaken_or_fatigued":
+			return "target is Shaken or Fatigued"
 	return ""
 
 

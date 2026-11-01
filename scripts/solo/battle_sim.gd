@@ -1128,6 +1128,10 @@ static func _append_attached_models(next: Dictionary, u: Dictionary, out: Array)
 static func _ctx_of(su: Dictionary, melee := false) -> Dictionary:
 	var ctx := AiEv.ctx_for(su["unit"], bool(su.get("in_cover", false)))
 	ctx["models"] = int(su["alive"])
+	# Rules 3.6 (SHO-09s): the two TARGET-STATE facts the conditional-AP arms read, off the same
+	# snapshot `_below_half` already measures for morale.
+	ctx["above_half_strength"] = not _below_half(su)
+	ctx["shaken_or_fatigued"] = bool(su.get("shaken", false)) or bool(su.get("fatigued", false))
 	# W-P1 parity: the flag rides the ctx — profile_ev hard-sets the natural-6
 	# target itself (the old quality=6 approximation still let modifiers move it).
 	# S1-02 (GF/AoF v3.5.1 p.10): a Shaken unit strikes back counting as fatigued.

@@ -9571,7 +9571,9 @@ func _solo_conditional_ap_parts(profile: Dictionary, striker: GameUnit, defender
 	# SHO-20: the striker's Hold state rides the same view -- the 3.6 Slayer gate reads it.
 	var held := _solo_unit_held(striker)
 	var v36 := AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
-	var cx := {"weapon_range_in": float(profile.get("range", 0)), "held": held}
+	var cx := {"weapon_range_in": float(profile.get("range", 0)), "held": held,
+		"above_half_strength": not _solo_below_half_strength(defender),
+		"shaken_or_fatigued": defender.is_shaken or defender.is_fatigued}
 	var parts: Array = []
 	var seen := {}
 	var moved_logged := false
