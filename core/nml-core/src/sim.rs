@@ -3498,6 +3498,40 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
             }
         }
     }
+    // Row W1.4b-defence (rules 3.6) — the defence family's "most models" answer
+    // is read from the LIVING joined unit at use time, not the profile-build
+    // count: a squad that loses carriers can lose the stamp. SAFE DIRECTION
+    // only: a live majority leaves the static value untouched (a static "on"
+    // may come from an aura bearer or an unconditional alias leg the live tally
+    // cannot see), so only `Some(false)` clears.
+    if rule_on(rules_epoch, EPOCH_73_V36) {
+        // Synthetic states in the existing sim tests carry a short profile table
+        // and no attached rows, so read both leniently instead of indexing.
+        let host = state.roster.profile.get(i).and_then(|&p| state.profiles.list.get(p));
+        let heroes: Vec<(&crate::state::Profile, i64)> = state.attached.get(i)
+            .map(|a| a.iter()
+                .filter(|&&h| state.alive.get(h).copied().unwrap_or(0) > 0)
+                .filter_map(|&h| {
+                    let hp = *state.roster.profile.get(h)?;
+                    Some((state.profiles.list.get(hp)?, state.alive.get(h).copied().unwrap_or(0)))
+                })
+                .collect())
+            .unwrap_or_default();
+        if let (Some(host), Some(&alive)) = (host, state.alive.get(i)) {
+            if crate::unit::defence_family_live(
+                host, alive, &heroes, &["Fortified"], rules_epoch,
+            ) == Some(false) {
+                c.fortified = false;
+            }
+            if crate::unit::defence_family_live(
+                host, alive, &heroes,
+                &["Guarded", "Versatile Defense", "Sturdy", "Safety Gear", "Tenacious"],
+                rules_epoch,
+            ) == Some(false) {
+                c.guarded = false;
+            }
+        }
+    }
     c.hit_mod = mods::sum(state, i, mods::Role::AttackerOwn, melee, |r| r.hit_mod);
     c.vs_hit_mod = mods::sum(state, i, mods::Role::VsTarget, melee, |r| r.hit_mod);
     // Wave 4 follow-up (port-vengeance) — "friendly units get +X to hit rolls
