@@ -404,7 +404,7 @@
             UnitStatic { ctx: Ctx { fear: 2, ..Ctx::default() }, quality: 6, ..UnitStatic::default() },
             UnitStatic { quality: 6, ..UnitStatic::default() },
         ];
-        expected_melee_morale(&mut st, &statics, 0, 10, 2, 10, Seams { rules_epoch: CURRENT_RULES_EPOCH, ..Default::default() });
+        expected_melee_morale(&mut st, &statics, 0, 10, 2, 10, 0, Seams { rules_epoch: CURRENT_RULES_EPOCH, ..Default::default() });
         assert_eq!(st.alive[0], 1, "the Fear(2) unit dealt 1+2=3 > 2, it must not test morale");
         assert_eq!(st.alive[2], 0, "the plain unit lost the comparison and must rout");
     }
@@ -422,7 +422,7 @@
             UnitStatic { ctx: Ctx { fear: 2, ..Ctx::default() }, quality: 6, ..UnitStatic::default() },
             UnitStatic { quality: 6, ..UnitStatic::default() },
         ];
-        expected_melee_morale(&mut st, &statics, 0, 1, 2, 1, Seams { rules_epoch, ..Default::default() });
+        expected_melee_morale(&mut st, &statics, 0, 1, 2, 1, 0, Seams { rules_epoch, ..Default::default() });
         st.alive[2]
     }
 
