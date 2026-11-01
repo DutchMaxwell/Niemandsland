@@ -1610,6 +1610,35 @@ pub(crate) fn most_models_of(with: i64, total: i64) -> bool {
     with * 2 > total
 }
 
+/// Row W1.4b-defence (rules 3.6, `EPOCH_73_V36`) — the defence family's "most
+/// models" answer read from the LIVING joined unit at use time, not the
+/// profile-build count: `Some(true)` when at least one of `rules` holds a
+/// strict majority of the living models, `Some(false)` when none does, and
+/// `None` below the gate (the static stamp then stays untouched). Every living
+/// host model shares the host's rules; each living joined hero is one model
+/// however Tough. Pure (no `State`), so the callers can unit-test it directly.
+pub(crate) fn defence_family_live(
+    host: &Profile,
+    host_alive: i64,
+    heroes: &[(&Profile, i64)],
+    rules: &[&str],
+    rules_epoch: u32,
+) -> Option<bool> {
+    if !rule_on(rules_epoch, EPOCH_73_V36) {
+        return None;
+    }
+    let host_alive = host_alive.max(0);
+    let living: Vec<&Profile> = heroes.iter().filter(|h| h.1 > 0).map(|h| h.0).collect();
+    let total = host_alive + living.len() as i64;
+    let holds = rules.iter().any(|rule| {
+        let host_with = if has_special_rule(&host.special_rules, rule) { host_alive } else { 0 };
+        let heroes_with =
+            living.iter().filter(|p| has_special_rule(&p.special_rules, rule)).count() as i64;
+        most_models_of(host_with + heroes_with, total)
+    });
+    Some(holds)
+}
+
 /// `AiEv.rule_on_most_models` — whether MOST living models of the unit carry
 /// `rule` (ruling D-MOST): a strict majority, models not wounds, every living
 /// joined hero one model however Tough. Rules live per unit, so all

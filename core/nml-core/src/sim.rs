@@ -3428,6 +3428,40 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
     if melee && rule_on(rules_epoch, EPOCH_73_V36) {
         c.guarded_charge_over_in = crate::combat::CHARGE_LONG_RANGE_IN;
     }
+    // Row W1.4b-defence (rules 3.6) — the defence family's "most models" answer
+    // is read from the LIVING joined unit at use time, not the profile-build
+    // count: a squad that loses carriers can lose the stamp. SAFE DIRECTION
+    // only: a live majority leaves the static value untouched (a static "on"
+    // may come from an aura bearer or an unconditional alias leg the live tally
+    // cannot see), so only `Some(false)` clears.
+    if rule_on(rules_epoch, EPOCH_73_V36) {
+        let host = &state.profiles.list[state.roster.profile[i]];
+        let heroes: Vec<(&crate::state::Profile, i64)> = state.attached[i]
+            .iter()
+            .filter(|&&h| state.alive[h] > 0)
+            .map(|&h| (&state.profiles.list[state.roster.profile[h]], state.alive[h]))
+            .collect();
+        if crate::unit::defence_family_live(
+            host,
+            state.alive[i],
+            &heroes,
+            &["Fortified"],
+            rules_epoch,
+        ) == Some(false)
+        {
+            c.fortified = false;
+        }
+        if crate::unit::defence_family_live(
+            host,
+            state.alive[i],
+            &heroes,
+            &["Guarded", "Versatile Defense", "Sturdy", "Safety Gear", "Tenacious"],
+            rules_epoch,
+        ) == Some(false)
+        {
+            c.guarded = false;
+        }
+    }
     c.hit_mod = mods::sum(state, i, mods::Role::AttackerOwn, melee, |r| r.hit_mod);
     c.vs_hit_mod = mods::sum(state, i, mods::Role::VsTarget, melee, |r| r.hit_mod);
     // Wave 4 follow-up (port-vengeance) — "friendly units get +X to hit rolls
