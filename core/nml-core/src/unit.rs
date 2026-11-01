@@ -1656,14 +1656,14 @@ pub(crate) fn evasion_rule_live(
 
 /// Row MOR-02 (D-MOST): the Regeneration family names whose 3.6 text counts most models (their
 /// Boosts keep the every-model read). Twin: `AiEv.REGEN_MOST_MODELS`.
-const REGEN_MOST_MODELS: &[&str] = &[
+pub(crate) const REGEN_MOST_MODELS: &[&str] = &[
     "Regeneration", "Self-Repair", "Angelic Blessing", "Cursed Undead", "Grounded Protection",
     "Knightborn", "Plaguebound", "Protected", "Protection Feat", "Warding",
 ];
 
 /// `AiEv.regen_family_on`: most models for the names above from `EPOCH_73_V36`, else every model.
 /// Read once at profile build, so the host's living models are its `model_count` (at least one).
-fn regen_family_on(p: &Profile, rule: &str, rules_epoch: u32) -> bool {
+pub(crate) fn regen_family_on(p: &Profile, rule: &str, rules_epoch: u32) -> bool {
     if !rule_on(rules_epoch, crate::acts::EPOCH_73_V36) || !REGEN_MOST_MODELS.contains(&rule) {
         return rule_on_all_models(p, rule);
     }
@@ -1673,6 +1673,48 @@ fn regen_family_on(p: &Profile, rule: &str, rules_epoch: u32) -> bool {
             "most models of {} carry {rule}: a joined hero without it does not switch it off", p.name));
     }
     on
+}
+
+/// Row W1.4b — the LIVE twin of `regen_family_on`: a family name holds while a strict
+/// majority of the joined unit's living models carry it (model_count read at USE time, a
+/// living hero one model). `Some` folds the members' printed `(target, spell)` MIN; `None`
+/// below `EPOCH_73_V36` and when no family name has the majority.
+pub(crate) fn regen_family_live(
+    host: &Profile,
+    host_alive: i64,
+    host_targets: (i64, i64),
+    heroes: &[(&Profile, i64, (i64, i64))],
+    rules_epoch: u32,
+) -> Option<(i64, i64)> {
+    if !rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
+        return None;
+    }
+    let host_alive = host_alive.max(0);
+    let total = host_alive + heroes.iter().map(|(_, alive, _)| (*alive).max(0)).sum::<i64>();
+    let fold = |have: i64, cand: i64| if cand > 0 && (have == 0 || cand < have) { cand } else { have };
+    let mut best = (0i64, 0i64);
+    let mut on = false;
+    for name in REGEN_MOST_MODELS {
+        let host_with = if has_special_rule(&host.special_rules, name) { host_alive } else { 0 };
+        let hero_with = heroes
+            .iter()
+            .filter(|(p, alive, _)| *alive > 0 && has_special_rule(&p.special_rules, name))
+            .map(|(_, alive, _)| (*alive).max(0))
+            .sum::<i64>();
+        if !most_models_of(host_with + hero_with, total) {
+            continue;
+        }
+        on = true;
+        if host_with > 0 {
+            best = (fold(best.0, host_targets.0), fold(best.1, host_targets.1));
+        }
+        for (p, alive, targets) in heroes {
+            if *alive > 0 && has_special_rule(&p.special_rules, name) {
+                best = (fold(best.0, targets.0), fold(best.1, targets.1));
+            }
+        }
+    }
+    on.then_some(best)
 }
 
 /// MOR-05 — the Fortified and Shielded family names whose 3.6 wording says "most models" (the
