@@ -72,7 +72,7 @@ use super::*;
         ("Point-Blank Piercing Aura", "gf", "blessed_sisters", "Point-Blank Piercing", true),
         ("Protection Feat Aura", "aofs", "crazed_zealots", "Protection Feat", true),
         ("Enhanced Rapid Blink Aura", "gf", "elven_jesters", "Enhanced Rapid Blink", false),
-        ("Ravage Aura", "aof", "orcs", "Ravage", false),
+        ("Ravage Aura", "aof", "orcs", "Ravage(+1)", false),
         ("Relentless Aura", "aof", "dwarves", "Relentless", false),
         ("Scout Aura", "aof", "change_disciples", "Scout", false),
         ("Enhanced Scrapper Aura", "gf", "jackals", "Enhanced Scrapper", true),
