@@ -18,7 +18,7 @@ use crate::combat::{
     shielded_defense,
     shoot_ev, should_test_shooting_morale, shrouded_reach, RAVAGE_WOUND_TARGET,
     ANGELIC_BLESSING_BOOST_TARGET_SPELL, BEST_HIT_TARGET, CURSED_UNDEAD_BOOST_TARGET,
-    HOLD_THE_LINE_BOOST_MORALE_BONUS, SELF_REPAIR_BOOST_TARGET, UNMODIFIED_SIX,
+    HOLD_THE_LINE_BOOST_MORALE_BONUS, REGENERATION_TARGET, SELF_REPAIR_BOOST_TARGET, UNMODIFIED_SIX,
 };
 // NML-1073 M5 D6a-B4 — the per-model sight twin, used only behind `sighting`.
 use crate::sight;
@@ -1680,9 +1680,31 @@ fn ebr_relay_has_hero(
 /// defender's "defense" role (ai_spell.gd:352 — the `def_mod`/`defense_mod`
 /// roll-bonus pair). The "range"/"speed" roles stay absent — their seams do
 /// not exist yet, the same gap, not a second one.
+/// Test-only wrapper: the precision-debuff unit test spends a plain exchange.
+#[cfg(test)]
 fn spend_exchange(state: &mut State, att: usize, def: usize, melee: bool) {
     mods::spend_once(state, att, &[mods::Role::AttackerOwn, mods::Role::Ap, mods::Role::Grant], melee);
     mods::spend_once(state, def, &[mods::Role::VsTarget, mods::Role::Defense, mods::Role::Grant, mods::Role::GrantVs], melee);
+}
+
+/// DAT-17a — the exchange spend with the Regeneration grant's wound gate.
+fn spend_exchange_wounded(
+    state: &mut State, att: usize, def: usize, melee: bool, att_wounded: bool, def_wounded: bool,
+) {
+    let att_roles = [mods::Role::AttackerOwn, mods::Role::Ap, mods::Role::Grant];
+    let def_roles = [mods::Role::VsTarget, mods::Role::Defense, mods::Role::Grant, mods::Role::GrantVs];
+    let att_had = [Some(att), state.attached_to[att]].into_iter().flatten()
+        .any(|u| state.buffs[u].iter().any(mods::is_regen_grant));
+    let def_had = [Some(def), state.attached_to[def]].into_iter().flatten()
+        .any(|u| state.buffs[u].iter().any(mods::is_regen_grant));
+    mods::spend_once_except(state, att, &att_roles, melee, |r| mods::keep_regen(r, att_wounded));
+    mods::spend_once_except(state, def, &def_roles, melee, |r| mods::keep_regen(r, def_wounded));
+    if att_wounded && att_had {
+        trace_rule("regen-grant", "Regeneration Buff", &format!("spent by a wounding exchange (unit {att})"));
+    }
+    if def_wounded && def_had {
+        trace_rule("regen-grant", "Regeneration Buff", &format!("spent by a wounding exchange (unit {def})"));
+    }
 }
 
 /// `main._solo_apply_vs_marks` :16738-16771 — the ENEMY-side half of the
@@ -3506,6 +3528,14 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
             c.regen_target = fold_min(c.regen_target, CURSED_UNDEAD_BOOST_TARGET);
             c.regen_target_spell = fold_min(c.regen_target_spell, CURSED_UNDEAD_BOOST_TARGET);
         }
+        // DAT-17a — a granted "Regeneration" (the "Regeneration Buff" once-grant)
+        // reads as the family's primitive from `EPOCH_73_V36` on; below 73 the
+        // ledger stays blind and the static stamp alone decides.
+        if rule_on(rules_epoch, EPOCH_73_V36) && grants && mods::granted(state, i, "Regeneration") {
+            c.regeneration = true;
+            c.regen_target = fold_min(c.regen_target, REGENERATION_TARGET);
+            c.regen_target_spell = fold_min(c.regen_target_spell, REGENERATION_TARGET);
+        }
         // spell_only: the Angelic stamp folds the spell twin ONLY.
         c.regen_target_spell = if grants && mods::granted(state, i, "Enhanced Angelic Blessing") {
             fold_min(c.regen_target_spell, ANGELIC_BLESSING_BOOST_TARGET_SPELL)
@@ -5304,6 +5334,7 @@ fn strike_phase(
     let raw_deadly = r.deadly_tally;
     let w = shot.absorb(r);
     let members: Vec<usize> = parts.iter().map(|(mi, _, _)| *mi).collect();
+    let att_wounds_before = wounds_left(next, si);
     let hazard_self = land_hazardous_self(statics, next, &members, seams, shot);
     // B13: the table measures the lash-back on wounds actually TAKEN — the
     // wound-POOL difference (`_solo_retaliate_hits` :4570, NML-937), snapshotted
@@ -5386,7 +5417,8 @@ fn strike_phase(
         );
         land_wounds_with(next, si, landed, seams.tray_exact);
     }
-    spend_exchange(next, si, ti, true); // main.gd:6152, per strike phase
+    let att_wounded = wounds_left(next, si) < att_wounds_before;
+    spend_exchange_wounded(next, si, ti, true, att_wounded, taken > 0); // main.gd:6152, per strike phase
     (caused, retaliated, hazard_self, scourge_taken)
 }
 
@@ -9132,6 +9164,7 @@ fn resolve_with(
                             let phantom = r.scourge_wounds;
                             let w = shot.absorb(r);
                             let members: Vec<usize> = parts.iter().map(|(mi, _, _)| *mi).collect();
+                            let att_wounds_before = wounds_left(&next, si);
                             land_hazardous_self(statics, &mut next, &members, seams, shot);
                             if !seams.tray_exact {
                                 land_wounds_with(&mut next, g.ti, w, false);
@@ -9176,7 +9209,9 @@ fn resolve_with(
                             }
                             // main.gd:3244 — the exchange spends its own
                             // once-mods BEFORE the post-volley morale test.
-                            spend_exchange(&mut next, si, g.ti, false);
+                            let att_wounded = wounds_left(&next, si) < att_wounds_before;
+                            let def_wounded = wounds_left(&next, g.ti) < wounds_before_g;
+                            spend_exchange_wounded(&mut next, si, g.ti, false, att_wounded, def_wounded);
                             // D1-B5b: the volley's morale test is the NEXT
                             // thing on the table's tray (main.gd:8248-8251),
                             // per group — inside the per-group
