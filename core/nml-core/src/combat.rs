@@ -801,16 +801,23 @@ pub fn profile_ev(
     // Cover stays a SHOOTING-only read. The Guarded family's distance gate is the shot distance
     // against the shared over-9" threshold, or (SHO-17e) the stamped charge gate against the W1.5b
     // pre-charge gap for a melee strike; 0.0 below `EPOCH_73_V36` keeps the old melee number.
-    let mut defense = shielded_defense(def.defense, def.shielded_bonus(), def.def_floor());
+    // SHO-14e — the ESTIMATE twin of SHO-14: a Pierce weapon's save drops the target's POSITIVE
+    // Defense modifiers at `EPOCH_73_V36` through the same `dice::pierce_ignores` predicate the
+    // resolver's save fold reads. Armor (already baked into `def.defense`) and Fortified stay.
+    let pierce = crate::dice::pierce_ignores(p, att);
+    let mut defense = shielded_defense(def.defense, if pierce { 0 } else { def.shielded_bonus() }, def.def_floor());
     if !melee && p.blast <= 1 && !p.indirect && !p.ignores_cover {
-        defense = covered_defense(defense, def.in_cover, def.def_floor());
+        defense = covered_defense(defense, if pierce { false } else { def.in_cover }, def.def_floor());
     }
     // Audit 2026-09-13 §2.4 — the Sturdy-kind Boost replaces the gate; a
     // MAX over the two readings, never a second -1 (the dice fold's twin).
     let guarded_over_in = if melee { def.guarded_charge_over_in } else { LONG_RANGE_IN };
     defense = guarded_defense(
         defense,
-        def.guarded && guarded_over_in > 0.0 && dist_in > guarded_over_in
+        !pierce
+            && def.guarded
+            && guarded_over_in > 0.0
+            && dist_in > guarded_over_in
             && !def.sturdy_boost_gates_guarded,
         def.def_floor(),
     );
