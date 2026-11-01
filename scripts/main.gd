@@ -7547,6 +7547,24 @@ func _solo_defense_parts(target: GameUnit, source: String) -> Array:
 	return parts
 
 
+## Rules 3.6 (SHO-14) — Pierce ignores every POSITIVE Defense modifier: rebuild from Armor plus the
+## NEGATIVE parts, so Cover, Shielded, the over-9" family and growth markers drop out.
+func _solo_pierce_defense(target: GameUnit, melee: bool, ignored: PackedStringArray) -> int:
+	var stripped: int = _solo_armored_defense(target)
+	var source := AiCombatMath.HIT_SOURCE_MELEE if melee else AiCombatMath.HIT_SOURCE_SHOOTING
+	for p in _solo_defense_parts(target, source):
+		if not bool((p as Dictionary)["applies"]):
+			continue
+		var bonus := int((p as Dictionary)["bonus"])
+		if bonus > 0:
+			ignored.append("%s +%d" % [str((p as Dictionary)["name"]), bonus])
+		elif bonus < 0:
+			stripped -= bonus
+	if not melee and _solo_majority_in_cover(target):
+		ignored.append("Cover +1")
+	return stripped
+
+
 ## rules-must-log for NML-932: the ATTACK save steps name every Defense contribution they folded in,
 ## each with ITS OWN rule's name — the same single truth (_solo_defense_parts) the arithmetic reads.
 ##
@@ -8850,6 +8868,14 @@ func _solo_resolve_saves(striker: GameUnit, defender: GameUnit, weapon_name: Str
 	if hits <= 0:
 		return 0
 	_vfx_saves_made = 0   # VFX #1: the save batches below add the saves they made
+	# Rules 3.6 (SHO-14): a Pierce save ignores the target's POSITIVE Defense modifiers.
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
+			and (profile.get("rules", []) as Array).has("Pierce"):
+		var pierce_names: PackedStringArray = []
+		base_defense = _solo_pierce_defense(defender, melee, pierce_names)
+		if battle_log != null and not pierce_names.is_empty():
+			battle_log.log_event(BattleLog.Category.COMBAT, "Pierce: %s ignores %s" % [
+				weapon_name, ", ".join(pierce_names)], true)
 	# Base AP plus any conditional AP (Shatter/Tear/Melee Slayer/Disintegrate; range-gated Slayer/
 	# Piercing Hunter need `dist_in` — -1 = unknown, their ranged leg then stays off, conservative)
 	# this weapon gets against THIS defender — registry-driven, system-scoped.
