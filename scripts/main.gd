@@ -8229,6 +8229,14 @@ func _solo_charge_leg_dist_in(charging: bool, charge_from_in: float) -> float:
 	return 0.0
 
 
+## SHO-17 (rules 3.6): the Guarded family's charge-leg gate. From EPOCH_73_V36 the shared 6" charge
+## threshold; below it the old over-9" reading stays byte-identical.
+func _solo_guarded_charge_gate() -> float:
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		return AiCombatMath.CHARGE_LONG_RANGE_IN
+	return AiCombatMath.LONG_RANGE_IN
+
+
 ## Rules 3.6 (EPOCH_73_V36) — one Parry event per strike: roll min(X * carrier models,
 ## hits) dice after every hit roll, then each 6+ cancels the highest-worth hit (AP plus
 ## the on-6 bonus). Only counts shrink; pass 2 keeps its own order.

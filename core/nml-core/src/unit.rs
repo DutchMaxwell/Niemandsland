@@ -266,6 +266,13 @@ pub struct Ctx {
     /// save path leaves it false.
     pub fortified_alias_over9: bool,
     pub guarded: bool,
+    /// SHO-17 (`EPOCH_73_V36`) — WHICH Guarded-family name drove `guarded` (rules-must-log),
+    /// "" below the gate and when none. Stamped in `ctx_for` from the same family walk.
+    pub guarded_name: &'static str,
+    /// SHO-17 (`EPOCH_73_V36`) — the charge-leg gate of the Guarded family. 6.0 at the epoch,
+    /// 0.0 below it (the old over-9" read stays byte-identical). The dice read it, the sim
+    /// seams (`ctx_live` / `ctx_of_melee`) stamp it on the melee defender's context.
+    pub guarded_charge_over_in: f64,
     pub ranged_shrouding: bool,
     /// The clamp pair the three ranged reads share (dice.rs's volley,
     /// combat.rs's shoot_ev, sim.rs's sight_reach_in): the carried entry's
@@ -3121,6 +3128,8 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
             || (rule_on(rules_epoch, EPOCH_7_TABLE_RULES) && guarded_family_on(p, "Sturdy", rules_epoch))
             || (rule_on(rules_epoch, EPOCH_13_WHO_WINS)
                 && (guarded_family_on(p, "Safety Gear", rules_epoch) || guarded_family_on(p, "Tenacious", rules_epoch))),
+        guarded_name: "",
+        guarded_charge_over_in: 0.0,
         ranged_shrouding: ranged_shroud.is_some(),
         ranged_shroud_penalty_in: ranged_shroud.map_or(SHROUD_RANGE_PENALTY_IN, |s| s[0]),
         ranged_shroud_floor_in: ranged_shroud.map_or(SHROUD_FLOOR_IN, |s| s[1]),
