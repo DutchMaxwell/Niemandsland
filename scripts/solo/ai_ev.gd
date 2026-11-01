@@ -478,6 +478,16 @@ static func bane_boost_window(unit: GameUnit, over9: bool) -> Dictionary:
 	return {}
 
 
+## Rules 3.6 (SHO-10): does this profile's stamped Bane re-roll window open against THIS target? The
+## SAME predicate the conditional-AP leg runs (AiCombatMath.cond_met); no stamped condition (the only
+## shipped shape) always opens.
+static func bane_applies(profile: Dictionary, target_tough: int, target_defense: int,
+		dist_in: float, melee: bool) -> bool:
+	var bc: Dictionary = profile.get("bane_condition", {})
+	return bc.is_empty() or AiCombatMath.cond_met(str(bc.get("condition", "")), bc, target_tough,
+		target_defense, false, dist_in, melee, {"weapon_range_in": float(profile.get("range", 0))})
+
+
 ## Stamp the Sergeant facet onto a unit's weapon profiles (wave 5, model-level rule): the FIRST profile
 ## with attacks gets "sergeant_attacks" = the bearer's own attack share (total attacks / alive models,
 ## min 1) — the pooled resolution's documented approximation of "when THIS model attacks". Gated by the
@@ -623,6 +633,15 @@ static func stamp_sergeant(profiles: Array, unit: GameUnit) -> Array:
 			var existing_bypass := bool(fpd.get("bane", false)) and bool(fpd.get("bypass_regen", not lacerate_only(fpd)))
 			fpd["bane"] = true
 			fpd["bypass_regen"] = existing_bypass or bool(sp.get("bypass_regen", false))
+	# SHO-10: a Bane BOOST entry's optional target condition rides the stamp (epoch 73 only).
+	for e in RulesRegistry.unit_rules_of_primitive(unit, "Bane"):
+		var bp: Dictionary = (e as Dictionary).get("params", {})
+		var low := maxi(int(bp.get("reroll_save_low", 0)), int(bp.get("reroll_save_from", 0)))
+		if low <= 1 or not bp.has("condition") or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 \
+				or not has_exact_rule(unit, str(bp.get("upgrades", ""))):
+			continue
+		for fp in profiles:
+			fp["bane_condition"] = {"condition": str(bp["condition"]), "threshold": int(bp.get("threshold", 0))}
 	# Coverage wave: cover-ignore facet (unit-level "Ignores Cover when shooting" and kin — the
 	# Indirect primitive's cover_only alias form): ranged profiles save against uncovered Defense.
 	for e in RulesRegistry.unit_rules_of_primitive(unit, "Indirect"):
@@ -853,7 +872,10 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 				"weapon_range_in": float(profile.get("range", 0)),
 				"above_half_strength": bool(def_ctx.get("above_half_strength", false)),
 				"shaken_or_fatigued": bool(def_ctx.get("shaken_or_fatigued", false))})
-	var bane := bool(profile.get("bane", false))
+	# SHO-10: a re-roll entry's target condition (stamped above, epoch 73 only) can shut the
+	# window; "" on every shipped entry keeps the old EV answer.
+	var bane := bool(profile.get("bane", false)) and bane_applies(profile,
+		maxi(int(def_ctx.get("tough", 1)), 1), int(def_ctx.get("defense", 4)), dist_in, melee)
 	# Fortified (defender): each incoming hit's FINAL AP counts as -1 (min 0) — applied per sub-batch.
 	var fort := bool(def_ctx.get("fortified", false))
 	var fort_over := float(def_ctx.get("fortified_over_in", -1.0))

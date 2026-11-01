@@ -826,6 +826,11 @@ pub struct ShootProfile {
     /// ("Mischievous Boost" at epoch 6, "Bestial Boost" at epoch 7); "" = the
     /// base 6s-only window.
     pub bane_rule: &'static str,
+    /// Rules 3.6 (SHO-10): the target condition the re-roll entry names — the
+    /// same test the conditional-AP leg runs (`combat::cond_met`). "" on every
+    /// shipped entry; only the epoch-73 stamp reads `condition`/`threshold`.
+    pub bane_condition: String,
+    pub bane_threshold: i64,
     /// Wave 3 (`rules-wave3-shred3`): the family's per-face wound amount,
     /// read off the carried Shred-primitive entry's own
     /// `extra_wound_per_save_one` (`build_for`'s epoch-6 arm, gated
@@ -5692,6 +5697,7 @@ fn stamp_bane_boost(
     shoot: &mut [ShootProfile],
     name: &'static str,
     widening: &'static str,
+    rules_epoch: u32,
 ) {
     let map = reg.rules_for(&p.game_system);
     let Some(e) = map
@@ -5707,10 +5713,17 @@ fn stamp_bane_boost(
         return;
     }
     let over = e.param_f("over_in", 9.0);
+    // SHO-10: the optional target condition that opens the window. Gated at
+    // EPOCH_73_V36 so an epoch-72 record that already spells the key replays
+    // the unconditional window; no shipped entry spells it either way.
+    let cond = if rule_on(rules_epoch, EPOCH_73_V36) { e.param_s("condition").to_string() } else { String::new() };
+    let threshold = e.param_i("threshold", 0);
     for sp in shoot.iter_mut().filter(|sp| sp.bane) {
         sp.bane_low = low;
         sp.bane_over_in = over;
         sp.bane_rule = name;
+        sp.bane_condition = cond.clone();
+        sp.bane_threshold = threshold;
     }
 }
 
@@ -6569,7 +6582,7 @@ impl UnitStatic {
         // never widens — no pre-charge gap (the shred2 precedent). Read BY
         // NAME, never by iterating the shared primitive (#489).
         if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
-            stamp_bane_boost(reg, p, &mut shoot, "Enhanced Mischievous", "reroll_save_low");
+            stamp_bane_boost(reg, p, &mut shoot, "Enhanced Mischievous", "reroll_save_low", rules_epoch);
         }
         // Wave 4 (rules-wave4-boostbases2), gated on the FROZEN
         // `EPOCH_7_TABLE_RULES`: "Bestial Boost" is the aof/beastmen twin of
@@ -6579,7 +6592,7 @@ impl UnitStatic {
         // instead of a second mechanism. An epoch-6 record reads the base
         // 6s-only window and replays byte-exact.
         if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
-            stamp_bane_boost(reg, p, &mut shoot, "Enhanced Bestial", "reroll_save_low");
+            stamp_bane_boost(reg, p, &mut shoot, "Enhanced Bestial", "reroll_save_low", rules_epoch);
         }
         // Wave 6 (rules-wave6-scrapper), gated on the FROZEN
         // `EPOCH_30_SCRAPPER_BOOST`: "Scrapper Boost" (gf/jackals) is the Bane
@@ -6594,7 +6607,7 @@ impl UnitStatic {
         // NAME, never by iterating the shared primitive. A record below
         // epoch 30 reads the base 6s-only window and replays byte-exact.
         if rule_on(rules_epoch, EPOCH_30_SCRAPPER_BOOST) {
-            stamp_bane_boost(reg, p, &mut shoot, "Enhanced Scrapper", "reroll_save_from");
+            stamp_bane_boost(reg, p, &mut shoot, "Enhanced Scrapper", "reroll_save_from", rules_epoch);
         }
         // Shred wave 3 (rules-wave3-shred3): the family's per-face wound
         // amount is now READ off the carried Shred-primitive entry

@@ -493,36 +493,29 @@ pub fn conditional_ap_bonus_vs(
     if c.gate == "ranged_over" && !(!melee && dist_in >= 0.0 && dist_in > c.over_in) {
         return 0;
     }
+    if cond_met(c, t, is_charging, dist_in, melee) { c.ap_bonus } else { 0 }
+}
+
+/// The ONE target-condition test both 3.6 legs share: the conditional-AP match
+/// above and the save re-roll window (`dice.rs` `save_batch`). A re-roll entry
+/// names no range knobs, so its `CondAp` leaves `over_in`/`within_in` at 0.0
+/// and only the target-property arms can open.
+pub fn cond_met(c: &CondAp, t: &CondApTarget, is_charging: bool, dist_in: f64, melee: bool) -> bool {
     match c.condition.as_str() {
-        // Wave 4 (rules-wave4-boostbases) — "Havocbound Boost"'s always-on
-        // spelling ("always gets AP(+1) … instead of only when …"): no gate.
-        // Only unit.rs build_for's epoch-6 named arm creates this condition
-        // (the FROZEN `EPOCH_6_TABLE_RULES`), so every pre-epoch-6 replay
-        // stays byte-exact.
-        "always" => c.ap_bonus,
-        "vs_tough_ge" if t.tough >= c.threshold => c.ap_bonus,
-        "vs_armor" if t.defense <= c.threshold => c.ap_bonus,
-        "on_charge" if is_charging => c.ap_bonus,
-        "ranged_over" if !melee && dist_in > c.over_in => c.ap_bonus,
-        // Wave 4 (rules-wave4-condap) — "Point-Blank Piercing"'s printed
-        // shape ("AP(+1) when shooting enemies within 12\""): the cap is
-        // inclusive, an unknown distance (< 0) stays shut like the ranged
-        // legs above. The generic pass stamps `within_in` 0.0 (it never
-        // reads the key), so the registry-spelled specs it has stamped at
-        // every epoch stay inert here; only unit.rs build_for's epoch-7
-        // named arm (the FROZEN `EPOCH_7_TABLE_RULES`) sets the cap, and
-        // every pre-epoch-7 replay stays byte-exact.
-        "ranged_within" if !melee && c.within_in > 0.0 && dist_in >= 0.0 && dist_in <= c.within_in => {
-            c.ap_bonus
-        }
-        // Exactly half the range is not beyond it; no range or no distance stays shut.
-        "over_half_range" if !melee && t.weapon_range_in > 0.0 && dist_in >= 0.0 && dist_in > t.weapon_range_in / 2.0 => {
-            c.ap_bonus
-        }
-        "def_5_6" if t.defense >= 5 => c.ap_bonus,
-        "above_half_strength" if t.above_half_strength => c.ap_bonus,
-        "shaken_or_fatigued" if t.shaken_or_fatigued => c.ap_bonus,
-        _ => 0,
+        // Wave 4 (rules-wave4-boostbases) — "Havocbound Boost"'s always-on spelling.
+        "always" => true,
+        "vs_tough_ge" => t.tough >= c.threshold,
+        "vs_armor" => t.defense <= c.threshold,
+        "on_charge" => is_charging,
+        "ranged_over" => !melee && dist_in > c.over_in,
+        // Wave 4 (rules-wave4-condap) — "Point-Blank Piercing": the cap is
+        // inclusive, an unknown distance (< 0) stays shut.
+        "ranged_within" => !melee && c.within_in > 0.0 && dist_in >= 0.0 && dist_in <= c.within_in,
+        "over_half_range" => !melee && t.weapon_range_in > 0.0 && dist_in >= 0.0 && dist_in > t.weapon_range_in / 2.0,
+        "def_5_6" => t.defense >= 5,
+        "above_half_strength" => t.above_half_strength,
+        "shaken_or_fatigued" => t.shaken_or_fatigued,
+        _ => false,
     }
 }
 
@@ -792,7 +785,9 @@ pub fn profile_ev(
     for c in &p.cond_ap {
         ap += conditional_ap_bonus_vs(c, &CondApTarget::of(def, p.range as f64), false, dist_in, melee);
     }
-    let bane = p.bane;
+    // SHO-10: a re-roll entry may name the target condition that opens its window;
+    // "" on every shipped entry, so every old EV answer stays put.
+    let bane = p.bane && (p.bane_condition.is_empty() || cond_met(&CondAp { condition: p.bane_condition.clone(), threshold: p.bane_threshold, ..Default::default() }, &CondApTarget::of(def, p.range as f64), false, dist_in, melee));
     let fort = def.fortified;
     // Rules 3.6 row MOR-12c (ai_ev.gd:648-655): the bearer's share of the plain
     // hits (its attacks over the profile's, the dice path's same fraction) saves
