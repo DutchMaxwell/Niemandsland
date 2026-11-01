@@ -515,7 +515,6 @@ pub fn cond_met(c: &CondAp, t: &CondApTarget, is_charging: bool, dist_in: f64, m
         "def_5_6" => t.defense >= 5,
         "above_half_strength" => t.above_half_strength,
         "shaken_or_fatigued" => t.shaken_or_fatigued,
-        _ => false,
         // Rules 3.6 (SHO-09b): MOST of the target's models stand within 1" of terrain.
         "near_terrain" => t.near_terrain,
         _ => false,
