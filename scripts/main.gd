@@ -7815,6 +7815,16 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 	var attacker_artillery: bool = shooter_member != null and shooter_member.has_special_rule("Artillery")
 	var stealth: bool = _solo_stealth_family_on(target, "Stealth")
 	var target_artillery: bool = target.has_special_rule("Artillery")
+	# SHO-06 (rules 3.6): the target-side penalty is -1 past 12", only while most models carry the
+	# rule and the unit has NOT moved this round. Below 73 the old over-9" -2 reading stays.
+	var target_art_v36: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
+	var target_art_over: float = AiCombatMath.LONG_RANGE_IN
+	var target_art_most := true
+	var target_art_moved := false
+	if target_artillery and target_art_v36:
+		target_art_over = float(RulesRegistry.unit_param(target, "Artillery", "target_over_in", 12.0))
+		target_art_most = _solo_rule_on_most_models(target, "Artillery")
+		target_art_moved = int(target.unit_properties.get("moved_round", -1)) == opr_army_manager.current_round
 	# The Artillery magnitudes are the entries' params (dead-parameter fold, twin of #1006): the
 	# fallback is the recorded constant, so a real-book replay is byte-identical.
 	var art_shooter_bonus: int = AiCombatMath.ARTILLERY_SHOOTER_HIT_BONUS
@@ -7822,7 +7832,10 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 	if attacker_artillery:
 		art_shooter_bonus = int(RulesRegistry.unit_param(shooter_member, "Artillery", "shooter_hit_bonus", AiCombatMath.ARTILLERY_SHOOTER_HIT_BONUS))
 	if target_artillery:
-		art_target_pen = int(RulesRegistry.unit_param(target, "Artillery", "target_hit_penalty", AiCombatMath.ARTILLERY_TARGET_HIT_PENALTY))
+		if target_art_v36:
+			art_target_pen = int(RulesRegistry.unit_param(target, "Artillery", "target_hit_penalty_v36", 1))
+		else:
+			art_target_pen = int(RulesRegistry.unit_param(target, "Artillery", "target_hit_penalty", AiCombatMath.ARTILLERY_TARGET_HIT_PENALTY))
 	var notes: PackedStringArray = []
 	var over_nine: bool = dist_in > AiCombatMath.LONG_RANGE_IN
 	# Rules 3.6 (EPOCH_73_V36): the SHOOTER's +1 needs a Hold and a target past `shooter_over_in`
@@ -7839,7 +7852,10 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 			art_gate_hold = bool(RulesRegistry.unit_param(shooter_member, "Artillery", "shooter_requires_hold", false))
 			art_gate_ok = (not art_gate_hold or art_held) \
 				and (art_gate_over <= 0.0 or dist_in > art_gate_over)
-	var mod: int = AiCombatMath.shooting_hit_modifier(dist_in, attacker_artillery, stealth, target_artillery, evasive,
+	var target_art_applies: bool = target_artillery and over_nine
+	if target_art_v36:
+		target_art_applies = target_artillery and target_art_most and not target_art_moved and dist_in > target_art_over
+	var mod: int = AiCombatMath.shooting_hit_modifier(dist_in, attacker_artillery, stealth, target_art_applies, evasive,
 		art_shooter_bonus if art_gate_ok else 0, art_target_pen)
 	if attacker_artillery and over_nine and (art_gate_hold or art_gate_over > 0.0):
 		if art_gate_ok:
@@ -7868,10 +7884,20 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 			notes.append("%s -%d over %d\"" % [alias_name, alias_pen, int(alias_gate)])
 		else:
 			notes.append("%s -%d" % [alias_name, alias_pen])
-	if target_artillery and over_nine:
-		notes.append("Artillery target -%d" % art_target_pen)
-	elif target_artillery:
-		notes.append("Artillery target: no -%d (within 9\")" % art_target_pen)   # #224 sweep
+	if target_artillery:
+		if target_art_v36:
+			if target_art_applies:
+				notes.append("Artillery target -%d over %d\" (unmoved)" % [art_target_pen, int(target_art_over)])
+			elif target_art_moved:
+				notes.append("Artillery target: no -%d (moved this round)" % art_target_pen)
+			elif not target_art_most:
+				notes.append("Artillery target: no -%d (most models lack it)" % art_target_pen)
+			else:
+				notes.append("Artillery target: no -%d (within %d\")" % [art_target_pen, int(target_art_over)])
+		elif over_nine:
+			notes.append("Artillery target -%d" % art_target_pen)
+		else:
+			notes.append("Artillery target: no -%d (within 9\")" % art_target_pen)   # #224 sweep
 	# Rules 3.6 (EPOCH_73_V36): a shot at an Aircraft is also -N to hit (AiEv reads the same number).
 	var air_pen := AiEv.aircraft_hit_penalty(target)
 	if air_pen > 0:
