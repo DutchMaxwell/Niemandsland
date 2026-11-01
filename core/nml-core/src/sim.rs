@@ -1680,6 +1680,8 @@ fn ebr_relay_has_hero(
 /// defender's "defense" role (ai_spell.gd:352 — the `def_mod`/`defense_mod`
 /// roll-bonus pair). The "range"/"speed" roles stay absent — their seams do
 /// not exist yet, the same gap, not a second one.
+/// Test-only wrapper: the precision-debuff unit test spends a plain exchange.
+#[cfg(test)]
 fn spend_exchange(state: &mut State, att: usize, def: usize, melee: bool) {
     mods::spend_once(state, att, &[mods::Role::AttackerOwn, mods::Role::Ap, mods::Role::Grant], melee);
     mods::spend_once(state, def, &[mods::Role::VsTarget, mods::Role::Defense, mods::Role::Grant, mods::Role::GrantVs], melee);

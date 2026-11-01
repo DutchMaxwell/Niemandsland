@@ -87,7 +87,6 @@ pub enum Role {
     Ap,
     Defense,
     Speed,
-    RegenGrant,
 }
 
 /// `AiSpell.mods_for` ai_spell.gd:364-400, one record.
@@ -112,7 +111,6 @@ pub fn matches(r: &LiveMod, role: Role, melee: bool) -> bool {
         // `beneficiary: ""` (main.gd:16541) so the two readings cannot
         // diverge in practice; match the GDScript anyway.
         Role::Speed => r.move_mod != 0,
-        Role::RegenGrant => is_regen_grant(r),
     }
 }
 
