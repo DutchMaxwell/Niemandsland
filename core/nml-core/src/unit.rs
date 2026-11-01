@@ -118,6 +118,13 @@ pub struct Ctx {
     pub morale_rating: i64,
     pub tough: i64,
     pub models: i64,
+    /// Rules 3.6 (SHO-09s): the target still has MORE THAN half its models left (a single-model
+    /// unit: more than half its Tough). Stamped at the volley/melee seams from the morale lane's
+    /// `below_half`; a ctx no seam stamped carries `false`, so every old answer stays put.
+    pub above_half_strength: bool,
+    /// Rules 3.6 (SHO-09s): the target is Shaken OR Fatigued — also while it is being shot at.
+    /// Read only by the conditional-AP arm, never by the fatigue math.
+    pub shaken_or_fatigued: bool,
     pub artillery: bool,
     /// The Artillery hit modifiers' own registry params (`shooter_hit_bonus`
     /// / `target_hit_penalty`, dead-parameter recount 2026-09-15): the
@@ -3007,6 +3014,8 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         morale_rating,
         tough: unit_rating(&p.special_rules, "Tough").max(1),
         models: 1, // placeholder; `_ctx_of` always writes the snapshot's alive
+        above_half_strength: false,
+        shaken_or_fatigued: false,
         artillery: has_special_rule(&p.special_rules, "Artillery"),
         artillery_shooter_hit_bonus,
         artillery_target_hit_penalty,

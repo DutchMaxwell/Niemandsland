@@ -520,6 +520,8 @@ pub fn conditional_ap_bonus_vs(
             c.ap_bonus
         }
         "def_5_6" if t.defense >= 5 => c.ap_bonus,
+        "above_half_strength" if t.above_half_strength => c.ap_bonus,
+        "shaken_or_fatigued" if t.shaken_or_fatigued => c.ap_bonus,
         _ => 0,
     }
 }
@@ -536,19 +538,30 @@ pub struct CondApTarget {
     /// Rules 3.6 (SHO-20): the FIRING unit's Hold state, read only by the
     /// `hold_or_charge` gate. The EV folds cannot know it (`false`).
     pub shooter_held: bool,
+    /// Rules 3.6 (SHO-09s): the two TARGET-STATE conditions. `Ctx` carries both, stamped at the
+    /// seams that hold `statics` and `seams`; `Default` keeps every unstamped ctx shut.
+    pub above_half_strength: bool,
+    pub shaken_or_fatigued: bool,
 }
 
 impl CondApTarget {
     /// The target as the dice and EV folds see it, shot at with a `weapon_range_in` weapon.
     pub fn of(def: &Ctx, weapon_range_in: f64) -> Self {
-        Self { tough: def.tough.max(1), defense: def.defense, weapon_range_in, shooter_held: false }
+        Self {
+            tough: def.tough.max(1),
+            defense: def.defense,
+            weapon_range_in,
+            shooter_held: false,
+            above_half_strength: def.above_half_strength,
+            shaken_or_fatigued: def.shaken_or_fatigued,
+        }
     }
 }
 
 /// [`conditional_ap_bonus_vs`] without a weapon range: the melee leg and the
 /// granted conditions, whose legs never measure one.
 pub fn conditional_ap_bonus(c: &CondAp, target_tough: i64, target_defense: i64, is_charging: bool, dist_in: f64, melee: bool) -> i64 {
-    let t = CondApTarget { tough: target_tough, defense: target_defense, weapon_range_in: 0.0, shooter_held: false };
+    let t = CondApTarget { tough: target_tough, defense: target_defense, weapon_range_in: 0.0, shooter_held: false, above_half_strength: false, shaken_or_fatigued: false };
     conditional_ap_bonus_vs(c, &t, is_charging, dist_in, melee)
 }
 
@@ -558,6 +571,8 @@ pub fn cond_ap_why(condition: &str) -> &'static str {
     match condition {
         "over_half_range" => " (target beyond half the weapon's range)",
         "def_5_6" => " (target defends on 5+ or 6+)",
+        "above_half_strength" => " (target is above half strength)",
+        "shaken_or_fatigued" => " (target is Shaken or Fatigued)",
         _ => "",
     }
 }
