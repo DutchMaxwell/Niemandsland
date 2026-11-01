@@ -67,10 +67,10 @@ func test_the_guarded_charge_gate_is_six_inches_at_epoch_73_and_nine_below_it() 
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
 	var main: Node = auto_free(preload("res://scripts/main.gd").new())
 	assert_float(float(main._solo_guarded_charge_gate())) \
-		.override_failure_message("rules 3.6: the shared 6\" charge gate").is_equal_approx(6.0)
+		.override_failure_message("rules 3.6: the shared 6\" charge gate").is_equal_approx(6.0, 1e-6)
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
 	assert_float(float(main._solo_guarded_charge_gate())) \
-		.override_failure_message("below 73 the old over-9\" reading").is_equal_approx(9.0)
+		.override_failure_message("below 73 the old over-9\" reading").is_equal_approx(9.0, 1e-6)
 
 
 func test_a_guarded_unit_charged_from_seven_inches_saves_one_better_at_epoch_73() -> void:
