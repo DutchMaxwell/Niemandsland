@@ -639,20 +639,28 @@ pub fn profile_ev(
             // buff/debuff ±N composes into the SAME net-modifier sum the
             // clamp then sees, exactly like the GDScript's `+ spell_mod`.
             // 0 on every ctx_of-built ctx, so the pre-swap EV is unchanged.
-            let mut melee_mod = melee_hit_modifier(
+            let enemy_mod = melee_hit_modifier(
                 def.evasive,
                 def.melee_evasion,
                 def.stealth_alias_penalty,
                 def.stealth_alias_over_in,
                 def.stealth_alias_applies_charged,
                 0.0,
-            ) + att.hit_mod;
+            );
+            let mut melee_mod = enemy_mod + att.hit_mod;
             // EV/tray split (found by #489, caveat 4): `p.unstoppable_ev` folds
             // in the unit-level prefix scan the EV imagination itself does
             // (ai_ev.gd:347, `stamp_unit_strikers`); the tray reads the plain
             // weapon flag alone.
-            if p.unstoppable_ev && melee_mod < 0 {
-                melee_mod = 0;
+            // EPOCH_73_V36 (SHO-08e) — the Unstoppable split: the bearer's own net
+            // (`att.hit_mod`) stays, only the enemy-side minus is clamped; below the
+            // gate the whole sum keeps the old single clamp.
+            if p.unstoppable_ev {
+                if rule_on(att.rules_epoch, EPOCH_73_V36) {
+                    melee_mod = att.hit_mod + enemy_mod.max(0);
+                } else if melee_mod < 0 {
+                    melee_mod = 0;
+                }
             }
             (raw, target) = fold_hit(def.modifier_sum, raw, melee_mod);
         }
@@ -665,16 +673,29 @@ pub fn profile_ev(
         // (dice.rs) supplies non-zero values. The Wave-6 spell-hit net is
         // the one modifier it does fold (ai_ev.gd:493's `+ spell_mod`): the
         // bearer's own buff/debuff ±N, 0 on every ctx_of-built ctx.
-        let mut shoot_mod = shooting_hit_modifier(
+        let art_own = if att.artillery && dist_in > LONG_RANGE_IN {
+            att.artillery_shooter_hit_bonus.unwrap_or(ARTILLERY_SHOOTER_HIT_BONUS)
+        } else {
+            0
+        };
+        let enemy_mod = shooting_hit_modifier(
             dist_in, att.artillery, def.stealth, def.artillery, def.evasive, 0, 0, 0, 0.0,
-            att.artillery_shooter_hit_bonus.unwrap_or(ARTILLERY_SHOOTER_HIT_BONUS),
+            0,
             def.artillery_target_hit_penalty.unwrap_or(ARTILLERY_TARGET_HIT_PENALTY),
-        ) + att.hit_mod
+        )
             // EPOCH_73_V36 — the volley's Aircraft -N, inside the same clamp.
             - def.aircraft_hit_penalty;
+        let own_mod = att.hit_mod + art_own;
+        let mut shoot_mod = own_mod + enemy_mod;
         // EV/tray split (found by #489, caveat 4) — see the melee branch above.
-        if p.unstoppable_ev && shoot_mod < 0 {
-            shoot_mod = 0; // GF v3.5.1 p.15, head wave 1 — clamp BEFORE weapon bonuses.
+        // EPOCH_73_V36 (SHO-08e) — the Unstoppable split: the bearer's own net and
+        // the Artillery shooter's own +1 stay, only the enemy-side minus is clamped.
+        if p.unstoppable_ev {
+            if rule_on(att.rules_epoch, EPOCH_73_V36) {
+                shoot_mod = own_mod + enemy_mod.max(0);
+            } else if shoot_mod < 0 {
+                shoot_mod = 0; // GF v3.5.1 p.15, head wave 1 — clamp BEFORE weapon bonuses.
+            }
         }
         (raw, target) = fold_hit(def.modifier_sum, raw, shoot_mod);
     }
