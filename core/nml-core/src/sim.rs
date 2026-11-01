@@ -8215,6 +8215,9 @@ fn grounded_speed_bonus_in(
 /// table's replaced majority-in-cover-CELL approximation had). An armed
 /// alias whose read fails is stood down here (the penalty zeroed), so both
 /// the shooting and the melee fold consume a closed gate.
+/// Rules 3.6 (SHO-09b): the same majority verdict stamps `def.near_terrain`
+/// on every target this seam builds, alias carrier or not, so the shared
+/// conditional-AP predicate reads one sampler instead of a second geometry.
 /// Rules-must-log: both verdicts trace, the trace names the rule and the
 /// verdict. `Cover::Recorded` replays read false = gate closed (records
 /// below 57 never consult this read at all — the stamp is gated).
@@ -8225,10 +8228,6 @@ fn stealth_alias_terrain_gate(
     cover: Cover,
     def: &mut Ctx,
 ) {
-    if !def.stealth_alias_near_terrain {
-        return;
-    }
-    let unit = &statics[state.roster.profile[ti]].name;
     let open = match cover {
         // A replayed node carries no board: the read is honest false and the
         // gate closes.
@@ -8257,6 +8256,13 @@ fn stealth_alias_terrain_gate(
             near * 2 <= models
         }
     };
+    // Rules 3.6 (SHO-09b): the same majority read answers the conditional-AP arm, so it stamps on
+    // every target this seam builds — not only on the alias carriers below (`open` is its inverse).
+    def.near_terrain = !open;
+    if !def.stealth_alias_near_terrain {
+        return;
+    }
+    let unit = &statics[state.roster.profile[ti]].name;
     if open {
         def.stealth_alias_penalty = 0;
         trace_rule("grounded-stealth", unit, "in the open -> no -1 to hit (the gate holds)");
