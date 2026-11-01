@@ -19,7 +19,8 @@ extends RefCounted
 ##
 ## Unit context dictionary (unit_ctx / build via ctx_for): quality:int, defense:int, tough:int,
 ## models:int, artillery:bool, furious:bool, fearless:bool, impact:int, stealth:bool, evasive:bool,
-## shielded:bool, in_cover:bool, counter_models:int, regeneration:bool. Missing keys default neutral.
+## shielded:bool, in_cover:bool, counter_models:int, brace_models:int, parry_dice:int,
+## regeneration:bool. Missing keys default neutral.
 
 # ===== Constants =====
 
@@ -266,6 +267,37 @@ static func _brace_cut(unit: GameUnit) -> int:
 	return total
 
 
+## Rules 3.6 (`EPOCH_73_V36`) — the Parry(X) dice ONE living carrier model brings: the unit-level
+## rating, else the best melee weapon's rating on the unit's own loadout. 0 below the wave and for a
+## unit without Parry. The defender's alive model count multiplies this in `_parry_cancels` — the
+## same per-carrier shape the Rust `Ctx::parry_dice` stamp uses.
+static func _parry_dice(unit: GameUnit) -> int:
+	if unit == null or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return 0
+	var by_name := unit_rating(unit, "Parry") if RulesRegistry.unit_rule_active(unit, "Parry") else 0
+	if by_name > 0:
+		return by_name
+	var weapons: Array = []
+	if unit.source_type == "opr" and unit.source_data is OPRApiClient.OPRUnit:
+		weapons = (unit.source_data as OPRApiClient.OPRUnit).weapons
+	var best := 0
+	for w in weapons:
+		if w is Object and AiShooting._field_i(w, "range_value", 0) <= 0 and AiShooting._has_rule(w, "Parry"):
+			best = maxi(best, maxi(AiShooting._rating_of(w, "Parry"), 1))
+	return best
+
+
+## Rules 3.6 (`EPOCH_73_V36`) — the expected hits a Parry(X) defender cancels from a strike:
+## `min(X * living models, expected hits) / 6`. 0 below the wave and without Parry.
+static func _parry_cancels(def_ctx: Dictionary, hits: float) -> float:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return 0.0
+	var dice := float(int(def_ctx.get("parry_dice", 0))) * float(maxi(int(def_ctx.get("models", 1)), 1))
+	if dice <= 0.0:
+		return 0.0
+	return minf(dice, hits) / 6.0
+
+
 ## Build the EV context for a live unit. `in_cover` / `counter_models` come from the caller's terrain /
 ## weapon knowledge (cover is a terrain read, counter models a weapon walk — injected, not divined).
 ## Wave 5: `defense` is the Armor(X)-adjusted value ("counts as having Defense X+", best-of — the same
@@ -315,6 +347,7 @@ static func ctx_for(unit: GameUnit, in_cover: bool = false, counter_models: int 
 		"counter_strikes_first": SoloController.counter_strikes_first(unit),
 		"brace_models": _brace_cut(unit),
 		"brace_impact_per_model": 1,
+		"parry_dice": _parry_dice(unit),
 		"regeneration": _regen_target(unit) > 0,
 		"regen_target": _regen_target(unit),
 		"regen_target_spell": _regen_target(unit, true),
@@ -743,6 +776,12 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 	if blast > 1:
 		hits *= float(clampi(blast, 1, maxi(int(def_ctx.get("models", 1)), 1)))
 	six_hits = minf(six_hits, hits)
+	# — Parry (rules 3.6, `EPOCH_73_V36`): the defender's dice cancel expected hits, the on-6 AP
+	#   sub-batch first ("most dangerous first"); 0 below the wave. Melee only — a strike rule.
+	if melee:
+		var cancels := _parry_cancels(def_ctx, hits)
+		six_hits -= minf(cancels, six_hits)
+		hits -= cancels
 	# — Saves: Shielded then Cover (shooting only; Blast AND Indirect ignore cover — wave 5 — not
 	#   Shielded) then AP —
 	var defense := AiCombatMath.shielded_defense(int(def_ctx.get("defense", 4)), bool(def_ctx.get("shielded", false)))
@@ -901,8 +940,16 @@ static func impact_ev(att: Dictionary, def_ctx: Dictionary) -> float:
 		return 0.0
 	var p_hit := AiCombatMath.success_chance(AiCombatMath.IMPACT_HIT_TARGET)
 	var defense := AiCombatMath.shielded_defense(int(def_ctx.get("defense", 4)), bool(def_ctx.get("shielded", false)))
-	var wounds := float(dice) * p_hit * (1.0 - block_chance(defense, 0, false)) \
-		+ float(heavy_dice) * p_hit * (1.0 - block_chance(defense, 1, false))
+	# Rules 3.6 (`EPOCH_73_V36`) — Parry's expected cancels come off the Impact hits before the
+	# saves, the HEAVY pool first (the dice path's `parry_cancel` order, "most dangerous first").
+	var plain_hits := float(dice) * p_hit
+	var heavy_hits := float(heavy_dice) * p_hit
+	var cancels := _parry_cancels(def_ctx, plain_hits + heavy_hits)
+	var parry_heavy_cut := minf(cancels, heavy_hits)
+	heavy_hits -= parry_heavy_cut
+	plain_hits -= minf(cancels - parry_heavy_cut, plain_hits)
+	var wounds := plain_hits * (1.0 - block_chance(defense, 0, false)) \
+		+ heavy_hits * (1.0 - block_chance(defense, 1, false))
 	if bool(def_ctx.get("regeneration", false)):
 		wounds *= 1.0 - AiCombatMath.success_chance(int(def_ctx.get("regen_target", REGENERATION_TARGET)))
 	return wounds
