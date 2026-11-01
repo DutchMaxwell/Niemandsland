@@ -20,6 +20,7 @@ mod sho_15a;
 mod sho_15b;
 mod sho_16;
 mod sho_17;
+mod sho_17e;
 mod sho_18;
 mod sho_19;
 mod sho_20;
