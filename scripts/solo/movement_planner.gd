@@ -86,6 +86,7 @@ static var wall_cull := true
 static var wall_cull_stats: Variant = null
 const DIFFICULT_COST_MULT := 2.0            # Theta* soft cost: route AROUND Difficult when cheaper (research §1.3/3.3)
 const DANGEROUS_COST_MULT := 6.0            # Dangerous DEALS DAMAGE — avoid it hard (route around unless the detour is >6x)
+const UNSTABLE_MOVE_IN := 6.0               # rules 3.6: a leg over 6" through a ruin risks the Dangerous test
 const THETA_DIAG := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1),
 	Vector2i(1, 1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(-1, -1)]   # 8-connected (any-angle)
 const SOLVE_PASSES := 24                     # iterative-projection sweeps (compact AI units converge well within this)
@@ -1317,7 +1318,7 @@ static func _cell_center_fine(cell: Vector2i) -> Vector2:
 ## Terrain cost multiplier for routing at point `p` (research §1.3 soft cost): INF = hard block (Impassable
 ## or a caller-avoided cell — the go-around set), else a >1 multiplier for Dangerous/Difficult so the search
 ## routes AROUND them when cheaper yet may still enter. Uses the 3" typed grid + opts.avoid_cells.
-static func _terrain_cost_at(p: Vector2, grid: Dictionary, opts: Dictionary) -> float:
+static func _terrain_cost_at(p: Vector2, grid: Dictionary, opts: Dictionary, unstable_danger := false) -> float:
 	if grid.is_empty():
 		return 1.0
 	var cell := TerrainRules.cell_of(p, TerrainRules.CELL_IN)
@@ -1335,6 +1336,9 @@ static func _terrain_cost_at(p: Vector2, grid: Dictionary, opts: Dictionary) -> 
 		return DANGEROUS_COST_MULT
 	if bool(opts.get("difficult_debuff", false)):
 		return DIFFICULT_COST_MULT
+	# rules 3.6: ruin ground is Unstable — a leg over UNSTABLE_MOVE_IN prices it as Dangerous.
+	if unstable_danger and TerrainRules.is_unstable(t):
+		return DANGEROUS_COST_MULT
 	if TerrainRules.is_dangerous(t):
 		return DANGEROUS_COST_MULT
 	if TerrainRules.is_difficult(t):
@@ -1355,9 +1359,10 @@ static func _segment_cost(a: Vector2, b: Vector2, grid: Dictionary, opts: Dictio
 		return span + ledge_cost(a, b, opts)
 	var steps := maxi(1, int(ceil(span / (PLAN_CELL_IN * 0.5))))
 	var sub := span / float(steps)
+	var unstable := span > UNSTABLE_MOVE_IN and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
 	var total := 0.0
 	for i in range(steps):
-		var m := _terrain_cost_at(a.lerp(b, (float(i) + 0.5) / float(steps)), grid, opts)
+		var m := _terrain_cost_at(a.lerp(b, (float(i) + 0.5) / float(steps)), grid, opts, unstable)
 		total += sub * (1.0 if is_inf(m) else m)
 	return total + ledge_cost(a, b, opts)
 

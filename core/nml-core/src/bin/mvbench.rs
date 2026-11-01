@@ -70,6 +70,7 @@ fn main() {
                 avoid_fine: &empty,
                 dangerous_debuff: call.opts.dangerous_debuff,
                 difficult_debuff: call.opts.difficult_debuff,
+                unstable_danger: call.opts.unstable_danger,
             };
             if black_box(step_blocked(*a, *b, &call.walls, &o)) {
                 hits += 1;
@@ -91,6 +92,7 @@ fn main() {
                 avoid_fine: &empty,
                 dangerous_debuff: call.opts.dangerous_debuff,
                 difficult_debuff: call.opts.difficult_debuff,
+                unstable_danger: call.opts.unstable_danger,
             };
             acc += black_box(segment_cost(*a, *b, &call.grid, &o));
         }
