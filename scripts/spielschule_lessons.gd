@@ -111,9 +111,9 @@ const _S08_STEPS := [
 		"rule": "p.12", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
 	{"id": "shoot_cover", "text": "Shoot the enemy in cover and watch the +1 in the log.",
 		"rule": "p.12", "all": [{"check": "counter_grew", "args": {"key": "shoot:alpha"}}]},
-	{"id": "dangerous", "text": "Dangerous terrain is a hazard on the table: a unit moving through it rolls one test die per model, and a 1 wounds it. Read the rule, then press Continue.",
+	{"id": "dangerous", "text": "Dangerous terrain is a hazard on the table: the whole unit takes one test, rolling one die per wound it has left, and a 1 wounds it. Read the rule, then press Continue.",
 		"rule": "p.12", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
-	{"id": "wall", "text": "Ruins are area terrain: units can see into and out of them, but not through — nobody shoots through the ruins, then press Continue.",
+	{"id": "wall", "text": "Ruins are Unstable and still give Cover: sight may pass through them, but a unit whose own move is longer than 6\" into or through the ruins risks a Dangerous terrain test, then press Continue.",
 		"rule": "p.12", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
 ]
 
@@ -132,7 +132,7 @@ const _S07_STEPS := [
 			{"check": "counter_grew", "args": {"key": "continue"}}]},
 	{"id": "morale_test", "text": "The enemy squad is at half strength. Shoot it with Alpha Squad: at the end of the activation it takes a morale test.",
 		"rule": "p.10", "all": [{"check": "counter_grew", "args": {"key": "shoot:alpha"}}]},
-	{"id": "outcome", "text": "Read the log: a unit at half strength that loses models tests morale — fail and it is Shaken, at half strength or less it Routs, then press Continue.",
+	{"id": "outcome", "text": "Read the log: a failed shooting morale test leaves the unit Shaken — only a melee failure can Rout it, then press Continue.",
 		"rule": "p.10", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
 ]
 
