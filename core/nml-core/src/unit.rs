@@ -1628,6 +1628,32 @@ pub(crate) fn rule_on_most_models(p: &Profile, host_alive: i64, rule: &str, solo
     most_models_of(host_with + heroes_with, host_alive + heroes.len() as i64)
 }
 
+/// Rules 3.6 (row W1.4b) — the LIVE quantifier of the Evasive and Dodge
+/// stamps. `Some(on)` from `EPOCH_73_V36`; `None` below, so the caller keeps
+/// the static stamp byte-identical. The host's living models share the host's
+/// rules and every living joined hero is one model, however Tough; a strict
+/// majority of the living models carries the rule.
+pub(crate) fn evasion_rule_live(
+    host: &Profile, host_alive: i64, heroes: &[(&Profile, i64)], rule: &str, rules_epoch: u32,
+) -> Option<bool> {
+    if !rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
+        return None;
+    }
+    let host_alive = host_alive.max(0);
+    let mut with = if has_special_rule(&host.special_rules, rule) { host_alive } else { 0 };
+    let mut total = host_alive;
+    for (hero, alive) in heroes {
+        if *alive <= 0 {
+            continue;
+        }
+        total += 1;
+        if has_special_rule(&hero.special_rules, rule) {
+            with += 1;
+        }
+    }
+    Some(most_models_of(with, total))
+}
+
 /// Row MOR-02 (D-MOST): the Regeneration family names whose 3.6 text counts most models (their
 /// Boosts keep the every-model read). Twin: `AiEv.REGEN_MOST_MODELS`.
 const REGEN_MOST_MODELS: &[&str] = &[
