@@ -3424,6 +3424,36 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
     // Wave 4 (port-entrenched) — the volley's def build is `ctx_live` (5168).
     c.moved_round = state.moved_round[i];
     c.round = state.round;
+    // Rules 3.6 (row W1.4b) — the Stealth family's most-models read follows the
+    // LIVE living models: the stamp was built from the profile's full model
+    // count, so a unit that loses carriers kept the rule. From `EPOCH_73_V36`
+    // the host and every living attached hero decide; the penalty numbers and
+    // the alias stamps stay on the static profile. Below the gate the helper
+    // answers None and the stamp is untouched.
+    if rule_on(rules_epoch, EPOCH_73_V36) {
+        // A synthetic fixture may carry a shorter profile table than the roster
+        // (no Profile to read): keep the static stamp there.
+        let host = state.roster.profile.get(i).and_then(|&pi| state.profiles.list.get(pi));
+        let heroes: Vec<(&crate::state::Profile, i64)> = state.attached[i]
+            .iter()
+            .filter(|&&h| state.alive[h] > 0)
+            .filter_map(|&h| {
+                let pi = *state.roster.profile.get(h)?;
+                state.profiles.list.get(pi).map(|p| (p, state.alive[h]))
+            })
+            .collect();
+        if let Some(host) = host {
+            if let Some(on) = crate::unit::stealth_family_live(
+                host, state.alive[i], &heroes, "Stealth", rules_epoch,
+            ) {
+                let (carriers, total) = crate::unit::stealth_live_counts(
+                    host, state.alive[i], &heroes, "Stealth",
+                );
+                c.stealth = on;
+                c.stealth_most_models = on && carriers < total;
+            }
+        }
+    }
     c.hit_mod = mods::sum(state, i, mods::Role::AttackerOwn, melee, |r| r.hit_mod);
     c.vs_hit_mod = mods::sum(state, i, mods::Role::VsTarget, melee, |r| r.hit_mod);
     // Wave 4 follow-up (port-vengeance) — "friendly units get +X to hit rolls
