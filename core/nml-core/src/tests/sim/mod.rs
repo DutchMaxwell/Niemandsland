@@ -93,6 +93,7 @@
             versatile_pick_round: vec![-1; 4],
             versatile_pick_mode: vec![0; 4],
             retreating_strike_round: vec![-1; 4],
+            mind_control_moved_round: vec![-1; 4],
             growth_markers: vec![0; 4],
             vengeance_markers: vec![0; 4],
             growth_round: vec![-1; 4],

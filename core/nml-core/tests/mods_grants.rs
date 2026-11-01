@@ -106,6 +106,7 @@ fn two_units() -> (nml_core::State, Vec<UnitStatic>) {
         versatile_pick_round: vec![-1; 2],
         versatile_pick_mode: vec![0; 2],
         retreating_strike_round: vec![-1; 2],
+        mind_control_moved_round: vec![-1; 2],
         growth_markers: vec![0; 2],
         vengeance_markers: vec![0; 2],
         growth_round: vec![-1; 2],
