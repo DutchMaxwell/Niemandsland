@@ -11602,7 +11602,7 @@ func _solo_consolidate_melee(charger: GameUnit, defender: GameUnit, auto: bool =
 			"rule": "GF v3.5.1 p.9 consolidation: the charger moves back 1\" when neither unit was destroyed",
 			"candidates": [], "chosen": "", "why": "mandatory separation", "data": {"back_in": 1.0}})
 		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.COMBAT, "%s moves back 1\" (consolidation — GF v3.5.1 p.9)" % charger.get_name(), true)
+			battle_log.log_event(BattleLog.Category.COMBAT, "Consolidation: %s moves back 1\" (the charger separates — GF v3.5.1 p.9)" % charger.get_name(), true)
 		await _solo_animate_move(solo_controller.last_move_paths, false)   # NML-208: always glides
 		if dang > 0:
 			await _run_ai_dangerous(charger, dang)
@@ -11619,7 +11619,7 @@ func _solo_consolidate_melee(charger: GameUnit, defender: GameUnit, auto: bool =
 			# applied rule logs). A missing line here stalled the Game School S-06 consolidation step.
 			if solo_controller.last_move_paths.is_empty():
 				battle_log.log_event(BattleLog.Category.COMBAT,
-					"%s holds its ground (consolidation — GF v3.5.1 p.9)" % survivor.get_name(), true)
+					"Consolidation: %s holds its ground (enemy destroyed, no room to move — GF v3.5.1 p.9)" % survivor.get_name(), true)
 			else:
 				battle_log.log_event(BattleLog.Category.COMBAT,
 					"%s consolidates up to 3\" (enemy destroyed — GF v3.5.1 p.9)" % survivor.get_name(), true)
