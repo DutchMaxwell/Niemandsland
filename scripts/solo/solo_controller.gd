@@ -8884,6 +8884,19 @@ static func indirect_needs_hold(unit: GameUnit, key: String) -> bool:
 	return true
 
 
+## Rules 3.6 (SHO-03): the Indirect-family rule whose entry lifts the `key` Hold need (Quick Throw
+## for the sight half), the name the volley log prints when that rule is the reason. Empty at
+## epochs before 73, on a plain entry, or when no carried rule prints the key false.
+## Core twin: unit.rs build_for's EPOCH_73_V36 stamp.
+static func indirect_lift_rule(unit: GameUnit, key: String) -> String:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 or unit == null:
+		return ""
+	for e in RulesRegistry.unit_rules_of_primitive(unit, "Indirect"):
+		if ((e as Dictionary).get("params", {}) as Dictionary).get(key, true) == false:
+			return str((e as Dictionary).get("name", ""))
+	return ""
+
+
 ## Rules 3.6 (SHO-01b): the cover half of the Indirect waiver needs a Hold (`cover_needs_hold`, the
 ## SHO-01a sight half's shape above). Core twin: unit.rs build_for's EPOCH_73_V36 stamp.
 static func indirect_ignores_cover(unit: GameUnit, held: bool = true) -> bool:
