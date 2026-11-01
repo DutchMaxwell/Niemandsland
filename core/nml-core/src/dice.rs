@@ -1213,15 +1213,23 @@ pub fn resolve_volley_leg(
             hits += sixes(&faces);
         }
         if p.surge {
+            // SHO-18 (rules 3.6): a Surge ALIAS fires only from a shot over 9".
+            let alias_fires = !p.alias_gate
+                || p.surge_alias_rule.is_empty()
+                || mod_dist_in > LONG_RANGE_IN;
             if surge_gates {
                 // The table's own gates (main.gd:4465-4482): `surge_within_in`
                 // (Point-Blank) caps the whole bonus at or under the centre
                 // distance; a Boost adds successful unmodified 5s only PAST
                 // `surge_over_in` — melee (0.0) never qualifies.
-                if p.surge_within_in <= 0.0 || mod_dist_in <= p.surge_within_in {
+                if alias_fires && (p.surge_within_in <= 0.0 || mod_dist_in <= p.surge_within_in) {
                     hits += sixes(&faces) * p.bonus_hits_per_six.max(1);
                     if p.surge_low < 6 && mod_dist_in > p.surge_over_in {
                         hits += faces.iter().filter(|&&f| f == 5 && count_target <= 5).count() as i64;
+                    }
+                    if !p.surge_alias_rule.is_empty() && sixes(&faces) > 0 {
+                        out.log.push(format!("{}: shot from over {:.0}in — bonus hits on unmodified 6s",
+                            p.surge_alias_rule, LONG_RANGE_IN));
                     }
                 }
             } else {
@@ -1454,17 +1462,20 @@ pub fn resolve_volley_leg(
             }
         }
         let normal = hits - ap4;
+        // SHO-18 (rules 3.6): a Shred ALIAS pays only from a shot over 9".
+        let shred_alias_fires = shred_alias_dice
+            && (!p.alias_gate || mod_dist_in > LONG_RANGE_IN);
         // Rules 3.6 row MOR-12c: the bearer's share of the plain hits saves as
         // its own batch at AP(+sergeant_ap), the table's band (`main.gd:8372-8387`).
         let sgt_hits = sergeant_hits(p, n, normal, att);
-        let mut w = save_batch(p, def, def_owner, ap4, save_def, ap + on6, att.shred_grant, shred_alias_dice, shred_low, deadly_per_model, tray, &mut out);
+        let mut w = save_batch(p, def, def_owner, ap4, save_def, ap + on6, att.shred_grant, shred_alias_fires, shred_low, deadly_per_model, tray, &mut out);
         if sgt_hits > 0 {
             out.log.push(format!(
                 "{}: {} strikes {} hit{} with AP(+{})",
                 p.sergeant_rule, sh.owner, sgt_hits, if sgt_hits == 1 { "" } else { "s" }, p.sergeant_ap));
-            w += save_batch(p, def, def_owner, sgt_hits, save_def, ap + p.sergeant_ap, att.shred_grant, shred_alias_dice, shred_low, deadly_per_model, tray, &mut out);
+            w += save_batch(p, def, def_owner, sgt_hits, save_def, ap + p.sergeant_ap, att.shred_grant, shred_alias_fires, shred_low, deadly_per_model, tray, &mut out);
         }
-        w += save_batch(p, def, def_owner, normal - sgt_hits, save_def, ap, att.shred_grant, shred_alias_dice, shred_low, deadly_per_model, tray, &mut out);
+        w += save_batch(p, def, def_owner, normal - sgt_hits, save_def, ap, att.shred_grant, shred_alias_fires, shred_low, deadly_per_model, tray, &mut out);
         // `_solo_ignores_regen` :6927-6933 — Bane / Rending (and Unstoppable,
         // ai_ev.gd:433) cut through Regeneration; everything else is poolable.
         // B2b: `_solo_ignores_regen`'s last line (main.gd:6941) also answers
@@ -2123,7 +2134,13 @@ pub fn resolve_melee_leg(
                 out.log.push(format!("Precise: +1 to hit on {}'s strikes", sh.owner));
             }
             let mut hits = faces_to_hits(&faces, count_target as u8) as i64;
-            if p.surge {
+            // SHO-18 (rules 3.6): a Surge ALIAS fires only on a charge over 6"; a non-charging
+            // strike and every pre-73 record keep the old read.
+            let alias_fires = !p.alias_gate
+                || p.surge_alias_rule.is_empty()
+                || !charging
+                || charge_from_in > crate::combat::CHARGE_LONG_RANGE_IN;
+            if p.surge && alias_fires {
                 // No flag: at 0.0" this IS the table's gated read (the within
                 // cap passes, the low window below opens only for the sentinel).
                 hits += sixes(trig) * p.bonus_hits_per_six.max(1);
@@ -2137,6 +2154,10 @@ pub fn resolve_melee_leg(
                 // exactly like the table (main.gd:4539 at dist 0.0).
                 if p.surge_low < 6 && p.surge_over_in < 0.0 {
                     hits += trig.iter().filter(|&&f| f == 5 && count_target <= 5).count() as i64;
+                }
+                if !p.surge_alias_rule.is_empty() && sixes(trig) > 0 {
+                    out.log.push(format!("{}: charged from over {:.0}in — bonus hits on unmodified 6s",
+                        p.surge_alias_rule, crate::combat::CHARGE_LONG_RANGE_IN));
                 }
             }
             // Block B6 — the extra-ATTACK-DIE Surge siblings (Predator Fighter
@@ -2256,14 +2277,22 @@ pub fn resolve_melee_leg(
             let idx_ap = out.rolls.len();
             // Rules 3.6 row MOR-12c: the bearer's share of the plain hits, the
             // volley leg's twin (main.gd:8372-8387).
+            // SHO-18 (rules 3.6): a Shred ALIAS pays only on a charge over 6".
+            let shred_alias_fires = shred_alias_dice
+                && (!p.alias_gate || !charging || charge_from_in > crate::combat::CHARGE_LONG_RANGE_IN);
+            if p.shred_alias && p.alias_gate && shred_alias_fires && p.shred_ones_wound_bonus > 0 {
+                let name: &str = if p.shred_ones_rule.is_empty() { "Shred" } else { p.shred_ones_rule.as_str() };
+                out.log.push(format!("{}: charged from over {:.0}in — unmodified 1s take +1 wound",
+                    name, crate::combat::CHARGE_LONG_RANGE_IN));
+            }
             let normal = hits - ap4;
             let sgt_hits = sergeant_hits(p, n, normal, sh.att);
-            let mut w = save_batch(p, def, def_owner, ap4, save_def, ap + on6, sh.att.shred_grant, shred_alias_dice, 1, deadly_per_model, tray, &mut out);
+            let mut w = save_batch(p, def, def_owner, ap4, save_def, ap + on6, sh.att.shred_grant, shred_alias_fires, 1, deadly_per_model, tray, &mut out);
             if sgt_hits > 0 {
                 out.log.push(format!(
                     "{}: {} strikes {} hit{} with AP(+{})",
                     p.sergeant_rule, sh.owner, sgt_hits, if sgt_hits == 1 { "" } else { "s" }, p.sergeant_ap));
-                w += save_batch(p, def, def_owner, sgt_hits, save_def, ap + p.sergeant_ap, sh.att.shred_grant, shred_alias_dice, 1, deadly_per_model, tray, &mut out);
+                w += save_batch(p, def, def_owner, sgt_hits, save_def, ap + p.sergeant_ap, sh.att.shred_grant, shred_alias_fires, 1, deadly_per_model, tray, &mut out);
             }
             // Wave 4 follow-up — the batch's OWN blocked unmodified 1s (the
             // FIRST "defense" slot of the batch, never Bane's re-rolls: a 6
@@ -2271,7 +2300,7 @@ pub fn resolve_melee_leg(
             // Fighter's table counter read (main.gd:6505-6509).
             let ones_ap = fresh_save_ones(&out, idx_ap);
             let idx_rest = out.rolls.len();
-            w += save_batch(p, def, def_owner, normal - sgt_hits, save_def, ap, sh.att.shred_grant, shred_alias_dice, 1, deadly_per_model, tray, &mut out);
+            w += save_batch(p, def, def_owner, normal - sgt_hits, save_def, ap, sh.att.shred_grant, shred_alias_fires, 1, deadly_per_model, tray, &mut out);
             let ones_rest = fresh_save_ones(&out, idx_rest);
             // Wave 4 follow-up — Bloodthirsty Fighter (aof/war_disciples):
             // each unmodified 1 the DEFENDER rolled blocking this weapon pays
@@ -2317,7 +2346,7 @@ pub fn resolve_melee_leg(
                         // separate on-6 AP sub-batch, no Deadly special-case:
                         // they join the weapon's own batch, and on a Deadly
                         // weapon its per-model group below.
-                        let btw = save_batch(p, def, def_owner, bt_hits, save_def, ap + on6, sh.att.shred_grant, shred_alias_dice, 1, deadly_per_model, tray, &mut out);
+                        let btw = save_batch(p, def, def_owner, bt_hits, save_def, ap + on6, sh.att.shred_grant, shred_alias_fires, 1, deadly_per_model, tray, &mut out);
                         w += btw;
                     }
                 }

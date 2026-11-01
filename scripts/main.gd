@@ -324,6 +324,7 @@ var _solo_model_pick: Dictionary = {}        # B5: {unit, chain, recommended, ou
 # _solo_apply_regeneration — so no await can ever observe it. Never widen a window across an await:
 # every attack in the game shares those functions, and a leaked flag would rewrite an unrelated save.
 var _solo_takedown_solo: Dictionary = {}     # {unit, index, model} or {}
+var _solo_alias_charge_in: float = 0.0       # SHO-18: the melee charge gap for the alias gate
 ## Sweep F row `Fortified Aura` (epoch 55) — the loss line's once-guard: the
 ## demotion is a STATE, logged on the first save batch it bites, cleared
 ## while a bearer is alive again (a revived bearer re-projects the aura).
@@ -4483,6 +4484,7 @@ func _run_ai_shooting(report: Dictionary) -> void:
 			if RulesRegistry.unit_rule_active(member, "Shred") \
 					or _solo_shred_facet_applies(member, base_range):
 				prof["shred"] = true
+				prof["_shred_alias"] = true
 			member_profiles.append(prof)
 			# `reach` (target validity + per-model sighting) includes the unit's range bonus, so a Royal
 			# Legion unit shoots targets up to +4" beyond the weapon's printed range.
@@ -4491,6 +4493,7 @@ func _run_ai_shooting(report: Dictionary) -> void:
 				"reach": base_range + range_bonus, "profile": prof})
 		# Wave 5 Sergeant (model-level): the member's FIRST firing profile carries the bearer's share.
 		AiEv.stamp_sergeant(member_profiles, member)
+		_solo_stamp_alias_markers(member, member_profiles)
 		AiEv.stamp_conditional_ap(member_profiles, member)   # value Shatter/Tear/Melee Slayer/Disintegrate AP
 	if shots.is_empty():
 		_solo_log_no_volley(unit, report, "no ready ranged weapon")
@@ -6210,6 +6213,7 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 			# Shred can be granted at unit level too (wave 5) — mark every profile of that member.
 			if member_shred:
 				prof["shred"] = true
+				prof["_shred_alias"] = true
 			if growth_ap > 0:
 				prof["ap"] = int(prof.get("ap", 0)) + growth_ap
 			# Per-model shooting (GF v3.5.1 p.8): a ranged profile fires with the member's models that
@@ -6238,6 +6242,7 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 			scaled.append(prof)
 		# Wave 5 Sergeant (model-level): ONE profile per member carries the bearer's attack share.
 		AiEv.stamp_sergeant(scaled, member)
+		_solo_stamp_alias_markers(member, scaled)
 		AiEv.stamp_conditional_ap(scaled, member)   # value Shatter/Tear/Melee Slayer/Disintegrate AP
 		# S1-02 (GF/AoF v3.5.1 p.10): "Shaken units must stay idle, but may strike back counting as
 		# fatigued" — a Shaken unit never charges, so every melee strike it makes is a strike-back.
@@ -6300,7 +6305,7 @@ func _solo_cover_defense(target: GameUnit, base_defense: int) -> int:
 ## only for the CHARGING unit — `charging`). Those extra hits resolve BEFORE Blast(X) (GF v3.5.1: Blast
 ## multiplies "after resolving other special rules"), which then scales each hit ×min(X, target models).
 ## Every multiplication is battle-logged so it is VISIBLE. Uses the shared AiCombatMath.
-func _solo_hits(faces: Array, to_hit: int, profile: Dictionary, dist_in: float, target: GameUnit = null, charging: bool = false, roller: String = "") -> int:
+func _solo_hits(faces: Array, to_hit: int, profile: Dictionary, dist_in: float, target: GameUnit = null, charging: bool = false, roller: String = "", charge_from_in: float = 0.0) -> int:
 	# `to_hit` is the caller's UNCLAMPED summed target (D21): Precise's flat +1 folds into that sum and the
 	# one clamp happens here, so a penalty the old per-step clamp swallowed still counts against the +1.
 	to_hit = AiCombatMath.modified_hit_target(to_hit, 1 if bool(profile.get("precise", false)) else 0)
@@ -6324,10 +6329,13 @@ func _solo_hits(faces: Array, to_hit: int, profile: Dictionary, dist_in: float, 
 			_solo_rule_float(target, "Relentless +%d" % rel_bonus)
 		hits += rel_bonus
 	if bool(profile.get("surge", false)):
+		var surge_alias := str(profile.get("_surge_alias", ""))
+		var surge_alias_live: bool = surge_alias.is_empty() \
+			or _solo_alias_family_over(charging, dist_in, charge_from_in)
 		# Coverage wave: Surge-family gates — within_in (Point-Blank Surge: only within 12") and the
 		# Devout-Boost upgrade (successful unmodified 5s count too when engaging from over 9").
 		var within := float(profile.get("surge_within_in", 0.0))
-		if within <= 0.0 or dist_in <= within:
+		if surge_alias_live and (within <= 0.0 or dist_in <= within):
 			# The entry's own per-six bonus (dead-parameter recount 2026-09-15,
 			# family 2): every shipped row prints 1, so the recorded
 			# +1-per-six replay is unchanged.
@@ -6339,6 +6347,11 @@ func _solo_hits(faces: Array, to_hit: int, profile: Dictionary, dist_in: float, 
 						surge_fives += 1
 			bonus += surge_fives
 			if bonus > 0 and battle_log != null:
+				if not surge_alias.is_empty():
+					battle_log.log_event(BattleLog.Category.COMBAT,
+						"%s: %s from over %d\" — bonus hits on unmodified 6s" % [surge_alias,
+							("charged" if charging else "shot"),
+							int(AiCombatMath.CHARGE_LONG_RANGE_IN if charging else AiCombatMath.LONG_RANGE_IN)], true)
 				# #193 rules-must-log: this was the LAST silent on-6 branch — a "2 hits" tray that
 				# resolves as "3 hits" reads broken, not Surge. EPOCH 38 SURGE MARK: the bridge
 				# (_solo_bridge_granted_flags) folds the marked target's once-grant into THIS
@@ -8236,6 +8249,41 @@ func _solo_guarded_charge_gate() -> float:
 	return AiCombatMath.LONG_RANGE_IN
 
 
+## SHO-18 (rules 3.6): the alias families fire only from a shot over 9" or a charge over 6".
+func _solo_alias_family_over(charging: bool, dist_in: float, charge_from_in: float = 0.0) -> bool:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return true
+	if charging:
+		return charge_from_in > AiCombatMath.CHARGE_LONG_RANGE_IN
+	if dist_in <= 0.0:
+		return true
+	return dist_in > AiCombatMath.LONG_RANGE_IN
+
+
+## The Surge-family DATA alias a member carries for this facet ("" = the weapon's own Surge only).
+func _solo_surge_alias_name(member: GameUnit, profile_range: int) -> String:
+	for r in member.get_special_rules():
+		if str(r).strip_edges() == "Ferocious":
+			return "Ferocious"
+	for e in RulesRegistry.unit_rules_of_primitive(member, "Surge"):
+		var ed := e as Dictionary
+		var n := str(ed.get("name", ""))
+		var ep: Dictionary = ed.get("params", {})
+		if n.is_empty() or n in ["Surge", "Ferocious", "Surge Mark", "Great Sergeant"]:
+			continue
+		if not str(ep.get("upgrades", "")).is_empty() or ep.get("extra_attack", false) == true:
+			continue
+		if AiEv.facet_applies(ep, profile_range):
+			return n
+	return ""
+
+
+func _solo_stamp_alias_markers(member: GameUnit, profiles: Array) -> void:
+	for sp in profiles:
+		var salias := _solo_surge_alias_name(member, int((sp as Dictionary).get("range", 0)))
+		if not salias.is_empty(): (sp as Dictionary)["_surge_alias"] = salias
+
+
 ## Rules 3.6 (EPOCH_73_V36) — one Parry event per strike: roll min(X * carrier models,
 ## hits) dice after every hit roll, then each 6+ cancels the highest-worth hit (AP plus
 ## the on-6 bonus). Only counts shrink; pass 2 keeps its own order.
@@ -8530,7 +8578,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 					battle_log.log_event(BattleLog.Category.COMBAT,
 						"Fatigued: %s — %d unmodified 6%s hit but trigger no special rules" % [
 						str(group.get("name", "?")), n6, ("" if n6 == 1 else "s")], true)
-			var hits: int = await _solo_hits(faces, to_hit_raw, hit_profile, 0.0, defender, charging, _roller_label(striker))
+			var hits: int = await _solo_hits(faces, to_hit_raw, hit_profile, 0.0, defender, charging, _roller_label(striker), charge_from_in if charging else 0.0)
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s strikes with %s at %s — %d hit%s" % [
 					str(group.get("name", "?")), str(profile.get("name", "?")), defender.get_name(), hits, ("" if hits == 1 else "s")], true)
@@ -8582,6 +8630,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 				_solo_log_takedown_context(str(profile.get("name", "?")), td_pick, td_ctx, to_hit, p_defense, true)
 			# dist_in stays -1.0 (melee: the range-gated conditional AP legs stay off, as before) — it is
 			# spelled out only so the Takedown pick can ride the trailing `solo` argument.
+			_solo_alias_charge_in = charge_from_in if charging else 0.0
 			var w: int = await _solo_resolve_saves(group.get("member"), strike_unit, str(profile.get("name", "?")), six_faces, hits, p_defense, eff, human_defends, true, not (m_deadly or m_takedown), charging, -1.0, td_pick)
 			if m_takedown and w > 0 and not td_pick.is_empty():
 				# Takedown Strike (resolver wave A): the wounds go to the model picked BEFORE the roll
@@ -8632,10 +8681,11 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 							bt_name, bt_ones, ("" if bt_ones == 1 else "s"), str(group.get("name", "?")),
 							bt_n, ("" if bt_n == 1 else "s"), str(profile.get("name", "?"))], true)
 					var bt_faces: Array = await _solo_tray_roll(bt_n, to_hit, roll_owner)
-					var bt_hits: int = await _solo_hits(bt_faces, to_hit_raw, hit_profile, 0.0, defender, charging, _roller_label(striker))
+					var bt_hits: int = await _solo_hits(bt_faces, to_hit_raw, hit_profile, 0.0, defender, charging, _roller_label(striker), charge_from_in if charging else 0.0)
 					if bt_hits > 0:
 						# Extra attacks resolve pooled (no Deadly/Takedown special-casing — the aof
 						# bearers carry plain weapons) and NEVER chain (counter reset right after).
+						_solo_alias_charge_in = charge_from_in if charging else 0.0
 						var bt_w: int = await _solo_resolve_saves(group.get("member"), defender, str(profile.get("name", "?")), [] if mute_sixes else bt_faces, bt_hits, defense, eff, human_defends, true, true, charging)
 						_solo_last_save_ones = 0
 						caused += bt_w
@@ -8885,6 +8935,8 @@ func _solo_resolve_saves(striker: GameUnit, defender: GameUnit, weapon_name: Str
 	if hits <= 0:
 		return 0
 	_vfx_saves_made = 0   # VFX #1: the save batches below add the saves they made
+	# SHO-18: the melee charge gap for the alias gate rides the synchronous seam (the Takedown shape).
+	var alias_charge: float = _solo_alias_charge_in if (melee and charging) else 0.0
 	# Rules 3.6 (SHO-14): a Pierce save ignores the target's POSITIVE Defense modifiers.
 	if AiCombatMath.pierce_ignores(profile):
 		var pierce_names: PackedStringArray = []
@@ -8957,7 +9009,7 @@ func _solo_resolve_saves(striker: GameUnit, defender: GameUnit, weapon_name: Str
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s: %d hit%s on a 6 → AP(+%d)" % [
 				ap4_label, ap4_hits, ("" if ap4_hits == 1 else "s"), on6_bonus], true)
 		total += await _solo_save_batch(striker, defender, "%s (%s)" % [weapon_name, ap4_label], ap4_hits,
-			base_defense, ap + on6_bonus, profile, human_defends, bane, apply_deadly, dist_in > AiCombatMath.LONG_RANGE_IN, solo)
+			base_defense, ap + on6_bonus, profile, human_defends, bane, apply_deadly, dist_in > AiCombatMath.LONG_RANGE_IN, solo, alias_charge, dist_in)
 	var normal: int = hits - ap4_hits
 	# Row MOR-12 (EPOCH_73_V36, stamped only from 73 by AiEv.stamp_sergeant): the Sergeant bearer's
 	# share of the plain hits (its attacks over the profile's, rounded; the EV metric's same fraction)
@@ -8971,10 +9023,10 @@ func _solo_resolve_saves(striker: GameUnit, defender: GameUnit, weapon_name: Str
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s strikes %d hit%s with AP(+%d)" % [
 				sgt_rule, striker.get_name(), sgt_hits, ("" if sgt_hits == 1 else "s"), sgt_ap], true)
 		total += await _solo_save_batch(striker, defender, "%s (%s)" % [weapon_name, sgt_rule], sgt_hits,
-			base_defense, ap + sgt_ap, profile, human_defends, bane, apply_deadly, dist_in > AiCombatMath.LONG_RANGE_IN, solo)
+			base_defense, ap + sgt_ap, profile, human_defends, bane, apply_deadly, dist_in > AiCombatMath.LONG_RANGE_IN, solo, alias_charge, dist_in)
 		normal -= sgt_hits
 	if normal > 0:
-		total += await _solo_save_batch(striker, defender, weapon_name, normal, base_defense, ap, profile, human_defends, bane, apply_deadly, dist_in > AiCombatMath.LONG_RANGE_IN, solo)
+		total += await _solo_save_batch(striker, defender, weapon_name, normal, base_defense, ap, profile, human_defends, bane, apply_deadly, dist_in > AiCombatMath.LONG_RANGE_IN, solo, alias_charge, dist_in)
 	_vfx_hit_strip(defender, hits, _vfx_saves_made)
 	return total
 
@@ -8985,9 +9037,13 @@ func _solo_resolve_saves(striker: GameUnit, defender: GameUnit, weapon_name: Str
 ## human (their dice), else the AI auto-rolls its saves.
 func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String, count: int,
 		base_defense: int, ap: int, profile: Dictionary, human_defends: bool, bane: bool,
-		apply_deadly: bool = true, over9: bool = false, solo: Dictionary = {}) -> int:
+		apply_deadly: bool = true, over9: bool = false, solo: Dictionary = {},
+		charge_from_in: float = 0.0, dist_in: float = -1.0) -> int:
 	if count <= 0:
 		return 0
+	var shred_alias_live: bool = true
+	if typeof(profile.get("_shred_alias")) == TYPE_STRING and str(profile["_shred_alias"]) != "":
+		shred_alias_live = _solo_alias_family_over(charge_from_in > 0.0, dist_in, charge_from_in)
 	# TC-023 — the Fortified family is an ALL-MODELS unit trigger, and a Takedown save is a unit of [1]'s
 	# (GF v3.5.1 p.14): the picked model's own unit answers alone, so a sniped trooper keeps the Fortified
 	# his squad carries even under a non-Fortified attached hero (and never borrows a hero's). `solo` is {}
@@ -9128,7 +9184,7 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 	# the core's `.max()` twin). Shooting only: the melee resolve passes over9=false, so melee never
 	# widens (the core's no-pre-charge-gap shape).
 	var shred_extra := 0
-	if bool(profile.get("shred", false)):
+	if shred_alias_live and profile.get("shred", false) == true:
 		var boost_rule := ""
 		var boost_low := 1
 		var boost_over_in := 0.0
