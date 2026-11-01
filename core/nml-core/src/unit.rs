@@ -3036,6 +3036,13 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     } else {
         0
     };
+    // SHO-17 — the family walk's rules-must-log answer; `guarded` below shares it.
+    let guarded_name = if guarded_family_on(p, "Guarded", rules_epoch) { "Guarded" }
+        else if guarded_family_on(p, "Versatile Defense", rules_epoch) { "Versatile Defense" }
+        else if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) && guarded_family_on(p, "Sturdy", rules_epoch) { "Sturdy" }
+        else if rule_on(rules_epoch, EPOCH_13_WHO_WINS) && guarded_family_on(p, "Safety Gear", rules_epoch) { "Safety Gear" }
+        else if rule_on(rules_epoch, EPOCH_13_WHO_WINS) && guarded_family_on(p, "Tenacious", rules_epoch) { "Tenacious" }
+        else { "" };
     Ctx {
         quality: p.quality,
         defense: armored_defense(p.defense, armor),
@@ -3123,12 +3130,8 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         // `EPOCH_7_TABLE_RULES` — the wave-4 accounting's "no remap" call
         // stands: the registry primitive is untouched, only the name read
         // joins this flag.
-        guarded: guarded_family_on(p, "Guarded", rules_epoch)
-            || guarded_family_on(p, "Versatile Defense", rules_epoch)
-            || (rule_on(rules_epoch, EPOCH_7_TABLE_RULES) && guarded_family_on(p, "Sturdy", rules_epoch))
-            || (rule_on(rules_epoch, EPOCH_13_WHO_WINS)
-                && (guarded_family_on(p, "Safety Gear", rules_epoch) || guarded_family_on(p, "Tenacious", rules_epoch))),
-        guarded_name: "",
+        guarded: !guarded_name.is_empty(),
+        guarded_name,
         guarded_charge_over_in: 0.0,
         ranged_shrouding: ranged_shroud.is_some(),
         ranged_shroud_penalty_in: ranged_shroud.map_or(SHROUD_RANGE_PENALTY_IN, |s| s[0]),

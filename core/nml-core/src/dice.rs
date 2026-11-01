@@ -2187,17 +2187,22 @@ pub fn resolve_melee_leg(
                 0
             };
             let ap4 = if on6 > 0 { sixes(&faces).min(hits) } else { 0 };
-            // Melee reads no Cover (`profile_ev` keeps it on the shooting side). Guarded (over 9")
-            // DOES reach the charged side's saves at the table (main.gd:7096-7098): tray-exact
-            // applies it; without the switch the old Shielded-only read stands, flagged.
-            let over9 = def.guarded && charge_from_in > LONG_RANGE_IN && !def.sturdy_boost_gates_guarded;
-            if over9 && !tray_exact {
+            // SHO-17: the charge leg reads the 6" gate stamped on the defender's context; 0.0 below
+            // the epoch keeps the old over-9" reading (with `tray_exact`) byte-identical.
+            let gate_in = if def.guarded_charge_over_in > 0.0 { def.guarded_charge_over_in } else { LONG_RANGE_IN };
+            let over9 = def.guarded && charge_from_in > gate_in && !def.sturdy_boost_gates_guarded;
+            let applies = over9 && (tray_exact || def.guarded_charge_over_in > 0.0);
+            if over9 && !applies {
                 out.mark("guarded_over9");
+            }
+            if over9 && applies && def.guarded_charge_over_in > 0.0 {
+                let rule = if def.guarded_name.is_empty() { "Guarded" } else { def.guarded_name };
+                out.log.push(format!("{rule}: {def_owner} charged from over {}in — +1 Defense", gate_in as i64));
             }
             let pierce = pierce_ignores(p, sh.att);
             let save_def = guarded_defense(
                 shielded_defense(def.defense, if pierce { 0 } else { def.shielded_bonus() }, def.def_floor()),
-                over9 && tray_exact && !pierce, def.def_floor());
+                applies && !pierce, def.def_floor());
             shielded_alias_fired |= def.shielded && def.shielded_alias != ShieldedAlias::None;
             // Block B7 — Piercing Growth's AP delta, melee half (see the
             // shooting site's own note above).
@@ -2503,12 +2508,21 @@ pub fn impact_saves_with_tray(
 ) -> ShootResult {
     let mut out = ShootResult::default();
     if hits <= 0 { return out; }
-    let over9 = match charge {
-        None => def.guarded,
-        Some((gap_in, _)) => def.guarded && gap_in > LONG_RANGE_IN && !def.sturdy_boost_gates_guarded,
+    // SHO-17 — the 6" gate off the defender's context; 0.0 below the epoch keeps the old read.
+    let gate_in = if def.guarded_charge_over_in > 0.0 { def.guarded_charge_over_in } else { LONG_RANGE_IN };
+    let (over9, epoch_gate) = match charge {
+        None => (def.guarded, false),
+        Some((gap_in, _)) => {
+            let over = def.guarded && gap_in > gate_in && !def.sturdy_boost_gates_guarded;
+            (over, over && def.guarded_charge_over_in > 0.0)
+        }
     };
-    let exact = over9 && matches!(charge, Some((_, true)));
+    let exact = over9 && (matches!(charge, Some((_, true))) || epoch_gate);
     if over9 && !exact { out.mark("guarded_over9"); }
+    if epoch_gate {
+        let rule = if def.guarded_name.is_empty() { "Guarded" } else { def.guarded_name };
+        out.log.push(format!("{rule}: {def_owner} charged from over {}in — +1 Defense", gate_in as i64));
+    }
     let bare = ShootProfile { ap, ..Default::default() };
     let sd = guarded_defense(shielded_defense(def.defense, def.shielded_bonus(), def.def_floor()), exact, def.def_floor());
     let w = save_batch(&bare, def, def_owner, hits, sd, ap, false, false, 1, false, tray, &mut out);
