@@ -1238,6 +1238,8 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	await _solo_apply_piercing_tag(unit)
 	_solo_apply_precision_tag(unit)
 	_solo_apply_precision_target(unit)
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		await _solo_try_precision_spot(unit)   # rules 3.6: the spot rolls BEFORE the bearer's attacks
 	await _solo_apply_reckless_piercing(unit)
 	await _solo_apply_storm_attack(unit)
 	# Surprise Attack moved to activation start (D19 a, above the move) — see the call there.
@@ -1278,7 +1280,7 @@ func _solo_activate_one_ai_body() -> GameUnit:
 			and int(report.get("action", 0)) != AiDecision.Action.CHARGE:
 		await _solo_shooting_morale(unit, alive_before_dangerous, _roller_label(unit), wounds_before_dangerous,
 			"Dangerous terrain")
-	if unit != null:
+	if unit != null and AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
 		await _solo_try_precision_spot(unit)   # wave B: once per activation
 	# Ambush Re-Deployment fires "when a unit ... ENDS its activation" — the very last beat, after
 	# every attack and follow-up step, so the unit leaves with everything it did already resolved.
@@ -22709,19 +22711,27 @@ func _solo_apply_piercing_tag(unit: GameUnit) -> void:
 					continue
 			else:
 				member.unit_properties["piercing_tag_used"] = true
-			# Rules 3.6 (EPOCH_73_V36): X tokens stacked on one unit, or one token on each of up to X units.
-			var v36_tag: bool = n == "Piercing Tag" and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
-			var picks: Array = _solo_utility_targets(member, "enemy", float(sp.get("range_in", 24.0)), bool(sp.get("needs_los", true)), markers) if v36_tag else []
+			# Rules 3.6 (EPOCH_73_V36): Tags stack X tokens or spread one each; Targets put ONE token on each of
+			# up to X units and give a flat +1 (the 3.5 reading scaled with the token count).
+			var v36: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
+			var v36_tag: bool = n == "Piercing Tag" and v36
+			var v36_target: bool = n == "Piercing Target" and v36
+			var picks: Array = _solo_utility_targets(member, "enemy", float(sp.get("range_in", 24.0)), bool(sp.get("needs_los", true)), markers) if (v36_tag or v36_target) else []
 			var spread: bool = picks.size() >= 2
 			if not spread:
 				picks = [tgt]
 			for p in picks:
 				var pu := p as GameUnit
-				pu.unit_properties["piercing_tag_markers"] = int(pu.unit_properties.get("piercing_tag_markers", 0)) + (1 if spread else markers)
+				pu.unit_properties["piercing_tag_markers"] = int(pu.unit_properties.get("piercing_tag_markers", 0)) + (1 if (spread or v36_target) else markers)
 				# D42 (a), EPOCH_67_MARKERS_BURSTS: which name placed the marker, so the spend
 				# half (_solo_spend_piercing_tag) knows whether the pool stands (Piercing
 				# Target, no removal clause) or spends whole (the rest of the family).
 				pu.unit_properties["piercing_tag_source"] = n
+			if v36_target:
+				var names := picks.map(func(p): return (p as GameUnit).get_name())
+				_log_rule_event(BattleLog.Category.COMBAT,
+					"%s: %s places 1 token on each of %s — a friendly attack gets +1 AP" % [n, member.get_name(), ", ".join(names)], true)
+				continue
 			if v36_tag:
 				var placed := "1 token each, spread over %d units" % picks.size() if spread \
 					else "%d token%s, stacked on %s" % [markers, ("" if markers == 1 else "s"), tgt.get_name()]
@@ -22746,10 +22756,12 @@ func _solo_spend_piercing_tag(target: GameUnit) -> int:
 	if markers <= 0:
 		return 0
 	if str(target.unit_properties.get("piercing_tag_source", "")) == "Piercing Target":
+		var v36: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
+		var flat: int = 1 if v36 else markers
 		if battle_log != null:
 			_log_rule_event(BattleLog.Category.COMBAT,
-				"Piercing Target: +AP(%d) stands while %s lives" % [markers, target.get_name()], true)
-		return markers
+				"Piercing Target: +AP(%d) stands while %s lives%s" % [flat, target.get_name(), " (+1 (Target))" if v36 else ""], true)
+		return flat
 	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:   # rules 3.6: ONE token per attack, +1
 		target.unit_properties["piercing_tag_markers"] = markers - 1
 		_log_rule_event(BattleLog.Category.COMBAT,
