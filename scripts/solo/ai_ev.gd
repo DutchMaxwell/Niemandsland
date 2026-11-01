@@ -889,13 +889,18 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 		hits -= cancels
 	# — Saves: Shielded then Cover (shooting only; Blast AND Indirect ignore cover — wave 5 — not
 	#   Shielded) then AP —
-	var defense := AiCombatMath.shielded_defense(int(def_ctx.get("defense", 4)), bool(def_ctx.get("shielded", false)))
+	# SHO-14e — the ESTIMATE twin of SHO-14: the resolver's own `pierce_ignores` flag drops the
+	# target's POSITIVE Defense modifiers at `EPOCH_73_V36`. Armor and Fortified stay.
+	var pierce := AiCombatMath.pierce_ignores(profile)
+	var defense := AiCombatMath.shielded_defense(int(def_ctx.get("defense", 4)),
+		false if pierce else bool(def_ctx.get("shielded", false)))
 	if not melee and blast <= 1 and not bool(profile.get("indirect", false)) \
 			and not bool(profile.get("ignores_cover", false)):
 		# Ignores Cover (head wave 1): the dice path skips the cover save for these weapons
 		# (main.gd:3131/9755) — the EV judge kept charging it, so covered targets looked
 		# tougher to exactly the weapons built to punish them.
-		defense = AiCombatMath.covered_defense(defense, bool(def_ctx.get("in_cover", false)))
+		defense = AiCombatMath.covered_defense(defense,
+			false if pierce else bool(def_ctx.get("in_cover", false)))
 	# Guarded (rules 3.6): the +1 needs the attack to cross the stamped gate — the shot distance
 	# over 9", or (SHO-17e) the W1.5b pre-charge gap over the 6" charge gate; 0.0 below the epoch
 	# keeps the old melee number. The charge side rides `melee_ev`'s `charge_dist_in`.
@@ -903,7 +908,7 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 		else float(def_ctx.get("guarded_charge_over_in", 0.0))
 	if guard_gate > 0.0:
 		defense = AiCombatMath.guarded_defense(defense,
-			bool(def_ctx.get("guarded", false)) and dist_in > guard_gate)
+			(not pierce) and bool(def_ctx.get("guarded", false)) and dist_in > guard_gate)
 	var ap := int(profile.get("ap", 0)) + int(versatile.get("ap", 0))   # Versatile Attack AP(+1) mode
 	# Target-property conditional AP (Shatter/Tear/Melee Slayer/Disintegrate): value the extra AP this
 	# weapon gets against THIS target, so the AI's targeting matches the dice resolution. One truth with

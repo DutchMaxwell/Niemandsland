@@ -272,6 +272,13 @@ static func melee_hit_modifier(target_evasive: bool, target_melee_evasion: bool 
 	return -EVASIVE_HIT_PENALTY if (target_evasive or target_melee_evasion) else 0
 
 
+## Rules 3.6 (SHO-14/SHO-14e) — a Pierce weapon's saves ignore the target's POSITIVE Defense
+## modifiers from `EPOCH_73_V36`. ONE truth for the resolver (`main.gd`) and the AI estimate.
+static func pierce_ignores(profile: Dictionary) -> bool:
+	return AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
+		and (profile.get("rules", []) as Array).has("Pierce")
+
+
 ## The defender's Defense value after Shielded (army-book rule: +1 to Defense rolls = a save target one
 ## better), floored at 2+ (a natural 1 always fails a Defense roll too — core p.1 "Modifiers").
 static func shielded_defense(defense: int, is_shielded: bool) -> int:
