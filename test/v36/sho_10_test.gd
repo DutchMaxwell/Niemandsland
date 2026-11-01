@@ -47,14 +47,14 @@ func _rifle(over: Dictionary = {}) -> Dictionary:
 
 
 func test_cond_met_is_the_shared_target_condition_test() -> void:
-	assert_bool(AiCombatMath.cond_met("def_5_6", 0, 1, 5, false)).is_true()
-	assert_bool(AiCombatMath.cond_met("def_5_6", 0, 1, 4, false)).is_false()
-	assert_bool(AiCombatMath.cond_met("over_half_range", 0, 1, 4, false, 13.0, false,
+	assert_bool(AiCombatMath.cond_met("def_5_6", {}, 1, 5, false)).is_true()
+	assert_bool(AiCombatMath.cond_met("def_5_6", {}, 1, 4, false)).is_false()
+	assert_bool(AiCombatMath.cond_met("over_half_range", {}, 1, 4, false, 13.0, false,
 		{"weapon_range_in": 24.0})).is_true()
-	assert_bool(AiCombatMath.cond_met("over_half_range", 0, 1, 4, false, 10.0, false,
+	assert_bool(AiCombatMath.cond_met("over_half_range", {}, 1, 4, false, 10.0, false,
 		{"weapon_range_in": 24.0})).is_false()
-	assert_bool(AiCombatMath.cond_met("vs_tough_ge", 3, 3, 4, false)).is_true()
-	assert_bool(AiCombatMath.cond_met("vs_tough_ge", 3, 2, 4, false)).is_false()
+	assert_bool(AiCombatMath.cond_met("vs_tough_ge", {"threshold": 3}, 3, 4, false)).is_true()
+	assert_bool(AiCombatMath.cond_met("vs_tough_ge", {"threshold": 3}, 2, 4, false)).is_false()
 
 
 func test_the_window_carries_the_entry_condition_and_gates_on_the_target() -> void:
@@ -62,7 +62,6 @@ func test_the_window_carries_the_entry_condition_and_gates_on_the_target() -> vo
 	var u := _unit(["Probe Base", "Probe Bane"])
 	var win: Dictionary = AiEv.bane_boost_window(u, true)
 	assert_int(int(win.get("low", 0))).is_equal(5)
-	assert_str(str(win.get("condition", ""))).is_equal("def_5_6")
 	var rifle := _rifle()
 	var r: Dictionary = AiEv.stamp_sergeant([rifle], u)[0]
 	assert_bool(AiEv.bane_applies(r, 1, 3, 12.0, false)) \
@@ -82,14 +81,14 @@ func test_over_half_range_opens_only_beyond_half_the_weapon_range() -> void:
 
 
 func test_the_ev_prices_the_gated_window_only_when_the_condition_holds() -> void:
-	var baned := _rifle({"bane": true, "bane_condition": "def_5_6"})
+	var baned := _rifle({"bane": true, "bane_condition": {"condition": "def_5_6"}})
 	var plain := _rifle({"bane": false})
 	var soft := {"defense": 3, "tough": 1, "models": 5}
 	var hard := {"defense": 5, "tough": 1, "models": 5}
 	assert_float(AiEv.profile_ev(baned, ATT, soft, 12.0, false)) \
 		.is_equal_approx(AiEv.profile_ev(plain, ATT, soft, 12.0, false), 0.0001)
 	assert_bool(AiEv.profile_ev(baned, ATT, hard, 12.0, false)
-		< AiEv.profile_ev(plain, ATT, hard, 12.0, false)).is_true()
+		> AiEv.profile_ev(plain, ATT, hard, 12.0, false)).is_true()
 
 
 func test_the_stamp_reads_the_condition_only_from_epoch_73() -> void:
@@ -101,4 +100,5 @@ func test_the_stamp_reads_the_condition_only_from_epoch_73() -> void:
 		.override_failure_message("epoch 72 ignores the condition").is_false()
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
 	var now: Array = AiEv.stamp_sergeant([_rifle()], u)
-	assert_str(str((now[0] as Dictionary).get("bane_condition", ""))).is_equal("def_5_6")
+	var got: Dictionary = (now[0] as Dictionary).get("bane_condition", {})
+	assert_str(str(got.get("condition", ""))).is_equal("def_5_6")

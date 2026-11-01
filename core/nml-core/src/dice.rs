@@ -29,7 +29,7 @@
 use crate::combat::modified_hit_target;
 use crate::acts::{rule_on, EPOCH_73_V36};
 use crate::combat::{
-    cond_ap_why, conditional_ap_bonus, conditional_ap_bonus_vs, covered_defense, deadly_multiplier, fortified_ap, guarded_defense, hit_ev, CondApTarget,
+    cond_ap_why, cond_met, conditional_ap_bonus, conditional_ap_bonus_vs, covered_defense, deadly_multiplier, fortified_ap, guarded_defense, hit_ev, CondApTarget,
     impact_total_dice, melee_hit_modifier, fold_hit, reliable_quality, save_target,
     shielded_defense, morale_target, shooting_hit_modifier, shrouded_reach, thrust_to_hit,
     versatile_best_mode, BEST_HIT_TARGET, FEARLESS_RECOVER_TARGET, HEAVY_IMPACT_AP,
@@ -177,6 +177,9 @@ pub struct ShootResult {
     /// volley per weapon, read by `save_batch`; the melee resolve never sets
     /// it — its save batches run on fresh results, the base window.
     pub bane_low: i64,
+    /// Rules 3.6 (SHO-10): the re-roll entry's target condition did NOT hold
+    /// against this defender, so the whole Bane window (base 6s leg included) stays shut.
+    pub bane_gated: bool,
     /// How many saves the WIDENED window added to the re-roll batches (the
     /// successful 5s the base 6s-only leg would never have touched) — the volley
     /// turns a non-zero count into the one rules-must-log line.
@@ -484,8 +487,10 @@ fn save_batch(
     let mut reroll: Vec<u8> = Vec::new();
     // Wave 4 — the widened window (0 = the base 6s-only leg, byte-exact):
     // successful unmodified saves from `bane_low` up re-roll too.
-    let bane_from = if p.bane && out.bane_low > 1 { out.bane_low } else { 6 };
-    if p.bane {
+    // SHO-10: a re-roll entry's target condition shuts the whole window.
+    let bane = p.bane && !out.bane_gated;
+    let bane_from = if bane && out.bane_low > 1 { out.bane_low } else { 6 };
+    if bane {
         let n = faces.iter().filter(|&&f| f == 6 || (f as i64 >= bane_from && f as i64 >= target)).count() as i64;
         if n > 0 {
             reroll = tray.roll(n as usize);
@@ -836,6 +841,8 @@ pub fn resolve_volley_leg(
     // weapon opened it ("Mischievous Boost" at epoch 6, "Bestial Boost" at
     // epoch 7); "" = the base 6s-only window fired nothing.
     let mut bane_rule = "";
+    // SHO-10 — the words naming the target condition that opened the window.
+    let mut bane_why = "";
     // Wave 3 — the Shielded-family alias's own rules-must-log flag: the +1
     // rode a family DATA alias rather than the literal name, one line per
     // volley below (`ShootResult.log` precedent).
@@ -1240,9 +1247,13 @@ pub fn resolve_volley_leg(
         // 0 = the base 6s-only window; the melee resolve never sets it (its
         // save batches run on fresh results), so melee never widens — no
         // pre-charge gap (the shred2 precedent).
-        out.bane_low = if p.bane_low > 1 && mod_dist_in > p.bane_over_in { p.bane_low } else { 0 };
+        // SHO-10: the re-roll entry's optional target condition, the SAME test the
+        // conditional-AP leg runs; "" on every shipped entry keeps this byte-identical.
+        out.bane_gated = !p.bane_condition.is_empty() && !cond_met(&CondAp { condition: p.bane_condition.clone(), threshold: p.bane_threshold, ..Default::default() }, &CondApTarget::of(def, p.range as f64), false, mod_dist_in, false);
+        out.bane_low = if p.bane_low > 1 && mod_dist_in > p.bane_over_in && !out.bane_gated { p.bane_low } else { 0 };
         if out.bane_low > 1 {
             bane_rule = p.bane_rule;
+            bane_why = cond_ap_why(&p.bane_condition);
         }
         let on6 = if p.on6_ap > 0 {
             p.on6_ap
@@ -1510,7 +1521,7 @@ pub fn resolve_volley_leg(
     }
     if out.bane_rerolled > 0 {
         out.log.push(format!(
-            "{bane_rule}: {def_owner} — {} successful save(s) of 5-6 re-roll",
+            "{bane_rule}: {def_owner} — {} successful save(s) of 5-6 re-roll{bane_why}",
             out.bane_rerolled
         ));
     }

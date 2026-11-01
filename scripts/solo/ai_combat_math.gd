@@ -517,42 +517,48 @@ static func conditional_ap_bonus(params: Dictionary, target_tough: int, target_d
 	if gate == "hold_or_charge":
 		if not (is_charging or (not melee and bool(target.get("held", false)))):
 			return 0
-	var threshold: int = int(params.get("threshold", 0))
+	return bonus if cond_met(condition, params, target_tough, target_defense, is_charging,
+		dist_in, melee, target) else 0
+
+
+## The ONE target-condition test both 3.6 legs share: the conditional-AP match above and the save
+## re-roll window (main.gd's Bane leg). Twin of core/nml-core/src/combat.rs cond_met. `condition` is
+## the translated spec spelling; `params` carries threshold/over_in/within_in; `target` is the
+## CondApTarget view (weapon_range_in for over_half_range, held for the Slayer gate).
+static func cond_met(condition: String, params: Dictionary, target_tough: int, target_defense: int,
+		is_charging: bool, dist_in: float = -1.0, melee: bool = false, target: Dictionary = {}) -> bool:
+	var over_in: float = float(params.get("over_in", LONG_RANGE_IN))
+	var within_in: float = float(params.get("within_in", 0.0))
 	match condition:
+		"always":
+			return true
 		"vs_tough_ge":
-			return bonus if target_tough >= threshold else 0
+			return target_tough >= int(params.get("threshold", 0))
 		"vs_armor":
-			return bonus if target_defense <= threshold else 0
+			return target_defense <= int(params.get("threshold", 0))
 		"in_melee":
-			return bonus if melee else 0
+			return melee
 		"ranged":
-			return bonus if not melee else 0
+			return not melee
 		"ranged_over_or_charge":
-			return bonus if is_charging or (not melee and dist_in > over_in) else 0
+			return is_charging or (not melee and dist_in > over_in)
 		"hold_or_charge":
-			return bonus if is_charging or (not melee and bool(target.get("held", false))) else 0
+			return is_charging or (not melee and bool(target.get("held", false)))
 		"on_charge":
-			# Charge-gated, no target property (Piercing Assault: "AP(+1) when charging").
-			return bonus if is_charging else 0
+			return is_charging
 		"ranged_over":
-			# Range-gated, no target property (Piercing Hunter: "shoots at enemies over 9\": AP(+1)").
-			return bonus if (not melee and dist_in > over_in) else 0
+			return not melee and dist_in > over_in
 		"ranged_within":
-			# Point-Blank Piercing: "shooting enemies within 12\"" — the cap is INCLUSIVE and an
-			# unknown distance (< 0) stays shut, mirroring core/nml-core/src/combat.rs:389 exactly.
-			return bonus if (not melee and within_in > 0.0 and dist_in >= 0.0 and dist_in <= within_in) else 0
+			return not melee and within_in > 0.0 and dist_in >= 0.0 and dist_in <= within_in
 		"over_half_range":
-			# Exactly half the range is not beyond it; no range or no distance stays shut.
-			var range_in := float(target.get("weapon_range_in", 0.0))
-			return bonus if (not melee and range_in > 0.0 and dist_in >= 0.0 and dist_in > range_in / 2.0) else 0
+			return not melee and float(target.get("weapon_range_in", 0.0)) > 0.0 and dist_in >= 0.0 and dist_in > float(target.get("weapon_range_in", 0.0)) / 2.0
 		"def_5_6":
-			return bonus if target_defense >= 5 else 0
+			return target_defense >= 5
 		"above_half_strength":
-			return bonus if bool(target.get("above_half_strength", false)) else 0
+			return bool(target.get("above_half_strength", false))
 		"shaken_or_fatigued":
-			return bonus if bool(target.get("shaken_or_fatigued", false)) else 0
-		_:
-			return 0
+			return bool(target.get("shaken_or_fatigued", false))
+	return false
 
 
 ## Rules-must-log: the words naming a rules 3.6 condition that fired, "" for every older spelling (their log

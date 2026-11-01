@@ -8878,7 +8878,10 @@ func _solo_resolve_saves(striker: GameUnit, defender: GameUnit, weapon_name: Str
 	elif on6_bonus > 0:
 		ap4_label = "Crack"
 	var ap4_hits: int = AiCombatMath.rending_ap_hits(to_hit_faces, hits) if on6_bonus > 0 else 0
-	var bane: bool = _solo_striker_has_bane(striker, profile, melee)
+	# SHO-10: a re-roll entry's optional target condition opens (or shuts) the whole Bane window;
+	# every shipped entry is unconditional, so the old read stands.
+	var bane: bool = _solo_striker_has_bane(striker, profile, melee) and AiEv.bane_applies(profile,
+		_solo_unit_tough(defender), int(defender.unit_properties.get("defense", 4)), dist_in, melee)
 	var total := 0
 	# AP-on-6 sub-volley first; a Blast-multiplied hit-count can only shrink the count via the cap.
 	if ap4_hits > 0:
@@ -9016,6 +9019,9 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 		# shooting only): the window's successful 5s+ re-roll beside the base 6s leg; low 6 = no boost.
 		var win: Dictionary = AiEv.bane_boost_window(striker, over9)
 		var bane_low: int = int(win.get("low", AiCombatMath.UNMODIFIED_SIX))
+		# SHO-10: the words naming the target condition that opened the window ("" = unconditional).
+		var bane_spec: Dictionary = profile.get("bane_condition", {})
+		var bane_why := "" if bane_spec.is_empty() else AiCombatMath.conditional_ap_why(bane_spec)
 		var sixes: int = AiCombatMath.bane_reroll_count_from(save_faces, base_defense + ap, bane_low)
 		if sixes > 0:
 			if battle_log != null:
@@ -9026,8 +9032,9 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 					battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s re-rolls %d unmodified Defense 6%s" % [
 						bane_name if not bane_name.is_empty() else "Bane", defender.get_name(), sixes, ("" if sixes == 1 else "s")], true)
 				else:
-					battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s re-rolls %d unmodified Defense roll%s of %d+" % [
-						str(win["rule"]), defender.get_name(), sixes, ("" if sixes == 1 else "s"), bane_low], true)
+					battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s re-rolls %d unmodified Defense roll%s of %d+%s" % [
+						str(win["rule"]), defender.get_name(), sixes, ("" if sixes == 1 else "s"), bane_low,
+						("" if bane_why.is_empty() else " (%s)" % bane_why)], true)
 			reroll = await _owner_roll(defender, sixes, base_defense + ap, "defense",
 				"Defense re-roll (Bane) vs %s" % weapon_name, {"what": "Bane re-roll vs %s" % weapon_name})
 		blocks = AiCombatMath.blocks_with_bane_from(save_faces, reroll, base_defense, ap, bane_low)
