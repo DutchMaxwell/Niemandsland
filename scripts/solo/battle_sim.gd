@@ -990,7 +990,9 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 				# W-P1 parity (p.9): striking back fatigues the DEFENDER too — the
 				# game stamps both sides, the sim only ever stamped the charger.
 				tu["fatigued"] = true
-			_expected_melee_morale(su, su_before, tu, tu_before)
+			# MEL-10e: the sim's charge move rolls no Dangerous test, so the charge-move
+			# self-wound term is 0; the argument keeps the call shaped like the table twin.
+			_expected_melee_morale(su, su_before, tu, tu_before, 0)
 	# Shaken recovery (p.10): the idle activation clears Shaken — the recovery
 	# hold plan()/the rollout policy hand a shaken unit buys next round back.
 	if was_shaken and kind == AiDecision.Action.HOLD and shoot_key == "":
@@ -1890,14 +1892,21 @@ static func _expected_shooting_morale(tu: Dictionary, alive_before: int, wounds_
 		tu["shaken"] = true
 
 
-## Melee morale (p.10 via main.gd's flow): a destroyed side loses first;
-## otherwise the side that dealt FEWER wounds tests (tie = nobody). A fail at/below half is a ROUT — the loser
-## leaves the board. Fear(X) counts as having dealt +X wounds for the COMPARISON
-## only (p.13; the same AiCombatMath.fear_adjusted_wounds the table path uses).
-static func _expected_melee_morale(su: Dictionary, su_before: int, tu: Dictionary, tu_before: int) -> void:
-	var dealt_by_su := AiCombatMath.fear_adjusted_wounds(tu_before - _wounds_left(tu),
+## Melee morale (p.10 via main.gd's flow): a destroyed side loses first; otherwise the side that
+## TOOK more wounds over the activation tests (tie = nobody). A fail at/below half is a ROUT — the
+## loser leaves the board. Rules 3.6 (EPOCH_73_V36) reads the tally as wounds TAKEN: the enemy's
+## strikes, the enemy's Fear(X) (which rides the ENEMY's tally) and the charger's own charge-move
+## self-wounds. Below 73 the side that dealt FEWER wounds loses and self-wounds never count. The
+## same AiCombatMath.fear_adjusted_wounds the table path uses.
+static func _expected_melee_morale(su: Dictionary, su_before: int, tu: Dictionary, tu_before: int,
+		self_wounds: int = 0) -> void:
+	var taken_by_su := su_before - _wounds_left(su)
+	var taken_by_tu := tu_before - _wounds_left(tu)
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		taken_by_su += maxi(self_wounds, 0)
+	var score_su := AiCombatMath.fear_adjusted_wounds(taken_by_tu,
 		AiEv.unit_rating(su["unit"], "Fear"))
-	var dealt_by_tu := AiCombatMath.fear_adjusted_wounds(su_before - _wounds_left(su),
+	var score_tu := AiCombatMath.fear_adjusted_wounds(taken_by_su,
 		AiEv.unit_rating(tu["unit"], "Fear"))
 	var loser: Dictionary
 	if int(su["alive"]) <= 0 and int(tu["alive"]) <= 0:
@@ -1906,10 +1915,10 @@ static func _expected_melee_morale(su: Dictionary, su_before: int, tu: Dictionar
 		loser = su
 	elif int(tu["alive"]) <= 0:
 		loser = tu
-	elif dealt_by_su == dealt_by_tu:
+	elif score_su == score_tu:
 		return
 	else:
-		loser = tu if dealt_by_su > dealt_by_tu else su
+		loser = tu if score_su > score_tu else su
 	if int(loser["alive"]) <= 0 or not _morale_fails_expected(loser):
 		return
 	if _below_half(loser):
