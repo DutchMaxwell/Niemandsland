@@ -3518,10 +3518,17 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
                 .collect())
             .unwrap_or_default();
         if let (Some(host), Some(&alive)) = (host, state.alive.get(i)) {
-            if crate::unit::defence_family_live(
+            let fortified_live = crate::unit::defence_family_live(
                 host, alive, &heroes, &["Fortified"], rules_epoch,
-            ) == Some(false) {
+            );
+            if fortified_live == Some(false) {
                 c.fortified = false;
+            }
+            // Rules 3.6 (row W1.TRACE) — the live majority granting Fortified
+            // names itself once per read (arm `fortified-grant-live`).
+            if fortified_live == Some(true) && c.fortified {
+                trace_rule("fortified-grant-live", "Fortified", &format!(
+                    "live majority holds Fortified (unit {i})"));
             }
             if crate::unit::defence_family_live(
                 host, alive, &heroes,
@@ -3532,7 +3539,21 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
             }
         }
     }
-    c.hit_mod = mods::sum(state, i, mods::Role::AttackerOwn, melee, |r| r.hit_mod);
+    // Rules 3.6 (row W1.TRACE) — the utility-buff family's live hit grant
+    // names itself (arm `utility-grant-live`), one line per firing record.
+    let mut hit_mod = 0;
+    for u in [Some(i), state.attached_to[i]].into_iter().flatten() {
+        for r in &state.buffs[u] {
+            if mods::matches(r, mods::Role::AttackerOwn, melee) {
+                hit_mod += r.hit_mod;
+                if rule_on(rules_epoch, EPOCH_73_V36) {
+                    trace_rule("utility-grant-live", &r.name, &format!(
+                        "{:+} to hit on {}", r.hit_mod, statics[state.roster.profile[i]].name));
+                }
+            }
+        }
+    }
+    c.hit_mod = hit_mod;
     c.vs_hit_mod = mods::sum(state, i, mods::Role::VsTarget, melee, |r| r.hit_mod);
     // Wave 4 follow-up (port-vengeance) — "friendly units get +X to hit rolls
     // when attacking that unit" (main.gd:5806-5817): the markers sit ON the
@@ -3673,6 +3694,10 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
         // The Regeneration-primitive boosts: the granted entry's printed
         // targets, folded by the static stamp's own running-MIN rule.
         if grants && mods::granted(state, i, "Enhanced Self-Repair") {
+            if rule_on(rules_epoch, EPOCH_73_V36) {
+                trace_rule("regen-boost-live", "Enhanced Self-Repair", &format!(
+                    "live Boost leg on {}", statics[state.roster.profile[i]].name));
+            }
             c.regeneration = true;
             c.regen_target = fold_min(c.regen_target, SELF_REPAIR_BOOST_TARGET);
             c.regen_target_spell = fold_min(c.regen_target_spell, SELF_REPAIR_BOOST_TARGET);
@@ -5484,7 +5509,7 @@ fn strike_phase(
                     (prof36.is_some() && prof36.unwrap().thrust) || att.thrust_grant,
                     crate::combat::BEST_HIT_TARGET,
                 ),
-                &def, prof36, &mut shot.log);
+                &def, prof36, &mut shot.log, seams.rules_epoch);
             att.versatile_pick_hit = vh;
             att.versatile_pick_ap = va;
             att.versatile_latched = vl;
@@ -7458,6 +7483,7 @@ struct SplitGroup {
 /// every later volley/charge of the activation reuses it. Rules-must-log: one
 /// line per activation naming the pick. Returns the latched
 /// `(hit_mod, ap_mod)` and whether a pick is latched for this activation.
+#[allow(clippy::too_many_arguments)]
 fn versatile_latch(
     next: &mut State,
     statics: &[UnitStatic],
@@ -7466,6 +7492,7 @@ fn versatile_latch(
     def: &Ctx,
     prof: Option<&ShootProfile>,
     log: &mut Vec<String>,
+    rules_epoch: u32,
 ) -> (i64, i64, bool) {
     if next.versatile_pick_round[mi] == next.round {
         let mode = next.versatile_pick_mode[mi];
@@ -7488,6 +7515,14 @@ fn versatile_latch(
         statics[next.roster.profile[mi]].name,
         if ap_mod > 0 { "AP(+1)" } else { "+1 to hit" }
     ));
+    // Rules 3.6 (row W1.TRACE) — the once-per-activation pick names itself
+    // (arm `versatile-attack`).
+    if rule_on(rules_epoch, EPOCH_73_V36) {
+        trace_rule("versatile-attack", "Versatile Attack", &format!(
+            "{} picks {} for this activation",
+            statics[next.roster.profile[mi]].name,
+            if ap_mod > 0 { "AP(+1)" } else { "+1 to hit" }));
+    }
     (hit_mod, ap_mod, true)
 }
 
@@ -8635,6 +8670,11 @@ fn resolve_with(
     // rule and the rolled distance (`place_d3_hop` above), or per EPOCH_73_V36
     // rolled move (`bounding_move_in`).
     if let Some(line) = hop_log {
+        // Rules 3.6 (row W1.TRACE) — the Bounding hop names itself once
+        // (arm `bounding`), recorded band leg excluded by construction.
+        if rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) {
+            trace_rule("bounding", "Bounding", &line);
+        }
         if let Some((_, shot)) = dice.as_mut() {
             shot.log.push(line);
         }
@@ -9340,7 +9380,7 @@ fn resolve_with(
                                         let (vh, va, vl) = versatile_latch(&mut next, statics, *mi,
                                             crate::combat::reliable_quality(att.quality,
                                                 prof36.map(|p| p.reliable).unwrap_or(false)),
-                                            &def, prof36, &mut shot.log);
+                                            &def, prof36, &mut shot.log, seams.rules_epoch);
                                         att.versatile_pick_hit = vh;
                                         att.versatile_pick_ap = va;
                                         att.versatile_latched = vl;
@@ -9632,6 +9672,12 @@ fn resolve_with(
             };
             let (_, shot) = dice.as_mut().unwrap();
             shot.log.push(format!("{rule}: {} steps up to {band}\" after its attack", us.name));
+            // Rules 3.6 (row W1.TRACE) — the melee leg's post-attack step
+            // names itself once (arm `hit-and-run`).
+            if !shot_leg && rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) {
+                trace_rule("hit-and-run", "Hit & Run", &format!(
+                    "{} steps up to {band}\" after its melee attack", us.name));
+            }
             // Retreating Strike (main.gd:1097, resolver wave A): the post-
             // MELEE step may lash out -- the shooting leg never does.
             if !shot_leg {
