@@ -1,5 +1,4 @@
 //! Rules 3.6 row BG-03c tests (unstable ruins, AI move cost) for the sim module; owned by lane ux.
-use super::*;
 
 use crate::mv::cost::{segment_cost, terrain_cost_at, Grid, StepOpts};
 use crate::mv::T_RUINS;
