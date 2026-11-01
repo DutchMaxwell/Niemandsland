@@ -1818,6 +1818,46 @@ fn stealth_family_on(p: &Profile, rule: &str, rules_epoch: u32) -> bool {
     rule_on_all_models(p, rule)
 }
 
+/// Rules 3.6 (row W1.4b) — the LIVE quantifier of the Stealth family.
+/// `Some(on)` from `EPOCH_73_V36`; `None` below, so the caller keeps the static
+/// stamp byte-identical. A listed name needs a strict majority of the LIVING
+/// models (`host_alive` plus every living joined hero, one model however Tough);
+/// any other name keeps the all-models read. A dead model carries nothing.
+pub(crate) fn stealth_family_live(
+    host: &Profile, host_alive: i64, heroes: &[(&Profile, i64)], rule: &str, rules_epoch: u32,
+) -> Option<bool> {
+    if !rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
+        return None;
+    }
+    let (with, total) = stealth_live_counts(host, host_alive, heroes, rule);
+    if STEALTH_MOST_MODELS.contains(&rule) {
+        Some(most_models_of(with, total))
+    } else {
+        Some(with == total)
+    }
+}
+
+/// The live carrier tally of `rule` over the joined unit: the host's living
+/// models share the host's rules, and every living joined hero is one model.
+pub(crate) fn stealth_live_counts(
+    host: &Profile, host_alive: i64, heroes: &[(&Profile, i64)], rule: &str,
+) -> (i64, i64) {
+    let host_alive = host_alive.max(0);
+    let mut with = if has_special_rule(&host.special_rules, rule) { host_alive } else { 0 };
+    let mut total = host_alive;
+    for (hero, alive) in heroes {
+        let alive = (*alive).max(0);
+        if alive <= 0 {
+            continue;
+        }
+        total += 1;
+        if has_special_rule(&hero.special_rules, rule) {
+            with += 1;
+        }
+    }
+    (with, total)
+}
+
 /// Row MOR-06 (D-MOST) — the names whose 3.6 text counts most models; their
 /// Boosts and data aliases keep the all-models read. GD twin: `AiEv.MOST_MODELS_MOR06`.
 const MOST_MODELS_MOR06: [&str; 18] = [
