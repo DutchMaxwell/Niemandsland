@@ -756,6 +756,10 @@ pub struct ShootProfile {
     pub ignores_cover: bool,
     pub precise: bool,
     pub surge: bool,
+    /// SHO-18: the alias name that stamped `surge` ("" = the weapon's own Surge).
+    pub surge_alias_rule: String,
+    /// SHO-18: the alias families fire only from the right distance (73+; false below).
+    pub alias_gate: bool,
     pub rending: bool,
     pub bane: bool,
     /// The REGEN-BYPASS half of the Bane family, kept APART from `bane`:
@@ -3420,6 +3424,7 @@ fn stamp(
     if p.special_rules.iter().any(|r| r.trim() == "Ferocious") {
         for sp in shoot.iter_mut() {
             sp.surge = true;
+            sp.surge_alias_rule = "Ferocious".into();
         }
     }
     // 3. Surge-family data aliases (ai_ev.gd:225-249). `extra_attack`
@@ -3471,6 +3476,7 @@ fn stamp(
                     sp.surge_attack = true;
                 } else {
                     sp.surge = true;
+                    sp.surge_alias_rule = hit.name.clone();
                     sp.bonus_hits_per_six = hit.bonus_hits_per_six;
                     if hit.within_in > 0.0 {
                         sp.surge_within_in = hit.within_in;
@@ -3616,6 +3622,12 @@ fn stamp(
             rule: "Sergeant".into(),
             why: "sergeant_attacks needs GameUnit.get_alive_count() at the moment of the call (ai_ev.gd:284) — not in the static profile".into(),
         });
+    }
+    // SHO-18: stamp the alias gate on whichever array the caller passed.
+    if rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
+        for sp in shoot.iter_mut() {
+            sp.alias_gate = true;
+        }
     }
 }
 
@@ -6588,6 +6600,7 @@ impl UnitStatic {
                 for sp in shoot.iter_mut().chain(melee.iter_mut()) {
                     if facet_applies(hit.melee_only, scope_live, sp.range) {
                         sp.surge = true;
+                        sp.surge_alias_rule = hit.name.clone();
                         sp.bonus_hits_per_six = hit.bonus_hits_per_six;
                     }
                 }
