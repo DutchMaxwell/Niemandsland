@@ -352,6 +352,7 @@ mod mor_15 {
             beneficiary: String::new(),
             modifier: SpellModifier::default(),
             grants_rule: String::new(),
+            needs_los: false,
         }
     }
 
@@ -385,11 +386,17 @@ mod mor_15 {
     /// One cast sub-phase: unit 0 casts the bolt at the enemy (unit 2) 10"
     /// away. The caster's static comes from `build_for`; only the spell list
     /// and the `is_caster` flag are supplied by the fixture.
-    fn run(mut caster: UnitStatic, epoch: u32) -> State {
+    fn run(caster: UnitStatic, epoch: u32) -> State {
+        run_tokens(caster, epoch, 1)
+    }
+
+    /// The same attempt with `own` casting tokens in the purse (`run`'s
+    /// threshold-1 bolt leaves no boost room at one token).
+    fn run_tokens(mut caster: UnitStatic, epoch: u32, own: i64) -> State {
         caster.is_caster = true;
         caster.spells = vec![bolt()];
         let mut st = four_unit_line();
-        st.casts = vec![1, 0, 0, 0];
+        st.casts = vec![own, 0, 0, 0];
         st.positions[2] = vec![[10.0 * IN2M, 0.0, 0.0]];
         let statics = vec![caster];
         let mut next = st.clone();
@@ -415,6 +422,16 @@ mod mor_15 {
             .expect("p_success")
     }
 
+    /// The planned boost token count (the attempt event's `boost`).
+    fn planned_boost(s: &State) -> i64 {
+        s.cast_events
+            .iter()
+            .find(|e| e.get("spell").is_some())
+            .expect("one cast attempt")["boost"]
+            .as_i64()
+            .expect("boost")
+    }
+
     #[test]
     fn a_weapon_borne_amplifier_lowers_the_bearers_cast_target_at_epoch_73() {
         let caster = caster(
@@ -423,6 +440,10 @@ mod mor_15 {
             "gf",
             "blessed_sisters",
             EPOCH_73_V36,
+        );
+        assert_eq!(
+            caster.spell_amplifier_casting_mod, 1,
+            "the weapon-borne stamp reads casting_mod"
         );
         let next = run(caster, EPOCH_73_V36);
         assert!(
@@ -435,6 +456,7 @@ mod mor_15 {
     #[test]
     fn a_caster_without_the_rule_stays_at_four_plus_at_epoch_73() {
         let caster = caster("[]", r#"["Caster(1)"]"#, "gf", "blessed_sisters", EPOCH_73_V36);
+        assert_eq!(caster.spell_amplifier_casting_mod, 0);
         let next = run(caster, EPOCH_73_V36);
         assert!((p_success(&next) - 0.5).abs() < 1e-9, "plain caster stays at 4+");
     }
@@ -448,6 +470,7 @@ mod mor_15 {
             "blessed_sisters",
             EPOCH_72_PLAYTEST_RULES,
         );
+        assert_eq!(caster.spell_amplifier_casting_mod, 0, "the gate is EPOCH_73_V36");
         let next = run(caster, EPOCH_72_PLAYTEST_RULES);
         assert!((p_success(&next) - 0.5).abs() < 1e-9, "the old 4+ replays byte-exact");
     }
@@ -460,6 +483,10 @@ mod mor_15 {
             "gf",
             "blessed_sisters",
             EPOCH_73_V36,
+        );
+        assert_eq!(
+            caster.spell_amplifier_casting_mod, 0,
+            "the row is weapon-borne only"
         );
         let next = run(caster, EPOCH_73_V36);
         assert!((p_success(&next) - 0.5).abs() < 1e-9, "special_rules never grant it");
@@ -489,10 +516,77 @@ mod mor_15 {
             "ogres",
             EPOCH_73_V36,
         );
+        assert_eq!(
+            caster.spell_amplifier_casting_mod, 1,
+            "the aof map resolves the same entry"
+        );
         let next = run(caster, EPOCH_73_V36);
         assert!(
             (p_success(&next) - 2.0 / 3.0).abs() < 1e-9,
             "the aof map resolves the same entry"
+        );
+    }
+
+    /// Pre-review FLAG — the CORE planner must price the same fold the ROLL
+    /// uses. At 73 an amplifier carrier (target 3+) already has fewer steps
+    /// left, so it buys strictly FEWER boost tokens than the same caster
+    /// without the rule (target 4+, the coin-flip clause buys two).
+    #[test]
+    fn an_amplifier_caster_buys_fewer_boost_tokens_at_epoch_73() {
+        let plain = caster(
+            "[]",
+            r#"["Caster(1)"]"#,
+            "gf",
+            "blessed_sisters",
+            EPOCH_73_V36,
+        );
+        let amplified = caster(
+            r#"["Spell Amplifier"]"#,
+            r#"["Caster(1)"]"#,
+            "gf",
+            "blessed_sisters",
+            EPOCH_73_V36,
+        );
+        let plain = run_tokens(plain, EPOCH_73_V36, 6);
+        let amplified = run_tokens(amplified, EPOCH_73_V36, 6);
+        assert_eq!(planned_boost(&plain), 2, "the blind 4+ read buys two tokens");
+        assert!(
+            planned_boost(&amplified) < planned_boost(&plain),
+            "priced at the roll's 3+ it must buy fewer, got {}",
+            planned_boost(&amplified)
+        );
+        assert_eq!(
+            planned_boost(&amplified),
+            1,
+            "3+ leaves one step, and the 2+ clamp ends the spend"
+        );
+    }
+
+    /// Pre-review FLAG — below 73 the plan stays BLIND (net 0), so the old
+    /// boost count is byte-exact even for a carrier whose stamp is gated off.
+    #[test]
+    fn the_epoch_72_boost_plan_stays_blind() {
+        let plain = caster(
+            "[]",
+            r#"["Caster(1)"]"#,
+            "gf",
+            "blessed_sisters",
+            EPOCH_72_PLAYTEST_RULES,
+        );
+        let amplified = caster(
+            r#"["Spell Amplifier"]"#,
+            r#"["Caster(1)"]"#,
+            "gf",
+            "blessed_sisters",
+            EPOCH_72_PLAYTEST_RULES,
+        );
+        let plain = run_tokens(plain, EPOCH_72_PLAYTEST_RULES, 6);
+        let amplified = run_tokens(amplified, EPOCH_72_PLAYTEST_RULES, 6);
+        assert_eq!(planned_boost(&plain), 2, "the old blind count");
+        assert_eq!(
+            planned_boost(&amplified),
+            planned_boost(&plain),
+            "below 73 the pricing argument stays 0"
         );
     }
 }

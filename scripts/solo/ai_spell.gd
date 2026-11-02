@@ -113,6 +113,20 @@ static func cast_success_chance(boost_tokens: int, interference_tokens: int, bas
 	return AiCombatMath.success_chance(cast_target(boost_tokens, interference_tokens, base_target))
 
 
+## MOR-15 (rules 3.6, EPOCH_73_V36) — a WEAPON-borne "Spell Amplifier" adds +1 to the bearer's
+## OWN casting rolls. Weapon-only by the row's text: a unit's special_rules list never grants it.
+## `AiShooting._has_rule` is the shared weapon-rule matcher (the Rust twin's `base_rule_name`).
+static func spell_amplifier_mod(unit: GameUnit) -> int:
+	if unit == null or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return 0
+	if unit.source_type != "opr" or not (unit.source_data is OPRApiClient.OPRUnit):
+		return 0
+	for w in (unit.source_data as OPRApiClient.OPRUnit).weapons:
+		if AiShooting._has_rule(w, "Spell Amplifier"):
+			return int(RulesRegistry.unit_param(unit, "Spell Amplifier", "casting_mod", 1))
+	return 0
+
+
 # ===== Spell damage facets (the weapon-rule tokens of the committed spell maps) =====
 
 ## Parse a spell's weapon-rule token list (["AP(1)", "Blast(3)", "Bane", …] — the committed

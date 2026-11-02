@@ -1141,6 +1141,10 @@ pub struct UnitStatic {
     pub spell_conduit_reach_in: f64,
     pub spell_conduit_casting_mod: i64,
     pub spell_conduit_needs_steady: bool,
+    /// Rules 3.6 (`EPOCH_73_V36`) — a WEAPON-borne "Spell Amplifier": +1 to
+    /// the bearer's OWN casting rolls (4+ -> 3+). Read off the profile's
+    /// weapon rule lists, never `special_rules`; 0 below the gate.
+    pub spell_amplifier_casting_mod: i64,
     /// `RulesRegistry.unit_rule_active(gu, "Battleborn" | "Steadfast")`
     /// (rules_registry.gd:136-142) — the two rules that clear Shaken for free at
     /// a round start (ai_planner.gd:493-495). Static per unit, so the registry
@@ -7204,6 +7208,20 @@ impl UnitStatic {
             spell_conduit_needs_steady: unit_param_b_or(
                 reg, p, "Spell Conduit", "requires_not_shaken", true,
             ),
+            // Rules 3.6 (`EPOCH_73_V36`) — Spell Amplifier rides the WEAPON's
+            // rule list, so the bearer's own cast target drops by its
+            // `casting_mod`. A `special_rules` entry deliberately does not
+            // qualify (the row is weapon-borne).
+            spell_amplifier_casting_mod: if rule_on(rules_epoch, EPOCH_73_V36)
+                && p.weapons
+                    .iter()
+                    .flat_map(|w| w.rules.iter())
+                    .any(|r| base_rule_name(r) == "Spell Amplifier")
+            {
+                unit_param_i(reg, p, "Spell Amplifier", "casting_mod", 1)
+            } else {
+                0
+            },
             battleborn_active: unit_rule_active(reg, p, "Battleborn")
                 && (!rule_on(rules_epoch, EPOCH_73_V36)
                     || most_models_family_on(p, "Battleborn", rules_epoch)),

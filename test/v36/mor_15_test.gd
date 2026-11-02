@@ -104,3 +104,16 @@ func test_a_special_rule_spelling_does_nothing_at_epoch_73() -> void:
 	assert_str(text).override_failure_message(
 		"the row is weapon-borne: special_rules never grant it:\n%s" % text).contains("needs 4+")
 	await Boot.settle(get_tree())
+
+
+## The AI's own pricing seam: the same weapon scan, and the same 73 gate.
+func test_the_ai_prices_only_the_weapon_borne_rule() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	var caster := _armed(1, "AiAmplified", ["Spell Amplifier"], ["Caster(1)"])
+	assert_int(AiSpell.spell_amplifier_mod(caster)).is_equal(1)
+	var plain := _armed(1, "AiPlain", [], ["Caster(1)"])
+	assert_int(AiSpell.spell_amplifier_mod(plain)).is_equal(0)
+	var special := _armed(1, "AiSpecial", [], ["Caster(1)", "Spell Amplifier"])
+	assert_int(AiSpell.spell_amplifier_mod(special)).is_equal(0)
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
+	assert_int(AiSpell.spell_amplifier_mod(caster)).is_equal(0)

@@ -1230,6 +1230,14 @@
     "rush_mod": -4
    }
   },
+  "Spell Amplifier": {
+   "primitive": "Spell Amplifier",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "casting_mod": 1
+   }
+  },
   "Stealth": {
    "primitive": "Stealth",
    "rated": false,
