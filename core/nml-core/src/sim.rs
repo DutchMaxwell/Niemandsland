@@ -1697,22 +1697,28 @@ fn spend_exchange(state: &mut State, att: usize, def: usize, melee: bool) {
     mods::spend_once(state, def, &[mods::Role::VsTarget, mods::Role::Defense, mods::Role::Grant, mods::Role::GrantVs], melee);
 }
 
-/// DAT-17a — the exchange spend with the Regeneration grant's wound gate.
+/// DAT-17a — the exchange spend with the Regeneration grant's epoch gate.
 fn spend_exchange_wounded(
-    state: &mut State, att: usize, def: usize, melee: bool, att_wounded: bool, def_wounded: bool,
+    state: &mut State, att: usize, def: usize, melee: bool, att_wounded: bool, def_incoming: bool,
+    rules_epoch: u32,
 ) {
     let att_roles = [mods::Role::AttackerOwn, mods::Role::Ap, mods::Role::Grant];
     let def_roles = [mods::Role::VsTarget, mods::Role::Defense, mods::Role::Grant, mods::Role::GrantVs];
+    // EPOCH 73: the grant is spent by the FIRST exchange that brings a wound in
+    // to its holder — an all-ignored roll still spends it, a zero-wound exchange
+    // does not. The holder's own attack still keeps it. Below 73 the old
+    // unconditional spend answers for both sides (replay-exact).
+    let v36 = rule_on(rules_epoch, EPOCH_73_V36);
     let att_had = [Some(att), state.attached_to[att]].into_iter().flatten()
         .any(|u| state.buffs[u].iter().any(mods::is_regen_grant));
     let def_had = [Some(def), state.attached_to[def]].into_iter().flatten()
         .any(|u| state.buffs[u].iter().any(mods::is_regen_grant));
-    mods::spend_once_except(state, att, &att_roles, melee, |r| mods::keep_regen(r, att_wounded));
-    mods::spend_once_except(state, def, &def_roles, melee, |r| mods::keep_regen(r, def_wounded));
-    if att_wounded && att_had {
+    mods::spend_once_except(state, att, &att_roles, melee, |r| v36 && mods::keep_regen(r, att_wounded));
+    mods::spend_once_except(state, def, &def_roles, melee, |r| v36 && mods::keep_regen(r, def_incoming));
+    if v36 && att_wounded && att_had {
         trace_rule("regen-grant", "Regeneration Buff", &format!("spent by a wounding exchange (unit {att})"));
     }
-    if def_wounded && def_had {
+    if v36 && def_incoming && def_had {
         trace_rule("regen-grant", "Regeneration Buff", &format!("spent by a wounding exchange (unit {def})"));
     }
 }
@@ -5642,10 +5648,13 @@ fn strike_phase(
     // Deadly groups' raw tally rides `caused` but lands separately below, so
     // it is not an ignored wound.
     let ignored = r.caused - r.wounds - r.deadly_tally;
+    // DAT-17a: the grant is spent by wounds coming IN, not by wounds landing
+    // after Regeneration. `caused` is the pre-Regeneration tally, so an
+    // all-ignored roll still reads as wounding and a zero-wound exchange not.
+    let def_incoming = r.caused > 0;
     let raw_deadly = r.deadly_tally;
     let w = shot.absorb(r);
     let members: Vec<usize> = parts.iter().map(|(mi, _, _)| *mi).collect();
-    let att_wounds_before = wounds_left(next, si);
     let hazard_self = land_hazardous_self(statics, next, &members, seams, shot);
     // B13: the table measures the lash-back on wounds actually TAKEN — the
     // wound-POOL difference (`_solo_retaliate_hits` :4570, NML-937), snapshotted
@@ -5695,7 +5704,13 @@ fn strike_phase(
         let hits = def.retaliate_hits_per_wound * taken;
         shot.log.push(format!("Retaliate: {} lashes back — {} hits", ut.name, hits));
         let su = &statics[next.roster.profile[si]];
-        let sctx = ctx_of(su, next, si);
+        // The lash-back wounds the holder: read its LIVE ctx so a granted
+        // Regeneration is asked about them (the defender side already does).
+        let sctx = if rule_on(seams.rules_epoch, EPOCH_73_V36) {
+            ctx_live(ctx_of(su, next, si), statics, next, si, true, seams.rules_epoch)
+        } else {
+            ctx_of(su, next, si)
+        };
         let (unsaved, landed) = crate::dice::retaliate_saves_with_tray(
             hits, &sctx, &su.name, tray, &mut shot.rolls,
         );
@@ -5704,6 +5719,9 @@ fn strike_phase(
             retaliated = unsaved; // _solo_retaliate_credit += rw (main.gd:6171)
         }
     }
+    // DAT-17a: the striker's grant is spent on wounds COMING IN (pre-Regeneration),
+    // the same rule as the defender side — an all-ignored lash-back still spends it.
+    let mut att_incoming = retaliated;
     // Block C4 — Deathstrike / Self-Destruct death-half (`_solo_deathstrike_hits`
     // main.gd:16698-16731, called at :6174 immediately after the Retaliate
     // block): models KILLED by this phase's strikes lash out at the striker,
@@ -5722,14 +5740,19 @@ fn strike_phase(
             "Deathstrike/Self-Destruct: {}'s dying models lash out — {} takes {} hits",
             ut.name, su.name, hits
         ));
-        let sctx = ctx_of(su, next, si);
+        let sctx = if rule_on(seams.rules_epoch, EPOCH_73_V36) {
+            ctx_live(ctx_of(su, next, si), statics, next, si, true, seams.rules_epoch)
+        } else {
+            ctx_of(su, next, si)
+        };
         let (_, landed) = crate::dice::retaliate_saves_with_tray(
             hits, &sctx, &su.name, tray, &mut shot.rolls,
         );
+        att_incoming += landed;
         land_wounds_with(next, si, landed, seams.tray_exact);
     }
-    let att_wounded = wounds_left(next, si) < att_wounds_before;
-    spend_exchange_wounded(next, si, ti, true, att_wounded, taken > 0); // main.gd:6152, per strike phase
+    let att_wounded = att_incoming > 0;
+    spend_exchange_wounded(next, si, ti, true, att_wounded, def_incoming, seams.rules_epoch); // main.gd:6152, per strike phase
     (caused, retaliated, hazard_self, scourge_taken)
 }
 
@@ -9538,11 +9561,13 @@ fn resolve_with(
                             // The Deadly groups' raw tally rides `caused` but
                             // lands separately below — not an ignored wound.
                             let ignored = r.caused - r.wounds - r.deadly_tally;
+                            // DAT-17a: spend on wounds coming IN (pre-Regeneration),
+                            // not on the post-roll count that `wounds_before_g` measures.
+                            let def_incoming = r.caused > 0;
                             let phantom = r.scourge_wounds;
                             let w = shot.absorb(r);
                             let members: Vec<usize> = parts.iter().map(|(mi, _, _)| *mi).collect();
-                            let att_wounds_before = wounds_left(&next, si);
-                            land_hazardous_self(statics, &mut next, &members, seams, shot);
+                            let att_incoming = land_hazardous_self(statics, &mut next, &members, seams, shot);
                             if !seams.tray_exact {
                                 land_wounds_with(&mut next, g.ti, w, false);
                             }
@@ -9586,9 +9611,8 @@ fn resolve_with(
                             }
                             // main.gd:3244 — the exchange spends its own
                             // once-mods BEFORE the post-volley morale test.
-                            let att_wounded = wounds_left(&next, si) < att_wounds_before;
-                            let def_wounded = wounds_left(&next, g.ti) < wounds_before_g;
-                            spend_exchange_wounded(&mut next, si, g.ti, false, att_wounded, def_wounded);
+    let att_wounded = att_incoming > 0;
+                            spend_exchange_wounded(&mut next, si, g.ti, false, att_wounded, def_incoming, seams.rules_epoch);
                             // D1-B5b: the volley's morale test is the NEXT
                             // thing on the table's tray (main.gd:8248-8251),
                             // per group — inside the per-group
