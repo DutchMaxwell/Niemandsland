@@ -2059,6 +2059,12 @@ pub fn resolve_melee_leg(
     // Below the gate each chunk is one profile: today's interleaved draws.
     let order: Vec<(&Shooter<'_>, usize, usize)> = strikers.iter()
         .flat_map(|sh| sh.keep.iter().enumerate().map(move |(k, &pi)| (sh, k, pi))).collect();
+    // Rules 3.6 (row W1.TRACE-c) — Thrust's charge leg names itself once per
+    // striking profile (arm `thrust-in-melee`). The switch is read ONCE here,
+    // never per model or per die.
+    let trace_thrust = strikers.first()
+        .is_some_and(|sh| rule_on(sh.att.rules_epoch, EPOCH_73_V36))
+        && crate::mv::plain_memo::trace_rules_on();
     for part in order.chunks(if hits_first { order.len().max(1) } else { 1 }) {
         let mut pending = Vec::new();
         for &(sh, k, pi) in part {
@@ -2066,6 +2072,10 @@ pub fn resolve_melee_leg(
             let n = sh.attacks[k];
             if n <= 0 {
                 continue;
+            }
+            if trace_thrust && charging && (p.thrust || sh.att.thrust_grant) {
+                crate::sim::trace_rule("thrust-in-melee", "Thrust in Melee", &format!(
+                    "{}: Thrust adds its charge bonus to {}", sh.owner, p.name));
             }
             // Wave 4 follow-up — "Takedown Strike" names itself once per
             // strike (rules-must-log, the table's own log line at
@@ -2468,14 +2478,23 @@ pub fn impact_pools(att: &Ctx, def: &Ctx) -> [(i64, i64); 2] {
     if att.fatigued {
         return [(0, 0), (0, 0)];
     }
+    // Rules 3.6 (row W1.TRACE-c) — the Counter cut names itself once per
+    // Impact event (arm `counter-in-melee`). The switch is read ONCE here.
+    let trace_counter = rule_on(att.rules_epoch, EPOCH_73_V36)
+        && crate::mv::plain_memo::trace_rules_on();
     let models = att.models.max(0);
     let heavy_raw = att.heavy_impact * models;
-    let cut = def
+    let counter_cut = def
         .counter_models
-        .saturating_mul(def.counter_impact_per_model.unwrap_or(1))
+        .saturating_mul(def.counter_impact_per_model.unwrap_or(1));
+    let cut = counter_cut
         + def
             .brace_models
             .saturating_mul(def.brace_impact_per_model.unwrap_or(1));
+    if trace_counter && counter_cut > 0 {
+        crate::sim::trace_rule("counter-in-melee", "Counter in Melee", &format!(
+            "Counter models take {counter_cut} Impact dice off"));
+    }
     let heavy_cut = cut.min(heavy_raw);
     [
         (impact_total_dice(att.impact, models, cut - heavy_cut), 0),
