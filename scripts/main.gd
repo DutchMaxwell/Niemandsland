@@ -23551,21 +23551,19 @@ func _solo_apply_surprise_attack(unit: GameUnit) -> void:
 ## Teleport / Ethereal (design #816, PR 1 — table side): the BEFORE-ATTACK reposition beat, run
 ## after the move/charge resolves and before shooting/melee, in the same once-per-activation
 ## before-attacking slot the Storm Attack beat uses. AI side only (the human keeps the manual
-## drag). At epoch 73+ the band pass CONSUMES the placement latch
-## (movement_range_controller.gd's Ethereal arm), so this beat only WRITES it on a take: the
-## -6"/-6" rides exactly one move read after the placement and no later activation. Below epoch
-## 73 nothing consumes the latch, so this beat keeps its old activation-start clear. Asks the
+## drag). The band penalty is keyed to the activation that took the placement: a take stamps
+## `teleport_activation` with the live activation serial, and the band pass prices the -6"/-6"
+## only while that stamp still equals the serial — pure reads, so previews and the move agree.
+## The once-per-activation latch keeps its old activation-start clear here, so the next
+## activation may place again; below epoch 73 the band pass ignores the stamp and the penalty
+## stays permanently folded. Asks the
 ## controller's EV-margin policy, and on a take: writes the record the act recorder folds
 ## (used-flag + landing centroid), glides the RIGID formation to the new centroid (house rule:
 ## nothing teleports-invisibly), and logs ONE line naming rule, band cap and landing centroid.
 func _solo_apply_teleport(unit: GameUnit, report: Dictionary) -> void:
 	if unit == null or solo_controller == null or not _solo_is_ai_unit(unit) or unit.is_destroyed():
 		return
-	# Rules 3.6 (MOR-19b): the v36 band pass consumes the latch at the read site, so below the
-	# epoch (where the penalty is permanently folded and nothing consumes it) the old
-	# post-move-beat clear stays in force, keeping the once-per-activation placement working.
-	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
-		unit.unit_properties.erase("teleport_used_this_activation")
+	unit.unit_properties.erase("teleport_used_this_activation")
 	if int(report.get("action", AiDecision.Action.HOLD)) == AiDecision.Action.HOLD \
 			and SoloController.teleport_rule_name(unit) == "Teleport":
 		return
@@ -23580,6 +23578,7 @@ func _solo_apply_teleport(unit: GameUnit, report: Dictionary) -> void:
 	var to: Vector2 = dec.get("to", Vector2.ZERO)
 	var cap_in := SoloController.teleport_cap_in(rule, rush)
 	unit.unit_properties["teleport_used_this_activation"] = true
+	unit.unit_properties["teleport_activation"] = AiActRecorder.activation_serial
 	unit.unit_properties["teleport_to"] = to
 	var models: Array = solo_controller._moving_models(unit)
 	var centre: Vector3 = solo_controller.unit_centre(unit)
