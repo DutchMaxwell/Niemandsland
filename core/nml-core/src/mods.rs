@@ -115,14 +115,17 @@ pub fn matches(r: &LiveMod, role: Role, melee: bool) -> bool {
 }
 
 /// DAT-17a — the "Regeneration Buff" once-grant and its spell siblings carry
-/// `grants_rule: "Regeneration"`. The FIRST wounding exchange of the holder
-/// spends it; a zero-wound exchange leaves it in place (rules 3.6).
+/// `grants_rule: "Regeneration"`. From `EPOCH_73_V36` the grant is spent by the
+/// FIRST exchange that brings a wound in to its holder: a roll that ignores
+/// every wound still spends it (the wounds came in), a zero-wound exchange does
+/// not. The holder's own attack keeps it. Below 73 the old unconditional spend
+/// answers for both sides.
 pub fn is_regen_grant(r: &LiveMod) -> bool {
     r.once && base_rule_is(&r.grants_rule, "Regeneration")
 }
 
 /// `is_regen_grant` as a `spend_once_except` keep predicate: the grant survives
-/// only while the holder took no wounds this exchange.
+/// only while no wound came in to its holder this exchange (both sides at 73).
 pub fn keep_regen(r: &LiveMod, wounded: bool) -> bool {
     is_regen_grant(r) && !wounded
 }
