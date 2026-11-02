@@ -5669,7 +5669,11 @@ fn strike_phase(
         let su = &statics[next.roster.profile[si]];
         // The lash-back wounds the holder: read its LIVE ctx so a granted
         // Regeneration is asked about them (the defender side already does).
-        let sctx = ctx_live(ctx_of(su, next, si), statics, next, si, true, seams.rules_epoch);
+        let sctx = if rule_on(seams.rules_epoch, EPOCH_73_V36) {
+            ctx_live(ctx_of(su, next, si), statics, next, si, true, seams.rules_epoch)
+        } else {
+            ctx_of(su, next, si)
+        };
         let (unsaved, landed) = crate::dice::retaliate_saves_with_tray(
             hits, &sctx, &su.name, tray, &mut shot.rolls,
         );
@@ -5699,7 +5703,11 @@ fn strike_phase(
             "Deathstrike/Self-Destruct: {}'s dying models lash out — {} takes {} hits",
             ut.name, su.name, hits
         ));
-        let sctx = ctx_live(ctx_of(su, next, si), statics, next, si, true, seams.rules_epoch);
+        let sctx = if rule_on(seams.rules_epoch, EPOCH_73_V36) {
+            ctx_live(ctx_of(su, next, si), statics, next, si, true, seams.rules_epoch)
+        } else {
+            ctx_of(su, next, si)
+        };
         let (_, landed) = crate::dice::retaliate_saves_with_tray(
             hits, &sctx, &su.name, tray, &mut shot.rolls,
         );
