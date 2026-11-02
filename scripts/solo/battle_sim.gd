@@ -981,18 +981,25 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 			# NML-1132: both strike phases are built the way the table builds them —
 			# the host's melee set PLUS every alive attached hero's (main.gd:4284-4290),
 			# on the charger and on the striking-back defender alike.
-			_apply_expected_wounds(tu, AiEv.melee_ev(_profiles_of(su, true, 0.0, next),
-				_ctx_of(su, true), _ctx_of(tu), true, charge_dist))
+			var su_profiles := _profiles_of(su, true, 0.0, next)
+			var phantom_on_tu := _scourge_phantom_ev(su_profiles, _ctx_of(su, true), _ctx_of(tu),
+				charge_dist, true, su["unit"] as GameUnit)
+			_apply_expected_wounds(tu, AiEv.melee_ev(su_profiles, _ctx_of(su, true), _ctx_of(tu),
+				true, charge_dist))
 			su["fatigued"] = true
+			var phantom_on_su := 0
 			if int(tu["alive"]) > 0:   # survivors strike back, already survivor-scaled
-				_apply_expected_wounds(su, AiEv.melee_ev(_profiles_of(tu, true, 0.0, next),
-					_ctx_of(tu, true), _ctx_of(su), false))
+				var tu_profiles := _profiles_of(tu, true, 0.0, next)
+				phantom_on_su = _scourge_phantom_ev(tu_profiles, _ctx_of(tu, true), _ctx_of(su), 0.0,
+					false, tu["unit"] as GameUnit)
+				_apply_expected_wounds(su, AiEv.melee_ev(tu_profiles, _ctx_of(tu, true),
+					_ctx_of(su), false))
 				# W-P1 parity (p.9): striking back fatigues the DEFENDER too — the
 				# game stamps both sides, the sim only ever stamped the charger.
 				tu["fatigued"] = true
 			# MEL-10e: the sim's charge move rolls no Dangerous test, so the charge-move
 			# self-wound term is 0; the argument keeps the call shaped like the table twin.
-			_expected_melee_morale(su, su_before, tu, tu_before, 0)
+			_expected_melee_morale(su, su_before, tu, tu_before, 0, phantom_on_su, phantom_on_tu)
 	# Shaken recovery (p.10): the idle activation clears Shaken — the recovery
 	# hold plan()/the rollout policy hand a shaken unit buys next round back.
 	if was_shaken and kind == AiDecision.Action.HOLD and shoot_key == "":
@@ -1880,6 +1887,28 @@ static func _morale_dither(slot: int, round_no: int) -> float:
 	return fposmod((slot + 1.0) * 0.6180339887498949 + round_no * 0.7548776662466927, 1.0)
 
 
+## AI-06 (SHO-15b, EPOCH_73_V36): a Scourge striker's expected phantom wounds — the
+## Shred-vs-plain EV gap is hits × SIX_P, each such 1 worth phantom_wounds_per_save_one.
+static func _scourge_phantom_ev(profiles: Array, att: Dictionary, def_ctx: Dictionary,
+		dist_in: float, charging: bool, unit: GameUnit) -> int:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return 0
+	var per := int(RulesRegistry.unit_param(unit, "Scourge", "phantom_wounds_per_save_one", 2))
+	var def: Dictionary = def_ctx.duplicate()
+	def["regeneration"] = false
+	var total := 0.0
+	for p in profiles:
+		if not ((p as Dictionary).get("rules", []) as Array).has("Scourge"):
+			continue
+		var plain: Dictionary = (p as Dictionary).duplicate()
+		plain["shred"] = false
+		var probe: Dictionary = (p as Dictionary).duplicate()
+		probe["shred"] = true
+		total += AiEv.profile_ev(probe, att, def, dist_in, charging) \
+			- AiEv.profile_ev(plain, att, def, dist_in, charging)
+	return int(round(total * per))
+
+
 ## Post-volley morale (parity wave step 2, mirrors main.gd's PDF-verified flow):
 ## casualties this volley AND now at/below half => test; a shooting fail is
 ## SHAKEN, never a Rout (Rout exists only in melee — playtest bug 9).
@@ -1906,9 +1935,9 @@ static func _expected_shooting_morale(tu: Dictionary, alive_before: int, wounds_
 ## self-wounds. Below 73 the side that dealt FEWER wounds loses and self-wounds never count. The
 ## same AiCombatMath.fear_adjusted_wounds the table path uses.
 static func _expected_melee_morale(su: Dictionary, su_before: int, tu: Dictionary, tu_before: int,
-		self_wounds: int = 0) -> void:
-	var taken_by_su := su_before - _wounds_left(su)
-	var taken_by_tu := tu_before - _wounds_left(tu)
+		self_wounds: int = 0, phantom_on_su: int = 0, phantom_on_tu: int = 0) -> void:
+	var taken_by_su := su_before - _wounds_left(su) + phantom_on_su
+	var taken_by_tu := tu_before - _wounds_left(tu) + phantom_on_tu
 	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
 		taken_by_su += maxi(self_wounds, 0)
 	var score_su := AiCombatMath.fear_adjusted_wounds(taken_by_tu,
