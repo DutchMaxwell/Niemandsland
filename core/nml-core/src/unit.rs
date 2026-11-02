@@ -495,6 +495,9 @@ pub struct Ctx {
     pub versatile_pick_hit: i64,
     pub versatile_pick_ap: i64,
     pub versatile_latched: bool,
+    /// SHO-19 — the Versatile pick ignores the 9"/6" distance gate at
+    /// `EPOCH_73_V36` (Versatile Expert/Warrior, Enhanced Watchborn).
+    pub versatile_no_gate: bool,
     /// A live `grants_rule: "AP(+1) when shooting"` (Piercing Shooting Mark).
     pub pierce_shooting_grant: bool,
     /// A live `grants_rule: "AP(+1) in melee"` (Piercing Fighting Mark).
@@ -709,6 +712,9 @@ pub struct CondAp {
     /// The extra situational gate (`"ranged_over_or_charge"`), "" for none.
     pub gate: String,
     pub over_in: f64,
+    /// SHO-19: the CHARGE leg's own 6" band at `EPOCH_73_V36` (Havocbound /
+    /// Piercing Warrior). 0.0 = the old unconditional charge leg.
+    pub charge_over_in: f64,
     /// Wave 4 (rules-wave4-condap): the `ranged_within` cap — "Point-Blank
     /// Piercing"'s "when shooting enemies within 12\"". 0.0 on every spec the
     /// generic pass stamps (`cond_ap_of` never reads it), so the registry's own
@@ -3193,6 +3199,16 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         else if rule_on(rules_epoch, EPOCH_13_WHO_WINS) && guarded_family_on(p, "Safety Gear", rules_epoch) { "Safety Gear" }
         else if rule_on(rules_epoch, EPOCH_13_WHO_WINS) && guarded_family_on(p, "Tenacious", rules_epoch) { "Tenacious" }
         else { "" };
+    // SHO-19 — the Versatile Expert/Warrior spelling pins the pick's distance gate open from
+    // `EPOCH_73_V36`. The map entry owns the `no_gate_v36` switch, so the old data stays old.
+    let versatile_no_gate = rule_on(rules_epoch, EPOCH_73_V36) && {
+        let map = reg.rules_for(&p.game_system);
+        p.special_rules.iter().chain(p.item_grants.iter()).any(|raw| {
+            let n = base_rule_name(raw);
+            (n == "Versatile Expert" || n == "Versatile Warrior")
+                && map.lookup(&p.faction_folder, &n).is_some_and(|e| e.param_b("no_gate_v36"))
+        })
+    };
     Ctx {
         quality: p.quality,
         defense: armored_defense(p.defense, armor),
@@ -3375,6 +3391,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         versatile_pick_hit: 0,
         versatile_pick_ap: 0,
         versatile_latched: false,
+        versatile_no_gate,
         pierce_shooting_grant: false,
         pierce_melee_grant: false,
         pierce_assault_grant: false,
@@ -5493,6 +5510,7 @@ fn stamp_conditional_ap(
 fn stamp_conditional_ap_named(
     reg: &mut Registries,
     p: &Profile,
+    rules_epoch: u32,
     shoot: &mut [ShootProfile],
     melee: &mut [ShootProfile],
 ) {
@@ -5580,6 +5598,7 @@ fn stamp_conditional_ap_named(
                     sp.cond_ap.push(CondAp {
                         ap_bonus: ap,
                         condition: "on_charge".into(),
+                        charge_over_in: crate::combat::charge_over_in(rules_epoch),
                         name: n.clone(),
                         ..Default::default()
                     });
@@ -6674,6 +6693,7 @@ impl UnitStatic {
                         live.push(CondAp {
                             ap_bonus: ap,
                             condition: "on_charge".into(),
+                            charge_over_in: crate::combat::charge_over_in(rules_epoch),
                             name: n.clone(),
                             ..Default::default()
                         });
@@ -6721,7 +6741,7 @@ impl UnitStatic {
         // `stamp_conditional_ap_named`. A record below epoch 7 runs none of
         // it and replays byte-exact.
         if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
-            stamp_conditional_ap_named(reg, p, &mut shoot, &mut melee);
+            stamp_conditional_ap_named(reg, p, rules_epoch, &mut shoot, &mut melee);
         }
         // Wave 4 (rules-wave4-renames), gated on the FROZEN
         // `EPOCH_7_TABLE_RULES`: "Takedown when Shooting" is Takedown's

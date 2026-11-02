@@ -1118,7 +1118,9 @@ pub fn resolve_volley_leg(
         }
         let (mut raw, mut target) = fold_hit(def.modifier_sum, target, m);
         let mut versatile_ap = 0;
-        if (p.versatile_attack || att.versatile_grant) && mod_dist_in > LONG_RANGE_IN {
+        if (p.versatile_attack || att.versatile_grant)
+            && (att.versatile_no_gate || mod_dist_in > LONG_RANGE_IN)
+        {
             // Wave 3 — the "Vinci Tech Boost" form (`pick_one: false`,
             // stamped only under the frozen EPOCH_6_TABLE_RULES gate): BOTH
             // arms instead of the pick. The flag rides the same stamp the
@@ -2103,7 +2105,8 @@ pub fn resolve_melee_leg(
             }
             if sh.att.versatile_latched
                 && charging
-                && charge_from_in > LONG_RANGE_IN
+                && (sh.att.versatile_no_gate
+                    || charge_from_in > crate::combat::charge_gate_in(sh.att.rules_epoch))
                 && (p.versatile_attack || sh.att.versatile_grant)
             {
                 if !sh.att.fatigued {
@@ -2251,7 +2254,7 @@ pub fn resolve_melee_leg(
             // `on_charge`/`vs_tough_ge` gates fire correctly here.
             if cond_ap_dice {
                 for c in &p.cond_ap {
-                    let d = conditional_ap_bonus(c, def.tough.max(1), def.defense, charging, 0.0, true);
+                    let d = conditional_ap_bonus(c, def.tough.max(1), def.defense, charging, charge_from_in, true);
                     ap += d;
                     // Rules-must-log, the melee half: only the wave-3 NAMED
                     // forms log; unnamed specs stay silent (old replays).

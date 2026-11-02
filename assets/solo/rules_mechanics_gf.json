@@ -395,8 +395,10 @@
   "Versatile Attack",
   "Versatile Defense",
   "Versatile Defense Aura",
+  "Versatile Expert",
   "Versatile Reach",
   "Versatile Reach Aura",
+  "Versatile Warrior",
   "Warbound",
   "Enhanced Warbound",
   "Enhanced Warbound Aura",
@@ -1379,6 +1381,28 @@
    "params": {
     "ap_bonus": 1,
     "condition": "ranged"
+   }
+  },
+  "Versatile Expert": {
+   "primitive": "Versatile Attack",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "ap_bonus": 1,
+    "hit_bonus": 1,
+    "pick_one": true,
+    "no_gate_v36": true
+   }
+  },
+  "Versatile Warrior": {
+   "primitive": "Versatile Attack",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "ap_bonus": 1,
+    "hit_bonus": 1,
+    "pick_one": true,
+    "no_gate_v36": true
    }
   }
  },
