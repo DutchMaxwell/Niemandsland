@@ -1,9 +1,11 @@
 extends GdUnitTestSuite
-## Rules 3.6 row MOR-19b follow-up: the Ethereal placement latch is consumed by the band pass that
-## reads it, not by the post-move Teleport beat. The placement therefore prices exactly ONE move
-## read — the move it was made for — and the next activation is clean. Below EPOCH_73_V36 the
-## penalty stays permanently folded and the latch is untouched by the band pass, so the post-move
-## beat keeps its old activation-start clear: a second activation still places.
+## Rules 3.6 row MOR-19b follow-up: the Ethereal band penalty is keyed to the activation that
+## took the placement. The Teleport beat stamps `teleport_activation` with the live activation
+## serial; the band pass is PURE and prices the -6"/-6" only while that stamp still equals the
+## serial. Every read in the placement activation (preview, preview, move) therefore agrees, and
+## the next activation's serial drops it. Below EPOCH_73_V36 the penalty stays permanently folded
+## and the post-move beat keeps its old activation-start clear, so a second activation still
+## places.
 ##
 ## The latch is set through the LIVE stamp (`_solo_apply_teleport` with a controller whose policy
 ## takes the placement), never hand-written into `unit_properties`, so the test drives the same
@@ -22,11 +24,14 @@ var _runner: GdUnitSceneRunner
 var _main: Node
 var _root_before: Array
 var _epoch0: int
+var _serial0: int
 
 
 func before_test() -> void:
 	_epoch0 = AiActRecorder.rules_epoch
+	_serial0 = AiActRecorder.activation_serial
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	AiActRecorder.activation_serial = 0
 	E2EBoot.arm_harness_mode()
 	_root_before = E2EBoot.root_children(get_tree())
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
@@ -40,6 +45,7 @@ func before_test() -> void:
 
 func after_test() -> void:
 	AiActRecorder.rules_epoch = _epoch0   # statics leak across gdUnit tests — restore
+	AiActRecorder.activation_serial = _serial0
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 	_main = null
 	_runner = null
@@ -68,19 +74,24 @@ func _bands(unit: GameUnit) -> Dictionary:
 		unit, _main.movement_range_controller as MovementRangeController)
 
 
-func test_the_placement_penalty_is_consumed_by_the_band_read() -> void:
+func test_the_placement_penalty_is_keyed_to_the_placement_activation() -> void:
 	var unit := _ethereal_unit()
 	await _place(unit)
 	# Control: a placement nobody read keeps its latch.
 	assert_bool(unit.unit_properties.has("teleport_used_this_activation")).is_true()
 
-	# The placement move carries the penalty exactly once.
-	var placed: Dictionary = _bands(unit)
-	assert_int(placed["advance"]).is_equal(0)   # 6 - 6
-	assert_int(placed["rush"]).is_equal(6)      # 12 - 6
-	assert_bool(unit.unit_properties.has("teleport_used_this_activation")).is_false()
+	# Two previews and the move read all happen in the placement activation: all carry it.
+	for _i in 3:
+		var bands: Dictionary = _bands(unit)
+		assert_int(bands["advance"]).is_equal(0)   # 6 - 6
+		assert_int(bands["rush"]).is_equal(6)      # 12 - 6
 
-	# The following activation does not.
+	# Reads never mutate the latch or its stamp.
+	assert_bool(unit.unit_properties.has("teleport_used_this_activation")).is_true()
+	assert_bool(unit.unit_properties.has("teleport_activation")).is_true()
+
+	# The next activation advances the live serial: full bands, no penalty.
+	AiActRecorder.activation_serial += 1
 	var following: Dictionary = _bands(unit)
 	assert_int(following["advance"]).is_equal(6)
 	assert_int(following["rush"]).is_equal(12)
@@ -91,9 +102,10 @@ func test_below_epoch_73_the_penalty_is_permanent_and_the_latch_is_not_consumed(
 	var unit := _ethereal_unit()
 	await _place(unit)
 
-	var bands: Dictionary = _bands(unit)
-	assert_int(bands["advance"]).is_equal(0)   # always-on penalty at 72
-	assert_int(bands["rush"]).is_equal(6)
+	for _i in 3:
+		var bands: Dictionary = _bands(unit)
+		assert_int(bands["advance"]).is_equal(0)   # always-on penalty at 72
+		assert_int(bands["rush"]).is_equal(6)
 	assert_bool(unit.unit_properties.has("teleport_used_this_activation")).is_true()
 
 
