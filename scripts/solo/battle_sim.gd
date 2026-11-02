@@ -1608,6 +1608,10 @@ static func _best_spell_target(state: Dictionary, su: Dictionary, entry: Diction
 		origins: Array) -> Dictionary:
 	var range_in := float(entry.get("range_in", 0))
 	var player := int(su.get("player", 0))
+	# Rules 3.6 (D-SPELL-LOS): from EPOCH_73_V36 sight binds only when the entry
+	# says so; below the epoch every spell still needs it.
+	var sight_required: bool = bool(entry.get("needs_los", false)) \
+			or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36
 	var best_key := ""
 	var best_ev := -1.0
 	var best_d := INF
@@ -1621,7 +1625,7 @@ static func _best_spell_target(state: Dictionary, su: Dictionary, entry: Diction
 		# that first reachable origin is the cast's origin for this target.
 		for o in origins:
 			var osu: Dictionary = (o as Dictionary)["su"]
-			if not sees(osu, str(k)) or not _los_clear(state, osu, tu):
+			if sight_required and (not sees(osu, str(k)) or not _los_clear(state, osu, tu)):
 				continue
 			var d := dist_in(osu["positions"], tu["positions"])
 			if d > range_in + CONTROL_EPS:

@@ -28,6 +28,7 @@ use crate::rules::{Spell, SpellModifier};
     /// thing that can move the roll is the enemy's interference.
     fn spell() -> Spell {
         Spell {
+            needs_los: false,
             name: "bolt".into(),
             status: "modeled".into(),
             threshold: 2,

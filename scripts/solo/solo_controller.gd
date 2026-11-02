@@ -5301,10 +5301,15 @@ func spell_candidates(unit: GameUnit, entry: Dictionary, own_slot: int, other_sl
 		# NML-206: range is measured BASE EDGE to base edge (nearest models), not centre-to-centre —
 		# the centre reading rejected legal targets on wide units (maintainer live-test finding).
 		if cu != unit:
+			# Rules 3.6 (D-SPELL-LOS): from EPOCH_73_V36 sight binds only when
+			# the entry says so; below the epoch every spell still needs it.
+			var sight_required: bool = bool(entry.get("needs_los", false)) \
+					or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36
 			var reachable := false
 			for o in origins:
 				var ou := o as GameUnit
-				if cu == ou or (nearest_melee_gap_in(ou, cu) <= range_in and _has_los(ou, cu)):
+				if cu == ou or (nearest_melee_gap_in(ou, cu) <= range_in \
+						and (not sight_required or _has_los(ou, cu))):
 					reachable = true
 					break
 			if not reachable:

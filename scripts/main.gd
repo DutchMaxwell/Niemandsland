@@ -12698,7 +12698,11 @@ func solo_begin_cast(unit: GameUnit) -> void:
 	_solo_log_ebr_spell_exclusion(unit, str(entry.get("name", "?")), float(entry.get("range_in", 0)), cands)
 	if cands.is_empty():
 		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.GENERAL, "%s: no legal target for %s in %s\" + line of sight" % [
+			var sight_required: bool = bool(entry.get("needs_los", false)) \
+					or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36
+			var reason := "in %s\" + line of sight" if sight_required else "in %s\""
+			var msg := "%s: no legal target for %s " + reason
+			battle_log.log_event(BattleLog.Category.GENERAL, msg % [
 				unit.get_name(), str(entry.get("name", "?")), str(entry.get("range_in", 0))])
 		return
 	# NML-206 (maintainer live test: "ich konnte keine legitimen Ziele auswählen" — the promised
