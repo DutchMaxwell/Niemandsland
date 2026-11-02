@@ -540,8 +540,20 @@ static func stamp_sergeant(profiles: Array, unit: GameUnit) -> Array:
 			or not RulesRegistry.unit_rules_of_primitive(unit, "Versatile Attack").is_empty()):
 		# Coverage wave: DATA aliases (Watchborn — same over-9\" AP(+1)/+1-to-hit pick) stamp the
 		# same facet; the shooting half fires here, the charge half stays the tracked follow-up.
+		# Rules 3.6 (SHO-19): the family's map entries own the no-gate switch (Versatile Expert /
+		# Warrior); below the epoch the old over-9\" band stays.
+		var no_gate := false
+		if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+			for e in RulesRegistry.unit_rules_of_primitive(unit, "Versatile Attack"):
+				var ep: Dictionary = (e as Dictionary).get("params", {})
+				if bool(ep.get("no_gate_v36", false)):
+					no_gate = true
+					break
 		for vp in profiles:
-			(vp as Dictionary)["versatile_attack"] = true
+			var vpd := vp as Dictionary
+			vpd["versatile_attack"] = true
+			if no_gate:
+				vpd["versatile_no_gate"] = true
 	# Ferocious (unit rule: "when attacking, unmodified 6s deal 1 extra hit") = every weapon the unit
 	# uses gets Surge. Stamp the surge facet the EV metric and the dice path already read. Exact match so
 	# "Ferocious Boost" (a different rule) does not trigger it.
@@ -841,7 +853,11 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 	# — Versatile Attack (army-book): over 9" (shooting), pick the EV-better of +1 to hit or AP(+1) via the
 	#   SAME chooser the dice path calls. hit_mod improves the to-hit here; the ap bonus folds in below —
 	var versatile := {}
-	if bool(profile.get("versatile_attack", false)) and dist_in > AiCombatMath.LONG_RANGE_IN and (not melee or charging):
+	# Rules 3.6 (SHO-19): the map's no-gate switch lifts the 9\" band for Versatile Expert and
+	# Versatile Warrior; every other versatile profile keeps the over-9\" read.
+	if bool(profile.get("versatile_attack", false)) \
+			and (bool(profile.get("versatile_no_gate", false)) or dist_in > AiCombatMath.LONG_RANGE_IN) \
+			and (not melee or charging):
 		# Chooser inputs MUST match the dice path's (xhigh review find): main passes the SHIELDED defense
 		# (not covered) — pass the same basis here, or a Shielded target could flip the plan/dice mode choice.
 		var choose_def := AiCombatMath.shielded_defense(int(def_ctx.get("defense", 4)), bool(def_ctx.get("shielded", false)))
