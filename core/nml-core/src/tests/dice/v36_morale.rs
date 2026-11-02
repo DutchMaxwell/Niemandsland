@@ -210,7 +210,7 @@ mod mor_17a {
 
     #[test]
     fn a_spell_wound_is_ignored_on_2_at_73_and_on_4_at_72() {
-        let f = spell_facets(&[]);
+        let f = spell_facets(&[], EPOCH_73_V36);
         let now = spell_damage_ev(10, &knight_squad(r#"["Knightborn"]"#, "[]", EPOCH_73_V36).ctx, &f);
         let before = spell_damage_ev(10, &knight_squad(r#"["Knightborn"]"#, "[]", EPOCH_72_PLAYTEST_RULES).ctx, &f);
         assert!(now < before, "2+ vs 4+: {now} vs {before}");
@@ -223,7 +223,7 @@ mod mor_17a {
     fn enhanced_knightborn_has_no_gate_at_epoch_73_but_does_nothing_new_at_72() {
         let now = shot(&knight_squad(r#"["Enhanced Knightborn"]"#, "[]", EPOCH_73_V36), 5.0);
         assert!(regen_dice(&now) > 0, "no gate: the 6+ rolls inside 9in: {:?}", now.rolls);
-        let f = spell_facets(&[]);
+        let f = spell_facets(&[], EPOCH_73_V36);
         let now_spell = spell_damage_ev(
             10, &knight_squad(r#"["Enhanced Knightborn"]"#, "[]", EPOCH_73_V36).ctx, &f);
         assert!((now_spell - 5.0 / 6.0).abs() < 1e-9, "the spell leg is 2+ at 73: {now_spell}");

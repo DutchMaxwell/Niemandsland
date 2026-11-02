@@ -185,3 +185,146 @@ mod mor_17a {
         assert_eq!((ctx.regen_gate_over_in, ctx.regen_gate_charge_in), (0.0, 0.0));
     }
 }
+
+// --- Row MOR-SPELLFACET-a: spell facets read the 3.6 weapon-rule names at epoch 73.
+mod mor_spellfacet_a {
+    use super::super::*;
+    use crate::acts::{EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36};
+    use crate::rules::{Registries, Spell};
+    use crate::spell::{spell_damage_ev_of, spell_facets};
+    use crate::unit::Ctx;
+
+    /// One spell entry the LIVE registry really carries, built through
+    /// `spells_for` — the token list under test is the committed map's own.
+    fn live_spell(system: &str, faction: &str, name: &str) -> Spell {
+        let mut reg = Registries::new(&repo_root());
+        reg.spells_for(system, faction)
+            .iter()
+            .find(|s| s.name == name)
+            .cloned()
+            .unwrap_or_else(|| panic!("{system}/{faction} carries no {name}"))
+    }
+
+    fn plain_tough(tough: i64) -> Ctx {
+        Ctx { defense: 4, tough, models: 1, ..Default::default() }
+    }
+
+    /// The table at EPOCH_73_V36: Fracture is the old Crack, Puncture the old
+    /// Disintegrate, Disintegrate now the Tough(3)+ AP fold and Shatter the
+    /// sixes' AP(+3).
+    #[test]
+    fn the_four_tokens_read_the_36_facets_at_epoch_73() {
+        let fracture = spell_facets(&live_spell("aof", "high_elves", "Magic Arrows").weapon_rules, EPOCH_73_V36);
+        assert_eq!(
+            (fracture.on6_ap, fracture.ignores_regen, fracture.ap_vs_def3, fracture.ap_vs_tough3),
+            (2, false, 0, 0),
+            "Fracture = the old Crack"
+        );
+
+        let puncture = spell_facets(
+            &live_spell("aof", "duchies_of_vinci", "Explosive Concoction").weapon_rules,
+            EPOCH_73_V36,
+        );
+        assert_eq!(
+            (puncture.on6_ap, puncture.ignores_regen, puncture.ap_vs_def3, puncture.ap_vs_tough3),
+            (0, true, 2, 0),
+            "Puncture = the old Disintegrate"
+        );
+
+        let disintegrate = spell_facets(&live_spell("aof", "beastmen", "Ancestral Wrath").weapon_rules, EPOCH_73_V36);
+        assert_eq!(
+            (disintegrate.on6_ap, disintegrate.ignores_regen, disintegrate.ap_vs_def3, disintegrate.ap_vs_tough3),
+            (0, true, 0, 2),
+            "Disintegrate: regen bypass + AP(+2) vs Tough(3)+, never ap_vs_def3"
+        );
+
+        let shatter = spell_facets(
+            &live_spell("aof", "kingdom_of_angels", "Lightning Bolt").weapon_rules,
+            EPOCH_73_V36,
+        );
+        assert_eq!(
+            (shatter.on6_ap, shatter.ap_vs_tough3),
+            (3, 0),
+            "Shatter: sixes get AP(+3), never ap_vs_tough3"
+        );
+    }
+
+    /// Pattern 12 — below 73 all four keep the 3.5 readings byte-identical.
+    #[test]
+    fn the_four_tokens_keep_their_35_readings_at_epoch_72() {
+        let fracture = spell_facets(&live_spell("aof", "high_elves", "Magic Arrows").weapon_rules, EPOCH_72_PLAYTEST_RULES);
+        assert_eq!((fracture.on6_ap, fracture.ignores_regen), (0, false), "Fracture was unknown");
+
+        let puncture = spell_facets(
+            &live_spell("aof", "duchies_of_vinci", "Explosive Concoction").weapon_rules,
+            EPOCH_72_PLAYTEST_RULES,
+        );
+        assert_eq!(
+            (puncture.on6_ap, puncture.ignores_regen, puncture.ap_vs_def3, puncture.ap_vs_tough3),
+            (0, false, 0, 0),
+            "Puncture was unknown"
+        );
+
+        let disintegrate = spell_facets(&live_spell("aof", "beastmen", "Ancestral Wrath").weapon_rules, EPOCH_72_PLAYTEST_RULES);
+        assert_eq!(
+            (disintegrate.on6_ap, disintegrate.ignores_regen, disintegrate.ap_vs_def3, disintegrate.ap_vs_tough3),
+            (0, true, 2, 0),
+            "the 3.5 Disintegrate ticket"
+        );
+
+        let shatter = spell_facets(
+            &live_spell("aof", "kingdom_of_angels", "Lightning Bolt").weapon_rules,
+            EPOCH_72_PLAYTEST_RULES,
+        );
+        assert_eq!(
+            (shatter.on6_ap, shatter.ap_vs_tough3),
+            (0, 2),
+            "the 3.5 Shatter ticket"
+        );
+    }
+
+    /// Shatter at 73 upgrades the trigger-roll sixes, so a 6-hit spell prices
+    /// above its own 3.5 EV.
+    #[test]
+    fn shatter_raises_the_six_hit_ev_at_epoch_73() {
+        let spell = live_spell("aof", "kingdom_of_angels", "Lightning Bolt");
+        let def = plain_tough(1);
+        let now = spell_damage_ev_of(&spell, &def, EPOCH_73_V36);
+        let before = spell_damage_ev_of(&spell, &def, EPOCH_72_PLAYTEST_RULES);
+        assert!(now > before + 1e-9, "AP(+3) on the sixes must raise the EV: {now} vs {before}");
+    }
+
+    /// Disintegrate at 73 pays AP(+2) against Tough(3)+ only, and still
+    /// bypasses Regeneration.
+    #[test]
+    fn disintegrate_adds_ap_two_only_against_tough_three_at_epoch_73() {
+        let spell = live_spell("aof", "beastmen", "Ancestral Wrath");
+        let tough3 = plain_tough(3);
+        let tough2 = plain_tough(2);
+        assert!(
+            spell_damage_ev_of(&spell, &tough3, EPOCH_73_V36) > spell_damage_ev_of(&spell, &tough3, EPOCH_72_PLAYTEST_RULES) + 1e-9,
+            "Tough(3)+ pays the new AP(+2)"
+        );
+        assert!(
+            (spell_damage_ev_of(&spell, &tough2, EPOCH_73_V36)
+                - spell_damage_ev_of(&spell, &tough2, EPOCH_72_PLAYTEST_RULES))
+            .abs()
+                < 1e-9,
+            "Tough(2) pays nothing new"
+        );
+
+        let regen = Ctx {
+            defense: 4,
+            tough: 3,
+            models: 1,
+            regeneration: true,
+            regen_target: 5,
+            regen_target_spell: 5,
+            ..Default::default()
+        };
+        assert!(
+            (spell_damage_ev_of(&spell, &regen, EPOCH_73_V36) - spell_damage_ev_of(&spell, &tough3, EPOCH_73_V36)).abs() < 1e-9,
+            "Disintegrate still bypasses Regeneration at 73"
+        );
+    }
+}

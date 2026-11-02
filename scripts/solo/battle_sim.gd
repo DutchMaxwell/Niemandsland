@@ -1362,7 +1362,7 @@ static func _spell_damage_ev_of(entry: Dictionary, def_ctx: Dictionary) -> float
 		return 0.0
 	var hits := int(eff.get("hits", 0)) \
 		* maxi(int((entry.get("target", {}) as Dictionary).get("count", 1)), 1)
-	return AiSpell.spell_damage_ev(hits, def_ctx, AiSpell.spell_facets(eff.get("weapon_rules", [])))
+	return AiSpell.spell_damage_ev(hits, def_ctx, AiSpell.spell_facets(eff.get("weapon_rules", []), AiActRecorder.rules_epoch))
 
 
 # ===== NML-1069 — the cast sub-phase =========================================

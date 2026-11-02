@@ -198,7 +198,7 @@ use crate::spell::cast_success_chance;
         let (st, statics) = conduit_line(20.0, Some((12.0, true)), None, 8);
         let next = run(&st, &statics, 8);
         let ctx = ctx_of(&statics[2], &st, 2);
-        let ev = spell_damage_ev_of(&bolt(), &ctx);
+        let ev = spell_damage_ev_of(&bolt(), &ctx, crate::acts::CURRENT_RULES_EPOCH);
         // The expectation path walks all THREE D3 faces at weight 1/3 each,
         // so the landed EV is the chance times the spell's EV (battle_sim.gd
         // _cast_phase's own note) — with the rule's +1 riding the origin.
@@ -246,7 +246,7 @@ use crate::spell::cast_success_chance;
         assert!(next_cond.cast_events[0].get("origin").is_none(), "the caster's own origin writes no origin key");
 
         let ctx = ctx_of(&s_cond[2], &st_cond, 2);
-        let flat = cast_success_chance(0, 0) * spell_damage_ev_of(&bolt(), &ctx);
+        let flat = cast_success_chance(0, 0) * spell_damage_ev_of(&bolt(), &ctx, crate::acts::CURRENT_RULES_EPOCH);
         assert!((damage(&next_cond) - flat).abs() < 1e-9, "the flat chance, not the +1");
 
         // And a bearer PAST the rule's own 12" reach is no origin at all.
