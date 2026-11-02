@@ -137,7 +137,8 @@ static func spell_amplifier_mod(unit: GameUnit) -> int:
 ##                             with the same re-roll; only Bane also bypasses Regeneration — A1);
 ##   shred                   — +1 wound per unmodified Defense 1;
 ##   surge                   — +1 hit per 6 on the spell's trigger roll ("Roll as many dice as hits");
-##   on6_ap                  — AP(+X) upgrade on trigger-roll 6s (Crack +2 / Destructive +4);
+##   on6_ap                  — AP(+X) upgrade on trigger-roll 6s (Crack +2; Destructive below 73);
+##   ap_vs_above_half        — Destructive's rules 3.6 AP(+1) against a defender still above half;
 ##   ignores_regen           — Bane / Disintegrate wounds bypass Regeneration (never Lacerate);
 ##   ap_vs_tough3/9, ap_vs_def3 — the conditional AP facets (Shatter / Tear / Disintegrate), resolved
 ##                             against the actual defender by effective_ap().
@@ -170,7 +171,11 @@ static func spell_facets(weapon_rules: Array, rules_epoch: int) -> Dictionary:
 			"Crack":
 				f["on6_ap"] = maxi(int(f["on6_ap"]), 2)
 			"Destructive":
-				f["on6_ap"] = maxi(int(f["on6_ap"]), AiCombatMath.RENDING_AP_BONUS)
+				if v36:
+					var ap := _rating(s)
+					f["ap_vs_above_half"] = maxi(int(f["ap_vs_above_half"]), ap if ap > 0 else 1)
+				else:
+					f["on6_ap"] = maxi(int(f["on6_ap"]), AiCombatMath.RENDING_AP_BONUS)
 			"Hazardous":
 				# "Gets AP(4), but this model's unit takes one wound on unmodified rolls of 1" — the
 				# AP facet lands here; the self-wound side is the caller's trigger-roll business.
@@ -220,6 +225,8 @@ static func effective_ap(facets: Dictionary, def_ctx: Dictionary) -> int:
 		ap += int(facets["ap_vs_tough9"])
 	if int(facets.get("ap_vs_def3", 0)) > 0 and int(def_ctx.get("defense", 4)) <= 3:
 		ap += int(facets["ap_vs_def3"])
+	if bool(def_ctx.get("above_half_strength", false)):
+		ap += int(facets.get("ap_vs_above_half", 0))
 	return ap
 
 

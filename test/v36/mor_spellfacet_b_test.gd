@@ -66,9 +66,9 @@ func test_destructive_prices_ap_one_only_against_an_above_half_defender_at_epoch
 func test_a_plain_spell_is_unchanged_in_both_states() -> void:
 	for alive: int in [MODELS, 2]:
 		var now := _ev("gf", "elven_jesters", "Fatal Sorrow", AiActRecorder.EPOCH_73_V36, _defender(alive))
-		var before := _ev("gf", "elven_jesters", "Fatal Sorrow", AiActRecorder.EPOCH_72_PLAYTEST_RULES, _defender(alive))
+		var prior := _ev("gf", "elven_jesters", "Fatal Sorrow", AiActRecorder.EPOCH_72_PLAYTEST_RULES, _defender(alive))
 		assert_float(now).is_equal_approx(3.0, EPS)
-		assert_float(now).is_equal_approx(before, EPS)
+		assert_float(now).is_equal_approx(prior, EPS)
 
 
 func test_destructive_keeps_the_35_on6_ap_at_epoch_72() -> void:

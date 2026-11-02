@@ -213,8 +213,16 @@ pub fn spell_facets(weapon_rules: &[String], rules_epoch: u32) -> Facets {
             "Shred" => f.shred = true,
             "Surge" => f.surge = true,
             "Crack" => f.on6_ap = f.on6_ap.max(2),
-            // RENDING_AP_BONUS — ai_spell.gd:152-153.
-            "Destructive" => f.on6_ap = f.on6_ap.max(4),
+            // RENDING_AP_BONUS — ai_spell.gd:152-153. From 73 the token adds
+            // AP(+1) against a defender still above half instead.
+            "Destructive" => {
+                if v36 {
+                    let ap = rating(s);
+                    f.ap_vs_above_half = f.ap_vs_above_half.max(if ap > 0 { ap } else { 1 });
+                } else {
+                    f.on6_ap = f.on6_ap.max(4);
+                }
+            }
             "Hazardous" => f.ap = f.ap.max(4),
             // Rules 3.6 (EPOCH_73_V36) re-pointed the four spell tokens below;
             // the 3.5 arms stay byte-identical under the epoch flag.
@@ -263,6 +271,9 @@ fn effective_ap(f: &Facets, def: &Ctx) -> i64 {
     }
     if f.ap_vs_def3 > 0 && def.defense <= 3 {
         ap += f.ap_vs_def3;
+    }
+    if def.above_half_strength {
+        ap += f.ap_vs_above_half;
     }
     ap
 }
