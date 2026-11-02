@@ -4990,6 +4990,37 @@ fn melee_loser(state: &State, si: usize, ti: usize, score_su: i64, score_tu: i64
     if score_su == score_tu { None } else { Some(if score_su > score_tu { ti } else { si }) }
 }
 
+/// AI-06 (SHO-15b, `EPOCH_73_V36`): a Scourge striker's expected phantom wounds — the
+/// Shred-vs-plain EV gap is `hits * SIX_P`, each such 1 worth `SCOURGE_PHANTOM_WOUNDS`.
+#[allow(clippy::too_many_arguments)]
+fn scourge_phantom_ev(
+    profiles: &[ShootProfile], keep: Option<&[usize]>, attacks: &[i64], att: &Ctx,
+    def: &Ctx, dist_in: f64, charging: bool, rules_epoch: u32,
+) -> f64 {
+    if !rule_on(rules_epoch, EPOCH_73_V36) {
+        return 0.0;
+    }
+    let mut def = *def;
+    def.regeneration = false;
+    let mut total = 0.0;
+    let add = |pi: usize, a: i64, total: &mut f64| {
+        let p = &profiles[pi];
+        if !p.rules.iter().any(|r| r.trim() == "Scourge") {
+            return;
+        }
+        let (mut plain, mut probe) = (p.clone(), p.clone());
+        plain.shred = false;
+        probe.shred = true;
+        *total += crate::combat::profile_ev(&probe, a, att, &def, dist_in, charging)
+            - crate::combat::profile_ev(&plain, a, att, &def, dist_in, charging);
+    };
+    match keep {
+        Some(k) => k.iter().enumerate().for_each(|(j, &pi)| add(pi, attacks[j], &mut total)),
+        None => (0..profiles.len()).for_each(|j| add(j, attacks[j], &mut total)),
+    }
+    total * crate::dice::SCOURGE_PHANTOM_WOUNDS as f64
+}
+
 /// `BattleSim._expected_melee_morale` battle_sim.gd:1111-1125 — the loser
 /// tests only while alive; a fail at or below half is a
 /// ROUT, and the loser leaves the board: wounds, positions and radii cleared,
@@ -5019,10 +5050,12 @@ fn expected_melee_morale(
     ti: usize,
     tu_before: i64,
     self_wounds: i64,
+    phantom_on_su: f64,
+    phantom_on_tu: f64,
     seams: Seams,
 ) {
-    let taken_by_su = su_before - wounds_left(state, si);
-    let taken_by_tu = tu_before - wounds_left(state, ti);
+    let taken_by_su = su_before - wounds_left(state, si) + (phantom_on_su.round() as i64);
+    let taken_by_tu = tu_before - wounds_left(state, ti) + (phantom_on_tu.round() as i64);
     let (score_su, score_tu) = if rule_on(seams.rules_epoch, EPOCH_73_V36) {
         // 73: the loser TOOK more. Fear(X) rides the ENEMY's tally, and the
         // charger's own charge-move wounds count as taken by it.
@@ -9398,7 +9431,7 @@ fn resolve_with(
                 } else {
                     // The charger strikes: charging profiles, its OWN fatigue state
                     // (still the pre-charge one), the defender's plain context.
-                    let ev = {
+                    let (ev, phantom_on_tu) = {
                         let us = &statics[pi_s];
                         let ut = &statics[next.roster.profile[ti]];
                         let att = ctx_of_melee(us, &next, si, seams.rules_epoch);
@@ -9408,10 +9441,16 @@ fn resolve_with(
                         member_profiles_of(statics, &next, si, true, 0.0, seams, &mut sc);
                         // D-GATE6: priced at the pre-charge gap (`state` is the pre-move snapshot).
                         let gap = charge_estimate_gap_in(seams.rules_epoch, || modifier_distance_in(state, si, ti, seams));
-                        melee_ev(folded_slice(&us.melee, &sc), &sc.attacks, &att, &def, true, gap)
+                        let ev = melee_ev(folded_slice(&us.melee, &sc), &sc.attacks, &att, &def, true, gap);
+                        let phantom = scourge_phantom_ev(
+                            folded_slice(&us.melee, &sc), None, &sc.attacks, &att, &def, gap,
+                            true, seams.rules_epoch,
+                        );
+                        (ev, phantom)
                     };
                     apply_expected_wounds(&mut next, ti, ev, rng.as_deref_mut());
                     next.fatigued[si] = true;
+                    let mut phantom_on_su = 0.0;
                     if next.alive[ti] > 0 {
                         // Survivors strike back, already survivor-scaled by the
                         // updated `alive`. W-P1 parity (p.9): the strike-back
@@ -9421,7 +9460,7 @@ fn resolve_with(
                         if rule_on(seams.rules_epoch, EPOCH_73_V36) && chain_has_no_melee(statics, &next, ti) {
                             // nothing to strike with — the fight leaves the defender un-Fatigued
                         } else {
-                            let ev_back = {
+                            let (ev_back, phantom) = {
                                 let ut = &statics[next.roster.profile[ti]];
                                 let us = &statics[pi_s];
                                 let att = ctx_of_melee(ut, &next, ti, seams.rules_epoch);
@@ -9429,10 +9468,16 @@ fn resolve_with(
                                 // The strike-back folds too (`_solo_attack_groups` is built
                                 // for the DEFENDER the same way, main.gd:4284-4290).
                                 member_profiles_of(statics, &next, ti, true, 0.0, seams, &mut sc);
-                                melee_ev(folded_slice(&ut.melee, &sc), &sc.attacks, &att, &def, false, 0.0)
+                                let ev = melee_ev(folded_slice(&ut.melee, &sc), &sc.attacks, &att, &def, false, 0.0);
+                                let phantom = scourge_phantom_ev(
+                                    folded_slice(&ut.melee, &sc), None, &sc.attacks, &att, &def, 0.0,
+                                    false, seams.rules_epoch,
+                                );
+                                (ev, phantom)
                             };
                             apply_expected_wounds(&mut next, si, ev_back, rng.as_deref_mut());
                             next.fatigued[ti] = true;
+                            phantom_on_su = phantom;
                         }
                     }
                     // MEL-10e: the charger's own charge-move wounds are part of what
@@ -9440,7 +9485,7 @@ fn resolve_with(
                     // pre-move delta is 0 today; the term keeps this estimate's twin of
                     // `tray_charge_with_self_wounds` in step.
                     let self_wounds = (wounds_left(state, si) - su_before).max(0);
-                    expected_melee_morale(&mut next, statics, si, su_before, ti, tu_before, self_wounds, seams);
+                    expected_melee_morale(&mut next, statics, si, su_before, ti, tu_before, self_wounds, phantom_on_su, phantom_on_tu, seams);
                 }
                 // Consolidation Moves (GF v3.5.1 p.9), seam-gated: one side
                 // wiped by the melee just resolved above (wounds or the
