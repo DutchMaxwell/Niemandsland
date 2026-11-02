@@ -9501,6 +9501,11 @@ func _solo_morale_bonus(unit: GameUnit) -> int:
 ## Regeneration"; Lacerate does not), then everything lands through the normal wound machinery. Returns landed wounds.
 func _solo_land_wounds(target: GameUnit, regenable: int, regen_proof: int, from_spell: bool = false,
 		shot_in: float = -1.0, charged_in: float = -1.0) -> int:
+	# DAT-17a: from EPOCH 73 the grant is spent by wounds COMING IN, before the Regeneration roll —
+	# an all-ignored exchange still spends it, a zero-incoming exchange does not. Below 73 the landing
+	# adds no mark; only _solo_apply_wounds marks there (the old unconditional spend stays in charge).
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and regenable + regen_proof > 0:
+		_solo_mark_regen_grant_used(target)
 	var landed: int = maxi(regen_proof, 0) + await _solo_apply_regeneration(target, regenable, from_spell, {}, regen_proof, shot_in, charged_in)
 	if landed > 0:
 		await _solo_apply_wounds(target, landed)
