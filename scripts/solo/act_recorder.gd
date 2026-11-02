@@ -196,6 +196,12 @@ const EPOCH_63_MELEE_HEIGHT := 63
 ## A2 wounds at half strength test morale, A4 Deadly rolls all X Regeneration dice before the cap),
 ## and the rules 3.6 wave (0.3.15) to 73 with EPOCH_73_V36, the one epoch of the whole wave.
 static var rules_epoch: int = 73
+## The live activation identity the Ethereal placement band penalty is keyed to (MOR-19b): the
+## Solo AI advances it once per activation, the Teleport beat stamps the unit's
+## `teleport_activation` with it, and the band pass prices the -6"/-6" only while the two are
+## equal. Equality only — no ordering — so a stale stamp from an earlier activation never leaks
+## into a later one. Pure input for the band pass; nothing consumes or erases it.
+static var activation_serial: int = 0
 ## The tray-exact series' one bump, mirrored for the table-side gate it carries (the AI climb).
 const EPOCH_70_TRAY_EXACT := 70
 ## The play-test fixes' mirror for the GDScript twins (AiEv, AiSpell, BattleSim); the core's gate reads the
