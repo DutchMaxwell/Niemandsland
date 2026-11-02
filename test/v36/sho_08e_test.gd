@@ -1,8 +1,8 @@
 extends GdUnitTestSuite
 ## SHO-08e (rules 3.6, CORE 13b): the AI's expected-wound estimate gets the Unstoppable
-## own-vs-enemy split. From EPOCH_73_V36 the estimate clamps only the ENEMY-side negative
-## hit modifiers; the bearer's own net (the att ctx "spell_hit_mod" seam) stays. At
-## EPOCH_72_PLAYTEST_RULES the old single clamp over the whole sum stays byte-identical.
+## split the resolver applies. From EPOCH_73_V36 the estimate clamps its non-own sum,
+## so the bearer's spell net (the att ctx "spell_hit_mod" seam) joins the enemy side.
+## At EPOCH_72_PLAYTEST_RULES the old single clamp over the whole sum stays byte-identical.
 
 const ATT := {"quality": 4, "models": 5}
 const ATT_OWN_MINUS := {"quality": 4, "models": 5, "spell_hit_mod": -1}
@@ -50,21 +50,17 @@ func test_own_minus_is_clamped_at_epoch_72() -> void:
 	assert_float(m_clamped).is_equal_approx(m_free, 0.0001)
 
 
-## NEW leg: at 73 the bearer's own -1 survives while the target's Stealth -1 is
-## ignored, so the volley prices exactly like the own-minus-only one and below free.
-func test_own_minus_survives_at_epoch_73() -> void:
+## NEW leg: at 73 the estimate clamps the bearer's spell net with the enemy side,
+## exactly like the resolver's `m - own` clamp: a lone -1 is dropped to free.
+func test_own_minus_is_clamped_with_the_enemy_side_at_epoch_73() -> void:
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
 	var free: float = AiEv.profile_ev(_rprof({"unstoppable": true}), ATT, DEF_PLAIN, 12.0, false)
-	var own_only: float = AiEv.profile_ev(_rprof({"unstoppable": true}), ATT_OWN_MINUS, DEF_PLAIN, 12.0, false)
-	var kept: float = AiEv.profile_ev(_rprof({"unstoppable": true}), ATT_OWN_MINUS, DEF_STEALTH, 12.0, false)
-	assert_bool(own_only < free).is_true()
-	assert_float(kept).is_equal_approx(own_only, 0.0001)
-	# Melee side: the same split against an Evasive target.
+	var clamped: float = AiEv.profile_ev(_rprof({"unstoppable": true}), ATT_OWN_MINUS, DEF_PLAIN, 12.0, false)
+	assert_float(clamped).is_equal_approx(free, 0.0001)
+	# Melee side: the same clamp with an Evasive target.
 	var m_free: float = AiEv.profile_ev(_mprof({"unstoppable": true}), ATT, DEF_PLAIN, 0.0, true)
-	var m_own: float = AiEv.profile_ev(_mprof({"unstoppable": true}), ATT_OWN_MINUS, DEF_PLAIN, 0.0, true)
-	var m_kept: float = AiEv.profile_ev(_mprof({"unstoppable": true}), ATT_OWN_MINUS, DEF_EVASIVE, 0.0, true)
-	assert_bool(m_own < m_free).is_true()
-	assert_float(m_kept).is_equal_approx(m_own, 0.0001)
+	var m_clamped: float = AiEv.profile_ev(_mprof({"unstoppable": true}), ATT_OWN_MINUS, DEF_EVASIVE, 0.0, true)
+	assert_float(m_clamped).is_equal_approx(m_free, 0.0001)
 
 
 ## HOLD: an enemy minus alone is still ignored at both epochs.

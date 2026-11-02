@@ -670,12 +670,13 @@ pub fn profile_ev(
             // in the unit-level prefix scan the EV imagination itself does
             // (ai_ev.gd:347, `stamp_unit_strikers`); the tray reads the plain
             // weapon flag alone.
-            // EPOCH_73_V36 (SHO-08e) — the Unstoppable split: the bearer's own net
-            // (`att.hit_mod`) stays, only the enemy-side minus is clamped; below the
-            // gate the whole sum keeps the old single clamp.
+            // EPOCH_73_V36 (SHO-08e-fix) — the Unstoppable split is the resolver's
+            // `m - own` clamp: the bearer's spell net (`att.hit_mod`) joins the enemy
+            // side, so the COMBINED non-own sum is clamped at 0; below the gate the
+            // whole sum keeps the old single clamp.
             if p.unstoppable_ev {
                 if rule_on(att.rules_epoch, EPOCH_73_V36) {
-                    melee_mod = att.hit_mod + enemy_mod.max(0);
+                    melee_mod = (att.hit_mod + enemy_mod).max(0);
                 } else if melee_mod < 0 {
                     melee_mod = 0;
                 }
@@ -732,11 +733,12 @@ pub fn profile_ev(
         let own_mod = att.hit_mod + art_own;
         let mut shoot_mod = own_mod + enemy_mod;
         // EV/tray split (found by #489, caveat 4) — see the melee branch above.
-        // EPOCH_73_V36 (SHO-08e) — the Unstoppable split: the bearer's own net and
-        // the Artillery shooter's own +1 stay, only the enemy-side minus is clamped.
+        // EPOCH_73_V36 (SHO-08e-fix) — the resolver's `m - own` clamp: the bearer's
+        // spell net joins the enemy side, so the COMBINED non-own sum is clamped;
+        // the Artillery shooter's own +1 stays outside it.
         if p.unstoppable_ev {
             if rule_on(att.rules_epoch, EPOCH_73_V36) {
-                shoot_mod = own_mod + enemy_mod.max(0);
+                shoot_mod = art_own + (att.hit_mod + enemy_mod).max(0);
             } else if shoot_mod < 0 {
                 shoot_mod = 0; // GF v3.5.1 p.15, head wave 1 — clamp BEFORE weapon bonuses.
             }
