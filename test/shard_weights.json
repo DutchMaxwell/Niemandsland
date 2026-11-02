@@ -373,6 +373,7 @@
 "test/move_ledger_test.gd": 0.4,
 "test/move_takeback_test.gd": 0.0,
 "test/move_trails_test.gd": 0.1,
+"test/v36/mor_09_test.gd": 0.1,
 "test/v36/mor_11_test.gd": 0.1,
 "test/v36/mor_14_test.gd": 0.1,
 "test/v36/mor_15_test.gd": 0.1,
