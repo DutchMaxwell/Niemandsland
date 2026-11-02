@@ -6556,7 +6556,9 @@ fn reach_index_with_walls(state: &State, terrain: &Terrain, walls: &[crate::mv::
 /// `BattleSim._best_spell_target` battle_sim.gd:922-943 — the enemy a
 /// damage/debuff spell lands on: alive, on the other side, inside `range_in`
 /// with line of sight, best damage EV first and NEAREST on a tie. A debuff
-/// prices at 0, so it simply takes the nearest.
+/// prices at 0, so it simply takes the nearest. Rules 3.6 (D-SPELL-LOS): from
+/// `EPOCH_73_V36` sight binds only when the entry's own `needs_los` says so;
+/// below the epoch every spell still needs it.
 fn best_spell_target(
     statics: &[UnitStatic],
     state: &State,
@@ -6564,8 +6566,10 @@ fn best_spell_target(
     entry: &Spell,
     los: &[bool],
     origins: &[(usize, i64)],
+    rules_epoch: u32,
 ) -> Option<(usize, usize)> {
     let player = state.player[si];
+    let sight_required = !rule_on(rules_epoch, EPOCH_73_V36) || entry.needs_los;
     let mut best: Option<(usize, usize)> = None;
     let mut best_ev = -1.0f64;
     let mut best_d = f64::INFINITY;
@@ -6578,7 +6582,9 @@ fn best_spell_target(
         // origin for it — walk and break, no EV-shopping over origins.
         let mut reach: Option<(usize, f64)> = None;
         for &(ou, _) in origins {
-            let seen = if ou == si {
+            let seen = if !sight_required {
+                true
+            } else if ou == si {
                 state.sees_idx(si, ti) && los[ti]
             } else {
                 state.sees_idx(ou, ti) && state.los_clear(ou, ti)
@@ -6641,7 +6647,7 @@ fn pick_cast(
             if a.friendly() {
                 return Some((idx, si, origins[0].0)); // a friendly utility takes the caster's unit
             }
-            if let Some((ti, ou)) = best_spell_target(statics, state, si, entry, los, origins) {
+            if let Some((ti, ou)) = best_spell_target(statics, state, si, entry, los, origins, rules_epoch) {
                 return Some((idx, ti, ou)); // EV 0 -> the nearest enemy, like a debuff
             }
             continue;
@@ -6649,7 +6655,7 @@ fn pick_cast(
         if entry.effect_kind != "damage" && entry.effect_kind != "debuff" {
             continue; // an effect kind the sim has no arithmetic for
         }
-        if let Some((ti, ou)) = best_spell_target(statics, state, si, entry, los, origins) {
+        if let Some((ti, ou)) = best_spell_target(statics, state, si, entry, los, origins, rules_epoch) {
             return Some((idx, ti, ou));
         }
     }
@@ -10129,6 +10135,7 @@ mod cast_fold_tests {
 
     fn spell() -> Spell {
         Spell {
+            needs_los: false,
             name: "bolt".into(),
             status: "modeled".into(),
             threshold: 1,

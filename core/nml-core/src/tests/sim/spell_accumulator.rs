@@ -18,6 +18,7 @@ use super::*;
 
     fn spell() -> Spell {
         Spell {
+            needs_los: false,
             name: "bolt".into(),
             status: "modeled".into(),
             threshold: 2,

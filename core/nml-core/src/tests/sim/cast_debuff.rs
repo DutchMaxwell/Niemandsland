@@ -71,6 +71,7 @@ use super::*;
 
     fn debuff(hit: f64, dm: f64) -> Spell {
         Spell {
+            needs_los: false,
             name: "debuff".into(),
             status: "modeled".into(),
             threshold: 0,

@@ -41,6 +41,7 @@ use super::*;
 
     fn bolt() -> Spell {
         Spell {
+            needs_los: false,
             name: "bolt".into(),
             status: "modeled".into(),
             threshold: 0,
@@ -57,6 +58,7 @@ use super::*;
 
     fn mod_spell(kind: &str, hit: f64, dm: f64) -> Spell {
         Spell {
+            needs_los: false,
             name: "mod".into(),
             status: "modeled".into(),
             threshold: 0,
