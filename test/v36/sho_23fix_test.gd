@@ -37,7 +37,7 @@ func after_test() -> void:
 
 
 ## The fixture map keeps a primitive-named common row, so the OLD primitive lookup still fires and its
-## stacking is what the RED leg shows; the faction row carries the shipped Utility Buff stamp.
+## stacking is what the RED leg shows.
 func _use_map() -> void:
 	RulesRegistry.map_path_override["gf"] = MAP
 	RulesRegistry.reset_cache()
@@ -60,7 +60,8 @@ func _reg(u: GameUnit) -> GameUnit:
 	return u
 
 
-## The AI's bearer in the GF faction whose book prints the family (`blessed_sisters` = Precision Target).
+## The AI's bearer in the GF faction (`test_fixture` has no faction row, so the map's common row answers;
+## `blessed_sisters` is the shipped faction whose entry carries the Utility Buff primitive).
 func _bearer(name: String, rule: String, faction: String) -> GameUnit:
 	var u := _reg(E2EBoot.make_unit(_main, 2, name, [Vector3.ZERO]))
 	u.unit_properties["game_system"] = "gf"
@@ -89,7 +90,7 @@ func _hit_mods(u: GameUnit) -> Array:
 func test_precision_target_puts_one_token_on_each_of_two_units_at_73() -> void:
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
 	_use_map()
-	var bearer := _bearer("Marksman", "Precision Target(2)", "blessed_sisters")
+	var bearer := _bearer("Marksman", "Precision Target(2)", "test_fixture")
 	var alpha := _big(Vector3(10.0 * INCH, 0, 0))
 	var bravo := _small(Vector3(10.0 * INCH, 0, 6.0 * INCH))
 	_main._solo_apply_precision_target(bearer)
@@ -105,7 +106,7 @@ func test_precision_target_puts_one_token_on_each_of_two_units_at_73() -> void:
 func test_precision_target_still_stacks_two_tokens_on_one_unit_at_72() -> void:
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
 	_use_map()
-	var bearer := _bearer("Marksman", "Precision Target(2)", "blessed_sisters")
+	var bearer := _bearer("Marksman", "Precision Target(2)", "test_fixture")
 	var alpha := _big(Vector3(10.0 * INCH, 0, 0))
 	var bravo := _small(Vector3(10.0 * INCH, 0, 6.0 * INCH))
 	_main._solo_apply_precision_target(bearer)
