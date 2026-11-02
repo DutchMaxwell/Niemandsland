@@ -23124,11 +23124,7 @@ func _solo_apply_precision_target(unit: GameUnit) -> void:
 			continue
 		if bool(member.unit_properties.get("precision_target_used", false)):
 			continue
-		# SHO-22b shape: shipped entries stamp Precision Target with the "Utility Buff" primitive, which
-		# the old primitive-named lookup never matched; keep that path and add the Utility Buff one.
-		var entries: Array = RulesRegistry.unit_rules_of_primitive(member, "Precision Target")
-		entries.append_array(_solo_utility_buff_entries_named(member, "Precision Target"))
-		for e in entries:
+		for e in _solo_utility_buff_entries_named(member, "Precision Target"):
 			var ed := e as Dictionary
 			if bool(member.unit_properties.get("precision_target_used", false)):
 				break
