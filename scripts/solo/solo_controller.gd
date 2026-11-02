@@ -5076,6 +5076,19 @@ func _plan_casts(unit: GameUnit, report: Dictionary = {}) -> Array:
 	return casts
 
 
+## MOR-15b — the cast target the AI PLANNER prices boost/interference at. Below
+## EPOCH_73_V36 the core plans blind (`priced_net = 0`), so the old 4+ stays; from
+## 73 the same casting net the human block folds moves the target. The human
+## resolver always folds (`from_73_only == false`), as it always has.
+func caster_cast_target(unit: GameUnit, from_73_only := false) -> int:
+	if unit == null:
+		return AiSpell.CAST_BASE_TARGET
+	if from_73_only and AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return AiSpell.CAST_BASE_TARGET
+	var base := int(RulesRegistry.unit_param(unit, "Caster", "cast_target", AiSpell.CAST_BASE_TARGET))
+	return clampi(base - AiSpell.spell_amplifier_mod(unit), 2, 6)
+
+
 ## The one cast attempt of a single caster member: D3+X over the faction's BOOK-ORDERED spell list,
 ## cycle to the first valid spell (official); target + token economy filled by EV. Returns {} when
 ## the caster holds (no valid spell / no spell data), with the decision recorded either way.
