@@ -506,12 +506,17 @@ static func bane_boost_window(unit: GameUnit, over9: bool) -> Dictionary:
 
 ## Rules 3.6 (SHO-10): does this profile's stamped Bane re-roll window open against THIS target? The
 ## SAME predicate the conditional-AP leg runs (AiCombatMath.cond_met); no stamped condition (the only
-## shipped shape) always opens.
+## shipped shape) always opens. `target` carries the TARGET-STATE keys (`above_half_strength`,
+## `shaken_or_fatigued`, `near_terrain`) the Rust table path passes; {} keeps them all false.
 static func bane_applies(profile: Dictionary, target_tough: int, target_defense: int,
-		dist_in: float, melee: bool) -> bool:
+		dist_in: float, melee: bool, target: Dictionary = {}) -> bool:
 	var bc: Dictionary = profile.get("bane_condition", {})
-	return bc.is_empty() or AiCombatMath.cond_met(str(bc.get("condition", "")), bc, target_tough,
-		target_defense, false, dist_in, melee, {"weapon_range_in": float(profile.get("range", 0))})
+	if bc.is_empty():
+		return true
+	var view := target.duplicate()
+	view["weapon_range_in"] = float(profile.get("range", 0))
+	return AiCombatMath.cond_met(str(bc.get("condition", "")), bc, target_tough,
+		target_defense, false, dist_in, melee, view)
 
 
 ## Stamp the Sergeant facet onto a unit's weapon profiles (wave 5, model-level rule): the FIRST profile
@@ -923,7 +928,10 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 	# SHO-10: a re-roll entry's target condition (stamped above, epoch 73 only) can shut the
 	# window; "" on every shipped entry keeps the old EV answer.
 	var bane := bool(profile.get("bane", false)) and bane_applies(profile,
-		maxi(int(def_ctx.get("tough", 1)), 1), int(def_ctx.get("defense", 4)), dist_in, melee)
+		maxi(int(def_ctx.get("tough", 1)), 1), int(def_ctx.get("defense", 4)), dist_in, melee, {
+			"above_half_strength": bool(def_ctx.get("above_half_strength", false)),
+			"shaken_or_fatigued": bool(def_ctx.get("shaken_or_fatigued", false)),
+			"near_terrain": bool(def_ctx.get("near_terrain", false))})
 	# Fortified (defender): each incoming hit's FINAL AP counts as -1 (min 0) — applied per sub-batch.
 	var fort := bool(def_ctx.get("fortified", false))
 	var fort_over := float(def_ctx.get("fortified_over_in", -1.0))

@@ -9052,7 +9052,8 @@ func _solo_resolve_saves(striker: GameUnit, defender: GameUnit, weapon_name: Str
 	# SHO-10: a re-roll entry's optional target condition opens (or shuts) the whole Bane window;
 	# every shipped entry is unconditional, so the old read stands.
 	var bane: bool = _solo_striker_has_bane(striker, profile, melee) and AiEv.bane_applies(profile,
-		_solo_unit_tough(defender), int(defender.unit_properties.get("defense", 4)), dist_in, melee)
+		_solo_unit_tough(defender), int(defender.unit_properties.get("defense", 4)), dist_in, melee,
+		_solo_target_state(defender))
 	var total := 0
 	# AP-on-6 sub-volley first; a Blast-multiplied hit-count can only shrink the count via the cap.
 	if ap4_hits > 0:
@@ -9766,6 +9767,15 @@ func _solo_model_label(unit: GameUnit, idx: int) -> String:
 	return "trooper"
 
 
+## Rules 3.6: the TARGET-STATE facts the shared condition test reads, on the same basis the core's
+## `Ctx` stamps (SHO-10's bane window and the conditional-AP leg price the same target). One truth
+## for every caller; `near_terrain` is the deterministic sampler's verdict.
+func _solo_target_state(defender: GameUnit) -> Dictionary:
+	return {"above_half_strength": not _solo_below_half_strength(defender),
+		"shaken_or_fatigued": defender.is_shaken or defender.is_fatigued,
+		"near_terrain": _solo_stealth_alias_in_terrain(defender, 1.0, _solo_terrain_sampler())}
+
+
 ## Whether wounds from this attacker+profile bypass the defender's Regeneration (GF Advanced Rules
 ## v3.5.1: Bane, Rending and Unstoppable "ignore Regeneration"; Lacerate is the AoF sibling).
 ## Conditional-AP weapon rules (Shatter/Tear/Melee Slayer/Disintegrate): the extra AP this weapon gets
@@ -9796,10 +9806,8 @@ func _solo_conditional_ap_parts(profile: Dictionary, striker: GameUnit, defender
 	# SHO-20: the striker's Hold state rides the same view -- the 3.6 Slayer gate reads it.
 	var held := _solo_unit_held(striker)
 	var v36 := AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
-	var cx := {"weapon_range_in": float(profile.get("range", 0)), "held": held,
-		"above_half_strength": not _solo_below_half_strength(defender),
-		"shaken_or_fatigued": defender.is_shaken or defender.is_fatigued,
-		"near_terrain": _solo_stealth_alias_in_terrain(defender, 1.0, _solo_terrain_sampler())}
+	var cx := {"weapon_range_in": float(profile.get("range", 0)), "held": held}
+	cx.merge(_solo_target_state(defender))
 	var parts: Array = []
 	var seen := {}
 	var moved_logged := false
