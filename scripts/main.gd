@@ -6562,8 +6562,8 @@ func _solo_regen_family_on(unit: GameUnit, rule: String) -> bool:
 
 
 ## The Stealth-family names whose 3.6 text reads "most models" (the core's STEALTH_MOST_MODELS twin); every
-## other alias keeps the all-models read. Empyrean Spirit is on that list too but rides row MOR-06.
-const SOLO_STEALTH_MOST_MODELS: Array[String] = ["Stealth", "Changebound", "Machine-Fog", "Screened", "Entrenched"]
+## other alias keeps the all-models read. Empyrean Spirit and Grounded Evasion ride row MOR-06.
+const SOLO_STEALTH_MOST_MODELS: Array[String] = ["Stealth", "Changebound", "Machine-Fog", "Screened", "Entrenched", "Empyrean Spirit", "Grounded Evasion"]
 
 
 func _solo_stealth_family_on(unit: GameUnit, rule: String) -> bool:

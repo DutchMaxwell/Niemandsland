@@ -2028,7 +2028,8 @@ fn battleborn_recover_target_of(reg: &mut Registries, p: &Profile, rules_epoch: 
             return rule_on_most_models(p, p.model_count.max(1), name, false);
         }
         (has_special_rule(&p.special_rules, name) || has_special_rule(&p.item_grants, name))
-            && p.attached_hero_rules.iter().all(|hr| has_special_rule(hr, name))
+            && (!rule_on(rules_epoch, crate::acts::EPOCH_73_V36)
+                || p.attached_hero_rules.iter().all(|hr| has_special_rule(hr, name)))
     };
     let mut best = 0u32;
     for name in ["Honor Code", "Vale Oath", "Enhanced Vale Oath", "Unmovable"] {
@@ -5331,7 +5332,8 @@ fn growth_of_epoch(
         if e.primitive.as_deref() != Some("Growth Markers") {
             continue;
         }
-        if !most_models_family_on(p, &n, rules_epoch) {
+        if rule_on(rules_epoch, EPOCH_73_V36)
+            && !most_models_family_on(p, &n, rules_epoch) {
             continue;
         }
         let g = GrowthRule {
@@ -7063,9 +7065,11 @@ impl UnitStatic {
                 reg, p, "Spell Conduit", "requires_not_shaken", true,
             ),
             battleborn_active: unit_rule_active(reg, p, "Battleborn")
-                && most_models_family_on(p, "Battleborn", rules_epoch),
+                && (!rule_on(rules_epoch, EPOCH_73_V36)
+                    || most_models_family_on(p, "Battleborn", rules_epoch)),
             steadfast_active: unit_rule_active(reg, p, "Steadfast")
-                && most_models_family_on(p, "Steadfast", rules_epoch),
+                && (!rule_on(rules_epoch, EPOCH_73_V36)
+                    || most_models_family_on(p, "Steadfast", rules_epoch)),
             // Sweep H row Steadfast — the free-clear gate flag: the round-start
             // Shaken clear for Steadfast stays free only BELOW the FROZEN
             // `EPOCH_40_STEADFAST_ROLL`; from 40 the playout rolls the die
