@@ -540,6 +540,12 @@ static func bane_applies(profile: Dictionary, target_tough: int, target_defense:
 static func stamp_sergeant(profiles: Array, unit: GameUnit) -> Array:
 	if unit == null:
 		return profiles
+	# SHO-11 (rules 3.6): "Destructive" is the above-half-strength AP(+1) rule now,
+	# not the 3.5 unmodified-six AP(+4). Its 3.6 map entry reaches the conditional-AP
+	# pass; the old fixed on-6 flag must not double it from 73.
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		for fp in profiles:
+			(fp as Dictionary).erase("destructive")
 	for fp in profiles:
 		var fpd := fp as Dictionary
 		var takedown_name := takedown_rule_for_profile(unit, int(fpd.get("range", 0)))

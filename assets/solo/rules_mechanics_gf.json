@@ -2167,6 +2167,15 @@
      "uses_per_game": 1
     }
    },
+   "Purge": {
+    "primitive": "Purge",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "ap_bonus": 2,
+     "condition": "shaken_or_fatigued"
+    }
+   },
    "Regeneration Aura": {
     "primitive": "Regeneration",
     "rated": false,
@@ -2880,6 +2889,17 @@
     "book_version": "3.5.3",
     "params": {
      "grants": "Dash"
+    }
+   },
+   "Disintegrate": {
+    "primitive": "Disintegrate",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "ap_bonus": 2,
+     "condition": "vs_tough_ge",
+     "threshold": 3,
+     "bypass_regen": true
     }
    },
    "Guardian": {
@@ -4245,6 +4265,15 @@
      "impact_reduction_per_model": 1
     }
    },
+   "Destructive": {
+    "primitive": "Destructive",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "ap_bonus": 1,
+     "condition": "above_half_strength"
+    }
+   },
    "Disintegrate": {
     "primitive": "Disintegrate",
     "rated": false,
@@ -4484,6 +4513,15 @@
     "book_version": "3.5.3",
     "params": {
      "grants": "Counter-Attack"
+    }
+   },
+   "Destructive": {
+    "primitive": "Destructive",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "ap_bonus": 1,
+     "condition": "above_half_strength"
     }
    },
    "Fearless Aura": {
@@ -6112,6 +6150,17 @@
      "bypass_regen": false
     }
    },
+   "Disintegrate": {
+    "primitive": "Disintegrate",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "ap_bonus": 2,
+     "condition": "vs_tough_ge",
+     "threshold": 3,
+     "bypass_regen": true
+    }
+   },
    "Fortified": {
     "primitive": "Fortified",
     "rated": false,
@@ -6245,11 +6294,9 @@
    "Shatter": {
     "primitive": "Shatter",
     "rated": false,
-    "book_version": "3.5.3",
+    "book_version": "3.6.0",
     "params": {
-     "ap_bonus": 2,
-     "condition": "vs_tough_ge",
-     "threshold": 3
+     "on6_ap": 3
     }
    },
    "Shielded": {
@@ -8662,6 +8709,14 @@
      "once": true
     }
    },
+   "Shatter": {
+    "primitive": "Shatter",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "on6_ap": 3
+    }
+   },
    "Shielded": {
     "primitive": "Shielded",
     "rated": false,
@@ -9503,6 +9558,15 @@
      "melee_only": true
     }
    },
+   "Purge": {
+    "primitive": "Purge",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "ap_bonus": 2,
+     "condition": "shaken_or_fatigued"
+    }
+   },
    "Violent": {
     "primitive": "Shred",
     "rated": false,
@@ -9722,6 +9786,15 @@
     "params": {
      "ap_bonus": 1,
      "condition": "on_charge"
+    }
+   },
+   "Purge": {
+    "primitive": "Purge",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "ap_bonus": 2,
+     "condition": "shaken_or_fatigued"
     }
    },
    "Relentless Aura": {
@@ -11461,6 +11534,15 @@
     "book_version": "3.5.3",
     "params": {
      "grants": "Piercing Shooter"
+    }
+   },
+   "Purge": {
+    "primitive": "Purge",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "ap_bonus": 2,
+     "condition": "shaken_or_fatigued"
     }
    },
    "Rapid Charge": {

@@ -3484,6 +3484,14 @@ fn stamp(
     rules_epoch: u32,
     trace73: bool,
 ) {
+    // Rules 3.6 (SHO-11): "Destructive" is the above-half-strength AP(+1) rule now,
+    // not the 3.5 unmodified-six AP(+4). The 3.6 registry entry drives that bonus
+    // through the conditional-AP pass, so the old fixed on-6 flag must stay off.
+    if rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
+        for sp in shoot.iter_mut() {
+            sp.destructive = false;
+        }
+    }
     // 1. Versatile Attack, unit-wide (ai_ev.gd:209-217).
     if has_special_rule(&p.special_rules, "Versatile Attack")
         || !rules_of_primitive(reg, p, "Versatile Attack").is_empty()
