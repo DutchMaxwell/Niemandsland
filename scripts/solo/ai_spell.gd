@@ -394,30 +394,6 @@ static func boost_value_of(effect_value: float) -> float:
 	return effect_value if effect_value > 0.0 else UNPRICED_EFFECT_VALUE
 
 
-## MOR-16b (Spell Drain): the pre-attack pick. The enemy CASTER with the most
-## spell tokens inside the reach wins; a tokenless candidate or a caster out of
-## reach is no pick. Candidates: {unit, dist_in, has_los, casts_current, is_caster}.
-## Returns the winning candidate dict, or {} when nothing is legal.
-static func spell_drain_pick(candidates: Array, reach_in: float = 18.0) -> Dictionary:
-	var best: Dictionary = {}
-	var best_tokens := 0
-	for c in candidates:
-		var cand := c as Dictionary
-		if cand.is_empty() or not bool(cand.get("is_caster", false)):
-			continue
-		if float(cand.get("dist_in", INF)) > reach_in:
-			continue
-		if not bool(cand.get("has_los", false)):
-			continue
-		var tokens := int(cand.get("casts_current", 0))
-		if tokens <= 0:
-			continue
-		if tokens > best_tokens:
-			best_tokens = tokens
-			best = cand
-	return best
-
-
 ## F4/NML-006 — pure once-mod filtering for the DICE path (mirrors the exporter's encoding, tested):
 ## records = [{spell, hit_mod, def_mod, casting_mod, morale_mod, range_in, advance_in, rush_in,
 ## grants_rule, scope, beneficiary, duration}]. role selects the reading:

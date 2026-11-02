@@ -161,15 +161,3 @@ func test_epoch_72_drains_nothing() -> void:
 	await _main._solo_apply_vs_marks(bearer, target, 10.0)
 	assert_int(target.casts_current).is_equal(5)
 	assert_str(_log_text()).not_contains("drains Target")
-
-
-func test_the_ai_pick_prefers_the_richest_caster_in_reach() -> void:
-	var best := AiSpell.spell_drain_pick([
-		{"unit": "a", "dist_in": 5.0, "has_los": true, "casts_current": 1, "is_caster": true},
-		{"unit": "b", "dist_in": 17.0, "has_los": true, "casts_current": 4, "is_caster": true},
-		{"unit": "c", "dist_in": 30.0, "has_los": true, "casts_current": 3, "is_caster": true},
-	])
-	assert_str(str(best.get("unit", ""))).is_equal("b")
-	assert_bool(AiSpell.spell_drain_pick([
-		{"unit": "a", "dist_in": 5.0, "has_los": true, "casts_current": 0, "is_caster": true},
-	]).is_empty()).is_true()

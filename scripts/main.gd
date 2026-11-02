@@ -22344,9 +22344,9 @@ func _solo_apply_utility_buffs(unit: GameUnit) -> void:
 			var n := str(ed["name"])
 			var sp: Dictionary = ed.get("params", {})
 			# Resolver wave A: vs-target Marks ("... Mark") are ENEMY-side picks consumed at the
-			# attack seam (_solo_apply_vs_marks); MOR-16b's Spell Drain is the same seam, not a
-			# friendly buff. Skip both here.
-			if bool(sp.get("vs_target", false)) or int(sp.get("spell_token_drain", 0)) > 0:
+			# attack seam (_solo_apply_vs_marks); MOR-16b's Spell Drain is the same seam at
+			# epoch 73+, not a friendly buff. Below 73 the row stays on this friendly path.
+			if bool(sp.get("vs_target", false)) or (AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and int(sp.get("spell_token_drain", 0)) > 0):
 				continue
 			var range_in := float(sp.get("range_in", 12.0))
 			# Re-Position Artillery: a friendly Artillery model may immediately move up to 9".
