@@ -1,0 +1,19 @@
+{
+  "_meta": {"source": "SHO-23-fix test fixture: one faction entry stamped with the shipped Utility Buff primitive, plus a primitive-named common row so the old primitive lookup keeps its own path"},
+  "factions": {
+    "blessed_sisters": {
+      "Precision Target": {
+        "primitive": "Utility Buff",
+        "rated": true,
+        "params": {"bonus": "per_placed_marker", "markers": 1, "range_in": 18, "target": "enemy", "needs_los": true, "uses_per_game": 1}
+      }
+    }
+  },
+  "common": {
+    "Precision Target": {
+      "primitive": "Precision Target",
+      "rated": true,
+      "params": {"range_in": 18, "needs_los": true}
+    }
+  }
+}

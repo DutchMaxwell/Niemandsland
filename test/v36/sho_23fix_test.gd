@@ -7,6 +7,7 @@ extends GdUnitTestSuite
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const INCH := 0.0254
+const MAP := "res://test/v36/sho_23fix_map.json"
 
 var _runner: GdUnitSceneRunner
 var _main: Node
@@ -28,9 +29,23 @@ func before_test() -> void:
 
 func after_test() -> void:
 	AiActRecorder.rules_epoch = _epoch0   # statics leak across gdUnit tests
+	RulesRegistry.map_path_override.clear()
+	RulesRegistry.reset_cache()
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 	_main = null
 	_runner = null
+
+
+## The fixture map keeps a primitive-named common row, so the OLD primitive lookup still fires and its
+## stacking is what the RED leg shows; the faction row carries the shipped Utility Buff stamp.
+func _use_map() -> void:
+	RulesRegistry.map_path_override["gf"] = MAP
+	RulesRegistry.reset_cache()
+
+
+func _use_real_map() -> void:
+	RulesRegistry.map_path_override.clear()
+	RulesRegistry.reset_cache()
 
 
 func _log_text() -> String:
@@ -73,6 +88,7 @@ func _hit_mods(u: GameUnit) -> Array:
 ## RED on main: one record with +2 on the toughest pick, nothing on the second unit (the 3.5 stack).
 func test_precision_target_puts_one_token_on_each_of_two_units_at_73() -> void:
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	_use_map()
 	var bearer := _bearer("Marksman", "Precision Target(2)", "blessed_sisters")
 	var alpha := _big(Vector3(10.0 * INCH, 0, 0))
 	var bravo := _small(Vector3(10.0 * INCH, 0, 6.0 * INCH))
@@ -88,6 +104,7 @@ func test_precision_target_puts_one_token_on_each_of_two_units_at_73() -> void:
 ## The pinned 3.5 leg: every marker rides ONE record on the toughest pick (byte-exact old stacking).
 func test_precision_target_still_stacks_two_tokens_on_one_unit_at_72() -> void:
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
+	_use_map()
 	var bearer := _bearer("Marksman", "Precision Target(2)", "blessed_sisters")
 	var alpha := _big(Vector3(10.0 * INCH, 0, 0))
 	var bravo := _small(Vector3(10.0 * INCH, 0, 6.0 * INCH))
@@ -98,3 +115,16 @@ func test_precision_target_still_stacks_two_tokens_on_one_unit_at_72() -> void:
 	assert_str(text) \
 		.override_failure_message("rules-must-log, the 3.5 record line — got: %s" % text.strip_edges()) \
 		.contains("Precision Target on Alpha is ACTIVE: attackers get +2 to hit against it")
+
+
+## The shipped map stamps Precision Target with the "Utility Buff" primitive (the SHO-22b shape), so the
+## old primitive-named lookup never matched and the twin placed nothing; the Utility Buff entry must fire.
+func test_precision_target_reads_the_shipped_utility_buff_entry_at_73() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	_use_real_map()
+	var bearer := _bearer("Marksman", "Precision Target(2)", "blessed_sisters")
+	var alpha := _big(Vector3(10.0 * INCH, 0, 0))
+	var bravo := _small(Vector3(10.0 * INCH, 0, 6.0 * INCH))
+	_main._solo_apply_precision_target(bearer)
+	assert_array(_hit_mods(alpha)).override_failure_message("the shipped entry places one flat +1").is_equal([1])
+	assert_array(_hit_mods(bravo)).override_failure_message("the second pick gets its own +1").is_equal([1])
