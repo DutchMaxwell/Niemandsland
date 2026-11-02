@@ -137,6 +137,8 @@ func test_enhanced_alias_sentinel_never_opens_a_melee_strike_back() -> void:
 	var epoch0: int = AiActRecorder.rules_epoch
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
 	var p := _stamped_surge(AiActRecorder.EPOCH_73_V36)
+	# The dice path stamps the alias marker from the bearer's own rules; the bare stamp above does not.
+	p["_surge_alias"] = "Ferocious"
 	var plain := {"name": "Rifle", "attacks": 4, "ap": 0, "range": 24, "rules": []}
 	var main: Node = auto_free(load("res://scripts/main.gd").new())
 	main.battle_log = auto_free(BattleLog.new())
