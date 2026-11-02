@@ -4542,7 +4542,9 @@ fn max_usable_delta(legs: [Option<f64>; 2]) -> f64 {
 /// for everything else. The draw mirrors `_draw_aura_tokens`' own-front
 /// order. Returns (boost, own draw, helper draw); the caller folds the final
 /// roll target and owns the frozen `EPOCH_48_CASTER_BOOST` gate.
-// The rules epoch is threaded from the frozen seams, not held globally.
+// The rules epoch is threaded from the frozen seams, not held globally; the
+// extra `casting_net` argument mirrors the table's own call shape
+// (`plan_boost(..., priced_target)` from `_plan_member_cast`).
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn plan_caster_boost(
     statics: &[UnitStatic],
@@ -4553,12 +4555,14 @@ pub(crate) fn plan_caster_boost(
     own: i64,
     helpers: &[(usize, i64)],
     rules_epoch: u32,
+    casting_net: i64,
 ) -> (i64, i64, i64) {
     let own_left = (own - entry.threshold).max(0);
     let ev = cast_ev_of(statics, state, si, entry, ti, rules_epoch);
     let boost = plan_boost(
         boost_value_of(ev),
         own_left + helpers.iter().map(|(_, t)| *t).sum::<i64>(),
+        casting_net,
     );
     let own_draw = boost.min(own_left);
     (boost, own_draw, boost - own_draw)
@@ -6906,6 +6910,21 @@ fn casting_net_of(statics: &[UnitStatic], state: &State, ci: usize, seams: Seams
             }
         }
     }
+    // MOR-15 — a WEAPON-borne "Spell Amplifier" lifts the CASTER'S own target
+    // only (never the attached host's, never a conduit origin): the static is
+    // stamped off `ci`'s profile and gated at `EPOCH_73_V36`.
+    let amplifier = statics[state.roster.profile[ci]].spell_amplifier_casting_mod;
+    if amplifier != 0 {
+        net += amplifier;
+        trace_rule(
+            "cast",
+            "Spell Amplifier",
+            &format!(
+                "{:+} to {}'s cast target (casting_net now {net})",
+                amplifier, statics[state.roster.profile[ci]].name
+            ),
+        );
+    }
     net
 }
 
@@ -6954,7 +6973,7 @@ fn cast_origins(
 /// the attempt and pays for it. `tokens` is read ONCE before the loop, so all
 /// three faces shop with the same purse. Later faces see the state the earlier
 /// ones already damaged — that order is load-bearing.
-fn cast_phase(
+pub(crate) fn cast_phase(
     statics: &[UnitStatic],
     state: &mut State,
     si: usize,
@@ -7025,13 +7044,17 @@ fn cast_phase(
         // casting_mod folds in only when THIS cast is made through it.
         let origin_mod = origins.iter().find(|o| o.0 == ou).map_or(0, |o| o.1);
         let casting_net = casting_net_of(statics, state, ci, seams) + origin_mod;
+        // The PLANNER prices the table's `priced_target` from 73 (MOR-15);
+        // below the gate it stays blind (net 0) so every recorded corpus
+        // keeps its exact boost/interference decision.
+        let priced_net = if rule_on(seams.rules_epoch, EPOCH_73_V36) { casting_net } else { 0 };
         // Wave 6 (port-caster-boost) — the boost plan lands at the FIRST
         // pick; the purse was read once before the loop, so later faces
         // shop with (and roll with) the attempt's one boost decision.
         let plan = boost_plan
             .get_or_insert_with(|| {
                 let (b, o, h) = if rule_on(seams.rules_epoch, EPOCH_48_CASTER_BOOST) {
-                    plan_caster_boost(statics, state, si, &spells[idx], ti, own, &helpers, seams.rules_epoch)
+                    plan_caster_boost(statics, state, si, &spells[idx], ti, own, &helpers, seams.rules_epoch, priced_net)
                 } else {
                     (0, 0, 0)
                 };
@@ -7043,6 +7066,7 @@ fn cast_phase(
                         cast_ev_of(statics, state, si, &spells[idx], ti, seams.rules_epoch),
                         enemies.iter().map(|(_, t)| *t).sum(),
                         b,
+                        priced_net,
                     )
                 } else {
                     0

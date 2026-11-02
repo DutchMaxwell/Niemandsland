@@ -137,7 +137,7 @@ use super::*;
         let (st, statics) = board(vec![mod_spell("buff", 0.0, 1.0)]);
         let ev = cast_ev_of(&statics, &st, 0, &statics[0].spells[0], 0, crate::acts::CURRENT_RULES_EPOCH);
         assert!(ev > 0.0, "def buff priced {ev}");
-        let (boost, _, _) = plan_caster_boost(&statics, &st, 0, &statics[0].spells[0], 0, 2, &[], crate::acts::CURRENT_RULES_EPOCH);
+        let (boost, _, _) = plan_caster_boost(&statics, &st, 0, &statics[0].spells[0], 0, 2, &[], crate::acts::CURRENT_RULES_EPOCH, 0);
         assert!(boost > 0, "def buff boost {boost}");
     }
 

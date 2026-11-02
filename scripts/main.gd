@@ -4998,6 +4998,11 @@ func _solo_resolve_one_cast(cast: Dictionary) -> void:
 				break
 			if found:
 				break
+	# MOR-15 — a WEAPON-borne "Spell Amplifier" lifts the BEARER's own casting rolls from 73.
+	var amplifier := AiSpell.spell_amplifier_mod(caster)
+	if amplifier != 0:
+		casting_mod += amplifier
+		cast_mod_notes.append("Spell Amplifier %+d" % amplifier)
 	if casting_mod != 0:
 		base_target = clampi(base_target - casting_mod, 2, 6)
 		if battle_log != null:

@@ -1116,6 +1116,14 @@
     "requires_not_shaken": true
    }
   },
+  "Spell Amplifier": {
+   "primitive": "Spell Amplifier",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "casting_mod": 1
+   }
+  },
   "Spell Conduit": {
    "primitive": "Spell Conduit",
    "rated": false,

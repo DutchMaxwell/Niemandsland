@@ -237,7 +237,7 @@ use crate::rules::{Spell, SpellModifier};
             success_chance(6),
             "clamped at 6+, never above"
         );
-        assert_eq!(crate::spell::plan_interference(0.5, 2, 0), 2, "EV 1/2: both tokens beat the floor");
-        assert_eq!(crate::spell::plan_interference(0.5, 10, 2), 4, "the counter stops at the 6+ clamp");
-        assert_eq!(crate::spell::plan_interference(0.0, 6, 0), 0, "an unpriced cast draws no counter");
+        assert_eq!(crate::spell::plan_interference(0.5, 2, 0, 0), 2, "EV 1/2: both tokens beat the floor");
+        assert_eq!(crate::spell::plan_interference(0.5, 10, 2, 0), 4, "the counter stops at the 6+ clamp");
+        assert_eq!(crate::spell::plan_interference(0.0, 6, 0, 0), 0, "an unpriced cast draws no counter");
     }

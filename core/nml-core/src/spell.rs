@@ -93,18 +93,26 @@ pub fn cast_success_chance_vs(
 
 /// `AiSpell.plan_boost` ai_spell.gd:328-339, ported as-is (the caster side
 /// plans its boost BLIND to the counter — the table's own call shape,
-/// solo_controller.gd:4363, `plan_boost(boost_value, boost_pool)` with the
-/// interference argument defaulted; `plan_interference` plans against the
-/// committed boost afterwards): spend while the NEXT token's marginal EV — the
-/// chance gain times the effect's value — beats `TOKEN_VALUE_EPS`, with the
-/// COIN-FLIP CLAUSE dropping the floor to zero while the cast sits at or under
-/// `COIN_FLIP_P`. The [2,6] clamp naturally stops the spend once the roll
-/// cannot improve.
-pub fn plan_boost(effect_value: f64, available: i64) -> i64 {
+/// solo_controller.gd:4363, `plan_boost(boost_value, boost_pool, 0,
+/// priced_target)` with the interference argument defaulted;
+/// `plan_interference` plans against the committed boost afterwards): spend
+/// while the NEXT token's marginal EV — the chance gain times the effect's
+/// value — beats `TOKEN_VALUE_EPS`, with the COIN-FLIP CLAUSE dropping the
+/// floor to zero while the cast sits at or under `COIN_FLIP_P`. The [2,6]
+/// clamp naturally stops the spend once the roll cannot improve.
+///
+/// `casting_net` is the live fold the ROLL uses (`cast_success_chance`'s own
+/// first argument), so the plan prices the table's `priced_target`: a positive
+/// net (Spell Amplifier, friendly Casting Buff) already lowers the target and
+/// with it the marginal gain of a token. The caller (`sim::cast_phase`) gates
+/// the argument behind `EPOCH_73_V36`, passing 0 below it so the old BLIND
+/// pricing and every recorded corpus stay byte-exact; this function knows no
+/// epochs.
+pub fn plan_boost(effect_value: f64, available: i64, casting_net: i64) -> i64 {
     let mut boost = 0i64;
     while boost < available {
-        let p_now = cast_success_chance(0, boost);
-        let gain = (cast_success_chance(0, boost + 1) - p_now) * effect_value.max(0.0);
+        let p_now = cast_success_chance(casting_net, boost);
+        let gain = (cast_success_chance(casting_net, boost + 1) - p_now) * effect_value.max(0.0);
         let floor_now: f64 = if p_now <= COIN_FLIP_P { 0.0 } else { TOKEN_VALUE_EPS };
         if gain <= floor_now {
             break;
@@ -126,11 +134,15 @@ pub fn plan_boost(effect_value: f64, available: i64) -> i64 {
 /// caster, and a counter token has no such future cast of its own). Priced
 /// at the cast's own raw EV, so an unpriced cast draws no counter — and the
 /// [2,6] clamp stops the spend at 6+.
-pub fn plan_interference(effect_value: f64, available: i64, boost: i64) -> i64 {
+///
+/// `casting_net` is the same live fold the ROLL uses, so the counter prices
+/// the table's `priced_target`; the caller (`sim::cast_phase`) passes 0 below
+/// `EPOCH_73_V36` to keep the old blind pricing byte-exact.
+pub fn plan_interference(effect_value: f64, available: i64, boost: i64, casting_net: i64) -> i64 {
     let mut inter = 0i64;
     while inter < available {
-        let gain = (cast_success_chance_vs(0, boost, inter)
-            - cast_success_chance_vs(0, boost, inter + 1))
+        let gain = (cast_success_chance_vs(casting_net, boost, inter)
+            - cast_success_chance_vs(casting_net, boost, inter + 1))
             * effect_value.max(0.0);
         if gain <= TOKEN_VALUE_EPS {
             break;
@@ -481,14 +493,25 @@ mod tests {
         // the table's own worked shape: an unpriced cast buys exactly the one
         // token that lifts it out of the coin flip, never a second
         // (ai_spell.gd:43-51).
-        assert_eq!(plan_boost(boost_value_of(0.0), 6), 1);
+        assert_eq!(plan_boost(boost_value_of(0.0), 6, 0), 1);
         // EV 1/2: both tokens' marginal EV (1/12 each) beat the floor (the
         // first via the coin-flip clause), the clamp stops at 2+.
-        assert_eq!(plan_boost(0.5, 2), 2);
-        assert_eq!(plan_boost(0.5, 10), 2, "the [2,6] clamp ends the spend");
+        assert_eq!(plan_boost(0.5, 2, 0), 2);
+        assert_eq!(plan_boost(0.5, 10, 0), 2, "the [2,6] clamp ends the spend");
         // EV 1/36: the first token is the coin-flip clause's, the second
         // (1/36 < TOKEN_VALUE_EPS above the flip) stays held.
-        assert_eq!(plan_boost(1.0 / 36.0, 6), 1);
+        assert_eq!(plan_boost(1.0 / 36.0, 6, 0), 1);
         // no tokens, no spend.
-        assert_eq!(plan_boost(100.0, 0), 0);
+        assert_eq!(plan_boost(100.0, 0, 0), 0);
+    }
+
+    /// MOR-15 (pre-review FLAG) — the planner prices the SAME live fold the
+    /// roll uses: a net that already lowers the target (Spell Amplifier +1 ->
+    /// 3+) buys fewer tokens than the blind read, and a net at the 2+ clamp
+    /// has no step left to buy.
+    #[test]
+    fn plan_boost_prices_the_live_casting_net() {
+        assert_eq!(plan_boost(0.5, 10, 0), 2, "the blind read stays as-is");
+        assert_eq!(plan_boost(0.5, 10, 1), 1, "3+ has one step left, not two");
+        assert_eq!(plan_boost(1.0, 10, 2), 0, "a 2+ target has no step left");
     }}

@@ -5168,6 +5168,9 @@ func _plan_member_cast(unit: GameUnit, member: GameUnit, hold_out: Array = []) -
 	#   within 18" LoS (+1 each), gated by the difficulty's spend_boosts (default sharp AI spends). —
 	var threshold := int(chosen.get("threshold", 0))
 	var base_target := int(RulesRegistry.unit_param(member, "Caster", "cast_target", AiSpell.CAST_BASE_TARGET))
+	# MOR-15 — the AI prices the same weapon-borne +1 the table applies, but leaves the
+	# returned `base_target` raw so `_solo_resolve_one_cast` does not fold it twice.
+	var priced_target := base_target - AiSpell.spell_amplifier_mod(member)
 	var boost := 0
 	var boost_sources: Array = []
 	var spend_boosts: bool = diff == null or diff.spend_boosts()
@@ -5193,14 +5196,14 @@ func _plan_member_cast(unit: GameUnit, member: GameUnit, hold_out: Array = []) -
 	if spend_boosts and not helpers.is_empty():
 		for h in helpers:
 			boost_pool += int((h as Dictionary)["tokens"])
-		boost = AiSpell.plan_boost(boost_value, boost_pool)
+		boost = AiSpell.plan_boost(boost_value, boost_pool, 0, priced_target)
 		boost_sources = _draw_aura_tokens(helpers, boost)
 		if boost > 0:
 			# Name the reason PRECISELY: the coin-flip clause only gets the credit when the plain
 			# token floor would have bought nothing — i.e. the FIRST token's marginal EV sits under
 			# it. A fat cast (5 wounds) boosts on the ordinary floor and must not read as one.
-			var p_unboosted := AiSpell.cast_success_chance(0, 0, base_target)
-			var first_gain := (AiSpell.cast_success_chance(1, 0, base_target) - p_unboosted) * boost_value
+			var p_unboosted := AiSpell.cast_success_chance(0, 0, priced_target)
+			var first_gain := (AiSpell.cast_success_chance(1, 0, priced_target) - p_unboosted) * boost_value
 			if chosen_ev <= 0.0:
 				boost_why = "coin-flip boost on an unpriced effect: the spell's tokens are already paid, so the cast is worth landing"
 			elif p_unboosted <= AiSpell.COIN_FLIP_P and first_gain <= AiSpell.TOKEN_VALUE_EPS:
@@ -5221,7 +5224,7 @@ func _plan_member_cast(unit: GameUnit, member: GameUnit, hold_out: Array = []) -
 			var epool := 0
 			for h in enemy_helpers:
 				epool += int((h as Dictionary)["tokens"])
-			interference = AiSpell.plan_interference(chosen_ev, epool, boost)
+			interference = AiSpell.plan_interference(chosen_ev, epool, boost, priced_target)
 			interference_sources = _draw_aura_tokens(enemy_helpers, interference)
 	# — SPEND (the attempt's cost is paid before the roll — v3.5.1; one try per spell): the caster's
 	#   threshold, the helpers' boost tokens, the enemy's interference tokens. —
@@ -5232,7 +5235,7 @@ func _plan_member_cast(unit: GameUnit, member: GameUnit, hold_out: Array = []) -
 		var su := (src as Dictionary)["unit"] as GameUnit
 		su.spend_caster_points(int((src as Dictionary)["tokens"]))
 		_broadcast_casts(su)
-	var p_cast := AiSpell.cast_success_chance(boost, interference, base_target)
+	var p_cast := AiSpell.cast_success_chance(boost, interference, priced_target)
 	var target_names: Array = []
 	for t in chosen_targets:
 		target_names.append(((t as Dictionary)["unit"] as GameUnit).get_name())
@@ -5250,7 +5253,7 @@ func _plan_member_cast(unit: GameUnit, member: GameUnit, hold_out: Array = []) -
 	return {"caster": member, "caster_unit": unit, "spell": chosen,
 		"name": str(chosen.get("name", "?")), "threshold": threshold,
 		"targets": target_units, "ev": chosen_ev, "boost": boost, "interference": interference,
-		"target_num": AiSpell.cast_target(boost, interference, base_target), "base_target": base_target,
+		"target_num": AiSpell.cast_target(boost, interference, priced_target), "base_target": base_target,
 		"interference_open": not auto_interference and not enemy_helpers.is_empty(),
 		"tokens_before": tokens_before, "tokens_after": member.casts_current}
 
