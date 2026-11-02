@@ -4169,10 +4169,10 @@
    "Enhanced Lucky": {
     "primitive": "Surge",
     "rated": false,
-    "book_version": "3.5.3",
+    "book_version": "3.6.0",
     "params": {
      "upgrades": "Lucky",
-     "surge_low": 5
+     "over_in": 0
     }
    },
    "Enhanced Lucky Aura": {
@@ -6119,10 +6119,10 @@
    "Enhanced Ferocious": {
     "primitive": "Surge",
     "rated": false,
-    "book_version": "3.5.3",
+    "book_version": "3.6.0",
     "params": {
      "upgrades": "Ferocious",
-     "surge_low": 5
+     "over_in": 0
     }
    },
    "Enhanced Ferocious Aura": {

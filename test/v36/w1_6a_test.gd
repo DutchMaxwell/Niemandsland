@@ -5,7 +5,7 @@ extends GdUnitTestSuite
 ## primitive and params the 3.5 entry had, a carried form hands out the 3.6 base name, and the 3.5
 ## name is gone from the map. Every case reads the real maps through RulesRegistry.
 
-## DAT-12b drops the distance gate from these 3.6 entries, so CASES carries no over_in.
+## DAT-12b-fix spells over_in 0 (no distance condition) on the Enhanced entries it touches.
 ## The batch's 3.6 names next to the 3.5 names they replace.
 const RENAMED := {
 	"Enhanced Angelic Blessing": "Angelic Blessing Boost",
@@ -30,7 +30,7 @@ const RENAMED := {
 ## carried form's grant spelled with the 3.6 base name. JSON numbers read back as floats.
 const CASES := [
 	["gf", "blessed_sisters", "Enhanced Devout", "Surge",
-		{"upgrades": "Devout", "surge_low": 5.0}],
+		{"upgrades": "Devout", "over_in": 0.0}],
 	["gf", "eternal_dynasty", "Enhanced Clan Warrior Aura", "Aura Channel",
 		{"grants": "Enhanced Clan Warrior"}],
 	["aof", "beastmen", "Enhanced Bestial", "Bane",

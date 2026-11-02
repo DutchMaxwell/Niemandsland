@@ -36,17 +36,17 @@ use super::*;
     }
 
     /// "Lucky Boost Aura" (aof/halflings — the aura grants "Lucky Boost",
-    /// Surge primitive, surge_low 5 / over_in 9 behind its own
-    /// `upgrades: "Lucky"` coupling): the carrier carrying the aura AND the
-    /// base "Lucky" stamps the widened 5+ window over 9"; the base alone
-    /// stays the plain 6 (6 = no boost) and the pre-gate epoch 5 never
-    /// expands the aura at all.
+    /// Surge primitive, `over_in: 0` behind its own `upgrades: "Lucky"`
+    /// coupling): the carrier carrying the aura AND the base "Lucky" keeps
+    /// the base 6s window with no distance condition; the base alone stays
+    /// the plain 6 (6 = no boost) and the pre-gate epoch 5 never expands the
+    /// aura at all.
     #[test]
-    fn an_enhanced_lucky_aura_widens_the_surge_window_to_five_over_nine_at_the_current_epoch() {
+    fn an_enhanced_lucky_aura_keeps_the_base_window_at_the_current_epoch() {
         let epoch = crate::acts::CURRENT_RULES_EPOCH;
         let us = pin_unit("aof", "halflings", &["Enhanced Lucky Aura", "Lucky"], epoch);
-        assert_eq!(us.shoot[0].surge_low, 5, "the granted Enhanced Lucky widens the window to 5+");
-        assert_eq!(us.shoot[0].surge_over_in, 9.0, "the 5s count only past 9\"");
+        assert_eq!(us.shoot[0].surge_low, 6, "the base Lucky window");
+        assert_eq!(us.shoot[0].surge_over_in, -1.0, "no distance condition");
         let base_only = pin_unit("aof", "halflings", &["Lucky"], epoch);
         assert_eq!(base_only.shoot[0].surge_low, 6, "without the boost the plain 6 window stands");
         let pre = pin_unit("aof", "halflings", &["Enhanced Lucky Aura", "Lucky"], 5);
