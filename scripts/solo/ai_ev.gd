@@ -478,6 +478,15 @@ static func takedown_rule_for_profile(unit: GameUnit, profile_range: int) -> Str
 	return ""
 
 
+## Rules 3.6 (DAT-12b-fix): an explicit `over_in: 0` on an entry means "no distance
+## condition"; below `EPOCH_73_V36` the old 9" default stays, so an epoch-72 record replays.
+static func over_in_gate(params: Dictionary) -> float:
+	var gate := float(params.get("over_in", 9.0))
+	if gate != 0.0:
+		return gate
+	return -1.0 if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else 9.0
+
+
 ## The Bane family's WIDENED save re-roll window (wave 4: "Bestial Boost" / "Mischievous Boost" —
 ## `reroll_save_low` + `over_in` behind `upgrades`; wave 6: "Scrapper Boost" — the same window under
 ## its own param spelling `reroll_save_from`): past the entry's over_in the defender re-rolls
@@ -486,7 +495,7 @@ static func takedown_rule_for_profile(unit: GameUnit, profile_range: int) -> Str
 ## `over9` is the caller's past-9" flag (the melee resolve always carries an unknown distance, so
 ## false). Returns the applying entry's {low, over_in, rule}, or {} when the window does not apply.
 static func bane_boost_window(unit: GameUnit, over9: bool) -> Dictionary:
-	if unit == null or not over9:
+	if unit == null:
 		return {}
 	for e in RulesRegistry.unit_rules_of_primitive(unit, "Bane"):
 		var ed := e as Dictionary
@@ -500,7 +509,10 @@ static func bane_boost_window(unit: GameUnit, over9: bool) -> Dictionary:
 		var base := str(p.get("upgrades", ""))
 		if low <= 1 or base.is_empty() or not has_exact_rule(unit, base):
 			continue
-		return {"low": low, "over_in": float(p.get("over_in", 9.0)), "rule": str(ed["name"])}
+		var gate := over_in_gate(p)
+		if gate > 0.0 and not over9:
+			continue
+		return {"low": low, "over_in": gate, "rule": str(ed["name"])}
 	return {}
 
 
@@ -644,7 +656,7 @@ static func stamp_sergeant(profiles: Array, unit: GameUnit) -> Array:
 				fpd["surge_attack_low"] = int(sp.get("surge_low", 5))   # Primal Boost: 5-6 spawn attacks
 			elif bool(fpd.get("surge", false)):
 				fpd["surge_low"] = int(sp.get("surge_low", 5))
-				fpd["surge_over_in"] = float(sp.get("over_in", 9.0))
+				fpd["surge_over_in"] = over_in_gate(sp)
 	# Coverage wave (resolver audit): unit-level RENDING aliases ("Rending in Melee" / "when
 	# Shooting" — granted or direct): stamp the rending facet onto the gated profile set.
 	for e in RulesRegistry.unit_rules_of_primitive(unit, "Rending"):

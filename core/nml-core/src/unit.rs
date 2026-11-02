@@ -2314,6 +2314,17 @@ struct PrimitiveHit {
     extra_wound_per_save_one: i64,
 }
 
+/// Rules 3.6 (DAT-12b-fix): an EXPLICIT `over_in: 0` on an entry means "no
+/// distance condition" (the Enhanced forms' shape). Honoured only from
+/// `EPOCH_73_V36`; below it the same key reads the old 9" default, so an
+/// epoch-72 record replays byte-identical.
+fn v36_over_in(raw: f64, rules_epoch: u32) -> f64 {
+    if raw != 0.0 {
+        return raw;
+    }
+    if rule_on(rules_epoch, crate::acts::EPOCH_73_V36) { -1.0 } else { 9.0 }
+}
+
 /// `RulesRegistry.unit_rules_of_primitive` rules_registry.gd:155-176 — every
 /// effective rule (own + item-granted, each name once, in that order) whose
 /// registry entry resolves to `primitive`.
@@ -3535,10 +3546,22 @@ fn stamp(
             }
             continue;
         }
+        // DAT-12b-fix: an Enhanced entry drops the distance condition and keeps
+        // the BASE rule's window — not the 3.5 Boost's 5. From 73 only; below
+        // the gate the old Boost defaults (5 and 9") stay byte-identical.
+        let low = if rule_on(rules_epoch, crate::acts::EPOCH_73_V36) && hit.over_in == 0.0 {
+            reg.rules_for(&p.game_system)
+                .lookup(&p.faction_folder, &hit.upgrades)
+                .map(|e| e.param_i("surge_low", 6))
+                .unwrap_or(6)
+        } else {
+            hit.surge_low
+        };
+        let over = v36_over_in(hit.over_in, rules_epoch);
         for sp in shoot.iter_mut() {
             if sp.surge {
-                sp.surge_low = hit.surge_low;
-                sp.surge_over_in = hit.over_in;
+                sp.surge_low = low;
+                sp.surge_over_in = over;
             }
         }
     }
@@ -3613,7 +3636,7 @@ fn stamp(
         for sp in shoot.iter_mut() {
             if sp.shred_alias {
                 sp.shred_low = hit.save_fail_max;
-                sp.shred_over_in = hit.over_in;
+                sp.shred_over_in = v36_over_in(hit.over_in, rules_epoch);
             }
         }
     }
@@ -5914,7 +5937,7 @@ fn stamp_bane_boost(
     {
         return;
     }
-    let over = e.param_f("over_in", 9.0);
+    let over = v36_over_in(e.param_f("over_in", 9.0), rules_epoch);
     // SHO-10: the optional target condition that opens the window. Gated at
     // EPOCH_73_V36 so an epoch-72 record that already spells the key replays
     // the unconditional window; no shipped entry spells it either way.

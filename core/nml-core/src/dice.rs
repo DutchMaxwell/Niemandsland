@@ -1218,6 +1218,7 @@ pub fn resolve_volley_leg(
             // SHO-18 (rules 3.6): a Surge ALIAS fires only from a shot over 9".
             let alias_fires = !p.alias_gate
                 || p.surge_alias_rule.is_empty()
+                || p.surge_over_in < 0.0
                 || mod_dist_in > LONG_RANGE_IN;
             if surge_gates {
                 // The table's own gates (main.gd:4465-4482): `surge_within_in`
@@ -2147,6 +2148,8 @@ pub fn resolve_melee_leg(
             // strike (the strike-back) pays nothing, and every pre-73 record keeps the old read.
             let alias_fires = !p.alias_gate
                 || p.surge_alias_rule.is_empty()
+                || p.surge_over_in < 0.0
+                || !charging
                 || charge_from_in > crate::combat::CHARGE_LONG_RANGE_IN;
             if p.surge && alias_fires {
                 // No flag: at 0.0" this IS the table's gated read (the within

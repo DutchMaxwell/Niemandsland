@@ -55,11 +55,11 @@ fn enhanced_machine_fog_makes_the_minus_one_unconditional_like_its_3_5_boost() {
 }
 
 /// W1.6c, code literal (unit.rs aura channel list): the aura hands its base to a Lucky
-/// carrier, whose Surge then counts 5s.
+/// carrier, whose Surge then keeps the base 6s window with no distance condition.
 #[test]
 fn an_enhanced_lucky_aura_hands_its_base_like_its_3_5_boost_aura() {
     let us = enhanced_unit("aof", "halflings", &["Enhanced Lucky Aura", "Lucky"]);
-    assert_eq!(us.shoot[0].surge_low, 5, "the granted base widens the Surge window to 5+");
+    assert_eq!(us.shoot[0].surge_low, 6, "the base Lucky window");
 }
 
 /// W1.6c, map-only name (no code literal): the Shred upgrade stamps from its entry alone.

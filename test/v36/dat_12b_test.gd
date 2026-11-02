@@ -1,6 +1,7 @@
 extends GdUnitTestSuite
-## DAT-12b (0.3.15, rules 3.6): a rule whose name starts with "Enhanced " carries its effect with no
-## distance gate, so no such entry may keep an `over_in` knob. The gate belongs to the older wording.
+## DAT-12b-fix (0.3.15, rules 3.6): a rule whose name starts with "Enhanced " carries its effect
+## with no distance gate, spelled `over_in: 0`. No such entry may keep a positive gate; the older
+## wording's distance belongs to the base rule.
 ## The walk reads both rules 3.6 maps (gf and aof) through RulesRegistry, over the common section and
 ## every faction section; a per-system floor keeps an empty walk from passing. Two pinned cases name
 ## the books that print Enhanced Ferocious, and two non-Enhanced controls prove their gate stays.
@@ -58,9 +59,9 @@ func test_no_enhanced_form_resolves_with_a_distance_gate() -> void:
 			var rule: String = pair[1]
 			var entry := RulesRegistry.lookup(system, book, rule)
 			var params: Dictionary = entry.get("params", {})
-			assert_bool(params.has("over_in")).override_failure_message(
-				"%s/%s: '%s' still carries over_in=%s" % [system, book, rule, params.get("over_in")]) \
-				.is_false()
+			assert_float(float(params.get("over_in", 0.0))).override_failure_message(
+				"%s/%s: '%s' carries a distance gate over_in=%s" % [system, book, rule, params.get("over_in")]) \
+				.is_equal_approx(0.0, 0.001)
 
 
 func test_pinned_enhanced_forms_keep_their_other_knobs() -> void:
@@ -69,11 +70,11 @@ func test_pinned_enhanced_forms_keep_their_other_knobs() -> void:
 		var params: Dictionary = entry.get("params", {})
 		assert_str(str(entry.get("primitive", ""))).override_failure_message(
 			"%s/%s: '%s' moved off Surge: %s" % [c[0], c[1], c[2], entry]).is_equal("Surge")
-		assert_bool(params.has("over_in")).override_failure_message(
-			"%s/%s: '%s' still carries over_in=%s" % [c[0], c[1], c[2], params.get("over_in")]) \
-			.is_false()
-		assert_float(float(params.get("surge_low", -1.0))).override_failure_message(
-			"%s/%s: '%s' lost surge_low: %s" % [c[0], c[1], c[2], params]).is_equal_approx(5.0, 0.001)
+		assert_float(float(params.get("over_in", -1.0))).override_failure_message(
+			"%s/%s: '%s' lost the explicit no-distance spelling: %s" % [c[0], c[1], c[2], params]) \
+			.is_equal_approx(0.0, 0.001)
+		assert_float(float(params.get("surge_low", 6.0))).override_failure_message(
+			"%s/%s: '%s' lost the base 6s window: %s" % [c[0], c[1], c[2], params]).is_equal_approx(6.0, 0.001)
 		assert_str(str(params.get("upgrades", ""))).override_failure_message(
 			"%s/%s: '%s' lost its upgrade link: %s" % [c[0], c[1], c[2], params]) \
 			.is_equal("Ferocious")

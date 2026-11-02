@@ -6330,7 +6330,8 @@ func _solo_hits(faces: Array, to_hit: int, profile: Dictionary, dist_in: float, 
 		hits += rel_bonus
 	if bool(profile.get("surge", false)):
 		var surge_alias := str(profile.get("_surge_alias", ""))
-		var surge_alias_live: bool = surge_alias.is_empty() or (
+		var surge_alias_live: bool = surge_alias.is_empty() \
+			or float(profile.get("surge_over_in", 0.0)) < 0.0 or (
 			_solo_alias_charge_over(charging, charge_from_in) if charging
 			else _solo_alias_family_over(dist_in))
 		# Coverage wave: Surge-family gates — within_in (Point-Blank Surge: only within 12") and the
@@ -9245,17 +9246,19 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 		var boost_rule := ""
 		var boost_low := 1
 		var boost_over_in := 0.0
-		if over9:
-			for e in RulesRegistry.unit_rules_of_primitive(striker, "Shred"):
-				var ed := e as Dictionary
-				var ep: Dictionary = ed.get("params", {})
-				var low := maxi(int(ep.get("save_fail_max", 0)), int(ep.get("extra_wound_save_low", 0)))
-				var base := str(ep.get("upgrades", ""))
-				if low <= 1 or base.is_empty() or not AiEv.has_exact_rule(striker, base):
-					continue
-				boost_low = low
-				boost_rule = str(ed.get("name", ""))
-				boost_over_in = float(ep.get("over_in", 9.0))
+		for e in RulesRegistry.unit_rules_of_primitive(striker, "Shred"):
+			var ed := e as Dictionary
+			var ep: Dictionary = ed.get("params", {})
+			var low := maxi(int(ep.get("save_fail_max", 0)), int(ep.get("extra_wound_save_low", 0)))
+			var base := str(ep.get("upgrades", ""))
+			if low <= 1 or base.is_empty() or not AiEv.has_exact_rule(striker, base):
+				continue
+			var gate := AiEv.over_in_gate(ep)
+			if gate > 0.0 and not over9:
+				continue
+			boost_low = low
+			boost_rule = str(ed.get("name", ""))
+			boost_over_in = gate
 		if boost_low > 1:
 			shred_extra = AiCombatMath.shred_bonus_wounds(save_faces, reroll, boost_low, base_defense + ap)
 		else:
@@ -9265,8 +9268,9 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 			if shred_name.is_empty():
 				shred_name = "Shred"
 			if boost_low > 1:
-				battle_log.log_event(BattleLog.Category.COMBAT, "%s: Shred on failed saves of 1-%d (over %s\") — %d extra wound%s" % [
-					boost_rule, boost_low, str(boost_over_in).trim_suffix(".0"), shred_extra, ("" if shred_extra == 1 else "s")], true)
+				var gate_note := "" if boost_over_in < 0.0 else " (over %s\")" % str(boost_over_in).trim_suffix(".0")
+				battle_log.log_event(BattleLog.Category.COMBAT, "%s: Shred on failed saves of 1-%d%s — %d extra wound%s" % [
+					boost_rule, boost_low, gate_note, shred_extra, ("" if shred_extra == 1 else "s")], true)
 			else:
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %d Defense roll%s of 1 → +%d wound%s" % [
 					shred_name, shred_extra, ("" if shred_extra == 1 else "s"), shred_extra, ("" if shred_extra == 1 else "s")], true)

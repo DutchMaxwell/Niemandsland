@@ -76,10 +76,11 @@ fn enhanced_highborn_stacks_its_band_like_its_3_5_boost() {
     assert_eq!((bands.advance, bands.rush), (4.0, 6.0), "Highborn 0/2 + Enhanced Highborn 4/4");
 }
 
-/// W1.6b, map-only name (no code literal): the Surge upgrade counts 5s past 9".
+/// W1.6b, map-only name (no code literal): the Surge upgrade keeps the base
+/// 6s window and drops the distance condition.
 #[test]
-fn enhanced_ferocious_widens_the_surge_like_its_3_5_boost() {
+fn enhanced_ferocious_keeps_the_base_surge_window_like_its_3_5_boost() {
     let us = enhanced_unit("aof", "orcs", &["Ferocious", "Enhanced Ferocious"]);
-    assert_eq!(us.melee[0].surge_low, 5, "the entry's surge_low");
-    assert_eq!(us.melee[0].surge_over_in, 9.0, "the entry's over_in");
+    assert_eq!(us.melee[0].surge_low, 6, "the base Ferocious window");
+    assert_eq!(us.melee[0].surge_over_in, -1.0, "no distance condition");
 }
