@@ -1401,8 +1401,7 @@
    "params": {
     "ap_bonus": 1,
     "hit_bonus": 1,
-    "pick_one": true,
-    "no_gate_v36": true
+    "pick_one": true
    }
   }
  },
