@@ -25,6 +25,7 @@ use super::*;
 
     fn bolt() -> Spell {
         Spell {
+            needs_los: false,
             name: "bolt".into(),
             status: "modeled".into(),
             threshold: 0,
@@ -41,6 +42,7 @@ use super::*;
 
     fn blessing() -> Spell {
         Spell {
+            needs_los: false,
             name: "blessing".into(),
             status: "modeled".into(),
             threshold: 0,

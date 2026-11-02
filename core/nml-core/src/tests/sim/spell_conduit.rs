@@ -24,6 +24,7 @@ use crate::spell::cast_success_chance;
     /// One 12" damage bolt, threshold 2 — the PR 1 fixture's damage spell.
     fn bolt() -> Spell {
         Spell {
+            needs_los: false,
             name: "bolt".into(),
             status: "modeled".into(),
             threshold: 2,

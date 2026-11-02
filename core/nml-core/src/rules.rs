@@ -322,6 +322,10 @@ pub struct Spell {
     /// Bots burned their pick and tokens for nothing). Same shape as
     /// `UtilityBuff.grants_rule` (unit.rs).
     pub grants_rule: String,
+    /// Top-level `needs_los` — rules 3.6 (D-SPELL-LOS): a spell needs line of
+    /// sight only when its own entry says so. Absent means false: the spell
+    /// reaches any target in range, seen or not.
+    pub needs_los: bool,
 }
 
 /// The `effect.modifier` fields `BattleSim._apply_cast_effect` reads
@@ -491,6 +495,7 @@ fn spell_of(e: &Value) -> Spell {
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string(),
+        needs_los: e.get("needs_los").and_then(|v| v.as_bool()).unwrap_or(false),
     }
 }
 

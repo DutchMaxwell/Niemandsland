@@ -18,6 +18,7 @@ use crate::spell::cast_success_chance;
     /// printed -1 shape for a hand-checkable number.
     fn casting_debuff(mod_s: f64) -> Spell {
         Spell {
+            needs_los: false,
             name: "Hex".into(),
             status: "modeled".into(),
             threshold: 1,

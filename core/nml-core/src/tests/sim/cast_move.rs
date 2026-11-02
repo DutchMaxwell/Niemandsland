@@ -62,6 +62,7 @@ use super::*;
 
     fn move_spell(kind: &str, advance_in: f64, rush_in: f64, range_field: f64) -> Spell {
         Spell {
+            needs_los: false,
             name: "move_mod".into(),
             status: "modeled".into(),
             threshold: 0,
