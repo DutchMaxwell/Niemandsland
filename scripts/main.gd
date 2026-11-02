@@ -1237,7 +1237,7 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	await _solo_apply_utility_buffs(unit)
 	await _solo_apply_mind_control(unit)
 	await _solo_apply_piercing_tag(unit)
-	_solo_apply_precision_tag(unit)
+	await _solo_apply_precision_tag(unit)
 	_solo_apply_precision_target(unit)
 	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
 		await _solo_try_precision_spot(unit)   # rules 3.6: the spot rolls BEFORE the bearer's attacks
@@ -1622,7 +1622,7 @@ func _on_solo_human_activated(gu: GameUnit) -> void:
 			await _solo_apply_utility_buffs(gu)
 			# SHO-22b: the Precision Tag PLACEMENT is a once-per-game enemy pick ("during this model's
 			# activation"), auto-resolved for the human like the AI path does it (~line 1239).
-			_solo_apply_precision_tag(gu)
+			await _solo_apply_precision_tag(gu)
 			# Step 2.7b: the hotseat Breath Attack door (Automatic only) — a human bearer breathes on
 			# an enemy on its own tray.
 			if _solo_hotseat_automatic():
@@ -1650,7 +1650,7 @@ func _on_solo_human_activated(gu: GameUnit) -> void:
 	# once-per-activation Utility Buff (round-stamped, so a unit that already bought it at the
 	# attack door is untouched).
 	await _solo_apply_utility_buffs(gu)
-	_solo_apply_precision_tag(gu)
+	await _solo_apply_precision_tag(gu)
 	# Step 2.7a: the human Mend door (solo vs NACHTMAHR) — a human bearer heals a wounded Tough ally
 	# within 3" on its own tray, once per activation.
 	await _solo_apply_mend(gu)
@@ -12349,7 +12349,7 @@ func solo_begin_targeting(unit: GameUnit, melee: bool) -> void:
 	# human that moment is declaring the attack. Round-stamped inside, so the second door
 	# (_on_solo_human_activated, for a unit that never attacks) cannot apply it twice.
 	await _solo_apply_utility_buffs(unit)
-	_solo_apply_precision_tag(unit)
+	await _solo_apply_precision_tag(unit)
 	_solo_target_mode = {"unit": unit, "melee": melee}
 	if not melee and range_ring_controller != null and range_ring_controller.has_method("show_spell_preview"):
 		var weapons: Array = _solo_all_weapons(unit)
@@ -12404,7 +12404,7 @@ func solo_begin_auto(unit: GameUnit, verb: int) -> void:
 	if _hotseat_verb_refused(unit):
 		return
 	await _solo_apply_utility_buffs(unit)
-	_solo_apply_precision_tag(unit)
+	await _solo_apply_precision_tag(unit)
 	_solo_target_mode = {"unit": unit, "auto_verb": verb}
 	var bands: Dictionary = SoloController.move_bands_for_unit(unit, solo_controller.movement_range)
 	var band: float
@@ -22992,6 +22992,51 @@ func _solo_utility_buff_entries_named(member: GameUnit, rule_name: String) -> Ar
 	return out
 
 
+## UX-SHO22b-PICK test seam: empty in play. A test assigns a Callable to answer the Precision Tag pick
+## without opening the house card.
+var _solo_ask_precision_tag_pick: Callable = Callable()
+## The Precision Tag pick, split out: AI keeps today's policy; a HUMAN bearer from EPOCH_73_V36 picks
+## target and stack-vs-spread itself; below 73 the single auto target stays.
+func _solo_precision_tag_choice(member: GameUnit, legal: Array, markers: int) -> Dictionary:
+	if legal.is_empty():
+		return {}
+	var auto: Dictionary = {"target": legal[0], "spread": legal.size() >= 2}
+	if _solo_is_ai_unit(member) or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return auto
+	var picked: Dictionary
+	if _solo_ask_precision_tag_pick.is_valid():
+		picked = await _solo_ask_precision_tag_pick.call(member, legal, markers)
+	elif ProjectSettings.get_setting("niemandsland/harness_mode", false):
+		return auto   # a headless harness has no clicker — the safe default is today's pick
+	else:
+		picked = await _solo_precision_tag_pick_dialog(member, legal, markers)
+	if picked.is_empty() or not (picked.get("target") is GameUnit):
+		return auto
+	return {"target": picked["target"], "spread": bool(picked.get("spread", false)) and legal.size() >= 2}
+
+
+## The house card: one line per legal enemy, then — when a spread is legal — stack vs spread.
+func _solo_precision_tag_pick_dialog(member: GameUnit, legal: Array, markers: int) -> Dictionary:
+	var card := PromptCard.new("Precision Tag",
+		"%s may tag one enemy in range. Pick the target:" % member.get_name(), "", "Let the AI pick")
+	for t in legal:
+		var gu := t as GameUnit
+		var line := HouseStyle.action_line(gu.get_name())
+		line.pressed.connect(func() -> void: card.resolve(gu))
+		card.rows.add_child(line)
+	add_child(card)
+	var target: Variant = await card.answer({})
+	if not (target is GameUnit):
+		return {}
+	var picked := target as GameUnit
+	var spread := false
+	if markers >= 2 and legal.size() >= 2:
+		spread = await _solo_ask("Precision Tag",
+			"%d tokens: stack all on %s, or spread one on each of up to %d units?" % [
+				markers, picked.get_name(), markers], "Spread 1 each", "Stack on %s" % picked.get_name())
+	return {"target": picked, "spread": spread}
+
+
 ## Precision Tag (PRECISION_TEXT_2026-09-15 §4 — "Once per game, during this model's activation, pick one
 ## enemy unit within 24\" and in line of sight of it, and place X markers on it. When attacking, friendly
 ## units may remove markers from their target before rolling to hit to get +Y to hit rolls, where Y is the
@@ -23027,10 +23072,19 @@ func _solo_apply_precision_tag(unit: GameUnit) -> void:
 			var rating: int = int(ed.get("rating", 0))
 			var markers: int = maxi(rating if rating > 0 else int(sp.get("markers", 1)), 1)
 			var v36_tag: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
-			var picks: Array = _solo_utility_targets(member, "enemy", range_in, needs_los, markers) if v36_tag else []
-			var spread: bool = picks.size() >= 2
-			if not spread:
-				picks = [tgt]
+			var legal: Array = _solo_utility_targets(member, "enemy", range_in, needs_los, markers) if v36_tag else []
+			if legal.is_empty():
+				legal = [tgt]
+			var choice: Dictionary = await _solo_precision_tag_choice(member, legal, markers)
+			var chosen: GameUnit = choice.get("target", tgt) as GameUnit
+			var spread: bool = bool(choice.get("spread", false))
+			var picks: Array = [chosen]
+			if spread:
+				for lp in legal:
+					if picks.size() >= markers:
+						break
+					if lp != chosen:
+						picks.append(lp)
 			var per: int = 1 if spread else markers
 			for p in picks:
 				var pu := p as GameUnit
@@ -23038,18 +23092,18 @@ func _solo_apply_precision_tag(unit: GameUnit) -> void:
 				_sync_unit_property(pu, "tag_markers", int(pu.unit_properties["tag_markers"]))   # NML-927: the count rides the wire
 			if v36_tag:
 				var placed := "1 token each, spread over %d units" % picks.size() if spread \
-					else "%d token%s, stacked on %s" % [markers, ("" if markers == 1 else "s"), tgt.get_name()]
+					else "%d token%s, stacked on %s" % [markers, ("" if markers == 1 else "s"), chosen.get_name()]
 				if battle_log != null:
 					_log_rule_event(BattleLog.Category.COMBAT,
 						"Precision Tag: %s places %s — a friendly attack may spend one token for +1 to hit" % [
 						member.get_name(), placed], true)
-				_solo_rule_float(tgt, "Tagged +%d!" % per)
+				_solo_rule_float(chosen, "Tagged +%d!" % per)
 				continue
 			if battle_log != null:
 				_log_rule_event(BattleLog.Category.COMBAT,
 					"Precision Tag: %s places %d marker%s on %s — friendly attackers may remove markers for +1 to hit each" % [
-					member.get_name(), markers, ("" if markers == 1 else "s"), tgt.get_name()], true)
-			_solo_rule_float(tgt, "Tagged +%d!" % markers)
+					member.get_name(), markers, ("" if markers == 1 else "s"), chosen.get_name()], true)
+			_solo_rule_float(chosen, "Tagged +%d!" % markers)
 
 
 ## Precision Target (PRECISION_TEXT_2026-09-15 §5 — "Once per game, during this model's activation, pick one
