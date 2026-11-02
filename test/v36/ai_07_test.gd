@@ -73,6 +73,29 @@ func test_versatile_warrior_shoots_over_nine_and_charges_over_six_at_epoch_73() 
 		.is_equal_approx(10.0 / 3.0, 0.0001)
 
 
+## AI-07b: at epoch 73 a Warrior CHARGE only benefits over 6" (twin: combat.rs charge_gate_in),
+## so 4.0" stays at the plain 2.5 and 7.0" still picks (10/3).
+func test_versatile_warrior_charge_uses_the_six_inch_gate_at_epoch_73() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	var inside: float = AiEv.profile_ev(_stamped(["Versatile Warrior"], _blade()), ATT, DEF, 4.0, true)
+	var outside: float = AiEv.profile_ev(_stamped(["Versatile Warrior"], _blade()), ATT, DEF, 7.0, true)
+	assert_float(inside).override_failure_message("a charge at 4\" must not pick, got %f" % inside) \
+		.is_equal_approx(2.5, 0.0001)
+	assert_float(outside).override_failure_message("a charge at 7\" must pick, got %f" % outside) \
+		.is_equal_approx(10.0 / 3.0, 0.0001)
+
+
+## AI-07b: a Warrior SHOT keeps the 9" band at epoch 73 — 6.0" stays at 2.5, 10.0" picks.
+func test_versatile_warrior_shot_keeps_the_nine_inch_gate_at_epoch_73() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	var inside: float = AiEv.profile_ev(_stamped(["Versatile Warrior"], _gun()), ATT, DEF, 6.0, false)
+	var outside: float = AiEv.profile_ev(_stamped(["Versatile Warrior"], _gun()), ATT, DEF, 10.0, false)
+	assert_float(inside).override_failure_message("a shot at 6\" must not pick, got %f" % inside) \
+		.is_equal_approx(2.5, 0.0001)
+	assert_float(outside).override_failure_message("a shot at 10\" must pick, got %f" % outside) \
+		.is_equal_approx(10.0 / 3.0, 0.0001)
+
+
 func test_versatile_warrior_keeps_the_old_gates_at_epoch_72() -> void:
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
 	var shoot: float = AiEv.profile_ev(_stamped(["Versatile Warrior"], _gun()), ATT, DEF, 10.0, false)
