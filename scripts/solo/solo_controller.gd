@@ -983,7 +983,7 @@ func activation_payoff(unit: GameUnit) -> float:
 		if diff_k != null and diff_k.avoids_overkill():
 			pool_cap = maxf(0.0, remaining_pool(enemy))
 		if shoot_range > 0 and dist - advance <= float(shoot_range) and not profiles.is_empty():
-			var them := AiEv.ctx_for(enemy, majority_in_cover(enemy), 0)
+			var them := AiEv.ctx_for(enemy, majority_in_cover(enemy), 0, _held_now(enemy))
 			score = maxf(score, minf(AiEv.shoot_ev(profiles, us, them, maxf(dist - advance, 0.0)), pool_cap) * denial)
 		var gap := nearest_melee_gap_in(unit, enemy)
 		# #845 option (b): an enemy carrying the attackers-side Rapid Charge grant is in charge
@@ -993,7 +993,7 @@ func activation_payoff(unit: GameUnit) -> float:
 			var melee := AiEv.stamp_sergeant(filter_limited(unit, AiShooting.melee_profiles(weapons)), unit)
 			if not melee.is_empty():
 				var their_melee := AiEv.stamp_sergeant(filter_limited(enemy, AiShooting.melee_profiles(_unit_weapons(enemy))), enemy)
-				var them2 := AiEv.ctx_for(enemy, false, 0)
+				var them2 := AiEv.ctx_for(enemy, false, 0, _held_now(enemy))
 				score = maxf(score, minf(AiEv.charge_score(melee, us, their_melee, them2, gap), pool_cap) * denial)
 	var obj := _nearest_uncontrolled_objective(centre, unit)
 	if obj != NO_OBJECTIVE:
@@ -1374,6 +1374,15 @@ func _no_shot_reason(unit: GameUnit, base_range: int) -> String:
 	return "nearest enemy %.1f\" away, weapon reach %d\"" % [nearest, base_range]
 
 
+## The table's Hold read for a TARGET context: the unit has not moved this round (`moved_round`
+## stamp vs the army manager's round — the same source main.gd's `_solo_unit_held` uses). No stamp,
+## no unit or no manager means held, the old default.
+func _held_now(unit: GameUnit) -> bool:
+	if unit == null or army_manager == null:
+		return true
+	return int(unit.unit_properties.get("moved_round", -1)) != army_manager.current_round
+
+
 func best_shoot_target_now(ai_unit: GameUnit, held: bool = true) -> GameUnit:
 	if army_manager == null:
 		return null
@@ -1402,7 +1411,7 @@ func best_shoot_target_now(ai_unit: GameUnit, held: bool = true) -> GameUnit:
 		if not indirect and not _has_los(ai_unit, hu) \
 				and not grants_indirect_to_attackers(hu):   # wave 6 — the Indirect Mark's once-grant
 			continue
-		var them := AiEv.ctx_for(hu, majority_in_cover(hu), counter_models_of(hu))
+		var them := AiEv.ctx_for(hu, majority_in_cover(hu), counter_models_of(hu), _held_now(hu))
 		var ev: float = AiEv.shoot_ev(profiles, us, them, d) if not profiles.is_empty() else (100.0 - d)
 		if best == null or ev > best_ev:
 			best = hu
@@ -1461,7 +1470,7 @@ func nearest_human_unit(ai_unit: GameUnit) -> GameUnit:
 			var hu := td["unit"] as GameUnit
 			# Real terrain cover feeds the EV (field-test finding 6): a defender whose majority sits in
 			# woods/ruins is worth less to shoot — the EV must see it, not a hardcoded false.
-			var them := AiEv.ctx_for(hu, majority_in_cover(hu), counter_models_of(hu))
+			var them := AiEv.ctx_for(hu, majority_in_cover(hu), counter_models_of(hu), _held_now(hu))
 			if our_melee.is_empty():
 				# Targeting an Aircraft costs -12" of range — fold it into the EV distance so the
 				# range gates inside shoot_ev see the effective reach (system-scoped; 0 otherwise).
@@ -2056,7 +2065,7 @@ func _act(unit: GameUnit) -> Dictionary:
 		var vr_charge_better := false
 		if vr_unlocks:
 			var us := AiEv.ctx_for(unit, false, 0)
-			var them := AiEv.ctx_for(target_unit, majority_in_cover(target_unit), counter_models_of(target_unit))
+			var them := AiEv.ctx_for(target_unit, majority_in_cover(target_unit), counter_models_of(target_unit), _held_now(target_unit))
 			var our_melee: Array = AiEv.stamp_sergeant(filter_limited(unit, AiShooting.melee_profiles(weapons)), unit)
 			var their_melee: Array = AiEv.stamp_sergeant(filter_limited(target_unit, AiShooting.melee_profiles(_unit_weapons(target_unit))), target_unit)
 			var charge_ev := AiEv.charge_score(our_melee, us, their_melee, them, nearest_melee_gap_in(unit, target_unit))
@@ -2882,7 +2891,7 @@ func _book_attack_claims(unit: GameUnit, report: Dictionary) -> void:
 	if profiles.is_empty():
 		return
 	var us := AiEv.ctx_for(unit, majority_in_cover(unit), counter_models_of(unit))
-	var them := AiEv.ctx_for(target, majority_in_cover(target), counter_models_of(target))
+	var them := AiEv.ctx_for(target, majority_in_cover(target), counter_models_of(target), _held_now(target))
 	claim_expected(target, AiEv.shoot_ev(profiles, us, them, float(report.get("dist_in", 0.0))))
 
 
@@ -3021,7 +3030,7 @@ func _aircraft_heading(unit: GameUnit, centre: Vector3, move_in: float, weapons:
 		legal += 1
 		var ev := 0.0
 		for e in enemies:
-			var them := AiEv.ctx_for(e as GameUnit, majority_in_cover(e as GameUnit), 0)
+			var them := AiEv.ctx_for(e as GameUnit, majority_in_cover(e as GameUnit), 0, _held_now(e as GameUnit))
 			var dist := MoveIntent.distance_inches(endpoint, unit_centre(e as GameUnit))
 			var e_los: bool = not los_checker.is_valid() \
 				or bool(los_checker.call(Vector3(endpoint.x, centre.y, endpoint.z), unit_centre(e as GameUnit)))
@@ -3144,7 +3153,7 @@ func _shoot_ev_now(unit: GameUnit, target: GameUnit, dist_in: float) -> float:
 	if profiles.is_empty():
 		return 0.0
 	var us := AiEv.ctx_for(unit, majority_in_cover(unit), counter_models_of(unit))
-	var them := AiEv.ctx_for(target, majority_in_cover(target), counter_models_of(target))
+	var them := AiEv.ctx_for(target, majority_in_cover(target), counter_models_of(target), _held_now(target))
 	return AiEv.shoot_ev(profiles, us, them, dist_in)
 
 
@@ -3628,7 +3637,7 @@ func _flank_goal(unit: GameUnit, target: GameUnit, range_in: float, advance_in: 
 		return none
 	var ring_in: float = maxf(range_in - FLANK_RANGE_SLACK_IN, minf(range_in, 6.0))
 	var us := AiEv.ctx_for(unit, false, 0)
-	var them := AiEv.ctx_for(target, majority_in_cover(target), counter_models_of(target))
+	var them := AiEv.ctx_for(target, majority_in_cover(target), counter_models_of(target), _held_now(target))
 	var ring_ev := AiEv.shoot_ev(profiles, us, them, ring_in + target_range_penalty_in(target))
 	if ring_ev <= 0.0:
 		return none
