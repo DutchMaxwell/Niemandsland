@@ -84,7 +84,7 @@ func _all_ignored_seed(count: int) -> int:
 	for s in 4000:
 		rng.seed = s
 		var all := true
-		for i in count:
+		for _i in count:
 			if rng.randi_range(1, 6) < 5:
 				all = false
 				break
