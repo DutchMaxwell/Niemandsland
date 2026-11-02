@@ -211,7 +211,6 @@
   "Enhanced Plaguebound Aura",
   "Precise",
   "Precision Attacks Buff",
-  "Precision Charge",
   "Precision Charge Aura",
   "Precision Debuff",
   "Precision Feat",
@@ -2984,15 +2983,6 @@
      "condition": "vs_tough_ge",
      "threshold": 3,
      "charge_only": true
-    }
-   },
-   "Precision Charge": {
-    "primitive": "Shot Modifier",
-    "rated": false,
-    "book_version": "3.6.0",
-    "params": {
-     "hit_bonus": 1,
-     "when": "charge"
     }
    },
    "Precision Charge Aura": {

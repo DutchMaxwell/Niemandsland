@@ -3,10 +3,13 @@ extends GdUnitTestSuite
 ## 3.6 book that prints them resolved to "apply manually". The maps now carry one entry per book
 ## section that prints each name, with the primitive and knobs the 3.6 text states. Godot's JSON
 ## reads every number as a float, so the expected params below are floats.
+##
+## Precision Charge / Precision Fighter (the model-only bases) stay UNMAPPED: their 3.5 "Aura"
+## entries already carry the effect, and import expansion grants the base to every aura carrier, so
+## mapping the base would add +2 to the same model. Moving that effect needs an epoch gate in the
+## Shot Modifier seam, which is outside this data row.
 
 const IMPRECISE := {"hit_bonus": -1.0}
-const PRECISION_CHARGE := {"hit_bonus": 1.0, "when": "charge"}
-const PRECISION_FIGHTER := {"hit_bonus": 1.0, "melee_only": true}
 const INFILTRATING := {"grants": "Infiltrate", "min_enemy_dist_in": 3.0,
 	"melee_hit_bonus": 1.0, "arrival_round_only": true}
 const PREDATOR_AURA := {"grants": "Predator"}
@@ -19,14 +22,11 @@ const ENTRIES := [
 	["gf", "alien_hives", "Predator Aura", "Aura Channel", PREDATOR_AURA],
 	["gf", "elven_jesters", "Infiltrating Precision Strike", "Infiltrate", INFILTRATING],
 	["gf", "eternal_dynasty", "Imprecise", "Shot Modifier", IMPRECISE],
-	["gf", "eternal_dynasty", "Precision Fighter", "Shot Modifier", PRECISION_FIGHTER],
 	["gf", "goblin_reclaimers", "Imprecise", "Shot Modifier", IMPRECISE],
-	["gf", "orc_marauders", "Precision Charge", "Shot Modifier", PRECISION_CHARGE],
 	["gf", "rebel_guerrillas", "Reap", "Bane", REAP],
 	["gf", "robot_legions", "Imprecise", "Shot Modifier", IMPRECISE],
 	["gf", "soul_snatcher_cults", "Reap", "Bane", REAP],
 	["aof", "deep_sea_elves", "Reap", "Bane", REAP],
-	["aof", "dwarves", "Precision Charge", "Shot Modifier", PRECISION_CHARGE],
 	["aof", "ghostly_undead", "Reap", "Bane", REAP],
 	["aof", "shadow_stalkers", "Imprecise", "Shot Modifier", IMPRECISE],
 ]

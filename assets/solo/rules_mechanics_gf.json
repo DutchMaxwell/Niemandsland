@@ -229,10 +229,8 @@
   "Point-Blank Surge",
   "Precise",
   "Precision Attacks Buff",
-  "Precision Charge",
   "Precision Charge Aura",
   "Precision Debuff",
-  "Precision Fighter",
   "Precision Fighter Aura",
   "Precision Fighter Buff",
   "Precision Fighting Mark",
@@ -4639,15 +4637,6 @@
      "grants": "Piercing Marksman"
     }
    },
-   "Precision Fighter": {
-    "primitive": "Shot Modifier",
-    "rated": false,
-    "book_version": "3.6.0",
-    "params": {
-     "hit_bonus": 1,
-     "melee_only": true
-    }
-   },
    "Precision Fighter Aura": {
     "primitive": "Shot Modifier",
     "rated": false,
@@ -7487,15 +7476,6 @@
     "book_version": "3.5.3",
     "params": {
      "grants": "Piercing Fighter"
-    }
-   },
-   "Precision Charge": {
-    "primitive": "Shot Modifier",
-    "rated": false,
-    "book_version": "3.6.0",
-    "params": {
-     "hit_bonus": 1,
-     "when": "charge"
     }
    },
    "Precision Charge Aura": {
