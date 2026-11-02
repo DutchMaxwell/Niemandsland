@@ -576,6 +576,14 @@ pub fn advance_shoots(
 /// `AiEv.charge_score` ai_ev.gd:537-553 — the charge matchup tie-break: wounds
 /// we deal (thinned first-order by the defender's Counter strike-first) minus
 /// the wounds their strike-back deals, risk-weighted by our Fearless and Banner.
+///
+/// Rules 3.6 (`EPOCH_73_V36`): `AiEv.charge_score` (ai_ev.gd:1107) reads
+/// `them["counter_strikes_first"]`, stamped by `SoloController.
+/// counter_strikes_first` (solo_controller.gd:8921): only a defender that will
+/// actually strike back Counters first. Below the wave the old unconditional
+/// read stays. The GDScript passes a dictionary; this twin keeps the flat
+/// argument list, hence the count allow.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn charge_score(
     ours: &[ShootProfile],
     our_attacks: &[i64],
@@ -584,14 +592,16 @@ pub(crate) fn charge_score(
     their_attacks: &[i64],
     them: &Ctx,
     charge_from_in: f64,
-    _rules_epoch: u32,
-    _counter_strikes_first: bool,
+    rules_epoch: u32,
+    counter_strikes_first: bool,
 ) -> f64 {
     let mut dealt = melee_ev(ours, our_attacks, us, them, true, charge_from_in);
     let mut counter_first = 0.0f64;
-    for (k, p) in theirs.iter().enumerate() {
-        if p.range <= 0 && p.counter {
-            counter_first += profile_ev(p, their_attacks[k], them, us, 0.0, false);
+    if rules_epoch < EPOCH_73_V36 || counter_strikes_first {
+        for (k, p) in theirs.iter().enumerate() {
+            if p.range <= 0 && p.counter {
+                counter_first += profile_ev(p, their_attacks[k], them, us, 0.0, false);
+            }
         }
     }
     let pool = (us.models as f64 * us.tough.max(1) as f64).max(1.0);
@@ -600,6 +610,27 @@ pub(crate) fn charge_score(
     let mut risk_weight = if us.fearless { 0.5 } else { 1.0 };
     risk_weight *= (1.0 - us.morale_bonus as f64 * SIX_P).max(0.0);
     dealt - taken * risk_weight
+}
+
+/// `SoloController.counter_strikes_first` (solo_controller.gd:8921) — the policy
+/// `AiEv.charge_score` (ai_ev.gd:1107) reads. From `EPOCH_73_V36` a defender
+/// Counters first only when it is not Fatigued/Shaken and has a usable melee
+/// weapon; a Counter profile whose entry opts out of the strike-first slot
+/// (`strikes_first: false`) does not thin our charge either. Below the wave the
+/// old unconditional read stays, so the caller's epoch gate alone decides.
+pub(crate) fn counter_strikes_first(
+    state: &State,
+    e: usize,
+    theirs: &[ShootProfile],
+    rules_epoch: u32,
+) -> bool {
+    if rules_epoch < EPOCH_73_V36 {
+        return true;
+    }
+    if state.fatigued[e] || state.shaken[e] || theirs.is_empty() {
+        return false;
+    }
+    theirs.iter().all(|p| !p.counter || p.counter_strikes_first.unwrap_or(true))
 }
 
 /// `AiPlanner._best_charge` ai_planner.gd:1287-1318 — best hurtable melee target
@@ -699,6 +730,7 @@ pub fn best_charge(
         melee_profiles_of(ut, state.alive[e], sc);
         let (their_profiles, their_attacks) =
             crate::sim::ev_melee_set(&ut.melee, &sc.attacks, &state.limited_used[e], rules_epoch);
+        let counter_strikes_first = counter_strikes_first(state, e, &their_profiles, rules_epoch);
         let s = charge_score(
             &our_profiles,
             &our_attacks,
@@ -708,7 +740,7 @@ pub fn best_charge(
             &them,
             charge_from_in,
             rules_epoch,
-            true,
+            counter_strikes_first,
         ) - danger_loss;
         if s > best_score {
             best_score = s;

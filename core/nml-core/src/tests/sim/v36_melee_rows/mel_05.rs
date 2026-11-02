@@ -129,3 +129,29 @@ fn the_charge_score_thins_by_counter_only_when_the_rule_applies() {
         "below 73 the Counter thinning is unconditional"
     );
 }
+
+#[test]
+fn the_charge_counter_policy_follows_the_gd_strike_back_gate() {
+    let counter = vec![ShootProfile {
+        name: "Counter Blade".into(),
+        attacks: 2,
+        count: 1,
+        range: 0,
+        counter: true,
+        counter_strikes_first: Some(true),
+        ..Default::default()
+    }];
+    let mut st = four_unit_line();
+    assert!(crate::menu::counter_strikes_first(&st, 1, &counter, EPOCH_73_V36));
+    st.fatigued[1] = true;
+    assert!(!crate::menu::counter_strikes_first(&st, 1, &counter, EPOCH_73_V36));
+    assert!(
+        crate::menu::counter_strikes_first(&st, 1, &counter, EPOCH_72_PLAYTEST_RULES),
+        "below 73 the old unconditional read stays"
+    );
+    st.fatigued[1] = false;
+    st.shaken[1] = true;
+    assert!(!crate::menu::counter_strikes_first(&st, 1, &counter, EPOCH_73_V36));
+    let opted_out = vec![ShootProfile { counter_strikes_first: Some(false), ..counter[0].clone() }];
+    assert!(!crate::menu::counter_strikes_first(&st, 1, &opted_out, EPOCH_73_V36));
+}
