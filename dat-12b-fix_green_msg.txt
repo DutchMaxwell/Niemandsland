@@ -1,9 +1,0 @@
-[0.3.15] Enhanced rules drop the distance condition and keep the base trigger window
-
-The Surge half: Enhanced Ferocious/Devout/Lucky spell `over_in: 0` and drop
-the 3.5 Boost's widened `surge_low`. The readers honour an explicit 0 as the
-no-distance sentinel from epoch 73 and read the base rule's 6s window; below
-73 the old 5s-past-9" read stays byte-identical. The SHO-18 alias gate opens
-for the sentinel. GD mirrors follow. Shred half named as follow-up.
-
-Co-Authored-By: DeepSeek V4.1 Flash <noreply@deepseek.com>
