@@ -25,11 +25,11 @@ func after_test() -> void:
 ## A real GameUnit at `pos` (metres); `weapon_rules` ride the weapon list, `rules` the unit's
 ## own special rules. The casting_mod value is never hand-written — the registry supplies it.
 func _unit(pid: int, unit_name: String, pos: Vector3, rules: Array = [],
-		weapon_rules: Array = []) -> GameUnit:
+		weapon_rules: Array = [], faction: String = FACTION) -> GameUnit:
 	var unit := GameUnit.new()
 	unit.unit_id = unit_name.to_lower().replace(" ", "_")
 	unit.unit_properties = {"player_id": pid, "name": unit_name, "quality": 4, "defense": 4,
-		"special_rules": rules, "game_system": SYSTEM, "faction_folder": FACTION}
+		"special_rules": rules, "game_system": SYSTEM, "faction_folder": faction}
 	var model := ModelInstance.new()
 	model.is_alive = true
 	model.wounds_current = 1
@@ -111,7 +111,7 @@ func test_at_73_a_weapon_borne_amplifier_prices_the_same_net() -> void:
 func test_at_73_a_spell_conduit_prices_the_same_net() -> void:
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
 	var caster := _unit(1, "Caster", Vector3.ZERO, ["Caster(1)"])
-	var conduit := _unit(1, "Conduit", Vector3(0.1, 0.0, 0.0), ["Spell Conduit"])
+	var conduit := _unit(1, "Conduit", Vector3(0.1, 0.0, 0.0), ["Spell Conduit"], [], "blessed_sisters")
 	var solo := _controller([caster, conduit])
 	assert_int(solo.caster_cast_target(caster, true)).override_failure_message(
 		"a friendly Spell Conduit within range is part of the same net").is_equal(3)

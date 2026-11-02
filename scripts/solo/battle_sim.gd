@@ -1516,7 +1516,9 @@ static func _plan_cast_tokens(state: Dictionary, su: Dictionary, pick: Dictionar
 	var helper_pool := 0
 	for h in helpers:
 		helper_pool += int((h as Dictionary)["tokens"])
-	var boost := AiSpell.plan_boost(AiSpell.boost_value_of(ev), own_left + helper_pool)
+	var conduit_mod := int((pick.get("origin", {}) as Dictionary).get("mod", 0))
+	var cast_target := SoloController.planned_cast_target(su["unit"] as GameUnit, conduit_mod)
+	var boost := AiSpell.plan_boost(AiSpell.boost_value_of(ev), own_left + helper_pool, 0, cast_target)
 	var own_draw := mini(boost, own_left)
 	# The interference pool reads ONCE with the boost purse (the both-AI
 	# auto-plan, solo_controller.gd:4378-4386).
@@ -1524,7 +1526,7 @@ static func _plan_cast_tokens(state: Dictionary, su: Dictionary, pick: Dictionar
 	var enemy_pool := 0
 	for e in enemies:
 		enemy_pool += int((e as Dictionary)["tokens"])
-	var interference := AiSpell.plan_interference(ev, enemy_pool, boost)
+	var interference := AiSpell.plan_interference(ev, enemy_pool, boost, cast_target)
 	return {"boost": boost, "own_draw": own_draw,
 		"helpers": _draw_cast_tokens(helpers, boost - own_draw),
 		"enemies": _draw_cast_tokens(enemies, interference),

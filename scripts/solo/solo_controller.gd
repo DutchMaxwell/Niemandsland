@@ -5076,17 +5076,63 @@ func _plan_casts(unit: GameUnit, report: Dictionary = {}) -> Array:
 	return casts
 
 
-## MOR-15b — the cast target the AI PLANNER prices boost/interference at. Below
-## EPOCH_73_V36 the core plans blind (`priced_net = 0`), so the old 4+ stays; from
-## 73 the same casting net the human block folds moves the target. The human
-## resolver always folds (`from_73_only == false`), as it always has.
-func caster_cast_target(unit: GameUnit, from_73_only := false) -> int:
-	if unit == null:
-		return AiSpell.CAST_BASE_TARGET
-	if from_73_only and AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
-		return AiSpell.CAST_BASE_TARGET
+## The caster's casting net: mirrored casting records + weapon-borne Spell Amplifier +
+## the conduit the cast rides. One fold for the table, the planner and BattleSim.
+static func caster_casting_net(unit: GameUnit, conduit_mod: int = 0) -> Dictionary:
+	var net := conduit_mod
+	var notes: PackedStringArray = []
+	if conduit_mod != 0: notes.append("Spell Conduit %+d" % conduit_mod)
+	if unit != null:
+		var chain: Array = [unit]
+		if unit.has_method("get_attached_to") and unit.get_attached_to() != null:
+			chain.append(unit.get_attached_to())
+		for u in chain:
+			for rd in AiSpell.mods_for((u as GameUnit).unit_properties.get("spell_records", []), "casting", false):
+				net += int((rd as Dictionary).get("casting_mod", 0))
+				notes.append("%s %+d" % [str((rd as Dictionary).get("spell", "")), int((rd as Dictionary).get("casting_mod", 0))])
+	var amp := AiSpell.spell_amplifier_mod(unit)
+	if amp != 0:
+		net += amp
+		notes.append("Spell Amplifier %+d" % amp)
 	var base := int(RulesRegistry.unit_param(unit, "Caster", "cast_target", AiSpell.CAST_BASE_TARGET))
-	return clampi(base - AiSpell.spell_amplifier_mod(unit), 2, 6)
+	return {"net": net, "notes": notes, "target": clampi(base - net, 2, 6)}
+
+
+## The first friendly Spell Conduit the caster may cast through, plus the Shaken ones that sat it out.
+func caster_conduit(unit: GameUnit) -> Dictionary:
+	var shaken: Array = []
+	if army_manager == null or unit == null:
+		return {"shaken": shaken}
+	var pid := int(unit.unit_properties.get("player_id", 0))
+	for u in army_manager.get_game_units_for_player(pid):
+		var cu := u as GameUnit
+		if cu == null or cu == unit or cu.get_alive_count() == 0 or unit_in_reserve(cu):
+			continue
+		for e in RulesRegistry.unit_rules_of_primitive(cu, "Spell Conduit"):
+			var sp: Dictionary = (e as Dictionary).get("params", {})
+			if nearest_melee_gap_in(cu, unit) > float(sp.get("range_in", 12.0)):
+				continue
+			if bool(sp.get("requires_not_shaken", true)) and cu.is_shaken:
+				shaken.append({"rule": e, "unit": cu})
+				continue
+			return {"mod": int(sp.get("casting_mod", 1)), "unit": cu, "rule": e, "shaken": shaken}
+	return {"shaken": shaken}
+
+
+## MOR-15b — the AI planner prices at the real cast target from EPOCH_73_V36; below it
+## the plan stays blind (`priced_net = 0`). The human resolver always folds.
+func caster_cast_target(unit: GameUnit, from_73_only := false) -> int:
+	if unit == null or (from_73_only and AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36):
+		return AiSpell.CAST_BASE_TARGET
+	var conduit := caster_conduit(unit)
+	return int(caster_casting_net(unit, int(conduit.get("mod", 0)))["target"])
+
+
+## BattleSim's static planner twin, the origin's conduit_mod already known.
+static func planned_cast_target(unit: GameUnit, conduit_mod: int = 0) -> int:
+	if unit == null or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return AiSpell.CAST_BASE_TARGET
+	return int(caster_casting_net(unit, conduit_mod)["target"])
 
 
 ## The one cast attempt of a single caster member: D3+X over the faction's BOOK-ORDERED spell list,
@@ -5181,9 +5227,10 @@ func _plan_member_cast(unit: GameUnit, member: GameUnit, hold_out: Array = []) -
 	#   within 18" LoS (+1 each), gated by the difficulty's spend_boosts (default sharp AI spends). —
 	var threshold := int(chosen.get("threshold", 0))
 	var base_target := int(RulesRegistry.unit_param(member, "Caster", "cast_target", AiSpell.CAST_BASE_TARGET))
-	# MOR-15 — the AI prices the same weapon-borne +1 the table applies, but leaves the
-	# returned `base_target` raw so `_solo_resolve_one_cast` does not fold it twice.
-	var priced_target := base_target - AiSpell.spell_amplifier_mod(member)
+	# MOR-15b — the AI prices the same casting net the table folds (records + conduit +
+	# amplifier from epoch 73), but returns the raw `base_target` so the resolver does not
+	# fold it twice.
+	var priced_target := caster_cast_target(member, true)
 	var boost := 0
 	var boost_sources: Array = []
 	var spend_boosts: bool = diff == null or diff.spend_boosts()
