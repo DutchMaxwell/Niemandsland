@@ -5888,7 +5888,7 @@ func _solo_pick_overlay_target(attacker: GameUnit, overlay: int, max_range: floa
 	if opr_army_manager == null or solo_controller == null:
 		return null
 	var from := solo_controller.unit_centre(attacker)
-	var att_ctx: Dictionary = AiEv.ctx_for(attacker)
+	var att_ctx: Dictionary = AiEv.ctx_for(attacker, false, 0, held)
 	var cands: Array = []
 	var refs: Array = []
 	var evs: Array = []
@@ -5926,7 +5926,7 @@ func _solo_pick_overlay_target(attacker: GameUnit, overlay: int, max_range: floa
 		# Expected wounds of THIS weapon profile vs THIS defender — every wave-1..3 rule flows through
 		# the shared AiEv/AiCombatMath math (Deadly→Tough, Blast→big units, >9" Stealth devalued, …).
 		# An aircraft candidate's -12" folds into the EV distance so its range gates see the effective reach.
-		evs.append(AiEv.profile_ev(profile, att_ctx, AiEv.ctx_for(hu, in_cover, 0),
+		evs.append(AiEv.profile_ev(profile, att_ctx, AiEv.ctx_for(hu, in_cover, 0, _solo_unit_held(hu)),
 			dist + SoloController.target_range_penalty_in(hu), false) if not profile.is_empty() else 0.0)
 	var idx: int = AiTargeting.best_index(cands, overlay)
 	if idx < 0:
