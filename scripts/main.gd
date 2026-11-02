@@ -8253,19 +8253,22 @@ func _solo_guarded_charge_gate() -> float:
 	return AiCombatMath.LONG_RANGE_IN
 
 
-## SHO-18 (rules 3.6): the alias families fire only from a shot over 9".
+## SHO-18 (rules 3.6): the alias families fire only from a shot over 9". A melee strike-back
+## (dist 0 or less at 73) pays nothing; below 73 the unconditional read stays.
 func _solo_alias_family_over(dist_in: float) -> bool:
-	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 or dist_in <= 0.0:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
 		return true
+	if dist_in <= 0.0:
+		return false
 	return dist_in > AiCombatMath.LONG_RANGE_IN
 
 
-## SHO-18 (rules 3.6): the alias families fire on a charge only from over 6".
+## SHO-18 (rules 3.6): the alias families fire on a charge only from over 6"; a strike-back pays nothing.
 func _solo_alias_charge_over(charging: bool, charge_from_in: float) -> bool:
 	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
 		return true
 	if not charging:
-		return true
+		return false
 	return charge_from_in > AiCombatMath.CHARGE_LONG_RANGE_IN
 
 

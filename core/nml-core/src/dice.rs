@@ -2144,10 +2144,9 @@ pub fn resolve_melee_leg(
             }
             let mut hits = faces_to_hits(&faces, count_target as u8) as i64;
             // SHO-18 (rules 3.6): a Surge ALIAS fires only on a charge over 6"; a non-charging
-            // strike and every pre-73 record keep the old read.
+            // strike (the strike-back) pays nothing, and every pre-73 record keeps the old read.
             let alias_fires = !p.alias_gate
                 || p.surge_alias_rule.is_empty()
-                || !charging
                 || charge_from_in > crate::combat::CHARGE_LONG_RANGE_IN;
             if p.surge && alias_fires {
                 // No flag: at 0.0" this IS the table's gated read (the within
@@ -2286,9 +2285,9 @@ pub fn resolve_melee_leg(
             let idx_ap = out.rolls.len();
             // Rules 3.6 row MOR-12c: the bearer's share of the plain hits, the
             // volley leg's twin (main.gd:8372-8387).
-            // SHO-18 (rules 3.6): a Shred ALIAS pays only on a charge over 6".
+            // SHO-18 (rules 3.6): a Shred ALIAS pays only on a charge over 6"; a strike-back pays nothing.
             let shred_alias_fires = shred_alias_dice
-                && (!p.alias_gate || !charging || charge_from_in > crate::combat::CHARGE_LONG_RANGE_IN);
+                && (!p.alias_gate || charge_from_in > crate::combat::CHARGE_LONG_RANGE_IN);
             if p.shred_alias && p.alias_gate && shred_alias_fires && p.shred_ones_wound_bonus > 0 {
                 let name: &str = if p.shred_ones_rule.is_empty() { "Shred" } else { p.shred_ones_rule.as_str() };
                 out.log.push(format!("{}: charged from over {:.0}in — unmodified 1s take +1 wound",
