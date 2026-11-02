@@ -129,3 +129,23 @@ func test_enhanced_ferocious_keeps_the_boost_window_at_epoch_72() -> void:
 		"epoch 72 keeps the 3.5 Boost 5s window").is_equal(5)
 	assert_float(float(p.get("surge_over_in", 0.0))).override_failure_message(
 		"epoch 72 keeps the old 9-inch default").is_equal_approx(9.0, 0.001)
+
+
+## The 3.6 sentinel loosens the SHOT leg only: at 73 an Enhanced carrier striking back
+## pays no Surge sixes, while its 24" shot still pays. Live stamp, fixed faces.
+func test_enhanced_alias_sentinel_never_opens_a_melee_strike_back() -> void:
+	var epoch0: int = AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	var p := _stamped_surge(AiActRecorder.EPOCH_73_V36)
+	var plain := {"name": "Rifle", "attacks": 4, "ap": 0, "range": 24, "rules": []}
+	var main: Node = auto_free(load("res://scripts/main.gd").new())
+	main.battle_log = auto_free(BattleLog.new())
+	var faces := [6, 3, 2, 1]
+	var back: int = await main._solo_hits(faces, 4, p, 0.0, null, false, "", 0.0)
+	var plain_back: int = await main._solo_hits(faces, 4, plain, 0.0, null, false, "", 0.0)
+	assert_int(back).override_failure_message(
+		"an Enhanced bearer striking back pays no Surge sixes").is_equal(plain_back)
+	var shot: int = await main._solo_hits(faces, 4, p, 24.0, null, false, "", 0.0)
+	assert_int(shot).override_failure_message(
+		"the same bearer still pays on a 24-inch shot").is_equal(plain_back + 1)
+	AiActRecorder.rules_epoch = epoch0

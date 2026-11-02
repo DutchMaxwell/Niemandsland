@@ -6330,8 +6330,12 @@ func _solo_hits(faces: Array, to_hit: int, profile: Dictionary, dist_in: float, 
 		hits += rel_bonus
 	if bool(profile.get("surge", false)):
 		var surge_alias := str(profile.get("_surge_alias", ""))
+		# The 3.6 "no distance condition" sentinel (over_in 0) loosens the SHOT leg only:
+		# a melee strike-back and a short charge keep the charge/shot gate (SHO-18b).
+		var sentinel_shot: bool = dist_in > 0.0 and not charging \
+			and float(profile.get("surge_over_in", 0.0)) < 0.0
 		var surge_alias_live: bool = surge_alias.is_empty() \
-			or float(profile.get("surge_over_in", 0.0)) < 0.0 or (
+			or sentinel_shot or (
 			_solo_alias_charge_over(charging, charge_from_in) if charging
 			else _solo_alias_family_over(dist_in))
 		# Coverage wave: Surge-family gates — within_in (Point-Blank Surge: only within 12") and the
