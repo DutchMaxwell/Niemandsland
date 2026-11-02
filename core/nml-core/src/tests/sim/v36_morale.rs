@@ -297,14 +297,29 @@ mod mor_16a {
         assert_eq!(st.casts[2], 0);
     }
 
-    /// A Fearless target passes the forced test and keeps its tokens.
+    /// Rules 3.6 Fearless is not an auto-pass: a failed test gets one die and a
+    /// 4+ counts as passed, so the drain lands half as often — half the tokens.
     #[test]
-    fn a_fearless_target_loses_nothing() {
-        let (mut st, mut statics) = line("blessed_sisters", EPOCH_73_V36, 6, 5);
-        statics[2].fearless_own = true;
-        st.round = 1;
-        drain(&mut st, &statics, EPOCH_73_V36, 10.0);
-        assert_eq!(st.casts[2], 5);
+    fn a_fearless_target_loses_half_the_expected_tokens() {
+        let (st0, statics) = line("blessed_sisters", EPOCH_73_V36, 6, 5);
+        let mut fearful = statics.clone();
+        fearful[2].fearless_own = true;
+        let mut plain_total = 0;
+        let mut fearless_total = 0;
+        for r in 0..300 {
+            let mut a = st0.clone();
+            a.round = r;
+            drain(&mut a, &statics, EPOCH_73_V36, 10.0);
+            plain_total += 5 - a.casts[2];
+            let mut b = st0.clone();
+            b.round = r;
+            drain(&mut b, &fearful, EPOCH_73_V36, 10.0);
+            fearless_total += 5 - b.casts[2];
+        }
+        let plain = plain_total as f64 / 300.0;
+        let fear = fearless_total as f64 / 300.0;
+        assert!(fear > 0.0, "a Fearless unit still fails half of the time: {fear}");
+        assert!((fear - plain / 2.0).abs() < 0.15, "half the plain drain: plain {plain}, fearless {fear}");
     }
 
     /// Range and line of sight gate the pick exactly like a Mark.
