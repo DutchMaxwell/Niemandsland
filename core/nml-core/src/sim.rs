@@ -3524,12 +3524,6 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
             if fortified_live == Some(false) {
                 c.fortified = false;
             }
-            // Rules 3.6 (row W1.TRACE) — the live majority granting Fortified
-            // names itself once per read (arm `fortified-grant-live`).
-            if fortified_live == Some(true) && c.fortified {
-                trace_rule("fortified-grant-live", "Fortified", &format!(
-                    "live majority holds Fortified (unit {i})"));
-            }
             if crate::unit::defence_family_live(
                 host, alive, &heroes,
                 &["Guarded", "Versatile Defense", "Sturdy", "Safety Gear", "Tenacious"],
@@ -3794,6 +3788,12 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
                 if c.shielded_alias == ShieldedAlias::None {
                     c.shielded_alias = alias;
                 }
+                // Rules 3.6 (row W1.TRACE) — the live Shielded grant names
+                // itself (arm `shielded-grant-live`), one line per record.
+                if rule_on(rules_epoch, EPOCH_73_V36) {
+                    trace_rule("shielded-grant-live", "Shielded", &format!(
+                        "{name} grants Shielded (unit {i})"));
+                }
             }
         }
     }
@@ -3821,12 +3821,20 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
     // `EPOCH_6_TABLE_RULES`: the three Boost names' uniform printed shape
     // (AP(-1), no distance gate) folds as one flag-width stamp, the
     // Self-Repair Boost precedent; epoch-5 records replay untouched.
-    if rule_on(rules_epoch, EPOCH_6_TABLE_RULES)
-        && ((grants && mods::granted(state, i, "Enhanced Guardian"))
-            || (grants && mods::granted(state, i, "Enhanced Warden"))
-            || (grants && mods::granted(state, i, "Enhanced Ossified")))
-    {
-        c.fortified_boost_ap = c.fortified_boost_ap.max(1);
+    if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
+        let fortified_grant = ["Enhanced Guardian", "Enhanced Warden", "Enhanced Ossified"]
+            .into_iter()
+            .find(|name| grants && mods::granted(state, i, name));
+        if let Some(name) = fortified_grant {
+            c.fortified_boost_ap = c.fortified_boost_ap.max(1);
+            // Rules 3.6 (row W1.TRACE) — this live Boost grant raises the
+            // Fortified stamp, so it is the branch that names itself (arm
+            // `fortified-grant-live`), never the majority read.
+            if rule_on(rules_epoch, EPOCH_73_V36) {
+                trace_rule("fortified-grant-live", name, &format!(
+                    "live Fortified Boost grant (unit {i})"));
+            }
+        }
     }
     let (ap, hit) = growth_bonus_of(statics, state, i);
     c.growth_ap_mod = ap;
@@ -8148,7 +8156,7 @@ const KITE_RANGE_MARGIN_IN: f64 = 0.25;
 /// NML_TRACE_RULES seam — one shape for every rules-must-log line on this
 /// core.
 pub(crate) fn trace_rule(arm: &str, rule: &str, detail: &str) {
-    if std::env::var("NML_TRACE_RULES").as_deref() == Ok("1") {
+    if trace_rules_on() {
         eprintln!("[{arm}] {rule} — {detail}");
     }
 }
