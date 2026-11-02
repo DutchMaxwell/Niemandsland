@@ -1710,6 +1710,7 @@ pub(crate) fn evasion_rule_live(
 pub(crate) const REGEN_MOST_MODELS: &[&str] = &[
     "Regeneration", "Self-Repair", "Angelic Blessing", "Cursed Undead", "Grounded Protection",
     "Knightborn", "Plaguebound", "Protected", "Protection Feat", "Warding",
+    "Resistance", "Spell Resistance",
 ];
 
 /// `AiEv.regen_family_on`: most models for the names above from `EPOCH_73_V36`, else every model.
@@ -2809,9 +2810,23 @@ fn regen_targets(
     let mut other_min = base;
     let mut warding: Option<(i64, f64, f64)> = None;
     let mut no_gate = false;
-    if rule_on_all_models(p, "Resistance") && unit_rule_active(reg, p, "Resistance") {
+    // MOR-07 (rules 3.6): "Spell Resistance" reaches the same primitive; from
+    // `EPOCH_73_V36` both names need only a strict majority (D-MOST). Below 73
+    // only the 3.5 name exists and keeps the every-model read.
+    for name in ["Resistance", "Spell Resistance"] {
+        if name == "Spell Resistance" && !rule_on(rules_epoch, EPOCH_73_V36) {
+            continue;
+        }
+        let active = if rule_on(rules_epoch, EPOCH_73_V36) {
+            rule_on_most_models(p, p.model_count.max(1), name, false)
+        } else {
+            rule_on_all_models(p, name)
+        };
+        if !active || !unit_rule_active(reg, p, name) {
+            continue;
+        }
         let map = reg.rules_for(&p.game_system);
-        let e = map.lookup(&p.faction_folder, "Resistance");
+        let e = map.lookup(&p.faction_folder, name);
         let rs = match e {
             Some(e) => e.param_i("ignore_target", RESISTANCE_TARGET),
             None => RESISTANCE_TARGET,
@@ -2820,13 +2835,14 @@ fn regen_targets(
             Some(e) => e.param_i("ignore_target_spell", RESISTANCE_TARGET_SPELL),
             None => RESISTANCE_TARGET_SPELL,
         };
-        let most_generous = |cand: i64| base == 0 || cand < base;
-        picked = (
-            if most_generous(rs) { rs } else { base },
-            if most_generous(rs_spell) { rs_spell } else { base },
-            0,
-            0,
-        );
+        if rs > 0 && (picked.0 == 0 || rs < picked.0) {
+            picked.0 = rs;
+        }
+        if rs_spell > 0 && (picked.1 == 0 || rs_spell < picked.1) {
+            picked.1 = rs_spell;
+        }
+        trace_rule("regen", name, &format!("{}: {name} stamped {rs}+ (spells {rs_spell}+)",
+            p.name));
     }
     // The DATA-ALIAS wave itself (main.gd:6642-6652): the carrier walk is
     // `rules_of_primitive`'s (own + item-granted, each name once), the gate
@@ -4026,6 +4042,7 @@ pub(crate) const AURA_CHANNEL_NAMES: &[&str] = &[
     "Grounded Defense Aura",
     "Grounded Protection Aura",
     "Protected Aura",
+    "Spell Resistance Aura",
 ];
 
 /// The loader's own base-name cut (`rule[:-len(" Aura")].strip()`), kept only

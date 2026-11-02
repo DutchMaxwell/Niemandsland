@@ -137,7 +137,8 @@ static func most_models_of(with_count: int, total: int) -> bool:
 
 ## Row MOR-02 (D-MOST): the Regeneration family names whose 3.6 text counts most models (Boosts keep all).
 const REGEN_MOST_MODELS := ["Regeneration", "Self-Repair", "Angelic Blessing", "Cursed Undead",
-	"Grounded Protection", "Knightborn", "Plaguebound", "Protected", "Protection Feat", "Warding"]
+	"Grounded Protection", "Knightborn", "Plaguebound", "Protected", "Protection Feat", "Warding",
+	"Resistance", "Spell Resistance"]
 
 
 ## Most models for the names above from EPOCH_73_V36, else every model; `solo` = the Takedown unit of [1].
@@ -449,9 +450,14 @@ static func _regen_target(unit: GameUnit, from_spell: bool = false) -> int:
 		var target := int(RulesRegistry.unit_param(unit, "Self-Repair", "ignore_target", SELF_REPAIR_TARGET))
 		best = target if best == 0 else mini(best, target)
 	var key := "ignore_target_spell" if from_spell else "ignore_target"
-	if rule_on_all_models(unit, "Resistance"):
-		var target := int(RulesRegistry.unit_param(unit, "Resistance", key, 2 if from_spell else 6))
-		best = target if best == 0 else mini(best, target)
+	# MOR-07 (rules 3.6): "Spell Resistance" reaches the same primitive; both names take the
+	# most-models read from EPOCH_73_V36 (regen_family_on) and the every-model read below it.
+	for res_rule: String in ["Resistance", "Spell Resistance"]:
+		if res_rule == "Spell Resistance" and AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+			continue
+		if regen_family_on(unit, res_rule):
+			var target := int(RulesRegistry.unit_param(unit, res_rule, key, 2 if from_spell else 6))
+			best = target if best == 0 else mini(best, target)
 	for e in RulesRegistry.unit_rules_of_primitive(unit, "Regeneration"):
 		var name := str((e as Dictionary).get("name", ""))
 		if name in ["Regeneration", "Self-Repair", "Resistance"]:
