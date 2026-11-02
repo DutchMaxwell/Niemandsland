@@ -781,7 +781,13 @@ pub fn profile_ev(
     if !melee && p.relentless && dist_in > LONG_RANGE_IN {
         hits += attacks_f * SIX_P;
     }
-    if p.surge && !fatigue_mutes {
+    // SHO-18e (rules 3.6): the Surge SHOT/CHARGE alias families pay only from a shot over 9" or a
+    // charge over 6" — the resolver's own `alias_fires` condition (`resolve_melee_leg`; the volley
+    // fold reads 9"). `dist_in` is the charge gap `melee_ev` hands in (0.0 off a charge); a weapon's
+    // own Surge stamps no alias name and stays unconditional.
+    let alias_gate_in = if melee { CHARGE_LONG_RANGE_IN } else { LONG_RANGE_IN };
+    let alias_fires = !p.alias_gate || p.surge_alias_rule.is_empty() || dist_in > alias_gate_in;
+    if p.surge && alias_fires && !fatigue_mutes {
         hits += attacks_f * SIX_P;
     }
     // Block B6's extra-ATTACK-DIE Surge siblings (`p.surge_attack` /
@@ -882,7 +888,10 @@ pub fn profile_ev(
     if p.deadly > 0 {
         unsaved *= deadly_multiplier(p.deadly, deadly_cap) as f64;
     }
-    if p.shred {
+    // SHO-18e: the Shred ALIAS family follows the same shot-9"/charge-6" gate; the weapon's own
+    // Shred flag stays unconditional, exactly like the Surge exception above.
+    let shred_alias_fires = !p.alias_gate || dist_in > alias_gate_in;
+    if p.shred || (p.shred_alias && shred_alias_fires) {
         unsaved += hits * SIX_P;
     }
     // ai_ev.gd:434-435 reads the SAME EV-imagination `unstoppable` key
