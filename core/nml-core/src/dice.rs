@@ -2583,7 +2583,21 @@ pub fn impact_saves_with_tray(
     let sd = guarded_defense(shielded_defense(def.defense, def.shielded_bonus(), def.def_floor()), exact, def.def_floor());
     let w = save_batch(&bare, def, def_owner, hits, sd, ap, false, false, 1, false, tray, &mut out);
     out.caused = w;
-    out.wounds = regen_batch(w, def, def_owner, tray, &mut out.rolls);
+    // MOR-17a (rules 3.6): Warding's 6+ needs a charge from OVER its gate. A
+    // charge from the gate or closer folds nothing — the GD side's
+    // `_solo_land_wounds` gate, mirrored here. `None` keeps the old blanket read.
+    let regen_def = &Ctx {
+        regen_target: match charge {
+            Some((gap_in, _))
+                if def.regen_gate_charge_in > 0.0 && gap_in <= def.regen_gate_charge_in =>
+            {
+                0
+            }
+            _ => def.regen_target,
+        },
+        ..*def
+    };
+    out.wounds = regen_batch(w, regen_def, def_owner, tray, &mut out.rolls);
     out
 }
 
