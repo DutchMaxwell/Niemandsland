@@ -157,3 +157,81 @@ fn the_live_target_takes_the_smaller_printed_target_among_the_carriers() {
     assert!(ctx.regeneration, "two of three living models carry Regeneration");
     assert_eq!(ctx.regen_target, 5, "the living carriers' 5+ beats the dead stamp's 6+");
 }
+
+/// MOR-07's 3.6 name rides the same live fold: the living majority decides and
+/// the printed (6+, spells 2+) targets survive.
+#[test]
+fn spell_resistance_follows_the_living_majority_at_73() {
+    let holds = fixture(
+        "gf", "alien_hives", &["Spell Resistance"], 2, &[&["Hero"]], 2, &[1], EPOCH_73_V36,
+    );
+    let c = live(&holds, EPOCH_73_V36);
+    assert!(c.regeneration, "two of three living models carry Spell Resistance");
+    assert_eq!(c.regen_target, 6);
+    assert_eq!(c.regen_target_spell, 2);
+    let gone = fixture(
+        "gf", "alien_hives", &["Spell Resistance"], 2, &[&["Hero"]], 1, &[1], EPOCH_73_V36,
+    );
+    let c = live(&gone, EPOCH_73_V36);
+    assert!(!c.regeneration, "one of two living models is an exact half, not most");
+    assert_eq!(c.regen_target, 6, "the live fold clears the flag and leaves the static stamp");
+}
+
+/// The 3.5 "Resistance" name is a REGEN_MOST_MODELS member at 73 too, so the
+/// live majority owns it: one carrier of two living models clears the stamp,
+/// while the profile's own "Resistance" no longer shields it. At 72 the
+/// every-model stamp already strips a plain joined hero, unchanged here.
+#[test]
+fn resistance_follows_the_live_majority_at_73_and_the_every_model_stamp_at_72() {
+    let holds = fixture(
+        "gf", "alien_hives", &["Resistance"], 2, &[&["Hero"]], 2, &[1], EPOCH_73_V36,
+    );
+    assert!(live(&holds, EPOCH_73_V36).regeneration,
+        "two of three living models are most: Resistance keeps its stamp");
+    let gone = fixture(
+        "gf", "alien_hives", &["Resistance"], 2, &[&["Hero"]], 1, &[1], EPOCH_73_V36,
+    );
+    assert!(!live(&gone, EPOCH_73_V36).regeneration,
+        "one of two living models is an exact half, not most");
+    let at72 = fixture(
+        "gf", "alien_hives", &["Resistance"], 2, &[&["Hero"]], 1, &[1], EPOCH_72_PLAYTEST_RULES,
+    );
+    assert!(!live(&at72, EPOCH_72_PLAYTEST_RULES).regeneration,
+        "below 73 the every-model stamp already strips the plain joined hero: unchanged");
+}
+
+/// At 72 the 3.6 name does not exist yet: the live fold answers the recorded
+/// every-model stamp, so a Spell Resistance profile carries no Regeneration.
+#[test]
+fn spell_resistance_is_unknown_to_the_live_fold_at_epoch_72() {
+    let at72 = fixture(
+        "gf", "alien_hives", &["Spell Resistance"], 2, &[&["Hero"]], 2, &[1],
+        EPOCH_72_PLAYTEST_RULES,
+    );
+    let c = live(&at72, EPOCH_72_PLAYTEST_RULES);
+    assert!(!c.regeneration, "the 3.6 name reads nothing below 73: byte-identical");
+}
+
+/// Every remaining Regeneration-family name reads the living majority through
+/// the same live fold.
+#[test]
+fn each_regen_family_name_reads_the_living_majority_at_73() {
+    let cases = [
+        ("Self-Repair", "gf", "robot_legions", 6),
+        ("Angelic Blessing", "aof", "kingdom_of_angels", 6),
+        ("Cursed Undead", "aof", "vampiric_undead", 6),
+        ("Plaguebound", "gf", "plague_disciples", 6),
+        ("Protected", "gf", "orc_marauders", 6),
+        ("Protection Feat", "gf", "robot_legions", 5),
+        ("Warding", "gf", "knight_brothers", 6),
+    ];
+    for (name, system, faction, target) in cases {
+        let holds = fixture(system, faction, &[name], 2, &[&["Hero"]], 2, &[1], EPOCH_73_V36);
+        let c = live(&holds, EPOCH_73_V36);
+        assert!(c.regeneration, "{name}: two of three living models carry it");
+        assert_eq!(c.regen_target, target, "{name}: the printed target");
+        let gone = fixture(system, faction, &[name], 2, &[&["Hero"]], 1, &[1], EPOCH_73_V36);
+        assert!(!live(&gone, EPOCH_73_V36).regeneration,
+            "{name}: one of two living models is an exact half, not most");
+    }
+}

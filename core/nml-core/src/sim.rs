@@ -3472,6 +3472,13 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
             {
                 c.evasive = false;
             }
+            if crate::rules::has_special_rule(&host.special_rules, "Ranged Shrouding")
+                && crate::unit::most_models_family_live(
+                    host, state.alive[i], &heroes, "Ranged Shrouding", rules_epoch,
+                ) == Some(false)
+            {
+                c.ranged_shrouding = false;
+            }
         }
     }
     // Rules 3.6 (row W1.4b) — the Stealth family's most-models read follows the
@@ -3554,6 +3561,13 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
                 ) == Some(false)
             {
                 c.guarded = false;
+            }
+            if carries(&["Shielded"])
+                && crate::unit::defence_family_live(
+                    host, alive, &heroes, &["Shielded"], rules_epoch,
+                ) == Some(false)
+            {
+                c.shielded = false;
             }
         }
     }
@@ -3768,7 +3782,9 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
                 None if !grants || !(mods::granted(state, i, "Regeneration")
                     || mods::granted(state, i, "Enhanced Self-Repair")
                     || mods::granted(state, i, "Enhanced Cursed Undead")) => {
-                    let own = ["Resistance", "Medical Training", "Regeneration Buff",
+                    // "Resistance" is a REGEN_MOST_MODELS name at 73 (MOR-07), so the
+                    // live majority owns it; the boosts and Medical Training stay static.
+                    let own = ["Medical Training", "Regeneration Buff",
                         "Self-Repair Boost", "Cursed Undead Boost", "Plaguebound Boost",
                         "Angelic Blessing Boost"].iter().any(|r| {
                         crate::rules::has_special_rule(&host.special_rules, r)

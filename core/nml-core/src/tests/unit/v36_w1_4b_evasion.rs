@@ -128,3 +128,32 @@ fn a_plain_joined_hero_does_not_switch_the_host_majority_off() {
     assert!(live_evasion(&host, &st, EPOCH_73_V36).dodge,
         "three host carriers of four living models: a plain joined hero is only one model");
 }
+
+// --- (e) Ranged Shrouding follows the living majority at 73. ---
+
+#[test]
+fn two_of_three_living_models_keep_ranged_shrouding_at_epoch_73() {
+    let (host, profiles) = evasion_build(
+        &unit_json("gf", "jackals", &["Ranged Shrouding"], 2, &[]), EPOCH_73_V36);
+    let st = evasion_state(profiles, 2, 1);
+    assert!(live_evasion(&host, &st, EPOCH_73_V36).ranged_shrouding,
+        "two host models carry Ranged Shrouding out of three living models");
+}
+
+#[test]
+fn one_of_two_living_models_loses_ranged_shrouding_at_epoch_73() {
+    let (host, profiles) = evasion_build(
+        &unit_json("gf", "jackals", &["Ranged Shrouding"], 2, &[]), EPOCH_73_V36);
+    let st = evasion_state(profiles, 1, 1);
+    assert!(!live_evasion(&host, &st, EPOCH_73_V36).ranged_shrouding,
+        "one carrier of two living models is exactly half, not most: Ranged Shrouding is off");
+}
+
+#[test]
+fn the_same_dead_carrier_keeps_ranged_shrouding_at_epoch_72() {
+    let (host, profiles) = evasion_build(
+        &unit_json("gf", "jackals", &["Ranged Shrouding"], 2, &[]), EPOCH_72_PLAYTEST_RULES);
+    let st = evasion_state(profiles, 1, 1);
+    assert!(live_evasion(&host, &st, EPOCH_72_PLAYTEST_RULES).ranged_shrouding,
+        "below 73 the static stamp is byte-identical: Ranged Shrouding stays on");
+}
