@@ -3680,7 +3680,13 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
             c.pierce_melee_grant =
                 c.pierce_melee_grant || (grants && mods::granted_exact(state, i, "AP(+1) in melee"));
         }
-        c.pierce_assault_grant = grants && mods::granted(state, i, "Piercing Assault");
+        // DAT-06 — the AoF "Piercing Charge Buff" hands its bearer the granted
+        // rule "Piercing Charge"; from `EPOCH_73_V36` that grant reads as the
+        // same primitive. Below 73 the ledger stays blind.
+        c.pierce_assault_grant = grants
+            && (mods::granted(state, i, "Piercing Assault")
+                || (rule_on(rules_epoch, EPOCH_73_V36)
+                    && mods::granted(state, i, "Piercing Charge")));
         // EPOCH 44 SURGE MARK — the mark's once-grant ("Surge", placed by
         // `tray_vs_marks` at the attack seam, spent with the exchange) rides
         // the same attacker-side read the Primal Boost grant uses; the spell
