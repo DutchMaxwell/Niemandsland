@@ -1474,6 +1474,17 @@
      "incoming_ap_reduction": 1
     }
    },
+   "Fragment": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "reroll_save_sixes": true,
+     "reroll_save_low": 5,
+     "condition": "def_5_6",
+     "bypass_regen": false
+    }
+   },
    "Furious Aura": {
     "primitive": "Aura Channel",
     "rated": false,
@@ -1952,6 +1963,16 @@
      "extra_wound_per_save_one": 1
     }
    },
+   "Smash": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "reroll_save_sixes": true,
+     "condition": "over_half_range",
+     "bypass_regen": false
+    }
+   },
    "Unstoppable Mark": {
     "primitive": "Utility Buff",
     "rated": false,
@@ -2428,6 +2449,16 @@
     "book_version": "3.5.3",
     "params": {
      "defense_bonus": 1
+    }
+   },
+   "Smash": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "reroll_save_sixes": true,
+     "condition": "over_half_range",
+     "bypass_regen": false
     }
    },
    "Unstoppable Mark": {
@@ -3562,6 +3593,16 @@
      "floor_in": 6,
      "melee_move_penalty_in": 2,
      "melee_floor_in": 6
+    }
+   },
+   "Smash": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "reroll_save_sixes": true,
+     "condition": "over_half_range",
+     "bypass_regen": false
     }
    },
    "Stealth Buff": {
@@ -6024,6 +6065,16 @@
      "target": "attacking_unit"
     }
    },
+   "Decimate": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "reroll_save_sixes": true,
+     "condition": "above_half_strength",
+     "bypass_regen": false
+    }
+   },
    "Fast Aura": {
     "primitive": "Fast",
     "rated": false,
@@ -6609,6 +6660,16 @@
      "defense_bonus": 1
     }
    },
+   "Smash": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "reroll_save_sixes": true,
+     "condition": "over_half_range",
+     "bypass_regen": false
+    }
+   },
    "Teleport": {
     "primitive": "Teleport",
     "rated": false,
@@ -7030,6 +7091,18 @@
      "requires_tough": true
     }
    },
+   "Obliterate": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "reroll_save_sixes": true,
+     "reroll_save_low": 5,
+     "condition": "vs_tough_ge",
+     "threshold": 3,
+     "bypass_regen": true
+    }
+   },
    "Quick Shot": {
     "primitive": "Quick Shot",
     "rated": false,
@@ -7177,6 +7250,17 @@
     "params": {
      "rating": "X",
      "wound_target": 6
+    }
+   },
+   "Demolish": {
+    "primitive": "Indirect",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "ignores_cover": true,
+     "cover_only": true,
+     "ap_bonus": 1,
+     "condition": "near_terrain"
     }
    },
    "Grounded Stealth": {
@@ -7699,6 +7783,16 @@
      "target": "enemy",
      "once": true,
      "needs_los": true
+    }
+   },
+   "Decimate": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "reroll_save_sixes": true,
+     "condition": "above_half_strength",
+     "bypass_regen": false
     }
    },
    "Furious Aura": {
@@ -9531,6 +9625,18 @@
      "melee_only": true
     }
    },
+   "Obliterate": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "reroll_save_sixes": true,
+     "reroll_save_low": 5,
+     "condition": "vs_tough_ge",
+     "threshold": 3,
+     "bypass_regen": true
+    }
+   },
    "Quick Shot": {
     "primitive": "Quick Shot",
     "rated": false,
@@ -9568,6 +9674,16 @@
    }
   },
   "titan_lords_plague_disciples": {
+   "Decimate": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "reroll_save_sixes": true,
+     "condition": "above_half_strength",
+     "bypass_regen": false
+    }
+   },
    "Delayed Action": {
     "primitive": "Pass Turn",
     "rated": false,
@@ -9699,6 +9815,17 @@
     "book_version": "3.6.0",
     "params": {
      "place_d3_plus": 1
+    }
+   },
+   "Demolish": {
+    "primitive": "Indirect",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "ignores_cover": true,
+     "cover_only": true,
+     "ap_bonus": 1,
+     "condition": "near_terrain"
     }
    },
    "Fortified": {
@@ -10163,6 +10290,16 @@
      "grants": "Shred when Shooting"
     }
    },
+   "Smash": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "reroll_save_sixes": true,
+     "condition": "over_half_range",
+     "bypass_regen": false
+    }
+   },
    "Strafing": {
     "primitive": "Strafing",
     "rated": false,
@@ -10612,6 +10749,16 @@
     "book_version": "3.5.3",
     "params": {
      "defense_bonus": 1
+    }
+   },
+   "Smash": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "reroll_save_sixes": true,
+     "condition": "over_half_range",
+     "bypass_regen": false
     }
    },
    "Surge": {
@@ -11261,6 +11408,18 @@
      "needs_los": true
     }
    },
+   "Obliterate": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "reroll_save_sixes": true,
+     "reroll_save_low": 5,
+     "condition": "vs_tough_ge",
+     "threshold": 3,
+     "bypass_regen": true
+    }
+   },
    "Piercing Assault": {
     "primitive": "Piercing Assault",
     "rated": false,
@@ -11415,6 +11574,16 @@
     "book_version": "3.5.3",
     "params": {
      "grants": "Ambush"
+    }
+   },
+   "Decimate": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "reroll_save_sixes": true,
+     "condition": "above_half_strength",
+     "bypass_regen": false
     }
    },
    "Difficult Terrain Debuff": {
