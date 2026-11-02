@@ -155,3 +155,26 @@ fn a_replay_below_73_spends_the_grant_the_way_the_old_path_did() {
     );
     assert!(st.buffs[0].is_empty(), "at 72 the old path spends the attacker's grant too");
 }
+
+/// (d) The striker's own grant is spent by a strike-back that brings wounds in,
+/// even when Regeneration turns every one of them away: the strike-back is the
+/// exchange, so the incoming (pre-Regeneration) count is what spends it.
+#[test]
+fn a_regeneration_grant_on_the_striker_spends_on_an_all_ignored_strike_back() {
+    let (mut st, mut statics) = duel(2);
+    land_regen_grant(&mut st, &statics, 0, EPOCH_73_V36);
+    statics[0].ctx.regeneration = true;
+    statics[0].ctx.regen_target = 1;
+    statics[0].ctx.regen_target_spell = 1;
+    let before = wounds_left(&st, 0);
+    let mut tray = Tray::seeded(2);
+    let mut shot = ShootResult::default();
+    let (_, retaliated, _, _) = strike_phase(
+        &statics, &mut st, 0, 1, false, 0.0,
+        Seams { rules_epoch: EPOCH_73_V36, ..Default::default() },
+        &mut tray, &mut shot, StrikeSet::All, Cover::Recorded(None),
+    );
+    assert!(retaliated > 0, "the fixture must lash back for the grant to be asked");
+    assert_eq!(wounds_left(&st, 0), before, "Regeneration ignored every strike-back wound");
+    assert!(st.buffs[0].is_empty(), "an all-ignored strike-back still spends the striker's grant");
+}

@@ -5618,7 +5618,6 @@ fn strike_phase(
     let raw_deadly = r.deadly_tally;
     let w = shot.absorb(r);
     let members: Vec<usize> = parts.iter().map(|(mi, _, _)| *mi).collect();
-    let att_wounds_before = wounds_left(next, si);
     let hazard_self = land_hazardous_self(statics, next, &members, seams, shot);
     // B13: the table measures the lash-back on wounds actually TAKEN — the
     // wound-POOL difference (`_solo_retaliate_hits` :4570, NML-937), snapshotted
@@ -5668,7 +5667,9 @@ fn strike_phase(
         let hits = def.retaliate_hits_per_wound * taken;
         shot.log.push(format!("Retaliate: {} lashes back — {} hits", ut.name, hits));
         let su = &statics[next.roster.profile[si]];
-        let sctx = ctx_of(su, next, si);
+        // The lash-back wounds the holder: read its LIVE ctx so a granted
+        // Regeneration is asked about them (the defender side already does).
+        let sctx = ctx_live(ctx_of(su, next, si), statics, next, si, true, seams.rules_epoch);
         let (unsaved, landed) = crate::dice::retaliate_saves_with_tray(
             hits, &sctx, &su.name, tray, &mut shot.rolls,
         );
@@ -5677,6 +5678,9 @@ fn strike_phase(
             retaliated = unsaved; // _solo_retaliate_credit += rw (main.gd:6171)
         }
     }
+    // DAT-17a: the striker's grant is spent on wounds COMING IN (pre-Regeneration),
+    // the same rule as the defender side — an all-ignored lash-back still spends it.
+    let mut att_incoming = retaliated;
     // Block C4 — Deathstrike / Self-Destruct death-half (`_solo_deathstrike_hits`
     // main.gd:16698-16731, called at :6174 immediately after the Retaliate
     // block): models KILLED by this phase's strikes lash out at the striker,
@@ -5695,13 +5699,14 @@ fn strike_phase(
             "Deathstrike/Self-Destruct: {}'s dying models lash out — {} takes {} hits",
             ut.name, su.name, hits
         ));
-        let sctx = ctx_of(su, next, si);
+        let sctx = ctx_live(ctx_of(su, next, si), statics, next, si, true, seams.rules_epoch);
         let (_, landed) = crate::dice::retaliate_saves_with_tray(
             hits, &sctx, &su.name, tray, &mut shot.rolls,
         );
+        att_incoming += landed;
         land_wounds_with(next, si, landed, seams.tray_exact);
     }
-    let att_wounded = wounds_left(next, si) < att_wounds_before;
+    let att_wounded = att_incoming > 0;
     spend_exchange_wounded(next, si, ti, true, att_wounded, def_incoming, seams.rules_epoch); // main.gd:6152, per strike phase
     (caused, retaliated, hazard_self, scourge_taken)
 }
@@ -9486,8 +9491,7 @@ fn resolve_with(
                             let phantom = r.scourge_wounds;
                             let w = shot.absorb(r);
                             let members: Vec<usize> = parts.iter().map(|(mi, _, _)| *mi).collect();
-                            let att_wounds_before = wounds_left(&next, si);
-                            land_hazardous_self(statics, &mut next, &members, seams, shot);
+                            let att_incoming = land_hazardous_self(statics, &mut next, &members, seams, shot);
                             if !seams.tray_exact {
                                 land_wounds_with(&mut next, g.ti, w, false);
                             }
@@ -9531,7 +9535,7 @@ fn resolve_with(
                             }
                             // main.gd:3244 — the exchange spends its own
                             // once-mods BEFORE the post-volley morale test.
-                            let att_wounded = wounds_left(&next, si) < att_wounds_before;
+    let att_wounded = att_incoming > 0;
                             spend_exchange_wounded(&mut next, si, g.ti, false, att_wounded, def_incoming, seams.rules_epoch);
                             // D1-B5b: the volley's morale test is the NEXT
                             // thing on the table's tray (main.gd:8248-8251),
