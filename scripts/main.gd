@@ -4770,7 +4770,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		# — the SAME chooser AiEv.profile_ev uses, so the AI's plan and the real dice pick the
 		# same mode. EPOCH_38_WATCHBORN_LATCH: ONE pick per ACTIVATION — the first eligible
 		# volley decides, every later volley/charge of the activation reuses the latch.
-		if bool(profile.get("versatile_attack", false)) and dist_in > AiCombatMath.LONG_RANGE_IN:
+		if bool(profile.get("versatile_attack", false)) and _solo_versatile_over(member, dist_in, false, 0.0):
 			var vm: Dictionary = _solo_versatile_latch_read(member)
 			var fresh: bool = vm.is_empty()
 			if fresh:
@@ -8269,6 +8269,48 @@ func _solo_alias_charge_over(charging: bool, charge_from_in: float) -> bool:
 	return charge_from_in > AiCombatMath.CHARGE_LONG_RANGE_IN
 
 
+## SHO-19 (rules 3.6): Versatile Expert/Warrior pick with no distance gate from EPOCH_73_V36;
+## the base spellings keep the 9"/6" bands.
+func _solo_versatile_no_gate(unit: GameUnit) -> bool:
+	if unit == null or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return false
+	for n in ["Versatile Expert", "Versatile Warrior"]:
+		if AiEv.has_exact_rule(unit, n):
+			return true
+	return false
+
+
+## SHO-19: one shared gate for the Versatile pick -- 9" shooting, 6" charging at 73, and no
+## gate at all for the Expert/Warrior spellings.
+func _solo_versatile_over(unit: GameUnit, dist_in: float, charging: bool, charge_from_in: float) -> bool:
+	if _solo_versatile_no_gate(unit):
+		return true
+	if charging:
+		var gate: float = AiCombatMath.CHARGE_LONG_RANGE_IN \
+			if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else AiCombatMath.LONG_RANGE_IN
+		return charge_from_in > gate
+	return dist_in > AiCombatMath.LONG_RANGE_IN
+
+
+## SHO-19: Havocbound/Piercing Warrior's charge AP needs over 6" at EPOCH_73_V36; below it the
+## old unconditional charge leg stays. Both map rows spell the gate as ranged_over_or_charge.
+func _solo_havoc_charge_ap(base: String, params: Dictionary, bonus: int,
+		charging: bool, melee: bool) -> int:
+	if bonus <= 0 or not charging or not melee:
+		return bonus
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return bonus
+	if base != "Havocbound" and base != "Piercing Warrior":
+		return bonus
+	var cond := str(params.get("condition", ""))
+	var gate := str(params.get("gate", ""))
+	if cond == "on_charge" or cond == "ranged_over_or_charge" or gate == "ranged_over_or_charge":
+		if _solo_alias_charge_in <= 0.0:
+			return bonus
+		return bonus if _solo_alias_charge_in > AiCombatMath.CHARGE_LONG_RANGE_IN else 0
+	return bonus
+
+
 ## The Surge-family DATA alias a member carries for this facet ("" = the weapon's own Surge only).
 func _solo_surge_alias_name(member: GameUnit, profile_range: int) -> String:
 	for r in member.get_special_rules():
@@ -8550,7 +8592,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 			# EPOCH_38_WATCHBORN_LATCH: the charge REUSES the activation's latched pick (an earlier
 			# volley decided it); an un-latched charge is the first eligible attack and decides.
 			var v_ap := 0
-			if bool(profile.get("versatile_attack", false)) and charging and charge_from_in > AiCombatMath.LONG_RANGE_IN:
+			if bool(profile.get("versatile_attack", false)) and _solo_versatile_over(striker, 0.0, charging, charge_from_in):
 				var vm: Dictionary = _solo_versatile_latch_read(striker)
 				var fresh: bool = vm.is_empty()
 				if fresh:
@@ -9783,6 +9825,7 @@ func _solo_conditional_ap_parts(profile: Dictionary, striker: GameUnit, defender
 		# "condition" — the EV stamp (AiEv.stamp_conditional_ap) accepts the same shape.
 		if params.has("condition") or params.has("gate"):
 			var b := AiCombatMath.conditional_ap_bonus(params, d_tough, d_defense, charging, dist_in, melee, cx)
+			b = _solo_havoc_charge_ap(base, params, b, charging, melee)
 			if b > 0:
 				parts.append(_solo_cond_ap_part(base, b, params))
 			elif v36 and not moved_logged and _solo_slayer_moved(params, d_tough, charging, melee, held, dist_in):
@@ -9808,6 +9851,7 @@ func _solo_conditional_ap_parts(profile: Dictionary, striker: GameUnit, defender
 			continue   # its conditional legs are replaced -- the always leg above pays instead
 		if params.has("condition") or params.has("gate"):
 			var b := AiCombatMath.conditional_ap_bonus(params, d_tough, d_defense, charging, dist_in, melee, cx)
+			b = _solo_havoc_charge_ap(base, params, b, charging, melee)
 			if b > 0:
 				parts.append(_solo_cond_ap_part(base, b, params))
 			elif v36 and not moved_logged and _solo_slayer_moved(params, d_tough, charging, melee, held, dist_in):
@@ -9824,6 +9868,7 @@ func _solo_conditional_ap_parts(profile: Dictionary, striker: GameUnit, defender
 		var gparams: Dictionary = RulesRegistry.lookup(system, faction, gname).get("params", {})
 		if gparams.has("condition") or gparams.has("gate"):
 			var gbonus := AiCombatMath.conditional_ap_bonus(gparams, d_tough, d_defense, charging, dist_in, melee, cx)
+			gbonus = _solo_havoc_charge_ap(gname, gparams, gbonus, charging, melee)
 			if gbonus > 0:
 				parts.append(_solo_cond_ap_part(gname, gbonus, gparams))
 			elif v36 and not moved_logged and _solo_slayer_moved(gparams, d_tough, charging, melee, held, dist_in):
@@ -14361,7 +14406,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 			# choice — the EV pick only pre-labels the recommended button. EPOCH_38_WATCHBORN_LATCH:
 			# asked ONCE per activation (the first eligible volley) on the unit's latch, not per weapon
 			# per volley — every later volley/charge of this activation reuses the answer.
-			if bool(profile.get("versatile_attack", false)) and dist > AiCombatMath.LONG_RANGE_IN:
+			if bool(profile.get("versatile_attack", false)) and _solo_versatile_over(attacker, dist, false, 0.0):
 				var pname := str(profile.get("name", "?"))
 				var vm: Dictionary = _solo_versatile_latch_read(attacker)
 				var fresh: bool = vm.is_empty()

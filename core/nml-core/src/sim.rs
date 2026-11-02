@@ -5470,9 +5470,12 @@ fn strike_phase(
     // picked yet, and a pick made by an earlier volley reaches the dice fold.
     if charging
         && rule_on(seams.rules_epoch, EPOCH_38_WATCHBORN_LATCH)
-        && charge_from_in > crate::combat::LONG_RANGE_IN
     {
         for (mi, _, att) in parts.iter_mut() {
+            let over = charge_from_in > crate::combat::charge_gate_in(seams.rules_epoch);
+            if !att.versatile_no_gate && !over {
+                continue;
+            }
             let prof36 = statics[next.roster.profile[*mi]].melee.iter().find(|p| p.versatile_attack);
             if prof36.is_none() && !att.versatile_grant {
                 continue;
@@ -9333,7 +9336,8 @@ fn resolve_with(
                                     + (next.reckless_backfire_round[g.ti] == next.round) as i64;
                                 // EPOCH_38_WATCHBORN_LATCH — the FIRST eligible volley decides.
                                 if rule_on(seams.rules_epoch, EPOCH_38_WATCHBORN_LATCH)
-                                    && g.mod_d > crate::combat::LONG_RANGE_IN
+                                    && (att.versatile_no_gate
+                                        || g.mod_d > crate::combat::LONG_RANGE_IN)
                                 {
                                     let prof36 = statics[next.roster.profile[*mi]].shoot.iter().find(|p| p.versatile_attack);
                                     if prof36.is_some() || att.versatile_grant {
