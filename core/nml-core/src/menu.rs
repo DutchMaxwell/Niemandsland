@@ -576,7 +576,7 @@ pub fn advance_shoots(
 /// `AiEv.charge_score` ai_ev.gd:537-553 — the charge matchup tie-break: wounds
 /// we deal (thinned first-order by the defender's Counter strike-first) minus
 /// the wounds their strike-back deals, risk-weighted by our Fearless and Banner.
-fn charge_score(
+pub(crate) fn charge_score(
     ours: &[ShootProfile],
     our_attacks: &[i64],
     us: &Ctx,
@@ -584,6 +584,8 @@ fn charge_score(
     their_attacks: &[i64],
     them: &Ctx,
     charge_from_in: f64,
+    _rules_epoch: u32,
+    _counter_strikes_first: bool,
 ) -> f64 {
     let mut dealt = melee_ev(ours, our_attacks, us, them, true, charge_from_in);
     let mut counter_first = 0.0f64;
@@ -697,8 +699,17 @@ pub fn best_charge(
         melee_profiles_of(ut, state.alive[e], sc);
         let (their_profiles, their_attacks) =
             crate::sim::ev_melee_set(&ut.melee, &sc.attacks, &state.limited_used[e], rules_epoch);
-        let s = charge_score(&our_profiles, &our_attacks, &us, &their_profiles, &their_attacks, &them, charge_from_in)
-            - danger_loss;
+        let s = charge_score(
+            &our_profiles,
+            &our_attacks,
+            &us,
+            &their_profiles,
+            &their_attacks,
+            &them,
+            charge_from_in,
+            rules_epoch,
+            true,
+        ) - danger_loss;
         if s > best_score {
             best_score = s;
             best = Some(e);
