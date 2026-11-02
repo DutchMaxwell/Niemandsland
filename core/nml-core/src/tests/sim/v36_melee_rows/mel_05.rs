@@ -91,3 +91,67 @@ fn a_defender_without_counter_is_unchanged_at_epoch_73() {
     assert_eq!(out.impact_dice, 3, "no Counter, no Impact cut");
     assert!(!out.log.iter().any(|l| l.starts_with("Counter:")), "{:?}", out.log);
 }
+
+/// MEL-05e-fix: `menu::charge_score` mirrors `AiEv.charge_score` (ai_ev.gd:1107) through
+/// `SoloController.counter_strikes_first` (solo_controller.gd:8921). From `EPOCH_73_V36` the
+/// defender's Counter thins our charge only when the defender will actually strike back; below
+/// the wave the old unconditional read stays.
+#[test]
+fn the_charge_score_thins_by_counter_only_when_the_rule_applies() {
+    let ours = vec![ShootProfile { name: "Blade".into(), attacks: 4, count: 1, range: 0, ..Default::default() }];
+    let theirs = vec![ShootProfile {
+        name: "Counter Blade".into(),
+        attacks: 2,
+        count: 1,
+        range: 0,
+        counter: true,
+        counter_strikes_first: Some(true),
+        ..Default::default()
+    }];
+    let context = |epoch: u32| Ctx {
+        quality: 4,
+        defense: 4,
+        tough: 3,
+        models: 2,
+        rules_epoch: epoch,
+        ..Default::default()
+    };
+    let score = |epoch: u32, counter_strikes_first: bool| {
+        let (us, them) = (context(epoch), context(epoch));
+        crate::menu::charge_score(&ours, &[4], &us, &theirs, &[2], &them, 0.0, epoch, counter_strikes_first)
+    };
+    let thinned = score(EPOCH_73_V36, true);
+    let unthinned = score(EPOCH_73_V36, false);
+    assert!(thinned < unthinned, "an applicable Counter thins the charge: {thinned} < {unthinned}");
+    assert_eq!(
+        score(EPOCH_72_PLAYTEST_RULES, true),
+        score(EPOCH_72_PLAYTEST_RULES, false),
+        "below 73 the Counter thinning is unconditional"
+    );
+}
+
+#[test]
+fn the_charge_counter_policy_follows_the_gd_strike_back_gate() {
+    let counter = vec![ShootProfile {
+        name: "Counter Blade".into(),
+        attacks: 2,
+        count: 1,
+        range: 0,
+        counter: true,
+        counter_strikes_first: Some(true),
+        ..Default::default()
+    }];
+    let mut st = four_unit_line();
+    assert!(crate::menu::counter_strikes_first(&st, 1, &counter, EPOCH_73_V36));
+    st.fatigued[1] = true;
+    assert!(!crate::menu::counter_strikes_first(&st, 1, &counter, EPOCH_73_V36));
+    assert!(
+        crate::menu::counter_strikes_first(&st, 1, &counter, EPOCH_72_PLAYTEST_RULES),
+        "below 73 the old unconditional read stays"
+    );
+    st.fatigued[1] = false;
+    st.shaken[1] = true;
+    assert!(!crate::menu::counter_strikes_first(&st, 1, &counter, EPOCH_73_V36));
+    let opted_out = vec![ShootProfile { counter_strikes_first: Some(false), ..counter[0].clone() }];
+    assert!(!crate::menu::counter_strikes_first(&st, 1, &opted_out, EPOCH_73_V36));
+}
