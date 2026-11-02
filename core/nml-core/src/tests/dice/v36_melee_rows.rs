@@ -10,6 +10,7 @@ mod mel_05e;
 mod mel_06;
 mod mel_07b;
 mod mel_07c;
+mod mel_07d;
 mod mel_07e;
 mod mel_08;
 mod mel_09;
