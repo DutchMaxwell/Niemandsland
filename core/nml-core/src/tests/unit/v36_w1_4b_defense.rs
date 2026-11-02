@@ -118,3 +118,32 @@ fn a_joined_hero_without_the_rule_does_not_switch_the_host_majority_off() {
     let c = ctx_at("Fortified", 3, EPOCH_73_V36);
     assert!(c.fortified, "three of four living models carry it: one plain hero does not switch it off");
 }
+
+/// Shielded is a live-majority name too: one carrier of two living models is
+/// an exact half, so the stamp clears at 73; below the gate it stays.
+#[test]
+fn losing_a_shielded_carrier_clears_it_at_73_but_not_at_72() {
+    let at73 = ctx_at("Shielded", 1, EPOCH_73_V36);
+    assert!(!at73.shielded, "one carrier of two living models is an exact half: the live majority clears it");
+    let at72 = ctx_at("Shielded", 1, EPOCH_72_PLAYTEST_RULES);
+    assert!(at72.shielded, "below the gate the profile-build stamp stays untouched");
+}
+
+/// Two of three living models still carry Shielded: the strict majority holds.
+#[test]
+fn two_of_three_shielded_carriers_keep_it_at_73() {
+    let c = ctx_at("Shielded", 2, EPOCH_73_V36);
+    assert!(c.shielded, "two of three living models carry Shielded: the majority holds");
+}
+
+/// Every Guarded-family name reads the living majority through the one OR
+/// stamp: each name holds at two of three and clears at one of two.
+#[test]
+fn each_guarded_family_name_holds_as_a_live_majority_and_clears_when_none_is() {
+    for name in ["Versatile Defense", "Sturdy", "Safety Gear", "Tenacious"] {
+        let holds = ctx_at(name, 2, EPOCH_73_V36);
+        assert!(holds.guarded, "{name}: two of three living models carry it");
+        let gone = ctx_at(name, 1, EPOCH_73_V36);
+        assert!(!gone.guarded, "{name}: one of two living models is an exact half");
+    }
+}
