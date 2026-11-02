@@ -64,6 +64,20 @@ fn assert_no_arm(case: &str, epoch: u32, arm: &str) {
     );
 }
 
+fn assert_arm_names(case: &str, epoch: u32, arm: &str, name: &str) {
+    let stderr = run_child(case, epoch);
+    let line = stderr
+        .lines()
+        .find(|l| l.contains(&format!("[{arm}]")))
+        .unwrap_or_else(|| {
+            panic!("epoch {epoch}: expected the trace arm [{arm}], got:\n{stderr}")
+        });
+    assert!(
+        line.contains(name),
+        "epoch {epoch}: the [{arm}] line must name {name}, got:\n{line}"
+    );
+}
+
 // ---------------------------------------------------------------- fixtures --
 
 fn utility_case(epoch: u32) {
@@ -84,16 +98,18 @@ fn regen_case(epoch: u32) {
 
 fn fortified_case(epoch: u32) {
     let mut st = four_unit_line();
-    st.attached = Rc::new(vec![vec![], vec![], vec![], vec![]]);
-    st.attached_to = Rc::new(vec![None, None, None, None]);
-    st.alive = vec![1, 0, 0, 0];
-    let mut profile = st.profiles.list[0].clone();
-    profile.special_rules = vec!["Fortified".into()];
-    st.profiles = Rc::new(Profiles { list: vec![profile], index: HashMap::new() });
-    let mut statics = vec![UnitStatic::default(); 4];
-    statics[0].ctx.fortified = true;
+    st.buffs[0].push(rec(0, "Enhanced Guardian"));
+    let statics = vec![UnitStatic::default(); 4];
     let c = ctx_live(statics[0].ctx, &statics, &st, 0, false, epoch);
-    assert!(c.fortified);
+    assert!(c.fortified_boost_ap >= 1);
+}
+
+fn shielded_case(epoch: u32) {
+    let mut st = four_unit_line();
+    st.buffs[0].push(rec(0, "+1 to Defense"));
+    let statics = vec![UnitStatic::default(); 4];
+    let c = ctx_live(statics[0].ctx, &statics, &st, 0, false, epoch);
+    assert!(c.shielded);
 }
 
 fn hit_and_run_case(epoch: u32) {
@@ -163,6 +179,7 @@ fn trace_child() {
         "utility" => utility_case(epoch),
         "regen" => regen_case(epoch),
         "fortified" => fortified_case(epoch),
+        "shielded" => shielded_case(epoch),
         "hit-and-run" => hit_and_run_case(epoch),
         "bounding" => bounding_case(epoch),
         "versatile" => versatile_case(epoch),
@@ -184,7 +201,12 @@ fn regen_boost_live_emits_one_arm_at_73() {
 
 #[test]
 fn fortified_grant_live_emits_one_arm_at_73() {
-    assert_arm("fortified", E73, "fortified-grant-live");
+    assert_arm_names("fortified", E73, "fortified-grant-live", "Enhanced Guardian");
+}
+
+#[test]
+fn shielded_grant_live_emits_one_arm_at_73() {
+    assert_arm("shielded", E73, "shielded-grant-live");
 }
 
 #[test]
@@ -205,4 +227,14 @@ fn versatile_attack_emits_one_arm_at_73() {
 #[test]
 fn the_utility_arm_is_absent_at_72() {
     assert_no_arm("utility", E72, "utility-grant-live");
+}
+
+#[test]
+fn the_shielded_arm_is_absent_at_72() {
+    assert_no_arm("shielded", E72, "shielded-grant-live");
+}
+
+#[test]
+fn the_fortified_arm_is_absent_at_72() {
+    assert_no_arm("fortified", E72, "fortified-grant-live");
 }
