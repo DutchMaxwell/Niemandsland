@@ -1294,6 +1294,17 @@
      "bypass_regen": false
     }
    },
+   "Disintegrate": {
+    "primitive": "Disintegrate",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "ap_bonus": 2,
+     "condition": "vs_tough_ge",
+     "threshold": 3,
+     "bypass_regen": true
+    }
+   },
    "Enhanced Bestial": {
     "primitive": "Bane",
     "rated": false,
@@ -3821,6 +3832,15 @@
      "hit_bonus": 1
     }
    },
+   "Purge": {
+    "primitive": "Purge",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "ap_bonus": 2,
+     "condition": "shaken_or_fatigued"
+    }
+   },
    "Violent": {
     "primitive": "Shred",
     "rated": false,
@@ -4439,6 +4459,15 @@
      "ap_bonus": 1,
      "condition": "ranged_over_or_charge",
      "over_in": 9
+    }
+   },
+   "Purge": {
+    "primitive": "Purge",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "ap_bonus": 2,
+     "condition": "shaken_or_fatigued"
     }
    },
    "Relentless Mark": {
@@ -5306,6 +5335,14 @@
      "target": "enemy",
      "once": true,
      "needs_los": true
+    }
+   },
+   "Shatter": {
+    "primitive": "Shatter",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "on6_ap": 3
     }
    },
    "Shred": {
@@ -6511,6 +6548,14 @@
      "grants": "Relentless"
     }
    },
+   "Shatter": {
+    "primitive": "Shatter",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "on6_ap": 3
+    }
+   },
    "Spell Accumulator": {
     "primitive": "Spell Accumulator",
     "rated": true,
@@ -7700,6 +7745,15 @@
      "grants": "Piercing Shooter"
     }
    },
+   "Purge": {
+    "primitive": "Purge",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "ap_bonus": 2,
+     "condition": "shaken_or_fatigued"
+    }
+   },
    "Rapid Charge": {
     "primitive": "Fast",
     "rated": false,
@@ -8121,6 +8175,15 @@
      "grants": "Counter-Attack"
     }
    },
+   "Destructive": {
+    "primitive": "Destructive",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "ap_bonus": 1,
+     "condition": "above_half_strength"
+    }
+   },
    "Disintegrate": {
     "primitive": "Disintegrate",
     "rated": false,
@@ -8384,6 +8447,15 @@
     "book_version": "3.5.3",
     "params": {
      "grants": "Counter-Attack"
+    }
+   },
+   "Destructive": {
+    "primitive": "Destructive",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "ap_bonus": 1,
+     "condition": "above_half_strength"
     }
    },
    "Hit & Run": {
@@ -9055,6 +9127,15 @@
      "range_in": 12,
      "target": "friendly",
      "once": true
+    }
+   },
+   "Purge": {
+    "primitive": "Purge",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "ap_bonus": 2,
+     "condition": "shaken_or_fatigued"
     }
    },
    "Ranged Shrouding": {
