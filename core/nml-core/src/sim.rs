@@ -3487,14 +3487,23 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
             })
             .collect();
         if let Some(host) = host {
-            if let Some(on) = crate::unit::stealth_family_live(
-                host, state.alive[i], &heroes, "Stealth", rules_epoch,
-            ) {
-                let (carriers, total) = crate::unit::stealth_live_counts(
-                    host, state.alive[i], &heroes, "Stealth",
-                );
-                c.stealth = on;
-                c.stealth_most_models = on && carriers < total;
+            // Only a stamp the profile's own rules produced is read live: a
+            // stamp set by the core's aura fold carries none of the names on
+            // the profile itself, and that stamp is not ours to touch.
+            let carries = |name: &str| {
+                crate::rules::has_special_rule(&host.special_rules, name)
+                    || crate::rules::has_special_rule(&host.item_grants, name)
+            };
+            if carries("Stealth") {
+                if let Some(on) = crate::unit::stealth_family_live(
+                    host, state.alive[i], &heroes, "Stealth", rules_epoch,
+                ) {
+                    let (carriers, total) = crate::unit::stealth_live_counts(
+                        host, state.alive[i], &heroes, "Stealth",
+                    );
+                    c.stealth = on;
+                    c.stealth_most_models = on && carriers < total;
+                }
             }
         }
     }
@@ -3518,17 +3527,26 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
                 .collect())
             .unwrap_or_default();
         if let (Some(host), Some(&alive)) = (host, state.alive.get(i)) {
+            // Only a stamp the profile's own rules produced is cleared: a
+            // stamp the core's aura fold set carries none of the names on the
+            // profile itself, and that stamp is not ours to touch.
+            let carries = |names: &[&str]| names.iter().any(|name| {
+                crate::rules::has_special_rule(&host.special_rules, name)
+                    || crate::rules::has_special_rule(&host.item_grants, name)
+            });
             let fortified_live = crate::unit::defence_family_live(
                 host, alive, &heroes, &["Fortified"], rules_epoch,
             );
-            if fortified_live == Some(false) {
+            if carries(&["Fortified"]) && fortified_live == Some(false) {
                 c.fortified = false;
             }
-            if crate::unit::defence_family_live(
-                host, alive, &heroes,
-                &["Guarded", "Versatile Defense", "Sturdy", "Safety Gear", "Tenacious"],
-                rules_epoch,
-            ) == Some(false) {
+            if carries(&["Guarded", "Versatile Defense", "Sturdy", "Safety Gear", "Tenacious"])
+                && crate::unit::defence_family_live(
+                    host, alive, &heroes,
+                    &["Guarded", "Versatile Defense", "Sturdy", "Safety Gear", "Tenacious"],
+                    rules_epoch,
+                ) == Some(false)
+            {
                 c.guarded = false;
             }
         }

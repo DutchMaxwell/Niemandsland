@@ -1038,6 +1038,7 @@ mod v36_shoot_rows;
 mod v36_ux;
 mod v36_ux_18;
 mod v36_w1;
+mod v36_w1_4b_aura_live;
 mod v36_w1_4b_defense;
 mod v36_w1_4b_evasion;
 mod v36_w1_4b_regen;
