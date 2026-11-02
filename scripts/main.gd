@@ -8338,6 +8338,29 @@ func _solo_stamp_alias_markers(member: GameUnit, profiles: Array) -> void:
 		if not salias.is_empty(): (sp as Dictionary)["_surge_alias"] = salias
 
 
+## Rules 3.6 (EPOCH_73_V36) — the defender's Parry dice: X per living carrier model, counting the
+## attached heroes. 0 below the wave. Shared by the strike's event and MEL-07d's follow-up event.
+func _solo_melee_parry_dice(defender: GameUnit) -> int:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return 0
+	var m_parry := 0
+	for m in [defender] + (defender.get_attached_heroes() if defender.has_method("get_attached_heroes") else []):
+		var rating: int = _solo_unit_rating(m, "Parry") if RulesRegistry.unit_rule_active(m, "Parry") else 0
+		if rating <= 0 and m.source_data is OPRApiClient.OPRUnit:
+			for w in (m.source_data as OPRApiClient.OPRUnit).weapons:
+				if int(w.range_value) <= 0: rating = maxi(rating, AiShooting._rating_of(w, "Parry"))
+		m_parry += rating * maxi((m as GameUnit).get_alive_count(), 0)
+	return m_parry
+
+
+## One Parry event's dice: roll `n`, name the cancelled count in the log, return it.
+func _solo_parry_roll(n: int, defender: GameUnit) -> int:
+	var faces: Array = await _solo_tray_roll(n, AiCombatMath.UNMODIFIED_SIX, _roller_label(defender), "parry", "%s Parry: %d dice (6+)" % [defender.get_name(), n])
+	var k: int = AiCombatMath.count_hits(faces, AiCombatMath.UNMODIFIED_SIX)
+	if battle_log != null: battle_log.log_event(BattleLog.Category.COMBAT, "Parry: %s rolls %d dice and cancels %d strike hits" % [defender.get_name(), n, k], true)
+	return k
+
+
 ## Rules 3.6 (EPOCH_73_V36) — one Parry event per strike: roll min(X * carrier models,
 ## hits) dice after every hit roll, then each 6+ cancels the highest-worth hit (AP plus
 ## the on-6 bonus). Only counts shrink; pass 2 keeps its own order.
@@ -8346,9 +8369,7 @@ func _solo_parry_strike(pending: Array, defender: GameUnit, parry_dice: int, fix
 	var cuts: Array = []
 	for i in range(pending.size()): cuts.append([0, 0])
 	if n <= 0: return cuts
-	var faces: Array = await _solo_tray_roll(n, AiCombatMath.UNMODIFIED_SIX, _roller_label(defender), "parry", "%s Parry: %d dice (6+)" % [defender.get_name(), n])
-	var k: int = AiCombatMath.count_hits(faces, AiCombatMath.UNMODIFIED_SIX)
-	if battle_log != null: battle_log.log_event(BattleLog.Category.COMBAT, "Parry: %s rolls %d dice and cancels %d strike hits" % [defender.get_name(), n, k], true)
+	var k: int = await _solo_parry_roll(n, defender)
 	var regen := _solo_regen_target(defender)
 	var dctx := {"defense": _solo_defense_vs(defender, AiCombatMath.HIT_SOURCE_MELEE), "tough": _solo_unit_tough(defender), "regeneration": regen > 0, "regen_target": regen}
 	var cats: Array = []
@@ -8643,20 +8664,13 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 			m_pending.append([group, profile, td_pick, td_ctx, p_defense, strike_unit, faces, hits, m_takedown,
 				v_ap, to_hit, to_hit_raw, roll_owner, six_faces, hit_profile, mute_sixes])
 		# MEL-07c — Parry reads `m_pending` here: every hit rolled, no save yet.
-		if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
-			var m_parry := 0
-			for m in [defender] + (defender.get_attached_heroes() if defender.has_method("get_attached_heroes") else []):
-				var rating: int = _solo_unit_rating(m, "Parry") if RulesRegistry.unit_rule_active(m, "Parry") else 0
-				if rating <= 0 and m.source_data is OPRApiClient.OPRUnit:
-					for w in (m.source_data as OPRApiClient.OPRUnit).weapons:
-						if int(w.range_value) <= 0: rating = maxi(rating, AiShooting._rating_of(w, "Parry"))
-				m_parry += rating * maxi((m as GameUnit).get_alive_count(), 0)
-			if m_parry > 0:
-				var cuts: Array = await _solo_parry_strike(m_pending, defender, m_parry, uf_ap + extra_ap, charging)
-				for i in range(m_pending.size()):
-					var pen := m_pending[i] as Array
-					pen[7] = int(pen[7]) - int(cuts[i][0])
-					for j in range(int(cuts[i][1])): (pen[13] as Array).erase(AiCombatMath.UNMODIFIED_SIX)
+		var m_parry: int = _solo_melee_parry_dice(defender)
+		if m_parry > 0:
+			var cuts: Array = await _solo_parry_strike(m_pending, defender, m_parry, uf_ap + extra_ap, charging)
+			for i in range(m_pending.size()):
+				var pen := m_pending[i] as Array
+				pen[7] = int(pen[7]) - int(cuts[i][0])
+				for j in range(int(cuts[i][1])): (pen[13] as Array).erase(AiCombatMath.UNMODIFIED_SIX)
 		for pend in m_pending:
 			var group := pend[0] as Dictionary
 			var profile := pend[1] as Dictionary
@@ -8736,6 +8750,9 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 							bt_n, ("" if bt_n == 1 else "s"), str(profile.get("name", "?"))], true)
 					var bt_faces: Array = await _solo_tray_roll(bt_n, to_hit, roll_owner)
 					var bt_hits: int = await _solo_hits(bt_faces, to_hit_raw, hit_profile, 0.0, defender, charging, _roller_label(striker), charge_from_in if charging else 0.0)
+					# MEL-07d — the follow-up is its own strike: one more Parry event, same dice count.
+					if m_parry > 0 and bt_hits > 0:
+						bt_hits -= await _solo_parry_roll(mini(m_parry, bt_hits), defender)
 					if bt_hits > 0:
 						# Extra attacks resolve pooled (no Deadly/Takedown special-casing — the aof
 						# bearers carry plain weapons) and NEVER chain (counter reset right after).

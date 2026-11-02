@@ -1837,20 +1837,28 @@ fn fresh_save_ones(out: &ShootResult, idx: usize) -> i64 {
         .unwrap_or(0)
 }
 
-/// Rules 3.6 (`EPOCH_73_V36`) — one Parry event per strike: roll min(X * carrier models,
-/// hits) dice; each 6+ cancels the highest-worth hit (its own AP plus the on-6 bonus).
-pub(crate) fn parry_strike(pending: &mut [Pending<'_>], def: &Ctx, def_owner: &str, gated: bool, tray: &mut Tray, out: &mut ShootResult) {
-    let taken: i64 = pending.iter().map(|x| x.3).sum();
-    // MEL-07c-fix — the live melee path stamps the host-plus-joined-heroes sum
-    // (`sim::parry_dice_total`, the Impact event's own source); the hand-built
-    // dice fixtures keep the old per-host read.
+/// Rules 3.6 (`EPOCH_73_V36`) — one Parry event: roll min(X * carrier models, hits) dice;
+/// each 6+ cancels one hit. Shared by the strike's event and MEL-07d's follow-up event.
+/// MEL-07c-fix — the dice come from the host-plus-joined-heroes sum
+/// (`sim::parry_dice_total`, the Impact event's own source); the hand-built dice
+/// fixtures keep the old per-host read.
+fn parry_event(def: &Ctx, def_owner: &str, hits: i64, gated: bool, tray: &mut Tray, out: &mut ShootResult) -> i64 {
     let dice = def.parry_dice_total.unwrap_or(def.parry_dice * def.models);
-    let n = if gated { dice.min(taken) } else { 0 };
-    if n <= 0 { return; }
+    let n = if gated { dice.min(hits) } else { 0 };
+    if n <= 0 { return 0; }
     let faces = tray.roll(n as usize);
     let k = faces.iter().filter(|&&f| f >= 6).count() as i64;
     out.rolls.push(Roll { kind: "parry", count: n, target: 6, faces, owner: def_owner.into() });
     out.log.push(format!("Parry: {def_owner} rolls {n} dice and cancels {k} strike hits"));
+    k
+}
+
+/// Rules 3.6 (`EPOCH_73_V36`) — one Parry event per strike: roll min(X * carrier models,
+/// hits) dice; each 6+ cancels the highest-worth hit (its own AP plus the on-6 bonus).
+pub(crate) fn parry_strike(pending: &mut [Pending<'_>], def: &Ctx, def_owner: &str, gated: bool, tray: &mut Tray, out: &mut ShootResult) {
+    let taken: i64 = pending.iter().map(|x| x.3).sum();
+    let k = parry_event(def, def_owner, taken, gated, tray, out);
+    if k <= 0 { return; }
     let mut cand: Vec<(f64, usize, bool)> = Vec::new();
     for (i, t) in pending.iter().enumerate() {
         let (_sh, p, faces, hits, _, _, mute, _) = t;
@@ -2362,6 +2370,8 @@ pub fn resolve_melee_leg(
                         }
                     }
                     bt_hits += surge_attack_hits(p, bt_trig, count_target, sh.owner, tray, &mut out.rolls);
+                    // MEL-07d — the follow-up is its own strike: one more Parry event, same dice count.
+                    bt_hits -= parry_event(def, def_owner, bt_hits, hits_first, tray, &mut out);
                     if bt_hits > 0 {
                         // The table resolves the extras pooled with the same
                         // effective AP (main.gd:6180-6182) — one batch, no
