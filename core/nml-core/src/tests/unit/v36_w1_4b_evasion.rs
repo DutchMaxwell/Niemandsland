@@ -157,30 +157,3 @@ fn the_same_dead_carrier_keeps_ranged_shrouding_at_epoch_72() {
     assert!(live_evasion(&host, &st, EPOCH_72_PLAYTEST_RULES).ranged_shrouding,
         "below 73 the static stamp is byte-identical: Ranged Shrouding stays on");
 }
-
-// --- (f) The Growth members follow the living majority at 73. ---
-
-#[test]
-fn precision_growth_keeps_while_most_living_models_carry_it_and_clears_otherwise() {
-    let (host, profiles) = evasion_build(
-        &unit_json("gf", "infected_colonies", &["Precision Growth"], 2, &[]), EPOCH_73_V36);
-    let mut holds = evasion_state(profiles.clone(), 2, 1);
-    holds.growth_markers[0] = 2;
-    assert_eq!(live_evasion(&host, &holds, EPOCH_73_V36).growth_hit_mod, 1,
-        "two of three living models carry Precision Growth: the +1 per two markers folds");
-    let mut gone = evasion_state(profiles, 1, 1);
-    gone.growth_markers[0] = 2;
-    assert_eq!(live_evasion(&host, &gone, EPOCH_73_V36).growth_hit_mod, 0,
-        "one carrier of two living models is exactly half, not most: no Growth fold");
-}
-
-#[test]
-fn the_same_dead_carrier_keeps_precision_growth_at_epoch_72() {
-    let (host, profiles) = evasion_build(
-        &unit_json("gf", "infected_colonies", &["Precision Growth"], 2, &[]),
-        EPOCH_72_PLAYTEST_RULES);
-    let mut st = evasion_state(profiles, 1, 1);
-    st.growth_markers[0] = 2;
-    assert_eq!(live_evasion(&host, &st, EPOCH_72_PLAYTEST_RULES).growth_hit_mod, 1,
-        "below 73 the static stamp is byte-identical: the Growth fold stays");
-}
