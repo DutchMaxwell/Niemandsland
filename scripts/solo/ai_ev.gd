@@ -860,10 +860,13 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 	# — Versatile Attack (army-book): over 9" (shooting), pick the EV-better of +1 to hit or AP(+1) via the
 	#   SAME chooser the dice path calls. hit_mod improves the to-hit here; the ap bonus folds in below —
 	var versatile := {}
-	# Rules 3.6 (SHO-19): the map's no-gate switch lifts the 9\" band for Versatile Expert and
-	# Versatile Warrior; every other versatile profile keeps the over-9\" read.
+	# Rules 3.6 (SHO-19): the map's no-gate switch lifts the band for Versatile Expert; a
+	# CHARGE measures the 6\" band from EPOCH_73_V36 (twin: combat.rs charge_gate_in), a shot 9\".
+	var gate_in: float = AiCombatMath.LONG_RANGE_IN
+	if melee and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		gate_in = AiCombatMath.CHARGE_LONG_RANGE_IN
 	if bool(profile.get("versatile_attack", false)) \
-			and (bool(profile.get("versatile_no_gate", false)) or dist_in > AiCombatMath.LONG_RANGE_IN) \
+			and (bool(profile.get("versatile_no_gate", false)) or dist_in > gate_in) \
 			and (not melee or charging):
 		# Chooser inputs MUST match the dice path's (xhigh review find): main passes the SHIELDED defense
 		# (not covered) — pass the same basis here, or a Shielded target could flip the plan/dice mode choice.
