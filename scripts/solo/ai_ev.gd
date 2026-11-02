@@ -801,11 +801,12 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 			# Unstoppable (GF v3.5.1 p.15, head wave 1): the dice clamp the composed situational
 			# modifier at 0 BEFORE weapon-own bonuses (Precise/Versatile) — main.gd:5946/9712.
 			# The EV judge never knew, so it under-valued Unstoppable strikes into Evasive targets.
-			# SHO-08e (EPOCH_73_V36): the Unstoppable split — the bearer's own net (spell_mod)
-			# stays, only the enemy-side minus is clamped. Below the gate: the old single clamp.
+			# SHO-08e-fix (EPOCH_73_V36): the resolver's `m - own` clamp — the bearer's
+			# spell net joins the enemy side, so the COMBINED non-own sum is clamped at 0.
+			# Below the gate: the old single clamp.
 			if bool(profile.get("unstoppable", false)):
 				if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
-					melee_mod = spell_mod + maxi(enemy_mod, 0)
+					melee_mod = maxi(spell_mod + enemy_mod, 0)
 				elif melee_mod < 0:
 					melee_mod = 0
 			target = target - melee_mod
@@ -840,11 +841,12 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 			enemy_mod -= art_target_pen
 		var own_mod: int = spell_mod + art_own
 		var shoot_mod: int = own_mod + enemy_mod
-		# SHO-08e (EPOCH_73_V36): the Unstoppable split — the bearer's own net and the
-		# Artillery shooter's own +1 stay, only the enemy-side minus is clamped.
+		# SHO-08e-fix (EPOCH_73_V36): the resolver's `m - own` clamp — the bearer's
+		# spell net joins the enemy side, so the COMBINED non-own sum is clamped; the
+		# Artillery shooter's own +1 stays outside it.
 		if bool(profile.get("unstoppable", false)):
 			if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
-				shoot_mod = own_mod + maxi(enemy_mod, 0)
+				shoot_mod = art_own + maxi(spell_mod + enemy_mod, 0)
 			elif shoot_mod < 0:
 				shoot_mod = 0   # same clamp as the melee side; Fatigue stays above it (not a modifier)
 		target = target - shoot_mod
