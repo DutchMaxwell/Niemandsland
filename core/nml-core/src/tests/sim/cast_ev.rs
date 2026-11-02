@@ -118,12 +118,12 @@ use super::*;
     fn modifier_delta_matches_the_table_primitive() {
         let (st, statics) = board(vec![]);
         let eps = 1e-6;
-        let hit = cast_ev_of(&statics, &st, 0, &mod_spell("buff", 1.0, 0.0), 0);
+        let hit = cast_ev_of(&statics, &st, 0, &mod_spell("buff", 1.0, 0.0), 0, crate::acts::CURRENT_RULES_EPOCH);
         assert!(
             (hit - 2.0 / 3.0).abs() < eps,
             "hit_mod +1 leg: want 2/3, got {hit}"
         );
-        let def = cast_ev_of(&statics, &st, 0, &mod_spell("buff", 0.0, 1.0), 0);
+        let def = cast_ev_of(&statics, &st, 0, &mod_spell("buff", 0.0, 1.0), 0, crate::acts::CURRENT_RULES_EPOCH);
         assert!(
             (def - 2.0 / 3.0).abs() < eps,
             "def_mod +1 leg (defense role): want 2/3, got {def}"
@@ -135,9 +135,9 @@ use super::*;
     #[test]
     fn a_def_buff_book_prices_nonzero_and_boosts() {
         let (st, statics) = board(vec![mod_spell("buff", 0.0, 1.0)]);
-        let ev = cast_ev_of(&statics, &st, 0, &statics[0].spells[0], 0);
+        let ev = cast_ev_of(&statics, &st, 0, &statics[0].spells[0], 0, crate::acts::CURRENT_RULES_EPOCH);
         assert!(ev > 0.0, "def buff priced {ev}");
-        let (boost, _, _) = plan_caster_boost(&statics, &st, 0, &statics[0].spells[0], 0, 2, &[]);
+        let (boost, _, _) = plan_caster_boost(&statics, &st, 0, &statics[0].spells[0], 0, 2, &[], crate::acts::CURRENT_RULES_EPOCH);
         assert!(boost > 0, "def buff boost {boost}");
     }
 
@@ -147,7 +147,7 @@ use super::*;
     #[test]
     fn damage_ev_is_unchanged() {
         let (st, statics) = board(vec![bolt()]);
-        let ev = cast_ev_of(&statics, &st, 0, &statics[0].spells[0], 2);
+        let ev = cast_ev_of(&statics, &st, 0, &statics[0].spells[0], 2, crate::acts::CURRENT_RULES_EPOCH);
         assert!((ev - PINNED_BOLT_EV).abs() < 1e-9, "bolt ev {ev}");
     }
 

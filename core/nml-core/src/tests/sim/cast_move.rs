@@ -131,13 +131,13 @@ use super::*;
             false,
         );
         let eps = 1e-6;
-        let ev = cast_ev_of(&statics, &st, 0, &move_spell("buff", 0.0, 3.0, 0.0), 0);
+        let ev = cast_ev_of(&statics, &st, 0, &move_spell("buff", 0.0, 3.0, 0.0), 0, crate::acts::CURRENT_RULES_EPOCH);
         assert!(
             (ev - 2.0).abs() < eps,
             "the rush buff must price the charge it unlocks, got {ev}"
         );
         let (boost, _, _) =
-            plan_caster_boost(&statics, &st, 0, &move_spell("buff", 0.0, 3.0, 0.0), 0, 2, &[]);
+            plan_caster_boost(&statics, &st, 0, &move_spell("buff", 0.0, 3.0, 0.0), 0, 2, &[], crate::acts::CURRENT_RULES_EPOCH);
         assert!(boost > 0, "a priced cast must draw boost tokens, got {boost}");
     }
 
@@ -160,7 +160,7 @@ use super::*;
         );
         let eps = 1e-6;
         let ev =
-            cast_ev_of(&statics, &st, 0, &move_spell("debuff", -3.0, 0.0, 0.0), 2);
+            cast_ev_of(&statics, &st, 0, &move_spell("debuff", -3.0, 0.0, 0.0), 2, crate::acts::CURRENT_RULES_EPOCH);
         assert!(
             (ev - 2.0).abs() < eps,
             "the advance debuff must price the shot it removes, got {ev}"
@@ -182,7 +182,7 @@ use super::*;
             true,
         );
         let eps = 1e-6;
-        let ev = cast_ev_of(&statics, &st, 0, &move_spell("buff", 0.0, 0.0, 6.0), 0);
+        let ev = cast_ev_of(&statics, &st, 0, &move_spell("buff", 0.0, 0.0, 6.0), 0, crate::acts::CURRENT_RULES_EPOCH);
         assert!(
             (ev - 2.0).abs() < eps,
             "the range buff must price the shot it widens, got {ev}"

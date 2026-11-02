@@ -178,7 +178,8 @@ fn rating(rule: &str) -> i64 {
     inner.trim().parse::<i64>().unwrap_or(0).max(0)
 }
 
-pub fn spell_facets(weapon_rules: &[String]) -> Facets {
+pub fn spell_facets(weapon_rules: &[String], rules_epoch: u32) -> Facets {
+    let _ = rules_epoch;
     let mut f = Facets::default();
     for r in weapon_rules {
         let s = r.trim();
@@ -272,18 +273,18 @@ pub fn spell_damage_ev(hits: i64, def: &Ctx, f: &Facets) -> f64 {
 }
 
 /// `BattleSim._spell_damage_ev_of` battle_sim.gd:802-809.
-pub fn spell_damage_ev_of(sp: &Spell, def: &Ctx) -> f64 {
+pub fn spell_damage_ev_of(sp: &Spell, def: &Ctx, rules_epoch: u32) -> f64 {
     if sp.effect_kind != "damage" {
         return 0.0;
     }
     let hits = sp.effect_hits * sp.target_count.max(1);
-    spell_damage_ev(hits, def, &spell_facets(&sp.weapon_rules))
+    spell_damage_ev(hits, def, &spell_facets(&sp.weapon_rules, rules_epoch))
 }
 
 /// `BattleSim._spell_ev_from` battle_sim.gd:778-795 — the best affordable
 /// DAMAGE spell in range; returns (ev, cost). Ties keep the FIRST spell
 /// (strict `>`), which is why the book order of the list is rule data.
-pub fn spell_ev_from(spells: &[Spell], tokens: i64, def: &Ctx, d: f64) -> (f64, i64) {
+pub fn spell_ev_from(spells: &[Spell], tokens: i64, def: &Ctx, d: f64, rules_epoch: u32) -> (f64, i64) {
     let mut best_ev = 0.0f64;
     let mut best_cost = 0i64;
     for e in spells {
@@ -296,7 +297,7 @@ pub fn spell_ev_from(spells: &[Spell], tokens: i64, def: &Ctx, d: f64) -> (f64, 
         if e.threshold > tokens || d > e.range_in + 0.001 {
             continue;
         }
-        let ev = cast_success_chance_base() * spell_damage_ev_of(e, def);
+        let ev = cast_success_chance_base() * spell_damage_ev_of(e, def, rules_epoch);
         if ev > best_ev {
             best_ev = ev;
             best_cost = e.threshold;
@@ -307,11 +308,11 @@ pub fn spell_ev_from(spells: &[Spell], tokens: i64, def: &Ctx, d: f64) -> (f64, 
 
 /// `BattleSim.spell_ev_of` battle_sim.gd:766-773 — zeros unless the caster has
 /// tokens left AND `GameUnit.is_caster()` (game_unit.gd:374-377).
-pub fn spell_ev_of(is_caster: bool, spells: &[Spell], tokens: i64, def: &Ctx, d: f64) -> (f64, i64) {
+pub fn spell_ev_of(is_caster: bool, spells: &[Spell], tokens: i64, def: &Ctx, d: f64, rules_epoch: u32) -> (f64, i64) {
     if tokens <= 0 || !is_caster {
         return (0.0, 0);
     }
-    spell_ev_from(spells, tokens, def, d)
+    spell_ev_from(spells, tokens, def, d, rules_epoch)
 }
 
 /// `AiSpell.official_pick_order` ai_spell.gd:305-312 — the book list rotated by
@@ -407,7 +408,7 @@ mod tests {
         let carrier = Ctx { defense: 4, regeneration: true, regen_target: 6, regen_target_spell: 2, ..Default::default() };
         let plain_six = Ctx { defense: 4, regeneration: true, regen_target: 6, regen_target_spell: 6, ..Default::default() };
 
-        let f = spell_facets(&[]);
+        let f = spell_facets(&[], crate::acts::CURRENT_RULES_EPOCH);
         let carrier_unsaved = spell_damage_ev(10, &carrier, &f);
         let six_unsaved = spell_damage_ev(10, &plain_six, &f);
 

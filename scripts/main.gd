@@ -5098,7 +5098,7 @@ func _vfx_seal_begin(caster: GameUnit, entry: Dictionary, effect: Dictionary, sp
 func _solo_resolve_spell_damage(caster: GameUnit, caster_unit: GameUnit, spell_name: String,
 		entry: Dictionary, target: GameUnit) -> void:
 	var effect: Dictionary = entry.get("effect", {})
-	var facets: Dictionary = AiSpell.spell_facets(effect.get("weapon_rules", []))
+	var facets: Dictionary = AiSpell.spell_facets(effect.get("weapon_rules", []), AiActRecorder.rules_epoch)
 	var hits := int(effect.get("hits", 0))
 	if hits <= 0:
 		return

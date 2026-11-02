@@ -111,8 +111,8 @@ func test_below_the_gate_the_estimates_price_what_the_core_prices_at_71() -> voi
 	var through_s := 6.0 * (1.0 - 5.0 / 12.0)   # 6 spell hits, same save
 	var lacerate_w := {"name": "Claw Gun", "attacks": 10, "ap": 0, "deadly": 0, "bane": true, "range": 24,
 		"rules": ["Lacerate"]}
-	var lacerate_s := AiSpell.spell_facets(["Lacerate"])
-	var d3 := AiSpell.spell_facets(["Deadly(3)"])
+	var lacerate_s := AiSpell.spell_facets(["Lacerate"], AiActRecorder.EPOCH_72_PLAYTEST_RULES)
+	var d3 := AiSpell.spell_facets(["Deadly(3)"], AiActRecorder.EPOCH_72_PLAYTEST_RULES)
 	var epoch0: int = AiActRecorder.rules_epoch
 	var got := {}
 	for e in [gate - 1, gate]:

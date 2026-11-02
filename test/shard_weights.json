@@ -376,6 +376,7 @@
 "test/v36/mor_17adoubt_test.gd": 0.1,
 "test/v36/mor_19b_test.gd": 0.1,
 "test/v36/mor_19bfix_test.gd": 0.1,
+"test/v36/mor_spellfacet_a_test.gd": 0.1,
 "test/moved_round_drop_test.gd": 0.1,
 "test/movement_planner_test.gd": 6.2,
 "test/movement_range_controller_test.gd": 0.8,

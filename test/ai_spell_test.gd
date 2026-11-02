@@ -28,7 +28,7 @@ func test_cast_target_clamps_to_two_and_six() -> void:
 # === Facet parsing (the committed weapon-rule tokens) ===
 
 func test_spell_facets_parse_rated_and_flag_rules() -> void:
-	var f := AiSpell.spell_facets(["AP(2)", "Blast(3)", "Deadly(3)", "Bane", "Shred"])
+	var f := AiSpell.spell_facets(["AP(2)", "Blast(3)", "Deadly(3)", "Bane", "Shred"], AiActRecorder.EPOCH_72_PLAYTEST_RULES)
 	assert_int(int(f["ap"])).is_equal(2)
 	assert_int(int(f["blast"])).is_equal(3)
 	assert_int(int(f["deadly"])).is_equal(3)
@@ -38,27 +38,27 @@ func test_spell_facets_parse_rated_and_flag_rules() -> void:
 
 
 func test_spell_facets_on_six_and_conditional_ap() -> void:
-	var crack := AiSpell.spell_facets(["Crack"])
+	var crack := AiSpell.spell_facets(["Crack"], AiActRecorder.EPOCH_72_PLAYTEST_RULES)
 	assert_int(int(crack["on6_ap"])).is_equal(2)
-	var destructive := AiSpell.spell_facets(["Destructive"])
+	var destructive := AiSpell.spell_facets(["Destructive"], AiActRecorder.EPOCH_72_PLAYTEST_RULES)
 	assert_int(int(destructive["on6_ap"])).is_equal(4)
 	# Lacerate shares Bane's Defense-6 re-roll but NOT its Regeneration bypass (A1, play test 29.10.2026).
-	var lacerate := AiSpell.spell_facets(["Lacerate"])
+	var lacerate := AiSpell.spell_facets(["Lacerate"], AiActRecorder.EPOCH_72_PLAYTEST_RULES)
 	assert_bool(bool(lacerate["bane"])).is_true()
 	assert_bool(bool(lacerate["ignores_regen"])).is_false()
 	# Conditional AP resolves against the CONCRETE defender.
-	var shatter := AiSpell.spell_facets(["Shatter"])
+	var shatter := AiSpell.spell_facets(["Shatter"], AiActRecorder.EPOCH_72_PLAYTEST_RULES)
 	assert_int(AiSpell.effective_ap(shatter, {"defense": 4, "tough": 3})).is_equal(2)
 	assert_int(AiSpell.effective_ap(shatter, {"defense": 4, "tough": 1})).is_equal(0)
-	var tear := AiSpell.spell_facets(["Tear"])
+	var tear := AiSpell.spell_facets(["Tear"], AiActRecorder.EPOCH_72_PLAYTEST_RULES)
 	assert_int(AiSpell.effective_ap(tear, {"defense": 4, "tough": 9})).is_equal(4)
 	assert_int(AiSpell.effective_ap(tear, {"defense": 4, "tough": 3})).is_equal(0)
-	var disintegrate := AiSpell.spell_facets(["Disintegrate"])
+	var disintegrate := AiSpell.spell_facets(["Disintegrate"], AiActRecorder.EPOCH_72_PLAYTEST_RULES)
 	assert_int(AiSpell.effective_ap(disintegrate, {"defense": 3, "tough": 1})).is_equal(2)
 	assert_int(AiSpell.effective_ap(disintegrate, {"defense": 4, "tough": 1})).is_equal(0)
 	assert_bool(bool(disintegrate["ignores_regen"])).is_true()
 	# Unknown facets are a conservative no-op, never a crash.
-	var unknown := AiSpell.spell_facets(["Totally Unknown Rule(7)"])
+	var unknown := AiSpell.spell_facets(["Totally Unknown Rule(7)"], AiActRecorder.EPOCH_72_PLAYTEST_RULES)
 	assert_int(int(unknown["ap"])).is_equal(0)
 
 
@@ -89,24 +89,24 @@ func test_spell_damage_ev_ignores_shielded_and_cover() -> void:
 
 func test_spell_damage_ev_blast_multiplies_capped_at_models() -> void:
 	# 1 hit with Blast(3): ×3 vs 5 models, ×2 vs 2 models (min(X, models) — GF v3.5.1).
-	var f := AiSpell.spell_facets(["Blast(3)"])
+	var f := AiSpell.spell_facets(["Blast(3)"], AiActRecorder.EPOCH_72_PLAYTEST_RULES)
 	assert_float(AiSpell.spell_damage_ev(1, {"defense": 4, "models": 5}, f)).is_equal_approx(1.5, EPS)
 	assert_float(AiSpell.spell_damage_ev(1, {"defense": 4, "models": 2}, f)).is_equal_approx(1.0, EPS)
 
 
 func test_spell_damage_ev_ap_deadly_and_regeneration() -> void:
 	# AP(2): Defense 4+ saves on 6 only → 5/6 through.
-	var ap2 := AiSpell.spell_facets(["AP(2)"])
+	var ap2 := AiSpell.spell_facets(["AP(2)"], AiActRecorder.EPOCH_72_PLAYTEST_RULES)
 	assert_float(AiSpell.spell_damage_ev(6, {"defense": 4, "models": 5}, ap2)).is_equal_approx(5.0, EPS)
 	# Deadly(3) vs Tough(3): ×3; vs Tough 1: cap ×1.
-	var d3 := AiSpell.spell_facets(["Deadly(3)"])
+	var d3 := AiSpell.spell_facets(["Deadly(3)"], AiActRecorder.EPOCH_72_PLAYTEST_RULES)
 	assert_float(AiSpell.spell_damage_ev(2, {"defense": 4, "tough": 3}, d3)).is_equal_approx(3.0, EPS)
 	assert_float(AiSpell.spell_damage_ev(2, {"defense": 4, "tough": 1}, d3)).is_equal_approx(1.0, EPS)
 	# Regeneration 5+ ignores 1/3... a plain spell is reduced ×(1/3? no: 1 − P(5+) = 2/3)…
 	var regen := {"defense": 4, "regeneration": true, "regen_target": 5}
 	assert_float(AiSpell.spell_damage_ev(6, regen)).is_equal_approx(3.0 * (2.0 / 3.0), EPS)
 	# …but Bane wounds bypass it entirely (and re-roll the Defense 6s).
-	var bane := AiSpell.spell_facets(["Bane"])
+	var bane := AiSpell.spell_facets(["Bane"], AiActRecorder.EPOCH_72_PLAYTEST_RULES)
 	var p_block_bane := (2.0 / 6.0) + (1.0 / 6.0) * 0.5   # P(4,5) + P(6) × P(re-roll blocks)
 	assert_float(AiSpell.spell_damage_ev(6, regen, bane)).is_equal_approx(6.0 * (1.0 - p_block_bane), EPS)
 
@@ -115,7 +115,7 @@ func test_spell_damage_ev_deadly_against_regeneration_rolls_every_wound_before_t
 	# A4 for spells (maintainer ruling 29.10.2026, "Drei Wuerfe muessen gelingen"): a Deadly(3) wound on a
 	# 1-wound Regeneration model rolls 3 dice and the model survives only if all 3 succeed (5+ each: 1/27).
 	# 6 hits vs Defense 4+ → 3 unsaved, each worth 1 − (1/3)^3 = 26/27 of a wound.
-	var d3 := AiSpell.spell_facets(["Deadly(3)"])
+	var d3 := AiSpell.spell_facets(["Deadly(3)"], AiActRecorder.EPOCH_72_PLAYTEST_RULES)
 	var regen1 := {"defense": 4, "tough": 1, "regeneration": true, "regen_target": 5}
 	assert_float(AiSpell.spell_damage_ev(6, regen1, d3)).is_equal_approx(3.0 * 26.0 / 27.0, EPS)
 	# CONTROL: with Tough(3) the cap never bites — 3 wounds × 2/3 kept, as before.
@@ -128,21 +128,21 @@ func test_spell_damage_ev_lacerate_keeps_regeneration() -> void:
 	# face the Regeneration roll. 6 hits vs Defense 4+: 6 × (1 − 5/12) through, × 2/3 kept.
 	var regen := {"defense": 4, "regeneration": true, "regen_target": 5}
 	var through := 6.0 * (1.0 - 5.0 / 12.0)
-	var lacerate := AiSpell.spell_facets(["Lacerate"])
+	var lacerate := AiSpell.spell_facets(["Lacerate"], AiActRecorder.EPOCH_72_PLAYTEST_RULES)
 	assert_float(AiSpell.spell_damage_ev(6, regen, lacerate)).is_equal_approx(through * 2.0 / 3.0, EPS)
 	# CONTROL: Bane bypasses it.
-	assert_float(AiSpell.spell_damage_ev(6, regen, AiSpell.spell_facets(["Bane"]))).is_equal_approx(through, EPS)
+	assert_float(AiSpell.spell_damage_ev(6, regen, AiSpell.spell_facets(["Bane"]))).is_equal_approx(through, EPS, AiActRecorder.EPOCH_72_PLAYTEST_RULES)
 
 
 func test_spell_damage_ev_surge_and_on_six_ap() -> void:
 	# Surge: +hits/6 expected extra hits. 6 hits vs Def 4+ → (6+1)×0.5.
-	var surge := AiSpell.spell_facets(["Surge"])
+	var surge := AiSpell.spell_facets(["Surge"], AiActRecorder.EPOCH_72_PLAYTEST_RULES)
 	assert_float(AiSpell.spell_damage_ev(6, {"defense": 4}, surge)).is_equal_approx(3.5, EPS)
 	# Crack: hits/6 of the volley saves at AP(+2). 6 hits vs Def 4+: 5 at 1/2 + 1 at 5/6.
-	var crack := AiSpell.spell_facets(["Crack"])
+	var crack := AiSpell.spell_facets(["Crack"], AiActRecorder.EPOCH_72_PLAYTEST_RULES)
 	assert_float(AiSpell.spell_damage_ev(6, {"defense": 4}, crack)).is_equal_approx(5.0 * 0.5 + 1.0 * (5.0 / 6.0), EPS)
 	# Shred: +1 wound per Defense 1 → +hits/6 on top.
-	var shred := AiSpell.spell_facets(["Shred"])
+	var shred := AiSpell.spell_facets(["Shred"], AiActRecorder.EPOCH_72_PLAYTEST_RULES)
 	assert_float(AiSpell.spell_damage_ev(6, {"defense": 4}, shred)).is_equal_approx(3.0 + 1.0, EPS)
 
 

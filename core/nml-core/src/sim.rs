@@ -4234,9 +4234,10 @@ pub(crate) fn cast_ev_of(
     si: usize,
     entry: &Spell,
     ti: usize,
+    rules_epoch: u32,
 ) -> f64 {
     if entry.effect_kind == "damage" {
-        spell_damage_ev_of(entry, &ctx_of(&statics[state.roster.profile[ti]], state, ti))
+        spell_damage_ev_of(entry, &ctx_of(&statics[state.roster.profile[ti]], state, ti), rules_epoch)
     } else {
         modifier_cast_ev_of(statics, state, si, entry, ti)
     }
@@ -4495,9 +4496,10 @@ pub(crate) fn plan_caster_boost(
     ti: usize,
     own: i64,
     helpers: &[(usize, i64)],
+    rules_epoch: u32,
 ) -> (i64, i64, i64) {
     let own_left = (own - entry.threshold).max(0);
-    let ev = cast_ev_of(statics, state, si, entry, ti);
+    let ev = cast_ev_of(statics, state, si, entry, ti, rules_epoch);
     let boost = plan_boost(
         boost_value_of(ev),
         own_left + helpers.iter().map(|(_, t)| *t).sum::<i64>(),
@@ -6604,7 +6606,7 @@ fn best_spell_target(
         }
         let Some((ou, d)) = reach else { continue; };
         let ut = &statics[state.roster.profile[ti]];
-        let ev = spell_damage_ev_of(entry, &ctx_of(ut, state, ti));
+        let ev = spell_damage_ev_of(entry, &ctx_of(ut, state, ti), rules_epoch);
         if ev > best_ev + CONTROL_EPS || ((ev - best_ev).abs() <= CONTROL_EPS && d < best_d) {
             best_ev = ev;
             best_d = d;
@@ -6684,7 +6686,7 @@ fn apply_cast_effect(
     }
     if entry.effect_kind == "damage" {
         let ut = &statics[state.roster.profile[ti]];
-        let ev = spell_damage_ev_of(entry, &ctx_of(ut, state, ti));
+        let ev = spell_damage_ev_of(entry, &ctx_of(ut, state, ti), seams.rules_epoch);
         apply_expected_wounds(state, ti, scale * ev, rng);
         return;
     }
@@ -6971,7 +6973,7 @@ fn cast_phase(
         let plan = boost_plan
             .get_or_insert_with(|| {
                 let (b, o, h) = if rule_on(seams.rules_epoch, EPOCH_48_CASTER_BOOST) {
-                    plan_caster_boost(statics, state, si, &spells[idx], ti, own, &helpers)
+                    plan_caster_boost(statics, state, si, &spells[idx], ti, own, &helpers, seams.rules_epoch)
                 } else {
                     (0, 0, 0)
                 };
@@ -6980,7 +6982,7 @@ fn cast_phase(
                 // unpriced cast draws no counter, ai_spell.gd:518-527).
                 let i = if rule_on(seams.rules_epoch, EPOCH_51_CASTER_INTERFERENCE) {
                     plan_interference(
-                        cast_ev_of(statics, state, si, &spells[idx], ti),
+                        cast_ev_of(statics, state, si, &spells[idx], ti, seams.rules_epoch),
                         enemies.iter().map(|(_, t)| *t).sum(),
                         b,
                     )
@@ -7170,7 +7172,7 @@ fn volley_ev(
     let di = cache.slot(ut, statics, state, ti, rules_epoch);
     let (att, def) = (&cache.slots[ai].1, &cache.slots[di].1);
     let shooting = shoot_ev(&us.shoot, &sc.keep, &sc.attacks, att, def, d);
-    let (sp_ev, sp_cost) = spell_ev_of(us.is_caster, &us.spells, state.casts[si], def, d);
+    let (sp_ev, sp_cost) = spell_ev_of(us.is_caster, &us.spells, state.casts[si], def, d, rules_epoch);
     (shooting + sp_ev, sp_cost)
 }
 
@@ -9286,7 +9288,7 @@ fn resolve_with(
                         let (sp_ev, sp_cost) = match caster {
                             Some(ci) => {
                                 let cs = &statics[next.roster.profile[ci]];
-                                spell_ev_of(true, &cs.spells, next.casts[ci], &def, d_ev)
+                                spell_ev_of(true, &cs.spells, next.casts[ci], &def, d_ev, seams.rules_epoch)
                             }
                             None => (0.0, 0),
                         };

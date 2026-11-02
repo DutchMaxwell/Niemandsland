@@ -5338,7 +5338,7 @@ func _spell_ev_for(unit: GameUnit, _member: GameUnit, entry: Dictionary, cand: G
 	if str(entry.get("status", "")) != "modeled":
 		return 0.0
 	if kind == "damage":
-		var facets := AiSpell.spell_facets(effect.get("weapon_rules", []))
+		var facets := AiSpell.spell_facets(effect.get("weapon_rules", []), AiActRecorder.rules_epoch)
 		var def_ctx := AiEv.ctx_for(cand, false, 0)   # cover irrelevant: spells ignore Cover AND Shielded
 		if str((entry.get("target", {}) as Dictionary).get("kind", "unit")) == "model":
 			def_ctx["models"] = 1   # "resolved as if the target was a unit of [1]" — no Blast fan-out
