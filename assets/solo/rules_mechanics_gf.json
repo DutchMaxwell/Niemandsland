@@ -2276,6 +2276,18 @@
      "casting_mod": 1,
      "requires_not_shaken": true
     }
+   },
+   "Spell Drain": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "range_in": 18,
+     "target": "enemy",
+     "once": true,
+     "needs_los": true,
+     "spell_token_drain": 2
+    }
    }
   },
   "blood_brothers": {
@@ -5990,6 +6002,18 @@
      "range_in": 12,
      "casting_mod": 1,
      "requires_not_shaken": true
+    }
+   },
+   "Spell Drain": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "range_in": 18,
+     "target": "enemy",
+     "once": true,
+     "needs_los": true,
+     "spell_token_drain": 2
     }
    },
    "Stealth Aura": {
@@ -11244,6 +11268,18 @@
      "max_tokens": 6,
      "share_range_in": 12,
      "requires_not_shaken": true
+    }
+   },
+   "Spell Drain": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "range_in": 18,
+     "target": "enemy",
+     "once": true,
+     "needs_los": true,
+     "spell_token_drain": 2
     }
    },
    "Split": {

@@ -322,21 +322,36 @@ fn morale_fails_expected(state: &State, statics: &[UnitStatic], i: usize, seams:
         }
         return true;
     }
-    // Rules 3.6 (EPOCH_73_V36): a nearby Tough(9)+ Hero lifts the ESTIMATE exactly as the live
-    // resolver's `hero_aura_quality` lifts the table's test. No battle-log line: an estimate
-    // applies no rule.
-    let mut quality = morale_quality(statics, state, i, seams);
-    if let Some((_, aura)) = hero_aura_quality(statics, state, i, quality, seams) {
-        quality = aura;
-    }
-    let mut fail_p = (morale_target(quality, state.morale_bonus[i]) - 1) as f64 / 6.0;
-    if morale_fearless(statics, state, i, seams) {
-        fail_p *= 0.5;
-    }
+    let fail_p = morale_fail_chance(state, statics, i, seams);
     if seams.morale_by_probability {
         return fail_p > morale_dither(i, state.round);
     }
     fail_p >= 0.5
+}
+
+/// The fail CHANCE behind `morale_fails_expected` — the same Quality,
+/// `morale_bonus`, `hero_aura_quality` and `morale_fearless` folds, returned
+/// as a probability so an expectation seam (MOR-16a's token drain) never
+/// re-derives the number. A Fearless unit is NOT an auto-pass in rules 3.6:
+/// on a failed test it rolls one die and a 4+ counts as passed, so its fail
+/// chance is exactly halved — one reading for the AI estimate and the forced
+/// test alike.
+fn morale_fail_chance(
+    state: &State, statics: &[UnitStatic], i: usize, seams: Seams,
+) -> f64 {
+    if state.shaken[i] {
+        let noisy = seams.fearless_roll_when_shaken && morale_fearless(statics, state, i, seams);
+        return if noisy { 0.5 } else { 1.0 };
+    }
+    let mut quality = morale_quality(statics, state, i, seams);
+    if let Some((_, aura)) = hero_aura_quality(statics, state, i, quality, seams) {
+        quality = aura;
+    }
+    let fail_p = (morale_target(quality, state.morale_bonus[i]) - 1) as f64 / 6.0;
+    if morale_fearless(statics, state, i, seams) {
+        return fail_p * 0.5;
+    }
+    fail_p
 }
 
 /// A deterministic stand-in for the die in [0, 1): the golden-ratio sequence
@@ -1751,6 +1766,29 @@ fn tray_vs_marks(
             continue;
         }
         let pb = next.roster.profile[bearer];
+        // MOR-16a (EPOCH_73_V36): "Spell Drain" replaces these carriers'
+        // "Casting Debuff"; its pick is the committed target at this seam,
+        // once per bearer and round on the Mark latch, range/sight as a Mark.
+        if rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36)
+            && next.vs_mark_round[bearer] != next.round
+        {
+            if let Some(b) = statics[pb].utility_buffs.iter().find(|b| {
+                b.spell_token_drain > 0 && dist_in <= b.range_in
+                    && (!b.needs_los || los_clear(next, bearer, ti))
+            }) {
+                next.vs_mark_round[bearer] = next.round;
+                let fail_p = morale_fail_chance(next, statics, ti, seams);
+                let ev = b.spell_token_drain as f64 * fail_p;
+                let whole = ev.floor() as i64;
+                let spent = whole + i64::from(ev - whole as f64 > morale_dither(ti, next.round));
+                let before = next.casts[ti];
+                next.casts[ti] = (before - spent).max(0);
+                trace_rule("cast", "Spell Drain", &format!(
+                    "{} drains {}: fail chance {:.2}, tokens {} -> {}",
+                    statics[pb].name, statics[next.roster.profile[ti]].name, fail_p,
+                    before, next.casts[ti]));
+            }
+        }
         for b in &statics[pb].utility_buffs {
             if !b.vs_target || next.vs_mark_round[bearer] == next.round || dist_in > b.range_in {
                 continue;

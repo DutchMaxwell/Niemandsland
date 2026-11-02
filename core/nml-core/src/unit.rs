@@ -4369,6 +4369,11 @@ pub struct UtilityBuff {
     pub hit_mod: i64,
     pub casting_mod: i64,
     pub morale_mod: i64,
+    /// `spell_token_drain` — MOR-16a: on a FAILED Morale test the picked
+    /// enemy unit loses this many spell tokens (floor 0). Parsed only from
+    /// `EPOCH_73_V36` on; below it the row is inert and no `Spell Drain`
+    /// record is stamped.
+    pub spell_token_drain: i64,
     /// `ap_mod` / `def_mod` / `defense_mod` — the seam 4 record shape (design
     /// §4 step 1), parsed ONLY from `EPOCH_7_TABLE_RULES` on (below 7 the
     /// fields stay 0 and the all-zero row keeps being dropped). NOT
@@ -5018,6 +5023,13 @@ fn utility_buffs_of(reg: &mut Registries, p: &Profile, rules_epoch: u32, un: &mu
         if n == "Regeneration Buff" && !rule_on(rules_epoch, EPOCH_73_V36) {
             continue;
         }
+        // MOR-16a: "Spell Drain" is the 3.6 replacement for the carriers'
+        // "Casting Debuff" — below `EPOCH_73_V36` the entry reads as ABSENT,
+        // so the old Casting Debuff record keeps its reading and every
+        // recorded corpus replays byte-exact.
+        if n == "Spell Drain" && !rule_on(rules_epoch, EPOCH_73_V36) {
+            continue;
+        }
         let vs_target = e.param_b("vs_target");
         let target = match e.param_s("target") {
             "" => "friendly",
@@ -5064,6 +5076,11 @@ fn utility_buffs_of(reg: &mut Registries, p: &Profile, rules_epoch: u32, un: &mu
             hit_mod: e.param_i("hit_mod", 0),
             casting_mod: e.param_i("casting_mod", 0),
             morale_mod: e.param_i("morale_mod", 0),
+            spell_token_drain: if rule_on(rules_epoch, EPOCH_73_V36) {
+                e.param_i("spell_token_drain", 0)
+            } else {
+                0
+            },
             // SEAM 4 step 1 (design §4(d), the FROZEN `EPOCH_7_TABLE_RULES`):
             // the three ap/def knobs join the record shape — a row whose ONLY
             // knob is one of these lands on `record_buff`'s ledger from epoch
@@ -5104,6 +5121,7 @@ fn utility_buffs_of(reg: &mut Registries, p: &Profile, rules_epoch: u32, un: &mu
         // attackers-side record, stamped from `EPOCH_61_PRECISION_MARKERS`.
         let b = out.last().expect("just pushed");
         if !b.vs_target && b.reposition_in <= 0.0 && b.grants_rule.is_empty() && b.bonus.is_empty()
+            && b.spell_token_drain == 0
             && (b.hit_mod, b.casting_mod, b.morale_mod, b.ap_mod, b.def_mod, b.defense_mod, b.move_mod)
                 == (0, 0, 0, 0, 0, 0, 0) {
             un.push(Unimplemented { rule: b.name.clone(), why:

@@ -228,3 +228,133 @@ fn fearless_needs_every_model_at_epoch_72() {
     assert!(fails_expected(5, true, false, EPOCH_72_PLAYTEST_RULES));
     assert_eq!(recovery_dice(5, true, true, EPOCH_72_PLAYTEST_RULES).0, 1, "every model Fearless rolls");
 }
+
+// -------- MOR-16a: Spell Drain spends two spell tokens on a failed Morale
+// test, once per activation, at the attack seam (owner: lane morale). --------
+mod mor_16a {
+    use super::super::*;
+    use crate::acts::{EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36};
+    use crate::rules::Registries;
+
+    /// The bearer read through the LIVE registry (pattern 11).
+    fn bearer(faction: &str, epoch: u32) -> UnitStatic {
+        let p = Profile {
+            cost: 0, unit_id: "a".into(), name: "a".into(),
+            quality: 4, defense: 4, tough: 1, wounds_max: vec![1], model_count: 1,
+            weapons: vec![], special_rules: vec!["Spell Drain".into()],
+            caster_value: 0, base_radius: 0.0, base_shape: String::new(),
+            base_w_mm: 0.0, base_d_mm: 0.0, game_system: "gf".into(),
+            faction_folder: faction.into(), item_grants: vec![],
+            attached_hero_rules: vec![], move_bands: MoveBands::default(),
+        };
+        let mut reg = Registries::new(&super::super::repo_root());
+        UnitStatic::build_for(&mut reg, &p, epoch)
+    }
+
+    /// Unit 0 carries Spell Drain, unit 2 is the picked enemy with `quality`
+    /// and `tokens` spell tokens; units 1/3 are empty dummies.
+    fn line(faction: &str, epoch: u32, quality: i64, tokens: i64) -> (State, Vec<UnitStatic>) {
+        let mut st = four_unit_line();
+        let r = &*st.roster;
+        st.roster = Rc::new(Roster { keys: r.keys.clone(), index: HashMap::new(),
+            profile: vec![0, 1, 2, 3] });
+        st.casts[2] = tokens;
+        let mut target = UnitStatic { name: "target".into(), ..Default::default() };
+        target.quality = quality;
+        target.ctx.quality = quality;
+        target.model_count = 1;
+        target.wounds_max = vec![1];
+        (st, vec![bearer(faction, epoch), UnitStatic::default(), target, UnitStatic::default()])
+    }
+
+    fn drain(st: &mut State, statics: &[UnitStatic], epoch: u32, dist: f64) {
+        let seams = Seams { rules_epoch: epoch, ..Seams::default() };
+        crate::sim::tray_vs_marks(statics, st, 0, 2, dist, seams);
+    }
+
+    /// GREEN: Q6 fails 5 of 6, so two tokens go in expectation
+    /// (`2 * 5/6 = 1.67`); the integer store pays 1 or 2 via the dither.
+    #[test]
+    fn spell_drain_spends_two_tokens_times_the_fail_chance() {
+        let (st0, statics) = line("blessed_sisters", EPOCH_73_V36, 6, 5);
+        let mut total = 0;
+        for r in 0..300 {
+            let mut st = st0.clone();
+            st.round = r;
+            drain(&mut st, &statics, EPOCH_73_V36, 10.0);
+            total += 5 - st.casts[2];
+        }
+        let ev = total as f64 / 300.0;
+        assert!((ev - 2.0 * 5.0 / 6.0).abs() < 0.1, "expected 1.67 tokens, got {ev}");
+    }
+
+    /// The store floors at zero: one token in, the expected two out.
+    #[test]
+    fn spell_drain_floors_the_token_store_at_zero() {
+        let (mut st, statics) = line("blessed_sisters", EPOCH_73_V36, 6, 1);
+        st.round = 1;
+        drain(&mut st, &statics, EPOCH_73_V36, 10.0);
+        assert_eq!(st.casts[2], 0);
+    }
+
+    /// Rules 3.6 Fearless is not an auto-pass: a failed test gets one die and a
+    /// 4+ counts as passed, so the drain lands half as often — half the tokens.
+    #[test]
+    fn a_fearless_target_loses_half_the_expected_tokens() {
+        let (st0, statics) = line("blessed_sisters", EPOCH_73_V36, 6, 5);
+        let mut fearful = statics.clone();
+        fearful[2].fearless_own = true;
+        let mut plain_total = 0;
+        let mut fearless_total = 0;
+        for r in 0..300 {
+            let mut a = st0.clone();
+            a.round = r;
+            drain(&mut a, &statics, EPOCH_73_V36, 10.0);
+            plain_total += 5 - a.casts[2];
+            let mut b = st0.clone();
+            b.round = r;
+            drain(&mut b, &fearful, EPOCH_73_V36, 10.0);
+            fearless_total += 5 - b.casts[2];
+        }
+        let plain = plain_total as f64 / 300.0;
+        let fear = fearless_total as f64 / 300.0;
+        assert!(fear > 0.0, "a Fearless unit still fails half of the time: {fear}");
+        assert!((fear - plain / 2.0).abs() < 0.15, "half the plain drain: plain {plain}, fearless {fear}");
+    }
+
+    /// Range and line of sight gate the pick exactly like a Mark.
+    #[test]
+    fn out_of_range_or_hidden_targets_lose_nothing() {
+        let (mut st, statics) = line("blessed_sisters", EPOCH_73_V36, 6, 5);
+        st.round = 1;
+        drain(&mut st, &statics, EPOCH_73_V36, 19.0);
+        assert_eq!(st.casts[2], 5, "19\" is outside the 18\" reach");
+        let (mut st, statics) = line("blessed_sisters", EPOCH_73_V36, 6, 5);
+        st.round = 1;
+        st.los_pairs = Some(Rc::new(vec![false; 16]));
+        drain(&mut st, &statics, EPOCH_73_V36, 10.0);
+        assert_eq!(st.casts[2], 5, "no line of sight, no pick");
+    }
+
+    /// The once latch: a second attack in the same round drains nothing.
+    #[test]
+    fn a_second_activation_in_the_same_round_drains_nothing() {
+        let (mut st, statics) = line("blessed_sisters", EPOCH_73_V36, 6, 5);
+        st.round = 1;
+        drain(&mut st, &statics, EPOCH_73_V36, 10.0);
+        let after_first = st.casts[2];
+        assert!(after_first < 5, "the first attack drains");
+        drain(&mut st, &statics, EPOCH_73_V36, 10.0);
+        assert_eq!(st.casts[2], after_first, "the latch holds");
+    }
+
+    /// Pattern 12: below 73 the entry is inert and the tokens stay.
+    #[test]
+    fn spell_drain_is_inert_at_epoch_72() {
+        let (mut st, statics) = line("blessed_sisters", EPOCH_72_PLAYTEST_RULES, 6, 5);
+        st.round = 1;
+        drain(&mut st, &statics, EPOCH_72_PLAYTEST_RULES, 10.0);
+        assert_eq!(st.casts[2], 5);
+    }
+}
+
