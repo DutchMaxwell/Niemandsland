@@ -7525,6 +7525,8 @@ func _plan_positions(unit: GameUnit, models: Array, positions: Array, delta: Vec
 	var own_r_m := _move_base_radius_m(models)
 	var opts := {"clearance": own_r_m / INCHES_TO_METERS + CLEARANCE_EPS_IN,
 		"board_y_in": board_y_in}   # the planner's second axis; without it every bound would be square
+	# rules 3.6: a Flying unit flies over ruin ground, so the long-ruin Dangerous price is skipped.
+	opts["flying"] = unit.has_special_rule("Flying")
 	if not ledges_world.is_empty():
 		var ledges_in: Array = []
 		for l in ledges_world:

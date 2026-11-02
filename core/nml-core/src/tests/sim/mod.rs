@@ -1822,6 +1822,7 @@ mod v36_bg_03a;
 mod v36_bg_03a2;
 mod v36_bg_03a3;
 mod v36_bg_03c;
+mod v36_bg_03c_fix;
 mod v36_w1;
 mod v36_w1_5b;
 mod v36_w1_trace;
