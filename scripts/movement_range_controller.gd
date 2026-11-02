@@ -80,9 +80,11 @@ static func base_radius_for_props(props: Dictionary) -> float:
 ## rules still reach the bands, through the STRUCTURED path (`OPRArmyManager.expand_auras_of`
 ## stamps the granted rule NAME into special_rules).
 ## Returns advance, rush and charge distances, each clamped at zero.
-## STATIC + pure (reads only `props`): so callers WITHOUT a live controller instance — the Solo AI when
-## no MovementRangeController is injected — resolve Fast/Slow through this ONE band source instead of a
-## hardcoded 6"/12" fallback (field-test finding 1: a Slow unit moved the full 6").
+## STATIC (reads `props`, and consumes the Ethereal placement latch there): so callers WITHOUT a
+## live controller instance — the Solo AI when no MovementRangeController is injected — resolve
+## Fast/Slow through this ONE band source instead of a hardcoded 6"/12" fallback (field-test
+## finding 1: a Slow unit moved the full 6"). The one write is the latch consumption described
+## below the registry pass; everything else reads only.
 ## `applied` (DAT-16a): optional out-list that collects the carried rule names which WIDENED a band,
 ## in the same pass and order — callers write the rules-must-log line, never this pure function.
 static func move_bands_for_props(props: Dictionary, applied: Array = []) -> Dictionary:
@@ -169,11 +171,14 @@ static func move_bands_for_props(props: Dictionary, applied: Array = []) -> Dict
 		if int(rp.get("uses_per_game", 0)) > 0:
 			continue   # once-per-game feats (Speed Feat) never ride the permanent bands
 		# Rules 3.6 (MOR-19b): Ethereal's place-within-6" is optional, so the -6"/-6" band
-		# penalty rides only while the model was placed this activation. The latch is cleared
-		# at activation start, so the penalty drops at the activation's end. Below the epoch
-		# the penalty stays permanently folded (today's 3.5 behaviour).
+		# penalty rides only while the model was placed. This band pass is the latch's ONLY
+		# reader, so it CONSUMES the latch here: the penalty lands on the first move read after
+		# the placement — the move the placement was made for — and never on a later activation.
+		# Below the epoch the penalty stays permanently folded (today's 3.5 behaviour) and the
+		# latch is not touched.
 		if base2 == "Ethereal" and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
 			var placed := bool(props.get("teleport_used_this_activation", false))
+			props.erase("teleport_used_this_activation")   # consume: one move, then gone
 			var trace_board: Dictionary = props.get("activation_board", {})
 			if not trace_board.is_empty():
 				var verdict := "not placed — no movement penalty this activation"
