@@ -137,7 +137,7 @@ use super::*;
             "the rush buff must price the charge it unlocks, got {ev}"
         );
         let (boost, _, _) =
-            plan_caster_boost(&statics, &st, 0, &move_spell("buff", 0.0, 3.0, 0.0), 0, 2, &[], crate::acts::CURRENT_RULES_EPOCH);
+            plan_caster_boost(&statics, &st, 0, &move_spell("buff", 0.0, 3.0, 0.0), 0, 2, &[], crate::acts::CURRENT_RULES_EPOCH, 0);
         assert!(boost > 0, "a priced cast must draw boost tokens, got {boost}");
     }
 
