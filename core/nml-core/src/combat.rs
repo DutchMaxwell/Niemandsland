@@ -772,11 +772,16 @@ pub fn profile_ev(
         (_, target) = fold_hit(def.modifier_sum, raw, 1);
     }
     let mut hits = attacks_f * success_chance(target);
+    // MEL-09e-fix — EPOCH_73_V36: a fatigued melee striker's sixes still hit
+    // but fire no rule, so every on-6 bonus hit is muted here, not only the
+    // on-6 AP sub-batch below. This is the resolver's empty `trig` in
+    // `resolve_melee_leg`; Relentless stays ungated because it is shooting-only.
+    let fatigue_mutes = melee && att.fatigued && rule_on(att.rules_epoch, EPOCH_73_V36);
     // --- per-unmodified-6 bonus hits (ai_ev.gd:373-385) ---
     if !melee && p.relentless && dist_in > LONG_RANGE_IN {
         hits += attacks_f * SIX_P;
     }
-    if p.surge {
+    if p.surge && !fatigue_mutes {
         hits += attacks_f * SIX_P;
     }
     // Block B6's extra-ATTACK-DIE Surge siblings (`p.surge_attack` /
@@ -785,11 +790,11 @@ pub fn profile_ev(
     // stays exactly as blind to the extra-die form as the table's own planner.
     // Furious: the weapon never carries the flag (`AiShooting._profile` sets no
     // "furious" key), so only the unit-level context can fire it — ai_ev.gd:379.
-    if melee && charging && att.furious {
+    if melee && charging && att.furious && !fatigue_mutes {
         hits += attacks_f * SIX_P;
     }
     let sergeant_attacks = p.sergeant_attacks.min(attacks_f as i64) as f64;
-    if sergeant_attacks > 0.0 {
+    if sergeant_attacks > 0.0 && !fatigue_mutes {
         hits += sergeant_attacks * SIX_P;
     }
     // --- on-6 AP sub-batch (ai_ev.gd:389-395) ---
@@ -800,7 +805,7 @@ pub fn profile_ev(
     // MEL-09e — EPOCH_73_V36: a fatigued melee striker's sixes still hit but fire
     // no rule (MEL-09's `fatigue_mutes_sixes`), so the whole on-6 AP sub-batch is
     // priced at zero, exactly the resolver's `on6 = 0` in `resolve_melee_leg`.
-    if melee && att.fatigued && rule_on(att.rules_epoch, EPOCH_73_V36) {
+    if fatigue_mutes {
         on6_ap = 0;
     }
     let mut six_hits = if on6_ap > 0 { attacks_f * SIX_P } else { 0.0 };

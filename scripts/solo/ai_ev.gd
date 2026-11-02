@@ -878,18 +878,23 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 		target_raw -= 1
 	target = AiCombatMath.modified_hit_target(target_raw, 0)
 	var hits := attacks * AiCombatMath.success_chance(target)
+	# MEL-09e-fix (rules 3.6): a Fatigued melee striker's sixes still hit but fire no
+	# rule, so every on-6 bonus hit is muted — the resolver's empty `trig` twin.
+	# Relentless stays ungated because it is shooting-only.
+	var fatigue_mutes := melee and bool(att.get("fatigued", false)) \
+		and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
 	# — Per-unmodified-6 bonus hits (expected +attacks/6 each; "only the original hit counts as a 6") —
 	if not melee and bool(profile.get("relentless", false)) and dist_in > AiCombatMath.LONG_RANGE_IN:
 		hits += attacks * SIX_P
-	if bool(profile.get("surge", false)):
+	if not fatigue_mutes and bool(profile.get("surge", false)):
 		hits += attacks * SIX_P
-	if melee and charging and (bool(profile.get("furious", false)) or bool(att.get("furious", false))):
+	if not fatigue_mutes and melee and charging and (bool(profile.get("furious", false)) or bool(att.get("furious", false))):
 		hits += attacks * SIX_P
 	# — Sergeant (wave 5, model-level: the bearer's unmodified 6s deal +1 hit). The stamping caller
 	#   (stamp_sergeant) marks ONE profile with the bearer's own attack share; expectation = share/6,
 	#   the exact expected count of the bearer's 6s (mirrors the dice path's capped bonus) —
 	var sergeant_attacks := float(mini(int(profile.get("sergeant_attacks", 0)), int(attacks)))
-	if sergeant_attacks > 0.0:
+	if sergeant_attacks > 0.0 and not fatigue_mutes:
 		hits += sergeant_attacks * SIX_P
 	# — On-6 AP (wave 4 Rending/Destructive at the fixed +4; wave-5 army-book Crack at a stamped per-weapon
 	#   bonus): the expected unmodified-6 hits save at AP(+on6_ap); NOT Blast-multiplied (matches the
@@ -897,9 +902,10 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 	var on6_ap := int(profile.get("on6_ap", 0))
 	if on6_ap == 0 and (bool(profile.get("rending", false)) or bool(profile.get("destructive", false))):
 		on6_ap = AiCombatMath.RENDING_AP_BONUS
-	# MEL-09e (rules 3.6): a Fatigued melee striker's sixes still hit but fire no rule (MEL-09),
-	# so the whole on-6 AP sub-batch is priced at zero — the resolver's `on6 = 0` twin.
-	if melee and bool(att.get("fatigued", false)) and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+	# MEL-09e / MEL-09e-fix (rules 3.6): a Fatigued melee striker's sixes still hit but
+	# fire no rule, so the whole on-6 AP sub-batch is priced at zero — the resolver's
+	# `on6 = 0` twin.
+	if fatigue_mutes:
 		on6_ap = 0
 	var six_hits: float = attacks * SIX_P if on6_ap > 0 else 0.0
 	# — Blast (GF v3.5.1: each hit ×min(X, models in target), after other rules) —
