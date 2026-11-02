@@ -1143,7 +1143,8 @@ static func plan_sequential_flow(model_pos: Array, delta: Vector2, radii: Array,
 					continue
 				var jc: Vector2 = result[j] if placed.has(j) else model_pos[j]
 				zones.append({"c": jc, "r": maxf(0.0, float(radii[j]) + float(radii[idx]) - CONTACT_SLIDE_EPS_IN)})
-		var oi := {"clearance": base_clearance, "avoid_cells": avoid_cells, "zones": zones}
+		var oi := {"clearance": base_clearance, "avoid_cells": avoid_cells, "zones": zones,
+			"flying": bool(opts.get("flying", false))}
 		if not ledges.is_empty():
 			oi["ledges"] = ledges
 		var slot: Vector2 = (model_pos[idx] as Vector2) + delta
@@ -1224,7 +1225,8 @@ static func plan_sequential_flow(model_pos: Array, delta: Vector2, radii: Array,
 	# cross. Same-radius pairs only, both new chords within the move allowance; each accepted swap
 	# re-routes the two trails so the drawn corridors (and the dangerous/difficult accounting read off
 	# them) stay truthful. Charges are exempt (contact endpoints are owned by the charge snap).
-	var untangle_oi := {"clearance": base_clearance, "avoid_cells": opts.get("avoid_cells", {}), "zones": base_zones}
+	var untangle_oi := {"clearance": base_clearance, "avoid_cells": opts.get("avoid_cells", {}),
+		"zones": base_zones, "flying": bool(opts.get("flying", false))}
 	if not allow_contact and n >= 2 and untangle_endpoints(model_pos, result, radii, allowance, walls, untangle_oi):
 		var re_oi := untangle_oi
 		for i in range(n):
@@ -1332,9 +1334,19 @@ static func _terrain_cost_at(p: Vector2, grid: Dictionary, opts: Dictionary, uns
 	# EPOCH_27_TERRAIN_DEBUFF (sweep A): the carried terrain debuffs price exactly like the
 	# cell does — Dangerous first, then Difficult (the core's mv::cost order, and the
 	# call's own knobs: recorded calls carry them, old corpora default to false).
-	if bool(opts.get("dangerous_debuff", false)):
+	# Rules 3.6 (EPOCH_73_V36) reorder this: the long-ruin Dangerous price outranks the
+	# Difficult debuff, and a Dangerous cell outranks it too. Epoch 72 keeps the old order.
+	var dang := bool(opts.get("dangerous_debuff", false))
+	var diff := bool(opts.get("difficult_debuff", false))
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		if dang or (unstable_danger and TerrainRules.is_unstable(t)) or TerrainRules.is_dangerous(t):
+			return DANGEROUS_COST_MULT
+		if diff or TerrainRules.is_difficult(t):
+			return DIFFICULT_COST_MULT
+		return 1.0
+	if dang:
 		return DANGEROUS_COST_MULT
-	if bool(opts.get("difficult_debuff", false)):
+	if diff:
 		return DIFFICULT_COST_MULT
 	# rules 3.6: ruin ground is Unstable — a leg over UNSTABLE_MOVE_IN prices it as Dangerous.
 	if unstable_danger and TerrainRules.is_unstable(t):
@@ -1359,7 +1371,8 @@ static func _segment_cost(a: Vector2, b: Vector2, grid: Dictionary, opts: Dictio
 		return span + ledge_cost(a, b, opts)
 	var steps := maxi(1, int(ceil(span / (PLAN_CELL_IN * 0.5))))
 	var sub := span / float(steps)
-	var unstable := span > UNSTABLE_MOVE_IN and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
+	var unstable := span > UNSTABLE_MOVE_IN and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
+		and not bool(opts.get("flying", false))
 	var total := 0.0
 	for i in range(steps):
 		var m := _terrain_cost_at(a.lerp(b, (float(i) + 0.5) / float(steps)), grid, opts, unstable)
