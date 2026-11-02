@@ -177,6 +177,9 @@ pub struct Facets {
     pub ap_vs_tough3: i64,
     pub ap_vs_tough9: i64,
     pub ap_vs_def3: i64,
+    /// Rules 3.6 (`EPOCH_73_V36`): the Destructive token's AP(+1) against a
+    /// defender still above half its starting size / Tough value.
+    pub ap_vs_above_half: i64,
 }
 
 /// `AiSpell._rating` ai_spell.gd:170-175 — "AP(2)" -> 2, never negative.

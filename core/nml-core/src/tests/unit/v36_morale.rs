@@ -590,3 +590,70 @@ mod mor_15 {
         );
     }
 }
+// --- Row MOR-SPELLFACET-b: Destructive prices AP(+1) against an above-half defender at 73.
+mod mor_spellfacet_b {
+    use super::super::*;
+    use crate::acts::{EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36};
+    use crate::rules::{Registries, Spell};
+    use crate::spell::{spell_damage_ev_of, spell_facets};
+    use crate::unit::Ctx;
+
+    /// One spell entry the LIVE registry really carries, built through
+    /// `spells_for` — the token list under test is the committed map's own.
+    fn live_spell(system: &str, faction: &str, name: &str) -> Spell {
+        let mut reg = Registries::new(&repo_root());
+        reg.spells_for(system, faction)
+            .iter()
+            .find(|s| s.name == name)
+            .cloned()
+            .unwrap_or_else(|| panic!("{system}/{faction} carries no {name}"))
+    }
+
+    fn defender(above_half_strength: bool) -> Ctx {
+        Ctx { defense: 4, tough: 1, models: 5, above_half_strength, ..Default::default() }
+    }
+
+    /// The 3.6 meaning: the token no longer upgrades the sixes; it adds AP(+1)
+    /// only against a defender still above half. Six hits into Defense 4 are
+    /// 6 × 2/3 = 4 above half and 6 × 1/2 = 3 at or below it.
+    #[test]
+    fn destructive_prices_ap_one_only_against_an_above_half_defender_at_epoch_73() {
+        let spell = live_spell("gf", "elven_jesters", "Light Fragments");
+        let f = spell_facets(&spell.weapon_rules, EPOCH_73_V36);
+        assert_eq!(f.on6_ap, 0, "the 3.5 AP(+4) on the sixes is gone from 73");
+        assert_eq!(f.ap_vs_above_half, 1, "the token prices AP(+1) against the state");
+
+        let above = spell_damage_ev_of(&spell, &defender(true), EPOCH_73_V36);
+        let below = spell_damage_ev_of(&spell, &defender(false), EPOCH_73_V36);
+        assert!((above - 4.0).abs() < 1e-9, "above half pays AP(+1): {above}");
+        assert!((below - 3.0).abs() < 1e-9, "below half pays nothing: {below}");
+    }
+
+    /// A plain damage spell reads the same in both defender states at 73 and
+    /// exactly its 3.5 number at 72.
+    #[test]
+    fn a_plain_spell_is_unchanged_in_both_states() {
+        let spell = live_spell("gf", "elven_jesters", "Fatal Sorrow");
+        for above in [true, false] {
+            let now = spell_damage_ev_of(&spell, &defender(above), EPOCH_73_V36);
+            let before = spell_damage_ev_of(&spell, &defender(above), EPOCH_72_PLAYTEST_RULES);
+            assert!((now - 3.0).abs() < 1e-9, "six plain hits into Defense 4: {now}");
+            assert!((now - before).abs() < 1e-9, "no epoch change for a plain spell");
+        }
+    }
+
+    /// Pattern 12 — below 73 the old AP(+4)-on-six ticket and its EV come back,
+    /// byte-identical in both defender states.
+    #[test]
+    fn destructive_keeps_the_35_on6_ap_at_epoch_72() {
+        let spell = live_spell("gf", "elven_jesters", "Light Fragments");
+        let f = spell_facets(&spell.weapon_rules, EPOCH_72_PLAYTEST_RULES);
+        assert_eq!((f.on6_ap, f.ap_vs_above_half), (4, 0), "the 3.5 on-6 ticket");
+
+        let old = 5.0 * 0.5 + 1.0 * (5.0 / 6.0);
+        for above in [true, false] {
+            let ev = spell_damage_ev_of(&spell, &defender(above), EPOCH_72_PLAYTEST_RULES);
+            assert!((ev - old).abs() < 1e-9, "the 3.5 EV replays: {ev} vs {old}");
+        }
+    }
+}

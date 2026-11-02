@@ -145,7 +145,8 @@ static func spell_amplifier_mod(unit: GameUnit) -> int:
 ## the 3.5 readings stay in force.
 static func spell_facets(weapon_rules: Array, rules_epoch: int) -> Dictionary:
 	var f := {"ap": 0, "blast": 0, "deadly": 0, "bane": false, "shred": false, "surge": false,
-		"on6_ap": 0, "ignores_regen": false, "ap_vs_tough3": 0, "ap_vs_tough9": 0, "ap_vs_def3": 0}
+		"on6_ap": 0, "ignores_regen": false, "ap_vs_tough3": 0, "ap_vs_tough9": 0, "ap_vs_def3": 0,
+		"ap_vs_above_half": 0}
 	var v36: bool = rules_epoch >= AiActRecorder.EPOCH_73_V36
 	for r in weapon_rules:
 		var s := str(r).strip_edges()
