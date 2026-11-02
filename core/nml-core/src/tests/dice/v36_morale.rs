@@ -177,6 +177,37 @@ mod mor_17a {
         assert!(regen_dice(&before) > 0, "72 keeps today's reading: {:?}", before.rolls);
     }
 
+    /// One 64-die Impact pool on the tray, charged from `gap_in` (the pre-charge gap).
+    fn impact(us: &crate::unit::UnitStatic, gap_in: f64) -> ShootResult {
+        resolve_impact_pool_at(
+            64, 0, "Charger", &us.ctx, "Knightborn Squad", Some((gap_in, true)), &mut Tray::seeded(27),
+        )
+    }
+
+    /// RED on main: the Impact leg ignores wounds unconditionally from 73 on, so a charge from
+    /// 6" or less still rolled the 6+ ignore. The GD side gates it off at that distance.
+    #[test]
+    fn impact_keeps_its_wounds_on_a_charge_from_six_inches_or_less_at_epoch_73() {
+        let near = impact(&knight_squad(r#"["Knightborn"]"#, "[]", EPOCH_73_V36), 4.0);
+        assert_eq!(regen_dice(&near), 0, "charged from 4in: no 6+ die on Impact: {:?}", near.rolls);
+        assert_eq!(near.wounds, near.caused, "every unsaved Impact wound lands");
+    }
+
+    /// The other side: a charge from over 6" still ignores Impact wounds on the 6+.
+    #[test]
+    fn impact_ignores_its_wounds_on_a_charge_from_over_six_inches_at_epoch_73() {
+        let far = impact(&knight_squad(r#"["Knightborn"]"#, "[]", EPOCH_73_V36), 8.0);
+        assert!(regen_dice(&far) > 0, "charged from 8in: the 6+ ignore rolls: {:?}", far.rolls);
+        assert!(far.wounds < far.caused, "some Impact wounds are ignored");
+    }
+
+    /// Epoch-72 pin: below 73 there is no gate, so even a short charge keeps the 6+ ignore.
+    #[test]
+    fn impact_ignores_its_wounds_on_a_short_charge_at_epoch_72() {
+        let before = impact(&knight_squad(r#"["Knightborn"]"#, "[]", EPOCH_72_PLAYTEST_RULES), 4.0);
+        assert!(regen_dice(&before) > 0, "72 keeps today's reading: {:?}", before.rolls);
+    }
+
     #[test]
     fn a_spell_wound_is_ignored_on_2_at_73_and_on_4_at_72() {
         let f = spell_facets(&[]);
