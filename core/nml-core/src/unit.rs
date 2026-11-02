@@ -501,7 +501,7 @@ pub struct Ctx {
     pub versatile_pick_hit: i64,
     pub versatile_pick_ap: i64,
     pub versatile_latched: bool,
-    /// SHO-19 — the Versatile pick ignores the 9"/6" distance gate at
+    /// SHO-19 / SHO-19b — the Versatile pick ignores the 9"/6" distance gate at
     /// `EPOCH_73_V36` (Versatile Expert, Enhanced Watchborn).
     pub versatile_no_gate: bool,
     /// A live `grants_rule: "AP(+1) when shooting"` (Piercing Shooting Mark).
@@ -3248,13 +3248,14 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         else if rule_on(rules_epoch, EPOCH_13_WHO_WINS) && guarded_family_on(p, "Safety Gear", rules_epoch) { "Safety Gear" }
         else if rule_on(rules_epoch, EPOCH_13_WHO_WINS) && guarded_family_on(p, "Tenacious", rules_epoch) { "Tenacious" }
         else { "" };
-    // SHO-19 — the Versatile Expert spelling pins the pick's distance gate open from
-    // `EPOCH_73_V36`. The map entry owns the `no_gate_v36` switch, so the old data stays old.
+    // SHO-19 / SHO-19b — the Versatile Expert and Enhanced Watchborn spellings pin the pick's
+    // distance gate open from `EPOCH_73_V36`; the map entry owns the `no_gate_v36` switch,
+    // so the old data stays old.
     let versatile_no_gate = rule_on(rules_epoch, EPOCH_73_V36) && {
         let map = reg.rules_for(&p.game_system);
         p.special_rules.iter().chain(p.item_grants.iter()).any(|raw| {
             let n = base_rule_name(raw);
-            n == "Versatile Expert"
+            (n == "Versatile Expert" || n == "Enhanced Watchborn")
                 && map.lookup(&p.faction_folder, &n).is_some_and(|e| e.param_b("no_gate_v36"))
         })
     };

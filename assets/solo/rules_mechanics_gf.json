@@ -10100,6 +10100,17 @@
      "grants": "Versatile Reach"
     }
    },
+   "Enhanced Watchborn": {
+    "primitive": "Versatile Attack",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "ap_bonus": 1,
+     "hit_bonus": 1,
+     "pick_one": true,
+     "no_gate_v36": true
+    }
+   },
    "Watchborn": {
     "primitive": "Versatile Attack",
     "rated": false,
@@ -10315,6 +10326,17 @@
     "book_version": "3.5.3",
     "params": {
      "grants": "Versatile Reach"
+    }
+   },
+   "Enhanced Watchborn": {
+    "primitive": "Versatile Attack",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "ap_bonus": 1,
+     "hit_bonus": 1,
+     "pick_one": true,
+     "no_gate_v36": true
     }
    },
    "Watchborn": {

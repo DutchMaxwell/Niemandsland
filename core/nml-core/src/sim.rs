@@ -3684,6 +3684,9 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
         c.slayer_grant = grants && mods::granted(state, i, "Slayer");
         c.surge_grant = grants && mods::granted(state, i, "Enhanced Primal");
         c.versatile_grant = grants && mods::granted(state, i, "Versatile Attack");
+        c.versatile_no_gate = rule_on(rules_epoch, EPOCH_73_V36)
+            && grants
+            && mods::granted(state, i, "Enhanced Watchborn");
         c.pierce_shooting_grant = grants && mods::granted(state, i, "AP(+1) when shooting");
         c.pierce_melee_grant = grants && mods::granted(state, i, "AP(+1) in melee");
         // EPOCH 23 INERT MARKS (MARK_FAMILY_SWEEP_2026-09-14 finding 1): the
