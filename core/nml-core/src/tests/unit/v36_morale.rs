@@ -328,3 +328,171 @@ mod mor_spellfacet_a {
         );
     }
 }
+
+// --- Row MOR-15: a WEAPON-borne "Spell Amplifier" adds +1 to the bearer's own casting rolls.
+mod mor_15 {
+    use super::super::*;
+    use crate::acts::{EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36};
+    use crate::rules::{Spell, SpellModifier};
+    use crate::sim::cast_phase;
+    use crate::sim::tests::four_unit_line;
+    use crate::{Seams, State, IN2M};
+
+    /// One 12" damage bolt, threshold 1 — the fixture's castable spell.
+    fn bolt() -> Spell {
+        Spell {
+            name: "bolt".into(),
+            status: "modeled".into(),
+            threshold: 1,
+            range_in: 12.0,
+            target_count: 1,
+            effect_kind: "damage".into(),
+            effect_hits: 3,
+            weapon_rules: vec![],
+            beneficiary: String::new(),
+            modifier: SpellModifier::default(),
+            grants_rule: String::new(),
+        }
+    }
+
+    /// The REAL registry product (`build_for`): a quality-2 caster whose
+    /// weapon list carries `weapon_rules` (or not). `special` is the
+    /// `special_rules` list — the "wrong spelling" control.
+    fn caster(
+        weapon_rules: &str,
+        special: &str,
+        system: &str,
+        faction: &str,
+        epoch: u32,
+    ) -> UnitStatic {
+        let tpl = r#"{"kind":"header","knobs":{},"profiles":{
+          "c":{"unit_id":"c","name":"Caster","quality":2,"defense":4,"tough":1,
+            "wounds_max":[1],"model_count":1,"caster_value":1,
+            "base_radius":0.016,"game_system":"SYSTEM","faction_folder":"FACTION",
+            "special_rules":SPECIAL,"item_grants":[],
+            "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+            "weapons":[{"name":"Rod","range":12,"attacks":1,"count":1,"ap":0,
+              "rules":WEAPONS}]}}}"#
+            .replace("SYSTEM", system)
+            .replace("FACTION", faction)
+            .replace("SPECIAL", special)
+            .replace("WEAPONS", weapon_rules);
+        let header = read_act_header(&tpl).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        UnitStatic::build_for(&mut reg, header.profiles.get("c").expect("c"), epoch)
+    }
+
+    /// One cast sub-phase: unit 0 casts the bolt at the enemy (unit 2) 10"
+    /// away. The caster's static comes from `build_for`; only the spell list
+    /// and the `is_caster` flag are supplied by the fixture.
+    fn run(mut caster: UnitStatic, epoch: u32) -> State {
+        caster.is_caster = true;
+        caster.spells = vec![bolt()];
+        let mut st = four_unit_line();
+        st.casts = vec![1, 0, 0, 0];
+        st.positions[2] = vec![[10.0 * IN2M, 0.0, 0.0]];
+        let statics = vec![caster];
+        let mut next = st.clone();
+        let los = vec![true; st.units()];
+        cast_phase(
+            &statics,
+            &mut next,
+            0,
+            &los,
+            Seams { rules_epoch: epoch, ..Seams::default() },
+            None,
+        );
+        next
+    }
+
+    /// The planned cast chance (the attempt event's `p_success`).
+    fn p_success(s: &State) -> f64 {
+        s.cast_events
+            .iter()
+            .find(|e| e.get("spell").is_some())
+            .expect("one cast attempt")["p_success"]
+            .as_f64()
+            .expect("p_success")
+    }
+
+    #[test]
+    fn a_weapon_borne_amplifier_lowers_the_bearers_cast_target_at_epoch_73() {
+        let caster = caster(
+            r#"["Spell Amplifier"]"#,
+            r#"["Caster(1)"]"#,
+            "gf",
+            "blessed_sisters",
+            EPOCH_73_V36,
+        );
+        let next = run(caster, EPOCH_73_V36);
+        assert!(
+            (p_success(&next) - 2.0 / 3.0).abs() < 1e-9,
+            "4+ becomes 3+, got {}",
+            p_success(&next)
+        );
+    }
+
+    #[test]
+    fn a_caster_without_the_rule_stays_at_four_plus_at_epoch_73() {
+        let caster = caster("[]", r#"["Caster(1)"]"#, "gf", "blessed_sisters", EPOCH_73_V36);
+        let next = run(caster, EPOCH_73_V36);
+        assert!((p_success(&next) - 0.5).abs() < 1e-9, "plain caster stays at 4+");
+    }
+
+    #[test]
+    fn the_amplifier_does_nothing_at_epoch_72() {
+        let caster = caster(
+            r#"["Spell Amplifier"]"#,
+            r#"["Caster(1)"]"#,
+            "gf",
+            "blessed_sisters",
+            EPOCH_72_PLAYTEST_RULES,
+        );
+        let next = run(caster, EPOCH_72_PLAYTEST_RULES);
+        assert!((p_success(&next) - 0.5).abs() < 1e-9, "the old 4+ replays byte-exact");
+    }
+
+    #[test]
+    fn a_special_rule_spelling_does_nothing_at_epoch_73() {
+        let caster = caster(
+            "[]",
+            r#"["Caster(1)","Spell Amplifier"]"#,
+            "gf",
+            "blessed_sisters",
+            EPOCH_73_V36,
+        );
+        let next = run(caster, EPOCH_73_V36);
+        assert!((p_success(&next) - 0.5).abs() < 1e-9, "special_rules never grant it");
+    }
+
+    #[test]
+    fn both_system_maps_carry_the_amplifier_entry() {
+        let mut reg = Registries::new(&repo_root());
+        let gf = reg
+            .rules_for("gf")
+            .lookup("blessed_sisters", "Spell Amplifier")
+            .expect("gf entry");
+        assert_eq!(gf.param_i("casting_mod", 0), 1);
+        let aof = reg
+            .rules_for("aof")
+            .lookup("ogres", "Spell Amplifier")
+            .expect("aof entry");
+        assert_eq!(aof.param_i("casting_mod", 0), 1);
+    }
+
+    #[test]
+    fn an_aof_caster_stamps_the_same_amplifier() {
+        let caster = caster(
+            r#"["Spell Amplifier"]"#,
+            r#"["Caster(1)"]"#,
+            "aof",
+            "ogres",
+            EPOCH_73_V36,
+        );
+        let next = run(caster, EPOCH_73_V36);
+        assert!(
+            (p_success(&next) - 2.0 / 3.0).abs() < 1e-9,
+            "the aof map resolves the same entry"
+        );
+    }
+}

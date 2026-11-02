@@ -6954,7 +6954,7 @@ fn cast_origins(
 /// the attempt and pays for it. `tokens` is read ONCE before the loop, so all
 /// three faces shop with the same purse. Later faces see the state the earlier
 /// ones already damaged — that order is load-bearing.
-fn cast_phase(
+pub(crate) fn cast_phase(
     statics: &[UnitStatic],
     state: &mut State,
     si: usize,
