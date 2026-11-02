@@ -566,6 +566,7 @@
 "test/volumetric_los_test.gd": 0.1,
 "test/v36/mel_10h_test.gd": 0.1,
 "test/v36/mel_12_test.gd": 0.1,
+"test/v36/w1_flake_mp_test.gd": 0.1,
 "test/vs_mark_attacker_side_test.gd": 0.3,
 "test/war_ambience_test.gd": 0.7
 }
