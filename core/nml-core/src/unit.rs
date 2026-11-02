@@ -322,6 +322,12 @@ pub struct Ctx {
     /// over the host and its joined heroes and caps the total at the hits
     /// taken before rolling them.
     pub parry_dice: i64,
+    /// Rules 3.6 (`EPOCH_73_V36`) — the SAME host-plus-joined-heroes sum the
+    /// Impact event reads (`sim::parry_dice_total`), stamped on the melee
+    /// defender's context by `sim::strike_phase` so the strike Parry counts
+    /// the joined heroes too. `None` = not stamped (the hand-built dice
+    /// fixtures), which keeps the old `parry_dice * models` read.
+    pub parry_dice_total: Option<i64>,
     pub regeneration: bool,
     pub regen_target: i64,
     /// Block B10 — the SPELL-wound twin (`main._solo_regen_pick`'s
@@ -3395,6 +3401,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         brace_models: if brace_weapon.is_some() { p.model_count.max(0) } else { 0 },
         brace_impact_per_model: brace_weapon.map(|w| weapon_rating(w, "Brace").max(1)),
         parry_dice,
+        parry_dice_total: None,
         regeneration: regen_targets.0 > 0,
         regen_target: regen_targets.0,
         regen_target_spell: regen_targets.1,

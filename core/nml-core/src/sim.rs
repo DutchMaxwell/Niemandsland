@@ -5519,6 +5519,11 @@ fn strike_phase(
     }
     let ut = &statics[next.roster.profile[ti]];
     let mut def = with_modifier_sum(with_cond_ap_state(ctx_live(ctx_of(ut, next, ti), statics, next, ti, true, seams.rules_epoch), statics, next, ti, seams), seams.rules_epoch);
+    // MEL-07c-fix (`EPOCH_73_V36`) — the strike Parry counts the host AND its
+    // joined heroes, the same sum the Impact event reads (`parry_dice_total`).
+    if rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) {
+        def.parry_dice_total = Some(parry_dice_total(statics, next, ti));
+    }
     // D-STEALTH — the def build's terrain gate (the melee leg consumes the
     // same closed alias the shooting fold does).
     stealth_alias_terrain_gate(statics, next, ti, cover, &mut def);
@@ -5772,6 +5777,19 @@ fn impact_with_parry(
     caused
 }
 
+/// Rules 3.6 (`EPOCH_73_V36`) — the Parry dice ONE hits event brings: every
+/// living carrier model on the host AND its joined heroes contributes its own
+/// `Ctx::parry_dice` (the table's `[defender] + get_attached_heroes()` walk,
+/// main.gd:8647-8653). The Impact event and the strike Parry read this same
+/// sum, so both sides count the same models.
+fn parry_dice_total(statics: &[UnitStatic], state: &State, ti: usize) -> i64 {
+    std::iter::once(ti)
+        .chain(state.attached[ti].iter().copied())
+        .filter(|&m| state.alive[m] > 0)
+        .map(|m| statics[state.roster.profile[m]].ctx.parry_dice * state.alive[m])
+        .sum()
+}
+
 /// Impact pool by pool; the caller lands the wounds.
 #[allow(clippy::too_many_arguments)]
 fn impact_phase(
@@ -5822,10 +5840,7 @@ fn impact_phase(
     // Rules 3.6 (`EPOCH_73_V36`) — Parry(X): each living carrier model (host
     // and joined heroes) contributes X dice against this Impact event.
     let parry_dice: i64 = if rule_on(rules_epoch, EPOCH_73_V36) {
-        std::iter::once(ti).chain(next.attached[ti].iter().copied())
-            .filter(|&m| next.alive[m] > 0)
-            .map(|m| statics[next.roster.profile[m]].ctx.parry_dice * next.alive[m])
-            .sum()
+        parry_dice_total(statics, next, ti)
     } else {
         0
     };
