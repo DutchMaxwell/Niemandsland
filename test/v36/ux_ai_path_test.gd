@@ -75,6 +75,19 @@ func test_the_manifest_is_fetched_from_the_v36_folder() -> void:
 	assert_array(probe.fetched).is_equal(["ai_lists_v36/_manifest.json"])
 
 
+## The delivery probe's default is the v36 manifest the maintainer uploads (no --path needed).
+func test_the_cdn_probe_default_follows_the_v36_folder() -> void:
+	var probe_tool: Variant = load("res://tools/cdn_lists_probe.gd")
+	var has_default := false
+	for m: Dictionary in probe_tool.get_script_method_list():
+		if str(m["name"]) == "_default_path":
+			has_default = true
+	assert_bool(has_default).override_failure_message(
+		"cdn_lists_probe has no v36 default path").is_true()
+	if has_default:
+		assert_str(str(probe_tool.call("_default_path"))).is_equal("ai_lists_v36/_manifest.json")
+
+
 func test_a_cache_write_lands_in_the_v36_dir_only() -> void:
 	var probe: Node = auto_free(Probe.new())
 	probe._ai_lists_cache_write(PROBE_FILE, "v36")
