@@ -4622,7 +4622,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 				_solo_most_models_note(target, over9_rule)], true)
 	var covered_defense: int = _solo_cover_defense(target, base_defense)   # +1 Defense if majority in cover
 	# Resolver wave A — vs-target Marks: the bearer's pick lands on THIS volley's target.
-	_solo_apply_vs_marks(attacker, target, dist_in)
+	await _solo_apply_vs_marks(attacker, target, dist_in)
 	# Coverage wave — Piercing Tag: friendly attackers spend the markers for +AP on this volley.
 	# Resolver wave A — Reckless Piercing: the round-scoped AP stamps (buff on the attacker,
 	# backfire on the target) ride the same profile-AP merge.
@@ -11631,7 +11631,7 @@ func _run_ai_melee(report: Dictionary) -> void:
 	if not impact_first:
 		await _solo_stage_phase("Impact")
 	# Resolver wave A — vs-target Marks: the charger's pre-attack pick lands on this melee's defender.
-	_solo_apply_vs_marks(unit, target, 0.0)
+	await _solo_apply_vs_marks(unit, target, 0.0)
 	# Unwieldy (resolver wave A — "strikes last when charging"): the CHARGER's strikes swap behind
 	# the defender's strike-back; Counter and Impact keep their slots.
 	var charger_last: bool = _solo_unit_has_unwieldy(unit, target)
@@ -14318,7 +14318,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 	var covered_def: int = _solo_cover_defense(target, shielded_def)
 	# Resolver wave A parity: your volley places vs-target Marks, SPENDS Piercing-Tag markers and
 	# honours the Reckless-Piercing AP stamps — the AI path had these seams, yours silently didn't.
-	_solo_apply_vs_marks(attacker, target, dist)
+	await _solo_apply_vs_marks(attacker, target, dist)
 	var extra_ap := _solo_spend_piercing_tag(target) + _solo_reckless_ap(attacker, target)
 	# Per-model shooting transparency (GF v3.5.1 p.8): tell the player how many models actually fire.
 	if battle_log != null:
@@ -14589,7 +14589,7 @@ func _run_human_melee(attacker: GameUnit, target: GameUnit, auto: bool = false) 
 	if not impact_first:
 		await _solo_stage_phase("Impact")
 	# Resolver wave A — vs-target Marks: your charger's pre-attack pick lands on the defender.
-	_solo_apply_vs_marks(attacker, target, 0.0)
+	await _solo_apply_vs_marks(attacker, target, 0.0)
 	# Unwieldy (resolver wave A): a charging Unwieldy unit strikes LAST — the AI's strike-back
 	# resolves first; Counter and Impact keep their slots.
 	var h_charger_last: bool = _solo_unit_has_unwieldy(attacker, target)
@@ -22344,8 +22344,9 @@ func _solo_apply_utility_buffs(unit: GameUnit) -> void:
 			var n := str(ed["name"])
 			var sp: Dictionary = ed.get("params", {})
 			# Resolver wave A: vs-target Marks ("... Mark") are ENEMY-side picks consumed at the
-			# attack seam (_solo_apply_vs_marks) — not friendly buffs; skip them here.
-			if bool(sp.get("vs_target", false)):
+			# attack seam (_solo_apply_vs_marks); MOR-16b's Spell Drain is the same seam, not a
+			# friendly buff. Skip both here.
+			if bool(sp.get("vs_target", false)) or int(sp.get("spell_token_drain", 0)) > 0:
 				continue
 			var range_in := float(sp.get("range_in", 12.0))
 			# Re-Position Artillery: a friendly Artillery model may immediately move up to 9".
@@ -22742,14 +22743,17 @@ func _solo_apply_vs_marks(attacker: GameUnit, target: GameUnit, dist_in: float) 
 		var member := m as GameUnit
 		if member.get_alive_count() == 0:
 			continue
+		if int(member.unit_properties.get("vs_mark_round", -1)) == opr_army_manager.current_round:
+			continue   # once per activation — at most one activation per round (Second Wind aside)
+		if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+			if await _solo_apply_spell_drain(member, target, dist_in):
+				continue
 		for e in RulesRegistry.unit_rules_of_primitive(member, "Utility Buff"):
 			var ed := e as Dictionary
 			var sp: Dictionary = ed.get("params", {})
 			if not bool(sp.get("vs_target", false)):
 				continue
 			var n := str(ed["name"])
-			if int(member.unit_properties.get("vs_mark_round", -1)) == opr_army_manager.current_round:
-				continue   # once per activation — at most one activation per round (Second Wind aside)
 			if dist_in > float(sp.get("range_in", 18.0)):
 				continue
 			# NML-936 (v3.5.3 audit): the printed rule picks its enemy "within 18\" IN LINE OF SIGHT",
@@ -22781,6 +22785,48 @@ func _solo_apply_vs_marks(attacker: GameUnit, target: GameUnit, dist_in: float) 
 			# bearer only while it acts against this enemy. The once-consumption spends it after.
 			_solo_record_spell_mod(target, n, {"grants_rule": grant, "scope": str(sp.get("scope", "")), "beneficiary": "attackers",
 				"duration": "once", "no_live_grant": true})
+
+
+## MOR-16b: the table half of Spell Drain. The bearer's one enemy pick is the
+## committed target at this seam; it takes the REAL table Morale test, and on a
+## failure spends the entry's token count from its own caster pool (floor 0).
+## The once-per-activation latch, the 18" reach and the line-of-sight test are
+## the Mark's (the core twin is MOR-16a).
+func _solo_apply_spell_drain(member: GameUnit, target: GameUnit, dist_in: float) -> bool:
+	for e in RulesRegistry.unit_rules_of_primitive(member, "Utility Buff"):
+		var ed := e as Dictionary
+		var sp: Dictionary = ed.get("params", {})
+		var drain := int(sp.get("spell_token_drain", 0))
+		if drain <= 0:
+			continue
+		if dist_in > float(sp.get("range_in", 18.0)):
+			continue
+		if bool(sp.get("needs_los", true)) and not _solo_has_los(member, target):
+			if battle_log != null:
+				_log_rule_event(BattleLog.Category.COMBAT,
+					"%s: %s has no target in sight — %s is not drained and the rule is not applied" % [
+						str(ed["name"]), member.get_name(), target.get_name()], _solo_is_ai_unit(member))
+			continue
+		member.unit_properties["vs_mark_round"] = opr_army_manager.current_round
+		var before := target.casts_current
+		var passed := await _solo_morale_test(target, _roller_label(target), false, "Spell Drain")
+		if passed:
+			if battle_log != null:
+				_log_rule_event(BattleLog.Category.COMBAT,
+					"%s drains %s: Morale test passed, no spell tokens lost" % [
+						member.get_name(), target.get_name()], _solo_is_ai_unit(member))
+			return true
+		var after := maxi(0, before - drain)
+		target.set_caster_points(after)
+		if network_manager != null and network_manager.has_method("broadcast_unit_casts"):
+			network_manager.broadcast_unit_casts(target)
+		_solo_refresh_caster_markers()
+		if battle_log != null:
+			_log_rule_event(BattleLog.Category.COMBAT,
+				"%s drains %s: Morale test failed, -%d spell tokens (%d -> %d)" % [
+					member.get_name(), target.get_name(), drain, before, after], _solo_is_ai_unit(member))
+		return true
+	return false
 
 
 ## Rules 3.6 (SHO-01a): a human unit's Hold = not moved this round (the table stores no Hold action).
