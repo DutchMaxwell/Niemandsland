@@ -125,7 +125,7 @@ use super::*;
     #[test]
     fn hit_debuff_picks_the_target_s_best_baseline_mode() {
         let (st, statics) = board(rifle_ccw(), rifle_ccw(), 9.0);
-        let ev = cast_ev_of(&statics, &st, 0, &debuff(-1.0, 0.0), 2);
+        let ev = cast_ev_of(&statics, &st, 0, &debuff(-1.0, 0.0), 2, crate::acts::CURRENT_RULES_EPOCH);
         assert!(
             (ev - 2.0 / 3.0).abs() < EPS,
             "rifle8 target @9\": want +2/3, got {ev}"
@@ -137,7 +137,7 @@ use super::*;
     #[test]
     fn hit_debuff_on_a_ccw_only_target_in_reach_prices_the_melee_leg() {
         let (st, statics) = board(ccw_only(), rifle_ccw(), 1.0);
-        let ev = cast_ev_of(&statics, &st, 0, &debuff(-1.0, 0.0), 2);
+        let ev = cast_ev_of(&statics, &st, 0, &debuff(-1.0, 0.0), 2, crate::acts::CURRENT_RULES_EPOCH);
         assert!(
             (ev - 1.0 / 3.0).abs() < EPS,
             "CCW-only target @1\": want +1/3, got {ev}"
@@ -151,7 +151,7 @@ use super::*;
     #[test]
     fn hit_debuff_on_a_ccw_only_target_out_of_reach_is_legitimately_zero() {
         let (st, statics) = board(ccw_only(), rifle_ccw(), 9.0);
-        let ev = cast_ev_of(&statics, &st, 0, &debuff(-1.0, 0.0), 2);
+        let ev = cast_ev_of(&statics, &st, 0, &debuff(-1.0, 0.0), 2, crate::acts::CURRENT_RULES_EPOCH);
         assert!(ev.abs() < EPS, "CCW-only target @9\": want 0.0, got {ev}");
     }
 
@@ -162,6 +162,6 @@ use super::*;
     #[test]
     fn def_debuff_prices_our_attack_into_the_target() {
         let (st, statics) = board(rifle_ccw(), rifle_ccw(), 9.0);
-        let ev = cast_ev_of(&statics, &st, 0, &debuff(0.0, -1.0), 2);
+        let ev = cast_ev_of(&statics, &st, 0, &debuff(0.0, -1.0), 2, crate::acts::CURRENT_RULES_EPOCH);
         assert!(ev > 0.0, "def debuff must price the attack-role number > 0, got {ev}");
     }

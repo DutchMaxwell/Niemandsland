@@ -127,9 +127,12 @@ static func cast_success_chance(boost_tokens: int, interference_tokens: int, bas
 ##   ignores_regen           — Bane / Disintegrate wounds bypass Regeneration (never Lacerate);
 ##   ap_vs_tough3/9, ap_vs_def3 — the conditional AP facets (Shatter / Tear / Disintegrate), resolved
 ##                             against the actual defender by effective_ap().
-static func spell_facets(weapon_rules: Array) -> Dictionary:
+## Rules 3.6 (EPOCH_73_V36) renames/re-points Fracture, Puncture, Disintegrate and Shatter; below it
+## the 3.5 readings stay in force.
+static func spell_facets(weapon_rules: Array, rules_epoch: int) -> Dictionary:
 	var f := {"ap": 0, "blast": 0, "deadly": 0, "bane": false, "shred": false, "surge": false,
 		"on6_ap": 0, "ignores_regen": false, "ap_vs_tough3": 0, "ap_vs_tough9": 0, "ap_vs_def3": 0}
+	var v36: bool = rules_epoch >= AiActRecorder.EPOCH_73_V36
 	for r in weapon_rules:
 		var s := str(r).strip_edges()
 		var base := s.get_slice("(", 0).strip_edges()
@@ -157,11 +160,24 @@ static func spell_facets(weapon_rules: Array) -> Dictionary:
 				# "Gets AP(4), but this model's unit takes one wound on unmodified rolls of 1" — the
 				# AP facet lands here; the self-wound side is the caller's trigger-roll business.
 				f["ap"] = maxi(int(f["ap"]), 4)
+			"Fracture":
+				if v36:
+					f["on6_ap"] = maxi(int(f["on6_ap"]), 2)
+			"Puncture":
+				if v36:
+					f["ignores_regen"] = true
+					f["ap_vs_def3"] = 2
 			"Disintegrate":
 				f["ignores_regen"] = true
-				f["ap_vs_def3"] = 2
+				if v36:
+					f["ap_vs_tough3"] = maxi(int(f["ap_vs_tough3"]), 2)
+				else:
+					f["ap_vs_def3"] = 2
 			"Shatter":
-				f["ap_vs_tough3"] = 2
+				if v36:
+					f["on6_ap"] = maxi(int(f["on6_ap"]), 3)
+				else:
+					f["ap_vs_tough3"] = 2
 			"Tear":
 				f["ap_vs_tough9"] = 4
 			_:

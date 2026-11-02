@@ -69,10 +69,10 @@ use super::*;
     #[test]
     fn a_lacerate_spell_keeps_regeneration_from_epoch_72() {
         let through = 6.0 * (1.0 - 5.0 / 12.0);
-        let lacerate = spell_facets(&["Lacerate".to_string()]);
+        let lacerate = spell_facets(&["Lacerate".to_string()], EPOCH_72_PLAYTEST_RULES);
         assert!(close(spell_damage_ev(6, &regen_def(false), &lacerate), through), "below 72: bypass");
         assert!(close(spell_damage_ev(6, &regen_def(true), &lacerate), through * 2.0 / 3.0));
-        let bane = spell_facets(&["Bane".to_string()]);
+        let bane = spell_facets(&["Bane".to_string()], EPOCH_72_PLAYTEST_RULES);
         assert!(close(spell_damage_ev(6, &regen_def(true), &bane), through), "Bane bypasses");
     }
 
@@ -87,7 +87,7 @@ use super::*;
         assert!(close(ev(&regen_def(false)), 2.5 * 2.0 / 3.0), "at 71: one die on the capped wound");
         assert!(close(ev(&regen_def(true)), 2.5 * 26.0 / 27.0), "from 72: three dice");
         assert!(close(ev(&Ctx { tough: 3, ..regen_def(true) }), 2.5 * 3.0 * 2.0 / 3.0));
-        let d3 = spell_facets(&["Deadly(3)".to_string()]);
+        let d3 = spell_facets(&["Deadly(3)".to_string()], EPOCH_72_PLAYTEST_RULES);
         assert!(close(spell_damage_ev(6, &regen_def(false), &d3), 3.0 * 2.0 / 3.0));
         assert!(close(spell_damage_ev(6, &regen_def(true), &d3), 3.0 * 26.0 / 27.0));
     }

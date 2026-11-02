@@ -11,6 +11,7 @@
 //! `EPOCH_48_CASTER_BOOST` on, and the OPPOSING casters' interference from
 //! `EPOCH_51_CASTER_INTERFERENCE` (the pool's opposing-side mirror).
 
+use crate::acts::rule_on;
 use crate::combat::{block_chance, deadly_multiplier, deadly_regen_dealt, success_chance, SIX_P};
 use crate::rules::Spell;
 use crate::unit::Ctx;
@@ -178,8 +179,9 @@ fn rating(rule: &str) -> i64 {
     inner.trim().parse::<i64>().unwrap_or(0).max(0)
 }
 
-pub fn spell_facets(weapon_rules: &[String]) -> Facets {
+pub fn spell_facets(weapon_rules: &[String], rules_epoch: u32) -> Facets {
     let mut f = Facets::default();
+    let v36 = rule_on(rules_epoch, crate::acts::EPOCH_73_V36);
     for r in weapon_rules {
         let s = r.trim();
         let base = s.split('(').next().unwrap_or("").trim();
@@ -199,11 +201,34 @@ pub fn spell_facets(weapon_rules: &[String]) -> Facets {
             // RENDING_AP_BONUS — ai_spell.gd:152-153.
             "Destructive" => f.on6_ap = f.on6_ap.max(4),
             "Hazardous" => f.ap = f.ap.max(4),
+            // Rules 3.6 (EPOCH_73_V36) re-pointed the four spell tokens below;
+            // the 3.5 arms stay byte-identical under the epoch flag.
+            "Fracture" => {
+                if v36 {
+                    f.on6_ap = f.on6_ap.max(2);
+                }
+            }
+            "Puncture" => {
+                if v36 {
+                    f.ignores_regen = true;
+                    f.ap_vs_def3 = 2;
+                }
+            }
             "Disintegrate" => {
                 f.ignores_regen = true;
-                f.ap_vs_def3 = 2;
+                if v36 {
+                    f.ap_vs_tough3 = f.ap_vs_tough3.max(2);
+                } else {
+                    f.ap_vs_def3 = 2;
+                }
             }
-            "Shatter" => f.ap_vs_tough3 = 2,
+            "Shatter" => {
+                if v36 {
+                    f.on6_ap = f.on6_ap.max(3);
+                } else {
+                    f.ap_vs_tough3 = 2;
+                }
+            }
             "Tear" => f.ap_vs_tough9 = 4,
             _ => {}
         }
@@ -272,18 +297,18 @@ pub fn spell_damage_ev(hits: i64, def: &Ctx, f: &Facets) -> f64 {
 }
 
 /// `BattleSim._spell_damage_ev_of` battle_sim.gd:802-809.
-pub fn spell_damage_ev_of(sp: &Spell, def: &Ctx) -> f64 {
+pub fn spell_damage_ev_of(sp: &Spell, def: &Ctx, rules_epoch: u32) -> f64 {
     if sp.effect_kind != "damage" {
         return 0.0;
     }
     let hits = sp.effect_hits * sp.target_count.max(1);
-    spell_damage_ev(hits, def, &spell_facets(&sp.weapon_rules))
+    spell_damage_ev(hits, def, &spell_facets(&sp.weapon_rules, rules_epoch))
 }
 
 /// `BattleSim._spell_ev_from` battle_sim.gd:778-795 — the best affordable
 /// DAMAGE spell in range; returns (ev, cost). Ties keep the FIRST spell
 /// (strict `>`), which is why the book order of the list is rule data.
-pub fn spell_ev_from(spells: &[Spell], tokens: i64, def: &Ctx, d: f64) -> (f64, i64) {
+pub fn spell_ev_from(spells: &[Spell], tokens: i64, def: &Ctx, d: f64, rules_epoch: u32) -> (f64, i64) {
     let mut best_ev = 0.0f64;
     let mut best_cost = 0i64;
     for e in spells {
@@ -296,7 +321,7 @@ pub fn spell_ev_from(spells: &[Spell], tokens: i64, def: &Ctx, d: f64) -> (f64, 
         if e.threshold > tokens || d > e.range_in + 0.001 {
             continue;
         }
-        let ev = cast_success_chance_base() * spell_damage_ev_of(e, def);
+        let ev = cast_success_chance_base() * spell_damage_ev_of(e, def, rules_epoch);
         if ev > best_ev {
             best_ev = ev;
             best_cost = e.threshold;
@@ -307,11 +332,11 @@ pub fn spell_ev_from(spells: &[Spell], tokens: i64, def: &Ctx, d: f64) -> (f64, 
 
 /// `BattleSim.spell_ev_of` battle_sim.gd:766-773 — zeros unless the caster has
 /// tokens left AND `GameUnit.is_caster()` (game_unit.gd:374-377).
-pub fn spell_ev_of(is_caster: bool, spells: &[Spell], tokens: i64, def: &Ctx, d: f64) -> (f64, i64) {
+pub fn spell_ev_of(is_caster: bool, spells: &[Spell], tokens: i64, def: &Ctx, d: f64, rules_epoch: u32) -> (f64, i64) {
     if tokens <= 0 || !is_caster {
         return (0.0, 0);
     }
-    spell_ev_from(spells, tokens, def, d)
+    spell_ev_from(spells, tokens, def, d, rules_epoch)
 }
 
 /// `AiSpell.official_pick_order` ai_spell.gd:305-312 — the book list rotated by
@@ -407,7 +432,7 @@ mod tests {
         let carrier = Ctx { defense: 4, regeneration: true, regen_target: 6, regen_target_spell: 2, ..Default::default() };
         let plain_six = Ctx { defense: 4, regeneration: true, regen_target: 6, regen_target_spell: 6, ..Default::default() };
 
-        let f = spell_facets(&[]);
+        let f = spell_facets(&[], crate::acts::CURRENT_RULES_EPOCH);
         let carrier_unsaved = spell_damage_ev(10, &carrier, &f);
         let six_unsaved = spell_damage_ev(10, &plain_six, &f);
 
