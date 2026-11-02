@@ -1585,6 +1585,12 @@ fn trace_rule(arm: &str, rule: &str, detail: &str) {
     }
 }
 
+fn trace_stamp(on: bool, arm: &str, rule: &str, detail: &str) {
+    if on {
+        crate::sim::trace_rule(arm, rule, detail);
+    }
+}
+
 /// `AiEv.facet_applies` ai_ev.gd:105-110 — the melee/shooting gate of a
 /// unit-level facet; `profile_range` 0 means a melee profile.
 fn facet_applies(melee_only: bool, shooting_only: bool, profile_range: i64) -> bool {
@@ -2701,10 +2707,13 @@ pub fn capture_reads_for_epoch(
     let mut p = p.clone();
     apply_aura_channel(reg, &mut p, rules_epoch);
     let p = &p;
+    let trace73 = rule_on(rules_epoch, EPOCH_73_V36) && crate::mv::plain_memo::trace_rules_on();
     let mut morale_bonus = banner_bonus_of(reg, p, &p.special_rules);
     for hero in &p.attached_hero_rules {
         morale_bonus = morale_bonus.max(banner_bonus_of(reg, p, hero));
     }
+    trace_stamp(trace73 && morale_bonus != 0, "banner-stamp", "Banner",
+        &format!("{}: Banner stamped +{} morale", p.name, morale_bonus));
     // EPOCH_39_MORALE_RATING — the rating joins the SAME stamp, the table's
     // own shape: `morale_bonus_of` ADDS the two best-ofs (solo_controller.gd:5638).
     morale_bonus += morale_rating_stamp(reg, p, rules_epoch);
@@ -2749,7 +2758,7 @@ pub fn capture_reads_for_epoch(
 /// terrain-pending shape, `shielded_alias_of`'s own bool). Below 52 the
 /// recorded flat fold replays and the tail stays zeros.
 fn regen_targets(
-    reg: &mut Registries, p: &Profile, rules_epoch: u32,
+    reg: &mut Registries, p: &Profile, rules_epoch: u32, trace73: bool,
 ) -> (i64, i64, i64, i64, f64, f64) {
     let regen = if rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
         regen_family_on(p, "Regeneration", rules_epoch)
@@ -2846,6 +2855,9 @@ fn regen_targets(
                     &format!("regen alias on {} — wounds ignored on {}+ (spells {}+)", p.name,
                         e.param_i("ignore_target", 0), e.param_i("ignore_target_spell", 0)),
                 );
+                trace_stamp(trace73, "regen-alias", &n,
+                    &format!("{}: {} stamped {}+ (spells {}+)", p.name, n,
+                        e.param_i("ignore_target", 0), e.param_i("ignore_target_spell", 0)));
             }
             if e.param_b("all_models") && !regen_family_on(p, &n, rules_epoch) {
                 continue;
@@ -2994,6 +3006,7 @@ fn self_destruct_rating(reg: &mut Registries, p: &Profile) -> i64 {
 /// `AiEv.ctx_for` ai_ev.gd:135-165. `models` stays at the live-unit reading;
 /// `BattleSim._ctx_of` overwrites it with the snapshot's `alive` on every call.
 fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
+    let trace73 = rule_on(rules_epoch, EPOCH_73_V36) && crate::mv::plain_memo::trace_rules_on();
     let armor = if unit_rule_active(reg, p, "Armor") {
         unit_rating(&p.special_rules, "Armor")
     } else {
@@ -3052,6 +3065,8 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
                 else { stealth_alias_of(reg, p) };
             (ap, ao, ac, false, 0, 0.0)
         };
+    trace_stamp(trace73 && stealth_alias_penalty != 0, "stealth-alias-stamp", "Stealth",
+        &format!("{}: Stealth alias stamped -{} to hit", p.name, stealth_alias_penalty));
     // WAVE 3 — the family's DATA-ALIAS amounts, gated on the FROZEN
     // `EPOCH_6_TABLE_RULES`: an `rules_epoch: 5` record (the Gen-3 fleet's
     // window) reads zeros and replays byte-exact; the stamp IS the gate.
@@ -3062,6 +3077,8 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         } else {
             (0, 0, 0.0)
         };
+    trace_stamp(trace73 && fortified_alias_ap != 0, "fortified-alias", "Fortified",
+        &format!("{}: Fortified alias stamped -{} AP over {}", p.name, fortified_alias_ap, fortified_alias_over_in));
     let upr_shooting = (has_exact_rule(&p.special_rules, "Unpredictable")
         && unit_rule_active(reg, p, "Unpredictable"))
         || (has_exact_rule(&p.special_rules, "Unpredictable Shooter")
@@ -3071,7 +3088,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     } else {
         (1, 1, 3)
     };
-    let regen_targets = regen_targets(reg, p, rules_epoch);
+    let regen_targets = regen_targets(reg, p, rules_epoch, trace73);
     // Block C2 — the melee/charge leg of the Shot Modifier family (see the
     // `Ctx` fields). The name list IS the port: these three are exactly the
     // family's entries with no runtime gate, and naming them one by one keeps
@@ -3093,6 +3110,8 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
             continue;
         };
         let hb = e.param_i("hit_bonus", 0);
+        trace_stamp(trace73 && hb != 0, "shot-modifier", name,
+            &format!("{}: {} stamped +{} melee", p.name, name, hb));
         if charge_only {
             melee_hit_bonus_charge += hb;
         } else {
@@ -3112,12 +3131,24 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         0
     };
     let ranged_shroud = ranged_shroud_params(reg, p, rules_epoch);
+    if trace73 {
+        if let Some([pen, floor]) = ranged_shroud {
+            trace_stamp(true, "ranged-shrouding", "Ranged Shrouding",
+                &format!("{}: Ranged Shrouding stamped -{}\" range, floor {}in", p.name, pen, floor));
+        }
+    }
     // Wave 3 — the family's two runtime-gated shooting members (see
     // `shot_modifier_runtime_of`); `moved_this_round` keeps its default true
     // until sim.rs's volley site stamps the act-scope flag over it.
     let (mobile_artillery_hit, mobile_artillery_over_in, grounded_precision_hit) =
         shot_modifier_runtime_of(reg, p, rules_epoch);
     let shielded_alias = shielded_alias_of(reg, p, rules_epoch);
+    if trace73 {
+        if let Some((kind, terrain)) = shielded_alias {
+            trace_stamp(true, "shielded-alias", "Shielded",
+                &format!("{}: Shielded alias stamped {:?} (terrain {})", p.name, kind, terrain));
+        }
+    }
     // EPOCH_54_DEFENSE_RATING — the rating kind's magnitude rides the SAME
     // stamp (`Ctx::shielded_rating`): the table's `maxi(rating, 0)` off the
     // rule's own rating (main.gd:5592). The walk already proved the rating
@@ -3209,6 +3240,10 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
                 && map.lookup(&p.faction_folder, &n).is_some_and(|e| e.param_b("no_gate_v36"))
         })
     };
+    let evasive_on = most_models_family_on(p, "Evasive", rules_epoch) || !evasive_boost.is_empty();
+    trace_stamp(trace73 && evasive_on, "evasive-stamp",
+        if evasive_boost.is_empty() { "Evasive" } else { evasive_boost },
+        &format!("{}: Evasive stamped, -1 to hit", p.name));
     Ctx {
         quality: p.quality,
         defense: armored_defense(p.defense, armor),
@@ -3274,7 +3309,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         stationary_alias_penalty,
         stationary_alias_over_in,
         stationary_alias_name: if stationary_alias_penalty > 0 { "Entrenched" } else { "" },
-        evasive: most_models_family_on(p, "Evasive", rules_epoch) || !evasive_boost.is_empty(),
+        evasive: evasive_on,
         evasive_alias: !evasive_boost.is_empty(),
         evasive_alias_name: evasive_boost,
         melee_evasion: most_models_family_on(p, "Melee Evasion", rules_epoch),
@@ -3428,6 +3463,7 @@ fn stamp(
     shoot: &mut [ShootProfile],
     unimplemented: &mut Vec<Unimplemented>,
     rules_epoch: u32,
+    trace73: bool,
 ) {
     // 1. Versatile Attack, unit-wide (ai_ev.gd:209-217).
     if has_special_rule(&p.special_rules, "Versatile Attack")
@@ -3497,6 +3533,8 @@ fn stamp(
                     sp.bonus_hits_per_six = hit.bonus_hits_per_six;
                     if hit.within_in > 0.0 {
                         sp.surge_within_in = hit.within_in;
+                        trace_stamp(trace73, "surge-window", &hit.name,
+                            &format!("{}: {} stamped within {}in", p.name, hit.name, hit.within_in));
                     }
                     if let Some((low, over)) = printed_low {
                         if low < 6 {
@@ -3594,6 +3632,8 @@ fn stamp(
                 .any(|h| facet_applies(h.melee_only, h.shooting_only, sp.range))
         {
             sp.shred_alias = true;
+            trace_stamp(trace73, "shred", "Shred",
+                &format!("{}: Shred stamped +1 wound per unmodified 1", p.name));
         }
     }
     // 6b. Shred UPGRADE entries (the Boost family): fires only when the model
@@ -4159,7 +4199,9 @@ fn boost_aura_name_of(p: &Profile, base: &str) -> String {
 /// runtime state), while Precision Feat (`uses_per_game`) stays out: a
 /// once-per-game PLAYER CHOICE the table never automates, so stamping it
 /// flat would be bug #489's over-credit.
-fn stamp_shot_modifier(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProfile]) {
+fn stamp_shot_modifier(
+    reg: &mut Registries, p: &Profile, shoot: &mut [ShootProfile], trace73: bool,
+) {
     let mut flat = 0;
     let mut over9 = 0;
     for name in [
@@ -4184,6 +4226,9 @@ fn stamp_shot_modifier(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
             continue;
         };
         let hb = e.param_i("hit_bonus", 0);
+        let band = if e.param_f("over_in", 0.0) > 0.0 { "over 9in" } else { "flat" };
+        trace_stamp(trace73 && hb != 0, "shot-modifier", name,
+            &format!("{}: {} stamped {:+} to hit ({})", p.name, name, hb, band));
         if e.param_f("over_in", 0.0) > 0.0 {
             over9 += hb;
         } else {
@@ -5898,6 +5943,7 @@ fn stamp_bane_boost(
     name: &'static str,
     widening: &'static str,
     rules_epoch: u32,
+    trace73: bool,
 ) {
     let map = reg.rules_for(&p.game_system);
     let Some(e) = map
@@ -5918,13 +5964,17 @@ fn stamp_bane_boost(
     // the unconditional window; no shipped entry spells it either way.
     let cond = if rule_on(rules_epoch, EPOCH_73_V36) { e.param_s("condition").to_string() } else { String::new() };
     let threshold = e.param_i("threshold", 0);
+    let mut stamped = 0;
     for sp in shoot.iter_mut().filter(|sp| sp.bane) {
         sp.bane_low = low;
         sp.bane_over_in = over;
         sp.bane_rule = name;
         sp.bane_condition = cond.clone();
         sp.bane_threshold = threshold;
+        stamped += 1;
     }
+    trace_stamp(trace73 && stamped != 0, "bane-boost", name,
+        &format!("{}: {} stamped {}+ over {}in", p.name, name, low, over));
 }
 
 /// `SoloController.bounding_dice_count` (solo_controller.gd:1386-1396) — how
@@ -6536,11 +6586,12 @@ impl UnitStatic {
         // Aura-Channel fold so both additive legs see disjoint names.
         apply_fortified_aura_picks(reg, &mut p, rules_epoch);
         let p = &p;
+        let trace73 = rule_on(rules_epoch, EPOCH_73_V36) && crate::mv::plain_memo::trace_rules_on();
         let mut shoot = profiles_in_range(&p.weapons, 0.0);
-        stamp(reg, p, &mut shoot, &mut unimplemented, rules_epoch);
+        stamp(reg, p, &mut shoot, &mut unimplemented, rules_epoch, trace73);
         stamp_conditional_ap(reg, p, rules_epoch, &mut shoot);
         stamp_unit_strikers(reg, p, &mut shoot, rules_epoch);
-        stamp_shot_modifier(reg, p, &mut shoot);
+        stamp_shot_modifier(reg, p, &mut shoot, trace73);
 
         let mut melee = melee_profiles_at(&p.weapons, rules_epoch);
         // NML-002 Strafing — the move-through trigger's own array, stamped
@@ -6552,7 +6603,7 @@ impl UnitStatic {
         // battle_sim.gd:719-720 takes the identical path); a rule the port
         // cannot model is reported ONCE, not once per array.
         let mut melee_unimpl: Vec<Unimplemented> = Vec::new();
-        stamp(reg, p, &mut melee, &mut melee_unimpl, rules_epoch);
+        stamp(reg, p, &mut melee, &mut melee_unimpl, rules_epoch, trace73);
         stamp_conditional_ap(reg, p, rules_epoch, &mut melee);
         stamp_unit_strikers(reg, p, &mut melee, rules_epoch);
         // Lacerate+Counter wave, epoch-gated (`acts::rule_on`, epoch 3): the
@@ -6732,6 +6783,8 @@ impl UnitStatic {
                 for sp in shoot.iter_mut().chain(melee.iter_mut()) {
                     sp.cond_ap.extend(live.iter().cloned());
                 }
+                trace_stamp(trace73, "piercing-hunter", &live[0].name,
+                    &format!("{}: {} stamped AP+{}", p.name, live[0].name, live[0].ap_bonus));
             }
         }
         // Wave 4 (rules-wave4-condap), gated on the FROZEN
@@ -6784,7 +6837,7 @@ impl UnitStatic {
         // never widens — no pre-charge gap (the shred2 precedent). Read BY
         // NAME, never by iterating the shared primitive (#489).
         if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
-            stamp_bane_boost(reg, p, &mut shoot, "Enhanced Mischievous", "reroll_save_low", rules_epoch);
+            stamp_bane_boost(reg, p, &mut shoot, "Enhanced Mischievous", "reroll_save_low", rules_epoch, trace73);
         }
         // Wave 4 (rules-wave4-boostbases2), gated on the FROZEN
         // `EPOCH_7_TABLE_RULES`: "Bestial Boost" is the aof/beastmen twin of
@@ -6794,7 +6847,7 @@ impl UnitStatic {
         // instead of a second mechanism. An epoch-6 record reads the base
         // 6s-only window and replays byte-exact.
         if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
-            stamp_bane_boost(reg, p, &mut shoot, "Enhanced Bestial", "reroll_save_low", rules_epoch);
+            stamp_bane_boost(reg, p, &mut shoot, "Enhanced Bestial", "reroll_save_low", rules_epoch, trace73);
         }
         // Wave 6 (rules-wave6-scrapper), gated on the FROZEN
         // `EPOCH_30_SCRAPPER_BOOST`: "Scrapper Boost" (gf/jackals) is the Bane
@@ -6809,7 +6862,7 @@ impl UnitStatic {
         // NAME, never by iterating the shared primitive. A record below
         // epoch 30 reads the base 6s-only window and replays byte-exact.
         if rule_on(rules_epoch, EPOCH_30_SCRAPPER_BOOST) {
-            stamp_bane_boost(reg, p, &mut shoot, "Enhanced Scrapper", "reroll_save_from", rules_epoch);
+            stamp_bane_boost(reg, p, &mut shoot, "Enhanced Scrapper", "reroll_save_from", rules_epoch, trace73);
         }
         // Shred wave 3 (rules-wave3-shred3): the family's per-face wound
         // amount is now READ off the carried Shred-primitive entry
