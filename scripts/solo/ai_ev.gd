@@ -655,7 +655,14 @@ static func stamp_sergeant(profiles: Array, unit: GameUnit) -> Array:
 			if bool(sp.get("extra_attack", false)) and bool(fpd.get("surge_attack", false)):
 				fpd["surge_attack_low"] = int(sp.get("surge_low", 5))   # Primal Boost: 5-6 spawn attacks
 			elif bool(fpd.get("surge", false)):
-				fpd["surge_low"] = int(sp.get("surge_low", 5))
+				var low := int(sp.get("surge_low", 5))
+				# DAT-12b-fix (lead review): an Enhanced entry drops the distance
+				# condition and keeps the BASE rule's window, not the 3.5 Boost's 5.
+				# From 73 only; below the gate the old Boost defaults stay byte-identical.
+				if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
+						and float(sp.get("over_in", 9.0)) == 0.0:
+					low = int(RulesRegistry.unit_param(unit, base_rule, "surge_low", 6))
+				fpd["surge_low"] = low
 				fpd["surge_over_in"] = over_in_gate(sp)
 	# Coverage wave (resolver audit): unit-level RENDING aliases ("Rending in Melee" / "when
 	# Shooting" — granted or direct): stamp the rending facet onto the gated profile set.

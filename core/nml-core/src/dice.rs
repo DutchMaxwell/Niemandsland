@@ -2148,8 +2148,6 @@ pub fn resolve_melee_leg(
             // strike (the strike-back) pays nothing, and every pre-73 record keeps the old read.
             let alias_fires = !p.alias_gate
                 || p.surge_alias_rule.is_empty()
-                || p.surge_over_in < 0.0
-                || !charging
                 || charge_from_in > crate::combat::CHARGE_LONG_RANGE_IN;
             if p.surge && alias_fires {
                 // No flag: at 0.0" this IS the table's gated read (the within
