@@ -44,6 +44,8 @@ fn loser(
         2,
         10,
         self_wounds,
+        0.0,
+        0.0,
         Seams { rules_epoch, ..Default::default() },
     );
     if st.alive[0] == 0 {
