@@ -52,7 +52,7 @@ func _shred_wounds(epoch: int, charge_in: float) -> int:
 	var target := _unit("Target", 1, [])
 	var profile := {"shred": true, "_shred_alias": "Warbound", "range": 0, "rules": []}
 	return await main._solo_save_batch(striker, target, "Warbound", 1, 4, 0, profile,
-		false, false, true, false, {}, charge_in)
+		false, false, true, false, {}, -1.0, charge_in)
 
 
 ## The shared gate: a charge needs over 6", a non-charging strike keeps the old read.
