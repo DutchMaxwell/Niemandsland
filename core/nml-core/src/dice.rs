@@ -1841,7 +1841,11 @@ fn fresh_save_ones(out: &ShootResult, idx: usize) -> i64 {
 /// hits) dice; each 6+ cancels the highest-worth hit (its own AP plus the on-6 bonus).
 pub(crate) fn parry_strike(pending: &mut [Pending<'_>], def: &Ctx, def_owner: &str, gated: bool, tray: &mut Tray, out: &mut ShootResult) {
     let taken: i64 = pending.iter().map(|x| x.3).sum();
-    let n = if gated { (def.parry_dice * def.models).min(taken) } else { 0 };
+    // MEL-07c-fix — the live melee path stamps the host-plus-joined-heroes sum
+    // (`sim::parry_dice_total`, the Impact event's own source); the hand-built
+    // dice fixtures keep the old per-host read.
+    let dice = def.parry_dice_total.unwrap_or(def.parry_dice * def.models);
+    let n = if gated { dice.min(taken) } else { 0 };
     if n <= 0 { return; }
     let faces = tray.roll(n as usize);
     let k = faces.iter().filter(|&&f| f >= 6).count() as i64;
