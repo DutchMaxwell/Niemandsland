@@ -19,6 +19,12 @@ const PROBE_HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
     "base_radius":0.016,"game_system":"aof","faction_folder":"beastmen",
     "special_rules":["Bestial","Enhanced Bestial"],"item_grants":[],
     "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+    "weapons":[{"name":"Rifle","range":24,"attacks":8,"count":1,"ap":0,"rules":[]}]},
+  "revenant":{"unit_id":"revenant","name":"Revenant","quality":4,
+    "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+    "base_radius":0.016,"game_system":"aof","faction_folder":"undead",
+    "special_rules":["Mischievous","Enhanced Mischievous"],"item_grants":[],
+    "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
     "weapons":[{"name":"Rifle","range":24,"attacks":8,"count":1,"ap":0,"rules":[]}]}}}"#;
 
 fn probe_root(tag: &str) -> String {
@@ -30,7 +36,9 @@ fn probe_root(tag: &str) -> String {
       "goblins":{"Mischievous":{"primitive":"Bane","rated":false,"book_version":"3.6.0","params":{"reroll_save_sixes":true}},
         "Enhanced Mischievous":{"primitive":"Bane","rated":false,"book_version":"3.6.0","params":{"condition":"def_5_6","over_in":9.0,"reroll_save_low":5,"upgrades":"Mischievous"}}},
       "beastmen":{"Bestial":{"primitive":"Bane","rated":false,"book_version":"3.6.0","params":{"reroll_save_sixes":true}},
-        "Enhanced Bestial":{"primitive":"Bane","rated":false,"book_version":"3.6.0","params":{"condition":"over_half_range","over_in":9.0,"reroll_save_low":5,"upgrades":"Bestial"}}}}}"#;
+        "Enhanced Bestial":{"primitive":"Bane","rated":false,"book_version":"3.6.0","params":{"condition":"over_half_range","over_in":9.0,"reroll_save_low":5,"upgrades":"Bestial"}}},
+      "undead":{"Mischievous":{"primitive":"Bane","rated":false,"book_version":"3.6.0","params":{"reroll_save_sixes":true}},
+        "Enhanced Mischievous":{"primitive":"Bane","rated":false,"book_version":"3.6.0","params":{"condition":"above_half_strength","over_in":9.0,"reroll_save_low":5,"upgrades":"Mischievous"}}}}}"#;
     std::fs::write(map_dir.join("rules_mechanics_aof.json"), body).expect("write temp map");
     dir.to_string_lossy().into_owned()
 }
@@ -49,6 +57,22 @@ fn volley_of(
     seed: i64,
 ) -> ShootResult {
     let def = Ctx { defense, models: 1, tough: 1, ..Default::default() };
+    let mut tray = Tray::seeded(seed);
+    resolve_volley_with_tray(
+        &[Shooter { profiles: std::slice::from_ref(p), keep: &[0], attacks: &[8], att: &us.ctx, owner: "" }],
+        &def, "Target", dist, dist, true, true, true, true, &mut tray,
+    )
+}
+
+fn volley_state(
+    us: &crate::unit::UnitStatic,
+    p: &ShootProfile,
+    defense: i64,
+    dist: f64,
+    seed: i64,
+    above_half: bool,
+) -> ShootResult {
+    let def = Ctx { defense, models: 1, tough: 1, above_half_strength: above_half, ..Default::default() };
     let mut tray = Tray::seeded(seed);
     resolve_volley_with_tray(
         &[Shooter { profiles: std::slice::from_ref(p), keep: &[0], attacks: &[8], att: &us.ctx, owner: "" }],
@@ -125,4 +149,21 @@ fn the_volley_log_names_the_condition_that_opened_the_window() {
         "the re-roll line must name the condition: {:?}",
         out.log
     );
+}
+
+// SHO-10-fix: the Rust table path passes the target state into the re-roll window
+// (`CondApTarget::of`). This is the control pin the GD price must match: an
+// `above_half_strength` window opens against a target above half strength and stays
+// shut against one below.
+#[test]
+fn an_above_half_strength_window_reads_the_target_state_at_epoch_73() {
+    let root = probe_root("above_half");
+    let us = probe_unit(&root, "revenant", EPOCH_73_V36);
+    let bare = without_bane(&us);
+    let up = volley_state(&us, &us.shoot[0], 3, 12.0, SEED, true);
+    let up_off = volley_state(&us, &bare, 3, 12.0, SEED, true);
+    assert_ne!(up.rolls, up_off.rolls, "above half strength opens the window");
+    let down = volley_state(&us, &us.shoot[0], 3, 12.0, SEED, false);
+    let down_off = volley_state(&us, &bare, 3, 12.0, SEED, false);
+    assert_eq!(down.rolls, down_off.rolls, "below half strength keeps it shut");
 }
