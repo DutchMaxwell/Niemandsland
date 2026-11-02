@@ -590,6 +590,7 @@ static func stamp_sergeant(profiles: Array, unit: GameUnit) -> Array:
 		if str(r).strip_edges() == "Ferocious":
 			for fp in profiles:
 				(fp as Dictionary)["surge"] = true
+				(fp as Dictionary)["surge_alias"] = true
 			break
 	# Coverage wave (2026-07-23): Surge-family DATA aliases via the generic primitive layer —
 	# Devout (exact), Point-Blank Surge (within 12\"), Bloodborn/Clan Warrior/Primal (extra ATTACK
@@ -628,6 +629,7 @@ static func stamp_sergeant(profiles: Array, unit: GameUnit) -> Array:
 				fpd["surge_attack_rule"] = n
 			else:
 				fpd["surge"] = true
+				fpd["surge_alias"] = true
 				# The entry's own per-six bonus (dead-parameter recount 2026-09-15,
 				# family 2): every shipped row prints 1, the constant the fold
 				# hard-coded before this read.
@@ -694,6 +696,7 @@ static func stamp_sergeant(profiles: Array, unit: GameUnit) -> Array:
 			var fpd := fp as Dictionary
 			if facet_applies(sp, int(fpd.get("range", 0))):
 				fpd["shred"] = true
+				fpd["shred_alias"] = true
 	for e in RulesRegistry.unit_rules_of_primitive(unit, "Bane"):
 		var name := str((e as Dictionary).get("name", ""))
 		var sp: Dictionary = (e as Dictionary).get("params", {})
@@ -811,11 +814,23 @@ static func stamp_conditional_ap(profiles: Array, unit: GameUnit) -> Array:
 ## resolution step for step — to-hit modifiers, per-6 bonus hits, Blast, the Rending AP(+4) sub-batch,
 ## Bane save re-rolls, Deadly's Tough cap and the defender's Regeneration all use the same AiCombatMath
 ## rules as the dice path. `dist_in` gates the over-9" rules (ranged); melee is profile range 0.
+## SHO-18e (rules 3.6): the offensive Surge/Shred alias families pay only from a shot over 9" or
+## a charge over 6". `dist_in` is the distance `melee_ev` hands in (the W1.5b charge gap, 0.0 off
+## a charge), so this mirrors the resolver's `_solo_alias_family_over` / `_solo_alias_charge_over`.
+## A weapon's own Surge/Shred carries no alias marker and stays unconditional. Below
+## EPOCH_73_V36 the old unconditional read stays.
+static func _alias_gate_fires(melee: bool, dist_in: float) -> bool:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return true
+	return dist_in > (AiCombatMath.CHARGE_LONG_RANGE_IN if melee else AiCombatMath.LONG_RANGE_IN)
+
+
 static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary, dist_in: float, charging: bool) -> float:
 	var attacks := float(maxi(int(profile.get("attacks", 0)), 0))
 	if attacks <= 0.0:
 		return 0.0
 	var melee: bool = int(profile.get("range", 0)) <= 0
+	var alias_gate_fires := _alias_gate_fires(melee, dist_in)
 	var quality := int(att.get("quality", 4))
 	# Wave 6: a spell buff/debuff's ±N to hit rolls (AiSpell P3 seam) folds into the SAME net-modifier
 	# composition as the rule modifiers — 0 when absent, so the pre-spell EV is byte-identical.
@@ -917,7 +932,8 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 	# — Per-unmodified-6 bonus hits (expected +attacks/6 each; "only the original hit counts as a 6") —
 	if not melee and bool(profile.get("relentless", false)) and dist_in > AiCombatMath.LONG_RANGE_IN:
 		hits += attacks * SIX_P
-	if not fatigue_mutes and bool(profile.get("surge", false)):
+	if not fatigue_mutes and bool(profile.get("surge", false)) \
+			and (not bool(profile.get("surge_alias", false)) or alias_gate_fires):
 		hits += attacks * SIX_P
 	if not fatigue_mutes and melee and charging and (bool(profile.get("furious", false)) or bool(att.get("furious", false))):
 		hits += attacks * SIX_P
@@ -1011,7 +1027,8 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 		unsaved *= float(AiCombatMath.deadly_multiplier(deadly, deadly_cap))
 	# — Shred (wave 5): every save die (one per hit) that lands a natural 1 deals +1 wound — expected
 	#   +hits/6, NOT Deadly-multiplied (mirrors the dice path's save-step reading) —
-	if bool(profile.get("shred", false)):
+	if bool(profile.get("shred", false)) \
+			and (not bool(profile.get("shred_alias", false)) or alias_gate_fires):
 		unsaved += hits * SIX_P
 	# — Regeneration family (5+ Regeneration / 6+ Self-Repair ignores; Bane/Rending/UNSTOPPABLE bypass
 	#   it — main.gd:6772/6852, W-P1 parity fix: the unstoppable flag was parsed but never read here.
