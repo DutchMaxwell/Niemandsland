@@ -87,3 +87,45 @@ func test_non_enhanced_forms_keep_their_distance_gate() -> void:
 		assert_bool(params.has("over_in")).override_failure_message(
 			"%s/%s: control '%s' lost its over_in gate: %s" % [c[0], c[1], c[2], params]) \
 			.is_true()
+
+
+## A live carrier of the base rule plus its Enhanced form, in the book that prints both.
+func _enhanced_ferocious_unit() -> GameUnit:
+	var u := GameUnit.new()
+	u.unit_id = "enh_fer"
+	u.unit_properties = {"player_id": 2, "name": "E", "quality": 4, "defense": 4,
+		"special_rules": ["Ferocious", "Enhanced Ferocious"],
+		"game_system": "gf", "faction_folder": "orc_marauders"}
+	var m := ModelInstance.new()
+	m.is_alive = true
+	u.models.append(m)
+	return u
+
+
+## The LIVE AiEv stamp (not a hand-built dictionary) at `epoch`; restores the static clock first,
+## so a failing assert cannot leak the epoch into the next case.
+func _stamped_surge(epoch: int) -> Dictionary:
+	var epoch0: int = AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = epoch
+	var p := {"name": "Rifle", "attacks": 8, "ap": 0, "range": 24, "rules": []}
+	AiEv.stamp_sergeant([p], _enhanced_ferocious_unit())
+	AiActRecorder.rules_epoch = epoch0
+	return p
+
+
+func test_enhanced_ferocious_stamps_the_base_window_at_epoch_73() -> void:
+	var p := _stamped_surge(AiActRecorder.EPOCH_73_V36)
+	assert_bool(bool(p.get("surge", false))).override_failure_message(
+		"the base Ferocious never reached the stamp").is_true()
+	assert_int(int(p.get("surge_low", 0))).override_failure_message(
+		"the Enhanced form keeps the base Ferocious 6s window, not the Boost's 5").is_equal(6)
+	assert_float(float(p.get("surge_over_in", 9.0))).override_failure_message(
+		"an explicit over_in 0 means no distance condition").is_equal_approx(-1.0, 0.001)
+
+
+func test_enhanced_ferocious_keeps_the_boost_window_at_epoch_72() -> void:
+	var p := _stamped_surge(AiActRecorder.EPOCH_72_PLAYTEST_RULES)
+	assert_int(int(p.get("surge_low", 0))).override_failure_message(
+		"epoch 72 keeps the 3.5 Boost 5s window").is_equal(5)
+	assert_float(float(p.get("surge_over_in", 0.0))).override_failure_message(
+		"epoch 72 keeps the old 9-inch default").is_equal_approx(9.0, 0.001)
