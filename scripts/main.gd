@@ -23594,7 +23594,12 @@ func _solo_apply_surprise_attack(unit: GameUnit) -> void:
 ## Teleport / Ethereal (design #816, PR 1 — table side): the BEFORE-ATTACK reposition beat, run
 ## after the move/charge resolves and before shooting/melee, in the same once-per-activation
 ## before-attacking slot the Storm Attack beat uses. AI side only (the human keeps the manual
-## drag). Clears the activation latch (reset semantics — it refills every activation), asks the
+## drag). The band penalty is keyed to the activation that took the placement: a take stamps
+## `teleport_activation` with the live activation serial, and the band pass prices the -6"/-6"
+## only while that stamp still equals the serial — pure reads, so previews and the move agree.
+## The once-per-activation latch keeps its old activation-start clear here, so the next
+## activation may place again; below epoch 73 the band pass ignores the stamp and the penalty
+## stays permanently folded. Asks the
 ## controller's EV-margin policy, and on a take: writes the record the act recorder folds
 ## (used-flag + landing centroid), glides the RIGID formation to the new centroid (house rule:
 ## nothing teleports-invisibly), and logs ONE line naming rule, band cap and landing centroid.
@@ -23616,6 +23621,7 @@ func _solo_apply_teleport(unit: GameUnit, report: Dictionary) -> void:
 	var to: Vector2 = dec.get("to", Vector2.ZERO)
 	var cap_in := SoloController.teleport_cap_in(rule, rush)
 	unit.unit_properties["teleport_used_this_activation"] = true
+	unit.unit_properties["teleport_activation"] = AiActRecorder.activation_serial
 	unit.unit_properties["teleport_to"] = to
 	var models: Array = solo_controller._moving_models(unit)
 	var centre: Vector3 = solo_controller.unit_centre(unit)

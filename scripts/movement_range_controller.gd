@@ -80,9 +80,11 @@ static func base_radius_for_props(props: Dictionary) -> float:
 ## rules still reach the bands, through the STRUCTURED path (`OPRArmyManager.expand_auras_of`
 ## stamps the granted rule NAME into special_rules).
 ## Returns advance, rush and charge distances, each clamped at zero.
-## STATIC + pure (reads only `props`): so callers WITHOUT a live controller instance — the Solo AI when
-## no MovementRangeController is injected — resolve Fast/Slow through this ONE band source instead of a
-## hardcoded 6"/12" fallback (field-test finding 1: a Slow unit moved the full 6").
+## STATIC + pure (reads only `props`): so callers WITHOUT a live controller instance — the Solo AI
+## when no MovementRangeController is injected — resolve Fast/Slow through this ONE band source
+## instead of a hardcoded 6"/12" fallback (field-test finding 1: a Slow unit moved the full 6").
+## The Ethereal placement comparison below is a pure read of the stamp and the live serial; this
+## function never mutates the unit.
 ## `applied` (DAT-16a): optional out-list that collects the carried rule names which WIDENED a band,
 ## in the same pass and order — callers write the rules-must-log line, never this pure function.
 static func move_bands_for_props(props: Dictionary, applied: Array = []) -> Dictionary:
@@ -169,11 +171,14 @@ static func move_bands_for_props(props: Dictionary, applied: Array = []) -> Dict
 		if int(rp.get("uses_per_game", 0)) > 0:
 			continue   # once-per-game feats (Speed Feat) never ride the permanent bands
 		# Rules 3.6 (MOR-19b): Ethereal's place-within-6" is optional, so the -6"/-6" band
-		# penalty rides only while the model was placed this activation. The latch is cleared
-		# at activation start, so the penalty drops at the activation's end. Below the epoch
-		# the penalty stays permanently folded (today's 3.5 behaviour).
+		# penalty rides only in the activation that took the placement. The Teleport beat stamps
+		# `teleport_activation` with the live activation serial; this PURE read prices the
+		# penalty only while the stamp still equals that serial. Every read in the activation
+		# (range preview, candidate scoring, the move) gets the same answer, and the next
+		# activation's serial drops it. Nothing here mutates the unit. Below the epoch the
+		# penalty stays permanently folded (today's 3.5 behaviour).
 		if base2 == "Ethereal" and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
-			var placed := bool(props.get("teleport_used_this_activation", false))
+			var placed := int(props.get("teleport_activation", -1)) == AiActRecorder.activation_serial
 			var trace_board: Dictionary = props.get("activation_board", {})
 			if not trace_board.is_empty():
 				var verdict := "not placed — no movement penalty this activation"
