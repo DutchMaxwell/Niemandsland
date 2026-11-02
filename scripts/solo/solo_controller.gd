@@ -745,6 +745,7 @@ func activate_next_ai_unit() -> GameUnit:
 	if unit == null:
 		return null
 	_activation_seq += 1   # monotonic per-activation index for the deterministic difficulty draws
+	AiActRecorder.activation_serial = _activation_seq   # the live identity the band pass prices against
 	if not _round_first_slot.has(_current_round()):
 		_round_first_slot[_current_round()] = ai_slot   # D-wave: this round's opener
 	last_move_paths = []   # cleared per activation — HOLD / Shaken idle replays nothing

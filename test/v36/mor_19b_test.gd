@@ -1,7 +1,8 @@
 extends GdUnitTestSuite
 ## Rules 3.6 row MOR-19b: Ethereal's place-within-6" is optional and the -6" band penalty
-## applies only while the model was placed this activation. Below EPOCH_73_V36 the bands keep
-## today's always-on -6/-6. The core twin is core/nml-core/src/tests/unit/v36_mor_19b.rs.
+## applies only in the activation that took the placement (the `teleport_activation` stamp equals
+## the live activation serial). Below EPOCH_73_V36 the bands keep today's always-on -6/-6. The
+## core twin is core/nml-core/src/tests/unit/v36_mor_19b.rs.
 
 const CONTROLLER := preload("res://scripts/movement_range_controller.gd")
 
@@ -22,7 +23,7 @@ func _props(placed: bool) -> Dictionary:
 		"game_system": "aof",
 		"faction_folder": "ghostly_undead",
 		"special_rules": ["Ethereal"],
-		"teleport_used_this_activation": placed,
+		"teleport_activation": AiActRecorder.activation_serial if placed else -1,
 	}
 
 
