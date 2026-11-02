@@ -1488,6 +1488,18 @@
      "extra_wound_per_save_one": 1
     }
    },
+   "Spell Drain": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "range_in": 18,
+     "target": "enemy",
+     "once": true,
+     "needs_los": true,
+     "spell_token_drain": 2
+    }
+   },
    "Surge": {
     "primitive": "Surge",
     "rated": false,
@@ -7350,6 +7362,18 @@
      "requires_not_shaken": true
     }
    },
+   "Spell Drain": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "range_in": 18,
+     "target": "enemy",
+     "once": true,
+     "needs_los": true,
+     "spell_token_drain": 2
+    }
+   },
    "Split": {
     "primitive": "Split",
     "rated": true,
@@ -8744,6 +8768,18 @@
     "book_version": "3.5.3",
     "params": {
      "grants": "Shred in Melee"
+    }
+   },
+   "Spell Drain": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "range_in": 18,
+     "target": "enemy",
+     "once": true,
+     "needs_los": true,
+     "spell_token_drain": 2
     }
    },
    "Strafing": {
