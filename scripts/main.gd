@@ -23124,7 +23124,7 @@ func _solo_apply_precision_target(unit: GameUnit) -> void:
 			continue
 		if bool(member.unit_properties.get("precision_target_used", false)):
 			continue
-		for e in _solo_utility_buff_entries_named(member, "Precision Target"):
+		for e in RulesRegistry.unit_rules_of_primitive(member, "Precision Target"):
 			var ed := e as Dictionary
 			if bool(member.unit_properties.get("precision_target_used", false)):
 				break
@@ -23134,24 +23134,11 @@ func _solo_apply_precision_target(unit: GameUnit) -> void:
 				continue
 			member.unit_properties["precision_target_used"] = true
 			var markers: int = maxi(int(ed.get("rating", 0)), 1)
-			# Rules 3.6 (EPOCH_73_V36): Targets put ONE token on each of up to X units and give a flat +1
-			# (the 3.5 reading stacked all markers on one pick); below 73 the old stack stays byte-exact.
-			var v36: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
-			var picks: Array = _solo_utility_targets(member, "enemy", float(sp.get("range_in", 18.0)),
-				bool(sp.get("needs_los", true)), markers) if v36 else [tgt]
-			if picks.is_empty():
-				picks = [tgt]
-			for p in picks:
-				var pu := p as GameUnit
-				_solo_record_spell_mod(pu, "Precision Target", {
-					"modifier": {"hit_mod": 1 if v36 else markers},
-					"beneficiary": "attackers",
-					"duration": "game"})
-				_solo_rule_float(pu, "Targeted +%d!" % (1 if v36 else markers))
-			if v36:
-				var names := picks.map(func(p): return (p as GameUnit).get_name())
-				_log_rule_event(BattleLog.Category.COMBAT,
-					"Precision Target: %s places 1 token on each of %s — a friendly attack gets +1 to hit" % [member.get_name(), ", ".join(names)], true)
+			_solo_record_spell_mod(tgt, "Precision Target", {
+				"modifier": {"hit_mod": markers},
+				"beneficiary": "attackers",
+				"duration": "game"})
+			_solo_rule_float(tgt, "Targeted +%d!" % markers)
 
 
 ## Spend every Precision-Tag marker on the target for +X to hit on THIS volley (the AI spends all at once —
