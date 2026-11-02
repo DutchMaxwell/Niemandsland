@@ -3472,6 +3472,13 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
             {
                 c.evasive = false;
             }
+            if crate::rules::has_special_rule(&host.special_rules, "Ranged Shrouding")
+                && crate::unit::most_models_family_live(
+                    host, state.alive[i], &heroes, "Ranged Shrouding", rules_epoch,
+                ) == Some(false)
+            {
+                c.ranged_shrouding = false;
+            }
         }
     }
     // Rules 3.6 (row W1.4b) — the Stealth family's most-models read follows the
@@ -3554,6 +3561,13 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
                 ) == Some(false)
             {
                 c.guarded = false;
+            }
+            if carries(&["Shielded"])
+                && crate::unit::defence_family_live(
+                    host, alive, &heroes, &["Shielded"], rules_epoch,
+                ) == Some(false)
+            {
+                c.shielded = false;
             }
         }
     }
@@ -3768,7 +3782,9 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
                 None if !grants || !(mods::granted(state, i, "Regeneration")
                     || mods::granted(state, i, "Enhanced Self-Repair")
                     || mods::granted(state, i, "Enhanced Cursed Undead")) => {
-                    let own = ["Resistance", "Medical Training", "Regeneration Buff",
+                    // "Resistance" is a REGEN_MOST_MODELS name at 73 (MOR-07), so the
+                    // live majority owns it; the boosts and Medical Training stay static.
+                    let own = ["Medical Training", "Regeneration Buff",
                         "Self-Repair Boost", "Cursed Undead Boost", "Plaguebound Boost",
                         "Angelic Blessing Boost"].iter().any(|r| {
                         crate::rules::has_special_rule(&host.special_rules, r)
@@ -3869,7 +3885,7 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
             }
         }
     }
-    let (ap, hit) = growth_bonus_of(statics, state, i);
+    let (ap, hit) = growth_bonus_epoch(statics, state, i, rules_epoch);
     c.growth_ap_mod = ap;
     c.growth_hit_mod = hit;
     // rules-wave3-growthmark — the family's DEFENDER-side facets, gated on
@@ -3877,7 +3893,7 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
     // stamping `rules_epoch: 5` (the recording fleet's live epoch) replays
     // byte-exact, exactly like the Lacerate/ambush waves' own gates.
     if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
-        let (dm, fa) = growth_defense_of(statics, state, i);
+        let (dm, fa) = growth_defense_epoch(statics, state, i, rules_epoch);
         c.growth_def_mod = dm;
         c.growth_fortify_ap = fa;
     }
@@ -3933,7 +3949,41 @@ pub fn ctx_live_vs(
 /// hit summed separately. `state.growth_markers` is a single counter (see
 /// `unit::growth_of`), so a unit carrying two such rules would double-count —
 /// out of the training pool's scope.
+/// Row W1.4b — a Growth member's live majority over the joined unit: the
+/// static build filtered the facet by `most_models_family_on`, this re-reads
+/// the LIVING models at use time. Non-family growth names keep the static read.
+fn growth_rule_live(state: &State, i: usize, name: &str, rules_epoch: u32) -> bool {
+    if !rule_on(rules_epoch, EPOCH_73_V36) {
+        return true;
+    }
+    let Some(host) = state.roster.profile.get(i).and_then(|&p| state.profiles.list.get(p)) else {
+        return true;
+    };
+    // Only a facet the profile's own rules produced is read live: a synthetic
+    // fixture may patch the static alone, and that stamp is not ours to touch.
+    if !crate::rules::has_special_rule(&host.special_rules, name) {
+        return true;
+    }
+    let heroes: Vec<(&crate::state::Profile, i64)> = state.attached.get(i).map(|a| a.iter()
+        .filter(|&&h| state.alive.get(h).copied().unwrap_or(0) > 0)
+        .filter_map(|&h| {
+            let hp = *state.roster.profile.get(h)?;
+            Some((state.profiles.list.get(hp)?, state.alive.get(h).copied().unwrap_or(0)))
+        })
+        .collect()).unwrap_or_default();
+    crate::unit::most_models_family_live(
+        host, state.alive.get(i).copied().unwrap_or(0), &heroes, name, rules_epoch,
+    ) != Some(false)
+}
+
+#[cfg(test)]
 fn growth_bonus_of(statics: &[UnitStatic], state: &State, i: usize) -> (i64, i64) {
+    growth_bonus_epoch(statics, state, i, 0)
+}
+
+fn growth_bonus_epoch(
+    statics: &[UnitStatic], state: &State, i: usize, rules_epoch: u32,
+) -> (i64, i64) {
     let markers = state.growth_markers[i];
     if markers <= 0 {
         return (0, 0);
@@ -3941,6 +3991,9 @@ fn growth_bonus_of(statics: &[UnitStatic], state: &State, i: usize) -> (i64, i64
     let mut ap = 0;
     let mut hit = 0;
     for g in &statics[state.roster.profile[i]].growth {
+        if !growth_rule_live(state, i, &g.name, rules_epoch) {
+            continue;
+        }
         ap += g.ap_per_marker * markers + g.ap_per_two * (markers / 2);
         hit += g.hit_per_marker * markers + g.hit_per_two * (markers / 2);
     }
@@ -3955,7 +4008,14 @@ fn growth_bonus_of(statics: &[UnitStatic], state: &State, i: usize) -> (i64, i64
 /// `max(0)`, the only floor every shipped entry prints).
 /// One marker counter per unit, folded the same `markers`/`markers / 2` way
 /// as the attack half above.
+#[cfg(test)]
 fn growth_defense_of(statics: &[UnitStatic], state: &State, i: usize) -> (i64, i64) {
+    growth_defense_epoch(statics, state, i, 0)
+}
+
+fn growth_defense_epoch(
+    statics: &[UnitStatic], state: &State, i: usize, rules_epoch: u32,
+) -> (i64, i64) {
     let markers = state.growth_markers[i];
     if markers <= 0 {
         return (0, 0);
@@ -3963,6 +4023,9 @@ fn growth_defense_of(statics: &[UnitStatic], state: &State, i: usize) -> (i64, i
     let mut dm = 0;
     let mut fa = 0;
     for g in &statics[state.roster.profile[i]].growth {
+        if !growth_rule_live(state, i, &g.name, rules_epoch) {
+            continue;
+        }
         dm += g.defense_per_marker * markers + g.defense_per_two * (markers / 2);
         fa += g.enemy_ap_per_two * (markers / 2);
     }

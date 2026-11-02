@@ -1959,6 +1959,19 @@ fn most_models_family_on(p: &Profile, rule: &str, rules_epoch: u32) -> bool {
     on
 }
 
+/// Row W1.4b — the LIVE twin of `most_models_family_on` for the MOR-06 names:
+/// `Some(on)` from `EPOCH_73_V36` when `rule` is one of the family names, `None`
+/// for every other name and below the gate, so the caller keeps the static
+/// stamp. Same strict-majority read as `evasion_rule_live`.
+pub(crate) fn most_models_family_live(
+    host: &Profile, host_alive: i64, heroes: &[(&Profile, i64)], rule: &str, rules_epoch: u32,
+) -> Option<bool> {
+    if !MOST_MODELS_MOR06.contains(&rule) {
+        return None;
+    }
+    evasion_rule_live(host, host_alive, heroes, rule, rules_epoch)
+}
+
 /// Wave 4 (port-entrenched) — `stealth_alias_of_excluding` SPLIT by
 /// `requires_stationary`: true keeps the flagged entries (Entrenched),
 /// false only the unconditional ones, below the FROZEN gate never called.
