@@ -8277,19 +8277,22 @@ func _solo_alias_charge_over(charging: bool, charge_from_in: float) -> bool:
 	return charge_from_in > AiCombatMath.CHARGE_LONG_RANGE_IN
 
 
-## SHO-19 (rules 3.6): Versatile Expert pick with no distance gate from EPOCH_73_V36;
-## the other spellings keep the 9"/6" bands.
+## SHO-19 / SHO-19b (rules 3.6): the Versatile Expert pick and an Enhanced Watchborn carrier or
+## token skip the distance gate from EPOCH_73_V36; the base spellings keep the 9"/6" bands.
 func _solo_versatile_no_gate(unit: GameUnit) -> bool:
 	if unit == null or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
 		return false
 	for n in ["Versatile Expert"]:
 		if AiEv.has_exact_rule(unit, n):
 			return true
-	return false
+	if AiEv.has_exact_rule(unit, "Enhanced Watchborn"):
+		return true
+	return AiSpell.granted_rules_of(unit, null, true).has("Enhanced Watchborn") \
+		or AiSpell.granted_rules_of(unit, null, false).has("Enhanced Watchborn")
 
 
 ## SHO-19: one shared gate for the Versatile pick -- 9" shooting, 6" charging at 73, and no
-## gate at all for the Expert spelling.
+## gate at all for the Expert and Enhanced Watchborn spellings.
 func _solo_versatile_over(unit: GameUnit, dist_in: float, charging: bool, charge_from_in: float) -> bool:
 	if _solo_versatile_no_gate(unit):
 		return true
