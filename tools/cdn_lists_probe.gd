@@ -6,13 +6,19 @@ extends SceneTree
 ##   godot --headless -s res://tools/cdn_lists_probe.gd [-- path=ai_lists_v36/_manifest.json]
 ## Prints PROBE_OK <bytes> or PROBE_FAIL <result> <code>.
 
+## The v36 lists live in their own CDN folder (0.3.14 keeps ai_lists/), so a bare run checks the
+## uploaded v36 manifest rather than the old model manifest.
+static func _default_path() -> String:
+	return "ai_lists_v36/_manifest.json"
+
+
 func _init() -> void:
 	_run()
 
 
 func _run() -> void:
 	await process_frame   # _init runs before the loop — the node tree is only usable after a frame
-	var rel := "model_manifest.json"
+	var rel := _default_path()
 	for a in OS.get_cmdline_user_args():
 		if str(a).begins_with("path="):
 			rel = str(a).trim_prefix("path=")
