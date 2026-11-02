@@ -9434,13 +9434,17 @@ func _solo_regen_pick(target: GameUnit, from_spell: bool = false, shot_in: float
 			best_name = "self-repair"
 	# Resistance (wave-5): Regeneration family that ignores normal wounds on 6+, but SPELL wounds on a
 	# far more generous 2+ (official text). from_spell picks the threshold; the min keeps the most
-	# generous rule binding when a unit somehow fields several.
-	if _solo_rule_on_all_models(target, "Resistance"):
-		var key := "ignore_target_spell" if from_spell else "ignore_target"
-		var rs := int(RulesRegistry.unit_param(target, "Resistance", key, 2 if from_spell else 6))
-		if best == 0 or rs < best:
-			best = rs
-			best_name = "resistance"
+	# generous rule binding when a unit somehow fields several. MOR-07 (rules 3.6): "Spell Resistance"
+	# reaches the same primitive and both names take the most-models read from EPOCH_73_V36.
+	for res_rule: String in ["Resistance", "Spell Resistance"]:
+		if res_rule == "Spell Resistance" and AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+			continue
+		if _solo_rule_on_most_models(target, res_rule):
+			var key := "ignore_target_spell" if from_spell else "ignore_target"
+			var rs := int(RulesRegistry.unit_param(target, res_rule, key, 2 if from_spell else 6))
+			if best == 0 or rs < best:
+				best = rs
+				best_name = "resistance" if res_rule == "Resistance" else res_rule
 	# Coverage wave (2026-07-23): DATA aliases of the family (Plaguebound/Protected 6+, Knightborn
 	# 6+/4+ vs spells, …) via the generic primitive layer — all_models entries require the whole
 	# unit to carry the rule, exactly like Self-Repair. Grounded Protection's condition (sweep F
