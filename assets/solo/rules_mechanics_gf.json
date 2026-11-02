@@ -158,6 +158,7 @@
   "Ignores Regeneration in Melee",
   "Immobile",
   "Impact",
+  "Imprecise",
   "Increased Shooting Range",
   "Increased Shooting Range Aura",
   "Increased Shooting Range Buff",
@@ -171,6 +172,7 @@
   "Enhanced Infected Aura",
   "Infiltrate",
   "Infiltrate Aura",
+  "Infiltrating Precision Strike",
   "Inquisitorial Agent",
   "Instinctive",
   "Knightborn",
@@ -227,8 +229,10 @@
   "Point-Blank Surge",
   "Precise",
   "Precision Attacks Buff",
+  "Precision Charge",
   "Precision Charge Aura",
   "Precision Debuff",
+  "Precision Fighter",
   "Precision Fighter Aura",
   "Precision Fighter Buff",
   "Precision Fighting Mark",
@@ -241,6 +245,7 @@
   "Precision Tag",
   "Precision Target",
   "Predator",
+  "Predator Aura",
   "Predator Fighter",
   "Predator Shooter",
   "Predator Shooter Aura",
@@ -280,6 +285,7 @@
   "Re-Position Artillery",
   "Reanimation",
   "Reanimation Aura",
+  "Reap",
   "Regeneration",
   "Regeneration Aura",
   "Regeneration Buff",
@@ -1507,6 +1513,14 @@
      "grants": "Enhanced Hive Bond"
     }
    },
+   "Imprecise": {
+    "primitive": "Shot Modifier",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "hit_bonus": -1
+    }
+   },
    "Increased Shooting Range": {
     "primitive": "Royal Legion",
     "rated": false,
@@ -1580,6 +1594,14 @@
      "target": "enemy",
      "once": true,
      "needs_los": true
+    }
+   },
+   "Predator Aura": {
+    "primitive": "Aura Channel",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants": "Predator"
     }
    },
    "Predator Fighter": {
@@ -4293,6 +4315,17 @@
      "hit_penalty": 1
     }
    },
+   "Infiltrating Precision Strike": {
+    "primitive": "Infiltrate",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants": "Infiltrate",
+     "min_enemy_dist_in": 3.0,
+     "melee_hit_bonus": 1,
+     "arrival_round_only": true
+    }
+   },
    "Nimble": {
     "primitive": "Bounding",
     "rated": false,
@@ -4548,6 +4581,14 @@
      "grants": "Ignores Cover"
     }
    },
+   "Imprecise": {
+    "primitive": "Shot Modifier",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "hit_bonus": -1
+    }
+   },
    "Increased Shooting Range Mark": {
     "primitive": "Utility Buff",
     "rated": false,
@@ -4596,6 +4637,15 @@
     "book_version": "3.5.3",
     "params": {
      "grants": "Piercing Marksman"
+    }
+   },
+   "Precision Fighter": {
+    "primitive": "Shot Modifier",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "hit_bonus": 1,
+     "melee_only": true
     }
    },
    "Precision Fighter Aura": {
@@ -4783,6 +4833,14 @@
     "book_version": "3.5.3",
     "params": {
      "hit_bonus": 1
+    }
+   },
+   "Imprecise": {
+    "primitive": "Shot Modifier",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "hit_bonus": -1
     }
    },
    "Instinctive": {
@@ -7431,6 +7489,15 @@
      "grants": "Piercing Fighter"
     }
    },
+   "Precision Charge": {
+    "primitive": "Shot Modifier",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "hit_bonus": 1,
+     "when": "charge"
+    }
+   },
    "Precision Charge Aura": {
     "primitive": "Shot Modifier",
     "rated": false,
@@ -8435,6 +8502,19 @@
      "hit_bonus": 1
     }
    },
+   "Reap": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "reroll_save_sixes": true,
+     "reroll_save_low": 5,
+     "condition": "shaken_or_fatigued",
+     "upgrades": "Reap",
+     "over_in": 0,
+     "bypass_regen": false
+    }
+   },
    "Regeneration Aura": {
     "primitive": "Regeneration",
     "rated": false,
@@ -8529,6 +8609,14 @@
     "params": {
      "ap_bonus": 4,
      "bypass_regen": false
+    }
+   },
+   "Imprecise": {
+    "primitive": "Shot Modifier",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "hit_bonus": -1
     }
    },
    "Indirect Mark": {
@@ -9201,6 +9289,19 @@
     "book_version": "3.5.3",
     "params": {
      "max_units": 2
+    }
+   },
+   "Reap": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "reroll_save_sixes": true,
+     "reroll_save_low": 5,
+     "condition": "shaken_or_fatigued",
+     "upgrades": "Reap",
+     "over_in": 0,
+     "bypass_regen": false
     }
    },
    "Regeneration Aura": {

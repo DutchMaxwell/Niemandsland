@@ -146,6 +146,7 @@
   "Ignores Regeneration",
   "Immobile",
   "Impact",
+  "Imprecise",
   "Increased Shooting Range Aura",
   "Increased Shooting Range Mark",
   "Indirect",
@@ -210,6 +211,7 @@
   "Enhanced Plaguebound Aura",
   "Precise",
   "Precision Attacks Buff",
+  "Precision Charge",
   "Precision Charge Aura",
   "Precision Debuff",
   "Precision Feat",
@@ -255,6 +257,7 @@
   "Re-Position Artillery",
   "Reanimation",
   "Reanimation Aura",
+  "Reap",
   "Reckless Piercing",
   "Reckless Piercing Aura",
   "Regeneration",
@@ -2278,6 +2281,19 @@
      "grants": "Ranged Shrouding"
     }
    },
+   "Reap": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "reroll_save_sixes": true,
+     "reroll_save_low": 5,
+     "condition": "shaken_or_fatigued",
+     "upgrades": "Reap",
+     "over_in": 0,
+     "bypass_regen": false
+    }
+   },
    "Repel Ambushers": {
     "primitive": "Repel Ambushers",
     "rated": false,
@@ -2970,6 +2986,15 @@
      "charge_only": true
     }
    },
+   "Precision Charge": {
+    "primitive": "Shot Modifier",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "hit_bonus": 1,
+     "when": "charge"
+    }
+   },
    "Precision Charge Aura": {
     "primitive": "Shot Modifier",
     "rated": false,
@@ -3384,6 +3409,19 @@
      "hit_bonus": 1,
      "all_attacks": true,
      "uses_per_game": 1
+    }
+   },
+   "Reap": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "reroll_save_sixes": true,
+     "reroll_save_low": 5,
+     "condition": "shaken_or_fatigued",
+     "upgrades": "Reap",
+     "over_in": 0,
+     "bypass_regen": false
     }
    },
    "Relentless Aura": {
@@ -8229,6 +8267,14 @@
     "params": {
      "hit_bonus": 1,
      "melee_only": true
+    }
+   },
+   "Imprecise": {
+    "primitive": "Shot Modifier",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "hit_bonus": -1
     }
    },
    "Increased Shooting Range Aura": {
