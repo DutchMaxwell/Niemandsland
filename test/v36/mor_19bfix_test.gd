@@ -2,7 +2,8 @@ extends GdUnitTestSuite
 ## Rules 3.6 row MOR-19b follow-up: the Ethereal placement latch is consumed by the band pass that
 ## reads it, not by the post-move Teleport beat. The placement therefore prices exactly ONE move
 ## read — the move it was made for — and the next activation is clean. Below EPOCH_73_V36 the
-## penalty stays permanently folded and the latch is untouched (today's 3.5 behaviour).
+## penalty stays permanently folded and the latch is untouched by the band pass, so the post-move
+## beat keeps its old activation-start clear: a second activation still places.
 ##
 ## The latch is set through the LIVE stamp (`_solo_apply_teleport` with a controller whose policy
 ## takes the placement), never hand-written into `unit_properties`, so the test drives the same
@@ -11,7 +12,10 @@ extends GdUnitTestSuite
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 
 class FixedTeleportController extends SoloController:
-	func teleport_decision(_unit: GameUnit, _rush: bool) -> Dictionary:
+	var latch_at_decision := false
+
+	func teleport_decision(unit: GameUnit, _rush: bool) -> Dictionary:
+		latch_at_decision = bool(unit.unit_properties.get("teleport_used_this_activation", false))
 		return {"rule": "Ethereal", "used": true, "to": Vector2(0.2, 0.0)}
 
 var _runner: GdUnitSceneRunner
@@ -50,12 +54,13 @@ func _ethereal_unit() -> GameUnit:
 	return unit
 
 
-func _place(unit: GameUnit) -> void:
+func _place(unit: GameUnit) -> FixedTeleportController:
 	var controller: FixedTeleportController = auto_free(FixedTeleportController.new())
 	_main.add_child(controller)
 	controller.setup(_main.opr_army_manager, _main.network_manager, null)
 	_main.solo_controller = controller
 	await _main._solo_apply_teleport(unit, {"action": AiDecision.Action.HOLD})
+	return controller
 
 
 func _bands(unit: GameUnit) -> Dictionary:
@@ -89,4 +94,17 @@ func test_below_epoch_73_the_penalty_is_permanent_and_the_latch_is_not_consumed(
 	var bands: Dictionary = _bands(unit)
 	assert_int(bands["advance"]).is_equal(0)   # always-on penalty at 72
 	assert_int(bands["rush"]).is_equal(6)
+	assert_bool(unit.unit_properties.has("teleport_used_this_activation")).is_true()
+
+
+func test_below_epoch_73_a_second_activation_still_places() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
+	var unit := _ethereal_unit()
+	await _place(unit)
+	assert_bool(unit.unit_properties.has("teleport_used_this_activation")).is_true()
+
+	# The old epoch's post-move beat still clears the latch at activation start, so the
+	# once-per-activation policy is not refused and the placement works again.
+	var second: FixedTeleportController = await _place(unit)
+	assert_bool(second.latch_at_decision).is_false()
 	assert_bool(unit.unit_properties.has("teleport_used_this_activation")).is_true()
