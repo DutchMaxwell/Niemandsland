@@ -1,6 +1,7 @@
 extends GdUnitTestSuite
-## DAT-12b (0.3.15, rules 3.6): a rule whose name starts with "Enhanced " carries its effect with no
-## distance gate, so no such entry may keep an `over_in` knob. The gate belongs to the older wording.
+## DAT-12b-fix (0.3.15, rules 3.6): a rule whose name starts with "Enhanced " carries its effect
+## with no distance gate, spelled `over_in: 0`. No such entry may keep a positive gate; the older
+## wording's distance belongs to the base rule.
 ## The walk reads both rules 3.6 maps (gf and aof) through RulesRegistry, over the common section and
 ## every faction section; a per-system floor keeps an empty walk from passing. Two pinned cases name
 ## the books that print Enhanced Ferocious, and two non-Enhanced controls prove their gate stays.
@@ -58,9 +59,9 @@ func test_no_enhanced_form_resolves_with_a_distance_gate() -> void:
 			var rule: String = pair[1]
 			var entry := RulesRegistry.lookup(system, book, rule)
 			var params: Dictionary = entry.get("params", {})
-			assert_bool(params.has("over_in")).override_failure_message(
-				"%s/%s: '%s' still carries over_in=%s" % [system, book, rule, params.get("over_in")]) \
-				.is_false()
+			assert_float(float(params.get("over_in", 0.0))).override_failure_message(
+				"%s/%s: '%s' carries a distance gate over_in=%s" % [system, book, rule, params.get("over_in")]) \
+				.is_equal_approx(0.0, 0.001)
 
 
 func test_pinned_enhanced_forms_keep_their_other_knobs() -> void:
@@ -69,11 +70,11 @@ func test_pinned_enhanced_forms_keep_their_other_knobs() -> void:
 		var params: Dictionary = entry.get("params", {})
 		assert_str(str(entry.get("primitive", ""))).override_failure_message(
 			"%s/%s: '%s' moved off Surge: %s" % [c[0], c[1], c[2], entry]).is_equal("Surge")
-		assert_bool(params.has("over_in")).override_failure_message(
-			"%s/%s: '%s' still carries over_in=%s" % [c[0], c[1], c[2], params.get("over_in")]) \
-			.is_false()
-		assert_float(float(params.get("surge_low", -1.0))).override_failure_message(
-			"%s/%s: '%s' lost surge_low: %s" % [c[0], c[1], c[2], params]).is_equal_approx(5.0, 0.001)
+		assert_float(float(params.get("over_in", -1.0))).override_failure_message(
+			"%s/%s: '%s' lost the explicit no-distance spelling: %s" % [c[0], c[1], c[2], params]) \
+			.is_equal_approx(0.0, 0.001)
+		assert_float(float(params.get("surge_low", 6.0))).override_failure_message(
+			"%s/%s: '%s' lost the base 6s window: %s" % [c[0], c[1], c[2], params]).is_equal_approx(6.0, 0.001)
 		assert_str(str(params.get("upgrades", ""))).override_failure_message(
 			"%s/%s: '%s' lost its upgrade link: %s" % [c[0], c[1], c[2], params]) \
 			.is_equal("Ferocious")
@@ -86,3 +87,67 @@ func test_non_enhanced_forms_keep_their_distance_gate() -> void:
 		assert_bool(params.has("over_in")).override_failure_message(
 			"%s/%s: control '%s' lost its over_in gate: %s" % [c[0], c[1], c[2], params]) \
 			.is_true()
+
+
+## A live carrier of the base rule plus its Enhanced form, in the book that prints both.
+func _enhanced_ferocious_unit() -> GameUnit:
+	var u := GameUnit.new()
+	u.unit_id = "enh_fer"
+	u.unit_properties = {"player_id": 2, "name": "E", "quality": 4, "defense": 4,
+		"special_rules": ["Ferocious", "Enhanced Ferocious"],
+		"game_system": "gf", "faction_folder": "orc_marauders"}
+	var m := ModelInstance.new()
+	m.is_alive = true
+	u.models.append(m)
+	return u
+
+
+## The LIVE AiEv stamp (not a hand-built dictionary) at `epoch`; restores the static clock first,
+## so a failing assert cannot leak the epoch into the next case.
+func _stamped_surge(epoch: int) -> Dictionary:
+	var epoch0: int = AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = epoch
+	var p := {"name": "Rifle", "attacks": 8, "ap": 0, "range": 24, "rules": []}
+	AiEv.stamp_sergeant([p], _enhanced_ferocious_unit())
+	AiActRecorder.rules_epoch = epoch0
+	return p
+
+
+func test_enhanced_ferocious_stamps_the_base_window_at_epoch_73() -> void:
+	var p := _stamped_surge(AiActRecorder.EPOCH_73_V36)
+	assert_bool(bool(p.get("surge", false))).override_failure_message(
+		"the base Ferocious never reached the stamp").is_true()
+	assert_int(int(p.get("surge_low", 0))).override_failure_message(
+		"the Enhanced form keeps the base Ferocious 6s window, not the Boost's 5").is_equal(6)
+	assert_float(float(p.get("surge_over_in", 9.0))).override_failure_message(
+		"an explicit over_in 0 means no distance condition").is_equal_approx(-1.0, 0.001)
+
+
+func test_enhanced_ferocious_keeps_the_boost_window_at_epoch_72() -> void:
+	var p := _stamped_surge(AiActRecorder.EPOCH_72_PLAYTEST_RULES)
+	assert_int(int(p.get("surge_low", 0))).override_failure_message(
+		"epoch 72 keeps the 3.5 Boost 5s window").is_equal(5)
+	assert_float(float(p.get("surge_over_in", 0.0))).override_failure_message(
+		"epoch 72 keeps the old 9-inch default").is_equal_approx(9.0, 0.001)
+
+
+## The 3.6 sentinel loosens the SHOT leg only: at 73 an Enhanced carrier striking back
+## pays no Surge sixes, while its 24" shot still pays. Live stamp, fixed faces.
+func test_enhanced_alias_sentinel_never_opens_a_melee_strike_back() -> void:
+	var epoch0: int = AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	var p := _stamped_surge(AiActRecorder.EPOCH_73_V36)
+	# The dice path stamps the alias marker from the bearer's own rules; the bare stamp above does not.
+	p["_surge_alias"] = "Ferocious"
+	var plain := {"name": "Rifle", "attacks": 4, "ap": 0, "range": 24, "rules": []}
+	var main: Node = auto_free(load("res://scripts/main.gd").new())
+	main.battle_log = auto_free(BattleLog.new())
+	var faces := [6, 3, 2, 1]
+	var back: int = await main._solo_hits(faces, 4, p, 0.0, null, false, "", 0.0)
+	var plain_back: int = await main._solo_hits(faces, 4, plain, 0.0, null, false, "", 0.0)
+	assert_int(back).override_failure_message(
+		"an Enhanced bearer striking back pays no Surge sixes").is_equal(plain_back)
+	var shot: int = await main._solo_hits(faces, 4, p, 24.0, null, false, "", 0.0)
+	assert_int(shot).override_failure_message(
+		"the same bearer still pays on a 24-inch shot").is_equal(plain_back + 1)
+	AiActRecorder.rules_epoch = epoch0
