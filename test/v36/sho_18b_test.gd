@@ -1,8 +1,8 @@
 extends GdUnitTestSuite
 ## Rules 3.6 wave, row SHO-18b: the offensive Surge/Shred alias families fire only on a
-## CHARGE from over 6". Below EPOCH_73_V36 the old unconditional read stays; a non-charging
-## strike keeps the old read in both epochs. The Rust twin covers the dice; here the real
-## _solo_hits and _solo_save_batch seams run with a fixed tray.
+## CHARGE from over 6"; below EPOCH_73_V36 the old unconditional read stays. A non-charging
+## strike-back pays nothing from 73 (SHO-18b-fix). The Rust twin covers the dice; here the
+## real _solo_hits and _solo_save_batch seams run with a fixed tray.
 
 class Probe extends "res://scripts/main.gd":
 	var faces: Array = []
@@ -55,7 +55,7 @@ func _shred_wounds(epoch: int, charge_in: float) -> int:
 		false, false, true, false, {}, -1.0, charge_in)
 
 
-## The shared gate: a charge needs over 6", a non-charging strike keeps the old read.
+## The shared gate: a charge needs over 6", a non-charging strike-back pays nothing at 73.
 func test_the_family_gate_is_six_inches_charging_from_epoch_73() -> void:
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
 	var main: Node = auto_free(preload("res://scripts/main.gd").new())
@@ -64,7 +64,7 @@ func test_the_family_gate_is_six_inches_charging_from_epoch_73() -> void:
 	assert_bool(main._solo_alias_charge_over(true, 3.0)) \
 		.override_failure_message("a 3\" charge stays inside the 6\" gate").is_false()
 	assert_bool(main._solo_alias_charge_over(false, 0.0)) \
-		.override_failure_message("a non-charging strike keeps the old read").is_true()
+		.override_failure_message("a non-charging strike-back pays nothing from 73").is_false()
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
 	assert_bool(main._solo_alias_charge_over(true, 3.0)) \
 		.override_failure_message("below 73 the old unconditional read stays").is_true()
@@ -79,7 +79,7 @@ func test_ferocious_pays_its_sixes_over_six_inches_charging_and_not_inside_at_ep
 	assert_int(await _surge_hits(AiActRecorder.EPOCH_72_PLAYTEST_RULES, true, 3.0)) \
 		.override_failure_message("below 73 the 3\" charge still pays").is_equal(2)
 	assert_int(await _surge_hits(AiActRecorder.EPOCH_73_V36, false, 0.0)) \
-		.override_failure_message("a non-charging strike keeps the old read").is_equal(2)
+		.override_failure_message("a non-charging strike-back pays nothing from 73").is_equal(1)
 
 
 ## RED on main: Warbound's Shred fires on a 7" charge and not on a 3" charge.
