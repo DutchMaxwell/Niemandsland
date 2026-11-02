@@ -5000,8 +5000,7 @@ fn scourge_phantom_ev(
     if !rule_on(rules_epoch, EPOCH_73_V36) {
         return 0.0;
     }
-    let mut def = *def;
-    def.regeneration = false;
+    let def = Ctx { regeneration: false, ..*def };
     let mut total = 0.0;
     let add = |pi: usize, a: i64, total: &mut f64| {
         let p = &profiles[pi];
