@@ -96,9 +96,9 @@ use super::*;
             let p = [us.melee[0].clone()];
             let att = Ctx { quality: 4, ..Default::default() };
             let mut tray = Tray::seeded(9);
-            resolve_melee_with_tray(
+            resolve_melee_leg(
                 &[striker(&p, &[0], &[8], &att)], &defender(4, 5), "Target",
-                false, false, false, &mut tray,
+                true, false, false, false, 7.0, false, false, false, false, false, &mut tray,
             )
         };
         let m2 = melee(&two);
