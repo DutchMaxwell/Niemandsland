@@ -20,6 +20,23 @@ pub const LONG_RANGE_IN: f64 = 9.0;
 /// `AiCombatMath.CHARGE_LONG_RANGE_IN` — D-GATE6 (rules 3.6, `EPOCH_73_V36`): the over-6" gate of a
 /// CHARGE, measured before any model moves, closest model to closest model. Shooting keeps 9".
 pub const CHARGE_LONG_RANGE_IN: f64 = 6.0;
+
+/// The pre-charge gap a CHARGE's range gate measures against: 6" from `EPOCH_73_V36`, 9" below.
+pub fn charge_gate_in(rules_epoch: u32) -> f64 {
+    if !rule_on(rules_epoch, EPOCH_73_V36) {
+        return LONG_RANGE_IN;
+    }
+    CHARGE_LONG_RANGE_IN
+}
+
+/// The charge band a conditional-AP `on_charge` leg measures against: 6" from `EPOCH_73_V36`,
+/// 0.0 below (the old unconditional leg).
+pub fn charge_over_in(rules_epoch: u32) -> f64 {
+    if !rule_on(rules_epoch, EPOCH_73_V36) {
+        return 0.0;
+    }
+    CHARGE_LONG_RANGE_IN
+}
 /// `AiCombatMath.STEALTH_HIT_PENALTY` :64 / `ARTILLERY_SHOOTER_HIT_BONUS` :68 /
 /// `ARTILLERY_TARGET_HIT_PENALTY` :72 / `EVASIVE_HIT_PENALTY` :77.
 pub const STEALTH_HIT_PENALTY: i64 = 1;
@@ -506,7 +523,7 @@ pub fn cond_met(c: &CondAp, t: &CondApTarget, is_charging: bool, dist_in: f64, m
         "always" => true,
         "vs_tough_ge" => t.tough >= c.threshold,
         "vs_armor" => t.defense <= c.threshold,
-        "on_charge" => is_charging,
+        "on_charge" => is_charging && (c.charge_over_in <= 0.0 || dist_in > c.charge_over_in),
         "ranged_over" => !melee && dist_in > c.over_in,
         // Wave 4 (rules-wave4-condap) — "Point-Blank Piercing": the cap is
         // inclusive, an unknown distance (< 0) stays shut.
@@ -728,7 +745,9 @@ pub fn profile_ev(
     }
     // --- Versatile Attack (ai_ev.gd:361-368) ---
     let mut versatile_ap = 0;
-    if p.versatile_attack && dist_in > LONG_RANGE_IN && (!melee || charging) {
+    let gate_in = if melee { charge_gate_in(att.rules_epoch) } else { LONG_RANGE_IN };
+    let versatile_over = att.versatile_no_gate || dist_in > gate_in;
+    if p.versatile_attack && versatile_over && (!melee || charging) {
         let choose_def = shielded_defense(def.defense, def.shielded_bonus(), def.def_floor());
         // EPOCH_38_WATCHBORN_LATCH — a latched activation pick rides the Ctx
         // (sim::versatile_latch): the EV reuses the FIRST eligible attack's
