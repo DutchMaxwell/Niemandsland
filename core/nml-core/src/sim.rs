@@ -4488,6 +4488,8 @@ fn max_usable_delta(legs: [Option<f64>; 2]) -> f64 {
 /// for everything else. The draw mirrors `_draw_aura_tokens`' own-front
 /// order. Returns (boost, own draw, helper draw); the caller folds the final
 /// roll target and owns the frozen `EPOCH_48_CASTER_BOOST` gate.
+// The rules epoch is threaded from the frozen seams, not held globally.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn plan_caster_boost(
     statics: &[UnitStatic],
     state: &State,
@@ -6564,6 +6566,8 @@ fn reach_index_with_walls(state: &State, terrain: &Terrain, walls: &[crate::mv::
 /// prices at 0, so it simply takes the nearest. Rules 3.6 (D-SPELL-LOS): from
 /// `EPOCH_73_V36` sight binds only when the entry's own `needs_los` says so;
 /// below the epoch every spell still needs it.
+// The rules epoch is threaded from the frozen seams, not held globally.
+#[allow(clippy::too_many_arguments)]
 fn best_spell_target(
     statics: &[UnitStatic],
     state: &State,

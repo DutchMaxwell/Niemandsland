@@ -131,7 +131,7 @@ func test_spell_damage_ev_lacerate_keeps_regeneration() -> void:
 	var lacerate := AiSpell.spell_facets(["Lacerate"], AiActRecorder.EPOCH_72_PLAYTEST_RULES)
 	assert_float(AiSpell.spell_damage_ev(6, regen, lacerate)).is_equal_approx(through * 2.0 / 3.0, EPS)
 	# CONTROL: Bane bypasses it.
-	assert_float(AiSpell.spell_damage_ev(6, regen, AiSpell.spell_facets(["Bane"]))).is_equal_approx(through, EPS, AiActRecorder.EPOCH_72_PLAYTEST_RULES)
+	assert_float(AiSpell.spell_damage_ev(6, regen, AiSpell.spell_facets(["Bane"], AiActRecorder.EPOCH_72_PLAYTEST_RULES))).is_equal_approx(through, EPS)
 
 
 func test_spell_damage_ev_surge_and_on_six_ap() -> void:

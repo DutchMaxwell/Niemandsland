@@ -11,6 +11,7 @@
 //! `EPOCH_48_CASTER_BOOST` on, and the OPPOSING casters' interference from
 //! `EPOCH_51_CASTER_INTERFERENCE` (the pool's opposing-side mirror).
 
+use crate::acts::rule_on;
 use crate::combat::{block_chance, deadly_multiplier, deadly_regen_dealt, success_chance, SIX_P};
 use crate::rules::Spell;
 use crate::unit::Ctx;
@@ -179,8 +180,8 @@ fn rating(rule: &str) -> i64 {
 }
 
 pub fn spell_facets(weapon_rules: &[String], rules_epoch: u32) -> Facets {
-    let _ = rules_epoch;
     let mut f = Facets::default();
+    let v36 = rule_on(rules_epoch, crate::acts::EPOCH_73_V36);
     for r in weapon_rules {
         let s = r.trim();
         let base = s.split('(').next().unwrap_or("").trim();
@@ -200,11 +201,34 @@ pub fn spell_facets(weapon_rules: &[String], rules_epoch: u32) -> Facets {
             // RENDING_AP_BONUS — ai_spell.gd:152-153.
             "Destructive" => f.on6_ap = f.on6_ap.max(4),
             "Hazardous" => f.ap = f.ap.max(4),
+            // Rules 3.6 (EPOCH_73_V36) re-pointed the four spell tokens below;
+            // the 3.5 arms stay byte-identical under the epoch flag.
+            "Fracture" => {
+                if v36 {
+                    f.on6_ap = f.on6_ap.max(2);
+                }
+            }
+            "Puncture" => {
+                if v36 {
+                    f.ignores_regen = true;
+                    f.ap_vs_def3 = 2;
+                }
+            }
             "Disintegrate" => {
                 f.ignores_regen = true;
-                f.ap_vs_def3 = 2;
+                if v36 {
+                    f.ap_vs_tough3 = f.ap_vs_tough3.max(2);
+                } else {
+                    f.ap_vs_def3 = 2;
+                }
             }
-            "Shatter" => f.ap_vs_tough3 = 2,
+            "Shatter" => {
+                if v36 {
+                    f.on6_ap = f.on6_ap.max(3);
+                } else {
+                    f.ap_vs_tough3 = 2;
+                }
+            }
             "Tear" => f.ap_vs_tough9 = 4,
             _ => {}
         }

@@ -5102,6 +5102,18 @@ func _solo_resolve_spell_damage(caster: GameUnit, caster_unit: GameUnit, spell_n
 	var hits := int(effect.get("hits", 0))
 	if hits <= 0:
 		return
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		var applied: Array = []
+		if _solo_spell_has_rule(effect, "Fracture"):
+			applied.append("Fracture — sixes get AP(+2)")
+		if _solo_spell_has_rule(effect, "Puncture"):
+			applied.append("Puncture — ignores Regeneration, AP(+2) vs Defense 3 or less")
+		if _solo_spell_has_rule(effect, "Disintegrate"):
+			applied.append("Disintegrate — ignores Regeneration, AP(+2) vs Tough(3)+")
+		if _solo_spell_has_rule(effect, "Shatter"):
+			applied.append("Shatter — sixes get AP(+3)")
+		if not applied.is_empty():
+			_log_rule_event(BattleLog.Category.COMBAT, "%s: %s" % [spell_name, ", ".join(PackedStringArray(applied))], true)
 	var alive_before: int = SoloController.combined_alive(target)   # NML-966: trigger reads combined
 	var wounds_before: int = _solo_unit_wounds_now(target)
 	var models_before: int = _solo_combined_alive(target)
