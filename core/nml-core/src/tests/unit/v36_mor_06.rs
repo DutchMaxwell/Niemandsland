@@ -36,12 +36,12 @@ fn steadfast_recovery_keeps_with_a_plain_joined_hero_at_epoch_73() {
 }
 
 #[test]
-fn steadfast_recovery_needs_every_model_at_epoch_72() {
+fn steadfast_recovery_keeps_with_a_plain_joined_hero_at_epoch_72() {
     let mut reg = mor06_registry();
     let p = mor06_profile("gf", "change_disciples", &["Steadfast"], 5, &[PLAIN_HERO]);
     assert_eq!(
-        battleborn_recover_target_of(&mut reg, &p, EPOCH_72_PLAYTEST_RULES), 0,
-        "the old reading: one plain hero strips the recovery die"
+        battleborn_recover_target_of(&mut reg, &p, EPOCH_72_PLAYTEST_RULES), 4,
+        "before MOR-06 the unit's own carry granted the die, a plain hero and all"
     );
 }
 
@@ -56,13 +56,33 @@ fn battleborn_recovery_keeps_with_a_plain_joined_hero_at_epoch_73() {
 }
 
 #[test]
-fn battleborn_recovery_needs_every_model_at_epoch_72() {
+fn battleborn_recovery_keeps_with_a_plain_joined_hero_at_epoch_72() {
     let mut reg = mor06_registry();
     let p = mor06_profile("gf", "battle_brothers", &["Battleborn"], 5, &[PLAIN_HERO]);
     assert_eq!(
-        battleborn_recover_target_of(&mut reg, &p, EPOCH_72_PLAYTEST_RULES), 0,
-        "the old reading: one plain hero strips the recovery die"
+        battleborn_recover_target_of(&mut reg, &p, EPOCH_72_PLAYTEST_RULES), 4,
+        "before MOR-06 the unit's own carry granted the die, a plain hero and all"
     );
+}
+
+// --- D-MOST, the Steadfast / Battleborn activation flags. ---
+
+#[test]
+fn steadfast_active_keeps_with_a_plain_joined_hero_at_epoch_72() {
+    let mut reg = mor06_registry();
+    let p = mor06_profile("gf", "change_disciples", &["Steadfast"], 5, &[PLAIN_HERO]);
+    let us = UnitStatic::build_for(&mut reg, &p, EPOCH_72_PLAYTEST_RULES);
+    assert!(us.steadfast_active,
+        "before MOR-06 the unit's own carry kept the flag, a plain hero and all");
+}
+
+#[test]
+fn battleborn_active_keeps_with_a_plain_joined_hero_at_epoch_72() {
+    let mut reg = mor06_registry();
+    let p = mor06_profile("gf", "battle_brothers", &["Battleborn"], 5, &[PLAIN_HERO]);
+    let us = UnitStatic::build_for(&mut reg, &p, EPOCH_72_PLAYTEST_RULES);
+    assert!(us.battleborn_active,
+        "before MOR-06 the unit's own carry kept the flag, a plain hero and all");
 }
 
 // --- D-MOST, Evasive and Melee Evasion. ---
@@ -145,12 +165,12 @@ fn growth_markers_keep_with_a_plain_joined_hero_at_epoch_73() {
 }
 
 #[test]
-fn growth_markers_need_every_model_at_epoch_72() {
+fn growth_markers_keep_with_a_plain_joined_hero_at_epoch_72() {
     let mut reg = mor06_registry();
     let p = mor06_profile("gf", "alien_hives", &["Piercing Growth"], 5, &[PLAIN_HERO]);
     let us = UnitStatic::build_for(&mut reg, &p, EPOCH_72_PLAYTEST_RULES);
-    assert!(us.growth.is_empty(),
-        "the old reading: one plain hero strips the marker rule");
+    assert_eq!(us.growth.len(), 1,
+        "before MOR-06 the unit's own carry kept the marker rule, a plain hero and all");
 }
 
 // --- D-MOST, Grounded Evasion (the rules 3.6 name of Grounded Stealth). ---
