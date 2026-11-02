@@ -943,19 +943,38 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 			var d := _fold_dist_in(next, su, positions, tu)
 			var alive_before := int(tu["alive"])
 			var wounds_before := _wounds_left(tu)
+			var profiles := _profiles_of(su, false, d, next)
+			var att := _ctx_of(su)
+			var phantom := 0
+			if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+				# AI-06: the Shred-vs-plain EV gap is hits x SIX_P, each 1 worth the map's
+				# phantom_wounds_per_save_one; Regeneration is neutralised on both clones.
+				var phantom_def: Dictionary = _ctx_of(tu)
+				phantom_def["regeneration"] = false
+				var per := int(RulesRegistry.unit_param(su["unit"] as GameUnit, "Scourge",
+					"phantom_wounds_per_save_one", 2))
+				for p in profiles:
+					if not ((p as Dictionary).get("rules", []) as Array).has("Scourge"):
+						continue
+					var plain: Dictionary = (p as Dictionary).duplicate()
+					plain["shred"] = false
+					var probe: Dictionary = (p as Dictionary).duplicate()
+					probe["shred"] = true
+					var with_shred := AiEv.profile_ev(probe, att, phantom_def, d, false)
+					var without := AiEv.profile_ev(plain, att, phantom_def, d, false)
+					phantom += int(round((with_shred - without) * per))
 			if cast_phase_enabled():
-				_apply_expected_wounds(tu,
-					AiEv.shoot_ev(_profiles_of(su, false, d, next), _ctx_of(su), _ctx_of(tu), d))
+				_apply_expected_wounds(tu, AiEv.shoot_ev(profiles, att, _ctx_of(tu), d))
 			else:
 				# Seam OFF: the legacy spell rider, verbatim from dabd1da — the
 				# sub-phase above never ran, so casting only happens inside a shoot pick.
-				var volley := AiEv.shoot_ev(_profiles_of(su, false, d, next), _ctx_of(su), _ctx_of(tu), d)
+				var volley := AiEv.shoot_ev(profiles, att, _ctx_of(tu), d)
 				var sp := spell_ev_of(su, tu, d)
 				if float(sp["ev"]) > 0.0:
 					volley += float(sp["ev"])
 					su["casts"] = int(su.get("casts", 0)) - int(sp["cost"])
 				_apply_expected_wounds(tu, volley)
-			_expected_shooting_morale(tu, alive_before, wounds_before)
+			_expected_shooting_morale(tu, alive_before, wounds_before, phantom)
 	var charge_key := str(action.get("charge", ""))
 	if kind == AiDecision.Action.CHARGE and charge_key != "" and next["units"].has(charge_key):
 		var tu: Dictionary = next["units"][charge_key]
@@ -1912,8 +1931,22 @@ static func _scourge_phantom_ev(profiles: Array, att: Dictionary, def_ctx: Dicti
 ## Post-volley morale (parity wave step 2, mirrors main.gd's PDF-verified flow):
 ## casualties this volley AND now at/below half => test; a shooting fail is
 ## SHAKEN, never a Rout (Rout exists only in melee — playtest bug 9).
-static func _expected_shooting_morale(tu: Dictionary, alive_before: int, wounds_before: int) -> void:
+static func _expected_shooting_morale(tu: Dictionary, alive_before: int, wounds_before: int,
+		phantom: int = 0) -> void:
 	var u: GameUnit = tu["unit"]
+	# AI-06 (EPOCH_73_V36): the Scourge phantom wounds tip the trigger on a scratch copy (nothing
+	# is removed) with the stochastic draw suspended, so no rollout stream moves.
+	if phantom > 0 and int(tu["alive"]) > 0 and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		var v: Dictionary = tu.duplicate(true)
+		v["wound_frac"] = 0.0
+		var saved_rng := stochastic_rng
+		stochastic_rng = null
+		_apply_expected_wounds(v, float(phantom))
+		stochastic_rng = saved_rng
+		if int(v["alive"]) <= 0 or _below_half(v):
+			if _morale_fails_expected(tu):
+				tu["shaken"] = true
+			return
 	if u.models.size() == 1:
 		if int(tu["alive"]) > 0 and _wounds_left(tu) < wounds_before and _below_half(tu) \
 				and _morale_fails_expected(tu):

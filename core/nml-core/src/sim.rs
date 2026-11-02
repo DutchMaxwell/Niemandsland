@@ -9169,7 +9169,7 @@ fn resolve_with(
                 // exactly the conditions `spell_ev_of` already tested, or `None`
                 // where it already returned `(0.0, 0)`.
                 let caster = caster_of(statics, &next, si, seams);
-                let (volley, sp_cost) = {
+                let (volley, sp_cost, phantom) = {
                     let us = &statics[pi_s];
                     let ut = &statics[next.roster.profile[ti]];
                     member_profiles_reach(statics, &next, si, ti, d_ev, seams, &mut sc);
@@ -9180,8 +9180,29 @@ fn resolve_with(
                     let shooting = shoot_ev(
                         folded_slice(&us.shoot, &sc), &sc.keep, &sc.attacks, &att, &def, d_ev,
                     );
+                    // AI-06 (EPOCH_73_V36): the expected phantom wounds — the Shred-vs-plain EV
+                    // gap is hits * SIX_P, each such 1 worth SCOURGE_PHANTOM_WOUNDS. Regeneration
+                    // is neutralised on both clones so it cannot scale the gap.
+                    let mut phantom = 0.0;
+                    if rule_on(seams.rules_epoch, EPOCH_73_V36) {
+                        let mut no_regen = def;
+                        no_regen.regeneration = false;
+                        let profiles = folded_slice(&us.shoot, &sc);
+                        for (k, &pi) in sc.keep.iter().enumerate() {
+                            let p = &profiles[pi];
+                            if !p.rules.iter().any(|r| r.trim() == "Scourge") {
+                                continue;
+                            }
+                            let (mut plain, mut probe) = (p.clone(), p.clone());
+                            plain.shred = false;
+                            probe.shred = true;
+                            phantom += crate::combat::profile_ev(&probe, sc.attacks[k], &att, &no_regen, d_ev, false)
+                                - crate::combat::profile_ev(&plain, sc.attacks[k], &att, &no_regen, d_ev, false);
+                        }
+                        phantom *= crate::dice::SCOURGE_PHANTOM_WOUNDS as f64;
+                    }
                     if seams.cast {
-                        (shooting, 0)
+                        (shooting, 0, phantom)
                     } else {
                         let (sp_ev, sp_cost) = match caster {
                             Some(ci) => {
@@ -9191,9 +9212,9 @@ fn resolve_with(
                             None => (0.0, 0),
                         };
                         if sp_ev > 0.0 {
-                            (shooting + sp_ev, sp_cost)
+                            (shooting + sp_ev, sp_cost, phantom)
                         } else {
-                            (shooting, 0)
+                            (shooting, 0, phantom)
                         }
                     }
                 };
@@ -9538,9 +9559,15 @@ fn resolve_with(
                     None => {
                         apply_expected_wounds(&mut next, ti, volley, rng.as_deref_mut());
                         let ut = &statics[next.roster.profile[ti]];
-                        if shooting_morale_trigger(&next, statics, seams, ut, ti, morale_alive_before, wounds_before)
-                            && morale_fails_expected(&next, statics, ti, seams)
-                        {
+                        // AI-06: SHO-15a's trigger with the expected phantom wounds landed on a
+                        // scratch copy, so nothing is removed (0 below the wave).
+                        let mut log = Vec::new();
+                        let trigger = scourge_morale_trigger(
+                            &next, statics, seams, ut, ti, morale_alive_before, wounds_before,
+                            phantom.round() as i64, &mut log,
+                        );
+                        log.iter().for_each(|line| trace_rule("volley", "Scourge", line));
+                        if trigger && morale_fails_expected(&next, statics, ti, seams) {
                             next.shaken[ti] = true;
                             drop_carried(&mut next, ti);
                         }
