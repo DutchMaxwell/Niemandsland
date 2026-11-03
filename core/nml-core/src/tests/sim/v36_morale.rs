@@ -547,3 +547,52 @@ mod mor_16c {
         assert_eq!(st.casts[2], 0);
     }
 }
+
+// -------- MOR-09b: the Valiant band belongs to the unit that WAS charged,
+// not to the charger that lost the melee (owner: lane morale). --------
+mod mor_09b_band_owner {
+    use super::super::*;
+    use crate::acts::EPOCH_73_V36;
+    use crate::rng::GodotRng;
+
+    /// A single-model Valiant charger with NO attacks, so it always loses the
+    /// wound score to a hard-hitting defender, and Tough(9) so it survives to
+    /// take its morale test. The charge starts 3" away: inside the 6" band.
+    fn valiant_charger_loses_line() -> (State, Vec<UnitStatic>) {
+        let (mut st, mut statics) = super::super::vr_charge_line(3.0);
+        let spikes = crate::unit::ShootProfile {
+            name: "Spikes".into(), attacks: 30, count: 1, range: 0, ..Default::default()
+        };
+        statics[0].name = "Charger".into();
+        statics[0].melee = vec![];
+        statics[0].ctx.valiant_bonus = 1;
+        statics[0].ctx.tough = 9;
+        st.wounds[0] = vec![9];
+        statics[1].melee = vec![spikes];
+        st.morale_bonus[0] = 1;
+        (st, statics)
+    }
+
+    /// RED: the band is the DEFENDER's, so the charger's own test keeps the
+    /// Valiant +1 even though the charge started inside 6".
+    #[test]
+    fn a_valiant_charger_that_loses_inside_the_band_keeps_its_bonus() {
+        for seed in 0..2000 {
+            let (st, statics) = valiant_charger_loses_line();
+            let mut tray = Tray::seeded(seed);
+            let mut rng = GodotRng::new(0);
+            let (_next, shot) = crate::sim::resolve_stochastic_tray_on_board(
+                &statics, &st, &super::super::vr_charge(), &super::super::small_board(),
+                Seams { movement: true, rules_epoch: EPOCH_73_V36, ..Seams::default() },
+                &mut rng, &mut tray,
+            ).expect("the charge resolves");
+            if let Some(die) = shot.rolls.iter().find(|r| r.count == 1 && r.owner == "Charger") {
+                assert_eq!(die.target, 3,
+                    "the charger's own lost melee is not a charge AGAINST it: the Valiant +1 stays (die {die:?}, log {:#?})",
+                    shot.log);
+                return;
+            }
+        }
+        panic!("no seed landed the charger's morale test: the fixture must make the charger lose");
+    }
+}
