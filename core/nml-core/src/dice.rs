@@ -512,11 +512,14 @@ fn save_batch(
             });
             // AI-G2 rules-must-log: a weapon alias (Smash, Reap, Decimate) names its own book rule.
             if !p.bane_alias.is_empty() {
-                out.log.push(format!("{}: {def_owner} re-rolls {n} unmodified Defense 6{}{}", p.bane_alias, if n == 1 { "" } else { "s" }, cond_ap_why(&p.bane_condition)));
+                let s = if n == 1 { "" } else { "s" };
+                let what = if bane_from < 6 { format!("roll{s} of {bane_from}+") } else { format!("6{s}") };
+                out.log.push(format!("{}: {def_owner} re-rolls {n} unmodified Defense {what}{}", p.bane_alias, cond_ap_why(&p.bane_condition)));
+            } else {
+                // The widened window's own share — the successful 5s the base leg
+                // would never have touched (rules-must-log count).
+                out.bane_rerolled += faces.iter().filter(|&&f| out.bane_low > 1 && f < 6 && f as i64 >= out.bane_low && f as i64 >= target).count() as i64;
             }
-            // The widened window's own share — the successful 5s the base leg
-            // would never have touched (rules-must-log count).
-            out.bane_rerolled += faces.iter().filter(|&&f| out.bane_low > 1 && f < 6 && f as i64 >= out.bane_low && f as i64 >= target).count() as i64;
         }
     }
     let unsaved = (count - blocks_with_bane_from(&faces, &reroll, target, bane_from)).max(0);
@@ -2324,6 +2327,7 @@ pub fn resolve_melee_leg(
             }
             // AI-G2: the melee half of the volley's Bane-condition gate (the table's `bane_applies`, melee = true).
             out.bane_gated = !p.bane_condition.is_empty() && !cond_met(&CondAp { condition: p.bane_condition.clone(), threshold: p.bane_threshold, ..Default::default() }, &CondApTarget::of(def, p.range as f64), false, 0.0, true);
+            out.bane_low = if p.bane_low > 1 && 0.0 > p.bane_over_in && !out.bane_gated { p.bane_low } else { 0 };
             let normal = hits - ap4;
             let sgt_hits = sergeant_hits(p, n, normal, sh.att);
             let mut w = save_batch(p, def, def_owner, ap4, save_def, ap + on6, sh.att.shred_grant, shred_alias_fires, 1, deadly_per_model, tray, &mut out);

@@ -269,6 +269,11 @@ static func _stamp_weapon_bane_alias(fpd: Dictionary, unit: GameUnit) -> void:
 		fpd["bane_alias"] = n
 		if p.has("condition"):
 			fpd["bane_condition"] = {"condition": str(p["condition"]), "threshold": int(p.get("threshold", 0))}
+		# Reap's widened window: successful saves from the entry's own `reroll_save_low` re-roll too.
+		var low := maxi(int(p.get("reroll_save_low", 0)), int(p.get("reroll_save_from", 0)))
+		if low > 1:
+			fpd["bane_low"] = low
+			fpd["bane_over_in"] = over_in_gate(p)
 		return
 
 
@@ -308,6 +313,16 @@ static func unit_rating(unit: GameUnit, rule_name: String) -> int:
 	return 0
 
 
+## AI-G2 (EPOCH_73_V36): the Brace a member carries as a UNIT rule the map resolves to the Brace primitive
+## ("Brace in Melee": its `rating`, or the printed X), like a Brace weapon: {"x": rating, "rule": book name},
+## {} without one. The core's twin: brace_of.
+static func brace_unit_rule(member: GameUnit) -> Dictionary:
+	for e in RulesRegistry.unit_rules_of_primitive(member, "Brace"):
+		var x := maxi(int(((e as Dictionary).get("params", {}) as Dictionary).get("rating", 0)), int((e as Dictionary).get("rating", 0)))
+		return {"x": maxi(x, 1), "rule": str((e as Dictionary)["name"])}
+	return {}
+
+
 ## Rules 3.6 (`EPOCH_73_V36`) — the single Brace(X) rating a unit takes off a charge: X once for
 ## the unit, host and joined heroes alike, however many models carry it. 0 below the wave or
 ## without a carrier.
@@ -332,6 +347,7 @@ static func _brace_cut(unit: GameUnit) -> int:
 			if w is Object and AiShooting._has_rule(w, "Brace"):
 				best = maxi(best, maxi(AiShooting._rating_of(w, "Brace"), 1))
 				break
+		best = maxi(best, int(brace_unit_rule(member).get("x", 0)))
 	return best
 
 
