@@ -64,12 +64,13 @@ func _foe(pos: Vector3) -> GameUnit:
 	return u
 
 
-## One solo controller for the resolver, but no owed AI reply: the doubt is about the human's own
-## post-shot drag, so the fixture must not roll the table into the AI's turn.
+## A solo controller with the foe on the AI slot (so its saves/casualties are automated) but the AI
+## reply pinned shut: the doubt is about the human's own post-shot drag, so the fixture must not roll
+## the table into the AI's turn after the shot.
 func _controller_without_reply() -> void:
 	_main.solo_ai_slots = {2: true}
 	_main._ensure_solo_controller()
-	_main.solo_ai_slots = {}
+	_main._solo_ai_busy = true   # `_solo_pump` early-returns: the owed reply never runs
 
 
 func _log_text() -> String:
