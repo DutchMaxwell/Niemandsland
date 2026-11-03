@@ -8,6 +8,7 @@ extends GdUnitTestSuite
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const INCH := 0.0254
+const MIXED_LINE := "Unwieldy: Charger has it on some weapons only - normal strike order (per-weapon order not modelled)"
 
 var _runner: GdUnitSceneRunner
 var _main: Node
@@ -45,10 +46,13 @@ func _weapon(weapon_rules: Array) -> OPRApiClient.OPRWeapon:
 	return w
 
 
-## One 1-model unit at `x` inches whose single melee weapon carries `weapon_rules`.
-func _unit(pid: int, unit_name: String, x: float, weapon_rules: Array) -> GameUnit:
+## One 1-model unit at `x` inches whose melee weapon carries `weapon_rules`; `dagger_rules` (when not
+## null) adds a second melee weapon carrying them — a mixed loadout.
+func _unit(pid: int, unit_name: String, x: float, weapon_rules: Array, dagger_rules: Variant = null) -> GameUnit:
 	var u := E2EBoot.make_unit(_main, pid, unit_name, [Vector3(x * INCH, 0.0, 0.0)])
 	var ws: Array[OPRApiClient.OPRWeapon] = [_weapon(weapon_rules)]
+	if dagger_rules != null:
+		ws.append(_weapon(dagger_rules as Array))
 	var opr := OPRApiClient.OPRUnit.new()
 	opr.weapons = ws
 	u.source_type = "opr"
@@ -68,9 +72,9 @@ func _log_text() -> String:
 	return text
 
 
-func _charge(epoch: int, weapon_rules: Array) -> GameUnit:
+func _charge(epoch: int, weapon_rules: Array, dagger_rules: Variant = null) -> GameUnit:
 	AiActRecorder.rules_epoch = epoch
-	var charger := _unit(2, "Charger", 0.0, weapon_rules)
+	var charger := _unit(2, "Charger", 0.0, weapon_rules, dagger_rules)
 	var defender := _unit(1, "Defender", 1.0, [])
 	_main.seed_tray_rng(7)
 	await _main._run_ai_melee({"unit": charger, "target": defender, "charge_from_in": 1.0})
@@ -86,6 +90,31 @@ func test_a_weapon_borne_unwieldy_makes_the_charger_strike_last_at_epoch_73(time
 
 func test_a_weapon_borne_unwieldy_is_inert_at_epoch_72(timeout := 90000) -> void:
 	var charger: GameUnit = await _charge(AiActRecorder.EPOCH_72_PLAYTEST_RULES, ["Unwieldy"])
+	assert_bool(_main._solo_unit_has_unwieldy(charger)).is_false()
+	assert_str(_log_text()).not_contains("Unwieldy")
+	await E2EBoot.settle(get_tree())
+
+
+## Unwieldy is a WEAPON rule: one Unwieldy and one plain melee weapon make a mixed unit, which keeps the
+## normal order (per-weapon strike order is not modelled) and names that simplification once.
+func test_a_mixed_unit_keeps_the_normal_order_and_names_the_simplification_at_epoch_73(timeout := 90000) -> void:
+	var charger: GameUnit = await _charge(AiActRecorder.EPOCH_73_V36, ["Unwieldy"], [])
+	assert_bool(_main._solo_unit_has_unwieldy(charger)).is_false()
+	assert_str(_log_text()).contains(MIXED_LINE)
+	assert_str(_log_text()).not_contains("strikes last")
+	await E2EBoot.settle(get_tree())
+
+
+func test_a_unit_whose_every_melee_weapon_is_unwieldy_strikes_last_at_epoch_73(timeout := 90000) -> void:
+	var charger: GameUnit = await _charge(AiActRecorder.EPOCH_73_V36, ["Unwieldy"], ["Unwieldy"])
+	assert_bool(_main._solo_unit_has_unwieldy(charger)).is_true()
+	assert_str(_log_text()).contains("Unwieldy: Charger strikes last on the charge")
+	assert_str(_log_text()).not_contains(MIXED_LINE)
+	await E2EBoot.settle(get_tree())
+
+
+func test_a_mixed_unit_is_inert_at_epoch_72(timeout := 90000) -> void:
+	var charger: GameUnit = await _charge(AiActRecorder.EPOCH_72_PLAYTEST_RULES, ["Unwieldy"], [])
 	assert_bool(_main._solo_unit_has_unwieldy(charger)).is_false()
 	assert_str(_log_text()).not_contains("Unwieldy")
 	await E2EBoot.settle(get_tree())

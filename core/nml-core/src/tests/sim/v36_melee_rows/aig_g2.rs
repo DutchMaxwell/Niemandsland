@@ -44,12 +44,29 @@ fn profile(name: &str, range: f64, attacks: i64, weapon_rules: Vec<&str>) -> Pro
     }
 }
 
+/// `p` plus a second melee weapon ("Dagger") carrying `weapon_rules`: a mixed loadout.
+fn with_dagger(mut p: Profile, weapon_rules: Vec<&str>) -> Profile {
+    p.weapons.push(Weapon {
+        name: "Dagger".into(),
+        range: 0.0,
+        attacks: 1,
+        count: 1,
+        ap: 0,
+        rules: weapon_rules.into_iter().map(str::to_string).collect(),
+    });
+    p
+}
+
 /// One charge: a 1-model charger (unit 0, `attacks` melee attacks, `weapon_rules` on its weapon)
 /// into a 1-model defender (unit 1) with a plain melee weapon. Seeded, so two runs differ only
 /// in the rule under test.
 fn charge(epoch: u32, attacks: i64, weapon_rules: Vec<&str>) -> ShootResult {
+    charge_with(epoch, profile("Charger", 0.0, attacks, weapon_rules))
+}
+
+fn charge_with(epoch: u32, charger: Profile) -> ShootResult {
     let mut reg = Registries::new(&repo_root());
-    let charger = UnitStatic::build_for(&mut reg, &profile("Charger", 0.0, attacks, weapon_rules), epoch);
+    let charger = UnitStatic::build_for(&mut reg, &charger, epoch);
     let defender = UnitStatic::build_for(&mut reg, &profile("Defender", 0.0, 1, vec![]), epoch);
     let statics = vec![charger, defender];
     let mut st = four_unit_line();
@@ -99,6 +116,37 @@ fn a_weapon_borne_unwieldy_makes_the_charger_strike_last_at_epoch_73() {
 fn a_weapon_borne_unwieldy_is_inert_at_epoch_72() {
     let shot = charge(E72, 1, vec!["Unwieldy"]);
     assert_eq!(first_striker(&shot), "Charger", "epoch 72 replays today's order");
+    assert!(!shot.log.iter().any(|l| l.contains("Unwieldy")), "{:?}", shot.log);
+}
+
+const MIXED_LINE: &str =
+    "Unwieldy: Charger has it on some weapons only - normal strike order (per-weapon order not modelled)";
+
+/// Unwieldy is a WEAPON rule: a unit with one Unwieldy and one plain melee weapon is mixed, and the
+/// per-weapon strike order is not modelled, so it keeps the normal order and names why.
+#[test]
+fn a_mixed_unit_keeps_the_normal_order_and_names_the_simplification_at_epoch_73() {
+    let mixed = with_dagger(profile("Charger", 0.0, 1, vec!["Unwieldy"]), vec![]);
+    let shot = charge_with(E73, mixed);
+    assert_eq!(first_striker(&shot), "Charger", "a mixed unit does not strike last as a whole");
+    assert!(has_line(&shot, MIXED_LINE), "{:?}", shot.log);
+    assert!(!shot.log.iter().any(|l| l.contains("strikes last")), "{:?}", shot.log);
+}
+
+#[test]
+fn a_unit_whose_every_melee_weapon_is_unwieldy_strikes_last_at_epoch_73() {
+    let all = with_dagger(profile("Charger", 0.0, 1, vec!["Unwieldy"]), vec!["Unwieldy"]);
+    let shot = charge_with(E73, all);
+    assert_eq!(first_striker(&shot), "Defender");
+    assert!(has_line(&shot, "Unwieldy: Charger strikes last on the charge"), "{:?}", shot.log);
+    assert!(!has_line(&shot, MIXED_LINE), "{:?}", shot.log);
+}
+
+#[test]
+fn a_mixed_unit_is_inert_at_epoch_72() {
+    let mixed = with_dagger(profile("Charger", 0.0, 1, vec!["Unwieldy"]), vec![]);
+    let shot = charge_with(E72, mixed);
+    assert_eq!(first_striker(&shot), "Charger");
     assert!(!shot.log.iter().any(|l| l.contains("Unwieldy")), "{:?}", shot.log);
 }
 
