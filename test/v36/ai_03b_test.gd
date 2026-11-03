@@ -161,7 +161,8 @@ func test_the_planner_menu_at_epoch_73_offers_only_hold_or_a_plain_advance() -> 
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
 	var gunner := _unit(2, "Gunner", [Vector3.ZERO], ["Cumbersome"], [{"name": "Rifle", "range": 24}])
 	var foe := _unit(1, "Foe", [Vector3(18 * IN2M, 0, 0)])
-	var state := _state([gunner, foe], [Vector3(10 * IN2M, 0, 0)])
+	var marker := Vector3(10 * IN2M, 0, 0)
+	var state := _state([gunner, foe], [marker])
 	for menu in [AiPlanner.candidates(state, "gunner"), AiPlanner.candidates_wide(state, "gunner")]:
 		assert_int(_of_kind(menu, AiDecision.Action.RUSH).size()) \
 			.override_failure_message("rules 3.6: no Rush candidate for a Cumbersome unit (%s)" % str(menu)) \
@@ -174,10 +175,23 @@ func test_the_planner_menu_at_epoch_73_offers_only_hold_or_a_plain_advance() -> 
 		assert_int(shooting_advances.size()) \
 			.override_failure_message("rules 3.6: an advance never carries a shot (%s)" % str(menu)) \
 			.is_equal(0)
-		assert_bool(_of_kind(menu, AiDecision.Action.ADVANCE).size() > 0
-			or not _of_kind(menu, AiDecision.Action.HOLD).is_empty()) \
-			.override_failure_message("the pick must stay Hold (maybe shooting) or a plain Advance (%s)" % str(menu)) \
+		assert_bool(not _of_kind(menu, AiDecision.Action.HOLD).is_empty()) \
+			.override_failure_message("the menu keeps a Hold row (%s)" % str(menu)) \
 			.is_true()
+		var advances := _of_kind(menu, AiDecision.Action.ADVANCE)
+		assert_int(advances.size()) \
+			.override_failure_message("exactly one plain Advance per marker (%s)" % str(menu)) \
+			.is_equal(1)
+		assert_bool((advances[0] as Dictionary).get("dest") == marker) \
+			.override_failure_message("the plain Advance walks to the marker (%s)" % str(menu)) \
+			.is_true()
+		assert_bool(not (advances[0] as Dictionary).has("shoot")) \
+			.override_failure_message("the plain Advance carries no shot (%s)" % str(menu)) \
+			.is_true()
+	# same input -> same row
+	assert_bool(AiPlanner.candidates(state, "gunner") == AiPlanner.candidates(state, "gunner")) \
+		.override_failure_message("rules 3.6: the hand menu is deterministic") \
+		.is_true()
 
 
 func test_the_planner_menu_at_epoch_72_still_offers_a_rush() -> void:
@@ -213,3 +227,52 @@ func test_the_enemy_reply_advance_shoots_at_epoch_72() -> void:
 	assert_float(float(threat.get("squad", 0.0))) \
 		.override_failure_message("rules 3.5: the gun may advance 6\" into reach and fire, got %s" % threat) \
 		.is_greater(0.0)
+
+
+## The HAND planner's rollout fallback rows (`_policy_candidates`, the restricted menu
+## `_policy_step` plays out) must obey the same reduced menu as the live `candidates()`:
+## Hold (maybe shooting) or a plain Advance — never a Rush/Charge or an advance-with-shot.
+func test_the_rollout_fallback_menu_is_hold_or_a_plain_advance_at_epoch_73() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	var gunner := _unit(2, "Gunner", [Vector3.ZERO], ["Cumbersome"], [{"name": "Rifle", "range": 24}])
+	var foe := _unit(1, "Foe", [Vector3(18 * IN2M, 0, 0)])
+	var state := _state([gunner, foe], [Vector3(10 * IN2M, 0, 0)])
+	var menu := AiPlanner._policy_candidates(state, "gunner")
+	assert_int(_of_kind(menu, AiDecision.Action.RUSH).size()) \
+		.override_failure_message("rules 3.6: no fallback Rush for a Cumbersome unit (%s)" % str(menu)) \
+		.is_equal(0)
+	assert_int(_of_kind(menu, AiDecision.Action.CHARGE).size()) \
+		.override_failure_message("rules 3.6: no fallback Charge for a Cumbersome unit (%s)" % str(menu)) \
+		.is_equal(0)
+	var shooting_advances := _of_kind(menu, AiDecision.Action.ADVANCE) \
+		.filter(func(c: Dictionary) -> bool: return c.has("shoot"))
+	assert_int(shooting_advances.size()) \
+		.override_failure_message("rules 3.6: a fallback advance never carries a shot (%s)" % str(menu)) \
+		.is_equal(0)
+	assert_bool(not _of_kind(menu, AiDecision.Action.HOLD).is_empty()) \
+		.override_failure_message("the fallback menu keeps a Hold row (%s)" % str(menu)) \
+		.is_true()
+
+
+## The rush D197-opener doctrine is a raw RUSH row; for a Cumbersome unit it must fall back
+## to the plain Advance toward the same marker. The 3.5 control keeps the old Rush.
+func test_the_rush_doctrine_falls_back_to_a_plain_advance_at_epoch_73() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	var gunner := _unit(2, "Gunner", [Vector3.ZERO], ["Cumbersome"], [{"name": "Rifle", "range": 24}])
+	var foe := _unit(1, "Foe", [Vector3(18 * IN2M, 0, 0)])
+	var state := _state([gunner, foe], [Vector3(10 * IN2M, 0, 0)])
+	var pick := AiPlanner.doctrine_pick(state, 2, "rush")
+	assert_int(int((pick["action"] as Dictionary)["kind"])) \
+		.override_failure_message("rules 3.6: the rush doctrine settles on a plain Advance (%s)" % str(pick)) \
+		.is_equal(AiDecision.Action.ADVANCE)
+
+
+func test_the_rush_doctrine_keeps_its_rush_at_epoch_72() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
+	var gunner := _unit(2, "Gunner", [Vector3.ZERO], ["Cumbersome"], [{"name": "Rifle", "range": 24}])
+	var foe := _unit(1, "Foe", [Vector3(18 * IN2M, 0, 0)])
+	var state := _state([gunner, foe], [Vector3(10 * IN2M, 0, 0)])
+	var pick := AiPlanner.doctrine_pick(state, 2, "rush")
+	assert_int(int((pick["action"] as Dictionary)["kind"])) \
+		.override_failure_message("rules 3.5 has no Cumbersome: the Rush stands (%s)" % str(pick)) \
+		.is_equal(AiDecision.Action.RUSH)
