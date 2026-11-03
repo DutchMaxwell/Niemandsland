@@ -545,6 +545,7 @@ func _run() -> void:
 	army_manager.current_round = 1
 	battle_log.log_event(0, "=== AI ARENA: %s (P1) vs %s (P2) — seed %d dice %d, P%d opens ===" % [
 		_p1_grade, _p2_grade, _seed, _dice_seed, opener], true)
+	main._solo_log_scout_deployment()
 	await main._solo_run_both_ai_game(opener)
 
 	# Final-round board: the last round never advance_round()s, so it is captured here — after hiding

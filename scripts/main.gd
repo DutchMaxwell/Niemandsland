@@ -1323,6 +1323,7 @@ func _solo_ensure_playing_phase() -> void:
 				"The battle begins — NACHTMAHR deploys its remaining units", true)
 	if opr_army_manager != null and opr_army_manager.has_method("start_game") \
 			and "game_phase" in opr_army_manager and int(opr_army_manager.game_phase) == 0:
+		_solo_log_scout_deployment()
 		opr_army_manager.start_game()
 		_solo_run_redeployment()
 		_solo_begin_rapid_ambush_round_one()
@@ -4323,6 +4324,34 @@ func _solo_deploy_ai_turn() -> void:
 		battle_log.log_event(BattleLog.Category.GENERAL, "NACHTMAHR deploys %s — your turn" % unit.get_name(), true)
 	_solo_show_explain("NACHTMAHR deploys %s — your turn" % unit.get_name())
 	_solo_deploy_show_human_turn()
+
+
+## AIG-G2-L3: the Scout rule's whole effect is its DEPLOYMENT ORDER (scouts deploy after all other
+## units), so the battle log never named it. One entry names the rule (Scout, or the registry's
+## variant for the carrier) and the units it moved; nothing when no unit carries it.
+func _solo_log_scout_deployment() -> void:
+	if battle_log == null or opr_army_manager == null:
+		return
+	var names: PackedStringArray = []
+	var rules: PackedStringArray = []
+	for u in opr_army_manager.get_all_game_units():
+		var gu := u as GameUnit
+		if gu == null or gu.get_alive_count() <= 0 or not SoloController.unit_has_scout(gu) \
+				or SoloController.unit_in_reserve(gu) \
+				or (gu.has_method("is_attached") and gu.is_attached()):
+			continue
+		names.append(gu.get_name())
+		var resolved := RulesRegistry.unit_rules_of_primitive(gu, "Scout")
+		var rule_name := "Scout"
+		if not resolved.is_empty():
+			rule_name = str((resolved[0] as Dictionary).get("name", "Scout"))
+		if not rules.has(rule_name):
+			rules.append(rule_name)
+	if names.is_empty():
+		return
+	_log_rule_event(BattleLog.Category.GENERAL,
+		"%s: %s deployed after all other units (%s)" % [
+			", ".join(rules), ", ".join(names), OPRApiClient.rules_cite(_solo_rules_system())], false)
 
 
 ## Phase advance: MAIN → SCOUT (same procedure, roll-off winner starts — "the player that
