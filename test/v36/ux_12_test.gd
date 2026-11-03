@@ -5,6 +5,7 @@ extends GdUnitTestSuite
 ## read the same depth.
 
 const NINE_IN := 9.0 * 0.0254
+const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 
 
 func _unit(pid: int, positions: Array) -> GameUnit:
@@ -87,3 +88,36 @@ func test_human_scout_phase_texts_name_nine_inches_at_epoch_73() -> void:
 	AiActRecorder.rules_epoch = epoch0
 	assert_str(words73).contains("9\"")
 	assert_str(words72).contains("12\"")
+
+
+## AIG-G2-L3: the Scout rule's whole effect is its DEPLOYMENT ORDER (scouts deploy after all other
+## units), so the battle log never named it. At the start of play exactly ONE entry names the rule and
+## the units it moved — no per-unit spam, and nothing when no unit carries it.
+func test_scout_deployment_is_named_once_when_the_battle_starts(timeout := 120000) -> void:
+	E2EBoot.arm_harness_mode()
+	var root_before: Array = E2EBoot.root_children(get_tree())
+	var runner: GdUnitSceneRunner = scene_runner(E2EBoot.MAIN_SCENE)
+	var main: Node = runner.scene()
+	await runner.simulate_frames(4)
+	main.solo_ai_slots = {2: true}
+	main._ensure_solo_controller()
+	main._solo_batch = true
+	var human_scout := E2EBoot.make_unit(main, 1, "Pathfinders", [Vector3(0, 0, 0.5)])
+	human_scout.unit_properties["special_rules"] = ["Scout"]
+	main.opr_army_manager.game_units[human_scout.unit_id] = human_scout
+	var ai_scout := E2EBoot.make_unit(main, 2, "Outriders", [Vector3(0, 0, -0.5)])
+	ai_scout.unit_properties["special_rules"] = ["Scout"]
+	main.opr_army_manager.game_units[ai_scout.unit_id] = ai_scout
+	var plain := E2EBoot.make_unit(main, 1, "Line Infantry", [Vector3(0, 0, 0.2)])
+	main.opr_army_manager.game_units[plain.unit_id] = plain
+	main._solo_deploy_fsm = {"phase": "scout", "human_out": true, "winner_is_ai": false}
+	main._solo_deploy_phase_advance()
+	var hits: Array = []
+	for e in main.battle_log.entries():
+		var text := str((e as Dictionary)["text"])
+		if text.contains("Scout") and text.contains("Pathfinders") and text.contains("Outriders"):
+			hits.append(text)
+	E2EBoot.free_stray_root_nodes(get_tree(), root_before)
+	assert_int(hits.size()) \
+		.override_failure_message("the Scout deployment effect must be named exactly once in the battle log, got: %s" % str(hits)) \
+		.is_equal(1)
