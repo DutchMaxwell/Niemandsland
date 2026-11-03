@@ -260,6 +260,27 @@ static func effective_ap(facets: Dictionary, def_ctx: Dictionary) -> int:
 	return ap
 
 
+## The Bane window a spell's token list opens against THIS defender — the core's `bane_window`
+## (spell.rs). `{"bane": bool, "from": int}`: `from` 6 is the base sixes-only leg; Decimate opens it
+## against a defender above half, Obliterate against Tough(3)+, Reap against Shaken/Fatigued and
+## Fragment against Defense 5+ (each at 5+). One implementation for the EV and the dice path.
+static func bane_window(facets: Dictionary, def_ctx: Dictionary) -> Dictionary:
+	var bane := bool(facets.get("bane", false))
+	var from := 6
+	if bool(facets.get("bane_above_half", false)) and bool(def_ctx.get("above_half_strength", false)):
+		bane = true
+	if int(facets.get("bane_tough3_low", 0)) > 1 and maxi(int(def_ctx.get("tough", 1)), 1) >= 3:
+		bane = true
+		from = mini(from, int(facets["bane_tough3_low"]))
+	if int(facets.get("bane_shaken_low", 0)) > 1 and bool(def_ctx.get("shaken_or_fatigued", false)):
+		bane = true
+		from = mini(from, int(facets["bane_shaken_low"]))
+	if int(facets.get("bane_def56_low", 0)) > 1 and int(def_ctx.get("defense", 4)) >= 5:
+		bane = true
+		from = mini(from, int(facets["bane_def56_low"]))
+	return {"bane": bane, "from": from}
+
+
 # ===== P2 — damage-spell expected wounds =====
 
 ## P2: expected wounds of a damage spell against `def_ctx` (an AiEv.ctx_for context). Spells deal a
@@ -288,19 +309,9 @@ static func spell_damage_ev(hits: int, def_ctx: Dictionary, facets: Dictionary =
 	six_hits = minf(six_hits, h)
 	# Saves at the RAW Defense — no Shielded, no Cover (see above).
 	var defense := int(def_ctx.get("defense", 4))
-	var bane := bool(facets.get("bane", false))
-	var bane_from := 6
-	if bool(facets.get("bane_above_half", false)) and bool(def_ctx.get("above_half_strength", false)):
-		bane = true
-	if int(facets.get("bane_tough3_low", 0)) > 1 and maxi(int(def_ctx.get("tough", 1)), 1) >= 3:
-		bane = true
-		bane_from = mini(bane_from, int(facets["bane_tough3_low"]))
-	if int(facets.get("bane_shaken_low", 0)) > 1 and bool(def_ctx.get("shaken_or_fatigued", false)):
-		bane = true
-		bane_from = mini(bane_from, int(facets["bane_shaken_low"]))
-	if int(facets.get("bane_def56_low", 0)) > 1 and int(def_ctx.get("defense", 4)) >= 5:
-		bane = true
-		bane_from = mini(bane_from, int(facets["bane_def56_low"]))
+	var window := bane_window(facets, def_ctx)
+	var bane := bool(window.get("bane", false))
+	var bane_from := int(window.get("from", 6))
 	var ap := effective_ap(facets, def_ctx)
 	var unsaved := (h - six_hits) * (1.0 - AiEv.block_chance_from(defense, ap, bane, bane_from)) \
 		+ six_hits * (1.0 - AiEv.block_chance_from(defense, ap + int(facets.get("on6_ap", 0)), bane, bane_from))
