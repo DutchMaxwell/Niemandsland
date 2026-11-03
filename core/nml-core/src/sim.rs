@@ -6285,7 +6285,7 @@ fn tray_charge(
     charge_from_in: f64,
     cover: Cover,
 ) -> Option<usize> {
-    tray_charge_with_self_wounds(statics, next, si, ti, seams, tray, shot, charge_from_in, cover, 0)
+    tray_charge_with_self_wounds(statics, next, si, ti, seams, tray, shot, charge_from_in, cover, 0, 0, 0)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -6300,7 +6300,10 @@ fn tray_charge_with_self_wounds(
     charge_from_in: f64,
     cover: Cover,
     charger_self_wounds: i64,
+    pre_melee_su: i64,
+    pre_melee_tu: i64,
 ) -> Option<usize> {
+    let _ = (pre_melee_su, pre_melee_tu);
     let mut charger_self_wounds = charger_self_wounds;
     let mut defender_self_wounds = 0;
     let strikes_first =
@@ -9869,7 +9872,7 @@ fn resolve_with(
                         modifier_distance_in(state, si, ti, seams);
                     // Rules 3.6: what the charger's own Dangerous test cost it on the charge move counts as taken.
                     let self_wounds = (wounds_left(state, si) - su_before).max(0);
-                    if let Some(li) = tray_charge_with_self_wounds(statics, &mut next, si, ti, seams, tray, shot, charge_from_in, cover, self_wounds) {
+                    if let Some(li) = tray_charge_with_self_wounds(statics, &mut next, si, ti, seams, tray, shot, charge_from_in, cover, self_wounds, 0, 0) {
                         // D1-B5b: the melee loser's test is a REAL die now
                         // (:8116-8118), where D1-B5a still asked the
                         // expected-value oracle for the outcome.
