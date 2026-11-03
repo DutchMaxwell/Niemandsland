@@ -1,5 +1,5 @@
-//! MEL-04s tests (rules 3.6, lane melee): a Shaken braced unit takes no Impact dice off a charger,
-//! alongside the Fatigued exemption; a fresh braced unit still cuts and epoch 72 keeps today's dice.
+//! MEL-04s tests (rules 3.6, lane melee): a Shaken braced unit KEEPS its Impact cut; only a
+//! Fatigued braced unit loses it. A fresh braced unit cuts and epoch 72 keeps today's dice.
 use super::super::*;
 use crate::combat::IMPACT_HIT_TARGET;
 use crate::state::Weapon;
@@ -70,9 +70,9 @@ fn charge(epoch: u32, defender_fatigued: bool, defender_shaken: bool) -> (i64, V
 }
 
 #[test]
-fn a_shaken_braced_unit_takes_nothing_at_epoch_73() {
+fn a_shaken_braced_unit_keeps_its_cut_at_epoch_73() {
     let (dice, _) = charge(crate::acts::EPOCH_73_V36, false, true);
-    assert_eq!(dice, 3, "a Shaken braced unit removes nothing");
+    assert_eq!(dice, 2, "a Shaken braced unit keeps its X = 1 cut");
 }
 
 #[test]
@@ -82,9 +82,9 @@ fn a_fatigued_braced_unit_still_takes_nothing_at_epoch_73() {
 }
 
 #[test]
-fn a_fresh_braced_unit_takes_two_at_epoch_73() {
+fn a_fresh_braced_unit_takes_one_at_epoch_73() {
     let (dice, _) = charge(crate::acts::EPOCH_73_V36, false, false);
-    assert_eq!(dice, 1, "Impact(3) into two Brace(1) models: 3 - 2 = 1 die");
+    assert_eq!(dice, 2, "Impact(3) into two Brace(1) models: X = 1, so 3 - 1 = 2 dice");
 }
 
 #[test]
@@ -94,7 +94,7 @@ fn brace_is_inert_at_epoch_72() {
 }
 
 #[test]
-fn the_log_names_the_shaken_exemption() {
+fn the_log_names_the_shaken_cut() {
     let (_, lines) = charge(crate::acts::EPOCH_73_V36, false, true);
-    assert!(lines.iter().any(|l| l == "Brace: no effect, Defender is Shaken"), "{lines:?}");
+    assert!(lines.iter().any(|l| l == "Brace: Defender takes 1 Impact dice off Charger"), "{lines:?}");
 }
