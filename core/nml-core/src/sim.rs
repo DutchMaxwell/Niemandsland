@@ -1746,6 +1746,7 @@ fn spend_exchange_wounded(
 /// chain may mark once per round; the rule's base name (the entry minus
 /// " Mark") lands on the ATTACKER as a once-grant, and `ctx_live` carries it
 /// into the very rolls this seam precedes.
+#[allow(clippy::too_many_arguments)] // the tray and report join the seam's parity args
 fn tray_vs_marks(
     statics: &[UnitStatic],
     next: &mut State,
@@ -1753,6 +1754,8 @@ fn tray_vs_marks(
     ti: usize,
     dist_in: f64,
     seams: Seams,
+    tray: &mut Tray,
+    shot: &mut ShootResult,
 ) {
     let mut bearers: Vec<usize> = vec![si];
     if seams.hero_attach {
@@ -1777,16 +1780,19 @@ fn tray_vs_marks(
                     && (!b.needs_los || los_clear(next, bearer, ti))
             }) {
                 next.vs_mark_round[bearer] = next.round;
-                let fail_p = morale_fail_chance(next, statics, ti, seams);
-                let ev = b.spell_token_drain as f64 * fail_p;
-                let whole = ev.floor() as i64;
-                let spent = whole + i64::from(ev - whole as f64 > morale_dither(ti, next.round));
+                let owner = statics[pb].name.clone();
                 let before = next.casts[ti];
-                next.casts[ti] = (before - spent).max(0);
-                trace_rule("cast", "Spell Drain", &format!(
-                    "{} drains {}: fail chance {:.2}, tokens {} -> {}",
-                    statics[pb].name, statics[next.roster.profile[ti]].name, fail_p,
-                    before, next.casts[ti]));
+                let passed = control_morale_passed(statics, next, ti,
+                    ControlMoraleSource { owner: &owner, rule: "Spell Drain" }, seams, tray, shot);
+                if !passed {
+                    let spent = b.spell_token_drain;
+                    next.casts[ti] = (next.casts[ti] - spent).max(0);
+                    shot.log.push(format!("Spell Drain: {} loses {} spell tokens", statics[next.roster.profile[ti]].name, before - next.casts[ti]));
+                } else {
+                    shot.log.push(format!("Spell Drain: {} passes the Morale test, no tokens lost", statics[next.roster.profile[ti]].name));
+                }
+                trace_rule("cast", "Spell Drain", &format!("{} drains {}: {} tokens {} -> {}", owner,
+                    statics[next.roster.profile[ti]].name, if passed { "no" } else { "two" }, before, next.casts[ti]));
             }
         }
         for b in &statics[pb].utility_buffs {
@@ -6289,7 +6295,7 @@ fn tray_charge_with_self_wounds(
     }
     // main.gd:8035 — the charger's Mark lands after Impact and before the
     // strikes, measured at 0" (the two units are in base contact).
-    tray_vs_marks(statics, next, si, ti, 0.0, seams);
+    tray_vs_marks(statics, next, si, ti, 0.0, seams, tray, shot);
     let charger_last = charger_strikes_last(statics, next, si, seams);
     let strike_back_set = if counter_first { StrikeSet::NonCounter } else { StrikeSet::All };
     for slot in 0..2 {
@@ -9448,7 +9454,7 @@ fn resolve_with(
                             // main.gd:3042 — the Mark is picked and recorded
                             // BEFORE this group's profiles and contexts are
                             // read (:3082), so the grant reaches this volley.
-                            tray_vs_marks(statics, &mut next, si, g.ti, g.d, seams);
+                            tray_vs_marks(statics, &mut next, si, g.ti, g.d, seams, tray, shot);
                             // Wave 3 — Piercing Tag: the marked target's pool
                             // spends EVERY marker on THIS volley (main.gd
                             // :3123 AI / :9857 human, shooting only — the
