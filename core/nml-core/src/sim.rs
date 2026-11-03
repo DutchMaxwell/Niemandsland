@@ -5383,14 +5383,14 @@ fn expected_melee_morale(
         // charger's own charge-move wounds count as taken by it.
         let su_taken = taken_by_su + self_wounds.max(0);
         (
-            taken_by_tu + statics[state.roster.profile[si]].ctx.fear,
-            su_taken + statics[state.roster.profile[ti]].ctx.fear,
+            taken_by_tu + chain_fear(statics, state, si, seams),
+            su_taken + chain_fear(statics, state, ti, seams),
         )
     } else {
         // Below 73: the side that dealt fewer loses; self-wounds never count.
         (
-            taken_by_tu + statics[state.roster.profile[si]].ctx.fear,
-            taken_by_su + statics[state.roster.profile[ti]].ctx.fear,
+            taken_by_tu + chain_fear(statics, state, si, seams),
+            taken_by_su + chain_fear(statics, state, ti, seams),
         )
     };
     let Some(li) = melee_loser(state, si, ti, score_su, score_tu, seams) else { return };
@@ -5479,6 +5479,21 @@ fn chain_has_no_melee(statics: &[UnitStatic], state: &State, i: usize) -> bool {
         .chain(state.attached[i].iter().copied())
         .filter(|&mi| state.alive[mi] > 0)
         .all(|mi| statics[state.roster.profile[mi]].melee.is_empty())
+}
+
+/// FAB-B7 — a joined chain's Fear(X): the host's own rating PLUS every LIVING attached
+/// hero's, behind the same hero-attach seam every other chain read in this file uses. Below
+/// `EPOCH_73_V36` the host-only read stands, so every recorded corpus replays byte-exact.
+fn chain_fear(statics: &[UnitStatic], state: &State, i: usize, seams: Seams) -> i64 {
+    let mut f = statics[state.roster.profile[i]].ctx.fear;
+    if rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) && seams.hero_attach {
+        for &h in &state.attached[i] {
+            if state.alive[h] > 0 {
+                f += statics[state.roster.profile[h]].ctx.fear;
+            }
+        }
+    }
+    f
 }
 
 /// ONE side's strike phase on the tray, wounds LANDED. The landing is the point:
@@ -6402,8 +6417,8 @@ fn tray_charge_with_self_wounds(
     // sides have finished attacking, BEFORE the melee result / morale test.
     self_destruct_post_melee(statics, next, si, ti, seams, tray, shot);
     self_destruct_post_melee(statics, next, ti, si, seams, tray, shot);
-    let mut a = by_su + statics[next.roster.profile[si]].ctx.fear;
-    let mut b = by_tu + statics[next.roster.profile[ti]].ctx.fear;
+    let mut a = by_su + chain_fear(statics, next, si, seams);
+    let mut b = by_tu + chain_fear(statics, next, ti, seams);
     // Rules 3.6 (`EPOCH_73_V36`): the loser TOOK more wounds, so each side scores what its ENEMY took: wounds dealt, the
     // Fear it bears and the enemy's own self-wounds (the twin rolls no Hazardous, so only the charger adds any).
     if rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) {
