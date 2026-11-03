@@ -1301,8 +1301,7 @@
    "book_version": "3.6.0",
    "params": {
     "ignore_target": 6,
-    "ignore_target_spell": 2,
-    "all_models": true
+    "ignore_target_spell": 2
    }
   },
   "Spell Resistance Aura": {
