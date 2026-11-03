@@ -11730,12 +11730,26 @@ func _run_ai_melee(report: Dictionary) -> void:
 
 ## Rules 3.6 (EPOCH_73_V36): the loser TOOK more wounds in the activation, so each side scores what its ENEMY took:
 ## wounds dealt + the Fear it bears + the enemy's pre-melee activation wounds (`a_self` / `b_self`: what the
-## unit lost before the strikes — Dangerous, a spell, Hazardous) plus the melee's own Hazardous tally.
+## unit lost before the strikes - Dangerous, a spell, Hazardous) plus the melee's own Hazardous tally.
 ## Lower loses, as before; below 73 only dealt + Fear count. Returns [a_score, b_score].
+## FAB-B7 - a joined chain's Fear(X): the host's rating plus every LIVING attached hero's,
+## from `EPOCH_73_V36` (below it the host-only read stands). Twin: `sim::chain_fear`.
+func _solo_chain_fear(unit: GameUnit) -> int:
+	var f: int = _solo_unit_rating(unit, "Fear")
+	if unit == null or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return f
+	if unit.has_method("get_attached_heroes"):
+		for h in unit.get_attached_heroes():
+			var hero := h as GameUnit
+			if hero != null and hero.get_alive_count() > 0:
+				f += _solo_unit_rating(hero, "Fear")
+	return f
+
+
 func _solo_melee_scores(a: GameUnit, a_caused: int, b: GameUnit, b_caused: int,
 		a_self: int = 0, b_self: int = 0) -> Array:
-	var a_score: int = AiCombatMath.fear_adjusted_wounds(a_caused, _solo_unit_rating(a, "Fear"))
-	var b_score: int = AiCombatMath.fear_adjusted_wounds(b_caused, _solo_unit_rating(b, "Fear"))
+	var a_score: int = AiCombatMath.fear_adjusted_wounds(a_caused, _solo_chain_fear(a))
+	var b_score: int = AiCombatMath.fear_adjusted_wounds(b_caused, _solo_chain_fear(b))
 	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
 		a_score += b_self + int(_solo_hazard_self.get(b.get_instance_id(), 0))
 		b_score += a_self + int(_solo_hazard_self.get(a.get_instance_id(), 0))
@@ -11782,8 +11796,8 @@ func _solo_log_melee_result(a: GameUnit, a_caused: int, a_score: int,
 				_solo_regen_ignored, ("" if _solo_regen_ignored == 1 else "s"),
 				("do" if _solo_regen_ignored != 1 else "does")]
 		battle_log.log_event(BattleLog.Category.COMBAT, "Melee result: %s took %s, %s took %s — %s%s" % [
-			a.get_name(), _solo_taken_tally(b_caused, b_score, _solo_unit_rating(b, "Fear")),
-			b.get_name(), _solo_taken_tally(a_caused, a_score, _solo_unit_rating(a, "Fear")), verdict, regen_note], true)
+			a.get_name(), _solo_taken_tally(b_caused, b_score, _solo_chain_fear(b)),
+			b.get_name(), _solo_taken_tally(a_caused, a_score, _solo_chain_fear(a)), verdict, regen_note], true)
 		# SHO-15b Scourge: name the phantom wounds each side took and whether they decided the melee.
 		var a_ph := int(_solo_melee_scourge.get(a.get_instance_id(), 0))
 		var b_ph := int(_solo_melee_scourge.get(b.get_instance_id(), 0))
