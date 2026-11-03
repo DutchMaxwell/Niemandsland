@@ -2,6 +2,7 @@ extends GdUnitTestSuite
 ## Rules 3.6 wave, row UX-CITE: every player-visible rules citation names the rules version from the
 ## SINGLE SOURCE (OPRApiClient.rules_core_version, rendered by the new rules_cite helper) and drops
 ## page numbers. Comments are stripped before the scan, string literals are kept.
+## RED proof (CI red before the green commit): https://github.com/DutchMaxwell/Niemandsland/actions/runs/41597410698/job/125789051377
 ## PR A scans only the source it converts: main.gd up to the split line (stated in the PR body).
 
 const MAIN := "res://scripts/main.gd"
