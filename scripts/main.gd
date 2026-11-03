@@ -14730,7 +14730,10 @@ func _run_human_melee(attacker: GameUnit, target: GameUnit, auto: bool = false) 
 	_solo_log_melee_result(attacker, human_caused, human_score, target, ai_caused, ai_score)
 	await _solo_stage_phase("Melee result")
 	if loser != null and _solo_combined_alive(loser) > 0:
-		await _solo_morale_test(loser, _roller_label(loser), true)   # "Names, not You" (rules plan 2.5)
+		if loser == attacker:   # MOR-09b: the charger lost its own melee — twin of _run_ai_melee
+			await _solo_morale_test(loser, _roller_label(loser), true, OWN_CHARGE_CAUSE, -1.0, -1.0)
+		else:
+			await _solo_morale_test(loser, _roller_label(loser), true)   # "Names, not You" (rules plan 2.5)
 	await _solo_stage_phase("Morale")
 	# — Consolidation (GF v3.5.1 p.9, round 7 finding 4): neither destroyed → the human charger's 1"
 	#   back-step is surfaced as a reminder; one side destroyed → the survivor consolidates up to 3"
