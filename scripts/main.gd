@@ -28,6 +28,10 @@ const DEFAULT_TABLE_SIZE_FEET := Vector2(6, 4)  # 72x48 inches (landscape)
 ## Group rotation
 const GROUP_ROTATION_SPEED: float = 90.0  # degrees per second
 
+## MOR-09b: a melee the unit itself charged and lost — Banner still helps it,
+## the Valiant family does not (the unit was neither shot at nor charged).
+const OWN_CHARGE_CAUSE := "its own charge"
+
 ## Keycodes handled in _unhandled_key_input that MOVE/EDIT objects (arrange, copy/paste,
 ## duplicate, lock, regiment frontage, regiment-arc toggle, group-rotate, undo/redo, delete). These are swallowed
 ## while a remote peer is loading (the non-loading player is held back). The non-edit panels
@@ -11731,7 +11735,11 @@ func _run_ai_melee(report: Dictionary) -> void:
 	_solo_log_melee_result(unit, ai_caused, ai_score, target, human_caused, human_score)
 	await _solo_stage_phase("Melee result")
 	if loser != null and _solo_combined_alive(loser) > 0:
-		await _solo_morale_test(loser, _roller_label(loser), true, "", -1.0, float(report.get("charge_from_in", -1.0)))
+		if loser == target:
+			await _solo_morale_test(loser, _roller_label(loser), true, "", -1.0,
+				float(report.get("charge_from_in", -1.0)))
+		else:
+			await _solo_morale_test(loser, _roller_label(loser), true, OWN_CHARGE_CAUSE, -1.0, -1.0)
 	await _solo_stage_phase("Morale")
 	# — Consolidation (GF v3.5.1 p.9, after morale): neither destroyed → the CHARGER (the AI here) moves
 	#   back 1"; one side destroyed → the survivor consolidates up to 3" (round 7, finding 4) —
@@ -12145,9 +12153,20 @@ func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false, cause
 		# picked-units variant still covers the bearer's own unit) lowers the roll target, clamped to
 		# [2,6] (a natural 1 always fails). Without Banner this is the plain Quality target.
 		var morale_bonus: int = _solo_morale_bonus(unit)
+		var own_charge: bool = cause == OWN_CHARGE_CAUSE
 		# Rules 3.6 Banner: the Banner family's +1 only helps a test that shooting or melee caused. Any
 		# other cause takes the Banner share back out; the Morale(X) rating and spell tokens stay.
-		if cause != "" and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		if own_charge and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+			# MOR-09b: the test came from the unit's own charge, so it was neither shot at
+			# nor charged — only the Valiant-family share drops; plain Banner stays.
+			var own_banner_share: int = morale_bonus - SoloController.morale_rating_of(unit)
+			var own_valiant_share: int = mini(SoloController.valiant_bonus_of(unit), own_banner_share)
+			if own_valiant_share > 0:
+				morale_bonus -= own_valiant_share
+				_log_rule_event(BattleLog.Category.COMBAT,
+					"Banner: %s gets no +%d — it charged, it was not charged (Valiant needs a shot or a charge)" % [
+						unit.get_name(), own_valiant_share], true)
+		elif cause != "" and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
 			var banner_share: int = morale_bonus - SoloController.morale_rating_of(unit)
 			if banner_share > 0:
 				morale_bonus -= banner_share
@@ -12170,7 +12189,7 @@ func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false, cause
 		var spell_morale := 0
 		var morale_notes: PackedStringArray = []
 		var great_banner_skipped := 0
-		var skip_great_banner: bool = cause != "" and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
+		var skip_great_banner: bool = cause != "" and not own_charge and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
 		for mrd in AiSpell.mods_for(_solo_mods_of_chain(unit), "morale", melee):
 			if skip_great_banner and str((mrd as Dictionary).get("spell", "")) == "Great Banner":
 				great_banner_skipped += int((mrd as Dictionary).get("morale_mod", 0))
@@ -14711,7 +14730,10 @@ func _run_human_melee(attacker: GameUnit, target: GameUnit, auto: bool = false) 
 	_solo_log_melee_result(attacker, human_caused, human_score, target, ai_caused, ai_score)
 	await _solo_stage_phase("Melee result")
 	if loser != null and _solo_combined_alive(loser) > 0:
-		await _solo_morale_test(loser, _roller_label(loser), true)   # "Names, not You" (rules plan 2.5)
+		if loser == attacker:   # MOR-09b: the charger lost its own melee — twin of _run_ai_melee
+			await _solo_morale_test(loser, _roller_label(loser), true, OWN_CHARGE_CAUSE, -1.0, -1.0)
+		else:
+			await _solo_morale_test(loser, _roller_label(loser), true)   # "Names, not You" (rules plan 2.5)
 	await _solo_stage_phase("Morale")
 	# — Consolidation (GF v3.5.1 p.9, round 7 finding 4): neither destroyed → the human charger's 1"
 	#   back-step is surfaced as a reminder; one side destroyed → the survivor consolidates up to 3"
