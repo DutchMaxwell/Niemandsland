@@ -188,6 +188,25 @@ static func most_models_family_on(unit: GameUnit, rule: String, solo: bool = fal
 	return rule_on_all_models(unit, rule, solo)
 
 
+## FAB-C10 (rules 3.6 Dodge): the melee-evasion -1 a target carries — the plain "Melee Evasion" family
+## plus any OTHER entry on the same primitive (Dodge today; never name-hardcoded), read exactly like the
+## table's _solo_hit_mod_info: a `most_models` entry only from EPOCH_73_V36 and only on a majority, the
+## plain all-models arm otherwise. The extra entry's -1 holds only while the unit is NOT Fatigued.
+static func melee_evasion_on(unit: GameUnit) -> bool:
+	if most_models_family_on(unit, "Melee Evasion"):
+		return true
+	if unit == null or unit.is_fatigued:
+		return false
+	for e in RulesRegistry.unit_rules_of_primitive(unit, "Melee Evasion"):
+		var name := str((e as Dictionary)["name"])
+		if bool(((e as Dictionary).get("params", {}) as Dictionary).get("most_models", false)):
+			if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and rule_on_most_models(unit, name):
+				return true
+		elif rule_on_all_models(unit, name):
+			return true
+	return false
+
+
 ## EXACT unit-rule check — has_special_rule matches by PREFIX, so "Unpredictable" would false-positive
 ## on an "Unpredictable Fighter" unit (the Ferocious-vs-"Ferocious Boost" lesson). Rating stripped.
 static func has_exact_rule(unit: GameUnit, rule: String) -> bool:
@@ -378,7 +397,7 @@ static func ctx_for(unit: GameUnit, in_cover: bool = false, counter_models: int 
 		"stealth": rule_on_most_models(unit, "Stealth") if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
 			else rule_on_all_models(unit, "Stealth"),
 		"evasive": most_models_family_on(unit, "Evasive"),
-		"melee_evasion": most_models_family_on(unit, "Melee Evasion"),
+		"melee_evasion": melee_evasion_on(unit),
 		"fortified": rule_on_defence_family(unit, "Fortified"),
 		"fortified_over_in": _fortified_over_in(unit),
 		# Guarded OR Versatile Defense's consistently-played def-half (both: +1 Def when shot/charged
