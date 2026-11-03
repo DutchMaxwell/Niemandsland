@@ -12,7 +12,7 @@
 //! `EPOCH_51_CASTER_INTERFERENCE` (the pool's opposing-side mirror).
 
 use crate::acts::rule_on;
-use crate::combat::{block_chance, deadly_multiplier, deadly_regen_dealt, success_chance, SIX_P};
+use crate::combat::{block_chance_from, deadly_multiplier, deadly_regen_dealt, success_chance, SIX_P};
 use crate::rules::Spell;
 use crate::unit::Ctx;
 
@@ -180,7 +180,28 @@ pub struct Facets {
     /// Rules 3.6 (`EPOCH_73_V36`): the Destructive token's AP(+1) against a
     /// defender still above half its starting size / Tough value.
     pub ap_vs_above_half: i64,
+    /// Rules 3.6 (`EPOCH_73_V36`): Purge's AP(+2) against a shaken or
+    /// fatigued defender.
+    pub ap_vs_shaken: i64,
+    /// Rules 3.6 (`EPOCH_73_V36`): Decimate's Bane against a defender still
+    /// above half; created only when its condition holds.
+    pub bane_above_half: bool,
+    /// Rules 3.6 (`EPOCH_73_V36`): the widened Bane window vs Tough(3)+
+    /// (Obliterate); 0 = unset, 5 = successful saves of 5 and 6 re-roll.
+    pub bane_tough3_low: i64,
+    /// Rules 3.6 (`EPOCH_73_V36`): the widened Bane window against a shaken
+    /// or fatigued defender (Reap).
+    pub bane_shaken_low: i64,
+    /// Rules 3.6 (`EPOCH_73_V36`): the widened Bane window against a
+    /// defender at Defense 5-6 (Fragment).
+    pub bane_def56_low: i64,
 }
+
+/// Rules 3.6 (`EPOCH_73_V36`) spell-token ratings from
+/// `assets/solo/rules_mechanics_{gf,aof}.json` (both systems identical):
+/// Purge's `ap_bonus`, and the widened save window the three Bane tokens name.
+const PURGE_AP_BONUS: i64 = 2;
+const WIDENED_SAVE_FROM: i64 = 5;
 
 /// `AiSpell._rating` ai_spell.gd:170-175 — "AP(2)" -> 2, never negative.
 fn rating(rule: &str) -> i64 {
@@ -253,6 +274,27 @@ pub fn spell_facets(weapon_rules: &[String], rules_epoch: u32) -> Facets {
                 }
             }
             "Tear" => f.ap_vs_tough9 = 4,
+            // Rules 3.6 (`EPOCH_73_V36`) — the nine spell tokens of the new
+            // weapon family. Five are priced here; the three arms above the
+            // `_` stay explicit no-ops (never a guessed value):
+            //   Pierce / Smash — `over_half_range` needs a cast distance,
+            //                    which the spell EV context does not carry.
+            //   Demolish       — `near_terrain` is deliberately unknown in
+            //                    the spell EV; its Ignore Cover is moot (the
+            //                    spell save already ignores Cover).
+            //   Scourge        — phantom wounds feed the shooting-morale
+            //                    trigger and the melee tally, never damage.
+            "Pierce" | "Smash" => {}
+            "Demolish" => {}
+            "Scourge" => {}
+            "Purge" if v36 => f.ap_vs_shaken = PURGE_AP_BONUS,
+            "Decimate" if v36 => f.bane_above_half = true,
+            "Obliterate" if v36 => {
+                f.bane_tough3_low = WIDENED_SAVE_FROM;
+                f.ignores_regen = true;
+            }
+            "Reap" if v36 => f.bane_shaken_low = WIDENED_SAVE_FROM,
+            "Fragment" if v36 => f.bane_def56_low = WIDENED_SAVE_FROM,
             _ => {}
         }
     }
@@ -275,7 +317,33 @@ fn effective_ap(f: &Facets, def: &Ctx) -> i64 {
     if def.above_half_strength {
         ap += f.ap_vs_above_half;
     }
+    if def.shaken_or_fatigued {
+        ap += f.ap_vs_shaken;
+    }
     ap
+}
+
+/// Rules 3.6 (`EPOCH_73_V36`) — the Bane window the spell's token list opens
+/// against THIS defender. `(bane, from)`: `from` 6 is the base sixes-only leg.
+fn bane_window(f: &Facets, def: &Ctx) -> (bool, i64) {
+    let mut bane = f.bane;
+    let mut from = 6i64;
+    if f.bane_above_half && def.above_half_strength {
+        bane = true;
+    }
+    if f.bane_tough3_low > 1 && def.tough.max(1) >= 3 {
+        bane = true;
+        from = from.min(f.bane_tough3_low);
+    }
+    if f.bane_shaken_low > 1 && def.shaken_or_fatigued {
+        bane = true;
+        from = from.min(f.bane_shaken_low);
+    }
+    if f.bane_def56_low > 1 && def.defense >= 5 {
+        bane = true;
+        from = from.min(f.bane_def56_low);
+    }
+    (bane, from)
 }
 
 /// `AiSpell.spell_damage_ev` ai_spell.gd:205-235 — a spell has no to-hit roll,
@@ -294,10 +362,10 @@ pub fn spell_damage_ev(hits: i64, def: &Ctx, f: &Facets) -> f64 {
     }
     six_hits = six_hits.min(h);
     let defense = def.defense;
-    let bane = f.bane;
+    let (bane, bane_from) = bane_window(f, def);
     let ap = effective_ap(f, def);
-    let mut unsaved = (h - six_hits) * (1.0 - block_chance(defense, ap, bane))
-        + six_hits * (1.0 - block_chance(defense, ap + f.on6_ap, bane));
+    let mut unsaved = (h - six_hits) * (1.0 - block_chance_from(defense, ap, bane, bane_from))
+        + six_hits * (1.0 - block_chance_from(defense, ap + f.on6_ap, bane, bane_from));
     let deadly_cap = def.tough.max(1);
     let deadly_unsaved = unsaved; // A4: the raw unsaved count, before ×X
     if f.deadly > 0 {
@@ -307,7 +375,7 @@ pub fn spell_damage_ev(hits: i64, def: &Ctx, f: &Facets) -> f64 {
         unsaved += h * SIX_P;
     }
     // A1 (`EPOCH_72_PLAYTEST_RULES`): only Bane / Disintegrate bypass; below 72 Lacerate's `bane` did too.
-    if def.regeneration && !(f.ignores_regen || (bane && !def.playtest_rules)) {
+    if def.regeneration && !(f.ignores_regen || (f.bane && !def.playtest_rules)) {
         // Block B10 — the SPELL-wound leg reads the spell twin
         // (`_solo_regen_pick`'s `from_spell` key, main.gd:6595): a whole-unit
         // Resistance carrier ignores on `ignore_target_spell` (2+), every

@@ -439,6 +439,24 @@ pub fn block_chance(defense: i64, ap: i64, bane: bool) -> f64 {
     p.clamp(0.0, 1.0)
 }
 
+/// The widened Bane window (`dice.rs::blocks_with_bane_from`): every successful
+/// unmodified save at or above `from` re-rolls once, in addition to the base
+/// sixes. `from >= 6` is exactly [`block_chance`] (byte-identical).
+#[inline]
+pub fn block_chance_from(defense: i64, ap: i64, bane: bool, from: i64) -> f64 {
+    if from >= 6 {
+        return block_chance(defense, ap, bane);
+    }
+    let mut p = success_chance(save_target(defense, ap));
+    if bane {
+        let target = save_target(defense, ap).clamp(2, 6);
+        let from = from.clamp(2, 6).max(target);
+        let w = (7 - from).max(0) as f64 / 6.0;
+        p -= w * (1.0 - p);
+    }
+    p.clamp(0.0, 1.0)
+}
+
 /// Rules 3.6 (`EPOCH_73_V36`) — expected wounds of ONE already-rolled hit: the save fails
 /// at that hit's AP, then Deadly's multiply and Regeneration's keep. Ranks Parry's cuts.
 pub fn hit_ev(p: &ShootProfile, hit_is_a_six: bool, def: &Ctx) -> f64 {
