@@ -855,7 +855,7 @@ pub(crate) fn tray_breath_attack(
     let landed = shot.absorb(out);
     land_wounds_with(next, ti, landed, seams.tray_exact);
     if shooting_morale_trigger(next, statics, seams, ut, ti, alive_before, wounds_before) {
-        tray_morale_for(next, statics, ti, false, Some("Breath Attack"), seams, tray, shot);
+        tray_morale_for(next, statics, ti, false, Some("Breath Attack"), seams, tray, shot, None, None);
     }
 }
 
@@ -1068,7 +1068,7 @@ fn surprise_strike(
     let landed = shot.absorb(crate::dice::resolve_storm_hits_with_tray(successes, spec.ap, false, false, &def, &ut.name, tray));
     land_wounds_with(next, best, landed, seams.tray_exact);
     if shooting_morale_trigger(next, statics, seams, ut, best, ab, wb) {
-        tray_morale_for(next, statics, best, false, Some("Surprise Attack"), seams, tray, shot);
+        tray_morale_for(next, statics, best, false, Some("Surprise Attack"), seams, tray, shot, None, None);
     }
 }
 
@@ -1324,7 +1324,7 @@ pub(crate) fn tray_strafing(
         land_wounds_with(next, target, w, true); // the table's order: Takedown, Deadly, then the pool
     }
     if scourge_morale_trigger(next, statics, seams, ut, target, alive_before, wounds_before, phantom, &mut shot.log) {
-        tray_morale(next, statics, target, false, seams, tray, shot);
+        tray_morale(next, statics, target, false, seams, tray, shot, Some(d), None);
     }
 }
 
@@ -1387,7 +1387,7 @@ pub(crate) fn tray_storm_attack(
                 let landed = shot.absorb(crate::dice::resolve_storm_hits_with_tray(hits, ap, bane, shred, &def, &ut.name, tray));
                 land_wounds_with(next, best, landed, seams.tray_exact);
                 if shooting_morale_trigger(next, statics, seams, ut, best, alive_before, wounds_before) {
-                    tray_morale_for(next, statics, best, false, Some(&spec.name), seams, tray, shot);
+                    tray_morale_for(next, statics, best, false, Some(&spec.name), seams, tray, shot, None, None);
                 }
             }
         }
@@ -1910,7 +1910,7 @@ fn control_morale_passed(
     }
     let us = &statics[next.roster.profile[ti]];
     let mut ctx = live_morale_ctx(statics, next, ti, false, seams, shot);
-    drop_banner_for_cause(statics, next, ti, false, Some(source.rule), seams, &mut ctx, shot);
+    drop_banner_for_cause(statics, next, ti, false, Some(source.rule), None, None, seams, &mut ctx, shot);
     let (outcome, rolled) = crate::dice::resolve_morale_with_tray(
         &ctx, source.owner, false, false, next.shaken[ti], wounds_left(next, ti), tray,
     );
@@ -6089,25 +6089,51 @@ fn live_morale_ctx(statics: &[UnitStatic], state: &State, i: usize, melee: bool,
 /// takes the Banner share (the capture stamp minus the Morale(X) rating it
 /// also carries) back out of the target and names the cause once. Spell
 /// tokens and a granted Hold the Line Boost stay in.
-#[allow(clippy::too_many_arguments)] // the cause flag joins the existing parity args
+///
+/// MOR-09 Valiant: a shooting- or melee-caused test whose forcing distance sits
+/// INSIDE the band (shot at 9" or under, charge from 6" or under) also loses the
+/// Banner share. The distance is threaded from the call sites that already know
+/// the geometry; `None` means the caller could not supply it without inventing
+/// one, so the 3.5 reading stands (do not guess). Great Banner stays with the
+/// cause gate — it is a Utility Buff, not a Valiant-family entry.
+#[allow(clippy::too_many_arguments)] // the cause/distance flags join the existing parity args
 fn drop_banner_for_cause(
-    statics: &[UnitStatic], state: &State, i: usize, melee: bool, cause: Option<&str>, seams: Seams,
+    statics: &[UnitStatic], state: &State, i: usize, melee: bool, cause: Option<&str>,
+    over_in: Option<f64>, charge_from_in: Option<f64>, seams: Seams,
     ctx: &mut Ctx, shot: &mut ShootResult,
 ) {
-    let Some(cause) = cause else { return };
     if !rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) || state.shaken[i] { return; }
     let us = &statics[state.roster.profile[i]];
     let banner = (state.morale_bonus[i] - us.ctx.morale_rating).max(0);
-    if banner > 0 {
-        ctx.morale_bonus -= banner;
-        shot.log.push(format!("[Banner] {}: no +{} against {} (only shooting or melee)", us.name, banner, cause));
+    if let Some(cause) = cause {
+        if banner > 0 {
+            ctx.morale_bonus -= banner;
+            shot.log.push(format!("[Banner] {}: no +{} against {} (only shooting or melee)", us.name, banner, cause));
+        }
+        let great_banner = mods::sum(state, i, mods::Role::Morale, melee, |r| {
+            if &*r.name == "Great Banner" { r.morale_mod } else { 0 }
+        });
+        if great_banner != 0 {
+            ctx.morale_bonus -= great_banner;
+            shot.log.push(format!("[Great Banner] {}: no +{} against {} (only shooting or melee)", us.name, great_banner, cause));
+        }
+        return;
     }
-    let great_banner = mods::sum(state, i, mods::Role::Morale, melee, |r| {
-        if &*r.name == "Great Banner" { r.morale_mod } else { 0 }
-    });
-    if great_banner != 0 {
-        ctx.morale_bonus -= great_banner;
-        shot.log.push(format!("[Great Banner] {}: no +{} against {} (only shooting or melee)", us.name, great_banner, cause));
+    if !crate::unit::valiant_inside_band(melee, over_in, charge_from_in) { return; }
+    let vt = us.ctx.valiant_bonus.min(banner).max(0);
+    if vt > 0 {
+        ctx.morale_bonus -= vt;
+        let (kind, band) = if melee {
+            ("charge from", crate::unit::VALIANT_CHARGE_GATE_IN)
+        } else {
+            ("shot at", crate::unit::VALIANT_SHOT_GATE_IN)
+        };
+        let line = format!(
+            "[Banner] {}: no +{vt} from a {kind} {band}\" or under (Valiant counts only beyond the gate)",
+            us.name
+        );
+        trace_rule("morale", "Banner", &line);
+        shot.log.push(line);
     }
 }
 
@@ -6115,6 +6141,7 @@ fn drop_banner_for_cause(
 /// `morale_fails_expected`, with No Retreat's self-wounds landed regen-free
 /// ("can't be ignored") and the Rout half clearing the unit off the board
 /// exactly as `expected_melee_morale` does. A test shooting or melee caused.
+#[allow(clippy::too_many_arguments)] // the cause/distance flags join the existing parity args
 fn tray_morale(
     state: &mut State,
     statics: &[UnitStatic],
@@ -6123,8 +6150,10 @@ fn tray_morale(
     seams: Seams,
     tray: &mut Tray,
     shot: &mut ShootResult,
+    over_in: Option<f64>,
+    charge_from_in: Option<f64>,
 ) {
-    tray_morale_for(state, statics, i, melee, None, seams, tray, shot);
+    tray_morale_for(state, statics, i, melee, None, seams, tray, shot, over_in, charge_from_in);
 }
 
 /// `tray_morale` with its cause: `None` = shooting or melee, `Some(rule)` =
@@ -6133,13 +6162,14 @@ fn tray_morale(
 pub(crate) fn tray_morale_for(
     state: &mut State, statics: &[UnitStatic], i: usize, melee: bool, cause: Option<&str>,
     seams: Seams, tray: &mut Tray, shot: &mut ShootResult,
+    over_in: Option<f64>, charge_from_in: Option<f64>,
 ) {
     if !morale_side_alive(state, i, seams) {
         return;
     }
     let us = &statics[state.roster.profile[i]];
     let mut ctx = live_morale_ctx(statics, state, i, melee, seams, shot);
-    drop_banner_for_cause(statics, state, i, melee, cause, seams, &mut ctx, shot);
+    drop_banner_for_cause(statics, state, i, melee, cause, over_in, charge_from_in, seams, &mut ctx, shot);
     // EPOCH_39_MORALE_RATING — rules-must-log (main.gd:8596-8602): the test
     // that adds the rating names it, once per drawn die. A Shaken auto-fail
     // draws no die and adds nothing, so it stays silent.
@@ -9735,7 +9765,7 @@ fn resolve_with(
                             if scourge_morale_trigger(
                                 &next, statics, seams, ut_g, g.ti, morale_alive_g, wounds_before_g, phantom, &mut shot.log,
                             ) {
-                                tray_morale(&mut next, statics, g.ti, false, seams, tray, shot);
+                                tray_morale(&mut next, statics, g.ti, false, seams, tray, shot, Some(g.mod_d), None);
                             }
                         }
                     }
@@ -9810,7 +9840,7 @@ fn resolve_with(
                         // (:8116-8118), where D1-B5a still asked the
                         // expected-value oracle for the outcome.
                         if !rule_on(seams.rules_epoch, EPOCH_65_MELEE_TRUTH) || morale_side_alive(&next, li, seams) {
-                            tray_morale(&mut next, statics, li, true, seams, tray, shot);
+                            tray_morale(&mut next, statics, li, true, seams, tray, shot, None, Some(charge_from_in));
                         }
                     }
                     // Coverage wave — growth markers (Defensive Frenzy):
@@ -9966,7 +9996,7 @@ fn resolve_with(
             if let Some((tray, shot)) = dice.as_mut() {
                 let us = &statics[pi_s];
                 if shooting_morale_trigger(&next, statics, seams, us, si, alive_before, wounds_before) {
-                    tray_morale_for(&mut next, statics, si, false, Some("Dangerous terrain"), seams, tray, shot);
+                    tray_morale_for(&mut next, statics, si, false, Some("Dangerous terrain"), seams, tray, shot, None, None);
                 }
             }
         }

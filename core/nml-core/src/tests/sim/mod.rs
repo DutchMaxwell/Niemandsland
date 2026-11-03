@@ -462,7 +462,7 @@
         ];
         let mut tray = Tray::seeded(7);
         let mut shot = ShootResult::default();
-        tray_morale(&mut st, &statics, 0, false, Seams { rules_epoch, hero_attach: true, ..Default::default() }, &mut tray, &mut shot);
+        tray_morale(&mut st, &statics, 0, false, Seams { rules_epoch, hero_attach: true, ..Default::default() }, &mut tray, &mut shot, None, None);
         shot.rolls.first().map(|r| r.target)
     }
 
@@ -512,7 +512,7 @@
         assert!(!morale_fails_expected(&st, &statics, 0, seams));
         st.shaken[0] = true;
         let mut shot = ShootResult::default();
-        tray_morale(&mut st, &statics, 0, false, seams, &mut Tray::seeded(7), &mut shot);
+        tray_morale(&mut st, &statics, 0, false, seams, &mut Tray::seeded(7), &mut shot, None, None);
         assert_eq!(shot.rolls.len(), 1, "Shaken skips the test die and draws only the Fearless recovery die");
         assert_eq!(shot.rolls[0].target, crate::combat::FEARLESS_RECOVER_TARGET);
 

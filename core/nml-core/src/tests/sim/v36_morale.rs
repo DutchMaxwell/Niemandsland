@@ -66,7 +66,7 @@ fn combat_morale(melee: bool) -> (State, ShootResult) {
     let mut tray = Tray::seeded(seed_rolling_a_three());
     let mut shot = ShootResult::default();
     let seams = Seams { rules_epoch: epoch, ..Seams::default() };
-    tray_morale(&mut st, &statics, 2, melee, seams, &mut tray, &mut shot);
+    tray_morale(&mut st, &statics, 2, melee, seams, &mut tray, &mut shot, None, None);
     (st, shot)
 }
 
@@ -193,7 +193,7 @@ fn recovery_dice(host: i64, host_fearless: bool, hero_fearless: bool, rules_epoc
     let (mut st, statics) = joined_line(host, host_fearless, hero_fearless, true);
     let mut shot = ShootResult::default();
     let seams = Seams { rules_epoch, hero_attach: true, ..Default::default() };
-    tray_morale(&mut st, &statics, 0, false, seams, &mut Tray::seeded(7), &mut shot);
+    tray_morale(&mut st, &statics, 0, false, seams, &mut Tray::seeded(7), &mut shot, None, None);
     (shot.rolls.iter().filter(|r| r.target == FEARLESS_RECOVER_TARGET).count(), shot.log)
 }
 

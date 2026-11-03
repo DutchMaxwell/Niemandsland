@@ -116,6 +116,9 @@ pub struct Ctx {
     /// number the table writes (battle_sim.gd:1598) — this field never
     /// joins it.
     pub morale_rating: i64,
+    /// MOR-09 Valiant: the Valiant-family share of `morale_bonus`, stamp-only;
+    /// the band gate removes exactly this part (0 for a plain Banner unit).
+    pub valiant_bonus: i64,
     pub tough: i64,
     pub models: i64,
     /// Rules 3.6 (SHO-09s): the target still has MORE THAN half its models left (a single-model
@@ -2497,10 +2500,31 @@ pub struct CaptureReads {
     pub shroud: Option<[f64; 2]>,
 }
 
+/// Rules 3.6 Valiant (MOR-09): the Banner family's +1 counts only when the
+/// wound that forced the test came from a shot over 9" or a charge from over
+/// 6". The "Valiant" common map entry carries the same two params; the 3.5.3
+/// "Hold the Line" / "Hive Bond" entries stay untouched and are gated by the
+/// family name at `EPOCH_73_V36` (no per-epoch map variants exist for them).
+pub const VALIANT_SHOT_GATE_IN: f64 = 9.0;
+pub const VALIANT_CHARGE_GATE_IN: f64 = 6.0;
+
+/// True when the forcing distance sits INSIDE the Valiant band, so the Banner
+/// share must not count. `None` means the call site could not supply the
+/// geometry without inventing it — keep the 3.5 reading and do not guess (a
+/// rule-forced test carries no distance).
+pub fn valiant_inside_band(melee: bool, over_in: Option<f64>, charge_from_in: Option<f64>) -> bool {
+    if melee {
+        matches!(charge_from_in, Some(d) if d <= VALIANT_CHARGE_GATE_IN)
+    } else {
+        matches!(over_in, Some(d) if d <= VALIANT_SHOT_GATE_IN)
+    }
+}
+
 /// `SoloController.morale_bonus_of`, evaluated over one member's rule list:
 /// the named "Banner" (when the map fields it) and every DATA ALIAS whose entry
-/// resolves to the Banner primitive.
-fn banner_bonus_of(reg: &mut Registries, p: &Profile, rules: &[String]) -> i64 {
+/// resolves to the Banner primitive. From `EPOCH_73_V36` "Valiant" needs a
+/// strict model majority; below 73 it reads like any Banner alias.
+fn banner_bonus_of(reg: &mut Registries, p: &Profile, rules: &[String], rules_epoch: u32) -> i64 {
     let mut best = 0;
     let map = reg.rules_for(&p.game_system);
     if has_special_rule(rules, "Banner") && (map.empty || map.has_primitive(&p.faction_folder, "Banner")) {
@@ -2509,14 +2533,42 @@ fn banner_bonus_of(reg: &mut Registries, p: &Profile, rules: &[String]) -> i64 {
             None => BANNER_MORALE_BONUS,
         });
     }
+    let valiant_ok = rule_on(rules_epoch, EPOCH_73_V36)
+        && rule_on_most_models(p, p.model_count.max(1), "Valiant", false);
     let mut seen: Vec<String> = Vec::new();
     for raw in rules {
         let n = base_rule_name(raw);
         if n.is_empty() || n == "Banner" || seen.iter().any(|s| *s == n) {
             continue;
         }
+        if n == "Valiant" && rule_on(rules_epoch, EPOCH_73_V36) && !valiant_ok {
+            continue;
+        }
         seen.push(n.clone());
         if let Some(e) = map.lookup(&p.faction_folder, &n) {
+            if e.primitive.as_deref() == Some("Banner") {
+                best = best.max(e.param_i("morale_bonus", 0));
+            }
+        }
+    }
+    best
+}
+
+/// MOR-09 Valiant — Banner-primitive family names behind the distance gate.
+/// The two 3.5 spellings have no most-models clause.
+const VALIANT_FAMILY: [&str; 3] = ["Valiant", "Hold the Line", "Hive Bond"];
+
+/// The Valiant-family share of one member's banner bonus: the MAX
+/// `morale_bonus` over the carried family names, "Valiant" majority-gated.
+fn valiant_bonus_of(reg: &mut Registries, p: &Profile, rules: &[String], rules_epoch: u32) -> i64 {
+    let map = reg.rules_for(&p.game_system);
+    let valiant_ok = rule_on(rules_epoch, EPOCH_73_V36)
+        && rule_on_most_models(p, p.model_count.max(1), "Valiant", false);
+    let mut best = 0;
+    for name in VALIANT_FAMILY {
+        if !has_special_rule(rules, name) { continue; }
+        if name == "Valiant" && rule_on(rules_epoch, EPOCH_73_V36) && !valiant_ok { continue; }
+        if let Some(e) = map.lookup(&p.faction_folder, name) {
             if e.primitive.as_deref() == Some("Banner") {
                 best = best.max(e.param_i("morale_bonus", 0));
             }
@@ -2744,9 +2796,9 @@ pub fn capture_reads_for_epoch(
     apply_aura_channel(reg, &mut p, rules_epoch);
     let p = &p;
     let trace73 = rule_on(rules_epoch, EPOCH_73_V36) && crate::mv::plain_memo::trace_rules_on();
-    let mut morale_bonus = banner_bonus_of(reg, p, &p.special_rules);
+    let mut morale_bonus = banner_bonus_of(reg, p, &p.special_rules, rules_epoch);
     for hero in &p.attached_hero_rules {
-        morale_bonus = morale_bonus.max(banner_bonus_of(reg, p, hero));
+        morale_bonus = morale_bonus.max(banner_bonus_of(reg, p, hero, rules_epoch));
     }
     trace_stamp(trace73 && morale_bonus != 0, "banner-stamp", "Banner",
         &format!("{}: Banner stamped +{} morale", p.name, morale_bonus));
@@ -3077,6 +3129,17 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     // (ai_ev.gd:142-143); the ROLLED test adds the rating through the
     // capture stamp, and this field only names it.
     let morale_rating = morale_rating_stamp(reg, p, rules_epoch);
+    // MOR-09 Valiant — the family share the band gate may remove; trace the
+    // majority keep-on (rules-must-log, the `regen_family_on` shape).
+    let mut valiant_bonus = valiant_bonus_of(reg, p, &p.special_rules, rules_epoch);
+    for hero in &p.attached_hero_rules {
+        valiant_bonus = valiant_bonus.max(valiant_bonus_of(reg, p, hero, rules_epoch));
+    }
+    if has_special_rule(&p.special_rules, "Valiant") && rule_on(rules_epoch, EPOCH_73_V36)
+        && rule_on_most_models(p, p.model_count.max(1), "Valiant", false)
+        && !rule_on_all_models(p, "Valiant") {
+        trace_rule("valiant", "Valiant", &format!("most models of {} carry Valiant: a joined hero without it does not switch it off", p.name));
+    }
     // Wave 4 — "Machine-Fog Boost": the printed unconditional form of
     // Machine-Fog's own -1 (folds into `evasive`, below; the base entry's
     // conditional alias leg stands down so the two never stack).
@@ -3301,6 +3364,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         defense: armored_defense(p.defense, armor),
         morale_bonus,
         morale_rating,
+        valiant_bonus,
         tough: unit_rating(&p.special_rules, "Tough").max(1),
         models: 1, // placeholder; `_ctx_of` always writes the snapshot's alive
         above_half_strength: false,

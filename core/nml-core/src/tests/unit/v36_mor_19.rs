@@ -47,7 +47,7 @@ fn run(cause: Option<&str>, epoch: u32) -> (crate::state::State, ShootResult) {
     let mut tray = Tray::seeded(seed_rolling_a_three());
     let mut shot = ShootResult::default();
     let seams = Seams { rules_epoch: epoch, ..Seams::default() };
-    tray_morale_for(&mut st, &statics, 2, false, cause, seams, &mut tray, &mut shot);
+    tray_morale_for(&mut st, &statics, 2, false, cause, seams, &mut tray, &mut shot, None, None);
     (st, shot)
 }
 
