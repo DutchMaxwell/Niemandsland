@@ -953,10 +953,11 @@ pub fn shoot_ev(
     let reach_gate = dist_in.ceil();
     for (k, &pi) in keep.iter().enumerate() {
         let p = &profiles[pi];
+        let printed = p.range as f64 + p.reach_bonus_in; // the table's `range + shooting_range_bonus`
         let reach = if shrouded {
-            shrouded_reach(p.range as f64, def.ranged_shroud_penalty_in, def.ranged_shroud_floor_in)
+            shrouded_reach(printed, def.ranged_shroud_penalty_in, def.ranged_shroud_floor_in)
         } else {
-            p.range as f64
+            printed
         };
         if reach >= reach_gate && p.range > 0 {
             total += profile_ev(p, attacks[k], att, def, dist_in, false);

@@ -1758,6 +1758,7 @@ mod limited_weapons;
 mod mark_beneficiary;
 mod mark_consumers;
 mod mark_pins;
+mod range_grant_core;
 mod vs_grant_marks;
 mod melee_reach_table;
 mod mentioned2a_buffs;

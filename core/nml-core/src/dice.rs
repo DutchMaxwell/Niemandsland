@@ -913,12 +913,15 @@ pub fn resolve_volley_leg(
     for (sh, k, pi) in shots {
         let att = sh.att;
         let p = &sh.profiles[pi];
+        // Rules 3.6: the shooter's own range grant rides the PRINTED range, the target-side shrink
+        // applies to the sum (main.gd: `base_range + range_bonus`, then `effective_shoot_reach_in`).
+        let printed = p.range as f64 + p.reach_bonus_in;
         let mut reach = if def.ranged_shrouding {
-            let r = shrouded_reach(p.range as f64, def.ranged_shroud_penalty_in, def.ranged_shroud_floor_in);
-            shroud_shortened |= r < p.range as f64;
+            let r = shrouded_reach(printed, def.ranged_shroud_penalty_in, def.ranged_shroud_floor_in);
+            shroud_shortened |= r < printed;
             r
         } else {
-            p.range as f64
+            printed
         };
         // WAVE 3 MARK (`acts::rule_on` inside `ctx_live`, EPOCH_6_TABLE_RULES):
         // the target's live "+6\" shooting range" record extends the reach the
@@ -927,7 +930,14 @@ pub fn resolve_volley_leg(
         if p.range <= 0 || reach < reach_gate {
             continue;
         }
-        if def.range_mark_in > 0.0 && (p.range as f64) < reach_gate && reach >= reach_gate {
+        if p.reach_bonus_in > 0.0 && (p.range as f64) < reach_gate && reach >= reach_gate {
+            out.log.push(format!(
+                "{}: {} gains +{:.0}\" reach on {}",
+                p.reach_bonus_rule, sh.owner, p.reach_bonus_in, def_owner
+            ));
+        }
+        // The Mark names itself only where it was needed: a shooter the grant already carries is not its beneficiary.
+        if def.range_mark_in > 0.0 && (p.range as f64) < reach_gate && reach >= reach_gate && reach - def.range_mark_in < reach_gate {
             out.log.push(format!(
                 "Increased Shooting Range Mark: {} gains +{:.0}\" reach on {}",
                 sh.owner, def.range_mark_in, def_owner

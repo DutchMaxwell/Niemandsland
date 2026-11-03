@@ -768,6 +768,11 @@ pub struct ShootProfile {
     /// every melee reader keeps its meaning; its PRINTED range rides here for
     /// the range-relative gates. 0 on every other profile.
     pub printed_range: i64,
+    /// Rules 3.6 (`EPOCH_73_V36`): the shooter's own "+N\" range" book grant (Increased
+    /// Shooting Range, its Aura), added to this weapon's REACH at every range gate while
+    /// `range` keeps the printed value. 0 / "" below 73 and on a rule-less carrier.
+    pub reach_bonus_in: f64,
+    pub reach_bonus_rule: String,
     pub ap: i64,
     pub deadly: i64,
     pub blast: i64,
@@ -6742,17 +6747,22 @@ fn move_rule_mods_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Opt
 /// name and is skipped here. Rules-must-log: one `trace_rule` line per
 /// stamped unit. Epoch-gated: `EPOCH_6_TABLE_RULES` — a record stamped
 /// `rules_epoch: 5` (the Gen-3 fleet's own window) predates wave 3.
-fn royal_legion_family_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (f64, f64) {
+fn royal_legion_family_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (f64, f64, String) {
     if !rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
-        return (0.0, 0.0);
+        return (0.0, 0.0, String::new());
     }
     let hits = rules_of_primitive(reg, p, "Royal Legion");
     let map = reg.rules_for(&p.game_system);
     let (mut range, mut charge) = (0.0_f64, 0.0_f64);
+    // The book name of the entry that set `range` — the battle-log line names it.
+    let mut range_rule = String::new();
     let mut folded: Vec<String> = Vec::new();
     for hit in hits {
         let Some(e) = map.lookup(&p.faction_folder, &hit.name) else { continue };
-        range = range.max(e.param_f("range_bonus_in", 0.0));
+        if e.param_f("range_bonus_in", 0.0) > range {
+            range = e.param_f("range_bonus_in", 0.0);
+            range_rule = hit.name.clone();
+        }
         charge += e.param_f("charge_mod", 0.0);
         folded.push(hit.name);
     }
@@ -6766,7 +6776,10 @@ fn royal_legion_family_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -
             }
         }
         let Some(e) = map.lookup(&p.faction_folder, base) else { continue };
-        range = range.max(e.param_f("range_bonus_in", 0.0));
+        if e.param_f("range_bonus_in", 0.0) > range {
+            range = e.param_f("range_bonus_in", 0.0);
+            range_rule = base.to_string();
+        }
         charge += e.param_f("charge_mod", 0.0);
         folded.push(base.to_string());
     }
@@ -6777,7 +6790,7 @@ fn royal_legion_family_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -
             &format!("{}: +{:.0}\" shooting range, +{:.0}\" charge", p.name, range, charge),
         );
     }
-    (range, charge)
+    (range, charge, range_rule)
 }
 impl UnitStatic {
     /// The legacy epoch-0 build — every corpus recorded before
@@ -7278,6 +7291,14 @@ impl UnitStatic {
             Vec::new()
         };
         let royal_legion = royal_legion_family_of(reg, p, rules_epoch);
+        // Rules 3.6 (`EPOCH_73_V36`): the range half reaches every ranged weapon's gates, per
+        // member — the table's `shooting_range_bonus(member)` reads the member's own rules.
+        if rule_on(rules_epoch, crate::acts::EPOCH_73_V36) && royal_legion.0 > 0.0 {
+            for sp in shoot.iter_mut().filter(|sp| sp.range > 0) {
+                sp.reach_bonus_in = royal_legion.0;
+                sp.reach_bonus_rule = royal_legion.2.clone();
+            }
+        }
 
         // WAVE 3 — the family's own registry names for the rules-must-log
         // line, stamped behind the same frozen `EPOCH_6_TABLE_RULES` gate.
