@@ -709,7 +709,7 @@ mod mor_09 {
         let mut tray = Tray::seeded(seed_rolling_a_three());
         let mut shot = ShootResult::default();
         let seams = Seams { rules_epoch: epoch, ..Seams::default() };
-        tray_morale_for(&mut st, &statics, 2, melee, None, seams, &mut tray, &mut shot, over_in, charge_from_in);
+        tray_morale_for(&mut st, &statics, 2, melee, true, None, seams, &mut tray, &mut shot, over_in, charge_from_in);
         let die = shot.rolls.iter().find(|r| r.count == 1).expect("the morale die is drawn");
         (die.target, st.shaken[2])
     }
