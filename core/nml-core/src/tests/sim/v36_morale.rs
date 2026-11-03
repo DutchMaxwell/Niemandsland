@@ -358,3 +358,59 @@ mod mor_16a {
     }
 }
 
+
+// -------- MOR-16c: the core Spell Drain rolls the REAL tray Morale test and
+// leaves the target Shaken (rules 3.6), once per activation (owner: lane
+// morale). --------
+mod mor_16c {
+    use super::super::*;
+    use crate::acts::EPOCH_73_V36;
+    use crate::rules::Registries;
+
+    /// The bearer read through the LIVE registry (pattern 11).
+    fn bearer(epoch: u32) -> UnitStatic {
+        let p = Profile {
+            cost: 0, unit_id: "a".into(), name: "a".into(),
+            quality: 4, defense: 4, tough: 1, wounds_max: vec![1], model_count: 1,
+            weapons: vec![], special_rules: vec!["Spell Drain".into()],
+            caster_value: 0, base_radius: 0.0, base_shape: String::new(),
+            base_w_mm: 0.0, base_d_mm: 0.0, game_system: "gf".into(),
+            faction_folder: "blessed_sisters".into(), item_grants: vec![],
+            attached_hero_rules: vec![], move_bands: MoveBands::default(),
+        };
+        let mut reg = Registries::new(&super::super::repo_root());
+        UnitStatic::build_for(&mut reg, &p, epoch)
+    }
+
+    /// Unit 0 carries Spell Drain, unit 2 is the picked enemy with `quality`
+    /// and `tokens` spell tokens; units 1/3 are empty dummies.
+    fn line(epoch: u32, quality: i64, tokens: i64) -> (State, Vec<UnitStatic>) {
+        let mut st = four_unit_line();
+        let r = &*st.roster;
+        st.roster = Rc::new(Roster { keys: r.keys.clone(), index: HashMap::new(),
+            profile: vec![0, 1, 2, 3] });
+        st.casts[2] = tokens;
+        let mut target = UnitStatic { name: "target".into(), ..Default::default() };
+        target.quality = quality;
+        target.ctx.quality = quality;
+        target.model_count = 1;
+        target.wounds_max = vec![1];
+        (st, vec![bearer(epoch), UnitStatic::default(), target, UnitStatic::default()])
+    }
+
+    fn drain(st: &mut State, statics: &[UnitStatic], epoch: u32, dist: f64) {
+        let seams = Seams { rules_epoch: epoch, ..Seams::default() };
+        crate::sim::tray_vs_marks(statics, st, 0, 2, dist, seams);
+    }
+
+    /// RED on origin/main: a failed drain prices the loss in expectation and
+    /// never runs the Morale test, so the target never turns Shaken.
+    #[test]
+    fn a_failed_spell_drain_shakes_the_target_at_epoch_73() {
+        let (mut st, statics) = line(EPOCH_73_V36, 6, 5);
+        st.round = 1;
+        drain(&mut st, &statics, EPOCH_73_V36, 10.0);
+        assert!(st.casts[2] < 5, "the drain fired");
+        assert!(st.shaken[2], "a failed drain leaves the target Shaken (rules 3.6)");
+    }
+}
