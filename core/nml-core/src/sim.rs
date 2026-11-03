@@ -1548,6 +1548,23 @@ fn caster_member(statics: &[UnitStatic], state: &State, u: usize, seams: Seams) 
         && state.attached[u].iter().any(|&h| state.alive[h] > 0 && statics[state.roster.profile[h]].is_caster)
 }
 
+/// The INDEX of the chain member that pays for a cast: the unit itself when it
+/// is a Caster, else the first living joined caster hero (`caster_member`'s
+/// rule, resolved to a member so Spell Drain can spend from the right pool).
+fn caster_member_of(statics: &[UnitStatic], state: &State, u: usize, seams: Seams) -> Option<usize> {
+    if statics[state.roster.profile[u]].is_caster {
+        return Some(u);
+    }
+    if !seams.hero_attach {
+        return None;
+    }
+    state.attached[u]
+        .iter()
+        .copied()
+        .find(|&h| state.alive[h] > 0 && statics[state.roster.profile[h]].is_caster)
+}
+
+
 /// `main._solo_utility_targets` :16317-16359 — up to `max_targets` legal picks
 /// for one buff, best VALUE first (`alive_count + Tough`, :16358). Alive,
 /// non-reserve, never an ATTACHED unit (a joined hero is bought through its
@@ -1781,18 +1798,31 @@ fn tray_vs_marks(
             }) {
                 next.vs_mark_round[bearer] = next.round;
                 let owner = statics[pb].name.clone();
-                let before = next.casts[ti];
+                let target_name = statics[next.roster.profile[ti]].name.clone();
+                // FAB-B3: the Morale test (and the Shaken it may leave) always
+                // lands on the drained unit. The TOKEN loss needs a caster
+                // member of that chain — the unit itself or its joined caster
+                // hero; with none, the target simply has no pool to lose.
                 let passed = control_morale_passed(statics, next, ti,
                     ControlMoraleSource { owner: &owner, rule: "Spell Drain" }, seams, tray, shot);
-                if !passed {
+                if passed {
+                    shot.log.push(format!("Spell Drain: {} passes the Morale test, no tokens lost", target_name));
+                    trace_rule("cast", "Spell Drain", &format!("{} drains {}: no tokens (test passed)",
+                        owner, target_name));
+                } else if let Some(cm) = caster_member_of(statics, next, ti, seams) {
+                    let before = next.casts[cm];
                     let spent = b.spell_token_drain;
-                    next.casts[ti] = (next.casts[ti] - spent).max(0);
-                    shot.log.push(format!("Spell Drain: {} loses {} spell tokens", statics[next.roster.profile[ti]].name, before - next.casts[ti]));
+                    let after = (before - spent).max(0);
+                    next.casts[cm] = after;
+                    let member_name = statics[next.roster.profile[cm]].name.clone();
+                    shot.log.push(format!("Spell Drain: {} loses {} spell tokens", member_name, before - after));
+                    trace_rule("cast", "Spell Drain", &format!("{} drains {} via {}: two tokens {} -> {}",
+                        owner, target_name, member_name, before, after));
                 } else {
-                    shot.log.push(format!("Spell Drain: {} passes the Morale test, no tokens lost", statics[next.roster.profile[ti]].name));
+                    shot.log.push(format!("Spell Drain: {} has no spell tokens to lose", target_name));
+                    trace_rule("cast", "Spell Drain", &format!("{} drains {}: no caster in its chain",
+                        owner, target_name));
                 }
-                trace_rule("cast", "Spell Drain", &format!("{} drains {}: {} tokens {} -> {}", owner,
-                    statics[next.roster.profile[ti]].name, if passed { "no" } else { "two" }, before, next.casts[ti]));
             }
         }
         for b in &statics[pb].utility_buffs {

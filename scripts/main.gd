@@ -22830,9 +22830,9 @@ func _solo_apply_vs_marks(attacker: GameUnit, target: GameUnit, dist_in: float) 
 
 ## MOR-16b: the table half of Spell Drain. The bearer's one enemy pick is the
 ## committed target at this seam; it takes the REAL table Morale test, and on a
-## failure spends the entry's token count from its own caster pool (floor 0).
-## The once-per-activation latch, the 18" reach and the line-of-sight test are
-## the Mark's (the core twin is MOR-16a).
+## failure spends the entry's token count from the target chain's caster pool
+## (floor 0). The once-per-activation latch, the 18" reach and the line-of-sight
+## test are the Mark's (the core twin is MOR-16a).
 func _solo_apply_spell_drain(member: GameUnit, target: GameUnit, dist_in: float) -> bool:
 	for e in RulesRegistry.unit_rules_of_primitive(member, "Utility Buff"):
 		var ed := e as Dictionary
@@ -22848,8 +22848,10 @@ func _solo_apply_spell_drain(member: GameUnit, target: GameUnit, dist_in: float)
 					"%s: %s has no target in sight — %s is not drained and the rule is not applied" % [
 						str(ed["name"]), member.get_name(), target.get_name()], _solo_is_ai_unit(member))
 			continue
+		# FAB-B3: the latch and the Morale test are the rule's for ANY target;
+		# only the TOKEN loss below needs a caster member of the target chain
+		# (the unit itself or its joined caster hero).
 		member.unit_properties["vs_mark_round"] = opr_army_manager.current_round
-		var before := target.casts_current
 		var passed := await _solo_morale_test(target, _roller_label(target), false, "Spell Drain")
 		if passed:
 			if battle_log != null:
@@ -22857,17 +22859,25 @@ func _solo_apply_spell_drain(member: GameUnit, target: GameUnit, dist_in: float)
 					"%s drains %s: Morale test passed, no spell tokens lost" % [
 						member.get_name(), target.get_name()], _solo_is_ai_unit(member))
 			return true
-		var after := maxi(0, before - drain)
-		target.set_caster_points(after)
 		for cm in _solo_joined_chain(target):
 			(cm as GameUnit).is_shaken = true
+		var caster := RadialMenu._caster_member_of(target)
+		if caster == null:
+			if battle_log != null:
+				_log_rule_event(BattleLog.Category.COMBAT,
+					"%s drains %s: Morale test failed, no spell tokens to lose" % [
+						member.get_name(), target.get_name()], _solo_is_ai_unit(member))
+			return true
+		var before := caster.casts_current
+		var after := maxi(0, before - drain)
+		caster.set_caster_points(after)
 		if network_manager != null and network_manager.has_method("broadcast_unit_casts"):
-			network_manager.broadcast_unit_casts(target)
+			network_manager.broadcast_unit_casts(caster)
 		_solo_refresh_caster_markers()
 		if battle_log != null:
 			_log_rule_event(BattleLog.Category.COMBAT,
 				"%s drains %s: Morale test failed, -%d spell tokens (%d -> %d) — Shaken" % [
-					member.get_name(), target.get_name(), drain, before, after], _solo_is_ai_unit(member))
+					member.get_name(), caster.get_name(), drain, before, after], _solo_is_ai_unit(member))
 		return true
 	return false
 
