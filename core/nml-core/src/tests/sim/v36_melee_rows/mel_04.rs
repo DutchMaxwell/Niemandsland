@@ -121,6 +121,13 @@ fn a_control_unit_without_brace_rolls_three_at_both_epochs() {
 }
 
 #[test]
+fn four_brace_models_take_four_dice_at_epoch_73() {
+    let (dice, lines) = charge(crate::acts::EPOCH_73_V36, 6, 4, true, false, false);
+    assert_eq!(dice, 2, "Impact(6) into four Brace(1) models: 6 - 4 = 2 dice today");
+    assert!(lines.iter().any(|l| l == "Brace: Defender takes 4 Impact dice off Charger"), "{lines:?}");
+}
+
+#[test]
 fn the_log_names_brace_and_its_fatigue_exemption() {
     let (_, lines) = charge(crate::acts::EPOCH_73_V36, 3, 2, true, false, false);
     assert!(lines.iter().any(|l| l == "Brace: Defender takes 2 Impact dice off Charger"), "{lines:?}");

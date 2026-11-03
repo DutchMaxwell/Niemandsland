@@ -80,11 +80,13 @@ func _impact_dice() -> int:
 
 ## One AI charge: 1 charger model with Impact(3) into `models` defender models (Brace(1) weapons when
 ## `brace`, a 1-model joined hero with Brace when `hero`); `fatigued` marks the defender Fatigued.
-func _charge(epoch: int, brace: bool, fatigued: bool, hero: bool = false) -> void:
+func _charge(epoch: int, brace: bool, fatigued: bool, hero: bool = false, models: int = 2,
+		shaken: bool = false) -> void:
 	AiActRecorder.rules_epoch = epoch
 	var charger := _unit(2, "Charger", 0.0, 1, [], ["Impact(3)"], 4, 9)
-	var defender := _unit(1, "Defender", 1.0, 2, (["Brace(1)"] if brace else []), [], 4, 9)
+	var defender := _unit(1, "Defender", 1.0, models, (["Brace(1)"] if brace else []), [], 4, 9)
 	defender.is_fatigued = fatigued
+	defender.is_shaken = shaken
 	if hero:
 		var hero_unit := _unit(1, "Hero", 1.0, 1, ["Brace(1)"], [], 4, 9)
 		defender.unit_properties["attached_heroes"] = [hero_unit]
@@ -98,6 +100,22 @@ func test_brace_takes_two_impact_dice_at_epoch_73(timeout := 90000) -> void:
 		.override_failure_message("Impact(3) into two Brace(1) models: 3 - 2 = 1 die") \
 		.is_equal(1)
 	assert_int(_line_of("Brace: Defender takes 2 Impact dice off Charger")).is_greater_equal(0)
+	await E2EBoot.settle(get_tree())
+
+
+func test_four_brace_models_take_four_dice_at_epoch_73(timeout := 90000) -> void:
+	await _charge(AiActRecorder.EPOCH_73_V36, true, false, false, 4)
+	assert_int(_impact_dice()) \
+		.override_failure_message("Impact(3) into four Brace(1) models: 3 - 4 floors at 0 today") \
+		.is_equal(0)
+	assert_int(_line_of("Brace: Defender takes 4 Impact dice off Charger")).is_greater_equal(0)
+	await E2EBoot.settle(get_tree())
+
+
+func test_a_shaken_braced_unit_loses_the_cut_at_epoch_73(timeout := 90000) -> void:
+	await _charge(AiActRecorder.EPOCH_73_V36, true, false, false, 2, true)
+	assert_int(_impact_dice()).is_equal(3)
+	assert_int(_line_of("Brace: no effect, Defender is Shaken")).is_greater_equal(0)
 	await E2EBoot.settle(get_tree())
 
 
