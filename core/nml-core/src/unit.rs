@@ -862,6 +862,9 @@ pub struct ShootProfile {
     /// shipped entry; only the epoch-73 stamp reads `condition`/`threshold`.
     pub bane_condition: String,
     pub bane_threshold: i64,
+    /// AI-G2 (`EPOCH_73_V36`): the book name of the WEAPON rule the map resolves to the Bane primitive
+    /// (Smash, Reap, Decimate); the save batch's rules-must-log line names it. "" = none.
+    pub bane_alias: String,
     /// Wave 3 (`rules-wave3-shred3`): the family's per-face wound amount,
     /// read off the carried Shred-primitive entry's own
     /// `extra_wound_per_save_one` (`build_for`'s epoch-6 arm, gated
@@ -4061,6 +4064,31 @@ fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
         sp.unstoppable_ev = sp.unstoppable || u_unstop;
     }
     stamp_map_cover_regen(reg, p, shoot, rules_epoch);
+    stamp_weapon_bane_alias(reg, p, shoot, rules_epoch);
+}
+
+/// AI-G2 (`EPOCH_73_V36`): a WEAPON rule the faction map resolves to the Bane primitive (Smash, Reap, Decimate)
+/// re-rolls Defense 6s like the printed Bane, under its entry's own `condition`, and cuts Regeneration only when
+/// the entry prints `bypass_regen`. A profile that already banes keeps its own ungated window. Twin:
+/// `AiEv._stamp_weapon_bane_alias`.
+fn stamp_weapon_bane_alias(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProfile], rules_epoch: u32) {
+    if !rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
+        return;
+    }
+    let map = reg.rules_for(&p.game_system);
+    for sp in shoot.iter_mut().filter(|sp| !sp.bane) {
+        for n in sp.rules.iter().map(|r| base_rule_name(r)).collect::<Vec<_>>() {
+            let Some(e) = map.lookup(&p.faction_folder, &n) else { continue };
+            let on = facet_applies(e.param_b("melee_only"), e.param_b("shooting_only"), sp.range);
+            if !on || e.primitive.as_deref() != Some("Bane") || !e.param_b("reroll_save_sixes") || n.starts_with("Bane") || n.ends_with("Aura") {
+                continue;
+            }
+            sp.bane = true;
+            sp.bypass_regen |= e.param_b("bypass_regen");
+            (sp.bane_condition, sp.bane_threshold, sp.bane_alias) = (e.param_s("condition").to_string(), e.param_i("threshold", 0), n);
+            break;
+        }
+    }
 }
 
 /// AI-08a (`EPOCH_73_V36`): a weapon rule read through its map entry, not its 3.5 name (Anti-Cover:
