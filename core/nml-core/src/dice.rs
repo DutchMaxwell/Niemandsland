@@ -854,6 +854,8 @@ pub fn resolve_volley_leg(
     let mut aircraft_fired = false;
     // Rules 3.6 (D-MOST) — Stealth's -1 rode the most-models read: one line per volley.
     let mut stealth_most_fired = false;
+    // FAB-C15 — the once-granted Stealth's own rules-must-log flag.
+    let mut stealth_grant_fired = false;
     // SHO-05 (rules 3.6) — the Artillery shooter's gated +1 names itself once per
     // firing member (the `ma_fired` shape).
     let mut art_shooter_fired: Vec<&str> = Vec::new();
@@ -1102,6 +1104,7 @@ pub fn resolve_volley_leg(
             out.log.push(format!("Unstoppable: {} keeps its own {own} to hit", sh.owner));
         }
         stealth_most_fired |= def.stealth_most_models && mod_dist_in > LONG_RANGE_IN;
+        stealth_grant_fired |= def.stealth_grant && mod_dist_in > LONG_RANGE_IN;
         // EPOCH 34 UNSTOPPABLE MARK — the granted mark's CLAMP half: the
         // once-grant the mark seam leaves on the bearer (`ctx_live`'s
         // `unstoppable_mark`) counts like the weapon's own `p.unstoppable`,
@@ -1180,9 +1183,15 @@ pub fn resolve_volley_leg(
             faces: faces.clone(),
             owner: sh.owner.into(),
         });
-        let count_target = if p.precise { fold_hit(def.modifier_sum, raw, 1).1 } else { target };
+        // AIG-G2: a weapon-borne Imprecise is Precise's mirror, the -1 read from `EPOCH_73_V36`.
+        let imprecise = att.v36_rules && p.imprecise;
+        let weapon_mod = p.precise as i64 - imprecise as i64;
+        let count_target = if weapon_mod != 0 { fold_hit(def.modifier_sum, raw, weapon_mod).1 } else { target };
         if p.precise {
             out.log.push(format!("Precise: +1 to hit on {}'s volley", sh.owner));
+        }
+        if imprecise {
+            out.log.push(format!("Imprecise: -1 to hit on {}'s volley", sh.owner));
         }
         if p.hazardous {
             let ones = faces.iter().filter(|&&f| f == 1).count() as i64;
@@ -1597,6 +1606,9 @@ pub fn resolve_volley_leg(
     }
     if stealth_most_fired {
         out.log.push(format!("Stealth: {def_owner} — -1 to hit past 9\", most models carry it"));
+    }
+    if stealth_grant_fired {
+        out.log.push(format!("Stealth: {def_owner} — -1 to hit past 9\" (granted once)"));
     }
     if out.bane_rerolled > 0 {
         out.log.push(format!(
@@ -2170,9 +2182,15 @@ pub fn resolve_melee_leg(
             }
             // Precise scores one better than it ROLLS — `_solo_hits` :4405-4406
             // applies the +1 when counting, so the recorded target stays raw.
-            let count_target = if p.precise { fold_hit(def.modifier_sum, raw, 1).1 } else { target };
+            // AIG-G2: a weapon-borne Imprecise is Precise's mirror, the -1 read from `EPOCH_73_V36`.
+            let imprecise = sh.att.v36_rules && p.imprecise;
+            let weapon_mod = p.precise as i64 - imprecise as i64;
+            let count_target = if weapon_mod != 0 { fold_hit(def.modifier_sum, raw, weapon_mod).1 } else { target };
             if p.precise {
                 out.log.push(format!("Precise: +1 to hit on {}'s strikes", sh.owner));
+            }
+            if imprecise {
+                out.log.push(format!("Imprecise: -1 to hit on {}'s strikes", sh.owner));
             }
             let mut hits = faces_to_hits(&faces, count_target as u8) as i64;
             // SHO-18 (rules 3.6): a Surge ALIAS fires only on a charge over 6"; a non-charging

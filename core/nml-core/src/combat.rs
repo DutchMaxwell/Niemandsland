@@ -786,8 +786,10 @@ pub fn profile_ev(
         versatile_ap = ap_mod;
         (raw, target) = fold_hit(def.modifier_sum, raw, hit_mod);
     }
-    if p.precise {
-        (_, target) = fold_hit(def.modifier_sum, raw, 1);
+    // AIG-G2: Imprecise is Precise's mirror (-1, from `EPOCH_73_V36`); both on one weapon cancel.
+    let weapon_mod = p.precise as i64 - (att.v36_rules && p.imprecise) as i64;
+    if weapon_mod != 0 {
+        (_, target) = fold_hit(def.modifier_sum, raw, weapon_mod);
     }
     let mut hits = attacks_f * success_chance(target);
     // MEL-09e-fix — EPOCH_73_V36: a fatigued melee striker's sixes still hit

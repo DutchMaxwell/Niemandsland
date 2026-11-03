@@ -190,6 +190,8 @@ pub struct Ctx {
     /// the CHARGER's strikes swap BEHIND the defender's strike-back
     /// (main.gd:8073-8078). Counter and Impact keep their slots.
     pub unwieldy: bool,
+    /// AIG-G2 (`EPOCH_73_V36`): Unwieldy on SOME melee weapons only — normal order, the charge logs it.
+    pub unwieldy_mixed: bool,
     /// `Impact(X)` / `Heavy Impact(X)` / `Ravage(X)` ratings — read only by the
     /// melee side (`impact_ev` / `ravage_ev`, ai_ev.gd:497-529).
     pub impact: i64,
@@ -199,6 +201,10 @@ pub struct Ctx {
     /// Rules 3.6 (D-MOST): `stealth` holds through the most-models read while
     /// not every model carries it — only the volley's log line reads it.
     pub stealth_most_models: bool,
+    /// FAB-C15 — the literal Stealth name arrived as a one-time GRANT (the
+    /// "Stealth Buff" Utility Buff), not from the profile's own rules. The
+    /// volley's rules-must-log line names this leg separately.
+    pub stealth_grant: bool,
     /// The DEFENDER's best Stealth-primitive DATA ALIAS (Changebound et al.)
     /// OTHER than the literal "Stealth" name, which `stealth` above (and the
     /// fixed `STEALTH_HIT_PENALTY`/`LONG_RANGE_IN` constants) already cover
@@ -771,6 +777,8 @@ pub struct ShootProfile {
     pub strafing: bool,
     pub ignores_cover: bool,
     pub precise: bool,
+    /// AIG-G2 (rules 3.6, read from `EPOCH_73_V36`): the weapon carries Imprecise — -1 to hit.
+    pub imprecise: bool,
     pub surge: bool,
     /// SHO-18: the alias name that stamped `surge` ("" = the weapon's own Surge).
     pub surge_alias_rule: String,
@@ -1033,6 +1041,7 @@ impl ShootProfile {
             && self.strafing == o.strafing
             && self.ignores_cover == o.ignores_cover
             && self.precise == o.precise
+            && self.imprecise == o.imprecise
             && self.surge == o.surge
             && self.rending == o.rending
             && self.bane == o.bane
@@ -1528,6 +1537,7 @@ fn base_profile(w: &Weapon, attacks: i64, range_in: i64) -> ShootProfile {
         strafing: weapon_strafes(w),
         ignores_cover: weapon_has(w, "Ignores Cover"),
         precise: weapon_has(w, "Precise"),
+        imprecise: weapon_has(w, "Imprecise"),
         surge: weapon_has(w, "Surge"),
         rending: weapon_has(w, "Rending"),
         // Lacerate is a straight data-alias of Bane — ai_shooting.gd:126-129.
@@ -1858,15 +1868,17 @@ fn hit_and_run_boost_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> 
 /// the terrain half: the split walk now also reports the terrain-gated kind
 /// (`Ctx::stealth_alias_near_terrain`) and the def builds resolve the
 /// per-model read live; `requires_stationary` still is.
-fn stealth_alias_of(reg: &mut Registries, p: &Profile) -> (i64, f64, bool) {
-    stealth_alias_of_excluding(reg, p, "")
+fn stealth_alias_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (i64, f64, bool) {
+    stealth_alias_of_excluding(reg, p, "", rules_epoch)
 }
 
 /// The same walk with one name stood down — the thin-wrapper shape the
 /// signature rule prescribes: "Machine-Fog Boost" (wave 4) REPLACES its base
 /// entry's conditional alias leg with an unconditional evasive fold, and the
 /// two must never stack. `skip` "" = the plain walk, byte-exact.
-fn stealth_alias_of_excluding(reg: &mut Registries, p: &Profile, skip: &str) -> (i64, f64, bool) {
+fn stealth_alias_of_excluding(
+    reg: &mut Registries, p: &Profile, skip: &str, rules_epoch: u32,
+) -> (i64, f64, bool) {
     let mut best_penalty = 0;
     let mut best_over_in = 0.0;
     let mut best_applies_charged = false;
@@ -1879,13 +1891,18 @@ fn stealth_alias_of_excluding(reg: &mut Registries, p: &Profile, skip: &str) -> 
         let Some(e) = map.lookup(&p.faction_folder, &name) else {
             continue;
         };
-        if e.primitive.as_deref() != Some("Stealth") {
+        // FAB-C15: the flipped common "Stealth Buff" entry is a Utility Buff
+        // from 73; below the gate the old-data replay leg still folds its
+        // alias numbers onto the carrier, so every recorded corpus stays
+        // byte-exact. The 3.5.3 faction entries keep their own params.
+        let legacy_stealth_buff = name == "Stealth Buff" && !rule_on(rules_epoch, EPOCH_73_V36);
+        if e.primitive.as_deref() != Some("Stealth") && !legacy_stealth_buff {
             continue;
         }
-        let pen = e.param_i("hit_penalty", 0);
+        let pen = if legacy_stealth_buff { 1 } else { e.param_i("hit_penalty", 0) };
         if pen > best_penalty {
             best_penalty = pen;
-            best_over_in = e.param_f("over_in", 0.0);
+            best_over_in = if legacy_stealth_buff { 9.0 } else { e.param_f("over_in", 0.0) };
             best_applies_charged = e.param_b_or("applies_charged", false);
         }
     }
@@ -2005,16 +2022,17 @@ fn stealth_alias_split_walk(
         let Some(e) = map.lookup(&p.faction_folder, &name) else {
             continue;
         };
-        if e.primitive.as_deref() != Some("Stealth") {
+        let legacy_stealth_buff = name == "Stealth Buff" && !rule_on(rules_epoch, EPOCH_73_V36);
+        if e.primitive.as_deref() != Some("Stealth") && !legacy_stealth_buff {
             continue;
         }
         if e.param_b_or("requires_stationary", false) != want_stationary {
             continue;
         }
-        let pen = e.param_i("hit_penalty", 0);
+        let pen = if legacy_stealth_buff { 1 } else { e.param_i("hit_penalty", 0) };
         if pen > best_penalty {
             best_penalty = pen;
-            best_over_in = e.param_f("over_in", 0.0);
+            best_over_in = if legacy_stealth_buff { 9.0 } else { e.param_f("over_in", 0.0) };
             best_applies_charged = e.param_b_or("applies_charged", false);
             best_terrain_gated = e.param_f("terrain_within_in", 0.0) > 0.0;
         }
@@ -3196,9 +3214,9 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
             let (sp, so, _) = stationary_alias_of(reg, p, rules_epoch);
             (ap, ao, ac, near, sp, so)
         } else {
-            let (ap, ao, ac) = if machine_fog_boost { stealth_alias_of_excluding(reg, p, "Machine-Fog") }
-                else if empyrean_spirit_boost { stealth_alias_of_excluding(reg, p, "Empyrean Spirit") }
-                else { stealth_alias_of(reg, p) };
+            let (ap, ao, ac) = if machine_fog_boost { stealth_alias_of_excluding(reg, p, "Machine-Fog", rules_epoch) }
+                else if empyrean_spirit_boost { stealth_alias_of_excluding(reg, p, "Empyrean Spirit", rules_epoch) }
+                else { stealth_alias_of(reg, p, rules_epoch) };
             (ap, ao, ac, false, 0, 0.0)
         };
     trace_stamp(trace73 && stealth_alias_penalty != 0, "stealth-alias-stamp", "Stealth",
@@ -3344,6 +3362,10 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     // Rules 3.6 (`EPOCH_73_V36`) — a Brace(X) weapon bearer blunts a charge:
     // the unit takes X Impact dice off ONCE, however many models carry it.
     let brace = brace_of(reg, p, rules_epoch);
+    // AIG-G2 (`EPOCH_73_V36`): Unwieldy is a WEAPON rule, but the strike order is per unit, so the unit
+    // strikes last only when EVERY melee weapon it carries has it; a mix keeps the normal order (logged).
+    let melee = || p.weapons.iter().filter(|w| w.range <= 0.0 && w.count > 0);
+    let (melee_weapons, unwieldy_weapons) = (melee().count(), melee().filter(|w| weapon_has(w, "Unwieldy")).count());
     // Rules 3.6 (`EPOCH_73_V36`) — `Parry(X)`'s dice per living carrier model.
     let parry_dice = if rule_on(rules_epoch, EPOCH_73_V36) {
         let by_name = if unit_rule_active(reg, p, "Parry") { unit_rating(&p.special_rules, "Parry") } else { 0 };
@@ -3425,13 +3447,16 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         // name answers for the heroes — an alias carried ONLY by a hero is the
         // one case this misses, and it is named in `resolve_melee_with_tray`.
         unwieldy: !rules_of_primitive(reg, p, "Unwieldy").is_empty()
-            || p.attached_hero_rules.iter().any(|hr| has_exact_rule(hr, "Unwieldy")),
+            || p.attached_hero_rules.iter().any(|hr| has_exact_rule(hr, "Unwieldy"))
+            || (rule_on(rules_epoch, EPOCH_73_V36) && unwieldy_weapons > 0 && unwieldy_weapons == melee_weapons),
+        unwieldy_mixed: rule_on(rules_epoch, EPOCH_73_V36) && unwieldy_weapons > 0 && unwieldy_weapons < melee_weapons,
         impact: unit_rating(&p.special_rules, "Impact"),
         heavy_impact: unit_rating(&p.special_rules, "Heavy Impact"),
         ravage: unit_rating(&p.special_rules, "Ravage"),
         stealth: stealth_family_on(p, "Stealth", rules_epoch),
         stealth_most_models: stealth_family_on(p, "Stealth", rules_epoch)
             && !rule_on_all_models(p, "Stealth"),
+        stealth_grant: false,
         stealth_alias_penalty,
         stealth_alias_over_in,
         stealth_alias_applies_charged,
@@ -5137,6 +5162,12 @@ fn utility_buffs_of(reg: &mut Registries, p: &Profile, rules_epoch: u32, un: &mu
         // GRANTS Regeneration from `EPOCH_73_V36` on. Below the gate it read as
         // the carrier's own Regeneration fold, so it stamps no utility-buff row.
         if n == "Regeneration Buff" && !rule_on(rules_epoch, EPOCH_73_V36) {
+            continue;
+        }
+        // FAB-C15: the flipped common "Stealth Buff" entry is a Utility Buff
+        // that GRANTS Stealth from `EPOCH_73_V36` on. Below the gate it read as
+        // the carrier's own Stealth alias, so it stamps no utility-buff row.
+        if n == "Stealth Buff" && !rule_on(rules_epoch, EPOCH_73_V36) {
             continue;
         }
         // MOR-16a: "Spell Drain" is the 3.6 replacement for the carriers'

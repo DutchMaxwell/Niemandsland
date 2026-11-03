@@ -3766,6 +3766,13 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
         c.stationary_alias_over_in = ent_over;
         c.stationary_alias_name = "Entrenched";
     }
+    // FAB-C15 — the "Stealth Buff" 3.6 once-grant hands the literal Stealth
+    // name to a picked friendly (`_solo_apply_grant` overlay). Read it where
+    // the profile's own Stealth stamp lands; the grant is 3.6 data only.
+    if rule_on(rules_epoch, EPOCH_73_V36) {
+        c.stealth_grant = grants && mods::granted(state, i, "Stealth");
+        c.stealth = c.stealth || c.stealth_grant;
+    }
     // CENSUS rows 1-5 (evidence-only, non-folding — semantics §11.2/§12):
     // exercise the recorded grant ledger and log; the recorded band carries
     // the effect, so this must never fold. From `EPOCH_19_MOVE_GRANTS_FOLD`
@@ -6401,6 +6408,12 @@ fn tray_charge_with_self_wounds(
     // strikes, measured at 0" (the two units are in base contact).
     tray_vs_marks(statics, next, si, ti, 0.0, seams, tray, shot);
     let charger_last = charger_strikes_last(statics, next, si, seams);
+    let charger_static = &statics[next.roster.profile[si]];
+    if charger_last && rule_on(seams.rules_epoch, EPOCH_73_V36) {
+        shot.log.push(format!("Unwieldy: {} strikes last on the charge", charger_static.name));
+    } else if charger_static.ctx.unwieldy_mixed {
+        shot.log.push(format!("Unwieldy: {} has it on some weapons only - normal strike order (per-weapon order not modelled)", charger_static.name));
+    }
     let strike_back_set = if counter_first { StrikeSet::NonCounter } else { StrikeSet::All };
     for slot in 0..2 {
         if (slot == 0) != charger_last {
