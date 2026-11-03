@@ -3306,9 +3306,12 @@ func attacked_unit_drag_refused(unit: GameUnit) -> bool:
 	if unit == null or opr_army_manager == null \
 			or opr_army_manager.game_phase != OPRArmyManager.GamePhase.PLAYING:
 		return false
-	if not unit.is_activated:
+	# Lead 09:16: narrow to a unit that SHOT this activation and did not fight — a melee
+	# survivor's containment/back-step drag must stay legal (`shot_round` is stamped by the
+	# shooting leg only, so a melee-only activation never has it).
+	if int(unit.unit_properties.get("shot_round", -1)) != opr_army_manager.current_round:
 		return false
-	var text := "%s has already activated this round — it cannot move now" % unit.get_name()
+	var text := "%s has already shot this round — it cannot move now" % unit.get_name()
 	_log_rule_event(BattleLog.Category.MOVEMENT, text)
 	_show_toast(text)
 	return true
@@ -13934,6 +13937,10 @@ func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool, auto: 
 	# toggle path does the full job (GameUnit.activate marks host + heroes, marker, MP broadcast, log,
 	# alternation reply via unit_activated). A pre-toggled unit falls through to the normal pump so a
 	# mis-click fix never queues a second AI answer.
+	if not melee and attacker != null:
+		# Fable A6/F6: the shooting leg is what makes the later drag illegal — stamp it here,
+		# where the table already knows this attack was a volley.
+		attacker.unit_properties["shot_round"] = opr_army_manager.current_round
 	human_attack_resolved.emit(attacker, melee)
 	await _solo_complete_human_attack(attacker)
 
@@ -14164,6 +14171,8 @@ func _run_human_attack_split(attacker: GameUnit, target_a: GameUnit, target_b: G
 			attacker.get_name(), target_a.get_name(), target_b.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(attacker))], false)
 	await _run_human_shooting(attacker, target_a, b_names, true)
 	await _run_human_shooting(attacker, target_b, b_names, false)
+	if attacker != null:
+		attacker.unit_properties["shot_round"] = opr_army_manager.current_round
 	human_attack_resolved.emit(attacker, false)
 	await _solo_complete_human_attack(attacker)
 

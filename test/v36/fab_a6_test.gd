@@ -124,4 +124,22 @@ func test_a_shooting_artillery_unit_cannot_then_advance(timeout := 240000) -> vo
 		.is_false()
 	assert_str(log_after_drag) \
 		.override_failure_message("the refusal must name the unit and why (log: %s)" % log_after_drag.strip_edges()) \
-		.contains("has already activated this round — it cannot move now")
+		.contains("has already shot this round — it cannot move now")
+
+
+## Lead 09:16: the lock is the SHOT, not the activation — a melee survivor keeps its
+## post-melee containment/back-step drag (the old is_activated read refused it).
+func test_the_post_melee_containment_drag_still_works(timeout := 240000) -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	_controller_without_reply()
+	var gun := _gun(Vector3.ZERO, "Gun")
+	var foe := _foe(Vector3(1.0 * INCH, 0, 0))
+	await _main.begin_activation(gun)
+	await _main._run_human_melee(gun, foe)
+	await E2EBoot.settle(get_tree())
+	var node: Node3D = (gun.models[0] as ModelInstance).node
+	var from := node.global_position
+	await _drag(node, from, from + Vector3(0, 0, 3.0 * INCH))
+	assert_vector(node.global_position) \
+		.override_failure_message("a melee survivor's containment drag was refused (log: %s)" % _log_text().strip_edges()) \
+		.is_equal_approx(from + Vector3(0, 0, 3.0 * INCH), Vector3.ONE * 0.0001)
