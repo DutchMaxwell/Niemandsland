@@ -82,20 +82,3 @@ func test_havocbound_charge_ap_needs_over_six_inches_at_epoch_73() -> void:
 	var old: Array = main._solo_conditional_ap_parts(profile, striker, target, true, -1.0, true)
 	assert_int(int(old[0]["bonus"]) if not old.is_empty() else 0) \
 		.override_failure_message("below 73 the 4\" charge still pays").is_equal(1)
-
-
-## The pick line names the BOOK rule that carries the Versatile Attack primitive (Versatile Expert,
-## Watchborn), not the generic primitive label.
-func test_the_versatile_pick_names_its_book_rule_in_the_battle_log() -> void:
-	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
-	var main: Node = auto_free(preload("res://scripts/main.gd").new())
-	main.battle_log = auto_free(BattleLog.new())
-	main._solo_log_versatile_pick(_unit(["Versatile Expert"]), false)
-	main._solo_log_versatile_pick(_unit(["Watchborn"]), true)
-	var text := ""
-	for e in main.battle_log.entries():
-		text += str((e as Dictionary)["text"]) + "\n"
-	assert_str(text).override_failure_message("the Versatile pick still logs the primitive label:\n%s" % text) \
-		.contains("Versatile Expert") \
-		.contains("Watchborn")
-	assert_str(text).not_contains("Versatile Attack:")

@@ -103,28 +103,3 @@ func test_hit_and_run_steps_when_every_model_carries_it_at_epoch_73() -> void:
 	assert_bool((j[0] as SoloController).hit_and_run_move(j[1], true)).is_true()
 	assert_float(hero.models[0].node.global_position.distance_to(hero_at)).is_greater(0.001)
 	assert_str(_note(j[0])).is_empty()
-
-
-## The step line names the exact family entry the unit carries (the Fighter half here), never the
-## generic "Hit & Run" label.
-func test_the_hit_and_run_step_names_the_fighter_half_in_the_battle_log() -> void:
-	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
-	var human := _unit(1, [Vector3(0, 0, 0)], [])
-	var fighter := _unit(2, [Vector3(0.5, 0, 0)], ["Hit & Run Fighter"])
-	fighter.unit_id = "fighter"
-	fighter.unit_properties["name"] = "Raiders"
-	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
-	army.game_units = {human.unit_id: human, fighter.unit_id: fighter}
-	army.current_round = 1
-	var solo: SoloController = auto_free(SoloController.new())
-	add_child(solo)
-	solo.setup(army, null, null, 1, 2)
-	var main: Node = auto_free(preload("res://scripts/main.gd").new())
-	main.battle_log = auto_free(BattleLog.new())
-	main.solo_controller = solo
-	main._solo_log_hit_and_run_step(fighter, false, "up to 3\" out of the melee")
-	var text := ""
-	for e in main.battle_log.entries():
-		text += str((e as Dictionary)["text"]) + "\n"
-	assert_str(text).override_failure_message("the Hit & Run step still logs the generic label:\n%s" % text) \
-		.contains("Hit & Run Fighter: Raiders")

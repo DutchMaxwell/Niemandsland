@@ -398,8 +398,7 @@ var _gate_clamped_models: Dictionary = {}
 ## prints these to the battle log (its single printing point, next to the rule notes) — a silent
 ## correction reads like a broken game, and the reporter of #215 should see the fix work.
 var board_clamp_notes: Array = []
-## Vanguard family: one battle-log line per free placement, naming the BOOK entry that granted it
-## (Vanguard / Drakesworn / Fanatic). main prints and drains these; the controller never logs.
+## Vanguard family: one battle-log line per free placement, naming the BOOK entry that granted it.
 var vanguard_notes: Array = []
 ## Limited weapons already fired this game (wave 5, core v3.5.1: "may only be used once per game").
 ## Key: "<unit_id>::<weapon name>" (limited_key). Tracked for EVERY unit — AI and human — since both
@@ -11631,8 +11630,7 @@ func _deploy_place_id(id: int) -> GameUnit:
 			_deploy_zone_of.erase(unit)   # the placed spot MAY legally leave the zone
 			var free := AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_16_FREE_PLACEMENT
 			if free:
-				vanguard_notes.append("%s: %s takes its free 9\" placement after deploying" % [
-					_vanguard_entry_name(unit), unit.get_name()])
+				vanguard_notes.append(_vanguard_note(unit))
 			var rule_text := "Vanguard: after deploying, the unit may be placed anywhere fully within 9\" of its position"
 			var chosen := "%.1f\" repositioned" % (spot.distance_to(v_spot) / INCHES_TO_METERS)
 			var why := "vanguard free placement"
@@ -12313,14 +12311,9 @@ static func _carries_infiltrate_alias(unit: GameUnit) -> bool:
 	return false
 
 
-## The BOOK name of the Vanguard-family entry a placement used (Vanguard / Drakesworn / Fanatic) —
-## the narration names the entry, never the generic primitive label.
-static func _vanguard_entry_name(unit: GameUnit) -> String:
-	for e in RulesRegistry.unit_rules_of_primitive(unit, "Vanguard"):
-		var n := str((e as Dictionary).get("name", ""))
-		if not n.is_empty():
-			return n
-	return "Vanguard"
+## The battle-log line for one free placement, naming the BOOK entry that granted it.
+static func _vanguard_note(unit: GameUnit) -> String:
+	return "%s: %s takes its free 9\" placement after deploying" % [RulesRegistry.primitive_book_name(unit, "Vanguard"), unit.get_name()]
 
 
 ## Vanguard's forward push: candidate spots along the toward-table-centre line at 100/75/50/25% of the

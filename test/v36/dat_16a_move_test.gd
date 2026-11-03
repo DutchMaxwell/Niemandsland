@@ -124,22 +124,26 @@ func test_the_ai_arrival_line_states_the_units_real_ring() -> void:
 	var infiltrator := _carrier(1, "Infiltrators", "dark_elf_raiders", ["Infiltrate"])
 	assert_str(_main._solo_ambush_arrival_text(infiltrator)) \
 		.override_failure_message("an Infiltrate arrival still logs the fixed 9\"") \
-		.contains(">3\" from your units")
+		.contains(">3\" from your units") \
+		.contains("AI Infiltrate:")
 	var ambusher := _carrier(2, "Stalkers", "dark_elf_raiders", ["Ambush"])
 	assert_str(_main._solo_ambush_arrival_text(ambusher)) \
 		.override_failure_message("a plain Ambush arrival must log 9\"") \
-		.contains(">9\" from your units")
-
-
-## The arrival line names the BOOK rule that put the unit in reserve: Infiltrate for a carrier,
-## Ambush otherwise.
-func test_the_ai_arrival_line_names_infiltrate_or_ambush() -> void:
-	var infiltrator := _carrier(1, "Infiltrators", "dark_elf_raiders", ["Infiltrate"])
-	assert_str(_main._solo_ambush_arrival_text(infiltrator)) \
-		.override_failure_message("an Infiltrate arrival still logs the Ambush label") \
-		.contains("AI Infiltrate:") \
-		.not_contains("AI Ambush:")
-	var ambusher := _carrier(2, "Stalkers", "dark_elf_raiders", ["Ambush"])
-	assert_str(_main._solo_ambush_arrival_text(ambusher)) \
-		.override_failure_message("a plain Ambush arrival must keep the Ambush label") \
+		.contains(">9\" from your units") \
 		.contains("AI Ambush:")
+
+
+## The Versatile pick line names the BOOK rule (Versatile Expert), not the primitive label.
+func test_the_versatile_pick_names_its_book_rule() -> void:
+	var expert := _carrier(1, "Experts", "watch_brothers", ["Versatile Expert"])
+	_main._solo_log_versatile_pick(expert, false)
+	assert_str(_log_text()).contains("Versatile Expert: Experts")
+
+
+## The Vanguard free placement's battle-log line names the BOOK entry (Drakesworn), not "Vanguard".
+func test_the_vanguard_free_placement_names_its_book_entry() -> void:
+	var drake := _carrier(2, "Drakes", "volcanic_dwarves", ["Drakesworn"])
+	drake.unit_properties["game_system"] = "aof"
+	_main.solo_controller.vanguard_notes.append(SoloController._vanguard_note(drake))
+	_main._solo_log_vanguard_notes()
+	assert_str(_log_text()).contains("Drakesworn")

@@ -93,33 +93,3 @@ func test_vanguard_decision_keeps_the_free_placement_words_at_epoch_72() -> void
 	var rule := _vanguard_rule(out[1])
 	assert_str(rule).override_failure_message("below 3.6 the old words stay, got: %s" % rule) \
 		.not_contains("do not have Vanguard")
-
-
-## The free placement is narrated: the line names the BOOK entry that granted it (Drakesworn here),
-## never the generic primitive label.
-func test_the_vanguard_free_placement_names_its_book_entry_in_the_battle_log() -> void:
-	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
-	var human := _unit(1, [Vector3(0.0, 0.0, 0.02)])
-	var drake := _unit(2, [Vector3(0.0, 0.0, -0.5)], ["Drakesworn"])
-	drake.unit_id = "drake"
-	drake.unit_properties["name"] = "Drakes"
-	drake.unit_properties["game_system"] = "aof"
-	drake.unit_properties["faction_folder"] = "volcanic_dwarves"
-	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
-	army.game_units = {human.unit_id: human, drake.unit_id: drake}
-	army.current_round = 1
-	var solo: SoloController = auto_free(SoloController.new())
-	add_child(solo)
-	solo.setup(army, null, null, 1, 2)
-	var zone := Rect2(Vector2(-0.55, -0.6), Vector2(1.1, 0.3))
-	solo.deploy_begin(zone, [Vector2(0.0, 0.10)], Callable(), Callable(), 777)
-	assert_object(solo.deploy_next_one()).is_equal(drake)
-	var main: Node = auto_free(preload("res://scripts/main.gd").new())
-	main.battle_log = auto_free(BattleLog.new())
-	main.solo_controller = solo
-	main._solo_log_vanguard_notes()
-	var text := ""
-	for e in main.battle_log.entries():
-		text += str((e as Dictionary)["text"]) + "\n"
-	assert_str(text).override_failure_message("the Vanguard free placement logged no line naming Drakesworn:\n%s" % text) \
-		.contains("Drakesworn")
