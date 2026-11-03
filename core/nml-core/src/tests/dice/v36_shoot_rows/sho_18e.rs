@@ -25,6 +25,19 @@ const SHO_18E_HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
     "item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
     "weapons":[{"name":"Rifle","range":24,"attacks":8,"count":1,"ap":0,"rules":[]},
       {"name":"Blade","range":0,"attacks":6,"count":1,"ap":0,"rules":[]}]},
+  "enhanced_ferocious":{"unit_id":"enhanced_ferocious","name":"Enhanced Ferocious",
+    "quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+    "base_radius":0.016,"game_system":"aof","faction_folder":"orcs",
+    "special_rules":["Ferocious","Enhanced Ferocious"],"item_grants":[],
+    "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+    "weapons":[{"name":"Rifle","range":24,"attacks":8,"count":1,"ap":0,"rules":[]},
+      {"name":"Blade","range":0,"attacks":6,"count":1,"ap":0,"rules":[]}]},
+  "plain_surge":{"unit_id":"plain_surge","name":"Plain Surge","quality":4,"defense":3,"tough":1,
+    "wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,
+    "game_system":"gf","faction_folder":"war_disciples","special_rules":[],
+    "item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+    "weapons":[{"name":"Rifle","range":24,"attacks":8,"count":1,"ap":0,"rules":["Surge"]},
+      {"name":"Blade","range":0,"attacks":6,"count":1,"ap":0,"rules":[]}]},
   "plain":{"unit_id":"plain","name":"Plain","quality":4,"defense":3,"tough":1,
     "wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,
     "game_system":"gf","faction_folder":"war_disciples","special_rules":[],
@@ -112,4 +125,37 @@ fn below_epoch_73_the_aliases_pay_at_every_shot_distance() {
         assert!(close(seven, ten), "{id} at 72: 7\" and 10\" price the same, {seven} vs {ten}");
         assert!(seven > plain, "{id} at 72: the alias still pays, {seven} vs plain {plain}");
     }
+}
+
+/// RED on main: "Enhanced Ferocious" prints no distance gate, so the stamp stores the
+/// `-1.0` sentinel and the shot pays its unmodified-6 Surge at 7" too — the dice twin's
+/// own read (`dice.rs::alias_fires`). The gated Ferocious at 7", a weapon's own Surge and
+/// the over-9" band stay unchanged.
+#[test]
+fn an_enhanced_ferocious_shot_pays_its_surge_at_seven_inches_at_epoch_73() {
+    let seven = shot_ev("enhanced_ferocious", EPOCH_73_V36, 7.0);
+    let ten = shot_ev("enhanced_ferocious", EPOCH_73_V36, 10.0);
+    let plain = shot_ev("plain", EPOCH_73_V36, 7.0);
+    let gated_seven = shot_ev("ferocious", EPOCH_73_V36, 7.0);
+    let gated_ten = shot_ev("ferocious", EPOCH_73_V36, 10.0);
+    let own = shot_ev("plain_surge", EPOCH_73_V36, 3.0);
+    assert!(close(gated_seven, plain), "a plain Ferocious stays gated at 7\": {gated_seven} vs {plain}");
+    assert!(seven > plain, "the sentinel opens the 7\" shot: {seven} vs {plain}");
+    assert!(close(seven, ten), "the ungated sentinel prices 7\" and 10\" the same: {seven} vs {ten}");
+    assert!(gated_ten > gated_seven, "the over-9\" gated alias keeps its band: {gated_ten} vs {gated_seven}");
+    assert!(own > plain, "a weapon's own Surge stays unconditional: {own} vs {plain}");
+}
+
+/// The old side: at epoch 72 nothing stamps the sentinel (`over_in_gate` returns 9.0), so
+/// the Enhanced profile keeps the old read — the 7" shot already paid because main's alias
+/// gate is off below 73, and this change must leave that number exactly where it was.
+#[test]
+fn an_enhanced_ferocious_shot_at_epoch_72_keeps_the_old_read() {
+    let us = sho18e_static("enhanced_ferocious", EPOCH_72_PLAYTEST_RULES);
+    assert_eq!(us.shoot[0].surge_over_in, 9.0, "below 73 there is no sentinel");
+    let seven = shot_ev("enhanced_ferocious", EPOCH_72_PLAYTEST_RULES, 7.0);
+    let ten = shot_ev("enhanced_ferocious", EPOCH_72_PLAYTEST_RULES, 10.0);
+    let plain = shot_ev("plain", EPOCH_72_PLAYTEST_RULES, 7.0);
+    assert!(close(seven, ten), "at 72: 7\" and 10\" price the same, {seven} vs {ten}");
+    assert!(seven > plain, "at 72: the old unconditional read still pays, {seven} vs plain {plain}");
 }
