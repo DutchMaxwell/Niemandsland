@@ -187,7 +187,7 @@ func test_a_valiant_charger_that_loses_its_own_melee_gets_no_bonus(timeout := 90
 	var defender := _melee_unit(1, "Defender", 1.0, 1, "Spikes", [], 6, 9, 30)
 	_main.seed_tray_rng(7)
 	await _main._run_ai_melee({"unit": charger, "target": defender, "charge_from_in": 1.0})
-	assert_str(_log_text()).not_contains("Banner: Charger gets +1 to morale test rolls")
+	assert_str(_log_text()).not_contains("Charger gets +1 to morale test rolls")
 	assert_str(_log_text()).contains("Banner: Charger gets no +1 — it charged, it was not charged")
 
 
@@ -223,14 +223,14 @@ func _human_valiant_charger_loses() -> void:
 func test_a_human_valiant_charger_that_loses_its_own_melee_gets_no_bonus(timeout := 90000) -> void:
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
 	await _human_valiant_charger_loses()
-	assert_str(_log_text()).not_contains("Banner: Charger gets +1 to morale test rolls")
+	assert_str(_log_text()).not_contains("Charger gets +1 to morale test rolls")
 	assert_str(_log_text()).contains("Banner: Charger gets no +1 — it charged, it was not charged")
 
 
 func test_below_epoch_73_a_human_valiant_charger_keeps_its_old_bonus(timeout := 90000) -> void:
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36 - 1
 	await _human_valiant_charger_loses()
-	assert_str(_log_text()).contains("Banner: Charger gets +1 to morale test rolls")
+	assert_str(_log_text()).contains("Charger gets +1 to morale test rolls")
 	assert_str(_log_text()).not_contains("it charged, it was not charged")
 
 
@@ -242,7 +242,7 @@ func test_a_valiant_unit_charged_from_eight_inches_keeps_its_bonus(timeout := 90
 	var defender := _melee_unit(1, "Defender", 1.0, 1, "Spikes", ["Valiant"], 3, 9, 0)
 	_main.seed_tray_rng(7)
 	await _main._run_ai_melee({"unit": charger, "target": defender, "charge_from_in": 8.0})
-	assert_str(_log_text()).contains("Banner: Defender gets +1 to morale test rolls")
+	assert_str(_log_text()).contains("Defender gets +1 to morale test rolls")
 
 
 ## Charged from 4" (inside the gate): the Valiant share drops.
@@ -253,7 +253,7 @@ func test_a_valiant_unit_charged_from_four_inches_loses_its_bonus(timeout := 900
 	var defender := _melee_unit(1, "Defender", 1.0, 1, "Spikes", ["Valiant"], 3, 9, 0)
 	_main.seed_tray_rng(7)
 	await _main._run_ai_melee({"unit": charger, "target": defender, "charge_from_in": 4.0})
-	assert_str(_log_text()).not_contains("Banner: Defender gets +1 to morale test rolls")
+	assert_str(_log_text()).not_contains("Defender gets +1 to morale test rolls")
 	assert_str(_log_text()).contains("Valiant counts only beyond the gate")
 
 
