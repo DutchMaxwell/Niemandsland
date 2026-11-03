@@ -15150,8 +15150,7 @@ func _solo_alternate_ambush_arrivals(round_number: int) -> void:
 				_solo_focus_on_unit(unit)
 				_solo_show_explain("%s ambushes in from reserve" % unit.get_name())
 				if battle_log != null:
-					_log_rule_event(BattleLog.Category.GENERAL,
-						"AI Ambush: %s arrives — near an objective, >9\" from your units, clear of all standing bases" % unit.get_name(), true)
+					_log_rule_event(BattleLog.Category.GENERAL, _solo_ambush_arrival_text(unit), true)
 					_solo_log_ambush_variant_lines(unit, round_number, true)
 				await _solo_pace_attention()
 		elif not ai_turn and not human_pool.is_empty():
@@ -15174,6 +15173,14 @@ func _solo_alternate_ambush_arrivals(round_number: int) -> void:
 		_log_rule_event(BattleLog.Category.GENERAL,
 			"%d of your Ambush unit(s) stay in reserve — you'll be asked again next round." % held_h, false)
 	_solo_flush_dev()
+
+
+## The AI Ambush arrival line states the unit's REAL ring — the SAME number the placement used
+## (3" for Infiltrate, 9" for plain Ambush, alias rings included), never a fixed one.
+func _solo_ambush_arrival_text(unit: GameUnit) -> String:
+	var ring_in: int = roundi(solo_controller._reserve_min_enemy_dist_m(unit) / SoloController.INCHES_TO_METERS)
+	return "AI Ambush: %s arrives — near an objective, >%d\" from your units, clear of all standing bases" % [
+		unit.get_name(), ring_in]
 
 
 ## The variant lines an arrival owes (rules-must-log — a rule that silently does nothing reads exactly
