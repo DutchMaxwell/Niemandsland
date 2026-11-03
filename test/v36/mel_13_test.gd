@@ -6,6 +6,7 @@ extends GdUnitTestSuite
 ## EPOCH_73_V36: at epoch 72 a Dodge unit gets no penalty. Plain Melee Evasion keeps its old reading
 ## (no Fatigued gate, any epoch).
 
+## RED proof (CI red at the RED commit, gdUnit shard 9): https://github.com/DutchMaxwell/Niemandsland/actions/runs/41600834110/job/125799141905
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 
 var _runner: GdUnitSceneRunner
