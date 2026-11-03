@@ -191,6 +191,49 @@ func test_a_valiant_charger_that_loses_its_own_melee_gets_no_bonus(timeout := 90
 	assert_str(_log_text()).contains("Banner: Charger gets no +1 — it charged, it was not charged")
 
 
+## The human charger confirms its own saves ("Incoming fire!"); no headless run can click it, so a
+## repeating timer answers it (pattern: e2e_auto_charge_test.gd). Freed with the stray root nodes.
+func _arm_pump() -> void:
+	var pump := Timer.new()
+	pump.wait_time = 0.02
+	get_tree().root.add_child(pump)
+	pump.timeout.connect(_answer_save_prompt)
+	pump.start()
+
+
+func _answer_save_prompt() -> void:
+	if _main == null or not is_instance_valid(_main):
+		return
+	for c in _main.get_children():
+		var card := c as PromptCard
+		if card != null and card.title == "Incoming fire!":
+			card.ok_button.pressed.emit()
+
+
+## MOR-09b human twin: the player's Valiant charger loses its own melee to an AI defender.
+func _human_valiant_charger_loses() -> void:
+	_arm_pump()
+	_main.solo_ai_slots = {2: true}
+	var charger := _melee_unit(1, "Charger", 0.0, 1, "Blade", ["Valiant"], 3, 9, 0)
+	var defender := _melee_unit(2, "Defender", 1.0, 1, "Spikes", [], 6, 9, 30)
+	_main.seed_tray_rng(7)
+	await _main._run_human_melee(charger, defender, true)
+
+
+func test_a_human_valiant_charger_that_loses_its_own_melee_gets_no_bonus(timeout := 90000) -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	await _human_valiant_charger_loses()
+	assert_str(_log_text()).not_contains("Banner: Charger gets +1 to morale test rolls")
+	assert_str(_log_text()).contains("Banner: Charger gets no +1 — it charged, it was not charged")
+
+
+func test_below_epoch_73_a_human_valiant_charger_keeps_its_old_bonus(timeout := 90000) -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36 - 1
+	await _human_valiant_charger_loses()
+	assert_str(_log_text()).contains("Banner: Charger gets +1 to morale test rolls")
+	assert_str(_log_text()).not_contains("it charged, it was not charged")
+
+
 ## A Valiant unit CHARGED from 8" (over the 6" gate) and losing keeps the +1.
 func test_a_valiant_unit_charged_from_eight_inches_keeps_its_bonus(timeout := 90000) -> void:
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
