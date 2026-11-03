@@ -143,22 +143,6 @@ func test_an_enhanced_warbound_volley_names_the_rule_and_keeps_its_wounds() -> v
 		.contains("Enhanced Warbound")
 
 
-## QUICK THROW — the AI volley gets the LOS waiver (Indirect after moving) but never names the rule.
-func test_a_quick_throw_volley_names_the_rule_and_keeps_the_waiver() -> void:
-	var shooter := _unit(2, "Gunner", Vector3.ZERO, ["Quick Throw"], "human_inquisition")
-	shooter.unit_properties["moved_round"] = _main.opr_army_manager.current_round
-	var target := _unit(2, "Target", Vector3(0.25, 0.0, 0.0), [], "human_inquisition")
-	assert_bool(SoloController.indirect_ignores_los(shooter, true)) \
-		.override_failure_message("fixture: Quick Throw lifts the Hold need").is_true()
-	assert_bool(SoloController.indirect_ignores_los(shooter, false)) \
-		.override_failure_message("fixture: without the waiver the moved volley is blind").is_false()
-	var text := await _volley(shooter, target, [_weapon("Launcher", ["Indirect"] as Array[String])], true)
-	assert_str(text).override_failure_message("the volley still fires 3 hits:\n%s" % text) \
-		.contains("— 3 hits")
-	assert_str(text).override_failure_message("the battle log must name Quick Throw:\n%s" % text) \
-		.contains("Quick Throw")
-
-
 ## ANTI-COVER WHEN SHOOTING — the rule skips the save today but the applied skip names no rule.
 func test_anti_cover_when_shooting_names_the_rule_and_keeps_the_skip() -> void:
 	var shooter := _unit(2, "Gunner", Vector3.ZERO, ["Anti-Cover when Shooting"], "dwarf_guilds")

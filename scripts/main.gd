@@ -4738,6 +4738,14 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 	var total_caused := 0
 	var cover_logged := false   # I4: log Cover once, only when a shot's save really used it
 	var indirect_cover_logged := false   # Rules 3.6 (SHO-01b): name a moved Indirect shooter's kept cover once
+	var reliable_logged := false   # AIG-G2-L2a: name the Reliable Quality floor once per volley
+	var warbound_logged := false   # AIG-G2-L2a: name the widened Shred window once per volley
+	var shroud_spec := SoloController.ranged_shroud_spec(target)
+	if not shroud_spec.is_empty() and battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s — weapon ranges against it %s\" shorter (min %s\")" % [
+			str(shroud_spec["name"]), target.get_name(),
+			str(float(shroud_spec["range_penalty_in"])).trim_suffix(".0"),
+			str(float(shroud_spec["floor_in"])).trim_suffix(".0")], true)
 	# Unpredictable (generic army-book rule — "when attacking": the SHOOTING leg; the wave-4 melee-only
 	# Unpredictable Fighter lives in the melee path): ONE die per volley for the whole unit —
 	# 1-3 → AP(+1), 4-6 → +1 to hit on every profile it fires (same arithmetic, same visible tray).
@@ -4751,7 +4759,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 			upr_ap = int(upr_eff["ap"])
 			upr_hit = int(upr_eff["hit"])
 			if battle_log != null:
-				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s rolls %d → %s" % [
+				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s's volley rolls %d → %s" % [
 					upr_name, attacker.get_name(), int(upr_face[0]), ("AP(+1)" if upr_ap > 0 else "+1 to hit")], true)
 	for si in range(shots.size()):
 		var shot := shots[si] as Dictionary
@@ -4843,6 +4851,21 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 				battle_log.log_event(BattleLog.Category.COMBAT, str(ai_uf[1]), true)
 		var to_hit_raw: int = AiCombatMath.reliable_quality(int(shot["quality"]), bool(profile.get("reliable", false))) - ai_mod
 		var to_hit: int = AiCombatMath.modified_hit_target(to_hit_raw, 0)
+		if not reliable_logged and bool(profile.get("reliable", false)) and battle_log != null:
+			reliable_logged = true
+			battle_log.log_event(BattleLog.Category.COMBAT, "Reliable: %s shoots at Quality %d+" % [
+				member.get_name(), to_hit], true)
+		if not warbound_logged and bool(profile.get("shred", false)) and battle_log != null:
+			for e in RulesRegistry.unit_rules_of_primitive(member, "Shred"):
+				var ep: Dictionary = ((e as Dictionary).get("params", {}) as Dictionary)
+				var boost_low := maxi(int(ep.get("save_fail_max", 0)), int(ep.get("extra_wound_save_low", 0)))
+				var boost_base := str(ep.get("upgrades", ""))
+				if boost_low <= 1 or boost_base.is_empty() or not AiEv.has_exact_rule(member, boost_base):
+					continue
+				warbound_logged = true
+				battle_log.log_event(BattleLog.Category.COMBAT, "%s: failed saves of 1-%d count as wounds on %s" % [
+					str((e as Dictionary).get("name", "")), boost_low, target.get_name()], true)
+				break
 		if upr_ap > 0:
 			profile = profile.duplicate()
 			profile["ap"] = int(profile.get("ap", 0)) + upr_ap   # Unpredictable AP(+1) leg (never mutate source)
@@ -4903,7 +4926,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		# AI-08a — rules-must-log: a cover skip by a map-read rule (Anti-Cover et al.) names the rule.
 		elif td_ctx.is_empty() and battle_log != null and shot_cover < shot_base and int(profile.get("blast", 0)) <= 1 \
 				and not str(profile.get("cover_rule", "")).is_empty():
-			battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s — %s's cover save is skipped" % [
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s ignores %s's cover (save skipped)" % [
 				str(profile["cover_rule"]), shooter_name, target.get_name()], true)
 		var is_deadly: bool = int(profile.get("deadly", 0)) > 0
 		# TC-023: the saves are the PICKED MODEL's — rolled by its own GameUnit, so a sniped attached
