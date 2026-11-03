@@ -6360,9 +6360,13 @@ func _solo_cover_defense(target: GameUnit, base_defense: int) -> int:
 func _solo_hits(faces: Array, to_hit: int, profile: Dictionary, dist_in: float, target: GameUnit = null, charging: bool = false, roller: String = "", charge_from_in: float = 0.0) -> int:
 	# `to_hit` is the caller's UNCLAMPED summed target (D21): Precise's flat +1 folds into that sum and the
 	# one clamp happens here, so a penalty the old per-step clamp swallowed still counts against the +1.
-	to_hit = AiCombatMath.modified_hit_target(to_hit, 1 if bool(profile.get("precise", false)) else 0)
+	# AIG-G2 (EPOCH_73_V36): a weapon-borne Imprecise is Precise's mirror, folded into the same sum.
+	var imprecise: bool = bool(profile.get("imprecise", false))
+	to_hit = AiCombatMath.modified_hit_target(to_hit, (1 if bool(profile.get("precise", false)) else 0) - (1 if imprecise else 0))
 	if bool(profile.get("precise", false)) and battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "Precise: +1 to hit", true)
+	if imprecise and battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT, "Imprecise: -1 to hit", true)
 	var hits: int = AiCombatMath.count_hits(faces, to_hit)
 	if bool(profile.get("relentless", false)):
 		var rel_bonus: int = AiCombatMath.relentless_bonus_hits(faces, dist_in)
@@ -11716,6 +11720,7 @@ func _run_ai_melee(report: Dictionary) -> void:
 	var charger_last: bool = _solo_unit_has_unwieldy(unit, target)
 	if charger_last and battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "Unwieldy: %s strikes last on the charge" % unit.get_name(), true)
+	_solo_log_unwieldy_mixed(unit, charger_last)
 	for phase_slot in range(2):
 		if (phase_slot == 0) != charger_last:
 			# — AI strikes (unit + attached heroes; only models within 2" strike; Deadly multiplies wounds). The AI
@@ -14749,6 +14754,7 @@ func _run_human_melee(attacker: GameUnit, target: GameUnit, auto: bool = false, 
 	var h_charger_last: bool = _solo_unit_has_unwieldy(attacker, target)
 	if h_charger_last and battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "Unwieldy: %s strikes last on the charge" % attacker.get_name(), true)
+	_solo_log_unwieldy_mixed(attacker, h_charger_last)
 	var ai_struck: bool = ai_counter
 	for phase_slot in range(2):
 		if (phase_slot == 0) != h_charger_last:
@@ -22811,6 +22817,29 @@ func _solo_hazardous_bearer(owner_unit: GameUnit, weapon: String) -> ModelInstan
 	return null
 
 
+## AIG-G2 (rules 3.6, EPOCH_73_V36): do "all", "some" or "none" of a living unit's own melee weapons carry
+## `rule_name`? The strike order is per unit, so only "all" moves it (the core's `unwieldy`/`unwieldy_mixed`).
+func _solo_melee_weapon_cover(unit: GameUnit, rule_name: String) -> String:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 or unit == null or unit.get_alive_count() <= 0:
+		return "none"
+	if unit.source_type != "opr" or not unit.source_data is OPRApiClient.OPRUnit:
+		return "none"
+	var total := 0
+	var carrying := 0
+	for w in (unit.source_data as OPRApiClient.OPRUnit).weapons:
+		if w is Object and AiShooting._field_i(w, "range_value", 0) <= 0 and AiShooting._field_i(w, "count", 1) > 0:
+			total += 1
+			carrying += 1 if AiShooting._has_rule(w, rule_name) else 0
+	return "none" if carrying == 0 else ("all" if carrying == total else "some")
+
+
+## AIG-G2: a mixed Unwieldy loadout keeps the normal strike order and says why (once per charge).
+func _solo_log_unwieldy_mixed(unit: GameUnit, charger_last: bool) -> void:
+	if not charger_last and battle_log != null and _solo_melee_weapon_cover(unit, "Unwieldy") == "some":
+		battle_log.log_event(BattleLog.Category.COMBAT,
+			"Unwieldy: %s has it on some weapons only - normal strike order (per-weapon order not modelled)" % unit.get_name(), true)
+
+
 ## Unwieldy (resolver wave A — "strikes last when charging"): any chain member carrying the rule
 ## makes the whole charging unit resolve its strikes AFTER the defender's strike-back.
 func _solo_unit_has_unwieldy(unit: GameUnit, defender: GameUnit = null) -> bool:
@@ -22819,6 +22848,8 @@ func _solo_unit_has_unwieldy(unit: GameUnit, defender: GameUnit = null) -> bool:
 	for m in _solo_joined_chain(unit):
 		if not RulesRegistry.unit_rules_of_primitive(m as GameUnit, "Unwieldy").is_empty():
 			return true
+	if _solo_melee_weapon_cover(unit, "Unwieldy") == "all":
+		return true
 	# GH #325 — a charger granted Unwieldy by the defender's attackers-side token strikes last
 	# exactly like a printed carrier (melee-scoped read).
 	return AiSpell.granted_rules_of(unit, defender, false).has("Unwieldy")
