@@ -913,6 +913,11 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 				var hp: Array = (next["units"][hk] as Dictionary)["positions"]
 				for i in range(hp.size()):
 					hp[i] = (hp[i] as Vector3) + delta
+		# FAB-A5 fix: the sim's own move stamp. `moved_round` lives on the LIVE unit and the
+		# simulation never writes it, so the Hold read has to come from THIS resolution: any
+		# move arm marks the snapshot entry, a HOLD leaves it absent (the live fallback stays
+		# for a unit that really moved on the table before the snapshot).
+		su["_moved_round"] = int(next["round"])
 		var terrain_at: Callable = next.get("terrain_at", Callable())
 		if terrain_at.is_valid():   # T2b: the mover's cover follows it (unit-centre probe, v0)
 			su["in_cover"] = TerrainRules.gives_cover(int(terrain_at.call(centre + delta)))
@@ -945,7 +950,11 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 			var alive_before := int(tu["alive"])
 			var wounds_before := _wounds_left(tu)
 			var profiles := _profiles_of(su, false, d, next)
-			var att := _ctx_of(su, false, _held_for(su, round_now))
+			# FAB-A5 fix: the ATTACKER's Hold is the SIMULATED ACTION (plus the sim's own move
+			# stamp) — the old read fell back to a live `moved_round` the sim never wrote, so an
+			# ADVANCE+shoot still priced the Artillery +1 (Fable F5).
+			var att_held := kind == AiDecision.Action.HOLD and _held_for(su, round_now)
+			var att := _ctx_of(su, false, att_held)
 			var phantom := 0
 			if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
 				# AI-06: the Shred-vs-plain EV gap is hits x SIX_P, each 1 worth the map's
@@ -1178,10 +1187,13 @@ static func _ctx_of(su: Dictionary, melee := false, held := true) -> Dictionary:
 
 
 ## Rules 3.6 (SHO-05 / SHO-06e): the table's Hold read for a snapshot unit — `moved_round` against
-## the round the sim is resolving, the SAME expression main.gd's `_solo_unit_held` uses. The
-## snapshot keeps the live unit as `su["unit"]`, so the stamp is read there. No unit reference
-## means held, the old default.
+## the round the sim is resolving, the SAME expression main.gd's `_solo_unit_held` uses. Since
+## FAB-A5 the sim writes its OWN stamp (`su["_moved_round"]`, set by `resolve`'s move arms); the
+## live unit is only the fallback for a snapshot unit that never moved inside the resolution.
+## No stamp and no unit reference means held, the old default.
 static func _held_for(su: Dictionary, round_no: int) -> bool:
+	if su.has("_moved_round"):
+		return int(su["_moved_round"]) != round_no
 	var unit := su.get("unit") as GameUnit
 	if unit == null:
 		return true

@@ -97,3 +97,51 @@ func test_artillery_target_that_moved_this_round_hands_no_minus_one() -> void:
 	assert_int(_wounds_left_after_shot(rifle, gun)) \
 		.override_failure_message("a moved gun still gave the shooter the target -1") \
 		.is_equal(8)
+
+
+## Fable F5: the ATTACKER's Hold comes from the SIMULATED action. The live unit never moved, so the
+## old live read priced a simulated ADVANCE+shoot as a Hold (+1); the sim HOLD must keep it.
+func _resolve_with(shooter: GameUnit, target: GameUnit, kind: int) -> Dictionary:
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {shooter.unit_id: shooter, target.unit_id: target}
+	var state := BattleSim.capture(army, Callable(), Callable(), ROUND)
+	return BattleSim.resolve(state, {"unit": shooter.unit_id, "kind": kind,
+		"dest": (shooter.models[0].node as Node3D).global_position + Vector3(2.0 * IN2M, 0.0, 0.0),
+		"shoot": target.unit_id})
+
+
+func test_a_simulated_advance_and_shoot_pays_no_hold_bonus() -> void:
+	var gun := _unit(1, [Vector3.ZERO], "Gun", ["Artillery"], 10, 1)
+	var foe := _unit(2, _five_at(15.0), "Foe", [], 10, 2)
+	var advanced := _resolve_with(gun, foe, AiDecision.Action.ADVANCE)
+	assert_int(BattleSim._wounds_left(advanced["units"][foe.unit_id])) \
+		.override_failure_message("a simulated advance still got the Hold +1") \
+		.is_equal(8)
+	var gun2 := _unit(1, [Vector3.ZERO], "Gun", ["Artillery"], 10, 1)
+	var foe2 := _unit(2, _five_at(15.0), "Foe", [], 10, 2)
+	var held := _resolve_with(gun2, foe2, AiDecision.Action.HOLD)
+	assert_int(BattleSim._wounds_left(held["units"][foe2.unit_id])) \
+		.override_failure_message("a simulated hold lost its +1") \
+		.is_equal(7)
+
+
+## The defender leg through the SIM STATE: a gun that advanced EARLIER in the same simulated round
+## hands no target -1; a gun that held does. Two resolutions on one snapshot chain.
+func test_a_defender_that_moved_in_this_sim_round_hands_no_minus_one() -> void:
+	var gun := _unit(2, _five_at(15.0), "Gun", ["Artillery"], 10, 2)
+	var rifle := _unit(1, [Vector3.ZERO], "Rifle", [], 10, 1)
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {gun.unit_id: gun, rifle.unit_id: rifle}
+	var state := BattleSim.capture(army, Callable(), Callable(), ROUND)
+	var moved := BattleSim.resolve(state, {"unit": gun.unit_id, "kind": AiDecision.Action.ADVANCE,
+		"dest": (gun.models[0].node as Node3D).global_position + Vector3(0.0, 0.0, 2.0 * IN2M)})
+	var after := BattleSim.resolve(moved, {"unit": rifle.unit_id, "kind": AiDecision.Action.HOLD,
+		"shoot": gun.unit_id})
+	assert_int(BattleSim._wounds_left(after["units"][gun.unit_id])) \
+		.override_failure_message("a gun that moved in this sim round still gave the -1") \
+		.is_equal(8)
+	var still := BattleSim.resolve(state, {"unit": rifle.unit_id, "kind": AiDecision.Action.HOLD,
+		"shoot": gun.unit_id})
+	assert_int(BattleSim._wounds_left(still["units"][gun.unit_id])) \
+		.override_failure_message("a held gun stopped giving the -1") \
+		.is_equal(9)
