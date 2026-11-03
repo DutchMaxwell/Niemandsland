@@ -11730,7 +11730,7 @@ func _run_ai_melee(report: Dictionary) -> void:
 
 ## Rules 3.6 (EPOCH_73_V36): the loser TOOK more wounds in the activation, so each side scores what its ENEMY took:
 ## wounds dealt + the Fear it bears + the enemy's pre-melee activation wounds (`a_self` / `b_self`: what the
-## unit lost before the strikes - Dangerous, a spell, Hazardous) plus the melee's own Hazardous tally.
+## unit lost before the strikes — Dangerous, a spell, Hazardous) plus the melee's own Hazardous tally.
 ## Lower loses, as before; below 73 only dealt + Fear count. Returns [a_score, b_score].
 ## FAB-B7 - a joined chain's Fear(X): the host's rating plus every LIVING attached hero's,
 ## from `EPOCH_73_V36` (below it the host-only read stands). Twin: `sim::chain_fear`.

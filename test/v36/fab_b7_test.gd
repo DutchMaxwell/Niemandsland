@@ -72,3 +72,23 @@ func test_a_joined_hero_fear_counts_for_the_chain_from_73(timeout := 180000) -> 
 	assert_int(int(at72[0])).override_failure_message("72: the hero's Fear must stay out") \
 		.is_equal(int(AiEv.unit_rating(charger, "Fear")))
 	assert_int(int(at72[0])).is_less(int(at72[1]))
+
+
+## Rules-must-log: the melee result line explains its tally with the SAME joined chain the score
+## used, so the hero's Fear(2) is named rather than booked as a phantom self-inflicted wound.
+func test_the_melee_result_log_names_the_joined_hero_fear(timeout := 180000) -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	var charger := _unit("Charger", [], Vector3.ZERO)
+	var hero := _unit("Fear Hero", ["Fear(2)"], Vector3(0, 0, 0.2))
+	var defender := _unit("Defender", [], Vector3(0, 0, 2.0))
+	EquipmentDistributor.attach_hero_to_unit(hero, charger)
+	_main.battle_log.clear()
+	var scores: Array = _main._solo_melee_scores(charger, 0, defender, 2)
+	_main._solo_log_melee_result(charger, 0, int(scores[0]), defender, 2, int(scores[1]))
+	var text: String = ""
+	for e in _main.battle_log.entries():
+		text += str((e as Dictionary)["text"]) + "\n"
+	assert_str(text).override_failure_message(
+		"the log must name the joined hero's Fear, not a phantom self-inflicted wound (log: %s)" \
+		% text.strip_edges()).contains("Fear: 2")
+	assert_str(text).not_contains("self-inflicted")
