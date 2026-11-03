@@ -4484,7 +4484,9 @@ func _run_ai_shooting(report: Dictionary) -> void:
 			if RulesRegistry.unit_rule_active(member, "Shred") \
 					or _solo_shred_facet_applies(member, base_range):
 				prof["shred"] = true
-				prof["_shred_alias"] = true
+				var shred_alias := _solo_shred_facet_name(member, base_range)
+				if not shred_alias.is_empty() and shred_alias != "Shred":
+					prof["_shred_alias"] = shred_alias
 			member_profiles.append(prof)
 			# `reach` (target validity + per-model sighting) includes the unit's range bonus, so a Royal
 			# Legion unit shoots targets up to +4" beyond the weapon's printed range.
@@ -6223,7 +6225,9 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 			# Shred can be granted at unit level too (wave 5) — mark every profile of that member.
 			if member_shred:
 				prof["shred"] = true
-				prof["_shred_alias"] = true
+				var shred_alias := _solo_shred_facet_name(member, 0)
+				if not shred_alias.is_empty() and shred_alias != "Shred":
+					prof["_shred_alias"] = shred_alias
 			if growth_ap > 0:
 				prof["ap"] = int(prof.get("ap", 0)) + growth_ap
 			# Per-model shooting (GF v3.5.1 p.8): a ranged profile fires with the member's models that
