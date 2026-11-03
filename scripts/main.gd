@@ -1270,8 +1270,7 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	# qualifies (shoot vs charge).
 	if hnr_attacked and not unit.is_destroyed() \
 			and solo_controller.hit_and_run_move(unit, bool(report.get("can_shoot", false))):
-		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.MOVEMENT, "Hit & Run: %s steps up to 3\" after its attack" % unit.get_name(), true)
+		_solo_log_hit_and_run_step(unit, bool(report.get("can_shoot", false)), "up to 3\" after its attack")
 		if not bool(report.get("can_shoot", false)):
 			await _solo_retreating_strike(unit)   # resolver wave A: the post-MELEE step may lash out
 	elif hnr_attacked and not unit.is_destroyed() and battle_log != null \
@@ -1316,6 +1315,7 @@ func _solo_ensure_playing_phase() -> void:
 	if solo_controller != null and not solo_ai_slots.is_empty() \
 			and (solo_controller.deploy_pending() > 0 or solo_controller.deploy_scouts_pending() > 0):
 		solo_controller.deploy_remaining()
+		_solo_log_vanguard_notes()
 		_solo_deploy_fsm["phase"] = "done"
 		_solo_deploy_ui_hide()
 		if battle_log != null:
@@ -3318,8 +3318,7 @@ func attacked_unit_drag_refused(unit: GameUnit, distance_in := 0.0) -> bool:
 	# Lead 11:17: the Hit & Run family lets a HUMAN make its one 3" post-shot step by dragging.
 	if distance_in > 0.0 and solo_controller != null \
 			and bool(solo_controller.hit_and_run_drag_allowed(unit, distance_in, true)):
-		_log_rule_event(BattleLog.Category.MOVEMENT,
-			"Hit & Run: %s steps up to %.1f\" after shooting" % [unit.get_name(), distance_in])
+		_solo_log_hit_and_run_step(unit, true, "up to %.1f\" after shooting" % distance_in, true)
 		return false
 	var text := "%s has already shot this round — it cannot move now" % unit.get_name()
 	_log_rule_event(BattleLog.Category.MOVEMENT, text)
@@ -3951,6 +3950,7 @@ func _solo_phase_start() -> void:
 		solo_controller.deploy_set_gates(phase_gates)
 		var done: Array = solo_controller.deploy_place_n(quota)
 		placed[slot] = int(placed.get(slot, 0)) + done.size()
+		_solo_log_vanguard_notes()
 		_log_rule_event(BattleLog.Category.GENERAL, "Phase %d of %d (%s, %s): NACHTMAHR deploys %d unit(s)" % [
 			i + 1, phases.size(), role, share, done.size()], true)
 		_solo_deploy_fsm["phase_i"] = i + 1
@@ -4303,11 +4303,22 @@ func _solo_deploy_human_out() -> void:
 	_solo_deploy_ai_turn()
 
 
+## The Vanguard free placement owes ONE battle-log line naming the BOOK entry that granted it
+## (Vanguard / Drakesworn / Fanatic) — the controller records the note, main prints it.
+func _solo_log_vanguard_notes() -> void:
+	if battle_log == null or solo_controller == null:
+		return
+	for note in solo_controller.vanguard_notes:
+		battle_log.log_event(BattleLog.Category.GENERAL, str(note), true)
+	solo_controller.vanguard_notes.clear()
+
+
 ## One AI deployment turn of the CURRENT phase — or the phase's rest when the human is out.
 func _solo_deploy_ai_turn() -> void:
 	var phase := str(_solo_deploy_fsm.get("phase", "main"))
 	if bool(_solo_deploy_fsm.get("human_out", false)):
 		var n: int = solo_controller.deploy_remaining_main() if phase == "main" else solo_controller.deploy_remaining_scouts()
+		_solo_log_vanguard_notes()
 		if n > 0 and battle_log != null:
 			battle_log.log_event(BattleLog.Category.GENERAL,
 				"NACHTMAHR deploys its remaining %d unit(s)%s" % [n, (" (scouts)" if phase == "scout" else "")], true)
@@ -4318,6 +4329,7 @@ func _solo_deploy_ai_turn() -> void:
 		# The AI is out for this phase — the human keeps placing until he closes the phase.
 		_solo_deploy_show_human_turn()
 		return
+	_solo_log_vanguard_notes()
 	_solo_focus_on_unit(unit)
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL, "NACHTMAHR deploys %s — your turn" % unit.get_name(), true)
@@ -4821,9 +4833,8 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 			if int(vm.get("ap", 0)) > 0:
 				profile = profile.duplicate()
 				profile["ap"] = int(profile.get("ap", 0)) + int(vm.get("ap", 0))
-			if battle_log != null and fresh:
-				battle_log.log_event(BattleLog.Category.COMBAT, "Versatile Attack: %s picks %s for this activation" % [
-					member.get_name(), "AP(+1)" if int(vm.get("ap", 0)) > 0 else "+1 to hit"], true)
+			if fresh:
+				_solo_log_versatile_pick(member, int(vm.get("ap", 0)) > 0)
 		_solo_log_hit_mod(mod_info, target, to_hit)
 		var shooter_name: String = member.get_name()
 		_vfx_volley(member, target, profile, sight_pairs.slice(0, shot_bearers if shot_bearers >= 0 else sight_pairs.size()),
@@ -8356,6 +8367,37 @@ func _solo_versatile_over(unit: GameUnit, dist_in: float, charging: bool, charge
 	return dist_in > AiCombatMath.LONG_RANGE_IN
 
 
+## The BOOK name of the applied Versatile Attack entry (Versatile Expert / Versatile Warrior /
+## Watchborn / Vinci Tech); the generic primitive label is only the fallback.
+func _solo_versatile_book_name(member: GameUnit) -> String:
+	for e in RulesRegistry.unit_rules_of_primitive(member, "Versatile Attack"):
+		var n := str((e as Dictionary).get("name", ""))
+		if not n.is_empty() and n != "Versatile Attack":
+			return n
+	return "Versatile Attack"
+
+
+## The pick line: name the rule the unit actually carries, never the primitive label.
+func _solo_log_versatile_pick(member: GameUnit, ap_mode: bool) -> void:
+	if battle_log == null:
+		return
+	battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s picks %s for this activation" % [
+		_solo_versatile_book_name(member), member.get_name(), "AP(+1)" if ap_mode else "+1 to hit"], true)
+
+
+## The Hit & Run step line names the BOOK family entry the unit carries (Hit & Run / Hit & Run
+## Fighter / Harassing / Guerrilla), never the primitive label.
+func _solo_log_hit_and_run_step(unit: GameUnit, after_shoot: bool, step: String, broadcast: bool = false) -> void:
+	if solo_controller == null:
+		return
+	var text := "%s: %s steps %s" % [
+		solo_controller._hit_and_run_pick(unit, after_shoot), unit.get_name(), step]
+	if broadcast:
+		_log_rule_event(BattleLog.Category.MOVEMENT, text)
+	elif battle_log != null:
+		battle_log.log_event(BattleLog.Category.MOVEMENT, text, true)
+
+
 ## SHO-19: Havocbound/Piercing Warrior's charge AP needs over 6" at EPOCH_73_V36; below it the
 ## old unconditional charge leg stays. Both map rows spell the gate as ranged_over_or_charge.
 func _solo_havoc_charge_ap(base: String, params: Dictionary, bonus: int,
@@ -8687,9 +8729,8 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 					to_hit_raw -= int(vm.get("hit_mod", 0))   # D21: one sum, one clamp
 					to_hit = AiCombatMath.modified_hit_target(to_hit_raw, 0)
 				v_ap = int(vm.get("ap", 0))
-				if battle_log != null and fresh:
-					battle_log.log_event(BattleLog.Category.COMBAT, "Versatile Attack: %s picks %s for this activation" % [
-						striker.get_name(), "AP(+1)" if v_ap > 0 else "+1 to hit"], true)
+				if fresh:
+					_solo_log_versatile_pick(striker, v_ap > 0)
 			if not fatigued:
 				_solo_log_hit_mod(p_mod, strike_unit, to_hit)
 			var roll_owner: String = _roller_label(group.get("member"))
@@ -13970,8 +14011,7 @@ func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool, auto: 
 		# after_shoot=false: the melee leg (covers the Fighter half, never the Shooter half).
 		if target != null and not target.is_destroyed() and _solo_is_ai_unit(target) \
 				and solo_controller.hit_and_run_move(target, false):
-			if battle_log != null:
-				battle_log.log_event(BattleLog.Category.MOVEMENT, "Hit & Run: %s steps up to 3\" out of the melee" % target.get_name(), true)
+			_solo_log_hit_and_run_step(target, false, "up to 3\" out of the melee")
 			await _solo_retreating_strike(target)   # resolver wave A: the post-melee step may lash out
 		elif target != null and not target.is_destroyed() and _solo_is_ai_unit(target) and battle_log != null \
 				and not solo_controller.last_hit_and_run_note.is_empty():   # UX-19: only some models carry it
@@ -14587,9 +14627,8 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 				if int(vm.get("ap", 0)) > 0:
 					profile = profile.duplicate()
 					profile["ap"] = int(profile.get("ap", 0)) + int(vm.get("ap", 0))
-				if battle_log != null and fresh:
-					battle_log.log_event(BattleLog.Category.COMBAT, "Versatile Attack: %s picks %s for this activation" % [
-						attacker.get_name(), "AP(+1)" if int(vm.get("ap", 0)) > 0 else "+1 to hit"], true)
+				if fresh:
+					_solo_log_versatile_pick(attacker, int(vm.get("ap", 0)) > 0)
 			_solo_log_hit_mod(p_mod, target, to_hit)
 			_vfx_player_volley(group.get("member"), target, profile, bool(profile.get("indirect", false))
 				or h_granted_indirect or _solo_target_grants_indirect(target))
@@ -15230,9 +15269,12 @@ func _solo_alternate_ambush_arrivals(round_number: int) -> void:
 ## The AI Ambush arrival line states the unit's REAL ring — the SAME number the placement used
 ## (3" for Infiltrate, 9" for plain Ambush, alias rings included), never a fixed one.
 func _solo_ambush_arrival_text(unit: GameUnit) -> String:
+	var infiltrate: bool = unit.has_special_rule(SoloController.RULE_INFILTRATE) \
+		or SoloController._carries_infiltrate_alias(unit)
+	var label := "Infiltrate" if infiltrate else "Ambush"
 	var ring_in: int = roundi(solo_controller._reserve_min_enemy_dist_m(unit) / SoloController.INCHES_TO_METERS)
-	return "AI Ambush: %s arrives — near an objective, >%d\" from your units, clear of all standing bases" % [
-		unit.get_name(), ring_in]
+	return "AI %s: %s arrives — near an objective, >%d\" from your units, clear of all standing bases" % [
+		label, unit.get_name(), ring_in]
 
 
 ## The variant lines an arrival owes (rules-must-log — a rule that silently does nothing reads exactly
