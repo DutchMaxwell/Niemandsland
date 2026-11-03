@@ -6795,7 +6795,14 @@ static func musician_move_bonus_in(unit: GameUnit) -> float:
 ## Gap 18a: moved here from main.gd so the dice path and BattleSim read ONE truth (the sim stamps it
 ## at capture time — this walks the registry, far too costly per activation).
 static func morale_bonus_of(unit: GameUnit) -> int:
+	return int(morale_bonus_named_of(unit).get("bonus", 0))
+
+
+## FAB-C20: same walk, plus the Banner-family entry that supplied the winning bonus. The number stays
+## the ONE truth; callers that need the entry's name read it here instead of re-walking the family.
+static func morale_bonus_named_of(unit: GameUnit) -> Dictionary:
 	var best := 0
+	var best_name := ""
 	var members: Array = [unit]
 	if unit != null and unit.has_method("get_attached_heroes"):
 		members = members + unit.get_attached_heroes()
@@ -6804,7 +6811,11 @@ static func morale_bonus_of(unit: GameUnit) -> int:
 		if member == null or member.get_alive_count() == 0:
 			continue
 		if RulesRegistry.unit_rule_active(member, "Banner"):
-			best = maxi(best, int(RulesRegistry.unit_param(member, "Banner", "morale_bonus", AiCombatMath.BANNER_MORALE_BONUS)))
+			var plain := int(RulesRegistry.unit_param(member, "Banner", "morale_bonus",
+				AiCombatMath.BANNER_MORALE_BONUS))
+			if plain > best:
+				best = plain
+				best_name = "Banner"
 		for e in RulesRegistry.unit_rules_of_primitive(member, "Banner"):
 			var ed := e as Dictionary
 			var rule_name := str(ed["name"])
@@ -6815,8 +6826,11 @@ static func morale_bonus_of(unit: GameUnit) -> int:
 			if rule_name == "Valiant" and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
 					and not AiEv.rule_on_most_models(member, "Valiant"):
 				continue
-			best = maxi(best, int((ed.get("params", {}) as Dictionary).get("morale_bonus", 0)))
-	return best + morale_rating_of(unit)
+			var entry_bonus := int((ed.get("params", {}) as Dictionary).get("morale_bonus", 0))
+			if entry_bonus > best:
+				best = entry_bonus
+				best_name = rule_name
+	return {"bonus": best + morale_rating_of(unit), "name": best_name if not best_name.is_empty() else "Banner"}
 
 
 ## MOR-09 Valiant — the Banner-family share that only counts beyond the distance gate. MAX, never a sum.

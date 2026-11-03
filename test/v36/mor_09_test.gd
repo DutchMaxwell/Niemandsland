@@ -165,3 +165,60 @@ func test_the_ai_charge_estimate_prices_the_valiant_gate() -> void:
 	assert_bool(far > near).override_failure_message(
 		"inside 6\" the Valiant share must not relax the weight (near=%f far=%f)" % [near, far]).is_true()
 	assert_float(old_near).is_equal_approx(far, 0.0001)
+
+
+## FAB-C20/C-F21: the positive morale line names the Banner-family entry that actually paid, not the
+## generic word "Banner". Numbers and the pass target stay put.
+func test_a_valiant_unit_names_valiant_in_the_positive_morale_line() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	var target := _board_unit(1, ["Valiant"])
+	_seed_first_die_three()
+	var passed: bool = await _main._solo_morale_test(target, "Victim", false, "", 10.0, -1.0)
+	assert_bool(passed).override_failure_message(
+		"Valiant over 9\" keeps its +1\n" + _log_text()).is_true()
+	assert_str(_log_text()).override_failure_message(
+		"the line must name Valiant, not Banner (log: %s)" % _log_text()) \
+		.contains("Valiant: Victim gets +1 to morale test rolls (passes on 3+)")
+
+
+func test_hold_the_line_names_itself_in_the_positive_morale_line() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	var target := _board_unit(1, ["Hold the Line"])
+	target.unit_properties["faction_folder"] = "human_defense_force"
+	_seed_first_die_three()
+	var passed: bool = await _main._solo_morale_test(target, "Victim", false, "", 10.0, -1.0)
+	assert_bool(passed).override_failure_message(
+		"Hold the Line keeps its +1 over 9\"\n" + _log_text()).is_true()
+	assert_str(_log_text()).override_failure_message(
+		"the line must name Hold the Line, not Banner (log: %s)" % _log_text()) \
+		.contains("Hold the Line: Victim gets +1 to morale test rolls (passes on 3+)")
+
+
+func test_bravery_names_itself_in_the_positive_morale_line() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	var target := _board_unit(1, ["Bravery"])
+	_seed_first_die_three()
+	var passed: bool = await _main._solo_morale_test(target, "Victim", false, "", 10.0, -1.0)
+	assert_bool(passed).override_failure_message(
+		"Bravery keeps its +1\n" + _log_text()).is_true()
+	assert_str(_log_text()).override_failure_message(
+		"the line must name Bravery, not Banner (log: %s)" % _log_text()) \
+		.contains("Bravery: Victim gets +1 to morale test rolls (passes on 3+)")
+
+
+## The literal Banner entry still says "Banner", and the Morale(X) form keeps the entry's name.
+func test_plain_banner_and_the_morale_rating_form_keep_their_names() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	var plain := _board_unit(1, ["Banner"])
+	_seed_first_die_three()
+	var passed: bool = await _main._solo_morale_test(plain, "Victim", false, "", 10.0, -1.0)
+	assert_bool(passed).is_true()
+	assert_str(_log_text()).contains("Banner: Victim gets +1 to morale test rolls (passes on 3+)")
+	var rated := _board_unit(1, ["Morale(2)", "Hold the Line"], "Rated")
+	rated.unit_properties["faction_folder"] = "human_defense_force"
+	_seed_first_die_three()
+	var rated_passed: bool = await _main._solo_morale_test(rated, "Rated", false, "", 10.0, -1.0)
+	assert_bool(rated_passed).override_failure_message(
+		"Morale(2) + Hold the Line passes on 2+\n" + _log_text()).is_true()
+	assert_str(_log_text()).contains(
+		"Morale(2) + Hold the Line: Rated gets +3 to morale test rolls (passes on 2+)")
