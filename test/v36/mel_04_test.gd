@@ -1,7 +1,7 @@
 extends GdUnitTestSuite
-## Rules 3.6 wave, row MEL-04: a unit whose weapons carry Brace(X) blunts a charge. Every living
-## braced model (host and joined hero alike) takes X Impact dice off the charging unit, floored at 0.
-## Epoch 72 keeps today's dice; a Fatigued braced unit removes nothing.
+## Rules 3.6 wave, row MEL-04: a unit whose weapons carry Brace(X) blunts a charge by X Impact
+## dice ONCE per unit, however many models carry it; host and joined hero alike share the one
+## rating. Epoch 72 keeps today's dice; only a Fatigued braced unit removes nothing.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const INCH := 0.0254
@@ -94,28 +94,28 @@ func _charge(epoch: int, brace: bool, fatigued: bool, hero: bool = false, models
 	await _main._run_ai_melee({"unit": charger, "target": defender, "charge_from_in": 1.0})
 
 
-func test_brace_takes_two_impact_dice_at_epoch_73(timeout := 90000) -> void:
+func test_brace_takes_one_impact_die_at_epoch_73(timeout := 90000) -> void:
 	await _charge(AiActRecorder.EPOCH_73_V36, true, false)
 	assert_int(_impact_dice()) \
-		.override_failure_message("Impact(3) into two Brace(1) models: 3 - 2 = 1 die") \
-		.is_equal(1)
-	assert_int(_line_of("Brace: Defender takes 2 Impact dice off Charger")).is_greater_equal(0)
+		.override_failure_message("Impact(3) into two Brace(1) models: X = 1, so 3 - 1 = 2 dice") \
+		.is_equal(2)
+	assert_int(_line_of("Brace: Defender takes 1 Impact dice off Charger")).is_greater_equal(0)
 	await E2EBoot.settle(get_tree())
 
 
-func test_four_brace_models_take_four_dice_at_epoch_73(timeout := 90000) -> void:
+func test_four_brace_models_take_one_die_at_epoch_73(timeout := 90000) -> void:
 	await _charge(AiActRecorder.EPOCH_73_V36, true, false, false, 4)
 	assert_int(_impact_dice()) \
-		.override_failure_message("Impact(3) into four Brace(1) models: 3 - 4 floors at 0 today") \
-		.is_equal(0)
-	assert_int(_line_of("Brace: Defender takes 4 Impact dice off Charger")).is_greater_equal(0)
+		.override_failure_message("Impact(3) into four Brace(1) models: X = 1, so 3 - 1 = 2 dice") \
+		.is_equal(2)
+	assert_int(_line_of("Brace: Defender takes 1 Impact dice off Charger")).is_greater_equal(0)
 	await E2EBoot.settle(get_tree())
 
 
-func test_a_shaken_braced_unit_loses_the_cut_at_epoch_73(timeout := 90000) -> void:
+func test_a_shaken_braced_unit_keeps_the_cut_at_epoch_73(timeout := 90000) -> void:
 	await _charge(AiActRecorder.EPOCH_73_V36, true, false, false, 2, true)
-	assert_int(_impact_dice()).is_equal(3)
-	assert_int(_line_of("Brace: no effect, Defender is Shaken")).is_greater_equal(0)
+	assert_int(_impact_dice()).is_equal(2)
+	assert_int(_line_of("Brace: Defender takes 1 Impact dice off Charger")).is_greater_equal(0)
 	await E2EBoot.settle(get_tree())
 
 

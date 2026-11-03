@@ -5925,23 +5925,27 @@ fn impact_phase(
     if rule_on(rules_epoch, EPOCH_73_V36) {
         // Rules 3.6 — Counter no longer cuts Impact dice; Brace is the only cut.
         cut_by.counter_models = 0;
-        // The Brace walk, host AND living attached heroes; a Fatigued
-        // or Shaken braced unit removes nothing, and every application logs its own line.
+        // The Brace walk, host AND living attached heroes: the unit's single
+        // rating X, never multiplied by models or carriers. A Fatigued braced
+        // unit removes nothing; Shaken does not switch it off.
         let brace: i64 = std::iter::once(ti).chain(next.attached[ti].iter().copied())
             .filter(|&m| next.alive[m] > 0)
-            .map(|m| { let c = ctx_of(&statics[next.roster.profile[m]], next, m); c.brace_models * c.brace_impact_per_model.unwrap_or(1) })
-            .sum();
-        let braced = next.fatigued[ti] || next.shaken[ti];
+            .map(|m| {
+                let c = ctx_of(&statics[next.roster.profile[m]], next, m);
+                if c.brace_models > 0 { c.brace_impact_per_model.unwrap_or(1) } else { 0 }
+            })
+            .max()
+            .unwrap_or(0);
+        let braced = next.fatigued[ti];
         if brace > 0 {
             if braced {
-                let why = if next.shaken[ti] { "Shaken" } else { "Fatigued" };
-                shot.log.push(format!("Brace: no effect, {} is {}", ut.name, why));
+                shot.log.push(format!("Brace: no effect, {} is Fatigued", ut.name));
             } else {
                 shot.log.push(format!("Brace: {} takes {} Impact dice off {}", ut.name, brace, us.name));
             }
         }
-        cut_by.brace_models = if braced { 0 } else { brace };
-        cut_by.brace_impact_per_model = Some(1);
+        cut_by.brace_models = if braced || brace == 0 { 0 } else { 1 };
+        cut_by.brace_impact_per_model = Some(brace.max(1));
     }
     let pools = crate::dice::impact_pools(&ctx_of_melee(us, next, si, rules_epoch), &cut_by);
     // Rules 3.6 (`EPOCH_73_V36`) — Parry(X): each living carrier model (host

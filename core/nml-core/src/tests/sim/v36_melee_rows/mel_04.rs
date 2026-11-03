@@ -1,6 +1,6 @@
 //! MEL-04 tests (rules 3.6, lane melee): a defender's Brace(X) weapons take X Impact dice off the
-//! charger for EVERY living braced model (host and joined hero alike), floored at 0, from
-//! `EPOCH_73_V36`; epoch 72 keeps today's dice and a Fatigued braced unit removes nothing.
+//! charger ONCE per unit (host and joined hero alike), floored at 0, from `EPOCH_73_V36`; epoch 72
+//! keeps today's dice and a Fatigued braced unit removes nothing.
 use super::super::*;
 use crate::combat::IMPACT_HIT_TARGET;
 use crate::state::Weapon;
@@ -90,9 +90,9 @@ fn charge(
 }
 
 #[test]
-fn brace_takes_two_impact_dice_at_epoch_73() {
+fn brace_takes_one_impact_die_at_epoch_73() {
     let (dice, _) = charge(crate::acts::EPOCH_73_V36, 3, 2, true, false, false);
-    assert_eq!(dice, 1, "Impact(3) into two Brace(1) models: 3 - 2 = 1 die");
+    assert_eq!(dice, 2, "Impact(3) into two Brace(1) models: X = 1, so 3 - 1 = 2 dice");
 }
 
 #[test]
@@ -121,16 +121,16 @@ fn a_control_unit_without_brace_rolls_three_at_both_epochs() {
 }
 
 #[test]
-fn four_brace_models_take_four_dice_at_epoch_73() {
+fn four_brace_models_take_one_die_at_epoch_73() {
     let (dice, lines) = charge(crate::acts::EPOCH_73_V36, 6, 4, true, false, false);
-    assert_eq!(dice, 2, "Impact(6) into four Brace(1) models: 6 - 4 = 2 dice today");
-    assert!(lines.iter().any(|l| l == "Brace: Defender takes 4 Impact dice off Charger"), "{lines:?}");
+    assert_eq!(dice, 5, "Impact(6) into four Brace(1) models: X = 1, so 6 - 1 = 5 dice");
+    assert!(lines.iter().any(|l| l == "Brace: Defender takes 1 Impact dice off Charger"), "{lines:?}");
 }
 
 #[test]
 fn the_log_names_brace_and_its_fatigue_exemption() {
     let (_, lines) = charge(crate::acts::EPOCH_73_V36, 3, 2, true, false, false);
-    assert!(lines.iter().any(|l| l == "Brace: Defender takes 2 Impact dice off Charger"), "{lines:?}");
+    assert!(lines.iter().any(|l| l == "Brace: Defender takes 1 Impact dice off Charger"), "{lines:?}");
     let (_, tired) = charge(crate::acts::EPOCH_73_V36, 3, 2, true, false, true);
     assert!(tired.iter().any(|l| l == "Brace: no effect, Defender is Fatigued"), "{tired:?}");
 }

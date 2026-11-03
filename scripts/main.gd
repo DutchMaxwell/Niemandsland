@@ -8183,15 +8183,16 @@ func _solo_log_counter_first_decision(unit: GameUnit, counter_first: bool) -> vo
 		_log_rule_event(BattleLog.Category.COMBAT, "Counter: %s declines to strike first" % unit.get_name(), true)
 
 
-## Rules 3.6 (`EPOCH_73_V36`) — the alive models of a unit (incl. attached heroes) whose weapons carry
-## Brace(X): each takes X Impact dice off a unit charging it. 0 below 73.
+## Rules 3.6 (`EPOCH_73_V36`) — the single Brace(X) rating of a unit (incl. attached heroes) whose
+## weapons carry Brace: X Impact dice off a unit charging it, ONCE per unit, however many models
+## carry it. 0 below 73 or without a carrier.
 func _solo_brace_models(unit: GameUnit) -> int:
 	if unit == null or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
 		return 0
 	var members: Array = [unit]
 	if unit.has_method("get_attached_heroes"):
 		members = members + unit.get_attached_heroes()
-	var total := 0
+	var best := 0
 	for m in members:
 		var member := m as GameUnit
 		if member == null:
@@ -8204,9 +8205,9 @@ func _solo_brace_models(unit: GameUnit) -> int:
 			weapons = (member.source_data as OPRApiClient.OPRUnit).weapons
 		for w in weapons:
 			if w is Object and AiShooting._has_rule(w, "Brace"):
-				total += alive * maxi(AiShooting._rating_of(w, "Brace"), 1)
+				best = maxi(best, maxi(AiShooting._rating_of(w, "Brace"), 1))
 				break
-	return total
+	return best
 
 
 ## Resolve one side's melee strikes against `defender` and LAND the wounds (Regeneration-bucketed): the
@@ -8867,11 +8868,11 @@ func _solo_charge_impact(charger: GameUnit, defender: GameUnit, human_defends: b
 	var counter_models: int = _solo_counter_models(defender)
 	var brace_cut: int = _solo_brace_models(defender)
 	if brace_cut > 0:
-		if defender.is_fatigued or defender.is_shaken:
+		if defender.is_fatigued:
 			brace_cut = 0
 			if battle_log != null:
-				_log_rule_event(BattleLog.Category.COMBAT, "Brace: no effect, %s is %s" % [
-					defender.get_name(), "Shaken" if defender.is_shaken else "Fatigued"], true)
+				_log_rule_event(BattleLog.Category.COMBAT, "Brace: no effect, %s is Fatigued" % [
+					defender.get_name()], true)
 		elif battle_log != null:
 			_log_rule_event(BattleLog.Category.COMBAT, "Brace: %s takes %d Impact dice off %s" % [
 				defender.get_name(), brace_cut, charger.get_name()], true)

@@ -1,7 +1,7 @@
 extends GdUnitTestSuite
 ## Rules 3.6 wave, row MEL-04e: the AI's Impact estimate sees a defender's Brace cut, so a charge
 ## into a braced unit is priced lower. Epoch 72 keeps today's value; a Fatigued braced defender
-## cuts nothing in the estimate either; a unit without Brace is the control.
+## cuts nothing in the estimate either; a Shaken one keeps the cut; no Brace is the control.
 
 const ATT := {"quality": 4, "impact": 3, "models": 2}
 
@@ -37,11 +37,11 @@ func _brace_unit(models: int, weapon_rules: Array) -> GameUnit:
 	return u
 
 
-func test_the_estimate_sees_two_brace_models_at_epoch_73() -> void:
+func test_the_estimate_sees_one_brace_at_epoch_73() -> void:
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
 	var braced: Dictionary = AiEv.ctx_for(_brace_unit(2, ["Brace(1)"]))
 	var plain: Dictionary = AiEv.ctx_for(_brace_unit(2, []))
-	assert_int(int(braced.get("brace_models", 0))).is_equal(2)
+	assert_int(int(braced.get("brace_models", 0))).is_equal(1)
 	assert_bool(AiEv.impact_ev(ATT, braced) < AiEv.impact_ev(ATT, plain)).is_true()
 
 

@@ -973,8 +973,8 @@ pub fn ravage_ev(att: &Ctx, def: &Ctx) -> f64 {
 }
 
 /// `AiEv.impact_ev` ai_ev.gd:512-529 — the charge's Impact pool (2+ to hit, no
-/// AP) plus the Heavy Impact pool (saves at AP(1)); the defender's Counter and
-/// Brace models strip the HEAVY dice first, defender-optimal.
+/// AP) plus the Heavy Impact pool (saves at AP(1)); the defender's Counter
+/// models and Brace carrier strip the HEAVY dice first, defender-optimal.
 ///
 /// `counter_models` is always 0 in the sim: `BattleSim._ctx_of` calls
 /// `AiEv.ctx_for(unit, in_cover)` and leaves the third argument at its default
@@ -988,10 +988,10 @@ pub fn ravage_ev(att: &Ctx, def: &Ctx) -> f64 {
 /// Fatigued braced defender removes nothing, as in the resolver.
 pub fn impact_ev(att: &Ctx, def: &Ctx) -> f64 {
     let models = att.models.max(0);
-    let brace = if def.fatigued {
+    let brace = if def.fatigued || def.brace_models <= 0 {
         0
     } else {
-        def.brace_models.saturating_mul(def.brace_impact_per_model.unwrap_or(1))
+        def.brace_impact_per_model.unwrap_or(1)
     };
     let counter = def
         .counter_models
