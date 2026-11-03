@@ -34,7 +34,7 @@ func test_every_consolidation_log_line_names_it_outside_the_citation() -> void:
 		"cannot read res://scripts/main.gd").is_not_null()
 	if file == null:
 		return
-	var cite_paren := RegEx.create_from_string("\\([^()]*GF v3\\.5\\.1 p\\.9[^()]*\\)")
+	var cite_paren := RegEx.create_from_string("\\([^()]*%s[^()]*\\)")
 	var checked := 0
 	while not file.eof_reached():
 		var line := file.get_line()
@@ -45,7 +45,7 @@ func test_every_consolidation_log_line_names_it_outside_the_citation() -> void:
 			continue
 		if not line.to_lower().contains("consolidat"):
 			continue
-		if not line.contains("GF v3.5.1 p.9"):
+		if not line.contains("OPRApiClient.rules_cite"):
 			continue
 		checked += 1
 		var outside := cite_paren.sub(line, "", true)
