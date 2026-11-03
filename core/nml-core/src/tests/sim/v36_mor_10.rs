@@ -25,7 +25,7 @@ fn aura_round(epoch: u32, tweak: impl FnOnce(&mut State, &mut Vec<UnitStatic>)) 
     tweak(&mut st, &mut statics);
     let mut shot = ShootResult::default();
     let seams = Seams { rules_epoch: epoch, hero_attach: true, ..Default::default() };
-    tray_morale(&mut st, &statics, 0, false, seams, &mut Tray::seeded(7), &mut shot);
+    tray_morale(&mut st, &statics, 0, false, seams, &mut Tray::seeded(7), &mut shot, None, None);
     (shot.rolls.first().map(|r| r.target), shot.log)
 }
 
