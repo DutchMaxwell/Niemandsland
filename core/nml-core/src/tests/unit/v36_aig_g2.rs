@@ -17,8 +17,14 @@ mod aig_g2 {
 
     /// A carrier whose one 24" rifle prints `rule`, read at `epoch`.
     fn carrier(faction: &str, rule: &str, epoch: u32) -> UnitStatic {
+        carrier_at(faction, rule, epoch, 24)
+    }
+
+    /// The same carrier with the weapon's range spelled out (0 = a melee weapon).
+    fn carrier_at(faction: &str, rule: &str, epoch: u32, range: i64) -> UnitStatic {
         let printed = if rule.is_empty() { String::new() } else { format!("\"{rule}\"") };
         let tpl = HEADER
+            .replace("\"range\":24", &format!("\"range\":{range}"))
             .replace("\"battle_brothers\"", &format!("\"{faction}\""))
             .replace("\"rules\":[]", &format!("\"rules\":[{printed}]"));
         let header = read_act_header(&tpl).expect("HEADER parses");
@@ -28,12 +34,16 @@ mod aig_g2 {
 
     /// The real volley of 64 shots from `us`'s rifle at a lone Defense-5 model `dist` inches away.
     fn volley(us: &UnitStatic, dist: f64) -> crate::dice::ShootResult {
+        volley_vs(us, dist, &Ctx { defense: 5, models: 1, tough: 1, ..Default::default() })
+    }
+
+    /// The same volley at the defender `def`.
+    fn volley_vs(us: &UnitStatic, dist: f64, def: &Ctx) -> crate::dice::ShootResult {
         let p = [us.shoot[0].clone()];
         let att = Ctx { quality: 4, ..Default::default() };
-        let def = Ctx { defense: 5, models: 1, tough: 1, ..Default::default() };
         let strikers = [crate::dice::Shooter { profiles: &p, keep: &[0], attacks: &[64], att: &att, owner: "att" }];
         let mut tray = crate::dice::Tray::seeded(27);
-        crate::dice::resolve_volley_with_tray(&strikers, &def, "Target", dist, dist, true, false, false, false, &mut tray)
+        crate::dice::resolve_volley_with_tray(&strikers, def, "Target", dist, dist, true, false, false, false, &mut tray)
     }
 
     /// Control: the printed Bane keeps both halves, unconditionally.
@@ -87,5 +97,47 @@ mod aig_g2 {
         let plain = volley(&carrier("battle_brothers", "", EPOCH_73_V36), 6.0);
         assert!(!shut.log.iter().any(|l| l.contains("Smash")), "gate shut: {:?}", shut.log);
         assert_eq!(shut.wounds, plain.wounds, "a shut gate changes nothing");
+    }
+
+    fn shaken(defense: i64) -> Ctx {
+        Ctx { defense, models: 1, tough: 1, shaken_or_fatigued: true, ..Default::default() }
+    }
+
+    /// Reap's map params print the widened window: successful saves of 5+ re-roll, no distance gate.
+    #[test]
+    fn a_reap_weapon_stamps_the_entrys_widened_window() {
+        for range in [24, 0] {
+            let us = carrier_at("rebel_guerrillas", "Reap", EPOCH_73_V36, range);
+            let sp = if range > 0 { &us.shoot[0] } else { &us.melee[0] };
+            assert_eq!(sp.bane_low, 5, "the entry's reroll_save_low (range {range})");
+            assert!(sp.bane_over_in < 0.0, "over_in 0 means no distance condition (range {range})");
+        }
+        assert_eq!(carrier("rebel_guerrillas", "Reap", EPOCH_72_PLAYTEST_RULES).shoot[0].bane_low, 0, "epoch 72 stays plain");
+    }
+
+    /// The live volley: a Shaken target re-rolls its successful saves of 5+ and the log names Reap and
+    /// the window; an unshaken one is untouched (the gate is the entry's own condition).
+    #[test]
+    fn the_volley_logs_reaps_widened_window_against_a_shaken_target() {
+        let us = carrier("rebel_guerrillas", "Reap", EPOCH_73_V36);
+        let open = volley_vs(&us, 6.0, &shaken(3));
+        assert!(open.log.iter().any(|l| l.starts_with("Reap:") && l.contains("of 5+")), "{:?}", open.log);
+        let calm = Ctx { defense: 3, models: 1, tough: 1, ..Default::default() };
+        let shut = volley_vs(&us, 6.0, &calm);
+        let plain = volley_vs(&carrier("rebel_guerrillas", "", EPOCH_73_V36), 6.0, &calm);
+        assert!(!shut.log.iter().any(|l| l.contains("Reap")), "gate shut: {:?}", shut.log);
+        assert_eq!(shut.wounds, plain.wounds, "a shut gate changes nothing");
+    }
+
+    /// The same window on a MELEE weapon (most shipped Reap weapons): the real melee resolver.
+    #[test]
+    fn the_melee_strike_logs_reaps_widened_window_against_a_shaken_target() {
+        let us = carrier_at("rebel_guerrillas", "Reap", EPOCH_73_V36, 0);
+        let p = [us.melee[0].clone()];
+        let att = Ctx { quality: 4, ..Default::default() };
+        let strikers = [crate::dice::Shooter { profiles: &p, keep: &[0], attacks: &[64], att: &att, owner: "att" }];
+        let mut tray = crate::dice::Tray::seeded(27);
+        let hit = crate::dice::resolve_melee_with_tray(&strikers, &shaken(3), "Target", false, true, false, &mut tray);
+        assert!(hit.log.iter().any(|l| l.starts_with("Reap:") && l.contains("of 5+")), "{:?}", hit.log);
     }
 }
