@@ -855,7 +855,7 @@ pub(crate) fn tray_breath_attack(
     let landed = shot.absorb(out);
     land_wounds_with(next, ti, landed, seams.tray_exact);
     if shooting_morale_trigger(next, statics, seams, ut, ti, alive_before, wounds_before) {
-        tray_morale_for(next, statics, ti, false, Some("Breath Attack"), seams, tray, shot, None, None);
+        tray_morale_for(next, statics, ti, false, true, Some("Breath Attack"), seams, tray, shot, None, None);
     }
 }
 
@@ -1068,7 +1068,7 @@ fn surprise_strike(
     let landed = shot.absorb(crate::dice::resolve_storm_hits_with_tray(successes, spec.ap, false, false, &def, &ut.name, tray));
     land_wounds_with(next, best, landed, seams.tray_exact);
     if shooting_morale_trigger(next, statics, seams, ut, best, ab, wb) {
-        tray_morale_for(next, statics, best, false, Some("Surprise Attack"), seams, tray, shot, None, None);
+        tray_morale_for(next, statics, best, false, true, Some("Surprise Attack"), seams, tray, shot, None, None);
     }
 }
 
@@ -1387,7 +1387,7 @@ pub(crate) fn tray_storm_attack(
                 let landed = shot.absorb(crate::dice::resolve_storm_hits_with_tray(hits, ap, bane, shred, &def, &ut.name, tray));
                 land_wounds_with(next, best, landed, seams.tray_exact);
                 if shooting_morale_trigger(next, statics, seams, ut, best, alive_before, wounds_before) {
-                    tray_morale_for(next, statics, best, false, Some(&spec.name), seams, tray, shot, None, None);
+                    tray_morale_for(next, statics, best, false, true, Some(&spec.name), seams, tray, shot, None, None);
                 }
             }
         }
@@ -1940,7 +1940,7 @@ fn control_morale_passed(
     }
     let us = &statics[next.roster.profile[ti]];
     let mut ctx = live_morale_ctx(statics, next, ti, false, seams, shot);
-    drop_banner_for_cause(statics, next, ti, false, Some(source.rule), None, None, seams, &mut ctx, shot);
+    drop_banner_for_cause(statics, next, ti, false, true, Some(source.rule), None, None, seams, &mut ctx, shot);
     let (outcome, rolled) = crate::dice::resolve_morale_with_tray(
         &ctx, source.owner, false, false, next.shaken[ti], wounds_left(next, ti), tray,
     );
@@ -6145,10 +6145,14 @@ fn live_morale_ctx(statics: &[UnitStatic], state: &State, i: usize, melee: bool,
 /// the geometry; `None` means the caller could not supply it without inventing
 /// one, so the 3.5 reading stands (do not guess). Great Banner stays with the
 /// cause gate — it is a Utility Buff, not a Valiant-family entry.
+///
+/// MOR-09b: `charged_by_enemy = false` is the melee the unit itself charged and
+/// lost. Melee caused the test, so Banner stays; but the unit was not charged,
+/// so the Valiant share comes out (an explicit state, never the `None` reading).
 #[allow(clippy::too_many_arguments)] // the cause/distance flags join the existing parity args
 fn drop_banner_for_cause(
-    statics: &[UnitStatic], state: &State, i: usize, melee: bool, cause: Option<&str>,
-    over_in: Option<f64>, charge_from_in: Option<f64>, seams: Seams,
+    statics: &[UnitStatic], state: &State, i: usize, melee: bool, charged_by_enemy: bool,
+    cause: Option<&str>, over_in: Option<f64>, charge_from_in: Option<f64>, seams: Seams,
     ctx: &mut Ctx, shot: &mut ShootResult,
 ) {
     if !rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) || state.shaken[i] { return; }
@@ -6165,6 +6169,21 @@ fn drop_banner_for_cause(
         if great_banner != 0 {
             ctx.morale_bonus -= great_banner;
             shot.log.push(format!("[Great Banner] {}: no +{} against {} (only shooting or melee)", us.name, great_banner, cause));
+        }
+        return;
+    }
+    if !charged_by_enemy {
+        // MOR-09b: the unit itself charged and lost. Melee caused the test, so
+        // Banner stays; the Valiant family does not — the unit was not charged.
+        let vt = us.ctx.valiant_bonus.min(banner).max(0);
+        if vt > 0 {
+            ctx.morale_bonus -= vt;
+            let line = format!(
+                "[Banner] {}: no +{vt} — it charged, it was not charged (Valiant needs a shot or a charge)",
+                us.name
+            );
+            trace_rule("morale", "Banner", &line);
+            shot.log.push(line);
         }
         return;
     }
@@ -6202,15 +6221,15 @@ fn tray_morale(
     over_in: Option<f64>,
     charge_from_in: Option<f64>,
 ) {
-    tray_morale_for(state, statics, i, melee, None, seams, tray, shot, over_in, charge_from_in);
+    tray_morale_for(state, statics, i, melee, true, None, seams, tray, shot, over_in, charge_from_in);
 }
 
 /// `tray_morale` with its cause: `None` = shooting or melee, `Some(rule)` =
 /// any other rule that forced the test (`drop_banner_for_cause`).
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn tray_morale_for(
-    state: &mut State, statics: &[UnitStatic], i: usize, melee: bool, cause: Option<&str>,
-    seams: Seams, tray: &mut Tray, shot: &mut ShootResult,
+    state: &mut State, statics: &[UnitStatic], i: usize, melee: bool, charged_by_enemy: bool,
+    cause: Option<&str>, seams: Seams, tray: &mut Tray, shot: &mut ShootResult,
     over_in: Option<f64>, charge_from_in: Option<f64>,
 ) {
     if !morale_side_alive(state, i, seams) {
@@ -6218,7 +6237,7 @@ pub(crate) fn tray_morale_for(
     }
     let us = &statics[state.roster.profile[i]];
     let mut ctx = live_morale_ctx(statics, state, i, melee, seams, shot);
-    drop_banner_for_cause(statics, state, i, melee, cause, over_in, charge_from_in, seams, &mut ctx, shot);
+    drop_banner_for_cause(statics, state, i, melee, charged_by_enemy, cause, over_in, charge_from_in, seams, &mut ctx, shot);
     // EPOCH_39_MORALE_RATING — rules-must-log (main.gd:8596-8602): the test
     // that adds the rating names it, once per drawn die. A Shaken auto-fail
     // draws no die and adds nothing, so it stays silent.
@@ -9899,8 +9918,15 @@ fn resolve_with(
                         // (:8116-8118), where D1-B5a still asked the
                         // expected-value oracle for the outcome.
                         if !rule_on(seams.rules_epoch, EPOCH_65_MELEE_TRUTH) || morale_side_alive(&next, li, seams) {
-                            let charged_from = if li == si { None } else { Some(charge_from_in) };
-                            tray_morale(&mut next, statics, li, true, seams, tray, shot, None, charged_from);
+                            // MOR-09b: the loser's own charge keeps Banner but drops the
+                            // Valiant share; only a unit that WAS charged keeps the band.
+                            if li == si {
+                                tray_morale_for(&mut next, statics, li, true, false, None,
+                                    seams, tray, shot, None, None);
+                            } else {
+                                tray_morale(&mut next, statics, li, true, seams, tray, shot, None,
+                                    Some(charge_from_in));
+                            }
                         }
                     }
                     // Coverage wave — growth markers (Defensive Frenzy):
@@ -10056,7 +10082,7 @@ fn resolve_with(
             if let Some((tray, shot)) = dice.as_mut() {
                 let us = &statics[pi_s];
                 if shooting_morale_trigger(&next, statics, seams, us, si, alive_before, wounds_before) {
-                    tray_morale_for(&mut next, statics, si, false, Some("Dangerous terrain"), seams, tray, shot, None, None);
+                    tray_morale_for(&mut next, statics, si, false, true, Some("Dangerous terrain"), seams, tray, shot, None, None);
                 }
             }
         }
