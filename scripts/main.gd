@@ -3298,6 +3298,21 @@ func hotseat_off_turn_drag(unit: GameUnit) -> bool:
 	_show_toast(text)
 	return true
 
+
+## Rules 3.6 (Fable A6/F6): a human unit that has already ATTACKED this activation is spent — a later
+## free drag would let one activation both keep Hold's shot bonus and advance. Lock the move (the
+## caller filters plain clicks) and name the refusal once.
+func attacked_unit_drag_refused(unit: GameUnit) -> bool:
+	if unit == null or opr_army_manager == null \
+			or opr_army_manager.game_phase != OPRArmyManager.GamePhase.PLAYING:
+		return false
+	if not unit.is_activated:
+		return false
+	var text := "%s has already activated this round — it cannot move now" % unit.get_name()
+	_log_rule_event(BattleLog.Category.MOVEMENT, text)
+	_show_toast(text)
+	return true
+
 ## (Re)build the SoloController for the currently designated AI slot (setup wires TurnManager once).
 func _ensure_solo_controller() -> void:
 	# #196 belt-and-braces: in multiplayer the controller exists only for an EXPLICITLY

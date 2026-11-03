@@ -1529,7 +1529,14 @@ func _snapback_off_turn_drag() -> bool:
 	if main == null or not main.has_method("hotseat_off_turn_drag"):
 		return false
 	var gu: GameUnit = _drag_unit_of(_drag_anchor_object)
-	if gu == null or not bool(main.call("hotseat_off_turn_drag", gu)):
+	if gu == null:
+		return false
+	var snap := bool(main.call("hotseat_off_turn_drag", gu))
+	# Fable A6/F6: a unit that already attacked this activation is spent — its later drag snaps back.
+	# Only a REAL move counts, so a plain click on an activated unit logs no refusal.
+	if not snap and _drag_moved_at_all() and main.has_method("attacked_unit_drag_refused"):
+		snap = bool(main.call("attacked_unit_drag_refused", gu))
+	if not snap:
 		return false
 	for obj in _selected_objects:
 		if not is_instance_valid(obj) or not _drag_start_positions.has(obj):
@@ -1541,6 +1548,18 @@ func _snapback_off_turn_drag() -> bool:
 		if obj is RigidBody3D:
 			obj.freeze = false
 	return true
+
+
+## True when a dragged base cleared the same 0.1" floor `_on_units_dropped` uses for a real move.
+func _drag_moved_at_all() -> bool:
+	for obj in _selected_objects:
+		if not is_instance_valid(obj) or not _drag_start_positions.has(obj):
+			continue
+		var start: Vector3 = _drag_start_positions[obj]
+		var offset := Vector2(obj.global_position.x - start.x, obj.global_position.z - start.z)
+		if offset.length() * METERS_TO_INCHES > 0.1:
+			return true
+	return false
 
 
 ## Clear every per-drag field: the end of an ordinary drop, or right after a snap-back.
