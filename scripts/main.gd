@@ -4948,61 +4948,26 @@ func _solo_resolve_one_cast(cast: Dictionary) -> void:
 	var boost := int(cast.get("boost", 0))
 	var interference := int(cast.get("interference", 0))
 	var base_target := int(cast.get("base_target", AiSpell.CAST_BASE_TARGET))
-	# NML-006 casting_mod: active tokens like "-3 to casting rolls" (Burn the Heretic) shift the
-	# caster's roll target — applied BEFORE announce/boost/interference so every preview shows the
-	# true number; [2,6] clamp (a 1 always fails, a 6 always casts). Spent right after the cast die.
-	var casting_mod := 0
-	var cast_mod_notes: PackedStringArray = []
-	for crd in AiSpell.mods_for(_solo_mods_of_chain(caster), "casting", false):
-		casting_mod += int((crd as Dictionary).get("casting_mod", 0))
-		cast_mod_notes.append("%s %+d" % [str((crd as Dictionary).get("spell", "")),
-			int((crd as Dictionary).get("casting_mod", 0))])
-	# Coverage wave — Spell Conduit: a friendly non-Shaken conduit within its range gives +1 to
-	# casting rolls (the position-proxy half is a registry-noted approximation).
+	var conduit_mod := 0
 	if solo_controller != null and opr_army_manager != null:
 		var cpid := int(caster.unit_properties.get("player_id", 0))
 		_solo_log_shaken_lenders(cpid)
-		for u in opr_army_manager.get_game_units_for_player(cpid):
-			var cu := u as GameUnit
-			if cu == null or cu == caster or cu.get_alive_count() == 0 or SoloController.unit_in_reserve(cu):
-				continue
-			var found := false
-			for e in RulesRegistry.unit_rules_of_primitive(cu, "Spell Conduit"):
-				var sp: Dictionary = (e as Dictionary).get("params", {})
-				# NML-981: measured base edge to base edge (nearest models) like every other ranged
-				# check — the unit-centre reading denied legal conduits on wide bases (the AI's
-				# conduit-origin sweep already measures edges; NML-206 precedent).
-				var d := solo_controller.nearest_melee_gap_in(cu, caster)
-				if d > float(sp.get("range_in", 12.0)):
-					continue
-				# NML-936 (v3.5.3 audit): "Friendly casters may only use this rule if this unit isn't
-				# Shaken" — the condition now comes from the rule's own params instead of a blanket
-				# hardcoded skip, and an in-range conduit that is sitting it out says so (rules-must-log)
-				# instead of vanishing from the sum without a word.
-				if bool(sp.get("requires_not_shaken", true)) and cu.is_shaken:
-					if battle_log != null:
-						_log_rule_event(BattleLog.Category.COMBAT,
-							"%s: %s is Shaken — its conduit does not help %s cast" % [
-								str((e as Dictionary)["name"]), cu.get_name(), caster.get_name()], true)
-					continue
-				casting_mod += int(sp.get("casting_mod", 1))
-				cast_mod_notes.append("%s %+d" % [str((e as Dictionary)["name"]), int(sp.get("casting_mod", 1))])
-				# Rules-must-log (#782): name the rule BY NAME, the conduit, and the
-				# origin the cast rides — the conduit's own position.
-				if battle_log != null and solo_controller != null:
-					_log_rule_event(BattleLog.Category.COMBAT,
-						"%s: %s casts as if standing at %s (%s)" % [
-							str((e as Dictionary)["name"]), caster.get_name(), cu.get_name(),
-							str(solo_controller.unit_centre(cu))], true)
-				found = true
-				break
-			if found:
-				break
-	# MOR-15 — a WEAPON-borne "Spell Amplifier" lifts the BEARER's own casting rolls from 73.
-	var amplifier := AiSpell.spell_amplifier_mod(caster)
-	if amplifier != 0:
-		casting_mod += amplifier
-		cast_mod_notes.append("Spell Amplifier %+d" % amplifier)
+		var conduit := solo_controller.caster_conduit(caster)
+		for sh in conduit.get("shaken", []):
+			var se := sh as Dictionary
+			if battle_log != null:
+				_log_rule_event(BattleLog.Category.COMBAT, "%s: %s is Shaken — its conduit does not help %s cast" % [
+					str((se["rule"] as Dictionary)["name"]), (se["unit"] as GameUnit).get_name(), caster.get_name()], true)
+		if conduit.has("unit"):
+			var cu := conduit["unit"] as GameUnit
+			conduit_mod = int(conduit.get("mod", 0))
+			if battle_log != null:
+				_log_rule_event(BattleLog.Category.COMBAT, "%s: %s casts as if standing at %s (%s)" % [
+					str((conduit["rule"] as Dictionary)["name"]), caster.get_name(), cu.get_name(),
+					str(solo_controller.unit_centre(cu))], true)
+	var cast_net := SoloController.caster_casting_net(caster, conduit_mod)
+	var casting_mod := int(cast_net["net"])
+	var cast_mod_notes: PackedStringArray = cast_net["notes"]
 	if casting_mod != 0:
 		base_target = clampi(base_target - casting_mod, 2, 6)
 		if battle_log != null:
@@ -12845,7 +12810,8 @@ func _run_human_cast(unit: GameUnit, member: GameUnit, entry: Dictionary, picked
 	for h in ai_helpers:
 		ai_pool += int((h as Dictionary)["tokens"])
 	if ai_pool > 0:
-		interference = AiSpell.plan_interference(float(threshold), ai_pool, boost)
+		var caster_target := solo_controller.caster_cast_target(member)
+		interference = AiSpell.plan_interference(float(threshold), ai_pool, boost, caster_target)
 		if interference > 0:
 			for d in SoloController._draw_aura_tokens(ai_helpers, interference):
 				var dd := d as Dictionary
@@ -12856,7 +12822,7 @@ func _run_human_cast(unit: GameUnit, member: GameUnit, entry: Dictionary, picked
 				_log_rule_event(BattleLog.Category.COMBAT,
 					"NACHTMAHR interferes with %d token%s — your cast roll worsens to %d+%s" % [
 					interference, ("" if interference == 1 else "s"),
-					AiSpell.cast_target(boost, interference, AiSpell.CAST_BASE_TARGET), _solo_aura_pool_note()], true)
+					AiSpell.cast_target(boost, interference, caster_target), _solo_aura_pool_note()], true)
 	_solo_refresh_caster_markers()
 	await _solo_resolve_one_cast({"caster": member, "caster_unit": unit, "spell": entry,
 		"name": spell_name, "targets": targets, "boost": boost, "interference": interference,
