@@ -91,8 +91,8 @@ func test_purge_ap_reaches_the_live_spell_save_at_epoch_73() -> void:
 	var main := await _cast(AiActRecorder.EPOCH_73_V36, ["Purge"], 3, [6, 6, 6], true)
 	var text := _log_text(main)
 	assert_str(text).override_failure_message(
-		"Purge's AP(+2) must move the live spell save from Defense 4+ to 2+ (log: %s)" % text.strip_edges()) \
-		.contains("Target saves on 2+")
+		"Purge's AP(+2) must move the live spell save from 4+ to 6+ (log: %s)" % text.strip_edges()) \
+		.contains("Target saves on 6+")
 	assert_str(text).override_failure_message("rules-must-log: Purge must be named (log: %s)" % text.strip_edges()) \
 		.contains("Purge +2 AP vs Shaken")
 
