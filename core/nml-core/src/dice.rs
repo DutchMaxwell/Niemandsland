@@ -1088,7 +1088,7 @@ pub fn resolve_volley_leg(
         evasive_boost_fired |= def.evasive_alias;
         // EPOCH_73_V36 — Unstoppable ignores only the minus from OTHER sources; the shooter's own
         // rules' modifiers stay outside the clamp (0 below 73 = one clamp over the whole sum).
-        let art = if att.artillery { att.artillery_shooter_hit_bonus.unwrap_or(crate::combat::ARTILLERY_SHOOTER_HIT_BONUS) } else { 0 };
+        let art = if att.artillery { art_shooter_bonus } else { 0 };
         let over9 = if mod_dist_in > LONG_RANGE_IN { p.hit_bonus_over9 + art } else { 0 };
         let own = if att.v36_rules { p.hit_bonus + over9 + att.growth_hit_mod + upr_hit + ma + gp + im } else { 0 };
         if (p.unstoppable || att.unstoppable_mark || att.unstoppable_aura) && own < 0 {
