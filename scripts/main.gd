@@ -11720,6 +11720,7 @@ func _run_ai_melee(report: Dictionary) -> void:
 	var charger_last: bool = _solo_unit_has_unwieldy(unit, target)
 	if charger_last and battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "Unwieldy: %s strikes last on the charge" % unit.get_name(), true)
+	_solo_log_unwieldy_mixed(unit, charger_last)
 	for phase_slot in range(2):
 		if (phase_slot == 0) != charger_last:
 			# — AI strikes (unit + attached heroes; only models within 2" strike; Deadly multiplies wounds). The AI
@@ -14753,6 +14754,7 @@ func _run_human_melee(attacker: GameUnit, target: GameUnit, auto: bool = false, 
 	var h_charger_last: bool = _solo_unit_has_unwieldy(attacker, target)
 	if h_charger_last and battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "Unwieldy: %s strikes last on the charge" % attacker.get_name(), true)
+	_solo_log_unwieldy_mixed(attacker, h_charger_last)
 	var ai_struck: bool = ai_counter
 	for phase_slot in range(2):
 		if (phase_slot == 0) != h_charger_last:
@@ -22815,17 +22817,27 @@ func _solo_hazardous_bearer(owner_unit: GameUnit, weapon: String) -> ModelInstan
 	return null
 
 
-## AIG-G2 (rules 3.6, EPOCH_73_V36): a rule printed on a living member's MELEE weapon — the shipped
-## lists carry Unwieldy there, where the unit-level reader never looks.
-func _solo_member_melee_weapon_has(member: GameUnit, rule_name: String) -> bool:
-	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 or member == null or member.get_alive_count() <= 0:
-		return false
-	if member.source_type != "opr" or not member.source_data is OPRApiClient.OPRUnit:
-		return false
-	for w in (member.source_data as OPRApiClient.OPRUnit).weapons:
-		if w is Object and AiShooting._field_i(w, "range_value", 0) <= 0 and AiShooting._has_rule(w, rule_name):
-			return true
-	return false
+## AIG-G2 (rules 3.6, EPOCH_73_V36): do "all", "some" or "none" of a living unit's own melee weapons carry
+## `rule_name`? The strike order is per unit, so only "all" moves it (the core's `unwieldy`/`unwieldy_mixed`).
+func _solo_melee_weapon_cover(unit: GameUnit, rule_name: String) -> String:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 or unit == null or unit.get_alive_count() <= 0:
+		return "none"
+	if unit.source_type != "opr" or not unit.source_data is OPRApiClient.OPRUnit:
+		return "none"
+	var total := 0
+	var carrying := 0
+	for w in (unit.source_data as OPRApiClient.OPRUnit).weapons:
+		if w is Object and AiShooting._field_i(w, "range_value", 0) <= 0 and AiShooting._field_i(w, "count", 1) > 0:
+			total += 1
+			carrying += 1 if AiShooting._has_rule(w, rule_name) else 0
+	return "none" if carrying == 0 else ("all" if carrying == total else "some")
+
+
+## AIG-G2: a mixed Unwieldy loadout keeps the normal strike order and says why (once per charge).
+func _solo_log_unwieldy_mixed(unit: GameUnit, charger_last: bool) -> void:
+	if not charger_last and battle_log != null and _solo_melee_weapon_cover(unit, "Unwieldy") == "some":
+		battle_log.log_event(BattleLog.Category.COMBAT,
+			"Unwieldy: %s has it on some weapons only - normal strike order (per-weapon order not modelled)" % unit.get_name(), true)
 
 
 ## Unwieldy (resolver wave A — "strikes last when charging"): any chain member carrying the rule
@@ -22836,8 +22848,8 @@ func _solo_unit_has_unwieldy(unit: GameUnit, defender: GameUnit = null) -> bool:
 	for m in _solo_joined_chain(unit):
 		if not RulesRegistry.unit_rules_of_primitive(m as GameUnit, "Unwieldy").is_empty():
 			return true
-		if _solo_member_melee_weapon_has(m as GameUnit, "Unwieldy"):
-			return true
+	if _solo_melee_weapon_cover(unit, "Unwieldy") == "all":
+		return true
 	# GH #325 — a charger granted Unwieldy by the defender's attackers-side token strikes last
 	# exactly like a printed carrier (melee-scoped read).
 	return AiSpell.granted_rules_of(unit, defender, false).has("Unwieldy")

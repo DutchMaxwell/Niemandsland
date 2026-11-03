@@ -973,7 +973,7 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 		target_raw -= 1
 	if bool(profile.get("imprecise", false)):   # AIG-G2: Precise's mirror (the flag is epoch-gated at build)
 		target_raw += 1
-	target =AiCombatMath.modified_hit_target(target_raw, 0)
+	target = AiCombatMath.modified_hit_target(target_raw, 0)
 	var hits := attacks * AiCombatMath.success_chance(target)
 	# MEL-09e-fix (rules 3.6): a Fatigued melee striker's sixes still hit but fire no
 	# rule, so every on-6 bonus hit is muted — the resolver's empty `trig` twin.

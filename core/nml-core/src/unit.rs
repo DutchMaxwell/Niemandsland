@@ -190,6 +190,8 @@ pub struct Ctx {
     /// the CHARGER's strikes swap BEHIND the defender's strike-back
     /// (main.gd:8073-8078). Counter and Impact keep their slots.
     pub unwieldy: bool,
+    /// AIG-G2 (`EPOCH_73_V36`): Unwieldy on SOME melee weapons only — normal order, the charge logs it.
+    pub unwieldy_mixed: bool,
     /// `Impact(X)` / `Heavy Impact(X)` / `Ravage(X)` ratings — read only by the
     /// melee side (`impact_ev` / `ravage_ev`, ai_ev.gd:497-529).
     pub impact: i64,
@@ -3334,6 +3336,10 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     } else {
         None
     };
+    // AIG-G2 (`EPOCH_73_V36`): Unwieldy is a WEAPON rule, but the strike order is per unit, so the unit
+    // strikes last only when EVERY melee weapon it carries has it; a mix keeps the normal order (logged).
+    let melee = || p.weapons.iter().filter(|w| w.range <= 0.0 && w.count > 0);
+    let (melee_weapons, unwieldy_weapons) = (melee().count(), melee().filter(|w| weapon_has(w, "Unwieldy")).count());
     // Rules 3.6 (`EPOCH_73_V36`) — `Parry(X)`'s dice per living carrier model.
     let parry_dice = if rule_on(rules_epoch, EPOCH_73_V36) {
         let by_name = if unit_rule_active(reg, p, "Parry") { unit_rating(&p.special_rules, "Parry") } else { 0 };
@@ -3416,9 +3422,8 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         // one case this misses, and it is named in `resolve_melee_with_tray`.
         unwieldy: !rules_of_primitive(reg, p, "Unwieldy").is_empty()
             || p.attached_hero_rules.iter().any(|hr| has_exact_rule(hr, "Unwieldy"))
-            // AIG-G2 (`EPOCH_73_V36`): the rule is printed on a melee weapon of the unit itself.
-            || (rule_on(rules_epoch, EPOCH_73_V36)
-                && p.weapons.iter().any(|w| w.range <= 0.0 && w.count > 0 && weapon_has(w, "Unwieldy"))),
+            || (rule_on(rules_epoch, EPOCH_73_V36) && unwieldy_weapons > 0 && unwieldy_weapons == melee_weapons),
+        unwieldy_mixed: rule_on(rules_epoch, EPOCH_73_V36) && unwieldy_weapons > 0 && unwieldy_weapons < melee_weapons,
         impact: unit_rating(&p.special_rules, "Impact"),
         heavy_impact: unit_rating(&p.special_rules, "Heavy Impact"),
         ravage: unit_rating(&p.special_rules, "Ravage"),
