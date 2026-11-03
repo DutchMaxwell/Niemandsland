@@ -10649,8 +10649,9 @@ func unit_centre(unit: GameUnit) -> Vector3:
 ## Nearest base-to-base pair between ANY alive model of `a` (incl. attached heroes) and ANY of `b`, via
 ## the shared SeparationChecker shapes. `honor_height_reach` applies GF p.9's 4" vertical melee reach
 ## (false is used only to phrase a height-blocked refusal — see nearest_melee_gap_in below). Returns
-## {"gap_in": edge gap or INF, "height_in": that pair's vertical separation in inches}.
-func nearest_melee_pair_info(a: GameUnit, b: GameUnit, honor_height_reach: bool) -> Dictionary:
+## {"gap_in": edge gap or INF, "height_in": that pair's vertical separation in inches}. `start_xz` (network id ->
+## world XZ, FAB-B4) measures a model of `a` from where it stood before a hand drag: same shape, moved centre.
+func nearest_melee_pair_info(a: GameUnit, b: GameUnit, honor_height_reach: bool, start_xz: Dictionary = {}) -> Dictionary:
 	var a_models := _moving_models(a)
 	var b_models := _moving_models(b)
 	var out := {"gap_in": INF, "height_in": 0.0}
@@ -10660,6 +10661,9 @@ func nearest_melee_pair_info(a: GameUnit, b: GameUnit, honor_height_reach: bool)
 		var ashape := SeparationChecker.shape_for_model(am as ModelInstance)
 		if ashape == null:
 			continue
+		var was: Variant = start_xz.get(int((am as ModelInstance).node.get_meta("network_id", 0)))
+		if was != null:
+			ashape.center = was
 		var ay: float = (am as ModelInstance).node.global_position.y
 		for bm in b_models:
 			var bshape := SeparationChecker.shape_for_model(bm as ModelInstance)
@@ -10687,10 +10691,10 @@ func nearest_melee_gap_in(a: GameUnit, b: GameUnit) -> float:
 ## D-GATE6 (rules 3.6): the distance a charge is measured from — before any model moves, closest model to
 ## closest model, base edge to base edge (the core's `modifier_distance_in`, no height filter). Below
 ## EPOCH_73_V36 the intent's unit-centre distance `centre_in` stands; a pair with no live shapes keeps it too.
-func charge_from_in(unit: GameUnit, target: GameUnit, centre_in: float) -> float:
+func charge_from_in(unit: GameUnit, target: GameUnit, centre_in: float, start_xz: Dictionary = {}) -> float:
 	if target == null or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
 		return centre_in
-	var gap: float = nearest_melee_pair_info(unit, target, false)["gap_in"]
+	var gap: float = nearest_melee_pair_info(unit, target, false, start_xz)["gap_in"]
 	return gap if gap != INF else centre_in
 
 

@@ -5473,12 +5473,15 @@ fn melee_parts(statics: &[UnitStatic], state: &State, i: usize, ti: usize, seams
 /// MEL-PAR-B14 (`EPOCH_73_V36`, table twin `_run_ai_melee`/`_run_human_melee`): a defender whose
 /// living chain (host plus joined heroes) carries no melee profile at all — an Assault weapon's melee
 /// copy counts, `unit::melee_profiles_at` builds it at this epoch — cannot strike back and is not
-/// made Fatigued by the fight.
+/// made Fatigued by the fight. FAB-B4 (MEL-02b, the table's `_solo_strike_back_block` "spent" read): a
+/// Limited melee profile the member already spent counts as absent, so an all-spent chain is "no melee".
 fn chain_has_no_melee(statics: &[UnitStatic], state: &State, i: usize) -> bool {
     std::iter::once(i)
         .chain(state.attached[i].iter().copied())
         .filter(|&mi| state.alive[mi] > 0)
-        .all(|mi| statics[state.roster.profile[mi]].melee.is_empty())
+        .all(|mi| {
+            statics[state.roster.profile[mi]].melee.iter().all(|p| p.limited && state.limited_used[mi].iter().any(|n| n == &p.name))
+        })
 }
 
 /// FAB-B7 — a joined chain's Fear(X): the host's own rating PLUS every LIVING attached
