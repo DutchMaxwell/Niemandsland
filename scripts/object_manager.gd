@@ -1535,7 +1535,7 @@ func _snapback_off_turn_drag() -> bool:
 	# Fable A6/F6: a unit that already attacked this activation is spent — its later drag snaps back.
 	# Only a REAL move counts, so a plain click on an activated unit logs no refusal.
 	if not snap and _drag_moved_at_all() and main.has_method("attacked_unit_drag_refused"):
-		snap = bool(main.call("attacked_unit_drag_refused", gu))
+		snap = bool(main.call("attacked_unit_drag_refused", gu, _drag_distance_in()))
 	if not snap:
 		return false
 	for obj in _selected_objects:
@@ -1548,6 +1548,18 @@ func _snapback_off_turn_drag() -> bool:
 		if obj is RigidBody3D:
 			obj.freeze = false
 	return true
+
+
+## Longest base offset of this drag in inches (the Hit & Run step's 3" limit reads it).
+func _drag_distance_in() -> float:
+	var longest := 0.0
+	for obj in _selected_objects:
+		if not is_instance_valid(obj) or not _drag_start_positions.has(obj):
+			continue
+		var start: Vector3 = _drag_start_positions[obj]
+		longest = maxf(longest, Vector2(obj.global_position.x - start.x,
+			obj.global_position.z - start.z).length() * METERS_TO_INCHES)
+	return longest
 
 
 ## True when a dragged base cleared the same 0.1" floor `_on_units_dropped` uses for a real move.

@@ -143,3 +143,48 @@ func test_the_post_melee_containment_drag_still_works(timeout := 240000) -> void
 	assert_vector(node.global_position) \
 		.override_failure_message("a melee survivor's containment drag was refused (log: %s)" % _log_text().strip_edges()) \
 		.is_equal_approx(from + Vector3(0, 0, 3.0 * INCH), Vector3.ONE * 0.0001)
+
+
+## Lead 11:17: the Hit & Run family lets a HUMAN make its one post-shot step by dragging - 2.5" stands
+## and is logged like the AI step, a second drag in the same round is refused.
+func test_a_human_hit_and_run_shooter_makes_its_one_post_shot_step(timeout := 240000) -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	_controller_without_reply()
+	var gun := _gun(Vector3.ZERO, "Gunner")
+	gun.unit_properties["special_rules"] = ["Artillery", "Hit & Run Shooter"]
+	RulesRegistry.reset_cache()
+	var foe := _foe(Vector3(17.0 * INCH, 0, 0))
+	await _main._run_human_attack(gun, foe, false)
+	await E2EBoot.settle(get_tree())
+	var node: Node3D = (gun.models[0] as ModelInstance).node
+	var from := node.global_position
+	await _drag(node, from, from + Vector3(0, 0, 2.5 * INCH))
+	assert_vector(node.global_position) \
+		.override_failure_message("a Hit & Run Shooter's 2.5\" step was refused (log: %s)" % _log_text().strip_edges()) \
+		.is_equal_approx(from + Vector3(0, 0, 2.5 * INCH), Vector3.ONE * 0.0001)
+	assert_str(_log_text()) \
+		.override_failure_message("the human step must be logged like the AI one") \
+		.contains("Hit & Run: Gunner steps up to 2.5\" after shooting")
+	var after_step := node.global_position
+	await _drag(node, after_step, after_step + Vector3(0, 0, 2.0 * INCH))
+	assert_vector(node.global_position) \
+		.override_failure_message("a SECOND post-shot step must be refused (log: %s)" % _log_text().strip_edges()) \
+		.is_equal_approx(after_step, Vector3.ONE * 0.0001)
+
+
+## The 3" ceiling: a first 4" post-shot drag is refused even for a bearer.
+func test_a_human_hit_and_run_step_longer_than_three_inches_is_refused(timeout := 240000) -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	_controller_without_reply()
+	var gun := _gun(Vector3.ZERO, "Gunner")
+	gun.unit_properties["special_rules"] = ["Artillery", "Hit & Run Shooter"]
+	RulesRegistry.reset_cache()
+	var foe := _foe(Vector3(17.0 * INCH, 0, 0))
+	await _main._run_human_attack(gun, foe, false)
+	await E2EBoot.settle(get_tree())
+	var node: Node3D = (gun.models[0] as ModelInstance).node
+	var from := node.global_position
+	await _drag(node, from, from + Vector3(0, 0, 4.0 * INCH))
+	assert_vector(node.global_position) \
+		.override_failure_message("a 4\" Hit & Run step was allowed (log: %s)" % _log_text().strip_edges()) \
+		.is_equal_approx(from, Vector3.ONE * 0.0001)
