@@ -592,6 +592,7 @@
 "test/unit_utils_test.gd": 0.1,
 "test/update_checker_test.gd": 0.2,
 "test/v36/fab_b7_test.gd": 0.1,
+"test/v36/fab_l2a_test.gd": 0.15,
 "test/v36/mel_02_test.gd": 0.1,
 "test/v36/mel_02b_test.gd": 0.1,
 "test/v36/mel_05_test.gd": 0.1,
