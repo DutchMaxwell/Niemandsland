@@ -771,6 +771,8 @@ pub struct ShootProfile {
     pub strafing: bool,
     pub ignores_cover: bool,
     pub precise: bool,
+    /// AIG-G2 (rules 3.6, read from `EPOCH_73_V36`): the weapon carries Imprecise — -1 to hit.
+    pub imprecise: bool,
     pub surge: bool,
     /// SHO-18: the alias name that stamped `surge` ("" = the weapon's own Surge).
     pub surge_alias_rule: String,
@@ -1033,6 +1035,7 @@ impl ShootProfile {
             && self.strafing == o.strafing
             && self.ignores_cover == o.ignores_cover
             && self.precise == o.precise
+            && self.imprecise == o.imprecise
             && self.surge == o.surge
             && self.rending == o.rending
             && self.bane == o.bane
@@ -1525,6 +1528,7 @@ fn base_profile(w: &Weapon, attacks: i64, range_in: i64) -> ShootProfile {
         strafing: weapon_strafes(w),
         ignores_cover: weapon_has(w, "Ignores Cover"),
         precise: weapon_has(w, "Precise"),
+        imprecise: weapon_has(w, "Imprecise"),
         surge: weapon_has(w, "Surge"),
         rending: weapon_has(w, "Rending"),
         // Lacerate is a straight data-alias of Bane — ai_shooting.gd:126-129.
@@ -3411,7 +3415,10 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         // name answers for the heroes — an alias carried ONLY by a hero is the
         // one case this misses, and it is named in `resolve_melee_with_tray`.
         unwieldy: !rules_of_primitive(reg, p, "Unwieldy").is_empty()
-            || p.attached_hero_rules.iter().any(|hr| has_exact_rule(hr, "Unwieldy")),
+            || p.attached_hero_rules.iter().any(|hr| has_exact_rule(hr, "Unwieldy"))
+            // AIG-G2 (`EPOCH_73_V36`): the rule is printed on a melee weapon of the unit itself.
+            || (rule_on(rules_epoch, EPOCH_73_V36)
+                && p.weapons.iter().any(|w| w.range <= 0.0 && w.count > 0 && weapon_has(w, "Unwieldy"))),
         impact: unit_rating(&p.special_rules, "Impact"),
         heavy_impact: unit_rating(&p.special_rules, "Heavy Impact"),
         ravage: unit_rating(&p.special_rules, "Ravage"),

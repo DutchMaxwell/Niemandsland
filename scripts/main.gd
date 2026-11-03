@@ -6360,9 +6360,13 @@ func _solo_cover_defense(target: GameUnit, base_defense: int) -> int:
 func _solo_hits(faces: Array, to_hit: int, profile: Dictionary, dist_in: float, target: GameUnit = null, charging: bool = false, roller: String = "", charge_from_in: float = 0.0) -> int:
 	# `to_hit` is the caller's UNCLAMPED summed target (D21): Precise's flat +1 folds into that sum and the
 	# one clamp happens here, so a penalty the old per-step clamp swallowed still counts against the +1.
-	to_hit = AiCombatMath.modified_hit_target(to_hit, 1 if bool(profile.get("precise", false)) else 0)
+	# AIG-G2 (EPOCH_73_V36): a weapon-borne Imprecise is Precise's mirror, folded into the same sum.
+	var imprecise: bool = bool(profile.get("imprecise", false))
+	to_hit = AiCombatMath.modified_hit_target(to_hit, (1 if bool(profile.get("precise", false)) else 0) - (1 if imprecise else 0))
 	if bool(profile.get("precise", false)) and battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "Precise: +1 to hit", true)
+	if imprecise and battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT, "Imprecise: -1 to hit", true)
 	var hits: int = AiCombatMath.count_hits(faces, to_hit)
 	if bool(profile.get("relentless", false)):
 		var rel_bonus: int = AiCombatMath.relentless_bonus_hits(faces, dist_in)
@@ -22811,6 +22815,19 @@ func _solo_hazardous_bearer(owner_unit: GameUnit, weapon: String) -> ModelInstan
 	return null
 
 
+## AIG-G2 (rules 3.6, EPOCH_73_V36): a rule printed on a living member's MELEE weapon — the shipped
+## lists carry Unwieldy there, where the unit-level reader never looks.
+func _solo_member_melee_weapon_has(member: GameUnit, rule_name: String) -> bool:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 or member == null or member.get_alive_count() <= 0:
+		return false
+	if member.source_type != "opr" or not member.source_data is OPRApiClient.OPRUnit:
+		return false
+	for w in (member.source_data as OPRApiClient.OPRUnit).weapons:
+		if w is Object and AiShooting._field_i(w, "range_value", 0) <= 0 and AiShooting._has_rule(w, rule_name):
+			return true
+	return false
+
+
 ## Unwieldy (resolver wave A — "strikes last when charging"): any chain member carrying the rule
 ## makes the whole charging unit resolve its strikes AFTER the defender's strike-back.
 func _solo_unit_has_unwieldy(unit: GameUnit, defender: GameUnit = null) -> bool:
@@ -22818,6 +22835,8 @@ func _solo_unit_has_unwieldy(unit: GameUnit, defender: GameUnit = null) -> bool:
 		return false
 	for m in _solo_joined_chain(unit):
 		if not RulesRegistry.unit_rules_of_primitive(m as GameUnit, "Unwieldy").is_empty():
+			return true
+		if _solo_member_melee_weapon_has(m as GameUnit, "Unwieldy"):
 			return true
 	# GH #325 — a charger granted Unwieldy by the defender's attackers-side token strikes last
 	# exactly like a printed carrier (melee-scoped read).

@@ -1177,9 +1177,15 @@ pub fn resolve_volley_leg(
             faces: faces.clone(),
             owner: sh.owner.into(),
         });
-        let count_target = if p.precise { fold_hit(def.modifier_sum, raw, 1).1 } else { target };
+        // AIG-G2: a weapon-borne Imprecise is Precise's mirror, the -1 read from `EPOCH_73_V36`.
+        let imprecise = att.v36_rules && p.imprecise;
+        let weapon_mod = p.precise as i64 - imprecise as i64;
+        let count_target = if weapon_mod != 0 { fold_hit(def.modifier_sum, raw, weapon_mod).1 } else { target };
         if p.precise {
             out.log.push(format!("Precise: +1 to hit on {}'s volley", sh.owner));
+        }
+        if imprecise {
+            out.log.push(format!("Imprecise: -1 to hit on {}'s volley", sh.owner));
         }
         if p.hazardous {
             let ones = faces.iter().filter(|&&f| f == 1).count() as i64;
@@ -2167,9 +2173,15 @@ pub fn resolve_melee_leg(
             }
             // Precise scores one better than it ROLLS — `_solo_hits` :4405-4406
             // applies the +1 when counting, so the recorded target stays raw.
-            let count_target = if p.precise { fold_hit(def.modifier_sum, raw, 1).1 } else { target };
+            // AIG-G2: a weapon-borne Imprecise is Precise's mirror, the -1 read from `EPOCH_73_V36`.
+            let imprecise = sh.att.v36_rules && p.imprecise;
+            let weapon_mod = p.precise as i64 - imprecise as i64;
+            let count_target = if weapon_mod != 0 { fold_hit(def.modifier_sum, raw, weapon_mod).1 } else { target };
             if p.precise {
                 out.log.push(format!("Precise: +1 to hit on {}'s strikes", sh.owner));
+            }
+            if imprecise {
+                out.log.push(format!("Imprecise: -1 to hit on {}'s strikes", sh.owner));
             }
             let mut hits = faces_to_hits(&faces, count_target as u8) as i64;
             // SHO-18 (rules 3.6): a Surge ALIAS fires only on a charge over 6"; a non-charging

@@ -6400,6 +6400,9 @@ fn tray_charge_with_self_wounds(
     // strikes, measured at 0" (the two units are in base contact).
     tray_vs_marks(statics, next, si, ti, 0.0, seams, tray, shot);
     let charger_last = charger_strikes_last(statics, next, si, seams);
+    if charger_last && rule_on(seams.rules_epoch, EPOCH_73_V36) {
+        shot.log.push(format!("Unwieldy: {} strikes last on the charge", statics[next.roster.profile[si]].name));
+    }
     let strike_back_set = if counter_first { StrikeSet::NonCounter } else { StrikeSet::All };
     for slot in 0..2 {
         if (slot == 0) != charger_last {

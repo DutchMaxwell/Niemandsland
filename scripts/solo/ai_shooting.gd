@@ -140,6 +140,8 @@ static func _profile(w: Variant, attacks: int, range_in: int) -> Dictionary:
 		# save step then uses the uncovered Defense, like Blast/Indirect.
 		"ignores_cover": _has_rule(w, "Ignores Cover"),
 		"precise": _has_rule(w, "Precise"),   # army-book weapon rule: +1 to hit when attacking
+		# AIG-G2 (rules 3.6, EPOCH_73_V36): Imprecise is Precise's mirror — -1 to hit when attacking.
+		"imprecise": _has_rule(w, "Imprecise") and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36,
 		# Wave-2 weapon rules (GF/AoF Advanced Rules v3.5.1): Surge (+1 hit per unmodified 6, any range),
 		# Rending (unmodified 6-to-hit → AP(+4) on those hits), Bane (defender re-rolls unmodified Defense
 		# 6s), Thrust (charging melee → +1 to hit and AP(+1)). Pre-parsed here like the wave-1 facets so the
