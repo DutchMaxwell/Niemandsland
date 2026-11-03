@@ -1030,8 +1030,6 @@ mod v36_mor_06;
 mod v36_mor_07;
 mod v36_mor_19;
 mod v36_mor_19b;
-mod v36_mor_spellfacet_a;
-mod v36_mor_spellfacet_b;
 mod v36_morale;
 mod v36_ravage_rating;
 mod v36_shoot;
