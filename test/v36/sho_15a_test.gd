@@ -14,7 +14,8 @@ class Probe extends "res://scripts/main.gd":
 			_purpose: String = "") -> Array:
 		return faces
 
-	func _solo_morale_test(_unit: GameUnit, _owner: String, _melee: bool = false, _cause: String = "") -> bool:
+	func _solo_morale_test(_unit: GameUnit, _owner: String, _melee: bool = false, _cause: String = "",
+			_over_in: float = -1.0, _charge_from_in: float = -1.0) -> bool:
 		morale_tests += 1
 		return true
 
