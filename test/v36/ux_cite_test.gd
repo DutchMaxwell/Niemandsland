@@ -106,7 +106,8 @@ func test_player_visible_citations_name_the_rules_version() -> void:
 
 ## The lead correction: a call site never hardcodes the system; it passes the game's own system.
 func test_no_call_site_hardcodes_a_system() -> void:
-	var call_re := RegEx.create_from_string("rules_cite\\(\"")
+	var call_re := RegEx.create_from_string("rules_cite\\(")
+	var literal_re := RegEx.create_from_string("rules_cite\\(\"")
 	var bad: Array[String] = []
 	var checked := 0
 	for path in FILES:
@@ -120,7 +121,8 @@ func test_no_call_site_hardcodes_a_system() -> void:
 			var code := _code_without_comment(line)
 			if call_re.search(code) != null:
 				checked += 1
-				bad.append("%s:%d -> %s" % [path, line_no, code.strip_edges()])
+				if literal_re.search(code) != null:
+					bad.append("%s:%d -> %s" % [path, line_no, code.strip_edges()])
 		file.close()
 	assert_int(checked).override_failure_message(
 		"found no rules_cite call site to check").is_greater(0)

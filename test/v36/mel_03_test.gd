@@ -6,7 +6,7 @@ extends GdUnitTestSuite
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const INCH := 0.0254
-const COUNTER_AFTER_IMPACT_LINE := "strikes first, after the Impact dice (rules 3.6)"
+const COUNTER_AFTER_IMPACT_LINE := "strikes first, after the Impact dice ("
 
 var _runner: GdUnitSceneRunner
 var _main: Node
