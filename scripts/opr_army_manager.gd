@@ -3172,7 +3172,7 @@ func can_embark(unit: GameUnit, transport: GameUnit) -> Dictionary:
 		return {"ok": false, "reason": "%s is itself embarked" % transport.get_name()}
 	var need := unit_embark_spaces(unit)
 	if need == TransportState.UNTRANSPORTABLE:
-		return {"ok": false, "reason": "%s cannot be transported (Tough too high — GF v3.5.1 Transport(X))" % unit.get_name()}
+		return {"ok": false, "reason": "%s cannot be transported (Tough too high — %s Transport(X))" % [unit.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))]}
 	var free := cap - transport_used_spaces(transport)
 	if need > free:
 		return {"ok": false, "reason": "not enough space in %s (needs %d, %d free of Transport(%d))" % [transport.get_name(), need, free, cap]}

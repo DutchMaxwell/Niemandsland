@@ -738,10 +738,10 @@ static func create_dead_model_menu(unit_dead_count: int = 1, selection_dead_coun
 
 
 ## The only menu an EMBARKED model offers (NML-105, the dead-model mirror): disembark its unit.
-static func create_embarked_model_menu(transport_name: String) -> Array[RadialMenuItem]:
+static func create_embarked_model_menu(transport_name: String, system: String = "") -> Array[RadialMenuItem]:
 	var items: Array[RadialMenuItem] = []
 	items.append(RadialMenuItem.new("disembark", "Disembark", "▢", true,
-		"Leave %s (GF v3.5.1 Transport: the unit is placed fully within 6\")" % transport_name))
+		"Leave %s (%s Transport: the unit is placed fully within 6\")" % [transport_name, OPRApiClient.rules_cite(system)]))
 	# #338: staying inside is a legal choice — it spends the activation so the round can close.
 	items.append(RadialMenuItem.new("stay_embarked", "Stay aboard", "▣", true,
 		"Spend the activation inside %s — the unit stays embarked this round" % transport_name))
@@ -762,7 +762,7 @@ static func create_regiment_menu(game_unit: GameUnit, remaining: int, pool_max: 
 	# the pool, removing/reviving models from the back rank.
 	var wounds_label = "W %d/%d" % [remaining, pool_max]
 	var can_adjust: bool = pool_max > 0
-	items.append(RadialMenuItem.new("regiment_wounds", wounds_label, "W", can_adjust, "Open the wounds dialog (AoF:R p.9 pooled-tough counter)"))
+	items.append(RadialMenuItem.new("regiment_wounds", wounds_label, "W", can_adjust, "Open the wounds dialog (%s pooled-tough counter)" % OPRApiClient.rules_cite(RulesRegistry.system_of_unit(game_unit))))
 
 	# Cycle frontage (mirrors B) — convenient from the menu.
 	items.append(RadialMenuItem.new("regiment_frontage", "Frontage", "⊧", true, "Cycle models-per-rank (5 → 4 → 3 → 2 → 1)"))

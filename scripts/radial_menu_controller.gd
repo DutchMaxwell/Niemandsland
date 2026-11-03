@@ -247,7 +247,7 @@ func open_menu(screen_position: Vector2, selected_objects: Array) -> void:
 			if emb_tr != null:
 				context["disembark_unit"] = emb_unit
 				radial_menu.open(screen_position, RadialMenu.create_embarked_model_menu(
-					str(emb_tr.unit_properties.get("name", "transport"))), context)
+					str(emb_tr.unit_properties.get("name", "transport")), RulesRegistry.system_of_unit(emb_unit)), context)
 		return
 
 	var game_unit = UnitUtils.get_game_unit(first_obj)

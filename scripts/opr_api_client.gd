@@ -673,13 +673,28 @@ static func rules_core_version(system_abbrev: String) -> String:
 	return version
 
 
-## O-CITE: the player-visible rules citation for a scope - "GF 3.6", "AoF 3.6", "GF/AoF 3.6" -
-## version from rules_core_version (major.minor only), never a second constant.
-static func rules_cite(scope: String) -> String:
-	match scope.to_lower():
-		"gf": return "GF " + _major_minor(rules_core_version("gf"))
-		"aof": return "AoF " + _major_minor(rules_core_version("aof"))
-		_: return "GF/AoF " + _major_minor(rules_core_version("gf"))
+## O-CITE: the player-visible rules citation for the CURRENT GAME's system - "GF 3.6", "AoF 3.6",
+## "GFF 3.5", "AoFS 3.5", "AoF:R 3.5" - version from THAT system's rules_core_version (major.minor
+## only), never a second constant. Callers pass RulesRegistry.system_of_unit(unit) for unit-scoped
+## text and the army's game_system_abbrev (normalised) for game-scoped text. "gf/aof" stays for the
+## legacy two-book wording.
+static func rules_cite(system_abbrev: String) -> String:
+	var system := system_abbrev.strip_edges().to_lower()
+	if system == "gf/aof":
+		return "GF/AoF " + _major_minor(rules_core_version("gf"))
+	if system.is_empty() or rules_core_version(system).is_empty():
+		system = "gf"
+	return _rules_system_label(system) + " " + _major_minor(rules_core_version(system))
+
+
+## The book label of a normalised system slug (the abbreviations the comments use).
+static func _rules_system_label(system: String) -> String:
+	match system:
+		"gff": return "GFF"
+		"aof": return "AoF"
+		"aofs": return "AoFS"
+		"aofr": return "AoF:R"
+		_: return "GF"
 
 
 ## D5 (b), 27.10.2026: a book on OTHER rules is imported WITH a warning — the player may
