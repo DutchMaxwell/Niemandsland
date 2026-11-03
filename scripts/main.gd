@@ -9509,8 +9509,8 @@ func _solo_bane_facet_name(striker: GameUnit, profile_range: int) -> String:
 	return ""
 
 
-## The target's Regeneration / medic (GF Advanced Rules v3.5.1: "When a unit where all models have this
-## rule takes wounds, roll one die for each. On a 5+ it is ignored."; the Battle Brothers "Medical
+## The target's Regeneration / medic (GF Advanced Rules v3.5.1, rule Regeneration: a wound on the unit
+## rolls one die per wound taken, and each 5+ ignores it; the Battle Brothers "Medical
 ## Training" item grants Regeneration Aura): roll one REAL tray die per incoming wound, each 5+ ignores
 ## it. AP never affects this roll (AP only modifies Defense rolls). The battle log always states the
 ## outcome ("rolls N regeneration dice — M ignored"), so a 0-ignore roll is still visible. Returns the
@@ -9562,8 +9562,8 @@ func _solo_apply_regeneration(target: GameUnit, wounds: int, from_spell: bool = 
 ## The wound-ignore ROLL TARGET for a unit's Regeneration-family rule, or 0 when it has none:
 ##   • Regeneration / Medical Training (Regeneration Aura) — ignore each wound on a 5+ (GF v3.5.1),
 ##     triggered by ANY bearing model (incl. a per-model medic item);
-##   • Self-Repair (wave-4 army-book rule, Robot Legions — official Army Forge text: "When a unit where
-##     all models have this rule takes wounds, roll one die for each. On a 6+ it is ignored.") — 6+, and
+##   • Self-Repair (wave-4 army-book rule, Robot Legions — rule Self-Repair: when a unit where all
+##     models have it takes wounds, roll one die per wound and each 6+ ignores it) — 6+, and
 ##     ALL models must carry it.
 ## Regeneration wins when both are present (the lower, more generous target). One truth with AiEv.ctx_for.
 ## Wave 5: the 5+/6+ targets are DATA (RulesRegistry ignore_target for the unit's system/faction; the
