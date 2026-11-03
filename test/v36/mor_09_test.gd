@@ -183,7 +183,7 @@ func _melee_unit(pid: int, unit_name: String, x: float, models: int, weapon: Str
 func test_a_valiant_charger_inside_the_band_keeps_its_bonus(timeout := 90000) -> void:
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
 	_main.solo_ai_slots = {1: true, 2: true}
-	var charger := _melee_unit(2, "Charger", 0.0, 1, "Blade", ["Valiant"], 2, 9, 0)
+	var charger := _melee_unit(2, "Charger", 0.0, 1, "Blade", ["Valiant"], 3, 9, 0)
 	var defender := _melee_unit(1, "Defender", 1.0, 1, "Spikes", [], 6, 9, 30)
 	_main.seed_tray_rng(7)
 	await _main._run_ai_melee({"unit": charger, "target": defender, "charge_from_in": 1.0})
