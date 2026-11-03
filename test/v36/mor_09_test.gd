@@ -1,0 +1,167 @@
+extends GdUnitTestSuite
+## Rules 3.6 wave, row MOR-09b: the table twin and the AI estimate gate only the Valiant-family
+## share by distance. A plain Banner keeps its +1 inside the band; Valiant loses it inside 9"/6".
+## "Valiant" also needs a strict model majority from epoch 73; the 3.5 spellings keep their shape.
+
+const Boot := preload("res://test/e2e/e2e_boot.gd")
+
+var _runner: GdUnitSceneRunner
+var _main: Node
+var _roots: Array
+var _epoch_before: int
+var _unit_seq := 0
+
+
+func before_test() -> void:
+	_epoch_before = AiActRecorder.rules_epoch
+	Boot.arm_harness_mode()
+	_roots = Boot.root_children(get_tree())
+	_runner = scene_runner(Boot.MAIN_SCENE)
+	_main = _runner.scene()
+	await _runner.simulate_frames(4)
+	_main.solo_ai_slots = {2: true}
+	_main._ensure_solo_controller()
+	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
+	_main._solo_batch = true
+
+
+func after_test() -> void:
+	AiActRecorder.rules_epoch = _epoch_before
+	Boot.free_stray_root_nodes(get_tree(), _roots)
+	_main = null
+	_runner = null
+
+
+## A Quality 4 unit of `models` models for player 1, registered on the board.
+func _board_unit(models: int, rules: Array, unit_name: String = "Victim") -> GameUnit:
+	var spots: Array = []
+	for i in range(models):
+		spots.append(Vector3(0.05 + 0.03 * i, 0, 0))
+	var u := Boot.make_unit(_main, 1, unit_name, spots)
+	u.unit_properties["game_system"] = "gf"
+	u.unit_properties["special_rules"] = rules
+	_main.opr_army_manager.game_units[u.unit_id] = u
+	return u
+
+
+## A scene-free unit for the static reads and the AI estimate (real registry, no hand-written params).
+func _pure_unit(rules: Array, models: int = 1, faction: String = "") -> GameUnit:
+	var u := GameUnit.new()
+	_unit_seq += 1
+	u.unit_id = "pure%d" % _unit_seq
+	u.unit_properties = {"player_id": 1, "name": "Pure", "quality": 4, "defense": 4,
+		"game_system": "gf", "special_rules": rules}
+	if not faction.is_empty():
+		u.unit_properties["faction_folder"] = faction
+	for i in range(models):
+		var m := ModelInstance.new()
+		m.is_alive = true
+		u.models.append(m)
+	return u
+
+
+## Seeds the tray so its first die is a 3: a pass on 3+ (with the +1), a fail on 4+ (without).
+func _seed_first_die_three() -> void:
+	var rng := RandomNumberGenerator.new()
+	for candidate in range(200):
+		rng.seed = candidate
+		if rng.randi_range(1, 6) == 3:
+			_main.seed_tray_rng(candidate)
+			return
+	fail("no seed rolls a 3 first")
+
+
+func _log_text() -> String:
+	var out := ""
+	for entry in _main.battle_log.entries():
+		out += str(entry["text"]) + "\n"
+	return out
+
+
+func _melee_profile() -> Dictionary:
+	return {"name": "Blades", "attacks": 6, "ap": 0, "deadly": 0, "range": 0, "rules": []}
+
+
+func test_a_plain_banner_unit_shot_at_five_keeps_its_bonus_at_epoch_73() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	var target := _board_unit(1, ["Banner"])
+	_seed_first_die_three()
+	var passed: bool = await _main._solo_morale_test(target, "Victim", false, "", 5.0, -1.0)
+	assert_bool(passed).override_failure_message(
+		"a plain Banner keeps its +1 inside 9\"\n" + _log_text()).is_true()
+	assert_str(_log_text()).contains("gets +1 to morale test rolls")
+	assert_str(_log_text()).not_contains("Valiant counts only beyond the gate")
+
+
+func test_valiant_shot_at_five_loses_the_bonus_at_epoch_73() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	var target := _board_unit(1, ["Valiant"])
+	_seed_first_die_three()
+	var passed: bool = await _main._solo_morale_test(target, "Victim", false, "", 5.0, -1.0)
+	assert_bool(passed).override_failure_message(
+		"Valiant inside 9\" must lose the share\n" + _log_text()).is_false()
+	assert_bool(target.is_shaken).is_true()
+	assert_str(_log_text()).contains("Valiant counts only beyond the gate")
+
+
+func test_valiant_shot_at_ten_keeps_the_bonus_at_epoch_73() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	var target := _board_unit(1, ["Valiant"])
+	_seed_first_die_three()
+	var passed: bool = await _main._solo_morale_test(target, "Victim", false, "", 10.0, -1.0)
+	assert_bool(passed).override_failure_message(
+		"Valiant over 9\" keeps the +1\n" + _log_text()).is_true()
+	assert_str(_log_text()).contains("gets +1 to morale test rolls")
+	assert_str(_log_text()).not_contains("Valiant counts only beyond the gate")
+
+
+func test_a_minority_valiant_carrier_gets_nothing_at_epoch_73() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	var majority := _pure_unit(["Valiant"], 1)
+	assert_int(SoloController.valiant_bonus_of(majority)).is_equal(1)
+	assert_int(SoloController.morale_bonus_of(majority)).is_equal(1)
+	var minority := _pure_unit(["Valiant"], 1)
+	minority.unit_properties["attached_heroes"] = [_pure_unit([], 1)]
+	assert_int(SoloController.valiant_bonus_of(minority)).is_equal(0)
+	assert_int(SoloController.morale_bonus_of(minority)).is_equal(0)
+
+
+func test_epoch_72_keeps_the_old_valiant_reading() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
+	var target := _board_unit(1, ["Valiant"])
+	_seed_first_die_three()
+	var passed: bool = await _main._solo_morale_test(target, "Victim", false, "", 5.0, -1.0)
+	assert_bool(passed).override_failure_message(
+		"epoch 72 keeps the unconditional Valiant reading\n" + _log_text()).is_true()
+	assert_str(_log_text()).contains("gets +1 to morale test rolls")
+	assert_str(_log_text()).not_contains("Valiant counts only beyond the gate")
+
+
+func test_below_epoch_73_the_ai_estimate_keeps_the_plain_banner_read() -> void:
+	var epoch := AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
+	var alias := AiEv.ctx_for(_pure_unit(["Hive Bond"], 1, "alien_hives"))
+	var plain := AiEv.ctx_for(_pure_unit(["Banner"], 1))
+	AiActRecorder.rules_epoch = epoch
+	assert_int(int(alias.get("morale_bonus", -1))).is_equal(0)
+	assert_int(int(alias.get("valiant_bonus", -1))).is_equal(0)
+	assert_int(int(plain.get("morale_bonus", -1))).is_equal(1)
+
+
+func test_the_ai_charge_estimate_prices_the_valiant_gate() -> void:
+	var epoch := AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	var us := AiEv.ctx_for(_pure_unit(["Valiant"], 1))
+	assert_int(int(us.get("morale_bonus", 0))).is_equal(1)
+	assert_int(int(us.get("valiant_bonus", 0))).is_equal(1)
+	var our_melee := [_melee_profile()]
+	var their_melee := [_melee_profile()]
+	var them := AiEv.ctx_for(_pure_unit([], 1))
+	var near: float = AiEv.charge_score(our_melee, us, their_melee, them, 5.0)
+	var far: float = AiEv.charge_score(our_melee, us, their_melee, them, 10.0)
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
+	var old_near: float = AiEv.charge_score(our_melee, us, their_melee, them, 5.0)
+	AiActRecorder.rules_epoch = epoch
+	assert_bool(far > near).override_failure_message(
+		"inside 6\" the Valiant share must not relax the weight (near=%f far=%f)" % [near, far]).is_true()
+	assert_float(old_near).is_equal_approx(far, 0.0001)
