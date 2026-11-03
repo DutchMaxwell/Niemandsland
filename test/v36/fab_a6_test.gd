@@ -166,7 +166,7 @@ func test_a_human_hit_and_run_shooter_makes_its_one_post_shot_step(timeout := 24
 		.is_equal_approx(from + Vector3(0, 0, 2.5 * INCH), Vector3.ONE * 0.0001)
 	assert_str(_log_text()) \
 		.override_failure_message("the human step must be logged like the AI one") \
-		.contains("Hit & Run: Gunner steps up to 2.5\" after shooting")
+		.contains("Hit & Run Shooter: Gunner steps up to 2.5\" after shooting")
 	var after_step := node.global_position
 	await _drag(node, after_step, after_step + Vector3(0, 0, 2.0 * INCH))
 	assert_vector(node.global_position) \
