@@ -161,7 +161,8 @@ func test_the_planner_menu_at_epoch_73_offers_only_hold_or_a_plain_advance() -> 
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
 	var gunner := _unit(2, "Gunner", [Vector3.ZERO], ["Cumbersome"], [{"name": "Rifle", "range": 24}])
 	var foe := _unit(1, "Foe", [Vector3(18 * IN2M, 0, 0)])
-	var state := _state([gunner, foe], [Vector3(10 * IN2M, 0, 0)])
+	var marker := Vector3(10 * IN2M, 0, 0)
+	var state := _state([gunner, foe], [marker])
 	for menu in [AiPlanner.candidates(state, "gunner"), AiPlanner.candidates_wide(state, "gunner")]:
 		assert_int(_of_kind(menu, AiDecision.Action.RUSH).size()) \
 			.override_failure_message("rules 3.6: no Rush candidate for a Cumbersome unit (%s)" % str(menu)) \
@@ -174,10 +175,23 @@ func test_the_planner_menu_at_epoch_73_offers_only_hold_or_a_plain_advance() -> 
 		assert_int(shooting_advances.size()) \
 			.override_failure_message("rules 3.6: an advance never carries a shot (%s)" % str(menu)) \
 			.is_equal(0)
-		assert_bool(_of_kind(menu, AiDecision.Action.ADVANCE).size() > 0
-			or not _of_kind(menu, AiDecision.Action.HOLD).is_empty()) \
-			.override_failure_message("the pick must stay Hold (maybe shooting) or a plain Advance (%s)" % str(menu)) \
+		assert_bool(not _of_kind(menu, AiDecision.Action.HOLD).is_empty()) \
+			.override_failure_message("the menu keeps a Hold row (%s)" % str(menu)) \
 			.is_true()
+		var advances := _of_kind(menu, AiDecision.Action.ADVANCE)
+		assert_int(advances.size()) \
+			.override_failure_message("exactly one plain Advance per marker (%s)" % str(menu)) \
+			.is_equal(1)
+		assert_bool((advances[0] as Dictionary).get("dest") == marker) \
+			.override_failure_message("the plain Advance walks to the marker (%s)" % str(menu)) \
+			.is_true()
+		assert_bool(not (advances[0] as Dictionary).has("shoot")) \
+			.override_failure_message("the plain Advance carries no shot (%s)" % str(menu)) \
+			.is_true()
+	# same input -> same row
+	assert_bool(AiPlanner.candidates(state, "gunner") == AiPlanner.candidates(state, "gunner")) \
+		.override_failure_message("rules 3.6: the hand menu is deterministic") \
+		.is_true()
 
 
 func test_the_planner_menu_at_epoch_72_still_offers_a_rush() -> void:
