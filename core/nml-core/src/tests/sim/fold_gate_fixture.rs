@@ -66,12 +66,12 @@ use super::*;
         let (statics, mut st) = fold_legs("Enhanced Hold the Line");
         let mut tray = Tray::seeded(5);
         let mut mshot = ShootResult::default();
-        tray_morale(&mut st.clone(), &statics, 0, false, Seams { rules_epoch: 5, ..Default::default() }, &mut tray, &mut mshot);
+        tray_morale(&mut st.clone(), &statics, 0, false, Seams { rules_epoch: 5, ..Default::default() }, &mut tray, &mut mshot, None, None);
         let on = mshot.rolls[0].target;
         st.buffs[0].clear();
         let mut tray_b = Tray::seeded(5);
         let mut mshot_b = ShootResult::default();
-        tray_morale(&mut st, &statics, 0, false, Seams { rules_epoch: 5, ..Default::default() }, &mut tray_b, &mut mshot_b);
+        tray_morale(&mut st, &statics, 0, false, Seams { rules_epoch: 5, ..Default::default() }, &mut tray_b, &mut mshot_b, None, None);
         assert_eq!(on, (mshot_b.rolls[0].target - HOLD_THE_LINE_BOOST_MORALE_BONUS).clamp(2, 6),
             "epoch 5: the printed morale_bonus 2 joins the same [2,6]-clamped net");
 
@@ -80,11 +80,11 @@ use super::*;
         let (statics2, mut st2) = fold_legs("Enhanced Hold the Line");
         let mut tray2 = Tray::seeded(5);
         let mut mshot2 = ShootResult::default();
-        tray_morale(&mut st2.clone(), &statics2, 0, false, Seams { rules_epoch: 4, ..Default::default() }, &mut tray2, &mut mshot2);
+        tray_morale(&mut st2.clone(), &statics2, 0, false, Seams { rules_epoch: 4, ..Default::default() }, &mut tray2, &mut mshot2, None, None);
         st2.buffs[0].clear();
         let mut tray2_b = Tray::seeded(5);
         let mut mshot2_b = ShootResult::default();
-        tray_morale(&mut st2, &statics2, 0, false, Seams { rules_epoch: 4, ..Default::default() }, &mut tray2_b, &mut mshot2_b);
+        tray_morale(&mut st2, &statics2, 0, false, Seams { rules_epoch: 4, ..Default::default() }, &mut tray2_b, &mut mshot2_b, None, None);
         assert_eq!(
             mshot2.rolls[0].target, mshot2_b.rolls[0].target,
             "rules_epoch 4 gets none of the buff — buffed and unbuffed targets match"

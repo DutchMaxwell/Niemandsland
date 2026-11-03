@@ -657,3 +657,129 @@ mod mor_spellfacet_b {
         }
     }
 }
+
+/// Row MOR-09: "Valiant" resolves as the Banner primitive; at Epoch 73 the
+/// Banner share counts only over the 9" shot / 6" charge gate. Built through
+/// the REAL registry so the stamp and the gate are the live ones.
+mod mor_09 {
+    use super::super::*;
+    use crate::acts::{EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36};
+    use crate::dice::{ShootResult, Tray};
+    use crate::io::Seams;
+    use crate::sim::tray_morale_for;
+    use crate::state::Profile;
+    use crate::unit::{capture_reads_for_epoch, UnitStatic};
+
+    fn banner_profile(rule: &str, faction: &str) -> Profile {
+        Profile {
+            cost: 0,
+            unit_id: "b".into(),
+            name: "b".into(),
+            quality: 4,
+            defense: 4,
+            tough: 1,
+            wounds_max: vec![1],
+            model_count: 1,
+            weapons: vec![],
+            special_rules: vec![rule.into()],
+            caster_value: 0,
+            base_radius: 0.0,
+            base_shape: String::new(),
+            base_w_mm: 0.0,
+            base_d_mm: 0.0,
+            game_system: "gf".into(),
+            faction_folder: faction.into(),
+            item_grants: vec![],
+            attached_hero_rules: vec![],
+            move_bands: crate::state::MoveBands::default(),
+        }
+    }
+
+    fn seed_rolling_a_three() -> i64 {
+        (0..500).find(|&s| Tray::seeded(s).roll(1)[0] == 3).expect("some seed rolls a 3")
+    }
+
+    fn run_profile(p: &Profile, melee: bool, over_in: Option<f64>, charge_from_in: Option<f64>, epoch: u32) -> (i64, bool) {
+        let mut reg = Registries::new(&repo_root());
+        let us = UnitStatic::build_for(&mut reg, p, epoch);
+        let reads = capture_reads_for_epoch(&mut reg, p, epoch);
+        let mut st = crate::sim::tests::four_unit_line();
+        st.morale_bonus[2] = reads.morale_bonus;
+        let statics = vec![us; 4];
+        let mut tray = Tray::seeded(seed_rolling_a_three());
+        let mut shot = ShootResult::default();
+        let seams = Seams { rules_epoch: epoch, ..Seams::default() };
+        tray_morale_for(&mut st, &statics, 2, melee, None, seams, &mut tray, &mut shot, over_in, charge_from_in);
+        let die = shot.rolls.iter().find(|r| r.count == 1).expect("the morale die is drawn");
+        (die.target, st.shaken[2])
+    }
+
+    fn run_banner(rule: &str, faction: &str, melee: bool, over_in: Option<f64>, charge_from_in: Option<f64>, epoch: u32) -> (i64, bool) {
+        run_profile(&banner_profile(rule, faction), melee, over_in, charge_from_in, epoch)
+    }
+
+    #[test]
+    fn valiant_resolves_through_the_registry_like_hold_the_line() {
+        let p = banner_profile("Valiant", "human_defense_force");
+        let mut reg = Registries::new(&repo_root());
+        assert_eq!(capture_reads_for_epoch(&mut reg, &p, EPOCH_73_V36).morale_bonus, 1);
+    }
+
+    #[test]
+    fn old_banner_names_drop_inside_the_shot_gate_at_epoch_73() {
+        for (rule, faction) in [("Hold the Line", "human_defense_force"), ("Hive Bond", "alien_hives")] {
+            let (target, _) = run_banner(rule, faction, false, Some(4.0), None, EPOCH_73_V36);
+            assert_eq!(target, 4, "{rule} inside 9\": no Banner +1");
+        }
+    }
+
+    #[test]
+    fn valiant_gate_covers_shots_and_charges_at_epoch_73() {
+        for (melee, over, charge, expected) in [
+            (false, Some(4.0), None, 4),
+            (false, Some(10.0), None, 3),
+            (true, None, Some(4.0), 4),
+            (true, None, Some(8.0), 3),
+        ] {
+            let (target, _) = run_banner("Valiant", "human_defense_force", melee, over, charge, EPOCH_73_V36);
+            assert_eq!(target, expected, "melee={melee} over={over:?} charge={charge:?}");
+        }
+    }
+
+    #[test]
+    fn old_banner_names_keep_the_bonus_at_epoch_72() {
+        let (target, _) = run_banner("Hold the Line", "human_defense_force", false, Some(4.0), None, EPOCH_72_PLAYTEST_RULES);
+        assert_eq!(target, 3, "epoch 72: the unconditional reading stays");
+    }
+
+    #[test]
+    fn valiant_without_distance_keeps_the_bonus_at_epoch_73() {
+        let (target, _) = run_banner("Valiant", "human_defense_force", false, None, None, EPOCH_73_V36);
+        assert_eq!(target, 3, "no distance supplied: keep the 3.5 reading");
+    }
+
+    #[test]
+    fn banner_at_five_keeps_the_bonus_at_epoch_73() {
+        let (target, _) = run_banner("Banner", "human_defense_force", false, Some(5.0), None, EPOCH_73_V36);
+        assert_eq!(target, 3, "plain Banner keeps its +1 inside the band");
+    }
+
+    #[test]
+    fn valiant_at_five_loses_and_at_ten_keeps_the_bonus_at_epoch_73() {
+        let (inside, _) = run_banner("Valiant", "human_defense_force", false, Some(5.0), None, EPOCH_73_V36);
+        assert_eq!(inside, 4, "Valiant inside 9\": no +1");
+        let (outside, _) = run_banner("Valiant", "human_defense_force", false, Some(10.0), None, EPOCH_73_V36);
+        assert_eq!(outside, 3, "Valiant over 9\": the +1 counts");
+    }
+
+    #[test]
+    fn valiant_minority_gives_nothing_at_epoch_73() {
+        let mut p = banner_profile("Valiant", "human_defense_force");
+        p.attached_hero_rules = vec![Vec::new()];
+        let mut reg = Registries::new(&repo_root());
+        assert_eq!(capture_reads_for_epoch(&mut reg, &p, EPOCH_73_V36).morale_bonus, 0,
+            "a minority carrier gets no Banner stamp");
+        let (target, _) = run_profile(&p, false, Some(5.0), None, EPOCH_73_V36);
+        assert_eq!(target, 4, "a minority carrier reads plain Quality");
+    }
+}

@@ -1263,6 +1263,17 @@
     "condition": "ranged"
    }
   },
+  "Valiant": {
+   "primitive": "Banner",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "morale_bonus": 1,
+    "trigger": "combat",
+    "gate_over_in": 9.0,
+    "gate_over_charge_in": 6.0
+   }
+  },
   "Versatile Expert": {
    "primitive": "Versatile Attack",
    "rated": false,
