@@ -4872,7 +4872,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 	# NML-966 gap B: Deadly/Takedown wounds bypass the regen pool and never reached `landed` —
 	# a Deadly-only volley silently skipped the half-strength morale test. landed_extra counts them in.
 	if landed + landed_extra > 0 or _solo_scourge_wounds > 0:   # SHO-15a: phantom wounds count as taken
-		await _solo_shooting_morale(target, alive_before, _roller_label(target), wounds_before)
+		await _solo_shooting_morale(target, alive_before, _roller_label(target), wounds_before, "", dist_in, -1.0)
 		await _solo_stage_phase("Morale")
 	_solo_stage_end()
 	_solo_consume_once_mods(attacker, target, false)   # F4: once-mods spent by this exchange
@@ -11684,7 +11684,7 @@ func _run_ai_melee(report: Dictionary) -> void:
 	_solo_log_melee_result(unit, ai_caused, ai_score, target, human_caused, human_score)
 	await _solo_stage_phase("Melee result")
 	if loser != null and _solo_combined_alive(loser) > 0:
-		await _solo_morale_test(loser, _roller_label(loser), true)
+		await _solo_morale_test(loser, _roller_label(loser), true, "", -1.0, float(report.get("charge_from_in", -1.0)))
 	await _solo_stage_phase("Morale")
 	# — Consolidation (GF v3.5.1 p.9, after morale): neither destroyed → the CHARGER (the AI here) moves
 	#   back 1"; one side destroyed → the survivor consolidates up to 3" (round 7, finding 4) —
@@ -11876,7 +11876,7 @@ func _solo_consolidate_melee(charger: GameUnit, defender: GameUnit, auto: bool =
 ## basis `_solo_below_half_strength` already used for the outcome — wounds clicked onto a joined hero
 ## used to be invisible here because the trigger counted the unit's own models only.
 func _solo_shooting_morale(unit: GameUnit, alive_before: int, owner: String, wounds_before: int = -1,
-		cause: String = "") -> void:
+		cause: String = "", over_in: float = -1.0, charge_from_in: float = -1.0) -> void:
 	if unit == null:
 		return
 	var phantom := _solo_scourge_wounds   # SHO-15a: read once, never carried to the next trigger
@@ -11893,15 +11893,15 @@ func _solo_shooting_morale(unit: GameUnit, alive_before: int, owner: String, wou
 					"%s is at half its tough value (%d/%d) — morale test (GF v3.5.1 p.10)" % [
 					unit.get_name(), wounds_now, _solo_unit_wounds_start(unit)], true)
 			_solo_scourge_decides(unit, phantom, false)
-			await _solo_morale_test(unit, owner, false, cause)
+			await _solo_morale_test(unit, owner, false, cause, over_in, charge_from_in)
 		elif _solo_scourge_decides(unit, phantom, true):
-			await _solo_morale_test(unit, owner, false, cause)
+			await _solo_morale_test(unit, owner, false, cause, over_in, charge_from_in)
 		return
 	var alive_now: int = SoloController.combined_alive(unit)
 	var total: int = SoloController.combined_total(unit)
 	if AiCombatMath.should_test_shooting_morale(alive_before, alive_now, total):
 		_solo_scourge_decides(unit, phantom, false)
-		await _solo_morale_test(unit, owner, false, cause)
+		await _solo_morale_test(unit, owner, false, cause, over_in, charge_from_in)
 	elif alive_now > 0 and wounds_before >= 0 and _solo_unit_wounds_now(unit) < wounds_before \
 			and AiCombatMath.at_or_below_half(alive_now, total):
 		# A2 (play test 29.10.2026): p.10 triggers on WOUNDS that leave the unit at half or less, not only
@@ -11911,9 +11911,9 @@ func _solo_shooting_morale(unit: GameUnit, alive_before: int, owner: String, wou
 				"%s takes wounds at half strength or less (%d/%d models) — morale test (GF v3.5.1 p.10)" % [
 				unit.get_name(), alive_now, total], true)
 		_solo_scourge_decides(unit, phantom, false)
-		await _solo_morale_test(unit, owner, false, cause)
+		await _solo_morale_test(unit, owner, false, cause, over_in, charge_from_in)
 	elif _solo_scourge_decides(unit, phantom, true):
-		await _solo_morale_test(unit, owner, false, cause)
+		await _solo_morale_test(unit, owner, false, cause, over_in, charge_from_in)
 
 
 ## SHO-15a Scourge: the volley's phantom wounds read as landed in the table's casualty order (nothing is
@@ -12064,7 +12064,8 @@ func _solo_ask_hero_morale_once(unit: GameUnit) -> void:
 
 
 ## `cause` names the rule that forced the test; "" = shooting or melee (Rules 3.6 Banner, MOR-08).
-func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false, cause: String = "") -> bool:
+func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false, cause: String = "",
+		over_in: float = -1.0, charge_from_in: float = -1.0) -> bool:
 	await _solo_ask_hero_morale_once(unit)
 	var below_half := _solo_below_half_strength(unit)   # single models: tough-wounds scale (p.10)
 	var result: int
@@ -12089,6 +12090,18 @@ func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false, cause
 				morale_bonus -= banner_share
 				_log_rule_event(BattleLog.Category.COMBAT, "Banner: %s gets no +%d against %s (only shooting or melee)" % [
 					unit.get_name(), banner_share, cause], true)
+		elif AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+			# MOR-09 Valiant: inside the band only the Valiant-family share drops; a plain Banner
+			# keeps its +1. A negative distance means the caller cannot know it — keep the 3.5 read.
+			var band: float = AiCombatMath.CHARGE_LONG_RANGE_IN if melee else AiCombatMath.LONG_RANGE_IN
+			var forcing: float = charge_from_in if melee else over_in
+			if forcing >= 0.0 and forcing <= band:
+				var valiant_share: int = mini(SoloController.valiant_bonus_of(unit),
+					morale_bonus - SoloController.morale_rating_of(unit))
+				if valiant_share > 0:
+					morale_bonus -= valiant_share
+					_log_rule_event(BattleLog.Category.COMBAT, "Banner: %s gets no +%d from a %s %d\" or under (Valiant counts only beyond the gate)" % [
+						unit.get_name(), valiant_share, "charge from" if melee else "shot at", int(band)], true)
 		# NML-006 morale_mod: active spell tokens ("+1/-1 to morale test rolls", once) join the
 		# Banner bonus in the [2,6]-clamped target; spent right after the test die (rules-must-log).
 		var spell_morale := 0
@@ -14540,7 +14553,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 	await _solo_stage_phase("Result")
 	# The target tests morale if the volley dropped it to half strength or less (goal 003 P1). Its roll
 	# carries its owner's label — "AI (X)" only for an AI seat; a two-human table names the player (#1719).
-	await _solo_shooting_morale(target, target_alive_before, _roller_label(target), target_wounds_before)
+	await _solo_shooting_morale(target, target_alive_before, _roller_label(target), target_wounds_before, "", dist, -1.0)
 	await _solo_stage_phase("Morale")
 	_solo_stage_end()
 	_solo_consume_once_mods(attacker, target, false)   # F4: once-mods spent by this exchange

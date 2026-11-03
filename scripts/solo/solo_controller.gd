@@ -6791,11 +6791,39 @@ static func morale_bonus_of(unit: GameUnit) -> int:
 			best = maxi(best, int(RulesRegistry.unit_param(member, "Banner", "morale_bonus", AiCombatMath.BANNER_MORALE_BONUS)))
 		for e in RulesRegistry.unit_rules_of_primitive(member, "Banner"):
 			var ed := e as Dictionary
-			if str(ed["name"]) == "Banner":
+			var rule_name := str(ed["name"])
+			if rule_name == "Banner":
+				continue
+			# MOR-09 Valiant (rules 3.6): "Valiant" needs a strict model majority; the 3.5 spellings
+			# (Hold the Line, Hive Bond) keep their printed shape and always count.
+			if rule_name == "Valiant" and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
+					and not AiEv.rule_on_most_models(member, "Valiant"):
 				continue
 			best = maxi(best, int((ed.get("params", {}) as Dictionary).get("morale_bonus", 0)))
 	return best + morale_rating_of(unit)
 
+
+## MOR-09 Valiant — the Banner-family share that only counts beyond the distance gate. MAX, never a sum.
+const VALIANT_FAMILY: Array = ["Valiant", "Hold the Line", "Hive Bond"]
+static func valiant_bonus_of(unit: GameUnit) -> int:
+	var best := 0
+	var members: Array = [unit]
+	if unit != null and unit.has_method("get_attached_heroes"):
+		members = members + unit.get_attached_heroes()
+	for m in members:
+		var member := m as GameUnit
+		if member == null or member.get_alive_count() == 0:
+			continue
+		for e in RulesRegistry.unit_rules_of_primitive(member, "Banner"):
+			var ed := e as Dictionary
+			var rule_name := str(ed["name"])
+			if not (rule_name in VALIANT_FAMILY):
+				continue
+			if rule_name == "Valiant" and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
+					and not AiEv.rule_on_most_models(member, "Valiant"):
+				continue
+			best = maxi(best, int((ed.get("params", {}) as Dictionary).get("morale_bonus", 0)))
+	return best
 
 
 static func morale_rating_of(unit: GameUnit) -> int:
