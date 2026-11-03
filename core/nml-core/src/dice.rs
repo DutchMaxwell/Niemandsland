@@ -1330,10 +1330,11 @@ pub fn resolve_volley_leg(
         // table makes for THIS profile, after the volley's earlier Takedown groups landed (it re-picks
         // per profile, main.gd:4171) — the caller answers from the groups so far.
         let td_own = unit_of_one && takedown_cover(&out.takedown_groups);
-        // Rules 3.6 (SHO-01b): an Indirect shot drops cover only after a Hold; Blast and
-        // Ignores Cover keep dropping it at every epoch (`indirect_cover_needs_hold` is stamped
-        // only from EPOCH_73_V36, so older records keep their unconditional skip).
-        let indirect_keeps_cover = p.indirect && p.indirect_cover_needs_hold && !sh.att.held;
+        // Rules 3.6 (FAB-A3): an Indirect shot lifts cover granted by sight blockers only, and the
+        // engine grants Cover terrain only — so a HELD shot keeps it too. Blast and Ignores Cover
+        // keep dropping it at every epoch (`indirect_cover_needs_hold` is stamped only from
+        // EPOCH_73_V36, so older records keep their unconditional skip).
+        let indirect_keeps_cover = p.indirect && p.indirect_cover_needs_hold;
         let skips_cover = p.blast > 1 || p.ignores_cover || (p.indirect && !indirect_keeps_cover);
         let save_def = if skips_cover {
             base
@@ -1379,11 +1380,12 @@ pub fn resolve_volley_leg(
             out.log
                 .push(format!("{rule}: {} — {}'s cover save is skipped", sh.owner, def_owner));
         }
-        // Rules 3.6 (SHO-01b) — rules-must-log: a moved Indirect shooter's target KEEPS its cover.
+        // Rules 3.6 (FAB-A3) — rules-must-log: an Indirect shot's target KEEPS its terrain cover.
         if !indirect_cover_logged && indirect_keeps_cover && def.in_cover && p.blast <= 1 {
             indirect_cover_logged = true;
             out.log.push(format!(
-                "Indirect: {} moved — {}'s cover counts (only a Hold ignores it)", sh.owner, def_owner));
+                "Indirect: {} — {}'s cover counts (only sight-blocker cover is ignored)",
+                sh.owner, def_owner));
         }
         // Block B7 — Piercing Growth: main.gd:4287's marker-driven AP delta,
         // shooting and melee both (`_solo_attack_groups` adds it to `prof

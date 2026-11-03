@@ -1,6 +1,7 @@
 extends GdUnitTestSuite
-## Rules 3.6 wave, row SHO-01b: an Indirect weapon drops the target's cover only when its unit used a
-## Hold action. A moved Indirect shooter's target keeps its cover; at EPOCH_72_PLAYTEST_RULES the old
+## Rules 3.6 wave, row SHO-01b: an Indirect weapon keeps the target's terrain cover at epoch 73 —
+## the entry lifts only sight-blocker cover and the table grants Cover terrain only, so a Hold no
+## longer matters (FAB-A3 corrects the earlier Hold reading). At EPOCH_72_PLAYTEST_RULES the old
 ## reading stands (every Indirect shot drops cover). Blast(X > 1) and Ignores Cover drop cover at every
 ## epoch, moved or held. Drives the real AI volley (_solo_resolve_ai_volley) over main.tscn, the same
 ## path the AI and the human save resolution share, and reads the battle log the rule writes.
@@ -110,12 +111,12 @@ func test_a_moved_indirect_shot_ignores_cover_at_epoch_72() -> void:
 		.not_contains("saves on 3+")
 
 
-func test_a_held_indirect_shot_ignores_cover_at_epoch_73() -> void:
+func test_a_held_indirect_shot_lets_cover_count_at_epoch_73() -> void:
 	var text := await _volley_at(AiActRecorder.EPOCH_73_V36, false, ["Indirect"] as Array[String])
-	assert_str(text).override_failure_message("a Hold drops cover: %s" % text) \
-		.not_contains("cover counts")
-	assert_str(text).override_failure_message("and saves at the uncovered 4+: %s" % text) \
-		.not_contains("saves on 3+")
+	assert_str(text).override_failure_message("a Hold no longer drops terrain cover: %s" % text) \
+		.contains("cover counts")
+	assert_str(text).override_failure_message("and saves at the covered 3+: %s" % text) \
+		.contains("saves on 3+")
 
 
 func test_blast_drops_cover_at_epoch_73_whether_moved_or_held() -> void:
