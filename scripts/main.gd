@@ -9282,6 +9282,8 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 		if sixes > 0:
 			if battle_log != null:
 				var bane_name := _solo_bane_facet_name(striker, int(profile.get("range", 0)))
+				if bane_name.is_empty():
+					bane_name = str(profile.get("bane_alias", ""))   # AI-G2: the weapon alias's book name
 				if bane_name.is_empty() and _solo_profile_lacerate_only(profile):
 					bane_name = "Lacerate"
 				if win.is_empty() and bane_from >= AiCombatMath.UNMODIFIED_SIX:
@@ -9366,6 +9368,9 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 ## Shooting" only when shooting. Aura variants ("... Aura") grant Bane to OTHER units, so a striker's own
 ## aura rule never fires here. Reads the weapon's rules AND the striker unit's own special rules.
 func _solo_striker_has_bane(striker: GameUnit, profile: Dictionary, melee: bool) -> bool:
+	# AI-G2: a weapon alias (Smash, Reap, Decimate) the stamp resolved through the map; its gate is bane_applies'.
+	if not str(profile.get("bane_alias", "")).is_empty():
+		return true
 	var sources: Array = (profile.get("rules", []) as Array).duplicate()
 	if striker != null:
 		sources.append_array(striker.get_special_rules())
@@ -10163,8 +10168,9 @@ func _solo_ignores_regen(attacker: GameUnit, profile: Dictionary, target: GameUn
 		return true
 	for flag in ["rending", "unstoppable", "bane"]:
 		if bool(profile.get(flag, false)):
-			if flag == "bane" and _solo_profile_lacerate_only(profile):
-				continue   # A1: the flag is the printed Lacerate's re-roll, not a Bane grant
+			if flag == "bane" and (_solo_profile_lacerate_only(profile) \
+					or (not str(profile.get("bane_alias", "")).is_empty() and not bool(profile.get("bypass_regen", false)))):
+				continue   # A1: the flag is the printed Lacerate's re-roll, not a Bane grant; AI-G2: nor a weapon alias's
 			if battle_log != null and _solo_regen_bypass_named(target):
 				_log_rule_event(BattleLog.Category.COMBAT,
 					"%s (granted): Regeneration ignored" % flag.capitalize(),

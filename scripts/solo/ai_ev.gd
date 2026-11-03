@@ -250,6 +250,28 @@ static func lacerate_only(profile: Dictionary) -> bool:
 	return lacerate
 
 
+## AI-G2 (EPOCH_73_V36): a WEAPON rule the map resolves to the Bane primitive (Smash, Reap, Decimate) re-rolls
+## Defense 6s like the printed Bane, under its entry's own `condition`, and cuts Regeneration only when the entry
+## prints `bypass_regen`. A profile that already banes keeps its own ungated window. The core's twin:
+## stamp_weapon_bane_alias.
+static func _stamp_weapon_bane_alias(fpd: Dictionary, unit: GameUnit) -> void:
+	if bool(fpd.get("bane", false)):
+		return
+	for r in fpd.get("rules", []):
+		var n := RulesRegistry.base_rule_name(str(r))
+		var e := RulesRegistry.lookup(RulesRegistry.system_of_unit(unit), RulesRegistry.faction_of_unit(unit), n)
+		var p: Dictionary = e.get("params", {})
+		if str(e.get("primitive", "")) != "Bane" or not bool(p.get("reroll_save_sixes", false)) \
+				or n.begins_with("Bane") or n.ends_with("Aura") or not facet_applies(p, int(fpd.get("range", 0))):
+			continue
+		fpd["bane"] = true
+		fpd["bypass_regen"] = bool(fpd.get("bypass_regen", false)) or bool(p.get("bypass_regen", false))
+		fpd["bane_alias"] = n
+		if p.has("condition"):
+			fpd["bane_condition"] = {"condition": str(p["condition"]), "threshold": int(p.get("threshold", 0))}
+		return
+
+
 ## AI-08a (EPOCH_73_V36): a weapon rule read through its map entry, not its 3.5 name (the core's
 ## stamp_map_cover_regen twin); the profile keeps the rule's name for the log line, a unit's cover-only rule too.
 static func _stamp_map_cover_regen(fpd: Dictionary, unit: GameUnit) -> void:
@@ -758,6 +780,7 @@ static func stamp_sergeant(profiles: Array, unit: GameUnit) -> Array:
 	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
 		for fp in profiles:
 			_stamp_map_cover_regen(fp as Dictionary, unit)
+			_stamp_weapon_bane_alias(fp as Dictionary, unit)
 	# "Indirect when Shooting" (unit-level name, gf/aof books: "This model gets Indirect when
 	# shooting"): stamp the PLAIN `indirect` facet on the ranged profiles — the table mirror of the
 	# core's unit.rs build_for epoch-6 walk (unit.rs:5119-5138), which the save gate, EV and sight
