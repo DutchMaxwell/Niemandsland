@@ -19,8 +19,17 @@ const Dump := preload("res://tools/shipped_base_dump.gd")
 
 
 func after_test() -> void:
+	# shipped_knobs() stamps the aifix bundle through SoloController._apply_aifix, i.e. six planner
+	# STATICS. Pin every one of them back: a shuffled run showed this suite leaving no_end_threat on
+	# and act_recorder_mission_stamp_test then reading 'true' where it asserts the default 'false'.
 	BattleSim._core_env = -1
 	AiMissionEval.eval_variant = 0
+	AiPlanner.opener_by_finish = false
+	AiPlanner.no_end_threat = false
+	BattleSim.morale_by_probability = false
+	BattleSim.reply_v2 = false
+	BattleSim.reply_skip_activated = false
+	BattleSim.reply_hold_gate = false
 
 
 func _shipped() -> Dictionary:
