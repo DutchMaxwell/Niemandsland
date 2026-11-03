@@ -5,6 +5,7 @@
 //! 0.0 off a charge), so the estimate reads the SAME `alias_gate` / `surge_alias_rule` /
 //! `dist_in` fields the resolver's `resolve_melee_leg` / volley fold read. Below
 //! `EPOCH_73_V36` the old unconditional read stays.
+// RED proof (CI red at the RED commit, Test nml-core): https://github.com/DutchMaxwell/Niemandsland/actions/runs/41597422161/job/125787925714
 use super::super::*;
 use crate::acts::{EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36};
 use crate::combat::{melee_ev, profile_ev};
