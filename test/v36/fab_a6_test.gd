@@ -152,6 +152,8 @@ func test_a_human_hit_and_run_shooter_makes_its_one_post_shot_step(timeout := 24
 	_controller_without_reply()
 	var gun := _gun(Vector3.ZERO, "Gunner")
 	gun.unit_properties["special_rules"] = ["Artillery", "Hit & Run Shooter"]
+	# The registry is the source of the family: the book must actually carry the half-variant.
+	gun.unit_properties["faction_folder"] = "custodian_brothers"
 	RulesRegistry.reset_cache()
 	var foe := _foe(Vector3(17.0 * INCH, 0, 0))
 	await _main._run_human_attack(gun, foe, false)
@@ -178,6 +180,8 @@ func test_a_human_hit_and_run_step_longer_than_three_inches_is_refused(timeout :
 	_controller_without_reply()
 	var gun := _gun(Vector3.ZERO, "Gunner")
 	gun.unit_properties["special_rules"] = ["Artillery", "Hit & Run Shooter"]
+	# The registry is the source of the family: the book must actually carry the half-variant.
+	gun.unit_properties["faction_folder"] = "custodian_brothers"
 	RulesRegistry.reset_cache()
 	var foe := _foe(Vector3(17.0 * INCH, 0, 0))
 	await _main._run_human_attack(gun, foe, false)
