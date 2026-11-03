@@ -15,7 +15,8 @@ const GAP_CASES := [
 	["gf", "watch_brothers", "Re-Deployment", "Re-Deployment", {"max_units": 2}],
 	["gf", "elven_jesters", "Repel Ambushers", "Repel Ambushers", {"min_dist_in": 12.0}],
 	["gf", "voidspace_stalkers", "Repel Ambushers", "Repel Ambushers", {"min_dist_in": 12.0}],
-	["gf", "robot_legions", "Stealth Buff", "Stealth", {"hit_penalty": 1, "over_in": 9.0}],
+	["gf", "robot_legions", "Stealth Buff", "Utility Buff",
+		{"grants_rule": "Stealth", "target": "friendly", "max_targets": 1, "range_in": 12, "once": true}],
 	["aof", "vampiric_undead", "Ambush Aura", "Aura Channel", {"grants": "Ambush"}],
 	["aof", "duchies_of_vinci", "Good Shot", "Shot Modifier", {"hit_bonus": 1}],
 ]

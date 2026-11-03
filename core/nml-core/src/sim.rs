@@ -3766,6 +3766,13 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
         c.stationary_alias_over_in = ent_over;
         c.stationary_alias_name = "Entrenched";
     }
+    // FAB-C15 — the "Stealth Buff" 3.6 once-grant hands the literal Stealth
+    // name to a picked friendly (`_solo_apply_grant` overlay). Read it where
+    // the profile's own Stealth stamp lands; the grant is 3.6 data only.
+    if rule_on(rules_epoch, EPOCH_73_V36) {
+        c.stealth_grant = grants && mods::granted(state, i, "Stealth");
+        c.stealth = c.stealth || c.stealth_grant;
+    }
     // CENSUS rows 1-5 (evidence-only, non-folding — semantics §11.2/§12):
     // exercise the recorded grant ledger and log; the recorded band carries
     // the effect, so this must never fold. From `EPOCH_19_MOVE_GRANTS_FOLD`

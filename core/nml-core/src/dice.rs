@@ -847,6 +847,8 @@ pub fn resolve_volley_leg(
     let mut aircraft_fired = false;
     // Rules 3.6 (D-MOST) — Stealth's -1 rode the most-models read: one line per volley.
     let mut stealth_most_fired = false;
+    // FAB-C15 — the once-granted Stealth's own rules-must-log flag.
+    let mut stealth_grant_fired = false;
     // SHO-05 (rules 3.6) — the Artillery shooter's gated +1 names itself once per
     // firing member (the `ma_fired` shape).
     let mut art_shooter_fired: Vec<&str> = Vec::new();
@@ -1095,6 +1097,7 @@ pub fn resolve_volley_leg(
             out.log.push(format!("Unstoppable: {} keeps its own {own} to hit", sh.owner));
         }
         stealth_most_fired |= def.stealth_most_models && mod_dist_in > LONG_RANGE_IN;
+        stealth_grant_fired |= def.stealth_grant && mod_dist_in > LONG_RANGE_IN;
         // EPOCH 34 UNSTOPPABLE MARK — the granted mark's CLAMP half: the
         // once-grant the mark seam leaves on the bearer (`ctx_live`'s
         // `unstoppable_mark`) counts like the weapon's own `p.unstoppable`,
@@ -1590,6 +1593,9 @@ pub fn resolve_volley_leg(
     }
     if stealth_most_fired {
         out.log.push(format!("Stealth: {def_owner} — -1 to hit past 9\", most models carry it"));
+    }
+    if stealth_grant_fired {
+        out.log.push(format!("Stealth: {def_owner} — -1 to hit past 9\" (granted once)"));
     }
     if out.bane_rerolled > 0 {
         out.log.push(format!(

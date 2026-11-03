@@ -106,6 +106,8 @@ func test_the_table_grants_stealth_to_a_friendly_within_twelve_at_73() -> void:
 	_main._solo_apply_utility_buffs(bearer)
 	var records: Array = _main._solo_spell_mods.get(friend.get_instance_id(), [])
 	assert_array(records).override_failure_message("the 5\" friend receives the once-grant").has_size(1)
+	if records.is_empty():
+		return
 	var rec: Dictionary = records[0]
 	assert_str(str(rec.get("grants_rule", ""))).is_equal("Stealth")
 	assert_bool(friend.has_special_rule("Stealth")) \

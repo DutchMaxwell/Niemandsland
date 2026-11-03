@@ -67,6 +67,7 @@ fn line(epoch: u32) -> (State, Vec<UnitStatic>) {
     ];
     st.radii = Rc::new(vec![vec![IN2M], vec![], vec![IN2M], vec![IN2M]]);
     let mut inside = UnitStatic { name: "in".into(), ..Default::default() };
+    inside.ctx.quality = 4;
     inside.ctx.tough = 2;
     let mut outside = UnitStatic { name: "out".into(), ..Default::default() };
     outside.ctx.tough = 9;
