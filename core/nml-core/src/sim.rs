@@ -9844,7 +9844,8 @@ fn resolve_with(
                         // (:8116-8118), where D1-B5a still asked the
                         // expected-value oracle for the outcome.
                         if !rule_on(seams.rules_epoch, EPOCH_65_MELEE_TRUTH) || morale_side_alive(&next, li, seams) {
-                            tray_morale(&mut next, statics, li, true, seams, tray, shot, None, Some(charge_from_in));
+                            let charged_from = if li == si { None } else { Some(charge_from_in) };
+                            tray_morale(&mut next, statics, li, true, seams, tray, shot, None, charged_from);
                         }
                     }
                     // Coverage wave — growth markers (Defensive Frenzy):

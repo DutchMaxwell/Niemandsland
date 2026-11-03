@@ -6783,6 +6783,7 @@ static func morale_bonus_of(unit: GameUnit) -> int:
 	var members: Array = [unit]
 	if unit != null and unit.has_method("get_attached_heroes"):
 		members = members + unit.get_attached_heroes()
+	var valiant_majority: bool = AiEv.rule_on_most_models(unit, "Valiant")
 	for m in members:
 		var member := m as GameUnit
 		if member == null or member.get_alive_count() == 0:
@@ -6797,7 +6798,7 @@ static func morale_bonus_of(unit: GameUnit) -> int:
 			# MOR-09 Valiant (rules 3.6): "Valiant" needs a strict model majority; the 3.5 spellings
 			# (Hold the Line, Hive Bond) keep their printed shape and always count.
 			if rule_name == "Valiant" and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
-					and not AiEv.rule_on_most_models(member, "Valiant"):
+					and not valiant_majority:
 				continue
 			best = maxi(best, int((ed.get("params", {}) as Dictionary).get("morale_bonus", 0)))
 	return best + morale_rating_of(unit)
@@ -6810,6 +6811,7 @@ static func valiant_bonus_of(unit: GameUnit) -> int:
 	var members: Array = [unit]
 	if unit != null and unit.has_method("get_attached_heroes"):
 		members = members + unit.get_attached_heroes()
+	var valiant_majority: bool = AiEv.rule_on_most_models(unit, "Valiant")
 	for m in members:
 		var member := m as GameUnit
 		if member == null or member.get_alive_count() == 0:
@@ -6820,7 +6822,7 @@ static func valiant_bonus_of(unit: GameUnit) -> int:
 			if not (rule_name in VALIANT_FAMILY):
 				continue
 			if rule_name == "Valiant" and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
-					and not AiEv.rule_on_most_models(member, "Valiant"):
+					and not valiant_majority:
 				continue
 			best = maxi(best, int((ed.get("params", {}) as Dictionary).get("morale_bonus", 0)))
 	return best
