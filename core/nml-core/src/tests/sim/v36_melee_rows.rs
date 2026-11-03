@@ -22,5 +22,6 @@ mod mel_11b;
 mod mel_12;
 mod mel_13;
 mod mel_par_b14;
+mod mel_b4;
 mod mel_ips;
 mod fab_b7;
