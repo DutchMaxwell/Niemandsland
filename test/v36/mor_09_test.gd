@@ -148,6 +148,128 @@ func test_below_epoch_73_the_ai_estimate_keeps_the_plain_banner_read() -> void:
 	assert_int(int(plain.get("morale_bonus", -1))).is_equal(1)
 
 
+const INCH := 0.0254
+
+
+## A melee unit for the charge-call-site test: `models` models at `x` inches,
+## one melee weapon with `attacks` per model, the given rules.
+func _melee_unit(pid: int, unit_name: String, x: float, models: int, weapon: String,
+		rules: Array, defense: int, tough: int = 1, attacks: int = 1) -> GameUnit:
+	var positions: Array = []
+	for i in range(models):
+		positions.append(Vector3(x * INCH, 0.0, 0.02 * i))
+	var u := Boot.make_unit(_main, pid, unit_name, positions)
+	var w := OPRApiClient.OPRWeapon.new()
+	w.name = weapon
+	w.range_value = 0
+	w.attacks = attacks
+	var opr := OPRApiClient.OPRUnit.new()
+	var ws: Array[OPRApiClient.OPRWeapon] = [w]
+	opr.weapons = ws
+	u.source_type = "opr"
+	u.source_data = opr
+	u.unit_properties["game_system"] = "gf"
+	u.unit_properties["special_rules"] = rules + (["Tough(%d)" % tough] if tough > 1 else [])
+	u.unit_properties["defense"] = defense
+	for m in u.models:
+		(m as ModelInstance).wounds_max = tough
+		(m as ModelInstance).wounds_current = tough
+	_main.opr_army_manager.game_units[u.unit_id] = u
+	return u
+
+
+## MOR-09b: Valiant's +1 is for a test caused by being SHOT or CHARGED. A
+## charger that loses its own melee was neither, so it gets no Valiant share.
+func test_a_valiant_charger_that_loses_its_own_melee_gets_no_bonus(timeout := 90000) -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	_main.solo_ai_slots = {1: true, 2: true}
+	var charger := _melee_unit(2, "Charger", 0.0, 1, "Blade", ["Valiant"], 3, 9, 0)
+	var defender := _melee_unit(1, "Defender", 1.0, 1, "Spikes", [], 6, 9, 30)
+	_main.seed_tray_rng(7)
+	await _main._run_ai_melee({"unit": charger, "target": defender, "charge_from_in": 1.0})
+	assert_str(_log_text()).not_contains("Charger gets +1 to morale test rolls")
+	assert_str(_log_text()).contains("Banner: Charger gets no +1 — it charged, it was not charged")
+
+
+## The human charger confirms its own saves ("Incoming fire!"); no headless run can click it, so a
+## repeating timer answers it (pattern: e2e_auto_charge_test.gd). Freed with the stray root nodes.
+func _arm_pump() -> void:
+	var pump := Timer.new()
+	pump.wait_time = 0.02
+	get_tree().root.add_child(pump)
+	pump.timeout.connect(_answer_save_prompt)
+	pump.start()
+
+
+func _answer_save_prompt() -> void:
+	if _main == null or not is_instance_valid(_main):
+		return
+	for c in _main.get_children():
+		var card := c as PromptCard
+		if card != null and card.title == "Incoming fire!":
+			card.ok_button.pressed.emit()
+
+
+## MOR-09b human twin: the player's Valiant charger loses its own melee to an AI defender.
+func _human_valiant_charger_loses() -> void:
+	_arm_pump()
+	_main.solo_ai_slots = {2: true}
+	var charger := _melee_unit(1, "Charger", 0.0, 1, "Blade", ["Valiant"], 3, 9, 0)
+	var defender := _melee_unit(2, "Defender", 1.0, 1, "Spikes", [], 6, 9, 30)
+	_main.seed_tray_rng(7)
+	await _main._run_human_melee(charger, defender, true)
+
+
+func test_a_human_valiant_charger_that_loses_its_own_melee_gets_no_bonus(timeout := 90000) -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	await _human_valiant_charger_loses()
+	assert_str(_log_text()).not_contains("Charger gets +1 to morale test rolls")
+	assert_str(_log_text()).contains("Banner: Charger gets no +1 — it charged, it was not charged")
+
+
+func test_below_epoch_73_a_human_valiant_charger_keeps_its_old_bonus(timeout := 90000) -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36 - 1
+	await _human_valiant_charger_loses()
+	assert_str(_log_text()).contains("Charger gets +1 to morale test rolls")
+	assert_str(_log_text()).not_contains("it charged, it was not charged")
+
+
+## A Valiant unit CHARGED from 8" (over the 6" gate) and losing keeps the +1.
+func test_a_valiant_unit_charged_from_eight_inches_keeps_its_bonus(timeout := 90000) -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	_main.solo_ai_slots = {1: true, 2: true}
+	var charger := _melee_unit(2, "Charger", 0.0, 1, "Blade", [], 6, 9, 30)
+	var defender := _melee_unit(1, "Defender", 1.0, 1, "Spikes", ["Valiant"], 3, 9, 0)
+	_main.seed_tray_rng(7)
+	await _main._run_ai_melee({"unit": charger, "target": defender, "charge_from_in": 8.0})
+	assert_str(_log_text()).contains("Defender gets +1 to morale test rolls")
+
+
+## Charged from 4" (inside the gate): the Valiant share drops.
+func test_a_valiant_unit_charged_from_four_inches_loses_its_bonus(timeout := 90000) -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	_main.solo_ai_slots = {1: true, 2: true}
+	var charger := _melee_unit(2, "Charger", 0.0, 1, "Blade", [], 6, 9, 30)
+	var defender := _melee_unit(1, "Defender", 1.0, 1, "Spikes", ["Valiant"], 3, 9, 0)
+	_main.seed_tray_rng(7)
+	await _main._run_ai_melee({"unit": charger, "target": defender, "charge_from_in": 4.0})
+	assert_str(_log_text()).not_contains("Defender gets +1 to morale test rolls")
+	assert_str(_log_text()).contains("Valiant counts only beyond the gate")
+
+
+## MOR-09b: a Valiant HERO does not lift a Valiant-less host past the majority.
+func test_a_valiant_hero_does_not_lift_a_plain_host_at_epoch_73() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	var host := _pure_unit([], 3)
+	host.unit_properties["attached_heroes"] = [_pure_unit(["Valiant"], 1)]
+	assert_int(SoloController.valiant_bonus_of(host)).is_equal(0)
+	assert_int(SoloController.morale_bonus_of(host)).is_equal(0)
+	var valiant_host := _pure_unit(["Valiant"], 3)
+	valiant_host.unit_properties["attached_heroes"] = [_pure_unit([], 1)]
+	assert_int(SoloController.valiant_bonus_of(valiant_host)).is_equal(1)
+	assert_int(SoloController.morale_bonus_of(valiant_host)).is_equal(1)
+
+
 func test_the_ai_charge_estimate_prices_the_valiant_gate() -> void:
 	var epoch := AiActRecorder.rules_epoch
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
