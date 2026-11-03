@@ -398,6 +398,8 @@ var _gate_clamped_models: Dictionary = {}
 ## prints these to the battle log (its single printing point, next to the rule notes) — a silent
 ## correction reads like a broken game, and the reporter of #215 should see the fix work.
 var board_clamp_notes: Array = []
+## Vanguard family: one battle-log line per free placement, naming the BOOK entry that granted it.
+var vanguard_notes: Array = []
 ## Limited weapons already fired this game (wave 5, core v3.5.1: "may only be used once per game").
 ## Key: "<unit_id>::<weapon name>" (limited_key). Tracked for EVERY unit — AI and human — since both
 ## resolve through the shared profile paths; lives with the controller (one game = one controller).
@@ -11631,6 +11633,8 @@ func _deploy_place_id(id: int) -> GameUnit:
 			_place_unit_at(unit, v_spot)
 			_deploy_zone_of.erase(unit)   # the placed spot MAY legally leave the zone
 			var free := AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_16_FREE_PLACEMENT
+			if free:
+				vanguard_notes.append(_vanguard_note(unit))
 			var rule_text := "Vanguard: after deploying, the unit may be placed anywhere fully within 9\" of its position"
 			var chosen := "%.1f\" repositioned" % (spot.distance_to(v_spot) / INCHES_TO_METERS)
 			var why := "vanguard free placement"
@@ -12311,6 +12315,11 @@ static func _carries_infiltrate_alias(unit: GameUnit) -> bool:
 	return false
 
 
+## The battle-log line for one free placement, naming the BOOK entry that granted it.
+static func _vanguard_note(unit: GameUnit) -> String:
+	return "%s: %s takes its free 9\" placement after deploying" % [RulesRegistry.primitive_book_name(unit, "Vanguard"), unit.get_name()]
+
+
 ## Vanguard's forward push: candidate spots along the toward-table-centre line at 100/75/50/25% of the
 ## 9" placement, first legal one wins ({} checks: own-army occupied rings, blocking terrain under every
 ## model of the footprint, no wall-bisect). Returns the original spot when nothing forward is legal.
@@ -12450,7 +12459,7 @@ func hit_and_run_drag_allowed(unit: GameUnit, distance_in: float, after_shoot :=
 		for h in unit.get_attached_heroes():
 			var hero := h as GameUnit
 			if hero != null and hero.get_alive_count() > 0 and _hit_and_run_pick(hero, after_shoot).is_empty():
-				last_hit_and_run_note = "Hit & Run: %s stays put - not every model in the unit has the rule" % unit.get_name()
+				last_hit_and_run_note = "%s: %s stays put - not every model in the unit has the rule" % [rule, unit.get_name()]
 				return false
 	var move_in := float(RulesRegistry.unit_param(unit, rule, "move_in", HIT_AND_RUN_MOVE_IN))
 	if distance_in > move_in + 0.05:
