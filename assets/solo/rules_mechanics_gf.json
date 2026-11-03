@@ -1248,12 +1248,15 @@
    }
   },
   "Stealth Buff": {
-   "primitive": "Stealth",
+   "primitive": "Utility Buff",
    "rated": false,
    "book_version": "3.6.0",
    "params": {
-    "hit_penalty": 1,
-    "over_in": 9.0
+    "grants_rule": "Stealth",
+    "target": "friendly",
+    "max_targets": 1,
+    "range_in": 12,
+    "once": true
    }
   },
   "Strider": {
@@ -1433,8 +1436,7 @@
    "book_version": "3.6.0",
    "params": {
     "ignore_target": 6,
-    "ignore_target_spell": 2,
-    "all_models": true
+    "ignore_target_spell": 2
    }
   },
   "Spell Resistance Aura": {
