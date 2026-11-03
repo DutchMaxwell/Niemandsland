@@ -267,94 +267,100 @@ mod mor_16a {
         (st, vec![bearer(faction, epoch), UnitStatic::default(), target, UnitStatic::default()])
     }
 
-    fn drain(st: &mut State, statics: &[UnitStatic], epoch: u32, dist: f64) {
+    /// The first seed whose FIRST tray face fails `quality` (the real die path).
+    fn seed_failing(quality: u8) -> i64 {
+        (0..500)
+            .find(|&s| Tray::seeded(s).roll(1)[0] < quality)
+            .expect("some seed fails the quality")
+    }
+
+    /// The first seed whose first tray face passes `quality` (a 1 always fails).
+    fn seed_passing(quality: u8) -> i64 {
+        (0..500)
+            .find(|&s| {
+                let f = Tray::seeded(s).roll(1)[0];
+                f != 1 && f >= quality
+            })
+            .expect("some seed passes the quality")
+    }
+
+    fn drain(
+        st: &mut State, statics: &[UnitStatic], epoch: u32, dist: f64, seed: i64,
+    ) -> ShootResult {
         let seams = Seams { rules_epoch: epoch, ..Seams::default() };
-        crate::sim::tray_vs_marks(statics, st, 0, 2, dist, seams);
+        let mut tray = Tray::seeded(seed);
+        let mut shot = ShootResult::default();
+        crate::sim::tray_vs_marks(statics, st, 0, 2, dist, seams, &mut tray, &mut shot);
+        shot
     }
 
-    /// GREEN: Q6 fails 5 of 6, so two tokens go in expectation
-    /// (`2 * 5/6 = 1.67`); the integer store pays 1 or 2 via the dither.
+    /// GREEN: a failed test costs exactly the two printed tokens.
     #[test]
-    fn spell_drain_spends_two_tokens_times_the_fail_chance() {
-        let (st0, statics) = line("blessed_sisters", EPOCH_73_V36, 6, 5);
-        let mut total = 0;
-        for r in 0..300 {
-            let mut st = st0.clone();
-            st.round = r;
-            drain(&mut st, &statics, EPOCH_73_V36, 10.0);
-            total += 5 - st.casts[2];
-        }
-        let ev = total as f64 / 300.0;
-        assert!((ev - 2.0 * 5.0 / 6.0).abs() < 0.1, "expected 1.67 tokens, got {ev}");
+    fn spell_drain_spends_two_tokens_on_a_failed_test() {
+        let (mut st, statics) = line("blessed_sisters", EPOCH_73_V36, 4, 5);
+        st.round = 1;
+        let shot = drain(&mut st, &statics, EPOCH_73_V36, 10.0, seed_failing(4));
+        assert_eq!(st.casts[2], 3, "two tokens");
+        assert!(shot.log.iter().any(|l| l.contains("loses 2 spell tokens")), "{:?}", shot.log);
     }
 
-    /// The store floors at zero: one token in, the expected two out.
+    /// A passed test spends nothing and leaves the target standing.
+    #[test]
+    fn a_passed_test_keeps_the_token_store() {
+        let (mut st, statics) = line("blessed_sisters", EPOCH_73_V36, 4, 5);
+        st.round = 1;
+        let shot = drain(&mut st, &statics, EPOCH_73_V36, 10.0, seed_passing(4));
+        assert_eq!(st.casts[2], 5, "no loss");
+        assert!(!st.shaken[2], "a pass does not Shake");
+        assert!(shot.log.iter().any(|l| l.contains("passes the Morale test")), "{:?}", shot.log);
+    }
+
+    /// The store floors at zero: one token in, the two out.
     #[test]
     fn spell_drain_floors_the_token_store_at_zero() {
-        let (mut st, statics) = line("blessed_sisters", EPOCH_73_V36, 6, 1);
+        let (mut st, statics) = line("blessed_sisters", EPOCH_73_V36, 4, 1);
         st.round = 1;
-        drain(&mut st, &statics, EPOCH_73_V36, 10.0);
+        drain(&mut st, &statics, EPOCH_73_V36, 10.0, seed_failing(4));
         assert_eq!(st.casts[2], 0);
-    }
-
-    /// Rules 3.6 Fearless is not an auto-pass: a failed test gets one die and a
-    /// 4+ counts as passed, so the drain lands half as often — half the tokens.
-    #[test]
-    fn a_fearless_target_loses_half_the_expected_tokens() {
-        let (st0, statics) = line("blessed_sisters", EPOCH_73_V36, 6, 5);
-        let mut fearful = statics.clone();
-        fearful[2].fearless_own = true;
-        let mut plain_total = 0;
-        let mut fearless_total = 0;
-        for r in 0..300 {
-            let mut a = st0.clone();
-            a.round = r;
-            drain(&mut a, &statics, EPOCH_73_V36, 10.0);
-            plain_total += 5 - a.casts[2];
-            let mut b = st0.clone();
-            b.round = r;
-            drain(&mut b, &fearful, EPOCH_73_V36, 10.0);
-            fearless_total += 5 - b.casts[2];
-        }
-        let plain = plain_total as f64 / 300.0;
-        let fear = fearless_total as f64 / 300.0;
-        assert!(fear > 0.0, "a Fearless unit still fails half of the time: {fear}");
-        assert!((fear - plain / 2.0).abs() < 0.15, "half the plain drain: plain {plain}, fearless {fear}");
     }
 
     /// Range and line of sight gate the pick exactly like a Mark.
     #[test]
     fn out_of_range_or_hidden_targets_lose_nothing() {
-        let (mut st, statics) = line("blessed_sisters", EPOCH_73_V36, 6, 5);
+        let (mut st, statics) = line("blessed_sisters", EPOCH_73_V36, 4, 5);
         st.round = 1;
-        drain(&mut st, &statics, EPOCH_73_V36, 19.0);
+        drain(&mut st, &statics, EPOCH_73_V36, 19.0, seed_failing(4));
         assert_eq!(st.casts[2], 5, "19\" is outside the 18\" reach");
-        let (mut st, statics) = line("blessed_sisters", EPOCH_73_V36, 6, 5);
+        let (mut st, statics) = line("blessed_sisters", EPOCH_73_V36, 4, 5);
         st.round = 1;
         st.los_pairs = Some(Rc::new(vec![false; 16]));
-        drain(&mut st, &statics, EPOCH_73_V36, 10.0);
+        drain(&mut st, &statics, EPOCH_73_V36, 10.0, seed_failing(4));
         assert_eq!(st.casts[2], 5, "no line of sight, no pick");
     }
 
     /// The once latch: a second attack in the same round drains nothing.
     #[test]
     fn a_second_activation_in_the_same_round_drains_nothing() {
-        let (mut st, statics) = line("blessed_sisters", EPOCH_73_V36, 6, 5);
+        let (mut st, statics) = line("blessed_sisters", EPOCH_73_V36, 4, 5);
         st.round = 1;
-        drain(&mut st, &statics, EPOCH_73_V36, 10.0);
+        let first = drain(&mut st, &statics, EPOCH_73_V36, 10.0, seed_failing(4));
+        assert!(!first.rolls.is_empty(), "the first attack rolls the test");
         let after_first = st.casts[2];
         assert!(after_first < 5, "the first attack drains");
-        drain(&mut st, &statics, EPOCH_73_V36, 10.0);
+        let second = drain(&mut st, &statics, EPOCH_73_V36, 10.0, seed_passing(4));
         assert_eq!(st.casts[2], after_first, "the latch holds");
+        assert!(second.rolls.is_empty(), "no second test in the round");
     }
 
-    /// Pattern 12: below 73 the entry is inert and the tokens stay.
+    /// Pattern 12: below 73 the entry is inert, draws no die and the tokens stay.
     #[test]
     fn spell_drain_is_inert_at_epoch_72() {
-        let (mut st, statics) = line("blessed_sisters", EPOCH_72_PLAYTEST_RULES, 6, 5);
+        let (mut st, statics) = line("blessed_sisters", EPOCH_72_PLAYTEST_RULES, 4, 5);
         st.round = 1;
-        drain(&mut st, &statics, EPOCH_72_PLAYTEST_RULES, 10.0);
+        let shot = drain(&mut st, &statics, EPOCH_72_PLAYTEST_RULES, 10.0, seed_failing(4));
         assert_eq!(st.casts[2], 5);
+        assert!(!st.shaken[2], "the branch is inert");
+        assert!(shot.rolls.is_empty(), "no die below 73");
     }
 }
 
@@ -364,7 +370,7 @@ mod mor_16a {
 // morale). --------
 mod mor_16c {
     use super::super::*;
-    use crate::acts::EPOCH_73_V36;
+    use crate::acts::{EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36};
     use crate::rules::Registries;
 
     /// The bearer read through the LIVE registry (pattern 11).
@@ -398,19 +404,105 @@ mod mor_16c {
         (st, vec![bearer(epoch), UnitStatic::default(), target, UnitStatic::default()])
     }
 
-    fn drain(st: &mut State, statics: &[UnitStatic], epoch: u32, dist: f64) {
-        let seams = Seams { rules_epoch: epoch, ..Seams::default() };
-        crate::sim::tray_vs_marks(statics, st, 0, 2, dist, seams);
+    /// The first seed above zero whose FIRST tray face fails `quality` (a 1
+    /// always fails, so a joined hero at Quality 6 keeps the target at 6).
+    fn seed_failing(quality: u8) -> i64 {
+        (1..500)
+            .find(|&s| Tray::seeded(s).roll(1)[0] < quality)
+            .expect("some seed fails the quality")
     }
 
-    /// RED on origin/main: a failed drain prices the loss in expectation and
-    /// never runs the Morale test, so the target never turns Shaken.
+    /// The first seed above zero whose first tray face passes `quality`.
+    fn seed_passing(quality: u8) -> i64 {
+        (1..500)
+            .find(|&s| {
+                let f = Tray::seeded(s).roll(1)[0];
+                f != 1 && f >= quality
+            })
+            .expect("some seed passes the quality")
+    }
+
+    /// One drain on a REAL tray seeded by `seed` (also the round, so the latch
+    /// key is stable across the two calls a latch test makes).
+    fn drain(st: &mut State, statics: &[UnitStatic], epoch: u32, dist: f64, seed: i64)
+        -> (Tray, ShootResult) {
+        st.round = seed;
+        let seams = Seams { rules_epoch: epoch, ..Seams::default() };
+        let mut tray = Tray::seeded(seed);
+        let mut shot = ShootResult::default();
+        crate::sim::tray_vs_marks(statics, st, 0, 2, dist, seams, &mut tray, &mut shot);
+        (tray, shot)
+    }
+
+    /// GREEN: a forced-fail drain rolls the production Morale die, Shakes the
+    /// target and spends exactly two tokens.
     #[test]
-    fn a_failed_spell_drain_shakes_the_target_at_epoch_73() {
+    fn a_failed_spell_drain_rolls_the_tray_die_and_shakes_the_target() {
         let (mut st, statics) = line(EPOCH_73_V36, 6, 5);
-        st.round = 1;
-        drain(&mut st, &statics, EPOCH_73_V36, 10.0);
-        assert!(st.casts[2] < 5, "the drain fired");
+        let seed = seed_failing(6);
+        let (_tray, shot) = drain(&mut st, &statics, EPOCH_73_V36, 10.0, seed);
+        let die = shot.rolls.iter()
+            .find(|r| r.count == 1 && r.target == 6 && r.owner == "a")
+            .expect("the drain rolls the tray Morale die");
+        assert!(die.faces[0] < 6, "the seed fails Quality 6: {die:?}");
         assert!(st.shaken[2], "a failed drain leaves the target Shaken (rules 3.6)");
+        assert_eq!(st.casts[2], 3, "exactly two spell tokens on a failure");
+    }
+
+    /// A forced-pass drain: one die, no Shaken, the pool untouched.
+    #[test]
+    fn a_passed_spell_drain_keeps_the_tokens_and_leaves_the_target_steady() {
+        let (mut st, statics) = line(EPOCH_73_V36, 6, 5);
+        let (_tray, shot) = drain(&mut st, &statics, EPOCH_73_V36, 10.0, seed_passing(6));
+        assert_eq!(shot.rolls.iter().filter(|r| r.target == 6).count(), 1, "one Morale die");
+        assert!(!st.shaken[2], "a passed test does not Shake");
+        assert_eq!(st.casts[2], 5, "a passed test costs no tokens");
+    }
+
+    /// The failed test Shakes the target AND its joined chain.
+    #[test]
+    fn the_failed_drain_shakes_the_attached_chain() {
+        let (mut st, mut statics) = line(EPOCH_73_V36, 6, 5);
+        statics[3].quality = 6;
+        let seed = seed_failing(6);
+        st.round = seed;
+        let seams = Seams { rules_epoch: EPOCH_73_V36, hero_attach: true, ..Seams::default() };
+        let mut tray = Tray::seeded(seed);
+        let mut shot = ShootResult::default();
+        crate::sim::tray_vs_marks(&statics, &mut st, 0, 2, 10.0, seams, &mut tray, &mut shot);
+        assert!(st.shaken[2] && st.shaken[3], "the target and its joined hero");
+    }
+
+    /// The once-per-round latch: a second attack draws no die and drains nothing.
+    #[test]
+    fn the_drain_latch_holds_a_second_attack_in_the_same_round() {
+        let (mut st, statics) = line(EPOCH_73_V36, 6, 5);
+        let seed = seed_failing(6);
+        let (_f, _first) = drain(&mut st, &statics, EPOCH_73_V36, 10.0, seed);
+        assert_eq!(st.casts[2], 3);
+        let after = st.casts[2];
+        let (_s, second) = drain(&mut st, &statics, EPOCH_73_V36, 10.0, seed);
+        assert!(second.rolls.iter().all(|r| r.target != 6), "no second Morale die");
+        assert_eq!(st.casts[2], after, "the latch stops the second drain");
+    }
+
+    /// Pattern 12: below 73 the whole branch is inert — no die, no Shaken, no
+    /// token loss, and the tray never moves.
+    #[test]
+    fn the_epoch_72_control_stays_inert() {
+        let (mut st, statics) = line(EPOCH_72_PLAYTEST_RULES, 6, 5);
+        let (tray, shot) = drain(&mut st, &statics, EPOCH_72_PLAYTEST_RULES, 10.0, 1);
+        assert!(shot.rolls.is_empty(), "no die below 73");
+        assert!(!st.shaken[2]);
+        assert_eq!(st.casts[2], 5);
+        assert_eq!(tray.state_i64(), Tray::seeded(1).state_i64(), "the tray did not move");
+    }
+
+    /// Floor: two tokens out of a one-token store still leaves zero.
+    #[test]
+    fn a_failed_drain_floors_the_token_store_at_zero() {
+        let (mut st, statics) = line(EPOCH_73_V36, 6, 1);
+        drain(&mut st, &statics, EPOCH_73_V36, 10.0, 1);
+        assert_eq!(st.casts[2], 0);
     }
 }
