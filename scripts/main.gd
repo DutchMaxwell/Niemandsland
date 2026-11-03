@@ -21349,6 +21349,8 @@ func _on_start_game_pressed() -> void:
 func _on_game_phase_changed(phase: int) -> void:
 	_sync_move_trails_deployment()
 	_update_game_phase_ui()
+	if phase == OPRArmyManager.GamePhase.PLAYING:
+		_log_aura_grants()   # AIG-G2: the import expansion's silent grants surface at battle start
 	_solo_grade_logged = ""   # every phase change opens a new game's grade line
 	_solo_log_grade()
 	# Step 2.9: a hotseat Automatic table has no AI-seat handoff to print the rule inventory at, so print
@@ -21361,6 +21363,26 @@ func _on_game_phase_changed(phase: int) -> void:
 	if phase == OPRArmyManager.GamePhase.PLAYING and solo_ai_slots.is_empty() \
 			and (network_manager == null or not network_manager.is_multiplayer_active()):
 		_hotseat_rapid_ambush_round_one()
+
+## AIG-G2: one battle-log line per granted aura effect, in deployment order.
+func _log_aura_grants() -> void:
+	if battle_log == null or opr_army_manager == null: return
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36: return
+	var pids: Array = opr_army_manager.armies.keys()
+	pids.sort()
+	for pid in pids:
+		var army = opr_army_manager.armies[pid]
+		for unit in (army.units if army != null else []):
+			var gu: GameUnit = opr_army_manager.unit_to_game_unit.get(unit)
+			if gu == null or not is_instance_valid(gu) or opr_army_manager.game_units.get(gu.unit_id) != gu: continue
+			var to: GameUnit = gu.get_attached_to() if gu.is_attached() else gu
+			if to == null: continue
+			for r in gu.get_special_rules():
+				var aura := str(r).strip_edges()
+				var effect := AiEv.aura_granted_rule(gu, aura)
+				if not effect.is_empty() and to.has_special_rule(effect):
+					battle_log.log_event(BattleLog.Category.GENERAL,
+						"%s: %s grants %s to %s" % [aura, gu.get_name(), effect, to.get_name()])
 
 
 ## #1719: the round-1 Rapid Ambush step on a local table without an AI seat ("may be deployed at the

@@ -140,3 +140,16 @@ func test_battle_start_leaves_every_other_log_line_untouched() -> void:
 		.contains_exactly(["Battle started"])
 	assert_int(_aura_lines().size()).override_failure_message(
 		"exactly one line per granted aura effect — no duplicate for the two-aura bearer").is_equal(4)
+
+
+## The battle-start aura lines are an epoch-73 behaviour; below the epoch the log stays silent
+## (the same gate the log-only row uses).
+func test_below_epoch_73_the_battle_start_stays_silent() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
+	_build_battle()
+	await _start()
+	assert_array(_aura_lines()).override_failure_message(
+		"the aura grant lines leaked below epoch 73 (log: %s)" % str(_texts())).is_empty()
+	assert_array(_non_aura_lines()).override_failure_message(
+		"the rest of the battle log changed below epoch 73 (log: %s)" % str(_texts())) \
+		.contains_exactly(["Battle started"])
