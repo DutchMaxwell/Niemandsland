@@ -14468,11 +14468,27 @@ func _solo_log_range_bonus(attacker: GameUnit, target: GameUnit) -> void:
 			# player's own book prints, never the primitive we happen to file it under.
 			var rule_name := "Royal Legion"
 			if not member.has_special_rule("Royal Legion"):
-				for e in RulesRegistry.unit_rules_of_primitive(member, "Royal Legion"):
-					var alias := str((e as Dictionary).get("name", ""))
-					if not alias.is_empty() and alias != "Royal Legion":
-						rule_name = alias
-						break
+				if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+					var alias := ""
+					var aura_alias := ""
+					for e in RulesRegistry.unit_rules_of_primitive(member, "Royal Legion"):
+						var n := str((e as Dictionary).get("name", ""))
+						if n.is_empty() or n == "Royal Legion":
+							continue
+						if alias.is_empty():
+							alias = n
+						if aura_alias.is_empty() and n.ends_with("Aura"):
+							aura_alias = n
+					if not aura_alias.is_empty():
+						alias = aura_alias
+					if not alias.is_empty():
+						rule_name = _solo_range_bonus_book_name(member, alias)
+				else:
+					for e in RulesRegistry.unit_rules_of_primitive(member, "Royal Legion"):
+						var legacy := str((e as Dictionary).get("name", ""))
+						if not legacy.is_empty() and legacy != "Royal Legion":
+							rule_name = legacy
+							break
 			causes.append("%s +%d\"" % [rule_name, bonus_in - spell_in])
 		if spell_in > 0:
 			causes.append("spell +%d\"" % spell_in)
@@ -14494,6 +14510,18 @@ func _solo_log_range_bonus(attacker: GameUnit, target: GameUnit) -> void:
 		battle_log.log_event(BattleLog.Category.COMBAT,
 			"%s: %s shooting range — %s reaches %s past its printed range" % [
 			member.get_name(), " + ".join(causes), ", ".join(lifted), target.get_name()], true)
+
+
+## The range log names the BOOK rule the unit carries. When an Aura Channel expands into a base rule,
+## the base is what `grants`, but the table prints the aura's own name — walk the channel to it.
+func _solo_range_bonus_book_name(member: GameUnit, alias: String) -> String:
+	for e in RulesRegistry.unit_rules_of_primitive(member, "Aura Channel"):
+		var row := e as Dictionary
+		var name := str(row.get("name", ""))
+		var grants := str((row.get("params", {}) as Dictionary).get("grants", ""))
+		if not name.is_empty() and (name == alias or grants == alias):
+			return name
+	return alias
 
 
 ## Automodus step 2.3b (OD 7): the enemy units a manual drag of `unit` may draw a shooting line to (no sight
