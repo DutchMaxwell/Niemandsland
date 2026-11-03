@@ -1018,6 +1018,7 @@ mod rending_shooting_aura;
 mod renames;
 mod takedown_strike;
 mod tohit_shroud;
+mod v36_ai;
 mod v36_data;
 mod v36_data_rows;
 mod v36_dat_16b;
