@@ -45,12 +45,14 @@ func _board_unit(models: int, rules: Array, unit_name: String = "Victim") -> Gam
 
 
 ## A scene-free unit for the static reads and the AI estimate (real registry, no hand-written params).
-func _pure_unit(rules: Array, models: int = 1) -> GameUnit:
+func _pure_unit(rules: Array, models: int = 1, faction: String = "") -> GameUnit:
 	var u := GameUnit.new()
 	_unit_seq += 1
 	u.unit_id = "pure%d" % _unit_seq
 	u.unit_properties = {"player_id": 1, "name": "Pure", "quality": 4, "defense": 4,
 		"game_system": "gf", "special_rules": rules}
+	if not faction.is_empty():
+		u.unit_properties["faction_folder"] = faction
 	for i in range(models):
 		var m := ModelInstance.new()
 		m.is_alive = true
@@ -133,6 +135,17 @@ func test_epoch_72_keeps_the_old_valiant_reading() -> void:
 		"epoch 72 keeps the unconditional Valiant reading\n" + _log_text()).is_true()
 	assert_str(_log_text()).contains("gets +1 to morale test rolls")
 	assert_str(_log_text()).not_contains("Valiant counts only beyond the gate")
+
+
+func test_below_epoch_73_the_ai_estimate_keeps_the_plain_banner_read() -> void:
+	var epoch := AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
+	var alias := AiEv.ctx_for(_pure_unit(["Hive Bond"], 1, "alien_hives"))
+	var plain := AiEv.ctx_for(_pure_unit(["Banner"], 1))
+	AiActRecorder.rules_epoch = epoch
+	assert_int(int(alias.get("morale_bonus", -1))).is_equal(0)
+	assert_int(int(alias.get("valiant_bonus", -1))).is_equal(0)
+	assert_int(int(plain.get("morale_bonus", -1))).is_equal(1)
 
 
 func test_the_ai_charge_estimate_prices_the_valiant_gate() -> void:

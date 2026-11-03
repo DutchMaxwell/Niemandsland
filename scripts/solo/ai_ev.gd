@@ -334,12 +334,19 @@ static func ctx_for(unit: GameUnit, in_cover: bool = false, counter_models: int 
 		held: bool = true) -> Dictionary:
 	if unit == null:
 		return NEUTRAL_DEFENDER.duplicate()
+	# From EPOCH_73_V36 the Banner family share is the table's own read (`valiant_bonus` names its
+	# Valiant part); below 73 the estimate keeps the plain Banner-only number main priced before.
+	var morale_bonus := 0
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		morale_bonus = SoloController.morale_bonus_of(unit) - SoloController.morale_rating_of(unit)
+	elif RulesRegistry.unit_rule_active(unit, "Banner"):
+		morale_bonus = int(RulesRegistry.unit_param(unit, "Banner", "morale_bonus", AiCombatMath.BANNER_MORALE_BONUS))
 	return {
 		"quality": unit.get_quality(),
 		"defense": AiCombatMath.armored_defense(unit.get_defense(),
 			unit_rating(unit, "Armor") if RulesRegistry.unit_rule_active(unit, "Armor") else 0),
-		"morale_bonus": SoloController.morale_bonus_of(unit) - SoloController.morale_rating_of(unit),
-		"valiant_bonus": SoloController.valiant_bonus_of(unit),
+		"morale_bonus": morale_bonus,
+		"valiant_bonus": SoloController.valiant_bonus_of(unit) if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else 0,
 		"tough": maxi(unit_rating(unit, "Tough"), 1),
 		"models": maxi(unit.get_alive_count(), 1),
 		# Rules 3.6 (SHO-09s): the two TARGET-STATE facts, on the same basis as BattleSim._below_half
