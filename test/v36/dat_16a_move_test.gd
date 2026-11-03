@@ -129,3 +129,17 @@ func test_the_ai_arrival_line_states_the_units_real_ring() -> void:
 	assert_str(_main._solo_ambush_arrival_text(ambusher)) \
 		.override_failure_message("a plain Ambush arrival must log 9\"") \
 		.contains(">9\" from your units")
+
+
+## The arrival line names the BOOK rule that put the unit in reserve: Infiltrate for a carrier,
+## Ambush otherwise.
+func test_the_ai_arrival_line_names_infiltrate_or_ambush() -> void:
+	var infiltrator := _carrier(1, "Infiltrators", "dark_elf_raiders", ["Infiltrate"])
+	assert_str(_main._solo_ambush_arrival_text(infiltrator)) \
+		.override_failure_message("an Infiltrate arrival still logs the Ambush label") \
+		.contains("AI Infiltrate:") \
+		.not_contains("AI Ambush:")
+	var ambusher := _carrier(2, "Stalkers", "dark_elf_raiders", ["Ambush"])
+	assert_str(_main._solo_ambush_arrival_text(ambusher)) \
+		.override_failure_message("a plain Ambush arrival must keep the Ambush label") \
+		.contains("AI Ambush:")
