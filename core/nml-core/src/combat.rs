@@ -802,9 +802,14 @@ pub fn profile_ev(
     // SHO-18e (rules 3.6): the Surge SHOT/CHARGE alias families pay only from a shot over 9" or a
     // charge over 6" — the resolver's own `alias_fires` condition (`resolve_melee_leg`; the volley
     // fold reads 9"). `dist_in` is the charge gap `melee_ev` hands in (0.0 off a charge); a weapon's
-    // own Surge stamps no alias name and stays unconditional.
+    // own Surge stamps no alias name and stays unconditional. DAT-12b-fix: an "Enhanced <X>" alias
+    // prints no distance gate, so the stamp stores the `-1.0` sentinel the dice twin already honours
+    // (`dice.rs::alias_fires`); the estimate must open that same gate.
     let alias_gate_in = if melee { CHARGE_LONG_RANGE_IN } else { LONG_RANGE_IN };
-    let alias_fires = !p.alias_gate || p.surge_alias_rule.is_empty() || dist_in > alias_gate_in;
+    let alias_fires = !p.alias_gate
+        || p.surge_alias_rule.is_empty()
+        || (!melee && p.surge_over_in < 0.0)
+        || dist_in > alias_gate_in;
     if p.surge && alias_fires && !fatigue_mutes {
         hits += attacks_f * SIX_P;
     }
