@@ -1251,9 +1251,9 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	await _solo_apply_teleport(unit, report)   # design #816 PR 1: the before-attack reposition beat
 	if unit.is_destroyed():
 		return unit
-	# NML-002 Strafing (official text: "Once per activation, when this model moves through enemy
-	# units, pick one of them and attack it with this weapon as if it was shooting. This weapon may
-	# only be used in this way."): the trigger fires on the EXECUTED trails — independent of the
+	# NML-002 Strafing (rule Strafing: once per activation, after moving through an enemy unit, the
+	# bearer picks one and attacks it with this weapon as if shooting; the weapon has no other use):
+	# the trigger fires on the EXECUTED trails — independent of the
 	# normal shoot decision (the weapon is excluded from every regular volley).
 	await _solo_apply_strafing(unit)
 	await _solo_apply_crossing_attack(unit)
@@ -6246,7 +6246,7 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 				prof["ap"] = int(prof.get("ap", 0)) + growth_ap
 			# Per-model shooting (GF v3.5.1 p.8): a ranged profile fires with the member's models that
 			# have range + LOS at ITS OWN range; melee scales by the models within 2" strike reach (p.9).
-			# #231: "its own range" is the EFFECTIVE one — against an Aircraft (-12") or a Ranged
+			# #231: the model's own range is the EFFECTIVE one — against an Aircraft (-12") or a Ranged
 			# Shrouding target the rear models drop out of the count, exactly as on the AI volley.
 			# NML-929: and the boosted one — with Royal Legion / a spell range token the REAR models
 			# come back into the count, at the same reach the declaration was judged with.
@@ -7312,8 +7312,8 @@ func _solo_reanimation_spot_ok(pos: Vector3, r: float, model: ModelInstance, anc
 	return true
 
 
-## Mend (army-book, grill round 2 cut A — official text: "Once per activation, before attacking, pick
-## one friendly model within 3\" with Tough, and remove D3 wounds from it."): the AI heals the WOUNDED
+## Mend (army-book, grill round 2 cut A — rule Mend: once per activation, before attacking, the
+## bearer heals D3 wounds on one friendly Tough model within 3"): the AI heals the WOUNDED
 ## Tough model (wounds_max > 1 — Tough(1) regiment pools are excluded by the rule's wording) with the
 ## most wounds lost within 3" of the bearer's unit, hero tiebreak; one visible tray die is the D3
 ## (1-2→1, 3-4→2, 5-6→3); the heal runs through the same wound-marker + MP seams the damage paths use.
@@ -7371,9 +7371,9 @@ func _solo_apply_mend(unit: GameUnit) -> void:
 			unit.get_name(), healed, ("" if healed == 1 else "s"), int(face[0]), patient.wounds_current, patient.wounds_max], ai_side)
 
 
-## Breath Attack (army-book, grill round 2 cut A — official text: "Once per activation, before
-## attacking, roll one die. On a 2+ one enemy unit within 6\" in line of sight takes 1 hit with
-## Blast(3) and AP(1)."): one breath per AI unit activation (documented simplification, however many
+## Breath Attack (army-book, grill round 2 cut A — rule Breath Attack: once per activation, before
+## attacking, roll one die; on a 2+ one enemy unit within 6" in line of sight takes 1 hit with
+## Blast(3) and AP(1)): one breath per AI unit activation (documented simplification, however many
 ## bearers). The AI picks the enemy in range + LOS worth the most expected wounds — Blast(3) counts
 ## min(3, models) hits, saved at the Shielded/Armor Defense with AP(1); Blast ignores Cover, and the
 ## 6" range can never trip Guarded's over-9 gate. Resolves through the normal save + wound-landing
@@ -8762,9 +8762,9 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 					regen_proof += w
 				else:
 					regenable += w
-			# Bloodthirsty Fighter (resolver wave A — "for each unmodified 1 that enemies roll when
-			# blocking hits from this model's weapons in melee, this model may roll +1 attack with
-			# that weapon; doesn't apply to newly generated attacks"): consume this batch's 1s once.
+			# Bloodthirsty Fighter (resolver wave A — rule Bloodthirsty Fighter: for each unmodified 1
+			# an enemy rolls blocking hits from this model's melee weapons, the model may roll one extra
+			# attack with that weapon; newly generated attacks do not count): consume this batch's 1s once.
 			var bt_ones := _solo_last_save_ones
 			_solo_last_save_ones = 0
 			if bt_ones > 0 and hits > 0:
@@ -8808,8 +8808,8 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 		if v36_tally:
 			_solo_regen_ignored += regenable + regen_proof - m_landed
 			caused += m_landed - (regenable + regen_proof)
-	# Retaliate(X) — wave 7, re-proven against the v3.5.3 army-book wording (NML-937): "When this
-	# model takes a wound in melee, the attacker takes X hits PER WOUND TAKEN". v3.5.2 fired the
+	# Retaliate(X) — wave 7, re-proven against the v3.5.3 army-book wording (NML-937): rule Retaliate(X)
+	# (when this model takes a wound in melee, the attacker takes X hits per wound taken). v3.5.2 fired the
 	# trigger once per wound event; v3.5.3 states the scale explicitly, and the registry carries it
 	# as the `hits_per_wound` knob ("X" = the rule's own rating) — read by _solo_retaliate_hits.
 	# Hits resolve AFTER the wounds landed (post-Regeneration, Deadly and Takedown included = wounds
@@ -12236,9 +12236,9 @@ func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false, cause
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s is Fearless — recovery die (4+) holds" % unit.get_name(), true)
 		elif battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s is Fearless — recovery die (4+) fails" % unit.get_name(), true)
-	# No Retreat (quick-win batch; official text: a failed morale test that causes Shaken/Rout "counts
-	# as passed instead. Then, roll as many dice as the number of wounds it would take to fully destroy
-	# it, and for each result of 1-3 the unit takes one wound, which can't be ignored."): the pass is
+	# No Retreat (quick-win batch; rule No Retreat: a failed morale test that would cause Shaken/Rout
+	# counts as passed instead. Then roll one die per wound needed to destroy the unit; each 1-3 deals
+	# one wound, which can't be ignored.): the pass is
 	# paid in self-wounds rolled visibly on the real tray (a 4+ is "safe", so the tray highlights the
 	# harmless faces); the wounds land via _solo_apply_wounds DIRECTLY — Regeneration/Resistance never
 	# roll ("can't be ignored"). Checked AFTER Fearless (the free rescue first, the paid one only if
