@@ -168,3 +168,44 @@ func test_a_moved_cumbersome_human_unit_still_shoots_at_epoch_72(timeout := 2400
 		.contains("line of sight")
 	assert_str(text).not_contains("Cumbersome")
 	await E2EBoot.settle(get_tree())
+
+
+# ===== the settled AI action: every late hook passes the same gate =====
+
+## `_act` lets the position solver, the flank doctrine and the rush demote rewrite the action
+## AFTER the tree's own Cumbersome gate. The settled-action read is the one the live path calls
+## there; RED: it does not exist yet, so the unchanged triple leaks a RUSH/advance-shot.
+func _settled(unit: GameUnit, action: int, shoot: bool, shoot_range: float) -> Dictionary:
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	if not solo.has_method("cumbersome_settle"):
+		return {"action": action, "shoot": shoot}
+	return solo.call("cumbersome_settle", unit, action, shoot, shoot_range) as Dictionary
+
+
+func test_the_settled_cumbersome_action_is_hold_or_a_plain_advance() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	var u := _unit_with(["Cumbersome"], "gf")
+	for verb in [AiDecision.Action.RUSH, AiDecision.Action.CHARGE]:
+		var settled := _settled(u, verb, false, 24.0)
+		assert_int(int(settled["action"])) \
+			.override_failure_message("rules 3.6: %d must settle to HOLD" % verb) \
+			.is_equal(AiDecision.Action.HOLD)
+	var advance := _settled(u, AiDecision.Action.ADVANCE, true, 24.0)
+	assert_int(int(advance["action"])).is_equal(AiDecision.Action.ADVANCE)
+	assert_bool(bool(advance["shoot"])) \
+		.override_failure_message("rules 3.6: a settled Advance carries no volley") \
+		.is_false()
+	var hold := _settled(u, AiDecision.Action.HOLD, true, 24.0)
+	assert_bool(bool(hold["shoot"])) \
+		.override_failure_message("holding stays open and keeps its shot") \
+		.is_true()
+
+
+func test_the_settled_cumbersome_action_is_untouched_below_epoch_73() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
+	var u := _unit_with(["Cumbersome"], "gf")
+	var settled := _settled(u, AiDecision.Action.RUSH, false, 24.0)
+	assert_int(int(settled["action"])) \
+		.override_failure_message("rules 3.5 has no Cumbersome: the Rush stands") \
+		.is_equal(AiDecision.Action.RUSH)
