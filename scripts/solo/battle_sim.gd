@@ -913,6 +913,11 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 				var hp: Array = (next["units"][hk] as Dictionary)["positions"]
 				for i in range(hp.size()):
 					hp[i] = (hp[i] as Vector3) + delta
+		# FAB-A5 fix: the sim's own move stamp. `moved_round` lives on the LIVE unit and the
+		# simulation never writes it, so the Hold read has to come from THIS resolution: any
+		# move arm marks the snapshot entry, a HOLD leaves it absent (the live fallback stays
+		# for a unit that really moved on the table before the snapshot).
+		su["_moved_round"] = int(next["round"])
 		var terrain_at: Callable = next.get("terrain_at", Callable())
 		if terrain_at.is_valid():   # T2b: the mover's cover follows it (unit-centre probe, v0)
 			su["in_cover"] = TerrainRules.gives_cover(int(terrain_at.call(centre + delta)))
@@ -936,6 +941,7 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 			and (kind == AiDecision.Action.HOLD or kind == AiDecision.Action.ADVANCE):
 		var tu: Dictionary = next["units"][shoot_key]
 		if _los_clear(next, su, tu):
+			var round_now := int(next["round"])
 			# NML-1132: measured over the TABLE's own two model sets — host + attached
 			# heroes on both sides (_fold_dist_in below), because the table's reach test
 			# runs from the FIRING MEMBER's models to the target unit AND its heroes
@@ -944,12 +950,16 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 			var alive_before := int(tu["alive"])
 			var wounds_before := _wounds_left(tu)
 			var profiles := _profiles_of(su, false, d, next)
-			var att := _ctx_of(su)
+			# FAB-A5 fix: the ATTACKER's Hold is the SIMULATED ACTION (plus the sim's own move
+			# stamp) — the old read fell back to a live `moved_round` the sim never wrote, so an
+			# ADVANCE+shoot still priced the Artillery +1 (Fable F5).
+			var att_held := kind == AiDecision.Action.HOLD and _held_for(su, round_now)
+			var att := _ctx_of(su, false, att_held)
 			var phantom := 0
 			if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
 				# AI-06: the Shred-vs-plain EV gap is hits x SIX_P, each 1 worth the map's
 				# phantom_wounds_per_save_one; Regeneration is neutralised on both clones.
-				var phantom_def: Dictionary = _ctx_of(tu)
+				var phantom_def: Dictionary = _ctx_of(tu, false, _held_for(tu, round_now))
 				phantom_def["regeneration"] = false
 				var per := int(RulesRegistry.unit_param(su["unit"] as GameUnit, "Scourge",
 					"phantom_wounds_per_save_one", 2))
@@ -964,11 +974,13 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 					var without := AiEv.profile_ev(plain, att, phantom_def, d, false)
 					phantom += int(round((with_shred - without) * per))
 			if cast_phase_enabled():
-				_apply_expected_wounds(tu, AiEv.shoot_ev(profiles, att, _ctx_of(tu), d))
+				_apply_expected_wounds(tu, AiEv.shoot_ev(profiles, att,
+					_ctx_of(tu, false, _held_for(tu, round_now)), d))
 			else:
 				# Seam OFF: the legacy spell rider, verbatim from dabd1da — the
 				# sub-phase above never ran, so casting only happens inside a shoot pick.
-				var volley := AiEv.shoot_ev(profiles, att, _ctx_of(tu), d)
+				var volley := AiEv.shoot_ev(profiles, att,
+					_ctx_of(tu, false, _held_for(tu, round_now)), d)
 				var sp := spell_ev_of(su, tu, d)
 				if float(sp["ev"]) > 0.0:
 					volley += float(sp["ev"])
@@ -1153,8 +1165,11 @@ static func _append_attached_models(next: Dictionary, u: Dictionary, out: Array)
 ## `melee`: a FATIGUED unit hits only on unmodified 6s in melee (GF v3.5.1
 ## p.9) — approximated as Quality 6 for the EV; shooting is unaffected. The
 ## EV layer itself is fatigue-blind, so the snapshot flag must be priced here.
-static func _ctx_of(su: Dictionary, melee := false) -> Dictionary:
-	var ctx := AiEv.ctx_for(su["unit"], bool(su.get("in_cover", false)))
+## `held` (rules 3.6 SHO-05 / SHO-06e): the table's Hold read — not moved this round. Stamped
+## through `ctx_for` so the Artillery shooter +1 and target -1 gates can see it.
+static func _ctx_of(su: Dictionary, melee := false, held := true) -> Dictionary:
+	var ctx := AiEv.ctx_for(su["unit"], bool(su.get("in_cover", false)), 0, held)
+	ctx["held"] = held
 	ctx["models"] = int(su["alive"])
 	# Rules 3.6 (SHO-09s): the two TARGET-STATE facts the conditional-AP arms read, off the same
 	# snapshot `_below_half` already measures for morale.
@@ -1169,6 +1184,20 @@ static func _ctx_of(su: Dictionary, melee := false) -> Dictionary:
 	if melee and (bool(su.get("fatigued", false)) or bool(su.get("shaken", false))):
 		ctx["fatigued"] = true
 	return ctx
+
+
+## Rules 3.6 (SHO-05 / SHO-06e): the table's Hold read for a snapshot unit — `moved_round` against
+## the round the sim is resolving, the SAME expression main.gd's `_solo_unit_held` uses. Since
+## FAB-A5 the sim writes its OWN stamp (`su["_moved_round"]`, set by `resolve`'s move arms); the
+## live unit is only the fallback for a snapshot unit that never moved inside the resolution.
+## No stamp and no unit reference means held, the old default.
+static func _held_for(su: Dictionary, round_no: int) -> bool:
+	if su.has("_moved_round"):
+		return int(su["_moved_round"]) != round_no
+	var unit := su.get("unit") as GameUnit
+	if unit == null:
+		return true
+	return int(unit.unit_properties.get("moved_round", -1)) != round_no
 
 
 ## Weapon profiles with attacks scaled to the snapshot's survivors (dead models
