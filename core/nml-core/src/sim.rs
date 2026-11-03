@@ -2718,12 +2718,12 @@ fn reposition_artillery_for(
 /// table ranks candidates by EV to pick the BEST one, but Re-Position
 /// Artillery only ever asks whether ONE exists (`== null`), so the ranking
 /// is not replicated here — a scan over max weapon range + LOS (or
-/// Indirect) answers the same boolean. `shooting_range_bonus` (a flat
-/// per-unit add, e.g. Royal Legion +4") is unmodelled everywhere in this
-/// port (io.rs) and stays unmodelled here too.
+/// Indirect) answers the same boolean. `shooting_range_bonus`'s Royal Legion
+/// half rides each profile's `reach_bonus_in` (rules 3.6); spell tokens stay
+/// unmodelled here (io.rs).
 fn has_shoot_target(statics: &[UnitStatic], state: &State, arty: usize) -> bool {
     let us = &statics[state.roster.profile[arty]];
-    let max_range = us.shoot.iter().map(|p| p.range).max().unwrap_or(0) as f64;
+    let max_range = us.shoot.iter().map(|p| p.range as f64 + p.reach_bonus_in).fold(0.0_f64, f64::max);
     if max_range <= 0.0 {
         return false;
     }
@@ -4725,7 +4725,7 @@ pub fn profiles_of(us: &UnitStatic, alive: i64, d: f64, sc: &mut Scratch) {
     sc.fold.clear();
     sc.fold_set = false;
     for (i, p) in us.shoot.iter().enumerate() {
-        if (p.range as f64) < d {
+        if (p.range as f64) + p.reach_bonus_in < d {
             continue;
         }
         sc.keep.push(i);
@@ -4771,7 +4771,7 @@ pub fn reach_rescale(us: &UnitStatic, alive: i64, a_pos: &[[f64; 3]], b_pos: &[[
         if p.extra_attack_q > 0 {
             continue;
         }
-        let n = (gaps.iter().filter(|&&g| g <= p.range as f64).count() as i64).min(alive);
+        let n = (gaps.iter().filter(|&&g| g <= p.range as f64 + p.reach_bonus_in).count() as i64).min(alive);
         sc.attacks[k] = effective_attacks(p.attacks, n, us.model_count);
     }
 }
@@ -5141,7 +5141,7 @@ pub fn member_profiles_of(
             // and indexes the folded list through `keep`.
             if melee {
                 sc.attacks.push(a);
-            } else if (p.range as f64) >= d {
+            } else if (p.range as f64) + p.reach_bonus_in >= d {
                 let idx = sc.fold.len();
                 sc.keep.push(idx);
                 sc.attacks.push(a);
@@ -5272,11 +5272,11 @@ fn sighted_profiles_of(
         0.0
     };
     for (i, p) in us.shoot.iter().enumerate() {
-        if (p.range as f64) + mark_range < d {
+        if (p.range as f64) + p.reach_bonus_in + mark_range < d {
             continue;
         }
         sc.keep.push(i);
-        let reach = sight_reach_in(p.range as f64 + mark_range, state.aircraft[ti], def);
+        let reach = sight_reach_in(p.range as f64 + p.reach_bonus_in + mark_range, state.aircraft[ti], def);
         // Indirect (GF v3.5.1) "may target enemies that are not in line of
         // sight as if in line of sight": the range gate stays, the sight test
         // goes (main.gd:4136-4138).
@@ -5292,6 +5292,10 @@ fn sighted_profiles_of(
         if mark_indirect && !p.indirect && seen > 0 {
             trace_rule("volley", "Indirect Mark",
                 &format!("{} fires at {} without line of sight", statics[state.roster.profile[mi]].name, statics[state.roster.profile[ti]].name));
+        }
+        if p.reach_bonus_in > 0.0 && (p.range as f64) < d {
+            trace_rule("volley", &p.reach_bonus_rule,
+                &format!("{} gains +{:.0}\" reach on {}", statics[state.roster.profile[mi]].name, p.reach_bonus_in, statics[state.roster.profile[ti]].name));
         }
         if mark_range > 0.0 && (p.range as f64) < d {
             trace_rule("volley", "Increased Shooting Range Mark",
@@ -8513,7 +8517,7 @@ fn s10_dest_arms(
             let range = statics[next.roster.profile[si]]
                 .shoot
                 .iter()
-                .map(|w| w.range as f64)
+                .map(|w| w.range as f64 + w.reach_bonus_in)
                 .fold(0.0_f64, f64::max);
             return s10_kite(next, statics, si, en, centre, ec, enemy_dist, range, band_in, hold);
         }
