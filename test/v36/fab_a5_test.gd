@@ -5,6 +5,7 @@ extends GdUnitTestSuite
 ## no -1; a gun that held keeps its +1. Driven through BattleSim.capture + BattleSim.resolve, so
 ## the shoot leg's own ctx build is what is measured.
 
+## RED proof (CI red at the RED commit, gdUnit shard 8): https://github.com/DutchMaxwell/Niemandsland/actions/runs/41597416642/job/125789003687
 const IN2M := 0.0254
 const ROUND := 73
 
