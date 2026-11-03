@@ -1062,6 +1062,19 @@ static func block_chance(defense: int, ap: int, bane: bool) -> float:
 	return clampf(p, 0.0, 1.0)
 
 
+## The widened Bane window (rules 3.6 spell tokens): every successful unmodified save at or above
+## `from` re-rolls once, in addition to the base sixes. `from >= 6` is exactly block_chance.
+static func block_chance_from(defense: int, ap: int, bane: bool, from: int) -> float:
+	if from >= AiCombatMath.UNMODIFIED_SIX:
+		return block_chance(defense, ap, bane)
+	var p := AiCombatMath.success_chance(AiCombatMath.save_target(defense, ap))
+	if bane:
+		var target := clampi(AiCombatMath.save_target(defense, ap), AiCombatMath.BEST_HIT_TARGET, AiCombatMath.UNMODIFIED_SIX)
+		var first := maxi(clampi(from, AiCombatMath.BEST_HIT_TARGET, AiCombatMath.UNMODIFIED_SIX), target)
+		p -= float(7 - first) / 6.0 * (1.0 - p)
+	return clampf(p, 0.0, 1.0)
+
+
 ## Versatile Attack (army-book): over 9" the unit picks ONE effect for the activation — AP(+1) OR +1 to
 ## hit. This is the pure, EV-optimal chooser: given the composed to-hit target, the target's Defense, the
 ## profile AP and Bane, it returns which mode yields more unsaved wounds per attack. BOTH the EV metric

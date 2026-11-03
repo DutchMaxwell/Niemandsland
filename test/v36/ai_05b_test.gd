@@ -97,6 +97,9 @@ func test_the_widened_window_re_rolls_a_successful_five() -> void:
 	assert_float(frag).is_equal_approx(32.0 / 9.0, EPS)
 	assert_bool(frag > 28.0 / 9.0 + EPS).override_failure_message("the sixes-only leg would stop at 28/9").is_true()
 
+	assert_float(AiEv.block_chance_from(4, 0, true, 6)).is_equal_approx(AiEv.block_chance(4, 0, true), EPS)
+	assert_bool(AiEv.block_chance_from(4, 0, true, 5) < AiEv.block_chance(4, 0, true)).is_true()
+
 
 ## Case 3 — the four documented no-ops leave the EV on the plain spell even with every target
 ## state they name switched on.
