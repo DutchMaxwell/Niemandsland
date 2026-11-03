@@ -1,5 +1,7 @@
-//! SHO-01b tests (rules 3.6, lane shoot): an Indirect weapon drops the target's cover only after a
-//! Hold. Blast and Ignores Cover keep dropping it at every epoch.
+//! SHO-01b tests (rules 3.6, lane shoot): an Indirect weapon keeps the target's terrain cover at
+//! epoch 73 — the entry lifts only sight-blocker cover, and the engine grants Cover terrain only,
+//! so a Hold changes nothing (FAB-A3 corrects the earlier Hold reading). Blast and Ignores Cover
+//! keep dropping it at every epoch, and below 73 every Indirect shot drops it.
 use super::super::*;
 
 use crate::acts::{read_act_header, EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36};
@@ -45,7 +47,7 @@ fn a_moved_indirect_shooter_lets_the_target_keep_cover_at_epoch_73() {
         &us.shoot, &[0], &[6], &moved, &covered_defender(), 12.0, &mut tray);
     assert_eq!(save_target_of(&out), 3, "a moved Indirect shot counts the target's cover");
     assert!(
-        out.log.iter().any(|l| l.contains("cover counts") && l.contains("moved")),
+        out.log.iter().any(|l| l.contains("cover counts")),
         "the kept cover names itself (rules-must-log): {:?}",
         out.log
     );
@@ -72,18 +74,19 @@ fn a_moved_indirect_shooter_ignores_cover_at_epoch_72() {
     );
 }
 
-/// After a Hold the Indirect shot ignores cover again at epoch 73.
+/// A held Indirect shooter at epoch 73 keeps the target's terrain cover too (FAB-A3): there is no
+/// sight-blocker cover to lift, so the Hold no longer drops anything.
 #[test]
-fn a_held_indirect_shooter_ignores_cover_at_epoch_73() {
+fn a_held_indirect_shooter_keeps_cover_at_epoch_73() {
     let us = cover_static(EPOCH_73_V36);
     let held = Ctx { held: true, ..us.ctx };
     let mut tray = Tray::seeded(27);
     let out = resolve_shooting_with_tray(
         &us.shoot, &[0], &[6], &held, &covered_defender(), 12.0, &mut tray);
-    assert_eq!(save_target_of(&out), 4, "a Hold drops the target's cover at epoch 73");
+    assert_eq!(save_target_of(&out), 3, "a held Indirect shot counts the target's terrain cover");
     assert!(
-        !out.log.iter().any(|l| l.contains("cover counts")),
-        "no kept-cover line after a Hold: {:?}",
+        out.log.iter().any(|l| l.contains("cover counts")),
+        "the kept cover names itself: {:?}",
         out.log
     );
 }
