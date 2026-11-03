@@ -119,3 +119,33 @@ func test_a_charger_that_dealt_more_strikes_still_loses_with_its_move_wounds_at_
 func test_the_same_charger_still_wins_on_struck_wounds_at_epoch_72() -> void:
 	var scores: Array = await _scores(AiActRecorder.EPOCH_73_V36 - 1)
 	assert_array(scores).is_equal([3, 2])
+
+
+## FAB-B2: the AI door reads the same pre-melee activation delta as the human door. The AI charger's
+## activation-start snapshot makes a wound a spell landed earlier in the activation count as TAKEN.
+func _ai_charge(epoch: int, pre_wounds: int) -> String:
+	AiActRecorder.rules_epoch = epoch
+	var charger := _unit(2, "Charger", 0.0)
+	var defender := _unit(1, "Defender", 1.0)
+	await _main.begin_activation(charger)
+	(charger.models[0] as ModelInstance).wounds_current -= pre_wounds
+	_main.seed_tray_rng(7)
+	await _main._run_ai_melee({"unit": charger, "target": defender, "charge_from_in": 1.0,
+		"dangerous_wounds_taken": 0})
+	var text := _log_text()
+	await E2EBoot.settle(get_tree())
+	return text
+
+
+func test_the_ai_door_counts_its_pre_melee_activation_wounds_at_epoch_73() -> void:
+	var text: String = await _ai_charge(AiActRecorder.EPOCH_73_V36, 2)
+	assert_str(text).contains("Charger took 2")
+	assert_str(text).contains("Defender took 0")
+	assert_str(text).contains("Charger loses the melee")
+
+
+## Below 73 the pre-melee delta stays out of the comparison, so the unarmed pair draws as before.
+func test_the_ai_pre_melee_activation_wounds_are_ignored_at_epoch_72() -> void:
+	var text: String = await _ai_charge(AiActRecorder.EPOCH_73_V36 - 1, 2)
+	assert_str(text).contains("a draw — no morale test")
+	assert_str(text).not_contains("took 2")

@@ -6668,12 +6668,12 @@ func begin_activation(unit: GameUnit) -> void:
 	await _solo_try_reanimation(unit)
 
 
-## MEL-10h (rules 3.6): the acting HUMAN unit's wounds at its activation start, so the melee can count
-## the Dangerous terrain it took on the charge move as wounds TAKEN (the AI path reads the move's own
-## delta). The first door of an activation wins; the attack door later in the same activation must not
-## rebase it. Cleared when the activation ends or the round advances.
+## Rules 3.6: the ACTING unit's wounds at its activation start, so the melee can count the Dangerous
+## terrain, a spell and any other wound taken before the melee as wounds TAKEN (FAB-B2: both doors).
+## The first door of an activation wins; the attack door later in the same activation must not rebase
+## it. Cleared when the activation ends or the round advances.
 func _solo_snapshot_activation_wounds(unit: GameUnit) -> void:
-	if unit == null or _solo_is_ai_unit(unit):
+	if unit == null:
 		return
 	var host := _solo_combat_unit(unit)
 	if host == null:
@@ -6684,8 +6684,8 @@ func _solo_snapshot_activation_wounds(unit: GameUnit) -> void:
 	_solo_activation_wounds_start[id] = _solo_unit_wounds_now(host)
 
 
-## Wounds the human unit lost since its activation start (Dangerous move, Hazardous earlier in the
-## activation, ...). Read BEFORE the melee strikes so only pre-melee self-wounds enter the tally; the
+## Wounds the unit lost since its activation start (Dangerous move, a spell, Hazardous earlier in the
+## activation, ...). Read BEFORE the melee strikes so only pre-melee wounds enter the tally; the
 ## melee's own Hazardous ones keep their separate `_solo_hazard_self` leg.
 func _solo_activation_self_wounds(unit: GameUnit) -> int:
 	if unit == null:
@@ -8245,7 +8245,7 @@ var _solo_retaliate_credit := 0   # Retaliate wounds of the LAST strike phase �
 var _solo_last_save_ones := 0   # resolver wave A: unmodified Defense 1s of the LAST save batch (Bloodthirsty Fighter)
 var _solo_hazard_self := {}   # unit instance id -> Hazardous self-wounds since the current melee began (rules 3.6 tally)
 var _solo_regen_ignored := 0   # MEL-10r: wounds Regeneration cancelled since the current melee began (rules 3.6 tally)
-var _solo_activation_wounds_start := {}   # human unit instance id -> wounds at ITS activation start (rules 3.6 taken tally)
+var _solo_activation_wounds_start := {}   # unit instance id -> wounds at ITS activation start (rules 3.6 taken tally)
 var _solo_scourge_wounds := 0   # SHO-15a: the volley's Scourge phantom wounds, read once by _solo_shooting_morale
 var _solo_melee_scourge := {}   # unit instance id -> Scourge phantom wounds taken in the current melee (SHO-15b tally)
 
@@ -11705,7 +11705,9 @@ func _run_ai_melee(report: Dictionary) -> void:
 	await _solo_self_destruct_post_melee(target, unit)
 	# — Morale: a destroyed side loses first; otherwise the lower wound score loses (tie = nobody). Fear(X) (GF/AoF
 	#   v3.5.1 p.13) counts as +X dealt wounds for THIS comparison only (never changes wounds applied) —
-	var scores: Array = _solo_melee_scores(unit, ai_caused, target, human_caused, int(report.get("dangerous_wounds_taken", 0)))
+	var self_taken: int = maxi(_solo_activation_self_wounds(unit), int(report.get("dangerous_wounds_taken", 0)))
+	var scores: Array = _solo_melee_scores(unit, ai_caused, target, human_caused, self_taken,
+		_solo_activation_self_wounds(target))
 	var ai_score: int = scores[0]
 	var human_score: int = scores[1]
 	var loser: GameUnit = _solo_melee_loser(unit, ai_score, target, human_score)
@@ -11727,13 +11729,15 @@ func _run_ai_melee(report: Dictionary) -> void:
 
 
 ## Rules 3.6 (EPOCH_73_V36): the loser TOOK more wounds in the activation, so each side scores what its ENEMY took:
-## wounds dealt + the Fear it bears + the enemy's self-wounds (`a_self`: a's Dangerous test on its charge move;
-## the Hazardous tally). Lower loses, as before; below 73 only dealt + Fear count. Returns [a_score, b_score].
-func _solo_melee_scores(a: GameUnit, a_caused: int, b: GameUnit, b_caused: int, a_self: int = 0) -> Array:
+## wounds dealt + the Fear it bears + the enemy's pre-melee activation wounds (`a_self` / `b_self`: what the
+## unit lost before the strikes — Dangerous, a spell, Hazardous) plus the melee's own Hazardous tally.
+## Lower loses, as before; below 73 only dealt + Fear count. Returns [a_score, b_score].
+func _solo_melee_scores(a: GameUnit, a_caused: int, b: GameUnit, b_caused: int,
+		a_self: int = 0, b_self: int = 0) -> Array:
 	var a_score: int = AiCombatMath.fear_adjusted_wounds(a_caused, _solo_unit_rating(a, "Fear"))
 	var b_score: int = AiCombatMath.fear_adjusted_wounds(b_caused, _solo_unit_rating(b, "Fear"))
 	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
-		a_score += int(_solo_hazard_self.get(b.get_instance_id(), 0))
+		a_score += b_self + int(_solo_hazard_self.get(b.get_instance_id(), 0))
 		b_score += a_self + int(_solo_hazard_self.get(a.get_instance_id(), 0))
 		# SHO-15b Scourge: the phantom wounds a side TOOK lift the enemy's tally, next to the self-wounds.
 		a_score += int(_solo_melee_scourge.get(b.get_instance_id(), 0))
@@ -14667,7 +14671,8 @@ func _run_human_melee(attacker: GameUnit, target: GameUnit, auto: bool = false) 
 	await _solo_self_destruct_post_melee(target, attacker)
 	# — Morale: a destroyed side loses first; otherwise the lower wound score loses. Fear(X) (GF/AoF v3.5.1 p.13) adds
 	#   +X to the bearer's tally for THIS comparison only. —
-	var scores: Array = _solo_melee_scores(attacker, human_caused, target, ai_caused, self_taken)
+	var scores: Array = _solo_melee_scores(attacker, human_caused, target, ai_caused, self_taken,
+		_solo_activation_self_wounds(target))
 	var human_score: int = scores[0]
 	var ai_score: int = scores[1]
 	var loser: GameUnit = _solo_melee_loser(attacker, human_score, target, ai_score)
