@@ -25,11 +25,11 @@ func after_test() -> void:
 	AiActRecorder.rules_epoch = _epoch_before
 
 
-func _unit(unit_name: String, weapons: Array) -> GameUnit:
+func _unit(unit_name: String, weapons: Array, rules: Array = ["Warbound"]) -> GameUnit:
 	var u: GameUnit = auto_free(GameUnit.new())
 	u.unit_id = "sho18c_%s" % unit_name
 	u.unit_properties = {"player_id": 2, "name": unit_name, "quality": 4, "defense": 4,
-		"special_rules": ["Warbound"], "game_system": "gf", "faction_folder": "war_disciples"}
+		"special_rules": rules, "game_system": "gf", "faction_folder": "war_disciples"}
 	var m := ModelInstance.new()
 	m.is_alive = true
 	u.models.append(m)
@@ -64,12 +64,12 @@ func _profile(main: Probe, striker: GameUnit, dist_in: float, melee: bool) -> Di
 	return prof
 
 
-func _shoot_wounds(epoch: int, dist_in: float) -> int:
+func _shoot_wounds(epoch: int, dist_in: float, rules: Array = ["Warbound"]) -> int:
 	AiActRecorder.rules_epoch = epoch
 	var main: Probe = auto_free(Probe.new())
 	main.battle_log = auto_free(BattleLog.new())
 	main.faces = [1]
-	var striker := _unit("Warbound Rifles", [{"name": "Rifle", "range": 24, "attacks": 2}])
+	var striker := _unit("Warbound Rifles", [{"name": "Rifle", "range": 24, "attacks": 2}], rules)
 	var target := _unit("Target", [])
 	var profile := _profile(main, striker, dist_in, false)
 	return await main._solo_save_batch(striker, target, "Rifle", 1, 4, 0, profile,
@@ -93,6 +93,13 @@ func test_a_six_inch_shot_pays_no_shred_alias_at_epoch_73() -> void:
 	assert_int(await _shoot_wounds(AiActRecorder.EPOCH_73_V36, 6.0)) \
 		.override_failure_message("the 6\" shot shreds — the gate never sees a marker name") \
 		.is_equal(1)
+
+
+## (a) The plain unit-level Shred grant is NOT an alias: it has no distance gate and still pays at 6".
+func test_plain_unit_level_shred_still_pays_at_six_inches_at_epoch_73() -> void:
+	assert_int(await _shoot_wounds(AiActRecorder.EPOCH_73_V36, 6.0, ["Shred"])) \
+		.override_failure_message("plain Shred must stay ungated at 6\"") \
+		.is_equal(2)
 
 
 ## The working half: over 9" the table still pays the alias.
