@@ -1746,6 +1746,7 @@ fn spend_exchange_wounded(
 /// chain may mark once per round; the rule's base name (the entry minus
 /// " Mark") lands on the ATTACKER as a once-grant, and `ctx_live` carries it
 /// into the very rolls this seam precedes.
+#[allow(clippy::too_many_arguments)] // the tray and report join the seam's parity args
 fn tray_vs_marks(
     statics: &[UnitStatic],
     next: &mut State,
@@ -1784,7 +1785,7 @@ fn tray_vs_marks(
                 let passed = control_morale_passed(statics, next, ti,
                     ControlMoraleSource { owner: &owner, rule: "Spell Drain" }, seams, tray, shot);
                 if !passed {
-                    let spent = b.spell_token_drain as i64;
+                    let spent = b.spell_token_drain;
                     next.casts[ti] = (next.casts[ti] - spent).max(0);
                     shot.log.push(format!("Spell Drain: {} loses {} spell tokens", statics[next.roster.profile[ti]].name, before - next.casts[ti]));
                 } else {
