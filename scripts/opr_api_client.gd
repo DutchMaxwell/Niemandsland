@@ -673,6 +673,15 @@ static func rules_core_version(system_abbrev: String) -> String:
 	return version
 
 
+## O-CITE: the player-visible rules citation for a scope - "GF 3.6", "AoF 3.6", "GF/AoF 3.6" -
+## version from rules_core_version (major.minor only), never a second constant.
+static func rules_cite(scope: String) -> String:
+	match scope.to_lower():
+		"gf": return "GF " + _major_minor(rules_core_version("gf"))
+		"aof": return "AoF " + _major_minor(rules_core_version("aof"))
+		_: return "GF/AoF " + _major_minor(rules_core_version("gf"))
+
+
 ## D5 (b), 27.10.2026: a book on OTHER rules is imported WITH a warning — the player may
 ## play on, the refusal for online rooms and saves follows in 0.3.15. Same major.minor = same rules,
 ## silent (3.6.1 books are fine on 3.6.0). "" when compatible or when either side says nothing.
