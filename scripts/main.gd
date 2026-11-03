@@ -5088,6 +5088,19 @@ func _solo_resolve_spell_damage(caster: GameUnit, caster_unit: GameUnit, spell_n
 			applied.append("Disintegrate — ignores Regeneration, AP(+2) vs Tough(3)+")
 		if _solo_spell_has_rule(effect, "Shatter"):
 			applied.append("Shatter — sixes get AP(+3)")
+		var state_name := "Shaken + Fatigued" if target.is_shaken and target.is_fatigued \
+			else ("Shaken" if target.is_shaken else "Fatigued")
+		if int(facets.get("ap_vs_shaken", 0)) > 0 and bool(target_state.get("shaken_or_fatigued", false)):
+			applied.append("Purge +%d AP vs %s" % [int(facets["ap_vs_shaken"]), state_name])
+		if bool(facets.get("bane_above_half", false)) and bool(target_state.get("above_half_strength", false)):
+			applied.append("Decimate — Bane vs a target above half")
+		if int(facets.get("bane_tough3_low", 0)) > 1 and _solo_unit_tough(target) >= 3:
+			applied.append("Obliterate — save window 5+ vs Tough(3)+, Regeneration bypassed")
+		if int(facets.get("bane_shaken_low", 0)) > 1 and bool(target_state.get("shaken_or_fatigued", false)):
+			applied.append("Reap — save window 5+ vs %s" % state_name)
+		if int(facets.get("bane_def56_low", 0)) > 1 \
+				and _solo_defense_vs(target, AiCombatMath.HIT_SOURCE_SPELL) >= 5:
+			applied.append("Fragment — save window 5+ vs Defense 5+")
 		if not applied.is_empty():
 			_log_rule_event(BattleLog.Category.COMBAT, "%s: %s" % [spell_name, ", ".join(PackedStringArray(applied))], true)
 	var alive_before: int = SoloController.combined_alive(target)   # NML-966: trigger reads combined
@@ -5117,10 +5130,16 @@ func _solo_resolve_spell_damage(caster: GameUnit, caster_unit: GameUnit, spell_n
 	var base_defense: int = _solo_defense_vs(target, AiCombatMath.HIT_SOURCE_SPELL)
 	_solo_log_defense_vs_spell(target, base_defense)
 	var def_ctx := {"defense": base_defense, "tough": _solo_unit_tough(target),
-		"above_half_strength": bool(target_state.get("above_half_strength", false))}
+		"above_half_strength": bool(target_state.get("above_half_strength", false)),
+		"shaken_or_fatigued": target.is_shaken or target.is_fatigued,
+		# Demolish's near-terrain read is deliberately unknown here (the no-op spell.rs documents).
+		"near_terrain": false}
 	var ap := AiSpell.effective_ap(facets, def_ctx)
-	var bane := bool(facets.get("bane", false))
-	var profile := {"name": spell_name, "ap": ap, "deadly": int(facets.get("deadly", 0)),
+	var window := AiSpell.bane_window(facets, def_ctx)
+	var bane := bool(window.get("bane", false))
+	var bane_from := int(window.get("from", 6))
+	# Scourge phantom wounds feed the SHOOTING tally (SHO-15a); range > 0 selects that bucket.
+	var profile := {"name": spell_name, "ap": ap, "deadly": int(facets.get("deadly", 0)), "range": 1,
 		"shred": bool(facets.get("shred", false)), "rules": effect.get("weapon_rules", [])}
 	var human_defends: bool = not _solo_is_ai_unit(target)
 	# A4 for spells: a Deadly spell's saves return the RAW unsaved count, which lands per model below.
@@ -5132,10 +5151,12 @@ func _solo_resolve_spell_damage(caster: GameUnit, caster_unit: GameUnit, spell_n
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s: %d hit%s on a 6 → AP(+%d)" % [
 				spell_name, upgraded, ("" if upgraded == 1 else "s"), int(facets.get("on6_ap", 0))], true)
 		caused += await _solo_save_batch(caster, target, "%s (on-6)" % spell_name, upgraded,
-			base_defense, ap + int(facets.get("on6_ap", 0)), profile, human_defends, bane, deadly <= 0)
+			base_defense, ap + int(facets.get("on6_ap", 0)), profile, human_defends, bane, deadly <= 0,
+			false, {}, -1.0, 0.0, bane_from)
 	if total_hits - upgraded > 0:
 		caused += await _solo_save_batch(caster, target, spell_name, total_hits - upgraded,
-			base_defense, ap, profile, human_defends, bane, deadly <= 0)
+			base_defense, ap, profile, human_defends, bane, deadly <= 0,
+			false, {}, -1.0, 0.0, bane_from)
 	# Regeneration: only Bane / Disintegrate wounds bypass it (the facets carry this; Lacerate re-rolls only).
 	var landed: int
 	var proof := bool(facets.get("ignores_regen", false))
@@ -9108,7 +9129,7 @@ func _solo_resolve_saves(striker: GameUnit, defender: GameUnit, weapon_name: Str
 func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String, count: int,
 		base_defense: int, ap: int, profile: Dictionary, human_defends: bool, bane: bool,
 		apply_deadly: bool = true, over9: bool = false, solo: Dictionary = {},
-		dist_in: float = -1.0, charge_from_in: float = 0.0) -> int:
+		dist_in: float = -1.0, charge_from_in: float = 0.0, bane_from: int = 6) -> int:
 	if count <= 0:
 		return 0
 	var shred_alias_live: bool = true
@@ -9214,7 +9235,7 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 		# Widened re-roll window (wave 4: Bestial/Mischievous Boost — reroll_save_low past over_in,
 		# shooting only): the window's successful 5s+ re-roll beside the base 6s leg; low 6 = no boost.
 		var win: Dictionary = AiEv.bane_boost_window(striker, over9)
-		var bane_low: int = int(win.get("low", AiCombatMath.UNMODIFIED_SIX))
+		var bane_low: int = mini(int(win.get("low", AiCombatMath.UNMODIFIED_SIX)), bane_from)
 		# SHO-10: the words naming the target condition that opened the window ("" = unconditional).
 		var bane_spec: Dictionary = profile.get("bane_condition", {})
 		var bane_why := "" if bane_spec.is_empty() else AiCombatMath.conditional_ap_why(bane_spec)
@@ -9224,12 +9245,14 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 				var bane_name := _solo_bane_facet_name(striker, int(profile.get("range", 0)))
 				if bane_name.is_empty() and _solo_profile_lacerate_only(profile):
 					bane_name = "Lacerate"
-				if win.is_empty():
+				if win.is_empty() and bane_from >= AiCombatMath.UNMODIFIED_SIX:
 					battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s re-rolls %d unmodified Defense 6%s" % [
 						bane_name if not bane_name.is_empty() else "Bane", defender.get_name(), sixes, ("" if sixes == 1 else "s")], true)
 				else:
+					var bane_rule := str(win["rule"]) if not win.is_empty() \
+						else (bane_name if not bane_name.is_empty() else "Bane")
 					battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s re-rolls %d unmodified Defense roll%s of %d+%s" % [
-						str(win["rule"]), defender.get_name(), sixes, ("" if sixes == 1 else "s"), bane_low,
+						bane_rule, defender.get_name(), sixes, ("" if sixes == 1 else "s"), bane_low,
 						("" if bane_why.is_empty() else " (%s)" % bane_why)], true)
 			reroll = await _owner_roll(defender, sixes, base_defense + ap, "defense",
 				"Defense re-roll (Bane) vs %s" % weapon_name, {"what": "Bane re-roll vs %s" % weapon_name})
