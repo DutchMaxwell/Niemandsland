@@ -1205,7 +1205,7 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	await _solo_animate_move(solo_controller.last_move_paths)
 	if has_move and solo_controller.last_move_climb_in > 0.0:
 		_log_rule_event(BattleLog.Category.MOVEMENT, "%s climbs onto terrain (+%.1f\" of its move) — %s" % [
-			unit.get_name(), solo_controller.last_move_climb_in, OPRApiClient.rules_cite("gf")], true)
+			unit.get_name(), solo_controller.last_move_climb_in, OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))], true)
 	if has_move:
 		await _solo_pace_attention()   # (f) before attacks resolve
 		_solo_spend_once_kind(unit, ["speed"])   # NML-006: speed once-mods are spent by the executed move
@@ -1334,7 +1334,7 @@ func _solo_run_redeployment() -> void:
 		if battle_log != null:
 			_log_rule_event(BattleLog.Category.MOVEMENT,
 				"Re-Deployment: %s is removed and deployed again (%.1f\" nearer a marker) — %s" % [
-				(rd["unit"] as GameUnit).get_name(), float(rd["gain_in"]), OPRApiClient.rules_cite("gf")], true)
+				(rd["unit"] as GameUnit).get_name(), float(rd["gain_in"]), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(rd["unit"] as GameUnit))], true)
 	if battle_log != null and opr_army_manager != null:
 		var yours: PackedStringArray = []
 		for u in opr_army_manager.get_game_units_for_player(solo_controller.human_slot):
@@ -2007,7 +2007,7 @@ func _solo_after_activation() -> void:
 		if _solo_cargo_hint_round != opr_army_manager.current_round:
 			_solo_cargo_hint_round = opr_army_manager.current_round
 			_log_rule_event(BattleLog.Category.GENERAL,
-				"Only embarked passengers are left this round — click a passenger to disembark, or pick 'Stay aboard' to spend its activation inside (%s)" % OPRApiClient.rules_cite("gf"), true)
+				"Only embarked passengers are left this round — click a passenger to disembark, or pick 'Stay aboard' to spend its activation inside (%s)" % OPRApiClient.rules_cite(_solo_rules_system()), true)
 		return
 	# Coverage wave — Second Wind (Inquisitorial Agent / Martial Prowess): before the round closes,
 	# a carrier may buy a SECOND activation (once per game, 1/3-of-carriers cap per round).
@@ -2587,9 +2587,9 @@ func _solo_auto_seize() -> void:
 			if not SoloController.objective_info_in_range(entry, objectives[i]):
 				continue
 			if str(entry.get("lock_rule", "")).is_empty():
-				reasons.append("%s arrived from Ambush this round and cannot seize or contest (%s)" % [str(entry["name"]), OPRApiClient.rules_cite("gf/aof")])
+				reasons.append("%s arrived from Ambush this round and cannot seize or contest (%s)" % [str(entry["name"]), OPRApiClient.rules_cite(_solo_rules_system())])
 			else:
-				reasons.append("%s was placed by %s this round and cannot seize or contest (rules 3.6)" % [str(entry["name"]), str(entry["lock_rule"])])
+				reasons.append("%s was placed by %s this round and cannot seize or contest (%s)" % [str(entry["name"]), str(entry["lock_rule"]), OPRApiClient.rules_cite(_solo_rules_system())])
 		if not reasons.is_empty():
 			locked_near[i] = "; ".join(reasons)
 	var changed_indices := {}
@@ -2603,7 +2603,7 @@ func _solo_auto_seize() -> void:
 		# measurable across a self-play run rather than only human-readable in the battle log.
 		if solo_controller != null:
 			solo_controller.record_decision({"kind": "seize", "unit": "objective %d" % (idx + 1),
-				"rule": "Solo & Co-Op %s: a marker is held by the ONE side with non-Shaken models within 3\"" % OPRApiClient.rules_cite("aof"),
+				"rule": "Solo & Co-Op: a marker is held by the ONE side with non-Shaken models within 3\"",
 				"candidates": [], "chosen": ("neutral (contested)" if owner == 0 else _solo_player_label(owner)),
 				"why": "round-end seize", "data": {"index": idx, "owner": owner, "round": round_no}})
 		if network_manager != null:
@@ -3498,7 +3498,7 @@ func _on_solo_deploy_pressed() -> void:
 	if battle_log != null:
 		_log_rule_event(BattleLog.Category.GENERAL,
 			"Deployment roll-off: you %d — NACHTMAHR %d. The winner picks a table edge and deploys first (%s) [seed %d]" % [
-			you_roll, ai_roll, OPRApiClient.rules_cite("gf"), seed_value], false)
+			you_roll, ai_roll, OPRApiClient.rules_cite(_solo_rules_system()), seed_value], false)
 	if ai_roll > you_roll:
 		# NACHTMAHR picks its edge (v1 heuristic: opposite the human's army tray — the natural
 		# setup; objectives sit centre-line, so the edges are near-symmetric) and deploys first.
@@ -3557,6 +3557,16 @@ func _solo_human_gate_violation(gu: GameUnit) -> String:
 func _solo_army_points(slot: int) -> int:
 	var army = opr_army_manager.armies.get(slot) if opr_army_manager != null else null
 	return int(army.points) if army != null else 0
+
+
+## O-CITE: the current game's own system slug, for the game-scoped citation lines. The human army
+## carries it (the field the AI-list dialog normalises); the default system when none is loaded.
+func _solo_rules_system() -> String:
+	var slot: int = solo_controller.human_slot if solo_controller != null else 1
+	var army = opr_army_manager.armies.get(slot) if opr_army_manager != null else null
+	if army == null:
+		return RulesRegistry.DEFAULT_SYSTEM
+	return RulesRegistry.normalize_system(str(army.game_system_abbrev))
 
 
 ## The picked mission's attacker points factor (> 1 only for a roles mission that grants one).
@@ -3828,7 +3838,7 @@ func _solo_deploy_begin_side(ai_neg_z: bool) -> void:
 			aside_names.append((u as GameUnit).get_name())
 		battle_log.log_event(BattleLog.Category.GENERAL,
 			"You hold %d Ambush unit(s) in reserve on your tray (%s) — placement alternates from round 2 (%s)." % [
-				set_aside.size(), ", ".join(aside_names), OPRApiClient.rules_cite("gf/aof")], false)
+				set_aside.size(), ", ".join(aside_names), OPRApiClient.rules_cite(_solo_rules_system())], false)
 	# The player's SCOUT units are set aside for the scout phase (p.14: "May be set aside before
 	# deployment. After all other units are deployed …") — named so he keeps them on the tray.
 	var human_scouts: PackedStringArray = []
@@ -3839,7 +3849,7 @@ func _solo_deploy_begin_side(ai_neg_z: bool) -> void:
 			human_scouts.append(gu.get_name())
 	if not human_scouts.is_empty() and battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL,
-			"Scout phase later: keep %s on the tray — scouts deploy AFTER all other units (%s)" % [", ".join(human_scouts), OPRApiClient.rules_cite("gf")], false)
+			"Scout phase later: keep %s on the tray — scouts deploy AFTER all other units (%s)" % [", ".join(human_scouts), OPRApiClient.rules_cite(_solo_rules_system())], false)
 	_solo_deploy_fsm["human_scouts"] = human_scouts
 	_solo_deploy_fsm["phase"] = "main"
 	_solo_deploy_fsm["human_out"] = false
@@ -4254,7 +4264,7 @@ func _solo_deploy_newly_placed_human() -> Array:
 			gu.unit_properties["ambush_reserve"] = false
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.GENERAL,
-					"%s deploys normally — Ambush not used (%s: 'may be set aside')." % [gu.get_name(), OPRApiClient.rules_cite("gf/aof")], false)
+					"%s deploys normally — Ambush not used (%s: 'may be set aside')." % [gu.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(gu))], false)
 		out.append(gu)
 	return out
 
@@ -4299,7 +4309,7 @@ func _solo_deploy_phase_advance() -> void:
 			_solo_deploy_fsm["human_out"] = human_scouts.is_empty()
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.GENERAL,
-					"SCOUT phase: players alternate placing scouts — %s (%s)" % [solo_scout_band_words(), OPRApiClient.rules_cite("gf")], false)
+					"SCOUT phase: players alternate placing scouts — %s (%s)" % [solo_scout_band_words(), OPRApiClient.rules_cite(_solo_rules_system())], false)
 			if solo_scout_starts_with_first_turn(bool(_solo_deploy_fsm.get("winner_is_ai", false)),
 					not human_scouts.is_empty()):
 				_solo_deploy_ai_turn()
@@ -5957,7 +5967,7 @@ func _solo_pick_overlay_target(attacker: GameUnit, overlay: int, max_range: floa
 		rec_cands.append({"name": (refs[i] as GameUnit).get_name(), "ev": float(evs[i]),
 			"key": [bool(cands[i]["activated"]), bool(cands[i]["in_cover"]), float(dists[i])]})
 	solo_controller.record_decision({"kind": "target", "unit": attacker.get_name(),
-		"rule": "Solo %s: nearest/not-activated/open + weapon overlay" % OPRApiClient.rules_cite("aof"),
+		"rule": "Solo %s: nearest/not-activated/open + weapon overlay" % OPRApiClient.rules_cite(RulesRegistry.system_of_unit(attacker)),
 		"candidates": rec_cands, "chosen": (refs[idx] as GameUnit).get_name(), "why": why,
 		"data": {"overlay": overlay, "weapon": str(profile.get("name", "")), "considered": refs.size()}})
 	return refs[idx]
@@ -8826,7 +8836,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 	# the Counter-only / non-Counter sub-phases legitimately roll nothing when the unit lacks those weapons.
 	if not struck_any and filter == SoloStrike.ALL and battle_log != null:
 		_log_rule_event(BattleLog.Category.COMBAT,
-			"%s has no melee weapons in reach — no strikes (%s)" % [striker.get_name(), OPRApiClient.rules_cite("gf/aof")],
+			"%s has no melee weapons in reach — no strikes (%s)" % [striker.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(striker))],
 			_solo_is_ai_unit(striker))
 	if struck_any:
 		_solo_consume_once_mods(striker, defender, true)   # F4: once-mods spent by this strike phase
@@ -9617,7 +9627,7 @@ func _solo_land_deadly_wounds(target: GameUnit, weapon_name: String, deadly_x: i
 		_solo_rule_float(target, "Deadly(%d) → %d" % [deadly_x, dealt], Color(1.0, 0.5, 0.4))
 		if int(acc["forced"]) > 0:
 			battle_log.log_event(BattleLog.Category.COMBAT, "Deadly(%d): %d wound%s finish the already-wounded Tough model first (%s)" % [
-				deadly_x, int(acc["forced"]), ("" if int(acc["forced"]) == 1 else "s"), OPRApiClient.rules_cite("gf")], true)
+				deadly_x, int(acc["forced"]), ("" if int(acc["forced"]) == 1 else "s"), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(target))], true)
 	# A joined hero's casualties are parked through the hero's OWN unit (its unit_id), like the normal wound path.
 	var died_by_owner := {}   # GameUnit -> Array[ModelInstance]
 	for m in died_models:
@@ -10374,7 +10384,7 @@ func _on_transport_spill_dangerous(_transport: GameUnit, spilled: Array) -> void
 			continue
 		if battle_log != null:
 			_log_rule_event(BattleLog.Category.COMBAT,
-				"%s takes its Dangerous Terrain test after the wreck (%s)" % [unit.get_name(), OPRApiClient.rules_cite("gf")], true)
+				"%s takes its Dangerous Terrain test after the wreck (%s)" % [unit.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))], true)
 		await _run_ai_dangerous(unit, int((p as Array)[1]))
 
 
@@ -11578,7 +11588,7 @@ func _run_ai_melee(report: Dictionary) -> void:
 				var info := solo_controller.nearest_melee_pair_info(unit, target, false)
 				if info["gap_in"] <= SoloController.MELEE_ENGAGE_IN:
 					msg = "%s's charge falls short — %.1f\" above, melee reaches %.0f\" up (%s)" \
-						% [unit.get_name(), info["height_in"], SoloController.melee_vertical_in(), OPRApiClient.rules_cite("gf")]
+						% [unit.get_name(), info["height_in"], SoloController.melee_vertical_in(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))]
 			_log_rule_event(BattleLog.Category.COMBAT, msg, true)
 		# Stage seam: an early exit still closes its phase boundary — the falls-short line gets
 		# its own card instead of bleeding into the next activation.
@@ -11590,13 +11600,13 @@ func _run_ai_melee(report: Dictionary) -> void:
 	if snapped_ai < 0.0:
 		if battle_log != null:
 			_log_rule_event(BattleLog.Category.COMBAT,
-				"%s's charge falls short (%.1f\" gap, move budget spent) — %s 'as close as possible'" % [unit.get_name(), -snapped_ai, OPRApiClient.rules_cite("gf")], true)
+				"%s's charge falls short (%.1f\" gap, move budget spent) — %s 'as close as possible'" % [unit.get_name(), -snapped_ai, OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))], true)
 		await _solo_stage_phase("Charge")
 		_solo_stage_end()
 		return
 	if snapped_ai > 0.05 and battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT,
-			"%s charges into base contact (+%.1f\") — %s" % [unit.get_name(), snapped_ai, OPRApiClient.rules_cite("gf/aof")], true)
+			"%s charges into base contact (+%.1f\") — %s" % [unit.get_name(), snapped_ai, OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))], true)
 	# PILE-IN (GF v3.5.1 p.9, live-test Bug 18 + NML-208): once the chargers stand, every defender
 	# model without base contact MUST move up to 3" into contact — mandatory, so automated for both
 	# sides, VISIBLY (the models glide; a teleport read as "nothing happened" in the live test).
@@ -11606,10 +11616,10 @@ func _run_ai_melee(report: Dictionary) -> void:
 		await _solo_animate_move(pile_moves, false)   # NML-208: pile-in always glides
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT,
-				"%s: %d model%s pile in up to 3\" (%s)" % [target.get_name(), pile_moves.size(), ("" if pile_moves.size() == 1 else "s"), OPRApiClient.rules_cite("gf")], true)
+				"%s: %d model%s pile in up to 3\" (%s)" % [target.get_name(), pile_moves.size(), ("" if pile_moves.size() == 1 else "s"), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(target))], true)
 	elif _solo_combined_alive(target) > 1 and battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT,
-			"%s: all models already in base contact — no pile-in needed (%s)" % [target.get_name(), OPRApiClient.rules_cite("gf")], true)
+			"%s: all models already in base contact — no pile-in needed (%s)" % [target.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(target))], true)
 	var ai_caused := 0
 	var human_caused := 0
 	_solo_hazard_self.clear()
@@ -11645,7 +11655,7 @@ func _run_ai_melee(report: Dictionary) -> void:
 		if strike_back == 1:
 			if impact_first and battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT,
-					"Counter: %s strikes first, after the Impact dice (rules 3.6)" % target.get_name(), true)
+					"Counter: %s strikes first, after the Impact dice (%s)" % [target.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(target))], true)
 			human_caused += await _solo_melee_strike_phase(target, unit, false, SoloStrike.COUNTER_ONLY)
 			ai_caused += _solo_take_retaliate_credit()
 	# Stage seam: the boundary sits OUTSIDE the Counter branches, so a declined (or absent)
@@ -11687,9 +11697,9 @@ func _run_ai_melee(report: Dictionary) -> void:
 					if block != "":
 						strike_back = 0
 						if battle_log != null:
-							var line := "%s has no melee weapons — cannot strike back (%s)" % [target.get_name(), OPRApiClient.rules_cite("gf")]
+							var line := "%s has no melee weapons — cannot strike back (%s)" % [target.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(target))]
 							if block == "spent":
-								line = "%s's melee weapons are all spent (Limited) — cannot strike back (%s)" % [target.get_name(), OPRApiClient.rules_cite("gf")]
+								line = "%s's melee weapons are all spent (Limited) — cannot strike back (%s)" % [target.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(target))]
 							_log_rule_event(BattleLog.Category.COMBAT, line, defender_is_ai)
 					else:
 						strike_back = 1 if defender_is_ai or await _solo_confirm_strike_back(target, unit, false) else 0
@@ -11849,17 +11859,17 @@ func _solo_consolidate_melee(charger: GameUnit, defender: GameUnit, auto: bool =
 			# impossible). Non-exclusive: the board stays interactive while the dialog stands.
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT,
-					"Consolidation: move %s back 1\" (the charger separates — %s)" % [charger.get_name(), OPRApiClient.rules_cite("gf")], true)
+					"Consolidation: move %s back 1\" (the charger separates — %s)" % [charger.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(charger))], true)
 			await _solo_board_prompt(
-				"Pull back 1\": drag %s back from the melee (%s) — the game waits." % [charger.get_name(), OPRApiClient.rules_cite("gf")],
+				"Pull back 1\": drag %s back from the melee (%s) — the game waits." % [charger.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(charger))],
 				"✓ Pulled back")
 			return
 		var dang: int = solo_controller.separate_from_melee(charger, solo_controller.unit_centre(defender))
 		solo_controller.record_decision({"kind": "separate", "unit": charger.get_name(),
-			"rule": "%s consolidation: the charger moves back 1\" when neither unit was destroyed" % OPRApiClient.rules_cite("gf"),
+			"rule": "%s consolidation: the charger moves back 1\" when neither unit was destroyed" % OPRApiClient.rules_cite(RulesRegistry.system_of_unit(charger)),
 			"candidates": [], "chosen": "", "why": "mandatory separation", "data": {"back_in": 1.0}})
 		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.COMBAT, "Consolidation: %s moves back 1\" (the charger separates — %s)" % [charger.get_name(), OPRApiClient.rules_cite("gf")], true)
+			battle_log.log_event(BattleLog.Category.COMBAT, "Consolidation: %s moves back 1\" (the charger separates — %s)" % [charger.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(charger))], true)
 		await _solo_animate_move(solo_controller.last_move_paths, false)   # NML-208: always glides
 		if dang > 0:
 			await _run_ai_dangerous(charger, dang)
@@ -11876,10 +11886,10 @@ func _solo_consolidate_melee(charger: GameUnit, defender: GameUnit, auto: bool =
 			# applied rule logs). A missing line here stalled the Game School S-06 consolidation step.
 			if solo_controller.last_move_paths.is_empty():
 				battle_log.log_event(BattleLog.Category.COMBAT,
-					"Consolidation: %s holds its ground (enemy destroyed, no room to move — %s)" % [survivor.get_name(), OPRApiClient.rules_cite("gf")], true)
+					"Consolidation: %s holds its ground (enemy destroyed, no room to move — %s)" % [survivor.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(survivor))], true)
 			else:
 				battle_log.log_event(BattleLog.Category.COMBAT,
-					"%s consolidates up to 3\" (enemy destroyed — %s)" % [survivor.get_name(), OPRApiClient.rules_cite("gf")], true)
+					"%s consolidates up to 3\" (enemy destroyed — %s)" % [survivor.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(survivor))], true)
 		if not solo_controller.last_move_paths.is_empty():
 			await _solo_animate_move(solo_controller.last_move_paths, false)   # NML-208: always glides
 		if dang2 > 0:
@@ -11891,9 +11901,9 @@ func _solo_consolidate_melee(charger: GameUnit, defender: GameUnit, auto: bool =
 	# player drags his models up to 3" while it is open, then confirms; only then does the game go on.
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT,
-			"Consolidation: %s may move up to 3\" (enemy destroyed — %s)" % [survivor.get_name(), OPRApiClient.rules_cite("gf")], false)
+			"Consolidation: %s may move up to 3\" (enemy destroyed — %s)" % [survivor.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(survivor))], false)
 	await _solo_board_prompt(
-		"Consolidate: %s destroyed the enemy — you may drag it up to 3\" (%s)." % [survivor.get_name(), OPRApiClient.rules_cite("gf")],
+		"Consolidate: %s destroyed the enemy — you may drag it up to 3\" (%s)." % [survivor.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(survivor))],
 		"✓ Done consolidating")
 
 
@@ -11923,7 +11933,7 @@ func _solo_shooting_morale(unit: GameUnit, alive_before: int, owner: String, wou
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT,
 					"%s is at half its tough value (%d/%d) — morale test (%s)" % [
-					unit.get_name(), wounds_now, _solo_unit_wounds_start(unit), OPRApiClient.rules_cite("gf")], true)
+					unit.get_name(), wounds_now, _solo_unit_wounds_start(unit), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))], true)
 			_solo_scourge_decides(unit, phantom, false)
 			await _solo_morale_test(unit, owner, false, cause, over_in, charge_from_in)
 		elif _solo_scourge_decides(unit, phantom, true):
@@ -11941,7 +11951,7 @@ func _solo_shooting_morale(unit: GameUnit, alive_before: int, owner: String, wou
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT,
 				"%s takes wounds at half strength or less (%d/%d models) — morale test (%s)" % [
-				unit.get_name(), alive_now, total, OPRApiClient.rules_cite("gf")], true)
+				unit.get_name(), alive_now, total, OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))], true)
 		_solo_scourge_decides(unit, phantom, false)
 		await _solo_morale_test(unit, owner, false, cause, over_in, charge_from_in)
 	elif _solo_scourge_decides(unit, phantom, true):
@@ -12108,7 +12118,7 @@ func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false, cause
 		result = AiCombatMath.morale_result_shaken(below_half and melee)
 		if battle_log != null:
 			_log_rule_event(BattleLog.Category.COMBAT,
-				"%s is already Shaken — automatically fails morale (GF/AoF v3.5.1 p.10)" % unit.get_name(), true)
+				"%s is already Shaken — automatically fails morale (%s)" % [unit.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))], true)
 	else:
 		# Banner (wave 5, system-scoped params via RulesRegistry: +1 to morale test rolls; the GFF/AoFS
 		# picked-units variant still covers the bearer's own unit) lowers the roll target, clamped to
@@ -12296,8 +12306,8 @@ func _solo_confirm_cast_first(unit: GameUnit) -> bool:
 		return false
 	_solo_cast_asked[unit.get_instance_id()] = rnd
 	var cast_first: bool = await _solo_ask("Cast window",
-		"%s can still cast (%d token%s left).\nSpells must be cast BEFORE attacking (GF v3.5.1) — after this attack the window is gone." % [
-		member.get_name(), member.casts_current, ("" if member.casts_current == 1 else "s")],
+		"%s can still cast (%d token%s left).\nSpells must be cast BEFORE attacking (%s) — after this attack the window is gone." % [
+		member.get_name(), member.casts_current, ("" if member.casts_current == 1 else "s"), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))],
 		"Cast first", "Attack without casting")
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL,
@@ -12413,7 +12423,7 @@ func solo_begin_targeting(unit: GameUnit, melee: bool) -> void:
 	if unit.is_activated:
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.GENERAL,
-				"%s has already activated this round — one activation per unit (GF v3.5.1)" % unit.get_name())
+				"%s has already activated this round — one activation per unit (%s)" % [unit.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))])
 		return
 	# No activation door here (D23): opening the window commits nothing — _run_human_attack begins it.
 	# Cast-window guard (maintainer decision "Vorfrage" 2026-07-23): spells go BEFORE the attack
@@ -12472,7 +12482,7 @@ func solo_begin_auto(unit: GameUnit, verb: int) -> void:
 	if unit.is_activated:
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.GENERAL,
-				"%s has already activated this round — one activation per unit (GF v3.5.1)" % unit.get_name())
+				"%s has already activated this round — one activation per unit (%s)" % [unit.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))])
 		return
 	var cumbersome_why := cumbersome_refusal(unit, verb)
 	if cumbersome_why != "":
@@ -12695,7 +12705,7 @@ func solo_begin_cast(unit: GameUnit) -> void:
 	if unit.is_activated:
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.GENERAL,
-				"%s has already activated this round — one activation per unit (GF v3.5.1)" % unit.get_name())
+				"%s has already activated this round — one activation per unit (%s)" % [unit.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))])
 		return
 	_ensure_solo_controller()
 	if _hotseat_verb_refused(unit):
@@ -13464,8 +13474,8 @@ func _solo_validate_target(attacker: GameUnit, target: GameUnit, melee: bool) ->
 		if is_inf(gap):
 			var info := solo_controller.nearest_melee_pair_info(attacker, target, false)
 			if info["gap_in"] <= SoloController.MELEE_ENGAGE_IN:
-				return "%.1f\" above — melee reaches %.0f\" up (GF p.9)" \
-					% [info["height_in"], SoloController.melee_vertical_in()]
+				return "%.1f\" above — melee reaches %.0f\" up (%s)" \
+					% [info["height_in"], SoloController.melee_vertical_in(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(attacker))]
 			gap = info["gap_in"]
 		return "not in melee range (%.1f\" — move into base contact)" % gap
 	# B11 (test game 2): the refusal message measures base-EDGE to base-edge between the NEAREST
@@ -13553,7 +13563,7 @@ func _solo_los_refusal_detail(shooter: GameUnit, target: GameUnit) -> String:
 		if bu != null:
 			var own: bool = int(bu.unit_properties.get("player_id", 0)) == int(shooter.unit_properties.get("player_id", 0))
 			return " — nearest lane blocked by %s%s" % [bu.get_name(),
-				" (your own unit: only the shooter's OWN unit is see-through — GF v3.5.1 p.5)" if own else ""]
+				" (your own unit: only the shooter's OWN unit is see-through — %s)" % OPRApiClient.rules_cite(RulesRegistry.system_of_unit(shooter)) if own else ""]
 	return ""
 
 
@@ -13845,7 +13855,7 @@ func _solo_offer_split_fire(attacker: GameUnit, target_a: GameUnit) -> Dictionar
 ## ([] = "All at <target>"). Apart from the guards above so the prompt is drivable headless.
 func _solo_ask_split_fire(target_a: GameUnit, names: Array) -> Array:
 	var card := PromptCard.new("Split fire?",
-		"Up to two targets (GF v3.5.1 p.8). Checked weapons fire at a SECOND target:",
+		"Up to two targets (%s). Checked weapons fire at a SECOND target:" % OPRApiClient.rules_cite(RulesRegistry.system_of_unit(target_a)),
 		"Pick 2nd target", "All at %s" % target_a.get_name())
 	var checks: Array = []
 	for n in names:
@@ -13876,7 +13886,7 @@ func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool, auto: 
 		var snapped: float = solo_controller.snap_charge(attacker, target)
 		if snapped > 0.05 and battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT,
-				"%s charges into base contact (+%.1f\") — the unit follows in coherency (GF/AoF v3.5.1 p.8)" % [attacker.get_name(), snapped], true)
+				"%s charges into base contact (+%.1f\") — the unit follows in coherency (%s)" % [attacker.get_name(), snapped, OPRApiClient.rules_cite(RulesRegistry.system_of_unit(attacker))], true)
 		# PILE-IN (GF v3.5.1 p.9, live-test Bug 18 + NML-208): the defender here is the AI's unit — its
 		# mandatory 3" pile-in is automated and now GLIDES visibly (teleport read as "nothing happened").
 		var pile_moves: Array = solo_controller.pile_in(target, attacker)
@@ -13884,10 +13894,10 @@ func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool, auto: 
 			await _solo_animate_move(pile_moves, false)   # NML-208: pile-in always glides
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT,
-				"%s: %d model%s pile in up to 3\" (GF v3.5.1 p.9)" % [target.get_name(), pile_moves.size(), ("" if pile_moves.size() == 1 else "s")], true)
+				"%s: %d model%s pile in up to 3\" (%s)" % [target.get_name(), pile_moves.size(), ("" if pile_moves.size() == 1 else "s"), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(target))], true)
 		elif _solo_combined_alive(target) > 1 and battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT,
-			"%s: all models already in base contact — no pile-in needed (GF v3.5.1 p.9)" % target.get_name(), true)
+			"%s: all models already in base contact — no pile-in needed (%s)" % [target.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(target))], true)
 		await _run_human_melee(attacker, target, auto)
 		# Hit & Run (cut C): "being in melee" covers the DEFENDER too — the AI's charged unit may take
 		# its once-per-round 3" step after the melee resolves (the human's own bearers move manually —
@@ -14135,8 +14145,8 @@ func _run_human_attack_split(attacker: GameUnit, target_a: GameUnit, target_b: G
 	_solo_log_unmodeled_rules(target_b)
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT,
-			"Split fire: %s fires at %s and %s (declared before rolling — GF v3.5.1 p.8)" % [
-			attacker.get_name(), target_a.get_name(), target_b.get_name()], false)
+			"Split fire: %s fires at %s and %s (declared before rolling — %s)" % [
+			attacker.get_name(), target_a.get_name(), target_b.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(attacker))], false)
 	await _run_human_shooting(attacker, target_a, b_names, true)
 	await _run_human_shooting(attacker, target_b, b_names, false)
 	human_attack_resolved.emit(attacker, false)
@@ -14195,7 +14205,7 @@ func _solo_log_reach_shrink(attacker: GameUnit, target: GameUnit) -> void:
 	var shrouded := not shroud.is_empty()
 	if aircraft:
 		battle_log.log_event(BattleLog.Category.COMBAT,
-			"%s is an Aircraft: weapon ranges count -12\" against it (GF v3.5.1)" % target.get_name(), true)
+			"%s is an Aircraft: weapon ranges count -12\" against it (%s)" % [target.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(target))], true)
 	if shrouded:
 		battle_log.log_event(BattleLog.Category.COMBAT,
 			"%s has %s: weapon ranges -%s\" (min %s\") against it" % [target.get_name(),
@@ -14379,8 +14389,8 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 				else SoloController.indirect_lift_rule(attacker, "los_needs_hold")
 			if lift_rule.is_empty():
 				battle_log.log_event(BattleLog.Category.COMBAT,
-					"Indirect: %s targets %s without line of sight (GF v3.5.1)" % [
-					attacker.get_name(), target.get_name()], true)
+					"Indirect: %s targets %s without line of sight (%s)" % [
+					attacker.get_name(), target.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(attacker))], true)
 			else:
 				battle_log.log_event(BattleLog.Category.COMBAT,
 					"%s: %s targets %s without line of sight — no Hold needed" % [
@@ -14620,8 +14630,8 @@ func _run_human_melee(attacker: GameUnit, target: GameUnit, auto: bool = false) 
 		await _solo_stage_phase("Impact")
 	if ai_counter and _solo_combined_alive(target) > 0:
 		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.COMBAT, ("Counter: %s strikes first, after the Impact dice (rules 3.6)"
-				if impact_first else "Counter: %s strikes first") % target.get_name(), true)
+			battle_log.log_event(BattleLog.Category.COMBAT, ("Counter: %s strikes first, after the Impact dice (%s)"
+				if impact_first else "Counter: %s strikes first (%s)") % [target.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(target))], true)
 		ai_caused += await _solo_melee_strike_phase(target, attacker, false, SoloStrike.COUNTER_ONLY)
 		human_caused += _solo_take_retaliate_credit()
 	# Stage seam: the boundary sits OUTSIDE the branch — no Counter simply means an empty phase,
@@ -14657,7 +14667,7 @@ func _run_human_melee(attacker: GameUnit, target: GameUnit, auto: bool = false) 
 				if _solo_strike_back_block(target, attacker) == "spent":
 					if battle_log != null:
 						_log_rule_event(BattleLog.Category.COMBAT,
-							"%s's melee weapons are all spent (Limited) — cannot strike back (GF v3.5.1)" % target.get_name(), true)
+							"%s's melee weapons are all spent (Limited) — cannot strike back (%s)" % [target.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(target))], true)
 				else:
 					ai_caused += await _solo_melee_strike_phase(target, attacker, false,
 						SoloStrike.NON_COUNTER if ai_counter else SoloStrike.ALL)
@@ -15301,7 +15311,7 @@ func _solo_ambush_human_turn(round_number: int, pool: Array) -> Array:
 			_solo_set_unit_visible(gu, true)
 			if battle_log != null:
 				_log_rule_event(BattleLog.Category.GENERAL,
-					"You deploy %s from Ambush reserve (>9\" from enemies) — it may act this round, no seizing (GF v3.5.1 p.13)" % gu.get_name(), false)
+					"You deploy %s from Ambush reserve (>9\" from enemies) — it may act this round, no seizing (%s)" % [gu.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(gu))], false)
 			solo_controller.last_arrival_note = ""   # the human placed by hand — only the checks below speak
 			_solo_log_ambush_variant_lines(gu, round_number, false)
 			_solo_warn_ambush_proximity(gu)
@@ -15412,8 +15422,8 @@ func _solo_warn_ambush_proximity(gu: GameUnit) -> void:
 		beacon_note = " — Ambush Beacon not used: %s is %.1f\" away (the waiver needs %d\" or less)" % [
 			str(near["name"]), float(near["dist_in"]), int(round(float(near["radius_in"])))]
 	_log_rule_event(BattleLog.Category.GENERAL,
-		"⚠ %s stands %.1f\" from an enemy — Ambush arrivals must be >9\" away (GF v3.5.1 p.13); nudge it out (or house-rule it)%s" % [
-			gu.get_name(), worst, beacon_note], false)
+		"⚠ %s stands %.1f\" from an enemy — Ambush arrivals must be >9\" away (%s); nudge it out (or house-rule it)%s" % [
+			gu.get_name(), worst, OPRApiClient.rules_cite(RulesRegistry.system_of_unit(gu)), beacon_note], false)
 
 
 ## The friendly beacon covering `gu` ({} when none): ANY alive model of the unit inside a beacon
@@ -15631,8 +15641,8 @@ func _solo_prompt_wound_allocation(target: GameUnit, wounds: int, pid: int, appl
 		if not SoloController.wound_pick_eligible(target, pu):
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT,
-					"%s is part of %s — its own models take wounds first (GF v3.5.1 p.14)" % [
-					pu.get_name(), target.get_name()], false)
+					"%s is part of %s — its own models take wounds first (%s)" % [
+					pu.get_name(), target.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(target))], false)
 			continue
 		left -= 1
 		if apply_pick.is_valid():
@@ -15684,8 +15694,8 @@ func _solo_hero_carries_on(target: GameUnit) -> void:
 				radial_menu_controller._update_fatigued_markers(hu)
 		if (hu.is_shaken or hu.is_fatigued) and battle_log != null:
 			_log_rule_event(BattleLog.Category.COMBAT,
-				"%s fights on alone — carries the unit's %s (GF v3.5.1 p.14)" % [hu.get_name(),
-				("Shaken + Fatigue" if hu.is_shaken and hu.is_fatigued else ("Shaken" if hu.is_shaken else "Fatigue"))], true)
+				"%s fights on alone — carries the unit's %s (%s)" % [hu.get_name(),
+				("Shaken + Fatigue" if hu.is_shaken and hu.is_fatigued else ("Shaken" if hu.is_shaken else "Fatigue")), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(hu))], true)
 
 
 ## Apply up to `wounds` to a unit's models back-rank-first (Tough absorbs before dying); returns the
@@ -17021,7 +17031,7 @@ func _build_success_controls() -> void:
 	_modifier_value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_modifier_value_label.custom_minimum_size = Vector2(MODIFIER_VALUE_MIN_WIDTH, 0)
 	_modifier_value_label.tooltip_text = "Applied to every die. Natural 6 always succeeds," \
-		+ " natural 1 always fails (OPR Core Rules v3.5.1)."
+		+ " natural 1 always fails (OPR Core Rules %s)." % OPRApiClient.rules_cite(_solo_rules_system())
 	var stepper := HouseStyle.stepper([-1, 1], _modifier_value_label, _on_modifier_delta_pressed, "Modifier", true)
 	var modifier_row := HouseStyle.field_row("Modifier", stepper)
 	modifier_row.name = "ModifierRow"
@@ -17036,7 +17046,7 @@ func _build_reroll_row() -> void:
 		[DiceRules.RerollMode.FAILURES, "Fails", "Re-roll every die that failed the success target"],
 		[DiceRules.RerollMode.ONES, "1s", "Re-roll all natural 1s"],
 		[DiceRules.RerollMode.SIXES, "6s",
-			"Re-roll all natural 6s (OPR \"Bane\", v3.5.1: the target must re-roll unmodified Defense rolls of 6)"],
+			"Re-roll all natural 6s (OPR \"Bane\", %s: the target must re-roll unmodified Defense rolls of 6)" % OPRApiClient.rules_cite(_solo_rules_system())],
 		[DiceRules.RerollMode.ALL, "All", "Re-roll every die"],
 	]
 	var texts: Array = []
@@ -17393,7 +17403,7 @@ func _on_battle_log_dropped(moves: Array) -> void:
 		# a sandbox aid (D5a, no hard stop without Strict), so the drop's own line flags it.
 		if float(e["climb_in"]) > MoveLedger.CLIMB_MAX_IN:
 			_log_rule_event(BattleLog.Category.MOVEMENT,
-				"%s climbs %.1f\" — over 3\", impassable (GF p.11)" % [unit_name, float(e["climb_in"])])
+				"%s climbs %.1f\" — over 3\", impassable (%s)" % [unit_name, float(e["climb_in"]), OPRApiClient.rules_cite(_solo_rules_system())])
 	_log_move_summaries(summaries)
 	# Rules-must-log (DAT-16a): a move-band rule (Agile, Scurry, Highborn, …) widened this move's
 	# reach silently. ONE line per moved unit, naming the unit's own rules that did it.
@@ -17502,7 +17512,7 @@ func _log_move_summaries(summaries: Array) -> void:
 		if bool(e.get("whole", false)) or count >= alive or alive <= 1:
 			battle_log.on_unit_moved(unit_name, max_in, false, climb_in)
 		else:
-			var suffix := " incl. %.1f\" climb — GF p.11" % climb_in if climb_in > 0.05 else ""
+			var suffix := " incl. %.1f\" climb — %s" % [climb_in, OPRApiClient.rules_cite(_solo_rules_system())] if climb_in > 0.05 else ""
 			battle_log.log_event(BattleLog.Category.MOVEMENT,
 				"%s: %d of %d models move %.0f\"%s" % [unit_name, count, alive, max_in, suffix])
 
@@ -20761,7 +20771,7 @@ func _refresh_solo_panel() -> void:
 	solo_panel_box.add_child(points_advice)
 	var deploy_btn := Button.new()
 	deploy_btn.text = "Start Deployment"
-	deploy_btn.tooltip_text = "GF v3.5.1: roll-off, the winner picks a table edge and deploys first; then alternate one unit each (hand-over by click), then the Scout phase. The roll-off winner takes round 1's first turn."
+	deploy_btn.tooltip_text = "%s: roll-off, the winner picks a table edge and deploys first; then alternate one unit each (hand-over by click), then the Scout phase. The roll-off winner takes round 1's first turn." % OPRApiClient.rules_cite(_solo_rules_system())
 	deploy_btn.focus_mode = Control.FOCUS_NONE
 	deploy_btn.pressed.connect(_on_solo_deploy_pressed)
 	# Maintainer MP test: the guided deployment is a solo-game flow — in a multiplayer room
@@ -21161,9 +21171,9 @@ func _set_aside_offtable_ambush() -> void:
 	for slot in by_slot:
 		var set_aside: Array = by_slot[slot]
 		battle_log.log_event(BattleLog.Category.GENERAL,
-			"%s %d Ambush unit(s) in reserve on %s tray (%s) — placement alternates from round 2 (GF/AoF p.13)." % [
+			"%s %d Ambush unit(s) in reserve on %s tray (%s) — placement alternates from round 2 (%s)." % [
 				"You hold" if seated else "%s holds" % _solo_player_label(slot), set_aside.size(),
-				"your" if seated else "its", _tray_names(set_aside, 99)], false)
+				"your" if seated else "its", _tray_names(set_aside, 99), OPRApiClient.rules_cite(_solo_rules_system())], false)
 
 
 ## The deployment gate (maintainer 2026-07-27: "Ich konnte das Deployment einfach umgehen. Ich habe die
@@ -21201,8 +21211,8 @@ func _deployment_gate_refuses_start() -> bool:
 		left.size(), _tray_names(left), hint])
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL,
-			"Start refused — %d unit(s) still on the tray: %s. Deploy them first (GF/AoF v3.5.1)." % [
-				left.size(), _tray_names(left, 99)], false)
+			"Start refused — %d unit(s) still on the tray: %s. Deploy them first (%s)." % [
+				left.size(), _tray_names(left, 99), OPRApiClient.rules_cite(_solo_rules_system())], false)
 	return true
 
 
@@ -21406,7 +21416,7 @@ func _resolve_skirmish_drop(mv: Dictionary, unit: GameUnit) -> void:
 	if model == null or not model.is_alive:
 		return
 	for drop in JumpRules.drops(mv.get("path", PackedVector2Array()), object_manager._surface_fn(), mv.get("from_raw", node.position).y):
-		var page := "GFF p.14" if unit.unit_properties.game_system == "gff" else "AoFS p.15"
+		var page := OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))
 		if JumpRules.drop_kind(drop.dy_in) == JumpRules.DropKind.IMPASSABLE:
 			_log_rule_event(BattleLog.Category.MOVEMENT, "%s: drop over 6\", impassable (%s)" % [unit.get_name(), page])
 			return

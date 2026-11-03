@@ -297,7 +297,7 @@ func test_the_cast_window_asks_once_per_round(timeout := 120000) -> void:
 	(func() -> void: out.append(await _main._solo_confirm_cast_first(hero))).call()
 	var p := await _await_prompt("Cast window")
 	assert_str(_text_of(p)).contains("Warboss can still cast (2 tokens left).")
-	assert_str(_text_of(p)).contains("Spells must be cast BEFORE attacking (GF v3.5.1)")
+	assert_str(_text_of(p)).contains("Spells must be cast BEFORE attacking (%s)" % OPRApiClient.rules_cite(RulesRegistry.system_of_unit(hero)))
 	_assert_controls(p, ["Cast first", "Attack without casting"])
 	await _click(_button(p, "Cast first"))
 	var got: Variant = await _answer(out)
@@ -415,7 +415,7 @@ func test_split_fire_returns_the_checked_weapons(timeout := 120000) -> void:
 	var out: Array = []
 	(func() -> void: out.append(await _main._solo_ask_split_fire(raiders, names))).call()
 	var p := await _await_prompt("Split fire?")
-	assert_str(_text_of(p)).contains("Up to two targets (GF v3.5.1 p.8). Checked weapons fire at a SECOND target:")
+	assert_str(_text_of(p)).contains("Up to two targets (%s). Checked weapons fire at a SECOND target:" % OPRApiClient.rules_cite(RulesRegistry.system_of_unit(raiders)))
 	_assert_controls(p, ["Rifle", "Pistol", "Grenade", "Pick 2nd target", "All at Raiders"])
 	await _click(_button(p, "Pistol"))
 	assert_bool(_button(p, "Pistol").button_pressed).is_true()

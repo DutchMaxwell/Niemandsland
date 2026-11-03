@@ -104,4 +104,4 @@ func test_a_step_over_3in_logs_an_impassable_warning() -> void:
 	var texts: Array = []
 	for e in log_node.entries():
 		texts.append(str(e["text"]))
-	assert_array(texts).contains(["Own Unit climbs 6.0\" — over 3\", impassable (GF p.11)"])
+	assert_array(texts).contains(["Own Unit climbs 6.0\" — over 3\", impassable (%s)" % OPRApiClient.rules_cite(RulesRegistry.DEFAULT_SYSTEM)])
