@@ -370,7 +370,7 @@ static func no_retreat_wounds(faces: Array, wound_max: int = NO_RETREAT_SELF_WOU
 
 
 ## Fear(X) adjusted wound total for the who-won-melee check ONLY (GF/AoF Advanced Rules v3.5.1, p.13, rule
-## Fear(X): for that check the model is treated as having dealt X wounds more). Rules 3.6 reads the same
+## Fear(X): the melee-winner comparison credits the model with X extra wounds). Rules 3.6 reads the same
 ## tally as wounds TAKEN, so the caller passes the enemy's taken total and the Fear that rides it (the
 ## unit's own Fear for the unit's foe). Never changes the wounds actually applied — only the winner comparison.
 ## Returns wounds + X (both terms floored at 0).
