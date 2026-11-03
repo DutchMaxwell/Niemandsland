@@ -1,13 +1,22 @@
 extends GdUnitTestSuite
 ## Rules 3.6 wave, row UX-CITE: every player-visible rules citation names the rules version from the
-## SINGLE SOURCE (OPRApiClient.rules_core_version, rendered by the new rules_cite helper) and drops
-## page numbers. Comments are stripped before the scan, string literals are kept.
-## RED proof (CI red before the green commit): https://github.com/DutchMaxwell/Niemandsland/actions/runs/41597410698/job/125789051377
-## PR A scans only the source it converts: main.gd up to the split line (stated in the PR body).
+## SINGLE SOURCE (OPRApiClient.rules_core_version, rendered by the rules_cite helper) and drops page
+## numbers. Comments are stripped before the scan, string literals are kept.
+## PR B scans the full set of files this row converts and checks the two lead corrections: the
+## citation follows the CURRENT GAME's system (no hardcoded "gf"/"aof" call site) and the Solo & Co-Op
+## marker line carries no core version at all.
 
-const MAIN := "res://scripts/main.gd"
-const SPLIT_LINE := 12000
-const FILES := [MAIN]
+const FILES := [
+	"res://scripts/main.gd",
+	"res://scripts/opr_api_client.gd",
+	"res://scripts/opr_army_manager.gd",
+	"res://scripts/placement_ghost.gd",
+	"res://scripts/radial_menu.gd",
+]
+## The label rules_cite renders per normalized game system (the version itself comes from the map).
+const SYSTEM_LABELS := [
+	["gf", "GF "], ["gff", "GFF "], ["aof", "AoF "], ["aofs", "AoFS "], ["aofr", "AoF:R "],
+]
 
 
 ## Drops a trailing `#` comment, keeping quoted text (and `#` inside a string) intact.
@@ -72,31 +81,85 @@ func _literals(code: String) -> Array[String]:
 
 func test_player_visible_citations_name_the_rules_version() -> void:
 	var page_re := RegEx.new()
-	page_re.compile("p\\.\\s?\\d")
+	page_re.compile("(p\\.\\s?\\d|v3\\.\\d|rules\\s+\\d\\.\\d)")
 	var bad: Array[String] = []
+	var checked := 0
 	for path in FILES:
 		var file := FileAccess.open(path, FileAccess.READ)
-		assert_object(file).is_not_null()
+		assert_object(file).override_failure_message("cannot read %s" % path).is_not_null()
 		if file == null:
 			continue
 		var line_no := 0
 		while not file.eof_reached():
 			var line := file.get_line()
 			line_no += 1
-			if path == MAIN and line_no > SPLIT_LINE:
-				break
 			for lit in _literals(_code_without_comment(line)):
+				checked += 1
 				if lit.contains("v3.5") or page_re.search(lit) != null:
 					bad.append("%s:%d -> %s" % [path, line_no, lit])
 		file.close()
-	assert_array(bad).is_empty()
+	assert_int(checked).override_failure_message(
+		"the citation scan saw no string literal at all").is_greater(0)
+	assert_array(bad).override_failure_message(
+		"player-visible citation(s) still name a page or a hardcoded version:\n%s" % "\n".join(bad)).is_empty()
+
+
+## The lead correction: a call site never hardcodes the system; it passes the game's own system.
+func test_no_call_site_hardcodes_a_system() -> void:
+	var call_re := RegEx.create_from_string("rules_cite\\(\"")
+	var bad: Array[String] = []
+	var checked := 0
+	for path in FILES:
+		var file := FileAccess.open(path, FileAccess.READ)
+		if file == null:
+			continue
+		var line_no := 0
+		while not file.eof_reached():
+			var line := file.get_line()
+			line_no += 1
+			var code := _code_without_comment(line)
+			if call_re.search(code) != null:
+				checked += 1
+				bad.append("%s:%d -> %s" % [path, line_no, code.strip_edges()])
+		file.close()
+	assert_int(checked).override_failure_message(
+		"found no rules_cite call site to check").is_greater(0)
+	assert_array(bad).override_failure_message(
+		"these citations hardcode a system instead of the current game's:\n%s" % "\n".join(bad)).is_empty()
+
+
+## A Solo & Co-Op sentence is not a GF/AoF core citation, so the marker line carries no version.
+func test_solo_marker_line_carries_no_version_citation() -> void:
+	var file := FileAccess.open("res://scripts/main.gd", FileAccess.READ)
+	assert_object(file).is_not_null()
+	if file == null:
+		return
+	var bad: Array[String] = []
+	var checked := 0
+	var line_no := 0
+	while not file.eof_reached():
+		var line := file.get_line()
+		line_no += 1
+		var code := _code_without_comment(line)
+		if not code.contains("Solo & Co-Op"):
+			continue
+		checked += 1
+		if code.contains("rules_cite(") or code.contains("v3.5") or code.contains("rules 3.6"):
+			bad.append("%s:%d -> %s" % ["res://scripts/main.gd", line_no, code.strip_edges()])
+	file.close()
+	assert_int(checked).override_failure_message(
+		"found no Solo & Co-Op line in main.gd").is_greater(0)
+	assert_array(bad).override_failure_message(
+		"a Solo & Co-Op line still carries a core version citation:\n%s" % "\n".join(bad)).is_empty()
 
 
 func test_rules_cite_uses_the_rule_maps_version() -> void:
-	var cases := [["gf", "GF ", "gf"], ["aof", "AoF ", "aof"], ["gf/aof", "GF/AoF ", "gf"]]
-	for c in cases:
-		var scope: String = c[0]
+	for c in SYSTEM_LABELS:
+		var system: String = c[0]
 		var label: String = c[1]
-		var system: String = c[2]
 		var expected := label + OPRApiClient._major_minor(OPRApiClient.rules_core_version(system))
-		assert_str(OPRApiClient.rules_cite(scope)).is_equal(expected)
+		assert_str(OPRApiClient.rules_cite(system)).override_failure_message(
+			"rules_cite(%s) does not name that system" % system).is_equal(expected)
+	# The combined scope stays available for the legacy two-book wording.
+	assert_str(OPRApiClient.rules_cite("gf/aof")).is_equal(
+		"GF/AoF " + OPRApiClient._major_minor(OPRApiClient.rules_core_version("gf")))
