@@ -1,5 +1,6 @@
 //! Rules 3.6 lane melee: one test file per row (MEL-TESTSEED); a row writes only its own file.
 mod aig_g2;
+mod aig_g2_brace;
 mod mel_01;
 mod mel_02;
 mod mel_03;

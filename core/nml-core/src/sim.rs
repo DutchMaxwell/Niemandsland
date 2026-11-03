@@ -5983,20 +5983,21 @@ fn impact_phase(
         // The Brace walk, host AND living attached heroes: the unit's single
         // rating X, never multiplied by models or carriers. A Fatigued braced
         // unit removes nothing; Shaken does not switch it off.
-        let brace: i64 = std::iter::once(ti).chain(next.attached[ti].iter().copied())
+        let (brace, brace_rule): (i64, &str) = std::iter::once(ti).chain(next.attached[ti].iter().copied())
             .filter(|&m| next.alive[m] > 0)
             .map(|m| {
-                let c = ctx_of(&statics[next.roster.profile[m]], next, m);
-                if c.brace_models > 0 { c.brace_impact_per_model.unwrap_or(1) } else { 0 }
+                let su = &statics[next.roster.profile[m]];
+                let c = ctx_of(su, next, m);
+                (if c.brace_models > 0 { c.brace_impact_per_model.unwrap_or(1) } else { 0 }, su.brace_rule.as_str())
             })
-            .max()
-            .unwrap_or(0);
+            .max_by_key(|b| b.0)
+            .unwrap_or((0, ""));
         let braced = next.fatigued[ti];
         if brace > 0 {
             if braced {
-                shot.log.push(format!("Brace: no effect, {} is Fatigued", ut.name));
+                shot.log.push(format!("{brace_rule}: no effect, {} is Fatigued", ut.name));
             } else {
-                shot.log.push(format!("Brace: {} takes {} Impact dice off {}", ut.name, brace, us.name));
+                shot.log.push(format!("{brace_rule}: {} takes {} Impact dice off {}", ut.name, brace, us.name));
             }
         }
         cut_by.brace_models = if braced || brace == 0 { 0 } else { 1 };
