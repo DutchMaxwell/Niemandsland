@@ -9083,14 +9083,15 @@ func _solo_resolve_saves(striker: GameUnit, defender: GameUnit, weapon_name: Str
 	# Rending (GF/AoF v3.5.1 p.14) AND the army-book Destructive (wave 4) BOTH upgrade the unmodified-6-to-
 	# hit hits to AP(+4); they share AiCombatMath.rending_ap_hits (one math). The only difference is
 	# downstream: Rending bypasses Regeneration (via _solo_ignores_regen), Destructive does not.
-	var on6_bonus: int = _solo_on6_ap_bonus(profile, striker)
+	var on6_entry: Dictionary = _solo_on6_ap_bonus(profile, striker)
+	var on6_bonus: int = int(on6_entry.get("bonus", 0))
 	var ap4_label := ""
 	if bool(profile.get("rending", false)):
 		ap4_label = "Rending"
 	elif bool(profile.get("destructive", false)):
 		ap4_label = "Destructive"
 	elif on6_bonus > 0:
-		ap4_label = "Crack"
+		ap4_label = str(on6_entry.get("name", "Crack"))
 	var ap4_hits: int = AiCombatMath.rending_ap_hits(to_hit_faces, hits) if on6_bonus > 0 else 0
 	# SHO-10: a re-roll entry's optional target condition opens (or shuts) the whole Bane window;
 	# every shipped entry is unconditional, so the old read stands.
@@ -9979,17 +9980,23 @@ func _unit_carries_base_rule(unit: GameUnit, rule: String) -> bool:
 
 ## The on-6-to-hit AP bonus a weapon grants (the hits that roll an unmodified 6 save at a worse AP).
 ## Rending / Destructive use the fixed +4 (byte-identical fallback); the army-book Crack is a per-weapon
-## value (+2) from the registry, system-scoped. 0 when the weapon has no on-6 AP rule.
-func _solo_on6_ap_bonus(profile: Dictionary, striker: GameUnit) -> int:
-	if bool(profile.get("rending", false)) or bool(profile.get("destructive", false)):
-		return AiCombatMath.RENDING_AP_BONUS
+## value (+2) from the registry, system-scoped. 0 when the weapon has no on-6 AP rule. FAB-C20: the
+## applied entry's name rides along so the battle log can name Fracture/Shatter instead of "Crack".
+func _solo_on6_ap_bonus(profile: Dictionary, striker: GameUnit) -> Dictionary:
+	if bool(profile.get("rending", false)):
+		return {"bonus": AiCombatMath.RENDING_AP_BONUS, "name": "Rending"}
+	if bool(profile.get("destructive", false)):
+		return {"bonus": AiCombatMath.RENDING_AP_BONUS, "name": "Destructive"}
 	var system := RulesRegistry.system_of_unit(striker)
 	var faction := RulesRegistry.faction_of_unit(striker)
 	for r in profile.get("rules", []):
-		var on6: int = int(RulesRegistry.lookup(system, faction, RulesRegistry.base_rule_name(str(r))).get("params", {}).get("on6_ap", 0))
+		var base := RulesRegistry.base_rule_name(str(r))
+		var entry := RulesRegistry.lookup(system, faction, base)
+		var on6: int = int(entry.get("params", {}).get("on6_ap", 0))
 		if on6 > 0:
-			return on6
-	return 0
+			var applied := str(entry.get("name", base)).strip_edges()
+			return {"bonus": on6, "name": applied if not applied.is_empty() else "Crack"}
+	return {"bonus": 0, "name": ""}
 
 
 ## Whether any unit-level rule of the Shred family applies to a profile of this reach (0 = melee).
@@ -12149,9 +12156,10 @@ func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false, cause
 		var test_target: int = AiCombatMath.morale_target(_solo_morale_quality(unit), morale_bonus + spell_morale)
 		if morale_bonus > 0 and battle_log != null:
 			var rating := SoloController.morale_rating_of(unit)
-			var source := "Morale(%d)" % rating if rating > 0 else "Banner"
+			var family_name := str(SoloController.morale_bonus_named_of(unit).get("name", "Banner"))
+			var source := "Morale(%d)" % rating if rating > 0 else family_name
 			if rating > 0 and morale_bonus > rating:
-				source += " + Banner"
+				source += " + " + family_name
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s gets +%d to morale test rolls (passes on %d+)" % [
 				source, unit.get_name(), morale_bonus, test_target], true)
 		if spell_morale != 0 and battle_log != null:
