@@ -5104,11 +5104,17 @@ func _solo_resolve_spell_damage(caster: GameUnit, caster_unit: GameUnit, spell_n
 		entry: Dictionary, target: GameUnit) -> void:
 	var effect: Dictionary = entry.get("effect", {})
 	var facets: Dictionary = AiSpell.spell_facets(effect.get("weapon_rules", []), AiActRecorder.rules_epoch)
+	var target_state: Dictionary = _solo_target_state(target)
 	var hits := int(effect.get("hits", 0))
 	if hits <= 0:
 		return
 	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
 		var applied: Array = []
+		if _solo_spell_has_rule(effect, "Destructive"):
+			if bool(target_state.get("above_half_strength", false)):
+				applied.append("Destructive +1 AP (above half)")
+			else:
+				applied.append("Destructive not applied (target at or below half)")
 		if _solo_spell_has_rule(effect, "Fracture"):
 			applied.append("Fracture — sixes get AP(+2)")
 		if _solo_spell_has_rule(effect, "Puncture"):
@@ -5145,7 +5151,8 @@ func _solo_resolve_spell_damage(caster: GameUnit, caster_unit: GameUnit, spell_n
 	_solo_log_armor(target)
 	var base_defense: int = _solo_defense_vs(target, AiCombatMath.HIT_SOURCE_SPELL)
 	_solo_log_defense_vs_spell(target, base_defense)
-	var def_ctx := {"defense": base_defense, "tough": _solo_unit_tough(target)}
+	var def_ctx := {"defense": base_defense, "tough": _solo_unit_tough(target),
+		"above_half_strength": bool(target_state.get("above_half_strength", false))}
 	var ap := AiSpell.effective_ap(facets, def_ctx)
 	var bane := bool(facets.get("bane", false))
 	var profile := {"name": spell_name, "ap": ap, "deadly": int(facets.get("deadly", 0)),
