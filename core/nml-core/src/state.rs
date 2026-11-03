@@ -611,6 +611,12 @@ pub struct State {
     /// (main.gd:5861/:5866): the once-per-ROUND stamp of the Retreating
     /// Strike, per bearer, -1 for never; the `hit_and_run_round` shape.
     pub retreating_strike_round: Vec<i64>,
+    /// MOR-18 (`EPOCH_73_V36`) — `unit_properties["mind_control_moved_round"]`:
+    /// the round Mind Control already MOVED this unit, -1 for never. A second
+    /// bearer that picks it in the same round still forces its morale test (and
+    /// the Shaken that follows), but the displacement is skipped; the
+    /// `retreating_strike_round` shape self-clears at the round start.
+    pub mind_control_moved_round: Vec<i64>,
     /// Block B7 — `unit_properties["growth_<rule>"]` (main.gd:16978), this
     /// unit's OWN marker count for its "Growth Markers" rule. A single counter
     /// per unit, not per rule name (see `unit::growth_of`'s own note).

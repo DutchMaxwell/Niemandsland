@@ -175,6 +175,7 @@ pub fn synth_state(a: &Value, b: &Value, zone_a: &Zone, zone_b: &Zone, markers: 
         versatile_pick_round: vec![-1; n],
         versatile_pick_mode: vec![0; n],
         retreating_strike_round: vec![-1; n],
+        mind_control_moved_round: vec![-1; n],
         growth_markers: vec![0; n], vengeance_markers: vec![0; n], growth_round: vec![-1; n],
         growth_strike_round: vec![-1; n],
         second_wind_used: vec![false; n], surprise_attack_used: vec![false; n], reinforcement_used: vec![false; n], teleport_used: vec![false; n],
