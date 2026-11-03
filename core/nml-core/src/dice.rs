@@ -510,6 +510,10 @@ fn save_batch(
                 faces: reroll.clone(),
                 owner: def_owner.into(),
             });
+            // AI-G2 rules-must-log: a weapon alias (Smash, Reap, Decimate) names its own book rule.
+            if !p.bane_alias.is_empty() {
+                out.log.push(format!("{}: {def_owner} re-rolls {n} unmodified Defense 6{}{}", p.bane_alias, if n == 1 { "" } else { "s" }, cond_ap_why(&p.bane_condition)));
+            }
             // The widened window's own share — the successful 5s the base leg
             // would never have touched (rules-must-log count).
             out.bane_rerolled += faces.iter().filter(|&&f| out.bane_low > 1 && f < 6 && f as i64 >= out.bane_low && f as i64 >= target).count() as i64;
@@ -2318,6 +2322,8 @@ pub fn resolve_melee_leg(
                 out.log.push(format!("{}: charged from over {:.0}in — unmodified 1s take +1 wound",
                     name, crate::combat::CHARGE_LONG_RANGE_IN));
             }
+            // AI-G2: the melee half of the volley's Bane-condition gate (the table's `bane_applies`, melee = true).
+            out.bane_gated = !p.bane_condition.is_empty() && !cond_met(&CondAp { condition: p.bane_condition.clone(), threshold: p.bane_threshold, ..Default::default() }, &CondApTarget::of(def, p.range as f64), false, 0.0, true);
             let normal = hits - ap4;
             let sgt_hits = sergeant_hits(p, n, normal, sh.att);
             let mut w = save_batch(p, def, def_owner, ap4, save_def, ap + on6, sh.att.shred_grant, shred_alias_fires, 1, deadly_per_model, tray, &mut out);
