@@ -45,7 +45,7 @@ func _unit(unit_name: String, pid: int, pos: Vector3, rules: Array, quality: int
 
 func _bearer_and_target(tokens: int = 5, quality: int = 6, target_rules: Array = []) -> Array:
 	var bearer := _unit("Drainer", 1, Vector3(-0.3, 0, 0), ["Spell Drain"], 4, 0)
-	var target := _unit("Target", 2, Vector3(0.3, 0, 0), target_rules, quality, tokens)
+	var target := _unit("Target", 2, Vector3(0.3, 0, 0), ["Caster(2)"] + target_rules, quality, tokens)
 	return [bearer, target]
 
 
@@ -174,3 +174,35 @@ func test_epoch_72_drains_nothing() -> void:
 	await _main._solo_apply_vs_marks(bearer, target, 10.0)
 	assert_int(target.casts_current).is_equal(5)
 	assert_str(_log_text()).not_contains("drains Target")
+
+
+## FAB-B3: the target is not a caster itself; its joined hero is. The hero's
+## pool pays the two tokens, the host's empty pool stays at zero.
+func test_a_joined_caster_hero_pays_the_drain() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	var bearer := _unit("Drainer", 1, Vector3(-0.3, 0, 0), ["Spell Drain"], 4, 0)
+	var target := _unit("Target", 2, Vector3(0.3, 0, 0), [], 6, 0)
+	var hero := _unit("Hero", 3, Vector3(0.3, 0, 0), ["Caster(2)"], 4, 5)
+	target.unit_properties["attached_heroes"] = [hero]
+	hero.unit_properties["attached_to"] = target
+	_main.opr_army_manager.current_round = 1
+	_main.seed_tray_rng(_seed_for(1))
+	await _main._solo_apply_vs_marks(bearer, target, 10.0)
+	assert_int(hero.casts_current).is_equal(3)
+	assert_int(target.casts_current).is_equal(0)
+	assert_str(_log_text()).contains("Drainer drains Hero: Morale test failed, -2 spell tokens (5 -> 3) — Shaken")
+
+
+## A chain with no caster takes the Morale test like any target: a failure
+## leaves it Shaken and latches, but there is no token pool to spend.
+func test_a_non_caster_target_is_shaken_but_loses_no_tokens() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	var bearer := _unit("Drainer", 1, Vector3(-0.3, 0, 0), ["Spell Drain"], 4, 0)
+	var target := _unit("Target", 2, Vector3(0.3, 0, 0), [], 6, 5)
+	_main.opr_army_manager.current_round = 1
+	_main.seed_tray_rng(_seed_for(1))
+	await _main._solo_apply_vs_marks(bearer, target, 10.0)
+	assert_bool(target.is_shaken).is_true()
+	assert_int(target.casts_current).is_equal(5)
+	assert_int(int(bearer.unit_properties.get("vs_mark_round", -1))).is_equal(1)
+	assert_str(_log_text()).contains("no spell tokens to lose")

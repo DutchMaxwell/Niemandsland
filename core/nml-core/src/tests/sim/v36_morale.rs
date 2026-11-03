@@ -264,6 +264,7 @@ mod mor_16a {
         target.ctx.quality = quality;
         target.model_count = 1;
         target.wounds_max = vec![1];
+        target.is_caster = true;
         (st, vec![bearer(faction, epoch), UnitStatic::default(), target, UnitStatic::default()])
     }
 
@@ -362,6 +363,45 @@ mod mor_16a {
         assert!(!st.shaken[2], "the branch is inert");
         assert!(shot.rolls.is_empty(), "no die below 73");
     }
+
+    /// RED (FAB-B3): the target is not a caster itself; its joined hero is.
+    /// The two tokens come out of the HERO's pool, not the host's empty one.
+    #[test]
+    fn spell_drain_spends_the_joined_caster_heros_tokens() {
+        let (mut st, mut statics) = line("blessed_sisters", EPOCH_73_V36, 4, 0);
+        statics[2].is_caster = false;
+        statics[3].name = "hero".into();
+        statics[3].is_caster = true;
+        st.casts[3] = 5;
+        st.round = 1;
+        let seams = Seams { rules_epoch: EPOCH_73_V36, hero_attach: true, ..Seams::default() };
+        let mut tray = Tray::seeded(seed_failing(4));
+        let mut shot = ShootResult::default();
+        crate::sim::tray_vs_marks(&statics, &mut st, 0, 2, 10.0, seams, &mut tray, &mut shot);
+        assert_eq!(st.casts[3], 3, "the joined caster hero pays the two tokens");
+        assert_eq!(st.casts[2], 0, "the host's empty pool is untouched");
+        assert!(
+            shot.log.iter().any(|l| l.contains("hero") && l.contains("loses 2 spell tokens")),
+            "rules-must-log: the paying member is named — got {:?}", shot.log
+        );
+    }
+
+    /// A chain with no caster takes the Morale test like any target: a
+    /// failure leaves it Shaken and latches, but there is no pool to spend.
+    #[test]
+    fn a_non_caster_target_is_shaken_but_loses_no_tokens() {
+        let (mut st, mut statics) = line("blessed_sisters", EPOCH_73_V36, 4, 5);
+        statics[2].is_caster = false;
+        st.round = 1;
+        let shot = drain(&mut st, &statics, EPOCH_73_V36, 10.0, seed_failing(4));
+        assert!(st.shaken[2], "the failed test Shakes any target");
+        assert_eq!(st.casts[2], 5, "no caster chain, no token pool spent");
+        assert_eq!(st.vs_mark_round[0], st.round, "the once latch is set before the test");
+        assert!(
+            shot.log.iter().any(|l| l.contains("has no spell tokens to lose")),
+            "rules-must-log: the empty pool is named — got {:?}", shot.log
+        );
+    }
 }
 
 
@@ -401,6 +441,7 @@ mod mor_16c {
         target.ctx.quality = quality;
         target.model_count = 1;
         target.wounds_max = vec![1];
+        target.is_caster = true;
         (st, vec![bearer(epoch), UnitStatic::default(), target, UnitStatic::default()])
     }
 
