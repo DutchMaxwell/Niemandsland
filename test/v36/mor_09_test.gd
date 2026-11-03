@@ -196,7 +196,7 @@ func test_a_valiant_unit_charged_from_eight_inches_keeps_its_bonus(timeout := 90
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
 	_main.solo_ai_slots = {1: true, 2: true}
 	var charger := _melee_unit(2, "Charger", 0.0, 1, "Blade", [], 6, 9, 30)
-	var defender := _melee_unit(1, "Defender", 1.0, 1, "Spikes", ["Valiant"], 2, 9, 0)
+	var defender := _melee_unit(1, "Defender", 1.0, 1, "Spikes", ["Valiant"], 3, 9, 0)
 	_main.seed_tray_rng(7)
 	await _main._run_ai_melee({"unit": charger, "target": defender, "charge_from_in": 8.0})
 	assert_str(_log_text()).contains("Banner: Defender gets +1 to morale test rolls")
@@ -207,7 +207,7 @@ func test_a_valiant_unit_charged_from_four_inches_loses_its_bonus(timeout := 900
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
 	_main.solo_ai_slots = {1: true, 2: true}
 	var charger := _melee_unit(2, "Charger", 0.0, 1, "Blade", [], 6, 9, 30)
-	var defender := _melee_unit(1, "Defender", 1.0, 1, "Spikes", ["Valiant"], 2, 9, 0)
+	var defender := _melee_unit(1, "Defender", 1.0, 1, "Spikes", ["Valiant"], 3, 9, 0)
 	_main.seed_tray_rng(7)
 	await _main._run_ai_melee({"unit": charger, "target": defender, "charge_from_in": 4.0})
 	assert_str(_log_text()).not_contains("Banner: Defender gets +1 to morale test rolls")
