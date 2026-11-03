@@ -117,3 +117,15 @@ func test_an_arrival_held_back_by_repel_ambushers_names_the_rule_and_its_carrier
 		.override_failure_message("Repel Ambushers held the arrival back and NO log line names it") \
 		.contains("Repel Ambushers")
 	assert_str(text).contains("Wardens")
+
+
+## The AI arrival line states the unit's REAL ring: 3" for Infiltrate, 9" for plain Ambush.
+func test_the_ai_arrival_line_states_the_units_real_ring() -> void:
+	var infiltrator := _carrier(1, "Infiltrators", "dark_elf_raiders", ["Infiltrate"])
+	assert_str(_main._solo_ambush_arrival_text(infiltrator)) \
+		.override_failure_message("an Infiltrate arrival still logs the fixed 9\"") \
+		.contains(">3\" from your units")
+	var ambusher := _carrier(2, "Stalkers", "dark_elf_raiders", ["Ambush"])
+	assert_str(_main._solo_ambush_arrival_text(ambusher)) \
+		.override_failure_message("a plain Ambush arrival must log 9\"") \
+		.contains(">9\" from your units")
