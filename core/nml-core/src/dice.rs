@@ -1441,7 +1441,7 @@ pub fn resolve_volley_leg(
                 if c.gate == "hold_or_charge" {
                     if d > 0 {
                         out.log.push(format!("Slayer: AP(+{}) because {} held", d, sh.owner));
-                    } else if !att.held && mod_dist_in > c.over_in
+                    } else if !att.held && (att.v36_rules || mod_dist_in > c.over_in)
                         && c.condition == "vs_tough_ge" && def.tough.max(1) >= c.threshold
                     {
                         out.log.push(format!("Slayer: no AP, {} moved", sh.owner));
@@ -1461,7 +1461,7 @@ pub fn resolve_volley_leg(
                 if att.v36_rules {
                     if d > 0 {
                         out.log.push(format!("Slayer: AP(+{}) because {} held", d, sh.owner));
-                    } else if !att.held && mod_dist_in > spec.over_in && def.tough.max(1) >= 3 {
+                    } else if !att.held && (att.v36_rules || mod_dist_in > spec.over_in) && def.tough.max(1) >= 3 {
                         out.log.push(format!("Slayer: no AP, {} moved", sh.owner));
                     }
                 }

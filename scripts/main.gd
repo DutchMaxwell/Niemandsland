@@ -9893,7 +9893,7 @@ func _solo_conditional_ap_parts(profile: Dictionary, striker: GameUnit, defender
 			b = _solo_havoc_charge_ap(base, params, b, charging, melee)
 			if b > 0:
 				parts.append(_solo_cond_ap_part(base, b, params))
-			elif v36 and not moved_logged and _solo_slayer_moved(params, d_tough, charging, melee, held, dist_in):
+			elif v36 and not moved_logged and _solo_slayer_moved(params, d_tough, charging, melee, held):
 				parts.append({"name": base, "bonus": 0})
 				moved_logged = true
 	# MODEL-level family members (Slayer / Piercing Hunter: "when this model shoots…") sit on the UNIT,
@@ -9919,7 +9919,7 @@ func _solo_conditional_ap_parts(profile: Dictionary, striker: GameUnit, defender
 			b = _solo_havoc_charge_ap(base, params, b, charging, melee)
 			if b > 0:
 				parts.append(_solo_cond_ap_part(base, b, params))
-			elif v36 and not moved_logged and _solo_slayer_moved(params, d_tough, charging, melee, held, dist_in):
+			elif v36 and not moved_logged and _solo_slayer_moved(params, d_tough, charging, melee, held):
 				parts.append({"name": base, "bonus": 0})
 				moved_logged = true
 	# GH #325 — spell-granted conditional-AP rules (the defender's attackers-side token, e.g. Veil
@@ -9936,23 +9936,23 @@ func _solo_conditional_ap_parts(profile: Dictionary, striker: GameUnit, defender
 			gbonus = _solo_havoc_charge_ap(gname, gparams, gbonus, charging, melee)
 			if gbonus > 0:
 				parts.append(_solo_cond_ap_part(gname, gbonus, gparams))
-			elif v36 and not moved_logged and _solo_slayer_moved(gparams, d_tough, charging, melee, held, dist_in):
+			elif v36 and not moved_logged and _solo_slayer_moved(gparams, d_tough, charging, melee, held):
 				parts.append({"name": gname, "bonus": 0})
 				moved_logged = true
 	return parts
 
 
-## Rules 3.6 (SHO-20): a moved shooter's shot that the old over-9" leg would have paid gets no AP;
-## the battle log says why it was switched off. Melee and the charge leg never reach this.
+## Rules 3.6 (SHO-20): at epoch 73 a moved shooter's shot has no 9" leg left, so it gets no AP at any
+## distance; the battle log says why it was switched off. Melee and the charge leg never reach this.
 func _solo_slayer_moved(params: Dictionary, target_tough: int, charging: bool, melee: bool,
-		held: bool, dist_in: float) -> bool:
+		held: bool) -> bool:
 	if melee or charging or held:
 		return false
 	if str(params.get("gate", "")) != "ranged_over_or_charge":
 		return false
 	if str(params.get("condition", "")) != "vs_tough_ge" or target_tough < int(params.get("threshold", 0)):
 		return false
-	return dist_in > float(params.get("over_in", 9.0))
+	return true
 
 
 ## One conditional-AP part {name, bonus}; a rules 3.6 condition adds its words ("why") so the battle-log
