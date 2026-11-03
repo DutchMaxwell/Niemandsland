@@ -347,6 +347,18 @@ func entries_for_unit(unit_key: String) -> Array[Dictionary]:
 	return out
 
 
+## FAB-B4 (rules 3.6): model id -> where that model stood BEFORE its first recorded move of `round_num` (the first
+## point of its first polyline, world XZ metres). A take-back erased its entry, so an undone drag never counts; a
+## model with no entry this round did not move. A unit activates once a round, so these are its activation's starts.
+func round_starts_for_unit(unit_key: String, round_num: int) -> Dictionary:
+	var out := {}
+	for entry in entries_for_unit(unit_key):
+		var model_id := int(entry.get("model", 0))
+		if int(entry.get("round", -1)) == round_num and not out.has(model_id):
+			out[model_id] = (entry["points"] as PackedVector2Array)[0]
+	return out
+
+
 # ===== Activation-end clearing (the visible-trail rules) =====
 
 ## A move for `unit_key` (owned by `owner`) was committed as part of drop `drop_id`.

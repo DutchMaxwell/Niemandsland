@@ -13938,6 +13938,20 @@ func _solo_ask_split_fire(target_a: GameUnit, names: Array) -> Array:
 	return picked
 
 
+## FAB-B4 (rules 3.6): where each model of the charger (host plus joined heroes) stood before this round's hand
+## drag, from the movement ledger. A manual charge is only legal once the drag brought it into reach, so the
+## figure the 3.6 charge gates need exists only there. No entry = it did not move = its current spot is right.
+func _human_charge_starts(attacker: GameUnit) -> Dictionary:
+	var starts := {}
+	if move_trails == null or opr_army_manager == null:
+		return starts
+	var chain: Array = [attacker]
+	chain.append_array(attacker.get_attached_heroes())
+	for gu in chain:
+		starts.merge(move_trails.ledger.round_starts_for_unit((gu as GameUnit).unit_id, opr_army_manager.current_round))
+	return starts
+
+
 func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool, auto: bool = false, charge_from_in: float = -1.0) -> void:
 	if attacker == null or target == null or dice_roller_control == null:
 		return
@@ -13945,12 +13959,14 @@ func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool, auto: 
 	_solo_log_unmodeled_rules(attacker)
 	_solo_log_unmodeled_rules(target)
 	if melee:
-		# FAB-B4 (rules 3.6, core twin `tray_charge`): the charge gates read the PRE-charge edge gap, so it is
-		# taken BEFORE the snap and pile-in close it. An Auto charge already moved and hands its own figure in
-		# (`charge_from_in` >= 0). Below EPOCH_73_V36 a human charge reads 0" as it always did.
+		# FAB-B4 (rules 3.6, core twin `tray_charge`): the charge gates read the PRE-charge edge gap, taken BEFORE
+		# the snap and pile-in close it. An Auto charge already moved and hands its own figure in (`charge_from_in`
+		# >= 0); a hand charge is measured from where the ledger says its models stood before the drag. Below
+		# EPOCH_73_V36 a human charge reads 0" as it always did.
 		var charge_gap := 0.0
 		if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
-			charge_gap = charge_from_in if charge_from_in >= 0.0 else solo_controller.charge_from_in(attacker, target, 0.0)
+			charge_gap = charge_from_in if charge_from_in >= 0.0 \
+				else solo_controller.charge_from_in(attacker, target, 0.0, _human_charge_starts(attacker))
 		# CHARGE SNAP (field-test finding 5): before the strikes, snap the charging unit into clean base
 		# contact — its nearest model touches the enemy and the rest ride forward in coherency (GF/AoF
 		# v3.5.1 p.8). A small nudge (validation already required ≤ MELEE_ENGAGE_IN); logged + broadcast.

@@ -143,3 +143,50 @@ func test_a_defender_with_a_melee_weapon_is_still_fatigued_at_epoch_73() -> void
 	await _charge(charger, target, AiActRecorder.EPOCH_73_V36)
 	assert_bool(target.is_fatigued).override_failure_message(
 		"a defender that struck back is Fatigued\n" + _log_text()).is_true()
+
+
+## The player's real path: a manual melee pick is only legal within 1" of base contact, so the charger was
+## DRAGGED into reach first. The pre-charge gap then lives in the MoveLedger (the polyline's first point),
+## not in the models' spots. `from_in` < 0 records no move (the unit did not drag).
+func _dragged_warding_charge(epoch: int, from_in: float) -> String:
+	AiActRecorder.rules_epoch = epoch
+	var charger := _unit(1, "Charger", 8.5, 20)   # where the drag ended: ~0.2" off the Wardens' base
+	var target := _unit(2, "Wardens", 10.0, 0, ["Warding"], 6, 30, "knight_brothers")
+	if from_in >= 0.0:
+		(charger.models[0] as ModelInstance).node.set_meta("network_id", 7)
+		_main.move_trails.ledger.record(1, charger.unit_id, "Charger", 7,
+			PackedVector2Array([Vector2(from_in * INCH, 0.0), Vector2(8.5 * INCH, 0.0)]),
+			_main.opr_army_manager.current_round)
+	assert_str(_main._solo_validate_target(charger, target, true)) \
+		.override_failure_message("the dragged charger must be a legal manual pick").is_equal("")
+	_main.seed_tray_rng(7)
+	await _main._solo_split_or_attack(charger, target, true)
+	var text := _log_text()
+	await E2EBoot.settle(get_tree())
+	return text
+
+
+func test_a_dragged_charge_from_over_six_opens_warding_at_epoch_73() -> void:
+	var text: String = await _dragged_warding_charge(AiActRecorder.EPOCH_73_V36, 0.0)
+	assert_str(text).override_failure_message("a drag from ~8.7in out is a charge from over 6in: %s" % text) \
+		.contains("ignores wounds on 6+ (charged from over 6in)")
+
+
+func test_a_dragged_charge_from_within_six_keeps_warding_shut_at_epoch_73() -> void:
+	var text: String = await _dragged_warding_charge(AiActRecorder.EPOCH_73_V36, 4.0)
+	assert_str(text).override_failure_message("a drag from ~4.7in out stays inside the 6in gate: %s" % text) \
+		.contains("no 6+ ignore")
+	assert_str(text).not_contains("charged from over 6in")
+
+
+func test_a_charge_without_a_ledger_move_reads_its_current_gap_at_epoch_73() -> void:
+	var text: String = await _dragged_warding_charge(AiActRecorder.EPOCH_73_V36, -1.0)
+	assert_str(text).override_failure_message("no ledger move = the unit did not drag, ~0.2in is right: %s" % text) \
+		.contains("no 6+ ignore")
+
+
+func test_a_dragged_charge_keeps_the_old_read_at_epoch_72() -> void:
+	var text: String = await _dragged_warding_charge(AiActRecorder.EPOCH_72_PLAYTEST_RULES, 0.0)
+	assert_str(text).override_failure_message("epoch 72 keeps the unconditional 6+: %s" % text) \
+		.contains("Warding dice (6+)")
+	assert_str(text).not_contains("charged from over 6in")
