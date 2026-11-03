@@ -328,8 +328,8 @@ static func _parry_cancels(def_ctx: Dictionary, hits: float) -> float:
 ## Build the EV context for a live unit. `in_cover` / `counter_models` come from the caller's terrain /
 ## weapon knowledge (cover is a terrain read, counter models a weapon walk — injected, not divined).
 ## Wave 5: `defense` is the Armor(X)-adjusted value ("counts as having Defense X+", best-of — the same
-## AiCombatMath.armored_defense the dice path uses) and `morale_bonus` carries Banner's +1 (both gated
-## by the system-scoped RulesRegistry, so a rule only fires where its book fields it).
+## AiCombatMath.armored_defense the dice path uses) and `morale_bonus` carries the Banner-family share
+## (`valiant_bonus` names its Valiant part; both gated by the system-scoped RulesRegistry).
 static func ctx_for(unit: GameUnit, in_cover: bool = false, counter_models: int = 0,
 		held: bool = true) -> Dictionary:
 	if unit == null:
@@ -338,8 +338,8 @@ static func ctx_for(unit: GameUnit, in_cover: bool = false, counter_models: int 
 		"quality": unit.get_quality(),
 		"defense": AiCombatMath.armored_defense(unit.get_defense(),
 			unit_rating(unit, "Armor") if RulesRegistry.unit_rule_active(unit, "Armor") else 0),
-		"morale_bonus": int(RulesRegistry.unit_param(unit, "Banner", "morale_bonus", AiCombatMath.BANNER_MORALE_BONUS)) \
-			if RulesRegistry.unit_rule_active(unit, "Banner") else 0,
+		"morale_bonus": SoloController.morale_bonus_of(unit) - SoloController.morale_rating_of(unit),
+		"valiant_bonus": SoloController.valiant_bonus_of(unit),
 		"tough": maxi(unit_rating(unit, "Tough"), 1),
 		"models": maxi(unit.get_alive_count(), 1),
 		# Rules 3.6 (SHO-09s): the two TARGET-STATE facts, on the same basis as BattleSim._below_half
@@ -1182,8 +1182,13 @@ static func charge_score(our_profiles: Array, us: Dictionary, their_profiles: Ar
 	var risk_weight: float = 0.5 if bool(us.get("fearless", false)) else 1.0
 	# Banner (wave 5): +1 to morale test rolls shaves 1/6 off the chance a failed test sticks, so the
 	# wounds-taken weight relaxes by morale_bonus/6 — an advisory heuristic, tie-breaks only (the same
-	# discipline as the Fearless half-weight above).
-	risk_weight *= maxf(0.0, 1.0 - float(int(us.get("morale_bonus", 0))) * SIX_P)
+	# discipline as the Fearless half-weight above). MOR-09 Valiant: inside the 6" charge band only the
+	# Valiant-family share drops; a plain Banner keeps its +1. Negative distance = unknown.
+	var morale_bonus := int(us.get("morale_bonus", 0))
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
+			and charge_dist_in >= 0.0 and charge_dist_in <= AiCombatMath.CHARGE_LONG_RANGE_IN:
+		morale_bonus -= mini(int(us.get("valiant_bonus", 0)), morale_bonus)
+	risk_weight *= maxf(0.0, 1.0 - float(morale_bonus) * SIX_P)
 	return dealt - taken * risk_weight
 
 
