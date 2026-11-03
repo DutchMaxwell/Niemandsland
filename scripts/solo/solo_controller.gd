@@ -9005,14 +9005,16 @@ static func indirect_lift_rule(unit: GameUnit, key: String) -> String:
 	return ""
 
 
-## Rules 3.6 (SHO-01b): the cover half of the Indirect waiver needs a Hold (`cover_needs_hold`, the
-## SHO-01a sight half's shape above). Core twin: unit.rs build_for's EPOCH_73_V36 stamp.
-static func indirect_ignores_cover(unit: GameUnit, held: bool = true) -> bool:
-	return held or not indirect_needs_hold(unit, "cover_needs_hold")
+## Rules 3.6 (FAB-A3): the Indirect entry lifts cover granted by sight blockers only, and the table
+## grants Cover terrain only — so a 3.6 entry answers false here and the Hold no longer matters.
+## `_held` stays for the call sites; the `cover_needs_hold` read is the epoch trigger.
+## Core twin: unit.rs build_for's EPOCH_73_V36 stamp and dice.rs's save fold.
+static func indirect_ignores_cover(unit: GameUnit, _held: bool = true) -> bool:
+	return not indirect_needs_hold(unit, "cover_needs_hold")
 
 
 ## The volley's cover decision (main.gd's AI and human save paths): Blast and Ignores Cover always
-## drop the target's cover; an Indirect weapon drops it only after a Hold at rules 3.6.
+## drop the target's cover; at rules 3.6 an Indirect weapon keeps terrain cover (`_held` unused).
 ## Core twin: dice.rs resolve_volley_leg's save fold.
 static func shot_ignores_cover(profile: Dictionary, unit: GameUnit, held: bool = true) -> bool:
 	if int(profile.get("blast", 0)) > 1 or bool(profile.get("ignores_cover", false)):

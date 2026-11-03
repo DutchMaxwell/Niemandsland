@@ -4815,8 +4815,8 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		if not indirect_cover_logged and bool(profile.get("indirect", false)) \
 				and not SoloController.indirect_ignores_cover(attacker, _solo_unit_held(attacker)) \
 				and battle_log != null and AiCombatMath.shot_uses_cover(save_def, shot_cover, shot_base):
-			indirect_cover_logged = true   # the rule applied: the target keeps cover because the shooter moved
-			battle_log.log_event(BattleLog.Category.COMBAT, "Indirect: %s moved — %s's cover counts (only a Hold ignores it)" % [
+			indirect_cover_logged = true   # the rule applied: the target keeps its terrain cover
+			battle_log.log_event(BattleLog.Category.COMBAT, "Indirect: %s — %s's cover counts (only sight-blocker cover is ignored)" % [
 				attacker.get_name(), target.get_name()], true)
 		if td_ctx.is_empty() and not cover_logged and battle_log != null \
 				and AiCombatMath.shot_uses_cover(save_def, shot_cover, shot_base):
@@ -14526,8 +14526,8 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 			if not indirect_cover_logged and bool(profile.get("indirect", false)) \
 					and not SoloController.indirect_ignores_cover(attacker, _solo_unit_held(attacker)) \
 					and battle_log != null and AiCombatMath.shot_uses_cover(save_def, shot_cover, shot_base):
-				indirect_cover_logged = true   # the rule applied: the target keeps cover because the shooter moved
-				battle_log.log_event(BattleLog.Category.COMBAT, "Indirect: %s moved — %s's cover counts (only a Hold ignores it)" % [
+				indirect_cover_logged = true   # the rule applied: the target keeps its terrain cover
+				battle_log.log_event(BattleLog.Category.COMBAT, "Indirect: %s — %s's cover counts (only sight-blocker cover is ignored)" % [
 					attacker.get_name(), target.get_name()], true)
 			if td_ctx.is_empty() and not cover_logged and battle_log != null \
 					and AiCombatMath.shot_uses_cover(save_def, shot_cover, shot_base):
