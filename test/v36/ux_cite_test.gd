@@ -12,6 +12,7 @@ const FILES := [
 	"res://scripts/opr_army_manager.gd",
 	"res://scripts/placement_ghost.gd",
 	"res://scripts/radial_menu.gd",
+	"res://scripts/radial_menu_controller.gd",
 ]
 ## The label rules_cite renders per normalized game system (the version itself comes from the map).
 const SYSTEM_LABELS := [
