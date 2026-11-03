@@ -386,18 +386,20 @@ mod mor_16a {
         );
     }
 
-    /// A chain with no caster at all logs the skip instead of "spending"
-    /// nothing from the host's pool.
+    /// A chain with no caster takes the Morale test like any target: a
+    /// failure leaves it Shaken and latches, but there is no pool to spend.
     #[test]
-    fn a_chain_without_a_caster_logs_the_skip() {
+    fn a_non_caster_target_is_shaken_but_loses_no_tokens() {
         let (mut st, mut statics) = line("blessed_sisters", EPOCH_73_V36, 4, 5);
         statics[2].is_caster = false;
         st.round = 1;
         let shot = drain(&mut st, &statics, EPOCH_73_V36, 10.0, seed_failing(4));
-        assert_eq!(st.casts[2], 5, "no caster in the chain, no tokens spent");
+        assert!(st.shaken[2], "the failed test Shakes any target");
+        assert_eq!(st.casts[2], 5, "no caster chain, no token pool spent");
+        assert_eq!(st.vs_mark_round[0], st.round, "the once latch is set before the test");
         assert!(
-            shot.log.iter().any(|l| l.contains("no caster in its chain")),
-            "rules-must-log: the skip is logged — got {:?}", shot.log
+            shot.log.iter().any(|l| l.contains("has no spell tokens to lose")),
+            "rules-must-log: the empty pool is named — got {:?}", shot.log
         );
     }
 }
