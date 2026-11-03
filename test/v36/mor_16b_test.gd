@@ -49,6 +49,13 @@ func _bearer_and_target(tokens: int = 5, quality: int = 6, target_rules: Array =
 	return [bearer, target]
 
 
+func _attach_hero(target: GameUnit) -> GameUnit:
+	var hero := _unit("Hero", 3, Vector3(0.3, 0, 0), [], 4, 0)
+	target.unit_properties["attached_heroes"] = [hero]
+	hero.unit_properties["attached_to"] = target
+	return hero
+
+
 ## The first tray face this seed produces (and the second, when asked) — the
 ## live dice stream is the tray's own RNG, seeded exactly as the arena does.
 func _seed_for(face: int, second: int = 0) -> int:
@@ -82,11 +89,14 @@ func test_a_failed_morale_test_takes_two_spell_tokens() -> void:
 	var pair := _bearer_and_target()
 	var bearer: GameUnit = pair[0]
 	var target: GameUnit = pair[1]
+	var hero := _attach_hero(target)
 	_main.opr_army_manager.current_round = 1
 	_main.seed_tray_rng(_seed_for(1))
 	await _main._solo_apply_vs_marks(bearer, target, 10.0)
 	assert_int(target.casts_current).is_equal(3)
-	assert_str(_log_text()).contains("Drainer drains Target: Morale test failed, -2 spell tokens (5 -> 3)")
+	assert_str(_log_text()).contains("Drainer drains Target: Morale test failed, -2 spell tokens (5 -> 3) — Shaken")
+	assert_bool(target.is_shaken).is_true()
+	assert_bool(hero.is_shaken).is_true()
 	assert_int(int(bearer.unit_properties.get("vs_mark_round", -1))).is_equal(1)
 
 
@@ -95,11 +105,14 @@ func test_a_passed_morale_test_keeps_the_tokens_and_names_the_test() -> void:
 	var pair := _bearer_and_target(3, 2)
 	var bearer: GameUnit = pair[0]
 	var target: GameUnit = pair[1]
+	var hero := _attach_hero(target)
 	_main.opr_army_manager.current_round = 1
 	_main.seed_tray_rng(_seed_for(6))
 	await _main._solo_apply_vs_marks(bearer, target, 10.0)
 	assert_int(target.casts_current).is_equal(3)
 	assert_str(_log_text()).contains("Drainer drains Target: Morale test passed")
+	assert_bool(target.is_shaken).is_false()
+	assert_bool(hero.is_shaken).is_false()
 
 
 func test_a_fearless_target_recovers_and_keeps_its_tokens() -> void:

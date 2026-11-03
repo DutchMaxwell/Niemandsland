@@ -22818,12 +22818,14 @@ func _solo_apply_spell_drain(member: GameUnit, target: GameUnit, dist_in: float)
 			return true
 		var after := maxi(0, before - drain)
 		target.set_caster_points(after)
+		for cm in _solo_joined_chain(target):
+			(cm as GameUnit).is_shaken = true
 		if network_manager != null and network_manager.has_method("broadcast_unit_casts"):
 			network_manager.broadcast_unit_casts(target)
 		_solo_refresh_caster_markers()
 		if battle_log != null:
 			_log_rule_event(BattleLog.Category.COMBAT,
-				"%s drains %s: Morale test failed, -%d spell tokens (%d -> %d)" % [
+				"%s drains %s: Morale test failed, -%d spell tokens (%d -> %d) — Shaken" % [
 					member.get_name(), target.get_name(), drain, before, after], _solo_is_ai_unit(member))
 		return true
 	return false
