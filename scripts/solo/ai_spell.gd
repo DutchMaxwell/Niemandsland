@@ -147,7 +147,8 @@ static func spell_amplifier_mod(unit: GameUnit) -> int:
 static func spell_facets(weapon_rules: Array, rules_epoch: int) -> Dictionary:
 	var f := {"ap": 0, "blast": 0, "deadly": 0, "bane": false, "shred": false, "surge": false,
 		"on6_ap": 0, "ignores_regen": false, "ap_vs_tough3": 0, "ap_vs_tough9": 0, "ap_vs_def3": 0,
-		"ap_vs_above_half": 0}
+		"ap_vs_above_half": 0, "ap_vs_shaken": 0, "bane_above_half": false,
+		"bane_tough3_low": 0, "bane_shaken_low": 0, "bane_def56_low": 0}
 	var v36: bool = rules_epoch >= AiActRecorder.EPOCH_73_V36
 	for r in weapon_rules:
 		var s := str(r).strip_edges()
@@ -200,6 +201,33 @@ static func spell_facets(weapon_rules: Array, rules_epoch: int) -> Dictionary:
 					f["ap_vs_tough3"] = 2
 			"Tear":
 				f["ap_vs_tough9"] = 4
+			# Rules 3.6 (EPOCH_73_V36) — the nine spell tokens of the new weapon family.
+			# Five are priced below; the four no-ops stay explicit:
+			#   Pierce / Smash — over_half_range needs a cast distance (the EV has none)
+			#   Demolish       — near_terrain is unknown here; the EV already ignores Cover
+			#   Scourge        — phantom wounds feed the morale trigger / melee tally, never damage
+			"Pierce", "Smash":
+				pass
+			"Demolish":
+				pass
+			"Scourge":
+				pass
+			"Purge":
+				if v36:
+					f["ap_vs_shaken"] = 2
+			"Decimate":
+				if v36:
+					f["bane_above_half"] = true
+			"Obliterate":
+				if v36:
+					f["bane_tough3_low"] = 5
+					f["ignores_regen"] = true
+			"Reap":
+				if v36:
+					f["bane_shaken_low"] = 5
+			"Fragment":
+				if v36:
+					f["bane_def56_low"] = 5
 			_:
 				pass   # unknown facet: conservative no-op (base hits still count)
 	return f
@@ -227,6 +255,8 @@ static func effective_ap(facets: Dictionary, def_ctx: Dictionary) -> int:
 		ap += int(facets["ap_vs_def3"])
 	if bool(def_ctx.get("above_half_strength", false)):
 		ap += int(facets.get("ap_vs_above_half", 0))
+	if bool(def_ctx.get("shaken_or_fatigued", false)):
+		ap += int(facets.get("ap_vs_shaken", 0))
 	return ap
 
 
@@ -259,9 +289,21 @@ static func spell_damage_ev(hits: int, def_ctx: Dictionary, facets: Dictionary =
 	# Saves at the RAW Defense — no Shielded, no Cover (see above).
 	var defense := int(def_ctx.get("defense", 4))
 	var bane := bool(facets.get("bane", false))
+	var bane_from := 6
+	if bool(facets.get("bane_above_half", false)) and bool(def_ctx.get("above_half_strength", false)):
+		bane = true
+	if int(facets.get("bane_tough3_low", 0)) > 1 and maxi(int(def_ctx.get("tough", 1)), 1) >= 3:
+		bane = true
+		bane_from = mini(bane_from, int(facets["bane_tough3_low"]))
+	if int(facets.get("bane_shaken_low", 0)) > 1 and bool(def_ctx.get("shaken_or_fatigued", false)):
+		bane = true
+		bane_from = mini(bane_from, int(facets["bane_shaken_low"]))
+	if int(facets.get("bane_def56_low", 0)) > 1 and int(def_ctx.get("defense", 4)) >= 5:
+		bane = true
+		bane_from = mini(bane_from, int(facets["bane_def56_low"]))
 	var ap := effective_ap(facets, def_ctx)
-	var unsaved := (h - six_hits) * (1.0 - AiEv.block_chance(defense, ap, bane)) \
-		+ six_hits * (1.0 - AiEv.block_chance(defense, ap + int(facets.get("on6_ap", 0)), bane))
+	var unsaved := (h - six_hits) * (1.0 - AiEv.block_chance_from(defense, ap, bane, bane_from)) \
+		+ six_hits * (1.0 - AiEv.block_chance_from(defense, ap + int(facets.get("on6_ap", 0)), bane, bane_from))
 	# Deadly (Tough-capped multiply — one model takes them all, so Tough bounds it).
 	var deadly := int(facets.get("deadly", 0))
 	var deadly_cap := maxi(int(def_ctx.get("tough", 1)), 1)
@@ -275,7 +317,7 @@ static func spell_damage_ev(hits: int, def_ctx: Dictionary, facets: Dictionary =
 	# facet is the Defense-6 re-roll alone). Both fixes read the core's frozen gate (spell.rs): below
 	# EPOCH_72_PLAYTEST_RULES Lacerate's `bane` still bypasses and the cap comes before the roll.
 	var playtest := AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_72_PLAYTEST_RULES
-	if bool(def_ctx.get("regeneration", false)) and not (bool(facets.get("ignores_regen", false)) or (bane and not playtest)):
+	if bool(def_ctx.get("regeneration", false)) and not (bool(facets.get("ignores_regen", false)) or (bool(facets.get("bane", false)) and not playtest)):
 		var keep := 1.0 - AiCombatMath.success_chance(int(def_ctx.get("regen_target_spell", def_ctx.get("regen_target", AiEv.REGENERATION_TARGET))))
 		unsaved *= keep
 		# A4 (maintainer ruling 29.10.2026), as AiEv.profile_ev: all X wounds are rolled before the cap.
