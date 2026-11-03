@@ -39,13 +39,27 @@ fn duel() -> State {
 /// The loser of the charge melee and the log the tray kept; `self_wounds` = what the charger took from its own
 /// Dangerous test on the charge move before the melee began.
 fn charge(charger_fear: i64, defender_fear: i64, self_wounds: i64, epoch: u32) -> (Option<usize>, Vec<String>) {
+    charge_pre(charger_fear, defender_fear, self_wounds, 0, 0, epoch)
+}
+
+/// `charge` plus the wounds each side took from a spell earlier in the same activation (`pre_melee_su` on the
+/// charger, `pre_melee_tu` on the defender).
+fn charge_pre(
+    charger_fear: i64,
+    defender_fear: i64,
+    self_wounds: i64,
+    pre_melee_su: i64,
+    pre_melee_tu: i64,
+    epoch: u32,
+) -> (Option<usize>, Vec<String>) {
     let statics = vec![unarmed("Charger", charger_fear), unarmed("Defender", defender_fear)];
     let mut st = duel();
     let seams = Seams { rules_epoch: epoch, ..Default::default() };
     let mut tray = Tray::seeded(11);
     let mut shot = ShootResult::default();
     let loser = tray_charge_with_self_wounds(
-        &statics, &mut st, 0, 1, seams, &mut tray, &mut shot, 0.0, Cover::Recorded(None), self_wounds);
+        &statics, &mut st, 0, 1, seams, &mut tray, &mut shot, 0.0, Cover::Recorded(None), self_wounds,
+        pre_melee_su, pre_melee_tu);
     (loser, shot.log)
 }
 
@@ -92,4 +106,37 @@ fn defender_fear_still_counts_against_the_charger_at_both_epochs() {
         let (loser, _) = charge(0, 2, 0, epoch);
         assert_eq!(loser, Some(0), "epoch {epoch}: the charger took 2 (Fear) against 0");
     }
+}
+
+/// FAB-B2: the melee tally counts EVERY wound each side took in the activation. A spell that landed 2 wounds on
+/// the charger before it charged lifts the defender's tally to 2 against 0, so the charger loses at 73.
+#[test]
+fn the_chargers_pre_melee_activation_wounds_lose_the_melee_at_epoch_73() {
+    let (loser, log) = charge_pre(0, 0, 0, 2, 0, EPOCH_73_V36);
+    assert_eq!(loser, Some(0), "2 wounds taken earlier in the activation: the charger loses");
+    assert!(
+        log.iter().any(|l| l.contains("Charger took 2") && l.contains("Defender took 0")),
+        "the verdict names the comparison as wounds taken: {log:?}"
+    );
+}
+
+/// The same spell on the DEFENDER: the charger dealt 0 strikes but the defender took 2 earlier in the
+/// activation, so it is the defender that loses at 73.
+#[test]
+fn the_defenders_pre_melee_activation_wounds_lose_it_the_melee_at_epoch_73() {
+    let (loser, log) = charge_pre(0, 0, 0, 0, 2, EPOCH_73_V36);
+    assert_eq!(loser, Some(1), "2 wounds taken earlier in the activation: the defender loses");
+    assert!(
+        log.iter().any(|l| l.contains("Charger took 0") && l.contains("Defender took 2")),
+        "the verdict names the comparison as wounds taken: {log:?}"
+    );
+}
+
+/// Below the epoch the comparison stays on wounds dealt: pre-melee activation wounds are ignored and the two
+/// unarmed sides tie.
+#[test]
+fn pre_melee_activation_wounds_are_ignored_at_epoch_72() {
+    let (loser, log) = charge_pre(0, 0, 0, 2, 2, EPOCH_72_PLAYTEST_RULES);
+    assert_eq!(loser, None, "a tie in wounds dealt: nobody tests");
+    assert!(!log.iter().any(|l| l.contains("took")), "the 72 leg writes no wounds-taken line: {log:?}");
 }
