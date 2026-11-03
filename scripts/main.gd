@@ -12693,7 +12693,7 @@ func _run_player_intent(unit: GameUnit, verb: int, target: GameUnit, point: Vari
 	if verb == AiDecision.Action.CHARGE:
 		var gap_in: float = solo_controller.nearest_melee_gap_in(unit, target)
 		if gap_in <= SoloController.MELEE_ENGAGE_IN:
-			await _run_human_attack(unit, target, true, true)   # snap, pile-in, melee, activation, AI reply
+			await _run_human_attack(unit, target, true, true, float(report.get("charge_from_in", -1.0)))   # snap, pile-in, melee, activation, AI reply
 			return
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT,
@@ -13938,13 +13938,35 @@ func _solo_ask_split_fire(target_a: GameUnit, names: Array) -> Array:
 	return picked
 
 
-func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool, auto: bool = false) -> void:
+## FAB-B4 (rules 3.6): where each model of the charger (host plus joined heroes) stood before this round's hand
+## drag, from the movement ledger. A manual charge is only legal once the drag brought it into reach, so the
+## figure the 3.6 charge gates need exists only there. No entry = it did not move = its current spot is right.
+func _human_charge_starts(attacker: GameUnit) -> Dictionary:
+	var starts := {}
+	if move_trails == null or opr_army_manager == null:
+		return starts
+	var chain: Array = [attacker]
+	chain.append_array(attacker.get_attached_heroes())
+	for gu in chain:
+		starts.merge(move_trails.ledger.round_starts_for_unit((gu as GameUnit).unit_id, opr_army_manager.current_round))
+	return starts
+
+
+func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool, auto: bool = false, charge_from_in: float = -1.0) -> void:
 	if attacker == null or target == null or dice_roller_control == null:
 		return
 	await begin_activation(attacker)   # D23: the resolving attack is the committed action
 	_solo_log_unmodeled_rules(attacker)
 	_solo_log_unmodeled_rules(target)
 	if melee:
+		# FAB-B4 (rules 3.6, core twin `tray_charge`): the charge gates read the PRE-charge edge gap, taken BEFORE
+		# the snap and pile-in close it. An Auto charge already moved and hands its own figure in (`charge_from_in`
+		# >= 0); a hand charge is measured from where the ledger says its models stood before the drag. Below
+		# EPOCH_73_V36 a human charge reads 0" as it always did.
+		var charge_gap := 0.0
+		if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+			charge_gap = charge_from_in if charge_from_in >= 0.0 \
+				else solo_controller.charge_from_in(attacker, target, 0.0, _human_charge_starts(attacker))
 		# CHARGE SNAP (field-test finding 5): before the strikes, snap the charging unit into clean base
 		# contact — its nearest model touches the enemy and the rest ride forward in coherency (GF/AoF
 		# v3.5.1 p.8). A small nudge (validation already required ≤ MELEE_ENGAGE_IN); logged + broadcast.
@@ -13963,7 +13985,7 @@ func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool, auto: 
 		elif _solo_combined_alive(target) > 1 and battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT,
 			"%s: all models already in base contact — no pile-in needed (%s)" % [target.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(target))], true)
-		await _run_human_melee(attacker, target, auto)
+		await _run_human_melee(attacker, target, auto, charge_gap)
 		# Hit & Run (cut C): "being in melee" covers the DEFENDER too — the AI's charged unit may take
 		# its once-per-round 3" step after the melee resolves (the human's own bearers move manually —
 		# on a two-human table the defender is one, #1719).
@@ -14676,7 +14698,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 ## strike back — solo rules p.57 — so no prompt), Impact (Counter-reduced), your strikes (charging:
 ## Furious/Thrust; the AI's Evasive/Shielded apply), the AI's remaining strike-back, then the Fear-adjusted
 ## melee-winner morale (GF/AoF v3.5.1 p.13).
-func _run_human_melee(attacker: GameUnit, target: GameUnit, auto: bool = false) -> void:
+func _run_human_melee(attacker: GameUnit, target: GameUnit, auto: bool = false, charge_from_in: float = 0.0) -> void:
 	var human_caused := 0
 	var ai_caused := 0
 	var self_taken: int = _solo_activation_self_wounds(attacker)   # MEL-10h: pre-melee wounds count as TAKEN at 3.6
@@ -14697,7 +14719,7 @@ func _run_human_melee(attacker: GameUnit, target: GameUnit, auto: bool = false) 
 	_solo_log_counter_first_decision(target, ai_counter)
 	var impact_first: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
 	if impact_first:   # rules 3.6 (core twin `tray_charge`): Impact rolls before either side strikes
-		human_caused += await _solo_charge_impact(attacker, target, not _solo_is_ai_unit(target))
+		human_caused += await _solo_charge_impact(attacker, target, not _solo_is_ai_unit(target), charge_from_in)
 		await _solo_stage_phase("Impact")
 	if ai_counter and _solo_combined_alive(target) > 0:
 		if battle_log != null:
@@ -14711,7 +14733,7 @@ func _run_human_melee(attacker: GameUnit, target: GameUnit, auto: bool = false) 
 	# — Impact(X) auto-hits on your charge (GF/AoF v3.5.1 p.13; reduced by the AI's Counter models). The
 	#   counter-strike may already have wiped your unit — nothing left to roll then. —
 	if not impact_first and _solo_combined_alive(attacker) > 0:
-		human_caused += await _solo_charge_impact(attacker, target, not _solo_is_ai_unit(target))
+		human_caused += await _solo_charge_impact(attacker, target, not _solo_is_ai_unit(target), charge_from_in)
 	if not impact_first:
 		await _solo_stage_phase("Impact")
 	# Resolver wave A — vs-target Marks: your charger's pre-attack pick lands on the defender.
@@ -14726,7 +14748,7 @@ func _run_human_melee(attacker: GameUnit, target: GameUnit, auto: bool = false) 
 		if (phase_slot == 0) != h_charger_last:
 			# — Your strikes (unit + attached heroes; only models within 2" strike; charging bonuses apply) —
 			if _solo_combined_alive(attacker) > 0 and _solo_combined_alive(target) > 0:
-				human_caused += await _solo_melee_strike_phase(attacker, target, true, SoloStrike.ALL)
+				human_caused += await _solo_melee_strike_phase(attacker, target, true, SoloStrike.ALL, charge_from_in)
 				ai_caused += _solo_take_retaliate_credit()
 				_solo_set_fatigued(attacker)
 			await _solo_stage_phase("%s strikes" % attacker.get_name())
@@ -14735,7 +14757,8 @@ func _run_human_melee(attacker: GameUnit, target: GameUnit, auto: bool = false) 
 			if _solo_combined_alive(target) > 0 and _solo_combined_alive(attacker) > 0:
 				# MEL-02b (rules 3.6, EPOCH_73_V36): a defender whose every melee profile is a spent
 				# Limited weapon gets no strike-back and no fatigue, exactly like B14's no-weapon case.
-				if _solo_strike_back_block(target, attacker) == "spent":
+				var block := _solo_strike_back_block(target, attacker)
+				if block == "spent":
 					if battle_log != null:
 						_log_rule_event(BattleLog.Category.COMBAT,
 							"%s's melee weapons are all spent (Limited) — cannot strike back (%s)" % [target.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(target))], true)
@@ -14743,7 +14766,9 @@ func _run_human_melee(attacker: GameUnit, target: GameUnit, auto: bool = false) 
 					ai_caused += await _solo_melee_strike_phase(target, attacker, false,
 						SoloStrike.NON_COUNTER if ai_counter else SoloStrike.ALL)
 					human_caused += _solo_take_retaliate_credit()
-					ai_struck = true
+					# FAB-B4 (rules 3.6): from epoch 73 a defender with no melee weapon at all is not tired by the
+					# empty slot (the phase logged "no melee weapons in reach"); the core and the AI path never tire it.
+					ai_struck = block != "none" or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36
 			await _solo_stage_phase("%s strikes back" % target.get_name())
 	if ai_struck and _solo_combined_alive(target) > 0:
 		_solo_set_fatigued(target)
@@ -14763,7 +14788,7 @@ func _run_human_melee(attacker: GameUnit, target: GameUnit, auto: bool = false) 
 		if loser == attacker:   # MOR-09b: the charger lost its own melee — twin of _run_ai_melee
 			await _solo_morale_test(loser, _roller_label(loser), true, OWN_CHARGE_CAUSE, -1.0, -1.0)
 		else:
-			await _solo_morale_test(loser, _roller_label(loser), true)   # "Names, not You" (rules plan 2.5)
+			await _solo_morale_test(loser, _roller_label(loser), true, "", -1.0, charge_from_in)   # "Names, not You" (rules plan 2.5)
 	await _solo_stage_phase("Morale")
 	# — Consolidation (GF v3.5.1 p.9, round 7 finding 4): neither destroyed → the human charger's 1"
 	#   back-step is surfaced as a reminder; one side destroyed → the survivor consolidates up to 3"
