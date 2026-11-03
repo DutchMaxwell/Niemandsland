@@ -178,17 +178,40 @@ func _melee_unit(pid: int, unit_name: String, x: float, models: int, weapon: Str
 	return u
 
 
-## MOR-09b: the band belongs to the unit that was CHARGED. A Valiant charger
-## that loses the melee inside 6" is not "charged", so its own test keeps the +1.
-func test_a_valiant_charger_inside_the_band_keeps_its_bonus(timeout := 90000) -> void:
+## MOR-09b: Valiant's +1 is for a test caused by being SHOT or CHARGED. A
+## charger that loses its own melee was neither, so it gets no Valiant share.
+func test_a_valiant_charger_that_loses_its_own_melee_gets_no_bonus(timeout := 90000) -> void:
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
 	_main.solo_ai_slots = {1: true, 2: true}
 	var charger := _melee_unit(2, "Charger", 0.0, 1, "Blade", ["Valiant"], 3, 9, 0)
 	var defender := _melee_unit(1, "Defender", 1.0, 1, "Spikes", [], 6, 9, 30)
 	_main.seed_tray_rng(7)
 	await _main._run_ai_melee({"unit": charger, "target": defender, "charge_from_in": 1.0})
-	assert_str(_log_text()).not_contains("Charger gets no +1 from a charge from 6")
-	assert_str(_log_text()).contains("Banner: Charger gets +1 to morale test rolls")
+	assert_str(_log_text()).not_contains("Banner: Charger gets +1 to morale test rolls")
+	assert_str(_log_text()).contains("Banner: Charger gets no +1 — it charged, it was not charged")
+
+
+## A Valiant unit CHARGED from 8" (over the 6" gate) and losing keeps the +1.
+func test_a_valiant_unit_charged_from_eight_inches_keeps_its_bonus(timeout := 90000) -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	_main.solo_ai_slots = {1: true, 2: true}
+	var charger := _melee_unit(2, "Charger", 0.0, 1, "Blade", [], 6, 9, 30)
+	var defender := _melee_unit(1, "Defender", 1.0, 1, "Spikes", ["Valiant"], 2, 9, 0)
+	_main.seed_tray_rng(7)
+	await _main._run_ai_melee({"unit": charger, "target": defender, "charge_from_in": 8.0})
+	assert_str(_log_text()).contains("Banner: Defender gets +1 to morale test rolls")
+
+
+## Charged from 4" (inside the gate): the Valiant share drops.
+func test_a_valiant_unit_charged_from_four_inches_loses_its_bonus(timeout := 90000) -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	_main.solo_ai_slots = {1: true, 2: true}
+	var charger := _melee_unit(2, "Charger", 0.0, 1, "Blade", [], 6, 9, 30)
+	var defender := _melee_unit(1, "Defender", 1.0, 1, "Spikes", ["Valiant"], 2, 9, 0)
+	_main.seed_tray_rng(7)
+	await _main._run_ai_melee({"unit": charger, "target": defender, "charge_from_in": 4.0})
+	assert_str(_log_text()).not_contains("Banner: Defender gets +1 to morale test rolls")
+	assert_str(_log_text()).contains("Valiant counts only beyond the gate")
 
 
 ## MOR-09b: a Valiant HERO does not lift a Valiant-less host past the majority.
