@@ -3298,6 +3298,30 @@ func hotseat_off_turn_drag(unit: GameUnit) -> bool:
 	_show_toast(text)
 	return true
 
+
+## Rules 3.6 (Fable A6/F6): a human unit that has already ATTACKED this activation is spent — a later
+## free drag would let one activation both keep Hold's shot bonus and advance. Lock the move (the
+## caller filters plain clicks) and name the refusal once.
+func attacked_unit_drag_refused(unit: GameUnit, distance_in := 0.0) -> bool:
+	if unit == null or opr_army_manager == null \
+			or opr_army_manager.game_phase != OPRArmyManager.GamePhase.PLAYING:
+		return false
+	# Lead 09:16: narrow to a unit that SHOT this activation and did not fight — a melee
+	# survivor's containment/back-step drag must stay legal (`shot_round` is stamped by the
+	# shooting leg only, so a melee-only activation never has it).
+	if int(unit.unit_properties.get("shot_round", -1)) != opr_army_manager.current_round:
+		return false
+	# Lead 11:17: the Hit & Run family lets a HUMAN make its one 3" post-shot step by dragging.
+	if distance_in > 0.0 and solo_controller != null \
+			and bool(solo_controller.hit_and_run_drag_allowed(unit, distance_in, true)):
+		_log_rule_event(BattleLog.Category.MOVEMENT,
+			"Hit & Run: %s steps up to %.1f\" after shooting" % [unit.get_name(), distance_in])
+		return false
+	var text := "%s has already shot this round — it cannot move now" % unit.get_name()
+	_log_rule_event(BattleLog.Category.MOVEMENT, text)
+	_show_toast(text)
+	return true
+
 ## (Re)build the SoloController for the currently designated AI slot (setup wires TurnManager once).
 func _ensure_solo_controller() -> void:
 	# #196 belt-and-braces: in multiplayer the controller exists only for an EXPLICITLY
@@ -13941,6 +13965,10 @@ func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool, auto: 
 	# toggle path does the full job (GameUnit.activate marks host + heroes, marker, MP broadcast, log,
 	# alternation reply via unit_activated). A pre-toggled unit falls through to the normal pump so a
 	# mis-click fix never queues a second AI answer.
+	if not melee and attacker != null:
+		# Fable A6/F6: the shooting leg is what makes the later drag illegal — stamp it here,
+		# where the table already knows this attack was a volley.
+		attacker.unit_properties["shot_round"] = opr_army_manager.current_round
 	human_attack_resolved.emit(attacker, melee)
 	await _solo_complete_human_attack(attacker)
 
@@ -14171,6 +14199,8 @@ func _run_human_attack_split(attacker: GameUnit, target_a: GameUnit, target_b: G
 			attacker.get_name(), target_a.get_name(), target_b.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(attacker))], false)
 	await _run_human_shooting(attacker, target_a, b_names, true)
 	await _run_human_shooting(attacker, target_b, b_names, false)
+	if attacker != null:
+		attacker.unit_properties["shot_round"] = opr_army_manager.current_round
 	human_attack_resolved.emit(attacker, false)
 	await _solo_complete_human_attack(attacker)
 

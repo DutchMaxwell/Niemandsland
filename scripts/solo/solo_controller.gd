@@ -12430,6 +12430,32 @@ func _hit_and_run_pick(unit: GameUnit, after_shoot: bool) -> String:
 ## `last_hit_and_run_note` for main.gd's battle log. Below it the host's own rules decide alone, as before.
 ## The core's twin: sim.rs `hit_and_run_mixed`.
 var last_hit_and_run_note: String = ""
+## Rules 3.6 (A6b, lead 11:17): a HUMAN bearer makes the post-shoot step by dragging, so the table
+## needs the same permission test without the AI's automatic move. True = this drag IS the one
+## per-round Hit & Run step (stamps the round); the caller logs and lets the drop stand.
+func hit_and_run_drag_allowed(unit: GameUnit, distance_in: float, after_shoot := true) -> bool:
+	if unit == null or army_manager == null or unit.is_destroyed() or unit.get_alive_count() <= 0:
+		return false
+	var rule := _hit_and_run_pick(unit, after_shoot)
+	if rule.is_empty():
+		return false
+	# UX-19 rule, human side: from 73 every model (living joined heroes included) must carry it.
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		for h in unit.get_attached_heroes():
+			var hero := h as GameUnit
+			if hero != null and hero.get_alive_count() > 0 and _hit_and_run_pick(hero, after_shoot).is_empty():
+				last_hit_and_run_note = "Hit & Run: %s stays put - not every model in the unit has the rule" % unit.get_name()
+				return false
+	var move_in := float(RulesRegistry.unit_param(unit, rule, "move_in", HIT_AND_RUN_MOVE_IN))
+	if distance_in > move_in + 0.05:
+		return false
+	var round_no := _current_round()
+	if int(unit.unit_properties.get("hit_and_run_round", -1)) == round_no:
+		return false   # one shared per-round use, same stamp the AI step writes
+	unit.unit_properties["hit_and_run_round"] = round_no
+	return true
+
+
 func hit_and_run_move(unit: GameUnit, after_shoot: bool = true) -> bool:
 	last_hit_and_run_note = ""
 	if unit == null or army_manager == null or unit.is_destroyed() or unit.get_alive_count() <= 0:
