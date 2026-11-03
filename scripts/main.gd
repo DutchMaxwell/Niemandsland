@@ -6298,7 +6298,9 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 					member.get_name(), melee_count, member.get_alive_count(),
 					int(SoloController.melee_reach_in())], true)
 		var scaled: Array = []
-		var growth_ap := int(_solo_growth_attack_bonus(member).get("ap", 0))   # Piercing Growth
+		var growth := _solo_growth_attack_bonus(member)
+		var growth_ap := int(growth.get("ap", 0))   # Piercing Growth
+		var growth_ap_names: String = ", ".join(PackedStringArray(growth.get("ap_names", [])))
 		# Unit-level grant (wave 5); coverage wave: DATA aliases (Warbound, Infected) via the
 		# generic primitive layer — same facet, same dice.
 		var member_shred: bool = RulesRegistry.unit_rule_active(member, "Shred") \
@@ -6330,6 +6332,9 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 					prof["_shred_alias"] = shred_alias
 			if growth_ap > 0:
 				prof["ap"] = int(prof.get("ap", 0)) + growth_ap
+				# AIG-G2-L4 — rules-must-log: carry the rule NAME to the save step (the batch that
+				# reads the AP names it); a build that never added the bonus never carries the mark.
+				prof["_growth_ap"] = {"name": growth_ap_names, "bonus": growth_ap}
 			# Per-model shooting (GF v3.5.1 p.8): a ranged profile fires with the member's models that
 			# have range + LOS at ITS OWN range; melee scales by the models within 2" strike reach (p.9).
 			# #231: the model's own range is the EFFECTIVE one — against an Aircraft (-12") or a Ranged
@@ -9197,6 +9202,14 @@ func _solo_resolve_saves(striker: GameUnit, defender: GameUnit, weapon_name: Str
 			"Piercing Mark: friendly attackers get AP(+%d) against %s (once)" % [
 				pierce_grant_ap, defender.get_name()], true)
 	var ap: int = int(profile.get("ap", 0)) + cond_ap + pierce_grant_ap
+	# AIG-G2-L4 — rules-must-log: the Growth-marker AP that _solo_attack_groups folded into the
+	# profile (Piercing Growth) names the rule that supplied it, at the save step where the number
+	# reaches the dice. The mark rides the profile, so a build path that never added it stays silent.
+	var growth_ap_named: Dictionary = profile.get("_growth_ap", {})
+	if battle_log != null and int(growth_ap_named.get("bonus", 0)) > 0 \
+			and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s adds AP(+%d) from its growth markers" % [
+			str(growth_ap_named.get("name", "")), striker.get_name(), int(growth_ap_named["bonus"])], true)
 	# Rending (GF/AoF v3.5.1 p.14) AND the army-book Destructive (wave 4) BOTH upgrade the unmodified-6-to-
 	# hit hits to AP(+4); they share AiCombatMath.rending_ap_hits (one math). The only difference is
 	# downstream: Rending bypasses Regeneration (via _solo_ignores_regen), Destructive does not.
@@ -10204,6 +10217,14 @@ func _solo_ignores_regen(attacker: GameUnit, profile: Dictionary, target: GameUn
 			if bool(p2.get("bypass_regen", false)):
 				if not AiEv.facet_applies(p2, int(profile.get("range", 0))):
 					continue
+				# AIG-G2-L4 — rules-must-log: the MODEL-level Regeneration bypass ("Unstoppable when
+				# Shooting" and its melee twin, printed or aura-granted) names itself here; the weapon
+				# arm above already names its rule, this arm used to answer in silence.
+				if battle_log != null and target != null \
+						and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
+						and _solo_regen_bypass_named(target):
+					_log_rule_event(BattleLog.Category.COMBAT, "%s: Regeneration ignored" % str(ed["name"]),
+						_solo_is_ai_unit(attacker))
 				return true
 		# Wave-4 family: "Rending in Melee" (entry bypass_regen + melee_only) sits on the MODEL too
 		# (direct or aura-granted). The Lacerate loop above never consulted them, so the entry's
@@ -23744,15 +23765,22 @@ static func _growth_facet_bonus(params: Dictionary, facet: String, markers: int)
 
 
 ## Attack-side growth bonuses: {"ap": int, "hit": int} (Piercing/Precision Growth per two markers,
-## Piercing/Precision Frenzy per marker).
+## Piercing/Precision Frenzy per marker). `ap_names` / `hit_names` carry the rule names that actually
+## contributed, so the batch that reads the numbers can name the rule it applied (AIG-G2-L4).
 func _solo_growth_attack_bonus(unit: GameUnit) -> Dictionary:
-	var out := {"ap": 0, "hit": 0}
+	var out := {"ap": 0, "hit": 0, "ap_names": [], "hit_names": []}
 	for e in RulesRegistry.unit_rules_of_primitive(unit, "Growth Markers"):
 		var ed := e as Dictionary
 		var sp: Dictionary = ed.get("params", {})
 		var markers: int = _solo_growth_markers(unit, str(ed["name"]))
-		out["ap"] += _growth_facet_bonus(sp, "ap", markers)
-		out["hit"] += _growth_facet_bonus(sp, "hit", markers)
+		var ap_bonus: int = _growth_facet_bonus(sp, "ap", markers)
+		var hit_bonus: int = _growth_facet_bonus(sp, "hit", markers)
+		out["ap"] += ap_bonus
+		out["hit"] += hit_bonus
+		if ap_bonus > 0:
+			(out["ap_names"] as Array).append(str(ed["name"]))
+		if hit_bonus > 0:
+			(out["hit_names"] as Array).append(str(ed["name"]))
 	return out
 
 
