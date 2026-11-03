@@ -58,7 +58,7 @@ fn ev(epoch: u32, brace: bool, fatigued: bool) -> f64 {
 }
 
 #[test]
-fn the_estimate_sees_two_brace_models_at_epoch_73() {
+fn the_estimate_sees_one_brace_at_epoch_73() {
     assert!(ev(crate::acts::EPOCH_73_V36, true, false) < ev(crate::acts::EPOCH_73_V36, false, false),
         "Impact(3) into two Brace(1) models must price lower than the unbraced defender");
 }
