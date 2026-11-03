@@ -200,7 +200,7 @@ fn fight(epoch: u32) -> (State, Option<usize>, ShootResult) {
     let mut tray = Tray::seeded(283);
     let mut shot = ShootResult::default();
     let loser = tray_charge_with_self_wounds(
-        &statics, &mut st, 0, 1, seams, &mut tray, &mut shot, 0.0, Cover::Recorded(None), 0,
+        &statics, &mut st, 0, 1, seams, &mut tray, &mut shot, 0.0, Cover::Recorded(None), 0, 0, 0,
     );
     (st, loser, shot)
 }

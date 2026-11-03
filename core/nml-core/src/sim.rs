@@ -6303,7 +6303,6 @@ fn tray_charge_with_self_wounds(
     pre_melee_su: i64,
     pre_melee_tu: i64,
 ) -> Option<usize> {
-    let _ = (pre_melee_su, pre_melee_tu);
     let mut charger_self_wounds = charger_self_wounds;
     let mut defender_self_wounds = 0;
     let strikes_first =
@@ -6408,8 +6407,8 @@ fn tray_charge_with_self_wounds(
     // Rules 3.6 (`EPOCH_73_V36`): the loser TOOK more wounds, so each side scores what its ENEMY took: wounds dealt, the
     // Fear it bears and the enemy's own self-wounds (the twin rolls no Hazardous, so only the charger adds any).
     if rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) {
-        b += charger_self_wounds;
-        a += defender_self_wounds;
+        b += charger_self_wounds + pre_melee_su;
+        a += defender_self_wounds + pre_melee_tu;
         // SHO-15b Scourge: phantom wounds a side's blocks earned count as wounds it TOOK, so they lift the enemy's
         // tally. The verdict without them names whether they decided this melee.
         let (a_base, b_base) = (a, b);
@@ -9214,6 +9213,12 @@ fn resolve_with(
     // the same shape of missing input `cover_dest` fixed for terrain. The
     // caller supplies the caster's row; without one the pre-move matrix is used
     // and a moved caster's targeting is an approximation.
+    // FAB-B2 (rules 3.6): the melee tally counts EVERY wound each side took in
+    // the activation. The cast sub-phase is the pre-melee source the core
+    // tracks itself, so the wound delta across it is the honest counter; the
+    // charge move's own self-wounds ride `charger_self_wounds` separately.
+    let cast_wounds_before_su = wounds_left(&next, si);
+    let cast_wounds_before_tu = ci.map_or(0, |t| wounds_left(&next, t));
     if seams.cast {
         let row: Vec<bool> = match cast_los {
             Some(r) => r.to_vec(),
@@ -9221,6 +9226,8 @@ fn resolve_with(
         };
         cast_phase(statics, &mut next, si, &row, seams, rng.as_deref_mut());
     }
+    let pre_melee_su = (cast_wounds_before_su - wounds_left(&next, si)).max(0);
+    let pre_melee_tu = ci.map_or(0, |t| (cast_wounds_before_tu - wounds_left(&next, t)).max(0));
 
     // --- MEND (main.gd:1056-1058), the pre-attack slot — every action kind,
     // tray path only. See `tray_mend`; no bearer, no patient, no draw.
@@ -9872,7 +9879,7 @@ fn resolve_with(
                         modifier_distance_in(state, si, ti, seams);
                     // Rules 3.6: what the charger's own Dangerous test cost it on the charge move counts as taken.
                     let self_wounds = (wounds_left(state, si) - su_before).max(0);
-                    if let Some(li) = tray_charge_with_self_wounds(statics, &mut next, si, ti, seams, tray, shot, charge_from_in, cover, self_wounds, 0, 0) {
+                    if let Some(li) = tray_charge_with_self_wounds(statics, &mut next, si, ti, seams, tray, shot, charge_from_in, cover, self_wounds, pre_melee_su, pre_melee_tu) {
                         // D1-B5b: the melee loser's test is a REAL die now
                         // (:8116-8118), where D1-B5a still asked the
                         // expected-value oracle for the outcome.
