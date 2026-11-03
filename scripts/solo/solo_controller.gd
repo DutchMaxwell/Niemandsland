@@ -2178,6 +2178,7 @@ func _act(unit: GameUnit) -> Dictionary:
 	var action: int = int(dec["action"])
 	var do_shoot: bool = bool(dec["shoot"])
 	var action_why := "decision tree"
+	var cumb_named := false   # the Cumbersome rule speaks once per activation (the settled gate below)
 	# NML-007 EV floor: is the advance's follow-up volley actually worth its 6" of board? (Computed
 	# up front so the overlay chain below stays a clean if/elif; pure reads, no behaviour on its own.)
 	var advance_shot_worth: bool = bool(ctx["shoot_after_advance"]) and target_unit != null \
@@ -2301,6 +2302,7 @@ func _act(unit: GameUnit) -> Dictionary:
 			do_shoot = shoot_range > 0
 			action_why = "Cumbersome: %s's move is cut to Hold" % unit.get_name()
 		_rule_note(report, "Cumbersome: %s may only Hold or take a plain Advance without a volley (rules 3.6)" % unit.get_name(), true)
+		cumb_named = true
 	# COMMANDER RANGED DISCIPLINE (AI plausibility Stage 4, Part B): a ranged-line unit with a clean shot is
 	# NOT dragged off it toward a marker it cannot seize this move — it holds and shoots (the Stage-3 firepower
 	# fix). Standing order, re-validated (continue while the shot holds, abort with a reason when it does not).
@@ -2374,7 +2376,8 @@ func _act(unit: GameUnit) -> Dictionary:
 				do_shoot = shoot_range > 0
 				solver_used = false
 				action_why = "Cumbersome: adopted plan re-gated to Hold"
-			_rule_note(report, "Cumbersome: %s's adopted plan keeps only Hold or a plain Advance without a volley (rules 3.6)" % unit.get_name(), true)
+			_rule_note(report, "Cumbersome: %s may only Hold or take a plain Advance without a volley (rules 3.6)" % unit.get_name(), true)
+			cumb_named = true
 		# NML-1026 (body F2): the adopted plan may carry a CHARGE the tree's own
 		# rule gates just refused (they lived tree-side only). Re-gate here; an
 		# illegal charge becomes a RUSH toward the same enemy — the move
@@ -2547,6 +2550,19 @@ func _act(unit: GameUnit) -> Dictionary:
 			"why": "rush capped to advance distance",
 			"data": {"budget_in": DIFFICULT_MOVE_CAP_IN, "advance_in": advance,
 				"target": target_unit.get_name()}})
+	# Rules 3.6 (SHO-16) SETTLED Cumbersome gate: the position solver, the flank doctrine and the
+	# rush demote above rewrite the action AFTER the tree/plan gates, so settle it once more. A
+	# Cumbersome unit ends on HOLD or a plain ADVANCE, never a volley after moving; the rule line
+	# is emitted once per activation (the earlier gates may already have named it).
+	var settled := cumbersome_settle(unit, action, do_shoot, shoot_range)
+	if bool(settled["changed"]):
+		action = int(settled["action"])
+		do_shoot = bool(settled["shoot"])
+		report["action"] = action
+		report["shoot"] = do_shoot
+		action_why = "Cumbersome: %s keeps only Hold or a plain Advance without a volley" % unit.get_name()
+		if not cumb_named:
+			_rule_note(report, "Cumbersome: %s may only Hold or take a plain Advance without a volley (rules 3.6)" % unit.get_name(), true)
 	# P0 MENU-COVERAGE PROBE (NML-1009, env-gated NML_MENU_PROBE=1): the tree's
 	# activation is settled HERE — action, destination and victim are final and
 	# nothing has moved yet, so the board still matches what the planner would
@@ -8937,6 +8953,18 @@ static func forces_hold(unit_rules: Array) -> bool:
 ## `cumbersome_at` (menu.rs) and of main.gd's helper.
 static func cumbersome_active(unit: GameUnit) -> bool:
 	return AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and RulesRegistry.unit_rule_active(unit, "Cumbersome")
+
+
+## Rules 3.6 (SHO-16) SETTLED action: the last word after every hook that can rewrite the tree's
+## action (the position solver, the flank doctrine, the rush demote). A Cumbersome unit ends on
+## HOLD or a plain ADVANCE, never a volley after moving. `changed` says whether this read altered
+## the action or the shot, so `_act` emits the rule line once per activation.
+func cumbersome_settle(unit: GameUnit, action: int, do_shoot: bool, shoot_range: float) -> Dictionary:
+	if not cumbersome_active(unit) or action == AiDecision.Action.HOLD:
+		return {"action": action, "shoot": do_shoot, "changed": false}
+	if action == AiDecision.Action.ADVANCE:
+		return {"action": action, "shoot": false, "changed": do_shoot}
+	return {"action": AiDecision.Action.HOLD, "shoot": shoot_range > 0.0, "changed": true}
 
 
 ## The rule name that keeps a unit to Hold actions at the live rules epoch, or "" — the name the
