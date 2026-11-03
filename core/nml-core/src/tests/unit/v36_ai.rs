@@ -7,6 +7,7 @@
 mod ai_05b {
     use super::super::*;
     use crate::acts::{EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36};
+    use crate::combat::{block_chance, block_chance_from};
     use crate::rules::{Registries, Spell};
     use crate::spell::{spell_damage_ev, spell_facets};
     use crate::unit::Ctx;
@@ -99,6 +100,9 @@ mod ai_05b {
         let frag = eval(FRAGMENT, EPOCH_73_V36, &def5);
         assert!((frag - 32.0 / 9.0).abs() < 1e-9, "Fragment window from 5: {frag}");
         assert!(frag > 28.0 / 9.0 + 1e-9, "the sixes-only leg would stop at 28/9");
+
+        assert_eq!(block_chance_from(4, 0, true, 6), block_chance(4, 0, true), "from 6 is byte-exact");
+        assert!(block_chance_from(4, 0, true, 5) < block_chance(4, 0, true));
     }
 
     /// Case 3 — the four documented no-ops leave the EV on the plain spell
@@ -156,6 +160,29 @@ mod ai_05b {
                 assert!(now > old + 1e-9, "{} must be priced at 73: {now} vs {old}", spell.2);
             } else {
                 assert_eq!(now, old, "{} must stay a no-op at 73", spell.2);
+            }
+        }
+
+        for spell in [PURGE, DECIMATE, OBLITERATE, REAP, FRAGMENT, PIERCE, SMASH, DEMOLISH, SCOURGE] {
+            let f = spell_facets(&live_spell(spell.0, spell.1, spell.2).weapon_rules, EPOCH_73_V36);
+            match spell.2 {
+                "Eternal Flame" => assert_eq!(f.ap_vs_shaken, 2, "{}", spell.2),
+                "Rapid Putrefaction" => assert!(f.bane_above_half, "{}", spell.2),
+                "Beautiful Pain" => {
+                    assert_eq!(f.bane_tough3_low, 5, "{}", spell.2);
+                    assert!(f.ignores_regen, "{}", spell.2);
+                }
+                "Wave of Discord" => assert_eq!(f.bane_shaken_low, 5, "{}", spell.2),
+                "Overwhelming Strike" => assert_eq!(f.bane_def56_low, 5, "{}", spell.2),
+                _ => {
+                    assert_eq!(
+                        (f.ap_vs_shaken, f.bane_tough3_low, f.bane_shaken_low, f.bane_def56_low),
+                        (0, 0, 0, 0),
+                        "{}",
+                        spell.2
+                    );
+                    assert!(!f.bane_above_half, "{}", spell.2);
+                }
             }
         }
     }
