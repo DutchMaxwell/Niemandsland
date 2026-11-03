@@ -11712,7 +11712,8 @@ func _run_ai_melee(report: Dictionary) -> void:
 	_solo_log_melee_result(unit, ai_caused, ai_score, target, human_caused, human_score)
 	await _solo_stage_phase("Melee result")
 	if loser != null and _solo_combined_alive(loser) > 0:
-		await _solo_morale_test(loser, _roller_label(loser), true, "", -1.0, float(report.get("charge_from_in", -1.0)))
+		var charged_from: float = float(report.get("charge_from_in", -1.0)) if loser == target else -1.0
+		await _solo_morale_test(loser, _roller_label(loser), true, "", -1.0, charged_from)
 	await _solo_stage_phase("Morale")
 	# — Consolidation (GF v3.5.1 p.9, after morale): neither destroyed → the CHARGER (the AI here) moves
 	#   back 1"; one side destroyed → the survivor consolidates up to 3" (round 7, finding 4) —
