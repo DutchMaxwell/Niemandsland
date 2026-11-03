@@ -160,3 +160,15 @@ fn an_enhanced_ferocious_shot_at_epoch_72_keeps_the_old_read() {
     assert!(close(seven, ten), "at 72: 7\" and 10\" price the same, {seven} vs {ten}");
     assert!(seven > plain, "at 72: the old unconditional read still pays, {seven} vs plain {plain}");
 }
+
+/// Lead 09:20: the dice open the Enhanced sentinel on the SHOT leg only - a charge or melee
+/// strike keeps the 6" charge gate. An Enhanced Ferocious charge from 4" therefore pays no
+/// alias (same as the dice), while a 7" charge still does.
+#[test]
+fn an_enhanced_ferocious_charge_inside_the_band_pays_no_alias_at_epoch_73() {
+    let four = charge_ev("enhanced_ferocious", EPOCH_73_V36, 4.0);
+    let seven = charge_ev("enhanced_ferocious", EPOCH_73_V36, 7.0);
+    let plain = charge_ev("plain", EPOCH_73_V36, 4.0);
+    assert!(close(four, plain), "a 4\" charge is inside the 6\" gate: {four} vs plain {plain}");
+    assert!(seven > four, "a 7\" charge still pays the alias: {seven} vs {four}");
+}

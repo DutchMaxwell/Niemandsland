@@ -941,7 +941,7 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 		hits += attacks * SIX_P
 	if not fatigue_mutes and bool(profile.get("surge", false)) \
 			and (not bool(profile.get("surge_alias", false)) or alias_gate_fires \
-				or float(profile.get("surge_over_in", 0.0)) < 0.0):
+				or (not melee and float(profile.get("surge_over_in", 0.0)) < 0.0)):
 		hits += attacks * SIX_P
 	if not fatigue_mutes and melee and charging and (bool(profile.get("furious", false)) or bool(att.get("furious", false))):
 		hits += attacks * SIX_P

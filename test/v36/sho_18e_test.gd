@@ -195,3 +195,16 @@ func test_enhanced_ferocious_at_epoch_72_keeps_the_old_read() -> void:
 		.override_failure_message("at 72: the old unconditional read still pays") \
 		.is_greater(plain)
 
+
+## Lead 09:20: the dice open the Enhanced sentinel on the SHOT leg only - a charge keeps the 6"
+## charge gate. An Enhanced Ferocious charge from 4" pays no alias (same as the dice), a 7" one does.
+func test_enhanced_ferocious_charge_inside_the_band_pays_no_alias() -> void:
+	var four := _charge_ev(ENHANCED_FEROCIOUS, "aof", "orcs", AiActRecorder.EPOCH_73_V36, 4.0)
+	var seven := _charge_ev(ENHANCED_FEROCIOUS, "aof", "orcs", AiActRecorder.EPOCH_73_V36, 7.0)
+	var plain := _plain_charge(AiActRecorder.EPOCH_73_V36, 4.0)
+	assert_float(four) \
+		.override_failure_message("a 4\" charge is inside the 6\" gate") \
+		.is_equal_approx(plain, 0.0001)
+	assert_float(seven) \
+		.override_failure_message("a 7\" charge still pays the alias") \
+		.is_greater(four)

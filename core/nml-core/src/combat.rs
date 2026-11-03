@@ -808,7 +808,7 @@ pub fn profile_ev(
     let alias_gate_in = if melee { CHARGE_LONG_RANGE_IN } else { LONG_RANGE_IN };
     let alias_fires = !p.alias_gate
         || p.surge_alias_rule.is_empty()
-        || p.surge_over_in < 0.0
+        || (!melee && p.surge_over_in < 0.0)
         || dist_in > alias_gate_in;
     if p.surge && alias_fires && !fatigue_mutes {
         hits += attacks_f * SIX_P;
