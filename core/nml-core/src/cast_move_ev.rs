@@ -142,7 +142,7 @@ fn shoot_usage_ev(
     let mut keep = Vec::new();
     let mut attacks = Vec::new();
     for (pi, p) in shoot.iter().enumerate() {
-        if (p.range as f64) < shoot_d {
+        if (p.range as f64) + p.reach_bonus_in < shoot_d {
             continue;
         }
         keep.push(pi);
