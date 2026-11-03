@@ -18,9 +18,11 @@ const EDGE_SLACK_IN := 2.0 * 0.016 / IN2M
 var _runner: GdUnitSceneRunner
 var _main: Node
 var _root_before: Array
+var _epoch0: int
 
 
 func before_test() -> void:
+	_epoch0 = AiActRecorder.rules_epoch
 	E2EBoot.arm_harness_mode()
 	_root_before = E2EBoot.root_children(get_tree())
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
@@ -35,6 +37,7 @@ func after_test() -> void:
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 	_main = null
 	_runner = null
+	AiActRecorder.rules_epoch = _epoch0
 	RulesRegistry.reset_cache()
 
 
@@ -138,3 +141,20 @@ func test_an_aura_channel_names_the_aura_not_its_expanded_base() -> void:
 	assert_str(text) \
 		.override_failure_message("rules-must-log: the aura granted the reach, the line must name it (log: %s)" % text.strip_edges()) \
 		.contains("Increased Shooting Range Aura +6\" shooting range")
+
+
+func test_below_epoch_73_the_aura_line_keeps_its_old_text() -> void:
+	# The book-name fix belongs to epoch 73. At 72 the table must print the old expanded-base text,
+	# byte for byte, so a playtest table cannot silently change its wording.
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
+	var gunner := _armed(1, "Bio-Tech Master", [Vector3.ZERO], "gf", "alien_hives",
+		["Increased Shooting Range Aura", "Increased Shooting Range"])
+	var grunts := _armed(2, "Grunts", [Vector3(_x_for_gap(26.0), 0, 0)], "gf", "alien_hives", [])
+	assert_int(SoloController.shooting_range_bonus(gunner)) \
+		.override_failure_message("fixture broken: the expanded aura must still resolve to +6\"").is_equal(6)
+	_main._solo_log_range_bonus(gunner, grunts)
+	var text := _log_text()
+	assert_str(text) \
+		.override_failure_message("epoch 72 keeps the old line (log: %s)" % text.strip_edges()) \
+		.contains("Bio-Tech Master: Increased Shooting Range +6\" shooting range — Rifle reaches Grunts past its printed range")
+	assert_str(text).not_contains("Increased Shooting Range Aura")

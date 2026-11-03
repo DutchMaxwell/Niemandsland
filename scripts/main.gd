@@ -14447,20 +14447,27 @@ func _solo_log_range_bonus(attacker: GameUnit, target: GameUnit) -> void:
 			# player's own book prints, never the primitive we happen to file it under.
 			var rule_name := "Royal Legion"
 			if not member.has_special_rule("Royal Legion"):
-				var alias := ""
-				var aura_alias := ""
-				for e in RulesRegistry.unit_rules_of_primitive(member, "Royal Legion"):
-					var n := str((e as Dictionary).get("name", ""))
-					if n.is_empty() or n == "Royal Legion":
-						continue
-					if alias.is_empty():
-						alias = n
-					if aura_alias.is_empty() and n.ends_with("Aura"):
-						aura_alias = n
-				if not aura_alias.is_empty():
-					alias = aura_alias
-				if not alias.is_empty():
-					rule_name = _solo_range_bonus_book_name(member, alias)
+				if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+					var alias := ""
+					var aura_alias := ""
+					for e in RulesRegistry.unit_rules_of_primitive(member, "Royal Legion"):
+						var n := str((e as Dictionary).get("name", ""))
+						if n.is_empty() or n == "Royal Legion":
+							continue
+						if alias.is_empty():
+							alias = n
+						if aura_alias.is_empty() and n.ends_with("Aura"):
+							aura_alias = n
+					if not aura_alias.is_empty():
+						alias = aura_alias
+					if not alias.is_empty():
+						rule_name = _solo_range_bonus_book_name(member, alias)
+				else:
+					for e in RulesRegistry.unit_rules_of_primitive(member, "Royal Legion"):
+						var legacy := str((e as Dictionary).get("name", ""))
+						if not legacy.is_empty() and legacy != "Royal Legion":
+							rule_name = legacy
+							break
 			causes.append("%s +%d\"" % [rule_name, bonus_in - spell_in])
 		if spell_in > 0:
 			causes.append("spell +%d\"" % spell_in)
