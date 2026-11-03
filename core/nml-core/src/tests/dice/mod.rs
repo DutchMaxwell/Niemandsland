@@ -445,7 +445,6 @@ mod v36_melee;
 mod v36_melee_rows;
 mod v36_mor_04;
 mod v36_mor_12c;
-mod v36_mor_17;
 mod v36_morale;
 mod v36_shoot;
 mod v36_shoot_rows;
