@@ -8291,8 +8291,11 @@ func _solo_log_counter_first_decision(unit: GameUnit, counter_first: bool) -> vo
 
 ## Rules 3.6 (`EPOCH_73_V36`) — the single Brace(X) rating of a unit (incl. attached heroes) whose
 ## weapons carry Brace: X Impact dice off a unit charging it, ONCE per unit, however many models
-## carry it. 0 below 73 or without a carrier.
+## carry it. 0 below 73 or without a carrier. AI-G2: a UNIT rule the map resolves to the Brace primitive
+## ("Brace in Melee") counts like a Brace weapon; `_solo_brace_rule` is the book name of the rule that gave the cut.
+var _solo_brace_rule := "Brace"
 func _solo_brace_models(unit: GameUnit) -> int:
+	_solo_brace_rule = "Brace"
 	if unit == null or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
 		return 0
 	var members: Array = [unit]
@@ -8311,8 +8314,14 @@ func _solo_brace_models(unit: GameUnit) -> int:
 			weapons = (member.source_data as OPRApiClient.OPRUnit).weapons
 		for w in weapons:
 			if w is Object and AiShooting._has_rule(w, "Brace"):
+				if maxi(AiShooting._rating_of(w, "Brace"), 1) > best:
+					_solo_brace_rule = "Brace"
 				best = maxi(best, maxi(AiShooting._rating_of(w, "Brace"), 1))
 				break
+		var unit_rule: Dictionary = AiEv.brace_unit_rule(member)
+		if int(unit_rule.get("x", 0)) > best:
+			best = int(unit_rule["x"])
+			_solo_brace_rule = str(unit_rule["rule"])
 	return best
 
 
@@ -8981,11 +8990,11 @@ func _solo_charge_impact(charger: GameUnit, defender: GameUnit, human_defends: b
 		if defender.is_fatigued:
 			brace_cut = 0
 			if battle_log != null:
-				_log_rule_event(BattleLog.Category.COMBAT, "Brace: no effect, %s is Fatigued" % [
-					defender.get_name()], true)
+				_log_rule_event(BattleLog.Category.COMBAT, "%s: no effect, %s is Fatigued" % [
+					_solo_brace_rule, defender.get_name()], true)
 		elif battle_log != null:
-			_log_rule_event(BattleLog.Category.COMBAT, "Brace: %s takes %d Impact dice off %s" % [
-				defender.get_name(), brace_cut, charger.get_name()], true)
+			_log_rule_event(BattleLog.Category.COMBAT, "%s: %s takes %d Impact dice off %s" % [
+				_solo_brace_rule, defender.get_name(), brace_cut, charger.get_name()], true)
 	var cut_models: int = counter_models + brace_cut
 	var heavy_cut: int = mini(cut_models, hx * models)
 	var heavy_dice: int = hx * models - heavy_cut
@@ -9325,6 +9334,9 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 		# Widened re-roll window (wave 4: Bestial/Mischievous Boost — reroll_save_low past over_in,
 		# shooting only): the window's successful 5s+ re-roll beside the base 6s leg; low 6 = no boost.
 		var win: Dictionary = AiEv.bane_boost_window(striker, over9)
+		# AI-G2: a weapon alias's own window (Reap), stamped on the profile; over_in <= 0 = no distance condition.
+		if win.is_empty() and int(profile.get("bane_low", 0)) > 1 and (over9 or float(profile.get("bane_over_in", 0.0)) <= 0.0):
+			win = {"low": int(profile["bane_low"]), "over_in": float(profile.get("bane_over_in", 0.0)), "rule": str(profile.get("bane_alias", ""))}
 		var bane_low: int = mini(int(win.get("low", AiCombatMath.UNMODIFIED_SIX)), bane_from)
 		# SHO-10: the words naming the target condition that opened the window ("" = unconditional).
 		var bane_spec: Dictionary = profile.get("bane_condition", {})

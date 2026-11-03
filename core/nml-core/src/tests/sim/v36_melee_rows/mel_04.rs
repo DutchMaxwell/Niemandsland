@@ -49,12 +49,25 @@ fn charge(
     hero_brace: bool,
     defender_fatigued: bool,
 ) -> (i64, Vec<String>) {
+    charge_with(epoch, impact, def_models, &[], brace, hero_brace, defender_fatigued)
+}
+
+/// `charge` with the defender's UNIT rules spelled out (AI-G2: a unit rule the map resolves to Brace).
+pub(super) fn charge_with(
+    epoch: u32,
+    impact: i64,
+    def_models: i64,
+    def_rules: &[&str],
+    brace: bool,
+    hero_brace: bool,
+    defender_fatigued: bool,
+) -> (i64, Vec<String>) {
     let mut reg = Registries::new(&repo_root());
     let impact_rule = format!("Impact({impact})");
     let charger = UnitStatic::build_for(&mut reg, &profile("Charger", 1, vec![impact_rule.as_str()], vec![]), epoch);
     let defender = UnitStatic::build_for(
         &mut reg,
-        &profile("Defender", def_models, vec![], if brace { vec!["Brace(1)"] } else { vec![] }),
+        &profile("Defender", def_models, def_rules.to_vec(), if brace { vec!["Brace(1)"] } else { vec![] }),
         epoch,
     );
     let hero = UnitStatic::build_for(

@@ -1097,6 +1097,9 @@ pub struct UnitStatic {
     /// `Profile.name` — `GameUnit.get_name()`, which is what `_solo_tray_roll`
     /// signs every die with (main.gd:3199-3200, :6448).
     pub name: String,
+    /// Rules 3.6 (`EPOCH_73_V36`) — the book name of the Brace this unit carries ("Brace", "Brace in Melee");
+    /// the charge's rules-must-log line names it. "" = no Brace.
+    pub brace_rule: String,
     /// Merged + stamped RANGED profiles, unfiltered (range > 0, any distance).
     pub shoot: Vec<ShootProfile>,
     /// Merged + stamped MELEE profiles (range 0) — `AiShooting.melee_profiles`
@@ -3128,6 +3131,21 @@ fn self_destruct_rating(reg: &mut Registries, p: &Profile) -> i64 {
     unit_rating(&p.special_rules, "Self-Destruct").max(1)
 }
 
+/// Rules 3.6 (`EPOCH_73_V36`) — the Brace a profile carries: a Brace(X) WEAPON, else a UNIT rule the map
+/// resolves to the Brace primitive ("Brace in Melee": its `rating`, or the printed X). `(book name, X)`.
+/// Twin: `AiEv.brace_unit_rule`.
+fn brace_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Option<(String, i64)> {
+    if !rule_on(rules_epoch, EPOCH_73_V36) {
+        return None;
+    }
+    if let Some(w) = p.weapons.iter().find(|w| weapon_has(w, "Brace")) {
+        return Some(("Brace".to_string(), weapon_rating(w, "Brace").max(1)));
+    }
+    let hit = rules_of_primitive(reg, p, "Brace").into_iter().next()?;
+    let x = unit_param_i(reg, p, &hit.name, "rating", 0).max(unit_rating(&p.special_rules, &hit.name));
+    Some((hit.name, x.max(1)))
+}
+
 /// `AiEv.ctx_for` ai_ev.gd:135-165. `models` stays at the live-unit reading;
 /// `BattleSim._ctx_of` overwrites it with the snapshot's `alive` on every call.
 fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
@@ -3343,11 +3361,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     };
     // Rules 3.6 (`EPOCH_73_V36`) — a Brace(X) weapon bearer blunts a charge:
     // the unit takes X Impact dice off ONCE, however many models carry it.
-    let brace_weapon = if rule_on(rules_epoch, EPOCH_73_V36) {
-        p.weapons.iter().find(|w| weapon_has(w, "Brace"))
-    } else {
-        None
-    };
+    let brace = brace_of(reg, p, rules_epoch);
     // AIG-G2 (`EPOCH_73_V36`): Unwieldy is a WEAPON rule, but the strike order is per unit, so the unit
     // strikes last only when EVERY melee weapon it carries has it; a mix keeps the normal order (logged).
     let melee = || p.weapons.iter().filter(|w| w.range <= 0.0 && w.count > 0);
@@ -3536,8 +3550,8 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
             None
         },
         // Rules 3.6 — `sim::ctx_of` trims the carrier flag to the living models.
-        brace_models: if brace_weapon.is_some() { 1 } else { 0 },
-        brace_impact_per_model: brace_weapon.map(|w| weapon_rating(w, "Brace").max(1)),
+        brace_models: if brace.is_some() { 1 } else { 0 },
+        brace_impact_per_model: brace.map(|b| b.1),
         parry_dice,
         parry_dice_total: None,
         regeneration: regen_targets.0 > 0,
@@ -4111,6 +4125,11 @@ fn stamp_weapon_bane_alias(reg: &mut Registries, p: &Profile, shoot: &mut [Shoot
             sp.bane = true;
             sp.bypass_regen |= e.param_b("bypass_regen");
             (sp.bane_condition, sp.bane_threshold, sp.bane_alias) = (e.param_s("condition").to_string(), e.param_i("threshold", 0), n);
+            // Reap's widened window: successful saves from the entry's own `reroll_save_low` re-roll too.
+            let low = e.param_i("reroll_save_low", 0).max(e.param_i("reroll_save_from", 0));
+            if low > 1 {
+                (sp.bane_low, sp.bane_over_in) = (low, v36_over_in(e.param_f("over_in", 9.0), rules_epoch));
+            }
             break;
         }
     }
@@ -7292,6 +7311,7 @@ impl UnitStatic {
         UnitStatic {
             ctx: ctx_for(reg, p, rules_epoch),
             name: p.name.clone(),
+            brace_rule: brace_of(reg, p, rules_epoch).map(|b| b.0).unwrap_or_default(),
             fortified_alias_name: fa.alias_name,
             fortified_boost_name: fa.boost_name,
             hold_only,
