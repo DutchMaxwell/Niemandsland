@@ -8,7 +8,7 @@ spell leg of the same activation has already wiped the host.
 Jokers (4 models + a hero) charge Berserkers (0 models left, the joined Berserker Veteran alive). The table
 fights: Jokers strike twice and the Champion once, the hero saves and strikes back (five roll groups). The core
 guarded the fight on the HOST's model count alone, so it resolved nothing at all (a charge landed in base contact
-and then no dice). The chain's models are the hero's now: the same unit, p.14 "fights on alone".
+and then no dice). The chain's models are the hero's now: under the Hero rule the hero is the unit once its host is gone.
 
 Legs: from epoch 73 the five rolls equal the table's roll for roll (counts, targets and faces); below 73 the old
 silence stands (byte-identical replay of the old games).

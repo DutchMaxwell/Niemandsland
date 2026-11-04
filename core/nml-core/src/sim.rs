@@ -6533,8 +6533,9 @@ fn combat_unit(state: &State, ti: usize, seams: Seams) -> usize {
 }
 
 /// G4-C11 (`EPOCH_73_V36`) — a charge NAMED at a host with no models left while a joined hero lives: the chain's models are
-/// the hero's now (GF v3.5.1 p.14, "fights on alone"; the table's `_solo_combined_alive` still counts the unit), so the
-/// melee, which guards on `alive[ti]`, runs against the first living attached hero. `None` for every other target.
+/// the hero's now (the Hero rule: the hero is the unit once its host is gone, and the table's `_solo_combined_alive`
+/// still counts the unit), so the melee, which guards on `alive[ti]`, runs against the first living attached hero.
+/// `None` for every other target.
 fn lone_hero_of(state: &State, ti: usize, seams: Seams) -> Option<usize> {
     if !seams.hero_attach || !rule_on(seams.rules_epoch, EPOCH_73_V36) || state.alive[ti] > 0 {
         return None;
@@ -9949,7 +9950,7 @@ fn resolve_with(
                 if let Some((tray, shot)) = dice.as_mut() {
                     if let Some((host, hero)) = lone {
                         shot.log.push(format!(
-                            "Hero: {} has no models left - the joined {} fights on alone",
+                            "Hero: {} has no models left - {} is the unit now",
                             statics[next.roster.profile[host]].name, statics[next.roster.profile[hero]].name
                         ));
                     }
