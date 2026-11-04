@@ -2006,6 +2006,21 @@ pub fn resolve_melee_with_tray(
 // alias's charge leg folds on.
 #[allow(clippy::too_many_arguments)]
 pub fn resolve_melee_leg(
+    strikers: &[Shooter<'_>], def: &Ctx, def_owner: &str, charging: bool, cond_ap_dice: bool, shred_alias_dice: bool,
+    deadly_per_model: bool, charge_from_in: f64, screened_melee: bool, tray_exact: bool, hits_first: bool,
+    fatigue_mutes_sixes: bool, tally_post_regen: bool, tray: &mut Tray,
+) -> ShootResult {
+    resolve_melee_leg_wipe(
+        strikers, def, def_owner, charging, cond_ap_dice, shred_alias_dice, deadly_per_model, charge_from_in,
+        screened_melee, tray_exact, hits_first, fatigue_mutes_sixes, tally_post_regen, None, tray,
+    )
+}
+
+/// `resolve_melee_leg` plus R3-C2 (`EPOCH_73_V36`): `deadly_wipes` answers, on the finished Deadly groups, whether they
+/// already destroy the whole defender; the table lands Deadly first and the pool after, so the pool's Regeneration die is
+/// then never rolled. `None` (every caller below 73) rolls it as before.
+#[allow(clippy::too_many_arguments)]
+pub fn resolve_melee_leg_wipe(
     strikers: &[Shooter<'_>],
     def: &Ctx,
     def_owner: &str,
@@ -2022,6 +2037,7 @@ pub fn resolve_melee_leg(
     fatigue_mutes_sixes: bool,
     // MEL-10r (`EPOCH_73_V36`) — the melee tally counts only wounds Regeneration did NOT cancel.
     tally_post_regen: bool,
+    deadly_wipes: Option<&dyn Fn(&ShootResult) -> bool>,
     tray: &mut Tray,
 ) -> ShootResult {
     // The alias's charged leg fires on the CHARGER's strikes only — a
@@ -2542,7 +2558,12 @@ pub fn resolve_melee_leg(
         });
     }
     out.caused += regen_proof + regenable + out.deadly_tally;
-    let landed_regenable = regen_batch(regenable, def, def_owner, tray, &mut out.rolls);
+    // R3-C2: Deadly lands first (tray-exact order), so wounds that land on an already destroyed defender roll no ignore die.
+    let pool_lands_on_dead = tray_exact && regenable > 0 && def.regeneration && def.regen_target > 0 && deadly_wipes.is_some_and(|w| w(&out));
+    if pool_lands_on_dead {
+        out.log.push(format!("Regeneration: {def_owner} is already destroyed by the Deadly wounds - no ignore roll for the other wounds"));
+    }
+    let landed_regenable = if pool_lands_on_dead { regenable } else { regen_batch(regenable, def, def_owner, tray, &mut out.rolls) };
     out.wounds += regen_proof + landed_regenable;
     // MEL-10r — a wound Regeneration cancels is not TAKEN: the 73 tally counts what landed.
     out.taken = if tally_post_regen { out.wounds + out.deadly_tally } else { out.caused };
