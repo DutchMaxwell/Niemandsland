@@ -801,6 +801,12 @@ fn combined_alive(state: &State, i: usize, seams: Seams) -> i64 {
         }
 }
 
+/// Rules 3.6 (`EPOCH_73_V36`, the Hero rule) — a melee side still STANDS while its host has a model OR a joined hero
+/// lives (the table's `_solo_combined_alive`); below 73 only the host's own models count.
+fn side_up(state: &State, i: usize, seams: Seams) -> bool {
+    if rule_on(seams.rules_epoch, EPOCH_73_V36) { combined_alive(state, i, seams) > 0 } else { state.alive[i] > 0 }
+}
+
 /// Rules 3.6 (`EPOCH_73_V36`) — Blast(X) caps by the table's `_solo_combined_alive(target)`: the host's living
 /// models PLUS every living joined hero. Stamped beside `models`, which stays the host's own count.
 fn stamp_blast_models(def: &mut Ctx, state: &State, ti: usize, seams: Seams) {
@@ -6508,7 +6514,7 @@ fn tray_charge_with_self_wounds(
     if impact_first && next.alive[si] > 0 && next.alive[ti] > 0 {
         by_su += impact_phase(statics, next, si, ti, tray, shot, seams.rules_epoch, charge_from_in, seams.tray_exact);
     }
-    if counter_first && next.alive[si] > 0 && next.alive[ti] > 0 {
+    if counter_first && side_up(next, si, seams) && side_up(next, ti, seams) {
         let (c, rc, h, s) = strike_phase(statics, next, ti, si, false, 0.0, seams, tray, shot, StrikeSet::CounterOnly, cover);
         by_tu += c;
         by_su += rc;
@@ -6544,7 +6550,7 @@ fn tray_charge_with_self_wounds(
                 scourge_on_defender += s;
                 next.fatigued[si] = true;
             }
-        } else if next.alive[ti] > 0 && next.alive[si] > 0 {
+        } else if side_up(next, ti, seams) && side_up(next, si, seams) {
             // :8100 — and so does the strike-back, in both directions.
             // B13: the strike-back's lash-back credits the charger's tally.
             // MEL-PAR-B14 (`EPOCH_73_V36`, main.gd:10817-10823): a defender with no melee weapon at
@@ -6555,6 +6561,11 @@ fn tray_charge_with_self_wounds(
                     statics[next.roster.profile[ti]].name
                 ));
             } else {
+                // R3-C1 (`EPOCH_73_V36`, the Hero rule): the host's models are gone, a joined hero stands - it strikes back.
+                if let Some(h) = next.attached[ti].iter().copied().find(|&h| next.alive[h] > 0).filter(|_| next.alive[ti] <= 0) {
+                    shot.log.push(format!("Hero: {} has no models left - {} strikes back for the unit",
+                        statics[next.roster.profile[ti]].name, statics[next.roster.profile[h]].name));
+                }
                 let (c, rc, h, s) = strike_phase(statics, next, ti, si, false, 0.0, seams, tray, shot, strike_back_set, cover);
                 by_tu += c;
                 by_su += rc;
