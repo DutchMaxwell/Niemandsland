@@ -9235,7 +9235,15 @@ fn resolve_with(
     // the cast/shoot/melee/hit-and-run tail below, to where main.gd:1092-1098
     // actually rolls the END-of-activation test — not here.
     let mut dangerous_morale_due: Option<(i64, i64)> = None;
-    if moved && !seams.no_dangerous {
+    // F-DANG-HOLD (`EPOCH_73_V36`, ruling D2): the book's Dangerous Terrain test also fires for a unit that
+    // ACTIVATES in it, a Hold included. The table asks for it whenever the activation moved nothing
+    // (`_dangerous_standing_counts` solo_controller.gd:5943: Aircraft and reserve skip it, Flying is
+    // guarded in `dangerous_dice`). Below 73 only a move tests.
+    let activated_in_it = !moved
+        && rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36)
+        && !next.aircraft[si]
+        && !next.dormant[si];
+    if (moved || activated_in_it) && !seams.no_dangerous {
         if let Some((tray, shot)) = dice.as_mut() {
             let n = dangerous_dice(statics, state, &next, si, seams, landing.as_ref(), cover, shot);
             if n > 0 {
