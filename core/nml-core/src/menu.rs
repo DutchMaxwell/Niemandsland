@@ -1216,7 +1216,8 @@ pub(crate) fn starts_incoherent(state: &State, terrain: &Terrain, unit: usize, r
 }
 
 /// The gather pick `_act_regroup` makes (:2933): an ADVANCE that stays where it stands, so the placement gate pulls the
-/// stragglers in, and the post-move volley the table still allows (`shoot`, the best target now).
+/// stragglers in, and the post-move volley the table still allows (`shoot`, the best target now). The caller hands `shoot`
+/// over only where the resolver can answer a MOVED volley (`wide_shoot` / `moved_shoot`); otherwise the resolve declines.
 pub(crate) fn regroup_menu(state: &State, unit: usize, shoot: Option<usize>) -> Vec<Candidate> {
     let mut c = Candidate::new(state.key(unit), ADVANCE);
     c.dest = Some(geom::to_f64(geom::centre(&state.positions[unit])));
@@ -1281,7 +1282,7 @@ pub fn candidates_tuned(
         out.push(c);
     }
     if starts_incoherent(state, terrain, unit, rules_epoch) {
-        return regroup_menu(state, unit, shoot);
+        return regroup_menu(state, unit, shoot.filter(|_| tuning.wide_shoot));
     }
     // NML-1020 lab half: Immobile/Artillery may only Hold (p.13/p.57) — the menu
     // for carriers ends here, so no playout can ever imagine them moving.

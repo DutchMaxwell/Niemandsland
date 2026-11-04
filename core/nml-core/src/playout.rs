@@ -113,7 +113,7 @@ impl<'a> Policy<'a> {
             best_shoot(state, self.statics, unit, sc, self.tuning, self.seams.rules_epoch, None);
         // G4-C7 (`EPOCH_73_V36`): a unit that starts out of coherency may only gather — the same one pick as the hand menu.
         if crate::menu::starts_incoherent(state, self.terrain, unit, self.seams.rules_epoch) {
-            return crate::menu::regroup_menu(state, unit, shoot);
+            return crate::menu::regroup_menu(state, unit, shoot.filter(|_| self.seams.moved_shoot));
         }
         let mut hold = Candidate::hold(key);
         if let Some(e) = shoot {
