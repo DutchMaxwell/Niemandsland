@@ -8,6 +8,8 @@ act, so the case pins the FORMULA, not the dice resolver.
 
 1. only-silent -> gate PASSES after the fix (RED: it FAILED before).
 2. silent + one parted act -> gate still FAILS (guards a too-loose formula).
+3. F-PRINT: the number the gate PRINTS for "not FULL-equal" leaves the both-silent acts out, like the
+   pass formula does (it used to print the both-silent acts as failing: 207 for 186 real ones).
 """
 
 from __future__ import annotations
@@ -118,3 +120,35 @@ def test_melee_gate_still_fails_a_parted_act(tmp_path, monkeypatch):
     _game(tmp_path, "mixed", [_melee("silent"), _melee("parted")], _parted_dice())
     monkeypatch.setattr(mrg, "nml_core", _Stub({"parted": _parted_roll()}))
     assert mrg.run(tmp_path, REPO, "table", 0, False) == 1
+
+
+def _shoot_args(report_only: bool) -> tuple:
+    return (REPO, "table", 0, 0, report_only, "table", "unit", "auto", "auto", True)
+
+
+def test_shoot_gate_prints_a_both_silent_act_as_nothing_short(tmp_path, monkeypatch, capsys):
+    _game(tmp_path, "silent", [_shoot("silent")], [])
+    monkeypatch.setattr(srg, "nml_core", _Stub({}))
+    assert srg.run(tmp_path, *_shoot_args(True)) == 0
+    assert "REPORT ONLY \u2014 0/1 acts short" in capsys.readouterr().out
+
+
+def test_shoot_gate_prints_only_the_parted_act_as_failing(tmp_path, monkeypatch, capsys):
+    _game(tmp_path, "mixed", [_shoot("silent"), _shoot("parted")], _parted_dice())
+    monkeypatch.setattr(srg, "nml_core", _Stub({"parted": _parted_roll()}))
+    assert srg.run(tmp_path, *_shoot_args(False)) == 1
+    assert "FAIL \u2014 1 of 2 shooting acts" in capsys.readouterr().out
+
+
+def test_melee_gate_prints_a_both_silent_act_as_nothing_short(tmp_path, monkeypatch, capsys):
+    _game(tmp_path, "silent", [_melee("silent")], [])
+    monkeypatch.setattr(mrg, "nml_core", _Stub({}))
+    assert mrg.run(tmp_path, REPO, "table", 0, True) == 0
+    assert "REPORT ONLY \u2014 0/1 acts short" in capsys.readouterr().out
+
+
+def test_melee_gate_prints_only_the_parted_act_as_failing(tmp_path, monkeypatch, capsys):
+    _game(tmp_path, "mixed", [_melee("silent"), _melee("parted")], _parted_dice())
+    monkeypatch.setattr(mrg, "nml_core", _Stub({"parted": _parted_roll()}))
+    assert mrg.run(tmp_path, REPO, "table", 0, False) == 1
+    assert "FAIL \u2014 1 of 2 charge acts" in capsys.readouterr().out

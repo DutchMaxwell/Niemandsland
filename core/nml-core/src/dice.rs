@@ -310,6 +310,13 @@ fn piercing_assault_grant_cond() -> CondAp {
     CondAp { ap_bonus: 1, condition: "on_charge".into(), ..Default::default() }
 }
 
+/// The table's `blast_log_text`: names Blast(X) and, when the model count clamps the multiplier, the cap.
+fn blast_log(x: i64, hits: i64, boosted: i64, models: i64) -> String {
+    let mult = boosted / hits.max(1);
+    let capped = if mult >= x { String::new() } else { format!(" (capped by {models} model{} in target)", if models == 1 { "" } else { "s" }) };
+    format!("Blast({x}): {hits} hit{} ×{mult}{capped} → {boosted} hits", if hits == 1 { "" } else { "s" })
+}
+
 fn surge_attack_hits(
     p: &ShootProfile,
     faces: &[u8],
@@ -913,6 +920,7 @@ pub fn resolve_volley_leg(
     for (sh, k, pi) in shots {
         let att = sh.att;
         let p = &sh.profiles[pi];
+        let reach_gate = att.member_gap_in.map_or(reach_gate, f64::ceil);
         // Rules 3.6: the shooter's own range grant rides the PRINTED range, the target-side shrink
         // applies to the sum (main.gd: `base_range + range_bonus`, then `effective_shoot_reach_in`).
         let printed = p.range as f64 + p.reach_bonus_in;
@@ -1308,7 +1316,12 @@ pub fn resolve_volley_leg(
         // (main.gd `_solo_hits`, TC-023) and the save reads the pick's own square.
         let unit_of_one = takedown_exact && p.takedown;
         if hits > 0 && p.blast > 1 {
-            hits *= p.blast.clamp(1, if unit_of_one { 1 } else { def.models.max(1) });
+            let cap = if unit_of_one { 1 } else { def.blast_models.unwrap_or(def.models).max(1) };
+            let boosted = hits * p.blast.clamp(1, cap);
+            if def.blast_models.is_some() {
+                out.log.push(blast_log(p.blast, hits, boosted, cap));
+            }
+            hits = boosted;
         }
         if hits <= 0 {
             continue; // :3210 — no hits, no save batch
@@ -2261,7 +2274,12 @@ pub fn resolve_melee_leg(
                 hits += sixes(trig).min(p.sergeant_attacks);
             }
             if hits > 0 && p.blast > 1 {
-                hits *= p.blast.clamp(1, if tray_exact && p.takedown { 1 } else { def.models.max(1) });
+                let cap = if tray_exact && p.takedown { 1 } else { def.blast_models.unwrap_or(def.models).max(1) };
+                let boosted = hits * p.blast.clamp(1, cap);
+                if def.blast_models.is_some() {
+                    out.log.push(blast_log(p.blast, hits, boosted, cap));
+                }
+                hits = boosted;
             }
             if hits <= 0 {
                 continue;
