@@ -67,7 +67,9 @@ fn charge(st: &State, statics: &[UnitStatic], seed: i64, epoch: u32) -> (State, 
         teleport: None,
     };
     let (mut rng, mut tray) = (GodotRng::new(0), Tray::seeded(seed));
-    let seams = Seams { rules_epoch: epoch, hero_attach: true, ..Seams::default() };
+    // The live seams derive the tray-exact landing order from the epoch (plan.rs): Takedown, Deadly, THEN the pool.
+    let tray_exact = crate::acts::rule_on(epoch, crate::acts::EPOCH_70_TRAY_EXACT);
+    let seams = Seams { rules_epoch: epoch, hero_attach: true, tray_exact, ..Seams::default() };
     resolve_stochastic_tray_on_board(statics, st, &action, &Terrain::default(), seams, &mut rng, &mut tray).unwrap()
 }
 
