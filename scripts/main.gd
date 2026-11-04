@@ -4662,6 +4662,14 @@ func _solo_ai_volley_distance_in(attacker: GameUnit, target: GameUnit) -> float:
 	return MoveIntent.distance_inches(solo_controller.unit_centre(attacker), solo_controller.unit_centre(target))
 
 
+## T-DUP-WEAPON-BEARERS: the key under which two entries of one weapon share their living bearers — the firing
+## member, the weapon's name and its attacks per copy (the same match alive_bearers_of counts bearers by).
+func _solo_bearer_key(shot: Dictionary) -> String:
+	var p: Dictionary = shot["profile"]
+	return "%d|%s|%d" % [(shot["member"] as GameUnit).get_instance_id(), str(p.get("name", "")),
+		maxi(int(p.get("attacks", 0)) / maxi(int(p.get("count", 1)), 1), 0)]
+
+
 ## SHO-PAR-F6: one AI shot's eligibility — the member's models with range + sight to the target (and the
 ## pairs they cleared), the bearer-gated attack report (NML-1025) and the living bearers. From EPOCH_73_V36
 ## the volley reads it ONCE per shot before the first die (all weapons fire together); before, per shot.
@@ -4787,6 +4795,12 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s's volley rolls %d → %s" % [
 					upr_name, attacker.get_name(), int(upr_face[0]), ("AP(+1)" if upr_ap > 0 else "+1 to hit")], true)
+	var entry_count := {}   # T-DUP-WEAPON-BEARERS: entries per bearer key (member, weapon name, attacks per copy)
+	var guns_fired := {}   # ... and the bearers the earlier entries of that key already took
+	if at_declaration:
+		for s in shots:
+			var ek: String = _solo_bearer_key(s as Dictionary)
+			entry_count[ek] = int(entry_count.get(ek, 0)) + 1
 	for si in range(shots.size()):
 		var shot := shots[si] as Dictionary
 		var member := shot["member"] as GameUnit
@@ -4809,6 +4823,20 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		var shot_range_in: int = int(SoloController.effective_shoot_reach_in(float(shot["reach"]), target))
 		var shot_max_models: int = int(shot["max"])
 		var shot_bearers: int = int(decl["bearers"])
+		var bearer_key: String = _solo_bearer_key(shot)
+		if shot_bearers >= 0 and attacks > 0 and int(entry_count.get(bearer_key, 0)) > 1:
+			# T-DUP-WEAPON-BEARERS: this weapon is listed more than once, so the entries SHARE the bearers of the
+			# sighted models — each entry rolls for its own copies out of what the earlier entries left.
+			var per_copy: int = maxi(int(profile.get("attacks", 0)) / maxi(int(profile.get("count", 1)), 1), 1)
+			var taken: int = int(guns_fired.get(bearer_key, 0))
+			var guns: int = maxi(mini(mini(shot_bearers, sighted) - taken, int(profile.get("count", 1))), 0)
+			guns_fired[bearer_key] = taken + guns
+			if guns * per_copy != attacks and battle_log != null:
+				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s is listed %d times — its %d bearers fire once, this entry rolls for %d of them" % [
+					member.get_name(), str(profile.get("name", "?")), int(entry_count[bearer_key]), shot_bearers, guns], true)
+			attacks = guns * per_copy
+			if attacks <= 0:
+				volley_report = {"attacks": 0, "silent": "its bearers already fire another entry of it"}
 		AiShotRecorder.record({"act": solo_controller.move_act_seq(), "round": solo_controller._current_round(),
 			"player": solo_controller.ai_slot, "shooter": attacker.get_name(), "member": member.get_name(),
 			"weapon": str(profile.get("name", "?")), "target": target.get_name(),
