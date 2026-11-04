@@ -5103,6 +5103,10 @@ pub fn member_profiles_of(
             sc.bearers_last = seams.casualties_bearers_last;
             profiles_of(us, state.alive[si], d, sc);
             shoot_bearers_rescale(us, state, si, seams.rules_epoch, sc);
+            // Limited: the table's `filter_limited` on the EV set — a spent weapon is priced no more than it is rolled.
+            if rule_on(seams.rules_epoch, EPOCH_73_V36) {
+                drop_spent_limited(&us.shoot, &state.limited_used[si], sc);
+            }
         }
         return;
     }
@@ -5118,10 +5122,12 @@ pub fn member_profiles_of(
         let set = if melee { &um.melee } else { &um.shoot };
         for p in set {
             // MEL-02e: a Limited profile the member already spent brings no strikes, so it
-            // leaves the EV set from `EPOCH_73_V36` (the table's `filter_limited`).
-            if melee && rule_on(seams.rules_epoch, EPOCH_73_V36)
-                && p.limited && state.limited_used[mi].iter().any(|n| n == &p.name)
-            {
+            // leaves the EV set from `EPOCH_73_V36` (the table's `filter_limited`). G4-H-LIM: a
+            // spent SHOOTING profile stays in the folded list (the reach rescale indexes it) but
+            // is never kept, so it is priced no more than it is rolled.
+            let spent = rule_on(seams.rules_epoch, EPOCH_73_V36)
+                && p.limited && state.limited_used[mi].iter().any(|n| n == &p.name);
+            if melee && spent {
                 continue;
             }
             // FEAT PR 2 — the ranged bonus shot never scales with the unit
@@ -5141,7 +5147,7 @@ pub fn member_profiles_of(
             // and indexes the folded list through `keep`.
             if melee {
                 sc.attacks.push(a);
-            } else if (p.range as f64) + p.reach_bonus_in >= d {
+            } else if (p.range as f64) + p.reach_bonus_in >= d && !spent {
                 let idx = sc.fold.len();
                 sc.keep.push(idx);
                 sc.attacks.push(a);
@@ -9647,6 +9653,14 @@ fn resolve_with(
                                 } else {
                                     profiles_of(um, next.alive[mi], g.d, &mut msc);
                                     shoot_bearers_rescale(um, &next, mi, seams.rules_epoch, &mut msc);
+                                }
+                                if rule_on(seams.rules_epoch, EPOCH_73_V36) {
+                                    // Limited: the log names the book rule for each spent weapon the volley leaves out.
+                                    for p in msc.keep.iter().map(|&k| &um.shoot[k]) {
+                                        if p.limited && next.limited_used[mi].iter().any(|n| n == &p.name) {
+                                            shot.log.push(format!("Limited: {} is used up — once per game", p.name));
+                                        }
+                                    }
                                 }
                                 drop_spent_limited(&um.shoot, &next.limited_used[mi], &mut msc);
                                 if let Some(aims) = &g.weapons {
