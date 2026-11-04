@@ -1819,6 +1819,7 @@ mod v36_g4r2_hero_spill;
 mod v36_melee;
 mod v36_melee_rows;
 mod v36_g4_c8b;
+mod v36_g4r4_banner_dead_host;
 mod v36_mor_10;
 mod v36_mor_11;
 mod v36_mor_14;
