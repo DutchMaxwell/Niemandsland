@@ -154,6 +154,72 @@ func test_traced_no_ops_before_the_header_exists() -> void:
 	assert_int(_dump_lines().size()).is_equal(0)
 
 
+## F-HOLD-ADV (rules 3.6, EPOCH_73_V36, lead ruling D7): the act line carries the planner's PICK, flushed before the
+## activation runs; the table's own gates may turn it into another verb (aof_1000_net_001 act 33: a planned Hold became
+## an Advance to walk into range). The EXECUTED verb is a `kind:"verb"` line of its own, joined by `act`.
+## LIVE PATH: a real SoloController runs _act on a real Cumbersome unit whose adopted plan is a Rush; the table cuts a
+## Cumbersome unit's move to Hold (rules 3.6, SHO-16), so the verb that ran (HOLD) is not the verb that was picked (RUSH).
+func _verb_lines() -> Array:
+	return _dump_lines().map(func(l: Variant) -> Variant: return JSON.parse_string(str(l))) \
+		.filter(func(d: Variant) -> bool: return d is Dictionary and str((d as Dictionary).get("kind", "")) == "verb")
+
+
+## The act line for unit B (player 2, Cumbersome) planned as `planned_kind`, then B's real activation (_act).
+func _activate_planned(planned_kind: int, epoch: int) -> int:
+	AiActRecorder.rules_epoch = epoch
+	RulesRegistry.reset_cache()
+	var a := _armed(1, [Vector3.ZERO], "A")
+	var b := _armed(2, [Vector3(14.0 * IN2M, 0, 0)], "B")
+	b.unit_properties.merge({"special_rules": ["Cumbersome"], "game_system": "gf", "faction_folder": "some_book"}, true)
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {"A": a, "B": b}
+	army.current_round = 1
+	var state := BattleSim.capture(army, func() -> Array: return [], func(_i: int) -> int: return 0, 1, 3)
+	var pick := {"used": true, "unit_key": "B", "action": {"unit": "B", "kind": planned_kind}}
+	AiActRecorder.finish(AiActRecorder.begin(state, 2, [b], Callable()), pick)
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	solo.difficulty_by_slot[2] = SoloDifficulty.for_grade("planner_v0_herofold")
+	solo._planner_intent = {"unit": b, "round": 1, "action": pick["action"], "target": a, "why": "test pick",
+		"expectation": {"before": 0.5, "after": 0.5}}
+	solo._act(b)
+	return solo.move_act_seq()
+
+
+func test_a_planned_rush_the_table_cuts_to_hold_writes_the_executed_verb() -> void:
+	var act := _activate_planned(AiDecision.Action.RUSH, AiActRecorder.EPOCH_73_V36)
+	var lines := _verb_lines()
+	assert_int(lines.size()).override_failure_message("one verb line: %s" % str(_dump_lines())).is_equal(1)
+	if lines.is_empty():
+		return
+	var v := lines[0] as Dictionary
+	assert_int(int(v["act"])).is_equal(act)
+	assert_int(int(v["verb"])).is_equal(AiDecision.Action.HOLD)
+	assert_int(int(v["planned"])).is_equal(AiDecision.Action.RUSH)
+
+
+func test_a_pick_the_table_plays_as_planned_writes_no_verb_line() -> void:
+	_activate_planned(AiDecision.Action.HOLD, AiActRecorder.EPOCH_73_V36)
+	assert_array(_verb_lines()).is_empty()
+
+
+func test_the_executed_verb_line_is_written_from_epoch_73_only() -> void:
+	var state := _state()
+	var pool: Array = [(state["units"]["A"] as Dictionary)["unit"]]
+	AiActRecorder.finish(AiActRecorder.begin(state, 1, pool, Callable()),
+		{"used": true, "unit_key": "A", "action": {"unit": "A", "kind": AiDecision.Action.HOLD}})
+	var rec: GDScript = AiActRecorder
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
+	if rec.has_method("executed_verb"):
+		rec.call("executed_verb", 1, AiDecision.Action.ADVANCE, AiDecision.Action.HOLD)
+	assert_array(_verb_lines()).is_empty()
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	if rec.has_method("executed_verb"):   # RED: the writer does not exist yet, so nothing is written
+		rec.call("executed_verb", 1, AiDecision.Action.ADVANCE, AiDecision.Action.HOLD)
+	assert_int(_verb_lines().size()).is_equal(1)
+
+
 ## NML-1073 M5 D5-4b: the header profile carries the base SHAPE, not only the
 ## circumscribing radius. `base_radius` is `BaseShape.bounding_radius()`, while
 ## the table's own contact measure walks the exact SUPPORT EXTENT of an oval
