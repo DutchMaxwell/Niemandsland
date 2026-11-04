@@ -4043,6 +4043,10 @@ pub fn ctx_live_vs(
     c.furious = c.furious || mods::granted_vs(state, target, "Furious");
     c.relentless_grant = c.relentless_grant || mods::granted_vs(state, target, "Relentless");
     c.shred_grant = c.shred_grant || mods::granted_vs(state, target, "Shred");
+    // G4R3 F-SURGE-GRANT (EPOCH_73_V36): a spell's once-grant of Surge to the target's attackers (the table's
+    // `_solo_bridge_granted_flags`) pays like the Surge mark; the exchange spends the record.
+    c.surge_mark_grant = c.surge_mark_grant
+        || (rule_on(rules_epoch, EPOCH_73_V36) && mods::granted_vs(state, target, "Surge"));
     c
 }
 
@@ -9734,6 +9738,13 @@ fn resolve_with(
                                 // (main.gd:7650/:5773-5775) — a HOLD act never
                                 // moves, an ADVANCE/RUSH did.
                                 let mut att = ctx_live_vs(ctx_of(um, &next, mi), statics, &next, mi, g.ti, false, seams.rules_epoch);
+                                // Rules-must-log (F-SURGE-GRANT): the grant names the book rule and the spell.
+                                if rule_on(seams.rules_epoch, EPOCH_73_V36) && !msc.keep.is_empty() {
+                                    let grant = next.buffs[g.ti].iter().find(|r| r.attackers && &*r.grants_rule == "Surge");
+                                    if let Some(r) = grant {
+                                        shot.log.push(format!("Surge: {} against {} — granted by {}, once", um.name, ut_g.name, r.name));
+                                    }
+                                }
                                 // FEAT PR 3 — the latch feats' volley read
                                 // (design §4 PRs 3+4): a bearer fires at its
                                 // FIRST qualifying attack while unspent —
