@@ -98,9 +98,9 @@ mod mel_par_f5 {
     }
 
     #[test]
-    fn partial_contact_keeps_pro_rata_at_epoch_73() {
+    fn partial_contact_counts_living_bearers_up_to_the_strikers_at_epoch_73() {
         let (st, statics) = sisters(2);
-        assert_eq!(strike(&st, &statics, EPOCH_73_V36, true), vec![2, 0], "2 of 3 strike: 4x2/5 and 1x2/5 rounded");
+        assert_eq!(strike(&st, &statics, EPOCH_73_V36, true), vec![2, 0], "2 of 3 strike: 1 x min(3 CCW bearers, 2); no fist bearer lives");
     }
 
     #[test]
