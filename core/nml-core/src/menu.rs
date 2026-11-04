@@ -813,6 +813,19 @@ fn charge_path_blocked(
     !ix.query_memo(&q).reachable
 }
 
+/// G4-C2 (c) — can the core's own move port execute this charge? The table's declaration probe re-gates a charge whose
+/// formation still ends short of the engage ring to a Rush (`charge_path_probe`); `charge_reaches_contact` is that
+/// verdict on the port. Rules 3.6 (`EPOCH_73_V36`, the RECORDING's epoch like `forces_hold`); below it, or without a
+/// board, the pick stands as before.
+fn charge_executes(state: &State, terrain: &Terrain, statics: &[UnitStatic], i: usize, e: usize) -> bool {
+    let epoch = statics.get(state.roster.profile[i]).map_or(0, |s| s.rules_epoch);
+    if !rule_on(epoch, EPOCH_73_V36) || !terrain.is_valid() {
+        return true;
+    }
+    let band = crate::gate::charge_band_in(state, statics, i, e);
+    crate::mv::step::MoveRules { rules_epoch: epoch }.charge_reaches_contact(state, terrain, i, e, band, true)
+}
+
 /// NML-1157 — the nearest enemy this unit could actually REACH: the smallest
 /// base-edge gap among the targets the charge gate and the futile bar both
 /// accept. `best_charge` answers "who is the best matchup"; with one candidate
@@ -1277,8 +1290,10 @@ pub fn candidates_tuned(
         c.dest = Some(o.pos);
         out.push(c);
     }
-    let scored =
-        best_charge(state, terrain, statics, unit, sc, tuning, CURRENT_RULES_EPOCH, None);
+    // G4-C2 (c): the core's own move port has the last word on every charge pick the menu offers (rules 3.6).
+    let executes = |e: usize| charge_executes(state, terrain, statics, unit, e);
+    let scored = best_charge(state, terrain, statics, unit, sc, tuning, CURRENT_RULES_EPOCH, None)
+        .filter(|&e| executes(e));
     if let Some(e) = scored {
         out.push(charge_at(state, key, e));
     }
@@ -1288,6 +1303,7 @@ pub fn candidates_tuned(
     if tuning.target_units {
         if let Some(e) =
             nearest_chargeable(state, terrain, statics, unit, sc, tuning, CURRENT_RULES_EPOCH)
+                .filter(|&e| executes(e))
         {
             if Some(e) != scored {
                 out.push(charge_at(state, key, e));
@@ -1366,7 +1382,9 @@ pub fn candidates_tuned(
         for q in [&qh as &dyn Fn(usize) -> bool, &qu] {
             if let Some(e) = best_charge(
                 state, terrain, statics, unit, sc, tuning, CURRENT_RULES_EPOCH, Some(q),
-            ) {
+            )
+            .filter(|&e| executes(e))
+            {
                 if !charged.contains(&e) {
                     charged.push(e);
                     out.push(charge_at(state, key, e));
