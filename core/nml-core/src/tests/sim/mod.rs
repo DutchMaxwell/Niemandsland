@@ -1826,6 +1826,7 @@ mod v36_mor_18;
 mod v36_morale;
 mod v36_shoot;
 mod v36_shoot_rows;
+mod v36_g4r4_x1b_feat_melee;
 mod v36_g4r2_dang_hold;
 mod v36_ux;
 mod v36_ux_17;
