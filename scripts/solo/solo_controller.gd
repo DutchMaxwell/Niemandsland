@@ -811,6 +811,7 @@ func activate_next_ai_unit() -> GameUnit:
 		AiActRecorder.auto(_move_act_seq, _current_round(),
 			int(unit.unit_properties.get("player_id", 0)), unit.get_name(),
 			int(last_report.get("action", -1)))
+	AiActRecorder.played(_move_act_seq)   # F-PHANTOM (rules 3.6): this activation RAN; a pick with no marker never did
 	ai_unit_activated.emit(unit)
 	# M0-3 (NML-1073): one state fingerprint per activation, after every kind (normal act, disembark,
 	# Shaken idle, aircraft) has fully resolved and returned — cheap (one sha256 per activation, not
