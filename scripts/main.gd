@@ -4932,7 +4932,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 				and AiCombatMath.shot_uses_cover(save_def, shot_cover, shot_base):
 			cover_logged = true   # I4: only claim Cover when the roll truly saved at the covered value
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s is in cover: +1 Defense (saves on %d+)" % [
-				target.get_name(), AiCombatMath.shown_target(save_def)], true)
+				_solo_defense_signer(target).get_name(), AiCombatMath.shown_target(save_def)], true)
 		# AI-08a — rules-must-log: a cover skip by a map-read rule (Anti-Cover et al.) names the rule.
 		elif td_ctx.is_empty() and battle_log != null and shot_cover < shot_base and int(profile.get("blast", 0)) <= 1 \
 				and not str(profile.get("cover_rule", "")).is_empty():
@@ -7906,6 +7906,13 @@ func _solo_defense_holder(unit: GameUnit) -> GameUnit:
 	return null
 
 
+## The unit a Defense-side battle-log line is signed with: the chain member holding the models (G4-T2),
+## else the unit itself. Below EPOCH_73_V36 that is always the unit.
+func _solo_defense_signer(unit: GameUnit) -> GameUnit:
+	var holder: GameUnit = _solo_defense_holder(unit)
+	return holder if holder != null else unit
+
+
 ## The unit's Defense after Armor(X) ("counts as having Defense X+", best-of — AiCombatMath.armored_defense,
 ## the same math the EV context uses). Equals get_defense() for unarmored units. Reads the chain member
 ## that actually holds the models (G4-T2): a dead host with a living hero saves on the hero's Defense.
@@ -10511,6 +10518,12 @@ func _solo_majority_in_cover(unit: GameUnit) -> bool:
 	# hero in the open whose squad stands in woods used to collect a +1 Defense he never earned.
 	if not _solo_takedown_solo.is_empty() and unit != null and unit == _solo_takedown_solo.get("unit"):
 		return _solo_model_in_cover(_solo_takedown_solo.get("model") as ModelInstance)
+	# G4R2 F-T-COVER (EPOCH_73_V36, sibling of G4-T2): a joined unit whose host models are all dead stands
+	# on its living hero's square — the hero is the unit now. Below 73 the holder is the unit itself, so
+	# the dead host keeps reading "not in cover".
+	var holder: GameUnit = _solo_defense_holder(unit)
+	if holder != null and holder != unit:
+		return _solo_majority_in_cover(holder)
 	if terrain_overlay == null or not terrain_overlay.has_method("get_terrain_at_world_position"):
 		return false
 	var models: Array = unit.get_alive_models()
@@ -11803,13 +11816,16 @@ static func _solo_rules_without_items(rules: Array, item_grants: Variant) -> Arr
 	var present := {}
 	for r in rules:
 		present[RulesRegistry.base_rule_name(str(r))] = true
+	var grants := {}   # keyed by the stripped name: an AI-list item name may carry a trailing space ("Psy-Witch ")
+	for k in (item_grants as Dictionary):
+		grants[RulesRegistry.base_rule_name(str(k))] = (item_grants as Dictionary)[k]
 	var out: Array = []
 	for r in rules:
 		var base := RulesRegistry.base_rule_name(str(r))
-		if not (item_grants as Dictionary).has(base):
+		if not grants.has(base):
 			out.append(r)
 			continue
-		for g in (item_grants as Dictionary)[base]:
+		for g in grants[base]:
 			if not present.has(RulesRegistry.base_rule_name(str(g))):
 				present[RulesRegistry.base_rule_name(str(g))] = true
 				out.append(g)
@@ -14909,7 +14925,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 					and AiCombatMath.shot_uses_cover(save_def, shot_cover, shot_base):
 				cover_logged = true   # I4: only claim Cover when the roll truly saved at the covered value
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s is in cover: +1 Defense (saves on %d+)" % [
-					target.get_name(), AiCombatMath.shown_target(save_def)], true)
+					_solo_defense_signer(target).get_name(), AiCombatMath.shown_target(save_def)], true)
 			# DAT-16b — rules-must-log: the HUMAN volley names the map-read rule that skips cover,
 			# the AI-08a block's twin (the human path used to skip cover without a word). The line is
 			# epoch-gated so that below 73 the human path stays byte-exact.

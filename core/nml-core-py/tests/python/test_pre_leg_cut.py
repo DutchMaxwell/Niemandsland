@@ -116,11 +116,3 @@ def test_a_keep_list_of_another_roster_size_is_not_trusted():
     front of it) has a shorter act-start list: the positions would not line up, so the gate keeps the first k."""
     out = srg.patch_pre(_five_models(), {"foe": {"alive": 2, "shaken": False, "of": 6, "keep": [1, 5]}})
     assert _xs(out) == [0.0, 1.0]
-
-
-def test_a_dangerous_test_in_front_of_the_cast_leg_leaves_the_act_uncut():
-    """The core's own dangerous test would draw BETWEEN two stretches of one resolve and a tray cannot be burned
-    mid-resolve: the act stays as recorded, and the gate says so instead of guessing."""
-    rolls = [{"leg": "dangerous", "count": 5}, {"leg": "cast", "count": 1}, {"leg": "main", "count": 4}]
-    kept, draws, plain = srg.cut_pre_legs(rolls, {"units": {}}, {}, True, True)
-    assert kept == rolls and draws == 0

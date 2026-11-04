@@ -1,10 +1,50 @@
 name: Rust (advisory)
 
 on:
+  # Path filter (CISPEED-RUSTPATH): the six jobs below read ONLY the paths listed here
+  # (measured 04.11.2026: every non-core file the jobs open, with its access time reset
+  # to 2000 beforehand, on a clean clone running clippy_gate.sh, cargo test nml-core,
+  # cargo build nml-core-godot, cargo check + maturin build + pytest nml-core-py and
+  # pytest tools with the CI environment: no HOME lists, no Godot, no onnxruntime).
+  # Not read at all: scripts/**, scenes/**, shaders/**, docs/**, addons/**, any .gd file.
+  #   core/**                                   the crates, Cargo.toml/Cargo.lock, python tests + fixtures
+  #   rust-toolchain.toml                       the pinned rustc
+  #   .github/workflows/rust.yml                this file
+  #   tools/**                                  pytest tools (recursive), clippy_gate.sh + clippy_baseline.txt,
+  #                                             epoch_gate_check.py, modules the python tests import
+  #   assets/solo/**                            rules/spells mechanics, missions, deployments, brains
+  #   assets/model_manifest.json                read by list_to_profile.py
+  #   data/**                                   encoder_rule_vocab_v1.json
+  #   test/fixtures/**                          position/sight/policy parity fixtures, card lists
+  #   farm/patches/preserve-core-identity.patch only with NML_FARM_IDENTITY_PATCH=1 (never set in CI)
+  # test/shard_weights.json and the *_test.gd file list are read by tools/shard_assign_test.py;
+  # that guard runs on every PR in build.yml ("Shards cover every suite"), so they are NOT listed.
+  # workflow_dispatch and workflow_call (release gate in build.yml) ignore paths and always run.
+  # A new path the jobs start reading MUST be added here; re-measure the way the PR body says.
   push:
     branches: [main]
+    paths:
+      - 'core/**'
+      - 'rust-toolchain.toml'
+      - '.github/workflows/rust.yml'
+      - 'tools/**'
+      - 'assets/solo/**'
+      - 'assets/model_manifest.json'
+      - 'data/**'
+      - 'test/fixtures/**'
+      - 'farm/patches/preserve-core-identity.patch'
   pull_request:
     branches: [main]
+    paths:
+      - 'core/**'
+      - 'rust-toolchain.toml'
+      - '.github/workflows/rust.yml'
+      - 'tools/**'
+      - 'assets/solo/**'
+      - 'assets/model_manifest.json'
+      - 'data/**'
+      - 'test/fixtures/**'
+      - 'farm/patches/preserve-core-identity.patch'
   workflow_dispatch:
   # Reusable: build.yml calls this workflow as the release gate's Rust check on
   # tag pushes (rust.yml itself has no tag trigger — tags don't touch main/PR).

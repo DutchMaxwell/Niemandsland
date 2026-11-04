@@ -9,6 +9,7 @@
 //! imagined, which is exactly why a recorded root pair matrix cannot answer the
 //! gate and this port has to exist.
 
+use crate::acts::{rule_on, EPOCH_73_V36};
 use crate::combat::shrouded_reach;
 use crate::geom::{self, V3};
 use crate::state::State;
@@ -76,7 +77,18 @@ pub fn charge_illegal_tuned(
     let probe_r = state.charge_probe_r[attacker];
     let a = from.unwrap_or_else(|| geom::centre(&state.positions[attacker]));
     let b = to.unwrap_or_else(|| geom::centre(&state.positions[victim]));
+    // G4-T8: from `EPOCH_73_V36` the corridor ends at the CONTACT point, not the target's centre.
+    let epoch = statics.get(state.roster.profile[attacker]).map_or(0, |s| s.rules_epoch);
+    let b = if rule_on(epoch, EPOCH_73_V36) { charge_probe_end(a, b, gap_in) } else { b };
     corridor_forced_through(a, b, probe_r, terrain)
+}
+
+/// G4-T8 (`EPOCH_73_V36`; table twin `SoloController.charge_probe_end`): the far end of the cap gate corridor,
+/// `gap_in` along the line from `a` toward `b` — the contact point — or `b` itself when the target is nearer.
+pub fn charge_probe_end(a: V3, b: V3, gap_in: f64) -> V3 {
+    let dist = v2_length([b[0] - a[0], b[2] - a[2]]) as f64;
+    let reach = gap_in * INCHES_TO_METERS;
+    if dist <= reach { b } else { lerp(a, b, reach / dist) }
 }
 
 /// The live charge reach of `attacker` against `victim` in inches: the spend fold's band (`charge` or the Rush band
