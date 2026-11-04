@@ -254,7 +254,10 @@ fn fatigued_sixes_line(owner: &str, n: i64) -> String {
 /// dice, and that share's fraction of the plain hits
 /// `min(normal, round(normal * share / attacks))`. `att.models` is the live
 /// alive count (`ctx_of` writes `state.alive`), the Ctx twin of the table's
-/// `GameUnit.get_alive_count()`. 0 without the rules 3.6 stamp.
+/// `GameUnit.get_alive_count()`. 0 without the rules 3.6 stamp. `attacks` is
+/// the pool the share is a fraction of: the weapon's full attack total on the
+/// volley leg (the table stamps before the sighted scaling), the strike's own
+/// scaled count on the melee leg (the table stamps its melee profile after it).
 fn sergeant_hits(p: &ShootProfile, attacks: i64, normal: i64, att: &Ctx) -> i64 {
     if p.sergeant_ap <= 0 || attacks <= 0 || normal <= 0 {
         return 0;
@@ -1524,7 +1527,10 @@ pub fn resolve_volley_leg(
         }
         // Rules 3.6 row MOR-12c: the bearer's share of the plain hits saves as
         // its own batch at AP(+sergeant_ap), the table's band (`main.gd:8372-8387`).
-        let sgt_hits = sergeant_hits(p, n, normal, att);
+        // G4R4 C-SERGEANT-SCALE: the table stamps the share on the FULL-strength profile, before the sighted
+        // scaling, so the share is a fraction of the weapon's whole attack pool (`p.attacks`), not of the
+        // sighted dice `n` (the stamp exists only from `EPOCH_73_V36`, so below it nothing changes).
+        let sgt_hits = sergeant_hits(p, p.attacks.max(n), normal, att);
         let mut w = save_batch(p, def, def_owner, ap4, save_def, ap + on6, att.shred_grant, shred_alias_fires, shred_low, deadly_per_model, tray, &mut out);
         if sgt_hits > 0 {
             out.log.push(format!(
@@ -1809,6 +1815,8 @@ fn melee_hit_target(
     // read (Ctx::in_cover), inside the same Unstoppable clamp as the C2
     // bonuses above.
     m += grounded_precision_mod(att);
+    // R3-X1b (`EPOCH_73_V36`) — Precision Feat's +1 on every strike of the phase that spent the latch (stamped by sim.rs).
+    m += att.feat_hit_bonus;
     // EPOCH 34 UNSTOPPABLE MARK — the melee clamp half, the volley fold's
     // twin: the granted mark (`ctx_live`'s `unstoppable_mark`) counts like
     // the weapon's own `p.unstoppable`. The bool return carries "the GRANT
@@ -2006,6 +2014,21 @@ pub fn resolve_melee_with_tray(
 // alias's charge leg folds on.
 #[allow(clippy::too_many_arguments)]
 pub fn resolve_melee_leg(
+    strikers: &[Shooter<'_>], def: &Ctx, def_owner: &str, charging: bool, cond_ap_dice: bool, shred_alias_dice: bool,
+    deadly_per_model: bool, charge_from_in: f64, screened_melee: bool, tray_exact: bool, hits_first: bool,
+    fatigue_mutes_sixes: bool, tally_post_regen: bool, tray: &mut Tray,
+) -> ShootResult {
+    resolve_melee_leg_wipe(
+        strikers, def, def_owner, charging, cond_ap_dice, shred_alias_dice, deadly_per_model, charge_from_in,
+        screened_melee, tray_exact, hits_first, fatigue_mutes_sixes, tally_post_regen, None, tray,
+    )
+}
+
+/// `resolve_melee_leg` plus R3-C2 (`EPOCH_73_V36`): `deadly_wipes` answers, on the finished Deadly groups, whether they
+/// already destroy the whole defender; the table lands Deadly first and the pool after, so the pool's Regeneration die is
+/// then never rolled. `None` (every caller below 73) rolls it as before.
+#[allow(clippy::too_many_arguments)]
+pub fn resolve_melee_leg_wipe(
     strikers: &[Shooter<'_>],
     def: &Ctx,
     def_owner: &str,
@@ -2022,6 +2045,7 @@ pub fn resolve_melee_leg(
     fatigue_mutes_sixes: bool,
     // MEL-10r (`EPOCH_73_V36`) — the melee tally counts only wounds Regeneration did NOT cancel.
     tally_post_regen: bool,
+    deadly_wipes: Option<&dyn Fn(&ShootResult) -> bool>,
     tray: &mut Tray,
 ) -> ShootResult {
     // The alias's charged leg fires on the CHARGER's strikes only — a
@@ -2542,7 +2566,12 @@ pub fn resolve_melee_leg(
         });
     }
     out.caused += regen_proof + regenable + out.deadly_tally;
-    let landed_regenable = regen_batch(regenable, def, def_owner, tray, &mut out.rolls);
+    // R3-C2: Deadly lands first (tray-exact order), so wounds that land on an already destroyed defender roll no ignore die.
+    let pool_lands_on_dead = tray_exact && regenable > 0 && def.regeneration && def.regen_target > 0 && deadly_wipes.is_some_and(|w| w(&out));
+    if pool_lands_on_dead {
+        out.log.push(format!("Regeneration: {def_owner} is already destroyed by the Deadly wounds - no ignore roll for the other wounds"));
+    }
+    let landed_regenable = if pool_lands_on_dead { regenable } else { regen_batch(regenable, def, def_owner, tray, &mut out.rolls) };
     out.wounds += regen_proof + landed_regenable;
     // MEL-10r — a wound Regeneration cancels is not TAKEN: the 73 tally counts what landed.
     out.taken = if tally_post_regen { out.wounds + out.deadly_tally } else { out.caused };

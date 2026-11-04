@@ -72,7 +72,7 @@ use super::*;
         let terrain = small_board();
         let seams = Seams { consolidate: true, rules_epoch: 7, ..Default::default() };
         let mut next = st.clone();
-        consolidate_after_melee(&mut next, Cover::Board(&terrain), seams, 0, 2);
+        consolidate_after_melee(&mut next, &_statics, Cover::Board(&terrain), seams, 0, 2, None);
         assert_eq!(next.moved_round[0], next.round, "the consolidation move stamps the round");
         assert_eq!(next.moved_round[2], -1, "the wiped unit is never stamped");
     }
