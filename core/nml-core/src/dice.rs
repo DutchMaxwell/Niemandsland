@@ -1809,6 +1809,8 @@ fn melee_hit_target(
     // read (Ctx::in_cover), inside the same Unstoppable clamp as the C2
     // bonuses above.
     m += grounded_precision_mod(att);
+    // R3-X1b (`EPOCH_73_V36`) — Precision Feat's +1 on every strike of the phase that spent the latch (stamped by sim.rs).
+    m += att.feat_hit_bonus;
     // EPOCH 34 UNSTOPPABLE MARK — the melee clamp half, the volley fold's
     // twin: the granted mark (`ctx_live`'s `unstoppable_mark`) counts like
     // the weapon's own `p.unstoppable`. The bool return carries "the GRANT
