@@ -6,7 +6,7 @@
 //! the charge's own strikes because the host had no model left. From `EPOCH_73_V36` the surplus spills onto
 //! the hero and the hero strikes. Below 73 the surplus is dropped and the host-only gates stay, byte for byte.
 use super::*;
-use crate::acts::EPOCH_73_V36;
+use crate::acts::{EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36};
 use crate::read_act_header;
 
 /// A real host (one model) and a real joined hero, both built from profiles the way the game builds a unit.
@@ -94,6 +94,7 @@ fn the_dangerous_surplus_reaches_the_hero_and_the_hero_charges_on_from_73() {
         "the applied rule names itself: {:?}",
         shot.log
     );
+    assert!(shot.log.iter().any(|l| l.starts_with("Hero:") && l.contains("charges on as the unit")), "{:?}", shot.log);
     let strikes = shot.rolls.iter().filter(|r| r.kind == "attack" && r.owner == "Novice Leader").count();
     assert!(strikes >= 1, "the Novice Leader strikes for the unit: {:?}", shot.rolls);
 }
@@ -108,4 +109,16 @@ fn a_one_wound_test_spills_nothing() {
         .find(|(_, shot)| test_wounds(shot) == 1)
         .expect("a seed where the Dangerous test costs exactly one wound");
     assert_eq!((next.alive[0], next.wounds[1].clone()), (0, vec![3]));
+}
+
+/// Below 73 the gates stay host-only: with the host dead and the hero alive the side is DOWN, so the dead host
+/// ends the charge's strikes and the surplus is dropped; from 73 the hero keeps the side standing.
+#[test]
+fn a_living_hero_keeps_a_dead_hosts_side_standing_only_from_73() {
+    let (mut st, _) = line(EPOCH_73_V36);
+    (st.alive[0], st.wounds[0], st.positions[0]) = (0, vec![], vec![]);
+    for (epoch, want) in [(EPOCH_72_PLAYTEST_RULES, false), (EPOCH_73_V36, true)] {
+        let seams = Seams { rules_epoch: epoch, hero_attach: true, ..Seams::default() };
+        assert_eq!(side_up(&st, 0, seams), want, "epoch {epoch}");
+    }
 }
