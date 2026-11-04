@@ -21,8 +21,16 @@ const ALIAS_HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
 
 /// A carrier printing `rules` in `aof/halflings`, read at `epoch`.
 fn alias_unit(rules: &[&str], epoch: u32) -> UnitStatic {
+    alias_unit_in("aof", "halflings", rules, epoch)
+}
+
+/// The same carrier in another army book (the gated-alias control).
+fn alias_unit_in(system: &str, faction: &str, rules: &[&str], epoch: u32) -> UnitStatic {
     let printed = rules.iter().map(|r| format!("\"{r}\"")).collect::<Vec<_>>().join(",");
-    let tpl = ALIAS_HEADER.replace("\"special_rules\":[]", &format!("\"special_rules\":[{printed}]"));
+    let tpl = ALIAS_HEADER
+        .replace("\"special_rules\":[]", &format!("\"special_rules\":[{printed}]"))
+        .replace("\"game_system\":\"aof\"", &format!("\"game_system\":\"{system}\""))
+        .replace("\"faction_folder\":\"halflings\"", &format!("\"faction_folder\":\"{faction}\""));
     let header = read_act_header(&tpl).expect("ALIAS_HEADER parses");
     let mut reg = Registries::new(&repo_root());
     UnitStatic::build_for(&mut reg, header.profiles.get("carrier").expect("carrier"), epoch)
@@ -74,5 +82,41 @@ fn a_plain_surge_alias_pays_one_six_at_three_inches_from_73() {
         surge_volley(&[old.shoot[0].clone()], 4, 3.0, true, &mut t).rolls[1].count,
         base + 1,
         "below 73 the legacy alias-gate-off read still pays at 3\""
+    );
+}
+
+/// The battle-log text of one seed-6 volley (one natural 6 in 8 dice) at `d`.
+fn alias_log(us: &UnitStatic, d: f64) -> String {
+    let mut t = Tray::seeded(6);
+    surge_volley(&[us.shoot[0].clone()], 4, d, true, &mut t).log.join("\n")
+}
+
+/// The line names the BOOK rule and, for a plain alias, no distance it does not
+/// have: it pays at any range from 73, so a 3" shot must not claim "over 9in".
+#[test]
+fn a_plain_alias_line_names_no_nine_inch_gate_from_73() {
+    let log = alias_log(&alias_unit(&["Lucky"], EPOCH_73_V36), 3.0);
+    assert!(log.contains("Lucky"), "the plain alias paid but never named itself, got: {log}");
+    assert!(!log.contains("over 9"), "the 3\" plain-alias line still claims a 9\" gate, got: {log}");
+}
+
+/// Below 73 the recorded wording stands byte-exact.
+#[test]
+fn below_73_the_recorded_over_nine_line_stands() {
+    let log = alias_log(&alias_unit(&["Lucky"], EPOCH_73_V36 - 1), 3.0);
+    assert!(
+        log.contains("Lucky: shot from over 9in \u{2014} bonus hits on unmodified 6s"),
+        "below 73 the recorded 9in line must stay, got: {log}"
+    );
+}
+
+/// Control: Devout Boost carries a real 9" condition, so its line keeps the band.
+#[test]
+fn a_gated_alias_keeps_its_over_nine_line_from_73() {
+    let us = alias_unit_in("gf", "blessed_sisters", &["Devout", "Devout Boost"], EPOCH_73_V36);
+    let log = alias_log(&us, 10.0);
+    assert!(
+        log.contains("Devout") && log.contains("from over 9in"),
+        "the gated alias lost its 9in band, got: {log}"
     );
 }
