@@ -226,6 +226,30 @@ def defender_state(plain: dict, key: str) -> tuple[int, int]:
     return (int(u["alive"]), int(sum(u["wounds"])))
 
 
+def lone_hero_names(plain: dict, profiles: dict) -> dict[str, str]:
+    """A LONE attached hero's NAME -> its HOST's name (G4-H6): the table signs
+    the save with the host's label (G4-T2), the core with the hero's own. A
+    lone hero's `attached_to` host has no living models; the hero still has."""
+    units, out = plain.get("units") or {}, {}
+    for key, u in units.items():
+        host = u.get("attached_to")
+        hu = units.get(host) if host else None
+        if not hu or int(u.get("alive", 0)) <= 0 or int(hu.get("alive", 0)) > 0:
+            continue
+        hero = str((profiles.get(key) or {}).get("name", ""))
+        hname = str((profiles.get(host) or {}).get("name", ""))
+        if hero and hname:
+            out[hero] = hname
+    return out
+
+
+def signer_ok(roller: str, table_label: str, lone: dict[str, str]) -> bool:
+    """The table's label for the port's roller: the roller's own name, or - for a LONE hero (`lone_hero_names`) - its
+    host's. Only ever a relaxation: a label that matched before still matches, so a lone hero that rolls under its own
+    name (its own attack, a strike) cannot turn into a new `owner` failure."""
+    return table_label in ("AI (%s)" % roller, "AI (%s)" % lone.get(roller, roller))
+
+
 def shots_of(d: Path) -> dict[int, list[dict]]:
     """The table's own per-shot record — sidecar `shots.jsonl` (NML_SHOT_DUMP,
     written inside the per-shot loop of `_solo_resolve_ai_volley`, so per
@@ -534,6 +558,8 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
             tally["pre_cut"] += len(rolls_cut) < len(rolls_k)
             tally["pre_uncut"] += len(rolls_cut) == len(rolls_k) and any(r.get("leg") in CUT_LEGS for r in rolls_k)
             state = core.state_of(plain)
+            # G4-H6: a LONE joined hero's roll compares as its host's label.
+            lone = lone_hero_names(plain, head["profiles"])
             # `--red-misseed` moves the tray one seed over. Every count and
             # every target still comes out of the same state, so the SHAPE holds
             # and the comparison reaches the faces — which is exactly what has
@@ -653,12 +679,12 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
                 # hero fires its OWN shots" from a claim into a verdict: a host
                 # rolling the hero's dice matches on count, target and faces and
                 # can only part HERE.
-                owners_ok = all("AI (%s)" % g[4] == w[4] for g, w in zip(got, want))
+                owners_ok = all(signer_ok(g[4], w[4], lone) for g, w in zip(got, want))
                 if not owners_ok:
                     reasons["owner"] = reasons.get("owner", 0) + 1
                     if len(firsts) < max(3, verbose):
                         bad = next((i for i, (g, w) in enumerate(zip(got, want))
-                                    if "AI (%s)" % g[4] != w[4]), 0)
+                                    if not signer_ok(g[4], w[4], lone)), 0)
                         firsts.append("%s act %d [owner] %s — roll %d: AI (%s) vs table %s"
                                       % (d.name, k, action["shoot"][-6:], bad + 1,
                                          got[bad][4], want[bad][4]))
