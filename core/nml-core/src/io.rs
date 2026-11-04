@@ -316,6 +316,11 @@ pub struct PlainLedger {
     /// empty there — an old act replays with every Limited weapon fresh.
     #[serde(default)]
     limited_used: Vec<String>,
+    /// G4-H-MOVED (`EPOCH_73_V36`) — `unit_properties["moved_round"]` (main.gd `_solo_animate_move`): the
+    /// round the unit last executed a move, written by act_recorder.gd `_ledger_of`. Absent from every
+    /// corpus recorded before this key — an old act replays with every unit "never moved" (-1).
+    #[serde(default)]
+    moved_round: Option<i64>,
     /// Wave 5 (PR 1's recorder): the `{"used", "to"}` block; `to` arrives as the `"(x, y)"` Vector2 string.
     #[serde(default)]
     teleport: Option<PlainTeleport>,
@@ -1227,6 +1232,11 @@ pub fn fold_ledger(
     // Limited: the table's spent weapons ride the act state from EPOCH_73_V36; below it every Limited weapon replays fresh.
     if rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
         Rc::make_mut(&mut st.limited_used)[ui] = ledger.limited_used.clone();
+    }
+    // Moved: the table's own stamp rides the act state from EPOCH_73_V36, so Artillery's -1, Entrenched and
+    // the stationary alias penalty read the round the unit really moved in; below it every unit reads -1.
+    if let (true, Some(r)) = (rule_on(rules_epoch, crate::acts::EPOCH_73_V36), ledger.moved_round) {
+        st.moved_round[ui] = r;
     }
     st.teleport_used[ui] = ledger.teleport.as_ref().map(|t| t.used).unwrap_or(false);
     st.growth_markers[ui] = ledger.growth;
