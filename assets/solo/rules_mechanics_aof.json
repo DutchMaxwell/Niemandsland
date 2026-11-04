@@ -1200,6 +1200,11 @@
    "rated": false,
    "book_version": "3.5.1"
   },
+  "Unique Hero": {
+   "primitive": "Hero",
+   "rated": false,
+   "book_version": "3.6.0"
+  },
   "Unpredictable Fighter": {
    "primitive": "Unpredictable Fighter",
    "rated": false,
@@ -5572,6 +5577,18 @@
      "once": true
     }
    },
+   "Versatile Warrior Buff": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants_rule": "Versatile Attack",
+     "target": "friendly",
+     "max_targets": 1,
+     "range_in": 12,
+     "once": true
+    }
+   },
    "Warding": {
     "primitive": "Regeneration",
     "rated": false,
@@ -7086,6 +7103,14 @@
      "counts_as": "Impact"
     }
    },
+   "Increased Shooting Range": {
+    "primitive": "Royal Legion",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "range_bonus_in": 6
+    }
+   },
    "Increased Shooting Range Aura": {
     "primitive": "Royal Legion",
     "rated": false,
@@ -8352,6 +8377,14 @@
     "primitive": "Unpredictable Fighter",
     "rated": false,
     "book_version": "3.5.3"
+   },
+   "Versatile Warrior Aura": {
+    "primitive": "Aura Channel",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants": "Versatile Warrior"
+    }
    }
   },
   "shadow_stalkers": {
