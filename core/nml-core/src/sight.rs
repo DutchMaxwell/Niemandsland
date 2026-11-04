@@ -36,8 +36,9 @@
 //!      separation_checker.gd:137-140). For a ROUND base the two are the same
 //!      number (`radius = effective_mm / 2`), so `base_mm = r * 2000` is exact;
 //!      for an OVAL base the circumscribed radius over-states the mean the
-//!      height table wants, and this port therefore over-states an oval model's
-//!      height.
+//!      height table wants, and below `EPOCH_73_V36` this port therefore
+//!      over-states an oval model's height. From it `model_height_at` takes the
+//!      mean axis off the header's `base_w_mm` / `base_d_mm` (AI-G4 C-SIGHT).
 //!   3. WEAPON BEARERS. `SoloController.alive_bearers_of` (:7720-7739) reads the
 //!      per-MODEL loadout, which the capture does not carry — see
 //!      `sim::sighted_profiles_of` for the approximation and its measured cost.
@@ -106,6 +107,17 @@ pub fn height_in_for_base_mm(base_mm: f64) -> f64 {
 #[inline]
 pub fn model_height_m(radius_m: f64) -> f64 {
     height_in_for_base_mm(radius_m * 2000.0) * IN2M
+}
+
+/// A model's height for the game at `rules_epoch`. From `EPOCH_73_V36` an OVAL base feeds the MEAN of its two axes
+/// into the height table, as `_solo_model_base_mm` does: the half-axes come off the profile's `base_w_mm` /
+/// `base_d_mm`, the recorded radius carrying the model's Tough scale. A round base reads `radius * 2000` as before.
+fn model_height_at(state: &State, unit: usize, radius_m: f64, rules_epoch: u32) -> f64 {
+    if !rule_on(rules_epoch, EPOCH_73_V36) {
+        return model_height_m(radius_m);
+    }
+    let (sx, sz) = state.base_shape(unit).semis(radius_m);
+    height_in_for_base_mm((sx + sz) * 1000.0) * IN2M
 }
 
 /// One model as `VolumetricLos` sees it: a base circle extruded from where it
@@ -530,11 +542,11 @@ pub fn unit_radius_m(state: &State, i: usize) -> f64 {
 
 /// The TALLEST alive model of a unit and its attached heroes, in metres —
 /// `main._solo_unit_los_height_m` :4262-4275, floored at 32 mm infantry.
-pub fn unit_height_m(state: &State, i: usize) -> f64 {
+pub fn unit_height_m(state: &State, i: usize, rules_epoch: u32) -> f64 {
     let mut h = height_in_for_base_mm(DEFAULT_BASE_MM) * IN2M;
     for &m in std::iter::once(&i).chain(state.attached[i].iter()) {
         for &r in &state.radii[m] {
-            h = h.max(model_height_m(r));
+            h = h.max(model_height_at(state, m, r, rules_epoch));
         }
     }
     h
@@ -546,6 +558,11 @@ pub fn unit_height_m(state: &State, i: usize) -> f64 {
 /// see the target); a unit still in Ambush reserve is off-table and blocks
 /// nothing (`dormant`).
 pub fn blockers_of(state: &State, from: usize, to: usize, rules_epoch: u32) -> Vec<Blocker> {
+    blockers_of_at(state, from, to, rules_epoch, rules_epoch)
+}
+
+/// `blockers_of`, with the epoch the blocker HEIGHTS follow (`model_height_at`) apart from the one the rest reads.
+fn blockers_of_at(state: &State, from: usize, to: usize, rules_epoch: u32, height_epoch: u32) -> Vec<Blocker> {
     let mut excluded = HashSet::new();
     for &u in &[from, to] {
         excluded.insert(u);
@@ -567,7 +584,7 @@ pub fn blockers_of(state: &State, from: usize, to: usize, rules_epoch: u32) -> V
         for (k, p) in state.positions[i].iter().enumerate() {
             let r = state.radii[i].get(k).copied().unwrap_or(0.016);
             out.push(Blocker {
-                cyl: Cyl { c: [p[0], p[2]], r, y0: p[1], y1: p[1] + model_height_m(r) },
+                cyl: Cyl { c: [p[0], p[2]], r, y0: p[1], y1: p[1] + model_height_at(state, i, r, height_epoch) },
                 unit: i,
                 aircraft: state.aircraft[i],
             });
@@ -594,13 +611,14 @@ pub fn sighted_count(
     reach_in: f64,
     indirect: bool,
     horizontal_sort: bool,
+    rules_epoch: u32,
 ) -> i64 {
     let mut targets: Vec<[f64; 3]> = Vec::new();
     for &t in std::iter::once(&target).chain(state.attached[target].iter()) {
         targets.extend(state.positions[t].iter().copied());
     }
     let (from_r, to_r) = (unit_radius_m(state, member), unit_radius_m(state, target));
-    let (from_h, to_h) = (unit_height_m(state, member), unit_height_m(state, target));
+    let (from_h, to_h) = (unit_height_m(state, member, rules_epoch), unit_height_m(state, target, rules_epoch));
     let to_air = state.aircraft[target];
     let range_m = reach_in * IN2M + from_r + to_r;
     sighted_models(&state.positions[member], &targets, range_m, horizontal_sort, |sp, tp| {
@@ -622,11 +640,12 @@ pub const UNBOUNDED_RANGE_IN: f64 = 9999.0;
 /// `SoloController._has_los` (:6121-6128) as main.gd:2338 wires it:
 /// `_solo_sighted_count(shooter, target, SOLO_LOS_UNBOUNDED_RANGE_IN) > 0` —
 /// ANY alive model of `i` with a sight line to ANY alive model of `j`, terrain
-/// volumes and every other unit's bases included, the range half switched off.
-pub fn unit_sees(state: &State, zones: &[Zone], i: usize, j: usize) -> bool {
-    let blockers = blockers_of(state, i, j, CURRENT_RULES_EPOCH);
+/// volumes and every other unit's bases included, the range half switched off. Only the model HEIGHTS follow
+/// `rules_epoch` (an oval base reads its mean axis from `EPOCH_73_V36`); the rest still reads `CURRENT_RULES_EPOCH`.
+pub fn unit_sees(state: &State, zones: &[Zone], i: usize, j: usize, rules_epoch: u32) -> bool {
+    let blockers = blockers_of_at(state, i, j, CURRENT_RULES_EPOCH, rules_epoch);
     sighted_count(state, zones, &blockers, i, j, UNBOUNDED_RANGE_IN, false,
-        rule_on(CURRENT_RULES_EPOCH, EPOCH_66_DISTANCE_TRUTH)) > 0
+        rule_on(CURRENT_RULES_EPOCH, EPOCH_66_DISTANCE_TRUTH), rules_epoch) > 0
 }
 
 /// `BattleSim.capture`'s sight sweep (battle_sim.gd:1563-1576) as one row-major
@@ -651,7 +670,7 @@ pub fn sight_matrix_at(state: &State, terrain: &Terrain, rules_epoch: u32) -> Ve
             if state.player[i] == state.player[j] || state.dormant[i] || state.dormant[j] {
                 continue;
             }
-            m[i * n + j] = unit_sees(state, &zones, i, j);
+            m[i * n + j] = unit_sees(state, &zones, i, j, rules_epoch);
         }
     }
     m
