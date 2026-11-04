@@ -7197,6 +7197,8 @@ impl UnitStatic {
                 }
                 match n.as_str() {
                     "Watchborn" | "Vinci Tech" => name = Some(n.clone()),
+                    // The pick's log line names the BOOK rule, as the table's `primitive_book_name` does.
+                    "Versatile Expert" if rule_on(rules_epoch, EPOCH_73_V36) => name = Some(n.clone()),
                     "Enhanced Vinci Tech" => boost = true,
                     _ => {}
                 }
