@@ -25,7 +25,7 @@ func before_test() -> void:
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
-	_main.solo_ai_slots = {2: true}
+	_main.solo_ai_slots = {1: true, 2: true}   # both seats AI, so the defender auto-rolls its saves (no dialog)
 	_main._ensure_solo_controller()
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	_main._solo_batch = true
@@ -54,9 +54,9 @@ func _gun() -> OPRApiClient.OPRWeapon:
 	return w
 
 
-## The AI's shooter: one model at the origin holding the 9" gun, built the way the live path reads it.
+## The AI's shooter (seat 1, the AI side when both seats are AI): one model at the origin holding the 9" gun, built the way the live path reads it.
 func _shooter() -> GameUnit:
-	var u := E2EBoot.make_unit(_main, 2, "Gunners", [Vector3.ZERO])
+	var u := E2EBoot.make_unit(_main, 1, "Gunners", [Vector3.ZERO])
 	u.unit_properties["quality"] = 2
 	var opr := OPRApiClient.OPRUnit.new()
 	var ws: Array[OPRApiClient.OPRWeapon] = [_gun()]
@@ -67,18 +67,18 @@ func _shooter() -> GameUnit:
 	return u
 
 
-## The human chain: a host whose models are ALL dead and a living one-model hero (40 mm base, Defense
+## The opposing chain (seat 2): a host whose models are ALL dead and a living one-model hero (40 mm base, Defense
 ## 4+) attached to it. The centre gap is 9" + the shooter's radius + half the hero's radius, so the hero
 ## is in reach only when its own radius is read (a radius-0 read leaves it half a radius outside).
 func _chain(shooter: GameUnit, host_alive: bool = false, hero_mm: int = HERO_BASE_MM) -> Dictionary:
 	var shooter_r := SoloController.model_base_radius_m(shooter.models[0])
 	var hero_r := float(hero_mm) / 2000.0
 	var x := 9.0 * INCH + shooter_r + 0.5 * hero_r
-	var host := E2EBoot.make_unit(_main, 1, "Host", [Vector3(x, 0.0, 0.0)])
+	var host := E2EBoot.make_unit(_main, 2, "Host", [Vector3(x, 0.0, 0.0)])
 	host.unit_properties["defense"] = 5
 	for m in host.models:
 		(m as ModelInstance).is_alive = host_alive
-	var hero := E2EBoot.make_unit(_main, 1, "Hero", [Vector3(x, 0.0, 0.05)])
+	var hero := E2EBoot.make_unit(_main, 2, "Hero", [Vector3(x, 0.0, 0.05)])
 	hero.unit_properties["defense"] = 4
 	hero.unit_properties["base_size_round"] = hero_mm
 	host.unit_properties["attached_heroes"] = [hero]
@@ -95,7 +95,7 @@ func _activate(shooter: GameUnit) -> void:
 
 # ===== the live volley assignment =====
 
-func test_the_ai_volley_assignment_reaches_a_lone_hero_by_its_own_base() -> void:
+func test_the_ai_volley_assignment_reaches_a_lone_hero_by_its_own_base(timeout := 60000) -> void:
 	var shooter := _shooter()
 	_chain(shooter)
 	await _activate(shooter)
@@ -106,6 +106,9 @@ func test_the_ai_volley_assignment_reaches_a_lone_hero_by_its_own_base() -> void
 	assert_str(text) \
 		.override_failure_message("the volley fires at the hero's chain and the hero saves on 4+ (log: %s)" % text.strip_edges()) \
 		.contains("Hero saves on 4+")
+	assert_str(text) \
+		.override_failure_message("the volley names the book rule it applied (log: %s)" % text.strip_edges()) \
+		.contains("Fights on alone (GF 3.6): Hero is the unit")
 	await E2EBoot.settle(get_tree())
 
 
@@ -141,6 +144,20 @@ func test_a_living_host_keeps_its_own_radius_even_with_a_wider_hero() -> void:
 	assert_float(_main._solo_unit_base_radius_m(chain["host"])) \
 		.override_failure_message("a host with living models is read by those models only, as before") \
 		.is_equal_approx(SeparationChecker.DEFAULT_BASE_RADIUS_M, 0.0001)
+	await E2EBoot.settle(get_tree())
+
+
+func test_a_volley_at_a_living_host_writes_no_fights_on_alone_line(timeout := 60000) -> void:
+	var shooter := _shooter()
+	_chain(shooter, true)
+	await _activate(shooter)
+	var text := _log_text()
+	assert_str(text) \
+		.override_failure_message("the host still holds models, so the volley must really fire (log: %s)" % text.strip_edges()) \
+		.contains("Host saves on 5+")
+	assert_str(text) \
+		.override_failure_message("a living host means no lone hero, so no fights-on-alone line (log: %s)" % text.strip_edges()) \
+		.not_contains("Fights on alone")
 	await E2EBoot.settle(get_tree())
 
 
