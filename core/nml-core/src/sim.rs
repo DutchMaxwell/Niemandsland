@@ -8982,6 +8982,17 @@ fn resolve_with(
         + buff_in
         + grant_in
         + rapid_mark_in;
+    // Rules 3.6 (G4-H7): a charge on a unit with no living model, host and joined heroes, is void - the table logs
+    // "the charge falls short" and moves nothing, so there is no move, no Dangerous test and no fight.
+    let charge_void = kind == CHARGE
+        && rule_on(seams.rules_epoch, EPOCH_73_V36)
+        && ci.is_some_and(|ti| combined_alive(state, ti, seams) <= 0);
+    let band_in = if charge_void { 0.0 } else { band_in };
+    if charge_void {
+        if let Some((_, shot)) = dice.as_mut() {
+            shot.log.push(format!("{}'s charge falls short: the target has no models left", statics[pi_s].name));
+        }
+    }
     if rapid_mark_in > 0.0 {
         if let (Some(ti), Some((_, shot))) = (ci, dice.as_mut()) {
             shot.log.push(format!("Rapid Charge Mark: +{rapid_mark_in:.0}\" charge reach against {}",
