@@ -763,6 +763,7 @@
 "test/v36/dat_16a_move_test.gd": 20.0,
 "test/v36/dat_16b_test.gd": 3.0,
 "test/v36/dat_17a_test.gd": 13.0,
+"test/v36/f1b_registry_rows_test.gd": 0.1,
 "test/v36/fab_a10_test.gd": 0.1,
 "test/v36/fab_a1_test.gd": 0.2,
 "test/v36/fab_a3_test.gd": 56.0,
