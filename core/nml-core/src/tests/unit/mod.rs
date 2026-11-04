@@ -1037,6 +1037,7 @@ mod v36_ravage_rating;
 mod v36_shoot;
 mod v36_shoot_rows;
 mod v36_ux;
+mod v36_g4_c1;
 mod v36_ux_18;
 mod v36_w1;
 mod v36_w1_4b_aura_live;
