@@ -1345,10 +1345,11 @@
         st.alive = vec![3, 3];
         st.attached = Rc::new(vec![vec![], vec![]]);
         st.attached_to = Rc::new(vec![None, None]);
-        st.positions[0] = vec![[0.0, 0.0, 0.0], [0.8, 0.0, 0.0], [1.2, 0.0, 0.0]];
+        // Base contact, three rows of 1" bases: from EPOCH_73_V36 a model strikes only inside its reach.
+        st.positions[0] = vec![[0.0, 0.0, 0.0], [0.0, 0.0, 2.0 * IN2M], [0.0, 0.0, 4.0 * IN2M]];
         st.wounds[0] = vec![1, 1, 1];
         Rc::make_mut(&mut st.radii)[0] = vec![IN2M, IN2M, IN2M];
-        st.positions[1] = vec![[2.0, 0.0, 0.0], [3.0, 0.0, 0.0], [4.0, 0.0, 0.0]];
+        st.positions[1] = vec![[2.0 * IN2M, 0.0, 0.0], [2.0 * IN2M, 0.0, 2.0 * IN2M], [2.0 * IN2M, 0.0, 4.0 * IN2M]];
         st.wounds[1] = vec![1, 1, 1];
         Rc::make_mut(&mut st.radii)[1] = vec![IN2M, IN2M, IN2M];
         (st, statics)

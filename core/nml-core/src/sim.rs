@@ -4713,6 +4713,9 @@ pub struct Scratch {
     /// 0 (the `Default`) is pre-epoch-6: every existing caller keeps its
     /// reading exactly as it replays today.
     pub rules_epoch: u32,
+    /// G4-C8a: the models that strike, set by `melee_parts` so `strike_phase` logs the count
+    /// without measuring twice. Read only off a `melee_parts` product.
+    pub strikers: i64,
 }
 
 /// `BattleSim._profiles_of(su, false, d)` battle_sim.gd:714-749 fused with the
@@ -5430,6 +5433,31 @@ fn expected_melee_morale(
 
 // --------------------------- D1-B5a: the melee sub-phases on the tray ---
 
+/// "Who Can Strike" at `EPOCH_73_V36`, the twin of `SoloController.striking_models_for`
+/// (solo_controller.gd:10484): the member's models whose base EDGE lies within the epoch's reach
+/// (3" across, 3" up) of ANY base edge of the target host or its joined heroes, measured through the
+/// recorded radii and base shapes. No enemy model on hand: every model strikes, like the table.
+fn striking_models_edge(state: &State, mi: usize, ti: usize, rules_epoch: u32) -> i64 {
+    let (reach_in, vertical_in) = crate::combat::melee_reach_in(rules_epoch);
+    let foes = || std::iter::once(ti).chain(state.attached[ti].iter().copied()).filter(|&e| state.alive[e] > 0);
+    if foes().next().is_none() {
+        return state.positions[mi].len() as i64;
+    }
+    let (sh, r_of) = (state.base_shape(mi), |u: usize, k: usize| state.radii[u].get(k).copied().unwrap_or(DEFAULT_BASE_RADIUS_M));
+    (0..state.positions[mi].len())
+        .filter(|&k| {
+            let p = state.positions[mi][k];
+            foes().any(|e| {
+                let eh = state.base_shape(e);
+                state.positions[e].iter().enumerate().any(|(j, &q)| {
+                    (p[1] - q[1]).abs() <= vertical_in * IN2M
+                        && geom::pair_gap_m(geom::to_f32(p), r_of(mi, k), sh, geom::to_f32(q), r_of(e, j), eh) / IN2M <= reach_in
+                })
+            })
+        })
+        .count() as i64
+}
+
 /// The MEMBERS of a melee strike phase in the table's build order
 /// (`_solo_attack_groups` main.gd:4284-4290): the unit, then each attached hero,
 /// each with its OWN melee set, Quality and fatigue flag. Melee has no range
@@ -5440,6 +5468,9 @@ fn expected_melee_morale(
 /// `melee_count = solo_controller.striking_models_for(member, enemy)`
 /// (main.gd:4314-4317): each member scales by ITS OWN models within 2" of `ti`
 /// instead of its whole `alive` count. Off (the default) is today's behaviour.
+///
+/// G4-C8a (`EPOCH_73_V36`): the count is `striking_models_edge` whatever the knob says, as the table's
+/// `striking_models_for` always runs in the live game; the knob keeps its centre measure below 73.
 fn melee_parts(statics: &[UnitStatic], state: &State, i: usize, ti: usize, seams: Seams) -> Vec<(usize, Scratch, Ctx)> {
     let mut parts: Vec<(usize, Scratch, Ctx)> = Vec::new();
     for &mi in std::iter::once(&i).chain(state.attached[i].iter()) {
@@ -5448,11 +5479,14 @@ fn melee_parts(statics: &[UnitStatic], state: &State, i: usize, ti: usize, seams
         }
         let um = &statics[state.roster.profile[mi]];
         let mut sc = Scratch::default();
-        let count = if seams.melee_reach {
+        let count = if rule_on(seams.rules_epoch, EPOCH_73_V36) {
+            striking_models_edge(state, mi, ti, seams.rules_epoch)
+        } else if seams.melee_reach {
             crate::combat::striking_models(&state.positions[mi], &state.positions[ti], seams.rules_epoch)
         } else {
             state.alive[mi]
         };
+        sc.strikers = count;
         melee_profiles_of(um, count, &mut sc);
         melee_bearers_rescale(um, state, mi, count, seams.rules_epoch, &mut sc);
         sc.keep = (0..um.melee.len()).collect();
@@ -5604,6 +5638,14 @@ fn strike_phase(
             if melee[k].printed_range > 0 {
                 shot.log.push(format!("Assault: {} also strikes in melee", melee[k].name));
             }
+        }
+    }
+    // G4-C8a rules-must-log: "Who Can Strike" names itself when fewer models strike than live (the table's
+    // MEL-02 line, main.gd `_solo_attack_groups`, which prints the same text without the rule name).
+    if rule_on(seams.rules_epoch, EPOCH_73_V36) {
+        for (mi, sc, _) in parts.iter().filter(|(mi, sc, _)| sc.strikers < next.alive[*mi]) {
+            shot.log.push(format!("Who Can Strike: {}: {} of {} models are within {}\" and strike", statics[next.roster.profile[*mi]].name,
+                sc.strikers, next.alive[*mi], crate::combat::melee_reach_in(seams.rules_epoch).0 as i64));
         }
     }
     // MEL-11 (`EPOCH_73_V36`) — Ravage once per round, never while Fatigued.
