@@ -18,6 +18,9 @@ Fantasy). Built in Godot.
 > decide. See [`PROJECT_STATUS.md`](PROJECT_STATUS.md) for the honest
 > done / in-progress / planned breakdown, and [`docs/ROADMAP.md`](docs/ROADMAP.md) for what's
 > planned next.
+>
+> **Rules version:** Grimdark Future and Age of Fantasy play OnePageRules **3.6**; Firefight, Skirmish and
+> Regiments still play 3.5.1. The game shows the rules version next to the game version.
 
 ## Features
 
@@ -32,7 +35,7 @@ What the code actually does today:
   Deployment is a click-guided rulebook flow (roll-off, alternating placement, scouts, ambush
   arrivals), and you shoot, fight and cast through the radial menu with real dice in the tray.
   Hundreds of special rules resolve automatically across all five systems — the coverage has been
-  measured for GrimDark Future and Age of Fantasy (446 of 452 rule names at every layer); Firefight,
+  measured for GrimDark Future and Age of Fantasy on the 3.5 books (446 of 452 rule names at every layer, 2026-09-13); Firefight,
   Skirmish and Regiments load the same registry but carry no measured figure yet. **Every applied
   rule writes its own battle-log line** — the remaining uncovered special rules are a small
   residue, and the battle log names any rule it applies (or asks for manual handling) per unit, so
