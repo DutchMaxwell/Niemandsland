@@ -75,7 +75,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
 import nml_core  # noqa: E402
 from shoot_replay_gate import (  # noqa: E402
     burn_prefix, combat_kind, cut_pre_legs, defender_state, first_at_or_after, parted_field, read_game,
-    _stale, read_pre, resolve_vintage_flag, successes, vintage_report_line,
+    read_pre, resolve_vintage_flag, successes, vintage_report_line,
 )
 
 #: `BattleSim.CHARGE` — the only act kind that fights a melee.
@@ -242,12 +242,6 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
             # AI-G4 H1b: the table's cast/spell legs are cut, their dice burned, the state patched (see shoot_replay_gate).
             rolls_cut, pre_burn, plain = cut_pre_legs([r for r in dice[i0:] if int(r["act"]) == k],
                                                       act["state"], pres.get(k))
-            units, tgt = plain.get("units", {}), str(action["charge"])
-            if not rolls_cut and tgt in units and _stale(units, tgt):
-                # G4-H7: the cast leg destroyed the charge target (host and joined heroes) - the table's charge "falls
-                # short" and draws nothing, and the core is not asked to strike a unit with no models.
-                tally["both_silent"] += 1
-                continue
             tray = nml_core.Tray(seed + 1 if mode == "misseed" else seed)
             if burn[i0] + pre_burn:
                 tray.roll(burn[i0] + pre_burn)
