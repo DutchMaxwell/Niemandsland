@@ -1328,6 +1328,11 @@
    "rated": false,
    "book_version": "3.5.1"
   },
+  "Unique Hero": {
+   "primitive": "Hero",
+   "rated": false,
+   "book_version": "3.6.0"
+  },
   "Unpredictable Fighter": {
    "primitive": "Unpredictable Fighter",
    "rated": false,
@@ -6250,6 +6255,15 @@
      "hit_per_two": 1
     }
    },
+   "Spawn": {
+    "primitive": "Spawn",
+    "rated": true,
+    "book_version": "3.6.0",
+    "params": {
+     "place_in": 6,
+     "once_per_game": true
+    }
+   },
    "Surge": {
     "primitive": "Surge",
     "rated": false,
@@ -7354,6 +7368,15 @@
      "cover_only": true,
      "ap_bonus": 1,
      "condition": "near_terrain"
+    }
+   },
+   "Grounded Evasion": {
+    "primitive": "Stealth",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "hit_penalty": 1,
+     "terrain_within_in": 1
     }
    },
    "Grounded Stealth": {
@@ -10296,6 +10319,14 @@
      "morale_bonus": 1
     }
    },
+   "Enhanced Watchborn Aura": {
+    "primitive": "Aura Channel",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants": "Enhanced Watchborn"
+    }
+   },
    "Evasive": {
     "primitive": "Evasive",
     "rated": false,
@@ -10493,6 +10524,14 @@
     "book_version": "3.5.3",
     "params": {
      "morale_bonus": 1
+    }
+   },
+   "Enhanced Watchborn Aura": {
+    "primitive": "Aura Channel",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants": "Enhanced Watchborn"
     }
    },
    "Evasive": {
