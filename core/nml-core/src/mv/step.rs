@@ -1646,7 +1646,7 @@ pub(crate) mod tests {
         let mut shot = crate::dice::ShootResult::default();
         let seams = crate::io::Seams::default();
         let call = |statics: &[UnitStatic], l: &Landing, shot: &mut crate::dice::ShootResult| {
-            dangerous_dice(statics, &st, &st, 0, seams, Some(l), crate::sim::Cover::Board(&t), shot)
+            dangerous_dice(statics, &st, &st, 0, seams, Some(l), crate::sim::Cover::Board(&t), shot, false)
         };
         // Tough(1) x 3, all three routes crossing: three dice.
         assert_eq!(call(&tough1, &land(vec![true, true, true]), &mut shot), 3);
