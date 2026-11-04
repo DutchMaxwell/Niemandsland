@@ -100,10 +100,15 @@ mod g4r4_cons {
     }
 
     /// Neither side is destroyed (a one-attack charger against a Tough 20 target): the charger, one model,
-    /// stands in contact at x = 10.2" after the charge (the bar ends at 9", a base there is clear) and
-    /// backs 1" west to 9.2" - onto the bar's edge.
-    fn separation_onto_the_bar() -> (State, Vec<UnitStatic>) {
-        scene(&[20.0], 20, 1, 8.2, 20, 2)
+    /// walks over the bar (its own charge-move test) and stands in contact at x = 6", then backs 1" west
+    /// (away from the target) to 5" - still on the bar, so the back-step has a test of its own.
+    fn separation_on_the_bar() -> (State, Vec<UnitStatic>) {
+        scene(&[-4.0], 20, 1, 8.0, 20, 2)
+    }
+
+    /// The same standoff far from the bar: the back-step happens, there is nothing to test.
+    fn separation_on_clear_ground() -> (State, Vec<UnitStatic>) {
+        scene(&[-30.0], 20, 1, -26.0, 20, 2)
     }
 
     #[test]
@@ -128,27 +133,30 @@ mod g4r4_cons {
 
     #[test]
     fn the_charger_backs_off_one_inch_when_neither_side_is_destroyed_at_73() {
-        let (st, statics) = separation_onto_the_bar();
+        let (st, statics) = separation_on_clear_ground();
         let (at72, _, _) = charge(&st, &statics, EPOCH_72_PLAYTEST_RULES);
-        let (at73, _, log) = charge(&st, &statics, EPOCH_73_V36);
+        let (at73, rolls, log) = charge(&st, &statics, EPOCH_73_V36);
         assert!(at73.alive[0] > 0 && at73.alive[1] > 0, "neither side may be destroyed: {:?}", at73.alive);
         let back = at72.positions[0][0][0] - at73.positions[0][0][0];
         assert!((back - IN2M).abs() < 0.05 * IN2M, "1\" away from the target (east of it), got {} in", back / IN2M);
         assert!(log.iter().any(|l| l.starts_with("Consolidation: p1_0_a moves back 1\"")), "{log:?}");
+        assert!(!rolls.iter().any(is_dangerous_roll), "clear ground, no test: {rolls:?}");
     }
 
     #[test]
     fn the_back_step_onto_dangerous_ground_rolls_the_test_at_73() {
-        let (st, statics) = separation_onto_the_bar();
+        let (st, statics) = separation_on_the_bar();
+        let dice = |epoch: u32| charge(&st, &statics, epoch).1.iter().filter(|r| is_dangerous_roll(r)).map(|r| r.count).collect::<Vec<_>>();
+        assert_eq!(dice(EPOCH_72_PLAYTEST_RULES), vec![20], "below 73 only the charge move's own test (Tough 20) rolls");
         let (_, rolls, _) = charge(&st, &statics, EPOCH_73_V36);
-        let dang: Vec<usize> = (0..rolls.len()).filter(|&i| is_dangerous_roll(&rolls[i])).collect();
-        assert_eq!(dang, vec![rolls.len() - 1], "ONE test, the last die: {rolls:?}");
-        assert_eq!((rolls[rolls.len() - 1].count, rolls[rolls.len() - 1].owner.as_str()), (1, "p1_0_a"));
+        assert_eq!(dice(EPOCH_73_V36), vec![20, 1], "the move's test, then the back-step's: one die for the one model");
+        let last = &rolls[rolls.len() - 1];
+        assert!(is_dangerous_roll(last) && last.owner == "p1_0_a", "the back-step's test is the last die of the activation: {rolls:?}");
     }
 
     #[test]
-    fn below_73_nobody_consolidates_and_no_trailing_test_rolls() {
-        for (st, statics) in [winner_on_the_bar(), separation_onto_the_bar()] {
+    fn below_73_nobody_consolidates() {
+        for (st, statics) in [winner_on_the_bar(), separation_on_clear_ground()] {
             let (_, rolls, log) = charge(&st, &statics, EPOCH_72_PLAYTEST_RULES);
             assert!(!rolls.iter().any(is_dangerous_roll), "{rolls:?}");
             assert!(!log.iter().any(|l| l.starts_with("Consolidation")), "{log:?}");

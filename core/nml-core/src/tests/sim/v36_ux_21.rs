@@ -50,7 +50,7 @@ fn standing_dice(st: &State, statics: &[UnitStatic], epoch: u32) -> (i64, crate:
     let t = dangerous_bar_board();
     let seams = Seams { rules_epoch: epoch, hero_attach: true, ..Seams::default() };
     let mut shot = crate::dice::ShootResult::default();
-    let n = dangerous_dice(statics, st, st, 0, seams, None, Cover::Board(&t), &mut shot);
+    let n = dangerous_dice(statics, st, st, 0, seams, None, Cover::Board(&t), &mut shot, false);
     (n, shot)
 }
 
