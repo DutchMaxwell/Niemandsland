@@ -254,7 +254,10 @@ fn fatigued_sixes_line(owner: &str, n: i64) -> String {
 /// dice, and that share's fraction of the plain hits
 /// `min(normal, round(normal * share / attacks))`. `att.models` is the live
 /// alive count (`ctx_of` writes `state.alive`), the Ctx twin of the table's
-/// `GameUnit.get_alive_count()`. 0 without the rules 3.6 stamp.
+/// `GameUnit.get_alive_count()`. 0 without the rules 3.6 stamp. `attacks` is
+/// the pool the share is a fraction of: the weapon's full attack total on the
+/// volley leg (the table stamps before the sighted scaling), the strike's own
+/// scaled count on the melee leg (the table stamps its melee profile after it).
 fn sergeant_hits(p: &ShootProfile, attacks: i64, normal: i64, att: &Ctx) -> i64 {
     if p.sergeant_ap <= 0 || attacks <= 0 || normal <= 0 {
         return 0;
@@ -1524,7 +1527,10 @@ pub fn resolve_volley_leg(
         }
         // Rules 3.6 row MOR-12c: the bearer's share of the plain hits saves as
         // its own batch at AP(+sergeant_ap), the table's band (`main.gd:8372-8387`).
-        let sgt_hits = sergeant_hits(p, n, normal, att);
+        // G4R4 C-SERGEANT-SCALE: the table stamps the share on the FULL-strength profile, before the sighted
+        // scaling, so the share is a fraction of the weapon's whole attack pool (`p.attacks`), not of the
+        // sighted dice `n` (the stamp exists only from `EPOCH_73_V36`, so below it nothing changes).
+        let sgt_hits = sergeant_hits(p, p.attacks.max(n), normal, att);
         let mut w = save_batch(p, def, def_owner, ap4, save_def, ap + on6, att.shred_grant, shred_alias_fires, shred_low, deadly_per_model, tray, &mut out);
         if sgt_hits > 0 {
             out.log.push(format!(
