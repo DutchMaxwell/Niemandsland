@@ -1390,7 +1390,7 @@ func best_shoot_target_now(ai_unit: GameUnit, held: bool = true) -> GameUnit:
 	if army_manager == null:
 		return null
 	var weapons := _unit_weapons(ai_unit)
-	var base_range: int = AiArchetype.max_range_inches(weapons) + shooting_range_bonus(ai_unit)
+	var base_range: int = _gate_reach_in(ai_unit)
 	if base_range <= 0:
 		return null
 	var indirect: bool = has_indirect_ranged(weapons) and indirect_ignores_los(ai_unit, held)
@@ -2004,7 +2004,7 @@ func _act(unit: GameUnit) -> Dictionary:
 	var centre := unit_centre(unit)
 	var tcentre := unit_centre(target_unit)
 	var enemy_dist := MoveIntent.distance_inches(centre, tcentre)
-	var shoot_range := AiArchetype.max_range_inches(weapons) + shooting_range_bonus(unit)   # +Royal Legion (wave 4)
+	var shoot_range := _gate_reach_in(unit)   # +Royal Legion (wave 4); the living chain's longest gun from 73
 	# Targeting an Aircraft costs -12" of range (GF v3.5.1, system-scoped) and Ranged Shrouding another
 	# -6" floored at 6" — every range gate below measures against THIS target, so both fold into the
 	# working range once, here.
@@ -2091,7 +2091,7 @@ func _act(unit: GameUnit) -> Dictionary:
 			charge_reach += vr_charge_in
 		elif shoot_range > 0:
 			shoot_range = int(effective_shoot_reach_in(
-				float(AiArchetype.max_range_inches(weapons) + shooting_range_bonus(unit)) + vr_range_in, target_unit))
+				float(_gate_reach_in(unit)) + vr_range_in, target_unit))
 			if not vr_unlocks:
 				record_decision({"kind": "target", "unit": unit.get_name(),
 					"rule": "Versatile Reach: pick one — +4\" range when shooting chosen (no charge is unlocked by the +2\")",
@@ -2332,6 +2332,7 @@ func _act(unit: GameUnit) -> Dictionary:
 	# tree's section draw, because that is all the imitation corpus ever taught.
 	# No policy loaded => {} => byte-identical tree.
 	var planner_used := false
+	var planned_verb := -1   # F-HOLD-ADV: the verb the adopted plan picked (-1: no plan)
 	var pl := {}
 	var _ph_plan := 0
 	if act_wall_enabled():
@@ -2345,6 +2346,7 @@ func _act(unit: GameUnit) -> Dictionary:
 	if bool(pl.get("used", false)):
 		planner_used = true
 		action = int(pl["action"])
+		planned_verb = action
 		do_shoot = bool(pl["shoot"])
 		dec["toward"] = int(pl["toward"])
 		action_why = str(pl["why"])
@@ -2587,6 +2589,8 @@ func _act(unit: GameUnit) -> Dictionary:
 	var band_in: float = (rush if action == AiDecision.Action.RUSH
 		else (advance if action == AiDecision.Action.ADVANCE else 0.0))
 	var charge_band_in := melee_shroud_charge_in(charge_reach, target_unit)
+	if planned_verb >= 0 and action != planned_verb:
+		AiActRecorder.executed_verb(_move_act_seq, action, planned_verb)   # F-HOLD-ADV (D7): the verb that RAN
 	var intent := ActIntent.make(unit, action, target_unit, goal, band_in, do_shoot, {
 		"charge_band_in": charge_band_in, "shoot_range_in": shoot_range, "quick_shot": quick_shot,
 		"enemy_dist_in": enemy_dist, "to_objective": to_obj, "to_flank": to_flank,
@@ -2709,6 +2713,7 @@ func execute_intent(intent: Dictionary, report: Dictionary) -> Dictionary:
 			or grants_indirect_to_attackers(target))   # wave 6 — the Indirect Mark's once-grant
 	if bool(report["can_shoot"]) and target != null:
 		_note_nearest_model_reach(report, unit, target, shoot_range_in)
+		_note_chain_reach(report, unit, target)
 	if bool(report["can_shoot"]) and quick_shot and action == AiDecision.Action.RUSH:
 		_rule_note(report, "Quick Shot: shoots after its Rush action", true)   # explains otherwise-impossible shots — travels
 	# POST-MOVE RETARGET (Bug 27/28): a HOLD/ADVANCE always MAY shoot (OPR) — so if the decided target is
@@ -2727,6 +2732,7 @@ func execute_intent(intent: Dictionary, report: Dictionary) -> Dictionary:
 		if retgt != null:
 			report["can_shoot"] = true
 			_note_nearest_model_reach(report, unit, retgt, effective_shoot_reach_in(float(shoot_range_in), retgt))
+			_note_chain_reach(report, unit, retgt)
 			record_decision({"kind": "target", "unit": unit.get_name(),
 				"rule": "Post-move retarget: an Advance/Hold may always shoot — the decided target is out of range/LOS, so fire on the best reachable enemy instead (Bug 27/28)",
 				"candidates": [], "chosen": retgt.get_name(), "why": "post-move retarget to a reachable enemy",
@@ -2816,9 +2822,7 @@ func player_intent(unit: GameUnit, verb: int, target: GameUnit, point: Variant =
 		var rushes := verb == AiDecision.Action.RUSH
 		return ActIntent.make(unit, verb, null, point, rush if rushes else advance, false, {"to_objective": true,
 			"source": "player", "why": "player intent: rushes to a point" if rushes else "player intent: advances to a point"})
-	var weapons := _unit_weapons(unit)
-	var shoot_range_in := effective_shoot_reach_in(
-		AiArchetype.max_range_inches(weapons) + float(shooting_range_bonus(unit)), target)
+	var shoot_range_in := effective_shoot_reach_in(float(_gate_reach_in(unit)), target)
 	var enemy_dist_in := MoveIntent.distance_inches(unit_centre(unit), unit_centre(target))
 	var quick_shot: bool = (unit.has_special_rule("Quick Shot") and RulesRegistry.unit_rule_active(unit, "Quick Shot")) \
 		or AiSpell.granted_rules_of(unit, target).has("Quick Shot")
@@ -2956,8 +2960,7 @@ func _act_regroup(unit: GameUnit, report: Dictionary) -> Dictionary:
 		"candidates": [], "chosen": "regroup", "why": "torn at activation start (casualties)",
 		"data": {"models": models.size(), "now_coherent": _config_coherent_world(models, gathered, chain_in)}})
 	# Post-move shooting: an Advance may fire — open the gate against whatever is now reachable.
-	var weapons := _unit_weapons(unit)
-	var shoot_range := AiArchetype.max_range_inches(weapons) + shooting_range_bonus(unit)
+	var shoot_range := _gate_reach_in(unit)
 	if shoot_range > 0:
 		var retgt := best_shoot_target_now(unit, false)   # a regroup move never Holds
 		if retgt != null:
@@ -3314,6 +3317,26 @@ func _living_chain_weapons(unit: GameUnit) -> Array:
 				continue
 			out.append(ow)
 	return out
+
+
+## G4R2 F-T-SLACK (EPOCH_73_V36): the reach the shooting gates read — the longest gun of the LIVING chain (host
+## plus joined heroes), the list the volley itself fires (main._solo_all_weapons). Below 73 the host's own list.
+func _gate_reach_in(unit: GameUnit) -> int:
+	var weapons: Array = _unit_weapons(unit) if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 \
+		else _living_chain_weapons(unit)
+	return AiArchetype.max_range_inches(weapons) + shooting_range_bonus(unit)
+
+
+## Rules-must-log (Hero): when ONLY a joined hero's gun puts `target` in reach — the unit's own guns stop short of
+## the nearest-model gap — the battle log names the book rule. Silent below EPOCH_73_V36.
+func _note_chain_reach(report: Dictionary, unit: GameUnit, target: GameUnit) -> void:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 or target == null:
+		return
+	var own_in := int(effective_shoot_reach_in(float(AiArchetype.max_range_inches(_unit_weapons(unit)) + shooting_range_bonus(unit)), target))
+	var gap_in := shoot_reach_gap_in(unit, target, MoveIntent.distance_inches(unit_centre(unit), unit_centre(target)))
+	if gap_in > float(own_in):
+		_rule_note(report, "%s: Hero — the joined hero's gun reaches %s (%.1f\" away, the unit's own guns reach %d\")" % [
+			unit.get_name(), target.get_name(), gap_in, own_in], true)
 
 
 ## The persistent close-and-fight standing order: keep the SAME enemy the unit was closing on (Killzone

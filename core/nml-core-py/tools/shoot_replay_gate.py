@@ -293,6 +293,19 @@ def read_pre(d: Path) -> dict[int, dict]:
     return out
 
 
+def read_verbs(d: Path) -> dict[int, int]:
+    """{activation ordinal: executed verb} from the `kind:"verb"` lines of acts.jsonl (F-HOLD-ADV, epoch 73+): the table's
+    own gates turned the planner's pick into this verb (a planned Hold walked into range as an Advance), so the replay
+    plays it. A recording from before the row has no such line and replays the pick."""
+    out: dict[int, int] = {}
+    for x in (d / "acts.jsonl").read_text().splitlines():
+        if '"verb"' in x:
+            r = json.loads(x)
+            if r.get("kind") == "verb":
+                out[int(r["act"])] = int(r["verb"])
+    return out
+
+
 #: `TerrainRules.gives_cover`: ruins and forest. `BASE_RIM_SAMPLES` of terrain_rules.gd.
 COVER_TYPES, RIM_SAMPLES = (1, 2), 8
 
@@ -498,7 +511,7 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
               "next_equal", "equal_over_2", "equal_dice_max", "split_fire",
               "full_equal_owner", "clean_acts", "clean_full_equal", "clean_both_silent",
               "split_injected", "split_reaim", "split_multi", "split_aligned",
-              "split_uncovered", "split_stale", "split_ambig", "split_full_equal", "pre_cut", "pre_uncut")}
+              "split_uncovered", "split_stale", "split_ambig", "split_full_equal", "pre_cut", "pre_uncut", "verbs")}
     unported: dict[str, int] = {}
     reasons: dict[str, int] = {}
     # D6a-B5: the SAME classifier over the acts the table did NOT split-fire on.
@@ -518,6 +531,7 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
         burn = burn_prefix(dice)
         shots = shots_of(d)
         pres = read_pre(d)
+        verbs = read_verbs(d)
         core = nml_core.load(repo)
         if hero_attach == "off":
             head = detach_header(head)
@@ -560,6 +574,11 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
             action = (act.get("pick") or {}).get("action") or {}
             if int(action.get("kind", -1)) not in SHOOTING_KINDS or not action.get("shoot"):
                 continue
+            if k in verbs:   # F-HOLD-ADV: the verb the table ran, not the one it planned
+                if verbs[k] not in SHOOTING_KINDS:
+                    continue   # it ran a move that cannot shoot: there is no volley to replay
+                action = dict(action, kind=verbs[k])
+                tally["verbs"] += 1
             tally["acts"] += 1
             # NML-1150: SPLIT FIRE's aim — where the table really pointed each
             # weapon (shots.jsonl). Injected into the action as `split`; the
@@ -786,6 +805,7 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
         ", ".join("%s=%d" % kv for kv in sorted(reasons.items())) or "none"))
     print("  pre   : %d acts with the table's cast/spell leg cut%s; %d left uncut (a roll in front of the leg)"
           % (tally["pre_cut"], " [RED: %s]" % red_pre if red_pre else "", tally["pre_uncut"]))
+    print("  verbs : %d acts replayed with the verb the table executed (F-HOLD-ADV)" % tally["verbs"])
     print("  split-fire: %d/%d acts where the table saved dice under a unit that is NOT "
           "the recorded shoot target" % (tally["split_fire"], tally["acts"]))
     # The same two numbers over the acts split fire did NOT touch — the only

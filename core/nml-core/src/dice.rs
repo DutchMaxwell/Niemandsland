@@ -2512,6 +2512,15 @@ pub fn resolve_melee_leg(
     for (owner, hit) in &gp_fired {
         out.log.push(format!("Grounded Precision: {owner} — {hit:+} to hit (in terrain)"));
     }
+    // Rules 3.6 (`EPOCH_73_V36`) — the Precision Fighter / Precision Charge BASES name themselves per member.
+    for sh in strikers {
+        if sh.att.precision_fighter_base {
+            out.log.push(format!("Precision Fighter: {} — +1 to hit (melee)", sh.owner));
+        }
+        if sh.att.precision_charge_base && charging {
+            out.log.push(format!("Precision Charge: {} — +1 to hit (charging)", sh.owner));
+        }
+    }
     // Wave 4 — the Boost's rules-must-log line, once per melee resolve.
     if evasive_boost_fired {
         out.log.push(format!(
