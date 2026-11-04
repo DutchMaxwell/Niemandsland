@@ -760,6 +760,14 @@ fn combined_alive(state: &State, i: usize, seams: Seams) -> i64 {
         }
 }
 
+/// Rules 3.6 (`EPOCH_73_V36`) — Blast(X) caps by the table's `_solo_combined_alive(target)`: the host's living
+/// models PLUS every living joined hero. Stamped beside `models`, which stays the host's own count.
+fn stamp_blast_models(def: &mut Ctx, state: &State, ti: usize, seams: Seams) {
+    if rule_on(seams.rules_epoch, EPOCH_73_V36) {
+        def.blast_models = Some(combined_alive(state, ti, seams));
+    }
+}
+
 /// BLOCK B3 — the breath-weapon primitive on the tray path's pre-attack slot,
 /// right after Mend: `_solo_apply_breath_attack` main.gd:5262-5330. Official
 /// text: "Once per activation, before attacking, pick one enemy unit within
@@ -1259,6 +1267,7 @@ pub(crate) fn tray_strafing(
     let d = modifier_distance_in(next, si, target, seams);
     let ut = &statics[next.roster.profile[target]];
     let mut def = with_modifier_sum(with_cond_ap_state(ctx_live(ctx_of(ut, next, target), statics, next, target, false, seams.rules_epoch), statics, next, target, seams), seams.rules_epoch);
+    stamp_blast_models(&mut def, next, target, seams);
     // D-STEALTH — the strafe volley reads the defender's live context the
     // same way the table's `_solo_resolve_ai_volley` does (main.gd:3007), so
     // the def build carries the same terrain gate.
@@ -5679,6 +5688,7 @@ fn strike_phase(
     if rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) {
         def.parry_dice_total = Some(parry_dice_total(statics, next, ti));
     }
+    stamp_blast_models(&mut def, next, ti, seams);
     // D-STEALTH — the def build's terrain gate (the melee leg consumes the
     // same closed alias the shooting fold does).
     stealth_alias_terrain_gate(statics, next, ti, cover, &mut def);
@@ -9625,6 +9635,7 @@ fn resolve_with(
                             let precision_hit = precision_markers_spend(&mut next, g.ti, seams.rules_epoch, &mut shot.log);
                             let ut_g = &statics[next.roster.profile[g.ti]];
                             let mut def = with_modifier_sum(with_cond_ap_state(ctx_live(ctx_of(ut_g, &next, g.ti), statics, &next, g.ti, false, seams.rules_epoch), statics, &next, g.ti, seams), seams.rules_epoch);
+                            stamp_blast_models(&mut def, &next, g.ti, seams);
                             // D-STEALTH — the def build's terrain gate: the alias
                             // applies only while the TARGET stands within 1" of
                             // terrain (per model, the majority fold).
