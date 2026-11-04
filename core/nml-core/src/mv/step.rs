@@ -2145,4 +2145,69 @@ pub(crate) mod tests {
         memo_probe(&state, &t, 0, dest, band, true, true, 0, 0, &ran);
         assert_eq!(ran.get(), 2);
     }
+
+    /// G4-C7b (rules 3.6, the Regroup rule): the table's regroup hands `_finalize_placement` the UNMOVED positions, so
+    /// a torn unit is gathered although its centre goes nowhere. One unit, three models in a row at 2.5" steps then
+    /// 5": the last stands 3" past its neighbour's edge, past the 1" link.
+    fn torn_row() -> (State, Terrain) {
+        let (r, s) = (IN2M, IN2M as f32);
+        let pos = vec![vec![[0.0, 0.0, 0.0], [2.5 * s, 0.0, 0.0], [7.5 * s, 0.0, 0.0]]];
+        (units_state(pos, vec![vec![r, r, r]], vec![vec![]]), board(vec![]))
+    }
+
+    /// Largest edge gap between consecutive models of the row, in inches (the chain's weakest link).
+    fn widest_link_in(end: &[V3]) -> f64 {
+        end.windows(2).map(|w| geom::length(geom::sub(w[1], w[0])) as f64 / IN2M - 2.0).fold(f64::MIN, f64::max)
+    }
+
+    fn stay_put(rules_epoch: u32, state: &State, t: &Terrain) -> Landing {
+        let here = geom::centre(&state.positions[0]);
+        MoveRules { rules_epoch }
+            .plain_move(state, t, 0, here, 6.0, true, true, crate::mv::FAST_PLANNER_GUARD)
+            .expect("the board is real and the unit has models")
+    }
+
+    #[test]
+    fn red_a_torn_unit_that_stays_put_is_gathered_from_rules_3_6() {
+        let (state, t) = torn_row();
+        let land = stay_put(EPOCH_73_V36, &state, &t);
+        let link = widest_link_in(&land.end);
+        assert!(link <= 1.0 + 1e-3, "the gather must close the 3\" gap to the 1\" link, widest link {link}\"");
+        // Only the straggler walks: the two coherent models stay where they stand.
+        for i in 0..2 {
+            let off = geom::length(geom::sub(land.end[i], pos_of(&state, Mover { unit: 0, model: i }))) as f64 / IN2M;
+            assert!(off < 0.05, "model {i} moved {off}\"");
+        }
+    }
+
+    /// A gap of 1.5" is a half-inch pull: short enough that the boxed escape's own guard (a move under 1") would fire.
+    /// The table's regroup never enters `_execute_move`, so it spends no sidestep attempt.
+    #[test]
+    fn red_the_gather_spends_no_sidestep_attempt() {
+        let (r, s) = (IN2M, IN2M as f32);
+        let pos = vec![vec![[0.0, 0.0, 0.0], [2.5 * s, 0.0, 0.0], [6.0 * s, 0.0, 0.0]]];
+        let (state, t) = (units_state(pos, vec![vec![r, r, r]], vec![vec![]]), board(vec![]));
+        let land = stay_put(EPOCH_73_V36, &state, &t);
+        assert!(widest_link_in(&land.end) <= 1.0 + 1e-3, "the half-inch gap is closed");
+        assert!(!land.sidestep_spent, "a regroup spends no sidestep attempt");
+    }
+
+    #[test]
+    fn below_rules_3_6_a_torn_unit_that_stays_put_stays_torn() {
+        let (state, t) = torn_row();
+        let land = stay_put(EPOCH_73_V36 - 1, &state, &t);
+        assert!(widest_link_in(&land.end) > 2.9, "epoch 72 is byte-identical: the early return before the gate stands");
+    }
+
+    #[test]
+    fn a_coherent_unit_that_stays_put_is_not_rearranged_for_free() {
+        let (r, s) = (IN2M, IN2M as f32);
+        let pos = vec![vec![[0.0, 0.0, 0.0], [2.5 * s, 0.0, 0.0], [5.0 * s, 0.0, 0.0]]];
+        let (state, t) = (units_state(pos, vec![vec![r, r, r]], vec![vec![]]), board(vec![]));
+        let land = stay_put(EPOCH_73_V36, &state, &t);
+        for i in 0..3 {
+            let off = geom::length(geom::sub(land.end[i], pos_of(&state, Mover { unit: 0, model: i }))) as f64 / IN2M;
+            assert!(off < 1e-6, "model {i} moved {off}\" although the unit was coherent");
+        }
+    }
 }
