@@ -4961,9 +4961,9 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		elif is_deadly and w > 0:
 			# Deadly (GF v3.5.1 p.14): each unsaved wound ×X on one model, no carry-over.
 			if _solo_ignores_regen(member, profile, target):
-				landed_extra += await _solo_land_deadly_wounds(target, str(profile.get("name", "?")), int(profile.get("deadly", 0)), 0, w)
+				landed_extra += await _solo_land_deadly_wounds(target, str(profile.get("name", "?")), int(profile.get("deadly", 0)), 0, w, false, dist_in)
 			else:
-				landed_extra += await _solo_land_deadly_wounds(target, str(profile.get("name", "?")), int(profile.get("deadly", 0)), w, 0)
+				landed_extra += await _solo_land_deadly_wounds(target, str(profile.get("name", "?")), int(profile.get("deadly", 0)), w, 0, false, dist_in)
 		elif _solo_ignores_regen(member, profile, target):
 			regen_proof += w
 		else:
@@ -9663,7 +9663,7 @@ func _solo_bane_facet_name(striker: GameUnit, profile_range: int) -> String:
 ## {} for every other wound in the game, which leaves the lookup exactly as it was.
 ## `bypassed`: wounds of the same hit that ignore Regeneration — logged when the unit had a roll to skip.
 func _solo_apply_regeneration(target: GameUnit, wounds: int, from_spell: bool = false, solo: Dictionary = {},
-		bypassed: int = 0, shot_in: float = -1.0, charged_in: float = -1.0) -> int:
+		bypassed: int = 0, shot_in: float = -1.0, charged_in: float = -1.0, log_gate: bool = true) -> int:
 	# PURELY SYNCHRONOUS window: _solo_regen_pick only reads rules, and the flag is down again before the
 	# tray below awaits (a leaked flag would rewrite the next unrelated unit's ignore roll).
 	_solo_takedown_solo = solo
@@ -9671,7 +9671,7 @@ func _solo_apply_regeneration(target: GameUnit, wounds: int, from_spell: bool = 
 	_solo_takedown_solo = {}
 	# Rules-must-log (MOR-17a): the distance gate's verdict, once per resolution that rolled.
 	var gate_msg := str(pick.get("gate", ""))
-	if not gate_msg.is_empty() and wounds > 0 and battle_log != null:
+	if not gate_msg.is_empty() and wounds > 0 and battle_log != null and log_gate:
 		battle_log.log_event(BattleLog.Category.COMBAT, gate_msg, true)
 	var regen_target: int = int(pick.get("target", 0))
 	# Rules-must-log: the regen trace names the verdict (the Grounded
@@ -9847,7 +9847,7 @@ func _solo_land_wounds(target: GameUnit, regenable: int, regen_proof: int, from_
 ## `from_spell`: a damage spell's Deadly wounds (Resistance and its kin roll at their spell threshold).
 ## Returns the wounds actually dealt (the melee comparison + summary).
 func _solo_land_deadly_wounds(target: GameUnit, weapon_name: String, deadly_x: int,
-		regenable_unsaved: int, regen_proof_unsaved: int, from_spell: bool = false) -> int:
+		regenable_unsaved: int, regen_proof_unsaved: int, from_spell: bool = false, shot_in: float = -1.0) -> int:
 	var proof: int = maxi(regen_proof_unsaved, 0)
 	var surviving: int = proof + maxi(regenable_unsaved, 0)   # unsaved Deadly wounds, before ×X
 	if surviving <= 0:
@@ -9872,6 +9872,10 @@ func _solo_land_deadly_wounds(target: GameUnit, weapon_name: String, deadly_x: i
 	var take := func(_pu: GameUnit, mi: ModelInstance) -> void:
 		acc["victim"] = mi
 	var auto_rest := false   # a right-click / the strip button = "auto-allocate the rest" of this volley
+	# C-WARDING-DEADLY (EPOCH_73_V36, lead ruling D3): the shot's distance reaches the Regeneration family, so the
+	# Warding / Knightborn 6+ gate shuts on Deadly wounds from within 9" too; its verdict is logged once.
+	var gate_in: float = shot_in if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else -1.0
+	var gate_logged := false
 	for w_i in range(surviving):
 		var pick: Dictionary = SoloController.deadly_pick(target)
 		if pick.is_empty():
@@ -9888,9 +9892,10 @@ func _solo_land_deadly_wounds(target: GameUnit, weapon_name: String, deadly_x: i
 			victim = (pick["unit"] as GameUnit).models[int(pick["index"])]
 		var mult: int = maxi(1, deadly_x)   # apply_deadly_hit caps what survives at the model
 		if w_i >= proof:
-			mult = await _solo_apply_regeneration(target, mult, from_spell)   # one logged die per multiplied wound
+			mult = await _solo_apply_regeneration(target, mult, from_spell, {}, 0, gate_in, -1.0, not gate_logged)   # one logged die per multiplied wound
+			gate_logged = true
 		else:
-			await _solo_apply_regeneration(target, 0, from_spell, {}, mult)   # A1: the skipped roll is logged
+			await _solo_apply_regeneration(target, 0, from_spell, {}, mult, gate_in)   # A1: the skipped roll is logged
 		if mult > 0:
 			acc["dealt"] += SoloController.apply_deadly_hit(victim, mult, on_changed, on_died)
 	var dealt: int = int(acc["dealt"])
@@ -14967,9 +14972,9 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 					await _solo_land_takedown_wounds(target, str(profile.get("name", "?")), td_pick, td_w, 0)
 			elif is_deadly and w > 0:
 				if _solo_ignores_regen(group.get("member"), profile, target):
-					await _solo_land_deadly_wounds(target, str(profile.get("name", "?")), int(profile.get("deadly", 0)), 0, w)
+					await _solo_land_deadly_wounds(target, str(profile.get("name", "?")), int(profile.get("deadly", 0)), 0, w, false, dist)
 				else:
-					await _solo_land_deadly_wounds(target, str(profile.get("name", "?")), int(profile.get("deadly", 0)), w, 0)
+					await _solo_land_deadly_wounds(target, str(profile.get("name", "?")), int(profile.get("deadly", 0)), w, 0, false, dist)
 			elif _solo_ignores_regen(group.get("member"), profile, target):
 				regen_proof += w
 			else:
