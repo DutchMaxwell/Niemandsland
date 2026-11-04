@@ -244,11 +244,38 @@ def lone_hero_names(plain: dict, profiles: dict) -> dict[str, str]:
     return out
 
 
-def signer_ok(roller: str, table_label: str, lone: dict[str, str]) -> bool:
+def signer_ok(roller: str, table_label: str, lone: dict[str, str], extra_host: str = "") -> bool:
     """The table's label for the port's roller: the roller's own name, or - for a LONE hero (`lone_hero_names`) - its
-    host's. Only ever a relaxation: a label that matched before still matches, so a lone hero that rolls under its own
-    name (its own attack, a strike) cannot turn into a new `owner` failure."""
-    return table_label in ("AI (%s)" % roller, "AI (%s)" % lone.get(roller, roller))
+    host's, or - for a rule-generated extra die (`extra_die_hosts`) - the host's. Only ever a relaxation: a label that
+    matched before still matches, so a lone hero that rolls under its own name (its own attack, a strike) cannot turn
+    into a new `owner` failure."""
+    return table_label in ("AI (%s)" % roller, "AI (%s)" % lone.get(roller, roller), "AI (%s)" % (extra_host or roller))
+
+
+#: The rules that add one attack die per unmodified 6 (dice.rs `surge_attack_hits`): the table signs that die with the
+#: HOST's label, the core with the rolling member's (R3-H3).
+SURGE_ATTACK_RULES = ("Bloodborn", "Clan Warrior", "Primal", "Predator", "Royal Warrior", "Crazed", "Psychotic")
+
+
+def extra_die_hosts(rolls: list[dict], plain: dict, profiles: dict) -> dict[int, str]:
+    """Roll index -> HOST name, for each rule-generated extra attack die the port drew (R3-H3): an attack roll right
+    behind another attack roll of the same roller and target, with as many dice as that roll had unmodified 6s (5s too
+    for the Boost form), rolled by an attached member whose own rules hold a surge-attack rule. Never an extra die's
+    successor (extras do not re-trigger). Only the label is relaxed; count, target and faces stay compared in full."""
+    units, out = plain.get("units") or {}, {}
+    for i in range(1, len(rolls)):
+        prev, cur = rolls[i - 1], rolls[i]
+        sixes, fives = prev["faces"].count(6), prev["faces"].count(5)
+        if (i - 1 in out or not sixes or cur["kind"] != "attack" or prev["kind"] != "attack" or cur["owner"] != prev["owner"]
+                or cur["target"] != prev["target"] or cur["count"] not in (sixes, sixes + fives)):
+            continue
+        for key, u in units.items():
+            p, host = profiles.get(key) or {}, profiles.get(u.get("attached_to") or "") or {}
+            rules = list(p.get("special_rules") or []) + [r for w in p.get("weapons") or [] for r in w.get("rules") or []]
+            if p.get("name") == cur["owner"] and host.get("name") and any(str(r).startswith(SURGE_ATTACK_RULES) for r in rules):
+                out[i] = str(host["name"])
+                break
+    return out
 
 
 def shots_of(d: Path) -> dict[int, list[dict]]:
@@ -740,12 +767,13 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
                 # hero fires its OWN shots" from a claim into a verdict: a host
                 # rolling the hero's dice matches on count, target and faces and
                 # can only part HERE.
-                owners_ok = all(signer_ok(g[4], w[4], lone) for g, w in zip(got, want))
+                hosts = extra_die_hosts(report["rolls"], plain, head["profiles"])
+                owners_ok = all(signer_ok(g[4], w[4], lone, hosts.get(i, "")) for i, (g, w) in enumerate(zip(got, want)))
                 if not owners_ok:
                     reasons["owner"] = reasons.get("owner", 0) + 1
                     if len(firsts) < max(3, verbose):
                         bad = next((i for i, (g, w) in enumerate(zip(got, want))
-                                    if not signer_ok(g[4], w[4], lone)), 0)
+                                    if not signer_ok(g[4], w[4], lone, hosts.get(i, ""))), 0)
                         firsts.append("%s act %d [owner] %s — roll %d: AI (%s) vs table %s"
                                       % (d.name, k, action["shoot"][-6:], bad + 1,
                                          got[bad][4], want[bad][4]))
