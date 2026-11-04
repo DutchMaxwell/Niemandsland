@@ -209,6 +209,83 @@ func test_the_pre_block_names_the_models_the_cast_leg_left_standing() -> void:
 	assert_array(want).override_failure_message("a prefix would not tell the models apart").is_not_equal([0, 1])
 
 
+## A five-model, two-wound unit of the caster's side: the shooter whose own dangerous-terrain test the gates cut.
+func _shooter() -> GameUnit:
+	var positions: Array = []
+	for i in range(5):
+		positions.append(Vector3(0.0, 0, 0.03 * i))
+	var u := Boot.make_unit(_main, 1, "Runners", positions)
+	var opr := OPRApiClient.OPRUnit.new()
+	var ws: Array[OPRApiClient.OPRWeapon] = []
+	opr.weapons = ws
+	u.source_type = "opr"
+	u.source_data = opr
+	for m in u.models:
+		(m as ModelInstance).wounds_max = 2
+		(m as ModelInstance).wounds_current = 2
+	_main.opr_army_manager.game_units[u.unit_id] = u
+	return u
+
+
+func _wounds_of(u: GameUnit) -> Array:
+	return u.get_alive_models().map(func(m: Variant) -> int: return (m as ModelInstance).wounds_current)
+
+
+func _wounds_total(u: GameUnit) -> int:
+	return _wounds_of(u).reduce(func(a: int, b: int) -> int: return a + b, 0)
+
+
+## AI-G4 row H-DANG-CUT (rules 3.6, EPOCH_73_V36): when a cast follows the dangerous-terrain test the gates cut BOTH
+## legs, so the shooter's own losses from that test must come from the pre block - and the snapshot behind the diff
+## was taken AFTER the test, so the shooter never showed up in it. The activation now takes the snapshot before the
+## test and hands it to the cast leg (`_solo_act_flags`); the unit's wounds ride along (a Tough model that survived at half Tough is the
+## morale trigger). Live path: the real dangerous resolver, then the real cast leg, over a real five-model unit.
+func test_the_pre_block_carries_the_shooters_own_dangerous_terrain_losses() -> void:
+	var runner := _shooter()
+	var foe := _foe()
+	_open_act(runner)
+	var start: Dictionary = _main._solo_unit_flags()   # what the activation takes before the dangerous test
+	_main.seed_tray_rng(_seed_where_the_cast_passes())
+	var tries := 0
+	while _wounds_total(runner) == 10 and tries < 30:
+		await _main._run_ai_dangerous(runner, 6)
+		tries += 1
+	assert_int(_wounds_total(runner)).override_failure_message("fixture broken: the dangerous test must wound the runners").is_less(10)
+	_main.set("_solo_act_flags", start)   # the activation's hand-over to the cast leg (set(): a no-op where the member is absent)
+	await _main._solo_resolve_ai_casts({"casts": [_cast(runner, foe)]})
+	var pre := _pre_lines()
+	assert_int(pre.size()).override_failure_message("one pre line per cast leg").is_equal(1)
+	if pre.is_empty():
+		return
+	var units: Dictionary = (pre[0] as Dictionary).get("units", {})
+	assert_bool(units.has(runner.unit_id)).override_failure_message("the shooter is not in pre: %s" % str(pre[0])).is_true()
+	var rec: Dictionary = units.get(runner.unit_id, {})
+	assert_int(int(rec.get("alive", -1))).is_equal(runner.get_alive_count())
+	var wounds: Array = (rec.get("wounds", []) as Array).map(func(v: Variant) -> int: return int(v))   # JSON numbers are floats
+	assert_array(wounds).override_failure_message("pre: %s" % str(rec)).is_equal(_wounds_of(runner))
+
+
+## AI-G4 row C-GRANTED-RANGE, the pre half: a cast that grants a unit shooting reach ("+8 inches" from Lust Boon's
+## Enhanced Lustbound) is a change of the unit the core cannot read from its static rules, so the pre block names it:
+## `reach` = the growth of the unit's shooting-range bonus over the cast leg, inches. Live path: the real token
+## stamp (`_solo_refresh_spell_stamps`, the one every volley and range ring reads) and the real pre writer.
+func test_the_pre_block_carries_a_spell_granted_reach() -> void:
+	var caster := _caster()
+	_open_act(caster)
+	var start: Dictionary = _main._solo_unit_flags()
+	_main._solo_spell_mods[caster.get_instance_id()] = [{"spell": "Range Buff", "range_in": 8}]
+	_main._solo_refresh_spell_stamps(caster)
+	assert_int(SoloController.shooting_range_bonus(caster)).override_failure_message("fixture broken: the stamp must reach the range read").is_equal(8)
+	_main._solo_record_pre_leg(start)
+	var pre := _pre_lines()
+	assert_int(pre.size()).is_equal(1)
+	if pre.is_empty():
+		return
+	var units: Dictionary = (pre[0] as Dictionary).get("units", {})
+	assert_bool(units.has(caster.unit_id)).override_failure_message("pre: %s" % str(pre[0])).is_true()
+	assert_int(int((units.get(caster.unit_id, {}) as Dictionary).get("reach", 0))).is_equal(8)
+
+
 func test_below_epoch_73_nothing_new_is_written() -> void:
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36 - 1
 	var caster := _caster()

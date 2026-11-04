@@ -1,0 +1,9 @@
+{"act":1,"count":1,"faces":[4],"leg":"cast","owner":"AI (Wolf Elite Raider)","player":1,"roll_kind":"attack","round":1,"seq":1,"target":3}
+{"act":1,"count":1,"faces":[4],"leg":"spell","owner":"AI (Hive Guardians)","player":1,"roll_kind":"defense","round":1,"seq":2,"target":7}
+{"act":2,"count":6,"faces":[5,3,6,2,5,6],"leg":"dangerous","owner":"AI (Synapse Tyrant)","player":2,"roll_kind":"dangerous","round":1,"seq":3,"target":6}
+{"act":2,"count":1,"faces":[6],"leg":"cast","owner":"AI (Synapse Tyrant)","player":2,"roll_kind":"attack","round":1,"seq":4,"target":4}
+{"act":2,"count":6,"faces":[6,1,4,2,2,3],"leg":"spell","owner":"AI (Wolf Raider Brothers)","player":2,"roll_kind":"defense","round":1,"seq":5,"target":6}
+{"act":2,"count":2,"faces":[3,6],"leg":"main","owner":"AI (Synapse Tyrant)","player":2,"roll_kind":"attack","round":1,"seq":6,"target":4}
+{"act":2,"count":1,"faces":[1],"leg":"main","owner":"AI (Wolf Raider Brothers)","player":2,"roll_kind":"defense","round":1,"seq":7,"target":4}
+{"act":2,"count":1,"faces":[1],"leg":"main","owner":"AI (Wolf Raider Brothers)","player":2,"roll_kind":"morale","round":1,"seq":8,"target":4}
+{"act":2,"count":1,"faces":[6],"leg":"main","owner":"AI (Wolf Raider Brothers)","player":2,"roll_kind":"fearless","round":1,"seq":9,"target":4}
