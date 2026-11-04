@@ -1229,6 +1229,11 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	var dangerous_dice: int = int(report.get("dangerous_dice", dangerous_models))
 	var alive_before_dangerous: int = SoloController.combined_alive(unit)   # NML-966: combined for the morale trigger
 	var wounds_before_dangerous: int = _solo_unit_wounds_now(unit)
+	# G4-R3 T1 (EPOCH_73_V36): the charge target's wound baseline at the charger's move; _run_ai_melee reads the
+	# delta BEFORE the strikes (the target's own activation counter is stale once it has acted this round).
+	if target != null and int(report.get("action", 0)) == AiDecision.Action.CHARGE \
+			and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		report["target_wounds_start"] = _solo_unit_wounds_now(_solo_combat_unit(target))
 	_solo_act_flags = _solo_unit_flags() if not (report.get("casts", []) as Array).is_empty() else {}   # H-DANG-CUT: before the test
 	if dangerous_dice > 0:
 		await _run_ai_dangerous(unit, dangerous_dice)
@@ -11996,6 +12001,11 @@ func _run_ai_melee(report: Dictionary) -> void:
 	# G4-T9: the pre-melee activation wounds (Dangerous move, a spell, ...) are read HERE, before Counter, Impact
 	# and the strikes, like `_run_human_melee`; read after them the strike-back wounds would count twice.
 	var pre_melee_self_wounds: int = _solo_activation_self_wounds(unit)
+	# G4-R3 T1: the TARGET's pre-melee wounds (a spell between the move and the strikes), read here from the baseline
+	# the move stored — not from its activation counter, which would book the fight's own wounds a second time.
+	var pre_melee_target_wounds: int = 0
+	if report.has("target_wounds_start"):
+		pre_melee_target_wounds = maxi(0, int(report["target_wounds_start"]) - _solo_unit_wounds_now(_solo_combat_unit(target)))
 	_solo_stage_begin("%s charges %s" % [unit.get_name(), target.get_name()])
 	# The charge must actually reach combat, measured base-to-base (field-test finding 5): the planner ends
 	# the charge at/near base contact, so the gap between the nearest models — not the unit centres — is the
@@ -12137,8 +12147,7 @@ func _run_ai_melee(report: Dictionary) -> void:
 	# — Morale: a destroyed side loses first; otherwise the lower wound score loses (tie = nobody). Fear(X) (GF/AoF
 	#   v3.5.1 p.13) counts as +X dealt wounds for THIS comparison only (never changes wounds applied) —
 	var self_taken: int = maxi(pre_melee_self_wounds, int(report.get("dangerous_wounds_taken", 0)))
-	var scores: Array = _solo_melee_scores(unit, ai_caused, target, human_caused, self_taken,
-		_solo_activation_self_wounds(target))
+	var scores: Array = _solo_melee_scores(unit, ai_caused, target, human_caused, self_taken, pre_melee_target_wounds)
 	var ai_score: int = scores[0]
 	var human_score: int = scores[1]
 	var loser: GameUnit = _solo_melee_loser(unit, ai_score, target, human_score)
@@ -15195,8 +15204,9 @@ func _run_human_melee(attacker: GameUnit, target: GameUnit, auto: bool = false, 
 	await _solo_self_destruct_post_melee(target, attacker)
 	# — Morale: a destroyed side loses first; otherwise the lower wound score loses. Fear(X) (GF/AoF v3.5.1 p.13) adds
 	#   +X to the bearer's tally for THIS comparison only. —
-	var scores: Array = _solo_melee_scores(attacker, human_caused, target, ai_caused, self_taken,
-		_solo_activation_self_wounds(target))
+	# G4-R3 T1: the AI target's activation counter is stale once it has acted this round; the human charge has no
+	# target baseline, so its pre-melee target wounds are 0 (the strikes' own wounds must not count twice).
+	var scores: Array = _solo_melee_scores(attacker, human_caused, target, ai_caused, self_taken, 0)
 	var human_score: int = scores[0]
 	var ai_score: int = scores[1]
 	var loser: GameUnit = _solo_melee_loser(attacker, human_score, target, ai_score)
