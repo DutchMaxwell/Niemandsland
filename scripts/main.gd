@@ -151,6 +151,7 @@ var _success_target: int = DiceRules.TARGET_NONE
 var _success_modifier: int = 0
 var _next_roll_owner: String = ""   # attribution for the next tray roll ("AI (…)"); empty = "You" (goal 001)
 var _solo_tray_busy: bool = false   # NML-954: a _solo_tray_roll is in flight — the tray is exclusive
+var _solo_leg: String = "main"   # AI-G4 H1a: the activation leg a tray roll belongs to ("spell" inside the cast leg; dice.jsonl `leg`)
 var _next_roll_purpose: String = ""   # what the roll is about — tray label + MP context (community #170)
 var _next_roll_kind: String = "attack"   # Bug 16: "defense" words the dice-log line as "defends … blocks"
 var _target_buttons: Array[Button] = []
@@ -5025,13 +5026,39 @@ func _vfx_player_volley(member: GameUnit, target: GameUnit, profile: Dictionary,
 func _solo_resolve_ai_casts(report: Dictionary) -> void:
 	if dice_roller_control == null or solo_controller == null:
 		return
+	var flags_before := _solo_unit_flags()
+	_solo_leg = "spell"   # AI-G4 H1a: every roll below is the cast leg's; the cast die itself re-tags to "cast"
 	for c in report.get("casts", []):
 		var cast := c as Dictionary
 		var caster: GameUnit = cast.get("caster")
 		if caster == null or caster.get_alive_count() == 0:
 			continue   # the caster died to a Dangerous-terrain test before the cast resolved
 		await _solo_resolve_one_cast(cast)
+	_solo_leg = "main"
+	_solo_record_pre_leg(flags_before)
 	_solo_refresh_caster_markers()
+
+
+## AI-G4 H1a: {unit id: [alive models, Shaken]} of every unit on the table (the cast leg's before/after diff).
+func _solo_unit_flags() -> Dictionary:
+	var flags := {}
+	for uid in opr_army_manager.game_units:
+		var u := opr_army_manager.game_units[uid] as GameUnit
+		flags[uid] = [u.get_alive_count(), u.is_shaken]
+	return flags
+
+
+## AI-G4 H1a: writes the `pre` block of this activation - the units the cast leg changed, so the replay
+## gates can start the core from the state the table's volley started from. Epoch 73+ only.
+func _solo_record_pre_leg(before: Dictionary) -> void:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 or not AiActRecorder.active():
+		return
+	var changed := {}
+	var after := _solo_unit_flags()
+	for uid in after:
+		if after[uid] != before.get(uid):
+			changed[uid] = {"alive": after[uid][0], "shaken": after[uid][1]}
+	AiActRecorder.pre(solo_controller.move_act_seq(), changed)
 
 
 ## One cast: the announced spell, the boost/interference-adjusted target number, one real tray die.
@@ -5118,8 +5145,11 @@ func _solo_resolve_one_cast(cast: Dictionary) -> void:
 	var target_num := AiSpell.cast_target(boost, interference, base_target)
 	# THE CAST ROLL — one visible die on the real tray (no hidden RNG).
 	var roll_owner := str(cast.get("owner_label", "AI (%s)" % caster.get_name()))
+	var leg_before := _solo_leg
+	_solo_leg = "cast"   # AI-G4 H1a: the cast die is its own leg of the recording
 	var faces: Array = await _solo_tray_roll(1, target_num, roll_owner, "attack",
 		"Casting %s (%d+)" % [spell_name, target_num])
+	_solo_leg = leg_before
 	var success: bool = not faces.is_empty() and DiceRules.is_success(int(faces[0]), target_num, 0)
 	if seal_id > 0:
 		_vfx_emit({"k": "seal_end", "sid": seal_id, "o": int(SpellSeal.Outcome.SUCCESS if success else SpellSeal.Outcome.FAIL),
@@ -10634,10 +10664,14 @@ func _solo_tray_roll(count: int, success_target: int, owner: String, roll_kind: 
 		# NML-1073 M5 D1-B1: sibling file, default OFF (env NML_DICE_DUMP) — stamps the ACTIVATION
 		# ordinal the "dice" decision record above never carries (a live decisions.json must stay
 		# byte-identical whether this seam is on or off, so it is not added there).
-		AiDiceRecorder.record({"act": solo_controller.move_act_seq(), "seq": _solo_dice_seq,
+		var dice_rec := {"act": solo_controller.move_act_seq(), "seq": _solo_dice_seq,
 			"round": solo_controller._current_round(), "player": solo_controller.ai_slot,
 			"roll_kind": roll_kind, "owner": owner, "target": success_target, "count": count,
-			"faces": faces})
+			"faces": faces}
+		if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+			# AI-G4 H1a: the replay gates cut the cast and spell legs (the core rolls no cast die), keep the rest.
+			dice_rec["leg"] = "dangerous" if roll_kind == "dangerous" else _solo_leg
+		AiDiceRecorder.record(dice_rec)
 	_dice_count = prev_count
 	_update_dice_set(prev_count)
 	_success_target = prev_target
