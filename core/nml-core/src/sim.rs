@@ -6532,6 +6532,16 @@ fn combat_unit(state: &State, ti: usize, seams: Seams) -> usize {
     }
 }
 
+/// G4-C11 (`EPOCH_73_V36`) — a charge NAMED at a host with no models left while a joined hero lives: the chain's models are
+/// the hero's now (GF v3.5.1 p.14, "fights on alone"; the table's `_solo_combined_alive` still counts the unit), so the
+/// melee, which guards on `alive[ti]`, runs against the first living attached hero. `None` for every other target.
+fn lone_hero_of(state: &State, ti: usize, seams: Seams) -> Option<usize> {
+    if !seams.hero_attach || !rule_on(seams.rules_epoch, EPOCH_73_V36) || state.alive[ti] > 0 {
+        return None;
+    }
+    state.attached[ti].iter().copied().find(|&h| state.alive[h] > 0)
+}
+
 /// `BattleSim._unit_group` battle_sim.gd:528-547 as a membership test — is unit
 /// `oi` part of the group `key_i` moves and ends as? That is `key_i` itself plus
 /// its attached heroes, plus (only when `include_host`) its host. Only the
@@ -8859,16 +8869,9 @@ fn resolve_with(
     // resolved. It rides here rather than at the melee branch because `ci` is
     // also the spacing clamp's body-only group (`spacing_fraction`), and GF
     // v3.5.1 p.7 exempts the enemy UNIT, which p.14 says includes its hero.
-    let ci = if charge_key.is_empty() {
-        None
-    } else {
-        state
-            .roster
-            .index
-            .get(charge_key.as_str())
-            .copied()
-            .map(|c| combat_unit(state, c, seams))
-    };
+    let named = state.roster.index.get(charge_key.as_str()).copied().filter(|_| !charge_key.is_empty());
+    let lone = named.and_then(|c| lone_hero_of(state, c, seams).map(|h| (c, h)));
+    let ci = lone.map(|(_, h)| h).or_else(|| named.map(|c| combat_unit(state, c, seams)));
     let pi_s = state.roster.profile[si];
     let mut next = state.clone();
     let was_shaken = next.shaken[si];
@@ -9944,6 +9947,12 @@ fn resolve_with(
                 // (`tray_morale`) — no morale draw is left standing, verified by
                 // replay.
                 if let Some((tray, shot)) = dice.as_mut() {
+                    if let Some((host, hero)) = lone {
+                        shot.log.push(format!(
+                            "Hero: {} has no models left - the joined {} fights on alone",
+                            statics[next.roster.profile[host]].name, statics[next.roster.profile[hero]].name
+                        ));
+                    }
                     // EPOCH_22_SCREENED_MELEE — the pre-charge gap, measured the
                     // table's own way on the PRE-move snapshot
                     // (`report["charge_from_in"]`, solo_controller.gd:2329).
