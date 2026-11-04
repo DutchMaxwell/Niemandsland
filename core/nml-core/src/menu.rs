@@ -755,6 +755,7 @@ pub fn best_charge(
 /// pair, a route to the target model's CENTRE may spend the charge band plus the two base radii (the last stretch of
 /// that route is the contact itself), around Container cells, the board's ruin walls (MEL-PAR-F8) and the units in
 /// the way (`foe` = the victim's group, no obstacle). Lenient by construction: it asks one model, with the whole unit's largest radius as clearance.
+/// From `EPOCH_73_V36` it also carries the table's 6" difficult-ground cap (G4-C2, see below).
 fn charge_path_blocked(
     state: &State,
     terrain: &Terrain,
@@ -801,15 +802,29 @@ fn charge_path_blocked(
         return false;
     }
     let target = [(centre[0] as f64 + dx / d * stand_off) as f32, (centre[1] as f64 + dy / d * stand_off) as f32];
-    let q = crate::mv::reach::ReachQuery {
-        start,
-        target,
-        radius,
-        band: crate::gate::charge_band_in(state, statics, i, e),
-        cap_in: 0.0,
-        mover,
-        foe: group(e),
-    };
+    // Rules 3.6 p.11 (Difficult Terrain): the table's charge probe caps the band at 6" when a route crosses forest;
+    // Strider and Flying never pay it. A carried Difficult Terrain rule is already in `charge_band_in` (`live_bands_of`).
+    // The epoch is the RECORDING's (`statics`, the header's), like `forces_hold`: the menu itself runs at the live one.
+    let recorded_epoch = statics.get(state.roster.profile[i]).map_or(0, |s| s.rules_epoch);
+    let mut band = crate::gate::charge_band_in(state, statics, i, e);
+    let mut cap_in = 0.0;
+    if rule_on(recorded_epoch, EPOCH_73_V36) && !state.charge_no_difficult[i] {
+        // The cap is the whole unit's: the table caps when ANY model's trail crosses forest (`_trails_cross_difficult`),
+        // so every model walks the nearest pair's charge vector here, not just the nearest one.
+        let (pa, pb) = (state.positions[i][a], state.positions[e][b]);
+        let travel = band.min(best.0 / IN2M).max(0.0) * IN2M;
+        let len = (pb[0] - pa[0]).hypot(pb[2] - pa[2]).max(1e-9);
+        let v = [(pb[0] - pa[0]) / len * travel, (pb[2] - pa[2]) / len * travel];
+        let crosses = state.positions[i].iter().enumerate().any(|(k, p)| {
+            let to = geom::to_f32([p[0] + v[0], p[1], p[2] + v[1]]);
+            crate::gate::crosses_difficult(geom::to_f32(*p), to, model_r(i, k), terrain)
+        });
+        if crosses {
+            band = band.min(crate::gate::DIFFICULT_MOVE_CAP_IN);
+        }
+        cap_in = crate::gate::DIFFICULT_MOVE_CAP_IN;
+    }
+    let q = crate::mv::reach::ReachQuery { start, target, radius, band, cap_in, mover, foe: group(e) };
     !ix.query_memo(&q).reachable
 }
 
