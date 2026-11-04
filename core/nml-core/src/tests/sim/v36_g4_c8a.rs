@@ -114,6 +114,30 @@ mod g4_c8a {
         assert_eq!(blade_attacks(&st, &statics, at(EPOCH_73_V36, false)), 3, "the host stands 30\" away; the hero is within reach");
     }
 
+    /// The log of one charge strike of the first unit at the second, at `epoch`.
+    fn strike_log(st: &mut State, statics: &[UnitStatic], epoch: u32) -> Vec<String> {
+        let mut shot = ShootResult::default();
+        strike_phase(statics, st, 0, 1, true, 0.0, at(epoch, false), &mut Tray::seeded(2), &mut shot, StrikeSet::All, Cover::Recorded(None));
+        shot.log
+    }
+
+    const WHO_CAN_STRIKE: &str = "Who Can Strike: p1_0_a: 3 of 5 models are within 3\" and strike";
+
+    #[test]
+    fn the_strike_names_who_can_strike_when_fewer_models_strike_than_live() {
+        let (mut st, statics) = fight(0.0254, &WIDE, 0.0, None);
+        let log = strike_log(&mut st, &statics, EPOCH_73_V36);
+        assert!(log.iter().any(|l| l == WHO_CAN_STRIKE), "{log:?}");
+    }
+
+    #[test]
+    fn no_who_can_strike_line_when_every_model_strikes_or_below_73() {
+        let (mut all, statics) = fight(0.0254, &[2.5, 2.6, 2.7, 2.8, 2.9], 0.0, None);
+        assert!(!strike_log(&mut all, &statics, EPOCH_73_V36).iter().any(|l| l.starts_with("Who Can Strike")), "all 5 strike");
+        let (mut wide, statics) = fight(0.0254, &WIDE, 0.0, None);
+        assert!(!strike_log(&mut wide, &statics, EPOCH_72_PLAYTEST_RULES).iter().any(|l| l.starts_with("Who Can Strike")), "epoch 72");
+    }
+
     #[test]
     fn below_73_the_centre_measure_and_the_all_alive_default_stay() {
         let (st, statics) = fight(0.0254, &WIDE, 0.0, None);
