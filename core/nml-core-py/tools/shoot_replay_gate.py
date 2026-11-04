@@ -310,6 +310,16 @@ def cut_dangerous(rolls: list[dict], kept: list[dict]) -> bool:
     return any(r.get("leg") == "dangerous" for r in rolls[:len(rolls) - len(kept)])
 
 
+def lone_hero_of(units: dict, key: str) -> str:
+    """AI-G4 F-AIM (epoch 73+): the table fires "at" a dead host while its joined hero stands - the hero is the unit
+    now. `key` itself unless it has no living model and exactly one living attached hero; then that hero's key."""
+    u = units.get(key, {})
+    if int(u.get("alive", -1)) != 0:
+        return key
+    live = [str(h) for h in (u.get("attached", []) or []) if int(units.get(str(h), {}).get("alive", -1)) > 0]
+    return live[0] if len(live) == 1 else key
+
+
 def split_aim(head: dict, rec: list[dict], shoot_key: str, units: dict) -> tuple[list[dict] | None, str, int]:
     """The `split` aim for one act, or `(None, why, 0)` to stay pooled. A
     non-empty `target_id` that the header profiles carry is the unit key itself
@@ -338,6 +348,8 @@ def split_aim(head: dict, rec: list[dict], shoot_key: str, units: dict) -> tuple
             amb += 1
     if not aim:
         return None, "uncovered", amb
+    if int((head.get("knobs") or {}).get("rules_epoch", 0)) >= 73:
+        aim = [dict(a, target=lone_hero_of(units, a["target"])) for a in aim]
     if any(_stale(units, a["target"]) for a in aim):
         return None, "stale", amb
     if all(a["target"] == shoot_key for a in aim):
@@ -772,13 +784,15 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
     # Both sides drawing NOTHING is agreement, not a missing verdict.
     ok = (tally["acts"] > 0
           and tally["full_equal_owner"] + tally["both_silent"] == tally["acts"])
+    # AI-G4 F-PRINT: the printed number leaves the both-silent acts out, like the pass formula does.
+    short = tally["acts"] - tally["full_equal_owner"] - tally["both_silent"]
     if report_only:
         print("  REPORT ONLY — %d/%d acts short of full equality, exit 0 by request"
-              % (tally["acts"] - tally["full_equal_owner"], tally["acts"]))
+              % (short, tally["acts"]))
         return 0
     print("  %s" % ("PASS" if ok else
                     "FAIL — %d of %d shooting acts are not FULL-equal (see the buckets above)"
-                    % (tally["acts"] - tally["full_equal_owner"], tally["acts"])))
+                    % (short, tally["acts"])))
     return 0 if ok else 1
 
 

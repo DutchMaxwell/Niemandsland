@@ -433,13 +433,15 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
     # Both sides drawing NOTHING is agreement, not a missing verdict.
     ok = (tally["acts"] > 0
           and tally["full_equal"] + tally["both_silent"] == tally["acts"])
+    # AI-G4 F-PRINT: the printed number leaves the both-silent acts out, like the pass formula does.
+    short = tally["acts"] - tally["full_equal"] - tally["both_silent"]
     if report_only:
         print("  REPORT ONLY — %d/%d acts short of full equality, exit 0 by request"
-              % (tally["acts"] - tally["full_equal"], tally["acts"]))
+              % (short, tally["acts"]))
         return 0
     print("  %s" % ("PASS" if ok else
                     "FAIL — %d of %d charge acts are not FULL-equal (see the buckets above)"
-                    % (tally["acts"] - tally["full_equal"], tally["acts"])))
+                    % (short, tally["acts"])))
     return 0 if ok else 1
 
 
