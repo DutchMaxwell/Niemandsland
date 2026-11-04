@@ -241,6 +241,16 @@ jobs:
           set -euo pipefail
           python3 tools/shard_assign.py --shards ${{ needs.changes.outputs.shard_count }} --check
 
+      # tools/shard_assign_test.py reads the real test/ tree (the *_test.gd file list and
+      # test/shard_weights.json): the balance check (max shard within 15 % of the mean) and the
+      # real-tree coverage check. rust.yml runs it too, but only when its path filter matches;
+      # weights and suite files change on most GDScript PRs, so the guard lives here, on every PR.
+      - name: Shard assignment tests (balance and real-tree coverage)
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet pytest
+          python3 -m pytest tools/shard_assign_test.py -q
+
   relay-tests:
     name: Relay tests
     runs-on: ubuntu-latest
