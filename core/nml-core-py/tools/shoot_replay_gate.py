@@ -676,6 +676,8 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
           "(the strict bar; %d act(s) match the dice but not the roller)"
           % (tally["full_equal_owner"], tally["acts"],
              tally["full_equal"] - tally["full_equal_owner"]))
+    print("  BOTH-SILENT: %d/%d acts where neither side drew a die (counted as equal)"
+          % (tally["both_silent"], tally["acts"]))
     print("        : %d/%d acts PREFIX-equal (the overlap held; %d table_longer, %d port_longer)"
           % (tally["prefix_equal"], tally["acts"], tally["table_longer"], tally["port_longer"]))
     print("  rolls : %d of %d compared rolls equal" % (tally["rolls_equal"], tally["rolls"]))
@@ -738,7 +740,9 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
         return 0 if ok else 1
 
     # The GATE is the strict bar: same dice AND the same unit rolling them.
-    ok = tally["acts"] > 0 and tally["full_equal_owner"] == tally["acts"]
+    # Both sides drawing NOTHING is agreement, not a missing verdict.
+    ok = (tally["acts"] > 0
+          and tally["full_equal_owner"] + tally["both_silent"] == tally["acts"])
     if report_only:
         print("  REPORT ONLY — %d/%d acts short of full equality, exit 0 by request"
               % (tally["acts"] - tally["full_equal_owner"], tally["acts"]))

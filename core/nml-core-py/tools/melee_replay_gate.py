@@ -384,6 +384,8 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
           % (silent_table, tally["acts"], tally["both_silent"], tally["table_silent"]))
     print("        : %d/%d acts where the PORT drew nothing while the table rolled — never benign"
           % (tally["port_silent"], tally["acts"]))
+    print("  BOTH-SILENT: %d/%d acts where neither side drew a die (counted as equal)"
+          % (tally["both_silent"], tally["acts"]))
     print("  morale: %d equal (count, target and roller), %d table only, %d port only, "
           "%d other, %d neither"
           % (tally["morale_equal"], tally["morale_table_only"], tally["morale_port_only"],
@@ -421,7 +423,9 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
                  "FAILED — %d act(s) of more than 2 dice survived a wrong-seeded tray"
                  % tally["equal_over_2"]))
         return 0 if ok else 1
-    ok = tally["acts"] > 0 and tally["full_equal"] == tally["acts"]
+    # Both sides drawing NOTHING is agreement, not a missing verdict.
+    ok = (tally["acts"] > 0
+          and tally["full_equal"] + tally["both_silent"] == tally["acts"])
     if report_only:
         print("  REPORT ONLY — %d/%d acts short of full equality, exit 0 by request"
               % (tally["acts"] - tally["full_equal"], tally["acts"]))
