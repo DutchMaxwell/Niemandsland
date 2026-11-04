@@ -152,6 +152,7 @@ var _success_modifier: int = 0
 var _next_roll_owner: String = ""   # attribution for the next tray roll ("AI (…)"); empty = "You" (goal 001)
 var _solo_tray_busy: bool = false   # NML-954: a _solo_tray_roll is in flight — the tray is exclusive
 var _solo_leg: String = "main"   # AI-G4 H1a: the activation leg a tray roll belongs to ("spell" inside the cast leg; dice.jsonl `leg`)
+var _solo_act_flags: Dictionary = {}   # H-DANG-CUT: the board's `_solo_unit_flags` taken BEFORE the dangerous test, handed to the cast leg's `pre` diff
 var _next_roll_purpose: String = ""   # what the roll is about — tray label + MP context (community #170)
 var _next_roll_kind: String = "attack"   # Bug 16: "defense" words the dice-log line as "defends … blocks"
 var _target_buttons: Array[Button] = []
@@ -1225,6 +1226,7 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	if target != null and int(report.get("action", 0)) == AiDecision.Action.CHARGE \
 			and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
 		report["target_wounds_start"] = _solo_unit_wounds_now(_solo_combat_unit(target))
+	_solo_act_flags = _solo_unit_flags() if not (report.get("casts", []) as Array).is_empty() else {}   # H-DANG-CUT: before the test
 	if dangerous_dice > 0:
 		await _run_ai_dangerous(unit, dangerous_dice)
 	report["dangerous_wounds_taken"] = wounds_before_dangerous - _solo_unit_wounds_now(unit)   # rules 3.6 melee tally
@@ -4915,7 +4917,8 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		if bool(profile.get("limited", false)):
 			solo_controller.mark_limited_used(member, profile)   # once per game — spent on the roll (wave 5)
 		await _solo_hazardous_self_wounds(attacker, profile, faces)   # resolver wave A: natural 1s wound the firer
-		var hits: int = await _solo_hits(faces, to_hit_raw, profile, dist_in, target, false, "AI (%s)" % attacker.get_name())
+		var hits: int = await _solo_hits(faces, to_hit_raw, profile, dist_in, target, false, "AI (%s)" % attacker.get_name(),
+			0.0, models_before if at_declaration else -1)
 		if battle_log != null:
 			var sight_note: String = "" if sighted >= member.get_alive_count() else " (%d/%d models sighted)" % [sighted, member.get_alive_count()]
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s fires %s at %s%s — %d hit%s" % [
@@ -5037,7 +5040,8 @@ func _vfx_player_volley(member: GameUnit, target: GameUnit, profile: Dictionary,
 func _solo_resolve_ai_casts(report: Dictionary) -> void:
 	if dice_roller_control == null or solo_controller == null:
 		return
-	var flags_before := _solo_unit_flags()
+	var flags_before: Dictionary = _solo_act_flags if not _solo_act_flags.is_empty() else _solo_unit_flags()
+	_solo_act_flags = {}
 	_solo_leg = "spell"   # AI-G4 H1a: every roll below is the cast leg's; the cast die itself re-tags to "cast"
 	for c in report.get("casts", []):
 		var cast := c as Dictionary
@@ -5050,13 +5054,15 @@ func _solo_resolve_ai_casts(report: Dictionary) -> void:
 	_solo_refresh_caster_markers()
 
 
-## AI-G4 H1a: {unit id: [alive models, Shaken, the living ModelInstances]} of every unit on the table (the cast leg's
-## before/after diff; the third slot is F-PRE-SURV's list of who stood at the start).
+## AI-G4 H1a: {unit id: [alive models, Shaken, the living ModelInstances, their wounds, shooting-range bonus]} of every
+## unit on the table (the cast leg's before/after diff; the third slot is F-PRE-SURV's list of who stood at the start).
 func _solo_unit_flags() -> Dictionary:
 	var flags := {}
 	for uid in opr_army_manager.game_units:
 		var u := opr_army_manager.game_units[uid] as GameUnit
-		flags[uid] = [u.get_alive_count(), u.is_shaken, u.get_alive_models()]
+		var live: Array = u.get_alive_models()
+		flags[uid] = [u.get_alive_count(), u.is_shaken, live, live.map(func(m: Variant) -> int: return (m as ModelInstance).wounds_current),
+			SoloController.shooting_range_bonus(u)]
 	return flags
 
 
@@ -5069,9 +5075,12 @@ func _solo_record_pre_leg(before: Dictionary) -> void:
 	var after := _solo_unit_flags()
 	for uid in after:
 		var was: Array = before.get(uid, [])
-		if was.is_empty() or after[uid][0] != was[0] or after[uid][1] != was[1]:
-			changed[uid] = {"alive": after[uid][0], "shaken": after[uid][1]}
+		if was.is_empty() or after[uid][0] != was[0] or after[uid][1] != was[1] or after[uid][3] != was[3] or after[uid][4] != was[4]:
+			# `wounds` = the survivors' wounds; `reach` (C-GRANTED-RANGE) = the spell-granted shooting reach, inches
+			changed[uid] = {"alive": after[uid][0], "shaken": after[uid][1], "wounds": after[uid][3]}
 			if not was.is_empty():
+				if after[uid][4] != was[4]:
+					changed[uid]["reach"] = after[uid][4] - was[4]
 				# F-PRE-SURV: WHICH models of the start list still stand (`of` = its length), not only how many
 				var keep: Array = []
 				for i in (was[2] as Array).size():
@@ -6546,7 +6555,7 @@ func _solo_cover_defense(target: GameUnit, base_defense: int) -> int:
 ## only for the CHARGING unit — `charging`). Those extra hits resolve BEFORE Blast(X) (GF v3.5.1: Blast
 ## multiplies "after resolving other special rules"), which then scales each hit ×min(X, target models).
 ## Every multiplication is battle-logged so it is VISIBLE. Uses the shared AiCombatMath.
-func _solo_hits(faces: Array, to_hit: int, profile: Dictionary, dist_in: float, target: GameUnit = null, charging: bool = false, roller: String = "", charge_from_in: float = 0.0) -> int:
+func _solo_hits(faces: Array, to_hit: int, profile: Dictionary, dist_in: float, target: GameUnit = null, charging: bool = false, roller: String = "", charge_from_in: float = 0.0, blast_models: int = -1) -> int:
 	# `to_hit` is the caller's UNCLAMPED summed target (D21): Precise's flat +1 folds into that sum and the
 	# one clamp happens here, so a penalty the old per-step clamp swallowed still counts against the +1.
 	# AIG-G2 (EPOCH_73_V36): a weapon-borne Imprecise is Precise's mirror, folded into the same sum.
@@ -6665,11 +6674,14 @@ func _solo_hits(faces: Array, to_hit: int, profile: Dictionary, dist_in: float, 
 		# TC-023 — a Takedown resolves "as if it was a unit of [1]" (GF v3.5.1 p.14), so Blast has exactly
 		# one model to spill onto and can never multiply. Read off the profile, not the takedown flag:
 		# the flag's window is synchronous and has already closed by the time the dice are counted.
-		var models_in_target: int = 1 if bool(profile.get("takedown", false)) else _solo_combined_alive(target)
+		# C-BLAST-CAP-GROUPS (EPOCH_73_V36, lead ruling D2): a volley fires simultaneously, so a volley caller passes the
+		# models standing at ITS START (`blast_models` >= 0) and the cap ignores the casualties of earlier weapon groups.
+		var models_in_target: int = 1 if bool(profile.get("takedown", false)) else (blast_models if blast_models >= 0 else _solo_combined_alive(target))
 		var boosted: int = AiCombatMath.blast_hits(hits, blast, models_in_target)
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT,
-				blast_log_text(blast, hits, boosted, models_in_target), true)
+				blast_log_text(blast, hits, boosted, models_in_target) \
+				+ (" (cap read when the volley started)" if blast_models > _solo_combined_alive(target) else ""), true)
 			_solo_rule_float(target, "Blast ×%d → %d" % [maxi(boosted / maxi(hits, 1), 1), boosted])
 		hits = boosted
 	return hits
@@ -14764,6 +14776,8 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 	_solo_log_range_bonus(attacker, target)
 	var target_alive_before: int = SoloController.combined_alive(target)   # NML-966: combined for the morale trigger
 	var target_wounds_before: int = _solo_unit_wounds_now(target)
+	# C-BLAST-CAP-GROUPS (EPOCH_73_V36): the models standing at the volley's start cap every Blast of it; -1 = live read.
+	var blast_models_start: int = _solo_combined_alive(target) if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else -1
 	var regenable := 0
 	var regen_proof := 0
 	# Armor(X) (wave 5) sets the working Defense, then every Defense contribution of the parts seam
@@ -14938,7 +14952,8 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 			if bool(profile.get("limited", false)):
 				solo_controller.mark_limited_used(group.get("member"), profile)   # once per game (wave 5)
 			await _solo_hazardous_self_wounds(attacker, profile, faces)   # resolver wave A: natural 1s wound the firer
-			var hits: int = await _solo_hits(faces, to_hit_raw, profile, dist, target, false, _roller_label(attacker))
+			var hits: int = await _solo_hits(faces, to_hit_raw, profile, dist, target, false, _roller_label(attacker),
+				0.0, blast_models_start)
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s fires %s at %s — %d hit%s" % [
 					str(group.get("name", "?")), str(profile.get("name", "?")), target.get_name(), hits, ("" if hits == 1 else "s")])

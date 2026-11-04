@@ -88,6 +88,8 @@ pub struct Landing {
     /// `_retrace_to` (:5053) rewrites them toward the gated endpoint. Always
     /// false for a Flying unit, which ignores terrain effects while moving (p.13).
     pub dangerous: Vec<bool>,
+    /// The per-model polylines `last_move_paths` publishes: the route RETRACED to the gated endpoint (`retrace_to`).
+    pub trails: Vec<Vec<V2>>,
     /// The `plan_unit_step` call this landing was solved from — the LAST one,
     /// so a p.11 re-plan reports the call it actually kept. `None` only when
     /// the bounds-clamped delta was zero and no call was ever made. Kept for
@@ -900,7 +902,7 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
             if rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES) && !best_coherent && start_coherent {
                 return Landing { sidestep_spent: false, shorten_covered: true, budget_in: 0.0,
                     movers: self.movers.clone(), end: self.pos.clone(), arc_in: 0.0, climb_in: 0.0,
-                    dangerous: vec![false; self.movers.len()], call: best_call };
+                    dangerous: vec![false; self.movers.len()], trails: Vec::new(), call: best_call };
             }
             (planned, trails, budget_in, call) = (best_pos, best_trails, best_reach, best_call);
         }
@@ -957,11 +959,25 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
         dangerous = trails.iter().enumerate().map(|(i, leg)|
             self.crosses_dangerous(leg, radii_m.get(i).copied().unwrap_or(0.0))).collect();
     }
-    let (mut climb_in, ledges) = (0.0f64, self.walls_and_ledges().1);
+    let (walls, ledges) = self.walls_and_ledges();
+    let mut climb_in = 0.0f64;
     for (i, leg) in trails.iter_mut().enumerate() {
         // :5068-5071 — and THEN the trail is retraced to the endpoint, which is
         // the polyline `last_move_paths` publishes and :8659 measures.
-        *leg = retrace_to(leg, starts[i], planned.get(i).copied().unwrap_or(starts[i]));
+        let mut trail = retrace_to(leg, starts[i], planned.get(i).copied().unwrap_or(starts[i]));
+        // AIG-L6 (`EPOCH_73_V36`, table twin `_retrace_wall_true`): the retrace closes the trimmed route with ONE
+        // straight leg, which can run through a wall the route bent around once the gate moved the end off the
+        // route (a charge's coherency pull). That model keeps its route-true endpoint; walls here are the
+        // planner's own (container edges are climbs, a Flying unit has none).
+        let n = trail.len();
+        if rule_on(self.rules_epoch, EPOCH_73_V36) && n >= 2 && i < planned.len()
+            && walls.iter().any(|w| g2::segments_cross(trail[n - 2], trail[n - 1], w[0], w[1])) {
+            if let Some(&end) = leg.last() {
+                planned[i] = end;
+                trail = leg.clone();
+            }
+        }
+        *leg = trail;
         // :6317-6322 — the climb is movement spent: it joins the arc, and the largest one is logged.
         let climb: f64 = leg.windows(2).map(|w| ledge_cost(w[0], w[1], &ledges)).sum();
         arc_in = arc_in.max(g2::polyline_length(leg) + climb);
@@ -978,7 +994,7 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
         })
         .collect();
     Landing { sidestep_spent, shorten_covered: !self.allow_contact && rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES),
-        movers: self.movers.clone(), end, budget_in, arc_in, climb_in, dangerous, call }
+        movers: self.movers.clone(), end, budget_in, arc_in, climb_in, dangerous, trails, call }
 }
 }
 
@@ -1640,13 +1656,14 @@ pub(crate) mod tests {
             arc_in: 0.0,
             climb_in: 0.0,
             dangerous: dang,
+            trails: Vec::new(),
             call: None,
         };
         let tough1 = vec![UnitStatic { wounds_max: vec![1, 1, 1], ..Default::default() }];
         let mut shot = crate::dice::ShootResult::default();
         let seams = crate::io::Seams::default();
         let call = |statics: &[UnitStatic], l: &Landing, shot: &mut crate::dice::ShootResult| {
-            dangerous_dice(statics, &st, &st, 0, seams, Some(l), crate::sim::Cover::Board(&t), shot)
+            dangerous_dice(statics, &st, &st, 0, seams, Some(l), crate::sim::Cover::Board(&t), shot, false)
         };
         // Tough(1) x 3, all three routes crossing: three dice.
         assert_eq!(call(&tough1, &land(vec![true, true, true]), &mut shot), 3);

@@ -250,6 +250,14 @@ fn morale_root(state: &State, i: usize, seams: Seams) -> usize {
     }
 }
 
+/// G4R4 C-LONEHERO-SHAKEN (`EPOCH_73_V36`): the Shaken a morale test reads. A lone joined hero (its host has no models
+/// left) is the host's unit and the table keeps the flag on that unit, so the dead host's Shaken is the hero's; every
+/// other unit reads its own flag, and below 73 every unit does.
+fn unit_shaken(state: &State, i: usize, seams: Seams) -> bool {
+    let root = morale_root(state, i, seams);
+    state.shaken[i] || (root != i && state.alive[root] <= 0 && state.shaken[root])
+}
+
 /// `main._solo_unit_wounds_now`: from 73 the chain's wounds (host plus joined heroes), below 73 the unit's own.
 fn morale_wounds_left(state: &State, i: usize, seams: Seams) -> i64 {
     let r = morale_root(state, i, seams);
@@ -3264,6 +3272,7 @@ pub(crate) fn dangerous_dice(
     landing: Option<&crate::mv::step::Landing>,
     cover: Cover,
     shot: &mut ShootResult,
+    models_only: bool,
 ) -> i64 {
     let Cover::Board(t) = cover else { return 0 };
     if !t.is_valid() || state.profile(si).special_rules.iter().any(|r| r == "Flying") {
@@ -3342,13 +3351,15 @@ pub(crate) fn dangerous_dice(
         if !crossed && !in_dang(p0, radius(state, u, m)) && !debuffed(state, u) {
             continue;
         }
-        dice += tough(u, m);
+        dice += if models_only { 1 } else { tough(u, m) };
     }
     // UX-20 (`EPOCH_73_V36`, rules 3.6): one affected model is enough, and then
     // the WHOLE joined unit (host + attached heroes, every living model) takes
     // ONE test, and the test rolls one die per WOUND THE UNIT HAS LEFT (UX-21).
-    // Below 73 only the affected models roll their Tough value.
-    if dice > 0 && rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) {
+    // Below 73 only the affected models roll their Tough value. `models_only`: the
+    // consolidation's own count, one die per affected model - the table hands
+    // `_run_ai_dangerous` that model count after a consolidation move (main.gd).
+    if dice > 0 && !models_only && rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) {
         let mut chain = vec![si];
         if seams.hero_attach {
             chain.extend(state.attached[si].iter().copied());
@@ -3806,6 +3817,7 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
     c.thrust_grant = grants && mods::granted(state, i, "Thrust");
     c.relentless_grant = grants && mods::granted(state, i, "Relentless");
     c.shred_grant = grants && mods::granted(state, i, "Shred");
+    c.bane_grant = rule_on(rules_epoch, EPOCH_73_V36) && grants && mods::granted(state, i, "Bane when Shooting");
     c.unpredictable = c.unpredictable || (grants && mods::granted(state, i, "Unpredictable Fighter"));
     c.guarded = c.guarded || (grants && mods::granted(state, i, "Guarded"));
     c.melee_evasion = c.melee_evasion || (grants && mods::granted(state, i, "Melee Evasion"));
@@ -5888,7 +5900,15 @@ fn strike_phase(
     // own: on from the current rules epoch onward, pre-port corpora replay
     // byte-exact (dice.rs::save_batch's gate).
     let shred_alias_dice = rule_on(seams.rules_epoch, EPOCH_3_TABLE_RULES);
-    let r = crate::dice::resolve_melee_leg(&members, &def, &ut.name, charging, cond_ap_dice, shred_alias_dice, rule_on(seams.rules_epoch, EPOCH_14_DEADLY_LANDING), charge_from_in, rule_on(seams.rules_epoch, EPOCH_22_SCREENED_MELEE), seams.tray_exact, rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36), rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36), rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36), tray);
+    // R3-C2 (`EPOCH_73_V36`): do the finished Deadly groups already destroy the defender chain? Landed on a scratch copy,
+    // so the answer is exact (casualty order, no carry-over, joined heroes); the dice leg then skips the pool's ignore die.
+    let deadly_wipes = |r: &ShootResult| {
+        let mut scratch = (*next).clone();
+        r.deadly_groups.iter().for_each(|&(post, dx)| { land_deadly_wounds(&mut scratch, ti, post, dx, seams); });
+        combined_alive(&scratch, ti, seams) == 0
+    };
+    let wipes: Option<&dyn Fn(&ShootResult) -> bool> = rule_on(seams.rules_epoch, EPOCH_73_V36).then_some(&deadly_wipes);
+    let r = crate::dice::resolve_melee_leg_wipe(&members, &def, &ut.name, charging, cond_ap_dice, shred_alias_dice, rule_on(seams.rules_epoch, EPOCH_14_DEADLY_LANDING), charge_from_in, rule_on(seams.rules_epoch, EPOCH_22_SCREENED_MELEE), seams.tray_exact, rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36), rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36), rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36), wipes, tray);
     // WAVE 3, rules-must-log — the melee leg's Boost shape fired (no distance
     // here; the gated aliases never reach a melee save batch, exactly the
     // table's own `dist_in: -1.0` read, main.gd:6119).
@@ -6226,7 +6246,7 @@ const HERO_AURA_REACH_IN: f64 = 6.0;
 /// Tough(9)+, within 6" base edge to base edge (`modifier_distance_in`, the table's `nearest_melee_gap_in`).
 /// Such a Hero cannot be joined, so it is its own unit. A Shaken `i` rolls no die, so no aura is spent.
 fn hero_aura_quality(statics: &[UnitStatic], state: &State, i: usize, own: i64, seams: Seams) -> Option<(usize, i64)> {
-    if !rule_on(seams.rules_epoch, EPOCH_73_V36) || state.shaken[i] {
+    if !rule_on(seams.rules_epoch, EPOCH_73_V36) || unit_shaken(state, i, seams) {
         return None;
     }
     let mut best: Option<(usize, i64)> = None;
@@ -6300,7 +6320,7 @@ fn drop_banner_for_cause(
     cause: Option<&str>, over_in: Option<f64>, charge_from_in: Option<f64>, seams: Seams,
     ctx: &mut Ctx, shot: &mut ShootResult,
 ) {
-    if !rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) || state.shaken[i] { return; }
+    if !rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) || unit_shaken(state, i, seams) { return; }
     let us = &statics[state.roster.profile[i]];
     let banner = (state.morale_bonus[i] - us.ctx.morale_rating).max(0);
     if let Some(cause) = cause {
@@ -6383,10 +6403,16 @@ pub(crate) fn tray_morale_for(
     let us = &statics[state.roster.profile[i]];
     let mut ctx = live_morale_ctx(statics, state, i, melee, seams, shot);
     drop_banner_for_cause(statics, state, i, melee, charged_by_enemy, cause, over_in, charge_from_in, seams, &mut ctx, shot);
+    // G4R4 C-LONEHERO-SHAKEN: the unit's flag, the dead host's included (rules-must-log names the Shaken rule).
+    let shaken = unit_shaken(state, i, seams);
+    if shaken && !state.shaken[i] {
+        let host = &statics[state.roster.profile[morale_root(state, i, seams)]].name;
+        shot.log.push(format!("Shaken: {} is the unit of its dead host {host}, which is Shaken — the test fails without a die", us.name));
+    }
     // EPOCH_39_MORALE_RATING — rules-must-log (main.gd:8596-8602): the test
     // that adds the rating names it, once per drawn die. A Shaken auto-fail
     // draws no die and adds nothing, so it stays silent.
-    if us.ctx.morale_rating > 0 && !state.shaken[i] {
+    if us.ctx.morale_rating > 0 && !shaken {
         shot.log.push(format!(
             "[Morale({})] {}: +{} to the morale test (passes on {}+)",
             us.ctx.morale_rating,
@@ -6402,7 +6428,7 @@ pub(crate) fn tray_morale_for(
         &us.name,
         melee,
         below_half(state, statics, us, i, seams),
-        state.shaken[i],
+        shaken,
         // `SoloController.wounds_to_destroy` :6084 also counts the attached
         // heroes' models; this port counts the unit's own wounds, which is the
         // die COUNT of a No Retreat roll and nothing else.
@@ -6411,7 +6437,7 @@ pub(crate) fn tray_morale_for(
     );
     // Rules 3.6 rules-must-log (main.gd `_solo_morale_test`): a unit Fearless by MOST of its models names the
     // count when it draws the recovery die - the die follows the test die, or stands alone for a Shaken unit.
-    if rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) && ctx.fearless && r.rolls.len() > usize::from(!state.shaken[i]) {
+    if rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) && ctx.fearless && r.rolls.len() > usize::from(!shaken) {
         let (with, total) = fearless_models(statics, state, i, seams);
         if with < total {
             shot.log.push(format!("Fearless: {with} of {total} models of {} have it — most do, so the whole unit counts", us.name));
@@ -8824,37 +8850,67 @@ fn consolidation_goal(next: &State, winner: usize) -> Option<V3> {
     })
 }
 
-/// Consolidation Moves (GF v3.5.1 p.9), seam-gated by `consolidate`. Only the
-/// "one side destroyed" half is ported: the survivor may move up to 3" via
-/// the SAME routed chain `plain_move` gives ADVANCE/RUSH. Neither destroyed
-/// (or a mutual wipe) is not this port's rung — no rule fires, no move, and
-/// `consolidate="off"` (default) never reaches this function at all.
-fn consolidate_after_melee(next: &mut State, cover: Cover, seams: Seams, si: usize, ti: usize) {
-    let winner = if next.alive[ti] <= 0 && next.alive[si] > 0 {
+/// Consolidation Moves (GF v3.5.1 p.9; the table's `_solo_consolidate_melee`), seam-gated by `consolidate`
+/// and, from `EPOCH_73_V36`, by the epoch alone. One side destroyed: the survivor may move up to 3" via the
+/// SAME routed chain `plain_move` gives ADVANCE/RUSH. From 73 also neither destroyed: the charger moves back 1",
+/// the sides counted with their joined heroes, then on the dice path the move's Dangerous terrain test
+/// (`_run_ai_dangerous(unit, dang)`: one die per affected model; `no_dangerous` is the RED switch of the MOVE's
+/// test, which the gate turns off when the tray already spent that leg, so this later test ignores it).
+fn consolidate_after_melee(next: &mut State, statics: &[UnitStatic], cover: Cover, seams: Seams, si: usize, ti: usize, mut dice: Option<(&mut Tray, &mut ShootResult)>) {
+    let v36 = rule_on(seams.rules_epoch, EPOCH_73_V36);
+    let (sa, ta) = if v36 { (combined_alive(next, si, seams), combined_alive(next, ti, seams)) } else { (next.alive[si], next.alive[ti]) };
+    let sep = v36 && sa > 0 && ta > 0;
+    let winner = if (ta <= 0 && sa > 0) || sep {
         si
-    } else if next.alive[si] <= 0 && next.alive[ti] > 0 {
+    } else if sa <= 0 && ta > 0 {
         ti
     } else {
         return;
     };
     let Cover::Board(t) = cover else { return };
-    let Some(goal) = consolidation_goal(next, winner) else { return };
+    if next.alive[winner] <= 0 || (sep && next.alive[ti] <= 0) {
+        return;
+    }
+    let (goal, band_in, what) = if sep {
+        let (c, d) = (geom::centre(&next.positions[si]), geom::centre(&next.positions[ti]));
+        (geom::sub(geom::mul(c, 2.0), d), 1.0, "moves back 1\" (the charger separates)")
+    } else {
+        let Some(goal) = consolidation_goal(next, winner) else { return };
+        (goal, CONSOLIDATE_WIN_IN, "consolidates up to 3\" (enemy destroyed)")
+    };
     if let Some(land) = (crate::mv::step::MoveRules { rules_epoch: seams.rules_epoch }).plain_move(
         next,
         t,
         winner,
         goal,
-        CONSOLIDATE_WIN_IN,
+        band_in,
         seams.hero_attach,
         true,
         crate::mv::FAST_PLANNER_GUARD,
     ) {
+        // `_execute_move` tests only a move that moved (its 0.0005 m early-out); the count reads the pre-move state.
+        let moved = land.movers.iter().zip(&land.end).any(|(m, e)| geom::length(geom::sub(*e, geom::to_f32(next.positions[m.unit][m.model]))) > 0.0005);
+        let name = statics[next.roster.profile[winner]].name.clone();
+        let mut n = 0;
+        if let (true, true, Some((_, shot))) = (v36, moved, dice.as_mut()) {
+            shot.log.push(format!("Consolidation: {name} {what}"));
+            n = dangerous_dice(statics, next, next, winner, seams, Some(&land), cover, shot, true);
+        }
         land.spend_sidestep(next);
         for (i, m) in land.movers.iter().enumerate() {
             next.positions[m.unit][m.model] = geom::to_f64(land.end[i]);
         }
         // Wave 4 (port-entrenched) — consolidation counts as moving.
         next.moved_round[winner] = next.round;
+        if let (true, Some((tray, shot))) = (n > 0, dice) {
+            shot.log.push(format!("Dangerous terrain: {name} takes one test for the whole unit ({n} dice)"));
+            let faces = tray.roll(n as usize);
+            let w = dangerous_wounds(&faces);
+            shot.rolls.push(crate::dice::Roll { kind: "attack", count: n, target: DANGEROUS_TARGET, faces, owner: name });
+            if w > 0 {
+                land_wounds_with(next, winner, w, seams.tray_exact);
+            }
+        }
     }
 }
 
@@ -9508,7 +9564,7 @@ fn resolve_with(
         && !next.dormant[si];
     if ((moved && !flew) || activated_in_it) && !seams.no_dangerous {
         if let Some((tray, shot)) = dice.as_mut() {
-            let n = dangerous_dice(statics, state, &next, si, seams, landing.as_ref(), cover, shot);
+            let n = dangerous_dice(statics, state, &next, si, seams, landing.as_ref(), cover, shot, false);
             if n > 0 {
                 let faces = tray.roll(n as usize);
                 let w = dangerous_wounds(&faces);
@@ -10371,8 +10427,8 @@ fn resolve_with(
                 // Consolidation Moves (GF v3.5.1 p.9), seam-gated: one side
                 // wiped by the melee just resolved above (wounds or the
                 // morale rout), win or EV path alike — the survivor may move.
-                if seams.consolidate {
-                    consolidate_after_melee(&mut next, cover, seams, si, ti);
+                if seams.consolidate || rule_on(seams.rules_epoch, EPOCH_73_V36) {
+                    consolidate_after_melee(&mut next, statics, cover, seams, si, ti, dice.as_mut().map(|d| (&mut *d.0, &mut *d.1)));
                 }
             }
         }

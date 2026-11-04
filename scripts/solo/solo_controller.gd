@@ -6365,8 +6365,16 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 		longest_arc_m = maxf(longest_arc_m, MovementPlanner.polyline_length(t as Array) + climb_in * INCHES_TO_METERS)
 	if not _is_regiment(unit):
 		# Retrace each animation trail to its GATED endpoint so the glide ends exactly where the state now is.
+		var wall_kept := 0
 		for i in range(mini(trails.size(), new_positions.size())):
-			trails[i] = _retrace_to(trails[i] as Array, positions[i] as Vector3, new_positions[i] as Vector3)
+			var kept := _retrace_wall_true(unit, trails[i] as Array, positions[i] as Vector3, new_positions[i] as Vector3)
+			trails[i] = kept[0]
+			if (kept[1] as Vector3) != (new_positions[i] as Vector3):
+				new_positions[i] = kept[1]
+				wall_kept += 1
+		if wall_kept > 0:   # rules-must-log (AIG-L6): the kept-back models say which book rule held them
+			board_clamp_notes.append("%s: %d model%s stay on their own side of a wall (Charge: no moving through walls; Unit Coherency waits)"
+				% [unit.get_name(), wall_kept, "" if wall_kept == 1 else "s"])
 	_apply_model_positions(models, new_positions)
 	# Publish the per-model routes + base radii for the presentation layer (glide + swept corridor +
 	# distance label) — the STATE is already final (applied + broadcast above); the replay is local.
@@ -8481,6 +8489,25 @@ func _retrace_to(route: Array, start: Vector3, gated: Vector3) -> Array:
 	if (trimmed.back() as Vector3).distance_to(gated) > OVERLAP_EPS_M:
 		trimmed.append(gated)
 	return trimmed
+
+
+## AIG-L6 (EPOCH_73_V36): `_retrace_to` closes the trimmed route with ONE straight leg to the gate-corrected end,
+## and when the gate moved that end off the route (a charge's coherency pull) the leg can run through a wall the
+## route had bent around. The model then keeps its route-true endpoint, the wall clamp's own discipline ("route
+## truth wins"); a ledge the unit may climb (<= 3") is no wall. Returns [trail, end].
+func _retrace_wall_true(unit: GameUnit, route: Array, start: Vector3, gated: Vector3) -> Array:
+	var trail := _retrace_to(route, start, gated)
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 or route.is_empty() or trail.size() < 2 \
+			or unit.has_special_rule("Flying"):
+		return [trail, gated]
+	var ledges := _ledges_world(unit).filter(func(l): return float(l["dy_in"]) <= MovementPlanner.LEDGE_CLIMB_MAX_IN)
+	var a := Vector2((trail[trail.size() - 2] as Vector3).x, (trail[trail.size() - 2] as Vector3).z)
+	var b := Vector2((trail[trail.size() - 1] as Vector3).x, (trail[trail.size() - 1] as Vector3).z)
+	for w in _rest_walls():
+		if not _is_ledge_edge(w, ledges) and MovementPlanner.segments_cross(a, b, w[0], w[1]):
+			var back := route.back() as Vector3
+			return [route, Vector3(back.x, gated.y, back.z)]
+	return [trail, gated]
 
 
 ## Straight one-leg trails for a rigid slide (start → end per model).
@@ -10912,8 +10939,9 @@ func _charge_path_probe_impl(unit: GameUnit, target: GameUnit, band_in: float) -
 	if not _is_regiment(unit):
 		finalized = _finalize_placement(unit, models, positions, planned, true, target)
 		for i in range(mini(trails.size(), finalized.size())):
-			trails[i] = _retrace_to(trails[i] as Array, positions[i] as Vector3,
-				finalized[i] as Vector3)
+			var kept := _retrace_wall_true(unit, trails[i] as Array, positions[i] as Vector3, finalized[i] as Vector3)
+			trails[i] = kept[0]
+			finalized[i] = kept[1]
 
 	var target_shapes: Array = []
 	for target_model in _moving_models(target):
