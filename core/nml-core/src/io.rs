@@ -1697,6 +1697,24 @@ mod tests {
         assert_eq!(hosted.growth_round[1], -1, "attached -> never swept");
     }
 
+    /// G4-H-MOVED (`EPOCH_73_V36`) — the table's `moved_round` stamp rides the act ledger: `fold_ledger`
+    /// reads it from 73 on, an act without the key keeps -1 ("never moved"), and below 73 it is not read.
+    #[test]
+    fn fold_ledger_reads_the_moved_round_stamp_from_epoch_73_only() {
+        let ledger: super::PlainLedger = serde_json::from_str(r#"{"moved_round":1}"#).expect("ledger");
+        let none: super::PlainLedger = serde_json::from_str("{}").expect("ledger");
+        let mut st = state_of(LEDGER_PLAIN);
+        super::fold_ledger(&mut st, 1, &ledger, crate::acts::EPOCH_73_V36, 1, false, -1);
+        assert_eq!(st.moved_round[1], 1, "the stamp lands on the named unit");
+        assert_eq!(st.moved_round[0], -1, "unit 0 is untouched");
+        let mut old = state_of(LEDGER_PLAIN);
+        super::fold_ledger(&mut old, 1, &ledger, crate::acts::EPOCH_72_PLAYTEST_RULES, 1, false, -1);
+        assert_eq!(old.moved_round[1], -1, "below 73 the key is not read");
+        let mut absent = state_of(LEDGER_PLAIN);
+        super::fold_ledger(&mut absent, 1, &none, crate::acts::EPOCH_73_V36, 1, false, -1);
+        assert_eq!(absent.moved_round[1], -1, "an act without the key keeps -1");
+    }
+
     /// `p1_0_a` on the tray: the shape `battle_sim.gd:1477-1489` + `:1539-1543`
     /// write for a unit `SoloController.unit_in_reserve` answers true for —
     /// zero table presence (`alive: 0`, no positions/wounds/radii) and its
