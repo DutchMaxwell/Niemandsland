@@ -56,15 +56,24 @@ mod g4_c8a {
     /// The charger (unit 0) in a line at `xs` inches, the target host at `host_x` inches and, when
     /// `hero_x` is given, a joined hero at that spot; all bases of radius `r`.
     fn fight(r: f64, xs: &[f64], host_x: f64, hero_x: Option<f64>) -> (State, Vec<UnitStatic>) {
+        fight_with(&header(r), None, r, xs, host_x, hero_x)
+    }
+
+    /// `fight` over a given header text and, when given, the charger's per-model kits.
+    fn fight_with(head_text: &str, kits: Option<Value>, r: f64, xs: &[f64], host_x: f64, hero_x: Option<f64>) -> (State, Vec<UnitStatic>) {
         let mut units = serde_json::Map::new();
-        units.insert("p1_0_a".into(), unit(1, &line(xs), r, &[], ""));
+        let mut charger = unit(1, &line(xs), r, &[], "");
+        if let Some(k) = kits {
+            charger["kits"] = k;
+        }
+        units.insert("p1_0_a".into(), charger);
         let kids: Vec<&str> = hero_x.iter().map(|_| "p2_1_h").collect();
         units.insert("p2_0_b".into(), unit(2, &line(&[host_x]), r, &kids, ""));
         if let Some(hx) = hero_x {
             units.insert("p2_1_h".into(), unit(2, &line(&[hx]), r, &[], "p2_0_b"));
         }
         let plain = json!({"round": 1, "rounds_total": 4, "scoring": "end", "units": units});
-        let head = read_act_header(&header(r)).expect("header");
+        let head = read_act_header(head_text).expect("header");
         let mut cache = ProfileCache::new(head.profiles);
         let mut roster = None;
         let st = io::state_from_json(&plain.to_string(), &mut cache, &mut roster).expect("state");
@@ -136,6 +145,33 @@ mod g4_c8a {
         assert!(!strike_log(&mut all, &statics, EPOCH_73_V36).iter().any(|l| l.starts_with("Who Can Strike")), "all 5 strike");
         let (mut wide, statics) = fight(0.0254, &WIDE, 0.0, None);
         assert!(!strike_log(&mut wide, &statics, EPOCH_72_PLAYTEST_RULES).iter().any(|l| l.starts_with("Who Can Strike")), "epoch 72");
+    }
+
+    /// The charger carrying a special weapon: four Blade bearers (one attack each) and ONE Fist bearer
+    /// (four attacks), one kit per model — the shape the table's `alive_bearers_of` reads.
+    fn special() -> (State, Vec<UnitStatic>) {
+        let one = r#"{"name":"Blade","range":0,"attacks":5,"count":1,"ap":0,"rules":[]}"#;
+        let two = r#"{"name":"Blade","range":0,"attacks":1,"count":4,"ap":0,"rules":[]},
+            {"name":"Fist","range":0,"attacks":4,"count":1,"ap":0,"rules":[]}"#;
+        let kit = |w: &str| json!({"weapons": [w], "equipment": 0, "wounds_max": 1});
+        let kits = json!([kit("Fist"), kit("Blade"), kit("Blade"), kit("Blade"), kit("Blade")]);
+        fight_with(&header(0.0254).replacen(one, two, 1), Some(kits), 0.0254, &WIDE, 0.0, None)
+    }
+
+    fn all_attacks(st: &State, statics: &[UnitStatic], seams: Seams) -> Vec<i64> {
+        melee_parts(statics, st, 0, 1, seams)[0].1.attacks.clone()
+    }
+
+    #[test]
+    fn partial_contact_counts_the_living_bearers_up_to_the_strikers_at_73() {
+        let (st, statics) = special();
+        assert_eq!(all_attacks(&st, &statics, at(EPOCH_73_V36, false)), vec![3, 4], "3 strike: 1 attack x min(4, 3) bearers; 4 x min(1, 3)");
+    }
+
+    #[test]
+    fn below_73_partial_contact_stays_pro_rata() {
+        let (st, statics) = special();
+        assert_eq!(all_attacks(&st, &statics, at(EPOCH_72_PLAYTEST_RULES, true)), vec![1, 1], "1 of 5 strikes by the 3\" centre measure: 4x1/5, 4x1/5");
     }
 
     #[test]
