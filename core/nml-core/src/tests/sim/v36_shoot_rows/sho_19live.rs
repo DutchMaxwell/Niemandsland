@@ -16,7 +16,10 @@ fn expert_line(rules_epoch: u32, gap_in: f64) -> (State, Vec<UnitStatic>) {
     expert.faction_folder = "watch_brothers".into();
     expert.special_rules = vec!["Versatile Expert".into()];
     expert.wounds_max = vec![1];
-    expert.weapons = vec![Weapon { name: "Rifle".into(), range: 24.0, attacks: 20, count: 1, ap: 0, rules: vec![] }];
+    expert.weapons = vec![
+        Weapon { name: "Rifle".into(), range: 24.0, attacks: 20, count: 1, ap: 0, rules: vec![] },
+        Weapon { name: "Blade".into(), range: 0.0, attacks: 20, count: 1, ap: 0, rules: vec![] },
+    ];
     st.roster = Rc::new(Roster {
         keys: vec!["a".into(), "b".into()],
         index: ["a", "b"].iter().enumerate().map(|(i, k)| (k.to_string(), i)).collect(),
@@ -43,14 +46,19 @@ fn expert_line(rules_epoch: u32, gap_in: f64) -> (State, Vec<UnitStatic>) {
 
 /// The Expert holds and shoots its target: the volley's own log and rolls.
 fn expert_volley(rules_epoch: u32, gap_in: f64) -> crate::dice::ShootResult {
+    expert_act(rules_epoch, gap_in, false)
+}
+
+/// The Expert either holds and shoots `b`, or charges it from `gap_in`.
+fn expert_act(rules_epoch: u32, gap_in: f64, charge: bool) -> crate::dice::ShootResult {
     let (st, statics) = expert_line(rules_epoch, gap_in);
     assert!(statics[0].ctx.versatile_no_gate == (rules_epoch >= EPOCH_73_V36), "setup: the static flag");
     let act = Action {
-        kind: HOLD,
+        kind: if charge { CHARGE } else { HOLD },
         unit: "a".into(),
         dest: None,
-        shoot: Some("b".into()),
-        charge: None,
+        shoot: if charge { None } else { Some("b".into()) },
+        charge: if charge { Some("b".into()) } else { None },
         patient: false,
         split: None,
         traced: None,
@@ -79,6 +87,31 @@ fn a_versatile_expert_at_four_inches_latches_its_pick_at_epoch_73() {
     );
     let targets: Vec<i64> = r.rolls.iter().filter(|x| x.kind == "attack" && x.count == 20).map(|x| x.target).collect();
     assert_eq!(targets, vec![3], "the +1 to hit reaches the volley's dice (Quality 4 -> 3+)");
+}
+
+/// RED on main (row G4-C12, gf_1000_net_001 act 12): the same overwrite hid the pick from a
+/// charge whose pre-charge gap (5.77") sits inside the 6" charge gate, so the strike rolled
+/// its plain 4+ where the table rolls the picked +1 to hit.
+#[test]
+fn a_versatile_expert_charging_from_inside_six_inches_latches_its_pick_at_epoch_73() {
+    let r = expert_act(EPOCH_73_V36, 5.77, true);
+    assert!(
+        r.log.iter().any(|l| l.starts_with("Versatile Expert:") && l.contains("picks +1 to hit")),
+        "rules-must-log: the book rule names the pick; log: {:?}",
+        r.log
+    );
+    let targets: Vec<i64> = r.rolls.iter().filter(|x| x.kind == "attack" && x.count == 20).map(|x| x.target).collect();
+    assert_eq!(targets, vec![3], "the +1 to hit reaches the strike (Quality 4 -> 3+); rolls: {:?}",
+        r.rolls.iter().map(|x| (x.kind, x.count, x.target)).collect::<Vec<_>>());
+}
+
+/// The pin: below 73 a 5.77" charge latches nothing (the old 9" gate).
+#[test]
+fn below_epoch_73_a_charge_inside_the_gate_latches_no_pick() {
+    let r = expert_act(EPOCH_72_PLAYTEST_RULES, 5.77, true);
+    assert!(r.log.iter().all(|l| !l.contains("picks")), "72 keeps the gate; log: {:?}", r.log);
+    let targets: Vec<i64> = r.rolls.iter().filter(|x| x.kind == "attack" && x.count == 20).map(|x| x.target).collect();
+    assert_eq!(targets, vec![4]);
 }
 
 /// The pin: below 73 the Expert has no no-gate pick, so 4" latches nothing.
