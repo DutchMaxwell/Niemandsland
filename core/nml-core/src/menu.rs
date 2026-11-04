@@ -1206,6 +1206,25 @@ pub fn candidates_in(
     candidates_tuned(state, terrain, statics, unit, sc, Tuning::default())
 }
 
+/// G4-C7 (`EPOCH_73_V36`, the Regroup rule): a unit that STARTS its activation out of coherency may only take the action
+/// that restores it, so every menu (the hand menu, the rollout menu, the grid widening) shrinks to the one gather pick.
+/// Mirrors the table's `_act` check before any plan (solo_controller.gd:1853): more than one model and not coherent now.
+pub(crate) fn starts_incoherent(state: &State, terrain: &Terrain, unit: usize, rules_epoch: u32) -> bool {
+    rule_on(rules_epoch, EPOCH_73_V36)
+        && !state.positions[unit].is_empty()
+        && !(crate::mv::step::MoveRules { rules_epoch }).unit_coherent_now(state, terrain, unit, true)
+}
+
+/// The gather pick `_act_regroup` makes (:2933): an ADVANCE that stays where it stands, so the placement gate pulls the
+/// stragglers in, and the post-move volley the table still allows (`shoot`, the best target now). The caller hands `shoot`
+/// over only where the resolver can answer a MOVED volley (`wide_shoot` / `moved_shoot`); otherwise the resolve declines.
+pub(crate) fn regroup_menu(state: &State, unit: usize, shoot: Option<usize>) -> Vec<Candidate> {
+    let mut c = Candidate::new(state.key(unit), ADVANCE);
+    c.dest = Some(geom::to_f64(geom::centre(&state.positions[unit])));
+    c.shoot = shoot.map(|e| state.key(e).to_string());
+    vec![c]
+}
+
 /// One CHARGE candidate aimed at `e`, built the way both menu sites build it:
 /// the destination is the TARGET UNIT'S CENTRE (`ai_planner.gd:1035`), which is
 /// what `resolve`'s rigid arm then walks toward.
@@ -1271,6 +1290,9 @@ pub fn candidates_tuned(
         let mut c = Candidate::new(key, HOLD);
         c.shoot = Some(state.key(e).to_string());
         out.push(c);
+    }
+    if starts_incoherent(state, terrain, unit, rules_epoch) {
+        return regroup_menu(state, unit, shoot.filter(|_| tuning.wide_shoot));
     }
     // NML-1020 lab half: Immobile/Artillery may only Hold (p.13/p.57) — the menu
     // for carriers ends here, so no playout can ever imagine them moving.
