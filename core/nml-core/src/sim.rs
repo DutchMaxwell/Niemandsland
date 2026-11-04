@@ -9669,13 +9669,30 @@ fn resolve_with(
                                 let mut msc = Scratch::default();
                                 msc.rules_epoch = seams.rules_epoch;
                                 msc.bearers_last = seams.casualties_bearers_last;
+                                // G4R3 F-HERO-RANGE (EPOCH_73_V36): range is per MODEL — a joined hero's weapons
+                                // are gated by the hero's own nearest gap (the host's `g.d` below 73 and for the host).
+                                let hero_own_gap = mi != si && rule_on(seams.rules_epoch, EPOCH_73_V36);
+                                let dm = if !hero_own_gap {
+                                    g.d
+                                } else if seams.range_by_base_edge || plan.is_some() {
+                                    range_gap_in(&next, &next.positions[mi], mi, g.ti)
+                                } else {
+                                    geom::dist_in(&next.positions[mi], &next.positions[g.ti])
+                                };
                                 if seams.sighting {
                                     sighted_profiles_of(
-                                        um, &next, statics, mi, g.ti, &zones, g.d, kind == HOLD, &mut msc,
+                                        um, &next, statics, mi, g.ti, &zones, dm, kind == HOLD, &mut msc,
                                     );
                                 } else {
-                                    profiles_of(um, next.alive[mi], g.d, &mut msc);
+                                    profiles_of(um, next.alive[mi], dm, &mut msc);
                                     shoot_bearers_rescale(um, &next, mi, seams.rules_epoch, &mut msc);
+                                }
+                                if hero_own_gap && dm < g.d {
+                                    // Rules-must-log: the hero's own gap kept a weapon the host's gap would have dropped.
+                                    let mark = if mods::granted_vs(&next, g.ti, "+6\" shooting range") { INCREASED_SHOOTING_RANGE_MARK_IN } else { 0.0 };
+                                    for p in msc.keep.iter().map(|&k| &um.shoot[k]).filter(|p| p.range as f64 + p.reach_bonus_in + mark < g.d) {
+                                        shot.log.push(format!("Shooting Range: {} fires {} from its own base, {dm:.1}\" away", um.name, p.name));
+                                    }
                                 }
                                 if rule_on(seams.rules_epoch, EPOCH_73_V36) {
                                     // Limited: the log names the book rule for each spent weapon the volley leaves out.
@@ -9744,6 +9761,7 @@ fn resolve_with(
                                 }
                                 att.moved_this_round = moved;
                                 att.held = kind == HOLD;
+                                att.member_gap_in = hero_own_gap.then_some(dm);
                                 parts.push((mi, msc, att));
                             }
                             // FEAT PR 2 — the deferred stamp: the unspent
