@@ -45,6 +45,8 @@ fn line(hero_gap_in: f64) -> (State, Vec<UnitStatic>) {
     let keys = st.roster.keys.clone();
     let index = keys.iter().enumerate().map(|(i, k)| (k.clone(), i)).collect();
     st.roster = Rc::new(Roster { keys, index, profile: vec![0, 1, 2, 3] });
+    let base = st.profiles.list[0].clone();
+    st.profiles = Rc::new(Profiles { list: vec![base; 4], index: HashMap::new() });
     st.alive = vec![1, 1, 1, 0];
     st.attached = Rc::new(vec![vec![1], vec![], vec![], vec![]]);
     st.attached_to = Rc::new(vec![None, Some(0), None, None]);
@@ -99,20 +101,21 @@ fn below_epoch_73_the_host_gap_still_drops_the_hero_weapon() {
     }
 }
 
-/// The gate is the hero's OWN gap: a hero behind the host (13.3") and a hero level with it (12.3")
-/// are both out of range of a 12" weapon, no slack.
+/// The gate is the hero's OWN gap: a hero behind the host (13.3"), level with it (12.3") and a hair
+/// past the weapon's range (12.01") are all out of a 12" weapon's reach — no slack.
 #[test]
 fn a_hero_out_of_range_by_its_own_gap_does_not_fire() {
     for sighting in [true, false] {
-        assert_eq!(hero_dice(13.3, EPOCH_73_V36, sighting), 0, "sighting={sighting}: 13.3\" of 12\"");
-        assert_eq!(hero_dice(12.3, EPOCH_73_V36, sighting), 0, "sighting={sighting}: 12.3\" of 12\"");
+        for gap in [13.3, 12.3, 12.01] {
+            assert_eq!(hero_dice(gap, EPOCH_73_V36, sighting), 0, "sighting={sighting}: {gap}\" of 12\"");
+        }
     }
 }
 
-/// At exactly the weapon's range the hero fires: no slack the other way either.
+/// A hair inside the weapon's range the hero fires (the range test is the edge gap, no centre ruler).
 #[test]
-fn a_hero_exactly_at_its_range_fires() {
+fn a_hero_just_inside_its_range_fires() {
     for sighting in [true, false] {
-        assert_eq!(hero_dice(12.0, EPOCH_73_V36, sighting), 2, "sighting={sighting}: 12.0\" of 12\"");
+        assert_eq!(hero_dice(11.99, EPOCH_73_V36, sighting), 2, "sighting={sighting}: 11.99\" of 12\"");
     }
 }

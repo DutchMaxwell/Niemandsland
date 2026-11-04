@@ -913,6 +913,7 @@ pub fn resolve_volley_leg(
     for (sh, k, pi) in shots {
         let att = sh.att;
         let p = &sh.profiles[pi];
+        let reach_gate = att.member_gap_in.map_or(reach_gate, f64::ceil);
         // Rules 3.6: the shooter's own range grant rides the PRINTED range, the target-side shrink
         // applies to the sum (main.gd: `base_range + range_bonus`, then `effective_shoot_reach_in`).
         let printed = p.range as f64 + p.reach_bonus_in;

@@ -107,6 +107,9 @@ impl ShieldedAlias {
 /// (battle_sim.gd:701-712) writes over the template per call.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Ctx {
+    /// G4R3 F-HERO-RANGE (`EPOCH_73_V36`): a joined hero's own nearest gap to the volley target, set at the
+    /// volley seam; the resolver's range test reads it in place of the volley distance. `None` = the volley's own.
+    pub member_gap_in: Option<f64>,
     pub quality: i64,
     pub defense: i64,
     pub morale_bonus: i64,
@@ -3405,6 +3408,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         if evasive_boost.is_empty() { "Evasive" } else { evasive_boost },
         &format!("{}: Evasive stamped, -1 to hit", p.name));
     Ctx {
+        member_gap_in: None,
         quality: p.quality,
         defense: armored_defense(p.defense, armor),
         morale_bonus,
