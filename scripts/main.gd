@@ -5738,13 +5738,23 @@ func _solo_consume_once_mods(attacker: GameUnit, defender: GameUnit, melee: bool
 		for u in [unit, unit.get_attached_to() if unit.has_method("get_attached_to") else null]:
 			var uu := u as GameUnit
 			if uu != null:
-				_solo_spend_once_mods(uu, pair[1] as Array, melee)
+				_solo_spend_once_mods(uu, pair[1] as Array, melee, "", unit == attacker)
+
+
+## G4-T10 (EPOCH_73_V36, lead ruling on the 3.6 once-grants): a "once" grant is spent the next time its effect
+## actually applies. Evasive (and Melee Evasion) works when its bearer is ATTACKED, so the bearer own strike or
+## volley does not spend it; the exchange that attacks the bearer does (the defender side of the same spend).
+func _solo_grant_waits_to_be_attacked(rd: Dictionary) -> bool:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return false
+	var rule := RulesRegistry.base_rule_name(str(rd.get("grants_rule", "")))
+	return rule == "Evasive" or rule == "Melee Evasion"
 
 
 ## F4/NML-006 — spend every once-record on ONE unit that matches `roles` (role- and scope-filtered
 ## exactly like the reads). Reverts the NML-006 side effects (grant overlay off, props stamps
 ## recomputed), removes the paired library token and logs each spend (rules-must-log).
-func _solo_spend_once_mods(uu: GameUnit, roles: Array, melee: bool, keep_spell: String = "") -> void:
+func _solo_spend_once_mods(uu: GameUnit, roles: Array, melee: bool, keep_spell: String = "", attacking: bool = false) -> void:
 	var key := uu.get_instance_id()
 	var records: Array = _solo_spell_mods.get(key, [])
 	if records.is_empty():
@@ -5754,6 +5764,8 @@ func _solo_spend_once_mods(uu: GameUnit, roles: Array, melee: bool, keep_spell: 
 		for rd in AiSpell.mods_for(records, str(role), melee):
 			if keep_spell != "" and str((rd as Dictionary).get("spell", "")) == keep_spell:
 				continue
+			if attacking and _solo_grant_waits_to_be_attacked(rd as Dictionary):
+				continue   # G4-T10: the bearer own attack does not use an attacked-only grant
 			if str((rd as Dictionary).get("duration", "")) == "once" and not spent.has(rd):
 				if _solo_is_regen_grant(rd as Dictionary) and not bool((rd as Dictionary).get("used", false)):
 					continue
