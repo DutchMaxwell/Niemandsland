@@ -594,6 +594,18 @@ fn gate_flags(&self) -> super::gate::GateFlags<'_> {
         start_world: &self.pos, rules_epoch: self.rules_epoch, ..Default::default() }
 }
 
+/// G4-C7b: does the unit START this move out of coherency? The movers' own start footprint against the acting unit's
+/// chain length (6" skirmish, else 9"): the predicate the final placement gate leaves behind (`coherent_placement`).
+fn starts_torn(&self, starts: &[V2], radii_m: &[f64]) -> bool {
+    let radii_in: Vec<f64> = radii_m.iter().map(|r| r / IN2M).collect();
+    let shapes: Vec<_> = self.movers.iter().map(|m| self.state.base_shape(m.unit)).collect();
+    let chain = if rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES)
+        && matches!(self.state.profile(self.si).game_system.as_str(), "gff" | "aofs")
+    { super::SKIRMISH_CHAIN_IN } else { super::MAX_CHAIN_IN };
+    !super::gate::coherent_placement(starts, &radii_in,
+        super::gate::GateFlags { shapes: &shapes, coherent_chain_in: chain, ..Default::default() })
+}
+
 /// The gate starts from the planner's world endpoints; trimming may replace them.
 fn world_endpoints(&self, planned: &[V2]) -> Vec<V3> {
     planned.iter().enumerate().map(|(i, p)| {
@@ -790,10 +802,18 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
     }
     // :4858-4866 — nothing actually moved: the table returns BEFORE the gate,
     // so a unit already stacked where it stands is not re-arranged for free.
-    let stirred = planned
+    let walked = planned
         .iter()
         .enumerate()
         .any(|(i, p)| g2::distance_to(*p, starts[i]) as f64 * IN2M > OVERLAP_EPS_M);
+    // G4-C7b (Regroup, `EPOCH_73_V36`): `_act_regroup` hands `_finalize_placement` the UNMOVED positions, so a unit
+    // that starts torn still runs the gate when its centre goes nowhere. It never enters `_execute_move`, so it
+    // spends no sidestep attempt either (the boxed escape below is skipped).
+    let regroup = !walked
+        && rule_on(self.rules_epoch, EPOCH_73_V36)
+        && !self.allow_contact
+        && self.starts_torn(&starts, radii_m);
+    let stirred = walked || regroup;
     // :4884-4885 — THE HARD FINAL PLACEMENT GATE, applied HERE, after the trim,
     // so the trim can never cut a gate-corrected endpoint off its trail. Passes
     // 1-4, the epoch-gated whole-unit shorten and the wall clamp are ported
@@ -886,7 +906,7 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
         }
         // The forward lane being jammed does not reduce the legal lateral band.
         let big = self.own_r_m >= 1.5 * IN2M;
-        if !self.allow_contact && rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES)
+        if !self.allow_contact && !regroup && rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES)
             && granted_reach >= 2.0 && achieved_in(&starts, &planned) < 1.0
             && (big || state.sidestep_budget.available(state.round))
             && self.has_lateral_room(granted_reach)
