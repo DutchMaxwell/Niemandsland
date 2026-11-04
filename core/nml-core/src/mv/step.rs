@@ -1220,6 +1220,10 @@ fn charge_landing(self, state: &State, t: &Terrain, si: usize, ci: usize,
         let remaining = land.remaining_in();
         short = closest > crate::sim::MELEE_ENGAGE_IN
             || closest > remaining + crate::sim::BASE_CONTACT_EPSILON_IN;
+        // `charge_snap_fits_unit_budget` :10807 — the probe's first clause: the LONGEST route of the
+        // formation must fit the band it was granted (a trailing model can walk further than the cap).
+        short |= rule_on(self.rules_epoch, EPOCH_73_V36)
+            && land.arc_in > land.budget_in + crate::sim::BASE_CONTACT_EPSILON_IN;
     }
     Some((land, short))
 }
