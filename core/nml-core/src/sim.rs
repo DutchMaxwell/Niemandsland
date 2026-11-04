@@ -6418,12 +6418,22 @@ pub(crate) fn tray_morale_for(
             drop_carried(state, i);
         }
         Morale::Routed => {
-            drop_carried(state, i);
-            state.wounds[i].clear();
-            state.positions[i].clear();
-            Rc::make_mut(&mut state.radii)[i].clear();
-            state.kits_drop(i);
-            state.alive[i] = 0;
+            // R3-C3 (`EPOCH_73_V36`, the Hero rule): a rout destroys the whole chain, the living joined heroes too.
+            let mut gone = vec![i];
+            if seams.hero_attach && rule_on(seams.rules_epoch, EPOCH_73_V36) {
+                gone.extend(state.attached[i].iter().copied().filter(|&h| state.alive[h] > 0));
+            }
+            for &u in &gone {
+                drop_carried(state, u);
+                state.wounds[u].clear();
+                state.positions[u].clear();
+                Rc::make_mut(&mut state.radii)[u].clear();
+                state.kits_drop(u);
+                state.alive[u] = 0;
+                if u != i {
+                    shot.log.push(format!("Routed: {} is destroyed with {}", statics[state.roster.profile[u]].name, us.name));
+                }
+            }
         }
     }
 }
