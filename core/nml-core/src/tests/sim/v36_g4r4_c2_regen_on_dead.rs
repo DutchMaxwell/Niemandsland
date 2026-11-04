@@ -78,18 +78,28 @@ fn regen_rolls(shot: &ShootResult) -> usize {
     shot.rolls.iter().filter(|r| r.kind == "attack" && r.owner == "Artillery" && r.target == 6).count()
 }
 
-/// Every charge in which the Artillery dies, as (state, report): only Deadly can kill its two wounds, the pike
-/// adds at most one pool wound.
-fn wiped(epoch: u32) -> Vec<(State, ShootResult)> {
+/// The wounds the Deadly(3) hit lands after the Artillery's 6+ ignore dice: three dice, one per wound of the hit.
+/// Nothing when no Deadly hit got through the save.
+fn deadly_wounds(shot: &ShootResult) -> Option<i64> {
+    let r = shot.rolls.iter().find(|r| r.kind == "attack" && r.owner == "Artillery" && r.target == 6 && r.count == 3)?;
+    Some(3 - r.faces.iter().filter(|&&f| f >= 6).count() as i64)
+}
+
+/// Every charge in which the Deadly hit ALONE destroys the Artillery (two wounds left, so two landed Deadly wounds
+/// do it); a Deadly hit that leaves it standing and a pike wound that finishes it are not this case.
+fn deadly_wipes(epoch: u32) -> Vec<(State, ShootResult)> {
     let (st, statics) = line(epoch);
-    (0..300).map(|s| charge(&st, &statics, s, epoch)).filter(|(next, _)| next.alive[2] == 0).collect()
+    (0..300)
+        .map(|s| charge(&st, &statics, s, epoch))
+        .filter(|(next, shot)| next.alive[2] == 0 && deadly_wounds(shot).is_some_and(|d| d >= 2))
+        .collect()
 }
 
 /// The row: a Deadly wipe leaves no pool ignore roll - one roll entry (the Deadly dice), never two - and the
 /// log names the rule on the charges where the pike's wound would have rolled one.
 #[test]
 fn a_deadly_wipe_rolls_no_pool_regeneration_die_from_73() {
-    let all = wiped(EPOCH_73_V36);
+    let all = deadly_wipes(EPOCH_73_V36);
     assert!(all.len() >= 20, "fixture: the Deadly hit wipes the Artillery often enough ({})", all.len());
     for (i, (_, shot)) in all.iter().enumerate() {
         assert!(regen_rolls(shot) <= 1, "wipe #{i} rolled a die for the pool after the unit was gone: {:?}", shot.rolls);
@@ -103,7 +113,7 @@ fn a_deadly_wipe_rolls_no_pool_regeneration_die_from_73() {
 /// Below 73 the extra die stays: some wipe still rolls two ignore entries.
 #[test]
 fn below_73_the_pool_regeneration_die_is_still_rolled() {
-    let all = wiped(EPOCH_72_PLAYTEST_RULES);
+    let all = deadly_wipes(EPOCH_72_PLAYTEST_RULES);
     assert!(all.iter().any(|(_, shot)| regen_rolls(shot) == 2), "{} wipes, none with the pool die", all.len());
     assert!(all.iter().all(|(_, shot)| shot.log.iter().all(|l| !l.starts_with("Regeneration:"))));
 }
