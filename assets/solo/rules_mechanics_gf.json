@@ -1346,6 +1346,11 @@
    "rated": false,
    "book_version": "3.5.1"
   },
+  "Unique Hero": {
+   "primitive": "Hero",
+   "rated": false,
+   "book_version": "3.6.0"
+  },
   "Unpredictable Fighter": {
    "primitive": "Unpredictable Fighter",
    "rated": false,
@@ -6195,6 +6200,16 @@
      "grants": "Fortified"
     }
    },
+   "Hit & Run Shooter": {
+    "primitive": "Hit & Run Shooter",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "move_in": 3.0,
+     "per_round": true,
+     "after": "shoot"
+    }
+   },
    "Infected": {
     "primitive": "Shred",
     "rated": false,
@@ -6266,6 +6281,15 @@
      "per_round": true,
      "max_markers": 4,
      "hit_per_two": 1
+    }
+   },
+   "Spawn": {
+    "primitive": "Spawn",
+    "rated": true,
+    "book_version": "3.6.0",
+    "params": {
+     "place_in": 6,
+     "once_per_game": true
     }
    },
    "Surge": {
@@ -7374,6 +7398,15 @@
      "condition": "near_terrain"
     }
    },
+   "Grounded Evasion": {
+    "primitive": "Stealth",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "hit_penalty": 1,
+     "terrain_within_in": 1
+    }
+   },
    "Grounded Stealth": {
     "primitive": "Stealth",
     "rated": false,
@@ -8275,6 +8308,14 @@
     "params": {
      "vs_target": true,
      "needs_los": true
+    }
+   },
+   "Vanguard": {
+    "primitive": "Vanguard",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_in": 9.0
     }
    },
    "Versatile Attack": {
@@ -10314,6 +10355,14 @@
      "morale_bonus": 1
     }
    },
+   "Enhanced Watchborn Aura": {
+    "primitive": "Aura Channel",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants": "Enhanced Watchborn"
+    }
+   },
    "Evasive": {
     "primitive": "Evasive",
     "rated": false,
@@ -10513,6 +10562,14 @@
      "morale_bonus": 1
     }
    },
+   "Enhanced Watchborn Aura": {
+    "primitive": "Aura Channel",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants": "Enhanced Watchborn"
+    }
+   },
    "Evasive": {
     "primitive": "Evasive",
     "rated": false,
@@ -10671,6 +10728,14 @@
     "params": {
      "vs_target": true,
      "needs_los": true
+    }
+   },
+   "Vanguard": {
+    "primitive": "Vanguard",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_in": 9.0
     }
    },
    "Versatile Reach": {
@@ -10903,6 +10968,14 @@
     "params": {
      "vs_target": true,
      "needs_los": true
+    }
+   },
+   "Vanguard": {
+    "primitive": "Vanguard",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_in": 9.0
     }
    },
    "Versatile Attack": {
@@ -11171,6 +11244,14 @@
     "params": {
      "vs_target": true,
      "needs_los": true
+    }
+   },
+   "Vanguard": {
+    "primitive": "Vanguard",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_in": 9.0
     }
    },
    "Versatile Attack": {

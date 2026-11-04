@@ -923,6 +923,12 @@ static func _ledger_of(u: GameUnit) -> Dictionary:
 	var spent_limited: Array = u.unit_properties.get("limited_used", [])
 	if rules_epoch >= EPOCH_73_V36 and not spent_limited.is_empty():
 		ledger["limited_used"] = spent_limited.duplicate()
+	# G4-H-MOVED (EPOCH_73_V36) — the round the unit last executed a move (unit_properties["moved_round"],
+	# stamped by main.gd _solo_animate_move). The table reads it for Artillery's -1 to hit, Entrenched and the
+	# stationary alias penalty; without it the core reads every unit as "never moved".
+	var moved_round := int(u.unit_properties.get("moved_round", -1))
+	if rules_epoch >= EPOCH_73_V36 and moved_round != -1:
+		ledger["moved_round"] = moved_round
 	var markers := 0
 	for e in RulesRegistry.unit_rules_of_primitive(u, "Growth Markers"):
 		var rn := str((e as Dictionary)["name"]).to_snake_case()

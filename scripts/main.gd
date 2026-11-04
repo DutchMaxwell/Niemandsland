@@ -11795,13 +11795,16 @@ static func _solo_rules_without_items(rules: Array, item_grants: Variant) -> Arr
 	var present := {}
 	for r in rules:
 		present[RulesRegistry.base_rule_name(str(r))] = true
+	var grants := {}   # keyed by the stripped name: an AI-list item name may carry a trailing space ("Psy-Witch ")
+	for k in (item_grants as Dictionary):
+		grants[RulesRegistry.base_rule_name(str(k))] = (item_grants as Dictionary)[k]
 	var out: Array = []
 	for r in rules:
 		var base := RulesRegistry.base_rule_name(str(r))
-		if not (item_grants as Dictionary).has(base):
+		if not grants.has(base):
 			out.append(r)
 			continue
-		for g in (item_grants as Dictionary)[base]:
+		for g in grants[base]:
 			if not present.has(RulesRegistry.base_rule_name(str(g))):
 				present[RulesRegistry.base_rule_name(str(g))] = true
 				out.append(g)
@@ -11841,6 +11844,9 @@ func _run_ai_melee(report: Dictionary) -> void:
 	var target: GameUnit = report.get("target")
 	if unit == null or target == null or dice_roller_control == null:
 		return
+	# G4-T9: the pre-melee activation wounds (Dangerous move, a spell, ...) are read HERE, before Counter, Impact
+	# and the strikes, like `_run_human_melee`; read after them the strike-back wounds would count twice.
+	var pre_melee_self_wounds: int = _solo_activation_self_wounds(unit)
 	_solo_stage_begin("%s charges %s" % [unit.get_name(), target.get_name()])
 	# The charge must actually reach combat, measured base-to-base (field-test finding 5): the planner ends
 	# the charge at/near base contact, so the gap between the nearest models — not the unit centres — is the
@@ -11981,7 +11987,7 @@ func _run_ai_melee(report: Dictionary) -> void:
 	await _solo_self_destruct_post_melee(target, unit)
 	# — Morale: a destroyed side loses first; otherwise the lower wound score loses (tie = nobody). Fear(X) (GF/AoF
 	#   v3.5.1 p.13) counts as +X dealt wounds for THIS comparison only (never changes wounds applied) —
-	var self_taken: int = maxi(_solo_activation_self_wounds(unit), int(report.get("dangerous_wounds_taken", 0)))
+	var self_taken: int = maxi(pre_melee_self_wounds, int(report.get("dangerous_wounds_taken", 0)))
 	var scores: Array = _solo_melee_scores(unit, ai_caused, target, human_caused, self_taken,
 		_solo_activation_self_wounds(target))
 	var ai_score: int = scores[0]

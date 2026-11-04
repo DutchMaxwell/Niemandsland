@@ -1218,6 +1218,11 @@
    "rated": false,
    "book_version": "3.5.1"
   },
+  "Unique Hero": {
+   "primitive": "Hero",
+   "rated": false,
+   "book_version": "3.6.0"
+  },
   "Unpredictable Fighter": {
    "primitive": "Unpredictable Fighter",
    "rated": false,
@@ -2858,6 +2863,14 @@
      "all_models": true
     }
    },
+   "Quick Throw": {
+    "primitive": "Indirect",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "los_needs_hold": false
+    }
+   },
    "Ranged Slayer": {
     "primitive": "Slayer",
     "rated": false,
@@ -3093,6 +3106,14 @@
      "hit_per_marker": 1
     }
    },
+   "Quick Throw": {
+    "primitive": "Indirect",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "los_needs_hold": false
+    }
+   },
    "Rapid Charge": {
     "primitive": "Fast",
     "rated": false,
@@ -3253,6 +3274,14 @@
     "params": {
      "reroll_save_sixes": true,
      "bypass_regen": true
+    }
+   },
+   "Bounding": {
+    "primitive": "Bounding",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_d3_plus": 1
     }
    },
    "Breath Attack": {
@@ -5598,6 +5627,18 @@
      "once": true
     }
    },
+   "Versatile Warrior Buff": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants_rule": "Versatile Attack",
+     "target": "friendly",
+     "max_targets": 1,
+     "range_in": 12,
+     "once": true
+    }
+   },
    "Warding": {
     "primitive": "Regeneration",
     "rated": false,
@@ -7112,6 +7153,14 @@
      "counts_as": "Impact"
     }
    },
+   "Increased Shooting Range": {
+    "primitive": "Royal Legion",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "range_bonus_in": 6
+    }
+   },
    "Increased Shooting Range Aura": {
     "primitive": "Royal Legion",
     "rated": false,
@@ -8386,6 +8435,14 @@
     "primitive": "Unpredictable Fighter",
     "rated": false,
     "book_version": "3.5.3"
+   },
+   "Versatile Warrior Aura": {
+    "primitive": "Aura Channel",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants": "Versatile Warrior"
+    }
    }
   },
   "shadow_stalkers": {
