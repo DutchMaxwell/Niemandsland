@@ -957,6 +957,11 @@ static func _ledger_of(u: GameUnit) -> Dictionary:
 			continue
 		if bool(u.unit_properties.get("takedown_bonus_used_%s" % tn, false)):
 			feats.append(tn)
+	# G4-R3 X1a (EPOCH_73_V36): the Precision Feat's latch, shared by shooting and melee (main.gd
+	# `_solo_spend_shot_feats`) — the same ledger name list, so the core replays the attack with the latch closed.
+	for e in RulesRegistry.unit_rules_of_primitive(u, "Shot Modifier"):
+		if SoloController.shot_feat_spent(u, e as Dictionary):
+			feats.append(str((e as Dictionary)["name"]))
 	if not feats.is_empty():
 		ledger["feats_used"] = feats
 	# G4-H-LIM (EPOCH_73_V36) — the once-per-game LIMITED ledger: the weapon names this unit has already
