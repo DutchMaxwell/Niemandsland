@@ -71,6 +71,15 @@ static func aura_granted_rules(members: Array) -> Array:
 	return granted
 
 
+## Rules 3.6 (EPOCH_73_V36): the Precision Charge / Fighter BASES pay the picked member itself (its own rules). Below the
+## epoch they read nothing; from it a member that also carries the Aura keeps the Aura's single +1 (the import copies the
+## base onto every Aura carrier). Core twin: unit.rs `precision_base_stands_down`.
+static func precision_base_stands_down(unit: GameUnit, rule: String) -> bool:
+	if rule != "Precision Charge" and rule != "Precision Fighter":
+		return false
+	return AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 or unit.has_special_rule(rule + " Aura")
+
+
 ## The base rule ONE carried rule string grants when it is an "* Aura" ("" otherwise). From
 ## EPOCH_73_V36 a modelled "Aura Channel" hands its `params.grants` VERBATIM (a rated aura keeps
 ## its rating: "Ravage Aura" -> "Ravage(+1)"); the strip-" Aura" read stays the fallback for

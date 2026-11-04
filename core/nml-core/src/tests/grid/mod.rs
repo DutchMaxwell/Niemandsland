@@ -9,6 +9,7 @@ fn school(cells: &[(i64, i64, i32)]) -> Terrain {
         cells: cells.iter().map(|c| [c.0 as f64, c.1 as f64, c.2 as f64]).collect(),
         sandbox: vec![],
         pieces: vec![],
+        containers: Vec::new(),
         walls: vec![],
         cell_params: CellParams {
             table_size_feet: [6.0, 4.0],

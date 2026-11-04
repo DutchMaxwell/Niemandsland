@@ -182,6 +182,7 @@ fn school(cells: &[(i64, i64, i32)]) -> Terrain {
         cells: cells.iter().map(|c| [c.0 as f64, c.1 as f64, c.2 as f64]).collect(),
         sandbox: vec![],
         pieces: vec![],
+        containers: Vec::new(),
         walls: vec![],
         cell_params: CellParams {
             table_size_feet: [6.0, 4.0],
@@ -406,6 +407,7 @@ fn the_wall_clamp_reverts_a_gate_push_that_tunnels() {
         cells: vec![[15.0, 15.0, CONTAINER as f64]],
         sandbox: vec![],
         pieces: vec![],
+        containers: Vec::new(),
         // a rest wall due west of the container cell, in world metres
         // world metres: the container's own west face at inch x = 37, z 24-27,
         // i.e. straight across the projection's shortest way out (-x).

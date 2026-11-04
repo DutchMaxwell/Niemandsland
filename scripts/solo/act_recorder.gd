@@ -340,6 +340,19 @@ static func pre(act: int, units: Dictionary) -> void:
 	_count += 1
 
 
+## F-HOLD-ADV (rules 3.6, EPOCH_73_V36, lead ruling D7): the verb the table EXECUTED when its own gates turned the
+## planner's pick into another one (a planned Hold that walks into range as an Advance), as a line of its own joined
+## by `act` - the act line carries the pick and was flushed before the activation ran. The replay gates play `verb`.
+## No-op below epoch 73, when NML_ACT_DUMP is unset, before the header exists, or when the line cap is hit.
+static func executed_verb(act: int, verb: int, planned: int) -> void:
+	var f := _dump_stream()
+	if f == null or _count >= _max or not _header_written or rules_epoch < EPOCH_73_V36:
+		return
+	f.store_line(JSON.stringify({"kind": "verb", "act": act, "verb": verb, "planned": planned}, "", true, true))
+	f.flush()   # a same-process reader (the unit test) must see the line without a close()
+	_count += 1
+
+
 ## NML-1010 wave C gate (C9.2): one line per ROUND END into `rounds.jsonl` beside acts.jsonl.
 ## `pre` = the board captured BEFORE the table's round-end referee ran (seize, carry step,
 ## destroy step, VP), as the same plain an act line carries; `post` = the ledger the referee
@@ -684,10 +697,25 @@ static func _terrain_line(terrain_cb: Callable, school_world: Dictionary = {}) -
 	# has no per-move half-extents to apply that offset with, only the overlay.
 	var walls: Array = MoveRecorder._flatten(ov.get_wall_segments_world()) \
 		if ov.has_method("get_wall_segments_world") else []
-	return {"cells": cells, "sandbox": sandbox, "walls": walls,
+	var line := {"cells": cells, "sandbox": sandbox, "walls": walls,
 		"cell_params": {"table_size_feet": [ov.table_size_feet.x, ov.table_size_feet.y],
 			"grid_rotation_degrees": float(ov.grid_rotation_degrees),
 			"grid_size_inches": ov.GRID_SIZE_INCHES, "inches_to_meters": ov.INCHES_TO_METERS}}
+	if rules_epoch >= EPOCH_73_V36:
+		line["containers"] = _container_boxes(ov)
+	return line
+
+
+## F-CONT (rules 3.6, EPOCH_73_V36, lead ruling D5): the placed containers' exact 6x3 boxes `{c, he, yaw}` in world
+## metres — `TerrainOverlay._blocker_obbs`, the list the table's sight keeps while it drops the painted cells under
+## each box. The core (sight.rs `zones_of_at`) builds a solid 2.5" volume from them. An overlay without the list = [].
+static func _container_boxes(ov: Object) -> Array:
+	var out: Array = []
+	for ob in (ov.get("_blocker_obbs") if "_blocker_obbs" in ov else []):
+		var c: Vector2 = ob["c"]
+		var he: Vector2 = ob["he"]
+		out.append({"c": [c.x, c.y], "he": [he.x, he.y], "yaw": float(ob["yaw"])})
+	return out
 
 
 ## NML-1073 M3-0: core_selfplay has no TerrainOverlay node — its board is a

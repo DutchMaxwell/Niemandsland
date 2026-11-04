@@ -10,8 +10,10 @@ THE BUNDLED GAMES (`fixtures/g4r2_aim/`, AoF 1000 pt NET arm, the 1104 recording
 fixtures: the header, the one act line, `auto` placeholders before it, every roll up to it verbatim, its shots):
 
   * aof_1000_net_007 act 22 - a HOLD: the pick is the hero `Champion`, its host `Dark Shooters` has no model left.
-    After the fix the port rolls the table's attack and both save batches with the same faces. It stays one roll
-    short (the table's morale test of the lone hero) - a different cause, not this row's; the test pins that.
+    After the fix the port rolls the table's attack and both save batches with the same faces. Until G4R3's
+    F-MORALE-CHAIN it stayed one roll short (the table's morale test of the lone hero, a wounded-not-killed
+    last model of a dead host); from rules epoch 73 the port rolls that die too (4+, face 1) and the act is
+    FULL-equal.
   * aof_1000_net_001 act 22 - an ADVANCE: the port rolls the table's dice and the act is FULL-equal on the dice
     (the signer of the defender's roll differs: the lone-hero label, G4-H6).
 
@@ -44,7 +46,9 @@ def test_a_dead_host_aim_reaches_the_living_hero(capsys):
     out = gate(capsys)
     assert "0 table silent, 0 port silent, 0 shape, 0 faces" in out, out
     assert "2/2 acts PREFIX-equal" in out, out
-    assert "1/2 acts FULL-equal" in out, out
+    assert "2/2 acts FULL-equal" in out, out
+    assert "0 table_longer, 0 port_longer" in out, out
+    assert "6 of 6 compared rolls equal" in out, out
 
 
 def test_the_lone_hero_is_the_unit_the_aim_names():

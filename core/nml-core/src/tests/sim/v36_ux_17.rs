@@ -48,6 +48,7 @@ use super::*;
             cells: vec![],
             sandbox: vec![],
             pieces: vec![],
+            containers: Vec::new(),
             walls,
             cell_params: crate::terrain::CellParams {
                 table_size_feet: [6.0, 4.0],

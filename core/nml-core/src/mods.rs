@@ -124,6 +124,13 @@ pub fn is_regen_grant(r: &LiveMod) -> bool {
     r.once && base_rule_is(&r.grants_rule, "Regeneration")
 }
 
+/// G4-T10 (`EPOCH_73_V36`, lead ruling on the 3.6 once-grants; table twin `_solo_grant_waits_to_be_attacked`):
+/// a once grant is spent the next time its effect actually applies. Evasive (and Melee Evasion) works when
+/// its bearer is ATTACKED, so the bearer's own strike or volley keeps it; the defender side still spends it.
+pub fn attacked_only_grant(r: &LiveMod) -> bool {
+    r.once && (base_rule_is(&r.grants_rule, "Evasive") || base_rule_is(&r.grants_rule, "Melee Evasion"))
+}
+
 /// `is_regen_grant` as a `spend_once_except` keep predicate: the grant survives
 /// only while no wound came in to its holder this exchange (both sides at 73).
 pub fn keep_regen(r: &LiveMod, wounded: bool) -> bool {

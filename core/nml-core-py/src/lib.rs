@@ -2906,6 +2906,7 @@ fn no_terrain() -> Terrain {
         cells: Vec::new(),
         sandbox: Vec::new(),
         pieces: Vec::new(),
+        containers: Vec::new(),
         walls: Vec::new(),
         cell_params: nmlcore::terrain::CellParams {
             table_size_feet: [6.0, 4.0],

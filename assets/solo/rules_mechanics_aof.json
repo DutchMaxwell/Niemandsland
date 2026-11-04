@@ -975,6 +975,24 @@
     "hit_bonus": 1
    }
   },
+  "Precision Charge": {
+   "primitive": "Shot Modifier",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "hit_bonus": 1,
+    "when": "charge"
+   }
+  },
+  "Precision Fighter": {
+   "primitive": "Shot Modifier",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "hit_bonus": 1,
+    "melee_only": true
+   }
+  },
   "Puncture": {
    "primitive": "Disintegrate",
    "rated": false,
