@@ -19,7 +19,7 @@ use godot::builtin::VariantType;
 
 use nml_core::io::{fold_ledger, los_positions, PlainLedger};
 use nml_core::state::{Bands, MoveBands, Roster};
-use nml_core::terrain::{CellParams, Obb, PlainTerrain};
+use nml_core::terrain::{CellParams, ContainerObb, Obb, PlainTerrain};
 use nml_core::{
     Knobs, Marker, MeleeReach, Mods, Objective, Profile, ProfileDyn, Profiles, SearchMode, Sighting, State,
     TreeDice, TreeLeaf, Weapon,
@@ -946,6 +946,12 @@ pub fn terrain_of(d: &VarDictionary) -> PlainTerrain {
         // (`selfplay.load_board`); the live overlay hands its shapes as
         // `sandbox`, so nothing here reads a `pieces` key.
         pieces: Vec::new(),
+        // F-CONT (rules 3.6) — `AiActRecorder._container_boxes`; no key = no boxes (a header below `EPOCH_73_V36`).
+        containers: darr(d, "containers")
+            .iter_shared()
+            .filter_map(|v| v.try_to::<VarDictionary>().ok())
+            .map(|b| ContainerObb { c: pair(&darr(&b, "c")), he: pair(&darr(&b, "he")), yaw: dnum(&b, "yaw", 0.0) })
+            .collect(),
         walls,
         cell_params: CellParams {
             table_size_feet: pair(&darr(&cp, "table_size_feet")),

@@ -299,6 +299,7 @@ mod tests {
             cells,
             sandbox: Vec::new(),
             pieces: Vec::new(),
+            containers: Vec::new(),
             walls: Vec::new(),
             cell_params: CellParams {
                 table_size_feet: [6.0, 4.0],

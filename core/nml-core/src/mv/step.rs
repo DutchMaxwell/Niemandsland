@@ -1460,6 +1460,7 @@ pub(crate) mod tests {
             cells: vec![],
             sandbox: Vec::<Obb>::new(),
             pieces: Vec::new(),
+            containers: Vec::new(),
             walls,
             cell_params: CellParams {
                 table_size_feet: [6.0, 4.0],
@@ -1497,6 +1498,7 @@ pub(crate) mod tests {
             cells: vec![[15.0, 15.0, terrain::DANGEROUS as f64]],
             sandbox: Vec::<Obb>::new(),
             pieces: Vec::new(),
+            containers: Vec::new(),
             walls: vec![],
             cell_params: CellParams {
                 table_size_feet: [6.0, 4.0],
@@ -1665,6 +1667,7 @@ pub(crate) mod tests {
             cells: arr(&tr["cells"]).iter().map(|c| [f(&c[0]), f(&c[1]), f(&c[2])]).collect(),
             sandbox: Vec::<Obb>::new(),
             pieces: Vec::new(),
+            containers: Vec::new(),
             walls: arr(&tr["walls"])
                 .iter()
                 .map(|w| [[f(&w[0][0]), f(&w[0][1])], [f(&w[1][0]), f(&w[1][1])]])
@@ -1764,6 +1767,7 @@ pub(crate) mod tests {
             cells: arr(&tr["cells"]).iter().map(|c| [f(&c[0]), f(&c[1]), f(&c[2])]).collect(),
             sandbox: Vec::<Obb>::new(),
             pieces: Vec::new(),
+            containers: Vec::new(),
             walls: arr(&tr["walls"])
                 .iter()
                 .map(|w| [[f(&w[0][0]), f(&w[0][1])], [f(&w[1][0]), f(&w[1][1])]])
@@ -1850,6 +1854,7 @@ pub(crate) mod tests {
             cells: arr(&tr["cells"]).iter().map(|c| [f(&c[0]), f(&c[1]), f(&c[2])]).collect(),
             sandbox: Vec::<Obb>::new(),
             pieces: Vec::new(),
+            containers: Vec::new(),
             walls: arr(&tr["walls"])
                 .iter()
                 .map(|w| [[f(&w[0][0]), f(&w[0][1])], [f(&w[1][0]), f(&w[1][1])]])
@@ -1940,6 +1945,7 @@ pub(crate) mod tests {
             cells: arr(&tr["cells"]).iter().map(|c| [f(&c[0]), f(&c[1]), f(&c[2])]).collect(),
             sandbox: Vec::<Obb>::new(),
             pieces: Vec::new(),
+            containers: Vec::new(),
             walls: arr(&tr["walls"])
                 .iter()
                 .map(|w| [[f(&w[0][0]), f(&w[0][1])], [f(&w[1][0]), f(&w[1][1])]])

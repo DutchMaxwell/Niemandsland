@@ -669,6 +669,65 @@ func test_header_terrain_line_walls_is_empty_without_the_overlay_method() -> voi
 	assert_array(line["walls"] as Array).is_equal([])
 
 
+## F-CONT (rules 3.6, EPOCH_73_V36, lead ruling D5): the table's sight keeps a placed container's exact 6x3 box and
+## drops the painted cells under it, so the header's terrain block carries the boxes `{c, he, yaw}` next to `cells`
+## and the core builds its sight volumes from them. LIVE PATH: a REAL TerrainOverlay places a real container (the way
+## the game does) and the recorder reads the overlay's own box list; nothing here sets a flag by hand.
+func _overlay_with_container(angle_deg: float) -> Node3D:
+	var overlay: Node3D = auto_free(preload("res://scripts/terrain_overlay.gd").new())
+	overlay.table_size_feet = Vector2(6, 4)
+	overlay.update_placed_objects([{"object_type": "container", "cell": Vector2i(15, 15),
+		"offset": Vector2(0.5, 0.5), "angle_deg": angle_deg}], Vector2(6, 4), 0.0)
+	return overlay
+
+
+func _terrain_line_of(overlay: Node3D) -> Dictionary:
+	var host: _FakeTerrainHost = auto_free(_FakeTerrainHost.new())
+	host.terrain_overlay = overlay
+	return AiActRecorder._terrain_line(Callable(host, "terrain_type_at")) as Dictionary
+
+
+func test_header_terrain_line_carries_the_placed_containers_boxes_from_epoch_73() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	var overlay := _overlay_with_container(30.0)
+	var line := _terrain_line_of(overlay)
+	var boxes := line.get("containers", []) as Array
+	assert_int(boxes.size()).is_equal(1)
+	var want := (overlay._blocker_obbs as Array)[0] as Dictionary
+	var got := boxes[0] as Dictionary
+	assert_array(got.keys()).contains_exactly_in_any_order(["c", "he", "yaw"])
+	assert_array(got["c"] as Array).is_equal([(want["c"] as Vector2).x, (want["c"] as Vector2).y])
+	assert_array(got["he"] as Array).is_equal([(want["he"] as Vector2).x, (want["he"] as Vector2).y])
+	assert_float(float(got["yaw"])).is_equal(float(want["yaw"]))
+	assert_float((got["he"] as Array)[0]).is_equal_approx(3.0 * IN2M, 1e-9)   # the 6x3 box: half length 3"
+	assert_float((got["he"] as Array)[1]).is_equal_approx(1.5 * IN2M, 1e-9)   # half depth 1.5"
+
+
+func test_header_terrain_line_has_no_containers_key_below_epoch_73() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
+	assert_bool(_terrain_line_of(_overlay_with_container(0.0)).has("containers")).is_false()
+
+
+func test_header_terrain_line_containers_is_empty_without_the_overlay_list() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	var overlay: _StubOverlayNoWallsMethod = auto_free(_StubOverlayNoWallsMethod.new())
+	assert_array(_terrain_line_of(overlay).get("containers", null) as Array).is_equal([])
+
+
+func test_the_written_header_carries_the_container_boxes_as_json_numbers() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	var host: _FakeTerrainHost = auto_free(_FakeTerrainHost.new())
+	host.terrain_overlay = _overlay_with_container(0.0)
+	var state := _state()
+	var pool: Array = [(state["units"]["A"] as Dictionary)["unit"]]
+	AiActRecorder.finish(AiActRecorder.begin(state, 1, pool, Callable(host, "terrain_type_at")),
+		{"used": true, "unit_key": "A", "action": {"unit": "A", "kind": AiDecision.Action.HOLD}})
+	var header := JSON.parse_string(_dump_lines()[0]) as Dictionary
+	var boxes := (header["terrain"] as Dictionary).get("containers", []) as Array
+	assert_int(boxes.size()).is_equal(1)
+	assert_bool(((boxes[0] as Dictionary)["c"] as Array)[0] is float).is_true()   # a number, not a "(x, y)" string
+
+
 ## NML-1126: the header carries the rule-TEXT provenance of the game that wrote it.
 ## `OPRArmy.rule_descriptions` is fetched live from the army-forge API at import and feeds
 ## the description-driven move modifiers; when that fetch failed the game used to play on
