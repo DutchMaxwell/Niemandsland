@@ -419,7 +419,7 @@ pub fn land_wounds(state: &mut State, ti: usize, left: i64) {
 /// table's `apply_wounds_to_models` — `chain_casualty_order(unit, wounds)` computed ONCE, each model
 /// soaking wounds until it dies, the next one after it. Without kits, or without `exact`, slot 0
 /// goes first exactly as before.
-pub fn land_wounds_with(state: &mut State, ti: usize, mut left: i64, exact: bool) {
+pub fn land_wounds_with(state: &mut State, ti: usize, mut left: i64, exact: bool) -> i64 {
     let mut order = if exact {
         crate::casualty::chain_casualty_order(state, ti, Some(left.max(0) as usize)).unwrap_or_default()
     } else {
@@ -446,6 +446,25 @@ pub fn land_wounds_with(state: &mut State, ti: usize, mut left: i64, exact: bool
         }
     }
     state.alive[ti] = state.positions[ti].len() as i64;
+    left
+}
+
+/// Rules 3.6 (`EPOCH_73_V36`, ruling D1) — a joined hero is part of the unit: the pool wounds the host's models
+/// cannot soak go on to its living joined heroes in `State::attached` order, heroes LAST (the table's
+/// `_solo_land_wounds` over the chain). Below 73, or without the attachment seam, the surplus is dropped.
+fn land_pool_wounds(state: &mut State, ti: usize, w: i64, exact: bool, seams: Seams, log: &mut Vec<String>) {
+    let mut left = land_wounds_with(state, ti, w, exact);
+    if left <= 0 || !seams.hero_attach || !rule_on(seams.rules_epoch, EPOCH_73_V36) {
+        return;
+    }
+    for h in state.attached[ti].clone() {
+        if left <= 0 || state.alive[h] <= 0 {
+            continue;
+        }
+        let taken = left - land_wounds_with(state, h, left, exact);
+        left -= taken;
+        log.push(format!("Hero: {taken} wound{} beyond the unit's models go on to {}", if taken == 1 { "" } else { "s" }, state.key(h)));
+    }
 }
 
 /// The table AI's Takedown pick (`attacker_pick_target`): the host's most valuable living model,
@@ -1322,7 +1341,7 @@ pub(crate) fn tray_strafing(
     let members: Vec<usize> = parts.iter().map(|(b, _, _, _)| *b).collect();
     land_hazardous_self(statics, next, &members, seams, shot);
     if !seams.tray_exact {
-        land_wounds_with(next, target, w, false);
+        land_pool_wounds(next, target, w, false, seams, &mut shot.log);
     }
     land_takedown_groups(next, target, shot);
     for &(post, dx) in std::mem::take(&mut shot.deadly_groups).iter() {
@@ -1330,7 +1349,7 @@ pub(crate) fn tray_strafing(
         shot.log.push(format!("Deadly({dx}): {post} unsaved ×{dx}, no carry-over → {dl} wounds dealt"));
     }
     if seams.tray_exact {
-        land_wounds_with(next, target, w, true); // the table's order: Takedown, Deadly, then the pool
+        land_pool_wounds(next, target, w, true, seams, &mut shot.log); // the table's order: Takedown, Deadly, then the pool
     }
     if scourge_morale_trigger(next, statics, seams, ut, target, alive_before, wounds_before, phantom, &mut shot.log) {
         tray_morale(next, statics, target, false, seams, tray, shot, Some(d), None);
@@ -5831,7 +5850,7 @@ fn strike_phase(
     // this phase.
     let alive_before = next.alive[ti];
     if !seams.tray_exact {
-        land_wounds_with(next, ti, w, false);
+        land_pool_wounds(next, ti, w, false, seams, &mut shot.log);
     }
     // Audit 2026-09-13 §2.1 — Deadly lands PER MODEL with no carry-over (the
     // table's `apply_deadly_wounds`, solo_controller.gd:8333), and the melee
@@ -5848,7 +5867,7 @@ fn strike_phase(
             "Deadly({dx}): {post} unsaved ×{dx}, no carry-over → {d} wounds dealt"));
     }
     if seams.tray_exact {
-        land_wounds_with(next, ti, w, true);
+        land_pool_wounds(next, ti, w, true, seams, &mut shot.log);
     }
     caused = caused - raw_deadly + dealt;
     // rules-wave3-growthmark (epoch 6) — the ignore-wound marker AFTER the
@@ -9880,7 +9899,7 @@ fn resolve_with(
                             let members: Vec<usize> = parts.iter().map(|(mi, _, _)| *mi).collect();
                             let att_incoming = land_hazardous_self(statics, &mut next, &members, seams, shot);
                             if !seams.tray_exact {
-                                land_wounds_with(&mut next, g.ti, w, false);
+                                land_pool_wounds(&mut next, g.ti, w, false, seams, &mut shot.log);
                             }
                             // Tray-exact S7: the table lands Takedown and Deadly INLINE per weapon
                             // (Takedown first, main.gd:4054-4067) and the pool at the volley's end.
@@ -9896,7 +9915,7 @@ fn resolve_with(
                                     "Deadly({dx}): {post} unsaved ×{dx}, no carry-over → {d} wounds dealt"));
                             }
                             if seams.tray_exact {
-                                land_wounds_with(&mut next, g.ti, w, true);
+                                land_pool_wounds(&mut next, g.ti, w, true, seams, &mut shot.log);
                             }
                             // rules-wave3-growthmark (epoch 6) — the
                             // ignore-wound marker AFTER the landing.
