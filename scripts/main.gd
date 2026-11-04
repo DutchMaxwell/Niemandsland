@@ -4910,7 +4910,8 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		if bool(profile.get("limited", false)):
 			solo_controller.mark_limited_used(member, profile)   # once per game — spent on the roll (wave 5)
 		await _solo_hazardous_self_wounds(attacker, profile, faces)   # resolver wave A: natural 1s wound the firer
-		var hits: int = await _solo_hits(faces, to_hit_raw, profile, dist_in, target, false, "AI (%s)" % attacker.get_name())
+		var hits: int = await _solo_hits(faces, to_hit_raw, profile, dist_in, target, false, "AI (%s)" % attacker.get_name(),
+			0.0, models_before if at_declaration else -1)
 		if battle_log != null:
 			var sight_note: String = "" if sighted >= member.get_alive_count() else " (%d/%d models sighted)" % [sighted, member.get_alive_count()]
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s fires %s at %s%s — %d hit%s" % [
@@ -6541,7 +6542,7 @@ func _solo_cover_defense(target: GameUnit, base_defense: int) -> int:
 ## only for the CHARGING unit — `charging`). Those extra hits resolve BEFORE Blast(X) (GF v3.5.1: Blast
 ## multiplies "after resolving other special rules"), which then scales each hit ×min(X, target models).
 ## Every multiplication is battle-logged so it is VISIBLE. Uses the shared AiCombatMath.
-func _solo_hits(faces: Array, to_hit: int, profile: Dictionary, dist_in: float, target: GameUnit = null, charging: bool = false, roller: String = "", charge_from_in: float = 0.0) -> int:
+func _solo_hits(faces: Array, to_hit: int, profile: Dictionary, dist_in: float, target: GameUnit = null, charging: bool = false, roller: String = "", charge_from_in: float = 0.0, blast_models: int = -1) -> int:
 	# `to_hit` is the caller's UNCLAMPED summed target (D21): Precise's flat +1 folds into that sum and the
 	# one clamp happens here, so a penalty the old per-step clamp swallowed still counts against the +1.
 	# AIG-G2 (EPOCH_73_V36): a weapon-borne Imprecise is Precise's mirror, folded into the same sum.
@@ -6660,11 +6661,14 @@ func _solo_hits(faces: Array, to_hit: int, profile: Dictionary, dist_in: float, 
 		# TC-023 — a Takedown resolves "as if it was a unit of [1]" (GF v3.5.1 p.14), so Blast has exactly
 		# one model to spill onto and can never multiply. Read off the profile, not the takedown flag:
 		# the flag's window is synchronous and has already closed by the time the dice are counted.
-		var models_in_target: int = 1 if bool(profile.get("takedown", false)) else _solo_combined_alive(target)
+		# C-BLAST-CAP-GROUPS (EPOCH_73_V36, lead ruling D2): a volley fires simultaneously, so a volley caller passes the
+		# models standing at ITS START (`blast_models` >= 0) and the cap ignores the casualties of earlier weapon groups.
+		var models_in_target: int = 1 if bool(profile.get("takedown", false)) else (blast_models if blast_models >= 0 else _solo_combined_alive(target))
 		var boosted: int = AiCombatMath.blast_hits(hits, blast, models_in_target)
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT,
-				blast_log_text(blast, hits, boosted, models_in_target), true)
+				blast_log_text(blast, hits, boosted, models_in_target) \
+				+ (" (cap read when the volley started)" if blast_models > _solo_combined_alive(target) else ""), true)
 			_solo_rule_float(target, "Blast ×%d → %d" % [maxi(boosted / maxi(hits, 1), 1), boosted])
 		hits = boosted
 	return hits
@@ -14755,6 +14759,8 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 	_solo_log_range_bonus(attacker, target)
 	var target_alive_before: int = SoloController.combined_alive(target)   # NML-966: combined for the morale trigger
 	var target_wounds_before: int = _solo_unit_wounds_now(target)
+	# C-BLAST-CAP-GROUPS (EPOCH_73_V36): the models standing at the volley's start cap every Blast of it; -1 = live read.
+	var blast_models_start: int = _solo_combined_alive(target) if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else -1
 	var regenable := 0
 	var regen_proof := 0
 	# Armor(X) (wave 5) sets the working Defense, then every Defense contribution of the parts seam
@@ -14929,7 +14935,8 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 			if bool(profile.get("limited", false)):
 				solo_controller.mark_limited_used(group.get("member"), profile)   # once per game (wave 5)
 			await _solo_hazardous_self_wounds(attacker, profile, faces)   # resolver wave A: natural 1s wound the firer
-			var hits: int = await _solo_hits(faces, to_hit_raw, profile, dist, target, false, _roller_label(attacker))
+			var hits: int = await _solo_hits(faces, to_hit_raw, profile, dist, target, false, _roller_label(attacker),
+				0.0, blast_models_start)
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s fires %s at %s — %d hit%s" % [
 					str(group.get("name", "?")), str(profile.get("name", "?")), target.get_name(), hits, ("" if hits == 1 else "s")])
