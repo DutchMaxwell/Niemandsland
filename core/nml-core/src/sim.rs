@@ -1745,7 +1745,7 @@ fn spend_exchange_wounded(
         .any(|u| state.buffs[u].iter().any(mods::is_regen_grant));
     let def_had = [Some(def), state.attached_to[def]].into_iter().flatten()
         .any(|u| state.buffs[u].iter().any(mods::is_regen_grant));
-    mods::spend_once_except(state, att, &att_roles, melee, |r| v36 && mods::keep_regen(r, att_wounded));
+    mods::spend_once_except(state, att, &att_roles, melee, |r| v36 && (mods::keep_regen(r, att_wounded) || mods::attacked_only_grant(r)));
     mods::spend_once_except(state, def, &def_roles, melee, |r| v36 && mods::keep_regen(r, def_incoming));
     if v36 && att_wounded && att_had {
         trace_rule("regen-grant", "Regeneration Buff", &format!("spent by a wounding exchange (unit {att})"));
