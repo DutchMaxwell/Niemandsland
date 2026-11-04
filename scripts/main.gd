@@ -4950,7 +4950,10 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		if bool(profile.get("limited", false)):
 			solo_controller.mark_limited_used(member, profile)   # once per game — spent on the roll (wave 5)
 		await _solo_hazardous_self_wounds(attacker, profile, faces)   # resolver wave A: natural 1s wound the firer
-		var hits: int = await _solo_hits(faces, to_hit_raw, profile, dist_in, target, false, "AI (%s)" % attacker.get_name(),
+		# H-EXTRA-ATTACK-SIGNER (EPOCH_73_V36): a rule-generated extra attack die is rolled by the member that fired,
+		# like the shot's own dice (the core signs it so); below 73 the host unit signs it as before.
+		var hit_signer: String = shooter_name if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else attacker.get_name()
+		var hits: int = await _solo_hits(faces, to_hit_raw, profile, dist_in, target, false, "AI (%s)" % hit_signer,
 			0.0, models_before if at_declaration else -1)
 		if battle_log != null:
 			var sight_note: String = "" if sighted >= member.get_alive_count() else " (%d/%d models sighted)" % [sighted, member.get_alive_count()]
