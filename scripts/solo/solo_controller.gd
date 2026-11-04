@@ -9792,6 +9792,22 @@ static func speed_feat_flag(rule_name: String) -> String:
 	return "speed_feat_used_%s" % rule_name.to_snake_case()
 
 
+## G4-R3 X1a (EPOCH_73_V36): the Precision Feat's once-per-game latch (a Shot Modifier entry with `uses_per_game`).
+## ONE flag per rule, shared by shooting and melee: main `_solo_spend_shot_feats` closes it, the hit modifier and
+## the act ledger read it.
+static func shot_feat_flag(rule_name: String) -> String:
+	return "shot_feat_used_%s" % rule_name.to_snake_case()
+
+
+## True when `entry` is a once-per-game Shot Modifier whose latch `unit` has already spent.
+static func shot_feat_spent(unit: GameUnit, entry: Dictionary) -> bool:
+	if unit == null or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return false
+	if int((entry.get("params", {}) as Dictionary).get("uses_per_game", 0)) <= 0:
+		return false
+	return bool(unit.unit_properties.get(shot_feat_flag(str(entry["name"])), false))
+
+
 ## The verdict on one pass attempt. "" = the pass is legal; anything else is the REASON it is not,
 ## ready to be printed. Transparency doctrine (#224): the radial entry is offered even when the
 ## rule cannot be used right now, and the refusal explains itself instead of vanishing from the menu.

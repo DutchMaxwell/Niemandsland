@@ -4988,6 +4988,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		await _solo_stage_phase("Morale")
 	_solo_stage_end()
 	_solo_consume_once_mods(attacker, target, false)   # F4: once-mods spent by this exchange
+	_solo_spend_shot_feats(attacker)
 
 
 ## VFX #2: one tracer per firing model along the eye-to-eye segment the LOS rule tested (same heights as
@@ -5749,6 +5750,24 @@ func _solo_consume_once_mods(attacker: GameUnit, defender: GameUnit, melee: bool
 			var uu := u as GameUnit
 			if uu != null:
 				_solo_spend_once_mods(uu, pair[1] as Array, melee, "", unit == attacker)
+
+
+## G4-R3 X1a (EPOCH_73_V36, lead ruling 1): the Precision Feat is ONE once-per-game latch shared by shooting AND
+## melee. The bearer's first attack of any kind (a strike-back too) spends it; the act ledger records the name
+## (`feats_used`). Every open once-per-game Shot Modifier on the attacker's chain closes with the exchange.
+func _solo_spend_shot_feats(attacker: GameUnit) -> void:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return
+	for m in _solo_joined_chain(attacker):
+		var member := m as GameUnit
+		for e in RulesRegistry.unit_rules_of_primitive(member, "Shot Modifier"):
+			var ed := e as Dictionary
+			if int((ed.get("params", {}) as Dictionary).get("uses_per_game", 0)) <= 0 \
+					or SoloController.shot_feat_spent(member, ed):
+				continue
+			member.unit_properties[SoloController.shot_feat_flag(str(ed["name"]))] = true
+			_log_rule_event(BattleLog.Category.COMBAT, "%s: %s spends its once-per-game feat on this attack" % [
+				str(ed["name"]), member.get_name()], _solo_is_ai_unit(member))
 
 
 ## G4-T10 (EPOCH_73_V36, lead ruling on the 3.6 once-grants): a "once" grant is spent the next time its effect
@@ -8093,6 +8112,8 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 			for e in RulesRegistry.unit_rules_of_primitive(shooter_member, "Shot Modifier"):
 				if AiEv.precision_base_stands_down(shooter_member, str((e as Dictionary)["name"])):
 					continue
+				if SoloController.shot_feat_spent(shooter_member, e as Dictionary):
+					continue   # G4-R3 X1a: the once-per-game Feat latch is spent
 				var sp3: Dictionary = (e as Dictionary).get("params", {})
 				var charge_only3 := str(sp3.get("when", "")) == "charge"
 				if not (bool(sp3.get("all_attacks", false)) or bool(sp3.get("melee_only", false)) \
@@ -8223,6 +8244,8 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 	# Visor +1 over 9" / Grounded Precision terrain-conditional) — data-driven via the layer.
 	if shooter_member != null:
 		for e in RulesRegistry.unit_rules_of_primitive(shooter_member, "Shot Modifier"):
+			if SoloController.shot_feat_spent(shooter_member, e as Dictionary):
+				continue   # G4-R3 X1a: the once-per-game Feat latch is spent
 			var sp2: Dictionary = (e as Dictionary).get("params", {})
 			# Dead-aura wave: a melee-scoped or charge-scoped hit bonus is not a shooting bonus. Both
 			# already ship in the skirmish books ("Precision Fighter Aura" melee_only, "Precision Charge
@@ -9096,6 +9119,8 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 			_solo_is_ai_unit(striker))
 	if struck_any:
 		_solo_consume_once_mods(striker, defender, true)   # F4: once-mods spent by this strike phase
+		if filter != SoloStrike.COUNTER_ONLY:   # the Counter-first split's second phase still carries the Feat
+			_solo_spend_shot_feats(striker)
 	return caused
 
 
@@ -14991,6 +15016,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 	await _solo_stage_phase("Morale")
 	_solo_stage_end()
 	_solo_consume_once_mods(attacker, target, false)   # F4: once-mods spent by this exchange
+	_solo_spend_shot_feats(attacker)
 
 
 ## The player's melee charge (goal 001 P8): the AI defender's Counter weapons strike FIRST (it must always
