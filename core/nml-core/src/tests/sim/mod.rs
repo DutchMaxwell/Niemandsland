@@ -1816,6 +1816,7 @@ mod v36_fab_c15;
 mod v36_g4_c8a;
 mod v36_g4r2_blast_hero;
 mod v36_g4r2_hero_spill;
+mod v36_g4r4_consolidation;
 mod v36_melee;
 mod v36_melee_rows;
 mod v36_g4_c8b;
