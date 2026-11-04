@@ -8829,6 +8829,40 @@ fn board_zones(t: &Terrain, shelf: bool, rules_epoch: u32) -> Rc<Vec<sight::Zone
     })
 }
 
+/// `TerrainRules.base_fully_in_cover` terrain_rules.gd:64 — the centre AND 8 rim points all give cover (`r <= 0`: the centre alone).
+fn base_fully_in_cover(p: V3, r: f64, t: &Terrain) -> bool {
+    gives_cover(t.type_at(p))
+        && (r <= 0.0
+            || (0..8).all(|i| {
+                let a = std::f64::consts::TAU * i as f64 / 8.0;
+                gives_cover(t.type_at(geom::add(p, [(a.cos() * r) as f32, 0.0, (a.sin() * r) as f32])))
+            }))
+}
+
+/// The mover's cover flag after a move. Below `EPOCH_73_V36` the host's centre cell. From it every moving member —
+/// the host and its joined heroes — is read the way `main._solo_majority_in_cover` :10498 reads it (Grounded Precision
+/// asks AFTER the move): a unit built with one model by its centre, a squad when more than half of its bases lie
+/// fully inside. A flag that changes is logged under its book name (rules-must-log).
+fn land_cover(statics: &[UnitStatic], next: &mut State, si: usize, t: &Terrain, seams: Seams, mut shot: Option<&mut ShootResult>) {
+    if !rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) {
+        next.in_cover[si] = gives_cover(t.type_at(geom::centre(&next.positions[si])));
+        return;
+    }
+    let chain: Vec<usize> = std::iter::once(si).chain(next.attached[si].iter().copied().filter(|_| seams.hero_attach)).collect();
+    for u in chain {
+        let single = next.profile(u).model_count <= 1;
+        let fully = (0..next.positions[u].len()).filter(|&k| {
+            let r = if single { 0.0 } else { next.radii[u].get(k).copied().unwrap_or(DEFAULT_BASE_RADIUS_M) };
+            base_fully_in_cover(geom::to_f32(next.positions[u][k]), r, t)
+        });
+        let now = fully.count() * 2 > next.positions[u].len();
+        if let (true, Some(s)) = (now != next.in_cover[u], shot.as_deref_mut()) {
+            s.log.push(format!("Cover: {} {} cover at its landing", statics[next.roster.profile[u]].name, if now { "is in" } else { "leaves" }));
+        }
+        next.in_cover[u] = now;
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn resolve_with(
     statics: &[UnitStatic],
@@ -9116,7 +9150,7 @@ fn resolve_with(
         // POST-move unit centre, which is now the solved formation's centre.
         if let Cover::Board(t) = cover {
             if t.is_valid() {
-                next.in_cover[si] = gives_cover(t.type_at(geom::centre(&next.positions[si])));
+                land_cover(statics, &mut next, si, t, seams, dice.as_mut().map(|d| &mut *d.1));
             }
         }
     } else if band_in > 0.0
@@ -9220,7 +9254,7 @@ fn resolve_with(
             Cover::Recorded(None) => {}
             Cover::Board(t) => {
                 if t.is_valid() {
-                    next.in_cover[si] = gives_cover(t.type_at(geom::add(centre, delta)));
+                    land_cover(statics, &mut next, si, t, seams, dice.as_mut().map(|d| &mut *d.1));
                 }
             }
         }
