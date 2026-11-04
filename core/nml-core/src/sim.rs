@@ -250,6 +250,13 @@ fn morale_root(state: &State, i: usize, seams: Seams) -> usize {
     }
 }
 
+/// G4R4 C-GRANTED-RANGE (`EPOCH_73_V36`, empty `reach_grants` below it): the best reach a LIVE grant on member `mi` adds
+/// ("Lust Boon" hands out Enhanced Lustbound, +8"), with the granted rule's name. The table reads it per member.
+fn granted_reach<'a>(us: &'a UnitStatic, state: &State, mi: usize) -> (f64, &'a str) {
+    let live = us.reach_grants.iter().filter(|(n, _)| mods::granted(state, mi, n));
+    live.fold((0.0, ""), |best, (n, b)| if *b > best.0 { (*b, n.as_str()) } else { best })
+}
+
 /// `main._solo_unit_wounds_now`: from 73 the chain's wounds (host plus joined heroes), below 73 the unit's own.
 fn morale_wounds_left(state: &State, i: usize, seams: Seams) -> i64 {
     let r = morale_root(state, i, seams);
@@ -5211,7 +5218,7 @@ pub fn member_profiles_of(
             // and indexes the folded list through `keep`.
             if melee {
                 sc.attacks.push(a);
-            } else if (p.range as f64) + p.reach_bonus_in >= d && !spent {
+            } else if (p.range as f64) + p.reach_bonus_in.max(granted_reach(um, state, mi).0) >= d && !spent {
                 let idx = sc.fold.len();
                 sc.keep.push(idx);
                 sc.attacks.push(a);
@@ -5341,12 +5348,14 @@ fn sighted_profiles_of(
     } else {
         0.0
     };
+    let granted = granted_reach(us, state, mi).0;
     for (i, p) in us.shoot.iter().enumerate() {
-        if (p.range as f64) + p.reach_bonus_in + mark_range < d {
+        let bonus = p.reach_bonus_in.max(granted);
+        if (p.range as f64) + bonus + mark_range < d {
             continue;
         }
         sc.keep.push(i);
-        let reach = sight_reach_in(p.range as f64 + p.reach_bonus_in + mark_range, state.aircraft[ti], def);
+        let reach = sight_reach_in(p.range as f64 + bonus + mark_range, state.aircraft[ti], def);
         // Indirect (GF v3.5.1) "may target enemies that are not in line of
         // sight as if in line of sight": the range gate stays, the sight test
         // goes (main.gd:4136-4138).
@@ -9909,6 +9918,11 @@ fn resolve_with(
                                         shot.log.push(format!("Shooting Range: {} fires {} from its own base, {dm:.1}\" away", um.name, p.name));
                                     }
                                 }
+                                // G4R4 C-GRANTED-RANGE: a live spell grant's reach kept a weapon the static reach would drop.
+                                let (granted, granted_rule) = granted_reach(um, &next, mi);
+                                for p in msc.keep.iter().map(|&k| &um.shoot[k]).filter(|p| granted > 0.0 && (p.range as f64) + p.reach_bonus_in < dm) {
+                                    shot.log.push(format!("{granted_rule}: {} gains +{granted:.0}\" reach on {}", um.name, ut_g.name));
+                                }
                                 if rule_on(seams.rules_epoch, EPOCH_73_V36) {
                                     // Limited: the log names the book rule for each spent weapon the volley leaves out.
                                     for p in msc.keep.iter().map(|&k| &um.shoot[k]) {
@@ -9984,6 +9998,7 @@ fn resolve_with(
                                 att.moved_this_round = moved;
                                 att.held = kind == HOLD;
                                 att.member_gap_in = hero_own_gap.then_some(dm);
+                                att.granted_reach_in = granted_reach(um, &next, mi).0;
                                 parts.push((mi, msc, att));
                             }
                             // FEAT PR 2 — the deferred stamp: the unspent

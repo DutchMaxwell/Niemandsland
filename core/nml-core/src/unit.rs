@@ -110,6 +110,9 @@ pub struct Ctx {
     /// G4R3 F-HERO-RANGE (`EPOCH_73_V36`): a joined hero's own nearest gap to the volley target, set at the
     /// volley seam; the resolver's range test reads it in place of the volley distance. `None` = the volley's own.
     pub member_gap_in: Option<f64>,
+    /// G4R4 C-GRANTED-RANGE (`EPOCH_73_V36`): the best reach a live spell grant adds to this member's ranged weapons,
+    /// stamped at the volley seam (`UnitStatic::reach_grants`); 0 = none.
+    pub granted_reach_in: f64,
     pub quality: i64,
     pub defense: i64,
     pub morale_bonus: i64,
@@ -1365,6 +1368,9 @@ pub struct UnitStatic {
     /// record stamped `rules_epoch: 5` (the Gen-3 fleet's own window) predates
     /// wave 3 and reads zeros.
     pub royal_legion_range_in: f64,
+    /// G4R4 C-GRANTED-RANGE (`EPOCH_73_V36`): the Royal Legion-family rules a friendly spell of this faction can
+    /// hand the unit (`grants_rule`), with their `range_bonus_in` — read live off the grant ledger at the volley.
+    pub reach_grants: Vec<(String, f64)>,
     pub royal_legion_charge_in: f64,
     /// `RulesRegistry.unit_rule_active(gu, "Re-Position Artillery")` — the
     /// "Utility Buff" movement primitive's registry gate (block B2).
@@ -3425,6 +3431,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         &format!("{}: Evasive stamped, -1 to hit", p.name));
     Ctx {
         member_gap_in: None,
+        granted_reach_in: 0.0,
         quality: p.quality,
         defense: armored_defense(p.defense, armor),
         morale_bonus,
@@ -6771,6 +6778,29 @@ fn move_rule_mods_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Opt
     if hit { Some(acc) } else { None }
 }
 
+/// G4R4 C-GRANTED-RANGE (`EPOCH_73_V36`): the Royal Legion-primitive rules (with their `range_bonus_in`) that a spell of
+/// the unit's faction hands out as a `grants_rule` ("Lust Boon" -> "Enhanced Lustbound" +8"). The table reads such a grant
+/// per member when it measures reach; the volley reads these names off the live ledger. Empty below 73.
+fn granted_reach_rules(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Vec<(String, f64)> {
+    if !rule_on(rules_epoch, EPOCH_73_V36) {
+        return Vec::new();
+    }
+    let names: Vec<String> = reg.spells_for(&p.game_system, &p.faction_folder).iter().map(|s| s.grants_rule.clone()).collect();
+    let map = reg.rules_for(&p.game_system);
+    let mut out: Vec<(String, f64)> = Vec::new();
+    for n in names {
+        if n.is_empty() || out.iter().any(|(o, _)| *o == n) {
+            continue;
+        }
+        let Some(e) = map.lookup(&p.faction_folder, &n) else { continue };
+        let b = e.param_f("range_bonus_in", 0.0);
+        if e.primitive.as_deref() == Some("Royal Legion") && b > 0.0 {
+            out.push((n, b));
+        }
+    }
+    out
+}
+
 /// The Royal Legion family (wave 3, epoch 6) — every carried Royal
 /// Legion-primitive entry's two live halves, folded the way the twins ship
 /// them: `range_bonus_in` takes the alias-MAX (`_shooting_range_bonus`'s
@@ -7485,6 +7515,7 @@ impl UnitStatic {
             move_rule_mods: move_rule_mods_of(reg, p, rules_epoch),
             solo_move_grant_mods: solo_move_grant_mods_of(reg, p, rules_epoch),
             royal_legion_range_in: royal_legion.0,
+            reach_grants: granted_reach_rules(reg, p, rules_epoch),
             royal_legion_charge_in: royal_legion.1,
             versatile_reach_charge_in: if unit_rule_active(reg, p, "Versatile Reach")
                 || has_special_rule(&p.special_rules, "Versatile Reach Aura")
