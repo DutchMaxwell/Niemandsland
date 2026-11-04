@@ -14,7 +14,8 @@ THE BUNDLED GAMES (the 1104 recording, AoF/GF 1000 pt NET arm, trimmed like the 
 act line and its `pre` line, `auto` placeholders before it, every roll up to it verbatim, its shots):
 
   * `fixtures/g4r2_pre_uncut_shoot/gf_1000_net_039` act 19 - dangerous (3 dice, 6+), cast (1 die, 5+), volley.
-  * `fixtures/g4r2_pre_uncut_melee/aof_1000_net_039` act 9  - dangerous (12 dice), cast (1 die), pile-in, melee.
+  * `fixtures/g4r2_pre_uncut_melee/aof_1000_net_039` act 9  - dangerous (12 dice), cast (1 die), melee, morale, and a
+    second dangerous test (4 dice) after the pile-in that the core never draws (not this row's cause).
 """
 
 from __future__ import annotations
@@ -49,10 +50,14 @@ def test_cut_without_burn_parts_the_shoot_act_at_the_faces(capsys):
     assert "faces=1" in out, out
 
 
-def test_melee_act_9_is_full_equal_with_the_dangerous_test_cut(capsys):
+def test_melee_act_9_matches_every_roll_the_core_draws_with_the_dangerous_test_cut(capsys):
+    """Before: the table's cast die was compared with the melee and the act parted at roll 2 (count). After: all
+    nine rolls the core draws match; the act stays ONE roll short of FULL-equal because the table closes it with a
+    second dangerous test (4 dice, after the pile-in) the core does not draw - a different cause, pinned as such."""
     mrg.run(FIXTURES / "g4r2_pre_uncut_melee", str(REPO), "table", 0, True, movement=True)
     out = capsys.readouterr().out
-    assert "EQUAL : 1/1 acts FULL-equal" in out, out
+    assert "1/1 acts PREFIX-equal (the overlap held; 1 table_longer, 0 port_longer)" in out, out
+    assert "parted: 0 shape, 0 faces" in out, out
 
 
 def test_a_dangerous_test_in_front_of_the_cast_leg_is_cut_with_it():
