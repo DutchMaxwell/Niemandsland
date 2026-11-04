@@ -120,5 +120,5 @@ fn a_single_wound_stays_on_the_host_and_spares_the_hero() {
         .find(|(_, shot)| shot.caused == 1)
         .expect("a seed with exactly one unsaved wound");
     assert_eq!(next.alive[2], 1, "the host loses one model: {:?}", next.wounds);
-    assert_eq!((next.alive[3], next.wounds[3].clone()), (1, vec![3]), "the hero is assigned wounds last: {:?}", shot.log);
+    assert_eq!((next.alive[3], next.wounds[3].clone()), (1, vec![3]), "the hero is spared while the host still has models: {:?}", shot.log);
 }

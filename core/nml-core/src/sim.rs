@@ -463,7 +463,7 @@ fn land_pool_wounds(state: &mut State, ti: usize, w: i64, exact: bool, seams: Se
         }
         let taken = left - land_wounds_with(state, h, left, exact);
         left -= taken;
-        log.push(format!("Hero: {taken} wound{} beyond the unit's models go on to {} (heroes are assigned wounds last)", if taken == 1 { "" } else { "s" }, state.key(h)));
+        log.push(format!("Hero: {taken} wound{} beyond the unit's models go on to {}", if taken == 1 { "" } else { "s" }, state.key(h)));
     }
 }
 
