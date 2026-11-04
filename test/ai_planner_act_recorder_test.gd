@@ -164,6 +164,34 @@ func _verb_lines() -> Array:
 		.filter(func(d: Variant) -> bool: return d is Dictionary and str((d as Dictionary).get("kind", "")) == "verb")
 
 
+## `_solve_planner` stamps the planner's per-preset STATICS (SoloController._apply_aifix and friends) and they outlive the
+## test: a later suite in the same process (battle_sim_resolve_test in CI shard 8) then reads the aifix morale and reply
+## laws. The values are saved before the activation and put back after it.
+func _planner_statics() -> Array:
+	return [AiPlanner.opener_by_finish, AiPlanner.no_end_threat, AiPlanner.brain_knobs, AiPlanner.leaf_opener,
+		AiPlanner.brain_breadth, AiPlanner.points_strength, AiPlanner.table_fidelity, AiPlanner.playout_search,
+		BattleSim.morale_by_probability, BattleSim.reply_v2, BattleSim.reply_skip_activated, BattleSim.reply_hold_gate,
+		BattleSim.hero_fold, AiMissionEval.fit_mode, AiMissionEval.eval_variant]
+
+
+func _restore_planner_statics(v: Array) -> void:
+	AiPlanner.opener_by_finish = v[0]
+	AiPlanner.no_end_threat = v[1]
+	AiPlanner.brain_knobs = v[2]
+	AiPlanner.leaf_opener = v[3]
+	AiPlanner.brain_breadth = v[4]
+	AiPlanner.points_strength = v[5]
+	AiPlanner.table_fidelity = v[6]
+	AiPlanner.playout_search = v[7]
+	BattleSim.morale_by_probability = v[8]
+	BattleSim.reply_v2 = v[9]
+	BattleSim.reply_skip_activated = v[10]
+	BattleSim.reply_hold_gate = v[11]
+	BattleSim.hero_fold = v[12]
+	AiMissionEval.fit_mode = v[13]
+	AiMissionEval.eval_variant = v[14]
+
+
 ## The act line for unit B (player 2, Cumbersome) planned as `planned_kind`, then B's real activation (_act).
 func _activate_planned(planned_kind: int, epoch: int) -> int:
 	AiActRecorder.rules_epoch = epoch
@@ -183,7 +211,9 @@ func _activate_planned(planned_kind: int, epoch: int) -> int:
 	solo.difficulty_by_slot[2] = SoloDifficulty.for_grade("planner_v0_herofold")
 	solo._planner_intent = {"unit": b, "round": solo._current_round(), "action": pick["action"], "target": a, "why": "test pick",
 		"expectation": {"before": 0.5, "after": 0.5}}
+	var saved := _planner_statics()
 	solo._act(b)
+	_restore_planner_statics(saved)
 	return solo.move_act_seq()
 
 
