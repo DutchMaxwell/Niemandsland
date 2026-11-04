@@ -78,7 +78,7 @@ func _chain(shooter: GameUnit, host_alive: bool = false, hero_mm: int = HERO_BAS
 	host.unit_properties["defense"] = 5
 	for m in host.models:
 		(m as ModelInstance).is_alive = host_alive
-	var hero := E2EBoot.make_unit(_main, 2, "Hero", [Vector3(x, 0.0, 0.05)])
+	var hero := E2EBoot.make_unit(_main, 2, "Captain", [Vector3(x, 0.0, 0.05)])
 	hero.unit_properties["defense"] = 4
 	hero.unit_properties["base_size_round"] = hero_mm
 	host.unit_properties["attached_heroes"] = [hero]
@@ -104,11 +104,11 @@ func test_the_ai_volley_assignment_reaches_a_lone_hero_by_its_own_base(timeout :
 		.override_failure_message("the lone hero is in reach by its own base, so the weapon gets it as target (log: %s)" % text.strip_edges()) \
 		.not_contains("no volley")
 	assert_str(text) \
-		.override_failure_message("the volley fires at the hero's chain and the hero saves on 4+ (log: %s)" % text.strip_edges()) \
-		.contains("Hero saves on 4+")
+		.override_failure_message("the volley fires at the hero's chain and the Captain saves on 4+ (log: %s)" % text.strip_edges()) \
+		.contains("Captain saves on 4+")
 	assert_str(text) \
 		.override_failure_message("the volley names the book rule it applied (log: %s)" % text.strip_edges()) \
-		.contains("Fights on alone (GF 3.6): Hero is the unit")
+		.contains("Hero: Captain is the unit now")
 	await E2EBoot.settle(get_tree())
 
 
@@ -147,7 +147,7 @@ func test_a_living_host_keeps_its_own_radius_even_with_a_wider_hero() -> void:
 	await E2EBoot.settle(get_tree())
 
 
-func test_a_volley_at_a_living_host_writes_no_fights_on_alone_line(timeout := 60000) -> void:
+func test_a_volley_at_a_living_host_writes_no_hero_is_the_unit_line(timeout := 60000) -> void:
 	var shooter := _shooter()
 	_chain(shooter, true)
 	await _activate(shooter)
@@ -156,8 +156,8 @@ func test_a_volley_at_a_living_host_writes_no_fights_on_alone_line(timeout := 60
 		.override_failure_message("the host still holds models, so the volley must really fire (log: %s)" % text.strip_edges()) \
 		.contains("Host saves on 5+")
 	assert_str(text) \
-		.override_failure_message("a living host means no lone hero, so no fights-on-alone line (log: %s)" % text.strip_edges()) \
-		.not_contains("Fights on alone")
+		.override_failure_message("a living host means no lone hero, so the Hero rule writes no line (log: %s)" % text.strip_edges()) \
+		.not_contains("is the unit now")
 	await E2EBoot.settle(get_tree())
 
 
