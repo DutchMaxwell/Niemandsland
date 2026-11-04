@@ -91,8 +91,9 @@ def test_a_pre_block_without_the_reach_key_replays_as_before(capsys, tmp_path):
 def test_with_reach_raises_the_ranged_weapons_of_the_named_unit_only():
     g = FX / "g4r4_granted_reach" / "gf_1000_net_026"
     head, lines, _, _ = srg.read_game(g)
-    uid, = [u for u, r in srg.read_pre(g)[9].items() if r.get("reach")]
-    out = srg.with_reach(head["profiles"], srg.read_pre(g)[9])
+    uid = lines[0]["pick"]["action"]["unit"]   # the shooting host; its joined hero carries the grant too
+    assert srg.read_pre(g)[9][uid]["reach"] == 8
+    out = srg.with_reach(head["profiles"], {uid: srg.read_pre(g)[9][uid]})
     before = {w["name"]: w["range"] for w in head["profiles"][uid]["weapons"]}
     after = {w["name"]: w["range"] for w in out[uid]["weapons"]}
     assert before["Battle Rifle"] == 24 and after["Battle Rifle"] == 32

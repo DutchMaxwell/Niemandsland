@@ -296,7 +296,8 @@ def read_played(d: Path) -> set[int]:
 
 
 def read_pre(d: Path) -> dict[int, dict]:
-    """{activation ordinal: {unit id: {alive, shaken}}} from the `kind:"pre"` lines of acts.jsonl (H1a, epoch 73+)."""
+    """{activation ordinal: {unit id: {alive, shaken[, keep, of, wounds, reach]}}} from the `kind:"pre"` lines of acts.jsonl
+    (H1a, epoch 73+; `wounds` = the survivors' wounds and `reach` = a granted shooting reach in inches, H-DANG-CUT / C-GRANTED-RANGE)."""
     out: dict[int, dict] = {}
     for x in (d / "acts.jsonl").read_text().splitlines():
         if '"pre"' in x:
@@ -357,7 +358,23 @@ def patch_pre(plain: dict, units: dict, board=None) -> dict:
             u["alive"] = a
             if board is not None and u.get("positions"):
                 u["in_cover"] = majority_in_cover(u, board, a0)
+        w = rec.get("wounds")   # H-DANG-CUT: the survivors' own wounds after the legs (a record from before the key has none)
+        if isinstance(w, list) and len(w) == a and isinstance(u.get("wounds"), list) and len(u["wounds"]) == a:
+            u["wounds"] = list(w)
         out["units"][uid] = u
+    return out
+
+
+def with_reach(profiles: dict, pre: dict | None) -> dict:
+    """C-GRANTED-RANGE, pre half (epoch 73+): `profiles` with the reach a cast leg GRANTED (the record's `reach`, inches)
+    added to the printed range of every ranged weapon of that unit - the core reads `range + reach_bonus_in` everywhere,
+    so the sum is the same. A record without `reach` (an older recording) changes nothing."""
+    out = dict(profiles)
+    for uid, rec in (pre or {}).items():
+        r = int(rec.get("reach", 0))
+        if r and uid in out:
+            out[uid] = dict(out[uid], weapons=[dict(w, range=int(w["range"]) + r) if int(w.get("range", 0)) > 0 else w
+                                              for w in out[uid]["weapons"]])
     return out
 
 
@@ -602,15 +619,22 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
                 action = dict(action, kind=verbs[k])
                 tally["verbs"] += 1
             tally["acts"] += 1
+            i0 = first_at_or_after(dice, k)
+            plain = act["state"] if hero_attach == "table" else detach(act["state"])
+            # AI-G4 H1b: the cast/spell legs are cut, their dice burned, the state patched from the `pre` line.
+            # H-ROUND-BOUNDARY: a roll of a LATER round under this ordinal is the next round's start roll, not this act's.
+            rolls_k = [r for r in dice[i0:] if int(r["act"]) == k and int(r.get("round", 0)) <= int(act.get("round", 99))]
+            rolls_cut, pre_burn, plain = cut_pre_legs(rolls_k, plain, pres.get(k), red_pre != "noburn",
+                                                      red_pre != "nopatch", board)
             # NML-1150: SPLIT FIRE's aim — where the table really pointed each
             # weapon (shots.jsonl). Injected into the action as `split`; the
             # core then resolves one tray volley per target group, in the
             # table's group order. Only the AIM comes from the record — every
             # count and face stays port-computed.
             aim, aim_kind, amb = (None, "", 0)
-            if inject:
+            if inject:   # H-AIM-ORDER: mapped from the state after the pre patch (the spell may have killed the host)
                 aim, aim_kind, amb = split_aim(head, shots.get(k, []), action["shoot"],
-                                               act["state"]["units"])
+                                               plain["units"] if hero_attach == "table" else act["state"]["units"])
             if aim is not None:
                 tally["split_injected"] += 1
                 tally["split_" + aim_kind] += 1
@@ -621,14 +645,14 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
                 # on an ambiguous name, or the ordinal is stale (a named target
                 # is dead) — the act stays on the pooled path
                 tally["split_" + aim_kind] += 1
-            i0 = first_at_or_after(dice, k)
-            plain = act["state"] if hero_attach == "table" else detach(act["state"])
-            # AI-G4 H1b: the cast/spell legs are cut, their dice burned, the state patched from the `pre` line.
-            rolls_k = [r for r in dice[i0:] if int(r["act"]) == k]
-            rolls_cut, pre_burn, plain = cut_pre_legs(rolls_k, plain, pres.get(k), red_pre != "noburn",
-                                                      red_pre != "nopatch", board)
             tally["pre_cut"] += len(rolls_cut) < len(rolls_k)
             tally["pre_uncut"] += len(rolls_cut) == len(rolls_k) and any(r.get("leg") in CUT_LEGS for r in rolls_k)
+            dang_off = cut_dangerous(rolls_k, rolls_cut)
+            reach = any(r.get("reach") for r in (pres.get(k) or {}).values())
+            if dang_off or reach:  # G4-H8: the cut took the table's dangerous test, the core rolls none for this one act;
+                # C-GRANTED-RANGE: the spell's reach. Before `state_of`: a new header drops the roster the state is built on.
+                core.set_header(dict(header, profiles=with_reach(header["profiles"], pres.get(k)),
+                                     knobs=dict(header["knobs"], dangerous=False) if dang_off else header["knobs"]))
             state = core.state_of(plain)
             # G4-H6: a LONE joined hero's roll compares as its host's label.
             lone = lone_hero_names(plain, head["profiles"])
@@ -639,9 +663,6 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
             tray = nml_core.Tray(seed + 1 if mode == "misseed" else seed)
             if burn[i0] + pre_burn:
                 tray.roll(burn[i0] + pre_burn)
-            dang_off = cut_dangerous(rolls_k, rolls_cut)
-            if dang_off:  # G4-H8: the cut took the table's dangerous test; the core rolls none for this one act
-                core.set_header(dict(header, knobs=dict(header["knobs"], dangerous=False)))
             try:
                 if mode in ("table", "misseed"):
                     nxt, report = core.resolve_with_tray(state, action, nml_core.Rng(0), tray)
@@ -654,7 +675,7 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
                     firsts.append("%s act %d — DECLINED: %s" % (d.name, k, exc))
                 continue
             finally:
-                if dang_off:
+                if dang_off or reach:
                     core.set_header(header)
             for name in report["unported"]:
                 unported[name] = unported.get(name, 0) + 1
