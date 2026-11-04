@@ -6267,6 +6267,19 @@ fn hero_aura_quality(statics: &[UnitStatic], state: &State, i: usize, own: i64, 
     best
 }
 
+/// G4R4 C-BANNER-DEAD-HOST (`EPOCH_73_V36`): the part of unit `i`'s recorded Banner bonus that left with its carrier. The
+/// table reads the Banner by LIVING member (`morale_bonus_named_of` skips a member without models), so once the host that
+/// carried it has no models, only a living joined hero's own Banner is left. 0 below 73 and while the host lives.
+fn banner_gone(statics: &[UnitStatic], state: &State, i: usize, seams: Seams) -> i64 {
+    let share = |u: usize| (state.morale_bonus[u] - statics[state.roster.profile[u]].ctx.morale_rating).max(0);
+    let root = morale_root(state, i, seams);
+    if !rule_on(seams.rules_epoch, EPOCH_73_V36) || !seams.hero_attach || state.alive[root] > 0 {
+        return 0;
+    }
+    let kept = state.attached[root].iter().filter(|&&h| state.alive[h] > 0).map(|&h| share(h)).max().unwrap_or(0);
+    (share(i) - kept).max(0)
+}
+
 /// One live context for ordinary morale and the Mind Control family.
 fn live_morale_ctx(statics: &[UnitStatic], state: &State, i: usize, melee: bool, seams: Seams, shot: &mut ShootResult) -> Ctx {
     let us = &statics[state.roster.profile[i]];
@@ -6291,7 +6304,12 @@ fn live_morale_ctx(statics: &[UnitStatic], state: &State, i: usize, melee: bool,
     // B2b: the live morale records join the Banner bonus in the SAME
     // [2,6]-clamped target the table builds (main.gd:8288-8296). Wave 2: a
     // granted "Hold the Line Boost" joins the same net, epoch-gated.
-    ctx.morale_bonus = state.morale_bonus[i]
+    let gone = banner_gone(statics, state, i, seams);
+    if gone > 0 {
+        let root = &statics[state.roster.profile[morale_root(state, i, seams)]].name;
+        shot.log.push(format!("Banner: {root} died with its Banner — {}'s morale test loses +{gone}", us.name));
+    }
+    ctx.morale_bonus = state.morale_bonus[i] - gone
         + mods::sum(state, i, mods::Role::Morale, melee, |r| r.morale_mod)
         + if rule_on(seams.rules_epoch, EPOCH_5_TABLE_RULES) && mods::granted(state, i, "Enhanced Hold the Line") { HOLD_THE_LINE_BOOST_MORALE_BONUS } else { 0 };
     ctx.no_retreat = ctx.no_retreat || mods::granted(state, i, "No Retreat");
@@ -6322,7 +6340,7 @@ fn drop_banner_for_cause(
 ) {
     if !rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) || unit_shaken(state, i, seams) { return; }
     let us = &statics[state.roster.profile[i]];
-    let banner = (state.morale_bonus[i] - us.ctx.morale_rating).max(0);
+    let banner = ((state.morale_bonus[i] - us.ctx.morale_rating).max(0) - banner_gone(statics, state, i, seams)).max(0);
     if let Some(cause) = cause {
         if banner > 0 {
             ctx.morale_bonus -= banner;
