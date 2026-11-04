@@ -340,6 +340,19 @@ static func pre(act: int, units: Dictionary) -> void:
 	_count += 1
 
 
+## F-PHANTOM (rules 3.6, EPOCH_73_V36): the activation of `act` RAN - the table's executor played the unit. The act line
+## is written when the planner PICKS, so a pick the table never plays (the game ends first: gf_1000_net_004 act 20,
+## gf_1000_net_009 act 25, gf_1000_net_022 act 27) has a line and no marker, and the replay gates skip it. A line of its
+## own joined by `act`. No-op below epoch 73, when NML_ACT_DUMP is unset, before the header exists, or at the line cap.
+static func played(act: int) -> void:
+	var f := _dump_stream()
+	if f == null or _count >= _max or not _header_written or rules_epoch < EPOCH_73_V36:
+		return
+	f.store_line(JSON.stringify({"kind": "played", "act": act}, "", true, true))
+	f.flush()   # a same-process reader (the unit test) must see the line without a close()
+	_count += 1
+
+
 ## F-HOLD-ADV (rules 3.6, EPOCH_73_V36, lead ruling D7): the verb the table EXECUTED when its own gates turned the
 ## planner's pick into another one (a planned Hold that walks into range as an Advance), as a line of its own joined
 ## by `act` - the act line carries the pick and was flushed before the activation ran. The replay gates play `verb`.

@@ -282,6 +282,19 @@ def _stale(units: dict, key: str) -> bool:
 CUT_LEGS = ("cast", "spell")
 
 
+def read_played(d: Path) -> set[int]:
+    """The activation ordinals of the `kind:"played"` lines of acts.jsonl (F-PHANTOM, epoch 73+): the table's executor
+    ran these. The act line is written when the planner PICKS, so a pick the game ended before the table played has a
+    line and no marker. A recording from before the row has no marker at all (an empty set: nothing is skipped)."""
+    out: set[int] = set()
+    for x in (d / "acts.jsonl").read_text().splitlines():
+        if '"played"' in x:
+            r = json.loads(x)
+            if r.get("kind") == "played":
+                out.add(int(r["act"]))
+    return out
+
+
 def read_pre(d: Path) -> dict[int, dict]:
     """{activation ordinal: {unit id: {alive, shaken}}} from the `kind:"pre"` lines of acts.jsonl (H1a, epoch 73+)."""
     out: dict[int, dict] = {}
@@ -323,9 +336,11 @@ def majority_in_cover(u: dict, board, built: int) -> bool:
 
 
 def patch_pre(plain: dict, units: dict, board=None) -> dict:
-    """`plain` after the cast leg: every unit in `units` cut down to its recorded alive count (models dropped from the
-    end of each per-model list) and carrying its recorded Shaken flag. With a `board` (F-PRE-COVER) a unit the leg cut
-    down gets its `in_cover` read again from the survivors, as the table does per save moment."""
+    """`plain` after the cast leg: every unit in `units` cut down to its recorded alive count and carrying its recorded
+    Shaken flag. The survivors are the models the record's `keep` names (F-PRE-SURV: positions in the act-start list,
+    `of` = its length); a record without them, or for a list of another size, drops models from the end. With a `board`
+    (F-PRE-COVER) a unit the leg cut down gets its `in_cover` read again from the survivors, as the table does per save
+    moment."""
     out = dict(plain, units=dict(plain["units"]))
     for uid, rec in units.items():
         if uid not in out["units"]:
@@ -333,9 +348,12 @@ def patch_pre(plain: dict, units: dict, board=None) -> dict:
         u = dict(out["units"][uid], shaken=bool(rec["shaken"]))
         a0, a = int(u["alive"]), int(rec["alive"])
         if a < a0:
+            keep = rec.get("keep")
+            if keep is None or rec.get("of") != a0 or len(keep) != a or not all(0 <= i < a0 for i in keep):
+                keep = list(range(a))
             for f in ("wounds", "radii", "positions", "kits"):
                 if isinstance(u.get(f), list) and len(u[f]) == a0:
-                    u[f] = u[f][:a]
+                    u[f] = [u[f][i] for i in keep]
             u["alive"] = a
             if board is not None and u.get("positions"):
                 u["in_cover"] = majority_in_cover(u, board, a0)
@@ -505,7 +523,7 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
         return 1
 
     tally = {k: 0 for k in
-             ("acts", "prefix_equal", "full_equal", "table_longer", "port_longer",
+             ("acts", "unplayed", "prefix_equal", "full_equal", "table_longer", "port_longer",
               "both_silent", "table_silent", "port_silent", "shape", "faces",
               "declined", "rolls_equal", "rolls", "hits_equal", "hits", "next_checked",
               "next_equal", "equal_over_2", "equal_dice_max", "split_fire",
@@ -532,6 +550,7 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
         shots = shots_of(d)
         pres = read_pre(d)
         verbs = read_verbs(d)
+        played = read_played(d)
         core = nml_core.load(repo)
         if hero_attach == "off":
             head = detach_header(head)
@@ -573,6 +592,9 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
             k = int(act["act"])
             action = (act.get("pick") or {}).get("action") or {}
             if int(action.get("kind", -1)) not in SHOOTING_KINDS or not action.get("shoot"):
+                continue
+            if played and k not in played:   # F-PHANTOM: a pick the table never played has no volley to replay
+                tally["unplayed"] += 1
                 continue
             if k in verbs:   # F-HOLD-ADV: the verb the table ran, not the one it planned
                 if verbs[k] not in SHOOTING_KINDS:
@@ -803,6 +825,7 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
              tally["split_ambig"], tally["split_full_equal"]))
     print("  first field to part: %s" % (
         ", ".join("%s=%d" % kv for kv in sorted(reasons.items())) or "none"))
+    print("  played: shooting picks the table never played (F-PHANTOM) skipped - unplayed: %d" % tally["unplayed"])
     print("  pre   : %d acts with the table's cast/spell leg cut%s; %d left uncut (a roll in front of the leg)"
           % (tally["pre_cut"], " [RED: %s]" % red_pre if red_pre else "", tally["pre_uncut"]))
     print("  verbs : %d acts replayed with the verb the table executed (F-HOLD-ADV)" % tally["verbs"])
