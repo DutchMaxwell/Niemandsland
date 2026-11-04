@@ -149,3 +149,34 @@ func test_the_ai_pre_melee_activation_wounds_are_ignored_at_epoch_72() -> void:
 	var text: String = await _ai_charge(AiActRecorder.EPOCH_73_V36 - 1, 2)
 	assert_str(text).contains("a draw — no morale test")
 	assert_str(text).not_contains("took 2")
+
+
+## G4-T9: the AI charger takes wounds in the STRIKE-BACK only (none before the melee). The activation
+## snapshot must be read before the strikes, else those wounds count a second time as "self-inflicted".
+func _ai_charge_struck_back(epoch: int) -> Dictionary:
+	AiActRecorder.rules_epoch = epoch
+	_main.solo_ai_slots = {1: true, 2: true}   # both seats AI: the strike-back auto-resolves, no dialog
+	var charger := _unit(2, "Charger", 0.0)
+	var defender := _unit(1, "Defender", 1.0, 6)   # armed: a real Club profile strikes back
+	await _main.begin_activation(charger)
+	_main.seed_tray_rng(7)
+	await _main._run_ai_melee({"unit": charger, "target": defender, "charge_from_in": 1.0,
+		"dangerous_wounds_taken": 0})
+	var lost: int = 10 - (charger.models[0] as ModelInstance).wounds_current
+	var text := _log_text()
+	await E2EBoot.settle(get_tree())
+	return {"text": text, "lost": lost}
+
+
+func test_the_ai_charger_strike_back_wounds_count_once_at_epoch_73() -> void:
+	var r: Dictionary = await _ai_charge_struck_back(AiActRecorder.EPOCH_73_V36)
+	assert_int(int(r["lost"])).is_greater(0)   # the scenario bites: the strike-back did wound the charger
+	assert_str(str(r["text"])).contains("Charger took %d," % int(r["lost"]))
+	assert_str(str(r["text"])).not_contains("self-inflicted")
+
+
+## Below 73 the comparison stays dealt-only, so the line is the old one (byte-identical).
+func test_the_ai_charger_strike_back_line_is_unchanged_at_epoch_72() -> void:
+	var r: Dictionary = await _ai_charge_struck_back(AiActRecorder.EPOCH_73_V36 - 1)
+	assert_int(int(r["lost"])).is_greater(0)
+	assert_str(str(r["text"])).contains("Melee result: Charger dealt 0, Defender dealt %d" % int(r["lost"]))
