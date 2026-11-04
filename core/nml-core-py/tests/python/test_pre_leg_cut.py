@@ -24,8 +24,10 @@ THE TWO MUTANTS, both through the gate's own `--red-pre` switch (the live gate p
 
   * `noburn`  - cut the rolls but leave their dice on the tray: the volley draws the cast die's face first, so
                 the shapes hold and every act parts AT THE FACES.
-  * `nopatch` - cut and burn but keep the pre-spell state: act 19 volleys with two models too many and parts
-                AT THE COUNT; act 3 (nothing changed) stays equal.
+  * `nopatch` - cut and burn but keep the pre-spell state: every roll of act 19 still matches, but the target the
+                spell thinned out is two models too strong, so the table's morale test after the volley never
+                happens in the core - act 19 parts AT THE LENGTH; act 3 (nothing changed) stays equal. (The brief
+                expected "at the count"; measured it is the length.)
 """
 
 from __future__ import annotations
@@ -65,10 +67,10 @@ def test_cut_without_burn_parts_at_the_faces(capsys):
     assert "faces=2" in out, out
 
 
-def test_no_patch_parts_act_19_at_the_count(capsys):
+def test_no_patch_parts_act_19_at_the_length(capsys):
     equal, acts, out = gate(capsys, red_pre="nopatch")
     assert (equal, acts) == (1, 2), out
-    assert "first field to part: count=1" in out, out
+    assert "first field to part: length=1" in out, out
 
 
 def test_an_old_recording_without_the_stamps_keeps_its_old_numbers(capsys, tmp_path):
