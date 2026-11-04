@@ -101,8 +101,8 @@ func test_a_moved_artillery_target_drops_its_minus_one_at_epoch_73() -> void:
 func test_the_ai_target_picker_prefers_a_moved_artillery_target_at_epoch_73() -> void:
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
 	var shooter := _unit(2, "Shooter", [Vector3.ZERO], [], _rifle())
-	var unmoved := _gun("Unmoved", 13.0)
-	var moved := _gun("Moved", -13.0)
+	var unmoved := _gun("Unmoved", 14.0)   # 14" centre = 12.7" base edge: the picker measures the nearest model from 73
+	var moved := _gun("Moved", -14.0)
 	_mark_moved(moved)
 	var solo := _controller([shooter, unmoved, moved])
 	# Equal official key (same band, not activated, open): the EV tie-break decides, and the
@@ -115,8 +115,8 @@ func test_the_ai_target_picker_prefers_a_moved_artillery_target_at_epoch_73() ->
 func test_the_ai_target_picker_keeps_the_first_of_two_unmoved_guns_at_epoch_73() -> void:
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
 	var shooter := _unit(2, "Shooter", [Vector3.ZERO], [], _rifle())
-	var first := _gun("First", 13.0)
-	var second := _gun("Second", -13.0)
+	var first := _gun("First", 14.0)   # over 12" edge to edge, like the moved-gun case above
+	var second := _gun("Second", -14.0)
 	var solo := _controller([shooter, first, second])
 	assert_object(solo.best_shoot_target_now(shooter, true)) \
 		.override_failure_message("two identical held guns must tie and keep the first") \

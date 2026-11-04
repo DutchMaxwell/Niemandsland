@@ -151,6 +151,7 @@ var _success_target: int = DiceRules.TARGET_NONE
 var _success_modifier: int = 0
 var _next_roll_owner: String = ""   # attribution for the next tray roll ("AI (…)"); empty = "You" (goal 001)
 var _solo_tray_busy: bool = false   # NML-954: a _solo_tray_roll is in flight — the tray is exclusive
+var _solo_leg: String = "main"   # AI-G4 H1a: the activation leg a tray roll belongs to ("spell" inside the cast leg; dice.jsonl `leg`)
 var _next_roll_purpose: String = ""   # what the roll is about — tray label + MP context (community #170)
 var _next_roll_kind: String = "attack"   # Bug 16: "defense" words the dice-log line as "defends … blocks"
 var _target_buttons: Array[Button] = []
@@ -4558,6 +4559,7 @@ func _run_ai_shooting(report: Dictionary) -> void:
 			# Wave 5: an expended Limited weapon no longer shoots (core v3.5.1: once per game); a
 			# unit-level Shred grant marks every weapon profile (the weapon facet is already parsed).
 			if bool(prof.get("limited", false)) and solo_controller.is_limited_used(member, prof):
+				_solo_log_limited_spent(member, prof)
 				continue
 			if RulesRegistry.unit_rule_active(member, "Shred") \
 					or _solo_shred_facet_applies(member, base_range):
@@ -4618,6 +4620,13 @@ func _solo_log_no_volley(unit: GameUnit, report: Dictionary, why: String) -> voi
 		if int(report.get("action", 0)) == AiDecision.Action.HOLD else ""
 	battle_log.log_event(BattleLog.Category.COMBAT, "%s: no volley — %s%s" % [
 		unit.get_name(), why, hold_note], true)
+
+
+## Limited (once per game): a volley leaves out a weapon that already fired — the log names the book rule.
+func _solo_log_limited_spent(member: GameUnit, prof: Dictionary) -> void:
+	if battle_log != null and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		battle_log.log_event(BattleLog.Category.COMBAT, "Limited: %s's %s is used up — once per game" % [
+			member.get_name(), str(prof.get("name", "?"))], true)
 
 
 ## Resolve-first priority of a shot (GF v3.5.1 p.14): Takedown before Deadly before the rest. sort_custom
@@ -4786,6 +4795,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		AiShotRecorder.record({"act": solo_controller.move_act_seq(), "round": solo_controller._current_round(),
 			"player": solo_controller.ai_slot, "shooter": attacker.get_name(), "member": member.get_name(),
 			"weapon": str(profile.get("name", "?")), "target": target.get_name(),
+			"target_id": str(target.unit_id),
 			"alive": member.get_alive_count(), "sighted": sighted, "bearers": shot_bearers,
 			"max_models": shot_max_models, "attacks": attacks,
 			"reach_in": float(shot_range_in) + (_solo_unit_base_radius_m(member) + _solo_unit_base_radius_m(target)) \
@@ -5017,13 +5027,39 @@ func _vfx_player_volley(member: GameUnit, target: GameUnit, profile: Dictionary,
 func _solo_resolve_ai_casts(report: Dictionary) -> void:
 	if dice_roller_control == null or solo_controller == null:
 		return
+	var flags_before := _solo_unit_flags()
+	_solo_leg = "spell"   # AI-G4 H1a: every roll below is the cast leg's; the cast die itself re-tags to "cast"
 	for c in report.get("casts", []):
 		var cast := c as Dictionary
 		var caster: GameUnit = cast.get("caster")
 		if caster == null or caster.get_alive_count() == 0:
 			continue   # the caster died to a Dangerous-terrain test before the cast resolved
 		await _solo_resolve_one_cast(cast)
+	_solo_leg = "main"
+	_solo_record_pre_leg(flags_before)
 	_solo_refresh_caster_markers()
+
+
+## AI-G4 H1a: {unit id: [alive models, Shaken]} of every unit on the table (the cast leg's before/after diff).
+func _solo_unit_flags() -> Dictionary:
+	var flags := {}
+	for uid in opr_army_manager.game_units:
+		var u := opr_army_manager.game_units[uid] as GameUnit
+		flags[uid] = [u.get_alive_count(), u.is_shaken]
+	return flags
+
+
+## AI-G4 H1a: writes the `pre` block of this activation - the units the cast leg changed, so the replay
+## gates can start the core from the state the table's volley started from. Epoch 73+ only.
+func _solo_record_pre_leg(before: Dictionary) -> void:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 or not AiActRecorder.active():
+		return
+	var changed := {}
+	var after := _solo_unit_flags()
+	for uid in after:
+		if after[uid] != before.get(uid):
+			changed[uid] = {"alive": after[uid][0], "shaken": after[uid][1]}
+	AiActRecorder.pre(solo_controller.move_act_seq(), changed)
 
 
 ## One cast: the announced spell, the boost/interference-adjusted target number, one real tray die.
@@ -5110,8 +5146,11 @@ func _solo_resolve_one_cast(cast: Dictionary) -> void:
 	var target_num := AiSpell.cast_target(boost, interference, base_target)
 	# THE CAST ROLL — one visible die on the real tray (no hidden RNG).
 	var roll_owner := str(cast.get("owner_label", "AI (%s)" % caster.get_name()))
+	var leg_before := _solo_leg
+	_solo_leg = "cast"   # AI-G4 H1a: the cast die is its own leg of the recording
 	var faces: Array = await _solo_tray_roll(1, target_num, roll_owner, "attack",
 		"Casting %s (%d+)" % [spell_name, target_num])
+	_solo_leg = leg_before
 	var success: bool = not faces.is_empty() and DiceRules.is_success(int(faces[0]), target_num, 0)
 	if seal_id > 0:
 		_vfx_emit({"k": "seal_end", "sid": seal_id, "o": int(SpellSeal.Outcome.SUCCESS if success else SpellSeal.Outcome.FAIL),
@@ -6075,6 +6114,14 @@ func _solo_sighted_count(shooter: GameUnit, target: GameUnit, range_in: int, ign
 	if shooter == null or target == null:
 		return 0
 	var _prof_sight_t0 := BattleSim.prof_t0()   # NML-1072: LOS/sight computation
+	# G4-T5 (EPOCH_73_V36): an OVAL base's circumscribed radius overstates the slack, so a shot the
+	# ruler refuses could pass. Measure the nearest real base-edge gap first; LOS and the per-model
+	# count below stay untouched.
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
+			and (_solo_unit_has_oval(shooter) or _solo_unit_has_oval(target)) \
+			and _solo_shoot_gap_in(shooter, target, INF) > float(range_in):
+		BattleSim.prof_mark("sight", _prof_sight_t0)
+		return 0
 	var target_positions: Array = []
 	var target_members: Array = [target]
 	if target.has_method("get_attached_heroes"):
@@ -6264,7 +6311,7 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 		# scaling by the per-model sighted count below still zeroes any profile no model can actually reach.
 		var member_dist: float = dist_in
 		if not melee and enemy != null and solo_controller != null:
-			member_dist = _solo_nearest_model_gap_in(member, enemy, dist_in)
+			member_dist = _solo_shoot_gap_in(member, enemy, dist_in)
 		# NML-929 — the SHOOTER-SIDE bonus belongs on this gate too: Royal Legion's +4" and the spell
 		# range tokens (both through SoloController.shooting_range_bonus) are what _solo_validate_target
 		# measured when it let the player DECLARE the shot, and what the AI volley folds into each shot's
@@ -6409,6 +6456,44 @@ func _solo_nearest_model_gap_in(member: GameUnit, enemy: GameUnit, fallback_in: 
 	return maxf(best - edge_slack_in, 0.0)
 
 
+## Whether the unit has at least one OVAL base among its live models (attached heroes included) — the
+## EPOCH_73_V36 switch that moves the shooting reach from the circumscribed circle to the real shape.
+func _solo_unit_has_oval(unit: GameUnit) -> bool:
+	if unit == null:
+		return false
+	var models: Array = unit.get_alive_models_with_attached() if unit.has_method("get_alive_models_with_attached") \
+		else unit.get_alive_models()
+	for m in models:
+		var mi := m as ModelInstance
+		if mi == null or mi.unit == null or mi.unit.unit_properties == null:
+			continue
+		var tough: int = int(mi.properties.get("tough", 0)) if mi.properties else 0
+		if bool(OPRArmyManager.effective_base_props(mi.unit.unit_properties, tough).get("base_is_oval", false)):
+			return true
+	return false
+
+
+## The shooting reach's DISTANCE truth at EPOCH_73_V36: the nearest base-edge gap between the models,
+## through the recorded base SHAPES (ovals included) like the core's `range_gap_in`. Below 73 and for an
+## all-round pair the circumscribed-slack read stands, so every recorded corpus replays byte-exact.
+func _solo_shoot_gap_in(a: GameUnit, b: GameUnit, fallback_in: float) -> float:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 \
+			or not (_solo_unit_has_oval(a) or _solo_unit_has_oval(b)):
+		return _solo_nearest_model_gap_in(a, b, fallback_in)
+	var a_models: Array = a.get_alive_models_with_attached() if a.has_method("get_alive_models_with_attached") else a.get_alive_models()
+	var b_models: Array = b.get_alive_models_with_attached() if b.has_method("get_alive_models_with_attached") else b.get_alive_models()
+	var best := INF
+	for am in a_models:
+		var ash := SeparationChecker.shape_for_model(am as ModelInstance)
+		if ash == null:
+			continue
+		for bm in b_models:
+			var bsh := SeparationChecker.shape_for_model(bm as ModelInstance)
+			if bsh != null:
+				best = minf(best, SeparationChecker.edge_distance(ash, bsh))
+	return maxf(best, 0.0) if best != INF else _solo_nearest_model_gap_in(a, b, fallback_in)
+
+
 # === Solo combat facets (goal 003 P3 — shared pure-module math: cover / hits / wounds / regen / tough) ===
 
 ## The defender's save target after Cover (GF Advanced Rules v3.5.1 p.11): the majority of a target's models
@@ -6481,9 +6566,14 @@ func _solo_hits(faces: Array, to_hit: int, profile: Dictionary, dist_in: float, 
 						"%s: charged from over %d\" — bonus hits on unmodified 6s" % [
 							surge_alias, int(AiCombatMath.CHARGE_LONG_RANGE_IN)], true)
 				elif not surge_alias.is_empty() and dist_in > 0.0:
-					battle_log.log_event(BattleLog.Category.COMBAT,
-						"%s: shot from over %d\" — bonus hits on unmodified 6s" % [
-							surge_alias, int(AiCombatMath.LONG_RANGE_IN)], true)
+					if sentinel_shot and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+						# Rules 3.6: a plain alias pays at any range, so its line names no 9" band.
+						battle_log.log_event(BattleLog.Category.COMBAT,
+							"%s: bonus hits on unmodified 6s" % surge_alias, true)
+					else:
+						battle_log.log_event(BattleLog.Category.COMBAT,
+							"%s: shot from over %d\" — bonus hits on unmodified 6s" % [
+								surge_alias, int(AiCombatMath.LONG_RANGE_IN)], true)
 				# #193 rules-must-log: this was the LAST silent on-6 branch — a "2 hits" tray that
 				# resolves as "3 hits" reads broken, not Surge. EPOCH 38 SURGE MARK: the bridge
 				# (_solo_bridge_granted_flags) folds the marked target's once-grant into THIS
@@ -10626,10 +10716,14 @@ func _solo_tray_roll(count: int, success_target: int, owner: String, roll_kind: 
 		# NML-1073 M5 D1-B1: sibling file, default OFF (env NML_DICE_DUMP) — stamps the ACTIVATION
 		# ordinal the "dice" decision record above never carries (a live decisions.json must stay
 		# byte-identical whether this seam is on or off, so it is not added there).
-		AiDiceRecorder.record({"act": solo_controller.move_act_seq(), "seq": _solo_dice_seq,
+		var dice_rec := {"act": solo_controller.move_act_seq(), "seq": _solo_dice_seq,
 			"round": solo_controller._current_round(), "player": solo_controller.ai_slot,
 			"roll_kind": roll_kind, "owner": owner, "target": success_target, "count": count,
-			"faces": faces})
+			"faces": faces}
+		if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+			# AI-G4 H1a: the replay gates cut the cast and spell legs (the core rolls no cast die), keep the rest.
+			dice_rec["leg"] = "dangerous" if roll_kind == "dangerous" else _solo_leg
+		AiDiceRecorder.record(dice_rec)
 	_dice_count = prev_count
 	_update_dice_set(prev_count)
 	_success_target = prev_target
@@ -14450,7 +14544,7 @@ func _solo_log_reach_shrink(attacker: GameUnit, target: GameUnit) -> void:
 				or not (member.source_data is OPRApiClient.OPRUnit):
 			continue
 		# Profiles that WOULD reach at the printed range — the ones the shrink then takes away.
-		var gap: float = _solo_nearest_model_gap_in(member, target, INF)
+		var gap: float = _solo_shoot_gap_in(member, target, INF)
 		for p in AiShooting.profiles_in_range((member.source_data as OPRApiClient.OPRUnit).weapons, gap):
 			var printed := float((p as Dictionary).get("range", 0))
 			if SoloController.effective_shoot_reach_in(printed, target) >= gap:
@@ -14518,7 +14612,7 @@ func _solo_log_range_bonus(attacker: GameUnit, target: GameUnit) -> void:
 		if spell_in > 0:
 			causes.append("spell +%d\"" % spell_in)
 		# Profiles that reach ONLY because of the bonus: out of reach at the printed range, in reach with it.
-		var gap: float = _solo_nearest_model_gap_in(member, target, INF)
+		var gap: float = _solo_shoot_gap_in(member, target, INF)
 		var lifted: PackedStringArray = []
 		for p in AiShooting.profiles_in_range((member.source_data as OPRApiClient.OPRUnit).weapons,
 				maxf(gap - float(bonus_in), 0.0)):

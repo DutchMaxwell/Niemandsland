@@ -309,6 +309,13 @@ pub struct PlainLedger {
     /// Empty on every older corpus.
     #[serde(default)]
     feats_used: Vec<String>,
+    /// G4-H-LIM (`EPOCH_73_V36`) — `unit_properties["limited_used"]`
+    /// (`SoloController.mark_limited_used`): the weapon names this unit has
+    /// already fired under Limited (once per game), written by act_recorder.gd
+    /// `_ledger_of`. Absent from every corpus recorded before this key, and
+    /// empty there — an old act replays with every Limited weapon fresh.
+    #[serde(default)]
+    limited_used: Vec<String>,
     /// Wave 5 (PR 1's recorder): the `{"used", "to"}` block; `to` arrives as the `"(x, y)"` Vector2 string.
     #[serde(default)]
     teleport: Option<PlainTeleport>,
@@ -1217,6 +1224,10 @@ pub fn fold_ledger(
     st.reinforcement_used[ui] = ledger.reinforcement_used;
     Rc::make_mut(&mut st.storm_used)[ui] = ledger.storm_used.clone();
     Rc::make_mut(&mut st.feats_used)[ui] = ledger.feats_used.clone();
+    // Limited: the table's spent weapons ride the act state from EPOCH_73_V36; below it every Limited weapon replays fresh.
+    if rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
+        Rc::make_mut(&mut st.limited_used)[ui] = ledger.limited_used.clone();
+    }
     st.teleport_used[ui] = ledger.teleport.as_ref().map(|t| t.used).unwrap_or(false);
     st.growth_markers[ui] = ledger.growth;
     st.vengeance_markers[ui] = ledger.vengeance_markers;

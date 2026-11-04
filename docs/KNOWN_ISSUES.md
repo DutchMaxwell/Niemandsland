@@ -31,6 +31,9 @@ not there yet and what to watch for. The full done / in-progress / planned break
   offer the three verbs while their move preview and target selection are reworked (issue #1828);
   move and attack by hand (the radial's Shoot / Fight, or drag). NACHTMAHR's own activations are
   unaffected.
+- **Rules 3.6 for Grimdark Future and Age of Fantasy only.** Firefight, Skirmish and Regiments still
+  play rules 3.5.1. Army Forge serves their 3.6 books, which import with a warning that names both
+  versions; a save, or a player in an online room, on other rules is refused.
 - **AI thinking time has been measured on one machine only** (a developer laptop). On a slower PC
   the opponent may take longer per decision — if it feels slow, send a diagnostics report (below);
   its header names which AI path your machine ran.
@@ -58,9 +61,9 @@ not there yet and what to watch for. The full done / in-progress / planned break
   cleanest recovery is to rejoin the room. The deep reconnect-sync issues are fixed (no more
   "reconnected but nothing syncs"); fully *graceful* guest reconnect is post-Alpha.
 - **Online rules automation after the host's connection drops (#1887, #1886).** Right after the
-  host's link comes back, the next spell can be cast without asking the other player for interference
-  (the battle log says the seat was empty), and a question the host stopped waiting for can stay open
-  on the other screen; close it with ×. A fix is planned for 0.3.14.1.
+  host's link comes back, a question the host stopped waiting for can stay open on the other screen;
+  close it with ×. A fix is planned. (The spell that was cast without asking for interference after a
+  rejoin is fixed on main, #1890.)
 - **Import while a guest is mid-join** was a source of missing/duplicated models — fixed; if you
   ever see it, send a diagnostics report (below).
 
@@ -75,8 +78,6 @@ not there yet and what to watch for. The full done / in-progress / planned break
   NACHTMAHR plays with Erlkönig. The release build proves on a macOS runner that the exported app
   loads the core and plays; no person has tried it on a real Mac yet. If the start line or the
   diagnostics report names the decision tree on your Mac, the core did not load — please report it.
-  (The solo grade picker still says "on macOS still without Erlkönig" next to Albtraum; that text is
-  out of date and is being fixed separately.)
 - **Windows: an in-game update from 0.3.12.0 restarts the game once.** The 0.3.12.0 updater
   replaces only `Niemandsland.exe`; on its first start 0.3.13.0 copies the missing rules-core file
   (`nml_core_godot.dll`) from the downloaded update next to the game and restarts once by itself.

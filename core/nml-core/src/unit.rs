@@ -3709,9 +3709,17 @@ fn stamp(
                         trace_stamp(trace73, "surge-window", &hit.name,
                             &format!("{}: {} stamped within {}in", p.name, hit.name, hit.within_in));
                     }
+                    // Rules 3.6 (row G4-C3, EPOCH_73_V36): the table stamps
+                    // every Surge data alias with its own `over_in` (default
+                    // -1.0, "no distance condition"), so a PLAIN alias —
+                    // `surge_low` 6, no wider window — pays at any range from
+                    // 73. Below 73 only the widened 5s window carries the
+                    // sentinel, and every recorded corpus replays.
                     if let Some((low, over)) = printed_low {
                         if low < 6 {
                             sp.surge_low = low;
+                        }
+                        if low < 6 || rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
                             sp.surge_over_in = over;
                         }
                     }
@@ -6837,6 +6845,15 @@ impl UnitStatic {
         let p = &p;
         let trace73 = rule_on(rules_epoch, EPOCH_73_V36) && crate::mv::plain_memo::trace_rules_on();
         let mut shoot = profiles_in_range(&p.weapons, 0.0);
+        // Rules 3.6: the table bridges a unit's own Relentless onto its weapon
+        // profile at the reading seam, so the weapon does not have to print it.
+        // Mirror that on the shoot array only; the melee array carries range 0
+        // and can never reach the over-9" bonus. Gated at `EPOCH_73_V36`.
+        if rule_on(rules_epoch, EPOCH_73_V36) && has_special_rule(&p.special_rules, "Relentless") {
+            for sp in shoot.iter_mut() {
+                sp.relentless = true;
+            }
+        }
         stamp(reg, p, &mut shoot, &mut unimplemented, rules_epoch, trace73);
         stamp_conditional_ap(reg, p, rules_epoch, &mut shoot);
         stamp_unit_strikers(reg, p, &mut shoot, rules_epoch);

@@ -24,17 +24,20 @@ REPO = Path(__file__).resolve().parents[4]
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "mel_par_f8" / "act19.json"
 
 
-def _menu_offers_the_charge(walls: bool) -> bool:
+def _menu_offers_the_charge(walls: bool, rules_epoch: int | None = None) -> bool:
     import nml_core
 
     fix = json.loads(FIXTURE.read_text())
     head = fix["header"]
     terrain = head["terrain"] if walls else dict(head["terrain"], walls=[])
+    knobs = dict(head["knobs"], hero_attach=True, engage_fold=True)
+    if rules_epoch is not None:
+        knobs["rules_epoch"] = rules_epoch
     core = nml_core.load(str(REPO))
     core.set_header({
         "profiles": head["profiles"],
         "terrain": terrain,
-        "knobs": dict(head["knobs"], hero_attach=True, engage_fold=True),
+        "knobs": knobs,
     })
     menu = core.candidates(core.state_of(fix["state"]), fix["charger"])
     return any(isinstance(c, dict) and c.get("charge") == fix["victim"] for c in menu)
@@ -49,5 +52,7 @@ def test_no_charge_through_a_ruin_wall_the_unit_cannot_walk_around():
 
 
 def test_without_the_walls_the_same_charge_is_offered():
-    assert _menu_offers_the_charge(walls=False), (
+    # Epoch 72 on purpose (G4-C2 c): from epoch 73 the menu also asks the core's move port, which ends short on this
+    # geometry even without the walls. This leg isolates the PATH CHECK: the walls, not any other filter, drop the charge.
+    assert _menu_offers_the_charge(walls=False, rules_epoch=72), (
         "with the walls removed the charge must stay on the menu")

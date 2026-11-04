@@ -5103,6 +5103,10 @@ pub fn member_profiles_of(
             sc.bearers_last = seams.casualties_bearers_last;
             profiles_of(us, state.alive[si], d, sc);
             shoot_bearers_rescale(us, state, si, seams.rules_epoch, sc);
+            // Limited: the table's `filter_limited` on the EV set — a spent weapon is priced no more than it is rolled.
+            if rule_on(seams.rules_epoch, EPOCH_73_V36) {
+                drop_spent_limited(&us.shoot, &state.limited_used[si], sc);
+            }
         }
         return;
     }
@@ -5118,10 +5122,12 @@ pub fn member_profiles_of(
         let set = if melee { &um.melee } else { &um.shoot };
         for p in set {
             // MEL-02e: a Limited profile the member already spent brings no strikes, so it
-            // leaves the EV set from `EPOCH_73_V36` (the table's `filter_limited`).
-            if melee && rule_on(seams.rules_epoch, EPOCH_73_V36)
-                && p.limited && state.limited_used[mi].iter().any(|n| n == &p.name)
-            {
+            // leaves the EV set from `EPOCH_73_V36` (the table's `filter_limited`). G4-H-LIM: a
+            // spent SHOOTING profile stays in the folded list (the reach rescale indexes it) but
+            // is never kept, so it is priced no more than it is rolled.
+            let spent = rule_on(seams.rules_epoch, EPOCH_73_V36)
+                && p.limited && state.limited_used[mi].iter().any(|n| n == &p.name);
+            if melee && spent {
                 continue;
             }
             // FEAT PR 2 — the ranged bonus shot never scales with the unit
@@ -5141,7 +5147,7 @@ pub fn member_profiles_of(
             // and indexes the folded list through `keep`.
             if melee {
                 sc.attacks.push(a);
-            } else if (p.range as f64) + p.reach_bonus_in >= d {
+            } else if (p.range as f64) + p.reach_bonus_in >= d && !spent {
                 let idx = sc.fold.len();
                 sc.keep.push(idx);
                 sc.attacks.push(a);
@@ -5283,7 +5289,7 @@ fn sighted_profiles_of(
         let lost = p.indirect_los_needs_hold && !held; // Rules 3.6 (SHO-01a): the waiver needs Hold
         let seen = sight::sighted_count(state, zones, &blockers, mi, ti, reach,
             (p.indirect && p.indirect_ignores_los.unwrap_or(true) && !lost) || mark_indirect,
-            rule_on(sc.rules_epoch, EPOCH_66_DISTANCE_TRUTH));
+            rule_on(sc.rules_epoch, EPOCH_66_DISTANCE_TRUTH), sc.rules_epoch);
         if lost && !mark_indirect {
             trace_rule("volley", "Indirect",
                 &format!("{} did not Hold: {} needs line of sight", statics[state.roster.profile[mi]].name, p.name));
@@ -9095,6 +9101,10 @@ fn resolve_with(
         for (i, m) in land.movers.iter().enumerate() {
             next.positions[m.unit][m.model] = geom::to_f64(land.end[i]);
         }
+        // Rules-must-log (main.gd:1210-1212): a climb names the Terrain rule and the inches it cost.
+        if let (true, Some((_, shot))) = (land.climb_in > 0.0, dice.as_mut()) {
+            shot.log.push(format!("Terrain: {} climbs onto terrain (+{:.1}\" of its move)", statics[pi_s].name, land.climb_in));
+        }
         // D5-2 review fix: the table's own arc only feeds the D5-1 budget
         // gate when `charge_landing` asks for it — otherwise `movement=
         // "table"` silently forces `charge_landing="table"` on, and the
@@ -9438,7 +9448,7 @@ fn resolve_with(
                     // coarse grid line between the two centres, which refused a shot the outer models see past
                     // a forest. The EV half runs the same gate, so the search now prices that shot too.
                     Cover::Board(t) if t.is_valid() && rule_on(sc.rules_epoch, EPOCH_73_V36) => {
-                        sight::unit_sees(&next, &board_zones(t, seams.shelf_sight, seams.rules_epoch), si, ti)
+                        sight::unit_sees(&next, &board_zones(t, seams.shelf_sight, seams.rules_epoch), si, ti, sc.rules_epoch)
                     }
                     Cover::Board(t) if t.is_valid() => !t.los_blocked_at(
                         geom::centre(&next.positions[si]),
@@ -9647,6 +9657,14 @@ fn resolve_with(
                                 } else {
                                     profiles_of(um, next.alive[mi], g.d, &mut msc);
                                     shoot_bearers_rescale(um, &next, mi, seams.rules_epoch, &mut msc);
+                                }
+                                if rule_on(seams.rules_epoch, EPOCH_73_V36) {
+                                    // Limited: the log names the book rule for each spent weapon the volley leaves out.
+                                    for p in msc.keep.iter().map(|&k| &um.shoot[k]) {
+                                        if p.limited && next.limited_used[mi].iter().any(|n| n == &p.name) {
+                                            shot.log.push(format!("Limited: {} is used up — once per game", p.name));
+                                        }
+                                    }
                                 }
                                 drop_spent_limited(&um.shoot, &next.limited_used[mi], &mut msc);
                                 if let Some(aims) = &g.weapons {

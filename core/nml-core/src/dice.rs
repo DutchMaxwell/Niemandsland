@@ -1257,9 +1257,14 @@ pub fn resolve_volley_leg(
                         hits += faces.iter().filter(|&&f| f == 5 && count_target <= 5).count() as i64;
                     }
                     if !p.surge_alias_rule.is_empty() && sixes(&faces) > 0 {
-                        out.log.push(format!(
-                            "{}: shot from over {:.0}in — bonus hits on unmodified 6s",
-                            p.surge_alias_rule, LONG_RANGE_IN));
+                        if p.alias_gate && p.surge_over_in < 0.0 {
+                            // Rules 3.6: a plain alias pays at any range, so its line names no 9in band.
+                            out.log.push(format!("{}: bonus hits on unmodified 6s", p.surge_alias_rule));
+                        } else {
+                            out.log.push(format!(
+                                "{}: shot from over {:.0}in — bonus hits on unmodified 6s",
+                                p.surge_alias_rule, LONG_RANGE_IN));
+                        }
                     }
                 }
             } else {

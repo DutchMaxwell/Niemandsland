@@ -327,6 +327,19 @@ static func traced(act: int, tag: String, faces: Array, plus: int, bonus_in: flo
 	_count += 1
 
 
+## AI-G4 H1a (rules 3.6, EPOCH_73_V36): the units the activation's CAST LEG changed, {uid: {alive, shaken}},
+## as a line of its own joined by `act` (the act line was flushed before the activation ran and is never
+## rewritten). The replay gates cut the cast and spell rolls and start the core from this state. No-op
+## below epoch 73, when NML_ACT_DUMP is unset, before the header exists, or when the line cap is hit.
+static func pre(act: int, units: Dictionary) -> void:
+	var f := _dump_stream()
+	if f == null or _count >= _max or not _header_written or rules_epoch < EPOCH_73_V36:
+		return
+	f.store_line(JSON.stringify({"kind": "pre", "act": act, "units": units}, "", true, true))
+	f.flush()   # a same-process reader (the unit test) must see the line without a close()
+	_count += 1
+
+
 ## NML-1010 wave C gate (C9.2): one line per ROUND END into `rounds.jsonl` beside acts.jsonl.
 ## `pre` = the board captured BEFORE the table's round-end referee ran (seize, carry step,
 ## destroy step, VP), as the same plain an act line carries; `post` = the ledger the referee
@@ -904,6 +917,12 @@ static func _ledger_of(u: GameUnit) -> Dictionary:
 			feats.append(tn)
 	if not feats.is_empty():
 		ledger["feats_used"] = feats
+	# G4-H-LIM (EPOCH_73_V36) — the once-per-game LIMITED ledger: the weapon names this unit has already
+	# fired (unit_properties["limited_used"], SoloController.mark_limited_used). The table skips a spent
+	# weapon (main.gd _run_ai_shooting); without the names the core prices and rolls it again.
+	var spent_limited: Array = u.unit_properties.get("limited_used", [])
+	if rules_epoch >= EPOCH_73_V36 and not spent_limited.is_empty():
+		ledger["limited_used"] = spent_limited.duplicate()
 	var markers := 0
 	for e in RulesRegistry.unit_rules_of_primitive(u, "Growth Markers"):
 		var rn := str((e as Dictionary)["name"]).to_snake_case()
