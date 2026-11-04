@@ -301,6 +301,16 @@ def cut_pre_legs(rolls: list[dict], plain: dict, pre: dict | None, burn: bool = 
     return rolls[lead:], draws, patch_pre(plain, pre or {}) if patch else plain
 
 
+def lone_hero_of(units: dict, key: str) -> str:
+    """AI-G4 F-AIM (epoch 73+): the table fires "at" a dead host while its joined hero stands - the hero is the unit
+    now. `key` itself unless it has no living model and exactly one living attached hero; then that hero's key."""
+    u = units.get(key, {})
+    if int(u.get("alive", -1)) != 0:
+        return key
+    live = [str(h) for h in (u.get("attached", []) or []) if int(units.get(str(h), {}).get("alive", -1)) > 0]
+    return live[0] if len(live) == 1 else key
+
+
 def split_aim(head: dict, rec: list[dict], shoot_key: str, units: dict) -> tuple[list[dict] | None, str, int]:
     """The `split` aim for one act, or `(None, why, 0)` to stay pooled. A
     non-empty `target_id` that the header profiles carry is the unit key itself
@@ -329,6 +339,8 @@ def split_aim(head: dict, rec: list[dict], shoot_key: str, units: dict) -> tuple
             amb += 1
     if not aim:
         return None, "uncovered", amb
+    if int((head.get("knobs") or {}).get("rules_epoch", 0)) >= 73:
+        aim = [dict(a, target=lone_hero_of(units, a["target"])) for a in aim]
     if any(_stale(units, a["target"]) for a in aim):
         return None, "stale", amb
     if all(a["target"] == shoot_key for a in aim):
