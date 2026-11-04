@@ -740,6 +740,7 @@ mod tests {
                 Obb { c: [-8.0 * IN2M, 3.0 * IN2M], he: [1.5 * IN2M, 1.5 * IN2M], yaw: 0.0, kind: DANGEROUS },
             ],
             pieces: vec![],
+            containers: Vec::new(),
             walls: vec![],
             cell_params: CellParams {
                 table_size_feet: [6.0, 4.0],
@@ -787,6 +788,7 @@ mod tests {
             cells: vec![[20.0, 20.0, FOREST as f64], [21.0, 20.0, FOREST as f64], [30.0, 25.0, RUINS as f64]],
             sandbox: vec![],
             pieces: vec![],
+            containers: Vec::new(),
             walls: vec![],
             cell_params: CellParams {
                 table_size_feet: [6.0, 4.0],
