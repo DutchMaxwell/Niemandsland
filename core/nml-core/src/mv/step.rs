@@ -88,6 +88,8 @@ pub struct Landing {
     /// `_retrace_to` (:5053) rewrites them toward the gated endpoint. Always
     /// false for a Flying unit, which ignores terrain effects while moving (p.13).
     pub dangerous: Vec<bool>,
+    /// The per-model polylines `last_move_paths` publishes: the route RETRACED to the gated endpoint (`retrace_to`).
+    pub trails: Vec<Vec<V2>>,
     /// The `plan_unit_step` call this landing was solved from — the LAST one,
     /// so a p.11 re-plan reports the call it actually kept. `None` only when
     /// the bounds-clamped delta was zero and no call was ever made. Kept for
@@ -900,7 +902,7 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
             if rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES) && !best_coherent && start_coherent {
                 return Landing { sidestep_spent: false, shorten_covered: true, budget_in: 0.0,
                     movers: self.movers.clone(), end: self.pos.clone(), arc_in: 0.0, climb_in: 0.0,
-                    dangerous: vec![false; self.movers.len()], call: best_call };
+                    dangerous: vec![false; self.movers.len()], trails: Vec::new(), call: best_call };
             }
             (planned, trails, budget_in, call) = (best_pos, best_trails, best_reach, best_call);
         }
@@ -978,7 +980,7 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
         })
         .collect();
     Landing { sidestep_spent, shorten_covered: !self.allow_contact && rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES),
-        movers: self.movers.clone(), end, budget_in, arc_in, climb_in, dangerous, call }
+        movers: self.movers.clone(), end, budget_in, arc_in, climb_in, dangerous, trails, call }
 }
 }
 
@@ -1640,6 +1642,7 @@ pub(crate) mod tests {
             arc_in: 0.0,
             climb_in: 0.0,
             dangerous: dang,
+            trails: Vec::new(),
             call: None,
         };
         let tough1 = vec![UnitStatic { wounds_max: vec![1, 1, 1], ..Default::default() }];

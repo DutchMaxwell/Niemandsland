@@ -737,6 +737,7 @@
 "test/v36/aig_g2_test.gd": 26.9,
 "test/v36/aig_g2_weapon_rules_test.gd": 29.0,
 "test/v36/aig_g4_reach_test.gd": 10.4,
+"test/v36/aig_l6_charge_wall_test.gd": 2.0,
 "test/v36/bg_01_test.gd": 0.1,
 "test/v36/bg_03b2_test.gd": 0.1,
 "test/v36/bg_03b_test.gd": 0.1,
