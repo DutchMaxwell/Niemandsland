@@ -5693,6 +5693,18 @@ fn strike_phase(
             }
         }
     }
+    // R3-X1b (`EPOCH_73_V36`, lead ruling 1): Precision Feat is ONE latch per game shared by shooting and melee. The bearer's
+    // first attack of any kind - a strike-back included - gets +1 to hit on this whole phase, then the latch is spent.
+    if rule_on(seams.rules_epoch, EPOCH_73_V36) {
+        for (mi, _, att) in parts.iter_mut().filter(|(_, sc, _)| !sc.keep.is_empty()) {
+            let um = &statics[next.roster.profile[*mi]];
+            if um.precision_feat_hit > 0 && !next.feats_used[*mi].iter().any(|n| n == "Precision Feat") {
+                att.feat_hit_bonus += um.precision_feat_hit;
+                Rc::make_mut(&mut next.feats_used)[*mi].push("Precision Feat".to_string());
+                shot.log.push(format!("[feat] Precision Feat spent by {}", um.name));
+            }
+        }
+    }
     // MEL-01 (D-ASSAULT) rules-must-log: an Assault weapon's melee copy (the
     // profile carrying its printed range) names itself when it strikes.
     for (mi, sc, _) in parts.iter() {
