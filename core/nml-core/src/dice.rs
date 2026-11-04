@@ -310,6 +310,13 @@ fn piercing_assault_grant_cond() -> CondAp {
     CondAp { ap_bonus: 1, condition: "on_charge".into(), ..Default::default() }
 }
 
+/// The table's `blast_log_text`: names Blast(X) and, when the model count clamps the multiplier, the cap.
+fn blast_log(x: i64, hits: i64, boosted: i64, models: i64) -> String {
+    let mult = boosted / hits.max(1);
+    let capped = if mult >= x { String::new() } else { format!(" (capped by {models} model{} in target)", if models == 1 { "" } else { "s" }) };
+    format!("Blast({x}): {hits} hit{} ×{mult}{capped} → {boosted} hits", if hits == 1 { "" } else { "s" })
+}
+
 fn surge_attack_hits(
     p: &ShootProfile,
     faces: &[u8],
@@ -1257,9 +1264,14 @@ pub fn resolve_volley_leg(
                         hits += faces.iter().filter(|&&f| f == 5 && count_target <= 5).count() as i64;
                     }
                     if !p.surge_alias_rule.is_empty() && sixes(&faces) > 0 {
-                        out.log.push(format!(
-                            "{}: shot from over {:.0}in — bonus hits on unmodified 6s",
-                            p.surge_alias_rule, LONG_RANGE_IN));
+                        if p.alias_gate && p.surge_over_in < 0.0 {
+                            // Rules 3.6: a plain alias pays at any range, so its line names no 9in band.
+                            out.log.push(format!("{}: bonus hits on unmodified 6s", p.surge_alias_rule));
+                        } else {
+                            out.log.push(format!(
+                                "{}: shot from over {:.0}in — bonus hits on unmodified 6s",
+                                p.surge_alias_rule, LONG_RANGE_IN));
+                        }
                     }
                 }
             } else {
@@ -1303,7 +1315,12 @@ pub fn resolve_volley_leg(
         // (main.gd `_solo_hits`, TC-023) and the save reads the pick's own square.
         let unit_of_one = takedown_exact && p.takedown;
         if hits > 0 && p.blast > 1 {
-            hits *= p.blast.clamp(1, if unit_of_one { 1 } else { def.models.max(1) });
+            let cap = if unit_of_one { 1 } else { def.blast_models.unwrap_or(def.models).max(1) };
+            let boosted = hits * p.blast.clamp(1, cap);
+            if def.blast_models.is_some() {
+                out.log.push(blast_log(p.blast, hits, boosted, cap));
+            }
+            hits = boosted;
         }
         if hits <= 0 {
             continue; // :3210 — no hits, no save batch
@@ -2256,7 +2273,12 @@ pub fn resolve_melee_leg(
                 hits += sixes(trig).min(p.sergeant_attacks);
             }
             if hits > 0 && p.blast > 1 {
-                hits *= p.blast.clamp(1, if tray_exact && p.takedown { 1 } else { def.models.max(1) });
+                let cap = if tray_exact && p.takedown { 1 } else { def.blast_models.unwrap_or(def.models).max(1) };
+                let boosted = hits * p.blast.clamp(1, cap);
+                if def.blast_models.is_some() {
+                    out.log.push(blast_log(p.blast, hits, boosted, cap));
+                }
+                hits = boosted;
             }
             if hits <= 0 {
                 continue;
