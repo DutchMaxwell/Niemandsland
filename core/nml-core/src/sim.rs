@@ -10015,6 +10015,13 @@ fn resolve_with(
                 if seams.movement && !seams.plain_only {
                     (crate::mv::step::MoveRules { rules_epoch: seams.rules_epoch })
                         .snap_charge_state(&mut next, si, ti, charge_remaining_in, seams.hero_attach);
+                    // G4-C8b: the defender's mandatory pile-in, before Counter, Impact and every strike.
+                    if let (true, Cover::Board(t)) = (rule_on(seams.rules_epoch, EPOCH_73_V36), cover) {
+                        let n = (crate::mv::step::MoveRules { rules_epoch: seams.rules_epoch }).pile_in_state(&mut next, t, si, ti, seams.hero_attach);
+                        if let (true, Some((_, shot))) = (n > 0, dice.as_mut()) {
+                            shot.log.push(format!("Pile In: {}: {n} model{} pile in up to 3\"", statics[next.roster.profile[ti]].name, if n == 1 { "" } else { "s" }));
+                        }
+                    }
                 }
                 let tu_before = wounds_left(&next, ti);
                 let su_before = wounds_left(&next, si);
