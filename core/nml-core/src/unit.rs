@@ -662,6 +662,9 @@ pub struct Ctx {
     /// The `when: "charge"` names (Precision Charge Aura): only while the
     /// strike is a charge.
     pub melee_hit_bonus_charge: i64,
+    /// Rules 3.6 (`EPOCH_73_V36`): which BASE fed the two fields above; the melee fold names it in the log.
+    pub precision_charge_base: bool,
+    pub precision_fighter_base: bool,
     // --- Wave 3 — the Shot Modifier family's two RUNTIME-GATED shooting
     // members (main.gd:5761-5779's data-driven loop), stamped BY NAME in
     // `ctx_for` behind the EPOCH_6_TABLE_RULES gate (`shot_modifier_runtime_
@@ -3264,12 +3267,15 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     // below; Grounded Precision's `all_attacks` melee half is consumed at the
     // melee seam itself (dice.rs::melee_hit_target).
     let (mut melee_hit_bonus, mut melee_hit_bonus_charge) = (0, 0);
+    let (mut precision_charge_base, mut precision_fighter_base) = (false, false);
     for (name, charge_only) in [
         ("Good Fighter", false),
         ("Precision Fighter Aura", false),
         ("Precision Charge Aura", true),
+        ("Precision Fighter", false),
+        ("Precision Charge", true),
     ] {
-        if !unit_rule_active(reg, p, name) {
+        if !unit_rule_active(reg, p, name) || precision_base_stands_down(p, name, rules_epoch) {
             continue;
         }
         let map = reg.rules_for(&p.game_system);
@@ -3279,6 +3285,11 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         let hb = e.param_i("hit_bonus", 0);
         trace_stamp(trace73 && hb != 0, "shot-modifier", name,
             &format!("{}: {} stamped +{} melee", p.name, name, hb));
+        match name {
+            "Precision Charge" => precision_charge_base = true,
+            "Precision Fighter" => precision_fighter_base = true,
+            _ => {}
+        }
         if charge_only {
             melee_hit_bonus_charge += hb;
         } else {
@@ -3587,6 +3598,8 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         defense_mod: 0,
         melee_hit_bonus,
         melee_hit_bonus_charge,
+        precision_charge_base,
+        precision_fighter_base,
         unstoppable_grant: false,
         unstoppable_mark: false,
         unstoppable_aura: false,
@@ -4410,6 +4423,14 @@ fn boost_aura_name_of(p: &Profile, base: &str) -> String {
         .find(|r| boost_aura_base_of(r) == Some(base))
         .cloned()
         .unwrap_or_else(|| format!("{base} Aura"))
+}
+
+/// Rules 3.6 (`EPOCH_73_V36`): the Precision Charge / Fighter BASES pay the carrier model itself (its own rules). Below
+/// the gate they read nothing; from it a model that also carries the Aura keeps the Aura's single +1 (the import copies
+/// the base onto every Aura carrier). GD twin: `AiEv.precision_base_stands_down`.
+fn precision_base_stands_down(p: &Profile, name: &str, rules_epoch: u32) -> bool {
+    matches!(name, "Precision Charge" | "Precision Fighter")
+        && (!rule_on(rules_epoch, EPOCH_73_V36) || has_special_rule(&p.special_rules, &format!("{name} Aura")))
 }
 
 /// `RulesRegistry.unit_rules_of_primitive(shooter, "Shot Modifier")`,
