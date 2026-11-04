@@ -1125,6 +1125,23 @@ pub fn charge_reaches_contact(self, state: &State, t: &Terrain, si: usize, ci: u
         .is_none_or(|(_, short)| !short)
 }
 
+/// `SoloController.unit_coherent_now` :10632 — is the unit's CURRENT configuration (its own models plus the attached
+/// heroes') one coherent chain? The chain length is the acting unit's own (6" skirmish, else 9"). `true` when there is no
+/// board or at most one model: no opinion then.
+pub fn unit_coherent_now(self, state: &State, t: &Terrain, si: usize, hero_attach: bool) -> bool {
+    let mut movers = movers_of(state, si);
+    if !hero_attach { movers.retain(|m| m.unit == si); }
+    if movers.len() <= 1 || !t.is_valid() { return true; }
+    let starts: Vec<V2> = movers.iter().map(|m| t.to_inch(pos_of(state, *m))).collect();
+    let radii_in: Vec<f64> = movers.iter().map(|m| radius_of(state, *m) / IN2M).collect();
+    let shapes: Vec<_> = movers.iter().map(|m| state.base_shape(m.unit)).collect();
+    let chain = if rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES)
+        && matches!(state.profile(si).game_system.as_str(), "gff" | "aofs")
+    { super::SKIRMISH_CHAIN_IN } else { super::MAX_CHAIN_IN };
+    super::gate::coherent_placement(&starts, &radii_in,
+        super::gate::GateFlags { shapes: &shapes, coherent_chain_in: chain, ..Default::default() })
+}
+
 /// The charge landing and whether it ENDS SHORT (#857): the table re-gates such a charge to a Rush.
 #[allow(clippy::too_many_arguments)]
 fn charge_landing(self, state: &State, t: &Terrain, si: usize, ci: usize,
