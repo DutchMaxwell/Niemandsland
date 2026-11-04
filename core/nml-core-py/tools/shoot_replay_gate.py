@@ -243,6 +243,13 @@ def lone_hero_names(plain: dict, profiles: dict) -> dict[str, str]:
     return out
 
 
+def signer_ok(roller: str, table_label: str, lone: dict[str, str]) -> bool:
+    """The table's label for the port's roller: the roller's own name, or - for a LONE hero (`lone_hero_names`) - its
+    host's. Only ever a relaxation: a label that matched before still matches, so a lone hero that rolls under its own
+    name (its own attack, a strike) cannot turn into a new `owner` failure."""
+    return table_label in ("AI (%s)" % roller, "AI (%s)" % lone.get(roller, roller))
+
+
 def shots_of(d: Path) -> dict[int, list[dict]]:
     """The table's own per-shot record — sidecar `shots.jsonl` (NML_SHOT_DUMP,
     written inside the per-shot loop of `_solo_resolve_ai_volley`, so per
@@ -660,13 +667,12 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
                 # hero fires its OWN shots" from a claim into a verdict: a host
                 # rolling the hero's dice matches on count, target and faces and
                 # can only part HERE.
-                owners_ok = all("AI (%s)" % lone.get(g[4], g[4]) == w[4]
-                                for g, w in zip(got, want))
+                owners_ok = all(signer_ok(g[4], w[4], lone) for g, w in zip(got, want))
                 if not owners_ok:
                     reasons["owner"] = reasons.get("owner", 0) + 1
                     if len(firsts) < max(3, verbose):
                         bad = next((i for i, (g, w) in enumerate(zip(got, want))
-                                    if "AI (%s)" % lone.get(g[4], g[4]) != w[4]), 0)
+                                    if not signer_ok(g[4], w[4], lone)), 0)
                         firsts.append("%s act %d [owner] %s — roll %d: AI (%s) vs table %s"
                                       % (d.name, k, action["shoot"][-6:], bad + 1,
                                          got[bad][4], want[bad][4]))
