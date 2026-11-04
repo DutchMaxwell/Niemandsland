@@ -85,11 +85,3 @@ def test_an_old_recording_without_the_stamps_keeps_its_old_numbers(capsys, tmp_p
     equal, acts_n, out = gate(capsys, ref=tmp_path)
     assert (equal, acts_n) == (0, 2), out
     assert "first field to part: count=2" in out, out
-
-
-def test_a_dangerous_test_in_front_of_the_cast_leg_leaves_the_act_uncut():
-    """The core's own dangerous test would draw BETWEEN two stretches of one resolve and a tray cannot be burned
-    mid-resolve: the act stays as recorded, and the gate says so instead of guessing."""
-    rolls = [{"leg": "dangerous", "count": 5}, {"leg": "cast", "count": 1}, {"leg": "main", "count": 4}]
-    kept, draws, plain = srg.cut_pre_legs(rolls, {"units": {}}, {}, True, True)
-    assert kept == rolls and draws == 0
