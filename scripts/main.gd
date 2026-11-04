@@ -8062,6 +8062,8 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 		# melee they are printed for, while the shooting branch below applied them to every shot.
 		if shooter_member != null:
 			for e in RulesRegistry.unit_rules_of_primitive(shooter_member, "Shot Modifier"):
+				if AiEv.precision_base_stands_down(shooter_member, str((e as Dictionary)["name"])):
+					continue
 				var sp3: Dictionary = (e as Dictionary).get("params", {})
 				var charge_only3 := str(sp3.get("when", "")) == "charge"
 				if not (bool(sp3.get("all_attacks", false)) or bool(sp3.get("melee_only", false)) \
