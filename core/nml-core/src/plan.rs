@@ -1092,6 +1092,7 @@ impl<'a> Search<'a> {
             if units.contains(&u) || state.shaken[u]
                 || crate::menu::holds_only(state, statics, u)
                 || crate::menu::cumbersome_at(state, statics, u)
+                || crate::menu::starts_incoherent(state, terrain, u, seams.rules_epoch)
             {
                 continue;
             }

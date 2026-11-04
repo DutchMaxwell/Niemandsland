@@ -74,7 +74,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
 
 import nml_core  # noqa: E402
 from shoot_replay_gate import (  # noqa: E402
-    burn_prefix, combat_kind, cut_pre_legs, defender_state, first_at_or_after, parted_field, read_game,
+    burn_prefix, combat_kind, cut_dangerous, cut_pre_legs, defender_state, first_at_or_after, parted_field, read_game,
     read_pre, resolve_vintage_flag, successes, vintage_report_line,
 )
 
@@ -211,15 +211,16 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
         eff_cond_ap = resolve_vintage_flag(cond_ap, head, repo, "cond_ap")
         vintage_seen.add((eff_engage_fold, eff_cond_ap))
         nml_core.set_legacy_no_cond_ap(not eff_cond_ap)
-        core.set_header({"profiles": round_only_profiles(head["profiles"])
-                         if red_round_only else head["profiles"],
-                         "terrain": dict(head.get("terrain") or {}, walls=walls)
-                         if head.get("terrain") else None,
-                         "knobs": dict(head.get("knobs", {}), hero_attach=True,
-                                       charge_landing=charge_landing,
-                                       dangerous=not no_dangerous,
-                                       engage_fold=eff_engage_fold,
-                                       movement=movement and not rigid_red)})
+        header = {"profiles": round_only_profiles(head["profiles"])
+                  if red_round_only else head["profiles"],
+                  "terrain": dict(head.get("terrain") or {}, walls=walls)
+                  if head.get("terrain") else None,
+                  "knobs": dict(head.get("knobs", {}), hero_attach=True,
+                                charge_landing=charge_landing,
+                                dangerous=not no_dangerous,
+                                engage_fold=eff_engage_fold,
+                                movement=movement and not rigid_red)}
+        core.set_header(header)
         if walls_check and walls:
             walls_seen["games"] += 1
             got = core.walls_in()
@@ -240,11 +241,14 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
             tally["acts"] += 1
             i0 = first_at_or_after(dice, k)
             # AI-G4 H1b: the table's cast/spell legs are cut, their dice burned, the state patched (see shoot_replay_gate).
-            rolls_cut, pre_burn, plain = cut_pre_legs([r for r in dice[i0:] if int(r["act"]) == k],
-                                                      act["state"], pres.get(k))
+            rolls_k = [r for r in dice[i0:] if int(r["act"]) == k]
+            rolls_cut, pre_burn, plain = cut_pre_legs(rolls_k, act["state"], pres.get(k))
             tray = nml_core.Tray(seed + 1 if mode == "misseed" else seed)
             if burn[i0] + pre_burn:
                 tray.roll(burn[i0] + pre_burn)
+            dang_off = cut_dangerous(rolls_k, rolls_cut)
+            if dang_off:  # G4-H8: the cut took the table's dangerous test; the core rolls none for this one act
+                core.set_header(dict(header, knobs=dict(header["knobs"], dangerous=False)))
             try:
                 nxt, report = core.resolve_with_tray(
                     core.state_of(plain), action, nml_core.Rng(0), tray)
@@ -253,6 +257,9 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
                 if len(firsts) < 3:
                     firsts.append("%s act %d — DECLINED: %s" % (d.name, k, exc))
                 continue
+            finally:
+                if dang_off:
+                    core.set_header(header)
             for name in report["unported"]:
                 unported[name] = unported.get(name, 0) + 1
             got = [(r["kind"], r["count"], r["target"], r["faces"], "AI (%s)" % r["owner"])
