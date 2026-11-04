@@ -1925,7 +1925,7 @@ impl Core {
         let blockers = nmlcore::sight::blockers_of(st, mi, ti, self.knobs.rules_epoch);
         let n = nmlcore::sight::sighted_count(st, &zones, &blockers, mi, ti, reach_in,
             indirect, nmlcore::acts::rule_on(self.knobs.rules_epoch,
-                nmlcore::acts::EPOCH_66_DISTANCE_TRUTH));
+                nmlcore::acts::EPOCH_66_DISTANCE_TRUTH), self.knobs.rules_epoch);
         let slack = nmlcore::sight::unit_radius_m(st, mi) + nmlcore::sight::unit_radius_m(st, ti);
         to_py(
             py,
