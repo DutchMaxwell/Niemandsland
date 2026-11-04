@@ -6837,6 +6837,15 @@ impl UnitStatic {
         let p = &p;
         let trace73 = rule_on(rules_epoch, EPOCH_73_V36) && crate::mv::plain_memo::trace_rules_on();
         let mut shoot = profiles_in_range(&p.weapons, 0.0);
+        // Rules 3.6: the table bridges a unit's own Relentless onto its weapon
+        // profile at the reading seam, so the weapon does not have to print it.
+        // Mirror that on the shoot array only; the melee array carries range 0
+        // and can never reach the over-9" bonus. Gated at `EPOCH_73_V36`.
+        if rule_on(rules_epoch, EPOCH_73_V36) && has_special_rule(&p.special_rules, "Relentless") {
+            for sp in shoot.iter_mut() {
+                sp.relentless = true;
+            }
+        }
         stamp(reg, p, &mut shoot, &mut unimplemented, rules_epoch, trace73);
         stamp_conditional_ap(reg, p, rules_epoch, &mut shoot);
         stamp_unit_strikers(reg, p, &mut shoot, rules_epoch);
