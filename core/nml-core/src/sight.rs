@@ -65,7 +65,7 @@ const Y_EPS_M: f64 = 1e-6;
 pub const AIRCRAFT_TARGET_RANGE_PENALTY_IN: f64 = 12.0;
 /// `main.SOLO_LOS_DEFAULT_BASE_MM` :4237 — the floor `_solo_unit_los_height_m`
 /// starts from, so a unit is never shorter than 32 mm infantry.
-const DEFAULT_BASE_MM: f64 = 32.0;
+pub(crate) const DEFAULT_BASE_MM: f64 = 32.0;
 /// `VolumetricLos.BASE_HEIGHT_TABLE` — (base mm, model height in inches).
 const BASE_HEIGHT_TABLE: [[f64; 2]; 6] =
     [[25.0, 1.0], [32.0, 1.25], [40.0, 1.5], [50.0, 2.0], [60.0, 3.0], [100.0, 4.0]];

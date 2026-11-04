@@ -1255,6 +1255,16 @@ pub fn candidates_tuned(
     // `holds_only` / `cumbersome_at` read it — so a game at 72 keeps the pre-3.6 walls and a game at 73
     // sees through a ruin.
     let rules_epoch = statics.get(state.roster.profile[unit]).map_or(0, |s| s.rules_epoch);
+    // Rules 3.6 Aircraft (`EPOCH_73_V36`): the table flies a plane whatever is picked (:1847): ONE Advance row, shot priced there.
+    if rule_on(rules_epoch, EPOCH_73_V36) && state.aircraft[unit] {
+        if let Some(d) = crate::sim::aircraft_delta(statics, state, unit, terrain, false, rules_epoch) {
+            let moved: Vec<[f64; 3]> = state.positions[unit].iter().map(|p| geom::to_f64(geom::add(geom::to_f32(*p), d))).collect();
+            let mut c = Candidate::new(key, ADVANCE);
+            c.dest = Some(geom::to_f64(geom::add(geom::centre(&state.positions[unit]), d)));
+            c.shoot = best_shoot_from(state, statics, unit, &moved, sc, tuning).map(|e| state.key(e).to_string());
+            return vec![c];
+        }
+    }
     let mut out = vec![Candidate::new(key, HOLD)];
     let shoot = best_shoot(state, statics, unit, sc, tuning, CURRENT_RULES_EPOCH, None);
     if let Some(e) = shoot {
