@@ -181,7 +181,7 @@ func _activate_planned(planned_kind: int, epoch: int) -> int:
 	add_child(solo)
 	solo.setup(army, null, null, 1, 2)
 	solo.difficulty_by_slot[2] = SoloDifficulty.for_grade("planner_v0_herofold")
-	solo._planner_intent = {"unit": b, "round": 1, "action": pick["action"], "target": a, "why": "test pick",
+	solo._planner_intent = {"unit": b, "round": solo._current_round(), "action": pick["action"], "target": a, "why": "test pick",
 		"expectation": {"before": 0.5, "after": 0.5}}
 	solo._act(b)
 	return solo.move_act_seq()

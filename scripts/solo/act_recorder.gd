@@ -340,6 +340,19 @@ static func pre(act: int, units: Dictionary) -> void:
 	_count += 1
 
 
+## F-HOLD-ADV (rules 3.6, EPOCH_73_V36, lead ruling D7): the verb the table EXECUTED when its own gates turned the
+## planner's pick into another one (a planned Hold that walks into range as an Advance), as a line of its own joined
+## by `act` - the act line carries the pick and was flushed before the activation ran. The replay gates play `verb`.
+## No-op below epoch 73, when NML_ACT_DUMP is unset, before the header exists, or when the line cap is hit.
+static func executed_verb(act: int, verb: int, planned: int) -> void:
+	var f := _dump_stream()
+	if f == null or _count >= _max or not _header_written or rules_epoch < EPOCH_73_V36:
+		return
+	f.store_line(JSON.stringify({"kind": "verb", "act": act, "verb": verb, "planned": planned}, "", true, true))
+	f.flush()   # a same-process reader (the unit test) must see the line without a close()
+	_count += 1
+
+
 ## NML-1010 wave C gate (C9.2): one line per ROUND END into `rounds.jsonl` beside acts.jsonl.
 ## `pre` = the board captured BEFORE the table's round-end referee ran (seize, carry step,
 ## destroy step, VP), as the same plain an act line carries; `post` = the ledger the referee
