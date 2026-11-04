@@ -910,6 +910,7 @@
 "test/v36/w1_6f_test.gd": 0.1,
 "test/v36/w1_6g_test.gd": 0.1,
 "test/v36/w1_flake_mp_test.gd": 0.1,
+"test/v36/w31_f1_vanguard_books_test.gd": 0.1,
 "test/vampiric_undead_model_resolution_test.gd": 0.5,
 "test/vehicle_base_alignment_test.gd": 0.1,
 "test/vfx_glyphs_test.gd": 0.1,
