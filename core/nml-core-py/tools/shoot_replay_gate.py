@@ -323,9 +323,11 @@ def majority_in_cover(u: dict, board, built: int) -> bool:
 
 
 def patch_pre(plain: dict, units: dict, board=None) -> dict:
-    """`plain` after the cast leg: every unit in `units` cut down to its recorded alive count (models dropped from the
-    end of each per-model list) and carrying its recorded Shaken flag. With a `board` (F-PRE-COVER) a unit the leg cut
-    down gets its `in_cover` read again from the survivors, as the table does per save moment."""
+    """`plain` after the cast leg: every unit in `units` cut down to its recorded alive count and carrying its recorded
+    Shaken flag. The survivors are the models the record's `keep` names (F-PRE-SURV: positions in the act-start list,
+    `of` = its length); a record without them, or for a list of another size, drops models from the end. With a `board`
+    (F-PRE-COVER) a unit the leg cut down gets its `in_cover` read again from the survivors, as the table does per save
+    moment."""
     out = dict(plain, units=dict(plain["units"]))
     for uid, rec in units.items():
         if uid not in out["units"]:
@@ -333,9 +335,12 @@ def patch_pre(plain: dict, units: dict, board=None) -> dict:
         u = dict(out["units"][uid], shaken=bool(rec["shaken"]))
         a0, a = int(u["alive"]), int(rec["alive"])
         if a < a0:
+            keep = rec.get("keep")
+            if keep is None or rec.get("of") != a0 or len(keep) != a or not all(0 <= i < a0 for i in keep):
+                keep = list(range(a))
             for f in ("wounds", "radii", "positions", "kits"):
                 if isinstance(u.get(f), list) and len(u[f]) == a0:
-                    u[f] = u[f][:a]
+                    u[f] = [u[f][i] for i in keep]
             u["alive"] = a
             if board is not None and u.get("positions"):
                 u["in_cover"] = majority_in_cover(u, board, a0)
