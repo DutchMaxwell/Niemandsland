@@ -67,10 +67,10 @@ func test_epoch_72_keeps_the_recorded_over_nine_line() -> void:
 		.contains("from over 9\"")
 
 
-## Gated control: Devout Boost's 9" condition keeps its band at 73.
+## Gated control: Devout Boost (Skirmish book) keeps its 9" condition, so its band stays at 73.
 func test_a_gated_alias_keeps_its_over_nine_line() -> void:
 	var text := await _log_text(AiActRecorder.EPOCH_73_V36,
-		_unit("Devout", ["Devout", "Devout Boost"], "gf", "blessed_sisters"), 10.0)
+		_unit("Devout", ["Devout", "Devout Boost"], "gff", "blessed_sisters"), 10.0)
 	assert_str(text) \
 		.override_failure_message("the gated alias lost its 9\" band — got: %s" % text.strip_edges()) \
 		.contains("Devout") \

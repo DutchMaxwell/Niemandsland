@@ -113,7 +113,7 @@ fn below_73_the_recorded_over_nine_line_stands() {
 /// Control: Devout Boost carries a real 9" condition, so its line keeps the band.
 #[test]
 fn a_gated_alias_keeps_its_over_nine_line_from_73() {
-    let us = alias_unit_in("gf", "blessed_sisters", &["Devout", "Devout Boost"], EPOCH_73_V36);
+    let us = alias_unit_in("gff", "blessed_sisters", &["Devout", "Devout Boost"], EPOCH_73_V36);
     let log = alias_log(&us, 10.0);
     assert!(
         log.contains("Devout") && log.contains("from over 9in"),
