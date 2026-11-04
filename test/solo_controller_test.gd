@@ -2211,6 +2211,46 @@ func test_charge_cap_gate_is_edge_aware() -> void:
 	assert_bool(solo._charge_capped_by_difficult(ai, from, to, 19.7)).is_true()
 
 
+## G4-T8: the cap gate probes to the CONTACT point, not the target's centre. The target stands 7.76" away
+## (centre to centre) with forest under its own base only; the charger's whole leg of ~6.5" is open ground.
+## The old probe ran to the target's centre, hit that forest and capped every charge from beyond 6".
+func _cap_to_contact_scene(epoch: int) -> Dictionary:
+	var epoch0: int = AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = epoch
+	var charger := _unit(2, [Vector3(0.0, 0, 0)])
+	var target := _unit(1, [Vector3(7.76 * 0.0254, 0, 0)])
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {charger.unit_id: charger, target.unit_id: target}
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	solo.terrain_type_at = func(p) -> int:   # forest only under the target's base, from 0.2" before its centre
+		return TerrainRules.TerrainType.FOREST if (p as Vector3).x >= (7.56 * 0.0254) else TerrainRules.TerrainType.NONE
+	var gap: float = solo.nearest_melee_gap_in(charger, target)
+	var from := Vector3(0.0, 0, 0)
+	var to := Vector3(7.76 * 0.0254, 0, 0)
+	var out := {"gap": gap,
+		"capped": solo._charge_capped_by_difficult(charger, from, to, gap),
+		"illegal": solo.charge_candidate_illegal(charger, target, gap, from, to)}
+	AiActRecorder.rules_epoch = epoch0
+	return out
+
+
+func test_the_cap_gate_probes_to_the_contact_point_at_epoch_73() -> void:
+	var r := _cap_to_contact_scene(AiActRecorder.EPOCH_73_V36)
+	assert_float(float(r["gap"])).is_greater(6.0)   # over the 6" cap, so the gate is live
+	assert_bool(bool(r["capped"])).is_false()
+	assert_bool(bool(r["illegal"])).is_false()
+
+
+## Below 73 the probe still runs to the target's centre (byte-identical).
+func test_the_cap_gate_still_probes_to_the_centre_below_epoch_73() -> void:
+	var r := _cap_to_contact_scene(AiActRecorder.EPOCH_73_V36 - 1)
+	assert_float(float(r["gap"])).is_greater(6.0)
+	assert_bool(bool(r["capped"])).is_true()
+	assert_bool(bool(r["illegal"])).is_true()
+
+
 ## NML-002 Strafing: purer Move-Through-Test — Trail-Bein über einer Basis zählt, vorbei nicht.
 func test_trails_cross_unit_bases() -> void:
 	var enemy := _unit(1, [Vector3(0.2, 0, 0.2)])
