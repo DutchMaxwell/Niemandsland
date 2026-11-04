@@ -784,6 +784,7 @@
 "test/v36/g4_t6_test.gd": 0.1,
 "test/v36/g4r2_t_cover_test.gd": 10.0,
 "test/v36/g4r2_t_slack_test.gd": 15.0,
+"test/v36/g4r3_dup_weapon_bearers_test.gd": 12.0,
 "test/v36/g4r3_phantom_test.gd": 8.0,
 "test/v36/mel_01_test.gd": 5.1,
 "test/v36/mel_02_test.gd": 15.2,
