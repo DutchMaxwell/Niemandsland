@@ -236,7 +236,29 @@ fn combined_total(statics: &[UnitStatic], state: &State, i: usize, us: &UnitStat
 /// The living count a morale snapshot is taken on: host + joined heroes with C12 on, the host alone otherwise.
 #[inline]
 fn morale_alive(state: &State, i: usize, seams: Seams) -> i64 {
+    let i = morale_root(state, i, seams);
     if hero_size_on(state, i, seams) { combined_alive(state, i, seams) } else { state.alive[i] }
+}
+
+/// G4R3 F-MORALE-CHAIN (`EPOCH_73_V36`): the unit a shooting-morale test is about. A joined hero named as the
+/// target (host dead) is the table's unit's last model, so its test reads the CHAIN — host plus every joined
+/// hero (`combined_*`, `_solo_unit_wounds_now`) — not the hero as a unit of its own. Else `i`; below 73 always `i`.
+fn morale_root(state: &State, i: usize, seams: Seams) -> usize {
+    match state.attached_to[i] {
+        Some(h) if seams.hero_attach && rule_on(seams.rules_epoch, EPOCH_73_V36) => h,
+        _ => i,
+    }
+}
+
+/// `main._solo_unit_wounds_now`: from 73 the chain's wounds (host plus joined heroes), below 73 the unit's own.
+fn morale_wounds_left(state: &State, i: usize, seams: Seams) -> i64 {
+    let r = morale_root(state, i, seams);
+    let heroes: i64 = if seams.hero_attach && rule_on(seams.rules_epoch, EPOCH_73_V36) {
+        state.attached[r].iter().map(|&h| wounds_left(state, h)).sum()
+    } else {
+        0
+    };
+    wounds_left(state, r) + heroes
 }
 
 /// The best living model's Quality in a joined unit from the melee-truth epoch.
@@ -858,7 +880,7 @@ pub(crate) fn tray_breath_attack(
     let ut = &statics[next.roster.profile[ti]];
     let def = ctx_of(ut, next, ti);
     let alive_before = morale_alive(next, ti, seams);
-    let wounds_before = wounds_left(next, ti);
+    let wounds_before = morale_wounds_left(next, ti, seams);
     let out = crate::dice::resolve_breath_attack_with_tray(hits, BREATH_AP, &def, &ut.name, tray);
     let landed = shot.absorb(out);
     land_wounds_with(next, ti, landed, seams.tray_exact);
@@ -1072,7 +1094,7 @@ fn surprise_strike(
     shot.log.push(format!("Surprise Attack: {owner} strikes unawares — {successes} of {} dice hit", spec.dice));
     let ut = &statics[next.roster.profile[best]];
     let def = ctx_of(ut, next, best);
-    let (ab, wb) = (morale_alive(next, best, seams), wounds_left(next, best));
+    let (ab, wb) = (morale_alive(next, best, seams), morale_wounds_left(next, best, seams));
     let landed = shot.absorb(crate::dice::resolve_storm_hits_with_tray(successes, spec.ap, false, false, &def, &ut.name, tray));
     land_wounds_with(next, best, landed, seams.tray_exact);
     if shooting_morale_trigger(next, statics, seams, ut, best, ab, wb) {
@@ -1272,7 +1294,7 @@ pub(crate) fn tray_strafing(
     // same way the table's `_solo_resolve_ai_volley` does (main.gd:3007), so
     // the def build carries the same terrain gate.
     stealth_alias_terrain_gate(statics, next, target, cover, &mut def);
-    let (alive_before, wounds_before) = (morale_alive(next, target, seams), wounds_left(next, target));
+    let (alive_before, wounds_before) = (morale_alive(next, target, seams), morale_wounds_left(next, target, seams));
     // Per member (host first, then each alive attached hero): the Strafing
     // profiles in range, survivor-scaled — `profiles_of`'s shape over
     // `strafe_shoot`.
@@ -1388,7 +1410,7 @@ pub(crate) fn tray_storm_attack(
                 }
                 let ut = &statics[next.roster.profile[best]];
                 let def = ctx_of(ut, next, best);
-                let (alive_before, wounds_before) = (morale_alive(next, best, seams), wounds_left(next, best));
+                let (alive_before, wounds_before) = (morale_alive(next, best, seams), morale_wounds_left(next, best, seams));
                 let (ap, bane, shred) = match spec.facet {
                     StormFacet::Ap1 => (1, false, false), StormFacet::Bane => (0, true, false),
                     StormFacet::Shred => (0, false, true), StormFacet::Surge => (0, false, false),
@@ -3440,13 +3462,15 @@ fn shooting_morale_trigger(
     alive_before: i64,
     wounds_before: i64,
 ) -> bool {
+    let root = morale_root(state, ti, seams);
+    let (ti, us) = if root == ti { (ti, us) } else { (root, &statics[state.roster.profile[root]]) };
     // A2 (`EPOCH_72_PLAYTEST_RULES`, main.gd `_solo_shooting_morale` since #1912): WOUNDS that leave a
     // multi-model unit at half or less test too, without a lost model (p.10). `wounds_before` is the
     // host's own count, so a hit that lands only on a joined hero is not seen here.
     let wounded = |alive: i64, total: i64| {
         rule_on(seams.rules_epoch, EPOCH_72_PLAYTEST_RULES)
             && alive > 0
-            && wounds_left(state, ti) < wounds_before
+            && morale_wounds_left(state, ti, seams) < wounds_before
             && at_or_below_half(alive, total)
     };
     if hero_size_on(state, ti, seams) {
@@ -3457,7 +3481,7 @@ fn shooting_morale_trigger(
     if us.model_count == 1 {
         // A single model measures morale in TOUGH WOUNDS, not models (p.10).
         return state.alive[ti] > 0
-            && wounds_left(state, ti) < wounds_before
+            && morale_wounds_left(state, ti, seams) < wounds_before
             && below_half(state, statics, us, ti, seams);
     }
     should_test_shooting_morale(alive_before, state.alive[ti], us.model_count)
@@ -3472,6 +3496,11 @@ fn scourge_morale_trigger(
     alive_before: i64, wounds_before: i64, phantom: i64, log: &mut Vec<String>,
 ) -> bool {
     let real = shooting_morale_trigger(state, statics, seams, us, ti, alive_before, wounds_before);
+    if real && rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) && morale_alive(state, ti, seams) == alive_before {
+        // Rules-must-log (G4R3 F-MORALE-CHAIN): no model fell, so the unit's wounds called the test (A2).
+        let unit = &statics[state.roster.profile[morale_root(state, ti, seams)]].name;
+        log.push(format!("Morale: {unit} takes wounds at half strength or less — morale test"));
+    }
     if phantom <= 0 || state.alive[ti] <= 0 || !rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) {
         return real;
     }
@@ -9270,7 +9299,7 @@ fn resolve_with(
                     // main.gd:1042-1043 — the snapshot for that later test, taken
                     // BEFORE these wounds land.
                     let alive_before = morale_alive(&next, si, seams);
-                    let wounds_before = wounds_left(&next, si);
+                    let wounds_before = morale_wounds_left(&next, si, seams);
                     land_wounds_with(&mut next, si, w, seams.tray_exact);
                     // main.gd:1096-1098 — a NON-charge activation tests morale for
                     // these wounds at its very END ("units in melee don't take
@@ -9498,7 +9527,7 @@ fn resolve_with(
                 // folded reach there would let a host weapon fire from a hero's model.
                 let d_ev = if seams.hero_attach { fold_dist_in(&next, si, ti, seams) } else { d };
                 let morale_alive_before = morale_alive(&next, ti, seams);
-                let wounds_before = wounds_left(&next, ti);
+                let wounds_before = morale_wounds_left(&next, ti, seams);
                 // Seam ON: a plain volley — the cast sub-phase above already
                 // ran. Seam OFF: the LEGACY spell rider (battle_sim.gd:621-628),
                 // where the spell's EV joins the volley and the caster pays for
@@ -9658,7 +9687,7 @@ fn resolve_with(
                             }
                             let alive_before_g = next.alive[g.ti];
                             let morale_alive_g = morale_alive(&next, g.ti, seams);
-                            let wounds_before_g = wounds_left(&next, g.ti);
+                            let wounds_before_g = morale_wounds_left(&next, g.ti, seams);
                             let mut feat_spends: Vec<usize> = Vec::new();
                             let mut parts: Vec<(usize, Scratch, Ctx)> = Vec::new();
                             for &mi in std::iter::once(&si).chain(next.attached[si].iter()) {
