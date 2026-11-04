@@ -71,6 +71,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import subprocess
 import sys
 import time
@@ -292,9 +293,26 @@ def read_pre(d: Path) -> dict[int, dict]:
     return out
 
 
-def patch_pre(plain: dict, units: dict) -> dict:
+#: `TerrainRules.gives_cover`: ruins and forest. `BASE_RIM_SAMPLES` of terrain_rules.gd.
+COVER_TYPES, RIM_SAMPLES = (1, 2), 8
+
+
+def majority_in_cover(u: dict, board, built: int) -> bool:
+    """`_solo_majority_in_cover` on a unit's standing models: more than half of them FULLY inside cover terrain (centre
+    + rim), a unit built with one model by its centre alone."""
+    n = 0
+    for p, r in zip(u["positions"], u["radii"]):
+        r = float(r) if built > 1 else 0.0
+        ring = [[p[0] + math.cos(math.tau * i / RIM_SAMPLES) * r, 0.0, p[2] + math.sin(math.tau * i / RIM_SAMPLES) * r]
+                for i in range(RIM_SAMPLES)] if r > 0 else []
+        n += all(board.type_at(q) in COVER_TYPES for q in [p, *ring])
+    return n * 2 > len(u["positions"])
+
+
+def patch_pre(plain: dict, units: dict, board=None) -> dict:
     """`plain` after the cast leg: every unit in `units` cut down to its recorded alive count (models dropped from the
-    end of each per-model list) and carrying its recorded Shaken flag."""
+    end of each per-model list) and carrying its recorded Shaken flag. With a `board` (F-PRE-COVER) a unit the leg cut
+    down gets its `in_cover` read again from the survivors, as the table does per save moment."""
     out = dict(plain, units=dict(plain["units"]))
     for uid, rec in units.items():
         if uid not in out["units"]:
@@ -306,12 +324,14 @@ def patch_pre(plain: dict, units: dict) -> dict:
                 if isinstance(u.get(f), list) and len(u[f]) == a0:
                     u[f] = u[f][:a]
             u["alive"] = a
+            if board is not None and u.get("positions"):
+                u["in_cover"] = majority_in_cover(u, board, a0)
         out["units"][uid] = u
     return out
 
 
 def cut_pre_legs(rolls: list[dict], plain: dict, pre: dict | None, burn: bool = True,
-                 patch: bool = True) -> tuple[list[dict], int, dict]:
+                 patch: bool = True, board=None) -> tuple[list[dict], int, dict]:
     """(the act's rolls without the cast/spell legs, draws to burn off the tray for them, `plain` after the leg).
     Only a cast leg that LEADS the act is cut: a dangerous test (or any other roll) in front of it would make the core
     draw between two stretches of one resolve, and a tray cannot be burned mid-resolve - such an act is left as
@@ -322,7 +342,7 @@ def cut_pre_legs(rolls: list[dict], plain: dict, pre: dict | None, burn: bool = 
     if lead == 0 or lead != sum(r.get("leg") in CUT_LEGS for r in rolls):
         return rolls, 0, plain
     draws = sum(max(1, int(r["count"])) for r in rolls[:lead]) if burn else 0
-    return rolls[lead:], draws, patch_pre(plain, pre or {}) if patch else plain
+    return rolls[lead:], draws, patch_pre(plain, pre or {}, board) if patch else plain
 
 
 def lone_hero_of(units: dict, key: str) -> str:
@@ -511,6 +531,7 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
         walls_seen.add(wall_src)
         terrain = dict(head.get("terrain") or {}, walls=walls) if movement and head.get("terrain") else head.get("terrain")
         move_knob = {"movement": not red_move_rigid} if movement else {}
+        board = nml_core.board(head["terrain"]) if head.get("terrain") else None  # F-PRE-COVER: cover of survivors
         core.set_header({"profiles": head["profiles"], "terrain": terrain,
                          "knobs": dict(head.get("knobs", {}), **move_knob,
                                        hero_attach=hero_attach == "table",
@@ -554,7 +575,7 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
             # AI-G4 H1b: the cast/spell legs are cut, their dice burned, the state patched from the `pre` line.
             rolls_k = [r for r in dice[i0:] if int(r["act"]) == k]
             rolls_cut, pre_burn, plain = cut_pre_legs(rolls_k, plain, pres.get(k), red_pre != "noburn",
-                                                      red_pre != "nopatch")
+                                                      red_pre != "nopatch", board)
             tally["pre_cut"] += len(rolls_cut) < len(rolls_k)
             tally["pre_uncut"] += len(rolls_cut) == len(rolls_k) and any(r.get("leg") in CUT_LEGS for r in rolls_k)
             state = core.state_of(plain)
