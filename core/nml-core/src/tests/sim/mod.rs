@@ -1714,6 +1714,7 @@ mod cast_kind;
 mod cast_move;
 mod casting_debuff;
 mod casting_mod;
+mod charge_destroyed_target;
 mod courage_buff;
 mod utility_buff_family;
 mod utility_spells;
