@@ -412,6 +412,7 @@
 mod entrenched;
 mod modifier_sum;
     mod fortified;
+    mod g4r4_sergeant_scale;
     mod gate_only_rows;
     mod growth_markers;
     mod heavy_impact;
