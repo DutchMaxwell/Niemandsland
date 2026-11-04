@@ -6566,9 +6566,14 @@ func _solo_hits(faces: Array, to_hit: int, profile: Dictionary, dist_in: float, 
 						"%s: charged from over %d\" — bonus hits on unmodified 6s" % [
 							surge_alias, int(AiCombatMath.CHARGE_LONG_RANGE_IN)], true)
 				elif not surge_alias.is_empty() and dist_in > 0.0:
-					battle_log.log_event(BattleLog.Category.COMBAT,
-						"%s: shot from over %d\" — bonus hits on unmodified 6s" % [
-							surge_alias, int(AiCombatMath.LONG_RANGE_IN)], true)
+					if sentinel_shot and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+						# Rules 3.6: a plain alias pays at any range, so its line names no 9" band.
+						battle_log.log_event(BattleLog.Category.COMBAT,
+							"%s: bonus hits on unmodified 6s" % surge_alias, true)
+					else:
+						battle_log.log_event(BattleLog.Category.COMBAT,
+							"%s: shot from over %d\" — bonus hits on unmodified 6s" % [
+								surge_alias, int(AiCombatMath.LONG_RANGE_IN)], true)
 				# #193 rules-must-log: this was the LAST silent on-6 branch — a "2 hits" tray that
 				# resolves as "3 hits" reads broken, not Surge. EPOCH 38 SURGE MARK: the bridge
 				# (_solo_bridge_granted_flags) folds the marked target's once-grant into THIS
