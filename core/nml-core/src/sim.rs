@@ -5452,12 +5452,14 @@ fn striking_models_edge(state: &State, mi: usize, ti: usize, rules_epoch: u32) -
     if foes().next().is_none() {
         return state.positions[mi].len() as i64;
     }
-    let (sh, r_of) = (state.base_shape(mi), |u: usize, k: usize| state.radii[u].get(k).copied().unwrap_or(DEFAULT_BASE_RADIUS_M));
+    // A hand-built roster may map a unit to no profile: round then, like an unrecorded base.
+    let shape = |u: usize| state.profiles.list.get(state.roster.profile[u]).map_or(geom::BaseShape::Round, |p| p.shape());
+    let (sh, r_of) = (shape(mi), |u: usize, k: usize| state.radii[u].get(k).copied().unwrap_or(DEFAULT_BASE_RADIUS_M));
     (0..state.positions[mi].len())
         .filter(|&k| {
             let p = state.positions[mi][k];
             foes().any(|e| {
-                let eh = state.base_shape(e);
+                let eh = shape(e);
                 state.positions[e].iter().enumerate().any(|(j, &q)| {
                     (p[1] - q[1]).abs() <= vertical_in * IN2M
                         && geom::pair_gap_m(geom::to_f32(p), r_of(mi, k), sh, geom::to_f32(q), r_of(e, j), eh) / IN2M <= reach_in
