@@ -503,6 +503,9 @@ pub struct Ctx {
     /// into the save batch the way the weapon's own `p.shred` is (dice.rs).
     /// Zero on every `ctx_of`.
     pub shred_grant: bool,
+    /// G4R4 C-GRANTED-BANE (`EPOCH_73_V36`): a live `grants_rule: "Bane when Shooting"` — every ranged weapon of the
+    /// member is a Bane weapon for the volley (dice.rs). Zero on every `ctx_of`.
+    pub bane_grant: bool,
     // --- Wave 2 "Utility Buff" family (gated `acts::rule_on(.., EPOCH_5_TABLE_RULES)`). ---
     /// A live `grants_rule: "Slayer"` — AP(+2) vs Tough 3+, charge or over 9".
     pub slayer_grant: bool,
@@ -3608,6 +3611,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         thrust_grant: false,
         relentless_grant: false,
         shred_grant: false,
+        bane_grant: false,
         slayer_grant: false,
         surge_grant: false,
         versatile_grant: false,

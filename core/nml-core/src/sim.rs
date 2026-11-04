@@ -3817,6 +3817,7 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
     c.thrust_grant = grants && mods::granted(state, i, "Thrust");
     c.relentless_grant = grants && mods::granted(state, i, "Relentless");
     c.shred_grant = grants && mods::granted(state, i, "Shred");
+    c.bane_grant = rule_on(rules_epoch, EPOCH_73_V36) && grants && mods::granted(state, i, "Bane when Shooting");
     c.unpredictable = c.unpredictable || (grants && mods::granted(state, i, "Unpredictable Fighter"));
     c.guarded = c.guarded || (grants && mods::granted(state, i, "Guarded"));
     c.melee_evasion = c.melee_evasion || (grants && mods::granted(state, i, "Melee Evasion"));

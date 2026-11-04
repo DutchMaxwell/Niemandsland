@@ -1846,6 +1846,7 @@ mod v36_bg_03c_fix;
 mod v36_w1;
 mod v36_w1_5b;
 mod v36_w1_trace;
+mod v36_g4r4_granted_bane;
 mod versatile_reach;
 mod watchborn_latch;
 mod weapons;
