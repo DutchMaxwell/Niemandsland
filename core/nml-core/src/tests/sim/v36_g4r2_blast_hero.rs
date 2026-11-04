@@ -16,7 +16,8 @@ const BLAST_HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
     "base_radius":0.016,"game_system":"aof","faction_folder":"halflings",
     "special_rules":[],"item_grants":[],
     "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
-    "weapons":[{"name":"Giant Sling","range":24,"attacks":1,"count":1,"ap":0,"rules":["Blast(3)"]}]}}}"#;
+    "weapons":[{"name":"Giant Sling","range":24,"attacks":1,"count":1,"ap":0,"rules":["Blast(3)"]},
+      {"name":"Cleaver","range":0,"attacks":1,"count":1,"ap":0,"rules":["Blast(3)"]}]}}}"#;
 
 fn repo_root() -> String {
     format!("{}/../..", env!("CARGO_MANIFEST_DIR"))
@@ -113,4 +114,46 @@ fn a_dead_hero_does_not_raise_the_blast_cap() {
     let (st, statics) = blast_line(EPOCH_73_V36, false);
     let shot = shoot(&st, &statics, hitting_seed(), EPOCH_73_V36);
     assert_eq!(save_dice(&shot), 1, "dead hero: 1 hit x host 1: {:?}", shot.rolls);
+}
+
+/// The melee twin (row G4-C9, aof_1000_net_035 act 28): a charging Blast(3) blade hits a host of 1 model with
+/// a living joined hero. The table's `_solo_hits` caps by the combined count in melee as well, so one hit
+/// rolls 2 save dice from 73; below 73 and with a dead hero it stays 1.
+fn charge(st: &State, statics: &[UnitStatic], seed: i64, epoch: u32) -> ShootResult {
+    let mut near = st.clone(); // the charge fixtures' 2.5" gap
+    near.positions[2] = vec![[2.5 * IN2M, 0.0, 0.0]];
+    if !near.positions[3].is_empty() {
+        near.positions[3] = vec![[2.52 * IN2M, 0.0, 0.0]];
+    }
+    let action = Action {
+        kind: CHARGE, unit: "a".into(), dest: None, shoot: None, charge: Some("b".into()),
+        patient: false, split: None, traced: None, teleport: None,
+    };
+    let (mut rng, mut tray) = (GodotRng::new(0), Tray::seeded(seed));
+    let seams = Seams { rules_epoch: epoch, hero_attach: true, ..Seams::default() };
+    resolve_stochastic_tray_on_board(statics, &near, &action, &Terrain::default(), seams, &mut rng, &mut tray).unwrap().1
+}
+
+/// A seed on which the charge lands a hit (a save batch exists).
+fn charge_hit_seed(st: &State, statics: &[UnitStatic], epoch: u32) -> i64 {
+    (0..64)
+        .find(|&s| charge(st, statics, s, epoch).rolls.iter().any(|r| r.kind == "defense"))
+        .expect("a seed with a charge hit")
+}
+
+#[test]
+fn a_blast_blade_counts_the_joined_hero_from_73() {
+    let (st, statics) = blast_line(EPOCH_73_V36, true);
+    let shot = charge(&st, &statics, charge_hit_seed(&st, &statics, EPOCH_73_V36), EPOCH_73_V36);
+    let saves: Vec<_> = shot.rolls.iter().filter(|r| r.kind == "defense" && r.owner == "b").collect();
+    assert_eq!(saves[0].count, 2, "1 hit x min(3, host 1 + hero 1): {:?}", shot.rolls);
+    assert!(shot.log.iter().any(|l| l.contains("Blast(3): 1 hit ×2")), "the applied rule names itself: {:?}", shot.log);
+}
+
+#[test]
+fn below_73_a_blast_blade_keeps_the_host_only_cap() {
+    let (st, statics) = blast_line(EPOCH_73_V36 - 1, true);
+    let shot = charge(&st, &statics, charge_hit_seed(&st, &statics, EPOCH_73_V36 - 1), EPOCH_73_V36 - 1);
+    let saves: Vec<_> = shot.rolls.iter().filter(|r| r.kind == "defense" && r.owner == "b").collect();
+    assert_eq!(saves[0].count, 1, "below 73: 1 hit x host 1: {:?}", shot.rolls);
 }
