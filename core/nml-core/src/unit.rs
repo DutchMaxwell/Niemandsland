@@ -3709,9 +3709,17 @@ fn stamp(
                         trace_stamp(trace73, "surge-window", &hit.name,
                             &format!("{}: {} stamped within {}in", p.name, hit.name, hit.within_in));
                     }
+                    // Rules 3.6 (row G4-C3, EPOCH_73_V36): the table stamps
+                    // every Surge data alias with its own `over_in` (default
+                    // -1.0, "no distance condition"), so a PLAIN alias —
+                    // `surge_low` 6, no wider window — pays at any range from
+                    // 73. Below 73 only the widened 5s window carries the
+                    // sentinel, and every recorded corpus replays.
                     if let Some((low, over)) = printed_low {
                         if low < 6 {
                             sp.surge_low = low;
+                        }
+                        if low < 6 || rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
                             sp.surge_over_in = over;
                         }
                     }
