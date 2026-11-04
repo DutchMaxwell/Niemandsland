@@ -1084,6 +1084,14 @@ func _run_solo_ai_turn() -> void:
 ## log, then resolve Dangerous tests / shooting / melee with real tray dice. A Shaken unit idles and
 ## recovers instead (OPR p.10). Returns the activated unit, or null when the AI side is done.
 ##
+## G4-R3 X2 (EPOCH_73_V36, lead ruling 2): a charger whose host died in its own Dangerous test while a joined hero
+## lives is NOT destroyed — the hero goes on as the unit. Below 73 the host's own models decide, as before.
+func _solo_activation_unit_gone(unit: GameUnit) -> bool:
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		return SoloController.combined_alive(unit) <= 0
+	return unit.is_destroyed()
+
+
 ## Thin wrapper so the harness seam fires on EVERY exit path of the body below (Shaken idle and the
 ## destroyed-mid-activation returns included), always with the board in its settled end state.
 func _solo_activate_one_ai() -> GameUnit:
@@ -1225,15 +1233,17 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	if dangerous_dice > 0:
 		await _run_ai_dangerous(unit, dangerous_dice)
 	report["dangerous_wounds_taken"] = wounds_before_dangerous - _solo_unit_wounds_now(unit)   # rules 3.6 melee tally
-	if unit.is_destroyed():
+	if _solo_activation_unit_gone(unit):
 		return unit
+	if unit.is_destroyed() and battle_log != null:   # G4-R3 X2: only reachable at epoch 73 with a living joined hero
+		_log_rule_event(BattleLog.Category.COMBAT, "%s is destroyed but its joined hero lives - the unit is not destroyed and goes on" % unit.get_name(), true)
 	# Wave 6 — Caster(X): resolve the activation's planned casts BEFORE the attack (v3.5.1: "at any
 	# point before attacking"; the official solo procedure casts after moving). The tokens were spent
 	# at plan time (the attempt's cost); here the 4+ cast die rolls on the real tray and the effect
 	# lands (spell damage saves reuse the shooting save path — no Shielded, no Cover against spells).
 	if not (report.get("casts", []) as Array).is_empty():
 		await _solo_resolve_ai_casts(report)
-	if unit.is_destroyed():
+	if _solo_activation_unit_gone(unit):
 		return unit
 	# Mend + Breath Attack (army-book, grill round 2 cut A): once per activation, BEFORE attacking —
 	# same slot the Caster resolution uses ("at any point before attacking").
@@ -1252,7 +1262,7 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	await _solo_apply_storm_attack(unit)
 	# Surprise Attack moved to activation start (D19 a, above the move) — see the call there.
 	await _solo_apply_teleport(unit, report)   # design #816 PR 1: the before-attack reposition beat
-	if unit.is_destroyed():
+	if _solo_activation_unit_gone(unit):
 		return unit
 	# NML-002 Strafing (rule Strafing: once per activation, after moving through an enemy unit, the
 	# bearer picks one and attacks it with this weapon as if shooting; the weapon has no other use):
