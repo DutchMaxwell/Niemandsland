@@ -152,6 +152,7 @@ var _success_modifier: int = 0
 var _next_roll_owner: String = ""   # attribution for the next tray roll ("AI (…)"); empty = "You" (goal 001)
 var _solo_tray_busy: bool = false   # NML-954: a _solo_tray_roll is in flight — the tray is exclusive
 var _solo_leg: String = "main"   # AI-G4 H1a: the activation leg a tray roll belongs to ("spell" inside the cast leg; dice.jsonl `leg`)
+var _solo_act_flags: Dictionary = {}   # H-DANG-CUT: the board's `_solo_unit_flags` taken BEFORE the dangerous test, handed to the cast leg's `pre` diff
 var _next_roll_purpose: String = ""   # what the roll is about — tray label + MP context (community #170)
 var _next_roll_kind: String = "attack"   # Bug 16: "defense" words the dice-log line as "defends … blocks"
 var _target_buttons: Array[Button] = []
@@ -1220,6 +1221,7 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	var dangerous_dice: int = int(report.get("dangerous_dice", dangerous_models))
 	var alive_before_dangerous: int = SoloController.combined_alive(unit)   # NML-966: combined for the morale trigger
 	var wounds_before_dangerous: int = _solo_unit_wounds_now(unit)
+	_solo_act_flags = _solo_unit_flags() if not (report.get("casts", []) as Array).is_empty() else {}   # H-DANG-CUT: before the test
 	if dangerous_dice > 0:
 		await _run_ai_dangerous(unit, dangerous_dice)
 	report["dangerous_wounds_taken"] = wounds_before_dangerous - _solo_unit_wounds_now(unit)   # rules 3.6 melee tally
@@ -5033,7 +5035,8 @@ func _vfx_player_volley(member: GameUnit, target: GameUnit, profile: Dictionary,
 func _solo_resolve_ai_casts(report: Dictionary) -> void:
 	if dice_roller_control == null or solo_controller == null:
 		return
-	var flags_before := _solo_unit_flags()
+	var flags_before: Dictionary = _solo_act_flags if not _solo_act_flags.is_empty() else _solo_unit_flags()
+	_solo_act_flags = {}
 	_solo_leg = "spell"   # AI-G4 H1a: every roll below is the cast leg's; the cast die itself re-tags to "cast"
 	for c in report.get("casts", []):
 		var cast := c as Dictionary
@@ -5046,13 +5049,15 @@ func _solo_resolve_ai_casts(report: Dictionary) -> void:
 	_solo_refresh_caster_markers()
 
 
-## AI-G4 H1a: {unit id: [alive models, Shaken, the living ModelInstances]} of every unit on the table (the cast leg's
-## before/after diff; the third slot is F-PRE-SURV's list of who stood at the start).
+## AI-G4 H1a: {unit id: [alive models, Shaken, the living ModelInstances, their wounds, shooting-range bonus]} of every
+## unit on the table (the cast leg's before/after diff; the third slot is F-PRE-SURV's list of who stood at the start).
 func _solo_unit_flags() -> Dictionary:
 	var flags := {}
 	for uid in opr_army_manager.game_units:
 		var u := opr_army_manager.game_units[uid] as GameUnit
-		flags[uid] = [u.get_alive_count(), u.is_shaken, u.get_alive_models()]
+		var live: Array = u.get_alive_models()
+		flags[uid] = [u.get_alive_count(), u.is_shaken, live, live.map(func(m: Variant) -> int: return (m as ModelInstance).wounds_current),
+			SoloController.shooting_range_bonus(u)]
 	return flags
 
 
@@ -5065,9 +5070,12 @@ func _solo_record_pre_leg(before: Dictionary) -> void:
 	var after := _solo_unit_flags()
 	for uid in after:
 		var was: Array = before.get(uid, [])
-		if was.is_empty() or after[uid][0] != was[0] or after[uid][1] != was[1]:
-			changed[uid] = {"alive": after[uid][0], "shaken": after[uid][1]}
+		if was.is_empty() or after[uid][0] != was[0] or after[uid][1] != was[1] or after[uid][3] != was[3] or after[uid][4] != was[4]:
+			# `wounds` = the survivors' wounds; `reach` (C-GRANTED-RANGE) = the spell-granted shooting reach, inches
+			changed[uid] = {"alive": after[uid][0], "shaken": after[uid][1], "wounds": after[uid][3]}
 			if not was.is_empty():
+				if after[uid][4] != was[4]:
+					changed[uid]["reach"] = after[uid][4] - was[4]
 				# F-PRE-SURV: WHICH models of the start list still stand (`of` = its length), not only how many
 				var keep: Array = []
 				for i in (was[2] as Array).size():

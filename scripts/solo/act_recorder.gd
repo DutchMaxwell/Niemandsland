@@ -327,7 +327,8 @@ static func traced(act: int, tag: String, faces: Array, plus: int, bonus_in: flo
 	_count += 1
 
 
-## AI-G4 H1a (rules 3.6, EPOCH_73_V36): the units the activation's CAST LEG changed, {uid: {alive, shaken}},
+## AI-G4 H1a (rules 3.6, EPOCH_73_V36): the units the activation's CAST LEG changed (and, from the activation's start,
+## its own dangerous-terrain test), {uid: {alive, shaken, wounds[, keep, of, reach]}},
 ## as a line of its own joined by `act` (the act line was flushed before the activation ran and is never
 ## rewritten). The replay gates cut the cast and spell rolls and start the core from this state. No-op
 ## below epoch 73, when NML_ACT_DUMP is unset, before the header exists, or when the line cap is hit.
