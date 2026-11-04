@@ -4929,13 +4929,13 @@ fn land_hazardous_self(
 }
 
 /// MEL-PAR-F5 (`EPOCH_73_V36`) — a dead model's melee weapon is gone. The table (`_solo_attack_groups`) rolls a
-/// weapon carried by fewer models than the unit holds as `per-copy x min(living bearers, strikers)`. The core
-/// follows only when every living model strikes (`count >= alive`): with partial contact it does not know WHICH
-/// models touch, so the pro-rata number stays. None = keep the pro-rata number (gate off, a bonus attack, a
-/// weapon every model carries, or no aligned kits).
+/// weapon carried by fewer models than the unit holds as `per-copy x min(living bearers, strikers)`, also with
+/// partial contact (G4-C8a: it never learns WHICH models touch either, and `count` is a real count since the
+/// base-edge measure). None = keep the pro-rata number (gate off, a bonus attack, a weapon every model
+/// carries, or no aligned kits).
 fn melee_bearer_attacks(p: &ShootProfile, model_count: i64, state: &State, unit: usize, count: i64, rules_epoch: u32) -> Option<i64> {
     let copies = p.count.max(1);
-    if !rule_on(rules_epoch, crate::acts::EPOCH_73_V36) || count < state.alive[unit] || p.extra_attack_q > 0 || copies >= model_count {
+    if !rule_on(rules_epoch, crate::acts::EPOCH_73_V36) || p.extra_attack_q > 0 || copies >= model_count {
         return None;
     }
     living_bearers(state, unit, &p.name).map(|b| (p.attacks / copies).max(0) * b.min(count))
