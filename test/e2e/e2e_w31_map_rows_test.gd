@@ -88,7 +88,8 @@ func test_an_item_container_name_with_a_trailing_space_gets_no_manual_note() -> 
 		.is_empty()
 
 
-## The control: the check can still fail. Precision Charge has no reader, so the note stays (F2).
+## The control: the check can still fail. A name no map ever carries must keep its note (F2's Precision Charge got
+## its rows in the follow-up, so the control uses an invented name that can never be mapped).
 func test_a_rule_without_a_row_still_gets_the_manual_note() -> void:
-	_main._solo_log_unmodeled_rules(_unit("gf", "orc_marauders", ["Precision Charge"]))
-	assert_array(_noted_rules()).is_equal(["Precision Charge"])
+	_main._solo_log_unmodeled_rules(_unit("gf", "orc_marauders", ["Unmapped Probe Rule"]))
+	assert_array(_noted_rules()).is_equal(["Unmapped Probe Rule"])

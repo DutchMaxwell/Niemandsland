@@ -85,6 +85,15 @@ pub struct Obb {
     pub kind: i32,
 }
 
+/// F-CONT (rules 3.6, `EPOCH_73_V36`) — one placed container's exact 6"x3" box, `TerrainOverlay._blocker_obbs`
+/// flattened by `AiActRecorder._container_boxes`: world metres, `yaw` as in `Obb`. Always solid, 2.5" tall.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ContainerObb {
+    pub c: [f64; 2],
+    pub he: [f64; 2],
+    pub yaw: f64,
+}
+
 /// `TerrainOverlay`'s grid geometry — act_recorder.gd:150-153.
 #[derive(Debug, Clone, Deserialize)]
 pub struct CellParams {
@@ -115,6 +124,9 @@ pub struct PlainTerrain {
     /// `default`, and hence `Terrain::pieces`'s fall-back to `sandbox`.
     #[serde(default)]
     pub pieces: Vec<[f64; 6]>,
+    /// F-CONT — the header's `containers` (written from `EPOCH_73_V36`; absent from every older recording).
+    #[serde(default)]
+    pub containers: Vec<ContainerObb>,
     pub cell_params: CellParams,
 }
 
@@ -130,6 +142,9 @@ pub struct Terrain {
     /// NML-1163 — `PlainTerrain::pieces` in the same WORLD-METRE frame
     /// `sandbox` uses, so `Terrain::pieces` can answer with one slice type.
     bank: Vec<Obb>,
+    /// F-CONT — `PlainTerrain::containers`; read by the sight volumes only (`type_at` never looks at them, as the table's
+    /// `get_terrain_at_world_position` does not).
+    containers: Vec<ContainerObb>,
     cell_m: f64,
     /// `-deg_to_rad(grid_rotation_degrees)`, i.e. the `-rot_rad` the lambda uses.
     neg_rot: f64,
@@ -435,6 +450,12 @@ impl Terrain {
         &self.sandbox
     }
 
+    /// F-CONT — the placed containers' exact boxes the header carried (empty before `EPOCH_73_V36` recordings).
+    #[inline]
+    pub fn containers(&self) -> &[ContainerObb] {
+        &self.containers
+    }
+
     /// NML-1163 — the pieces `tokens::terrain_token` exports: the BANKED
     /// drawing list when the board carried one, else the header's freely
     /// placed `sandbox` (the pre-NML-1163 reading, and still the only one an
@@ -482,6 +503,7 @@ impl Terrain {
             cells,
             sandbox: p.sandbox.clone(),
             bank,
+            containers: p.containers.clone(),
             cell_m,
             neg_rot: -rot_rad,
             half_grid: grid_size as f64 / 2.0,
@@ -742,6 +764,7 @@ mod tests {
             cells: cells.iter().map(|c| [c.0 as f64, c.1 as f64, c.2 as f64]).collect(),
             sandbox: vec![],
             pieces: vec![],
+            containers: Vec::new(),
             walls: vec![],
             cell_params: CellParams {
                 table_size_feet: [6.0, 4.0],

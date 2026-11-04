@@ -10,6 +10,7 @@ use super::super::*;
             cells: z.map(|r| [18.0, r as f64, FOREST as f64]).collect(),
             sandbox: vec![],
             pieces: vec![],
+            containers: Vec::new(),
             walls: vec![],
             cell_params: CellParams {
                 table_size_feet: [6.0, 4.0],
