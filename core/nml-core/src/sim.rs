@@ -9313,6 +9313,13 @@ fn resolve_with(
     if let Some(land) = landing.as_ref() {
         land.spend_sidestep(&mut next);
         moved = true;
+        // G4-C7b (Regroup, `EPOCH_73_V36`): a unit that starts out of coherency spends its advance gathering — the
+        // move port ran the placement gate on it; the log names the rule.
+        if let (Cover::Board(t), true, Some((_, shot))) = (cover, kind == ADVANCE, dice.as_mut()) {
+            if crate::menu::starts_incoherent(state, t, si, seams.rules_epoch) {
+                shot.log.push(format!("Regroup: {} starts out of coherency - its action gathers it back", statics[pi_s].name));
+            }
+        }
         // Wave 4 (port-entrenched) — every EXECUTED move stamps (main.gd:7786).
         next.moved_round[si] = next.round;
         for (i, m) in land.movers.iter().enumerate() {
