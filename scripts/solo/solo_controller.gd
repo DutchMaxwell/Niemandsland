@@ -3504,7 +3504,19 @@ func _charge_capped_by_difficult(unit: GameUnit, from: Vector3, to: Vector3, gap
 	# but whose base-width grazes difficult ground WILL be capped, so the tree must not call the
 	# charge available (the honest falls-short from the field validation, seed 21002 R2).
 	var probe_r := _move_base_radius_m(_moving_models(unit))
-	return _corridor_forced_through(from, to, TerrainRules.PathCheck.DIFFICULT, probe_r)
+	return _corridor_forced_through(from, charge_probe_end(from, to, gap_in), TerrainRules.PathCheck.DIFFICULT, probe_r)
+
+
+## G4-T8 (EPOCH_73_V36): the far end of the cap gate corridor is the CONTACT point (gap_in along the line from
+## `from` toward `to`), not the target centre: forest under the target own base is no part of the charger leg.
+## Below 73, and when the target is nearer than the gap, the centre stands. Twins: BattleSim.charge_illegal_plain,
+## core gate::charge_illegal_tuned.
+static func charge_probe_end(from: Vector3, to: Vector3, gap_in: float) -> Vector3:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return to
+	var dist := Vector2(to.x - from.x, to.z - from.z).length()
+	var reach := gap_in * INCHES_TO_METERS
+	return to if dist <= reach else from.lerp(to, reach / dist)
 
 
 ## Shared corridor probe (#316 extraction — the difficult cap's exact geometry): the straight
