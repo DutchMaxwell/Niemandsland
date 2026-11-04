@@ -204,7 +204,9 @@ func test_the_pre_block_names_the_models_the_cast_leg_left_standing() -> void:
 	var units: Dictionary = (_pre_lines()[0] as Dictionary).get("units", {})
 	var rec: Dictionary = units.get(foe.unit_id, {})
 	assert_int(int(rec.get("of", -1))).override_failure_message("pre: %s" % str(rec)).is_equal(start.size())
-	assert_array(rec.get("keep", []) as Array).override_failure_message("pre: %s" % str(rec)).is_equal(want)
+	var keep: Array = (rec.get("keep", []) as Array).map(func(v: Variant) -> int: return int(v))   # JSON numbers are floats
+	assert_array(keep).override_failure_message("pre: %s" % str(rec)).is_equal(want)
+	assert_array(want).override_failure_message("a prefix would not tell the models apart").is_not_equal([0, 1])
 
 
 func test_below_epoch_73_nothing_new_is_written() -> void:
