@@ -400,6 +400,7 @@
 "test/fx_bolt_test.gd": 0.1,
 "test/fx_burst_test.gd": 0.7,
 "test/g4_limited_ledger_test.gd": 0.1,
+"test/g4_moved_round_ledger_test.gd": 0.1,
 "test/game_phase_test.gd": 0.2,
 "test/gore_setting_test.gd": 0.1,
 "test/graphics_settings_calm_test.gd": 0.1,

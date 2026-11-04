@@ -316,6 +316,11 @@ pub struct PlainLedger {
     /// empty there — an old act replays with every Limited weapon fresh.
     #[serde(default)]
     limited_used: Vec<String>,
+    /// G4-H-MOVED (`EPOCH_73_V36`) — `unit_properties["moved_round"]` (main.gd `_solo_animate_move`): the
+    /// round the unit last executed a move, written by act_recorder.gd `_ledger_of`. Absent from every
+    /// corpus recorded before this key — an old act replays with every unit "never moved" (-1).
+    #[serde(default)]
+    moved_round: Option<i64>,
     /// Wave 5 (PR 1's recorder): the `{"used", "to"}` block; `to` arrives as the `"(x, y)"` Vector2 string.
     #[serde(default)]
     teleport: Option<PlainTeleport>,
@@ -1228,6 +1233,11 @@ pub fn fold_ledger(
     if rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
         Rc::make_mut(&mut st.limited_used)[ui] = ledger.limited_used.clone();
     }
+    // Moved: the table's own stamp rides the act state from EPOCH_73_V36, so Artillery's -1, Entrenched and
+    // the stationary alias penalty read the round the unit really moved in; below it every unit reads -1.
+    if let (true, Some(r)) = (rule_on(rules_epoch, crate::acts::EPOCH_73_V36), ledger.moved_round) {
+        st.moved_round[ui] = r;
+    }
     st.teleport_used[ui] = ledger.teleport.as_ref().map(|t| t.used).unwrap_or(false);
     st.growth_markers[ui] = ledger.growth;
     st.vengeance_markers[ui] = ledger.vengeance_markers;
@@ -1695,6 +1705,24 @@ mod tests {
         let mut hosted = state_of(LEDGER_PLAIN);
         super::fold_ledger(&mut hosted, 1, &ledger, crate::acts::CURRENT_RULES_EPOCH, 1, true, -1);
         assert_eq!(hosted.growth_round[1], -1, "attached -> never swept");
+    }
+
+    /// G4-H-MOVED (`EPOCH_73_V36`) — the table's `moved_round` stamp rides the act ledger: `fold_ledger`
+    /// reads it from 73 on, an act without the key keeps -1 ("never moved"), and below 73 it is not read.
+    #[test]
+    fn fold_ledger_reads_the_moved_round_stamp_from_epoch_73_only() {
+        let ledger: super::PlainLedger = serde_json::from_str(r#"{"moved_round":1}"#).expect("ledger");
+        let none: super::PlainLedger = serde_json::from_str("{}").expect("ledger");
+        let mut st = state_of(LEDGER_PLAIN);
+        super::fold_ledger(&mut st, 1, &ledger, crate::acts::EPOCH_73_V36, 1, false, -1);
+        assert_eq!(st.moved_round[1], 1, "the stamp lands on the named unit");
+        assert_eq!(st.moved_round[0], -1, "unit 0 is untouched");
+        let mut old = state_of(LEDGER_PLAIN);
+        super::fold_ledger(&mut old, 1, &ledger, crate::acts::EPOCH_72_PLAYTEST_RULES, 1, false, -1);
+        assert_eq!(old.moved_round[1], -1, "below 73 the key is not read");
+        let mut absent = state_of(LEDGER_PLAIN);
+        super::fold_ledger(&mut absent, 1, &none, crate::acts::EPOCH_73_V36, 1, false, -1);
+        assert_eq!(absent.moved_round[1], -1, "an act without the key keeps -1");
     }
 
     /// `p1_0_a` on the tray: the shape `battle_sim.gd:1477-1489` + `:1539-1543`
