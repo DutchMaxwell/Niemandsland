@@ -109,3 +109,14 @@ fn an_unwounded_lone_hero_does_not_test() {
         assert_eq!(morale_dice(&shot), 0);
     }
 }
+
+/// Rules-must-log: the test the chain's wounds called names itself, with the unit the table names (the host).
+#[test]
+fn the_wound_test_names_its_rule_in_the_battle_log() {
+    let (seed, _, _) = *wounded_not_killed(EPOCH_73_V36).iter().find(|c| c.1 == 2).expect("a 2-of-3 seed");
+    let (_, shot) = volley(seed, EPOCH_73_V36);
+    assert!(
+        shot.log.iter().any(|l| l == "Morale: Acolytes takes wounds at half strength or less — morale test"),
+        "log: {:?}", shot.log
+    );
+}
