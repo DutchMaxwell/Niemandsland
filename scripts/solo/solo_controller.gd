@@ -2954,6 +2954,9 @@ func _act_regroup(unit: GameUnit, report: Dictionary) -> Dictionary:
 	report["action"] = AiDecision.Action.ADVANCE   # a MOVE action → shooting after is allowed (post-move retarget)
 	report["moved"] = true
 	report["regroup"] = true
+	# G4R3 F-T-REGROUP-LOG (EPOCH_73_V36): the Regroup rule names itself — it used to act silently.
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		_rule_note(report, "Regroup: %s starts its activation out of coherency — it gathers back first" % unit.get_name(), false)
 	var chain_in: float = CoherencyChecker.SKIRMISH_CHAIN_DISTANCE_INCHES \
 		if CoherencyChecker.is_skirmish_system(unit) else CoherencyChecker.MAX_CHAIN_DISTANCE_INCHES
 	record_decision({"kind": "action", "unit": unit.get_name(),
