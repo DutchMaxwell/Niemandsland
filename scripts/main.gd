@@ -151,6 +151,7 @@ var _success_target: int = DiceRules.TARGET_NONE
 var _success_modifier: int = 0
 var _next_roll_owner: String = ""   # attribution for the next tray roll ("AI (…)"); empty = "You" (goal 001)
 var _solo_tray_busy: bool = false   # NML-954: a _solo_tray_roll is in flight — the tray is exclusive
+var _solo_leg: String = "main"   # AI-G4 H1a: the activation leg a tray roll belongs to ("spell" inside the cast leg; dice.jsonl `leg`)
 var _next_roll_purpose: String = ""   # what the roll is about — tray label + MP context (community #170)
 var _next_roll_kind: String = "attack"   # Bug 16: "defense" words the dice-log line as "defends … blocks"
 var _target_buttons: Array[Button] = []
@@ -4558,6 +4559,7 @@ func _run_ai_shooting(report: Dictionary) -> void:
 			# Wave 5: an expended Limited weapon no longer shoots (core v3.5.1: once per game); a
 			# unit-level Shred grant marks every weapon profile (the weapon facet is already parsed).
 			if bool(prof.get("limited", false)) and solo_controller.is_limited_used(member, prof):
+				_solo_log_limited_spent(member, prof)
 				continue
 			if RulesRegistry.unit_rule_active(member, "Shred") \
 					or _solo_shred_facet_applies(member, base_range):
@@ -4618,6 +4620,13 @@ func _solo_log_no_volley(unit: GameUnit, report: Dictionary, why: String) -> voi
 		if int(report.get("action", 0)) == AiDecision.Action.HOLD else ""
 	battle_log.log_event(BattleLog.Category.COMBAT, "%s: no volley — %s%s" % [
 		unit.get_name(), why, hold_note], true)
+
+
+## Limited (once per game): a volley leaves out a weapon that already fired — the log names the book rule.
+func _solo_log_limited_spent(member: GameUnit, prof: Dictionary) -> void:
+	if battle_log != null and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		battle_log.log_event(BattleLog.Category.COMBAT, "Limited: %s's %s is used up — once per game" % [
+			member.get_name(), str(prof.get("name", "?"))], true)
 
 
 ## Resolve-first priority of a shot (GF v3.5.1 p.14): Takedown before Deadly before the rest. sort_custom
@@ -5018,13 +5027,39 @@ func _vfx_player_volley(member: GameUnit, target: GameUnit, profile: Dictionary,
 func _solo_resolve_ai_casts(report: Dictionary) -> void:
 	if dice_roller_control == null or solo_controller == null:
 		return
+	var flags_before := _solo_unit_flags()
+	_solo_leg = "spell"   # AI-G4 H1a: every roll below is the cast leg's; the cast die itself re-tags to "cast"
 	for c in report.get("casts", []):
 		var cast := c as Dictionary
 		var caster: GameUnit = cast.get("caster")
 		if caster == null or caster.get_alive_count() == 0:
 			continue   # the caster died to a Dangerous-terrain test before the cast resolved
 		await _solo_resolve_one_cast(cast)
+	_solo_leg = "main"
+	_solo_record_pre_leg(flags_before)
 	_solo_refresh_caster_markers()
+
+
+## AI-G4 H1a: {unit id: [alive models, Shaken]} of every unit on the table (the cast leg's before/after diff).
+func _solo_unit_flags() -> Dictionary:
+	var flags := {}
+	for uid in opr_army_manager.game_units:
+		var u := opr_army_manager.game_units[uid] as GameUnit
+		flags[uid] = [u.get_alive_count(), u.is_shaken]
+	return flags
+
+
+## AI-G4 H1a: writes the `pre` block of this activation - the units the cast leg changed, so the replay
+## gates can start the core from the state the table's volley started from. Epoch 73+ only.
+func _solo_record_pre_leg(before: Dictionary) -> void:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 or not AiActRecorder.active():
+		return
+	var changed := {}
+	var after := _solo_unit_flags()
+	for uid in after:
+		if after[uid] != before.get(uid):
+			changed[uid] = {"alive": after[uid][0], "shaken": after[uid][1]}
+	AiActRecorder.pre(solo_controller.move_act_seq(), changed)
 
 
 ## One cast: the announced spell, the boost/interference-adjusted target number, one real tray die.
@@ -5111,8 +5146,11 @@ func _solo_resolve_one_cast(cast: Dictionary) -> void:
 	var target_num := AiSpell.cast_target(boost, interference, base_target)
 	# THE CAST ROLL — one visible die on the real tray (no hidden RNG).
 	var roll_owner := str(cast.get("owner_label", "AI (%s)" % caster.get_name()))
+	var leg_before := _solo_leg
+	_solo_leg = "cast"   # AI-G4 H1a: the cast die is its own leg of the recording
 	var faces: Array = await _solo_tray_roll(1, target_num, roll_owner, "attack",
 		"Casting %s (%d+)" % [spell_name, target_num])
+	_solo_leg = leg_before
 	var success: bool = not faces.is_empty() and DiceRules.is_success(int(faces[0]), target_num, 0)
 	if seal_id > 0:
 		_vfx_emit({"k": "seal_end", "sid": seal_id, "o": int(SpellSeal.Outcome.SUCCESS if success else SpellSeal.Outcome.FAIL),
@@ -7791,18 +7829,41 @@ func _solo_armor_rating(target: GameUnit) -> int:
 	return _solo_unit_rating(target, "Armor")
 
 
+## G4-T2 (EPOCH_73_V36, lead ruling O2): which member of a joined chain currently holds its models —
+## the unit itself while it has alive models, else the first alive attached hero, else null. Below 73
+## the old host read stands so every recorded corpus replays byte-exact.
+func _solo_defense_holder(unit: GameUnit) -> GameUnit:
+	if unit == null:
+		return null
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return unit
+	if unit.get_alive_count() > 0:
+		return unit
+	for hero in unit.get_attached_heroes():
+		if hero is GameUnit and (hero as GameUnit).get_alive_count() > 0:
+			return hero
+	return null
+
+
 ## The unit's Defense after Armor(X) ("counts as having Defense X+", best-of — AiCombatMath.armored_defense,
-## the same math the EV context uses). Equals get_defense() for unarmored units.
+## the same math the EV context uses). Equals get_defense() for unarmored units. Reads the chain member
+## that actually holds the models (G4-T2): a dead host with a living hero saves on the hero's Defense.
 func _solo_armored_defense(target: GameUnit) -> int:
-	return AiCombatMath.armored_defense(target.get_defense(), _solo_armor_rating(target))
+	var holder: GameUnit = _solo_defense_holder(target)
+	if holder == null:
+		return 0
+	return AiCombatMath.armored_defense(holder.get_defense(), _solo_armor_rating(holder))
 
 
 ## Battle-log Armor(X) when it actually improves the working Defense (visible rule application, wave 5).
 func _solo_log_armor(target: GameUnit) -> void:
-	var armored: int = _solo_armored_defense(target)
-	if armored != target.get_defense() and battle_log != null:
+	var holder: GameUnit = _solo_defense_holder(target)
+	if holder == null:
+		return
+	var armored: int = _solo_armored_defense(holder)
+	if armored != holder.get_defense() and battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s has Armor(%d): counts as Defense %d+" % [
-			target.get_name(), _solo_armor_rating(target), armored], true)
+			holder.get_name(), _solo_armor_rating(holder), armored], true)
 
 
 ## Compose two to-hit-modifier note fragments ("Stealth -1" + "Indirect moved -1") into one log note.
@@ -10604,10 +10665,14 @@ func _solo_tray_roll(count: int, success_target: int, owner: String, roll_kind: 
 		# NML-1073 M5 D1-B1: sibling file, default OFF (env NML_DICE_DUMP) — stamps the ACTIVATION
 		# ordinal the "dice" decision record above never carries (a live decisions.json must stay
 		# byte-identical whether this seam is on or off, so it is not added there).
-		AiDiceRecorder.record({"act": solo_controller.move_act_seq(), "seq": _solo_dice_seq,
+		var dice_rec := {"act": solo_controller.move_act_seq(), "seq": _solo_dice_seq,
 			"round": solo_controller._current_round(), "player": solo_controller.ai_slot,
 			"roll_kind": roll_kind, "owner": owner, "target": success_target, "count": count,
-			"faces": faces})
+			"faces": faces}
+		if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+			# AI-G4 H1a: the replay gates cut the cast and spell legs (the core rolls no cast die), keep the rest.
+			dice_rec["leg"] = "dangerous" if roll_kind == "dangerous" else _solo_leg
+		AiDiceRecorder.record(dice_rec)
 	_dice_count = prev_count
 	_update_dice_set(prev_count)
 	_success_target = prev_target
@@ -10875,8 +10940,10 @@ func _solo_clear_auto_fan() -> void:
 func _solo_log_save_threshold(defender: GameUnit, defense: int, ap: int) -> void:
 	if battle_log == null:
 		return
+	var holder: GameUnit = _solo_defense_holder(defender)
+	var named: GameUnit = holder if holder != null else defender
 	battle_log.log_event(BattleLog.Category.COMBAT, "%s saves on %s" % [
-		defender.get_name(), save_threshold_text(defense, ap)], true)
+		named.get_name(), save_threshold_text(defense, ap)], true)
 
 
 ## The save-threshold text. A bare "7+" reads as impossible on a d6 (community #173) —

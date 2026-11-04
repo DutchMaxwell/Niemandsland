@@ -74,8 +74,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
 
 import nml_core  # noqa: E402
 from shoot_replay_gate import (  # noqa: E402
-    burn_prefix, combat_kind, defender_state, first_at_or_after, parted_field, read_game,
-    resolve_vintage_flag, successes, vintage_report_line,
+    burn_prefix, combat_kind, cut_pre_legs, defender_state, first_at_or_after, parted_field, read_game,
+    read_pre, resolve_vintage_flag, successes, vintage_report_line,
 )
 
 #: `BattleSim.CHARGE` — the only act kind that fights a melee.
@@ -192,6 +192,7 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
     for d in games:
         head, lines, dice, seed = read_game(d)
         burn = burn_prefix(dice)
+        pres = read_pre(d)
         core = nml_core.load(repo)
         # D5-2: the charge move routes around the board's WALLS, and the act
         # corpus carried none before rung D5-2a. Without them the port would
@@ -238,12 +239,15 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
                 continue
             tally["acts"] += 1
             i0 = first_at_or_after(dice, k)
+            # AI-G4 H1b: the table's cast/spell legs are cut, their dice burned, the state patched (see shoot_replay_gate).
+            rolls_cut, pre_burn, plain = cut_pre_legs([r for r in dice[i0:] if int(r["act"]) == k],
+                                                      act["state"], pres.get(k))
             tray = nml_core.Tray(seed + 1 if mode == "misseed" else seed)
-            if burn[i0]:
-                tray.roll(burn[i0])
+            if burn[i0] + pre_burn:
+                tray.roll(burn[i0] + pre_burn)
             try:
                 nxt, report = core.resolve_with_tray(
-                    core.state_of(act["state"]), action, nml_core.Rng(0), tray)
+                    core.state_of(plain), action, nml_core.Rng(0), tray)
             except Exception as exc:  # a declined activation is not a dice verdict
                 tally["declined"] += 1
                 if len(firsts) < 3:
@@ -258,7 +262,7 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
             # `roll_kind` goes through `combat_kind()` (NML-1104) — the
             # module docstring's THE MORALE CHECK section says why.
             want = [(combat_kind(r["roll_kind"]), r["count"], r["target"], r["faces"], r["owner"])
-                    for r in dice[i0:] if int(r["act"]) == k]
+                    for r in rolls_cut]
             if not got and not want:
                 tally["both_silent"] += 1
                 continue

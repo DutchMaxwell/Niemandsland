@@ -1366,7 +1366,7 @@ func _no_shot_reason(unit: GameUnit, base_range: int) -> String:
 			continue
 		standing += 1
 		var reach: int = int(effective_shoot_reach_in(float(base_range), hu))
-		var d := MoveIntent.distance_inches(from, unit_centre(hu))
+		var d := shoot_reach_gap_in(unit, hu, MoveIntent.distance_inches(from, unit_centre(hu)))
 		nearest = minf(nearest, d)
 		if reach > 0 and d <= float(reach) and not _has_los(unit, hu):
 			in_range_no_los += 1
@@ -1408,7 +1408,7 @@ func best_shoot_target_now(ai_unit: GameUnit, held: bool = true) -> GameUnit:
 		var reach: int = int(effective_shoot_reach_in(float(base_range), hu))   # Aircraft -12" + Ranged Shrouding
 		if reach <= 0:
 			continue
-		var d := MoveIntent.distance_inches(from, unit_centre(hu))
+		var d := shoot_reach_gap_in(ai_unit, hu, MoveIntent.distance_inches(from, unit_centre(hu)))
 		if d > float(reach):
 			continue
 		if not indirect and not _has_los(ai_unit, hu) \
@@ -2699,10 +2699,12 @@ func execute_intent(intent: Dictionary, report: Dictionary) -> Dictionary:
 			and unit.has_special_rule("Artillery"):
 		_rule_note(report, "Artillery: moves like any unit under rules 3.6", true)
 	report["can_shoot"] = (do_shoot or (quick_shot and action == AiDecision.Action.RUSH)) \
-		and shoot_range_in > 0 and d2 <= shoot_range_in \
+		and shoot_range_in > 0 and shoot_reach_gap_in(unit, target, d2) <= shoot_range_in \
 		and (_has_los(unit, target) or (has_indirect_ranged(weapons) and indirect_ignores_los(unit, action == AiDecision.Action.HOLD)) \
 			or granted_indirect_of(unit)   # GH #325 — the shooter's own Indirect token
 			or grants_indirect_to_attackers(target))   # wave 6 — the Indirect Mark's once-grant
+	if bool(report["can_shoot"]) and target != null:
+		_note_nearest_model_reach(report, unit, target, shoot_range_in)
 	if bool(report["can_shoot"]) and quick_shot and action == AiDecision.Action.RUSH:
 		_rule_note(report, "Quick Shot: shoots after its Rush action", true)   # explains otherwise-impossible shots — travels
 	# POST-MOVE RETARGET (Bug 27/28): a HOLD/ADVANCE always MAY shoot (OPR) — so if the decided target is
@@ -2720,6 +2722,7 @@ func execute_intent(intent: Dictionary, report: Dictionary) -> Dictionary:
 		var retgt: GameUnit = null if source == "player" else best_shoot_target_now(unit, action == AiDecision.Action.HOLD)
 		if retgt != null:
 			report["can_shoot"] = true
+			_note_nearest_model_reach(report, unit, retgt, effective_shoot_reach_in(float(shoot_range_in), retgt))
 			record_decision({"kind": "target", "unit": unit.get_name(),
 				"rule": "Post-move retarget: an Advance/Hold may always shoot — the decided target is out of range/LOS, so fire on the best reachable enemy instead (Bug 27/28)",
 				"candidates": [], "chosen": retgt.get_name(), "why": "post-move retarget to a reachable enemy",
@@ -10698,6 +10701,23 @@ func charge_from_in(unit: GameUnit, target: GameUnit, centre_in: float, start_xz
 		return centre_in
 	var gap: float = nearest_melee_pair_info(unit, target, false, start_xz)["gap_in"]
 	return gap if gap != INF else centre_in
+
+
+## AI-G4 (rules 3.6, Shooting): a model fires when its weapon reaches a MODEL of the target, so the AI's reach
+## test measures the nearest model pair, base edge to base edge — the same pair as charge_from_in, which keeps
+## the unit-centre `centre_in` below EPOCH_73_V36. The per-weapon range checks at the volley stay as they are.
+func shoot_reach_gap_in(unit: GameUnit, target: GameUnit, centre_in: float) -> float:
+	return charge_from_in(unit, target, centre_in)
+
+
+## Rules-must-log: when ONLY the nearest-model reading puts `target` in reach (the unit centres are farther
+## apart than `reach_in`), the battle log names the book rule. Below EPOCH_73_V36 the two readings coincide.
+func _note_nearest_model_reach(report: Dictionary, unit: GameUnit, target: GameUnit, reach_in: float) -> void:
+	var centre := MoveIntent.distance_inches(unit_centre(unit), unit_centre(target))
+	if centre <= reach_in:
+		return
+	_rule_note(report, "%s: Shooting — range is measured to the nearest model of %s (%.1f\" away, %.1f\" between the unit centres)" % [
+		unit.get_name(), target.get_name(), shoot_reach_gap_in(unit, target, centre), centre], true)   # explains an otherwise-impossible shot — travels
 
 
 ## The nearest charger-model / enemy-model pair, as the base-to-base gap (inches) to close and the world
