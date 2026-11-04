@@ -1823,6 +1823,7 @@ mod v36_mor_10;
 mod v36_mor_11;
 mod v36_mor_14;
 mod v36_mor_18;
+mod v36_g4r4_c3_rout_hero;
 mod v36_morale;
 mod v36_shoot;
 mod v36_shoot_rows;
