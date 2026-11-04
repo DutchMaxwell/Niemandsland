@@ -243,6 +243,14 @@ def shots_of(d: Path) -> dict[int, list[dict]]:
     return out
 
 
+def _stale(units: dict, key: str) -> bool:
+    """No living model on the unit AND none on a joined hero attached to it.
+    A host wiped out under a still-standing hero is a legal shot (G4-H4)."""
+    u = units.get(key, {})
+    if int(u.get("alive", -1)) > 0:
+        return False
+    return not any(int(units.get(str(h), {}).get("alive", -1)) > 0
+                   for h in (u.get("attached", []) or []))
 #: AI-G4 H1b (lead ruling O3): the legs of an activation the core never rolls. The table rolls the cast die and
 #: the spell's own saves and morale inside the act; the core prices a cast as an expectation (sim.rs `cast_phase`),
 #: so the gate CUTS them. `dangerous` stays the core's. A roll without a `leg` (a recording from before H1a) is `main`.
@@ -294,21 +302,26 @@ def cut_pre_legs(rolls: list[dict], plain: dict, pre: dict | None, burn: bool = 
 
 
 def split_aim(head: dict, rec: list[dict], shoot_key: str, units: dict) -> tuple[list[dict] | None, str, int]:
-    """The `split` aim for one act, or `(None, why, 0)` to stay pooled. The
-    sidecar's target NAME becomes a unit key through the header profiles; a
-    name sitting on more than one key is ambiguous and its entries are dropped
-    (the count rides back as the third slot), never guessed. An aim whose
-    entries all point at the recorded `shoot` key is the pre-1150 path and
-    injects nothing. An aim naming a unit that is DEAD in the replayed state
-    is a stale ordinal (the sidecar shares dice.jsonl's move_act_seq, which a
-    dry side can hand to a later activation) — the whole aim is untrustworthy
-    and injects nothing."""
+    """The `split` aim for one act, or `(None, why, 0)` to stay pooled. A
+    non-empty `target_id` that the header profiles carry is the unit key itself
+    (G4-H4) and wins outright — two units can share a display NAME. Without
+    one, the sidecar's target NAME becomes a unit key through the header
+    profiles; a name sitting on more than one key is ambiguous and its entries
+    are dropped (the count rides back as the third slot), never guessed. An aim
+    whose entries all point at the recorded `shoot` key is the pre-1150 path and
+    injects nothing. An aim naming a unit that is DEAD in the replayed state is
+    a stale ordinal (the sidecar shares dice.jsonl's move_act_seq, which a dry
+    side can hand to a later activation) — the whole aim is untrustworthy and
+    injects nothing; a dead HOST with a living joined hero is still a legal
+    shot (G4-H4)."""
+    profiles = head["profiles"]
     name_keys: dict[str, list[str]] = {}
-    for k, p in head["profiles"].items():
+    for k, p in profiles.items():
         name_keys.setdefault(str(p.get("name", "")), []).append(k)
     aim, amb = [], 0
     for s in rec:
-        keys = name_keys.get(str(s.get("target", "")), [])
+        tid = str(s.get("target_id", "") or "")
+        keys = [tid] if tid and tid in profiles else name_keys.get(str(s.get("target", "")), [])
         if len(keys) == 1:
             aim.append({"member": str(s["member"]), "weapon": str(s["weapon"]),
                         "target": keys[0]})
@@ -316,7 +329,7 @@ def split_aim(head: dict, rec: list[dict], shoot_key: str, units: dict) -> tuple
             amb += 1
     if not aim:
         return None, "uncovered", amb
-    if any(int(units.get(a["target"], {}).get("alive", -1)) <= 0 for a in aim):
+    if any(_stale(units, a["target"]) for a in aim):
         return None, "stale", amb
     if all(a["target"] == shoot_key for a in aim):
         return None, "aligned", amb

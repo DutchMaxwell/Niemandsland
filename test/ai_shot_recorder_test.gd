@@ -54,18 +54,19 @@ func test_record_no_ops_when_env_unset() -> void:
 func test_record_writes_a_line_when_env_set() -> void:
 	OS.set_environment("NML_SHOT_DUMP", ProjectSettings.globalize_path(_DUMP_DIR))
 	AiShotRecorder.record({"act": 4, "round": 2, "player": 1, "shooter": "Squad A", "member": "Sergeant",
-		"weapon": "Special Rifle", "target": "Squad B", "alive": 4, "sighted": 2, "bearers": 1,
+		"weapon": "Special Rifle", "target": "Squad B", "target_id": "p2_3_squad_b", "alive": 4, "sighted": 2, "bearers": 1,
 		"max_models": 5, "attacks": 2, "reach_in": 25.4, "indirect": true})
 
 	var lines := _dump_lines()
 	assert_int(lines.size()).is_equal(1)
 	var rec: Dictionary = JSON.parse_string(lines[0])
-	for key in ["act", "round", "player", "shooter", "member", "weapon", "target",
+	for key in ["act", "round", "player", "shooter", "member", "weapon", "target", "target_id",
 			"alive", "sighted", "bearers", "max_models", "attacks", "reach_in", "indirect"]:
 		assert_bool(rec.has(key)).is_true()
 	assert_int(int(rec["act"])).is_equal(4)
 	assert_str(str(rec["shooter"])).is_equal("Squad A")
 	assert_str(str(rec["member"])).is_equal("Sergeant")
+	assert_str(str(rec["target_id"])).is_equal("p2_3_squad_b")
 	assert_int(int(rec["bearers"])).is_equal(1)
 	assert_bool(bool(rec["indirect"])).is_true()
 
