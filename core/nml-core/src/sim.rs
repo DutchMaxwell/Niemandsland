@@ -8494,6 +8494,51 @@ pub(crate) fn trace_rule(arm: &str, rule: &str, detail: &str) {
     }
 }
 
+const AIRCRAFT_MOVE_IN: f64 = 30.0;
+const AIRCRAFT_HEADINGS: usize = 16;
+/// Rules 3.6 `Aircraft` (`EPOCH_73_V36`), `_act_aircraft` :2968 / `_aircraft_heading` :3018: a mandatory straight 30" run
+/// toward an enemy centre or one of 16 compass points, legal while it stays on the board, the best volley from the
+/// endpoint wins (1e-4 better; ties to the larger edge margin). `None` = no board or no legal lane.
+pub(crate) fn aircraft_delta(statics: &[UnitStatic], state: &State, si: usize, t: &Terrain, shelf: bool, rules_epoch: u32) -> Option<V3> {
+    let board = t.board_in(); // an absent board is [0, 0]: no lane is legal, the answer is None
+    // The table's `los_checker` (main.gd:3373): point to point, infantry height, terrain volumes only.
+    let (zones, h) = (board_zones(t, shelf, rules_epoch), sight::height_in_for_base_mm(sight::DEFAULT_BASE_MM) * IN2M);
+    let cyl = |p: V3| sight::Cyl { c: [p[0] as f64, p[2] as f64], r: 0.0, y0: 0.0, y1: h };
+    let (c, us, mut sc) = (geom::centre(&state.positions[si]), &statics[state.roster.profile[si]], Scratch::default());
+    // The heading's EV prices the PRINTED reach: `profiles_in_range` carries no `shooting_range_bonus` (:3038).
+    let bare: Vec<ShootProfile> = us.shoot.iter().cloned().map(|p| ShootProfile { reach_bonus_in: 0.0, ..p }).collect();
+    let base_r = state.radii[si].iter().copied().fold(DEFAULT_BASE_RADIUS_M, f64::max);
+    let own_r = crate::deployment::deploy_footprint_radius(state.alive[si] as usize, base_r);
+    let lim = [board[0] * 0.5 * IN2M - 0.02 - own_r, board[1] * 0.5 * IN2M - 0.02 - own_r];
+    let foes: Vec<usize> = crate::menu::enemy_keys(state, si).into_iter().filter(|&e| !state.dormant[e] && state.attached_to[e].is_none()).collect();
+    let mut heads: Vec<V3> = foes.iter().map(|&e| geom::sub(geom::centre(&state.positions[e]), c))
+        .filter(|d| d[0].hypot(d[2]) > 0.001).map(|d| geom::normalized([d[0], 0.0, d[2]])).collect();
+    heads.extend((0..AIRCRAFT_HEADINGS).map(|i| (std::f64::consts::TAU * i as f64 / AIRCRAFT_HEADINGS as f64) as f32)
+        .map(|a| [a.cos(), 0.0, a.sin()]));
+    let mut best: Option<(f64, f64, V3)> = None;
+    for h in heads {
+        let delta = geom::mul(h, AIRCRAFT_MOVE_IN * IN2M);
+        let end = geom::add(c, delta);
+        let (mx, mz) = (lim[0] - (end[0] as f64).abs(), lim[1] - (end[2] as f64).abs());
+        if mx < 0.0 || mz < 0.0 { continue; }
+        let mut ev = 0.0f64;
+        for &e in &foes {
+            let ec = geom::centre(&state.positions[e]);
+            if sight::has_los(&cyl(end), &cyl(ec), false, &zones, &[]) {
+                profiles_of(us, state.alive[si], 0.0, &mut sc);
+                let def = ctx_of(&statics[state.roster.profile[e]], state, e);
+                let d = geom::length(geom::sub(end, ec)) as f64 / IN2M;
+                ev = ev.max(shoot_ev(&bare, &sc.keep, &sc.attacks, &ctx_of(us, state, si), &def, d));
+            }
+        }
+        let margin = mx.min(mz);
+        if best.is_none_or(|(be, bm, _)| ev > be + 1e-4 || ((ev - be).abs() <= 1e-4 && margin > bm)) {
+            best = Some((ev, margin, delta));
+        }
+    }
+    best.map(|b| b.2)
+}
+
 /// S10-a/b — rewrite the (dest, band) the plain arm is aimed with, per the
 /// table's own body: (a) the in-range shooter's KITE step
 /// (solo_controller.gd:2218-2222 via `_move_away` :4761), (b) the goal stop —
@@ -9050,6 +9095,23 @@ fn resolve_with(
     // S10-a: a kite whose cap floors at zero moves NOTHING on the table (the
     // `_move_away` is_zero_approx guard) — neither the plain arm nor rigid.
     let mut hold = false;
+    // Rules 3.6 Aircraft (`EPOCH_73_V36`): the straight run replaces the band move, no planner/spacing/Dangerous test (:3080).
+    let mut flew = false;
+    if matches!(kind, ADVANCE | RUSH) && next.aircraft[si] && rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) {
+        if let Some(d) = if let Cover::Board(t) = cover { aircraft_delta(statics, &next, si, t, seams.shelf_sight, seams.rules_epoch) } else { None } {
+            let chain = std::iter::once(si).chain(next.attached[si].iter().copied().filter(|_| seams.hero_attach));
+            for u in chain.collect::<Vec<_>>() {
+                next.positions[u].iter_mut().for_each(|p| *p = geom::to_f64(geom::add(geom::to_f32(*p), d)));
+            }
+            (flew, moved, next.moved_round[si]) = (true, true, next.round);
+            let line = format!(
+                "Aircraft: {} flies {AIRCRAFT_MOVE_IN:.0}\" straight (heading {:.0}\u{b0})",
+                statics[pi_s].name, (d[2] as f64).atan2(d[0] as f64).to_degrees()
+            );
+            trace_rule("aircraft", "Aircraft", &line);
+            if let Some((_, shot)) = dice.as_mut() { shot.log.push(line); }
+        }
+    }
     if seams.movement && !seams.plain_only && kind == CHARGE && band_in > 0.0 {
         if let (Cover::Board(t), Some(ti)) = (cover, ci) {
             landing = (crate::mv::step::MoveRules { rules_epoch: seams.rules_epoch }).charge_move(
@@ -9075,7 +9137,7 @@ fn resolve_with(
     // longer a translation. `--red-move-rigid` (`move_rigid`) forces the old
     // arm back for the gate's RED. `None` = the port declines and the rigid
     // translation still stands.
-    if seams.movement && !seams.move_rigid && kind != CHARGE && band_in > 0.0 {
+    if seams.movement && !seams.move_rigid && kind != CHARGE && band_in > 0.0 && !flew {
         if let (Cover::Board(t), Some(dest)) = (cover, action.dest) {
             let (dest, band) =
                 s10_dest_arms(statics, &next, si, kind, dest, band_in, &mut hold);
@@ -9121,6 +9183,7 @@ fn resolve_with(
         }
     } else if band_in > 0.0
         && !hold
+        && !flew
         && action.dest.is_some()
         && !next.positions[si].is_empty()
     {
@@ -9235,7 +9298,7 @@ fn resolve_with(
     // the cast/shoot/melee/hit-and-run tail below, to where main.gd:1092-1098
     // actually rolls the END-of-activation test — not here.
     let mut dangerous_morale_due: Option<(i64, i64)> = None;
-    if moved && !seams.no_dangerous {
+    if moved && !flew && !seams.no_dangerous {
         if let Some((tray, shot)) = dice.as_mut() {
             let n = dangerous_dice(statics, state, &next, si, seams, landing.as_ref(), cover, shot);
             if n > 0 {
