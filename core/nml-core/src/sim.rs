@@ -801,6 +801,12 @@ fn combined_alive(state: &State, i: usize, seams: Seams) -> i64 {
         }
 }
 
+/// Rules 3.6 (`EPOCH_73_V36`, the Hero rule) — a melee side still STANDS while its host has a model OR a joined hero
+/// lives (the table's `_solo_combined_alive`); below 73 only the host's own models count.
+fn side_up(state: &State, i: usize, seams: Seams) -> bool {
+    if rule_on(seams.rules_epoch, EPOCH_73_V36) { combined_alive(state, i, seams) > 0 } else { state.alive[i] > 0 }
+}
+
 /// Rules 3.6 (`EPOCH_73_V36`) — Blast(X) caps by the table's `_solo_combined_alive(target)`: the host's living
 /// models PLUS every living joined hero. Stamped beside `models`, which stays the host's own count.
 fn stamp_blast_models(def: &mut Ctx, state: &State, ti: usize, seams: Seams) {
@@ -5693,6 +5699,18 @@ fn strike_phase(
             }
         }
     }
+    // R3-X1b (`EPOCH_73_V36`, lead ruling 1): Precision Feat is ONE latch per game shared by shooting and melee. The bearer's
+    // first attack of any kind - a strike-back included - gets +1 to hit on this whole phase, then the latch is spent.
+    if rule_on(seams.rules_epoch, EPOCH_73_V36) {
+        for (mi, _, att) in parts.iter_mut().filter(|(_, sc, _)| !sc.keep.is_empty()) {
+            let um = &statics[next.roster.profile[*mi]];
+            if um.precision_feat_hit > 0 && !next.feats_used[*mi].iter().any(|n| n == "Precision Feat") {
+                att.feat_hit_bonus += um.precision_feat_hit;
+                Rc::make_mut(&mut next.feats_used)[*mi].push("Precision Feat".to_string());
+                shot.log.push(format!("[feat] Precision Feat spent by {}", um.name));
+            }
+        }
+    }
     // MEL-01 (D-ASSAULT) rules-must-log: an Assault weapon's melee copy (the
     // profile carrying its printed range) names itself when it strikes.
     for (mi, sc, _) in parts.iter() {
@@ -6412,12 +6430,22 @@ pub(crate) fn tray_morale_for(
             drop_carried(state, i);
         }
         Morale::Routed => {
-            drop_carried(state, i);
-            state.wounds[i].clear();
-            state.positions[i].clear();
-            Rc::make_mut(&mut state.radii)[i].clear();
-            state.kits_drop(i);
-            state.alive[i] = 0;
+            // R3-C3 (`EPOCH_73_V36`, the Hero rule): a rout destroys the whole chain, the living joined heroes too.
+            let mut gone = vec![i];
+            if seams.hero_attach && rule_on(seams.rules_epoch, EPOCH_73_V36) {
+                gone.extend(state.attached[i].iter().copied().filter(|&h| state.alive[h] > 0));
+            }
+            for &u in &gone {
+                drop_carried(state, u);
+                state.wounds[u].clear();
+                state.positions[u].clear();
+                Rc::make_mut(&mut state.radii)[u].clear();
+                state.kits_drop(u);
+                state.alive[u] = 0;
+                if u != i {
+                    shot.log.push(format!("Routed: {} is destroyed with {}", statics[state.roster.profile[u]].name, us.name));
+                }
+            }
         }
     }
 }
@@ -6505,10 +6533,10 @@ fn tray_charge_with_self_wounds(
     // the enemy's winner tally at EPOCH_73_V36 only.
     let mut scourge_on_charger = 0;
     let mut scourge_on_defender = 0;
-    if impact_first && next.alive[si] > 0 && next.alive[ti] > 0 {
+    if impact_first && side_up(next, si, seams) && next.alive[ti] > 0 {
         by_su += impact_phase(statics, next, si, ti, tray, shot, seams.rules_epoch, charge_from_in, seams.tray_exact);
     }
-    if counter_first && next.alive[si] > 0 && next.alive[ti] > 0 {
+    if counter_first && side_up(next, si, seams) && side_up(next, ti, seams) {
         let (c, rc, h, s) = strike_phase(statics, next, ti, si, false, 0.0, seams, tray, shot, StrikeSet::CounterOnly, cover);
         by_tu += c;
         by_su += rc;
@@ -6517,7 +6545,7 @@ fn tray_charge_with_self_wounds(
     }
     // main.gd:8276's alive gate — a counter phase that wiped the charger
     // closes the card, nothing left to roll.
-    if !impact_first && next.alive[si] > 0 && next.alive[ti] > 0 {
+    if !impact_first && side_up(next, si, seams) && next.alive[ti] > 0 {
         by_su += impact_phase(statics, next, si, ti, tray, shot, seams.rules_epoch, charge_from_in, seams.tray_exact);
     }
     // main.gd:8035 — the charger's Mark lands after Impact and before the
@@ -6535,7 +6563,12 @@ fn tray_charge_with_self_wounds(
         if (slot == 0) != charger_last {
             // :8079 — the charger strikes only while BOTH sides still stand;
             // an Impact pool that wiped the defender ends the melee here.
-            if next.alive[si] > 0 && next.alive[ti] > 0 {
+            if side_up(next, si, seams) && next.alive[ti] > 0 {
+                // R3-X2a (`EPOCH_73_V36`, lead ruling 2): the charger's host died in its Dangerous test, a joined hero stands.
+                if let Some(h) = next.attached[si].iter().copied().find(|&h| next.alive[h] > 0).filter(|_| next.alive[si] <= 0) {
+                    shot.log.push(format!("Hero: {} has no models left - {} charges on as the unit",
+                        statics[next.roster.profile[si]].name, statics[next.roster.profile[h]].name));
+                }
                 // B13: the defender's lash-back credits ITS OWN tally (by_tu).
                 let (c, rc, h, s) = strike_phase(statics, next, si, ti, true, charge_from_in, seams, tray, shot, StrikeSet::All, cover);
                 by_su += c;
@@ -6544,7 +6577,7 @@ fn tray_charge_with_self_wounds(
                 scourge_on_defender += s;
                 next.fatigued[si] = true;
             }
-        } else if next.alive[ti] > 0 && next.alive[si] > 0 {
+        } else if side_up(next, ti, seams) && side_up(next, si, seams) {
             // :8100 — and so does the strike-back, in both directions.
             // B13: the strike-back's lash-back credits the charger's tally.
             // MEL-PAR-B14 (`EPOCH_73_V36`, main.gd:10817-10823): a defender with no melee weapon at
@@ -6555,6 +6588,11 @@ fn tray_charge_with_self_wounds(
                     statics[next.roster.profile[ti]].name
                 ));
             } else {
+                // R3-C1 (`EPOCH_73_V36`, the Hero rule): the host's models are gone, a joined hero stands - it strikes back.
+                if let Some(h) = next.attached[ti].iter().copied().find(|&h| next.alive[h] > 0).filter(|_| next.alive[ti] <= 0) {
+                    shot.log.push(format!("Hero: {} has no models left - {} strikes back for the unit",
+                        statics[next.roster.profile[ti]].name, statics[next.roster.profile[h]].name));
+                }
                 let (c, rc, h, s) = strike_phase(statics, next, ti, si, false, 0.0, seams, tray, shot, strike_back_set, cover);
                 by_tu += c;
                 by_su += rc;
@@ -9486,7 +9524,9 @@ fn resolve_with(
                     // BEFORE these wounds land.
                     let alive_before = morale_alive(&next, si, seams);
                     let wounds_before = morale_wounds_left(&next, si, seams);
-                    land_wounds_with(&mut next, si, w, seams.tray_exact);
+                    // R3-X2a (`EPOCH_73_V36`, lead ruling 2): the surplus wounds the host's models cannot soak go on to the
+                    // joined hero (heroes last); below 73 `land_pool_wounds` drops them as before.
+                    land_pool_wounds(&mut next, si, w, seams.tray_exact, seams, &mut shot.log);
                     // main.gd:1096-1098 — a NON-charge activation tests morale for
                     // these wounds at its very END ("units in melee don't take
                     // morale tests from wounds at the end of an activation").
