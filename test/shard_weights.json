@@ -385,6 +385,7 @@
 "test/e2e/e2e_volley_morale_test.gd": 9.0,
 "test/e2e/e2e_volley_saves_owner_roll_test.gd": 17.0,
 "test/e2e/e2e_vs_mark_los_test.gd": 41.0,
+"test/e2e/e2e_w31_precision_base_test.gd": 12.0,
 "test/e2e/e2e_warding_test.gd": 12.0,
 "test/e2e/e2e_wave4_ebr_coordinate_test.gd": 33.0,
 "test/e2e/e2e_weapon_unstoppable_regen_test.gd": 16.0,
