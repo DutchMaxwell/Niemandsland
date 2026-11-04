@@ -1806,6 +1806,7 @@ mod v36_data;
 mod v36_dat_06fix;
 mod v36_dat_17a;
 mod v36_fab_c15;
+mod v36_g4r2_hero_spill;
 mod v36_melee;
 mod v36_melee_rows;
 mod v36_mor_10;
