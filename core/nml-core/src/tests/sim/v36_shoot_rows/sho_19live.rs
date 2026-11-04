@@ -10,7 +10,8 @@ use crate::state::Weapon;
 /// the game builds it: `build_for` over the shipped gf rule map.
 fn expert_line(rules_epoch: u32, gap_in: f64) -> (State, Vec<UnitStatic>) {
     let mut st = four_unit_line();
-    let mut expert = st.profiles.list[0].clone();
+    let base = st.profiles.list[0].clone();
+    let mut expert = base.clone();
     expert.name = "Expert".into();
     expert.game_system = "gf".into();
     expert.faction_folder = "watch_brothers".into();
@@ -23,9 +24,9 @@ fn expert_line(rules_epoch: u32, gap_in: f64) -> (State, Vec<UnitStatic>) {
     st.roster = Rc::new(Roster {
         keys: vec!["a".into(), "b".into()],
         index: ["a", "b"].iter().enumerate().map(|(i, k)| (k.to_string(), i)).collect(),
-        profile: vec![0, 0],
+        profile: vec![0, 1],
     });
-    st.profiles = Rc::new(Profiles { list: vec![expert.clone()], index: HashMap::new() });
+    st.profiles = Rc::new(Profiles { list: vec![expert.clone(), base], index: HashMap::new() });
     st.player = vec![0, 1];
     st.alive = vec![1, 1];
     st.attached = Rc::new(vec![vec![], vec![]]);
