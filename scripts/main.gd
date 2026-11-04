@@ -6113,6 +6113,14 @@ func _solo_sighted_count(shooter: GameUnit, target: GameUnit, range_in: int, ign
 	if shooter == null or target == null:
 		return 0
 	var _prof_sight_t0 := BattleSim.prof_t0()   # NML-1072: LOS/sight computation
+	# G4-T5 (EPOCH_73_V36): an OVAL base's circumscribed radius overstates the slack, so a shot the
+	# ruler refuses could pass. Measure the nearest real base-edge gap first; LOS and the per-model
+	# count below stay untouched.
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
+			and (_solo_unit_has_oval(shooter) or _solo_unit_has_oval(target)) \
+			and _solo_shoot_gap_in(shooter, target, INF) > float(range_in):
+		BattleSim.prof_mark("sight", _prof_sight_t0)
+		return 0
 	var target_positions: Array = []
 	var target_members: Array = [target]
 	if target.has_method("get_attached_heroes"):
@@ -6302,7 +6310,7 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 		# scaling by the per-model sighted count below still zeroes any profile no model can actually reach.
 		var member_dist: float = dist_in
 		if not melee and enemy != null and solo_controller != null:
-			member_dist = _solo_nearest_model_gap_in(member, enemy, dist_in)
+			member_dist = _solo_shoot_gap_in(member, enemy, dist_in)
 		# NML-929 — the SHOOTER-SIDE bonus belongs on this gate too: Royal Legion's +4" and the spell
 		# range tokens (both through SoloController.shooting_range_bonus) are what _solo_validate_target
 		# measured when it let the player DECLARE the shot, and what the AI volley folds into each shot's
@@ -6445,6 +6453,44 @@ func _solo_nearest_model_gap_in(member: GameUnit, enemy: GameUnit, fallback_in: 
 	# gate — one measuring truth (GF v3.5.1 p.4 "measure from the closest point").
 	var edge_slack_in: float = (_solo_unit_base_radius_m(member) + _solo_unit_base_radius_m(enemy)) / MoveIntent.INCHES_TO_METERS
 	return maxf(best - edge_slack_in, 0.0)
+
+
+## Whether the unit has at least one OVAL base among its live models (attached heroes included) — the
+## EPOCH_73_V36 switch that moves the shooting reach from the circumscribed circle to the real shape.
+func _solo_unit_has_oval(unit: GameUnit) -> bool:
+	if unit == null:
+		return false
+	var models: Array = unit.get_alive_models_with_attached() if unit.has_method("get_alive_models_with_attached") \
+		else unit.get_alive_models()
+	for m in models:
+		var mi := m as ModelInstance
+		if mi == null or mi.unit == null or mi.unit.unit_properties == null:
+			continue
+		var tough: int = int(mi.properties.get("tough", 0)) if mi.properties else 0
+		if bool(OPRArmyManager.effective_base_props(mi.unit.unit_properties, tough).get("base_is_oval", false)):
+			return true
+	return false
+
+
+## The shooting reach's DISTANCE truth at EPOCH_73_V36: the nearest base-edge gap between the models,
+## through the recorded base SHAPES (ovals included) like the core's `range_gap_in`. Below 73 and for an
+## all-round pair the circumscribed-slack read stands, so every recorded corpus replays byte-exact.
+func _solo_shoot_gap_in(a: GameUnit, b: GameUnit, fallback_in: float) -> float:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 \
+			or not (_solo_unit_has_oval(a) or _solo_unit_has_oval(b)):
+		return _solo_nearest_model_gap_in(a, b, fallback_in)
+	var a_models: Array = a.get_alive_models_with_attached() if a.has_method("get_alive_models_with_attached") else a.get_alive_models()
+	var b_models: Array = b.get_alive_models_with_attached() if b.has_method("get_alive_models_with_attached") else b.get_alive_models()
+	var best := INF
+	for am in a_models:
+		var ash := SeparationChecker.shape_for_model(am as ModelInstance)
+		if ash == null:
+			continue
+		for bm in b_models:
+			var bsh := SeparationChecker.shape_for_model(bm as ModelInstance)
+			if bsh != null:
+				best = minf(best, SeparationChecker.edge_distance(ash, bsh))
+	return maxf(best, 0.0) if best != INF else _solo_nearest_model_gap_in(a, b, fallback_in)
 
 
 # === Solo combat facets (goal 003 P3 — shared pure-module math: cover / hits / wounds / regen / tough) ===
@@ -14492,7 +14538,7 @@ func _solo_log_reach_shrink(attacker: GameUnit, target: GameUnit) -> void:
 				or not (member.source_data is OPRApiClient.OPRUnit):
 			continue
 		# Profiles that WOULD reach at the printed range — the ones the shrink then takes away.
-		var gap: float = _solo_nearest_model_gap_in(member, target, INF)
+		var gap: float = _solo_shoot_gap_in(member, target, INF)
 		for p in AiShooting.profiles_in_range((member.source_data as OPRApiClient.OPRUnit).weapons, gap):
 			var printed := float((p as Dictionary).get("range", 0))
 			if SoloController.effective_shoot_reach_in(printed, target) >= gap:
@@ -14560,7 +14606,7 @@ func _solo_log_range_bonus(attacker: GameUnit, target: GameUnit) -> void:
 		if spell_in > 0:
 			causes.append("spell +%d\"" % spell_in)
 		# Profiles that reach ONLY because of the bonus: out of reach at the printed range, in reach with it.
-		var gap: float = _solo_nearest_model_gap_in(member, target, INF)
+		var gap: float = _solo_shoot_gap_in(member, target, INF)
 		var lifted: PackedStringArray = []
 		for p in AiShooting.profiles_in_range((member.source_data as OPRApiClient.OPRUnit).weapons,
 				maxf(gap - float(bonus_in), 0.0)):
