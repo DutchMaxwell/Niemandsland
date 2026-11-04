@@ -2003,6 +2003,14 @@
      "needs_los": true
     }
    },
+   "Vanguard": {
+    "primitive": "Vanguard",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_in": 9.0
+    }
+   },
    "Versatile Attack": {
     "primitive": "Versatile Attack",
     "rated": false,
@@ -2503,6 +2511,14 @@
      "needs_los": true
     }
    },
+   "Vanguard": {
+    "primitive": "Vanguard",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_in": 9.0
+    }
+   },
    "Versatile Attack": {
     "primitive": "Versatile Attack",
     "rated": false,
@@ -2761,6 +2777,14 @@
     "params": {
      "vs_target": true,
      "needs_los": true
+    }
+   },
+   "Vanguard": {
+    "primitive": "Vanguard",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_in": 9.0
     }
    },
    "Versatile Attack": {
@@ -4131,6 +4155,14 @@
     "params": {
      "vs_target": true,
      "needs_los": true
+    }
+   },
+   "Vanguard": {
+    "primitive": "Vanguard",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_in": 9.0
     }
    },
    "Versatile Attack": {
@@ -6277,6 +6309,14 @@
      "grants": "Unpredictable Shooter"
     }
    },
+   "Vanguard": {
+    "primitive": "Vanguard",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_in": 9.0
+    }
+   },
    "Violent": {
     "primitive": "Shred",
     "rated": false,
@@ -7034,6 +7074,14 @@
     "params": {
      "vs_target": true,
      "needs_los": true
+    }
+   },
+   "Vanguard": {
+    "primitive": "Vanguard",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_in": 9.0
     }
    },
    "Versatile Attack": {
@@ -8718,6 +8766,14 @@
      "bonus_hits_per_six": 1
     }
    },
+   "Vanguard": {
+    "primitive": "Vanguard",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_in": 9.0
+    }
+   },
    "Takedown Strike": {
     "primitive": "Takedown",
     "rated": false,
@@ -9286,6 +9342,14 @@
     "params": {
      "advance_bonus_in": 3.0,
      "rush_bonus_in": 6.0
+    }
+   },
+   "Vanguard": {
+    "primitive": "Vanguard",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_in": 9.0
     }
    },
    "Unpredictable Fighter": {

@@ -122,6 +122,8 @@ For the full control reference, see the **Controls** section in [`README.md`](..
 2. In Niemandsland, open the left panel (☰) on your table, choose **Import OPR Army…** and paste the link.
 3. The game fetches the list via the OPR API and downloads the faction's 3D models from the asset CDN on first use (internet required; cached afterwards).
 
+The game plays OnePageRules **3.6** for Grimdark Future and Age of Fantasy (Firefight, Skirmish and Regiments still play 3.5.1). A book on other rules still imports, with a warning that names both versions; a save made on other rules, or a player on other rules in an online room, is refused.
+
 Each model appears on the table with its base size, wound counter, and status tokens. Units show coherency indicators and a docked info card.
 
 ---
@@ -135,7 +137,7 @@ rules like at a real table; either player can drop back to Manual at once. The r
 by hand) are shared on both screens.
 When the second player sits down, the host is asked once whether to play with rules automation; the
 **Rules** section of the left panel (shown once an army is imported) holds the switch, also for a hot-seat table with no AI.
-It supports **2 players** over LAN or the internet. Both players must run the **same version** — the version handshake will reject a mismatch.
+It supports **2 players** over LAN or the internet. Both players must run the **same version** and play the **same rules version** — the version handshake will reject a mismatch.
 
 **Host a game**
 
