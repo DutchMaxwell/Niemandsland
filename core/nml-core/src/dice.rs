@@ -960,6 +960,15 @@ pub fn resolve_volley_leg(
         if n <= 0 {
             continue; // main.gd:3163 — a silent weapon leaves before any die
         }
+        // G4R4 C-GRANTED-BANE (`EPOCH_73_V36`): a live "Bane when Shooting" grant makes this ranged weapon a Bane
+        // weapon for the volley (the table's `_solo_striker_has_bane`); the re-roll's log line names the book rule.
+        let granted_bane;
+        let p = if att.bane_grant && !p.bane {
+            granted_bane = ShootProfile { bane: true, bypass_regen: true, bane_alias: "Bane when Shooting".into(), ..p.clone() };
+            &granted_bane
+        } else {
+            p
+        };
         // --- to-hit, `profile_ev` ai_ev.gd:335-370's shooting branch ---
         // FEAT PR 2 — the once-per-game bonus shot strikes at its OWN
         // Quality (main.gd:3100: `"quality": int(tgd.get("quality", 2))`),
