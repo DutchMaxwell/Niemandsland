@@ -243,6 +243,56 @@ def shots_of(d: Path) -> dict[int, list[dict]]:
     return out
 
 
+#: AI-G4 H1b (lead ruling O3): the legs of an activation the core never rolls. The table rolls the cast die and
+#: the spell's own saves and morale inside the act; the core prices a cast as an expectation (sim.rs `cast_phase`),
+#: so the gate CUTS them. `dangerous` stays the core's. A roll without a `leg` (a recording from before H1a) is `main`.
+CUT_LEGS = ("cast", "spell")
+
+
+def read_pre(d: Path) -> dict[int, dict]:
+    """{activation ordinal: {unit id: {alive, shaken}}} from the `kind:"pre"` lines of acts.jsonl (H1a, epoch 73+)."""
+    out: dict[int, dict] = {}
+    for x in (d / "acts.jsonl").read_text().splitlines():
+        if '"pre"' in x:
+            r = json.loads(x)
+            if r.get("kind") == "pre":
+                out[int(r["act"])] = r["units"]
+    return out
+
+
+def patch_pre(plain: dict, units: dict) -> dict:
+    """`plain` after the cast leg: every unit in `units` cut down to its recorded alive count (models dropped from the
+    end of each per-model list) and carrying its recorded Shaken flag."""
+    out = dict(plain, units=dict(plain["units"]))
+    for uid, rec in units.items():
+        if uid not in out["units"]:
+            continue
+        u = dict(out["units"][uid], shaken=bool(rec["shaken"]))
+        a0, a = int(u["alive"]), int(rec["alive"])
+        if a < a0:
+            for f in ("wounds", "radii", "positions", "kits"):
+                if isinstance(u.get(f), list) and len(u[f]) == a0:
+                    u[f] = u[f][:a]
+            u["alive"] = a
+        out["units"][uid] = u
+    return out
+
+
+def cut_pre_legs(rolls: list[dict], plain: dict, pre: dict | None, burn: bool = True,
+                 patch: bool = True) -> tuple[list[dict], int, dict]:
+    """(the act's rolls without the cast/spell legs, draws to burn off the tray for them, `plain` after the leg).
+    Only a cast leg that LEADS the act is cut: a dangerous test (or any other roll) in front of it would make the core
+    draw between two stretches of one resolve, and a tray cannot be burned mid-resolve - such an act is left as
+    recorded. `burn` / `patch` False are the two RED mutants (`--red-pre noburn|nopatch`)."""
+    lead = 0
+    while lead < len(rolls) and rolls[lead].get("leg") in CUT_LEGS:
+        lead += 1
+    if lead == 0 or lead != sum(r.get("leg") in CUT_LEGS for r in rolls):
+        return rolls, 0, plain
+    draws = sum(max(1, int(r["count"])) for r in rolls[:lead]) if burn else 0
+    return rolls[lead:], draws, patch_pre(plain, pre or {}) if patch else plain
+
+
 def split_aim(head: dict, rec: list[dict], shoot_key: str, units: dict) -> tuple[list[dict] | None, str, int]:
     """The `split` aim for one act, or `(None, why, 0)` to stay pooled. The
     sidecar's target NAME becomes a unit key through the header profiles; a
@@ -354,7 +404,7 @@ def vintage_report_line(seen: set[tuple[bool, bool]]) -> str:
 
 def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: bool,
         hero_attach: str = "table", sighting: str = "unit",
-        engage_fold: str = "auto", cond_ap: str = "auto", inject: bool = True,
+        engage_fold: str = "auto", cond_ap: str = "auto", inject: bool = True, red_pre: str = "",
         movement: bool = False, red_move_rigid: bool = False) -> int:
     games = sorted(d for d in ref.iterdir() if d.is_dir() and (d / "dice.jsonl").exists())
     if limit:
@@ -370,7 +420,7 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
               "next_equal", "equal_over_2", "equal_dice_max", "split_fire",
               "full_equal_owner", "clean_acts", "clean_full_equal", "clean_both_silent",
               "split_injected", "split_reaim", "split_multi", "split_aligned",
-              "split_uncovered", "split_stale", "split_ambig", "split_full_equal")}
+              "split_uncovered", "split_stale", "split_ambig", "split_full_equal", "pre_cut", "pre_uncut")}
     unported: dict[str, int] = {}
     reasons: dict[str, int] = {}
     # D6a-B5: the SAME classifier over the acts the table did NOT split-fire on.
@@ -389,6 +439,7 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
         head, lines, dice, seed = read_game(d)
         burn = burn_prefix(dice)
         shots = shots_of(d)
+        pres = read_pre(d)
         core = nml_core.load(repo)
         if hero_attach == "off":
             head = detach_header(head)
@@ -451,14 +502,20 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
                 tally["split_" + aim_kind] += 1
             i0 = first_at_or_after(dice, k)
             plain = act["state"] if hero_attach == "table" else detach(act["state"])
+            # AI-G4 H1b: the cast/spell legs are cut, their dice burned, the state patched from the `pre` line.
+            rolls_k = [r for r in dice[i0:] if int(r["act"]) == k]
+            rolls_cut, pre_burn, plain = cut_pre_legs(rolls_k, plain, pres.get(k), red_pre != "noburn",
+                                                      red_pre != "nopatch")
+            tally["pre_cut"] += len(rolls_cut) < len(rolls_k)
+            tally["pre_uncut"] += len(rolls_cut) == len(rolls_k) and any(r.get("leg") in CUT_LEGS for r in rolls_k)
             state = core.state_of(plain)
             # `--red-misseed` moves the tray one seed over. Every count and
             # every target still comes out of the same state, so the SHAPE holds
             # and the comparison reaches the faces — which is exactly what has
             # to go red, and what `--mode off` (no dice at all) cannot prove.
             tray = nml_core.Tray(seed + 1 if mode == "misseed" else seed)
-            if burn[i0]:
-                tray.roll(burn[i0])
+            if burn[i0] + pre_burn:
+                tray.roll(burn[i0] + pre_burn)
             try:
                 if mode in ("table", "misseed"):
                     nxt, report = core.resolve_with_tray(state, action, nml_core.Rng(0), tray)
@@ -480,7 +537,7 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
             tgt_owner = "AI (%s)" % head["profiles"][action["shoot"]]["name"] \
                 if action["shoot"] in head["profiles"] else None
             split = bool(tgt_owner and any(r["roll_kind"] == "defense" and r["owner"] != tgt_owner
-                                           for r in dice[i0:] if int(r["act"]) == k))
+                                           for r in rolls_cut))
             tally["split_fire"] += split
 
             # `owner` rides along as the FIFTH slot and is deliberately NOT
@@ -496,7 +553,7 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
             # Regeneration/morale roll inside this window still reads "attack"
             # against the port's own still-blanket kind.
             want = [(combat_kind(r["roll_kind"]), r["count"], r["target"], r["faces"], r["owner"])
-                    for r in dice[i0:] if int(r["act"]) == k]
+                    for r in rolls_cut]
             if not split:
                 tally["clean_acts"] += 1
             if not got and not want:
@@ -637,6 +694,8 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
              tally["split_ambig"], tally["split_full_equal"]))
     print("  first field to part: %s" % (
         ", ".join("%s=%d" % kv for kv in sorted(reasons.items())) or "none"))
+    print("  pre   : %d acts with the table's cast/spell leg cut%s; %d left uncut (a roll in front of the leg)"
+          % (tally["pre_cut"], " [RED: %s]" % red_pre if red_pre else "", tally["pre_uncut"]))
     print("  split-fire: %d/%d acts where the table saved dice under a unit that is NOT "
           "the recorded shoot target" % (tally["split_fire"], tally["acts"]))
     # The same two numbers over the acts split fire did NOT touch — the only
@@ -736,10 +795,13 @@ def main(argv: list[str]) -> int:
                          "action's `split` (the core then resolves one tray volley per target "
                          "group, in the table's order). 'off' is the BEFORE control on the same "
                          "binary — every act stays pooled on the recorded shoot key")
+    ap.add_argument("--red-pre", choices=("noburn", "nopatch"), default="",
+                    help="AI-G4 H1b RED PROOF for the cast/spell cut: 'noburn' cuts the rolls but leaves their dice "
+                         "on the tray (the faces must part), 'nopatch' keeps the pre-spell state (the count must part)")
     a = ap.parse_args(argv)
     mode = "misseed" if a.red_misseed else a.mode
     return run(Path(a.ref).expanduser(), a.repo, mode, a.limit, a.verbose, a.report_only,
-               a.hero_attach, a.sighting, a.engage_fold, a.cond_ap, a.inject == "on",
+               a.hero_attach, a.sighting, a.engage_fold, a.cond_ap, a.inject == "on", a.red_pre,
                a.movement or a.red_move_rigid, a.red_move_rigid)
 
 

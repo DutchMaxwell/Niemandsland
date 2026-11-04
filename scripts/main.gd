@@ -4558,6 +4558,7 @@ func _run_ai_shooting(report: Dictionary) -> void:
 			# Wave 5: an expended Limited weapon no longer shoots (core v3.5.1: once per game); a
 			# unit-level Shred grant marks every weapon profile (the weapon facet is already parsed).
 			if bool(prof.get("limited", false)) and solo_controller.is_limited_used(member, prof):
+				_solo_log_limited_spent(member, prof)
 				continue
 			if RulesRegistry.unit_rule_active(member, "Shred") \
 					or _solo_shred_facet_applies(member, base_range):
@@ -4618,6 +4619,13 @@ func _solo_log_no_volley(unit: GameUnit, report: Dictionary, why: String) -> voi
 		if int(report.get("action", 0)) == AiDecision.Action.HOLD else ""
 	battle_log.log_event(BattleLog.Category.COMBAT, "%s: no volley — %s%s" % [
 		unit.get_name(), why, hold_note], true)
+
+
+## Limited (once per game): a volley leaves out a weapon that already fired — the log names the book rule.
+func _solo_log_limited_spent(member: GameUnit, prof: Dictionary) -> void:
+	if battle_log != null and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		battle_log.log_event(BattleLog.Category.COMBAT, "Limited: %s's %s is used up — once per game" % [
+			member.get_name(), str(prof.get("name", "?"))], true)
 
 
 ## Resolve-first priority of a shot (GF v3.5.1 p.14): Takedown before Deadly before the rest. sort_custom
@@ -7790,18 +7798,41 @@ func _solo_armor_rating(target: GameUnit) -> int:
 	return _solo_unit_rating(target, "Armor")
 
 
+## G4-T2 (EPOCH_73_V36, lead ruling O2): which member of a joined chain currently holds its models —
+## the unit itself while it has alive models, else the first alive attached hero, else null. Below 73
+## the old host read stands so every recorded corpus replays byte-exact.
+func _solo_defense_holder(unit: GameUnit) -> GameUnit:
+	if unit == null:
+		return null
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return unit
+	if unit.get_alive_count() > 0:
+		return unit
+	for hero in unit.get_attached_heroes():
+		if hero is GameUnit and (hero as GameUnit).get_alive_count() > 0:
+			return hero
+	return null
+
+
 ## The unit's Defense after Armor(X) ("counts as having Defense X+", best-of — AiCombatMath.armored_defense,
-## the same math the EV context uses). Equals get_defense() for unarmored units.
+## the same math the EV context uses). Equals get_defense() for unarmored units. Reads the chain member
+## that actually holds the models (G4-T2): a dead host with a living hero saves on the hero's Defense.
 func _solo_armored_defense(target: GameUnit) -> int:
-	return AiCombatMath.armored_defense(target.get_defense(), _solo_armor_rating(target))
+	var holder: GameUnit = _solo_defense_holder(target)
+	if holder == null:
+		return 0
+	return AiCombatMath.armored_defense(holder.get_defense(), _solo_armor_rating(holder))
 
 
 ## Battle-log Armor(X) when it actually improves the working Defense (visible rule application, wave 5).
 func _solo_log_armor(target: GameUnit) -> void:
-	var armored: int = _solo_armored_defense(target)
-	if armored != target.get_defense() and battle_log != null:
+	var holder: GameUnit = _solo_defense_holder(target)
+	if holder == null:
+		return
+	var armored: int = _solo_armored_defense(holder)
+	if armored != holder.get_defense() and battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s has Armor(%d): counts as Defense %d+" % [
-			target.get_name(), _solo_armor_rating(target), armored], true)
+			holder.get_name(), _solo_armor_rating(holder), armored], true)
 
 
 ## Compose two to-hit-modifier note fragments ("Stealth -1" + "Indirect moved -1") into one log note.
@@ -10874,8 +10905,10 @@ func _solo_clear_auto_fan() -> void:
 func _solo_log_save_threshold(defender: GameUnit, defense: int, ap: int) -> void:
 	if battle_log == null:
 		return
+	var holder: GameUnit = _solo_defense_holder(defender)
+	var named: GameUnit = holder if holder != null else defender
 	battle_log.log_event(BattleLog.Category.COMBAT, "%s saves on %s" % [
-		defender.get_name(), save_threshold_text(defense, ap)], true)
+		named.get_name(), save_threshold_text(defense, ap)], true)
 
 
 ## The save-threshold text. A bare "7+" reads as impossible on a d6 (community #173) —
