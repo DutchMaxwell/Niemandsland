@@ -2840,6 +2840,14 @@
      "all_models": true
     }
    },
+   "Quick Throw": {
+    "primitive": "Indirect",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "los_needs_hold": false
+    }
+   },
    "Ranged Slayer": {
     "primitive": "Slayer",
     "rated": false,
@@ -3075,6 +3083,14 @@
      "hit_per_marker": 1
     }
    },
+   "Quick Throw": {
+    "primitive": "Indirect",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "los_needs_hold": false
+    }
+   },
    "Rapid Charge": {
     "primitive": "Fast",
     "rated": false,
@@ -3227,6 +3243,14 @@
     "params": {
      "reroll_save_sixes": true,
      "bypass_regen": true
+    }
+   },
+   "Bounding": {
+    "primitive": "Bounding",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_d3_plus": 1
     }
    },
    "Breath Attack": {
