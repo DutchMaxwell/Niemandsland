@@ -760,6 +760,14 @@ fn combined_alive(state: &State, i: usize, seams: Seams) -> i64 {
         }
 }
 
+/// Rules 3.6 (`EPOCH_73_V36`) — Blast(X) caps by the table's `_solo_combined_alive(target)`: the host's living
+/// models PLUS every living joined hero. Stamped beside `models`, which stays the host's own count.
+fn stamp_blast_models(def: &mut Ctx, state: &State, ti: usize, seams: Seams) {
+    if rule_on(seams.rules_epoch, EPOCH_73_V36) {
+        def.blast_models = Some(combined_alive(state, ti, seams));
+    }
+}
+
 /// BLOCK B3 — the breath-weapon primitive on the tray path's pre-attack slot,
 /// right after Mend: `_solo_apply_breath_attack` main.gd:5262-5330. Official
 /// text: "Once per activation, before attacking, pick one enemy unit within
@@ -1259,6 +1267,7 @@ pub(crate) fn tray_strafing(
     let d = modifier_distance_in(next, si, target, seams);
     let ut = &statics[next.roster.profile[target]];
     let mut def = with_modifier_sum(with_cond_ap_state(ctx_live(ctx_of(ut, next, target), statics, next, target, false, seams.rules_epoch), statics, next, target, seams), seams.rules_epoch);
+    stamp_blast_models(&mut def, next, target, seams);
     // D-STEALTH — the strafe volley reads the defender's live context the
     // same way the table's `_solo_resolve_ai_volley` does (main.gd:3007), so
     // the def build carries the same terrain gate.
@@ -3792,9 +3801,9 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
         c.slayer_grant = grants && mods::granted(state, i, "Slayer");
         c.surge_grant = grants && mods::granted(state, i, "Enhanced Primal");
         c.versatile_grant = grants && mods::granted(state, i, "Versatile Attack");
-        c.versatile_no_gate = rule_on(rules_epoch, EPOCH_73_V36)
-            && grants
-            && mods::granted(state, i, "Enhanced Watchborn");
+        // The live grant only ADDS to the static Expert flag (`unit::ctx_for`); assigning would drop it.
+        c.versatile_no_gate = c.versatile_no_gate
+            || (rule_on(rules_epoch, EPOCH_73_V36) && grants && mods::granted(state, i, "Enhanced Watchborn"));
         c.pierce_shooting_grant = grants && mods::granted(state, i, "AP(+1) when shooting");
         c.pierce_melee_grant = grants && mods::granted(state, i, "AP(+1) in melee");
         // EPOCH 23 INERT MARKS (MARK_FAMILY_SWEEP_2026-09-14 finding 1): the
@@ -4034,6 +4043,10 @@ pub fn ctx_live_vs(
     c.furious = c.furious || mods::granted_vs(state, target, "Furious");
     c.relentless_grant = c.relentless_grant || mods::granted_vs(state, target, "Relentless");
     c.shred_grant = c.shred_grant || mods::granted_vs(state, target, "Shred");
+    // G4R3 F-SURGE-GRANT (EPOCH_73_V36): a spell's once-grant of Surge to the target's attackers (the table's
+    // `_solo_bridge_granted_flags`) pays like the Surge mark; the exchange spends the record.
+    c.surge_mark_grant = c.surge_mark_grant
+        || (rule_on(rules_epoch, EPOCH_73_V36) && mods::granted_vs(state, target, "Surge"));
     c
 }
 
@@ -5679,6 +5692,7 @@ fn strike_phase(
     if rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) {
         def.parry_dice_total = Some(parry_dice_total(statics, next, ti));
     }
+    stamp_blast_models(&mut def, next, ti, seams);
     // D-STEALTH — the def build's terrain gate (the melee leg consumes the
     // same closed alias the shooting fold does).
     stealth_alias_terrain_gate(statics, next, ti, cover, &mut def);
@@ -6530,6 +6544,17 @@ fn combat_unit(state: &State, ti: usize, seams: Seams) -> usize {
         Some(h) if state.alive[h] > 0 => h,
         _ => ti,
     }
+}
+
+/// G4-C11 (`EPOCH_73_V36`) — a charge NAMED at a host with no models left while a joined hero lives: the chain's models are
+/// the hero's now (the Hero rule: the hero is the unit once its host is gone, and the table's `_solo_combined_alive`
+/// still counts the unit), so the melee, which guards on `alive[ti]`, runs against the first living attached hero.
+/// `None` for every other target.
+fn lone_hero_of(state: &State, ti: usize, seams: Seams) -> Option<usize> {
+    if !seams.hero_attach || !rule_on(seams.rules_epoch, EPOCH_73_V36) || state.alive[ti] > 0 {
+        return None;
+    }
+    state.attached[ti].iter().copied().find(|&h| state.alive[h] > 0)
 }
 
 /// `BattleSim._unit_group` battle_sim.gd:528-547 as a membership test — is unit
@@ -8859,16 +8884,9 @@ fn resolve_with(
     // resolved. It rides here rather than at the melee branch because `ci` is
     // also the spacing clamp's body-only group (`spacing_fraction`), and GF
     // v3.5.1 p.7 exempts the enemy UNIT, which p.14 says includes its hero.
-    let ci = if charge_key.is_empty() {
-        None
-    } else {
-        state
-            .roster
-            .index
-            .get(charge_key.as_str())
-            .copied()
-            .map(|c| combat_unit(state, c, seams))
-    };
+    let named = state.roster.index.get(charge_key.as_str()).copied().filter(|_| !charge_key.is_empty());
+    let lone = named.and_then(|c| lone_hero_of(state, c, seams).map(|h| (c, h)));
+    let ci = lone.map(|(_, h)| h).or_else(|| named.map(|c| combat_unit(state, c, seams)));
     let pi_s = state.roster.profile[si];
     let mut next = state.clone();
     let was_shaken = next.shaken[si];
@@ -9235,7 +9253,15 @@ fn resolve_with(
     // the cast/shoot/melee/hit-and-run tail below, to where main.gd:1092-1098
     // actually rolls the END-of-activation test — not here.
     let mut dangerous_morale_due: Option<(i64, i64)> = None;
-    if moved && !seams.no_dangerous {
+    // F-DANG-HOLD (`EPOCH_73_V36`, ruling D2): the book's Dangerous Terrain test also fires for a unit that
+    // ACTIVATES in it, a Hold included. The table asks for it whenever the activation moved nothing
+    // (`_dangerous_standing_counts` solo_controller.gd:5943: Aircraft and reserve skip it, Flying is
+    // guarded in `dangerous_dice`). Below 73 only a move tests.
+    let activated_in_it = !moved
+        && rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36)
+        && !next.aircraft[si]
+        && !next.dormant[si];
+    if (moved || activated_in_it) && !seams.no_dangerous {
         if let Some((tray, shot)) = dice.as_mut() {
             let n = dangerous_dice(statics, state, &next, si, seams, landing.as_ref(), cover, shot);
             if n > 0 {
@@ -9625,6 +9651,7 @@ fn resolve_with(
                             let precision_hit = precision_markers_spend(&mut next, g.ti, seams.rules_epoch, &mut shot.log);
                             let ut_g = &statics[next.roster.profile[g.ti]];
                             let mut def = with_modifier_sum(with_cond_ap_state(ctx_live(ctx_of(ut_g, &next, g.ti), statics, &next, g.ti, false, seams.rules_epoch), statics, &next, g.ti, seams), seams.rules_epoch);
+                            stamp_blast_models(&mut def, &next, g.ti, seams);
                             // D-STEALTH — the def build's terrain gate: the alias
                             // applies only while the TARGET stands within 1" of
                             // terrain (per model, the majority fold).
@@ -9650,13 +9677,30 @@ fn resolve_with(
                                 let mut msc = Scratch::default();
                                 msc.rules_epoch = seams.rules_epoch;
                                 msc.bearers_last = seams.casualties_bearers_last;
+                                // G4R3 F-HERO-RANGE (EPOCH_73_V36): range is per MODEL — a joined hero's weapons
+                                // are gated by the hero's own nearest gap (the host's `g.d` below 73 and for the host).
+                                let hero_own_gap = mi != si && rule_on(seams.rules_epoch, EPOCH_73_V36);
+                                let dm = if !hero_own_gap {
+                                    g.d
+                                } else if seams.range_by_base_edge || plan.is_some() {
+                                    range_gap_in(&next, &next.positions[mi], mi, g.ti)
+                                } else {
+                                    geom::dist_in(&next.positions[mi], &next.positions[g.ti])
+                                };
                                 if seams.sighting {
                                     sighted_profiles_of(
-                                        um, &next, statics, mi, g.ti, &zones, g.d, kind == HOLD, &mut msc,
+                                        um, &next, statics, mi, g.ti, &zones, dm, kind == HOLD, &mut msc,
                                     );
                                 } else {
-                                    profiles_of(um, next.alive[mi], g.d, &mut msc);
+                                    profiles_of(um, next.alive[mi], dm, &mut msc);
                                     shoot_bearers_rescale(um, &next, mi, seams.rules_epoch, &mut msc);
+                                }
+                                if hero_own_gap && dm < g.d {
+                                    // Rules-must-log: the hero's own gap kept a weapon the host's gap would have dropped.
+                                    let mark = if mods::granted_vs(&next, g.ti, "+6\" shooting range") { INCREASED_SHOOTING_RANGE_MARK_IN } else { 0.0 };
+                                    for p in msc.keep.iter().map(|&k| &um.shoot[k]).filter(|p| p.range as f64 + p.reach_bonus_in + mark < g.d) {
+                                        shot.log.push(format!("Shooting Range: {} fires {} from its own base, {dm:.1}\" away", um.name, p.name));
+                                    }
                                 }
                                 if rule_on(seams.rules_epoch, EPOCH_73_V36) {
                                     // Limited: the log names the book rule for each spent weapon the volley leaves out.
@@ -9698,6 +9742,13 @@ fn resolve_with(
                                 // (main.gd:7650/:5773-5775) — a HOLD act never
                                 // moves, an ADVANCE/RUSH did.
                                 let mut att = ctx_live_vs(ctx_of(um, &next, mi), statics, &next, mi, g.ti, false, seams.rules_epoch);
+                                // Rules-must-log (F-SURGE-GRANT): the grant names the book rule and the spell.
+                                if rule_on(seams.rules_epoch, EPOCH_73_V36) && !msc.keep.is_empty() {
+                                    let grant = next.buffs[g.ti].iter().find(|r| r.attackers && &*r.grants_rule == "Surge");
+                                    if let Some(r) = grant {
+                                        shot.log.push(format!("Surge: {} against {} — granted by {}, once", um.name, ut_g.name, r.name));
+                                    }
+                                }
                                 // FEAT PR 3 — the latch feats' volley read
                                 // (design §4 PRs 3+4): a bearer fires at its
                                 // FIRST qualifying attack while unspent —
@@ -9725,6 +9776,7 @@ fn resolve_with(
                                 }
                                 att.moved_this_round = moved;
                                 att.held = kind == HOLD;
+                                att.member_gap_in = hero_own_gap.then_some(dm);
                                 parts.push((mi, msc, att));
                             }
                             // FEAT PR 2 — the deferred stamp: the unspent
@@ -9944,6 +9996,12 @@ fn resolve_with(
                 // (`tray_morale`) — no morale draw is left standing, verified by
                 // replay.
                 if let Some((tray, shot)) = dice.as_mut() {
+                    if let Some((host, hero)) = lone {
+                        shot.log.push(format!(
+                            "Hero: {} has no models left - {} is the unit now",
+                            statics[next.roster.profile[host]].name, statics[next.roster.profile[hero]].name
+                        ));
+                    }
                     // EPOCH_22_SCREENED_MELEE — the pre-charge gap, measured the
                     // table's own way on the PRE-move snapshot
                     // (`report["charge_from_in"]`, solo_controller.gd:2329).

@@ -392,6 +392,27 @@ func test_charge_illegal_plain_is_a_pure_function_of_the_capture() -> void:
 	assert_bool(BattleSim.charge_illegal_plain(board, forest, "A", "B", 10.0)).is_false()
 
 
+## G4-T8 twin of SoloController._charge_capped_by_difficult: forest under the TARGET's base only, the
+## charger's leg (gap 6.5") open -> from epoch 73 the plain gate probes to the contact point and lets it
+## through; below 73 it still probes to the target's centre and caps it.
+func test_charge_illegal_plain_probes_to_the_contact_point_from_epoch_73() -> void:
+	var board := {"units": {
+		"A": {"positions": [[0.0, 0.0, 0.0]], "alive": 1, "player": 1, "aircraft": false,
+			"bands": {"advance": 6.0, "rush": 12.0}, "charge_probe_r": 0.016, "charge_no_difficult": false},
+		"B": {"positions": [[7.76 * IN2M, 0.0, 0.0]], "alive": 1, "player": 2, "aircraft": false,
+			"bands": {"advance": 6.0, "rush": 12.0}, "charge_probe_r": 0.016, "charge_no_difficult": false}}}
+	var under_target := {"terrain_at": func(p: Vector3) -> int:
+		return TerrainRules.TerrainType.FOREST if p.x >= 7.56 * IN2M else TerrainRules.TerrainType.NONE}
+	var epoch0: int = AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	var at73: bool = BattleSim.charge_illegal_plain(board, under_target, "A", "B", 6.5)
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36 - 1
+	var at72: bool = BattleSim.charge_illegal_plain(board, under_target, "A", "B", 6.5)
+	AiActRecorder.rules_epoch = epoch0
+	assert_bool(at73).is_false()
+	assert_bool(at72).is_true()
+
+
 ## NML-1073 M2-5b: a hero that FALLS stops lending its rules to the unit it
 ## joined. `AiEv.rule_on_all_models` (ai_ev.gd:79-83) only asks the ALIVE
 ## attached heroes, so the host GAINS every unit-wide rule the dead hero lacked

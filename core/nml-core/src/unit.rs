@@ -107,6 +107,9 @@ impl ShieldedAlias {
 /// (battle_sim.gd:701-712) writes over the template per call.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Ctx {
+    /// G4R3 F-HERO-RANGE (`EPOCH_73_V36`): a joined hero's own nearest gap to the volley target, set at the
+    /// volley seam; the resolver's range test reads it in place of the volley distance. `None` = the volley's own.
+    pub member_gap_in: Option<f64>,
     pub quality: i64,
     pub defense: i64,
     pub morale_bonus: i64,
@@ -338,6 +341,11 @@ pub struct Ctx {
     /// the joined heroes too. `None` = not stamped (the hand-built dice
     /// fixtures), which keeps the old `parry_dice * models` read.
     pub parry_dice_total: Option<i64>,
+    /// Rules 3.6 (`EPOCH_73_V36`) — the models a Blast(X) multiplies onto: the host's living models PLUS
+    /// its living joined heroes (the table's `_solo_combined_alive`), stamped by `sim::stamp_blast_models`
+    /// on the shot's defender context. `models` stays the host's own count for every other reader.
+    /// `None` = not stamped (below 73, hand-built dice fixtures): Blast reads `models` as before.
+    pub blast_models: Option<i64>,
     pub regeneration: bool,
     pub regen_target: i64,
     /// Block B10 — the SPELL-wound twin (`main._solo_regen_pick`'s
@@ -3405,6 +3413,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         if evasive_boost.is_empty() { "Evasive" } else { evasive_boost },
         &format!("{}: Evasive stamped, -1 to hit", p.name));
     Ctx {
+        member_gap_in: None,
         quality: p.quality,
         defense: armored_defense(p.defense, armor),
         morale_bonus,
@@ -3559,6 +3568,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         brace_impact_per_model: brace.map(|b| b.1),
         parry_dice,
         parry_dice_total: None,
+        blast_models: None,
         regeneration: regen_targets.0 > 0,
         regen_target: regen_targets.0,
         regen_target_spell: regen_targets.1,
@@ -7197,6 +7207,8 @@ impl UnitStatic {
                 }
                 match n.as_str() {
                     "Watchborn" | "Vinci Tech" => name = Some(n.clone()),
+                    // The pick's log line names the BOOK rule, as the table's `primitive_book_name` does.
+                    "Versatile Expert" if rule_on(rules_epoch, EPOCH_73_V36) => name = Some(n.clone()),
                     "Enhanced Vinci Tech" => boost = true,
                     _ => {}
                 }
