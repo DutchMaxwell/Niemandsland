@@ -684,10 +684,25 @@ static func _terrain_line(terrain_cb: Callable, school_world: Dictionary = {}) -
 	# has no per-move half-extents to apply that offset with, only the overlay.
 	var walls: Array = MoveRecorder._flatten(ov.get_wall_segments_world()) \
 		if ov.has_method("get_wall_segments_world") else []
-	return {"cells": cells, "sandbox": sandbox, "walls": walls,
+	var line := {"cells": cells, "sandbox": sandbox, "walls": walls,
 		"cell_params": {"table_size_feet": [ov.table_size_feet.x, ov.table_size_feet.y],
 			"grid_rotation_degrees": float(ov.grid_rotation_degrees),
 			"grid_size_inches": ov.GRID_SIZE_INCHES, "inches_to_meters": ov.INCHES_TO_METERS}}
+	if rules_epoch >= EPOCH_73_V36:
+		line["containers"] = _container_boxes(ov)
+	return line
+
+
+## F-CONT (rules 3.6, EPOCH_73_V36, lead ruling D5): the placed containers' exact 6x3 boxes `{c, he, yaw}` in world
+## metres — `TerrainOverlay._blocker_obbs`, the list the table's sight keeps while it drops the painted cells under
+## each box. The core (sight.rs `zones_of_at`) builds a solid 2.5" volume from them. An overlay without the list = [].
+static func _container_boxes(ov: Object) -> Array:
+	var out: Array = []
+	for ob in (ov.get("_blocker_obbs") if "_blocker_obbs" in ov else []):
+		var c: Vector2 = ob["c"]
+		var he: Vector2 = ob["he"]
+		out.append({"c": [c.x, c.y], "he": [he.x, he.y], "yaw": float(ob["yaw"])})
+	return out
 
 
 ## NML-1073 M3-0: core_selfplay has no TerrainOverlay node — its board is a

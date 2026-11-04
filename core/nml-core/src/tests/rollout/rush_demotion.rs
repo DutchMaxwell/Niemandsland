@@ -107,6 +107,7 @@ fn menu_h(header: &str, plain: &str, epoch: u32) -> Vec<Candidate> {
         ],
         sandbox: Vec::<crate::terrain::Obb>::new(),
         pieces: vec![],
+        containers: Vec::new(),
         walls: vec![],
         cell_params: crate::terrain::CellParams {
             table_size_feet: [6.0, 4.0],
