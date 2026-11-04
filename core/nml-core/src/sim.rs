@@ -9920,7 +9920,7 @@ fn resolve_with(
                                 }
                                 // G4R4 C-GRANTED-RANGE: a live spell grant's reach kept a weapon the static reach would drop.
                                 let (granted, granted_rule) = granted_reach(um, &next, mi);
-                                for p in msc.keep.iter().map(|&k| &um.shoot[k]).filter(|p| granted > 0.0 && (p.range as f64) + p.reach_bonus_in < dm) {
+                                for _ in msc.keep.iter().map(|&k| &um.shoot[k]).filter(|p| granted > 0.0 && (p.range as f64) + p.reach_bonus_in < dm) {
                                     shot.log.push(format!("{granted_rule}: {} gains +{granted:.0}\" reach on {}", um.name, ut_g.name));
                                 }
                                 if rule_on(seams.rules_epoch, EPOCH_73_V36) {
