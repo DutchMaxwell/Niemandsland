@@ -5283,7 +5283,7 @@ fn sighted_profiles_of(
         let lost = p.indirect_los_needs_hold && !held; // Rules 3.6 (SHO-01a): the waiver needs Hold
         let seen = sight::sighted_count(state, zones, &blockers, mi, ti, reach,
             (p.indirect && p.indirect_ignores_los.unwrap_or(true) && !lost) || mark_indirect,
-            rule_on(sc.rules_epoch, EPOCH_66_DISTANCE_TRUTH));
+            rule_on(sc.rules_epoch, EPOCH_66_DISTANCE_TRUTH), sc.rules_epoch);
         if lost && !mark_indirect {
             trace_rule("volley", "Indirect",
                 &format!("{} did not Hold: {} needs line of sight", statics[state.roster.profile[mi]].name, p.name));
@@ -9438,7 +9438,7 @@ fn resolve_with(
                     // coarse grid line between the two centres, which refused a shot the outer models see past
                     // a forest. The EV half runs the same gate, so the search now prices that shot too.
                     Cover::Board(t) if t.is_valid() && rule_on(sc.rules_epoch, EPOCH_73_V36) => {
-                        sight::unit_sees(&next, &board_zones(t, seams.shelf_sight, seams.rules_epoch), si, ti)
+                        sight::unit_sees(&next, &board_zones(t, seams.shelf_sight, seams.rules_epoch), si, ti, sc.rules_epoch)
                     }
                     Cover::Board(t) if t.is_valid() => !t.los_blocked_at(
                         geom::centre(&next.positions[si]),

@@ -50,7 +50,7 @@ use super::super::*;
         let (next, _) = sho_par_f3_volley(&terrain, crate::acts::EPOCH_72_PLAYTEST_RULES);
         assert!((next.positions[0][0][0] / IN2M).abs() < 1e-6, "the shooter advanced to x = 0");
         assert!(terrain.los_blocked(geom::centre(&next.positions[0]), geom::centre(&next.positions[2])));
-        assert!(crate::sight::unit_sees(&next, &crate::sight::zones_of(&terrain), 0, 2));
+        assert!(crate::sight::unit_sees(&next, &crate::sight::zones_of(&terrain), 0, 2, crate::acts::EPOCH_72_PLAYTEST_RULES));
     }
 
     /// RED on main: the moved shooter rolled nothing, although two of its models see the target past the wood.
