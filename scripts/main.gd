@@ -4558,6 +4558,7 @@ func _run_ai_shooting(report: Dictionary) -> void:
 			# Wave 5: an expended Limited weapon no longer shoots (core v3.5.1: once per game); a
 			# unit-level Shred grant marks every weapon profile (the weapon facet is already parsed).
 			if bool(prof.get("limited", false)) and solo_controller.is_limited_used(member, prof):
+				_solo_log_limited_spent(member, prof)
 				continue
 			if RulesRegistry.unit_rule_active(member, "Shred") \
 					or _solo_shred_facet_applies(member, base_range):
@@ -4618,6 +4619,13 @@ func _solo_log_no_volley(unit: GameUnit, report: Dictionary, why: String) -> voi
 		if int(report.get("action", 0)) == AiDecision.Action.HOLD else ""
 	battle_log.log_event(BattleLog.Category.COMBAT, "%s: no volley — %s%s" % [
 		unit.get_name(), why, hold_note], true)
+
+
+## Limited (once per game): a volley leaves out a weapon that already fired — the log names the book rule.
+func _solo_log_limited_spent(member: GameUnit, prof: Dictionary) -> void:
+	if battle_log != null and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		battle_log.log_event(BattleLog.Category.COMBAT, "Limited: %s's %s is used up — once per game" % [
+			member.get_name(), str(prof.get("name", "?"))], true)
 
 
 ## Resolve-first priority of a shot (GF v3.5.1 p.14): Takedown before Deadly before the rest. sort_custom

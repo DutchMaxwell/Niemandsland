@@ -904,6 +904,12 @@ static func _ledger_of(u: GameUnit) -> Dictionary:
 			feats.append(tn)
 	if not feats.is_empty():
 		ledger["feats_used"] = feats
+	# G4-H-LIM (EPOCH_73_V36) — the once-per-game LIMITED ledger: the weapon names this unit has already
+	# fired (unit_properties["limited_used"], SoloController.mark_limited_used). The table skips a spent
+	# weapon (main.gd _run_ai_shooting); without the names the core prices and rolls it again.
+	var spent_limited: Array = u.unit_properties.get("limited_used", [])
+	if rules_epoch >= EPOCH_73_V36 and not spent_limited.is_empty():
+		ledger["limited_used"] = spent_limited.duplicate()
 	var markers := 0
 	for e in RulesRegistry.unit_rules_of_primitive(u, "Growth Markers"):
 		var rn := str((e as Dictionary)["name"]).to_snake_case()
