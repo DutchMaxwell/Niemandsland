@@ -71,6 +71,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import subprocess
 import sys
 import time
@@ -226,6 +227,30 @@ def defender_state(plain: dict, key: str) -> tuple[int, int]:
     return (int(u["alive"]), int(sum(u["wounds"])))
 
 
+def lone_hero_names(plain: dict, profiles: dict) -> dict[str, str]:
+    """A LONE attached hero's NAME -> its HOST's name (G4-H6): the table signs
+    the save with the host's label (G4-T2), the core with the hero's own. A
+    lone hero's `attached_to` host has no living models; the hero still has."""
+    units, out = plain.get("units") or {}, {}
+    for key, u in units.items():
+        host = u.get("attached_to")
+        hu = units.get(host) if host else None
+        if not hu or int(u.get("alive", 0)) <= 0 or int(hu.get("alive", 0)) > 0:
+            continue
+        hero = str((profiles.get(key) or {}).get("name", ""))
+        hname = str((profiles.get(host) or {}).get("name", ""))
+        if hero and hname:
+            out[hero] = hname
+    return out
+
+
+def signer_ok(roller: str, table_label: str, lone: dict[str, str]) -> bool:
+    """The table's label for the port's roller: the roller's own name, or - for a LONE hero (`lone_hero_names`) - its
+    host's. Only ever a relaxation: a label that matched before still matches, so a lone hero that rolls under its own
+    name (its own attack, a strike) cannot turn into a new `owner` failure."""
+    return table_label in ("AI (%s)" % roller, "AI (%s)" % lone.get(roller, roller))
+
+
 def shots_of(d: Path) -> dict[int, list[dict]]:
     """The table's own per-shot record — sidecar `shots.jsonl` (NML_SHOT_DUMP,
     written inside the per-shot loop of `_solo_resolve_ai_volley`, so per
@@ -268,9 +293,26 @@ def read_pre(d: Path) -> dict[int, dict]:
     return out
 
 
-def patch_pre(plain: dict, units: dict) -> dict:
+#: `TerrainRules.gives_cover`: ruins and forest. `BASE_RIM_SAMPLES` of terrain_rules.gd.
+COVER_TYPES, RIM_SAMPLES = (1, 2), 8
+
+
+def majority_in_cover(u: dict, board, built: int) -> bool:
+    """`_solo_majority_in_cover` on a unit's standing models: more than half of them FULLY inside cover terrain (centre
+    + rim), a unit built with one model by its centre alone."""
+    n = 0
+    for p, r in zip(u["positions"], u["radii"]):
+        r = float(r) if built > 1 else 0.0
+        ring = [[p[0] + math.cos(math.tau * i / RIM_SAMPLES) * r, 0.0, p[2] + math.sin(math.tau * i / RIM_SAMPLES) * r]
+                for i in range(RIM_SAMPLES)] if r > 0 else []
+        n += all(board.type_at(q) in COVER_TYPES for q in [p, *ring])
+    return n * 2 > len(u["positions"])
+
+
+def patch_pre(plain: dict, units: dict, board=None) -> dict:
     """`plain` after the cast leg: every unit in `units` cut down to its recorded alive count (models dropped from the
-    end of each per-model list) and carrying its recorded Shaken flag."""
+    end of each per-model list) and carrying its recorded Shaken flag. With a `board` (F-PRE-COVER) a unit the leg cut
+    down gets its `in_cover` read again from the survivors, as the table does per save moment."""
     out = dict(plain, units=dict(plain["units"]))
     for uid, rec in units.items():
         if uid not in out["units"]:
@@ -282,12 +324,14 @@ def patch_pre(plain: dict, units: dict) -> dict:
                 if isinstance(u.get(f), list) and len(u[f]) == a0:
                     u[f] = u[f][:a]
             u["alive"] = a
+            if board is not None and u.get("positions"):
+                u["in_cover"] = majority_in_cover(u, board, a0)
         out["units"][uid] = u
     return out
 
 
 def cut_pre_legs(rolls: list[dict], plain: dict, pre: dict | None, burn: bool = True,
-                 patch: bool = True) -> tuple[list[dict], int, dict]:
+                 patch: bool = True, board=None) -> tuple[list[dict], int, dict]:
     """(the act's rolls without the cast/spell legs, draws to burn off the tray for them, `plain` after the leg).
     Only a cast leg that LEADS the act is cut, and a leading dangerous test is cut with it (G4-H8: the table's order is
     dangerous test -> cast; both are burned as ONE prefix and the caller switches the core's own test off, see
@@ -301,7 +345,7 @@ def cut_pre_legs(rolls: list[dict], plain: dict, pre: dict | None, burn: bool = 
     if casts == 0 or casts != sum(r.get("leg") in CUT_LEGS for r in rolls[:lead]):
         return rolls, 0, plain
     draws = sum(max(1, int(r["count"])) for r in rolls[:lead]) if burn else 0
-    return rolls[lead:], draws, patch_pre(plain, pre or {}) if patch else plain
+    return rolls[lead:], draws, patch_pre(plain, pre or {}, board) if patch else plain
 
 
 def cut_dangerous(rolls: list[dict], kept: list[dict]) -> bool:
@@ -496,6 +540,7 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
         walls_seen.add(wall_src)
         terrain = dict(head.get("terrain") or {}, walls=walls) if movement and head.get("terrain") else head.get("terrain")
         move_knob = {"movement": not red_move_rigid} if movement else {}
+        board = nml_core.board(head["terrain"]) if head.get("terrain") else None  # F-PRE-COVER: cover of survivors
         header = {"profiles": head["profiles"], "terrain": terrain,
                   "knobs": dict(head.get("knobs", {}), **move_knob,
                                 hero_attach=hero_attach == "table",
@@ -540,10 +585,12 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
             # AI-G4 H1b: the cast/spell legs are cut, their dice burned, the state patched from the `pre` line.
             rolls_k = [r for r in dice[i0:] if int(r["act"]) == k]
             rolls_cut, pre_burn, plain = cut_pre_legs(rolls_k, plain, pres.get(k), red_pre != "noburn",
-                                                      red_pre != "nopatch")
+                                                      red_pre != "nopatch", board)
             tally["pre_cut"] += len(rolls_cut) < len(rolls_k)
             tally["pre_uncut"] += len(rolls_cut) == len(rolls_k) and any(r.get("leg") in CUT_LEGS for r in rolls_k)
             state = core.state_of(plain)
+            # G4-H6: a LONE joined hero's roll compares as its host's label.
+            lone = lone_hero_names(plain, head["profiles"])
             # `--red-misseed` moves the tray one seed over. Every count and
             # every target still comes out of the same state, so the SHAPE holds
             # and the comparison reaches the faces — which is exactly what has
@@ -669,12 +716,12 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
                 # hero fires its OWN shots" from a claim into a verdict: a host
                 # rolling the hero's dice matches on count, target and faces and
                 # can only part HERE.
-                owners_ok = all("AI (%s)" % g[4] == w[4] for g, w in zip(got, want))
+                owners_ok = all(signer_ok(g[4], w[4], lone) for g, w in zip(got, want))
                 if not owners_ok:
                     reasons["owner"] = reasons.get("owner", 0) + 1
                     if len(firsts) < max(3, verbose):
                         bad = next((i for i, (g, w) in enumerate(zip(got, want))
-                                    if "AI (%s)" % g[4] != w[4]), 0)
+                                    if not signer_ok(g[4], w[4], lone)), 0)
                         firsts.append("%s act %d [owner] %s — roll %d: AI (%s) vs table %s"
                                       % (d.name, k, action["shoot"][-6:], bad + 1,
                                          got[bad][4], want[bad][4]))

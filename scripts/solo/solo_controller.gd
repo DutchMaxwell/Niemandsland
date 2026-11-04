@@ -2385,7 +2385,11 @@ func _act(unit: GameUnit) -> Dictionary:
 		# illegal charge becomes a RUSH toward the same enemy — the move
 		# survives, the doomed charge dies loudly (rules-must-log).
 		if action == AiDecision.Action.CHARGE and target_unit != null:
-			var charge_deny := charge_illegal_why(unit, target_unit, rush)
+			# G4-T7 (EPOCH_73_V36): an adopted CHARGE is measured against the unit's CHARGE band (the
+			# declaration probe's `charge_reach`; charge_illegal_why re-adds the Rapid Charge bonus itself),
+			# not the rush band; below 73 the rush band stands.
+			var regate_band: float = rush if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 else charge_reach - rcm_bonus
+			var charge_deny := charge_illegal_why(unit, target_unit, regate_band)
 			if charge_deny != "":
 				action = AiDecision.Action.RUSH
 				action_why = "adopted charge re-gated (%s) — rushing instead" % charge_deny
