@@ -74,8 +74,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
 
 import nml_core  # noqa: E402
 from shoot_replay_gate import (  # noqa: E402
-    burn_prefix, combat_kind, defender_state, first_at_or_after, parted_field, read_game,
-    resolve_vintage_flag, successes, vintage_report_line,
+    burn_prefix, combat_kind, defender_state, first_at_or_after, lone_hero_names,
+    parted_field, read_game, resolve_vintage_flag, successes, vintage_report_line,
 )
 
 #: `BattleSim.CHARGE` — the only act kind that fights a melee.
@@ -237,6 +237,9 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
             if int(action.get("kind", -1)) != CHARGE_KIND or not action.get("charge"):
                 continue
             tally["acts"] += 1
+            lone = {  # G4-H6: a LONE joined hero's roll compares as its host's label.
+                "AI (%s)" % h: "AI (%s)" % v
+                for h, v in lone_hero_names(act["state"], head["profiles"]).items()}
             i0 = first_at_or_after(dice, k)
             tray = nml_core.Tray(seed + 1 if mode == "misseed" else seed)
             if burn[i0]:
@@ -293,7 +296,7 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
             verdict, why = "equal", ""
             tally["rolls"] += max(len(got), len(want))
             for i, (g, w) in enumerate(zip(got, want)):
-                field = parted_field(g, w) or ("owner" if g[4] != w[4] else None)
+                field = parted_field(g, w) or ("owner" if lone.get(g[4], g[4]) != w[4] else None)
                 if field:
                     # WHICH field parted first is the whole diagnosis: `count` is
                     # the attack-scaling class (the table scales melee by the
