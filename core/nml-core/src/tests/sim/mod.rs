@@ -1806,6 +1806,7 @@ mod split_fire;
 mod strafing;
 mod terrain_debuff;
 mod traversal;
+mod v36_g4r4_granted_range;
 mod unstoppable_aura;
 mod utility_move_buff_pins;
 mod v36_ai;
