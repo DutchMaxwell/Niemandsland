@@ -333,16 +333,25 @@ def patch_pre(plain: dict, units: dict, board=None) -> dict:
 def cut_pre_legs(rolls: list[dict], plain: dict, pre: dict | None, burn: bool = True,
                  patch: bool = True, board=None) -> tuple[list[dict], int, dict]:
     """(the act's rolls without the cast/spell legs, draws to burn off the tray for them, `plain` after the leg).
-    Only a cast leg that LEADS the act is cut: a dangerous test (or any other roll) in front of it would make the core
-    draw between two stretches of one resolve, and a tray cannot be burned mid-resolve - such an act is left as
-    recorded. `burn` / `patch` False are the two RED mutants (`--red-pre noburn|nopatch`)."""
+    Only a cast leg that LEADS the act is cut, and a leading dangerous test is cut with it (G4-H8: the table's order is
+    dangerous test -> cast; both are burned as ONE prefix and the caller switches the core's own test off, see
+    `cut_dangerous`). Any other roll in front of the cast would make the core draw between two stretches of one
+    resolve, and a tray cannot be burned mid-resolve - such an act is left as recorded, and so is a dangerous test with
+    no cast behind it (the core's own). `burn` / `patch` False are the two RED mutants (`--red-pre noburn|nopatch`)."""
     lead = 0
-    while lead < len(rolls) and rolls[lead].get("leg") in CUT_LEGS:
+    while lead < len(rolls) and rolls[lead].get("leg") in CUT_LEGS + ("dangerous",):
         lead += 1
-    if lead == 0 or lead != sum(r.get("leg") in CUT_LEGS for r in rolls):
+    casts = sum(r.get("leg") in CUT_LEGS for r in rolls)
+    if casts == 0 or casts != sum(r.get("leg") in CUT_LEGS for r in rolls[:lead]):
         return rolls, 0, plain
     draws = sum(max(1, int(r["count"])) for r in rolls[:lead]) if burn else 0
     return rolls[lead:], draws, patch_pre(plain, pre or {}, board) if patch else plain
+
+
+def cut_dangerous(rolls: list[dict], kept: list[dict]) -> bool:
+    """True when `cut_pre_legs` took the table's dangerous test along with the cast leg (G4-H8): the tray has spent its
+    dice, so the core must not roll a test of its own for this act (header knob `dangerous` off, then restored)."""
+    return any(r.get("leg") == "dangerous" for r in rolls[:len(rolls) - len(kept)])
 
 
 def lone_hero_of(units: dict, key: str) -> str:
@@ -532,17 +541,18 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
         terrain = dict(head.get("terrain") or {}, walls=walls) if movement and head.get("terrain") else head.get("terrain")
         move_knob = {"movement": not red_move_rigid} if movement else {}
         board = nml_core.board(head["terrain"]) if head.get("terrain") else None  # F-PRE-COVER: cover of survivors
-        core.set_header({"profiles": head["profiles"], "terrain": terrain,
-                         "knobs": dict(head.get("knobs", {}), **move_knob,
-                                       hero_attach=hero_attach == "table",
-                                       engage_fold=eff_engage_fold,
-                                       # NML-1073 M5 D6a-B4. `"unit"` is the
-                                       # default and the BEFORE half of the
-                                       # sighting measurement; `"model"` gives
-                                       # the volley the table's own die count,
-                                       # which lands in the `count` bucket of
-                                       # "first field to part".
-                                       sighting=sighting)})
+        header = {"profiles": head["profiles"], "terrain": terrain,
+                  "knobs": dict(head.get("knobs", {}), **move_knob,
+                                hero_attach=hero_attach == "table",
+                                engage_fold=eff_engage_fold,
+                                # NML-1073 M5 D6a-B4. `"unit"` is the
+                                # default and the BEFORE half of the
+                                # sighting measurement; `"model"` gives
+                                # the volley the table's own die count,
+                                # which lands in the `count` bucket of
+                                # "first field to part".
+                                sighting=sighting)}
+        core.set_header(header)
         for pos, act in enumerate(lines):
             # The INTERLEAVED ordinal `read_game` stamped, never the
             # act line's position among its own kind.
@@ -588,6 +598,9 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
             tray = nml_core.Tray(seed + 1 if mode == "misseed" else seed)
             if burn[i0] + pre_burn:
                 tray.roll(burn[i0] + pre_burn)
+            dang_off = cut_dangerous(rolls_k, rolls_cut)
+            if dang_off:  # G4-H8: the cut took the table's dangerous test; the core rolls none for this one act
+                core.set_header(dict(header, knobs=dict(header["knobs"], dangerous=False)))
             try:
                 if mode in ("table", "misseed"):
                     nxt, report = core.resolve_with_tray(state, action, nml_core.Rng(0), tray)
@@ -599,6 +612,9 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
                 if len(firsts) < max(3, verbose):
                     firsts.append("%s act %d — DECLINED: %s" % (d.name, k, exc))
                 continue
+            finally:
+                if dang_off:
+                    core.set_header(header)
             for name in report["unported"]:
                 unported[name] = unported.get(name, 0) + 1
             # SPLIT FIRE, measured rather than assumed: the table signs each save
