@@ -28,7 +28,7 @@ use crate::terrain::{self, Terrain};
 use crate::IN2M;
 use crate::acts::{rule_on, EPOCH_6_TABLE_RULES, EPOCH_8_PLANNER_MENU, EPOCH_73_V36};
 
-use super::cost::{CellSet, Grid, Zone};
+use super::cost::{ledge_cost, CellSet, Grid, Ledge, Wall, Zone};
 use super::entry::plan_unit_step_call;
 use super::geom2::{self as g2, V2};
 use super::io::{CallOpts, MoveCall};
@@ -78,8 +78,10 @@ pub struct Landing {
     /// `last_move_budget_in` :5060 — the band the move was actually granted
     /// (the p.11 cap may have cut it).
     pub budget_in: f64,
-    /// The LONGEST single-model arc, in inches — what :8659 subtracts.
+    /// The LONGEST single-model arc, in inches — what :8659 subtracts. The climb is movement spent (GF p.11): it joins the arc.
     pub arc_in: f64,
+    /// `last_move_climb_in` — the largest climb any model's route paid over a container edge, 0 when none.
+    pub climb_in: f64,
     /// `_dangerous_trail_flags(trails, trail_radii_m)` :5036, in `movers` order:
     /// did this model's ROUTE cross a DANGEROUS cell? Read off the trails at the
     /// same point the table reads them — after the distance-truth trim, BEFORE
@@ -438,9 +440,24 @@ impl Move<'_> {
         )
     }
 
+/// `_plan_positions` :7645-7648 — the walls the solve sees and the container edges it climbs instead (heights B2,
+/// GF p.11). From `EPOCH_73_V36` a container's edges leave the walls and are priced as ledges: a leg over one pays
+/// its height, a model never ends mid-climb. Flying ignores walls and climbs alike (:6157).
+fn walls_and_ledges(&self) -> (Vec<Wall>, Vec<Ledge>) {
+    if self.flying {
+        return (Vec::new(), Vec::new());
+    }
+    if !rule_on(self.rules_epoch, EPOCH_73_V36) {
+        return (self.t.walls_in().to_vec(), Vec::new());
+    }
+    let (walls, edges) = self.t.walls_and_ledges();
+    (walls, edges.iter().map(|e| Ledge { a: e[0], b: e[1], dy_in: terrain::CONTAINER_HEIGHT_IN }).collect())
+}
+
 /// `_plan_positions` :6136 — one `plan_unit_step` call, inputs only.
 fn build_call(&self, delta_world: V3, reach_in: f64, avoid_diff: bool, avoid_dang: bool) -> MoveCall {
     let (state, t, si, ci) = (self.state, self.t, self.si, self.ci);
+    let (walls, ledges) = self.walls_and_ledges();
     let (movers, own_r_m) = (&self.movers, self.own_r_m);
     let (dang_debuff, diff_debuff) = self.terrain_debuffs();
     let board = t.board_in();
@@ -488,7 +505,7 @@ fn build_call(&self, delta_world: V3, reach_in: f64, avoid_diff: bool, avoid_dan
         model_pos: mpos,
         delta: mdelta,
         // p.13/p.14: Flying ignores walls while moving (:6157).
-        walls: if self.flying { Vec::new() } else { t.walls_in().to_vec() },
+        walls,
         grid,
         allow_contact: self.allow_contact,
         board_in: board[0],
@@ -517,7 +534,7 @@ fn build_call(&self, delta_world: V3, reach_in: f64, avoid_diff: bool, avoid_dan
             charge_goal: ci.map(|c| planner_point(unit_centre(state, c), t, self.rules_epoch)),
             charge_tgt_bases: tgt_bases,
             charge_slots,
-            ledges: Vec::new(),
+            ledges,
         },
         planned: Vec::new(),
         trails: Vec::new(),
@@ -862,7 +879,7 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
             // test for a move it never made.
             if rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES) && !best_coherent && start_coherent {
                 return Landing { sidestep_spent: false, shorten_covered: true, budget_in: 0.0,
-                    movers: self.movers.clone(), end: self.pos.clone(), arc_in: 0.0,
+                    movers: self.movers.clone(), end: self.pos.clone(), arc_in: 0.0, climb_in: 0.0,
                     dangerous: vec![false; self.movers.len()], call: best_call };
             }
             (planned, trails, budget_in, call) = (best_pos, best_trails, best_reach, best_call);
@@ -920,11 +937,15 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
         dangerous = trails.iter().enumerate().map(|(i, leg)|
             self.crosses_dangerous(leg, radii_m.get(i).copied().unwrap_or(0.0))).collect();
     }
+    let (mut climb_in, ledges) = (0.0f64, self.walls_and_ledges().1);
     for (i, leg) in trails.iter_mut().enumerate() {
         // :5068-5071 — and THEN the trail is retraced to the endpoint, which is
         // the polyline `last_move_paths` publishes and :8659 measures.
         *leg = retrace_to(leg, starts[i], planned.get(i).copied().unwrap_or(starts[i]));
-        arc_in = arc_in.max(g2::polyline_length(leg));
+        // :6317-6322 — the climb is movement spent: it joins the arc, and the largest one is logged.
+        let climb: f64 = leg.windows(2).map(|w| ledge_cost(w[0], w[1], &ledges)).sum();
+        arc_in = arc_in.max(g2::polyline_length(leg) + climb);
+        climb_in = climb_in.max(climb);
     }
     let end: Vec<V3> = self
         .movers
@@ -937,7 +958,7 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
         })
         .collect();
     Landing { sidestep_spent, shorten_covered: !self.allow_contact && rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES),
-        movers: self.movers.clone(), end, budget_in, arc_in, dangerous, call }
+        movers: self.movers.clone(), end, budget_in, arc_in, climb_in, dangerous, call }
 }
 }
 
@@ -1504,6 +1525,7 @@ pub(crate) mod tests {
             end: vec![away; 3],
             budget_in: 6.0,
             arc_in: 0.0,
+            climb_in: 0.0,
             dangerous: dang,
             call: None,
         };

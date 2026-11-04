@@ -20,6 +20,8 @@ pub const NONE: i32 = 0;
 pub const RUINS: i32 = 1;
 pub const FOREST: i32 = 2;
 pub const CONTAINER: i32 = 3;
+/// `TerrainRules.CONTAINER_HEIGHT_INCHES` - what a climb over a container's edge costs a move.
+pub const CONTAINER_HEIGHT_IN: f64 = 2.5;
 pub const DANGEROUS: i32 = 4;
 
 /// `TerrainRules.CELL_IN` terrain_rules.gd:26 — one terrain cell is 3"x3".
@@ -227,6 +229,21 @@ impl Terrain {
     #[inline]
     pub fn walls_in(&self) -> &[[[f32; 2]; 2]] {
         &self.walls_in
+    }
+
+    /// Heights B2 (GF p.11): `walls_in` split into the walls and the container EDGES, which the table's planner
+    /// climbs (`solo_controller._is_ledge_edge`). The header carries no container list, only the painted cells and the
+    /// wall segments, so an edge is a segment with container ground a hair (1 cm) to either side of its midpoint.
+    pub fn walls_and_ledges(&self) -> (Vec<[[f32; 2]; 2]>, Vec<[[f32; 2]; 2]>) {
+        let (mut walls, mut ledges) = (Vec::new(), Vec::new());
+        for (w, m) in self.walls_in.iter().zip(&self.walls_world) {
+            let d = [m[1][0] - m[0][0], m[1][1] - m[0][1]];
+            let len = d[0].hypot(d[1]).max(f32::EPSILON);
+            let (mid, n) = ([(m[0][0] + m[1][0]) * 0.5, (m[0][1] + m[1][1]) * 0.5], [-d[1] / len * 0.01, d[0] / len * 0.01]);
+            let edge = [1.0f32, -1.0].iter().any(|s| self.type_at([mid[0] + s * n[0], 0.0, mid[1] + s * n[1]]) == CONTAINER);
+            if edge { ledges.push(*w) } else { walls.push(*w) }
+        }
+        (walls, ledges)
     }
 
     /// The board's wall segments in WORLD METRES, f32 at the Vector2 boundary

@@ -9095,6 +9095,10 @@ fn resolve_with(
         for (i, m) in land.movers.iter().enumerate() {
             next.positions[m.unit][m.model] = geom::to_f64(land.end[i]);
         }
+        // Rules-must-log (main.gd:1210-1212): a climb names the Terrain rule and the inches it cost.
+        if let (true, Some((_, shot))) = (land.climb_in > 0.0, dice.as_mut()) {
+            shot.log.push(format!("Terrain: {} climbs onto terrain (+{:.1}\" of its move)", statics[pi_s].name, land.climb_in));
+        }
         // D5-2 review fix: the table's own arc only feeds the D5-1 budget
         // gate when `charge_landing` asks for it — otherwise `movement=
         // "table"` silently forces `charge_landing="table"` on, and the
