@@ -3228,6 +3228,14 @@
      "negates": "Slow"
     }
    },
+   "Vanguard": {
+    "primitive": "Vanguard",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_in": 9.0
+    }
+   },
    "Swift Aura": {
     "primitive": "Aura Channel",
     "rated": false,
@@ -8364,6 +8372,14 @@
     "book_version": "3.5.3",
     "params": {
      "shooting_only": true
+    }
+   },
+   "Vanguard": {
+    "primitive": "Vanguard",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_in": 9.0
     }
    },
    "Unpredictable Fighter": {
