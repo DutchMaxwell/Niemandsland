@@ -9810,7 +9810,7 @@ fn resolve_with(
                             // shooting fold ONLY when THIS group's target is
                             // the closest enemy (main.gd:5745-5748), per
                             // member carrying it.
-                            for (mi, _, att) in parts.iter_mut() {
+                            for (mi, msc, att) in parts.iter_mut() {
                                 if att.instinctive_hit_bonus > 0
                                     && instinctive_applies(&next, *mi, g.ti)
                                 {
@@ -9832,7 +9832,17 @@ fn resolve_with(
                                     && (att.versatile_no_gate
                                         || g.mod_d > crate::combat::LONG_RANGE_IN)
                                 {
-                                    let prof36 = statics[next.roster.profile[*mi]].shoot.iter().find(|p| p.versatile_attack);
+                                    let shoot36 = &statics[next.roster.profile[*mi]].shoot;
+                                    let prof36 = if rule_on(seams.rules_epoch, EPOCH_73_V36) {
+                                        // The table latches on the FIRST FIRED weapon: the member's weapons that
+                                        // fire, in the volley's resolve-first order (Takedown, Deadly, the rest).
+                                        let mut fired: Vec<&ShootProfile> = msc.keep.iter().zip(&msc.attacks)
+                                            .filter(|(_, &n)| n > 0).map(|(&k, _)| &shoot36[k]).collect();
+                                        fired.sort_by_key(|p| crate::dice::shot_rank(p));
+                                        fired.into_iter().find(|p| p.versatile_attack)
+                                    } else {
+                                        shoot36.iter().find(|p| p.versatile_attack)
+                                    };
                                     if prof36.is_some() || att.versatile_grant {
                                         let (vh, va, vl) = versatile_latch(&mut next, statics, *mi,
                                             crate::combat::reliable_quality(att.quality,

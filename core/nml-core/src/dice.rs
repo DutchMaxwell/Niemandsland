@@ -777,6 +777,17 @@ pub fn resolve_volley_with_tray(
     resolve_volley_leg(shooters, def, def_owner, dist_in, mod_dist_in, cond_ap_dice, surge_gates, shred_alias_dice, shred_boost_dice, false, false, &|_| false, tray)
 }
 
+/// The table's resolve-first rank of a shot (`_solo_shot_priority`): Takedown, then Deadly, then the rest.
+pub fn shot_rank(p: &ShootProfile) -> u8 {
+    if p.takedown {
+        0
+    } else if p.deadly > 0 {
+        1
+    } else {
+        2
+    }
+}
+
 // The leg split adds one gate-bool to the resolver's existing pack.
 #[allow(clippy::too_many_arguments)]
 pub fn resolve_volley_leg(
@@ -907,16 +918,7 @@ pub fn resolve_volley_leg(
         .iter()
         .flat_map(|sh| sh.keep.iter().enumerate().map(move |(k, &pi)| (sh, k, pi)))
         .collect();
-    shots.sort_by_key(|&(sh, _, pi)| {
-        let p = &sh.profiles[pi];
-        if p.takedown {
-            0
-        } else if p.deadly > 0 {
-            1
-        } else {
-            2
-        }
-    });
+    shots.sort_by_key(|&(sh, _, pi)| shot_rank(&sh.profiles[pi]));
     for (sh, k, pi) in shots {
         let att = sh.att;
         let p = &sh.profiles[pi];
