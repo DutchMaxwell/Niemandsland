@@ -6845,7 +6845,21 @@ func _solo_over9_defense_rule(target: GameUnit) -> String:
 	# all-models read.
 	for e in RulesRegistry.unit_rules_of_primitive(target, "Guarded"):
 		var n := str((e as Dictionary)["name"])
-		if n != "Guarded" and _solo_guarded_family_on(target, n):
+		if n != "Guarded" and _solo_guarded_family_on(target, n) and _solo_replacing_upgrade(target, n).is_empty():
+			return n
+	return ""
+
+
+## C-STURDY-BOOST (EPOCH_73_V36, lead ruling D1): the carried upgrade that REPLACES a Guarded-family rule — Enhanced
+## Sturdy gives +1 Defense at any range INSTEAD of Sturdy's +1 from over 9" (the core's `sturdy_boost_gates_guarded`).
+## The upgrade's own name, "" when the unit carries none (or below epoch 73, where the two stack).
+func _solo_replacing_upgrade(target: GameUnit, base: String) -> String:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return ""
+	for e in RulesRegistry.unit_rules_of_primitive(target, "Shielded"):
+		var n := str((e as Dictionary)["name"])
+		if str(((e as Dictionary).get("params", {}) as Dictionary).get("upgrades", "")) == base \
+				and _solo_rule_on_all_models(target, n):
 			return n
 	return ""
 
@@ -7844,6 +7858,13 @@ func _solo_log_defense_parts(target: GameUnit, source: String, defense: int, ai:
 			continue
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s is %s: %+d Defense (saves on %d+)" % [
 			target.get_name(), str(pd["name"]), bonus, AiCombatMath.shown_target(defense)], ai)
+	# C-STURDY-BOOST rules-must-log: an upgrade that replaces the unit's Sturdy says so (epoch 73+).
+	for ge in RulesRegistry.unit_rules_of_primitive(target, "Guarded"):
+		var base := str((ge as Dictionary)["name"])
+		var upgrade := _solo_replacing_upgrade(target, base)
+		if base != "Guarded" and not upgrade.is_empty() and _solo_guarded_family_on(target, base):
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s: replaces %s — +1 Defense at any range, no extra +1 from over 9\"" % [
+				upgrade, base], ai)
 
 
 ## rules-must-log for NML-104: the spell save step NAMES both halves. What DOES apply gets a line —
