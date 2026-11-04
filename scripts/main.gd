@@ -4795,6 +4795,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		AiShotRecorder.record({"act": solo_controller.move_act_seq(), "round": solo_controller._current_round(),
 			"player": solo_controller.ai_slot, "shooter": attacker.get_name(), "member": member.get_name(),
 			"weapon": str(profile.get("name", "?")), "target": target.get_name(),
+			"target_id": str(target.unit_id),
 			"alive": member.get_alive_count(), "sighted": sighted, "bearers": shot_bearers,
 			"max_models": shot_max_models, "attacks": attacks,
 			"reach_in": float(shot_range_in) + (_solo_unit_base_radius_m(member) + _solo_unit_base_radius_m(target)) \
