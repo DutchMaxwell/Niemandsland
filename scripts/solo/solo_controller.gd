@@ -2333,6 +2333,7 @@ func _act(unit: GameUnit) -> Dictionary:
 	# tree's section draw, because that is all the imitation corpus ever taught.
 	# No policy loaded => {} => byte-identical tree.
 	var planner_used := false
+	var planned_verb := -1   # F-HOLD-ADV: the verb the adopted plan picked (-1: no plan)
 	var pl := {}
 	var _ph_plan := 0
 	if act_wall_enabled():
@@ -2346,6 +2347,7 @@ func _act(unit: GameUnit) -> Dictionary:
 	if bool(pl.get("used", false)):
 		planner_used = true
 		action = int(pl["action"])
+		planned_verb = action
 		do_shoot = bool(pl["shoot"])
 		dec["toward"] = int(pl["toward"])
 		action_why = str(pl["why"])
@@ -2588,6 +2590,8 @@ func _act(unit: GameUnit) -> Dictionary:
 	var band_in: float = (rush if action == AiDecision.Action.RUSH
 		else (advance if action == AiDecision.Action.ADVANCE else 0.0))
 	var charge_band_in := melee_shroud_charge_in(charge_reach, target_unit)
+	if planned_verb >= 0 and action != planned_verb:
+		AiActRecorder.executed_verb(_move_act_seq, action, planned_verb)   # F-HOLD-ADV (D7): the verb that RAN
 	var intent := ActIntent.make(unit, action, target_unit, goal, band_in, do_shoot, {
 		"charge_band_in": charge_band_in, "shoot_range_in": shoot_range, "quick_shot": quick_shot,
 		"enemy_dist_in": enemy_dist, "to_objective": to_obj, "to_flank": to_flank,
@@ -3502,7 +3506,19 @@ func _charge_capped_by_difficult(unit: GameUnit, from: Vector3, to: Vector3, gap
 	# but whose base-width grazes difficult ground WILL be capped, so the tree must not call the
 	# charge available (the honest falls-short from the field validation, seed 21002 R2).
 	var probe_r := _move_base_radius_m(_moving_models(unit))
-	return _corridor_forced_through(from, to, TerrainRules.PathCheck.DIFFICULT, probe_r)
+	return _corridor_forced_through(from, charge_probe_end(from, to, gap_in), TerrainRules.PathCheck.DIFFICULT, probe_r)
+
+
+## G4-T8 (EPOCH_73_V36): the far end of the cap gate corridor is the CONTACT point (gap_in along the line from
+## `from` toward `to`), not the target centre: forest under the target own base is no part of the charger leg.
+## Below 73, and when the target is nearer than the gap, the centre stands. Twins: BattleSim.charge_illegal_plain,
+## core gate::charge_illegal_tuned.
+static func charge_probe_end(from: Vector3, to: Vector3, gap_in: float) -> Vector3:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return to
+	var dist := Vector2(to.x - from.x, to.z - from.z).length()
+	var reach := gap_in * INCHES_TO_METERS
+	return to if dist <= reach else from.lerp(to, reach / dist)
 
 
 ## Shared corridor probe (#316 extraction — the difficult cap's exact geometry): the straight

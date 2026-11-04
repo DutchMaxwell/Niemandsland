@@ -594,6 +594,18 @@ fn gate_flags(&self) -> super::gate::GateFlags<'_> {
         start_world: &self.pos, rules_epoch: self.rules_epoch, ..Default::default() }
 }
 
+/// G4-C7b: does the unit START this move out of coherency? The movers' own start footprint against the acting unit's
+/// chain length (6" skirmish, else 9"): the predicate the final placement gate leaves behind (`coherent_placement`).
+fn starts_torn(&self, starts: &[V2], radii_m: &[f64]) -> bool {
+    let radii_in: Vec<f64> = radii_m.iter().map(|r| r / IN2M).collect();
+    let shapes: Vec<_> = self.movers.iter().map(|m| self.state.base_shape(m.unit)).collect();
+    let chain = if rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES)
+        && matches!(self.state.profile(self.si).game_system.as_str(), "gff" | "aofs")
+    { super::SKIRMISH_CHAIN_IN } else { super::MAX_CHAIN_IN };
+    !super::gate::coherent_placement(starts, &radii_in,
+        super::gate::GateFlags { shapes: &shapes, coherent_chain_in: chain, ..Default::default() })
+}
+
 /// The gate starts from the planner's world endpoints; trimming may replace them.
 fn world_endpoints(&self, planned: &[V2]) -> Vec<V3> {
     planned.iter().enumerate().map(|(i, p)| {
@@ -790,10 +802,18 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
     }
     // :4858-4866 — nothing actually moved: the table returns BEFORE the gate,
     // so a unit already stacked where it stands is not re-arranged for free.
-    let stirred = planned
+    let walked = planned
         .iter()
         .enumerate()
         .any(|(i, p)| g2::distance_to(*p, starts[i]) as f64 * IN2M > OVERLAP_EPS_M);
+    // G4-C7b (Regroup, `EPOCH_73_V36`): `_act_regroup` hands `_finalize_placement` the UNMOVED positions, so a unit
+    // that starts torn still runs the gate when its centre goes nowhere. It never enters `_execute_move`, so it
+    // spends no sidestep attempt either (the boxed escape below is skipped).
+    let regroup = !walked
+        && rule_on(self.rules_epoch, EPOCH_73_V36)
+        && !self.allow_contact
+        && self.starts_torn(&starts, radii_m);
+    let stirred = walked || regroup;
     // :4884-4885 — THE HARD FINAL PLACEMENT GATE, applied HERE, after the trim,
     // so the trim can never cut a gate-corrected endpoint off its trail. Passes
     // 1-4, the epoch-gated whole-unit shorten and the wall clamp are ported
@@ -886,7 +906,7 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
         }
         // The forward lane being jammed does not reduce the legal lateral band.
         let big = self.own_r_m >= 1.5 * IN2M;
-        if !self.allow_contact && rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES)
+        if !self.allow_contact && !regroup && rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES)
             && granted_reach >= 2.0 && achieved_in(&starts, &planned) < 1.0
             && (big || state.sidestep_budget.available(state.round))
             && self.has_lateral_room(granted_reach)
@@ -1105,6 +1125,58 @@ pub(crate) fn snap_charge_state(self, state: &mut State, si: usize, ci: usize,
     Some(snap)
 }
 
+/// G4-C8b (`EPOCH_73_V36`) — `SoloController.pile_in` (solo_controller.gd:11000), which the table runs once the charger
+/// has stood: each defender model without base contact steps up to 3" toward its own `charge_contact_slots` slot, the
+/// model nearest its slot first, on the longest of eleven fractions of the step that clears the walls and overlaps no
+/// base; the longest that also keeps the defender coherent wins. Returns the models moved. Not ported: the regiment
+/// skip, oval bases in the coherency preference (round discs, as the placement ladder's round arm).
+pub(crate) fn pile_in_state(self, state: &mut State, t: &Terrain, si: usize, ti: usize, hero_attach: bool) -> usize {
+    let (mut dm, mut cm) = (movers_of(state, ti), movers_of(state, si));
+    if !hero_attach { dm.retain(|m| m.unit == ti); cm.retain(|m| m.unit == si); }
+    let inch = |p: V3| [p[0] / IN2M as f32, p[2] / IN2M as f32];
+    let radii: Vec<f64> = dm.iter().map(|m| radius_of(state, *m) / IN2M).collect();
+    let mpos: Vec<V2> = dm.iter().map(|m| inch(pos_of(state, *m))).collect();
+    let tgt: Vec<(V2, f64)> = cm.iter().map(|m| (inch(pos_of(state, *m)), radius_of(state, *m) / IN2M)).collect();
+    let slots = super::charge::charge_contact_slots(&mpos, &radii, &tgt);
+    let to_slot = |i: usize| slots.get(i).map_or(f64::INFINITY, |s| g2::distance_to(mpos[i], *s));
+    let mut order: Vec<usize> = (0..dm.len()).collect();
+    order.sort_by(|&a, &b| if (to_slot(a) - to_slot(b)).abs() > 0.0001 { to_slot(a).total_cmp(&to_slot(b)) } else { a.cmp(&b) });
+    let walls: &[[[f32; 2]; 2]] = if state.profile(ti).special_rules.iter().any(|r| r == "Flying") { &[] } else { t.walls_world_m() };
+    let chain = if matches!(state.profile(ti).game_system.as_str(), "gff" | "aofs") { super::SKIRMISH_CHAIN_IN } else { super::MAX_CHAIN_IN };
+    let mut moved = 0;
+    for i in order {
+        let (m, p, r) = (dm[i], pos_of(state, dm[i]), radius_of(state, dm[i]));
+        let gap = |q: V3, rq: f64| (p[0] - q[0]).hypot(p[2] - q[2]) as f64 - r - rq;
+        let near = cm.iter().map(|c| gap(pos_of(state, *c), radius_of(state, *c))).fold(f64::INFINITY, f64::min);
+        let Some(slot) = slots.get(i).filter(|_| near > crate::sim::BASE_CONTACT_EPSILON_IN * IN2M) else { continue };
+        let to = [slot[0] as f64 * IN2M - p[0] as f64, slot[1] as f64 * IN2M - p[2] as f64];
+        let len = to[0].hypot(to[1]);
+        let full = (3.0 * IN2M).min((len - 0.001).max(0.0));
+        if len <= 0.0005 || full <= 0.0005 { continue; }
+        let (mut legal, mut chosen) = (None, None);
+        for frac in [1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.05] {
+            let c: V3 = [p[0] + (to[0] / len * full * frac) as f32, p[1], p[2] + (to[1] / len * full * frac) as f32];
+            let blocked = walls.iter().any(|w| g2::seg_seg_distance([p[0], p[2]], [c[0], c[2]], w[0], w[1]) < r + 0.001);
+            let overlaps = (0..state.units()).any(|u| (0..state.positions[u].len()).any(|k| {
+                !(u == m.unit && k == m.model) && (c[0] - state.positions[u][k][0] as f32).hypot(c[2] - state.positions[u][k][2] as f32) as f64
+                    - r - radius_of(state, Mover { unit: u, model: k }) < -0.0005
+            }));
+            if blocked || overlaps { continue; }
+            legal.get_or_insert(c);
+            let cfg: Vec<V2> = dm.iter().map(|d| if d.unit == m.unit && d.model == m.model { inch(c) } else { inch(pos_of(state, *d)) }).collect();
+            if dm.len() <= 1 || (super::components_r(&cfg, &radii).len() == 1 && super::max_edge_spread_r(&cfg, &radii) <= chain) {
+                chosen = Some(c);
+                break;
+            }
+        }
+        if let Some(c) = chosen.or(legal) {
+            state.positions[m.unit][m.model] = geom::to_f64(c);
+            moved += 1;
+        }
+    }
+    moved
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn charge_move(self, state: &State, t: &Terrain, si: usize, ci: usize,
     band_in: f64, hero_attach: bool, fast_planner: bool, guard: i64) -> Option<Landing> {
@@ -1123,6 +1195,23 @@ pub fn charge_reaches_contact(self, state: &State, t: &Terrain, si: usize, ci: u
     band_in: f64, hero_attach: bool) -> bool {
     self.charge_landing(state, t, si, ci, band_in, hero_attach, true, crate::mv::FAST_PLANNER_GUARD)
         .is_none_or(|(_, short)| !short)
+}
+
+/// `SoloController.unit_coherent_now` :10632 — is the unit's CURRENT configuration (its own models plus the attached
+/// heroes') one coherent chain? The chain length is the acting unit's own (6" skirmish, else 9"). `true` when there is no
+/// board or at most one model: no opinion then.
+pub fn unit_coherent_now(self, state: &State, t: &Terrain, si: usize, hero_attach: bool) -> bool {
+    let mut movers = movers_of(state, si);
+    if !hero_attach { movers.retain(|m| m.unit == si); }
+    if movers.len() <= 1 || !t.is_valid() { return true; }
+    let starts: Vec<V2> = movers.iter().map(|m| t.to_inch(pos_of(state, *m))).collect();
+    let radii_in: Vec<f64> = movers.iter().map(|m| radius_of(state, *m) / IN2M).collect();
+    let shapes: Vec<_> = movers.iter().map(|m| state.base_shape(m.unit)).collect();
+    let chain = if rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES)
+        && matches!(state.profile(si).game_system.as_str(), "gff" | "aofs")
+    { super::SKIRMISH_CHAIN_IN } else { super::MAX_CHAIN_IN };
+    super::gate::coherent_placement(&starts, &radii_in,
+        super::gate::GateFlags { shapes: &shapes, coherent_chain_in: chain, ..Default::default() })
 }
 
 /// The charge landing and whether it ENDS SHORT (#857): the table re-gates such a charge to a Rush.
@@ -2127,5 +2216,70 @@ pub(crate) mod tests {
         memo_probe(&state, &t, 0, dest, band, true, true, 0, 0, &ran);
         memo_probe(&state, &t, 0, dest, band, true, true, 0, 0, &ran);
         assert_eq!(ran.get(), 2);
+    }
+
+    /// G4-C7b (rules 3.6, the Regroup rule): the table's regroup hands `_finalize_placement` the UNMOVED positions, so
+    /// a torn unit is gathered although its centre goes nowhere. One unit, three models in a row at 2.5" steps then
+    /// 5": the last stands 3" past its neighbour's edge, past the 1" link.
+    fn torn_row() -> (State, Terrain) {
+        let (r, s) = (IN2M, IN2M as f32);
+        let pos = vec![vec![[0.0, 0.0, 0.0], [2.5 * s, 0.0, 0.0], [7.5 * s, 0.0, 0.0]]];
+        (units_state(pos, vec![vec![r, r, r]], vec![vec![]]), board(vec![]))
+    }
+
+    /// Largest edge gap between consecutive models of the row, in inches (the chain's weakest link).
+    fn widest_link_in(end: &[V3]) -> f64 {
+        end.windows(2).map(|w| geom::length(geom::sub(w[1], w[0])) as f64 / IN2M - 2.0).fold(f64::MIN, f64::max)
+    }
+
+    fn stay_put(rules_epoch: u32, state: &State, t: &Terrain) -> Landing {
+        let here = geom::centre(&state.positions[0]);
+        MoveRules { rules_epoch }
+            .plain_move(state, t, 0, here, 6.0, true, true, crate::mv::FAST_PLANNER_GUARD)
+            .expect("the board is real and the unit has models")
+    }
+
+    #[test]
+    fn red_a_torn_unit_that_stays_put_is_gathered_from_rules_3_6() {
+        let (state, t) = torn_row();
+        let land = stay_put(EPOCH_73_V36, &state, &t);
+        let link = widest_link_in(&land.end);
+        assert!(link <= 1.0 + 1e-3, "the gather must close the 3\" gap to the 1\" link, widest link {link}\"");
+        // Only the straggler walks: the two coherent models stay where they stand.
+        for i in 0..2 {
+            let off = geom::length(geom::sub(land.end[i], pos_of(&state, Mover { unit: 0, model: i }))) as f64 / IN2M;
+            assert!(off < 0.05, "model {i} moved {off}\"");
+        }
+    }
+
+    /// A gap of 1.5" is a half-inch pull: short enough that the boxed escape's own guard (a move under 1") would fire.
+    /// The table's regroup never enters `_execute_move`, so it spends no sidestep attempt.
+    #[test]
+    fn red_the_gather_spends_no_sidestep_attempt() {
+        let (r, s) = (IN2M, IN2M as f32);
+        let pos = vec![vec![[0.0, 0.0, 0.0], [2.5 * s, 0.0, 0.0], [6.0 * s, 0.0, 0.0]]];
+        let (state, t) = (units_state(pos, vec![vec![r, r, r]], vec![vec![]]), board(vec![]));
+        let land = stay_put(EPOCH_73_V36, &state, &t);
+        assert!(widest_link_in(&land.end) <= 1.0 + 1e-3, "the half-inch gap is closed");
+        assert!(!land.sidestep_spent, "a regroup spends no sidestep attempt");
+    }
+
+    #[test]
+    fn below_rules_3_6_a_torn_unit_that_stays_put_stays_torn() {
+        let (state, t) = torn_row();
+        let land = stay_put(EPOCH_73_V36 - 1, &state, &t);
+        assert!(widest_link_in(&land.end) > 2.9, "epoch 72 is byte-identical: the early return before the gate stands");
+    }
+
+    #[test]
+    fn a_coherent_unit_that_stays_put_is_not_rearranged_for_free() {
+        let (r, s) = (IN2M, IN2M as f32);
+        let pos = vec![vec![[0.0, 0.0, 0.0], [2.5 * s, 0.0, 0.0], [5.0 * s, 0.0, 0.0]]];
+        let (state, t) = (units_state(pos, vec![vec![r, r, r]], vec![vec![]]), board(vec![]));
+        let land = stay_put(EPOCH_73_V36, &state, &t);
+        for i in 0..3 {
+            let off = geom::length(geom::sub(land.end[i], pos_of(&state, Mover { unit: 0, model: i }))) as f64 / IN2M;
+            assert!(off < 1e-6, "model {i} moved {off}\" although the unit was coherent");
+        }
     }
 }

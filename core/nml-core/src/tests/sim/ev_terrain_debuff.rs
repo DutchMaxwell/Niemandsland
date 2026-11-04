@@ -181,3 +181,60 @@ use super::*;
             "the bare twin's raw EV clears the bar unchanged"
         );
     }
+
+    /// G4-T10, the table's `_solo_grant_waits_to_be_attacked` twin: a "once" Evasive grant works when its
+    /// bearer is ATTACKED, so the bearer's own strike exchange keeps it and the exchange that attacks the
+    /// bearer spends it. Below `EPOCH_73_V36` the old spend (the bearer's own strike spends it) stands.
+    #[test]
+    fn an_attacked_only_once_grant_survives_its_bearers_own_strike_from_epoch_73() {
+        let epoch73 = crate::acts::EPOCH_73_V36;
+        for (epoch, kept_by_own_strike) in [(epoch73, true), (epoch73 - 1, false)] {
+            let (mut st, _statics) = carried_pair("ogres", &[], 8.0, 4);
+            let mut row = grant_row("Evasive");
+            row.once = true;
+            st.buffs[0] = vec![row];
+            crate::sim::spend_exchange_wounded(&mut st, 0, 2, true, false, false, epoch);
+            assert_eq!(
+                crate::mods::granted(&st, 0, "Evasive"), kept_by_own_strike,
+                "epoch {epoch}: the bearer's own strike keeps an attacked-only grant only from 73"
+            );
+            if kept_by_own_strike {
+                crate::sim::spend_exchange_wounded(&mut st, 2, 0, true, false, false, epoch);
+                assert!(!crate::mods::granted(&st, 0, "Evasive"), "the exchange that attacks the bearer spends it");
+            }
+        }
+    }
+
+    /// G4-T8, the table's `_charge_capped_by_difficult` twin: forest under the TARGET's base only (grid
+    /// cell x 9..12"), the charger's own 8" leg open. From `EPOCH_73_V36` the cap gate probes to the
+    /// contact point and lets the charge through; below 73 it still probes to the target's centre (in
+    /// the forest) and caps it. The unit's static epoch is what the gate reads.
+    #[test]
+    fn the_cap_gate_probes_to_the_contact_point_from_epoch_73() {
+        let (st, mut statics) = carried_pair("ogres", &[], 8.0, 4);
+        let t = crate::terrain::Terrain::build(&crate::terrain::PlainTerrain {
+            cells: vec![[18.0, 15.0, crate::terrain::FOREST as f64]],
+            sandbox: vec![],
+            pieces: vec![],
+            walls: vec![],
+            cell_params: crate::terrain::CellParams {
+                table_size_feet: [6.0, 4.0],
+                grid_rotation_degrees: 0.0,
+                grid_size_inches: 3.0,
+                inches_to_meters: IN2M,
+            },
+        });
+        assert_eq!(t.type_at([(10.0 * IN2M) as f32, 0.0, 0.0]), crate::terrain::FOREST, "the target's centre stands in forest");
+        assert_eq!(t.type_at([(8.0 * IN2M) as f32, 0.0, 0.0]), crate::terrain::NONE, "the charger's contact point does not");
+        assert!(
+            !crate::gate::charge_illegal_tuned(&st, &statics, &t, 0, 2, 8.0, None, None, true),
+            "from epoch 73 the open leg to the contact point is no capped charge"
+        );
+        for s in statics.iter_mut() {
+            s.rules_epoch = crate::acts::EPOCH_73_V36 - 1;
+        }
+        assert!(
+            crate::gate::charge_illegal_tuned(&st, &statics, &t, 0, 2, 8.0, None, None, true),
+            "below 73 the probe still runs to the target's centre"
+        );
+    }

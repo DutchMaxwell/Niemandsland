@@ -4932,7 +4932,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 				and AiCombatMath.shot_uses_cover(save_def, shot_cover, shot_base):
 			cover_logged = true   # I4: only claim Cover when the roll truly saved at the covered value
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s is in cover: +1 Defense (saves on %d+)" % [
-				target.get_name(), AiCombatMath.shown_target(save_def)], true)
+				_solo_defense_signer(target).get_name(), AiCombatMath.shown_target(save_def)], true)
 		# AI-08a — rules-must-log: a cover skip by a map-read rule (Anti-Cover et al.) names the rule.
 		elif td_ctx.is_empty() and battle_log != null and shot_cover < shot_base and int(profile.get("blast", 0)) <= 1 \
 				and not str(profile.get("cover_rule", "")).is_empty():
@@ -5738,13 +5738,23 @@ func _solo_consume_once_mods(attacker: GameUnit, defender: GameUnit, melee: bool
 		for u in [unit, unit.get_attached_to() if unit.has_method("get_attached_to") else null]:
 			var uu := u as GameUnit
 			if uu != null:
-				_solo_spend_once_mods(uu, pair[1] as Array, melee)
+				_solo_spend_once_mods(uu, pair[1] as Array, melee, "", unit == attacker)
+
+
+## G4-T10 (EPOCH_73_V36, lead ruling on the 3.6 once-grants): a "once" grant is spent the next time its effect
+## actually applies. Evasive (and Melee Evasion) works when its bearer is ATTACKED, so the bearer own strike or
+## volley does not spend it; the exchange that attacks the bearer does (the defender side of the same spend).
+func _solo_grant_waits_to_be_attacked(rd: Dictionary) -> bool:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return false
+	var rule := RulesRegistry.base_rule_name(str(rd.get("grants_rule", "")))
+	return rule == "Evasive" or rule == "Melee Evasion"
 
 
 ## F4/NML-006 — spend every once-record on ONE unit that matches `roles` (role- and scope-filtered
 ## exactly like the reads). Reverts the NML-006 side effects (grant overlay off, props stamps
 ## recomputed), removes the paired library token and logs each spend (rules-must-log).
-func _solo_spend_once_mods(uu: GameUnit, roles: Array, melee: bool, keep_spell: String = "") -> void:
+func _solo_spend_once_mods(uu: GameUnit, roles: Array, melee: bool, keep_spell: String = "", attacking: bool = false) -> void:
 	var key := uu.get_instance_id()
 	var records: Array = _solo_spell_mods.get(key, [])
 	if records.is_empty():
@@ -5754,6 +5764,8 @@ func _solo_spend_once_mods(uu: GameUnit, roles: Array, melee: bool, keep_spell: 
 		for rd in AiSpell.mods_for(records, str(role), melee):
 			if keep_spell != "" and str((rd as Dictionary).get("spell", "")) == keep_spell:
 				continue
+			if attacking and _solo_grant_waits_to_be_attacked(rd as Dictionary):
+				continue   # G4-T10: the bearer own attack does not use an attacked-only grant
 			if str((rd as Dictionary).get("duration", "")) == "once" and not spent.has(rd):
 				if _solo_is_regen_grant(rd as Dictionary) and not bool((rd as Dictionary).get("used", false)):
 					continue
@@ -7894,6 +7906,13 @@ func _solo_defense_holder(unit: GameUnit) -> GameUnit:
 		if hero is GameUnit and (hero as GameUnit).get_alive_count() > 0:
 			return hero
 	return null
+
+
+## The unit a Defense-side battle-log line is signed with: the chain member holding the models (G4-T2),
+## else the unit itself. Below EPOCH_73_V36 that is always the unit.
+func _solo_defense_signer(unit: GameUnit) -> GameUnit:
+	var holder: GameUnit = _solo_defense_holder(unit)
+	return holder if holder != null else unit
 
 
 ## The unit's Defense after Armor(X) ("counts as having Defense X+", best-of — AiCombatMath.armored_defense,
@@ -10501,6 +10520,12 @@ func _solo_majority_in_cover(unit: GameUnit) -> bool:
 	# hero in the open whose squad stands in woods used to collect a +1 Defense he never earned.
 	if not _solo_takedown_solo.is_empty() and unit != null and unit == _solo_takedown_solo.get("unit"):
 		return _solo_model_in_cover(_solo_takedown_solo.get("model") as ModelInstance)
+	# G4R2 F-T-COVER (EPOCH_73_V36, sibling of G4-T2): a joined unit whose host models are all dead stands
+	# on its living hero's square — the hero is the unit now. Below 73 the holder is the unit itself, so
+	# the dead host keeps reading "not in cover".
+	var holder: GameUnit = _solo_defense_holder(unit)
+	if holder != null and holder != unit:
+		return _solo_majority_in_cover(holder)
 	if terrain_overlay == null or not terrain_overlay.has_method("get_terrain_at_world_position"):
 		return false
 	var models: Array = unit.get_alive_models()
@@ -11793,13 +11818,16 @@ static func _solo_rules_without_items(rules: Array, item_grants: Variant) -> Arr
 	var present := {}
 	for r in rules:
 		present[RulesRegistry.base_rule_name(str(r))] = true
+	var grants := {}   # keyed by the stripped name: an AI-list item name may carry a trailing space ("Psy-Witch ")
+	for k in (item_grants as Dictionary):
+		grants[RulesRegistry.base_rule_name(str(k))] = (item_grants as Dictionary)[k]
 	var out: Array = []
 	for r in rules:
 		var base := RulesRegistry.base_rule_name(str(r))
-		if not (item_grants as Dictionary).has(base):
+		if not grants.has(base):
 			out.append(r)
 			continue
-		for g in (item_grants as Dictionary)[base]:
+		for g in grants[base]:
 			if not present.has(RulesRegistry.base_rule_name(str(g))):
 				present[RulesRegistry.base_rule_name(str(g))] = true
 				out.append(g)
@@ -14899,7 +14927,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 					and AiCombatMath.shot_uses_cover(save_def, shot_cover, shot_base):
 				cover_logged = true   # I4: only claim Cover when the roll truly saved at the covered value
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s is in cover: +1 Defense (saves on %d+)" % [
-					target.get_name(), AiCombatMath.shown_target(save_def)], true)
+					_solo_defense_signer(target).get_name(), AiCombatMath.shown_target(save_def)], true)
 			# DAT-16b — rules-must-log: the HUMAN volley names the map-read rule that skips cover,
 			# the AI-08a block's twin (the human path used to skip cover without a word). The line is
 			# epoch-gated so that below 73 the human path stays byte-exact.

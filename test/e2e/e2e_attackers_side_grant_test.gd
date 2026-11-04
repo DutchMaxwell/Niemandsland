@@ -164,3 +164,69 @@ func test_a_peer_adopting_the_record_does_not_stamp_the_target() -> void:
 	assert_bool(foe.has_special_rule("Rending")) \
 		.override_failure_message("S1-05 (MP) — the peer stamped the attackers' Rending onto the target: %s" % str(foe.get_special_rules())) \
 		.is_false()
+
+
+# ===== G4-T10: a once grant is spent when its effect applies, not by the bearer's own strike ======
+
+func _armed(pid: int, unit_name: String, x: float, attacks: int, quality: int) -> GameUnit:
+	var u := _unit(pid, unit_name, Vector3(x * INCH, 0, 0))
+	u.unit_properties["quality"] = quality
+	var model := u.models[0] as ModelInstance
+	model.model_index = 0
+	model.wounds_max = 10
+	model.wounds_current = 10
+	var weapon := OPRApiClient.OPRWeapon.new()
+	weapon.name = "Club"
+	weapon.range_value = 0
+	weapon.attacks = attacks
+	var source := OPRApiClient.OPRUnit.new()
+	source.weapons = [weapon]
+	u.source_type = "opr"
+	u.source_data = source
+	return u
+
+
+func _blood_dome_charge(epoch: int) -> String:
+	var epoch0: int = AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = epoch
+	_main.solo_ai_slots = {1: true, 2: true}   # both seats AI: the strike-back auto-resolves, no dialog
+	_main._ensure_solo_controller()
+	_main._solo_batch = true
+	var charger := _armed(2, "Pathfinders", 0.0, 2, 4)
+	var sisters := _armed(1, "Sisters", 1.0, 12, 3)   # quality 3: hits on 3+, on 4+ against an Evasive unit
+	_main._solo_record_spell_mod(charger, "Blood Dome", {"grants_rule": "Evasive",
+		"beneficiary": "", "duration": "once", "scope": ""})
+	await _main.begin_activation(charger)
+	_main.seed_tray_rng(7)
+	await _main._run_ai_melee({"unit": charger, "target": sisters, "charge_from_in": 1.0,
+		"dangerous_wounds_taken": 0})
+	var text := _log_text()
+	await E2EBoot.settle(get_tree())
+	AiActRecorder.rules_epoch = epoch0
+	return text
+
+
+func _line_starting(text: String, prefix: String) -> String:
+	for line in text.split("\n"):
+		if line.strip_edges().begins_with(prefix):
+			return line.strip_edges()
+	return ""
+
+
+## The act-27 shape (gf_1000_net_002): Blood Dome gave the CHARGER a once Evasive grant. The grant works when
+## the unit is ATTACKED, so the charger's own strike does not spend it: the Sisters (quality 3) hit on 4+ in
+## the strike-back, and only THEN is the grant consumed (lead ruling G4-T10, 3.6 once-grants).
+func test_a_once_evasive_grant_survives_the_chargers_own_strike_at_epoch_73() -> void:
+	var text: String = await _blood_dome_charge(AiActRecorder.EPOCH_73_V36)
+	assert_str(_line_starting(text, "AI (Sisters):")).ends_with("(4+)")
+	var consumed := "\"Blood Dome\" on Pathfinders is consumed (applies once)"
+	assert_int(text.count(consumed)).is_equal(1)
+	assert_bool(text.find(consumed) > text.find("AI (Sisters):")) \
+		.override_failure_message("the grant was spent before the strike-back it was meant for:\n%s" % text) \
+		.is_true()
+
+
+## Below 73 the old order stands (byte-identical): the charger's strike spends the grant, the strike-back hits on 3+.
+func test_a_once_evasive_grant_is_still_spent_by_the_chargers_strike_below_epoch_73() -> void:
+	var text: String = await _blood_dome_charge(AiActRecorder.EPOCH_73_V36 - 1)
+	assert_str(_line_starting(text, "AI (Sisters):")).ends_with("(3+)")
