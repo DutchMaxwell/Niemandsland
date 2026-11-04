@@ -404,7 +404,8 @@ def vintage_report_line(seen: set[tuple[bool, bool]]) -> str:
 
 def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: bool,
         hero_attach: str = "table", sighting: str = "unit",
-        engage_fold: str = "auto", cond_ap: str = "auto", inject: bool = True, red_pre: str = "") -> int:
+        engage_fold: str = "auto", cond_ap: str = "auto", inject: bool = True, red_pre: str = "",
+        movement: bool = False, red_move_rigid: bool = False) -> int:
     games = sorted(d for d in ref.iterdir() if d.is_dir() and (d / "dice.jsonl").exists())
     if limit:
         games = games[:limit]
@@ -431,6 +432,9 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
     vintage_seen: set[tuple[bool, bool]] = set()
     t0 = time.perf_counter()
 
+    walls_seen: set[str] = set()
+    if movement:
+        from melee_replay_gate import header_walls_m  # lazy: melee_replay_gate imports this module at load time
     for d in games:
         head, lines, dice, seed = read_game(d)
         burn = burn_prefix(dice)
@@ -451,8 +455,15 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
         # along. Neither touches this tool's verdict — it replays one recorded
         # act at a time and compares the DEFENDER — but a control that only half
         # flips the knob is not a control.
-        core.set_header({"profiles": head["profiles"], "terrain": head.get("terrain"),
-                         "knobs": dict(head.get("knobs", {}),
+        # AI-G4 H2 (--movement): the shooter's Advance moves per model through the movement port (header knob
+        # movement=table) on the board's walls, read the way the melee gate reads them. --red-move-rigid hands
+        # the same walls over with the knob OFF: the rigid landing is back. Without the flag nothing is set.
+        walls, wall_src = header_walls_m(d, head) if movement else ([], "")
+        walls_seen.add(wall_src)
+        terrain = dict(head.get("terrain") or {}, walls=walls) if movement and head.get("terrain") else head.get("terrain")
+        move_knob = {"movement": not red_move_rigid} if movement else {}
+        core.set_header({"profiles": head["profiles"], "terrain": terrain,
+                         "knobs": dict(head.get("knobs", {}), **move_knob,
                                        hero_attach=hero_attach == "table",
                                        engage_fold=eff_engage_fold,
                                        # NML-1073 M5 D6a-B4. `"unit"` is the
@@ -653,6 +664,8 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
     label = {"table": "GATE D1-B4",
              "off": "RED D1-B4 --mode off (dice=expected)",
              "misseed": "RED D1-B4 --red-misseed (tray on dice_seed+1)"}[mode]
+    if movement:
+        label += " + movement=table" + (" [RED: rigid]" if red_move_rigid else "")
     print()
     print("%s over %d games, %d shooting acts, hero_attach=%s, sighting=%s, %s (%.1fs)" % (
         label, len(games), tally["acts"], hero_attach, sighting,
@@ -690,6 +703,8 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
     print("  no-split : %d/%d of those acts FULL-equal (+%d both silent); first field to part "
           "there: %s" % (tally["clean_full_equal"], tally["clean_acts"], tally["clean_both_silent"],
                          ", ".join("%s=%d" % kv for kv in sorted(reasons_clean.items())) or "none"))
+    if movement:
+        print("  walls : %s" % "; ".join(sorted(walls_seen)))
     print("  unported branches touched: %s" % (
         ", ".join("%s=%d" % kv for kv in sorted(unported.items())) or "none"))
     for f in firsts:
@@ -758,6 +773,13 @@ def main(argv: list[str]) -> int:
                     help="'unit' is today's die count (every ALIVE model of the unit fires) and "
                          "the BEFORE half of D6a; 'model' counts the models with range AND line "
                          "of sight, per weapon, the way the table does")
+    ap.add_argument("--movement", action="store_true",
+                    help="AI-G4 H2: replay with the header knob movement=table - the shooter's Advance moves per "
+                         "model through the M4 movement port on the board's walls (the melee gate's switch), "
+                         "instead of the core translating the unit rigidly")
+    ap.add_argument("--red-move-rigid", action="store_true",
+                    help="RED PROOF for --movement: the same walls are handed over but the header knob stays "
+                         "OFF, so the rigid landing is back and the acts the port closed part again")
     ap.add_argument("--limit", type=int, default=0, help="only the first N game dirs")
     ap.add_argument("--verbose", type=int, default=0, help="print every diverging act")
     ap.add_argument("--engage-fold", choices=("auto", "on", "off"), default="auto",
@@ -779,7 +801,8 @@ def main(argv: list[str]) -> int:
     a = ap.parse_args(argv)
     mode = "misseed" if a.red_misseed else a.mode
     return run(Path(a.ref).expanduser(), a.repo, mode, a.limit, a.verbose, a.report_only,
-               a.hero_attach, a.sighting, a.engage_fold, a.cond_ap, a.inject == "on", a.red_pre)
+               a.hero_attach, a.sighting, a.engage_fold, a.cond_ap, a.inject == "on", a.red_pre,
+               a.movement or a.red_move_rigid, a.red_move_rigid)
 
 
 if __name__ == "__main__":
