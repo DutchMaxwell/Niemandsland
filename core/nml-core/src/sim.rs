@@ -6521,7 +6521,7 @@ fn tray_charge_with_self_wounds(
     // the enemy's winner tally at EPOCH_73_V36 only.
     let mut scourge_on_charger = 0;
     let mut scourge_on_defender = 0;
-    if impact_first && next.alive[si] > 0 && next.alive[ti] > 0 {
+    if impact_first && side_up(next, si, seams) && next.alive[ti] > 0 {
         by_su += impact_phase(statics, next, si, ti, tray, shot, seams.rules_epoch, charge_from_in, seams.tray_exact);
     }
     if counter_first && side_up(next, si, seams) && side_up(next, ti, seams) {
@@ -6533,7 +6533,7 @@ fn tray_charge_with_self_wounds(
     }
     // main.gd:8276's alive gate — a counter phase that wiped the charger
     // closes the card, nothing left to roll.
-    if !impact_first && next.alive[si] > 0 && next.alive[ti] > 0 {
+    if !impact_first && side_up(next, si, seams) && next.alive[ti] > 0 {
         by_su += impact_phase(statics, next, si, ti, tray, shot, seams.rules_epoch, charge_from_in, seams.tray_exact);
     }
     // main.gd:8035 — the charger's Mark lands after Impact and before the
@@ -6551,7 +6551,12 @@ fn tray_charge_with_self_wounds(
         if (slot == 0) != charger_last {
             // :8079 — the charger strikes only while BOTH sides still stand;
             // an Impact pool that wiped the defender ends the melee here.
-            if next.alive[si] > 0 && next.alive[ti] > 0 {
+            if side_up(next, si, seams) && next.alive[ti] > 0 {
+                // R3-X2a (`EPOCH_73_V36`, lead ruling 2): the charger's host died in its Dangerous test, a joined hero stands.
+                if let Some(h) = next.attached[si].iter().copied().find(|&h| next.alive[h] > 0).filter(|_| next.alive[si] <= 0) {
+                    shot.log.push(format!("Hero: {} has no models left - {} charges on as the unit",
+                        statics[next.roster.profile[si]].name, statics[next.roster.profile[h]].name));
+                }
                 // B13: the defender's lash-back credits ITS OWN tally (by_tu).
                 let (c, rc, h, s) = strike_phase(statics, next, si, ti, true, charge_from_in, seams, tray, shot, StrikeSet::All, cover);
                 by_su += c;
@@ -9507,7 +9512,9 @@ fn resolve_with(
                     // BEFORE these wounds land.
                     let alive_before = morale_alive(&next, si, seams);
                     let wounds_before = morale_wounds_left(&next, si, seams);
-                    land_wounds_with(&mut next, si, w, seams.tray_exact);
+                    // R3-X2a (`EPOCH_73_V36`, lead ruling 2): the surplus wounds the host's models cannot soak go on to the
+                    // joined hero (heroes last); below 73 `land_pool_wounds` drops them as before.
+                    land_pool_wounds(&mut next, si, w, seams.tray_exact, seams, &mut shot.log);
                     // main.gd:1096-1098 — a NON-charge activation tests morale for
                     // these wounds at its very END ("units in melee don't take
                     // morale tests from wounds at the end of an activation").
