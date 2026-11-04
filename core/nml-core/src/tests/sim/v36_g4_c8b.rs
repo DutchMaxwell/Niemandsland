@@ -33,9 +33,10 @@ mod g4_c8b {
         (next, shot.log)
     }
 
-    /// The defender's models' summed centre distance to the charger's model.
-    fn spread(st: &State) -> f64 {
-        st.positions[1].iter().map(|p| (p[0] - st.positions[0][0][0]).hypot(p[2] - st.positions[0][0][2])).sum()
+    /// The defender's models' summed centre distance to the point `to` - the charger's contact spot. From
+    /// 73 the charger backs off 1" after the fight (G4R4-CONS), so its final spot is no longer the reference.
+    fn spread(st: &State, to: [f64; 3]) -> f64 {
+        st.positions[1].iter().map(|p| (p[0] - to[0]).hypot(p[2] - to[2])).sum()
     }
 
     #[test]
@@ -50,7 +51,8 @@ mod g4_c8b {
         let (st, statics) = line_of_three();
         let (at72, _) = charge(&st, &statics, EPOCH_72_PLAYTEST_RULES);
         let (at73, _) = charge(&st, &statics, EPOCH_73_V36);
-        assert!(spread(&at73) < spread(&at72) - 0.5 * IN2M, "{} vs {}", spread(&at73) / IN2M, spread(&at72) / IN2M);
+        let contact = at72.positions[0][0];
+        assert!(spread(&at73, contact) < spread(&at72, contact) - 0.5 * IN2M, "{} vs {}", spread(&at73, contact) / IN2M, spread(&at72, contact) / IN2M);
     }
 
     #[test]
