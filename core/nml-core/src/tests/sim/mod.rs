@@ -1822,6 +1822,7 @@ mod v36_g4r4_consolidation;
 mod v36_melee;
 mod v36_melee_rows;
 mod v36_g4_c8b;
+mod v36_g4r4_lonehero_shaken;
 mod v36_mor_10;
 mod v36_mor_11;
 mod v36_mor_14;

@@ -250,6 +250,14 @@ fn morale_root(state: &State, i: usize, seams: Seams) -> usize {
     }
 }
 
+/// G4R4 C-LONEHERO-SHAKEN (`EPOCH_73_V36`): the Shaken a morale test reads. A lone joined hero (its host has no models
+/// left) is the host's unit and the table keeps the flag on that unit, so the dead host's Shaken is the hero's; every
+/// other unit reads its own flag, and below 73 every unit does.
+fn unit_shaken(state: &State, i: usize, seams: Seams) -> bool {
+    let root = morale_root(state, i, seams);
+    state.shaken[i] || (root != i && state.alive[root] <= 0 && state.shaken[root])
+}
+
 /// `main._solo_unit_wounds_now`: from 73 the chain's wounds (host plus joined heroes), below 73 the unit's own.
 fn morale_wounds_left(state: &State, i: usize, seams: Seams) -> i64 {
     let r = morale_root(state, i, seams);
@@ -6237,7 +6245,7 @@ const HERO_AURA_REACH_IN: f64 = 6.0;
 /// Tough(9)+, within 6" base edge to base edge (`modifier_distance_in`, the table's `nearest_melee_gap_in`).
 /// Such a Hero cannot be joined, so it is its own unit. A Shaken `i` rolls no die, so no aura is spent.
 fn hero_aura_quality(statics: &[UnitStatic], state: &State, i: usize, own: i64, seams: Seams) -> Option<(usize, i64)> {
-    if !rule_on(seams.rules_epoch, EPOCH_73_V36) || state.shaken[i] {
+    if !rule_on(seams.rules_epoch, EPOCH_73_V36) || unit_shaken(state, i, seams) {
         return None;
     }
     let mut best: Option<(usize, i64)> = None;
@@ -6311,7 +6319,7 @@ fn drop_banner_for_cause(
     cause: Option<&str>, over_in: Option<f64>, charge_from_in: Option<f64>, seams: Seams,
     ctx: &mut Ctx, shot: &mut ShootResult,
 ) {
-    if !rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) || state.shaken[i] { return; }
+    if !rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) || unit_shaken(state, i, seams) { return; }
     let us = &statics[state.roster.profile[i]];
     let banner = (state.morale_bonus[i] - us.ctx.morale_rating).max(0);
     if let Some(cause) = cause {
@@ -6394,10 +6402,16 @@ pub(crate) fn tray_morale_for(
     let us = &statics[state.roster.profile[i]];
     let mut ctx = live_morale_ctx(statics, state, i, melee, seams, shot);
     drop_banner_for_cause(statics, state, i, melee, charged_by_enemy, cause, over_in, charge_from_in, seams, &mut ctx, shot);
+    // G4R4 C-LONEHERO-SHAKEN: the unit's flag, the dead host's included (rules-must-log names the Shaken rule).
+    let shaken = unit_shaken(state, i, seams);
+    if shaken && !state.shaken[i] {
+        let host = &statics[state.roster.profile[morale_root(state, i, seams)]].name;
+        shot.log.push(format!("Shaken: {} is the unit of its dead host {host}, which is Shaken — the test fails without a die", us.name));
+    }
     // EPOCH_39_MORALE_RATING — rules-must-log (main.gd:8596-8602): the test
     // that adds the rating names it, once per drawn die. A Shaken auto-fail
     // draws no die and adds nothing, so it stays silent.
-    if us.ctx.morale_rating > 0 && !state.shaken[i] {
+    if us.ctx.morale_rating > 0 && !shaken {
         shot.log.push(format!(
             "[Morale({})] {}: +{} to the morale test (passes on {}+)",
             us.ctx.morale_rating,
@@ -6413,7 +6427,7 @@ pub(crate) fn tray_morale_for(
         &us.name,
         melee,
         below_half(state, statics, us, i, seams),
-        state.shaken[i],
+        shaken,
         // `SoloController.wounds_to_destroy` :6084 also counts the attached
         // heroes' models; this port counts the unit's own wounds, which is the
         // die COUNT of a No Retreat roll and nothing else.
@@ -6422,7 +6436,7 @@ pub(crate) fn tray_morale_for(
     );
     // Rules 3.6 rules-must-log (main.gd `_solo_morale_test`): a unit Fearless by MOST of its models names the
     // count when it draws the recovery die - the die follows the test die, or stands alone for a Shaken unit.
-    if rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) && ctx.fearless && r.rolls.len() > usize::from(!state.shaken[i]) {
+    if rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) && ctx.fearless && r.rolls.len() > usize::from(!shaken) {
         let (with, total) = fearless_models(statics, state, i, seams);
         if with < total {
             shot.log.push(format!("Fearless: {with} of {total} models of {} have it — most do, so the whole unit counts", us.name));
