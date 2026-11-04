@@ -2332,6 +2332,7 @@ func _act(unit: GameUnit) -> Dictionary:
 	# tree's section draw, because that is all the imitation corpus ever taught.
 	# No policy loaded => {} => byte-identical tree.
 	var planner_used := false
+	var planned_verb := -1   # F-HOLD-ADV: the verb the adopted plan picked (-1: no plan)
 	var pl := {}
 	var _ph_plan := 0
 	if act_wall_enabled():
@@ -2345,6 +2346,7 @@ func _act(unit: GameUnit) -> Dictionary:
 	if bool(pl.get("used", false)):
 		planner_used = true
 		action = int(pl["action"])
+		planned_verb = action
 		do_shoot = bool(pl["shoot"])
 		dec["toward"] = int(pl["toward"])
 		action_why = str(pl["why"])
@@ -2587,6 +2589,8 @@ func _act(unit: GameUnit) -> Dictionary:
 	var band_in: float = (rush if action == AiDecision.Action.RUSH
 		else (advance if action == AiDecision.Action.ADVANCE else 0.0))
 	var charge_band_in := melee_shroud_charge_in(charge_reach, target_unit)
+	if planned_verb >= 0 and action != planned_verb:
+		AiActRecorder.executed_verb(_move_act_seq, action, planned_verb)   # F-HOLD-ADV (D7): the verb that RAN
 	var intent := ActIntent.make(unit, action, target_unit, goal, band_in, do_shoot, {
 		"charge_band_in": charge_band_in, "shoot_range_in": shoot_range, "quick_shot": quick_shot,
 		"enemy_dist_in": enemy_dist, "to_objective": to_obj, "to_flank": to_flank,
