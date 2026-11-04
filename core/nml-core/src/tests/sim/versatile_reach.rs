@@ -198,3 +198,30 @@ use super::*;
             vr_gap(&epoch_current)
         );
     }
+
+    /// The 73 twin of the epoch-gate test above (the 72 one cannot read it: from 73 the charger backs off 1" after
+    /// the fight, G4R4-CONS, so the final gap is no longer the landing). The landing is read from what the activation
+    /// did: a charge that stops 1.5" short never fights and never backs off, so the back-step line proves the +2" ring
+    /// bonus reached contact, and the charger's final gap is that contact plus exactly the 1" step. RED if the
+    /// `rule_on(.., 1)` gate at the `versatile_reach_charge_in` call site is dropped: the charge lands 1.5" short.
+    #[test]
+    fn the_versatile_reach_epoch_gate_lands_in_contact_at_73_before_the_charger_backs_off() {
+        let (st, mut statics) = vr_charge_line(13.5);
+        statics[0].versatile_reach_charge_in = Some(2.0);
+        let (at73, shot) = resolve_stochastic_tray_on_board(
+            &statics, &st, &vr_charge(), &small_board(),
+            Seams { movement: true, versatile_reach: false, rules_epoch: crate::acts::EPOCH_73_V36, ..Seams::default() },
+            &mut crate::rng::GodotRng::new(0), &mut Tray::seeded(11),
+        )
+        .unwrap();
+        assert!(
+            shot.log.iter().any(|l| l.starts_with("Consolidation: ") && l.contains("moves back 1\"")),
+            "knob false, epoch 73: the charge must reach the fight and back off, {:?}",
+            shot.log
+        );
+        assert!(
+            vr_gap(&at73) - 1.0 < 0.3,
+            "the +2\" bonus lands in contact before the 1\" back-step, final gap {:.3}\"",
+            vr_gap(&at73)
+        );
+    }
