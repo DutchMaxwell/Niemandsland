@@ -5,8 +5,11 @@
   shard_assign.py --shards N --check     prove every suite on disk lands in exactly one shard
 
 Weights come from test/shard_weights.json (suite -> seconds, regenerated from a main run).
-A suite missing from the file gets the median weight, so a new suite is still assigned
-exactly once. Longest-processing-time-first: heaviest suite into the lightest shard.
+A new suite needs NO line there: a suite missing from the file gets the median weight and is
+still assigned exactly once (--check prints how many suites sit at the median; the next
+regeneration gives them a measured weight). A line for a suite that no longer exists fails
+--check - delete the line together with the suite. Longest-processing-time-first: heaviest
+suite into the lightest shard.
 """
 import argparse
 import json
@@ -22,9 +25,14 @@ def suites_on_disk():
     return sorted(out.split("\n")[:-1], key=lambda s: s.encode())
 
 
-def assign(suites, weights, shards):
+def default_weight(suites, weights):
+    """The weight of a suite with no line: the median of the weights that exist."""
     known = [weights[s] for s in suites if s in weights]
-    default = statistics.median(known) if known else 1.0
+    return statistics.median(known) if known else 1.0
+
+
+def assign(suites, weights, shards):
+    default = default_weight(suites, weights)
     load = [0.0] * shards
     out = [[] for _ in range(shards)]
     for s in sorted(suites, key=lambda s: (-weights.get(s, default), s.encode())):
@@ -52,8 +60,16 @@ def main():
     missing = sorted(set(suites) - set(seen))
     dupes = sorted({s for s in seen if seen.count(s) > 1})
     print(f"*_test.gd files on disk: {len(suites)} | assigned: {len(seen)}")
+    unweighted = [s for s in suites if s not in weights]
+    if unweighted:
+        print(f"{len(unweighted)} unweighted suites at the median ({default_weight(suites, weights):g} s)")
+    stale = sorted(set(weights) - set(suites), key=lambda s: s.encode())
+    if stale:
+        print(f"::error::{WEIGHTS} has lines for suites that no longer exist - delete them: {stale}")
     if missing or dupes or len(seen) != len(suites):
         print(f"::error::shard coverage broken - missing from every shard: {missing}, in several shards: {dupes}")
+        return 1
+    if stale:
         return 1
     print(f"OK: the {a.shards} shards cover every *_test.gd suite exactly once")
     return 0
