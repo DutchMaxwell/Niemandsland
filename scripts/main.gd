@@ -4692,6 +4692,11 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 	var alive_before: int = SoloController.combined_alive(target)   # NML-966: trigger reads combined
 	var wounds_before: int = _solo_unit_wounds_now(target)
 	var models_before: int = _solo_combined_alive(target)
+	# G4R3 F-T-SIGHT-LONE (EPOCH_73_V36): the Hero rule — name it when the volley's target is a lone hero.
+	var lone_hero: GameUnit = _solo_defense_holder(target)
+	if lone_hero != null and lone_hero != target and battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT, "Hero: %s is the unit now — shots from %s at %s are measured and saved as the hero" % [
+			lone_hero.get_name(), attacker.get_name(), target.get_name()], true)
 	# Armor(X) (wave 5, army-book upgrade: "counts as having Defense X+") sets the working Defense,
 	# then every Defense contribution of the parts seam folds in (Shielded and its data aliases,
 	# growth markers, spell tokens — each NAMED in the log, NML-932); Cover (GF v3.5.1 p.11) is
@@ -5040,12 +5045,13 @@ func _solo_resolve_ai_casts(report: Dictionary) -> void:
 	_solo_refresh_caster_markers()
 
 
-## AI-G4 H1a: {unit id: [alive models, Shaken]} of every unit on the table (the cast leg's before/after diff).
+## AI-G4 H1a: {unit id: [alive models, Shaken, the living ModelInstances]} of every unit on the table (the cast leg's
+## before/after diff; the third slot is F-PRE-SURV's list of who stood at the start).
 func _solo_unit_flags() -> Dictionary:
 	var flags := {}
 	for uid in opr_army_manager.game_units:
 		var u := opr_army_manager.game_units[uid] as GameUnit
-		flags[uid] = [u.get_alive_count(), u.is_shaken]
+		flags[uid] = [u.get_alive_count(), u.is_shaken, u.get_alive_models()]
 	return flags
 
 
@@ -5057,8 +5063,17 @@ func _solo_record_pre_leg(before: Dictionary) -> void:
 	var changed := {}
 	var after := _solo_unit_flags()
 	for uid in after:
-		if after[uid] != before.get(uid):
+		var was: Array = before.get(uid, [])
+		if was.is_empty() or after[uid][0] != was[0] or after[uid][1] != was[1]:
 			changed[uid] = {"alive": after[uid][0], "shaken": after[uid][1]}
+			if not was.is_empty():
+				# F-PRE-SURV: WHICH models of the start list still stand (`of` = its length), not only how many
+				var keep: Array = []
+				for i in (was[2] as Array).size():
+					if is_instance_valid(was[2][i]) and (was[2][i] as ModelInstance).is_alive:
+						keep.append(i)
+				changed[uid]["of"] = (was[2] as Array).size()
+				changed[uid]["keep"] = keep
 	AiActRecorder.pre(solo_controller.move_act_seq(), changed)
 
 
@@ -6254,8 +6269,13 @@ func _solo_los_chain_ids(u: GameUnit) -> Array:
 func _solo_unit_base_radius_m(unit: GameUnit) -> float:
 	if unit == null:
 		return 0.0
+	# G4R3 F-T-SIGHT-LONE (EPOCH_73_V36): the Hero rule — a joined hero whose host models are all dead
+	# IS the unit now, so its own base speaks for the sight cylinder and the edge slack, not 0.
+	var holder: GameUnit = _solo_defense_holder(unit)
+	if holder == null:
+		return 0.0
 	var r := 0.0
-	for m in unit.get_alive_models():
+	for m in holder.get_alive_models():
 		r = maxf(r, SoloController.model_base_radius_m(m))
 	return r
 
