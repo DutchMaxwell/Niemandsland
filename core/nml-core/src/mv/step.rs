@@ -1105,6 +1105,58 @@ pub(crate) fn snap_charge_state(self, state: &mut State, si: usize, ci: usize,
     Some(snap)
 }
 
+/// G4-C8b (`EPOCH_73_V36`) — `SoloController.pile_in` (solo_controller.gd:11000), which the table runs once the charger
+/// has stood: each defender model without base contact steps up to 3" toward its own `charge_contact_slots` slot, the
+/// model nearest its slot first, on the longest of eleven fractions of the step that clears the walls and overlaps no
+/// base; the longest that also keeps the defender coherent wins. Returns the models moved. Not ported: the regiment
+/// skip, oval bases in the coherency preference (round discs, as the placement ladder's round arm).
+pub(crate) fn pile_in_state(self, state: &mut State, t: &Terrain, si: usize, ti: usize, hero_attach: bool) -> usize {
+    let (mut dm, mut cm) = (movers_of(state, ti), movers_of(state, si));
+    if !hero_attach { dm.retain(|m| m.unit == ti); cm.retain(|m| m.unit == si); }
+    let inch = |p: V3| [p[0] / IN2M as f32, p[2] / IN2M as f32];
+    let radii: Vec<f64> = dm.iter().map(|m| radius_of(state, *m) / IN2M).collect();
+    let mpos: Vec<V2> = dm.iter().map(|m| inch(pos_of(state, *m))).collect();
+    let tgt: Vec<(V2, f64)> = cm.iter().map(|m| (inch(pos_of(state, *m)), radius_of(state, *m) / IN2M)).collect();
+    let slots = super::charge::charge_contact_slots(&mpos, &radii, &tgt);
+    let to_slot = |i: usize| slots.get(i).map_or(f64::INFINITY, |s| g2::distance_to(mpos[i], *s));
+    let mut order: Vec<usize> = (0..dm.len()).collect();
+    order.sort_by(|&a, &b| if (to_slot(a) - to_slot(b)).abs() > 0.0001 { to_slot(a).total_cmp(&to_slot(b)) } else { a.cmp(&b) });
+    let walls: &[[[f32; 2]; 2]] = if state.profile(ti).special_rules.iter().any(|r| r == "Flying") { &[] } else { t.walls_world_m() };
+    let chain = if matches!(state.profile(ti).game_system.as_str(), "gff" | "aofs") { super::SKIRMISH_CHAIN_IN } else { super::MAX_CHAIN_IN };
+    let mut moved = 0;
+    for i in order {
+        let (m, p, r) = (dm[i], pos_of(state, dm[i]), radius_of(state, dm[i]));
+        let gap = |q: V3, rq: f64| (p[0] - q[0]).hypot(p[2] - q[2]) as f64 - r - rq;
+        let near = cm.iter().map(|c| gap(pos_of(state, *c), radius_of(state, *c))).fold(f64::INFINITY, f64::min);
+        let Some(slot) = slots.get(i).filter(|_| near > crate::sim::BASE_CONTACT_EPSILON_IN * IN2M) else { continue };
+        let to = [slot[0] as f64 * IN2M - p[0] as f64, slot[1] as f64 * IN2M - p[2] as f64];
+        let len = to[0].hypot(to[1]);
+        let full = (3.0 * IN2M).min((len - 0.001).max(0.0));
+        if len <= 0.0005 || full <= 0.0005 { continue; }
+        let (mut legal, mut chosen) = (None, None);
+        for frac in [1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.05] {
+            let c: V3 = [p[0] + (to[0] / len * full * frac) as f32, p[1], p[2] + (to[1] / len * full * frac) as f32];
+            let blocked = walls.iter().any(|w| g2::seg_seg_distance([p[0], p[2]], [c[0], c[2]], w[0], w[1]) < r + 0.001);
+            let overlaps = (0..state.units()).any(|u| (0..state.positions[u].len()).any(|k| {
+                !(u == m.unit && k == m.model) && (c[0] - state.positions[u][k][0] as f32).hypot(c[2] - state.positions[u][k][2] as f32) as f64
+                    - r - radius_of(state, Mover { unit: u, model: k }) < -0.0005
+            }));
+            if blocked || overlaps { continue; }
+            legal.get_or_insert(c);
+            let cfg: Vec<V2> = dm.iter().map(|d| if d.unit == m.unit && d.model == m.model { inch(c) } else { inch(pos_of(state, *d)) }).collect();
+            if dm.len() <= 1 || (super::components_r(&cfg, &radii).len() == 1 && super::max_edge_spread_r(&cfg, &radii) <= chain) {
+                chosen = Some(c);
+                break;
+            }
+        }
+        if let Some(c) = chosen.or(legal) {
+            state.positions[m.unit][m.model] = geom::to_f64(c);
+            moved += 1;
+        }
+    }
+    moved
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn charge_move(self, state: &State, t: &Terrain, si: usize, ci: usize,
     band_in: f64, hero_attach: bool, fast_planner: bool, guard: i64) -> Option<Landing> {
@@ -1123,6 +1175,23 @@ pub fn charge_reaches_contact(self, state: &State, t: &Terrain, si: usize, ci: u
     band_in: f64, hero_attach: bool) -> bool {
     self.charge_landing(state, t, si, ci, band_in, hero_attach, true, crate::mv::FAST_PLANNER_GUARD)
         .is_none_or(|(_, short)| !short)
+}
+
+/// `SoloController.unit_coherent_now` :10632 — is the unit's CURRENT configuration (its own models plus the attached
+/// heroes') one coherent chain? The chain length is the acting unit's own (6" skirmish, else 9"). `true` when there is no
+/// board or at most one model: no opinion then.
+pub fn unit_coherent_now(self, state: &State, t: &Terrain, si: usize, hero_attach: bool) -> bool {
+    let mut movers = movers_of(state, si);
+    if !hero_attach { movers.retain(|m| m.unit == si); }
+    if movers.len() <= 1 || !t.is_valid() { return true; }
+    let starts: Vec<V2> = movers.iter().map(|m| t.to_inch(pos_of(state, *m))).collect();
+    let radii_in: Vec<f64> = movers.iter().map(|m| radius_of(state, *m) / IN2M).collect();
+    let shapes: Vec<_> = movers.iter().map(|m| state.base_shape(m.unit)).collect();
+    let chain = if rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES)
+        && matches!(state.profile(si).game_system.as_str(), "gff" | "aofs")
+    { super::SKIRMISH_CHAIN_IN } else { super::MAX_CHAIN_IN };
+    super::gate::coherent_placement(&starts, &radii_in,
+        super::gate::GateFlags { shapes: &shapes, coherent_chain_in: chain, ..Default::default() })
 }
 
 /// The charge landing and whether it ENDS SHORT (#857): the table re-gates such a charge to a Rush.
