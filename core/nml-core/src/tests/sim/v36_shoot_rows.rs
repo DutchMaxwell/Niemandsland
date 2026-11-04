@@ -6,6 +6,7 @@ mod sho_15b;
 mod g4r3_morale_chain;
 mod sho_16;
 mod sho_19b;
+mod sho_19live;
 mod sho_21b;
 mod sho_23;
 mod sho_par_f3;

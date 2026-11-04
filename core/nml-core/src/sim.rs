@@ -782,6 +782,14 @@ fn combined_alive(state: &State, i: usize, seams: Seams) -> i64 {
         }
 }
 
+/// Rules 3.6 (`EPOCH_73_V36`) — Blast(X) caps by the table's `_solo_combined_alive(target)`: the host's living
+/// models PLUS every living joined hero. Stamped beside `models`, which stays the host's own count.
+fn stamp_blast_models(def: &mut Ctx, state: &State, ti: usize, seams: Seams) {
+    if rule_on(seams.rules_epoch, EPOCH_73_V36) {
+        def.blast_models = Some(combined_alive(state, ti, seams));
+    }
+}
+
 /// BLOCK B3 — the breath-weapon primitive on the tray path's pre-attack slot,
 /// right after Mend: `_solo_apply_breath_attack` main.gd:5262-5330. Official
 /// text: "Once per activation, before attacking, pick one enemy unit within
@@ -1281,6 +1289,7 @@ pub(crate) fn tray_strafing(
     let d = modifier_distance_in(next, si, target, seams);
     let ut = &statics[next.roster.profile[target]];
     let mut def = with_modifier_sum(with_cond_ap_state(ctx_live(ctx_of(ut, next, target), statics, next, target, false, seams.rules_epoch), statics, next, target, seams), seams.rules_epoch);
+    stamp_blast_models(&mut def, next, target, seams);
     // D-STEALTH — the strafe volley reads the defender's live context the
     // same way the table's `_solo_resolve_ai_volley` does (main.gd:3007), so
     // the def build carries the same terrain gate.
@@ -3821,9 +3830,9 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
         c.slayer_grant = grants && mods::granted(state, i, "Slayer");
         c.surge_grant = grants && mods::granted(state, i, "Enhanced Primal");
         c.versatile_grant = grants && mods::granted(state, i, "Versatile Attack");
-        c.versatile_no_gate = rule_on(rules_epoch, EPOCH_73_V36)
-            && grants
-            && mods::granted(state, i, "Enhanced Watchborn");
+        // The live grant only ADDS to the static Expert flag (`unit::ctx_for`); assigning would drop it.
+        c.versatile_no_gate = c.versatile_no_gate
+            || (rule_on(rules_epoch, EPOCH_73_V36) && grants && mods::granted(state, i, "Enhanced Watchborn"));
         c.pierce_shooting_grant = grants && mods::granted(state, i, "AP(+1) when shooting");
         c.pierce_melee_grant = grants && mods::granted(state, i, "AP(+1) in melee");
         // EPOCH 23 INERT MARKS (MARK_FAMILY_SWEEP_2026-09-14 finding 1): the
@@ -5708,6 +5717,7 @@ fn strike_phase(
     if rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) {
         def.parry_dice_total = Some(parry_dice_total(statics, next, ti));
     }
+    stamp_blast_models(&mut def, next, ti, seams);
     // D-STEALTH — the def build's terrain gate (the melee leg consumes the
     // same closed alias the shooting fold does).
     stealth_alias_terrain_gate(statics, next, ti, cover, &mut def);
@@ -9264,7 +9274,15 @@ fn resolve_with(
     // the cast/shoot/melee/hit-and-run tail below, to where main.gd:1092-1098
     // actually rolls the END-of-activation test — not here.
     let mut dangerous_morale_due: Option<(i64, i64)> = None;
-    if moved && !seams.no_dangerous {
+    // F-DANG-HOLD (`EPOCH_73_V36`, ruling D2): the book's Dangerous Terrain test also fires for a unit that
+    // ACTIVATES in it, a Hold included. The table asks for it whenever the activation moved nothing
+    // (`_dangerous_standing_counts` solo_controller.gd:5943: Aircraft and reserve skip it, Flying is
+    // guarded in `dangerous_dice`). Below 73 only a move tests.
+    let activated_in_it = !moved
+        && rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36)
+        && !next.aircraft[si]
+        && !next.dormant[si];
+    if (moved || activated_in_it) && !seams.no_dangerous {
         if let Some((tray, shot)) = dice.as_mut() {
             let n = dangerous_dice(statics, state, &next, si, seams, landing.as_ref(), cover, shot);
             if n > 0 {
@@ -9654,6 +9672,7 @@ fn resolve_with(
                             let precision_hit = precision_markers_spend(&mut next, g.ti, seams.rules_epoch, &mut shot.log);
                             let ut_g = &statics[next.roster.profile[g.ti]];
                             let mut def = with_modifier_sum(with_cond_ap_state(ctx_live(ctx_of(ut_g, &next, g.ti), statics, &next, g.ti, false, seams.rules_epoch), statics, &next, g.ti, seams), seams.rules_epoch);
+                            stamp_blast_models(&mut def, &next, g.ti, seams);
                             // D-STEALTH — the def build's terrain gate: the alias
                             // applies only while the TARGET stands within 1" of
                             // terrain (per model, the majority fold).
