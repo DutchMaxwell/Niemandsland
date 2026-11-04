@@ -182,6 +182,31 @@ func test_the_act_carries_a_pre_block_with_the_cast_leg_casualties() -> void:
 	assert_bool(units.has(caster.unit_id)).override_failure_message("an unchanged unit is not listed").is_false()
 
 
+## AI-G4 row F-PRE-SURV (rules 3.6, EPOCH_73_V36): the pre block names WHICH models the cast leg left standing, not
+## only how many. The gates kept the FIRST k models of the act-start list, but a spell kills whichever models the wound
+## allocation picks (aof_1000_net_033 act 9: the table's spell killed other models than the gate's list dropped). `keep`
+## = the positions, in the unit's act-start list of living models, that still stand; `of` = that list's length (the gate
+## applies `keep` only to a per-model list of that size). Live path: the real spell resolver over a real five-model unit.
+func test_the_pre_block_names_the_models_the_cast_leg_left_standing() -> void:
+	var caster := _caster()
+	var foe := _foe()
+	_open_act(caster)
+	var start: Array = foe.get_alive_models()
+	var cast := _cast(caster, foe)
+	((cast["spell"] as Dictionary)["effect"] as Dictionary)["hits"] = 3   # a bolt that thins the unit, not wipes it
+	_main.seed_tray_rng(_seed_where_the_cast_passes())
+	await _main._solo_resolve_ai_casts({"casts": [cast]})
+	assert_int(foe.get_alive_count()).override_failure_message("the bolt must kill someone, and not everyone").is_between(1, 4)
+	var want: Array = []
+	for i in range(start.size()):
+		if (start[i] as ModelInstance).is_alive:
+			want.append(i)
+	var units: Dictionary = (_pre_lines()[0] as Dictionary).get("units", {})
+	var rec: Dictionary = units.get(foe.unit_id, {})
+	assert_int(int(rec.get("of", -1))).override_failure_message("pre: %s" % str(rec)).is_equal(start.size())
+	assert_array(rec.get("keep", []) as Array).override_failure_message("pre: %s" % str(rec)).is_equal(want)
+
+
 func test_below_epoch_73_nothing_new_is_written() -> void:
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36 - 1
 	var caster := _caster()
