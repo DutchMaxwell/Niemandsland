@@ -1108,6 +1108,27 @@ pub(crate) fn snap_charge_state(self, state: &mut State, si: usize, ci: usize,
 #[allow(clippy::too_many_arguments)]
 pub fn charge_move(self, state: &State, t: &Terrain, si: usize, ci: usize,
     band_in: f64, hero_attach: bool, fast_planner: bool, guard: i64) -> Option<Landing> {
+    let (land, short) = self.charge_landing(state, t, si, ci, band_in, hero_attach, fast_planner, guard)?;
+    if short {
+        return self.plain_move(state, t, si, unit_centre(state, ci),
+            band_in, hero_attach, fast_planner, guard);
+    }
+    Some(land)
+}
+
+/// G4-C2 (c): would the table's declaration probe (`charge_path_probe`) accept this charge? False when the whole
+/// formation, planned the way `_execute_move` plans it, still ends short of the engage ring. `true` when the port
+/// declines (no board, no models): it has no opinion then.
+pub fn charge_reaches_contact(self, state: &State, t: &Terrain, si: usize, ci: usize,
+    band_in: f64, hero_attach: bool) -> bool {
+    self.charge_landing(state, t, si, ci, band_in, hero_attach, true, crate::mv::FAST_PLANNER_GUARD)
+        .is_none_or(|(_, short)| !short)
+}
+
+/// The charge landing and whether it ENDS SHORT (#857): the table re-gates such a charge to a Rush.
+#[allow(clippy::too_many_arguments)]
+fn charge_landing(self, state: &State, t: &Terrain, si: usize, ci: usize,
+    band_in: f64, hero_attach: bool, fast_planner: bool, guard: i64) -> Option<(Landing, bool)> {
     let board = t.board_in();
     if !t.is_valid() || board[0] <= 0.0 || board[1] <= 0.0 {
         return None;
@@ -1181,6 +1202,7 @@ pub fn charge_move(self, state: &State, t: &Terrain, si: usize, ci: usize,
     // centre. Mirror it at the epoch that added the probe: a charge that ends
     // SHORT of the engage ring rides the plain approach vector, not the
     // contact-aimed one. A charge that reaches the ring is untouched.
+    let mut short = false;
     if rule_on(self.rules_epoch, EPOCH_8_PLANNER_MENU) {
         let to = movers_of(state, ci);
         let mut closest = f64::INFINITY;
@@ -1196,14 +1218,10 @@ pub fn charge_move(self, state: &State, t: &Terrain, si: usize, ci: usize,
         // `charge_snap_fits_unit_budget` :8783 — the probe demands the residual
         // still fits the move budget the charge left over, not just the ring.
         let remaining = land.remaining_in();
-        if closest > crate::sim::MELEE_ENGAGE_IN
-            || closest > remaining + crate::sim::BASE_CONTACT_EPSILON_IN
-        {
-            return self.plain_move(state, t, si, unit_centre(state, ci),
-                band_in, hero_attach, fast_planner, guard);
-        }
+        short = closest > crate::sim::MELEE_ENGAGE_IN
+            || closest > remaining + crate::sim::BASE_CONTACT_EPSILON_IN;
     }
-    Some(land)
+    Some((land, short))
 }
 
 #[allow(clippy::too_many_arguments)]
