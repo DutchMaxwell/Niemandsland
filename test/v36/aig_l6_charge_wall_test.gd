@@ -116,3 +116,12 @@ func test_charge_below_epoch_73_is_untouched() -> void:
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
 	var run := _charge("ai")
 	assert_int(_wall_cuts(run[0] as SoloController)).is_greater(0)
+
+
+## rules-must-log: the model kept on its own side of the wall says which book rule held it.
+func test_a_kept_back_model_is_named_in_the_battle_log() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	var run := _charge("ai")
+	var notes := str((run[0] as SoloController).board_clamp_notes)
+	assert_str(notes).contains("own side of a wall")
+	assert_str(notes).contains("Charge")
