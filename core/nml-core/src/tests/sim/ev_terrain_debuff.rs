@@ -193,6 +193,7 @@ use super::*;
             cells: vec![[18.0, 15.0, crate::terrain::FOREST as f64]],
             sandbox: vec![],
             pieces: vec![],
+            containers: Vec::new(),
             walls: vec![],
             cell_params: crate::terrain::CellParams {
                 table_size_feet: [6.0, 4.0],
