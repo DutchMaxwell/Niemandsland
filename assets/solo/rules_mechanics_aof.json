@@ -5023,6 +5023,15 @@
      "grants": "Enhanced Highborn"
     }
    },
+   "Hit & Run": {
+    "primitive": "Hit & Run",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "move_in": 3.0,
+     "per_round": true
+    }
+   },
    "Piercing Tag": {
     "primitive": "Piercing Tag",
     "rated": true,
