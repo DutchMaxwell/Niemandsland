@@ -12,3 +12,4 @@ mod dat_12b;
 mod w31_f1;
 mod w31_f34;
 mod f5a2_rows;
+mod aig2_r5_hero_die;
