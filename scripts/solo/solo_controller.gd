@@ -1402,7 +1402,11 @@ func best_shoot_target_now(ai_unit: GameUnit, held: bool = true) -> GameUnit:
 	var best_ev := 0.0
 	for h in army_manager.get_game_units_for_player(enemy_slot_of(ai_unit)):
 		var hu := h as GameUnit
-		if hu == null or hu.is_destroyed() or unit_in_reserve(hu):
+		if hu == null or unit_in_reserve(hu):
+			continue
+		# G4R5 R8 (EPOCH_73_V36, Hero rule): a chain whose host models are all dead but whose joined hero lives is
+		# not destroyed - the hero IS the unit now and stays a target through its host.
+		if hu.is_destroyed() and not (AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and combined_alive(hu) > 0):
 			continue
 		if hu.has_method("is_attached") and hu.is_attached():
 			continue
