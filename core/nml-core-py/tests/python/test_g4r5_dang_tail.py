@@ -50,3 +50,17 @@ def test_the_three_shooting_acts_are_full_equal_with_the_cut_tests_tail(capsys):
 def test_the_charge_act_is_full_equal_with_the_cut_tests_wounds_in_the_melee_result(capsys):
     out = melee(capsys)
     assert "EQUAL : 1/1 acts FULL-equal" in out, out
+
+
+def test_the_mutant_with_the_knob_off_parts_the_four_acts_again(capsys):
+    """`--red-dang-tail` hands the core no `dangerous_replay`: the old numbers - all four acts part."""
+    assert "EQUAL : 0/3 acts FULL-equal" in shoot(capsys, red_dang_tail=True)
+    assert "EQUAL : 0/1 acts FULL-equal" in melee(capsys, red_dang_tail=True)
+
+
+def test_dang_replay_reads_the_act_start_chain_in_the_cores_morale_terms():
+    """The host plus its joined hero; the hero's models count in `alive` only with `hero_counts_in_size`."""
+    units = {"host": {"alive": 5, "wounds": [1] * 5, "attached": ["hero"]}, "hero": {"alive": 1, "wounds": [3]}}
+    assert srg.dang_replay(units, "host", {}) == [5, 8]
+    assert srg.dang_replay(units, "host", {"hero_counts_in_size": True}) == [6, 8]
+    assert srg.dang_replay({"solo": {"alive": 1, "wounds": [4]}}, "solo", {}) == [1, 4]

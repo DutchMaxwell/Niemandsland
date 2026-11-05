@@ -346,6 +346,7 @@ pub fn seams_of(knobs: &Knobs) -> Seams {
         // per-seat A/B grants the permission alone to the resolving core.
         moved_shoot: knobs.menu_wide || knobs.moved_shoot,
         dangerous_end_morale: knobs.dangerous_end_morale,
+        dangerous_replay: knobs.dangerous_replay,
         morale_by_probability: knobs.morale_by_probability,
         fire_in_range_only: knobs.fire_in_range_only,
         hero_counts_in_size: knobs.hero_counts_in_size,

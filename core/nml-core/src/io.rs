@@ -663,6 +663,9 @@ pub struct Seams {
     /// bug this replaces exactly for corpora that predate it.
     #[serde(default)]
     pub dangerous_end_morale: bool,
+    /// `Knobs::dangerous_replay` (G4R5 R1) passed straight through: replay gates only, None in play.
+    #[serde(default)]
+    pub dangerous_replay: Option<(i64, i64)>,
     /// aifix D1 — the imagined morale test fails with its probability (a
     /// deterministic dither) instead of the 50 % cliff. Default OFF.
     #[serde(default)]

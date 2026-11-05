@@ -251,6 +251,10 @@ pub struct Knobs {
     /// absent key means the corpus predates the port, so it defaults OFF.
     #[serde(default)]
     pub dangerous_end_morale: bool,
+    /// G4R5 R1 F-DANG-TAIL (`EPOCH_73_V36`) - REPLAY GATES ONLY: the unit's act-start `[alive, wounds]` (morale terms)
+    /// of an activation whose Dangerous test the gate cut. In-game play never sets it (`knobs_of` has no key). Default None.
+    #[serde(default)]
+    pub dangerous_replay: Option<(i64, i64)>,
     /// aifix E1 — the imagined next-round opener is the side that finished
     /// activating first (GF p.7), not the smaller head count. Research knob
     /// for the A/B, default OFF (the AI's imagination, not the referee).
@@ -1610,6 +1614,7 @@ impl Default for Knobs {
             dangerous: true,
             engage_fold: false,
             dangerous_end_morale: false,
+            dangerous_replay: None,
             opener_by_finish: false,
             no_end_threat: false,
             fire_in_range_only: false,
