@@ -12,8 +12,9 @@ use nml_core::{
     io::{Action, Seams},
     plan::seams_of,
     rng::GodotRng,
+    sight::surface_y_m,
     sim::resolve_stochastic_tray_on_board,
-    terrain::Terrain,
+    terrain::{PlainTerrain, Terrain, CONTAINER},
     IN2M,
 };
 use serde_json::Value;
@@ -66,4 +67,25 @@ fn the_joined_hero_that_climbs_a_container_stands_on_its_roof_from_epoch_73() {
 fn below_epoch_73_nobody_of_the_chain_stands_above_the_table() {
     let (chain, _) = replay(EPOCH_72_PLAYTEST_RULES);
     assert!(chain.iter().all(|p| p[1] == 0.0), "epoch 72 keeps the recorded behaviour byte for byte");
+}
+
+/// The helper behind the landing height, read the way the table reads a container: the placed box, a painted cell no
+/// box covers, nothing under a painted cell the box covers by its centre, and the box is not read below epoch 73.
+#[test]
+fn the_surface_is_the_roof_over_a_box_or_an_uncovered_painted_cell_and_the_table_elsewhere() {
+    let board = |cells: serde_json::Value, boxes: serde_json::Value| {
+        let t = serde_json::json!({"cells": cells, "sandbox": [], "walls": [], "containers": boxes,
+            "cell_params": {"table_size_feet": [6.0, 4.0], "grid_rotation_degrees": 0.0, "grid_size_inches": 3.0, "inches_to_meters": IN2M}});
+        Terrain::build(&serde_json::from_value::<PlainTerrain>(t).unwrap())
+    };
+    let at = |x_in: f64, z_in: f64| [x_in * IN2M, z_in * IN2M];
+    let cell = serde_json::json!([[15.0, 15.0, CONTAINER as f64]]); // world cell (0, 0): x, z in [0", 3"), centre (1.5", 1.5")
+    let boxed = serde_json::json!([{"c": [1.5 * IN2M, 2.5 * IN2M], "he": [3.0 * IN2M, 1.5 * IN2M], "yaw": 0.0}]);
+    let none = serde_json::json!([]);
+    let only_box = board(none.clone(), boxed.clone());
+    assert_eq!(surface_y_m(&only_box, at(1.5, 2.5), EPOCH_73_V36), ROOF_M, "over the placed box");
+    assert_eq!(surface_y_m(&only_box, at(8.0, 2.5), EPOCH_73_V36), 0.0, "beside it");
+    assert_eq!(surface_y_m(&only_box, at(1.5, 2.5), EPOCH_72_PLAYTEST_RULES), 0.0, "the box is not read below epoch 73");
+    assert_eq!(surface_y_m(&board(cell.clone(), none), at(1.5, 0.5), EPOCH_73_V36), ROOF_M, "a painted cell no box covers");
+    assert_eq!(surface_y_m(&board(cell, boxed), at(1.5, 0.5), EPOCH_73_V36), 0.0, "the cell the box covers by its centre drops out");
 }

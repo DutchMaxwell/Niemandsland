@@ -527,6 +527,19 @@ pub fn zones_of_at(t: &Terrain, rules_epoch: u32) -> Vec<Zone> {
     out
 }
 
+/// `VolumetricLos.surface_y_at` (:211) over the board's solid volumes - the height a model standing at the flat world
+/// point `p` stands on: the roof of the container holding it (a placed box, or a painted container cell no box covers,
+/// the same two the zones above keep), else the table at 0. Metres. G4R5 R3: the table settles every moved model here.
+pub fn surface_y_m(t: &Terrain, p: [f64; 2], rules_epoch: u32) -> f64 {
+    let boxes: &[terrain::ContainerObb] = if rule_on(rules_epoch, EPOCH_73_V36) { t.containers() } else { &[] };
+    let covered = |q: [f64; 2]| boxes.iter().any(|b| BoxFoot { c: b.c, he: b.he, yaw: b.yaw, y0: 0.0 }.holds_point(q));
+    let (sin, cos) = t.grid_yaw().sin_cos();
+    let k = cell_of(p, t.grid_yaw(), t.cell_m());
+    let (lx, lz) = ((k.0 as f64 + 0.5) * t.cell_m(), (k.1 as f64 + 0.5) * t.cell_m());
+    let painted = t.type_at([p[0] as f32, 0.0, p[1] as f32]) == terrain::CONTAINER && !covered([lx * cos - lz * sin, lx * sin + lz * cos]);
+    if covered(p) || painted { volume_height_in(terrain::CONTAINER) * IN2M } else { 0.0 }
+}
+
 /// `zones_of`, plus with `shelf` (the dormant `Seams::shelf_sight`) every freely
 /// placed shelf piece of the header as its own upright box of its type's height —
 /// `TerrainOverlay._sandbox_volumes` (:1283-1300). The header records no floor
