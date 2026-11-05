@@ -4837,6 +4837,8 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s's volley rolls %d → %s" % [
 					upr_name, attacker.get_name(), int(upr_face[0]), ("AP(+1)" if upr_ap > 0 else "+1 to hit")], true)
+	var hero_upr: Dictionary = await _solo_hero_unpredictable(attacker, upr_name,   # AIG-G2 R5: a joined hero's own die
+		shots.map(func(s: Variant) -> Variant: return (s as Dictionary)["member"]), target, true)
 	var entry_count := {}   # T-DUP-WEAPON-BEARERS: entries per bearer key (member, weapon name, attacks per copy)
 	var guns_fired := {}   # ... and the bearers the earlier entries of that key already took
 	if at_declaration:
@@ -4847,6 +4849,9 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		var shot := shots[si] as Dictionary
 		var member := shot["member"] as GameUnit
 		var profile := _solo_bridge_granted_flags(member, shot["profile"] as Dictionary, target)
+		var m_upr: Dictionary = hero_upr.get(member.get_instance_id(), {})   # the member's own die, else the unit's
+		var m_hit: int = int(m_upr.get("hit", upr_hit))
+		var m_ap: int = int(m_upr.get("ap", upr_ap))
 		# Per-model shooting (GF v3.5.1 p.8 "Who Can Shoot") decides the dice count FIRST, so a shot that
 		# scales to nothing leaves before any rule fires on it (it also keeps the Takedown pick below out
 		# of volleys that never roll). Indirect (wave 5) targets as if in line of sight — its per-model
@@ -4919,7 +4924,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 				mod_info = td_ctx["mod"] as Dictionary
 				shot_base = int(td_ctx["defense"])
 				shot_cover = int(td_ctx["covered"])
-		var ai_own: int = int(mod_info.get("own", 0)) + upr_hit   # SHO-08: own rules' part (Unstoppable)
+		var ai_own: int = int(mod_info.get("own", 0)) + m_hit   # SHO-08: own rules' part (Unstoppable)
 		if moved and (bool(profile.get("indirect", false)) or granted_indirect):
 			if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
 				# Rules 3.6 (SHO-02): the penalty is gone; the hit-info names the non-application.
@@ -4940,7 +4945,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		if ai_tag_hit != 0:
 			mod_info = {"mod": int(mod_info.get("mod", 0)) + ai_tag_hit,
 				"note": _solo_join_note(str(mod_info.get("note", "")), "Tagged +%d" % ai_tag_hit)}
-		var ai_mod: int = int(mod_info.get("mod", 0)) + upr_hit
+		var ai_mod: int = int(mod_info.get("mod", 0)) + m_hit
 		if bool(profile.get("unstoppable", false)):
 			var ai_uf: Array = _solo_unstoppable_fold(ai_mod, ai_own)   # Unstoppable: other sources' minus ignored
 			ai_mod = int(ai_uf[0])
@@ -4963,9 +4968,9 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s: failed saves of 1-%d count as wounds on %s" % [
 					str((e as Dictionary).get("name", "")), boost_low, target.get_name()], true)
 				break
-		if upr_ap > 0:
+		if m_ap > 0:
 			profile = profile.duplicate()
-			profile["ap"] = int(profile.get("ap", 0)) + upr_ap   # Unpredictable AP(+1) leg (never mutate source)
+			profile["ap"] = int(profile.get("ap", 0)) + m_ap   # Unpredictable AP(+1) leg (never mutate source)
 		# Versatile Attack (army-book): over 9" apply the EV-better of +1 to hit or AP(+1)
 		# — the SAME chooser AiEv.profile_ev uses, so the AI's plan and the real dice pick the
 		# same mode. EPOCH_38_WATCHBORN_LATCH: ONE pick per ACTIVATION — the first eligible
@@ -7879,6 +7884,32 @@ func _solo_unpredictable_rule(striker: GameUnit, melee: bool, target: GameUnit =
 			or AiSpell.granted_rules_of(striker, target, true).has("Unpredictable Shooter")):
 		return "Unpredictable Shooter"
 	return ""
+
+
+## AIG-G2 R5 (EPOCH_73_V36): a joined hero who carries Unpredictable (Shooter) himself rolls ONE die for his own guns when
+## his host rolled none (`host_rule` empty): the line names the book rule and the hero. A host that rolled keeps covering the
+## whole unit (one die per volley). Returns {hero instance id: {"ap", "hit"}} for the members that rolled.
+func _solo_hero_unpredictable(attacker: GameUnit, host_rule: String, members: Array, target: GameUnit, ai: bool) -> Dictionary:
+	var out := {}
+	if not host_rule.is_empty() or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return out
+	for m in members:
+		var hero := m as GameUnit
+		if hero == null or hero == attacker or out.has(hero.get_instance_id()):
+			continue
+		var rule := _solo_unpredictable_rule(hero, false, target)
+		if rule.is_empty():
+			continue
+		var face: Array = await _solo_tray_roll(1, AiCombatMath.BEST_HIT_TARGET,
+			("AI (%s)" % hero.get_name()) if ai else _roller_label(hero))
+		if face.is_empty():
+			continue
+		var eff: Dictionary = AiCombatMath.unpredictable_fighter_effect(int(face[0]))
+		out[hero.get_instance_id()] = {"ap": int(eff["ap"]), "hit": int(eff["hit"])}
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT, ("%s: %s's volley rolls %d → %s" if ai else "%s: %s rolls %d → %s") % [
+				rule, hero.get_name(), int(face[0]), ("AP(+1)" if int(eff["ap"]) > 0 else "+1 to hit")], true)
+	return out
 
 
 ## The groups of _solo_defense_parts, folded in this order (one sum, clamped once at the save).
@@ -15014,8 +15045,13 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 	if not h_groups.is_empty():
 		h_groups = h_groups + _solo_takedown_bonus_groups(attacker, false)
 	var arrival_logged := {}   # G4R5 F-AMBUSH-ARRIVAL-AP: the book rule is named once per member
+	var hero_upr: Dictionary = await _solo_hero_unpredictable(attacker, upr_name,   # AIG-G2 R5: a joined hero's own die
+		h_groups.map(func(g: Variant) -> Variant: return (g as Dictionary).get("member")), target, false)
 	for grp in h_groups:
 		var group := grp as Dictionary
+		var m_upr: Dictionary = hero_upr.get((group.get("member") as GameUnit).get_instance_id(), {})   # own die, else the unit's
+		var m_hit: int = int(m_upr.get("hit", upr_hit))
+		var m_ap: int = int(m_upr.get("ap", upr_ap))
 		var base_quality: int = int(group.get("quality", 4))
 		var mod_info: Dictionary = _solo_hit_mod_info(group.get("member"), target, dist, false)
 		for p in group.get("profiles", []):
@@ -15052,7 +15088,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 			# stamp the Entrenched gate reads — one truth for "moved this round".
 			var h_moved: bool = opr_army_manager != null \
 				and int(attacker.unit_properties.get("moved_round", -1)) == opr_army_manager.current_round
-			var h_own: int = int(p_mod.get("own", 0)) + upr_hit   # SHO-08: own rules' part (Unstoppable)
+			var h_own: int = int(p_mod.get("own", 0)) + m_hit   # SHO-08: own rules' part (Unstoppable)
 			if h_moved and (bool(profile.get("indirect", false)) or h_granted_indirect):
 				if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
 					# Rules 3.6 (SHO-02): the penalty is gone; the hit-info names the non-application.
@@ -15073,7 +15109,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 			if tag_hit != 0:
 				p_mod = {"mod": int(p_mod.get("mod", 0)) + tag_hit,
 					"note": _solo_join_note(str(p_mod.get("note", "")), "Tagged +%d" % tag_hit)}
-			var h_mod: int = int(p_mod.get("mod", 0)) + upr_hit
+			var h_mod: int = int(p_mod.get("mod", 0)) + m_hit
 			if bool(profile.get("unstoppable", false)):
 				var h_uf: Array = _solo_unstoppable_fold(h_mod, h_own)   # Unstoppable: other sources' minus ignored
 				if battle_log != null and str(h_uf[1]) != "":
@@ -15084,9 +15120,9 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 			var to_hit_raw: int = AiCombatMath.reliable_quality(base_quality, bool(profile.get("reliable", false))) - h_mod
 			var to_hit: int = AiCombatMath.modified_hit_target(to_hit_raw, 0)
 			var arrival_ap := _solo_ambush_arrival_ap(group.get("member") as GameUnit, arrival_logged)   # G4R5 F-AMBUSH-ARRIVAL-AP
-			if upr_ap + extra_ap + arrival_ap > 0:
+			if m_ap + extra_ap + arrival_ap > 0:
 				profile = profile.duplicate()
-				profile["ap"] = int(profile.get("ap", 0)) + upr_ap + extra_ap + arrival_ap   # Unpredictable + Tag/Reckless/Ambush-arrival AP
+				profile["ap"] = int(profile.get("ap", 0)) + m_ap + extra_ap + arrival_ap   # Unpredictable + Tag/Reckless/Ambush-arrival AP
 			# Versatile Attack applies to the HUMAN's volley too (xhigh review find: the profiles are stamped
 			# and every other modeled rule auto-applies here, but this path never read the flag — the player's
 			# own Versatile units were cheated of their buff). Bug 13 (field test): the mode is the PLAYER's
