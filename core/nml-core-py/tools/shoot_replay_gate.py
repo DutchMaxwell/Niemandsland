@@ -492,6 +492,16 @@ def cut_dangerous(rolls: list[dict], kept: list[dict]) -> bool:
     return any(r.get("leg") == "dangerous" for r in rolls[:len(rolls) - len(kept)])
 
 
+def dang_replay(units: dict, key: str, knobs: dict) -> list[int]:
+    """F-DANG-TAIL (epoch 73+): the unit's ACT-START [alive, wounds] in the core's own morale terms (`morale_alive` /
+    `morale_wounds_left`: the host plus its joined heroes, the heroes' models only with `hero_counts_in_size`). Handed over in
+    the header knob `dangerous_replay` for an act whose Dangerous test `cut_dangerous` cut: the core reads the difference to
+    the patched state and arms the tail the cut took (end-of-activation morale test, the charger's melee tally)."""
+    chain = [key] + [str(h) for h in units[key].get("attached", []) or []]
+    return [sum(int(units[c]["alive"]) for c in (chain if knobs.get("hero_counts_in_size") else chain[:1])),
+            sum(sum(units[c]["wounds"]) for c in chain)]
+
+
 def lone_hero_of(units: dict, key: str) -> str:
     """AI-G4 F-AIM (epoch 73+): the table fires "at" a dead host while its joined hero stands - the hero is the unit
     now. `key` itself unless it has no living model and exactly one living attached hero; then that hero's key."""
@@ -621,7 +631,7 @@ def vintage_report_line(seen: set[tuple[bool, bool]]) -> str:
 def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: bool,
         hero_attach: str = "table", sighting: str = "unit",
         engage_fold: str = "auto", cond_ap: str = "auto", inject: bool = True, red_pre: str = "",
-        movement: bool = False, red_move_rigid: bool = False, land: bool = False) -> int:
+        movement: bool = False, red_move_rigid: bool = False, land: bool = False, red_dang_tail: bool = False) -> int:
     games = sorted(d for d in ref.iterdir() if d.is_dir() and (d / "dice.jsonl").exists())
     if limit:
         games = games[:limit]
@@ -716,6 +726,7 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
             # AI-G4 H1b: the cast/spell legs are cut, their dice burned, the state patched from the `pre` line.
             # H-ROUND-BOUNDARY: a roll of a LATER round under this ordinal is the next round's start roll, not this act's.
             rolls_k = [r for r in dice[i0:] if int(r["act"]) == k and int(r.get("round", 0)) <= int(act.get("round", 99))]
+            start = plain["units"]   # F-DANG-TAIL: the act-start units, before the cut patches them
             rolls_cut, pre_burn, plain = cut_pre_legs(rolls_k, plain, pres.get(k), red_pre != "noburn",
                                                       red_pre != "nopatch", board)
             # NML-1150: SPLIT FIRE's aim — where the table really pointed each
@@ -761,8 +772,10 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
                 plain, action = landed, dict(action, dest=centroid(landed["units"], action["unit"]))
             if dang_off or reach or landed:  # G4-H8: the cut took the table's dangerous test, the core rolls none for this one act;
                 # C-GRANTED-RANGE: the spell's reach. Before `state_of`: a new header drops the roster the state is built on.
+                # F-DANG-TAIL: the cut test's tail rides the same header (`--red-dang-tail` hands none: the old numbers)
+                tail = None if red_dang_tail else dang_replay(start, action["unit"], header["knobs"]) if dang_off else None
                 core.set_header(dict(header, profiles=with_reach(header["profiles"], pres.get(k)),
-                                     knobs=dict(header["knobs"], **({"dangerous": False} if dang_off else {}),
+                                     knobs=dict(header["knobs"], **({"dangerous": False, "dangerous_replay": tail} if dang_off else {}),
                                                 **({"movement": False} if landed else {}))))
             state = core.state_of(plain)
             # G4-H6: a LONE joined hero's roll compares as its host's label.
@@ -929,6 +942,7 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
     if movement:
         label += " + movement=table" + (" [RED: rigid]" if red_move_rigid else "")
     label += " + LAND (A1)" if land else ""
+    label += " [RED: --red-dang-tail]" if red_dang_tail else ""
     print()
     print("%s over %d games, %d shooting acts, hero_attach=%s, sighting=%s, %s (%.1fs)" % (
         label, len(games), tally["acts"], hero_attach, sighting,
@@ -1075,11 +1089,13 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--red-pre", choices=("noburn", "nopatch"), default="",
                     help="AI-G4 H1b RED PROOF for the cast/spell cut: 'noburn' cuts the rolls but leaves their dice "
                          "on the tray (the faces must part), 'nopatch' keeps the pre-spell state (the count must part)")
+    ap.add_argument("--red-dang-tail", action="store_true",
+                    help="G4R5 R1 RED PROOF for F-DANG-TAIL: no `dangerous_replay` knob for a cut Dangerous test (the cut test's end-of-activation morale test is lost again and the acts part)")
     a = ap.parse_args(argv)
     mode = "misseed" if a.red_misseed else a.mode
     return run(Path(a.ref).expanduser(), a.repo, mode, a.limit, a.verbose, a.report_only,
                a.hero_attach, a.sighting, a.engage_fold, a.cond_ap, a.inject == "on", a.red_pre,
-               a.movement or a.red_move_rigid, a.red_move_rigid, a.land)
+               a.movement or a.red_move_rigid, a.red_move_rigid, a.land, a.red_dang_tail)
 
 
 if __name__ == "__main__":

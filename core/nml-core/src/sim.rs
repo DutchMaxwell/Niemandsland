@@ -9639,6 +9639,22 @@ fn resolve_with(
             }
         }
     }
+    // F-DANG-TAIL (`EPOCH_73_V36`, replay gates only): the gate cut the table's Dangerous test (`no_dangerous`) and patched its
+    // wounds into `state`; the header knob hands back the unit's act-start (alive, wounds). Their difference to the patched state
+    // is the cut test's tail: the end-of-activation morale test below (non-charge) and, for a charge, the charger's self-inflicted
+    // wounds in the melee result (`dangerous_tail_wounds`). Play never sets the knob, so it runs the test above and this is skipped.
+    let mut dangerous_tail_wounds = 0;
+    if let (true, Some((alive_before, wounds_before))) = (seams.no_dangerous && rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36), seams.dangerous_replay) {
+        dangerous_tail_wounds = (wounds_before - morale_wounds_left(&next, si, seams)).max(0);
+        if dangerous_tail_wounds > 0 {
+            if let Some((_, shot)) = dice.as_mut() {
+                shot.log.push(format!("Dangerous terrain: {} took {dangerous_tail_wounds} wound(s) in the test the replay cut - the morale test and the melee tally still count them", statics[pi_s].name));
+            }
+            if kind != CHARGE && seams.dangerous_end_morale {
+                dangerous_morale_due = Some((alive_before, wounds_before));
+            }
+        }
+    }
 
     // --- cast sub-phase (battle_sim.gd:602-607), seam-gated ---
     // `_best_spell_target` (:930) probes `_los_clear` with the POST-move
@@ -10401,7 +10417,7 @@ fn resolve_with(
                     let charge_from_in =
                         modifier_distance_in(state, si, ti, seams);
                     // Rules 3.6: what the charger's own Dangerous test cost it on the charge move counts as taken.
-                    let self_wounds = (wounds_left(state, si) - su_before).max(0);
+                    let self_wounds = (wounds_left(state, si) - su_before).max(0) + dangerous_tail_wounds;
                     if let Some(li) = tray_charge_with_self_wounds(statics, &mut next, si, ti, seams, tray, shot, charge_from_in, cover, self_wounds, pre_melee_su, pre_melee_tu) {
                         // D1-B5b: the melee loser's test is a REAL die now
                         // (:8116-8118), where D1-B5a still asked the

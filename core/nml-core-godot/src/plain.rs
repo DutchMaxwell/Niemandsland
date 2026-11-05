@@ -1074,6 +1074,7 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         // `Knobs::default()` = OFF, so a corpus recorded before it is untouched.
         dangerous_end_morale: d.get("dangerous_end_morale").map(|v| flag(&v))
             .unwrap_or(dflt.dangerous_end_morale),
+        dangerous_replay: dflt.dangerous_replay, // G4R5 R1: replay gates only, never read from the game's dictionary
         opener_by_finish: d.get("opener_by_finish").map(|v| flag(&v)).unwrap_or(dflt.opener_by_finish),
         no_end_threat: d.get("no_end_threat").map(|v| flag(&v)).unwrap_or(dflt.no_end_threat),
         fire_in_range_only: d.get("fire_in_range_only").map(|v| flag(&v)).unwrap_or(dflt.fire_in_range_only),
