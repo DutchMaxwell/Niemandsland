@@ -347,6 +347,52 @@ def read_verbs(d: Path) -> dict[int, int]:
     return out
 
 
+IN2M = 0.0254   # `SoloController.INCHES_TO_METERS`
+
+
+def read_moves(d: Path) -> dict[int, dict]:
+    """{activation ordinal: the `moves.json` entry}: the per-model move the TABLE executed (one entry per activation)."""
+    f = d / "moves.json"
+    return {int(m["act"]): m for m in json.loads(f.read_text()).get("activations", [])} if f.exists() else {}
+
+
+def land_at_table(plain: dict, action: dict, name: str, move: dict | None, later: dict | None) -> dict | None:
+    """AI-G4 F-LAND (A1): `plain` with the shooter chain where the table's EXECUTED Advance ended, else None. x/z from `moves.json`, each
+    model by the start point it left (the next act's state can hold a LATER Harassing step: aof_006/33); y, the climb, from the next
+    act's state when that unit has as many models. Not an aircraft: it flies its fixed distance from where it stands."""
+    if not move or not move.get("models") or move.get("unit") != name or int(move.get("action", -1)) != 1 \
+            or plain["units"][action["unit"]].get("aircraft") or not plain["units"][action["unit"]]["positions"]:
+        return None
+    starts, ends = [m["pts"][0] for m in move["models"]], [m["pts"][-1] for m in move["models"]]
+    out, mapped = dict(plain, units=dict(plain["units"])), 0
+    for key in [action["unit"], *(plain["units"][action["unit"]].get("attached") or [])]:
+        u, ys = dict(out["units"][key]), ((later or {}).get(key) or {}).get("positions") or []
+        pts = [list(p) for p in u["positions"]]
+        for i, p in enumerate(pts):
+            j = min(range(len(starts)), key=lambda m: math.dist((p[0], p[2]), starts[m]))
+            if math.dist((p[0], p[2]), starts[j]) < 0.02:
+                pts[i] = [ends[j][0], ys[i][1] if len(ys) == len(pts) else p[1], ends[j][1]]
+                mapped += 1
+        out["units"][key] = dict(u, positions=pts)
+    return out if mapped else None
+
+
+def centroid(units: dict, key: str):
+    """[x, y, z] centre of a unit's models, None for a unit with none."""
+    ps = (units.get(key) or {}).get("positions") or []
+    return [sum(p[i] for p in ps) / len(ps) for i in range(3)] if ps else None
+
+
+def landing_gap(core, state, action: dict, landed: dict) -> float:
+    """Inches between the shooter's centre after the core's OWN Advance and after the table's executed move (inf: none)."""
+    try:
+        own = centroid(core.resolve_stochastic_rng(state, action, nml_core.Rng(0)).plain()["units"], action["unit"])
+    except Exception:
+        return math.inf
+    table = centroid(landed["units"], action["unit"])
+    return math.dist((own[0], own[2]), (table[0], table[2])) / IN2M if own and table else math.inf
+
+
 #: `TerrainRules.gives_cover`: ruins and forest. `BASE_RIM_SAMPLES` of terrain_rules.gd.
 COVER_TYPES, RIM_SAMPLES = (1, 2), 8
 
@@ -558,7 +604,7 @@ def vintage_report_line(seen: set[tuple[bool, bool]]) -> str:
 def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: bool,
         hero_attach: str = "table", sighting: str = "unit",
         engage_fold: str = "auto", cond_ap: str = "auto", inject: bool = True, red_pre: str = "",
-        movement: bool = False, red_move_rigid: bool = False) -> int:
+        movement: bool = False, red_move_rigid: bool = False, land: bool = False) -> int:
     games = sorted(d for d in ref.iterdir() if d.is_dir() and (d / "dice.jsonl").exists())
     if limit:
         games = games[:limit]
@@ -573,7 +619,8 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
               "next_equal", "equal_over_2", "equal_dice_max", "split_fire",
               "full_equal_owner", "clean_acts", "clean_full_equal", "clean_both_silent",
               "split_injected", "split_reaim", "split_multi", "split_aligned",
-              "split_uncovered", "split_stale", "split_ambig", "split_full_equal", "pre_cut", "pre_uncut", "verbs")}
+              "split_uncovered", "split_stale", "split_ambig", "split_full_equal", "pre_cut", "pre_uncut", "verbs",
+              "land", "land_far", "land_skip", "land_none")}
     unported: dict[str, int] = {}
     reasons: dict[str, int] = {}
     # D6a-B5: the SAME classifier over the acts the table did NOT split-fire on.
@@ -595,6 +642,7 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
         pres = read_pre(d)
         verbs = read_verbs(d)
         played = read_played(d)
+        moves = read_moves(d) if land else {}
         core = nml_core.load(repo)
         if hero_attach == "off":
             head = detach_header(head)
@@ -676,10 +724,23 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
             tally["pre_uncut"] += len(rolls_cut) == len(rolls_k) and any(r.get("leg") in CUT_LEGS for r in rolls_k)
             dang_off = cut_dangerous(rolls_k, rolls_cut)
             reach = any(r.get("reach") for r in (pres.get(k) or {}).values())
-            if dang_off or reach:  # G4-H8: the cut took the table's dangerous test, the core rolls none for this one act;
+            landed = None
+            if land and action["kind"] == 1:   # AI-G4 F-LAND (A1): the shooter chain stands where the table's executed Advance ended
+                if any(r.get("leg") == "dangerous" for r in rolls_cut):
+                    tally["land_skip"] += 1   # the table's own dangerous test is among the rolls to match: the core's route rolls it
+                else:
+                    landed = land_at_table(plain, action, head["profiles"].get(action["unit"], {}).get("name"), moves.get(k),
+                                           lines[pos + 1]["state"]["units"] if pos + 1 < len(lines) else None)
+                    tally["land_none"] += landed is None
+            if landed is not None:
+                tally["land"], tally["land_far"] = tally["land"] + 1, tally["land_far"] + (landing_gap(core, core.state_of(plain), action, landed) > 0.5)
+                # in place: the verb stays (a Hold fires Indirect unseen) and the rigid Advance (movement off) moves nothing to its own centre
+                plain, action = landed, dict(action, dest=centroid(landed["units"], action["unit"]))
+            if dang_off or reach or landed:  # G4-H8: the cut took the table's dangerous test, the core rolls none for this one act;
                 # C-GRANTED-RANGE: the spell's reach. Before `state_of`: a new header drops the roster the state is built on.
                 core.set_header(dict(header, profiles=with_reach(header["profiles"], pres.get(k)),
-                                     knobs=dict(header["knobs"], dangerous=False) if dang_off else header["knobs"]))
+                                     knobs=dict(header["knobs"], **({"dangerous": False} if dang_off else {}),
+                                                **({"movement": False} if landed else {}))))
             state = core.state_of(plain)
             # G4-H6: a LONE joined hero's roll compares as its host's label.
             lone = lone_hero_names(plain, head["profiles"])
@@ -702,7 +763,7 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
                     firsts.append("%s act %d — DECLINED: %s" % (d.name, k, exc))
                 continue
             finally:
-                if dang_off or reach:
+                if dang_off or reach or landed:
                     core.set_header(header)
             for name in report["unported"]:
                 unported[name] = unported.get(name, 0) + 1
@@ -844,6 +905,7 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
              "misseed": "RED D1-B4 --red-misseed (tray on dice_seed+1)"}[mode]
     if movement:
         label += " + movement=table" + (" [RED: rigid]" if red_move_rigid else "")
+    label += " + LAND (A1)" if land else ""
     print()
     print("%s over %d games, %d shooting acts, hero_attach=%s, sighting=%s, %s (%.1fs)" % (
         label, len(games), tally["acts"], hero_attach, sighting,
@@ -878,6 +940,10 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
     print("  pre   : %d acts with the table's cast/spell leg cut%s; %d left uncut (a roll in front of the leg)"
           % (tally["pre_cut"], " [RED: %s]" % red_pre if red_pre else "", tally["pre_uncut"]))
     print("  verbs : %d acts replayed with the verb the table executed (F-HOLD-ADV)" % tally["verbs"])
+    if land:
+        print("LAND applied %d acts, %d landed > 0.5in from the core" % (tally["land"], tally["land_far"]))
+        print("LAND not applied to %d Advance acts: %d with the table's own dangerous test, %d aircraft or without a matching move"
+              % (tally["land_skip"] + tally["land_none"], tally["land_skip"], tally["land_none"]))
     print("  split-fire: %d/%d acts where the table saved dice under a unit that is NOT "
           "the recorded shoot target" % (tally["split_fire"], tally["acts"]))
     # The same two numbers over the acts split fire did NOT touch — the only
@@ -966,6 +1032,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--red-move-rigid", action="store_true",
                     help="RED PROOF for --movement: the same walls are handed over but the header knob stays "
                          "OFF, so the rigid landing is back and the acts the port closed part again")
+    ap.add_argument("--land", action="store_true",
+                    help="AI-G4 F-LAND (A1): replay each Advance in place at the landing the table EXECUTED (moves.json), not the core's own")
     ap.add_argument("--limit", type=int, default=0, help="only the first N game dirs")
     ap.add_argument("--verbose", type=int, default=0, help="print every diverging act")
     ap.add_argument("--engage-fold", choices=("auto", "on", "off"), default="auto",
@@ -988,7 +1056,7 @@ def main(argv: list[str]) -> int:
     mode = "misseed" if a.red_misseed else a.mode
     return run(Path(a.ref).expanduser(), a.repo, mode, a.limit, a.verbose, a.report_only,
                a.hero_attach, a.sighting, a.engage_fold, a.cond_ap, a.inject == "on", a.red_pre,
-               a.movement or a.red_move_rigid, a.red_move_rigid)
+               a.movement or a.red_move_rigid, a.red_move_rigid, a.land)
 
 
 if __name__ == "__main__":
