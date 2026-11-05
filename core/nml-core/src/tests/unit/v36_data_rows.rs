@@ -1,6 +1,7 @@
 //! Rules 3.6 lane data: one test file per row (DAT-TESTSEED); a row writes only its own file.
 mod ai_08a;
 mod ai_08b;
+mod aig_g2_r3;
 mod dat_04;
 mod f5b_ravage;
 mod dat_05a;
