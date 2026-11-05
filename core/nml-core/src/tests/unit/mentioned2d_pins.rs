@@ -280,14 +280,19 @@ use super::*;
     }
 
     /// "Warden Boost Aura" (aof/eternal_wardens — the aura grants "Warden
-    /// Boost", Fortified primitive, incoming_ap_reduction 1): the carrier's
-    /// incoming AP folds one step lighter through the grant; no aura, or
-    /// epoch 5, keeps the plain reading.
+    /// Boost", Fortified primitive, incoming_ap_reduction 2 from epoch 73, 1
+    /// below): the carrier's incoming AP folds two steps lighter through the
+    /// grant; no aura, or epoch 5, keeps the plain reading.
     #[test]
-    fn an_enhanced_warden_aura_carrier_reduces_incoming_ap_by_one_at_the_current_epoch() {
+    fn an_enhanced_warden_aura_carrier_reduces_incoming_ap_by_two_at_the_current_epoch() {
         let epoch = crate::acts::CURRENT_RULES_EPOCH;
         let us = pin_unit("aof", "eternal_wardens", &["Enhanced Warden Aura"], epoch);
-        assert_eq!(us.ctx.fortified_boost_ap, 1, "the granted Boost's incoming_ap_reduction");
+        assert_eq!(us.ctx.fortified_boost_ap, 2, "the granted Boost's incoming_ap_reduction (AI-G2 R7)");
+        assert_eq!(
+            pin_unit("aof", "eternal_wardens", &["Enhanced Warden Aura"], 72).ctx.fortified_boost_ap,
+            1,
+            "epoch 72 keeps the flat cut of one"
+        );
         assert_eq!(us.fortified_boost_name, "Enhanced Warden", "the boost names its rule");
         assert_eq!(
             pin_unit("aof", "eternal_wardens", &[], epoch).ctx.fortified_boost_ap,
