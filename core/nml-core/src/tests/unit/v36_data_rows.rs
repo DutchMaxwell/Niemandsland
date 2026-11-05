@@ -2,6 +2,7 @@
 mod ai_08a;
 mod aig2_r7b;
 mod ai_08b;
+mod aig_g2_r3;
 mod dat_04;
 mod f5b_ravage;
 mod dat_05a;

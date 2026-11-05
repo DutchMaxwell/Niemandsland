@@ -85,13 +85,14 @@ use super::*;
     }
 
     /// RED on main: an advance from x = -1.5 has 6" of band, but the first climb costs 4.5" of ground + 2.5" = 7".
-    /// A model never ends mid-climb: it halts 0.05" short of the edge (x = 3). The core treated the edge as a wall
-    /// and stopped (or swerved) a whole base earlier.
+    /// A model never ends mid-climb, and (AIG-L6b) never with its 1" base on the block: the planner halts it at the
+    /// edge (x = 2.95) and the gate pulls it back along its route to the first spot its base may rest on, a base and
+    /// the 2 mm clearance short of the edge (x = 3 - 1 - 0.079 = 1.92).
     #[test]
     fn a_move_that_cannot_pay_the_climb_halts_just_short_of_the_ledge_at_epoch_73() {
         let (next, _) = go(ADVANCE, -1.5, 8.0, &container_board(true, false), crate::acts::EPOCH_73_V36);
         let (x, z) = lands(&next);
-        assert!(x > 2.7 && x < 3.0 && z.abs() < 0.15, "halted at ({x:.2}, {z:.2}), want (2.95, 0) (RED on main)");
+        assert!(x > 1.85 && x < 1.93 && z.abs() < 0.15, "halted at ({x:.2}, {z:.2}), want (1.92, 0) (RED on main)");
     }
 
     /// RED on main: the climb is a rule the battle log names (rules-must-log), with the inches it cost.

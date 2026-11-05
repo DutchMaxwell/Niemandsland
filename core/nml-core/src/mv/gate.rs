@@ -347,6 +347,38 @@ fn rest_forbidden(c: [f64; 2], r_in: f64, t: &Terrain) -> bool {
     t.walls_in().iter().any(|w| point_seg_distance(p, w[0], w[1]) <= lim)
 }
 
+/// AIG-L6b (`EPOCH_73_V36`): does a base of `r_in` at `c` OVERLAP what it may not rest on, from the GROUND? A base that
+/// only TOUCHES (inside the 2 mm rest clearance, as a model landing a base-radius beyond a container does) is left
+/// where it stands - the base is shrunk by the clearance plus the overlap epsilon - and so is a model standing on the
+/// roof it climbed (heights B2, G4R5 R3: its centre is over the container footprint).
+pub(crate) fn overlaps_block(c: [f64; 2], r_in: f64, t: &Terrain) -> bool {
+    let on_roof = t.type_at(t.from_inch([c[0] as f32, c[1] as f32], 0.0)) == terrain::CONTAINER;
+    !on_roof && rest_forbidden(c, r_in - WALL_REST_CLEARANCE_IN - OVERLAP_EPS_IN, t)
+}
+
+/// AIG-L6b (`EPOCH_73_V36`, table twin `_rest_legal_cut`): walk a route back from its end to the first point a base of
+/// `r_in` may rest on - 1 cm steps (the projection's own ring), then four bisections that keep the legal side
+/// (~0.6 mm). The route cut there, or `None` when no point of it is rest-legal.
+pub(crate) fn rest_legal_cut(route: &[V2], r_in: f64, t: &Terrain) -> Option<Vec<V2>> {
+    let forbidden = |s: f64| {
+        let p = super::geom2::trim_polyline(route, s).last().copied().unwrap_or(route[0]);
+        rest_forbidden([p[0] as f64, p[1] as f64], r_in, t)
+    };
+    let mut hi = super::geom2::polyline_length(route); // arc length of a spot known to be forbidden
+    while hi > 0.0 {
+        let mut lo = (hi - TERRAIN_OUT_STEP_IN).max(0.0);
+        if !forbidden(lo) {
+            for _ in 0..4 {
+                let mid = (lo + hi) * 0.5;
+                if forbidden(mid) { hi = mid } else { lo = mid }
+            }
+            return Some(super::geom2::trim_polyline(route, lo));
+        }
+        hi = lo;
+    }
+    None
+}
+
 /// `SoloController._project_out_forbidden_world` :6807 — the shortest hop to a
 /// spot whose WHOLE base is clear: 1 cm rings out to 20 cm, sixteen compass
 /// directions each, nearest ring first and, inside one ring, the world-frame
