@@ -10,7 +10,7 @@ Niemandsland is a 3D tabletop sandbox for [OnePageRules](https://onepagerules.co
 
 1. Download the latest release from the [Releases](../../../releases) page.
 2. Unzip the archive.
-3. Run `Niemandsland.exe` — no installer needed.
+3. Run `Niemandsland.exe` — no installer needed. Keep `Niemandsland.pck` and `nml_core_godot.dll` in the same folder.
 
 **Linux**
 
