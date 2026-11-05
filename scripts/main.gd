@@ -6403,6 +6403,20 @@ func _solo_unit_los_height_m(unit: GameUnit) -> float:
 	return h
 
 
+## AIG-G2 R3 (rules-must-log, EPOCH_73_V36): a Crossing Strike weapon never strikes in melee, so the strike
+## of its carrier names the book rule once per such weapon (the host's and each attached hero's).
+func _solo_log_crossing_strike_melee(striker: GameUnit) -> void:
+	if battle_log == null or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return
+	for m in [striker] + striker.get_attached_heroes():
+		var member := m as GameUnit
+		if member == null or member.get_alive_count() == 0 or not member.source_data is OPRApiClient.OPRUnit:
+			continue
+		for p in AiShooting.strafing_profiles((member.source_data as OPRApiClient.OPRUnit).weapons):
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s attacks only when %s moves through an enemy unit — it does not strike in melee" % [
+				AiShooting.strafing_rule_name([p]), str((p as Dictionary).get("name", "?")), member.get_name()], true)
+
+
 ## Weapon groups for a combat activation: the unit's own profiles at its Quality PLUS each attached hero's
 ## profiles at the hero's Quality — a joined hero fights WITH its unit (field-test lock). Each profile's
 ## attack count is SCALED so dead models no longer attack (goal 003 P3, mirrors the sim fix): shooting scales
@@ -8933,6 +8947,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 	# per-model landing), the pooled wounds land right after it; the diff is "what THIS member took".
 	var pools_before: Array = _solo_wound_pools(defender)
 	var m_groups: Array = _solo_attack_groups(striker, 0.0, true, defender)
+	_solo_log_crossing_strike_melee(striker)
 	if filter != SoloStrike.COUNTER_ONLY and not m_groups.is_empty():
 		m_groups = m_groups + _solo_takedown_bonus_groups(striker, true)
 	# EPOCH_73_V36 — one strike is ONE hits event (the core's `resolve_melee_leg` chunk loop): pass 1 rolls

@@ -6169,11 +6169,15 @@ pub(crate) fn profiles_in_range(weapons: &[Weapon], dist_in: f64) -> Vec<ShootPr
 /// The melee list at the record's epoch — `AiShooting.melee_profiles`
 /// ai_shooting.gd:44-56. MEL-01 (D-ASSAULT, `EPOCH_73_V36`):
 /// a ranged weapon carrying Assault also yields a melee copy, in weapon order,
-/// at range 0 with its printed range kept in `printed_range`.
+/// at range 0 with its printed range kept in `printed_range`. AIG-G2 R3 (same epoch): a Crossing Strike /
+/// Strafing weapon never strikes here, it fires only through the move-through trigger.
 pub(crate) fn melee_profiles_at(weapons: &[Weapon], rules_epoch: u32) -> Vec<ShootProfile> {
     let assault = rule_on(rules_epoch, crate::acts::EPOCH_73_V36);
     let mut raw: Vec<ShootProfile> = Vec::new();
     for w in weapons {
+        if assault && weapon_strafes(w) {
+            continue; // AIG-G2 R3 (same epoch gate): fires only through the move-through trigger
+        }
         let copy = assault && w.range as i64 > 0 && weapon_has(w, "Assault");
         if w.range as i64 > 0 && !copy {
             continue;
