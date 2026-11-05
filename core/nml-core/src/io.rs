@@ -1707,7 +1707,10 @@ mod tests {
         assert_eq!(st.buffs[0].len(), 1, "unit 0's own fold is untouched");
         let mut hosted = state_of(LEDGER_PLAIN);
         super::fold_ledger(&mut hosted, 1, &ledger, crate::acts::CURRENT_RULES_EPOCH, 1, true, -1);
-        assert_eq!(hosted.growth_round[1], -1, "attached -> never swept");
+        assert_eq!(hosted.growth_round[1], hosted.round, "attached at 73 -> swept by the table's round start like any unit");
+        let mut old = state_of(LEDGER_PLAIN);
+        super::fold_ledger(&mut old, 1, &ledger, crate::acts::EPOCH_72_PLAYTEST_RULES, 1, true, -1);
+        assert_eq!(old.growth_round[1], -1, "below 73 an attached unit stays never swept");
     }
 
     /// G4-H-MOVED (`EPOCH_73_V36`) — the table's `moved_round` stamp rides the act ledger: `fold_ledger`
