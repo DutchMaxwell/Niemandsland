@@ -78,6 +78,7 @@ fn by_terrain() -> Terrain {
         cells: vec![[19.0, 15.0, FOREST as f64]],
         sandbox: vec![],
         pieces: vec![],
+        containers: Vec::new(),
         walls: vec![],
         cell_params: CellParams {
             table_size_feet: [6.0, 4.0],

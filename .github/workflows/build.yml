@@ -58,7 +58,7 @@ jobs:
       - name: Shard count (single source)
         id: shards
         run: |
-          COUNT=10
+          COUNT=12
           echo "shard_count=$COUNT" >> "$GITHUB_OUTPUT"
           echo "shards=$(python3 -c "import json,sys; print(json.dumps(list(range(int(sys.argv[1])))))" "$COUNT")" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
@@ -240,6 +240,16 @@ jobs:
         run: |
           set -euo pipefail
           python3 tools/shard_assign.py --shards ${{ needs.changes.outputs.shard_count }} --check
+
+      # tools/shard_assign_test.py reads the real test/ tree (the *_test.gd file list and
+      # test/shard_weights.json): the balance check (max shard within 15 % of the mean) and the
+      # real-tree coverage check. rust.yml runs it too, but only when its path filter matches;
+      # weights and suite files change on most GDScript PRs, so the guard lives here, on every PR.
+      - name: Shard assignment tests (balance and real-tree coverage)
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet pytest
+          python3 -m pytest tools/shard_assign_test.py -q
 
   relay-tests:
     name: Relay tests

@@ -778,6 +778,7 @@ impl Core {
             // NEW rule, so an absent key (every corpus recorded before it)
             // stays OFF.
             dangerous_end_morale: self.knobs.dangerous_end_morale,
+            dangerous_replay: self.knobs.dangerous_replay,
             morale_by_probability: self.knobs.morale_by_probability,
             fire_in_range_only: self.knobs.fire_in_range_only,
             hero_counts_in_size: self.knobs.hero_counts_in_size,
@@ -2906,6 +2907,7 @@ fn no_terrain() -> Terrain {
         cells: Vec::new(),
         sandbox: Vec::new(),
         pieces: Vec::new(),
+        containers: Vec::new(),
         walls: Vec::new(),
         cell_params: nmlcore::terrain::CellParams {
             table_size_feet: [6.0, 4.0],

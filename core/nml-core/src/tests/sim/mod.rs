@@ -1065,6 +1065,7 @@
             cells,
             sandbox: vec![],
             pieces: vec![],
+            containers: Vec::new(),
             walls: vec![],
             cell_params: crate::terrain::CellParams {
                 table_size_feet: [6.0, 4.0],
@@ -1128,6 +1129,7 @@
             sandbox: vec![],
             walls: vec![],
             pieces: vec![],
+            containers: Vec::new(),
             cell_params: crate::terrain::CellParams {
                 table_size_feet: [6.0, 4.0],
                 grid_rotation_degrees: 0.0,
@@ -1220,6 +1222,7 @@
             cells: vec![],
             sandbox: vec![],
             pieces: vec![],
+            containers: Vec::new(),
             walls: vec![],
             cell_params: crate::terrain::CellParams {
                 table_size_feet: [6.0, 4.0],
@@ -1297,6 +1300,7 @@
             cells,
             sandbox: vec![],
             pieces: vec![],
+            containers: Vec::new(),
             walls: vec![],
             cell_params: crate::terrain::CellParams {
                 table_size_feet: [6.0, 4.0],
@@ -1345,10 +1349,11 @@
         st.alive = vec![3, 3];
         st.attached = Rc::new(vec![vec![], vec![]]);
         st.attached_to = Rc::new(vec![None, None]);
-        st.positions[0] = vec![[0.0, 0.0, 0.0], [0.8, 0.0, 0.0], [1.2, 0.0, 0.0]];
+        // Base contact, three rows of 1" bases: from EPOCH_73_V36 a model strikes only inside its reach.
+        st.positions[0] = vec![[0.0, 0.0, 0.0], [0.0, 0.0, 2.0 * IN2M], [0.0, 0.0, 4.0 * IN2M]];
         st.wounds[0] = vec![1, 1, 1];
         Rc::make_mut(&mut st.radii)[0] = vec![IN2M, IN2M, IN2M];
-        st.positions[1] = vec![[2.0, 0.0, 0.0], [3.0, 0.0, 0.0], [4.0, 0.0, 0.0]];
+        st.positions[1] = vec![[2.0 * IN2M, 0.0, 0.0], [2.0 * IN2M, 0.0, 2.0 * IN2M], [2.0 * IN2M, 0.0, 4.0 * IN2M]];
         st.wounds[1] = vec![1, 1, 1];
         Rc::make_mut(&mut st.radii)[1] = vec![IN2M, IN2M, IN2M];
         (st, statics)
@@ -1599,6 +1604,7 @@
                 ],
                 sandbox: Vec::<Obb>::new(),
                 pieces: vec![],
+                containers: Vec::new(),
                 walls: vec![],
                 cell_params: CellParams {
                     table_size_feet: [6.0, 4.0],
@@ -1714,6 +1720,7 @@ mod cast_kind;
 mod cast_move;
 mod casting_debuff;
 mod casting_mod;
+mod charge_destroyed_target;
 mod courage_buff;
 mod utility_buff_family;
 mod utility_spells;
@@ -1799,26 +1806,46 @@ mod split_fire;
 mod strafing;
 mod terrain_debuff;
 mod traversal;
+mod v36_g4r4_granted_range;
 mod unstoppable_aura;
 mod utility_move_buff_pins;
 mod v36_ai;
 mod v36_data;
 mod v36_dat_06fix;
 mod v36_dat_17a;
+mod v36_g4r4_c2_regen_on_dead;
 mod v36_fab_c15;
+mod v36_g4_c8a;
+mod v36_g4r4_c1_strikeback;
+mod v36_g4r2_blast_hero;
+mod v36_g4r2_hero_spill;
+mod v36_g4r4_consolidation;
 mod v36_melee;
 mod v36_melee_rows;
+mod v36_g4_c8b;
+mod v36_g4r4_banner_dead_host;
+mod v36_g4r4_lonehero_shaken;
 mod v36_mor_10;
 mod v36_mor_11;
 mod v36_mor_14;
 mod v36_mor_18;
+mod v36_g4r4_c3_rout_hero;
 mod v36_morale;
 mod v36_shoot;
 mod v36_shoot_rows;
+mod v36_g4r4_x1b_feat_melee;
+mod v36_g4r2_dang_hold;
 mod v36_ux;
 mod v36_ux_17;
 mod v36_ux_19;
 mod v36_ux_21;
+mod v36_g4r4_x2a_dangerous_spill;
+mod v36_g4r5_dang_tail;
+mod v36_g4r5_hero_reach;
+mod v36_g4r5_hostdead_shoot;
+mod v36_g4r5_primal_grant;
+mod v36_g4r5_versatile_def;
+mod v36_g4r5_moved_sight_chain;
 mod v36_bg_03a;
 mod v36_bg_03a2;
 mod v36_bg_03a3;
@@ -1827,6 +1854,7 @@ mod v36_bg_03c_fix;
 mod v36_w1;
 mod v36_w1_5b;
 mod v36_w1_trace;
+mod v36_g4r4_granted_bane;
 mod versatile_reach;
 mod watchborn_latch;
 mod weapons;

@@ -2062,6 +2062,11 @@ static func capture(army: OPRArmyManager, objectives_provider: Callable = Callab
 		# scoring) while its strength survives in dormant_* for the arrival
 		# step. A tray node's position must never leak into the board picture.
 		var dormant := SoloController.unit_in_reserve(u)
+		# G4R5 R8c (EPOCH_73_V36): a hero joined to a reserved host waits in the tray with it - a hero is no reserve unit
+		# of its own, so without this it stood on the board as a live lone hero the table refuses to target.
+		if not dormant and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+			var host_gu: Variant = u.get_attached_to()
+			dormant = host_gu is GameUnit and SoloController.unit_in_reserve(host_gu as GameUnit)
 		var dormant_wounds: Array = []
 		for m in u.models:
 			if dormant:
@@ -2542,9 +2547,9 @@ static func charge_illegal_plain(state: Dictionary, header: Dictionary,
 		return false
 	var probe_r := float(au.get("charge_probe_r", SeparationChecker.DEFAULT_BASE_RADIUS_M))
 	var terrain_at: Callable = header.get("terrain_at", Callable())
-	return _corridor_forced_through_plain(
-		from if from != Vector3.INF else _plain_centre(au),
-		to if to != Vector3.INF else _plain_centre(vu), probe_r, terrain_at)
+	var from_p: Vector3 = from if from != Vector3.INF else _plain_centre(au)
+	var to_p: Vector3 = to if to != Vector3.INF else _plain_centre(vu)
+	return _corridor_forced_through_plain(from_p, SoloController.charge_probe_end(from_p, to_p, gap_in), probe_r, terrain_at)
 
 
 ## SoloController.melee_shroud_charge_in (:5150) off the recorded [penalty_in, floor_in] pair —

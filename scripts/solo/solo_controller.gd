@@ -811,6 +811,7 @@ func activate_next_ai_unit() -> GameUnit:
 		AiActRecorder.auto(_move_act_seq, _current_round(),
 			int(unit.unit_properties.get("player_id", 0)), unit.get_name(),
 			int(last_report.get("action", -1)))
+	AiActRecorder.played(_move_act_seq)   # F-PHANTOM (rules 3.6): this activation RAN; a pick with no marker never did
 	ai_unit_activated.emit(unit)
 	# M0-3 (NML-1073): one state fingerprint per activation, after every kind (normal act, disembark,
 	# Shaken idle, aircraft) has fully resolved and returned — cheap (one sha256 per activation, not
@@ -1390,7 +1391,7 @@ func best_shoot_target_now(ai_unit: GameUnit, held: bool = true) -> GameUnit:
 	if army_manager == null:
 		return null
 	var weapons := _unit_weapons(ai_unit)
-	var base_range: int = AiArchetype.max_range_inches(weapons) + shooting_range_bonus(ai_unit)
+	var base_range: int = _gate_reach_in(ai_unit)
 	if base_range <= 0:
 		return null
 	var indirect: bool = has_indirect_ranged(weapons) and indirect_ignores_los(ai_unit, held)
@@ -1401,7 +1402,11 @@ func best_shoot_target_now(ai_unit: GameUnit, held: bool = true) -> GameUnit:
 	var best_ev := 0.0
 	for h in army_manager.get_game_units_for_player(enemy_slot_of(ai_unit)):
 		var hu := h as GameUnit
-		if hu == null or hu.is_destroyed() or unit_in_reserve(hu):
+		if hu == null or unit_in_reserve(hu):
+			continue
+		# G4R5 R8 (EPOCH_73_V36, Hero rule): a chain whose host models are all dead but whose joined hero lives is
+		# not destroyed - the hero IS the unit now and stays a target through its host.
+		if hu.is_destroyed() and not (AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and combined_alive(hu) > 0):
 			continue
 		if hu.has_method("is_attached") and hu.is_attached():
 			continue
@@ -1440,8 +1445,12 @@ func nearest_human_unit(ai_unit: GameUnit) -> GameUnit:
 	var cands: Array = []
 	for h in army_manager.get_game_units_for_player(enemy_slot_of(ai_unit)):   # B6: actor-derived side
 		var hu := h as GameUnit
-		if hu == null or hu.is_destroyed() or unit_in_reserve(hu):
-			continue   # skip destroyed units and any still off-table in Ambush reserve (findings 3/4)
+		if hu == null or unit_in_reserve(hu):
+			continue   # skip any unit still off-table in Ambush reserve (findings 3/4)
+		# G4R5 R8b (EPOCH_73_V36, Hero rule): a chain whose host models are all dead but whose joined hero lives is
+		# not destroyed - the hero IS the unit now and stays the target through its host.
+		if hu.is_destroyed() and not (AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and combined_alive(hu) > 0):
+			continue   # skip destroyed units
 		if hu.has_method("is_attached") and hu.is_attached():
 			continue   # a joined hero is PART of its host unit — you target the unit, never the hero alone
 		if melee_only and is_aircraft(hu):
@@ -1854,6 +1863,8 @@ func _act(unit: GameUnit) -> Dictionary:
 		return _act_regroup(unit, report)
 	var target_unit := nearest_human_unit(unit)
 	if target_unit == null:
+		if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:   # G4R5 R8b: no activation passes without a line
+			_rule_note(report, "%s: no enemy unit to act against — it holds" % unit.get_name(), false)
 		return report
 	# Capture the passed-a-nearer-enemy flag BEFORE _commander_apply may re-query targets and
 	# clobber the transient member (community #164 narration).
@@ -2004,7 +2015,7 @@ func _act(unit: GameUnit) -> Dictionary:
 	var centre := unit_centre(unit)
 	var tcentre := unit_centre(target_unit)
 	var enemy_dist := MoveIntent.distance_inches(centre, tcentre)
-	var shoot_range := AiArchetype.max_range_inches(weapons) + shooting_range_bonus(unit)   # +Royal Legion (wave 4)
+	var shoot_range := _gate_reach_in(unit)   # +Royal Legion (wave 4); the living chain's longest gun from 73
 	# Targeting an Aircraft costs -12" of range (GF v3.5.1, system-scoped) and Ranged Shrouding another
 	# -6" floored at 6" — every range gate below measures against THIS target, so both fold into the
 	# working range once, here.
@@ -2091,7 +2102,7 @@ func _act(unit: GameUnit) -> Dictionary:
 			charge_reach += vr_charge_in
 		elif shoot_range > 0:
 			shoot_range = int(effective_shoot_reach_in(
-				float(AiArchetype.max_range_inches(weapons) + shooting_range_bonus(unit)) + vr_range_in, target_unit))
+				float(_gate_reach_in(unit)) + vr_range_in, target_unit))
 			if not vr_unlocks:
 				record_decision({"kind": "target", "unit": unit.get_name(),
 					"rule": "Versatile Reach: pick one — +4\" range when shooting chosen (no charge is unlocked by the +2\")",
@@ -2332,6 +2343,7 @@ func _act(unit: GameUnit) -> Dictionary:
 	# tree's section draw, because that is all the imitation corpus ever taught.
 	# No policy loaded => {} => byte-identical tree.
 	var planner_used := false
+	var planned_verb := -1   # F-HOLD-ADV: the verb the adopted plan picked (-1: no plan)
 	var pl := {}
 	var _ph_plan := 0
 	if act_wall_enabled():
@@ -2345,6 +2357,7 @@ func _act(unit: GameUnit) -> Dictionary:
 	if bool(pl.get("used", false)):
 		planner_used = true
 		action = int(pl["action"])
+		planned_verb = action
 		do_shoot = bool(pl["shoot"])
 		dec["toward"] = int(pl["toward"])
 		action_why = str(pl["why"])
@@ -2385,7 +2398,11 @@ func _act(unit: GameUnit) -> Dictionary:
 		# illegal charge becomes a RUSH toward the same enemy — the move
 		# survives, the doomed charge dies loudly (rules-must-log).
 		if action == AiDecision.Action.CHARGE and target_unit != null:
-			var charge_deny := charge_illegal_why(unit, target_unit, rush)
+			# G4-T7 (EPOCH_73_V36): an adopted CHARGE is measured against the unit's CHARGE band (the
+			# declaration probe's `charge_reach`; charge_illegal_why re-adds the Rapid Charge bonus itself),
+			# not the rush band; below 73 the rush band stands.
+			var regate_band: float = rush if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 else charge_reach - rcm_bonus
+			var charge_deny := charge_illegal_why(unit, target_unit, regate_band)
 			if charge_deny != "":
 				action = AiDecision.Action.RUSH
 				action_why = "adopted charge re-gated (%s) — rushing instead" % charge_deny
@@ -2583,6 +2600,8 @@ func _act(unit: GameUnit) -> Dictionary:
 	var band_in: float = (rush if action == AiDecision.Action.RUSH
 		else (advance if action == AiDecision.Action.ADVANCE else 0.0))
 	var charge_band_in := melee_shroud_charge_in(charge_reach, target_unit)
+	if planned_verb >= 0 and action != planned_verb:
+		AiActRecorder.executed_verb(_move_act_seq, action, planned_verb)   # F-HOLD-ADV (D7): the verb that RAN
 	var intent := ActIntent.make(unit, action, target_unit, goal, band_in, do_shoot, {
 		"charge_band_in": charge_band_in, "shoot_range_in": shoot_range, "quick_shot": quick_shot,
 		"enemy_dist_in": enemy_dist, "to_objective": to_obj, "to_flank": to_flank,
@@ -2705,6 +2724,7 @@ func execute_intent(intent: Dictionary, report: Dictionary) -> Dictionary:
 			or grants_indirect_to_attackers(target))   # wave 6 — the Indirect Mark's once-grant
 	if bool(report["can_shoot"]) and target != null:
 		_note_nearest_model_reach(report, unit, target, shoot_range_in)
+		_note_chain_reach(report, unit, target)
 	if bool(report["can_shoot"]) and quick_shot and action == AiDecision.Action.RUSH:
 		_rule_note(report, "Quick Shot: shoots after its Rush action", true)   # explains otherwise-impossible shots — travels
 	# POST-MOVE RETARGET (Bug 27/28): a HOLD/ADVANCE always MAY shoot (OPR) — so if the decided target is
@@ -2723,6 +2743,7 @@ func execute_intent(intent: Dictionary, report: Dictionary) -> Dictionary:
 		if retgt != null:
 			report["can_shoot"] = true
 			_note_nearest_model_reach(report, unit, retgt, effective_shoot_reach_in(float(shoot_range_in), retgt))
+			_note_chain_reach(report, unit, retgt)
 			record_decision({"kind": "target", "unit": unit.get_name(),
 				"rule": "Post-move retarget: an Advance/Hold may always shoot — the decided target is out of range/LOS, so fire on the best reachable enemy instead (Bug 27/28)",
 				"candidates": [], "chosen": retgt.get_name(), "why": "post-move retarget to a reachable enemy",
@@ -2812,9 +2833,7 @@ func player_intent(unit: GameUnit, verb: int, target: GameUnit, point: Variant =
 		var rushes := verb == AiDecision.Action.RUSH
 		return ActIntent.make(unit, verb, null, point, rush if rushes else advance, false, {"to_objective": true,
 			"source": "player", "why": "player intent: rushes to a point" if rushes else "player intent: advances to a point"})
-	var weapons := _unit_weapons(unit)
-	var shoot_range_in := effective_shoot_reach_in(
-		AiArchetype.max_range_inches(weapons) + float(shooting_range_bonus(unit)), target)
+	var shoot_range_in := effective_shoot_reach_in(float(_gate_reach_in(unit)), target)
 	var enemy_dist_in := MoveIntent.distance_inches(unit_centre(unit), unit_centre(target))
 	var quick_shot: bool = (unit.has_special_rule("Quick Shot") and RulesRegistry.unit_rule_active(unit, "Quick Shot")) \
 		or AiSpell.granted_rules_of(unit, target).has("Quick Shot")
@@ -2945,6 +2964,9 @@ func _act_regroup(unit: GameUnit, report: Dictionary) -> Dictionary:
 	report["action"] = AiDecision.Action.ADVANCE   # a MOVE action → shooting after is allowed (post-move retarget)
 	report["moved"] = true
 	report["regroup"] = true
+	# G4R3 F-T-REGROUP-LOG (EPOCH_73_V36): the Regroup rule names itself — it used to act silently.
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		_rule_note(report, "Regroup: %s starts its activation out of coherency — it gathers back first" % unit.get_name(), false)
 	var chain_in: float = CoherencyChecker.SKIRMISH_CHAIN_DISTANCE_INCHES \
 		if CoherencyChecker.is_skirmish_system(unit) else CoherencyChecker.MAX_CHAIN_DISTANCE_INCHES
 	record_decision({"kind": "action", "unit": unit.get_name(),
@@ -2952,8 +2974,7 @@ func _act_regroup(unit: GameUnit, report: Dictionary) -> Dictionary:
 		"candidates": [], "chosen": "regroup", "why": "torn at activation start (casualties)",
 		"data": {"models": models.size(), "now_coherent": _config_coherent_world(models, gathered, chain_in)}})
 	# Post-move shooting: an Advance may fire — open the gate against whatever is now reachable.
-	var weapons := _unit_weapons(unit)
-	var shoot_range := AiArchetype.max_range_inches(weapons) + shooting_range_bonus(unit)
+	var shoot_range := _gate_reach_in(unit)
 	if shoot_range > 0:
 		var retgt := best_shoot_target_now(unit, false)   # a regroup move never Holds
 		if retgt != null:
@@ -3312,6 +3333,26 @@ func _living_chain_weapons(unit: GameUnit) -> Array:
 	return out
 
 
+## G4R2 F-T-SLACK (EPOCH_73_V36): the reach the shooting gates read — the longest gun of the LIVING chain (host
+## plus joined heroes), the list the volley itself fires (main._solo_all_weapons). Below 73 the host's own list.
+func _gate_reach_in(unit: GameUnit) -> int:
+	var weapons: Array = _unit_weapons(unit) if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 \
+		else _living_chain_weapons(unit)
+	return AiArchetype.max_range_inches(weapons) + shooting_range_bonus(unit)
+
+
+## Rules-must-log (Hero): when ONLY a joined hero's gun puts `target` in reach — the unit's own guns stop short of
+## the nearest-model gap — the battle log names the book rule. Silent below EPOCH_73_V36.
+func _note_chain_reach(report: Dictionary, unit: GameUnit, target: GameUnit) -> void:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 or target == null:
+		return
+	var own_in := int(effective_shoot_reach_in(float(AiArchetype.max_range_inches(_unit_weapons(unit)) + shooting_range_bonus(unit)), target))
+	var gap_in := shoot_reach_gap_in(unit, target, MoveIntent.distance_inches(unit_centre(unit), unit_centre(target)))
+	if gap_in > float(own_in):
+		_rule_note(report, "%s: Hero — the joined hero's gun reaches %s (%.1f\" away, the unit's own guns reach %d\")" % [
+			unit.get_name(), target.get_name(), gap_in, own_in], true)
+
+
 ## The persistent close-and-fight standing order: keep the SAME enemy the unit was closing on (Killzone
 ## continue-task) while it is alive and on the table, so the monster stops flip-chasing the momentary
 ## nearest and can mount a MULTI-ROUND charge approach. Re-validated each activation. Returns
@@ -3497,7 +3538,19 @@ func _charge_capped_by_difficult(unit: GameUnit, from: Vector3, to: Vector3, gap
 	# but whose base-width grazes difficult ground WILL be capped, so the tree must not call the
 	# charge available (the honest falls-short from the field validation, seed 21002 R2).
 	var probe_r := _move_base_radius_m(_moving_models(unit))
-	return _corridor_forced_through(from, to, TerrainRules.PathCheck.DIFFICULT, probe_r)
+	return _corridor_forced_through(from, charge_probe_end(from, to, gap_in), TerrainRules.PathCheck.DIFFICULT, probe_r)
+
+
+## G4-T8 (EPOCH_73_V36): the far end of the cap gate corridor is the CONTACT point (gap_in along the line from
+## `from` toward `to`), not the target centre: forest under the target own base is no part of the charger leg.
+## Below 73, and when the target is nearer than the gap, the centre stands. Twins: BattleSim.charge_illegal_plain,
+## core gate::charge_illegal_tuned.
+static func charge_probe_end(from: Vector3, to: Vector3, gap_in: float) -> Vector3:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return to
+	var dist := Vector2(to.x - from.x, to.z - from.z).length()
+	var reach := gap_in * INCHES_TO_METERS
+	return to if dist <= reach else from.lerp(to, reach / dist)
 
 
 ## Shared corridor probe (#316 extraction — the difficult cap's exact geometry): the straight
@@ -6325,8 +6378,16 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 		longest_arc_m = maxf(longest_arc_m, MovementPlanner.polyline_length(t as Array) + climb_in * INCHES_TO_METERS)
 	if not _is_regiment(unit):
 		# Retrace each animation trail to its GATED endpoint so the glide ends exactly where the state now is.
+		var wall_kept := 0
 		for i in range(mini(trails.size(), new_positions.size())):
-			trails[i] = _retrace_to(trails[i] as Array, positions[i] as Vector3, new_positions[i] as Vector3)
+			var kept := _retrace_wall_true(unit, trails[i] as Array, positions[i] as Vector3, new_positions[i] as Vector3)
+			trails[i] = kept[0]
+			if (kept[1] as Vector3) != (new_positions[i] as Vector3):
+				new_positions[i] = kept[1]
+				wall_kept += 1
+		if wall_kept > 0:   # rules-must-log (AIG-L6): the kept-back models say which book rule held them
+			board_clamp_notes.append("%s: %d model%s stay on their own side of a wall (Charge: no moving through walls; Unit Coherency waits)"
+				% [unit.get_name(), wall_kept, "" if wall_kept == 1 else "s"])
 	_apply_model_positions(models, new_positions)
 	# Publish the per-model routes + base radii for the presentation layer (glide + swept corridor +
 	# distance label) — the STATE is already final (applied + broadcast above); the replay is local.
@@ -8443,6 +8504,25 @@ func _retrace_to(route: Array, start: Vector3, gated: Vector3) -> Array:
 	return trimmed
 
 
+## AIG-L6 (EPOCH_73_V36): `_retrace_to` closes the trimmed route with ONE straight leg to the gate-corrected end,
+## and when the gate moved that end off the route (a charge's coherency pull) the leg can run through a wall the
+## route had bent around. The model then keeps its route-true endpoint, the wall clamp's own discipline ("route
+## truth wins"); a ledge the unit may climb (<= 3") is no wall. Returns [trail, end].
+func _retrace_wall_true(unit: GameUnit, route: Array, start: Vector3, gated: Vector3) -> Array:
+	var trail := _retrace_to(route, start, gated)
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 or route.is_empty() or trail.size() < 2 \
+			or unit.has_special_rule("Flying"):
+		return [trail, gated]
+	var ledges := _ledges_world(unit).filter(func(l): return float(l["dy_in"]) <= MovementPlanner.LEDGE_CLIMB_MAX_IN)
+	var a := Vector2((trail[trail.size() - 2] as Vector3).x, (trail[trail.size() - 2] as Vector3).z)
+	var b := Vector2((trail[trail.size() - 1] as Vector3).x, (trail[trail.size() - 1] as Vector3).z)
+	for w in _rest_walls():
+		if not _is_ledge_edge(w, ledges) and MovementPlanner.segments_cross(a, b, w[0], w[1]):
+			var back := route.back() as Vector3
+			return [route, Vector3(back.x, gated.y, back.z)]
+	return [trail, gated]
+
+
 ## Straight one-leg trails for a rigid slide (start → end per model).
 static func _fill_straight_trails(world_trails: Array, from_pos: Array, to_pos: Array) -> void:
 	if world_trails == null:
@@ -9752,6 +9832,22 @@ static func speed_feat_flag(rule_name: String) -> String:
 	return "speed_feat_used_%s" % rule_name.to_snake_case()
 
 
+## G4-R3 X1a (EPOCH_73_V36): the Precision Feat's once-per-game latch (a Shot Modifier entry with `uses_per_game`).
+## ONE flag per rule, shared by shooting and melee: main `_solo_spend_shot_feats` closes it, the hit modifier and
+## the act ledger read it.
+static func shot_feat_flag(rule_name: String) -> String:
+	return "shot_feat_used_%s" % rule_name.to_snake_case()
+
+
+## True when `entry` is a once-per-game Shot Modifier whose latch `unit` has already spent.
+static func shot_feat_spent(unit: GameUnit, entry: Dictionary) -> bool:
+	if unit == null or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return false
+	if int((entry.get("params", {}) as Dictionary).get("uses_per_game", 0)) <= 0:
+		return false
+	return bool(unit.unit_properties.get(shot_feat_flag(str(entry["name"])), false))
+
+
 ## The verdict on one pass attempt. "" = the pass is legal; anything else is the REASON it is not,
 ## ready to be printed. Transparency doctrine (#224): the radial entry is offered even when the
 ## rule cannot be used right now, and the refusal explains itself instead of vanishing from the menu.
@@ -10872,8 +10968,9 @@ func _charge_path_probe_impl(unit: GameUnit, target: GameUnit, band_in: float) -
 	if not _is_regiment(unit):
 		finalized = _finalize_placement(unit, models, positions, planned, true, target)
 		for i in range(mini(trails.size(), finalized.size())):
-			trails[i] = _retrace_to(trails[i] as Array, positions[i] as Vector3,
-				finalized[i] as Vector3)
+			var kept := _retrace_wall_true(unit, trails[i] as Array, positions[i] as Vector3, finalized[i] as Vector3)
+			trails[i] = kept[0]
+			finalized[i] = kept[1]
 
 	var target_shapes: Array = []
 	for target_model in _moving_models(target):

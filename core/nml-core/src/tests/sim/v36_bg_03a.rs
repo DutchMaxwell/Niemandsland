@@ -11,6 +11,7 @@ use super::*;
             cells: vec![[14.0, 15.0, kind as f64]],
             sandbox: Vec::new(),
             pieces: Vec::new(),
+            containers: Vec::new(),
             walls: vec![],
             cell_params: CellParams {
                 table_size_feet: [6.0, 4.0],
@@ -69,7 +70,7 @@ use super::*;
     ) -> i64 {
         let seams = Seams { rules_epoch: epoch, hero_attach: true, ..Seams::default() };
         let mut shot = crate::dice::ShootResult::default();
-        dangerous_dice(statics, st, st, 0, seams, Some(land), Cover::Board(t), &mut shot)
+        dangerous_dice(statics, st, st, 0, seams, Some(land), Cover::Board(t), &mut shot, false)
     }
 
     /// Control: an 8" rush through a RUINS cell is no Dangerous terrain below

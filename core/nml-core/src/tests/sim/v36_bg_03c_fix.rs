@@ -50,6 +50,7 @@ fn one_cell_board(kind: i32) -> Terrain {
         cells: vec![[14.0, 15.0, kind as f64]],
         sandbox: Vec::new(),
         pieces: Vec::new(),
+        containers: Vec::new(),
         walls: vec![],
         cell_params: CellParams {
             table_size_feet: [6.0, 4.0],

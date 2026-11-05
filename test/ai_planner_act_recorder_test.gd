@@ -154,6 +154,102 @@ func test_traced_no_ops_before_the_header_exists() -> void:
 	assert_int(_dump_lines().size()).is_equal(0)
 
 
+## F-HOLD-ADV (rules 3.6, EPOCH_73_V36, lead ruling D7): the act line carries the planner's PICK, flushed before the
+## activation runs; the table's own gates may turn it into another verb (aof_1000_net_001 act 33: a planned Hold became
+## an Advance to walk into range). The EXECUTED verb is a `kind:"verb"` line of its own, joined by `act`.
+## LIVE PATH: a real SoloController runs _act on a real Cumbersome unit whose adopted plan is a Rush; the table cuts a
+## Cumbersome unit's move to Hold (rules 3.6, SHO-16), so the verb that ran (HOLD) is not the verb that was picked (RUSH).
+func _verb_lines() -> Array:
+	return _dump_lines().map(func(l: Variant) -> Variant: return JSON.parse_string(str(l))) \
+		.filter(func(d: Variant) -> bool: return d is Dictionary and str((d as Dictionary).get("kind", "")) == "verb")
+
+
+## `_solve_planner` stamps the planner's per-preset STATICS (SoloController._apply_aifix and friends) and they outlive the
+## test: a later suite in the same process (battle_sim_resolve_test in CI shard 8) then reads the aifix morale and reply
+## laws. The values are saved before the activation and put back after it.
+func _planner_statics() -> Array:
+	return [AiPlanner.opener_by_finish, AiPlanner.no_end_threat, AiPlanner.brain_knobs, AiPlanner.leaf_opener,
+		AiPlanner.brain_breadth, AiPlanner.points_strength, AiPlanner.table_fidelity, AiPlanner.playout_search,
+		BattleSim.morale_by_probability, BattleSim.reply_v2, BattleSim.reply_skip_activated, BattleSim.reply_hold_gate,
+		BattleSim.hero_fold, AiMissionEval.fit_mode, AiMissionEval.eval_variant]
+
+
+func _restore_planner_statics(v: Array) -> void:
+	AiPlanner.opener_by_finish = v[0]
+	AiPlanner.no_end_threat = v[1]
+	AiPlanner.brain_knobs = v[2]
+	AiPlanner.leaf_opener = v[3]
+	AiPlanner.brain_breadth = v[4]
+	AiPlanner.points_strength = v[5]
+	AiPlanner.table_fidelity = v[6]
+	AiPlanner.playout_search = v[7]
+	BattleSim.morale_by_probability = v[8]
+	BattleSim.reply_v2 = v[9]
+	BattleSim.reply_skip_activated = v[10]
+	BattleSim.reply_hold_gate = v[11]
+	BattleSim.hero_fold = v[12]
+	AiMissionEval.fit_mode = v[13]
+	AiMissionEval.eval_variant = v[14]
+
+
+## The act line for unit B (player 2, Cumbersome) planned as `planned_kind`, then B's real activation (_act).
+func _activate_planned(planned_kind: int, epoch: int) -> int:
+	AiActRecorder.rules_epoch = epoch
+	RulesRegistry.reset_cache()
+	var a := _armed(1, [Vector3.ZERO], "A")
+	var b := _armed(2, [Vector3(14.0 * IN2M, 0, 0)], "B")
+	b.unit_properties.merge({"special_rules": ["Cumbersome"], "game_system": "gf", "faction_folder": "some_book"}, true)
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {"A": a, "B": b}
+	army.current_round = 1
+	var state := BattleSim.capture(army, func() -> Array: return [], func(_i: int) -> int: return 0, 1, 3)
+	var pick := {"used": true, "unit_key": "B", "action": {"unit": "B", "kind": planned_kind}}
+	AiActRecorder.finish(AiActRecorder.begin(state, 2, [b], Callable()), pick)
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	solo.difficulty_by_slot[2] = SoloDifficulty.for_grade("planner_v0_herofold")
+	solo._planner_intent = {"unit": b, "round": solo._current_round(), "action": pick["action"], "target": a, "why": "test pick",
+		"expectation": {"before": 0.5, "after": 0.5}}
+	var saved := _planner_statics()
+	solo._act(b)
+	_restore_planner_statics(saved)
+	return solo.move_act_seq()
+
+
+func test_a_planned_rush_the_table_cuts_to_hold_writes_the_executed_verb() -> void:
+	var act := _activate_planned(AiDecision.Action.RUSH, AiActRecorder.EPOCH_73_V36)
+	var lines := _verb_lines()
+	assert_int(lines.size()).override_failure_message("one verb line: %s" % str(_dump_lines())).is_equal(1)
+	if lines.is_empty():
+		return
+	var v := lines[0] as Dictionary
+	assert_int(int(v["act"])).is_equal(act)
+	assert_int(int(v["verb"])).is_equal(AiDecision.Action.HOLD)
+	assert_int(int(v["planned"])).is_equal(AiDecision.Action.RUSH)
+
+
+func test_a_pick_the_table_plays_as_planned_writes_no_verb_line() -> void:
+	_activate_planned(AiDecision.Action.HOLD, AiActRecorder.EPOCH_73_V36)
+	assert_array(_verb_lines()).is_empty()
+
+
+func test_the_executed_verb_line_is_written_from_epoch_73_only() -> void:
+	var state := _state()
+	var pool: Array = [(state["units"]["A"] as Dictionary)["unit"]]
+	AiActRecorder.finish(AiActRecorder.begin(state, 1, pool, Callable()),
+		{"used": true, "unit_key": "A", "action": {"unit": "A", "kind": AiDecision.Action.HOLD}})
+	var rec: GDScript = AiActRecorder
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
+	if rec.has_method("executed_verb"):
+		rec.call("executed_verb", 1, AiDecision.Action.ADVANCE, AiDecision.Action.HOLD)
+	assert_array(_verb_lines()).is_empty()
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	if rec.has_method("executed_verb"):   # RED: the writer does not exist yet, so nothing is written
+		rec.call("executed_verb", 1, AiDecision.Action.ADVANCE, AiDecision.Action.HOLD)
+	assert_int(_verb_lines().size()).is_equal(1)
+
+
 ## NML-1073 M5 D5-4b: the header profile carries the base SHAPE, not only the
 ## circumscribing radius. `base_radius` is `BaseShape.bounding_radius()`, while
 ## the table's own contact measure walks the exact SUPPORT EXTENT of an oval
@@ -390,6 +486,27 @@ func test_charge_illegal_plain_is_a_pure_function_of_the_capture() -> void:
 	# Strider/Flying ignore difficult (p.13).
 	(board["units"]["A"] as Dictionary)["charge_no_difficult"] = true
 	assert_bool(BattleSim.charge_illegal_plain(board, forest, "A", "B", 10.0)).is_false()
+
+
+## G4-T8 twin of SoloController._charge_capped_by_difficult: forest under the TARGET's base only, the
+## charger's leg (gap 6.5") open -> from epoch 73 the plain gate probes to the contact point and lets it
+## through; below 73 it still probes to the target's centre and caps it.
+func test_charge_illegal_plain_probes_to_the_contact_point_from_epoch_73() -> void:
+	var board := {"units": {
+		"A": {"positions": [[0.0, 0.0, 0.0]], "alive": 1, "player": 1, "aircraft": false,
+			"bands": {"advance": 6.0, "rush": 12.0}, "charge_probe_r": 0.016, "charge_no_difficult": false},
+		"B": {"positions": [[7.76 * IN2M, 0.0, 0.0]], "alive": 1, "player": 2, "aircraft": false,
+			"bands": {"advance": 6.0, "rush": 12.0}, "charge_probe_r": 0.016, "charge_no_difficult": false}}}
+	var under_target := {"terrain_at": func(p: Vector3) -> int:
+		return TerrainRules.TerrainType.FOREST if p.x >= 7.56 * IN2M else TerrainRules.TerrainType.NONE}
+	var epoch0: int = AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	var at73: bool = BattleSim.charge_illegal_plain(board, under_target, "A", "B", 6.5)
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36 - 1
+	var at72: bool = BattleSim.charge_illegal_plain(board, under_target, "A", "B", 6.5)
+	AiActRecorder.rules_epoch = epoch0
+	assert_bool(at73).is_false()
+	assert_bool(at72).is_true()
 
 
 ## NML-1073 M2-5b: a hero that FALLS stops lending its rules to the unit it
@@ -646,6 +763,65 @@ func test_header_terrain_line_walls_is_empty_without_the_overlay_method() -> voi
 	host.terrain_overlay = overlay
 	var line := AiActRecorder._terrain_line(Callable(host, "terrain_type_at")) as Dictionary
 	assert_array(line["walls"] as Array).is_equal([])
+
+
+## F-CONT (rules 3.6, EPOCH_73_V36, lead ruling D5): the table's sight keeps a placed container's exact 6x3 box and
+## drops the painted cells under it, so the header's terrain block carries the boxes `{c, he, yaw}` next to `cells`
+## and the core builds its sight volumes from them. LIVE PATH: a REAL TerrainOverlay places a real container (the way
+## the game does) and the recorder reads the overlay's own box list; nothing here sets a flag by hand.
+func _overlay_with_container(angle_deg: float) -> Node3D:
+	var overlay: Node3D = auto_free(preload("res://scripts/terrain_overlay.gd").new())
+	overlay.table_size_feet = Vector2(6, 4)
+	overlay.update_placed_objects([{"object_type": "container", "cell": Vector2i(15, 15),
+		"offset": Vector2(0.5, 0.5), "angle_deg": angle_deg}], Vector2(6, 4), 0.0)
+	return overlay
+
+
+func _terrain_line_of(overlay: Node3D) -> Dictionary:
+	var host: _FakeTerrainHost = auto_free(_FakeTerrainHost.new())
+	host.terrain_overlay = overlay
+	return AiActRecorder._terrain_line(Callable(host, "terrain_type_at")) as Dictionary
+
+
+func test_header_terrain_line_carries_the_placed_containers_boxes_from_epoch_73() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	var overlay := _overlay_with_container(30.0)
+	var line := _terrain_line_of(overlay)
+	var boxes := line.get("containers", []) as Array
+	assert_int(boxes.size()).is_equal(1)
+	var want := (overlay._blocker_obbs as Array)[0] as Dictionary
+	var got := boxes[0] as Dictionary
+	assert_array(got.keys()).contains_exactly_in_any_order(["c", "he", "yaw"])
+	assert_array(got["c"] as Array).is_equal([(want["c"] as Vector2).x, (want["c"] as Vector2).y])
+	assert_array(got["he"] as Array).is_equal([(want["he"] as Vector2).x, (want["he"] as Vector2).y])
+	assert_float(float(got["yaw"])).is_equal(float(want["yaw"]))
+	assert_float((got["he"] as Array)[0]).is_equal_approx(3.0 * IN2M, 1e-9)   # the 6x3 box: half length 3"
+	assert_float((got["he"] as Array)[1]).is_equal_approx(1.5 * IN2M, 1e-9)   # half depth 1.5"
+
+
+func test_header_terrain_line_has_no_containers_key_below_epoch_73() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
+	assert_bool(_terrain_line_of(_overlay_with_container(0.0)).has("containers")).is_false()
+
+
+func test_header_terrain_line_containers_is_empty_without_the_overlay_list() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	var overlay: _StubOverlayNoWallsMethod = auto_free(_StubOverlayNoWallsMethod.new())
+	assert_array(_terrain_line_of(overlay).get("containers", null) as Array).is_equal([])
+
+
+func test_the_written_header_carries_the_container_boxes_as_json_numbers() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	var host: _FakeTerrainHost = auto_free(_FakeTerrainHost.new())
+	host.terrain_overlay = _overlay_with_container(0.0)
+	var state := _state()
+	var pool: Array = [(state["units"]["A"] as Dictionary)["unit"]]
+	AiActRecorder.finish(AiActRecorder.begin(state, 1, pool, Callable(host, "terrain_type_at")),
+		{"used": true, "unit_key": "A", "action": {"unit": "A", "kind": AiDecision.Action.HOLD}})
+	var header := JSON.parse_string(_dump_lines()[0]) as Dictionary
+	var boxes := (header["terrain"] as Dictionary).get("containers", []) as Array
+	assert_int(boxes.size()).is_equal(1)
+	assert_bool(((boxes[0] as Dictionary)["c"] as Array)[0] is float).is_true()   # a number, not a "(x, y)" string
 
 
 ## NML-1126: the header carries the rule-TEXT provenance of the game that wrote it.

@@ -324,3 +324,43 @@ func test_planner_pick_keeps_its_dictionary_shape() -> void:
 			"waits", "rolled_units"]:
 		assert_bool(pick.has(k)).override_failure_message("pick is missing " + k).is_true()
 	assert_str(str(pick["intent"])).contains("round played out")
+
+
+## G4-T7: the adoption re-gate measures an adopted CHARGE against the unit's CHARGE band. A Royal Legion
+## unit has charge 14" but rush 12"; the planner adopted a charge from a 12-14" gap and the re-gate, which
+## was handed the rush band, threw it out ("out of charge band") and rushed instead.
+func _regate_scene(epoch: int) -> Dictionary:
+	var epoch0: int = AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = epoch
+	var sc := _controller()
+	sc.set_difficulty(2, SoloDifficulty.for_grade("planner_v0"))
+	var taker: GameUnit = sc.army_manager.game_units["Taker"]
+	var enemy: GameUnit = sc.army_manager.game_units["Enemy"]
+	taker.unit_properties["game_system"] = "aof"
+	taker.unit_properties["faction_folder"] = "mummified_undead"
+	taker.unit_properties["special_rules"] = ["Royal Legion"]
+	(taker.models[0] as ModelInstance).node.global_position = Vector3.ZERO
+	(enemy.models[0] as ModelInstance).node.global_position = Vector3(15.0 * IN2M, 0, 0)
+	sc._planner_intent = {"unit": taker, "round": 1, "target": enemy,
+		"action": {"kind": AiDecision.Action.CHARGE}, "expectation": {"before": 0.4, "after": 0.5},
+		"why": "adopted charge"}
+	var bands: Dictionary = SoloController.move_bands_for_unit(taker, null)
+	var gap: float = sc.nearest_melee_gap_in(taker, enemy)
+	var report := sc._act(taker)
+	AiActRecorder.rules_epoch = epoch0
+	return {"report": report, "bands": bands, "gap": gap}
+
+
+func test_an_adopted_charge_inside_the_charge_band_but_beyond_rush_is_not_regated_at_epoch_73() -> void:
+	var r := _regate_scene(AiActRecorder.EPOCH_73_V36)
+	assert_float(float(r["bands"]["charge"])).is_equal(14.0)   # the live bands: charge 14 > rush 12
+	assert_float(float(r["bands"]["rush"])).is_equal(12.0)
+	assert_float(float(r["gap"])).is_greater(12.0)
+	assert_float(float(r["gap"])).is_less(14.0)
+	assert_int(int((r["report"] as Dictionary)["action"])).is_equal(AiDecision.Action.CHARGE)
+
+
+## Below 73 the re-gate keeps the rush band, so the same adopted charge is still thrown out (byte-identical).
+func test_an_adopted_charge_beyond_rush_is_still_regated_below_epoch_73() -> void:
+	var r := _regate_scene(AiActRecorder.EPOCH_73_V36 - 1)
+	assert_int(int((r["report"] as Dictionary)["action"])).is_equal(AiDecision.Action.RUSH)

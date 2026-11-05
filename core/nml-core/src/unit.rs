@@ -107,6 +107,12 @@ impl ShieldedAlias {
 /// (battle_sim.gd:701-712) writes over the template per call.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Ctx {
+    /// G4R3 F-HERO-RANGE (`EPOCH_73_V36`): a joined hero's own nearest gap to the volley target, set at the
+    /// volley seam; the resolver's range test reads it in place of the volley distance. `None` = the volley's own.
+    pub member_gap_in: Option<f64>,
+    /// G4R4 C-GRANTED-RANGE (`EPOCH_73_V36`): the best reach a live spell grant adds to this member's ranged weapons,
+    /// stamped at the volley seam (`UnitStatic::reach_grants`); 0 = none.
+    pub granted_reach_in: f64,
     pub quality: i64,
     pub defense: i64,
     pub morale_bonus: i64,
@@ -338,6 +344,11 @@ pub struct Ctx {
     /// the joined heroes too. `None` = not stamped (the hand-built dice
     /// fixtures), which keeps the old `parry_dice * models` read.
     pub parry_dice_total: Option<i64>,
+    /// Rules 3.6 (`EPOCH_73_V36`) — the models a Blast(X) multiplies onto: the host's living models PLUS
+    /// its living joined heroes (the table's `_solo_combined_alive`), stamped by `sim::stamp_blast_models`
+    /// on the shot's defender context. `models` stays the host's own count for every other reader.
+    /// `None` = not stamped (below 73, hand-built dice fixtures): Blast reads `models` as before.
+    pub blast_models: Option<i64>,
     pub regeneration: bool,
     pub regen_target: i64,
     /// Block B10 — the SPELL-wound twin (`main._solo_regen_pick`'s
@@ -495,6 +506,9 @@ pub struct Ctx {
     /// into the save batch the way the weapon's own `p.shred` is (dice.rs).
     /// Zero on every `ctx_of`.
     pub shred_grant: bool,
+    /// G4R4 C-GRANTED-BANE (`EPOCH_73_V36`): a live `grants_rule: "Bane when Shooting"` — every ranged weapon of the
+    /// member is a Bane weapon for the volley (dice.rs). Zero on every `ctx_of`.
+    pub bane_grant: bool,
     // --- Wave 2 "Utility Buff" family (gated `acts::rule_on(.., EPOCH_5_TABLE_RULES)`). ---
     /// A live `grants_rule: "Slayer"` — AP(+2) vs Tough 3+, charge or over 9".
     pub slayer_grant: bool,
@@ -654,6 +668,9 @@ pub struct Ctx {
     /// The `when: "charge"` names (Precision Charge Aura): only while the
     /// strike is a charge.
     pub melee_hit_bonus_charge: i64,
+    /// Rules 3.6 (`EPOCH_73_V36`): which BASE fed the two fields above; the melee fold names it in the log.
+    pub precision_charge_base: bool,
+    pub precision_fighter_base: bool,
     // --- Wave 3 — the Shot Modifier family's two RUNTIME-GATED shooting
     // members (main.gd:5761-5779's data-driven loop), stamped BY NAME in
     // `ctx_for` behind the EPOCH_6_TABLE_RULES gate (`shot_modifier_runtime_
@@ -1354,6 +1371,9 @@ pub struct UnitStatic {
     /// record stamped `rules_epoch: 5` (the Gen-3 fleet's own window) predates
     /// wave 3 and reads zeros.
     pub royal_legion_range_in: f64,
+    /// G4R4 C-GRANTED-RANGE (`EPOCH_73_V36`): the Royal Legion-family rules a friendly spell of this faction can
+    /// hand the unit (`grants_rule`), with their `range_bonus_in` — read live off the grant ledger at the volley.
+    pub reach_grants: Vec<(String, f64)>,
     pub royal_legion_charge_in: f64,
     /// `RulesRegistry.unit_rule_active(gu, "Re-Position Artillery")` — the
     /// "Utility Buff" movement primitive's registry gate (block B2).
@@ -3256,12 +3276,15 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     // below; Grounded Precision's `all_attacks` melee half is consumed at the
     // melee seam itself (dice.rs::melee_hit_target).
     let (mut melee_hit_bonus, mut melee_hit_bonus_charge) = (0, 0);
+    let (mut precision_charge_base, mut precision_fighter_base) = (false, false);
     for (name, charge_only) in [
         ("Good Fighter", false),
         ("Precision Fighter Aura", false),
         ("Precision Charge Aura", true),
+        ("Precision Fighter", false),
+        ("Precision Charge", true),
     ] {
-        if !unit_rule_active(reg, p, name) {
+        if !unit_rule_active(reg, p, name) || precision_base_stands_down(p, name, rules_epoch) {
             continue;
         }
         let map = reg.rules_for(&p.game_system);
@@ -3271,6 +3294,11 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         let hb = e.param_i("hit_bonus", 0);
         trace_stamp(trace73 && hb != 0, "shot-modifier", name,
             &format!("{}: {} stamped +{} melee", p.name, name, hb));
+        match name {
+            "Precision Charge" => precision_charge_base = true,
+            "Precision Fighter" => precision_fighter_base = true,
+            _ => {}
+        }
         if charge_only {
             melee_hit_bonus_charge += hb;
         } else {
@@ -3405,6 +3433,8 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         if evasive_boost.is_empty() { "Evasive" } else { evasive_boost },
         &format!("{}: Evasive stamped, -1 to hit", p.name));
     Ctx {
+        member_gap_in: None,
+        granted_reach_in: 0.0,
         quality: p.quality,
         defense: armored_defense(p.defense, armor),
         morale_bonus,
@@ -3559,6 +3589,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         brace_impact_per_model: brace.map(|b| b.1),
         parry_dice,
         parry_dice_total: None,
+        blast_models: None,
         regeneration: regen_targets.0 > 0,
         regen_target: regen_targets.0,
         regen_target_spell: regen_targets.1,
@@ -3577,6 +3608,8 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         defense_mod: 0,
         melee_hit_bonus,
         melee_hit_bonus_charge,
+        precision_charge_base,
+        precision_fighter_base,
         unstoppable_grant: false,
         unstoppable_mark: false,
         unstoppable_aura: false,
@@ -3585,6 +3618,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         thrust_grant: false,
         relentless_grant: false,
         shred_grant: false,
+        bane_grant: false,
         slayer_grant: false,
         surge_grant: false,
         versatile_grant: false,
@@ -4400,6 +4434,14 @@ fn boost_aura_name_of(p: &Profile, base: &str) -> String {
         .find(|r| boost_aura_base_of(r) == Some(base))
         .cloned()
         .unwrap_or_else(|| format!("{base} Aura"))
+}
+
+/// Rules 3.6 (`EPOCH_73_V36`): the Precision Charge / Fighter BASES pay the carrier model itself (its own rules). Below
+/// the gate they read nothing; from it a model that also carries the Aura keeps the Aura's single +1 (the import copies
+/// the base onto every Aura carrier). GD twin: `AiEv.precision_base_stands_down`.
+fn precision_base_stands_down(p: &Profile, name: &str, rules_epoch: u32) -> bool {
+    matches!(name, "Precision Charge" | "Precision Fighter")
+        && (!rule_on(rules_epoch, EPOCH_73_V36) || has_special_rule(&p.special_rules, &format!("{name} Aura")))
 }
 
 /// `RulesRegistry.unit_rules_of_primitive(shooter, "Shot Modifier")`,
@@ -6740,6 +6782,29 @@ fn move_rule_mods_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Opt
     if hit { Some(acc) } else { None }
 }
 
+/// G4R4 C-GRANTED-RANGE (`EPOCH_73_V36`): the Royal Legion-primitive rules (with their `range_bonus_in`) that a spell of
+/// the unit's faction hands out as a `grants_rule` ("Lust Boon" -> "Enhanced Lustbound" +8"). The table reads such a grant
+/// per member when it measures reach; the volley reads these names off the live ledger. Empty below 73.
+fn granted_reach_rules(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Vec<(String, f64)> {
+    if !rule_on(rules_epoch, EPOCH_73_V36) {
+        return Vec::new();
+    }
+    let names: Vec<String> = reg.spells_for(&p.game_system, &p.faction_folder).iter().map(|s| s.grants_rule.clone()).collect();
+    let map = reg.rules_for(&p.game_system);
+    let mut out: Vec<(String, f64)> = Vec::new();
+    for n in names {
+        if n.is_empty() || out.iter().any(|(o, _)| *o == n) {
+            continue;
+        }
+        let Some(e) = map.lookup(&p.faction_folder, &n) else { continue };
+        let b = e.param_f("range_bonus_in", 0.0);
+        if e.primitive.as_deref() == Some("Royal Legion") && b > 0.0 {
+            out.push((n, b));
+        }
+    }
+    out
+}
+
 /// The Royal Legion family (wave 3, epoch 6) — every carried Royal
 /// Legion-primitive entry's two live halves, folded the way the twins ship
 /// them: `range_bonus_in` takes the alias-MAX (`_shooting_range_bonus`'s
@@ -7197,6 +7262,8 @@ impl UnitStatic {
                 }
                 match n.as_str() {
                     "Watchborn" | "Vinci Tech" => name = Some(n.clone()),
+                    // The pick's log line names the BOOK rule, as the table's `primitive_book_name` does.
+                    "Versatile Expert" if rule_on(rules_epoch, EPOCH_73_V36) => name = Some(n.clone()),
                     "Enhanced Vinci Tech" => boost = true,
                     _ => {}
                 }
@@ -7452,6 +7519,7 @@ impl UnitStatic {
             move_rule_mods: move_rule_mods_of(reg, p, rules_epoch),
             solo_move_grant_mods: solo_move_grant_mods_of(reg, p, rules_epoch),
             royal_legion_range_in: royal_legion.0,
+            reach_grants: granted_reach_rules(reg, p, rules_epoch),
             royal_legion_charge_in: royal_legion.1,
             versatile_reach_charge_in: if unit_rule_active(reg, p, "Versatile Reach")
                 || has_special_rule(&p.special_rules, "Versatile Reach Aura")

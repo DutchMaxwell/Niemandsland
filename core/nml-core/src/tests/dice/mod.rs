@@ -412,6 +412,7 @@
 mod entrenched;
 mod modifier_sum;
     mod fortified;
+    mod g4r4_sergeant_scale;
     mod gate_only_rows;
     mod growth_markers;
     mod heavy_impact;
@@ -425,6 +426,7 @@ mod morale_rating;
 mod rung_i_dice;
 mod counter_param;
 mod shooting_order;
+mod precision_base;
 mod shot_modifier;
 mod shot_modifier_flat;
 mod shot_modifier_melee;

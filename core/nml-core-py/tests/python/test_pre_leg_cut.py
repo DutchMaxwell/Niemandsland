@@ -87,9 +87,32 @@ def test_an_old_recording_without_the_stamps_keeps_its_old_numbers(capsys, tmp_p
     assert "first field to part: count=2" in out, out
 
 
-def test_a_dangerous_test_in_front_of_the_cast_leg_leaves_the_act_uncut():
-    """The core's own dangerous test would draw BETWEEN two stretches of one resolve and a tray cannot be burned
-    mid-resolve: the act stays as recorded, and the gate says so instead of guessing."""
-    rolls = [{"leg": "dangerous", "count": 5}, {"leg": "cast", "count": 1}, {"leg": "main", "count": 4}]
-    kept, draws, plain = srg.cut_pre_legs(rolls, {"units": {}}, {}, True, True)
-    assert kept == rolls and draws == 0
+def _five_models() -> dict:
+    """A five-model unit as the act line carries it: per-model lists over the LIVING models, one x per model."""
+    return {"units": {"foe": {"alive": 5, "wounds": [1] * 5, "radii": [0.016] * 5, "kits": list(range(5)),
+                              "positions": [[float(i), 0.0, 0.0] for i in range(5)]}}}
+
+
+def _xs(plain: dict) -> list[float]:
+    return [p[0] for p in plain["units"]["foe"]["positions"]]
+
+
+def test_the_survivors_the_pre_block_names_are_the_models_kept():
+    """G4R3 F-PRE-SURV: the spell killed models 0, 2 and 3 (aof_1000_net_033 act 9 killed other models than the first
+    k): the replay must start from models 1 and 4, with their own radii, wounds and kits, not from models 0 and 1."""
+    out = srg.patch_pre(_five_models(), {"foe": {"alive": 2, "shaken": False, "of": 5, "keep": [1, 4]}})
+    foe = out["units"]["foe"]
+    assert _xs(out) == [1.0, 4.0] and foe["kits"] == [1, 4] and foe["alive"] == 2
+
+
+def test_a_pre_record_without_keep_still_keeps_the_first_models():
+    """An H1a recording (no `keep`) replays as before: the first k models of the list."""
+    out = srg.patch_pre(_five_models(), {"foe": {"alive": 2, "shaken": False}})
+    assert _xs(out) == [0.0, 1.0]
+
+
+def test_a_keep_list_of_another_roster_size_is_not_trusted():
+    """`of` is the length of the list `keep` indexes. A unit that lost models BEFORE the cast leg (a dangerous test in
+    front of it) has a shorter act-start list: the positions would not line up, so the gate keeps the first k."""
+    out = srg.patch_pre(_five_models(), {"foe": {"alive": 2, "shaken": False, "of": 6, "keep": [1, 5]}})
+    assert _xs(out) == [0.0, 1.0]

@@ -327,15 +327,55 @@ static func traced(act: int, tag: String, faces: Array, plus: int, bonus_in: flo
 	_count += 1
 
 
-## AI-G4 H1a (rules 3.6, EPOCH_73_V36): the units the activation's CAST LEG changed, {uid: {alive, shaken}},
+## AI-G4 H1a (rules 3.6, EPOCH_73_V36): the units the activation's CAST LEG changed (and, from the activation's start,
+## its own dangerous-terrain test), {uid: {alive, shaken, wounds[, keep, of, reach, grants]}},
 ## as a line of its own joined by `act` (the act line was flushed before the activation ran and is never
 ## rewritten). The replay gates cut the cast and spell rolls and start the core from this state. No-op
 ## below epoch 73, when NML_ACT_DUMP is unset, before the header exists, or when the line cap is hit.
+## `grants` (F-PRE-TOKENS) = the rule names the cast leg added to the unit's spell records (see `granted_names`).
 static func pre(act: int, units: Dictionary) -> void:
 	var f := _dump_stream()
 	if f == null or _count >= _max or not _header_written or rules_epoch < EPOCH_73_V36:
 		return
 	f.store_line(JSON.stringify({"kind": "pre", "act": act, "units": units}, "", true, true))
+	f.flush()   # a same-process reader (the unit test) must see the line without a close()
+	_count += 1
+
+
+## F-PRE-TOKENS (rules 3.6, EPOCH_73_V36): the rule names a unit's spell records grant ("Bane when Shooting"), in
+## placement order. The cast leg only APPENDS records, so the names it added are the tail past the act-start count; the
+## replay gates put each one back as the ledger buff the table's token is (the core reads it, #2500).
+static func granted_names(records: Array) -> Array:
+	var names: Array = []
+	for rd in records:
+		var rule := str((rd as Dictionary).get("grants_rule", ""))
+		if not rule.is_empty():
+			names.append(rule)
+	return names
+
+
+## F-PHANTOM (rules 3.6, EPOCH_73_V36): the activation of `act` RAN - the table's executor played the unit. The act line
+## is written when the planner PICKS, so a pick the table never plays (the game ends first: gf_1000_net_004 act 20,
+## gf_1000_net_009 act 25, gf_1000_net_022 act 27) has a line and no marker, and the replay gates skip it. A line of its
+## own joined by `act`. No-op below epoch 73, when NML_ACT_DUMP is unset, before the header exists, or at the line cap.
+static func played(act: int) -> void:
+	var f := _dump_stream()
+	if f == null or _count >= _max or not _header_written or rules_epoch < EPOCH_73_V36:
+		return
+	f.store_line(JSON.stringify({"kind": "played", "act": act}, "", true, true))
+	f.flush()   # a same-process reader (the unit test) must see the line without a close()
+	_count += 1
+
+
+## F-HOLD-ADV (rules 3.6, EPOCH_73_V36, lead ruling D7): the verb the table EXECUTED when its own gates turned the
+## planner's pick into another one (a planned Hold that walks into range as an Advance), as a line of its own joined
+## by `act` - the act line carries the pick and was flushed before the activation ran. The replay gates play `verb`.
+## No-op below epoch 73, when NML_ACT_DUMP is unset, before the header exists, or when the line cap is hit.
+static func executed_verb(act: int, verb: int, planned: int) -> void:
+	var f := _dump_stream()
+	if f == null or _count >= _max or not _header_written or rules_epoch < EPOCH_73_V36:
+		return
+	f.store_line(JSON.stringify({"kind": "verb", "act": act, "verb": verb, "planned": planned}, "", true, true))
 	f.flush()   # a same-process reader (the unit test) must see the line without a close()
 	_count += 1
 
@@ -684,10 +724,25 @@ static func _terrain_line(terrain_cb: Callable, school_world: Dictionary = {}) -
 	# has no per-move half-extents to apply that offset with, only the overlay.
 	var walls: Array = MoveRecorder._flatten(ov.get_wall_segments_world()) \
 		if ov.has_method("get_wall_segments_world") else []
-	return {"cells": cells, "sandbox": sandbox, "walls": walls,
+	var line := {"cells": cells, "sandbox": sandbox, "walls": walls,
 		"cell_params": {"table_size_feet": [ov.table_size_feet.x, ov.table_size_feet.y],
 			"grid_rotation_degrees": float(ov.grid_rotation_degrees),
 			"grid_size_inches": ov.GRID_SIZE_INCHES, "inches_to_meters": ov.INCHES_TO_METERS}}
+	if rules_epoch >= EPOCH_73_V36:
+		line["containers"] = _container_boxes(ov)
+	return line
+
+
+## F-CONT (rules 3.6, EPOCH_73_V36, lead ruling D5): the placed containers' exact 6x3 boxes `{c, he, yaw}` in world
+## metres — `TerrainOverlay._blocker_obbs`, the list the table's sight keeps while it drops the painted cells under
+## each box. The core (sight.rs `zones_of_at`) builds a solid 2.5" volume from them. An overlay without the list = [].
+static func _container_boxes(ov: Object) -> Array:
+	var out: Array = []
+	for ob in (ov.get("_blocker_obbs") if "_blocker_obbs" in ov else []):
+		var c: Vector2 = ob["c"]
+		var he: Vector2 = ob["he"]
+		out.append({"c": [c.x, c.y], "he": [he.x, he.y], "yaw": float(ob["yaw"])})
+	return out
 
 
 ## NML-1073 M3-0: core_selfplay has no TerrainOverlay node — its board is a
@@ -915,6 +970,11 @@ static func _ledger_of(u: GameUnit) -> Dictionary:
 			continue
 		if bool(u.unit_properties.get("takedown_bonus_used_%s" % tn, false)):
 			feats.append(tn)
+	# G4-R3 X1a (EPOCH_73_V36): the Precision Feat's latch, shared by shooting and melee (main.gd
+	# `_solo_spend_shot_feats`) — the same ledger name list, so the core replays the attack with the latch closed.
+	for e in RulesRegistry.unit_rules_of_primitive(u, "Shot Modifier"):
+		if SoloController.shot_feat_spent(u, e as Dictionary):
+			feats.append(str((e as Dictionary)["name"]))
 	if not feats.is_empty():
 		ledger["feats_used"] = feats
 	# G4-H-LIM (EPOCH_73_V36) — the once-per-game LIMITED ledger: the weapon names this unit has already
@@ -923,6 +983,12 @@ static func _ledger_of(u: GameUnit) -> Dictionary:
 	var spent_limited: Array = u.unit_properties.get("limited_used", [])
 	if rules_epoch >= EPOCH_73_V36 and not spent_limited.is_empty():
 		ledger["limited_used"] = spent_limited.duplicate()
+	# G4-H-MOVED (EPOCH_73_V36) — the round the unit last executed a move (unit_properties["moved_round"],
+	# stamped by main.gd _solo_animate_move). The table reads it for Artillery's -1 to hit, Entrenched and the
+	# stationary alias penalty; without it the core reads every unit as "never moved".
+	var moved_round := int(u.unit_properties.get("moved_round", -1))
+	if rules_epoch >= EPOCH_73_V36 and moved_round != -1:
+		ledger["moved_round"] = moved_round
 	var markers := 0
 	for e in RulesRegistry.unit_rules_of_primitive(u, "Growth Markers"):
 		var rn := str((e as Dictionary)["name"]).to_snake_case()

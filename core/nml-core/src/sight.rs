@@ -24,9 +24,10 @@
 //!   1. CONTAINER BOXES. `terrain_overlay._build_los_volumes` (:1183-1186) uses
 //!      the exact 6"x3" OBB a placed container recorded in `_blocker_obbs`
 //!      (:2841), and DROPS the container's painted cells that the OBB covers
-//!      (:1238-1241). The OBB comes from the placed-object list, which no act
-//!      line carries; only the 3"-quantised cells survive into `terrain.cells`.
-//!      This port therefore builds containers from those cells, solid, at the
+//!      (:1238-1241). From `EPOCH_73_V36` the act header's `terrain.containers`
+//!      carries that OBB and `zones_of_at` does the same. Older recordings carry
+//!      only the 3"-quantised cells in `terrain.cells`, so this port builds
+//!      containers from those cells, solid, at the
 //!      same 2.5" height. Measured on `~/selfplay_out/qbe_ref`: keeping them
 //!      agrees with the recorded per-shot `sighted` on 9 more shots than dropping
 //!      them, and never on fewer.
@@ -65,7 +66,7 @@ const Y_EPS_M: f64 = 1e-6;
 pub const AIRCRAFT_TARGET_RANGE_PENALTY_IN: f64 = 12.0;
 /// `main.SOLO_LOS_DEFAULT_BASE_MM` :4237 — the floor `_solo_unit_los_height_m`
 /// starts from, so a unit is never shorter than 32 mm infantry.
-const DEFAULT_BASE_MM: f64 = 32.0;
+pub(crate) const DEFAULT_BASE_MM: f64 = 32.0;
 /// `VolumetricLos.BASE_HEIGHT_TABLE` — (base mm, model height in inches).
 const BASE_HEIGHT_TABLE: [[f64; 2]; 6] =
     [[25.0, 1.0], [32.0, 1.25], [40.0, 1.5], [50.0, 2.0], [60.0, 3.0], [100.0, 4.0]];
@@ -482,10 +483,21 @@ pub fn zones_of_at(t: &Terrain, rules_epoch: u32) -> Vec<Zone> {
     if !t.is_valid() {
         return Vec::new();
     }
+    // F-CONT (rules 3.6, `EPOCH_73_V36`): a placed container is its exact box, and the painted container cells whose
+    // centre the box covers drop out (`TerrainOverlay._zone_volumes`, the NML-965 double-block trap).
+    let boxes: &[terrain::ContainerObb] = if rule_on(rules_epoch, EPOCH_73_V36) { t.containers() } else { &[] };
+    let (sin, cos) = t.grid_yaw().sin_cos();
+    let under_box = |k: (i64, i64)| {
+        let (lx, lz) = ((k.0 as f64 + 0.5) * t.cell_m(), (k.1 as f64 + 0.5) * t.cell_m());
+        let p = [lx * cos - lz * sin, lx * sin + lz * cos];
+        boxes.iter().any(|b| BoxFoot { c: b.c, he: b.he, yaw: b.yaw, y0: 0.0 }.holds_point(p))
+    };
+    let half = t.half_grid_cells();
     let cells: HashMap<(i64, i64), i32> = t
         .painted_cells()
         .filter(|&(_, k)| volume_height_in(k) > 0.0 && !ruin_is_open(k, rules_epoch))
-        .map(|(c, k)| ((c.0 - t.half_grid_cells(), c.1 - t.half_grid_cells()), k))
+        .map(|(c, k)| ((c.0 - half, c.1 - half), k))
+        .filter(|&(c, k)| !(k == terrain::CONTAINER && under_box(c)))
         .collect();
     let (mut seen, mut out) = (HashSet::new(), Vec::new());
     for (&start, &kind) in cells.iter() {
@@ -510,7 +522,22 @@ pub fn zones_of_at(t: &Terrain, rules_epoch: u32) -> Vec<Zone> {
             foot: None,
         });
     }
+    let roof = volume_height_in(terrain::CONTAINER) * IN2M;
+    out.extend(boxes.iter().map(|b| Zone::shelf_box(b.c, b.he, b.yaw, 0.0, roof, true)));
     out
+}
+
+/// `VolumetricLos.surface_y_at` (:211) over the board's solid volumes - the height a model standing at the flat world
+/// point `p` stands on: the roof of the container holding it (a placed box, or a painted container cell no box covers,
+/// the same two the zones above keep), else the table at 0. Metres. G4R5 R3: the table settles every moved model here.
+pub fn surface_y_m(t: &Terrain, p: [f64; 2], rules_epoch: u32) -> f64 {
+    let boxes: &[terrain::ContainerObb] = if rule_on(rules_epoch, EPOCH_73_V36) { t.containers() } else { &[] };
+    let covered = |q: [f64; 2]| boxes.iter().any(|b| BoxFoot { c: b.c, he: b.he, yaw: b.yaw, y0: 0.0 }.holds_point(q));
+    let (sin, cos) = t.grid_yaw().sin_cos();
+    let k = cell_of(p, t.grid_yaw(), t.cell_m());
+    let (lx, lz) = ((k.0 as f64 + 0.5) * t.cell_m(), (k.1 as f64 + 0.5) * t.cell_m());
+    let painted = t.type_at([p[0] as f32, 0.0, p[1] as f32]) == terrain::CONTAINER && !covered([lx * cos - lz * sin, lx * sin + lz * cos]);
+    if covered(p) || painted { volume_height_in(terrain::CONTAINER) * IN2M } else { 0.0 }
 }
 
 /// `zones_of`, plus with `shelf` (the dormant `Seams::shelf_sight`) every freely
@@ -807,6 +834,7 @@ mod tests {
             cells: cells.iter().map(|&(x, z, k)| [x as f64, z as f64, k as f64]).collect(),
             sandbox,
             pieces: vec![],
+            containers: Vec::new(),
             walls: vec![],
             cell_params: CellParams {
                 table_size_feet: [6.0, 4.0],

@@ -19,7 +19,7 @@ use godot::builtin::VariantType;
 
 use nml_core::io::{fold_ledger, los_positions, PlainLedger};
 use nml_core::state::{Bands, MoveBands, Roster};
-use nml_core::terrain::{CellParams, Obb, PlainTerrain};
+use nml_core::terrain::{CellParams, ContainerObb, Obb, PlainTerrain};
 use nml_core::{
     Knobs, Marker, MeleeReach, Mods, Objective, Profile, ProfileDyn, Profiles, SearchMode, Sighting, State,
     TreeDice, TreeLeaf, Weapon,
@@ -946,6 +946,12 @@ pub fn terrain_of(d: &VarDictionary) -> PlainTerrain {
         // (`selfplay.load_board`); the live overlay hands its shapes as
         // `sandbox`, so nothing here reads a `pieces` key.
         pieces: Vec::new(),
+        // F-CONT (rules 3.6) — `AiActRecorder._container_boxes`; no key = no boxes (a header below `EPOCH_73_V36`).
+        containers: darr(d, "containers")
+            .iter_shared()
+            .filter_map(|v| v.try_to::<VarDictionary>().ok())
+            .map(|b| ContainerObb { c: pair(&darr(&b, "c")), he: pair(&darr(&b, "he")), yaw: dnum(&b, "yaw", 0.0) })
+            .collect(),
         walls,
         cell_params: CellParams {
             table_size_feet: pair(&darr(&cp, "table_size_feet")),
@@ -1068,6 +1074,7 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         // `Knobs::default()` = OFF, so a corpus recorded before it is untouched.
         dangerous_end_morale: d.get("dangerous_end_morale").map(|v| flag(&v))
             .unwrap_or(dflt.dangerous_end_morale),
+        dangerous_replay: dflt.dangerous_replay, // G4R5 R1: replay gates only, never read from the game's dictionary
         opener_by_finish: d.get("opener_by_finish").map(|v| flag(&v)).unwrap_or(dflt.opener_by_finish),
         no_end_threat: d.get("no_end_threat").map(|v| flag(&v)).unwrap_or(dflt.no_end_threat),
         fire_in_range_only: d.get("fire_in_range_only").map(|v| flag(&v)).unwrap_or(dflt.fire_in_range_only),

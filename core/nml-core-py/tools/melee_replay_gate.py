@@ -74,8 +74,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
 
 import nml_core  # noqa: E402
 from shoot_replay_gate import (  # noqa: E402
-    burn_prefix, combat_kind, cut_pre_legs, defender_state, first_at_or_after, parted_field, read_game,
-    read_pre, resolve_vintage_flag, successes, vintage_report_line,
+    burn_prefix, combat_kind, cut_dangerous, cut_pre_legs, dang_replay, defender_state, extra_die_hosts, first_at_or_after,
+    lone_hero_names, parted_field, read_game, read_pre, resolve_vintage_flag, signer_ok, successes, vintage_report_line,
 )
 
 #: `BattleSim.CHARGE` — the only act kind that fights a melee.
@@ -167,7 +167,7 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
         walls_check: bool = False, rigid_red: bool = False,
         no_dangerous: bool = False, no_hero_fold: bool = False,
         engage_fold: str = "auto", cond_ap: str = "auto",
-        red_round_only: bool = False) -> int:
+        red_round_only: bool = False, red_dang_tail: bool = False) -> int:
     games = sorted(d for d in ref.iterdir() if d.is_dir() and (d / "dice.jsonl").exists())
     if limit:
         games = games[:limit]
@@ -211,15 +211,16 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
         eff_cond_ap = resolve_vintage_flag(cond_ap, head, repo, "cond_ap")
         vintage_seen.add((eff_engage_fold, eff_cond_ap))
         nml_core.set_legacy_no_cond_ap(not eff_cond_ap)
-        core.set_header({"profiles": round_only_profiles(head["profiles"])
-                         if red_round_only else head["profiles"],
-                         "terrain": dict(head.get("terrain") or {}, walls=walls)
-                         if head.get("terrain") else None,
-                         "knobs": dict(head.get("knobs", {}), hero_attach=True,
-                                       charge_landing=charge_landing,
-                                       dangerous=not no_dangerous,
-                                       engage_fold=eff_engage_fold,
-                                       movement=movement and not rigid_red)})
+        header = {"profiles": round_only_profiles(head["profiles"])
+                  if red_round_only else head["profiles"],
+                  "terrain": dict(head.get("terrain") or {}, walls=walls)
+                  if head.get("terrain") else None,
+                  "knobs": dict(head.get("knobs", {}), hero_attach=True,
+                                charge_landing=charge_landing,
+                                dangerous=not no_dangerous,
+                                engage_fold=eff_engage_fold,
+                                movement=movement and not rigid_red)}
+        core.set_header(header)
         if walls_check and walls:
             walls_seen["games"] += 1
             got = core.walls_in()
@@ -240,11 +241,16 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
             tally["acts"] += 1
             i0 = first_at_or_after(dice, k)
             # AI-G4 H1b: the table's cast/spell legs are cut, their dice burned, the state patched (see shoot_replay_gate).
-            rolls_cut, pre_burn, plain = cut_pre_legs([r for r in dice[i0:] if int(r["act"]) == k],
-                                                      act["state"], pres.get(k))
+            rolls_k = [r for r in dice[i0:] if int(r["act"]) == k]
+            rolls_cut, pre_burn, plain = cut_pre_legs(rolls_k, act["state"], pres.get(k))
             tray = nml_core.Tray(seed + 1 if mode == "misseed" else seed)
             if burn[i0] + pre_burn:
                 tray.roll(burn[i0] + pre_burn)
+            dang_off = cut_dangerous(rolls_k, rolls_cut)
+            if dang_off:  # G4-H8: the cut took the table's dangerous test; the core rolls none for this one act
+                # F-DANG-TAIL: its wounds still lose the melee (`--red-dang-tail` hands the core nothing: the old numbers)
+                tail = None if red_dang_tail else dang_replay(act["state"]["units"], action["unit"], header["knobs"])
+                core.set_header(dict(header, knobs=dict(header["knobs"], dangerous=False, dangerous_replay=tail)))
             try:
                 nxt, report = core.resolve_with_tray(
                     core.state_of(plain), action, nml_core.Rng(0), tray)
@@ -253,6 +259,9 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
                 if len(firsts) < 3:
                     firsts.append("%s act %d — DECLINED: %s" % (d.name, k, exc))
                 continue
+            finally:
+                if dang_off:
+                    core.set_header(header)
             for name in report["unported"]:
                 unported[name] = unported.get(name, 0) + 1
             got = [(r["kind"], r["count"], r["target"], r["faces"], "AI (%s)" % r["owner"])
@@ -296,8 +305,11 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
 
             verdict, why = "equal", ""
             tally["rolls"] += max(len(got), len(want))
+            # R3-H2/R3-H3: a lone joined hero's save and a rule-generated extra die may carry the host's label.
+            lone, hosts = lone_hero_names(plain, head["profiles"]), extra_die_hosts(report["rolls"], plain, head["profiles"])
             for i, (g, w) in enumerate(zip(got, want)):
-                field = parted_field(g, w) or ("owner" if g[4] != w[4] else None)
+                field = parted_field(g, w) or (
+                    "owner" if not signer_ok(report["rolls"][i]["owner"], w[4], lone, hosts.get(i, "")) else None)
                 if field:
                     # WHICH field parted first is the whole diagnosis: `count` is
                     # the attack-scaling class (the table scales melee by the
@@ -360,6 +372,7 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
         label += " [RED: --red-no-dangerous, the p.12 test OFF]"
     if no_hero_fold:
         label += " [RED: --red-no-hero-fold, the engage test on the hosts alone]"
+    label += " [RED: --red-dang-tail]" if red_dang_tail else ""
     if red_round_only:
         label += " [RED: --red-round-only, every base its circumscribing circle]"
     silent_table = tally["both_silent"] + tally["table_silent"]
@@ -426,13 +439,15 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
     # Both sides drawing NOTHING is agreement, not a missing verdict.
     ok = (tally["acts"] > 0
           and tally["full_equal"] + tally["both_silent"] == tally["acts"])
+    # AI-G4 F-PRINT: the printed number leaves the both-silent acts out, like the pass formula does.
+    short = tally["acts"] - tally["full_equal"] - tally["both_silent"]
     if report_only:
         print("  REPORT ONLY — %d/%d acts short of full equality, exit 0 by request"
-              % (tally["acts"] - tally["full_equal"], tally["acts"]))
+              % (short, tally["acts"]))
         return 0
     print("  %s" % ("PASS" if ok else
                     "FAIL — %d of %d charge acts are not FULL-equal (see the buckets above)"
-                    % (tally["acts"] - tally["full_equal"], tally["acts"])))
+                    % (short, tally["acts"])))
     return 0 if ok else 1
 
 
@@ -493,12 +508,14 @@ def main(argv: list[str]) -> int:
                     help="NML-1130: conditional AP (PR #448/NML-1103), i.e. LEGACY_NO_COND_AP "
                          "inverted. 'auto' (default) reads the corpus's OWN vintage; 'on'/'off' "
                          "force it")
+    ap.add_argument("--red-dang-tail", action="store_true",
+                    help="G4R5 R1 RED PROOF for F-DANG-TAIL: no `dangerous_replay` knob for a cut Dangerous test (the cut test's wounds are missing from the melee tally again and the acts part)")
     a = ap.parse_args(argv)
     return run(Path(a.ref).expanduser(), a.repo,
                "misseed" if a.red_misseed else a.mode, a.limit, a.report_only,
                a.charge_landing, a.movement or a.red_move_rigid, a.walls_check,
                a.red_move_rigid, a.red_no_dangerous, a.red_no_hero_fold,
-               a.engage_fold, a.cond_ap, a.red_round_only)
+               a.engage_fold, a.cond_ap, a.red_round_only, a.red_dang_tail)
 
 
 if __name__ == "__main__":
