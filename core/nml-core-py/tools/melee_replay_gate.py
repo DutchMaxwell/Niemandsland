@@ -374,7 +374,7 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
         label += " [RED: --red-no-hero-fold, the engage test on the hosts alone]"
     label += " [RED: --red-dang-tail]" if red_dang_tail else ""
     if red_round_only:
-        label +=" [RED: --red-round-only, every base its circumscribing circle]"
+        label += " [RED: --red-round-only, every base its circumscribing circle]"
     silent_table = tally["both_silent"] + tally["table_silent"]
     print()
     print("%s over %d games, %d charge acts, %s (%.1fs)"
