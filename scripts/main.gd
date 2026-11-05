@@ -9569,7 +9569,12 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 	else:
 		# Coverage wave: Fortified-family DATA aliases (Guardian, Primeborn — the over-9"-gated
 		# form: "shot or charged from over 9\" away → hits count as AP(-1), min AP(0)").
-		for e in RulesRegistry.unit_rules_of_primitive(defender, "Fortified"):
+		# AI-G2 R7 (EPOCH_73_V36): an enhanced form's larger cut REPLACES its base's, so entries with a cut above 1 are
+		# tried first (stable partition) and the first whose gate passes still wins. Below 73 every cut reads 1: unchanged.
+		var fort_entries: Array = RulesRegistry.unit_rules_of_primitive(defender, "Fortified")
+		fort_entries = fort_entries.filter(func(x): return AiCombatMath.fortified_entry_cut(x) > 1) \
+			+ fort_entries.filter(func(x): return AiCombatMath.fortified_entry_cut(x) <= 1)
+		for e in fort_entries:
 			var ed := e as Dictionary
 			var n := str(ed["name"])
 			if n == "Fortified":
@@ -9590,7 +9595,7 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 				_solo_fortified_aura_loss_log(defender, dead_aura)
 				continue
 			var apb := ap
-			ap = AiCombatMath.fortified_ap(ap, true)
+			ap = AiCombatMath.fortified_ap(ap, true, AiCombatMath.fortified_entry_cut(ed))
 			if ap < apb and battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s takes the hits at AP(%d) instead of AP(%d) — saves on %d+%s" % [
 					n, defender.get_name(), ap, apb, base_defense + ap, _solo_most_models_note(defender, n)], true)

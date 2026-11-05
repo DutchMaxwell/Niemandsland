@@ -2160,9 +2160,10 @@ fn battleborn_recover_target_of(reg: &mut Registries, p: &Profile, rules_epoch: 
 /// `gate_in <= 0.0` branch — EVERY save batch, every leg; a gated entry
 /// ("Guardian"/"Primeborn"/"Warden"/"Ossified") fires only past its own
 /// `over_in`, which only the volley can measure. The table applies the FIRST
-/// entry whose gate passes and breaks (:6461); every shipped entry carries
-/// `incoming_ap_reduction: 1`, so the max here IS that first read — the
-/// primal-Boost "uniform printed shape" precedent. Scans own rules AND
+/// entry whose gate passes and breaks (:6461); below `EPOCH_73_V36` every entry
+/// reads 1, so the max here IS that first read — the primal-Boost "uniform
+/// printed shape" precedent. From 73 an enhanced form (Enhanced Warden: 2)
+/// REPLACES its base's cut through the max, never stacks. Scans own rules AND
 /// `item_grants`, each gated by `rule_on_all_models` (TC-023's all-models read).
 #[derive(Default)]
 struct FortifiedAlias {
@@ -2201,7 +2202,7 @@ fn fortified_alias_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Fo
         if e.primitive.as_deref() != Some("Fortified") {
             continue;
         }
-        let ap = e.param_i("incoming_ap_reduction", 1);
+        let ap = if rule_on(rules_epoch, EPOCH_73_V36) { e.param_i("incoming_ap_reduction", 1) } else { 1 };
         let over_in = e.param_f("over_in", 0.0);
         // Sweep F row `Fortified Aura` (epoch 55) — the aura entry's own
         // knobs, read wherever the entry resolves (the boost arm is where
