@@ -9801,13 +9801,20 @@ fn resolve_with(
             // G4R5 F-HOSTDEAD-SHOOT (`EPOCH_73_V36`): a MOVED volley probes sight and range from the first living chain member
             // once the host's own Dangerous test took its last model (`lone_hero_of`); the host's key finds no model to probe.
             let probe = if moved { lone_hero_of(&next, si, seams).unwrap_or(si) } else { si };
+            // G4R5 F-MOVED-SIGHT-CHAIN (`EPOCH_73_V36`): the table decides sight per member (`_solo_sighted_count`), so a
+            // living but blind host does not silence a joined hero that sees the target: the first seeing chain member.
+            let mut blind_host_hero: Option<usize> = None;
             let sighted = if moved {
                 (match cover {
                     // SHO-PAR-F3 (EPOCH_73_V36): the table's own per-model 3D sight (`_solo_has_los`), not the
                     // coarse grid line between the two centres, which refused a shot the outer models see past
                     // a forest. The EV half runs the same gate, so the search now prices that shot too.
                     Cover::Board(t) if t.is_valid() && rule_on(sc.rules_epoch, EPOCH_73_V36) => {
-                        sight::unit_sees(&next, &board_zones(t, seams.shelf_sight, seams.rules_epoch), probe, ti, sc.rules_epoch)
+                        let zones = board_zones(t, seams.shelf_sight, seams.rules_epoch);
+                        let chain = std::iter::once(si).chain(next.attached[si].iter().copied().filter(|_| seams.hero_attach));
+                        let seen_by = chain.filter(|&m| next.alive[m] > 0).find(|&m| sight::unit_sees(&next, &zones, m, ti, sc.rules_epoch));
+                        blind_host_hero = seen_by.filter(|&m| m != si && next.alive[si] > 0);
+                        seen_by.is_some()
                     }
                     Cover::Board(t) if t.is_valid() => !t.los_blocked_at(
                         geom::centre(&next.positions[si]),
@@ -9915,6 +9922,10 @@ fn resolve_with(
                         if probe != si {
                             shot.log.push(format!("Hero: {} has no models left - {} fires the volley as the unit",
                                 statics[pi_s].name, statics[next.roster.profile[probe]].name));
+                        }
+                        if let Some(h) = blind_host_hero {
+                            shot.log.push(format!("Hero: {} has no model that sees {} - {} sees it and fires the volley as the unit",
+                                statics[pi_s].name, statics[next.roster.profile[ti]].name, statics[next.roster.profile[h]].name));
                         }
                         for m in split_marks {
                             shot.mark(m);
