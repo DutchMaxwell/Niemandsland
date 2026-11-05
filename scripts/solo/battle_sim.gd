@@ -2062,6 +2062,11 @@ static func capture(army: OPRArmyManager, objectives_provider: Callable = Callab
 		# scoring) while its strength survives in dormant_* for the arrival
 		# step. A tray node's position must never leak into the board picture.
 		var dormant := SoloController.unit_in_reserve(u)
+		# G4R5 R8c (EPOCH_73_V36): a hero joined to a reserved host waits in the tray with it - a hero is no reserve unit
+		# of its own, so without this it stood on the board as a live lone hero the table refuses to target.
+		if not dormant and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+			var host_gu: Variant = u.get_attached_to()
+			dormant = host_gu is GameUnit and SoloController.unit_in_reserve(host_gu as GameUnit)
 		var dormant_wounds: Array = []
 		for m in u.models:
 			if dormant:
