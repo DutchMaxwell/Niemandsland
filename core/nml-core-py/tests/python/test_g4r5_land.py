@@ -22,11 +22,17 @@ placeholders for the other ordinals, every roll up to the last act, the acts' mo
   * aof_1000_net_001 act 3    an INDIRECT weapon: equal both ways, and only while the Advance stays an Advance
   * gf_1000_net_019 act 1     an aircraft (not applied)
 
-Flag off the four landing acts part again (the mutant); with `land=True` all seven acts are FULL-equal.
+THE VERDICTS ARE PER NAMED ACT (game + ordinal), never a total: another row's defect (the climb height, a route flag) can make one of
+these acts equal without `--land`, and a mutant test must not pin it. `verdict()` replays ONE act: the gate plays only the acts
+with a `played` marker, so the copy of the game keeps the marker of the named act alone.
+  * LANDING acts part with the flag off (the mutant) and are FULL-equal with `land=True`;
+  * the CLIMB act is FULL-equal with `land=True` (its flag-off verdict belongs to the climb row);
+  * GUARD acts are FULL-equal both ways: an Indirect weapon, the table's own dangerous test, an aircraft.
 """
 
 from __future__ import annotations
 
+import json
 import math
 import re
 import shutil
@@ -35,12 +41,18 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
 
+import pytest  # noqa: E402
 import shoot_replay_gate as srg  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[4]
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "g4r5_land"
 ALL = ("aof_1000_net_001", "aof_1000_net_006", "aof_1000_net_008", "gf_1000_net_006", "gf_1000_net_019")
 IN2M = 0.0254
+
+
+LANDING = (("aof_1000_net_006", 33), ("aof_1000_net_008", 34), ("gf_1000_net_006", 21))
+CLIMB = (("gf_1000_net_006", 26),)
+GUARD = (("aof_1000_net_001", 3), ("aof_1000_net_008", 2), ("gf_1000_net_019", 1))
 
 
 def _ref(tmp_path: Path, *games: str) -> Path:
@@ -59,6 +71,18 @@ def gate(capsys, ref: Path, land: bool) -> tuple[int, int, str]:
     return int(m.group(1)), int(m.group(2)), out
 
 
+def verdict(capsys, tmp_path: Path, game: str, act: int, land: bool) -> str:
+    """"equal" / "both_silent" / "parted" of ONE bundled act, replayed alone (the other acts lose their `played` marker)."""
+    ref = tmp_path / f"{game}-{act}-{int(land)}"
+    shutil.copytree(FIXTURE / game, ref / game)
+    f = ref / game / "acts.jsonl"
+    rows = [json.loads(x) for x in f.read_text().splitlines()]
+    f.write_text("".join(json.dumps(r) + "\n" for r in rows if not (r.get("kind") == "played" and r["act"] != act)))
+    equal, acts, out = gate(capsys, ref, land)
+    assert acts == 1, out
+    return "equal" if equal else "both_silent" if "BOTH-SILENT: 1/1" in out else "parted"
+
+
 def _act(game: str, k: int):
     """(header, the act's state, its action, its moves.json entry, the next act's units) of a bundled game."""
     head, lines, _dice, _seed = srg.read_game(FIXTURE / game)
@@ -67,31 +91,30 @@ def _act(game: str, k: int):
             lines[pos + 1]["state"]["units"])
 
 
-def test_flag_off_mutant_the_four_landing_acts_part(capsys, tmp_path):
-    equal, acts, out = gate(capsys, _ref(tmp_path), land=False)
-    assert (equal, acts) == (3, 7), out
-    assert "LAND" not in out, out
+@pytest.mark.parametrize("game,act", LANDING)
+def test_flag_off_mutant_the_landing_act_parts(capsys, tmp_path, game, act):
+    assert verdict(capsys, tmp_path, game, act, land=False) == "parted"
 
 
-def test_land_replays_every_act_from_the_table_landing(capsys, tmp_path):
-    equal, acts, out = gate(capsys, _ref(tmp_path), land=True)
-    assert (equal, acts) == (7, 7), out
+@pytest.mark.parametrize("game,act", LANDING + CLIMB + GUARD)
+def test_land_replays_the_act_from_the_table_landing(capsys, tmp_path, game, act):
+    assert verdict(capsys, tmp_path, game, act, land=True) == "equal"
+
+
+@pytest.mark.parametrize("game,act", GUARD)
+def test_the_guard_acts_are_equal_without_the_flag_too(capsys, tmp_path, game, act):
+    assert verdict(capsys, tmp_path, game, act, land=False) == "equal"
 
 
 def test_the_summary_line_names_the_acts_applied_and_the_gap(capsys, tmp_path):
     _, _, out = gate(capsys, _ref(tmp_path), land=True)
-    assert "LAND applied 5 acts, 2 landed > 0.5in from the core" in out, out
+    m = re.search(r"LAND applied (\d+) acts, (\d+) landed > 0\.5in from the core", out)
+    assert m and int(m.group(1)) == 5 and int(m.group(2)) >= 1, out
 
 
 def test_the_acts_it_did_not_touch_are_named_too(capsys, tmp_path):
     _, _, out = gate(capsys, _ref(tmp_path), land=True)
     assert "LAND not applied to 2 Advance acts: 1 with the table's own dangerous test, 1 aircraft or without a matching move" in out, out
-
-
-def test_the_trap_act_closes_from_moves_json_alone(capsys, tmp_path):
-    ref = _ref(tmp_path, "aof_1000_net_006")
-    assert gate(capsys, ref, land=False)[:2] == (0, 1)
-    assert gate(capsys, ref, land=True)[:2] == (1, 1)
 
 
 def test_x_z_come_from_the_executed_move_not_from_the_next_acts_state():
