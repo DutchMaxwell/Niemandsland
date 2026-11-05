@@ -29,10 +29,13 @@ DRAFT for the next release. The big change: Grimdark Future and Age of Fantasy n
   Stalkers books. Vanguard is placed and logged in fourteen more books, Hit & Run Shooter, Bounding
   and Quick Throw work in the books that field them, and Unique Hero, Enhanced Watchborn Aura,
   Versatile Warrior Aura and Buff, Grounded Evasion, Spawn and Increased Shooting Range no longer
-  tell the player to apply them by hand. Precision Charge gives its carrier +1 to hit when
-  charging and Precision Fighter +1 to hit in melee. (#1934, #1940, #1943, #1948, #1957, #1959,
+  tell the player to apply them by hand. Increased Shooting Range, Takedown Shot, Piercing Target,
+  Melee Slayer, Hit & Run and Primeborn now work in the six books that field them without a row,
+  Piercing Spotter, Precision Spotter and Slayer in the four Age of Fantasy books that do, and Ravage
+  rolls for the Duchies of Vinci Scouts in a table game. Precision Charge gives its carrier +1 to hit
+  when charging and Precision Fighter +1 to hit in melee. (#1934, #1940, #1943, #1948, #1957, #1959,
   #1962, #1969, #1982, #1994, #2048, #2060, #2083–#2085, #2112, #2142, #2147, #2158, #2188, #2189,
-  #2209, #2235, #2247, #2248, #2252, #2255, #2286, #2426, #2427, #2435, #2441)
+  #2209, #2235, #2247, #2248, #2252, #2255, #2286, #2426, #2427, #2435, #2441, #2545, #2547, #2549)
 - **"Most models" rules read the living models.** A rule that a joined unit has when most of its
   models carry it (Stealth, Fearless, Regeneration and Self-Repair, Fortified, Guarded, Evasive,
   Dodge, Steadfast, Shrouding, Growth Markers, Sturdy, Versatile Defense, Spell Resistance and more)
@@ -44,8 +47,11 @@ DRAFT for the next release. The big change: Grimdark Future and Age of Fantasy n
   hero that still stands saves with the Cover bonus when it stands in cover, rolls its own
   Protection Feat, is seen and shot at from its own base, and a charge goes on with it when its host
   dies in its own Dangerous terrain test. A joined hero's longer gun opens the unit's shot when the
-  host's guns stop short, and the log names the Hero rule when only the hero's gun reaches. (#2430,
-  #2452, #2466, #2503, #2522)
+  host's guns stop short, and the log names the Hero rule when only the hero's gun reaches. A joined
+  hero's own Growth markers (Fortified Growth, Piercing Growth, Defensive Frenzy) tick and are named
+  in the battle log, a per-round marker starts in round 1 of a solo game, and a joined hero's marker
+  is placed once per round. Unpredictable Shooter on a joined hero's own gun rolls its die and
+  names the hero in the log. (#2430, #2452, #2466, #2503, #2522, #2558, #2561, #2573)
 - **Movement and deployment follow 3.6.** Cumbersome units may only Hold or Advance and cannot shoot
   after moving. Artillery may move and no longer takes the old -2 to be hit; it gets +1 to hit only
   when it Holds and shoots over 12". A Scout deploys at most 9" ahead of its zone and must end more
@@ -76,19 +82,20 @@ DRAFT for the next release. The big change: Grimdark Future and Age of Fantasy n
   hit one worse. Ravage rolls once per round and never while Fatigued, a Sergeant strikes one AP
   better, and Infiltrating Precision Strike strikes one better on its arrival round. A defender whose
   melee weapons are all spent gets no strike-back. Smash, Reap and Decimate weapons re-roll Defense 6s
-  like Bane. A Crossing Strike weapon fires only when its bearer moves through an enemy unit,
-  Regenerative Strength rolls token dice for wounds instead of adding attacks, and a Bloodthirsty
-  follow-up strike keeps its Parry. (#1947, #1950, #1992, #2001, #2003, #2021, #2039, #2066, #2116,
-  #2121, #2126, #2128, #2275, #2282, #2339, #2370, #2372, #2378)
+  like Bane. In a solo game a Crossing Strike weapon no longer strikes in melee: it attacks only when
+  its bearer moves through an enemy unit, rolling at the unit it crossed, after NACHTMAHR's moves and
+  after the player's own. Regenerative Strength rolls token dice for wounds instead of adding
+  attacks, and a Bloodthirsty follow-up strike keeps its Parry. (#1947, #1950, #1992, #2001, #2003,
+  #2021, #2039, #2066, #2116, #2121, #2126, #2128, #2275, #2282, #2339, #2370, #2372, #2378, #2554)
 - **Melee wounds count once, and a once-only grant waits for its attack.** A charger's wounds from
   the defender's strike-back and a charged unit's earlier wounds no longer count twice in the melee
   result, so the loser no longer flips on a double count. A once Evasive grant such as Blood Dome is
   spent when its unit is attacked, not by its own charge strike, and the Precision Feat is used once
   per game at the bearer's first attack, shot or strike, then spent and logged. (#2434, #2446,
   #2494, #2502)
-- **Shooting follows 3.6.** Indirect weapons fire without line of sight only after a Hold, ignore
-  cover only after a Hold, and a held Indirect shot keeps terrain cover; Quick Throw lets them fire
-  after moving. Weapons can gain AP when shooting from far away or against a weakly armoured target;
+- **Shooting follows 3.6.** Indirect weapons fire without line of sight only after a Hold, and an
+  Indirect shot keeps the target's terrain cover, held or not; Quick Throw lets them fire after
+  moving. Weapons can gain AP when shooting from far away or against a weakly armoured target;
   Pierce ignores the target's positive Defense modifiers; Slayer shots get their extra AP only after a
   Hold. Shrouding takes 2" off a charge and 4" off a shot, shooting at an Aircraft is -1 to hit, and
   Screened and Guarded only help against shots from over 9" and charges from over 6". Brutal, Violent,
@@ -113,8 +120,10 @@ DRAFT for the next release. The big change: Grimdark Future and Age of Fantasy n
   #2243, #2254, #2256, #2262, #2272)
 - **Defence upgrades and distance gates play as printed.** Warding and Knightborn roll no 6+ ignore
   die on Deadly wounds from within 9". An upgrade such as Enhanced Sturdy replaces Sturdy's bonus
-  from over 9" instead of adding to it, and the log names the replaced rule. A Scrapper bearer's
-  re-roll of Defense 6s no longer cuts the target's Regeneration roll. (#2490, #2492, #2525)
+  from over 9" instead of adding to it, and the log names the replaced rule. Enhanced Warden,
+  Enhanced Guardian and Enhanced Ossified cut two points of AP instead of one, replacing the base
+  cut, and the log names them. A Scrapper bearer's re-roll of Defense 6s no longer cuts the target's
+  Regeneration roll. (#2490, #2492, #2525, #2559, #2564)
 - **Morale follows 3.6.** A unit near a tough friendly Hero can test morale on the Hero's Quality.
   Banner keeps its share while only Valiant is gated by distance and majority, and Valiant's band
   belongs to the unit that was hit. A Banner steadies a unit against shooting and melee, not against
@@ -153,14 +162,15 @@ DRAFT for the next release. The big change: Grimdark Future and Age of Fantasy n
   #2264, #2265, #2268, #2273, #2285, #2292, #2304, #2320, #2325, #2326, #2330, #2332, #2338, #2387)
 - **Its estimates follow what a spell hands out and what a pick or a Feat changes.** A spell's
   Surge on a unit's attackers, Bane when Shooting and Primal (one extra-attack group, not one per
-  channel) count, and a Royal Legion rule such as Lust Boon extends its shooting reach. A Blast
+  channel) count, and a Royal Legion rule such as Lust Boon extends its shooting reach. A spell that
+  grants Enhanced Warden, Guardian or Ossified makes it count their two-point AP cut. A Blast
   weapon counts the hero joined to its target, a Sergeant takes its share of the unit's full attack
   pool, and the Precision Feat makes a melee hit one better once. The Versatile Expert, the
   first-fired weapon's pick and the Versatile Attack pick (after the over-9" Sturdy fold) are read
   as the game reads them, a Grounded Precision hero is in cover after a move, Artillery's -1 to hit
   stays withheld from units that moved this round, and a unit wiped by Deadly wounds gets no extra
   ignore die. (#2429, #2432, #2444, #2457, #2458, #2459, #2486, #2487, #2488, #2499, #2500, #2533,
-  #2537)
+  #2537, #2566)
 - **It counts only what its living models carry.** In melee and shooting it uses only the weapons its
   living models still carry, a unit with no melee weapon does not strike back or tire, a Limited
   weapon that already fired is not counted again, and a volley keeps the targets it had when it was
@@ -177,7 +187,8 @@ DRAFT for the next release. The big change: Grimdark Future and Age of Fantasy n
   target. It flies an Aircraft the straight 30" the table flies, never ends a charging model across
   a wall, and prices the consolidation move after a melee and the Dangerous test it can cost. A unit
   that starts out of coherency may only gather, and a gather that runs pulls it back into
-  coherency. (#2440, #2442, #2455, #2465, #2471, #2479, #2485)
+  coherency. A model that ends its move beside a container stops short of it instead of standing
+  with its base on the block. (#2440, #2442, #2455, #2465, #2471, #2479, #2485, #2555)
 - **Its melee and hold estimates follow the table.** Melee strikers are counted by base edge, a
   charged unit piles in up to 3" before the fight, and a unit that holds in Dangerous Terrain takes
   the test. (#2431, #2437, #2460)
@@ -189,10 +200,12 @@ DRAFT for the next release. The big change: Grimdark Future and Age of Fantasy n
 - **It shoots and tests morale with its joined heroes in mind.** A shot's range is measured to the
   nearest model of the target's whole unit, joined hero included, and a joined hero's weapons are
   measured from the hero's own base. A hero that sees the target fires the moved volley when its
-  host is blind or died in its own Dangerous test. A wounded lone hero makes its unit test morale at
-  half strength, a lone hero whose host died Shaken fails its test without a die, and the Banner of
-  a host that died in the volley no longer helps the hero's test. (#2450, #2456, #2491, #2498,
-  #2511, #2518, #2521, #2526)
+  host is blind or died in its own Dangerous test. A joined hero's own Increased Shooting Range
+  lifts the reach of the hero's gun only, and the hero's base never lets its host's weapon fire from
+  out of reach (the log names Who Can Shoot when it refuses one). A wounded lone hero makes its unit
+  test morale at half strength, a lone hero whose host died Shaken fails its test without a die, and
+  the Banner of a host that died in the volley no longer helps the hero's test. (#2450, #2456,
+  #2491, #2498, #2511, #2518, #2521, #2526, #2556, #2572)
 - **It acts against a lone joined hero.** It moves, shoots or charges a lone hero that is the only
   enemy left (an activation with no enemy writes one line and holds), shoots one after a Regroup,
   and no longer targets a hero whose host waits in Ambush reserve. (#2512, #2519, #2528)
@@ -247,10 +260,12 @@ DRAFT for the next release. The big change: Grimdark Future and Age of Fantasy n
   #1916)
 - Test, CI and measurement work: per-row Rust test files and removal of unused stubs, shard weights
   for the new suites, planner and replay-gate fixes, a "most models" reader shared by both engines,
-  and CI that skips exports for draft PRs, queues one build per burst of pushes and builds the macOS
-  export on macos-15. (#1903, #1941, #1960, #1967, #1970, #1973, #1986, #2007–#2009, #2013–#2016,
-  #2026, #2050, #2076, #2094, #2117, #2149, #2161, #2169, #2201, #2210, #2241, #2245, #2296, #2301,
-  #2307, #2319, #2392, #2394, #2396, #2399, #2401, #2405, #2408)
+  a check that fails the build when a book fields a rule the game calls automated but has no row for
+  it, arena-log and replay-gate fixes, and CI that skips exports for draft PRs, queues one build per
+  burst of pushes and builds the macOS export on macos-15. (#1903, #1941, #1960, #1967, #1970,
+  #1973, #1986, #2007–#2009, #2013–#2016, #2026, #2050, #2076, #2094, #2117, #2149, #2161, #2169,
+  #2201, #2210, #2241, #2245, #2296, #2301, #2307, #2319, #2392, #2394, #2396, #2399, #2401, #2405,
+  #2408, #2551, #2553, #2571, #2575)
 - Code comments that quoted the rulebook now name the rule and paraphrase it. (#2360, #2390)
 
 ## [0.3.14.0-alpha] — 2026-10-28
