@@ -266,7 +266,7 @@ def extra_die_hosts(rolls: list[dict], plain: dict, profiles: dict) -> dict[int,
     for i in range(1, len(rolls)):
         prev, cur = rolls[i - 1], rolls[i]
         sixes, fives = prev["faces"].count(6), prev["faces"].count(5)
-        if (i - 1 in out or not sixes or cur["kind"] != "attack" or prev["kind"] != "attack" or cur["owner"] != prev["owner"]
+        if (i - 1 in out or not (sixes or fives) or cur["kind"] != "attack" or prev["kind"] != "attack" or cur["owner"] != prev["owner"]
                 or cur["target"] != prev["target"] or cur["count"] not in (sixes, sixes + fives)):
             continue
         for key, u in units.items():
