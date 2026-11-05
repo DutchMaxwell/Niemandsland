@@ -22,8 +22,9 @@ const BY_NAME: [(&str, &str); 5] = [
 ];
 
 /// Pairs the guard still reports on the current data and that an open PR resolves. Empty = nothing is hidden.
-/// F5a/F5b merges empty this list: remove an entry when its row lands (the test names every stale entry).
-const EXPECTED_OFFENDERS: [&str; 0] = [];
+/// The F5a pairs landed in #2545 and #2547. The Ravage row of #2549 empties the last entry: when that PR merges, delete
+/// it here (the test names every stale entry). The same edit is needed whichever of the two merges second.
+const EXPECTED_OFFENDERS: [&str; 1] = ["aof/duchies_of_vinci Ravage"];
 
 fn names_of(v: &Value) -> BTreeSet<String> {
     v.as_array().map(|a| a.iter().filter_map(|n| n.as_str().map(String::from)).collect()).unwrap_or_default()
