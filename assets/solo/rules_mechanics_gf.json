@@ -3083,7 +3083,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "incoming_ap_reduction": 1
+     "incoming_ap_reduction": 2
     }
    },
    "Enhanced Guardian Aura": {

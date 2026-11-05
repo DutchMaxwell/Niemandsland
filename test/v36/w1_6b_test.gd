@@ -27,7 +27,7 @@ const RENAMED := {
 const CASES := [
 	["gf", "havoc_brothers", "Enhanced Havocbound", "Piercing Hunter",
 		{"ap_bonus": 1.0, "always": true, "upgrades": "Havocbound"}],
-	["gf", "custodian_brothers", "Enhanced Guardian", "Fortified", {"incoming_ap_reduction": 1.0}],
+	["gf", "custodian_brothers", "Enhanced Guardian", "Fortified", {"incoming_ap_reduction": 2.0}],   # AI-G2 R7b: the 3.6 text cuts 2
 	["gf", "rebel_guerrillas", "Enhanced Guerrilla Aura", "Aura Channel", {"grants": "Enhanced Guerrilla"}],
 	["aof", "orcs", "Enhanced Ferocious", "Surge", {"upgrades": "Ferocious", "over_in": 0.0}],
 	["aof", "high_elves", "Enhanced Highborn", "Fast", {"advance_mod": 4.0, "rush_mod": 4.0, "upgrades": "Highborn"}],

@@ -27,7 +27,7 @@ const CASES := [
 	["aof", "ghostly_undead", "Enhanced Empyrean Spirit", "Evasive", {"hit_penalty": 1.0}],
 	["gf", "goblin_reclaimers", "Enhanced Mischievous", "Bane",
 		{"reroll_save_low": 5.0, "bypass_regen": false, "upgrades": "Mischievous"}],
-	["aof", "ossified_undead", "Enhanced Ossified", "Fortified", {"incoming_ap_reduction": 1.0}],
+	["aof", "ossified_undead", "Enhanced Ossified", "Fortified", {"incoming_ap_reduction": 2.0}],   # AI-G2 R7b: the 3.6 text cuts 2
 	["aof", "ossified_undead", "Enhanced Ossified Aura", "Aura Channel", {"grants": "Enhanced Ossified"}],
 	["gf", "plague_disciples", "Enhanced Plaguebound", "Regeneration",
 		{"ignore_target": 5.0, "all_models": true, "upgrades": "Plaguebound"}],

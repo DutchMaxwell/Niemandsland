@@ -110,14 +110,14 @@ use super::*;
     }
 
     /// "Ossified Boost Aura" (aof/ossified_undead — grants "Ossified Boost",
-    /// Fortified primitive, incoming_ap_reduction 1, no over_in): the
-    /// granted base rides the boost arm — EVERY save batch eats 1 AP; a
-    /// rule-less carrier keeps 0.
+    /// Fortified primitive, incoming_ap_reduction 2 from epoch 73 (AI-G2 R7b), 1
+    /// below, no over_in): the granted form rides the boost arm — EVERY save
+    /// batch eats 2 AP; a rule-less carrier keeps 0.
     #[test]
-    fn an_enhanced_ossified_aura_reduces_every_incoming_ap_by_one_at_the_current_epoch() {
+    fn an_enhanced_ossified_aura_reduces_every_incoming_ap_by_two_at_the_current_epoch() {
         let epoch = crate::acts::CURRENT_RULES_EPOCH;
         let us = pin_unit("aof", "ossified_undead", &["Enhanced Ossified Aura"], epoch);
-        assert_eq!(us.ctx.fortified_boost_ap, 1, "the granted Boost's incoming_ap_reduction");
+        assert_eq!(us.ctx.fortified_boost_ap, 2, "the granted Boost's incoming_ap_reduction");
         let plain = pin_unit("aof", "ossified_undead", &[], epoch);
         assert_eq!(plain.ctx.fortified_boost_ap, 0, "no aura, no reduction");
     }

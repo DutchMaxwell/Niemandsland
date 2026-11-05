@@ -64,11 +64,11 @@ fn enhanced_mischievous_widens_the_bane_window_like_its_3_5_boost() {
 }
 
 /// W1.6d, code literal (unit.rs aura channel list): the aura hands its base to the carrier,
-/// and every save batch against it eats 1 AP.
+/// and every save batch against it eats 2 AP (AI-G2 R7b: the enhanced form's cut replaces the base's 1).
 #[test]
 fn an_enhanced_ossified_aura_hands_its_base_like_its_3_5_boost_aura() {
     let us = enhanced_unit("aof", "ossified_undead", &["Enhanced Ossified Aura"]);
-    assert_eq!(us.ctx.fortified_boost_ap, 1, "the granted base's incoming_ap_reduction");
+    assert_eq!(us.ctx.fortified_boost_ap, 2, "the granted base's incoming_ap_reduction");
 }
 
 /// W1.6d, map-only name (no code literal): the Regeneration upgrade ignores wounds on 5+.
