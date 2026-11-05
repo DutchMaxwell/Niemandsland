@@ -1844,6 +1844,7 @@ mod v36_g4r5_dang_tail;
 mod v36_g4r5_hero_reach;
 mod v36_g4r5_hostdead_shoot;
 mod v36_g4r5_primal_grant;
+mod v36_g4r5_versatile_def;
 mod v36_g4r5_moved_sight_chain;
 mod v36_bg_03a;
 mod v36_bg_03a2;
