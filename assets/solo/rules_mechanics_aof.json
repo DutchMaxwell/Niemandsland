@@ -2917,6 +2917,16 @@
      "grants": "Rapid Advance"
     }
    },
+   "Ravage": {
+    "primitive": "Ravage",
+    "rated": true,
+    "book_version": "3.6.0",
+    "params": {
+     "rating": "X",
+     "wound_target": 6,
+     "no_save": true
+    }
+   },
    "Re-Position Artillery": {
     "primitive": "Utility Buff",
     "rated": false,
