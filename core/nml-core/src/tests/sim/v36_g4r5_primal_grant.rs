@@ -42,11 +42,11 @@ fn roar() -> crate::mods::LiveMod {
     }
 }
 
-/// Unit 0 = the beast `key` (one model, at the origin) with the grant when `granted`; unit 2 = a hardened one-model target.
-fn line(key: &str, granted: bool) -> (State, Vec<UnitStatic>) {
+/// Unit 0 = the beast `key` (one model, at the origin, built at `epoch` like a record of that epoch) with the grant when `granted`; unit 2 = a hardened one-model target.
+fn line(key: &str, granted: bool, epoch: u32) -> (State, Vec<UnitStatic>) {
     let header = read_act_header(HEADER).expect("HEADER parses");
     let mut reg = Registries::new(&repo_root());
-    let beast = UnitStatic::build_for(&mut reg, header.profiles.get(key).expect(key), EPOCH_73_V36);
+    let beast = UnitStatic::build_for(&mut reg, header.profiles.get(key).expect(key), epoch);
     assert!(beast.shoot[0].surge_attack == (key != "plain"), "{key}: the Primal form is stamped exactly where it is printed");
     let (mut st, mut statics) = buff_line();
     statics[0] = beast;
@@ -67,7 +67,7 @@ fn line(key: &str, granted: bool) -> (State, Vec<UnitStatic>) {
 
 /// The beast's attack rolls through one HOLD volley at unit 2 (`volley`) or one charge into it, as (count, faces).
 fn attack_rolls(volley: bool, key: &str, granted: bool, seed: i64, epoch: u32) -> (Vec<(i64, Vec<u8>)>, Vec<String>) {
-    let (mut st, statics) = line(key, granted);
+    let (mut st, statics) = line(key, granted, epoch);
     let seams = Seams { rules_epoch: epoch, ..Seams::default() };
     let shot = if volley {
         let terrain = crate::terrain::Terrain::default();

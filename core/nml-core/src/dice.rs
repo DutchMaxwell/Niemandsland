@@ -349,6 +349,22 @@ fn surge_attack_hits(
     faces_to_hits(&extra_faces, count_target as u8) as i64
 }
 
+/// G4R5 F-PRIMAL-GRANT-ONCE (`EPOCH_73_V36`): ONE live "Enhanced Primal" grant is carried in two channels (the overlay rule on
+/// the unit's rules and the ledger buff the spell records) and rolls ONE extras group, like the table's idempotent profile flag.
+/// On a member that PRINTS the extra-die form the grant only LOWERS that form's threshold to 5s; only a member without the
+/// printed form rolls the grant's own group. Below 73 both groups roll (replay). Returns the extras' hits.
+#[allow(clippy::too_many_arguments)]
+fn primal_extras(p: &ShootProfile, grant: bool, v36: bool, faces: &[u8], count_target: i64, owner: &str, tray: &mut Tray, out: &mut ShootResult) -> i64 {
+    if !(grant && v36 && p.surge_attack) {
+        let hits = surge_attack_hits(p, faces, count_target, owner, tray, &mut out.rolls);
+        return hits + if grant { surge_attack_hits(&primal_boost_grant_profile(), faces, count_target, owner, tray, &mut out.rolls) } else { 0 };
+    }
+    if faces.iter().any(|&f| f == 6 || (f == 5 && count_target <= 5)) {
+        out.log.push(format!("Enhanced Primal: {owner} — one extra-attack roll on unmodified 5s and 6s (the grant widens the Primal, it adds no second roll)"));
+    }
+    surge_attack_hits(&ShootProfile { surge_attack_low: p.surge_attack_low.min(5), ..p.clone() }, faces, count_target, owner, tray, &mut out.rolls)
+}
+
 /// `AiCombatMath.blocks_with_bane` :354-363 — each unmodified Defense 6 is
 /// replaced by the next re-roll face, in order; a re-rolled 6 still blocks.
 fn blocks_with_bane(faces: &[u8], reroll: &[u8], target: i64) -> i64 {
@@ -1299,11 +1315,8 @@ pub fn resolve_volley_leg(
         // Block B6 — the extra-ATTACK-DIE Surge siblings, ported (see the
         // helper's own doc). Draws its own tray slot right after Surge's,
         // matching `_solo_hits`'s order.
-        hits += surge_attack_hits(p, &faces, count_target, sh.owner, tray, &mut out.rolls);
-        // Wave 2 — a granted "Primal Boost", the same low-surge form.
-        if att.surge_grant {
-            hits += surge_attack_hits(&primal_boost_grant_profile(), &faces, count_target, sh.owner, tray, &mut out.rolls);
-        }
+        // Wave 2 — a granted "Primal Boost", the same low-surge form (one group per member: `primal_extras`).
+        hits += primal_extras(p, att.surge_grant, rule_on(att.rules_epoch, EPOCH_73_V36), &faces, count_target, sh.owner, tray, &mut out);
         // EPOCH 44 SURGE MARK — the mark's once-grant ("Surge", placed by
         // `tray_vs_marks` at the attack seam, spent with the exchange) reads
         // against the marked target ONLY: +1 hit per unmodified 6, the plain
@@ -2283,11 +2296,8 @@ pub fn resolve_melee_leg_wipe(
             }
             // Block B6 — the extra-ATTACK-DIE Surge siblings (Predator Fighter
             // is melee-only, so this is the branch it actually fires on).
-            hits += surge_attack_hits(p, trig, count_target, sh.owner, tray, &mut out.rolls);
-            // Wave 2 — a granted "Primal Boost", the same low-surge form.
-            if sh.att.surge_grant {
-                hits += surge_attack_hits(&primal_boost_grant_profile(), trig, count_target, sh.owner, tray, &mut out.rolls);
-            }
+            // Wave 2 — a granted "Primal Boost", the same low-surge form (one group per member: `primal_extras`).
+            hits += primal_extras(p, sh.att.surge_grant, rule_on(sh.att.rules_epoch, EPOCH_73_V36), trig, count_target, sh.owner, tray, &mut out);
             // EPOCH 44 SURGE MARK — the strike fold's twin of the volley leg
             // above: the mark's once-grant adds +1 hit per unmodified 6
             // against the marked target only, named once when it fires.
