@@ -9798,13 +9798,16 @@ fn resolve_with(
             // a record below epoch 6 never waives anything here.
             let mark_indirect = rule_on(sc.rules_epoch, EPOCH_6_TABLE_RULES)
                 && mods::granted_vs(&next, ti, "Indirect");
+            // G4R5 F-HOSTDEAD-SHOOT (`EPOCH_73_V36`): a MOVED volley probes sight and range from the first living chain member
+            // once the host's own Dangerous test took its last model (`lone_hero_of`); the host's key finds no model to probe.
+            let probe = if moved { lone_hero_of(&next, si, seams).unwrap_or(si) } else { si };
             let sighted = if moved {
                 (match cover {
                     // SHO-PAR-F3 (EPOCH_73_V36): the table's own per-model 3D sight (`_solo_has_los`), not the
                     // coarse grid line between the two centres, which refused a shot the outer models see past
                     // a forest. The EV half runs the same gate, so the search now prices that shot too.
                     Cover::Board(t) if t.is_valid() && rule_on(sc.rules_epoch, EPOCH_73_V36) => {
-                        sight::unit_sees(&next, &board_zones(t, seams.shelf_sight, seams.rules_epoch), si, ti, sc.rules_epoch)
+                        sight::unit_sees(&next, &board_zones(t, seams.shelf_sight, seams.rules_epoch), probe, ti, sc.rules_epoch)
                     }
                     Cover::Board(t) if t.is_valid() => !t.los_blocked_at(
                         geom::centre(&next.positions[si]),
@@ -9822,9 +9825,9 @@ fn resolve_with(
             }
             if plan.is_some() || sighted {
                 let d = if seams.range_by_base_edge {
-                    range_gap_in(&next, &next.positions[si], si, ti)
+                    range_gap_in(&next, &next.positions[probe], probe, ti)
                 } else {
-                    geom::dist_in(&next.positions[si], &next.positions[ti])
+                    geom::dist_in(&next.positions[probe], &next.positions[ti])
                 };
                 // The table's epoch-66 nearest-base modifier measure remains
                 // separate from this pooled range-validity distance.
@@ -9908,6 +9911,10 @@ fn resolve_with(
                                 "Quick Shot: {} shoots after its Rush action",
                                 statics[pi_s].name
                             ));
+                        }
+                        if probe != si {
+                            shot.log.push(format!("Hero: {} has no models left - {} fires the volley as the unit",
+                                statics[pi_s].name, statics[next.roster.profile[probe]].name));
                         }
                         for m in split_marks {
                             shot.mark(m);
