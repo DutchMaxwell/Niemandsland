@@ -18,6 +18,18 @@ use super::*;
         assert_eq!(other.fortified_boost_ap, 0, "only the family's own names fold");
     }
 
+    /// AI-G2 R7c (`EPOCH_73_V36`): the Enhanced Warden / Guardian / Ossified book text cuts TWO AP and replaces the
+    /// base cut, so a spell's live grant of one of the three names stamps 2; below 73 the stamp stays 1.
+    #[test]
+    fn fortified_boost_grants_cut_two_ap_from_epoch_73() {
+        for rule in ["Enhanced Guardian", "Enhanced Warden", "Enhanced Ossified"] {
+            let on = fold_leg(rule, crate::acts::EPOCH_73_V36);
+            assert_eq!(on.fortified_boost_ap, 2, "{rule}: the granted form's cut replaces the base's 1 at 73");
+            let off = fold_leg(rule, crate::acts::EPOCH_72_PLAYTEST_RULES);
+            assert_eq!(off.fortified_boost_ap, 1, "{rule}: epoch 72 replays the flat cut of one");
+        }
+    }
+
     #[test]
     fn the_unpredictable_shooter_mark_sets_the_shooting_die_leg_at_epoch_5_only() {
         assert!(fold_leg("Unpredictable Shooter", 5).unpredictable_shooting);

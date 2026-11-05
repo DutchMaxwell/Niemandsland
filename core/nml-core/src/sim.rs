@@ -4067,7 +4067,9 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
             .into_iter()
             .find(|name| grants && mods::granted(state, i, name));
         if let Some(name) = fortified_grant {
-            c.fortified_boost_ap = c.fortified_boost_ap.max(1);
+            // AI-G2 R7c (EPOCH_73_V36): the granted enhanced form's cut (2) replaces the base's 1 — the book text of
+            // all three names; the printed rows carry the same number (`fortified_alias_of`).
+            c.fortified_boost_ap = c.fortified_boost_ap.max(if rule_on(rules_epoch, EPOCH_73_V36) { 2 } else { 1 });
             // Rules 3.6 (row W1.TRACE) — this live Boost grant raises the
             // Fortified stamp, so it is the branch that names itself (arm
             // `fortified-grant-live`), never the majority read.
