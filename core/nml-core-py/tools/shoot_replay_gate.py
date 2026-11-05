@@ -323,8 +323,9 @@ def read_played(d: Path) -> set[int]:
 
 
 def read_pre(d: Path) -> dict[int, dict]:
-    """{activation ordinal: {unit id: {alive, shaken[, keep, of, wounds, reach]}}} from the `kind:"pre"` lines of acts.jsonl
-    (H1a, epoch 73+; `wounds` = the survivors' wounds and `reach` = a granted shooting reach in inches, H-DANG-CUT / C-GRANTED-RANGE)."""
+    """{activation ordinal: {unit id: {alive, shaken[, keep, of, wounds, reach, grants]}}} from the `kind:"pre"` lines of acts.jsonl
+    (H1a, epoch 73+; `wounds` = the survivors' wounds, `reach` = a granted shooting reach in inches, `grants` = the rule names the
+    cast leg granted, H-DANG-CUT / C-GRANTED-RANGE / F-PRE-TOKENS)."""
     out: dict[int, dict] = {}
     for x in (d / "acts.jsonl").read_text().splitlines():
         if '"pre"' in x:
@@ -434,6 +435,10 @@ def patch_pre(plain: dict, units: dict, board=None) -> dict:
         w = rec.get("wounds")   # H-DANG-CUT: the survivors' own wounds after the legs (a record from before the key has none)
         if isinstance(w, list) and len(w) == a and isinstance(u.get("wounds"), list) and len(u["wounds"]) == a:
             u["wounds"] = list(w)
+        grants = [str(g) for g in rec.get("grants") or []]   # F-PRE-TOKENS: a rule the cast leg granted rides as the ledger buff the table's token is
+        if grants:
+            led = dict(u.get("ledger") or {})
+            u["ledger"] = dict(led, buffs=[*led.get("buffs", []), *({"spell": "pre", "grants_rule": g, "granted_to": [uid]} for g in grants)])
         out["units"][uid] = u
     return out
 
