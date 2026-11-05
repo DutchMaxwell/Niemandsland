@@ -286,6 +286,64 @@ func test_the_pre_block_carries_a_spell_granted_reach() -> void:
 	assert_int(int((units.get(caster.unit_id, {}) as Dictionary).get("reach", 0))).is_equal(8)
 
 
+## The real "Breath of Change" entry (assets/solo/spells_mechanics_gf.json): a friendly buff that grants "Bane when Shooting"
+## once. The unit casts it on itself, the shape gf_1000_net_037 act 10 recorded.
+func _breath_of_change(caster: GameUnit) -> Dictionary:
+	return {"caster": caster, "caster_unit": caster, "name": "Breath of Change", "targets": [caster], "boost": 0,
+		"interference": 0, "base_target": 2, "threshold": 2, "owner_label": "AI (Mystic)",
+		"spell": {"range_in": 12, "effect": {"kind": "buff", "grants_rule": "Bane when Shooting", "duration": "once"},
+			"target": {"side": "friendly", "count": 2, "kind": "unit"}}}
+
+
+## AI-G4 round 5, row R6 F-PRE-TOKENS (rules 3.6, EPOCH_73_V36): a cast that GRANTS a unit a rule (Breath of Change:
+## "Bane when Shooting", gf_1000_net_037 act 10) changes nothing the pre block measured - no model fell, no reach grew -
+## so the replay's core never saw the grant and the defender's re-roll was missing. The pre block now names the rules
+## the cast leg added to a unit's spell records as `grants`. Live path: the real spell entry through the real cast
+## resolver, the real token placement and the real pre writer.
+func test_the_pre_block_carries_the_rule_a_cast_granted() -> void:
+	var caster := _caster()
+	_open_act(caster)
+	_main.seed_tray_rng(_seed_where_the_cast_passes())
+	await _main._solo_resolve_ai_casts({"casts": [_breath_of_change(caster)]})
+	assert_int((_main._solo_spell_mods.get(caster.get_instance_id(), []) as Array).size()) \
+		.override_failure_message("fixture broken: the cast must place the grant token").is_equal(1)
+	var pre := _pre_lines()
+	assert_int(pre.size()).is_equal(1)
+	if pre.is_empty():
+		return
+	var units: Dictionary = (pre[0] as Dictionary).get("units", {})
+	assert_bool(units.has(caster.unit_id)).override_failure_message("pre: %s" % str(pre[0])).is_true()
+	var rec: Dictionary = units.get(caster.unit_id, {})
+	assert_array(rec.get("grants", [])).override_failure_message("pre: %s" % str(rec)).is_equal(["Bane when Shooting"])
+
+
+## A grant that was already on the unit when the cast leg began is in the act line's ledger: pre names only the grants the
+## leg ADDED (one, though the unit now holds two), so the gate never stacks a token the state already carries.
+func test_pre_names_only_the_grants_the_cast_leg_added() -> void:
+	var caster := _caster()
+	_main._solo_place_spell_tokens("Breath of Change", [caster],
+		{"kind": "buff", "grants_rule": "Bane when Shooting", "duration": "once"})
+	_open_act(caster)
+	_main.seed_tray_rng(_seed_where_the_cast_passes())
+	await _main._solo_resolve_ai_casts({"casts": [_breath_of_change(caster)]})
+	var units: Dictionary = (_pre_lines()[0] as Dictionary).get("units", {})
+	assert_array((units.get(caster.unit_id, {}) as Dictionary).get("grants", [])) \
+		.override_failure_message("pre: %s" % str(units)).is_equal(["Bane when Shooting"])
+	assert_int((_main._solo_spell_mods.get(caster.get_instance_id(), []) as Array).size()).is_equal(2)
+
+
+## CONTROL: a cast that grants no rule (a damage spell) leaves no `grants` key on anyone.
+func test_a_cast_that_grants_nothing_writes_no_grants_key() -> void:
+	var caster := _caster()
+	var foe := _foe()
+	_open_act(caster)
+	_main.seed_tray_rng(_seed_where_the_cast_passes())
+	await _main._solo_resolve_ai_casts({"casts": [_cast(caster, foe)]})
+	var units: Dictionary = (_pre_lines()[0] as Dictionary).get("units", {})
+	for uid in units:
+		assert_bool((units[uid] as Dictionary).has("grants")).override_failure_message("pre: %s" % str(units)).is_false()
+
+
 func test_below_epoch_73_nothing_new_is_written() -> void:
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36 - 1
 	var caster := _caster()
