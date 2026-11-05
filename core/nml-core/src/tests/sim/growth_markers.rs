@@ -95,3 +95,99 @@ use super::*;
         assert_eq!(shot.rolls[1].target, 5,
             "2 markers banked over 2 rounds -> AP(+1) on this round's shot (Defense 4+ becomes 5+)");
     }
+
+    // ---- AIG-G2 R2: a JOINED hero's own Growth marker (EPOCH_73_V36) ----
+    //
+    // The core ticks growth lazily at the ACTIVATING unit only and credits the kill to the wiping side's own
+    // index, so a hero joined to the host (his own roster row, `attached[host]`) never ticked or got the kill
+    // credit. From epoch 73 the host's activation ticks each living attached hero who carries a per-round rule
+    // (same Shaken block as the host), and the wiping side's kill credits each living attached hero who carries
+    // an on_kill rule. The table twin is `test/v36/aig2_r2_growth_hero_test.gd`.
+
+    const V36: u32 = crate::acts::EPOCH_73_V36;
+
+    fn hero_seams(epoch: u32) -> Seams {
+        Seams { hero_attach: true, rules_epoch: epoch, ..Default::default() }
+    }
+
+    /// Row 0 = host `a` (no Growth rule), row 1 = its joined hero `ah` carrying `rule`.
+    fn joined_hero_line(rule: GrowthRule) -> (State, Vec<UnitStatic>) {
+        let (st, mut statics) = buff_line();
+        statics[1].growth = vec![rule];
+        (st, statics)
+    }
+
+    fn run_growth(st: &State, statics: &[UnitStatic], action: &Action, seams: Seams, seed: i64) -> State {
+        let terrain = crate::terrain::Terrain::default();
+        let mut tray = Tray::seeded(seed);
+        let mut rng = crate::rng::GodotRng::new(0);
+        resolve_stochastic_tray_on_board(statics, st, action, &terrain, seams, &mut rng, &mut tray).unwrap().0
+    }
+
+    /// Piercing Growth on the hero: the host's activation ticks HIS marker, never the host's.
+    #[test]
+    fn a_joined_heros_round_marker_ticks_at_the_hosts_activation_from_epoch_73() {
+        let rule = GrowthRule { per_round: true, max_markers: 4, ap_per_two: 1, ..Default::default() };
+        let (mut st, statics) = joined_hero_line(rule);
+        st.round = 1;
+        let next = run_growth(&st, &statics, &buff_action(None), hero_seams(V36), 11);
+        assert_eq!((next.growth_markers[1], next.growth_round[1]), (1, 1), "the hero's own marker ticked");
+        assert_eq!(next.growth_markers[0], 0, "the host never inherits the hero's rule");
+    }
+
+    /// Below epoch 73 the lazy host-only tick stands byte for byte: the hero's row is never touched.
+    #[test]
+    fn below_epoch_73_a_joined_hero_does_not_tick() {
+        let rule = GrowthRule { per_round: true, max_markers: 4, ap_per_two: 1, ..Default::default() };
+        let (mut st, statics) = joined_hero_line(rule);
+        st.round = 1;
+        let next = run_growth(&st, &statics, &buff_action(None), hero_seams(V36 - 1), 11);
+        assert_eq!((next.growth_markers[1], next.growth_round[1]), (0, -1));
+    }
+
+    /// G4R6 R19 (`EPOCH_73_V36`): the table's round start already placed the joined hero's marker (his ledger says 1),
+    /// so the host's activation must not place a second one. The row is folded by the live reader (`fold_ledger`, the body
+    /// `state_of` and the Godot seam both run) with the unit's own attached fact; below 73 nothing touches the hero.
+    #[test]
+    fn a_joined_heros_ticked_marker_is_not_ticked_again_at_the_hosts_activation() {
+        let rule = GrowthRule { per_round: true, max_markers: 4, ap_per_two: 1, ..Default::default() };
+        let (mut st, statics) = joined_hero_line(rule.clone());
+        st.round = 2;
+        let ledger: crate::io::PlainLedger = serde_json::from_str(r#"{"growth":1}"#).expect("ledger");
+        crate::io::fold_ledger(&mut st, 1, &ledger, V36, 1, true, -1);
+        let next = run_growth(&st, &statics, &buff_action(None), hero_seams(V36), 11);
+        assert_eq!(next.growth_markers[1], 1, "the table's round-start marker is the hero's one for round 2");
+
+        let (mut old, statics) = joined_hero_line(rule);
+        old.round = 2;
+        crate::io::fold_ledger(&mut old, 1, &ledger, V36 - 1, 1, true, -1);
+        let next = run_growth(&old, &statics, &buff_action(None), hero_seams(V36 - 1), 11);
+        assert_eq!((next.growth_markers[1], next.growth_round[1]), (1, -1), "below 73 the old reading stands");
+    }
+
+    /// A Shaken host blocks the round's marker for the hero too (the round is consumed, only the marker is not).
+    #[test]
+    fn a_shaken_host_blocks_its_joined_heros_marker() {
+        let rule = GrowthRule { per_round: true, max_markers: 4, ap_per_two: 1, ..Default::default() };
+        let (mut st, statics) = joined_hero_line(rule);
+        st.round = 1;
+        st.shaken[0] = true;
+        let next = run_growth(&st, &statics, &buff_action(None), hero_seams(V36), 11);
+        assert_eq!((next.growth_markers[1], next.growth_round[1]), (0, 1));
+    }
+
+    /// Defensive Frenzy on the hero: the host's volley wipes `b` (three one-wound models, a 40-attack rifle) and the
+    /// kill credits the hero who carries the rule; the host, carrying none, gets nothing.
+    #[test]
+    fn a_joined_heros_on_kill_marker_is_credited_by_the_hosts_wipe_from_epoch_73() {
+        let rule = GrowthRule { on_kill: true, max_markers: 2, hit_per_marker: 1, ..Default::default() };
+        let (mut st, mut statics) = joined_hero_line(rule);
+        statics[0].shoot = vec![gun("Rifle", 40, 24)];
+        st.round = 1;
+        let on = run_growth(&st, &statics, &buff_action(Some("b")), hero_seams(V36), 27);
+        assert!(on.alive[2] <= 0, "fixture: the volley wiped the target (alive {:?})", on.alive);
+        assert_eq!(on.growth_markers[1], 1, "the kill reached the hero's rule");
+        assert_eq!(on.growth_markers[0], 0);
+        let off = run_growth(&st, &statics, &buff_action(Some("b")), hero_seams(V36 - 1), 27);
+        assert_eq!(off.growth_markers[1], 0, "below 73 the credit stays host-only");
+    }

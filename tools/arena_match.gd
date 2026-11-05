@@ -545,7 +545,7 @@ func _run() -> void:
 	army_manager.current_round = 1
 	battle_log.log_event(0, "=== AI ARENA: %s (P1) vs %s (P2) — seed %d dice %d, P%d opens ===" % [
 		_p1_grade, _p2_grade, _seed, _dice_seed, opener], true)
-	main._solo_log_scout_deployment()
+	log_deployment_notes(main)
 	await main._solo_run_both_ai_game(opener)
 
 	# Final-round board: the last round never advance_round()s, so it is captured here — after hiding
@@ -599,6 +599,15 @@ func _run() -> void:
 				printerr("[PROFILE] phase=%s total_ms=%d calls=%d" % [
 					k, int(BattleSim.profile[k]) / 1000, int(BattleSim.profile.get(str(k) + "_n", 0))])
 	quit(0)
+
+
+## The deployment lines the battle log owes once play begins (seam: the arena has no deployment FSM).
+## Real play drains the Vanguard free-placement notes in that FSM; here they are drained after both sides are
+## down, BEFORE the Scout line. From EPOCH_73_V36 only — below it the arena log stays byte-identical.
+static func log_deployment_notes(main: Node) -> void:
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		main._solo_log_vanguard_notes()
+	main._solo_log_scout_deployment()
 
 
 ## Whose ACCOUNT a decision record belongs on. Usually the slot the controller was acting as when the

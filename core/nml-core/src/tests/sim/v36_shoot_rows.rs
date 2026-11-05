@@ -1,4 +1,5 @@
 //! Rules 3.6 lane shoot: one test file per row (SHO-TESTSEED); a row writes only its own file.
+mod aig_g2_r3_reach;
 mod g4r3_hero_range;
 mod g4r5_target_chain_gap;
 mod sho_01a;

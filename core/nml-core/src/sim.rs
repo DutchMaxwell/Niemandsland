@@ -1344,8 +1344,10 @@ pub(crate) fn tray_strafing(
         // Per member (host first, then each alive attached hero): the Strafing
         // profiles in range, survivor-scaled — `profiles_of`'s shape over
         // `strafe_shoot`.
+        // AIG-G2 R3 (`EPOCH_73_V36`): the target is the crossed unit, so the printed range (0 on Drop Bombs) gates nothing.
+        let reach_gate = !rule_on(seams.rules_epoch, EPOCH_73_V36);
         let (keep, attacks): (Vec<usize>, Vec<i64>) = um.strafe_shoot.iter().enumerate()
-            .filter(|(_, p)| (p.range as f64) >= d)
+            .filter(|(_, p)| !reach_gate || (p.range as f64) >= d)
             .map(|(i, p)| (i, effective_attacks(p.attacks, next.alive[b], um.model_count)))
             .unzip();
         if keep.is_empty() { return None; }
@@ -1353,6 +1355,7 @@ pub(crate) fn tray_strafing(
         // the Indirect moved-penalty fold reads it.
         let mut att = ctx_live_vs(ctx_of(um, next, b), statics, next, b, target, false, seams.rules_epoch);
         att.moved_this_round = true;
+        att.strafe_volley = !reach_gate;
         Some((b, keep, attacks, att))
     }).collect();
     let shooters: Vec<crate::dice::Shooter> = parts.iter()
@@ -4064,7 +4067,9 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
             .into_iter()
             .find(|name| grants && mods::granted(state, i, name));
         if let Some(name) = fortified_grant {
-            c.fortified_boost_ap = c.fortified_boost_ap.max(1);
+            // AI-G2 R7c (EPOCH_73_V36): the granted enhanced form's cut (2) replaces the base's 1 — the book text of
+            // all three names; the printed rows carry the same number (`fortified_alias_of`).
+            c.fortified_boost_ap = c.fortified_boost_ap.max(if rule_on(rules_epoch, EPOCH_73_V36) { 2 } else { 1 });
             // Rules 3.6 (row W1.TRACE) — this live Boost grant raises the
             // Fortified stamp, so it is the branch that names itself (arm
             // `fortified-grant-live`), never the majority read.
@@ -4210,6 +4215,34 @@ fn growth_on_kill(statics: &[UnitStatic], next: &mut State, si: usize) {
     };
     if next.growth_markers[si] < cap {
         next.growth_markers[si] += 1;
+    }
+}
+
+/// AIG-G2 R2 (`EPOCH_73_V36`, hero seam on): the HOST's activation also ticks each living attached hero's own
+/// per-round marker, under the host's Shaken reading — a joined hero's row never activates on its own. Table twin:
+/// `_solo_growth_round_start` ticking a living attached hero. Below 73 nothing happens, exactly as before.
+fn growth_round_start_heroes(statics: &[UnitStatic], next: &mut State, si: usize, shaken: bool, seams: Seams) {
+    if !seams.hero_attach || !rule_on(seams.rules_epoch, EPOCH_73_V36) {
+        return;
+    }
+    for h in next.attached[si].clone() {
+        if next.alive[h] > 0 {
+            growth_round_start(statics, next, h, shaken);
+        }
+    }
+}
+
+/// The kill credit of `growth_on_kill`, plus (AIG-G2 R2, `EPOCH_73_V36`, hero seam on) one per living attached hero
+/// of the wiping side who carries an on_kill rule himself. Table twin: `_solo_growth_on_kill` over the chain.
+fn growth_credit_kill(statics: &[UnitStatic], next: &mut State, wiper: usize, seams: Seams) {
+    growth_on_kill(statics, next, wiper);
+    if !seams.hero_attach || !rule_on(seams.rules_epoch, EPOCH_73_V36) {
+        return;
+    }
+    for h in next.attached[wiper].clone() {
+        if next.alive[h] > 0 {
+            growth_on_kill(statics, next, h);
+        }
     }
 }
 
@@ -5937,7 +5970,7 @@ fn strike_phase(
     // table's own `dist_in: -1.0` read, main.gd:6119).
     if r.fortified_fired {
         if let Some(n) = fortified_log_name(statics, next, ti, false) {
-            shot.log.push(format!("{n}: {} takes the hits at AP(-1), min. AP(0) — saves one better", ut.name));
+            shot.log.push(format!("{n}: {} takes the hits at AP(-{}), min. AP(0) — saves one better", ut.name, def.fortified_boost_ap.max(1)));
         }
     }
     for (mi, sc, _) in &parts {
@@ -9775,6 +9808,7 @@ fn resolve_with(
     // reading (captured before this activation's own moves/tests run it).
     if dice.is_some() {
         growth_round_start(statics, &mut next, si, was_shaken);
+        growth_round_start_heroes(statics, &mut next, si, was_shaken, seams);
     }
 
     // --- shoot (battle_sim.gd:608-630); HOLD and ADVANCE only, plus RUSH for
@@ -10265,7 +10299,8 @@ fn resolve_with(
                                 let over9 =
                                     def.fortified_alias_over_in > 0.0 && g.mod_d > def.fortified_alias_over_in;
                                 if let Some(n) = fortified_log_name(statics, &next, g.ti, over9) {
-                                    shot.log.push(format!("{n}: {} takes the hits at AP(-1), min. AP(0) — saves one better", ut_g.name));
+                                    let cut = def.fortified_boost_ap.max(if over9 { def.fortified_alias_ap } else { 0 }).max(1);
+                                    shot.log.push(format!("{n}: {} takes the hits at AP(-{cut}), min. AP(0) — saves one better", ut_g.name));
                                 }
                             }
                             for (mi, msc, _) in &parts {
@@ -10318,7 +10353,7 @@ fn resolve_with(
                             // own kill marker when this volley just fully
                             // destroyed its target.
                             if alive_before_g > 0 && next.alive[g.ti] <= 0 {
-                                growth_on_kill(statics, &mut next, si);
+                                growth_credit_kill(statics, &mut next, si, seams);
                             }
                             // Wave 4 follow-up (port-vengeance) — the volley's
                             // wiped target banks its Vengeance markers on the
@@ -10448,9 +10483,9 @@ fn resolve_with(
                     // marker, win-by-wipe only — a mutual wipe or a fight
                     // that leaves both sides standing earns nothing.
                     if next.alive[ti] <= 0 && next.alive[si] > 0 {
-                        growth_on_kill(statics, &mut next, si);
+                        growth_credit_kill(statics, &mut next, si, seams);
                     } else if next.alive[si] <= 0 && next.alive[ti] > 0 {
-                        growth_on_kill(statics, &mut next, ti);
+                        growth_credit_kill(statics, &mut next, ti, seams);
                     }
                     // Wave 4 follow-up (port-vengeance) — Vengeance at the
                     // melee consolidation's own guards (main.gd:8226-8231):

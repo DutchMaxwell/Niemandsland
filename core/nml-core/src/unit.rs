@@ -110,6 +110,8 @@ pub struct Ctx {
     /// G4R3 F-HERO-RANGE (`EPOCH_73_V36`): a joined hero's own nearest gap to the volley target, set at the
     /// volley seam; the resolver's range test reads it in place of the volley distance. `None` = the volley's own.
     pub member_gap_in: Option<f64>,
+    /// AIG-G2 R3 (`EPOCH_73_V36`): a Crossing Strike move-through volley; the resolver's printed-range gate is off.
+    pub strafe_volley: bool,
     /// G4R4 C-GRANTED-RANGE (`EPOCH_73_V36`): the best reach a live spell grant adds to this member's ranged weapons,
     /// stamped at the volley seam (`UnitStatic::reach_grants`); 0 = none.
     pub granted_reach_in: f64,
@@ -2160,9 +2162,10 @@ fn battleborn_recover_target_of(reg: &mut Registries, p: &Profile, rules_epoch: 
 /// `gate_in <= 0.0` branch — EVERY save batch, every leg; a gated entry
 /// ("Guardian"/"Primeborn"/"Warden"/"Ossified") fires only past its own
 /// `over_in`, which only the volley can measure. The table applies the FIRST
-/// entry whose gate passes and breaks (:6461); every shipped entry carries
-/// `incoming_ap_reduction: 1`, so the max here IS that first read — the
-/// primal-Boost "uniform printed shape" precedent. Scans own rules AND
+/// entry whose gate passes and breaks (:6461); below `EPOCH_73_V36` every entry
+/// reads 1, so the max here IS that first read — the primal-Boost "uniform
+/// printed shape" precedent. From 73 an enhanced form (Enhanced Warden: 2)
+/// REPLACES its base's cut through the max, never stacks. Scans own rules AND
 /// `item_grants`, each gated by `rule_on_all_models` (TC-023's all-models read).
 #[derive(Default)]
 struct FortifiedAlias {
@@ -2201,7 +2204,7 @@ fn fortified_alias_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Fo
         if e.primitive.as_deref() != Some("Fortified") {
             continue;
         }
-        let ap = e.param_i("incoming_ap_reduction", 1);
+        let ap = if rule_on(rules_epoch, EPOCH_73_V36) { e.param_i("incoming_ap_reduction", 1) } else { 1 };
         let over_in = e.param_f("over_in", 0.0);
         // Sweep F row `Fortified Aura` (epoch 55) — the aura entry's own
         // knobs, read wherever the entry resolves (the boost arm is where
@@ -3535,6 +3538,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         mobile_artillery_over_in,
         grounded_precision_hit,
         moved_this_round: true,
+        strafe_volley: false,
         held: false,
         // Wave 4 (port-entrenched) — the table's own default (never moved).
         moved_round: -1,
@@ -6169,11 +6173,14 @@ pub(crate) fn profiles_in_range(weapons: &[Weapon], dist_in: f64) -> Vec<ShootPr
 /// The melee list at the record's epoch — `AiShooting.melee_profiles`
 /// ai_shooting.gd:44-56. MEL-01 (D-ASSAULT, `EPOCH_73_V36`):
 /// a ranged weapon carrying Assault also yields a melee copy, in weapon order,
-/// at range 0 with its printed range kept in `printed_range`.
+/// at range 0, printed range kept in `printed_range`. AIG-G2 R3 (same epoch): a Crossing Strike weapon never strikes here.
 pub(crate) fn melee_profiles_at(weapons: &[Weapon], rules_epoch: u32) -> Vec<ShootProfile> {
     let assault = rule_on(rules_epoch, crate::acts::EPOCH_73_V36);
     let mut raw: Vec<ShootProfile> = Vec::new();
     for w in weapons {
+        if assault && weapon_strafes(w) {
+            continue; // AIG-G2 R3 (same epoch gate): fires only through the move-through trigger
+        }
         let copy = assault && w.range as i64 > 0 && weapon_has(w, "Assault");
         if w.range as i64 > 0 && !copy {
             continue;

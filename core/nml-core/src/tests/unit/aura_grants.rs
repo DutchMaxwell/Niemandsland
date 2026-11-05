@@ -158,7 +158,7 @@ use super::*;
             // carrier itself.
             match aura {
                 "Enhanced Guardian Aura" => {
-                    assert_eq!(granted.ctx.fortified_boost_ap, 1, "Enhanced Guardian's incoming_ap_reduction");
+                    assert_eq!(granted.ctx.fortified_boost_ap, 2, "Enhanced Guardian's incoming_ap_reduction (AI-G2 R7b: replaces the base's 1)");
                 }
                 "Enhanced Plaguebound Aura" => {
                     assert_eq!(granted.ctx.regen_target, 5, "Enhanced Plaguebound's ignore_target");

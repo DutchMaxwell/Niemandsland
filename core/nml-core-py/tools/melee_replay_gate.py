@@ -49,6 +49,10 @@ so it cannot flatter the port. Buckets: `equal`,
 wounds it dealt made the other side lose), `port_only`, `other` (both tested, a
 different target or roller), `neither`.
 
+CONSOLIDATION (G4R6 R21, epoch 73+). The winner's destination is a free "may": for a charge whose next act shows the
+charger alive and the defender wiped, `consol_marker` hands the core the table's recorded final charger centroid as a
+neutral marker, so the table's own Dangerous test there has a core twin (`--red-consol-land` hands none).
+
 THE RED. `--red-misseed` seeds the tray with `dice_seed + 1` and changes nothing
 else: every die count and every target still comes out of the same recorded
 state, so the shapes line up, the comparison REACHES the faces, and every act
@@ -144,6 +148,27 @@ def header_walls_m(d: Path, head: dict) -> tuple[list, str]:
     return out, "moves_calls.jsonl %s, %d segments (inches -> metres)" % (src, len(out))
 
 
+def consol_marker(plain: dict, action: dict, nxt: dict | None) -> dict:
+    """G4R6 R21 F-CONSOL-LAND (epoch 73+): `plain` with a NEUTRAL marker at the table's recorded final centroid of the charger.
+
+    For a charge whose NEXT act shows the charger alive and the defender wiped. The winner's consolidation destination is a
+    free choice (both legal); the core aims at the nearest marker its side does not own, so it lands where the table's
+    consolidation did and the table's own Dangerous terrain test there has a core twin. Any other act is returned as it is.
+    """
+    units = (nxt or {}).get("units") or {}
+    u, t = units.get(action["unit"]) or {}, units.get(action["charge"]) or {}
+    ps = u.get("positions") or []
+    if int(u.get("alive", 0)) <= 0 or int(t.get("alive", 0)) > 0 or not ps:
+        return plain
+    c = [sum(p[i] for p in ps) / len(ps) for i in (0, 2)]
+    return dict(plain, objectives=list(plain["objectives"]) + [{"owner": 0, "pos": [c[0], 0.0, c[1]]}])
+
+
+def legged(got: list[tuple], want: list[tuple]) -> list[tuple]:
+    """`got` where a roll that is the SAME die as the table's carries the table's recorded `leg` (the core's rolls have none)."""
+    return [g + want[i][5:] if i < len(want) and g == want[i][:5] else g for i, g in enumerate(got)]
+
+
 def trailing_morale(rolls: list[tuple]) -> list[tuple]:
     """The activation's trailing MORALE block, which is the last thing it draws.
 
@@ -151,13 +176,14 @@ def trailing_morale(rolls: list[tuple]) -> list[tuple]:
     self-wound roll is `wounds_to_destroy` dice (main.gd:8364) and it is always
     LAST. Walking back over 1-die rolls alone therefore stops at it and drops
     the whole block, which is why it is accepted once, at the end, by its
-    target.
+    target. A die of the recorded `dangerous` leg (a sixth field) is the
+    Dangerous terrain test of a move, never a morale die (G4R6 R21).
     """
     i = len(rolls)
     if i and rolls[i - 1][0] == "attack" and rolls[i - 1][1] > 1 \
             and rolls[i - 1][2] == NO_RETREAT_TARGET:
         i -= 1
-    while i > 0 and rolls[i - 1][0] == "attack" and rolls[i - 1][1] == 1:
+    while i > 0 and rolls[i - 1][0] == "attack" and rolls[i - 1][1] == 1 and rolls[i - 1][5:] != ("dangerous",):
         i -= 1
     return rolls[i:]
 
@@ -167,7 +193,8 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
         walls_check: bool = False, rigid_red: bool = False,
         no_dangerous: bool = False, no_hero_fold: bool = False,
         engage_fold: str = "auto", cond_ap: str = "auto",
-        red_round_only: bool = False, red_dang_tail: bool = False) -> int:
+        red_round_only: bool = False, red_dang_tail: bool = False,
+        red_consol_land: bool = False) -> int:
     games = sorted(d for d in ref.iterdir() if d.is_dir() and (d / "dice.jsonl").exists())
     if limit:
         games = games[:limit]
@@ -209,6 +236,7 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
         eff_engage_fold = False if no_hero_fold else \
             resolve_vintage_flag(engage_fold, head, repo, "engage_fold")
         eff_cond_ap = resolve_vintage_flag(cond_ap, head, repo, "cond_ap")
+        consol_on = int((head.get("knobs") or {}).get("rules_epoch", 0)) >= 73 and not red_consol_land
         vintage_seen.add((eff_engage_fold, eff_cond_ap))
         nml_core.set_legacy_no_cond_ap(not eff_cond_ap)
         header = {"profiles": round_only_profiles(head["profiles"])
@@ -243,6 +271,8 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
             # AI-G4 H1b: the table's cast/spell legs are cut, their dice burned, the state patched (see shoot_replay_gate).
             rolls_k = [r for r in dice[i0:] if int(r["act"]) == k]
             rolls_cut, pre_burn, plain = cut_pre_legs(rolls_k, act["state"], pres.get(k))
+            if consol_on:  # G4R6 R21: the core consolidates where the table's consolidation landed
+                plain = consol_marker(plain, action, lines[pos + 1]["state"] if pos + 1 < len(lines) else None)
             tray = nml_core.Tray(seed + 1 if mode == "misseed" else seed)
             if burn[i0] + pre_burn:
                 tray.roll(burn[i0] + pre_burn)
@@ -270,7 +300,7 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
             # truncating would hide "the table drew more than the port did".
             # `roll_kind` goes through `combat_kind()` (NML-1104) — the
             # module docstring's THE MORALE CHECK section says why.
-            want = [(combat_kind(r["roll_kind"]), r["count"], r["target"], r["faces"], r["owner"])
+            want = [(combat_kind(r["roll_kind"]), r["count"], r["target"], r["faces"], r["owner"], r.get("leg", "main"))
                     for r in rolls_cut]
             if not got and not want:
                 tally["both_silent"] += 1
@@ -288,7 +318,7 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
             # MORALE, measured apart from the four-field verdict and only on the
             # acts where BOTH sides rolled: an act the table never fought has no
             # morale test to compare against.
-            gm, wm = trailing_morale(got), trailing_morale(want)
+            gm, wm = trailing_morale(legged(got, want)), trailing_morale(want)
             if not gm and not wm:
                 tally["morale_none"] += 1
             elif gm and not wm:
@@ -373,6 +403,7 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
     if no_hero_fold:
         label += " [RED: --red-no-hero-fold, the engage test on the hosts alone]"
     label += " [RED: --red-dang-tail]" if red_dang_tail else ""
+    label += " [RED: --red-consol-land]" if red_consol_land else ""
     if red_round_only:
         label += " [RED: --red-round-only, every base its circumscribing circle]"
     silent_table = tally["both_silent"] + tally["table_silent"]
@@ -510,12 +541,14 @@ def main(argv: list[str]) -> int:
                          "force it")
     ap.add_argument("--red-dang-tail", action="store_true",
                     help="G4R5 R1 RED PROOF for F-DANG-TAIL: no `dangerous_replay` knob for a cut Dangerous test (the cut test's wounds are missing from the melee tally again and the acts part)")
+    ap.add_argument("--red-consol-land", action="store_true",
+                    help="G4R6 R21 RED PROOF for F-CONSOL-LAND: no neutral marker at the table's final charger centroid (the core consolidates where it chooses: the old numbers)")
     a = ap.parse_args(argv)
     return run(Path(a.ref).expanduser(), a.repo,
                "misseed" if a.red_misseed else a.mode, a.limit, a.report_only,
                a.charge_landing, a.movement or a.red_move_rigid, a.walls_check,
                a.red_move_rigid, a.red_no_dangerous, a.red_no_hero_fold,
-               a.engage_fold, a.cond_ap, a.red_round_only, a.red_dang_tail)
+               a.engage_fold, a.cond_ap, a.red_round_only, a.red_dang_tail, a.red_consol_land)
 
 
 if __name__ == "__main__":
