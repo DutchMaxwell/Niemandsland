@@ -110,6 +110,9 @@ pub struct Ctx {
     /// G4R3 F-HERO-RANGE (`EPOCH_73_V36`): a joined hero's own nearest gap to the volley target, set at the
     /// volley seam; the resolver's range test reads it in place of the volley distance. `None` = the volley's own.
     pub member_gap_in: Option<f64>,
+    /// AIG-G2 R3 (`EPOCH_73_V36`): this volley is a Crossing Strike move-through attack, aimed at the unit the
+    /// bearer flew over, so the resolver's printed-range gate does not apply (stamped at `tray_strafing`).
+    pub strafe_volley: bool,
     /// G4R4 C-GRANTED-RANGE (`EPOCH_73_V36`): the best reach a live spell grant adds to this member's ranged weapons,
     /// stamped at the volley seam (`UnitStatic::reach_grants`); 0 = none.
     pub granted_reach_in: f64,
@@ -3535,6 +3538,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         mobile_artillery_over_in,
         grounded_precision_hit,
         moved_this_round: true,
+        strafe_volley: false,
         held: false,
         // Wave 4 (port-entrenched) — the table's own default (never moved).
         moved_round: -1,

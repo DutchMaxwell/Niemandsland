@@ -956,7 +956,7 @@ pub fn resolve_volley_leg(
         // the target's live "+6\" shooting range" record extends the reach the
         // range gate tests — `ctx_of` (the EV imagination) leaves it 0.
         reach += def.range_mark_in;
-        if p.range <= 0 || reach < reach_gate {
+        if !att.strafe_volley && (p.range <= 0 || reach < reach_gate) {
             continue;
         }
         if p.reach_bonus_in > 0.0 && (p.range as f64) < reach_gate && reach >= reach_gate {

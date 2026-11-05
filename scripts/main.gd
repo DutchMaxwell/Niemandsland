@@ -4515,9 +4515,13 @@ func _solo_apply_strafing(unit: GameUnit) -> void:
 		if member.source_type == "opr" and member.source_data is OPRApiClient.OPRUnit:
 			weapons = (member.source_data as OPRApiClient.OPRUnit).weapons
 		for prof in AiShooting.strafing_profiles(weapons):
+			# AIG-G2 R3 (EPOCH_73_V36): the target is the unit the bearer moved through, so the printed range
+			# (0 on Drop Bombs) does not gate this volley — the unlimited reach the Takedown bonus shot uses.
+			var reach_in: int = 9999 if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
+				else (int(prof.get("range", 0)) if prof.has("range") else 0)
 			shots.append({"member": member, "quality": member.get_quality(),
 				"alive": member.get_alive_count(), "max": member.models.size(),
-				"reach": int(prof.get("range", 0)) if prof.has("range") else 0, "profile": prof})
+				"reach": reach_in, "profile": prof})
 	if shots.is_empty():
 		return
 	# Trails of THIS activation vs every enemy unit's bases — collect crossed enemies, take the nearest.
