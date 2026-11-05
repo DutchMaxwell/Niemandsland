@@ -21,13 +21,21 @@ use serde_json::Value;
 use std::io::Cursor;
 
 const FIXTURE: &str = include_str!("fixtures/climb_y_aof000_act10.json");
+/// G4R5 R3b: aof_1000_net_016 act 8, an Advance whose model 0 starts on a 2.5in roof and walks off it.
+const WALK_OFF: &str = include_str!("fixtures/walk_off_roof_aof016_act8.json");
 const REPO: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../..");
 const ROOF_M: f64 = 2.5 * IN2M;
 
 /// Replays the fixture act at `epoch`; returns the next state, the board and the moving chain's models (the acting unit
 /// plus its joined hero) in that state.
 fn replay(epoch: u32) -> (Vec<[f64; 3]>, Terrain) {
-    let fx: Value = serde_json::from_str(FIXTURE).unwrap();
+    let (chain, board, _) = replay_of(FIXTURE, epoch);
+    (chain, board)
+}
+
+/// As `replay`, for any fixture; the third value is the chain's models in the pre-act state.
+fn replay_of(fixture: &str, epoch: u32) -> (Vec<[f64; 3]>, Terrain, Vec<[f64; 3]>) {
+    let fx: Value = serde_json::from_str(fixture).unwrap();
     let text = format!("{}\n{}\n", fx["header"], fx["act_line"]);
     let corpus = read_acts(Cursor::new(text), "fixture").unwrap();
     let acts = act_statics(&corpus, REPO);
@@ -44,7 +52,12 @@ fn replay(epoch: u32) -> (Vec<[f64; 3]>, Terrain) {
     let mut keys = vec![action.unit.clone()];
     keys.extend(fx["act_line"]["state"]["units"][&action.unit]["attached"].as_array().unwrap().iter().map(|k| k.as_str().unwrap().to_string()));
     let chain = keys.iter().flat_map(|k| next.positions[next.roster.index[k.as_str()]].iter().copied()).collect();
-    (chain, corpus.terrain)
+    let start = keys
+        .iter()
+        .flat_map(|k| fx["act_line"]["state"]["units"][k.as_str()]["positions"].as_array().unwrap().iter())
+        .map(|p| [0, 1, 2].map(|i| p[i].as_f64().unwrap()))
+        .collect();
+    (chain, corpus.terrain, start)
 }
 
 fn over_a_container(t: &Terrain, p: &[f64; 3]) -> bool {
@@ -67,6 +80,27 @@ fn the_joined_hero_that_climbs_a_container_stands_on_its_roof_from_epoch_73() {
 fn below_epoch_73_nobody_of_the_chain_stands_above_the_table() {
     let (chain, _) = replay(EPOCH_72_PLAYTEST_RULES);
     assert!(chain.iter().all(|p| p[1] == 0.0), "epoch 72 keeps the recorded behaviour byte for byte");
+}
+
+/// R3b: the table settles every moved model on `surface_y_at(end)`, so a model that starts on a roof and ends off every
+/// roof stands on the table again (y 0). The core kept the start height: the model floated 2.5in above the table, and the
+/// eye height and cover of the following volley differed.
+#[test]
+fn a_model_that_walks_off_a_roof_stands_on_the_table_from_epoch_73() {
+    let (chain, board, start) = replay_of(WALK_OFF, EPOCH_73_V36);
+    let walkers: Vec<_> = start.iter().zip(&chain).filter(|(s, _)| (s[1] - ROOF_M).abs() < 1e-6).collect();
+    assert_eq!(walkers.len(), 1, "exactly one model of the chain starts on the roof: {start:?}");
+    let (_, end) = walkers[0];
+    assert!(!over_a_container(&board, end), "the model ends off every roof: {end:?}");
+    assert_eq!(end[1], 0.0, "and stands on the table: y {:.4} m, it started at {ROOF_M:.4} m", end[1]);
+}
+
+#[test]
+fn below_epoch_73_the_model_that_walks_off_a_roof_keeps_its_start_height() {
+    let (chain, _, start) = replay_of(WALK_OFF, EPOCH_72_PLAYTEST_RULES);
+    let walkers: Vec<_> = start.iter().zip(&chain).filter(|(s, _)| (s[1] - ROOF_M).abs() < 1e-6).collect();
+    assert_eq!(walkers.len(), 1);
+    assert!((walkers[0].1[1] - ROOF_M).abs() < 1e-6, "epoch 72 keeps the recorded behaviour byte for byte: {:?}", walkers[0].1);
 }
 
 /// The helper behind the landing height, read the way the table reads a container: the placed box, a painted cell no
