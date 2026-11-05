@@ -4213,6 +4213,34 @@ fn growth_on_kill(statics: &[UnitStatic], next: &mut State, si: usize) {
     }
 }
 
+/// AIG-G2 R2 (`EPOCH_73_V36`, hero seam on): the HOST's activation also ticks each living attached hero's own
+/// per-round marker, under the host's Shaken reading — a joined hero's row never activates on its own. Table twin:
+/// `_solo_growth_round_start` ticking a living attached hero. Below 73 nothing happens, exactly as before.
+fn growth_round_start_heroes(statics: &[UnitStatic], next: &mut State, si: usize, shaken: bool, seams: Seams) {
+    if !seams.hero_attach || !rule_on(seams.rules_epoch, EPOCH_73_V36) {
+        return;
+    }
+    for h in next.attached[si].clone() {
+        if next.alive[h] > 0 {
+            growth_round_start(statics, next, h, shaken);
+        }
+    }
+}
+
+/// The kill credit of `growth_on_kill`, plus (AIG-G2 R2, `EPOCH_73_V36`, hero seam on) one per living attached hero
+/// of the wiping side who carries an on_kill rule himself. Table twin: `_solo_growth_on_kill` over the chain.
+fn growth_credit_kill(statics: &[UnitStatic], next: &mut State, wiper: usize, seams: Seams) {
+    growth_on_kill(statics, next, wiper);
+    if !seams.hero_attach || !rule_on(seams.rules_epoch, EPOCH_73_V36) {
+        return;
+    }
+    for h in next.attached[wiper].clone() {
+        if next.alive[h] > 0 {
+            growth_on_kill(statics, next, h);
+        }
+    }
+}
+
 /// Wave 4 follow-up (port-vengeance) — `_solo_vengeance_on_destroyed`
 /// main.gd:5884-5902: when a unit FULLY dies, the DESTROYER banks one marker
 /// per START model of every Vengeance-carrying chain member of the dead
@@ -9775,6 +9803,7 @@ fn resolve_with(
     // reading (captured before this activation's own moves/tests run it).
     if dice.is_some() {
         growth_round_start(statics, &mut next, si, was_shaken);
+        growth_round_start_heroes(statics, &mut next, si, was_shaken, seams);
     }
 
     // --- shoot (battle_sim.gd:608-630); HOLD and ADVANCE only, plus RUSH for
@@ -10319,7 +10348,7 @@ fn resolve_with(
                             // own kill marker when this volley just fully
                             // destroyed its target.
                             if alive_before_g > 0 && next.alive[g.ti] <= 0 {
-                                growth_on_kill(statics, &mut next, si);
+                                growth_credit_kill(statics, &mut next, si, seams);
                             }
                             // Wave 4 follow-up (port-vengeance) — the volley's
                             // wiped target banks its Vengeance markers on the
@@ -10449,9 +10478,9 @@ fn resolve_with(
                     // marker, win-by-wipe only — a mutual wipe or a fight
                     // that leaves both sides standing earns nothing.
                     if next.alive[ti] <= 0 && next.alive[si] > 0 {
-                        growth_on_kill(statics, &mut next, si);
+                        growth_credit_kill(statics, &mut next, si, seams);
                     } else if next.alive[si] <= 0 && next.alive[ti] > 0 {
-                        growth_on_kill(statics, &mut next, ti);
+                        growth_credit_kill(statics, &mut next, ti, seams);
                     }
                     // Wave 4 follow-up (port-vengeance) — Vengeance at the
                     // melee consolidation's own guards (main.gd:8226-8231):
