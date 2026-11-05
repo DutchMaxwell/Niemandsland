@@ -990,13 +990,13 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
         .map(|(i, m)| {
             let p = planned.get(i).copied().unwrap_or_else(|| t.to_inch(pos_of(state, *m)));
             let w = t.from_inch(p, 0.0);
-            // G4R5 R3 (`EPOCH_73_V36`, table twin `_apply_model_positions`): a model whose route ends on a container
-            // footprint stands on its roof. Ending off every roof keeps the start height as before (the table puts a
-            // model that left a roof back on the table; not ported here, it would unmask xz landings of other rows).
-            let roof = if rule_on(self.rules_epoch, EPOCH_73_V36) {
+            // G4R5 R3 + R3b (`EPOCH_73_V36`, table twin `_apply_model_positions`): a model stands where its route ends:
+            // on the roof of the container footprint it ends on, else on the table, so one that walks off a roof is back
+            // at y 0. Below epoch 73 it keeps the start height.
+            let y = if rule_on(self.rules_epoch, EPOCH_73_V36) {
                 crate::sight::surface_y_m(t, [w[0] as f64, w[2] as f64], self.rules_epoch) as f32
-            } else { 0.0 };
-            [w[0], if roof > 0.0 { roof } else { self.pos[i][1] }, w[2]]
+            } else { self.pos[i][1] };
+            [w[0], y, w[2]]
         })
         .collect();
     Landing { sidestep_spent, shorten_covered: !self.allow_contact && rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES),
