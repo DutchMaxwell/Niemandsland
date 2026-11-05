@@ -3454,6 +3454,19 @@ pub fn range_gap_in(state: &State, a_pos: &[[f64; 3]], si: usize, ti: usize) -> 
     )
 }
 
+/// G4R5 F-TARGET-CHAIN-GAP (`EPOCH_73_V36`, `hero_attach`): the range gap to a target is measured to the nearest
+/// model of its whole chain, the host and its LIVING joined heroes (`gap(t)` measures one chain unit; the table's
+/// `_note_nearest_model_reach`). Older records and a lone host keep `gap(ti)`, byte for byte.
+fn chain_gap_in(state: &State, ti: usize, seams: Seams, gap: impl Fn(usize) -> f64) -> f64 {
+    let mut best = gap(ti);
+    if seams.hero_attach && rule_on(seams.rules_epoch, EPOCH_73_V36) {
+        for &h in state.attached[ti].iter().filter(|&&h| state.alive[h] > 0) {
+            best = best.min(gap(h));
+        }
+    }
+    best
+}
+
 /// Live table modifier distance: nearest alive model bases, including joined
 /// heroes when that seam is active. Older recordings keep the centre measure.
 fn modifier_distance_in(state: &State, si: usize, ti: usize, seams: Seams) -> f64 {
@@ -8115,11 +8128,10 @@ fn split_plan(
         // to base-edge — the centre-space equivalent subtracts BOTH base radii
         // from every pair distance. The group exists because the TABLE's own
         // test fired, so every gate below runs on that EDGE gap.
-        let d = (geom::dist_in(&state.positions[si], &state.positions[ti])
-            - (state.radii[si].first().copied().unwrap_or(DEFAULT_BASE_RADIUS_M)
-                + state.radii[ti].first().copied().unwrap_or(DEFAULT_BASE_RADIUS_M))
-                / IN2M)
-            .max(0.0);
+        let radius = |u: usize| state.radii[u].first().copied().unwrap_or(DEFAULT_BASE_RADIUS_M);
+        let d = chain_gap_in(state, ti, seams, |t| {
+            (geom::dist_in(&state.positions[si], &state.positions[t]) - (radius(si) + radius(t)) / IN2M).max(0.0)
+        });
         // Epoch 66 follows the table's nearest-base modifier measure; older
         // records keep the centre gap independently of this range gate.
         let mod_d = modifier_distance_in(state, si, ti, seams);
@@ -9824,11 +9836,11 @@ fn resolve_with(
                     &format!("{} may target {} without line of sight", statics[pi_s].name, statics[next.roster.profile[ti]].name));
             }
             if plan.is_some() || sighted {
-                let d = if seams.range_by_base_edge {
-                    range_gap_in(&next, &next.positions[probe], probe, ti)
+                let d = chain_gap_in(&next, ti, seams, |t| if seams.range_by_base_edge {
+                    range_gap_in(&next, &next.positions[probe], probe, t)
                 } else {
-                    geom::dist_in(&next.positions[probe], &next.positions[ti])
-                };
+                    geom::dist_in(&next.positions[probe], &next.positions[t])
+                });
                 // The table's epoch-66 nearest-base modifier measure remains
                 // separate from this pooled range-validity distance.
                 let mod_d = modifier_distance_in(&next, si, ti, seams);
@@ -10017,13 +10029,13 @@ fn resolve_with(
                                 // G4R3 F-HERO-RANGE (EPOCH_73_V36): range is per MODEL — a joined hero's weapons
                                 // are gated by the hero's own nearest gap (the host's `g.d` below 73 and for the host).
                                 let hero_own_gap = mi != si && rule_on(seams.rules_epoch, EPOCH_73_V36);
-                                let dm = if !hero_own_gap {
-                                    g.d
-                                } else if seams.range_by_base_edge || plan.is_some() {
-                                    range_gap_in(&next, &next.positions[mi], mi, g.ti)
+                                // G4R5 F-TARGET-CHAIN-GAP: this member's gap to ONE unit of the target's chain.
+                                let gap_to = |t: usize| if seams.range_by_base_edge || plan.is_some() {
+                                    range_gap_in(&next, &next.positions[mi], mi, t)
                                 } else {
-                                    geom::dist_in(&next.positions[mi], &next.positions[g.ti])
+                                    geom::dist_in(&next.positions[mi], &next.positions[t])
                                 };
+                                let dm = if !hero_own_gap { g.d } else { chain_gap_in(&next, g.ti, seams, &gap_to) };
                                 if seams.sighting {
                                     sighted_profiles_of(
                                         um, &next, statics, mi, g.ti, &zones, dm, kind == HOLD, &mut msc,
@@ -10045,6 +10057,15 @@ fn resolve_with(
                                     shot.log.push(format!("{granted_rule}: {} gains +{granted:.0}\" reach on {}", um.name, ut_g.name));
                                 }
                                 if rule_on(seams.rules_epoch, EPOCH_73_V36) {
+                                    // Shooting Range: the target's joined hero put a weapon in reach that its host's gap alone would drop.
+                                    let host_gap = gap_to(g.ti);
+                                    for p in msc.keep.iter().map(|&k| &um.shoot[k]) {
+                                        let printed = p.range as f64 + p.reach_bonus_in.max(granted_reach(um, &next, mi).0);
+                                        let shrunk = if def.ranged_shrouding { shrouded_reach(printed, def.ranged_shroud_penalty_in, def.ranged_shroud_floor_in) } else { printed };
+                                        if (dm..host_gap).contains(&(shrunk + def.range_mark_in)) {
+                                            shot.log.push(format!("Shooting Range: {} fires {} - range is measured to the nearest model of {} ({dm:.1}\" away)", um.name, p.name, ut_g.name));
+                                        }
+                                    }
                                     // Limited: the log names the book rule for each spent weapon the volley leaves out.
                                     for p in msc.keep.iter().map(|&k| &um.shoot[k]) {
                                         if p.limited && next.limited_used[mi].iter().any(|n| n == &p.name) {

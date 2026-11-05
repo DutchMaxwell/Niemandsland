@@ -159,6 +159,28 @@ fn the_chain_gap_is_the_nearest_model_with_no_slack() {
     assert_eq!(dice("Gun Squad", true, true, 11.99, EPOCH_73_V36, false, false).0, 3, "11.99\" of 12\"");
 }
 
+/// CONTROL (passes before and after the change): a DEAD joined hero never extends the gap, even with its stale position
+/// standing in reach - the chain is the host and its LIVING heroes. Mutant: the chain without the alive filter fires.
+#[test]
+fn a_dead_joined_hero_never_extends_the_gap() {
+    for (armed_host, owner) in [(true, "Gun Squad"), (false, "Squad Leader")] {
+        let (mut st, statics) = line(true, armed_host, 11.5);
+        (st.alive[3], st.wounds[3]) = (0, vec![]);
+        let mut hold = advance_to(0.0);
+        hold.kind = HOLD;
+        hold.dest = None;
+        hold.shoot = Some("b".into());
+        let seams = Seams { rules_epoch: EPOCH_73_V36, hero_attach: true, range_by_base_edge: true, ..Seams::default() };
+        let (_, shot) = resolve_stochastic_tray_on_board(
+            &statics, &st, &hold, &crate::terrain::Terrain::default(), seams,
+            &mut crate::rng::GodotRng::new(0), &mut Tray::seeded(1),
+        )
+        .unwrap();
+        let n: i64 = shot.rolls.iter().filter(|r| r.kind == "attack" && r.owner == owner).map(|r| r.count).sum();
+        assert_eq!(n, 0, "{owner}: the dead hero's stale spot is no model of the chain {:?}", shot.log);
+    }
+}
+
 /// CONTROL: a target host already in reach fires on its own, with or without a hero (passes before and after).
 #[test]
 fn a_target_host_in_reach_fires_on_its_own_gap() {
