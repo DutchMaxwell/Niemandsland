@@ -6394,7 +6394,7 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 			board_clamp_notes.append("%s: %d model%s stay on their own side of a wall (Charge: no moving through walls; Unit Coherency waits)"
 				% [unit.get_name(), wall_kept, "" if wall_kept == 1 else "s"])
 		if container_cut > 0:   # rules-must-log (AIG-L6b): the pulled-back models say which book rule held them
-			board_clamp_notes.append("%s: %d model%s stop short of a container (Terrain height: a base may not end its move on a container; Unit Coherency waits)"
+			board_clamp_notes.append("%s: %d model%s stop short of a container or wall (Terrain height: a base may not end its move on a container or its wall; Unit Coherency waits)"
 				% [unit.get_name(), container_cut, "" if container_cut == 1 else "s"])
 	_apply_model_positions(models, new_positions)
 	# Publish the per-model routes + base radii for the presentation layer (glide + swept corridor +
