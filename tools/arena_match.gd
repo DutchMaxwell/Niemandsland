@@ -602,7 +602,11 @@ func _run() -> void:
 
 
 ## The deployment lines the battle log owes once play begins (seam: the arena has no deployment FSM).
+## Real play drains the Vanguard free-placement notes in that FSM; here they are drained after both sides are
+## down, BEFORE the Scout line. From EPOCH_73_V36 only — below it the arena log stays byte-identical.
 static func log_deployment_notes(main: Node) -> void:
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		main._solo_log_vanguard_notes()
 	main._solo_log_scout_deployment()
 
 
