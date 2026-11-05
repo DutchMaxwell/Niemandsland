@@ -4730,10 +4730,12 @@ func _solo_bearer_key(shot: Dictionary) -> String:
 func _solo_shot_eligibility(member: GameUnit, profile: Dictionary, shot: Dictionary, target: GameUnit,
 		granted_indirect: bool, moved: bool = false) -> Dictionary:
 	var pairs: Array = []
-	var sighted: int = _solo_sighted_count(member, target,
-		int(SoloController.effective_shoot_reach_in(float(shot["reach"]), target)),
-		(bool(profile.get("indirect", false)) and SoloController.indirect_ignores_los(member, not moved)) \
-			or granted_indirect or _solo_target_grants_indirect(target), pairs)   # GH #325
+	var reach_in: int = int(SoloController.effective_shoot_reach_in(float(shot["reach"]), target))
+	var waive_los: bool = (bool(profile.get("indirect", false)) and SoloController.indirect_ignores_los(member, not moved)) \
+		or granted_indirect or _solo_target_grants_indirect(target)   # GH #325
+	var sighted: int = _solo_sighted_count(member, target, reach_in, waive_los, pairs, false, null, true)
+	if sighted == 0 and _solo_own_gap_refused(member, target, reach_in, waive_los):
+		_solo_log_own_gap_refusal(member, target, str(profile.get("name", "?")))
 	var copies: int = maxi(int(profile.get("count", 1)), 1)
 	return {"pairs": pairs, "sighted": sighted, "alive": member.get_alive_count(),
 		"report": SoloController.scaled_attacks_report(member, profile, sighted, int(shot["max"])),
@@ -5125,7 +5127,7 @@ func _vfx_player_volley(member: GameUnit, target: GameUnit, profile: Dictionary,
 		return
 	var pairs: Array = []
 	_solo_sighted_count(member, target, int(SoloController.effective_shoot_reach_in(float(profile.get("range", 0))
-		+ float(SoloController.shooting_range_bonus(member)), target)), los_waived, pairs)
+		+ float(SoloController.shooting_range_bonus(member)), target)), los_waived, pairs, false, null, true)
 	_vfx_volley(member, target, profile, pairs.slice(0, maxi(int(profile.get("count", 1)), 1)), los_waived)
 
 
@@ -6272,8 +6274,10 @@ func _solo_pick_overlay_target(attacker: GameUnit, overlay: int, max_range: floa
 ## gate but waives the sight test.
 ## `pairs_out` (optional) collects each counted model's [shooter_pos, target_pos] (see SoloController.sighted_models).
 ## Step 2.3a: `first_hit` stops at the first counted model; `blockers` = shared _solo_los_blockers(shooter, null).
+## G4R6 F-SIGHT-OWN-GAP (EPOCH_73_V36): `own_models_only` measures the oval gate from the shooter's OWN models, so a
+## joined hero's base does not extend its host's weapons (Who Can Shoot). The per-member volley counts pass true.
 func _solo_sighted_count(shooter: GameUnit, target: GameUnit, range_in: int, ignore_los: bool = false,
-		pairs_out = null, first_hit := false, blockers = null) -> int:
+		pairs_out = null, first_hit := false, blockers = null, own_models_only := false) -> int:
 	if shooter == null or target == null:
 		return 0
 	var _prof_sight_t0 := BattleSim.prof_t0()   # NML-1072: LOS/sight computation
@@ -6282,7 +6286,7 @@ func _solo_sighted_count(shooter: GameUnit, target: GameUnit, range_in: int, ign
 	# count below stay untouched.
 	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
 			and (_solo_unit_has_oval(shooter) or _solo_unit_has_oval(target)) \
-			and _solo_shoot_gap_in(shooter, target, INF) > float(range_in):
+			and _solo_shoot_gap_in(shooter, target, INF, own_models_only) > float(range_in):
 		BattleSim.prof_mark("sight", _prof_sight_t0)
 		return 0
 	var target_positions: Array = []
@@ -6306,6 +6310,20 @@ func _solo_sighted_count(shooter: GameUnit, target: GameUnit, range_in: int, ign
 		float(range_in) * MoveIntent.INCHES_TO_METERS + edge_slack_m, los, pairs_out, first_hit)
 	BattleSim.prof_mark("sight", _prof_sight_t0)
 	return _sighted
+
+
+## G4R6 F-SIGHT-OWN-GAP (EPOCH_73_V36): true when `member`'s own models cannot reach the target but the old host+hero
+## fold (its joined hero's base) would have counted a model, so the refusal is the rule's doing and gets named.
+func _solo_own_gap_refused(member: GameUnit, target: GameUnit, reach_in: int, ignore_los: bool) -> bool:
+	return AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and not member.get_attached_heroes().is_empty() \
+		and _solo_sighted_count(member, target, reach_in, ignore_los, null, true) > 0
+
+
+## Rules-must-log for the refusal above: Who Can Shoot, once per refused shot.
+func _solo_log_own_gap_refusal(member: GameUnit, target: GameUnit, weapon: String) -> void:
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT, "Who Can Shoot: %s's %s cannot reach %s from its own models — a joined hero's base does not extend its host's weapons" % [
+			member.get_name(), weapon, target.get_name()], true)
 
 
 ## GEOMETRIC PER-MODEL line of sight for a shooter→target model pair (GF/AoF v3.5.1 p.5: "Models can't see
@@ -6572,9 +6590,12 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 			# come back into the count, at the same reach the declaration was judged with.
 			var count: int = melee_count
 			if not melee:
-				count = _solo_sighted_count(member, enemy,
-					int(SoloController.effective_shoot_reach_in(float(prof.get("range", 0)) + float(range_bonus), enemy)),
-					bool(prof.get("indirect", false)) and SoloController.indirect_ignores_los(member, _solo_unit_held(unit)) or mark_indirect) if enemy != null else member.get_alive_count()
+				var reach_in: int = 0 if enemy == null else int(SoloController.effective_shoot_reach_in(float(prof.get("range", 0)) + float(range_bonus), enemy))
+				var waive_los: bool = bool(prof.get("indirect", false)) and SoloController.indirect_ignores_los(member, _solo_unit_held(unit)) or mark_indirect
+				count = _solo_sighted_count(member, enemy, reach_in, waive_los, null, false, null, true) if enemy != null else member.get_alive_count()
+				# G4R6 F-SIGHT-OWN-GAP: the fire loop names the book rule for a shot only the joined hero's base would have reached.
+				if count == 0 and enemy != null and _solo_own_gap_refused(member, enemy, reach_in, waive_los):
+					prof["_own_gap_refused"] = true
 			# X2 (test game 2, B15): a dead bearer's weapon dies with it. Special weapons (fewer copies
 			# than models) are pinned to specific models by EquipmentDistributor — fire per-copy attacks
 			# × LIVING bearers (capped by the reach/sight count) instead of the unit-wide alive/max
@@ -6658,11 +6679,13 @@ func _solo_unit_has_oval(unit: GameUnit) -> bool:
 ## The shooting reach's DISTANCE truth at EPOCH_73_V36: the nearest base-edge gap between the models,
 ## through the recorded base SHAPES (ovals included) like the core's `range_gap_in`. Below 73 and for an
 ## all-round pair the circumscribed-slack read stands, so every recorded corpus replays byte-exact.
-func _solo_shoot_gap_in(a: GameUnit, b: GameUnit, fallback_in: float) -> float:
+## `own_models_only` (G4R6 F-SIGHT-OWN-GAP) reads the first side by its own models, not its joined heroes' too.
+func _solo_shoot_gap_in(a: GameUnit, b: GameUnit, fallback_in: float, own_models_only := false) -> float:
 	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 \
 			or not (_solo_unit_has_oval(a) or _solo_unit_has_oval(b)):
 		return _solo_nearest_model_gap_in(a, b, fallback_in)
-	var a_models: Array = a.get_alive_models_with_attached() if a.has_method("get_alive_models_with_attached") else a.get_alive_models()
+	var a_models: Array = a.get_alive_models_with_attached() if a.has_method("get_alive_models_with_attached") \
+		and not own_models_only else a.get_alive_models()
 	var b_models: Array = b.get_alive_models_with_attached() if b.has_method("get_alive_models_with_attached") else b.get_alive_models()
 	var best := INF
 	for am in a_models:
@@ -15073,6 +15096,9 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 		for p in group.get("profiles", []):
 			var profile := _solo_bridge_granted_flags(group.get("member"), p as Dictionary, target)
 			if int(profile.get("attacks", 0)) <= 0:
+				# G4R6 F-SIGHT-OWN-GAP: name the book rule once, in the split-fire half that would have rolled it.
+				if profile.has("_own_gap_refused") and (split_names.is_empty() or split_names.has(str(profile.get("name", ""))) != skip_named):
+					_solo_log_own_gap_refusal(group.get("member"), target, str(profile.get("name", "?")))
 				continue
 			# #226 SPLIT FIRE (GF v3.5.1 p.8): with a split declared, this volley only rolls
 			# its half — skip_named=true fires everything NOT in the set (target A), false
