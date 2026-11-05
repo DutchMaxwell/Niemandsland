@@ -5,7 +5,7 @@
 //! and 3, "Structural"). A new unmapped name on the list would hide the same way, so this test fails on it.
 //!
 //! Carriers come from the names-only fixture `test/fixtures/book_rule_carriers_v36.json` (per book, the distinct non-core
-//! rule names its units carry in the 3.6 army books; no rule text). A pair is resolved when the book's registry section
+//! rule names its units carry in the 3.6 army books; no rule text; regenerate it with `tools/book_rule_carriers.py`). A pair is resolved when the book's registry section
 //! or the system's `common` section names the rule (the gap tool's own definition), or the rule is in `BY_NAME`.
 use super::super::*;
 use serde_json::{json, Value};
@@ -22,9 +22,9 @@ const BY_NAME: [(&str, &str); 5] = [
 ];
 
 /// Pairs the guard still reports on the current data and that an open PR resolves. Empty = nothing is hidden.
-/// The F5a pairs landed in #2545 and #2547. The Ravage row of #2549 empties the last entry: when that PR merges, delete
-/// it here (the test names every stale entry). The same edit is needed whichever of the two merges second.
-const EXPECTED_OFFENDERS: [&str; 1] = ["aof/duchies_of_vinci Ravage"];
+/// The F5a/F5b pairs all landed (#2545, #2547, #2549), so nothing is hidden today. A pair that must wait for its row goes
+/// here, and the test names it as stale once the row lands.
+const EXPECTED_OFFENDERS: [&str; 0] = [];
 
 fn names_of(v: &Value) -> BTreeSet<String> {
     v.as_array().map(|a| a.iter().filter_map(|n| n.as_str().map(String::from)).collect()).unwrap_or_default()
