@@ -976,6 +976,19 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
                 planned[i] = end;
                 trail = leg.clone();
             }
+        } else if rule_on(self.rules_epoch, EPOCH_73_V36) && !self.flying && n >= 2 && leg.len() >= 2 && i < planned.len() {
+            // AIG-L6b (`EPOCH_73_V36`, table twin `_retrace_wall_true`): a model never ends with its base where it may
+            // not rest (a container, its wall). The gate's push-out is reverted by the wall clamp when it starts
+            // inside the wall clearance, so a climber that came down a container edge stayed ON it: it stops at the
+            // first rest-legal point of its own route instead.
+            let r_in = radii_m.get(i).copied().unwrap_or(0.0) / IN2M;
+            let end = [planned[i][0] as f64, planned[i][1] as f64];
+            if super::gate::overlaps_block(end, r_in, t) {
+                if let Some(cut) = super::gate::rest_legal_cut(leg, r_in, t) {
+                    planned[i] = *cut.last().unwrap_or(&planned[i]);
+                    trail = cut;
+                }
+            }
         }
         *leg = trail;
         // :6317-6322 — the climb is movement spent: it joins the arc, and the largest one is logged.
