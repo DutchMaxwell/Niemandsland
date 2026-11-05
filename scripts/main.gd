@@ -10548,7 +10548,11 @@ func _solo_ignores_regen(attacker: GameUnit, profile: Dictionary, target: GameUn
 	for flag in ["rending", "unstoppable", "bane"]:
 		if bool(profile.get(flag, false)):
 			if flag == "bane" and (_solo_profile_lacerate_only(profile) \
-					or (not str(profile.get("bane_alias", "")).is_empty() and not bool(profile.get("bypass_regen", false)))):
+					or (not str(profile.get("bane_alias", "")).is_empty() and not bool(profile.get("bypass_regen", false)))
+					# G4R5 R14 (EPOCH_73_V36): nor a UNIT alias's (Scrapper) - its stamp writes bypass_regen = false and no
+					# bane_alias; an ABSENT key is a printed Bane and keeps bypassing.
+					or (AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and profile.has("bypass_regen") \
+						and not bool(profile["bypass_regen"]))):
 				continue   # A1: the flag is the printed Lacerate's re-roll, not a Bane grant; AI-G2: nor a weapon alias's
 			if battle_log != null and _solo_regen_bypass_named(target):
 				_log_rule_event(BattleLog.Category.COMBAT,
