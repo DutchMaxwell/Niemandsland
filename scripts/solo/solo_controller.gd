@@ -1441,8 +1441,12 @@ func nearest_human_unit(ai_unit: GameUnit) -> GameUnit:
 	var cands: Array = []
 	for h in army_manager.get_game_units_for_player(enemy_slot_of(ai_unit)):   # B6: actor-derived side
 		var hu := h as GameUnit
-		if hu == null or hu.is_destroyed() or unit_in_reserve(hu):
-			continue   # skip destroyed units and any still off-table in Ambush reserve (findings 3/4)
+		if hu == null or unit_in_reserve(hu):
+			continue   # skip any unit still off-table in Ambush reserve (findings 3/4)
+		# G4R5 R8b (EPOCH_73_V36, Hero rule): a chain whose host models are all dead but whose joined hero lives is
+		# not destroyed - the hero IS the unit now and stays the target through its host.
+		if hu.is_destroyed() and not (AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and combined_alive(hu) > 0):
+			continue   # skip destroyed units
 		if hu.has_method("is_attached") and hu.is_attached():
 			continue   # a joined hero is PART of its host unit — you target the unit, never the hero alone
 		if melee_only and is_aircraft(hu):
@@ -1855,6 +1859,8 @@ func _act(unit: GameUnit) -> Dictionary:
 		return _act_regroup(unit, report)
 	var target_unit := nearest_human_unit(unit)
 	if target_unit == null:
+		if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:   # G4R5 R8b: no activation passes without a line
+			_rule_note(report, "%s: no enemy unit to act against — it holds" % unit.get_name(), false)
 		return report
 	# Capture the passed-a-nearer-enemy flag BEFORE _commander_apply may re-query targets and
 	# clobber the transient member (community #164 narration).
