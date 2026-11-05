@@ -18,6 +18,7 @@ THE BUNDLED ACT (the 1105 round-5a recording, GF 1000 pt NET arm, trimmed like `
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -40,6 +41,42 @@ def test_the_wiping_charge_is_full_equal_with_the_tables_consolidation_marker(ca
     out = melee(capsys)
     assert "EQUAL : 1/1 acts FULL-equal" in out, out
     assert "0 table only" in out, out
+
+
+def test_the_mutant_without_the_marker_parts_the_act_again(capsys):
+    """`--red-consol-land` hands the core no marker: the old numbers - 0/1, the table's test is the one die the core lacks."""
+    out = melee(capsys, red_consol_land=True)
+    assert "EQUAL : 0/1 acts FULL-equal" in out and "1 table_longer" in out, out
+
+
+def test_below_epoch_73_the_gate_asks_for_no_marker(capsys, tmp_path, monkeypatch):
+    """The same act recorded at rules epoch 72 never reaches `consol_marker` (the epoch-73 act does: the control)."""
+    calls = []
+    orig = mrg.consol_marker
+    monkeypatch.setattr(mrg, "consol_marker", lambda *a: calls.append(a) or orig(*a))
+    melee(capsys)
+    assert len(calls) == 1
+    game = tmp_path / "gf_1000_net_005"
+    game.mkdir()
+    for f in (FIXTURES / "g4r6_consol_land" / "gf_1000_net_005").iterdir():
+        game.joinpath(f.name).write_text(f.read_text())
+    rows = (game / "acts.jsonl").read_text().splitlines()
+    head = json.loads(rows[0])
+    head["knobs"]["rules_epoch"] = 72
+    (game / "acts.jsonl").write_text("\n".join([json.dumps(head)] + rows[1:]) + "\n")
+    mrg.run(tmp_path, str(REPO), "table", 0, True, movement=True)
+    assert len(calls) == 1, "the epoch-72 act asked for a marker"
+
+
+def test_the_marker_is_the_chargers_final_centroid_and_only_for_a_wipe():
+    plain = {"objectives": [{"owner": 2, "pos": [1.0, 0.0, 1.0]}]}
+    action = {"unit": "a", "charge": "b"}
+    nxt = {"units": {"a": {"alive": 2, "positions": [[0.0, 0.0, 0.0], [2.0, 0.0, 4.0]]}, "b": {"alive": 0, "positions": []}}}
+    assert mrg.consol_marker(plain, action, nxt)["objectives"] == plain["objectives"] + [{"owner": 0, "pos": [1.0, 0.0, 2.0]}]
+    assert plain["objectives"] == [{"owner": 2, "pos": [1.0, 0.0, 1.0]}]  # the recorded state is not edited
+    for edit in ({"b": {"alive": 1, "positions": [[0.0, 0.0, 0.0]]}}, {"a": {"alive": 0, "positions": []}}):
+        assert mrg.consol_marker(plain, action, {"units": dict(nxt["units"], **edit)}) is plain
+    assert mrg.consol_marker(plain, action, None) is plain
 
 
 def test_a_dangerous_leg_die_is_not_a_morale_die():
