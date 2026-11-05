@@ -10035,7 +10035,7 @@ fn resolve_with(
                                 } else {
                                     geom::dist_in(&next.positions[mi], &next.positions[t])
                                 };
-                                let dm = if !hero_own_gap { g.d } else { chain_gap_in(&next, g.ti, seams, &gap_to) };
+                                let dm = if !hero_own_gap { g.d } else { chain_gap_in(&next, g.ti, seams, gap_to) };
                                 if seams.sighting {
                                     sighted_profiles_of(
                                         um, &next, statics, mi, g.ti, &zones, dm, kind == HOLD, &mut msc,
