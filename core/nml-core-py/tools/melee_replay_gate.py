@@ -273,7 +273,7 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
             rolls_cut, pre_burn, plain = cut_pre_legs(rolls_k, act["state"], pres.get(k))
             if consol_on:  # G4R6 R21: the core consolidates where the table's consolidation landed
                 plain = consol_marker(plain, action, lines[pos + 1]["state"] if pos + 1 < len(lines) else None)
-            tray =nml_core.Tray(seed + 1 if mode == "misseed" else seed)
+            tray = nml_core.Tray(seed + 1 if mode == "misseed" else seed)
             if burn[i0] + pre_burn:
                 tray.roll(burn[i0] + pre_burn)
             dang_off = cut_dangerous(rolls_k, rolls_cut)
