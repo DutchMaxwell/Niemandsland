@@ -4746,12 +4746,16 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 	# Resolver wave A — Reckless Piercing: the round-scoped AP stamps (buff on the attacker,
 	# backfire on the target) ride the same profile-AP merge.
 	var tag_ap := _solo_spend_piercing_tag(target) + _solo_reckless_ap(attacker, target)
-	if tag_ap > 0:
+	var arrival_logged := {}   # G4R5 F-AMBUSH-ARRIVAL-AP: Ambushing Piercing Shot is per shot member, like the core
+	if tag_ap > 0 or AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
 		shots = shots.duplicate()
 		for si in range(shots.size()):
 			var sd := (shots[si] as Dictionary).duplicate()
+			var shot_ap := tag_ap + _solo_ambush_arrival_ap(sd.get("member") as GameUnit, arrival_logged)
+			if shot_ap == 0:
+				continue
 			var sprof := (sd.get("profile", {}) as Dictionary).duplicate()
-			sprof["ap"] = int(sprof.get("ap", 0)) + tag_ap
+			sprof["ap"] = int(sprof.get("ap", 0)) + shot_ap
 			sd["profile"] = sprof
 			shots[si] = sd
 	# SHO-PAR-F6 (EPOCH_73_V36, lead ruling O1): all weapons of the volley fire together, so every shot's
@@ -14956,6 +14960,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 	var h_groups: Array = _solo_attack_groups(attacker, dist, false, target)
 	if not h_groups.is_empty():
 		h_groups = h_groups + _solo_takedown_bonus_groups(attacker, false)
+	var arrival_logged := {}   # G4R5 F-AMBUSH-ARRIVAL-AP: the book rule is named once per member
 	for grp in h_groups:
 		var group := grp as Dictionary
 		var base_quality: int = int(group.get("quality", 4))
@@ -15025,9 +15030,10 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 				h_mod = int(h_uf[0])
 			var to_hit_raw: int = AiCombatMath.reliable_quality(base_quality, bool(profile.get("reliable", false))) - h_mod
 			var to_hit: int = AiCombatMath.modified_hit_target(to_hit_raw, 0)
-			if upr_ap + extra_ap > 0:
+			var arrival_ap := _solo_ambush_arrival_ap(group.get("member") as GameUnit, arrival_logged)   # G4R5 F-AMBUSH-ARRIVAL-AP
+			if upr_ap + extra_ap + arrival_ap > 0:
 				profile = profile.duplicate()
-				profile["ap"] = int(profile.get("ap", 0)) + upr_ap + extra_ap   # Unpredictable + Tag/Reckless AP
+				profile["ap"] = int(profile.get("ap", 0)) + upr_ap + extra_ap + arrival_ap   # Unpredictable + Tag/Reckless/Ambush-arrival AP
 			# Versatile Attack applies to the HUMAN's volley too (xhigh review find: the profiles are stamped
 			# and every other modeled rule auto-applies here, but this path never read the flag — the player's
 			# own Versatile units were cheated of their buff). Bug 13 (field test): the mode is the PLAYER's
@@ -23573,6 +23579,21 @@ func _solo_reckless_ap(attacker: GameUnit, target: GameUnit) -> int:
 				bonus += 1
 				break
 	return bonus
+
+
+## G4R5 F-AMBUSH-ARRIVAL-AP (EPOCH_73_V36): "Ambushing Piercing Shot" — the SHOOTING member's weapons get AP(+1) in the
+## round it arrived from Ambush (the core's `ctx_live` `ambush_arrival_ap`: the member's own rule, its own arrival stamp
+## == this round). Melee never calls this. `logged` names the book rule once per member per volley.
+func _solo_ambush_arrival_ap(member: GameUnit, logged: Dictionary) -> int:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 or opr_army_manager == null or member == null:
+		return 0
+	if int(member.unit_properties.get("ambush_arrived_round", -1)) != opr_army_manager.current_round \
+			or not SoloController.unit_carries_rule(member, "Ambushing Piercing Shot"):
+		return 0
+	if battle_log != null and not logged.has(member):
+		battle_log.log_event(BattleLog.Category.COMBAT, "Ambushing Piercing Shot: %s shoots with AP(+1) in its arrival round" % member.get_name(), true)
+	logged[member] = true
+	return 1
 
 
 ## Mind Control ("pick one enemy within 18\" in LOS, it takes a morale test; if failed you may move
