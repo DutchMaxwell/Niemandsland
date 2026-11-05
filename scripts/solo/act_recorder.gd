@@ -328,10 +328,11 @@ static func traced(act: int, tag: String, faces: Array, plus: int, bonus_in: flo
 
 
 ## AI-G4 H1a (rules 3.6, EPOCH_73_V36): the units the activation's CAST LEG changed (and, from the activation's start,
-## its own dangerous-terrain test), {uid: {alive, shaken, wounds[, keep, of, reach]}},
+## its own dangerous-terrain test), {uid: {alive, shaken, wounds[, keep, of, reach, grants]}},
 ## as a line of its own joined by `act` (the act line was flushed before the activation ran and is never
 ## rewritten). The replay gates cut the cast and spell rolls and start the core from this state. No-op
 ## below epoch 73, when NML_ACT_DUMP is unset, before the header exists, or when the line cap is hit.
+## `grants` (F-PRE-TOKENS) = the rule names the cast leg added to the unit's spell records (see `granted_names`).
 static func pre(act: int, units: Dictionary) -> void:
 	var f := _dump_stream()
 	if f == null or _count >= _max or not _header_written or rules_epoch < EPOCH_73_V36:
@@ -339,6 +340,18 @@ static func pre(act: int, units: Dictionary) -> void:
 	f.store_line(JSON.stringify({"kind": "pre", "act": act, "units": units}, "", true, true))
 	f.flush()   # a same-process reader (the unit test) must see the line without a close()
 	_count += 1
+
+
+## F-PRE-TOKENS (rules 3.6, EPOCH_73_V36): the rule names a unit's spell records grant ("Bane when Shooting"), in
+## placement order. The cast leg only APPENDS records, so the names it added are the tail past the act-start count; the
+## replay gates put each one back as the ledger buff the table's token is (the core reads it, #2500).
+static func granted_names(records: Array) -> Array:
+	var names: Array = []
+	for rd in records:
+		var rule := str((rd as Dictionary).get("grants_rule", ""))
+		if not rule.is_empty():
+			names.append(rule)
+	return names
 
 
 ## F-PHANTOM (rules 3.6, EPOCH_73_V36): the activation of `act` RAN - the table's executor played the unit. The act line
