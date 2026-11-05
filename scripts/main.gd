@@ -24040,8 +24040,10 @@ func _solo_growth_round_start() -> void:
 		var gu := u as GameUnit
 		if gu == null or gu.get_alive_count() == 0 or SoloController.unit_in_reserve(gu):
 			continue
-		if gu.has_method("is_attached") and gu.is_attached():
+		# AIG-G2 R2 (EPOCH_73_V36): a living joined hero ticks the marker of his OWN rule; below 73 attached units skip.
+		if gu.has_method("is_attached") and gu.is_attached() and AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
 			continue
+		var host_shaken: bool = gu.is_attached() and (gu.get_attached_to() as GameUnit).is_shaken
 		for e in RulesRegistry.unit_rules_of_primitive(gu, "Growth Markers"):
 			var ed := e as Dictionary
 			var sp: Dictionary = ed.get("params", {})
@@ -24054,7 +24056,7 @@ func _solo_growth_round_start() -> void:
 			# v3.5.3: Shaken BLOCKS the round's marker, it no longer removes the ones already earned —
 			# so the skip sits here (per carrier, after the state is read) and says so, instead of
 			# skipping the unit wholesale in silence (rules-must-log: a blocked tick is a rule at work).
-			if gu.is_shaken:
+			if gu.is_shaken or host_shaken:
 				if battle_log != null:
 					_log_rule_event(BattleLog.Category.GENERAL, "%s: %s is Shaken — no marker this round (keeps %d/%d)" % [
 						n, gu.get_name(), cur, cap], _solo_is_ai_unit(gu))
@@ -24069,24 +24071,30 @@ func _solo_growth_round_start() -> void:
 					n, gu.get_name(), cur, cap], _solo_is_ai_unit(gu))
 
 
-## On-kill accrual (Defensive Frenzy: "place one marker when it fully destroys an enemy unit").
+## On-kill accrual (Defensive Frenzy: "place one marker when it fully destroys an enemy unit"). AIG-G2 R2
+## (EPOCH_73_V36): the chain's kill also credits each living joined hero who carries the rule himself.
 func _solo_growth_on_kill(attacker: GameUnit) -> void:
 	if attacker == null:
 		return
-	for e in RulesRegistry.unit_rules_of_primitive(attacker, "Growth Markers"):
-		var ed := e as Dictionary
-		var sp: Dictionary = ed.get("params", {})
-		if not bool(sp.get("on_kill", false)):
-			continue
-		var n := str(ed["name"])
-		var key := "growth_%s" % n.to_snake_case()
-		var cur := int(attacker.unit_properties.get(key, 0))
-		var cap := int(sp.get("max_markers", 2))
-		if cur < cap:
-			attacker.unit_properties[key] = cur + 1
-			if battle_log != null:
-				_log_rule_event(BattleLog.Category.COMBAT, "%s: %s gains a marker for the kill (%d/%d)" % [
-					n, attacker.get_name(), cur + 1, cap], _solo_is_ai_unit(attacker))
+	var members: Array = [attacker]
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		members.append_array(attacker.get_attached_heroes().filter(func(h: Variant) -> bool: return (h as GameUnit).get_alive_count() > 0))
+	for m in members:
+		var who := m as GameUnit
+		for e in RulesRegistry.unit_rules_of_primitive(who, "Growth Markers"):
+			var ed := e as Dictionary
+			var sp: Dictionary = ed.get("params", {})
+			if not bool(sp.get("on_kill", false)):
+				continue
+			var n := str(ed["name"])
+			var key := "growth_%s" % n.to_snake_case()
+			var cur := int(who.unit_properties.get(key, 0))
+			var cap := int(sp.get("max_markers", 2))
+			if cur < cap:
+				who.unit_properties[key] = cur + 1
+				if battle_log != null:
+					_log_rule_event(BattleLog.Category.COMBAT, "%s: %s gains a marker for the kill (%d/%d)" % [
+						n, who.get_name(), cur + 1, cap], _solo_is_ai_unit(who))
 
 
 ## Defense bonuses from growth markers (Defensive Frenzy: +1 Defense per marker), one entry per rule
