@@ -1344,8 +1344,10 @@ pub(crate) fn tray_strafing(
         // Per member (host first, then each alive attached hero): the Strafing
         // profiles in range, survivor-scaled — `profiles_of`'s shape over
         // `strafe_shoot`.
+        // AIG-G2 R3 (`EPOCH_73_V36`): the target is the crossed unit, so the printed range (0 on Drop Bombs) gates nothing.
+        let reach_gate = !rule_on(seams.rules_epoch, EPOCH_73_V36);
         let (keep, attacks): (Vec<usize>, Vec<i64>) = um.strafe_shoot.iter().enumerate()
-            .filter(|(_, p)| (p.range as f64) >= d)
+            .filter(|(_, p)| !reach_gate || (p.range as f64) >= d)
             .map(|(i, p)| (i, effective_attacks(p.attacks, next.alive[b], um.model_count)))
             .unzip();
         if keep.is_empty() { return None; }
@@ -1353,6 +1355,7 @@ pub(crate) fn tray_strafing(
         // the Indirect moved-penalty fold reads it.
         let mut att = ctx_live_vs(ctx_of(um, next, b), statics, next, b, target, false, seams.rules_epoch);
         att.moved_this_round = true;
+        att.strafe_volley = !reach_gate;
         Some((b, keep, attacks, att))
     }).collect();
     let shooters: Vec<crate::dice::Shooter> = parts.iter()
