@@ -86,6 +86,11 @@ fn the_hero_fires_the_moved_volley_when_the_host_died_in_its_dangerous_test_from
     let (next, shot) = host_dies(EPOCH_73_V36);
     assert_eq!(next.alive[0], 0, "the host's one model is dead: {:?}", shot.log);
     assert_eq!(hero_volley_dice(&shot), 2, "the Novice Leader's Carbine fires: {:?} {:?}", shot.rolls, shot.log);
+    assert!(
+        shot.log.iter().any(|l| l.starts_with("Hero:") && l.contains("fires the volley as the unit")),
+        "the applied rule names itself: {:?}",
+        shot.log
+    );
 }
 
 /// CONTROL (passes with and without the change): the same hero fires the same Carbine on a Hold.
