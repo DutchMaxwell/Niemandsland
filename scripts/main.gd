@@ -1344,6 +1344,8 @@ func _solo_ensure_playing_phase() -> void:
 		_solo_log_scout_deployment()
 		opr_army_manager.start_game()
 		_solo_run_redeployment()
+		if not solo_ai_slots.is_empty():
+			_solo_growth_round_one()   # G4R6 R22: round 1's Growth sweep, before the Rapid Ambush beat
 		_solo_begin_rapid_ambush_round_one()
 
 
@@ -2158,7 +2160,7 @@ func _solo_run_both_ai_game(first_opener: int = 1) -> void:
 	_solo_ai_busy = true
 	_solo_game_finished = false
 	var opener: int = first_opener if (first_opener == 1 or first_opener == 2) else 1
-	await _solo_both_ai_rapid_round_one()   # Rapid Ambush may land before round 1's first activation
+	await _solo_both_ai_opening()   # round 1's Growth markers, then Rapid Ambush (which may land before the first activation)
 	while not _solo_game_finished:
 		var round_no: int = opr_army_manager.current_round
 		var _prof_rd_t0 := BattleSim.prof_t0()   # NML-1072: round-transition bookkeeping
@@ -2317,6 +2319,20 @@ func _solo_both_ai_round_start(round_number: int) -> void:
 	for slot in [1, 2]:
 		_solo_set_active_side(slot)
 		await _solo_reinforcement_ai_offers()
+
+
+## G4R6 R22 (EPOCH_73_V36): a per-round Growth rule places its marker at the start of EACH round the unit is on the
+## table, round 1 included, so the opening sweeps once BEFORE any Rapid Ambush arrival (every later round runs growth,
+## then arrivals). Below 73 the first sweep stays round 2's. The existing line names the rule per carrier.
+func _solo_growth_round_one() -> void:
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		_solo_growth_round_start()
+
+
+## The both-AI loop's round-1 opening: the Growth sweep, then the Rapid Ambush arrivals.
+func _solo_both_ai_opening() -> void:
+	_solo_growth_round_one()
+	await _solo_both_ai_rapid_round_one()
 
 
 ## The self-play twin of _solo_begin_rapid_ambush_round_one: with both sides on the AI, round 1's
