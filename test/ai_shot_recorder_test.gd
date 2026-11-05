@@ -7,8 +7,13 @@ extends GdUnitTestSuite
 
 const _DUMP_DIR := "user://shot_recorder_test_tmp"
 
+var _max_before: int
+
 
 func before_test() -> void:
+	# AiShotRecorder._max is static too and close() does not reset it: the line-cap test below sets it to 1, and a
+	# later suite in the same process (g4r3_dup_weapon_bearers_test) then wrote one shot line instead of all of them.
+	_max_before = AiShotRecorder._max
 	DirAccess.make_dir_recursive_absolute(_DUMP_DIR)
 	# AiShotRecorder's env check + open stream are cached STATIC state (by design — the real
 	# game opens the file once per process) — reset it per test so two test_ functions in this
@@ -21,7 +26,9 @@ func before_test() -> void:
 
 func after_test() -> void:
 	AiShotRecorder.close()
+	AiShotRecorder._max = _max_before
 	OS.set_environment("NML_SHOT_DUMP", "")
+	OS.set_environment("NML_SHOT_DUMP_MAX", "")
 	var d := DirAccess.open(_DUMP_DIR)
 	if d != null:
 		for f in d.get_files():
@@ -82,4 +89,3 @@ func test_record_respects_the_line_cap() -> void:
 		"weapon": "W", "target": "B", "alive": 1, "sighted": 1, "bearers": -1,
 		"max_models": 1, "attacks": 1, "reach_in": 12.0, "indirect": false})
 	assert_int(_dump_lines().size()).is_equal(1)
-	OS.set_environment("NML_SHOT_DUMP_MAX", "")
