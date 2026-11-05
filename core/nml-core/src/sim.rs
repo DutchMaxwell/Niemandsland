@@ -5894,7 +5894,8 @@ fn strike_phase(
                     (prof36.is_some() && prof36.unwrap().thrust) || att.thrust_grant,
                     crate::combat::BEST_HIT_TARGET,
                 ),
-                &def, prof36, &mut shot.log, seams.rules_epoch);
+                &def, guarded_folds(&def, charge_from_in, if def.guarded_charge_over_in > 0.0 { def.guarded_charge_over_in } else { crate::combat::LONG_RANGE_IN }, seams.rules_epoch),
+                prof36, &mut shot.log, seams.rules_epoch);
             att.versatile_pick_hit = vh;
             att.versatile_pick_ap = va;
             att.versatile_latched = vl;
@@ -8048,6 +8049,12 @@ struct SplitGroup {
 /// every later volley/charge of the activation reuses it. Rules-must-log: one
 /// line per activation naming the pick. Returns the latched
 /// `(hit_mod, ap_mod)` and whether a pick is latched for this activation.
+/// G4R5 F-VERSATILE-DEF (`EPOCH_73_V36`): the Versatile chooser reads the target's Defense AFTER the over-gate Guarded/Sturdy fold
+/// (the table's `shot_base`), as the dice do. `gate_in` is the fold's own gate for the half asking (a shot's 9", a charge's stamped gate).
+fn guarded_folds(def: &Ctx, over_in: f64, gate_in: f64, rules_epoch: u32) -> bool {
+    rule_on(rules_epoch, EPOCH_73_V36) && def.guarded && over_in > gate_in && !def.sturdy_boost_gates_guarded
+}
+
 #[allow(clippy::too_many_arguments)]
 fn versatile_latch(
     next: &mut State,
@@ -8055,6 +8062,7 @@ fn versatile_latch(
     mi: usize,
     hit_target: i64,
     def: &Ctx,
+    guarded: bool,
     prof: Option<&ShootProfile>,
     log: &mut Vec<String>,
     rules_epoch: u32,
@@ -8069,7 +8077,7 @@ fn versatile_latch(
     };
     let (hit_mod, ap_mod) = crate::combat::versatile_best_mode(
         hit_target,
-        shielded_defense(def.defense, def.shielded_bonus(), def.def_floor()),
+        crate::combat::guarded_defense(shielded_defense(def.defense, def.shielded_bonus(), def.def_floor()), guarded, def.def_floor()),
         ap,
         bane,
     );
@@ -10203,7 +10211,8 @@ fn resolve_with(
                                         let (vh, va, vl) = versatile_latch(&mut next, statics, *mi,
                                             crate::combat::reliable_quality(att.quality,
                                                 prof36.map(|p| p.reliable).unwrap_or(false)),
-                                            &def, prof36, &mut shot.log, seams.rules_epoch);
+                                            &def, guarded_folds(&def, g.mod_d, crate::combat::LONG_RANGE_IN, seams.rules_epoch),
+                                            prof36, &mut shot.log, seams.rules_epoch);
                                         att.versatile_pick_hit = vh;
                                         att.versatile_pick_ap = va;
                                         att.versatile_latched = vl;
