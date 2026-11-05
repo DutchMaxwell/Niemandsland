@@ -10010,12 +10010,17 @@ fn resolve_with(
                                 // G4R3 F-HERO-RANGE (EPOCH_73_V36): range is per MODEL — a joined hero's weapons
                                 // are gated by the hero's own nearest gap (the host's `g.d` below 73 and for the host).
                                 let hero_own_gap = mi != si && rule_on(seams.rules_epoch, EPOCH_73_V36);
+                                // G4R5 F-HERO-REACH (EPOCH_73_V36): the target's models include its attached heroes'
+                                // (`_solo_sighted_count`), so the gap is the nearest model of the target's CHAIN.
                                 let dm = if !hero_own_gap {
                                     g.d
-                                } else if seams.range_by_base_edge || plan.is_some() {
-                                    range_gap_in(&next, &next.positions[mi], mi, g.ti)
                                 } else {
-                                    geom::dist_in(&next.positions[mi], &next.positions[g.ti])
+                                    let chain = std::iter::once(g.ti).chain(next.attached[g.ti].iter().copied().filter(|_| seams.hero_attach));
+                                    chain.map(|t| if seams.range_by_base_edge || plan.is_some() {
+                                        range_gap_in(&next, &next.positions[mi], mi, t)
+                                    } else {
+                                        geom::dist_in(&next.positions[mi], &next.positions[t])
+                                    }).fold(f64::INFINITY, f64::min)
                                 };
                                 if seams.sighting {
                                     sighted_profiles_of(
