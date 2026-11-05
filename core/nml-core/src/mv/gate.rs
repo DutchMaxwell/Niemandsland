@@ -338,13 +338,22 @@ fn resolve_overlaps(s: &mut WorldDisc, obs: &[WorldDisc]) -> bool {
 /// CONTAINER — a base dipping in by any amount counts), and a ruin/container
 /// WALL segment nearer than the base radius plus 2 mm. A model may stand IN a
 /// ruin, never ON its wall.
-pub(crate) fn rest_forbidden(c: [f64; 2], r_in: f64, t: &Terrain) -> bool {
+fn rest_forbidden(c: [f64; 2], r_in: f64, t: &Terrain) -> bool {
     let p: V2 = [c[0] as f32, c[1] as f32];
     if terrain::base_in_terrain(t.from_inch(p, 0.0), r_in * IN2M, t, terrain::is_forbidden_rest) {
         return true;
     }
     let lim = r_in + WALL_REST_CLEARANCE_IN;
     t.walls_in().iter().any(|w| point_seg_distance(p, w[0], w[1]) <= lim)
+}
+
+/// AIG-L6b (`EPOCH_73_V36`): does a base of `r_in` at `c` OVERLAP what it may not rest on, from the GROUND? A base that
+/// only TOUCHES (inside the 2 mm rest clearance, as a model landing a base-radius beyond a container does) is left
+/// where it stands - the base is shrunk by the clearance plus the overlap epsilon - and so is a model standing on the
+/// roof it climbed (heights B2, G4R5 R3: its centre is over the container footprint).
+pub(crate) fn overlaps_block(c: [f64; 2], r_in: f64, t: &Terrain) -> bool {
+    let on_roof = t.type_at(t.from_inch([c[0] as f32, c[1] as f32], 0.0)) == terrain::CONTAINER;
+    !on_roof && rest_forbidden(c, r_in - WALL_REST_CLEARANCE_IN - OVERLAP_EPS_IN, t)
 }
 
 /// AIG-L6b (`EPOCH_73_V36`, table twin `_rest_legal_cut`): walk a route back from its end to the first point a base of

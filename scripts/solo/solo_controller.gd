@@ -8532,7 +8532,11 @@ func _retrace_wall_true(unit: GameUnit, route: Array, start: Vector3, gated: Vec
 		if not _is_ledge_edge(w, ledges) and MovementPlanner.segments_cross(a, b, w[0], w[1]):
 			var back := route.back() as Vector3
 			return [route, Vector3(back.x, gated.y, back.z), false]
-	if route.size() >= 2 and _world_forbidden(gated, radius_m):
+	# Only an OVERLAP on the GROUND is pulled back: a base that merely touches the block (inside the 2 mm rest clearance,
+	# as a model landing a base-radius beyond a container does) stays - the base is shrunk by the clearance + the
+	# overlap epsilon - and so does a model standing on the roof it climbed (Heights B2: the AI settles on the roof).
+	var on_roof: bool = terrain_type_at.is_valid() and int(terrain_type_at.call(gated)) == int(TerrainRules.TerrainType.CONTAINER)
+	if route.size() >= 2 and not on_roof and _world_forbidden(gated, radius_m - WALL_REST_CLEARANCE_M - OVERLAP_EPS_M):
 		var cut := _rest_legal_cut(route, radius_m)
 		if not cut.is_empty():
 			var end := cut.back() as Vector3

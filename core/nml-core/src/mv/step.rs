@@ -983,7 +983,7 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
             // first rest-legal point of its own route instead.
             let r_in = radii_m.get(i).copied().unwrap_or(0.0) / IN2M;
             let end = [planned[i][0] as f64, planned[i][1] as f64];
-            if super::gate::rest_forbidden(end, r_in, t) {
+            if super::gate::overlaps_block(end, r_in, t) {
                 if let Some(cut) = super::gate::rest_legal_cut(leg, r_in, t) {
                     planned[i] = *cut.last().unwrap_or(&planned[i]);
                     trail = cut;
