@@ -1344,8 +1344,7 @@ pub(crate) fn tray_strafing(
         // Per member (host first, then each alive attached hero): the Strafing
         // profiles in range, survivor-scaled — `profiles_of`'s shape over
         // `strafe_shoot`.
-        // AIG-G2 R3 (`EPOCH_73_V36`): the target is the unit the bearer moved through, so the printed range
-        // (0 on Drop Bombs) does not gate this volley.
+        // AIG-G2 R3 (`EPOCH_73_V36`): the target is the crossed unit, so the printed range (0 on Drop Bombs) gates nothing.
         let reach_gate = !rule_on(seams.rules_epoch, EPOCH_73_V36);
         let (keep, attacks): (Vec<usize>, Vec<i64>) = um.strafe_shoot.iter().enumerate()
             .filter(|(_, p)| !reach_gate || (p.range as f64) >= d)

@@ -110,8 +110,7 @@ pub struct Ctx {
     /// G4R3 F-HERO-RANGE (`EPOCH_73_V36`): a joined hero's own nearest gap to the volley target, set at the
     /// volley seam; the resolver's range test reads it in place of the volley distance. `None` = the volley's own.
     pub member_gap_in: Option<f64>,
-    /// AIG-G2 R3 (`EPOCH_73_V36`): this volley is a Crossing Strike move-through attack, aimed at the unit the
-    /// bearer flew over, so the resolver's printed-range gate does not apply (stamped at `tray_strafing`).
+    /// AIG-G2 R3 (`EPOCH_73_V36`): a Crossing Strike move-through volley; the resolver's printed-range gate is off.
     pub strafe_volley: bool,
     /// G4R4 C-GRANTED-RANGE (`EPOCH_73_V36`): the best reach a live spell grant adds to this member's ranged weapons,
     /// stamped at the volley seam (`UnitStatic::reach_grants`); 0 = none.
@@ -6173,8 +6172,7 @@ pub(crate) fn profiles_in_range(weapons: &[Weapon], dist_in: f64) -> Vec<ShootPr
 /// The melee list at the record's epoch — `AiShooting.melee_profiles`
 /// ai_shooting.gd:44-56. MEL-01 (D-ASSAULT, `EPOCH_73_V36`):
 /// a ranged weapon carrying Assault also yields a melee copy, in weapon order,
-/// at range 0 with its printed range kept in `printed_range`. AIG-G2 R3 (same epoch): a Crossing Strike /
-/// Strafing weapon never strikes here, it fires only through the move-through trigger.
+/// at range 0, printed range kept in `printed_range`. AIG-G2 R3 (same epoch): a Crossing Strike weapon never strikes here.
 pub(crate) fn melee_profiles_at(weapons: &[Weapon], rules_epoch: u32) -> Vec<ShootProfile> {
     let assault = rule_on(rules_epoch, crate::acts::EPOCH_73_V36);
     let mut raw: Vec<ShootProfile> = Vec::new();

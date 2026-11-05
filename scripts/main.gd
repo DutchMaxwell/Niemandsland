@@ -4500,9 +4500,12 @@ func _apply_unit_visible(unit: GameUnit, vis: bool) -> void:
 ## NML-002 — Strafing resolution: if the unit (incl. joined heroes) carries a Strafing weapon and
 ## this activation's move passed over an enemy unit's bases, pick ONE crossed enemy (nearest) and
 ## fire ONLY the Strafing profiles at it, through the shared volley resolver. Once per activation.
-func _solo_apply_strafing(unit: GameUnit) -> void:
-	if unit == null or solo_controller == null or solo_controller.last_move_paths.is_empty():
+func _solo_apply_strafing(unit: GameUnit, human_trails: Array = []) -> void:
+	var human_move: bool = not human_trails.is_empty()   # the PLAYER's drop (EPOCH_73_V36): same detection + volley
+	if unit == null or solo_controller == null or (solo_controller.last_move_paths.is_empty() and not human_move):
 		return
+	if human_move and int(unit.unit_properties.get("strafe_round", -1)) == opr_army_manager.current_round:
+		return   # once per activation: the player's bearer already fired this round
 	var members: Array = [unit]
 	if unit.has_method("get_attached_heroes"):
 		members = members + unit.get_attached_heroes()
@@ -4525,11 +4528,11 @@ func _solo_apply_strafing(unit: GameUnit) -> void:
 	if shots.is_empty():
 		return
 	# Trails of THIS activation vs every enemy unit's bases — collect crossed enemies, take the nearest.
-	var trails: Array = []
-	for mp in solo_controller.last_move_paths:
+	var trails: Array = human_trails.duplicate()
+	for mp in ([] if human_move else solo_controller.last_move_paths):
 		trails.append((mp as Dictionary).get("path", []))
 	var crossed: Array = []
-	for e in opr_army_manager.get_game_units_for_player(solo_controller.human_slot):
+	for e in opr_army_manager.get_game_units_for_player(solo_controller.ai_slot if human_move else solo_controller.human_slot):
 		var eu := e as GameUnit
 		if eu == null or eu.get_alive_count() <= 0 or SoloController.unit_in_reserve(eu):
 			continue
@@ -4543,12 +4546,38 @@ func _solo_apply_strafing(unit: GameUnit) -> void:
 		return MoveIntent.distance_inches(solo_controller.unit_centre(unit), solo_controller.unit_centre(a)) \
 			< MoveIntent.distance_inches(solo_controller.unit_centre(unit), solo_controller.unit_centre(b)))
 	var target := crossed[0] as GameUnit
+	if human_move:
+		unit.unit_properties["strafe_round"] = opr_army_manager.current_round
 	if battle_log != null:
 		var rule_name := AiShooting.strafing_rule_name(shots.map(func(s): return s["profile"]))
 		battle_log.log_event(BattleLog.Category.COMBAT,
 			"%s: %s passes over %s — attacks it as if shooting (once per activation)" % [
 			rule_name, unit.get_name(), target.get_name()], true)
 	await _solo_resolve_ai_volley(unit, target, shots, true)
+
+
+## AIG-G2 R3 (EPOCH_73_V36): the same move-through trigger after the PLAYER's own drop in a solo game — each
+## unit's executed paths (a joined hero counts with its host) go through `_solo_apply_strafing` above.
+func _solo_human_strafing(moves: Array) -> void:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 or solo_controller == null or solo_ai_slots.is_empty():
+		return
+	var legs := {}   # unit -> its models' executed paths, as Vector3 legs
+	for mv in moves:
+		var unit := UnitUtils.get_game_unit((mv as Dictionary).get("node") as Node3D)
+		if unit != null and unit.is_attached() and unit.get_attached_to() is GameUnit:
+			unit = unit.get_attached_to()
+		if unit == null or _solo_is_ai_unit(unit) or float((mv as Dictionary).get("inches", 0.0)) <= 0.1:
+			continue
+		var leg: Array = []
+		for p in (mv as Dictionary).get("path", PackedVector2Array()):
+			leg.append(Vector3((p as Vector2).x, 0.0, (p as Vector2).y))
+		legs[unit] = legs.get(unit, []) + [leg]
+	for unit in legs:
+		while _solo_tray_busy:
+			if not is_inside_tree():
+				return
+			await get_tree().process_frame
+		await _solo_apply_strafing(unit as GameUnit, legs[unit])
 
 
 func _run_ai_shooting(report: Dictionary) -> void:
@@ -22000,6 +22029,7 @@ func _on_units_dropped(moves: Array) -> void:
 		if unit != null:
 			unit.unit_properties["moved_round"] = opr_army_manager.current_round
 			await _resolve_skirmish_drop(mv, unit)
+	await _solo_human_strafing(moves)
 
 
 ## Human drops use the same surface truth, tray, casualties and activation flow as combat.
