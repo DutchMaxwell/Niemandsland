@@ -835,6 +835,7 @@ pub fn resolve_volley_leg(
     // is stamped out of `Ctx::unpredictable_shooting` (unit.rs).
     let mut upr_ap = 0i64;
     let mut upr_hit = 0i64;
+    let mut hero_upr: Vec<(usize, i64, i64)> = Vec::new(); // (shooter index, ap, hit): a joined hero's own die
     if shooters.first().is_some_and(|sh| sh.att.unpredictable_shooting) {
         let att0 = shooters[0].att;
         let faces = tray.roll(1);
@@ -850,6 +851,15 @@ pub fn resolve_volley_leg(
             faces,
             owner: shooters[0].owner.into(),
         });
+    } else if shooters.first().is_some_and(|sh| sh.att.v36_rules) {
+        // AIG-G2 R5 (EPOCH_73_V36): the host rolled none, so each joined hero who carries the rule himself rolls ONE
+        // die for his OWN profiles, before any weapon fires. Table twin: `_solo_hero_unpredictable`.
+        for (i, sh) in shooters.iter().enumerate().skip(1).filter(|(_, sh)| sh.att.unpredictable_shooting) {
+            let faces = tray.roll(1);
+            let low = (faces[0] as i64) <= sh.att.unpredictable_low_roll_max;
+            hero_upr.push((i, if low { sh.att.unpredictable_ap_bonus } else { 0 }, if low { 0 } else { sh.att.unpredictable_hit_bonus }));
+            out.rolls.push(Roll { kind: "attack", count: 1, target: BEST_HIT_TARGET, faces, owner: sh.owner.into() });
+        }
     }
     // `dist_in` gates RANGE VALIDITY only (`reach_gate`, B11's edge/nearest-
     // model gap). `mod_dist_in` is the separate over-9" modifier distance:
@@ -941,6 +951,11 @@ pub fn resolve_volley_leg(
     for (sh, k, pi) in shots {
         let att = sh.att;
         let p = &sh.profiles[pi];
+        // The member's own die when a joined hero rolled one (AIG-G2 R5), else the unit's (the host's) die.
+        let (upr_ap, upr_hit) = hero_upr
+            .iter()
+            .find(|h| std::ptr::eq(&shooters[h.0], sh))
+            .map_or((upr_ap, upr_hit), |h| (h.1, h.2));
         let reach_gate = att.member_gap_in.map_or(reach_gate, f64::ceil);
         // Rules 3.6: the shooter's own range grant rides the PRINTED range, the target-side shrink
         // applies to the sum (main.gd: `base_range + range_bonus`, then `effective_shoot_reach_in`).
