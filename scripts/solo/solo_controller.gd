@@ -6379,15 +6379,23 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 	if not _is_regiment(unit):
 		# Retrace each animation trail to its GATED endpoint so the glide ends exactly where the state now is.
 		var wall_kept := 0
+		var container_cut := 0
 		for i in range(mini(trails.size(), new_positions.size())):
-			var kept := _retrace_wall_true(unit, trails[i] as Array, positions[i] as Vector3, new_positions[i] as Vector3)
+			var kept := _retrace_wall_true(unit, trails[i] as Array, positions[i] as Vector3, new_positions[i] as Vector3,
+				model_base_radius_m(models[i] as ModelInstance))
 			trails[i] = kept[0]
 			if (kept[1] as Vector3) != (new_positions[i] as Vector3):
 				new_positions[i] = kept[1]
-				wall_kept += 1
+				if bool(kept[2]):
+					container_cut += 1
+				else:
+					wall_kept += 1
 		if wall_kept > 0:   # rules-must-log (AIG-L6): the kept-back models say which book rule held them
 			board_clamp_notes.append("%s: %d model%s stay on their own side of a wall (Charge: no moving through walls; Unit Coherency waits)"
 				% [unit.get_name(), wall_kept, "" if wall_kept == 1 else "s"])
+		if container_cut > 0:   # rules-must-log (AIG-L6b): the pulled-back models say which book rule held them
+			board_clamp_notes.append("%s: %d model%s stop short of a container (Terrain height: a base may not end its move on a container; Unit Coherency waits)"
+				% [unit.get_name(), container_cut, "" if container_cut == 1 else "s"])
 	_apply_model_positions(models, new_positions)
 	# Publish the per-model routes + base radii for the presentation layer (glide + swept corridor +
 	# distance label) — the STATE is already final (applied + broadcast above); the replay is local.
@@ -8507,20 +8515,48 @@ func _retrace_to(route: Array, start: Vector3, gated: Vector3) -> Array:
 ## AIG-L6 (EPOCH_73_V36): `_retrace_to` closes the trimmed route with ONE straight leg to the gate-corrected end,
 ## and when the gate moved that end off the route (a charge's coherency pull) the leg can run through a wall the
 ## route had bent around. The model then keeps its route-true endpoint, the wall clamp's own discipline ("route
-## truth wins"); a ledge the unit may climb (<= 3") is no wall. Returns [trail, end].
-func _retrace_wall_true(unit: GameUnit, route: Array, start: Vector3, gated: Vector3) -> Array:
+## truth wins"); a ledge the unit may climb (<= 3") is no wall.
+## AIG-L6b (EPOCH_73_V36): a model never ends with its base where it may not rest (a container, its wall). The gate's
+## push-out is reverted by `_clamp_gate_walls` when it starts inside the wall clearance, so a climber that came down a
+## container edge stayed ON it; it now stops at the first rest-legal point of its own route instead.
+## Returns [trail, end, pulled_back_from_a_container].
+func _retrace_wall_true(unit: GameUnit, route: Array, start: Vector3, gated: Vector3, radius_m: float) -> Array:
 	var trail := _retrace_to(route, start, gated)
 	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 or route.is_empty() or trail.size() < 2 \
 			or unit.has_special_rule("Flying"):
-		return [trail, gated]
+		return [trail, gated, false]
 	var ledges := _ledges_world(unit).filter(func(l): return float(l["dy_in"]) <= MovementPlanner.LEDGE_CLIMB_MAX_IN)
 	var a := Vector2((trail[trail.size() - 2] as Vector3).x, (trail[trail.size() - 2] as Vector3).z)
 	var b := Vector2((trail[trail.size() - 1] as Vector3).x, (trail[trail.size() - 1] as Vector3).z)
 	for w in _rest_walls():
 		if not _is_ledge_edge(w, ledges) and MovementPlanner.segments_cross(a, b, w[0], w[1]):
 			var back := route.back() as Vector3
-			return [route, Vector3(back.x, gated.y, back.z)]
-	return [trail, gated]
+			return [route, Vector3(back.x, gated.y, back.z), false]
+	if route.size() >= 2 and _world_forbidden(gated, radius_m):
+		var cut := _rest_legal_cut(route, radius_m)
+		if not cut.is_empty():
+			var end := cut.back() as Vector3
+			return [cut, Vector3(end.x, gated.y, end.z), true]
+	return [trail, gated, false]
+
+
+## AIG-L6b (EPOCH_73_V36): walk a route back from its end to the first point a base of `radius_m` may rest on - 1 cm
+## steps (the projection's own ring), then four bisections that keep the legal side (~0.6 mm). The route cut there, or
+## [] when no point of it is rest-legal. Core twin: `gate::rest_legal_cut`.
+func _rest_legal_cut(route: Array, radius_m: float) -> Array:
+	var hi := MovementPlanner.polyline_length(route)   # arc length of a spot known to be forbidden
+	while hi > 0.0:
+		var lo := maxf(0.0, hi - TERRAIN_OUT_STEP_M)
+		if not _world_forbidden(MovementPlanner.trim_polyline(route, lo).back() as Vector3, radius_m):
+			for _k in range(4):
+				var mid := (lo + hi) * 0.5
+				if _world_forbidden(MovementPlanner.trim_polyline(route, mid).back() as Vector3, radius_m):
+					hi = mid
+				else:
+					lo = mid
+			return MovementPlanner.trim_polyline(route, lo)
+		hi = lo
+	return []
 
 
 ## Straight one-leg trails for a rigid slide (start → end per model).
@@ -10968,7 +11004,8 @@ func _charge_path_probe_impl(unit: GameUnit, target: GameUnit, band_in: float) -
 	if not _is_regiment(unit):
 		finalized = _finalize_placement(unit, models, positions, planned, true, target)
 		for i in range(mini(trails.size(), finalized.size())):
-			var kept := _retrace_wall_true(unit, trails[i] as Array, positions[i] as Vector3, finalized[i] as Vector3)
+			var kept := _retrace_wall_true(unit, trails[i] as Array, positions[i] as Vector3, finalized[i] as Vector3,
+				model_base_radius_m(models[i] as ModelInstance))
 			trails[i] = kept[0]
 			finalized[i] = kept[1]
 

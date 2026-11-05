@@ -338,13 +338,36 @@ fn resolve_overlaps(s: &mut WorldDisc, obs: &[WorldDisc]) -> bool {
 /// CONTAINER — a base dipping in by any amount counts), and a ruin/container
 /// WALL segment nearer than the base radius plus 2 mm. A model may stand IN a
 /// ruin, never ON its wall.
-fn rest_forbidden(c: [f64; 2], r_in: f64, t: &Terrain) -> bool {
+pub(crate) fn rest_forbidden(c: [f64; 2], r_in: f64, t: &Terrain) -> bool {
     let p: V2 = [c[0] as f32, c[1] as f32];
     if terrain::base_in_terrain(t.from_inch(p, 0.0), r_in * IN2M, t, terrain::is_forbidden_rest) {
         return true;
     }
     let lim = r_in + WALL_REST_CLEARANCE_IN;
     t.walls_in().iter().any(|w| point_seg_distance(p, w[0], w[1]) <= lim)
+}
+
+/// AIG-L6b (`EPOCH_73_V36`, table twin `_rest_legal_cut`): walk a route back from its end to the first point a base of
+/// `r_in` may rest on - 1 cm steps (the projection's own ring), then four bisections that keep the legal side
+/// (~0.6 mm). The route cut there, or `None` when no point of it is rest-legal.
+pub(crate) fn rest_legal_cut(route: &[V2], r_in: f64, t: &Terrain) -> Option<Vec<V2>> {
+    let forbidden = |s: f64| {
+        let p = super::geom2::trim_polyline(route, s).last().copied().unwrap_or(route[0]);
+        rest_forbidden([p[0] as f64, p[1] as f64], r_in, t)
+    };
+    let mut hi = super::geom2::polyline_length(route); // arc length of a spot known to be forbidden
+    while hi > 0.0 {
+        let mut lo = (hi - TERRAIN_OUT_STEP_IN).max(0.0);
+        if !forbidden(lo) {
+            for _ in 0..4 {
+                let mid = (lo + hi) * 0.5;
+                if forbidden(mid) { hi = mid } else { lo = mid }
+            }
+            return Some(super::geom2::trim_polyline(route, lo));
+        }
+        hi = lo;
+    }
+    None
 }
 
 /// `SoloController._project_out_forbidden_world` :6807 — the shortest hop to a
