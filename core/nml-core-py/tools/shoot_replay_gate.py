@@ -266,7 +266,7 @@ def extra_die_hosts(rolls: list[dict], plain: dict, profiles: dict) -> dict[int,
     for i in range(1, len(rolls)):
         prev, cur = rolls[i - 1], rolls[i]
         sixes, fives = prev["faces"].count(6), prev["faces"].count(5)
-        if (i - 1 in out or not sixes or cur["kind"] != "attack" or prev["kind"] != "attack" or cur["owner"] != prev["owner"]
+        if (i - 1 in out or not (sixes or fives) or cur["kind"] != "attack" or prev["kind"] != "attack" or cur["owner"] != prev["owner"]
                 or cur["target"] != prev["target"] or cur["count"] not in (sixes, sixes + fives)):
             continue
         for key, u in units.items():
@@ -376,6 +376,18 @@ def land_at_table(plain: dict, action: dict, name: str, move: dict | None, later
                 mapped += 1
         out["units"][key] = dict(u, positions=pts)
     return out if mapped else None
+
+
+def teleport_to(start: dict, later: dict | None):
+    """(x, z) the unit's Ethereal reposition ended at in THIS act: the next act's ledger `teleport.to`, unless it is the start ledger's (stale)."""
+    to, was = [((u or {}).get("ledger") or {}).get("teleport") or {} for u in (later, start)]
+    return tuple(float(c) for c in to["to"].strip("()").split(",")) if to.get("used") and to.get("to") != was.get("to") else None
+
+
+def shift(plain: dict, keys: list, dx: float, dz: float) -> dict:
+    """`plain` with every model of the named units moved by (dx, dz); the height stays."""
+    units = dict(plain["units"], **{k: dict(plain["units"][k], positions=[[p[0] + dx, p[1], p[2] + dz] for p in plain["units"][k]["positions"]]) for k in keys})
+    return dict(plain, units=units)
 
 
 def centroid(units: dict, key: str):
@@ -731,12 +743,18 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
             reach = any(r.get("reach") for r in (pres.get(k) or {}).values())
             landed = None
             if land and action["kind"] == 1:   # AI-G4 F-LAND (A1): the shooter chain stands where the table's executed Advance ended
-                if any(r.get("leg") == "dangerous" for r in rolls_cut):
+                later = lines[pos + 1]["state"]["units"] if pos + 1 < len(lines) else {}
+                tele = teleport_to(plain["units"][action["unit"]], later.get(action["unit"]))   # an Ethereal reposition after the Advance
+                if any(r.get("leg") == "dangerous" for r in rolls_cut) and not tele:
                     tally["land_skip"] += 1   # the table's own dangerous test is among the rolls to match: the core's route rolls it
                 else:
-                    landed = land_at_table(plain, action, head["profiles"].get(action["unit"], {}).get("name"), moves.get(k),
-                                           lines[pos + 1]["state"]["units"] if pos + 1 < len(lines) else None)
+                    landed = land_at_table(plain, action, head["profiles"].get(action["unit"], {}).get("name"), moves.get(k), later)
                     tally["land_none"] += landed is None
+                    if landed is not None and tele:   # the reposition follows the test and no volley does: the test is cut, its dice burned
+                        here = centroid(landed["units"], action["unit"])
+                        landed = shift(landed, [action["unit"], *(plain["units"][action["unit"]].get("attached") or [])], tele[0] - here[0], tele[1] - here[2])
+                        n = next((i for i, r in enumerate(rolls_cut) if r.get("leg") != "dangerous"), len(rolls_cut))
+                        pre_burn, rolls_cut, dang_off = pre_burn + sum(max(1, int(r["count"])) for r in rolls_cut[:n]), rolls_cut[n:], True
             if landed is not None:
                 tally["land"], tally["land_far"] = tally["land"] + 1, tally["land_far"] + (landing_gap(core, core.state_of(plain), action, landed) > 0.5)
                 # in place: the verb stays (a Hold fires Indirect unseen) and the rigid Advance (movement off) moves nothing to its own centre
