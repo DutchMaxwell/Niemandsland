@@ -3320,25 +3320,41 @@ func _living_chain_weapons(unit: GameUnit) -> Array:
 		members = members + unit.get_attached_heroes()
 	var out: Array = []
 	for mem in members:
-		var gm := mem as GameUnit
-		if gm == null or gm.get_alive_count() <= 0:
+		out.append_array(_living_member_weapons(mem as GameUnit))
+	return out
+
+
+## One chain member's weapons whose bearers still breathe (the per-member half of `_living_chain_weapons`).
+func _living_member_weapons(gm: GameUnit) -> Array:
+	var out: Array = []
+	if gm == null or gm.get_alive_count() <= 0:
+		return out
+	for w in _unit_weapons(gm):
+		var ow := w as OPRApiClient.OPRWeapon
+		if ow == null:
 			continue
-		for w in _unit_weapons(gm):
-			var ow := w as OPRApiClient.OPRWeapon
-			if ow == null:
-				continue
-			if alive_bearers_of(gm, ow.name) == 0:
-				continue
-			out.append(ow)
+		if alive_bearers_of(gm, ow.name) == 0:
+			continue
+		out.append(ow)
 	return out
 
 
 ## G4R2 F-T-SLACK (EPOCH_73_V36): the reach the shooting gates read — the longest gun of the LIVING chain (host
 ## plus joined heroes), the list the volley itself fires (main._solo_all_weapons). Below 73 the host's own list.
+## AIG-G2 R4 (EPOCH_73_V36): each member's gun carries that MEMBER's own range bonus (the pairing the volley fires),
+## so a joined hero's own Increased Shooting Range lifts the gate for his gun and never for the host's.
 func _gate_reach_in(unit: GameUnit) -> int:
-	var weapons: Array = _unit_weapons(unit) if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 \
-		else _living_chain_weapons(unit)
-	return AiArchetype.max_range_inches(weapons) + shooting_range_bonus(unit)
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return AiArchetype.max_range_inches(_unit_weapons(unit)) + shooting_range_bonus(unit)
+	var best := 0
+	var members: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		members = members + unit.get_attached_heroes()
+	for mem in members:
+		var own_in := AiArchetype.max_range_inches(_living_member_weapons(mem as GameUnit))
+		if own_in > 0:
+			best = maxi(best, own_in + shooting_range_bonus(mem as GameUnit))
+	return best
 
 
 ## Rules-must-log (Hero): when ONLY a joined hero's gun puts `target` in reach — the unit's own guns stop short of
