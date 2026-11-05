@@ -458,7 +458,13 @@ def patch_pre(plain: dict, units: dict, board=None) -> dict:
 def with_reach(profiles: dict, pre: dict | None) -> dict:
     """C-GRANTED-RANGE, pre half (epoch 73+): `profiles` with the reach a cast leg GRANTED (the record's `reach`, inches)
     added to the printed range of every ranged weapon of that unit - the core reads `range + reach_bonus_in` everywhere,
-    so the sum is the same. A record without `reach` (an older recording) changes nothing."""
+    so the sum is the same. A record without `reach` (an older recording) changes nothing.
+    F-REACH-ONCE: `reach` and `grants` are two views of the SAME grant; `patch_pre` already stamps `grants` as the ledger buff the
+    core reads the reach off itself (the joined hero through the chain read), so an act whose pre block carries `grants` on any
+    record gets the printed profiles back (the stand-in would add the +8" a second time); only a recording from before the
+    `grants` key (#2513) still needs it."""
+    if any(rec.get("grants") for rec in (pre or {}).values()):
+        return profiles
     out = dict(profiles)
     for uid, rec in (pre or {}).items():
         r = int(rec.get("reach", 0))
