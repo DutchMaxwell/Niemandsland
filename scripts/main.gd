@@ -5096,15 +5096,16 @@ func _solo_resolve_ai_casts(report: Dictionary) -> void:
 	_solo_refresh_caster_markers()
 
 
-## AI-G4 H1a: {unit id: [alive models, Shaken, the living ModelInstances, their wounds, shooting-range bonus]} of every
-## unit on the table (the cast leg's before/after diff; the third slot is F-PRE-SURV's list of who stood at the start).
+## AI-G4 H1a: {unit id: [alive models, Shaken, the living ModelInstances, their wounds, shooting-range bonus, granted rule
+## names]} of every unit on the table (the cast leg's before/after diff; the third slot is F-PRE-SURV's list of who stood
+## at the start, the last is F-PRE-TOKENS' `grants_rule` list of the unit's live spell records).
 func _solo_unit_flags() -> Dictionary:
 	var flags := {}
 	for uid in opr_army_manager.game_units:
 		var u := opr_army_manager.game_units[uid] as GameUnit
 		var live: Array = u.get_alive_models()
 		flags[uid] = [u.get_alive_count(), u.is_shaken, live, live.map(func(m: Variant) -> int: return (m as ModelInstance).wounds_current),
-			SoloController.shooting_range_bonus(u)]
+			SoloController.shooting_range_bonus(u), AiActRecorder.granted_names(_solo_spell_mods.get(u.get_instance_id(), []))]
 	return flags
 
 
@@ -5117,12 +5118,15 @@ func _solo_record_pre_leg(before: Dictionary) -> void:
 	var after := _solo_unit_flags()
 	for uid in after:
 		var was: Array = before.get(uid, [])
-		if was.is_empty() or after[uid][0] != was[0] or after[uid][1] != was[1] or after[uid][3] != was[3] or after[uid][4] != was[4]:
+		if was.is_empty() or after[uid][0] != was[0] or after[uid][1] != was[1] or after[uid][3] != was[3] or after[uid][4] != was[4] \
+				or after[uid][5] != was[5]:
 			# `wounds` = the survivors' wounds; `reach` (C-GRANTED-RANGE) = the spell-granted shooting reach, inches
 			changed[uid] = {"alive": after[uid][0], "shaken": after[uid][1], "wounds": after[uid][3]}
 			if not was.is_empty():
 				if after[uid][4] != was[4]:
 					changed[uid]["reach"] = after[uid][4] - was[4]
+				if (after[uid][5] as Array).size() > (was[5] as Array).size():   # F-PRE-TOKENS: the rules the leg granted (the act line's ledger holds the rest)
+					changed[uid]["grants"] = (after[uid][5] as Array).slice((was[5] as Array).size())
 				# F-PRE-SURV: WHICH models of the start list still stand (`of` = its length), not only how many
 				var keep: Array = []
 				for i in (was[2] as Array).size():
@@ -9836,6 +9840,11 @@ func _solo_regen_target(target: GameUnit, from_spell: bool = false) -> int:
 ## reads the charge/shoot gates use); -1.0 = the distance is unknown and the old reading stands.
 func _solo_regen_pick(target: GameUnit, from_spell: bool = false, shot_in: float = -1.0,
 		charged_in: float = -1.0) -> Dictionary:
+	# G4R5 R9 (EPOCH_73_V36, lead ruling D1): a chain whose host models are all dead IS its living hero now - its own
+	# ignore-wounds rules (Protection Feat) count, and "most models carry it" is decided over the living chain models.
+	var holder: GameUnit = _solo_defense_holder(target)
+	if holder != null:
+		target = holder
 	var best := 0   # the most generous (lowest) ignore target the unit fields; 0 = none
 	var best_name := ""
 	if _solo_has_regeneration(target):

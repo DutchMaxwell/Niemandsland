@@ -9798,13 +9798,23 @@ fn resolve_with(
             // a record below epoch 6 never waives anything here.
             let mark_indirect = rule_on(sc.rules_epoch, EPOCH_6_TABLE_RULES)
                 && mods::granted_vs(&next, ti, "Indirect");
+            // G4R5 F-HOSTDEAD-SHOOT (`EPOCH_73_V36`): a MOVED volley probes sight and range from the first living chain member
+            // once the host's own Dangerous test took its last model (`lone_hero_of`); the host's key finds no model to probe.
+            let probe = if moved { lone_hero_of(&next, si, seams).unwrap_or(si) } else { si };
+            // G4R5 F-MOVED-SIGHT-CHAIN (`EPOCH_73_V36`): the table decides sight per member (`_solo_sighted_count`), so a
+            // living but blind host does not silence a joined hero that sees the target: the first seeing chain member.
+            let mut blind_host_hero: Option<usize> = None;
             let sighted = if moved {
                 (match cover {
                     // SHO-PAR-F3 (EPOCH_73_V36): the table's own per-model 3D sight (`_solo_has_los`), not the
                     // coarse grid line between the two centres, which refused a shot the outer models see past
                     // a forest. The EV half runs the same gate, so the search now prices that shot too.
                     Cover::Board(t) if t.is_valid() && rule_on(sc.rules_epoch, EPOCH_73_V36) => {
-                        sight::unit_sees(&next, &board_zones(t, seams.shelf_sight, seams.rules_epoch), si, ti, sc.rules_epoch)
+                        let zones = board_zones(t, seams.shelf_sight, seams.rules_epoch);
+                        let chain = std::iter::once(si).chain(next.attached[si].iter().copied().filter(|_| seams.hero_attach));
+                        let seen_by = chain.filter(|&m| next.alive[m] > 0).find(|&m| sight::unit_sees(&next, &zones, m, ti, sc.rules_epoch));
+                        blind_host_hero = seen_by.filter(|&m| m != si && next.alive[si] > 0);
+                        seen_by.is_some()
                     }
                     Cover::Board(t) if t.is_valid() => !t.los_blocked_at(
                         geom::centre(&next.positions[si]),
@@ -9822,9 +9832,9 @@ fn resolve_with(
             }
             if plan.is_some() || sighted {
                 let d = if seams.range_by_base_edge {
-                    range_gap_in(&next, &next.positions[si], si, ti)
+                    range_gap_in(&next, &next.positions[probe], probe, ti)
                 } else {
-                    geom::dist_in(&next.positions[si], &next.positions[ti])
+                    geom::dist_in(&next.positions[probe], &next.positions[ti])
                 };
                 // The table's epoch-66 nearest-base modifier measure remains
                 // separate from this pooled range-validity distance.
@@ -9908,6 +9918,14 @@ fn resolve_with(
                                 "Quick Shot: {} shoots after its Rush action",
                                 statics[pi_s].name
                             ));
+                        }
+                        if probe != si {
+                            shot.log.push(format!("Hero: {} has no models left - {} fires the volley as the unit",
+                                statics[pi_s].name, statics[next.roster.profile[probe]].name));
+                        }
+                        if let Some(h) = blind_host_hero {
+                            shot.log.push(format!("Hero: {} has no model that sees {} - {} sees it and fires the volley as the unit",
+                                statics[pi_s].name, statics[next.roster.profile[ti]].name, statics[next.roster.profile[h]].name));
                         }
                         for m in split_marks {
                             shot.mark(m);
@@ -10010,12 +10028,17 @@ fn resolve_with(
                                 // G4R3 F-HERO-RANGE (EPOCH_73_V36): range is per MODEL — a joined hero's weapons
                                 // are gated by the hero's own nearest gap (the host's `g.d` below 73 and for the host).
                                 let hero_own_gap = mi != si && rule_on(seams.rules_epoch, EPOCH_73_V36);
+                                // G4R5 F-HERO-REACH (EPOCH_73_V36): the target's models include its attached heroes'
+                                // (`_solo_sighted_count`), so the gap is the nearest model of the target's CHAIN.
                                 let dm = if !hero_own_gap {
                                     g.d
-                                } else if seams.range_by_base_edge || plan.is_some() {
-                                    range_gap_in(&next, &next.positions[mi], mi, g.ti)
                                 } else {
-                                    geom::dist_in(&next.positions[mi], &next.positions[g.ti])
+                                    let chain = std::iter::once(g.ti).chain(next.attached[g.ti].iter().copied().filter(|_| seams.hero_attach));
+                                    chain.map(|t| if seams.range_by_base_edge || plan.is_some() {
+                                        range_gap_in(&next, &next.positions[mi], mi, t)
+                                    } else {
+                                        geom::dist_in(&next.positions[mi], &next.positions[t])
+                                    }).fold(f64::INFINITY, f64::min)
                                 };
                                 if seams.sighting {
                                     sighted_profiles_of(
