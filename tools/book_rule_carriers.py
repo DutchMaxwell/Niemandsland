@@ -3,16 +3,14 @@
 
     python3 tools/book_rule_carriers.py <books_dir> [--out test/fixtures/book_rule_carriers_v36.json] [--snapshot LABEL]
 
-`<books_dir>` is in the NML_ARMY_BOOKS_DIR format: `<books_dir>/<system>/<armyId>.json` for gf and aof (a
-`<slug>__<armyId>.json` name works too) plus `<books_dir>/<system>/_common.json`, the core-rulebook rule list, whose names
-are excluded. The slug comes from the public `assets/solo/army_books_index.json`. Output: per book, the sorted distinct rule
-names its units carry. Names only: no rule text, no unit names (OPR content stays out of the repo, THIRD_PARTY.md).
+`<books_dir>` is in the NML_ARMY_BOOKS_DIR format: `<system>/<armyId>.json` (a `<slug>__<armyId>.json` name works too) plus
+`<system>/_common.json`, the core-rulebook rule list, whose names are excluded. Slugs come from the public
+`assets/solo/army_books_index.json`. Output: per book, the distinct rule names its units carry. Names only (THIRD_PARTY.md).
 """
 import argparse
 import glob
 import json
 import os
-import sys
 
 SYSTEMS = ("aof", "gf")
 INDEX_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "solo", "army_books_index.json")
@@ -59,7 +57,7 @@ def build(books_dir: str, snapshot: str) -> dict:
                 continue   # _common.json, or an empty shell (no units): nothing carried, and the index does not list it
             entry = index.get(system, {}).get(stem.rsplit("__", 1)[-1])
             if entry is None:
-                sys.exit("%s: armyId is not in assets/solo/army_books_index.json" % path)
+                raise SystemExit("%s: armyId is not in assets/solo/army_books_index.json" % path)
             out[system][entry["faction_folder"]] = sorted(book_rule_names(book) - core)
     return out
 
@@ -80,4 +78,3 @@ if __name__ == "__main__":
     parser.add_argument("--snapshot", default="")
     args = parser.parse_args()
     write(build(args.books_dir, args.snapshot), args.out)
-    print("wrote", args.out)
