@@ -2819,6 +2819,17 @@
      "requires_tough": true
     }
    },
+   "Piercing Spotter": {
+    "primitive": "Piercing Tag",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "rating": "X",
+     "range_in": 30,
+     "needs_los": true,
+     "place_roll": 4
+    }
+   },
    "Precise": {
     "primitive": "Precise",
     "rated": false,
@@ -5125,6 +5136,18 @@
     "book_version": "3.5.3",
     "params": {
      "grants": "Shred in Melee"
+    }
+   },
+   "Slayer": {
+    "primitive": "Slayer",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "ap_bonus": 2,
+     "condition": "vs_tough_ge",
+     "threshold": 3,
+     "gate": "ranged_over_or_charge",
+     "over_in": 9.0
     }
    },
    "Spell Conduit": {
@@ -8288,6 +8311,19 @@
      "requires_tough": true
     }
    },
+   "Precision Spotter": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "bonus": "per_removed_marker",
+     "markers": 1,
+     "range_in": 30,
+     "target": "enemy",
+     "needs_los": true,
+     "place_roll": 4
+    }
+   },
    "Precision Target": {
     "primitive": "Utility Buff",
     "rated": true,
@@ -8820,6 +8856,17 @@
      "heal_d3": true,
      "range_in": 3.0,
      "requires_tough": true
+    }
+   },
+   "Piercing Spotter": {
+    "primitive": "Piercing Tag",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "rating": "X",
+     "range_in": 30,
+     "needs_los": true,
+     "place_roll": 4
     }
    },
    "Precision Hunter": {
