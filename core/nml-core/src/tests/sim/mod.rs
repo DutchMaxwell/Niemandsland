@@ -1840,6 +1840,7 @@ mod v36_ux_17;
 mod v36_ux_19;
 mod v36_ux_21;
 mod v36_g4r4_x2a_dangerous_spill;
+mod v36_g4r5_dang_tail;
 mod v36_g4r5_hero_reach;
 mod v36_g4r5_hostdead_shoot;
 mod v36_g4r5_primal_grant;
