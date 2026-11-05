@@ -93,7 +93,10 @@ func test_the_regroup_retarget_sees_a_lone_hero_at_73(timeout := 60000) -> void:
 	assert_str(text).contains("Regroup: Gunners starts its activation out of coherency")
 	assert_str(text) \
 		.override_failure_message("the Regroup fired nothing at the lone hero (log: %s)" % text.strip_edges()) \
-		.contains("Gunners: Shooting")
+		.contains("Gunners fires at Cultists")
+	assert_str(text) \
+		.override_failure_message("rules-must-log: the shot names the Hero rule (log: %s)" % text.strip_edges()) \
+		.contains("Hero: Champion is the unit now")
 	await E2EBoot.settle(get_tree())
 
 
@@ -105,5 +108,5 @@ func test_the_epoch_72_control_keeps_the_blind_retarget(timeout := 60000) -> voi
 	assert_object(_main.solo_controller.best_shoot_target_now(gunners, false)).is_null()
 	var done: GameUnit = await _main._solo_activate_one_ai()
 	assert_object(done).is_equal(gunners)
-	assert_str(_log_text()).not_contains("Gunners: Shooting")
+	assert_str(_log_text()).not_contains("Gunners fires at")
 	await E2EBoot.settle(get_tree())
