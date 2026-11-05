@@ -55,9 +55,10 @@ func _import_ratmen_getrie_with_grenadiers(base_rule: bool) -> Dictionary:
 		if str(u.get("name", "")) == "Getrie Veikasip":
 			u["joinToUnit"] = grenadiers_sel
 			if base_rule:
-				for it: Dictionary in u.get("items", []):
-					for c: Dictionary in it.get("content", []):
-						c["name"] = "Increased Shooting Range"
+				for key in ["items", "loadout"]:
+					for it: Dictionary in u.get(key, []):
+						for c: Dictionary in it.get("content", []):
+							c["name"] = "Increased Shooting Range"
 	var client := OPRApiClient.new()
 	var army := client.build_army_offline(data)
 	army.player_id = 1
@@ -162,7 +163,9 @@ func test_ratmen_grenadiers_with_getrie_reach_18_at_73() -> void:
 	assert_array(host.get_attached_heroes()).override_failure_message("fixture: Getrie is not joined").contains([hero])
 	assert_int(SoloController.shooting_range_bonus(hero)) \
 		.override_failure_message("Getrie's own Increased Shooting Range was not read").is_equal(6)
-	assert_int(SoloController.shooting_range_bonus(host)).override_failure_message("the hero's rule is not the host's").is_equal(0)
+	assert_int(SoloController.shooting_range_bonus(host)) \
+		.override_failure_message("the hero's rule is not the host's (host rules: %s, hero rules: %s)" % [
+			str(host.get_special_rules()), str(hero.get_special_rules())]).is_equal(0)
 	assert_int(_main.solo_controller._gate_reach_in(host)) \
 		.override_failure_message("ratmen Grenadiers + Getrie: weapon reach must be 18\"").is_equal(18)
 
