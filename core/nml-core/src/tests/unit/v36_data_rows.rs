@@ -5,6 +5,7 @@ mod dat_04;
 mod dat_05a;
 mod dat_09;
 mod f1b_rows;
+mod f5c_modeled_guard;
 mod f5a1_rows;
 mod dat_12b;
 mod w31_f1;
