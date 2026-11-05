@@ -9840,6 +9840,11 @@ func _solo_regen_target(target: GameUnit, from_spell: bool = false) -> int:
 ## reads the charge/shoot gates use); -1.0 = the distance is unknown and the old reading stands.
 func _solo_regen_pick(target: GameUnit, from_spell: bool = false, shot_in: float = -1.0,
 		charged_in: float = -1.0) -> Dictionary:
+	# G4R5 R9 (EPOCH_73_V36, lead ruling D1): a chain whose host models are all dead IS its living hero now - its own
+	# ignore-wounds rules (Protection Feat) count, and "most models carry it" is decided over the living chain models.
+	var holder: GameUnit = _solo_defense_holder(target)
+	if holder != null:
+		target = holder
 	var best := 0   # the most generous (lowest) ignore target the unit fields; 0 = none
 	var best_name := ""
 	if _solo_has_regeneration(target):
