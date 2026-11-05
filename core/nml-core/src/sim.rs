@@ -5937,7 +5937,7 @@ fn strike_phase(
     // table's own `dist_in: -1.0` read, main.gd:6119).
     if r.fortified_fired {
         if let Some(n) = fortified_log_name(statics, next, ti, false) {
-            shot.log.push(format!("{n}: {} takes the hits at AP(-1), min. AP(0) — saves one better", ut.name));
+            shot.log.push(format!("{n}: {} takes the hits at AP(-{}), min. AP(0) — saves one better", ut.name, def.fortified_boost_ap.max(1)));
         }
     }
     for (mi, sc, _) in &parts {
@@ -10265,7 +10265,8 @@ fn resolve_with(
                                 let over9 =
                                     def.fortified_alias_over_in > 0.0 && g.mod_d > def.fortified_alias_over_in;
                                 if let Some(n) = fortified_log_name(statics, &next, g.ti, over9) {
-                                    shot.log.push(format!("{n}: {} takes the hits at AP(-1), min. AP(0) — saves one better", ut_g.name));
+                                    let cut = def.fortified_boost_ap.max(if over9 { def.fortified_alias_ap } else { 0 }).max(1);
+                                    shot.log.push(format!("{n}: {} takes the hits at AP(-{cut}), min. AP(0) — saves one better", ut_g.name));
                                 }
                             }
                             for (mi, msc, _) in &parts {

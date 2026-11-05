@@ -302,8 +302,16 @@ static func shot_uses_cover(save_def: int, shot_cover: int, shot_base: int) -> b
 ## Fortified (army-book: "units where all models have this rule take hits that count as having AP(-1),
 ## to a min. of AP(0)"): the defender-side reduction of an incoming hit's AP. Applied per-hit to the
 ## FINAL AP (base + conditional + on-6) so the min-0 clamp is correct for each hit.
-static func fortified_ap(ap: int, is_fortified: bool) -> int:
-	return maxi(0, ap - 1) if is_fortified else ap
+static func fortified_ap(ap: int, is_fortified: bool, cut: int = 1) -> int:
+	return maxi(0, ap - cut) if is_fortified else ap
+
+
+## AI-G2 R7: the AP cut one Fortified-family registry entry carries (Enhanced Warden: 2). An enhanced form's cut REPLACES
+## its base's, it never stacks. Flat 1 below EPOCH_73_V36 (byte-identical). Core twin: unit.rs `fortified_alias_of`.
+static func fortified_entry_cut(entry: Dictionary) -> int:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return 1
+	return maxi(1, int((entry.get("params", {}) as Dictionary).get("incoming_ap_reduction", 1)))
 
 
 ## Guarded (army-book rule — official text: "When units where all models have this rule are shot or
