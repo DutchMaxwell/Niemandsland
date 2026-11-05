@@ -145,6 +145,26 @@ use super::*;
         assert_eq!((next.growth_markers[1], next.growth_round[1]), (0, -1));
     }
 
+    /// G4R6 R19 (`EPOCH_73_V36`): the table's round start already placed the joined hero's marker (his ledger says 1),
+    /// so the host's activation must not place a second one. The row is folded by the live reader (`fold_ledger`, the body
+    /// `state_of` and the Godot seam both run) with the unit's own attached fact; below 73 nothing touches the hero.
+    #[test]
+    fn a_joined_heros_ticked_marker_is_not_ticked_again_at_the_hosts_activation() {
+        let rule = GrowthRule { per_round: true, max_markers: 4, ap_per_two: 1, ..Default::default() };
+        let (mut st, statics) = joined_hero_line(rule.clone());
+        st.round = 2;
+        let ledger: crate::io::PlainLedger = serde_json::from_str(r#"{"growth":1}"#).expect("ledger");
+        crate::io::fold_ledger(&mut st, 1, &ledger, V36, 1, true, -1);
+        let next = run_growth(&st, &statics, &buff_action(None), hero_seams(V36), 11);
+        assert_eq!(next.growth_markers[1], 1, "the table's round-start marker is the hero's one for round 2");
+
+        let (mut old, statics) = joined_hero_line(rule);
+        old.round = 2;
+        crate::io::fold_ledger(&mut old, 1, &ledger, V36 - 1, 1, true, -1);
+        let next = run_growth(&old, &statics, &buff_action(None), hero_seams(V36 - 1), 11);
+        assert_eq!((next.growth_markers[1], next.growth_round[1]), (1, -1), "below 73 the old reading stands");
+    }
+
     /// A Shaken host blocks the round's marker for the hero too (the round is consumed, only the marker is not).
     #[test]
     fn a_shaken_host_blocks_its_joined_heros_marker() {
