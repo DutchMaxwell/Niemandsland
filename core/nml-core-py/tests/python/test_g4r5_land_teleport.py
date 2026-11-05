@@ -17,6 +17,7 @@ act after each, `auto` placeholders and every roll up to act 16.
 
 from __future__ import annotations
 
+import json
 import re
 import shutil
 import sys
@@ -24,6 +25,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
 
+import pytest  # noqa: E402
 import shoot_replay_gate as srg  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[4]
@@ -31,14 +33,21 @@ FIXTURE = Path(__file__).resolve().parent / "fixtures" / "g4r5_land_teleport"
 GAME = "aof_1000_net_034"
 
 
-def gate(capsys, tmp_path: Path, land: bool) -> tuple[int, int, str]:
-    """The gate's own run the way parity.sh calls it: (both-silent acts, shooting acts, the whole report)."""
-    shutil.copytree(FIXTURE / GAME, tmp_path / GAME)
-    srg.run(tmp_path, str(REPO), "table", 0, 99, True, sighting="model", movement=True, **({"land": True} if land else {}))
+ACTS = (10, 16)
+
+
+def verdict(capsys, tmp_path: Path, act: int, land: bool) -> str:
+    """"equal" / "both_silent" / "parted" of ONE bundled act, replayed alone (the other act loses its `played` marker): a verdict per
+    named act, never a total another row could move."""
+    ref = tmp_path / f"{act}-{int(land)}"
+    shutil.copytree(FIXTURE / GAME, ref / GAME)
+    f = ref / GAME / "acts.jsonl"
+    rows = [json.loads(x) for x in f.read_text().splitlines()]
+    f.write_text("".join(json.dumps(r) + "\n" for r in rows if not (r.get("kind") == "played" and r["act"] != act)))
+    srg.run(ref, str(REPO), "table", 0, 99, True, sighting="model", movement=True, **({"land": True} if land else {}))
     out = capsys.readouterr().out
-    m = re.search(r"BOTH-SILENT: (\d+)/(\d+) acts", out)
-    assert m, out
-    return int(m.group(1)), int(m.group(2)), out
+    assert re.search(r"EQUAL : \d+/1 acts", out), out
+    return "equal" if "EQUAL : 1/1" in out else "both_silent" if "BOTH-SILENT: 1/1" in out else "parted"
 
 
 def _act(k: int):
@@ -47,16 +56,20 @@ def _act(k: int):
     return lines[pos]["state"]["units"], lines[pos + 1]["state"]["units"], lines[pos]["pick"]["action"]["unit"]
 
 
-def test_flag_off_mutant_both_acts_fire_a_volley_the_table_never_did(capsys, tmp_path):
-    silent, acts, out = gate(capsys, tmp_path, land=False)
-    assert (silent, acts) == (0, 2), out
-    assert "0 table_longer, 2 port_longer" in out, out
+@pytest.mark.parametrize("act", ACTS)
+def test_flag_off_mutant_the_act_fires_a_volley_the_table_never_did(capsys, tmp_path, act):
+    assert verdict(capsys, tmp_path, act, land=False) == "parted"
 
 
-def test_land_makes_both_acts_silent_on_both_sides(capsys, tmp_path):
-    silent, acts, out = gate(capsys, tmp_path, land=True)
-    assert (silent, acts) == (2, 2), out
-    assert "LAND applied 2 acts" in out, out
+@pytest.mark.parametrize("act", ACTS)
+def test_land_makes_the_act_silent_on_both_sides(capsys, tmp_path, act):
+    assert verdict(capsys, tmp_path, act, land=True) == "both_silent"
+
+
+def test_the_summary_line_counts_both_acts_as_landed(capsys, tmp_path):
+    shutil.copytree(FIXTURE / GAME, tmp_path / GAME)
+    srg.run(tmp_path, str(REPO), "table", 0, 99, True, sighting="model", movement=True, land=True)
+    assert "LAND applied 2 acts" in capsys.readouterr().out
 
 
 def test_the_reposition_end_is_the_next_acts_ledger_teleport_to():
