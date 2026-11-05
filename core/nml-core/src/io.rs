@@ -1266,8 +1266,13 @@ pub fn fold_ledger(
     // (`sim.rs::growth_round_start` is a no-op for a non-grower
     // either way — see the fixture below). Excluded: a unit that
     // arrived (ambush) THIS round was still in reserve when the
-    // sweep ran, so it was skipped there too.
-    if alive > 0 && !is_attached && ambush_arrived_round != st.round {
+    // sweep ran, so it was skipped there too. A JOINED hero is swept
+    // like any unit from EPOCH_73_V36 (the table ticks his own rule at
+    // the round start); below 73 an attached unit stays never swept.
+    if alive > 0
+        && (!is_attached || rule_on(rules_epoch, crate::acts::EPOCH_73_V36))
+        && ambush_arrived_round != st.round
+    {
         st.growth_round[ui] = st.round;
     }
 }
