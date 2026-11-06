@@ -213,7 +213,7 @@ DRAFT for the next release. The big change: Grimdark Future and Age of Fantasy n
 ### Changed — multiplayer
 - **Online rooms keep to one rules version.** A room refuses a player who is on other rules and names
   both rules versions. A save made on other rules is refused with a clear message, so a 3.5 table
-  cannot be loaded into a 3.6 game by accident. (#1939, #1990)
+  cannot be loaded into a 3.6 game by accident. (#1939, #1990, #2579)
 
 ### Changed — UI
 - **Models turn toward their direction of travel while they glide**, and NACHTMAHR's miniatures face
@@ -223,6 +223,9 @@ DRAFT for the next release. The big change: Grimdark Future and Age of Fantasy n
   version instead of page numbers. (#1999, #2000, #2045)
 
 ### Fixed
+- **A refused save or online join says why on screen.** The reason used to reach only the log or the
+  closed side menu, so the player sat at an empty table without a word; it now shows for 15 seconds at
+  the top of the screen, also when a player on another game version tries to join. (#2579)
 - **Lacerate no longer switches off Regeneration**: wounds from a Lacerate weapon or spell face the
   target's Regeneration or Self-Repair roll again; only rules that ignore Regeneration (Bane, Rending,
   Unstoppable, ...) skip it, and the battle log now says when that roll is skipped. The AI opponent's
