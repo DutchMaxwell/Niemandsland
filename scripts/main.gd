@@ -1912,6 +1912,8 @@ const STATUS_LANE_BANNER := 92
 const STATUS_LANE_TOAST := 124
 ## How long a plain OPERATIONAL notice stays up (NML-955 keeps AI explanations off this timer).
 const SOLO_TOAST_HIDE_S := 6.0
+## A refused save or online join leaves the player on an empty table while the table intro may still run: 6 s is easy to miss.
+const REFUSAL_TOAST_HIDE_S := 15.0
 const STATUS_LANE_PEER := 156
 
 
@@ -18952,7 +18954,9 @@ func _on_version_rejected(host_version: String, my_version: String) -> void:
 	push_warning("[Network] Version mismatch — host=%s, us=%s. Disconnecting." % [host_version, my_version])
 	network_manager.disconnect_game()
 	_update_network_ui(false, false)
-	GameMenu.set_status(network_status_label, "Version mismatch: host %s, you %s — update to match" % [host_version, my_version], HouseStyle.TONE_DANGER)
+	var text := "Version mismatch: host %s, you %s — update to match" % [host_version, my_version]
+	GameMenu.set_status(network_status_label, text, HouseStyle.TONE_DANGER)
+	_solo_show_toast(text, REFUSAL_TOAST_HIDE_S)
 
 
 func _on_player_left(peer_id: int) -> void:
@@ -19907,6 +19911,7 @@ func _solo_rebind_carried_after_load() -> void:
 ## Load failed callback
 func _on_load_failed(error: String) -> void:
 	push_error("Load failed: %s" % error)
+	_solo_show_toast(error, REFUSAL_TOAST_HIDE_S)
 
 
 ## Load a battle from a path passed via the startup menu
