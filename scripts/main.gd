@@ -9968,18 +9968,27 @@ func _solo_apply_regeneration(target: GameUnit, wounds: int, from_spell: bool = 
 			target.get_name(), bypassed, ("" if bypassed == 1 else "s"), str(pick.get("name", "regeneration"))], true)
 	if wounds <= 0 or regen_target <= 0:
 		return maxi(wounds, 0)
-	var faces: Array = await _owner_roll(target, wounds, regen_target, "regeneration",
-		"Regeneration (%d+ ignores a wound)" % regen_target, {"what": "regeneration dice"})
+	return await _solo_roll_ignore_group(target, wounds, regen_target, str(pick.get("name", "regeneration")),
+		"Regeneration (%d+ ignores a wound)" % regen_target, "regeneration dice")
+
+
+## One wound-ignore roll for one rule: one REAL tray die per wound, each at or above `ign_target` ignores
+## it; the battle log always names the rule and the outcome. Returns the wounds that still land. The body
+## of `_solo_apply_regeneration`'s roll, shared by the per-name groups (R-1).
+func _solo_roll_ignore_group(target: GameUnit, wounds: int, ign_target: int, rule_name: String,
+		purpose: String, what: String) -> int:
+	if wounds <= 0 or ign_target <= 0:
+		return wounds
+	var faces: Array = await _owner_roll(target, wounds, ign_target, "regeneration", purpose, {"what": what})
 	var ignored := 0
 	for f in faces:
-		if int(f) >= regen_target:
+		if int(f) >= ign_target:
 			ignored += 1
 	if battle_log != null:
 		# Rules-must-log: the line names the ACTUAL family rule — aliases (Plaguebound, Knightborn,
 		# Protected, …) included, not just the three named forms.
-		var rule_name: String = str(pick.get("name", "regeneration"))
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s rolls %d %s di%s (%d+) — %d wound%s ignored" % [
-			target.get_name(), wounds, rule_name, ("e" if wounds == 1 else "ce"), regen_target, ignored, ("" if ignored == 1 else "s")], true)
+			target.get_name(), wounds, rule_name, ("e" if wounds == 1 else "ce"), ign_target, ignored, ("" if ignored == 1 else "s")], true)
 		if ignored > 0:
 			_solo_rule_float(target, "%s: %d ignored" % [rule_name.capitalize(), ignored], Color(0.5, 1.0, 0.6))
 	return maxi(wounds - ignored, 0)
@@ -9998,6 +10007,41 @@ func _solo_regen_target(target: GameUnit, from_spell: bool = false) -> int:
 	return int(_solo_regen_pick(target, from_spell).get("target", 0))
 
 
+## R-1: the GROUP a wound-ignore rule belongs to. Forms of ONE rule (an Enhanced / Boost / Aura / Buff form, or
+## an entry that upgrades another) share a key and make one roll; differently named rules keep their own key
+## and each make their own roll. Regeneration, its Aura / Buff forms and Medical Training are one group.
+static func _solo_ignore_group_key(rule_name: String, params: Dictionary) -> String:
+	var upgraded := str(params.get("upgrades", ""))
+	if not upgraded.is_empty():
+		return upgraded
+	var lower := rule_name.to_lower()
+	if lower.begins_with("regeneration") or lower == "medical training":
+		return "Regeneration"
+	if lower == "self-repair":
+		return "Self-Repair"
+	if lower == "resistance":
+		return "Resistance"
+	var key := rule_name
+	if key.begins_with("Enhanced "):
+		key = key.substr("Enhanced ".length())
+	var stripped := true
+	while stripped:
+		stripped = false
+		for suffix: String in [" Aura", " Buff", " Boost"]:
+			if key.ends_with(suffix):
+				key = key.substr(0, key.length() - suffix.length())
+				stripped = true
+	return key
+
+
+## R-1: record one wound-ignore rule in the pick's per-group table - the group keeps its most generous target
+## (the lowest number) and the name / gate flag of the entry that holds it.
+func _solo_ignore_group_put(groups: Dictionary, key: String, rule_name: String, tgt: int, gated: bool) -> void:
+	if groups.has(key) and int((groups[key] as Dictionary)["target"]) <= tgt:
+		return
+	groups[key] = {"group": key, "name": rule_name, "target": tgt, "gated": gated}
+
+
 ## The winning Regeneration-family pick — {target: int (0 = none), name: String} — shared by the
 ## roll and its log line (rules-must-log: the line names the ACTUAL rule, aliases included).
 ## `shot_in` / `charged_in` are the DISTANCES of the resolution being resolved (edge to edge, the same
@@ -10011,11 +10055,14 @@ func _solo_regen_pick(target: GameUnit, from_spell: bool = false, shot_in: float
 		target = holder
 	var best := 0   # the most generous (lowest) ignore target the unit fields; 0 = none
 	var best_name := ""
+	var groups := {}   # R-1: the same rules told apart by NAME - one entry per group, see _solo_ignore_group_key
 	if _solo_has_regeneration(target):
 		best = int(RulesRegistry.unit_param(target, "Regeneration", "ignore_target", 5))
 		best_name = "regeneration"
+		_solo_ignore_group_put(groups, "Regeneration", "regeneration", best, false)
 	if _solo_regen_family_on(target, "Self-Repair"):
 		var sr := int(RulesRegistry.unit_param(target, "Self-Repair", "ignore_target", 6))
+		_solo_ignore_group_put(groups, "Self-Repair", "self-repair", sr, false)
 		if best == 0 or sr < best:
 			best = sr
 			best_name = "self-repair"
@@ -10029,6 +10076,8 @@ func _solo_regen_pick(target: GameUnit, from_spell: bool = false, shot_in: float
 		if _solo_rule_on_most_models(target, res_rule):
 			var key := "ignore_target_spell" if from_spell else "ignore_target"
 			var rs := int(RulesRegistry.unit_param(target, res_rule, key, 2 if from_spell else 6))
+			_solo_ignore_group_put(groups, _solo_ignore_group_key(res_rule, {}),
+				"resistance" if res_rule == "Resistance" else res_rule, rs, false)
 			if best == 0 or rs < best:
 				best = rs
 				best_name = "resistance" if res_rule == "Resistance" else res_rule
@@ -10041,6 +10090,7 @@ func _solo_regen_pick(target: GameUnit, from_spell: bool = false, shot_in: float
 	var open_refused := ""
 	var gate_refused := ""   # MOR-17a: a gated name whose distance shut its 6+ (rules-must-log)
 	var gate_msg := ""       # MOR-17a: the gate's verdict line, logged where the roll happens
+	var gate_any := ""       # R-1: the same verdict for a gated rule that rolls in its own group
 	for e in RulesRegistry.unit_rules_of_primitive(target, "Regeneration"):
 		var ed := e as Dictionary
 		var n := str(ed["name"])
@@ -10075,13 +10125,20 @@ func _solo_regen_pick(target: GameUnit, from_spell: bool = false, shot_in: float
 			tgt = int(params.get(key2, params.get("ignore_target", 0)))
 		else:
 			tgt = int(params.get(key2, params.get("ignore_target", 0)))
+		var gate_line := ""
+		if tgt > 0 and gated and not from_spell and (shot_in >= 0.0 or charged_in >= 0.0):
+			gate_line = "Warding: %s ignores wounds on 6+ (%s from over %din)" % [
+				target.get_name(), "charged" if charged_in >= 0.0 else "shot", int(gate_in)]
+		if tgt > 0:
+			_solo_ignore_group_put(groups, _solo_ignore_group_key(n, params), n, tgt, gated)
+			if not gate_line.is_empty():
+				gate_any = gate_line
 		if tgt > 0 and (best == 0 or tgt < best):
 			best = tgt
 			best_name = n
 			best_terr = terr_in
-			if gated and not from_spell and (shot_in >= 0.0 or charged_in >= 0.0):
-				gate_msg = "Warding: %s ignores wounds on 6+ (%s from over %din)" % [
-					target.get_name(), "charged" if charged_in >= 0.0 else "shot", int(gate_in)]
+			if not gate_line.is_empty():
+				gate_msg = gate_line
 	var trace := ""
 	var best_rule: String = {"regeneration": "Regeneration", "self-repair": "Self-Repair"}.get(best_name, best_name)
 	if best_name != "" and best_terr > 0.0:
@@ -10091,14 +10148,43 @@ func _solo_regen_pick(target: GameUnit, from_spell: bool = false, shot_in: float
 	elif best_name != "" and _solo_regen_family_on(target, best_rule) and not _solo_rule_on_all_models(target, best_rule):
 		# Rules-must-log (row MOR-02): the most-models read kept the roll although not every model carries it.
 		trace = "%s: most models carry it, so a joined hero without it does not switch it off" % best_rule
-	if best_name != "Warding" and best_name != "Knightborn" and best_name != "Angelic Blessing":
-		gate_msg = ""   # another family rule bound the roll — the gate changed nothing
-	if best == 0 and not gate_refused.is_empty():
-		gate_msg = "Warding: no 6+ ignore, %s was %s from within %din" % [
+	var refusal := ""
+	if not gate_refused.is_empty():
+		refusal = "Warding: no 6+ ignore, %s was %s from within %din" % [
 			target.get_name(), "charged" if charged_in >= 0.0 else "shot",
 			int(float(RulesRegistry.unit_param(target, gate_refused, "ignore_over_in_charge" if charged_in >= 0.0 else "ignore_over_in",
 				6.0 if charged_in >= 0.0 else 9.0)))]
-	return {"target": best, "name": best_name, "trace": trace, "gate": gate_msg}
+	if best_name != "Warding" and best_name != "Knightborn" and best_name != "Angelic Blessing":
+		gate_msg = ""   # another family rule bound the roll — the gate changed nothing
+	if best == 0 and not gate_refused.is_empty():
+		gate_msg = refusal
+	var group_list: Array = []
+	for group_key: String in groups:
+		var entry: Dictionary = (groups[group_key] as Dictionary).duplicate()
+		entry["regen"] = group_key == "Regeneration"
+		group_list.append(entry)
+	# Deterministic order (the host rolls them in this order): Regeneration first, then the most generous
+	# target, then the group name.
+	group_list.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if bool(a["regen"]) != bool(b["regen"]):
+			return bool(a["regen"])
+		if int(a["target"]) != int(b["target"]):
+			return int(a["target"]) < int(b["target"])
+		return str(a["group"]) < str(b["group"]))
+	# R-1: the gate verdict of a gated rule that rolls (or was refused) in its OWN group, even when another
+	# rule is the overall best and the top-level gate line above stays empty.
+	var group_gate := ""
+	var gate_binds := false
+	var refused_has_group := false
+	for g: Dictionary in group_list:
+		gate_binds = gate_binds or bool(g["gated"])
+		refused_has_group = refused_has_group or str(g["group"]) == _solo_ignore_group_key(gate_refused, {})
+	if gate_binds:
+		group_gate = gate_any
+	elif not refused_has_group:
+		group_gate = refusal
+	return {"target": best, "name": best_name, "trace": trace, "gate": gate_msg, "groups": group_list,
+		"group_gate": group_gate}
 
 
 ## Banner's morale-test bonus for a unit — gap 18a: the body now lives in
