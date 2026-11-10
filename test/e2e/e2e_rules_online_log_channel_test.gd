@@ -1,5 +1,5 @@
 extends GdUnitTestSuite
-## Plan 3.2 (konrad 12.10.): rule lines on BOTH screens in an agreed online Automatic room.
+## Plan 3.2 (lead 12.10.): rule lines on BOTH screens in an agreed online Automatic room.
 ##
 ## The log channel itself is not new — NML-946 built it: main._log_rule_event writes the local line AND
 ## calls network_manager.broadcast_log_event; the peer's copy is written by main._on_remote_log_event;

@@ -1,5 +1,5 @@
 extends GdUnitTestSuite
-## Plan 3.3b (Q4 Road 2, konrad 12.10.): ONE round advance, by the host.
+## Plan 3.3b (Q4 Road 2, lead 12.10.): ONE round advance, by the host.
 ##
 ## In an Automatic online room only the host advances the round. A guest pressing Next Round sends
 ## `request_next_round` and does NOT advance its own state; the host runs the end-round path and

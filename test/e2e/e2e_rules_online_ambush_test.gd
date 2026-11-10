@@ -1,5 +1,5 @@
 extends GdUnitTestSuite
-## Plan 3.4b (konrad 12.10., ruling (a)): Ambush online in turn order, host-driven handshake.
+## Plan 3.4b (lead 12.10., ruling (a)): Ambush online in turn order, host-driven handshake.
 ##
 ## At the round start (round >= 2) the HOST drives the reserve step for each side, opener first:
 ##   * a side with NO reserve is skipped at once (no wire, no wait);
