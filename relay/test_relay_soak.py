@@ -228,12 +228,11 @@ class TestHostRejoinCascade:
         for ws in (guest_ws, intruder, rehost):
             await ws.close()
 
-    async def test_legacy_tokenless_host_rejoin_still_works(self, relay):
-        """Backward-compat: a 0.3.6.0 host that created its room WITHOUT a token (host_token == "")
-        must still reclaim peer_id 1 on rejoin via the legacy first-joiner path — so deploying the
-        token-gated relay never breaks in-flight old-client sessions."""
+    async def test_host_seat_needs_the_host_token(self, relay):
+        """Only the token the room was created with reclaims peer_id 1. A room created without a
+        token keeps the host seat free while the host is away; a tokenless join gets a guest seat."""
         server, url = relay
-        host_ws, code, _ = await create_room(url)  # no token on create -> legacy room
+        host_ws, code, _ = await create_room(url)  # no token on create
         guest_ws, _ = await join_room(url, code)
         await drain(host_ws)
         await drain(guest_ws)
@@ -242,15 +241,16 @@ class TestHostRejoinCascade:
         await asyncio.sleep(0.1)
         assert json.loads(await guest_ws.recv())["type"] == "host_paused"
 
-        # A tokenless rejoin reclaims peer_id 1 (legacy first-joiner fallback).
-        rehost = await websockets.connect(url)
-        await rehost.send(json.dumps({"type": "join_room", "code": code}))
-        resp = json.loads(await rehost.recv())
-        assert resp["type"] == "room_rejoined_host"
-        assert resp["peer_id"] == 1
+        joiner = await websockets.connect(url)
+        await joiner.send(json.dumps({"type": "join_room", "code": code}))
+        resp = json.loads(await joiner.recv())
+        assert resp["type"] == "room_joined"
+        assert resp["peer_id"] != 1
+        assert server.rooms[code].host_disconnected_at > 0.0
+        assert 1 not in server.rooms[code].peers
 
         await guest_ws.close()
-        await rehost.close()
+        await joiner.close()
 
     async def test_room_dies_if_host_misses_window(self, relay):
         """If the host does not return within the rejoin window, the room is

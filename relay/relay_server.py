@@ -491,29 +491,23 @@ class RelayServer:
             await self._send_error(websocket, "Room not found")
             return
 
-        # Rehost: the host dropped but the room was preserved (HOST_RECONNECT.md). A room created by a
-        # token-bearing host (0.3.6.1+) lets ONLY the matching token reclaim peer_id 1 — a guest
-        # reconnecting during the host's absence must NOT seize the host slot (that demoted the real
-        # host to a guest and orphaned the authoritative state = the live-game async); a lingering
-        # half-open old peer-1 socket is evicted so the real host reclaims at once. A LEGACY room with
-        # no host_token (a 0.3.6.0 host that never sent a token on create) falls back to the old
-        # "first joiner reclaims the free slot 1" behaviour, so deploying this relay never breaks
-        # in-flight 0.3.6.0 sessions (cross-version play is already blocked by the version handshake).
+        # Rehost: the host dropped but the room was preserved (HOST_RECONNECT.md). ONLY the token the
+        # room was created with reclaims peer_id 1, so the host seat stays with the real host (a room
+        # created without a token has no reclaimable host seat); a lingering half-open old peer-1
+        # socket is evicted so the real host reclaims at once.
         is_token_host = bool(room.host_token) and token == room.host_token
-        is_legacy_first_joiner = not room.host_token and 1 not in room.peers
-        if room.host_disconnected_at > 0.0 and (is_token_host or is_legacy_first_joiner):
+        if room.host_disconnected_at > 0.0 and is_token_host:
             room.host_disconnected_at = 0.0
-            if is_token_host:
-                # Evict any lingering old peer-1 socket (half-open drop) so the real host reclaims now.
-                old_host = room.peers.pop(1, None)
-                if old_host is not None:
-                    self.connections.pop(old_host.websocket, None)
-                    if old_host.writer_task is not None:
-                        old_host.writer_task.cancel()
-                    try:
-                        await old_host.websocket.close(4000, "Replaced by host reconnect")
-                    except websockets.exceptions.ConnectionClosed:
-                        pass
+            # Evict any lingering old peer-1 socket (half-open drop) so the real host reclaims now.
+            old_host = room.peers.pop(1, None)
+            if old_host is not None:
+                self.connections.pop(old_host.websocket, None)
+                if old_host.writer_task is not None:
+                    old_host.writer_task.cancel()
+                try:
+                    await old_host.websocket.close(4000, "Replaced by host reconnect")
+                except websockets.exceptions.ConnectionClosed:
+                    pass
             peer = Peer(websocket=websocket, peer_id=1, room_code=code, ip_address=ip, token=token)
             room.peers[1] = peer
             self.connections[websocket] = peer
