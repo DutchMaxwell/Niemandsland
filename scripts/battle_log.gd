@@ -184,7 +184,9 @@ func on_dice_rolled(count: int, hits: int, target: int, player: String = "", fac
 	# mistaken for an attack line ("0 hits (7+)" used to be a SAVE at 7+); attacks keep the hit wording.
 	var defense := kind == "defense"
 	var noun := "block" if defense else "hit"
-	var prefix := (player + (" defends: " if defense else ": ")) if not player.is_empty() else ""
+	# "You" is the solo human's roller label: it takes the plain verb ("You defend"), a named roller "defends".
+	var verb := " defend: " if player == "You" else " defends: "
+	var prefix := (player + (verb if defense else ": ")) if not player.is_empty() else ""
 	if not faces.is_empty():
 		var sorted_faces := faces.duplicate()
 		sorted_faces.sort()
