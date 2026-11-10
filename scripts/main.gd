@@ -2699,7 +2699,7 @@ func _solo_secret_trap_hits(victim: GameUnit) -> void:
 	var hits: int = int(faces[0]) + 1
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "Trap: %s takes %d hits" % [victim.get_name(), hits], true)
-	var profile: Dictionary = {"name": "Trap", "ap": 0, "deadly": 0, "rules": []}
+	var profile: Dictionary = {"name": "Trap", "ap": 0, "deadly": 0, "rules": [], "_impact_pool": true}
 	var w: int = await _solo_resolve_saves(victim, victim, "Trap", [], hits,
 		_solo_defense_vs(victim, AiCombatMath.HIT_SOURCE_MELEE), profile, not _solo_is_ai_unit(victim), true)
 	if w > 0:
@@ -7860,7 +7860,7 @@ func _solo_apply_breath_attack(unit: GameUnit) -> void:
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "Breath Attack: %s breathes on %s — %d hit%s (Blast(%d), AP(%d))" % [
 			unit.get_name(), btarget.get_name(), bhits, ("" if bhits == 1 else "s"), blast_x, b_ap], ai_side)
-	var bprofile: Dictionary = {"name": "Breath Attack", "ap": b_ap, "deadly": 0, "blast": blast_x, "rules": []}
+	var bprofile: Dictionary = {"name": "Breath Attack", "ap": b_ap, "deadly": 0, "blast": blast_x, "rules": [], "_impact_pool": true}
 	var w: int = await _solo_resolve_saves(unit, btarget, "Breath Attack", [], bhits,
 		_solo_defense_vs(btarget), bprofile, not _solo_is_ai_unit(btarget), false)
 	if w > 0:
@@ -9320,7 +9320,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 				battle_log.log_event(BattleLog.Category.COMBAT,
 					"Retaliate: %s lashes back — %d hit%s (%s)" % [
 					defender.get_name(), rhits, ("" if rhits == 1 else "s"), str(rt.get("detail", ""))], true)
-			var rprofile: Dictionary = {"name": "Retaliate", "ap": 0, "deadly": 0, "rules": []}
+			var rprofile: Dictionary = {"name": "Retaliate", "ap": 0, "deadly": 0, "rules": [], "_impact_pool": true}
 			var rw: int = await _solo_resolve_saves(defender, striker, "Retaliate", [], rhits,
 				_solo_defense_vs(striker, AiCombatMath.HIT_SOURCE_MELEE), rprofile, not _solo_is_ai_unit(striker), true)
 			if rw > 0:
@@ -9445,7 +9445,8 @@ func _solo_charge_impact(charger: GameUnit, defender: GameUnit, human_defends: b
 				("e" if int(p["dice"]) == 1 else "ce"), hits, ("" if hits == 1 else "s")], true)
 		if hits <= 0:
 			continue
-		# "_impact_pool": Impact is not a weapon -- _solo_resolve_saves adds no unit-level conditional AP to it.
+		# "_impact_pool": a hit from no weapon (Impact, Trap, Breath, Retaliate, Deathstrike, Self-Destruct) -- the causing
+		# unit's weapon-scoped unit rules (see _solo_resolve_saves) never reach it.
 		var profile: Dictionary = {"name": str(p["label"]), "ap": int(p["ap"]), "deadly": 0, "rules": [], "_impact_pool": true}
 		var w: int = await _solo_resolve_saves(charger, defender, str(p["label"]), [], hits, impact_defense, profile, human_defends, true)
 		if w > 0:
@@ -9553,8 +9554,11 @@ func _solo_resolve_saves(striker: GameUnit, defender: GameUnit, weapon_name: Str
 	# Base AP plus any conditional AP (Shatter/Tear/Melee Slayer/Disintegrate; range-gated Slayer/
 	# Piercing Hunter need `dist_in` — -1 = unknown, their ranged leg then stays off, conservative)
 	# this weapon gets against THIS defender — registry-driven, system-scoped.
-	# The Impact pools (marker "_impact_pool") get none: their hits come from no weapon, the core's Impact path adds none.
-	var cond_parts: Array = [] if bool(profile.get("_impact_pool", false)) \
+	# A marked profile ("_impact_pool": Impact, Trap, Breath, Retaliate, Deathstrike, Self-Destruct) is a hit from no
+	# weapon: it gets no conditional AP, no Bane re-roll and no Piercing Mark grant from the causing unit's own
+	# rules, as in the core. Its fixed AP (Breath, Heavy Impact) stays.
+	var no_weapon: bool = bool(profile.get("_impact_pool", false))
+	var cond_parts: Array = [] if no_weapon \
 		else _solo_conditional_ap_parts(profile, striker, defender, charging, dist_in, melee)
 	var cond_ap := 0
 	for cp in cond_parts:
@@ -9583,7 +9587,7 @@ func _solo_resolve_saves(striker: GameUnit, defender: GameUnit, weapon_name: Str
 	# before _solo_apply_vs_marks, so an impact batch sees no record — the same
 	# order the core's tray_vs_marks seam keeps (after Impact, before strikes).
 	var pierce_grant_ap := 0
-	for rd in AiSpell.mods_for(_solo_mods_of_chain(defender), "grant_vs", melee):
+	for rd in ([] if no_weapon else AiSpell.mods_for(_solo_mods_of_chain(defender), "grant_vs", melee)):
 		if str((rd as Dictionary).get("beneficiary", "")) != "attackers":
 			continue
 		var grant_rule := str((rd as Dictionary).get("grants_rule", ""))
@@ -9617,7 +9621,7 @@ func _solo_resolve_saves(striker: GameUnit, defender: GameUnit, weapon_name: Str
 	var ap4_hits: int = AiCombatMath.rending_ap_hits(to_hit_faces, hits) if on6_bonus > 0 else 0
 	# SHO-10: a re-roll entry's optional target condition opens (or shuts) the whole Bane window;
 	# every shipped entry is unconditional, so the old read stands.
-	var bane: bool = _solo_striker_has_bane(striker, profile, melee) and AiEv.bane_applies(profile,
+	var bane: bool = not no_weapon and _solo_striker_has_bane(striker, profile, melee) and AiEv.bane_applies(profile,
 		_solo_unit_tough(defender), int(defender.unit_properties.get("defense", 4)), dist_in, melee,
 		_solo_target_state(defender))
 	var total := 0
@@ -10593,6 +10597,8 @@ func _solo_regen_bypass_named(target: GameUnit) -> bool:
 
 
 func _solo_ignores_regen(attacker: GameUnit, profile: Dictionary, target: GameUnit = null) -> bool:
+	if bool(profile.get("_impact_pool", false)):
+		return false   # a hit from no weapon: the causing unit's unit-level bypass rules are its weapons' (as in the core)
 	var system := RulesRegistry.system_of_unit(attacker)
 	var faction := RulesRegistry.faction_of_unit(attacker)
 	for r in profile.get("rules", []):
@@ -23530,7 +23536,7 @@ func _solo_deathstrike_hits(defender: GameUnit, striker: GameUnit, alive_before:
 		battle_log.log_event(BattleLog.Category.COMBAT,
 			"%s: %s's dying models lash out — %s takes %d hit%s" % [
 			rule_name, defender.get_name(), striker.get_name(), total_hits, ("" if total_hits == 1 else "s")], true)
-	var dprofile: Dictionary = {"name": rule_name, "ap": 0, "deadly": 0, "rules": []}
+	var dprofile: Dictionary = {"name": rule_name, "ap": 0, "deadly": 0, "rules": [], "_impact_pool": true}
 	var dw: int = await _solo_resolve_saves(defender, striker, rule_name, [], total_hits,
 		_solo_defense_vs(striker, AiCombatMath.HIT_SOURCE_MELEE), dprofile, not _solo_is_ai_unit(striker), true)
 	if dw > 0:
@@ -23559,7 +23565,7 @@ func _solo_self_destruct_post_melee(unit: GameUnit, enemy: GameUnit) -> void:
 					n, member.get_name(), enemy.get_name(), hits, ("" if hits == 1 else "s")], true)
 			await _solo_apply_wounds(member, 9999)   # "it is immediately killed" — all surviving carriers
 			if _solo_combined_alive(enemy) > 0:
-				var sprofile: Dictionary = {"name": n, "ap": 0, "deadly": 0, "rules": []}
+				var sprofile: Dictionary = {"name": n, "ap": 0, "deadly": 0, "rules": [], "_impact_pool": true}
 				var sw: int = await _solo_resolve_saves(member, enemy, n, [], hits,
 					_solo_defense_vs(enemy, AiCombatMath.HIT_SOURCE_MELEE), sprofile, not _solo_is_ai_unit(enemy), true)
 				if sw > 0:
