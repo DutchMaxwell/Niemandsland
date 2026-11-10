@@ -9998,6 +9998,33 @@ func _solo_regen_target(target: GameUnit, from_spell: bool = false) -> int:
 	return int(_solo_regen_pick(target, from_spell).get("target", 0))
 
 
+## R-1: the GROUP a wound-ignore rule belongs to. Forms of ONE rule (an Enhanced / Boost / Aura / Buff form, or
+## an entry that upgrades another) share a key and make one roll; differently named rules keep their own key
+## and each make their own roll. Regeneration, its Aura / Buff forms and Medical Training are one group.
+static func _solo_ignore_group_key(rule_name: String, params: Dictionary) -> String:
+	var upgraded := str(params.get("upgrades", ""))
+	if not upgraded.is_empty():
+		return upgraded
+	var lower := rule_name.to_lower()
+	if lower.begins_with("regeneration") or lower == "medical training":
+		return "Regeneration"
+	if lower == "self-repair":
+		return "Self-Repair"
+	if lower == "resistance":
+		return "Resistance"
+	var key := rule_name
+	if key.begins_with("Enhanced "):
+		key = key.substr("Enhanced ".length())
+	var stripped := true
+	while stripped:
+		stripped = false
+		for suffix: String in [" Aura", " Buff", " Boost"]:
+			if key.ends_with(suffix):
+				key = key.substr(0, key.length() - suffix.length())
+				stripped = true
+	return key
+
+
 ## The winning Regeneration-family pick — {target: int (0 = none), name: String} — shared by the
 ## roll and its log line (rules-must-log: the line names the ACTUAL rule, aliases included).
 ## `shot_in` / `charged_in` are the DISTANCES of the resolution being resolved (edge to edge, the same
