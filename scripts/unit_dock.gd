@@ -745,7 +745,8 @@ func _spell_effect(spell_name: String, unit: GameUnit = null) -> String:
 func _show_spell_ring(spell_name: String) -> void:
 	if range_ring_controller == null or not range_ring_controller.has_method("show_spell_preview"):
 		return
-	range_ring_controller.show_spell_preview(_presented_model_nodes(), OPRApiClient.spell_radius_inches(_spell_effect(spell_name)))
+	range_ring_controller.show_spell_preview(_presented_model_nodes(), OPRApiClient.spell_radius_for(_spell_effect(spell_name),
+			RulesRegistry.system_of_unit(_presented_unit), RulesRegistry.faction_of_unit(_presented_unit), spell_name))
 
 
 func _clear_spell_ring() -> void:

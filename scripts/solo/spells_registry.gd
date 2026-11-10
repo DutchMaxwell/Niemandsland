@@ -87,6 +87,19 @@ static func spells_for_unit(unit: GameUnit) -> Array:
 	return spells_for(RulesRegistry.system_of_unit(unit), RulesRegistry.faction_of_unit(unit))
 
 
+## A spell's range in inches (`range_in`) for the spell range ring; 0 when the map, faction or spell is
+## unknown or the spell has no range. Reads the map directly (not spells_for) so an ordinary miss does not
+## count as a missing spell book.
+static func range_in_for(system: String, faction: String, spell_name: String) -> int:
+	var fmap: Variant = map_for(system).get("factions", {}).get(faction, {})
+	if not (fmap is Dictionary):
+		return 0
+	for sp in fmap.get("spells", []):
+		if sp is Dictionary and str(sp.get("name", "")) == spell_name:
+			return maxi(0, int(sp.get("range_in", 0)))
+	return 0
+
+
 ## One spell entry by name (for the human-side assist / tests); {} when unknown.
 static func entry_for(system: String, faction: String, spell_name: String) -> Dictionary:
 	for sp in spells_for(system, faction):

@@ -496,7 +496,8 @@ func _on_rule_hover_ended(_meta: Variant) -> void:
 func _show_spell_range_preview(spell_name: String) -> void:
 	if range_ring_controller == null or not range_ring_controller.has_method("show_spell_preview"):
 		return
-	var radius := OPRApiClient.spell_radius_inches(_spell_effect(spell_name))
+	var radius := OPRApiClient.spell_radius_for(_spell_effect(spell_name),
+			RulesRegistry.system_of_unit(_current_unit), RulesRegistry.faction_of_unit(_current_unit), spell_name)
 	if radius <= 0:
 		return
 	range_ring_controller.show_spell_preview(_caster_model_nodes(), radius)

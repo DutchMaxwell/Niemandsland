@@ -1720,6 +1720,15 @@ static func spell_radius_inches(effect: String) -> int:
 	return int(m.get_string(1)) if m else 0
 
 
+## The ring radius for a spell. With effect text: parsed from it, exactly as spell_radius_inches. With NO
+## text (the shipped lesson boards carry none): `range_in` from the text-free spell map for the caster's
+## (system, faction); 0 = no ring when the map does not know the spell.
+static func spell_radius_for(effect: String, system: String, faction: String, spell_name: String) -> int:
+	if not effect.strip_edges().is_empty():
+		return spell_radius_inches(effect)
+	return SpellsRegistry.range_in_for(system, faction, spell_name)
+
+
 ## Fetches the shared/common rule descriptions for the army's game system and merges
 ## them in WITHOUT overwriting army-book-specific descriptions. Cached per system.
 func _fetch_common_rules(army: OPRArmy) -> void:
