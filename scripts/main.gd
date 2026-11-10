@@ -11682,7 +11682,7 @@ func _solo_spawn_pulse_ring(at: Vector3, color: Color) -> MeshInstance3D:
 
 func _solo_clear_announce(nodes: Array) -> void:
 	for n in nodes:
-		if n is Node and is_instance_valid(n):
+		if is_instance_valid(n) and n is Node:   # validity first: `is` on a freed instance raises
 			(n as Node).queue_free()
 	_solo_live_announce = []   # whichever set was just freed, nothing is left to sweep
 
