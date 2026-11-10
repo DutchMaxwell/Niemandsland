@@ -1,5 +1,5 @@
 extends GdUnitTestSuite
-## Shipped-base drift guard (konrad ORDER 476c3390, step 1). The base an A/B runs
+## Shipped-base drift guard (lead ORDER 476c3390, step 1). The base an A/B runs
 ## against MUST equal the game's own shipped header knobs — the block
 ## tools/shipped_base_dump.gd emits from SoloDifficulty planner_v0 + SoloController
 ## ._apply_aifix + AiActRecorder._header_line, the same path the live core reads.
@@ -87,7 +87,7 @@ func test_the_shipped_header_carries_the_1724_1728_keys() -> void:
 			"shipped header lost table-fidelity key %s" % key).is_true()
 
 
-## Second mode (konrad ORDER b16a8cbc): the base the eval actually RUNS is the shipped
+## Second mode (lead ORDER b16a8cbc): the base the eval actually RUNS is the shipped
 ## header MINUS a fixed allow-list of dropped keys, so guard the FILTERED base, not just
 ## the raw header. NML_BATCH_BASE_FILTERED=<prep base> is compared to header-minus-list;
 ## any OTHER missing/extra key = RED (a 7th drop fails). The 6 allowed drops, by reason:

@@ -1,5 +1,5 @@
 extends GdUnitTestSuite
-## Plan 3.5 (konrad 12.10.): disconnect + token.
+## Plan 3.5 (lead 12.10.): disconnect + token.
 ##
 ## The 120 s roll bound is already on every roll kind (all rolls route through `_owner_roll`) and the
 ## reconnect restore is already the 3.3a full-state push (`turn_state`). The new work is the disconnect

@@ -1,5 +1,5 @@
 extends GdUnitTestSuite
-## Plan 3.4a (konrad 12.10.): round-start recovery online, on the owner's tray.
+## Plan 3.4a (lead 12.10.): round-start recovery online, on the owner's tray.
 ##
 ## At a round advance in an Automatic online room the HOST runs the round-start Shaken recovery
 ## (Battleborn / Steadfast) for BOTH sides — the same `_solo_battleborn_recovery()` the solo and hotseat
