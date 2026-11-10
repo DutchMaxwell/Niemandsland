@@ -10081,6 +10081,7 @@ func _solo_regen_pick(target: GameUnit, from_spell: bool = false, shot_in: float
 	var open_refused := ""
 	var gate_refused := ""   # MOR-17a: a gated name whose distance shut its 6+ (rules-must-log)
 	var gate_msg := ""       # MOR-17a: the gate's verdict line, logged where the roll happens
+	var gate_any := ""       # R-1: the same verdict for a gated rule that rolls in its own group
 	for e in RulesRegistry.unit_rules_of_primitive(target, "Regeneration"):
 		var ed := e as Dictionary
 		var n := str(ed["name"])
@@ -10115,15 +10116,20 @@ func _solo_regen_pick(target: GameUnit, from_spell: bool = false, shot_in: float
 			tgt = int(params.get(key2, params.get("ignore_target", 0)))
 		else:
 			tgt = int(params.get(key2, params.get("ignore_target", 0)))
+		var gate_line := ""
+		if tgt > 0 and gated and not from_spell and (shot_in >= 0.0 or charged_in >= 0.0):
+			gate_line = "Warding: %s ignores wounds on 6+ (%s from over %din)" % [
+				target.get_name(), "charged" if charged_in >= 0.0 else "shot", int(gate_in)]
 		if tgt > 0:
 			_solo_ignore_group_put(groups, _solo_ignore_group_key(n, params), n, tgt, gated)
+			if not gate_line.is_empty():
+				gate_any = gate_line
 		if tgt > 0 and (best == 0 or tgt < best):
 			best = tgt
 			best_name = n
 			best_terr = terr_in
-			if gated and not from_spell and (shot_in >= 0.0 or charged_in >= 0.0):
-				gate_msg = "Warding: %s ignores wounds on 6+ (%s from over %din)" % [
-					target.get_name(), "charged" if charged_in >= 0.0 else "shot", int(gate_in)]
+			if not gate_line.is_empty():
+				gate_msg = gate_line
 	var trace := ""
 	var best_rule: String = {"regeneration": "Regeneration", "self-repair": "Self-Repair"}.get(best_name, best_name)
 	if best_name != "" and best_terr > 0.0:
@@ -10133,13 +10139,16 @@ func _solo_regen_pick(target: GameUnit, from_spell: bool = false, shot_in: float
 	elif best_name != "" and _solo_regen_family_on(target, best_rule) and not _solo_rule_on_all_models(target, best_rule):
 		# Rules-must-log (row MOR-02): the most-models read kept the roll although not every model carries it.
 		trace = "%s: most models carry it, so a joined hero without it does not switch it off" % best_rule
-	if best_name != "Warding" and best_name != "Knightborn" and best_name != "Angelic Blessing":
-		gate_msg = ""   # another family rule bound the roll — the gate changed nothing
-	if best == 0 and not gate_refused.is_empty():
-		gate_msg = "Warding: no 6+ ignore, %s was %s from within %din" % [
+	var refusal := ""
+	if not gate_refused.is_empty():
+		refusal = "Warding: no 6+ ignore, %s was %s from within %din" % [
 			target.get_name(), "charged" if charged_in >= 0.0 else "shot",
 			int(float(RulesRegistry.unit_param(target, gate_refused, "ignore_over_in_charge" if charged_in >= 0.0 else "ignore_over_in",
 				6.0 if charged_in >= 0.0 else 9.0)))]
+	if best_name != "Warding" and best_name != "Knightborn" and best_name != "Angelic Blessing":
+		gate_msg = ""   # another family rule bound the roll — the gate changed nothing
+	if best == 0 and not gate_refused.is_empty():
+		gate_msg = refusal
 	var group_list: Array = []
 	for group_key: String in groups:
 		var entry: Dictionary = (groups[group_key] as Dictionary).duplicate()
@@ -10153,7 +10162,20 @@ func _solo_regen_pick(target: GameUnit, from_spell: bool = false, shot_in: float
 		if int(a["target"]) != int(b["target"]):
 			return int(a["target"]) < int(b["target"])
 		return str(a["group"]) < str(b["group"]))
-	return {"target": best, "name": best_name, "trace": trace, "gate": gate_msg, "groups": group_list}
+	# R-1: the gate verdict of a gated rule that rolls (or was refused) in its OWN group, even when another
+	# rule is the overall best and the top-level gate line above stays empty.
+	var group_gate := ""
+	var gate_binds := false
+	var refused_has_group := false
+	for g: Dictionary in group_list:
+		gate_binds = gate_binds or bool(g["gated"])
+		refused_has_group = refused_has_group or str(g["group"]) == _solo_ignore_group_key(gate_refused, {})
+	if gate_binds:
+		group_gate = gate_any
+	elif not refused_has_group:
+		group_gate = refusal
+	return {"target": best, "name": best_name, "trace": trace, "gate": gate_msg, "groups": group_list,
+		"group_gate": group_gate}
 
 
 ## Banner's morale-test bonus for a unit — gap 18a: the body now lives in

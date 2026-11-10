@@ -115,3 +115,17 @@ func test_a_unit_without_any_ignore_rule_has_no_groups() -> void:
 	var pick := _pick([], "human_inquisition")
 	assert_array(pick["groups"]).is_empty()
 	assert_int(int(pick["target"])).is_equal(0)
+
+
+## A gated rule (a distance gate on its 6+) that rolls beside Regeneration still explains itself: the pick's
+## top-level gate line stays empty (another rule is the overall best), the group gate carries the verdict.
+func test_a_gated_rule_beside_regeneration_still_explains_itself() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	var unit := _unit(["Regeneration", "Knightborn"], "gf", "knight_brothers")
+	var far: Dictionary = _main._solo_regen_pick(unit, false, 12.0)
+	assert_str(str(far["gate"])).is_equal("")
+	assert_str(str(far["group_gate"])).contains("Warding: ")
+	assert_str(str(far["group_gate"])).contains("over 9")
+	var near: Dictionary = _main._solo_regen_pick(unit, false, 5.0)
+	assert_int((near["groups"] as Array).size()).is_equal(1)
+	assert_str(str(near["group_gate"])).contains("no 6+")
