@@ -317,10 +317,15 @@ class RelayServer:
 
         self._open_sockets.add(websocket)
         self.ip_connection_counts[ip] = self.ip_connection_counts.get(ip, 0) + 1
+        pre_join_timestamps: list = []  # rate window for frames sent before the socket owns a Peer
 
         try:
             async for message in websocket:
                 peer = self.connections.get(websocket)
+                if peer is None and not self._within_rate(pre_join_timestamps):
+                    logger.warning("Rate limit exceeded before joining a room")
+                    await websocket.close(4429, "Rate limit exceeded")
+                    break
 
                 if isinstance(message, str):
                     # JSON control message
@@ -781,15 +786,22 @@ class RelayServer:
 
         Returns True if the message is allowed, False if rate limited.
         """
-        now = time.monotonic()
-        # Remove timestamps older than 1 second
-        peer.message_timestamps = [
-            t for t in peer.message_timestamps if now - t < 1.0
-        ]
-        if len(peer.message_timestamps) >= RATE_LIMIT_MESSAGES_PER_SECOND:
+        if not self._within_rate(peer.message_timestamps):
             logger.warning("Rate limit exceeded for peer %d", peer.peer_id)
             return False
-        peer.message_timestamps.append(now)
+        return True
+
+    @staticmethod
+    def _within_rate(timestamps: list) -> bool:
+        """Sliding one-second window over `timestamps` (pruned and appended in place).
+
+        Returns True and records the message if it is allowed, False if the window is full.
+        """
+        now = time.monotonic()
+        timestamps[:] = [t for t in timestamps if now - t < 1.0]
+        if len(timestamps) >= RATE_LIMIT_MESSAGES_PER_SECOND:
+            return False
+        timestamps.append(now)
         return True
 
     async def _remove_connection(

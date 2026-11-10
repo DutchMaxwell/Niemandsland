@@ -651,6 +651,19 @@ class TestSecurity:
         for ws in connections:
             await ws.close()
 
+    async def test_rate_limit_applies_before_joining(self, relay, monkeypatch):
+        """A socket that has not created or joined a room is rate-limited like a joined peer."""
+        import relay_server
+        monkeypatch.setattr(relay_server, "RATE_LIMIT_MESSAGES_PER_SECOND", 20)
+        _server, url = relay
+        ws = await websockets.connect(url)
+        with pytest.raises(websockets.exceptions.ConnectionClosed) as closed:
+            for _ in range(25):
+                await ws.send(json.dumps({"type": "heartbeat"}))
+            while True:
+                await asyncio.wait_for(ws.recv(), timeout=5.0)
+        assert closed.value.rcvd is not None and closed.value.rcvd.code == 4429
+
     async def test_heartbeat_ack_sent(self, relay):
         server, url = relay
         ws, code, _ = await create_room(url)
