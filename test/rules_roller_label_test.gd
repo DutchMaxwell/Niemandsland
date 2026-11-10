@@ -36,3 +36,17 @@ func test_online_remote_unit_uses_the_peer_display_name() -> void:
 func test_online_without_a_name_falls_back_to_the_slot() -> void:
 	assert_str(MainScript.roller_label_for("Bravo Squad", false, false, false, true, "", "P2 (Bravo)")) \
 		.is_equal("P2 (Bravo)")
+
+
+# The tray header for a roll that passes no purpose: "You" takes the plain verb ("You roll (N+)");
+# every other label is a name and keeps "<label> rolls (N+)".
+func test_fallback_purpose_for_you_uses_the_plain_verb() -> void:
+	assert_str(MainScript.roll_purpose_fallback("You", 4)).is_equal("You roll (4+)")
+
+
+func test_fallback_purpose_for_a_player_name_keeps_rolls() -> void:
+	assert_str(MainScript.roll_purpose_fallback("Alice", 4)).is_equal("Alice rolls (4+)")
+
+
+func test_fallback_purpose_for_an_ai_unit_keeps_rolls() -> void:
+	assert_str(MainScript.roll_purpose_fallback("AI (Wardens)", 4)).is_equal("AI (Wardens) rolls (4+)")

@@ -10875,6 +10875,14 @@ static func roller_label_for(unit_name: String, is_ai: bool, ai_designated: bool
 	return slot_label
 
 
+## The tray header for a scripted roll that passes no purpose (community #170: never a bare tray).
+## Pure, so it is testable without a scene. "You" is a pronoun, not a name, so it takes the plain
+## verb ("You roll (4+)"); every other label is a name and keeps "<label> rolls (N+)".
+static func roll_purpose_fallback(owner: String, success_target: int) -> String:
+	var verb := "roll" if owner == "You" else "rolls"
+	return "%s %s (%d+)" % [owner, verb, success_target]
+
+
 ## Battle-log / tray-roll label for a unit (rules plan 2.5). An AI unit is "AI (unit)" as before; a
 ## human unit is "You" while an AI slot is designated (solo vs NACHTMAHR, byte-identical); otherwise
 ## (hotseat, or a human-vs-human room) the unit is named by its player slot — the session's display
@@ -10998,7 +11006,7 @@ func _solo_tray_roll(count: int, success_target: int, owner: String, roll_kind: 
 	# Community #170: the tray names WHAT is being rolled. High-value sites pass a specific
 	# purpose; the fallback synthesizes an honest generic one so no roll shows a bare tray.
 	if purpose.is_empty():
-		purpose = "%s rolls (%d+)" % [owner, success_target]
+		purpose = roll_purpose_fallback(owner, success_target)
 	_next_roll_purpose = purpose
 	_set_roll_purpose(purpose)
 	# #162: any scripted tray roll (solo flow) commits the table — take-backs expire.
