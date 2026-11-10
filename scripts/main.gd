@@ -325,9 +325,9 @@ var _solo_model_pick: Dictionary = {}        # B5: {unit, chain, recommended, ou
 # model, the shared target-side readers answer for THAT MODEL ALONE — its own unit's rules (the joined
 # chain's other members neither grant nor withhold them) and its own cover square (the other models
 # "don't … provide cover to the target model"). Readers: _solo_rule_on_all_models, _solo_majority_in_cover,
-# _solo_has_regeneration. It is set and cleared inside three PURELY SYNCHRONOUS windows — the whole of
-# _solo_takedown_context, the Fortified prologue of _solo_save_batch and the pick of
-# _solo_apply_regeneration — so no await can ever observe it. Never widen a window across an await:
+# _solo_has_regeneration. It is set and cleared inside four PURELY SYNCHRONOUS windows — the whole of
+# _solo_takedown_context, the Fortified prologue of _solo_save_batch and the picks of
+# _solo_apply_regeneration and _solo_ignore_wounds — so no await can ever observe it. Never widen a window across an await:
 # every attack in the game shares those functions, and a leaked flag would rewrite an unrelated save.
 var _solo_takedown_solo: Dictionary = {}     # {unit, index, model} or {}
 var _solo_alias_charge_in: float = 0.0       # SHO-18: the melee charge gap for the alias gate
@@ -5468,7 +5468,9 @@ func _solo_resolve_spell_damage(caster: GameUnit, caster_unit: GameUnit, spell_n
 		# all X rolled (Resistance at its spell threshold), the survivors capped at that model.
 		landed = await _solo_land_deadly_wounds(target, spell_name, deadly, 0 if proof else caused, caused if proof else 0, true)
 	elif proof:
-		landed = await _solo_land_wounds(target, 0, caused)
+		# R-1: from rules 3.6 a bypassed spell wound still meets the rules that are not named Regeneration, and
+		# meets them at the SPELL threshold (a unit with Resistance rolls 2+ against it, not 6+).
+		landed = await _solo_land_wounds(target, 0, caused, AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36)
 	else:
 		# from_spell=true: a unit with Resistance ignores THESE (spell) wounds on 2+, not 6+.
 		landed = await _solo_land_wounds(target, caused, 0, true)
@@ -9946,6 +9948,9 @@ func _solo_bane_facet_name(striker: GameUnit, profile_range: int) -> String:
 ## `bypassed`: wounds of the same hit that ignore Regeneration — logged when the unit had a roll to skip.
 func _solo_apply_regeneration(target: GameUnit, wounds: int, from_spell: bool = false, solo: Dictionary = {},
 		bypassed: int = 0, shot_in: float = -1.0, charged_in: float = -1.0, log_gate: bool = true) -> int:
+	# R-1: from the rules 3.6 epoch a direct caller meets the per-name rolls too (no production caller bypasses here any more).
+	if bypassed == 0 and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		return await _solo_ignore_wounds(target, wounds, 0, from_spell, solo, shot_in, charged_in, log_gate)
 	# PURELY SYNCHRONOUS window: _solo_regen_pick only reads rules, and the flag is down again before the
 	# tray below awaits (a leaked flag would rewrite the next unrelated unit's ignore roll).
 	_solo_takedown_solo = solo
@@ -10203,10 +10208,60 @@ func _solo_land_wounds(target: GameUnit, regenable: int, regen_proof: int, from_
 	# adds no mark; only _solo_apply_wounds marks there (the old unconditional spend stays in charge).
 	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and regenable + regen_proof > 0:
 		_solo_mark_regen_grant_used(target)
-	var landed: int = maxi(regen_proof, 0) + await _solo_apply_regeneration(target, regenable, from_spell, {}, regen_proof, shot_in, charged_in)
+	var landed: int = await _solo_ignore_wounds(target, regenable, regen_proof, from_spell, {}, shot_in, charged_in)
 	if landed > 0:
 		await _solo_apply_wounds(target, landed)
 	return landed
+
+
+## R-1: every wound-ignore rule of the target is told apart by NAME. A bypass (Bane / Rending / ...) skips only the
+## roll of the rule named Regeneration; every other named rule still rolls against those wounds. Two differently
+## named rules each roll, one after the other, on the wounds still standing; forms of one rule are one roll (the
+## pick's groups). Returns ALL wounds that land, the bypassed ones included. Below the rules 3.6 epoch this is
+## exactly today's fold: the bypassed wounds land and the one folded roll covers the regenable ones.
+func _solo_ignore_wounds(target: GameUnit, regenable: int, bypassed: int, from_spell: bool = false,
+		solo: Dictionary = {}, shot_in: float = -1.0, charged_in: float = -1.0, log_gate: bool = true) -> int:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return maxi(bypassed, 0) + await _solo_apply_regeneration(target, regenable, from_spell, solo, bypassed, shot_in, charged_in, log_gate)
+	# PURELY SYNCHRONOUS window (see _solo_takedown_solo): the flag is down again before the first tray await.
+	_solo_takedown_solo = solo
+	var pick := _solo_regen_pick(target, from_spell, shot_in, charged_in)
+	_solo_takedown_solo = {}
+	var pool: int = maxi(regenable, 0)
+	var bypass: int = maxi(bypassed, 0)
+	# Rules-must-log (MOR-17a): the distance gate's verdict, once per resolution, for a gated rule that rolls in its
+	# own group as well as for a refusal.
+	var group_gate := str(pick.get("group_gate", ""))
+	if not group_gate.is_empty() and pool + bypass > 0 and battle_log != null and log_gate:
+		battle_log.log_event(BattleLog.Category.COMBAT, group_gate, true)
+	var trace := str(pick.get("trace", ""))
+	if not trace.is_empty() and battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT, "%s — %s" % [target.get_name(), trace], true)
+	var display_of := {"regeneration": "Regeneration", "self-repair": "Self-Repair", "resistance": "Resistance"}
+	var groups: Array = pick.get("groups", [])
+	var others: Array = []
+	for g: Dictionary in groups:
+		if not bool(g["regen"]):
+			others.append(str(display_of.get(str(g["name"]), str(g["name"]))))
+	var joined := false   # the bypassed wounds have joined the pool (a non-Regeneration group rolls them)
+	for g: Dictionary in groups:
+		var g_name := str(g["name"])
+		var g_target := int(g["target"])
+		if bool(g["regen"]):
+			# A1 rules-must-log: the skip is never silent.
+			if bypass > 0 and battle_log != null:
+				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %d wound%s ignore Regeneration — no %s roll" % [
+					target.get_name(), bypass, ("" if bypass == 1 else "s"), g_name], true)
+		elif not joined:
+			joined = true
+			if bypass > 0:
+				if battle_log != null:
+					battle_log.log_event(BattleLog.Category.COMBAT, "%s: %d wound%s ignore only Regeneration — %s still rolls" % [
+						target.get_name(), bypass, ("" if bypass == 1 else "s"), " and ".join(others)], true)
+				pool += bypass
+		pool = await _solo_roll_ignore_group(target, pool, g_target, g_name,
+			"%s (%d+ ignores a wound)" % [display_of.get(g_name, g_name), g_target], "%s dice" % g_name)
+	return pool if joined else pool + bypass
 
 
 ## Deadly(X) landing (GF v3.5.1 p.13, no carry-over): each unsaved wound deals X to ONE model, capped at what
@@ -10264,11 +10319,10 @@ func _solo_land_deadly_wounds(target: GameUnit, weapon_name: String, deadly_x: i
 		if victim == null:
 			victim = (pick["unit"] as GameUnit).models[int(pick["index"])]
 		var mult: int = maxi(1, deadly_x)   # apply_deadly_hit caps what survives at the model
-		if w_i >= proof:
-			mult = await _solo_apply_regeneration(target, mult, from_spell, {}, 0, gate_in, -1.0, not gate_logged)   # one logged die per multiplied wound
-			gate_logged = true
-		else:
-			await _solo_apply_regeneration(target, 0, from_spell, {}, mult, gate_in)   # A1: the skipped roll is logged
+		# One logged die per multiplied wound; a bypassed wound (A1) logs its skip and meets every other named rule.
+		mult = await _solo_ignore_wounds(target, mult if w_i >= proof else 0, 0 if w_i >= proof else mult,
+			from_spell, {}, gate_in, -1.0, not gate_logged)
+		gate_logged = true
 		if mult > 0:
 			acc["dealt"] += SoloController.apply_deadly_hit(victim, mult, on_changed, on_died)
 	var dealt: int = int(acc["dealt"])
@@ -10402,7 +10456,7 @@ func _solo_land_takedown_wounds(target: GameUnit, weapon_name: String, pick: Dic
 		return 0
 	# TC-023: the ignore roll is the PICKED MODEL's unit-of-[1] roll — a Regeneration/medic hero joined to a
 	# plain squad no longer covers the sniped trooper (and the hero's own roll still stands when HE is hit).
-	var landed: int = maxi(regen_proof, 0) + await _solo_apply_regeneration(owner, regenable, false, pick, regen_proof)
+	var landed: int = await _solo_ignore_wounds(owner, regenable, regen_proof, false, pick)
 	if landed <= 0:
 		return 0
 	var pid: int = int(owner.unit_properties.get("player_id", target.unit_properties.get("player_id", 1)))
@@ -10698,13 +10752,18 @@ func _solo_profile_lacerate_only(profile: Dictionary) -> bool:
 	return lacerate
 
 
-## DAT-16b — rules-must-log: a Regeneration bypass names itself only when the hit target really has a
-## Regeneration-family roll to skip (the regen pool's own seam, `_solo_regen_target`). Below rules 3.6
+## DAT-16b — rules-must-log: a Regeneration bypass names itself only when the hit target really has a roll
+## of the rule named Regeneration to skip (a `regen` group of the pick, `_solo_regen_pick`). Below rules 3.6
 ## the old line stays byte-identical for replay; a direct caller without a target keeps the old line.
 func _solo_regen_bypass_named(target: GameUnit) -> bool:
 	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 or target == null:
 		return true
-	return _solo_regen_target(target) > 0
+	# R-1: a bypass skips only the roll of the rule named Regeneration, so only a target that carries a rule of
+	# that group can be told "Regeneration ignored" (Self-Repair, Protected, ... still roll and are not skipped).
+	for g: Dictionary in _solo_regen_pick(target).get("groups", []):
+		if bool(g.get("regen", false)):
+			return true
+	return false
 
 
 func _solo_ignores_regen(attacker: GameUnit, profile: Dictionary, target: GameUnit = null) -> bool:
