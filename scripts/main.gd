@@ -10025,6 +10025,14 @@ static func _solo_ignore_group_key(rule_name: String, params: Dictionary) -> Str
 	return key
 
 
+## R-1: record one wound-ignore rule in the pick's per-group table - the group keeps its most generous target
+## (the lowest number) and the name / gate flag of the entry that holds it.
+func _solo_ignore_group_put(groups: Dictionary, key: String, rule_name: String, tgt: int, gated: bool) -> void:
+	if groups.has(key) and int((groups[key] as Dictionary)["target"]) <= tgt:
+		return
+	groups[key] = {"group": key, "name": rule_name, "target": tgt, "gated": gated}
+
+
 ## The winning Regeneration-family pick — {target: int (0 = none), name: String} — shared by the
 ## roll and its log line (rules-must-log: the line names the ACTUAL rule, aliases included).
 ## `shot_in` / `charged_in` are the DISTANCES of the resolution being resolved (edge to edge, the same
@@ -10038,11 +10046,14 @@ func _solo_regen_pick(target: GameUnit, from_spell: bool = false, shot_in: float
 		target = holder
 	var best := 0   # the most generous (lowest) ignore target the unit fields; 0 = none
 	var best_name := ""
+	var groups := {}   # R-1: the same rules told apart by NAME - one entry per group, see _solo_ignore_group_key
 	if _solo_has_regeneration(target):
 		best = int(RulesRegistry.unit_param(target, "Regeneration", "ignore_target", 5))
 		best_name = "regeneration"
+		_solo_ignore_group_put(groups, "Regeneration", "regeneration", best, false)
 	if _solo_regen_family_on(target, "Self-Repair"):
 		var sr := int(RulesRegistry.unit_param(target, "Self-Repair", "ignore_target", 6))
+		_solo_ignore_group_put(groups, "Self-Repair", "self-repair", sr, false)
 		if best == 0 or sr < best:
 			best = sr
 			best_name = "self-repair"
@@ -10056,6 +10067,8 @@ func _solo_regen_pick(target: GameUnit, from_spell: bool = false, shot_in: float
 		if _solo_rule_on_most_models(target, res_rule):
 			var key := "ignore_target_spell" if from_spell else "ignore_target"
 			var rs := int(RulesRegistry.unit_param(target, res_rule, key, 2 if from_spell else 6))
+			_solo_ignore_group_put(groups, _solo_ignore_group_key(res_rule, {}),
+				"resistance" if res_rule == "Resistance" else res_rule, rs, false)
 			if best == 0 or rs < best:
 				best = rs
 				best_name = "resistance" if res_rule == "Resistance" else res_rule
@@ -10102,6 +10115,8 @@ func _solo_regen_pick(target: GameUnit, from_spell: bool = false, shot_in: float
 			tgt = int(params.get(key2, params.get("ignore_target", 0)))
 		else:
 			tgt = int(params.get(key2, params.get("ignore_target", 0)))
+		if tgt > 0:
+			_solo_ignore_group_put(groups, _solo_ignore_group_key(n, params), n, tgt, gated)
 		if tgt > 0 and (best == 0 or tgt < best):
 			best = tgt
 			best_name = n
@@ -10125,7 +10140,20 @@ func _solo_regen_pick(target: GameUnit, from_spell: bool = false, shot_in: float
 			target.get_name(), "charged" if charged_in >= 0.0 else "shot",
 			int(float(RulesRegistry.unit_param(target, gate_refused, "ignore_over_in_charge" if charged_in >= 0.0 else "ignore_over_in",
 				6.0 if charged_in >= 0.0 else 9.0)))]
-	return {"target": best, "name": best_name, "trace": trace, "gate": gate_msg}
+	var group_list: Array = []
+	for group_key: String in groups:
+		var entry: Dictionary = (groups[group_key] as Dictionary).duplicate()
+		entry["regen"] = group_key == "Regeneration"
+		group_list.append(entry)
+	# Deterministic order (the host rolls them in this order): Regeneration first, then the most generous
+	# target, then the group name.
+	group_list.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if bool(a["regen"]) != bool(b["regen"]):
+			return bool(a["regen"])
+		if int(a["target"]) != int(b["target"]):
+			return int(a["target"]) < int(b["target"])
+		return str(a["group"]) < str(b["group"]))
+	return {"target": best, "name": best_name, "trace": trace, "gate": gate_msg, "groups": group_list}
 
 
 ## Banner's morale-test bonus for a unit — gap 18a: the body now lives in

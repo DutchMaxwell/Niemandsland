@@ -61,3 +61,57 @@ func test_the_group_key_folds_only_forms_of_one_rule() -> void:
 	]
 	for c in cases:
 		assert_str(_main._solo_ignore_group_key(str(c[0]), c[1])).is_equal(str(c[2]))
+
+
+func _pick(rules: Array, faction: String, system: String = "gf") -> Dictionary:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	return _main._solo_regen_pick(_unit(rules, system, faction))
+
+
+## Regeneration and a differently named rule are two groups, Regeneration first; the top-level verdict
+## (the single best target and its name) is what it always was.
+func test_two_named_rules_make_two_groups_and_the_top_level_is_unchanged() -> void:
+	var pick := _pick(["Regeneration", "Plaguebound"], "plague_disciples")
+	var groups: Array = pick["groups"]
+	assert_int(groups.size()).is_equal(2)
+	assert_str(str(groups[0]["group"])).is_equal("Regeneration")
+	assert_str(str(groups[0]["name"])).is_equal("regeneration")
+	assert_int(int(groups[0]["target"])).is_equal(5)
+	assert_bool(bool(groups[0]["regen"])).is_true()
+	assert_str(str(groups[1]["group"])).is_equal("Plaguebound")
+	assert_int(int(groups[1]["target"])).is_equal(6)
+	assert_bool(bool(groups[1]["regen"])).is_false()
+	assert_int(int(pick["target"])).is_equal(5)
+	assert_str(str(pick["name"])).is_equal("regeneration")
+
+
+func test_forms_of_one_rule_make_one_group_at_the_best_target() -> void:
+	var pick := _pick(["Plaguebound", "Enhanced Plaguebound"], "plague_disciples")
+	var groups: Array = pick["groups"]
+	assert_int(groups.size()).is_equal(1)
+	assert_str(str(groups[0]["group"])).is_equal("Plaguebound")
+	assert_int(int(groups[0]["target"])).is_equal(5)
+	assert_int(int(pick["target"])).is_equal(5)
+	assert_str(str(pick["name"])).is_equal("Enhanced Plaguebound")
+
+
+func test_self_repair_and_its_enhanced_form_make_one_group() -> void:
+	var pick := _pick(["Self-Repair", "Enhanced Self-Repair"], "robot_legions")
+	var groups: Array = pick["groups"]
+	assert_int(groups.size()).is_equal(1)
+	assert_str(str(groups[0]["group"])).is_equal("Self-Repair")
+	assert_int(int(groups[0]["target"])).is_equal(5)
+
+
+func test_a_lone_alias_is_one_group_and_not_the_regeneration_group() -> void:
+	var pick := _pick(["Protected"], "human_inquisition")
+	var groups: Array = pick["groups"]
+	assert_int(groups.size()).is_equal(1)
+	assert_str(str(groups[0]["group"])).is_equal("Protected")
+	assert_bool(bool(groups[0]["regen"])).is_false()
+
+
+func test_a_unit_without_any_ignore_rule_has_no_groups() -> void:
+	var pick := _pick([], "human_inquisition")
+	assert_array(pick["groups"]).is_empty()
+	assert_int(int(pick["target"])).is_equal(0)
