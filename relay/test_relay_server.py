@@ -1420,3 +1420,19 @@ class TestStatsDigest:
         import stats_digest
         out = stats_digest.render_digest([], source="empty.log")
         assert "No STATS records found." in out
+
+
+class TestDependencyPin:
+    """requirements.txt pins websockets to one major version, and the suite runs inside it."""
+
+    def test_websockets_pinned_to_tested_major(self):
+        from pathlib import Path
+
+        lines = Path(__file__).with_name("requirements.txt").read_text(encoding="utf-8").splitlines()
+        spec = next(line.strip() for line in lines if line.strip().startswith("websockets"))
+        lower = spec.split(">=", 1)[1].split(",", 1)[0].strip()
+        upper = spec.split("<", 1)[1].strip() if "<" in spec else ""
+        assert upper, "websockets needs an upper bound"
+        installed = tuple(int(part) for part in websockets.__version__.split(".")[:2])
+        low = tuple(int(part) for part in lower.split(".")[:2])
+        assert low <= installed < (int(upper.split(".")[0]), 0)

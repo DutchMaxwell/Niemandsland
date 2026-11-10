@@ -70,7 +70,7 @@ Three ways to read them, all returning the same blob:
 
 ```bash
 cd relay
-python -m pip install -r requirements.txt   # websockets>=12.0
+python -m pip install -r requirements.txt   # websockets>=16.0,<17
 python relay_server.py --port 8765
 ```
 
@@ -103,7 +103,7 @@ fly deploy
 | `relay_server.py` | The relay (asyncio + `websockets`) — routing, rooms, `Stats`, `/stats` |
 | `relay_stats.py` | CLI: query a relay's aggregate stats over WebSocket and print them |
 | `stats_digest.py` | Parse captured `STATS` log lines into a weekly usage digest |
-| `requirements.txt` | `websockets>=12.0` |
+| `requirements.txt` | `websockets>=16.0,<17` (the major the suite runs against) |
 | `Dockerfile` | `python:3.11-slim`, runs `relay_server.py --port 8765` |
 | `fly.toml` | Fly.io deployment config |
 | `test_relay_server.py`, `conftest.py`, `pytest.ini` | Test suite |
