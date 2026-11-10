@@ -18051,12 +18051,17 @@ func _on_battle_log_dead(node, dead: bool) -> void:
 	var total: int = SoloController.combined_total(gu)
 	if dead:
 		if alive == 0:
-			battle_log.on_unit_destroyed(gu.get_name())
+			# A volley parks its casualties one by one with the whole unit already dead: write the line once.
+			if not bool(gu.get_meta("destroyed_line_written", false)):
+				gu.set_meta("destroyed_line_written", true)
+				battle_log.on_unit_destroyed(gu.get_name())
 			_solo_drop_carried(gu, "destroyed")
 			_solo_recycle_if_due(gu)
 		else:
+			gu.set_meta("destroyed_line_written", false)
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s loses a model (%d/%d)" % [gu.get_name(), alive, total])
 	else:
+		gu.set_meta("destroyed_line_written", false)
 		battle_log.on_unit_revived(gu.get_name())
 
 
