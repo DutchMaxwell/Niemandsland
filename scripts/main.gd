@@ -10752,8 +10752,8 @@ func _solo_profile_lacerate_only(profile: Dictionary) -> bool:
 	return lacerate
 
 
-## DAT-16b — rules-must-log: a Regeneration bypass names itself only when the hit target really has a
-## Regeneration-family roll to skip (the regen pool's own seam, `_solo_regen_target`). Below rules 3.6
+## DAT-16b — rules-must-log: a Regeneration bypass names itself only when the hit target really has a roll
+## of the rule named Regeneration to skip (a `regen` group of the pick, `_solo_regen_pick`). Below rules 3.6
 ## the old line stays byte-identical for replay; a direct caller without a target keeps the old line.
 func _solo_regen_bypass_named(target: GameUnit) -> bool:
 	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 or target == null:
