@@ -23285,6 +23285,33 @@ func _solo_bridge_granted_flags(unit: GameUnit, profile: Dictionary, target: Gam
 					out = profile.duplicate()
 				out["unstoppable"] = true
 				break
+	# A granted Thrust (own-store record, e.g. "Thrust in Melee") arms the charge bonus like the
+	# weapon's own flag — the same live-record walk and scope split as the Unstoppable leg above. The
+	# charge readers (to-hit +1, AP +1, the battle-log line) only look at the profile flag, so the
+	# bridge is the only place a unit-level grant can reach them. Attackers-side records stay out.
+	for m in _solo_joined_chain(unit):
+		var gu := m as GameUnit
+		if gu == null or bool(out.get("thrust", false)):
+			break
+		for rd in gu.unit_properties.get(SOLO_SPELL_RECORDS_KEY, []):
+			var rec := rd as Dictionary
+			if str(rec.get("beneficiary", "")) == "attackers":
+				continue
+			var scope := str(rec.get("scope", ""))
+			if (scope == "shooting" and not bridge_shooting) \
+					or (scope == "melee" and bridge_shooting):
+				continue
+			var grant_base := RulesRegistry.base_rule_name(str(rec.get("grants_rule", "")))
+			var grant_cut := grant_base.find(" when ")
+			if grant_cut < 0:
+				grant_cut = grant_base.find(" in ")
+			if grant_cut >= 0:
+				grant_base = grant_base.substr(0, grant_cut)
+			if grant_base == "Thrust":
+				if out == profile:
+					out = profile.duplicate()
+				out["thrust"] = true
+				break
 	if target != null and _solo_spell_mods.has(target.get_instance_id()):
 		var records := _solo_spell_mods[target.get_instance_id()] as Array
 		for rule_name in AiSpell.attacker_grants_from_target(records):
