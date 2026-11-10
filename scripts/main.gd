@@ -5468,7 +5468,9 @@ func _solo_resolve_spell_damage(caster: GameUnit, caster_unit: GameUnit, spell_n
 		# all X rolled (Resistance at its spell threshold), the survivors capped at that model.
 		landed = await _solo_land_deadly_wounds(target, spell_name, deadly, 0 if proof else caused, caused if proof else 0, true)
 	elif proof:
-		landed = await _solo_land_wounds(target, 0, caused)
+		# R-1: from rules 3.6 a bypassed spell wound still meets the rules that are not named Regeneration, and
+		# meets them at the SPELL threshold (a unit with Resistance rolls 2+ against it, not 6+).
+		landed = await _solo_land_wounds(target, 0, caused, AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36)
 	else:
 		# from_spell=true: a unit with Resistance ignores THESE (spell) wounds on 2+, not 6+.
 		landed = await _solo_land_wounds(target, caused, 0, true)
@@ -10756,7 +10758,12 @@ func _solo_profile_lacerate_only(profile: Dictionary) -> bool:
 func _solo_regen_bypass_named(target: GameUnit) -> bool:
 	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 or target == null:
 		return true
-	return _solo_regen_target(target) > 0
+	# R-1: a bypass skips only the roll of the rule named Regeneration, so only a target that carries a rule of
+	# that group can be told "Regeneration ignored" (Self-Repair, Protected, ... still roll and are not skipped).
+	for g: Dictionary in _solo_regen_pick(target).get("groups", []):
+		if bool(g.get("regen", false)):
+			return true
+	return false
 
 
 func _solo_ignores_regen(attacker: GameUnit, profile: Dictionary, target: GameUnit = null) -> bool:
