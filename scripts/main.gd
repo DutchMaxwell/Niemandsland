@@ -1641,6 +1641,8 @@ func _solo_drop_open_pick_of(gu: GameUnit) -> void:
 	var host := _solo_combat_unit(gu)
 	if host == null or _solo_target_mode.is_empty() or _solo_target_mode.get("unit") != host:
 		return
+	if _solo_target_mode.has("coordinate"):
+		return   # the hand-off offer belongs to an activated unit by design; only its pick or decline books the reply
 	_solo_end_targeting()
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL,

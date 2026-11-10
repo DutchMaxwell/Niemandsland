@@ -271,3 +271,88 @@ func test_control_shooting_pick_without_activation_resolves_an_attack(timeout :=
 
 func test_control_melee_pick_without_activation_resolves_an_attack(timeout := 120000) -> void:
 	await _control(true)
+
+
+# === The Coordinate offer belongs to an ALREADY activated unit by design ==========================
+##
+## The hand-off offer (`_solo_try_coordinate_human`) is a window whose unit is the activated bearer. It
+## owns the activation flow: only its pick or its decline books the AI's reply. Un-marking and
+## re-marking the bearer while the offer is open ("a mis-click fix") emits unit_activated again; that
+## must NOT close the offer, or nothing is left to book the owed reply.
+
+## A human bearer with Coordinate (the book that fields it, as e2e_wave4_ebr_coordinate_test.gd stamps
+## it), a friend in reach to hand off to, and an AI unit far away. The AI is frozen: this measures the
+## reply LEDGER, not the AI's turn. Opens the REAL offer by activating the bearer through the card's
+## toggle; `_solo_try_coordinate_human` offers nothing while `_solo_batch` is on, so it is switched off.
+func _open_coordinate_offer() -> GameUnit:
+	var bearer := _armed(1, "Comms Team", Vector3.ZERO, false)
+	var receiver := _armed(1, "Riflemen", Vector3(8.0 * INCH, 0, 0), false)
+	_armed(2, "Watchers", Vector3(-50.0 * INCH, 0, 0), false)
+	bearer.unit_properties["game_system"] = "gf"
+	bearer.unit_properties["faction_folder"] = "human_defense_force"
+	bearer.unit_properties["special_rules"] = ["Coordinate"]
+	assert_bool(receiver.is_activated).is_false()
+	_main._solo_batch = false
+	_main._solo_ai_busy = true
+	_main._solo_pending_replies = 0
+	await _main.radial_menu_controller.card_toggle_activation(bearer)
+	var deadline := Time.get_ticks_msec() + 5000
+	while not _main._solo_target_mode.has("coordinate") and Time.get_ticks_msec() < deadline:
+		await get_tree().process_frame
+	return bearer
+
+
+## "Un-mark and re-mark": the unit card's activation toggle twice.
+func _toggle_off_and_on(bearer: GameUnit) -> void:
+	await _main.radial_menu_controller.card_toggle_activation(bearer)
+	assert_bool(bearer.is_activated).override_failure_message("fixture: the toggle did not un-mark the bearer").is_false()
+	await _main.radial_menu_controller.card_toggle_activation(bearer)
+	assert_bool(bearer.is_activated).override_failure_message("fixture: the toggle did not re-mark the bearer").is_true()
+	await _runner.simulate_frames(4)
+
+
+func _assert_offer_open_and_undropped(bearer: GameUnit) -> void:
+	assert_bool(_main._solo_target_mode.has("coordinate")) \
+		.override_failure_message("the Coordinate offer was closed by re-marking its bearer") \
+		.is_true()
+	assert_bool(_main._solo_target_mode.get("unit") == bearer).is_true()
+	assert_bool(_log_text().find("the open target pick is dropped") != -1) \
+		.override_failure_message("the log says the Coordinate offer was dropped") \
+		.is_false()
+
+
+func test_coordinate_offer_survives_a_re_toggle_and_decline_books_one_reply(timeout := 120000) -> void:
+	var bearer := await _open_coordinate_offer()
+	assert_bool(_main._solo_target_mode.has("coordinate")) \
+		.override_failure_message("fixture: no Coordinate offer opened for the bearer") \
+		.is_true()
+	assert_bool(bearer.is_activated).override_failure_message("fixture: the bearer is not activated").is_true()
+	await _toggle_off_and_on(bearer)
+	_assert_offer_open_and_undropped(bearer)
+	var before: int = _main._solo_pending_replies
+	await _main._solo_coordinate_decline(bearer)
+	assert_int(_main._solo_pending_replies) \
+		.override_failure_message("declining the offer must book exactly one AI reply") \
+		.is_equal(before + 1)
+	_main._solo_ai_busy = false
+	await E2EBoot.settle(get_tree())
+
+
+## The same through the player's real decline (Esc): with the offer gone, Esc finds no window and the
+## owed reply is never booked - the ledger is where a dropped offer shows.
+func test_coordinate_offer_esc_after_a_re_toggle_books_one_reply(timeout := 120000) -> void:
+	var bearer := await _open_coordinate_offer()
+	assert_bool(_main._solo_target_mode.has("coordinate")) \
+		.override_failure_message("fixture: no Coordinate offer opened for the bearer") \
+		.is_true()
+	await _toggle_off_and_on(bearer)
+	var before: int = _main._solo_pending_replies
+	var esc := InputEventKey.new()
+	esc.keycode = KEY_ESCAPE
+	esc.pressed = true
+	await _main._solo_targeting_input(esc)
+	assert_int(_main._solo_pending_replies) \
+		.override_failure_message("Esc on the Coordinate offer must book exactly one AI reply") \
+		.is_equal(before + 1)
+	_main._solo_ai_busy = false
+	await E2EBoot.settle(get_tree())
