@@ -144,3 +144,52 @@ func test_counter_attack_unit_cuts_impact_dice() -> void:
 	assert_str(_log_text()).contains("Counter: -2 Impact dice")
 	assert_str(_log_text()).contains("Impact(3) rolls 4 dice")
 	await E2EBoot.settle(get_tree())
+
+
+## Impact is not a weapon: a charger's unit-level melee AP rule (Piercing Fighter, gf/orc_marauders)
+## must not reach its Impact hits, only its weapon strikes. Tough models so Impact never wipes the foe.
+func _tough_foe() -> GameUnit:
+	var foe := _foe()
+	for m in foe.models:
+		(m as ModelInstance).wounds_max = 9
+		(m as ModelInstance).wounds_current = 9
+	foe.unit_properties["special_rules"] = ["Tough(9)"]
+	return foe
+
+
+## The log's save-threshold lines ("<unit> saves on <target>") in the order the batches rolled.
+func _save_lines() -> Array:
+	var lines: Array = []
+	for e in _main.battle_log.entries():
+		if str((e as Dictionary)["text"]).contains(" saves on "):
+			lines.append(str((e as Dictionary)["text"]))
+	return lines
+
+
+func test_impact_hits_get_no_unit_melee_ap_bonus() -> void:
+	var charger := _fighter(["Piercing Fighter", "Impact(6)"], "gf", "orc_marauders")
+	_main.seed_tray_rng(7)
+	await _main._solo_charge_impact(charger, _tough_foe(), false)
+	assert_str(_log_text()).contains("Impact(6) rolls 6 dice").not_contains("Piercing Fighter: AP(")
+	assert_array(_save_lines()).is_equal(["Grunts saves on 4+"])
+	await E2EBoot.settle(get_tree())
+
+
+func test_the_weapon_strikes_of_the_same_charge_still_get_the_unit_melee_ap() -> void:
+	var charger := _fighter(["Piercing Fighter", "Impact(6)"], "gf", "orc_marauders")
+	(charger.source_data as OPRApiClient.OPRUnit).weapons[0].attacks = 24   # enough hits to reach the saves
+	var foe := _tough_foe()
+	_main.seed_tray_rng(7)
+	await _main._solo_charge_impact(charger, foe, false)
+	await _main._solo_melee_strike_phase(charger, foe, true, NON_COUNTER)
+	assert_array(_save_lines()).is_equal(["Grunts saves on 4+", "Grunts saves on 5+ (Def 4+, AP 1)"])
+	await E2EBoot.settle(get_tree())
+
+
+func test_heavy_impact_keeps_its_own_ap_and_gains_no_unit_melee_ap() -> void:
+	var charger := _fighter(["Piercing Fighter", "Impact(4)", "Heavy Impact(4)"], "gf", "orc_marauders")
+	_main.seed_tray_rng(7)
+	await _main._solo_charge_impact(charger, _tough_foe(), false)
+	assert_str(_log_text()).contains("Heavy Impact(4) rolls 4 dice").not_contains("Piercing Fighter: AP(")
+	assert_array(_save_lines()).is_equal(["Grunts saves on 4+", "Grunts saves on 5+ (Def 4+, AP 1)"])
+	await E2EBoot.settle(get_tree())

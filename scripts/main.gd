@@ -9442,7 +9442,8 @@ func _solo_charge_impact(charger: GameUnit, defender: GameUnit, human_defends: b
 				("e" if int(p["dice"]) == 1 else "ce"), hits, ("" if hits == 1 else "s")], true)
 		if hits <= 0:
 			continue
-		var profile: Dictionary = {"name": str(p["label"]), "ap": int(p["ap"]), "deadly": 0, "rules": []}
+		# "_impact_pool": Impact is not a weapon -- _solo_resolve_saves adds no unit-level conditional AP to it.
+		var profile: Dictionary = {"name": str(p["label"]), "ap": int(p["ap"]), "deadly": 0, "rules": [], "_impact_pool": true}
 		var w: int = await _solo_resolve_saves(charger, defender, str(p["label"]), [], hits, impact_defense, profile, human_defends, true)
 		if w > 0:
 			var imp_landed: int
@@ -9549,7 +9550,9 @@ func _solo_resolve_saves(striker: GameUnit, defender: GameUnit, weapon_name: Str
 	# Base AP plus any conditional AP (Shatter/Tear/Melee Slayer/Disintegrate; range-gated Slayer/
 	# Piercing Hunter need `dist_in` — -1 = unknown, their ranged leg then stays off, conservative)
 	# this weapon gets against THIS defender — registry-driven, system-scoped.
-	var cond_parts: Array = _solo_conditional_ap_parts(profile, striker, defender, charging, dist_in, melee)
+	# The Impact pools (marker "_impact_pool") get none: their hits come from no weapon, the core's Impact path adds none.
+	var cond_parts: Array = [] if bool(profile.get("_impact_pool", false)) \
+		else _solo_conditional_ap_parts(profile, striker, defender, charging, dist_in, melee)
 	var cond_ap := 0
 	for cp in cond_parts:
 		var cp_name := str((cp as Dictionary)["name"])
