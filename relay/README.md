@@ -21,6 +21,15 @@ join with the room code.
 - **Host reconnect** preserves the room briefly and lets ONLY the host's identity token reclaim peer 1
   (a guest can't seize the host slot); see [`HOST_RECONNECT.md`](HOST_RECONNECT.md).
 
+## Trust model
+
+The relay is a **trusted component** of a multiplayer session. Game clients rely on it to stamp
+each forwarded frame with its true sender peer id and to announce peer joins and leaves (and the
+host's pause and return) truthfully; they do not authenticate one another end to end. Room
+membership is the trust boundary between players: a room code admits a player to that room only,
+and the relay never forwards a frame across rooms. Point the game only at a relay you trust; the
+default is the project's own relay.
+
 ## Usage stats (aggregate, no PII)
 
 The relay counts how much it is used — the project keeps **no client telemetry**, so the relay's own

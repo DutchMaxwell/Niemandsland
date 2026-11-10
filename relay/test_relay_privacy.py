@@ -154,3 +154,14 @@ class TestRetentionBound:
         assert "ip" not in saved
         assert not any("ip" in key.lower() or "address" in key.lower()
                        for key in _all_keys(saved))
+
+class TestTrustModel:
+    """The README states what game clients rely on the relay for."""
+
+    def test_readme_documents_the_trust_model(self):
+        readme = Path(__file__).with_name("README.md").read_text(encoding="utf-8")
+        assert "## Trust model" in readme
+        section = readme.split("## Trust model", 1)[1].split("\n## ", 1)[0]
+        assert "trusted component" in section
+        assert "sender" in section
+        assert "join" in section and "leave" in section
