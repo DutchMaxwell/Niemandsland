@@ -1633,6 +1633,20 @@ func _solo_coordinate_decline(bearer: GameUnit) -> void:
 	await _solo_finish_human_activation(bearer)
 
 
+## A targeting window that belongs to `gu` is stale once `gu` counts as activated by any route that is not
+## its own resolving attack (the unit card's Activate button, a transport move): the window would stay open
+## through the opponent's turn and a later click could still resolve an attack for a spent unit. A resolving
+## attack closes its window before it rolls, so this finds nothing to drop on that path.
+func _solo_drop_open_pick_of(gu: GameUnit) -> void:
+	var host := _solo_combat_unit(gu)
+	if host == null or _solo_target_mode.is_empty() or _solo_target_mode.get("unit") != host:
+		return
+	_solo_end_targeting()
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL,
+			"%s is activated — the open target pick is dropped" % host.get_name())
+
+
 func _on_solo_human_activated(gu: GameUnit) -> void:
 	# The first solo activation IS the game start (see _solo_ensure_playing_phase), so it faces the same
 	# deployment gate as the Start-Game button — otherwise activating a unit is a second, button-free way
@@ -1641,6 +1655,7 @@ func _on_solo_human_activated(gu: GameUnit) -> void:
 		_solo_undo_refused_activation(gu)
 		return
 	_solo_ensure_playing_phase()
+	_solo_drop_open_pick_of(gu)   # before the early returns below: hotseat and plain rooms keep a window too
 	if not _solo_alternation_ready(gu):
 		# NML-939: a room with no AI seat (plain human-vs-human multiplayer) has no alternation to drive, but
 		# the unit's own activation is still the door of its once-per-activation Utility Buff.
