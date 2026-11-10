@@ -430,6 +430,7 @@ var solo_activation_done: Callable = Callable()
 var solo_round_done: Callable = Callable()
 var _solo_toast: Label = null                # transient AI-action attribution/outcome toast
 var _solo_live_announce: Array = []          # announce rings/line currently on the board (leak sweep)
+var _solo_live_announce_human: bool = false   # that set belongs to a HUMAN's attack/cast: its resolver is running, the sweep leaves it
 var _solo_toast_gen: int = 0   # generation token so an auto-hide never blanks a newer toast
 var _solo_toast_sticky: bool = false   # NML-955: this toast is an AI EXPLANATION — no timer, click to dismiss
 var _solo_unmodeled_logged: Dictionary = {}  # rule name -> true: once-per-session unmodeled-rule notes
@@ -2041,7 +2042,10 @@ func _solo_alternation_ready(gu: GameUnit) -> bool:
 ## After any activation chain: when BOTH sides are out of eligible units the round is over — auto-seize
 ## objectives, then advance the round (or end the game after SOLO_GAME_ROUNDS).
 func _solo_after_activation() -> void:
-	_solo_clear_announce(_solo_live_announce)   # leak sweep: an aborted await path leaves rings behind
+	# Leak sweep: an aborted await path leaves rings behind. A human's volley/cast runs as a detached coroutine, so
+	# the AI's reply can end while its markers are still up for the cast window — those belong to the resolver.
+	if not _solo_live_announce_human:
+		_solo_clear_announce(_solo_live_announce)
 	if solo_controller == null or _solo_ai_busy or not _solo_alternation_active():
 		return
 	if not solo_controller.eligible_units_for(solo_controller.human_slot).is_empty():
@@ -11654,6 +11658,7 @@ func _solo_show_attack_announce(shooter: GameUnit, target: GameUnit, verb: Strin
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s %s %s" % [shooter.get_name(), verb, target.get_name()], true)
 	_solo_live_announce = nodes   # sweep target if the caller's cleanup never runs
+	_solo_live_announce_human = not _solo_is_ai_unit(shooter)
 	return nodes
 
 
@@ -11685,6 +11690,7 @@ func _solo_clear_announce(nodes: Array) -> void:
 		if is_instance_valid(n) and n is Node:   # validity first: `is` on a freed instance raises
 			(n as Node).queue_free()
 	_solo_live_announce = []   # whichever set was just freed, nothing is left to sweep
+	_solo_live_announce_human = false
 
 
 ## Maintainer UX (31.07.): a PICKED cast target wears a SOLID cyan ring — visually distinct
