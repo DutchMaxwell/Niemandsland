@@ -396,6 +396,10 @@ var _solo_auto_saves: bool = false           # A3 (NML-202): skip _solo_prompt_s
 var _solo_batch: bool = false                # headless sweeps: instant (non-physics) dice + zero pacing holds (implies fast)
 var _solo_relic_drop_queue: Array = []
 var _solo_relic_drop_active: Dictionary = {}
+# One loss line per volley and unit: while a volley parks its casualties (one signal each, all with the same
+# final count) _on_battle_log_dead only counts them here (GameUnit -> [casualties, alive, total]) and the outermost
+# _solo_remove_dead_models writes the lines when it is done. null = no volley open, lines go out at once.
+var _volley_losses = null
 var _solo_relic_drop_gen := 0
 var _solo_vip_pick: Dictionary = {}   # D14.4: the human VIP defender's one click {spot}
 var _solo_secret_pick: Dictionary = {}   # D12a-2: the human defender's two clicks {relic, trap} (marker indexes)
@@ -4061,12 +4065,15 @@ func _solo_mission_reserves_set_aside() -> void:
 
 ## D11a (Last Stand, R8a): a covered side's unit that is destroyed for the FIRST time comes back as a
 ## full-strength copy in reserve (parked off the table, a mission reserve like any other: it rolls the
-## mission's die each round). The copy is marked `recycled`, so its own destruction is final.
+## mission's die each round). The copy is marked `recycled`, so its own destruction is final; the original is
+## marked too (meta, never saved), because a volley parks its casualties one signal at a time with the whole
+## unit already dead and every one of those signals comes here.
 func _solo_recycle_if_due(gu: GameUnit) -> void:
 	var cfg := _solo_reserve_cfg()
 	if cfg.is_empty() or not bool(cfg.get("recycle", false)) or gu == null or table == null:
 		return
-	if bool(gu.unit_properties.get("recycled", false)) or bool(gu.unit_properties.get("mission_reserve", false)):
+	if bool(gu.unit_properties.get("recycled", false)) or bool(gu.unit_properties.get("mission_reserve", false)) \
+			or bool(gu.get_meta("recycle_copy_made", false)):
 		return
 	var pid: int = int(gu.unit_properties.get("player_id", 0))
 	var src := gu.source_data as OPRApiClient.OPRUnit
@@ -4086,6 +4093,7 @@ func _solo_recycle_if_due(gu: GameUnit) -> void:
 	if copy == null:
 		return
 	copy.unit_properties["recycled"] = true
+	gu.set_meta("recycle_copy_made", true)
 	solo_controller.mission_reserve_set([copy])
 	_log_rule_event(BattleLog.Category.GENERAL, "%s is destroyed — a full-strength copy returns to reserve ONCE, arriving on %d+ from round %d" % [
 		gu.get_name(), int(cfg.get("arrive_on", 6)), int(cfg.get("from_round", 2))], pid == solo_controller.ai_slot)
@@ -18059,7 +18067,11 @@ func _on_battle_log_dead(node, dead: bool) -> void:
 			_solo_recycle_if_due(gu)
 		else:
 			gu.set_meta("destroyed_line_written", false)
-			battle_log.log_event(BattleLog.Category.COMBAT, "%s loses a model (%d/%d)" % [gu.get_name(), alive, total])
+			if _volley_losses != null:   # a volley is parking: the funnel writes ONE line when it is done
+				var held: Array = _volley_losses.get(gu, [0, 0, 0])
+				_volley_losses[gu] = [int(held[0]) + 1, alive, total]
+			else:
+				_solo_log_unit_loss(gu, 1, alive, total)
 	else:
 		gu.set_meta("destroyed_line_written", false)
 		battle_log.on_unit_revived(gu.get_name())
@@ -24786,15 +24798,35 @@ func _solo_rule_unit_ghost(shape: Array, zone: Dictionary, blockers: Array, boun
 
 
 
+func _solo_log_unit_loss(gu: GameUnit, casualties: int, alive: int, total: int) -> void:
+	battle_log.log_event(BattleLog.Category.COMBAT, "%s loses %s (%d/%d)" % [
+		gu.get_name(), "a model" if casualties == 1 else "%d models" % casualties, alive, total])
+
+
+func _solo_flush_volley_losses() -> void:
+	var held: Dictionary = _volley_losses
+	_volley_losses = null
+	for gu in held:
+		_solo_log_unit_loss(gu as GameUnit, int(held[gu][0]), int(held[gu][1]), int(held[gu][2]))
+
+
 func _solo_remove_dead_models(unit: GameUnit, died_models: Array[ModelInstance], pid: int) -> void:
+	var opens_volley: bool = _volley_losses == null
+	if opens_volley:
+		_volley_losses = {}
 	for model in died_models:
 		var combined := _solo_combat_unit(unit)
 		if model == died_models.back() and _solo_combined_alive(combined) == 0:
+			if opens_volley:   # a Split placement can wait on a click: no line may stay held meanwhile
+				_solo_flush_volley_losses()
+				opens_volley = false
 			await _solo_split_from_last_model(combined, model)
 		if model.node != null and is_instance_valid(model.node):
 			opr_army_manager.set_loose_model_dead(model.node, pid, true, unit.unit_id)
 		if network_manager != null and network_manager.has_method("broadcast_model_wounds"):
 			network_manager.broadcast_model_wounds(model)
+	if opens_volley:
+		_solo_flush_volley_losses()
 
 
 func _solo_split_rules(unit: GameUnit) -> Dictionary:
