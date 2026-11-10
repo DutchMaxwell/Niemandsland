@@ -5880,13 +5880,16 @@ func _solo_consume_once_mods(attacker: GameUnit, defender: GameUnit, melee: bool
 
 ## G4-R3 X1a (EPOCH_73_V36, lead ruling 1): the Precision Feat is ONE once-per-game latch shared by shooting AND
 ## melee. The bearer's first attack of any kind (a strike-back too) spends it; the act ledger records the name
-## (`feats_used`). Every open once-per-game Shot Modifier on the attacker's chain closes with the exchange.
+## (`feats_used`). Every open once-per-game Shot Modifier and the Piercing Feat (T-1) on the attacker's chain
+## closes with the exchange.
 func _solo_spend_shot_feats(attacker: GameUnit) -> void:
 	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
 		return
 	for m in _solo_joined_chain(attacker):
 		var member := m as GameUnit
-		for e in RulesRegistry.unit_rules_of_primitive(member, "Shot Modifier"):
+		var feats: Array = RulesRegistry.unit_rules_of_primitive(member, "Shot Modifier")
+		feats.append_array(RulesRegistry.unit_rules_of_primitive(member, "Piercing Assault"))   # T-1: Piercing Feat
+		for e in feats:
 			var ed := e as Dictionary
 			if int((ed.get("params", {}) as Dictionary).get("uses_per_game", 0)) <= 0 \
 					or SoloController.shot_feat_spent(member, ed):
@@ -10465,6 +10468,18 @@ func _solo_conditional_ap_parts(profile: Dictionary, striker: GameUnit, defender
 			elif v36 and not moved_logged and _solo_slayer_moved(params, d_tough, charging, melee, held):
 				parts.append({"name": base, "bonus": 0})
 				moved_logged = true
+	# T-1 (EPOCH_73_V36): the Piercing Feat, the Precision Feat's twin - a once-per-game AP bonus on every attack of
+	# the bearer's first attacking exchange (core sim.rs volley + strike seams). The latch is the Precision Feat's
+	# (SoloController.shot_feat_*), closed by _solo_spend_shot_feats. Synthetic hit sources (Trap, Retaliate,
+	# Deathstrike, Breath) carry no `attacks` and are not the bearer's attacks.
+	if v36 and int(profile.get("attacks", 0)) > 0:
+		for fe in RulesRegistry.unit_rules_of_primitive(striker, "Piercing Assault"):
+			var fed := fe as Dictionary
+			var fp: Dictionary = fed.get("params", {})
+			if int(fp.get("uses_per_game", 0)) <= 0 or SoloController.shot_feat_spent(striker, fed):
+				continue
+			if int(fp.get("ap_bonus", 0)) > 0:
+				parts.append({"name": str(fed["name"]), "bonus": int(fp["ap_bonus"])})
 	# GH #325 — spell-granted conditional-AP rules (the defender's attackers-side token, e.g. Veil
 	# of Madness → Slayer) take the SAME registry-driven path: the lookup fires only where the
 	# striker's book actually fields the rule, deduped against the loops above.

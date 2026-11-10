@@ -9888,7 +9888,8 @@ static func speed_feat_flag(rule_name: String) -> String:
 	return "speed_feat_used_%s" % rule_name.to_snake_case()
 
 
-## G4-R3 X1a (EPOCH_73_V36): the Precision Feat's once-per-game latch (a Shot Modifier entry with `uses_per_game`).
+## G4-R3 X1a (EPOCH_73_V36): the Precision Feat's and the Piercing Feat's once-per-game latch (a Shot Modifier or
+## Piercing Assault entry with `uses_per_game`).
 ## ONE flag per rule, shared by shooting and melee: main `_solo_spend_shot_feats` closes it, the hit modifier and
 ## the act ledger read it.
 static func shot_feat_flag(rule_name: String) -> String:
