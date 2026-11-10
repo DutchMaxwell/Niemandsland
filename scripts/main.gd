@@ -9946,6 +9946,9 @@ func _solo_bane_facet_name(striker: GameUnit, profile_range: int) -> String:
 ## `bypassed`: wounds of the same hit that ignore Regeneration — logged when the unit had a roll to skip.
 func _solo_apply_regeneration(target: GameUnit, wounds: int, from_spell: bool = false, solo: Dictionary = {},
 		bypassed: int = 0, shot_in: float = -1.0, charged_in: float = -1.0, log_gate: bool = true) -> int:
+	# R-1: from the rules 3.6 epoch a direct caller meets the per-name rolls too (no production caller bypasses here any more).
+	if bypassed == 0 and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		return await _solo_ignore_wounds(target, wounds, 0, from_spell, solo, shot_in, charged_in, log_gate)
 	# PURELY SYNCHRONOUS window: _solo_regen_pick only reads rules, and the flag is down again before the
 	# tray below awaits (a leaked flag would rewrite the next unrelated unit's ignore roll).
 	_solo_takedown_solo = solo
@@ -10203,7 +10206,7 @@ func _solo_land_wounds(target: GameUnit, regenable: int, regen_proof: int, from_
 	# adds no mark; only _solo_apply_wounds marks there (the old unconditional spend stays in charge).
 	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and regenable + regen_proof > 0:
 		_solo_mark_regen_grant_used(target)
-	var landed: int = maxi(regen_proof, 0) + await _solo_apply_regeneration(target, regenable, from_spell, {}, regen_proof, shot_in, charged_in)
+	var landed: int = await _solo_ignore_wounds(target, regenable, regen_proof, from_spell, {}, shot_in, charged_in)
 	if landed > 0:
 		await _solo_apply_wounds(target, landed)
 	return landed
@@ -10314,11 +10317,10 @@ func _solo_land_deadly_wounds(target: GameUnit, weapon_name: String, deadly_x: i
 		if victim == null:
 			victim = (pick["unit"] as GameUnit).models[int(pick["index"])]
 		var mult: int = maxi(1, deadly_x)   # apply_deadly_hit caps what survives at the model
-		if w_i >= proof:
-			mult = await _solo_apply_regeneration(target, mult, from_spell, {}, 0, gate_in, -1.0, not gate_logged)   # one logged die per multiplied wound
-			gate_logged = true
-		else:
-			await _solo_apply_regeneration(target, 0, from_spell, {}, mult, gate_in)   # A1: the skipped roll is logged
+		# One logged die per multiplied wound; a bypassed wound (A1) logs its skip and meets every other named rule.
+		mult = await _solo_ignore_wounds(target, mult if w_i >= proof else 0, 0 if w_i >= proof else mult,
+			from_spell, {}, gate_in, -1.0, not gate_logged)
+		gate_logged = true
 		if mult > 0:
 			acc["dealt"] += SoloController.apply_deadly_hit(victim, mult, on_changed, on_died)
 	var dealt: int = int(acc["dealt"])
@@ -10452,7 +10454,7 @@ func _solo_land_takedown_wounds(target: GameUnit, weapon_name: String, pick: Dic
 		return 0
 	# TC-023: the ignore roll is the PICKED MODEL's unit-of-[1] roll — a Regeneration/medic hero joined to a
 	# plain squad no longer covers the sniped trooper (and the hero's own roll still stands when HE is hit).
-	var landed: int = maxi(regen_proof, 0) + await _solo_apply_regeneration(owner, regenable, false, pick, regen_proof)
+	var landed: int = await _solo_ignore_wounds(owner, regenable, regen_proof, false, pick)
 	if landed <= 0:
 		return 0
 	var pid: int = int(owner.unit_properties.get("player_id", target.unit_properties.get("player_id", 1)))

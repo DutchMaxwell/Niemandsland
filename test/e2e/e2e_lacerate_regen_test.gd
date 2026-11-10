@@ -154,24 +154,27 @@ func test_lacerate_volley_rolls_self_repair() -> void:
 	assert_str(text).not_contains("ignore Regeneration")
 
 
-## Bane's wounds skip Self-Repair, and the log says so (rules-must-log: the skip is never silent).
-func test_bane_volley_skips_self_repair_and_says_so() -> void:
+## Bane's wounds skip only the roll of the rule named Regeneration: Self-Repair still rolls them, and the log
+## says so (rules-must-log: the decision is never silent).
+func test_bane_volley_still_rolls_self_repair_and_says_so() -> void:
 	var text: String = await _volley(["AP(4)", "Bane"])
-	assert_str(text).not_contains("self-repair di")
+	assert_str(text).contains("self-repair di")
 	assert_str(text) \
-		.override_failure_message("A1 — the skipped Self-Repair roll must be logged (log: %s)" % text.strip_edges()) \
-		.contains("ignore Regeneration — no self-repair roll")
+		.override_failure_message("A1 — the still-rolling Self-Repair must be logged (log: %s)" % text.strip_edges()) \
+		.contains("ignore only Regeneration — Self-Repair still rolls")
+	assert_str(text).not_contains("no self-repair roll")
 
 
 ## Rending (p.14) ignores Regeneration on EVERY hit — not only the unmodified 6s that get AP(+4). No AP
-## here, so most wounds come from non-6 hits; a 6s-only bypass would roll Self-Repair for them.
-func test_rending_volley_skips_self_repair_on_every_hit() -> void:
+## here, so most wounds come from non-6 hits; all of them bypass Regeneration only - Self-Repair still rolls them.
+func test_rending_volley_still_rolls_self_repair_on_every_hit() -> void:
 	var text: String = await _volley(["Rending"])
 	assert_str(text).contains("Rending:")
-	assert_str(text).not_contains("self-repair di")
+	assert_str(text).contains("self-repair di")
 	assert_str(text) \
-		.override_failure_message("A1 — the skipped Self-Repair roll must be logged (log: %s)" % text.strip_edges()) \
-		.contains("ignore Regeneration — no self-repair roll")
+		.override_failure_message("A1 — the still-rolling Self-Repair must be logged (log: %s)" % text.strip_edges()) \
+		.contains("ignore only Regeneration — Self-Repair still rolls")
+	assert_str(text).not_contains("no self-repair roll")
 
 
 ## CONTROL (the check can fail): a plain volley rolls Self-Repair and claims no skip.
@@ -192,10 +195,11 @@ func test_lacerate_spell_rolls_self_repair() -> void:
 	assert_str(text).not_contains("ignore Regeneration")
 
 
-## A Bane spell skips Self-Repair and says so.
-func test_bane_spell_skips_self_repair_and_says_so() -> void:
+## A Bane spell skips only Regeneration: Self-Repair still rolls and the log says so.
+func test_bane_spell_still_rolls_self_repair_and_says_so() -> void:
 	var text: String = await _spell(["AP(4)", "Bane"])
-	assert_str(text).not_contains("self-repair di")
+	assert_str(text).contains("self-repair di")
 	assert_str(text) \
-		.override_failure_message("A1 — the skipped Self-Repair roll must be logged (log: %s)" % text.strip_edges()) \
-		.contains("ignore Regeneration — no self-repair roll")
+		.override_failure_message("A1 — the still-rolling Self-Repair must be logged (log: %s)" % text.strip_edges()) \
+		.contains("ignore only Regeneration — Self-Repair still rolls")
+	assert_str(text).not_contains("no self-repair roll")
