@@ -2,6 +2,7 @@ extends SceneTree
 ## Build a lesson table through the game's import, spawn and save paths.
 ## Run: godot --path <wt> --headless -s res://tools/lesson_table_builder.gd -- chapter=S-01
 
+const TextStrip := preload("res://tools/tutorial_text_strip.gd")
 const MAX_BOOT_FRAMES := 900
 const DROP_SETTLE_S := 4.0
 const INCH := 0.0254
@@ -109,6 +110,7 @@ func _build() -> void:
 	if typeof(state) != TYPE_DICTIONARY:
 		_fail("saved table is invalid JSON")
 		return
+	TextStrip.strip_state(state)  # no third-party rule / spell text in a shipped table
 	var file := FileAccess.open(path, FileAccess.WRITE)
 	if file == null:
 		_fail("cannot compact saved table")
