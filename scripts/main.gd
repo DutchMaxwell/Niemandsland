@@ -9968,18 +9968,27 @@ func _solo_apply_regeneration(target: GameUnit, wounds: int, from_spell: bool = 
 			target.get_name(), bypassed, ("" if bypassed == 1 else "s"), str(pick.get("name", "regeneration"))], true)
 	if wounds <= 0 or regen_target <= 0:
 		return maxi(wounds, 0)
-	var faces: Array = await _owner_roll(target, wounds, regen_target, "regeneration",
-		"Regeneration (%d+ ignores a wound)" % regen_target, {"what": "regeneration dice"})
+	return await _solo_roll_ignore_group(target, wounds, regen_target, str(pick.get("name", "regeneration")),
+		"Regeneration (%d+ ignores a wound)" % regen_target, "regeneration dice")
+
+
+## One wound-ignore roll for one rule: one REAL tray die per wound, each at or above `ign_target` ignores
+## it; the battle log always names the rule and the outcome. Returns the wounds that still land. The body
+## of `_solo_apply_regeneration`'s roll, shared by the per-name groups (R-1).
+func _solo_roll_ignore_group(target: GameUnit, wounds: int, ign_target: int, rule_name: String,
+		purpose: String, what: String) -> int:
+	if wounds <= 0 or ign_target <= 0:
+		return wounds
+	var faces: Array = await _owner_roll(target, wounds, ign_target, "regeneration", purpose, {"what": what})
 	var ignored := 0
 	for f in faces:
-		if int(f) >= regen_target:
+		if int(f) >= ign_target:
 			ignored += 1
 	if battle_log != null:
 		# Rules-must-log: the line names the ACTUAL family rule — aliases (Plaguebound, Knightborn,
 		# Protected, …) included, not just the three named forms.
-		var rule_name: String = str(pick.get("name", "regeneration"))
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s rolls %d %s di%s (%d+) — %d wound%s ignored" % [
-			target.get_name(), wounds, rule_name, ("e" if wounds == 1 else "ce"), regen_target, ignored, ("" if ignored == 1 else "s")], true)
+			target.get_name(), wounds, rule_name, ("e" if wounds == 1 else "ce"), ign_target, ignored, ("" if ignored == 1 else "s")], true)
 		if ignored > 0:
 			_solo_rule_float(target, "%s: %d ignored" % [rule_name.capitalize(), ignored], Color(0.5, 1.0, 0.6))
 	return maxi(wounds - ignored, 0)
