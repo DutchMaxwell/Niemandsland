@@ -87,6 +87,11 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 logger = logging.getLogger("relay")
 
 
+def _remote_ip(websocket) -> str:
+    """The transport-level source address of a socket ("unknown" if the transport has none)."""
+    return websocket.remote_address[0] if websocket.remote_address else "unknown"
+
+
 def _lifetime_bucket(seconds: float) -> str:
     """Classify a room's total lifetime into a coarse duration bucket (see ROOM_LIFETIME_BUCKETS)."""
     minutes = seconds / 60.0
@@ -282,6 +287,9 @@ class RelayServer:
         self.ip_connection_counts: dict[str, int] = {}
         self.stats = Stats(os.environ.get("RELAY_STATS_PATH", ""))
         self._closing: set = set()  # background closes of taken-over sockets (held so they are not GC'd)
+        # Every accepted, still-open socket. The per-IP admission check counts these by their transport
+        # address; a socket holds its slot until it closes.
+        self._open_sockets: set = set()
 
     def generate_room_code(self) -> str:
         """Generate a cryptographically random room code.
@@ -299,15 +307,16 @@ class RelayServer:
 
     async def handle_connection(self, websocket: ServerConnection) -> None:
         """Main handler for a new WebSocket connection."""
-        ip = websocket.remote_address[0] if websocket.remote_address else "unknown"
+        ip = _remote_ip(websocket)
 
-        # Check connection limit per IP
-        current_count = self.ip_connection_counts.get(ip, 0)
+        # Check connection limit per IP: count this IP's open sockets.
+        current_count = sum(1 for ws in self._open_sockets if _remote_ip(ws) == ip)
         if current_count >= MAX_CONNECTIONS_PER_IP:
             await websocket.close(4429, "Too many connections from this IP")
             return
 
-        self.ip_connection_counts[ip] = current_count + 1
+        self._open_sockets.add(websocket)
+        self.ip_connection_counts[ip] = self.ip_connection_counts.get(ip, 0) + 1
 
         try:
             async for message in websocket:
@@ -787,6 +796,7 @@ class RelayServer:
         self, websocket: ServerConnection, ip: str
     ) -> None:
         """Clean up when a connection is closed."""
+        self._open_sockets.discard(websocket)
         # Decrement IP count
         if ip in self.ip_connection_counts:
             self.ip_connection_counts[ip] -= 1

@@ -627,6 +627,30 @@ class TestSecurity:
         for ws in connections:
             await ws.close()
 
+    async def test_ip_limit_counts_open_sockets(self, relay):
+        """Every open socket counts against MAX_CONNECTIONS_PER_IP until it closes."""
+        server, url = relay
+        connections = []
+        for _ in range(MAX_CONNECTIONS_PER_IP):
+            ws, _code, _ = await create_room(url)
+            await ws.send(json.dumps({"type": "delete_data"}))
+            assert json.loads(await ws.recv()) == {"type": "data_deleted"}
+            connections.append(ws)
+
+        overflow_ws = await websockets.connect(url)
+        with pytest.raises(websockets.exceptions.ConnectionClosed) as closed:
+            await overflow_ws.send(json.dumps({"type": "heartbeat"}))
+            await asyncio.wait_for(overflow_ws.recv(), timeout=2.0)
+        assert closed.value.rcvd is not None and closed.value.rcvd.code == 4429
+
+        # Closing one socket frees exactly one slot again.
+        await connections.pop().close()
+        await asyncio.sleep(0.1)
+        recovered, _code, _ = await create_room(url)
+        connections.append(recovered)
+        for ws in connections:
+            await ws.close()
+
     async def test_heartbeat_ack_sent(self, relay):
         server, url = relay
         ws, code, _ = await create_room(url)
