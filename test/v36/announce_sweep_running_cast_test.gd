@@ -71,7 +71,7 @@ func _on_cast_line(entry: Dictionary, seen: Dictionary) -> void:
 	if seen["fired"] or not str(entry.get("text", "")).contains("— needs "):
 		return
 	seen["fired"] = true
-	seen["markers"] = (_main._solo_live_announce as Array).duplicate()
+	seen["markers"] = (_main._solo_live_announce_human as Array).duplicate()
 	_main._solo_after_activation()
 	seen["swept"] = (seen["markers"] as Array).filter(_gone_or_queued)
 
