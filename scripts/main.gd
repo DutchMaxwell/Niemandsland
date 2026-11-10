@@ -4654,6 +4654,9 @@ func _run_ai_shooting(report: Dictionary) -> void:
 			if bool(prof.get("limited", false)) and solo_controller.is_limited_used(member, prof):
 				_solo_log_limited_spent(member, prof)
 				continue
+			# R-1 (A2): remember that the weapon itself prints Shred before the unit grant folds the flag.
+			if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and bool(prof.get("shred", false)):
+				prof["_shred_own"] = true
 			if RulesRegistry.unit_rule_active(member, "Shred") \
 					or _solo_shred_facet_applies(member, base_range):
 				prof["shred"] = true
@@ -6603,6 +6606,9 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 				if member.has_special_rule("Counter") \
 						or not RulesRegistry.unit_rules_of_primitive(member, "Counter").is_empty():
 					prof["counter"] = true
+			# R-1 (A2): the weapon's own Shred is remembered before the unit grant folds the flag.
+			if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and bool(prof.get("shred", false)):
+				prof["_shred_own"] = true
 			# Shred can be granted at unit level too (wave 5) — mark every profile of that member.
 			if member_shred:
 				prof["shred"] = true
@@ -9691,7 +9697,9 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 	if count <= 0:
 		return 0
 	var shred_alias_live: bool = true
-	if typeof(profile.get("_shred_alias")) == TYPE_STRING and str(profile["_shred_alias"]) != "":
+	# R-1 (A2): a scoped form of Shred is the rule Shred itself - only an alias of ANOTHER name is distance-gated.
+	if typeof(profile.get("_shred_alias")) == TYPE_STRING and str(profile["_shred_alias"]) != "" \
+			and _solo_shred_group_key(str(profile["_shred_alias"])) != "Shred":
 		shred_alias_live = (
 			_solo_alias_charge_over(true, charge_from_in) if charge_from_in > 0.0
 			else _solo_alias_family_over(dist_in))
@@ -9846,6 +9854,11 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 	# window widens to the entry's `save_fail_max` (`extra_wound_save_low` is the Warbound spelling —
 	# the core's `.max()` twin). Shooting only: the melee resolve passes over9=false, so melee never
 	# widens (the core's no-pre-charge-gap shape).
+	# R-1 (A2): a weapon's own Shred beside a unit-level rule of ANOTHER name is a second rule: it pays its own
+	# part (unmodified 1s, never alias-gated) after the alias part below. Scoped forms of Shred stay one rule.
+	var own_apart: bool = bool(profile.get("_shred_own", false)) \
+			and typeof(profile.get("_shred_alias")) == TYPE_STRING \
+			and _solo_shred_group_key(str(profile["_shred_alias"])) != "Shred"
 	var shred_extra := 0
 	if shred_alias_live and profile.get("shred", false) == true:
 		var boost_rule := ""
@@ -9880,6 +9893,13 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %d Defense roll%s of 1 → +%d wound%s" % [
 					shred_name, shred_extra, ("" if shred_extra == 1 else "s"), shred_extra, ("" if shred_extra == 1 else "s")], true)
 			_solo_rule_float(defender, "%s +%d" % [(boost_rule if boost_low > 1 else shred_name), shred_extra], Color(1.0, 0.5, 0.4))
+	if own_apart:
+		var own := AiCombatMath.shred_bonus_wounds(save_faces, reroll)
+		if own > 0 and battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT, "Shred: %d Defense roll%s of 1 → +%d wound%s" % [
+				own, ("" if own == 1 else "s"), own, ("" if own == 1 else "s")], true)
+			_solo_rule_float(defender, "Shred +%d" % own, Color(1.0, 0.5, 0.4))
+		shred_extra += own
 	var unsaved := maxi(0, count - blocks)
 	_vfx_saves_made += blocks
 	# apply_deadly=false (Bug: Deadly no-carry-over): return the RAW unsaved count so the caller can
@@ -10731,6 +10751,22 @@ func _solo_on6_ap_bonus(profile: Dictionary, striker: GameUnit) -> Dictionary:
 ## rules in all five core books, so both leaks were live.
 func _solo_shred_facet_applies(member: GameUnit, profile_range: int) -> bool:
 	return not _solo_shred_facet_name(member, profile_range).is_empty()
+
+
+## R-1 (A2): the base name of a Shred form. "Enhanced X", "X Aura" / "X Buff" / "X Boost" and the scoped
+## "X in Melee" / "X when Shooting" are forms of X (lead ruling D2): one rule, never two rolls.
+static func _solo_shred_group_key(rule_name: String) -> String:
+	var n := rule_name.strip_edges()
+	if n.begins_with("Enhanced "):
+		n = n.substr(9)
+	var trimmed := true
+	while trimmed:
+		trimmed = false
+		for suffix in [" Aura", " Buff", " Boost", " in Melee", " when Shooting"]:
+			if n.ends_with(suffix):
+				n = n.left(n.length() - suffix.length())
+				trimmed = true
+	return n
 
 
 func _solo_shred_facet_name(member: GameUnit, profile_range: int) -> String:
