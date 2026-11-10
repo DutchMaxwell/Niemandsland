@@ -995,7 +995,7 @@ impl Core {
             ),
         );
         m.insert("consolidate".into(), self.knobs.consolidate.into());
-        // The four knobs the read-back used to omit (konrad ORDER 2f4f7a13). The header
+        // The four knobs the read-back used to omit (lead ORDER 2f4f7a13). The header
         // parser reads all four (`plain.rs knobs_of`), but `knobs()` did not return them,
         // so the A/B harness's override read-back (`selfplay.core_with_knob_overrides`)
         // REJECTED them — the instrument could not see a knob it set. `dangerous_end_morale`,
