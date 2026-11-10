@@ -4061,12 +4061,15 @@ func _solo_mission_reserves_set_aside() -> void:
 
 ## D11a (Last Stand, R8a): a covered side's unit that is destroyed for the FIRST time comes back as a
 ## full-strength copy in reserve (parked off the table, a mission reserve like any other: it rolls the
-## mission's die each round). The copy is marked `recycled`, so its own destruction is final.
+## mission's die each round). The copy is marked `recycled`, so its own destruction is final; the original is
+## marked too (meta, never saved), because a volley parks its casualties one signal at a time with the whole
+## unit already dead and every one of those signals comes here.
 func _solo_recycle_if_due(gu: GameUnit) -> void:
 	var cfg := _solo_reserve_cfg()
 	if cfg.is_empty() or not bool(cfg.get("recycle", false)) or gu == null or table == null:
 		return
-	if bool(gu.unit_properties.get("recycled", false)) or bool(gu.unit_properties.get("mission_reserve", false)):
+	if bool(gu.unit_properties.get("recycled", false)) or bool(gu.unit_properties.get("mission_reserve", false)) \
+			or bool(gu.get_meta("recycle_copy_made", false)):
 		return
 	var pid: int = int(gu.unit_properties.get("player_id", 0))
 	var src := gu.source_data as OPRApiClient.OPRUnit
@@ -4086,6 +4089,7 @@ func _solo_recycle_if_due(gu: GameUnit) -> void:
 	if copy == null:
 		return
 	copy.unit_properties["recycled"] = true
+	gu.set_meta("recycle_copy_made", true)
 	solo_controller.mission_reserve_set([copy])
 	_log_rule_event(BattleLog.Category.GENERAL, "%s is destroyed — a full-strength copy returns to reserve ONCE, arriving on %d+ from round %d" % [
 		gu.get_name(), int(cfg.get("arrive_on", 6)), int(cfg.get("from_round", 2))], pid == solo_controller.ai_slot)
