@@ -26,15 +26,14 @@ relay head-of-line block → bilateral heartbeat false-drops → reconnect storm
    rejoiner — possibly a racing guest — seize peer 1 + the host role, demoting the real host to a guest
    and orphaning the authoritative state = the desync. Now the host's reconnect token is stored as
    `Room.host_token` (threaded through `create_room`), and ONLY a matching token reclaims peer 1; a
-   lingering half-open old peer-1 socket is evicted so the real host reclaims at once. A room created by
-   a **legacy 0.3.6.0 host** (no token → `host_token == ""`) falls back to the old first-joiner path, so
-   deploying this relay never breaks in-flight old-client sessions (cross-version play is already blocked
-   by the version handshake).
+   lingering half-open old peer-1 socket is evicted so the real host reclaims at once. A room created
+   without a token (`host_token == ""`, only 0.3.6.0 hosts did that) has no reclaimable host seat: the
+   room is held for the rejoin window and then closes like any room whose host does not return.
 3. **Version-kick guard.** `enforce_version_handshake_timeout` never kicks a SUPERSEDED peer id (its slot
    rebound to a new id) — stopping the kick-cascade amplifier.
 
 Regression coverage: a relay head-of-line unit test (a wedged peer must not block the recv loop), a
-"non-host token cannot seize the host slot" test, and a legacy-tokenless-host-rejoin test.
+"non-host token cannot seize the host slot" test, and a "host seat needs the host token" test.
 
 ## Seat takeover (0.3.14, bug 4) - a rejoin before the heartbeat cut
 

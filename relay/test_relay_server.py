@@ -280,7 +280,6 @@ class TestRoomManagement:
     async def test_max_peers_per_room_enforced(self, relay):
         server, url = relay
         # Raise IP limit for this test (all from localhost)
-        server.ip_connection_counts.clear()
         old_limit = MAX_CONNECTIONS_PER_IP
         import relay_server
         relay_server.MAX_CONNECTIONS_PER_IP = 20
@@ -627,6 +626,63 @@ class TestSecurity:
         for ws in connections:
             await ws.close()
 
+    async def test_ip_limit_counts_open_sockets(self, relay):
+        """Every open socket counts against MAX_CONNECTIONS_PER_IP until it closes."""
+        server, url = relay
+        connections = []
+        for _ in range(MAX_CONNECTIONS_PER_IP):
+            ws, _code, _ = await create_room(url)
+            await ws.send(json.dumps({"type": "delete_data"}))
+            assert json.loads(await ws.recv()) == {"type": "data_deleted"}
+            connections.append(ws)
+
+        overflow_ws = await websockets.connect(url)
+        with pytest.raises(websockets.exceptions.ConnectionClosed) as closed:
+            await overflow_ws.send(json.dumps({"type": "heartbeat"}))
+            await asyncio.wait_for(overflow_ws.recv(), timeout=2.0)
+        assert closed.value.rcvd is not None and closed.value.rcvd.code == 4429
+
+        # Closing one socket frees exactly one slot again.
+        await connections.pop().close()
+        await asyncio.sleep(0.1)
+        recovered, _code, _ = await create_room(url)
+        connections.append(recovered)
+        for ws in connections:
+            await ws.close()
+
+    async def test_one_ip_holds_at_most_its_connection_cap_in_rooms(self, relay):
+        """Rooms need an open socket each, so one IP never holds more rooms than
+        MAX_CONNECTIONS_PER_IP."""
+        server, url = relay
+        connections = []
+        for _ in range(MAX_CONNECTIONS_PER_IP + 3):
+            ws = await websockets.connect(url)
+            connections.append(ws)
+            try:
+                await ws.send(json.dumps({"type": "create_room"}))
+                if json.loads(await asyncio.wait_for(ws.recv(), timeout=2.0))["type"] != "room_created":
+                    continue
+                await ws.send(json.dumps({"type": "delete_data"}))
+                await asyncio.wait_for(ws.recv(), timeout=2.0)
+            except websockets.exceptions.ConnectionClosed:
+                pass
+        assert len(server.rooms) == MAX_CONNECTIONS_PER_IP
+        for ws in connections:
+            await ws.close()
+
+    async def test_rate_limit_applies_before_joining(self, relay, monkeypatch):
+        """A socket that has not created or joined a room is rate-limited like a joined peer."""
+        import relay_server
+        monkeypatch.setattr(relay_server, "RATE_LIMIT_MESSAGES_PER_SECOND", 20)
+        _server, url = relay
+        ws = await websockets.connect(url)
+        with pytest.raises(websockets.exceptions.ConnectionClosed) as closed:
+            for _ in range(25):
+                await ws.send(json.dumps({"type": "heartbeat"}))
+            while True:
+                await asyncio.wait_for(ws.recv(), timeout=5.0)
+        assert closed.value.rcvd is not None and closed.value.rcvd.code == 4429
+
     async def test_heartbeat_ack_sent(self, relay):
         server, url = relay
         ws, code, _ = await create_room(url)
@@ -874,7 +930,6 @@ class TestRoomListing:
         import relay_server
         old_limit = relay_server.MAX_CONNECTIONS_PER_IP
         relay_server.MAX_CONNECTIONS_PER_IP = MAX_PEERS_PER_ROOM + 5
-        server.ip_connection_counts.clear()
         host_ws, code, _ = await create_public_room(url)
         guests = []
         try:
@@ -1365,3 +1420,19 @@ class TestStatsDigest:
         import stats_digest
         out = stats_digest.render_digest([], source="empty.log")
         assert "No STATS records found." in out
+
+
+class TestDependencyPin:
+    """requirements.txt pins websockets to one major version, and the suite runs inside it."""
+
+    def test_websockets_pinned_to_tested_major(self):
+        from pathlib import Path
+
+        lines = Path(__file__).with_name("requirements.txt").read_text(encoding="utf-8").splitlines()
+        spec = next(line.strip() for line in lines if line.strip().startswith("websockets"))
+        lower = spec.split(">=", 1)[1].split(",", 1)[0].strip()
+        upper = spec.split("<", 1)[1].strip() if "<" in spec else ""
+        assert upper, "websockets needs an upper bound"
+        installed = tuple(int(part) for part in websockets.__version__.split(".")[:2])
+        low = tuple(int(part) for part in lower.split(".")[:2])
+        assert low <= installed < (int(upper.split(".")[0]), 0)

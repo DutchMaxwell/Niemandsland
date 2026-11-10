@@ -107,14 +107,14 @@ class TestDeleteData:
         await host_ws.recv()   # host: peer_connected(guest)
         await guest_ws.recv()  # guest: peer_connected(host)
 
-        caller_ip = next(iter(server.ip_connection_counts))
+        caller_ip = next(iter(server.connections.values())).ip_address
+        assert caller_ip
         assert any(peer.ip_address == caller_ip for peer in server.connections.values())
 
         await guest_ws.send(json.dumps({"type": "delete_data"}))
         reply = json.loads(await guest_ws.recv())
         assert reply == {"type": "data_deleted"}
 
-        assert caller_ip not in server.ip_connection_counts
         assert all(peer.ip_address == "" for peer in server.connections.values())
 
         # An unknown caller (never joined a room) gets a clean error, not a crash.
@@ -154,3 +154,14 @@ class TestRetentionBound:
         assert "ip" not in saved
         assert not any("ip" in key.lower() or "address" in key.lower()
                        for key in _all_keys(saved))
+
+class TestTrustModel:
+    """The README states what game clients rely on the relay for."""
+
+    def test_readme_documents_the_trust_model(self):
+        readme = Path(__file__).with_name("README.md").read_text(encoding="utf-8")
+        assert "## Trust model" in readme
+        section = readme.split("## Trust model", 1)[1].split("\n## ", 1)[0]
+        assert "trusted component" in section
+        assert "sender" in section
+        assert "join" in section and "leave" in section

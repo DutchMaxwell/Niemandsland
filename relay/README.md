@@ -21,6 +21,15 @@ join with the room code.
 - **Host reconnect** preserves the room briefly and lets ONLY the host's identity token reclaim peer 1
   (a guest can't seize the host slot); see [`HOST_RECONNECT.md`](HOST_RECONNECT.md).
 
+## Trust model
+
+The relay is a **trusted component** of a multiplayer session. Game clients rely on it to stamp
+each forwarded frame with its true sender peer id and to announce peer joins and leaves (and the
+host's pause and return) truthfully; they do not authenticate one another end to end. Room
+membership is the trust boundary between players: a room code admits a player to that room only,
+and the relay never forwards a frame across rooms. Point the game only at a relay you trust; the
+default is the project's own relay.
+
 ## Usage stats (aggregate, no PII)
 
 The relay counts how much it is used — the project keeps **no client telemetry**, so the relay's own
@@ -61,7 +70,7 @@ Three ways to read them, all returning the same blob:
 
 ```bash
 cd relay
-python -m pip install -r requirements.txt   # websockets>=12.0
+python -m pip install -r requirements.txt   # websockets>=16.0,<17
 python relay_server.py --port 8765
 ```
 
@@ -94,7 +103,7 @@ fly deploy
 | `relay_server.py` | The relay (asyncio + `websockets`) — routing, rooms, `Stats`, `/stats` |
 | `relay_stats.py` | CLI: query a relay's aggregate stats over WebSocket and print them |
 | `stats_digest.py` | Parse captured `STATS` log lines into a weekly usage digest |
-| `requirements.txt` | `websockets>=12.0` |
+| `requirements.txt` | `websockets>=16.0,<17` (the major the suite runs against) |
 | `Dockerfile` | `python:3.11-slim`, runs `relay_server.py --port 8765` |
 | `fly.toml` | Fly.io deployment config |
 | `test_relay_server.py`, `conftest.py`, `pytest.ini` | Test suite |
