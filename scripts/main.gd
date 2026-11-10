@@ -5880,13 +5880,16 @@ func _solo_consume_once_mods(attacker: GameUnit, defender: GameUnit, melee: bool
 
 ## G4-R3 X1a (EPOCH_73_V36, lead ruling 1): the Precision Feat is ONE once-per-game latch shared by shooting AND
 ## melee. The bearer's first attack of any kind (a strike-back too) spends it; the act ledger records the name
-## (`feats_used`). Every open once-per-game Shot Modifier on the attacker's chain closes with the exchange.
+## (`feats_used`). Every open once-per-game Shot Modifier and the Piercing Feat (T-1) on the attacker's chain
+## closes with the exchange.
 func _solo_spend_shot_feats(attacker: GameUnit) -> void:
 	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
 		return
 	for m in _solo_joined_chain(attacker):
 		var member := m as GameUnit
-		for e in RulesRegistry.unit_rules_of_primitive(member, "Shot Modifier"):
+		var feats: Array = RulesRegistry.unit_rules_of_primitive(member, "Shot Modifier")
+		feats.append_array(RulesRegistry.unit_rules_of_primitive(member, "Piercing Assault"))   # T-1: Piercing Feat
+		for e in feats:
 			var ed := e as Dictionary
 			if int((ed.get("params", {}) as Dictionary).get("uses_per_game", 0)) <= 0 \
 					or SoloController.shot_feat_spent(member, ed):

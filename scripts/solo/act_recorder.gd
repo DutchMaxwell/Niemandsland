@@ -975,6 +975,10 @@ static func _ledger_of(u: GameUnit) -> Dictionary:
 	for e in RulesRegistry.unit_rules_of_primitive(u, "Shot Modifier"):
 		if SoloController.shot_feat_spent(u, e as Dictionary):
 			feats.append(str((e as Dictionary)["name"]))
+	# T-1: the Piercing Feat rides the same latch and the same ledger name list.
+	for e in RulesRegistry.unit_rules_of_primitive(u, "Piercing Assault"):
+		if SoloController.shot_feat_spent(u, e as Dictionary):
+			feats.append(str((e as Dictionary)["name"]))
 	if not feats.is_empty():
 		ledger["feats_used"] = feats
 	# G4-H-LIM (EPOCH_73_V36) — the once-per-game LIMITED ledger: the weapon names this unit has already
