@@ -651,6 +651,26 @@ class TestSecurity:
         for ws in connections:
             await ws.close()
 
+    async def test_one_ip_holds_at_most_its_connection_cap_in_rooms(self, relay):
+        """Rooms need an open socket each, so one IP never holds more rooms than
+        MAX_CONNECTIONS_PER_IP."""
+        server, url = relay
+        connections = []
+        for _ in range(MAX_CONNECTIONS_PER_IP + 3):
+            ws = await websockets.connect(url)
+            connections.append(ws)
+            try:
+                await ws.send(json.dumps({"type": "create_room"}))
+                if json.loads(await asyncio.wait_for(ws.recv(), timeout=2.0))["type"] != "room_created":
+                    continue
+                await ws.send(json.dumps({"type": "delete_data"}))
+                await asyncio.wait_for(ws.recv(), timeout=2.0)
+            except websockets.exceptions.ConnectionClosed:
+                pass
+        assert len(server.rooms) == MAX_CONNECTIONS_PER_IP
+        for ws in connections:
+            await ws.close()
+
     async def test_rate_limit_applies_before_joining(self, relay, monkeypatch):
         """A socket that has not created or joined a room is rate-limited like a joined peer."""
         import relay_server
