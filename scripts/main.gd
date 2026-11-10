@@ -4654,6 +4654,9 @@ func _run_ai_shooting(report: Dictionary) -> void:
 			if bool(prof.get("limited", false)) and solo_controller.is_limited_used(member, prof):
 				_solo_log_limited_spent(member, prof)
 				continue
+			# R-1 (A2): remember that the weapon itself prints Shred before the unit grant folds the flag.
+			if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and bool(prof.get("shred", false)):
+				prof["_shred_own"] = true
 			if RulesRegistry.unit_rule_active(member, "Shred") \
 					or _solo_shred_facet_applies(member, base_range):
 				prof["shred"] = true
@@ -6603,6 +6606,9 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 				if member.has_special_rule("Counter") \
 						or not RulesRegistry.unit_rules_of_primitive(member, "Counter").is_empty():
 					prof["counter"] = true
+			# R-1 (A2): the weapon's own Shred is remembered before the unit grant folds the flag.
+			if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and bool(prof.get("shred", false)):
+				prof["_shred_own"] = true
 			# Shred can be granted at unit level too (wave 5) — mark every profile of that member.
 			if member_shred:
 				prof["shred"] = true
