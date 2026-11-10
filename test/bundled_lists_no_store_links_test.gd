@@ -1,5 +1,5 @@
 extends GdUnitTestSuite
-## Bundled army lists ship no store links: the game never reads them and they point at a third-party shop.
+## Bundled army lists ship no store links and no product picture paths: the game never reads them.
 
 const DIRS := ["res://assets/arena_lists", "res://assets/tutorial"]
 
@@ -22,6 +22,6 @@ func test_no_bundled_list_carries_a_store_link() -> void:
 	var hits: Array = []
 	for p in _json_files():
 		var text := FileAccess.get_file_as_string(p)
-		if text.contains("storeLinks") or text.contains("myminifactory"):
+		if text.contains("storeLinks") or text.contains("myminifactory") or text.contains("mageUrl"):
 			hits.append(p)
-	assert_array(hits).override_failure_message("store links in bundled lists: %s" % str(hits)).is_empty()
+	assert_array(hits).override_failure_message("store links or picture paths in bundled lists: %s" % str(hits)).is_empty()
