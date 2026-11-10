@@ -280,7 +280,6 @@ class TestRoomManagement:
     async def test_max_peers_per_room_enforced(self, relay):
         server, url = relay
         # Raise IP limit for this test (all from localhost)
-        server.ip_connection_counts.clear()
         old_limit = MAX_CONNECTIONS_PER_IP
         import relay_server
         relay_server.MAX_CONNECTIONS_PER_IP = 20
@@ -931,7 +930,6 @@ class TestRoomListing:
         import relay_server
         old_limit = relay_server.MAX_CONNECTIONS_PER_IP
         relay_server.MAX_CONNECTIONS_PER_IP = MAX_PEERS_PER_ROOM + 5
-        server.ip_connection_counts.clear()
         host_ws, code, _ = await create_public_room(url)
         guests = []
         try:

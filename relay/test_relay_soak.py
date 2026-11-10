@@ -320,7 +320,7 @@ class TestIpLimitChurn:
         for _ in range(MAX_CONNECTIONS_PER_IP):
             conns.append(await websockets.connect(url))
         await asyncio.sleep(0.1)
-        assert server.ip_connection_counts.get("127.0.0.1") == MAX_CONNECTIONS_PER_IP
+        assert len(server._open_sockets) == MAX_CONNECTIONS_PER_IP
 
         # One over the limit: accepted at TCP, then closed with 4429.
         over = await websockets.connect(url)
@@ -336,7 +336,7 @@ class TestIpLimitChurn:
         # Free one slot -> a fresh connection succeeds.
         await conns.pop().close()
         await asyncio.sleep(0.1)
-        assert server.ip_connection_counts.get("127.0.0.1") == MAX_CONNECTIONS_PER_IP - 1
+        assert len(server._open_sockets) == MAX_CONNECTIONS_PER_IP - 1
         recovered = await websockets.connect(url)
         await recovered.send(json.dumps({"type": "create_room"}))
         assert json.loads(await recovered.recv())["type"] == "room_created"

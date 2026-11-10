@@ -284,7 +284,6 @@ class RelayServer:
     def __init__(self):
         self.rooms: dict[str, Room] = {}
         self.connections: dict[ServerConnection, Peer] = {}
-        self.ip_connection_counts: dict[str, int] = {}
         self.stats = Stats(os.environ.get("RELAY_STATS_PATH", ""))
         self._closing: set = set()  # background closes of taken-over sockets (held so they are not GC'd)
         # Every accepted, still-open socket. The per-IP admission check counts these by their transport
@@ -316,7 +315,6 @@ class RelayServer:
             return
 
         self._open_sockets.add(websocket)
-        self.ip_connection_counts[ip] = self.ip_connection_counts.get(ip, 0) + 1
         pre_join_timestamps: list = []  # rate window for frames sent before the socket owns a Peer
 
         try:
@@ -400,7 +398,6 @@ class RelayServer:
             if peer is None:
                 await websocket.send(json.dumps({"type": "error", "reason": "no_data"}))
                 return
-            self.ip_connection_counts.pop(ip, None)
             for existing_peer in self.connections.values():
                 if existing_peer.ip_address == ip:
                     existing_peer.ip_address = ""
@@ -809,11 +806,6 @@ class RelayServer:
     ) -> None:
         """Clean up when a connection is closed."""
         self._open_sockets.discard(websocket)
-        # Decrement IP count
-        if ip in self.ip_connection_counts:
-            self.ip_connection_counts[ip] -= 1
-            if self.ip_connection_counts[ip] <= 0:
-                del self.ip_connection_counts[ip]
 
         peer = self.connections.pop(websocket, None)
         if not peer:
