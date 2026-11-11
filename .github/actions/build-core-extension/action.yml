@@ -4,6 +4,12 @@ inputs:
   target:
     description: "Target platform to build for: 'linux' or 'windows' (ubuntu runner), 'macos' (macos-14 runner only)."
     required: true
+  debug-symbols:
+    description: "'true' uploads the debug-symbol artifact (Linux, Windows); 'false' skips it, for a second build in the same run whose artifact name would collide."
+    default: "true"
+  cache-shared-key:
+    description: "Swatinem/rust-cache shared-key; empty keeps the per-job key."
+    default: ""
 runs:
   using: composite
   steps:
@@ -13,6 +19,7 @@ runs:
       uses: Swatinem/rust-cache@v2
       with:
         workspaces: core
+        shared-key: ${{ inputs.cache-shared-key }}
     # x86_64-only MinGW toolchain with cached .deb files (shared with onnx-spike.yml).
     - name: Setup mingw-w64 (x86_64 only)
       if: inputs.target == 'windows'
@@ -71,7 +78,7 @@ runs:
           echo "::error::shipped library still embeds $PATHS /home/ path(s)"; exit 1
         fi
     - name: Upload debug symbols
-      if: inputs.target == 'linux'
+      if: inputs.debug-symbols == 'true' && inputs.target == 'linux'
       uses: actions/upload-artifact@v4
       with:
         name: nml-core-debug-${{ steps.strip.outputs.build_id }}
@@ -112,7 +119,7 @@ runs:
     # DLL's sha256; it differs in name from the Linux one and both are uploaded in a
     # single release-job run.
     - name: Upload Windows debug symbols
-      if: inputs.target == 'windows'
+      if: inputs.debug-symbols == 'true' && inputs.target == 'windows'
       uses: actions/upload-artifact@v4
       with:
         name: nml-core-debug-windows-${{ steps.stripwin.outputs.id }}
