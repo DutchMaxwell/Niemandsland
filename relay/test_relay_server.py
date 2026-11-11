@@ -666,6 +666,38 @@ class TestSecurity:
         for ws in held:
             await ws.close()
 
+    async def test_roomless_control_messages_are_paced(self, relay):
+        """A socket in no room may not fire join attempts faster than the pre-join pace."""
+        server, url = relay
+        ws = await websockets.connect(url)
+        answers = 0
+        with pytest.raises(websockets.exceptions.ConnectionClosed) as closed:
+            for _ in range(relay_server.PRE_JOIN_CONTROL_MESSAGES_PER_SECOND + 5):
+                await ws.send(json.dumps({"type": "join_room", "code": "AAAAAA"}))
+            while True:
+                await asyncio.wait_for(ws.recv(), timeout=2.0)
+                answers += 1
+        assert closed.value.rcvd is not None and closed.value.rcvd.code == 4429
+        assert answers == relay_server.PRE_JOIN_CONTROL_MESSAGES_PER_SECOND
+
+    async def test_a_game_clients_roomless_pace_is_never_cut(self, relay):
+        """One control message per 50 ms (the pace limit itself, far above a real client's) passes,
+        and a peer inside a room keeps the general ceiling for its control messages."""
+        server, url = relay
+        ws = await websockets.connect(url)
+        for _ in range(relay_server.PRE_JOIN_CONTROL_MESSAGES_PER_SECOND + 5):
+            await ws.send(json.dumps({"type": "join_room", "code": "AAAAAA"}))
+            resp = json.loads(await asyncio.wait_for(ws.recv(), timeout=2.0))
+            assert resp["type"] == "error"
+            await asyncio.sleep(0.06)
+        await ws.send(json.dumps({"type": "create_room"}))
+        assert json.loads(await asyncio.wait_for(ws.recv(), timeout=2.0))["type"] == "room_created"
+        for _ in range(relay_server.PRE_JOIN_CONTROL_MESSAGES_PER_SECOND * 3):
+            await ws.send(json.dumps({"type": "heartbeat"}))
+        for _ in range(relay_server.PRE_JOIN_CONTROL_MESSAGES_PER_SECOND * 3):
+            assert json.loads(await asyncio.wait_for(ws.recv(), timeout=2.0))["type"] == "heartbeat_ack"
+        await ws.close()
+
     async def test_ip_limit_counts_open_sockets(self, relay):
         """Every open socket counts against MAX_CONNECTIONS_PER_IP until it closes."""
         server, url = relay

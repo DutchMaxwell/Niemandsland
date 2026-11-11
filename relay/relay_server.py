@@ -52,6 +52,11 @@ MAX_MESSAGE_SIZE = 1048576  # 1MB — game state serializations can be large
 # The relay stays a dumb router; the client owns pacing (token bucket). 2000 gives headroom
 # while still catching a genuinely misbehaving peer.
 RATE_LIMIT_MESSAGES_PER_SECOND = 2000
+# Control messages from a socket that is in no room (create, join, list, heartbeat). A game client
+# sends about one per second there at most (a join retry every 2 s plus a heartbeat every 5 s), so
+# this leaves a wide margin while keeping room-code attempts slow. Binary frames sent while roomless
+# are dropped anyway and stay under the general ceiling above.
+PRE_JOIN_CONTROL_MESSAGES_PER_SECOND = 20
 # A legitimate reconnect storm behind one NAT (guest churns peer 3,4,5...) must not trip a
 # second 4429 ("Too many connections from this IP") and turn a transient blip into a dead room.
 MAX_CONNECTIONS_PER_IP = 10
@@ -331,11 +336,18 @@ class RelayServer:
 
         self._open_sockets.add(websocket)
         pre_join_timestamps: list = []  # rate window for frames sent before the socket owns a Peer
+        pre_join_control_timestamps: list = []  # tighter window for its control messages
 
         try:
             async for message in websocket:
                 peer = self.connections.get(websocket)
                 if peer is None and not self._within_rate(pre_join_timestamps):
+                    logger.warning("Rate limit exceeded before joining a room")
+                    await websocket.close(4429, "Rate limit exceeded")
+                    break
+                if (peer is None and isinstance(message, str)
+                        and not self._within_rate(
+                            pre_join_control_timestamps, PRE_JOIN_CONTROL_MESSAGES_PER_SECOND)):
                     logger.warning("Rate limit exceeded before joining a room")
                     await websocket.close(4429, "Rate limit exceeded")
                     break
@@ -798,14 +810,14 @@ class RelayServer:
         return True
 
     @staticmethod
-    def _within_rate(timestamps: list) -> bool:
+    def _within_rate(timestamps: list, limit: Optional[int] = None) -> bool:
         """Sliding one-second window over `timestamps` (pruned and appended in place).
 
         Returns True and records the message if it is allowed, False if the window is full.
         """
         now = time.monotonic()
         timestamps[:] = [t for t in timestamps if now - t < 1.0]
-        if len(timestamps) >= RATE_LIMIT_MESSAGES_PER_SECOND:
+        if len(timestamps) >= (RATE_LIMIT_MESSAGES_PER_SECOND if limit is None else limit):
             return False
         timestamps.append(now)
         return True
