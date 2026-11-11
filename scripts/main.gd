@@ -8913,10 +8913,12 @@ func _solo_melee_parry_dice(defender: GameUnit) -> int:
 	var m_parry := 0
 	for m in [defender] + (defender.get_attached_heroes() if defender.has_method("get_attached_heroes") else []):
 		var rating: int = _solo_unit_rating(m, "Parry") if RulesRegistry.unit_rule_active(m, "Parry") else 0
+		var alive: int = maxi((m as GameUnit).get_alive_count(), 0)
 		if rating <= 0 and m.source_data is OPRApiClient.OPRUnit:
+			# A Parry WEAPON is carried by `count` models, not by the whole unit (the unit rule above is).
 			for w in (m.source_data as OPRApiClient.OPRUnit).weapons:
-				if int(w.range_value) <= 0: rating = maxi(rating, AiShooting._rating_of(w, "Parry"))
-		m_parry += rating * maxi((m as GameUnit).get_alive_count(), 0)
+				if int(w.range_value) <= 0: m_parry += AiShooting._rating_of(w, "Parry") * mini(maxi(int(w.count), 1), alive)
+		m_parry += rating * alive
 	return m_parry
 
 
