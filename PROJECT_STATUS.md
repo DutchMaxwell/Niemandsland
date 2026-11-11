@@ -81,13 +81,31 @@ cylinder whose height comes off the official base-size table, every terrain piec
 volume, and a sight query is a single 3D eye-to-eye segment — so the ruler's verdict, the sight
 fan, the engine and the AI can never disagree.
 
-**Rules 3.6 (on main, ships with the next release)** — Grimdark Future and Age of Fantasy play OnePageRules 3.6
+**Rules 3.6 (shipped in 0.3.15.0)** — Grimdark Future and Age of Fantasy play OnePageRules 3.6
 (`_meta.core_version` 3.6.0 in `assets/solo/rules_mechanics_gf.json` and `_aof.json`); Firefight, Skirmish and
 Regiments stay on 3.5.1 until they are ported. The rules version shows next to the game version, an older book
 imports with a warning, and a save or an online room on other rules is refused. 3.6 runs under its own rules
 epoch (73), so recordings and reference runs below it are unchanged. Examples: ruins no longer block sight (they
 are Unstable), Cumbersome units may only Hold or Advance, charges are measured edge to edge before the move, and
 the battle log names every applied rule as the book does. The player-facing list is in `CHANGELOG.md`.
+
+**Solo — the 0.3.15 wave** — the rules 3.6 port, in play. **A joined hero plays as the unit its host
+leaves behind**: when every host model is dead it saves with the Cover bonus, rolls its own Protection
+Feat, is seen and shot at from its own base and carries a charge on, and "most models" rules (Stealth,
+Fearless, Regeneration, Fortified, Guarded …) are judged on the models still alive. **Wounds count
+once**: a charger's wounds from the strike-back and from Dangerous terrain enter the melee result
+exactly once, wounds that Regeneration cancels do not count, and Scourge's phantom wounds do.
+**Wound-ignore rules roll by name** (Regeneration and Protected each roll, the forms of one rule are one
+roll, a bypass skips only Regeneration), a weapon's own Shred and a unit rule of another name each pay
+their extra wounds, and hits that come from no weapon (Impact, Trap, Breath Attack, Retaliate,
+Deathstrike, Self-Destruct) take no weapon-scoped unit rules. **Spells**: casters within 18″ boost and
+resist without line of sight, and Spell Drain rolls a real Morale test on the tray. **NACHTMAHR** reads the
+same rules — its damage, morale and movement estimates count what the table rolls, a shot is measured
+to the nearest model of the target's whole unit, and it acts against a lone joined hero. **Battle log**:
+a destroyed unit is announced once, a volley writes one loss line, and a solo player's own lines read
+"You defend" and "You roll". **Automodus** — the one-click Charge, Advance & Shoot and Rush verbs — stays
+switched off in this release (its landing preview, lit targets and hover preview are merged behind the
+switch); you move and attack by hand. The per-change list is in `CHANGELOG.md`.
 
 **Solo — the 0.3.11 wave in play** — **Reanimation** rolls on activation and you allocate its
 restores by clicking; **Reinforcement** returns a destroyed unit as a fresh copy on the game's
@@ -278,7 +296,8 @@ cards & the radial menu, wounds/casualties/revive, a real army import, table & c
 the competitive Map Layout editor, and movement & trails (path painting, dry-brush cap, 1″
 spacing, Start-Game phase gate). It ships with a bundled board (official lists, real minis,
 auto-generated terrain), progress persistence and an end assessment. Still open for later
-waves: Settings, hosting/multiplayer, Regiments, and an OPR-rules / solo-play track.
+waves: Settings, hosting/multiplayer and Regiments; the OPR-rules / solo-play track shipped as the
+Trial by Fire lessons below.
 
 **Combat effects, Calm Mode, missions, Trial by Fire** — resolved attacks and casts are drawn at the
 table (result marks, shots, falls, spells, hero auras; drawn from the rules' own results, one **Combat
@@ -395,7 +414,7 @@ and `hero_attachment_dialog.gd` were removed as dead code in January 2026 — th
 
 ## Tests
 
-gdUnit4: about **3,160 test functions** across **387 suites** in `test/` (incl. `coherency_checker`,
+gdUnit4: about **6,000 test functions** across **981 suites** in `test/` and its subfolders (incl. `coherency_checker`,
 `save_manager`, `startup_menu`, `internet_lobby`, `relay_multiplayer_peer`, `network_manager` /
 `network_version_handshake`, `dice_rules`, `player_identity`, the movement/spacing
 suites `separation_checker` / `separation_resolver` / `separation_zone`, `move_ledger` /
@@ -404,10 +423,10 @@ suites — `solo_controller`, `turn_manager`, `movement_planner`, `ai_decision` 
 `ai_targeting` / `ai_position` / `ai_round_planner` / `ai_combat_math` / `ai_spell`,
 `rules_registry`, `spells_registry`, `terrain_rules`, `sight_fan`, `volumetric_los`,
 `los_volumes`, `transport_state` / `transport_embark`, `autosave_controller`). The
-**end-to-end layer** (`test/e2e/`, **105 suites**)
+**end-to-end layer** (`test/e2e/`, **291 suites**)
 boots the real `scenes/main.tscn` and drives the real menu / deployment-gate / click-ownership
 / battle-log-export / AI-path-label flows that unit tests skip. Python: the nml-core-py bindings
-suite (**88 pytest files**) and `relay/test_relay_server.py` (67 green); the Rust workspace tests
+suite (**153 pytest files**) and `relay/test_relay_server.py` (79 test functions); the Rust workspace tests
 run in `.github/workflows/rust.yml`. How to run: [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md). Coverage of the
 solo / movement / MP / tutorial paths is solid; some older gameplay scripts are still
 untested.

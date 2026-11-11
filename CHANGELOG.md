@@ -6,7 +6,9 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 
 ## [Unreleased]
 
-DRAFT for the next release. The big change: Grimdark Future and Age of Fantasy now play OnePageRules
+## [0.3.15.0-alpha] — 2026-11-11
+
+The big change: Grimdark Future and Age of Fantasy now play OnePageRules
 **rules 3.6**. The game, the rules automation, the Game School and NACHTMAHR all follow it.
 
 ### Changed — rules 3.6
@@ -18,7 +20,7 @@ DRAFT for the next release. The big change: Grimdark Future and Age of Fantasy n
 - **Armies renamed in the 3.6 books keep their models and their rules.** Units and weapons that the
   3.6 books rename still find their 3D models (Saurians, Mummified Undead, Vampiric Undead, Ratmen,
   Havoc Masters and more), and the army-book index, the spell exporter and the Voidspace Stalkers book
-  read the 3.6 books. Tutorial, arena and Game School armies use the 3.6 lists. (#1924–#1929, #1933,
+  read the 3.6 books. Tutorial, arena and Game School armies use the 3.6 lists. (#1924, #1925, #1926, #1927, #1928, #1929, #1933,
   #1936, #1966, #1984, #2064, #2172)
 - **Renamed and reworded special rules work in every 3.6 book that fields them.** This covers the
   Enhanced forms (Havocbound, Changebound, Bloodborn, Darkborn, Wolfborn, Knightborn and many more,
@@ -34,7 +36,7 @@ DRAFT for the next release. The big change: Grimdark Future and Age of Fantasy n
   Piercing Spotter, Precision Spotter and Slayer in the four Age of Fantasy books that do, and Ravage
   rolls for the Duchies of Vinci Scouts in a table game. Precision Charge gives its carrier +1 to hit
   when charging and Precision Fighter +1 to hit in melee. (#1934, #1940, #1943, #1948, #1957, #1959,
-  #1962, #1969, #1982, #1994, #2048, #2060, #2083–#2085, #2112, #2142, #2147, #2158, #2188, #2189,
+  #1962, #1969, #1982, #1994, #2048, #2060, #2083, #2084, #2085, #2112, #2142, #2147, #2158, #2188, #2189,
   #2209, #2235, #2247, #2248, #2252, #2255, #2286, #2426, #2427, #2435, #2441, #2545, #2547, #2549)
 - **"Most models" rules read the living models.** A rule that a joined unit has when most of its
   models carry it (Stealth, Fearless, Regeneration and Self-Repair, Fortified, Guarded, Evasive,
@@ -85,14 +87,15 @@ DRAFT for the next release. The big change: Grimdark Future and Age of Fantasy n
   like Bane. In a solo game a Crossing Strike weapon no longer strikes in melee: it attacks only when
   its bearer moves through an enemy unit, rolling at the unit it crossed, after NACHTMAHR's moves and
   after the player's own. Regenerative Strength rolls token dice for wounds instead of adding
-  attacks, and a Bloodthirsty follow-up strike keeps its Parry. (#1947, #1950, #1992, #2001, #2003,
-  #2021, #2039, #2066, #2116, #2121, #2126, #2128, #2275, #2282, #2339, #2370, #2372, #2378, #2554)
+  attacks, and a Bloodthirsty follow-up strike keeps its Parry. A Thrust handed out by an aura, a buff or a joined hero
+  now counts on the charge at the table, and Impact hits take no weapon AP bonus. (#1947, #1950, #1992, #2001, #2003,
+  #2021, #2039, #2066, #2116, #2121, #2126, #2128, #2275, #2282, #2339, #2370, #2372, #2378, #2554, #2582, #2583)
 - **Melee wounds count once, and a once-only grant waits for its attack.** A charger's wounds from
   the defender's strike-back and a charged unit's earlier wounds no longer count twice in the melee
   result, so the loser no longer flips on a double count. A once Evasive grant such as Blood Dome is
   spent when its unit is attacked, not by its own charge strike, and the Precision Feat is used once
-  per game at the bearer's first attack, shot or strike, then spent and logged. (#2434, #2446,
-  #2494, #2502)
+  per game at the bearer's first attack, shot or strike, then spent and logged. The Piercing Feat's AP bonus is paid once per game the same way.
+  (#2434, #2446, #2494, #2502, #2585)
 - **Shooting follows 3.6.** Indirect weapons fire without line of sight only after a Hold, and an
   Indirect shot keeps the target's terrain cover, held or not; Quick Throw lets them fire after
   moving. Weapons can gain AP when shooting from far away or against a weakly armoured target;
@@ -221,6 +224,14 @@ DRAFT for the next release. The big change: Grimdark Future and Age of Fantasy n
 - **The interface speaks rules 3.6.** The rules version shows next to the game version, the terrain
   tooltips use the 3.6 words (Dense, Sight Blocking, Unstable), and the Game School shows the rules
   version instead of page numbers. (#1999, #2000, #2045)
+- **In a solo game your own lines say "You".** The save line reads "You defend" and the dice tray
+  header "You roll", not "You defends" and "You rolls". (#2591, #2592)
+
+### Changed — Windows
+- **Windows: the game data ships as its own file** (`Niemandsland.pck` next to `Niemandsland.exe`) —
+  an antivirus heuristic blocked the 0.3.14.0 download, whose executable carried the game data inside.
+  Players still on 0.3.12.0 or older must download the zip by hand once: that version's in-game
+  updater replaces only the executable. (#1906)
 
 ### Fixed
 - **A refused save or online join says why on screen.** The reason used to reach only the log or the
@@ -244,6 +255,19 @@ DRAFT for the next release. The big change: Grimdark Future and Age of Fantasy n
 - **Bonuses that counted twice or at the wrong time are corrected**: Stealth Buff grants Stealth once,
   a moved Artillery's Unstoppable volley no longer gets a phantom +1, and a Precision Target stops
   stacking markers. (#2267, #2337, #2357)
+- **Hits that come from no weapon no longer borrow weapon rules.** Trap, Breath Attack, Retaliate,
+  Deathstrike and Self-Destruct hits take nothing from the attacking unit's weapon-scoped rules (extra
+  AP, Bane re-rolls, Regeneration bypass, Piercing Mark), as Impact hits already did. (#2588)
+- **A unit wiped out in one volley is announced once.** The battle log wrote the destroyed line once
+  per casualty, a recycle mission put one reserve copy per casualty into reserve, and a volley that
+  killed several models of a surviving unit wrote one loss line per model; each now appears once, as
+  "X loses N models (a/b)". (#2589, #2590)
+- **An open target pick closes when its unit is activated another way**, for example with the unit
+  card's Activate button; a later click on an enemy no longer resolves an attack for a unit already
+  marked activated, and the log says the pick was dropped. (#2593)
+- **A running cast or attack keeps its markers.** NACHTMAHR's end-of-activation clean-up and its next
+  announcement no longer delete the rings and attack line of a cast of yours that is still on the
+  table, and a marker that is already gone no longer breaks the cast's clean-up. (#2597, #2599, #2600)
 
 ### Changed — rules corrections
 - **Deadly against Regeneration or Self-Repair rolls once per wound after the multiplication**: a
@@ -255,21 +279,39 @@ DRAFT for the next release. The big change: Grimdark Future and Age of Fantasy n
   to one model as X wounds, all X face the target's Regeneration-family roll (Resistance at its spell
   value), and only what the rolls do not stop is capped at that model. The AI opponent's spell
   estimate counts the same way. (#1920)
+- **Wound-ignore and extra-wound rules roll by name.** Each differently named wound-ignore rule
+  (Regeneration and Protected, for example) rolls its own die in turn while the forms of one rule stay
+  one roll, and a rule that bypasses Regeneration skips only that roll. A weapon's own Shred and a unit
+  rule of another name (Warbound and kin) each pay their extra wounds and write their own log line.
+  (#2595, #2596)
 
 ### Internal
 - Automodus rework groundwork (landing preview, lit targets, hover preview, free-point Rush and
   Advance & Shoot, two-instance acceptance) is merged but stays switched off: the radial keeps Charge,
-  Advance & Shoot and Rush hidden until the switch-on change lands. (#1853–#1859, #1892–#1904, #1908,
+  Advance & Shoot and Rush hidden until the switch-on change lands. (#1853, #1854, #1855, #1856, #1857, #1858, #1859, #1892, #1893, #1894, #1895, #1896, #1897, #1898,
+  #1899, #1900, #1901, #1902, #1903, #1904, #1908,
   #1916)
 - Test, CI and measurement work: per-row Rust test files and removal of unused stubs, shard weights
   for the new suites, planner and replay-gate fixes, a "most models" reader shared by both engines,
   a check that fails the build when a book fields a rule the game calls automated but has no row for
   it, arena-log and replay-gate fixes, and CI that skips exports for draft PRs, queues one build per
   burst of pushes and builds the macOS export on macos-15. (#1903, #1941, #1960, #1967, #1970,
-  #1973, #1986, #2007–#2009, #2013–#2016, #2026, #2050, #2076, #2094, #2117, #2149, #2161, #2169,
+  #1973, #1986, #2007, #2008, #2009, #2013, #2014, #2015, #2016, #2026, #2050, #2076, #2094, #2117, #2149, #2161, #2169,
   #2201, #2210, #2241, #2245, #2296, #2301, #2307, #2319, #2392, #2394, #2396, #2399, #2401, #2405,
   #2408, #2551, #2553, #2571, #2575)
 - Code comments that quoted the rulebook now name the rule and paraphrase it. (#2360, #2390)
+- More test, CI and replay-gate work: the AI replay gates print only the really failing acts and follow
+  the table's own landings, spell grants and targets, Dangerous Terrain tails, Ethereal repositions and
+  lone joined heroes, and count a spell's range grant once; the gdUnit stage runs on 12 shards with
+  weights for the suites that run over a minute, and a new suite no longer needs a weights entry; the
+  Rust (advisory) workflow runs only when a path it reads changes; the wound-ignore groundwork; Versatile
+  Reach's landing is covered at rules epoch 73 again; and the CHANGELOG draft itself. (#2413, #2422,
+  #2424, #2428, #2439, #2443, #2448, #2454, #2461, #2462, #2464, #2467, #2483, #2495, #2496, #2504,
+  #2507, #2513, #2514, #2517, #2523, #2541, #2594)
+- Data and housekeeping: tutorial saves and bundled army lists carry no rule or spell text, store links
+  or product picture paths, header comments name the role they play, and the relay's connection limit,
+  message-rate window and host-seat reclaim are tidied with no protocol change. (#2584, #2586, #2587,
+  #2598)
 
 ## [0.3.14.0-alpha] — 2026-10-28
 
