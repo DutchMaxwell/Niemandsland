@@ -61,6 +61,6 @@ func test_control_a_walker_stays_behind_the_wall() -> void:
 	assert_float(_plan_end_x([])).is_less(2.0)
 
 
-func test_at_epoch_72_a_flying_unit_stays_behind_the_wall() -> void:
+func test_below_epoch_75_a_flying_unit_stays_behind_the_wall() -> void:
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_75_TABLE_FIXES - 1
 	assert_float(_plan_end_x(["Flying"])).is_less(2.0)
