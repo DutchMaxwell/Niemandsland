@@ -66,7 +66,9 @@ func _refresh() -> void:
 		var copy: Dictionary = card[WhatsNewContent.language(_locale)]
 		column.add_child(_wrapped_label(copy.title, HouseStyle.NOTE))
 		column.add_child(_wrapped_label(copy.body, HouseStyle.BODY))
-		column.add_child(_image_slot(card.image))
+		# A card without a picture (a rules-only release) is text only.
+		if not str(card.get("image", "")).is_empty():
+			column.add_child(_image_slot(card.image))
 		_cards.add_child(HouseStyle.card(column))
 
 func _wrapped_label(text: String, variant: StringName) -> Label:
