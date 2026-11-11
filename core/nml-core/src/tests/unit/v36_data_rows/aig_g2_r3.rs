@@ -57,3 +57,30 @@ fn a_plain_range_zero_weapon_still_strikes_at_epoch_73() {
     let plain = Weapon { name: "Blade".into(), range: 0.0, attacks: 2, count: 1, ap: 0, rules: vec![] };
     assert_eq!(crate::unit::melee_profiles_at(&[plain], EPOCH_73_V36).len(), 1);
 }
+
+// S6 (#2612, EPOCH_75_TABLE_FIXES): the move-through volley is a shooting attack, so a unit-level Shred-family
+// rule stamps its profiles; a range-0 weapon (Drop Bombs) reads the facet with reach max(range, 1).
+fn strafer_with(rule: &str, epoch: u32) -> UnitStatic {
+    let src = ZEPPELIN.replace("\"special_rules\":[]", &format!("\"special_rules\":[\"{rule}\"]"))
+        .replace("{\"name\":\"Drop Bombs\"", "{\"name\":\"Strafe Gun\",\"range\":24,\"attacks\":4,\"count\":1,\"ap\":0,\"rules\":[\"Crossing Strike\"]},\n               {\"name\":\"Drop Bombs\"");
+    let header = read_act_header(&src).expect("header");
+    let mut reg = Registries::new(&repo_root());
+    UnitStatic::build_for(&mut reg, header.profiles.get("zeppelin").expect("zeppelin"), epoch)
+}
+
+#[test]
+fn a_crossing_strike_volley_shreds_like_a_shooting_attack_from_epoch_75() {
+    let us = strafer_with("Shred when Shooting", crate::acts::EPOCH_75_TABLE_FIXES);
+    assert_eq!(us.strafe_shoot.len(), 2, "ranged and range-0 Crossing Strike weapons");
+    assert!(us.strafe_shoot.iter().all(|p| p.shred_alias), "a strafe profile lacks the Shred stamp");
+    // The melee-only facet never stamps a shooting volley; a rule-free unit never does.
+    assert!(!strafer_with("Shred in Melee", crate::acts::EPOCH_75_TABLE_FIXES).strafe_shoot.iter().any(|p| p.shred_alias));
+    assert!(!strafer_with("Fast", crate::acts::EPOCH_75_TABLE_FIXES).strafe_shoot.iter().any(|p| p.shred_alias));
+}
+
+#[test]
+fn a_crossing_strike_volley_stays_unstamped_at_epoch_74() {
+    let us = strafer_with("Shred when Shooting", crate::acts::EPOCH_75_TABLE_FIXES - 1);
+    assert_eq!(us.strafe_shoot.len(), 2);
+    assert!(!us.strafe_shoot.iter().any(|p| p.shred_alias), "epoch 74 must keep the raw array");
+}
