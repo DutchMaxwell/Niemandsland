@@ -343,6 +343,7 @@ fn a_two_model_flow_places_the_leader_then_pulls_the_straggler_in() {
         charge_tgt_bases: &[],
         charge_slots: &[],
         ledges: &[],
+        climb_cost: false,
     };
     let got = plan_sequential_flow(
         &pos, delta, &radii, &walls, &grid, &opts, 40.0, false, ThetaCfg::default(),
@@ -381,6 +382,7 @@ fn ledge_flow(dy_in: f64) -> (V2, Vec<V2>, Vec<Ledge>) {
         charge_tgt_bases: &[],
         charge_slots: &[],
         ledges: &ledges,
+        climb_cost: false,
     };
     let got = plan_sequential_flow(
         &[[10.0, 10.0]], [6.0, 0.0], &[0.5], &[], &Grid::default(), &opts, 48.0, false,
@@ -493,6 +495,7 @@ fn charge_flow(slot: V2, allowance: f64) -> nml_core::mv::FlowResult {
         charge_tgt_bases: &bases,
         charge_slots: &slots,
         ledges: &[],
+        climb_cost: false,
     };
     plan_sequential_flow(
         &pos, [8.0, 0.0], &radii, &walls, &grid, &opts, 40.0, true, ThetaCfg::default(),

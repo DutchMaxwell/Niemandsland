@@ -7,7 +7,7 @@ extends GdUnitTestSuite
 func test_the_recorder_stamps_the_rules_3_6_wave_at_epoch_73() -> void:
 	assert_int(AiActRecorder.rules_epoch) \
 		.override_failure_message("the recorder must stamp the rules 3.6 epoch, 73, not %d" % AiActRecorder.rules_epoch) \
-		.is_equal(73)
+		.is_greater_equal(73)
 
 
 ## Every later 3.6 row gates its GDScript twin on the mirror constant, so it must exist and be the live
@@ -18,7 +18,7 @@ func test_the_rules_3_6_mirror_constant_is_the_live_stamp_at_epoch_73() -> void:
 	assert_int(int(consts.get("EPOCH_73_V36", -1))) \
 		.override_failure_message("AiActRecorder has no EPOCH_73_V36 = 73 mirror") \
 		.is_equal(73)
-	assert_int(AiActRecorder.rules_epoch).is_equal(int(consts.get("EPOCH_73_V36", -1)))
+	assert_int(AiActRecorder.rules_epoch).is_greater_equal(int(consts.get("EPOCH_73_V36", -1)))
 
 
 func test_the_play_test_fixes_mirror_stays_frozen_at_epoch_72() -> void:

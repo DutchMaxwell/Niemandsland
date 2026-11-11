@@ -26,9 +26,9 @@ use crate::geom::{self, V3};
 use crate::state::State;
 use crate::terrain::{self, Terrain};
 use crate::IN2M;
-use crate::acts::{rule_on, EPOCH_6_TABLE_RULES, EPOCH_8_PLANNER_MENU, EPOCH_73_V36};
+use crate::acts::{rule_on, EPOCH_6_TABLE_RULES, EPOCH_74_CLIMB_COST, EPOCH_8_PLANNER_MENU, EPOCH_73_V36};
 
-use super::cost::{ledge_cost, CellSet, Grid, Ledge, Wall, Zone};
+use super::cost::{ledge_cost, trim_polyline_priced, CellSet, Grid, Ledge, Wall, Zone};
 use super::entry::plan_unit_step_call;
 use super::geom2::{self as g2, V2};
 use super::io::{CallOpts, MoveCall};
@@ -456,6 +456,24 @@ fn walls_and_ledges(&self) -> (Vec<Wall>, Vec<Ledge>) {
     (walls, edges.iter().map(|e| Ledge { a: e[0], b: e[1], dy_in: terrain::CONTAINER_HEIGHT_IN }).collect())
 }
 
+/// `_ledges_world` — the climbs in the table's world frame (metres), for the trims and the gate slack. Empty below
+/// `EPOCH_74_CLIMB_COST` and for a Flying unit, so every flat trim stays byte-identical.
+fn world_ledges(&self) -> Vec<Ledge> {
+    if !rule_on(self.rules_epoch, EPOCH_74_CLIMB_COST) {
+        return Vec::new();
+    }
+    let board = self.t.board_in();
+    self.walls_and_ledges().1.iter().map(|l| Ledge {
+        a: super::gate::to_world_f32(l.a, board), b: super::gate::to_world_f32(l.b, board), dy_in: l.dy_in,
+    }).collect()
+}
+
+/// `_priced_len_m` — a world trail's ground length plus the climb it pays (GF p.11), in metres.
+fn priced_len_m(world: &[V2], ledges_w: &[Ledge]) -> f64 {
+    let climb_in: f64 = world.windows(2).map(|w| ledge_cost(w[0], w[1], ledges_w)).sum();
+    g2::polyline_length(world) + climb_in * IN2M
+}
+
 /// `_plan_positions` :6136 — one `plan_unit_step` call, inputs only.
 fn build_call(&self, delta_world: V3, reach_in: f64, avoid_diff: bool, avoid_dang: bool) -> MoveCall {
     let (state, t, si, ci) = (self.state, self.t, self.si, self.ci);
@@ -537,6 +555,7 @@ fn build_call(&self, delta_world: V3, reach_in: f64, avoid_diff: bool, avoid_dan
             charge_tgt_bases: tgt_bases,
             charge_slots,
             ledges,
+            climb_cost: rule_on(self.rules_epoch, EPOCH_74_CLIMB_COST),
         },
         planned: Vec::new(),
         trails: Vec::new(),
@@ -624,10 +643,12 @@ fn trim_to_band(&self, leg: &mut Vec<V2>, reach_in: f64) -> Option<(V2, V2)> {
         let world: Vec<V2> = leg.iter()
             .map(|p| super::gate::to_world_f32(*p, board)).collect();
         let budget_m = reach_in * IN2M;
-        if g2::polyline_length(&world) <= budget_m + OVERLAP_EPS_M {
+        // A climb is movement spent (GF p.11): the trim pays it and stops short of a ledge it cannot pay.
+        let ledges_w = self.world_ledges();
+        if Self::priced_len_m(&world, &ledges_w) <= budget_m + OVERLAP_EPS_M {
             return None;
         }
-        let cut = g2::trim_polyline(&world, budget_m);
+        let cut = trim_polyline_priced(&world, budget_m, &ledges_w, IN2M);
         // Nearest inch-grid representation of each trimmed world point. The
         // add-then-divide planner input conversion would round twice here.
         *leg = cut.iter().map(|p| [
@@ -645,6 +666,7 @@ fn trim_to_band(&self, leg: &mut Vec<V2>, reach_in: f64) -> Option<(V2, V2)> {
 }
 
 fn gate_caps(&self, trails: &[Vec<V2>], radii_m: &[f64], reach_in: f64) -> Vec<f64> {
+    let ledges_w = self.world_ledges();
     trails
         .iter()
         .enumerate()
@@ -659,7 +681,7 @@ fn gate_caps(&self, trails: &[Vec<V2>], radii_m: &[f64], reach_in: f64) -> Vec<f
             let walked = if rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES) {
                 let world: Vec<V2> = leg.iter()
                     .map(|p| super::gate::to_world_f32(*p, self.t.board_in())).collect();
-                g2::polyline_length(&world) / IN2M
+                Self::priced_len_m(&world, &ledges_w) / IN2M // a climb paid is walked (GF p.11)
             } else {
                 g2::polyline_length(leg)
             };
@@ -2323,5 +2345,88 @@ pub(crate) mod tests {
             let off = geom::length(geom::sub(land.end[i], pos_of(&state, Mover { unit: 0, model: i }))) as f64 / IN2M;
             assert!(off < 1e-6, "model {i} moved {off}\" although the unit was coherent");
         }
+    }
+
+    /// A 6x4 ft board with one long container, x 3..6", z -18..18": its four OBB edges are walls on painted container
+    /// ground, so from `EPOCH_73_V36` the two long edges are 2.5" climbs (heights B2, GF p.11).
+    fn container_board() -> Terrain {
+        let e = |ax: f64, az: f64, bx: f64, bz: f64| [[ax * IN2M, az * IN2M], [bx * IN2M, bz * IN2M]];
+        Terrain::build(&PlainTerrain {
+            cells: (9..=20).map(|j| [16.0, j as f64, terrain::CONTAINER as f64]).collect(),
+            sandbox: Vec::<Obb>::new(),
+            pieces: Vec::new(),
+            containers: Vec::new(),
+            walls: vec![e(3.0, -18.0, 6.0, -18.0), e(6.0, -18.0, 6.0, 18.0), e(6.0, 18.0, 3.0, 18.0), e(3.0, 18.0, 3.0, -18.0)],
+            cell_params: CellParams {
+                table_size_feet: [6.0, 4.0],
+                grid_rotation_degrees: 0.0,
+                grid_size_inches: 3.0,
+                inches_to_meters: IN2M,
+            },
+        })
+    }
+
+    /// The most any published route of a multi-model `band_in` move toward `dest` spends, ground + climb, and the
+    /// largest climb, at `rules_epoch`. Models are 0.5"-radius bases, 1.2" apart in rows of three from `at`.
+    fn multi_model_rush(rules_epoch: u32, n: usize, at: [f64; 2], dest: [f64; 2], band_in: f64) -> (f64, f64, f64) {
+        let t = container_board();
+        let pos: Vec<V3> = (0..n)
+            .map(|k| [((at[0] + (k % 3) as f64 * 1.2) * IN2M) as f32, 0.0, ((at[1] + (k / 3) as f64 * 1.2) * IN2M) as f32])
+            .collect();
+        let state = units_state(vec![pos], vec![vec![0.5 * IN2M; n]], vec![vec![]]);
+        let dest = [(dest[0] * IN2M) as f32, 0.0, (dest[1] * IN2M) as f32];
+        let land = (MoveRules { rules_epoch })
+            .plain_move(&state, &t, 0, dest, band_in, false, true, crate::mv::FAST_PLANNER_GUARD)
+            .expect("the port moves the unit");
+        (land.budget_in, land.arc_in, land.climb_in)
+    }
+
+    /// The routes of six Rushes over the container (each sent a model over a ledge it had no movement left for) that
+    /// spend more than their band as ground + climb at `rules_epoch`, and whether any route climbed at all.
+    fn routes_over_their_band(rules_epoch: u32) -> (bool, Vec<String>) {
+        let cases = [
+            (3, [-1.0, 0.0], [13.0, 1.0], 8.0),
+            (4, [-1.0, -4.0], [13.0, -4.0], 8.0),
+            (5, [-0.5, 3.0], [13.5, 4.0], 8.0),
+            (3, [-1.2, -2.1], [12.8, -1.0], 12.0),
+            (4, [-2.0, 2.0], [12.0, 3.0], 12.0),
+            (5, [-1.0, -6.0], [13.0, -6.0], 12.0),
+        ];
+        let (mut climbed, mut over) = (false, Vec::new());
+        for (n, at, dest, band) in cases {
+            let (budget, arc, climb) = multi_model_rush(rules_epoch, n, at, dest, band);
+            climbed |= climb > 0.0;
+            if arc > budget + 0.03 {
+                over.push(format!("{n} models from {at:?}: a route spent {arc:.2}\" (ground + climb) of a {budget:.1}\" band"));
+            }
+        }
+        (climbed, over)
+    }
+
+    /// `EPOCH_74_CLIMB_COST`: a climb is movement spent (GF p.11), so a multi-model Rush over the container may not
+    /// spend more than its band as ground + climb on any model's route. The walk priced the climb, but the coherency
+    /// pull, the untangle re-route, the solver leg, the distance-truth trim and the gate slack measured flat length.
+    #[test]
+    fn at_epoch_74_a_multi_model_move_over_a_container_never_spends_more_than_its_band() {
+        let (climbed, over) = routes_over_their_band(EPOCH_74_CLIMB_COST);
+        assert!(climbed, "no case climbed: the test proves nothing");
+        assert!(over.is_empty(), "{}", over.join("\n"));
+    }
+
+    /// `EPOCH_73_V36` (the old leg): records stamped 73 were made with the flat trims, so the same Rushes still
+    /// replay the recorded behaviour - at least one route climbs past its band, exactly as before the port.
+    #[test]
+    fn at_epoch_73_the_trims_after_the_walk_stay_flat() {
+        let (climbed, over) = routes_over_their_band(EPOCH_73_V36);
+        assert!(climbed, "no case climbed: the test proves nothing");
+        assert!(!over.is_empty(), "at epoch 73 every route kept its band: the climb cost leaked below its gate");
+    }
+
+    /// Control (passes before and after): a Rush beside the container climbs nothing and keeps its whole band.
+    #[test]
+    fn a_multi_model_move_beside_the_container_keeps_its_band() {
+        let (budget, arc, climb) = multi_model_rush(EPOCH_74_CLIMB_COST, 4, [-1.0, -21.5], [20.0, -21.5], 8.0);
+        assert_eq!(climb, 0.0);
+        assert!(arc > 7.9 && arc <= budget + 0.03, "arc {arc:.2} of {budget:.1}");
     }
 }
