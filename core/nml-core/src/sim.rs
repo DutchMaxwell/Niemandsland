@@ -34,7 +34,7 @@ use crate::acts::{
     EPOCH_51_CASTER_INTERFERENCE, EPOCH_52_UTILITY_SPELLS, EPOCH_56_GROUNDED_PROTECTION,
     EPOCH_61_PRECISION_MARKERS, EPOCH_62_CASTING_MOD, EPOCH_65_MELEE_TRUTH,
     EPOCH_66_DISTANCE_TRUTH, EPOCH_67_MARKERS_BURSTS, EPOCH_68_MODIFIER_SUM,
-    EPOCH_71_RAPID_CHARGE_MARK, EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36,
+    EPOCH_71_RAPID_CHARGE_MARK, EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36, EPOCH_75_TABLE_FIXES,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
@@ -6216,7 +6216,9 @@ fn impact_phase(
     let pools = crate::dice::impact_pools(&ctx_of_melee(us, next, si, rules_epoch), &cut_by);
     // Rules 3.6 (`EPOCH_73_V36`) — Parry(X): each living carrier model (host
     // and joined heroes) contributes X dice against this Impact event.
-    let parry_dice: i64 = if rule_on(rules_epoch, EPOCH_73_V36) {
+    // `EPOCH_75_TABLE_FIXES` (maintainer ruling): Impact hits are never parried,
+    // so no Parry die is drawn; a record stamped 74 or below replays its draw.
+    let parry_dice: i64 = if rule_on(rules_epoch, EPOCH_73_V36) && !rule_on(rules_epoch, EPOCH_75_TABLE_FIXES) {
         parry_dice_total(statics, next, ti)
     } else {
         0
