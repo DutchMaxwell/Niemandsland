@@ -323,6 +323,51 @@ static func trim_polyline(points: Array, max_len: float) -> Array:
 	return out
 
 
+## Climb-priced trim_polyline (GF p.11: a climb is movement spent, up and down alike): each leg pays its length
+## plus the dy_in of every ledge it crosses, and the polyline ends where `max_len` runs out or LEDGE_STOP_IN short
+## of a ledge it can no longer pay (no model ends its move mid-climb) — the rule _walk_offset walks by. `ledges`
+## share the points' frame (Vector2 x/y, or the x/z of Vector3 points); `climb_scale` turns dy_in into the
+## points' length unit (1.0 for inches). A polyline that crosses no ledge trims exactly like trim_polyline.
+static func trim_polyline_priced(points: Array, max_len: float, ledges: Array, climb_scale: float = 1.0) -> Array:
+	if ledges.is_empty() or points.size() <= 1 or max_len <= 0.0:
+		return trim_polyline(points, max_len)
+	var lopts := {"ledges": ledges}
+	var out: Array = [points[0]]
+	var spent := 0.0
+	for i in range(1, points.size()):
+		var leg: float = _point_dist(points[i - 1], points[i])
+		if leg <= EPS:
+			continue
+		var crossings := ledge_crossings(_flat2(points[i - 1]), _flat2(points[i]), lopts)
+		var climb := 0.0
+		for c in crossings:
+			climb += float(c[1]) * climb_scale
+		if spent + leg + climb <= max_len + EPS:
+			out.append(points[i])
+			spent += leg + climb
+			continue
+		var paid := 0.0
+		var stop_t := (max_len - spent) / leg
+		for c in crossings:
+			var dy := float(c[1]) * climb_scale
+			if (c[0] as float) * leg + paid + dy > max_len - spent + EPS:
+				stop_t = minf((max_len - spent - paid) / leg, (c[0] as float) - LEDGE_STOP_IN * climb_scale / leg)
+				break
+			paid += dy
+			stop_t = (max_len - spent - paid) / leg
+		if stop_t > EPS:
+			out.append(_point_lerp(points[i - 1], points[i], minf(stop_t, 1.0)))
+		break
+	return out
+
+
+## Ground-plane form of a polyline point: a Vector2 as is, a world Vector3 as its x/z.
+static func _flat2(p: Variant) -> Vector2:
+	if p is Vector3:
+		return Vector2((p as Vector3).x, (p as Vector3).z)
+	return p as Vector2
+
+
 # === Public coherency predicate (mirrors CoherencyChecker, point-model form) ================
 
 static func _are_linked(a: Vector2, b: Vector2) -> bool:
@@ -951,10 +996,32 @@ static func _plan_unit_step_unified(model_pos: Array, delta: Vector2, walls: Arr
 	# a fully-legal flow is returned unchanged — best_score == 0 short-circuits).
 	var solved := solve_formation(flowed, radii, walls, opts, board_in, allow_contact)
 	_append_trail_finals(trails, solved)
+	# GF p.11: the solver's final leg may not climb a ledge the move has no movement left to pay for.
+	_trim_unpaid_climbs(trails, solved, opts, float(opts.get("charge_allowance", delta.length())))
 	# NML-230 Breach B: the p.11 per-polyline difficult cap runs LAST, on the final trails + endpoints,
 	# so replanned/solver-adjusted routes that newly cross difficult can never keep the full band.
 	_cap_difficult_polylines(trails, solved, radii, grid, float(opts.get("difficult_cap_in", 0.0)))
 	return solved
+
+
+## GF p.11 (a climb is movement spent): a trail that crosses a climbable ledge and costs more than the move
+## allowance as flat length + climb is cut back by trim_polyline_priced, and its model's position follows the cut.
+## Trails that climb nothing are left exactly as they are. Mutates `trails` and `positions`.
+static func _trim_unpaid_climbs(trails: Array, positions: Array, opts: Dictionary, allowance: float) -> void:
+	var ledges: Array = (opts.get("ledges", []) as Array).filter(
+		func(l): return float(l["dy_in"]) <= LEDGE_CLIMB_MAX_IN + EPS)
+	if ledges.is_empty() or trails == null:
+		return
+	var lopts := {"ledges": ledges}
+	for i in range(mini(trails.size(), positions.size())):
+		var t := trails[i] as Array
+		var climb := 0.0
+		for k in range(1, t.size()):
+			climb += ledge_cost(t[k - 1], t[k], lopts)
+		if climb > 0.0 and polyline_length(t) + climb > allowance + EPS:
+			var cut := trim_polyline_priced(t, allowance, ledges)
+			trails[i] = cut
+			positions[i] = cut.back()
 
 
 # === Sequential per-model flow (field-test round 6, finding 7 — the maintainer's design) =====
@@ -1235,6 +1302,8 @@ static func plan_sequential_flow(model_pos: Array, delta: Vector2, radii: Array,
 				if t_end.distance_to(result[i] as Vector2) > EPS:
 					var rroute := _theta_star_b(model_pos[i], result[i], walls, grid, board, re_oi)
 					trails[i] = string_pull(rroute, walls, grid, re_oi)
+	# GF p.11: the coherency pull and the untangle re-route add legs after the priced walk — none may climb unpaid.
+	_trim_unpaid_climbs(trails, result, opts, allowance)
 	return result
 
 
