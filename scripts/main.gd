@@ -10002,7 +10002,7 @@ func _solo_apply_regeneration(target: GameUnit, wounds: int, from_spell: bool = 
 ## it; the battle log always names the rule and the outcome. Returns the wounds that still land. The body
 ## of `_solo_apply_regeneration`'s roll, shared by the per-name groups (R-1).
 func _solo_roll_ignore_group(target: GameUnit, wounds: int, ign_target: int, rule_name: String,
-		purpose: String, what: String) -> int:
+		purpose: String, what: String, once_rule: String = "") -> int:
 	if wounds <= 0 or ign_target <= 0:
 		return wounds
 	var faces: Array = await _owner_roll(target, wounds, ign_target, "regeneration", purpose, {"what": what})
@@ -10017,7 +10017,19 @@ func _solo_roll_ignore_group(target: GameUnit, wounds: int, ign_target: int, rul
 			target.get_name(), wounds, rule_name, ("e" if wounds == 1 else "ce"), ign_target, ignored, ("" if ignored == 1 else "s")], true)
 		if ignored > 0:
 			_solo_rule_float(target, "%s: %d ignored" % [rule_name.capitalize(), ignored], Color(0.5, 1.0, 0.6))
+	if not once_rule.is_empty():
+		# PF-a (EPOCH_73_V36): a once-per-game ignore rule (Protection Feat) is spent by its first roll; the flag
+		# lives on the bearer's props, like the other once-per-game latches.
+		_solo_defense_signer(target).unit_properties[_solo_ignore_feat_flag(once_rule)] = true
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s spends its once-per-game ignore roll" % [
+				once_rule, _solo_defense_signer(target).get_name()], true)
 	return maxi(wounds - ignored, 0)
+
+
+## PF-a: the props flag that closes a once-per-game wound-ignore rule (Protection Feat) on its bearer.
+static func _solo_ignore_feat_flag(rule_name: String) -> String:
+	return "ignore_feat_used_%s" % rule_name.to_snake_case()
 
 
 ## The wound-ignore ROLL TARGET for a unit's Regeneration-family rule, or 0 when it has none:
@@ -10117,6 +10129,7 @@ func _solo_regen_pick(target: GameUnit, from_spell: bool = false, shot_in: float
 	var gate_refused := ""   # MOR-17a: a gated name whose distance shut its 6+ (rules-must-log)
 	var gate_msg := ""       # MOR-17a: the gate's verdict line, logged where the roll happens
 	var gate_any := ""       # R-1: the same verdict for a gated rule that rolls in its own group
+	var spent_feats: Array = []   # PF-a: once-per-game rules whose latch is already spent
 	for e in RulesRegistry.unit_rules_of_primitive(target, "Regeneration"):
 		var ed := e as Dictionary
 		var n := str(ed["name"])
@@ -10124,6 +10137,13 @@ func _solo_regen_pick(target: GameUnit, from_spell: bool = false, shot_in: float
 			continue   # the named forms above stay the one truth
 		var params: Dictionary = ed.get("params", {})
 		if bool(params.get("all_models", false)) and not _solo_regen_family_on(target, n):
+			continue
+		# PF-a (EPOCH_73_V36): `uses_per_game` closes the rule once its first roll was made; a refusal is returned
+		# so the roller can say so.
+		var once: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
+			and int(params.get("uses_per_game", 0)) > 0
+		if once and bool(target.unit_properties.get(_solo_ignore_feat_flag(n), false)):
+			spent_feats.append(n)
 			continue
 		var terr_in := float(params.get("terrain_within_in", 0.0))
 		if terr_in > 0.0 and not _solo_majority_in_cover(target):
@@ -10156,7 +10176,10 @@ func _solo_regen_pick(target: GameUnit, from_spell: bool = false, shot_in: float
 			gate_line = "Warding: %s ignores wounds on 6+ (%s from over %din)" % [
 				target.get_name(), "charged" if charged_in >= 0.0 else "shot", int(gate_in)]
 		if tgt > 0:
-			_solo_ignore_group_put(groups, _solo_ignore_group_key(n, params), n, tgt, gated)
+			var grp_key := _solo_ignore_group_key(n, params)
+			_solo_ignore_group_put(groups, grp_key, n, tgt, gated)
+			if once and str((groups[grp_key] as Dictionary)["name"]) == n:
+				(groups[grp_key] as Dictionary)["once"] = true
 			if not gate_line.is_empty():
 				gate_any = gate_line
 		if tgt > 0 and (best == 0 or tgt < best):
@@ -10210,7 +10233,7 @@ func _solo_regen_pick(target: GameUnit, from_spell: bool = false, shot_in: float
 	elif not refused_has_group:
 		group_gate = refusal
 	return {"target": best, "name": best_name, "trace": trace, "gate": gate_msg, "groups": group_list,
-		"group_gate": group_gate}
+		"group_gate": group_gate, "spent_feats": spent_feats}
 
 
 ## Banner's morale-test bonus for a unit — gap 18a: the body now lives in
@@ -10258,6 +10281,11 @@ func _solo_ignore_wounds(target: GameUnit, regenable: int, bypassed: int, from_s
 	var trace := str(pick.get("trace", ""))
 	if not trace.is_empty() and battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s — %s" % [target.get_name(), trace], true)
+	# PF-a rules-must-log: a once-per-game rule that is already spent says so where it would have rolled.
+	if pool + bypass > 0 and battle_log != null and log_gate:
+		for spent_name in pick.get("spent_feats", []):
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s already used it this game — no ignore roll" % [
+				str(spent_name), _solo_defense_signer(target).get_name()], true)
 	var display_of := {"regeneration": "Regeneration", "self-repair": "Self-Repair", "resistance": "Resistance"}
 	var groups: Array = pick.get("groups", [])
 	var others: Array = []
@@ -10281,7 +10309,8 @@ func _solo_ignore_wounds(target: GameUnit, regenable: int, bypassed: int, from_s
 						target.get_name(), bypass, ("" if bypass == 1 else "s"), " and ".join(others)], true)
 				pool += bypass
 		pool = await _solo_roll_ignore_group(target, pool, g_target, g_name,
-			"%s (%d+ ignores a wound)" % [display_of.get(g_name, g_name), g_target], "%s dice" % g_name)
+			"%s (%d+ ignores a wound)" % [display_of.get(g_name, g_name), g_target], "%s dice" % g_name,
+			g_name if bool(g.get("once", false)) else "")
 	return pool if joined else pool + bypass
 
 
