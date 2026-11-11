@@ -567,6 +567,37 @@ jobs:
           name: windows-build
           path: build/windows
 
+  # The only job that STARTS the Windows build (one-core P1, step 14, decision D4): the exported .exe
+  # boots headless on a real Windows runner and must print update_checker.gd's boot line
+  # `core: NmlCore loaded`. Advisory: not in all-required's needs. A GUI-subsystem .exe has no
+  # captured stdout, so Godot writes the log to a file (--log-file).
+  windows-load-proof:
+    name: Windows load proof
+    runs-on: windows-latest
+    timeout-minutes: 15
+    # `changes` too: the `if` below reads its output, and `needs` only exposes direct dependencies.
+    needs: [changes, export-windows]
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') && (github.event_name != 'pull_request' || (needs.changes.outputs.not_core_only == 'true' && !github.event.pull_request.draft)) }}
+    steps:
+      - name: Download the Windows export
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-build
+          path: build/windows
+
+      - name: Boot the exported .exe - NmlCore loads
+        shell: pwsh
+        run: |
+          $log = Join-Path $env:RUNNER_TEMP 'win.log'
+          $p = Start-Process -FilePath "build\windows\$env:EXPORT_NAME.exe" -ArgumentList '--headless', '--log-file', "`"$log`"" -PassThru
+          if (-not $p.WaitForExit(30000)) { Stop-Process -Id $p.Id -Force }
+          if (-not (Test-Path $log) -or (Get-Item $log).Length -eq 0) {
+            Write-Output "::error::the exported .exe wrote no log to $log (--log-file)"; exit 1 }
+          Get-Content $log
+          if (-not (Select-String -Path $log -SimpleMatch 'core: NmlCore loaded' -Quiet)) {
+            Write-Output "::error::the Windows build never printed 'core: NmlCore loaded' - the core did not load"; exit 1 }
+          Write-Output "OK: the Windows build loaded NmlCore"
+
   # macOS core + proof (maintainer decision, board D40, 26.09.2026). tract-linalg assembles hand-written
   # SIMD kernels per target and needs Apple's toolchain, so the Rust core is built natively on a macos-15
   # runner (both darwin triples, lipo'd into ONE universal dylib) and the macOS preset is exported and RUN
