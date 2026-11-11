@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 import websockets
 
+import relay_server
 from relay_server import (
     RelayServer,
     CODE_ALPHABET,
@@ -624,6 +625,45 @@ class TestSecurity:
             pass  # Expected - server rejected the connection
 
         for ws in connections:
+            await ws.close()
+
+    async def test_behind_the_proxy_each_client_address_has_its_own_cap(self, relay, monkeypatch):
+        """Behind the platform proxy all sockets share one transport address; the cap must count
+        the proxy-stated client address, so one full client does not lock out another."""
+        monkeypatch.setenv(relay_server.PROXY_ENV_MARKER, "relay-under-test")
+        server, url = relay
+        first = [
+            await websockets.connect(
+                url, additional_headers={relay_server.CLIENT_ADDRESS_HEADER: "192.0.2.1"})
+            for _ in range(MAX_CONNECTIONS_PER_IP)
+        ]
+        other = await websockets.connect(
+            url, additional_headers={relay_server.CLIENT_ADDRESS_HEADER: "192.0.2.2"})
+        await other.send(json.dumps({"type": "create_room"}))
+        resp = json.loads(await asyncio.wait_for(other.recv(), timeout=2.0))
+        assert resp["type"] == "room_created"
+
+        overflow = await websockets.connect(
+            url, additional_headers={relay_server.CLIENT_ADDRESS_HEADER: "192.0.2.1"})
+        with pytest.raises(websockets.exceptions.ConnectionClosed):
+            await asyncio.wait_for(overflow.recv(), timeout=2.0)
+        for ws in first + [other]:
+            await ws.close()
+
+    async def test_a_directly_reached_relay_ignores_a_client_stated_address(self, relay, monkeypatch):
+        """Without the platform marker the header is client-controlled and must not move the cap."""
+        monkeypatch.delenv(relay_server.PROXY_ENV_MARKER, raising=False)
+        server, url = relay
+        held = [
+            await websockets.connect(
+                url, additional_headers={relay_server.CLIENT_ADDRESS_HEADER: f"192.0.2.{i}"})
+            for i in range(MAX_CONNECTIONS_PER_IP)
+        ]
+        overflow = await websockets.connect(
+            url, additional_headers={relay_server.CLIENT_ADDRESS_HEADER: "192.0.2.250"})
+        with pytest.raises(websockets.exceptions.ConnectionClosed):
+            await asyncio.wait_for(overflow.recv(), timeout=2.0)
+        for ws in held:
             await ws.close()
 
     async def test_ip_limit_counts_open_sockets(self, relay):

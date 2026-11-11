@@ -87,8 +87,23 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 logger = logging.getLogger("relay")
 
 
+# Behind the hosting platform's proxy every socket arrives from the proxy's own address, so the
+# transport address would count all players as one. The proxy states the real client address in
+# this header. It is trusted ONLY when the platform's environment marker is set: a relay that is
+# reached directly must never let a client name its own address.
+CLIENT_ADDRESS_HEADER = "Fly-Client-IP"
+PROXY_ENV_MARKER = "FLY_APP_NAME"
+
+
 def _remote_ip(websocket) -> str:
-    """The transport-level source address of a socket ("unknown" if the transport has none)."""
+    """The client address of a socket: the proxy-stated one when running behind the platform
+    proxy, else the transport-level source address ("unknown" if the transport has none)."""
+    if os.environ.get(PROXY_ENV_MARKER):
+        request = getattr(websocket, "request", None)
+        stated = request.headers.get(CLIENT_ADDRESS_HEADER, "") if request is not None else ""
+        stated = stated.strip()
+        if stated:
+            return stated
     return websocket.remote_address[0] if websocket.remote_address else "unknown"
 
 
