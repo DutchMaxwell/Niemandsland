@@ -77,6 +77,8 @@ func _ready() -> void:
 	# Release 0925 option (b): a Windows install the 0.3.12.0 updater left without its core DLL heals once.
 	CoreSelfHeal.run(CoreSelfHeal.Ops.new(self), OS.get_name() == "Windows" and OS.has_feature("template"),
 			ClassDB.class_exists("NmlCore"))
+	# One-core phase 1: every start logs whether the Rust rules core loaded (support logs, export smoke).
+	print(CoreLoadNotice.boot_line(ClassDB.class_exists("NmlCore")))
 
 
 # ===== Public API =====

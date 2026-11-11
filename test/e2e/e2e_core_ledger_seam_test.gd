@@ -15,7 +15,8 @@ extends GdUnitTestSuite
 ## `_stamp_gate_reads` / `_ledger_of` / `_header_line`, the rules registry, the NmlCore extension. Constructed:
 ## three bare units and their flags. The spell record carries FLOAT numbers, the shape a unit has after a
 ## save/load (`JSON.parse_string` reads every number as float).
-## Skipped where the extension is not loaded (the CI gdUnit shards build no core), as e2e_core_reload_test does.
+## Needs the NmlCore extension, which the CI gdUnit shards build and load; a missing core fails
+## test/core_extension_loaded_test.gd instead of skipping these cases.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const IN2M := 0.0254
@@ -99,15 +100,13 @@ func _agent_activated_after_last_hold(core: Object, spent: bool) -> bool:
 	return bool((got["units"]["Agent"] as Dictionary).get("activated", false))
 
 
-func test_a_fresh_carrier_gets_second_wind(
-		do_skip := not ClassDB.class_exists("NmlCore"), skip_reason := "needs the NmlCore extension") -> void:
+func test_a_fresh_carrier_gets_second_wind() -> void:
 	var core: Object = ClassDB.instantiate("NmlCore")
 	assert_bool(_agent_activated_after_last_hold(core, false)).override_failure_message(
 		"control: an unspent carrier must be re-activated by Second Wind").is_false()
 
 
-func test_a_spent_second_wind_stays_spent_in_the_core(
-		do_skip := not ClassDB.class_exists("NmlCore"), skip_reason := "needs the NmlCore extension") -> void:
+func test_a_spent_second_wind_stays_spent_in_the_core() -> void:
 	var core: Object = ClassDB.instantiate("NmlCore")
 	var plain := _plain(_state(true))
 	assert_bool(bool(plain["units"]["Agent"]["ledger"].get("second_wind_used", false))).is_true()
@@ -117,8 +116,7 @@ func test_a_spent_second_wind_stays_spent_in_the_core(
 		"the ledger failed to parse").is_false()
 
 
-func test_the_live_header_marks_the_bands_prefolded(
-		do_skip := not ClassDB.class_exists("NmlCore"), skip_reason := "needs the NmlCore extension") -> void:
+func test_the_live_header_marks_the_bands_prefolded() -> void:
 	var core: Object = ClassDB.instantiate("NmlCore")
 	var state := _state(false)
 	var head: Dictionary = AiActRecorder._header_line(state, Callable())
