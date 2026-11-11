@@ -7,14 +7,19 @@ extends GdUnitTestSuite
 ## widens from 1 to `save_fail_max`). The table's Shred window was hardwired to unmodified 1s, so a
 ## Boosted Destroyer (aof/ogres) shredded only on failed saves of 1 where the sim shreds on 1-2
 ## when shooting over 9".
+## Rules 3.6 (PF-b): from EPOCH_73_V36 the Enhanced forms no longer widen the window (see
+## test/v36/pf_b_enhanced_shred_distance_test.gd), so this suite pins the replayed 3.5 Boost at epoch 72.
 
 const Boot := preload("res://test/e2e/e2e_boot.gd")
 var _runner: GdUnitSceneRunner
 var _main: Node
 var _roots: Array
+var _epoch0 := 0
 
 
 func before_test() -> void:
+	_epoch0 = AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
 	Boot.arm_harness_mode()
 	_roots = Boot.root_children(get_tree())
 	_runner = scene_runner(Boot.MAIN_SCENE)
@@ -27,6 +32,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	AiActRecorder.rules_epoch = _epoch0
 	Boot.free_stray_root_nodes(get_tree(), _roots)
 	_main = null
 	_runner = null
