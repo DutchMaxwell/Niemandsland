@@ -32,7 +32,8 @@ The relay then blanks the caller's IP on every in-memory peer record and replies
 `{"type": "data_deleted"}`. A caller with no room data gets
 `{"type": "error", "reason": "no_data"}`. The game connection itself stays up — routing uses
 peer ids and room codes, not IPs. The per-IP connection limit uses the open connection's own
-address for as long as that connection is open; it is gone when the connection closes.
+address (behind the hosting proxy: the client address the proxy states for that connection) for
+as long as that connection is open; it is gone when the connection closes.
 
 ## Logs
 
