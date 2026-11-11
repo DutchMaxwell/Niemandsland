@@ -9184,7 +9184,10 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 			# EPOCH_38_WATCHBORN_LATCH: the charge REUSES the activation's latched pick (an earlier
 			# volley decided it); an un-latched charge is the first eligible attack and decides.
 			var v_ap := 0
-			if bool(profile.get("versatile_attack", false)) and _solo_versatile_over(striker, 0.0, charging, charge_from_in):
+			# 3.6: the pick lasts "until the end of the activation" -- a strike-back (charging=false) runs in the
+			# ENEMY's activation, so from EPOCH_73_V36 it neither picks nor latches (no leak into the own activation).
+			var versatile_window: bool = charging or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36
+			if versatile_window and bool(profile.get("versatile_attack", false)) and _solo_versatile_over(striker, 0.0, charging, charge_from_in):
 				var vm: Dictionary = _solo_versatile_latch_read(striker)
 				var fresh: bool = vm.is_empty()
 				if fresh:
