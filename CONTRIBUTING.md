@@ -48,7 +48,16 @@ invocation used in development) are in [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.
 
 ### Tests
 
-Run the tests before pushing — CI runs the same on Godot 4.6:
+Run the tests before pushing — CI runs the same on Godot 4.6. The Rust core is required: before gdUnit,
+build it (Rust toolchain needed) and re-import the project:
+
+```bash
+cargo build --release --features onnx-tract --manifest-path core/nml-core-godot/Cargo.toml
+bash core/install_gdextension.sh
+godot --headless --import
+```
+
+Then:
 
 ```bash
 # gdUnit4 (GDScript) — see docs/DEVELOPMENT.md for the full runner command:
