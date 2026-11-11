@@ -1220,7 +1220,7 @@ static func ravage_ev(att: Dictionary, def_ctx: Dictionary) -> float:
 
 ## Expected Impact wounds of a charge (GF/AoF v3.5.1 p.13): X dice per charging model minus the
 ## defender's single Brace(X) cut (impact_total_dice), hit on 2+, saved at the Shielded-adjusted
-## Defense (no AP — Impact is not a weapon), Regeneration applies (no bypass).
+## Defense (no AP — Impact is not a weapon), Regeneration applies (no bypass). Parry never applies.
 static func impact_ev(att: Dictionary, def_ctx: Dictionary) -> float:
 	# Heavy Impact rides as a SECOND pool whose hits save at AP(1); the cut strips the heavy dice
 	# first (defender-optimal — mirrors the dice path). Rules 3.6 (`EPOCH_73_V36`): Counter takes no
@@ -1241,14 +1241,10 @@ static func impact_ev(att: Dictionary, def_ctx: Dictionary) -> float:
 		return 0.0
 	var p_hit := AiCombatMath.success_chance(AiCombatMath.IMPACT_HIT_TARGET)
 	var defense := AiCombatMath.shielded_defense(int(def_ctx.get("defense", 4)), bool(def_ctx.get("shielded", false)))
-	# Rules 3.6 (`EPOCH_73_V36`) — Parry's expected cancels come off the Impact hits before the
-	# saves, the HEAVY pool first (the dice path's `parry_cancel` order, "most dangerous first").
+	# Rules 3.6 (maintainer ruling): Parry reduces the hits of ordinary melee attacks only, so Impact hits
+	# (the Heavy Impact pool too) go straight to the saves. The table's dice path never parried them.
 	var plain_hits := float(dice) * p_hit
 	var heavy_hits := float(heavy_dice) * p_hit
-	var cancels := _parry_cancels(def_ctx, plain_hits + heavy_hits)
-	var parry_heavy_cut := minf(cancels, heavy_hits)
-	heavy_hits -= parry_heavy_cut
-	plain_hits -= minf(cancels - parry_heavy_cut, plain_hits)
 	var wounds := plain_hits * (1.0 - block_chance(defense, 0, false)) \
 		+ heavy_hits * (1.0 - block_chance(defense, 1, false))
 	if bool(def_ctx.get("regeneration", false)):

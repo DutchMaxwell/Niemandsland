@@ -164,7 +164,7 @@ use super::*;
                     assert_eq!(granted.ctx.regen_target, 5, "Enhanced Plaguebound's ignore_target");
                 }
                 "Protection Feat Aura" => {
-                    assert_eq!(granted.ctx.regen_target, 5, "Protection Feat's ignore_target");
+                    assert_eq!(granted.ctx.regen_feat, 5, "Protection Feat's ignore_target (held aside from 75)");
                 }
                 _ => {}
             }

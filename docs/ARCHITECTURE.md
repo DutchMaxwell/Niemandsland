@@ -117,7 +117,7 @@ layout that `AudioManager` builds on — load-bearing, not clutter; do not move 
 The solo opponent (**NACHTMAHR**) is a self-contained engine (no network). Its GDScript path below
 is rule-based and deterministic; a release build with the Rust core plays it through the core's
 search planner with a trained neural network (value net) as leaf evaluator — see
-[Rust rules core](#rust-rules-core-optional). It runs only in a solo game; a
+[Rust rules core](#rust-rules-core-required). It runs only in a solo game; a
 human-vs-human table never touches it. Written from scratch against OPR's official Solo & Co-Op
 ruleset (the old root-level `ai_*.gd` / `battle_simulator.gd` were removed and **not** revived).
 - `solo_controller.gd` (`SoloController`) — the orchestrator wired into `main.gd`: the **AI
@@ -183,12 +183,12 @@ ruleset (the old root-level `ai_*.gd` / `battle_simulator.gd` were removed and *
 - `grass_field.gd`, `atmospheric_clouds.gd`, `cinematic_intro.gd`,
   `opr_stats_tooltip.gd`, `selection_spill_light.gd`.
 
-## Rust rules core (optional)
+## Rust rules core (required)
 
-`core/` is a Cargo workspace — `nml-core` (the rules port), `nml-core-godot` (the optional Godot
+`core/` is a Cargo workspace — `nml-core` (the rules port), `nml-core-godot` (the Godot
 extension) and `nml-core-py` (Python bindings) — used for fast look-ahead and training. Godot
-loads it only as an optional GDExtension (`core/nml_core.gdextension.in`, installed by
-`core/install_gdextension.sh`). Until 22.09.2026 the extension shipped dormant inside the Linux and
+loads it as a GDExtension (`core/nml_core.gdextension.in`, installed by
+`core/install_gdextension.sh`). The core is **required**: CI builds and loads it in every test shard, and a release fails without it on any platform. At runtime a failed load still falls back to the decision tree and shows a warning, until that fallback is retired. Until 22.09.2026 the extension shipped dormant inside the Linux and
 Windows exports; since then a **release build wants the core by default** (`BattleSim.core_wanted`,
 `NML_CORE=0` opts out; debug builds still need the explicit `NML_CORE=1`): the one player-facing grade
 runs the search planner with the packed ONNX leaf evaluator (`assets/solo/brains/erlkoenig.onnx`,
@@ -199,7 +199,7 @@ live (`opponent: erlkoenig … move=core` / `opponent: tree — …`). macOS rel
 universal (arm64 + x86_64) core library: it can only be built on a macOS runner, so the `export-macos` job
 of `build.yml` builds it, exports and ad-hoc signs the app and runs the exported app headless
 (`tools/core_ship_probe.tscn`, judged by `tools/assert_ship_probe.py`) before the release ships that zip; if that job
-failed, the release falls back to a core-less macOS export that runs the GDScript engine. The core reads its rule files and the
+fails, the release fails (there is no core-less macOS export). The core reads its rule files and the
 model from a staged copy under `user://nml_core/<version>/` (`CoreAssets`), because a packed export has
 no files on disk. See [`DEV_BRAIN_BRIDGE.md`](DEV_BRAIN_BRIDGE.md) for the developer-only loopback
 evaluator, which still exists for experiments.

@@ -371,6 +371,9 @@ pub struct Ctx {
     /// The pending kind's SPELL-wound twin (the entry's `ignore_target_spell`,
     /// defaulting to its `ignore_target` like every alias fold).
     pub regen_pending_spell: i64,
+    /// `EPOCH_75_TABLE_FIXES` (#2613) — a once-per-game Regeneration entry (`uses_per_game > 0`, Protection Feat)
+    /// held ASIDE: `sim::ctx_live` folds it only while the bearer's `feats_used` latch is open. 0 = none.
+    pub regen_feat: i64,
     /// MOR-17a (rules 3.6, `EPOCH_73_V36`) — Warding / Knightborn / Angelic
     /// Blessing ignore a non-spell wound on a 6+ ONLY when the unit was shot
     /// from over this many inches. 0.0 = ungated (the old entry, every unit
@@ -871,6 +874,10 @@ pub struct ShootProfile {
     /// widened window counts only past this centre distance, exactly 9" not
     /// "over" — same strict gate as every other over-9" read in this port.
     pub shred_over_in: f64,
+    /// Epoch 75 (`EPOCH_75_TABLE_FIXES`): an "Enhanced X" Shred entry carried with its base
+    /// pays the alias on unmodified 1s at any distance on a shot and on a charge (never a
+    /// strike-back) and never widens the window. Set by arm 6b; read by dice.rs.
+    pub shred_any_distance: bool,
     /// Wave 4 (`rules-wave4-boostbases`) — the Bane Boost's widened save
     /// re-roll window ("Mischievous Boost"'s own `reroll_save_low`, stamped
     /// by `build_for`'s epoch-6 arm only when the model also carries the
@@ -2900,7 +2907,7 @@ pub fn capture_reads_for_epoch(
 /// recorded flat fold replays and the tail stays zeros.
 fn regen_targets(
     reg: &mut Registries, p: &Profile, rules_epoch: u32, trace73: bool,
-) -> (i64, i64, i64, i64, f64, f64) {
+) -> (i64, i64, i64, i64, f64, f64, i64) {
     let regen = if rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
         regen_family_on(p, "Regeneration", rules_epoch)
     } else {
@@ -2922,6 +2929,7 @@ fn regen_targets(
         0
     };
     let mut picked = (base, base, 0i64, 0i64);
+    let mut feat = 0i64;
     // MOR-17a (rules 3.6): the names that share Warding's distance gate.
     // `other_min` is the best target NO gated name supplies; `warding` the
     // gated name's own reading. The gate is stamped only when the gated
@@ -3039,6 +3047,13 @@ fn regen_targets(
             // tuple's pending tail) for `sim::ctx_live`'s per-save-moment
             // resolution on the snapshot's `in_cover` — the Shielded family's
             // terrain-pending shape. Below 52 the flat fold replays unchanged.
+            // #2613 (EPOCH_75_TABLE_FIXES): a once-per-game entry is held aside for the live latch.
+            if rule_on(rules_epoch, crate::acts::EPOCH_75_TABLE_FIXES) && e.param_i("uses_per_game", 0) > 0 {
+                if normal > 0 && (feat == 0 || normal < feat) {
+                    feat = normal;
+                }
+                continue;
+            }
             if rule_on(rules_epoch, EPOCH_56_GROUNDED_PROTECTION)
                 && e.param_f("terrain_within_in", 0.0) > 0.0
             {
@@ -3081,7 +3096,7 @@ fn regen_targets(
             }
         }
     }
-    (picked.0, picked.1, picked.2, picked.3, gates.0, gates.1)
+    (picked.0, picked.1, picked.2, picked.3, gates.0, gates.1, feat)
 }
 
 /// The SHOOTING leg's three die params (`ap_bonus`/`hit_bonus`/`low_roll_max`)
@@ -3599,6 +3614,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         regen_target_spell: regen_targets.1,
         regen_pending: regen_targets.2,
         regen_pending_spell: regen_targets.3,
+        regen_feat: regen_targets.6,
         regen_gate_over_in: regen_targets.4,
         regen_gate_charge_in: regen_targets.5,
         fatigued: false,
@@ -3878,6 +3894,13 @@ fn stamp(
             || hit.upgrades.is_empty()
             || !has_exact_rule(&p.special_rules, &hit.upgrades)
         {
+            continue;
+        }
+        // Epoch 75: the Enhanced form is "always", not the 3.5 Boost window.
+        if rule_on(rules_epoch, crate::acts::EPOCH_75_TABLE_FIXES) && hit.name.starts_with("Enhanced ") {
+            for sp in shoot.iter_mut().filter(|sp| sp.shred_alias) {
+                sp.shred_any_distance = true;
+            }
             continue;
         }
         for sp in shoot.iter_mut() {
@@ -6936,7 +6959,19 @@ impl UnitStatic {
         // UNGATED and UNSTAMPED: the table builds it raw off the weapons
         // (`AiShooting.strafing_profiles`, main.gd:2976-2985) and the
         // once-per-activation volley reads it exactly as built.
-        let strafe_shoot = strafing_profiles(&p.weapons);
+        let mut strafe_shoot = strafing_profiles(&p.weapons);
+        // S6 (#2612, EPOCH_75_TABLE_FIXES): the volley is a shooting attack, so the unit-level
+        // Shred family is stamped like `stamp` step 6 does; a range-0 weapon reads reach max(range, 1).
+        if rule_on(rules_epoch, crate::acts::EPOCH_75_TABLE_FIXES) {
+            let plain_shred = unit_rule_active(reg, p, "Shred");
+            let mut hits = rules_of_primitive(reg, p, "Shred");
+            hits.retain(|h| !wave3_alias(&h.name) || rule_on(rules_epoch, EPOCH_6_TABLE_RULES));
+            for sp in strafe_shoot.iter_mut() {
+                if plain_shred || hits.iter().any(|h| facet_applies(h.melee_only, h.shooting_only, sp.range.max(1))) {
+                    sp.shred_alias = true;
+                }
+            }
+        }
         // The same stamping runs on the melee array (`_profiles_of(su, true)`
         // battle_sim.gd:719-720 takes the identical path); a rule the port
         // cannot model is reported ONCE, not once per array.
