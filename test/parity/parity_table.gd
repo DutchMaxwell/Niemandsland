@@ -85,7 +85,10 @@ static func run(main: Node, sc: Dictionary, seeds: int, out_path: String, dump_d
 		var dfn := _make_unit(main, sc["defender"], {})
 		var wobj: OPRApiClient.OPRWeapon = (att.source_data as OPRApiClient.OPRUnit).weapons[0]
 		var shots: Array = []
-		for p in AiEv.stamp_sergeant(AiShooting.profiles_in_range([wobj], dist_in), att):
+		var plist: Array = AiShooting.profiles_in_range([wobj], dist_in)
+		for p in plist:   # the game's own order (_run_ai_shooting): unit-level Shred stamp, then the sergeant stamp
+			main._solo_stamp_unit_shred(p, att, int(weapon["range_in"]))
+		for p in AiEv.stamp_sergeant(plist, att):
 			shots.append({"member": att, "quality": int(sc["attacker"]["quality"]), "alive": att.get_alive_count(),
 				"max": att.models.size(), "reach": float(weapon["range_in"]), "profile": p})
 		main.seed_tray_rng(s)

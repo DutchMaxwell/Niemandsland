@@ -105,3 +105,32 @@ func test_red_a_table_only_ap2_is_caught(do_skip := not ClassDB.class_exists("Nm
 	var r := await _gate("ap1", {"weapon_rules": ["AP(2)"]})
 	assert_int(int(r["rc"])).is_equal(1)
 	assert_int((r["mismatching_seeds"] as Array).size()).is_greater_equal(1)
+
+
+@warning_ignore('unused_parameter')
+func test_warbound_control_matches_the_core(do_skip := not ClassDB.class_exists("NmlCore"),
+		skip_reason := "NmlCore extension not loaded") -> void:
+	# Control for EXC-1: the base Warbound alone at 6" keeps the distance gate on both sides, no exception applies.
+	var r := await _gate("warbound_6in")
+	assert_int(int(r["rc"])).override_failure_message(str(r["problems"]) + str(r["first_mismatches"])).is_equal(0)
+	assert_int(int(r["identical"])).is_equal(SEEDS)
+
+
+@warning_ignore('unused_parameter')
+func test_exc1_enhanced_warbound_is_the_listed_difference(do_skip := not ClassDB.class_exists("NmlCore"),
+		skip_reason := "NmlCore extension not loaded") -> void:
+	# PF-b (#2615): the table pays the Shred extra wound at 6", the core not yet. Green only with EXC-1 listed.
+	var r := await _gate("enhanced_warbound_6in")
+	assert_int(int(r["rc"])).override_failure_message(str(r["problems"]) + str(r["first_mismatches"])).is_equal(0)
+
+
+func test_exceptions_file_is_well_formed() -> void:
+	var list = JSON.parse_string(FileAccess.get_file_as_string("res://test/parity/exceptions.json"))
+	assert_bool(list is Array).is_true()
+	var ids := {}
+	for e in list:
+		for k in ["id", "lane", "since", "pr", "owner_lane", "reason"]:
+			assert_bool((e as Dictionary).has(k) and str(e[k]) != "").override_failure_message("%s lacks %s" % [e.get("id"), k]).is_true()
+		assert_bool((e as Dictionary).has("scenario")).is_true()
+		assert_bool(ids.has(e["id"])).override_failure_message("duplicate id " + str(e["id"])).is_false()
+		ids[e["id"]] = true
