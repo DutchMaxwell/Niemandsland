@@ -43,9 +43,13 @@ use crate::unit::{CondAp, Ctx, ShieldedAlias, ShootProfile};
 type Pending<'a> = (&'a Shooter<'a>, &'a ShootProfile, Vec<u8>, i64, i64, i64, bool, i64);
 
 /// One dice tray: the generator `seed_tray_rng` seeds, and nothing else.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct Tray {
     rng: GodotRng,
+    /// One-core Phase 0 (`step.rs`): faces supplied from outside, one group per
+    /// roll in draw order. `None` (every existing construction site) = the seeded
+    /// stream; `Some` = the stream is never touched.
+    feed: Option<Feed>,
     /// NML-1100, `EPOCH_67_MARKERS_BURSTS`: false (the default, every existing
     /// construction site) keeps the pre-batch-D `maxi(1, count)` burn. Set
     /// per-resolve by `resolve_stochastic_tray_on_board` (the sole production
@@ -62,13 +66,13 @@ impl Tray {
     /// engine and what `GodotRng::new` mirrors; a negative seed must land on
     /// the same stream on both sides.
     pub fn seeded(seed: i64) -> Tray {
-        Tray { rng: GodotRng::new(seed), zero_draws: false }
+        Tray { rng: GodotRng::new(seed), feed: None, zero_draws: false }
     }
 
     /// A tray that continues a generator already in flight — how a replay
     /// reaches a recorded position in the stream.
     pub fn from_rng(rng: GodotRng) -> Tray {
-        Tray { rng, zero_draws: false }
+        Tray { rng, feed: None, zero_draws: false }
     }
 
     /// Re-seeds in place, as a second `seed_tray_rng` call would.
@@ -92,12 +96,57 @@ impl Tray {
     /// the draw.
     pub fn roll(&mut self, count: usize) -> Vec<u8> {
         let n = if self.zero_draws { count } else { count.max(1) };
+        if let Some(feed) = self.feed.as_mut() {
+            return feed.take(n);
+        }
         (0..n).map(|_| self.rng.randi_range(1, 6) as u8).collect()
+    }
+
+    /// One-core Phase 0: a tray that serves `groups` (one per roll, draw order)
+    /// instead of drawing. Past the last group it serves 1s and records where it
+    /// first ran dry (`starved_at`) — the step API turns that into `NeedRoll`.
+    pub fn supplied(groups: Vec<Vec<u8>>) -> Tray {
+        let feed = Feed { groups, next: 0, starved_at: None, mismatch: None };
+        Tray { rng: GodotRng::new(0), feed: Some(feed), zero_draws: false }
+    }
+
+    /// The supplied feed, if this tray has one.
+    pub fn feed(&self) -> Option<&Feed> {
+        self.feed.as_ref()
     }
 
     /// `rng.state` — the cheap replay checkpoint GATE R already compares.
     pub fn state_i64(&self) -> i64 {
         self.rng.state_i64()
+    }
+}
+
+/// Supplied faces for `Tray::supplied`.
+#[derive(Debug, Clone)]
+pub struct Feed {
+    groups: Vec<Vec<u8>>,
+    next: usize,
+    /// First roll no group was supplied for: (index, faces it draws).
+    pub starved_at: Option<(usize, usize)>,
+    /// First roll whose supplied group had the wrong size: (index, wanted, got).
+    pub mismatch: Option<(usize, usize, usize)>,
+}
+
+impl Feed {
+    fn take(&mut self, n: usize) -> Vec<u8> {
+        let i = self.next;
+        self.next += 1;
+        match self.groups.get(i) {
+            Some(g) if g.len() == n => g.clone(),
+            Some(g) => {
+                self.mismatch.get_or_insert((i, n, g.len()));
+                vec![1; n]
+            }
+            None => {
+                self.starved_at.get_or_insert((i, n));
+                vec![1; n]
+            }
+        }
     }
 }
 
