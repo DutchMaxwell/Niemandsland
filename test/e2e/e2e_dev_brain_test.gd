@@ -126,9 +126,25 @@ func test_unset_url_keeps_decisions_identical(
 		skip_reason := "Build/install NmlCore to exercise the developer brain bridge") -> void:
 	var sc := _controller()
 	assert_object(_pick(sc)).is_not_null()
-	var expected := JSON.stringify(sc.decision_log)
+	var expected := _without_batch_us(sc.decision_log)
+	var brain_names: Array = []
+	for rec in sc.decision_log:
+		if rec is Dictionary and rec.get("kind") == "brain":
+			brain_names.append(str(rec["data"].get("name", "")))
 	sc.decision_log.clear()
 	assert_object(_pick(sc)).is_not_null()
-	assert_str(JSON.stringify(sc.decision_log)).is_equal(expected)
-	assert_str(expected).not_contains('"kind":"brain"')
+	assert_str(_without_batch_us(sc.decision_log)).is_equal(expected)
+	# Unset URL = no DEVELOPER brain; the shipped brain, when ready, still records its own line.
+	assert_bool(brain_names.is_empty()).is_equal(not sc.shipped_brain_ready())
+	for brain_name in brain_names:
+		assert_str(brain_name).is_equal("onnx")
 	await Boot.settle(get_tree())
+
+
+## The decision log as JSON without the brain's wall-time field `batch_us` (differs per pick).
+func _without_batch_us(entries: Array) -> String:
+	var copy := entries.duplicate(true)
+	for rec in copy:
+		if rec is Dictionary and rec.get("kind") == "brain" and rec.get("data") is Dictionary:
+			rec["data"].erase("batch_us")
+	return JSON.stringify(copy)

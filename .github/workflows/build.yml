@@ -89,11 +89,75 @@ jobs:
               - 'scripts/solo/**'
               - 'assets/solo/brains/**'
 
+  # Builds the Rust core once per run for the test shards, which load it (one-core P1, step 5).
+  # Shares the export-linux rust cache entry instead of adding a second ~1 GB one; no debug-symbol
+  # artifact, so it never collides with export-linux's nml-core-debug-<build-id> upload.
+  core-linux:
+    name: Build core for tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    needs: changes
+    if: ${{ github.event_name != 'pull_request' || needs.changes.outputs.not_core_only == 'true' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build core extension (NmlCore)
+        uses: ./.github/actions/build-core-extension
+        with:
+          target: linux
+          debug-symbols: "false"
+          cache-shared-key: export-linux
+
+      - name: Upload the core library for the test shards
+        uses: actions/upload-artifact@v4
+        with:
+          name: nml-core-linux-test
+          path: core/target/release/libnml_core_godot.so
+          retention-days: 1
+          if-no-files-found: error
+
+  # The nml_core python module for the doctrine twin cases in test/objective_layout_test.gd, which
+  # run it through NML_DOCTRINE_PYO3_PYTHON. Reads rust.yml's core-py rust cache and never saves one.
+  # The wheel is not abi3: this job and the shards pin the same Python minor.
+  core-py-linux:
+    name: Build nml_core python for tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: changes
+    if: ${{ github.event_name != 'pull_request' || needs.changes.outputs.not_core_only == 'true' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Python (same minor as the shards)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo (read only, rust.yml's core-py entry)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+          shared-key: core-py
+          save-if: false
+      - name: Build the nml_core wheel
+        run: |
+          pip install maturin
+          NML_BUILD_COMMIT=$GITHUB_SHA maturin build --release -i python -m core/nml-core-py/Cargo.toml -o dist
+      - name: Upload the wheel for the test shards
+        uses: actions/upload-artifact@v4
+        with:
+          name: nml-core-py-test
+          path: dist/*.whl
+          retention-days: 1
+          if-no-files-found: error
+
   test:
     name: gdUnit4 Tests (shard ${{ matrix.shard }})
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    needs: changes
+    needs: [changes, core-linux, core-py-linux]
     if: ${{ github.event_name != 'pull_request' || needs.changes.outputs.not_core_only == 'true' }}
     strategy:
       fail-fast: false
@@ -102,6 +166,31 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Download the core library (Build core for tests)
+        uses: actions/download-artifact@v4
+        with:
+          name: nml-core-linux-test
+          path: core/target/release
+
+      - name: Install the core extension manifest
+        run: touch core/target/.gdignore && bash core/install_gdextension.sh && test -f core/nml_core.gdextension
+
+      - name: Setup Python (same minor as the nml_core wheel)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Download the nml_core wheel (Build nml_core python for tests)
+        uses: actions/download-artifact@v4
+        with:
+          name: nml-core-py-test
+          path: ${{ runner.temp }}/nml-core-py
+
+      - name: Install nml_core and point the doctrine twin tests at it
+        run: |
+          pip install "$RUNNER_TEMP"/nml-core-py/*.whl
+          echo "NML_DOCTRINE_PYO3_PYTHON=$(command -v python)" >> "$GITHUB_ENV"
 
       - name: Setup Godot
         uses: ./.github/actions/setup-godot
@@ -143,6 +232,20 @@ jobs:
 
       - name: Import project (generates .godot/, compile-check)
         run: godot --headless --editor --quit --path .
+
+      # The shards must run with NmlCore loaded: fail here, before gdUnit, when the class is absent.
+      - name: Gate - NmlCore loads in the test lane
+        run: |
+          godot --headless --path . -s res://tools/core_dormant_check.gd 2>&1 | tee /tmp/core_load.log
+          python3 - <<'PY'
+          import json, sys
+          lines = [l for l in open("/tmp/core_load.log") if "NML_DORMANT_CHECK " in l]
+          data = json.loads(lines[0].split("NML_DORMANT_CHECK ", 1)[1]) if lines else {}
+          if data.get("class_present") is not True:
+              print("::error::NmlCore did not load in the test lane")
+              sys.exit(1)
+          print("OK: NmlCore loaded in the test lane (class_present True)")
+          PY
 
       # Each shard builds its own deterministic slice of the suite: sort every
       # *_test.gd under test/ (recursive, LC_ALL=C), then let tools/shard_assign.py split them into
@@ -278,7 +381,7 @@ jobs:
     name: All required checks
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: [changes, test, shards-coverage, relay-tests]
+    needs: [changes, core-linux, core-py-linux, test, shards-coverage, relay-tests]
     if: always()
     steps:
       - name: Every required job is green or skipped
