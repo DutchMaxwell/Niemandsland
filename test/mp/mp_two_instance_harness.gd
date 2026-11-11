@@ -469,6 +469,7 @@ func _spawn_unit(unit_id: String, player_id: int, display_name: String, pos: Vec
 		unit.models.append(model)
 		node.set_meta("game_unit", unit)
 		node.set_meta("model_instance", model)
+		node.set_meta("model_index", i)   # as equipment_distributor does; the full-state save reads it
 	return unit
 
 

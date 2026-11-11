@@ -1112,9 +1112,7 @@ class Run:
             and all(u in s["guest"].get("units", {}) for u in FEAT_MARKS) and not self._feat_marks_missing(s),
             timeout=90,
             diagnostic=lambda s: "not spent on: " + repr(self._feat_marks_missing(s)))
-        # The marks are the claim (the predicate above); the rebuilt synthetic fixture's second model has no
-        # live node on the guest, so the whole-unit compare is off here.
-        self.checkpoint("feat-marks-after-guest-rejoin", states, compare_units=False)
+        self.checkpoint("feat-marks-after-guest-rejoin", states)
 
     def _start_question_scenario(self) -> None:
         """Bug 6c: the host is asked ONCE whether to play with rules automation when the second player
