@@ -33,7 +33,7 @@ use crate::acts::{
     EPOCH_50_SURGE_LOW, EPOCH_54_DEFENSE_RATING, EPOCH_55_FORTIFIED_AURA,
     EPOCH_56_GROUNDED_PROTECTION, EPOCH_58_PRECISION_DEBUFF, EPOCH_60_GROUNDED_STEALTH,
     EPOCH_61_PRECISION_MARKERS, EPOCH_65_MELEE_TRUTH, EPOCH_66_DISTANCE_TRUTH,
-    EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36,
+    EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36, EPOCH_75_TABLE_FIXES,
 };
 use crate::combat::{
     armored_defense, BANNER_MORALE_BONUS, LONG_RANGE_IN, REGENERATION_TARGET, RESISTANCE_TARGET,
@@ -2584,8 +2584,12 @@ pub fn valiant_inside_band(melee: bool, over_in: Option<f64>, charge_from_in: Op
 /// the named "Banner" (when the map fields it) and every DATA ALIAS whose entry
 /// resolves to the Banner primitive. From `EPOCH_73_V36` "Valiant" needs a
 /// strict model majority; below 73 it reads like any Banner alias.
-fn banner_bonus_of(reg: &mut Registries, p: &Profile, rules: &[String], rules_epoch: u32) -> i64 {
+/// Returns `(best of the rest, Bravery family best)`; the second is 0 below
+/// `EPOCH_75_TABLE_FIXES`, where Bravery folds into the one best-of.
+fn banner_bonus_of(reg: &mut Registries, p: &Profile, rules: &[String], rules_epoch: u32) -> (i64, i64) {
     let mut best = 0;
+    let mut bravery = 0;
+    let split = rule_on(rules_epoch, EPOCH_75_TABLE_FIXES);
     let map = reg.rules_for(&p.game_system);
     if has_special_rule(rules, "Banner") && (map.empty || map.has_primitive(&p.faction_folder, "Banner")) {
         best = best.max(match map.lookup(&p.faction_folder, "Banner") {
@@ -2607,12 +2611,21 @@ fn banner_bonus_of(reg: &mut Registries, p: &Profile, rules: &[String], rules_ep
         seen.push(n.clone());
         if let Some(e) = map.lookup(&p.faction_folder, &n) {
             if e.primitive.as_deref() == Some("Banner") {
-                best = best.max(e.param_i("morale_bonus", 0));
+                if split && BRAVERY_FAMILY.contains(&n.as_str()) {
+                    bravery = bravery.max(e.param_i("morale_bonus", 0));
+                } else {
+                    best = best.max(e.param_i("morale_bonus", 0));
+                }
             }
         }
     }
-    best
+    (best, bravery)
 }
+
+/// Maintainer ruling (`EPOCH_75_TABLE_FIXES`, the table's `SoloController.BRAVERY_FAMILY`): the
+/// Bravery rule's two spellings are ONE own source that ADDS to the best of the other Banner-family
+/// entries (Banner + Bravery Aura = +2); the aura and the bare base the expansion stamps share a best-of.
+const BRAVERY_FAMILY: [&str; 2] = ["Bravery Aura", "Bravery"];
 
 /// MOR-09 Valiant — Banner-primitive family names behind the distance gate.
 /// The two 3.5 spellings have no most-models clause.
@@ -2856,12 +2869,17 @@ pub fn capture_reads_for_epoch(
     apply_aura_channel(reg, &mut p, rules_epoch);
     let p = &p;
     let trace73 = rule_on(rules_epoch, EPOCH_73_V36) && crate::mv::plain_memo::trace_rules_on();
-    let mut morale_bonus = banner_bonus_of(reg, p, &p.special_rules, rules_epoch);
+    // `EPOCH_75_TABLE_FIXES`: the Bravery family is its own best-of across host AND heroes (the
+    // table walks every member's entries into one rest best-of and one Bravery best-of), then ADDS.
+    let (mut morale_bonus, mut bravery) = banner_bonus_of(reg, p, &p.special_rules, rules_epoch);
     for hero in &p.attached_hero_rules {
-        morale_bonus = morale_bonus.max(banner_bonus_of(reg, p, hero, rules_epoch));
+        let (rest, brave) = banner_bonus_of(reg, p, hero, rules_epoch);
+        (morale_bonus, bravery) = (morale_bonus.max(rest), bravery.max(brave));
     }
+    let named = if morale_bonus > 0 && bravery > 0 { "Banner + Bravery Aura" } else { "Banner" };
+    morale_bonus += bravery;
     trace_stamp(trace73 && morale_bonus != 0, "banner-stamp", "Banner",
-        &format!("{}: Banner stamped +{} morale", p.name, morale_bonus));
+        &format!("{}: {named} stamped +{} morale", p.name, morale_bonus));
     // EPOCH_39_MORALE_RATING — the rating joins the SAME stamp, the table's
     // own shape: `morale_bonus_of` ADDS the two best-ofs (solo_controller.gd:5638).
     morale_bonus += morale_rating_stamp(reg, p, rules_epoch);
