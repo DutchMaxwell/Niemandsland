@@ -114,7 +114,7 @@ func test_reload_rebuilds_the_core_node_and_header(timeout := 120000,
 	await E2EBoot.settle(get_tree())
 
 
-func test_without_the_extension_the_tree_is_chosen_and_logged(timeout := 120000,
-		do_skip := ClassDB.class_exists("NmlCore"), skip_reason := "runs only without the NmlCore extension") -> void:
+func test_with_the_core_off_the_tree_is_chosen_and_logged(timeout := 120000) -> void:
+	BattleSim._core_env = 0   # core off, as a failed load or NML_CORE=0 leaves it (after_test restores)
 	var sc := _arm()
 	assert_bool(sc.difficulty_by_slot[2].planner).is_false()
