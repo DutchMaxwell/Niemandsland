@@ -10788,6 +10788,13 @@ func _solo_stamp_unit_shred(prof: Dictionary, member: GameUnit, facet_range: int
 			prof["_shred_alias"] = shred_alias
 
 
+func _solo_shred_facet_name(member: GameUnit, profile_range: int) -> String:
+	for e in RulesRegistry.unit_rules_of_primitive(member, "Shred"):
+		if AiEv.facet_applies((e as Dictionary).get("params", {}), profile_range):
+			return str((e as Dictionary).get("name", "Shred"))
+	return ""
+
+
 ## PF-b (EPOCH_73_V36): the name of the Enhanced form of a Shred alias the striker carries together with its base
 ## (Enhanced Warbound / Destroyer / Infected), or "". The form says the base always pays, so it lifts the base's
 ## distance condition on shots, charges and strike-backs alike; its window stays the base's unmodified 1s.
@@ -10805,13 +10812,6 @@ func _solo_shred_enhanced_name(striker: GameUnit) -> String:
 ## PF-b: the 1-2 window belongs to the 3.5 Boost forms; from EPOCH_73_V36 an "Enhanced" form never widens it.
 static func _solo_shred_boost_widens(rule_name: String) -> bool:
 	return AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 or not rule_name.begins_with("Enhanced ")
-
-
-func _solo_shred_facet_name(member: GameUnit, profile_range: int) -> String:
-	for e in RulesRegistry.unit_rules_of_primitive(member, "Shred"):
-		if AiEv.facet_applies((e as Dictionary).get("params", {}), profile_range):
-			return str((e as Dictionary).get("name", "Shred"))
-	return ""
 
 
 ## A1: the profile prints Lacerate and no Bane — AiShooting folds Lacerate into the `bane` flag for its
