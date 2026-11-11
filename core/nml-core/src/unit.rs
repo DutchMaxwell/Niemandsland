@@ -6948,7 +6948,19 @@ impl UnitStatic {
         // UNGATED and UNSTAMPED: the table builds it raw off the weapons
         // (`AiShooting.strafing_profiles`, main.gd:2976-2985) and the
         // once-per-activation volley reads it exactly as built.
-        let strafe_shoot = strafing_profiles(&p.weapons);
+        let mut strafe_shoot = strafing_profiles(&p.weapons);
+        // S6 (#2612, EPOCH_75_TABLE_FIXES): the volley is a shooting attack, so the unit-level
+        // Shred family is stamped like `stamp` step 6 does; a range-0 weapon reads reach max(range, 1).
+        if rule_on(rules_epoch, crate::acts::EPOCH_75_TABLE_FIXES) {
+            let plain_shred = unit_rule_active(reg, p, "Shred");
+            let mut hits = rules_of_primitive(reg, p, "Shred");
+            hits.retain(|h| !wave3_alias(&h.name) || rule_on(rules_epoch, EPOCH_6_TABLE_RULES));
+            for sp in strafe_shoot.iter_mut() {
+                if plain_shred || hits.iter().any(|h| facet_applies(h.melee_only, h.shooting_only, sp.range.max(1))) {
+                    sp.shred_alias = true;
+                }
+            }
+        }
         // The same stamping runs on the melee array (`_profiles_of(su, true)`
         // battle_sim.gd:719-720 takes the identical path); a rule the port
         // cannot model is reported ONCE, not once per array.
