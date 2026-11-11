@@ -44,6 +44,20 @@ func test_book_squad_fills_the_apc_exactly() -> void:
 	assert_str(str(gate.get("reason"))).contains("not enough space")
 
 
+func test_the_gate_refuses_a_non_hero_unit_above_tough_three() -> void:
+	# Rules 3.6 (GF Beginner's Guide v3.6.0 p.15): non-Heroes ride up to Tough(3) only.
+	var apc := _unit("apc", 1, ["Transport(12)", "Tough(6)"])
+	var brute := _unit("brute", 1, ["Tough(4)"])
+	var gate: Dictionary = _mgr.can_embark(brute, apc)
+	assert_bool(bool(gate.get("ok"))).override_failure_message("a Tough(4) non-Hero got a seat: %s" % str(gate)).is_false()
+	assert_str(str(gate.get("reason"))).contains("cannot be transported")
+	# CONTROL: a Tough(3) non-Hero fits (3 of 12 seats) and a Tough(4) Hero fits (1 seat).
+	var big := _unit("big", 1, ["Tough(3)"])
+	assert_bool(bool(_mgr.can_embark(big, apc).get("ok"))).is_true()
+	var hero := _unit("hero4", 1, ["Hero", "Tough(4)"])
+	assert_bool(bool(_mgr.can_embark(hero, apc).get("ok"))).is_true()
+
+
 func test_state_roundtrip_sets_and_clears_everything() -> void:
 	var apc := _unit("apc", 1, ["Transport(6)"])
 	var squad := _unit("squad", 3, [])
