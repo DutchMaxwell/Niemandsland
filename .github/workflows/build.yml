@@ -270,6 +270,35 @@ jobs:
       - name: Run relay tests (base + churn/soak)
         run: cd relay && python -m pytest -q
 
+  # The one name branch protection requires (besides `hygiene`). It is green when every job it needs
+  # is `success`, or `skipped` (the docs/tools fast lane skips the test shards). It runs with
+  # `if: always()` so a failed or cancelled need shows up as a red check instead of a missing one.
+  # Add every new gating job to `needs` below.
+  all-required:
+    name: All required checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [changes, test, shards-coverage, relay-tests]
+    if: always()
+    steps:
+      - name: Every required job is green or skipped
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PY'
+          import json, os, sys
+          needs = json.loads(os.environ["RESULTS"])
+          bad = []
+          for job, info in needs.items():
+              result = info.get("result")
+              print(f"{job}: {result}")
+              if result not in ("success", "skipped"):
+                  bad.append(f"{job}={result}")
+          if bad:
+              print("::error::required job(s) not green: " + ", ".join(bad))
+              sys.exit(1)
+          PY
+
   export-linux:
     name: Linux Export
     # glibc floor of the shipped Linux core: ubuntu-latest moved to glibc 2.43, players on 2.42 cannot load it
