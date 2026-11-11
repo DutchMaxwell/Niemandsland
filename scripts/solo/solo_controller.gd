@@ -6883,11 +6883,18 @@ static func musician_move_bonus_in(unit: GameUnit) -> float:
 	return float(RulesRegistry.unit_param(unit, "Musician", "move_bonus_in", AiCombatMath.MUSICIAN_MOVE_BONUS_IN))
 
 
+## Rules 3.6: the Bravery rule's two spellings (see `morale_bonus_of`).
+const BRAVERY_FAMILY: Array = ["Bravery Aura", "Bravery"]
+
+
 ## Banner's morale-test bonus for a unit (wave 5): +1 when the unit or an attached hero carries Banner
 ## AND its book fields the rule for this system (RulesRegistry gate; the bonus value is data with the
 ## constant fallback). Coverage wave: DATA aliases of the family (Courage Aura, Hold the Line, Hive
 ## Bond, …) resolve through the generic primitive layer — the strongest single bonus applies (rule
 ## effects of the same name never stack; different names are one family here, best-of keeps it sane).
+## Rules 3.6 (EPOCH_73_V36): Bravery Aura is the one exception — it is its own source and ADDS to the best
+## of the rest (Banner + Bravery Aura = +2); its carrier name and the bare base the aura expansion stamps
+## beside it are ONE rule, so they share one best-of.
 ## Gap 18a: moved here from main.gd so the dice path and BattleSim read ONE truth (the sim stamps it
 ## at capture time — this walks the registry, far too costly per activation).
 static func morale_bonus_of(unit: GameUnit) -> int:
@@ -6899,6 +6906,8 @@ static func morale_bonus_of(unit: GameUnit) -> int:
 static func morale_bonus_named_of(unit: GameUnit) -> Dictionary:
 	var best := 0
 	var best_name := ""
+	var bravery := 0
+	var bravery_name := ""
 	var members: Array = [unit]
 	if unit != null and unit.has_method("get_attached_heroes"):
 		members = members + unit.get_attached_heroes()
@@ -6924,10 +6933,18 @@ static func morale_bonus_named_of(unit: GameUnit) -> Dictionary:
 					and not valiant_majority:
 				continue
 			var entry_bonus := int((ed.get("params", {}) as Dictionary).get("morale_bonus", 0))
+			if rule_name in BRAVERY_FAMILY and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+				if entry_bonus > bravery:
+					bravery = entry_bonus
+					bravery_name = rule_name
+				continue
 			if entry_bonus > best:
 				best = entry_bonus
 				best_name = rule_name
-	return {"bonus": best + morale_rating_of(unit), "name": best_name if not best_name.is_empty() else "Banner"}
+	var shown := best_name if not best_name.is_empty() else "Banner"
+	if bravery > 0:
+		shown = bravery_name if best == 0 else shown + " + " + bravery_name
+	return {"bonus": best + bravery + morale_rating_of(unit), "name": shown}
 
 
 ## MOR-09 Valiant — the Banner-family share that only counts beyond the distance gate. MAX, never a sum.
