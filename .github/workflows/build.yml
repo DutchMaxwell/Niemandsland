@@ -478,11 +478,18 @@ jobs:
       - name: Smoke-run the exported Linux build
         run: |
           set -o pipefail
-          timeout 30 build/linux/$EXPORT_NAME.x86_64 --headless > /tmp/exported_run.log 2>&1 || true
+          timeout 30 build/linux/$EXPORT_NAME.x86_64 --headless --quit-after 300 > /tmp/exported_run.log 2>&1 || true
           if grep -iE "GDExtension|SCRIPT ERROR|Parse Error" /tmp/exported_run.log; then
             echo "::error::the exported build reported an extension/script/parse error"; exit 1
           fi
-          echo "OK: exported build started with no GDExtension/script/parse errors"
+          # The core must really load, not just ship: godot-rust's init line and the boot line of
+          # update_checker.gd (CoreLoadNotice.boot_line) both have to be there.
+          for LINE in "Initialize godot-rust" "core: NmlCore loaded"; do
+            grep -qF "$LINE" /tmp/exported_run.log || {
+              grep -F "core: NmlCore" /tmp/exported_run.log || true
+              echo "::error::the exported build never printed '$LINE' - the core did not load"; exit 1; }
+          done
+          echo "OK: exported build started, loaded NmlCore, no GDExtension/script/parse errors"
 
       # Best-effort: a failed artifact upload (e.g. the account's Actions artifact-storage
       # quota is full) must not red-fail the export job. Releases use the self-contained
@@ -614,8 +621,8 @@ jobs:
   # runner (both darwin triples, lipo'd into ONE universal dylib) and the macOS preset is exported and RUN
   # on the same runner. The job is green only when the exported, ad-hoc-signed .app loads NmlCore and plays
   # `opponent: erlkoenig` (tools/core_ship_probe.tscn, judged by tools/assert_ship_probe.py). The release
-  # job ships THIS job's zip when it exists and falls back to its own core-less macOS export when it does
-  # not, so a failed macOS core never fails a release (the decision tree stays the fallback).
+  # job ships THIS job's zip and requires it: a failed macOS core fails the whole release (one-core P1,
+  # decision D2 reverses D40) - no platform ships without the core.
   export-macos:
     name: macOS Export (core + proof)
     runs-on: macos-15
@@ -714,13 +721,16 @@ jobs:
         run: |
           set -o pipefail
           APP=$(find build/macos/bundle -maxdepth 1 -name '*.app' | head -1)
-          perl -e 'alarm shift; exec @ARGV' 30 "$APP/Contents/MacOS/$EXPORT_NAME" --headless > build/logs/exported_run.log 2>&1 || true
+          perl -e 'alarm shift; exec @ARGV' 30 "$APP/Contents/MacOS/$EXPORT_NAME" --headless --quit-after 300 > build/logs/exported_run.log 2>&1 || true
           cat build/logs/exported_run.log
           if grep -iE "GDExtension|SCRIPT ERROR|Parse Error" build/logs/exported_run.log; then
             echo "::error::the exported build reported an extension/script/parse error"; exit 1
           fi
           if ! grep -q "Initialize godot-rust" build/logs/exported_run.log; then
             echo "::error::the exported build never loaded the extension (no godot-rust init line)"; exit 1
+          fi
+          if ! grep -qF "core: NmlCore loaded" build/logs/exported_run.log; then
+            echo "::error::the exported build never printed 'core: NmlCore loaded' - the core did not load"; exit 1
           fi
           echo "OK: exported build started, loaded the extension, no GDExtension/script/parse errors"
 
@@ -764,8 +774,8 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "$APP"
           ls -l build/macos/$EXPORT_NAME.zip
 
-      # Tags: the release job consumes this zip, so a failed upload must fail THIS job (the release then falls
-      # back to the core-less macOS build). Other runs: best effort, like the other export artifacts.
+      # Tags: the release job consumes this zip, so a failed upload must fail THIS job (and with it the
+      # release). Other runs: best effort, like the other export artifacts.
       - name: Upload macOS release zip
         continue-on-error: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         uses: actions/upload-artifact@v4
@@ -800,21 +810,17 @@ jobs:
   # Self-contained (builds its own Linux + Windows binaries) so it does NOT depend on the best-effort
   # Actions artifact upload, which can hit the account's artifact storage quota. The one exception is
   # the macOS zip with the Rust core, built and proven by export-macos (a macos-15 runner is the only
-  # place that can build it): the release takes it when it is there and exports a core-less macOS
-  # build itself when it is not.
+  # place that can build it): the release requires it and fails without it.
   release:
     name: Publish GitHub Release
     # glibc floor of the shipped Linux core: ubuntu-latest moved to glibc 2.43, players on 2.42 cannot load it
     runs-on: ubuntu-24.04
     timeout-minutes: 45
-    # gdUnit (test), the relay suite and the Rust workspace checks must all be
-    # green for the tagged sha before a release is built and published.
-    # export-macos is in `needs` only so the release WAITS for its zip; it is deliberately no gate — a
-    # failed or missing macOS core must never fail a release. `!cancelled()` lets the job run after a
-    # failed export-macos, so the three gates are spelled out: each must be 'success' exactly as the
-    # implicit success() demanded before (a skipped or failed gate still stops the release).
+    # gdUnit (test), the relay suite, the Rust workspace checks and the macOS core export (built, signed
+    # and proven) must all be green for the tagged sha before a release is built and published: the
+    # implicit success() covers all four needs, so a failed macOS core fails the release (D2).
     needs: [test, relay-tests, rust-gate, export-macos]
-    if: ${{ !cancelled() && startsWith(github.ref, 'refs/tags/v') && needs.test.result == 'success' && needs.relay-tests.result == 'success' && needs.rust-gate.result == 'success' }}
+    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
     permissions:
       contents: write
     env:
@@ -864,21 +870,9 @@ jobs:
       - name: Stamp build hash
         run: sed -i "/^config\/version=/a config/build_hash=\"${GITHUB_SHA::7}\"" project.godot
 
-      # rcodesign (apple-codesign) ad-hoc-signs the macOS bundle on this Linux runner — no Apple
-      # account, certificate, notarization or Mac runner needed. Pinned for reproducibility.
-      - name: Install rcodesign (ad-hoc macOS signing)
-        run: |
-          RCODESIGN_URL="https://github.com/indygreg/apple-platform-rs/releases/download/apple-codesign/0.29.0/apple-codesign-0.29.0-x86_64-unknown-linux-musl.tar.gz"
-          curl -fsSL -o /tmp/rcodesign.tar.gz "$RCODESIGN_URL"
-          tar -xzf /tmp/rcodesign.tar.gz -C /tmp
-          sudo mv /tmp/apple-codesign-*-x86_64-unknown-linux-musl/rcodesign /usr/local/bin/rcodesign
-          rcodesign --version
-
       # The macOS zip WITH the Rust core, exported, signed and proven (loads NmlCore, plays erlkoenig) by the
-      # export-macos job. Optional: when that job failed or its artifact is gone, the step below fails
-      # softly and the macOS build is exported here without the core (the decision tree, as before).
-      - name: Fetch the proven macOS build (optional)
-        continue-on-error: true
+      # export-macos job. Required: without it the build step below fails the release.
+      - name: Fetch the proven macOS build
         uses: actions/download-artifact@v4
         with:
           name: macos-release
@@ -890,29 +884,22 @@ jobs:
           godot --headless --verbose --export-release "Linux" dist/linux/$EXPORT_NAME.x86_64
           godot --headless --verbose --export-release "Windows Desktop" dist/windows/$EXPORT_NAME.exe
           test -f "dist/windows/$EXPORT_NAME.pck" || { echo "::error::the Windows release lacks $EXPORT_NAME.pck"; exit 1; }
-          if [ -f "dist/macos-core/$EXPORT_NAME.zip" ]; then
-            # The export-macos job's zip: universal core dylib in Contents/Frameworks, ad-hoc signed
-            # (dylib first, then the .app) and run on a macos-15 runner before it was uploaded.
-            cp "dist/macos-core/$EXPORT_NAME.zip" "dist/macos/$EXPORT_NAME.zip"
-            echo "OK: macOS ships the proven build with the Rust core"
-          else
-            echo "::warning::no macOS build with the core is available (export-macos failed or was skipped) — macOS ships WITHOUT the core and plays the decision tree"
-            # No dylib was built: drop the manifest's macos entries, or the export would point at a file that is
-            # not there ("Failed to open '<dylib>'", exit code 0 — measured 26.09.). Linux and Windows are
-            # already exported above and never read those lines.
-            sed -i '/^macos\./d' core/nml_core.gdextension
-            # macOS: export, then AD-HOC sign with rcodesign. An unsigned arm64 bundle is KILLED by
-            # macOS on Apple Silicon ("is damaged"); an ad-hoc signature lets it run and downgrades
-            # Gatekeeper to the milder "unidentified developer" prompt (right-click -> Open). Still
-            # NOT notarized (no Apple account) — users may still need to clear quarantine once with
-            # `xattr -dr com.apple.quarantine Niemandsland.app` (documented in the README).
-            godot --headless --verbose --export-release "macOS" dist/macos/$EXPORT_NAME.zip
-            unzip -q dist/macos/$EXPORT_NAME.zip -d dist/macos/bundle
-            APP_BUNDLE=$(find dist/macos/bundle -maxdepth 1 -name '*.app' | head -1)
-            rcodesign sign "$APP_BUNDLE"
-            rm dist/macos/$EXPORT_NAME.zip
-            (cd dist/macos/bundle && zip -qry "../$EXPORT_NAME.zip" .)
-          fi
+          test -f "dist/macos-core/$EXPORT_NAME.zip" || { echo "::error::no proven macOS build with the core"; exit 1; }
+          # The export-macos job's zip: universal core dylib in Contents/Frameworks, ad-hoc signed
+          # (dylib first, then the .app) and run on a macos-15 runner before it was uploaded.
+          cp "dist/macos-core/$EXPORT_NAME.zip" "dist/macos/$EXPORT_NAME.zip"
+
+      # export-linux never runs on a tag, so the release smokes its own Linux build: it must boot and
+      # load NmlCore (the same two lines export-linux requires).
+      - name: Smoke-run the Linux release build - NmlCore loads
+        run: |
+          timeout 30 dist/linux/$EXPORT_NAME.x86_64 --headless --quit-after 300 > /tmp/release_run.log 2>&1 || true
+          for LINE in "Initialize godot-rust" "core: NmlCore loaded"; do
+            grep -qF "$LINE" /tmp/release_run.log || {
+              grep -F "core: NmlCore" /tmp/release_run.log || true
+              echo "::error::the Linux release build never printed '$LINE' - the core did not load"; exit 1; }
+          done
+          echo "OK: the Linux release build loaded NmlCore"
 
       - name: Guard - no debug symbols in the release tree
         run: |
@@ -930,15 +917,12 @@ jobs:
           # The macOS export is already a .zip of the .app bundle — just give it the release name.
           cp "dist/macos/${EXPORT_NAME}.zip" "dist/Niemandsland-macos.zip"
 
-      # Say in the run which macOS flavour shipped, so nobody has to open the zip to find out.
-      - name: Report the macOS flavour
+      # No platform ships without the Rust core (tools/check_release_zip.py, one-core P1 step 12).
+      - name: Guard - every zip carries the core
         run: |
-          unzip -l "dist/Niemandsland-macos.zip" > /tmp/macos_zip_list.txt
-          if grep -q 'Contents/Frameworks/libnml_core_godot.dylib' /tmp/macos_zip_list.txt; then
-            echo "::notice::the macOS zip carries the Rust core (NACHTMAHR plays Erlkönig there)"
-          else
-            echo "::warning::the macOS zip carries NO Rust core (NACHTMAHR plays the decision tree there)"
-          fi
+          for OS in linux windows macos; do
+            python3 tools/check_release_zip.py "dist/Niemandsland-$OS.zip" "$OS"
+          done
 
       - name: Extract release notes (CHANGELOG section for this tag)
         # Match the section for THIS tag's version (e.g. v0.3.9.0-alpha -> "## [0.3.9.0-alpha]"),
