@@ -673,9 +673,34 @@ static func rules_core_version(system_abbrev: String) -> String:
 	return version
 
 
-## D5 (b), 27.10.2026: a book NEWER than the rules is imported WITH a warning — the player may
+## O-CITE: the player-visible rules citation for the CURRENT GAME's system - "GF 3.6", "AoF 3.6",
+## "GFF 3.5", "AoFS 3.5", "AoF:R 3.5" - version from THAT system's rules_core_version (major.minor
+## only), never a second constant. Callers pass RulesRegistry.system_of_unit(unit) for unit-scoped
+## text and the army's game_system_abbrev (normalised) for game-scoped text. "gf/aof" stays for the
+## legacy two-book wording.
+static func rules_cite(system_abbrev: String) -> String:
+	var system := system_abbrev.strip_edges().to_lower()
+	if system == "gf/aof":
+		return "GF/AoF " + _major_minor(rules_core_version("gf"))
+	if system.is_empty() or rules_core_version(system).is_empty():
+		system = "gf"
+	return _rules_system_label(system) + " " + _major_minor(rules_core_version(system))
+
+
+## The book label of a normalised system slug (the abbreviations the comments use).
+static func _rules_system_label(system: String) -> String:
+	match system:
+		"gff": return "GFF"
+		"aof": return "AoF"
+		"aofs": return "AoFS"
+		"aofr": return "AoF:R"
+		_: return "GF"
+
+
+## D5 (b), 27.10.2026: a book on OTHER rules is imported WITH a warning — the player may
 ## play on, the refusal for online rooms and saves follows in 0.3.15. Same major.minor = same rules,
-## silent (3.5.3 books are fine on 3.5.1). "" when compatible or when either side says nothing.
+## silent (3.6.1 books are fine on 3.6.0). "" when compatible or when either side says nothing.
+## The sentence names the older side: a newer book plays on old rules, an older list may not match.
 static func rules_version_warning(book_version: String, core_version: String) -> String:
 	if book_version.is_empty() or core_version.is_empty():
 		return ""
@@ -683,6 +708,9 @@ static func rules_version_warning(book_version: String, core_version: String) ->
 	var core_mm := _major_minor(core_version)
 	if book_mm.is_empty() or core_mm.is_empty() or book_mm == core_mm:
 		return ""
+	if book_mm.naturalnocasecmp_to(core_mm) < 0:
+		return "Army Forge serves rules %s, this build plays %s — this list was built for the older rules, some units or rules may not match." % [
+			book_version, core_version]
 	return "Army Forge serves rules %s, this build plays %s — the game runs on the old rules." % [
 		book_version, core_version]
 
@@ -1690,6 +1718,15 @@ static func spell_radius_inches(effect: String) -> int:
 		return 0
 	var m := re.search(effect)
 	return int(m.get_string(1)) if m else 0
+
+
+## The ring radius for a spell. With effect text: parsed from it, exactly as spell_radius_inches. With NO
+## text (the shipped lesson boards carry none): `range_in` from the text-free spell map for the caster's
+## (system, faction); 0 = no ring when the map does not know the spell.
+static func spell_radius_for(effect: String, system: String, faction: String, spell_name: String) -> int:
+	if not effect.strip_edges().is_empty():
+		return spell_radius_inches(effect)
+	return SpellsRegistry.range_in_for(system, faction, spell_name)
 
 
 ## Fetches the shared/common rule descriptions for the army's game system and merges

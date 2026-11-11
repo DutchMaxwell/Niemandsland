@@ -346,6 +346,7 @@ pub fn seams_of(knobs: &Knobs) -> Seams {
         // per-seat A/B grants the permission alone to the resolving core.
         moved_shoot: knobs.menu_wide || knobs.moved_shoot,
         dangerous_end_morale: knobs.dangerous_end_morale,
+        dangerous_replay: knobs.dangerous_replay,
         morale_by_probability: knobs.morale_by_probability,
         fire_in_range_only: knobs.fire_in_range_only,
         hero_counts_in_size: knobs.hero_counts_in_size,
@@ -1090,7 +1091,9 @@ impl<'a> Search<'a> {
             }
             let Some(&u) = state.roster.index.get(&scored[i].unit_key) else { continue };
             if units.contains(&u) || state.shaken[u]
-                || crate::menu::forces_hold(&state.profile(u).special_rules)
+                || crate::menu::holds_only(state, statics, u)
+                || crate::menu::cumbersome_at(state, statics, u)
+                || crate::menu::starts_incoherent(state, terrain, u, seams.rules_epoch)
             {
                 continue;
             }
@@ -1157,8 +1160,9 @@ impl<'a> Search<'a> {
                             // grid-search step 9 F1 — mirror the hand: the moved-cell LOS probe
                             // rides ONLY under `shoot_los`; a wall otherwise keeps the row (the hand
                             // never re-probes from the moved point), and a blocked line drops it.
-                            let blocked = tuning.shoot_los && terrain.is_valid() && terrain.los_blocked(
-                                crate::geom::centre(&moved), crate::geom::centre(&state.positions[e]));
+                            let blocked = tuning.shoot_los && terrain.is_valid() && terrain.los_blocked_at(
+                                crate::geom::centre(&moved), crate::geom::centre(&state.positions[e]),
+                                seams.rules_epoch);
                             if blocked {
                                 continue;
                             }

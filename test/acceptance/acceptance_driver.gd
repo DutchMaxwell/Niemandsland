@@ -5,6 +5,11 @@ extends Node
 ## Every checkpoint writes a markdown row plus a screenshot; frame gaps > 2 s are counted as stalls.
 
 const LISTS := ["__FfT0jOYHtc", "gLi7he9YFjEt"]   # the public Army Forge lists of the tutorial board (P1, P2)
+## P1 is imported through its LIVE share link, so the upstream list can change under a run. The
+## scenario steps never name a P1 unit: they deploy the smallest unit, delete the rest and read one
+## unit's radial. Guard exactly that minimum and name the change instead of dying on a null unit.
+const P1_MIN_UNITS := 1
+const P1_MIN_MODELS := 1
 var o := {"role": "solo", "scenario": "1", "out": "user://", "relay": ""}
 var step := "boot"
 var _t := Time.get_ticks_msec()
@@ -163,8 +168,38 @@ func _import(p: int, ai := false) -> bool:   # Import OPR Army... -> share link 
 	var tick := _first("CheckBox", func(x: CheckBox) -> bool: return x.text.begins_with("AI-controlled")) as CheckBox
 	if tick != null:
 		tick.button_pressed = ai
-	return await _press("IMPORT ARMY", 90.0) and await _wait("army %d spawns" % (p + 1),
-		func() -> Variant: return _game_log().count(tray) > before, 300.0) != null
+	if not (await _press("IMPORT ARMY", 90.0) and await _wait("army %d spawns" % (p + 1),
+		func() -> Variant: return _game_log().count(tray) > before, 300.0) != null):
+		return false
+	if p == 0:   # P1's source is live: say it loudly when Army Forge no longer serves what the steps need
+		var composition := _composition(1)
+		var problem := p1_composition_problem(composition)
+		await _check("p1.composition", problem == "", problem if problem != "" else "P1 list: %s" % [composition])
+		if problem != "":
+			return false
+	return true
+
+
+## "" when `composition` (one dict per unit: {"name": String, "models": int}) still supports every
+## scenario step; else the loud row text naming what is missing. Static so a gdUnit test can feed it
+## a composition without booting the game.
+static func p1_composition_problem(composition: Array) -> String:
+	var models := 0
+	for unit in composition:
+		models += int((unit as Dictionary).get("models", 0))
+	if composition.size() < P1_MIN_UNITS:
+		return "Army Forge list changed: no unit left for P1 (scenario steps need %d)" % P1_MIN_UNITS
+	if models < P1_MIN_MODELS:
+		return "Army Forge list changed: no model left for P1 (scenario steps need %d)" % P1_MIN_MODELS
+	return ""
+
+
+func _composition(pid: int) -> Array:   # the imported army as the guard sees it: one row per unit
+	var army = _main().opr_army_manager.armies.get(pid)
+	if army == null:
+		return []
+	return army.units.map(func(u: OPRApiClient.OPRUnit) -> Dictionary: return {"name": u.name, "models": u.size})
+
 
 func _units(pid: int) -> Array:   # where the player's units stand (to right-click them)
 	return _main().opr_army_manager.game_units.values().filter(func(u: GameUnit) -> bool: return int(u.unit_properties.get("player_id", 0)) == pid)

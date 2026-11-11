@@ -28,6 +28,17 @@ var _archive: Array = []               # append-only whole game — what the EXP
 var _archive_dropped: int = 0          # only ever non-zero past ARCHIVE_CAP; announced in the header
 var _seq: int = 0
 
+## The collector of the running table. GameUnit is a RefCounted (no tree), so a rule that lives on
+## the unit (Caster Group's refill) writes through this pointer; entry/exit keep it on the live one.
+static var live: BattleLog = null
+
+func _enter_tree() -> void:
+	live = self
+
+func _exit_tree() -> void:
+	if live == self:
+		live = null
+
 
 # === Core ===
 
@@ -173,7 +184,9 @@ func on_dice_rolled(count: int, hits: int, target: int, player: String = "", fac
 	# mistaken for an attack line ("0 hits (7+)" used to be a SAVE at 7+); attacks keep the hit wording.
 	var defense := kind == "defense"
 	var noun := "block" if defense else "hit"
-	var prefix := (player + (" defends: " if defense else ": ")) if not player.is_empty() else ""
+	# "You" is the solo human's roller label: it takes the plain verb ("You defend"), a named roller "defends".
+	var verb := " defend: " if player == "You" else " defends: "
+	var prefix := (player + (verb if defense else ": ")) if not player.is_empty() else ""
 	if not faces.is_empty():
 		var sorted_faces := faces.duplicate()
 		sorted_faces.sort()

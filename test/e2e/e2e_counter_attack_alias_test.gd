@@ -15,9 +15,11 @@ const NON_COUNTER := 2    # SoloStrike.NON_COUNTER
 var _runner: GdUnitSceneRunner
 var _main: Node
 var _root_before: Array
+var _epoch0: int
 
 
 func before_test() -> void:
+	_epoch0 = AiActRecorder.rules_epoch
 	E2EBoot.arm_harness_mode()
 	_root_before = E2EBoot.root_children(get_tree())
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
@@ -30,6 +32,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	AiActRecorder.rules_epoch = _epoch0   # statics leak across gdUnit tests
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 	_main = null
 	_runner = null
@@ -124,6 +127,7 @@ func test_unit_without_counter_strikes_in_the_normal_slot() -> void:
 ## Impact(3) x two charging models starts at six dice. Two Counter-Attack defenders
 ## strip one each; the actual charge tray therefore rolls four.
 func test_counter_attack_unit_cuts_impact_dice() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES   # rules 3.6 stops the cut at 73
 	var charger := E2EBoot.make_unit(_main, 2, "Charger", [Vector3.ZERO, Vector3(0, 0, INCH)])
 	charger.unit_properties["special_rules"] = ["Impact(3)"]
 	var defender := E2EBoot.make_unit(_main, 1, "Rat Pack", [Vector3(0.5 * INCH, 0, 0),
@@ -139,4 +143,53 @@ func test_counter_attack_unit_cuts_impact_dice() -> void:
 	await _main._solo_charge_impact(charger, defender, false)
 	assert_str(_log_text()).contains("Counter: -2 Impact dice")
 	assert_str(_log_text()).contains("Impact(3) rolls 4 dice")
+	await E2EBoot.settle(get_tree())
+
+
+## Impact is not a weapon: a charger's unit-level melee AP rule (Piercing Fighter, gf/orc_marauders)
+## must not reach its Impact hits, only its weapon strikes. Tough models so Impact never wipes the foe.
+func _tough_foe() -> GameUnit:
+	var foe := _foe()
+	for m in foe.models:
+		(m as ModelInstance).wounds_max = 9
+		(m as ModelInstance).wounds_current = 9
+	foe.unit_properties["special_rules"] = ["Tough(9)"]
+	return foe
+
+
+## The log's save-threshold lines ("<unit> saves on <target>") in the order the batches rolled.
+func _save_lines() -> Array:
+	var lines: Array = []
+	for e in _main.battle_log.entries():
+		if str((e as Dictionary)["text"]).contains(" saves on "):
+			lines.append(str((e as Dictionary)["text"]))
+	return lines
+
+
+func test_impact_hits_get_no_unit_melee_ap_bonus() -> void:
+	var charger := _fighter(["Piercing Fighter", "Impact(6)"], "gf", "orc_marauders")
+	_main.seed_tray_rng(7)
+	await _main._solo_charge_impact(charger, _tough_foe(), false)
+	assert_str(_log_text()).contains("Impact(6) rolls 6 dice").not_contains("Piercing Fighter: AP(")
+	assert_array(_save_lines()).is_equal(["Grunts saves on 4+"])
+	await E2EBoot.settle(get_tree())
+
+
+func test_the_weapon_strikes_of_the_same_charge_still_get_the_unit_melee_ap() -> void:
+	var charger := _fighter(["Piercing Fighter", "Impact(6)"], "gf", "orc_marauders")
+	(charger.source_data as OPRApiClient.OPRUnit).weapons[0].attacks = 24   # enough hits to reach the saves
+	var foe := _tough_foe()
+	_main.seed_tray_rng(7)
+	await _main._solo_charge_impact(charger, foe, false)
+	await _main._solo_melee_strike_phase(charger, foe, true, NON_COUNTER)
+	assert_array(_save_lines()).is_equal(["Grunts saves on 4+", "Grunts saves on 5+ (Def 4+, AP 1)"])
+	await E2EBoot.settle(get_tree())
+
+
+func test_heavy_impact_keeps_its_own_ap_and_gains_no_unit_melee_ap() -> void:
+	var charger := _fighter(["Piercing Fighter", "Impact(4)", "Heavy Impact(4)"], "gf", "orc_marauders")
+	_main.seed_tray_rng(7)
+	await _main._solo_charge_impact(charger, _tough_foe(), false)
+	assert_str(_log_text()).contains("Heavy Impact(4) rolls 4 dice").not_contains("Piercing Fighter: AP(")
+	assert_array(_save_lines()).is_equal(["Grunts saves on 4+", "Grunts saves on 5+ (Def 4+, AP 1)"])
 	await E2EBoot.settle(get_tree())

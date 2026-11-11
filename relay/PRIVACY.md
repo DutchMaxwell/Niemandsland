@@ -8,7 +8,7 @@ a client deletes its IP data. It is the reference for `IP_RETENTION_DAYS` in `re
 
 | Field | Where held | Why | Retention | Publicly exposed? |
 | --- | --- | --- | --- | --- |
-| Peer IP (`Peer.ip_address`, `ip_connection_counts`) | Memory only | Per-IP connection limit (`MAX_CONNECTIONS_PER_IP`) | Connection lifetime, at most `IP_RETENTION_DAYS` (30 days); erased earlier by `delete_data` | No — never logged or persisted |
+| Peer IP (`Peer.ip_address`, the open connection's address) | Memory only | Per-IP connection limit (`MAX_CONNECTIONS_PER_IP`), counted over the open connections | Connection lifetime, at most `IP_RETENTION_DAYS` (30 days); `delete_data` blanks `Peer.ip_address` earlier | No — never logged or persisted |
 | Peer id, room code | Memory only | Route game frames to the right sockets | Connection / room lifetime | Only the code of a *public* room, in the `rooms_list` browser reply |
 | Reconnect token | Memory only | Reclaim the same peer id after a drop | Rejoin window (20 s) | No |
 | Aggregate counters (`Stats`) | Memory + JSON file at `RELAY_STATS_PATH` | Usage history across scale-to-zero restarts | Counts, peaks and histograms only | Yes — `GET /stats` and the `get_stats` / `STATS` outputs are aggregate-only |
@@ -28,10 +28,11 @@ A connected client may send the WebSocket control message
 
     {"type": "delete_data"}
 
-The relay then removes the caller's IP from `ip_connection_counts` and blanks it on every
-in-memory peer record, and replies `{"type": "data_deleted"}`. A caller with no room data gets
+The relay then blanks the caller's IP on every in-memory peer record and replies
+`{"type": "data_deleted"}`. A caller with no room data gets
 `{"type": "error", "reason": "no_data"}`. The game connection itself stays up — routing uses
-peer ids and room codes, not IPs.
+peer ids and room codes, not IPs. The per-IP connection limit uses the open connection's own
+address for as long as that connection is open; it is gone when the connection closes.
 
 ## Logs
 

@@ -17,7 +17,7 @@ static func profiles_in_range(weapons: Array, dist_in: float) -> Array:
 		var rng_in: int = _field_i(w, "range_value", 0)
 		if rng_in <= 0 or float(rng_in) < dist_in:
 			continue
-		if _has_rule(w, "Strafing"):
+		if is_strafing(w):
 			continue   # NML-002: "may only be used in this way" — fires via the move-through trigger only
 		var attacks: int = maxi(_field_i(w, "attacks", 1), 0) * maxi(_field_i(w, "count", 1), 1)
 		if attacks <= 0:
@@ -26,11 +26,26 @@ static func profiles_in_range(weapons: Array, dist_in: float) -> Array:
 	return merge_identical(out)
 
 
+## NML-002: the weapon attacks only through the move-through trigger. Crossing Strike is its 3.6 name;
+## both names stay until the old one is dropped.
+static func is_strafing(w: Variant) -> bool:
+	return _has_rule(w, "Strafing") or _has_rule(w, "Crossing Strike")
+
+
+## The name a move-through attack logs under: the 3.6 name when one of the firing profiles carries it.
+static func strafing_rule_name(profiles: Array) -> String:
+	for p in profiles:
+		for r in (p as Dictionary).get("rules", []):
+			if GameUnit.rule_name_matches(str(r), "Crossing Strike"):
+				return "Crossing Strike"
+	return "Strafing"
+
+
 ## NML-002: the unit's Strafing weapon profiles (fired ONLY by the move-through trigger).
 static func strafing_profiles(weapons: Array) -> Array:
 	var out: Array = []
 	for w in weapons:
-		if not _has_rule(w, "Strafing"):
+		if not is_strafing(w):
 			continue
 		var attacks: int = maxi(_field_i(w, "attacks", 1), 0) * maxi(_field_i(w, "count", 1), 1)
 		if attacks <= 0:
@@ -41,15 +56,25 @@ static func strafing_profiles(weapons: Array) -> Array:
 
 ## MELEE weapon profiles (range 0) — same shape as profiles_in_range (range 0, never Relentless), for the
 ## melee resolution: each profile rolls as one batch; the defender saves at Defense + that profile's AP.
+## MEL-01 (D-ASSAULT, rules 3.6 epoch): a ranged weapon carrying Assault also yields a melee copy, in weapon
+## order, at range 0 (every melee reader keeps its meaning) with its printed range kept in "printed_range".
+## AIG-G2 R3 (same epoch): a Crossing Strike / Strafing weapon never strikes here, it fires via move-through only.
 static func melee_profiles(weapons: Array) -> Array:
+	var assault: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
 	var out: Array = []
 	for w in weapons:
-		if _field_i(w, "range_value", 0) > 0:
+		if assault and is_strafing(w):
+			continue   # AIG-G2 R3 (same epoch gate): a Crossing Strike weapon strikes only through the move-through trigger
+		var copy: bool = assault and _field_i(w, "range_value", 0) > 0 and _has_rule(w, "Assault")
+		if _field_i(w, "range_value", 0) > 0 and not copy:
 			continue
 		var attacks: int = maxi(_field_i(w, "attacks", 1), 0) * maxi(_field_i(w, "count", 1), 1)
 		if attacks <= 0:
 			continue
-		out.append(_profile(w, attacks, 0))
+		var p := _profile(w, attacks, 0)
+		if copy:
+			p["printed_range"] = _field_i(w, "range_value", 0)
+		out.append(p)
 	return merge_identical(out)
 
 
@@ -113,11 +138,13 @@ static func _profile(w: Variant, attacks: int, range_in: int) -> Dictionary:
 		"reliable": _has_rule(w, "Reliable"),
 		# NML-002 Strafing (weapon rule): "This weapon may only be used in this way" — the flag
 		# EXCLUDES it from every normal volley; the move-through trigger fires it separately.
-		"strafing": _has_rule(w, "Strafing"),
+		"strafing": is_strafing(w),
 		# Coverage wave: weapon-level cover negation ("Ignores Cover" / "… when Shooting") — the
 		# save step then uses the uncovered Defense, like Blast/Indirect.
 		"ignores_cover": _has_rule(w, "Ignores Cover"),
 		"precise": _has_rule(w, "Precise"),   # army-book weapon rule: +1 to hit when attacking
+		# AIG-G2 (rules 3.6, EPOCH_73_V36): Imprecise is Precise's mirror — -1 to hit when attacking.
+		"imprecise": _has_rule(w, "Imprecise") and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36,
 		# Wave-2 weapon rules (GF/AoF Advanced Rules v3.5.1): Surge (+1 hit per unmodified 6, any range),
 		# Rending (unmodified 6-to-hit → AP(+4) on those hits), Bane (defender re-rolls unmodified Defense
 		# 6s), Thrust (charging melee → +1 to hit and AP(+1)). Pre-parsed here like the wave-1 facets so the

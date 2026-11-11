@@ -6,14 +6,270 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 
 ## [Unreleased]
 
-### Changed
-- **Windows: the game data ships as its own file** (`Niemandsland.pck` next to `Niemandsland.exe`) -
-  an antivirus heuristic blocked the 0.3.14.0 download, whose executable carried the game data inside.
+DRAFT for the next release. The big change: Grimdark Future and Age of Fantasy now play OnePageRules
+**rules 3.6**. The game, the rules automation, the Game School and NACHTMAHR all follow it.
+
+### Changed — rules 3.6
+- **Grimdark Future and Age of Fantasy play rules 3.6.** A 3.6 Army Forge book imports silently; an
+  older 3.5 book still imports, with a warning. The rules version shows next to the game version, and
+  the game's own rule citations name the system and version they quote. Firefight, Skirmish and
+  Regiments stay on rules 3.5.1 for now. The README and the project status page say which rules
+  version the game plays. (#1930, #1931, #1999, #2329, #2350, #2363, #2425)
+- **Armies renamed in the 3.6 books keep their models and their rules.** Units and weapons that the
+  3.6 books rename still find their 3D models (Saurians, Mummified Undead, Vampiric Undead, Ratmen,
+  Havoc Masters and more), and the army-book index, the spell exporter and the Voidspace Stalkers book
+  read the 3.6 books. Tutorial, arena and Game School armies use the 3.6 lists. (#1924–#1929, #1933,
+  #1936, #1966, #1984, #2064, #2172)
+- **Renamed and reworded special rules work in every 3.6 book that fields them.** This covers the
+  Enhanced forms (Havocbound, Changebound, Bloodborn, Darkborn, Wolfborn, Knightborn and many more,
+  with no distance gate), the Bravery family, Piercing Charge and its Aura and Buff, Crossing Strike,
+  Fracture and Puncture, Anti-Cover and Anti-Regen, Shred and Surge, Heavy Impact, Precise, Unwieldy,
+  Scurry, Lustbound, Highborn, Piercing Marksman, Grounded Defense, Great Banner, Speed Debuff, the
+  Regeneration Buff, rated auras such as the orcs' Ravage Aura, and the Brothers and Voidspace
+  Stalkers books. Vanguard is placed and logged in fourteen more books, Hit & Run Shooter, Bounding
+  and Quick Throw work in the books that field them, and Unique Hero, Enhanced Watchborn Aura,
+  Versatile Warrior Aura and Buff, Grounded Evasion, Spawn and Increased Shooting Range no longer
+  tell the player to apply them by hand. Increased Shooting Range, Takedown Shot, Piercing Target,
+  Melee Slayer, Hit & Run and Primeborn now work in the six books that field them without a row,
+  Piercing Spotter, Precision Spotter and Slayer in the four Age of Fantasy books that do, and Ravage
+  rolls for the Duchies of Vinci Scouts in a table game. Precision Charge gives its carrier +1 to hit
+  when charging and Precision Fighter +1 to hit in melee. (#1934, #1940, #1943, #1948, #1957, #1959,
+  #1962, #1969, #1982, #1994, #2048, #2060, #2083–#2085, #2112, #2142, #2147, #2158, #2188, #2189,
+  #2209, #2235, #2247, #2248, #2252, #2255, #2286, #2426, #2427, #2435, #2441, #2545, #2547, #2549)
+- **"Most models" rules read the living models.** A rule that a joined unit has when most of its
+  models carry it (Stealth, Fearless, Regeneration and Self-Repair, Fortified, Guarded, Evasive,
+  Dodge, Steadfast, Shrouding, Growth Markers, Sturdy, Versatile Defense, Spell Resistance and more)
+  is judged on the models still alive. Hit & Run needs every model. Named heroes (Unique Hero) count
+  as heroes, a lone joined hero defends with its own Defense, and a joined hero's Fear counts in the
+  melee result. (#1978, #1985, #1988, #2004, #2068, #2087, #2130, #2165, #2207, #2216, #2223, #2227,
+  #2287, #2299, #2347, #2397)
+- **A joined hero plays as the unit its host leaves behind.** When every host model is dead, the
+  hero that still stands saves with the Cover bonus when it stands in cover, rolls its own
+  Protection Feat, is seen and shot at from its own base, and a charge goes on with it when its host
+  dies in its own Dangerous terrain test. A joined hero's longer gun opens the unit's shot when the
+  host's guns stop short, and the log names the Hero rule when only the hero's gun reaches. A joined
+  hero's own Growth markers (Fortified Growth, Piercing Growth, Defensive Frenzy) tick and are named
+  in the battle log, a per-round marker starts in round 1 of a solo game, and a joined hero's marker
+  is placed once per round. Unpredictable Shooter on a joined hero's own gun rolls its die and
+  names the hero in the log. (#2430, #2452, #2466, #2503, #2522, #2558, #2561, #2573)
+- **Movement and deployment follow 3.6.** Cumbersome units may only Hold or Advance and cannot shoot
+  after moving. Artillery may move and no longer takes the old -2 to be hit; it gets +1 to hit only
+  when it Holds and shoots over 12". A Scout deploys at most 9" ahead of its zone and must end more
+  than 9" from enemies that are not Scouts; a Vanguard move must end more than 9" from enemies without
+  Vanguard. Reinforcements land within 9" of a table edge and more than 9" from enemies. Bounding,
+  Nimble, Dash, Wolfborn, Wave-Step and Rapid Blink move their rolled inches. Only your own transports
+  take units, and they can board from 2" away. A unit placed by Spawn or Split cannot take or dispute
+  an objective in the round it arrives. Ethereal's placement inside 6" is optional, and its penalty
+  lasts for the placement activation. (#1944, #1954, #1977, #1983, #1993, #2006, #2017, #2042, #2052,
+  #2088, #2096, #2146, #2181, #2274, #2351)
+- **Terrain follows 3.6.** Ruins no longer block line of sight; they are Unstable instead, so a move
+  of over 6" into or through one risks a Dangerous terrain test. In Dangerous terrain one model makes
+  the whole joined unit take a single test, rolling one die per wound the unit has left, and a
+  charger's wounds from it count toward the melee loser. Terrain labels use the 3.6 words (Dense,
+  Sight Blocking). (#1952, #2000, #2036, #2091, #2092, #2100, #2102, #2129, #2140)
+- **Charges and melee follow 3.6.** Charges are measured edge to edge before the move, and a charge
+  you make keeps that pre-charge distance. Models strike from 3" away and up to 3" above or below.
+  Every melee hit is rolled before any save, Parry cancels hits after the hit rolls, and the loser of
+  a melee is the unit that took more wounds in the whole activation; wounds that Regeneration cancels
+  no longer count, and Scourge's phantom wounds do. A Fatigued unit's sixes still hit but set off no
+  special rules. Assault weapons also strike in melee, and Limited weapons are one use per game across
+  shooting and melee. (#1942, #1953, #1956, #1976, #1980, #2019, #2072, #2134, #2135, #2136, #2277,
+  #2349, #2354)
+- **Counter, Brace, Dodge and other melee rules follow 3.6.** Impact dice roll before Counter strikes,
+  and Counter strikes first only when it chooses to and is not Fatigued. Brace takes Impact dice off a
+  charging unit (a Fatigued unit loses it). Dodge costs melee attackers -1 to hit while the unit is
+  not Fatigued. A unit whose weapons are all Unwieldy strikes last on a charge, and Imprecise weapons
+  hit one worse. Ravage rolls once per round and never while Fatigued, a Sergeant strikes one AP
+  better, and Infiltrating Precision Strike strikes one better on its arrival round. A defender whose
+  melee weapons are all spent gets no strike-back. Smash, Reap and Decimate weapons re-roll Defense 6s
+  like Bane. In a solo game a Crossing Strike weapon no longer strikes in melee: it attacks only when
+  its bearer moves through an enemy unit, rolling at the unit it crossed, after NACHTMAHR's moves and
+  after the player's own. Regenerative Strength rolls token dice for wounds instead of adding
+  attacks, and a Bloodthirsty follow-up strike keeps its Parry. (#1947, #1950, #1992, #2001, #2003,
+  #2021, #2039, #2066, #2116, #2121, #2126, #2128, #2275, #2282, #2339, #2370, #2372, #2378, #2554)
+- **Melee wounds count once, and a once-only grant waits for its attack.** A charger's wounds from
+  the defender's strike-back and a charged unit's earlier wounds no longer count twice in the melee
+  result, so the loser no longer flips on a double count. A once Evasive grant such as Blood Dome is
+  spent when its unit is attacked, not by its own charge strike, and the Precision Feat is used once
+  per game at the bearer's first attack, shot or strike, then spent and logged. (#2434, #2446,
+  #2494, #2502)
+- **Shooting follows 3.6.** Indirect weapons fire without line of sight only after a Hold, and an
+  Indirect shot keeps the target's terrain cover, held or not; Quick Throw lets them fire after
+  moving. Weapons can gain AP when shooting from far away or against a weakly armoured target;
+  Pierce ignores the target's positive Defense modifiers; Slayer shots get their extra AP only after a
+  Hold. Shrouding takes 2" off a charge and 4" off a shot, shooting at an Aircraft is -1 to hit, and
+  Screened and Guarded only help against shots from over 9" and charges from over 6". Brutal, Violent,
+  Warbound and Ferocious, and Havocbound, Watchborn and Vinci Tech, work only over their distance
+  gates. Unstoppable no longer ignores a minus to hit from the shooter's own rules. Tags and Target
+  tokens give a flat +1 when spent, and a human bearer places them like the AI does. A Hazardous
+  self-wound hits the bearer model and counts X with Blast(X) or Deadly(X), only Versatile Expert
+  skips the pick distance (Warrior keeps it), the unit-level Relentless rule reaches the unit's
+  shooting, and shooting reach is measured to the edge of an oval base. (#1946, #1955, #1965, #1971,
+  #1987, #2002, #2011, #2038, #2040, #2053, #2054, #2175, #2176, #2178, #2193, #2195, #2196, #2229,
+  #2231, #2234, #2244, #2250, #2267, #2288, #2334, #2340, #2400, #2404, #2409)
+- **Volleys count their models and bearers right.** Blast's model cap is read before the first
+  shot, so the casualties of a Deadly weapon cannot shrink the cap of the next weapon in the same
+  volley, in the AI's and the player's volley. Two entries of one weapon share their bearers instead
+  of each firing for all of them, and a unit that arrives from Ambush with Ambushing Piercing Shot
+  shoots with AP(+1) in its arrival round. (#2489, #2493, #2542)
+- **Defence rules follow 3.6.** Warding, Knightborn and Angelic Blessing ignore spell wounds on 2+ and
+  ranged wounds on 6+ once past their distance gate. Guardian, Primeborn, Warden and Ossified protect
+  against every hit. Entrenched is a Human Defense Force rule (-1 to be hit from over 12" while
+  unmoved). A granted Regeneration is spent by the first wounding exchange of its holder, and a 3.6
+  save re-roll hurts only the targets its text names. (#1998, #2090, #2152, #2155, #2166, #2184,
+  #2243, #2254, #2256, #2262, #2272)
+- **Defence upgrades and distance gates play as printed.** Warding and Knightborn roll no 6+ ignore
+  die on Deadly wounds from within 9". An upgrade such as Enhanced Sturdy replaces Sturdy's bonus
+  from over 9" instead of adding to it, and the log names the replaced rule. Enhanced Warden,
+  Enhanced Guardian and Enhanced Ossified cut two points of AP instead of one, replacing the base
+  cut, and the log names them. A Scrapper bearer's re-roll of Defense 6s no longer cuts the target's
+  Regeneration roll. (#2490, #2492, #2525, #2559, #2564)
+- **Morale follows 3.6.** A unit near a tough friendly Hero can test morale on the Hero's Quality.
+  Banner keeps its share while only Valiant is gated by distance and majority, and Valiant's band
+  belongs to the unit that was hit. A Banner steadies a unit against shooting and melee, not against
+  Mind Control. Scourge's 1s on the block roll count toward the shooting morale test. (#1945, #2010,
+  #2078, #2309, #2320, #2335)
+- **Spells follow 3.6.** Casters use the 3.6 spell lists. Casters within 18" boost and resist a spell
+  without line of sight, and a spell needs line of sight only when the spell says so (the spell card
+  no longer asks). Spell Drain makes the target take a real Morale test on the tray; a failure costs
+  it two spell tokens and leaves it Shaken, and the tokens come from the target chain's caster. Spell
+  Amplifier adds one to the bearer's casting rolls, destructive spells add one AP against an
+  above-half unit, Mind Control moves a unit only once per round, and spell damage applies the 3.6
+  spell tokens. (#1949, #1964, #2063, #2163, #2284, #2289, #2294, #2303, #2305, #2312, #2331, #2333)
+- **Game School teaches 3.6.** The lessons show the rules version instead of page numbers and teach
+  the 3.6 Dangerous terrain, rout and ruin rules; the melee lesson no longer stalls when every model
+  already touches its enemy. (#1938, #2045, #2186)
+- **The battle log names the book rule.** Every rule the game applies writes a line that names the
+  rule as the book does (for example Smash, Precise, Quick Throw, Scout, Entrenched, Valiant, Brace in
+  Melee), including rules that are silent in play, aura grants at battle start and the move rules that
+  widened a move. A skipped cover or Regeneration roll is named too. A Surge alias names its 9"
+  band only when it has one, and a unit torn by casualties writes a Regroup line when it spends its
+  activation gathering. (#1982, #1997, #2074, #2081, #2113, #2222, #2230, #2238, #2249, #2259,
+  #2343, #2358, #2365, #2369, #2371, #2373, #2374, #2381, #2386, #2421, #2470)
+
+### Changed — NACHTMAHR (the AI opponent)
+- **NACHTMAHR plays rules 3.6.** It reads the renamed 3.6 rules, brings pre-built lists from their own
+  3.6 folder, and its choices follow the new rules: it never rushes or charges with a Cumbersome unit
+  and knows it cannot shoot after moving, charges a Counter unit only when it will strike back, never
+  plans a charge through ruin walls, plays Sergeant and Great Sergeant as the rules say, and counts
+  Parry, Brace and Impact the way the game resolves them. (#1951, #1963, #1975, #2035, #2062, #2069,
+  #2079, #2093, #2105, #2118, #2154, #2160, #2239, #2283, #2352)
+- **Its damage and morale estimates match the game's rules.** The estimates count Artillery, Surge and
+  Shred aliases, Screened, Guarded, Pierce, Unstoppable, Dodge, Fatigue, Banner and Valiant, Increased
+  Shooting Range, long moves through ruins, Scourge's phantom wounds, a tough Hero's Quality and the
+  nine new spell weapon tokens with the same distances and numbers the game uses when it rolls them.
+  (#2023, #2101, #2150, #2167, #2173, #2183, #2198, #2204, #2213, #2214, #2215, #2242, #2246, #2263,
+  #2264, #2265, #2268, #2273, #2285, #2292, #2304, #2320, #2325, #2326, #2330, #2332, #2338, #2387)
+- **Its estimates follow what a spell hands out and what a pick or a Feat changes.** A spell's
+  Surge on a unit's attackers, Bane when Shooting and Primal (one extra-attack group, not one per
+  channel) count, and a Royal Legion rule such as Lust Boon extends its shooting reach. A spell that
+  grants Enhanced Warden, Guardian or Ossified makes it count their two-point AP cut. A Blast
+  weapon counts the hero joined to its target, a Sergeant takes its share of the unit's full attack
+  pool, and the Precision Feat makes a melee hit one better once. The Versatile Expert, the
+  first-fired weapon's pick and the Versatile Attack pick (after the over-9" Sturdy fold) are read
+  as the game reads them, a Grounded Precision hero is in cover after a move, Artillery's -1 to hit
+  stays withheld from units that moved this round, and a unit wiped by Deadly wounds gets no extra
+  ignore die. (#2429, #2432, #2444, #2457, #2458, #2459, #2486, #2487, #2488, #2499, #2500, #2533,
+  #2537, #2566)
+- **It counts only what its living models carry.** In melee and shooting it uses only the weapons its
+  living models still carry, a unit with no melee weapon does not strike back or tire, a Limited
+  weapon that already fired is not counted again, and a volley keeps the targets it had when it was
+  declared. It shoots a target whose nearest model is in reach, not only one whose unit centre is, and
+  no longer offers a charge its own movement check cannot carry out or whose longest route outruns
+  the charge band. (#1968, #1974, #2012, #2037, #2049, #2122, #2398, #2403, #2412, #2436)
+- **Its planning matches what happens in the game.** It plans with Hazardous self-wounds, climbs
+  container edges, reads oval-based heights and sees past forests and ruins the way the game does.
+  It sees a container as the box it is, a model that climbs one stands on its roof, and a model that
+  walks off a roof stands on the table again. (#1989, #2099, #2406, #2411, #2453, #2515, #2535)
+- **It moves and charges the way the table does.** It judges an adopted charge against the charge
+  band, not the rush band (a Royal Legion unit with a 14" charge no longer rushes from a 12-14"
+  gap), and checks the difficult-terrain cap on the ground the charger crosses, not under the
+  target. It flies an Aircraft the straight 30" the table flies, never ends a charging model across
+  a wall, and prices the consolidation move after a melee and the Dangerous test it can cost. A unit
+  that starts out of coherency may only gather, and a gather that runs pulls it back into
+  coherency. A model that ends its move beside a container stops short of it instead of standing
+  with its base on the block. (#2440, #2442, #2455, #2465, #2471, #2479, #2485, #2555)
+- **Its melee and hold estimates follow the table.** Melee strikers are counted by base edge, a
+  charged unit piles in up to 3" before the fight, and a unit that holds in Dangerous Terrain takes
+  the test. (#2431, #2437, #2460)
+- **It reads a joined unit as the table does.** Wounds beyond a unit's models fall on its joined
+  hero, a charge at a unit whose host models are dead fights the hero, and a charge on a unit with
+  no living model falls short. A joined hero strikes back for its unit when a charge wipes the
+  host's models, a charging hero goes on when its host dies in the Dangerous test, and a routed unit
+  takes its joined hero with it. (#2445, #2447, #2451, #2481, #2482, #2484)
+- **It shoots and tests morale with its joined heroes in mind.** A shot's range is measured to the
+  nearest model of the target's whole unit, joined hero included, and a joined hero's weapons are
+  measured from the hero's own base. A hero that sees the target fires the moved volley when its
+  host is blind or died in its own Dangerous test. A joined hero's own Increased Shooting Range
+  lifts the reach of the hero's gun only, and the hero's base never lets its host's weapon fire from
+  out of reach (the log names Who Can Shoot when it refuses one). A wounded lone hero makes its unit
+  test morale at half strength, a lone hero whose host died Shaken fails its test without a die, and
+  the Banner of a host that died in the volley no longer helps the hero's test. (#2450, #2456,
+  #2491, #2498, #2511, #2518, #2521, #2526, #2556, #2572)
+- **It acts against a lone joined hero.** It moves, shoots or charges a lone hero that is the only
+  enemy left (an activation with no enemy writes one line and holds), shoots one after a Regroup,
+  and no longer targets a hero whose host waits in Ambush reserve. (#2512, #2519, #2528)
+
+### Changed — multiplayer
+- **Online rooms keep to one rules version.** A room refuses a player who is on other rules and names
+  both rules versions. A save made on other rules is refused with a clear message, so a 3.5 table
+  cannot be loaded into a 3.6 game by accident. (#1939, #1990, #2579)
+
+### Changed — UI
+- **Models turn toward their direction of travel while they glide**, and NACHTMAHR's miniatures face
+  the enemy after deployment and moves. (#1910, #1919)
+- **The interface speaks rules 3.6.** The rules version shows next to the game version, the terrain
+  tooltips use the 3.6 words (Dense, Sight Blocking, Unstable), and the Game School shows the rules
+  version instead of page numbers. (#1999, #2000, #2045)
 
 ### Fixed
+- **A refused save or online join says why on screen.** The reason used to reach only the log or the
+  closed side menu, so the player sat at an empty table without a word; it now shows for 15 seconds at
+  the top of the screen, also when a player on another game version tries to join. (#2579)
+- **Lacerate no longer switches off Regeneration**: wounds from a Lacerate weapon or spell face the
+  target's Regeneration or Self-Repair roll again; only rules that ignore Regeneration (Bane, Rending,
+  Unstoppable, ...) skip it, and the battle log now says when that roll is skipped. The AI opponent's
+  damage estimates and the rules data count that roll too. (#1911, #1921, #1923)
 - **A volley at the other player's unit lets that player roll the saves**: online on their own tray,
-  as melee already did, and on a hotseat table with the defender's save prompt; a charge's Impact
-  hits too. (#1828)
+  as melee already did, and on a hotseat table with the defender's save prompt; a charge's Impact hits
+  too. (#1828, #1905)
+- **Wounds that leave a unit at half strength or less trigger its morale test even when no model
+  falls**, for example wounds on a surviving Tough model after shooting, a spell or dangerous terrain.
+  (#1912, #1923)
+- **An interference question waits for a returning owner** instead of calling the seat empty after the
+  host's rejoin. (#1887, #1890)
+- **Models mode hides the flat terrain tiles after a rebuild too.** (#1888, #1889)
+- **A unit that has shot cannot be dragged on afterwards.** An Artillery unit that shot from a Hold
+  used to keep the Hold bonus and still advance in the same activation. (#2336)
+- **Bonuses that counted twice or at the wrong time are corrected**: Stealth Buff grants Stealth once,
+  a moved Artillery's Unstoppable volley no longer gets a phantom +1, and a Precision Target stops
+  stacking markers. (#2267, #2337, #2357)
+
+### Changed — rules corrections
+- **Deadly against Regeneration or Self-Repair rolls once per wound after the multiplication**: a
+  Deadly(3) wound is three wounds and three rolls, not one roll before multiplying, even on a model
+  with fewer wounds left; what the rolls do not stop is then capped at that model (no carry-over).
+  Each roll is in the battle log, and the AI opponent's damage estimate counts the same way. (#1914,
+  #1923)
+- **Deadly damage spells now land like Deadly weapons**: each unsaved wound of a Deadly(X) spell goes
+  to one model as X wounds, all X face the target's Regeneration-family roll (Resistance at its spell
+  value), and only what the rolls do not stop is capped at that model. The AI opponent's spell
+  estimate counts the same way. (#1920)
+
+### Internal
+- Automodus rework groundwork (landing preview, lit targets, hover preview, free-point Rush and
+  Advance & Shoot, two-instance acceptance) is merged but stays switched off: the radial keeps Charge,
+  Advance & Shoot and Rush hidden until the switch-on change lands. (#1853–#1859, #1892–#1904, #1908,
+  #1916)
+- Test, CI and measurement work: per-row Rust test files and removal of unused stubs, shard weights
+  for the new suites, planner and replay-gate fixes, a "most models" reader shared by both engines,
+  a check that fails the build when a book fields a rule the game calls automated but has no row for
+  it, arena-log and replay-gate fixes, and CI that skips exports for draft PRs, queues one build per
+  burst of pushes and builds the macOS export on macos-15. (#1903, #1941, #1960, #1967, #1970,
+  #1973, #1986, #2007–#2009, #2013–#2016, #2026, #2050, #2076, #2094, #2117, #2149, #2161, #2169,
+  #2201, #2210, #2241, #2245, #2296, #2301, #2307, #2319, #2392, #2394, #2396, #2399, #2401, #2405,
+  #2408, #2551, #2553, #2571, #2575)
+- Code comments that quoted the rulebook now name the rule and paraphrase it. (#2360, #2390)
 
 ## [0.3.14.0-alpha] — 2026-10-28
 

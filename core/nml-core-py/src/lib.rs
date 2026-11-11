@@ -778,6 +778,7 @@ impl Core {
             // NEW rule, so an absent key (every corpus recorded before it)
             // stays OFF.
             dangerous_end_morale: self.knobs.dangerous_end_morale,
+            dangerous_replay: self.knobs.dangerous_replay,
             morale_by_probability: self.knobs.morale_by_probability,
             fire_in_range_only: self.knobs.fire_in_range_only,
             hero_counts_in_size: self.knobs.hero_counts_in_size,
@@ -994,7 +995,7 @@ impl Core {
             ),
         );
         m.insert("consolidate".into(), self.knobs.consolidate.into());
-        // The four knobs the read-back used to omit (konrad ORDER 2f4f7a13). The header
+        // The four knobs the read-back used to omit (lead ORDER 2f4f7a13). The header
         // parser reads all four (`plain.rs knobs_of`), but `knobs()` did not return them,
         // so the A/B harness's override read-back (`selfplay.core_with_knob_overrides`)
         // REJECTED them — the instrument could not see a knob it set. `dangerous_end_morale`,
@@ -1396,7 +1397,7 @@ impl Core {
     fn restamp_los(&self, py: Python<'_>, state: &PyState) -> PyState {
         let mut out = state.copy(py);
         let n = out.inner.units();
-        let m = sight::sight_matrix(&out.inner, &self.terrain);
+        let m = sight::sight_matrix_at(&out.inner, &self.terrain, self.knobs.rules_epoch);
         let rows: Vec<Option<Rc<HashMap<String, bool>>>> = (0..n)
             .map(|i| {
                 Some(Rc::new(
@@ -1921,11 +1922,11 @@ impl Core {
             st.roster.index.get(k).copied().ok_or_else(|| Unsupported::new_err(format!("no unit {k}")))
         };
         let (mi, ti) = (idx(member)?, idx(target)?);
-        let zones = nmlcore::sight::zones_of(&self.terrain);
+        let zones = nmlcore::sight::zones_of_at(&self.terrain, self.knobs.rules_epoch);
         let blockers = nmlcore::sight::blockers_of(st, mi, ti, self.knobs.rules_epoch);
         let n = nmlcore::sight::sighted_count(st, &zones, &blockers, mi, ti, reach_in,
             indirect, nmlcore::acts::rule_on(self.knobs.rules_epoch,
-                nmlcore::acts::EPOCH_66_DISTANCE_TRUTH));
+                nmlcore::acts::EPOCH_66_DISTANCE_TRUTH), self.knobs.rules_epoch);
         let slack = nmlcore::sight::unit_radius_m(st, mi) + nmlcore::sight::unit_radius_m(st, ti);
         to_py(
             py,
@@ -2906,6 +2907,7 @@ fn no_terrain() -> Terrain {
         cells: Vec::new(),
         sandbox: Vec::new(),
         pieces: Vec::new(),
+        containers: Vec::new(),
         walls: Vec::new(),
         cell_params: nmlcore::terrain::CellParams {
             table_size_feet: [6.0, 4.0],
@@ -3071,15 +3073,20 @@ fn deploy_interleaved(
 /// tray rows `[[x, z, r],..]` (pregame_dump.gd `tray_models` — INPUT state; a
 /// caller without trays, the twin's own self-play, passes empty dicts, the 6e
 /// default-empty guard). Returns `{"1": [placement dicts], "2": [..]}` with
-/// the settled models written back.
+/// the settled models written back. `rules_epoch` (default: the live epoch,
+/// like `deploy_side`) picks the scouts' zone of record, the epoch's Scout
+/// band (`settle_units_at`, UX-12).
 #[pyfunction]
+#[pyo3(signature = (sides, board, trays, first_slot, rules_epoch=None))]
 fn deploy_finish(
     py: Python<'_>,
     sides: &Bound<'_, PyAny>,
     board: PyRef<'_, Board>,
     trays: HashMap<String, Vec<[f64; 3]>>,
     first_slot: i64,
+    rules_epoch: Option<u32>,
 ) -> PyResult<Py<PyAny>> {
+    let rules_epoch = rules_epoch.unwrap_or(CURRENT_RULES_EPOCH);
     let sides: HashMap<String, SideIn> = json_of(sides, "sides")?;
     let (s1, s2) = (
         sides.get("1").ok_or_else(|| Unsupported::new_err("sides[\"1\"] missing"))?,
@@ -3113,7 +3120,7 @@ fn deploy_finish(
     );
     let walls = board.inner.walls_world_m();
     let finish = |specs: &[UnitSpec], sd: &mut SideDeploy, zone: &Rect, tray: &[([f32; 2], f64)]| {
-        let st = deployment::settle_units(specs, sd, zone);
+        let st = deployment::settle_units_at(specs, sd, zone, rules_epoch);
         let mut units: Vec<SettleUnit> = st.iter().map(|p| p.1.clone()).collect();
         deployment::deploy_finish_all(&mut units, &board.inner, walls, tray);
         write_back(&st, 0, &units, sd);
@@ -3132,8 +3139,8 @@ fn deploy_finish(
     }
     // SECOND finish: BOTH rosters, slot-1 roster then slot-2 (the table's
     // get_all_game_units order; tests/deployment.rs:1354-1372).
-    let st1 = deployment::settle_units(&specs1, &sd1, &zone1);
-    let st2 = deployment::settle_units(&specs2, &sd2, &zone2);
+    let st1 = deployment::settle_units_at(&specs1, &sd1, &zone1, rules_epoch);
+    let st2 = deployment::settle_units_at(&specs2, &sd2, &zone2, rules_epoch);
     let mut all: Vec<SettleUnit> = st1.iter().map(|p| p.1.clone()).collect();
     let n1 = all.len();
     all.extend(st2.iter().map(|p| p.1.clone()));
@@ -3187,6 +3194,8 @@ fn nml_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // `play_game()` stamps. See `acts::rule_on`.
     m.add("CURRENT_RULES_EPOCH", nmlcore::CURRENT_RULES_EPOCH)?;
     m.add("EPOCH_66_DISTANCE_TRUTH", nmlcore::acts::EPOCH_66_DISTANCE_TRUTH)?;
+    // Rules 3.6 (MOR-19b): the py-side band fold's gate for Ethereal's optional placement.
+    m.add("EPOCH_73_V36", nmlcore::acts::EPOCH_73_V36)?;
     // 16.09. (window 32): the token layout constants, so python tests and the netlab
     // read the core's window instead of pinning 24 by hand.
     m.add("N_UNITS", nmlcore::tokens::N_UNITS)?;

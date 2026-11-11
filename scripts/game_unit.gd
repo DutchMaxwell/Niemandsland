@@ -269,9 +269,10 @@ func has_special_rule(rule: String) -> bool:
 	return false
 
 
-## Checks if this unit is a hero.
+## Checks if this unit is a hero. Rules 3.6 named heroes carry "Unique Hero" in place of "Hero", and it
+## counts as Hero for every purpose (join, hero morale, solo sims); the core's twin is unit.rs `is_hero`.
 func is_hero() -> bool:
-	return has_special_rule("Hero")
+	return has_special_rule("Hero") or has_special_rule("Unique Hero")
 
 
 # ===== Hero Attachment =====
@@ -445,6 +446,11 @@ func add_round_caster_points() -> void:
 		# grant RESETS to the current bearer count instead of accumulating.
 		casts_per_round = get_caster_value()
 		casts_current = casts_per_round
+		# Rules-must-log (DAT-16a): the refill is a rule effect, so it names the rule and the new
+		# token count. GameUnit is a RefCounted, so it writes through the live collector.
+		if BattleLog.live != null and casts_current > 0:
+			BattleLog.live.log_event(BattleLog.Category.GENERAL,
+				"Caster Group: %s refills to %d spell token(s)" % [get_name(), casts_current])
 		return
 	if casts_per_round > 0:
 		casts_current = mini(casts_current + casts_per_round, CASTER_POINTS_CAP)

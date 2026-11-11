@@ -71,6 +71,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import subprocess
 import sys
 import time
@@ -112,6 +113,29 @@ def successes(faces, target: int) -> int:
     if target <= 0:
         return 0
     return sum(1 for f in faces if f >= 6 or (f > 1 and f >= target))
+
+
+def compared_target(kind: str, target: int) -> int:
+    """The `target` a roll is COMPARED at (AI-G4F1, DIAG-PARITY D-A). A DEFENSE
+    target reads clamped to 2..6: the core clamps the summed save target once
+    (dice.rs `save_target(..).clamp(2, 6)`, `EPOCH_68_MODIFIER_SUM`), the table
+    hands the tray the raw `base_defense + ap` (main.gd `_solo_tray_roll`). A 6
+    always saves and a 1 always fails (`successes()`), so a 10+ blocks exactly
+    the faces a 6+ does. Attack targets stay raw. Reports print the raw pair."""
+    return min(max(target, 2), 6) if kind == "defense" else target
+
+
+def parted_field(g: tuple, w: tuple) -> str | None:
+    """The first of kind / count / target where the port's roll `g` and the
+    recorded roll `w` part, the target read through `compared_target()`; None
+    when they agree. Shared by both replay gates."""
+    if g[0] != w[0]:
+        return "kind"
+    if g[1] != w[1]:
+        return "count"
+    if compared_target(g[0], g[2]) != compared_target(w[0], w[2]):
+        return "target"
+    return None
 
 
 def read_game(d: Path) -> tuple[dict, list[dict], list[dict], int]:
@@ -203,6 +227,57 @@ def defender_state(plain: dict, key: str) -> tuple[int, int]:
     return (int(u["alive"]), int(sum(u["wounds"])))
 
 
+def lone_hero_names(plain: dict, profiles: dict) -> dict[str, str]:
+    """A LONE attached hero's NAME -> its HOST's name (G4-H6): the table signs
+    the save with the host's label (G4-T2), the core with the hero's own. A
+    lone hero's `attached_to` host has no living models; the hero still has."""
+    units, out = plain.get("units") or {}, {}
+    for key, u in units.items():
+        host = u.get("attached_to")
+        hu = units.get(host) if host else None
+        if not hu or int(u.get("alive", 0)) <= 0 or int(hu.get("alive", 0)) > 0:
+            continue
+        hero = str((profiles.get(key) or {}).get("name", ""))
+        hname = str((profiles.get(host) or {}).get("name", ""))
+        if hero and hname:
+            out[hero] = hname
+    return out
+
+
+def signer_ok(roller: str, table_label: str, lone: dict[str, str], extra_host: str = "") -> bool:
+    """The table's label for the port's roller: the roller's own name, or - for a LONE hero (`lone_hero_names`) - its
+    host's, or - for a rule-generated extra die (`extra_die_hosts`) - the host's. Only ever a relaxation: a label that
+    matched before still matches, so a lone hero that rolls under its own name (its own attack, a strike) cannot turn
+    into a new `owner` failure."""
+    return table_label in ("AI (%s)" % roller, "AI (%s)" % lone.get(roller, roller), "AI (%s)" % (extra_host or roller))
+
+
+#: The rules that add one attack die per unmodified 6 (dice.rs `surge_attack_hits`): the table signs that die with the
+#: HOST's label, the core with the rolling member's (R3-H3).
+SURGE_ATTACK_RULES = ("Bloodborn", "Clan Warrior", "Primal", "Predator", "Royal Warrior", "Crazed", "Psychotic")
+
+
+def extra_die_hosts(rolls: list[dict], plain: dict, profiles: dict) -> dict[int, str]:
+    """Roll index -> HOST name, for each rule-generated extra attack die the port drew (R3-H3): an attack roll right
+    behind another attack roll of the same roller and target, with as many dice as that roll had unmodified 6s (5s too
+    for the Boost form), rolled by an attached member whose own rules hold a surge-attack rule. Never an extra die's
+    successor (extras do not re-trigger). Only the label is relaxed; count, target and faces stay compared in full."""
+    units, out = plain.get("units") or {}, {}
+    for i in range(1, len(rolls)):
+        prev, cur = rolls[i - 1], rolls[i]
+        sixes, fives = prev["faces"].count(6), prev["faces"].count(5)
+        if (i - 1 in out or not (sixes or fives) or cur["kind"] != "attack" or prev["kind"] != "attack" or cur["owner"] != prev["owner"]
+                or cur["target"] != prev["target"] or cur["count"] not in (sixes, sixes + fives)):
+            continue
+        for key, u in units.items():
+            p, host = profiles.get(key) or {}, profiles.get(u.get("attached_to") or "") or {}
+            rules = list(p.get("special_rules") or []) + [r for w in p.get("weapons") or [] for r in w.get("rules") or []]
+            if p.get("name") == cur["owner"] and host.get("name") and any(str(r).startswith(SURGE_ATTACK_RULES) for r in rules):
+                out[i] = str(host["name"])
+                break
+    return out
+
+
 def shots_of(d: Path) -> dict[int, list[dict]]:
     """The table's own per-shot record — sidecar `shots.jsonl` (NML_SHOT_DUMP,
     written inside the per-shot loop of `_solo_resolve_ai_volley`, so per
@@ -220,22 +295,250 @@ def shots_of(d: Path) -> dict[int, list[dict]]:
     return out
 
 
+def _stale(units: dict, key: str) -> bool:
+    """No living model on the unit AND none on a joined hero attached to it.
+    A host wiped out under a still-standing hero is a legal shot (G4-H4)."""
+    u = units.get(key, {})
+    if int(u.get("alive", -1)) > 0:
+        return False
+    return not any(int(units.get(str(h), {}).get("alive", -1)) > 0
+                   for h in (u.get("attached", []) or []))
+#: AI-G4 H1b (lead ruling O3): the legs of an activation the core never rolls. The table rolls the cast die and
+#: the spell's own saves and morale inside the act; the core prices a cast as an expectation (sim.rs `cast_phase`),
+#: so the gate CUTS them. `dangerous` stays the core's. A roll without a `leg` (a recording from before H1a) is `main`.
+CUT_LEGS = ("cast", "spell")
+
+
+def read_played(d: Path) -> set[int]:
+    """The activation ordinals of the `kind:"played"` lines of acts.jsonl (F-PHANTOM, epoch 73+): the table's executor
+    ran these. The act line is written when the planner PICKS, so a pick the game ended before the table played has a
+    line and no marker. A recording from before the row has no marker at all (an empty set: nothing is skipped)."""
+    out: set[int] = set()
+    for x in (d / "acts.jsonl").read_text().splitlines():
+        if '"played"' in x:
+            r = json.loads(x)
+            if r.get("kind") == "played":
+                out.add(int(r["act"]))
+    return out
+
+
+def read_pre(d: Path) -> dict[int, dict]:
+    """{activation ordinal: {unit id: {alive, shaken[, keep, of, wounds, reach, grants]}}} from the `kind:"pre"` lines of acts.jsonl
+    (H1a, epoch 73+; `wounds` = the survivors' wounds, `reach` = a granted shooting reach in inches, `grants` = the rule names the
+    cast leg granted, H-DANG-CUT / C-GRANTED-RANGE / F-PRE-TOKENS)."""
+    out: dict[int, dict] = {}
+    for x in (d / "acts.jsonl").read_text().splitlines():
+        if '"pre"' in x:
+            r = json.loads(x)
+            if r.get("kind") == "pre":
+                out[int(r["act"])] = r["units"]
+    return out
+
+
+def read_verbs(d: Path) -> dict[int, int]:
+    """{activation ordinal: executed verb} from the `kind:"verb"` lines of acts.jsonl (F-HOLD-ADV, epoch 73+): the table's
+    own gates turned the planner's pick into this verb (a planned Hold walked into range as an Advance), so the replay
+    plays it. A recording from before the row has no such line and replays the pick."""
+    out: dict[int, int] = {}
+    for x in (d / "acts.jsonl").read_text().splitlines():
+        if '"verb"' in x:
+            r = json.loads(x)
+            if r.get("kind") == "verb":
+                out[int(r["act"])] = int(r["verb"])
+    return out
+
+
+IN2M = 0.0254   # `SoloController.INCHES_TO_METERS`
+
+
+def read_moves(d: Path) -> dict[int, dict]:
+    """{activation ordinal: the `moves.json` entry}: the per-model move the TABLE executed (one entry per activation)."""
+    f = d / "moves.json"
+    return {int(m["act"]): m for m in json.loads(f.read_text()).get("activations", [])} if f.exists() else {}
+
+
+def land_at_table(plain: dict, action: dict, name: str, move: dict | None, later: dict | None) -> dict | None:
+    """AI-G4 F-LAND (A1): `plain` with the shooter chain where the table's EXECUTED Advance ended, else None. x/z from `moves.json`, each
+    model by the start point it left (the next act's state can hold a LATER Harassing step: aof_006/33); y, the climb, from the next
+    act's state when that unit has as many models. Not an aircraft: it flies its fixed distance from where it stands."""
+    if not move or not move.get("models") or move.get("unit") != name or int(move.get("action", -1)) != 1 \
+            or plain["units"][action["unit"]].get("aircraft") or not plain["units"][action["unit"]]["positions"]:
+        return None
+    starts, ends = [m["pts"][0] for m in move["models"]], [m["pts"][-1] for m in move["models"]]
+    out, mapped = dict(plain, units=dict(plain["units"])), 0
+    for key in [action["unit"], *(plain["units"][action["unit"]].get("attached") or [])]:
+        u, ys = dict(out["units"][key]), ((later or {}).get(key) or {}).get("positions") or []
+        pts = [list(p) for p in u["positions"]]
+        for i, p in enumerate(pts):
+            j = min(range(len(starts)), key=lambda m: math.dist((p[0], p[2]), starts[m]))
+            if math.dist((p[0], p[2]), starts[j]) < 0.02:
+                pts[i] = [ends[j][0], ys[i][1] if len(ys) == len(pts) else p[1], ends[j][1]]
+                mapped += 1
+        out["units"][key] = dict(u, positions=pts)
+    return out if mapped else None
+
+
+def teleport_to(start: dict, later: dict | None):
+    """(x, z) the unit's Ethereal reposition ended at in THIS act: the next act's ledger `teleport.to`, unless it is the start ledger's (stale)."""
+    to, was = [((u or {}).get("ledger") or {}).get("teleport") or {} for u in (later, start)]
+    return tuple(float(c) for c in to["to"].strip("()").split(",")) if to.get("used") and to.get("to") != was.get("to") else None
+
+
+def shift(plain: dict, keys: list, dx: float, dz: float) -> dict:
+    """`plain` with every model of the named units moved by (dx, dz); the height stays."""
+    units = dict(plain["units"], **{k: dict(plain["units"][k], positions=[[p[0] + dx, p[1], p[2] + dz] for p in plain["units"][k]["positions"]]) for k in keys})
+    return dict(plain, units=units)
+
+
+def centroid(units: dict, key: str):
+    """[x, y, z] centre of a unit's models, None for a unit with none."""
+    ps = (units.get(key) or {}).get("positions") or []
+    return [sum(p[i] for p in ps) / len(ps) for i in range(3)] if ps else None
+
+
+def landing_gap(core, state, action: dict, landed: dict) -> float:
+    """Inches between the shooter's centre after the core's OWN Advance and after the table's executed move (inf: none)."""
+    try:
+        own = centroid(core.resolve_stochastic_rng(state, action, nml_core.Rng(0)).plain()["units"], action["unit"])
+    except Exception:
+        return math.inf
+    table = centroid(landed["units"], action["unit"])
+    return math.dist((own[0], own[2]), (table[0], table[2])) / IN2M if own and table else math.inf
+
+
+#: `TerrainRules.gives_cover`: ruins and forest. `BASE_RIM_SAMPLES` of terrain_rules.gd.
+COVER_TYPES, RIM_SAMPLES = (1, 2), 8
+
+
+def majority_in_cover(u: dict, board, built: int) -> bool:
+    """`_solo_majority_in_cover` on a unit's standing models: more than half of them FULLY inside cover terrain (centre
+    + rim), a unit built with one model by its centre alone."""
+    n = 0
+    for p, r in zip(u["positions"], u["radii"]):
+        r = float(r) if built > 1 else 0.0
+        ring = [[p[0] + math.cos(math.tau * i / RIM_SAMPLES) * r, 0.0, p[2] + math.sin(math.tau * i / RIM_SAMPLES) * r]
+                for i in range(RIM_SAMPLES)] if r > 0 else []
+        n += all(board.type_at(q) in COVER_TYPES for q in [p, *ring])
+    return n * 2 > len(u["positions"])
+
+
+def patch_pre(plain: dict, units: dict, board=None) -> dict:
+    """`plain` after the cast leg: every unit in `units` cut down to its recorded alive count and carrying its recorded
+    Shaken flag. The survivors are the models the record's `keep` names (F-PRE-SURV: positions in the act-start list,
+    `of` = its length); a record without them, or for a list of another size, drops models from the end. With a `board`
+    (F-PRE-COVER) a unit the leg cut down gets its `in_cover` read again from the survivors, as the table does per save
+    moment."""
+    out = dict(plain, units=dict(plain["units"]))
+    for uid, rec in units.items():
+        if uid not in out["units"]:
+            continue
+        u = dict(out["units"][uid], shaken=bool(rec["shaken"]))
+        a0, a = int(u["alive"]), int(rec["alive"])
+        if a < a0:
+            keep = rec.get("keep")
+            if keep is None or rec.get("of") != a0 or len(keep) != a or not all(0 <= i < a0 for i in keep):
+                keep = list(range(a))
+            for f in ("wounds", "radii", "positions", "kits"):
+                if isinstance(u.get(f), list) and len(u[f]) == a0:
+                    u[f] = [u[f][i] for i in keep]
+            u["alive"] = a
+            if board is not None and u.get("positions"):
+                u["in_cover"] = majority_in_cover(u, board, a0)
+        w = rec.get("wounds")   # H-DANG-CUT: the survivors' own wounds after the legs (a record from before the key has none)
+        if isinstance(w, list) and len(w) == a and isinstance(u.get("wounds"), list) and len(u["wounds"]) == a:
+            u["wounds"] = list(w)
+        grants = [str(g) for g in rec.get("grants") or []]   # F-PRE-TOKENS: a rule the cast leg granted rides as the ledger buff the table's token is
+        if grants:
+            led = dict(u.get("ledger") or {})
+            u["ledger"] = dict(led, buffs=[*led.get("buffs", []), *({"spell": "pre", "grants_rule": g, "granted_to": [uid]} for g in grants)])
+        out["units"][uid] = u
+    return out
+
+
+def with_reach(profiles: dict, pre: dict | None) -> dict:
+    """C-GRANTED-RANGE, pre half (epoch 73+): `profiles` with the reach a cast leg GRANTED (the record's `reach`, inches)
+    added to the printed range of every ranged weapon of that unit - the core reads `range + reach_bonus_in` everywhere,
+    so the sum is the same. A record without `reach` (an older recording) changes nothing.
+    F-REACH-ONCE: `reach` and `grants` are two views of the SAME grant; `patch_pre` already stamps `grants` as the ledger buff the
+    core reads the reach off itself (the joined hero through the chain read), so an act whose pre block carries `grants` on any
+    record gets the printed profiles back (the stand-in would add the +8" a second time); only a recording from before the
+    `grants` key (#2513) still needs it."""
+    if any(rec.get("grants") for rec in (pre or {}).values()):
+        return profiles
+    out = dict(profiles)
+    for uid, rec in (pre or {}).items():
+        r = int(rec.get("reach", 0))
+        if r and uid in out:
+            out[uid] = dict(out[uid], weapons=[dict(w, range=int(w["range"]) + r) if int(w.get("range", 0)) > 0 else w
+                                              for w in out[uid]["weapons"]])
+    return out
+
+
+def cut_pre_legs(rolls: list[dict], plain: dict, pre: dict | None, burn: bool = True,
+                 patch: bool = True, board=None) -> tuple[list[dict], int, dict]:
+    """(the act's rolls without the cast/spell legs, draws to burn off the tray for them, `plain` after the leg).
+    Only a cast leg that LEADS the act is cut, and a leading dangerous test is cut with it (G4-H8: the table's order is
+    dangerous test -> cast; both are burned as ONE prefix and the caller switches the core's own test off, see
+    `cut_dangerous`). Any other roll in front of the cast would make the core draw between two stretches of one
+    resolve, and a tray cannot be burned mid-resolve - such an act is left as recorded, and so is a dangerous test with
+    no cast behind it (the core's own). `burn` / `patch` False are the two RED mutants (`--red-pre noburn|nopatch`)."""
+    lead = 0
+    while lead < len(rolls) and rolls[lead].get("leg") in CUT_LEGS + ("dangerous",):
+        lead += 1
+    casts = sum(r.get("leg") in CUT_LEGS for r in rolls)
+    if casts == 0 or casts != sum(r.get("leg") in CUT_LEGS for r in rolls[:lead]):
+        return rolls, 0, plain
+    draws = sum(max(1, int(r["count"])) for r in rolls[:lead]) if burn else 0
+    return rolls[lead:], draws, patch_pre(plain, pre or {}, board) if patch else plain
+
+
+def cut_dangerous(rolls: list[dict], kept: list[dict]) -> bool:
+    """True when `cut_pre_legs` took the table's dangerous test along with the cast leg (G4-H8): the tray has spent its
+    dice, so the core must not roll a test of its own for this act (header knob `dangerous` off, then restored)."""
+    return any(r.get("leg") == "dangerous" for r in rolls[:len(rolls) - len(kept)])
+
+
+def dang_replay(units: dict, key: str, knobs: dict) -> list[int]:
+    """F-DANG-TAIL (epoch 73+): the unit's ACT-START [alive, wounds] in the core's own morale terms (`morale_alive` /
+    `morale_wounds_left`: the host plus its joined heroes, the heroes' models only with `hero_counts_in_size`). Handed over in
+    the header knob `dangerous_replay` for an act whose Dangerous test `cut_dangerous` cut: the core reads the difference to
+    the patched state and arms the tail the cut took (end-of-activation morale test, the charger's melee tally)."""
+    chain = [key] + [str(h) for h in units[key].get("attached", []) or []]
+    return [sum(int(units[c]["alive"]) for c in (chain if knobs.get("hero_counts_in_size") else chain[:1])),
+            sum(sum(units[c]["wounds"]) for c in chain)]
+
+
+def lone_hero_of(units: dict, key: str) -> str:
+    """AI-G4 F-AIM (epoch 73+): the table fires "at" a dead host while its joined hero stands - the hero is the unit
+    now. `key` itself unless it has no living model and exactly one living attached hero; then that hero's key."""
+    u = units.get(key, {})
+    if int(u.get("alive", -1)) != 0:
+        return key
+    live = [str(h) for h in (u.get("attached", []) or []) if int(units.get(str(h), {}).get("alive", -1)) > 0]
+    return live[0] if len(live) == 1 else key
+
+
 def split_aim(head: dict, rec: list[dict], shoot_key: str, units: dict) -> tuple[list[dict] | None, str, int]:
-    """The `split` aim for one act, or `(None, why, 0)` to stay pooled. The
-    sidecar's target NAME becomes a unit key through the header profiles; a
-    name sitting on more than one key is ambiguous and its entries are dropped
-    (the count rides back as the third slot), never guessed. An aim whose
-    entries all point at the recorded `shoot` key is the pre-1150 path and
-    injects nothing. An aim naming a unit that is DEAD in the replayed state
-    is a stale ordinal (the sidecar shares dice.jsonl's move_act_seq, which a
-    dry side can hand to a later activation) — the whole aim is untrustworthy
-    and injects nothing."""
+    """The `split` aim for one act, or `(None, why, 0)` to stay pooled. A
+    non-empty `target_id` that the header profiles carry is the unit key itself
+    (G4-H4) and wins outright — two units can share a display NAME. Without
+    one, the sidecar's target NAME becomes a unit key through the header
+    profiles; a name sitting on more than one key is ambiguous and its entries
+    are dropped (the count rides back as the third slot), never guessed. An aim
+    whose entries all point at the recorded `shoot` key is the pre-1150 path and
+    injects nothing. An aim naming a unit that is DEAD in the replayed state is
+    a stale ordinal (the sidecar shares dice.jsonl's move_act_seq, which a dry
+    side can hand to a later activation) — the whole aim is untrustworthy and
+    injects nothing; a dead HOST with a living joined hero is still a legal
+    shot (G4-H4)."""
+    profiles = head["profiles"]
     name_keys: dict[str, list[str]] = {}
-    for k, p in head["profiles"].items():
+    for k, p in profiles.items():
         name_keys.setdefault(str(p.get("name", "")), []).append(k)
     aim, amb = [], 0
     for s in rec:
-        keys = name_keys.get(str(s.get("target", "")), [])
+        tid = str(s.get("target_id", "") or "")
+        keys = [tid] if tid and tid in profiles else name_keys.get(str(s.get("target", "")), [])
         if len(keys) == 1:
             aim.append({"member": str(s["member"]), "weapon": str(s["weapon"]),
                         "target": keys[0]})
@@ -243,7 +546,9 @@ def split_aim(head: dict, rec: list[dict], shoot_key: str, units: dict) -> tuple
             amb += 1
     if not aim:
         return None, "uncovered", amb
-    if any(int(units.get(a["target"], {}).get("alive", -1)) <= 0 for a in aim):
+    if int((head.get("knobs") or {}).get("rules_epoch", 0)) >= 73:
+        aim = [dict(a, target=lone_hero_of(units, a["target"])) for a in aim]
+    if any(_stale(units, a["target"]) for a in aim):
         return None, "stale", amb
     if all(a["target"] == shoot_key for a in aim):
         return None, "aligned", amb
@@ -331,7 +636,8 @@ def vintage_report_line(seen: set[tuple[bool, bool]]) -> str:
 
 def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: bool,
         hero_attach: str = "table", sighting: str = "unit",
-        engage_fold: str = "auto", cond_ap: str = "auto", inject: bool = True) -> int:
+        engage_fold: str = "auto", cond_ap: str = "auto", inject: bool = True, red_pre: str = "",
+        movement: bool = False, red_move_rigid: bool = False, land: bool = False, red_dang_tail: bool = False) -> int:
     games = sorted(d for d in ref.iterdir() if d.is_dir() and (d / "dice.jsonl").exists())
     if limit:
         games = games[:limit]
@@ -340,13 +646,14 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
         return 1
 
     tally = {k: 0 for k in
-             ("acts", "prefix_equal", "full_equal", "table_longer", "port_longer",
+             ("acts", "unplayed", "prefix_equal", "full_equal", "table_longer", "port_longer",
               "both_silent", "table_silent", "port_silent", "shape", "faces",
               "declined", "rolls_equal", "rolls", "hits_equal", "hits", "next_checked",
               "next_equal", "equal_over_2", "equal_dice_max", "split_fire",
               "full_equal_owner", "clean_acts", "clean_full_equal", "clean_both_silent",
               "split_injected", "split_reaim", "split_multi", "split_aligned",
-              "split_uncovered", "split_stale", "split_ambig", "split_full_equal")}
+              "split_uncovered", "split_stale", "split_ambig", "split_full_equal", "pre_cut", "pre_uncut", "verbs",
+              "land", "land_far", "land_skip", "land_none")}
     unported: dict[str, int] = {}
     reasons: dict[str, int] = {}
     # D6a-B5: the SAME classifier over the acts the table did NOT split-fire on.
@@ -358,10 +665,17 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
     vintage_seen: set[tuple[bool, bool]] = set()
     t0 = time.perf_counter()
 
+    walls_seen: set[str] = set()
+    if movement:
+        from melee_replay_gate import header_walls_m  # lazy: melee_replay_gate imports this module at load time
     for d in games:
         head, lines, dice, seed = read_game(d)
         burn = burn_prefix(dice)
         shots = shots_of(d)
+        pres = read_pre(d)
+        verbs = read_verbs(d)
+        played = read_played(d)
+        moves = read_moves(d) if land else {}
         core = nml_core.load(repo)
         if hero_attach == "off":
             head = detach_header(head)
@@ -377,17 +691,26 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
         # along. Neither touches this tool's verdict — it replays one recorded
         # act at a time and compares the DEFENDER — but a control that only half
         # flips the knob is not a control.
-        core.set_header({"profiles": head["profiles"], "terrain": head.get("terrain"),
-                         "knobs": dict(head.get("knobs", {}),
-                                       hero_attach=hero_attach == "table",
-                                       engage_fold=eff_engage_fold,
-                                       # NML-1073 M5 D6a-B4. `"unit"` is the
-                                       # default and the BEFORE half of the
-                                       # sighting measurement; `"model"` gives
-                                       # the volley the table's own die count,
-                                       # which lands in the `count` bucket of
-                                       # "first field to part".
-                                       sighting=sighting)})
+        # AI-G4 H2 (--movement): the shooter's Advance moves per model through the movement port (header knob
+        # movement=table) on the board's walls, read the way the melee gate reads them. --red-move-rigid hands
+        # the same walls over with the knob OFF: the rigid landing is back. Without the flag nothing is set.
+        walls, wall_src = header_walls_m(d, head) if movement else ([], "")
+        walls_seen.add(wall_src)
+        terrain = dict(head.get("terrain") or {}, walls=walls) if movement and head.get("terrain") else head.get("terrain")
+        move_knob = {"movement": not red_move_rigid} if movement else {}
+        board = nml_core.board(head["terrain"]) if head.get("terrain") else None  # F-PRE-COVER: cover of survivors
+        header = {"profiles": head["profiles"], "terrain": terrain,
+                  "knobs": dict(head.get("knobs", {}), **move_knob,
+                                hero_attach=hero_attach == "table",
+                                engage_fold=eff_engage_fold,
+                                # NML-1073 M5 D6a-B4. `"unit"` is the
+                                # default and the BEFORE half of the
+                                # sighting measurement; `"model"` gives
+                                # the volley the table's own die count,
+                                # which lands in the `count` bucket of
+                                # "first field to part".
+                                sighting=sighting)}
+        core.set_header(header)
         for pos, act in enumerate(lines):
             # The INTERLEAVED ordinal `read_game` stamped, never the
             # act line's position among its own kind.
@@ -395,16 +718,32 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
             action = (act.get("pick") or {}).get("action") or {}
             if int(action.get("kind", -1)) not in SHOOTING_KINDS or not action.get("shoot"):
                 continue
+            if played and k not in played:   # F-PHANTOM: a pick the table never played has no volley to replay
+                tally["unplayed"] += 1
+                continue
+            if k in verbs:   # F-HOLD-ADV: the verb the table ran, not the one it planned
+                if verbs[k] not in SHOOTING_KINDS:
+                    continue   # it ran a move that cannot shoot: there is no volley to replay
+                action = dict(action, kind=verbs[k])
+                tally["verbs"] += 1
             tally["acts"] += 1
+            i0 = first_at_or_after(dice, k)
+            plain = act["state"] if hero_attach == "table" else detach(act["state"])
+            # AI-G4 H1b: the cast/spell legs are cut, their dice burned, the state patched from the `pre` line.
+            # H-ROUND-BOUNDARY: a roll of a LATER round under this ordinal is the next round's start roll, not this act's.
+            rolls_k = [r for r in dice[i0:] if int(r["act"]) == k and int(r.get("round", 0)) <= int(act.get("round", 99))]
+            start = plain["units"]   # F-DANG-TAIL: the act-start units, before the cut patches them
+            rolls_cut, pre_burn, plain = cut_pre_legs(rolls_k, plain, pres.get(k), red_pre != "noburn",
+                                                      red_pre != "nopatch", board)
             # NML-1150: SPLIT FIRE's aim — where the table really pointed each
             # weapon (shots.jsonl). Injected into the action as `split`; the
             # core then resolves one tray volley per target group, in the
             # table's group order. Only the AIM comes from the record — every
             # count and face stays port-computed.
             aim, aim_kind, amb = (None, "", 0)
-            if inject:
+            if inject:   # H-AIM-ORDER: mapped from the state after the pre patch (the spell may have killed the host)
                 aim, aim_kind, amb = split_aim(head, shots.get(k, []), action["shoot"],
-                                               act["state"]["units"])
+                                               plain["units"] if hero_attach == "table" else act["state"]["units"])
             if aim is not None:
                 tally["split_injected"] += 1
                 tally["split_" + aim_kind] += 1
@@ -415,16 +754,45 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
                 # on an ambiguous name, or the ordinal is stale (a named target
                 # is dead) — the act stays on the pooled path
                 tally["split_" + aim_kind] += 1
-            i0 = first_at_or_after(dice, k)
-            plain = act["state"] if hero_attach == "table" else detach(act["state"])
+            tally["pre_cut"] += len(rolls_cut) < len(rolls_k)
+            tally["pre_uncut"] += len(rolls_cut) == len(rolls_k) and any(r.get("leg") in CUT_LEGS for r in rolls_k)
+            dang_off = cut_dangerous(rolls_k, rolls_cut)
+            reach = any(r.get("reach") for r in (pres.get(k) or {}).values())
+            landed = None
+            if land and action["kind"] == 1:   # AI-G4 F-LAND (A1): the shooter chain stands where the table's executed Advance ended
+                later = lines[pos + 1]["state"]["units"] if pos + 1 < len(lines) else {}
+                tele = teleport_to(plain["units"][action["unit"]], later.get(action["unit"]))   # an Ethereal reposition after the Advance
+                if any(r.get("leg") == "dangerous" for r in rolls_cut) and not tele:
+                    tally["land_skip"] += 1   # the table's own dangerous test is among the rolls to match: the core's route rolls it
+                else:
+                    landed = land_at_table(plain, action, head["profiles"].get(action["unit"], {}).get("name"), moves.get(k), later)
+                    tally["land_none"] += landed is None
+                    if landed is not None and tele:   # the reposition follows the test and no volley does: the test is cut, its dice burned
+                        here = centroid(landed["units"], action["unit"])
+                        landed = shift(landed, [action["unit"], *(plain["units"][action["unit"]].get("attached") or [])], tele[0] - here[0], tele[1] - here[2])
+                        n = next((i for i, r in enumerate(rolls_cut) if r.get("leg") != "dangerous"), len(rolls_cut))
+                        pre_burn, rolls_cut, dang_off = pre_burn + sum(max(1, int(r["count"])) for r in rolls_cut[:n]), rolls_cut[n:], True
+            if landed is not None:
+                tally["land"], tally["land_far"] = tally["land"] + 1, tally["land_far"] + (landing_gap(core, core.state_of(plain), action, landed) > 0.5)
+                # in place: the verb stays (a Hold fires Indirect unseen) and the rigid Advance (movement off) moves nothing to its own centre
+                plain, action = landed, dict(action, dest=centroid(landed["units"], action["unit"]))
+            if dang_off or reach or landed:  # G4-H8: the cut took the table's dangerous test, the core rolls none for this one act;
+                # C-GRANTED-RANGE: the spell's reach. Before `state_of`: a new header drops the roster the state is built on.
+                # F-DANG-TAIL: the cut test's tail rides the same header (`--red-dang-tail` hands none: the old numbers)
+                tail = None if red_dang_tail else dang_replay(start, action["unit"], header["knobs"]) if dang_off else None
+                core.set_header(dict(header, profiles=with_reach(header["profiles"], pres.get(k)),
+                                     knobs=dict(header["knobs"], **({"dangerous": False, "dangerous_replay": tail} if dang_off else {}),
+                                                **({"movement": False} if landed else {}))))
             state = core.state_of(plain)
+            # G4-H6: a LONE joined hero's roll compares as its host's label.
+            lone = lone_hero_names(plain, head["profiles"])
             # `--red-misseed` moves the tray one seed over. Every count and
             # every target still comes out of the same state, so the SHAPE holds
             # and the comparison reaches the faces — which is exactly what has
             # to go red, and what `--mode off` (no dice at all) cannot prove.
             tray = nml_core.Tray(seed + 1 if mode == "misseed" else seed)
-            if burn[i0]:
-                tray.roll(burn[i0])
+            if burn[i0] + pre_burn:
+                tray.roll(burn[i0] + pre_burn)
             try:
                 if mode in ("table", "misseed"):
                     nxt, report = core.resolve_with_tray(state, action, nml_core.Rng(0), tray)
@@ -436,6 +804,9 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
                 if len(firsts) < max(3, verbose):
                     firsts.append("%s act %d — DECLINED: %s" % (d.name, k, exc))
                 continue
+            finally:
+                if dang_off or reach or landed:
+                    core.set_header(header)
             for name in report["unported"]:
                 unported[name] = unported.get(name, 0) + 1
             # SPLIT FIRE, measured rather than assumed: the table signs each save
@@ -446,7 +817,7 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
             tgt_owner = "AI (%s)" % head["profiles"][action["shoot"]]["name"] \
                 if action["shoot"] in head["profiles"] else None
             split = bool(tgt_owner and any(r["roll_kind"] == "defense" and r["owner"] != tgt_owner
-                                           for r in dice[i0:] if int(r["act"]) == k))
+                                           for r in rolls_cut))
             tally["split_fire"] += split
 
             # `owner` rides along as the FIFTH slot and is deliberately NOT
@@ -462,7 +833,7 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
             # Regeneration/morale roll inside this window still reads "attack"
             # against the port's own still-blanket kind.
             want = [(combat_kind(r["roll_kind"]), r["count"], r["target"], r["faces"], r["owner"])
-                    for r in dice[i0:] if int(r["act"]) == k]
+                    for r in rolls_cut]
             if not split:
                 tally["clean_acts"] += 1
             if not got and not want:
@@ -486,13 +857,12 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
             why = ""
             tally["rolls"] += max(len(got), len(want))
             for i, (g, w) in enumerate(zip(got, want)):
-                if g[:3] != w[:3]:
+                field = parted_field(g, w)
+                if field:
                     # WHICH field parted first is the whole diagnosis: `count`
                     # is the attack-scaling class (the table scales by SIGHTED
                     # models, main.gd:4109, this port by `alive`), `target` the
                     # to-hit / AP class, `kind` a draw-order class.
-                    field = ("kind" if g[0] != w[0] else
-                             "count" if g[1] != w[1] else "target")
                     reasons[field] = reasons.get(field, 0) + 1
                     if not split:
                         reasons_clean[field] = reasons_clean.get(field, 0) + 1
@@ -538,12 +908,13 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
                 # hero fires its OWN shots" from a claim into a verdict: a host
                 # rolling the hero's dice matches on count, target and faces and
                 # can only part HERE.
-                owners_ok = all("AI (%s)" % g[4] == w[4] for g, w in zip(got, want))
+                hosts = extra_die_hosts(report["rolls"], plain, head["profiles"])
+                owners_ok = all(signer_ok(g[4], w[4], lone, hosts.get(i, "")) for i, (g, w) in enumerate(zip(got, want)))
                 if not owners_ok:
                     reasons["owner"] = reasons.get("owner", 0) + 1
                     if len(firsts) < max(3, verbose):
                         bad = next((i for i, (g, w) in enumerate(zip(got, want))
-                                    if "AI (%s)" % g[4] != w[4]), 0)
+                                    if not signer_ok(g[4], w[4], lone, hosts.get(i, ""))), 0)
                         firsts.append("%s act %d [owner] %s — roll %d: AI (%s) vs table %s"
                                       % (d.name, k, action["shoot"][-6:], bad + 1,
                                          got[bad][4], want[bad][4]))
@@ -574,6 +945,10 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
     label = {"table": "GATE D1-B4",
              "off": "RED D1-B4 --mode off (dice=expected)",
              "misseed": "RED D1-B4 --red-misseed (tray on dice_seed+1)"}[mode]
+    if movement:
+        label += " + movement=table" + (" [RED: rigid]" if red_move_rigid else "")
+    label += " + LAND (A1)" if land else ""
+    label += " [RED: --red-dang-tail]" if red_dang_tail else ""
     print()
     print("%s over %d games, %d shooting acts, hero_attach=%s, sighting=%s, %s (%.1fs)" % (
         label, len(games), tally["acts"], hero_attach, sighting,
@@ -584,6 +959,8 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
           "(the strict bar; %d act(s) match the dice but not the roller)"
           % (tally["full_equal_owner"], tally["acts"],
              tally["full_equal"] - tally["full_equal_owner"]))
+    print("  BOTH-SILENT: %d/%d acts where neither side drew a die (counted as equal)"
+          % (tally["both_silent"], tally["acts"]))
     print("        : %d/%d acts PREFIX-equal (the overlap held; %d table_longer, %d port_longer)"
           % (tally["prefix_equal"], tally["acts"], tally["table_longer"], tally["port_longer"]))
     print("  rolls : %d of %d compared rolls equal" % (tally["rolls_equal"], tally["rolls"]))
@@ -602,6 +979,14 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
              tally["split_ambig"], tally["split_full_equal"]))
     print("  first field to part: %s" % (
         ", ".join("%s=%d" % kv for kv in sorted(reasons.items())) or "none"))
+    print("  played: shooting picks the table never played (F-PHANTOM) skipped - unplayed: %d" % tally["unplayed"])
+    print("  pre   : %d acts with the table's cast/spell leg cut%s; %d left uncut (a roll in front of the leg)"
+          % (tally["pre_cut"], " [RED: %s]" % red_pre if red_pre else "", tally["pre_uncut"]))
+    print("  verbs : %d acts replayed with the verb the table executed (F-HOLD-ADV)" % tally["verbs"])
+    if land:
+        print("LAND applied %d acts, %d landed > 0.5in from the core" % (tally["land"], tally["land_far"]))
+        print("LAND not applied to %d Advance acts: %d with the table's own dangerous test, %d aircraft or without a matching move"
+              % (tally["land_skip"] + tally["land_none"], tally["land_skip"], tally["land_none"]))
     print("  split-fire: %d/%d acts where the table saved dice under a unit that is NOT "
           "the recorded shoot target" % (tally["split_fire"], tally["acts"]))
     # The same two numbers over the acts split fire did NOT touch — the only
@@ -609,6 +994,8 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
     print("  no-split : %d/%d of those acts FULL-equal (+%d both silent); first field to part "
           "there: %s" % (tally["clean_full_equal"], tally["clean_acts"], tally["clean_both_silent"],
                          ", ".join("%s=%d" % kv for kv in sorted(reasons_clean.items())) or "none"))
+    if movement:
+        print("  walls : %s" % "; ".join(sorted(walls_seen)))
     print("  unported branches touched: %s" % (
         ", ".join("%s=%d" % kv for kv in sorted(unported.items())) or "none"))
     for f in firsts:
@@ -642,14 +1029,18 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
         return 0 if ok else 1
 
     # The GATE is the strict bar: same dice AND the same unit rolling them.
-    ok = tally["acts"] > 0 and tally["full_equal_owner"] == tally["acts"]
+    # Both sides drawing NOTHING is agreement, not a missing verdict.
+    ok = (tally["acts"] > 0
+          and tally["full_equal_owner"] + tally["both_silent"] == tally["acts"])
+    # AI-G4 F-PRINT: the printed number leaves the both-silent acts out, like the pass formula does.
+    short = tally["acts"] - tally["full_equal_owner"] - tally["both_silent"]
     if report_only:
         print("  REPORT ONLY — %d/%d acts short of full equality, exit 0 by request"
-              % (tally["acts"] - tally["full_equal_owner"], tally["acts"]))
+              % (short, tally["acts"]))
         return 0
     print("  %s" % ("PASS" if ok else
                     "FAIL — %d of %d shooting acts are not FULL-equal (see the buckets above)"
-                    % (tally["acts"] - tally["full_equal_owner"], tally["acts"])))
+                    % (short, tally["acts"])))
     return 0 if ok else 1
 
 
@@ -677,6 +1068,15 @@ def main(argv: list[str]) -> int:
                     help="'unit' is today's die count (every ALIVE model of the unit fires) and "
                          "the BEFORE half of D6a; 'model' counts the models with range AND line "
                          "of sight, per weapon, the way the table does")
+    ap.add_argument("--movement", action="store_true",
+                    help="AI-G4 H2: replay with the header knob movement=table - the shooter's Advance moves per "
+                         "model through the M4 movement port on the board's walls (the melee gate's switch), "
+                         "instead of the core translating the unit rigidly")
+    ap.add_argument("--red-move-rigid", action="store_true",
+                    help="RED PROOF for --movement: the same walls are handed over but the header knob stays "
+                         "OFF, so the rigid landing is back and the acts the port closed part again")
+    ap.add_argument("--land", action="store_true",
+                    help="AI-G4 F-LAND (A1): replay each Advance in place at the landing the table EXECUTED (moves.json), not the core's own")
     ap.add_argument("--limit", type=int, default=0, help="only the first N game dirs")
     ap.add_argument("--verbose", type=int, default=0, help="print every diverging act")
     ap.add_argument("--engage-fold", choices=("auto", "on", "off"), default="auto",
@@ -692,10 +1092,16 @@ def main(argv: list[str]) -> int:
                          "action's `split` (the core then resolves one tray volley per target "
                          "group, in the table's order). 'off' is the BEFORE control on the same "
                          "binary — every act stays pooled on the recorded shoot key")
+    ap.add_argument("--red-pre", choices=("noburn", "nopatch"), default="",
+                    help="AI-G4 H1b RED PROOF for the cast/spell cut: 'noburn' cuts the rolls but leaves their dice "
+                         "on the tray (the faces must part), 'nopatch' keeps the pre-spell state (the count must part)")
+    ap.add_argument("--red-dang-tail", action="store_true",
+                    help="G4R5 R1 RED PROOF for F-DANG-TAIL: no `dangerous_replay` knob for a cut Dangerous test (the cut test's end-of-activation morale test is lost again and the acts part)")
     a = ap.parse_args(argv)
     mode = "misseed" if a.red_misseed else a.mode
     return run(Path(a.ref).expanduser(), a.repo, mode, a.limit, a.verbose, a.report_only,
-               a.hero_attach, a.sighting, a.engage_fold, a.cond_ap, a.inject == "on")
+               a.hero_attach, a.sighting, a.engage_fold, a.cond_ap, a.inject == "on", a.red_pre,
+               a.movement or a.red_move_rigid, a.red_move_rigid, a.land, a.red_dang_tail)
 
 
 if __name__ == "__main__":

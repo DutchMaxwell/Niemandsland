@@ -34,7 +34,7 @@ use super::*;
     /// One bearer "a" at the origin (1" radius, 1 model), no hero, no enemies.
     fn tp_line(rules_epoch: u32) -> (State, Vec<UnitStatic>) {
         let (st, _) = dangerous_line();
-        let a = tp_bearer(rules_epoch, "Teleport", "gf", "wormhole_daemons_of_change");
+        let a = tp_bearer(rules_epoch, "Teleport", "gf", "daemons_of_change");
         (st, vec![a, UnitStatic { name: "ah".into(), ..Default::default() }, UnitStatic { name: "b".into(), ..Default::default() }, UnitStatic { name: "bh".into(), ..Default::default() }])
     }
 
@@ -185,7 +185,7 @@ use super::*;
             wounds_max: vec![1], model_count: 1, weapons: vec![],
             special_rules: vec!["Teleport".into()], caster_value: 0, base_radius: 0.0,
             base_shape: String::new(), base_w_mm: 0.0, base_d_mm: 0.0,
-            game_system: "gf".into(), faction_folder: "wormhole_daemons_of_change".into(),
+            game_system: "gf".into(), faction_folder: "daemons_of_change".into(),
             item_grants: vec![], attached_hero_rules: vec![], move_bands: Default::default(),
         };
         let mut index = std::collections::HashMap::new();

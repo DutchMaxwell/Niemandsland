@@ -1,5 +1,5 @@
 extends GdUnitTestSuite
-## Plan 3.3a FIX (konrad 12.10., defect in #1771): the host records a received activation FACT and
+## Plan 3.3a FIX (lead 12.10., defect in #1771): the host records a received activation FACT and
 ## advances + broadcasts the token.
 ##
 ## 3.3a made the token a LOCAL gate: the acting machine advances its own token, and a guest never

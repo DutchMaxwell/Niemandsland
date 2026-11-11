@@ -1,0 +1,65 @@
+{"act":1,"count":1,"faces":[4],"leg":"cast","owner":"AI (Scholar)","player":1,"roll_kind":"attack","round":1,"seq":1,"target":3}
+{"act":1,"count":3,"faces":[1,6,5],"leg":"spell","owner":"AI (Elite Dragonkin Marksmen)","player":1,"roll_kind":"defense","round":1,"seq":2,"target":3}
+{"act":2,"count":4,"faces":[2,2,4,2],"leg":"dangerous","owner":"AI (Elite Dragonkin Marksmen)","player":2,"roll_kind":"dangerous","round":1,"seq":3,"target":6}
+{"act":2,"count":3,"faces":[6,2,5],"leg":"main","owner":"AI (Elite Dragonkin Marksmen)","player":2,"roll_kind":"attack","round":1,"seq":4,"target":3}
+{"act":2,"count":1,"faces":[3],"leg":"main","owner":"AI (Elite Dragonkin Marksmen)","player":2,"roll_kind":"attack","round":1,"seq":5,"target":3}
+{"act":2,"count":1,"faces":[6],"leg":"main","owner":"AI (Sea Guard)","player":2,"roll_kind":"defense","round":1,"seq":6,"target":7}
+{"act":2,"count":2,"faces":[5,2],"leg":"main","owner":"AI (Sea Guard)","player":2,"roll_kind":"defense","round":1,"seq":7,"target":6}
+{"act":2,"count":1,"faces":[5],"leg":"main","owner":"AI (Elite Dragonkin Marksmen)","player":2,"roll_kind":"attack","round":1,"seq":8,"target":3}
+{"act":2,"count":3,"faces":[1,1,1],"leg":"main","owner":"AI (Sea Guard)","player":2,"roll_kind":"defense","round":1,"seq":9,"target":5}
+{"act":2,"count":1,"faces":[2],"leg":"main","owner":"AI (Sea Guard)","player":2,"roll_kind":"morale","round":1,"seq":10,"target":4}
+{"act":3,"count":10,"faces":[4,4,1,6,1,2,5,1,2,1],"leg":"main","owner":"AI (Elf Reavers)","player":1,"roll_kind":"attack","round":1,"seq":11,"target":4}
+{"act":3,"count":1,"faces":[3],"leg":"main","owner":"AI (Elite Dragonkin Marksmen)","player":1,"roll_kind":"defense","round":1,"seq":12,"target":4}
+{"act":3,"count":3,"faces":[3,2,3],"leg":"main","owner":"AI (Elite Dragonkin Marksmen)","player":1,"roll_kind":"defense","round":1,"seq":13,"target":3}
+{"act":3,"count":1,"faces":[4],"leg":"main","owner":"AI (Elite Dragonkin Marksmen)","player":1,"roll_kind":"morale","round":1,"seq":14,"target":3}
+{"act":5,"count":6,"faces":[5,1,3,6,5,5],"leg":"main","owner":"AI (Deep-Sea Artillery)","player":1,"roll_kind":"attack","round":1,"seq":15,"target":4}
+{"act":5,"count":4,"faces":[3,3,5,2],"leg":"main","owner":"AI (Imperial Artillery)","player":1,"roll_kind":"defense","round":1,"seq":16,"target":6}
+{"act":12,"count":2,"faces":[2,4],"leg":"dangerous","owner":"AI (Elite Dragonkin Marksmen)","player":2,"roll_kind":"dangerous","round":2,"seq":17,"target":6}
+{"act":12,"count":2,"faces":[6,1],"leg":"main","owner":"AI (Elite Dragonkin Marksmen)","player":2,"roll_kind":"attack","round":2,"seq":18,"target":3}
+{"act":12,"count":1,"faces":[5],"leg":"main","owner":"AI (Elite Dragonkin Marksmen)","player":2,"roll_kind":"attack","round":2,"seq":19,"target":3}
+{"act":12,"count":1,"faces":[4],"leg":"main","owner":"AI (Sea Guard)","player":2,"roll_kind":"defense","round":2,"seq":20,"target":6}
+{"act":12,"count":1,"faces":[1],"leg":"main","owner":"AI (Sea Guard)","player":2,"roll_kind":"defense","round":2,"seq":21,"target":5}
+{"act":12,"count":3,"faces":[4,4,6],"leg":"main","owner":"AI (Sea Guard)","player":2,"roll_kind":"attack","round":2,"seq":22,"target":5}
+{"act":12,"count":3,"faces":[1,1,6],"leg":"main","owner":"AI (Sea Guard)","player":2,"roll_kind":"attack","round":2,"seq":23,"target":5}
+{"act":12,"count":1,"faces":[6],"leg":"main","owner":"AI (Elite Dragonkin Marksmen)","player":2,"roll_kind":"defense","round":2,"seq":24,"target":3}
+{"act":12,"count":1,"faces":[1],"leg":"main","owner":"AI (Elite Dragonkin Marksmen)","player":2,"roll_kind":"defense","round":2,"seq":25,"target":3}
+{"act":12,"count":1,"faces":[6],"leg":"main","owner":"AI (Sea Guard)","player":2,"roll_kind":"morale","round":2,"seq":26,"target":4}
+{"act":13,"count":8,"faces":[4,2,2,2,6,2,3,1],"leg":"main","owner":"AI (Elf Reavers)","player":1,"roll_kind":"attack","round":2,"seq":27,"target":4}
+{"act":13,"count":2,"faces":[5,6],"leg":"main","owner":"AI (Ravenmen Mercenaries)","player":1,"roll_kind":"defense","round":2,"seq":28,"target":5}
+{"act":15,"count":6,"faces":[1,5,5,4,5,1],"leg":"main","owner":"AI (Deep-Sea Artillery)","player":1,"roll_kind":"attack","round":2,"seq":29,"target":3}
+{"act":15,"count":4,"faces":[5,2,1,2],"leg":"main","owner":"AI (Ravenmen Mercenaries)","player":1,"roll_kind":"defense","round":2,"seq":30,"target":6}
+{"act":16,"count":2,"faces":[6,4],"leg":"main","owner":"AI (Imperial Artillery)","player":2,"roll_kind":"attack","round":2,"seq":31,"target":5}
+{"act":16,"count":1,"faces":[3],"leg":"main","owner":"AI (Imperial Artillery)","player":2,"roll_kind":"attack","round":2,"seq":32,"target":5}
+{"act":16,"count":3,"faces":[2,5,4],"leg":"main","owner":"AI (Octopus Hybrids)","player":2,"roll_kind":"defense","round":2,"seq":33,"target":6}
+{"act":17,"count":1,"faces":[6],"leg":"cast","owner":"AI (Scholar)","player":1,"roll_kind":"attack","round":2,"seq":34,"target":3}
+{"act":17,"count":3,"faces":[6,2,5],"leg":"spell","owner":"AI (Ravenmen Mercenaries)","player":1,"roll_kind":"defense","round":2,"seq":35,"target":5}
+{"act":17,"count":1,"faces":[6],"leg":"spell","owner":"AI (Ravenmen Mercenaries)","player":1,"roll_kind":"morale","round":2,"seq":36,"target":5}
+{"act":19,"count":18,"faces":[1,3,3,6,4,6,3,3,3,6,1,3,4,2,2,4,2,5],"leg":"dangerous","owner":"AI (Depth Horrors)","player":1,"roll_kind":"dangerous","round":2,"seq":37,"target":6}
+{"act":21,"count":10,"faces":[1,2,1,5,3,5,5,2,6,3],"leg":"main","owner":"AI (Elf Reavers)","player":1,"roll_kind":"attack","round":3,"seq":38,"target":4}
+{"act":21,"count":1,"faces":[6],"leg":"main","owner":"AI (Elite Dragonkin Marksmen)","player":1,"roll_kind":"defense","round":3,"seq":39,"target":4}
+{"act":21,"count":3,"faces":[3,3,2],"leg":"main","owner":"AI (Elite Dragonkin Marksmen)","player":1,"roll_kind":"defense","round":3,"seq":40,"target":3}
+{"act":22,"count":13,"faces":[4,4,4,1,1,5,6,6,1,5,6,3,3],"leg":"dangerous","owner":"AI (Elite Dragonkin Warriors)","player":2,"roll_kind":"dangerous","round":3,"seq":41,"target":6}
+{"act":23,"count":6,"faces":[5,1,5,2,4,2],"leg":"main","owner":"AI (Deep-Sea Artillery)","player":1,"roll_kind":"attack","round":3,"seq":42,"target":3}
+{"act":23,"count":3,"faces":[2,1,5],"leg":"main","owner":"AI (Claysoul Levy)","player":1,"roll_kind":"defense","round":3,"seq":43,"target":7}
+{"act":25,"count":3,"faces":[4,1,4],"leg":"main","owner":"AI (Sea Guard)","player":1,"roll_kind":"attack","round":3,"seq":44,"target":5}
+{"act":26,"count":2,"faces":[1,2],"leg":"main","owner":"AI (Imperial Artillery)","player":2,"roll_kind":"attack","round":3,"seq":45,"target":5}
+{"act":27,"count":1,"faces":[3],"leg":"cast","owner":"AI (Scholar)","player":1,"roll_kind":"attack","round":3,"seq":46,"target":3}
+{"act":27,"count":3,"faces":[4,1,4],"leg":"spell","owner":"AI (Claysoul Levy)","player":1,"roll_kind":"defense","round":3,"seq":47,"target":6}
+{"act":29,"count":16,"faces":[2,1,6,1,4,6,6,3,3,5,6,2,2,3,2,2],"leg":"dangerous","owner":"AI (Depth Horrors)","player":1,"roll_kind":"dangerous","round":3,"seq":48,"target":6}
+{"act":29,"count":5,"faces":[5,6,4,2,5],"leg":"main","owner":"AI (Depth Horrors)","player":1,"roll_kind":"attack","round":3,"seq":49,"target":4}
+{"act":29,"count":2,"faces":[5,6],"leg":"main","owner":"AI (Ravenmen Mercenaries)","player":1,"roll_kind":"defense","round":3,"seq":50,"target":7}
+{"act":29,"count":10,"faces":[3,5,1,1,3,4,6,3,5,5],"leg":"main","owner":"AI (Ravenmen Mercenaries)","player":1,"roll_kind":"defense","round":3,"seq":51,"target":6}
+{"act":30,"count":1,"faces":[1],"leg":"main","owner":"AI (Elite Dragonkin Warriors)","player":2,"roll_kind":"attack","round":4,"seq":52,"target":3}
+{"act":30,"count":6,"faces":[1,4,1,1,5,6],"leg":"main","owner":"AI (Elite Dragonkin Warriors)","player":2,"roll_kind":"attack","round":4,"seq":53,"target":3}
+{"act":30,"count":1,"faces":[3],"leg":"main","owner":"AI (Elite Dragonkin Warriors)","player":2,"roll_kind":"attack","round":4,"seq":54,"target":3}
+{"act":30,"count":3,"faces":[2,1,4],"leg":"main","owner":"AI (Dragonkin Captain)","player":2,"roll_kind":"attack","round":4,"seq":55,"target":4}
+{"act":30,"count":4,"faces":[4,4,5,1],"leg":"main","owner":"AI (Sea Guard)","player":2,"roll_kind":"defense","round":4,"seq":56,"target":7}
+{"act":30,"count":1,"faces":[2],"leg":"main","owner":"AI (Sea Guard)","player":2,"roll_kind":"defense","round":4,"seq":57,"target":6}
+{"act":31,"count":10,"faces":[6,4,4,2,4,5,4,1,3,4],"leg":"main","owner":"AI (Elf Reavers)","player":1,"roll_kind":"attack","round":4,"seq":58,"target":4}
+{"act":31,"count":1,"faces":[5],"leg":"main","owner":"AI (Claysoul Levy)","player":1,"roll_kind":"defense","round":4,"seq":59,"target":7}
+{"act":31,"count":6,"faces":[3,5,2,6,2,1],"leg":"main","owner":"AI (Claysoul Levy)","player":1,"roll_kind":"defense","round":4,"seq":60,"target":6}
+{"act":31,"count":1,"faces":[4],"leg":"main","owner":"AI (Claysoul Levy)","player":1,"roll_kind":"morale","round":4,"seq":61,"target":4}
+{"act":32,"count":2,"faces":[4,4],"leg":"main","owner":"AI (Imperial Artillery)","player":2,"roll_kind":"attack","round":4,"seq":62,"target":5}
+{"act":33,"count":1,"faces":[2],"leg":"cast","owner":"AI (Scholar)","player":1,"roll_kind":"attack","round":4,"seq":63,"target":4}
+{"act":34,"count":1,"faces":[5],"leg":"main","owner":"AI (Claysoul Levy)","player":2,"roll_kind":"attack","round":4,"seq":64,"target":5}
+{"act":34,"count":1,"faces":[2],"leg":"main","owner":"AI (Depth Horrors)","player":2,"roll_kind":"defense","round":4,"seq":65,"target":4}

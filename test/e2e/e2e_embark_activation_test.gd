@@ -209,7 +209,7 @@ func test_a_spent_cargo_keeps_a_greyed_unload_entry(timeout := 120000) -> void:
 		.override_failure_message("the refused entry must be GREYED, not clickable (GF v3.5.1 p.15 forbids the second move action)") \
 		.is_false()
 	assert_str(str(it.label)).contains("already activated")
-	assert_str(str(it.tooltip)).contains("p.15")
+	assert_str(str(it.tooltip)).contains(OPRApiClient.rules_cite(RulesRegistry.system_of_unit(tc[1])))
 
 
 func test_a_spent_unit_keeps_a_greyed_embark_entry(timeout := 120000) -> void:
@@ -231,7 +231,7 @@ func test_a_spent_unit_keeps_a_greyed_embark_entry(timeout := 120000) -> void:
 	if found == null:
 		return
 	assert_bool(bool(found.enabled)).is_false()
-	assert_str(str(found.tooltip)).contains("p.15")
+	assert_str(str(found.tooltip)).contains(OPRApiClient.rules_cite(RulesRegistry.system_of_unit(tc[1])))
 
 
 # ===== NML-954 — a destroyed transport owes its cargo all THREE consequences =====

@@ -80,10 +80,14 @@ static func base_radius_for_props(props: Dictionary) -> float:
 ## rules still reach the bands, through the STRUCTURED path (`OPRArmyManager.expand_auras_of`
 ## stamps the granted rule NAME into special_rules).
 ## Returns advance, rush and charge distances, each clamped at zero.
-## STATIC + pure (reads only `props`): so callers WITHOUT a live controller instance — the Solo AI when
-## no MovementRangeController is injected — resolve Fast/Slow through this ONE band source instead of a
-## hardcoded 6"/12" fallback (field-test finding 1: a Slow unit moved the full 6").
-static func move_bands_for_props(props: Dictionary) -> Dictionary:
+## STATIC + pure (reads only `props`): so callers WITHOUT a live controller instance — the Solo AI
+## when no MovementRangeController is injected — resolve Fast/Slow through this ONE band source
+## instead of a hardcoded 6"/12" fallback (field-test finding 1: a Slow unit moved the full 6").
+## The Ethereal placement comparison below is a pure read of the stamp and the live serial; this
+## function never mutates the unit.
+## `applied` (DAT-16a): optional out-list that collects the carried rule names which WIDENED a band,
+## in the same pass and order — callers write the rules-must-log line, never this pure function.
+static func move_bands_for_props(props: Dictionary, applied: Array = []) -> Dictionary:
 	var advance := OPR_ADVANCE_INCHES
 	var rush := OPR_RUSH_CHARGE_INCHES
 	var charge_extra := 0
@@ -115,6 +119,7 @@ static func move_bands_for_props(props: Dictionary) -> Dictionary:
 				advance += FAST_ADVANCE_BONUS
 			if not rush_done:
 				rush += FAST_RUSH_BONUS
+			_note_band_rule(applied, base)
 			counted[base] = {"advance": true, "rush": true}
 		elif base == "Slow":
 			if not adv_done:
@@ -126,16 +131,19 @@ static func move_bands_for_props(props: Dictionary) -> Dictionary:
 			if not rush_done:
 				rush += RAPID_RUSH_BONUS
 				charge_extra -= RAPID_RUSH_BONUS
+				_note_band_rule(applied, base)
 			counted[base] = {"advance": true, "rush": true}
 		elif base == "Quick":
 			if not adv_done:
 				advance += QUICK_BONUS
 			if not rush_done:
 				rush += QUICK_BONUS
+			_note_band_rule(applied, base)
 			counted[base] = {"advance": true, "rush": true}
 		elif base == "Rapid Advance":
 			if not adv_done:
 				advance += RAPID_ADVANCE_BONUS
+				_note_band_rule(applied, base)
 			counted[base] = {"advance": true, "rush": true}
 	# Coverage wave (2026-07-23): REGISTRY pass — data aliases of the move-band family (Scurry /
 	# Highborn / Agile → Quick-style mods, Lustbound's charge half via Royal Legion, …) apply their
@@ -162,6 +170,24 @@ static func move_bands_for_props(props: Dictionary) -> Dictionary:
 		var rp: Dictionary = entry.get("params", {})
 		if int(rp.get("uses_per_game", 0)) > 0:
 			continue   # once-per-game feats (Speed Feat) never ride the permanent bands
+		# Rules 3.6 (MOR-19b): Ethereal's place-within-6" is optional, so the -6"/-6" band
+		# penalty rides only in the activation that took the placement. The Teleport beat stamps
+		# `teleport_activation` with the live activation serial; this PURE read prices the
+		# penalty only while the stamp still equals that serial. Every read in the activation
+		# (range preview, candidate scoring, the move) gets the same answer, and the next
+		# activation's serial drops it. Nothing here mutates the unit. Below the epoch the
+		# penalty stays permanently folded (today's 3.5 behaviour).
+		if base2 == "Ethereal" and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+			var placed := int(props.get("teleport_activation", -1)) == AiActRecorder.activation_serial
+			var trace_board: Dictionary = props.get("activation_board", {})
+			if not trace_board.is_empty():
+				var verdict := "not placed — no movement penalty this activation"
+				if placed:
+					verdict = "placed — -%d\"/-%d\" for this activation" % [
+						abs(int(rp.get("advance_mod", 0))), abs(int(rp.get("rush_mod", 0)))]
+				trace_board["band_trace"] = "%s: %s" % [base2, verdict]
+			if not placed:
+				continue
 		# Grounded Speed (sweep F 2026-09-14): a terrain-gated entry (`terrain_within_in` > 0) adds
 		# its mods ONLY while the unit is within that proximity of terrain AT ACTIVATION — the same
 		# verdict the core answers (sim.rs grounded_speed_bonus_in) over the table's twin query
@@ -172,16 +198,24 @@ static func move_bands_for_props(props: Dictionary) -> Dictionary:
 		var in_terrain := true
 		if float(rp.get("terrain_within_in", 0.0)) > 0.0:
 			in_terrain = _grounded_in_terrain(props, rp, base2)
+		var widened := false
 		if not bool(done2.get("advance", false)) and in_terrain:
-			advance += int(rp.get("advance_mod", 0))
+			var adv_mod := int(rp.get("advance_mod", 0))
+			advance += adv_mod
+			widened = widened or adv_mod > 0
 		if not bool(done2.get("rush", false)) and in_terrain:
 			var rush_mod := int(rp.get("rush_mod", 0))
 			if bool(rp.get("charge_only", false)):
 				# Rapid Charge (+ Aura), v3.5.3: "moves +4\" when using Charge actions" — the Charge band only.
-				charge_extra += int(rp.get("charge_mod", rush_mod))
+				var charge_mod := int(rp.get("charge_mod", rush_mod))
+				charge_extra += charge_mod
+				widened = widened or charge_mod > 0
 			else:
 				rush += rush_mod
 				charge_extra += int(rp.get("charge_mod", rush_mod)) - rush_mod
+				widened = widened or rush_mod > 0 or int(rp.get("charge_mod", rush_mod)) > 0
+		if widened:
+			_note_band_rule(applied, base2)
 		counted[key2] = {"advance": true, "rush": true}
 	# NML-006: active spell tokens with movement modifiers ('+2" advance / +4" rush', once) are stamped
 	# into props as "spell_move_mod" by the solo layer — read here so the AI's bands AND the human's
@@ -195,6 +229,19 @@ static func move_bands_for_props(props: Dictionary) -> Dictionary:
 ## A rule's base name without its rating parenthetical: "Swift(3)" -> "Swift", "Fast" -> "Fast".
 static func _rule_base_name(rule: String) -> String:
 	return rule.split("(")[0].strip_edges()
+
+
+## Rules-must-log (DAT-16a): the carried rule names that actually WIDENED this unit's bands —
+## exactly the names the same pass used, so the log can never invent a rule or miss one.
+static func move_band_rule_names_for_props(props: Dictionary) -> Array:
+	var applied: Array = []
+	move_bands_for_props(props, applied)
+	return applied
+
+
+static func _note_band_rule(applied: Array, rule_name: String) -> void:
+	if not rule_name.is_empty() and not applied.has(rule_name):
+		applied.append(rule_name)
 
 
 ## The terrain verdict for a registry entry gated on `terrain_within_in` (the Grounded Speed

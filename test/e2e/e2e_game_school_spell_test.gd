@@ -92,10 +92,12 @@ func test_s_spell_three_steps_complete(timeout := 120000) -> void:
 	assert_bool(await _wait_index(1)).is_true()   # the range preview shows
 
 	# The caster's first affordable ENEMY spell that the game's own candidate filter offers on the
-	# enemy squad — the same seam the Cast flow uses to decide legal targets. Leave exactly one
+	# enemy squad — the same seam the Cast flow uses to decide legal targets. Leave exactly the spell cost, one
 	# token so the post-spend boost pool is empty — the boost dialog is an interactive prompt that
 	# cannot be answered headless, and this lesson teaches the base cast, not boosting.
-	alpha.casts_current = 1
+	# Rules 3.6 re-export: the Archivist's one-token enemy spell (Psychic Terror) reaches 6 inches, the squad
+	# stands about 15 inches away, so the test spends the lesson's own two tokens on a two-token spell.
+	alpha.casts_current = 2
 	var entry: Dictionary = {}
 	for sp in SpellsRegistry.spells_for_unit(alpha):
 		var e := sp as Dictionary

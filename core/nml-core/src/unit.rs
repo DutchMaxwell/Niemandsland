@@ -33,6 +33,7 @@ use crate::acts::{
     EPOCH_50_SURGE_LOW, EPOCH_54_DEFENSE_RATING, EPOCH_55_FORTIFIED_AURA,
     EPOCH_56_GROUNDED_PROTECTION, EPOCH_58_PRECISION_DEBUFF, EPOCH_60_GROUNDED_STEALTH,
     EPOCH_61_PRECISION_MARKERS, EPOCH_65_MELEE_TRUTH, EPOCH_66_DISTANCE_TRUTH,
+    EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36,
 };
 use crate::combat::{
     armored_defense, BANNER_MORALE_BONUS, LONG_RANGE_IN, REGENERATION_TARGET, RESISTANCE_TARGET,
@@ -84,10 +85,10 @@ impl ShieldedAlias {
         match self {
             Self::None => "",
             Self::PlusOneToDefense => "+1 to Defense",
-            Self::SturdyBoost => "Sturdy Boost",
+            Self::SturdyBoost => "Enhanced Sturdy",
             Self::SafetyGearBoost => "Safety Gear Boost",
             Self::TenaciousBoost => "Tenacious Boost",
-            Self::GroundedReinforcement => "Grounded Reinforcement",
+            Self::GroundedReinforcement => "Grounded Defense",
             Self::DefenseRating => "Defense",
         }
     }
@@ -106,6 +107,14 @@ impl ShieldedAlias {
 /// (battle_sim.gd:701-712) writes over the template per call.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Ctx {
+    /// G4R3 F-HERO-RANGE (`EPOCH_73_V36`): a joined hero's own nearest gap to the volley target, set at the
+    /// volley seam; the resolver's range test reads it in place of the volley distance. `None` = the volley's own.
+    pub member_gap_in: Option<f64>,
+    /// AIG-G2 R3 (`EPOCH_73_V36`): a Crossing Strike move-through volley; the resolver's printed-range gate is off.
+    pub strafe_volley: bool,
+    /// G4R4 C-GRANTED-RANGE (`EPOCH_73_V36`): the best reach a live spell grant adds to this member's ranged weapons,
+    /// stamped at the volley seam (`UnitStatic::reach_grants`); 0 = none.
+    pub granted_reach_in: f64,
     pub quality: i64,
     pub defense: i64,
     pub morale_bonus: i64,
@@ -115,8 +124,22 @@ pub struct Ctx {
     /// number the table writes (battle_sim.gd:1598) — this field never
     /// joins it.
     pub morale_rating: i64,
+    /// MOR-09 Valiant: the Valiant-family share of `morale_bonus`, stamp-only;
+    /// the band gate removes exactly this part (0 for a plain Banner unit).
+    pub valiant_bonus: i64,
     pub tough: i64,
     pub models: i64,
+    /// Rules 3.6 (SHO-09s): the target still has MORE THAN half its models left (a single-model
+    /// unit: more than half its Tough). Stamped at the volley/melee seams from the morale lane's
+    /// `below_half`; a ctx no seam stamped carries `false`, so every old answer stays put.
+    pub above_half_strength: bool,
+    /// Rules 3.6 (SHO-09s): the target is Shaken OR Fatigued — also while it is being shot at.
+    /// Read only by the conditional-AP arm, never by the fatigue math.
+    pub shaken_or_fatigued: bool,
+    /// Rules 3.6 (SHO-09b): MOST of the target's models stand within 1" of terrain. Stamped at
+    /// the volley/melee seams from the same majority sampler the Stealth alias gate uses; a ctx
+    /// no seam stamped carries `false`, so every old answer stays put.
+    pub near_terrain: bool,
     pub artillery: bool,
     /// The Artillery hit modifiers' own registry params (`shooter_hit_bonus`
     /// / `target_hit_penalty`, dead-parameter recount 2026-09-15): the
@@ -126,6 +149,17 @@ pub struct Ctx {
     /// folds keep the constants, the recorded values.
     pub artillery_shooter_hit_bonus: Option<i64>,
     pub artillery_target_hit_penalty: Option<i64>,
+    /// Rules 3.6 (SHO-05): the shooter's +1 to hit needs a Hold and a target past this many inches
+    /// (the entry's `shooter_over_in` / `shooter_requires_hold`, stamped from `EPOCH_73_V36`).
+    /// 0 = every older epoch: the shared over-9" gate alone.
+    pub artillery_shooter_over_in: f64,
+    pub artillery_shooter_needs_hold: bool,
+    /// Rules 3.6 (SHO-06): a shot at an Artillery unit takes `target_hit_penalty_v36` only past
+    /// `target_over_in`, only while most models carry the rule and the unit has not moved this
+    /// round. None/0.0/false below `EPOCH_73_V36`: the old over-9" -2 leg.
+    pub artillery_target_hit_penalty_v36: Option<i64>,
+    pub artillery_target_over_in: f64,
+    pub artillery_target_most_models: bool,
     pub furious: bool,
     pub fearless: bool,
     /// `Fear(X)` — the melee WINNER comparison and nothing else
@@ -164,12 +198,21 @@ pub struct Ctx {
     /// the CHARGER's strikes swap BEHIND the defender's strike-back
     /// (main.gd:8073-8078). Counter and Impact keep their slots.
     pub unwieldy: bool,
+    /// AIG-G2 (`EPOCH_73_V36`): Unwieldy on SOME melee weapons only — normal order, the charge logs it.
+    pub unwieldy_mixed: bool,
     /// `Impact(X)` / `Heavy Impact(X)` / `Ravage(X)` ratings — read only by the
     /// melee side (`impact_ev` / `ravage_ev`, ai_ev.gd:497-529).
     pub impact: i64,
     pub heavy_impact: i64,
     pub ravage: i64,
     pub stealth: bool,
+    /// Rules 3.6 (D-MOST): `stealth` holds through the most-models read while
+    /// not every model carries it — only the volley's log line reads it.
+    pub stealth_most_models: bool,
+    /// FAB-C15 — the literal Stealth name arrived as a one-time GRANT (the
+    /// "Stealth Buff" Utility Buff), not from the profile's own rules. The
+    /// volley's rules-must-log line names this leg separately.
+    pub stealth_grant: bool,
     /// The DEFENDER's best Stealth-primitive DATA ALIAS (Changebound et al.)
     /// OTHER than the literal "Stealth" name, which `stealth` above (and the
     /// fixed `STEALTH_HIT_PENALTY`/`LONG_RANGE_IN` constants) already cover
@@ -221,6 +264,9 @@ pub struct Ctx {
     pub evasive_alias_name: &'static str,
     /// `Melee Evasion` — the melee twin of Evasive (ai_ev.gd:150).
     pub melee_evasion: bool,
+    /// `Dodge` (rules 3.6) — MOST models carry it. The melee -1 itself is a resolution-time read
+    /// (`sim::strike_phase`: only while the unit is not Fatigued), so the stamp stays static.
+    pub dodge: bool,
     pub fortified: bool,
     /// WAVE 3 — the Fortified family's DATA-ALIAS stamp (`fortified_alias_of`
     /// below, gated `EPOCH_6_TABLE_RULES`; the stamp IS the dice hook's gate).
@@ -237,6 +283,13 @@ pub struct Ctx {
     /// save path leaves it false.
     pub fortified_alias_over9: bool,
     pub guarded: bool,
+    /// SHO-17 (`EPOCH_73_V36`) — WHICH Guarded-family name drove `guarded` (rules-must-log),
+    /// "" below the gate and when none. Stamped in `ctx_for` from the same family walk.
+    pub guarded_name: &'static str,
+    /// SHO-17 (`EPOCH_73_V36`) — the charge-leg gate of the Guarded family. 6.0 at the epoch,
+    /// 0.0 below it (the old over-9" read stays byte-identical). The dice read it, the sim
+    /// seams (`ctx_live` / `ctx_of_melee`) stamp it on the melee defender's context.
+    pub guarded_charge_over_in: f64,
     pub ranged_shrouding: bool,
     /// The clamp pair the three ranged reads share (dice.rs's volley,
     /// combat.rs's shoot_ev, sim.rs's sight_reach_in): the carried entry's
@@ -276,6 +329,28 @@ pub struct Ctx {
     /// `impact_reduction_per_model` (registry default 1, stamped behind the
     /// FROZEN `EPOCH_13_WHO_WINS` with `counter_models`).
     pub counter_impact_per_model: Option<i64>,
+    /// Rules 3.6 (`EPOCH_73_V36`) — a living member whose weapon carries
+    /// Brace(X) blunts a charge by X dice ONCE per unit. 1 = carrier flag,
+    /// 0 below 73 or without a carrier; never a model count.
+    pub brace_models: i64,
+    /// The Brace carrier's own X, read off the weapon's rating (default 1).
+    pub brace_impact_per_model: Option<i64>,
+    /// Rules 3.6 (`EPOCH_73_V36`) — `Parry(X)`: the dice each LIVING carrier
+    /// model adds to a hits event (0 = no Parry). `sim::impact_phase` sums it
+    /// over the host and its joined heroes and caps the total at the hits
+    /// taken before rolling them.
+    pub parry_dice: i64,
+    /// Rules 3.6 (`EPOCH_73_V36`) — the SAME host-plus-joined-heroes sum the
+    /// Impact event reads (`sim::parry_dice_total`), stamped on the melee
+    /// defender's context by `sim::strike_phase` so the strike Parry counts
+    /// the joined heroes too. `None` = not stamped (the hand-built dice
+    /// fixtures), which keeps the old `parry_dice * models` read.
+    pub parry_dice_total: Option<i64>,
+    /// Rules 3.6 (`EPOCH_73_V36`) — the models a Blast(X) multiplies onto: the host's living models PLUS
+    /// its living joined heroes (the table's `_solo_combined_alive`), stamped by `sim::stamp_blast_models`
+    /// on the shot's defender context. `models` stays the host's own count for every other reader.
+    /// `None` = not stamped (below 73, hand-built dice fixtures): Blast reads `models` as before.
+    pub blast_models: Option<i64>,
     pub regeneration: bool,
     pub regen_target: i64,
     /// Block B10 — the SPELL-wound twin (`main._solo_regen_pick`'s
@@ -296,6 +371,15 @@ pub struct Ctx {
     /// The pending kind's SPELL-wound twin (the entry's `ignore_target_spell`,
     /// defaulting to its `ignore_target` like every alias fold).
     pub regen_pending_spell: i64,
+    /// MOR-17a (rules 3.6, `EPOCH_73_V36`) — Warding / Knightborn / Angelic
+    /// Blessing ignore a non-spell wound on a 6+ ONLY when the unit was shot
+    /// from over this many inches. 0.0 = ungated (the old entry, every unit
+    /// without one of the three names, and every record below 73).
+    pub regen_gate_over_in: f64,
+    /// The same pair's CHARGE gate: no 6+ ignore unless the unit was charged
+    /// from over this many inches (a strike-back rides 0.0, which never
+    /// clears it — it did the charging). 0.0 = ungated.
+    pub regen_gate_charge_in: f64,
     /// The DYNAMIC melee flag `BattleSim._ctx_of(su, true)` writes over the
     /// template (battle_sim.gd:705-707): a fatigued striker hits only on 6s.
     pub fatigued: bool,
@@ -424,6 +508,9 @@ pub struct Ctx {
     /// into the save batch the way the weapon's own `p.shred` is (dice.rs).
     /// Zero on every `ctx_of`.
     pub shred_grant: bool,
+    /// G4R4 C-GRANTED-BANE (`EPOCH_73_V36`): a live `grants_rule: "Bane when Shooting"` — every ranged weapon of the
+    /// member is a Bane weapon for the volley (dice.rs). Zero on every `ctx_of`.
+    pub bane_grant: bool,
     // --- Wave 2 "Utility Buff" family (gated `acts::rule_on(.., EPOCH_5_TABLE_RULES)`). ---
     /// A live `grants_rule: "Slayer"` — AP(+2) vs Tough 3+, charge or over 9".
     pub slayer_grant: bool,
@@ -440,6 +527,9 @@ pub struct Ctx {
     pub versatile_pick_hit: i64,
     pub versatile_pick_ap: i64,
     pub versatile_latched: bool,
+    /// SHO-19 / SHO-19b — the Versatile pick ignores the 9"/6" distance gate at
+    /// `EPOCH_73_V36` (Versatile Expert, Enhanced Watchborn).
+    pub versatile_no_gate: bool,
     /// A live `grants_rule: "AP(+1) when shooting"` (Piercing Shooting Mark).
     pub pierce_shooting_grant: bool,
     /// A live `grants_rule: "AP(+1) in melee"` (Piercing Fighting Mark).
@@ -501,12 +591,35 @@ pub struct Ctx {
     /// The mod's own sign stays POSITIVE: the "Defense rolls +N" log lines
     /// name the ladder, not the fold.
     pub growth_def_lowers: bool,
+    /// `EPOCH_73_V36`, stamped in `ctx_for` off the record's own epoch like `playtest_rules`.
+    /// A live "Regenerative Strength" bearer: at epoch 73 its Growth Markers add no attacks
+    /// and instead roll `growth_wound_dice` token dice before the strikes (MEL-12).
+    pub growth_wounds_not_attacks: bool,
+    /// MEL-12 — the token dice this member rolls at its strike (one per banked marker),
+    /// stamped per live melee ctx; 0 everywhere else. Rolled in `dice::resolve_melee_leg`
+    /// after Ravage, never priced by the EV.
+    pub growth_wound_dice: i64,
+    /// `EPOCH_73_V36`, stamped in `ctx_for` off the record's own epoch like `playtest_rules`.
+    pub v36_rules: bool,
     /// D21 (`EPOCH_68_MODIFIER_SUM`): the save target is ONE sum clamped once at
     /// `[2, 6]`, not a ladder of per-modifier 2+ floors. Stamped in `ctx_for` off
     /// the record's own epoch (the statics are built per record), so every
     /// `ctx_of` ctx — EV pricing and dice alike — follows the table from 68 and
     /// an older record replays the old floors. `neutral_defender()` stays false.
     pub modifier_sum: bool,
+    /// `EPOCH_72_PLAYTEST_RULES`, stamped in `ctx_for` off the record's own epoch like
+    /// `modifier_sum`: the DEFENDER's ctx carries it, so the EV (`profile_ev`,
+    /// `spell_damage_ev`) and the dice's Deadly leg roll all X wounds against the
+    /// Regeneration family before the cap (A4), and a spell's Lacerate keeps Regeneration (A1).
+    pub playtest_rules: bool,
+    /// The record's own rules epoch, stamped in `ctx_for`. The dice seams read
+    /// it for rules that are removed from `EPOCH_73_V36` on (SHO-02's Indirect
+    /// moved penalty); 0 on every hand-built context, i.e. the old reading.
+    pub rules_epoch: u32,
+    /// `EPOCH_73_V36`: the to-hit penalty every shot AT this unit takes because it is an
+    /// Aircraft (the map's `Aircraft.target_hit_penalty`, beside the range penalty). Stamped
+    /// in `ctx_for` off the record's own epoch; 0 for every other unit and below 73.
+    pub aircraft_hit_penalty: i64,
     // --- Ambush family (rules-wave2-ambush). ZERO on every `ctx_of` (baked
     // into `ctx_for`), like `growth_ap_mod` — only `sim::ctx_live` reads the
     // arrival stamp and folds it in, so the EV imagination stays blind to it
@@ -557,6 +670,9 @@ pub struct Ctx {
     /// The `when: "charge"` names (Precision Charge Aura): only while the
     /// strike is a charge.
     pub melee_hit_bonus_charge: i64,
+    /// Rules 3.6 (`EPOCH_73_V36`): which BASE fed the two fields above; the melee fold names it in the log.
+    pub precision_charge_base: bool,
+    pub precision_fighter_base: bool,
     // --- Wave 3 — the Shot Modifier family's two RUNTIME-GATED shooting
     // members (main.gd:5761-5779's data-driven loop), stamped BY NAME in
     // `ctx_for` behind the EPOCH_6_TABLE_RULES gate (`shot_modifier_runtime_
@@ -578,6 +694,8 @@ pub struct Ctx {
     /// moved, so the Mobile Artillery bonus stays OFF (#489's direction:
     /// under-credit, never over-credit).
     pub moved_this_round: bool,
+    /// Rules 3.6 (SHO-01a): the activation's action was Hold, stamped at the volley (default false).
+    pub held: bool,
     /// Wave 4 (port-quick-readjustment): the bearer ignores the Indirect
     /// moved to-hit penalty — `no_moved_penalty: true` read off the NAME's
     /// own registry entry (the table's `best_primitive_param(member,
@@ -629,6 +747,9 @@ pub struct CondAp {
     /// The extra situational gate (`"ranged_over_or_charge"`), "" for none.
     pub gate: String,
     pub over_in: f64,
+    /// SHO-19: the CHARGE leg's own 6" band at `EPOCH_73_V36` (Havocbound /
+    /// Piercing Warrior). 0.0 = the old unconditional charge leg.
+    pub charge_over_in: f64,
     /// Wave 4 (rules-wave4-condap): the `ranged_within` cap — "Point-Blank
     /// Piercing"'s "when shooting enemies within 12\"". 0.0 on every spec the
     /// generic pass stamps (`cond_ap_of` never reads it), so the registry's own
@@ -662,6 +783,15 @@ pub struct ShootProfile {
     pub attacks: i64,
     pub count: i64,
     pub range: i64,
+    /// MEL-01 (D-ASSAULT): an Assault weapon's melee copy sits at `range` 0, so
+    /// every melee reader keeps its meaning; its PRINTED range rides here for
+    /// the range-relative gates. 0 on every other profile.
+    pub printed_range: i64,
+    /// Rules 3.6 (`EPOCH_73_V36`): the shooter's own "+N\" range" book grant (Increased
+    /// Shooting Range, its Aura), added to this weapon's REACH at every range gate while
+    /// `range` keeps the printed value. 0 / "" below 73 and on a rule-less carrier.
+    pub reach_bonus_in: f64,
+    pub reach_bonus_rule: String,
     pub ap: i64,
     pub deadly: i64,
     pub blast: i64,
@@ -671,7 +801,13 @@ pub struct ShootProfile {
     pub strafing: bool,
     pub ignores_cover: bool,
     pub precise: bool,
+    /// AIG-G2 (rules 3.6, read from `EPOCH_73_V36`): the weapon carries Imprecise — -1 to hit.
+    pub imprecise: bool,
     pub surge: bool,
+    /// SHO-18: the alias name that stamped `surge` ("" = the weapon's own Surge).
+    pub surge_alias_rule: String,
+    /// SHO-18: the alias families fire only from the right distance (73+; false below).
+    pub alias_gate: bool,
     pub rending: bool,
     pub bane: bool,
     /// The REGEN-BYPASS half of the Bane family, kept APART from `bane`:
@@ -753,6 +889,14 @@ pub struct ShootProfile {
     /// ("Mischievous Boost" at epoch 6, "Bestial Boost" at epoch 7); "" = the
     /// base 6s-only window.
     pub bane_rule: &'static str,
+    /// Rules 3.6 (SHO-10): the target condition the re-roll entry names — the
+    /// same test the conditional-AP leg runs (`combat::cond_met`). "" on every
+    /// shipped entry; only the epoch-73 stamp reads `condition`/`threshold`.
+    pub bane_condition: String,
+    pub bane_threshold: i64,
+    /// AI-G2 (`EPOCH_73_V36`): the book name of the WEAPON rule the map resolves to the Bane primitive
+    /// (Smash, Reap, Decimate); the save batch's rules-must-log line names it. "" = none.
+    pub bane_alias: String,
     /// Wave 3 (`rules-wave3-shred3`): the family's per-face wound amount,
     /// read off the carried Shred-primitive entry's own
     /// `extra_wound_per_save_one` (`build_for`'s epoch-6 arm, gated
@@ -780,6 +924,10 @@ pub struct ShootProfile {
     /// `EPOCH_7_TABLE_RULES`): the folds keep the waiver, the recorded
     /// constant.
     pub indirect_ignores_los: Option<bool>,
+    /// Rules 3.6 (SHO-01a): the sight waiver needs Hold (`los_needs_hold`, from `EPOCH_73_V36`).
+    pub indirect_los_needs_hold: bool,
+    /// Rules 3.6 (SHO-01b): the cover waiver needs Hold (`cover_needs_hold`, from `EPOCH_73_V36`).
+    pub indirect_cover_needs_hold: bool,
     /// The unit-level "Indirect when Shooting" stamp (`build_for`'s epoch-6
     /// named walk below) — set ALONGSIDE `indirect` so the volley log
     /// (dice.rs) can name the RULE, not the weapon tag, when its cover skip
@@ -790,6 +938,9 @@ pub struct ShootProfile {
     /// log-only marker shape as `indirect_alias` for the cover-only name
     /// (whose plain flag block 5 already stamps, ungated).
     pub ignores_cover_alias: bool,
+    /// AI-08a (`EPOCH_73_V36`): the name of the map-read rule that skips cover
+    /// here (Anti-Cover et al.), for the volley log only. Empty below 73.
+    pub cover_rule: String,
     pub limited: bool,
     pub takedown: bool,
     /// Wave 4 (rules-wave4-renames): the UNIT-level Takedown-primitive NAME
@@ -834,6 +985,14 @@ pub struct ShootProfile {
     /// `AiEv.stamp_sergeant` :267-274 writes the bearer's own attack share here.
     /// ALWAYS 0 in this port — see `UnitStatic::unimplemented`.
     pub sergeant_attacks: i64,
+    /// Rules 3.6 (`EPOCH_73_V36`, row MOR-12c): the entry's `ap_bonus`
+    /// (Sergeant 1, Great Sergeant 2) stamped on the FIRST profile with
+    /// attacks. The live bearer share is taken at the strike (the Ctx's
+    /// alive count), exactly like `AiEv.stamp_sergeant`. 0 below the gate.
+    pub sergeant_ap: i64,
+    /// The rules 3.6 rule name the bearer share logs under ("Sergeant" /
+    /// "Great Sergeant"). Empty below the gate.
+    pub sergeant_rule: String,
     /// NML-1103 — `AiEv.stamp_conditional_ap` ai_ev.gd:296-313, read by
     /// `combat::profile_ev`. Stamped AFTER the merge, like every other facet.
     pub cond_ap: Vec<CondAp>,
@@ -896,6 +1055,7 @@ impl ShootProfile {
     fn merges_with(&self, o: &ShootProfile) -> bool {
         self.name == o.name
             && self.range == o.range
+            && self.printed_range == o.printed_range
             && self.ap == o.ap
             && self.deadly == o.deadly
             && self.blast == o.blast
@@ -905,6 +1065,7 @@ impl ShootProfile {
             && self.strafing == o.strafing
             && self.ignores_cover == o.ignores_cover
             && self.precise == o.precise
+            && self.imprecise == o.imprecise
             && self.surge == o.surge
             && self.rending == o.rending
             && self.bane == o.bane
@@ -960,6 +1121,9 @@ pub struct UnitStatic {
     /// `Profile.name` — `GameUnit.get_name()`, which is what `_solo_tray_roll`
     /// signs every die with (main.gd:3199-3200, :6448).
     pub name: String,
+    /// Rules 3.6 (`EPOCH_73_V36`) — the book name of the Brace this unit carries ("Brace", "Brace in Melee");
+    /// the charge's rules-must-log line names it. "" = no Brace.
+    pub brace_rule: String,
     /// Merged + stamped RANGED profiles, unfiltered (range > 0, any distance).
     pub shoot: Vec<ShootProfile>,
     /// Merged + stamped MELEE profiles (range 0) — `AiShooting.melee_profiles`
@@ -1020,6 +1184,10 @@ pub struct UnitStatic {
     pub spell_conduit_reach_in: f64,
     pub spell_conduit_casting_mod: i64,
     pub spell_conduit_needs_steady: bool,
+    /// Rules 3.6 (`EPOCH_73_V36`) — a WEAPON-borne "Spell Amplifier": +1 to
+    /// the bearer's OWN casting rolls (4+ -> 3+). Read off the profile's
+    /// weapon rule lists, never `special_rules`; 0 below the gate.
+    pub spell_amplifier_casting_mod: i64,
     /// `RulesRegistry.unit_rule_active(gu, "Battleborn" | "Steadfast")`
     /// (rules_registry.gd:136-142) — the two rules that clear Shaken for free at
     /// a round start (ai_planner.gd:493-495). Static per unit, so the registry
@@ -1086,6 +1254,10 @@ pub struct UnitStatic {
     /// `EPOCH_6_TABLE_RULES`): the menu keeps the gate, the recorded
     /// constant. Read only by `menu::candidates_tuned` — never recorded.
     pub hold_only: Option<bool>,
+    /// The `rules_epoch` this static was built under — carried for the
+    /// readers that get no epoch of their own (`menu::holds_only`). 0 (the
+    /// `Default`) is a hand-built static: every gate keeps its oldest leg.
+    pub rules_epoch: u32,
     /// FEAT PR 3 — the two aof latch feats' windows, read BY NAME off the
     /// registry (the design's `hit_bonus: 1, all_attacks: true` /
     /// `ap_bonus: 1, condition: any_attack`, both `uses_per_game: 1` —
@@ -1113,7 +1285,7 @@ pub struct UnitStatic {
     pub ebr: Option<EbrStamp>,
     /// The Teleport/Ethereal read (epoch 8) — `teleport_of`; None below 8.
     pub teleport: Option<TeleportSpec>,
-    /// `GameUnit.is_hero()` game_unit.gd:273-275 — "Hero" in the rule list.
+    /// `GameUnit.is_hero()` game_unit.gd:274-275 — "Hero" or "Unique Hero" in the rule list.
     /// Mend's patient tiebreak prefers heroes (main.gd:5361).
     pub is_hero: bool,
     /// NML-1152 B14 step 1 (Bounding): `unit_rule_active(gu, "Bounding")`'s own
@@ -1140,7 +1312,8 @@ pub struct UnitStatic {
     /// simulation input: in a FRESH core sim (no recorded `bounding_d3`
     /// trace) the core rolls the dice itself and performs the placement
     /// before the move; a RECORDED act replays the table's band model
-    /// byte-exact and never hops.
+    /// byte-exact and never hops. From EPOCH_73_V36 every carrier of this
+    /// primitive spends the roll as a move instead (`sim::bounding_move_in`).
     pub bounding_place: Option<PlaceSpec>,
     /// The Quick/Fast move-band family — the named carriers' own registry
     /// params, summed the way BOTH band passes stack them (per rule NAME:
@@ -1200,6 +1373,9 @@ pub struct UnitStatic {
     /// record stamped `rules_epoch: 5` (the Gen-3 fleet's own window) predates
     /// wave 3 and reads zeros.
     pub royal_legion_range_in: f64,
+    /// G4R4 C-GRANTED-RANGE (`EPOCH_73_V36`): the Royal Legion-family rules a friendly spell of this faction can
+    /// hand the unit (`grants_rule`), with their `range_bonus_in` — read live off the grant ledger at the volley.
+    pub reach_grants: Vec<(String, f64)>,
     pub royal_legion_charge_in: f64,
     /// `RulesRegistry.unit_rule_active(gu, "Re-Position Artillery")` — the
     /// "Utility Buff" movement primitive's registry gate (block B2).
@@ -1235,6 +1411,9 @@ pub struct UnitStatic {
     /// solo_controller.gd:1846/:4033 — a carrier's move-and-shoot band becomes
     /// its RUSH distance, so RUSH may also shoot (normally HOLD/ADVANCE only).
     pub quick_shot_active: bool,
+    /// Rules 3.6 (SHO-16) — `unit_rule_active(.., "Cumbersome")`: from
+    /// `EPOCH_73_V36` on a unit that moved this activation fires no volley.
+    pub cumbersome: bool,
     /// Block B8 — `RulesRegistry.unit_rules_of_primitive(gu, "Second Wind")`
     /// (solo_controller.gd:10448/:10477). Only two literal names resolve to
     /// this primitive anywhere in the registry (`assets/solo/rules_mechanics_
@@ -1278,6 +1457,10 @@ pub struct UnitStatic {
     /// `EPOCH_7_TABLE_RULES` and reading the ALIAS entry's own ring first
     /// (`best_primitive_param` reading) — see the stamp arm.
     pub infiltrate_min_enemy_dist_in: f64,
+    /// Rules 3.6 (`EPOCH_73_V36`, row MEL-IPS) — carries "Infiltrating Precision Strike": its melee strikes
+    /// hit one better in the round it arrived (`sim::strike_phase` reads `ambush_arrived_round`). The name
+    /// also rides the Infiltrate ring above. False below epoch 73 and for every non-carrier.
+    pub infiltrating_precision_strike: bool,
     /// Ambush family (rules-wave2-ambush) — the four registry names that ride
     /// the "Ambush" primitive, each read at its OWN literal with the entry's
     /// own params (`ambush_family_of`). Every field is its zero-value when the
@@ -1336,6 +1519,19 @@ fn weapon_has(w: &Weapon, rule: &str) -> bool {
     w.rules.iter().any(|r| r.trim().starts_with(rule))
 }
 
+/// NML-002 Strafing: the weapon attacks only through the move-through trigger.
+/// "Crossing Strike" is its 3.6 name; both names stay until the old one is dropped.
+fn weapon_strafes(w: &Weapon) -> bool {
+    weapon_has(w, "Strafing") || weapon_has(w, "Crossing Strike")
+}
+
+/// The name a move-through attack logs under: the 3.6 name when one of the firing
+/// weapons carries it, else the 3.5 name.
+pub(crate) fn strafing_rule_name<'a>(profiles: impl IntoIterator<Item = &'a ShootProfile>) -> &'static str {
+    let crossing = profiles.into_iter().any(|p| p.rules.iter().any(|r| r.trim().starts_with("Crossing Strike")));
+    if crossing { "Crossing Strike" } else { "Strafing" }
+}
+
 /// `AiShooting._rating_of` ai_shooting.gd:176-182 — no max(0) here, unlike the
 /// unit-level `AiEv.unit_rating`.
 fn weapon_rating(w: &Weapon, rule_name: &str) -> i64 {
@@ -1365,9 +1561,10 @@ fn base_profile(w: &Weapon, attacks: i64, range_in: i64) -> ShootProfile {
         relentless: weapon_has(w, "Relentless"),
         blast: weapon_rating(w, "Blast"),
         reliable: weapon_has(w, "Reliable"),
-        strafing: weapon_has(w, "Strafing"),
+        strafing: weapon_strafes(w),
         ignores_cover: weapon_has(w, "Ignores Cover"),
         precise: weapon_has(w, "Precise"),
+        imprecise: weapon_has(w, "Imprecise"),
         surge: weapon_has(w, "Surge"),
         rending: weapon_has(w, "Rending"),
         // Lacerate is a straight data-alias of Bane — ai_shooting.gd:126-129.
@@ -1445,6 +1642,12 @@ fn trace_rule(arm: &str, rule: &str, detail: &str) {
     }
 }
 
+fn trace_stamp(on: bool, arm: &str, rule: &str, detail: &str) {
+    if on {
+        crate::sim::trace_rule(arm, rule, detail);
+    }
+}
+
 /// `AiEv.facet_applies` ai_ev.gd:105-110 — the melee/shooting gate of a
 /// unit-level facet; `profile_range` 0 means a melee profile.
 fn facet_applies(melee_only: bool, shooting_only: bool, profile_range: i64) -> bool {
@@ -1473,6 +1676,188 @@ fn rule_on_all_models(p: &Profile, rule: &str) -> bool {
         .all(|hr| has_special_rule(hr, rule))
 }
 
+/// `AiEv.most_models_of` — the ONE strict-majority test every "most models"
+/// read shares (ruling D-MOST): more than half, so an exact half and an empty
+/// unit are both false.
+pub(crate) fn most_models_of(with: i64, total: i64) -> bool {
+    with * 2 > total
+}
+
+/// Row W1.4b-defence (rules 3.6, `EPOCH_73_V36`) — the defence family's "most
+/// models" answer read from the LIVING joined unit at use time, not the
+/// profile-build count: `Some(true)` when at least one of `rules` holds a
+/// strict majority of the living models, `Some(false)` when none does, and
+/// `None` below the gate (the static stamp then stays untouched). Every living
+/// host model shares the host's rules; each living joined hero is one model
+/// however Tough. Pure (no `State`), so the callers can unit-test it directly.
+pub(crate) fn defence_family_live(
+    host: &Profile,
+    host_alive: i64,
+    heroes: &[(&Profile, i64)],
+    rules: &[&str],
+    rules_epoch: u32,
+) -> Option<bool> {
+    if !rule_on(rules_epoch, EPOCH_73_V36) {
+        return None;
+    }
+    let host_alive = host_alive.max(0);
+    let living: Vec<&Profile> = heroes.iter().filter(|h| h.1 > 0).map(|h| h.0).collect();
+    let total = host_alive + living.len() as i64;
+    let holds = rules.iter().any(|rule| {
+        let host_with = if has_special_rule(&host.special_rules, rule) { host_alive } else { 0 };
+        let heroes_with =
+            living.iter().filter(|p| has_special_rule(&p.special_rules, rule)).count() as i64;
+        most_models_of(host_with + heroes_with, total)
+    });
+    Some(holds)
+}
+
+/// `AiEv.rule_on_most_models` — whether MOST living models of the unit carry
+/// `rule` (ruling D-MOST): a strict majority, models not wounds, every living
+/// joined hero one model however Tough. Rules live per unit, so all
+/// `host_alive` host models (`State::alive`) carry `p.special_rules` and each
+/// hero in `attached_hero_rules` (the living ones only) its own. `solo` is the
+/// unit-of-[1] collapse `AiEv.rule_on_all_models` makes: the picked model's
+/// own unit answers alone.
+pub(crate) fn rule_on_most_models(p: &Profile, host_alive: i64, rule: &str, solo: bool) -> bool {
+    let host_alive = host_alive.max(0);
+    let host_with = if has_special_rule(&p.special_rules, rule) { host_alive } else { 0 };
+    if solo {
+        return host_with > 0;
+    }
+    let heroes = &p.attached_hero_rules;
+    let heroes_with = heroes.iter().filter(|hr| has_special_rule(hr, rule)).count() as i64;
+    most_models_of(host_with + heroes_with, host_alive + heroes.len() as i64)
+}
+
+/// Rules 3.6 (row W1.4b) — the LIVE quantifier of the Evasive and Dodge
+/// stamps. `Some(on)` from `EPOCH_73_V36`; `None` below, so the caller keeps
+/// the static stamp byte-identical. The host's living models share the host's
+/// rules and every living joined hero is one model, however Tough; a strict
+/// majority of the living models carries the rule.
+pub(crate) fn evasion_rule_live(
+    host: &Profile, host_alive: i64, heroes: &[(&Profile, i64)], rule: &str, rules_epoch: u32,
+) -> Option<bool> {
+    if !rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
+        return None;
+    }
+    let host_alive = host_alive.max(0);
+    let mut with = if has_special_rule(&host.special_rules, rule) { host_alive } else { 0 };
+    let mut total = host_alive;
+    for (hero, alive) in heroes {
+        if *alive <= 0 {
+            continue;
+        }
+        total += 1;
+        if has_special_rule(&hero.special_rules, rule) {
+            with += 1;
+        }
+    }
+    Some(most_models_of(with, total))
+}
+
+/// Row MOR-02 (D-MOST): the Regeneration family names whose 3.6 text counts most models (their
+/// Boosts keep the every-model read). Twin: `AiEv.REGEN_MOST_MODELS`.
+pub(crate) const REGEN_MOST_MODELS: &[&str] = &[
+    "Regeneration", "Self-Repair", "Angelic Blessing", "Cursed Undead", "Grounded Protection",
+    "Knightborn", "Plaguebound", "Protected", "Protection Feat", "Warding",
+    "Resistance", "Spell Resistance",
+];
+
+/// `AiEv.regen_family_on`: most models for the names above from `EPOCH_73_V36`, else every model.
+/// Read once at profile build, so the host's living models are its `model_count` (at least one).
+pub(crate) fn regen_family_on(p: &Profile, rule: &str, rules_epoch: u32) -> bool {
+    if !rule_on(rules_epoch, crate::acts::EPOCH_73_V36) || !REGEN_MOST_MODELS.contains(&rule) {
+        return rule_on_all_models(p, rule);
+    }
+    let on = rule_on_most_models(p, p.model_count.max(1), rule, false);
+    if on && !rule_on_all_models(p, rule) {
+        trace_rule("regen", rule, &format!(
+            "most models of {} carry {rule}: a joined hero without it does not switch it off", p.name));
+    }
+    on
+}
+
+/// Row W1.4b — the LIVE twin of `regen_family_on`: a family name holds while a strict
+/// majority of the joined unit's living models carry it (model_count read at USE time, a
+/// living hero one model). `Some` folds the members' printed `(target, spell)` MIN; `None`
+/// below `EPOCH_73_V36` and when no family name has the majority.
+pub(crate) fn regen_family_live(
+    host: &Profile,
+    host_alive: i64,
+    host_targets: (i64, i64),
+    heroes: &[(&Profile, i64, (i64, i64))],
+    rules_epoch: u32,
+) -> Option<(i64, i64)> {
+    if !rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
+        return None;
+    }
+    let host_alive = host_alive.max(0);
+    let total = host_alive + heroes.iter().map(|(_, alive, _)| (*alive).max(0)).sum::<i64>();
+    let fold = |have: i64, cand: i64| if cand > 0 && (have == 0 || cand < have) { cand } else { have };
+    let mut best = (0i64, 0i64);
+    let mut on = false;
+    for name in REGEN_MOST_MODELS {
+        let host_with = if has_special_rule(&host.special_rules, name) { host_alive } else { 0 };
+        let hero_with = heroes
+            .iter()
+            .filter(|(p, alive, _)| *alive > 0 && has_special_rule(&p.special_rules, name))
+            .map(|(_, alive, _)| (*alive).max(0))
+            .sum::<i64>();
+        if !most_models_of(host_with + hero_with, total) {
+            continue;
+        }
+        on = true;
+        if host_with > 0 {
+            best = (fold(best.0, host_targets.0), fold(best.1, host_targets.1));
+        }
+        for (p, alive, targets) in heroes {
+            if *alive > 0 && has_special_rule(&p.special_rules, name) {
+                best = (fold(best.0, targets.0), fold(best.1, targets.1));
+            }
+        }
+    }
+    on.then_some(best)
+}
+
+/// MOR-05 — the Fortified and Shielded family names whose 3.6 wording says "most models" (the
+/// verified P1 list). The Guarded family is MOR-05b.
+const MOST_MODELS_DEFENCE: [&str; 6] =
+    ["Fortified", "Guardian", "Ossified", "Primeborn", "Warden", "Shielded"];
+
+/// The all-models read of `rule`, except that from `EPOCH_73_V36` the names above need only a
+/// strict majority (D-MOST); the host's count is `p.model_count`, taken at profile-build time.
+/// Rules-must-log: a rule kept on by the majority names itself on the trace.
+fn rule_on_defence_family(p: &Profile, rule: &str, rules_epoch: u32) -> bool {
+    if !rule_on(rules_epoch, crate::acts::EPOCH_73_V36) || !MOST_MODELS_DEFENCE.contains(&rule) {
+        return rule_on_all_models(p, rule);
+    }
+    let on = rule_on_most_models(p, p.model_count, rule, false);
+    if on && !rule_on_all_models(p, rule) {
+        trace_rule("v36-morale", rule, "most models carry it, so a joined hero without it does not switch it off");
+    }
+    on
+}
+
+/// MOR-05b — the Guarded family names whose 3.6 wording says "most models" (the verified list). The
+/// core's twin is `AiEv.MOST_MODELS_GUARDED`.
+const MOST_MODELS_GUARDED: [&str; 5] =
+    ["Guarded", "Versatile Defense", "Sturdy", "Safety Gear", "Tenacious"];
+
+/// The all-models read of `rule`, except that from `EPOCH_73_V36` the names above need only a strict
+/// majority (D-MOST); the host's count is `p.model_count`, taken at profile-build time.
+/// Rules-must-log: a rule kept on by the majority names itself on the trace.
+fn guarded_family_on(p: &Profile, rule: &str, rules_epoch: u32) -> bool {
+    if !rule_on(rules_epoch, crate::acts::EPOCH_73_V36) || !MOST_MODELS_GUARDED.contains(&rule) {
+        return rule_on_all_models(p, rule);
+    }
+    let on = rule_on_most_models(p, p.model_count, rule, false);
+    if on && !rule_on_all_models(p, rule) {
+        trace_rule("v36-morale", rule, "most models carry it, so a joined hero without it does not switch it off");
+    }
+    on
+}
+
 /// The two "Hit & Run" Boost spellings (gf/rebel_guerrillas "Guerrilla Boost",
 /// aof|gf dark-elf "Harassing Boost"): the entry's own `move_in` replaces the
 /// shared 3" const when the FROZEN `EPOCH_6_TABLE_RULES` gate is on — wave 4
@@ -1485,7 +1870,7 @@ fn hit_and_run_boost_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> 
     if !rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
         return (0.0, String::new());
     }
-    for name in ["Guerrilla Boost", "Harassing Boost"] {
+    for name in ["Enhanced Guerrilla", "Enhanced Harassing"] {
         if unit_rule_active(reg, p, name) {
             let mv = unit_param_f(reg, p, name, "move_in", 0.0);
             if mv > 0.0 {
@@ -1510,15 +1895,17 @@ fn hit_and_run_boost_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> 
 /// the terrain half: the split walk now also reports the terrain-gated kind
 /// (`Ctx::stealth_alias_near_terrain`) and the def builds resolve the
 /// per-model read live; `requires_stationary` still is.
-fn stealth_alias_of(reg: &mut Registries, p: &Profile) -> (i64, f64, bool) {
-    stealth_alias_of_excluding(reg, p, "")
+fn stealth_alias_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (i64, f64, bool) {
+    stealth_alias_of_excluding(reg, p, "", rules_epoch)
 }
 
 /// The same walk with one name stood down — the thin-wrapper shape the
 /// signature rule prescribes: "Machine-Fog Boost" (wave 4) REPLACES its base
 /// entry's conditional alias leg with an unconditional evasive fold, and the
 /// two must never stack. `skip` "" = the plain walk, byte-exact.
-fn stealth_alias_of_excluding(reg: &mut Registries, p: &Profile, skip: &str) -> (i64, f64, bool) {
+fn stealth_alias_of_excluding(
+    reg: &mut Registries, p: &Profile, skip: &str, rules_epoch: u32,
+) -> (i64, f64, bool) {
     let mut best_penalty = 0;
     let mut best_over_in = 0.0;
     let mut best_applies_charged = false;
@@ -1531,23 +1918,123 @@ fn stealth_alias_of_excluding(reg: &mut Registries, p: &Profile, skip: &str) -> 
         let Some(e) = map.lookup(&p.faction_folder, &name) else {
             continue;
         };
-        if e.primitive.as_deref() != Some("Stealth") {
+        // FAB-C15: the flipped common "Stealth Buff" entry is a Utility Buff
+        // from 73; below the gate the old-data replay leg still folds its
+        // alias numbers onto the carrier, so every recorded corpus stays
+        // byte-exact. The 3.5.3 faction entries keep their own params.
+        let legacy_stealth_buff = name == "Stealth Buff" && !rule_on(rules_epoch, EPOCH_73_V36);
+        if e.primitive.as_deref() != Some("Stealth") && !legacy_stealth_buff {
             continue;
         }
-        let pen = e.param_i("hit_penalty", 0);
+        let pen = if legacy_stealth_buff { 1 } else { e.param_i("hit_penalty", 0) };
         if pen > best_penalty {
             best_penalty = pen;
-            best_over_in = e.param_f("over_in", 0.0);
+            best_over_in = if legacy_stealth_buff { 9.0 } else { e.param_f("over_in", 0.0) };
             best_applies_charged = e.param_b_or("applies_charged", false);
         }
     }
     (best_penalty, best_over_in, best_applies_charged)
 }
+
+/// Rules 3.6 (ruling D-MOST) — the Stealth-family names whose 3.6 text reads "most models";
+/// every other alias keeps the all-models read. Empyrean Spirit and Grounded Evasion ride MOR-06;
+/// Entrenched joined in row MOR-04 (its 3.6 carrier is MOST models).
+const STEALTH_MOST_MODELS: [&str; 7] = [
+    "Stealth", "Changebound", "Machine-Fog", "Screened", "Empyrean Spirit", "Grounded Evasion",
+    "Entrenched",
+];
+
+/// The Stealth-family quantifier: from `EPOCH_73_V36` a listed name holds when
+/// most models carry it (`p.model_count` = the host's models when the profile
+/// is built), else, and below the gate, only when every model does.
+fn stealth_family_on(p: &Profile, rule: &str, rules_epoch: u32) -> bool {
+    if rule_on(rules_epoch, crate::acts::EPOCH_73_V36) && STEALTH_MOST_MODELS.contains(&rule) {
+        return rule_on_most_models(p, p.model_count, rule, false);
+    }
+    rule_on_all_models(p, rule)
+}
+
+/// Rules 3.6 (row W1.4b) — the LIVE quantifier of the Stealth family.
+/// `Some(on)` from `EPOCH_73_V36`; `None` below, so the caller keeps the static
+/// stamp byte-identical. A listed name needs a strict majority of the LIVING
+/// models (`host_alive` plus every living joined hero, one model however Tough);
+/// any other name keeps the all-models read. A dead model carries nothing.
+pub(crate) fn stealth_family_live(
+    host: &Profile, host_alive: i64, heroes: &[(&Profile, i64)], rule: &str, rules_epoch: u32,
+) -> Option<bool> {
+    if !rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
+        return None;
+    }
+    let (with, total) = stealth_live_counts(host, host_alive, heroes, rule);
+    if STEALTH_MOST_MODELS.contains(&rule) {
+        Some(most_models_of(with, total))
+    } else {
+        Some(with == total)
+    }
+}
+
+/// The live carrier tally of `rule` over the joined unit: the host's living
+/// models share the host's rules, and every living joined hero is one model.
+pub(crate) fn stealth_live_counts(
+    host: &Profile, host_alive: i64, heroes: &[(&Profile, i64)], rule: &str,
+) -> (i64, i64) {
+    let host_alive = host_alive.max(0);
+    let mut with = if has_special_rule(&host.special_rules, rule) { host_alive } else { 0 };
+    let mut total = host_alive;
+    for (hero, alive) in heroes {
+        let alive = (*alive).max(0);
+        if alive <= 0 {
+            continue;
+        }
+        total += 1;
+        if has_special_rule(&hero.special_rules, rule) {
+            with += 1;
+        }
+    }
+    (with, total)
+}
+
+/// Row MOR-06 (D-MOST) — the names whose 3.6 text counts most models; their
+/// Boosts and data aliases keep the all-models read. GD twin: `AiEv.MOST_MODELS_MOR06`.
+const MOST_MODELS_MOR06: [&str; 18] = [
+    "Steadfast", "Battleborn", "Honor Code", "Vale Oath", "Enhanced Vale Oath", "Unmovable",
+    "Evasive", "Melee Evasion", "Melee Shrouding", "Ranged Shrouding",
+    "Precision Growth", "Piercing Frenzy", "Regenerative Strength", "Precision Frenzy",
+    "Fortified Growth", "Defensive Frenzy", "Piercing Growth", "Defensive Growth",
+];
+
+/// Most models for the names above from `EPOCH_73_V36`, else every model; a majority
+/// past a plain joined hero names itself on the trace. GD twin: `AiEv.most_models_family_on`.
+fn most_models_family_on(p: &Profile, rule: &str, rules_epoch: u32) -> bool {
+    if !rule_on(rules_epoch, crate::acts::EPOCH_73_V36) || !MOST_MODELS_MOR06.contains(&rule) {
+        return rule_on_all_models(p, rule);
+    }
+    let on = rule_on_most_models(p, p.model_count.max(1), rule, false);
+    if on && !rule_on_all_models(p, rule) {
+        trace_rule("v36-most", rule,
+            "most models carry it, so a joined hero without it does not switch it off");
+    }
+    on
+}
+
+/// Row W1.4b — the LIVE twin of `most_models_family_on` for the MOR-06 names:
+/// `Some(on)` from `EPOCH_73_V36` when `rule` is one of the family names, `None`
+/// for every other name and below the gate, so the caller keeps the static
+/// stamp. Same strict-majority read as `evasion_rule_live`.
+pub(crate) fn most_models_family_live(
+    host: &Profile, host_alive: i64, heroes: &[(&Profile, i64)], rule: &str, rules_epoch: u32,
+) -> Option<bool> {
+    if !MOST_MODELS_MOR06.contains(&rule) {
+        return None;
+    }
+    evasion_rule_live(host, host_alive, heroes, rule, rules_epoch)
+}
+
 /// Wave 4 (port-entrenched) — `stealth_alias_of_excluding` SPLIT by
 /// `requires_stationary`: true keeps the flagged entries (Entrenched),
 /// false only the unconditional ones, below the FROZEN gate never called.
 fn stealth_alias_split_walk(
-    reg: &mut Registries, p: &Profile, skip: &str, want_stationary: bool,
+    reg: &mut Registries, p: &Profile, skip: &str, want_stationary: bool, rules_epoch: u32,
 ) -> (i64, f64, bool, bool) {
     let mut best_penalty = 0;
     let mut best_over_in = 0.0;
@@ -1556,22 +2043,23 @@ fn stealth_alias_split_walk(
     let map = reg.rules_for(&p.game_system);
     for r in &p.special_rules {
         let name = base_rule_name(r);
-        if name.is_empty() || name == "Stealth" || name == skip || !rule_on_all_models(p, &name) {
+        if name.is_empty() || name == "Stealth" || name == skip || !stealth_family_on(p, &name, rules_epoch) {
             continue;
         }
         let Some(e) = map.lookup(&p.faction_folder, &name) else {
             continue;
         };
-        if e.primitive.as_deref() != Some("Stealth") {
+        let legacy_stealth_buff = name == "Stealth Buff" && !rule_on(rules_epoch, EPOCH_73_V36);
+        if e.primitive.as_deref() != Some("Stealth") && !legacy_stealth_buff {
             continue;
         }
         if e.param_b_or("requires_stationary", false) != want_stationary {
             continue;
         }
-        let pen = e.param_i("hit_penalty", 0);
+        let pen = if legacy_stealth_buff { 1 } else { e.param_i("hit_penalty", 0) };
         if pen > best_penalty {
             best_penalty = pen;
-            best_over_in = e.param_f("over_in", 0.0);
+            best_over_in = if legacy_stealth_buff { 9.0 } else { e.param_f("over_in", 0.0) };
             best_applies_charged = e.param_b_or("applies_charged", false);
             best_terrain_gated = e.param_f("terrain_within_in", 0.0) > 0.0;
         }
@@ -1589,8 +2077,8 @@ fn stealth_alias_split_walk(
 pub(crate) const STEALTH_ALIAS_TERRAIN_WITHIN_IN: f64 = 1.0;
 
 /// The split's SIBLING fn — the `requires_stationary` members only.
-fn stationary_alias_of(reg: &mut Registries, p: &Profile) -> (i64, f64, bool) {
-    let (pen, over, charged, _) = stealth_alias_split_walk(reg, p, "", true);
+fn stationary_alias_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (i64, f64, bool) {
+    let (pen, over, charged, _) = stealth_alias_split_walk(reg, p, "", true, rules_epoch);
     (pen, over, charged)
 }
 /// Battleborn family wave 3 (rules-wave3-battleborn) — main.gd
@@ -1621,10 +2109,15 @@ fn battleborn_recover_target_of(reg: &mut Registries, p: &Profile, rules_epoch: 
         return 0;
     }
     let carried = |name: &str| {
-        has_special_rule(&p.special_rules, name) || has_special_rule(&p.item_grants, name)
+        if rule_on(rules_epoch, crate::acts::EPOCH_73_V36) && MOST_MODELS_MOR06.contains(&name) {
+            return rule_on_most_models(p, p.model_count.max(1), name, false);
+        }
+        (has_special_rule(&p.special_rules, name) || has_special_rule(&p.item_grants, name))
+            && (!rule_on(rules_epoch, crate::acts::EPOCH_73_V36)
+                || p.attached_hero_rules.iter().all(|hr| has_special_rule(hr, name)))
     };
     let mut best = 0u32;
-    for name in ["Honor Code", "Vale Oath", "Vale Oath Boost", "Unmovable"] {
+    for name in ["Honor Code", "Vale Oath", "Enhanced Vale Oath", "Unmovable"] {
         if !carried(name) {
             continue;
         }
@@ -1669,9 +2162,10 @@ fn battleborn_recover_target_of(reg: &mut Registries, p: &Profile, rules_epoch: 
 /// `gate_in <= 0.0` branch — EVERY save batch, every leg; a gated entry
 /// ("Guardian"/"Primeborn"/"Warden"/"Ossified") fires only past its own
 /// `over_in`, which only the volley can measure. The table applies the FIRST
-/// entry whose gate passes and breaks (:6461); every shipped entry carries
-/// `incoming_ap_reduction: 1`, so the max here IS that first read — the
-/// primal-Boost "uniform printed shape" precedent. Scans own rules AND
+/// entry whose gate passes and breaks (:6461); below `EPOCH_73_V36` every entry
+/// reads 1, so the max here IS that first read — the primal-Boost "uniform
+/// printed shape" precedent. From 73 an enhanced form (Enhanced Warden: 2)
+/// REPLACES its base's cut through the max, never stacks. Scans own rules AND
 /// `item_grants`, each gated by `rule_on_all_models` (TC-023's all-models read).
 #[derive(Default)]
 struct FortifiedAlias {
@@ -1694,14 +2188,14 @@ struct FortifiedAlias {
 const FORTIFIED_AURA_RULE: &str = "Fortified Aura";
 const FORTIFIED_AURA_BASE: &str = "Fortified";
 
-fn fortified_alias_of(reg: &mut Registries, p: &Profile) -> FortifiedAlias {
+fn fortified_alias_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> FortifiedAlias {
     let mut out = FortifiedAlias::default();
     let map = reg.rules_for(&p.game_system);
     let mut raws: Vec<&String> = p.special_rules.iter().collect();
     raws.extend(p.item_grants.iter());
     for raw in raws {
         let name = base_rule_name(raw);
-        if name.is_empty() || name == "Fortified" || !rule_on_all_models(p, &name) {
+        if name.is_empty() || name == "Fortified" || !rule_on_defence_family(p, &name, rules_epoch) {
             continue;
         }
         let Some(e) = map.lookup(&p.faction_folder, &name) else {
@@ -1710,7 +2204,7 @@ fn fortified_alias_of(reg: &mut Registries, p: &Profile) -> FortifiedAlias {
         if e.primitive.as_deref() != Some("Fortified") {
             continue;
         }
-        let ap = e.param_i("incoming_ap_reduction", 1);
+        let ap = if rule_on(rules_epoch, EPOCH_73_V36) { e.param_i("incoming_ap_reduction", 1) } else { 1 };
         let over_in = e.param_f("over_in", 0.0);
         // Sweep F row `Fortified Aura` (epoch 55) — the aura entry's own
         // knobs, read wherever the entry resolves (the boost arm is where
@@ -1906,6 +2400,17 @@ struct PrimitiveHit {
     extra_wound_per_save_one: i64,
 }
 
+/// Rules 3.6 (DAT-12b-fix): an EXPLICIT `over_in: 0` on an entry means "no
+/// distance condition" (the Enhanced forms' shape). Honoured only from
+/// `EPOCH_73_V36`; below it the same key reads the old 9" default, so an
+/// epoch-72 record replays byte-identical.
+fn v36_over_in(raw: f64, rules_epoch: u32) -> f64 {
+    if raw != 0.0 {
+        return raw;
+    }
+    if rule_on(rules_epoch, crate::acts::EPOCH_73_V36) { -1.0 } else { 9.0 }
+}
+
 /// `RulesRegistry.unit_rules_of_primitive` rules_registry.gd:155-176 — every
 /// effective rule (own + item-granted, each name once, in that order) whose
 /// registry entry resolves to `primitive`.
@@ -2048,10 +2553,31 @@ pub struct CaptureReads {
     pub shroud: Option<[f64; 2]>,
 }
 
+/// Rules 3.6 Valiant (MOR-09): the Banner family's +1 counts only when the
+/// wound that forced the test came from a shot over 9" or a charge from over
+/// 6". The "Valiant" common map entry carries the same two params; the 3.5.3
+/// "Hold the Line" / "Hive Bond" entries stay untouched and are gated by the
+/// family name at `EPOCH_73_V36` (no per-epoch map variants exist for them).
+pub const VALIANT_SHOT_GATE_IN: f64 = 9.0;
+pub const VALIANT_CHARGE_GATE_IN: f64 = 6.0;
+
+/// True when the forcing distance sits INSIDE the Valiant band, so the Banner
+/// share must not count. `None` means the call site could not supply the
+/// geometry without inventing it — keep the 3.5 reading and do not guess (a
+/// rule-forced test carries no distance).
+pub fn valiant_inside_band(melee: bool, over_in: Option<f64>, charge_from_in: Option<f64>) -> bool {
+    if melee {
+        matches!(charge_from_in, Some(d) if d <= VALIANT_CHARGE_GATE_IN)
+    } else {
+        matches!(over_in, Some(d) if d <= VALIANT_SHOT_GATE_IN)
+    }
+}
+
 /// `SoloController.morale_bonus_of`, evaluated over one member's rule list:
 /// the named "Banner" (when the map fields it) and every DATA ALIAS whose entry
-/// resolves to the Banner primitive.
-fn banner_bonus_of(reg: &mut Registries, p: &Profile, rules: &[String]) -> i64 {
+/// resolves to the Banner primitive. From `EPOCH_73_V36` "Valiant" needs a
+/// strict model majority; below 73 it reads like any Banner alias.
+fn banner_bonus_of(reg: &mut Registries, p: &Profile, rules: &[String], rules_epoch: u32) -> i64 {
     let mut best = 0;
     let map = reg.rules_for(&p.game_system);
     if has_special_rule(rules, "Banner") && (map.empty || map.has_primitive(&p.faction_folder, "Banner")) {
@@ -2060,14 +2586,42 @@ fn banner_bonus_of(reg: &mut Registries, p: &Profile, rules: &[String]) -> i64 {
             None => BANNER_MORALE_BONUS,
         });
     }
+    let valiant_ok = rule_on(rules_epoch, EPOCH_73_V36)
+        && rule_on_most_models(p, p.model_count.max(1), "Valiant", false);
     let mut seen: Vec<String> = Vec::new();
     for raw in rules {
         let n = base_rule_name(raw);
         if n.is_empty() || n == "Banner" || seen.iter().any(|s| *s == n) {
             continue;
         }
+        if n == "Valiant" && rule_on(rules_epoch, EPOCH_73_V36) && !valiant_ok {
+            continue;
+        }
         seen.push(n.clone());
         if let Some(e) = map.lookup(&p.faction_folder, &n) {
+            if e.primitive.as_deref() == Some("Banner") {
+                best = best.max(e.param_i("morale_bonus", 0));
+            }
+        }
+    }
+    best
+}
+
+/// MOR-09 Valiant — Banner-primitive family names behind the distance gate.
+/// The two 3.5 spellings have no most-models clause.
+const VALIANT_FAMILY: [&str; 3] = ["Valiant", "Hold the Line", "Hive Bond"];
+
+/// The Valiant-family share of one member's banner bonus: the MAX
+/// `morale_bonus` over the carried family names, "Valiant" majority-gated.
+fn valiant_bonus_of(reg: &mut Registries, p: &Profile, rules: &[String], rules_epoch: u32) -> i64 {
+    let map = reg.rules_for(&p.game_system);
+    let valiant_ok = rule_on(rules_epoch, EPOCH_73_V36)
+        && rule_on_most_models(p, p.model_count.max(1), "Valiant", false);
+    let mut best = 0;
+    for name in VALIANT_FAMILY {
+        if !has_special_rule(rules, name) { continue; }
+        if name == "Valiant" && rule_on(rules_epoch, EPOCH_73_V36) && !valiant_ok { continue; }
+        if let Some(e) = map.lookup(&p.faction_folder, name) {
             if e.primitive.as_deref() == Some("Banner") {
                 best = best.max(e.param_i("morale_bonus", 0));
             }
@@ -2115,8 +2669,8 @@ fn morale_rating_stamp(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> i
 
 /// `AiActRecorder._melee_shroud_params` act_recorder.gd:276-295 — the named rule
 /// first, then the DATA aliases of the two Shrouding primitives, in that order.
-fn melee_shroud_params(reg: &mut Registries, p: &Profile) -> Option<[f64; 2]> {
-    if rule_on_all_models(p, "Melee Shrouding") {
+fn melee_shroud_params(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Option<[f64; 2]> {
+    if most_models_family_on(p, "Melee Shrouding", rules_epoch) {
         let map = reg.rules_for(&p.game_system);
         let e = map.lookup(&p.faction_folder, "Melee Shrouding");
         return Some(match e {
@@ -2161,7 +2715,7 @@ fn ranged_shroud_params(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> 
         return rule_on_all_models(p, "Ranged Shrouding")
             .then_some([SHROUD_RANGE_PENALTY_IN, SHROUD_FLOOR_IN]);
     }
-    if rule_on_all_models(p, "Ranged Shrouding") {
+    if most_models_family_on(p, "Ranged Shrouding", rules_epoch) {
         let map = reg.rules_for(&p.game_system);
         let e = map.lookup(&p.faction_folder, "Ranged Shrouding");
         return Some(match e {
@@ -2202,13 +2756,13 @@ fn shielded_alias_of(
     p: &Profile,
     rules_epoch: u32,
 ) -> Option<(ShieldedAlias, bool)> {
-    if !rule_on(rules_epoch, EPOCH_6_TABLE_RULES) || rule_on_all_models(p, "Shielded") {
+    if !rule_on(rules_epoch, EPOCH_6_TABLE_RULES) || rule_on_defence_family(p, "Shielded", rules_epoch) {
         return None;
     }
     const ALIASES: [(&str, ShieldedAlias); 3] = [
         ("+1 to Defense", ShieldedAlias::PlusOneToDefense),
-        ("Sturdy Boost", ShieldedAlias::SturdyBoost),
-        ("Grounded Reinforcement", ShieldedAlias::GroundedReinforcement),
+        ("Enhanced Sturdy", ShieldedAlias::SturdyBoost),
+        ("Grounded Defense", ShieldedAlias::GroundedReinforcement),
     ];
     // Audit 2026-09-13 §2.4's skirmish half — "Safety Gear Boost" (gff) and
     // "Tenacious Boost" (aofs) join the wave at the CURRENT epoch only, so
@@ -2294,10 +2848,13 @@ pub fn capture_reads_for_epoch(
     let mut p = p.clone();
     apply_aura_channel(reg, &mut p, rules_epoch);
     let p = &p;
-    let mut morale_bonus = banner_bonus_of(reg, p, &p.special_rules);
+    let trace73 = rule_on(rules_epoch, EPOCH_73_V36) && crate::mv::plain_memo::trace_rules_on();
+    let mut morale_bonus = banner_bonus_of(reg, p, &p.special_rules, rules_epoch);
     for hero in &p.attached_hero_rules {
-        morale_bonus = morale_bonus.max(banner_bonus_of(reg, p, hero));
+        morale_bonus = morale_bonus.max(banner_bonus_of(reg, p, hero, rules_epoch));
     }
+    trace_stamp(trace73 && morale_bonus != 0, "banner-stamp", "Banner",
+        &format!("{}: Banner stamped +{} morale", p.name, morale_bonus));
     // EPOCH_39_MORALE_RATING — the rating joins the SAME stamp, the table's
     // own shape: `morale_bonus_of` ADDS the two best-ofs (solo_controller.gd:5638).
     morale_bonus += morale_rating_stamp(reg, p, rules_epoch);
@@ -2306,7 +2863,7 @@ pub fn capture_reads_for_epoch(
         aircraft: unit_rule_active(reg, p, "Aircraft"),
         charge_no_difficult: has_special_rule(&p.special_rules, "Strider")
             || has_special_rule(&p.special_rules, "Flying"),
-        shroud: melee_shroud_params(reg, p),
+        shroud: melee_shroud_params(reg, p, rules_epoch),
     }
 }
 
@@ -2341,16 +2898,21 @@ pub fn capture_reads_for_epoch(
 /// `sim::ctx_live` on the snapshot's own `in_cover` (the Shielded family's
 /// terrain-pending shape, `shielded_alias_of`'s own bool). Below 52 the
 /// recorded flat fold replays and the tail stays zeros.
-fn regen_targets(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (i64, i64, i64, i64) {
-    let base = if has_special_rule(&p.special_rules, "Regeneration")
-        || has_special_rule(&p.special_rules, "Medical Training")
-    {
+fn regen_targets(
+    reg: &mut Registries, p: &Profile, rules_epoch: u32, trace73: bool,
+) -> (i64, i64, i64, i64, f64, f64) {
+    let regen = if rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
+        regen_family_on(p, "Regeneration", rules_epoch)
+    } else {
+        has_special_rule(&p.special_rules, "Regeneration")
+    };
+    let base = if regen || has_special_rule(&p.special_rules, "Medical Training") {
         let map = reg.rules_for(&p.game_system);
         match map.lookup(&p.faction_folder, "Regeneration") {
             Some(e) => e.param_i("ignore_target", REGENERATION_TARGET),
             None => REGENERATION_TARGET,
         }
-    } else if rule_on_all_models(p, "Self-Repair") {
+    } else if regen_family_on(p, "Self-Repair", rules_epoch) {
         let map = reg.rules_for(&p.game_system);
         match map.lookup(&p.faction_folder, "Self-Repair") {
             Some(e) => e.param_i("ignore_target", SELF_REPAIR_TARGET),
@@ -2360,9 +2922,33 @@ fn regen_targets(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (i64, i
         0
     };
     let mut picked = (base, base, 0i64, 0i64);
-    if rule_on_all_models(p, "Resistance") && unit_rule_active(reg, p, "Resistance") {
+    // MOR-17a (rules 3.6): the names that share Warding's distance gate.
+    // `other_min` is the best target NO gated name supplies; `warding` the
+    // gated name's own reading. The gate is stamped only when the gated
+    // target is the one that binds, i.e. nothing else ignores on an equal or
+    // better face (a plain family rule keeps rolling either way). A gated
+    // entry carrying `no_gate_v36` (Enhanced Knightborn) pins the gate open
+    // even when a plain Knightborn is carried beside it.
+    let mut other_min = base;
+    let mut warding: Option<(i64, f64, f64)> = None;
+    let mut no_gate = false;
+    // MOR-07 (rules 3.6): "Spell Resistance" reaches the same primitive; from
+    // `EPOCH_73_V36` both names need only a strict majority (D-MOST). Below 73
+    // only the 3.5 name exists and keeps the every-model read.
+    for name in ["Resistance", "Spell Resistance"] {
+        if name == "Spell Resistance" && !rule_on(rules_epoch, EPOCH_73_V36) {
+            continue;
+        }
+        let active = if rule_on(rules_epoch, EPOCH_73_V36) {
+            rule_on_most_models(p, p.model_count.max(1), name, false)
+        } else {
+            rule_on_all_models(p, name)
+        };
+        if !active || !unit_rule_active(reg, p, name) {
+            continue;
+        }
         let map = reg.rules_for(&p.game_system);
-        let e = map.lookup(&p.faction_folder, "Resistance");
+        let e = map.lookup(&p.faction_folder, name);
         let rs = match e {
             Some(e) => e.param_i("ignore_target", RESISTANCE_TARGET),
             None => RESISTANCE_TARGET,
@@ -2371,13 +2957,14 @@ fn regen_targets(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (i64, i
             Some(e) => e.param_i("ignore_target_spell", RESISTANCE_TARGET_SPELL),
             None => RESISTANCE_TARGET_SPELL,
         };
-        let most_generous = |cand: i64| base == 0 || cand < base;
-        picked = (
-            if most_generous(rs) { rs } else { base },
-            if most_generous(rs_spell) { rs_spell } else { base },
-            0,
-            0,
-        );
+        if rs > 0 && (picked.0 == 0 || rs < picked.0) {
+            picked.0 = rs;
+        }
+        if rs_spell > 0 && (picked.1 == 0 || rs_spell < picked.1) {
+            picked.1 = rs_spell;
+        }
+        trace_rule("regen", name, &format!("{}: {name} stamped {rs}+ (spells {rs_spell}+)",
+            p.name));
     }
     // The DATA-ALIAS wave itself (main.gd:6642-6652): the carrier walk is
     // `rules_of_primitive`'s (own + item-granted, each name once), the gate
@@ -2403,7 +2990,12 @@ fn regen_targets(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (i64, i
             let Some(e) = map.lookup(&p.faction_folder, &n) else {
                 continue;
             };
-            if e.primitive.as_deref() != Some("Regeneration") {
+            // DAT-17b: the flipped "Regeneration Buff" entry is a Utility Buff
+            // now; below `EPOCH_73_V36` the old-data replay leg still folds its
+            // 5+ onto the carrier, so every recorded corpus stays byte-exact.
+            let legacy_regen_buff =
+                n == "Regeneration Buff" && !rule_on(rules_epoch, EPOCH_73_V36);
+            if e.primitive.as_deref() != Some("Regeneration") && !legacy_regen_buff {
                 continue;
             }
             // Wave 3 (epoch 6): "Warding" is Angelic Blessing/Knightborn's
@@ -2419,12 +3011,29 @@ fn regen_targets(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (i64, i
                     &format!("regen alias on {} — wounds ignored on {}+ (spells {}+)", p.name,
                         e.param_i("ignore_target", 0), e.param_i("ignore_target_spell", 0)),
                 );
+                trace_stamp(trace73, "regen-alias", &n,
+                    &format!("{}: {} stamped {}+ (spells {}+)", p.name, n,
+                        e.param_i("ignore_target", 0), e.param_i("ignore_target_spell", 0)));
             }
-            if e.param_b("all_models") && !rule_on_all_models(p, &n) {
+            if e.param_b("all_models") && !regen_family_on(p, &n, rules_epoch) {
                 continue;
             }
-            let normal = e.param_i("ignore_target", 0);
-            let spell = e.param_i("ignore_target_spell", normal);
+            let normal = if legacy_regen_buff {
+                REGENERATION_TARGET
+            } else {
+                e.param_i("ignore_target", 0)
+            };
+            // MOR-17a: the shared names read their 3.6 spell target (2+) from
+            // their own key; below 73 the entry's recorded 4+ stands.
+            let gated = matches!(
+                n.as_str(),
+                "Warding" | "Knightborn" | "Angelic Blessing" | "Enhanced Knightborn"
+            );
+            let spell = if gated && rule_on(rules_epoch, EPOCH_73_V36) {
+                e.param_i("ignore_target_spell_v36", e.param_i("ignore_target_spell", normal))
+            } else {
+                e.param_i("ignore_target_spell", normal)
+            };
             // EPOCH 56 GROUNDED PROTECTION — `terrain_within_in > 0` makes the
             // condition the rule's whole point: hold the target ASIDE (the
             // tuple's pending tail) for `sim::ctx_live`'s per-save-moment
@@ -2447,9 +3056,32 @@ fn regen_targets(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (i64, i
             if spell > 0 && (picked.1 == 0 || spell < picked.1) {
                 picked.1 = spell;
             }
+            if gated {
+                if normal > 0 {
+                    warding = Some((
+                        normal,
+                        e.param_f("ignore_over_in", 0.0),
+                        e.param_f("ignore_over_in_charge", 0.0),
+                    ));
+                    if rule_on(rules_epoch, EPOCH_73_V36) && e.param_b("no_gate_v36") {
+                        no_gate = true;
+                    }
+                }
+            } else if normal > 0 && (other_min == 0 || normal < other_min) {
+                other_min = normal;
+            }
         }
     }
-    picked
+    // MOR-17a: the distance gates are a 3.6 reading — below 73 the stamp stays 0.0.
+    let mut gates = (0.0, 0.0);
+    if rule_on(rules_epoch, EPOCH_73_V36) && !no_gate {
+        if let Some((normal, over, charge)) = warding {
+            if other_min == 0 || normal < other_min {
+                gates = (over, charge);
+            }
+        }
+    }
+    (picked.0, picked.1, picked.2, picked.3, gates.0, gates.1)
 }
 
 /// The SHOOTING leg's three die params (`ap_bonus`/`hit_bonus`/`low_roll_max`)
@@ -2527,9 +3159,25 @@ fn self_destruct_rating(reg: &mut Registries, p: &Profile) -> i64 {
     unit_rating(&p.special_rules, "Self-Destruct").max(1)
 }
 
+/// Rules 3.6 (`EPOCH_73_V36`) — the Brace a profile carries: a Brace(X) WEAPON, else a UNIT rule the map
+/// resolves to the Brace primitive ("Brace in Melee": its `rating`, or the printed X). `(book name, X)`.
+/// Twin: `AiEv.brace_unit_rule`.
+fn brace_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Option<(String, i64)> {
+    if !rule_on(rules_epoch, EPOCH_73_V36) {
+        return None;
+    }
+    if let Some(w) = p.weapons.iter().find(|w| weapon_has(w, "Brace")) {
+        return Some(("Brace".to_string(), weapon_rating(w, "Brace").max(1)));
+    }
+    let hit = rules_of_primitive(reg, p, "Brace").into_iter().next()?;
+    let x = unit_param_i(reg, p, &hit.name, "rating", 0).max(unit_rating(&p.special_rules, &hit.name));
+    Some((hit.name, x.max(1)))
+}
+
 /// `AiEv.ctx_for` ai_ev.gd:135-165. `models` stays at the live-unit reading;
 /// `BattleSim._ctx_of` overwrites it with the snapshot's `alive` on every call.
 fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
+    let trace73 = rule_on(rules_epoch, EPOCH_73_V36) && crate::mv::plain_memo::trace_rules_on();
     let armor = if unit_rule_active(reg, p, "Armor") {
         unit_rating(&p.special_rules, "Armor")
     } else {
@@ -2549,11 +3197,22 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     // (ai_ev.gd:142-143); the ROLLED test adds the rating through the
     // capture stamp, and this field only names it.
     let morale_rating = morale_rating_stamp(reg, p, rules_epoch);
+    // MOR-09 Valiant — the family share the band gate may remove; trace the
+    // majority keep-on (rules-must-log, the `regen_family_on` shape).
+    let mut valiant_bonus = valiant_bonus_of(reg, p, &p.special_rules, rules_epoch);
+    for hero in &p.attached_hero_rules {
+        valiant_bonus = valiant_bonus.max(valiant_bonus_of(reg, p, hero, rules_epoch));
+    }
+    if has_special_rule(&p.special_rules, "Valiant") && rule_on(rules_epoch, EPOCH_73_V36)
+        && rule_on_most_models(p, p.model_count.max(1), "Valiant", false)
+        && !rule_on_all_models(p, "Valiant") {
+        trace_rule("valiant", "Valiant", &format!("most models of {} carry Valiant: a joined hero without it does not switch it off", p.name));
+    }
     // Wave 4 — "Machine-Fog Boost": the printed unconditional form of
     // Machine-Fog's own -1 (folds into `evasive`, below; the base entry's
     // conditional alias leg stands down so the two never stack).
     let machine_fog_boost = rule_on(rules_epoch, EPOCH_6_TABLE_RULES)
-        && rule_on_all_models(p, "Machine-Fog") && rule_on_all_models(p, "Machine-Fog Boost");
+        && rule_on_all_models(p, "Machine-Fog") && rule_on_all_models(p, "Enhanced Machine-Fog");
     // Wave 4 (rules-wave4-boostbases2) — "Empyrean Spirit Boost" is the
     // aof/ghostly_undead twin of the same shape: the printed unconditional
     // form of Empyrean Spirit's own -1 ("enemies attacking them always get -1
@@ -2562,14 +3221,14 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     // stands down so the two never stack.
     let empyrean_spirit_boost = rule_on(rules_epoch, EPOCH_7_TABLE_RULES)
         && rule_on_all_models(p, "Empyrean Spirit")
-        && rule_on_all_models(p, "Empyrean Spirit Boost");
+        && rule_on_all_models(p, "Enhanced Empyrean Spirit");
     // The Boost that is the reason `evasive` is on, if any — the dice seams'
     // rules-must-log name ("" = none). Epoch 6 before epoch 7: a carrier can
     // only ever hold one of these two (different systems and factions).
     let evasive_boost = if machine_fog_boost {
-        "Machine-Fog Boost"
+        "Enhanced Machine-Fog"
     } else if empyrean_spirit_boost {
-        "Empyrean Spirit Boost"
+        "Enhanced Empyrean Spirit"
     } else {
         ""
     };
@@ -2579,25 +3238,29 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
             let skip = if machine_fog_boost { "Machine-Fog" }
                 else if empyrean_spirit_boost { "Empyrean Spirit" } else { "" };
-            let (ap, ao, ac, near) = stealth_alias_split_walk(reg, p, skip, false);
-            let (sp, so, _) = stationary_alias_of(reg, p);
+            let (ap, ao, ac, near) = stealth_alias_split_walk(reg, p, skip, false, rules_epoch);
+            let (sp, so, _) = stationary_alias_of(reg, p, rules_epoch);
             (ap, ao, ac, near, sp, so)
         } else {
-            let (ap, ao, ac) = if machine_fog_boost { stealth_alias_of_excluding(reg, p, "Machine-Fog") }
-                else if empyrean_spirit_boost { stealth_alias_of_excluding(reg, p, "Empyrean Spirit") }
-                else { stealth_alias_of(reg, p) };
+            let (ap, ao, ac) = if machine_fog_boost { stealth_alias_of_excluding(reg, p, "Machine-Fog", rules_epoch) }
+                else if empyrean_spirit_boost { stealth_alias_of_excluding(reg, p, "Empyrean Spirit", rules_epoch) }
+                else { stealth_alias_of(reg, p, rules_epoch) };
             (ap, ao, ac, false, 0, 0.0)
         };
+    trace_stamp(trace73 && stealth_alias_penalty != 0, "stealth-alias-stamp", "Stealth",
+        &format!("{}: Stealth alias stamped -{} to hit", p.name, stealth_alias_penalty));
     // WAVE 3 — the family's DATA-ALIAS amounts, gated on the FROZEN
     // `EPOCH_6_TABLE_RULES`: an `rules_epoch: 5` record (the Gen-3 fleet's
     // window) reads zeros and replays byte-exact; the stamp IS the gate.
     let (fortified_boost_ap, fortified_alias_ap, fortified_alias_over_in) =
         if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
-            let fa = fortified_alias_of(reg, p);
+            let fa = fortified_alias_of(reg, p, rules_epoch);
             (fa.boost_ap, fa.alias_ap, fa.alias_over_in)
         } else {
             (0, 0, 0.0)
         };
+    trace_stamp(trace73 && fortified_alias_ap != 0, "fortified-alias", "Fortified",
+        &format!("{}: Fortified alias stamped -{} AP over {}", p.name, fortified_alias_ap, fortified_alias_over_in));
     let upr_shooting = (has_exact_rule(&p.special_rules, "Unpredictable")
         && unit_rule_active(reg, p, "Unpredictable"))
         || (has_exact_rule(&p.special_rules, "Unpredictable Shooter")
@@ -2607,7 +3270,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     } else {
         (1, 1, 3)
     };
-    let regen_targets = regen_targets(reg, p, rules_epoch);
+    let regen_targets = regen_targets(reg, p, rules_epoch, trace73);
     // Block C2 — the melee/charge leg of the Shot Modifier family (see the
     // `Ctx` fields). The name list IS the port: these three are exactly the
     // family's entries with no runtime gate, and naming them one by one keeps
@@ -2616,12 +3279,15 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     // below; Grounded Precision's `all_attacks` melee half is consumed at the
     // melee seam itself (dice.rs::melee_hit_target).
     let (mut melee_hit_bonus, mut melee_hit_bonus_charge) = (0, 0);
+    let (mut precision_charge_base, mut precision_fighter_base) = (false, false);
     for (name, charge_only) in [
         ("Good Fighter", false),
         ("Precision Fighter Aura", false),
         ("Precision Charge Aura", true),
+        ("Precision Fighter", false),
+        ("Precision Charge", true),
     ] {
-        if !unit_rule_active(reg, p, name) {
+        if !unit_rule_active(reg, p, name) || precision_base_stands_down(p, name, rules_epoch) {
             continue;
         }
         let map = reg.rules_for(&p.game_system);
@@ -2629,6 +3295,13 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
             continue;
         };
         let hb = e.param_i("hit_bonus", 0);
+        trace_stamp(trace73 && hb != 0, "shot-modifier", name,
+            &format!("{}: {} stamped +{} melee", p.name, name, hb));
+        match name {
+            "Precision Charge" => precision_charge_base = true,
+            "Precision Fighter" => precision_fighter_base = true,
+            _ => {}
+        }
         if charge_only {
             melee_hit_bonus_charge += hb;
         } else {
@@ -2648,12 +3321,24 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         0
     };
     let ranged_shroud = ranged_shroud_params(reg, p, rules_epoch);
+    if trace73 {
+        if let Some([pen, floor]) = ranged_shroud {
+            trace_stamp(true, "ranged-shrouding", "Ranged Shrouding",
+                &format!("{}: Ranged Shrouding stamped -{}\" range, floor {}in", p.name, pen, floor));
+        }
+    }
     // Wave 3 — the family's two runtime-gated shooting members (see
     // `shot_modifier_runtime_of`); `moved_this_round` keeps its default true
     // until sim.rs's volley site stamps the act-scope flag over it.
     let (mobile_artillery_hit, mobile_artillery_over_in, grounded_precision_hit) =
         shot_modifier_runtime_of(reg, p, rules_epoch);
     let shielded_alias = shielded_alias_of(reg, p, rules_epoch);
+    if trace73 {
+        if let Some((kind, terrain)) = shielded_alias {
+            trace_stamp(true, "shielded-alias", "Shielded",
+                &format!("{}: Shielded alias stamped {:?} (terrain {})", p.name, kind, terrain));
+        }
+    }
     // EPOCH_54_DEFENSE_RATING — the rating kind's magnitude rides the SAME
     // stamp (`Ctx::shielded_rating`): the table's `maxi(rating, 0)` off the
     // rule's own rating (main.gd:5592). The walk already proved the rating
@@ -2664,6 +3349,17 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         } else {
             0
         };
+    // EPOCH_73_V36 — rules 3.6: a shot at an Aircraft is also -N to hit (the map's new key).
+    let aircraft_hit_penalty = if rule_on(rules_epoch, EPOCH_73_V36) && unit_rule_active(reg, p, "Aircraft") {
+        reg.rules_for(&p.game_system).lookup(&p.faction_folder, "Aircraft")
+            .map_or(0, |e| e.param_i("target_hit_penalty", 0))
+    } else {
+        0
+    };
+    // MEL-12 (`EPOCH_73_V36`) — Regenerative Strength pays in token dice, not attacks;
+    // keyed on the rule NAME so every other Growth Markers rule keeps its payout.
+    let growth_wounds_not_attacks = rule_on(rules_epoch, crate::acts::EPOCH_73_V36)
+        && unit_rule_active(reg, p, "Regenerative Strength");
     // The Artillery hit modifiers' own params (dead-parameter recount
     // 2026-09-15), behind the FROZEN `EPOCH_7_TABLE_RULES` like the
     // neighbouring Indirect param read: below 7 the Options stay None and
@@ -2677,6 +3373,16 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         artillery_entry.as_ref().map(|e| e.param_i("shooter_hit_bonus", 1));
     let artillery_target_hit_penalty =
         artillery_entry.as_ref().map(|e| e.param_i("target_hit_penalty", 2));
+    let v36_artillery = artillery_entry.as_ref().filter(|_| rule_on(rules_epoch, crate::acts::EPOCH_73_V36));
+    let artillery_shooter_over_in = v36_artillery.map_or(0.0, |e| e.param_f("shooter_over_in", 0.0));
+    let artillery_shooter_needs_hold = v36_artillery.is_some_and(|e| e.param_b_or("shooter_requires_hold", false));
+    // SHO-06 (rules 3.6): the target-side leg reads its own keys only at the gate; below 73 the
+    // three fields stay None/0.0/false and the old over-9" -2 leg is untouched.
+    let artillery_target_hit_penalty_v36 =
+        v36_artillery.map(|e| e.param_i("target_hit_penalty_v36", 1));
+    let artillery_target_over_in = v36_artillery.map_or(0.0, |e| e.param_f("target_over_in", 0.0));
+    let artillery_target_most_models = v36_artillery.is_some()
+        && rule_on_most_models(p, p.model_count.max(1), "Artillery", false);
     // Unit-wide Counter aliases strip one Impact roll per living model. Keep
     // the older weapon-only stamp unchanged for recordings before epoch 65.
     let counter_unit_reduction = if rule_on(rules_epoch, EPOCH_65_MELEE_TRUTH) {
@@ -2689,16 +3395,67 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     } else {
         None
     };
+    // Rules 3.6 (`EPOCH_73_V36`) — a Brace(X) weapon bearer blunts a charge:
+    // the unit takes X Impact dice off ONCE, however many models carry it.
+    let brace = brace_of(reg, p, rules_epoch);
+    // AIG-G2 (`EPOCH_73_V36`): Unwieldy is a WEAPON rule, but the strike order is per unit, so the unit
+    // strikes last only when EVERY melee weapon it carries has it; a mix keeps the normal order (logged).
+    let melee = || p.weapons.iter().filter(|w| w.range <= 0.0 && w.count > 0);
+    let (melee_weapons, unwieldy_weapons) = (melee().count(), melee().filter(|w| weapon_has(w, "Unwieldy")).count());
+    // Rules 3.6 (`EPOCH_73_V36`) — `Parry(X)`'s dice per living carrier model.
+    let parry_dice = if rule_on(rules_epoch, EPOCH_73_V36) {
+        let by_name = if unit_rule_active(reg, p, "Parry") { unit_rating(&p.special_rules, "Parry") } else { 0 };
+        if by_name > 0 {
+            by_name
+        } else {
+            p.weapons.iter().filter(|w| w.range <= 0.0).map(|w| weapon_rating(w, "Parry")).max().unwrap_or(0)
+        }
+    } else {
+        0
+    };
+    // SHO-17 — the family walk's rules-must-log answer; `guarded` below shares it.
+    let guarded_name = if guarded_family_on(p, "Guarded", rules_epoch) { "Guarded" }
+        else if guarded_family_on(p, "Versatile Defense", rules_epoch) { "Versatile Defense" }
+        else if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) && guarded_family_on(p, "Sturdy", rules_epoch) { "Sturdy" }
+        else if rule_on(rules_epoch, EPOCH_13_WHO_WINS) && guarded_family_on(p, "Safety Gear", rules_epoch) { "Safety Gear" }
+        else if rule_on(rules_epoch, EPOCH_13_WHO_WINS) && guarded_family_on(p, "Tenacious", rules_epoch) { "Tenacious" }
+        else { "" };
+    // SHO-19 / SHO-19b — the Versatile Expert and Enhanced Watchborn spellings pin the pick's
+    // distance gate open from `EPOCH_73_V36`; the map entry owns the `no_gate_v36` switch,
+    // so the old data stays old.
+    let versatile_no_gate = rule_on(rules_epoch, EPOCH_73_V36) && {
+        let map = reg.rules_for(&p.game_system);
+        p.special_rules.iter().chain(p.item_grants.iter()).any(|raw| {
+            let n = base_rule_name(raw);
+            (n == "Versatile Expert" || n == "Enhanced Watchborn")
+                && map.lookup(&p.faction_folder, &n).is_some_and(|e| e.param_b("no_gate_v36"))
+        })
+    };
+    let evasive_on = most_models_family_on(p, "Evasive", rules_epoch) || !evasive_boost.is_empty();
+    trace_stamp(trace73 && evasive_on, "evasive-stamp",
+        if evasive_boost.is_empty() { "Evasive" } else { evasive_boost },
+        &format!("{}: Evasive stamped, -1 to hit", p.name));
     Ctx {
+        member_gap_in: None,
+        granted_reach_in: 0.0,
         quality: p.quality,
         defense: armored_defense(p.defense, armor),
         morale_bonus,
         morale_rating,
+        valiant_bonus,
         tough: unit_rating(&p.special_rules, "Tough").max(1),
         models: 1, // placeholder; `_ctx_of` always writes the snapshot's alive
+        above_half_strength: false,
+        shaken_or_fatigued: false,
+        near_terrain: false,
         artillery: has_special_rule(&p.special_rules, "Artillery"),
         artillery_shooter_hit_bonus,
         artillery_target_hit_penalty,
+        artillery_shooter_over_in,
+        artillery_shooter_needs_hold,
+        artillery_target_hit_penalty_v36,
+        artillery_target_over_in,
+        artillery_target_most_models,
         furious: has_special_rule(&p.special_rules, "Furious"),
         fearless: if rule_on(rules_epoch, EPOCH_65_MELEE_TRUTH) {
             rule_on_all_models(p, "Fearless")
@@ -2728,11 +3485,16 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         // name answers for the heroes — an alias carried ONLY by a hero is the
         // one case this misses, and it is named in `resolve_melee_with_tray`.
         unwieldy: !rules_of_primitive(reg, p, "Unwieldy").is_empty()
-            || p.attached_hero_rules.iter().any(|hr| has_exact_rule(hr, "Unwieldy")),
+            || p.attached_hero_rules.iter().any(|hr| has_exact_rule(hr, "Unwieldy"))
+            || (rule_on(rules_epoch, EPOCH_73_V36) && unwieldy_weapons > 0 && unwieldy_weapons == melee_weapons),
+        unwieldy_mixed: rule_on(rules_epoch, EPOCH_73_V36) && unwieldy_weapons > 0 && unwieldy_weapons < melee_weapons,
         impact: unit_rating(&p.special_rules, "Impact"),
         heavy_impact: unit_rating(&p.special_rules, "Heavy Impact"),
         ravage: unit_rating(&p.special_rules, "Ravage"),
-        stealth: rule_on_all_models(p, "Stealth"),
+        stealth: stealth_family_on(p, "Stealth", rules_epoch),
+        stealth_most_models: stealth_family_on(p, "Stealth", rules_epoch)
+            && !rule_on_all_models(p, "Stealth"),
+        stealth_grant: false,
         stealth_alias_penalty,
         stealth_alias_over_in,
         stealth_alias_applies_charged,
@@ -2744,11 +3506,12 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         stationary_alias_penalty,
         stationary_alias_over_in,
         stationary_alias_name: if stationary_alias_penalty > 0 { "Entrenched" } else { "" },
-        evasive: rule_on_all_models(p, "Evasive") || !evasive_boost.is_empty(),
+        evasive: evasive_on,
         evasive_alias: !evasive_boost.is_empty(),
         evasive_alias_name: evasive_boost,
-        melee_evasion: rule_on_all_models(p, "Melee Evasion"),
-        fortified: rule_on_all_models(p, "Fortified")
+        melee_evasion: most_models_family_on(p, "Melee Evasion", rules_epoch),
+        dodge: unit_rule_active(reg, p, "Dodge") && rule_on_most_models(p, p.model_count, "Dodge", false),
+        fortified: rule_on_defence_family(p, "Fortified", rules_epoch)
             && fortified_aura_bearer_live(reg, p, rules_epoch),
         // WAVE 3 — stamped above, behind `EPOCH_6_TABLE_RULES`.
         fortified_boost_ap,
@@ -2765,11 +3528,9 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         // `EPOCH_7_TABLE_RULES` — the wave-4 accounting's "no remap" call
         // stands: the registry primitive is untouched, only the name read
         // joins this flag.
-        guarded: rule_on_all_models(p, "Guarded")
-            || rule_on_all_models(p, "Versatile Defense")
-            || (rule_on(rules_epoch, EPOCH_7_TABLE_RULES) && rule_on_all_models(p, "Sturdy"))
-            || (rule_on(rules_epoch, EPOCH_13_WHO_WINS)
-                && (rule_on_all_models(p, "Safety Gear") || rule_on_all_models(p, "Tenacious"))),
+        guarded: !guarded_name.is_empty(),
+        guarded_name,
+        guarded_charge_over_in: 0.0,
         ranged_shrouding: ranged_shroud.is_some(),
         ranged_shroud_penalty_in: ranged_shroud.map_or(SHROUD_RANGE_PENALTY_IN, |s| s[0]),
         ranged_shroud_floor_in: ranged_shroud.map_or(SHROUD_FLOOR_IN, |s| s[1]),
@@ -2777,6 +3538,8 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         mobile_artillery_over_in,
         grounded_precision_hit,
         moved_this_round: true,
+        strafe_volley: false,
+        held: false,
         // Wave 4 (port-entrenched) — the table's own default (never moved).
         moved_round: -1,
         round: 0,
@@ -2791,7 +3554,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
                 .rules_for(&p.game_system)
                 .lookup(&p.faction_folder, "Quick Readjustment")
                 .is_some_and(|e| e.param_b_or("no_moved_penalty", false)),
-        shielded: rule_on_all_models(p, "Shielded")
+        shielded: rule_on_defence_family(p, "Shielded", rules_epoch)
             || shielded_alias.as_ref().is_some_and(|(_, pending)| !*pending),
         shielded_alias: shielded_alias.map_or(ShieldedAlias::None, |(a, _)| a),
         shielded_rating,
@@ -2805,7 +3568,9 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         // count; epoch 65 also recognizes a unit-wide Counter primitive alias.
         // `sim::ctx_of` scales the stamped count to living models. Earlier
         // recordings retain their original weapon-only or hard-zero count.
-        counter_models: if counter_unit_reduction.is_some() {
+        counter_models: if rule_on(rules_epoch, EPOCH_73_V36) {
+            0
+        } else if counter_unit_reduction.is_some() {
             p.model_count.max(0)
         } else if rule_on(rules_epoch, EPOCH_13_WHO_WINS) {
             p.weapons.iter().filter(|w| w.range <= 0.0 && weapon_has(w, "Counter")).map(|w| w.count.max(1)).sum::<i64>().min(p.model_count.max(0))
@@ -2814,18 +3579,28 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         },
         // The unit alias supplies its own per-model magnitude at epoch 65;
         // weapon-only records retain the epoch-13 Counter entry's value.
-        counter_impact_per_model: if counter_unit_reduction.is_some() {
+        counter_impact_per_model: if rule_on(rules_epoch, EPOCH_73_V36) {
+            None
+        } else if counter_unit_reduction.is_some() {
             counter_unit_reduction
         } else if rule_on(rules_epoch, EPOCH_13_WHO_WINS) {
             reg.rules_for(&p.game_system).lookup(&p.faction_folder, "Counter").map(|e| e.param_i("impact_reduction_per_model", 1))
         } else {
             None
         },
+        // Rules 3.6 — `sim::ctx_of` trims the carrier flag to the living models.
+        brace_models: if brace.is_some() { 1 } else { 0 },
+        brace_impact_per_model: brace.map(|b| b.1),
+        parry_dice,
+        parry_dice_total: None,
+        blast_models: None,
         regeneration: regen_targets.0 > 0,
         regen_target: regen_targets.0,
         regen_target_spell: regen_targets.1,
         regen_pending: regen_targets.2,
         regen_pending_spell: regen_targets.3,
+        regen_gate_over_in: regen_targets.4,
+        regen_gate_charge_in: regen_targets.5,
         fatigued: false,
         retaliate_hits_per_wound: retaliate_hits_per_wound(reg, p),
         death_hits_per_kill: death_hits_per_kill(reg, p),
@@ -2837,6 +3612,8 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         defense_mod: 0,
         melee_hit_bonus,
         melee_hit_bonus_charge,
+        precision_charge_base,
+        precision_fighter_base,
         unstoppable_grant: false,
         unstoppable_mark: false,
         unstoppable_aura: false,
@@ -2845,12 +3622,14 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         thrust_grant: false,
         relentless_grant: false,
         shred_grant: false,
+        bane_grant: false,
         slayer_grant: false,
         surge_grant: false,
         versatile_grant: false,
         versatile_pick_hit: 0,
         versatile_pick_ap: 0,
         versatile_latched: false,
+        versatile_no_gate,
         pierce_shooting_grant: false,
         pierce_melee_grant: false,
         pierce_assault_grant: false,
@@ -2862,7 +3641,13 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         growth_def_mod: 0,
         growth_fortify_ap: 0,
         growth_def_lowers: false,
+        growth_wounds_not_attacks,
+        growth_wound_dice: 0,
+        v36_rules: rule_on(rules_epoch, crate::acts::EPOCH_73_V36),
         modifier_sum: rule_on(rules_epoch, crate::acts::EPOCH_68_MODIFIER_SUM),
+        playtest_rules: rule_on(rules_epoch, EPOCH_72_PLAYTEST_RULES),
+        rules_epoch,
+        aircraft_hit_penalty,
         ambush_arrival_ap: 0,
         tag_ap_mod: 0,
         reckless_ap: 0,
@@ -2881,7 +3666,16 @@ fn stamp(
     shoot: &mut [ShootProfile],
     unimplemented: &mut Vec<Unimplemented>,
     rules_epoch: u32,
+    trace73: bool,
 ) {
+    // Rules 3.6 (SHO-11): "Destructive" is the above-half-strength AP(+1) rule now,
+    // not the 3.5 unmodified-six AP(+4). The 3.6 registry entry drives that bonus
+    // through the conditional-AP pass, so the old fixed on-6 flag must stay off.
+    if rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
+        for sp in shoot.iter_mut() {
+            sp.destructive = false;
+        }
+    }
     // 1. Versatile Attack, unit-wide (ai_ev.gd:209-217).
     if has_special_rule(&p.special_rules, "Versatile Attack")
         || !rules_of_primitive(reg, p, "Versatile Attack").is_empty()
@@ -2894,6 +3688,7 @@ fn stamp(
     if p.special_rules.iter().any(|r| r.trim() == "Ferocious") {
         for sp in shoot.iter_mut() {
             sp.surge = true;
+            sp.surge_alias_rule = "Ferocious".into();
         }
     }
     // 3. Surge-family data aliases (ai_ev.gd:225-249). `extra_attack`
@@ -2904,6 +3699,11 @@ fn stamp(
     //    epoch-gated surge block.
     for hit in rules_of_primitive(reg, p, "Surge") {
         if hit.name == "Surge" || hit.name == "Ferocious" || !hit.upgrades.is_empty() {
+            continue;
+        }
+        // Row MOR-12 (rules 3.6): the 5-6 window became the bearer's AP(+2) share
+        // (stamp step 7), so the alias leaves the Surge walk from 73.
+        if hit.name == "Great Sergeant" && rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
             continue;
         }
         // EPOCH_17_SURGE_SCOPE (sweep B, row "Surge when Shooting"): the entry
@@ -2940,13 +3740,24 @@ fn stamp(
                     sp.surge_attack = true;
                 } else {
                     sp.surge = true;
+                    sp.surge_alias_rule = hit.name.clone();
                     sp.bonus_hits_per_six = hit.bonus_hits_per_six;
                     if hit.within_in > 0.0 {
                         sp.surge_within_in = hit.within_in;
+                        trace_stamp(trace73, "surge-window", &hit.name,
+                            &format!("{}: {} stamped within {}in", p.name, hit.name, hit.within_in));
                     }
+                    // Rules 3.6 (row G4-C3, EPOCH_73_V36): the table stamps
+                    // every Surge data alias with its own `over_in` (default
+                    // -1.0, "no distance condition"), so a PLAIN alias —
+                    // `surge_low` 6, no wider window — pays at any range from
+                    // 73. Below 73 only the widened 5s window carries the
+                    // sentinel, and every recorded corpus replays.
                     if let Some((low, over)) = printed_low {
                         if low < 6 {
                             sp.surge_low = low;
+                        }
+                        if low < 6 || rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
                             sp.surge_over_in = over;
                         }
                     }
@@ -2980,10 +3791,22 @@ fn stamp(
             }
             continue;
         }
+        // DAT-12b-fix: an Enhanced entry drops the distance condition and keeps
+        // the BASE rule's window — not the 3.5 Boost's 5. From 73 only; below
+        // the gate the old Boost defaults (5 and 9") stay byte-identical.
+        let low = if rule_on(rules_epoch, crate::acts::EPOCH_73_V36) && hit.over_in == 0.0 {
+            reg.rules_for(&p.game_system)
+                .lookup(&p.faction_folder, &hit.upgrades)
+                .map(|e| e.param_i("surge_low", 6))
+                .unwrap_or(6)
+        } else {
+            hit.surge_low
+        };
+        let over = v36_over_in(hit.over_in, rules_epoch);
         for sp in shoot.iter_mut() {
             if sp.surge {
-                sp.surge_low = hit.surge_low;
-                sp.surge_over_in = hit.over_in;
+                sp.surge_low = low;
+                sp.surge_over_in = over;
             }
         }
     }
@@ -3040,6 +3863,8 @@ fn stamp(
                 .any(|h| facet_applies(h.melee_only, h.shooting_only, sp.range))
         {
             sp.shred_alias = true;
+            trace_stamp(trace73, "shred", "Shred",
+                &format!("{}: Shred stamped +1 wound per unmodified 1", p.name));
         }
     }
     // 6b. Shred UPGRADE entries (the Boost family): fires only when the model
@@ -3058,17 +3883,39 @@ fn stamp(
         for sp in shoot.iter_mut() {
             if sp.shred_alias {
                 sp.shred_low = hit.save_fail_max;
-                sp.shred_over_in = hit.over_in;
+                sp.shred_over_in = v36_over_in(hit.over_in, rules_epoch);
             }
         }
     }
-    // 7. Sergeant (ai_ev.gd:282-291). Its share reads the LIVE alive count,
-    //    which the static profile does not carry — reported, never guessed.
-    if unit_rule_active(reg, p, "Sergeant") {
+    // 7. Sergeant / Great Sergeant (ai_ev.gd:282-291). From rules 3.6 the
+    //    FIRST profile with attacks carries the entry's AP bonus; the live
+    //    bearer share is taken at the strike, off the Ctx's alive count
+    //    (dice.rs / combat.rs), so the static only names the rule. Below the
+    //    gate the old report stays: the core never guesses the 3.5 share.
+    if rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
+        let sgt_rule = if unit_rule_active(reg, p, "Great Sergeant") {
+            "Great Sergeant"
+        } else {
+            "Sergeant"
+        };
+        if unit_rule_active(reg, p, sgt_rule) {
+            let ap = unit_param_i(reg, p, sgt_rule, "ap_bonus", 1);
+            if let Some(sp) = shoot.iter_mut().find(|sp| sp.attacks > 0) {
+                sp.sergeant_ap = ap;
+                sp.sergeant_rule = sgt_rule.into();
+            }
+        }
+    } else if unit_rule_active(reg, p, "Sergeant") {
         unimplemented.push(Unimplemented {
             rule: "Sergeant".into(),
             why: "sergeant_attacks needs GameUnit.get_alive_count() at the moment of the call (ai_ev.gd:284) — not in the static profile".into(),
         });
+    }
+    // SHO-18: stamp the alias gate on whichever array the caller passed.
+    if rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
+        for sp in shoot.iter_mut() {
+            sp.alias_gate = true;
+        }
     }
 }
 
@@ -3089,8 +3936,24 @@ fn stamp(
 /// and the Bane-primitive DATA-ALIAS wave (Bestial, Mischievous, Scrapper —
 /// non-"Bane", non-"Aura", `reroll_save_sixes`) joins it, exactly main.gd:
 /// 6553-6560. Every record below that epoch keeps the flat prefix reading.
+/// A1: the weapon prints Lacerate and no Bane — main.gd `_solo_profile_lacerate_only`.
+fn lacerate_only(rules: &[String]) -> bool {
+    let mut lacerate = false;
+    for r in rules {
+        let s = r.trim();
+        if s.starts_with("Bane") {
+            return false;
+        }
+        lacerate |= s.starts_with("Lacerate");
+    }
+    lacerate
+}
+
 fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProfile], rules_epoch: u32) {
     let table_ladder = rule_on(rules_epoch, EPOCH_3_TABLE_RULES);
+    // A1 (`EPOCH_72_PLAYTEST_RULES`, the table's #1911): Lacerate re-rolls the sixes only; it
+    // never ignores Regeneration (only Bane does). Below 72 both names bypass, replay-exact.
+    let playtest = rule_on(rules_epoch, EPOCH_72_PLAYTEST_RULES);
     let mut u_bane = false;
     let mut melee_bane = false;
     let mut shooting_bane = false;
@@ -3126,7 +3989,7 @@ fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
                 }
             } else {
                 u_bane = true;
-                u_bypass = true;
+                u_bypass |= !(playtest && rs.starts_with("Lacerate"));
             }
         } else if rs.starts_with("Rending") {
             // Wave 4 (rules-wave4-condap), gated on the FROZEN
@@ -3265,6 +4128,10 @@ fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
         sp.bane |= u_bane
             || (melee_bane && sp.range <= 0)
             || (shooting_bane && sp.range > 0);
+        // A1: `base_profile` stamps the legacy bypass for a printed Lacerate too.
+        if playtest && lacerate_only(&sp.rules) {
+            sp.bypass_regen = false;
+        }
         sp.bypass_regen |= u_bypass
             || (melee_bypass && sp.range <= 0)
             || (shooting_bypass && sp.range > 0);
@@ -3285,6 +4152,63 @@ fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
             sp.unstoppable = true;
         }
         sp.unstoppable_ev = sp.unstoppable || u_unstop;
+    }
+    stamp_map_cover_regen(reg, p, shoot, rules_epoch);
+    stamp_weapon_bane_alias(reg, p, shoot, rules_epoch);
+}
+
+/// AI-G2 (`EPOCH_73_V36`): a WEAPON rule the faction map resolves to the Bane primitive (Smash, Reap, Decimate)
+/// re-rolls Defense 6s like the printed Bane, under its entry's own `condition`, and cuts Regeneration only when
+/// the entry prints `bypass_regen`. A profile that already banes keeps its own ungated window. Twin:
+/// `AiEv._stamp_weapon_bane_alias`.
+fn stamp_weapon_bane_alias(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProfile], rules_epoch: u32) {
+    if !rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
+        return;
+    }
+    let map = reg.rules_for(&p.game_system);
+    for sp in shoot.iter_mut().filter(|sp| !sp.bane) {
+        for n in sp.rules.iter().map(|r| base_rule_name(r)).collect::<Vec<_>>() {
+            let Some(e) = map.lookup(&p.faction_folder, &n) else { continue };
+            let on = facet_applies(e.param_b("melee_only"), e.param_b("shooting_only"), sp.range);
+            if !on || e.primitive.as_deref() != Some("Bane") || !e.param_b("reroll_save_sixes") || n.starts_with("Bane") || n.ends_with("Aura") {
+                continue;
+            }
+            sp.bane = true;
+            sp.bypass_regen |= e.param_b("bypass_regen");
+            (sp.bane_condition, sp.bane_threshold, sp.bane_alias) = (e.param_s("condition").to_string(), e.param_i("threshold", 0), n);
+            // Reap's widened window: successful saves from the entry's own `reroll_save_low` re-roll too.
+            let low = e.param_i("reroll_save_low", 0).max(e.param_i("reroll_save_from", 0));
+            if low > 1 {
+                (sp.bane_low, sp.bane_over_in) = (low, v36_over_in(e.param_f("over_in", 9.0), rules_epoch));
+            }
+            break;
+        }
+    }
+}
+
+/// AI-08a (`EPOCH_73_V36`): a weapon rule read through its map entry, not its 3.5 name (Anti-Cover:
+/// Indirect cover-only form; Anti-Regen: Lacerate + `bypass_regen`); each skip keeps the rule's name for
+/// its log line, a unit's cover-only rule names its block-5 skip. Twin: `AiEv._stamp_map_cover_regen`.
+fn stamp_map_cover_regen(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProfile], rules_epoch: u32) {
+    if !rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
+        return;
+    }
+    let unit_cover = rules_of_primitive(reg, p, "Indirect").into_iter()
+        .find(|h| h.name != "Indirect" && h.cover_only && h.ignores_cover).map(|h| h.name);
+    let map = reg.rules_for(&p.game_system);
+    for sp in shoot.iter_mut() {
+        for n in sp.rules.iter().map(|r| base_rule_name(r)).collect::<Vec<_>>() {
+            let Some(e) = map.lookup(&p.faction_folder, &n) else { continue };
+            let (prim, on) = (e.primitive.as_deref(), facet_applies(e.param_b("melee_only"), e.param_b("shooting_only"), sp.range));
+            if on && prim == Some("Indirect") && n != "Indirect" && sp.range > 0 && e.param_b("cover_only") && e.param_b("ignores_cover") {
+                (sp.ignores_cover, sp.cover_rule) = (true, n);
+            } else if on && prim == Some("Lacerate") && !n.starts_with("Lacerate") && e.param_b("bypass_regen") {
+                (sp.bypass_regen, sp.regen_bypass_rule) = (true, n);
+            }
+        }
+        if sp.cover_rule.is_empty() && sp.ignores_cover && sp.range > 0 {
+            sp.cover_rule = unit_cover.clone().unwrap_or_default();
+        }
     }
 }
 
@@ -3318,7 +4242,7 @@ pub(crate) const AURA_CHANNEL_NAMES: &[&str] = &[
     "Strider Aura",
     "Rending in Melee Aura",
     "Quick Shot Aura",
-    "Piercing Hunter Aura",
+    "Piercing Marksman Aura",
     "Teleport Aura",
     "Hit & Run Fighter Aura",
     "Indirect when Shooting Aura",
@@ -3329,9 +4253,10 @@ pub(crate) const AURA_CHANNEL_NAMES: &[&str] = &[
     "Speed Feat Aura",
     "Reanimation Aura",
     "Piercing Shooter Aura",
-    "Grounded Reinforcement Aura",
+    "Grounded Defense Aura",
     "Grounded Protection Aura",
     "Protected Aura",
+    "Spell Resistance Aura",
 ];
 
 /// The loader's own base-name cut (`rule[:-len(" Aura")].strip()`), kept only
@@ -3426,21 +4351,21 @@ fn aura_name_of(p: &Profile, base: &str) -> String {
 // earlier epoch. What the core gains is the leg the loader twin skips —
 // `LEGACY_CORE_SELFPLAY` returns from `_expand_auras` before it runs.
 pub(crate) const BOOST_AURA_CHANNEL_NAMES: &[&str] = &[
-    "Hold the Line Boost Aura",
-    "Targeting Visor Boost Aura",
-    "Warden Boost Aura",
-    "Lucky Boost Aura",
-    "Buccaneer Boost Aura",
-    "Vale Oath Boost Aura",
-    "Wave-Step Boost Aura",
-    "Royal Warrior Boost Aura",
-    "Bestial Boost Aura",
-    "Vinci Tech Boost Aura",
-    "Ossified Boost Aura",
-    "Shadowborn Boost Aura",
-    "Destroyer Boost Aura",
-    "Empyrean Spirit Boost Aura",
-    "Wild Veil Boost Aura",
+    "Enhanced Hold the Line Aura",
+    "Enhanced Targeting Visor Aura",
+    "Enhanced Warden Aura",
+    "Enhanced Lucky Aura",
+    "Enhanced Buccaneer Aura",
+    "Enhanced Vale Oath Aura",
+    "Enhanced Wave-Step Aura",
+    "Enhanced Royal Warrior Aura",
+    "Enhanced Bestial Aura",
+    "Enhanced Vinci Tech Aura",
+    "Enhanced Ossified Aura",
+    "Enhanced Shadowborn Aura",
+    "Enhanced Destroyer Aura",
+    "Enhanced Empyrean Spirit Aura",
+    "Enhanced Wild Veil Aura",
 ];
 
 /// The loader's own base-name cut (`rule[:-len(" Aura")].strip()`), kept only
@@ -3515,6 +4440,14 @@ fn boost_aura_name_of(p: &Profile, base: &str) -> String {
         .unwrap_or_else(|| format!("{base} Aura"))
 }
 
+/// Rules 3.6 (`EPOCH_73_V36`): the Precision Charge / Fighter BASES pay the carrier model itself (its own rules). Below
+/// the gate they read nothing; from it a model that also carries the Aura keeps the Aura's single +1 (the import copies
+/// the base onto every Aura carrier). GD twin: `AiEv.precision_base_stands_down`.
+fn precision_base_stands_down(p: &Profile, name: &str, rules_epoch: u32) -> bool {
+    matches!(name, "Precision Charge" | "Precision Fighter")
+        && (!rule_on(rules_epoch, EPOCH_73_V36) || has_special_rule(&p.special_rules, &format!("{name} Aura")))
+}
+
 /// `RulesRegistry.unit_rules_of_primitive(shooter, "Shot Modifier")`,
 /// main.gd:5681-5701 — scoped to this port's eight named carriers: B4's
 /// (Good Shot, Bad Shot, Targeting Visor) plus block C3's four flat/over-9"
@@ -3536,17 +4469,19 @@ fn boost_aura_name_of(p: &Profile, base: &str) -> String {
 /// runtime state), while Precision Feat (`uses_per_game`) stays out: a
 /// once-per-game PLAYER CHOICE the table never automates, so stamping it
 /// flat would be bug #489's over-credit.
-fn stamp_shot_modifier(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProfile]) {
+fn stamp_shot_modifier(
+    reg: &mut Registries, p: &Profile, shoot: &mut [ShootProfile], trace73: bool,
+) {
     let mut flat = 0;
     let mut over9 = 0;
     for name in [
         "Good Shot",
         "Bad Shot",
         "Targeting Visor",
-        "Targeting Visor Boost",
+        "Enhanced Targeting Visor",
         "Precision Shooter Aura",
         "Buccaneer",
-        "Buccaneer Boost",
+        "Enhanced Buccaneer",
         // Rung C data port (AUDIT_armybook_flanks_2026-09-02.md): Precision
         // Hunter is Targeting Visor's word-for-word twin ("+1 to hit rolls
         // when shooting at enemies over 9\" away") — same primitive, same
@@ -3561,6 +4496,9 @@ fn stamp_shot_modifier(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
             continue;
         };
         let hb = e.param_i("hit_bonus", 0);
+        let band = if e.param_f("over_in", 0.0) > 0.0 { "over 9in" } else { "flat" };
+        trace_stamp(trace73 && hb != 0, "shot-modifier", name,
+            &format!("{}: {} stamped {:+} to hit ({})", p.name, name, hb, band));
         if e.param_f("over_in", 0.0) > 0.0 {
             over9 += hb;
         } else {
@@ -3631,6 +4569,11 @@ pub struct UtilityBuff {
     pub hit_mod: i64,
     pub casting_mod: i64,
     pub morale_mod: i64,
+    /// `spell_token_drain` — MOR-16a: on a FAILED Morale test the picked
+    /// enemy unit loses this many spell tokens (floor 0). Parsed only from
+    /// `EPOCH_73_V36` on; below it the row is inert and no `Spell Drain`
+    /// record is stamped.
+    pub spell_token_drain: i64,
     /// `ap_mod` / `def_mod` / `defense_mod` — the seam 4 record shape (design
     /// §4 step 1), parsed ONLY from `EPOCH_7_TABLE_RULES` on (below 7 the
     /// fields stay 0 and the all-zero row keeps being dropped). NOT
@@ -3690,11 +4633,11 @@ const WAVE2_UTILITY_BUFF_RULES: [&str; 12] = [
     "Piercing Assault Buff",
     "Piercing Shooting Mark",
     "Piercing Fighting Mark",
-    "Self-Repair Boost Buff",
-    "Cursed Undead Boost Buff",
-    "Angelic Blessing Boost Buff",
-    "Hold the Line Boost Buff",
-    "Primal Boost Buff",
+    "Enhanced Self-Repair Buff",
+    "Enhanced Cursed Undead Buff",
+    "Enhanced Angelic Blessing Buff",
+    "Enhanced Hold the Line Buff",
+    "Enhanced Primal Buff",
 ];
 
 
@@ -4274,6 +5217,25 @@ fn utility_buffs_of(reg: &mut Registries, p: &Profile, rules_epoch: u32, un: &mu
         if n == "Precision Debuff" && !rule_on(rules_epoch, EPOCH_58_PRECISION_DEBUFF) {
             continue;
         }
+        // DAT-17b: the flipped "Regeneration Buff" entry is a Utility Buff that
+        // GRANTS Regeneration from `EPOCH_73_V36` on. Below the gate it read as
+        // the carrier's own Regeneration fold, so it stamps no utility-buff row.
+        if n == "Regeneration Buff" && !rule_on(rules_epoch, EPOCH_73_V36) {
+            continue;
+        }
+        // FAB-C15: the flipped common "Stealth Buff" entry is a Utility Buff
+        // that GRANTS Stealth from `EPOCH_73_V36` on. Below the gate it read as
+        // the carrier's own Stealth alias, so it stamps no utility-buff row.
+        if n == "Stealth Buff" && !rule_on(rules_epoch, EPOCH_73_V36) {
+            continue;
+        }
+        // MOR-16a: "Spell Drain" is the 3.6 replacement for the carriers'
+        // "Casting Debuff" — below `EPOCH_73_V36` the entry reads as ABSENT,
+        // so the old Casting Debuff record keeps its reading and every
+        // recorded corpus replays byte-exact.
+        if n == "Spell Drain" && !rule_on(rules_epoch, EPOCH_73_V36) {
+            continue;
+        }
         let vs_target = e.param_b("vs_target");
         let target = match e.param_s("target") {
             "" => "friendly",
@@ -4320,6 +5282,11 @@ fn utility_buffs_of(reg: &mut Registries, p: &Profile, rules_epoch: u32, un: &mu
             hit_mod: e.param_i("hit_mod", 0),
             casting_mod: e.param_i("casting_mod", 0),
             morale_mod: e.param_i("morale_mod", 0),
+            spell_token_drain: if rule_on(rules_epoch, EPOCH_73_V36) {
+                e.param_i("spell_token_drain", 0)
+            } else {
+                0
+            },
             // SEAM 4 step 1 (design §4(d), the FROZEN `EPOCH_7_TABLE_RULES`):
             // the three ap/def knobs join the record shape — a row whose ONLY
             // knob is one of these lands on `record_buff`'s ledger from epoch
@@ -4360,6 +5327,7 @@ fn utility_buffs_of(reg: &mut Registries, p: &Profile, rules_epoch: u32, un: &mu
         // attackers-side record, stamped from `EPOCH_61_PRECISION_MARKERS`.
         let b = out.last().expect("just pushed");
         if !b.vs_target && b.reposition_in <= 0.0 && b.grants_rule.is_empty() && b.bonus.is_empty()
+            && b.spell_token_drain == 0
             && (b.hit_mod, b.casting_mod, b.morale_mod, b.ap_mod, b.def_mod, b.defense_mod, b.move_mod)
                 == (0, 0, 0, 0, 0, 0, 0) {
             un.push(Unimplemented { rule: b.name.clone(), why:
@@ -4678,7 +5646,15 @@ pub struct GrowthRule {
 /// `state.growth_markers` is ONE counter per unit (see `sim::growth_bonus_
 /// of`): the training pool never carries two such rules on one bearer, so a
 /// unit with both would wrongly share one count — out of this block's scope.
+#[cfg(test)]
 fn growth_of(reg: &mut Registries, p: &Profile, un: &mut Vec<Unimplemented>) -> Vec<GrowthRule> {
+    growth_of_epoch(reg, p, 0, un)
+}
+
+/// MOR-06 — epoch-aware twin: from `EPOCH_73_V36` most models suffice, else every model must.
+fn growth_of_epoch(
+    reg: &mut Registries, p: &Profile, rules_epoch: u32, un: &mut Vec<Unimplemented>,
+) -> Vec<GrowthRule> {
     let mut out = Vec::new();
     let mut raws: Vec<&String> = p.special_rules.iter().collect();
     raws.extend(p.item_grants.iter());
@@ -4692,6 +5668,10 @@ fn growth_of(reg: &mut Registries, p: &Profile, un: &mut Vec<Unimplemented>) -> 
         seen.push(n.clone());
         let Some(e) = map.lookup(&p.faction_folder, &n) else { continue };
         if e.primitive.as_deref() != Some("Growth Markers") {
+            continue;
+        }
+        if rule_on(rules_epoch, EPOCH_73_V36)
+            && !most_models_family_on(p, &n, rules_epoch) {
             continue;
         }
         let g = GrowthRule {
@@ -4744,6 +5724,9 @@ fn cond_ap_of(reg: &mut Registries, p: &Profile, base: &str) -> (Option<CondAp>,
             bypass_regen: e.param_b("bypass_regen"),
             melee_only: e.param_b("melee_only"),
             shooting_only: e.param_b("shooting_only"),
+            // Rules 3.6 hook: a new spelling carries its rule name, so the dice
+            // folds' rules-must-log line names it; older spellings stay unnamed.
+            name: if crate::combat::cond_ap_why(e.param_s("condition")).is_empty() { String::new() } else { base.to_string() },
             ..Default::default()
         }),
         on6,
@@ -4783,11 +5766,20 @@ fn stamp_conditional_ap(
     if LEGACY_NO_COND_AP.load(Ordering::Relaxed) {
         return; // frozen-corpus replay — see the flag's own note
     }
+    // Rules 3.6 (SHO-20) — from `EPOCH_73_V36` the Slayer family's shooting leg
+    // reads a HOLD, not the over-9" gap; the stamp carries the new spelling and
+    // every pre-73 record keeps the old one (byte-exact replays).
+    let hold_gate = |mut c: CondAp| -> CondAp {
+        if rule_on(rules_epoch, crate::acts::EPOCH_73_V36) && c.gate == "ranged_over_or_charge" {
+            c.gate = "hold_or_charge".to_string();
+        }
+        c
+    };
     let mut unit_specs: Vec<(String, CondAp)> = Vec::new();
     for r in &p.special_rules {
         let base = base_rule_name(r);
         if let (Some(c), _) = cond_ap_of(reg, p, &base) {
-            unit_specs.push((base, c));
+            unit_specs.push((base, hold_gate(c)));
         }
     }
     for sp in shoot.iter_mut() {
@@ -4809,7 +5801,7 @@ fn stamp_conditional_ap(
                 {
                     sp.regen_bypass_rule = base.clone();
                 }
-                sp.cond_ap.push(c);
+                sp.cond_ap.push(hold_gate(c));
                 seen.push(base);
             }
             // Crack's on-6-to-hit AP upgrade (:305-307) — a plain assignment in
@@ -4858,6 +5850,7 @@ fn stamp_conditional_ap(
 fn stamp_conditional_ap_named(
     reg: &mut Registries,
     p: &Profile,
+    rules_epoch: u32,
     shoot: &mut [ShootProfile],
     melee: &mut [ShootProfile],
 ) {
@@ -4945,6 +5938,7 @@ fn stamp_conditional_ap_named(
                     sp.cond_ap.push(CondAp {
                         ap_bonus: ap,
                         condition: "on_charge".into(),
+                        charge_over_in: crate::combat::charge_over_in(rules_epoch),
                         name: n.clone(),
                         ..Default::default()
                     });
@@ -5164,7 +6158,7 @@ pub(crate) fn profiles_in_range(weapons: &[Weapon], dist_in: f64) -> Vec<ShootPr
         if rng_in <= 0 || (rng_in as f64) < dist_in {
             continue;
         }
-        if weapon_has(w, "Strafing") {
+        if weapon_strafes(w) {
             continue; // NML-002: fires only through the move-through trigger
         }
         let attacks = w.attacks.max(0) * w.count.max(1);
@@ -5176,34 +6170,43 @@ pub(crate) fn profiles_in_range(weapons: &[Weapon], dist_in: f64) -> Vec<ShootPr
     merge_identical(raw)
 }
 
-/// `AiShooting.melee_profiles` ai_shooting.gd:44-56 — every range-0 weapon, also
-/// UNSTAMPED. Strafing is NOT excluded here: that filter lives in
-/// `profiles_in_range` alone, and a melee weapon never carries the move-through
-/// trigger.
-pub(crate) fn melee_profiles(weapons: &[Weapon]) -> Vec<ShootProfile> {
+/// The melee list at the record's epoch — `AiShooting.melee_profiles`
+/// ai_shooting.gd:44-56. MEL-01 (D-ASSAULT, `EPOCH_73_V36`):
+/// a ranged weapon carrying Assault also yields a melee copy, in weapon order,
+/// at range 0, printed range kept in `printed_range`. AIG-G2 R3 (same epoch): a Crossing Strike weapon never strikes here.
+pub(crate) fn melee_profiles_at(weapons: &[Weapon], rules_epoch: u32) -> Vec<ShootProfile> {
+    let assault = rule_on(rules_epoch, crate::acts::EPOCH_73_V36);
     let mut raw: Vec<ShootProfile> = Vec::new();
     for w in weapons {
-        if w.range as i64 > 0 {
+        if assault && weapon_strafes(w) {
+            continue; // AIG-G2 R3 (same epoch gate): fires only through the move-through trigger
+        }
+        let copy = assault && w.range as i64 > 0 && weapon_has(w, "Assault");
+        if w.range as i64 > 0 && !copy {
             continue;
         }
         let attacks = w.attacks.max(0) * w.count.max(1);
         if attacks <= 0 {
             continue;
         }
-        raw.push(base_profile(w, attacks, 0));
+        let mut p = base_profile(w, attacks, 0);
+        if copy {
+            p.printed_range = w.range as i64;
+        }
+        raw.push(p);
     }
     merge_identical(raw)
 }
 
 /// `AiShooting.strafing_profiles` ai_shooting.gd:30-39 — the NML-002 move-through
-/// trigger's OWN set: every weapon carrying "Strafing", one profile per weapon,
+/// trigger's OWN set: every weapon carrying "Strafing" or "Crossing Strike", one profile per weapon,
 /// NO merge_identical (the table's function does not merge) and NO range gate
 /// (the trigger's reach test happens at the volley, not at the build). Mirrors
 /// the table exactly; consumed by `sim::tray_strafing` alone.
 pub(crate) fn strafing_profiles(weapons: &[Weapon]) -> Vec<ShootProfile> {
     let mut raw: Vec<ShootProfile> = Vec::new();
     for w in weapons {
-        if !weapon_has(w, "Strafing") {
+        if !weapon_strafes(w) {
             continue;
         }
         let attacks = w.attacks.max(0) * w.count.max(1);
@@ -5237,6 +6240,8 @@ fn stamp_bane_boost(
     shoot: &mut [ShootProfile],
     name: &'static str,
     widening: &'static str,
+    rules_epoch: u32,
+    trace73: bool,
 ) {
     let map = reg.rules_for(&p.game_system);
     let Some(e) = map
@@ -5251,12 +6256,23 @@ fn stamp_bane_boost(
     {
         return;
     }
-    let over = e.param_f("over_in", 9.0);
+    let over = v36_over_in(e.param_f("over_in", 9.0), rules_epoch);
+    // SHO-10: the optional target condition that opens the window. Gated at
+    // EPOCH_73_V36 so an epoch-72 record that already spells the key replays
+    // the unconditional window; no shipped entry spells it either way.
+    let cond = if rule_on(rules_epoch, EPOCH_73_V36) { e.param_s("condition").to_string() } else { String::new() };
+    let threshold = e.param_i("threshold", 0);
+    let mut stamped = 0;
     for sp in shoot.iter_mut().filter(|sp| sp.bane) {
         sp.bane_low = low;
         sp.bane_over_in = over;
         sp.bane_rule = name;
+        sp.bane_condition = cond.clone();
+        sp.bane_threshold = threshold;
+        stamped += 1;
     }
+    trace_stamp(trace73 && stamped != 0, "bane-boost", name,
+        &format!("{}: {} stamped {}+ over {}in", p.name, name, low, over));
 }
 
 /// `SoloController.bounding_dice_count` (solo_controller.gd:1386-1396) — how
@@ -5294,8 +6310,8 @@ fn bounding_boost_dice_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -
     }
     let map = reg.rules_for(&p.game_system);
     let Some(e) = map
-        .lookup(&p.faction_folder, "Wave-Step Boost")
-        .filter(|_| has_exact_rule(&p.special_rules, "Wave-Step Boost"))
+        .lookup(&p.faction_folder, "Enhanced Wave-Step")
+        .filter(|_| has_exact_rule(&p.special_rules, "Enhanced Wave-Step"))
     else {
         return 0;
     };
@@ -5489,11 +6505,17 @@ fn move_rule_mods_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Opt
         // entry ships with this wave, so a record below
         // `EPOCH_6_TABLE_RULES` keeps NOT seeing it.
         "Reach Hunt",
+        // Rules 3.6 (DAT-10): Lustbound's entry is a Quick-shaped alias (+1"/+2")
+        // the table's band pass already reads; gated on the frozen `EPOCH_73_V36`.
+        "Lustbound",
     ] {
         if !unit_rule_active(reg, p, name) {
             continue;
         }
         if wave3_alias(name) && !rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
+            continue;
+        }
+        if name == "Lustbound" && !rule_on(rules_epoch, EPOCH_73_V36) {
             continue;
         }
         let map = reg.rules_for(&p.game_system);
@@ -5525,7 +6547,7 @@ fn move_rule_mods_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Opt
     // gate is a per-activation majority read no statics-time stamp can
     // answer, so a flat stamp would be #489's over-credit, not a port.
     if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
-        for name in ["Highborn Boost", "Scurry Boost"] {
+        for name in ["Enhanced Highborn", "Enhanced Scurry"] {
             if !unit_rule_active(reg, p, name) {
                 continue;
             }
@@ -5737,14 +6759,27 @@ fn move_rule_mods_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Opt
                 e.param_f("advance_mod", 0.0),
                 e.param_f("rush_mod", e.param_f("charge_mod", 0.0)),
             );
-            acc.advance += adv;
-            acc.rush += rsh;
-            hit = true;
-            crate::sim::trace_rule(
-                "move-bands",
-                "Ethereal",
-                &format!("Ethereal: {adv}\" advance / {rsh}\" rush from the printed rule"),
-            );
+            if rule_on(rules_epoch, EPOCH_73_V36) {
+                // Rules 3.6 (MOR-19b): the place-within-6" is optional, so the STATIC
+                // bands carry the unplaced value; the table re-applies the -6"/-6" only
+                // while `teleport_used_this_activation` is set for the activation.
+                crate::sim::trace_rule(
+                    "move-bands",
+                    "Ethereal",
+                    &format!(
+                        "Ethereal: not placed (static) — 3.6 keeps the {adv}\" advance / {rsh}\" rush only while placed"
+                    ),
+                );
+            } else {
+                acc.advance += adv;
+                acc.rush += rsh;
+                hit = true;
+                crate::sim::trace_rule(
+                    "move-bands",
+                    "Ethereal",
+                    &format!("Ethereal: {adv}\" advance / {rsh}\" rush from the printed rule"),
+                );
+            }
         }
     }
 
@@ -5752,6 +6787,29 @@ fn move_rule_mods_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Opt
         acc.charge = Some(acc.rush + charge_delta);
     }
     if hit { Some(acc) } else { None }
+}
+
+/// G4R4 C-GRANTED-RANGE (`EPOCH_73_V36`): the Royal Legion-primitive rules (with their `range_bonus_in`) that a spell of
+/// the unit's faction hands out as a `grants_rule` ("Lust Boon" -> "Enhanced Lustbound" +8"). The table reads such a grant
+/// per member when it measures reach; the volley reads these names off the live ledger. Empty below 73.
+fn granted_reach_rules(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Vec<(String, f64)> {
+    if !rule_on(rules_epoch, EPOCH_73_V36) {
+        return Vec::new();
+    }
+    let names: Vec<String> = reg.spells_for(&p.game_system, &p.faction_folder).iter().map(|s| s.grants_rule.clone()).collect();
+    let map = reg.rules_for(&p.game_system);
+    let mut out: Vec<(String, f64)> = Vec::new();
+    for n in names {
+        if n.is_empty() || out.iter().any(|(o, _)| *o == n) {
+            continue;
+        }
+        let Some(e) = map.lookup(&p.faction_folder, &n) else { continue };
+        let b = e.param_f("range_bonus_in", 0.0);
+        if e.primitive.as_deref() == Some("Royal Legion") && b > 0.0 {
+            out.push((n, b));
+        }
+    }
+    out
 }
 
 /// The Royal Legion family (wave 3, epoch 6) — every carried Royal
@@ -5769,21 +6827,26 @@ fn move_rule_mods_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Opt
 /// name and is skipped here. Rules-must-log: one `trace_rule` line per
 /// stamped unit. Epoch-gated: `EPOCH_6_TABLE_RULES` — a record stamped
 /// `rules_epoch: 5` (the Gen-3 fleet's own window) predates wave 3.
-fn royal_legion_family_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (f64, f64) {
+fn royal_legion_family_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (f64, f64, String) {
     if !rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
-        return (0.0, 0.0);
+        return (0.0, 0.0, String::new());
     }
     let hits = rules_of_primitive(reg, p, "Royal Legion");
     let map = reg.rules_for(&p.game_system);
     let (mut range, mut charge) = (0.0_f64, 0.0_f64);
+    // The book name of the entry that set `range` — the battle-log line names it.
+    let mut range_rule = String::new();
     let mut folded: Vec<String> = Vec::new();
     for hit in hits {
         let Some(e) = map.lookup(&p.faction_folder, &hit.name) else { continue };
-        range = range.max(e.param_f("range_bonus_in", 0.0));
+        if e.param_f("range_bonus_in", 0.0) > range {
+            range = e.param_f("range_bonus_in", 0.0);
+            range_rule = hit.name.clone();
+        }
         charge += e.param_f("charge_mod", 0.0);
         folded.push(hit.name);
     }
-    for (aura, base) in [("Lustbound Boost Aura", "Lustbound Boost")] {
+    for (aura, base) in [("Enhanced Lustbound Aura", "Enhanced Lustbound")] {
         if !has_special_rule(&p.special_rules, aura) || folded.iter().any(|n| n == base) {
             continue;
         }
@@ -5793,7 +6856,10 @@ fn royal_legion_family_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -
             }
         }
         let Some(e) = map.lookup(&p.faction_folder, base) else { continue };
-        range = range.max(e.param_f("range_bonus_in", 0.0));
+        if e.param_f("range_bonus_in", 0.0) > range {
+            range = e.param_f("range_bonus_in", 0.0);
+            range_rule = base.to_string();
+        }
         charge += e.param_f("charge_mod", 0.0);
         folded.push(base.to_string());
     }
@@ -5804,7 +6870,7 @@ fn royal_legion_family_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -
             &format!("{}: +{:.0}\" shooting range, +{:.0}\" charge", p.name, range, charge),
         );
     }
-    (range, charge)
+    (range, charge, range_rule)
 }
 impl UnitStatic {
     /// The legacy epoch-0 build — every corpus recorded before
@@ -5849,13 +6915,23 @@ impl UnitStatic {
         // Aura-Channel fold so both additive legs see disjoint names.
         apply_fortified_aura_picks(reg, &mut p, rules_epoch);
         let p = &p;
+        let trace73 = rule_on(rules_epoch, EPOCH_73_V36) && crate::mv::plain_memo::trace_rules_on();
         let mut shoot = profiles_in_range(&p.weapons, 0.0);
-        stamp(reg, p, &mut shoot, &mut unimplemented, rules_epoch);
+        // Rules 3.6: the table bridges a unit's own Relentless onto its weapon
+        // profile at the reading seam, so the weapon does not have to print it.
+        // Mirror that on the shoot array only; the melee array carries range 0
+        // and can never reach the over-9" bonus. Gated at `EPOCH_73_V36`.
+        if rule_on(rules_epoch, EPOCH_73_V36) && has_special_rule(&p.special_rules, "Relentless") {
+            for sp in shoot.iter_mut() {
+                sp.relentless = true;
+            }
+        }
+        stamp(reg, p, &mut shoot, &mut unimplemented, rules_epoch, trace73);
         stamp_conditional_ap(reg, p, rules_epoch, &mut shoot);
         stamp_unit_strikers(reg, p, &mut shoot, rules_epoch);
-        stamp_shot_modifier(reg, p, &mut shoot);
+        stamp_shot_modifier(reg, p, &mut shoot, trace73);
 
-        let mut melee = melee_profiles(&p.weapons);
+        let mut melee = melee_profiles_at(&p.weapons, rules_epoch);
         // NML-002 Strafing — the move-through trigger's own array, stamped
         // UNGATED and UNSTAMPED: the table builds it raw off the weapons
         // (`AiShooting.strafing_profiles`, main.gd:2976-2985) and the
@@ -5865,7 +6941,7 @@ impl UnitStatic {
         // battle_sim.gd:719-720 takes the identical path); a rule the port
         // cannot model is reported ONCE, not once per array.
         let mut melee_unimpl: Vec<Unimplemented> = Vec::new();
-        stamp(reg, p, &mut melee, &mut melee_unimpl, rules_epoch);
+        stamp(reg, p, &mut melee, &mut melee_unimpl, rules_epoch, trace73);
         stamp_conditional_ap(reg, p, rules_epoch, &mut melee);
         stamp_unit_strikers(reg, p, &mut melee, rules_epoch);
         // Lacerate+Counter wave, epoch-gated (`acts::rule_on`, epoch 3): the
@@ -5916,12 +6992,13 @@ impl UnitStatic {
         // Buff now, placed by `tray_vs_marks` and consumed by the Surge folds
         // against the marked target only, so the walk no longer carries the
         // name — the flipped registry cannot answer the Surge primitive.
+        // Row MOR-12: Great Sergeant leaves the walk from rules 3.6 (stamp step 3 reports it).
         if rule_on(rules_epoch, EPOCH_5_TABLE_RULES) {
             for hit in rules_of_primitive(reg, p, "Surge").into_iter().filter(|hit| {
                 matches!(
                     hit.name.as_str(),
                     "Brutal" | "Great Sergeant" | "Devout" | "Surge when Shooting" | "Lucky"
-                )
+                ) && !(hit.name == "Great Sergeant" && rule_on(rules_epoch, crate::acts::EPOCH_73_V36))
             }) {
                 // EPOCH_17_SURGE_SCOPE: "Surge when Shooting" is the only name
                 // of the walk that carries `shooting_only` (sweep B) — honoured
@@ -5931,6 +7008,7 @@ impl UnitStatic {
                 for sp in shoot.iter_mut().chain(melee.iter_mut()) {
                     if facet_applies(hit.melee_only, scope_live, sp.range) {
                         sp.surge = true;
+                        sp.surge_alias_rule = hit.name.clone();
                         sp.bonus_hits_per_six = hit.bonus_hits_per_six;
                     }
                 }
@@ -5981,7 +7059,7 @@ impl UnitStatic {
             // base's two conditional legs when carried — the printed "always
             // … (instead of only when …)" — so the walk knows before it
             // reaches either name.
-            let havoc_boosted = p.special_rules.iter().any(|r| base_rule_name(r) == "Havocbound Boost");
+            let havoc_boosted = p.special_rules.iter().any(|r| base_rule_name(r) == "Enhanced Havocbound");
             for raw in &p.special_rules {
                 let n = base_rule_name(raw);
                 if n.is_empty() || seen.iter().any(|s| *s == n) {
@@ -6004,6 +7082,7 @@ impl UnitStatic {
                         live.push(CondAp {
                             ap_bonus: ap,
                             condition: "on_charge".into(),
+                            charge_over_in: crate::combat::charge_over_in(rules_epoch),
                             name: n.clone(),
                             ..Default::default()
                         });
@@ -6024,7 +7103,7 @@ impl UnitStatic {
                             ..Default::default()
                         });
                     }
-                    "Havocbound Boost" => {
+                    "Enhanced Havocbound" => {
                         // Wave 4 — the always leg, the entry's own `upgrades`
                         // coupling ("If this model has Havocbound"); the
                         // volley's and the strike's named cond_ap lines log.
@@ -6042,6 +7121,8 @@ impl UnitStatic {
                 for sp in shoot.iter_mut().chain(melee.iter_mut()) {
                     sp.cond_ap.extend(live.iter().cloned());
                 }
+                trace_stamp(trace73, "piercing-hunter", &live[0].name,
+                    &format!("{}: {} stamped AP+{}", p.name, live[0].name, live[0].ap_bonus));
             }
         }
         // Wave 4 (rules-wave4-condap), gated on the FROZEN
@@ -6051,7 +7132,7 @@ impl UnitStatic {
         // `stamp_conditional_ap_named`. A record below epoch 7 runs none of
         // it and replays byte-exact.
         if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
-            stamp_conditional_ap_named(reg, p, &mut shoot, &mut melee);
+            stamp_conditional_ap_named(reg, p, rules_epoch, &mut shoot, &mut melee);
         }
         // Wave 4 (rules-wave4-renames), gated on the FROZEN
         // `EPOCH_7_TABLE_RULES`: "Takedown when Shooting" is Takedown's
@@ -6094,7 +7175,7 @@ impl UnitStatic {
         // never widens — no pre-charge gap (the shred2 precedent). Read BY
         // NAME, never by iterating the shared primitive (#489).
         if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
-            stamp_bane_boost(reg, p, &mut shoot, "Mischievous Boost", "reroll_save_low");
+            stamp_bane_boost(reg, p, &mut shoot, "Enhanced Mischievous", "reroll_save_low", rules_epoch, trace73);
         }
         // Wave 4 (rules-wave4-boostbases2), gated on the FROZEN
         // `EPOCH_7_TABLE_RULES`: "Bestial Boost" is the aof/beastmen twin of
@@ -6104,7 +7185,7 @@ impl UnitStatic {
         // instead of a second mechanism. An epoch-6 record reads the base
         // 6s-only window and replays byte-exact.
         if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
-            stamp_bane_boost(reg, p, &mut shoot, "Bestial Boost", "reroll_save_low");
+            stamp_bane_boost(reg, p, &mut shoot, "Enhanced Bestial", "reroll_save_low", rules_epoch, trace73);
         }
         // Wave 6 (rules-wave6-scrapper), gated on the FROZEN
         // `EPOCH_30_SCRAPPER_BOOST`: "Scrapper Boost" (gf/jackals) is the Bane
@@ -6119,7 +7200,7 @@ impl UnitStatic {
         // NAME, never by iterating the shared primitive. A record below
         // epoch 30 reads the base 6s-only window and replays byte-exact.
         if rule_on(rules_epoch, EPOCH_30_SCRAPPER_BOOST) {
-            stamp_bane_boost(reg, p, &mut shoot, "Scrapper Boost", "reroll_save_from");
+            stamp_bane_boost(reg, p, &mut shoot, "Enhanced Scrapper", "reroll_save_from", rules_epoch, trace73);
         }
         // Shred wave 3 (rules-wave3-shred3): the family's per-face wound
         // amount is now READ off the carried Shred-primitive entry
@@ -6188,12 +7269,14 @@ impl UnitStatic {
                 }
                 match n.as_str() {
                     "Watchborn" | "Vinci Tech" => name = Some(n.clone()),
-                    "Vinci Tech Boost" => boost = true,
+                    // The pick's log line names the BOOK rule, as the table's `primitive_book_name` does.
+                    "Versatile Expert" if rule_on(rules_epoch, EPOCH_73_V36) => name = Some(n.clone()),
+                    "Enhanced Vinci Tech" => boost = true,
                     _ => {}
                 }
             }
             if boost && has_vinci {
-                name = Some("Vinci Tech Boost".to_string());
+                name = Some("Enhanced Vinci Tech".to_string());
                 both = true;
             }
             if let Some(vn) = name {
@@ -6254,7 +7337,9 @@ impl UnitStatic {
                 .rules_for(&p.game_system)
                 .lookup(&p.faction_folder, "Indirect");
             let pen = entry.as_ref().map_or(1, |e| e.param_i("moved_hit_penalty", 1));
-            if pen > 0 {
+            // Rules 3.6 (SHO-02): the map key stays the EPOCH_72 leg; from 73
+            // the stamp is 0 and the dice seams never fold the moved penalty.
+            if pen > 0 && !rule_on(rules_epoch, EPOCH_73_V36) {
                 for sp in shoot.iter_mut() {
                     if sp.indirect {
                         sp.indirect_moved_hit_penalty = pen;
@@ -6272,6 +7357,22 @@ impl UnitStatic {
                 }
             }
         }
+        // Rules 3.6 (SHO-01a): the "Indirect" entry's `*_needs_hold`; a unit rule printing it false lifts it.
+        if rule_on(rules_epoch, EPOCH_73_V36) {
+            let mut needs_hold = |key: &str| {
+                unit_param_b_or(reg, p, "Indirect", key, false)
+                    && !rules_of_primitive(reg, p, "Indirect").iter().any(|h| {
+                        reg.rules_for(&p.game_system).lookup(&p.faction_folder, &h.name)
+                            .is_some_and(|e| !e.param_b_or(key, true))
+                    })
+            };
+            let los = needs_hold("los_needs_hold");
+            let cover = needs_hold("cover_needs_hold");
+            for sp in shoot.iter_mut().filter(|sp| sp.indirect) {
+                sp.indirect_los_needs_hold = los;
+                sp.indirect_cover_needs_hold = cover;
+            }
+        }
 
         let is_caster = has_special_rule(&p.special_rules, "Caster")
             || has_special_rule(&p.special_rules, "Caster Group");
@@ -6281,11 +7382,19 @@ impl UnitStatic {
             Vec::new()
         };
         let royal_legion = royal_legion_family_of(reg, p, rules_epoch);
+        // Rules 3.6 (`EPOCH_73_V36`): the range half reaches every ranged weapon's gates, per
+        // member — the table's `shooting_range_bonus(member)` reads the member's own rules.
+        if rule_on(rules_epoch, crate::acts::EPOCH_73_V36) && royal_legion.0 > 0.0 {
+            for sp in shoot.iter_mut().filter(|sp| sp.range > 0) {
+                sp.reach_bonus_in = royal_legion.0;
+                sp.reach_bonus_rule = royal_legion.2.clone();
+            }
+        }
 
         // WAVE 3 — the family's own registry names for the rules-must-log
         // line, stamped behind the same frozen `EPOCH_6_TABLE_RULES` gate.
     let fa = rule_on(rules_epoch, EPOCH_6_TABLE_RULES)
-        .then(|| fortified_alias_of(reg, p))
+        .then(|| fortified_alias_of(reg, p, rules_epoch))
         .unwrap_or_default();
     // Wave 4 (`rules-wave4-boostbases`) — the Hit & Run Boost band, stamped
     // behind the same FROZEN `EPOCH_6_TABLE_RULES` gate (the sim fold reads
@@ -6314,9 +7423,11 @@ impl UnitStatic {
         UnitStatic {
             ctx: ctx_for(reg, p, rules_epoch),
             name: p.name.clone(),
+            brace_rule: brace_of(reg, p, rules_epoch).map(|b| b.0).unwrap_or_default(),
             fortified_alias_name: fa.alias_name,
             fortified_boost_name: fa.boost_name,
             hold_only,
+            rules_epoch,
             shoot,
             melee,
             strafe_shoot,
@@ -6353,8 +7464,26 @@ impl UnitStatic {
             spell_conduit_needs_steady: unit_param_b_or(
                 reg, p, "Spell Conduit", "requires_not_shaken", true,
             ),
-            battleborn_active: unit_rule_active(reg, p, "Battleborn"),
-            steadfast_active: unit_rule_active(reg, p, "Steadfast"),
+            // Rules 3.6 (`EPOCH_73_V36`) — Spell Amplifier rides the WEAPON's
+            // rule list, so the bearer's own cast target drops by its
+            // `casting_mod`. A `special_rules` entry deliberately does not
+            // qualify (the row is weapon-borne).
+            spell_amplifier_casting_mod: if rule_on(rules_epoch, EPOCH_73_V36)
+                && p.weapons
+                    .iter()
+                    .flat_map(|w| w.rules.iter())
+                    .any(|r| base_rule_name(r) == "Spell Amplifier")
+            {
+                unit_param_i(reg, p, "Spell Amplifier", "casting_mod", 1)
+            } else {
+                0
+            },
+            battleborn_active: unit_rule_active(reg, p, "Battleborn")
+                && (!rule_on(rules_epoch, EPOCH_73_V36)
+                    || most_models_family_on(p, "Battleborn", rules_epoch)),
+            steadfast_active: unit_rule_active(reg, p, "Steadfast")
+                && (!rule_on(rules_epoch, EPOCH_73_V36)
+                    || most_models_family_on(p, "Steadfast", rules_epoch)),
             // Sweep H row Steadfast — the free-clear gate flag: the round-start
             // Shaken clear for Steadfast stays free only BELOW the FROZEN
             // `EPOCH_40_STEADFAST_ROLL`; from 40 the playout rolls the die
@@ -6386,13 +7515,18 @@ impl UnitStatic {
             battleborn_recover_target: battleborn_recover_target_of(reg, p, rules_epoch),
             mend_active: unit_rule_active(reg, p, "Mend"),
             breath_attack_active: unit_rule_active(reg, p, "Breath Attack"),
-            is_hero: has_special_rule(&p.special_rules, "Hero"),
+            // Rules 3.6 named heroes carry "Unique Hero" in place of "Hero"
+            // (a Hero for every purpose). No epoch gate: the name is absent
+            // from every 3.5 book, so no recorded game changes.
+            is_hero: has_special_rule(&p.special_rules, "Hero")
+                || has_special_rule(&p.special_rules, "Unique Hero"),
             bounding: bounding_of(reg, p),
             bounding_dice: bounding_boost_dice_of(reg, p, rules_epoch),
             bounding_place: bounding_place_of(reg, p, rules_epoch),
             move_rule_mods: move_rule_mods_of(reg, p, rules_epoch),
             solo_move_grant_mods: solo_move_grant_mods_of(reg, p, rules_epoch),
             royal_legion_range_in: royal_legion.0,
+            reach_grants: granted_reach_rules(reg, p, rules_epoch),
             royal_legion_charge_in: royal_legion.1,
             versatile_reach_charge_in: if unit_rule_active(reg, p, "Versatile Reach")
                 || has_special_rule(&p.special_rules, "Versatile Reach Aura")
@@ -6423,6 +7557,7 @@ impl UnitStatic {
             hit_and_run_move_in: hnr_move_in,
             hit_and_run_rule: hnr_rule,
             quick_shot_active: unit_rule_active(reg, p, "Quick Shot"),
+            cumbersome: unit_rule_active(reg, p, "Cumbersome"),
             second_wind_active: unit_rule_active(reg, p, "Second Wind")
                 || unit_rule_active(reg, p, "Inquisitorial Agent")
                 || unit_rule_active(reg, p, "Martial Prowess"),
@@ -6448,9 +7583,18 @@ impl UnitStatic {
                 let infiltrate_ring =
                     unit_param_f(reg, p, "Infiltrate", "min_enemy_dist_in", INFILTRATE_MIN_ENEMY_DIST_IN);
                 unit_param_f(reg, p, "Surprise Attack", "min_enemy_dist_in", infiltrate_ring)
+            } else if rule_on(rules_epoch, crate::acts::EPOCH_73_V36)
+                && has_special_rule(&p.special_rules, "Infiltrating Precision Strike")
+            {
+                // Rules 3.6: counts as Infiltrate, Surprise Attack's alias shape; its own entry's ring wins.
+                let infiltrate_ring =
+                    unit_param_f(reg, p, "Infiltrate", "min_enemy_dist_in", INFILTRATE_MIN_ENEMY_DIST_IN);
+                unit_param_f(reg, p, "Infiltrating Precision Strike", "min_enemy_dist_in", infiltrate_ring)
             } else {
                 0.0
             },
+            infiltrating_precision_strike: rule_on(rules_epoch, crate::acts::EPOCH_73_V36)
+                && has_special_rule(&p.special_rules, "Infiltrating Precision Strike"),
             repel_ambushers_dist_in: if unit_rule_active(reg, p, "Repel Ambushers") {
                 unit_param_f(reg, p, "Repel Ambushers", "min_dist_in", REPEL_AMBUSHERS_DIST_IN)
             } else {
@@ -6475,7 +7619,7 @@ impl UnitStatic {
             retreating_strikes: retreating_strikes_of(reg, p, rules_epoch),
             ebr: ebr_of(reg, p, rules_epoch),
             teleport: teleport_of(reg, p, rules_epoch),
-            growth: growth_of(reg, p, &mut unimplemented),
+            growth: growth_of_epoch(reg, p, rules_epoch, &mut unimplemented),
             piercing_tags: piercing_tags_of(reg, p, rules_epoch),
             unimplemented,
         }

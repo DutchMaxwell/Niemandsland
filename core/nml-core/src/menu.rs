@@ -20,8 +20,8 @@
 
 use serde::Deserialize;
 
-use crate::acts::CURRENT_RULES_EPOCH;
-use crate::combat::{melee_ev, profile_ev, shoot_ev, SIX_P};
+use crate::acts::{rule_on, CURRENT_RULES_EPOCH, EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36};
+use crate::combat::{charge_estimate_gap_in, melee_ev, profile_ev, shoot_ev, SIX_P};
 use crate::geom::{self, V3};
 use crate::sim::{
     ctx_of, ctx_live, melee_profiles_of, profiles_of, teleport_probe, Scratch, ADVANCE, CHARGE,
@@ -215,6 +215,33 @@ pub fn forces_hold(unit_rules: &[String]) -> bool {
     })
 }
 
+/// `forces_hold` at a rules epoch: from `EPOCH_73_V36` on (rules 3.6) Artillery
+/// may move like any unit, so only Immobile still keeps a unit to Hold.
+pub fn forces_hold_at(unit_rules: &[String], rules_epoch: u32) -> bool {
+    if !rule_on(rules_epoch, EPOCH_73_V36) {
+        return forces_hold(unit_rules);
+    }
+    unit_rules.iter().any(|r| r.trim().starts_with("Immobile"))
+}
+
+/// The one hold-only read every planner surface shares — the menu gate, the
+/// grid pool (`plan.rs`) and the enemy reply model (`sim.rs`): the unit's names
+/// at the epoch its static was built under (`SoloController.forces_hold`).
+pub fn holds_only(state: &State, statics: &[UnitStatic], u: usize) -> bool {
+    let epoch = statics.get(state.roster.profile[u]).map_or(0, |s| s.rules_epoch);
+    forces_hold_at(&state.profile(u).special_rules, epoch)
+}
+
+/// Rules 3.6 (SHO-16) — `unit_rule_active(.., "Cumbersome")` from
+/// `EPOCH_73_V36` on: such a unit may only Hold or Advance, and fires no volley
+/// after moving. Read off the static's own build epoch, like `holds_only`.
+pub(crate) fn cumbersome_at(state: &State, statics: &[UnitStatic], u: usize) -> bool {
+    match statics.get(state.roster.profile[u]) {
+        Some(s) => s.cumbersome && rule_on(s.rules_epoch, EPOCH_73_V36),
+        None => false,
+    }
+}
+
 /// `AiArchetype.max_range_inches` ai_archetype.gd:60-64 over `_range`
 /// (:69-75), which reads `range_value` — the very number
 /// `BattleSim._unit_profile` (:1466) writes as the profile weapon's `range`.
@@ -328,7 +355,9 @@ pub fn best_shoot(
         if tuning.reach_only {
             crate::sim::reach_rescale(us, state.alive[i], &state.positions[i], &state.positions[e], 0.0, sc);
         }
-        let att = ctx_live(ctx_of(us, state, i), statics, state, i, false, rules_epoch);
+        let mut att = ctx_live(ctx_of(us, state, i), statics, state, i, false, rules_epoch);
+        // HOLD+shoot leg: the shot follows a Hold (SHO-06e reads `held` for the Artillery +1).
+        att.held = true;
         let def = ctx_live(ctx_of(ut, state, e), statics, state, e, false, rules_epoch);
         let ev = shoot_ev(&us.shoot, &sc.keep, &sc.attacks, &att, &def, d);
         if ev > best_ev {
@@ -365,7 +394,9 @@ pub fn ranked_shoots(
         if tuning.reach_only {
             crate::sim::reach_rescale(us, state.alive[i], &state.positions[i], &state.positions[e], 0.0, sc);
         }
-        let att = ctx_live(ctx_of(us, state, i), statics, state, i, false, rules_epoch);
+        let mut att = ctx_live(ctx_of(us, state, i), statics, state, i, false, rules_epoch);
+        // HOLD+shoot leg: the shot follows a Hold (SHO-06e reads `held` for the Artillery +1).
+        att.held = true;
         let def = ctx_live(ctx_of(ut, state, e), statics, state, e, false, rules_epoch);
         let ev = shoot_ev(&us.shoot, &sc.keep, &sc.attacks, &att, &def, d);
         if ev > 0.0 {
@@ -545,27 +576,61 @@ pub fn advance_shoots(
 /// `AiEv.charge_score` ai_ev.gd:537-553 — the charge matchup tie-break: wounds
 /// we deal (thinned first-order by the defender's Counter strike-first) minus
 /// the wounds their strike-back deals, risk-weighted by our Fearless and Banner.
-fn charge_score(
+///
+/// Rules 3.6 (`EPOCH_73_V36`): `AiEv.charge_score` (ai_ev.gd:1107) reads
+/// `them["counter_strikes_first"]`, stamped by `SoloController.
+/// counter_strikes_first` (solo_controller.gd:8921): only a defender that will
+/// actually strike back Counters first. Below the wave the old unconditional
+/// read stays. The GDScript passes a dictionary; this twin keeps the flat
+/// argument list, hence the count allow.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn charge_score(
     ours: &[ShootProfile],
     our_attacks: &[i64],
     us: &Ctx,
     theirs: &[ShootProfile],
     their_attacks: &[i64],
     them: &Ctx,
+    charge_from_in: f64,
+    rules_epoch: u32,
+    counter_strikes_first: bool,
 ) -> f64 {
-    let mut dealt = melee_ev(ours, our_attacks, us, them, true);
+    let mut dealt = melee_ev(ours, our_attacks, us, them, true, charge_from_in);
     let mut counter_first = 0.0f64;
-    for (k, p) in theirs.iter().enumerate() {
-        if p.range <= 0 && p.counter {
-            counter_first += profile_ev(p, their_attacks[k], them, us, 0.0, false);
+    if rules_epoch < EPOCH_73_V36 || counter_strikes_first {
+        for (k, p) in theirs.iter().enumerate() {
+            if p.range <= 0 && p.counter {
+                counter_first += profile_ev(p, their_attacks[k], them, us, 0.0, false);
+            }
         }
     }
     let pool = (us.models as f64 * us.tough.max(1) as f64).max(1.0);
     dealt *= (1.0 - counter_first / pool).clamp(0.0, 1.0);
-    let taken = melee_ev(theirs, their_attacks, them, us, false);
+    let taken = melee_ev(theirs, their_attacks, them, us, false, 0.0);
     let mut risk_weight = if us.fearless { 0.5 } else { 1.0 };
     risk_weight *= (1.0 - us.morale_bonus as f64 * SIX_P).max(0.0);
     dealt - taken * risk_weight
+}
+
+/// `SoloController.counter_strikes_first` (solo_controller.gd:8921) — the policy
+/// `AiEv.charge_score` (ai_ev.gd:1107) reads. From `EPOCH_73_V36` a defender
+/// Counters first only when it is not Fatigued/Shaken and has a usable melee
+/// weapon; a Counter profile whose entry opts out of the strike-first slot
+/// (`strikes_first: false`) does not thin our charge either. Below the wave the
+/// old unconditional read stays, so the caller's epoch gate alone decides.
+pub(crate) fn counter_strikes_first(
+    state: &State,
+    e: usize,
+    theirs: &[ShootProfile],
+    rules_epoch: u32,
+) -> bool {
+    if rules_epoch < EPOCH_73_V36 {
+        return true;
+    }
+    if state.fatigued[e] || state.shaken[e] || theirs.is_empty() {
+        return false;
+    }
+    theirs.iter().all(|p| !p.counter || p.counter_strikes_first.unwrap_or(true))
 }
 
 /// `AiPlanner._best_charge` ai_planner.gd:1287-1318 — best hurtable melee target
@@ -603,13 +668,21 @@ pub fn best_charge(
         return None;
     }
     melee_profiles_of(us_static, state.alive[i], sc);
-    let our_attacks = sc.attacks.clone();
+    let our_sc_attacks = sc.attacks.clone();
+    // MEL-02e: a Limited profile the unit already spent brings no strikes, so the charge
+    // estimate skips it from `EPOCH_73_V36` (the table's `filter_limited`). Nothing left to
+    // strike with means no charge to price, exactly like an empty melee set above.
+    let (our_profiles, our_attacks) =
+        crate::sim::ev_melee_set(&us_static.melee, &our_sc_attacks, &state.limited_used[i], rules_epoch);
+    if our_profiles.is_empty() {
+        return None;
+    }
     // EV_VOCAB_2026-09-15 §4: a live Dangerous Terrain debuff prices the
     // dice/6 expectation of its own movement into the charge — the loss is
     // per-unit constant, so it rides BOTH the futile bar and the score.
     let (_, danger_loss) = crate::sim::terrain_debuff_folds(statics, state, i);
     let centre_us = geom::centre(&state.positions[i]);
-    let path_ix = tuning.charge_needs_path.then(|| crate::sim::reach_index_for_state(state, terrain)).flatten();
+    let path_ix = tuning.charge_needs_path.then(|| crate::sim::walled_reach_index_for_state(state, terrain)).flatten();
     let mut best = None;
     let mut best_score = f64::NEG_INFINITY;
     for e in enemy_keys_tuned(state, i, tuning.target_units) {
@@ -648,13 +721,27 @@ pub fn best_charge(
         let ut = &statics[state.roster.profile[e]];
         let us = ctx_live(ctx_of(us_static, state, i), statics, state, i, true, rules_epoch);
         let them = ctx_live(ctx_of(ut, state, e), statics, state, e, true, rules_epoch);
-        let raw = melee_ev(&us_static.melee, &our_attacks, &us, &them, true);
+        // D-GATE6: the charge is priced at the pre-charge edge gap from `EPOCH_73_V36`.
+        let charge_from_in = charge_estimate_gap_in(rules_epoch, || gap_in);
+        let raw = melee_ev(&our_profiles, &our_attacks, &us, &them, true, charge_from_in);
         if raw - danger_loss < FUTILE_CHARGE_EV {
             continue;
         }
         melee_profiles_of(ut, state.alive[e], sc);
-        let s = charge_score(&us_static.melee, &our_attacks, &us, &ut.melee, &sc.attacks, &them)
-            - danger_loss;
+        let (their_profiles, their_attacks) =
+            crate::sim::ev_melee_set(&ut.melee, &sc.attacks, &state.limited_used[e], rules_epoch);
+        let counter_strikes_first = counter_strikes_first(state, e, &their_profiles, rules_epoch);
+        let s = charge_score(
+            &our_profiles,
+            &our_attacks,
+            &us,
+            &their_profiles,
+            &their_attacks,
+            &them,
+            charge_from_in,
+            rules_epoch,
+            counter_strikes_first,
+        ) - danger_loss;
         if s > best_score {
             best_score = s;
             best = Some(e);
@@ -666,8 +753,8 @@ pub fn best_charge(
 /// aifix F6 (inventory row M20, p.9 "a clear path to reach it") — true when the mover cannot walk to `e` within the
 /// live charge band. The question goes to the tier-2 reach index the rollouts already use: from the nearest model
 /// pair, a route to the target model's CENTRE may spend the charge band plus the two base radii (the last stretch of
-/// that route is the contact itself), around Container cells and the units in the way (`foe` = the victim's group,
-/// no obstacle). Lenient by construction: it asks one model, with the whole unit's largest radius as clearance.
+/// that route is the contact itself), around Container cells, the board's ruin walls (MEL-PAR-F8) and the units in
+/// the way (`foe` = the victim's group, no obstacle). Lenient by construction: it asks one model, with the whole unit's largest radius as clearance.
 fn charge_path_blocked(
     state: &State,
     terrain: &Terrain,
@@ -726,6 +813,19 @@ fn charge_path_blocked(
     !ix.query_memo(&q).reachable
 }
 
+/// G4-C2 (c) — can the core's own move port execute this charge? The table's declaration probe re-gates a charge whose
+/// formation still ends short of the engage ring to a Rush (`charge_path_probe`); `charge_reaches_contact` is that
+/// verdict on the port. Rules 3.6 (`EPOCH_73_V36`, the RECORDING's epoch like `forces_hold`); below it, or without a
+/// board, the pick stands as before.
+fn charge_executes(state: &State, terrain: &Terrain, statics: &[UnitStatic], i: usize, e: usize) -> bool {
+    let epoch = statics.get(state.roster.profile[i]).map_or(0, |s| s.rules_epoch);
+    if !rule_on(epoch, EPOCH_73_V36) || !terrain.is_valid() {
+        return true;
+    }
+    let band = crate::gate::charge_band_in(state, statics, i, e);
+    crate::mv::step::MoveRules { rules_epoch: epoch }.charge_reaches_contact(state, terrain, i, e, band, true)
+}
+
 /// NML-1157 — the nearest enemy this unit could actually REACH: the smallest
 /// base-edge gap among the targets the charge gate and the futile bar both
 /// accept. `best_charge` answers "who is the best matchup"; with one candidate
@@ -757,7 +857,7 @@ pub fn nearest_chargeable(
     melee_profiles_of(us_static, state.alive[i], sc);
     let our_attacks = sc.attacks.clone();
     let us = ctx_live(ctx_of(us_static, state, i), statics, state, i, true, rules_epoch);
-    let path_ix = tuning.charge_needs_path.then(|| crate::sim::reach_index_for_state(state, terrain)).flatten();
+    let path_ix = tuning.charge_needs_path.then(|| crate::sim::walled_reach_index_for_state(state, terrain)).flatten();
     let mut best = None;
     let mut best_gap = f64::INFINITY;
     for e in enemy_keys_tuned(state, i, tuning.target_units) {
@@ -792,7 +892,8 @@ pub fn nearest_chargeable(
             ctx_of(&statics[state.roster.profile[e]], state, e),
             statics, state, e, true, rules_epoch,
         );
-        if melee_ev(&us_static.melee, &our_attacks, &us, &them, true) < FUTILE_CHARGE_EV {
+        let charge_from_in = charge_estimate_gap_in(rules_epoch, || gap_in);
+        if melee_ev(&us_static.melee, &our_attacks, &us, &them, true, charge_from_in) < FUTILE_CHARGE_EV {
             continue;
         }
         best_gap = gap_in;
@@ -828,8 +929,23 @@ struct Threat<'a> {
 /// first, stable on ties by frontier order; empty when even charge safety is
 /// already lost or there is nothing to walk toward.
 pub fn safe_advances(state: &State, terrain: &Terrain, i: usize, tuning: Tuning) -> Vec<Candidate> {
-    let dests = crate::safe_memo::run(state, terrain, i, tuning, || {
-        safe_advances_fresh(state, terrain, i, tuning).iter().filter_map(|c| c.dest).collect()
+    safe_advances_at(state, terrain, i, tuning, EPOCH_72_PLAYTEST_RULES)
+}
+
+/// `safe_advances` as the game at `rules_epoch` reads the board: the open-fire-line probe (and so the patience
+/// of the advance) follows the same rules-3.6 reading every other sight seam takes.
+pub fn safe_advances_at(
+    state: &State,
+    terrain: &Terrain,
+    i: usize,
+    tuning: Tuning,
+    rules_epoch: u32,
+) -> Vec<Candidate> {
+    let dests = crate::safe_memo::run(state, terrain, i, tuning, rules_epoch, || {
+        safe_advances_fresh_at(state, terrain, i, tuning, rules_epoch)
+            .iter()
+            .filter_map(|c| c.dest)
+            .collect()
     });
     dests.into_iter().map(|d| advance_candidate(state, i, d)).collect()
 }
@@ -841,7 +957,20 @@ fn advance_candidate(state: &State, i: usize, dest: [f64; 3]) -> Candidate {
     c
 }
 
+/// The pre-3.6 reading for the safe-advance memo's own tests (no shipping caller: `candidates_tuned` asks
+/// `safe_advances_at` with the acting unit's epoch, and the memo's `run` goes through it).
+#[cfg(test)]
 pub(crate) fn safe_advances_fresh(state: &State, terrain: &Terrain, i: usize, tuning: Tuning) -> Vec<Candidate> {
+    safe_advances_fresh_at(state, terrain, i, tuning, EPOCH_72_PLAYTEST_RULES)
+}
+
+pub(crate) fn safe_advances_fresh_at(
+    state: &State,
+    terrain: &Terrain,
+    i: usize,
+    tuning: Tuning,
+    rules_epoch: u32,
+) -> Vec<Candidate> {
     let centre = geom::centre(&state.positions[i]);
     let mut best_d = f64::INFINITY;
     let mut goal: V3 = [0.0, 0.0, 0.0];
@@ -921,7 +1050,7 @@ pub(crate) fn safe_advances_fresh(state: &State, terrain: &Terrain, i: usize, tu
             if state.los_pairs.is_some() && terrain.is_valid() {
                 let mut open_lines = 0i64;
                 for e in enemy_keys(state, i) {
-                    if !terrain.los_blocked(geom::centre(&state.positions[e]), pnt) {
+                    if !terrain.los_blocked_at(geom::centre(&state.positions[e]), pnt, rules_epoch) {
                         open_lines += 1;
                     }
                     if open_lines >= 4 {
@@ -953,7 +1082,18 @@ pub(crate) fn safe_advances_fresh(state: &State, terrain: &Terrain, i: usize, tu
 /// nothing else. `safe_advances(...).into_iter().next()` keeps ONE scoring
 /// routine behind both sites.
 pub fn safe_advance(state: &State, terrain: &Terrain, i: usize, tuning: Tuning) -> Option<Candidate> {
-    safe_advances(state, terrain, i, tuning).into_iter().next()
+    safe_advance_at(state, terrain, i, tuning, EPOCH_72_PLAYTEST_RULES)
+}
+
+/// `safe_advance` as the game at `rules_epoch` reads the board (`safe_advances_at`).
+pub fn safe_advance_at(
+    state: &State,
+    terrain: &Terrain,
+    i: usize,
+    tuning: Tuning,
+    rules_epoch: u32,
+) -> Option<Candidate> {
+    safe_advances_at(state, terrain, i, tuning, rules_epoch).into_iter().next()
 }
 
 /// `AiPlanner._second_wave` ai_planner.gd:1141-1200 (D21/D23) — a follow-up move
@@ -1066,6 +1206,25 @@ pub fn candidates_in(
     candidates_tuned(state, terrain, statics, unit, sc, Tuning::default())
 }
 
+/// G4-C7 (`EPOCH_73_V36`, the Regroup rule): a unit that STARTS its activation out of coherency may only take the action
+/// that restores it, so every menu (the hand menu, the rollout menu, the grid widening) shrinks to the one gather pick.
+/// Mirrors the table's `_act` check before any plan (solo_controller.gd:1853): more than one model and not coherent now.
+pub(crate) fn starts_incoherent(state: &State, terrain: &Terrain, unit: usize, rules_epoch: u32) -> bool {
+    rule_on(rules_epoch, EPOCH_73_V36)
+        && !state.positions[unit].is_empty()
+        && !(crate::mv::step::MoveRules { rules_epoch }).unit_coherent_now(state, terrain, unit, true)
+}
+
+/// The gather pick `_act_regroup` makes (:2933): an ADVANCE that stays where it stands, so the placement gate pulls the
+/// stragglers in, and the post-move volley the table still allows (`shoot`, the best target now). The caller hands `shoot`
+/// over only where the resolver can answer a MOVED volley (`wide_shoot` / `moved_shoot`); otherwise the resolve declines.
+pub(crate) fn regroup_menu(state: &State, unit: usize, shoot: Option<usize>) -> Vec<Candidate> {
+    let mut c = Candidate::new(state.key(unit), ADVANCE);
+    c.dest = Some(geom::to_f64(geom::centre(&state.positions[unit])));
+    c.shoot = shoot.map(|e| state.key(e).to_string());
+    vec![c]
+}
+
 /// One CHARGE candidate aimed at `e`, built the way both menu sites build it:
 /// the destination is the TARGET UNIT'S CENTRE (`ai_planner.gd:1035`), which is
 /// what `resolve`'s rigid arm then walks toward.
@@ -1111,6 +1270,20 @@ pub fn candidates_tuned(
     tuning: Tuning,
 ) -> Vec<Candidate> {
     let key = state.key(unit);
+    // The board probes (the advance's open-fire-line penalty) read the unit's own rules epoch, exactly as
+    // `holds_only` / `cumbersome_at` read it — so a game at 72 keeps the pre-3.6 walls and a game at 73
+    // sees through a ruin.
+    let rules_epoch = statics.get(state.roster.profile[unit]).map_or(0, |s| s.rules_epoch);
+    // Rules 3.6 Aircraft (`EPOCH_73_V36`): the table flies a plane whatever is picked (:1847): ONE Advance row, shot priced there.
+    if rule_on(rules_epoch, EPOCH_73_V36) && state.aircraft[unit] {
+        if let Some(d) = crate::sim::aircraft_delta(statics, state, unit, terrain, false, rules_epoch) {
+            let moved: Vec<[f64; 3]> = state.positions[unit].iter().map(|p| geom::to_f64(geom::add(geom::to_f32(*p), d))).collect();
+            let mut c = Candidate::new(key, ADVANCE);
+            c.dest = Some(geom::to_f64(geom::add(geom::centre(&state.positions[unit]), d)));
+            c.shoot = best_shoot_from(state, statics, unit, &moved, sc, tuning).map(|e| state.key(e).to_string());
+            return vec![c];
+        }
+    }
     let mut out = vec![Candidate::new(key, HOLD)];
     let shoot = best_shoot(state, statics, unit, sc, tuning, CURRENT_RULES_EPOCH, None);
     if let Some(e) = shoot {
@@ -1118,9 +1291,12 @@ pub fn candidates_tuned(
         c.shoot = Some(state.key(e).to_string());
         out.push(c);
     }
+    if starts_incoherent(state, terrain, unit, rules_epoch) {
+        return regroup_menu(state, unit, shoot.filter(|_| tuning.wide_shoot));
+    }
     // NML-1020 lab half: Immobile/Artillery may only Hold (p.13/p.57) — the menu
     // for carriers ends here, so no playout can ever imagine them moving.
-    if forces_hold(&state.profile(unit).special_rules)
+    if holds_only(state, statics, unit)
         && statics[state.roster.profile[unit]].hold_only.unwrap_or(true)
     {
         // hold-only carriers may still fire at any target
@@ -1128,13 +1304,28 @@ pub fn candidates_tuned(
         out.extend(extra);
         return out;
     }
+    // Rules 3.6 (SHO-16): a Cumbersome unit may only Hold or Advance, and fires
+    // no volley after moving. Its menu is the hold rows plus one plain Advance
+    // per objective — never a RUSH, a CHARGE or an ADVANCE that carries a shot.
+    if cumbersome_at(state, statics, unit) {
+        let extra = all_target_rows(state, statics, unit, sc, tuning, &out);
+        out.extend(extra);
+        for o in &state.objectives {
+            let mut c = Candidate::new(key, ADVANCE);
+            c.dest = Some(o.pos);
+            out.push(c);
+        }
+        return out;
+    }
     for o in &state.objectives {
         let mut c = Candidate::new(key, RUSH);
         c.dest = Some(o.pos);
         out.push(c);
     }
-    let scored =
-        best_charge(state, terrain, statics, unit, sc, tuning, CURRENT_RULES_EPOCH, None);
+    // G4-C2 (c): the core's own move port has the last word on every charge pick the menu offers (rules 3.6).
+    let executes = |e: usize| charge_executes(state, terrain, statics, unit, e);
+    let scored = best_charge(state, terrain, statics, unit, sc, tuning, CURRENT_RULES_EPOCH, None)
+        .filter(|&e| executes(e));
     if let Some(e) = scored {
         out.push(charge_at(state, key, e));
     }
@@ -1144,6 +1335,7 @@ pub fn candidates_tuned(
     if tuning.target_units {
         if let Some(e) =
             nearest_chargeable(state, terrain, statics, unit, sc, tuning, CURRENT_RULES_EPOCH)
+                .filter(|&e| executes(e))
         {
             if Some(e) != scored {
                 out.push(charge_at(state, key, e));
@@ -1162,7 +1354,7 @@ pub fn candidates_tuned(
             out.push(c);
         }
     }
-    for c in safe_advances(state, terrain, unit, tuning) {
+    for c in safe_advances_at(state, terrain, unit, tuning, rules_epoch) {
         out.push(c);
     }
     if let Some(c) = second_wave(state, unit) {
@@ -1222,7 +1414,9 @@ pub fn candidates_tuned(
         for q in [&qh as &dyn Fn(usize) -> bool, &qu] {
             if let Some(e) = best_charge(
                 state, terrain, statics, unit, sc, tuning, CURRENT_RULES_EPOCH, Some(q),
-            ) {
+            )
+            .filter(|&e| executes(e))
+            {
                 if !charged.contains(&e) {
                     charged.push(e);
                     out.push(charge_at(state, key, e));

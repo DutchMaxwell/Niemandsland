@@ -1,8 +1,8 @@
 {
  "_meta": {
   "system": "gf",
-  "core_version": "3.5.1",
-  "faction_books": 47,
+  "core_version": "3.6.0",
+  "faction_books": 48,
   "generator": "tools/rules_mechanics_export.py",
   "contract": "lookup (system, faction, name) -> fallback (system, common, name); never name-only across systems",
   "content": "derived mechanics only - rule names + our own primitive/param encoding; no rule texts"
@@ -19,6 +19,7 @@
   "Ambushing Piercing Shot",
   "Armor",
   "Artillery",
+  "Assault",
   "Bad Shot",
   "Bane",
   "Bane Mark",
@@ -32,8 +33,14 @@
   "Battleborn",
   "Blast",
   "Bloodborn",
+  "Bravery",
+  "Bravery Aura",
+  "Bravery Buff",
+  "Enhanced Bloodborn",
   "Bounding",
   "Bounding Aura",
+  "Brace",
+  "Brace in Melee",
   "Breath Attack",
   "Brutal Fighter",
   "Caster",
@@ -41,13 +48,17 @@
   "Casting Buff",
   "Casting Debuff",
   "Changebound",
-  "Changebound Boost",
-  "Changebound Boost Aura",
+  "Crossing Strike",
+  "Enhanced Changebound",
+  "Enhanced Changebound Aura",
   "Clan Warrior",
-  "Clan Warrior Boost",
-  "Clan Warrior Boost Aura",
+  "Enhanced Clan Warrior",
+  "Enhanced Clan Warrior Aura",
   "Coordinate",
   "Counter",
+  "Counter in Melee",
+  "Counter in Melee Aura",
+  "Counter in Melee Buff",
   "Counter-Attack",
   "Counter-Attack Aura",
   "Courage Aura",
@@ -56,6 +67,7 @@
   "Crossing Attack",
   "Dangerous Terrain Debuff",
   "Darkborn",
+  "Enhanced Darkborn",
   "Dash",
   "Dash Aura",
   "Deadly",
@@ -68,8 +80,8 @@
   "Delayed Action",
   "Destructive",
   "Devout",
-  "Devout Boost",
-  "Devout Boost Aura",
+  "Enhanced Devout",
+  "Enhanced Devout Aura",
   "Difficult Terrain Debuff",
   "Disintegrate",
   "Drone Laser Gun",
@@ -78,6 +90,7 @@
   "Evasive",
   "Evasive Aura",
   "Extended Buff Range",
+  "Extra Reach",
   "Fanatic",
   "Fast",
   "Fast Aura",
@@ -87,12 +100,13 @@
   "Fearless",
   "Fearless Aura",
   "Ferocious",
-  "Ferocious Boost",
-  "Ferocious Boost Aura",
+  "Enhanced Ferocious",
+  "Enhanced Ferocious Aura",
   "Flying",
   "Fortified",
   "Fortified Aura",
   "Fortified Growth",
+  "Fracture",
   "Furious",
   "Furious Aura",
   "Furious Buff",
@@ -100,41 +114,41 @@
   "Good Shot",
   "Grounded Precision",
   "Grounded Precision Aura",
-  "Grounded Reinforcement",
-  "Grounded Reinforcement Aura",
+  "Grounded Defense",
+  "Grounded Defense Aura",
   "Grounded Stealth",
   "Growth Markers",
   "Guarded",
   "Guarded Buff",
   "Guardian",
-  "Guardian Boost",
-  "Guardian Boost Aura",
+  "Enhanced Guardian",
+  "Enhanced Guardian Aura",
   "Guerrilla",
-  "Guerrilla Boost",
-  "Guerrilla Boost Aura",
+  "Enhanced Guerrilla",
+  "Enhanced Guerrilla Aura",
   "Harassing",
-  "Harassing Boost",
-  "Harassing Boost Aura",
+  "Enhanced Harassing",
+  "Enhanced Harassing Aura",
   "Havocbound",
-  "Havocbound Boost",
-  "Havocbound Boost Aura",
+  "Enhanced Havocbound",
+  "Enhanced Havocbound Aura",
   "Hazardous",
   "Heavy Impact",
   "Hero",
   "Highborn",
-  "Highborn Boost",
-  "Highborn Boost Aura",
+  "Enhanced Highborn",
+  "Enhanced Highborn Aura",
   "Hit & Run",
   "Hit & Run Fighter",
   "Hit & Run Fighter Aura",
   "Hit & Run Shooter",
   "Hit & Run Shooter Aura",
   "Hive Bond",
-  "Hive Bond Boost",
-  "Hive Bond Boost Aura",
+  "Enhanced Hive Bond",
+  "Enhanced Hive Bond Aura",
   "Hold the Line",
-  "Hold the Line Boost",
-  "Hold the Line Boost Aura",
+  "Enhanced Hold the Line",
+  "Enhanced Hold the Line Aura",
   "Honor Code",
   "Ignores Cover",
   "Ignores Cover Aura",
@@ -144,6 +158,7 @@
   "Ignores Regeneration in Melee",
   "Immobile",
   "Impact",
+  "Imprecise",
   "Increased Shooting Range",
   "Increased Shooting Range Aura",
   "Increased Shooting Range Buff",
@@ -153,21 +168,22 @@
   "Indirect when Shooting",
   "Indirect when Shooting Aura",
   "Infected",
-  "Infected Boost",
-  "Infected Boost Aura",
+  "Enhanced Infected",
+  "Enhanced Infected Aura",
   "Infiltrate",
   "Infiltrate Aura",
+  "Infiltrating Precision Strike",
   "Inquisitorial Agent",
   "Instinctive",
   "Knightborn",
   "Lacerate",
   "Limited",
   "Lustbound",
-  "Lustbound Boost",
-  "Lustbound Boost Aura",
+  "Enhanced Lustbound",
+  "Enhanced Lustbound Aura",
   "Machine-Fog",
-  "Machine-Fog Boost",
-  "Machine-Fog Boost Aura",
+  "Enhanced Machine-Fog",
+  "Enhanced Machine-Fog Aura",
   "Martial Prowess",
   "Medical Training",
   "Melee Evasion",
@@ -179,8 +195,8 @@
   "Mend",
   "Mind Control",
   "Mischievous",
-  "Mischievous Boost",
-  "Mischievous Boost Aura",
+  "Enhanced Mischievous",
+  "Enhanced Mischievous Aura",
   "Mobile Artillery",
   "Morale",
   "Morale Debuff",
@@ -188,23 +204,26 @@
   "No Retreat",
   "No Retreat Aura",
   "No Retreat Buff",
+  "Parry",
   "Pass Turn",
   "Piercing Assault",
   "Piercing Assault Aura",
+  "Piercing Charge",
+  "Piercing Charge Aura",
   "Piercing Debuff",
   "Piercing Fighter Aura",
   "Piercing Frenzy",
   "Piercing Growth",
-  "Piercing Hunter",
-  "Piercing Hunter Aura",
+  "Piercing Marksman",
+  "Piercing Marksman Aura",
   "Piercing Shooter Aura",
   "Piercing Shooting Mark",
   "Piercing Spotter",
   "Piercing Tag",
   "Piercing Target",
   "Plaguebound",
-  "Plaguebound Boost",
-  "Plaguebound Boost Aura",
+  "Enhanced Plaguebound",
+  "Enhanced Plaguebound Aura",
   "Point-Blank Piercing",
   "Point-Blank Piercing Aura",
   "Point-Blank Surge",
@@ -224,22 +243,25 @@
   "Precision Tag",
   "Precision Target",
   "Predator",
+  "Predator Aura",
   "Predator Fighter",
   "Predator Shooter",
   "Predator Shooter Aura",
   "Primal",
-  "Primal Boost",
-  "Primal Boost Buff",
+  "Enhanced Primal",
+  "Enhanced Primal Buff",
   "Primeborn",
   "Protected",
   "Protected Aura",
   "Protection Feat",
   "Protection Feat Aura",
+  "Puncture",
   "Quick",
   "Quick Readjustment",
   "Quick Shot",
   "Quick Shot Aura",
   "Quick Shot Mark",
+  "Quick Throw",
   "Ranged Shrouding",
   "Ranged Shrouding Aura",
   "Ranged Slayer",
@@ -249,17 +271,19 @@
   "Rapid Advance Buff",
   "Rapid Ambush",
   "Rapid Blink",
-  "Rapid Blink Boost",
-  "Rapid Blink Boost Aura",
+  "Enhanced Rapid Blink",
+  "Enhanced Rapid Blink Aura",
   "Rapid Charge",
   "Rapid Charge Aura",
   "Rapid Rush",
   "Rapid Rush Aura",
+  "Rapid Rush Buff",
   "Ravage",
   "Re-Deployment",
   "Re-Position Artillery",
   "Reanimation",
   "Reanimation Aura",
+  "Reap",
   "Regeneration",
   "Regeneration Aura",
   "Regeneration Buff",
@@ -283,19 +307,20 @@
   "Scout",
   "Scout Aura",
   "Scrapper",
-  "Scrapper Boost",
-  "Scrapper Boost Aura",
+  "Enhanced Scrapper",
+  "Enhanced Scrapper Aura",
   "Screened",
   "Screened Aura",
   "Scurry",
-  "Scurry Boost",
-  "Scurry Boost Aura",
+  "Enhanced Scurry",
+  "Enhanced Scurry Aura",
   "Second Wind",
   "Self-Destruct",
   "Self-Repair",
-  "Self-Repair Boost",
-  "Self-Repair Boost Buff",
+  "Enhanced Self-Repair",
+  "Enhanced Self-Repair Buff",
   "Sergeant",
+  "Shadowborn",
   "Shatter",
   "Shielded",
   "Shielded Aura",
@@ -329,8 +354,8 @@
   "Strider",
   "Strider Aura",
   "Sturdy",
-  "Sturdy Boost",
-  "Sturdy Boost Aura",
+  "Enhanced Sturdy",
+  "Enhanced Sturdy Aura",
   "Surge",
   "Surge when Shooting",
   "Surprise Attack",
@@ -341,13 +366,15 @@
   "Takedown Shot",
   "Takedown Strike",
   "Targeting Visor",
-  "Targeting Visor Boost",
-  "Targeting Visor Boost Aura",
+  "Enhanced Targeting Visor",
+  "Enhanced Targeting Visor Aura",
   "Tear",
   "Teleport",
   "Teleport Aura",
   "Thrust",
+  "Thrust in Melee",
   "Thrust in Melee Aura",
+  "Thrust in Melee Buff",
   "Tough",
   "Transport",
   "Unique",
@@ -372,13 +399,16 @@
   "Versatile Attack",
   "Versatile Defense",
   "Versatile Defense Aura",
+  "Versatile Expert",
   "Versatile Reach",
   "Versatile Reach Aura",
+  "Versatile Warrior",
   "Warbound",
-  "Warbound Boost",
-  "Warbound Boost Aura",
+  "Enhanced Warbound",
+  "Enhanced Warbound Aura",
   "Watchborn",
-  "Wolfborn"
+  "Wolfborn",
+  "Enhanced Wolfborn"
  ],
  "decision": [
   "AP",
@@ -386,6 +416,7 @@
   "Ambush",
   "Armor",
   "Artillery",
+  "Assault",
   "Bane",
   "Banner",
   "Blast",
@@ -423,7 +454,7 @@
   "No Retreat",
   "Pass Turn",
   "Piercing Assault",
-  "Piercing Hunter",
+  "Piercing Marksman",
   "Precise",
   "Quick",
   "Quick Shot",
@@ -479,6 +510,15 @@
     "rating": "X"
    }
   },
+  "Agile": {
+   "primitive": "Quick",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "advance_mod": 1,
+    "rush_mod": 2
+   }
+  },
   "Aircraft": {
    "primitive": "Aircraft",
    "rated": false,
@@ -492,6 +532,7 @@
     "cannot_seize": true,
     "cannot_be_charged": true,
     "target_range_penalty_in": 12.0,
+    "target_hit_penalty": 1,
     "ignores_obstacles": true
    }
   },
@@ -499,6 +540,57 @@
    "primitive": "Ambush",
    "rated": false,
    "book_version": "3.5.1"
+  },
+  "Ambushing Piercing Shot": {
+   "primitive": "Ambush",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "counts_as": "Ambush"
+   }
+  },
+  "Anti-Cover": {
+   "primitive": "Indirect",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "ignores_cover": true,
+    "cover_only": true
+   }
+  },
+  "Anti-Cover Aura": {
+   "primitive": "Aura Channel",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "grants": "Anti-Cover"
+   }
+  },
+  "Anti-Cover when Shooting": {
+   "primitive": "Indirect",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "ignores_cover": true,
+    "cover_only": true,
+    "shooting_only": true
+   }
+  },
+  "Anti-Cover when Shooting Aura": {
+   "primitive": "Aura Channel",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "grants": "Anti-Cover when Shooting"
+   }
+  },
+  "Anti-Regen": {
+   "primitive": "Lacerate",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "bypass_regen": true
+   }
   },
   "Armor": {
    "primitive": "Armor",
@@ -517,8 +609,20 @@
    "params": {
     "shooter_hit_bonus": 1,
     "target_hit_penalty": 2,
+    "target_hit_penalty_v36": 1,
+    "target_over_in": 12.0,
     "over_in": 9.0,
+    "shooter_over_in": 12.0,
+    "shooter_requires_hold": true,
     "hold_only": true
+   }
+  },
+  "Assault": {
+   "primitive": "Assault",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "melee_copy": true
    }
   },
   "Bane": {
@@ -566,6 +670,50 @@
     "ignores_cover": true
    }
   },
+  "Brace": {
+   "primitive": "Brace",
+   "rated": true,
+   "book_version": "3.6.0",
+   "params": {
+    "rating": "X"
+   }
+  },
+  "Brace in Melee": {
+   "primitive": "Brace",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "rating": 1,
+    "melee_only": true
+   }
+  },
+  "Bravery": {
+   "primitive": "Banner",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "morale_bonus": 1
+   }
+  },
+  "Bravery Aura": {
+   "primitive": "Banner",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "morale_bonus": 1
+   }
+  },
+  "Bravery Buff": {
+   "primitive": "Utility Buff",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "morale_mod": 1,
+    "range_in": 12,
+    "target": "friendly",
+    "once": true
+   }
+  },
   "Caster": {
    "primitive": "Caster",
    "rated": false,
@@ -587,6 +735,59 @@
     "impact_reduction_per_model": 1
    }
   },
+  "Counter in Melee": {
+   "primitive": "Counter",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "strikes_first": true,
+    "melee_only": true
+   }
+  },
+  "Counter in Melee Aura": {
+   "primitive": "Aura Channel",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "grants": "Counter in Melee"
+   }
+  },
+  "Counter in Melee Buff": {
+   "primitive": "Utility Buff",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "grants_rule": "Counter in Melee",
+    "range_in": 12,
+    "target": "friendly",
+    "max_targets": 1,
+    "once": true
+   }
+  },
+  "Crossing Attack": {
+   "primitive": "Crossing Attack",
+   "rated": true,
+   "book_version": "3.6.0",
+   "params": {
+    "rating": "X",
+    "wound_target": 6
+   }
+  },
+  "Crossing Strike": {
+   "primitive": "Strafing",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "move_through_attack": true,
+    "weapon_only": true
+   }
+  },
+  "Cumbersome": {
+   "primitive": "Cumbersome",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {}
+  },
   "Deadly": {
    "primitive": "Deadly",
    "rated": false,
@@ -604,14 +805,36 @@
     "defense_bonus_from_rating": true
    }
   },
-  "Entrenched": {
-   "primitive": "Stealth",
+  "Dodge": {
+   "primitive": "Melee Evasion",
    "rated": false,
-   "book_version": "3.5.1",
+   "book_version": "3.6.0",
    "params": {
-    "hit_penalty": 2,
-    "over_in": 9,
-    "requires_stationary": true
+    "hit_penalty": 1,
+    "melee_only": true,
+    "most_models": true,
+    "not_fatigued": true
+   }
+  },
+  "Extended Buff Range": {
+   "primitive": "Extended Buff Range",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "relay_range_in": 24.0,
+    "pick_range_in": 12.0,
+    "requires_hero": true,
+    "excludes_spells": true,
+    "hero_link_in": 0.0
+   }
+  },
+  "Extra Reach": {
+   "primitive": "Royal Legion",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "range_bonus_in": 4,
+    "charge_mod": 2
    }
   },
   "Fast": {
@@ -644,6 +867,14 @@
    "rated": false,
    "book_version": "3.5.1"
   },
+  "Fracture": {
+   "primitive": "Crack",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "on6_ap": 2
+   }
+  },
   "Furious": {
    "primitive": "Furious",
    "rated": false,
@@ -651,6 +882,16 @@
    "params": {
     "bonus_hits_per_six": 1,
     "charge_only": true
+   }
+  },
+  "Heavy Impact": {
+   "primitive": "Heavy Impact",
+   "rated": true,
+   "book_version": "3.6.0",
+   "params": {
+    "rating": "X",
+    "ap": 1,
+    "counts_as": "Impact"
    }
   },
   "Hero": {
@@ -719,7 +960,9 @@
     "moved_hit_penalty": 1,
     "ignores_cover": true,
     "ignores_los": true,
-    "hold_and_shoot": true
+    "hold_and_shoot": true,
+    "los_needs_hold": true,
+    "cover_needs_hold": true
    }
   },
   "Indirect when Shooting": {
@@ -759,12 +1002,139 @@
     "scope": "unit"
    }
   },
+  "Parry": {
+   "primitive": "Parry",
+   "rated": true,
+   "book_version": "3.6.0",
+   "params": {
+    "rating": "X"
+   }
+  },
+  "Pierce": {
+   "primitive": "Pierce",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "ap_bonus": 1,
+    "condition": "over_half_range"
+   }
+  },
+  "Piercing Charge": {
+   "primitive": "Piercing Assault",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "ap_bonus": 1,
+    "condition": "on_charge"
+   }
+  },
+  "Piercing Charge Aura": {
+   "primitive": "Aura Channel",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "grants": "Piercing Charge"
+   }
+  },
+  "Piercing Marksman Aura": {
+   "primitive": "Aura Channel",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "grants": "Piercing Marksman"
+   }
+  },
+  "Precise": {
+   "primitive": "Precise",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "hit_bonus": 1
+   }
+  },
+  "Precision Charge": {
+   "primitive": "Shot Modifier",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "hit_bonus": 1,
+    "when": "charge"
+   }
+  },
+  "Precision Fighter": {
+   "primitive": "Shot Modifier",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "hit_bonus": 1,
+    "melee_only": true
+   }
+  },
+  "Predator": {
+   "primitive": "Surge",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "extra_attack": true
+   }
+  },
+  "Puncture": {
+   "primitive": "Disintegrate",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "ap_bonus": 2,
+    "condition": "vs_armor",
+    "threshold": 3,
+    "bypass_regen": true
+   }
+  },
+  "Rapid Rush Buff": {
+   "primitive": "Utility Buff",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "grants_rule": "Rapid Rush",
+    "target": "friendly",
+    "max_targets": 1,
+    "range_in": 12,
+    "once": true
+   }
+  },
+  "Ravage Aura": {
+   "primitive": "Aura Channel",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "grants": "Ravage(+1)"
+   }
+  },
+  "Re-Deployment": {
+   "primitive": "Re-Deployment",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "max_units": 2
+   }
+  },
   "Regeneration": {
    "primitive": "Regeneration",
    "rated": false,
    "book_version": "3.5.1",
    "params": {
     "ignore_target": 5
+   }
+  },
+  "Regeneration Buff": {
+   "primitive": "Utility Buff",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "grants_rule": "Regeneration",
+    "target": "friendly",
+    "max_targets": 1,
+    "range_in": 12,
+    "once": true
    }
   },
   "Relentless": {
@@ -813,6 +1183,22 @@
     "shooting_only": true
    }
   },
+  "Repel Ambushers": {
+   "primitive": "Repel Ambushers",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "min_dist_in": 12.0
+   }
+  },
+  "Scourge": {
+   "primitive": "Scourge",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "phantom_wounds_per_save_one": 2
+   }
+  },
   "Scout": {
    "primitive": "Scout",
    "rated": false,
@@ -823,8 +1209,16 @@
    "rated": false,
    "book_version": "3.5.1",
    "params": {
-    "bonus_hits_per_six": 1,
+    "ap_bonus": 1,
     "model_level": true
+   }
+  },
+  "Shred": {
+   "primitive": "Shred",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "extra_wound_per_save_one": 1
    }
   },
   "Shred in Melee": {
@@ -854,6 +1248,14 @@
     "rush_mod": -4
    }
   },
+  "Spell Amplifier": {
+   "primitive": "Spell Amplifier",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "casting_mod": 1
+   }
+  },
   "Stealth": {
    "primitive": "Stealth",
    "rated": false,
@@ -863,10 +1265,30 @@
     "over_in": 9.0
    }
   },
+  "Stealth Buff": {
+   "primitive": "Utility Buff",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "grants_rule": "Stealth",
+    "target": "friendly",
+    "max_targets": 1,
+    "range_in": 12,
+    "once": true
+   }
+  },
   "Strider": {
    "primitive": "Strider",
    "rated": false,
    "book_version": "3.5.1"
+  },
+  "Surge": {
+   "primitive": "Surge",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "bonus_hits_per_six": 1
+   }
   },
   "Surge when Shooting": {
    "primitive": "Surge",
@@ -892,6 +1314,17 @@
     "charge_only": true
    }
   },
+  "Thrust in Melee": {
+   "primitive": "Thrust",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "hit_bonus": 1,
+    "ap_bonus": 1,
+    "charge_only": true,
+    "melee_only": true
+   }
+  },
   "Tough": {
    "primitive": "Tough",
    "rated": false,
@@ -912,6 +1345,31 @@
    "primitive": null,
    "rated": false,
    "book_version": "3.5.1"
+  },
+  "Unique Hero": {
+   "primitive": "Hero",
+   "rated": false,
+   "book_version": "3.6.0"
+  },
+  "Unpredictable Fighter": {
+   "primitive": "Unpredictable Fighter",
+   "rated": false,
+   "book_version": "3.6.0"
+  },
+  "Unpredictable Fighter Mark": {
+   "primitive": "Utility Buff",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "beneficiary": "attackers",
+    "grants_rule": "Unpredictable Fighter",
+    "max_targets": 1,
+    "needs_los": true,
+    "once": true,
+    "range_in": 18,
+    "target": "enemy",
+    "vs_target": true
+   }
   },
   "Unstoppable": {
    "primitive": "Unstoppable",
@@ -936,6 +1394,15 @@
     "shooting_only": true
    }
   },
+  "Unwieldy": {
+   "primitive": "Unwieldy",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "strikes_last": true,
+    "condition": "charging"
+   }
+  },
   "Piercing Fighter": {
    "primitive": "Piercing Assault",
    "rated": false,
@@ -952,6 +1419,55 @@
    "params": {
     "ap_bonus": 1,
     "condition": "ranged"
+   }
+  },
+  "Valiant": {
+   "primitive": "Banner",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "morale_bonus": 1,
+    "trigger": "combat",
+    "gate_over_in": 9.0,
+    "gate_over_charge_in": 6.0
+   }
+  },
+  "Versatile Expert": {
+   "primitive": "Versatile Attack",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "ap_bonus": 1,
+    "hit_bonus": 1,
+    "pick_one": true,
+    "no_gate_v36": true
+   }
+  },
+  "Versatile Warrior": {
+   "primitive": "Versatile Attack",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "ap_bonus": 1,
+    "hit_bonus": 1,
+    "pick_one": true
+   }
+  },
+  "Spell Resistance": {
+   "primitive": "Resistance",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "ignore_target": 6,
+    "ignore_target_spell": 2
+   }
+  },
+  "Spell Resistance Aura": {
+   "primitive": "Aura Channel",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "grants": "Spell Resistance"
    }
   }
  },
@@ -1002,6 +1518,17 @@
      "incoming_ap_reduction": 1
     }
    },
+   "Fragment": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "reroll_save_sixes": true,
+     "reroll_save_low": 5,
+     "condition": "def_5_6",
+     "bypass_regen": false
+    }
+   },
    "Furious Aura": {
     "primitive": "Aura Channel",
     "rated": false,
@@ -1040,7 +1567,7 @@
      "trigger": "combat"
     }
    },
-   "Hive Bond Boost": {
+   "Enhanced Hive Bond": {
     "primitive": "Banner",
     "rated": false,
     "book_version": "3.5.3",
@@ -1049,12 +1576,20 @@
      "trigger": "combat"
     }
    },
-   "Hive Bond Boost Aura": {
+   "Enhanced Hive Bond Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Hive Bond Boost"
+     "grants": "Enhanced Hive Bond"
+    }
+   },
+   "Imprecise": {
+    "primitive": "Shot Modifier",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "hit_bonus": -1
     }
    },
    "Increased Shooting Range": {
@@ -1112,6 +1647,17 @@
      "uses_per_game": 1
     }
    },
+   "Piercing Target": {
+    "primitive": "Piercing Tag",
+    "rated": true,
+    "book_version": "3.6.0",
+    "params": {
+     "rating": "X",
+     "range_in": 18,
+     "needs_los": true,
+     "uses_per_game": 1
+    }
+   },
    "Precise": {
     "primitive": "Precise",
     "rated": false,
@@ -1130,6 +1676,14 @@
      "target": "enemy",
      "once": true,
      "needs_los": true
+    }
+   },
+   "Predator Aura": {
+    "primitive": "Aura Channel",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants": "Predator"
     }
    },
    "Predator Fighter": {
@@ -1374,7 +1928,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "bypass_regen": true
+     "bypass_regen": false
     }
    },
    "Melee Shrouding": {
@@ -1382,7 +1936,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "move_penalty_in": 3.0,
+     "move_penalty_in": 2.0,
      "floor_in": 6.0
     }
    },
@@ -1464,6 +2018,16 @@
      "extra_wound_per_save_one": 1
     }
    },
+   "Smash": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "reroll_save_sixes": true,
+     "condition": "over_half_range",
+     "bypass_regen": false
+    }
+   },
    "Unstoppable Mark": {
     "primitive": "Utility Buff",
     "rated": false,
@@ -1471,6 +2035,14 @@
     "params": {
      "vs_target": true,
      "needs_los": true
+    }
+   },
+   "Vanguard": {
+    "primitive": "Vanguard",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_in": 9.0
     }
    },
    "Versatile Attack": {
@@ -1551,22 +2123,21 @@
      "bonus_hits_per_six": 1
     }
    },
-   "Devout Boost": {
+   "Enhanced Devout": {
     "primitive": "Surge",
     "rated": false,
-    "book_version": "3.5.3",
+    "book_version": "3.6.0",
     "params": {
      "upgrades": "Devout",
-     "surge_low": 5,
-     "over_in": 9
+     "over_in": 0
     }
    },
-   "Devout Boost Aura": {
+   "Enhanced Devout Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Devout Boost"
+     "grants": "Enhanced Devout"
     }
    },
    "Disintegrate": {
@@ -1626,6 +2197,14 @@
      "once": true
     }
    },
+   "Increased Shooting Range": {
+    "primitive": "Royal Legion",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "range_bonus_in": 6
+    }
+   },
    "Increased Shooting Range Aura": {
     "primitive": "Royal Legion",
     "rated": false,
@@ -1644,7 +2223,7 @@
      "condition": "on_charge"
     }
    },
-   "Piercing Hunter": {
+   "Piercing Marksman": {
     "primitive": "Piercing Hunter",
     "rated": false,
     "book_version": "3.5.3",
@@ -1718,6 +2297,15 @@
      "uses_per_game": 1
     }
    },
+   "Purge": {
+    "primitive": "Purge",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "ap_bonus": 2,
+     "condition": "shaken_or_fatigued"
+    }
+   },
    "Regeneration Aura": {
     "primitive": "Regeneration",
     "rated": false,
@@ -1759,6 +2347,18 @@
      "casting_mod": 1,
      "requires_not_shaken": true
     }
+   },
+   "Spell Drain": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "range_in": 18,
+     "target": "enemy",
+     "once": true,
+     "needs_los": true,
+     "spell_token_drain": 2
+    }
    }
   },
   "blood_brothers": {
@@ -1788,6 +2388,24 @@
      "extra_attack": true
     }
    },
+   "Enhanced Bloodborn": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "upgrades": "Bloodborn",
+     "extra_attack": true,
+     "surge_low": 5
+    }
+   },
+   "Enhanced Bloodborn Aura": {
+    "primitive": "Aura Channel",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants": "Enhanced Bloodborn"
+    }
+   },
    "Courage Aura": {
     "primitive": "Banner",
     "rated": false,
@@ -1809,7 +2427,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "bypass_regen": true
+     "bypass_regen": false
     }
    },
    "Melee Shrouding": {
@@ -1817,7 +2435,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "move_penalty_in": 3.0,
+     "move_penalty_in": 2.0,
      "floor_in": 6.0
     }
    },
@@ -1916,6 +2534,16 @@
      "defense_bonus": 1
     }
    },
+   "Smash": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "reroll_save_sixes": true,
+     "condition": "over_half_range",
+     "bypass_regen": false
+    }
+   },
    "Unstoppable Mark": {
     "primitive": "Utility Buff",
     "rated": false,
@@ -1923,6 +2551,14 @@
     "params": {
      "vs_target": true,
      "needs_los": true
+    }
+   },
+   "Vanguard": {
+    "primitive": "Vanguard",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_in": 9.0
     }
    },
    "Versatile Attack": {
@@ -1982,6 +2618,24 @@
      "extra_attack": true
     }
    },
+   "Enhanced Bloodborn": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "upgrades": "Bloodborn",
+     "extra_attack": true,
+     "surge_low": 5
+    }
+   },
+   "Enhanced Bloodborn Aura": {
+    "primitive": "Aura Channel",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants": "Enhanced Bloodborn"
+    }
+   },
    "Courage Aura": {
     "primitive": "Banner",
     "rated": false,
@@ -2003,7 +2657,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "move_penalty_in": 3.0,
+     "move_penalty_in": 2.0,
      "floor_in": 6.0
     }
    },
@@ -2167,6 +2821,14 @@
      "needs_los": true
     }
    },
+   "Vanguard": {
+    "primitive": "Vanguard",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_in": 9.0
+    }
+   },
    "Versatile Attack": {
     "primitive": "Versatile Attack",
     "rated": false,
@@ -2208,7 +2870,7 @@
      "applies_charged": true
     }
    },
-   "Changebound Boost": {
+   "Enhanced Changebound": {
     "primitive": "Stealth",
     "rated": false,
     "book_version": "3.5.3",
@@ -2218,12 +2880,12 @@
      "upgrades": "Changebound"
     }
    },
-   "Changebound Boost Aura": {
+   "Enhanced Changebound Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Changebound Boost"
+     "grants": "Enhanced Changebound"
     }
    },
    "Dangerous Terrain Debuff": {
@@ -2397,16 +3059,18 @@
      "grants": "Dash"
     }
    },
-   "Guardian": {
-    "primitive": "Fortified",
+   "Disintegrate": {
+    "primitive": "Disintegrate",
     "rated": false,
-    "book_version": "3.5.3",
+    "book_version": "3.6.0",
     "params": {
-     "incoming_ap_reduction": 1,
-     "over_in": 9
+     "ap_bonus": 2,
+     "condition": "vs_tough_ge",
+     "threshold": 3,
+     "bypass_regen": true
     }
    },
-   "Guardian Boost": {
+   "Guardian": {
     "primitive": "Fortified",
     "rated": false,
     "book_version": "3.5.3",
@@ -2414,12 +3078,20 @@
      "incoming_ap_reduction": 1
     }
    },
-   "Guardian Boost Aura": {
+   "Enhanced Guardian": {
+    "primitive": "Fortified",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "incoming_ap_reduction": 2
+    }
+   },
+   "Enhanced Guardian Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Guardian Boost"
+     "grants": "Enhanced Guardian"
     }
    },
    "Hit & Run": {
@@ -2465,7 +3137,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "range_penalty_in": 6.0,
+     "range_penalty_in": 4.0,
      "floor_in": 6.0
     }
    },
@@ -2702,7 +3374,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "move_penalty_in": 3.0,
+     "move_penalty_in": 2.0,
      "floor_in": 6.0
     }
    },
@@ -2826,7 +3498,7 @@
      "over_in": 9
     }
    },
-   "Targeting Visor Boost": {
+   "Enhanced Targeting Visor": {
     "primitive": "Shot Modifier",
     "rated": false,
     "book_version": "3.5.3",
@@ -2834,12 +3506,12 @@
      "hit_bonus": 1
     }
    },
-   "Targeting Visor Boost Aura": {
+   "Enhanced Targeting Visor Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Targeting Visor Boost"
+     "grants": "Enhanced Targeting Visor"
     }
    }
   },
@@ -2881,6 +3553,25 @@
      "melee_floor_in": 6
     }
    },
+   "Enhanced Darkborn": {
+    "primitive": "Ranged Shrouding",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "range_penalty_in": 8,
+     "floor_in": 6,
+     "melee_move_penalty_in": 4,
+     "melee_floor_in": 6
+    }
+   },
+   "Enhanced Darkborn Aura": {
+    "primitive": "Aura Channel",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants": "Enhanced Darkborn"
+    }
+   },
    "Evasive": {
     "primitive": "Evasive",
     "rated": false,
@@ -2894,7 +3585,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "bypass_regen": true
+     "bypass_regen": false
     }
    },
    "Melee Shrouding": {
@@ -2902,7 +3593,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "move_penalty_in": 3.0,
+     "move_penalty_in": 2.0,
      "floor_in": 6.0
     }
    },
@@ -3001,6 +3692,16 @@
      "floor_in": 6,
      "melee_move_penalty_in": 2,
      "melee_floor_in": 6
+    }
+   },
+   "Smash": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "reroll_save_sixes": true,
+     "condition": "over_half_range",
+     "bypass_regen": false
     }
    },
    "Stealth Buff": {
@@ -3103,7 +3804,7 @@
      "per_round": true
     }
    },
-   "Harassing Boost": {
+   "Enhanced Harassing": {
     "primitive": "Hit & Run",
     "rated": false,
     "book_version": "3.5.3",
@@ -3112,12 +3813,12 @@
      "upgrades": "Harassing"
     }
    },
-   "Harassing Boost Aura": {
+   "Enhanced Harassing Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Harassing Boost"
+     "grants": "Enhanced Harassing"
     }
    },
    "Infiltrate": {
@@ -3134,7 +3835,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "bypass_regen": true
+     "bypass_regen": false
     }
    },
    "Martial Prowess": {
@@ -3160,7 +3861,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "move_penalty_in": 3.0,
+     "move_penalty_in": 2.0,
      "floor_in": 6.0
     }
    },
@@ -3193,7 +3894,7 @@
      "ap_per_marker": 1
     }
    },
-   "Piercing Hunter": {
+   "Piercing Marksman": {
     "primitive": "Piercing Hunter",
     "rated": false,
     "book_version": "3.5.3",
@@ -3203,12 +3904,12 @@
      "over_in": 9.0
     }
    },
-   "Piercing Hunter Aura": {
+   "Piercing Marksman Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Piercing Hunter"
+     "grants": "Piercing Marksman"
     }
    },
    "Precision Fighting Mark": {
@@ -3226,11 +3927,15 @@
     }
    },
    "Regeneration Buff": {
-    "primitive": "Regeneration",
+    "primitive": "Utility Buff",
     "rated": false,
-    "book_version": "3.5.3",
+    "book_version": "3.6.0",
     "params": {
-     "ignore_target": 5
+     "grants_rule": "Regeneration",
+     "target": "friendly",
+     "max_targets": 1,
+     "range_in": 12,
+     "once": true
     }
    },
    "Regenerative Strength": {
@@ -3304,6 +4009,25 @@
      "melee_floor_in": 6
     }
    },
+   "Enhanced Darkborn": {
+    "primitive": "Ranged Shrouding",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "range_penalty_in": 8,
+     "floor_in": 6,
+     "melee_move_penalty_in": 4,
+     "melee_floor_in": 6
+    }
+   },
+   "Enhanced Darkborn Aura": {
+    "primitive": "Aura Channel",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants": "Enhanced Darkborn"
+    }
+   },
    "Evasive": {
     "primitive": "Evasive",
     "rated": false,
@@ -3317,7 +4041,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "move_penalty_in": 3.0,
+     "move_penalty_in": 2.0,
      "floor_in": 6.0
     }
    },
@@ -3473,6 +4197,14 @@
     "params": {
      "vs_target": true,
      "needs_los": true
+    }
+   },
+   "Vanguard": {
+    "primitive": "Vanguard",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_in": 9.0
     }
    },
    "Versatile Attack": {
@@ -3635,7 +4367,7 @@
      "over_in": 9
     }
    },
-   "Sturdy Boost": {
+   "Enhanced Sturdy": {
     "primitive": "Shielded",
     "rated": false,
     "book_version": "3.5.3",
@@ -3644,12 +4376,12 @@
      "upgrades": "Sturdy"
     }
    },
-   "Sturdy Boost Aura": {
+   "Enhanced Sturdy Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Sturdy Boost"
+     "grants": "Enhanced Sturdy"
     }
    },
    "Surge": {
@@ -3719,6 +4451,15 @@
      "impact_reduction_per_model": 1
     }
    },
+   "Destructive": {
+    "primitive": "Destructive",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "ap_bonus": 1,
+     "condition": "above_half_strength"
+    }
+   },
    "Disintegrate": {
     "primitive": "Disintegrate",
     "rated": false,
@@ -3736,6 +4477,33 @@
     "book_version": "3.5.3",
     "params": {
      "hit_penalty": 1
+    }
+   },
+   "Increased Shooting Range": {
+    "primitive": "Royal Legion",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "range_bonus_in": 6
+    }
+   },
+   "Increased Shooting Range Aura": {
+    "primitive": "Aura Channel",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants": "Increased Shooting Range"
+    }
+   },
+   "Infiltrating Precision Strike": {
+    "primitive": "Infiltrate",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants": "Infiltrate",
+     "min_enemy_dist_in": 3.0,
+     "melee_hit_bonus": 1,
+     "arrival_round_only": true
     }
    },
    "Nimble": {
@@ -3763,7 +4531,7 @@
      "place_d3_plus": 0
     }
    },
-   "Rapid Blink Boost": {
+   "Enhanced Rapid Blink": {
     "primitive": "Bounding",
     "rated": false,
     "book_version": "3.5.3",
@@ -3772,12 +4540,12 @@
      "dice_count": 2
     }
    },
-   "Rapid Blink Boost Aura": {
+   "Enhanced Rapid Blink Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Rapid Blink Boost"
+     "grants": "Enhanced Rapid Blink"
     }
    },
    "Shielded": {
@@ -3836,6 +4604,16 @@
      "once": true,
      "range_in": 18,
      "target": "enemy"
+    }
+   },
+   "Takedown Shot": {
+    "primitive": "Takedown",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "extra_attack_q": 2,
+     "ap": 2,
+     "uses_per_game": 1
     }
    },
    "Takedown Strike": {
@@ -3925,7 +4703,7 @@
      "extra_attack": true
     }
    },
-   "Clan Warrior Boost": {
+   "Enhanced Clan Warrior": {
     "primitive": "Surge",
     "rated": false,
     "book_version": "3.5.3",
@@ -3935,12 +4713,12 @@
      "extra_attack": true
     }
    },
-   "Clan Warrior Boost Aura": {
+   "Enhanced Clan Warrior Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Clan Warrior Boost"
+     "grants": "Enhanced Clan Warrior"
     }
    },
    "Counter-Attack": {
@@ -3958,6 +4736,15 @@
     "book_version": "3.5.3",
     "params": {
      "grants": "Counter-Attack"
+    }
+   },
+   "Destructive": {
+    "primitive": "Destructive",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "ap_bonus": 1,
+     "condition": "above_half_strength"
     }
    },
    "Fearless Aura": {
@@ -3982,6 +4769,14 @@
     "book_version": "3.5.3",
     "params": {
      "grants": "Ignores Cover"
+    }
+   },
+   "Imprecise": {
+    "primitive": "Shot Modifier",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "hit_bonus": -1
     }
    },
    "Increased Shooting Range Mark": {
@@ -4016,7 +4811,7 @@
      "grants": "Melee Evasion"
     }
    },
-   "Piercing Hunter": {
+   "Piercing Marksman": {
     "primitive": "Piercing Hunter",
     "rated": false,
     "book_version": "3.5.3",
@@ -4026,12 +4821,12 @@
      "over_in": 9.0
     }
    },
-   "Piercing Hunter Aura": {
+   "Piercing Marksman Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Piercing Hunter"
+     "grants": "Piercing Marksman"
     }
    },
    "Precision Fighter Aura": {
@@ -4221,6 +5016,14 @@
      "hit_bonus": 1
     }
    },
+   "Imprecise": {
+    "primitive": "Shot Modifier",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "hit_bonus": -1
+    }
+   },
    "Instinctive": {
     "primitive": "Instinctive",
     "rated": false,
@@ -4256,23 +5059,22 @@
      "bypass_regen": false
     }
    },
-   "Mischievous Boost": {
+   "Enhanced Mischievous": {
     "primitive": "Bane",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
      "reroll_save_low": 5,
-     "over_in": 9,
      "bypass_regen": false,
      "upgrades": "Mischievous"
     }
    },
-   "Mischievous Boost Aura": {
+   "Enhanced Mischievous Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Mischievous Boost"
+     "grants": "Enhanced Mischievous"
     }
    },
    "Precision Fighter Aura": {
@@ -4450,7 +5252,7 @@
      "over_in": 9
     }
    },
-   "Havocbound Boost": {
+   "Enhanced Havocbound": {
     "primitive": "Piercing Hunter",
     "rated": false,
     "book_version": "3.5.3",
@@ -4460,12 +5262,12 @@
      "upgrades": "Havocbound"
     }
    },
-   "Havocbound Boost Aura": {
+   "Enhanced Havocbound Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Havocbound Boost"
+     "grants": "Enhanced Havocbound"
     }
    },
    "Mend": {
@@ -4636,15 +5438,15 @@
     }
    },
    "Highborn": {
-    "primitive": "Quick",
+    "primitive": "Royal Legion",
     "rated": false,
-    "book_version": "3.5.3",
+    "book_version": "3.6.0",
     "params": {
-     "advance_mod": 2,
-     "rush_mod": 2
+     "range_bonus_in": 4,
+     "charge_mod": 2
     }
    },
-   "Highborn Boost": {
+   "Enhanced Highborn": {
     "primitive": "Fast",
     "rated": false,
     "book_version": "3.5.3",
@@ -4654,12 +5456,12 @@
      "upgrades": "Highborn"
     }
    },
-   "Highborn Boost Aura": {
+   "Enhanced Highborn Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Highborn Boost"
+     "grants": "Enhanced Highborn"
     }
    },
    "Hit & Run": {
@@ -4875,6 +5677,16 @@
      "on6_ap": 2
     }
    },
+   "Entrenched": {
+    "primitive": "Stealth",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "hit_penalty": 1,
+     "over_in": 12,
+     "requires_stationary": true
+    }
+   },
    "Entrenched Buff": {
     "primitive": "Utility Buff",
     "rated": false,
@@ -4924,7 +5736,7 @@
      "trigger": "combat"
     }
    },
-   "Hold the Line Boost": {
+   "Enhanced Hold the Line": {
     "primitive": "Banner",
     "rated": false,
     "book_version": "3.5.3",
@@ -4933,12 +5745,12 @@
      "trigger": "combat"
     }
    },
-   "Hold the Line Boost Aura": {
+   "Enhanced Hold the Line Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Hold the Line Boost"
+     "grants": "Enhanced Hold the Line"
     }
    },
    "Mobile Artillery": {
@@ -5234,6 +6046,14 @@
      "no_moved_penalty": true
     }
    },
+   "Quick Throw": {
+    "primitive": "Indirect",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "los_needs_hold": false
+    }
+   },
    "Regeneration Aura": {
     "primitive": "Regeneration",
     "rated": false,
@@ -5303,6 +6123,18 @@
      "range_in": 12,
      "casting_mod": 1,
      "requires_not_shaken": true
+    }
+   },
+   "Spell Drain": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "range_in": 18,
+     "target": "enemy",
+     "once": true,
+     "needs_los": true,
+     "spell_token_drain": 2
     }
    },
    "Stealth Aura": {
@@ -5378,6 +6210,16 @@
      "target": "attacking_unit"
     }
    },
+   "Decimate": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "reroll_save_sixes": true,
+     "condition": "above_half_strength",
+     "bypass_regen": false
+    }
+   },
    "Fast Aura": {
     "primitive": "Fast",
     "rated": false,
@@ -5403,6 +6245,16 @@
      "grants": "Fortified"
     }
    },
+   "Hit & Run Shooter": {
+    "primitive": "Hit & Run Shooter",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "move_in": 3.0,
+     "per_round": true,
+     "after": "shoot"
+    }
+   },
    "Infected": {
     "primitive": "Shred",
     "rated": false,
@@ -5411,23 +6263,22 @@
      "extra_wound_per_save_one": 1
     }
    },
-   "Infected Boost": {
+   "Enhanced Infected": {
     "primitive": "Shred",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
      "upgrades": "Infected",
      "extra_wound_per_save_one": 1,
-     "save_fail_max": 2,
-     "over_in": 9
+     "save_fail_max": 2
     }
    },
-   "Infected Boost Aura": {
+   "Enhanced Infected Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Infected Boost"
+     "grants": "Enhanced Infected"
     }
    },
    "Lacerate": {
@@ -5435,7 +6286,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "bypass_regen": true
+     "bypass_regen": false
     }
    },
    "No Retreat": {
@@ -5475,6 +6326,15 @@
      "per_round": true,
      "max_markers": 4,
      "hit_per_two": 1
+    }
+   },
+   "Spawn": {
+    "primitive": "Spawn",
+    "rated": true,
+    "book_version": "3.6.0",
+    "params": {
+     "place_in": 6,
+     "once_per_game": true
     }
    },
    "Surge": {
@@ -5526,6 +6386,14 @@
      "grants": "Unpredictable Shooter"
     }
    },
+   "Vanguard": {
+    "primitive": "Vanguard",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_in": 9.0
+    }
+   },
    "Violent": {
     "primitive": "Shred",
     "rated": false,
@@ -5568,6 +6436,17 @@
     "params": {
      "ap_bonus": 4,
      "bypass_regen": false
+    }
+   },
+   "Disintegrate": {
+    "primitive": "Disintegrate",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "ap_bonus": 2,
+     "condition": "vs_tough_ge",
+     "threshold": 3,
+     "bypass_regen": true
     }
    },
    "Fortified": {
@@ -5644,7 +6523,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "range_penalty_in": 6.0,
+     "range_penalty_in": 4.0,
      "floor_in": 6.0
     }
    },
@@ -5681,7 +6560,7 @@
      "bypass_regen": false
     }
    },
-   "Scrapper Boost": {
+   "Enhanced Scrapper": {
     "primitive": "Bane",
     "rated": false,
     "book_version": "3.5.3",
@@ -5689,26 +6568,23 @@
      "upgrades": "Scrapper",
      "reroll_save_sixes": true,
      "reroll_save_from": 5,
-     "over_in": 9,
      "bypass_regen": false
     }
    },
-   "Scrapper Boost Aura": {
+   "Enhanced Scrapper Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Scrapper Boost"
+     "grants": "Enhanced Scrapper"
     }
    },
    "Shatter": {
     "primitive": "Shatter",
     "rated": false,
-    "book_version": "3.5.3",
+    "book_version": "3.6.0",
     "params": {
-     "ap_bonus": 2,
-     "condition": "vs_tough_ge",
-     "threshold": 3
+     "on6_ap": 3
     }
    },
    "Shielded": {
@@ -5833,7 +6709,30 @@
     "params": {
      "ignore_target": 6,
      "ignore_target_spell": 4,
-     "all_models": true
+     "all_models": true,
+     "ignore_target_spell_v36": 2,
+     "ignore_over_in": 9.0,
+     "ignore_over_in_charge": 6.0
+    }
+   },
+   "Enhanced Knightborn": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "ignore_target": 6,
+     "ignore_target_spell": 4,
+     "ignore_target_spell_v36": 2,
+     "all_models": true,
+     "no_gate_v36": true
+    }
+   },
+   "Enhanced Knightborn Aura": {
+    "primitive": "Aura Channel",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants": "Enhanced Knightborn"
     }
    },
    "Lacerate": {
@@ -5841,7 +6740,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "bypass_regen": true
+     "bypass_regen": false
     }
    },
    "Melee Shrouding": {
@@ -5849,7 +6748,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "move_penalty_in": 3.0,
+     "move_penalty_in": 2.0,
      "floor_in": 6.0
     }
    },
@@ -5933,6 +6832,16 @@
      "defense_bonus": 1
     }
    },
+   "Smash": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "reroll_save_sixes": true,
+     "condition": "over_half_range",
+     "bypass_regen": false
+    }
+   },
    "Teleport": {
     "primitive": "Teleport",
     "rated": false,
@@ -6010,7 +6919,10 @@
     "params": {
      "ignore_target": 6,
      "ignore_target_spell": 4,
-     "all_models": true
+     "all_models": true,
+     "ignore_target_spell_v36": 2,
+     "ignore_over_in": 9.0,
+     "ignore_over_in_charge": 6.0
     }
    }
   },
@@ -6056,7 +6968,30 @@
     "params": {
      "ignore_target": 6,
      "ignore_target_spell": 4,
-     "all_models": true
+     "all_models": true,
+     "ignore_target_spell_v36": 2,
+     "ignore_over_in": 9.0,
+     "ignore_over_in_charge": 6.0
+    }
+   },
+   "Enhanced Knightborn": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "ignore_target": 6,
+     "ignore_target_spell": 4,
+     "ignore_target_spell_v36": 2,
+     "all_models": true,
+     "no_gate_v36": true
+    }
+   },
+   "Enhanced Knightborn Aura": {
+    "primitive": "Aura Channel",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants": "Enhanced Knightborn"
     }
    },
    "Melee Shrouding": {
@@ -6064,7 +6999,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "move_penalty_in": 3.0,
+     "move_penalty_in": 2.0,
      "floor_in": 6.0
     }
    },
@@ -6218,6 +7153,14 @@
      "needs_los": true
     }
    },
+   "Vanguard": {
+    "primitive": "Vanguard",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_in": 9.0
+    }
+   },
    "Versatile Attack": {
     "primitive": "Versatile Attack",
     "rated": false,
@@ -6254,7 +7197,10 @@
     "params": {
      "ignore_target": 6,
      "ignore_target_spell": 4,
-     "all_models": true
+     "all_models": true,
+     "ignore_target_spell_v36": 2,
+     "ignore_over_in": 9.0,
+     "ignore_over_in_charge": 6.0
     }
    }
   },
@@ -6280,15 +7226,15 @@
     }
    },
    "Lustbound": {
-    "primitive": "Royal Legion",
+    "primitive": "Quick",
     "rated": false,
-    "book_version": "3.5.3",
+    "book_version": "3.6.0",
     "params": {
-     "range_bonus_in": 4,
-     "charge_mod": 2
+     "advance_mod": 1,
+     "rush_mod": 2
     }
    },
-   "Lustbound Boost": {
+   "Enhanced Lustbound": {
     "primitive": "Royal Legion",
     "rated": false,
     "book_version": "3.5.3",
@@ -6298,12 +7244,12 @@
      "upgrades": "Lustbound"
     }
    },
-   "Lustbound Boost Aura": {
+   "Enhanced Lustbound Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Lustbound Boost"
+     "grants": "Enhanced Lustbound"
     }
    },
    "Melee Evasion": {
@@ -6315,6 +7261,17 @@
      "melee_only": true
     }
    },
+   "Melee Slayer": {
+    "primitive": "Melee Slayer",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "ap_bonus": 2,
+     "charge_only": true,
+     "condition": "vs_tough_ge",
+     "threshold": 3
+    }
+   },
    "Mend": {
     "primitive": "Mend",
     "rated": false,
@@ -6323,6 +7280,18 @@
      "heal_d3": true,
      "range_in": 3.0,
      "requires_tough": true
+    }
+   },
+   "Obliterate": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "reroll_save_sixes": true,
+     "reroll_save_low": 5,
+     "condition": "vs_tough_ge",
+     "threshold": 3,
+     "bypass_regen": true
     }
    },
    "Quick Shot": {
@@ -6474,6 +7443,26 @@
      "wound_target": 6
     }
    },
+   "Demolish": {
+    "primitive": "Indirect",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "ignores_cover": true,
+     "cover_only": true,
+     "ap_bonus": 1,
+     "condition": "near_terrain"
+    }
+   },
+   "Grounded Evasion": {
+    "primitive": "Stealth",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "hit_penalty": 1,
+     "terrain_within_in": 1
+    }
+   },
    "Grounded Stealth": {
     "primitive": "Stealth",
     "rated": false,
@@ -6498,7 +7487,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "bypass_regen": true
+     "bypass_regen": false
     }
    },
    "Machine-Fog": {
@@ -6511,7 +7500,7 @@
      "applies_charged": true
     }
    },
-   "Machine-Fog Boost": {
+   "Enhanced Machine-Fog": {
     "primitive": "Evasive",
     "rated": false,
     "book_version": "3.5.3",
@@ -6519,12 +7508,12 @@
      "hit_penalty": 1
     }
    },
-   "Machine-Fog Boost Aura": {
+   "Enhanced Machine-Fog Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Machine-Fog Boost"
+     "grants": "Enhanced Machine-Fog"
     }
    },
    "Melee Shrouding": {
@@ -6532,7 +7521,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "move_penalty_in": 3.0,
+     "move_penalty_in": 2.0,
      "floor_in": 6.0
     }
    },
@@ -6720,22 +7709,21 @@
      "bonus_hits_per_six": 1
     }
    },
-   "Ferocious Boost": {
+   "Enhanced Ferocious": {
     "primitive": "Surge",
     "rated": false,
-    "book_version": "3.5.3",
+    "book_version": "3.6.0",
     "params": {
      "upgrades": "Ferocious",
-     "surge_low": 5,
-     "over_in": 9
+     "over_in": 0
     }
    },
-   "Ferocious Boost Aura": {
+   "Enhanced Ferocious Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Ferocious Boost"
+     "grants": "Enhanced Ferocious"
     }
    },
    "Hit & Run": {
@@ -6815,7 +7803,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "range_penalty_in": 6.0,
+     "range_penalty_in": 4.0,
      "floor_in": 6.0
     }
    },
@@ -6997,6 +7985,16 @@
      "needs_los": true
     }
    },
+   "Decimate": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "reroll_save_sixes": true,
+     "condition": "above_half_strength",
+     "bypass_regen": false
+    }
+   },
    "Furious Aura": {
     "primitive": "Aura Channel",
     "rated": false,
@@ -7024,7 +8022,7 @@
      "all_models": true
     }
    },
-   "Plaguebound Boost": {
+   "Enhanced Plaguebound": {
     "primitive": "Regeneration",
     "rated": false,
     "book_version": "3.5.3",
@@ -7034,12 +8032,12 @@
      "upgrades": "Plaguebound"
     }
    },
-   "Plaguebound Boost Aura": {
+   "Enhanced Plaguebound Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Plaguebound Boost"
+     "grants": "Enhanced Plaguebound"
     }
    },
    "Protected": {
@@ -7212,7 +8210,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "move_penalty_in": 3.0,
+     "move_penalty_in": 2.0,
      "floor_in": 6.0
     }
    },
@@ -7258,8 +8256,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "incoming_ap_reduction": 1,
-     "over_in": 9
+     "incoming_ap_reduction": 1
     }
    },
    "Rapid Rush": {
@@ -7367,6 +8364,14 @@
     "params": {
      "vs_target": true,
      "needs_los": true
+    }
+   },
+   "Vanguard": {
+    "primitive": "Vanguard",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_in": 9.0
     }
    },
    "Versatile Attack": {
@@ -7548,6 +8553,14 @@
      "no_moved_penalty": true
     }
    },
+   "Quick Throw": {
+    "primitive": "Indirect",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "los_needs_hold": false
+    }
+   },
    "Ravage": {
     "primitive": "Ravage",
     "rated": true,
@@ -7565,7 +8578,7 @@
     "params": {
      "trigger": "shaken_or_destroyed",
      "redeploy": "table_edge",
-     "within_in": 12,
+     "within_in": 9,
      "timing": "next_round_after_ambush",
      "no_objective_on_arrival": true,
      "once": true
@@ -7574,13 +8587,13 @@
    "Scurry": {
     "primitive": "Quick",
     "rated": false,
-    "book_version": "3.5.3",
+    "book_version": "3.6.0",
     "params": {
-     "advance_mod": 2,
+     "advance_mod": 1,
      "rush_mod": 2
     }
    },
-   "Scurry Boost": {
+   "Enhanced Scurry": {
     "primitive": "Fast",
     "rated": false,
     "book_version": "3.5.3",
@@ -7590,12 +8603,12 @@
      "upgrades": "Scurry"
     }
    },
-   "Scurry Boost Aura": {
+   "Enhanced Scurry Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Scurry Boost"
+     "grants": "Enhanced Scurry"
     }
    },
    "Self-Destruct": {
@@ -7745,7 +8758,7 @@
      "per_round": true
     }
    },
-   "Guerrilla Boost": {
+   "Enhanced Guerrilla": {
     "primitive": "Hit & Run",
     "rated": false,
     "book_version": "3.5.3",
@@ -7754,12 +8767,12 @@
      "per_round": true
     }
    },
-   "Guerrilla Boost Aura": {
+   "Enhanced Guerrilla Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Guerrilla Boost"
+     "grants": "Enhanced Guerrilla"
     }
    },
    "Lacerate": {
@@ -7767,7 +8780,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "bypass_regen": true
+     "bypass_regen": false
     }
    },
    "Piercing Tag": {
@@ -7787,6 +8800,19 @@
     "book_version": "3.5.3",
     "params": {
      "hit_bonus": 1
+    }
+   },
+   "Reap": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "reroll_save_sixes": true,
+     "reroll_save_low": 5,
+     "condition": "shaken_or_fatigued",
+     "upgrades": "Reap",
+     "over_in": 0,
+     "bypass_regen": false
     }
    },
    "Regeneration Aura": {
@@ -7837,6 +8863,14 @@
      "bonus_hits_per_six": 1
     }
    },
+   "Vanguard": {
+    "primitive": "Vanguard",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_in": 9.0
+    }
+   },
    "Takedown Strike": {
     "primitive": "Takedown",
     "rated": false,
@@ -7883,6 +8917,14 @@
     "params": {
      "ap_bonus": 4,
      "bypass_regen": false
+    }
+   },
+   "Imprecise": {
+    "primitive": "Shot Modifier",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "hit_bonus": -1
     }
    },
    "Indirect Mark": {
@@ -8043,7 +9085,7 @@
      "all_models": true
     }
    },
-   "Self-Repair Boost": {
+   "Enhanced Self-Repair": {
     "primitive": "Regeneration",
     "rated": false,
     "book_version": "3.5.3",
@@ -8052,15 +9094,23 @@
      "all_models": true
     }
    },
-   "Self-Repair Boost Buff": {
+   "Enhanced Self-Repair Buff": {
     "primitive": "Utility Buff",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants_rule": "Self-Repair Boost",
+     "grants_rule": "Enhanced Self-Repair",
      "range_in": 12,
      "target": "friendly",
      "once": true
+    }
+   },
+   "Shatter": {
+    "primitive": "Shatter",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "on6_ap": 3
     }
    },
    "Shielded": {
@@ -8139,7 +9189,7 @@
     }
    }
   },
-  "saurian_starhost": {
+  "saurian_starhosts": {
    "Ambush Beacon": {
     "primitive": "Ambush",
     "rated": false,
@@ -8275,7 +9325,7 @@
      "extra_attack": true
     }
    },
-   "Primal Boost": {
+   "Enhanced Primal": {
     "primitive": "Surge",
     "rated": false,
     "book_version": "3.5.3",
@@ -8285,12 +9335,12 @@
      "surge_low": 5
     }
    },
-   "Primal Boost Buff": {
+   "Enhanced Primal Buff": {
     "primitive": "Utility Buff",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants_rule": "Primal Boost",
+     "grants_rule": "Enhanced Primal",
      "range_in": 12,
      "target": "friendly",
      "once": true
@@ -8391,6 +9441,14 @@
      "rush_bonus_in": 6.0
     }
    },
+   "Vanguard": {
+    "primitive": "Vanguard",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_in": 9.0
+    }
+   },
    "Unpredictable Fighter": {
     "primitive": "Unpredictable Fighter",
     "rated": false,
@@ -8443,7 +9501,7 @@
      "grants": "Grounded Precision"
     }
    },
-   "Grounded Reinforcement": {
+   "Grounded Defense": {
     "primitive": "Shielded",
     "rated": false,
     "book_version": "3.5.3",
@@ -8452,12 +9510,12 @@
      "terrain_within_in": 1
     }
    },
-   "Grounded Reinforcement Aura": {
+   "Grounded Defense Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Grounded Reinforcement"
+     "grants": "Grounded Defense"
     }
    },
    "Increased Shooting Range Buff": {
@@ -8549,6 +9607,19 @@
      "max_units": 2
     }
    },
+   "Reap": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "reroll_save_sixes": true,
+     "reroll_save_low": 5,
+     "condition": "shaken_or_fatigued",
+     "upgrades": "Reap",
+     "over_in": 0,
+     "bypass_regen": false
+    }
+   },
    "Regeneration Aura": {
     "primitive": "Regeneration",
     "rated": false,
@@ -8564,7 +9635,7 @@
     "params": {
      "trigger": "shaken_or_destroyed",
      "redeploy": "table_edge",
-     "within_in": 12,
+     "within_in": 9,
      "timing": "next_round_after_ambush",
      "no_objective_on_arrival": true,
      "once": true
@@ -8686,7 +9757,7 @@
      "applies_charged": true
     }
    },
-   "Changebound Boost": {
+   "Enhanced Changebound": {
     "primitive": "Stealth",
     "rated": false,
     "book_version": "3.5.2",
@@ -8751,15 +9822,15 @@
     }
    },
    "Lustbound": {
-    "primitive": "Royal Legion",
+    "primitive": "Quick",
     "rated": false,
-    "book_version": "3.5.2",
+    "book_version": "3.6.0",
     "params": {
-     "range_bonus_in": 4,
-     "charge_mod": 2
+     "advance_mod": 1,
+     "rush_mod": 2
     }
    },
-   "Lustbound Boost": {
+   "Enhanced Lustbound": {
     "primitive": "Royal Legion",
     "rated": false,
     "book_version": "3.5.2",
@@ -8776,6 +9847,18 @@
     "params": {
      "hit_penalty": 1,
      "melee_only": true
+    }
+   },
+   "Obliterate": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "reroll_save_sixes": true,
+     "reroll_save_low": 5,
+     "condition": "vs_tough_ge",
+     "threshold": 3,
+     "bypass_regen": true
     }
    },
    "Quick Shot": {
@@ -8815,6 +9898,16 @@
    }
   },
   "titan_lords_plague_disciples": {
+   "Decimate": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "reroll_save_sixes": true,
+     "condition": "above_half_strength",
+     "bypass_regen": false
+    }
+   },
    "Delayed Action": {
     "primitive": "Pass Turn",
     "rated": false,
@@ -8841,7 +9934,7 @@
      "all_models": true
     }
    },
-   "Plaguebound Boost": {
+   "Enhanced Plaguebound": {
     "primitive": "Regeneration",
     "rated": false,
     "book_version": "3.5.2",
@@ -8904,6 +9997,15 @@
      "melee_only": true
     }
    },
+   "Purge": {
+    "primitive": "Purge",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "ap_bonus": 2,
+     "condition": "shaken_or_fatigued"
+    }
+   },
    "Violent": {
     "primitive": "Shred",
     "rated": false,
@@ -8920,14 +10022,162 @@
      "extra_wound_per_save_one": 1
     }
    },
-   "Warbound Boost": {
+   "Enhanced Warbound": {
     "primitive": "Shred",
     "rated": false,
     "book_version": "3.5.2",
     "params": {
      "extra_wound_save_low": 2,
-     "over_in": 9,
      "upgrades": "Warbound"
+    }
+   }
+  },
+  "voidspace_stalkers": {
+   "Bounding": {
+    "primitive": "Bounding",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "place_d3_plus": 1
+    }
+   },
+   "Demolish": {
+    "primitive": "Indirect",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "ignores_cover": true,
+     "cover_only": true,
+     "ap_bonus": 1,
+     "condition": "near_terrain"
+    }
+   },
+   "Fortified": {
+    "primitive": "Fortified",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "incoming_ap_reduction": 1
+    }
+   },
+   "Increased Shooting Range Buff": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "max_targets": 1,
+     "once": true,
+     "phase": "shoot",
+     "range_bonus_in": 6,
+     "range_in": 12,
+     "target": "friendly"
+    }
+   },
+   "Melee Slayer": {
+    "primitive": "Melee Slayer",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "ap_bonus": 2,
+     "charge_only": true,
+     "condition": "vs_tough_ge",
+     "threshold": 3
+    }
+   },
+   "Precision Target": {
+    "primitive": "Utility Buff",
+    "rated": true,
+    "book_version": "3.6.0",
+    "params": {
+     "bonus": "per_placed_marker",
+     "markers": 1,
+     "needs_los": true,
+     "range_in": 18,
+     "target": "enemy",
+     "uses_per_game": 1
+    }
+   },
+   "Ravage": {
+    "primitive": "Ravage",
+    "rated": true,
+    "book_version": "3.6.0",
+    "params": {
+     "no_save": true,
+     "rating": "X",
+     "wound_target": 6
+    }
+   },
+   "Regeneration Aura": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "ignore_target": 5
+    }
+   },
+   "Shadowborn": {
+    "primitive": "Ranged Shrouding",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "floor_in": 6,
+     "melee_floor_in": 6,
+     "melee_move_penalty_in": 2,
+     "range_penalty_in": 4
+    }
+   },
+   "Enhanced Shadowborn": {
+    "primitive": "Ranged Shrouding",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "range_penalty_in": 8,
+     "floor_in": 6,
+     "melee_move_penalty_in": 4,
+     "melee_floor_in": 6
+    }
+   },
+   "Enhanced Shadowborn Aura": {
+    "primitive": "Aura Channel",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants": "Enhanced Shadowborn"
+    }
+   },
+   "Enhanced Shadowborn Buff": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants_rule": "Enhanced Shadowborn",
+     "range_in": 12,
+     "target": "friendly",
+     "max_targets": 1,
+     "once": true
+    }
+   },
+   "Thrust in Melee": {
+    "primitive": "Thrust",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "hit_bonus": 1,
+     "ap_bonus": 1,
+     "charge_only": true,
+     "melee_only": true
+    }
+   },
+   "Thrust in Melee Buff": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants_rule": "Thrust",
+     "range_in": 12,
+     "target": "friendly",
+     "max_targets": 1,
+     "once": true
     }
    }
   },
@@ -8986,6 +10236,15 @@
     "params": {
      "ap_bonus": 1,
      "condition": "on_charge"
+    }
+   },
+   "Purge": {
+    "primitive": "Purge",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "ap_bonus": 2,
+     "condition": "shaken_or_fatigued"
     }
    },
    "Relentless Aura": {
@@ -9107,22 +10366,21 @@
      "extra_wound_per_save_one": 1
     }
    },
-   "Warbound Boost": {
+   "Enhanced Warbound": {
     "primitive": "Shred",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
      "extra_wound_save_low": 2,
-     "over_in": 9,
      "upgrades": "Warbound"
     }
    },
-   "Warbound Boost Aura": {
+   "Enhanced Warbound Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Warbound Boost"
+     "grants": "Enhanced Warbound"
     }
    }
   },
@@ -9153,6 +10411,14 @@
      "morale_bonus": 1
     }
    },
+   "Enhanced Watchborn Aura": {
+    "primitive": "Aura Channel",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants": "Enhanced Watchborn"
+    }
+   },
    "Evasive": {
     "primitive": "Evasive",
     "rated": false,
@@ -9166,7 +10432,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "bypass_regen": true
+     "bypass_regen": false
     }
    },
    "Melee Shrouding": {
@@ -9174,7 +10440,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "move_penalty_in": 3.0,
+     "move_penalty_in": 2.0,
      "floor_in": 6.0
     }
    },
@@ -9256,6 +10522,16 @@
      "grants": "Shred when Shooting"
     }
    },
+   "Smash": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "reroll_save_sixes": true,
+     "condition": "over_half_range",
+     "bypass_regen": false
+    }
+   },
    "Strafing": {
     "primitive": "Strafing",
     "rated": false,
@@ -9290,6 +10566,17 @@
     "book_version": "3.5.3",
     "params": {
      "grants": "Versatile Reach"
+    }
+   },
+   "Enhanced Watchborn": {
+    "primitive": "Versatile Attack",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "ap_bonus": 1,
+     "hit_bonus": 1,
+     "pick_one": true,
+     "no_gate_v36": true
     }
    },
    "Watchborn": {
@@ -9331,6 +10618,14 @@
      "morale_bonus": 1
     }
    },
+   "Enhanced Watchborn Aura": {
+    "primitive": "Aura Channel",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants": "Enhanced Watchborn"
+    }
+   },
    "Evasive": {
     "primitive": "Evasive",
     "rated": false,
@@ -9344,7 +10639,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "move_penalty_in": 3.0,
+     "move_penalty_in": 2.0,
      "floor_in": 6.0
     }
    },
@@ -9491,6 +10786,14 @@
      "needs_los": true
     }
    },
+   "Vanguard": {
+    "primitive": "Vanguard",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_in": 9.0
+    }
+   },
    "Versatile Reach": {
     "primitive": "Versatile Reach",
     "rated": false,
@@ -9507,6 +10810,17 @@
     "book_version": "3.5.3",
     "params": {
      "grants": "Versatile Reach"
+    }
+   },
+   "Enhanced Watchborn": {
+    "primitive": "Versatile Attack",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "ap_bonus": 1,
+     "hit_bonus": 1,
+     "pick_one": true,
+     "no_gate_v36": true
     }
    },
    "Watchborn": {
@@ -9586,7 +10900,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "bypass_regen": true
+     "bypass_regen": false
     }
    },
    "Melee Shrouding": {
@@ -9594,7 +10908,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "move_penalty_in": 3.0,
+     "move_penalty_in": 2.0,
      "floor_in": 6.0
     }
    },
@@ -9685,6 +10999,16 @@
      "defense_bonus": 1
     }
    },
+   "Smash": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "reroll_save_sixes": true,
+     "condition": "over_half_range",
+     "bypass_regen": false
+    }
+   },
    "Surge": {
     "primitive": "Surge",
     "rated": false,
@@ -9700,6 +11024,14 @@
     "params": {
      "vs_target": true,
      "needs_los": true
+    }
+   },
+   "Vanguard": {
+    "primitive": "Vanguard",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_in": 9.0
     }
    },
    "Versatile Attack": {
@@ -9737,6 +11069,23 @@
     "book_version": "3.5.3",
     "params": {
      "place_d3_plus": 0
+    }
+   },
+   "Enhanced Wolfborn": {
+    "primitive": "Bounding",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "place_d3_plus": 0,
+     "dice_count": 2
+    }
+   },
+   "Enhanced Wolfborn Aura": {
+    "primitive": "Aura Channel",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants": "Enhanced Wolfborn"
     }
    }
   },
@@ -9797,7 +11146,7 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "move_penalty_in": 3.0,
+     "move_penalty_in": 2.0,
      "floor_in": 6.0
     }
    },
@@ -9853,6 +11202,14 @@
     "book_version": "3.5.3",
     "params": {
      "hit_bonus": 1
+    }
+   },
+   "Primeborn": {
+    "primitive": "Fortified",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "incoming_ap_reduction": 1
     }
    },
    "Rapid Rush": {
@@ -9953,6 +11310,14 @@
      "needs_los": true
     }
    },
+   "Vanguard": {
+    "primitive": "Vanguard",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_in": 9.0
+    }
+   },
    "Versatile Attack": {
     "primitive": "Versatile Attack",
     "rated": false,
@@ -9989,9 +11354,26 @@
     "params": {
      "place_d3_plus": 0
     }
+   },
+   "Enhanced Wolfborn": {
+    "primitive": "Bounding",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "place_d3_plus": 0,
+     "dice_count": 2
+    }
+   },
+   "Enhanced Wolfborn Aura": {
+    "primitive": "Aura Channel",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "grants": "Enhanced Wolfborn"
+    }
    }
   },
-  "wormhole_daemons_of_change": {
+  "daemons_of_change": {
    "Ambush Aura": {
     "primitive": "Aura Channel",
     "rated": false,
@@ -10038,7 +11420,7 @@
      "applies_charged": true
     }
    },
-   "Changebound Boost": {
+   "Enhanced Changebound": {
     "primitive": "Stealth",
     "rated": false,
     "book_version": "3.5.3",
@@ -10048,12 +11430,12 @@
      "upgrades": "Changebound"
     }
    },
-   "Changebound Boost Aura": {
+   "Enhanced Changebound Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Changebound Boost"
+     "grants": "Enhanced Changebound"
     }
    },
    "Fearless Aura": {
@@ -10136,6 +11518,18 @@
      "requires_not_shaken": true
     }
    },
+   "Spell Drain": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "range_in": 18,
+     "target": "enemy",
+     "once": true,
+     "needs_los": true,
+     "spell_token_drain": 2
+    }
+   },
    "Split": {
     "primitive": "Split",
     "rated": true,
@@ -10199,7 +11593,7 @@
     }
    }
   },
-  "wormhole_daemons_of_lust": {
+  "daemons_of_lust": {
    "Ambush Aura": {
     "primitive": "Aura Channel",
     "rated": false,
@@ -10253,15 +11647,15 @@
     }
    },
    "Lustbound": {
-    "primitive": "Royal Legion",
+    "primitive": "Quick",
     "rated": false,
-    "book_version": "3.5.3",
+    "book_version": "3.6.0",
     "params": {
-     "range_bonus_in": 4,
-     "charge_mod": 2
+     "advance_mod": 1,
+     "rush_mod": 2
     }
    },
-   "Lustbound Boost": {
+   "Enhanced Lustbound": {
     "primitive": "Royal Legion",
     "rated": false,
     "book_version": "3.5.3",
@@ -10271,12 +11665,12 @@
      "upgrades": "Lustbound"
     }
    },
-   "Lustbound Boost Aura": {
+   "Enhanced Lustbound Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Lustbound Boost"
+     "grants": "Enhanced Lustbound"
     }
    },
    "Melee Evasion": {
@@ -10296,6 +11690,18 @@
      "range_in": 18,
      "move_in": 6,
      "needs_los": true
+    }
+   },
+   "Obliterate": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "reroll_save_sixes": true,
+     "reroll_save_low": 5,
+     "condition": "vs_tough_ge",
+     "threshold": 3,
+     "bypass_regen": true
     }
    },
    "Piercing Assault": {
@@ -10445,13 +11851,23 @@
     }
    }
   },
-  "wormhole_daemons_of_plague": {
+  "daemons_of_plague": {
    "Ambush Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
      "grants": "Ambush"
+    }
+   },
+   "Decimate": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "reroll_save_sixes": true,
+     "condition": "above_half_strength",
+     "bypass_regen": false
     }
    },
    "Difficult Terrain Debuff": {
@@ -10487,7 +11903,7 @@
      "all_models": true
     }
    },
-   "Plaguebound Boost": {
+   "Enhanced Plaguebound": {
     "primitive": "Regeneration",
     "rated": false,
     "book_version": "3.5.3",
@@ -10497,12 +11913,12 @@
      "upgrades": "Plaguebound"
     }
    },
-   "Plaguebound Boost Aura": {
+   "Enhanced Plaguebound Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Plaguebound Boost"
+     "grants": "Enhanced Plaguebound"
     }
    },
    "Precision Attacks Buff": {
@@ -10534,11 +11950,15 @@
     }
    },
    "Regeneration Buff": {
-    "primitive": "Regeneration",
+    "primitive": "Utility Buff",
     "rated": false,
-    "book_version": "3.5.3",
+    "book_version": "3.6.0",
     "params": {
-     "ignore_target": 5
+     "grants_rule": "Regeneration",
+     "target": "friendly",
+     "max_targets": 1,
+     "range_in": 12,
+     "once": true
     }
    },
    "Relentless Aura": {
@@ -10613,7 +12033,7 @@
     }
    }
   },
-  "wormhole_daemons_of_war": {
+  "daemons_of_war": {
    "+1 to Defense": {
     "primitive": "Shielded",
     "rated": false,
@@ -10688,6 +12108,15 @@
     "book_version": "3.5.3",
     "params": {
      "grants": "Piercing Shooter"
+    }
+   },
+   "Purge": {
+    "primitive": "Purge",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "ap_bonus": 2,
+     "condition": "shaken_or_fatigued"
     }
    },
    "Rapid Charge": {
@@ -10782,22 +12211,21 @@
      "extra_wound_per_save_one": 1
     }
    },
-   "Warbound Boost": {
+   "Enhanced Warbound": {
     "primitive": "Shred",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
      "extra_wound_save_low": 2,
-     "over_in": 9,
      "upgrades": "Warbound"
     }
    },
-   "Warbound Boost Aura": {
+   "Enhanced Warbound Aura": {
     "primitive": "Aura Channel",
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "grants": "Warbound Boost"
+     "grants": "Enhanced Warbound"
     }
    }
   }

@@ -66,13 +66,14 @@ func _capture(units: Array) -> Dictionary:
 
 ## The boost fixture: Wizard (Caster(1), 2 tokens) at 0", a HELPER caster
 ## (Caster(1), 1 token) at 6" — inside the 18" aura — and the enemy squad at
-## 3". The D3=1 face starts the official cycle at index 1 ("Piercing Bots"),
-## the same pick the plain cast-phase test pins.
+## 3". The D3=1 face starts the official cycle at index 1 ("Serpent Comet" of
+## saurian_starhosts in the rules 3.6 data; robot_legions' one-token damage spell
+## shrank to 6", so the fixture moved), the same pick the plain cast-phase test pins.
 func _boost_state(helper_gap_in: float = 6.0, enemy: bool = false) -> Dictionary:
 	var units: Array = [
-		_unit(1, "Wizard", [Vector3.ZERO], ["Caster(1)"], "robot_legions", 2),
+		_unit(1, "Wizard", [Vector3.ZERO], ["Caster(1)"], "saurian_starhosts", 2),
 		_unit(1, "Helper", [Vector3(helper_gap_in * IN2M, 0, 0)],
-			["Caster(1)"], "robot_legions", 1),
+			["Caster(1)"], "saurian_starhosts", 1),
 	]
 	var foes: Array = []
 	for i in range(4):
@@ -80,7 +81,7 @@ func _boost_state(helper_gap_in: float = 6.0, enemy: bool = false) -> Dictionary
 	units.append(_unit(2, "Squad", foes))
 	if enemy:
 		units.append(_unit(2, "EnemyCaster", [Vector3(8.5 * IN2M, 0, 0)],
-			["Caster(1)"], "robot_legions", 2))
+			["Caster(1)"], "saurian_starhosts", 2))
 	return _capture(units)
 
 

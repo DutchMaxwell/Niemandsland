@@ -151,13 +151,13 @@ func test_move_bands_description_overrides_constant() -> void:
 	assert_int(b["rush"]).is_equal(16)
 
 
-func test_move_bands_scurry_adds_two_each() -> void:
-	# Ratmen Clans "Scurry": +2" Advance AND +2" Rush/Charge (a direct additive rule, +2/+2 —
-	# unlike Fast's +2/+4). REGISTRY data (primitive "Quick", advance_mod/rush_mod 2), so it works
+func test_move_bands_scurry_adds_one_and_two() -> void:
+	# Ratmen Clans "Scurry" (rules 3.6): +1" Advance AND +2" Rush/Charge (a direct additive rule —
+	# unlike Fast's +2/+4). REGISTRY data (primitive "Quick", advance_mod 1, rush_mod 2), so it works
 	# on a list with no description texts at all.
 	var b := _controller().move_bands_for_props({
 		"game_system": "gf", "faction_folder": "ratmen_clans", "special_rules": ["Scurry"]})
-	assert_int(b["advance"]).is_equal(8)   # 6 + 2
+	assert_int(b["advance"]).is_equal(7)   # 6 + 1
 	assert_int(b["rush"]).is_equal(14)      # 12 + 2
 
 
@@ -303,10 +303,12 @@ func test_move_bands_clamps_at_zero() -> void:
 # pass's primitive allowlist (movement_range_controller.gd:179) so it can be read at all. ===
 
 func test_move_bands_ethereal_registry_only() -> void:
-	# No description text (a stripped/bundled AI list, e.g. the Godot-free trainer loader) — the
-	# REGISTRY pass alone must still apply the -6/-6.
+	# No description text (a stripped/bundled AI list, e.g., the Godot-free trainer loader) — the
+	# REGISTRY pass alone must still apply the -6/-6. Rules 3.6 (MOR-19b): the penalty rides only
+	# in the placement activation, so the stamp is set to the live serial here.
 	var b := _controller().move_bands_for_props({
 		"game_system": "aof", "faction_folder": "ghostly_undead", "special_rules": ["Ethereal"],
+		"teleport_activation": AiActRecorder.activation_serial,
 	})
 	assert_int(b["advance"]).is_equal(0)   # 6 - 6
 	assert_int(b["rush"]).is_equal(6)      # 12 - 6
@@ -317,13 +319,14 @@ func test_move_bands_ethereal_description_and_registry_do_not_double_apply() -> 
 	# marks Ethereal "counted" for both bands (:108-115) before the registry pass runs, and the
 	# registry pass skips any band already counted (:174-176) — so the -6/-6 applies exactly ONCE.
 	# A double-apply would clamp advance to 0 either way (masking the bug there), but rush tells:
-	# 12 - 6 - 6 = 0 (double) vs the correct 12 - 6 = 6 (single).
+	# 12 - 6 - 6 = 0 (double) vs the correct 12 - 6 = 6 (single). Rules 3.6 (MOR-19b): the stamp
+	# matches the live serial, so the activation's -6/-6 is live.
 	var desc := {"Ethereal": "Once per activation, before attacking, place this model anywhere " \
 		+ "fully within 6\" of its position. This model moves -6\" when using Advance, and -6\" " \
 		+ "when using Rush/Charge."}
 	var b := _controller().move_bands_for_props({
 		"game_system": "aof", "faction_folder": "ghostly_undead", "special_rules": ["Ethereal"],
-		"rule_descriptions": desc,
+		"rule_descriptions": desc, "teleport_activation": AiActRecorder.activation_serial,
 	})
 	assert_int(b["advance"]).is_equal(0)   # 6 - 6, once (clamp would mask a double-apply here)
 	assert_int(b["rush"]) \
@@ -450,7 +453,7 @@ func test_move_bands_royal_legion_charge_bonus_only() -> void:
 ## registry entry is `Fast | rush_mod=4, charge_only=true`. Charge only: the Rush band stays the
 ## plain 12", only the Charge band grows. Same for the aura.
 func test_move_bands_rapid_charge_is_charge_only() -> void:
-	for system_faction in [["gf", "wormhole_daemons_of_war"], ["aof", "dark_elves"]]:
+	for system_faction in [["gf", "daemons_of_war"], ["aof", "dark_elves"]]:
 		for rule_name in ["Rapid Charge", "Rapid Charge Aura"]:
 			var b := _controller().move_bands_for_props({
 				"game_system": system_faction[0], "faction_folder": system_faction[1],

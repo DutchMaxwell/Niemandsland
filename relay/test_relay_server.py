@@ -5,6 +5,7 @@ import json
 import random
 import struct
 import time
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -45,6 +46,18 @@ async def relay():
     yield server, url
     ws_server.close()
     await ws_server.wait_closed()
+
+
+@pytest.fixture(params=["warm", "young"])
+def runner_clock(request, monkeypatch):
+    """Run a test at a normal uptime AND as on a CI runner that booted seconds ago (#1961): there
+    time.monotonic() is still below HOST_REJOIN_WINDOW_SECONDS, so "now - window" is negative.
+    Request it BEFORE `relay` so the server lives on the shifted clock from its start."""
+    if request.param == "young":
+        real = time.monotonic
+        offset = real() - 3.0
+        monkeypatch.setattr(time, "monotonic", lambda: real() - offset)
+    return request.param
 
 
 async def http_get(url: str, path: str = "/stats") -> tuple:
@@ -102,6 +115,20 @@ async def list_rooms(url: str) -> list:
     assert resp["type"] == "rooms_list"
     await ws.close()
     return resp["rooms"]
+
+
+async def expire_host_rejoin_window(server, code: str) -> list:
+    """Helper: run the host-abandon reaper with its clock just past room `code`'s rejoin window.
+
+    Moves the reaper's clock forward from the server's own host-drop stamp instead of backdating
+    the stamp to "now - window": on a runner that booted seconds ago that stamp is negative, which
+    the reaper reads as "host present" and closes nothing (#1961)."""
+    import relay_server
+    stamp = server.rooms[code].host_disconnected_at
+    assert stamp > 0.0, "the host drop is not recorded yet"
+    clock = SimpleNamespace(monotonic=lambda: stamp + HOST_REJOIN_WINDOW_SECONDS + 1)
+    with patch.object(relay_server, "time", clock):
+        return await server._close_abandoned_rooms()
 
 
 # ============================================================================
@@ -253,7 +280,6 @@ class TestRoomManagement:
     async def test_max_peers_per_room_enforced(self, relay):
         server, url = relay
         # Raise IP limit for this test (all from localhost)
-        server.ip_connection_counts.clear()
         old_limit = MAX_CONNECTIONS_PER_IP
         import relay_server
         relay_server.MAX_CONNECTIONS_PER_IP = 20
@@ -375,7 +401,7 @@ class TestRoomManagement:
         await rehost_ws.close()
         await guest_ws.close()
 
-    async def test_abandoned_room_expires_after_window(self, relay):
+    async def test_abandoned_room_expires_after_window(self, runner_clock, relay):
         """A preserved room whose host never returns is closed past the window, and
         the waiting guest is told the host did not return."""
         server, url = relay
@@ -385,14 +411,11 @@ class TestRoomManagement:
         await guest_ws.recv()
 
         await host_ws.close()
-        await asyncio.sleep(0.1)
-        await guest_ws.recv()  # drain host_paused
+        msg = json.loads(await asyncio.wait_for(guest_ws.recv(), timeout=2.0))
+        assert msg["type"] == "host_paused"  # sent right after the server stamped the host drop
 
-        # Simulate the host having dropped longer than the rejoin window.
-        server.rooms[code].host_disconnected_at = (
-            time.monotonic() - HOST_REJOIN_WINDOW_SECONDS - 1
-        )
-        closed = await server._close_abandoned_rooms()
+        # The host stays away longer than the rejoin window.
+        closed = await expire_host_rejoin_window(server, code)
         assert code in closed
         assert code not in server.rooms
 
@@ -602,6 +625,63 @@ class TestSecurity:
 
         for ws in connections:
             await ws.close()
+
+    async def test_ip_limit_counts_open_sockets(self, relay):
+        """Every open socket counts against MAX_CONNECTIONS_PER_IP until it closes."""
+        server, url = relay
+        connections = []
+        for _ in range(MAX_CONNECTIONS_PER_IP):
+            ws, _code, _ = await create_room(url)
+            await ws.send(json.dumps({"type": "delete_data"}))
+            assert json.loads(await ws.recv()) == {"type": "data_deleted"}
+            connections.append(ws)
+
+        overflow_ws = await websockets.connect(url)
+        with pytest.raises(websockets.exceptions.ConnectionClosed) as closed:
+            await overflow_ws.send(json.dumps({"type": "heartbeat"}))
+            await asyncio.wait_for(overflow_ws.recv(), timeout=2.0)
+        assert closed.value.rcvd is not None and closed.value.rcvd.code == 4429
+
+        # Closing one socket frees exactly one slot again.
+        await connections.pop().close()
+        await asyncio.sleep(0.1)
+        recovered, _code, _ = await create_room(url)
+        connections.append(recovered)
+        for ws in connections:
+            await ws.close()
+
+    async def test_one_ip_holds_at_most_its_connection_cap_in_rooms(self, relay):
+        """Rooms need an open socket each, so one IP never holds more rooms than
+        MAX_CONNECTIONS_PER_IP."""
+        server, url = relay
+        connections = []
+        for _ in range(MAX_CONNECTIONS_PER_IP + 3):
+            ws = await websockets.connect(url)
+            connections.append(ws)
+            try:
+                await ws.send(json.dumps({"type": "create_room"}))
+                if json.loads(await asyncio.wait_for(ws.recv(), timeout=2.0))["type"] != "room_created":
+                    continue
+                await ws.send(json.dumps({"type": "delete_data"}))
+                await asyncio.wait_for(ws.recv(), timeout=2.0)
+            except websockets.exceptions.ConnectionClosed:
+                pass
+        assert len(server.rooms) == MAX_CONNECTIONS_PER_IP
+        for ws in connections:
+            await ws.close()
+
+    async def test_rate_limit_applies_before_joining(self, relay, monkeypatch):
+        """A socket that has not created or joined a room is rate-limited like a joined peer."""
+        import relay_server
+        monkeypatch.setattr(relay_server, "RATE_LIMIT_MESSAGES_PER_SECOND", 20)
+        _server, url = relay
+        ws = await websockets.connect(url)
+        with pytest.raises(websockets.exceptions.ConnectionClosed) as closed:
+            for _ in range(25):
+                await ws.send(json.dumps({"type": "heartbeat"}))
+            while True:
+                await asyncio.wait_for(ws.recv(), timeout=5.0)
+        assert closed.value.rcvd is not None and closed.value.rcvd.code == 4429
 
     async def test_heartbeat_ack_sent(self, relay):
         server, url = relay
@@ -850,7 +930,6 @@ class TestRoomListing:
         import relay_server
         old_limit = relay_server.MAX_CONNECTIONS_PER_IP
         relay_server.MAX_CONNECTIONS_PER_IP = MAX_PEERS_PER_ROOM + 5
-        server.ip_connection_counts.clear()
         host_ws, code, _ = await create_public_room(url)
         guests = []
         try:
@@ -1122,7 +1201,7 @@ class TestAggregateStats:
         await host_ws.close()
         await guest_ws.close()
 
-    async def test_abandoned_room_close_records_histogram(self, relay):
+    async def test_abandoned_room_close_records_histogram(self, runner_clock, relay):
         """The host-abandon reaper (host dropped, never rejoined) must record the histograms too."""
         server, url = relay
         host_ws, code, _ = await create_room(url)
@@ -1130,13 +1209,10 @@ class TestAggregateStats:
         await host_ws.recv()
         await guest_ws.recv()
         await host_ws.close()
-        await asyncio.sleep(0.1)
-        await guest_ws.recv()  # drain host_paused
-        # Simulate the host having dropped longer than the rejoin window.
-        server.rooms[code].host_disconnected_at = (
-            time.monotonic() - HOST_REJOIN_WINDOW_SECONDS - 1
-        )
-        closed = await server._close_abandoned_rooms()
+        msg = json.loads(await asyncio.wait_for(guest_ws.recv(), timeout=2.0))
+        assert msg["type"] == "host_paused"
+        # The host stays away longer than the rejoin window.
+        closed = await expire_host_rejoin_window(server, code)
         assert code in closed
         assert code not in server.rooms
         assert server.stats.peers_per_room["2"] == 1
@@ -1344,3 +1420,19 @@ class TestStatsDigest:
         import stats_digest
         out = stats_digest.render_digest([], source="empty.log")
         assert "No STATS records found." in out
+
+
+class TestDependencyPin:
+    """requirements.txt pins websockets to one major version, and the suite runs inside it."""
+
+    def test_websockets_pinned_to_tested_major(self):
+        from pathlib import Path
+
+        lines = Path(__file__).with_name("requirements.txt").read_text(encoding="utf-8").splitlines()
+        spec = next(line.strip() for line in lines if line.strip().startswith("websockets"))
+        lower = spec.split(">=", 1)[1].split(",", 1)[0].strip()
+        upper = spec.split("<", 1)[1].strip() if "<" in spec else ""
+        assert upper, "websockets needs an upper bound"
+        installed = tuple(int(part) for part in websockets.__version__.split(".")[:2])
+        low = tuple(int(part) for part in lower.split(".")[:2])
+        assert low <= installed < (int(upper.split(".")[0]), 0)

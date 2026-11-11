@@ -54,6 +54,21 @@ static func migrate(state: Dictionary) -> Dictionary:
 	return {"ok": true, "state": migrated, "error": "", "migrated_from": version}
 
 
+## Whether `state` was played under the rules this build plays (`build_rules`, e.g. "3.6.0"). Only
+## major.minor counts: 3.6.0 and 3.6.2 are the same rules. Returns "" when it may load, else the
+## plain-words reason it cannot. A save without the "rules_version" key was made before 0.3.15.
+static func rules_version_error(state: Dictionary, build_rules: String) -> String:
+	var build := OPRApiClient._major_minor(build_rules)
+	var saved := str(state.get("rules_version", ""))
+	if saved.is_empty():
+		return "This save carries no rules version (made before 0.3.15); this build plays rules %s and cannot load it." % build
+	var saved_mm := OPRApiClient._major_minor(saved)
+	if saved_mm != build:
+		return "This save was made with rules %s; this build plays rules %s and cannot load it." % [
+			saved if saved_mm.is_empty() else saved_mm, build]
+	return ""
+
+
 # === Steps (each lifts exactly one version) ===
 
 ## 1.4 → 1.5: sandbox terrain objects were ADDED in 1.5 — a 1.4 save simply has none. Nothing to

@@ -37,7 +37,7 @@ use crate::rules::Registries;
     /// move-through trigger fires on exactly such an executed trail
     /// (`_solo_apply_strafing` main.gd:2964-3007, trails vs
     /// `SoloController.trails_cross_unit_bases`).
-    fn strafe_line() -> (State, Vec<UnitStatic>) {
+    pub(super) fn strafe_line() -> (State, Vec<UnitStatic>) {
         let mut st = four_unit_line();
         st.roster = Rc::new(Roster {
             keys: vec!["a".into(), "b".into()],

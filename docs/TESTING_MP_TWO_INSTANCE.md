@@ -13,6 +13,10 @@ The default run covers:
 - the live LOS line and sight count over a human opponent;
 - co-op (#673): the AI-slot designation sync, the defender's owner being prompted for its
   own saves while the resolver logs a "waiting for" line, and the faces routed back.
+- with `--include-rules-online` (CI runs it), after the agreed Automatic room's alternation gate:
+  Automodus 3.5, the guest previews Advance & Shoot, clicks and runs it on its own machine; every
+  model lands within 1 mm of that preview on both peers, and the host rolls its own saves against
+  the volley (the guest's tray rolls none).
 
 The driver compares both peers after every step. A timeout, process crash,
 English or German GDScript parser/runtime error, wrong expected value, or peer

@@ -1,9 +1,16 @@
 extends SceneTree
 ## Headless probe for the S6 AI-list CDN delivery: performs the EXACT fetch the game's
 ## _fetch_cdn_text does (same host, same browser UA) against a known-existing object and —
-## once the lists are staged — against ai_lists/_manifest.json. Run:
-##   godot --headless -s res://tools/cdn_lists_probe.gd [-- path=ai_lists/_manifest.json]
+## once the lists are staged — against ai_lists_v36/_manifest.json (the rules 3.6 folder; 0.3.14 reads
+## ai_lists/). Run:
+##   godot --headless -s res://tools/cdn_lists_probe.gd [-- path=ai_lists_v36/_manifest.json]
 ## Prints PROBE_OK <bytes> or PROBE_FAIL <result> <code>.
+
+## The v36 lists live in their own CDN folder (0.3.14 keeps ai_lists/), so a bare run checks the
+## uploaded v36 manifest rather than the old model manifest.
+static func _default_path() -> String:
+	return "ai_lists_v36/_manifest.json"
+
 
 func _init() -> void:
 	_run()
@@ -11,7 +18,7 @@ func _init() -> void:
 
 func _run() -> void:
 	await process_frame   # _init runs before the loop — the node tree is only usable after a frame
-	var rel := "model_manifest.json"
+	var rel := _default_path()
 	for a in OS.get_cmdline_user_args():
 		if str(a).begins_with("path="):
 			rel = str(a).trim_prefix("path=")

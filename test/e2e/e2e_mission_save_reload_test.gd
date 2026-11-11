@@ -21,9 +21,10 @@ const SAVE_PATH := "user://e2e_mission_save_reload.nml"
 const LAST_ROUND := 4
 ## Marker spots well inside the real 6x4 ft table; only their OWNERS carry meaning here.
 const MARKER_POSITIONS := [Vector3(-0.3, 0.0, 0.3), Vector3(0.3, 0.0, -0.3)]
-## What a save of version 1.7 written before S1-15 carried — the AC5 fixture keeps only these keys.
+## What a save of version 1.7 written before S1-15 carried — the AC5 fixture keeps only these keys, plus the rules
+## stamp: since 0.3.15 a save without it is refused, and this case is about the missing mission data.
 const ROOT_KEYS_1_7 := ["version", "saved_at", "table", "objects", "game_units", "game_state",
-	"object_counter", "rule_descriptions", "player_spells", "army_names"]
+	"object_counter", "rule_descriptions", "player_spells", "army_names", "rules_version"]
 const GAME_STATE_KEYS_1_7 := ["current_round", "game_phase", "current_player", "token_library", "rule_state"]
 ## The verdicts the human (P1) reads against NACHTMAHR (P2) — main._solo_show_game_summary.
 const HUMAN_WINS := "You win — NACHTMAHR yields."

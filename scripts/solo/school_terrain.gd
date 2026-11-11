@@ -59,9 +59,10 @@ static func type_at(world: Dictionary, pos: Vector3) -> int:
 		cell_of(pos.x / IN2M, pos.z / IN2M, int(world["n"])), TerrainRules.TerrainType.NONE))
 
 
-## Centre-line LOS block, v0: any RUINS, CONTAINER or FOREST cell strictly
-## between the endpoints blocks (1"-step sampling; endpoint cells never block
-## — a unit inside a ruin or wood sees out of it and can be seen).
+## Centre-line LOS block, v0: any blocking cell strictly between the endpoints
+## blocks (1"-step sampling; endpoint cells never block — a unit inside a ruin
+## or wood sees out of it and can be seen). From rules 3.6 ruins are see-through,
+## so TerrainRules.blocks_los decides per epoch.
 static func los_blocked(world: Dictionary, a: Vector3, b: Vector3) -> bool:
 	var cells: Dictionary = world["cells"]
 	var n: int = int(world["n"])
@@ -77,7 +78,6 @@ static func los_blocked(world: Dictionary, a: Vector3, b: Vector3) -> bool:
 		if c == ca or c == cb:
 			continue
 		var t := int(cells.get(c, 0))
-		if t == TerrainRules.TerrainType.RUINS or t == TerrainRules.TerrainType.CONTAINER \
-				or t == TerrainRules.TerrainType.FOREST:
+		if TerrainRules.blocks_los(t):
 			return true
 	return false

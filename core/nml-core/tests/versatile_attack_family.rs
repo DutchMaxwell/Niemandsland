@@ -130,18 +130,18 @@ fn vinci_tech_buff_at_both_epochs_and_its_log_from_6() {
 /// byte-exact. The Boost WITHOUT Vinci Tech never engages — the rule's own
 /// printed condition — while the generic primitive buff keeps its reading.
 #[test]
-fn vinci_tech_boost_gets_both_arms_from_epoch_6() {
-    let on = build_at("aof", "duchies_of_vinci", &["Vinci Tech", "Vinci Tech Boost"], 6);
+fn enhanced_vinci_tech_gets_both_arms_from_epoch_6() {
+    let on = build_at("aof", "duchies_of_vinci", &["Vinci Tech", "Enhanced Vinci Tech"], 6);
     let v6 = volley(&on, "vinci");
     assert_eq!(v6.rolls[0].target, 3, "epoch 6: the hit arm fires TOO (both, not pick) (RED)");
     assert_eq!(v6.rolls[1].target, 5, "epoch 6: the AP arm fires as well");
     assert!(
-        v6.log.iter().any(|l| l.starts_with("Vinci Tech Boost:")),
+        v6.log.iter().any(|l| l.starts_with("Enhanced Vinci Tech:")),
         "epoch 6: the volley names the boost (RED before the fix): {:?}",
         v6.log
     );
 
-    let legacy = build_at("aof", "duchies_of_vinci", &["Vinci Tech", "Vinci Tech Boost"], 5);
+    let legacy = build_at("aof", "duchies_of_vinci", &["Vinci Tech", "Enhanced Vinci Tech"], 5);
     let v5 = volley(&legacy, "vinci");
     assert_eq!(v5.rolls[0].target, 4, "epoch 5: byte-exact pick, no hit arm");
     assert_eq!(v5.rolls[1].target, 5, "epoch 5: the generic pick's AP arm");
@@ -153,14 +153,14 @@ fn vinci_tech_boost_gets_both_arms_from_epoch_6() {
 
     // The Boost alone never engages: the printed condition needs Vinci Tech.
     // The generic primitive buff (pre-existing, ungated) still picks AP.
-    let lone = volley(&build_at("aof", "duchies_of_vinci", &["Vinci Tech Boost"], 6), "vinci");
+    let lone = volley(&build_at("aof", "duchies_of_vinci", &["Enhanced Vinci Tech"], 6), "vinci");
     assert_eq!(lone.rolls[0].target, 4, "boost without Vinci Tech: no hit arm");
     assert_eq!(
         lone.rolls[1].target, 5,
         "boost without Vinci Tech: the generic pick's AP arm (pre-existing)"
     );
     assert!(
-        lone.log.iter().all(|l| !l.starts_with("Vinci Tech Boost:")),
+        lone.log.iter().all(|l| !l.starts_with("Enhanced Vinci Tech:")),
         "boost without Vinci Tech: the rule does not fire, no log: {:?}",
         lone.log
     );

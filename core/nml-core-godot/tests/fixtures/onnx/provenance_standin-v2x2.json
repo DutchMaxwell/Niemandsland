@@ -22,7 +22,7 @@
    "canonical_sha256": "7633f52655bacd5f8e5032cc313b56ec2b5e36b76e60c388fa00cdc638546a9d"
   }
  },
- "golden_sha256": "2945c97458f36fcb6b372c89f904611b66fe0b6491966cbba4f7cf7e04be73cf",
+ "golden_sha256": "b3a57619c4d801a349910659b1c50ed469f432c3f7410cfd7f90e8141d27804c",
  "op_census": {
   "Add": 56,
   "Cast": 21,
@@ -58,7 +58,7 @@
   "Where": 12
  },
  "default_domain": true,
- "nml_core_sha": "a60ab2081388ce2c5a836eeb0748ca629acfbaa8",
+ "nml_core_sha": "30bf4a97c094d11dfee48a15c85db3cc70a1fa7c",
  "verify": {
   "leaves": 60,
   "real_leaves": 48,
@@ -88,5 +88,11 @@
   "why": "B1 (#1600): Terrain::build now synthesises terrain pieces from painted cells, so the 48 real leaves of acts_25 carry non-zero terr rows; leaves re-captured with the current core, only the terr block changed (units/units_mask/objs/objs_mask/glob bit-identical on all 48; the 12 synthetic leaves untouched); expected values re-scored with onnxruntime 1.30.0 (CPU, 1 intra-op thread) on the SHIPPED stand-in (runs.run1.raw_sha256 unchanged); the same procedure reproduces the previous golden exactly (max abs 0.0) before the swap",
   "value_shift_vs_previous_golden_max_abs": 0.009180948138237,
   "member_shift_vs_previous_golden_max_abs": 0.03213
+ },
+ "regenerated_r36": {
+  "date": "2026-11-02",
+  "why": "0.3.15 (#2063): the gf spell list follows the 3.6 books, so the Gauss Bots slot carries rating 1 instead of 3 and the displaced rule takes rating 3; two rule-bag rating columns (73, 79) of 14 real leaves moved. Leaves re-captured with the current core, only those two cells changed (units_mask, objs, objs_mask, terr and glob bit-identical on all 48; the 12 synthetic leaves untouched); expected values re-scored with onnxruntime 1.30.0 (CPU, 1 intra-op thread) on the SHIPPED stand-in (runs.run1.raw_sha256 unchanged); the same procedure reproduces the previous golden byte-identically (max abs 0.0) before the swap",
+  "value_shift_vs_previous_golden_max_abs": 0.00105978548527,
+  "member_shift_vs_previous_golden_max_abs": 0.0014562532
  }
 }

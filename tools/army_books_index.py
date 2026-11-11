@@ -19,6 +19,7 @@ is why only the three keys above may appear. The API is read ONCE here, at
 generation time — never by the game.
 
     python3 tools/army_books_index.py --lists gf=~/farm/ai_lists_gf --lists aof=~/farm/ai_lists_aof
+    python3 tools/army_books_index.py --books gf=~/farm/army_books_gf --lists gf=~/farm/ai_lists_gf
 """
 
 from __future__ import annotations
@@ -50,14 +51,34 @@ def army_ids_in_pool(list_dir: str) -> set:
     return ids
 
 
-def build_index(pools: dict) -> dict:
+def books_in_dir(book_dir: str) -> dict:
+    """Every book in `book_dir` keyed by its `armyId` (names starting with '_' skipped)."""
+    books = {}
+    for path in sorted(glob.glob(os.path.join(book_dir, "*.json"))):
+        if os.path.basename(path).startswith("_"):
+            continue
+        with open(path, encoding="utf-8") as handle:
+            book = json.load(handle)
+        army_id = str(book.get("armyId", "")).strip()
+        if army_id:
+            books[army_id] = book
+    return books
+
+
+def build_index(pools: dict, book_dirs: dict) -> dict:
     index = {}
-    for system, list_dir in sorted(pools.items()):
+    for system in sorted(set(pools) | set(book_dirs)):
+        books = books_in_dir(book_dirs[system]) if system in book_dirs else {}
+        army_ids = set(books) if system in book_dirs else army_ids_in_pool(pools[system])
+        if system in book_dirs and system in pools:
+            army_ids &= army_ids_in_pool(pools[system])
         section = {}
-        for army_id in sorted(army_ids_in_pool(list_dir)):
-            url = "%s/army-books/%s?gameSystem=%d" % (API_BASE, army_id, SYSTEM_IDS[system])
-            with urllib.request.urlopen(url, timeout=60) as response:
-                book = json.load(response)
+        for army_id in sorted(army_ids):
+            book = books.get(army_id)
+            if book is None:
+                url = "%s/army-books/%s?gameSystem=%d" % (API_BASE, army_id, SYSTEM_IDS[system])
+                with urllib.request.urlopen(url, timeout=60) as response:
+                    book = json.load(response)
             name = str(book.get("name", "")).strip()
             if not name:
                 raise SystemExit("army book %s/%s has no name" % (system, army_id))
@@ -90,17 +111,20 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--lists", action="append", default=[], metavar="SYSTEM=DIR",
                         help="AI-list pool to read armyIds from, e.g. gf=~/farm/ai_lists_gf")
+    parser.add_argument("--books", action="append", default=[], metavar="SYSTEM=DIR",
+                        help="local army-book dir, e.g. gf=~/farm/army_books_gf")
     args = parser.parse_args()
-    pools = {}
-    for spec in args.lists:
-        system, _, path = spec.partition("=")
-        if system not in SYSTEM_IDS or not path:
-            raise SystemExit("--lists wants SYSTEM=DIR, SYSTEM in %s" % sorted(SYSTEM_IDS))
-        pools[system] = os.path.expanduser(path)
-    if not pools:
-        raise SystemExit("no --lists given")
+    pools, book_dirs = {}, {}
+    for option, dest in (("lists", pools), ("books", book_dirs)):
+        for spec in getattr(args, option):
+            system, _, path = spec.partition("=")
+            if system not in SYSTEM_IDS or not path:
+                raise SystemExit("--%s wants SYSTEM=DIR, SYSTEM in %s" % (option, sorted(SYSTEM_IDS)))
+            dest[system] = os.path.expanduser(path)
+    if not pools and not book_dirs:
+        raise SystemExit("no --lists or --books given")
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    index = build_index(pools)
+    index = build_index(pools, book_dirs)
     check_hygiene(index, repo_root)
     with open(os.path.join(repo_root, OUT_PATH), "w", encoding="utf-8") as handle:
         handle.write(json.dumps(index, indent="\t", sort_keys=True, ensure_ascii=False) + "\n")

@@ -15,6 +15,7 @@ extends SceneTree
 ## Run (then copy the printed user:// file into assets/tutorial/):
 ##   flatpak run org.godotengine.Godot --path <wt> --headless -s res://tools/tutorial_board_builder.gd
 
+const TextStrip := preload("res://tools/tutorial_text_strip.gd")
 const P1_FIXTURE := "res://assets/tutorial/tutorial_army_p1.json"  # Battle Brothers (player)
 const P2_FIXTURE := "res://assets/tutorial/tutorial_army_p2.json"  # Robot Legions (enemy)
 const OUT_PATH := "user://tutorial_board.nml"
@@ -97,6 +98,19 @@ func _build() -> void:
 	var err: Error = await save_manager.save_game(OUT_PATH)
 	if err != OK:
 		printerr("BOARD-FAIL: save_game returned %d" % err)
+		quit(1)
+		return
+	# No third-party rule / spell text in a shipped board: re-read the written table, strip, write it back
+	# in the same pretty format (save_state_to_file is the signal-free core of save_game).
+	var state: Variant = JSON.parse_string(FileAccess.get_file_as_string(OUT_PATH))
+	if typeof(state) != TYPE_DICTIONARY:
+		printerr("BOARD-FAIL: saved board is invalid JSON")
+		quit(1)
+		return
+	TextStrip.strip_state(state)
+	err = save_manager.save_state_to_file(state, OUT_PATH)
+	if err != OK:
+		printerr("BOARD-FAIL: rewriting the stripped board returned %d" % err)
 		quit(1)
 		return
 	var unit_count: int = army_manager.get("game_units").size()

@@ -114,6 +114,29 @@ pub fn matches(r: &LiveMod, role: Role, melee: bool) -> bool {
     }
 }
 
+/// DAT-17a — the "Regeneration Buff" once-grant and its spell siblings carry
+/// `grants_rule: "Regeneration"`. From `EPOCH_73_V36` the grant is spent by the
+/// FIRST exchange that brings a wound in to its holder: a roll that ignores
+/// every wound still spends it (the wounds came in), a zero-wound exchange does
+/// not. The holder's own attack keeps it. Below 73 the old unconditional spend
+/// answers for both sides.
+pub fn is_regen_grant(r: &LiveMod) -> bool {
+    r.once && base_rule_is(&r.grants_rule, "Regeneration")
+}
+
+/// G4-T10 (`EPOCH_73_V36`, lead ruling on the 3.6 once-grants; table twin `_solo_grant_waits_to_be_attacked`):
+/// a once grant is spent the next time its effect actually applies. Evasive (and Melee Evasion) works when
+/// its bearer is ATTACKED, so the bearer's own strike or volley keeps it; the defender side still spends it.
+pub fn attacked_only_grant(r: &LiveMod) -> bool {
+    r.once && (base_rule_is(&r.grants_rule, "Evasive") || base_rule_is(&r.grants_rule, "Melee Evasion"))
+}
+
+/// `is_regen_grant` as a `spend_once_except` keep predicate: the grant survives
+/// only while no wound came in to its holder this exchange (both sides at 73).
+pub fn keep_regen(r: &LiveMod, wounded: bool) -> bool {
+    is_regen_grant(r) && !wounded
+}
+
 /// The net of one role over `_solo_mods_of_chain` (main.gd:3812) — the unit's
 /// OWN records plus its host's, because a joined hero shares the unit's tokens.
 pub fn sum(state: &State, i: usize, role: Role, melee: bool, f: impl Fn(&LiveMod) -> i64) -> i64 {
@@ -308,9 +331,19 @@ pub fn solo_move_grants(state: &State, i: usize, rules_epoch: u32) -> Vec<&'stat
 /// AND its host that matches one of `roles` goes. Removing the record IS the
 /// grant revocation here: this port keeps no second overlay to strip.
 pub fn spend_once(state: &mut State, i: usize, roles: &[Role], melee: bool) {
+    spend_once_except(state, i, roles, melee, |_| false);
+}
+
+/// `spend_once` with a keep predicate: a record the predicate accepts survives
+/// the spend. The 3.6 Great Banner skip uses it so a one-shot the test never
+/// counted is not burned by that test (MOR-19).
+pub fn spend_once_except(
+    state: &mut State, i: usize, roles: &[Role], melee: bool, keep: impl Fn(&LiveMod) -> bool,
+) {
     let host = state.attached_to[i];
     for u in [Some(i), host].into_iter().flatten() {
-        state.buffs[u]
-            .retain(|r| !(r.once && roles.iter().any(|&role| matches(r, role, melee))));
+        state.buffs[u].retain(|r| {
+            !(r.once && roles.iter().any(|&role| matches(r, role, melee)) && !keep(r))
+        });
     }
 }

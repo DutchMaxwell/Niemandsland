@@ -163,12 +163,15 @@ func test_guest_verb_runs_on_the_guest_and_replicates(timeout := 60000) -> void:
 	_main._hotseat_turn.side_on_turn = 2
 	var start: Vector3 = mine.models[0].node.global_position
 	await _main.solo_begin_auto(mine, AiDecision.Action.ADVANCE)
+	# 1.8f: the guest clicks a table point 10" toward the host's unit (the 6" Advance ends 10" away), then its shot.
+	if _main._solo_target_mode.has("auto_point"):   # a closed mode must fail below, not crash the run
+		await _main._solo_auto_point_click(start + Vector3(-10.0 * inch, 0.0, 0.0))
 	var log_text := ""
 	for e in _main.battle_log.entries():
 		log_text += str((e as Dictionary)["text"]) + " | "
 	assert_array(_main._solo_target_mode.get("auto_valid", [])).override_failure_message(
-		"the guest's verb lit nothing (log: %s)" % log_text).contains_exactly([hosts])
-	if _main._solo_target_mode.has("auto_verb"):   # a closed mode must fail below, not crash the run
+		"the guest's shot pick lit nothing (log: %s)" % log_text).contains_exactly([hosts])
+	if _main._solo_target_mode.has("auto_shot"):
 		await _main._solo_auto_click(hosts)
 	await E2EBoot.settle(get_tree())
 	var end: Vector3 = mine.models[0].node.global_position

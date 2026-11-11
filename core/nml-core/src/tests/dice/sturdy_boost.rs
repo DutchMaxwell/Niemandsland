@@ -9,7 +9,7 @@ use super::*;
     /// RED on the volley fold: Defense 4+, Sturdy + Sturdy Boost, AP(1) from
     /// 12" — the save target is 4+ (one +1), not 3+ (two).
     #[test]
-    fn sturdy_boost_replaces_the_distance_gate_instead_of_stacking_with_it() {
+    fn enhanced_sturdy_replaces_the_distance_gate_instead_of_stacking_with_it() {
         let def = Ctx {
             shielded: true,
             shielded_alias: crate::unit::ShieldedAlias::SturdyBoost,
@@ -75,7 +75,7 @@ use super::*;
           "carrier":{"unit_id":"carrier","name":"Carrier","quality":4,
             "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
             "base_radius":0.016,"game_system":"gf","faction_folder":"dwarf_guilds",
-            "special_rules":["Sturdy","Sturdy Boost"],"item_grants":[],
+            "special_rules":["Sturdy","Enhanced Sturdy"],"item_grants":[],
             "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
             "weapons":[{"name":"Blade","range":0,"attacks":1,"count":1,"rules":[]}]}}}"#;
         let header = read_act_header(tpl).expect("header");

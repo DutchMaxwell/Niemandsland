@@ -1,5 +1,5 @@
 extends SceneTree
-## Shipped-base generator (konrad ORDER 476c3390, step 1): the base knob bundle a
+## Shipped-base generator (lead ORDER 476c3390, step 1): the base knob bundle a
 ## promotion A/B must run against, read from the game's OWN header path so the
 ## harness never again runs on a hand copy that can go stale.
 ##

@@ -93,9 +93,11 @@
             versatile_pick_round: vec![-1; 4],
             versatile_pick_mode: vec![0; 4],
             retreating_strike_round: vec![-1; 4],
+            mind_control_moved_round: vec![-1; 4],
             growth_markers: vec![0; 4],
             vengeance_markers: vec![0; 4],
             growth_round: vec![-1; 4],
+            growth_strike_round: vec![-1; 4],
             second_wind_used: vec![false; 4], surprise_attack_used: vec![false; 4], teleport_used: vec![false; 4],
             reinforcement_used: vec![false; 4],
             second_wind_round: -1,
@@ -251,7 +253,7 @@
     /// natural 1. The epoch-5 control (the fleet stamps 5) draws NOTHING.
     #[test]
     fn storm_of_change_fires_shred_on_activation_at_epoch_six_not_five() {
-        let (st, statics) = storm_line("Storm of Change", "wormhole_daemons_of_change", 6);
+        let (st, statics) = storm_line("Storm of Change", "daemons_of_change", 6);
         let (next, shot) = run_storm(&st, &statics, 37, 6);
         let storm = &shot.rolls[0];
         assert_eq!(
@@ -269,7 +271,7 @@
             "rules must log: the line names the rule, the bearer and the dice"
         );
 
-        let (st5, statics5) = storm_line("Storm of Change", "wormhole_daemons_of_change", 5);
+        let (st5, statics5) = storm_line("Storm of Change", "daemons_of_change", 5);
         let (next5, shot5) = run_storm(&st5, &statics5, 37, 5);
         assert!(shot5.rolls.is_empty(), "epoch 5 predates the wave-3 port");
         assert!(shot5.log.is_empty());
@@ -282,7 +284,7 @@
     /// loses three. Epoch 5: nothing.
     #[test]
     fn storm_of_lust_pays_surge_dice_per_hit_at_epoch_six_not_five() {
-        let (st, statics) = storm_line("Storm of Lust", "wormhole_daemons_of_lust", 6);
+        let (st, statics) = storm_line("Storm of Lust", "daemons_of_lust", 6);
         let (next, shot) = run_storm(&st, &statics, 3, 6);
         let storm = &shot.rolls[0];
         assert_eq!((storm.kind, storm.count, storm.target), ("attack", 3, 2));
@@ -301,7 +303,7 @@
         assert_eq!(shot.caused, 3);
         assert_eq!(next.alive[2], 0);
 
-        let (st5, statics5) = storm_line("Storm of Lust", "wormhole_daemons_of_lust", 5);
+        let (st5, statics5) = storm_line("Storm of Lust", "daemons_of_lust", 5);
         let (next5, shot5) = run_storm(&st5, &statics5, 3, 5);
         assert!(shot5.rolls.is_empty());
         assert_eq!(next5.wounds[2], vec![1, 1, 1]);
@@ -313,7 +315,7 @@
     /// a 3, that failed re-roll wounds. Epoch 5: nothing.
     #[test]
     fn storm_of_plague_forces_the_bane_reroll_at_epoch_six_not_five() {
-        let (st, statics) = storm_line("Storm of Plague", "wormhole_daemons_of_plague", 6);
+        let (st, statics) = storm_line("Storm of Plague", "daemons_of_plague", 6);
         let (_, shot) = run_storm(&st, &statics, 3, 6);
         let storm = &shot.rolls[0];
         assert_eq!((storm.kind, storm.count, storm.target), ("attack", 3, 2));
@@ -327,7 +329,7 @@
         );
         assert_eq!(shot.caused, 1, "the re-rolled six failed into a wound");
 
-        let (st5, statics5) = storm_line("Storm of Plague", "wormhole_daemons_of_plague", 5);
+        let (st5, statics5) = storm_line("Storm of Plague", "daemons_of_plague", 5);
         let (next5, shot5) = run_storm(&st5, &statics5, 3, 5);
         assert!(shot5.rolls.is_empty());
         assert_eq!(next5.wounds[2], vec![1, 1, 1]);
@@ -338,7 +340,7 @@
     /// at target 5 — two failures. Epoch 5: nothing.
     #[test]
     fn storm_of_war_puts_ap_one_on_the_burst_at_epoch_six_not_five() {
-        let (st, statics) = storm_line("Storm of War", "wormhole_daemons_of_war", 6);
+        let (st, statics) = storm_line("Storm of War", "daemons_of_war", 6);
         let (next, shot) = run_storm(&st, &statics, 3, 6);
         let storm = &shot.rolls[0];
         assert_eq!((storm.kind, storm.count, storm.target), ("attack", 3, 2));
@@ -351,7 +353,7 @@
         assert_eq!(shot.caused, 2);
         assert_eq!(next.alive[2], 1);
 
-        let (st5, statics5) = storm_line("Storm of War", "wormhole_daemons_of_war", 5);
+        let (st5, statics5) = storm_line("Storm of War", "daemons_of_war", 5);
         let (next5, shot5) = run_storm(&st5, &statics5, 3, 5);
         assert!(shot5.rolls.is_empty());
         assert_eq!(next5.wounds[2], vec![1, 1, 1]);
@@ -362,12 +364,12 @@
     /// preset flag keeps the burst quiet on a fresh target pool.
     #[test]
     fn storm_is_once_per_game_per_bearer() {
-        let (st, statics) = storm_line("Storm of Change", "wormhole_daemons_of_change", 6);
+        let (st, statics) = storm_line("Storm of Change", "daemons_of_change", 6);
         let (next, shot) = run_storm(&st, &statics, 3, 6);
         assert!(!shot.rolls.is_empty());
         assert_eq!(next.storm_used[0], vec!["Storm of Change".to_string()]);
 
-        let (st2, statics2) = storm_line("Storm of Change", "wormhole_daemons_of_change", 6);
+        let (st2, statics2) = storm_line("Storm of Change", "daemons_of_change", 6);
         let mut spent = st2;
         Rc::make_mut(&mut spent.storm_used)[0] = vec!["Storm of Change".to_string()];
         let (next2, shot2) = run_storm(&spent, &statics2, 3, 6);
@@ -380,7 +382,7 @@
     /// once-per-game is NOT spent (main.gd:17257's own gate).
     #[test]
     fn storm_out_of_reach_is_not_spent() {
-        let (mut st, statics) = storm_line("Storm of Change", "wormhole_daemons_of_change", 6);
+        let (mut st, statics) = storm_line("Storm of Change", "daemons_of_change", 6);
         st.positions[2] =
             vec![[20.0 * IN2M, 0.0, 0.0], [20.02 * IN2M, 0.0, 0.0], [20.04 * IN2M, 0.0, 0.0]];
         let (next, shot) = run_storm(&st, &statics, 3, 6);
@@ -403,7 +405,7 @@
             UnitStatic { ctx: Ctx { fear: 2, ..Ctx::default() }, quality: 6, ..UnitStatic::default() },
             UnitStatic { quality: 6, ..UnitStatic::default() },
         ];
-        expected_melee_morale(&mut st, &statics, 0, 10, 2, 10, Seams { rules_epoch: CURRENT_RULES_EPOCH, ..Default::default() });
+        expected_melee_morale(&mut st, &statics, 0, 10, 2, 10, 0, 0.0, 0.0, Seams { rules_epoch: CURRENT_RULES_EPOCH, ..Default::default() });
         assert_eq!(st.alive[0], 1, "the Fear(2) unit dealt 1+2=3 > 2, it must not test morale");
         assert_eq!(st.alive[2], 0, "the plain unit lost the comparison and must rout");
     }
@@ -421,7 +423,7 @@
             UnitStatic { ctx: Ctx { fear: 2, ..Ctx::default() }, quality: 6, ..UnitStatic::default() },
             UnitStatic { quality: 6, ..UnitStatic::default() },
         ];
-        expected_melee_morale(&mut st, &statics, 0, 1, 2, 1, Seams { rules_epoch, ..Default::default() });
+        expected_melee_morale(&mut st, &statics, 0, 1, 2, 1, 0, 0.0, 0.0, Seams { rules_epoch, ..Default::default() });
         st.alive[2]
     }
 
@@ -460,7 +462,7 @@
         ];
         let mut tray = Tray::seeded(7);
         let mut shot = ShootResult::default();
-        tray_morale(&mut st, &statics, 0, false, Seams { rules_epoch, hero_attach: true, ..Default::default() }, &mut tray, &mut shot);
+        tray_morale(&mut st, &statics, 0, false, Seams { rules_epoch, hero_attach: true, ..Default::default() }, &mut tray, &mut shot, None, None);
         shot.rolls.first().map(|r| r.target)
     }
 
@@ -510,7 +512,7 @@
         assert!(!morale_fails_expected(&st, &statics, 0, seams));
         st.shaken[0] = true;
         let mut shot = ShootResult::default();
-        tray_morale(&mut st, &statics, 0, false, seams, &mut Tray::seeded(7), &mut shot);
+        tray_morale(&mut st, &statics, 0, false, seams, &mut Tray::seeded(7), &mut shot, None, None);
         assert_eq!(shot.rolls.len(), 1, "Shaken skips the test die and draws only the Fearless recovery die");
         assert_eq!(shot.rolls[0].target, crate::combat::FEARLESS_RECOVER_TARGET);
 
@@ -1063,6 +1065,7 @@
             cells,
             sandbox: vec![],
             pieces: vec![],
+            containers: Vec::new(),
             walls: vec![],
             cell_params: crate::terrain::CellParams {
                 table_size_feet: [6.0, 4.0],
@@ -1126,6 +1129,7 @@
             sandbox: vec![],
             walls: vec![],
             pieces: vec![],
+            containers: Vec::new(),
             cell_params: crate::terrain::CellParams {
                 table_size_feet: [6.0, 4.0],
                 grid_rotation_degrees: 0.0,
@@ -1218,6 +1222,7 @@
             cells: vec![],
             sandbox: vec![],
             pieces: vec![],
+            containers: Vec::new(),
             walls: vec![],
             cell_params: crate::terrain::CellParams {
                 table_size_feet: [6.0, 4.0],
@@ -1295,6 +1300,7 @@
             cells,
             sandbox: vec![],
             pieces: vec![],
+            containers: Vec::new(),
             walls: vec![],
             cell_params: crate::terrain::CellParams {
                 table_size_feet: [6.0, 4.0],
@@ -1343,10 +1349,11 @@
         st.alive = vec![3, 3];
         st.attached = Rc::new(vec![vec![], vec![]]);
         st.attached_to = Rc::new(vec![None, None]);
-        st.positions[0] = vec![[0.0, 0.0, 0.0], [0.8, 0.0, 0.0], [1.2, 0.0, 0.0]];
+        // Base contact, three rows of 1" bases: from EPOCH_73_V36 a model strikes only inside its reach.
+        st.positions[0] = vec![[0.0, 0.0, 0.0], [0.0, 0.0, 2.0 * IN2M], [0.0, 0.0, 4.0 * IN2M]];
         st.wounds[0] = vec![1, 1, 1];
         Rc::make_mut(&mut st.radii)[0] = vec![IN2M, IN2M, IN2M];
-        st.positions[1] = vec![[2.0, 0.0, 0.0], [3.0, 0.0, 0.0], [4.0, 0.0, 0.0]];
+        st.positions[1] = vec![[2.0 * IN2M, 0.0, 0.0], [2.0 * IN2M, 0.0, 2.0 * IN2M], [2.0 * IN2M, 0.0, 4.0 * IN2M]];
         st.wounds[1] = vec![1, 1, 1];
         Rc::make_mut(&mut st.radii)[1] = vec![IN2M, IN2M, IN2M];
         (st, statics)
@@ -1597,6 +1604,7 @@
                 ],
                 sandbox: Vec::<Obb>::new(),
                 pieces: vec![],
+                containers: Vec::new(),
                 walls: vec![],
                 cell_params: CellParams {
                     table_size_feet: [6.0, 4.0],
@@ -1712,6 +1720,7 @@ mod cast_kind;
 mod cast_move;
 mod casting_debuff;
 mod casting_mod;
+mod charge_destroyed_target;
 mod courage_buff;
 mod utility_buff_family;
 mod utility_spells;
@@ -1741,6 +1750,7 @@ mod growth_markers_epoch6;
 mod growth_place_pins;
 mod half_primitives;
 mod hero_size;
+mod playtest_morale;
 mod fearless_shaken;
 mod bearers_last;
 mod hit_and_run;
@@ -1755,6 +1765,7 @@ mod limited_weapons;
 mod mark_beneficiary;
 mod mark_consumers;
 mod mark_pins;
+mod range_grant_core;
 mod vs_grant_marks;
 mod melee_reach_table;
 mod mentioned2a_buffs;
@@ -1770,6 +1781,7 @@ mod piercing_tag;
 mod place_d3;
 mod precision_debuff;
 mod plain_moves;
+mod port_container_ledges;
 mod quick_shot;
 mod rapid_charge_mark;
 mod reckless_piercing;
@@ -1794,8 +1806,55 @@ mod split_fire;
 mod strafing;
 mod terrain_debuff;
 mod traversal;
+mod v36_g4r4_granted_range;
 mod unstoppable_aura;
 mod utility_move_buff_pins;
+mod v36_ai;
+mod v36_data;
+mod v36_dat_06fix;
+mod v36_dat_17a;
+mod v36_g4r4_c2_regen_on_dead;
+mod v36_fab_c15;
+mod v36_g4_c8a;
+mod v36_g4r4_c1_strikeback;
+mod v36_g4r2_blast_hero;
+mod v36_g4r2_hero_spill;
+mod v36_g4r4_consolidation;
+mod v36_melee;
+mod v36_melee_rows;
+mod v36_g4_c8b;
+mod v36_g4r4_banner_dead_host;
+mod v36_g4r4_lonehero_shaken;
+mod v36_mor_10;
+mod v36_mor_11;
+mod v36_mor_14;
+mod v36_mor_18;
+mod v36_g4r4_c3_rout_hero;
+mod v36_morale;
+mod v36_shoot;
+mod v36_shoot_rows;
+mod v36_g4r4_x1b_feat_melee;
+mod v36_g4r2_dang_hold;
+mod v36_ux;
+mod v36_ux_17;
+mod v36_ux_19;
+mod v36_ux_21;
+mod v36_g4r4_x2a_dangerous_spill;
+mod v36_g4r5_dang_tail;
+mod v36_g4r5_hero_reach;
+mod v36_g4r5_hostdead_shoot;
+mod v36_g4r5_primal_grant;
+mod v36_g4r5_versatile_def;
+mod v36_g4r5_moved_sight_chain;
+mod v36_bg_03a;
+mod v36_bg_03a2;
+mod v36_bg_03a3;
+mod v36_bg_03c;
+mod v36_bg_03c_fix;
+mod v36_w1;
+mod v36_w1_5b;
+mod v36_w1_trace;
+mod v36_g4r4_granted_bane;
 mod versatile_reach;
 mod watchborn_latch;
 mod weapons;

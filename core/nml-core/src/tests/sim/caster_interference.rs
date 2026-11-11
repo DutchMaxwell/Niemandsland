@@ -28,6 +28,7 @@ use crate::rules::{Spell, SpellModifier};
     /// thing that can move the roll is the enemy's interference.
     fn spell() -> Spell {
         Spell {
+            needs_los: false,
             name: "bolt".into(),
             status: "modeled".into(),
             threshold: 2,
@@ -47,7 +48,7 @@ use crate::rules::{Spell, SpellModifier};
     /// pick, inside the 18" aura) holding 2 interference tokens. One hit
     /// into Defense 4 prices EV 1/2, and `plan_interference`'s mirrored
     /// calculus buys BOTH enemy tokens: the roll drops 4+ -> 6+.
-    fn caster_and_foe() -> (State, Vec<UnitStatic>) {
+    pub(super) fn caster_and_foe() -> (State, Vec<UnitStatic>) {
         let mut st = four_unit_line();
         st.casts = vec![2, 0, 0, 2];
         st.attached = Rc::new(vec![vec![], vec![], vec![], vec![]]);
@@ -173,15 +174,16 @@ use crate::rules::{Spell, SpellModifier};
 
     /// The pool walk: "within 18" in line of sight of the caster's unit"
     /// (:4606) — a foe past the aura, or one without line of sight, never
-    /// spends a token, however fat its purse.
+    /// spends a token, however fat its purse. The rules 3.5 reading, pinned
+    /// at the frozen EPOCH_72 (rules 3.6 drops the sight line: v36_morale.rs).
     #[test]
-    fn a_foe_out_of_the_aura_or_without_line_of_sight_never_spends() {
+    fn a_foe_out_of_the_aura_or_without_line_of_sight_never_spends_at_epoch_72() {
         // 20" out: the spell still legally picks the 12" enemy — the POOL
         // is what refuses the far caster.
         let (mut st, statics) = caster_and_foe();
         st.positions[3] = vec![[20.0 * IN2M, 0.0, 0.0]];
         let los = vec![true; st.units()];
-        cast_phase(&statics, &mut st, 0, &los, epoch(EPOCH_51_CASTER_INTERFERENCE), None);
+        cast_phase(&statics, &mut st, 0, &los, epoch(EPOCH_72_PLAYTEST_RULES), None);
         assert_eq!(st.casts[3], 2, "a foe past the aura keeps every token");
         assert!(
             (st.wound_frac[2] - 0.25).abs() < 1e-9,
@@ -193,7 +195,7 @@ use crate::rules::{Spell, SpellModifier};
         // sight from the caster's unit (:4606).
         let (mut st, statics) = caster_and_foe();
         let los = vec![true, true, true, false];
-        cast_phase(&statics, &mut st, 0, &los, epoch(EPOCH_51_CASTER_INTERFERENCE), None);
+        cast_phase(&statics, &mut st, 0, &los, epoch(EPOCH_72_PLAYTEST_RULES), None);
         assert_eq!(st.casts[3], 2, "no LoS, no counter-spend");
     }
 
@@ -235,7 +237,7 @@ use crate::rules::{Spell, SpellModifier};
             success_chance(6),
             "clamped at 6+, never above"
         );
-        assert_eq!(crate::spell::plan_interference(0.5, 2, 0), 2, "EV 1/2: both tokens beat the floor");
-        assert_eq!(crate::spell::plan_interference(0.5, 10, 2), 4, "the counter stops at the 6+ clamp");
-        assert_eq!(crate::spell::plan_interference(0.0, 6, 0), 0, "an unpriced cast draws no counter");
+        assert_eq!(crate::spell::plan_interference(0.5, 2, 0, 0), 2, "EV 1/2: both tokens beat the floor");
+        assert_eq!(crate::spell::plan_interference(0.5, 10, 2, 0), 4, "the counter stops at the 6+ clamp");
+        assert_eq!(crate::spell::plan_interference(0.0, 6, 0, 0), 0, "an unpriced cast draws no counter");
     }

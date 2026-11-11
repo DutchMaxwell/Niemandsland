@@ -5,6 +5,17 @@ extends GdUnitTestSuite
 
 const INCHES_TO_METERS := 0.0254
 
+var _epoch0: int
+
+
+func before_test() -> void:
+	_epoch0 = AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
+
+
+func after_test() -> void:
+	AiActRecorder.rules_epoch = _epoch0   # statics leak across gdUnit tests - restore
+
 
 func _prop(prop_id: String, kind: int, footprint: Vector2, floors: Array) -> SandboxTerrainProp:
 	var prop := SandboxTerrainProp.new()

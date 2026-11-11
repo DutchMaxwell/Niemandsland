@@ -37,6 +37,7 @@ use super::*;
             sandbox: vec![],
             walls: vec![],
             pieces: vec![],
+            containers: Vec::new(),
             cell_params: crate::terrain::CellParams {
                 table_size_feet: [6.0, 4.0],
                 grid_rotation_degrees: 0.0,

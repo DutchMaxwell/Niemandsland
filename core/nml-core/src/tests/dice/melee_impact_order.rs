@@ -114,11 +114,10 @@ use super::*;
         }
     }
 
-    /// D6 — the melee tally is the PRE-Regeneration count (main.gd:6001/:6113),
-    /// while the wounds that LAND are the post-Regeneration ones. Comparing the
-    /// landed number lets a Regeneration roll decide who tests morale.
+    /// D6 — below epoch 73 the melee tally is the PRE-Regeneration count (main.gd:6001/:6113),
+    /// while the wounds that LAND are the post-Regeneration ones. Pinned to epoch 72 (old leg).
     #[test]
-    fn the_melee_tally_is_pre_regeneration_and_the_landed_wounds_are_not() {
+    fn the_melee_tally_is_pre_regeneration_at_epoch_72_and_the_landed_wounds_are_not() {
         let p = [blade(6)];
         let att = Ctx { quality: 2, models: 6, ..Default::default() };
         // Defense 6+ so nearly everything gets through, Regeneration on 2+ so
@@ -129,6 +128,24 @@ use super::*;
             &[striker(&p, &[0], &[6], &att)], &def, "Target", false, true, true, &mut tray);
         assert!(out.caused > 0, "the strike caused wounds: {:?}", out.rolls);
         assert!(out.wounds < out.caused, "Regeneration ignored some: {} vs {}", out.wounds, out.caused);
+        assert_eq!(out.taken, out.caused, "the 72 taken tally stays pre-Regeneration");
+    }
+
+    /// MEL-10r — from epoch 73 a wound Regeneration cancels is NOT taken, so the melee-winner
+    /// tally counts only the landed wounds. `caused` stays pre-Regeneration (the Regenerative
+    /// Strength trigger still reads what Regeneration ignored).
+    #[test]
+    fn the_melee_tally_drops_regeneration_cancelled_wounds_at_epoch_73() {
+        let p = [blade(6)];
+        let att = Ctx { quality: 2, models: 6, ..Default::default() };
+        let def = Ctx { regeneration: true, regen_target: 2, ..defender(6, 6) };
+        let mut tray = Tray::seeded(5);
+        let out = resolve_melee_leg(
+            &[striker(&p, &[0], &[6], &att)], &def, "Target",
+            false, true, true, true, 0.0, true, true, true, true, true, &mut tray);
+        assert_eq!(out.caused, 3, "three wounds were caused before Regeneration: {:?}", out.rolls);
+        assert_eq!(out.taken, 1, "Regeneration cancelled two of them, so only one is TAKEN");
+        assert_eq!(out.taken, out.wounds, "only the wounds Regeneration left count as taken");
     }
 
     /// An attached hero strikes under the host's activation and signs its own

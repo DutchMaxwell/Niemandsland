@@ -247,7 +247,7 @@ func open_menu(screen_position: Vector2, selected_objects: Array) -> void:
 			if emb_tr != null:
 				context["disembark_unit"] = emb_unit
 				radial_menu.open(screen_position, RadialMenu.create_embarked_model_menu(
-					str(emb_tr.unit_properties.get("name", "transport"))), context)
+					str(emb_tr.unit_properties.get("name", "transport")), RulesRegistry.system_of_unit(emb_unit)), context)
 		return
 
 	var game_unit = UnitUtils.get_game_unit(first_obj)
@@ -2483,9 +2483,9 @@ func _sync_marker_color_store(model: ModelInstance, marker_name: String, color: 
 var battle_log: BattleLog = null
 
 ## "Reached" gate for the sandbox embark intent: the rule's move has already happened on the
-## table by hand, so one alive model of the JOINED unit standing within this base gap of a
-## transport model counts as "only one model needs to reach the Transport" (GF v3.5.1).
-const EMBARK_REACH_M := 0.0254   # 1"
+## table by hand, so one alive model of the JOINED unit standing within the embark reach of a
+## transport model counts as reaching it. The reach is epoch-selected in ONE place:
+## OPRArmyManager.embark_reach_m() (1" at epoch 72, 2" from rules 3.6 on).
 
 
 ## Fill the menu context and append the transport items — "Embark" when a reachable friendly
@@ -2503,7 +2503,7 @@ func _append_transport_items(game_unit: GameUnit, context: Dictionary, items: Ar
 	if not targets.is_empty() and economy and game_unit.is_activated:
 		items.append(RadialMenu.RadialMenuItem.new("embark_spent",
 			"Embark — already activated", "▣", false,
-			"%s has already used its activation this round, and embarking is a move action (GF v3.5.1 p.15). It can board next round." % str(game_unit.unit_properties.get("name", "This unit"))))
+			"%s has already used its activation this round, and embarking is a move action (%s). It can board next round." % [str(game_unit.unit_properties.get("name", "This unit")), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(game_unit))]))
 	elif not targets.is_empty():
 		context["embark_targets"] = targets
 		for ti in range(targets.size()):
@@ -2514,14 +2514,14 @@ func _append_transport_items(game_unit: GameUnit, context: Dictionary, items: Ar
 				# unit deploys INSIDE and arrives with it.
 				items.append(RadialMenu.RadialMenuItem.new("embark_%d" % ti,
 					"Load into %s (reserve)" % tname, "▣", true,
-					"Load into %s in Ambush reserve — the unit deploys inside and arrives with it (GF v3.5.1 Transport)" % tname))
+					"Load into %s in Ambush reserve — the unit deploys inside and arrives with it (%s Transport)" % [tname, OPRApiClient.rules_cite(RulesRegistry.system_of_unit(game_unit))]))
 			else:
 				# #209: in a solo game embarking IS the unit's move action — the label says so
 				# up front, the click is the confirmation. One entry per reachable transport:
 				# the player picks the vehicle (maintainer find).
 				items.append(RadialMenu.RadialMenuItem.new("embark_%d" % ti,
 					"Embark: %s%s" % [tname, " — ends this unit's activation" if economy else ""], "▣", true,
-					"Embark into %s — any move action; only one model needs to reach it (GF v3.5.1 p.15 Transport)" % tname))
+					"Embark into %s — any move action; only one model needs to reach it (%s Transport)" % [tname, OPRApiClient.rules_cite(RulesRegistry.system_of_unit(game_unit))]))
 	var cargo: Array = army_manager.cargo_units(game_unit)
 	if not cargo.is_empty():
 		context["cargo_units"] = cargo
@@ -2538,11 +2538,11 @@ func _append_transport_items(game_unit: GameUnit, context: Dictionary, items: Ar
 			if economy and cu.is_activated:
 				items.append(RadialMenu.RadialMenuItem.new("unload_cargo_%d" % i,
 					"Unload %s — already activated" % cname, "▢", false,
-					"%s has already used its activation this round — embarking IS its move action, and a unit can't both embark and disembark in one activation (GF v3.5.1 p.15). It can exit next round." % cname))
+					"%s has already used its activation this round — embarking IS its move action, and a unit can't both embark and disembark in one activation (%s). It can exit next round." % [cname, OPRApiClient.rules_cite(RulesRegistry.system_of_unit(cu))]))
 				continue
 			items.append(RadialMenu.RadialMenuItem.new("unload_cargo_%d" % i,
 				"Unload %s%s" % [cname, " — its move action (may shoot after)" if economy else ""], "▢", true,
-				"Disembark this unit — an Advance exit: place fully within 6\", the shot window stays open (GF v3.5.1 p.7/p.15)"))
+				"Disembark this unit — an Advance exit: place fully within 6\", the shot window stays open (%s)" % OPRApiClient.rules_cite(RulesRegistry.system_of_unit(cu))))
 
 
 ## The transport this unit could embark into RIGHT NOW: same player, capacity gate ok, reached.
@@ -2565,7 +2565,7 @@ func _embark_targets_for(unit: GameUnit) -> Array:
 			continue
 		# ALL candidates, not the first hit — with two trucks in reach the player picks
 		# the vehicle (maintainer find), mirroring the per-cargo unload list.
-		if _joined_gap_to_m(unit, tr) <= EMBARK_REACH_M:
+		if _joined_gap_to_m(unit, tr) <= OPRArmyManager.embark_reach_m():
 			out.append(tr)
 		elif deploying and bool(tr.unit_properties.get("ambush_reserve", false)):
 			out.append(tr)
@@ -2615,14 +2615,19 @@ func _embark_unit(context: Dictionary) -> void:
 	# re-embark needs its own gate.
 	if _activation_economy_on() and army_manager != null \
 			and int(unit.unit_properties.get("disembarked_round", -1)) == army_manager.current_round:
-		_transport_log("%s disembarked this round — it can't embark again (one move action per activation, GF v3.5.1 p.15)" % str(unit.unit_properties.get("name", "unit")))
+		_transport_log("%s disembarked this round — it can't embark again (one move action per activation, %s)" % [str(unit.unit_properties.get("name", "unit")), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))])
 		return
 	if army_manager.set_unit_embarked(unit, tr, true):
 		if network_manager:
 			network_manager.broadcast_unit_embark(unit.unit_id, tr.unit_id, true)
-		_travel_transport_log("%s embarks into %s (%d/%d spaces used) — GF v3.5.1 Transport" % [
+		# Rules 3.6 (EPOCH_73_V36): the line names the 2" reach the offer was made on; a reserve load has none.
+		var rule_note := "%s Transport" % OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))
+		if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+			rule_note = "Transport, loaded in reserve" if bool(tr.unit_properties.get("ambush_reserve", false)) \
+					else "Transport, a model stood within 2\" of it (base edge to base edge)"
+		_travel_transport_log("%s embarks into %s (%d/%d spaces used) — %s" % [
 			str(unit.unit_properties.get("name", "unit")), str(tr.unit_properties.get("name", "transport")),
-			army_manager.transport_used_spaces(tr), army_manager.transport_capacity(tr)])
+			army_manager.transport_used_spaces(tr), army_manager.transport_capacity(tr), rule_note])
 		_consume_transport_activation(unit, "embark")
 
 
@@ -2733,11 +2738,11 @@ func _disembark_unit(unit: GameUnit, override_spots: Array = []) -> void:
 		# forbids is embarking again (gate above). Only the exit round is stamped here.
 		if _activation_economy_on():
 			unit.unit_properties["disembarked_round"] = army_manager.current_round
-			_travel_transport_log("%s disembarks from %s (Advance exit, fully within 6\") — it may still shoot this activation (GF v3.5.1 p.7/p.15)" % [
-				str(unit.unit_properties.get("name", "unit")), str(tr.unit_properties.get("name", "transport"))])
+			_travel_transport_log("%s disembarks from %s (Advance exit, fully within 6\") — it may still shoot this activation (%s)" % [
+				str(unit.unit_properties.get("name", "unit")), str(tr.unit_properties.get("name", "transport")), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))])
 		else:
-			_travel_transport_log("%s disembarks from %s — GF v3.5.1 Transport" % [
-				str(unit.unit_properties.get("name", "unit")), str(tr.unit_properties.get("name", "transport"))])
+			_travel_transport_log("%s disembarks from %s — %s Transport" % [
+				str(unit.unit_properties.get("name", "unit")), str(tr.unit_properties.get("name", "transport")), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))])
 
 
 ## #209 — whether the transport activation economy is running. Embark/disembark are "any move
@@ -2761,8 +2766,8 @@ func _activation_economy_on() -> bool:
 func _transport_activation_open(unit: GameUnit, verb: String) -> bool:
 	if not _activation_economy_on() or not unit.is_activated:
 		return true
-	_transport_log("%s has already activated this round — %s is a move action (GF v3.5.1 p.15)" % [
-		str(unit.unit_properties.get("name", "unit")), verb])
+	_transport_log("%s has already activated this round — %s is a move action (%s)" % [
+		str(unit.unit_properties.get("name", "unit")), verb, OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))])
 	return false
 
 
@@ -2776,8 +2781,8 @@ func _consume_transport_activation(unit: GameUnit, verb: String) -> void:
 	# client keeps the unit unactivated (sync_unit_embark never sets is_activated).
 	if network_manager:
 		network_manager.broadcast_unit_activation(unit)
-	_transport_log("%s spends its activation to %s (any move action — GF v3.5.1 p.15)" % [
-		str(unit.unit_properties.get("name", "unit")), verb])
+	_transport_log("%s spends its activation to %s (any move action — %s)" % [
+		str(unit.unit_properties.get("name", "unit")), verb, OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))])
 	unit_activated.emit(unit)
 
 
@@ -2834,12 +2839,14 @@ func _on_transport_cargo_spilled(transport: GameUnit, spilled: Array) -> void:
 		_update_shaken_markers(unit)
 		if network_manager:
 			network_manager.broadcast_unit_marker(unit, "ShakenMarker", true)
-		var dice_duty := "NACHTMAHR rolls its test now (one die per model, Tough(X) rolls X — p.12)" \
-			if _is_ai_unit(unit) else "take a Dangerous Terrain test now (one die per model, Tough(X) rolls X, a 1 wounds — p.12)"
-		var msg := ("%s is destroyed — GF v3.5.1 Transport: \"units inside must take a dangerous terrain test, " \
+		var cite_unit := OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))
+		var cite_transport := OPRApiClient.rules_cite(RulesRegistry.system_of_unit(transport))
+		var dice_duty := ("NACHTMAHR rolls its test now (one die per model, Tough(X) rolls X — %s)" % cite_unit) \
+			if _is_ai_unit(unit) else ("take a Dangerous Terrain test now (one die per model, Tough(X) rolls X, a 1 wounds — %s)" % cite_unit)
+		var msg := ("%s is destroyed — %s Transport: \"units inside must take a dangerous terrain test, " \
 			+ "are Shaken, and must be placed fully within 6\" of the transport before it's removed\". " \
 			+ "%s: placed fully within 6\" of the wreck, is SHAKEN, %s") % [
-			str(transport.unit_properties.get("name", "transport")),
+			str(transport.unit_properties.get("name", "transport")), cite_transport,
 			str(unit.unit_properties.get("name", "unit")), dice_duty]
 		# NML-957 step 6: this line stays LOCAL — both machines replay the spill through the
 		# wounds sync, so a broadcast copy would arrive twice on every screen (exclusion 1).

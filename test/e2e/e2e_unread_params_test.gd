@@ -229,8 +229,8 @@ func test_bounding_dice_count_reads_both_registry_shapes() -> void:
 	assert_int(SoloController.bounding_dice_count({})).is_equal(1)
 	assert_int(SoloController.bounding_dice_count({"dice_count": 0})).is_equal(1)
 	# The emitted maps really do carry the v3.5.3 upgrade — in both encodings.
-	assert_int(int(RulesRegistry.param("gf", "elven_jesters", "Rapid Blink Boost", "dice_count", 0))).is_equal(2)
-	assert_str(str(RulesRegistry.param("aof", "deep_sea_elves", "Wave-Step Boost", "place_die", ""))).is_equal("2d3")
+	assert_int(int(RulesRegistry.param("gf", "elven_jesters", "Enhanced Rapid Blink", "dice_count", 0))).is_equal(2)
+	assert_str(str(RulesRegistry.param("aof", "deep_sea_elves", "Enhanced Wave-Step", "place_die", ""))).is_equal("2d3")
 
 
 ## The rule in the real activation: a boosted blinker rolls TWO dice, and the note says 2D3. The
@@ -238,7 +238,7 @@ func test_bounding_dice_count_reads_both_registry_shapes() -> void:
 ## draw, which for this seed is a different number.
 func test_a_boosted_blink_rolls_two_d3_and_says_so() -> void:
 	_unit(1, "Grenzer", "alien_hives", [], 1, Vector3(-0.3, 0.0, 0.0))   # something to walk toward
-	var jester := _unit(2, "Springer", "elven_jesters", ["Rapid Blink", "Rapid Blink Boost"], 2,
+	var jester := _unit(2, "Springer", "elven_jesters", ["Rapid Blink", "Enhanced Rapid Blink"], 2,
 		Vector3(0.3, 0.0, 0.0))
 	var solo = _main.solo_controller
 	solo._rng.seed = 4242
@@ -259,7 +259,7 @@ func test_a_boosted_blink_rolls_two_d3_and_says_so() -> void:
 		joined += (str((n as Dictionary).get("text", "")) if n is Dictionary else str(n)) + "\n"
 	assert_str(joined) \
 		.override_failure_message("the boosted blink must place within 2D3\", not D3\":\n%s" % joined) \
-		.contains("Rapid Blink Boost: rolled %d\" of 2D3\"" % (d1 + d2))
+		.contains("Enhanced Rapid Blink: rolled %d\" of 2D3\"" % (d1 + d2))
 	await E2EBoot.settle(get_tree())
 
 
@@ -490,7 +490,7 @@ func test_the_growth_siblings_scale_in_both_registry_generations() -> void:
 ## min AP(0)"): unread, so it did nothing at all. The reduction reaches the REAL save batch, and the
 ## log line (written before any die) is the proof.
 func test_fortified_growth_softens_incoming_ap_per_two_markers() -> void:
-	var u := _unit(1, "Seuchenwall", "wormhole_daemons_of_plague", ["Fortified Growth"], 2)
+	var u := _unit(1, "Seuchenwall", "daemons_of_plague", ["Fortified Growth"], 2)
 	u.unit_properties["growth_fortified_growth"] = 4
 	var fg: Dictionary = _main._solo_growth_incoming_ap(u)
 	assert_bool(fg.is_empty()) \
@@ -502,7 +502,7 @@ func test_fortified_growth_softens_incoming_ap_per_two_markers() -> void:
 
 	# The all-models gate: a joined hero WITHOUT the rule switches the unit trigger off.
 	u.unit_properties["growth_fortified_growth"] = 4
-	var hero := _joined_hero(u, "Seuchenfürst", "wormhole_daemons_of_plague", ["Hero"])
+	var hero := _joined_hero(u, "Seuchenfürst", "daemons_of_plague", ["Hero"])
 	assert_object(hero).is_not_null()
 	assert_bool(_main._solo_growth_incoming_ap(u).is_empty()) \
 		.override_failure_message("\"all models have this rule\" is a UNIT trigger — a plain hero breaks it") \

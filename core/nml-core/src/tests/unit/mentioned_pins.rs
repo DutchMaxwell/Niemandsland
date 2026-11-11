@@ -50,9 +50,9 @@ use super::*;
     /// instead; epoch 5 (below the aura gate) and the rule-less carrier
     /// stamp nothing.
     #[test]
-    fn a_buccaneer_boost_aura_stamps_one_flat_to_hit_at_the_current_epoch() {
+    fn an_enhanced_buccaneer_aura_stamps_one_flat_to_hit_at_the_current_epoch() {
         let epoch = crate::acts::CURRENT_RULES_EPOCH;
-        let boost = mentioned_unit("aof", "sky_city_dwarves", &["Buccaneer Boost Aura"], "", epoch);
+        let boost = mentioned_unit("aof", "sky_city_dwarves", &["Enhanced Buccaneer Aura"], "", epoch);
         assert!(boost.shoot[0].hit_bonus == 1, "the granted base stamps the flat +1");
         assert!(
             boost.shoot[0].hit_bonus_over9 == 0,
@@ -63,7 +63,7 @@ use super::*;
             base.shoot[0].hit_bonus == 0 && base.shoot[0].hit_bonus_over9 == 1,
             "the base Buccaneer rides the strictly-over-9 ring instead"
         );
-        let pre = mentioned_unit("aof", "sky_city_dwarves", &["Buccaneer Boost Aura"], "", 5);
+        let pre = mentioned_unit("aof", "sky_city_dwarves", &["Enhanced Buccaneer Aura"], "", 5);
         assert!(
             pre.shoot[0].hit_bonus == 0 && pre.shoot[0].hit_bonus_over9 == 0,
             "epoch 5: the aura gate is OFF"
@@ -79,7 +79,7 @@ use super::*;
     #[test]
     fn a_plus_one_to_defense_carrier_shields_by_one_at_the_current_epoch() {
         let epoch = crate::acts::CURRENT_RULES_EPOCH;
-        let us = mentioned_unit("gf", "wormhole_daemons_of_war", &["+1 to Defense"], "", epoch);
+        let us = mentioned_unit("gf", "daemons_of_war", &["+1 to Defense"], "", epoch);
         assert!(us.ctx.shielded, "the alias fires the shielded half");
         assert_eq!(us.ctx.shielded_alias, ShieldedAlias::PlusOneToDefense);
         assert_eq!(us.ctx.shielded_bonus(), 1, "the +1 the rule produces");
@@ -88,7 +88,7 @@ use super::*;
             3,
             "Defense 4 -> hit on 3+"
         );
-        let plain = mentioned_unit("gf", "wormhole_daemons_of_war", &[], "", epoch);
+        let plain = mentioned_unit("gf", "daemons_of_war", &[], "", epoch);
         assert!(!plain.ctx.shielded && plain.ctx.shielded_bonus() == 0);
         assert_eq!(crate::combat::shielded_defense(plain.ctx.defense, 0, 2), 4, "no rule, plain rung");
         let unmapped = mentioned_unit("gf", "robot_legions", &["+1 to Defense"], "", epoch);

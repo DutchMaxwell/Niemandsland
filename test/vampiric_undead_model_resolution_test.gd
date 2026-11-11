@@ -372,3 +372,25 @@ func test_stitched_zombie_horde_without_a_shipped_bake_keeps_the_weapon_bake() -
 	var army := _hero_on_dragon("Vampire Master", ["Heavy Halberd"], "Stitched Zombie Horde")
 	assert_array(manager._unit_model_variant_names(army.units[0], "vampiric_undead")) \
 		.is_equal(["Vampire Master#halberd"])
+
+
+# --- Rules 3.6 weapon names: a plain rename of the 3.5 word keeps its bake --------------------------------
+
+func _drained_leader_with_rapid_bow(with_pet: bool) -> OPRApiClient.OPRArmy:
+	var loadout: Array = [
+		{"type": "ArmyBookWeapon", "name": "Rapid Bow", "range": 24, "attacks": 2, "count": 1},
+		{"type": "ArmyBookWeapon", "name": "Strike", "attacks": 2, "count": 1}]
+	if with_pet:
+		loadout.append({"type": "ArmyBookItem", "name": "Pet Ghoul", "count": 1,
+			"content": [{"type": "ArmyBookRule", "name": "Repel Ambushers"}]})
+	return _army([{"armyId": VU_ARMY, "name": "Drained Leader", "size": 1, "bases": {"round": "25"}, "loadout": loadout}])
+
+
+func test_rules_3_6_rapid_bow_resolves_the_drained_leader_bow_bakes() -> void:
+	var manager := _manager(["vampiric_undead/drained leader#bow", "vampiric_undead/drained leader#bow+pet_ghoul"])
+	assert_array(manager._unit_model_variant_names(_drained_leader_with_rapid_bow(false).units[0], "vampiric_undead")) \
+		.is_equal(["Drained Leader#bow"])
+	assert_array(manager._unit_model_variant_names(_drained_leader_with_rapid_bow(true).units[0], "vampiric_undead")) \
+		.is_equal(["Drained Leader#bow+pet_ghoul"])
+	# Scoped: another faction does not read the 3.6 Vampiric Undead word.
+	assert_str(manager.model_library.variant_slug(["Rapid Bow"], "beastmen")).is_equal("")

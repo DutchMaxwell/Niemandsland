@@ -72,7 +72,7 @@ use super::*;
         let terrain = small_board();
         let seams = Seams { consolidate: true, rules_epoch: 7, ..Default::default() };
         let mut next = st.clone();
-        consolidate_after_melee(&mut next, Cover::Board(&terrain), seams, 0, 2);
+        consolidate_after_melee(&mut next, &_statics, Cover::Board(&terrain), seams, 0, 2, None);
         assert_eq!(next.moved_round[0], next.round, "the consolidation move stamps the round");
         assert_eq!(next.moved_round[2], -1, "the wiped unit is never stamped");
     }
@@ -118,6 +118,8 @@ use super::*;
     /// over 9" at epoch 7 — the SAME stationary read a statically carried
     /// Entrenched gets (main.gd's grant overlay writes the name onto the
     /// chain, main.gd:3730; the read at :5694-5702 never distinguished).
+    /// The applied rule names itself at every epoch that applies it
+    /// (rules-must-log), not only from `EPOCH_73_V36`.
     #[test]
     fn a_granted_entrenched_takes_the_penalty_while_unmoved() {
         let (st, statics) = buff_line();

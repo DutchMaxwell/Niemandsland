@@ -11,7 +11,8 @@
 //! `EPOCH_48_CASTER_BOOST` on, and the OPPOSING casters' interference from
 //! `EPOCH_51_CASTER_INTERFERENCE` (the pool's opposing-side mirror).
 
-use crate::combat::{block_chance, deadly_multiplier, success_chance, SIX_P};
+use crate::acts::rule_on;
+use crate::combat::{block_chance_from, deadly_multiplier, deadly_regen_dealt, success_chance, SIX_P};
 use crate::rules::Spell;
 use crate::unit::Ctx;
 
@@ -92,18 +93,26 @@ pub fn cast_success_chance_vs(
 
 /// `AiSpell.plan_boost` ai_spell.gd:328-339, ported as-is (the caster side
 /// plans its boost BLIND to the counter — the table's own call shape,
-/// solo_controller.gd:4363, `plan_boost(boost_value, boost_pool)` with the
-/// interference argument defaulted; `plan_interference` plans against the
-/// committed boost afterwards): spend while the NEXT token's marginal EV — the
-/// chance gain times the effect's value — beats `TOKEN_VALUE_EPS`, with the
-/// COIN-FLIP CLAUSE dropping the floor to zero while the cast sits at or under
-/// `COIN_FLIP_P`. The [2,6] clamp naturally stops the spend once the roll
-/// cannot improve.
-pub fn plan_boost(effect_value: f64, available: i64) -> i64 {
+/// solo_controller.gd:4363, `plan_boost(boost_value, boost_pool, 0,
+/// priced_target)` with the interference argument defaulted;
+/// `plan_interference` plans against the committed boost afterwards): spend
+/// while the NEXT token's marginal EV — the chance gain times the effect's
+/// value — beats `TOKEN_VALUE_EPS`, with the COIN-FLIP CLAUSE dropping the
+/// floor to zero while the cast sits at or under `COIN_FLIP_P`. The [2,6]
+/// clamp naturally stops the spend once the roll cannot improve.
+///
+/// `casting_net` is the live fold the ROLL uses (`cast_success_chance`'s own
+/// first argument), so the plan prices the table's `priced_target`: a positive
+/// net (Spell Amplifier, friendly Casting Buff) already lowers the target and
+/// with it the marginal gain of a token. The caller (`sim::cast_phase`) gates
+/// the argument behind `EPOCH_73_V36`, passing 0 below it so the old BLIND
+/// pricing and every recorded corpus stay byte-exact; this function knows no
+/// epochs.
+pub fn plan_boost(effect_value: f64, available: i64, casting_net: i64) -> i64 {
     let mut boost = 0i64;
     while boost < available {
-        let p_now = cast_success_chance(0, boost);
-        let gain = (cast_success_chance(0, boost + 1) - p_now) * effect_value.max(0.0);
+        let p_now = cast_success_chance(casting_net, boost);
+        let gain = (cast_success_chance(casting_net, boost + 1) - p_now) * effect_value.max(0.0);
         let floor_now: f64 = if p_now <= COIN_FLIP_P { 0.0 } else { TOKEN_VALUE_EPS };
         if gain <= floor_now {
             break;
@@ -125,11 +134,15 @@ pub fn plan_boost(effect_value: f64, available: i64) -> i64 {
 /// caster, and a counter token has no such future cast of its own). Priced
 /// at the cast's own raw EV, so an unpriced cast draws no counter — and the
 /// [2,6] clamp stops the spend at 6+.
-pub fn plan_interference(effect_value: f64, available: i64, boost: i64) -> i64 {
+///
+/// `casting_net` is the same live fold the ROLL uses, so the counter prices
+/// the table's `priced_target`; the caller (`sim::cast_phase`) passes 0 below
+/// `EPOCH_73_V36` to keep the old blind pricing byte-exact.
+pub fn plan_interference(effect_value: f64, available: i64, boost: i64, casting_net: i64) -> i64 {
     let mut inter = 0i64;
     while inter < available {
-        let gain = (cast_success_chance_vs(0, boost, inter)
-            - cast_success_chance_vs(0, boost, inter + 1))
+        let gain = (cast_success_chance_vs(casting_net, boost, inter)
+            - cast_success_chance_vs(casting_net, boost, inter + 1))
             * effect_value.max(0.0);
         if gain <= TOKEN_VALUE_EPS {
             break;
@@ -164,7 +177,31 @@ pub struct Facets {
     pub ap_vs_tough3: i64,
     pub ap_vs_tough9: i64,
     pub ap_vs_def3: i64,
+    /// Rules 3.6 (`EPOCH_73_V36`): the Destructive token's AP(+1) against a
+    /// defender still above half its starting size / Tough value.
+    pub ap_vs_above_half: i64,
+    /// Rules 3.6 (`EPOCH_73_V36`): Purge's AP(+2) against a shaken or
+    /// fatigued defender.
+    pub ap_vs_shaken: i64,
+    /// Rules 3.6 (`EPOCH_73_V36`): Decimate's Bane against a defender still
+    /// above half; created only when its condition holds.
+    pub bane_above_half: bool,
+    /// Rules 3.6 (`EPOCH_73_V36`): the widened Bane window vs Tough(3)+
+    /// (Obliterate); 0 = unset, 5 = successful saves of 5 and 6 re-roll.
+    pub bane_tough3_low: i64,
+    /// Rules 3.6 (`EPOCH_73_V36`): the widened Bane window against a shaken
+    /// or fatigued defender (Reap).
+    pub bane_shaken_low: i64,
+    /// Rules 3.6 (`EPOCH_73_V36`): the widened Bane window against a
+    /// defender at Defense 5-6 (Fragment).
+    pub bane_def56_low: i64,
 }
+
+/// Rules 3.6 (`EPOCH_73_V36`) spell-token ratings from
+/// `assets/solo/rules_mechanics_{gf,aof}.json` (both systems identical):
+/// Purge's `ap_bonus`, and the widened save window the three Bane tokens name.
+const PURGE_AP_BONUS: i64 = 2;
+const WIDENED_SAVE_FROM: i64 = 5;
 
 /// `AiSpell._rating` ai_spell.gd:170-175 — "AP(2)" -> 2, never negative.
 fn rating(rule: &str) -> i64 {
@@ -178,8 +215,9 @@ fn rating(rule: &str) -> i64 {
     inner.trim().parse::<i64>().unwrap_or(0).max(0)
 }
 
-pub fn spell_facets(weapon_rules: &[String]) -> Facets {
+pub fn spell_facets(weapon_rules: &[String], rules_epoch: u32) -> Facets {
     let mut f = Facets::default();
+    let v36 = rule_on(rules_epoch, crate::acts::EPOCH_73_V36);
     for r in weapon_rules {
         let s = r.trim();
         let base = s.split('(').next().unwrap_or("").trim();
@@ -187,22 +225,76 @@ pub fn spell_facets(weapon_rules: &[String]) -> Facets {
             "AP" => f.ap = f.ap.max(rating(s)),
             "Blast" => f.blast = rating(s),
             "Deadly" => f.deadly = rating(s),
-            "Bane" | "Lacerate" => {
+            "Bane" => {
                 f.bane = true;
                 f.ignores_regen = true;
             }
+            // A1: Lacerate re-rolls the sixes only; below 72 its `bane` still bypasses (EV below).
+            "Lacerate" => f.bane = true,
             "Shred" => f.shred = true,
             "Surge" => f.surge = true,
             "Crack" => f.on6_ap = f.on6_ap.max(2),
-            // RENDING_AP_BONUS — ai_spell.gd:152-153.
-            "Destructive" => f.on6_ap = f.on6_ap.max(4),
+            // RENDING_AP_BONUS — ai_spell.gd:152-153. From 73 the token adds
+            // AP(+1) against a defender still above half instead.
+            "Destructive" => {
+                if v36 {
+                    let ap = rating(s);
+                    f.ap_vs_above_half = f.ap_vs_above_half.max(if ap > 0 { ap } else { 1 });
+                } else {
+                    f.on6_ap = f.on6_ap.max(4);
+                }
+            }
             "Hazardous" => f.ap = f.ap.max(4),
+            // Rules 3.6 (EPOCH_73_V36) re-pointed the four spell tokens below;
+            // the 3.5 arms stay byte-identical under the epoch flag.
+            "Fracture" => {
+                if v36 {
+                    f.on6_ap = f.on6_ap.max(2);
+                }
+            }
+            "Puncture" => {
+                if v36 {
+                    f.ignores_regen = true;
+                    f.ap_vs_def3 = 2;
+                }
+            }
             "Disintegrate" => {
                 f.ignores_regen = true;
-                f.ap_vs_def3 = 2;
+                if v36 {
+                    f.ap_vs_tough3 = f.ap_vs_tough3.max(2);
+                } else {
+                    f.ap_vs_def3 = 2;
+                }
             }
-            "Shatter" => f.ap_vs_tough3 = 2,
+            "Shatter" => {
+                if v36 {
+                    f.on6_ap = f.on6_ap.max(3);
+                } else {
+                    f.ap_vs_tough3 = 2;
+                }
+            }
             "Tear" => f.ap_vs_tough9 = 4,
+            // Rules 3.6 (`EPOCH_73_V36`) — the nine spell tokens of the new
+            // weapon family. Five are priced here; the three arms above the
+            // `_` stay explicit no-ops (never a guessed value):
+            //   Pierce / Smash — `over_half_range` needs a cast distance,
+            //                    which the spell EV context does not carry.
+            //   Demolish       — `near_terrain` is deliberately unknown in
+            //                    the spell EV; its Ignore Cover is moot (the
+            //                    spell save already ignores Cover).
+            //   Scourge        — phantom wounds feed the shooting-morale
+            //                    trigger and the melee tally, never damage.
+            "Pierce" | "Smash" => {}
+            "Demolish" => {}
+            "Scourge" => {}
+            "Purge" if v36 => f.ap_vs_shaken = PURGE_AP_BONUS,
+            "Decimate" if v36 => f.bane_above_half = true,
+            "Obliterate" if v36 => {
+                f.bane_tough3_low = WIDENED_SAVE_FROM;
+                f.ignores_regen = true;
+            }
+            "Reap" if v36 => f.bane_shaken_low = WIDENED_SAVE_FROM,
+            "Fragment" if v36 => f.bane_def56_low = WIDENED_SAVE_FROM,
             _ => {}
         }
     }
@@ -222,7 +314,36 @@ fn effective_ap(f: &Facets, def: &Ctx) -> i64 {
     if f.ap_vs_def3 > 0 && def.defense <= 3 {
         ap += f.ap_vs_def3;
     }
+    if def.above_half_strength {
+        ap += f.ap_vs_above_half;
+    }
+    if def.shaken_or_fatigued {
+        ap += f.ap_vs_shaken;
+    }
     ap
+}
+
+/// Rules 3.6 (`EPOCH_73_V36`) — the Bane window the spell's token list opens
+/// against THIS defender. `(bane, from)`: `from` 6 is the base sixes-only leg.
+fn bane_window(f: &Facets, def: &Ctx) -> (bool, i64) {
+    let mut bane = f.bane;
+    let mut from = 6i64;
+    if f.bane_above_half && def.above_half_strength {
+        bane = true;
+    }
+    if f.bane_tough3_low > 1 && def.tough.max(1) >= 3 {
+        bane = true;
+        from = from.min(f.bane_tough3_low);
+    }
+    if f.bane_shaken_low > 1 && def.shaken_or_fatigued {
+        bane = true;
+        from = from.min(f.bane_shaken_low);
+    }
+    if f.bane_def56_low > 1 && def.defense >= 5 {
+        bane = true;
+        from = from.min(f.bane_def56_low);
+    }
+    (bane, from)
 }
 
 /// `AiSpell.spell_damage_ev` ai_spell.gd:205-235 — a spell has no to-hit roll,
@@ -241,39 +362,47 @@ pub fn spell_damage_ev(hits: i64, def: &Ctx, f: &Facets) -> f64 {
     }
     six_hits = six_hits.min(h);
     let defense = def.defense;
-    let bane = f.bane;
+    let (bane, bane_from) = bane_window(f, def);
     let ap = effective_ap(f, def);
-    let mut unsaved = (h - six_hits) * (1.0 - block_chance(defense, ap, bane))
-        + six_hits * (1.0 - block_chance(defense, ap + f.on6_ap, bane));
+    let mut unsaved = (h - six_hits) * (1.0 - block_chance_from(defense, ap, bane, bane_from))
+        + six_hits * (1.0 - block_chance_from(defense, ap + f.on6_ap, bane, bane_from));
+    let deadly_cap = def.tough.max(1);
+    let deadly_unsaved = unsaved; // A4: the raw unsaved count, before ×X
     if f.deadly > 0 {
-        unsaved *= deadly_multiplier(f.deadly, def.tough.max(1)) as f64;
+        unsaved *= deadly_multiplier(f.deadly, deadly_cap) as f64;
     }
     if f.shred {
         unsaved += h * SIX_P;
     }
-    if def.regeneration && !(bane || f.ignores_regen) {
+    // A1 (`EPOCH_72_PLAYTEST_RULES`): only Bane / Disintegrate bypass; below 72 Lacerate's `bane` did too.
+    if def.regeneration && !(f.ignores_regen || (f.bane && !def.playtest_rules)) {
         // Block B10 — the SPELL-wound leg reads the spell twin
         // (`_solo_regen_pick`'s `from_spell` key, main.gd:6595): a whole-unit
         // Resistance carrier ignores on `ignore_target_spell` (2+), every
         // other unit repeats `regen_target` (ctx_for always writes both).
-        unsaved *= 1.0 - success_chance(def.regen_target_spell);
+        let keep = 1.0 - success_chance(def.regen_target_spell);
+        unsaved *= keep;
+        // A4 (`EPOCH_72_PLAYTEST_RULES`, ai_spell.gd): all X wounds are rolled before the cap.
+        if def.playtest_rules && f.deadly > deadly_cap {
+            unsaved += deadly_unsaved * (deadly_regen_dealt(f.deadly, deadly_cap, keep) - deadly_cap as f64 * keep);
+        }
     }
     unsaved
 }
 
 /// `BattleSim._spell_damage_ev_of` battle_sim.gd:802-809.
-pub fn spell_damage_ev_of(sp: &Spell, def: &Ctx) -> f64 {
+pub fn spell_damage_ev_of(sp: &Spell, def: &Ctx, rules_epoch: u32) -> f64 {
     if sp.effect_kind != "damage" {
         return 0.0;
     }
     let hits = sp.effect_hits * sp.target_count.max(1);
-    spell_damage_ev(hits, def, &spell_facets(&sp.weapon_rules))
+    spell_damage_ev(hits, def, &spell_facets(&sp.weapon_rules, rules_epoch))
 }
 
 /// `BattleSim._spell_ev_from` battle_sim.gd:778-795 — the best affordable
 /// DAMAGE spell in range; returns (ev, cost). Ties keep the FIRST spell
 /// (strict `>`), which is why the book order of the list is rule data.
-pub fn spell_ev_from(spells: &[Spell], tokens: i64, def: &Ctx, d: f64) -> (f64, i64) {
+pub fn spell_ev_from(spells: &[Spell], tokens: i64, def: &Ctx, d: f64, rules_epoch: u32) -> (f64, i64) {
     let mut best_ev = 0.0f64;
     let mut best_cost = 0i64;
     for e in spells {
@@ -286,7 +415,7 @@ pub fn spell_ev_from(spells: &[Spell], tokens: i64, def: &Ctx, d: f64) -> (f64, 
         if e.threshold > tokens || d > e.range_in + 0.001 {
             continue;
         }
-        let ev = cast_success_chance_base() * spell_damage_ev_of(e, def);
+        let ev = cast_success_chance_base() * spell_damage_ev_of(e, def, rules_epoch);
         if ev > best_ev {
             best_ev = ev;
             best_cost = e.threshold;
@@ -297,11 +426,11 @@ pub fn spell_ev_from(spells: &[Spell], tokens: i64, def: &Ctx, d: f64) -> (f64, 
 
 /// `BattleSim.spell_ev_of` battle_sim.gd:766-773 — zeros unless the caster has
 /// tokens left AND `GameUnit.is_caster()` (game_unit.gd:374-377).
-pub fn spell_ev_of(is_caster: bool, spells: &[Spell], tokens: i64, def: &Ctx, d: f64) -> (f64, i64) {
+pub fn spell_ev_of(is_caster: bool, spells: &[Spell], tokens: i64, def: &Ctx, d: f64, rules_epoch: u32) -> (f64, i64) {
     if tokens <= 0 || !is_caster {
         return (0.0, 0);
     }
-    spell_ev_from(spells, tokens, def, d)
+    spell_ev_from(spells, tokens, def, d, rules_epoch)
 }
 
 /// `AiSpell.official_pick_order` ai_spell.gd:305-312 — the book list rotated by
@@ -397,7 +526,7 @@ mod tests {
         let carrier = Ctx { defense: 4, regeneration: true, regen_target: 6, regen_target_spell: 2, ..Default::default() };
         let plain_six = Ctx { defense: 4, regeneration: true, regen_target: 6, regen_target_spell: 6, ..Default::default() };
 
-        let f = spell_facets(&[]);
+        let f = spell_facets(&[], crate::acts::CURRENT_RULES_EPOCH);
         let carrier_unsaved = spell_damage_ev(10, &carrier, &f);
         let six_unsaved = spell_damage_ev(10, &plain_six, &f);
 
@@ -446,14 +575,25 @@ mod tests {
         // the table's own worked shape: an unpriced cast buys exactly the one
         // token that lifts it out of the coin flip, never a second
         // (ai_spell.gd:43-51).
-        assert_eq!(plan_boost(boost_value_of(0.0), 6), 1);
+        assert_eq!(plan_boost(boost_value_of(0.0), 6, 0), 1);
         // EV 1/2: both tokens' marginal EV (1/12 each) beat the floor (the
         // first via the coin-flip clause), the clamp stops at 2+.
-        assert_eq!(plan_boost(0.5, 2), 2);
-        assert_eq!(plan_boost(0.5, 10), 2, "the [2,6] clamp ends the spend");
+        assert_eq!(plan_boost(0.5, 2, 0), 2);
+        assert_eq!(plan_boost(0.5, 10, 0), 2, "the [2,6] clamp ends the spend");
         // EV 1/36: the first token is the coin-flip clause's, the second
         // (1/36 < TOKEN_VALUE_EPS above the flip) stays held.
-        assert_eq!(plan_boost(1.0 / 36.0, 6), 1);
+        assert_eq!(plan_boost(1.0 / 36.0, 6, 0), 1);
         // no tokens, no spend.
-        assert_eq!(plan_boost(100.0, 0), 0);
+        assert_eq!(plan_boost(100.0, 0, 0), 0);
+    }
+
+    /// MOR-15 (pre-review FLAG) — the planner prices the SAME live fold the
+    /// roll uses: a net that already lowers the target (Spell Amplifier +1 ->
+    /// 3+) buys fewer tokens than the blind read, and a net at the 2+ clamp
+    /// has no step left to buy.
+    #[test]
+    fn plan_boost_prices_the_live_casting_net() {
+        assert_eq!(plan_boost(0.5, 10, 0), 2, "the blind read stays as-is");
+        assert_eq!(plan_boost(0.5, 10, 1), 1, "3+ has one step left, not two");
+        assert_eq!(plan_boost(1.0, 10, 2), 0, "a 2+ target has no step left");
     }}

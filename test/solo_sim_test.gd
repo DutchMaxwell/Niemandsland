@@ -399,6 +399,58 @@ func test_regeneration_medic_ignores_wounds_on_5plus() -> void:
 	assert_int(r2.size()).is_equal(0)
 
 
+func test_deadly_against_regeneration_rolls_all_three_dice_per_wound_before_the_cap() -> void:
+	# A4 (play test 29.10.2026, the table's #1914): a Deadly(3) wound on 1-wound Regeneration models is three
+	# wounds and three Regeneration dice; it lands (capped at 1) unless all three are ignored.
+	var deadly_w := {"name": "Gun", "range_value": 24, "attacks": 6, "count": 1, "special_rules": ["Deadly(3)"]}
+	var tgt: Dictionary = SoloSim.make_unit("T", 1, 4, 5, 10, [], 1, ["Regeneration"])
+	tgt["model_pos"] = [Vector2.ZERO]
+	var atk: Dictionary = SoloSim.make_unit("A", 0, 2, 4, 1, [deadly_w])
+	var rolls: Array = []
+	SoloSim._resolve_volley(atk, tgt, AiShooting.profiles_in_range([deadly_w], 10.0), 10.0, _rng(4), [], rolls, {})
+	var unsaved := 0
+	var faces: Array = []
+	for r in rolls:
+		var d := r as Dictionary
+		if str(d["kind"]) == "shoot":
+			unsaved += int(d["wounds"])   # Tough 1: the cap keeps each unsaved wound at ×1
+		elif str(d["kind"]) == "regen":
+			faces.append(int(d["face"]))
+	assert_int(unsaved).override_failure_message("fixture seed no longer wounds — pick another").is_greater(0)
+	assert_int(faces.size()).override_failure_message("three Regeneration dice per unsaved wound").is_equal(3 * unsaved)
+	if faces.size() != 3 * unsaved:
+		return
+	var landed := 0
+	for i in range(unsaved):
+		var kept := 0
+		for j in range(3):
+			kept += 0 if int(faces[3 * i + j]) >= 5 else 1
+		landed += mini(kept, 1)
+	assert_int(int(tgt["wounds_pool"])).is_equal(landed)
+
+
+func test_wounds_at_half_strength_test_morale_without_a_lost_model() -> void:
+	# A2 (play test 29.10.2026, the table's #1912): a 4-model Tough(3) unit at 2 of 4 that takes a wound and
+	# loses no model tests morale (p.10); at 3 of 4 it does not.
+	var gun := {"name": "Gun", "range_value": 24, "attacks": 1, "count": 1, "special_rules": []}
+	var atk: Dictionary = SoloSim.make_unit("A", 0, 2, 4, 1, [gun])
+	for case in [[6, true], [3, false]]:
+		var tgt: Dictionary = SoloSim.make_unit("T", 1, 6, 6, 4, [], 3)   # Quality 6+, Defense 6+
+		tgt["wounds_pool"] = int(case[0])
+		var before := SoloSim.alive_models(tgt)
+		tgt["model_pos"] = [Vector2.ZERO, Vector2.ONE, Vector2(2, 0), Vector2(3, 0)].slice(0, before)
+		var rolls: Array = []
+		SoloSim._resolve_volley(atk, tgt, AiShooting.profiles_in_range([gun], 10.0), 10.0, _rng(4), [], rolls, {})
+		var landed := 0
+		var tested := false
+		for r in rolls:
+			landed += int((r as Dictionary).get("wounds", 0)) if str((r as Dictionary)["kind"]) == "shoot" else 0
+			tested = tested or str((r as Dictionary)["kind"]) == "morale"
+		# One wound, no model lost (pool 6 -> 7 or 3 -> 4); a failed test may then rout the unit (SoloSim's own rule).
+		assert_int(landed).override_failure_message("fixture seed must land one wound").is_equal(1)
+		assert_bool(tested).override_failure_message("%d of 4 alive after a wound" % before).is_equal(bool(case[1]))
+
+
 func test_relentless_unit_holds_and_shoots_when_enemy_in_range() -> void:
 	# Relentless overlay (Solo rules p.2): with an enemy in range the unit Holds and shoots instead of
 	# manoeuvring — so it does NOT move (a plain shooter here would kite backward).

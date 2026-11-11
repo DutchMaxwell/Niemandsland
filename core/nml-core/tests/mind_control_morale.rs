@@ -62,7 +62,7 @@ fn fearless_target_gets_a_recovery_die_and_bonus_changes_the_target() {
 
 #[test]
 fn fatigue_debuff_also_shakes_then_fatigues() {
-    let (next, shot) = run("Fatigue Debuff", "wormhole_daemons_of_war", "", false, 0, EPOCH_65_MELEE_TRUTH, 3);
+    let (next, shot) = run("Fatigue Debuff", "daemons_of_war", "", false, 0, EPOCH_65_MELEE_TRUTH, 3);
     assert_eq!(shot.rolls[0].target, 4);
     assert!(next.shaken[1]);
     assert!(next.fatigued[1]);

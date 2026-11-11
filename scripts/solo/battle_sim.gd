@@ -10,6 +10,11 @@ extends RefCounted
 
 const IN2M := 0.0254
 
+## Rules 3.6 hero morale aura (twin of main.gd `_solo_aura_hero_for_morale` and sim.rs
+## `hero_aura_quality`): Tough(9)+ and 6" base edge to base edge.
+const HERO_AURA_TOUGH := 9
+const HERO_AURA_REACH_IN := 6.0
+
 ## CORE track S1: when set, expected wounds round STOCHASTICALLY (mean-
 ## preserving: the fraction becomes a probability) instead of carrying a
 ## fractional ledger — full games get outcome variance without per-die
@@ -908,6 +913,11 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 				var hp: Array = (next["units"][hk] as Dictionary)["positions"]
 				for i in range(hp.size()):
 					hp[i] = (hp[i] as Vector3) + delta
+		# FAB-A5 fix: the sim's own move stamp. `moved_round` lives on the LIVE unit and the
+		# simulation never writes it, so the Hold read has to come from THIS resolution: any
+		# move arm marks the snapshot entry, a HOLD leaves it absent (the live fallback stays
+		# for a unit that really moved on the table before the snapshot).
+		su["_moved_round"] = int(next["round"])
 		var terrain_at: Callable = next.get("terrain_at", Callable())
 		if terrain_at.is_valid():   # T2b: the mover's cover follows it (unit-centre probe, v0)
 			su["in_cover"] = TerrainRules.gives_cover(int(terrain_at.call(centre + delta)))
@@ -931,6 +941,7 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 			and (kind == AiDecision.Action.HOLD or kind == AiDecision.Action.ADVANCE):
 		var tu: Dictionary = next["units"][shoot_key]
 		if _los_clear(next, su, tu):
+			var round_now := int(next["round"])
 			# NML-1132: measured over the TABLE's own two model sets — host + attached
 			# heroes on both sides (_fold_dist_in below), because the table's reach test
 			# runs from the FIRING MEMBER's models to the target unit AND its heroes
@@ -938,19 +949,44 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 			var d := _fold_dist_in(next, su, positions, tu)
 			var alive_before := int(tu["alive"])
 			var wounds_before := _wounds_left(tu)
+			var profiles := _profiles_of(su, false, d, next)
+			# FAB-A5 fix: the ATTACKER's Hold is the SIMULATED ACTION (plus the sim's own move
+			# stamp) — the old read fell back to a live `moved_round` the sim never wrote, so an
+			# ADVANCE+shoot still priced the Artillery +1 (Fable F5).
+			var att_held := kind == AiDecision.Action.HOLD and _held_for(su, round_now)
+			var att := _ctx_of(su, false, att_held)
+			var phantom := 0
+			if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+				# AI-06: the Shred-vs-plain EV gap is hits x SIX_P, each 1 worth the map's
+				# phantom_wounds_per_save_one; Regeneration is neutralised on both clones.
+				var phantom_def: Dictionary = _ctx_of(tu, false, _held_for(tu, round_now))
+				phantom_def["regeneration"] = false
+				var per := int(RulesRegistry.unit_param(su["unit"] as GameUnit, "Scourge",
+					"phantom_wounds_per_save_one", 2))
+				for p in profiles:
+					if not ((p as Dictionary).get("rules", []) as Array).has("Scourge"):
+						continue
+					var plain: Dictionary = (p as Dictionary).duplicate()
+					plain["shred"] = false
+					var probe: Dictionary = (p as Dictionary).duplicate()
+					probe["shred"] = true
+					var with_shred := AiEv.profile_ev(probe, att, phantom_def, d, false)
+					var without := AiEv.profile_ev(plain, att, phantom_def, d, false)
+					phantom += int(round((with_shred - without) * per))
 			if cast_phase_enabled():
-				_apply_expected_wounds(tu,
-					AiEv.shoot_ev(_profiles_of(su, false, d, next), _ctx_of(su), _ctx_of(tu), d))
+				_apply_expected_wounds(tu, AiEv.shoot_ev(profiles, att,
+					_ctx_of(tu, false, _held_for(tu, round_now)), d))
 			else:
 				# Seam OFF: the legacy spell rider, verbatim from dabd1da — the
 				# sub-phase above never ran, so casting only happens inside a shoot pick.
-				var volley := AiEv.shoot_ev(_profiles_of(su, false, d, next), _ctx_of(su), _ctx_of(tu), d)
+				var volley := AiEv.shoot_ev(profiles, att,
+					_ctx_of(tu, false, _held_for(tu, round_now)), d)
 				var sp := spell_ev_of(su, tu, d)
 				if float(sp["ev"]) > 0.0:
 					volley += float(sp["ev"])
 					su["casts"] = int(su.get("casts", 0)) - int(sp["cost"])
 				_apply_expected_wounds(tu, volley)
-			_expected_shooting_morale(tu, alive_before, wounds_before)
+			_expected_shooting_morale(tu, alive_before, wounds_before, phantom)
 	var charge_key := str(action.get("charge", ""))
 	if kind == AiDecision.Action.CHARGE and charge_key != "" and next["units"].has(charge_key):
 		var tu: Dictionary = next["units"][charge_key]
@@ -976,16 +1012,25 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 			# NML-1132: both strike phases are built the way the table builds them —
 			# the host's melee set PLUS every alive attached hero's (main.gd:4284-4290),
 			# on the charger and on the striking-back defender alike.
-			_apply_expected_wounds(tu, AiEv.melee_ev(_profiles_of(su, true, 0.0, next),
-				_ctx_of(su, true), _ctx_of(tu), true, charge_dist))
+			var su_profiles := _profiles_of(su, true, 0.0, next)
+			var phantom_on_tu := _scourge_phantom_ev(su_profiles, _ctx_of(su, true), _ctx_of(tu),
+				charge_dist, true, su["unit"] as GameUnit)
+			_apply_expected_wounds(tu, AiEv.melee_ev(su_profiles, _ctx_of(su, true), _ctx_of(tu),
+				true, charge_dist))
 			su["fatigued"] = true
+			var phantom_on_su := 0
 			if int(tu["alive"]) > 0:   # survivors strike back, already survivor-scaled
-				_apply_expected_wounds(su, AiEv.melee_ev(_profiles_of(tu, true, 0.0, next),
-					_ctx_of(tu, true), _ctx_of(su), false))
+				var tu_profiles := _profiles_of(tu, true, 0.0, next)
+				phantom_on_su = _scourge_phantom_ev(tu_profiles, _ctx_of(tu, true), _ctx_of(su), 0.0,
+					false, tu["unit"] as GameUnit)
+				_apply_expected_wounds(su, AiEv.melee_ev(tu_profiles, _ctx_of(tu, true),
+					_ctx_of(su), false))
 				# W-P1 parity (p.9): striking back fatigues the DEFENDER too — the
 				# game stamps both sides, the sim only ever stamped the charger.
 				tu["fatigued"] = true
-			_expected_melee_morale(su, su_before, tu, tu_before)
+			# MEL-10e: the sim's charge move rolls no Dangerous test, so the charge-move
+			# self-wound term is 0; the argument keeps the call shaped like the table twin.
+			_expected_melee_morale(su, su_before, tu, tu_before, 0, phantom_on_su, phantom_on_tu)
 	# Shaken recovery (p.10): the idle activation clears Shaken — the recovery
 	# hold plan()/the rollout policy hand a shaken unit buys next round back.
 	if was_shaken and kind == AiDecision.Action.HOLD and shoot_key == "":
@@ -1120,15 +1165,39 @@ static func _append_attached_models(next: Dictionary, u: Dictionary, out: Array)
 ## `melee`: a FATIGUED unit hits only on unmodified 6s in melee (GF v3.5.1
 ## p.9) — approximated as Quality 6 for the EV; shooting is unaffected. The
 ## EV layer itself is fatigue-blind, so the snapshot flag must be priced here.
-static func _ctx_of(su: Dictionary, melee := false) -> Dictionary:
-	var ctx := AiEv.ctx_for(su["unit"], bool(su.get("in_cover", false)))
+## `held` (rules 3.6 SHO-05 / SHO-06e): the table's Hold read — not moved this round. Stamped
+## through `ctx_for` so the Artillery shooter +1 and target -1 gates can see it.
+static func _ctx_of(su: Dictionary, melee := false, held := true) -> Dictionary:
+	var ctx := AiEv.ctx_for(su["unit"], bool(su.get("in_cover", false)), 0, held)
+	ctx["held"] = held
 	ctx["models"] = int(su["alive"])
+	# Rules 3.6 (SHO-09s): the two TARGET-STATE facts the conditional-AP arms read, off the same
+	# snapshot `_below_half` already measures for morale.
+	ctx["above_half_strength"] = not _below_half(su)
+	ctx["shaken_or_fatigued"] = bool(su.get("shaken", false)) or bool(su.get("fatigued", false))
+	# Rules 3.6 (SHO-09b): the snapshot carries no board, so the EV is blind (0) — the same honest
+	# false the core's EV seams read; the live dice path stamps it from the terrain sampler.
+	ctx["near_terrain"] = false
 	# W-P1 parity: the flag rides the ctx — profile_ev hard-sets the natural-6
 	# target itself (the old quality=6 approximation still let modifiers move it).
 	# S1-02 (GF/AoF v3.5.1 p.10): a Shaken unit strikes back counting as fatigued.
 	if melee and (bool(su.get("fatigued", false)) or bool(su.get("shaken", false))):
 		ctx["fatigued"] = true
 	return ctx
+
+
+## Rules 3.6 (SHO-05 / SHO-06e): the table's Hold read for a snapshot unit — `moved_round` against
+## the round the sim is resolving, the SAME expression main.gd's `_solo_unit_held` uses. Since
+## FAB-A5 the sim writes its OWN stamp (`su["_moved_round"]`, set by `resolve`'s move arms); the
+## live unit is only the fallback for a snapshot unit that never moved inside the resolution.
+## No stamp and no unit reference means held, the old default.
+static func _held_for(su: Dictionary, round_no: int) -> bool:
+	if su.has("_moved_round"):
+		return int(su["_moved_round"]) != round_no
+	var unit := su.get("unit") as GameUnit
+	if unit == null:
+		return true
+	return int(unit.unit_properties.get("moved_round", -1)) != round_no
 
 
 ## Weapon profiles with attacks scaled to the snapshot's survivors (dead models
@@ -1153,12 +1222,16 @@ static func _profiles_of(su: Dictionary, melee: bool, d := 0.0, state := {}) -> 
 	# unit's special_rules (the registry gate would demand faction data the
 	# game's own fallback never asks for).
 	var u_bane := false
+	var u_bypass := false   # A1: the Regeneration-bypass half, its own flag (unit.rs `u_bypass`)
 	var u_rending := false
 	var u_unstop := false
 	for r in u.get_special_rules():
 		var rs := str(r).strip_edges()
 		if rs.begins_with("Bane") or rs.begins_with("Lacerate"):
 			u_bane = true
+			# A1 (EPOCH_72_PLAYTEST_RULES, the table's #1911): a unit-level Lacerate re-rolls the sixes only.
+			u_bypass = u_bypass or not (rs.begins_with("Lacerate") \
+				and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_72_PLAYTEST_RULES)
 		elif rs.begins_with("Rending"):
 			u_rending = true
 		elif rs.begins_with("Unstoppable"):
@@ -1183,6 +1256,10 @@ static func _profiles_of(su: Dictionary, melee: bool, d := 0.0, state := {}) -> 
 		q["attacks"] = SoloController.effective_attacks(int(q.get("attacks", 0)),
 			int(su["alive"]), u.models.size())
 		if u_bane:
+			if u_bypass:
+				q["bypass_regen"] = true
+			elif not bool(q.get("bane", false)):
+				q["bypass_regen"] = false   # A1: the unit's Lacerate brings the re-roll, not the bypass
 			q["bane"] = true
 		if u_rending:
 			q["rending"] = true
@@ -1314,7 +1391,7 @@ static func _spell_damage_ev_of(entry: Dictionary, def_ctx: Dictionary) -> float
 		return 0.0
 	var hits := int(eff.get("hits", 0)) \
 		* maxi(int((entry.get("target", {}) as Dictionary).get("count", 1)), 1)
-	return AiSpell.spell_damage_ev(hits, def_ctx, AiSpell.spell_facets(eff.get("weapon_rules", [])))
+	return AiSpell.spell_damage_ev(hits, def_ctx, AiSpell.spell_facets(eff.get("weapon_rules", []), AiActRecorder.rules_epoch))
 
 
 # ===== NML-1069 — the cast sub-phase =========================================
@@ -1468,7 +1545,9 @@ static func _plan_cast_tokens(state: Dictionary, su: Dictionary, pick: Dictionar
 	var helper_pool := 0
 	for h in helpers:
 		helper_pool += int((h as Dictionary)["tokens"])
-	var boost := AiSpell.plan_boost(AiSpell.boost_value_of(ev), own_left + helper_pool)
+	var conduit_mod := int((pick.get("origin", {}) as Dictionary).get("mod", 0))
+	var cast_target := SoloController.planned_cast_target(su["unit"] as GameUnit, conduit_mod)
+	var boost := AiSpell.plan_boost(AiSpell.boost_value_of(ev), own_left + helper_pool, 0, cast_target)
 	var own_draw := mini(boost, own_left)
 	# The interference pool reads ONCE with the boost purse (the both-AI
 	# auto-plan, solo_controller.gd:4378-4386).
@@ -1476,7 +1555,7 @@ static func _plan_cast_tokens(state: Dictionary, su: Dictionary, pick: Dictionar
 	var enemy_pool := 0
 	for e in enemies:
 		enemy_pool += int((e as Dictionary)["tokens"])
-	var interference := AiSpell.plan_interference(ev, enemy_pool, boost)
+	var interference := AiSpell.plan_interference(ev, enemy_pool, boost, cast_target)
 	return {"boost": boost, "own_draw": own_draw,
 		"helpers": _draw_cast_tokens(helpers, boost - own_draw),
 		"enemies": _draw_cast_tokens(enemies, interference),
@@ -1560,6 +1639,10 @@ static func _best_spell_target(state: Dictionary, su: Dictionary, entry: Diction
 		origins: Array) -> Dictionary:
 	var range_in := float(entry.get("range_in", 0))
 	var player := int(su.get("player", 0))
+	# Rules 3.6 (D-SPELL-LOS): from EPOCH_73_V36 sight binds only when the entry
+	# says so; below the epoch every spell still needs it.
+	var sight_required: bool = bool(entry.get("needs_los", false)) \
+			or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36
 	var best_key := ""
 	var best_ev := -1.0
 	var best_d := INF
@@ -1573,7 +1656,7 @@ static func _best_spell_target(state: Dictionary, su: Dictionary, entry: Diction
 		# that first reachable origin is the cast's origin for this target.
 		for o in origins:
 			var osu: Dictionary = (o as Dictionary)["su"]
-			if not sees(osu, str(k)) or not _los_clear(state, osu, tu):
+			if sight_required and (not sees(osu, str(k)) or not _los_clear(state, osu, tu)):
 				continue
 			var d := dist_in(osu["positions"], tu["positions"])
 			if d > range_in + CONTROL_EPS:
@@ -1713,8 +1796,12 @@ static func reply_threat(state: Dictionary, player: int) -> Dictionary:
 				or (mid_round and bool(eu.get("activated", false))):
 			continue
 		var movable := true
-		if reply_hold_gate and eu.get("unit") != null:
-			movable = not SoloController.forces_hold((eu["unit"] as GameUnit).get_special_rules())
+		if eu.get("unit") != null:
+			# Rules 3.6 (SHO-16): a Cumbersome enemy may neither charge nor advance-and-shoot,
+			# so it is not `movable` for those two legs; its standing volley above stays.
+			movable = not SoloController.cumbersome_active(eu["unit"] as GameUnit)
+			if reply_hold_gate:
+				movable = movable and not SoloController.forces_hold((eu["unit"] as GameUnit).get_special_rules())
 		var best_key := ""
 		var best_ev := 0.0
 		for mk in state["units"]:
@@ -1796,6 +1883,30 @@ static func _below_half(su: Dictionary) -> bool:
 	return AiCombatMath.at_or_below_half(int(su["alive"]), u.models.size())
 
 
+## Rules 3.6 (EPOCH_73_V36): stamp the best qualifying friendly Tough(9)+ Hero's Quality on the unit's snapshot as "aura_quality"; absent = no aura (hand-built snapshots stay byte-identical).
+static func _stamp_hero_aura(units: Dictionary) -> void:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return
+	for k in units:
+		var su: Dictionary = units[k]
+		if int(su["alive"]) <= 0 or bool(su.get("shaken", false)):
+			continue
+		var own := int((su["unit"] as GameUnit).get_quality())
+		var best := own
+		for hk in units:
+			var hu: Dictionary = units[hk]
+			if hk == k or int(hu["player"]) != int(su["player"]) or int(hu["alive"]) <= 0 \
+					or bool(hu.get("shaken", false)) or bool(hu.get("dormant", false)) or (su["attached"] as Array).has(hk):
+				continue
+			var hero := hu["unit"] as GameUnit
+			var q := int(hero.get_quality())
+			if hero.is_hero() and AiEv.unit_rating(hero, "Tough") >= HERO_AURA_TOUGH and q < best \
+					and edge_gap_in(su["positions"], su["radii"], hu["positions"], hu["radii"]) <= HERO_AURA_REACH_IN:
+				best = q
+		if best < own:
+			su["aura_quality"] = best
+
+
 ## The EXPECTED morale outcome, deterministically: Shaken always fails (p.10);
 ## otherwise the quality target's fail chance, halved by the Fearless re-roll
 ## (advanced p.13), fails when it reaches 50% — Q4+ crowds break, Q3 elites and
@@ -1806,9 +1917,19 @@ static func _morale_fails_expected(su: Dictionary) -> bool:
 	if bool(su.get("shaken", false)):
 		return true
 	var u: GameUnit = su["unit"]
-	var fail_p := float(AiCombatMath.morale_target(u.get_quality(),
+	var quality: int = u.get_quality()
+	# Rules 3.6 (EPOCH_73_V36): capture() stamps the better Quality of a qualifying Tough(9)+ Hero
+	# within 6" (base edge to base edge), the same aura the table's morale test and the core's live
+	# resolver apply. Hand-built snapshots carry no stamp, so they stay byte-identical.
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		var aura := int(su.get("aura_quality", 0))
+		if aura > 0 and aura < quality:
+			quality = aura
+	var fail_p := float(AiCombatMath.morale_target(quality,
 		int(su.get("morale_bonus", 0))) - 1) / 6.0
-	if AiEv.rule_on_all_models(u, "Fearless"):
+	# Rules 3.6 (EPOCH_73_V36): most living models are enough (sim.rs `morale_fearless`).
+	if (AiEv.rule_on_most_models(u, "Fearless") if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
+			else AiEv.rule_on_all_models(u, "Fearless")):
 		fail_p *= 0.5
 	if morale_by_probability:
 		return fail_p > _morale_dither(int(su.get("_slot", 0)), _morale_round)
@@ -1820,29 +1941,76 @@ static func _morale_dither(slot: int, round_no: int) -> float:
 	return fposmod((slot + 1.0) * 0.6180339887498949 + round_no * 0.7548776662466927, 1.0)
 
 
+## AI-06 (SHO-15b, EPOCH_73_V36): a Scourge striker's expected phantom wounds — the
+## Shred-vs-plain EV gap is hits × SIX_P, each such 1 worth phantom_wounds_per_save_one.
+static func _scourge_phantom_ev(profiles: Array, att: Dictionary, def_ctx: Dictionary,
+		dist_in: float, charging: bool, unit: GameUnit) -> int:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return 0
+	var per := int(RulesRegistry.unit_param(unit, "Scourge", "phantom_wounds_per_save_one", 2))
+	var def: Dictionary = def_ctx.duplicate()
+	def["regeneration"] = false
+	var total := 0.0
+	for p in profiles:
+		if not ((p as Dictionary).get("rules", []) as Array).has("Scourge"):
+			continue
+		var plain: Dictionary = (p as Dictionary).duplicate()
+		plain["shred"] = false
+		var probe: Dictionary = (p as Dictionary).duplicate()
+		probe["shred"] = true
+		total += AiEv.profile_ev(probe, att, def, dist_in, charging) \
+			- AiEv.profile_ev(plain, att, def, dist_in, charging)
+	return int(round(total * per))
+
+
 ## Post-volley morale (parity wave step 2, mirrors main.gd's PDF-verified flow):
 ## casualties this volley AND now at/below half => test; a shooting fail is
 ## SHAKEN, never a Rout (Rout exists only in melee — playtest bug 9).
-static func _expected_shooting_morale(tu: Dictionary, alive_before: int, wounds_before: int) -> void:
+static func _expected_shooting_morale(tu: Dictionary, alive_before: int, wounds_before: int,
+		phantom: int = 0) -> void:
 	var u: GameUnit = tu["unit"]
+	# AI-06 (EPOCH_73_V36): the Scourge phantom wounds tip the trigger on a scratch copy (nothing
+	# is removed) with the stochastic draw suspended, so no rollout stream moves.
+	if phantom > 0 and int(tu["alive"]) > 0 and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		var v: Dictionary = tu.duplicate(true)
+		v["wound_frac"] = 0.0
+		var saved_rng := stochastic_rng
+		stochastic_rng = null
+		_apply_expected_wounds(v, float(phantom))
+		stochastic_rng = saved_rng
+		if int(v["alive"]) <= 0 or _below_half(v):
+			if _morale_fails_expected(tu):
+				tu["shaken"] = true
+			return
 	if u.models.size() == 1:
 		if int(tu["alive"]) > 0 and _wounds_left(tu) < wounds_before and _below_half(tu) \
 				and _morale_fails_expected(tu):
 			tu["shaken"] = true
 		return
-	if AiCombatMath.should_test_shooting_morale(alive_before, int(tu["alive"]), u.models.size()) \
+	# A2 (EPOCH_72_PLAYTEST_RULES, the table's #1912): WOUNDS that leave the unit at half or less test too.
+	var wounded: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_72_PLAYTEST_RULES \
+		and int(tu["alive"]) > 0 and _wounds_left(tu) < wounds_before \
+		and AiCombatMath.at_or_below_half(int(tu["alive"]), u.models.size())
+	if (AiCombatMath.should_test_shooting_morale(alive_before, int(tu["alive"]), u.models.size()) or wounded) \
 			and _morale_fails_expected(tu):
 		tu["shaken"] = true
 
 
-## Melee morale (p.10 via main.gd's flow): a destroyed side loses first;
-## otherwise the side that dealt FEWER wounds tests (tie = nobody). A fail at/below half is a ROUT — the loser
-## leaves the board. Fear(X) counts as having dealt +X wounds for the COMPARISON
-## only (p.13; the same AiCombatMath.fear_adjusted_wounds the table path uses).
-static func _expected_melee_morale(su: Dictionary, su_before: int, tu: Dictionary, tu_before: int) -> void:
-	var dealt_by_su := AiCombatMath.fear_adjusted_wounds(tu_before - _wounds_left(tu),
+## Melee morale (p.10 via main.gd's flow): a destroyed side loses first; otherwise the side that
+## TOOK more wounds over the activation tests (tie = nobody). A fail at/below half is a ROUT — the
+## loser leaves the board. Rules 3.6 (EPOCH_73_V36) reads the tally as wounds TAKEN: the enemy's
+## strikes, the enemy's Fear(X) (which rides the ENEMY's tally) and the charger's own charge-move
+## self-wounds. Below 73 the side that dealt FEWER wounds loses and self-wounds never count. The
+## same AiCombatMath.fear_adjusted_wounds the table path uses.
+static func _expected_melee_morale(su: Dictionary, su_before: int, tu: Dictionary, tu_before: int,
+		self_wounds: int = 0, phantom_on_su: int = 0, phantom_on_tu: int = 0) -> void:
+	var taken_by_su := su_before - _wounds_left(su) + phantom_on_su
+	var taken_by_tu := tu_before - _wounds_left(tu) + phantom_on_tu
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		taken_by_su += maxi(self_wounds, 0)
+	var score_su := AiCombatMath.fear_adjusted_wounds(taken_by_tu,
 		AiEv.unit_rating(su["unit"], "Fear"))
-	var dealt_by_tu := AiCombatMath.fear_adjusted_wounds(su_before - _wounds_left(su),
+	var score_tu := AiCombatMath.fear_adjusted_wounds(taken_by_su,
 		AiEv.unit_rating(tu["unit"], "Fear"))
 	var loser: Dictionary
 	if int(su["alive"]) <= 0 and int(tu["alive"]) <= 0:
@@ -1851,10 +2019,10 @@ static func _expected_melee_morale(su: Dictionary, su_before: int, tu: Dictionar
 		loser = su
 	elif int(tu["alive"]) <= 0:
 		loser = tu
-	elif dealt_by_su == dealt_by_tu:
+	elif score_su == score_tu:
 		return
 	else:
-		loser = tu if dealt_by_su > dealt_by_tu else su
+		loser = tu if score_su > score_tu else su
 	if int(loser["alive"]) <= 0 or not _morale_fails_expected(loser):
 		return
 	if _below_half(loser):
@@ -1894,6 +2062,11 @@ static func capture(army: OPRArmyManager, objectives_provider: Callable = Callab
 		# scoring) while its strength survives in dormant_* for the arrival
 		# step. A tray node's position must never leak into the board picture.
 		var dormant := SoloController.unit_in_reserve(u)
+		# G4R5 R8c (EPOCH_73_V36): a hero joined to a reserved host waits in the tray with it - a hero is no reserve unit
+		# of its own, so without this it stood on the board as a live lone hero the table refuses to target.
+		if not dormant and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+			var host_gu: Variant = u.get_attached_to()
+			dormant = host_gu is GameUnit and SoloController.unit_in_reserve(host_gu as GameUnit)
 		var dormant_wounds: Array = []
 		for m in u.models:
 			if dormant:
@@ -1976,6 +2149,7 @@ static func capture(army: OPRArmyManager, objectives_provider: Callable = Callab
 			continue
 		su["attached_to"] = by_sel[join_to]
 		(units[by_sel[join_to]]["attached"] as Array).append(k)
+	_stamp_hero_aura(units)
 	if los_of.is_valid():
 		for k in units:
 			var su: Dictionary = units[k]
@@ -2373,9 +2547,9 @@ static func charge_illegal_plain(state: Dictionary, header: Dictionary,
 		return false
 	var probe_r := float(au.get("charge_probe_r", SeparationChecker.DEFAULT_BASE_RADIUS_M))
 	var terrain_at: Callable = header.get("terrain_at", Callable())
-	return _corridor_forced_through_plain(
-		from if from != Vector3.INF else _plain_centre(au),
-		to if to != Vector3.INF else _plain_centre(vu), probe_r, terrain_at)
+	var from_p: Vector3 = from if from != Vector3.INF else _plain_centre(au)
+	var to_p: Vector3 = to if to != Vector3.INF else _plain_centre(vu)
+	return _corridor_forced_through_plain(from_p, SoloController.charge_probe_end(from_p, to_p, gap_in), probe_r, terrain_at)
 
 
 ## SoloController.melee_shroud_charge_in (:5150) off the recorded [penalty_in, floor_in] pair —

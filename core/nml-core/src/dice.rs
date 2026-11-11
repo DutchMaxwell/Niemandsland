@@ -27,8 +27,9 @@
 
 #[cfg(test)]
 use crate::combat::modified_hit_target;
+use crate::acts::{rule_on, EPOCH_73_V36};
 use crate::combat::{
-    conditional_ap_bonus, covered_defense, deadly_multiplier, fortified_ap, guarded_defense,
+    cond_ap_why, cond_met, conditional_ap_bonus, conditional_ap_bonus_vs, covered_defense, deadly_multiplier, fortified_ap, guarded_defense, hit_ev, CondApTarget,
     impact_total_dice, melee_hit_modifier, fold_hit, reliable_quality, save_target,
     shielded_defense, morale_target, shooting_hit_modifier, shrouded_reach, thrust_to_hit,
     versatile_best_mode, BEST_HIT_TARGET, FEARLESS_RECOVER_TARGET, HEAVY_IMPACT_AP,
@@ -37,6 +38,9 @@ use crate::combat::{
 };
 use crate::rng::GodotRng;
 use crate::unit::{CondAp, Ctx, ShieldedAlias, ShootProfile};
+
+/// One entry of the strike's pass-1 hit list (`resolve_melee_leg`'s `pending`).
+type Pending<'a> = (&'a Shooter<'a>, &'a ShootProfile, Vec<u8>, i64, i64, i64, bool, i64);
 
 /// One dice tray: the generator `seed_tray_rng` seeds, and nothing else.
 #[derive(Debug, Clone, Copy)]
@@ -138,6 +142,8 @@ pub struct ShootResult {
     /// Unsaved wounds after Deadly, Shred and Regeneration — handed to the
     /// trainer's OWN casualty machinery, which decides who dies.
     pub wounds: i64,
+    /// SHO-15a/15b Scourge phantom wounds: never landed. The shooting morale trigger and the melee winner tally read them.
+    pub scourge_wounds: i64,
     /// D1-B5: wounds caused BEFORE Regeneration, which is the tally the table's
     /// melee-winner comparison runs on — `caused += w` sits inside the weapon
     /// loop (main.gd:6113/:6148) and `caused += rv_wounds` inside Ravage
@@ -145,6 +151,11 @@ pub struct ShootResult {
     /// `wounds`; compare `caused`. Using the landed number instead lets a
     /// Regeneration roll decide who tests morale, which the table never does.
     pub caused: i64,
+    /// MEL-10r (`EPOCH_73_V36`) — the melee-winner tally as wounds actually TAKEN: like `caused`,
+    /// but a wound Regeneration (or its family) cancels does NOT count. On the 73 leg only; below
+    /// it `taken == caused` (the pre-Regeneration tally, pinned byte-exact). `caused` stays
+    /// pre-Regeneration so Regenerative Strength still sees what Regeneration ignored.
+    pub taken: i64,
     /// Every roll drawn, in draw order.
     pub rolls: Vec<Roll>,
     /// Table branches this port does NOT reproduce that THIS activation hit.
@@ -166,6 +177,9 @@ pub struct ShootResult {
     /// volley per weapon, read by `save_batch`; the melee resolve never sets
     /// it — its save batches run on fresh results, the base window.
     pub bane_low: i64,
+    /// Rules 3.6 (SHO-10): the re-roll entry's target condition did NOT hold
+    /// against this defender, so the whole Bane window (base 6s leg included) stays shut.
+    pub bane_gated: bool,
     /// How many saves the WIDENED window added to the re-roll batches (the
     /// successful 5s the base 6s-only leg would never have touched) — the volley
     /// turns a non-zero count into the one rules-must-log line.
@@ -185,6 +199,10 @@ pub struct ShootResult {
     /// its unsaved wounds x max(Deadly, 1) AFTER the picked model's Regeneration (main.gd:4059-4067);
     /// the drain lands each on ONE model, overkill lost. Their raw count rides `deadly_tally`.
     pub takedown_groups: Vec<i64>,
+    /// Rules 3.6 (`EPOCH_73_V36`) — Hazardous self-wounds the dice legs read off the hit roll:
+    /// `(owner, weapon, unmodified 1s, X)` with X = max(Blast, Deadly, 1). The sim lands them on the
+    /// bearer (main.gd `_solo_hazardous_self_wounds`); below the gate they are ignored.
+    pub hazardous_self: Vec<(String, String, i64, i64)>,
 }
 
 impl ShootResult {
@@ -206,12 +224,14 @@ impl ShootResult {
     pub fn absorb(&mut self, other: ShootResult) -> i64 {
         self.rolls.extend(other.rolls);
         self.caused += other.caused;
+        self.taken += other.taken;
         self.log.extend(other.log);
         self.fortified_fired = self.fortified_fired || other.fortified_fired;
         self.bane_rerolled += other.bane_rerolled;
         self.deadly_groups.extend(other.deadly_groups);
         self.deadly_tally += other.deadly_tally;
         self.takedown_groups.extend(other.takedown_groups);
+        self.hazardous_self.extend(other.hazardous_self);
         for u in other.unported {
             self.mark(u);
         }
@@ -222,6 +242,30 @@ impl ShootResult {
 #[inline]
 fn sixes(faces: &[u8]) -> i64 {
     faces.iter().filter(|&&f| f == 6).count() as i64
+}
+
+/// Row MEL-09's rules-must-log line, the table's same text (`_solo_melee_strike_phase`).
+fn fatigued_sixes_line(owner: &str, n: i64) -> String {
+    format!("Fatigued: {owner} — {n} unmodified 6{} hit but trigger no special rules", if n == 1 { "" } else { "s" })
+}
+
+/// Rules 3.6 row MOR-12c — `AiEv.stamp_sergeant`'s bearer share, applied at the
+/// strike: `max(1, round(attacks / alive models))` of this profile's attack
+/// dice, and that share's fraction of the plain hits
+/// `min(normal, round(normal * share / attacks))`. `att.models` is the live
+/// alive count (`ctx_of` writes `state.alive`), the Ctx twin of the table's
+/// `GameUnit.get_alive_count()`. 0 without the rules 3.6 stamp. `attacks` is
+/// the pool the share is a fraction of: the weapon's full attack total on the
+/// volley leg (the table stamps before the sighted scaling), the strike's own
+/// scaled count on the melee leg (the table stamps its melee profile after it).
+fn sergeant_hits(p: &ShootProfile, attacks: i64, normal: i64, att: &Ctx) -> i64 {
+    if p.sergeant_ap <= 0 || attacks <= 0 || normal <= 0 {
+        return 0;
+    }
+    let alive = att.models.max(1) as f64;
+    let share = (attacks as f64 / alive).round().max(1.0);
+    let hits = (normal as f64 * share / attacks as f64).round() as i64;
+    hits.min(normal).max(0)
 }
 
 /// The Shielded-family alias's rules-must-log line, the volley and melee
@@ -269,6 +313,13 @@ fn piercing_assault_grant_cond() -> CondAp {
     CondAp { ap_bonus: 1, condition: "on_charge".into(), ..Default::default() }
 }
 
+/// The table's `blast_log_text`: names Blast(X) and, when the model count clamps the multiplier, the cap.
+fn blast_log(x: i64, hits: i64, boosted: i64, models: i64) -> String {
+    let mult = boosted / hits.max(1);
+    let capped = if mult >= x { String::new() } else { format!(" (capped by {models} model{} in target)", if models == 1 { "" } else { "s" }) };
+    format!("Blast({x}): {hits} hit{} ×{mult}{capped} → {boosted} hits", if hits == 1 { "" } else { "s" })
+}
+
 fn surge_attack_hits(
     p: &ShootProfile,
     faces: &[u8],
@@ -296,6 +347,22 @@ fn surge_attack_hits(
         owner: owner.into(),
     });
     faces_to_hits(&extra_faces, count_target as u8) as i64
+}
+
+/// G4R5 F-PRIMAL-GRANT-ONCE (`EPOCH_73_V36`): ONE live "Enhanced Primal" grant is carried in two channels (the overlay rule on
+/// the unit's rules and the ledger buff the spell records) and rolls ONE extras group, like the table's idempotent profile flag.
+/// On a member that PRINTS the extra-die form the grant only LOWERS that form's threshold to 5s; only a member without the
+/// printed form rolls the grant's own group. Below 73 both groups roll (replay). Returns the extras' hits.
+#[allow(clippy::too_many_arguments)]
+fn primal_extras(p: &ShootProfile, grant: bool, v36: bool, faces: &[u8], count_target: i64, owner: &str, tray: &mut Tray, out: &mut ShootResult) -> i64 {
+    if !(grant && v36 && p.surge_attack) {
+        let hits = surge_attack_hits(p, faces, count_target, owner, tray, &mut out.rolls);
+        return hits + if grant { surge_attack_hits(&primal_boost_grant_profile(), faces, count_target, owner, tray, &mut out.rolls) } else { 0 };
+    }
+    if faces.iter().any(|&f| f == 6 || (f == 5 && count_target <= 5)) {
+        out.log.push(format!("Enhanced Primal: {owner} — one extra-attack roll on unmodified 5s and 6s (the grant widens the Primal, it adds no second roll)"));
+    }
+    surge_attack_hits(&ShootProfile { surge_attack_low: p.surge_attack_low.min(5), ..p.clone() }, faces, count_target, owner, tray, &mut out.rolls)
 }
 
 /// `AiCombatMath.blocks_with_bane` :354-363 — each unmodified Defense 6 is
@@ -326,6 +393,9 @@ fn blocks_with_bane_from(faces: &[u8], reroll: &[u8], target: i64, from: i64) ->
     blocks
 }
 
+/// Scourge's `phantom_wounds_per_save_one` (rules_mechanics_gf/aof.json `common`; the table reads the map).
+pub const SCOURGE_PHANTOM_WOUNDS: i64 = 2;
+
 /// `AiCombatMath.shred_bonus_wounds` :475-485 — unmodified Defense 1s on the
 /// FINAL faces (a 6 that Bane re-rolled into a 1 counts, the 6 itself never).
 /// The Shred Boost generalizes the window to `low` (failed rolls 1..=low — a
@@ -346,6 +416,11 @@ fn shred_faces(faces: &[u8], reroll: &[u8], low: i64, target: i64) -> i64 {
         }
     }
     wounds
+}
+
+/// Rules 3.6 (SHO-14) — `Pierce`: the save ignores POSITIVE Defense modifiers; Armor and negatives stay.
+pub(crate) fn pierce_ignores(p: &ShootProfile, epoch_ctx: &Ctx) -> bool {
+    rule_on(epoch_ctx.rules_epoch, EPOCH_73_V36) && p.rules.iter().any(|r| r.trim() == "Pierce")
 }
 
 /// `main._solo_save_batch` :6385-6483 — ONE batch for the whole defender (not
@@ -383,6 +458,10 @@ fn save_batch(
     if count <= 0 {
         return 0;
     }
+    // SHO-14 — Pierce drops the positive growth ladder and a buff's negative `defense_mod`.
+    let pierce = pierce_ignores(p, def);
+    let growth_def = if pierce { 0 } else { def.growth_def_mod };
+    let defense_mod = if pierce && def.defense_mod < 0 { 0 } else { def.defense_mod };
     // Plain Fortified first (main.gd:6440-6447), then the WAVE 3 alias arm in
     // its ELSE — Boost ungated, gated aliases past the volley's over-9" flag,
     // both clamped at AP(0) like `fortified_ap`.
@@ -420,15 +499,15 @@ fn save_batch(
     let target = if def.modifier_sum {
         // D21 (`EPOCH_68_MODIFIER_SUM`): every defence step arrives unfloored;
         // the SUM incl. AP is clamped once, a natural 1/6 stay with the die.
-        save_target(defense - def.growth_def_mod + def.defense_mod, (eff_ap + def.growth_fortify_ap).max(0)).clamp(2, 6)
+        save_target(defense - growth_def + defense_mod, (eff_ap + def.growth_fortify_ap).max(0)).clamp(2, 6)
     } else if def.growth_def_lowers {
         save_target(
-            ((defense - def.growth_def_mod).clamp(2, 6) + def.defense_mod).max(BEST_HIT_TARGET),
+            ((defense - growth_def).clamp(2, 6) + defense_mod).max(BEST_HIT_TARGET),
             (eff_ap + def.growth_fortify_ap).max(0),
         )
     } else {
         save_target(
-            (defense + def.growth_def_mod + def.defense_mod).max(BEST_HIT_TARGET),
+            (defense + growth_def + defense_mod).max(BEST_HIT_TARGET),
             (eff_ap + def.growth_fortify_ap).max(0),
         )
     };
@@ -443,8 +522,10 @@ fn save_batch(
     let mut reroll: Vec<u8> = Vec::new();
     // Wave 4 — the widened window (0 = the base 6s-only leg, byte-exact):
     // successful unmodified saves from `bane_low` up re-roll too.
-    let bane_from = if p.bane && out.bane_low > 1 { out.bane_low } else { 6 };
-    if p.bane {
+    // SHO-10: a re-roll entry's target condition shuts the whole window.
+    let bane = p.bane && !out.bane_gated;
+    let bane_from = if bane && out.bane_low > 1 { out.bane_low } else { 6 };
+    if bane {
         let n = faces.iter().filter(|&&f| f == 6 || (f as i64 >= bane_from && f as i64 >= target)).count() as i64;
         if n > 0 {
             reroll = tray.roll(n as usize);
@@ -455,12 +536,24 @@ fn save_batch(
                 faces: reroll.clone(),
                 owner: def_owner.into(),
             });
-            // The widened window's own share — the successful 5s the base leg
-            // would never have touched (rules-must-log count).
-            out.bane_rerolled += faces.iter().filter(|&&f| out.bane_low > 1 && f < 6 && f as i64 >= out.bane_low && f as i64 >= target).count() as i64;
+            // AI-G2 rules-must-log: a weapon alias (Smash, Reap, Decimate) names its own book rule.
+            if !p.bane_alias.is_empty() {
+                let s = if n == 1 { "" } else { "s" };
+                let what = if bane_from < 6 { format!("roll{s} of {bane_from}+") } else { format!("6{s}") };
+                out.log.push(format!("{}: {def_owner} re-rolls {n} unmodified Defense {what}{}", p.bane_alias, cond_ap_why(&p.bane_condition)));
+            } else {
+                // The widened window's own share — the successful 5s the base leg
+                // would never have touched (rules-must-log count).
+                out.bane_rerolled += faces.iter().filter(|&&f| out.bane_low > 1 && f < 6 && f as i64 >= out.bane_low && f as i64 >= target).count() as i64;
+            }
         }
     }
     let unsaved = (count - blocks_with_bane_from(&faces, &reroll, target, bane_from)).max(0);
+    // SHO-15a/15b Scourge: the unmodified 1s on the FINAL faces (Shred's own read), counted, never landed.
+    // The shooting morale trigger and the melee winner tally both read this one count.
+    if p.rules.iter().any(|r| r.trim() == "Scourge") {
+        out.scourge_wounds += shred_faces(&faces, &reroll, 1, target) * SCOURGE_PHANTOM_WOUNDS;
+    }
     let shred = if p.shred || shred_grant || (p.shred_alias && shred_alias_dice) {
         // Wave 3: the per-face wound amount rides the profile's epoch-6
         // stamped `extra_wound_per_save_one` read (0 = unread -> the base
@@ -703,6 +796,17 @@ pub fn resolve_volley_with_tray(
     resolve_volley_leg(shooters, def, def_owner, dist_in, mod_dist_in, cond_ap_dice, surge_gates, shred_alias_dice, shred_boost_dice, false, false, &|_| false, tray)
 }
 
+/// The table's resolve-first rank of a shot (`_solo_shot_priority`): Takedown, then Deadly, then the rest.
+pub fn shot_rank(p: &ShootProfile) -> u8 {
+    if p.takedown {
+        0
+    } else if p.deadly > 0 {
+        1
+    } else {
+        2
+    }
+}
+
 // The leg split adds one gate-bool to the resolver's existing pack.
 #[allow(clippy::too_many_arguments)]
 pub fn resolve_volley_leg(
@@ -731,6 +835,7 @@ pub fn resolve_volley_leg(
     // is stamped out of `Ctx::unpredictable_shooting` (unit.rs).
     let mut upr_ap = 0i64;
     let mut upr_hit = 0i64;
+    let mut hero_upr: Vec<(usize, i64, i64)> = Vec::new(); // (shooter index, ap, hit): a joined hero's own die
     if shooters.first().is_some_and(|sh| sh.att.unpredictable_shooting) {
         let att0 = shooters[0].att;
         let faces = tray.roll(1);
@@ -746,6 +851,15 @@ pub fn resolve_volley_leg(
             faces,
             owner: shooters[0].owner.into(),
         });
+    } else if shooters.first().is_some_and(|sh| sh.att.v36_rules) {
+        // AIG-G2 R5 (EPOCH_73_V36): the host rolled none, so each joined hero who carries the rule himself rolls ONE
+        // die for his OWN profiles, before any weapon fires. Table twin: `_solo_hero_unpredictable`.
+        for (i, sh) in shooters.iter().enumerate().skip(1).filter(|(_, sh)| sh.att.unpredictable_shooting) {
+            let faces = tray.roll(1);
+            let low = (faces[0] as i64) <= sh.att.unpredictable_low_roll_max;
+            hero_upr.push((i, if low { sh.att.unpredictable_ap_bonus } else { 0 }, if low { 0 } else { sh.att.unpredictable_hit_bonus }));
+            out.rolls.push(Roll { kind: "attack", count: 1, target: BEST_HIT_TARGET, faces, owner: sh.owner.into() });
+        }
     }
     // `dist_in` gates RANGE VALIDITY only (`reach_gate`, B11's edge/nearest-
     // model gap). `mod_dist_in` is the separate over-9" modifier distance:
@@ -760,6 +874,10 @@ pub fn resolve_volley_leg(
     // alias-marked profile's cover skip actually lands on an in-cover target
     // (`shroud_shortened`'s shape) — one line per volley below.
     let mut alias_cover_logged = false;
+    // Rules 3.6 (SHO-01b) — the kept-cover line's once-per-volley flag.
+    let mut indirect_cover_logged = false;
+    // Rules 3.6 (SHO-14) — the Pierce line's once-per-volley flag.
+    let mut pierce_logged = false;
     // Wave 3 — the Shot Modifier family's two runtime-gated members name
     // themselves once per volley per firing member (rules-must-log): the
     // member's owner, its hit bonus and (Mobile Artillery only) its own
@@ -767,6 +885,8 @@ pub fn resolve_volley_leg(
     let mut ma_fired: Vec<(&str, i64, f64)> = Vec::new();
     // Wave 4 (port-entrenched) — the stationary alias's rules-must-log flag.
     let mut ent_fired = false;
+    // SHO-06 (rules 3.6) — the target-side Artillery penalty's rules-must-log flag.
+    let mut target_art_fired = false;
     let mut gp_fired: Vec<(&str, i64)> = Vec::new();
     // Wave 4 (port-quick-readjustment) — the moved-penalty legs' once-per-
     // member rules-must-log flags (`ma_fired`'s shape).
@@ -777,10 +897,21 @@ pub fn resolve_volley_leg(
     // that fired is `def.evasive_alias_name` ("Machine-Fog Boost" at epoch 6,
     // "Empyrean Spirit Boost" at epoch 7).
     let mut evasive_boost_fired = false;
+    // EPOCH_73_V36 — the Aircraft to-hit penalty's once-per-volley log flag.
+    let mut aircraft_fired = false;
+    // Rules 3.6 (D-MOST) — Stealth's -1 rode the most-models read: one line per volley.
+    let mut stealth_most_fired = false;
+    // FAB-C15 — the once-granted Stealth's own rules-must-log flag.
+    let mut stealth_grant_fired = false;
+    // SHO-05 (rules 3.6) — the Artillery shooter's gated +1 names itself once per
+    // firing member (the `ma_fired` shape).
+    let mut art_shooter_fired: Vec<&str> = Vec::new();
     // Wave 4 — and the widened Bane window's own rule name, sticky once a
     // weapon opened it ("Mischievous Boost" at epoch 6, "Bestial Boost" at
     // epoch 7); "" = the base 6s-only window fired nothing.
     let mut bane_rule = "";
+    // SHO-10 — the words naming the target condition that opened the window.
+    let mut bane_why = "";
     // Wave 3 — the Shielded-family alias's own rules-must-log flag: the +1
     // rode a family DATA alias rather than the literal name, one line per
     // volley below (`ShootResult.log` precedent).
@@ -792,6 +923,13 @@ pub fn resolve_volley_leg(
         fortified_alias_over9: def.fortified_alias_ap > 0
             && def.fortified_alias_over_in > 0.0
             && mod_dist_in > def.fortified_alias_over_in,
+        // MOR-17a (rules 3.6): Warding's 6+ needs a shot from OVER its gate —
+        // inside it the 6+ die of this kind never rolls (0 = old reading).
+        regen_target: if def.regen_gate_over_in > 0.0 && mod_dist_in <= def.regen_gate_over_in {
+            0
+        } else {
+            def.regen_target
+        },
         ..*def
     };
     // FLATTENED on purpose: one pass over the (member, profile) pairs, so the
@@ -809,34 +947,41 @@ pub fn resolve_volley_leg(
         .iter()
         .flat_map(|sh| sh.keep.iter().enumerate().map(move |(k, &pi)| (sh, k, pi)))
         .collect();
-    shots.sort_by_key(|&(sh, _, pi)| {
-        let p = &sh.profiles[pi];
-        if p.takedown {
-            0
-        } else if p.deadly > 0 {
-            1
-        } else {
-            2
-        }
-    });
+    shots.sort_by_key(|&(sh, _, pi)| shot_rank(&sh.profiles[pi]));
     for (sh, k, pi) in shots {
         let att = sh.att;
         let p = &sh.profiles[pi];
+        // The member's own die when a joined hero rolled one (AIG-G2 R5), else the unit's (the host's) die.
+        let (upr_ap, upr_hit) = hero_upr
+            .iter()
+            .find(|h| std::ptr::eq(&shooters[h.0], sh))
+            .map_or((upr_ap, upr_hit), |h| (h.1, h.2));
+        let reach_gate = att.member_gap_in.map_or(reach_gate, f64::ceil);
+        // Rules 3.6: the shooter's own range grant rides the PRINTED range, the target-side shrink
+        // applies to the sum (main.gd: `base_range + range_bonus`, then `effective_shoot_reach_in`).
+        let printed = p.range as f64 + p.reach_bonus_in.max(att.granted_reach_in);
         let mut reach = if def.ranged_shrouding {
-            let r = shrouded_reach(p.range as f64, def.ranged_shroud_penalty_in, def.ranged_shroud_floor_in);
-            shroud_shortened |= r < p.range as f64;
+            let r = shrouded_reach(printed, def.ranged_shroud_penalty_in, def.ranged_shroud_floor_in);
+            shroud_shortened |= r < printed;
             r
         } else {
-            p.range as f64
+            printed
         };
         // WAVE 3 MARK (`acts::rule_on` inside `ctx_live`, EPOCH_6_TABLE_RULES):
         // the target's live "+6\" shooting range" record extends the reach the
         // range gate tests — `ctx_of` (the EV imagination) leaves it 0.
         reach += def.range_mark_in;
-        if p.range <= 0 || reach < reach_gate {
+        if !att.strafe_volley && (p.range <= 0 || reach < reach_gate) {
             continue;
         }
-        if def.range_mark_in > 0.0 && (p.range as f64) < reach_gate && reach >= reach_gate {
+        if p.reach_bonus_in > 0.0 && (p.range as f64) < reach_gate && reach >= reach_gate {
+            out.log.push(format!(
+                "{}: {} gains +{:.0}\" reach on {}",
+                p.reach_bonus_rule, sh.owner, p.reach_bonus_in, def_owner
+            ));
+        }
+        // The Mark names itself only where it was needed: a shooter the grant already carries is not its beneficiary.
+        if def.range_mark_in > 0.0 && (p.range as f64) < reach_gate && reach >= reach_gate && reach - def.range_mark_in < reach_gate {
             out.log.push(format!(
                 "Increased Shooting Range Mark: {} gains +{:.0}\" reach on {}",
                 sh.owner, def.range_mark_in, def_owner
@@ -846,6 +991,15 @@ pub fn resolve_volley_leg(
         if n <= 0 {
             continue; // main.gd:3163 — a silent weapon leaves before any die
         }
+        // G4R4 C-GRANTED-BANE (`EPOCH_73_V36`): a live "Bane when Shooting" grant makes this ranged weapon a Bane
+        // weapon for the volley (the table's `_solo_striker_has_bane`); the re-roll's log line names the book rule.
+        let granted_bane;
+        let p = if att.bane_grant && !p.bane {
+            granted_bane = ShootProfile { bane: true, bypass_regen: true, bane_alias: "Bane when Shooting".into(), ..p.clone() };
+            &granted_bane
+        } else {
+            p
+        };
         // --- to-hit, `profile_ev` ai_ev.gd:335-370's shooting branch ---
         // FEAT PR 2 — the once-per-game bonus shot strikes at its OWN
         // Quality (main.gd:3100: `"quality": int(tgd.get("quality", 2))`),
@@ -870,17 +1024,43 @@ pub fn resolve_volley_leg(
             if !ent_fired {
                 ent_fired = true;
                 out.log.push(format!(
-                    "[{}] -{alias_pen} to hit vs {def_owner}: unmoved this round",
+                    "[{}] -{alias_pen} to hit over {alias_over:.0}\" vs {def_owner}: unmoved this round",
                     def.stationary_alias_name
                 ));
             }
         }
+        // SHO-05 (rules 3.6): the shooter's own +1 needs a Hold and a target past
+        // `shooter_over_in`; both stamp 0/false below EPOCH_73_V36, so older
+        // epochs keep the shared over-9" gate alone.
+        let v36_artillery = att.artillery_shooter_needs_hold || att.artillery_shooter_over_in > 0.0;
+        let art_gate_ok = (!att.artillery_shooter_needs_hold || att.held)
+            && (att.artillery_shooter_over_in <= 0.0 || mod_dist_in > att.artillery_shooter_over_in);
+        let art_shooter_bonus = if art_gate_ok {
+            att.artillery_shooter_hit_bonus.unwrap_or(crate::combat::ARTILLERY_SHOOTER_HIT_BONUS)
+        } else {
+            0
+        };
+        // SHO-06 (rules 3.6): the target-side penalty is -1 past 12" and only while most models
+        // carry the rule and the unit has not moved this round. Below the gate the old over-9"
+        // -2 leg stays byte-exact.
+        let v36_target_art = def.artillery_target_over_in > 0.0;
+        let target_art = if v36_target_art {
+            def.artillery_target_most_models && def.moved_round != def.round
+        } else {
+            def.artillery
+        };
+        let target_pen = if v36_target_art {
+            def.artillery_target_hit_penalty_v36.unwrap_or(1)
+        } else {
+            def.artillery_target_hit_penalty.unwrap_or(crate::combat::ARTILLERY_TARGET_HIT_PENALTY)
+        };
         let mut m = shooting_hit_modifier(
-            mod_dist_in, att.artillery, def.stealth, def.artillery, def.evasive,
+            mod_dist_in, att.artillery, def.stealth,
+            if v36_target_art { false } else { target_art }, def.evasive,
             p.hit_bonus, p.hit_bonus_over9,
             alias_pen, alias_over,
-            att.artillery_shooter_hit_bonus.unwrap_or(crate::combat::ARTILLERY_SHOOTER_HIT_BONUS),
-            def.artillery_target_hit_penalty.unwrap_or(crate::combat::ARTILLERY_TARGET_HIT_PENALTY),
+            art_shooter_bonus,
+            target_pen,
         )
             // B2b: the LIVE ledger's own nets — `_solo_hit_mod_info`
             // :5703-5709 adds the shooter's `_solo_spell_hit_mod` and the
@@ -900,7 +1080,35 @@ pub fn resolve_volley_leg(
             + att.feat_hit_bonus
             // Unpredictable's 4-6 half (main.gd:3180): folded into the SAME
             // sum, BEFORE the Unstoppable clamp, like the melee leg.
-            + upr_hit;
+            + upr_hit
+            // EPOCH_73_V36 — rules 3.6: a shot at an Aircraft is -N to hit,
+            // inside the Unstoppable clamp (an enemy-side negative modifier).
+            - def.aircraft_hit_penalty;
+        if v36_target_art && target_art && mod_dist_in > def.artillery_target_over_in {
+            m -= target_pen;
+            if !target_art_fired {
+                target_art_fired = true;
+                out.log.push(format!(
+                    "Artillery target: -{target_pen} to hit over {:.0}\" (most models, unmoved)",
+                    def.artillery_target_over_in
+                ));
+            }
+        }
+        aircraft_fired |= def.aircraft_hit_penalty > 0;
+        if att.artillery && v36_artillery && mod_dist_in > LONG_RANGE_IN
+            && art_shooter_fired.iter().all(|o| *o != sh.owner)
+        {
+            art_shooter_fired.push(sh.owner);
+            let over = att.artillery_shooter_over_in;
+            let line = if art_gate_ok {
+                format!("Artillery: +1 to hit (held, target over {over:.0}in)")
+            } else if !att.artillery_shooter_needs_hold || !att.held {
+                format!("Artillery: no +1 to hit, {} moved", sh.owner)
+            } else {
+                format!("Artillery: no +1 to hit, target within {over:.0}in")
+            };
+            out.log.push(line);
+        }
         // Wave 3 — the Shot Modifier family's runtime-gated members
         // (main.gd:5761-5779) ride the SAME sum: Mobile Artillery's
         // `requires_stationary` gate is the shooter's act-scope `moved`
@@ -925,11 +1133,21 @@ pub fn resolve_volley_leg(
         if im != 0 && im_fired.iter().all(|o| *o != sh.owner) {
             im_fired.push(sh.owner);
             out.log.push(format!("Indirect moved {im}: {} shoots after moving", sh.owner));
+        } else if rule_on(att.rules_epoch, EPOCH_73_V36)
+            && p.indirect
+            && att.moved_this_round
+            && im_fired.iter().all(|o| *o != sh.owner)
+        {
+            // Rules 3.6 (SHO-02): the non-application names itself (rules-must-log).
+            im_fired.push(sh.owner);
+            out.log.push(format!(
+                "Indirect: no moved penalty: {} shoots after moving", sh.owner));
         }
         if im == 0
             && p.indirect_moved_hit_penalty > 0
             && att.moved_this_round
             && att.quick_readjustment
+            && !rule_on(att.rules_epoch, EPOCH_73_V36)
             && qr_fired.iter().all(|o| *o != sh.owner)
         {
             qr_fired.push(sh.owner);
@@ -940,13 +1158,23 @@ pub fn resolve_volley_leg(
         // unconditional -1 rode this weapon's to-hit sum (the defender-side
         // alias marker, Ctx::evasive_alias).
         evasive_boost_fired |= def.evasive_alias;
+        // EPOCH_73_V36 — Unstoppable ignores only the minus from OTHER sources; the shooter's own
+        // rules' modifiers stay outside the clamp (0 below 73 = one clamp over the whole sum).
+        let art = if att.artillery { art_shooter_bonus } else { 0 };
+        let over9 = if mod_dist_in > LONG_RANGE_IN { p.hit_bonus_over9 + art } else { 0 };
+        let own = if att.v36_rules { p.hit_bonus + over9 + att.growth_hit_mod + upr_hit + ma + gp + im } else { 0 };
+        if (p.unstoppable || att.unstoppable_mark || att.unstoppable_aura) && own < 0 {
+            out.log.push(format!("Unstoppable: {} keeps its own {own} to hit", sh.owner));
+        }
+        stealth_most_fired |= def.stealth_most_models && mod_dist_in > LONG_RANGE_IN;
+        stealth_grant_fired |= def.stealth_grant && mod_dist_in > LONG_RANGE_IN;
         // EPOCH 34 UNSTOPPABLE MARK — the granted mark's CLAMP half: the
         // once-grant the mark seam leaves on the bearer (`ctx_live`'s
         // `unstoppable_mark`) counts like the weapon's own `p.unstoppable`,
         // the same grant the Regeneration split below already reads. The
         // rules-must-log line names the grant the one time the clamp actually
         // bites for it; a weapon's own flag stays silent as before.
-        if (p.unstoppable || att.unstoppable_mark || att.unstoppable_aura) && m < 0 {
+        if (p.unstoppable || att.unstoppable_mark || att.unstoppable_aura) && m - own < 0 {
             if att.unstoppable_mark {
                 out.log.push(format!(
                     "Unstoppable: {} — negative to-hit modifiers ignored (once)", sh.owner));
@@ -959,11 +1187,13 @@ pub fn resolve_volley_leg(
                 out.log.push(format!(
                     "Unstoppable: {} — negative to-hit modifiers ignored (aura)", sh.owner));
             }
-            m = 0;
+            m = own;
         }
         let (mut raw, mut target) = fold_hit(def.modifier_sum, target, m);
         let mut versatile_ap = 0;
-        if (p.versatile_attack || att.versatile_grant) && mod_dist_in > LONG_RANGE_IN {
+        if (p.versatile_attack || att.versatile_grant)
+            && (att.versatile_no_gate || mod_dist_in > LONG_RANGE_IN)
+        {
             // Wave 3 — the "Vinci Tech Boost" form (`pick_one: false`,
             // stamped only under the frozen EPOCH_6_TABLE_RULES gate): BOTH
             // arms instead of the pick. The flag rides the same stamp the
@@ -1016,8 +1246,21 @@ pub fn resolve_volley_leg(
             faces: faces.clone(),
             owner: sh.owner.into(),
         });
-        let count_target = if p.precise { fold_hit(def.modifier_sum, raw, 1).1 } else { target };
+        // AIG-G2: a weapon-borne Imprecise is Precise's mirror, the -1 read from `EPOCH_73_V36`.
+        let imprecise = att.v36_rules && p.imprecise;
+        let weapon_mod = p.precise as i64 - imprecise as i64;
+        let count_target = if weapon_mod != 0 { fold_hit(def.modifier_sum, raw, weapon_mod).1 } else { target };
+        if p.precise {
+            out.log.push(format!("Precise: +1 to hit on {}'s volley", sh.owner));
+        }
+        if imprecise {
+            out.log.push(format!("Imprecise: -1 to hit on {}'s volley", sh.owner));
+        }
         if p.hazardous {
+            let ones = faces.iter().filter(|&&f| f == 1).count() as i64;
+            if ones > 0 {
+                out.hazardous_self.push((sh.owner.to_string(), p.name.clone(), ones, p.blast.max(p.deadly).max(1)));
+            }
             out.mark("hazardous");
         }
         if p.strafing {
@@ -1051,15 +1294,30 @@ pub fn resolve_volley_leg(
             hits += sixes(&faces);
         }
         if p.surge {
+            // SHO-18 (rules 3.6): a Surge ALIAS fires only from a shot over 9".
+            let alias_fires = !p.alias_gate
+                || p.surge_alias_rule.is_empty()
+                || p.surge_over_in < 0.0
+                || mod_dist_in > LONG_RANGE_IN;
             if surge_gates {
                 // The table's own gates (main.gd:4465-4482): `surge_within_in`
                 // (Point-Blank) caps the whole bonus at or under the centre
                 // distance; a Boost adds successful unmodified 5s only PAST
                 // `surge_over_in` — melee (0.0) never qualifies.
-                if p.surge_within_in <= 0.0 || mod_dist_in <= p.surge_within_in {
+                if alias_fires && (p.surge_within_in <= 0.0 || mod_dist_in <= p.surge_within_in) {
                     hits += sixes(&faces) * p.bonus_hits_per_six.max(1);
                     if p.surge_low < 6 && mod_dist_in > p.surge_over_in {
                         hits += faces.iter().filter(|&&f| f == 5 && count_target <= 5).count() as i64;
+                    }
+                    if !p.surge_alias_rule.is_empty() && sixes(&faces) > 0 {
+                        if p.alias_gate && p.surge_over_in < 0.0 {
+                            // Rules 3.6: a plain alias pays at any range, so its line names no 9in band.
+                            out.log.push(format!("{}: bonus hits on unmodified 6s", p.surge_alias_rule));
+                        } else {
+                            out.log.push(format!(
+                                "{}: shot from over {:.0}in — bonus hits on unmodified 6s",
+                                p.surge_alias_rule, LONG_RANGE_IN));
+                        }
                     }
                 }
             } else {
@@ -1072,11 +1330,8 @@ pub fn resolve_volley_leg(
         // Block B6 — the extra-ATTACK-DIE Surge siblings, ported (see the
         // helper's own doc). Draws its own tray slot right after Surge's,
         // matching `_solo_hits`'s order.
-        hits += surge_attack_hits(p, &faces, count_target, sh.owner, tray, &mut out.rolls);
-        // Wave 2 — a granted "Primal Boost", the same low-surge form.
-        if att.surge_grant {
-            hits += surge_attack_hits(&primal_boost_grant_profile(), &faces, count_target, sh.owner, tray, &mut out.rolls);
-        }
+        // Wave 2 — a granted "Primal Boost", the same low-surge form (one group per member: `primal_extras`).
+        hits += primal_extras(p, att.surge_grant, rule_on(att.rules_epoch, EPOCH_73_V36), &faces, count_target, sh.owner, tray, &mut out);
         // EPOCH 44 SURGE MARK — the mark's once-grant ("Surge", placed by
         // `tray_vs_marks` at the attack seam, spent with the exchange) reads
         // against the marked target ONLY: +1 hit per unmodified 6, the plain
@@ -1103,7 +1358,12 @@ pub fn resolve_volley_leg(
         // (main.gd `_solo_hits`, TC-023) and the save reads the pick's own square.
         let unit_of_one = takedown_exact && p.takedown;
         if hits > 0 && p.blast > 1 {
-            hits *= p.blast.clamp(1, if unit_of_one { 1 } else { def.models.max(1) });
+            let cap = if unit_of_one { 1 } else { def.blast_models.unwrap_or(def.models).max(1) };
+            let boosted = hits * p.blast.clamp(1, cap);
+            if def.blast_models.is_some() {
+                out.log.push(blast_log(p.blast, hits, boosted, cap));
+            }
+            hits = boosted;
         }
         if hits <= 0 {
             continue; // :3210 — no hits, no save batch
@@ -1123,9 +1383,13 @@ pub fn resolve_volley_leg(
         // 0 = the base 6s-only window; the melee resolve never sets it (its
         // save batches run on fresh results), so melee never widens — no
         // pre-charge gap (the shred2 precedent).
-        out.bane_low = if p.bane_low > 1 && mod_dist_in > p.bane_over_in { p.bane_low } else { 0 };
+        // SHO-10: the re-roll entry's optional target condition, the SAME test the
+        // conditional-AP leg runs; "" on every shipped entry keeps this byte-identical.
+        out.bane_gated = !p.bane_condition.is_empty() && !cond_met(&CondAp { condition: p.bane_condition.clone(), threshold: p.bane_threshold, ..Default::default() }, &CondApTarget::of(def, p.range as f64), false, mod_dist_in, false);
+        out.bane_low = if p.bane_low > 1 && mod_dist_in > p.bane_over_in && !out.bane_gated { p.bane_low } else { 0 };
         if out.bane_low > 1 {
             bane_rule = p.bane_rule;
+            bane_why = cond_ap_why(&p.bane_condition);
         }
         let on6 = if p.on6_ap > 0 {
             p.on6_ap
@@ -1137,27 +1401,45 @@ pub fn resolve_volley_leg(
         let ap4 = if on6 > 0 { sixes(&faces).min(hits) } else { 0 };
         // Defense, in main.gd's own order: Shielded, then Guarded (over 9"),
         // then Cover — which Blast / Indirect / Ignores Cover skip (:3221).
-        let mut base = shielded_defense(def.defense, def.shielded_bonus(), def.def_floor());
+        let pierce = pierce_ignores(p, att);
+        let mut base = shielded_defense(def.defense, if pierce { 0 } else { def.shielded_bonus() }, def.def_floor());
         // Audit 2026-09-13 §2.4 — the Sturdy-kind Boost REPLACES the base
         // rule's over-9" condition ("always ... instead of only when shot or
         // charged from over 9\" away"): while one of its aliases supplied the
         // shielded half, the guarded leg's MAX reading is already on the
         // table, so the second -1 must not stack (the Fortified pair's shape
         // at :329-333).
-        base = guarded_defense(base, def.guarded && mod_dist_in > LONG_RANGE_IN && !def.sturdy_boost_gates_guarded, def.def_floor());
+        let guarded_applies = def.guarded && mod_dist_in > LONG_RANGE_IN && !def.sturdy_boost_gates_guarded;
+        base = guarded_defense(base, guarded_applies && !pierce, def.def_floor());
         shielded_alias_fired |= def.shielded && def.shielded_alias != ShieldedAlias::None;
         // Tray-exact S8: a Takedown save reads its pick's OWN square, and the pick is the one the
         // table makes for THIS profile, after the volley's earlier Takedown groups landed (it re-picks
         // per profile, main.gd:4171) — the caller answers from the groups so far.
         let td_own = unit_of_one && takedown_cover(&out.takedown_groups);
-        let save_def = if p.blast > 1 || p.indirect || p.ignores_cover {
+        // Rules 3.6 (FAB-A3): an Indirect shot lifts cover granted by sight blockers only, and the
+        // engine grants Cover terrain only — so a HELD shot keeps it too. Blast and Ignores Cover
+        // keep dropping it at every epoch (`indirect_cover_needs_hold` is stamped only from
+        // EPOCH_73_V36, so older records keep their unconditional skip).
+        let indirect_keeps_cover = p.indirect && p.indirect_cover_needs_hold;
+        let skips_cover = p.blast > 1 || p.ignores_cover || (p.indirect && !indirect_keeps_cover);
+        let save_def = if skips_cover {
             base
         } else {
-            covered_defense(base, if unit_of_one { td_own } else { def.in_cover }, def.def_floor())
+            covered_defense(base, if pierce { false } else if unit_of_one { td_own } else { def.in_cover }, def.def_floor())
         };
+        if pierce && !pierce_logged {
+            pierce_logged = true;
+            let mut ign: Vec<String> = Vec::new();
+            if def.shielded_bonus() > 0 { ign.push(format!("Shielded +{}", def.shielded_bonus())); }
+            if !skips_cover && (if unit_of_one { td_own } else { def.in_cover }) { ign.push("Cover +1".into()); }
+            if guarded_applies { ign.push("Guarded +1".into()); }
+            if def.growth_def_mod > 0 { ign.push(format!("Defensive growth +{}", def.growth_def_mod)); }
+            if def.defense_mod < 0 { ign.push(format!("Defense Buff +{}", -def.defense_mod)); }
+            if !ign.is_empty() { out.log.push(format!("Pierce: {} ignores {}", sh.owner, ign.join(", "))); }
+        }
         if unit_of_one {
             // Tray-exact S10 — `_solo_log_takedown_context`: the save the pick really rolls, and why.
-            let why = if p.blast > 1 || p.indirect || p.ignores_cover { "cover ignored" }
+            let why = if skips_cover { "cover ignored" }
                 else if td_own { "in cover of its own" } else { "no cover of its own" };
             out.log.push(format!("Takedown ({}): the pick saves on {save_def}+ ({why})", p.name));
         }
@@ -1169,17 +1451,27 @@ pub fn resolve_volley_leg(
         // carries no markers and stays silent.
         if !alias_cover_logged
             && def.in_cover
+            && skips_cover
             && p.blast <= 1
-            && (p.indirect_alias || p.ignores_cover_alias)
+            && (p.indirect_alias || p.ignores_cover_alias || !p.cover_rule.is_empty())
         {
             alias_cover_logged = true;
-            let rule = if p.ignores_cover_alias {
+            let rule = if !p.cover_rule.is_empty() {
+                p.cover_rule.as_str()
+            } else if p.ignores_cover_alias {
                 "Ignores Cover when Shooting"
             } else {
                 "Indirect when Shooting"
             };
             out.log
                 .push(format!("{rule}: {} — {}'s cover save is skipped", sh.owner, def_owner));
+        }
+        // Rules 3.6 (FAB-A3) — rules-must-log: an Indirect shot's target KEEPS its terrain cover.
+        if !indirect_cover_logged && indirect_keeps_cover && def.in_cover && p.blast <= 1 {
+            indirect_cover_logged = true;
+            out.log.push(format!(
+                "Indirect: {} — {}'s cover counts (only sight-blocker cover is ignored)",
+                sh.owner, def_owner));
         }
         // Block B7 — Piercing Growth: main.gd:4287's marker-driven AP delta,
         // shooting and melee both (`_solo_attack_groups` adds it to `prof
@@ -1221,24 +1513,69 @@ pub fn resolve_volley_leg(
         // is false here; the `ranged_over`/`ranged_over_or_charge` gates read
         // `mod_dist_in`, the NML-1152 modifier-distance split, not the plain
         // range gap.
+            let cap = CondApTarget { shooter_held: att.held, ..CondApTarget::of(def, p.range as f64) };
             if cond_ap_dice {
             for c in &p.cond_ap {
-                let d = conditional_ap_bonus(c, def.tough.max(1), def.defense, false, mod_dist_in, false);
+                let d = conditional_ap_bonus_vs(c, &cap, false, mod_dist_in, false);
                 ap += d;
                 // Rules-must-log: the wave-3 NAMED forms log their own AP
                 // (rule, unit, what changed). The generic pass's specs carry
-                // no name — old replays log nothing, byte-identical.
-                if d > 0 && !c.name.is_empty() {
-                    out.log.push(format!("{}: AP(+{}) on {}'s volley", c.name, d, sh.owner));
+                // no name — old replays log nothing, byte-identical. A rules
+                // 3.6 spelling is named at the stamp and adds its condition.
+                // SHO-20: the 3.6 Slayer gate names the Hold (or says why it
+                // was switched off); the pre-73 spelling stays silent.
+                if c.gate == "hold_or_charge" {
+                    if d > 0 {
+                        out.log.push(format!("Slayer: AP(+{}) because {} held", d, sh.owner));
+                    } else if !att.held && (att.v36_rules || mod_dist_in > c.over_in)
+                        && c.condition == "vs_tough_ge" && def.tough.max(1) >= c.threshold
+                    {
+                        out.log.push(format!("Slayer: no AP, {} moved", sh.owner));
+                    }
+                } else if d > 0 && !c.name.is_empty() {
+                    out.log.push(format!("{}: AP(+{}) on {}'s volley{}", c.name, d, sh.owner, cond_ap_why(&c.condition)));
                 }
             }
             // Wave 2 — the Slayer mark's granted conditional (epoch-gated).
             if att.slayer_grant {
-                ap += conditional_ap_bonus(&slayer_grant_cond(), def.tough.max(1), def.defense, false, mod_dist_in, false);
+                let mut spec = slayer_grant_cond();
+                if att.v36_rules {
+                    spec.gate = "hold_or_charge".to_string();
+                }
+                let d = conditional_ap_bonus_vs(&spec, &cap, false, mod_dist_in, false);
+                ap += d;
+                if att.v36_rules {
+                    if d > 0 {
+                        out.log.push(format!("Slayer: AP(+{}) because {} held", d, sh.owner));
+                    } else if !att.held && (att.v36_rules || mod_dist_in > spec.over_in) && def.tough.max(1) >= 3 {
+                        out.log.push(format!("Slayer: no AP, {} moved", sh.owner));
+                    }
+                }
             }
         }
-        let mut w = save_batch(p, def, def_owner, ap4, save_def, ap + on6, att.shred_grant, shred_alias_dice, shred_low, deadly_per_model, tray, &mut out);
-        w += save_batch(p, def, def_owner, hits - ap4, save_def, ap, att.shred_grant, shred_alias_dice, shred_low, deadly_per_model, tray, &mut out);
+        let normal = hits - ap4;
+        // SHO-18 (rules 3.6): a Shred ALIAS fires only from a shot over 9".
+        let shred_alias_fires = shred_alias_dice
+            && (!p.alias_gate || mod_dist_in > LONG_RANGE_IN);
+        if p.alias_gate && p.shred_alias && shred_alias_fires && p.shred_ones_wound_bonus > 0 {
+            let name: &str = if p.shred_ones_rule.is_empty() { "Shred" } else { p.shred_ones_rule.as_str() };
+            out.log.push(format!("{}: shot from over {:.0}in — unmodified 1s take +1 wound",
+                name, LONG_RANGE_IN));
+        }
+        // Rules 3.6 row MOR-12c: the bearer's share of the plain hits saves as
+        // its own batch at AP(+sergeant_ap), the table's band (`main.gd:8372-8387`).
+        // G4R4 C-SERGEANT-SCALE: the table stamps the share on the FULL-strength profile, before the sighted
+        // scaling, so the share is a fraction of the weapon's whole attack pool (`p.attacks`), not of the
+        // sighted dice `n` (the stamp exists only from `EPOCH_73_V36`, so below it nothing changes).
+        let sgt_hits = sergeant_hits(p, p.attacks.max(n), normal, att);
+        let mut w = save_batch(p, def, def_owner, ap4, save_def, ap + on6, att.shred_grant, shred_alias_fires, shred_low, deadly_per_model, tray, &mut out);
+        if sgt_hits > 0 {
+            out.log.push(format!(
+                "{}: {} strikes {} hit{} with AP(+{})",
+                p.sergeant_rule, sh.owner, sgt_hits, if sgt_hits == 1 { "" } else { "s" }, p.sergeant_ap));
+            w += save_batch(p, def, def_owner, sgt_hits, save_def, ap + p.sergeant_ap, att.shred_grant, shred_alias_fires, shred_low, deadly_per_model, tray, &mut out);
+        }
+        w += save_batch(p, def, def_owner, normal - sgt_hits, save_def, ap, att.shred_grant, shred_alias_fires, shred_low, deadly_per_model, tray, &mut out);
         // `_solo_ignores_regen` :6927-6933 — Bane / Rending (and Unstoppable,
         // ai_ev.gd:433) cut through Regeneration; everything else is poolable.
         // B2b: `_solo_ignores_regen`'s last line (main.gd:6941) also answers
@@ -1266,8 +1603,13 @@ pub fn resolve_volley_leg(
             || att.unstoppable_grant
             || disintegrate_regen;
         // Rules-must-log: the refusal names the rule — the table's
-        // Bane-in-Melee arm's own line (main.gd:7175-7176).
-        if disintegrate_regen && w > 0 {
+        // Bane-in-Melee arm's own line (main.gd:7175-7176). DAT-16b: from rules 3.6
+        // the line is written only when the target really has a Regeneration-family
+        // roll to skip (the pool's own `regeneration` / `regen_target` seam); below
+        // 73 the old line stays byte-identical for replay.
+        if disintegrate_regen && w > 0
+            && (!att.v36_rules || (def.regeneration && def.regen_target > 0))
+        {
             out.log.push(format!("{}: Regeneration ignored", p.regen_bypass_rule));
         }
         // EPOCH 34 UNSTOPPABLE MARK — rules-must-log, the Regeneration half:
@@ -1301,8 +1643,7 @@ pub fn resolve_volley_leg(
             out.takedown_groups.push(if ignores_regen { td } else { regen_batch(td, def, def_owner, tray, &mut out.rolls) });
             out.deadly_tally += w;
         } else if deadly_per_model && p.deadly > 0 {
-            let post = if ignores_regen { w } else { regen_batch(w, def, def_owner, tray, &mut out.rolls) };
-            out.deadly_groups.push((post, p.deadly.max(1)));
+            push_deadly_groups(&mut out, w, p.deadly.max(1), ignores_regen, def, def_owner, tray);
             out.deadly_tally += w;
         } else if ignores_regen {
             regen_proof += w;
@@ -1333,14 +1674,33 @@ pub fn resolve_volley_leg(
             def.evasive_alias_name
         ));
     }
+    if aircraft_fired {
+        out.log.push(format!("Aircraft: {def_owner} — shots at it get -{} to hit", def.aircraft_hit_penalty));
+    }
+    if stealth_most_fired {
+        out.log.push(format!("Stealth: {def_owner} — -1 to hit past 9\", most models carry it"));
+    }
+    if stealth_grant_fired {
+        out.log.push(format!("Stealth: {def_owner} — -1 to hit past 9\" (granted once)"));
+    }
     if out.bane_rerolled > 0 {
         out.log.push(format!(
-            "{bane_rule}: {def_owner} — {} successful save(s) of 5-6 re-roll",
+            "{bane_rule}: {def_owner} — {} successful save(s) of 5-6 re-roll{bane_why}",
             out.bane_rerolled
         ));
     }
     if shielded_alias_fired {
         out.log.push(shielded_alias_line(def, def_owner));
+    }
+    // MOR-17a — rules-must-log, once per volley: the gate's verdict, under the
+    // rule's name (Warding, Knightborn and Angelic Blessing are one rule).
+    if def.regen_gate_over_in > 0.0 && (regenable > 0 || out.deadly_tally > 0) {
+        let gate = def.regen_gate_over_in;
+        out.log.push(if def.regen_target > 0 {
+            format!("Warding: {def_owner} ignores wounds on 6+ (shot from over {gate:.0}in)")
+        } else {
+            format!("Warding: no 6+ ignore, {def_owner} was shot from within {gate:.0}in")
+        });
     }
     out.caused = regen_proof + regenable + out.deadly_tally;
     out.wounds = regen_proof + regen_batch(regenable, def, def_owner, tray, &mut out.rolls);
@@ -1352,6 +1712,24 @@ pub fn resolve_volley_leg(
 /// the volley tail because D1-B5's melee needs it three more times: Ravage lands
 /// at once (:6002), each Impact pool lands at once (:6337), and the strike phase
 /// pools its own (:6161).
+/// A4 (`EPOCH_72_PLAYTEST_RULES`, the table's `_solo_land_deadly_wounds` since #1914): each unsaved
+/// Deadly(X) wound is X wounds, and the Regeneration family rolls all X before the model's cap — one
+/// landing group per wound, a wound whose X are all ignored lands nothing. Below 72 (or with nothing
+/// to roll) the legacy leg: one roll on the RAW unsaved count, then ×X per model.
+fn push_deadly_groups(out: &mut ShootResult, w: i64, x: i64, ignores_regen: bool, def: &Ctx, def_owner: &str, tray: &mut Tray) {
+    if def.playtest_rules && !ignores_regen && def.regeneration && def.regen_target > 0 {
+        for _ in 0..w {
+            let post = regen_batch(x, def, def_owner, tray, &mut out.rolls);
+            if post > 0 {
+                out.deadly_groups.push((1, post));
+            }
+        }
+        return;
+    }
+    let post = if ignores_regen { w } else { regen_batch(w, def, def_owner, tray, &mut out.rolls) };
+    out.deadly_groups.push((post, x));
+}
+
 pub(crate) fn regen_batch(
     w: i64,
     def: &Ctx,
@@ -1474,13 +1852,18 @@ fn melee_hit_target(
     // read (Ctx::in_cover), inside the same Unstoppable clamp as the C2
     // bonuses above.
     m += grounded_precision_mod(att);
+    // R3-X1b (`EPOCH_73_V36`) — Precision Feat's +1 on every strike of the phase that spent the latch (stamped by sim.rs).
+    m += att.feat_hit_bonus;
     // EPOCH 34 UNSTOPPABLE MARK — the melee clamp half, the volley fold's
     // twin: the granted mark (`ctx_live`'s `unstoppable_mark`) counts like
     // the weapon's own `p.unstoppable`. The bool return carries "the GRANT
     // did the clamping" to the caller, which owns the rules-must-log line
     // (this function has no report of its own).
-    if (p.unstoppable || att.unstoppable_mark) && m < 0 {
-        return (fold_hit(def.modifier_sum, base, 0).0, att.unstoppable_mark);
+    // EPOCH_73_V36 — the volley's own-rules split, melee twin; 0 below 73 = one clamp on the sum.
+    let charge_bonus = if charging { att.melee_hit_bonus_charge } else { 0 };
+    let own = if att.v36_rules { uf_hit + att.melee_hit_bonus + charge_bonus + grounded_precision_mod(att) } else { 0 };
+    if (p.unstoppable || att.unstoppable_mark) && m - own < 0 {
+        return (fold_hit(def.modifier_sum, base, own).0, att.unstoppable_mark);
     }
     (fold_hit(def.modifier_sum, base, m).0, false)
 }
@@ -1492,8 +1875,14 @@ fn melee_hit_target(
 /// Readjustment" (Ctx::quick_readjustment, the `no_moved_penalty` opt-out).
 /// The magnitude rides the weapon static
 /// (ShootProfile::indirect_moved_hit_penalty, stamped behind the FROZEN
-/// `EPOCH_7_TABLE_RULES`); 0 = silent.
+/// `EPOCH_7_TABLE_RULES`); 0 = silent. Rules 3.6 (SHO-02, `EPOCH_73_V36`)
+/// removes the penalty: the function answers 0 and neither log line fires.
 fn indirect_moved_mod(att: &Ctx, p: &ShootProfile) -> i64 {
+    // Rules 3.6 (SHO-02): the moved penalty is gone from `EPOCH_73_V36` on —
+    // the same reading the table's `AiCombatMath.indirect_hit_modifier` takes.
+    if rule_on(att.rules_epoch, EPOCH_73_V36) {
+        return 0;
+    }
     if p.indirect
         && att.moved_this_round
         && !att.quick_readjustment
@@ -1543,6 +1932,41 @@ fn fresh_save_ones(out: &ShootResult, idx: usize) -> i64 {
         .filter(|r| r.kind == "defense")
         .map(|r| r.faces.iter().filter(|&&f| f == 1).count() as i64)
         .unwrap_or(0)
+}
+
+/// Rules 3.6 (`EPOCH_73_V36`) — one Parry event: roll min(X * carrier models, hits) dice;
+/// each 6+ cancels one hit. Shared by the strike's event and MEL-07d's follow-up event.
+/// MEL-07c-fix — the dice come from the host-plus-joined-heroes sum
+/// (`sim::parry_dice_total`, the Impact event's own source); the hand-built dice
+/// fixtures keep the old per-host read.
+fn parry_event(def: &Ctx, def_owner: &str, hits: i64, gated: bool, tray: &mut Tray, out: &mut ShootResult) -> i64 {
+    let dice = def.parry_dice_total.unwrap_or(def.parry_dice * def.models);
+    let n = if gated { dice.min(hits) } else { 0 };
+    if n <= 0 { return 0; }
+    let faces = tray.roll(n as usize);
+    let k = faces.iter().filter(|&&f| f >= 6).count() as i64;
+    out.rolls.push(Roll { kind: "parry", count: n, target: 6, faces, owner: def_owner.into() });
+    out.log.push(format!("Parry: {def_owner} rolls {n} dice and cancels {k} strike hits"));
+    k
+}
+
+/// Rules 3.6 (`EPOCH_73_V36`) — one Parry event per strike: roll min(X * carrier models,
+/// hits) dice; each 6+ cancels the highest-worth hit (its own AP plus the on-6 bonus).
+pub(crate) fn parry_strike(pending: &mut [Pending<'_>], def: &Ctx, def_owner: &str, gated: bool, tray: &mut Tray, out: &mut ShootResult) {
+    let taken: i64 = pending.iter().map(|x| x.3).sum();
+    let k = parry_event(def, def_owner, taken, gated, tray, out);
+    if k <= 0 { return; }
+    let mut cand: Vec<(f64, usize, bool)> = Vec::new();
+    for (i, t) in pending.iter().enumerate() {
+        let (_sh, p, faces, hits, _, _, mute, _) = t;
+        let sixes_hit = if *mute { 0 } else { sixes(faces).min(*hits) };
+        for j in 0..*hits { cand.push((hit_ev(p, j < sixes_hit, def), i, j < sixes_hit)); }
+    }
+    cand.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+    for &(_, i, is_six) in cand.iter().take(k as usize) {
+        pending[i].3 -= 1;
+        if let Some(pos) = if is_six { pending[i].2.iter().position(|&f| f == 6) } else { None } { pending[i].2.remove(pos); }
+    }
 }
 
 /// ONE melee strike phase on the tray — `main._solo_melee_strike_phase` :5941,
@@ -1618,7 +2042,7 @@ pub fn resolve_melee_with_tray(
 ) -> ShootResult {
     resolve_melee_leg(
         strikers, def, def_owner, charging, cond_ap_dice, shred_alias_dice,
-        false, 0.0, false, false, tray,
+        false, 0.0, false, false, false, false, false, tray,
     )
 }
 
@@ -1627,6 +2051,21 @@ pub fn resolve_melee_with_tray(
 // alias's charge leg folds on.
 #[allow(clippy::too_many_arguments)]
 pub fn resolve_melee_leg(
+    strikers: &[Shooter<'_>], def: &Ctx, def_owner: &str, charging: bool, cond_ap_dice: bool, shred_alias_dice: bool,
+    deadly_per_model: bool, charge_from_in: f64, screened_melee: bool, tray_exact: bool, hits_first: bool,
+    fatigue_mutes_sixes: bool, tally_post_regen: bool, tray: &mut Tray,
+) -> ShootResult {
+    resolve_melee_leg_wipe(
+        strikers, def, def_owner, charging, cond_ap_dice, shred_alias_dice, deadly_per_model, charge_from_in,
+        screened_melee, tray_exact, hits_first, fatigue_mutes_sixes, tally_post_regen, None, tray,
+    )
+}
+
+/// `resolve_melee_leg` plus R3-C2 (`EPOCH_73_V36`): `deadly_wipes` answers, on the finished Deadly groups, whether they
+/// already destroy the whole defender; the table lands Deadly first and the pool after, so the pool's Regeneration die is
+/// then never rolled. `None` (every caller below 73) rolls it as before.
+#[allow(clippy::too_many_arguments)]
+pub fn resolve_melee_leg_wipe(
     strikers: &[Shooter<'_>],
     def: &Ctx,
     def_owner: &str,
@@ -1637,12 +2076,31 @@ pub fn resolve_melee_leg(
     charge_from_in: f64,
     screened_melee: bool,
     tray_exact: bool,
+    // EPOCH_73_V36 — the strike rolls every hit before any save (see the chunk loop below).
+    hits_first: bool,
+    // EPOCH_73_V36 (row MEL-09) — a fatigued striker's sixes fire no rule (see `trig` below).
+    fatigue_mutes_sixes: bool,
+    // MEL-10r (`EPOCH_73_V36`) — the melee tally counts only wounds Regeneration did NOT cancel.
+    tally_post_regen: bool,
+    deadly_wipes: Option<&dyn Fn(&ShootResult) -> bool>,
     tray: &mut Tray,
 ) -> ShootResult {
     // The alias's charged leg fires on the CHARGER's strikes only — a
     // strike-back or counter phase rides 0.0, which never clears the
     // alias's `over_in` gate (the table's `charged_ok and melee` reading).
     let charge_from_in = if charging { charge_from_in } else { 0.0 };
+    // MOR-17a (rules 3.6): Warding's 6+ needs a charge from OVER its gate. A
+    // strike-back rides 0.0 — it did the charging, so the 6+ never rolls.
+    let def = &Ctx {
+        regen_target: if def.regen_gate_charge_in > 0.0
+            && charge_from_in <= def.regen_gate_charge_in
+        {
+            0
+        } else {
+            def.regen_target
+        },
+        ..*def
+    };
     let mut out = ShootResult::default();
     // Wave 3 — the Shielded-family alias's rules-must-log flag, the volley
     // fold's melee twin (Shielded is the whole melee Defense ladder here).
@@ -1688,6 +2146,23 @@ pub fn resolve_melee_leg(
         out.caused += w;
         out.wounds += regen_batch(w, def, def_owner, tray, &mut out.rolls);
     }
+    // MEL-12 (`EPOCH_73_V36`) — Regenerative Strength's banked tokens: one die
+    // per token, each 4+ a DIRECT wound (no hit roll, no save; Regeneration
+    // applies). Rolled once per round, before the strikes; the gate lives in
+    // `sim::strike_phase`, which zeroes the count and logs every skip.
+    for sh in strikers {
+        let n = sh.att.growth_wound_dice;
+        if n <= 0 {
+            continue;
+        }
+        let faces = tray.roll(n as usize);
+        let w = faces.iter().filter(|&&f| f as i64 >= 4).count() as i64;
+        out.rolls.push(Roll { kind: "attack", count: n, target: 4, faces, owner: sh.owner.into() });
+        out.log.push(format!(
+            "Regenerative Strength: {} rolls {} dice, {} wounds", sh.owner, n, w));
+        out.caused += w;
+        out.wounds += regen_batch(w, def, def_owner, tray, &mut out.rolls);
+    }
     // (3) the strikes :6060-6148. `regenable`/`regen_proof` are the PHASE's, not
     //     the member's — the table declares them before the group loop and lands
     //     them once after it (:6161).
@@ -1702,11 +2177,30 @@ pub fn resolve_melee_leg(
         if gp != 0 && gp_fired.iter().all(|(o, _)| *o != sh.owner) {
             gp_fired.push((sh.owner, gp));
         }
-        for (k, &pi) in sh.keep.iter().enumerate() {
+    }
+    // EPOCH_73_V36 — one strike is ONE hits event: pass 1 rolls every
+    // member's every profile to its hit count, pass 2 then runs each
+    // profile's saves, landing and Bloodthirsty extras in the same order.
+    // Below the gate each chunk is one profile: today's interleaved draws.
+    let order: Vec<(&Shooter<'_>, usize, usize)> = strikers.iter()
+        .flat_map(|sh| sh.keep.iter().enumerate().map(move |(k, &pi)| (sh, k, pi))).collect();
+    // Rules 3.6 (row W1.TRACE-c) — Thrust's charge leg names itself once per
+    // striking profile (arm `thrust-in-melee`). The switch is read ONCE here,
+    // never per model or per die.
+    let trace_thrust = strikers.first()
+        .is_some_and(|sh| rule_on(sh.att.rules_epoch, EPOCH_73_V36))
+        && crate::mv::plain_memo::trace_rules_on();
+    for part in order.chunks(if hits_first { order.len().max(1) } else { 1 }) {
+        let mut pending = Vec::new();
+        for &(sh, k, pi) in part {
             let p = &sh.profiles[pi];
             let n = sh.attacks[k];
             if n <= 0 {
                 continue;
+            }
+            if trace_thrust && charging && (p.thrust || sh.att.thrust_grant) {
+                crate::sim::trace_rule("thrust-in-melee", "Thrust in Melee", &format!(
+                    "{}: Thrust adds its charge bonus to {}", sh.owner, p.name));
             }
             // Wave 4 follow-up — "Takedown Strike" names itself once per
             // strike (rules-must-log, the table's own log line at
@@ -1746,7 +2240,8 @@ pub fn resolve_melee_leg(
             }
             if sh.att.versatile_latched
                 && charging
-                && charge_from_in > LONG_RANGE_IN
+                && (sh.att.versatile_no_gate
+                    || charge_from_in > crate::combat::charge_gate_in(sh.att.rules_epoch))
                 && (p.versatile_attack || sh.att.versatile_grant)
             {
                 if !sh.att.fatigued {
@@ -1762,14 +2257,42 @@ pub fn resolve_melee_leg(
                 faces: faces.clone(),
                 owner: sh.owner.into(),
             });
+            if p.hazardous {
+                let ones = faces.iter().filter(|&&f| f == 1).count() as i64;
+                if ones > 0 {
+                    out.hazardous_self.push((sh.owner.to_string(), p.name.clone(), ones, p.blast.max(p.deadly).max(1)));
+                }
+            }
+            // EPOCH_73_V36 (row MEL-09) — a fatigued striker (a Shaken strike-back
+            // counts as one) still hits on its sixes, but they fire no rule: every
+            // hit-six reader below sees `trig`, empty when muted. Saves untouched.
+            let mute = fatigue_mutes_sixes && sh.att.fatigued;
+            let trig: &[u8] = if mute { &[] } else { &faces };
+            if mute && sixes(&faces) > 0 {
+                out.log.push(fatigued_sixes_line(sh.owner, sixes(&faces)));
+            }
             // Precise scores one better than it ROLLS — `_solo_hits` :4405-4406
             // applies the +1 when counting, so the recorded target stays raw.
-            let count_target = if p.precise { fold_hit(def.modifier_sum, raw, 1).1 } else { target };
+            // AIG-G2: a weapon-borne Imprecise is Precise's mirror, the -1 read from `EPOCH_73_V36`.
+            let imprecise = sh.att.v36_rules && p.imprecise;
+            let weapon_mod = p.precise as i64 - imprecise as i64;
+            let count_target = if weapon_mod != 0 { fold_hit(def.modifier_sum, raw, weapon_mod).1 } else { target };
+            if p.precise {
+                out.log.push(format!("Precise: +1 to hit on {}'s strikes", sh.owner));
+            }
+            if imprecise {
+                out.log.push(format!("Imprecise: -1 to hit on {}'s strikes", sh.owner));
+            }
             let mut hits = faces_to_hits(&faces, count_target as u8) as i64;
-            if p.surge {
+            // SHO-18 (rules 3.6): a Surge ALIAS fires only on a charge over 6"; a non-charging
+            // strike (the strike-back) pays nothing, and every pre-73 record keeps the old read.
+            let alias_fires = !p.alias_gate
+                || p.surge_alias_rule.is_empty()
+                || charge_from_in > crate::combat::CHARGE_LONG_RANGE_IN;
+            if p.surge && alias_fires {
                 // No flag: at 0.0" this IS the table's gated read (the within
                 // cap passes, the low window below opens only for the sentinel).
-                hits += sixes(&faces) * p.bonus_hits_per_six.max(1);
+                hits += sixes(trig) * p.bonus_hits_per_six.max(1);
                 // EPOCH_50 SURGE LOW — the volley fold's twin (:996-1007): the
                 // entry's own printed low window (Great Sergeant's "5 or 6")
                 // pays its successful unmodified 5s in melee too. Melee
@@ -1779,21 +2302,22 @@ pub fn resolve_melee_leg(
                 // `EPOCH_50_SURGE_LOW` — the Boost's 9.0 stays shut here,
                 // exactly like the table (main.gd:4539 at dist 0.0).
                 if p.surge_low < 6 && p.surge_over_in < 0.0 {
-                    hits += faces.iter().filter(|&&f| f == 5 && count_target <= 5).count() as i64;
+                    hits += trig.iter().filter(|&&f| f == 5 && count_target <= 5).count() as i64;
+                }
+                if !p.surge_alias_rule.is_empty() && sixes(trig) > 0 {
+                    out.log.push(format!("{}: charged from over {:.0}in — bonus hits on unmodified 6s",
+                        p.surge_alias_rule, crate::combat::CHARGE_LONG_RANGE_IN));
                 }
             }
             // Block B6 — the extra-ATTACK-DIE Surge siblings (Predator Fighter
             // is melee-only, so this is the branch it actually fires on).
-            hits += surge_attack_hits(p, &faces, count_target, sh.owner, tray, &mut out.rolls);
-            // Wave 2 — a granted "Primal Boost", the same low-surge form.
-            if sh.att.surge_grant {
-                hits += surge_attack_hits(&primal_boost_grant_profile(), &faces, count_target, sh.owner, tray, &mut out.rolls);
-            }
+            // Wave 2 — a granted "Primal Boost", the same low-surge form (one group per member: `primal_extras`).
+            hits += primal_extras(p, sh.att.surge_grant, rule_on(sh.att.rules_epoch, EPOCH_73_V36), trig, count_target, sh.owner, tray, &mut out);
             // EPOCH 44 SURGE MARK — the strike fold's twin of the volley leg
             // above: the mark's once-grant adds +1 hit per unmodified 6
             // against the marked target only, named once when it fires.
             if sh.att.surge_mark_grant {
-                let mark_sixes = sixes(&faces);
+                let mark_sixes = sixes(trig);
                 if mark_sixes > 0 {
                     hits += mark_sixes;
                     out.log.push(format!(
@@ -1804,18 +2328,30 @@ pub fn resolve_melee_leg(
             // Furious :4477 — the unit-level rule the table stamps onto every
             // melee profile (main.gd:4343): unmodified 6s, charge only.
             if charging && sh.att.furious {
-                hits += sixes(&faces);
+                hits += sixes(trig);
             }
             if p.sergeant_attacks > 0 {
-                hits += sixes(&faces).min(p.sergeant_attacks);
+                hits += sixes(trig).min(p.sergeant_attacks);
             }
             if hits > 0 && p.blast > 1 {
-                hits *= p.blast.clamp(1, if tray_exact && p.takedown { 1 } else { def.models.max(1) });
+                let cap = if tray_exact && p.takedown { 1 } else { def.blast_models.unwrap_or(def.models).max(1) };
+                let boosted = hits * p.blast.clamp(1, cap);
+                if def.blast_models.is_some() {
+                    out.log.push(blast_log(p.blast, hits, boosted, cap));
+                }
+                hits = boosted;
             }
             if hits <= 0 {
                 continue;
             }
-            let on6 = if p.on6_ap > 0 {
+            pending.push((sh, p, faces, hits, count_target, versatile_ap, mute, n));
+        }
+        // MEL-07c — one Parry event per strike, after every hit roll and before any save.
+        parry_strike(&mut pending, def, def_owner, hits_first, tray, &mut out);
+        for (sh, p, faces, hits, count_target, versatile_ap, mute, n) in pending {
+            let on6 = if mute {
+                0
+            } else if p.on6_ap > 0 {
                 p.on6_ap
             } else if p.rending || p.destructive || sh.att.rending_grant {
                 RENDING_AP_BONUS
@@ -1823,15 +2359,22 @@ pub fn resolve_melee_leg(
                 0
             };
             let ap4 = if on6 > 0 { sixes(&faces).min(hits) } else { 0 };
-            // Melee reads no Cover (`profile_ev` keeps it on the shooting side). Guarded (over 9")
-            // DOES reach the charged side's saves at the table (main.gd:7096-7098): tray-exact
-            // applies it; without the switch the old Shielded-only read stands, flagged.
-            let over9 = def.guarded && charge_from_in > LONG_RANGE_IN && !def.sturdy_boost_gates_guarded;
-            if over9 && !tray_exact {
+            // SHO-17: the charge leg reads the 6" gate stamped on the defender's context; 0.0 below
+            // the epoch keeps the old over-9" reading (with `tray_exact`) byte-identical.
+            let gate_in = if def.guarded_charge_over_in > 0.0 { def.guarded_charge_over_in } else { LONG_RANGE_IN };
+            let over9 = def.guarded && charge_from_in > gate_in && !def.sturdy_boost_gates_guarded;
+            let applies = over9 && (tray_exact || def.guarded_charge_over_in > 0.0);
+            if over9 && !applies {
                 out.mark("guarded_over9");
             }
+            if over9 && applies && def.guarded_charge_over_in > 0.0 {
+                let rule = if def.guarded_name.is_empty() { "Guarded" } else { def.guarded_name };
+                out.log.push(format!("{rule}: {def_owner} charged from over {}in — +1 Defense", gate_in as i64));
+            }
+            let pierce = pierce_ignores(p, sh.att);
             let save_def = guarded_defense(
-                shielded_defense(def.defense, def.shielded_bonus(), def.def_floor()), over9 && tray_exact, def.def_floor());
+                shielded_defense(def.defense, if pierce { 0 } else { def.shielded_bonus() }, def.def_floor()),
+                applies && !pierce, def.def_floor());
             shielded_alias_fired |= def.shielded && def.shielded_alias != ShieldedAlias::None;
             // Block B7 — Piercing Growth's AP delta, melee half (see the
             // shooting site's own note above).
@@ -1853,18 +2396,27 @@ pub fn resolve_melee_leg(
             // `on_charge`/`vs_tough_ge` gates fire correctly here.
             if cond_ap_dice {
                 for c in &p.cond_ap {
-                    let d = conditional_ap_bonus(c, def.tough.max(1), def.defense, charging, 0.0, true);
+                    let d = conditional_ap_bonus(c, def.tough.max(1), def.defense, charging, charge_from_in, true);
                     ap += d;
                     // Rules-must-log, the melee half: only the wave-3 NAMED
                     // forms log; unnamed specs stay silent (old replays).
-                    if d > 0 && !c.name.is_empty() {
+                    // SHO-20: the 3.6 charge leg names the charge.
+                    if c.gate == "hold_or_charge" {
+                        if d > 0 {
+                            out.log.push(format!("Slayer: AP(+{}) because it charged", d));
+                        }
+                    } else if d > 0 && !c.name.is_empty() {
                         out.log.push(format!("{}: AP(+{}) on {}'s strike", c.name, d, sh.owner));
                     }
                 }
                 // Wave 2 — the Slayer mark and Piercing Assault on their
                 // granted legs, the same ladder the weapon-stamped conds ride.
                 if sh.att.slayer_grant {
-                    ap += conditional_ap_bonus(&slayer_grant_cond(), def.tough.max(1), def.defense, charging, 0.0, true);
+                    let d = conditional_ap_bonus(&slayer_grant_cond(), def.tough.max(1), def.defense, charging, 0.0, true);
+                    ap += d;
+                    if d > 0 && sh.att.v36_rules {
+                        out.log.push(format!("Slayer: AP(+{}) because it charged", d));
+                    }
                 }
                 if sh.att.pierce_assault_grant {
                     ap += conditional_ap_bonus(&piercing_assault_grant_cond(), def.tough.max(1), def.defense, charging, 0.0, true);
@@ -1874,14 +2426,35 @@ pub fn resolve_melee_leg(
             // Boost's charge half needs a pre-charge gap this port never
             // measured (see the NOT-PORTED list on resolve_melee_with_tray).
             let idx_ap = out.rolls.len();
-            let mut w = save_batch(p, def, def_owner, ap4, save_def, ap + on6, sh.att.shred_grant, shred_alias_dice, 1, deadly_per_model, tray, &mut out);
+            // Rules 3.6 row MOR-12c: the bearer's share of the plain hits, the
+            // volley leg's twin (main.gd:8372-8387).
+            // SHO-18 (rules 3.6): a Shred ALIAS pays only on a charge over 6"; a strike-back pays nothing.
+            let shred_alias_fires = shred_alias_dice
+                && (!p.alias_gate || charge_from_in > crate::combat::CHARGE_LONG_RANGE_IN);
+            if p.shred_alias && p.alias_gate && shred_alias_fires && p.shred_ones_wound_bonus > 0 {
+                let name: &str = if p.shred_ones_rule.is_empty() { "Shred" } else { p.shred_ones_rule.as_str() };
+                out.log.push(format!("{}: charged from over {:.0}in — unmodified 1s take +1 wound",
+                    name, crate::combat::CHARGE_LONG_RANGE_IN));
+            }
+            // AI-G2: the melee half of the volley's Bane-condition gate (the table's `bane_applies`, melee = true).
+            out.bane_gated = !p.bane_condition.is_empty() && !cond_met(&CondAp { condition: p.bane_condition.clone(), threshold: p.bane_threshold, ..Default::default() }, &CondApTarget::of(def, p.range as f64), false, 0.0, true);
+            out.bane_low = if p.bane_low > 1 && 0.0 > p.bane_over_in && !out.bane_gated { p.bane_low } else { 0 };
+            let normal = hits - ap4;
+            let sgt_hits = sergeant_hits(p, n, normal, sh.att);
+            let mut w = save_batch(p, def, def_owner, ap4, save_def, ap + on6, sh.att.shred_grant, shred_alias_fires, 1, deadly_per_model, tray, &mut out);
+            if sgt_hits > 0 {
+                out.log.push(format!(
+                    "{}: {} strikes {} hit{} with AP(+{})",
+                    p.sergeant_rule, sh.owner, sgt_hits, if sgt_hits == 1 { "" } else { "s" }, p.sergeant_ap));
+                w += save_batch(p, def, def_owner, sgt_hits, save_def, ap + p.sergeant_ap, sh.att.shred_grant, shred_alias_fires, 1, deadly_per_model, tray, &mut out);
+            }
             // Wave 4 follow-up — the batch's OWN blocked unmodified 1s (the
             // FIRST "defense" slot of the batch, never Bane's re-rolls: a 6
             // re-rolled into a 1 is not an unmodified 1), Bloodthirsty
             // Fighter's table counter read (main.gd:6505-6509).
             let ones_ap = fresh_save_ones(&out, idx_ap);
             let idx_rest = out.rolls.len();
-            w += save_batch(p, def, def_owner, hits - ap4, save_def, ap, sh.att.shred_grant, shred_alias_dice, 1, deadly_per_model, tray, &mut out);
+            w += save_batch(p, def, def_owner, normal - sgt_hits, save_def, ap, sh.att.shred_grant, shred_alias_fires, 1, deadly_per_model, tray, &mut out);
             let ones_rest = fresh_save_ones(&out, idx_rest);
             // Wave 4 follow-up — Bloodthirsty Fighter (aof/war_disciples):
             // each unmodified 1 the DEFENDER rolled blocking this weapon pays
@@ -1911,22 +2484,25 @@ pub fn resolve_melee_leg(
                         owner: sh.owner.into(),
                     });
                     let mut bt_hits = faces_to_hits(&bt_faces, count_target as u8) as i64;
+                    let bt_trig: &[u8] = if mute { &[] } else { &bt_faces };
                     if p.surge {
-                        bt_hits += sixes(&bt_faces) * p.bonus_hits_per_six.max(1);
+                        bt_hits += sixes(bt_trig) * p.bonus_hits_per_six.max(1);
                         // The one real gap: the table's `_solo_hits` (main.gd:7128)
                         // also pays the sentinel window's 5s on these extra dice.
                         if p.surge_low < 6 && p.surge_over_in < 0.0 {
                             out.mark("surge_gates");
                         }
                     }
-                    bt_hits += surge_attack_hits(p, &bt_faces, count_target, sh.owner, tray, &mut out.rolls);
+                    bt_hits += surge_attack_hits(p, bt_trig, count_target, sh.owner, tray, &mut out.rolls);
+                    // MEL-07d — the follow-up is its own strike: one more Parry event, same dice count.
+                    bt_hits -= parry_event(def, def_owner, bt_hits, hits_first, tray, &mut out);
                     if bt_hits > 0 {
                         // The table resolves the extras pooled with the same
                         // effective AP (main.gd:6180-6182) — one batch, no
                         // separate on-6 AP sub-batch, no Deadly special-case:
                         // they join the weapon's own batch, and on a Deadly
                         // weapon its per-model group below.
-                        let btw = save_batch(p, def, def_owner, bt_hits, save_def, ap + on6, sh.att.shred_grant, shred_alias_dice, 1, deadly_per_model, tray, &mut out);
+                        let btw = save_batch(p, def, def_owner, bt_hits, save_def, ap + on6, sh.att.shred_grant, shred_alias_fires, 1, deadly_per_model, tray, &mut out);
                         w += btw;
                     }
                 }
@@ -1957,8 +2533,11 @@ pub fn resolve_melee_leg(
                 || sh.att.unstoppable_regen_melee
                 || disintegrate_regen;
             // Rules-must-log: the refusal names the rule, the volley fold's
-            // twin (main.gd:7175-7176).
-            if disintegrate_regen && w > 0 {
+            // twin (main.gd:7175-7176). DAT-16b: same target gate as the ranged
+            // leg — from 73 only a real Regeneration roll is named.
+            if disintegrate_regen && w > 0
+                && (!sh.att.v36_rules || (def.regeneration && def.regen_target > 0))
+            {
                 out.log.push(format!("{}: Regeneration ignored", p.regen_bypass_rule));
             }
             // EPOCH 34 UNSTOPPABLE MARK — rules-must-log, the melee Regeneration
@@ -1979,8 +2558,7 @@ pub fn resolve_melee_leg(
                 out.takedown_groups.push(if ignores_regen { td } else { regen_batch(td, def, def_owner, tray, &mut out.rolls) });
                 out.deadly_tally += w;
             } else if deadly_per_model && p.deadly > 0 {
-                let post = if ignores_regen { w } else { regen_batch(w, def, def_owner, tray, &mut out.rolls) };
-                out.deadly_groups.push((post, p.deadly.max(1)));
+                push_deadly_groups(&mut out, w, p.deadly.max(1), ignores_regen, def, def_owner, tray);
                 out.deadly_tally += w;
             } else if ignores_regen {
                 regen_proof += w;
@@ -1992,6 +2570,15 @@ pub fn resolve_melee_leg(
     for (owner, hit) in &gp_fired {
         out.log.push(format!("Grounded Precision: {owner} — {hit:+} to hit (in terrain)"));
     }
+    // Rules 3.6 (`EPOCH_73_V36`) — the Precision Fighter / Precision Charge BASES name themselves per member.
+    for sh in strikers {
+        if sh.att.precision_fighter_base {
+            out.log.push(format!("Precision Fighter: {} — +1 to hit (melee)", sh.owner));
+        }
+        if sh.att.precision_charge_base && charging {
+            out.log.push(format!("Precision Charge: {} — +1 to hit (charging)", sh.owner));
+        }
+    }
     // Wave 4 — the Boost's rules-must-log line, once per melee resolve.
     if evasive_boost_fired {
         out.log.push(format!(
@@ -2002,8 +2589,26 @@ pub fn resolve_melee_leg(
     if shielded_alias_fired {
         out.log.push(shielded_alias_line(def, def_owner));
     }
+    // MOR-17a — rules-must-log, once per fight: the gate's verdict, the volley
+    // fold's melee twin (same rule name).
+    if def.regen_gate_charge_in > 0.0 && (regenable > 0 || out.deadly_tally > 0) {
+        let gate = def.regen_gate_charge_in;
+        out.log.push(if def.regen_target > 0 {
+            format!("Warding: {def_owner} ignores wounds on 6+ (charged from over {gate:.0}in)")
+        } else {
+            format!("Warding: no 6+ ignore, {def_owner} was charged from within {gate:.0}in")
+        });
+    }
     out.caused += regen_proof + regenable + out.deadly_tally;
-    out.wounds += regen_proof + regen_batch(regenable, def, def_owner, tray, &mut out.rolls);
+    // R3-C2: Deadly lands first (tray-exact order), so wounds that land on an already destroyed defender roll no ignore die.
+    let pool_lands_on_dead = tray_exact && regenable > 0 && def.regeneration && def.regen_target > 0 && deadly_wipes.is_some_and(|w| w(&out));
+    if pool_lands_on_dead {
+        out.log.push(format!("Regeneration: {def_owner} is already destroyed by the Deadly wounds - no ignore roll for the other wounds"));
+    }
+    let landed_regenable = if pool_lands_on_dead { regenable } else { regen_batch(regenable, def, def_owner, tray, &mut out.rolls) };
+    out.wounds += regen_proof + landed_regenable;
+    // MEL-10r — a wound Regeneration cancels is not TAKEN: the 73 tally counts what landed.
+    out.taken = if tally_post_regen { out.wounds + out.deadly_tally } else { out.caused };
     out
 }
 
@@ -2018,20 +2623,50 @@ pub fn resolve_melee_leg(
 /// `unwrap_or(1)` keeps every earlier replay byte-exact. Stripping the
 /// HEAVY dice first, defender-optimal (`_solo_charge_impact`
 /// :6292-6303). A fatigued charger rolls nothing at all (p.13).
+///
+/// Rules 3.6 (`EPOCH_73_V36`) — the `brace_models` carrier flag adds the
+/// single rating X once (the caller zeroes it while the defender is Fatigued).
 pub fn impact_pools(att: &Ctx, def: &Ctx) -> [(i64, i64); 2] {
     if att.fatigued {
         return [(0, 0), (0, 0)];
     }
+    // Rules 3.6 (row W1.TRACE-c) — the Counter cut names itself once per
+    // Impact event (arm `counter-in-melee`). The switch is read ONCE here.
+    let trace_counter = rule_on(att.rules_epoch, EPOCH_73_V36)
+        && crate::mv::plain_memo::trace_rules_on();
     let models = att.models.max(0);
     let heavy_raw = att.heavy_impact * models;
-    let cut = def
+    let counter_cut = def
         .counter_models
         .saturating_mul(def.counter_impact_per_model.unwrap_or(1));
+    let brace_cut = if def.brace_models > 0 {
+        def.brace_impact_per_model.unwrap_or(1)
+    } else {
+        0
+    };
+    let cut = counter_cut + brace_cut;
+    if trace_counter && counter_cut > 0 {
+        crate::sim::trace_rule("counter-in-melee", "Counter in Melee", &format!(
+            "Counter models take {counter_cut} Impact dice off"));
+    }
     let heavy_cut = cut.min(heavy_raw);
     [
         (impact_total_dice(att.impact, models, cut - heavy_cut), 0),
         (heavy_raw - heavy_cut, HEAVY_IMPACT_AP),
     ]
+}
+
+/// Rules 3.6 (`EPOCH_73_V36`) — Parry's cancellation: every face of 6 or more
+/// cancels one hit, the HEAVY pool first (the hits carrying AP are worth more),
+/// then the plain pool. `pools` is `impact_pools`'s order: [plain, heavy].
+pub fn parry_cancel(faces: &[u8], pools: [(i64, i64); 2]) -> [(i64, i64); 2] {
+    let mut left = faces.iter().filter(|&&f| f >= 6).count() as i64;
+    let mut out = pools;
+    let heavy = left.min(out[1].0);
+    out[1].0 -= heavy;
+    left -= heavy;
+    out[0].0 -= left.min(out[0].0);
+    out
 }
 
 /// ONE Impact pool on the tray: the hit roll at 2+, then ONE save batch (no
@@ -2052,6 +2687,18 @@ fn takedown_pick_line(p: &ShootProfile, def_owner: &str) -> String {
     format!("{rule} ({}): targets the most valuable model in {def_owner} — resolved as a unit of [1]", p.name)
 }
 
+/// ONE Impact pool's hit roll — the `attack` slot `resolve_impact_pool_at`
+/// records, split out so a Parry event can roll every pool's hits before any
+/// save. Returns the recorded roll and its hit count.
+pub fn impact_hit_roll(dice: i64, att_owner: &str, tray: &mut Tray) -> (Roll, i64) {
+    let faces = tray.roll(dice as usize);
+    let hits = faces_to_hits(&faces, IMPACT_HIT_TARGET as u8) as i64;
+    (
+        Roll { kind: "attack", count: dice, target: IMPACT_HIT_TARGET, faces, owner: att_owner.into() },
+        hits,
+    )
+}
+
 pub fn resolve_impact_pool_with_tray(
     dice: i64,
     ap: i64,
@@ -2061,6 +2708,51 @@ pub fn resolve_impact_pool_with_tray(
     tray: &mut Tray,
 ) -> ShootResult {
     resolve_impact_pool_at(dice, ap, att_owner, def, def_owner, None, tray)
+}
+
+/// ONE Impact pool's save batch once its hits are known — the tail of
+/// `resolve_impact_pool_at`. A Parry event calls this per pool after its
+/// cancellation, in the pools' own order.
+pub fn impact_saves_with_tray(
+    hits: i64, ap: i64, def: &Ctx, def_owner: &str, charge: Option<(f64, bool)>, tray: &mut Tray,
+) -> ShootResult {
+    let mut out = ShootResult::default();
+    if hits <= 0 { return out; }
+    // SHO-17 — the 6" gate off the defender's context; 0.0 below the epoch keeps the old read.
+    let gate_in = if def.guarded_charge_over_in > 0.0 { def.guarded_charge_over_in } else { LONG_RANGE_IN };
+    let (over9, epoch_gate) = match charge {
+        None => (def.guarded, false),
+        Some((gap_in, _)) => {
+            let over = def.guarded && gap_in > gate_in && !def.sturdy_boost_gates_guarded;
+            (over, over && def.guarded_charge_over_in > 0.0)
+        }
+    };
+    let exact = over9 && (matches!(charge, Some((_, true))) || epoch_gate);
+    if over9 && !exact { out.mark("guarded_over9"); }
+    if epoch_gate {
+        let rule = if def.guarded_name.is_empty() { "Guarded" } else { def.guarded_name };
+        out.log.push(format!("{rule}: {def_owner} charged from over {}in — +1 Defense", gate_in as i64));
+    }
+    let bare = ShootProfile { ap, ..Default::default() };
+    let sd = guarded_defense(shielded_defense(def.defense, def.shielded_bonus(), def.def_floor()), exact, def.def_floor());
+    let w = save_batch(&bare, def, def_owner, hits, sd, ap, false, false, 1, false, tray, &mut out);
+    out.caused = w;
+    // MOR-17a (rules 3.6): Warding's 6+ needs a charge from OVER its gate. A
+    // charge from the gate or closer folds nothing — the GD side's
+    // `_solo_land_wounds` gate, mirrored here. `None` keeps the old blanket read.
+    let regen_def = &Ctx {
+        regen_target: match charge {
+            Some((gap_in, _))
+                if def.regen_gate_charge_in > 0.0 && gap_in <= def.regen_gate_charge_in =>
+            {
+                0
+            }
+            _ => def.regen_target,
+        },
+        ..*def
+    };
+    out.wounds = regen_batch(w, regen_def, def_owner, tray, &mut out.rolls);
+    out
 }
 
 /// `resolve_impact_pool_with_tray` knowing the charge: `charge` = (the pre-charge gap in inches,
@@ -2080,33 +2772,12 @@ pub fn resolve_impact_pool_at(
     if dice <= 0 {
         return out;
     }
-    let over9 = match charge {
-        None => def.guarded,
-        Some((gap_in, _)) => def.guarded && gap_in > LONG_RANGE_IN && !def.sturdy_boost_gates_guarded,
-    };
-    let exact = over9 && matches!(charge, Some((_, true)));
-    if over9 && !exact {
-        out.mark("guarded_over9");
-    }
-    let faces = tray.roll(dice as usize);
-    let hits = faces_to_hits(&faces, IMPACT_HIT_TARGET as u8) as i64;
-    out.rolls.push(Roll {
-        kind: "attack",
-        count: dice,
-        target: IMPACT_HIT_TARGET,
-        faces,
-        owner: att_owner.into(),
-    });
+    let (roll, hits) = impact_hit_roll(dice, att_owner, tray);
+    out.rolls.push(roll);
     if hits <= 0 {
         return out;
     }
-    // "Impact is not a weapon": no Deadly, no Bane, no Shred — a bare profile
-    // carrying only the pool's AP, exactly as :6325 builds it.
-    let bare = ShootProfile { ap, ..Default::default() };
-    let sd = guarded_defense(shielded_defense(def.defense, def.shielded_bonus(), def.def_floor()), exact, def.def_floor());
-    let w = save_batch(&bare, def, def_owner, hits, sd, ap, false, false, 1, false, tray, &mut out);
-    out.caused = w;
-    out.wounds = regen_batch(w, def, def_owner, tray, &mut out.rolls);
+    out.wounds = out.absorb(impact_saves_with_tray(hits, ap, def, def_owner, charge, tray));
     out
 }
 

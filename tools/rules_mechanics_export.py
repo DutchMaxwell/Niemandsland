@@ -69,7 +69,7 @@ PRIMITIVE_PARAMS = {
     "Stealth": {"hit_penalty": 1, "over_in": 9.0},
     "Evasive": {"hit_penalty": 1},
     "Shielded": {"defense_bonus": 1},
-    "Artillery": {"shooter_hit_bonus": 1, "target_hit_penalty": 2, "over_in": 9.0, "hold_only": True},
+    "Artillery": {"shooter_hit_bonus": 1, "target_hit_penalty": 2, "target_hit_penalty_v36": 1, "target_over_in": 12.0, "over_in": 9.0, "shooter_over_in": 12.0, "shooter_requires_hold": True, "hold_only": True},
     "Immobile": {"hold_only": True},
     "Regeneration": {"ignore_target": 5},
     # Reanimation (army-book): one die per missing model/wound at activation, each 5+ restores one.
@@ -404,6 +404,11 @@ def params_for(system: str, name: str, primitive: str, mech_params: dict | None 
         params = dict(PRIMITIVE_PARAMS.get(primitive, {}))
     if name in ("Rapid Rush", "Rapid Rush Aura"):
         params["charge_mod"] = 0
+    # A1 (play test 29.10.2026): the army-book Lacerate only makes the target re-roll Defense 6s; it
+    # never ignores Regeneration. The primitive's other names ("Ignores Regeneration", the Unstoppable
+    # scopes) keep the bypass default above.
+    if name == "Lacerate" and primitive == "Lacerate":
+        params["bypass_regen"] = False
     return params
 
 

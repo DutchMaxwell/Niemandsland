@@ -415,7 +415,7 @@ func test_a_crowded_edge_places_what_fits_and_forfeits_the_rest_with_a_line() ->
 	var text := _log_text()
 	if copy == null:
 		# Not one model fit anywhere: then the promise must be KEPT for a later round, out loud.
-		assert_str(text).contains("no free spot within 12\"")
+		assert_str(text).contains("no free spot within 9\"")
 		assert_int(SoloController.reinforcement_due_round(u)).is_greater(0) \
 			.override_failure_message("the promise evaporated instead of waiting for a freer round")
 	else:

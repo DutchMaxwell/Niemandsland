@@ -87,6 +87,11 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 logger = logging.getLogger("relay")
 
 
+def _remote_ip(websocket) -> str:
+    """The transport-level source address of a socket ("unknown" if the transport has none)."""
+    return websocket.remote_address[0] if websocket.remote_address else "unknown"
+
+
 def _lifetime_bucket(seconds: float) -> str:
     """Classify a room's total lifetime into a coarse duration bucket (see ROOM_LIFETIME_BUCKETS)."""
     minutes = seconds / 60.0
@@ -279,9 +284,11 @@ class RelayServer:
     def __init__(self):
         self.rooms: dict[str, Room] = {}
         self.connections: dict[ServerConnection, Peer] = {}
-        self.ip_connection_counts: dict[str, int] = {}
         self.stats = Stats(os.environ.get("RELAY_STATS_PATH", ""))
         self._closing: set = set()  # background closes of taken-over sockets (held so they are not GC'd)
+        # Every accepted, still-open socket. The per-IP admission check counts these by their transport
+        # address; a socket holds its slot until it closes.
+        self._open_sockets: set = set()
 
     def generate_room_code(self) -> str:
         """Generate a cryptographically random room code.
@@ -299,19 +306,24 @@ class RelayServer:
 
     async def handle_connection(self, websocket: ServerConnection) -> None:
         """Main handler for a new WebSocket connection."""
-        ip = websocket.remote_address[0] if websocket.remote_address else "unknown"
+        ip = _remote_ip(websocket)
 
-        # Check connection limit per IP
-        current_count = self.ip_connection_counts.get(ip, 0)
+        # Check connection limit per IP: count this IP's open sockets.
+        current_count = sum(1 for ws in self._open_sockets if _remote_ip(ws) == ip)
         if current_count >= MAX_CONNECTIONS_PER_IP:
             await websocket.close(4429, "Too many connections from this IP")
             return
 
-        self.ip_connection_counts[ip] = current_count + 1
+        self._open_sockets.add(websocket)
+        pre_join_timestamps: list = []  # rate window for frames sent before the socket owns a Peer
 
         try:
             async for message in websocket:
                 peer = self.connections.get(websocket)
+                if peer is None and not self._within_rate(pre_join_timestamps):
+                    logger.warning("Rate limit exceeded before joining a room")
+                    await websocket.close(4429, "Rate limit exceeded")
+                    break
 
                 if isinstance(message, str):
                     # JSON control message
@@ -386,7 +398,6 @@ class RelayServer:
             if peer is None:
                 await websocket.send(json.dumps({"type": "error", "reason": "no_data"}))
                 return
-            self.ip_connection_counts.pop(ip, None)
             for existing_peer in self.connections.values():
                 if existing_peer.ip_address == ip:
                     existing_peer.ip_address = ""
@@ -480,29 +491,23 @@ class RelayServer:
             await self._send_error(websocket, "Room not found")
             return
 
-        # Rehost: the host dropped but the room was preserved (HOST_RECONNECT.md). A room created by a
-        # token-bearing host (0.3.6.1+) lets ONLY the matching token reclaim peer_id 1 — a guest
-        # reconnecting during the host's absence must NOT seize the host slot (that demoted the real
-        # host to a guest and orphaned the authoritative state = the live-game async); a lingering
-        # half-open old peer-1 socket is evicted so the real host reclaims at once. A LEGACY room with
-        # no host_token (a 0.3.6.0 host that never sent a token on create) falls back to the old
-        # "first joiner reclaims the free slot 1" behaviour, so deploying this relay never breaks
-        # in-flight 0.3.6.0 sessions (cross-version play is already blocked by the version handshake).
+        # Rehost: the host dropped but the room was preserved (HOST_RECONNECT.md). ONLY the token the
+        # room was created with reclaims peer_id 1, so the host seat stays with the real host (a room
+        # created without a token has no reclaimable host seat); a lingering half-open old peer-1
+        # socket is evicted so the real host reclaims at once.
         is_token_host = bool(room.host_token) and token == room.host_token
-        is_legacy_first_joiner = not room.host_token and 1 not in room.peers
-        if room.host_disconnected_at > 0.0 and (is_token_host or is_legacy_first_joiner):
+        if room.host_disconnected_at > 0.0 and is_token_host:
             room.host_disconnected_at = 0.0
-            if is_token_host:
-                # Evict any lingering old peer-1 socket (half-open drop) so the real host reclaims now.
-                old_host = room.peers.pop(1, None)
-                if old_host is not None:
-                    self.connections.pop(old_host.websocket, None)
-                    if old_host.writer_task is not None:
-                        old_host.writer_task.cancel()
-                    try:
-                        await old_host.websocket.close(4000, "Replaced by host reconnect")
-                    except websockets.exceptions.ConnectionClosed:
-                        pass
+            # Evict any lingering old peer-1 socket (half-open drop) so the real host reclaims now.
+            old_host = room.peers.pop(1, None)
+            if old_host is not None:
+                self.connections.pop(old_host.websocket, None)
+                if old_host.writer_task is not None:
+                    old_host.writer_task.cancel()
+                try:
+                    await old_host.websocket.close(4000, "Replaced by host reconnect")
+                except websockets.exceptions.ConnectionClosed:
+                    pass
             peer = Peer(websocket=websocket, peer_id=1, room_code=code, ip_address=ip, token=token)
             room.peers[1] = peer
             self.connections[websocket] = peer
@@ -772,26 +777,29 @@ class RelayServer:
 
         Returns True if the message is allowed, False if rate limited.
         """
-        now = time.monotonic()
-        # Remove timestamps older than 1 second
-        peer.message_timestamps = [
-            t for t in peer.message_timestamps if now - t < 1.0
-        ]
-        if len(peer.message_timestamps) >= RATE_LIMIT_MESSAGES_PER_SECOND:
+        if not self._within_rate(peer.message_timestamps):
             logger.warning("Rate limit exceeded for peer %d", peer.peer_id)
             return False
-        peer.message_timestamps.append(now)
+        return True
+
+    @staticmethod
+    def _within_rate(timestamps: list) -> bool:
+        """Sliding one-second window over `timestamps` (pruned and appended in place).
+
+        Returns True and records the message if it is allowed, False if the window is full.
+        """
+        now = time.monotonic()
+        timestamps[:] = [t for t in timestamps if now - t < 1.0]
+        if len(timestamps) >= RATE_LIMIT_MESSAGES_PER_SECOND:
+            return False
+        timestamps.append(now)
         return True
 
     async def _remove_connection(
         self, websocket: ServerConnection, ip: str
     ) -> None:
         """Clean up when a connection is closed."""
-        # Decrement IP count
-        if ip in self.ip_connection_counts:
-            self.ip_connection_counts[ip] -= 1
-            if self.ip_connection_counts[ip] <= 0:
-                del self.ip_connection_counts[ip]
+        self._open_sockets.discard(websocket)
 
         peer = self.connections.pop(websocket, None)
         if not peer:

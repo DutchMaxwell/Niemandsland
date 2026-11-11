@@ -251,6 +251,10 @@ pub struct Knobs {
     /// absent key means the corpus predates the port, so it defaults OFF.
     #[serde(default)]
     pub dangerous_end_morale: bool,
+    /// G4R5 R1 F-DANG-TAIL (`EPOCH_73_V36`) - REPLAY GATES ONLY: the unit's act-start `[alive, wounds]` (morale terms)
+    /// of an activation whose Dangerous test the gate cut. In-game play never sets it (`knobs_of` has no key). Default None.
+    #[serde(default)]
+    pub dangerous_replay: Option<(i64, i64)>,
     /// aifix E1 — the imagined next-round opener is the side that finished
     /// activating first (GF p.7), not the smaller head count. Research knob
     /// for the A/B, default OFF (the AI's imagination, not the referee).
@@ -830,7 +834,20 @@ pub const EPOCH_70_TRAY_EXACT: u32 = 70;
 /// reads it. Records stamped 66-70 were recorded while that writer was missing and replay byte-exact
 /// with the legacy bearer-side once-grant. Every call site reads THIS constant, not `71`.
 pub const EPOCH_71_RAPID_CHARGE_MARK: u32 = 71;
-pub const CURRENT_RULES_EPOCH: u32 = 71;
+/// The 29.10.2026 play-test fixes (A1/A2/A4), the table's #1911/#1912/#1914 in the core and its
+/// GDScript sim twins: from this epoch (A1) a printed Lacerate keeps the defender's Regeneration
+/// roll (only Bane bypasses it), (A2) wounds that leave a unit at half strength or less trigger
+/// the shooting morale test without a lost model, and (A4) a Deadly(X) wound against the
+/// Regeneration family rolls all X dice before the model's cap (the EV prices the same). Below it
+/// every record replays byte-exact. Every call site reads THIS constant, not `72`.
+pub const EPOCH_72_PLAYTEST_RULES: u32 = 72;
+/// The rules 3.6 wave (release 0.3.15, D-EPOCH): ONE epoch for the whole wave instead of one per
+/// step. Every 3.6 behaviour change in the core and its GDScript twins gates on THIS constant, and
+/// nobody bumps again inside the wave. Records stamped 72 or below replay with every 3.6 gate off.
+/// Corpus recordings from main are frozen from this bump until the release tag, so no corpus mixes
+/// half-ported 3.6 rules under one stamp. Every call site reads THIS constant, not `73`.
+pub const EPOCH_73_V36: u32 = 73;
+pub const CURRENT_RULES_EPOCH: u32 = 73;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -1597,6 +1614,7 @@ impl Default for Knobs {
             dangerous: true,
             engage_fold: false,
             dangerous_end_morale: false,
+            dangerous_replay: None,
             opener_by_finish: false,
             no_end_threat: false,
             fire_in_range_only: false,
@@ -2166,7 +2184,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 71, "the live epoch is EPOCH_71_RAPID_CHARGE_MARK");
+        assert_eq!(CURRENT_RULES_EPOCH, 73, "the live epoch is EPOCH_73_V36");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -2176,11 +2194,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":71}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":73}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 71"
+            "a fresh play_game() now stamps the bumped epoch, 73"
         );
     }
 

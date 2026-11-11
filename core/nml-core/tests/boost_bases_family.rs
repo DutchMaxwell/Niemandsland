@@ -86,8 +86,8 @@ fn forms_with<'a>(us: &'a UnitStatic, cond: &str) -> Vec<&'a CondAp> {
 /// conditional legs (never stacks), while without the Boost those legs stamp
 /// exactly as the piercehunt wave shipped them.
 #[test]
-fn havocbound_boost_stamps_the_always_leg_from_epoch_6() {
-    let on = build_at("gf", "havoc_brothers", &["Havocbound", "Havocbound Boost"], 6);
+fn enhanced_havocbound_stamps_the_always_leg_from_epoch_6() {
+    let on = build_at("gf", "havoc_brothers", &["Havocbound", "Enhanced Havocbound"], 6);
     let always = forms_with(&on, "always");
     assert_eq!(
         always.len(),
@@ -95,7 +95,7 @@ fn havocbound_boost_stamps_the_always_leg_from_epoch_6() {
         "epoch 6: the always leg on both stamped profiles (RED before the fix)"
     );
     assert_eq!(always[0].ap_bonus, 1, "epoch 6: AP(+1)");
-    assert_eq!(always[0].name, "Havocbound Boost", "the named form logs itself");
+    assert_eq!(always[0].name, "Enhanced Havocbound", "the named form logs itself");
     assert!(
         forms_with(&on, "on_charge").is_empty(),
         "the Boost replaces the charge leg, never stacks"
@@ -105,7 +105,7 @@ fn havocbound_boost_stamps_the_always_leg_from_epoch_6() {
         "the Boost replaces the ranged leg, never stacks"
     );
 
-    let off = build_at("gf", "havoc_brothers", &["Havocbound", "Havocbound Boost"], 5);
+    let off = build_at("gf", "havoc_brothers", &["Havocbound", "Enhanced Havocbound"], 5);
     assert!(
         forms_with(&off, "always").is_empty(),
         "epoch 5: pre-port records stay inert (RED before the fix)"
@@ -129,8 +129,8 @@ fn havocbound_boost_stamps_the_always_leg_from_epoch_6() {
 /// itself is a wave-3 spelling — an epoch-5 record never banes), and the
 /// base-only carrier keeps the 6s-only window either way.
 #[test]
-fn mischievous_boost_widens_the_bane_window_over_nine_inches_at_epoch_6() {
-    let us = build_at("gf", "goblin_reclaimers", &["Mischievous", "Mischievous Boost"], 6);
+fn enhanced_mischievous_widens_the_bane_window_over_nine_inches_at_epoch_6() {
+    let us = build_at("gf", "goblin_reclaimers", &["Mischievous", "Enhanced Mischievous"], 6);
     let p = [us.shoot[0].clone()];
     let att = Ctx { quality: 4, ..Default::default() };
     let def = Ctx { defense: 5, models: 1, tough: 1, ..Default::default() };
@@ -152,7 +152,7 @@ fn mischievous_boost_widens_the_bane_window_over_nine_inches_at_epoch_6() {
         "epoch 6, 12\": every successful 5-6 re-rolls (the widened window)"
     );
     assert!(
-        on.log.iter().any(|l| l.contains("Mischievous Boost")),
+        on.log.iter().any(|l| l.contains("Enhanced Mischievous")),
         "rules-must-log: the widened window names itself"
     );
 
@@ -167,7 +167,7 @@ fn mischievous_boost_widens_the_bane_window_over_nine_inches_at_epoch_6() {
     // Epoch 5: the record predates the wave — the base 6s-only window,
     // byte-exact ("Mischievous" itself baned since the bane wave; only the
     // WIDENED window is epoch-6 born).
-    let us5 = build_at("gf", "goblin_reclaimers", &["Mischievous", "Mischievous Boost"], 5);
+    let us5 = build_at("gf", "goblin_reclaimers", &["Mischievous", "Enhanced Mischievous"], 5);
     let p5 = [us5.shoot[0].clone()];
     let strikers5 = [Shooter { profiles: &p5, keep: &[0], attacks: &[64], att: &att, owner: "att" }];
     let mut t5 = Tray::seeded(27);
@@ -180,7 +180,7 @@ fn mischievous_boost_widens_the_bane_window_over_nine_inches_at_epoch_6() {
         "epoch 5: the base 6s-only window, byte-exact"
     );
     assert!(
-        !off.log.iter().any(|l| l.contains("Mischievous Boost")),
+        !off.log.iter().any(|l| l.contains("Enhanced Mischievous")),
         "epoch 5: the widened window is not born yet"
     );
 
@@ -198,7 +198,7 @@ fn mischievous_boost_widens_the_bane_window_over_nine_inches_at_epoch_6() {
         "no Boost: only the 6s re-roll, the base window"
     );
     assert!(
-        !without.log.iter().any(|l| l.contains("Mischievous Boost")),
+        !without.log.iter().any(|l| l.contains("Enhanced Mischievous")),
         "no widened window fired, nothing logs"
     );
 }
@@ -212,8 +212,8 @@ fn mischievous_boost_widens_the_bane_window_over_nine_inches_at_epoch_6() {
 /// volley's to-hit target shows the -1 inside 9" with the rules-must-log
 /// line.
 #[test]
-fn machine_fog_boost_makes_the_minus_one_unconditional_at_epoch_6() {
-    let on = build_at("gf", "machine_cults", &["Machine-Fog", "Machine-Fog Boost"], 6);
+fn enhanced_machine_fog_makes_the_minus_one_unconditional_at_epoch_6() {
+    let on = build_at("gf", "machine_cults", &["Machine-Fog", "Enhanced Machine-Fog"], 6);
     assert!(
         on.ctx.evasive,
         "epoch 6: the Boost folds into the evasive flag (RED before the fix)"
@@ -223,7 +223,7 @@ fn machine_fog_boost_makes_the_minus_one_unconditional_at_epoch_6() {
         "the base entry's conditional alias leg stands down (never stacks)"
     );
 
-    let off = build_at("gf", "machine_cults", &["Machine-Fog", "Machine-Fog Boost"], 5);
+    let off = build_at("gf", "machine_cults", &["Machine-Fog", "Enhanced Machine-Fog"], 5);
     assert!(!off.ctx.evasive, "epoch 5: pre-port records stay inert");
     assert_eq!(
         off.ctx.stealth_alias_penalty, 1,
@@ -243,7 +243,7 @@ fn machine_fog_boost_makes_the_minus_one_unconditional_at_epoch_6() {
         "epoch 6, 6\": the always -1 (4+ minus 1 = 5+) (RED before the fix)"
     );
     assert!(
-        shot.log.iter().any(|l| l.contains("Machine-Fog Boost")),
+        shot.log.iter().any(|l| l.contains("Enhanced Machine-Fog")),
         "rules-must-log: the Boost names itself at the volley seam"
     );
 
@@ -260,7 +260,7 @@ fn machine_fog_boost_makes_the_minus_one_unconditional_at_epoch_6() {
         "without the Boost the conditional alias stays shut inside 9\""
     );
     assert!(
-        !base_shot.log.iter().any(|l| l.contains("Machine-Fog Boost")),
+        !base_shot.log.iter().any(|l| l.contains("Enhanced Machine-Fog")),
         "nothing fired, nothing logs"
     );
 }
@@ -279,8 +279,8 @@ fn machine_fog_boost_makes_the_minus_one_unconditional_at_epoch_6() {
 /// constant once the strafing leg's name lands, per the wave protocol.
 /// The base "Scrapper" carrier keeps the 6s-only window either way.
 #[test]
-fn scrapper_boost_widens_the_bane_window_over_nine_inches_at_epoch_30() {
-    let us = build_at("gf", "jackals", &["Scrapper", "Scrapper Boost"], EPOCH_30_SCRAPPER_BOOST);
+fn enhanced_scrapper_widens_the_bane_window_over_nine_inches_at_epoch_30() {
+    let us = build_at("gf", "jackals", &["Scrapper", "Enhanced Scrapper"], EPOCH_30_SCRAPPER_BOOST);
     let p = [us.shoot[0].clone()];
     let att = Ctx { quality: 4, ..Default::default() };
     let def = Ctx { defense: 5, models: 1, tough: 1, ..Default::default() };
@@ -303,7 +303,7 @@ fn scrapper_boost_widens_the_bane_window_over_nine_inches_at_epoch_30() {
         "epoch 30, 12\": every successful 5-6 re-rolls (the widened window, RED before the fix)"
     );
     assert!(
-        on.log.iter().any(|l| l.contains("Scrapper Boost")),
+        on.log.iter().any(|l| l.contains("Enhanced Scrapper")),
         "rules-must-log: the widened window names itself (RED before the fix)"
     );
 
@@ -318,7 +318,7 @@ fn scrapper_boost_widens_the_bane_window_over_nine_inches_at_epoch_30() {
     // The old leg — the epoch immediately below the bump: the record predates
     // the wave, the base 6s-only window, byte-exact ("Scrapper" itself baned
     // since the bane wave; only the WIDENED window is epoch-30 born).
-    let us_old = build_at("gf", "jackals", &["Scrapper", "Scrapper Boost"], EPOCH_27_TERRAIN_DEBUFF);
+    let us_old = build_at("gf", "jackals", &["Scrapper", "Enhanced Scrapper"], EPOCH_27_TERRAIN_DEBUFF);
     let p_old = [us_old.shoot[0].clone()];
     let strikers_old = [Shooter { profiles: &p_old, keep: &[0], attacks: &[64], att: &att, owner: "att" }];
     let mut t_old = Tray::seeded(27);
@@ -331,7 +331,7 @@ fn scrapper_boost_widens_the_bane_window_over_nine_inches_at_epoch_30() {
         "below the bump: the base 6s-only window, byte-exact"
     );
     assert!(
-        !off.log.iter().any(|l| l.contains("Scrapper Boost")),
+        !off.log.iter().any(|l| l.contains("Enhanced Scrapper")),
         "below the bump: the widened window is not born yet"
     );
 
@@ -349,7 +349,7 @@ fn scrapper_boost_widens_the_bane_window_over_nine_inches_at_epoch_30() {
         "no Boost: only the 6s re-roll, the base window"
     );
     assert!(
-        !without.log.iter().any(|l| l.contains("Scrapper Boost")),
+        !without.log.iter().any(|l| l.contains("Enhanced Scrapper")),
         "no widened window fired, nothing logs"
     );
 }

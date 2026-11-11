@@ -1,5 +1,5 @@
 extends GdUnitTestSuite
-## Plan 3.3a (Q4 Road 2, konrad 12.10.): the online turn token, LOCAL gate.
+## Plan 3.3a (Q4 Road 2, lead 12.10.): the online turn token, LOCAL gate.
 ##
 ## In a room the two players agreed on (3.0) with the engine on (3.1) the turn alternates one-for-one
 ## (Q4 Road 2), but the refusal is LOCAL: the acting player's own machine applies the hotseat gate

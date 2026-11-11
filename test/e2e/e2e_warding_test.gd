@@ -4,9 +4,11 @@ const Boot := preload("res://test/e2e/e2e_boot.gd")
 var _runner: GdUnitSceneRunner
 var _main: Node
 var _roots: Array
+var _epoch0: int
 
 
 func before_test() -> void:
+	_epoch0 = AiActRecorder.rules_epoch
 	Boot.arm_harness_mode()
 	_roots = Boot.root_children(get_tree())
 	_runner = scene_runner(Boot.MAIN_SCENE)
@@ -19,6 +21,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	AiActRecorder.rules_epoch = _epoch0   # statics leak across gdUnit tests — restore
 	Boot.free_stray_root_nodes(get_tree(), _roots)
 	_main = null
 	_runner = null
@@ -46,10 +49,13 @@ func test_warding_ev_uses_normal_and_spell_ignore_targets() -> void:
 		assert_int(ctx["regen_target"]).is_equal(6)
 		assert_float(AiEv.profile_ev({"range": 24, "attacks": 12, "ap": 0}, {"quality": 4}, ctx, 12.0, false)) \
 			.is_equal_approx(2.5, 0.0001)
-		assert_float(AiSpell.spell_damage_ev(6, ctx)).is_equal_approx(1.5, 0.0001)
+		# MOR-17a: the shared rule's own 3.6 spell leg is 2+ from 73 (6 hits -> 3 unsaved, 1/6 kept).
+		assert_float(AiSpell.spell_damage_ev(6, ctx)).is_equal_approx(0.5, 0.0001)
 
 
-func test_warding_requires_all_models_and_keeps_the_best_target_for_each_source() -> void:
+## Below the rules 3.6 epoch Warding needs every model, and plain Regeneration reads the host alone.
+func test_warding_requires_all_models_and_keeps_the_best_target_for_each_source_at_epoch_72() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
 	var unit := _unit(["Warding"], "gf", "knight_brothers")
 	unit.unit_properties["defense"] = 4
 	var hero := _unit([], "gf", "knight_brothers")
@@ -62,12 +68,29 @@ func test_warding_requires_all_models_and_keeps_the_best_target_for_each_source(
 	assert_float(AiSpell.spell_damage_ev(6, ctx)).is_equal_approx(1.5, 0.0001)
 
 
+## Rules 3.6 (row MOR-02, ruling D-MOST): Warding counts most models, a joined hero being one model. One
+## Warding model with a hero without it is an exact half (off); three with the same hero are 3 of 4 (on).
+func test_warding_counts_most_models_at_epoch_73() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	var unit := _unit(["Warding"], "gf", "knight_brothers")
+	unit.unit_properties["defense"] = 4
+	unit.unit_properties["attached_heroes"] = [_unit([], "gf", "knight_brothers")]
+	assert_int(AiEv.ctx_for(unit)["regen_target"]).is_equal(0)
+	for _i in 2:
+		var model := ModelInstance.new()
+		model.is_alive = true
+		unit.models.append(model)
+	assert_int(AiEv.ctx_for(unit)["regen_target"]).is_equal(6)
+
+
 func test_warding_real_ignore_rolls_and_named_log_for_both_sources() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
 	var unit := _unit(["Warding"], "gf", "knight_brothers")
 	for from_spell in [false, true]:
 		var expected_rng := RandomNumberGenerator.new()
 		expected_rng.seed = 1300
-		var target := 4 if from_spell else 6
+		# MOR-17a: from 73 the shared rule ignores spell wounds on 2+.
+		var target := 2 if from_spell else 6
 		var ignored := 0
 		for _i in range(60):
 			if expected_rng.randi_range(1, 6) >= target:

@@ -125,3 +125,87 @@ func test_thrust_charge_against_evasive_is_one_sum() -> void:
 		.override_failure_message("Q2 Thrust charge vs Evasive must hit on 2+ (log: %s)" % text.strip_edges()) \
 		.contains("(2+)")
 	await E2EBoot.settle(get_tree())
+
+
+# ===== a Thrust GRANT (unit-level record) must reach the charge like the printed weapon rule =====
+
+## The shape of an own-store grant record: `grants_rule` names the rule, the optional scope and
+## beneficiary come from `extra`. The fixture guard proves the record really landed on the unit.
+func _grant_thrust(u: GameUnit, extra: Dictionary = {}) -> void:
+	var effect := {"grants_rule": "Thrust in Melee", "beneficiary": "", "scope": "", "duration": "round"}
+	effect.merge(extra, true)
+	_main._solo_record_spell_mod(u, "Lance Drill", effect)
+	assert_array(u.unit_properties.get("spell_records", [])) \
+		.override_failure_message("fixture: the grant record must be stored on the bearer") \
+		.has_size(1)
+
+
+func test_a_granted_thrust_reaches_a_melee_profile() -> void:
+	var striker := _melee_armed(1, "Lancers", Vector3.ZERO, [])
+	_grant_thrust(striker)
+	var profile := {"range": 0, "rules": []}
+	var bridged: Dictionary = _main._solo_bridge_granted_flags(striker, profile, null)
+	assert_bool(bool(bridged.get("thrust", false))) \
+		.override_failure_message("a live Thrust grant must set the thrust flag (bridged profile: %s)" % str(bridged)) \
+		.is_true()
+	assert_bool(profile.has("thrust")) \
+		.override_failure_message("the bridge must work on a copy, never mutate the input profile") \
+		.is_false()
+
+
+func test_an_attackers_side_record_arms_no_thrust_on_the_bearer() -> void:
+	var striker := _melee_armed(1, "Lancers", Vector3.ZERO, [])
+	_grant_thrust(striker, {"beneficiary": "attackers"})
+	var bridged: Dictionary = _main._solo_bridge_granted_flags(striker, {"range": 0, "rules": []}, null)
+	assert_bool(bool(bridged.get("thrust", false))) \
+		.override_failure_message("a record for whoever attacks the bearer is not the bearer's own Thrust (profile: %s)" % str(bridged)) \
+		.is_false()
+
+
+func test_a_shooting_scoped_thrust_grant_stays_out_of_a_melee_profile() -> void:
+	var striker := _melee_armed(1, "Lancers", Vector3.ZERO, [])
+	_grant_thrust(striker, {"scope": "shooting"})
+	var bridged: Dictionary = _main._solo_bridge_granted_flags(striker, {"range": 0, "rules": []}, null)
+	assert_bool(bool(bridged.get("thrust", false))) \
+		.override_failure_message("a shooting-scoped grant must not arm a melee profile (profile: %s)" % str(bridged)) \
+		.is_false()
+
+
+func test_an_already_set_thrust_flag_and_no_grant_leave_the_profile_untouched() -> void:
+	var striker := _melee_armed(1, "Lancers", Vector3.ZERO, [])
+	var plain := {"range": 0, "rules": []}
+	assert_bool(is_same(_main._solo_bridge_granted_flags(striker, plain, null), plain)) \
+		.override_failure_message("no grant: the very same profile object must come back").is_true()
+	_grant_thrust(striker)
+	var printed := {"range": 0, "rules": [], "thrust": true}
+	assert_bool(is_same(_main._solo_bridge_granted_flags(striker, printed, null), printed)) \
+		.override_failure_message("flag already set: the very same profile object must come back").is_true()
+
+
+## END TO END: the granted Thrust on a charge rolls at 3+ and says so; on the strike-back, nothing.
+func test_a_granted_thrust_charge_hits_one_better_and_logs() -> void:
+	var striker := _melee_armed(1, "Lancers", Vector3.ZERO, [])
+	_grant_thrust(striker)
+	var foe := _plain_foe()
+	await _main._solo_melee_strike_phase(striker, foe, true, 0)   # charging = true
+	var text := _log_text()
+	assert_str(text) \
+		.override_failure_message("a granted Thrust must roll the charge at 3+ (log: %s)" % text.strip_edges()) \
+		.contains("(3+)")
+	assert_str(text) \
+		.override_failure_message("rules-must-log — the granted Thrust bonus must be named (log: %s)" % text.strip_edges()) \
+		.contains("Thrust: +1 to hit and AP(+1) on the charge")
+	await E2EBoot.settle(get_tree())
+
+
+func test_a_granted_thrust_does_nothing_on_the_strike_back() -> void:
+	var striker := _melee_armed(1, "Lancers", Vector3.ZERO, [])
+	_grant_thrust(striker)
+	var foe := _plain_foe()
+	await _main._solo_melee_strike_phase(striker, foe, false, 0)   # charging = false
+	var text := _log_text()
+	assert_str(text) \
+		.override_failure_message("off the charge a granted Thrust must roll plain Quality (log: %s)" % text.strip_edges()) \
+		.contains("(4+)")
+	assert_str(text).not_contains("Thrust: +1")
+	await E2EBoot.settle(get_tree())

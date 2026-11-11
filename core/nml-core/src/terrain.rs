@@ -12,6 +12,7 @@
 
 use serde::Deserialize;
 
+use crate::acts::{rule_on, EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36};
 use crate::geom::V3;
 
 /// `TerrainRules.TerrainType` — terrain_rules.gd:24.
@@ -19,6 +20,10 @@ pub const NONE: i32 = 0;
 pub const RUINS: i32 = 1;
 pub const FOREST: i32 = 2;
 pub const CONTAINER: i32 = 3;
+/// One wall segment in the planner's inch frame, as `Terrain::walls_in` stores it.
+pub type WallSeg = [[f32; 2]; 2];
+/// `TerrainRules.CONTAINER_HEIGHT_INCHES` - what a climb over a container's edge costs a move.
+pub const CONTAINER_HEIGHT_IN: f64 = 2.5;
 pub const DANGEROUS: i32 = 4;
 
 /// `TerrainRules.CELL_IN` terrain_rules.gd:26 — one terrain cell is 3"x3".
@@ -42,6 +47,13 @@ pub fn is_difficult(t: i32) -> bool {
 #[inline]
 pub fn is_dangerous(t: i32) -> bool {
     t == DANGEROUS
+}
+
+/// Rules 3.6 (EPOCH_73_V36) — the p.12 terrain class ruins join at 3.6: a
+/// model that walks into or through one risks the Dangerous test.
+#[inline]
+pub fn is_unstable(t: i32) -> bool {
+    t == RUINS
 }
 
 /// The untyped class — "within 1\" of terrain" with NO kind restriction
@@ -71,6 +83,15 @@ pub struct Obb {
     pub yaw: f64,
     #[serde(rename = "type")]
     pub kind: i32,
+}
+
+/// F-CONT (rules 3.6, `EPOCH_73_V36`) — one placed container's exact 6"x3" box, `TerrainOverlay._blocker_obbs`
+/// flattened by `AiActRecorder._container_boxes`: world metres, `yaw` as in `Obb`. Always solid, 2.5" tall.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ContainerObb {
+    pub c: [f64; 2],
+    pub he: [f64; 2],
+    pub yaw: f64,
 }
 
 /// `TerrainOverlay`'s grid geometry — act_recorder.gd:150-153.
@@ -103,6 +124,9 @@ pub struct PlainTerrain {
     /// `default`, and hence `Terrain::pieces`'s fall-back to `sandbox`.
     #[serde(default)]
     pub pieces: Vec<[f64; 6]>,
+    /// F-CONT — the header's `containers` (written from `EPOCH_73_V36`; absent from every older recording).
+    #[serde(default)]
+    pub containers: Vec<ContainerObb>,
     pub cell_params: CellParams,
 }
 
@@ -118,6 +142,9 @@ pub struct Terrain {
     /// NML-1163 — `PlainTerrain::pieces` in the same WORLD-METRE frame
     /// `sandbox` uses, so `Terrain::pieces` can answer with one slice type.
     bank: Vec<Obb>,
+    /// F-CONT — `PlainTerrain::containers`; read by the sight volumes only (`type_at` never looks at them, as the table's
+    /// `get_terrain_at_world_position` does not).
+    containers: Vec<ContainerObb>,
     cell_m: f64,
     /// `-deg_to_rad(grid_rotation_degrees)`, i.e. the `-rot_rad` the lambda uses.
     neg_rot: f64,
@@ -219,6 +246,21 @@ impl Terrain {
     #[inline]
     pub fn walls_in(&self) -> &[[[f32; 2]; 2]] {
         &self.walls_in
+    }
+
+    /// Heights B2 (GF p.11): `walls_in` split into the walls and the container EDGES, which the table's planner
+    /// climbs (`solo_controller._is_ledge_edge`). The header carries no container list, only the painted cells and the
+    /// wall segments, so an edge is a segment with container ground a hair (1 cm) to either side of its midpoint.
+    pub fn walls_and_ledges(&self) -> (Vec<WallSeg>, Vec<WallSeg>) {
+        let (mut walls, mut ledges) = (Vec::new(), Vec::new());
+        for (w, m) in self.walls_in.iter().zip(&self.walls_world) {
+            let d = [m[1][0] - m[0][0], m[1][1] - m[0][1]];
+            let len = d[0].hypot(d[1]).max(f32::EPSILON);
+            let (mid, n) = ([(m[0][0] + m[1][0]) * 0.5, (m[0][1] + m[1][1]) * 0.5], [-d[1] / len * 0.01, d[0] / len * 0.01]);
+            let edge = [1.0f32, -1.0].iter().any(|s| self.type_at([mid[0] + s * n[0], 0.0, mid[1] + s * n[1]]) == CONTAINER);
+            if edge { ledges.push(*w) } else { walls.push(*w) }
+        }
+        (walls, ledges)
     }
 
     /// The board's wall segments in WORLD METRES, f32 at the Vector2 boundary
@@ -408,6 +450,12 @@ impl Terrain {
         &self.sandbox
     }
 
+    /// F-CONT — the placed containers' exact boxes the header carried (empty before `EPOCH_73_V36` recordings).
+    #[inline]
+    pub fn containers(&self) -> &[ContainerObb] {
+        &self.containers
+    }
+
     /// NML-1163 — the pieces `tokens::terrain_token` exports: the BANKED
     /// drawing list when the board carried one, else the header's freely
     /// placed `sandbox` (the pre-NML-1163 reading, and still the only one an
@@ -455,6 +503,7 @@ impl Terrain {
             cells,
             sandbox: p.sandbox.clone(),
             bank,
+            containers: p.containers.clone(),
             cell_m,
             neg_rot: -rot_rad,
             half_grid: grid_size as f64 / 2.0,
@@ -597,7 +646,16 @@ impl Terrain {
     /// `state["los_blocked"]`, read by `BattleSim._los_clear` on every scored
     /// candidate. An ABSENT board has no cells, so it answers "clear" for every
     /// pair — the same fall-open an invalid Callable gives `_los_clear`.
+    ///
+    /// The pre-3.6 reading, for callers that cannot know an epoch (the sight unit tests); a game asks
+    /// `los_blocked_at`.
     pub fn los_blocked(&self, a: V3, b: V3) -> bool {
+        self.los_blocked_at(a, b, EPOCH_72_PLAYTEST_RULES)
+    }
+
+    /// `los_blocked` as the game at `rules_epoch` reads the board (rules 3.6 = `EPOCH_73_V36`): a ruin still
+    /// gives cover but no longer BLOCKS the centre line, while a container and a forest block at every epoch.
+    pub fn los_blocked_at(&self, a: V3, b: V3, rules_epoch: u32) -> bool {
         // `Vector2(a.x / IN2M, a.z / IN2M)`: f64 divide, f32 store.
         let av = [(a[0] as f64 / crate::IN2M) as f32, (a[2] as f64 / crate::IN2M) as f32];
         let bv = [(b[0] as f64 / crate::IN2M) as f32, (b[2] as f64 / crate::IN2M) as f32];
@@ -619,7 +677,7 @@ impl Terrain {
                 continue;
             }
             let t = self.cells.get(&c).copied().unwrap_or(NONE);
-            if t == RUINS || t == CONTAINER || t == FOREST {
+            if (t == RUINS && !rule_on(rules_epoch, EPOCH_73_V36)) || t == CONTAINER || t == FOREST {
                 return true;
             }
         }
@@ -706,6 +764,7 @@ mod tests {
             cells: cells.iter().map(|c| [c.0 as f64, c.1 as f64, c.2 as f64]).collect(),
             sandbox: vec![],
             pieces: vec![],
+            containers: Vec::new(),
             walls: vec![],
             cell_params: CellParams {
                 table_size_feet: [6.0, 4.0],

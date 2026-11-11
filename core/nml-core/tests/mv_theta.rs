@@ -156,7 +156,7 @@ fn tie_board() -> (Vec<Wall>, Grid, Vec<Zone>, V2, V2, V2) {
 
 fn tie_opts<'a>(zones: &'a [Zone], fine: &'a CellSet) -> ThetaOpts<'a> {
     ThetaOpts {
-        step: StepOpts { ledges: &[], clearance: 0.0, zones, avoid_cells: fine, avoid_fine: fine, dangerous_debuff: false, difficult_debuff: false },
+        step: StepOpts { ledges: &[], clearance: 0.0, zones, avoid_cells: fine, avoid_fine: fine, dangerous_debuff: false, difficult_debuff: false, unstable_danger: false },
         reach_closest: false,
     }
 }
@@ -426,7 +426,7 @@ fn step_blocked_equals_the_unculled_scan() {
             .collect();
         let zones: Vec<Zone> = (0..6).map(|_| Zone { c: [(rnd() * 72.0) as f32, (rnd() * 48.0) as f32], r: 1.0 + rnd() * 4.0 }).collect();
         let clearance = if round % 4 == 3 { 0.0 } else { 0.5 };
-        let opts = StepOpts { ledges: &[], clearance, zones: &zones, avoid_cells: &empty, avoid_fine: &empty, dangerous_debuff: false, difficult_debuff: false };
+        let opts = StepOpts { ledges: &[], clearance, zones: &zones, avoid_cells: &empty, avoid_fine: &empty, dangerous_debuff: false, difficult_debuff: false, unstable_danger: false };
         for _ in 0..5000 {
             let p: V2 = [(rnd() * 72.0) as f32, (rnd() * 48.0) as f32];
             let c: V2 = [p[0] + (rnd() * 6.0 - 3.0) as f32, p[1] + (rnd() * 6.0 - 3.0) as f32];
@@ -474,7 +474,7 @@ fn the_wall_index_answers_exactly_like_the_scan() {
             }
         }
         let clearance = if round % 4 == 3 { 0.0 } else { 0.5 };
-        let opts = StepOpts { ledges: &[], clearance, zones: &zones, avoid_cells: &empty, avoid_fine: &empty, dangerous_debuff: false, difficult_debuff: false };
+        let opts = StepOpts { ledges: &[], clearance, zones: &zones, avoid_cells: &empty, avoid_fine: &empty, dangerous_debuff: false, difficult_debuff: false, unstable_danger: false };
         let ix = WallIndex::new(&walls);
         for _ in 0..5000 {
             let p: V2 = [(rnd() * 80.0 - 4.0) as f32, (rnd() * 56.0 - 4.0) as f32];
@@ -529,6 +529,7 @@ fn the_cost_memo_answers_exactly_like_terrain_cost_at() {
             avoid_fine: &fine,
             dangerous_debuff: round == 2,
             difficult_debuff: round == 3,
+            unstable_danger: false,
         };
         let mut memo = CostMemo::new(72, 48);
         for _ in 0..5000 {

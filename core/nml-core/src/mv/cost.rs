@@ -18,9 +18,13 @@ use super::geom2::{
     distance_to, lerp, point_seg_distance, seg_seg_distance_apart, segments_cross, V2,
 };
 use super::{
-    is_dangerous, is_difficult, CELL_IN, DANGEROUS_COST_MULT, DIFFICULT_COST_MULT, EPS,
-    PLAN_CELL_IN, T_NONE,
+    is_dangerous, is_difficult, is_unstable, CELL_IN, DANGEROUS_COST_MULT, DIFFICULT_COST_MULT,
+    EPS, PLAN_CELL_IN, T_NONE,
 };
+
+/// rules 3.6: a move of 6" or less through a ruin does NOT risk the Dangerous test; a longer leg
+/// prices ruin ground at the Dangerous multiplier (movement_planner.gd `UNSTABLE_MOVE_IN`).
+const UNSTABLE_MOVE_IN: f64 = 6.0;
 
 /// A wall segment in the planner's inch frame — `[a, b]`, the shape
 /// `MovementPlanner._wall_a` / `_wall_b` (movement_planner.gd:128/134) accept.
@@ -149,6 +153,9 @@ pub struct StepOpts<'a> {
     /// cell order below. False on every call recorded before the gate.
     pub dangerous_debuff: bool,
     pub difficult_debuff: bool,
+    /// rules 3.6 (EPOCH_73_V36): ruin ground is Unstable — a leg longer than 6" prices a RUINS sample
+    /// at `DANGEROUS_COST_MULT`, a shorter leg keeps it as ground. False on every earlier call.
+    pub unstable_danger: bool,
 }
 
 /// An empty cell set, for callers that have no `avoid_*` sets.
@@ -168,6 +175,7 @@ impl<'a> StepOpts<'a> {
             avoid_fine: empty_cells(),
             dangerous_debuff: false,
             difficult_debuff: false,
+            unstable_danger: false,
         }
     }
 }
@@ -472,12 +480,26 @@ fn segment_cost_core(
     }
     let steps = ((span / sample_in).ceil() as i64).max(1);
     let sub = span / steps as f64;
+    // rules 3.6: only a leg LONGER than 6" prices its ruin samples as Dangerous ground.
+    let unstable = opts.unstable_danger && span > UNSTABLE_MOVE_IN;
     let mut total = 0.0f64;
     for i in 0..steps {
-        let m = cost(lerp(a, b, (i as f64 + 0.5) / steps as f64));
+        let p = lerp(a, b, (i as f64 + 0.5) / steps as f64);
+        let base = cost(p);
+        let m = if unstable && base.is_finite() && is_unstable_at(p, grid) {
+            DANGEROUS_COST_MULT
+        } else {
+            base
+        };
         total += sub * if m.is_infinite() { 1.0 } else { m };
     }
     total + ledge_cost(a, b, opts.ledges)
+}
+
+/// The coarse cell at `p` is a RUINS cell (`terrain::is_unstable`'s class on the planner's typed grid).
+#[inline]
+fn is_unstable_at(p: V2, grid: &Grid) -> bool {
+    is_unstable(*grid.get(&cell_of(p, CELL_IN)).unwrap_or(&T_NONE))
 }
 
 /// `MovementPlanner._legs_cost` — movement_planner.gd:1483. Summed soft cost of
@@ -559,8 +581,12 @@ impl CostMemo {
         v
     }
 
-    /// `segment_cost` over the memo.
+    /// `segment_cost` over the memo. A long Unstable leg (rules 3.6) is priced per leg, not per cell,
+    /// so it goes through the unmemoised `segment_cost_at`.
     pub fn segment_cost(&mut self, a: V2, b: V2, grid: &Grid, opts: &StepOpts) -> f64 {
+        if opts.unstable_danger && distance_to(a, b) > UNSTABLE_MOVE_IN {
+            return segment_cost_at(a, b, grid, opts, PLAN_CELL_IN * 0.5);
+        }
         segment_cost_core(a, b, grid, opts, PLAN_CELL_IN * 0.5, &mut |p| self.cost(p, grid, opts))
     }
 

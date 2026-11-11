@@ -1,4 +1,5 @@
 use super::*;
+    use crate::acts::EPOCH_72_PLAYTEST_RULES;
 
     // --- Wave 4 "conditional-AP live reads" family (rules-wave4-condap, epoch 7) ---
     //
@@ -329,7 +330,7 @@ use super::*;
             "melee: the blade's sixes pay the same AP(+2)"
         );
         assert_eq!(
-            crate::spell::spell_facets(&["Crack".to_string()]).on6_ap,
+            crate::spell::spell_facets(&["Crack".to_string()], EPOCH_72_PLAYTEST_RULES).on6_ap,
             2,
             "the spell-token fold carries the same AP(+2)"
         );
@@ -365,7 +366,7 @@ use super::*;
             "melee: the blade pays against the same target class"
         );
         assert_eq!(
-            crate::spell::spell_facets(&["Shatter".to_string()]).ap_vs_tough3,
+            crate::spell::spell_facets(&["Shatter".to_string()], EPOCH_72_PLAYTEST_RULES).ap_vs_tough3,
             2,
             "the spell-token fold carries the same AP(+2)"
         );
@@ -395,7 +396,7 @@ use super::*;
             "melee: the blade pays against the same target class"
         );
         assert_eq!(
-            crate::spell::spell_facets(&["Tear".to_string()]).ap_vs_tough9,
+            crate::spell::spell_facets(&["Tear".to_string()], EPOCH_72_PLAYTEST_RULES).ap_vs_tough9,
             4,
             "the spell-token fold carries the same AP(+4)"
         );

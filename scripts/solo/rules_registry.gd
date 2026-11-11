@@ -216,6 +216,15 @@ static func unit_rules_of_primitive(unit: GameUnit, primitive: String) -> Array:
 	return out
 
 
+## The BOOK entry name a unit carries for `primitive` (e.g. "Versatile Expert"), primitive when none.
+static func primitive_book_name(unit: GameUnit, primitive: String) -> String:
+	for e in unit_rules_of_primitive(unit, primitive):
+		var n := str((e as Dictionary).get("name", ""))
+		if not n.is_empty() and n != primitive:
+			return n
+	return primitive
+
+
 ## The best (largest numeric) value of one param across a unit's rules of `primitive` — the common
 ## "any rule of this family grants it" reader. `fallback` when none carries the family.
 static func best_primitive_param(unit: GameUnit, primitive: String, key: String, fallback: Variant) -> Variant:

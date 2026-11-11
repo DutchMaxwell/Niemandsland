@@ -309,6 +309,18 @@ pub struct PlainLedger {
     /// Empty on every older corpus.
     #[serde(default)]
     feats_used: Vec<String>,
+    /// G4-H-LIM (`EPOCH_73_V36`) — `unit_properties["limited_used"]`
+    /// (`SoloController.mark_limited_used`): the weapon names this unit has
+    /// already fired under Limited (once per game), written by act_recorder.gd
+    /// `_ledger_of`. Absent from every corpus recorded before this key, and
+    /// empty there — an old act replays with every Limited weapon fresh.
+    #[serde(default)]
+    limited_used: Vec<String>,
+    /// G4-H-MOVED (`EPOCH_73_V36`) — `unit_properties["moved_round"]` (main.gd `_solo_animate_move`): the
+    /// round the unit last executed a move, written by act_recorder.gd `_ledger_of`. Absent from every
+    /// corpus recorded before this key — an old act replays with every unit "never moved" (-1).
+    #[serde(default)]
+    moved_round: Option<i64>,
     /// Wave 5 (PR 1's recorder): the `{"used", "to"}` block; `to` arrives as the `"(x, y)"` Vector2 string.
     #[serde(default)]
     teleport: Option<PlainTeleport>,
@@ -651,6 +663,9 @@ pub struct Seams {
     /// bug this replaces exactly for corpora that predate it.
     #[serde(default)]
     pub dangerous_end_morale: bool,
+    /// `Knobs::dangerous_replay` (G4R5 R1) passed straight through: replay gates only, None in play.
+    #[serde(default)]
+    pub dangerous_replay: Option<(i64, i64)>,
     /// aifix D1 — the imagined morale test fails with its probability (a
     /// deterministic dither) instead of the 50 % cliff. Default OFF.
     #[serde(default)]
@@ -1037,6 +1052,7 @@ pub(crate) fn state_of(
         versatile_pick_round: vec![-1; n],
         versatile_pick_mode: vec![0; n],
         retreating_strike_round: vec![-1; n],
+        mind_control_moved_round: vec![-1; n],
         growth_markers: vec![0; n],
         vengeance_markers: vec![0; n],
         spot_markers: vec![0; n],
@@ -1044,6 +1060,7 @@ pub(crate) fn state_of(
         spot_round: vec![-1; n],
         precision_used: Rc::new(vec![Vec::new(); n]),
         growth_round: vec![-1; n],
+        growth_strike_round: vec![-1; n],
         second_wind_used: vec![false; n],
         surprise_attack_used: vec![false; n],
         reinforcement_used: vec![false; n],
@@ -1215,6 +1232,15 @@ pub fn fold_ledger(
     st.reinforcement_used[ui] = ledger.reinforcement_used;
     Rc::make_mut(&mut st.storm_used)[ui] = ledger.storm_used.clone();
     Rc::make_mut(&mut st.feats_used)[ui] = ledger.feats_used.clone();
+    // Limited: the table's spent weapons ride the act state from EPOCH_73_V36; below it every Limited weapon replays fresh.
+    if rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
+        Rc::make_mut(&mut st.limited_used)[ui] = ledger.limited_used.clone();
+    }
+    // Moved: the table's own stamp rides the act state from EPOCH_73_V36, so Artillery's -1, Entrenched and
+    // the stationary alias penalty read the round the unit really moved in; below it every unit reads -1.
+    if let (true, Some(r)) = (rule_on(rules_epoch, crate::acts::EPOCH_73_V36), ledger.moved_round) {
+        st.moved_round[ui] = r;
+    }
     st.teleport_used[ui] = ledger.teleport.as_ref().map(|t| t.used).unwrap_or(false);
     st.growth_markers[ui] = ledger.growth;
     st.vengeance_markers[ui] = ledger.vengeance_markers;
@@ -1240,8 +1266,13 @@ pub fn fold_ledger(
     // (`sim.rs::growth_round_start` is a no-op for a non-grower
     // either way — see the fixture below). Excluded: a unit that
     // arrived (ambush) THIS round was still in reserve when the
-    // sweep ran, so it was skipped there too.
-    if alive > 0 && !is_attached && ambush_arrived_round != st.round {
+    // sweep ran, so it was skipped there too. A JOINED hero is swept
+    // like any unit from EPOCH_73_V36 (the table ticks his own rule at
+    // the round start); below 73 an attached unit stays never swept.
+    if alive > 0
+        && (!is_attached || rule_on(rules_epoch, crate::acts::EPOCH_73_V36))
+        && ambush_arrived_round != st.round
+    {
         st.growth_round[ui] = st.round;
     }
 }
@@ -1681,7 +1712,28 @@ mod tests {
         assert_eq!(st.buffs[0].len(), 1, "unit 0's own fold is untouched");
         let mut hosted = state_of(LEDGER_PLAIN);
         super::fold_ledger(&mut hosted, 1, &ledger, crate::acts::CURRENT_RULES_EPOCH, 1, true, -1);
-        assert_eq!(hosted.growth_round[1], -1, "attached -> never swept");
+        assert_eq!(hosted.growth_round[1], hosted.round, "attached at 73 -> swept by the table's round start like any unit");
+        let mut old = state_of(LEDGER_PLAIN);
+        super::fold_ledger(&mut old, 1, &ledger, crate::acts::EPOCH_72_PLAYTEST_RULES, 1, true, -1);
+        assert_eq!(old.growth_round[1], -1, "below 73 an attached unit stays never swept");
+    }
+
+    /// G4-H-MOVED (`EPOCH_73_V36`) — the table's `moved_round` stamp rides the act ledger: `fold_ledger`
+    /// reads it from 73 on, an act without the key keeps -1 ("never moved"), and below 73 it is not read.
+    #[test]
+    fn fold_ledger_reads_the_moved_round_stamp_from_epoch_73_only() {
+        let ledger: super::PlainLedger = serde_json::from_str(r#"{"moved_round":1}"#).expect("ledger");
+        let none: super::PlainLedger = serde_json::from_str("{}").expect("ledger");
+        let mut st = state_of(LEDGER_PLAIN);
+        super::fold_ledger(&mut st, 1, &ledger, crate::acts::EPOCH_73_V36, 1, false, -1);
+        assert_eq!(st.moved_round[1], 1, "the stamp lands on the named unit");
+        assert_eq!(st.moved_round[0], -1, "unit 0 is untouched");
+        let mut old = state_of(LEDGER_PLAIN);
+        super::fold_ledger(&mut old, 1, &ledger, crate::acts::EPOCH_72_PLAYTEST_RULES, 1, false, -1);
+        assert_eq!(old.moved_round[1], -1, "below 73 the key is not read");
+        let mut absent = state_of(LEDGER_PLAIN);
+        super::fold_ledger(&mut absent, 1, &none, crate::acts::EPOCH_73_V36, 1, false, -1);
+        assert_eq!(absent.moved_round[1], -1, "an act without the key keeps -1");
     }
 
     /// `p1_0_a` on the tray: the shape `battle_sim.gd:1477-1489` + `:1539-1543`

@@ -65,13 +65,15 @@ func test_charge_lights_only_chargeable_enemies(timeout := 60000) -> void:
 	_main._solo_end_targeting()
 
 
-func test_advance_lights_every_enemy(timeout := 60000) -> void:
+## Automodus 1.8f (OD 13): Advance aims at a table point like the point Rush; the shot is picked after the move.
+func test_advance_lights_no_enemy_and_aims_at_a_point(timeout := 60000) -> void:
 	var attacker := _unit(1, "Movers", Vector3.ZERO)
 	_unit(2, "Near", Vector3(8.0 * INCH, 0, 0))
 	_unit(2, "Far", Vector3(20.0 * INCH, 0, 0))
 	await _main.solo_begin_auto(attacker, AiDecision.Action.ADVANCE)
-	assert_int((_main._solo_target_mode.get("auto_valid", []) as Array).size()).is_equal(2)
-	assert_int((_main._solo_target_mode.get("cast_rings", []) as Array).size()).is_equal(2)
+	assert_bool(_main._solo_target_mode.has("auto_point")).is_true()
+	assert_int((_main._solo_target_mode.get("cast_rings", ["no mode"]) as Array).size()).is_equal(0)
+	assert_str(_log_text()).contains("Movers: hover the table to see where your models end, click to advance there")
 	_main._solo_end_targeting()
 
 
@@ -87,7 +89,7 @@ func test_shaken_unit_gets_no_mode_and_a_reason(timeout := 60000) -> void:
 func test_cancel_frees_the_rings(timeout := 60000) -> void:
 	var attacker := _unit(1, "Movers", Vector3.ZERO)
 	_unit(2, "Near", Vector3(8.0 * INCH, 0, 0))
-	await _main.solo_begin_auto(attacker, AiDecision.Action.ADVANCE)
+	await _main.solo_begin_auto(attacker, AiDecision.Action.CHARGE)
 	var rings: Array = (_main._solo_target_mode.get("cast_rings", []) as Array).duplicate()
 	assert_int(rings.size()).is_equal(1)
 	_main._solo_end_targeting()

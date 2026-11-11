@@ -1,0 +1,9 @@
+{"act":5,"count":1,"faces":[5],"leg":"cast","owner":"AI (Great Screecher)","player":1,"roll_kind":"attack","round":1,"seq":1,"target":4}
+{"act":5,"count":9,"faces":[4,5,4,6,4,3,2,1,3],"leg":"spell","owner":"AI (Balloon Hunters)","player":1,"roll_kind":"defense","round":1,"seq":2,"target":4}
+{"act":7,"count":1,"faces":[6],"leg":"cast","owner":"AI (Sky-Captain)","player":2,"roll_kind":"attack","round":1,"seq":3,"target":4}
+{"act":8,"count":1,"faces":[3],"leg":"cast","owner":"AI (Great Screecher)","player":1,"roll_kind":"attack","round":2,"seq":4,"target":4}
+{"act":8,"count":2,"faces":[6,3],"leg":"main","owner":"AI (Great Screecher)","player":1,"roll_kind":"attack","round":2,"seq":5,"target":4}
+{"act":8,"count":3,"faces":[1,3,4],"leg":"main","owner":"AI (Crew)","player":1,"roll_kind":"defense","round":2,"seq":6,"target":5}
+{"act":10,"count":13,"faces":[5,3,1,5,2,1,5,6,3,6,5,3,5],"leg":"dangerous","owner":"AI (Spectres)","player":1,"roll_kind":"dangerous","round":2,"seq":7,"target":6}
+{"act":15,"count":1,"faces":[1],"leg":"cast","owner":"AI (Sky-Captain)","player":2,"roll_kind":"attack","round":2,"seq":8,"target":4}
+{"act":16,"count":11,"faces":[6,3,3,5,3,3,6,2,5,4,1],"leg":"dangerous","owner":"AI (Spectres)","player":1,"roll_kind":"dangerous","round":3,"seq":9,"target":6}

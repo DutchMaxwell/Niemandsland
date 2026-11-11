@@ -5,6 +5,7 @@
 //! :497-505 and the melee branch of `profile_ev` :330-350) arrived with M1-3;
 //! `resolve()` reaches it only on a CHARGE (battle_sim.gd:631-646).
 
+use crate::acts::{rule_on, EPOCH_73_V36};
 use crate::unit::{CondAp, Ctx, ShootProfile};
 
 /// `AiEv.SIX_P` ai_ev.gd:27 — P(one specific d6 face).
@@ -16,6 +17,26 @@ pub const UNMODIFIED_SIX: i64 = 6;
 /// `AiCombatMath.LONG_RANGE_IN` :60 — the over-9" gate of Stealth/Artillery/
 /// Relentless/Guarded/Versatile Attack.
 pub const LONG_RANGE_IN: f64 = 9.0;
+/// `AiCombatMath.CHARGE_LONG_RANGE_IN` — D-GATE6 (rules 3.6, `EPOCH_73_V36`): the over-6" gate of a
+/// CHARGE, measured before any model moves, closest model to closest model. Shooting keeps 9".
+pub const CHARGE_LONG_RANGE_IN: f64 = 6.0;
+
+/// The pre-charge gap a CHARGE's range gate measures against: 6" from `EPOCH_73_V36`, 9" below.
+pub fn charge_gate_in(rules_epoch: u32) -> f64 {
+    if !rule_on(rules_epoch, EPOCH_73_V36) {
+        return LONG_RANGE_IN;
+    }
+    CHARGE_LONG_RANGE_IN
+}
+
+/// The charge band a conditional-AP `on_charge` leg measures against: 6" from `EPOCH_73_V36`,
+/// 0.0 below (the old unconditional leg).
+pub fn charge_over_in(rules_epoch: u32) -> f64 {
+    if !rule_on(rules_epoch, EPOCH_73_V36) {
+        return 0.0;
+    }
+    CHARGE_LONG_RANGE_IN
+}
 /// `AiCombatMath.STEALTH_HIT_PENALTY` :64 / `ARTILLERY_SHOOTER_HIT_BONUS` :68 /
 /// `ARTILLERY_TARGET_HIT_PENALTY` :72 / `EVASIVE_HIT_PENALTY` :77.
 pub const STEALTH_HIT_PENALTY: i64 = 1;
@@ -269,6 +290,21 @@ pub fn deadly_multiplier(deadly_x: i64, target_tough: i64) -> i64 {
     clampi(deadly_x, 1, target_tough.max(1))
 }
 
+/// `AiCombatMath.deadly_regen_dealt` (A4, #1914): the expected wounds ONE unsaved Deadly(X) wound
+/// deals to a model of `target_tough` against the Regeneration family — all X rolled, each kept
+/// with chance `keep`, the survivors capped: E[min(Binomial(X, keep), cap)]. `powf` = GDScript's `pow`.
+pub fn deadly_regen_dealt(deadly_x: i64, target_tough: i64, keep: f64) -> f64 {
+    let x = deadly_x.max(1);
+    let cap = target_tough.max(1);
+    let mut ev = 0.0;
+    let mut ways = 1.0; // C(x, k)
+    for k in 0..=x {
+        ev += ways * keep.powf(k as f64) * (1.0 - keep).powf((x - k) as f64) * k.min(cap) as f64;
+        ways = ways * (x - k) as f64 / (k + 1) as f64;
+    }
+    ev
+}
+
 /// `AiCombatMath.shrouded_reach` :300-303.
 #[inline]
 pub fn shrouded_reach(reach_in: f64, penalty_in: f64, floor_in: f64) -> f64 {
@@ -342,30 +378,46 @@ pub const BASE_CONTACT_IN: f64 = 1.0;
 /// GF/AoF Advanced Rules v3.5.1 p.9: "... and 4” vertically of an enemy model
 /// ... may attack it." Gated on `EPOCH_63_MELEE_HEIGHT` (see acts.rs).
 pub const MELEE_VERTICAL_IN: f64 = 4.0;
+/// Rules 3.6 strike reach (MEL-08): 3" across and 3" up, from `EPOCH_73_V36`.
+/// The 3.5 pair above stays for every older record.
+pub const MELEE_REACH_IN_V36: f64 = 3.0;
+pub const MELEE_VERTICAL_IN_V36: f64 = 3.0;
 
-/// True when two world Y coordinates (metres) are within the 4" vertical
-/// melee reach — the twin of `SoloController.within_melee_height`.
+/// The epoch's (across, up) strike reach in inches — the twin of
+/// `SoloController.melee_reach_in` / `melee_vertical_in`.
+pub fn melee_reach_in(rules_epoch: u32) -> (f64, f64) {
+    if crate::acts::rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
+        (MELEE_REACH_IN_V36, MELEE_VERTICAL_IN_V36)
+    } else {
+        (MELEE_REACH_IN, MELEE_VERTICAL_IN)
+    }
+}
+
+/// True when two world Y coordinates (metres) are within `vertical_in` of
+/// each other — the twin of `SoloController.within_melee_height`.
 #[inline]
-fn within_melee_height(y_a: f64, y_b: f64) -> bool {
-    (y_a - y_b).abs() <= MELEE_VERTICAL_IN * crate::IN2M
+fn within_melee_height(y_a: f64, y_b: f64, vertical_in: f64) -> bool {
+    (y_a - y_b).abs() <= vertical_in * crate::IN2M
 }
 
 /// Count of `striker`'s models within reach of ANY `enemy` model — the
 /// `melee_reach="table"` knob's own gate. Either side empty keeps today's
 /// behaviour (every striker counts), matching the GDScript fallback. From
-/// `EPOCH_63_MELEE_HEIGHT` a pair must also clear the 4" vertical reach.
+/// `EPOCH_63_MELEE_HEIGHT` a pair must also clear the vertical reach; the
+/// reach itself is the epoch's (`melee_reach_in`).
 pub fn striking_models(striker: &[[f64; 3]], enemy: &[[f64; 3]], rules_epoch: u32) -> i64 {
     if striker.is_empty() || enemy.is_empty() {
         return striker.len() as i64;
     }
     let height_gated = crate::acts::rule_on(rules_epoch, crate::acts::EPOCH_63_MELEE_HEIGHT);
-    let reach_m = (BASE_CONTACT_IN + MELEE_REACH_IN) * crate::IN2M;
+    let (reach_in, vertical_in) = melee_reach_in(rules_epoch);
+    let reach_m = (BASE_CONTACT_IN + reach_in) * crate::IN2M;
     let reach2 = reach_m * reach_m;
     striker
         .iter()
         .filter(|s| {
             enemy.iter().any(|e| {
-                if height_gated && !within_melee_height(s[1], e[1]) {
+                if height_gated && !within_melee_height(s[1], e[1], vertical_in) {
                     return false;
                 }
                 let dx = s[0] - e[0];
@@ -385,6 +437,36 @@ pub fn block_chance(defense: i64, ap: i64, bane: bool) -> f64 {
         p = (p - SIX_P) + SIX_P * p;
     }
     p.clamp(0.0, 1.0)
+}
+
+/// The widened Bane window (`dice.rs::blocks_with_bane_from`): every successful
+/// unmodified save at or above `from` re-rolls once, in addition to the base
+/// sixes. `from >= 6` is exactly [`block_chance`] (byte-identical).
+#[inline]
+pub fn block_chance_from(defense: i64, ap: i64, bane: bool, from: i64) -> f64 {
+    if from >= 6 {
+        return block_chance(defense, ap, bane);
+    }
+    let mut p = success_chance(save_target(defense, ap));
+    if bane {
+        let target = save_target(defense, ap).clamp(2, 6);
+        let from = from.clamp(2, 6).max(target);
+        let w = (7 - from).max(0) as f64 / 6.0;
+        p -= w * (1.0 - p);
+    }
+    p.clamp(0.0, 1.0)
+}
+
+/// Rules 3.6 (`EPOCH_73_V36`) — expected wounds of ONE already-rolled hit: the save fails
+/// at that hit's AP, then Deadly's multiply and Regeneration's keep. Ranks Parry's cuts.
+pub fn hit_ev(p: &ShootProfile, hit_is_a_six: bool, def: &Ctx) -> f64 {
+    let ap = p.ap + if hit_is_a_six { p.on6_ap.max(if p.rending || p.destructive { RENDING_AP_BONUS } else { 0 }) } else { 0 };
+    let defense = shielded_defense(def.defense, def.shielded_bonus(), def.def_floor());
+    let deadly = if p.deadly > 0 { deadly_multiplier(p.deadly, def.tough.max(1)) as f64 } else { 1.0 };
+    let keep = if def.regeneration && !(p.bypass_regen || p.rending || p.unstoppable) {
+        1.0 - success_chance(def.regen_target)
+    } else { 1.0 };
+    (1.0 - block_chance(defense, fortified_ap(ap, def.fortified), p.bane)) * deadly * keep
 }
 
 /// `AiEv.versatile_best_mode` ai_ev.gd:454-462 — returns (hit_mod, ap).
@@ -411,10 +493,13 @@ pub fn versatile_best_mode(hit_target: i64, defense: i64, ap: i64, bane: bool) -
 /// `charge_only` is an extra gate on top of the condition (Melee Slayer), and the
 /// `ranged_over_or_charge` GATE (Slayer) adds "charging OR shot from over 9 in".
 /// `dist_in < 0` means the caller has no range context: the ranged legs stay shut.
-pub fn conditional_ap_bonus(
+///
+/// Rules 3.6 hook (no 3.5 entry spells these, so no epoch gate):
+///   * `over_half_range` — shooting from beyond half the weapon's range
+///   * `def_5_6`         — the target's Defense value is 5+ or 6+
+pub fn conditional_ap_bonus_vs(
     c: &CondAp,
-    target_tough: i64,
-    target_defense: i64,
+    t: &CondApTarget,
     is_charging: bool,
     dist_in: f64,
     melee: bool,
@@ -428,6 +513,13 @@ pub fn conditional_ap_bonus(
     if c.gate == "ranged_over_or_charge" && !(is_charging || (!melee && dist_in > c.over_in)) {
         return 0;
     }
+    // Rules 3.6 (SHO-20) — the Slayer family's shooting gate from
+    // `EPOCH_73_V36` ("after a Hold"), stamped by unit.rs and the granted-Slayer
+    // legs. True when the attack is a charge or the shooter held; the ranged
+    // distance no longer opens it. Pre-73 stamps carry the old spelling above.
+    if c.gate == "hold_or_charge" && !(is_charging || (!melee && t.shooter_held)) {
+        return 0;
+    }
     // Wave 4 follow-up (rules-ranged-slayer) — "Ranged Slayer"'s gate, the
     // Slayer family's shooting-only spelling ("AP(+2) … over 9" away", no
     // charge leg). Fires only on the shooting array from beyond `over_in`
@@ -436,30 +528,98 @@ pub fn conditional_ap_bonus(
     if c.gate == "ranged_over" && !(!melee && dist_in >= 0.0 && dist_in > c.over_in) {
         return 0;
     }
+    if cond_met(c, t, is_charging, dist_in, melee) { c.ap_bonus } else { 0 }
+}
+
+/// The ONE target-condition test both 3.6 legs share: the conditional-AP match
+/// above and the save re-roll window (`dice.rs` `save_batch`). A re-roll entry
+/// names no range knobs, so its `CondAp` leaves `over_in`/`within_in` at 0.0
+/// and only the target-property arms can open.
+pub fn cond_met(c: &CondAp, t: &CondApTarget, is_charging: bool, dist_in: f64, melee: bool) -> bool {
     match c.condition.as_str() {
-        // Wave 4 (rules-wave4-boostbases) — "Havocbound Boost"'s always-on
-        // spelling ("always gets AP(+1) … instead of only when …"): no gate.
-        // Only unit.rs build_for's epoch-6 named arm creates this condition
-        // (the FROZEN `EPOCH_6_TABLE_RULES`), so every pre-epoch-6 replay
-        // stays byte-exact.
-        "always" => c.ap_bonus,
-        "vs_tough_ge" if target_tough >= c.threshold => c.ap_bonus,
-        "vs_armor" if target_defense <= c.threshold => c.ap_bonus,
-        "on_charge" if is_charging => c.ap_bonus,
-        "ranged_over" if !melee && dist_in > c.over_in => c.ap_bonus,
-        // Wave 4 (rules-wave4-condap) — "Point-Blank Piercing"'s printed
-        // shape ("AP(+1) when shooting enemies within 12\""): the cap is
-        // inclusive, an unknown distance (< 0) stays shut like the ranged
-        // legs above. The generic pass stamps `within_in` 0.0 (it never
-        // reads the key), so the registry-spelled specs it has stamped at
-        // every epoch stay inert here; only unit.rs build_for's epoch-7
-        // named arm (the FROZEN `EPOCH_7_TABLE_RULES`) sets the cap, and
-        // every pre-epoch-7 replay stays byte-exact.
-        "ranged_within" if !melee && c.within_in > 0.0 && dist_in >= 0.0 && dist_in <= c.within_in => {
-            c.ap_bonus
-        }
-        _ => 0,
+        // Wave 4 (rules-wave4-boostbases) — "Havocbound Boost"'s always-on spelling.
+        "always" => true,
+        "vs_tough_ge" => t.tough >= c.threshold,
+        "vs_armor" => t.defense <= c.threshold,
+        "on_charge" => is_charging && (c.charge_over_in <= 0.0 || dist_in > c.charge_over_in),
+        "ranged_over" => !melee && dist_in > c.over_in,
+        // Wave 4 (rules-wave4-condap) — "Point-Blank Piercing": the cap is
+        // inclusive, an unknown distance (< 0) stays shut.
+        "ranged_within" => !melee && c.within_in > 0.0 && dist_in >= 0.0 && dist_in <= c.within_in,
+        "over_half_range" => !melee && t.weapon_range_in > 0.0 && dist_in >= 0.0 && dist_in > t.weapon_range_in / 2.0,
+        "def_5_6" => t.defense >= 5,
+        "above_half_strength" => t.above_half_strength,
+        "shaken_or_fatigued" => t.shaken_or_fatigued,
+        // Rules 3.6 (SHO-09b): MOST of the target's models stand within 1" of terrain.
+        "near_terrain" => t.near_terrain,
+        _ => false,
     }
+}
+
+/// The conditional-AP check's view of the target, plus the firing weapon's
+/// range `over_half_range` measures against. `Default` knows nothing, so every
+/// leg reading it stays shut; later 3.6 target conditions add their fields here.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct CondApTarget {
+    pub tough: i64,
+    pub defense: i64,
+    /// The firing weapon's range in inches; 0 = a melee strike or no range known.
+    pub weapon_range_in: f64,
+    /// Rules 3.6 (SHO-20): the FIRING unit's Hold state, read only by the
+    /// `hold_or_charge` gate. The EV folds cannot know it (`false`).
+    pub shooter_held: bool,
+    /// Rules 3.6 (SHO-09s): the two TARGET-STATE conditions. `Ctx` carries both, stamped at the
+    /// seams that hold `statics` and `seams`; `Default` keeps every unstamped ctx shut.
+    pub above_half_strength: bool,
+    pub shaken_or_fatigued: bool,
+    /// Rules 3.6 (SHO-09b): MOST of the target's models stand within 1" of terrain.
+    pub near_terrain: bool,
+}
+
+impl CondApTarget {
+    /// The target as the dice and EV folds see it, shot at with a `weapon_range_in` weapon.
+    pub fn of(def: &Ctx, weapon_range_in: f64) -> Self {
+        Self {
+            tough: def.tough.max(1),
+            defense: def.defense,
+            weapon_range_in,
+            shooter_held: false,
+            above_half_strength: def.above_half_strength,
+            shaken_or_fatigued: def.shaken_or_fatigued,
+            near_terrain: def.near_terrain,
+        }
+    }
+}
+
+/// [`conditional_ap_bonus_vs`] without a weapon range: the melee leg and the
+/// granted conditions, whose legs never measure one.
+pub fn conditional_ap_bonus(c: &CondAp, target_tough: i64, target_defense: i64, is_charging: bool, dist_in: f64, melee: bool) -> i64 {
+    let t = CondApTarget { tough: target_tough, defense: target_defense, weapon_range_in: 0.0, shooter_held: false, above_half_strength: false, shaken_or_fatigued: false, near_terrain: false };
+    conditional_ap_bonus_vs(c, &t, is_charging, dist_in, melee)
+}
+
+/// Rules-must-log: the words naming a 3.6 condition that fired, "" for every
+/// older spelling (their log lines stay byte-identical).
+pub fn cond_ap_why(condition: &str) -> &'static str {
+    match condition {
+        "over_half_range" => " (target beyond half the weapon's range)",
+        "def_5_6" => " (target defends on 5+ or 6+)",
+        "above_half_strength" => " (target is above half strength)",
+        "shaken_or_fatigued" => " (target is Shaken or Fatigued)",
+        "near_terrain" => " (target stands within 1\" of terrain)",
+        _ => "",
+    }
+}
+
+/// Rules 3.6 (`EPOCH_73_V36`) — the expected hits a Parry(X) defender takes off a strike:
+/// `min(X * living carrier models, expected hits) / 6`, each die cancelling a hit on 6+.
+/// 0 below the wave and for a unit without Parry (both feed the same `Ctx` stamps).
+fn parry_cancels(def: &Ctx, hits: f64) -> f64 {
+    if !def.v36_rules || def.parry_dice <= 0 {
+        return 0.0;
+    }
+    let dice = (def.parry_dice * def.models.max(0)) as f64;
+    dice.min(hits) / 6.0
 }
 
 /// `AiEv.profile_ev` ai_ev.gd:322-437 — both halves. `melee` is the GDScript's
@@ -505,28 +665,39 @@ pub fn profile_ev(
             raw = 6;
         } else {
             raw = thrust_to_hit(att.quality, charging && p.thrust, def.def_floor());
-            // The Stealth data-alias pair rides the fold, but the EV
-            // imagination measures NO pre-charge gap (ai_ev.gd:442's melee
-            // branch has no alias leg either) — charge_from_in stays 0.0,
-            // which never clears the alias's `over_in` gate.
-            // The Wave-6 spell-hit net (ai_ev.gd:482): the bearer's own
-            // buff/debuff ±N composes into the SAME net-modifier sum the
-            // clamp then sees, exactly like the GDScript's `+ spell_mod`.
-            // 0 on every ctx_of-built ctx, so the pre-swap EV is unchanged.
-            let mut melee_mod = melee_hit_modifier(
+            // SHO-17e (rules 3.6): the Stealth DATA alias's charge leg (Screened et al.) reads its
+            // distance from the W1.5b pre-charge gap the caller hands in. From `EPOCH_73_V36` the
+            // charge leg's gate is the shared 6" charge threshold; below it the alias prices nothing
+            // (the old estimate number). 0.0 = not a charge, which never clears a real gate.
+            let v36 = rule_on(att.rules_epoch, EPOCH_73_V36);
+            let alias_over_in = if v36 && def.stealth_alias_over_in > 0.0 {
+                CHARGE_LONG_RANGE_IN
+            } else {
+                def.stealth_alias_over_in
+            };
+            let enemy_mod = melee_hit_modifier(
                 def.evasive,
                 def.melee_evasion,
-                def.stealth_alias_penalty,
-                def.stealth_alias_over_in,
+                if v36 { def.stealth_alias_penalty } else { 0 },
+                alias_over_in,
                 def.stealth_alias_applies_charged,
-                0.0,
-            ) + att.hit_mod;
+                if v36 { dist_in } else { 0.0 },
+            );
+            let mut melee_mod = enemy_mod + att.hit_mod;
             // EV/tray split (found by #489, caveat 4): `p.unstoppable_ev` folds
             // in the unit-level prefix scan the EV imagination itself does
             // (ai_ev.gd:347, `stamp_unit_strikers`); the tray reads the plain
             // weapon flag alone.
-            if p.unstoppable_ev && melee_mod < 0 {
-                melee_mod = 0;
+            // EPOCH_73_V36 (SHO-08e-fix) — the Unstoppable split is the resolver's
+            // `m - own` clamp: the bearer's spell net (`att.hit_mod`) joins the enemy
+            // side, so the COMBINED non-own sum is clamped at 0; below the gate the
+            // whole sum keeps the old single clamp.
+            if p.unstoppable_ev {
+                if rule_on(att.rules_epoch, EPOCH_73_V36) {
+                    melee_mod = (att.hit_mod + enemy_mod).max(0);
+                } else if melee_mod < 0 {
+                    melee_mod = 0;
+                }
             }
             (raw, target) = fold_hit(def.modifier_sum, raw, melee_mod);
         }
@@ -539,20 +710,64 @@ pub fn profile_ev(
         // (dice.rs) supplies non-zero values. The Wave-6 spell-hit net is
         // the one modifier it does fold (ai_ev.gd:493's `+ spell_mod`): the
         // bearer's own buff/debuff ±N, 0 on every ctx_of-built ctx.
-        let mut shoot_mod = shooting_hit_modifier(
-            dist_in, att.artillery, def.stealth, def.artillery, def.evasive, 0, 0, 0, 0.0,
-            att.artillery_shooter_hit_bonus.unwrap_or(ARTILLERY_SHOOTER_HIT_BONUS),
-            def.artillery_target_hit_penalty.unwrap_or(ARTILLERY_TARGET_HIT_PENALTY),
-        ) + att.hit_mod;
+        // SHO-06e (rules 3.6): the shooter's +1 needs a Hold and a target past
+        // `artillery_shooter_over_in`; at epoch 72 both stamp off (false / 0.0) and the
+        // shared over-9" gate alone prices the old reading.
+        let art_gate_ok = !att.artillery_shooter_needs_hold || att.held;
+        let art_over_ok =
+            att.artillery_shooter_over_in <= 0.0 || dist_in > att.artillery_shooter_over_in;
+        let art_own = if att.artillery && dist_in > LONG_RANGE_IN && art_gate_ok && art_over_ok {
+            att.artillery_shooter_hit_bonus.unwrap_or(ARTILLERY_SHOOTER_HIT_BONUS)
+        } else {
+            0
+        };
+        // SHO-06e (rules 3.6): the target-side penalty is -1 past `artillery_target_over_in`,
+        // only while most models carry the rule and the unit has NOT moved this round (the
+        // old 9" leg stays below the gate, where the three fields are 0/false).
+        let v36_target_art = def.artillery_target_over_in > 0.0;
+        let target_art = if v36_target_art {
+            def.artillery_target_most_models && def.moved_round != def.round
+        } else {
+            def.artillery
+        };
+        let target_pen = if v36_target_art {
+            def.artillery_target_hit_penalty_v36.unwrap_or(1)
+        } else {
+            def.artillery_target_hit_penalty.unwrap_or(ARTILLERY_TARGET_HIT_PENALTY)
+        };
+        let enemy_mod = shooting_hit_modifier(
+            dist_in, att.artillery, def.stealth,
+            if v36_target_art { false } else { target_art }, def.evasive, 0, 0, 0, 0.0,
+            0,
+            target_pen,
+        )
+            // EPOCH_73_V36 — the volley's Aircraft -N, inside the same clamp.
+            - def.aircraft_hit_penalty;
+        let enemy_mod = if v36_target_art && target_art && dist_in > def.artillery_target_over_in {
+            enemy_mod - target_pen
+        } else {
+            enemy_mod
+        };
+        let own_mod = att.hit_mod + art_own;
+        let mut shoot_mod = own_mod + enemy_mod;
         // EV/tray split (found by #489, caveat 4) — see the melee branch above.
-        if p.unstoppable_ev && shoot_mod < 0 {
-            shoot_mod = 0; // GF v3.5.1 p.15, head wave 1 — clamp BEFORE weapon bonuses.
+        // EPOCH_73_V36 (SHO-08e-fix) — the resolver's `m - own` clamp: the bearer's
+        // spell net joins the enemy side, so the COMBINED non-own sum is clamped;
+        // the Artillery shooter's own +1 stays outside it.
+        if p.unstoppable_ev {
+            if rule_on(att.rules_epoch, EPOCH_73_V36) {
+                shoot_mod = art_own + (att.hit_mod + enemy_mod).max(0);
+            } else if shoot_mod < 0 {
+                shoot_mod = 0; // GF v3.5.1 p.15, head wave 1 — clamp BEFORE weapon bonuses.
+            }
         }
         (raw, target) = fold_hit(def.modifier_sum, raw, shoot_mod);
     }
     // --- Versatile Attack (ai_ev.gd:361-368) ---
     let mut versatile_ap = 0;
-    if p.versatile_attack && dist_in > LONG_RANGE_IN && (!melee || charging) {
+    let gate_in = if melee { charge_gate_in(att.rules_epoch) } else { LONG_RANGE_IN };
+    let versatile_over = att.versatile_no_gate || dist_in > gate_in;
+    if p.versatile_attack && versatile_over && (!melee || charging) {
         let choose_def = shielded_defense(def.defense, def.shielded_bonus(), def.def_floor());
         // EPOCH_38_WATCHBORN_LATCH — a latched activation pick rides the Ctx
         // (sim::versatile_latch): the EV reuses the FIRST eligible attack's
@@ -571,15 +786,33 @@ pub fn profile_ev(
         versatile_ap = ap_mod;
         (raw, target) = fold_hit(def.modifier_sum, raw, hit_mod);
     }
-    if p.precise {
-        (_, target) = fold_hit(def.modifier_sum, raw, 1);
+    // AIG-G2: Imprecise is Precise's mirror (-1, from `EPOCH_73_V36`); both on one weapon cancel.
+    let weapon_mod = p.precise as i64 - (att.v36_rules && p.imprecise) as i64;
+    if weapon_mod != 0 {
+        (_, target) = fold_hit(def.modifier_sum, raw, weapon_mod);
     }
     let mut hits = attacks_f * success_chance(target);
+    // MEL-09e-fix — EPOCH_73_V36: a fatigued melee striker's sixes still hit
+    // but fire no rule, so every on-6 bonus hit is muted here, not only the
+    // on-6 AP sub-batch below. This is the resolver's empty `trig` in
+    // `resolve_melee_leg`; Relentless stays ungated because it is shooting-only.
+    let fatigue_mutes = melee && att.fatigued && rule_on(att.rules_epoch, EPOCH_73_V36);
     // --- per-unmodified-6 bonus hits (ai_ev.gd:373-385) ---
     if !melee && p.relentless && dist_in > LONG_RANGE_IN {
         hits += attacks_f * SIX_P;
     }
-    if p.surge {
+    // SHO-18e (rules 3.6): the Surge SHOT/CHARGE alias families pay only from a shot over 9" or a
+    // charge over 6" — the resolver's own `alias_fires` condition (`resolve_melee_leg`; the volley
+    // fold reads 9"). `dist_in` is the charge gap `melee_ev` hands in (0.0 off a charge); a weapon's
+    // own Surge stamps no alias name and stays unconditional. DAT-12b-fix: an "Enhanced <X>" alias
+    // prints no distance gate, so the stamp stores the `-1.0` sentinel the dice twin already honours
+    // (`dice.rs::alias_fires`); the estimate must open that same gate.
+    let alias_gate_in = if melee { CHARGE_LONG_RANGE_IN } else { LONG_RANGE_IN };
+    let alias_fires = !p.alias_gate
+        || p.surge_alias_rule.is_empty()
+        || (!melee && p.surge_over_in < 0.0)
+        || dist_in > alias_gate_in;
+    if p.surge && alias_fires && !fatigue_mutes {
         hits += attacks_f * SIX_P;
     }
     // Block B6's extra-ATTACK-DIE Surge siblings (`p.surge_attack` /
@@ -588,11 +821,11 @@ pub fn profile_ev(
     // stays exactly as blind to the extra-die form as the table's own planner.
     // Furious: the weapon never carries the flag (`AiShooting._profile` sets no
     // "furious" key), so only the unit-level context can fire it — ai_ev.gd:379.
-    if melee && charging && att.furious {
+    if melee && charging && att.furious && !fatigue_mutes {
         hits += attacks_f * SIX_P;
     }
     let sergeant_attacks = p.sergeant_attacks.min(attacks_f as i64) as f64;
-    if sergeant_attacks > 0.0 {
+    if sergeant_attacks > 0.0 && !fatigue_mutes {
         hits += sergeant_attacks * SIX_P;
     }
     // --- on-6 AP sub-batch (ai_ev.gd:389-395) ---
@@ -600,24 +833,51 @@ pub fn profile_ev(
     if on6_ap == 0 && (p.rending || p.destructive) {
         on6_ap = RENDING_AP_BONUS;
     }
+    // MEL-09e — EPOCH_73_V36: a fatigued melee striker's sixes still hit but fire
+    // no rule (MEL-09's `fatigue_mutes_sixes`), so the whole on-6 AP sub-batch is
+    // priced at zero, exactly the resolver's `on6 = 0` in `resolve_melee_leg`.
+    if fatigue_mutes {
+        on6_ap = 0;
+    }
     let mut six_hits = if on6_ap > 0 { attacks_f * SIX_P } else { 0.0 };
     // --- Blast (ai_ev.gd:397-400) ---
     if p.blast > 1 {
         hits *= clampi(p.blast, 1, def.models.max(1)) as f64;
     }
     six_hits = six_hits.min(hits);
+    // --- Parry (rules 3.6, `EPOCH_73_V36`): the defender's dice cancel expected hits, the
+    // on-6 AP sub-batch first ("most dangerous first"); 0 below the wave. Melee only — the
+    // defender's Parry is a strike rule, never a volley one.
+    if melee {
+        let cancels = parry_cancels(def, hits);
+        let six_cut = cancels.min(six_hits);
+        six_hits -= six_cut;
+        hits -= cancels;
+    }
     // --- saves: Shielded, then Cover, then Guarded (ai_ev.gd:403-411) ---
-    // Cover and Guarded are SHOOTING-only reads: melee EV always values at
-    // dist 0, so the charge halves of both live in the dice path only.
-    let mut defense = shielded_defense(def.defense, def.shielded_bonus(), def.def_floor());
+    // Cover stays a SHOOTING-only read. The Guarded family's distance gate is the shot distance
+    // against the shared over-9" threshold, or (SHO-17e) the stamped charge gate against the W1.5b
+    // pre-charge gap for a melee strike; 0.0 below `EPOCH_73_V36` keeps the old melee number.
+    // SHO-14e — the ESTIMATE twin of SHO-14: a Pierce weapon's save drops the target's POSITIVE
+    // Defense modifiers at `EPOCH_73_V36` through the same `dice::pierce_ignores` predicate the
+    // resolver's save fold reads. Armor (already baked into `def.defense`) and Fortified stay.
+    let pierce = crate::dice::pierce_ignores(p, att);
+    let mut defense = shielded_defense(def.defense, if pierce { 0 } else { def.shielded_bonus() }, def.def_floor());
     if !melee && p.blast <= 1 && !p.indirect && !p.ignores_cover {
-        defense = covered_defense(defense, def.in_cover, def.def_floor());
+        defense = covered_defense(defense, if pierce { false } else { def.in_cover }, def.def_floor());
     }
-    if !melee {
-        // Audit 2026-09-13 §2.4 — the Sturdy-kind Boost replaces the gate; a
-        // MAX over the two readings, never a second -1 (the dice fold's twin).
-        defense = guarded_defense(defense, def.guarded && dist_in > LONG_RANGE_IN && !def.sturdy_boost_gates_guarded, def.def_floor());
-    }
+    // Audit 2026-09-13 §2.4 — the Sturdy-kind Boost replaces the gate; a
+    // MAX over the two readings, never a second -1 (the dice fold's twin).
+    let guarded_over_in = if melee { def.guarded_charge_over_in } else { LONG_RANGE_IN };
+    defense = guarded_defense(
+        defense,
+        !pierce
+            && def.guarded
+            && guarded_over_in > 0.0
+            && dist_in > guarded_over_in
+            && !def.sturdy_boost_gates_guarded,
+        def.def_floor(),
+    );
     // NML-1103 — target-property conditional AP (ai_ev.gd:412-417): Shatter,
     // Tear, Disintegrate, Melee Slayer, Piercing Assault, Piercing Hunter. The
     // `is_charging` argument is the GDScript's `def_ctx.get("charging", false)`
@@ -626,24 +886,49 @@ pub fn profile_ev(
     // `def.defense` is the RAW context Defense, not the ladder above.
     let mut ap = p.ap + versatile_ap;
     for c in &p.cond_ap {
-        ap += conditional_ap_bonus(c, def.tough.max(1), def.defense, false, dist_in, melee);
+        ap += conditional_ap_bonus_vs(c, &CondApTarget::of(def, p.range as f64), false, dist_in, melee);
     }
-    let bane = p.bane;
+    // SHO-10: a re-roll entry may name the target condition that opens its window;
+    // "" on every shipped entry, so every old EV answer stays put.
+    let bane = p.bane && (p.bane_condition.is_empty() || cond_met(&CondAp { condition: p.bane_condition.clone(), threshold: p.bane_threshold, ..Default::default() }, &CondApTarget::of(def, p.range as f64), false, dist_in, melee));
     let fort = def.fortified;
-    let mut unsaved = (hits - six_hits) * (1.0 - block_chance(defense, fortified_ap(ap, fort), bane))
+    // Rules 3.6 row MOR-12c (ai_ev.gd:648-655): the bearer's share of the plain
+    // hits (its attacks over the profile's, the dice path's same fraction) saves
+    // at AP(+sergeant_ap); 0 below the stamp's epoch.
+    let sgt_ap = p.sergeant_ap;
+    let sgt_frac = if sgt_ap > 0 {
+        let alive = att.models.max(1) as f64;
+        let share = (attacks_f / alive).round().max(1.0);
+        share.min(attacks_f) / attacks_f.max(1.0)
+    } else {
+        0.0
+    };
+    let plain = hits - six_hits;
+    let mut unsaved = plain * (1.0 - sgt_frac) * (1.0 - block_chance(defense, fortified_ap(ap, fort), bane))
+        + plain * sgt_frac * (1.0 - block_chance(defense, fortified_ap(ap + sgt_ap, fort), bane))
         + six_hits * (1.0 - block_chance(defense, fortified_ap(ap + on6_ap, fort), bane));
     // --- Deadly, Shred, Regeneration (ai_ev.gd:423-436) ---
+    let deadly_cap = def.tough.max(1);
+    let deadly_unsaved = unsaved; // A4: the raw unsaved count, before ×X
     if p.deadly > 0 {
-        unsaved *= deadly_multiplier(p.deadly, def.tough.max(1)) as f64;
+        unsaved *= deadly_multiplier(p.deadly, deadly_cap) as f64;
     }
-    if p.shred {
+    // SHO-18e: the Shred ALIAS family follows the same shot-9"/charge-6" gate; the weapon's own
+    // Shred flag stays unconditional, exactly like the Surge exception above.
+    let shred_alias_fires = !p.alias_gate || dist_in > alias_gate_in;
+    if p.shred || (p.shred_alias && shred_alias_fires) {
         unsaved += hits * SIX_P;
     }
     // ai_ev.gd:434-435 reads the SAME EV-imagination `unstoppable` key
     // `_profiles_of` stamps (the unit-level prefix scan) here too — EV/tray
     // split, found by #489 caveat 4.
     if def.regeneration && !(p.bypass_regen || p.rending || p.unstoppable_ev) {
-        unsaved *= 1.0 - success_chance(def.regen_target);
+        let keep = 1.0 - success_chance(def.regen_target);
+        unsaved *= keep;
+        // A4 (`EPOCH_72_PLAYTEST_RULES`, ai_ev.gd since #1914): all X wounds are rolled before the cap.
+        if def.playtest_rules && p.deadly > deadly_cap {
+            unsaved += deadly_unsaved * (deadly_regen_dealt(p.deadly, deadly_cap, keep) - deadly_cap as f64 * keep);
+        }
     }
     unsaved
 }
@@ -668,10 +953,11 @@ pub fn shoot_ev(
     let reach_gate = dist_in.ceil();
     for (k, &pi) in keep.iter().enumerate() {
         let p = &profiles[pi];
+        let printed = p.range as f64 + p.reach_bonus_in; // the table's `range + shooting_range_bonus`
         let reach = if shrouded {
-            shrouded_reach(p.range as f64, def.ranged_shroud_penalty_in, def.ranged_shroud_floor_in)
+            shrouded_reach(printed, def.ranged_shroud_penalty_in, def.ranged_shroud_floor_in)
         } else {
-            p.range as f64
+            printed
         };
         if reach >= reach_gate && p.range > 0 {
             total += profile_ev(p, attacks[k], att, def, dist_in, false);
@@ -696,16 +982,29 @@ pub fn ravage_ev(att: &Ctx, def: &Ctx) -> f64 {
 
 /// `AiEv.impact_ev` ai_ev.gd:512-529 — the charge's Impact pool (2+ to hit, no
 /// AP) plus the Heavy Impact pool (saves at AP(1)); the defender's Counter
-/// models strip the HEAVY dice first, defender-optimal.
+/// models and Brace carrier strip the HEAVY dice first, defender-optimal.
 ///
 /// `counter_models` is always 0 in the sim: `BattleSim._ctx_of` calls
 /// `AiEv.ctx_for(unit, in_cover)` and leaves the third argument at its default
 /// (battle_sim.gd:702, ai_ev.gd:135). Modelled anyway so the function is the
 /// GDScript's, not a specialisation of it.
+///
+/// Rules 3.6 (`EPOCH_73_V36`): Counter takes no Impact dice away — `ctx_for`
+/// stamps `counter_models` 0 from the wave on, so this subtraction is the
+/// old-epoch replay path only. Brace is the only 3.6 cut and joins the same
+/// total; it is stamped 0 below the wave, so old records replay byte-exact. A
+/// Fatigued braced defender removes nothing, as in the resolver.
 pub fn impact_ev(att: &Ctx, def: &Ctx) -> f64 {
     let models = att.models.max(0);
-    let counter =
-        def.counter_models.saturating_mul(def.counter_impact_per_model.unwrap_or(1));
+    let brace = if def.fatigued || def.brace_models <= 0 {
+        0
+    } else {
+        def.brace_impact_per_model.unwrap_or(1)
+    };
+    let counter = def
+        .counter_models
+        .saturating_mul(def.counter_impact_per_model.unwrap_or(1))
+        + brace;
     let heavy_raw = att.heavy_impact * models;
     let heavy_cut = counter.min(heavy_raw);
     let heavy_dice = heavy_raw - heavy_cut;
@@ -715,12 +1014,28 @@ pub fn impact_ev(att: &Ctx, def: &Ctx) -> f64 {
     }
     let p_hit = success_chance(IMPACT_HIT_TARGET);
     let defense = shielded_defense(def.defense, def.shielded_bonus(), def.def_floor());
-    let mut wounds = dice as f64 * p_hit * (1.0 - block_chance(defense, 0, false))
-        + heavy_dice as f64 * p_hit * (1.0 - block_chance(defense, 1, false));
+    // Rules 3.6 (`EPOCH_73_V36`) — Parry's expected cancels come off the Impact hits before the
+    // saves, the HEAVY pool first (the dice path's `parry_cancel` order, "most dangerous first").
+    let mut plain_hits = dice as f64 * p_hit;
+    let mut heavy_hits = heavy_dice as f64 * p_hit;
+    let cancels = parry_cancels(def, plain_hits + heavy_hits);
+    let heavy_cut = cancels.min(heavy_hits);
+    heavy_hits -= heavy_cut;
+    plain_hits -= (cancels - heavy_cut).min(plain_hits);
+    let mut wounds = plain_hits * (1.0 - block_chance(defense, 0, false))
+        + heavy_hits * (1.0 - block_chance(defense, 1, false));
     if def.regeneration {
         wounds *= 1.0 - success_chance(def.regen_target);
     }
     wounds
+}
+
+/// D-GATE6 (rules 3.6, `EPOCH_73_V36`): the pre-charge distance a charge EV is handed — the closest-model
+/// base-edge gap (lazily, so a record below the wave never pays for the measure) from the wave, the
+/// blind 0.0 below it (every older record prices byte-exact).
+#[inline]
+pub fn charge_estimate_gap_in(rules_epoch: u32, edge_gap_in: impl FnOnce() -> f64) -> f64 {
+    if rule_on(rules_epoch, EPOCH_73_V36) { edge_gap_in() } else { 0.0 }
 }
 
 /// `AiEv.melee_ev` ai_ev.gd:485-495 — every melee profile strikes (profile
@@ -729,17 +1044,20 @@ pub fn impact_ev(att: &Ctx, def: &Ctx) -> f64 {
 /// `profiles` is the unit's whole merged MELEE set and `attacks[k]` the
 /// survivor-scaled count of `profiles[k]` — the same split as `shoot_ev`, minus
 /// the range filter (every melee profile is range 0, so all of them strike).
+/// `charge_from_in` is `charge_dist_in` (ai_ev.gd:695): the distance a CHARGE's
+/// strikes are priced at, 0.0 for a strike that is not a charge.
 pub fn melee_ev(
     profiles: &[ShootProfile],
     attacks: &[i64],
     att: &Ctx,
     def: &Ctx,
     charging: bool,
+    charge_from_in: f64,
 ) -> f64 {
     let mut total = 0.0;
     for (k, p) in profiles.iter().enumerate() {
         if p.range <= 0 {
-            total += profile_ev(p, attacks[k], att, def, 0.0, charging);
+            total += profile_ev(p, attacks[k], att, def, if charging { charge_from_in } else { 0.0 }, charging);
         }
     }
     if charging {
@@ -769,35 +1087,35 @@ mod tests {
     }
 
     #[test]
-    fn striking_models_counts_only_those_within_2in_of_an_enemy() {
+    fn striking_models_counts_only_those_within_2in_of_an_enemy_at_epoch_72() {
         // Ten models in a line, one inch apart, an enemy at the head of the
         // line: only the first three sit within the 3" (2" reach + 1" base
-        // contact) centre-space threshold.
+        // contact) centre-space threshold. The 3.6 leg is MEL-08's (tests/sim/v36_melee.rs).
         let line: Vec<[f64; 3]> = (1..=10).map(|i| [i as f64 * crate::IN2M, 0.0, 0.0]).collect();
         let enemy = vec![[0.0, 0.0, 0.0]];
-        assert_eq!(striking_models(&line, &enemy, crate::acts::CURRENT_RULES_EPOCH), 3);
+        assert_eq!(striking_models(&line, &enemy, crate::acts::EPOCH_72_PLAYTEST_RULES), 3);
         assert_eq!(
-            striking_models(&line, &[], crate::acts::CURRENT_RULES_EPOCH),
+            striking_models(&line, &[], crate::acts::EPOCH_72_PLAYTEST_RULES),
             10,
             "no enemy positions -> everyone counts"
         );
     }
 
     #[test]
-    fn striking_models_ignores_enemies_beyond_4in_vertically() {
+    fn striking_models_ignores_enemies_beyond_4in_vertically_at_epoch_72() {
         // GF/AoF Advanced Rules v3.5.1 p.9: "within 2” horizontally and 4” vertically of an
         // enemy model ... may attack it." Gated on EPOCH_63_MELEE_HEIGHT (L1: every recorded
         // corpus has y = 0, so a replay at the OLD epoch is unchanged — pinned here).
         let enemy = vec![[0.0, 0.0, 0.0]];
         let five_up = vec![[crate::IN2M, 5.0 * crate::IN2M, 0.0]];
         let three_up = vec![[crate::IN2M, 3.0 * crate::IN2M, 0.0]];
-        assert_eq!(striking_models(&five_up, &enemy, crate::acts::CURRENT_RULES_EPOCH), 0);
+        assert_eq!(striking_models(&five_up, &enemy, crate::acts::EPOCH_72_PLAYTEST_RULES), 0);
         assert_eq!(
             striking_models(&five_up, &enemy, crate::acts::EPOCH_62_CASTING_MOD),
             1,
             "epoch 62 predates the height gate -- no replay changes (L1)"
         );
-        assert_eq!(striking_models(&three_up, &enemy, crate::acts::CURRENT_RULES_EPOCH), 1);
+        assert_eq!(striking_models(&three_up, &enemy, crate::acts::EPOCH_72_PLAYTEST_RULES), 1);
     }
 
     #[test]

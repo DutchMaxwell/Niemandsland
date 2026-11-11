@@ -107,6 +107,7 @@ var connected_peers: Array[int] = []
 ## Peers (by id) that announced a matching version. Host-only.
 var validated_peers: Dictionary = {}
 var _rejoined_peers: Dictionary = {}   # peer id -> true when its token already held a seat (a rejoin, not a new player)
+var _peer_rules_versions: Dictionary = {}   # peer id -> rules version it sent just before its version announce
 
 ## Remote peers (by id) that announced themselves BUSY (loading — e.g. importing an army).
 ## While non-empty the local player's object move/edit input is gated and a banner shows.
@@ -388,6 +389,12 @@ func get_game_version() -> String:
 	return str(ProjectSettings.get_setting(VERSION_SETTING, "unknown"))
 
 
+## The rules version this build plays (the gf rule map's core_version). Both ends must agree on
+## major.minor; the patch digit may differ.
+func get_rules_version() -> String:
+	return OPRApiClient.rules_core_version("gf")
+
+
 ## Whether a joining peer has passed the version handshake. Host-only.
 func is_peer_validated(id: int) -> bool:
 	return validated_peers.get(id, false)
@@ -440,6 +447,7 @@ const HOST_PEER_ID: int = 1
 ## checks the table against the sends.
 const HOST_ONLY_HANDLERS: PackedStringArray = [
 	"_rpc_reject_version",
+	"_rpc_reject_rules_version",
 	"_rpc_assign_slot",
 	"_rpc_remap_peer",
 	"sync_peer_busy_proxy",
@@ -449,6 +457,7 @@ const HOST_ONLY_HANDLERS: PackedStringArray = [
 ]
 const ANY_PEER_HANDLERS: PackedStringArray = [
 	"_rpc_announce_version",
+	"_rpc_announce_rules_version",
 	"spawn_object_networked",
 	"spawn_sandbox_terrain_networked",
 	"pin_ruler_networked",
@@ -559,6 +568,10 @@ func announce_version_to_host() -> void:
 		return
 	if not _validate_rpc_ready("announce_version"):
 		return
+	# The rules version travels in its own message, BEFORE the announce, so the announce keeps the
+	# two arguments a pre-0.3.15 host accepts (it drops the unknown message and still refuses a
+	# game-version mismatch with today's message). The channel is ordered: the host has it first.
+	_remote_call("_rpc_announce_rules_version", [get_rules_version()], 1)
 	_remote_call("_rpc_announce_version", [get_game_version(), _my_client_token], 1)
 
 
@@ -589,6 +602,15 @@ func _disconnect_peer_safe(id: int) -> void:
 		mp.disconnect_peer(id)
 
 
+## RPC (client → host), sent right before _rpc_announce_version: the joining peer's rules version.
+## A host from before 0.3.15 does not list this message and drops it.
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_announce_rules_version(client_rules: String) -> void:
+	if not multiplayer.is_server():
+		return
+	_peer_rules_versions[_get_sender()] = client_rules
+
+
 ## RPC (client → host): the joining peer announces its game version + stable identity
 ## token. The version check (and reject path) is unchanged and runs FIRST; only after
 ## validation do we resolve the token to a canonical slot. The client_token arg is
@@ -599,11 +621,23 @@ func _rpc_announce_version(client_version: String, client_token: String = "") ->
 	if not multiplayer.is_server():
 		return
 	var sender := _get_sender()
+	var client_rules := str(_peer_rules_versions.get(sender, ""))
+	_peer_rules_versions.erase(sender)   # one rules message per announce
 	var host_version := get_game_version()
 	if client_version != host_version:
 		push_warning("[Network] Version mismatch: host=%s, peer %d=%s — rejecting" % [host_version, sender, client_version])
 		_remote_call("_rpc_reject_version", [host_version], sender)
 		# Let the reject RPC flush, then drop the peer host-side.
+		get_tree().create_timer(0.5).timeout.connect(_disconnect_peer_safe.bind(sender))
+		return
+	# Same game version: the rules must match too (major.minor). No rules message = a build from
+	# before 0.3.15 = refused. Only a peer that passed the game check gets here, so it is new enough
+	# to understand the rules refusal.
+	var host_rules := get_rules_version()
+	if OPRApiClient._major_minor(client_rules) != OPRApiClient._major_minor(host_rules):
+		push_warning("[Network] Rules mismatch: host=%s, peer %d=%s — rejecting" % [
+			host_rules, sender, client_rules if not client_rules.is_empty() else "none"])
+		_remote_call("_rpc_reject_rules_version", [host_version, host_rules, client_rules], sender)
 		get_tree().create_timer(0.5).timeout.connect(_disconnect_peer_safe.bind(sender))
 		return
 	# One join = one handshake: a repeat announce from a peer already validated in its unchanged slot
@@ -632,6 +666,16 @@ func is_rejoin(peer_id: int) -> bool:
 func _rpc_reject_version(host_version: String) -> void:
 	push_warning("[Network] Host rejected us: host=%s, we=%s" % [host_version, get_game_version()])
 	version_rejected.emit(host_version, get_game_version())
+
+
+## RPC (host → client): same game version, other rules. Both texts name the rules version, so the
+## version-mismatch status line shows them; `my_rules` is what the host received from us.
+@rpc("authority", "call_remote", "reliable")
+func _rpc_reject_rules_version(host_version: String, host_rules: String, my_rules: String) -> void:
+	var host_text := "%s (rules %s)" % [host_version, host_rules]
+	var my_text := "%s (rules %s)" % [get_game_version(), my_rules if not my_rules.is_empty() else "none"]
+	push_warning("[Network] Host rejected us: host=%s, we=%s" % [host_text, my_text])
+	version_rejected.emit(host_text, my_text)
 
 
 ## Host: map a client token to its canonical slot, (re)binding the transport peer_id.

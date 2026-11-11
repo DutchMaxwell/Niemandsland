@@ -19,7 +19,8 @@ extends RefCounted
 ##
 ## Unit context dictionary (unit_ctx / build via ctx_for): quality:int, defense:int, tough:int,
 ## models:int, artillery:bool, furious:bool, fearless:bool, impact:int, stealth:bool, evasive:bool,
-## shielded:bool, in_cover:bool, counter_models:int, regeneration:bool. Missing keys default neutral.
+## shielded:bool, in_cover:bool, counter_models:int, brace_models:int, parry_dice:int,
+## regeneration:bool. Missing keys default neutral.
 
 # ===== Constants =====
 
@@ -54,6 +55,9 @@ const SELF_REPAIR_TARGET := 6
 ## that a set of unit members (the unit + its attached Heroes) grant to the WHOLE unit via any "* Aura"
 ## they carry. The base keeps any qualifier ("Bane in Melee Aura" -> "Bane in Melee"). Pure; used by the
 ## import-time expander so every downstream rule check then sees the granted rule unit-wide.
+## From EPOCH_73_V36 a modelled "Aura Channel" hands its `params.grants` VERBATIM (a rated aura keeps
+## its rating: "Ravage Aura" -> "Ravage(+1)"); the strip-" Aura" read stays the fallback for unmodelled
+## entries, so below the epoch the expansion is byte-identical.
 static func aura_granted_rules(members: Array) -> Array:
 	var granted: Array = []
 	for m in members:
@@ -61,12 +65,39 @@ static func aura_granted_rules(members: Array) -> Array:
 		if gu == null:
 			continue
 		for r in gu.get_special_rules():
-			var s := str(r).strip_edges()
-			if s.ends_with(" Aura"):
-				var base := s.trim_suffix(" Aura").strip_edges()
-				if not base.is_empty() and not granted.has(base):
-					granted.append(base)
+			var base := aura_granted_rule(gu, str(r))
+			if not base.is_empty() and not granted.has(base):
+				granted.append(base)
 	return granted
+
+
+## Rules 3.6 (EPOCH_73_V36): the Precision Charge / Fighter BASES pay the picked member itself (its own rules). Below the
+## epoch they read nothing; from it a member that also carries the Aura keeps the Aura's single +1 (the import copies the
+## base onto every Aura carrier). Core twin: unit.rs `precision_base_stands_down`.
+static func precision_base_stands_down(unit: GameUnit, rule: String) -> bool:
+	if rule != "Precision Charge" and rule != "Precision Fighter":
+		return false
+	return AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 or unit.has_special_rule(rule + " Aura")
+
+
+## The base rule ONE carried rule string grants when it is an "* Aura" ("" otherwise). From
+## EPOCH_73_V36 a modelled "Aura Channel" hands its `params.grants` VERBATIM (a rated aura keeps
+## its rating: "Ravage Aura" -> "Ravage(+1)"); the strip-" Aura" read stays the fallback for
+## unmodelled entries, so the expansion is byte-identical.
+static func aura_granted_rule(gu: GameUnit, rule: String) -> String:
+	var s := rule.strip_edges()
+	if not s.ends_with(" Aura"):
+		return ""
+	var base := s.trim_suffix(" Aura").strip_edges()
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		var entry := RulesRegistry.lookup(RulesRegistry.system_of_unit(gu),
+			RulesRegistry.faction_of_unit(gu), s)
+		if str(entry.get("primitive", "")) == "Aura Channel":
+			var params: Dictionary = entry.get("params", {})
+			var carried := str(params.get("grants", "")).strip_edges()
+			if not carried.is_empty():
+				base = carried
+	return base
 
 
 ## Whether ALL living models of `unit` carry `rule` — the trigger form of Stealth / Evasive / Fortified / …, and
@@ -92,6 +123,106 @@ static func rule_on_all_models(unit: GameUnit, rule: String, solo: bool = false)
 				if not hero.has_special_rule(rule):
 					return false
 	return found
+
+
+## Whether MOST living models of `unit` carry `rule` — the rules 3.6 majority form (ruling D-MOST): a strict
+## majority, models not wounds, every living joined hero one model however Tough. Rules live per unit, so every
+## living host model carries the host's rules and every living joined hero its own. `solo` is the same
+## unit-of-[1] collapse as in rule_on_all_models: the picked model's own unit answers alone.
+static func rule_on_most_models(unit: GameUnit, rule: String, solo: bool = false) -> bool:
+	if unit == null:
+		return false
+	var alive := unit.get_alive_count()
+	var with_count := alive if unit.has_special_rule(rule) else 0
+	if solo:
+		return with_count > 0
+	var total := alive
+	if unit.has_method("get_attached_heroes"):
+		for h in unit.get_attached_heroes():
+			var hero := h as GameUnit
+			if hero != null and hero.get_alive_count() > 0:
+				total += 1
+				if hero.has_special_rule(rule):
+					with_count += 1
+	return most_models_of(with_count, total)
+
+
+## The ONE strict-majority test every "most models" read shares (ruling D-MOST): more than half, so an exact
+## half and an empty unit are both false. The core's twin is unit.rs `most_models_of`.
+static func most_models_of(with_count: int, total: int) -> bool:
+	return with_count * 2 > total
+
+
+## Row MOR-02 (D-MOST): the Regeneration family names whose 3.6 text counts most models (Boosts keep all).
+const REGEN_MOST_MODELS := ["Regeneration", "Self-Repair", "Angelic Blessing", "Cursed Undead",
+	"Grounded Protection", "Knightborn", "Plaguebound", "Protected", "Protection Feat", "Warding",
+	"Resistance", "Spell Resistance"]
+
+
+## Most models for the names above from EPOCH_73_V36, else every model; `solo` = the Takedown unit of [1].
+## The core's twin is unit.rs `regen_family_on`.
+static func regen_family_on(unit: GameUnit, rule: String, solo: bool = false) -> bool:
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and rule in REGEN_MOST_MODELS:
+		return rule_on_most_models(unit, rule, solo)
+	return rule_on_all_models(unit, rule, solo)
+
+
+## MOR-05 — the Fortified and Shielded family names whose 3.6 wording says "most models" (the verified P1
+## list). The Guarded family is MOR-05b. The core's twin is unit.rs MOST_MODELS_DEFENCE.
+const MOST_MODELS_DEFENCE := ["Fortified", "Guardian", "Ossified", "Primeborn", "Warden", "Shielded"]
+
+
+## The all-models read of `rule`, except that from EPOCH_73_V36 the names above need only a strict majority.
+static func rule_on_defence_family(unit: GameUnit, rule: String, solo: bool = false) -> bool:
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and rule in MOST_MODELS_DEFENCE:
+		return rule_on_most_models(unit, rule, solo)
+	return rule_on_all_models(unit, rule, solo)
+
+
+## Row MOR-05b — the Guarded family names whose 3.6 wording says "most models". The core's twin is
+## unit.rs MOST_MODELS_GUARDED.
+const MOST_MODELS_GUARDED := ["Guarded", "Versatile Defense", "Sturdy", "Safety Gear", "Tenacious"]
+
+
+## Most models for the names above from EPOCH_73_V36, else every model; `solo` = the Takedown unit of [1].
+## The core's twin is unit.rs `guarded_family_on`.
+static func guarded_family_on(unit: GameUnit, rule: String, solo: bool = false) -> bool:
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and rule in MOST_MODELS_GUARDED:
+		return rule_on_most_models(unit, rule, solo)
+	return rule_on_all_models(unit, rule, solo)
+
+
+## Row MOR-06 (D-MOST) — the names whose 3.6 text counts most models; the core's twin is unit.rs MOST_MODELS_MOR06.
+const MOST_MODELS_MOR06 := ["Steadfast", "Battleborn", "Honor Code", "Vale Oath",
+	"Enhanced Vale Oath", "Unmovable", "Evasive", "Melee Evasion", "Melee Shrouding",
+	"Ranged Shrouding", "Precision Growth", "Piercing Frenzy", "Regenerative Strength",
+	"Precision Frenzy", "Fortified Growth", "Defensive Frenzy", "Piercing Growth", "Defensive Growth"]
+
+
+## Most models for the names above from EPOCH_73_V36, else every model; core twin: unit.rs `most_models_family_on`.
+static func most_models_family_on(unit: GameUnit, rule: String, solo: bool = false) -> bool:
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and rule in MOST_MODELS_MOR06:
+		return rule_on_most_models(unit, rule, solo)
+	return rule_on_all_models(unit, rule, solo)
+
+
+## FAB-C10 (rules 3.6 Dodge): the melee-evasion -1 a target carries — the plain "Melee Evasion" family
+## plus any OTHER entry on the same primitive (Dodge today; never name-hardcoded), read exactly like the
+## table's _solo_hit_mod_info: a `most_models` entry only from EPOCH_73_V36 and only on a majority, the
+## plain all-models arm otherwise. The extra entry's -1 holds only while the unit is NOT Fatigued.
+static func melee_evasion_on(unit: GameUnit) -> bool:
+	if most_models_family_on(unit, "Melee Evasion"):
+		return true
+	if unit == null or unit.is_fatigued:
+		return false
+	for e in RulesRegistry.unit_rules_of_primitive(unit, "Melee Evasion"):
+		var name := str((e as Dictionary)["name"])
+		if bool(((e as Dictionary).get("params", {}) as Dictionary).get("most_models", false)):
+			if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and rule_on_most_models(unit, name):
+				return true
+		elif rule_on_all_models(unit, name):
+			return true
+	return false
 
 
 ## EXACT unit-rule check — has_special_rule matches by PREFIX, so "Unpredictable" would false-positive
@@ -121,6 +252,72 @@ static func facet_applies(params: Dictionary, profile_range: int) -> bool:
 	return true
 
 
+## A1 (play test 29.10.2026): the profile prints Lacerate and no Bane. AiShooting folds Lacerate into the
+## `bane` flag for its Defense-6 re-roll, but the army-book Lacerate never ignores Regeneration (only Bane
+## does) — so such a profile's `bypass_regen` defaults to OFF. The table's twin: main._solo_profile_lacerate_only.
+## Below EPOCH_72_PLAYTEST_RULES it answers false (the legacy bypass), as the core's stamp does at 71.
+static func lacerate_only(profile: Dictionary) -> bool:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_72_PLAYTEST_RULES:
+		return false
+	var lacerate := false
+	for r in profile.get("rules", []):
+		var s := str(r).strip_edges()
+		if s.begins_with("Bane"):
+			return false
+		lacerate = lacerate or s.begins_with("Lacerate")
+	return lacerate
+
+
+## AI-G2 (EPOCH_73_V36): a WEAPON rule the map resolves to the Bane primitive (Smash, Reap, Decimate) re-rolls
+## Defense 6s like the printed Bane, under its entry's own `condition`, and cuts Regeneration only when the entry
+## prints `bypass_regen`. A profile that already banes keeps its own ungated window. The core's twin:
+## stamp_weapon_bane_alias.
+static func _stamp_weapon_bane_alias(fpd: Dictionary, unit: GameUnit) -> void:
+	if bool(fpd.get("bane", false)):
+		return
+	for r in fpd.get("rules", []):
+		var n := RulesRegistry.base_rule_name(str(r))
+		var e := RulesRegistry.lookup(RulesRegistry.system_of_unit(unit), RulesRegistry.faction_of_unit(unit), n)
+		var p: Dictionary = e.get("params", {})
+		if str(e.get("primitive", "")) != "Bane" or not bool(p.get("reroll_save_sixes", false)) \
+				or n.begins_with("Bane") or n.ends_with("Aura") or not facet_applies(p, int(fpd.get("range", 0))):
+			continue
+		fpd["bane"] = true
+		fpd["bypass_regen"] = bool(fpd.get("bypass_regen", false)) or bool(p.get("bypass_regen", false))
+		fpd["bane_alias"] = n
+		if p.has("condition"):
+			fpd["bane_condition"] = {"condition": str(p["condition"]), "threshold": int(p.get("threshold", 0))}
+		# Reap's widened window: successful saves from the entry's own `reroll_save_low` re-roll too.
+		var low := maxi(int(p.get("reroll_save_low", 0)), int(p.get("reroll_save_from", 0)))
+		if low > 1:
+			fpd["bane_low"] = low
+			fpd["bane_over_in"] = over_in_gate(p)
+		return
+
+
+## AI-08a (EPOCH_73_V36): a weapon rule read through its map entry, not its 3.5 name (the core's
+## stamp_map_cover_regen twin); the profile keeps the rule's name for the log line, a unit's cover-only rule too.
+static func _stamp_map_cover_regen(fpd: Dictionary, unit: GameUnit) -> void:
+	var rng := int(fpd.get("range", 0))
+	for r in fpd.get("rules", []):
+		var n := RulesRegistry.base_rule_name(str(r))
+		var e := RulesRegistry.lookup(RulesRegistry.system_of_unit(unit), RulesRegistry.faction_of_unit(unit), n)
+		var p: Dictionary = e.get("params", {})
+		var prim := str(e.get("primitive", "")) if facet_applies(p, rng) else ""
+		if prim == "Indirect" and n != "Indirect" and rng > 0 and p.get("cover_only", false) and p.get("ignores_cover", false):
+			fpd["ignores_cover"] = true
+			fpd["cover_rule"] = n
+		elif prim == "Lacerate" and not n.begins_with("Lacerate") and bool(p.get("bypass_regen", false)):
+			fpd["bypass_regen"] = true
+			fpd["regen_bypass_rule"] = n
+	if str(fpd.get("cover_rule", "")).is_empty() and bool(fpd.get("ignores_cover", false)) and rng > 0:
+		for e in RulesRegistry.unit_rules_of_primitive(unit, "Indirect"):
+			var ep: Dictionary = (e as Dictionary).get("params", {})
+			if str(e["name"]) != "Indirect" and ep.get("cover_only", false) and ep.get("ignores_cover", false):
+				fpd["cover_rule"] = str(e["name"])
+				break
+
+
 ## Rating X of a unit-level "Name(X)" special rule (0 if absent) — type-safe against label-only shapes
 ## (the wave-1 _rule_to_string lesson).
 static func unit_rating(unit: GameUnit, rule_name: String) -> int:
@@ -134,51 +331,185 @@ static func unit_rating(unit: GameUnit, rule_name: String) -> int:
 	return 0
 
 
+## AI-G2 (EPOCH_73_V36): the Brace a member carries as a UNIT rule the map resolves to the Brace primitive
+## ("Brace in Melee": its `rating`, or the printed X), like a Brace weapon: {"x": rating, "rule": book name},
+## {} without one. The core's twin: brace_of.
+static func brace_unit_rule(member: GameUnit) -> Dictionary:
+	for e in RulesRegistry.unit_rules_of_primitive(member, "Brace"):
+		var x := maxi(int(((e as Dictionary).get("params", {}) as Dictionary).get("rating", 0)), int((e as Dictionary).get("rating", 0)))
+		return {"x": maxi(x, 1), "rule": str((e as Dictionary)["name"])}
+	return {}
+
+
+## Rules 3.6 (`EPOCH_73_V36`) — the single Brace(X) rating a unit takes off a charge: X once for
+## the unit, host and joined heroes alike, however many models carry it. 0 below the wave or
+## without a carrier.
+static func _brace_cut(unit: GameUnit) -> int:
+	if unit == null or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return 0
+	var members: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		members = members + unit.get_attached_heroes()
+	var best := 0
+	for m in members:
+		var member := m as GameUnit
+		if member == null:
+			continue
+		var alive: int = member.get_alive_count()
+		if alive <= 0:
+			continue
+		var weapons: Array = []
+		if member.source_type == "opr" and member.source_data is OPRApiClient.OPRUnit:
+			weapons = (member.source_data as OPRApiClient.OPRUnit).weapons
+		for w in weapons:
+			if w is Object and AiShooting._has_rule(w, "Brace"):
+				best = maxi(best, maxi(AiShooting._rating_of(w, "Brace"), 1))
+				break
+		best = maxi(best, int(brace_unit_rule(member).get("x", 0)))
+	return best
+
+
+## Rules 3.6 (`EPOCH_73_V36`) — the Parry(X) dice ONE living carrier model brings: the unit-level
+## rating, else the best melee weapon's rating on the unit's own loadout. 0 below the wave and for a
+## unit without Parry. The defender's alive model count multiplies this in `_parry_cancels` — the
+## same per-carrier shape the Rust `Ctx::parry_dice` stamp uses.
+static func _parry_dice(unit: GameUnit) -> int:
+	if unit == null or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return 0
+	var by_name := unit_rating(unit, "Parry") if RulesRegistry.unit_rule_active(unit, "Parry") else 0
+	if by_name > 0:
+		return by_name
+	var weapons: Array = []
+	if unit.source_type == "opr" and unit.source_data is OPRApiClient.OPRUnit:
+		weapons = (unit.source_data as OPRApiClient.OPRUnit).weapons
+	var best := 0
+	for w in weapons:
+		if w is Object and AiShooting._field_i(w, "range_value", 0) <= 0 and AiShooting._has_rule(w, "Parry"):
+			best = maxi(best, maxi(AiShooting._rating_of(w, "Parry"), 1))
+	return best
+
+
+## Rules 3.6 (`EPOCH_73_V36`) — the expected hits a Parry(X) defender cancels from a strike:
+## `min(X * living models, expected hits) / 6`. 0 below the wave and without Parry.
+static func _parry_cancels(def_ctx: Dictionary, hits: float) -> float:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return 0.0
+	var dice := float(int(def_ctx.get("parry_dice", 0))) * float(maxi(int(def_ctx.get("models", 1)), 1))
+	if dice <= 0.0:
+		return 0.0
+	return minf(dice, hits) / 6.0
+
+
 ## Build the EV context for a live unit. `in_cover` / `counter_models` come from the caller's terrain /
 ## weapon knowledge (cover is a terrain read, counter models a weapon walk — injected, not divined).
 ## Wave 5: `defense` is the Armor(X)-adjusted value ("counts as having Defense X+", best-of — the same
-## AiCombatMath.armored_defense the dice path uses) and `morale_bonus` carries Banner's +1 (both gated
-## by the system-scoped RulesRegistry, so a rule only fires where its book fields it).
-static func ctx_for(unit: GameUnit, in_cover: bool = false, counter_models: int = 0) -> Dictionary:
+## AiCombatMath.armored_defense the dice path uses) and `morale_bonus` carries the Banner-family share
+## (`valiant_bonus` names its Valiant part; both gated by the system-scoped RulesRegistry).
+static func ctx_for(unit: GameUnit, in_cover: bool = false, counter_models: int = 0,
+		held: bool = true) -> Dictionary:
 	if unit == null:
 		return NEUTRAL_DEFENDER.duplicate()
+	# From EPOCH_73_V36 the Banner family share is the table's own read (`valiant_bonus` names its
+	# Valiant part); below 73 the estimate keeps the plain Banner-only number main priced before.
+	var morale_bonus := 0
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		morale_bonus = SoloController.morale_bonus_of(unit) - SoloController.morale_rating_of(unit)
+	elif RulesRegistry.unit_rule_active(unit, "Banner"):
+		morale_bonus = int(RulesRegistry.unit_param(unit, "Banner", "morale_bonus", AiCombatMath.BANNER_MORALE_BONUS))
 	return {
 		"quality": unit.get_quality(),
 		"defense": AiCombatMath.armored_defense(unit.get_defense(),
 			unit_rating(unit, "Armor") if RulesRegistry.unit_rule_active(unit, "Armor") else 0),
-		"morale_bonus": int(RulesRegistry.unit_param(unit, "Banner", "morale_bonus", AiCombatMath.BANNER_MORALE_BONUS)) \
-			if RulesRegistry.unit_rule_active(unit, "Banner") else 0,
+		"morale_bonus": morale_bonus,
+		"valiant_bonus": SoloController.valiant_bonus_of(unit) if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else 0,
 		"tough": maxi(unit_rating(unit, "Tough"), 1),
 		"models": maxi(unit.get_alive_count(), 1),
+		# Rules 3.6 (SHO-09s): the two TARGET-STATE facts, on the same basis as BattleSim._below_half
+		# so the snapshot ctx and this live ctx stay dict-identical (sim_parity_core_test).
+		"above_half_strength": not _below_half_live(unit),
+		"shaken_or_fatigued": unit.is_shaken or unit.is_fatigued,
+		"near_terrain": false,
 		"artillery": unit.has_special_rule("Artillery"),
+		# SHO-05 (rules 3.6): the Artillery shooter's own +1 needs a Hold and a target past
+		# `shooter_over_in`; both read off the entry below epoch 73 (0/false = over-9" alone).
+		"artillery_shooter_over_in": 0.0 if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 \
+			else float(RulesRegistry.unit_param(unit, "Artillery", "shooter_over_in", 0.0)),
+		"artillery_shooter_needs_hold": AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
+			and bool(RulesRegistry.unit_param(unit, "Artillery", "shooter_requires_hold", false)),
+		# SHO-06e (rules 3.6): the target-side Artillery keys SHO-06's dice leg reads; 0/0/false
+		# below epoch 73 keeps the old over-9" -2 leg.
+		"artillery_target_over_in": 0.0 if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 \
+			else float(RulesRegistry.unit_param(unit, "Artillery", "target_over_in", 0.0)),
+		"artillery_target_hit_penalty_v36": 0 if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 \
+			else int(RulesRegistry.unit_param(unit, "Artillery", "target_hit_penalty_v36", 1)),
+		"artillery_target_most_models": AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
+			and rule_on_most_models(unit, "Artillery"),
+		"held": held,
 		"furious": unit.has_special_rule("Furious"),
 		"fearless": rule_on_all_models(unit, "Fearless"),
 		"impact": unit_rating(unit, "Impact"),
 		"heavy_impact": unit_rating(unit, "Heavy Impact"),
 		"ravage": unit_rating(unit, "Ravage"),
-		"stealth": rule_on_all_models(unit, "Stealth"),
-		"evasive": rule_on_all_models(unit, "Evasive"),
-		"melee_evasion": rule_on_all_models(unit, "Melee Evasion"),
-		"fortified": rule_on_all_models(unit, "Fortified"),
+		"stealth": rule_on_most_models(unit, "Stealth") if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
+			else rule_on_all_models(unit, "Stealth"),
+		"evasive": most_models_family_on(unit, "Evasive"),
+		"melee_evasion": melee_evasion_on(unit),
+		"fortified": rule_on_defence_family(unit, "Fortified"),
 		"fortified_over_in": _fortified_over_in(unit),
 		# Guarded OR Versatile Defense's consistently-played def-half (both: +1 Def when shot/charged
 		# from over 9" — one EV flag, one dice-path arithmetic).
-		"guarded": rule_on_all_models(unit, "Guarded") or rule_on_all_models(unit, "Versatile Defense"),
-		"ranged_shrouding": rule_on_all_models(unit, "Ranged Shrouding"),
-		"shielded": rule_on_all_models(unit, "Shielded"),
+		"guarded": guarded_family_on(unit, "Guarded") or guarded_family_on(unit, "Versatile Defense"),
+		# SHO-17e (rules 3.6): the Guarded family's charge-leg gate — the shared 6" charge threshold
+		# from EPOCH_73_V36, 0.0 below it (the old estimate numbers). The melee EV reads the W1.5b
+		# pre-charge gap against it; the shot leg keeps the over-9" gate.
+		"guarded_charge_over_in": AiCombatMath.CHARGE_LONG_RANGE_IN \
+			if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else 0.0,
+		"ranged_shrouding": most_models_family_on(unit, "Ranged Shrouding"),
+		"shielded": rule_on_defence_family(unit, "Shielded"),
 		"in_cover": in_cover,
 		"counter_models": counter_models,
+		# Rules 3.6 (`EPOCH_73_V36`): the defender's Counter policy — it Counters first only when
+		# it will strike back at all and is not Fatigued/Shaken. `charge_score` reads this instead of
+		# guessing from the profiles; below the wave it stays unused (old behaviour is unconditional).
+		"counter_strikes_first": SoloController.counter_strikes_first(unit),
+		"brace_models": _brace_cut(unit),
+		"brace_impact_per_model": 1,
+		"parry_dice": _parry_dice(unit),
 		"regeneration": _regen_target(unit) > 0,
 		"regen_target": _regen_target(unit),
 		"regen_target_spell": _regen_target(unit, true),
+		"aircraft_hit_penalty": aircraft_hit_penalty(unit),
 	}
+
+
+## Rules 3.6 (SHO-09s): the LIVE half-strength read, the twin of `BattleSim._below_half`'s snapshot
+## basis — a single model measures Tough wounds left, a multi-model unit its alive models against the
+## starting size. Kept here so `ctx_for` and `BattleSim._ctx_of` carry the same two facts.
+static func _below_half_live(unit: GameUnit) -> bool:
+	if unit.models.size() == 1:
+		var wounds := 0
+		for m in unit.models:
+			var mi := m as ModelInstance
+			if mi != null and mi.is_alive:
+				wounds += mi.wounds_current
+		return AiCombatMath.at_or_below_half(wounds, (unit.models[0] as ModelInstance).wounds_max)
+	return AiCombatMath.at_or_below_half(unit.get_alive_count(), unit.models.size())
+
+
+## Rules 3.6 (EPOCH_73_V36): the to-hit penalty every shot AT `unit` takes because it is an Aircraft (the
+## map's Aircraft `target_hit_penalty`, beside its range penalty); 0 for every other unit and below 73.
+## The table's to-hit breakdown (main._solo_hit_mod_info) reads the same number.
+static func aircraft_hit_penalty(unit: GameUnit) -> int:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 or not RulesRegistry.unit_rule_active(unit, "Aircraft"):
+		return 0
+	return int(RulesRegistry.unit_param(unit, "Aircraft", "target_hit_penalty", 0))
 
 
 static func _fortified_over_in(unit: GameUnit) -> float:
 	var best := -1.0
 	for e in RulesRegistry.unit_rules_of_primitive(unit, "Fortified"):
 		var name := str((e as Dictionary).get("name", ""))
-		if name == "Fortified" or not rule_on_all_models(unit, name):
+		if name == "Fortified" or not rule_on_defence_family(unit, name):
 			continue
 		var threshold := float((e as Dictionary).get("params", {}).get("over_in", 0.0))
 		if best < 0.0 or threshold < best:
@@ -192,23 +523,36 @@ static func _fortified_over_in(unit: GameUnit) -> float:
 ## both read the target from the RulesRegistry mechanics map (constants as byte-identical fallback).
 static func _regen_target(unit: GameUnit, from_spell: bool = false) -> int:
 	var best := 0
-	if unit.has_special_rule("Regeneration") or unit.has_special_rule("Medical Training"):
+	var regen := unit.has_special_rule("Regeneration")
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		regen = regen_family_on(unit, "Regeneration")
+	if regen or unit.has_special_rule("Medical Training"):
 		best = int(RulesRegistry.unit_param(unit, "Regeneration", "ignore_target", REGENERATION_TARGET))
-	if rule_on_all_models(unit, "Self-Repair"):
+	if regen_family_on(unit, "Self-Repair"):
 		var target := int(RulesRegistry.unit_param(unit, "Self-Repair", "ignore_target", SELF_REPAIR_TARGET))
 		best = target if best == 0 else mini(best, target)
 	var key := "ignore_target_spell" if from_spell else "ignore_target"
-	if rule_on_all_models(unit, "Resistance"):
-		var target := int(RulesRegistry.unit_param(unit, "Resistance", key, 2 if from_spell else 6))
-		best = target if best == 0 else mini(best, target)
+	# MOR-07 (rules 3.6): "Spell Resistance" reaches the same primitive; both names take the
+	# most-models read from EPOCH_73_V36 (regen_family_on) and the every-model read below it.
+	for res_rule: String in ["Resistance", "Spell Resistance"]:
+		if res_rule == "Spell Resistance" and AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+			continue
+		if regen_family_on(unit, res_rule):
+			var target := int(RulesRegistry.unit_param(unit, res_rule, key, 2 if from_spell else 6))
+			best = target if best == 0 else mini(best, target)
 	for e in RulesRegistry.unit_rules_of_primitive(unit, "Regeneration"):
 		var name := str((e as Dictionary).get("name", ""))
 		if name in ["Regeneration", "Self-Repair", "Resistance"]:
 			continue
 		var params: Dictionary = (e as Dictionary).get("params", {})
-		if bool(params.get("all_models", false)) and not rule_on_all_models(unit, name):
+		if bool(params.get("all_models", false)) and not regen_family_on(unit, name):
 			continue
-		var target := int(params.get(key, params.get("ignore_target", 0)))
+		# MOR-17a: the three shared names read their own 3.6 spell target (2+) from 73.
+		var entry_key := key
+		if from_spell and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
+				and (name == "Warding" or name == "Knightborn" or name == "Angelic Blessing"):
+			entry_key = "ignore_target_spell_v36"
+		var target := int(params.get(entry_key, 2 if entry_key == "ignore_target_spell_v36" else params.get("ignore_target", 0)))
 		if target > 0 and (best == 0 or target < best):
 			best = target
 	return best
@@ -222,6 +566,15 @@ static func takedown_rule_for_profile(unit: GameUnit, profile_range: int) -> Str
 	return ""
 
 
+## Rules 3.6 (DAT-12b-fix): an explicit `over_in: 0` on an entry means "no distance
+## condition"; below `EPOCH_73_V36` the old 9" default stays, so an epoch-72 record replays.
+static func over_in_gate(params: Dictionary) -> float:
+	var gate := float(params.get("over_in", 9.0))
+	if gate != 0.0:
+		return gate
+	return -1.0 if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else 9.0
+
+
 ## The Bane family's WIDENED save re-roll window (wave 4: "Bestial Boost" / "Mischievous Boost" —
 ## `reroll_save_low` + `over_in` behind `upgrades`; wave 6: "Scrapper Boost" — the same window under
 ## its own param spelling `reroll_save_from`): past the entry's over_in the defender re-rolls
@@ -230,7 +583,7 @@ static func takedown_rule_for_profile(unit: GameUnit, profile_range: int) -> Str
 ## `over9` is the caller's past-9" flag (the melee resolve always carries an unknown distance, so
 ## false). Returns the applying entry's {low, over_in, rule}, or {} when the window does not apply.
 static func bane_boost_window(unit: GameUnit, over9: bool) -> Dictionary:
-	if unit == null or not over9:
+	if unit == null:
 		return {}
 	for e in RulesRegistry.unit_rules_of_primitive(unit, "Bane"):
 		var ed := e as Dictionary
@@ -244,8 +597,26 @@ static func bane_boost_window(unit: GameUnit, over9: bool) -> Dictionary:
 		var base := str(p.get("upgrades", ""))
 		if low <= 1 or base.is_empty() or not has_exact_rule(unit, base):
 			continue
-		return {"low": low, "over_in": float(p.get("over_in", 9.0)), "rule": str(ed["name"])}
+		var gate := over_in_gate(p)
+		if gate > 0.0 and not over9:
+			continue
+		return {"low": low, "over_in": gate, "rule": str(ed["name"])}
 	return {}
+
+
+## Rules 3.6 (SHO-10): does this profile's stamped Bane re-roll window open against THIS target? The
+## SAME predicate the conditional-AP leg runs (AiCombatMath.cond_met); no stamped condition (the only
+## shipped shape) always opens. `target` carries the TARGET-STATE keys (`above_half_strength`,
+## `shaken_or_fatigued`, `near_terrain`) the Rust table path passes; {} keeps them all false.
+static func bane_applies(profile: Dictionary, target_tough: int, target_defense: int,
+		dist_in: float, melee: bool, target: Dictionary = {}) -> bool:
+	var bc: Dictionary = profile.get("bane_condition", {})
+	if bc.is_empty():
+		return true
+	var view := target.duplicate()
+	view["weapon_range_in"] = float(profile.get("range", 0))
+	return AiCombatMath.cond_met(str(bc.get("condition", "")), bc, target_tough,
+		target_defense, false, dist_in, melee, view)
 
 
 ## Stamp the Sergeant facet onto a unit's weapon profiles (wave 5, model-level rule): the FIRST profile
@@ -257,6 +628,12 @@ static func bane_boost_window(unit: GameUnit, over9: bool) -> Dictionary:
 static func stamp_sergeant(profiles: Array, unit: GameUnit) -> Array:
 	if unit == null:
 		return profiles
+	# SHO-11 (rules 3.6): "Destructive" is the above-half-strength AP(+1) rule now,
+	# not the 3.5 unmodified-six AP(+4). Its 3.6 map entry reaches the conditional-AP
+	# pass; the old fixed on-6 flag must not double it from 73.
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		for fp in profiles:
+			(fp as Dictionary).erase("destructive")
 	for fp in profiles:
 		var fpd := fp as Dictionary
 		var takedown_name := takedown_rule_for_profile(unit, int(fpd.get("range", 0)))
@@ -274,8 +651,20 @@ static func stamp_sergeant(profiles: Array, unit: GameUnit) -> Array:
 			or not RulesRegistry.unit_rules_of_primitive(unit, "Versatile Attack").is_empty()):
 		# Coverage wave: DATA aliases (Watchborn — same over-9\" AP(+1)/+1-to-hit pick) stamp the
 		# same facet; the shooting half fires here, the charge half stays the tracked follow-up.
+		# Rules 3.6 (SHO-19): the family's map entries own the no-gate switch (Versatile Expert /
+		# Warrior); below the epoch the old over-9\" band stays.
+		var no_gate := false
+		if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+			for e in RulesRegistry.unit_rules_of_primitive(unit, "Versatile Attack"):
+				var ep: Dictionary = (e as Dictionary).get("params", {})
+				if bool(ep.get("no_gate_v36", false)):
+					no_gate = true
+					break
 		for vp in profiles:
-			(vp as Dictionary)["versatile_attack"] = true
+			var vpd := vp as Dictionary
+			vpd["versatile_attack"] = true
+			if no_gate:
+				vpd["versatile_no_gate"] = true
 	# Ferocious (unit rule: "when attacking, unmodified 6s deal 1 extra hit") = every weapon the unit
 	# uses gets Surge. Stamp the surge facet the EV metric and the dice path already read. Exact match so
 	# "Ferocious Boost" (a different rule) does not trigger it.
@@ -283,6 +672,7 @@ static func stamp_sergeant(profiles: Array, unit: GameUnit) -> Array:
 		if str(r).strip_edges() == "Ferocious":
 			for fp in profiles:
 				(fp as Dictionary)["surge"] = true
+				(fp as Dictionary)["surge_alias"] = true
 			break
 	# Coverage wave (2026-07-23): Surge-family DATA aliases via the generic primitive layer —
 	# Devout (exact), Point-Blank Surge (within 12\"), Bloodborn/Clan Warrior/Primal (extra ATTACK
@@ -296,6 +686,8 @@ static func stamp_sergeant(profiles: Array, unit: GameUnit) -> Array:
 		var sp: Dictionary = ed.get("params", {})
 		if not str(sp.get("upgrades", "")).is_empty():
 			continue   # upgrade entries (Devout Boost) ride the base facet below, never stamp alone
+		if n == "Great Sergeant" and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+			continue   # rules 3.6: the bearer's AP share below replaces the 5-6 window
 		# EPOCH_17_SURGE_SCOPE (sweep B, row "Surge when Shooting"): the entry
 		# carries `shooting_only` now — the book's own printed scope, so the
 		# melee twin stays silent from 17. Only THIS name's scope is
@@ -319,6 +711,7 @@ static func stamp_sergeant(profiles: Array, unit: GameUnit) -> Array:
 				fpd["surge_attack_rule"] = n
 			else:
 				fpd["surge"] = true
+				fpd["surge_alias"] = true
 				# The entry's own per-six bonus (dead-parameter recount 2026-09-15,
 				# family 2): every shipped row prints 1, the constant the fold
 				# hard-coded before this read.
@@ -358,8 +751,15 @@ static func stamp_sergeant(profiles: Array, unit: GameUnit) -> Array:
 			if bool(sp.get("extra_attack", false)) and bool(fpd.get("surge_attack", false)):
 				fpd["surge_attack_low"] = int(sp.get("surge_low", 5))   # Primal Boost: 5-6 spawn attacks
 			elif bool(fpd.get("surge", false)):
-				fpd["surge_low"] = int(sp.get("surge_low", 5))
-				fpd["surge_over_in"] = float(sp.get("over_in", 9.0))
+				var low := int(sp.get("surge_low", 5))
+				# DAT-12b-fix (lead review): an Enhanced entry drops the distance
+				# condition and keeps the BASE rule's window, not the 3.5 Boost's 5.
+				# From 73 only; below the gate the old Boost defaults stay byte-identical.
+				if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
+						and float(sp.get("over_in", 9.0)) == 0.0:
+					low = int(RulesRegistry.unit_param(unit, base_rule, "surge_low", 6))
+				fpd["surge_low"] = low
+				fpd["surge_over_in"] = over_in_gate(sp)
 	# Coverage wave (resolver audit): unit-level RENDING aliases ("Rending in Melee" / "when
 	# Shooting" — granted or direct): stamp the rending facet onto the gated profile set.
 	for e in RulesRegistry.unit_rules_of_primitive(unit, "Rending"):
@@ -378,6 +778,7 @@ static func stamp_sergeant(profiles: Array, unit: GameUnit) -> Array:
 			var fpd := fp as Dictionary
 			if facet_applies(sp, int(fpd.get("range", 0))):
 				fpd["shred"] = true
+				fpd["shred_alias"] = true
 	for e in RulesRegistry.unit_rules_of_primitive(unit, "Bane"):
 		var name := str((e as Dictionary).get("name", ""))
 		var sp: Dictionary = (e as Dictionary).get("params", {})
@@ -388,9 +789,18 @@ static func stamp_sergeant(profiles: Array, unit: GameUnit) -> Array:
 			var fpd := fp as Dictionary
 			if not facet_applies(sp, int(fpd.get("range", 0))):
 				continue
-			var existing_bypass := bool(fpd.get("bane", false)) and bool(fpd.get("bypass_regen", true))
+			var existing_bypass := bool(fpd.get("bane", false)) and bool(fpd.get("bypass_regen", not lacerate_only(fpd)))
 			fpd["bane"] = true
 			fpd["bypass_regen"] = existing_bypass or bool(sp.get("bypass_regen", false))
+	# SHO-10: a Bane BOOST entry's optional target condition rides the stamp (epoch 73 only).
+	for e in RulesRegistry.unit_rules_of_primitive(unit, "Bane"):
+		var bp: Dictionary = (e as Dictionary).get("params", {})
+		var low := maxi(int(bp.get("reroll_save_low", 0)), int(bp.get("reroll_save_from", 0)))
+		if low <= 1 or not bp.has("condition") or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 \
+				or not has_exact_rule(unit, str(bp.get("upgrades", ""))):
+			continue
+		for fp in profiles:
+			fp["bane_condition"] = {"condition": str(bp["condition"]), "threshold": int(bp.get("threshold", 0))}
 	# Coverage wave: cover-ignore facet (unit-level "Ignores Cover when shooting" and kin — the
 	# Indirect primitive's cover_only alias form): ranged profiles save against uncovered Defense.
 	for e in RulesRegistry.unit_rules_of_primitive(unit, "Indirect"):
@@ -401,6 +811,10 @@ static func stamp_sergeant(profiles: Array, unit: GameUnit) -> Array:
 				var fpd := fp as Dictionary
 				if int(fpd.get("range", 0)) > 0:
 					fpd["ignores_cover"] = true
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		for fp in profiles:
+			_stamp_map_cover_regen(fp as Dictionary, unit)
+			_stamp_weapon_bane_alias(fp as Dictionary, unit)
 	# "Indirect when Shooting" (unit-level name, gf/aof books: "This model gets Indirect when
 	# shooting"): stamp the PLAIN `indirect` facet on the ranged profiles — the table mirror of the
 	# core's unit.rs build_for epoch-6 walk (unit.rs:5119-5138), which the save gate, EV and sight
@@ -412,7 +826,12 @@ static func stamp_sergeant(profiles: Array, unit: GameUnit) -> Array:
 			var fpd := fp as Dictionary
 			if int(fpd.get("range", 0)) > 0:
 				fpd["indirect"] = true
-	if not RulesRegistry.unit_rule_active(unit, "Sergeant"):
+	# EPOCH_73_V36 (row MOR-12): from rules 3.6 the same bearer share strikes at its entry's
+	# `ap_bonus` (Sergeant 1, Great Sergeant 2) instead of buying extra hits on 6s; the dice path
+	# saves it as its own batch (main._solo_resolve_saves). Below 73 the 3.5 extra-hit share stays.
+	var v36 := AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
+	var sgt_rule := "Great Sergeant" if v36 and RulesRegistry.unit_rule_active(unit, "Great Sergeant") else "Sergeant"
+	if not RulesRegistry.unit_rule_active(unit, sgt_rule):
 		return profiles
 	var alive: int = maxi(unit.get_alive_count(), 1)
 	for p in profiles:
@@ -420,7 +839,15 @@ static func stamp_sergeant(profiles: Array, unit: GameUnit) -> Array:
 		var attacks := int(profile.get("attacks", 0))
 		if attacks <= 0:
 			continue
-		profile["sergeant_attacks"] = maxi(1, roundi(float(attacks) / float(alive)))
+		var share := maxi(1, roundi(float(attacks) / float(alive)))
+		if v36:
+			var params: Dictionary = RulesRegistry.lookup(RulesRegistry.system_of_unit(unit),
+				RulesRegistry.faction_of_unit(unit), sgt_rule).get("params", {})
+			profile["sergeant_ap_attacks"] = share
+			profile["sergeant_ap"] = int(params.get("ap_bonus", 1))
+			profile["sergeant_rule"] = sgt_rule
+		else:
+			profile["sergeant_attacks"] = share
 		break
 	return profiles
 
@@ -470,11 +897,23 @@ static func stamp_conditional_ap(profiles: Array, unit: GameUnit) -> Array:
 ## resolution step for step — to-hit modifiers, per-6 bonus hits, Blast, the Rending AP(+4) sub-batch,
 ## Bane save re-rolls, Deadly's Tough cap and the defender's Regeneration all use the same AiCombatMath
 ## rules as the dice path. `dist_in` gates the over-9" rules (ranged); melee is profile range 0.
+## SHO-18e (rules 3.6): the offensive Surge/Shred alias families pay only from a shot over 9" or
+## a charge over 6". `dist_in` is the distance `melee_ev` hands in (the W1.5b charge gap, 0.0 off
+## a charge), so this mirrors the resolver's `_solo_alias_family_over` / `_solo_alias_charge_over`.
+## A weapon's own Surge/Shred carries no alias marker and stays unconditional. Below
+## EPOCH_73_V36 the old unconditional read stays.
+static func _alias_gate_fires(melee: bool, dist_in: float) -> bool:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return true
+	return dist_in > (AiCombatMath.CHARGE_LONG_RANGE_IN if melee else AiCombatMath.LONG_RANGE_IN)
+
+
 static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary, dist_in: float, charging: bool) -> float:
 	var attacks := float(maxi(int(profile.get("attacks", 0)), 0))
 	if attacks <= 0.0:
 		return 0.0
 	var melee: bool = int(profile.get("range", 0)) <= 0
+	var alias_gate_fires := _alias_gate_fires(melee, dist_in)
 	var quality := int(att.get("quality", 4))
 	# Wave 6: a spell buff/debuff's ±N to hit rolls (AiSpell P3 seam) folds into the SAME net-modifier
 	# composition as the rule modifiers — 0 when absent, so the pre-spell EV is byte-identical.
@@ -490,28 +929,74 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 			target = 6
 		else:
 			target = AiCombatMath.thrust_to_hit(quality, charging and bool(profile.get("thrust", false)))
-			var melee_mod := AiCombatMath.melee_hit_modifier(bool(def_ctx.get("evasive", false)),
-				bool(def_ctx.get("melee_evasion", false))) + spell_mod
+			var enemy_mod := AiCombatMath.melee_hit_modifier(bool(def_ctx.get("evasive", false)),
+				bool(def_ctx.get("melee_evasion", false)))
+			var melee_mod := enemy_mod + spell_mod
 			# Unstoppable (GF v3.5.1 p.15, head wave 1): the dice clamp the composed situational
 			# modifier at 0 BEFORE weapon-own bonuses (Precise/Versatile) — main.gd:5946/9712.
 			# The EV judge never knew, so it under-valued Unstoppable strikes into Evasive targets.
-			if bool(profile.get("unstoppable", false)) and melee_mod < 0:
-				melee_mod = 0
+			# SHO-08e-fix (EPOCH_73_V36): the resolver's `m - own` clamp — the bearer's
+			# spell net joins the enemy side, so the COMBINED non-own sum is clamped at 0.
+			# Below the gate: the old single clamp.
+			if bool(profile.get("unstoppable", false)):
+				if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+					melee_mod = maxi(spell_mod + enemy_mod, 0)
+				elif melee_mod < 0:
+					melee_mod = 0
 			target = target - melee_mod
 	else:
 		target = AiCombatMath.reliable_quality(quality, bool(profile.get("reliable", false)))
-		var shoot_mod := AiCombatMath.shooting_hit_modifier(dist_in,
+		# SHO-05 (rules 3.6): gate the shooter's own Artillery +1 the way the dice path does — a
+		# Hold and a target past `shooter_over_in` (0/false below 73 = the over-9" gate alone).
+		var art_bonus: int = AiCombatMath.ARTILLERY_SHOOTER_HIT_BONUS
+		var art_over := float(att.get("artillery_shooter_over_in", 0.0))
+		if bool(att.get("artillery", false)) and (
+				(bool(att.get("artillery_shooter_needs_hold", false)) and not bool(att.get("held", true)))
+				or (art_over > 0.0 and dist_in <= art_over)):
+			art_bonus = 0
+		var art_own: int = art_bonus if (bool(att.get("artillery", false)) and dist_in > AiCombatMath.LONG_RANGE_IN) else 0
+		# SHO-06e (rules 3.6): the target-side Artillery penalty is -1 past `target_over_in`, only
+		# while most models carry the rule and the target has NOT moved this round (`held` is the
+		# same per-unit no-move stamp SHO-05 reads). Below 73 the keys stamp 0/0/false: old leg.
+		var art_target_over := float(def_ctx.get("artillery_target_over_in", 0.0))
+		var art_target_v36: bool = art_target_over > 0.0
+		var art_target_on: bool = bool(def_ctx.get("artillery", false))
+		if art_target_v36:
+			art_target_on = bool(def_ctx.get("artillery_target_most_models", false)) \
+				and bool(def_ctx.get("held", true))
+		var art_target_pen: int = int(def_ctx.get("artillery_target_hit_penalty_v36", 1))
+		var target_pen_arg: int = art_target_pen if art_target_v36 else AiCombatMath.ARTILLERY_TARGET_HIT_PENALTY
+		var enemy_mod := AiCombatMath.shooting_hit_modifier(dist_in,
 			bool(att.get("artillery", false)), bool(def_ctx.get("stealth", false)),
-			bool(def_ctx.get("artillery", false)), bool(def_ctx.get("evasive", false))) + spell_mod
-		if bool(profile.get("unstoppable", false)) and shoot_mod < 0:
-			shoot_mod = 0   # same clamp as the melee side; Fatigue stays above it (not a modifier)
+			art_target_on if not art_target_v36 else false, bool(def_ctx.get("evasive", false)),
+			0, target_pen_arg) \
+			- int(def_ctx.get("aircraft_hit_penalty", 0))   # rules 3.6 Aircraft -N, inside the clamp
+		if art_target_v36 and art_target_on and dist_in > art_target_over:
+			enemy_mod -= art_target_pen
+		var own_mod: int = spell_mod + art_own
+		var shoot_mod: int = own_mod + enemy_mod
+		# SHO-08e-fix (EPOCH_73_V36): the resolver's `m - own` clamp — the bearer's
+		# spell net joins the enemy side, so the COMBINED non-own sum is clamped; the
+		# Artillery shooter's own +1 stays outside it.
+		if bool(profile.get("unstoppable", false)):
+			if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+				shoot_mod = art_own + maxi(spell_mod + enemy_mod, 0)
+			elif shoot_mod < 0:
+				shoot_mod = 0   # same clamp as the melee side; Fatigue stays above it (not a modifier)
 		target = target - shoot_mod
 	target_raw = target
 	target = AiCombatMath.modified_hit_target(target_raw, 0)
 	# — Versatile Attack (army-book): over 9" (shooting), pick the EV-better of +1 to hit or AP(+1) via the
 	#   SAME chooser the dice path calls. hit_mod improves the to-hit here; the ap bonus folds in below —
 	var versatile := {}
-	if bool(profile.get("versatile_attack", false)) and dist_in > AiCombatMath.LONG_RANGE_IN and (not melee or charging):
+	# Rules 3.6 (SHO-19): the map's no-gate switch lifts the band for Versatile Expert; a
+	# CHARGE measures the 6\" band from EPOCH_73_V36 (twin: combat.rs charge_gate_in), a shot 9\".
+	var gate_in: float = AiCombatMath.LONG_RANGE_IN
+	if melee and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		gate_in = AiCombatMath.CHARGE_LONG_RANGE_IN
+	if bool(profile.get("versatile_attack", false)) \
+			and (bool(profile.get("versatile_no_gate", false)) or dist_in > gate_in) \
+			and (not melee or charging):
 		# Chooser inputs MUST match the dice path's (xhigh review find): main passes the SHIELDED defense
 		# (not covered) — pass the same basis here, or a Shielded target could flip the plan/dice mode choice.
 		var choose_def := AiCombatMath.shielded_defense(int(def_ctx.get("defense", 4)), bool(def_ctx.get("shielded", false)))
@@ -520,20 +1005,29 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 	# Precise (army-book weapon rule): flat +1 to hit when attacking, any range (melee or shooting).
 	if bool(profile.get("precise", false)):
 		target_raw -= 1
+	if bool(profile.get("imprecise", false)):   # AIG-G2: Precise's mirror (the flag is epoch-gated at build)
+		target_raw += 1
 	target = AiCombatMath.modified_hit_target(target_raw, 0)
 	var hits := attacks * AiCombatMath.success_chance(target)
+	# MEL-09e-fix (rules 3.6): a Fatigued melee striker's sixes still hit but fire no
+	# rule, so every on-6 bonus hit is muted — the resolver's empty `trig` twin.
+	# Relentless stays ungated because it is shooting-only.
+	var fatigue_mutes := melee and bool(att.get("fatigued", false)) \
+		and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
 	# — Per-unmodified-6 bonus hits (expected +attacks/6 each; "only the original hit counts as a 6") —
 	if not melee and bool(profile.get("relentless", false)) and dist_in > AiCombatMath.LONG_RANGE_IN:
 		hits += attacks * SIX_P
-	if bool(profile.get("surge", false)):
+	if not fatigue_mutes and bool(profile.get("surge", false)) \
+			and (not bool(profile.get("surge_alias", false)) or alias_gate_fires \
+				or (not melee and float(profile.get("surge_over_in", 0.0)) < 0.0)):
 		hits += attacks * SIX_P
-	if melee and charging and (bool(profile.get("furious", false)) or bool(att.get("furious", false))):
+	if not fatigue_mutes and melee and charging and (bool(profile.get("furious", false)) or bool(att.get("furious", false))):
 		hits += attacks * SIX_P
 	# — Sergeant (wave 5, model-level: the bearer's unmodified 6s deal +1 hit). The stamping caller
 	#   (stamp_sergeant) marks ONE profile with the bearer's own attack share; expectation = share/6,
 	#   the exact expected count of the bearer's 6s (mirrors the dice path's capped bonus) —
 	var sergeant_attacks := float(mini(int(profile.get("sergeant_attacks", 0)), int(attacks)))
-	if sergeant_attacks > 0.0:
+	if sergeant_attacks > 0.0 and not fatigue_mutes:
 		hits += sergeant_attacks * SIX_P
 	# — On-6 AP (wave 4 Rending/Destructive at the fixed +4; wave-5 army-book Crack at a stamped per-weapon
 	#   bonus): the expected unmodified-6 hits save at AP(+on6_ap); NOT Blast-multiplied (matches the
@@ -541,56 +1035,100 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 	var on6_ap := int(profile.get("on6_ap", 0))
 	if on6_ap == 0 and (bool(profile.get("rending", false)) or bool(profile.get("destructive", false))):
 		on6_ap = AiCombatMath.RENDING_AP_BONUS
+	# MEL-09e / MEL-09e-fix (rules 3.6): a Fatigued melee striker's sixes still hit but
+	# fire no rule, so the whole on-6 AP sub-batch is priced at zero — the resolver's
+	# `on6 = 0` twin.
+	if fatigue_mutes:
+		on6_ap = 0
 	var six_hits: float = attacks * SIX_P if on6_ap > 0 else 0.0
 	# — Blast (GF v3.5.1: each hit ×min(X, models in target), after other rules) —
 	var blast := int(profile.get("blast", 0))
 	if blast > 1:
 		hits *= float(clampi(blast, 1, maxi(int(def_ctx.get("models", 1)), 1)))
 	six_hits = minf(six_hits, hits)
+	# — Parry (rules 3.6, `EPOCH_73_V36`): the defender's dice cancel expected hits, the on-6 AP
+	#   sub-batch first ("most dangerous first"); 0 below the wave. Melee only — a strike rule.
+	if melee:
+		var cancels := _parry_cancels(def_ctx, hits)
+		six_hits -= minf(cancels, six_hits)
+		hits -= cancels
 	# — Saves: Shielded then Cover (shooting only; Blast AND Indirect ignore cover — wave 5 — not
 	#   Shielded) then AP —
-	var defense := AiCombatMath.shielded_defense(int(def_ctx.get("defense", 4)), bool(def_ctx.get("shielded", false)))
+	# SHO-14e — the ESTIMATE twin of SHO-14: the resolver's own `pierce_ignores` flag drops the
+	# target's POSITIVE Defense modifiers at `EPOCH_73_V36`. Armor and Fortified stay.
+	var pierce := AiCombatMath.pierce_ignores(profile)
+	var defense := AiCombatMath.shielded_defense(int(def_ctx.get("defense", 4)),
+		false if pierce else bool(def_ctx.get("shielded", false)))
 	if not melee and blast <= 1 and not bool(profile.get("indirect", false)) \
 			and not bool(profile.get("ignores_cover", false)):
 		# Ignores Cover (head wave 1): the dice path skips the cover save for these weapons
 		# (main.gd:3131/9755) — the EV judge kept charging it, so covered targets looked
 		# tougher to exactly the weapons built to punish them.
-		defense = AiCombatMath.covered_defense(defense, bool(def_ctx.get("in_cover", false)))
-	# Guarded (quick-win batch: "+1 to defense rolls" when shot or charged from over 9" away) — the
-	# SHOOTING side gates on the volley distance here; the charge side lives only in the dice
-	# resolution, because melee EV always values at dist 0 (the Versatile Attack precedent).
-	if not melee:
+		defense = AiCombatMath.covered_defense(defense,
+			false if pierce else bool(def_ctx.get("in_cover", false)))
+	# Guarded (rules 3.6): the +1 needs the attack to cross the stamped gate — the shot distance
+	# over 9", or (SHO-17e) the W1.5b pre-charge gap over the 6" charge gate; 0.0 below the epoch
+	# keeps the old melee number. The charge side rides `melee_ev`'s `charge_dist_in`.
+	var guard_gate: float = AiCombatMath.LONG_RANGE_IN if not melee \
+		else float(def_ctx.get("guarded_charge_over_in", 0.0))
+	if guard_gate > 0.0:
 		defense = AiCombatMath.guarded_defense(defense,
-			bool(def_ctx.get("guarded", false)) and dist_in > AiCombatMath.LONG_RANGE_IN)
+			(not pierce) and bool(def_ctx.get("guarded", false)) and dist_in > guard_gate)
 	var ap := int(profile.get("ap", 0)) + int(versatile.get("ap", 0))   # Versatile Attack AP(+1) mode
 	# Target-property conditional AP (Shatter/Tear/Melee Slayer/Disintegrate): value the extra AP this
 	# weapon gets against THIS target, so the AI's targeting matches the dice resolution. One truth with
 	# main._solo_conditional_ap (both read the same registry params via AiCombatMath.conditional_ap_bonus).
 	for cap in profile.get("cond_ap", []):
 		ap += AiCombatMath.conditional_ap_bonus(cap as Dictionary, maxi(int(def_ctx.get("tough", 1)), 1),
-			int(def_ctx.get("defense", 4)), charging, dist_in, melee)
-	var bane := bool(profile.get("bane", false))
+			int(def_ctx.get("defense", 4)), charging, dist_in, melee, {
+				"weapon_range_in": float(profile.get("range", 0)),
+				"above_half_strength": bool(def_ctx.get("above_half_strength", false)),
+				"shaken_or_fatigued": bool(def_ctx.get("shaken_or_fatigued", false)),
+				"near_terrain": bool(def_ctx.get("near_terrain", false))})
+	# SHO-10: a re-roll entry's target condition (stamped above, epoch 73 only) can shut the
+	# window; "" on every shipped entry keeps the old EV answer.
+	var bane := bool(profile.get("bane", false)) and bane_applies(profile,
+		maxi(int(def_ctx.get("tough", 1)), 1), int(def_ctx.get("defense", 4)), dist_in, melee, {
+			"above_half_strength": bool(def_ctx.get("above_half_strength", false)),
+			"shaken_or_fatigued": bool(def_ctx.get("shaken_or_fatigued", false)),
+			"near_terrain": bool(def_ctx.get("near_terrain", false))})
 	# Fortified (defender): each incoming hit's FINAL AP counts as -1 (min 0) — applied per sub-batch.
 	var fort := bool(def_ctx.get("fortified", false))
 	var fort_over := float(def_ctx.get("fortified_over_in", -1.0))
 	if fort_over >= 0.0 and (fort_over == 0.0 or (dist_in > fort_over and (not melee or charging))):
 		fort = true
-	var unsaved := (hits - six_hits) * (1.0 - block_chance(defense, AiCombatMath.fortified_ap(ap, fort), bane)) \
+	# — Sergeant from rules 3.6 (row MOR-12): the bearer's share of the plain hits (its attacks over the
+	#   profile's, the dice path's same fraction) saves at AP(+sergeant_ap); 0 below the stamp's epoch —
+	var sgt_ap := int(profile.get("sergeant_ap", 0))
+	var sgt_frac: float = minf(float(profile.get("sergeant_ap_attacks", 0)), attacks) / maxf(attacks, 1.0) if sgt_ap > 0 else 0.0
+	var plain := hits - six_hits
+	var unsaved := plain * (1.0 - sgt_frac) * (1.0 - block_chance(defense, AiCombatMath.fortified_ap(ap, fort), bane)) \
+		+ plain * sgt_frac * (1.0 - block_chance(defense, AiCombatMath.fortified_ap(ap + sgt_ap, fort), bane)) \
 		+ six_hits * (1.0 - block_chance(defense, AiCombatMath.fortified_ap(ap + on6_ap, fort), bane))
 	# — Deadly (Tough-capped multiply) —
 	var deadly := int(profile.get("deadly", 0))
+	var deadly_cap := maxi(int(def_ctx.get("tough", 1)), 1)
+	var deadly_unsaved := unsaved   # A4: the raw unsaved count, before ×X
 	if deadly > 0:
-		unsaved *= float(AiCombatMath.deadly_multiplier(deadly, maxi(int(def_ctx.get("tough", 1)), 1)))
+		unsaved *= float(AiCombatMath.deadly_multiplier(deadly, deadly_cap))
 	# — Shred (wave 5): every save die (one per hit) that lands a natural 1 deals +1 wound — expected
 	#   +hits/6, NOT Deadly-multiplied (mirrors the dice path's save-step reading) —
-	if bool(profile.get("shred", false)):
+	if bool(profile.get("shred", false)) \
+			and (not bool(profile.get("shred_alias", false)) or alias_gate_fires):
 		unsaved += hits * SIX_P
 	# — Regeneration family (5+ Regeneration / 6+ Self-Repair ignores; Bane/Rending/UNSTOPPABLE bypass
 	#   it — main.gd:6772/6852, W-P1 parity fix: the unstoppable flag was parsed but never read here.
-	#   Destructive does NOT bypass, so its wounds are reduced here too) —
-	if bool(def_ctx.get("regeneration", false)) and not ((bane and bool(profile.get("bypass_regen", true))) or bool(profile.get("rending", false)) \
+	#   Destructive does NOT bypass, so its wounds are reduced here too; nor does Lacerate, A1) —
+	#   AI-08a: an explicit bypass_regen counts without Bane too (the map-read Anti-Regen weapon stamp).
+	if bool(def_ctx.get("regeneration", false)) and not (bool(profile.get("bypass_regen", bane and not lacerate_only(profile))) or bool(profile.get("rending", false)) \
 			or bool(profile.get("unstoppable", false))):
-		unsaved *= 1.0 - AiCombatMath.success_chance(int(def_ctx.get("regen_target", REGENERATION_TARGET)))
+		var keep := 1.0 - AiCombatMath.success_chance(int(def_ctx.get("regen_target", REGENERATION_TARGET)))
+		unsaved *= keep
+		# A4 (maintainer ruling 29.10.2026): all X wounds are rolled before the cap — past the cap that is
+		# worth more than the capped X × keep above. Below it nothing changes (byte-identical). The core's
+		# twin (combat.rs) reads the frozen EPOCH_72_PLAYTEST_RULES, so this mirror does too.
+		if deadly > deadly_cap and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_72_PLAYTEST_RULES:
+			unsaved += deadly_unsaved * (AiCombatMath.deadly_regen_dealt(deadly, deadly_cap, keep) - float(deadly_cap) * keep)
 	return unsaved
 
 
@@ -600,6 +1138,19 @@ static func block_chance(defense: int, ap: int, bane: bool) -> float:
 	var p := AiCombatMath.success_chance(AiCombatMath.save_target(defense, ap))
 	if bane:
 		p = (p - SIX_P) + SIX_P * p
+	return clampf(p, 0.0, 1.0)
+
+
+## The widened Bane window (rules 3.6 spell tokens): every successful unmodified save at or above
+## `from` re-rolls once, in addition to the base sixes. `from >= 6` is exactly block_chance.
+static func block_chance_from(defense: int, ap: int, bane: bool, from: int) -> float:
+	if from >= AiCombatMath.UNMODIFIED_SIX:
+		return block_chance(defense, ap, bane)
+	var p := AiCombatMath.success_chance(AiCombatMath.save_target(defense, ap))
+	if bane:
+		var target := clampi(AiCombatMath.save_target(defense, ap), AiCombatMath.BEST_HIT_TARGET, AiCombatMath.UNMODIFIED_SIX)
+		var first := maxi(clampi(from, AiCombatMath.BEST_HIT_TARGET, AiCombatMath.UNMODIFIED_SIX), target)
+		p -= float(7 - first) / 6.0 * (1.0 - p)
 	return clampf(p, 0.0, 1.0)
 
 
@@ -655,6 +1206,9 @@ static func melee_ev(profiles: Array, att: Dictionary, def_ctx: Dictionary, char
 ## Expected Ravage(X) wounds of a melee turn (army-book rule): X dice per alive bearer model, each 6+
 ## one DIRECT wound — no hit roll, no save; only Regeneration thins it (no bypass clause).
 static func ravage_ev(att: Dictionary, def_ctx: Dictionary) -> float:
+	# MEL-11 (rules 3.6): a Fatigued attacker rolls no Ravage (the core zeroes it in `ctx_of_melee`).
+	if bool(att.get("fatigued", false)) and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		return 0.0
 	var dice := int(att.get("ravage", 0)) * maxi(int(att.get("models", 0)), 0)
 	if dice <= 0:
 		return 0.0
@@ -665,13 +1219,20 @@ static func ravage_ev(att: Dictionary, def_ctx: Dictionary) -> float:
 
 
 ## Expected Impact wounds of a charge (GF/AoF v3.5.1 p.13): X dice per charging model minus the
-## defender's Counter models (impact_total_dice), hit on 2+, saved at the Shielded-adjusted Defense
-## (no AP — Impact is not a weapon), Regeneration applies (no bypass).
+## defender's single Brace(X) cut (impact_total_dice), hit on 2+, saved at the Shielded-adjusted
+## Defense (no AP — Impact is not a weapon), Regeneration applies (no bypass).
 static func impact_ev(att: Dictionary, def_ctx: Dictionary) -> float:
-	# Heavy Impact rides as a SECOND pool whose hits save at AP(1); Counter's denial strips the heavy
-	# dice first (defender-optimal — mirrors the dice path).
+	# Heavy Impact rides as a SECOND pool whose hits save at AP(1); the cut strips the heavy dice
+	# first (defender-optimal — mirrors the dice path). Rules 3.6 (`EPOCH_73_V36`): Counter takes no
+	# Impact dice away, so the injected `counter_models` is read below the wave only; Brace joins the
+	# same cut, and a Fatigued braced defender removes nothing.
 	var models := maxi(int(att.get("models", 0)), 0)
-	var counter := int(def_ctx.get("counter_models", 0))
+	var brace := int(def_ctx.get("brace_models", 0))
+	if bool(def_ctx.get("fatigued", false)):
+		brace = 0
+	var counter := brace
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		counter += int(def_ctx.get("counter_models", 0))
 	var heavy_raw := int(att.get("heavy_impact", 0)) * models
 	var heavy_cut := mini(counter, heavy_raw)
 	var heavy_dice := heavy_raw - heavy_cut
@@ -680,8 +1241,16 @@ static func impact_ev(att: Dictionary, def_ctx: Dictionary) -> float:
 		return 0.0
 	var p_hit := AiCombatMath.success_chance(AiCombatMath.IMPACT_HIT_TARGET)
 	var defense := AiCombatMath.shielded_defense(int(def_ctx.get("defense", 4)), bool(def_ctx.get("shielded", false)))
-	var wounds := float(dice) * p_hit * (1.0 - block_chance(defense, 0, false)) \
-		+ float(heavy_dice) * p_hit * (1.0 - block_chance(defense, 1, false))
+	# Rules 3.6 (`EPOCH_73_V36`) — Parry's expected cancels come off the Impact hits before the
+	# saves, the HEAVY pool first (the dice path's `parry_cancel` order, "most dangerous first").
+	var plain_hits := float(dice) * p_hit
+	var heavy_hits := float(heavy_dice) * p_hit
+	var cancels := _parry_cancels(def_ctx, plain_hits + heavy_hits)
+	var parry_heavy_cut := minf(cancels, heavy_hits)
+	heavy_hits -= parry_heavy_cut
+	plain_hits -= minf(cancels - parry_heavy_cut, plain_hits)
+	var wounds := plain_hits * (1.0 - block_chance(defense, 0, false)) \
+		+ heavy_hits * (1.0 - block_chance(defense, 1, false))
 	if bool(def_ctx.get("regeneration", false)):
 		wounds *= 1.0 - AiCombatMath.success_chance(int(def_ctx.get("regen_target", REGENERATION_TARGET)))
 	return wounds
@@ -696,19 +1265,29 @@ static func charge_score(our_profiles: Array, us: Dictionary, their_profiles: Ar
 		charge_dist_in: float = 0.0) -> float:
 	var dealt := melee_ev(our_profiles, us, them, true, charge_dist_in)
 	# Counter strikes first (p.13): first-order attacker attrition = counter wounds / our wound pool.
+	# Rules 3.6 (`EPOCH_73_V36`): only a defender that will actually strike back Counters first —
+	# `ctx_for` stamps the policy (fresh, not Fatigued/Shaken, a usable melee weapon). A hand-built
+	# context without the key counts no Counter first; below the wave the old unconditional read stays.
 	var counter_first := 0.0
-	for p in their_profiles:
-		var profile := p as Dictionary
-		if int(profile.get("range", 0)) <= 0 and bool(profile.get("counter", false)):
-			counter_first += profile_ev(profile, them, us, 0.0, false)
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 \
+			or bool(them.get("counter_strikes_first", false)):
+		for p in their_profiles:
+			var profile := p as Dictionary
+			if int(profile.get("range", 0)) <= 0 and bool(profile.get("counter", false)):
+				counter_first += profile_ev(profile, them, us, 0.0, false)
 	var pool := maxf(1.0, float(int(us.get("models", 1))) * float(maxi(int(us.get("tough", 1)), 1)))
 	dealt *= clampf(1.0 - counter_first / pool, 0.0, 1.0)
 	var taken := melee_ev(their_profiles, them, us, false)
 	var risk_weight: float = 0.5 if bool(us.get("fearless", false)) else 1.0
 	# Banner (wave 5): +1 to morale test rolls shaves 1/6 off the chance a failed test sticks, so the
 	# wounds-taken weight relaxes by morale_bonus/6 — an advisory heuristic, tie-breaks only (the same
-	# discipline as the Fearless half-weight above).
-	risk_weight *= maxf(0.0, 1.0 - float(int(us.get("morale_bonus", 0))) * SIX_P)
+	# discipline as the Fearless half-weight above). MOR-09 Valiant: inside the 6" charge band only the
+	# Valiant-family share drops; a plain Banner keeps its +1. Negative distance = unknown.
+	var morale_bonus := int(us.get("morale_bonus", 0))
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
+			and charge_dist_in >= 0.0 and charge_dist_in <= AiCombatMath.CHARGE_LONG_RANGE_IN:
+		morale_bonus -= mini(int(us.get("valiant_bonus", 0)), morale_bonus)
+	risk_weight *= maxf(0.0, 1.0 - float(morale_bonus) * SIX_P)
 	return dealt - taken * risk_weight
 
 

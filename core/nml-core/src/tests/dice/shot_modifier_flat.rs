@@ -30,7 +30,7 @@ use super::*;
     /// bucket and improves the to-hit at EVERY range. RED (drop the name from
     /// `stamp_shot_modifier`'s array): the rifle stays at Quality 4+.
     #[test]
-    fn a_targeting_visor_boost_carrier_improves_at_every_range() {
+    fn an_enhanced_targeting_visor_carrier_improves_at_every_range() {
         let us = c3_static("visor_boost");
         assert_eq!(us.shoot[0].hit_bonus, 1, "flat bucket");
         assert_eq!(us.shoot[0].hit_bonus_over9, 0);

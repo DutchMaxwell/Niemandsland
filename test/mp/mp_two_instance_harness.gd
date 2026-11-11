@@ -23,6 +23,8 @@ const P2A_UNIT := "mp2_p2a"
 ## #1882: the guest's own caster for the interference ask (a seat that can lend tokens).
 const GUEST_CASTER_UNIT := "mp2_guestcaster"
 const INTERFERENCE_SPELL := "Harness Hex"
+## 3.5: the guest's Advance & Shoot gun (P2 Alpha, three models).
+const AUTO_WEAPON := "Harness Rifle"
 
 var _args: Dictionary = {}
 var _main: Node = null
@@ -51,6 +53,10 @@ var _host_left_at := 0.0        # bugs 9+10: unix time the guest's "host left" n
 var _net_status_seen: Array = []  # bug 4: every network status text shown, in order (the hiccup notice)
 var _expect_link_cut := false     # step 23: a reconnect failure is data, not a test failure
 var _link_events: Array = []      # step 23: relay rejoin signals in order ({"t_ms", "e", "arg"})
+var _auto_preview: Array = []     # 3.5: the guest's previewed landing, one [x, y, z] per model
+var _auto_verb_done := false      # 3.5: the guest's clicked verb ran to its end
+var _auto_goal := Vector3.ZERO     # 1.8f: the table point the guest's Advance aims at
+var _tray_rolls: Array = []       # 3.5: every roll this tray showed, "local: <purpose>" / "remote: <purpose>"
 
 
 func _ready() -> void:
@@ -83,6 +89,7 @@ func _ready() -> void:
 	_log("start relay=%s seed=%s" % [relay_url, str(_args.get("seed", "240904"))])
 	_main = load("res://scenes/main.tscn").instantiate()
 	_main.name = "Main"
+	_listen_net_status()
 	get_tree().root.call_deferred("add_child", _main)
 	call_deferred("_wire_signals")
 
@@ -134,8 +141,8 @@ func _wire_signals() -> void:
 func _process(_delta: float) -> void:
 	var now := Time.get_ticks_msec()
 	var net_label = _main.get("network_status_label") if is_instance_valid(_main) else null
-	if net_label is Label and (_net_status_seen.is_empty() or _net_status_seen[-1] != net_label.text):
-		_net_status_seen.append(net_label.text)
+	if net_label is Label:   # fallback for the few texts main.gd writes straight to the label ("Hosting …")
+		_record_net_status(net_label.text)
 	_was_ready = _was_ready or _session_ready()
 	if not _failed and not _was_ready \
 			and float(now - _started_ms) / 1000.0 > CONNECT_TIMEOUT_S:
@@ -145,6 +152,25 @@ func _process(_delta: float) -> void:
 		_write_state()
 	if not _command_busy:
 		_poll_command()
+
+
+## #1958: GameMenu.set_status reports every network status the game sets, so two statuses set inside one
+## frame are both recorded (the per-frame look at the label saw only the last). Set by name, so this file
+## still loads against a GameMenu without the observer (the red/green check puts the game side back).
+func _listen_net_status() -> void:
+	var menu: Script = GameMenu
+	menu.set(&"status_observer", _on_net_status_set)
+
+
+func _on_net_status_set(label: Label, text: String) -> void:
+	if is_instance_valid(_main) and label == _main.get("network_status_label"):
+		_record_net_status(text)
+
+
+## Appends `text` unless it repeats the last entry (the frame sample re-reads what the observer recorded).
+func _record_net_status(text: String) -> void:
+	if _net_status_seen.is_empty() or _net_status_seen[-1] != text:
+		_net_status_seen.append(text)
 
 
 func _session_ready() -> bool:
@@ -240,6 +266,12 @@ func _run_command(seq: int, action: String, payload: Dictionary) -> void:
 			_run_remote_interference()
 	elif action == "answer_interference":
 		ok = _answer_interference()
+	elif action == "auto_verb":
+		# 3.5 (OD 9): the guest previews Advance & Shoot through the hover path, keeps the landing and clicks.
+		# Fire-and-forget: the volley at the host's unit waits for the host's own save roll (3.6).
+		ok = _require_role("guest", action) and await _auto_verb_preview()
+		if ok:
+			_run_auto_verb_click()
 	elif action == "confirm_save":
 		ok = _confirm_save_prompt()
 	elif action == "vfx_burst":
@@ -348,15 +380,29 @@ func _setup_fixture() -> bool:
 			[P1A_UNIT, 1, "P1 Alpha", Vector3(-0.30, 0.0, 0.15)],
 			[P1B_UNIT, 1, "P1 Bravo", Vector3(-0.20, 0.0, 0.15)],
 			[P1C_UNIT, 1, "P1 Charlie", Vector3(-0.10, 0.0, 0.15)],
-			[P2A_UNIT, 2, "P2 Alpha", Vector3(0.20, 0.0, 0.15)],
+			[P2A_UNIT, 2, "P2 Alpha", Vector3(0.3064, 0.0, 0.15), 3],   # 3.5: 16" from P1 Charlie
 		]:
-			var online := _spawn_unit(str(spec[0]), int(spec[1]), str(spec[2]), spec[3], net_id)
-			net_id += 1
+			var online := _spawn_unit(str(spec[0]), int(spec[1]), str(spec[2]), spec[3], net_id,
+				int(spec[4]) if spec.size() > 4 else 1)
 			if online == null:
 				return false
+			net_id += online.models.size()
 			_main.opr_army_manager.game_units[online.unit_id] = online
+		var rifle := OPRApiClient.OPRWeapon.new()   # 3.5: 12" range, so the Advance must close in to shoot
+		rifle.name = AUTO_WEAPON
+		rifle.range_value = 12
+		rifle.attacks = 3
+		var opr := OPRApiClient.OPRUnit.new()
+		opr.weapons = [rifle]
+		var gun := _unit(P2A_UNIT)
+		gun.source_type = "opr"
+		gun.source_data = opr
+		gun.unit_properties["quality"] = 2
 	for unit in _main.opr_army_manager.get_all_game_units():
 		_main.radial_menu_controller.initialize_status_markers_for_unit(unit)
+	# 3.5: whose tray rolled what (main's own handler runs first and marks the roll local or remote).
+	_main.dice_roller_control.roll_finnished.connect(func(_total: int) -> void: _tray_rolls.append(
+		"%s: %s" % ["local" if _main._last_roll_local else "remote", _main.roll_purpose_label.text]))
 	await get_tree().physics_frame
 	await get_tree().process_frame
 	# Connection/bootstrap lines race independently of the scripted scenario. Start the captured
@@ -369,26 +415,27 @@ func _setup_fixture() -> bool:
 
 
 func _spawn_unit(unit_id: String, player_id: int, display_name: String, pos: Vector3,
-		network_id: int) -> GameUnit:
-	var node: Node3D = _main.object_manager.spawn_miniature(pos, false, network_id)
-	if node == null:
-		return null
+		network_id: int, count := 1) -> GameUnit:
 	var unit := GameUnit.new()
 	unit.unit_id = unit_id
 	unit.unit_properties = {
 		"player_id": player_id, "name": display_name, "quality": 4, "defense": 4,
-		"network_id": unit_id, "size": 1, "special_rules": [],
+		"network_id": unit_id, "size": count, "special_rules": [],
 	}
-	var model := ModelInstance.new()
-	model.unit = unit
-	model.node = node
-	model.model_index = 0
-	model.is_alive = true
-	model.wounds_current = 1
-	model.wounds_max = 1
-	unit.models.append(model)
-	node.set_meta("game_unit", unit)
-	node.set_meta("model_instance", model)
+	for i in count:   # 3.5: more models stand in a coherent file along z
+		var node: Node3D = _main.object_manager.spawn_miniature(pos + Vector3(0.0, 0.0, 0.045 * i), false, network_id + i)
+		if node == null:
+			return null
+		var model := ModelInstance.new()
+		model.unit = unit
+		model.node = node
+		model.model_index = i
+		model.is_alive = true
+		model.wounds_current = 1
+		model.wounds_max = 1
+		unit.models.append(model)
+		node.set_meta("game_unit", unit)
+		node.set_meta("model_instance", model)
 	return unit
 
 
@@ -439,6 +486,33 @@ func _leave_to_menu() -> bool:
 	sm.queue_free()   # nm stays: the next scene's NetworkManager, listening to whatever peer survived
 	_log("left to the menu: %s" % JSON.stringify(_left))
 	return bool(_left.left)
+
+
+## 3.5 + 1.8f: the guest's Advance & Shoot aims at a table point (P1 Charlie's spot; the 6" reach stops 10" short),
+## previews it through the point path (the 1.8b/1.8f ghosts) and keeps the landing.
+func _auto_verb_preview() -> bool:
+	var unit := _unit(P2A_UNIT)
+	await _main.solo_begin_auto(unit, AiDecision.Action.ADVANCE)
+	if not _main._solo_target_mode.has("auto_point"):
+		_failure = "auto_verb: no point Advance (%s)" % str(_main._solo_target_mode)
+		return false
+	var aim: Vector3 = _main.solo_controller.unit_centre(_unit(P1C_UNIT))
+	_auto_goal = Vector3(aim.x, _main.solo_controller.unit_centre(unit).y, aim.z)
+	_main._solo_show_auto_point(_auto_goal)
+	var preview: Dictionary = _main._solo_target_mode.get("auto_previews", {}).get(_auto_goal, {})
+	_auto_preview = preview.get("landing", []).map(func(spot: Dictionary) -> Array: return _rounded(spot["pos"]))
+	return not _auto_preview.is_empty()
+
+
+## The click on the point moves the unit; the shot pick that follows lights P1 Charlie, and the click on it fires.
+func _run_auto_verb_click() -> void:
+	await _main._solo_auto_point_click(_auto_goal)
+	await _main._solo_auto_click(_unit(P1C_UNIT))
+	_auto_verb_done = true
+
+
+func _rounded(at: Vector3) -> Array:
+	return [snappedf(at.x, 0.0001), snappedf(at.y, 0.0001), snappedf(at.z, 0.0001)]
 
 
 func _unit(unit_id: String) -> GameUnit:
@@ -582,6 +656,10 @@ func _snapshot() -> Dictionary:
 		"objects": [],
 		"net_status_seen": _net_status_seen.duplicate(),
 		"link_events": _link_events.duplicate(),
+		"auto_preview": _auto_preview.duplicate(true),
+		"auto_verb_done": _auto_verb_done,
+		"tray_rolls": _tray_rolls.duplicate(),
+		"rolled_lines": [],
 	}
 	if _main != null and _main.get("object_manager") != null:
 		for child in _main.object_manager.get_children():
@@ -643,9 +721,14 @@ func _snapshot() -> Dictionary:
 				"spell_records": records.size(),
 				"spell_move_mod": unit.unit_properties.get("spell_move_mod", null),
 				"transport": transport.unit_id if transport != null else "",
+				"positions": unit.models.map(func(m: ModelInstance) -> Array: return _rounded(m.node.global_position) \
+					if m.is_alive and is_instance_valid(m.node) else []),
 			}
 	if _main != null and _main.get("battle_log") != null:
 		var entries: Array = _main.battle_log.entries()
+		for e in entries:   # 3.5: "<owner> rolled their ..." lines anywhere in the log, not only the tail
+			if str((e as Dictionary).get("text", "")).contains(" rolled their "):
+				state.rolled_lines.append(str(e["text"]))
 		for i in range(maxi(0, entries.size() - 8), entries.size()):
 			state.battle_log_tail.append(str((entries[i] as Dictionary).get("text", "")))
 	return state

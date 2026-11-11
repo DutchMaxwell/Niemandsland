@@ -53,6 +53,40 @@ func test_deadly_prefers_tough_targets() -> void:
 		AiEv.profile_ev(w, ATT, DEF_PLAIN, 12.0, false) * 2.0).is_true()
 
 
+func test_deadly_against_regeneration_rolls_every_wound_before_the_cap() -> void:
+	# A4 (maintainer ruling 29.10.2026, "Drei Wuerfe muessen gelingen"): a Deadly(3) wound on a 1-wound
+	# Regeneration model rolls 3 dice and the model survives only if all 3 succeed (5+ each: 1/27).
+	# 10 attacks, hit 4+, save 4+ → 2.5 unsaved, each worth 1 - (1/3)^3 = 26/27 of a wound.
+	var w := _rprof({"deadly": 3})
+	var regen1 := {"defense": 4, "tough": 1, "models": 5, "regeneration": true, "regen_target": 5}
+	assert_float(AiEv.profile_ev(w, ATT, regen1, 12.0, false)).is_equal_approx(2.5 * 26.0 / 27.0, 0.0001)
+	# CONTROL: with Tough(3) the cap never bites — 3 wounds × 2/3 kept, as before.
+	var regen3 := {"defense": 4, "tough": 3, "models": 5, "regeneration": true, "regen_target": 5}
+	assert_float(AiEv.profile_ev(w, ATT, regen3, 12.0, false)).is_equal_approx(2.5 * 3.0 * 2.0 / 3.0, 0.0001)
+
+
+func test_lacerate_keeps_regeneration_in_the_estimate() -> void:
+	# A1 (play test 29.10.2026): Lacerate shares Bane's Defense-6 re-roll but never its Regeneration bypass.
+	# 10 attacks, hit 4+ → 5 hits; Defense 4+ with the 6s re-rolled blocks 2/6 + 1/6 × 1/2 = 5/12.
+	var regen := {"defense": 4, "tough": 1, "models": 5, "regeneration": true, "regen_target": 5}
+	var through := 5.0 * (1.0 - 5.0 / 12.0)
+	var lac := _rprof({"bane": true, "rules": ["Lacerate"]})
+	assert_float(AiEv.profile_ev(lac, ATT, regen, 12.0, false)).is_equal_approx(through * 2.0 / 3.0, 0.0001)
+	# CONTROL: Bane keeps the bypass — the same re-roll, no Regeneration roll.
+	var bane := _rprof({"bane": true, "rules": ["Bane"]})
+	assert_float(AiEv.profile_ev(bane, ATT, regen, 12.0, false)).is_equal_approx(through, 0.0001)
+
+
+func test_a_bane_alias_on_a_lacerate_weapon_stamps_no_regeneration_bypass() -> void:
+	# The registry fold: a Bane-primitive alias (aof beastmen "Bestial", re-roll only) must not turn the
+	# Lacerate weapon's re-roll into a bypass (A1). A Bane weapon keeps its own.
+	var u := _boost_carrier(["Bestial"])
+	var stamped := AiEv.stamp_sergeant([_mprof({"bane": true, "rules": ["Lacerate"]}),
+		_mprof({"bane": true, "rules": ["Bane"]})], u)
+	assert_bool(bool((stamped[0] as Dictionary).get("bypass_regen", true))).is_false()
+	assert_bool(bool((stamped[1] as Dictionary).get("bypass_regen", false))).is_true()
+
+
 func test_blast_prefers_big_units() -> void:
 	# Blast(3) multiplies each hit by min(X, models): 10-model target doubles+ the 2-model one.
 	var w := _rprof({"blast": 3, "attacks": 2})
@@ -93,6 +127,10 @@ func test_regeneration_lowers_ev_but_bane_bypasses_it() -> void:
 
 
 func test_charge_score_counter_reduces_and_fearless_raises() -> void:
+	# Rules 3.5 leg: below EPOCH_73_V36 the Counter strike-first read is unconditional and the
+	# defender's counter_models still cut the Impact pool. The 3.6 legs live in test/v36/mel_05e_test.gd.
+	var epoch0: int = AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
 	var us := {"quality": 4, "defense": 4, "tough": 1, "models": 5}
 	var them := {"quality": 4, "defense": 4, "tough": 1, "models": 5}
 	var them_counter := {"quality": 4, "defense": 4, "tough": 1, "models": 5, "counter_models": 5}
@@ -102,18 +140,28 @@ func test_charge_score_counter_reduces_and_fearless_raises() -> void:
 	# A Counter defender lowers the charge score (strike-first attrition; same weapons otherwise).
 	var vs_plain: float = AiEv.charge_score(our_melee, us, their_plain, them)
 	var vs_counter: float = AiEv.charge_score(our_melee, us, their_counter, them_counter)
-	assert_bool(vs_counter < vs_plain).is_true()
 	# Our Fearless halves the taken-wounds weight (p.13 morale re-roll) → higher score, same matchup.
 	var us_fearless := {"quality": 4, "defense": 4, "tough": 1, "models": 5, "fearless": true}
-	assert_bool(AiEv.charge_score(our_melee, us_fearless, their_plain, them) > vs_plain).is_true()
+	var vs_fearless: float = AiEv.charge_score(our_melee, us_fearless, their_plain, them)
+	AiActRecorder.rules_epoch = epoch0   # restore before asserting: a failed assert stops the case
+	assert_bool(vs_counter < vs_plain).is_true()
+	assert_bool(vs_fearless > vs_plain).is_true()
 
 
 func test_impact_ev_reduced_by_counter_models() -> void:
+	# Rules 3.5 leg: below EPOCH_73_V36 Counter still takes Impact dice away. The 3.6 leg lives in
+	# test/v36/mel_05e_test.gd.
+	var epoch0: int = AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
 	var att := {"quality": 4, "impact": 3, "models": 2}
 	var no_counter := {"defense": 4, "tough": 1, "models": 5}
 	var with_counter := {"defense": 4, "tough": 1, "models": 5, "counter_models": 3}
-	assert_bool(AiEv.impact_ev(att, with_counter) < AiEv.impact_ev(att, no_counter)).is_true()
-	assert_float(AiEv.impact_ev({"impact": 0, "models": 5}, no_counter)).is_equal_approx(0.0, 0.0001)
+	var reduced: float = AiEv.impact_ev(att, with_counter)
+	var plain: float = AiEv.impact_ev(att, no_counter)
+	var no_impact: float = AiEv.impact_ev({"impact": 0, "models": 5}, no_counter)
+	AiActRecorder.rules_epoch = epoch0   # restore before asserting: a failed assert stops the case
+	assert_bool(reduced < plain).is_true()
+	assert_float(no_impact).is_equal_approx(0.0, 0.0001)
 
 
 func test_classify_fills_the_undefined_better_than() -> void:
@@ -207,9 +255,12 @@ func test_banner_morale_bonus_relaxes_charge_risk() -> void:
 		AiEv.charge_score(our_melee, us, their_melee, them)).is_true()
 
 
-func test_stamp_sergeant_marks_one_profile_with_the_bearers_share() -> void:
+func test_stamp_sergeant_marks_one_profile_with_the_bearers_share_at_epoch_72() -> void:
 	# A 5-model unit with Sergeant (core rule — active in the default system): the FIRST profile with
 	# attacks carries the bearer's per-model share (10 attacks / 5 models = 2); the second stays clean.
+	# The rules 3.5 leg: below EPOCH_73_V36 the share still buys the extra hit on 6s.
+	var epoch0: int = AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
 	var u := GameUnit.new()
 	u.unit_id = "sgt1"
 	u.unit_properties = {"player_id": 2, "name": "S", "quality": 4, "defense": 4,
@@ -229,6 +280,34 @@ func test_stamp_sergeant_marks_one_profile_with_the_bearers_share() -> void:
 	var clean := [_rprof({"attacks": 10})]
 	AiEv.stamp_sergeant(clean, plain_unit)
 	assert_int(int((clean[0] as Dictionary).get("sergeant_attacks", 0))).is_equal(0)
+	assert_int(int((profiles[0] as Dictionary).get("sergeant_ap", 0))).is_equal(0)
+	AiActRecorder.rules_epoch = epoch0   # statics leak across gdUnit tests — restore
+
+
+func test_stamp_sergeant_marks_one_profile_with_the_bearers_ap_share_at_epoch_73() -> void:
+	# Rules 3.6: the same bearer share now strikes one AP better instead of buying extra hits on 6s —
+	# the FIRST profile with attacks carries the share and the AP bonus, the 3.5 extra-hit share is gone.
+	var epoch0: int = AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	var u := GameUnit.new()
+	u.unit_id = "sgt3"
+	u.unit_properties = {"player_id": 2, "name": "S", "quality": 4, "defense": 4,
+		"special_rules": ["Sergeant"]}
+	for i in range(5):
+		var m := ModelInstance.new()
+		m.is_alive = true
+		u.models.append(m)
+	var profiles := [_rprof({"attacks": 10}), _rprof({"attacks": 4, "name": "Pistol"})]
+	AiEv.stamp_sergeant(profiles, u)
+	var first := profiles[0] as Dictionary
+	AiActRecorder.rules_epoch = epoch0   # restore before asserting: a failed assert stops the case
+	assert_int(int(first.get("sergeant_ap_attacks", 0))) \
+		.override_failure_message("the bearer's share (10 / 5 = 2) must carry the AP bonus").is_equal(2)
+	assert_int(int(first.get("sergeant_ap", 0))) \
+		.override_failure_message("a Sergeant bearer strikes at AP(+1) from rules 3.6").is_equal(1)
+	assert_int(int(first.get("sergeant_attacks", 0))) \
+		.override_failure_message("the extra hit on 6s is rules 3.5 only").is_equal(0)
+	assert_int(int((profiles[1] as Dictionary).get("sergeant_ap", 0))).is_equal(0)
 
 
 func test_ctx_for_applies_armor_counts_as_defense() -> void:
@@ -417,12 +496,20 @@ func test_versatile_defense_projects_the_guarded_ev_flag() -> void:
 func test_heavy_impact_adds_an_ap1_pool_and_counter_strips_it_first() -> void:
 	# Heavy Impact(1) on 2 models = 2 extra dice saving at AP(1): the charge EV rises above the plain
 	# Impact-only attacker, and 2 Counter models strip exactly the heavy pool (defender-optimal).
+	# Rules 3.5 leg: below EPOCH_73_V36 Counter still strips the heavy pool. The 3.6 leg lives in
+	# test/v36/mel_05e_test.gd.
+	var epoch0: int = AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
 	var plain_def := {"defense": 4, "tough": 1, "models": 5}
 	var att_imp := {"quality": 4, "models": 2, "impact": 1}
 	var att_both := {"quality": 4, "models": 2, "impact": 1, "heavy_impact": 1}
-	assert_bool(AiEv.impact_ev(att_both, plain_def) > AiEv.impact_ev(att_imp, plain_def)).is_true()
+	var heavy_ev: float = AiEv.impact_ev(att_both, plain_def)
+	var impact_only_ev: float = AiEv.impact_ev(att_imp, plain_def)
 	var counter_def := {"defense": 4, "tough": 1, "models": 5, "counter_models": 2}
-	assert_float(AiEv.impact_ev(att_both, counter_def)) 		.is_equal_approx(AiEv.impact_ev(att_imp, plain_def), 0.0001)   # heavy pool fully stripped
+	var stripped_ev: float = AiEv.impact_ev(att_both, counter_def)
+	AiActRecorder.rules_epoch = epoch0   # restore before asserting: a failed assert stops the case
+	assert_bool(heavy_ev > impact_only_ev).is_true()
+	assert_float(stripped_ev).is_equal_approx(impact_only_ev, 0.0001)   # heavy pool fully stripped
 
 
 func test_has_exact_rule_rejects_prefix_match() -> void:
@@ -448,7 +535,7 @@ func test_ferocious_stamps_surge_onto_every_profile() -> void:
 	assert_bool(bool((profs[0] as Dictionary).get("surge", false))).is_true()
 	assert_bool(bool((profs[1] as Dictionary).get("surge", false))).is_true()
 	var u2 := GameUnit.new()
-	u2.unit_properties = {"player_id": 2, "name": "U2", "quality": 4, "special_rules": ["Ferocious Boost"]}
+	u2.unit_properties = {"player_id": 2, "name": "U2", "quality": 4, "special_rules": ["Enhanced Ferocious"]}
 	var mi2 := ModelInstance.new(); mi2.is_alive = true; u2.models.append(mi2)
 	var profs2 := [_rprof()]
 	AiEv.stamp_sergeant(profs2, u2)
@@ -496,13 +583,13 @@ func _boost_carrier(rules: Array) -> GameUnit:
 
 func test_bane_boost_window_reads_the_beastmen_boost_entry() -> void:
 	# Bestial Boost (aof/beastmen): reroll_save_low 5 past over_in 9, behind upgrades "Bestial".
-	var win: Dictionary = AiEv.bane_boost_window(_boost_carrier(["Bestial", "Bestial Boost"]), true)
+	var win: Dictionary = AiEv.bane_boost_window(_boost_carrier(["Bestial", "Enhanced Bestial"]), true)
 	assert_int(int(win.get("low", 0))).is_equal(5)
 	assert_float(float(win.get("over_in", 0.0))).is_equal_approx(9.0, 0.0001)
-	assert_str(str(win.get("rule", ""))).is_equal("Bestial Boost")
+	assert_str(str(win.get("rule", ""))).is_equal("Enhanced Bestial")
 	# ROT: inside 9" never, and without the base rule never.
-	assert_dict(AiEv.bane_boost_window(_boost_carrier(["Bestial", "Bestial Boost"]), false)).is_empty()
-	assert_dict(AiEv.bane_boost_window(_boost_carrier(["Bestial Boost"]), true)).is_empty()
+	assert_dict(AiEv.bane_boost_window(_boost_carrier(["Bestial", "Enhanced Bestial"]), false)).is_empty()
+	assert_dict(AiEv.bane_boost_window(_boost_carrier(["Enhanced Bestial"]), true)).is_empty()
 
 
 func _scrapper_carrier(rules: Array) -> GameUnit:
@@ -513,15 +600,82 @@ func _scrapper_carrier(rules: Array) -> GameUnit:
 	return u
 
 
-func test_bane_boost_window_reads_the_scrapper_boost_entry() -> void:
+func test_bane_boost_window_reads_the_enhanced_scrapper_entry() -> void:
 	# Scrapper Boost (gf/jackals): reroll_save_from 5 past over_in 9, behind
 	# upgrades "Scrapper" — the widening under its own param spelling (the
 	# core stamps it behind EPOCH_30_SCRAPPER_BOOST; DEAD_PARAM_TRIAGE
 	# 2026-09-14 dead-knob row 1).
-	var win: Dictionary = AiEv.bane_boost_window(_scrapper_carrier(["Scrapper", "Scrapper Boost"]), true)
+	var win: Dictionary = AiEv.bane_boost_window(_scrapper_carrier(["Scrapper", "Enhanced Scrapper"]), true)
 	assert_int(int(win.get("low", 0))).is_equal(5)
 	assert_float(float(win.get("over_in", 0.0))).is_equal_approx(9.0, 0.0001)
-	assert_str(str(win.get("rule", ""))).is_equal("Scrapper Boost")
+	assert_str(str(win.get("rule", ""))).is_equal("Enhanced Scrapper")
 	# ROT: inside 9" never, and without the base rule never.
-	assert_dict(AiEv.bane_boost_window(_scrapper_carrier(["Scrapper", "Scrapper Boost"]), false)).is_empty()
-	assert_dict(AiEv.bane_boost_window(_scrapper_carrier(["Scrapper Boost"]), true)).is_empty()
+	assert_dict(AiEv.bane_boost_window(_scrapper_carrier(["Scrapper", "Enhanced Scrapper"]), false)).is_empty()
+	assert_dict(AiEv.bane_boost_window(_scrapper_carrier(["Enhanced Scrapper"]), true)).is_empty()
+
+
+# === MEL-07e: the AI's melee and Impact EV see a Parry unit's cancels ===
+
+func test_melee_ev_into_a_parry_unit_drops_to_the_expected_value() -> void:
+	# 10 attacks at 4+ = 5 expected hits; 5 Parry dice cancel min(5, 5)/6 = 5/6 hit; the Defense 4+
+	# save halves it, so 2.5 wounds become 2.0833 (a 1/6 relative drop).
+	var epoch0: int = AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	var att := {"quality": 4, "models": 1}
+	var plain := {"defense": 4, "tough": 1, "models": 5}
+	var parry := {"defense": 4, "tough": 1, "models": 5, "parry_dice": 1}
+	assert_float(AiEv.melee_ev([_mprof({"attacks": 10})], att, plain, false)) \
+		.override_failure_message("the no-Parry baseline is 2.5") \
+		.is_equal_approx(2.5, 0.0001)
+	assert_float(AiEv.melee_ev([_mprof({"attacks": 10})], att, parry, false)) \
+		.override_failure_message("Parry must take the expected 5/12 wound off the melee EV") \
+		.is_equal_approx(25.0 / 12.0, 0.0001)
+	AiActRecorder.rules_epoch = epoch0
+
+
+func test_impact_ev_into_a_parry_unit_drops_to_the_expected_value() -> void:
+	# Impact(6) hits on 2+ = 5 expected hits; 5 Parry dice cancel 5/6 hit; the Defense 4+ save
+	# halves it, so the Impact EV drops 2.5 -> 2.0833 like the melee leg.
+	var epoch0: int = AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	var att := {"quality": 4, "impact": 6, "models": 1}
+	var plain := {"defense": 4, "tough": 1, "models": 5}
+	var parry := {"defense": 4, "tough": 1, "models": 5, "parry_dice": 1}
+	assert_float(AiEv.impact_ev(att, plain)) \
+		.override_failure_message("the no-Parry baseline is 2.5") \
+		.is_equal_approx(2.5, 0.0001)
+	assert_float(AiEv.impact_ev(att, parry)) \
+		.override_failure_message("Parry must take the expected 5/12 wound off the Impact EV") \
+		.is_equal_approx(25.0 / 12.0, 0.0001)
+	AiActRecorder.rules_epoch = epoch0
+
+
+func test_melee_ev_into_a_parry_unit_is_unchanged_at_epoch_72() -> void:
+	# CONTROL: below epoch 73 the Parry stamp is off, so the same hand-built ctx keeps today's value.
+	var epoch0: int = AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
+	var att := {"quality": 4, "models": 1}
+	var plain := {"defense": 4, "tough": 1, "models": 5}
+	var parry := {"defense": 4, "tough": 1, "models": 5, "parry_dice": 1}
+	assert_float(AiEv.melee_ev([_mprof({"attacks": 10})], att, parry, false)) \
+		.override_failure_message("epoch 72 must keep today's value") \
+		.is_equal_approx(AiEv.melee_ev([_mprof({"attacks": 10})], att, plain, false), 0.0001)
+	AiActRecorder.rules_epoch = epoch0
+
+
+func test_ctx_for_reads_parry_dice_only_at_epoch_73() -> void:
+	var epoch0: int = AiActRecorder.rules_epoch
+	var u := GameUnit.new()
+	u.unit_id = "par1"
+	u.unit_properties = {"player_id": 2, "name": "P", "game_system": "gf", "quality": 4,
+		"defense": 4, "special_rules": ["Parry(1)"]}
+	var m := ModelInstance.new()
+	m.is_alive = true
+	u.models.append(m)
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	var at73: int = int(AiEv.ctx_for(u).get("parry_dice", 0))
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
+	var at72: int = int(AiEv.ctx_for(u).get("parry_dice", 0))
+	AiActRecorder.rules_epoch = epoch0
+	assert_int(at73).override_failure_message("Parry(1) adds one die per carrier at 73").is_equal(1)
+	assert_int(at72).override_failure_message("the Parry stamp is off below 73").is_equal(0)

@@ -36,6 +36,17 @@ func test_dice_roll_logs_who_and_face_results() -> void:
 	assert_str(str(log_node.entries()[2]["text"])).is_equal("2 dice: 4 2")
 
 
+func test_defense_roll_line_agrees_with_its_roller() -> void:
+	# A solo human is labelled "You": "You defends" read wrong, so the verb follows the roller.
+	var log_node: BattleLog = auto_free(BattleLog.new())
+	log_node.on_dice_rolled(2, 1, 3, "You", [4, 1], "defense")
+	assert_str(str(log_node.entries()[0]["text"])).is_equal("You defend: 4 1 → 1 block (3+)")
+	log_node.on_dice_rolled(2, 0, 7, "Alice", [2, 1], "defense")
+	assert_str(str(log_node.entries()[1]["text"])).is_equal("Alice defends: 2 1 → 0 blocks (7+)")
+	log_node.on_dice_rolled(2, 1, 3, "You", [4, 1])
+	assert_str(str(log_node.entries()[2]["text"])).is_equal("You: 4 1 → 1 hit (3+)")
+
+
 func test_ring_buffer_caps_and_drops_oldest() -> void:
 	var log_node: BattleLog = auto_free(BattleLog.new())
 	for i in range(BattleLog.CAP + 50):

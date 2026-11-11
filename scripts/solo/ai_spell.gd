@@ -113,23 +113,43 @@ static func cast_success_chance(boost_tokens: int, interference_tokens: int, bas
 	return AiCombatMath.success_chance(cast_target(boost_tokens, interference_tokens, base_target))
 
 
+## MOR-15 (rules 3.6, EPOCH_73_V36) — a WEAPON-borne "Spell Amplifier" adds +1 to the bearer's
+## OWN casting rolls. Weapon-only by the row's text: a unit's special_rules list never grants it.
+## `AiShooting._has_rule` is the shared weapon-rule matcher (the Rust twin's `base_rule_name`).
+static func spell_amplifier_mod(unit: GameUnit) -> int:
+	if unit == null or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return 0
+	if unit.source_type != "opr" or not (unit.source_data is OPRApiClient.OPRUnit):
+		return 0
+	for w in (unit.source_data as OPRApiClient.OPRUnit).weapons:
+		if AiShooting._has_rule(w, "Spell Amplifier"):
+			return int(RulesRegistry.unit_param(unit, "Spell Amplifier", "casting_mod", 1))
+	return 0
+
+
 # ===== Spell damage facets (the weapon-rule tokens of the committed spell maps) =====
 
 ## Parse a spell's weapon-rule token list (["AP(1)", "Blast(3)", "Bane", …] — the committed
 ## spells_mechanics_<system>.json encoding) into the facet knobs P2 consumes. Unknown tokens are
 ## ignored (conservative: the spell still deals its base hits, the exotic facet adds nothing).
 ##   ap / blast / deadly     — rated facets (AiShooting rating convention);
-##   bane                    — defender re-rolls unmodified Defense 6s (Lacerate is the AoF sibling
-##                             with the same re-roll text; both also bypass Regeneration);
+##   bane                    — defender re-rolls unmodified Defense 6s (Bane, and the army-book Lacerate
+##                             with the same re-roll; only Bane also bypasses Regeneration — A1);
 ##   shred                   — +1 wound per unmodified Defense 1;
 ##   surge                   — +1 hit per 6 on the spell's trigger roll ("Roll as many dice as hits");
-##   on6_ap                  — AP(+X) upgrade on trigger-roll 6s (Crack +2 / Destructive +4);
-##   ignores_regen           — Bane / Lacerate / Disintegrate wounds bypass Regeneration;
+##   on6_ap                  — AP(+X) upgrade on trigger-roll 6s (Crack +2; Destructive below 73);
+##   ap_vs_above_half        — Destructive's rules 3.6 AP(+1) against a defender still above half;
+##   ignores_regen           — Bane / Disintegrate wounds bypass Regeneration (never Lacerate);
 ##   ap_vs_tough3/9, ap_vs_def3 — the conditional AP facets (Shatter / Tear / Disintegrate), resolved
 ##                             against the actual defender by effective_ap().
-static func spell_facets(weapon_rules: Array) -> Dictionary:
+## Rules 3.6 (EPOCH_73_V36) renames/re-points Fracture, Puncture, Disintegrate and Shatter; below it
+## the 3.5 readings stay in force.
+static func spell_facets(weapon_rules: Array, rules_epoch: int) -> Dictionary:
 	var f := {"ap": 0, "blast": 0, "deadly": 0, "bane": false, "shred": false, "surge": false,
-		"on6_ap": 0, "ignores_regen": false, "ap_vs_tough3": 0, "ap_vs_tough9": 0, "ap_vs_def3": 0}
+		"on6_ap": 0, "ignores_regen": false, "ap_vs_tough3": 0, "ap_vs_tough9": 0, "ap_vs_def3": 0,
+		"ap_vs_above_half": 0, "ap_vs_shaken": 0, "bane_above_half": false,
+		"bane_tough3_low": 0, "bane_shaken_low": 0, "bane_def56_low": 0}
+	var v36: bool = rules_epoch >= AiActRecorder.EPOCH_73_V36
 	for r in weapon_rules:
 		var s := str(r).strip_edges()
 		var base := s.get_slice("(", 0).strip_edges()
@@ -140,9 +160,11 @@ static func spell_facets(weapon_rules: Array) -> Dictionary:
 				f["blast"] = _rating(s)
 			"Deadly":
 				f["deadly"] = _rating(s)
-			"Bane", "Lacerate":
+			"Bane":
 				f["bane"] = true
 				f["ignores_regen"] = true
+			"Lacerate":
+				f["bane"] = true
 			"Shred":
 				f["shred"] = true
 			"Surge":
@@ -150,18 +172,62 @@ static func spell_facets(weapon_rules: Array) -> Dictionary:
 			"Crack":
 				f["on6_ap"] = maxi(int(f["on6_ap"]), 2)
 			"Destructive":
-				f["on6_ap"] = maxi(int(f["on6_ap"]), AiCombatMath.RENDING_AP_BONUS)
+				if v36:
+					var ap := _rating(s)
+					f["ap_vs_above_half"] = maxi(int(f["ap_vs_above_half"]), ap if ap > 0 else 1)
+				else:
+					f["on6_ap"] = maxi(int(f["on6_ap"]), AiCombatMath.RENDING_AP_BONUS)
 			"Hazardous":
 				# "Gets AP(4), but this model's unit takes one wound on unmodified rolls of 1" — the
 				# AP facet lands here; the self-wound side is the caller's trigger-roll business.
 				f["ap"] = maxi(int(f["ap"]), 4)
+			"Fracture":
+				if v36:
+					f["on6_ap"] = maxi(int(f["on6_ap"]), 2)
+			"Puncture":
+				if v36:
+					f["ignores_regen"] = true
+					f["ap_vs_def3"] = 2
 			"Disintegrate":
 				f["ignores_regen"] = true
-				f["ap_vs_def3"] = 2
+				if v36:
+					f["ap_vs_tough3"] = maxi(int(f["ap_vs_tough3"]), 2)
+				else:
+					f["ap_vs_def3"] = 2
 			"Shatter":
-				f["ap_vs_tough3"] = 2
+				if v36:
+					f["on6_ap"] = maxi(int(f["on6_ap"]), 3)
+				else:
+					f["ap_vs_tough3"] = 2
 			"Tear":
 				f["ap_vs_tough9"] = 4
+			# Rules 3.6 (EPOCH_73_V36) — the nine spell tokens of the new weapon family.
+			# Five are priced below; the four no-ops stay explicit:
+			#   Pierce / Smash — over_half_range needs a cast distance (the EV has none)
+			#   Demolish       — near_terrain is unknown here; the EV already ignores Cover
+			#   Scourge        — phantom wounds feed the morale trigger / melee tally, never damage
+			"Pierce", "Smash":
+				pass
+			"Demolish":
+				pass
+			"Scourge":
+				pass
+			"Purge":
+				if v36:
+					f["ap_vs_shaken"] = 2
+			"Decimate":
+				if v36:
+					f["bane_above_half"] = true
+			"Obliterate":
+				if v36:
+					f["bane_tough3_low"] = 5
+					f["ignores_regen"] = true
+			"Reap":
+				if v36:
+					f["bane_shaken_low"] = 5
+			"Fragment":
+				if v36:
+					f["bane_def56_low"] = 5
 			_:
 				pass   # unknown facet: conservative no-op (base hits still count)
 	return f
@@ -187,7 +253,32 @@ static func effective_ap(facets: Dictionary, def_ctx: Dictionary) -> int:
 		ap += int(facets["ap_vs_tough9"])
 	if int(facets.get("ap_vs_def3", 0)) > 0 and int(def_ctx.get("defense", 4)) <= 3:
 		ap += int(facets["ap_vs_def3"])
+	if bool(def_ctx.get("above_half_strength", false)):
+		ap += int(facets.get("ap_vs_above_half", 0))
+	if bool(def_ctx.get("shaken_or_fatigued", false)):
+		ap += int(facets.get("ap_vs_shaken", 0))
 	return ap
+
+
+## The Bane window a spell's token list opens against THIS defender — the core's `bane_window`
+## (spell.rs). `{"bane": bool, "from": int}`: `from` 6 is the base sixes-only leg; Decimate opens it
+## against a defender above half, Obliterate against Tough(3)+, Reap against Shaken/Fatigued and
+## Fragment against Defense 5+ (each at 5+). One implementation for the EV and the dice path.
+static func bane_window(facets: Dictionary, def_ctx: Dictionary) -> Dictionary:
+	var bane := bool(facets.get("bane", false))
+	var from := 6
+	if bool(facets.get("bane_above_half", false)) and bool(def_ctx.get("above_half_strength", false)):
+		bane = true
+	if int(facets.get("bane_tough3_low", 0)) > 1 and maxi(int(def_ctx.get("tough", 1)), 1) >= 3:
+		bane = true
+		from = mini(from, int(facets["bane_tough3_low"]))
+	if int(facets.get("bane_shaken_low", 0)) > 1 and bool(def_ctx.get("shaken_or_fatigued", false)):
+		bane = true
+		from = mini(from, int(facets["bane_shaken_low"]))
+	if int(facets.get("bane_def56_low", 0)) > 1 and int(def_ctx.get("defense", 4)) >= 5:
+		bane = true
+		from = mini(from, int(facets["bane_def56_low"]))
+	return {"bane": bane, "from": from}
 
 
 # ===== P2 — damage-spell expected wounds =====
@@ -218,20 +309,31 @@ static func spell_damage_ev(hits: int, def_ctx: Dictionary, facets: Dictionary =
 	six_hits = minf(six_hits, h)
 	# Saves at the RAW Defense — no Shielded, no Cover (see above).
 	var defense := int(def_ctx.get("defense", 4))
-	var bane := bool(facets.get("bane", false))
+	var window := bane_window(facets, def_ctx)
+	var bane := bool(window.get("bane", false))
+	var bane_from := int(window.get("from", 6))
 	var ap := effective_ap(facets, def_ctx)
-	var unsaved := (h - six_hits) * (1.0 - AiEv.block_chance(defense, ap, bane)) \
-		+ six_hits * (1.0 - AiEv.block_chance(defense, ap + int(facets.get("on6_ap", 0)), bane))
+	var unsaved := (h - six_hits) * (1.0 - AiEv.block_chance_from(defense, ap, bane, bane_from)) \
+		+ six_hits * (1.0 - AiEv.block_chance_from(defense, ap + int(facets.get("on6_ap", 0)), bane, bane_from))
 	# Deadly (Tough-capped multiply — one model takes them all, so Tough bounds it).
 	var deadly := int(facets.get("deadly", 0))
+	var deadly_cap := maxi(int(def_ctx.get("tough", 1)), 1)
+	var deadly_unsaved := unsaved   # A4: the raw unsaved count, before ×X
 	if deadly > 0:
-		unsaved *= float(AiCombatMath.deadly_multiplier(deadly, maxi(int(def_ctx.get("tough", 1)), 1)))
+		unsaved *= float(AiCombatMath.deadly_multiplier(deadly, deadly_cap))
 	# Shred: +1 wound per unmodified Defense 1 among the save dice (one per hit) — expected +h/6.
 	if bool(facets.get("shred", false)):
 		unsaved += h * SIX_P
-	# Regeneration family, unless the facets bypass it (Bane / Lacerate / Disintegrate).
-	if bool(def_ctx.get("regeneration", false)) and not (bane or bool(facets.get("ignores_regen", false))):
-		unsaved *= 1.0 - AiCombatMath.success_chance(int(def_ctx.get("regen_target_spell", def_ctx.get("regen_target", AiEv.REGENERATION_TARGET))))
+	# Regeneration family, unless the facets bypass it (Bane / Disintegrate — never Lacerate, A1: its `bane`
+	# facet is the Defense-6 re-roll alone). Both fixes read the core's frozen gate (spell.rs): below
+	# EPOCH_72_PLAYTEST_RULES Lacerate's `bane` still bypasses and the cap comes before the roll.
+	var playtest := AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_72_PLAYTEST_RULES
+	if bool(def_ctx.get("regeneration", false)) and not (bool(facets.get("ignores_regen", false)) or (bool(facets.get("bane", false)) and not playtest)):
+		var keep := 1.0 - AiCombatMath.success_chance(int(def_ctx.get("regen_target_spell", def_ctx.get("regen_target", AiEv.REGENERATION_TARGET))))
+		unsaved *= keep
+		# A4 (maintainer ruling 29.10.2026), as AiEv.profile_ev: all X wounds are rolled before the cap.
+		if deadly > deadly_cap and playtest:
+			unsaved += deadly_unsaved * (AiCombatMath.deadly_regen_dealt(deadly, deadly_cap, keep) - float(deadly_cap) * keep)
 	return unsaved
 
 

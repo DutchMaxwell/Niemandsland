@@ -8,10 +8,10 @@ use super::*;
     /// build of the same carrier keeps the base 3" band and the base line,
     /// byte-exact. RED if the fold keeps the shared const.
     #[test]
-    fn guerrilla_boost_carrier_steps_six_inches_at_epoch_6() {
+    fn enhanced_guerrilla_carrier_steps_six_inches_at_epoch_6() {
         let terrain = crate::terrain::Terrain::default();
         let (st, statics) =
-            boost_line("gf", "rebel_guerrillas", &["Guerrilla", "Guerrilla Boost"], 6);
+            boost_line("gf", "rebel_guerrillas", &["Guerrilla", "Enhanced Guerrilla"], 6);
         let mut tray = Tray::seeded(11);
         let mut rng = crate::rng::GodotRng::new(0);
         let (next, shot) = resolve_stochastic_tray_on_board(
@@ -26,13 +26,13 @@ use super::*;
             );
         }
         assert!(
-            shot.log.iter().any(|l| l.contains("Guerrilla Boost: a steps up to 6\"")),
+            shot.log.iter().any(|l| l.contains("Enhanced Guerrilla: a steps up to 6\"")),
             "rules-must-log: the Boost names itself (RED before the fix)"
         );
 
         // The epoch-5 build of the same carrier: the base band, byte-exact.
         let (st5, statics5) =
-            boost_line("gf", "rebel_guerrillas", &["Guerrilla", "Guerrilla Boost"], 5);
+            boost_line("gf", "rebel_guerrillas", &["Guerrilla", "Enhanced Guerrilla"], 5);
         let mut tray5 = Tray::seeded(11);
         let mut rng5 = crate::rng::GodotRng::new(0);
         let (next5, shot5) = resolve_stochastic_tray_on_board(
@@ -52,10 +52,10 @@ use super::*;
     /// at epoch 6; WITHOUT the Boost the base "Harassing" carrier keeps the
     /// shared 3" const — the Boost band only lands on a real Boost carrier.
     #[test]
-    fn harassing_boost_carrier_steps_six_inches_at_epoch_6() {
+    fn enhanced_harassing_carrier_steps_six_inches_at_epoch_6() {
         let terrain = crate::terrain::Terrain::default();
         let (st, statics) =
-            boost_line("gf", "dark_elf_raiders", &["Harassing", "Harassing Boost"], 6);
+            boost_line("gf", "dark_elf_raiders", &["Harassing", "Enhanced Harassing"], 6);
         let mut tray = Tray::seeded(11);
         let mut rng = crate::rng::GodotRng::new(0);
         let (next, shot) = resolve_stochastic_tray_on_board(
@@ -70,7 +70,7 @@ use super::*;
             );
         }
         assert!(
-            shot.log.iter().any(|l| l.contains("Harassing Boost: a steps up to 6\"")),
+            shot.log.iter().any(|l| l.contains("Enhanced Harassing: a steps up to 6\"")),
             "rules-must-log: the Boost names itself (RED before the fix)"
         );
 

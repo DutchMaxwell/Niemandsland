@@ -92,3 +92,30 @@ func test_god_titan_with_the_godly_spear_resolves_the_spear_variant() -> void:
 	var default_army := _army([_titan("Godly Battle-Axe")])
 	assert_array(manager._unit_model_variant_names(default_army.units[0], "mummified_undead")) \
 		.is_equal([""])
+
+
+# --- Rules 3.6 weapon names: plain renames of the 3.5 words keep their bakes ----------------------------
+
+func _hero(unit_name: String, weapons: Array) -> Dictionary:
+	var loadout: Array = []
+	for weapon in weapons:
+		loadout.append(_weapon(weapon, 3))
+	return {"armyId": MU_ARMY, "name": unit_name, "size": 1, "bases": {"round": "32"}, "loadout": loadout}
+
+
+func test_rules_3_6_weapon_names_resolve_the_live_variants() -> void:
+	var manager := _manager(KEYS + ["mummified_undead/skeleton leader#bow", "mummified_undead/skeleton leader#greatweapon",
+		"mummified_undead/royal champion#greatweapon"])
+	var cases := [
+		[_hero("Skeleton Leader", ["Rapid Bow", "Strike"]), "Skeleton Leader#bow"],
+		[_hero("Skeleton Leader", ["Master Great Weapon"]), "Skeleton Leader#greatweapon"],
+		[_hero("Royal Champion", ["Master Great Weapon"]), "Royal Champion#greatweapon"],
+		[_sphinx(_weapon("Sphinx Great Weapon", 6), false), "Sphinx Champion#greatweapon"],
+		[_sphinx(_weapon("Sphinx Great Weapon", 6), true), "Sphinx Champion#greatweapon+wings"],
+	]
+	for case in cases:
+		assert_array(manager._unit_model_variant_names(_army([case[0]]).units[0], "mummified_undead")) \
+			.is_equal([case[1]])
+	# Scoped: another faction does not read the 3.6 Mummified words.
+	var lib: ModelLibrary = manager.model_library
+	assert_str(lib.variant_slug(["Rapid Bow", "Sphinx Great Weapon", "Master Great Weapon"], "beastmen")).is_equal("")

@@ -164,6 +164,13 @@ const FOLDER_ALIASES: Dictionary = {
 	"rift_daemons_of_lust": "wormhole_daemons_of_lust",
 	"rift_daemons_of_plague": "wormhole_daemons_of_plague",
 	"rift_daemons_of_war": "wormhole_daemons_of_war",
+	# Rules 3.6 renamed both Daemons families to "Daemons of X" (GF and AoF alike) and pluralised the Saurian
+	# Starhost book; an online import takes its folder from that live name, while the art keeps the old folders.
+	"daemons_of_change": "wormhole_daemons_of_change",
+	"daemons_of_lust": "wormhole_daemons_of_lust",
+	"daemons_of_plague": "wormhole_daemons_of_plague",
+	"daemons_of_war": "wormhole_daemons_of_war",
+	"saurian_starhosts": "saurian_starhost",
 }
 
 ## Books whose unit names carry a faction prefix the published art does not ("War Duke Titan" is the

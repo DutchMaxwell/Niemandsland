@@ -936,6 +936,13 @@ static func _policy_candidates(state: Dictionary, key: String) -> Array:
 		if d < best_d:
 			best_d = d
 			dest = (o as Dictionary)["pos"]
+	# Rules 3.6 (SHO-16) Cumbersome: the rollout's restricted menu obeys the same reduced set as
+	# candidates() — the Hold rows above plus one plain Advance per marker (here the nearest), no
+	# Rush, no Charge and no advance-with-shot.
+	if SoloController.cumbersome_active(su["unit"] as GameUnit):
+		if best_d < INF:
+			out.append({"unit": key, "kind": AiDecision.Action.ADVANCE, "dest": dest})
+		return out
 	if best_d < INF:
 		out.append({"unit": key, "kind": AiDecision.Action.RUSH, "dest": dest})
 	# Counter-charges exist in the mental game too (diagnosis 07.08.: without
@@ -1114,6 +1121,9 @@ static func doctrine_pick(state: Dictionary, player: int, doctrine: String) -> D
 					best_d = d
 					dest = (o as Dictionary)["pos"]
 			act = {"unit": key, "kind": AiDecision.Action.RUSH, "dest": dest}
+			# Rules 3.6 (SHO-16): the rush arm settles on the plain Advance for a Cumbersome unit.
+			if SoloController.cumbersome_active(su["unit"] as GameUnit):
+				act["kind"] = AiDecision.Action.ADVANCE
 		"hold":
 			act = {"unit": key, "kind": AiDecision.Action.HOLD}
 		"screen":
@@ -1125,6 +1135,9 @@ static func doctrine_pick(state: Dictionary, player: int, doctrine: String) -> D
 				if not state["objectives"].is_empty():
 					mid /= state["objectives"].size()
 				act = {"unit": key, "kind": AiDecision.Action.RUSH, "dest": mid}
+				# Rules 3.6 (SHO-16): the screen arm's forced rush becomes a plain Advance.
+				if SoloController.cumbersome_active(state["units"][key]["unit"] as GameUnit):
+					act["kind"] = AiDecision.Action.ADVANCE
 			else:
 				act = _safe_advance(state, key)
 				if act.is_empty():
@@ -1208,6 +1221,13 @@ static func candidates(state: Dictionary, key: String) -> Array:
 	# twin of #1006); hold_only = false reopens the moves on main's tree too.
 	if SoloController.forces_hold((su["unit"] as GameUnit).get_special_rules()) \
 			and SoloController.hold_only_param(su["unit"] as GameUnit):
+		return out
+	# Rules 3.6 (SHO-16) Cumbersome: the same reduced menu as the core — the hold rows above plus one
+	# plain Advance per marker. No Rush, no Charge and no advance-with-shot candidate.
+	if SoloController.cumbersome_active(su["unit"] as GameUnit):
+		for o in state["objectives"]:
+			out.append({"unit": key, "kind": AiDecision.Action.ADVANCE,
+				"dest": (o as Dictionary)["pos"]})
 		return out
 	for o in state["objectives"]:
 		out.append({"unit": key, "kind": AiDecision.Action.RUSH,
@@ -1351,9 +1371,11 @@ static func candidates_wide(state: Dictionary, key: String) -> Array:
 	var out := candidates(state, key)
 	var su: Dictionary = state["units"][key]
 	# NML-1020 lab half: the base menu is already hold-only for Immobile/
-	# Artillery — the wide builder must not append moves back.
-	if SoloController.forces_hold((su["unit"] as GameUnit).get_special_rules()) \
-			and SoloController.hold_only_param(su["unit"] as GameUnit):
+	# Artillery — the wide builder must not append moves back. Rules 3.6: a
+	# Cumbersome unit's base menu already carries its Hold rows and plain Advances.
+	if (SoloController.forces_hold((su["unit"] as GameUnit).get_special_rules()) \
+			and SoloController.hold_only_param(su["unit"] as GameUnit)) \
+			or SoloController.cumbersome_active(su["unit"] as GameUnit):
 		return out
 	var seen_shoot := {}
 	var seen_charge := {}

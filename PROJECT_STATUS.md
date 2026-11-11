@@ -1,6 +1,6 @@
 # Niemandsland — Status & Roadmap
 
-**Version:** 0.3.14.0-alpha *(public alpha — forward-looking backlog in [`docs/ROADMAP.md`](docs/ROADMAP.md))* · **Engine:** Godot 4.6 · **Branch:** `main`
+**Version:** 0.3.15.0-alpha *(public alpha — forward-looking backlog in [`docs/ROADMAP.md`](docs/ROADMAP.md))* · **Engine:** Godot 4.6 · **Branch:** `main`
 
 This is the single source of truth for what works, what's in progress, and what's
 planned. Architecture details live in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md);
@@ -18,14 +18,14 @@ nothing about a turn leaves the machine. One qualification, because "no network 
 if you let NACHTMAHR bring **its own** list, that list is fetched from the asset CDN the first time
 and cached (see below), so the very first use of **AI Opponent** needs a connection. Your own
 imported armies, and every decision NACHTMAHR makes, need none.
-**A four-grade difficulty ladder** (NML-1018, #1126 and
-#1127, merged 2026-09-26; shipping with the next tagged release): Dämmerung, Zwielicht and Finsternis play the decision tree; **Albtraum**, the default,
+**A four-grade difficulty ladder** (#1126 and
+#1127, shipped in 0.3.14.0): Dämmerung, Zwielicht and Finsternis play the decision tree; **Albtraum**, the default,
 plays with Erlkönig, NACHTMAHR's stronger model, where the core and its model load (otherwise the
 tree's ceiling). The picker sits in the solo panel and the choice is remembered
 (`scripts/solo/solo_grade.gd`). Every grade plays by the rules. The match
 runs the rulebook flow end to end: roll-off → the winner picks a table edge and deploys
-first → both sides alternate unit by unit with explicit hand-over clicks → scout phase in
-the 12″ band → the roll-off winner opens round 1. Ambush / Infiltrate reserves wait off
+first → both sides alternate unit by unit with explicit hand-over clicks → scout phase (rules 3.6:
+up to 9″ ahead of the zone, more than 9″ from enemies that are not Scouts) → the roll-off winner opens round 1. Ambush / Infiltrate reserves wait off
 table and arrive from round 2 (alternating placement, a per-model base-edge gate — more than 9″
 from enemies for Ambush, more than 3″ for Infiltrate,
 terrain-legal), objective markers are scored at the end of each round, and after the final
@@ -39,7 +39,8 @@ the range ring and a live line-of-sight ray (green = clear, red = blocked), and 
 dice in the tray for **both** sides. The melee sequence follows the book: the charge snaps to
 base contact, Counter strikes first, Impact hits land, your strike-back is an explicit prompt,
 fatigue applies to both sides, the loser tests morale up to Rout, and pile-in plus the
-up-to-3″ consolidation wait for your input instead of locking the board. Casualties are
+up-to-3″ consolidation wait for your input instead of locking the board. (That is the 3.5.1 flow;
+under rules 3.6 a charge is measured edge to edge before the move and Counter strikes first only when it chooses to.) Casualties are
 removed per model (plain models before special-weapon / equipment / Tough bearers, outside-in
 so the chain does not tear); Takedown model picks, Deadly multiplication and Regeneration ask
 the human player where they land. When **your** unit takes wounds and the choice can matter
@@ -66,7 +67,7 @@ Fortified / Guarded, the conditional-AP family, the "X Aura" variants) and the b
 (Aircraft, Strider / Flying terrain, Hit & Run, Retaliate, Strafing, Re-Deployment, Vanguard,
 Bounding, Teleport …) — **100 % coverage over the bundled opponent lists**, and book-wide
 **446 of 452 rule names (98.7 %) resolve at every layer**: registry, table mechanics, Rust core and
-the value encoder. Measured 2026-09-13 with `core/nml-core-py/tools/rule_universe_census.py`; two of
+the value encoder. Measured 2026-09-13 on the 3.5 books with `core/nml-core-py/tools/rule_universe_census.py`; two of
 the six remaining (`Unique`, `Sniper REMOVE`) are not table primitives at all.
 **That figure is GrimDark Future and Age of Fantasy only** — the census walks those two book
 families (`SYSTEMS = ("gf", "aof")`), so Firefight, Skirmish and Regiments have registry entries and
@@ -80,6 +81,14 @@ cylinder whose height comes off the official base-size table, every terrain piec
 volume, and a sight query is a single 3D eye-to-eye segment — so the ruler's verdict, the sight
 fan, the engine and the AI can never disagree.
 
+**Rules 3.6 (on main, ships with the next release)** — Grimdark Future and Age of Fantasy play OnePageRules 3.6
+(`_meta.core_version` 3.6.0 in `assets/solo/rules_mechanics_gf.json` and `_aof.json`); Firefight, Skirmish and
+Regiments stay on 3.5.1 until they are ported. The rules version shows next to the game version, an older book
+imports with a warning, and a save or an online room on other rules is refused. 3.6 runs under its own rules
+epoch (73), so recordings and reference runs below it are unchanged. Examples: ruins no longer block sight (they
+are Unstable), Cumbersome units may only Hold or Advance, charges are measured edge to edge before the move, and
+the battle log names every applied rule as the book does. The player-facing list is in `CHANGELOG.md`.
+
 **Solo — the 0.3.11 wave in play** — **Reanimation** rolls on activation and you allocate its
 restores by clicking; **Reinforcement** returns a destroyed unit as a fresh copy on the game's
 first runtime unit factory (a unit born mid-game gets its card, survives saves and takes its
@@ -92,7 +101,8 @@ the same audited rule lines you do.
 
 **Solo — the 0.3.12 wave** — **Elevation, Phase A** replaced several flat-map line-of-sight
 approximations with one volumetric truth (`VolumetricLos`) shared by the ruler, the sight fan, the
-engine and the AI; hills, ruins and walls now block by their actual shape. A **futile-charge gate**
+engine and the AI; hills, ruins and walls now block by their actual shape (under rules 3.6 ruins no longer block sight; they are
+Unstable instead). A **futile-charge gate**
 stops melee from charging or chasing a target it cannot hurt — an expected-wounds floor gates the
 decision, and either outcome writes its own battle-log line. **Movement-target commitment** adds
 hysteresis so a unit no longer flip-flops between two similar targets round after round; the hold

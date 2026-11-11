@@ -32,7 +32,7 @@ use super::*;
     /// A real production write (the Storm burst's once-per-game stamp) on a clone never reaches the parent state.
     #[test]
     fn storm_stamp_does_not_reach_the_parent() {
-        let (st, statics) = storm_line("Storm of Change", "wormhole_daemons_of_change", 6);
+        let (st, statics) = storm_line("Storm of Change", "daemons_of_change", 6);
         let (next, _) = run_storm(&st, &statics, 3, 6);
         assert_eq!(next.storm_used[0], vec!["Storm of Change".to_string()]);
         assert!(st.storm_used[0].is_empty(), "the parent ledger stays open");

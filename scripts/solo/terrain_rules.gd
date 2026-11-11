@@ -9,14 +9,11 @@ extends RefCounted
 ## semantics here from terrain_overlay.gd. LINE OF SIGHT is no longer here: since the elevation program
 ## there is exactly one sight truth, the volumetric VolumetricLos, which both sides feed from this data.
 ##
-## Terrain effects (GF Advanced Rules v3.5.1 p.11-12; mirrors terrain_overlay._terrain_effect_label):
-##   RUINS      Cover, Blocks LoS (area — see in/out, not through)  (6" tall)
-##   FOREST     Difficult, Cover, Blocks LoS (area — see in/out, not through)  (3.4" tall)
-##   CONTAINER  Impassable, Blocks LoS (solid — hard-block)         (2.5" tall)
-##   DANGEROUS  Dangerous Terrain                                   (Ground)
-## RUINS and FOREST are AREA terrain (p.12 "see into and out of forests, but not through them" — the
-## maintainer applies the same to ruins); a sight line is only blocked when it passes all the way THROUGH
-## the zone to a target beyond. CONTAINERS are solid Impassable+Blocking buildings and hard-block outright.
+## Terrain effects (rules 3.6, EPOCH_73_V36; older epochs keep the earlier classification):
+##   RUINS      Cover + Unstable, see-through (no sight block)          (6" tall)
+##   FOREST     Difficult, Cover, Dense (see in/out, not through)       (3.4" tall)
+##   CONTAINER  Impassable, Blocks LoS (solid — hard-block)             (2.5" tall)
+##   DANGEROUS  Dangerous Terrain                                       (Ground)
 
 enum TerrainType { NONE = 0, RUINS = 1, FOREST = 2, CONTAINER = 3, DANGEROUS = 4 }
 
@@ -34,7 +31,8 @@ const RUIN_ZONE_HEIGHT_INCHES := 6.0
 # === Type predicates (identical to terrain_overlay's classification) ===
 
 static func blocks_los(t: int) -> bool:
-	return t == TerrainType.RUINS or t == TerrainType.FOREST or t == TerrainType.CONTAINER
+	return (t == TerrainType.RUINS and AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36) \
+		or t == TerrainType.FOREST or t == TerrainType.CONTAINER
 
 
 ## REAL height (INCHES) of a terrain type as a 3D volume — what the volumetric sight truth extrudes each
@@ -75,9 +73,8 @@ static func base_fully_in_cover(pos: Vector3, radius_m: float, type_at: Callable
 	return true
 
 
-## AREA terrain (Forests + Ruins): you see INTO and OUT OF it, but not completely THROUGH it (GF/AoF v3.5.1
-## p.12). Containers are solid Impassable+Blocking buildings — NOT area terrain, so they hard-block LOS and
-## the see-in/out zone exception never applies to them (they publish a SOLID volume).
+## AREA terrain (forests, and ruins before rules 3.6): seen into and out of, not through. Containers
+## hard-block and are never area terrain. From 3.6 ruins publish no sight volume.
 static func is_area_terrain(t: int) -> bool:
 	return t == TerrainType.RUINS or t == TerrainType.FOREST
 
@@ -88,6 +85,13 @@ static func is_difficult(t: int) -> bool:
 
 static func is_dangerous(t: int) -> bool:
 	return t == TerrainType.DANGEROUS
+
+
+## Unstable (rules 3.6): ruins only. A model whose own move is longer than 6 inches and whose route
+## goes into or through a ruin takes the Dangerous test; the caller checks the move length and the
+## Flying exception, this predicate answers only the terrain class.
+static func is_unstable(t: int) -> bool:
+	return t == TerrainType.RUINS
 
 
 static func is_impassable(t: int) -> bool:
@@ -255,7 +259,7 @@ static func majority_in_cover(model_positions: Array, grid_cells: Dictionary, ce
 
 ## True if the straight path a->b touches any cell for which `check` holds. `check` is one of the
 ## predicate ids below (avoids Callable overhead in the hot movement path).
-enum PathCheck { DIFFICULT, DANGEROUS, IMPASSABLE }
+enum PathCheck { DIFFICULT, DANGEROUS, IMPASSABLE, UNSTABLE }
 
 
 static func path_crosses(grid_cells: Dictionary, a: Vector2, b: Vector2, check: int,
@@ -275,5 +279,8 @@ static func path_crosses(grid_cells: Dictionary, a: Vector2, b: Vector2, check: 
 					return true
 			PathCheck.IMPASSABLE:
 				if is_impassable(t):
+					return true
+			PathCheck.UNSTABLE:
+				if is_unstable(t):
 					return true
 	return false

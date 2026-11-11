@@ -49,6 +49,9 @@ func _ready() -> void:
 func serialize_game_state() -> Dictionary:
 	var state = {
 		"version": SAVE_VERSION,
+		# The rules the game was played under (0.3.15): load_game refuses a save from other rules. A new key,
+		# no SAVE_VERSION bump. GF and AoF play the same rules in this build, so the GF map speaks for both.
+		"rules_version": OPRApiClient.rules_core_version("gf"),
 		"saved_at": Time.get_datetime_string_from_system(),
 		"table": _serialize_table(),
 		"objects": _serialize_objects(),
@@ -430,6 +433,12 @@ func load_game(path: String) -> Error:
 	state = migration["state"]
 	if not str(migration["migrated_from"]).is_empty():
 		print("[SaveManager] migrated save from version %s to %s" % [migration["migrated_from"], SAVE_VERSION])
+	# A save from other rules (or from before saves carried them) is refused BEFORE the table is touched,
+	# never replayed on this build's rules. The multiplayer state sync does not come through here.
+	var rules_error := SaveMigrations.rules_version_error(state, OPRApiClient.rules_core_version("gf"))
+	if not rules_error.is_empty():
+		load_failed.emit(rules_error)
+		return ERR_INVALID_DATA
 
 	# Clear current state
 	if object_manager:

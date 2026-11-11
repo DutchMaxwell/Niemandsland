@@ -28,6 +28,10 @@ const DEFAULT_TABLE_SIZE_FEET := Vector2(6, 4)  # 72x48 inches (landscape)
 ## Group rotation
 const GROUP_ROTATION_SPEED: float = 90.0  # degrees per second
 
+## MOR-09b: a melee the unit itself charged and lost — Banner still helps it,
+## the Valiant family does not (the unit was neither shot at nor charged).
+const OWN_CHARGE_CAUSE := "its own charge"
+
 ## Keycodes handled in _unhandled_key_input that MOVE/EDIT objects (arrange, copy/paste,
 ## duplicate, lock, regiment frontage, regiment-arc toggle, group-rotate, undo/redo, delete). These are swallowed
 ## while a remote peer is loading (the non-loading player is held back). The non-edit panels
@@ -147,6 +151,8 @@ var _success_target: int = DiceRules.TARGET_NONE
 var _success_modifier: int = 0
 var _next_roll_owner: String = ""   # attribution for the next tray roll ("AI (…)"); empty = "You" (goal 001)
 var _solo_tray_busy: bool = false   # NML-954: a _solo_tray_roll is in flight — the tray is exclusive
+var _solo_leg: String = "main"   # AI-G4 H1a: the activation leg a tray roll belongs to ("spell" inside the cast leg; dice.jsonl `leg`)
+var _solo_act_flags: Dictionary = {}   # H-DANG-CUT: the board's `_solo_unit_flags` taken BEFORE the dangerous test, handed to the cast leg's `pre` diff
 var _next_roll_purpose: String = ""   # what the roll is about — tray label + MP context (community #170)
 var _next_roll_kind: String = "attack"   # Bug 16: "defense" words the dice-log line as "defends … blocks"
 var _target_buttons: Array[Button] = []
@@ -319,11 +325,12 @@ var _solo_model_pick: Dictionary = {}        # B5: {unit, chain, recommended, ou
 # model, the shared target-side readers answer for THAT MODEL ALONE — its own unit's rules (the joined
 # chain's other members neither grant nor withhold them) and its own cover square (the other models
 # "don't … provide cover to the target model"). Readers: _solo_rule_on_all_models, _solo_majority_in_cover,
-# _solo_has_regeneration. It is set and cleared inside three PURELY SYNCHRONOUS windows — the whole of
-# _solo_takedown_context, the Fortified prologue of _solo_save_batch and the pick of
-# _solo_apply_regeneration — so no await can ever observe it. Never widen a window across an await:
+# _solo_has_regeneration. It is set and cleared inside four PURELY SYNCHRONOUS windows — the whole of
+# _solo_takedown_context, the Fortified prologue of _solo_save_batch and the picks of
+# _solo_apply_regeneration and _solo_ignore_wounds — so no await can ever observe it. Never widen a window across an await:
 # every attack in the game shares those functions, and a leaked flag would rewrite an unrelated save.
 var _solo_takedown_solo: Dictionary = {}     # {unit, index, model} or {}
+var _solo_alias_charge_in: float = 0.0       # SHO-18: the melee charge gap for the alias gate
 ## Sweep F row `Fortified Aura` (epoch 55) — the loss line's once-guard: the
 ## demotion is a STATE, logged on the first save batch it bites, cleared
 ## while a bearer is alive again (a revived bearer re-projects the aura).
@@ -382,13 +389,17 @@ var _solo_ai_banner: Label = null            # non-blocking "NACHTMAHR is taking
 var _solo_dream_overlay: Control = null      # centred "NACHTMAHR dreams…" + spinner while the AI computes
 var _ai_opponent_btn: Button = null          # "AI Opponent" — NACHTMAHR builds its own army
 const AI_LISTS_DIR := "res://assets/ai_lists"          # dev/arena bundle — NEVER in the public repo
-const AI_LISTS_CDN_PATH := "ai_lists"                   # <AssetCdn.HOST>/ai_lists/… (S6 runtime delivery)
-const AI_LISTS_CACHE_DIR := "user://ai_lists_cache"     # offline replay of fetched lists
+const AI_LISTS_CDN_PATH := "ai_lists_v36"               # <AssetCdn.HOST>/ai_lists_v36/… (rules 3.6; 0.3.14 keeps ai_lists/)
+const AI_LISTS_CACHE_DIR := "user://ai_lists_cache_v36" # offline replay of fetched 3.6 lists (a 3.5 cache is never read)
 var _solo_fast: bool = false                 # fast-forward: shrink pacing holds + skip move animation
 var _solo_auto_saves: bool = false           # A3 (NML-202): skip _solo_prompt_saves' dialog, roll straight to the tray
 var _solo_batch: bool = false                # headless sweeps: instant (non-physics) dice + zero pacing holds (implies fast)
 var _solo_relic_drop_queue: Array = []
 var _solo_relic_drop_active: Dictionary = {}
+# One loss line per volley and unit: while a volley parks its casualties (one signal each, all with the same
+# final count) _on_battle_log_dead only counts them here (GameUnit -> [casualties, alive, total]) and the outermost
+# _solo_remove_dead_models writes the lines when it is done. null = no volley open, lines go out at once.
+var _volley_losses = null
 var _solo_relic_drop_gen := 0
 var _solo_vip_pick: Dictionary = {}   # D14.4: the human VIP defender's one click {spot}
 var _solo_secret_pick: Dictionary = {}   # D12a-2: the human defender's two clicks {relic, trap} (marker indexes)
@@ -418,7 +429,8 @@ var solo_activation_done: Callable = Callable()
 ## is_valid() is false, nothing is awaited. Argument: the round that just ENDED.
 var solo_round_done: Callable = Callable()
 var _solo_toast: Label = null                # transient AI-action attribution/outcome toast
-var _solo_live_announce: Array = []          # announce rings/line currently on the board (leak sweep)
+var _solo_live_announce: Array = []          # the AI's announce rings/line currently on the board (leak sweep)
+var _solo_live_announce_human: Array = []    # a HUMAN's: its resolver runs detached, so no AI sweep may touch it
 var _solo_toast_gen: int = 0   # generation token so an auto-hide never blanks a newer toast
 var _solo_toast_sticky: bool = false   # NML-955: this toast is an AI EXPLANATION — no timer, click to dismiss
 var _solo_unmodeled_logged: Dictionary = {}  # rule name -> true: once-per-session unmodeled-rule notes
@@ -1077,6 +1089,14 @@ func _run_solo_ai_turn() -> void:
 ## log, then resolve Dangerous tests / shooting / melee with real tray dice. A Shaken unit idles and
 ## recovers instead (OPR p.10). Returns the activated unit, or null when the AI side is done.
 ##
+## G4-R3 X2 (EPOCH_73_V36, lead ruling 2): a charger whose host died in its own Dangerous test while a joined hero
+## lives is NOT destroyed — the hero goes on as the unit. Below 73 the host's own models decide, as before.
+func _solo_activation_unit_gone(unit: GameUnit) -> bool:
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		return SoloController.combined_alive(unit) <= 0
+	return unit.is_destroyed()
+
+
 ## Thin wrapper so the harness seam fires on EVERY exit path of the body below (Shaken idle and the
 ## destroyed-mid-activation returns included), always with the board in its settled end state.
 func _solo_activate_one_ai() -> GameUnit:
@@ -1203,8 +1223,8 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	# — corridors appear, an attention beat, then the models glide; the state was applied + broadcast first.
 	await _solo_animate_move(solo_controller.last_move_paths)
 	if has_move and solo_controller.last_move_climb_in > 0.0:
-		_log_rule_event(BattleLog.Category.MOVEMENT, "%s climbs onto terrain (+%.1f\" of its move) — GF p.11" % [
-			unit.get_name(), solo_controller.last_move_climb_in], true)
+		_log_rule_event(BattleLog.Category.MOVEMENT, "%s climbs onto terrain (+%.1f\" of its move) — %s" % [
+			unit.get_name(), solo_controller.last_move_climb_in, OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))], true)
 	if has_move:
 		await _solo_pace_attention()   # (f) before attacks resolve
 		_solo_spend_once_kind(unit, ["speed"])   # NML-006: speed once-mods are spent by the executed move
@@ -1214,17 +1234,26 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	var dangerous_dice: int = int(report.get("dangerous_dice", dangerous_models))
 	var alive_before_dangerous: int = SoloController.combined_alive(unit)   # NML-966: combined for the morale trigger
 	var wounds_before_dangerous: int = _solo_unit_wounds_now(unit)
+	# G4-R3 T1 (EPOCH_73_V36): the charge target's wound baseline at the charger's move; _run_ai_melee reads the
+	# delta BEFORE the strikes (the target's own activation counter is stale once it has acted this round).
+	if target != null and int(report.get("action", 0)) == AiDecision.Action.CHARGE \
+			and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		report["target_wounds_start"] = _solo_unit_wounds_now(_solo_combat_unit(target))
+	_solo_act_flags = _solo_unit_flags() if not (report.get("casts", []) as Array).is_empty() else {}   # H-DANG-CUT: before the test
 	if dangerous_dice > 0:
 		await _run_ai_dangerous(unit, dangerous_dice)
-	if unit.is_destroyed():
+	report["dangerous_wounds_taken"] = wounds_before_dangerous - _solo_unit_wounds_now(unit)   # rules 3.6 melee tally
+	if _solo_activation_unit_gone(unit):
 		return unit
+	if unit.is_destroyed() and battle_log != null:   # G4-R3 X2: only reachable at epoch 73 with a living joined hero
+		_log_rule_event(BattleLog.Category.COMBAT, "%s is destroyed but its joined hero lives - the unit is not destroyed and goes on" % unit.get_name(), true)
 	# Wave 6 — Caster(X): resolve the activation's planned casts BEFORE the attack (v3.5.1: "at any
 	# point before attacking"; the official solo procedure casts after moving). The tokens were spent
 	# at plan time (the attempt's cost); here the 4+ cast die rolls on the real tray and the effect
 	# lands (spell damage saves reuse the shooting save path — no Shielded, no Cover against spells).
 	if not (report.get("casts", []) as Array).is_empty():
 		await _solo_resolve_ai_casts(report)
-	if unit.is_destroyed():
+	if _solo_activation_unit_gone(unit):
 		return unit
 	# Mend + Breath Attack (army-book, grill round 2 cut A): once per activation, BEFORE attacking —
 	# same slot the Caster resolution uses ("at any point before attacking").
@@ -1235,17 +1264,19 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	await _solo_apply_utility_buffs(unit)
 	await _solo_apply_mind_control(unit)
 	await _solo_apply_piercing_tag(unit)
-	_solo_apply_precision_tag(unit)
+	await _solo_apply_precision_tag(unit)
 	_solo_apply_precision_target(unit)
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		await _solo_try_precision_spot(unit)   # rules 3.6: the spot rolls BEFORE the bearer's attacks
 	await _solo_apply_reckless_piercing(unit)
 	await _solo_apply_storm_attack(unit)
 	# Surprise Attack moved to activation start (D19 a, above the move) — see the call there.
 	await _solo_apply_teleport(unit, report)   # design #816 PR 1: the before-attack reposition beat
-	if unit.is_destroyed():
+	if _solo_activation_unit_gone(unit):
 		return unit
-	# NML-002 Strafing (official text: "Once per activation, when this model moves through enemy
-	# units, pick one of them and attack it with this weapon as if it was shooting. This weapon may
-	# only be used in this way."): the trigger fires on the EXECUTED trails — independent of the
+	# NML-002 Strafing (rule Strafing: once per activation, after moving through an enemy unit, the
+	# bearer picks one and attacks it with this weapon as if shooting; the weapon has no other use):
+	# the trigger fires on the EXECUTED trails — independent of the
 	# normal shoot decision (the weapon is excluded from every regular volley).
 	await _solo_apply_strafing(unit)
 	await _solo_apply_crossing_attack(unit)
@@ -1263,17 +1294,21 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	if hnr_attacked and not unit.is_destroyed() \
 			and solo_controller.hit_and_run_move(unit, bool(report.get("can_shoot", false))):
 		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.MOVEMENT, "Hit & Run: %s steps up to 3\" after its attack" % unit.get_name(), true)
+			battle_log.log_event(BattleLog.Category.MOVEMENT, "%s: %s steps up to 3\" after its attack" % [solo_controller._hit_and_run_pick(unit, bool(report.get("can_shoot", false))), unit.get_name()], true)
 		if not bool(report.get("can_shoot", false)):
 			await _solo_retreating_strike(unit)   # resolver wave A: the post-MELEE step may lash out
+	elif hnr_attacked and not unit.is_destroyed() and battle_log != null \
+			and not solo_controller.last_hit_and_run_note.is_empty():   # UX-19: only some models carry it
+		battle_log.log_event(BattleLog.Category.MOVEMENT, solo_controller.last_hit_and_run_note, true)
 	# END-of-activation morale from DANGEROUS-terrain wounds (GF/AoF v3.5.1 p.10/p.12 — field-test finding
 	# 7): tested only NOW, AFTER the unit has acted, so dangerous damage never stops it shooting. A CHARGE
 	# resolves through the melee comparison instead ("units in melee don't take morale tests from wounds at
-	# the end of an activation"), so it is excluded here. should_test only fires on a real casualty at ≤half.
+	# the end of an activation"), so it is excluded here. It fires on wounds that leave the unit at ≤half.
 	if dangerous_models > 0 and not unit.is_destroyed() \
 			and int(report.get("action", 0)) != AiDecision.Action.CHARGE:
-		await _solo_shooting_morale(unit, alive_before_dangerous, _roller_label(unit), wounds_before_dangerous)
-	if unit != null:
+		await _solo_shooting_morale(unit, alive_before_dangerous, _roller_label(unit), wounds_before_dangerous,
+			"Dangerous terrain")
+	if unit != null and AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
 		await _solo_try_precision_spot(unit)   # wave B: once per activation
 	# Ambush Re-Deployment fires "when a unit ... ENDS its activation" — the very last beat, after
 	# every attack and follow-up step, so the unit leaves with everything it did already resolved.
@@ -1311,8 +1346,11 @@ func _solo_ensure_playing_phase() -> void:
 				"The battle begins — NACHTMAHR deploys its remaining units", true)
 	if opr_army_manager != null and opr_army_manager.has_method("start_game") \
 			and "game_phase" in opr_army_manager and int(opr_army_manager.game_phase) == 0:
+		_solo_log_scout_deployment()
 		opr_army_manager.start_game()
 		_solo_run_redeployment()
+		if not solo_ai_slots.is_empty():
+			_solo_growth_round_one()   # G4R6 R22: round 1's Growth sweep, before the Rapid Ambush beat
 		_solo_begin_rapid_ambush_round_one()
 
 
@@ -1325,8 +1363,8 @@ func _solo_run_redeployment() -> void:
 		var rd := r as Dictionary
 		if battle_log != null:
 			_log_rule_event(BattleLog.Category.MOVEMENT,
-				"Re-Deployment: %s is removed and deployed again (%.1f\" nearer a marker) — GF v3.5.1" % [
-				(rd["unit"] as GameUnit).get_name(), float(rd["gain_in"])], true)
+				"Re-Deployment: %s is removed and deployed again (%.1f\" nearer a marker) — %s" % [
+				(rd["unit"] as GameUnit).get_name(), float(rd["gain_in"]), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(rd["unit"] as GameUnit))], true)
 	if battle_log != null and opr_army_manager != null:
 		var yours: PackedStringArray = []
 		for u in opr_army_manager.get_game_units_for_player(solo_controller.human_slot):
@@ -1596,6 +1634,22 @@ func _solo_coordinate_decline(bearer: GameUnit) -> void:
 	await _solo_finish_human_activation(bearer)
 
 
+## A targeting window that belongs to `gu` is stale once `gu` counts as activated by any route that is not
+## its own resolving attack (the unit card's Activate button, a transport move): the window would stay open
+## through the opponent's turn and a later click could still resolve an attack for a spent unit. A resolving
+## attack closes its window before it rolls, so this finds nothing to drop on that path.
+func _solo_drop_open_pick_of(gu: GameUnit) -> void:
+	var host := _solo_combat_unit(gu)
+	if host == null or _solo_target_mode.is_empty() or _solo_target_mode.get("unit") != host:
+		return
+	if _solo_target_mode.has("coordinate"):
+		return   # the hand-off offer belongs to an activated unit by design; only its pick or decline books the reply
+	_solo_end_targeting()
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL,
+			"%s is activated — the open target pick is dropped" % host.get_name())
+
+
 func _on_solo_human_activated(gu: GameUnit) -> void:
 	# The first solo activation IS the game start (see _solo_ensure_playing_phase), so it faces the same
 	# deployment gate as the Start-Game button — otherwise activating a unit is a second, button-free way
@@ -1604,6 +1658,7 @@ func _on_solo_human_activated(gu: GameUnit) -> void:
 		_solo_undo_refused_activation(gu)
 		return
 	_solo_ensure_playing_phase()
+	_solo_drop_open_pick_of(gu)   # before the early returns below: hotseat and plain rooms keep a window too
 	if not _solo_alternation_ready(gu):
 		# NML-939: a room with no AI seat (plain human-vs-human multiplayer) has no alternation to drive, but
 		# the unit's own activation is still the door of its once-per-activation Utility Buff.
@@ -1612,6 +1667,9 @@ func _on_solo_human_activated(gu: GameUnit) -> void:
 			if _solo_hotseat_automatic():
 				await _solo_apply_mend(gu)
 			await _solo_apply_utility_buffs(gu)
+			# SHO-22b: the Precision Tag PLACEMENT is a once-per-game enemy pick ("during this model's
+			# activation"), auto-resolved for the human like the AI path does it (~line 1239).
+			await _solo_apply_precision_tag(gu)
 			# Step 2.7b: the hotseat Breath Attack door (Automatic only) — a human bearer breathes on
 			# an enemy on its own tray.
 			if _solo_hotseat_automatic():
@@ -1639,6 +1697,7 @@ func _on_solo_human_activated(gu: GameUnit) -> void:
 	# once-per-activation Utility Buff (round-stamped, so a unit that already bought it at the
 	# attack door is untouched).
 	await _solo_apply_utility_buffs(gu)
+	await _solo_apply_precision_tag(gu)
 	# Step 2.7a: the human Mend door (solo vs NACHTMAHR) — a human bearer heals a wounded Tough ally
 	# within 3" on its own tray, once per activation.
 	await _solo_apply_mend(gu)
@@ -1673,6 +1732,9 @@ func _on_solo_human_activated(gu: GameUnit) -> void:
 ## SoloController.alternation_next would hand the AI two answers in a row.
 func _solo_finish_human_activation(gu: GameUnit) -> void:
 	_solo_ai_took_last_activation = false   # the human just took an activation (finding 7: round-opener tracking)
+	if gu != null:
+		var host := _solo_combat_unit(gu)
+		_solo_activation_wounds_start.erase((host if host != null else gu).get_instance_id())
 	if gu == null or not gu.was_activated_via_coordinate():
 		_solo_pending_replies += 1
 	await _solo_pump()
@@ -1872,6 +1934,8 @@ const STATUS_LANE_BANNER := 92
 const STATUS_LANE_TOAST := 124
 ## How long a plain OPERATIONAL notice stays up (NML-955 keeps AI explanations off this timer).
 const SOLO_TOAST_HIDE_S := 6.0
+## A refused save or online join leaves the player on an empty table while the table intro may still run: 6 s is easy to miss.
+const REFUSAL_TOAST_HIDE_S := 15.0
 const STATUS_LANE_PEER := 156
 
 
@@ -1978,7 +2042,7 @@ func _solo_alternation_ready(gu: GameUnit) -> bool:
 ## After any activation chain: when BOTH sides are out of eligible units the round is over — auto-seize
 ## objectives, then advance the round (or end the game after SOLO_GAME_ROUNDS).
 func _solo_after_activation() -> void:
-	_solo_clear_announce(_solo_live_announce)   # leak sweep: an aborted await path leaves rings behind
+	_solo_clear_announce(_solo_live_announce)   # leak sweep (the AI's set only): an aborted await path leaves rings behind
 	if solo_controller == null or _solo_ai_busy or not _solo_alternation_active():
 		return
 	if not solo_controller.eligible_units_for(solo_controller.human_slot).is_empty():
@@ -1992,7 +2056,7 @@ func _solo_after_activation() -> void:
 		if _solo_cargo_hint_round != opr_army_manager.current_round:
 			_solo_cargo_hint_round = opr_army_manager.current_round
 			_log_rule_event(BattleLog.Category.GENERAL,
-				"Only embarked passengers are left this round — click a passenger to disembark, or pick 'Stay aboard' to spend its activation inside (GF v3.5.1 p.15)", true)
+				"Only embarked passengers are left this round — click a passenger to disembark, or pick 'Stay aboard' to spend its activation inside (%s)" % OPRApiClient.rules_cite(_solo_rules_system()), true)
 		return
 	# Coverage wave — Second Wind (Inquisitorial Agent / Martial Prowess): before the round closes,
 	# a carrier may buy a SECOND activation (once per game, 1/3-of-carriers cap per round).
@@ -2120,7 +2184,7 @@ func _solo_run_both_ai_game(first_opener: int = 1) -> void:
 	_solo_ai_busy = true
 	_solo_game_finished = false
 	var opener: int = first_opener if (first_opener == 1 or first_opener == 2) else 1
-	await _solo_both_ai_rapid_round_one()   # Rapid Ambush may land before round 1's first activation
+	await _solo_both_ai_opening()   # round 1's Growth markers, then Rapid Ambush (which may land before the first activation)
 	while not _solo_game_finished:
 		var round_no: int = opr_army_manager.current_round
 		var _prof_rd_t0 := BattleSim.prof_t0()   # NML-1072: round-transition bookkeeping
@@ -2279,6 +2343,20 @@ func _solo_both_ai_round_start(round_number: int) -> void:
 	for slot in [1, 2]:
 		_solo_set_active_side(slot)
 		await _solo_reinforcement_ai_offers()
+
+
+## G4R6 R22 (EPOCH_73_V36): a per-round Growth rule places its marker at the start of EACH round the unit is on the
+## table, round 1 included, so the opening sweeps once BEFORE any Rapid Ambush arrival (every later round runs growth,
+## then arrivals). Below 73 the first sweep stays round 2's. The existing line names the rule per carrier.
+func _solo_growth_round_one() -> void:
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		_solo_growth_round_start()
+
+
+## The both-AI loop's round-1 opening: the Growth sweep, then the Rapid Ambush arrivals.
+func _solo_both_ai_opening() -> void:
+	_solo_growth_round_one()
+	await _solo_both_ai_rapid_round_one()
 
 
 ## The self-play twin of _solo_begin_rapid_ambush_round_one: with both sides on the AI, round 1's
@@ -2541,8 +2619,11 @@ func _solo_auto_seize() -> void:
 		# A unit that arrived from Ambush THIS round can neither seize nor contest (GF/AoF v3.5.1 p.13);
 		# an Aircraft never can at all (GF v3.5.1 Aircraft, system-scoped via the mechanics maps).
 		var ambush_locked: bool = int(gu.unit_properties.get("ambush_arrived_round", -1)) == round_no
+		# Rules 3.6 (UX-16): Spawn / Split units carry the same lock; the log names the rule that placed them.
+		var origin := str(gu.unit_properties.get("origin", ""))
 		infos.append({"player": int(gu.unit_properties.get("player_id", 0)), "name": gu.get_name(), "shaken": gu.is_shaken,
-			"ambush_locked": ambush_locked, "aircraft": SoloController.is_aircraft(gu), "unit_id": gu.unit_id,
+			"ambush_locked": ambush_locked, "lock_rule": origin.capitalize() if origin in ["spawn", "split"] else "",
+			"aircraft": SoloController.is_aircraft(gu), "unit_id": gu.unit_id,
 			"positions": solo_controller.alive_positions(gu),
 			"radii": _solo_alive_radii(gu)})
 	var res: Dictionary = SoloController.seize_objectives(infos, objectives, owners,
@@ -2566,8 +2647,12 @@ func _solo_auto_seize() -> void:
 			if not bool(entry.get("ambush_locked", false)) or bool(entry.get("shaken", false)) \
 					or bool(entry.get("aircraft", false)):
 				continue
-			if SoloController.objective_info_in_range(entry, objectives[i]):
-				reasons.append("%s arrived from Ambush this round and cannot seize or contest (GF/AoF v3.5.1 p.13)" % str(entry["name"]))
+			if not SoloController.objective_info_in_range(entry, objectives[i]):
+				continue
+			if str(entry.get("lock_rule", "")).is_empty():
+				reasons.append("%s arrived from Ambush this round and cannot seize or contest (%s)" % [str(entry["name"]), OPRApiClient.rules_cite(_solo_rules_system())])
+			else:
+				reasons.append("%s was placed by %s this round and cannot seize or contest (%s)" % [str(entry["name"]), str(entry["lock_rule"]), OPRApiClient.rules_cite(_solo_rules_system())])
 		if not reasons.is_empty():
 			locked_near[i] = "; ".join(reasons)
 	var changed_indices := {}
@@ -2581,7 +2666,7 @@ func _solo_auto_seize() -> void:
 		# measurable across a self-play run rather than only human-readable in the battle log.
 		if solo_controller != null:
 			solo_controller.record_decision({"kind": "seize", "unit": "objective %d" % (idx + 1),
-				"rule": "Solo & Co-Op v3.5.0 p.2/p.6: a marker is held by the ONE side with non-Shaken models within 3\"",
+				"rule": "Solo & Co-Op: a marker is held by the ONE side with non-Shaken models within 3\"",
 				"candidates": [], "chosen": ("neutral (contested)" if owner == 0 else _solo_player_label(owner)),
 				"why": "round-end seize", "data": {"index": idx, "owner": owner, "round": round_no}})
 		if network_manager != null:
@@ -2636,7 +2721,7 @@ func _solo_secret_trap_hits(victim: GameUnit) -> void:
 	var hits: int = int(faces[0]) + 1
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "Trap: %s takes %d hits" % [victim.get_name(), hits], true)
-	var profile: Dictionary = {"name": "Trap", "ap": 0, "deadly": 0, "rules": []}
+	var profile: Dictionary = {"name": "Trap", "ap": 0, "deadly": 0, "rules": [], "_impact_pool": true}
 	var w: int = await _solo_resolve_saves(victim, victim, "Trap", [], hits,
 		_solo_defense_vs(victim, AiCombatMath.HIT_SOURCE_MELEE), profile, not _solo_is_ai_unit(victim), true)
 	if w > 0:
@@ -3276,6 +3361,30 @@ func hotseat_off_turn_drag(unit: GameUnit) -> bool:
 	_show_toast(text)
 	return true
 
+
+## Rules 3.6 (Fable A6/F6): a human unit that has already ATTACKED this activation is spent — a later
+## free drag would let one activation both keep Hold's shot bonus and advance. Lock the move (the
+## caller filters plain clicks) and name the refusal once.
+func attacked_unit_drag_refused(unit: GameUnit, distance_in := 0.0) -> bool:
+	if unit == null or opr_army_manager == null \
+			or opr_army_manager.game_phase != OPRArmyManager.GamePhase.PLAYING:
+		return false
+	# Lead 09:16: narrow to a unit that SHOT this activation and did not fight — a melee
+	# survivor's containment/back-step drag must stay legal (`shot_round` is stamped by the
+	# shooting leg only, so a melee-only activation never has it).
+	if int(unit.unit_properties.get("shot_round", -1)) != opr_army_manager.current_round:
+		return false
+	# Lead 11:17: the Hit & Run family lets a HUMAN make its one 3" post-shot step by dragging.
+	if distance_in > 0.0 and solo_controller != null \
+			and bool(solo_controller.hit_and_run_drag_allowed(unit, distance_in, true)):
+		_log_rule_event(BattleLog.Category.MOVEMENT,
+			"%s: %s steps up to %.1f\" after shooting" % [solo_controller._hit_and_run_pick(unit, true), unit.get_name(), distance_in])
+		return false
+	var text := "%s has already shot this round — it cannot move now" % unit.get_name()
+	_log_rule_event(BattleLog.Category.MOVEMENT, text)
+	_show_toast(text)
+	return true
+
 ## (Re)build the SoloController for the currently designated AI slot (setup wires TurnManager once).
 func _ensure_solo_controller() -> void:
 	# #196 belt-and-braces: in multiplayer the controller exists only for an EXPLICITLY
@@ -3365,6 +3474,10 @@ func _ensure_solo_controller() -> void:
 		solo_controller.round_provider = func() -> int:
 			return int(opr_army_manager.current_round) if opr_army_manager != null else 0
 		solo_controller.game_rounds = _solo_mission_rounds(_solo_mission_id)
+		# Automodus decision 14: only a designated AI seat turns its models to the enemy — read live, since the
+		# controller outlives its seat (#1719) and a hotseat table's geometry controller has ai_slot on a human.
+		solo_controller.is_ai_seat = func(slot: int) -> bool:
+			return solo_ai_slots.has(slot)
 	_solo_apply_difficulty()
 
 
@@ -3471,8 +3584,8 @@ func _on_solo_deploy_pressed() -> void:
 		"human_placed": {}, "outcome": []}
 	if battle_log != null:
 		_log_rule_event(BattleLog.Category.GENERAL,
-			"Deployment roll-off: you %d — NACHTMAHR %d. The winner picks a table edge and deploys first (GF v3.5.1) [seed %d]" % [
-			you_roll, ai_roll, seed_value], false)
+			"Deployment roll-off: you %d — NACHTMAHR %d. The winner picks a table edge and deploys first (%s) [seed %d]" % [
+			you_roll, ai_roll, OPRApiClient.rules_cite(_solo_rules_system()), seed_value], false)
 	if ai_roll > you_roll:
 		# NACHTMAHR picks its edge (v1 heuristic: opposite the human's army tray — the natural
 		# setup; objectives sit centre-line, so the edges are near-symmetric) and deploys first.
@@ -3531,6 +3644,16 @@ func _solo_human_gate_violation(gu: GameUnit) -> String:
 func _solo_army_points(slot: int) -> int:
 	var army = opr_army_manager.armies.get(slot) if opr_army_manager != null else null
 	return int(army.points) if army != null else 0
+
+
+## O-CITE: the current game's own system slug, for the game-scoped citation lines. The human army
+## carries it (the field the AI-list dialog normalises); the default system when none is loaded.
+func _solo_rules_system() -> String:
+	var slot: int = solo_controller.human_slot if solo_controller != null else 1
+	var army = opr_army_manager.armies.get(slot) if opr_army_manager != null else null
+	if army == null:
+		return RulesRegistry.DEFAULT_SYSTEM
+	return RulesRegistry.normalize_system(str(army.game_system_abbrev))
 
 
 ## The picked mission's attacker points factor (> 1 only for a roles mission that grants one).
@@ -3801,8 +3924,8 @@ func _solo_deploy_begin_side(ai_neg_z: bool) -> void:
 		for u in set_aside:
 			aside_names.append((u as GameUnit).get_name())
 		battle_log.log_event(BattleLog.Category.GENERAL,
-			"You hold %d Ambush unit(s) in reserve on your tray (%s) — placement alternates from round 2 (GF/AoF p.13)." % [
-				set_aside.size(), ", ".join(aside_names)], false)
+			"You hold %d Ambush unit(s) in reserve on your tray (%s) — placement alternates from round 2 (%s)." % [
+				set_aside.size(), ", ".join(aside_names), OPRApiClient.rules_cite(_solo_rules_system())], false)
 	# The player's SCOUT units are set aside for the scout phase (p.14: "May be set aside before
 	# deployment. After all other units are deployed …") — named so he keeps them on the tray.
 	var human_scouts: PackedStringArray = []
@@ -3813,7 +3936,7 @@ func _solo_deploy_begin_side(ai_neg_z: bool) -> void:
 			human_scouts.append(gu.get_name())
 	if not human_scouts.is_empty() and battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL,
-			"Scout phase later: keep %s on the tray — scouts deploy AFTER all other units (GF v3.5.1)" % ", ".join(human_scouts), false)
+			"Scout phase later: keep %s on the tray — scouts deploy AFTER all other units (%s)" % [", ".join(human_scouts), OPRApiClient.rules_cite(_solo_rules_system())], false)
 	_solo_deploy_fsm["human_scouts"] = human_scouts
 	_solo_deploy_fsm["phase"] = "main"
 	_solo_deploy_fsm["human_out"] = false
@@ -3887,6 +4010,7 @@ func _solo_phase_start() -> void:
 		solo_controller.deploy_set_gates(phase_gates)
 		var done: Array = solo_controller.deploy_place_n(quota)
 		placed[slot] = int(placed.get(slot, 0)) + done.size()
+		_solo_log_vanguard_notes()
 		_log_rule_event(BattleLog.Category.GENERAL, "Phase %d of %d (%s, %s): NACHTMAHR deploys %d unit(s)" % [
 			i + 1, phases.size(), role, share, done.size()], true)
 		_solo_deploy_fsm["phase_i"] = i + 1
@@ -3959,12 +4083,15 @@ func _solo_mission_reserves_set_aside() -> void:
 
 ## D11a (Last Stand, R8a): a covered side's unit that is destroyed for the FIRST time comes back as a
 ## full-strength copy in reserve (parked off the table, a mission reserve like any other: it rolls the
-## mission's die each round). The copy is marked `recycled`, so its own destruction is final.
+## mission's die each round). The copy is marked `recycled`, so its own destruction is final; the original is
+## marked too (meta, never saved), because a volley parks its casualties one signal at a time with the whole
+## unit already dead and every one of those signals comes here.
 func _solo_recycle_if_due(gu: GameUnit) -> void:
 	var cfg := _solo_reserve_cfg()
 	if cfg.is_empty() or not bool(cfg.get("recycle", false)) or gu == null or table == null:
 		return
-	if bool(gu.unit_properties.get("recycled", false)) or bool(gu.unit_properties.get("mission_reserve", false)):
+	if bool(gu.unit_properties.get("recycled", false)) or bool(gu.unit_properties.get("mission_reserve", false)) \
+			or bool(gu.get_meta("recycle_copy_made", false)):
 		return
 	var pid: int = int(gu.unit_properties.get("player_id", 0))
 	var src := gu.source_data as OPRApiClient.OPRUnit
@@ -3984,6 +4111,7 @@ func _solo_recycle_if_due(gu: GameUnit) -> void:
 	if copy == null:
 		return
 	copy.unit_properties["recycled"] = true
+	gu.set_meta("recycle_copy_made", true)
 	solo_controller.mission_reserve_set([copy])
 	_log_rule_event(BattleLog.Category.GENERAL, "%s is destroyed — a full-strength copy returns to reserve ONCE, arriving on %d+ from round %d" % [
 		gu.get_name(), int(cfg.get("arrive_on", 6)), int(cfg.get("from_round", 2))], pid == solo_controller.ai_slot)
@@ -4096,12 +4224,41 @@ func _solo_human_main_units() -> Array:
 
 ## D7a: a human placement outside the phase's zone ("" = fine).
 func _solo_phase_zone_violation(gu: GameUnit) -> String:
+	# UX-13: in the Scout phase at 73 the spot must clear the 9" gap to every non-Scout enemy unit.
+	if str(_solo_deploy_fsm.get("phase", "")) == "scout" and SoloController.scout_gap_in() > 0.0:
+		var models: Array = []
+		for m in gu.get_alive_models():
+			var mi := m as ModelInstance
+			if mi != null and mi.node != null:
+				models.append({"pos": Vector2(mi.node.global_position.x, mi.node.global_position.z),
+					"radius": solo_controller.model_base_radius_m(mi)})
+		var gap := SoloController.gate_violation({"min_from_enemy_in": SoloController.scout_gap_in()}, models,
+			solo_controller.bases_of_slot(solo_controller.ai_slot, null, true), [], [])
+		if not gap.is_empty():
+			return gap.replace("enemy units", "enemy units that are not Scouts")
+	if not _solo_deploy_fsm.has("phases"):
+		return ""
 	var phases: Array = _solo_deploy_fsm["phases"]
 	var zone := _solo_phase_zone(phases[int(_solo_deploy_fsm["phase_i"])] as Array, solo_controller.human_slot)
 	var c := solo_controller.unit_centre(gu)
 	if DeploymentCatalog.in_zone(zone["style"], int(zone["player"]), Vector2(c.x, c.z) / 0.0254):
 		return ""
 	return "must be placed inside the marked zone"
+
+
+## UX-12: how far ahead of its zone a scout may stand, in the scout-phase texts — the epoch's band from
+## the AI's own selector (9" under rules 3.6, 12" below).
+static func solo_scout_band_words() -> String:
+	var words := "up to %d\" ahead of your zone" % int(SoloController.scout_band_in())
+	if SoloController.scout_gap_in() > 0.0:
+		words += ", more than %d\" from enemy units that are not Scouts" % int(SoloController.scout_gap_in())
+	return words
+
+
+## UX-13: the Scout phase alternates from the SAME player who takes round 1's first turn (the
+## deployment roll-off winner, `winner_is_ai`). A side without scouts is skipped.
+static func solo_scout_starts_with_first_turn(winner_is_ai: bool, human_has_scouts: bool) -> bool:
+	return winner_is_ai or not human_has_scouts
 
 
 ## The human's MAIN/SCOUT-phase turn panel: place ONE unit, then hand over by click.
@@ -4112,7 +4269,7 @@ func _solo_deploy_show_human_turn() -> void:
 		return
 	var phase := str(_solo_deploy_fsm.get("phase", "main"))
 	var ai_left: int = solo_controller.deploy_pending() if phase == "main" else solo_controller.deploy_scouts_pending()
-	var what := "one unit" if phase == "main" else "one SCOUT unit (up to 12\" ahead of your zone)"
+	var what := "one unit" if phase == "main" else "one SCOUT unit (%s)" % solo_scout_band_words()
 	if ai_left > 0:
 		_solo_deploy_ui_show("Your turn: place %s on your side, then hand over.\n(NACHTMAHR has %d left.)" % [what, ai_left],
 			"✓ Unit placed", func() -> void: _solo_deploy_human_done_one(),
@@ -4140,7 +4297,7 @@ func _solo_deploy_human_done_one() -> void:
 			_solo_show_toast("%s %s — move it, then ✓" % [(gu as GameUnit).get_name(), broken])
 			_solo_deploy_show_human_turn()
 			return
-	if _solo_deploy_fsm.has("phases"):   # D7a: the unit must stand in the phase's zone
+	if _solo_deploy_fsm.has("phases") or str(_solo_deploy_fsm.get("phase", "main")) == "scout":
 		for gu in placed:
 			var outside := _solo_phase_zone_violation(gu as GameUnit)
 			if not outside.is_empty():
@@ -4199,7 +4356,7 @@ func _solo_deploy_newly_placed_human() -> Array:
 			gu.unit_properties["ambush_reserve"] = false
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.GENERAL,
-					"%s deploys normally — Ambush not used (GF/AoF p.13: 'may be set aside')." % gu.get_name(), false)
+					"%s deploys normally — Ambush not used (%s: 'may be set aside')." % [gu.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(gu))], false)
 		out.append(gu)
 	return out
 
@@ -4208,6 +4365,15 @@ func _solo_deploy_human_out() -> void:
 	_solo_deploy_fsm["human_turn"] = false
 	_solo_deploy_fsm["human_out"] = true
 	_solo_deploy_ai_turn()
+
+
+## The Vanguard free placement owes ONE battle-log line naming the BOOK entry that granted it.
+func _solo_log_vanguard_notes() -> void:
+	if battle_log == null or solo_controller == null:
+		return
+	for note in solo_controller.vanguard_notes:
+		battle_log.log_event(BattleLog.Category.GENERAL, str(note), true)
+	solo_controller.vanguard_notes.clear()
 
 
 ## One AI deployment turn of the CURRENT phase — or the phase's rest when the human is out.
@@ -4225,11 +4391,40 @@ func _solo_deploy_ai_turn() -> void:
 		# The AI is out for this phase — the human keeps placing until he closes the phase.
 		_solo_deploy_show_human_turn()
 		return
+	_solo_log_vanguard_notes()
 	_solo_focus_on_unit(unit)
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL, "NACHTMAHR deploys %s — your turn" % unit.get_name(), true)
 	_solo_show_explain("NACHTMAHR deploys %s — your turn" % unit.get_name())
 	_solo_deploy_show_human_turn()
+
+
+## AIG-G2-L3: the Scout rule's whole effect is its DEPLOYMENT ORDER (scouts deploy after all other
+## units), so the battle log never named it. One entry names the rule (Scout, or the registry's
+## variant for the carrier) and the units it moved; nothing when no unit carries it.
+func _solo_log_scout_deployment() -> void:
+	if battle_log == null or opr_army_manager == null:
+		return
+	var names: PackedStringArray = []
+	var rules: PackedStringArray = []
+	for u in opr_army_manager.get_all_game_units():
+		var gu := u as GameUnit
+		if gu == null or gu.get_alive_count() <= 0 or not SoloController.unit_has_scout(gu) \
+				or SoloController.unit_in_reserve(gu) \
+				or (gu.has_method("is_attached") and gu.is_attached()):
+			continue
+		names.append(gu.get_name())
+		var resolved := RulesRegistry.unit_rules_of_primitive(gu, "Scout")
+		var rule_name := "Scout"
+		if not resolved.is_empty():
+			rule_name = str((resolved[0] as Dictionary).get("name", "Scout"))
+		if not rules.has(rule_name):
+			rules.append(rule_name)
+	if names.is_empty():
+		return
+	_log_rule_event(BattleLog.Category.GENERAL,
+		"%s: %s deployed after all other units (%s)" % [
+			", ".join(rules), ", ".join(names), OPRApiClient.rules_cite(_solo_rules_system())], false)
 
 
 ## Phase advance: MAIN → SCOUT (same procedure, roll-off winner starts — "the player that
@@ -4244,8 +4439,9 @@ func _solo_deploy_phase_advance() -> void:
 			_solo_deploy_fsm["human_out"] = human_scouts.is_empty()
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.GENERAL,
-					"SCOUT phase: players alternate placing scouts up to 12\" ahead of their zone (GF v3.5.1)", false)
-			if bool(_solo_deploy_fsm.get("winner_is_ai", false)) or human_scouts.is_empty():
+					"SCOUT phase: players alternate placing scouts — %s (%s)" % [solo_scout_band_words(), OPRApiClient.rules_cite(_solo_rules_system())], false)
+			if solo_scout_starts_with_first_turn(bool(_solo_deploy_fsm.get("winner_is_ai", false)),
+					not human_scouts.is_empty()):
 				_solo_deploy_ai_turn()
 			else:
 				_solo_deploy_show_human_turn()
@@ -4348,9 +4544,12 @@ func _apply_unit_visible(unit: GameUnit, vis: bool) -> void:
 ## NML-002 — Strafing resolution: if the unit (incl. joined heroes) carries a Strafing weapon and
 ## this activation's move passed over an enemy unit's bases, pick ONE crossed enemy (nearest) and
 ## fire ONLY the Strafing profiles at it, through the shared volley resolver. Once per activation.
-func _solo_apply_strafing(unit: GameUnit) -> void:
-	if unit == null or solo_controller == null or solo_controller.last_move_paths.is_empty():
+func _solo_apply_strafing(unit: GameUnit, human_trails: Array = []) -> void:
+	var human_move: bool = not human_trails.is_empty()   # the PLAYER's drop (EPOCH_73_V36): same detection + volley
+	if unit == null or solo_controller == null or (solo_controller.last_move_paths.is_empty() and not human_move):
 		return
+	if human_move and int(unit.unit_properties.get("strafe_round", -1)) == opr_army_manager.current_round:
+		return   # once per activation: the player's bearer already fired this round
 	var members: Array = [unit]
 	if unit.has_method("get_attached_heroes"):
 		members = members + unit.get_attached_heroes()
@@ -4363,17 +4562,21 @@ func _solo_apply_strafing(unit: GameUnit) -> void:
 		if member.source_type == "opr" and member.source_data is OPRApiClient.OPRUnit:
 			weapons = (member.source_data as OPRApiClient.OPRUnit).weapons
 		for prof in AiShooting.strafing_profiles(weapons):
+			# AIG-G2 R3 (EPOCH_73_V36): the target is the unit the bearer moved through, so the printed range
+			# (0 on Drop Bombs) does not gate this volley — the unlimited reach the Takedown bonus shot uses.
+			var reach_in: int = 9999 if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
+				else (int(prof.get("range", 0)) if prof.has("range") else 0)
 			shots.append({"member": member, "quality": member.get_quality(),
 				"alive": member.get_alive_count(), "max": member.models.size(),
-				"reach": int(prof.get("range", 0)) if prof.has("range") else 0, "profile": prof})
+				"reach": reach_in, "profile": prof})
 	if shots.is_empty():
 		return
 	# Trails of THIS activation vs every enemy unit's bases — collect crossed enemies, take the nearest.
-	var trails: Array = []
-	for mp in solo_controller.last_move_paths:
+	var trails: Array = human_trails.duplicate()
+	for mp in ([] if human_move else solo_controller.last_move_paths):
 		trails.append((mp as Dictionary).get("path", []))
 	var crossed: Array = []
-	for e in opr_army_manager.get_game_units_for_player(solo_controller.human_slot):
+	for e in opr_army_manager.get_game_units_for_player(solo_controller.ai_slot if human_move else solo_controller.human_slot):
 		var eu := e as GameUnit
 		if eu == null or eu.get_alive_count() <= 0 or SoloController.unit_in_reserve(eu):
 			continue
@@ -4387,11 +4590,38 @@ func _solo_apply_strafing(unit: GameUnit) -> void:
 		return MoveIntent.distance_inches(solo_controller.unit_centre(unit), solo_controller.unit_centre(a)) \
 			< MoveIntent.distance_inches(solo_controller.unit_centre(unit), solo_controller.unit_centre(b)))
 	var target := crossed[0] as GameUnit
+	if human_move:
+		unit.unit_properties["strafe_round"] = opr_army_manager.current_round
 	if battle_log != null:
+		var rule_name := AiShooting.strafing_rule_name(shots.map(func(s): return s["profile"]))
 		battle_log.log_event(BattleLog.Category.COMBAT,
-			"Strafing: %s passes over %s — attacks it as if shooting (once per activation)" % [
-			unit.get_name(), target.get_name()], true)
+			"%s: %s passes over %s — attacks it as if shooting (once per activation)" % [
+			rule_name, unit.get_name(), target.get_name()], true)
 	await _solo_resolve_ai_volley(unit, target, shots, true)
+
+
+## AIG-G2 R3 (EPOCH_73_V36): the same move-through trigger after the PLAYER's own drop in a solo game — each
+## unit's executed paths (a joined hero counts with its host) go through `_solo_apply_strafing` above.
+func _solo_human_strafing(moves: Array) -> void:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 or solo_controller == null or solo_ai_slots.is_empty():
+		return
+	var legs := {}   # unit -> its models' executed paths, as Vector3 legs
+	for mv in moves:
+		var unit := UnitUtils.get_game_unit((mv as Dictionary).get("node") as Node3D)
+		if unit != null and unit.is_attached() and unit.get_attached_to() is GameUnit:
+			unit = unit.get_attached_to()
+		if unit == null or _solo_is_ai_unit(unit) or float((mv as Dictionary).get("inches", 0.0)) <= 0.1:
+			continue
+		var leg: Array = []
+		for p in (mv as Dictionary).get("path", PackedVector2Array()):
+			leg.append(Vector3((p as Vector2).x, 0.0, (p as Vector2).y))
+		legs[unit] = legs.get(unit, []) + [leg]
+	for unit in legs:
+		while _solo_tray_busy:
+			if not is_inside_tree():
+				return
+			await get_tree().process_frame
+		await _solo_apply_strafing(unit as GameUnit, legs[unit])
 
 
 func _run_ai_shooting(report: Dictionary) -> void:
@@ -4423,10 +4653,17 @@ func _run_ai_shooting(report: Dictionary) -> void:
 			# Wave 5: an expended Limited weapon no longer shoots (core v3.5.1: once per game); a
 			# unit-level Shred grant marks every weapon profile (the weapon facet is already parsed).
 			if bool(prof.get("limited", false)) and solo_controller.is_limited_used(member, prof):
+				_solo_log_limited_spent(member, prof)
 				continue
+			# R-1 (A2): remember that the weapon itself prints Shred before the unit grant folds the flag.
+			if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and bool(prof.get("shred", false)):
+				prof["_shred_own"] = true
 			if RulesRegistry.unit_rule_active(member, "Shred") \
 					or _solo_shred_facet_applies(member, base_range):
 				prof["shred"] = true
+				var shred_alias := _solo_shred_facet_name(member, base_range)
+				if not shred_alias.is_empty() and shred_alias != "Shred":
+					prof["_shred_alias"] = shred_alias
 			member_profiles.append(prof)
 			# `reach` (target validity + per-model sighting) includes the unit's range bonus, so a Royal
 			# Legion unit shoots targets up to +4" beyond the weapon's printed range.
@@ -4435,17 +4672,22 @@ func _run_ai_shooting(report: Dictionary) -> void:
 				"reach": base_range + range_bonus, "profile": prof})
 		# Wave 5 Sergeant (model-level): the member's FIRST firing profile carries the bearer's share.
 		AiEv.stamp_sergeant(member_profiles, member)
+		_solo_stamp_alias_markers(member, member_profiles)
 		AiEv.stamp_conditional_ap(member_profiles, member)   # value Shatter/Tear/Melee Slayer/Disintegrate AP
 	if shots.is_empty():
 		_solo_log_no_volley(unit, report, "no ready ranged weapon")
 		return
+	if bool(report.get("moved", false)) and battle_log != null and SoloController.has_indirect_ranged(_solo_all_weapons(unit)) \
+			and SoloController.indirect_ignores_los(unit) and not SoloController.indirect_ignores_los(unit, false):
+		battle_log.log_event(BattleLog.Category.COMBAT, "Indirect: %s did not Hold — its Indirect weapons need line of sight" % unit.get_name(), true)
 	# Split fire: assign each shot the best target under its weapon overlay, then group shots by target.
 	# Target validity is PER MODEL (GF v3.5.1 p.8): the shot's MEMBER needs a model with range+LOS.
 	var groups: Dictionary = {}   # target unit_id -> {"target": GameUnit, "shots": Array}
 	var order: Array = []
 	for shot in shots:
 		var overlay: int = AiTargeting.weapon_overlay((shot["profile"] as Dictionary).get("rules", []))
-		var tgt: GameUnit = _solo_pick_overlay_target(shot["member"], overlay, float(shot["reach"]), shot["profile"] as Dictionary)
+		var tgt: GameUnit = _solo_pick_overlay_target(shot["member"], overlay, float(shot["reach"]), shot["profile"] as Dictionary,
+			not bool(report.get("moved", false)))
 		if tgt == null:
 			continue
 		if not groups.has(tgt.unit_id):
@@ -4477,6 +4719,13 @@ func _solo_log_no_volley(unit: GameUnit, report: Dictionary, why: String) -> voi
 		unit.get_name(), why, hold_note], true)
 
 
+## Limited (once per game): a volley leaves out a weapon that already fired — the log names the book rule.
+func _solo_log_limited_spent(member: GameUnit, prof: Dictionary) -> void:
+	if battle_log != null and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		battle_log.log_event(BattleLog.Category.COMBAT, "Limited: %s's %s is used up — once per game" % [
+			member.get_name(), str(prof.get("name", "?"))], true)
+
+
 ## Resolve-first priority of a shot (GF v3.5.1 p.14): Takedown before Deadly before the rest. sort_custom
 ## is not guaranteed stable, but equal-priority shots (same tier) are interchangeable for the rule.
 func _solo_shot_priority(shot: Dictionary) -> int:
@@ -4496,6 +4745,33 @@ func _solo_ai_volley_distance_in(attacker: GameUnit, target: GameUnit) -> float:
 	if gap != INF:
 		return gap
 	return MoveIntent.distance_inches(solo_controller.unit_centre(attacker), solo_controller.unit_centre(target))
+
+
+## T-DUP-WEAPON-BEARERS: the key under which two entries of one weapon share their living bearers — the firing
+## member, the weapon's name and its attacks per copy (the same match alive_bearers_of counts bearers by).
+func _solo_bearer_key(shot: Dictionary) -> String:
+	var p: Dictionary = shot["profile"]
+	return "%d|%s|%d" % [(shot["member"] as GameUnit).get_instance_id(), str(p.get("name", "")),
+		maxi(int(p.get("attacks", 0)) / maxi(int(p.get("count", 1)), 1), 0)]
+
+
+## SHO-PAR-F6: one AI shot's eligibility — the member's models with range + sight to the target (and the
+## pairs they cleared), the bearer-gated attack report (NML-1025) and the living bearers. From EPOCH_73_V36
+## the volley reads it ONCE per shot before the first die (all weapons fire together); before, per shot.
+func _solo_shot_eligibility(member: GameUnit, profile: Dictionary, shot: Dictionary, target: GameUnit,
+		granted_indirect: bool, moved: bool = false) -> Dictionary:
+	var pairs: Array = []
+	var reach_in: int = int(SoloController.effective_shoot_reach_in(float(shot["reach"]), target))
+	var waive_los: bool = (bool(profile.get("indirect", false)) and SoloController.indirect_ignores_los(member, not moved)) \
+		or granted_indirect or _solo_target_grants_indirect(target)   # GH #325
+	var sighted: int = _solo_sighted_count(member, target, reach_in, waive_los, pairs, false, null, true)
+	if sighted == 0 and _solo_own_gap_refused(member, target, reach_in, waive_los):
+		_solo_log_own_gap_refusal(member, target, str(profile.get("name", "?")))
+	var copies: int = maxi(int(profile.get("count", 1)), 1)
+	return {"pairs": pairs, "sighted": sighted, "alive": member.get_alive_count(),
+		"report": SoloController.scaled_attacks_report(member, profile, sighted, int(shot["max"])),
+		"bearers": SoloController.alive_bearers_of(member, str(profile.get("name", "")),
+			maxi(int(profile.get("attacks", 0)) / copies, 0)) if copies < int(shot["max"]) else -1}
 
 
 ## Resolve one split-fire volley (all `shots` aimed at `target`) with real tray dice + the human's saves.
@@ -4523,6 +4799,11 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 	var alive_before: int = SoloController.combined_alive(target)   # NML-966: trigger reads combined
 	var wounds_before: int = _solo_unit_wounds_now(target)
 	var models_before: int = _solo_combined_alive(target)
+	# G4R3 F-T-SIGHT-LONE (EPOCH_73_V36): the Hero rule — name it when the volley's target is a lone hero.
+	var lone_hero: GameUnit = _solo_defense_holder(target)
+	if lone_hero != null and lone_hero != target and battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT, "Hero: %s is the unit now — shots from %s at %s are measured and saved as the hero" % [
+			lone_hero.get_name(), attacker.get_name(), target.get_name()], true)
 	# Armor(X) (wave 5, army-book upgrade: "counts as having Defense X+") sets the working Defense,
 	# then every Defense contribution of the parts seam folds in (Shielded and its data aliases,
 	# growth markers, spell tokens — each NAMED in the log, NML-932); Cover (GF v3.5.1 p.11) is
@@ -4537,23 +4818,40 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 	if not over9_rule.is_empty() and dist_in > AiCombatMath.LONG_RANGE_IN:
 		base_defense = AiCombatMath.guarded_defense(base_defense, true)
 		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.COMBAT, "%s (%s): shot from over 9\" — +1 Defense (saves on %d+)" % [
-				target.get_name(), over9_rule, AiCombatMath.shown_target(base_defense)], true)
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s (%s): shot from over 9\" — +1 Defense (saves on %d+)%s" % [
+				target.get_name(), over9_rule, AiCombatMath.shown_target(base_defense),
+				_solo_most_models_note(target, over9_rule)], true)
 	var covered_defense: int = _solo_cover_defense(target, base_defense)   # +1 Defense if majority in cover
 	# Resolver wave A — vs-target Marks: the bearer's pick lands on THIS volley's target.
-	_solo_apply_vs_marks(attacker, target, dist_in)
+	await _solo_apply_vs_marks(attacker, target, dist_in)
 	# Coverage wave — Piercing Tag: friendly attackers spend the markers for +AP on this volley.
 	# Resolver wave A — Reckless Piercing: the round-scoped AP stamps (buff on the attacker,
 	# backfire on the target) ride the same profile-AP merge.
 	var tag_ap := _solo_spend_piercing_tag(target) + _solo_reckless_ap(attacker, target)
-	if tag_ap > 0:
+	var arrival_logged := {}   # G4R5 F-AMBUSH-ARRIVAL-AP: Ambushing Piercing Shot is per shot member, like the core
+	if tag_ap > 0 or AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
 		shots = shots.duplicate()
 		for si in range(shots.size()):
 			var sd := (shots[si] as Dictionary).duplicate()
+			var shot_ap := tag_ap + _solo_ambush_arrival_ap(sd.get("member") as GameUnit, arrival_logged)
+			if shot_ap == 0:
+				continue
 			var sprof := (sd.get("profile", {}) as Dictionary).duplicate()
-			sprof["ap"] = int(sprof.get("ap", 0)) + tag_ap
+			sprof["ap"] = int(sprof.get("ap", 0)) + shot_ap
 			sd["profile"] = sprof
 			shots[si] = sd
+	# SHO-PAR-F6 (EPOCH_73_V36, lead ruling O1): all weapons of the volley fire together, so every shot's
+	# sighted models and bearers are fixed HERE, before the first die — an earlier weapon's casualties
+	# (Deadly / Takedown land mid-volley) no longer silence a later one; the core fixes its counts at
+	# declaration too. Wounds still resolve in order. EPOCH_72 keeps the per-shot recount in the loop.
+	var granted_indirect: bool = SoloController.granted_indirect_of(attacker)   # GH #325 — own token
+	var at_declaration: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
+	var declared: Array = []
+	if at_declaration:
+		for s in shots:
+			var ds := s as Dictionary
+			declared.append(_solo_shot_eligibility(ds["member"] as GameUnit, _solo_bridge_granted_flags(
+				ds["member"] as GameUnit, ds["profile"] as Dictionary, target), ds, target, granted_indirect, moved))
 	# ANNOUNCE: who shoots at whom — highlights + attack line + toast, held before any die is thrown.
 	var announce := _solo_show_attack_announce(attacker, target, "fires at")
 	_solo_show_fan_for_unit(attacker)   # Bug 17: the volley fan appears automatically — the shot is traceable
@@ -4564,10 +4862,18 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 	var total_hits := 0
 	var total_caused := 0
 	var cover_logged := false   # I4: log Cover once, only when a shot's save really used it
+	var indirect_cover_logged := false   # Rules 3.6 (SHO-01b): name a moved Indirect shooter's kept cover once
+	var reliable_logged := false   # AIG-G2-L2a: name the Reliable Quality floor once per volley
+	var warbound_logged := false   # AIG-G2-L2a: name the widened Shred window once per volley
+	var shroud_spec := SoloController.ranged_shroud_spec(target)
+	if not shroud_spec.is_empty() and battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s — weapon ranges against it %s\" shorter (min %s\")" % [
+			str(shroud_spec["name"]), target.get_name(),
+			str(float(shroud_spec["range_penalty_in"])).trim_suffix(".0"),
+			str(float(shroud_spec["floor_in"])).trim_suffix(".0")], true)
 	# Unpredictable (generic army-book rule — "when attacking": the SHOOTING leg; the wave-4 melee-only
 	# Unpredictable Fighter lives in the melee path): ONE die per volley for the whole unit —
 	# 1-3 → AP(+1), 4-6 → +1 to hit on every profile it fires (same arithmetic, same visible tray).
-	var granted_indirect: bool = SoloController.granted_indirect_of(attacker)   # GH #325 — own token
 	var upr_ap := 0
 	var upr_hit := 0
 	var upr_name := _solo_unpredictable_rule(attacker, false, target)
@@ -4578,35 +4884,59 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 			upr_ap = int(upr_eff["ap"])
 			upr_hit = int(upr_eff["hit"])
 			if battle_log != null:
-				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s rolls %d → %s" % [
+				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s's volley rolls %d → %s" % [
 					upr_name, attacker.get_name(), int(upr_face[0]), ("AP(+1)" if upr_ap > 0 else "+1 to hit")], true)
-	for s in shots:
-		var shot := s as Dictionary
+	var hero_upr: Dictionary = await _solo_hero_unpredictable(attacker, upr_name,   # AIG-G2 R5: a joined hero's own die
+		shots.map(func(s: Variant) -> Variant: return (s as Dictionary)["member"]), target, true)
+	var entry_count := {}   # T-DUP-WEAPON-BEARERS: entries per bearer key (member, weapon name, attacks per copy)
+	var guns_fired := {}   # ... and the bearers the earlier entries of that key already took
+	if at_declaration:
+		for s in shots:
+			var ek: String = _solo_bearer_key(s as Dictionary)
+			entry_count[ek] = int(entry_count.get(ek, 0)) + 1
+	for si in range(shots.size()):
+		var shot := shots[si] as Dictionary
 		var member := shot["member"] as GameUnit
 		var profile := _solo_bridge_granted_flags(member, shot["profile"] as Dictionary, target)
+		var m_upr: Dictionary = hero_upr.get(member.get_instance_id(), {})   # the member's own die, else the unit's
+		var m_hit: int = int(m_upr.get("hit", upr_hit))
+		var m_ap: int = int(m_upr.get("ap", upr_ap))
 		# Per-model shooting (GF v3.5.1 p.8 "Who Can Shoot") decides the dice count FIRST, so a shot that
 		# scales to nothing leaves before any rule fires on it (it also keeps the Takedown pick below out
 		# of volleys that never roll). Indirect (wave 5) targets as if in line of sight — its per-model
 		# sighting is range-only; the Aircraft penalty (-12") and Ranged Shrouding (-6" min 6") shorten
 		# the reach here too.
-		var sight_pairs: Array = []   # VFX #2: the model pairs the count below cleared (tracer segments)
-		var sighted: int = _solo_sighted_count(member, target,
-			int(SoloController.effective_shoot_reach_in(float(shot["reach"]), target)),
-			bool(profile.get("indirect", false)) or granted_indirect, sight_pairs)   # GH #325
+		var decl: Dictionary = declared[si] if at_declaration \
+			else _solo_shot_eligibility(member, profile, shot, target, granted_indirect, moved)
+		var sight_pairs: Array = decl["pairs"]   # VFX #2: the model pairs the count cleared (tracer segments)
+		var sighted: int = int(decl["sighted"])
 		# NML-1025: the bearer gate now guards the AI volley too (was human-only).
-		var volley_report: Dictionary = SoloController.scaled_attacks_report(member, profile, sighted, int(shot["max"]))
+		var volley_report: Dictionary = decl["report"]
 		var attacks: int = int(volley_report["attacks"])
 		# NML-1073 M5 D6a-B6: sibling of the dice tap (AiDiceRecorder) — the table-side per-shot
 		# facts the count above used, env NML_SHOT_DUMP, default OFF (byte-identical game either
 		# way; AiShotRecorder.record() no-ops on its own cached env check).
 		var shot_range_in: int = int(SoloController.effective_shoot_reach_in(float(shot["reach"]), target))
 		var shot_max_models: int = int(shot["max"])
-		var shot_copies: int = maxi(int(profile.get("count", 1)), 1)
-		var shot_bearers: int = SoloController.alive_bearers_of(member, str(profile.get("name", "")),
-			maxi(int(profile.get("attacks", 0)) / shot_copies, 0)) if shot_copies < shot_max_models else -1
+		var shot_bearers: int = int(decl["bearers"])
+		var bearer_key: String = _solo_bearer_key(shot)
+		if shot_bearers >= 0 and attacks > 0 and int(entry_count.get(bearer_key, 0)) > 1:
+			# T-DUP-WEAPON-BEARERS: this weapon is listed more than once, so the entries SHARE the bearers of the
+			# sighted models — each entry rolls for its own copies out of what the earlier entries left.
+			var per_copy: int = maxi(int(profile.get("attacks", 0)) / maxi(int(profile.get("count", 1)), 1), 1)
+			var taken: int = int(guns_fired.get(bearer_key, 0))
+			var guns: int = maxi(mini(mini(shot_bearers, sighted) - taken, int(profile.get("count", 1))), 0)
+			guns_fired[bearer_key] = taken + guns
+			if guns * per_copy != attacks and battle_log != null:
+				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s is listed %d times — its %d bearers fire once, this entry rolls for %d of them" % [
+					member.get_name(), str(profile.get("name", "?")), int(entry_count[bearer_key]), shot_bearers, guns], true)
+			attacks = guns * per_copy
+			if attacks <= 0:
+				volley_report = {"attacks": 0, "silent": "its bearers already fire another entry of it"}
 		AiShotRecorder.record({"act": solo_controller.move_act_seq(), "round": solo_controller._current_round(),
 			"player": solo_controller.ai_slot, "shooter": attacker.get_name(), "member": member.get_name(),
 			"weapon": str(profile.get("name", "?")), "target": target.get_name(),
+			"target_id": str(target.unit_id),
 			"alive": member.get_alive_count(), "sighted": sighted, "bearers": shot_bearers,
 			"max_models": shot_max_models, "attacks": attacks,
 			"reach_in": float(shot_range_in) + (_solo_unit_base_radius_m(member) + _solo_unit_base_radius_m(target)) \
@@ -4619,6 +4949,11 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s silent — %s" % [
 					member.get_name(), str(profile.get("name", "?")), str(volley_report["silent"])], true)
 			continue
+		# SHO-PAR-F6 rules-must-log: say so whenever casualties since the declaration did not shrink this shot.
+		if at_declaration and battle_log != null and (_solo_combined_alive(target) < models_before
+				or member.get_alive_count() < int(decl["alive"])):
+			battle_log.log_event(BattleLog.Category.COMBAT, "Simultaneous fire: %s fires %s as declared (%d model%s in range and sight before the first roll)" % [
+				member.get_name(), str(profile.get("name", "?")), sighted, ("" if sighted == 1 else "s")], true)
 		# Reliable (GF v3.5.1) sets the Quality (2+); the to-hit roll modifiers (Stealth / Artillery /
 		# Evasive, and Indirect's moved-shooting -1 — wave 5) then apply on top ("Reliable only changes
 		# the Quality value", p.14).
@@ -4638,13 +4973,19 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 				mod_info = td_ctx["mod"] as Dictionary
 				shot_base = int(td_ctx["defense"])
 				shot_cover = int(td_ctx["covered"])
-		if moved and (bool(profile.get("indirect", false)) or granted_indirect) \
-				and not bool(RulesRegistry.best_primitive_param(member, "Indirect", "no_moved_penalty", false)):
-			# Quick Readjustment (coverage wave): the bearer ignores the Indirect moved-penalty.
-			var indirect_mod: int = AiCombatMath.indirect_hit_modifier(true,
-				int(RulesRegistry.unit_param(member, "Indirect", "moved_hit_penalty", AiCombatMath.INDIRECT_MOVED_HIT_PENALTY)))
-			mod_info = {"mod": int(mod_info.get("mod", 0)) + indirect_mod,
-				"note": _solo_join_note(str(mod_info.get("note", "")), "Indirect moved %d" % indirect_mod)}
+		var ai_own: int = int(mod_info.get("own", 0)) + m_hit   # SHO-08: own rules' part (Unstoppable)
+		if moved and (bool(profile.get("indirect", false)) or granted_indirect):
+			if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+				# Rules 3.6 (SHO-02): the penalty is gone; the hit-info names the non-application.
+				mod_info = {"mod": int(mod_info.get("mod", 0)),
+					"note": _solo_join_note(str(mod_info.get("note", "")), "Indirect: no moved penalty")}
+			elif not bool(RulesRegistry.best_primitive_param(member, "Indirect", "no_moved_penalty", false)):
+				# Quick Readjustment (coverage wave): the bearer ignores the Indirect moved-penalty.
+				var indirect_mod: int = AiCombatMath.indirect_hit_modifier(true,
+					int(RulesRegistry.unit_param(member, "Indirect", "moved_hit_penalty", AiCombatMath.INDIRECT_MOVED_HIT_PENALTY)))
+				ai_own += indirect_mod
+				mod_info = {"mod": int(mod_info.get("mod", 0)) + indirect_mod,
+					"note": _solo_join_note(str(mod_info.get("note", "")), "Indirect moved %d" % indirect_mod)}
 		# NML-970: spent Spot markers fold INTO the note — the To-hit breakdown must name
 		# every bonus it counts, not only apply it (transparency doctrine).
 		if ai_spot_hit != 0:
@@ -4653,21 +4994,37 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		if ai_tag_hit != 0:
 			mod_info = {"mod": int(mod_info.get("mod", 0)) + ai_tag_hit,
 				"note": _solo_join_note(str(mod_info.get("note", "")), "Tagged +%d" % ai_tag_hit)}
-		var ai_mod: int = int(mod_info.get("mod", 0)) + upr_hit
-		if bool(profile.get("unstoppable", false)) and ai_mod < 0:
-			ai_mod = 0   # Unstoppable (GF v3.5.1 p.15): ignores all negative modifiers to this weapon
-			if battle_log != null:
-				battle_log.log_event(BattleLog.Category.COMBAT, "Unstoppable: negative to-hit modifiers ignored", true)
+		var ai_mod: int = int(mod_info.get("mod", 0)) + m_hit
+		if bool(profile.get("unstoppable", false)):
+			var ai_uf: Array = _solo_unstoppable_fold(ai_mod, ai_own)   # Unstoppable: other sources' minus ignored
+			ai_mod = int(ai_uf[0])
+			if battle_log != null and str(ai_uf[1]) != "":
+				battle_log.log_event(BattleLog.Category.COMBAT, str(ai_uf[1]), true)
 		var to_hit_raw: int = AiCombatMath.reliable_quality(int(shot["quality"]), bool(profile.get("reliable", false))) - ai_mod
 		var to_hit: int = AiCombatMath.modified_hit_target(to_hit_raw, 0)
-		if upr_ap > 0:
+		if not reliable_logged and bool(profile.get("reliable", false)) and battle_log != null:
+			reliable_logged = true
+			battle_log.log_event(BattleLog.Category.COMBAT, "Reliable: %s shoots at Quality %d+" % [
+				member.get_name(), to_hit], true)
+		if not warbound_logged and bool(profile.get("shred", false)) and battle_log != null:
+			for e in RulesRegistry.unit_rules_of_primitive(member, "Shred"):
+				var ep: Dictionary = ((e as Dictionary).get("params", {}) as Dictionary)
+				var boost_low := maxi(int(ep.get("save_fail_max", 0)), int(ep.get("extra_wound_save_low", 0)))
+				var boost_base := str(ep.get("upgrades", ""))
+				if boost_low <= 1 or boost_base.is_empty() or not AiEv.has_exact_rule(member, boost_base):
+					continue
+				warbound_logged = true
+				battle_log.log_event(BattleLog.Category.COMBAT, "%s: failed saves of 1-%d count as wounds on %s" % [
+					str((e as Dictionary).get("name", "")), boost_low, target.get_name()], true)
+				break
+		if m_ap > 0:
 			profile = profile.duplicate()
-			profile["ap"] = int(profile.get("ap", 0)) + upr_ap   # Unpredictable AP(+1) leg (never mutate source)
+			profile["ap"] = int(profile.get("ap", 0)) + m_ap   # Unpredictable AP(+1) leg (never mutate source)
 		# Versatile Attack (army-book): over 9" apply the EV-better of +1 to hit or AP(+1)
 		# — the SAME chooser AiEv.profile_ev uses, so the AI's plan and the real dice pick the
 		# same mode. EPOCH_38_WATCHBORN_LATCH: ONE pick per ACTIVATION — the first eligible
 		# volley decides, every later volley/charge of the activation reuses the latch.
-		if bool(profile.get("versatile_attack", false)) and dist_in > AiCombatMath.LONG_RANGE_IN:
+		if bool(profile.get("versatile_attack", false)) and _solo_versatile_over(member, dist_in, false, 0.0):
 			var vm: Dictionary = _solo_versatile_latch_read(member)
 			var fresh: bool = vm.is_empty()
 			if fresh:
@@ -4679,8 +5036,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 				profile = profile.duplicate()
 				profile["ap"] = int(profile.get("ap", 0)) + int(vm.get("ap", 0))
 			if battle_log != null and fresh:
-				battle_log.log_event(BattleLog.Category.COMBAT, "Versatile Attack: %s picks %s for this activation" % [
-					member.get_name(), "AP(+1)" if int(vm.get("ap", 0)) > 0 else "+1 to hit"], true)
+				_solo_log_versatile_pick(member, int(vm.get("ap", 0)) > 0)
 		_solo_log_hit_mod(mod_info, target, to_hit)
 		var shooter_name: String = member.get_name()
 		_vfx_volley(member, target, profile, sight_pairs.slice(0, shot_bearers if shot_bearers >= 0 else sight_pairs.size()),
@@ -4690,7 +5046,11 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		if bool(profile.get("limited", false)):
 			solo_controller.mark_limited_used(member, profile)   # once per game — spent on the roll (wave 5)
 		await _solo_hazardous_self_wounds(attacker, profile, faces)   # resolver wave A: natural 1s wound the firer
-		var hits: int = await _solo_hits(faces, to_hit_raw, profile, dist_in, target, false, "AI (%s)" % attacker.get_name())
+		# H-EXTRA-ATTACK-SIGNER (EPOCH_73_V36): a rule-generated extra attack die is rolled by the member that fired,
+		# like the shot's own dice (the core signs it so); below 73 the host unit signs it as before.
+		var hit_signer: String = shooter_name if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else attacker.get_name()
+		var hits: int = await _solo_hits(faces, to_hit_raw, profile, dist_in, target, false, "AI (%s)" % hit_signer,
+			0.0, models_before if at_declaration else -1)
 		if battle_log != null:
 			var sight_note: String = "" if sighted >= member.get_alive_count() else " (%d/%d models sighted)" % [sighted, member.get_alive_count()]
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s fires %s at %s%s — %d hit%s" % [
@@ -4706,12 +5066,23 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		# save-step rules) resolve inside _solo_resolve_saves. Native both-AI (AI ARENA): when the
 		# DEFENDER is itself AI, the saves auto-roll on the real tray (no human prompt) — the human_defends flag
 		# is derived, never assumed, so an AI-vs-AI game resolves shooting unattended.
-		var save_def: int = shot_base if (int(profile.get("blast", 0)) > 1 or bool(profile.get("indirect", false)) or bool(profile.get("ignores_cover", false))) else shot_cover
+		var save_def: int = shot_base if SoloController.shot_ignores_cover(profile, attacker, _solo_unit_held(attacker)) else shot_cover
+		if not indirect_cover_logged and bool(profile.get("indirect", false)) \
+				and not SoloController.indirect_ignores_cover(attacker, _solo_unit_held(attacker)) \
+				and battle_log != null and AiCombatMath.shot_uses_cover(save_def, shot_cover, shot_base):
+			indirect_cover_logged = true   # the rule applied: the target keeps its terrain cover
+			battle_log.log_event(BattleLog.Category.COMBAT, "Indirect: %s — %s's cover counts (only sight-blocker cover is ignored)" % [
+				attacker.get_name(), target.get_name()], true)
 		if td_ctx.is_empty() and not cover_logged and battle_log != null \
 				and AiCombatMath.shot_uses_cover(save_def, shot_cover, shot_base):
 			cover_logged = true   # I4: only claim Cover when the roll truly saved at the covered value
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s is in cover: +1 Defense (saves on %d+)" % [
-				target.get_name(), AiCombatMath.shown_target(save_def)], true)
+				_solo_defense_signer(target).get_name(), AiCombatMath.shown_target(save_def)], true)
+		# AI-08a — rules-must-log: a cover skip by a map-read rule (Anti-Cover et al.) names the rule.
+		elif td_ctx.is_empty() and battle_log != null and shot_cover < shot_base and int(profile.get("blast", 0)) <= 1 \
+				and not str(profile.get("cover_rule", "")).is_empty():
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s ignores %s's cover (save skipped)" % [
+				str(profile["cover_rule"]), shooter_name, target.get_name()], true)
 		var is_deadly: bool = int(profile.get("deadly", 0)) > 0
 		# TC-023: the saves are the PICKED MODEL's — rolled by its own GameUnit, so a sniped attached
 		# hero blocks on HIS Defense (and his own Fortified / conditional-AP profile), not the host's.
@@ -4728,22 +5099,22 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 			# before the roll. Resolver wave A: a Takedown weapon's Deadly multiplies on that model
 			# (p.14) — this also fixes book weapons carrying both (the multiply was silently dropped).
 			var td_w: int = w * maxi(int(profile.get("deadly", 0)), 1)
-			if _solo_ignores_regen(member, profile):
+			if _solo_ignores_regen(member, profile, target):
 				landed_extra += await _solo_land_takedown_wounds(target, str(profile.get("name", "?")), td_pick, 0, td_w)
 			else:
 				landed_extra += await _solo_land_takedown_wounds(target, str(profile.get("name", "?")), td_pick, td_w, 0)
 		elif is_deadly and w > 0:
 			# Deadly (GF v3.5.1 p.14): each unsaved wound ×X on one model, no carry-over.
-			if _solo_ignores_regen(member, profile):
-				landed_extra += await _solo_land_deadly_wounds(target, str(profile.get("name", "?")), int(profile.get("deadly", 0)), 0, w)
+			if _solo_ignores_regen(member, profile, target):
+				landed_extra += await _solo_land_deadly_wounds(target, str(profile.get("name", "?")), int(profile.get("deadly", 0)), 0, w, false, dist_in)
 			else:
-				landed_extra += await _solo_land_deadly_wounds(target, str(profile.get("name", "?")), int(profile.get("deadly", 0)), w, 0)
-		elif _solo_ignores_regen(member, profile):
+				landed_extra += await _solo_land_deadly_wounds(target, str(profile.get("name", "?")), int(profile.get("deadly", 0)), w, 0, false, dist_in)
+		elif _solo_ignores_regen(member, profile, target):
 			regen_proof += w
 		else:
 			regenable += w
 		await _solo_stage_phase(str(profile.get("name", "weapon")))
-	var landed: int = await _solo_land_wounds(target, regenable, regen_proof)
+	var landed: int = await _solo_land_wounds(target, regenable, regen_proof, false, dist_in)
 	if _solo_combined_alive(target) <= 0:
 		_solo_growth_on_kill(attacker)   # Defensive Frenzy: volley kill credit
 		_solo_vengeance_on_destroyed(target, attacker)
@@ -4757,11 +5128,12 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 	await _solo_stage_phase("Result")
 	# NML-966 gap B: Deadly/Takedown wounds bypass the regen pool and never reached `landed` —
 	# a Deadly-only volley silently skipped the half-strength morale test. landed_extra counts them in.
-	if landed + landed_extra > 0:
-		await _solo_shooting_morale(target, alive_before, _roller_label(target), wounds_before)
+	if landed + landed_extra > 0 or _solo_scourge_wounds > 0:   # SHO-15a: phantom wounds count as taken
+		await _solo_shooting_morale(target, alive_before, _roller_label(target), wounds_before, "", dist_in, -1.0)
 		await _solo_stage_phase("Morale")
 	_solo_stage_end()
 	_solo_consume_once_mods(attacker, target, false)   # F4: once-mods spent by this exchange
+	_solo_spend_shot_feats(attacker)
 
 
 ## VFX #2: one tracer per firing model along the eye-to-eye segment the LOS rule tested (same heights as
@@ -4786,7 +5158,7 @@ func _vfx_player_volley(member: GameUnit, target: GameUnit, profile: Dictionary,
 		return
 	var pairs: Array = []
 	_solo_sighted_count(member, target, int(SoloController.effective_shoot_reach_in(float(profile.get("range", 0))
-		+ float(SoloController.shooting_range_bonus(member)), target)), los_waived, pairs)
+		+ float(SoloController.shooting_range_bonus(member)), target)), los_waived, pairs, false, null, true)
 	_vfx_volley(member, target, profile, pairs.slice(0, maxi(int(profile.get("count", 1)), 1)), los_waived)
 
 
@@ -4801,13 +5173,59 @@ func _vfx_player_volley(member: GameUnit, target: GameUnit, profile: Dictionary,
 func _solo_resolve_ai_casts(report: Dictionary) -> void:
 	if dice_roller_control == null or solo_controller == null:
 		return
+	var flags_before: Dictionary = _solo_act_flags if not _solo_act_flags.is_empty() else _solo_unit_flags()
+	_solo_act_flags = {}
+	_solo_leg = "spell"   # AI-G4 H1a: every roll below is the cast leg's; the cast die itself re-tags to "cast"
 	for c in report.get("casts", []):
 		var cast := c as Dictionary
 		var caster: GameUnit = cast.get("caster")
 		if caster == null or caster.get_alive_count() == 0:
 			continue   # the caster died to a Dangerous-terrain test before the cast resolved
 		await _solo_resolve_one_cast(cast)
+	_solo_leg = "main"
+	_solo_record_pre_leg(flags_before)
 	_solo_refresh_caster_markers()
+
+
+## AI-G4 H1a: {unit id: [alive models, Shaken, the living ModelInstances, their wounds, shooting-range bonus, granted rule
+## names]} of every unit on the table (the cast leg's before/after diff; the third slot is F-PRE-SURV's list of who stood
+## at the start, the last is F-PRE-TOKENS' `grants_rule` list of the unit's live spell records).
+func _solo_unit_flags() -> Dictionary:
+	var flags := {}
+	for uid in opr_army_manager.game_units:
+		var u := opr_army_manager.game_units[uid] as GameUnit
+		var live: Array = u.get_alive_models()
+		flags[uid] = [u.get_alive_count(), u.is_shaken, live, live.map(func(m: Variant) -> int: return (m as ModelInstance).wounds_current),
+			SoloController.shooting_range_bonus(u), AiActRecorder.granted_names(_solo_spell_mods.get(u.get_instance_id(), []))]
+	return flags
+
+
+## AI-G4 H1a: writes the `pre` block of this activation - the units the cast leg changed, so the replay
+## gates can start the core from the state the table's volley started from. Epoch 73+ only.
+func _solo_record_pre_leg(before: Dictionary) -> void:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 or not AiActRecorder.active():
+		return
+	var changed := {}
+	var after := _solo_unit_flags()
+	for uid in after:
+		var was: Array = before.get(uid, [])
+		if was.is_empty() or after[uid][0] != was[0] or after[uid][1] != was[1] or after[uid][3] != was[3] or after[uid][4] != was[4] \
+				or after[uid][5] != was[5]:
+			# `wounds` = the survivors' wounds; `reach` (C-GRANTED-RANGE) = the spell-granted shooting reach, inches
+			changed[uid] = {"alive": after[uid][0], "shaken": after[uid][1], "wounds": after[uid][3]}
+			if not was.is_empty():
+				if after[uid][4] != was[4]:
+					changed[uid]["reach"] = after[uid][4] - was[4]
+				if (after[uid][5] as Array).size() > (was[5] as Array).size():   # F-PRE-TOKENS: the rules the leg granted (the act line's ledger holds the rest)
+					changed[uid]["grants"] = (after[uid][5] as Array).slice((was[5] as Array).size())
+				# F-PRE-SURV: WHICH models of the start list still stand (`of` = its length), not only how many
+				var keep: Array = []
+				for i in (was[2] as Array).size():
+					if is_instance_valid(was[2][i]) and (was[2][i] as ModelInstance).is_alive:
+						keep.append(i)
+				changed[uid]["of"] = (was[2] as Array).size()
+				changed[uid]["keep"] = keep
+	AiActRecorder.pre(solo_controller.move_act_seq(), changed)
 
 
 ## One cast: the announced spell, the boost/interference-adjusted target number, one real tray die.
@@ -4834,56 +5252,26 @@ func _solo_resolve_one_cast(cast: Dictionary) -> void:
 	var boost := int(cast.get("boost", 0))
 	var interference := int(cast.get("interference", 0))
 	var base_target := int(cast.get("base_target", AiSpell.CAST_BASE_TARGET))
-	# NML-006 casting_mod: active tokens like "-3 to casting rolls" (Burn the Heretic) shift the
-	# caster's roll target — applied BEFORE announce/boost/interference so every preview shows the
-	# true number; [2,6] clamp (a 1 always fails, a 6 always casts). Spent right after the cast die.
-	var casting_mod := 0
-	var cast_mod_notes: PackedStringArray = []
-	for crd in AiSpell.mods_for(_solo_mods_of_chain(caster), "casting", false):
-		casting_mod += int((crd as Dictionary).get("casting_mod", 0))
-		cast_mod_notes.append("%s %+d" % [str((crd as Dictionary).get("spell", "")),
-			int((crd as Dictionary).get("casting_mod", 0))])
-	# Coverage wave — Spell Conduit: a friendly non-Shaken conduit within its range gives +1 to
-	# casting rolls (the position-proxy half is a registry-noted approximation).
+	var conduit_mod := 0
 	if solo_controller != null and opr_army_manager != null:
 		var cpid := int(caster.unit_properties.get("player_id", 0))
 		_solo_log_shaken_lenders(cpid)
-		for u in opr_army_manager.get_game_units_for_player(cpid):
-			var cu := u as GameUnit
-			if cu == null or cu == caster or cu.get_alive_count() == 0 or SoloController.unit_in_reserve(cu):
-				continue
-			var found := false
-			for e in RulesRegistry.unit_rules_of_primitive(cu, "Spell Conduit"):
-				var sp: Dictionary = (e as Dictionary).get("params", {})
-				# NML-981: measured base edge to base edge (nearest models) like every other ranged
-				# check — the unit-centre reading denied legal conduits on wide bases (the AI's
-				# conduit-origin sweep already measures edges; NML-206 precedent).
-				var d := solo_controller.nearest_melee_gap_in(cu, caster)
-				if d > float(sp.get("range_in", 12.0)):
-					continue
-				# NML-936 (v3.5.3 audit): "Friendly casters may only use this rule if this unit isn't
-				# Shaken" — the condition now comes from the rule's own params instead of a blanket
-				# hardcoded skip, and an in-range conduit that is sitting it out says so (rules-must-log)
-				# instead of vanishing from the sum without a word.
-				if bool(sp.get("requires_not_shaken", true)) and cu.is_shaken:
-					if battle_log != null:
-						_log_rule_event(BattleLog.Category.COMBAT,
-							"%s: %s is Shaken — its conduit does not help %s cast" % [
-								str((e as Dictionary)["name"]), cu.get_name(), caster.get_name()], true)
-					continue
-				casting_mod += int(sp.get("casting_mod", 1))
-				cast_mod_notes.append("%s %+d" % [str((e as Dictionary)["name"]), int(sp.get("casting_mod", 1))])
-				# Rules-must-log (#782): name the rule BY NAME, the conduit, and the
-				# origin the cast rides — the conduit's own position.
-				if battle_log != null and solo_controller != null:
-					_log_rule_event(BattleLog.Category.COMBAT,
-						"%s: %s casts as if standing at %s (%s)" % [
-							str((e as Dictionary)["name"]), caster.get_name(), cu.get_name(),
-							str(solo_controller.unit_centre(cu))], true)
-				found = true
-				break
-			if found:
-				break
+		var conduit := solo_controller.caster_conduit(caster)
+		for sh in conduit.get("shaken", []):
+			var se := sh as Dictionary
+			if battle_log != null:
+				_log_rule_event(BattleLog.Category.COMBAT, "%s: %s is Shaken — its conduit does not help %s cast" % [
+					str((se["rule"] as Dictionary)["name"]), (se["unit"] as GameUnit).get_name(), caster.get_name()], true)
+		if conduit.has("unit"):
+			var cu := conduit["unit"] as GameUnit
+			conduit_mod = int(conduit.get("mod", 0))
+			if battle_log != null:
+				_log_rule_event(BattleLog.Category.COMBAT, "%s: %s casts as if standing at %s (%s)" % [
+					str((conduit["rule"] as Dictionary)["name"]), caster.get_name(), cu.get_name(),
+					str(solo_controller.unit_centre(cu))], true)
+	var cast_net := SoloController.caster_casting_net(caster, conduit_mod)
+	var casting_mod := int(cast_net["net"])
+	var cast_mod_notes: PackedStringArray = cast_net["notes"]
 	if casting_mod != 0:
 		base_target = clampi(base_target - casting_mod, 2, 6)
 		if battle_log != null:
@@ -4924,8 +5312,11 @@ func _solo_resolve_one_cast(cast: Dictionary) -> void:
 	var target_num := AiSpell.cast_target(boost, interference, base_target)
 	# THE CAST ROLL — one visible die on the real tray (no hidden RNG).
 	var roll_owner := str(cast.get("owner_label", "AI (%s)" % caster.get_name()))
+	var leg_before := _solo_leg
+	_solo_leg = "cast"   # AI-G4 H1a: the cast die is its own leg of the recording
 	var faces: Array = await _solo_tray_roll(1, target_num, roll_owner, "attack",
 		"Casting %s (%d+)" % [spell_name, target_num])
+	_solo_leg = leg_before
 	var success: bool = not faces.is_empty() and DiceRules.is_success(int(faces[0]), target_num, 0)
 	if seal_id > 0:
 		_vfx_emit({"k": "seal_end", "sid": seal_id, "o": int(SpellSeal.Outcome.SUCCESS if success else SpellSeal.Outcome.FAIL),
@@ -4984,10 +5375,41 @@ func _vfx_seal_begin(caster: GameUnit, entry: Dictionary, effect: Dictionary, sp
 func _solo_resolve_spell_damage(caster: GameUnit, caster_unit: GameUnit, spell_name: String,
 		entry: Dictionary, target: GameUnit) -> void:
 	var effect: Dictionary = entry.get("effect", {})
-	var facets: Dictionary = AiSpell.spell_facets(effect.get("weapon_rules", []))
+	var facets: Dictionary = AiSpell.spell_facets(effect.get("weapon_rules", []), AiActRecorder.rules_epoch)
+	var target_state: Dictionary = _solo_target_state(target)
 	var hits := int(effect.get("hits", 0))
 	if hits <= 0:
 		return
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		var applied: Array = []
+		if _solo_spell_has_rule(effect, "Destructive"):
+			if bool(target_state.get("above_half_strength", false)):
+				applied.append("Destructive +1 AP (above half)")
+			else:
+				applied.append("Destructive not applied (target at or below half)")
+		if _solo_spell_has_rule(effect, "Fracture"):
+			applied.append("Fracture — sixes get AP(+2)")
+		if _solo_spell_has_rule(effect, "Puncture"):
+			applied.append("Puncture — ignores Regeneration, AP(+2) vs Defense 3 or less")
+		if _solo_spell_has_rule(effect, "Disintegrate"):
+			applied.append("Disintegrate — ignores Regeneration, AP(+2) vs Tough(3)+")
+		if _solo_spell_has_rule(effect, "Shatter"):
+			applied.append("Shatter — sixes get AP(+3)")
+		var state_name := "Shaken + Fatigued" if target.is_shaken and target.is_fatigued \
+			else ("Shaken" if target.is_shaken else "Fatigued")
+		if int(facets.get("ap_vs_shaken", 0)) > 0 and bool(target_state.get("shaken_or_fatigued", false)):
+			applied.append("Purge +%d AP vs %s" % [int(facets["ap_vs_shaken"]), state_name])
+		if bool(facets.get("bane_above_half", false)) and bool(target_state.get("above_half_strength", false)):
+			applied.append("Decimate — Bane vs a target above half")
+		if int(facets.get("bane_tough3_low", 0)) > 1 and _solo_unit_tough(target) >= 3:
+			applied.append("Obliterate — save window 5+ vs Tough(3)+, Regeneration bypassed")
+		if int(facets.get("bane_shaken_low", 0)) > 1 and bool(target_state.get("shaken_or_fatigued", false)):
+			applied.append("Reap — save window 5+ vs %s" % state_name)
+		if int(facets.get("bane_def56_low", 0)) > 1 \
+				and _solo_defense_vs(target, AiCombatMath.HIT_SOURCE_SPELL) >= 5:
+			applied.append("Fragment — save window 5+ vs Defense 5+")
+		if not applied.is_empty():
+			_log_rule_event(BattleLog.Category.COMBAT, "%s: %s" % [spell_name, ", ".join(PackedStringArray(applied))], true)
 	var alive_before: int = SoloController.combined_alive(target)   # NML-966: trigger reads combined
 	var wounds_before: int = _solo_unit_wounds_now(target)
 	var models_before: int = _solo_combined_alive(target)
@@ -5014,12 +5436,21 @@ func _solo_resolve_spell_damage(caster: GameUnit, caster_unit: GameUnit, spell_n
 	_solo_log_armor(target)
 	var base_defense: int = _solo_defense_vs(target, AiCombatMath.HIT_SOURCE_SPELL)
 	_solo_log_defense_vs_spell(target, base_defense)
-	var def_ctx := {"defense": base_defense, "tough": _solo_unit_tough(target)}
+	var def_ctx := {"defense": base_defense, "tough": _solo_unit_tough(target),
+		"above_half_strength": bool(target_state.get("above_half_strength", false)),
+		"shaken_or_fatigued": target.is_shaken or target.is_fatigued,
+		# Demolish's near-terrain read is deliberately unknown here (the no-op spell.rs documents).
+		"near_terrain": false}
 	var ap := AiSpell.effective_ap(facets, def_ctx)
-	var bane := bool(facets.get("bane", false))
-	var profile := {"name": spell_name, "ap": ap, "deadly": int(facets.get("deadly", 0)),
+	var window := AiSpell.bane_window(facets, def_ctx)
+	var bane := bool(window.get("bane", false))
+	var bane_from := int(window.get("from", 6))
+	# Scourge phantom wounds feed the SHOOTING tally (SHO-15a); range > 0 selects that bucket.
+	var profile := {"name": spell_name, "ap": ap, "deadly": int(facets.get("deadly", 0)), "range": 1,
 		"shred": bool(facets.get("shred", false)), "rules": effect.get("weapon_rules", [])}
 	var human_defends: bool = not _solo_is_ai_unit(target)
+	# A4 for spells: a Deadly spell's saves return the RAW unsaved count, which lands per model below.
+	var deadly: int = int(profile["deadly"])
 	var upgraded: int = mini(trigger_sixes if int(facets.get("on6_ap", 0)) > 0 else 0, total_hits)
 	var caused := 0
 	if upgraded > 0:
@@ -5027,14 +5458,23 @@ func _solo_resolve_spell_damage(caster: GameUnit, caster_unit: GameUnit, spell_n
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s: %d hit%s on a 6 → AP(+%d)" % [
 				spell_name, upgraded, ("" if upgraded == 1 else "s"), int(facets.get("on6_ap", 0))], true)
 		caused += await _solo_save_batch(caster, target, "%s (on-6)" % spell_name, upgraded,
-			base_defense, ap + int(facets.get("on6_ap", 0)), profile, human_defends, bane)
+			base_defense, ap + int(facets.get("on6_ap", 0)), profile, human_defends, bane, deadly <= 0,
+			false, {}, -1.0, 0.0, bane_from)
 	if total_hits - upgraded > 0:
 		caused += await _solo_save_batch(caster, target, spell_name, total_hits - upgraded,
-			base_defense, ap, profile, human_defends, bane)
-	# Regeneration: only Bane / Lacerate / Disintegrate wounds bypass it (the facets carry this).
+			base_defense, ap, profile, human_defends, bane, deadly <= 0,
+			false, {}, -1.0, 0.0, bane_from)
+	# Regeneration: only Bane / Disintegrate wounds bypass it (the facets carry this; Lacerate re-rolls only).
 	var landed: int
-	if bane or bool(facets.get("ignores_regen", false)):
-		landed = await _solo_land_wounds(target, 0, caused)
+	var proof := bool(facets.get("ignores_regen", false))
+	if deadly > 0:
+		# A4 (maintainer rulings 29.10.2026): the weapons' per-model landing — each wound ×X on one model,
+		# all X rolled (Resistance at its spell threshold), the survivors capped at that model.
+		landed = await _solo_land_deadly_wounds(target, spell_name, deadly, 0 if proof else caused, caused if proof else 0, true)
+	elif proof:
+		# R-1: from rules 3.6 a bypassed spell wound still meets the rules that are not named Regeneration, and
+		# meets them at the SPELL threshold (a unit with Resistance rolls 2+ against it, not 6+).
+		landed = await _solo_land_wounds(target, 0, caused, AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36)
 	else:
 		# from_spell=true: a unit with Resistance ignores THESE (spell) wounds on 2+, not 6+.
 		landed = await _solo_land_wounds(target, caused, 0, true)
@@ -5050,7 +5490,7 @@ func _solo_resolve_spell_damage(caster: GameUnit, caster_unit: GameUnit, spell_n
 				spell_name, trigger_ones, ("" if trigger_ones == 1 else "s"), caster_unit.get_name(),
 				trigger_ones, ("" if trigger_ones == 1 else "s")], true)
 	if landed > 0 and not target.is_destroyed():
-		await _solo_shooting_morale(target, alive_before, _roller_label(target), wounds_before)
+		await _solo_shooting_morale(target, alive_before, _roller_label(target), wounds_before, spell_name)
 
 
 ## Whether a spell's weapon-rule token list carries `rule_name` (facet gate for the dice path).
@@ -5239,6 +5679,26 @@ func _solo_log_shaken_lenders(slot: int) -> void:
 				str(ed["rule"]), lender.get_name()], slot == solo_controller.ai_slot)
 
 
+## Rules-must-log (DAT-16a): a Spell Accumulator battery that paid into this cast names itself,
+## who lent and how many tokens — wording close to the core's cast event (sim.rs). Plain casters
+## lending their own tokens are not this rule's business and stay unlogged here.
+func _solo_log_accumulator_lends(draws: Array, caster_name: String) -> void:
+	if battle_log == null:
+		return
+	for d in draws:
+		var dd := d as Dictionary
+		var lender := dd["unit"] as GameUnit
+		if lender == null:
+			continue
+		var is_battery: bool = lender.has_special_rule("Spell Accumulator") \
+				or not RulesRegistry.unit_rules_of_primitive(lender, "Spell Accumulator").is_empty()
+		if not is_battery:
+			continue
+		_log_rule_event(BattleLog.Category.COMBAT,
+			"Spell Accumulator: %s lends %d token(s) to %s" % [
+				lender.get_name(), int(dd["tokens"]), caster_name])
+
+
 ## MECHANICAL token effect (maintainer 2026-07-22: buff/debuff tokens were decoration — the real
 ## dice never read them). A placed token with modifier data now registers hit_mod/def_mod on the
 ## unit; the hit path (_solo_hit_mod_info) and the defense seam (_solo_defense_parts) read it,
@@ -5257,6 +5717,8 @@ func _solo_record_spell_mod(tu: GameUnit, spell_name: String, effect: Dictionary
 		"rush_in": int(modifier.get("rush_in", 0)),
 		"grants_rule": grants, "scope": str(effect.get("scope", "")),
 		"beneficiary": str(effect.get("beneficiary", "")), "duration": str(effect.get("duration", "round"))}
+	if _solo_is_regen_grant(rec):
+		rec["used"] = bool(effect.get("used", false))
 	# #845 option (b): a vs-target Mark's record carries NO live overlay of its own — its
 	# grant is read target-aware by whoever attacks the marked unit. Only the Marks set this,
 	# so every existing spell record keeps its exact shape.
@@ -5444,13 +5906,44 @@ func _solo_consume_once_mods(attacker: GameUnit, defender: GameUnit, melee: bool
 		for u in [unit, unit.get_attached_to() if unit.has_method("get_attached_to") else null]:
 			var uu := u as GameUnit
 			if uu != null:
-				_solo_spend_once_mods(uu, pair[1] as Array, melee)
+				_solo_spend_once_mods(uu, pair[1] as Array, melee, "", unit == attacker)
+
+
+## G4-R3 X1a (EPOCH_73_V36, lead ruling 1): the Precision Feat is ONE once-per-game latch shared by shooting AND
+## melee. The bearer's first attack of any kind (a strike-back too) spends it; the act ledger records the name
+## (`feats_used`). Every open once-per-game Shot Modifier and the Piercing Feat (T-1) on the attacker's chain
+## closes with the exchange.
+func _solo_spend_shot_feats(attacker: GameUnit) -> void:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return
+	for m in _solo_joined_chain(attacker):
+		var member := m as GameUnit
+		var feats: Array = RulesRegistry.unit_rules_of_primitive(member, "Shot Modifier")
+		feats.append_array(RulesRegistry.unit_rules_of_primitive(member, "Piercing Assault"))   # T-1: Piercing Feat
+		for e in feats:
+			var ed := e as Dictionary
+			if int((ed.get("params", {}) as Dictionary).get("uses_per_game", 0)) <= 0 \
+					or SoloController.shot_feat_spent(member, ed):
+				continue
+			member.unit_properties[SoloController.shot_feat_flag(str(ed["name"]))] = true
+			_log_rule_event(BattleLog.Category.COMBAT, "%s: %s spends its once-per-game feat on this attack" % [
+				str(ed["name"]), member.get_name()], _solo_is_ai_unit(member))
+
+
+## G4-T10 (EPOCH_73_V36, lead ruling on the 3.6 once-grants): a "once" grant is spent the next time its effect
+## actually applies. Evasive (and Melee Evasion) works when its bearer is ATTACKED, so the bearer own strike or
+## volley does not spend it; the exchange that attacks the bearer does (the defender side of the same spend).
+func _solo_grant_waits_to_be_attacked(rd: Dictionary) -> bool:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return false
+	var rule := RulesRegistry.base_rule_name(str(rd.get("grants_rule", "")))
+	return rule == "Evasive" or rule == "Melee Evasion"
 
 
 ## F4/NML-006 — spend every once-record on ONE unit that matches `roles` (role- and scope-filtered
 ## exactly like the reads). Reverts the NML-006 side effects (grant overlay off, props stamps
 ## recomputed), removes the paired library token and logs each spend (rules-must-log).
-func _solo_spend_once_mods(uu: GameUnit, roles: Array, melee: bool) -> void:
+func _solo_spend_once_mods(uu: GameUnit, roles: Array, melee: bool, keep_spell: String = "", attacking: bool = false) -> void:
 	var key := uu.get_instance_id()
 	var records: Array = _solo_spell_mods.get(key, [])
 	if records.is_empty():
@@ -5458,7 +5951,13 @@ func _solo_spend_once_mods(uu: GameUnit, roles: Array, melee: bool) -> void:
 	var spent: Array = []
 	for role in roles:
 		for rd in AiSpell.mods_for(records, str(role), melee):
+			if keep_spell != "" and str((rd as Dictionary).get("spell", "")) == keep_spell:
+				continue
+			if attacking and _solo_grant_waits_to_be_attacked(rd as Dictionary):
+				continue   # G4-T10: the bearer own attack does not use an attacked-only grant
 			if str((rd as Dictionary).get("duration", "")) == "once" and not spent.has(rd):
+				if _solo_is_regen_grant(rd as Dictionary) and not bool((rd as Dictionary).get("used", false)):
+					continue
 				spent.append(rd)
 	if spent.is_empty():
 		return
@@ -5472,8 +5971,12 @@ func _solo_spend_once_mods(uu: GameUnit, roles: Array, melee: bool) -> void:
 			if (e as Dictionary).get("unit") == uu and str((e as Dictionary).get("token")) == spell:
 				_solo_spell_tokens_active.erase(e)
 		if battle_log != null:
-			_log_rule_event(BattleLog.Category.COMBAT,
-				"\"%s\" on %s is consumed (applies once)" % [spell, uu.get_name()], true)
+			if _solo_is_regen_grant(rd as Dictionary):
+				_log_rule_event(BattleLog.Category.COMBAT,
+					"Regeneration Buff: %s's Regeneration is spent by a wounding exchange" % uu.get_name(), true)
+			else:
+				_log_rule_event(BattleLog.Category.COMBAT,
+					"\"%s\" on %s is consumed (applies once)" % [spell, uu.get_name()], true)
 	if records.is_empty():
 		_solo_spell_mods.erase(key)
 	_solo_refresh_spell_stamps(uu)   # NML-006: stamps follow the surviving records
@@ -5481,15 +5984,37 @@ func _solo_spend_once_mods(uu: GameUnit, roles: Array, melee: bool) -> void:
 	_solo_mirror_spell_state()   # NML-949: durable half of the record kept in step
 
 
+## DAT-17a — the "Regeneration Buff" once-grant and its spell siblings carry
+## `grants_rule: "Regeneration"`; base-name match, twin of the Rust `base_rule_is`.
+func _solo_is_regen_grant(rd: Dictionary) -> bool:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return false
+	var grants := str(rd.get("grants_rule", ""))
+	return str(rd.get("duration", "")) == "once" \
+			and grants.strip_edges().split("(")[0].strip_edges() == "Regeneration"
+
+
+## DAT-17a — mark the holder's Regeneration grant spent once an exchange lands
+## wounds on it. Called from the exchange landing path only.
+func _solo_mark_regen_grant_used(uu: GameUnit) -> void:
+	if uu == null:
+		return
+	var records: Array = _solo_spell_mods.get(uu.get_instance_id(), [])
+	for rd in records:
+		var d := rd as Dictionary
+		if _solo_is_regen_grant(d):
+			d["used"] = true
+
+
 ## NML-006 — the event-specific once-consumers (casting after the cast die, morale after the test
 ## die, speed after the executed move): spend the given roles on a member AND its host.
-func _solo_spend_once_kind(member: GameUnit, roles: Array) -> void:
+func _solo_spend_once_kind(member: GameUnit, roles: Array, keep_spell: String = "") -> void:
 	if member == null:
 		return
 	for u in [member, member.get_attached_to() if member.has_method("get_attached_to") else null]:
 		var uu := u as GameUnit
 		if uu != null:
-			_solo_spend_once_mods(uu, roles, false)
+			_solo_spend_once_mods(uu, roles, false, keep_spell)
 
 
 ## Round boundary: every spell token placed this round comes off again (and syncs the removal).
@@ -5590,8 +6115,8 @@ func _solo_prompt_interference(caster: GameUnit, caster_unit: GameUnit, spell_na
 	var helpers: Array = solo_controller._aura_casters(side, caster_unit, null)
 	if helpers.is_empty():
 		if _solo_side_has_caster_tokens(side):
-			_log_rule_event(BattleLog.Category.COMBAT, "%s: no caster of P%d within %d\" and line of sight — no interference" % [
-				spell_name, side, int(AiSpell.AURA_RANGE_IN)], true)
+			_log_rule_event(BattleLog.Category.COMBAT, "%s: no caster of P%d %s — no interference" % [
+				spell_name, side, _solo_aura_reach_words()], true)
 		return 0
 	var pool := 0
 	for h in helpers:
@@ -5616,10 +6141,23 @@ func _solo_prompt_interference(caster: GameUnit, caster_unit: GameUnit, spell_na
 		payers.append("%s ×%d" % [payer.get_name(), take])
 	if battle_log != null:
 		_log_rule_event(BattleLog.Category.COMBAT,
-			"Interference: %s spend%s %d token%s — the cast roll worsens to %d+" % [
+			"Interference: %s spend%s %d token%s — the cast roll worsens to %d+%s" % [
 			", ".join(payers), ("s" if payers.size() == 1 else ""), spent, ("" if spent == 1 else "s"),
-			AiSpell.cast_target(boost, spent, base_target)], true)
+			AiSpell.cast_target(boost, spent, base_target), _solo_aura_pool_note()], true)
 	return spent
+
+
+## The boost/resist pool's reach in the battle log's words (rules-must-log). Rules 3.6 (EPOCH_73_V36, lead
+## ruling D-SPELL-LOS): every caster within 18" counts, seen or not; rules 3.5 also asked for a line of sight.
+func _solo_aura_reach_words() -> String:
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		return "within %d\", no line of sight needed" % int(AiSpell.AURA_RANGE_IN)
+	return "within %d\" and line of sight" % int(AiSpell.AURA_RANGE_IN)
+
+
+## The note a pool's token line ends with from rules 3.6 on: the reach that let those casters in.
+func _solo_aura_pool_note() -> String:
+	return (" (casters %s)" % _solo_aura_reach_words()) if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else ""
 
 
 ## No AI without its tick (#1719), online: the caster's opponent sits at another machine. The owner-roll
@@ -5632,8 +6170,8 @@ func _solo_remote_interference(member: GameUnit, unit: GameUnit, spell_name: Str
 	var helpers: Array = solo_controller._aura_casters(foe, unit, null)
 	if helpers.is_empty():
 		if _solo_side_has_caster_tokens(foe):
-			_log_rule_event(BattleLog.Category.COMBAT, "%s: no caster of P%d within %d\" and line of sight — no interference" % [
-				spell_name, foe, int(AiSpell.AURA_RANGE_IN)], true)
+			_log_rule_event(BattleLog.Category.COMBAT, "%s: no caster of P%d %s — no interference" % [
+				spell_name, foe, _solo_aura_reach_words()], true)
 		return 0
 	var lender := (helpers[0] as Dictionary)["unit"] as GameUnit
 	if _solo_i_own_unit(lender):
@@ -5698,11 +6236,11 @@ func _solo_refresh_caster_markers() -> void:
 ## target is valid when at least one of the shooting member's models has range + LOS to one of its
 ## models); attached heroes are never separate targets (they are part of their host unit). Null when
 ## nothing is valid.
-func _solo_pick_overlay_target(attacker: GameUnit, overlay: int, max_range: float, profile: Dictionary = {}) -> GameUnit:
+func _solo_pick_overlay_target(attacker: GameUnit, overlay: int, max_range: float, profile: Dictionary = {}, held: bool = true) -> GameUnit:
 	if opr_army_manager == null or solo_controller == null:
 		return null
 	var from := solo_controller.unit_centre(attacker)
-	var att_ctx: Dictionary = AiEv.ctx_for(attacker)
+	var att_ctx: Dictionary = AiEv.ctx_for(attacker, false, 0, held)
 	var cands: Array = []
 	var refs: Array = []
 	var evs: Array = []
@@ -5717,8 +6255,8 @@ func _solo_pick_overlay_target(attacker: GameUnit, overlay: int, max_range: floa
 		# -6" floored at 6" — per CANDIDATE, so a ground target stays reachable while the aircraft
 		# or shrouded unit next to it may not be.
 		var eff_range: int = int(SoloController.effective_shoot_reach_in(max_range, hu))
-		if _solo_sighted_count(attacker, hu, eff_range, bool(profile.get("indirect", false)) \
-				or _solo_target_grants_indirect(hu)) <= 0:   # wave 6 — the Indirect Mark's once-grant
+		if _solo_sighted_count(attacker, hu, eff_range, (bool(profile.get("indirect", false)) \
+				and SoloController.indirect_ignores_los(attacker, held)) or _solo_target_grants_indirect(hu)) <= 0:   # wave 6 — the Indirect Mark's once-grant
 			continue   # no model of the shooter has range + LOS → not a valid target (p.8; Indirect waives LOS)
 		var dist := MoveIntent.distance_inches(from, solo_controller.unit_centre(hu))
 		var in_cover := _solo_majority_in_cover(hu)
@@ -5740,7 +6278,7 @@ func _solo_pick_overlay_target(attacker: GameUnit, overlay: int, max_range: floa
 		# Expected wounds of THIS weapon profile vs THIS defender — every wave-1..3 rule flows through
 		# the shared AiEv/AiCombatMath math (Deadly→Tough, Blast→big units, >9" Stealth devalued, …).
 		# An aircraft candidate's -12" folds into the EV distance so its range gates see the effective reach.
-		evs.append(AiEv.profile_ev(profile, att_ctx, AiEv.ctx_for(hu, in_cover, 0),
+		evs.append(AiEv.profile_ev(profile, att_ctx, AiEv.ctx_for(hu, in_cover, 0, _solo_unit_held(hu)),
 			dist + SoloController.target_range_penalty_in(hu), false) if not profile.is_empty() else 0.0)
 	var idx: int = AiTargeting.best_index(cands, overlay)
 	if idx < 0:
@@ -5759,7 +6297,7 @@ func _solo_pick_overlay_target(attacker: GameUnit, overlay: int, max_range: floa
 		rec_cands.append({"name": (refs[i] as GameUnit).get_name(), "ev": float(evs[i]),
 			"key": [bool(cands[i]["activated"]), bool(cands[i]["in_cover"]), float(dists[i])]})
 	solo_controller.record_decision({"kind": "target", "unit": attacker.get_name(),
-		"rule": "Solo v3.5.0 p.2: nearest/not-activated/open + weapon overlay",
+		"rule": "Solo %s: nearest/not-activated/open + weapon overlay" % OPRApiClient.rules_cite(RulesRegistry.system_of_unit(attacker)),
 		"candidates": rec_cands, "chosen": (refs[idx] as GameUnit).get_name(), "why": why,
 		"data": {"overlay": overlay, "weapon": str(profile.get("name", "")), "considered": refs.size()}})
 	return refs[idx]
@@ -5772,11 +6310,21 @@ func _solo_pick_overlay_target(attacker: GameUnit, overlay: int, max_range: floa
 ## gate but waives the sight test.
 ## `pairs_out` (optional) collects each counted model's [shooter_pos, target_pos] (see SoloController.sighted_models).
 ## Step 2.3a: `first_hit` stops at the first counted model; `blockers` = shared _solo_los_blockers(shooter, null).
+## G4R6 F-SIGHT-OWN-GAP (EPOCH_73_V36): `own_models_only` measures the oval gate from the shooter's OWN models, so a
+## joined hero's base does not extend its host's weapons (Who Can Shoot). The per-member volley counts pass true.
 func _solo_sighted_count(shooter: GameUnit, target: GameUnit, range_in: int, ignore_los: bool = false,
-		pairs_out = null, first_hit := false, blockers = null) -> int:
+		pairs_out = null, first_hit := false, blockers = null, own_models_only := false) -> int:
 	if shooter == null or target == null:
 		return 0
 	var _prof_sight_t0 := BattleSim.prof_t0()   # NML-1072: LOS/sight computation
+	# G4-T5 (EPOCH_73_V36): an OVAL base's circumscribed radius overstates the slack, so a shot the
+	# ruler refuses could pass. Measure the nearest real base-edge gap first; LOS and the per-model
+	# count below stay untouched.
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
+			and (_solo_unit_has_oval(shooter) or _solo_unit_has_oval(target)) \
+			and _solo_shoot_gap_in(shooter, target, INF, own_models_only) > float(range_in):
+		BattleSim.prof_mark("sight", _prof_sight_t0)
+		return 0
 	var target_positions: Array = []
 	var target_members: Array = [target]
 	if target.has_method("get_attached_heroes"):
@@ -5798,6 +6346,20 @@ func _solo_sighted_count(shooter: GameUnit, target: GameUnit, range_in: int, ign
 		float(range_in) * MoveIntent.INCHES_TO_METERS + edge_slack_m, los, pairs_out, first_hit)
 	BattleSim.prof_mark("sight", _prof_sight_t0)
 	return _sighted
+
+
+## G4R6 F-SIGHT-OWN-GAP (EPOCH_73_V36): true when `member`'s own models cannot reach the target but the old host+hero
+## fold (its joined hero's base) would have counted a model, so the refusal is the rule's doing and gets named.
+func _solo_own_gap_refused(member: GameUnit, target: GameUnit, reach_in: int, ignore_los: bool) -> bool:
+	return AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and not member.get_attached_heroes().is_empty() \
+		and _solo_sighted_count(member, target, reach_in, ignore_los, null, true) > 0
+
+
+## Rules-must-log for the refusal above: Who Can Shoot, once per refused shot.
+func _solo_log_own_gap_refusal(member: GameUnit, target: GameUnit, weapon: String) -> void:
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT, "Who Can Shoot: %s's %s cannot reach %s from its own models — a joined hero's base does not extend its host's weapons" % [
+			member.get_name(), weapon, target.get_name()], true)
 
 
 ## GEOMETRIC PER-MODEL line of sight for a shooter→target model pair (GF/AoF v3.5.1 p.5: "Models can't see
@@ -5897,8 +6459,13 @@ func _solo_los_chain_ids(u: GameUnit) -> Array:
 func _solo_unit_base_radius_m(unit: GameUnit) -> float:
 	if unit == null:
 		return 0.0
+	# G4R3 F-T-SIGHT-LONE (EPOCH_73_V36): the Hero rule — a joined hero whose host models are all dead
+	# IS the unit now, so its own base speaks for the sight cylinder and the edge slack, not 0.
+	var holder: GameUnit = _solo_defense_holder(unit)
+	if holder == null:
+		return 0.0
 	var r := 0.0
-	for m in unit.get_alive_models():
+	for m in holder.get_alive_models():
 		r = maxf(r, SoloController.model_base_radius_m(m))
 	return r
 
@@ -5944,6 +6511,20 @@ func _solo_unit_los_height_m(unit: GameUnit) -> float:
 	return h
 
 
+## AIG-G2 R3 (rules-must-log, EPOCH_73_V36): a Crossing Strike weapon never strikes in melee, so the strike
+## of its carrier names the book rule once per such weapon (the host's and each attached hero's).
+func _solo_log_crossing_strike_melee(striker: GameUnit) -> void:
+	if battle_log == null or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return
+	for m in [striker] + striker.get_attached_heroes():
+		var member := m as GameUnit
+		if member == null or member.get_alive_count() == 0 or not member.source_data is OPRApiClient.OPRUnit:
+			continue
+		for p in AiShooting.strafing_profiles((member.source_data as OPRApiClient.OPRUnit).weapons):
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s attacks only when %s moves through an enemy unit — it does not strike in melee" % [
+				AiShooting.strafing_rule_name([p]), str((p as Dictionary).get("name", "?")), member.get_name()], true)
+
+
 ## Weapon groups for a combat activation: the unit's own profiles at its Quality PLUS each attached hero's
 ## profiles at the hero's Quality — a joined hero fights WITH its unit (field-test lock). Each profile's
 ## attack count is SCALED so dead models no longer attack (goal 003 P3, mirrors the sim fix): shooting scales
@@ -5966,7 +6547,7 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 		# scaling by the per-model sighted count below still zeroes any profile no model can actually reach.
 		var member_dist: float = dist_in
 		if not melee and enemy != null and solo_controller != null:
-			member_dist = _solo_nearest_model_gap_in(member, enemy, dist_in)
+			member_dist = _solo_shoot_gap_in(member, enemy, dist_in)
 		# NML-929 — the SHOOTER-SIDE bonus belongs on this gate too: Royal Legion's +4" and the spell
 		# range tokens (both through SoloController.shooting_range_bonus) are what _solo_validate_target
 		# measured when it let the player DECLARE the shot, and what the AI volley folds into each shot's
@@ -5994,8 +6575,15 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 			# BASE-EDGE strike reach (round 7, finding 3): the old centre-space count excluded big bases
 			# (walker/vehicle) from their own melee — the charger rolled nothing, only the defender struck.
 			melee_count = solo_controller.striking_models_for(member, enemy)
+			# MEL-02 (rules-must-log): when fewer models strike than are alive, say how many are in reach.
+			if melee_count < member.get_alive_count() and battle_log != null:
+				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %d of %d models are within %d\" and strike" % [
+					member.get_name(), melee_count, member.get_alive_count(),
+					int(SoloController.melee_reach_in())], true)
 		var scaled: Array = []
-		var growth_ap := int(_solo_growth_attack_bonus(member).get("ap", 0))   # Piercing Growth
+		var growth := _solo_growth_attack_bonus(member)
+		var growth_ap := int(growth.get("ap", 0))   # Piercing Growth
+		var growth_ap_names: String = ", ".join(PackedStringArray(growth.get("ap_names", [])))
 		# Unit-level grant (wave 5); coverage wave: DATA aliases (Warbound, Infected) via the
 		# generic primitive layer — same facet, same dice.
 		var member_shred: bool = RulesRegistry.unit_rule_active(member, "Shred") \
@@ -6019,22 +6607,34 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 				if member.has_special_rule("Counter") \
 						or not RulesRegistry.unit_rules_of_primitive(member, "Counter").is_empty():
 					prof["counter"] = true
+			# R-1 (A2): the weapon's own Shred is remembered before the unit grant folds the flag.
+			if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and bool(prof.get("shred", false)):
+				prof["_shred_own"] = true
 			# Shred can be granted at unit level too (wave 5) — mark every profile of that member.
 			if member_shred:
 				prof["shred"] = true
+				var shred_alias := _solo_shred_facet_name(member, 0)
+				if not shred_alias.is_empty() and shred_alias != "Shred":
+					prof["_shred_alias"] = shred_alias
 			if growth_ap > 0:
 				prof["ap"] = int(prof.get("ap", 0)) + growth_ap
+				# AIG-G2-L4 — rules-must-log: carry the rule NAME to the save step (the batch that
+				# reads the AP names it); a build that never added the bonus never carries the mark.
+				prof["_growth_ap"] = {"name": growth_ap_names, "bonus": growth_ap}
 			# Per-model shooting (GF v3.5.1 p.8): a ranged profile fires with the member's models that
 			# have range + LOS at ITS OWN range; melee scales by the models within 2" strike reach (p.9).
-			# #231: "its own range" is the EFFECTIVE one — against an Aircraft (-12") or a Ranged
+			# #231: the model's own range is the EFFECTIVE one — against an Aircraft (-12") or a Ranged
 			# Shrouding target the rear models drop out of the count, exactly as on the AI volley.
 			# NML-929: and the boosted one — with Royal Legion / a spell range token the REAR models
 			# come back into the count, at the same reach the declaration was judged with.
 			var count: int = melee_count
 			if not melee:
-				count = _solo_sighted_count(member, enemy,
-					int(SoloController.effective_shoot_reach_in(float(prof.get("range", 0)) + float(range_bonus), enemy)),
-					bool(prof.get("indirect", false)) and SoloController.indirect_ignores_los(member) or mark_indirect) if enemy != null else member.get_alive_count()
+				var reach_in: int = 0 if enemy == null else int(SoloController.effective_shoot_reach_in(float(prof.get("range", 0)) + float(range_bonus), enemy))
+				var waive_los: bool = bool(prof.get("indirect", false)) and SoloController.indirect_ignores_los(member, _solo_unit_held(unit)) or mark_indirect
+				count = _solo_sighted_count(member, enemy, reach_in, waive_los, null, false, null, true) if enemy != null else member.get_alive_count()
+				# G4R6 F-SIGHT-OWN-GAP: the fire loop names the book rule for a shot only the joined hero's base would have reached.
+				if count == 0 and enemy != null and _solo_own_gap_refused(member, enemy, reach_in, waive_los):
+					prof["_own_gap_refused"] = true
 			# X2 (test game 2, B15): a dead bearer's weapon dies with it. Special weapons (fewer copies
 			# than models) are pinned to specific models by EquipmentDistributor — fire per-copy attacks
 			# × LIVING bearers (capped by the reach/sight count) instead of the unit-wide alive/max
@@ -6050,6 +6650,7 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 			scaled.append(prof)
 		# Wave 5 Sergeant (model-level): ONE profile per member carries the bearer's attack share.
 		AiEv.stamp_sergeant(scaled, member)
+		_solo_stamp_alias_markers(member, scaled)
 		AiEv.stamp_conditional_ap(scaled, member)   # value Shatter/Tear/Melee Slayer/Disintegrate AP
 		# S1-02 (GF/AoF v3.5.1 p.10): "Shaken units must stay idle, but may strike back counting as
 		# fatigued" — a Shaken unit never charges, so every melee strike it makes is a strike-back.
@@ -6057,6 +6658,23 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 		groups.append({"name": member.get_name(), "quality": member.get_quality(),
 			"fatigued": member.is_fatigued or shaken, "shaken": shaken, "member": member, "profiles": scaled})
 	return groups
+
+
+## MEL-02b (rules 3.6, EPOCH_73_V36): the strike-back gate's read of the defender's melee weapons.
+## "" = it may strike; "none" = no melee profile at all (B14); "spent" = every profile left is an
+## expended Limited weapon. MEL-02 filters Limited PER PROFILE, so that last case leaves an empty
+## profile list inside a group that is still there. Below epoch 73 the old all-or-nothing read of the
+## group list stays byte-exact.
+func _solo_strike_back_block(unit: GameUnit, enemy: GameUnit) -> String:
+	var groups: Array = _solo_attack_groups(unit, 0.0, true, enemy)
+	if groups.is_empty():
+		return "none"
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return ""
+	for g in groups:
+		if not (g as Dictionary).get("profiles", []).is_empty():
+			return ""
+	return "spent"
 
 
 ## The NEAREST alive-model-to-alive-model distance (inches, table plane) between a member and the enemy —
@@ -6080,6 +6698,46 @@ func _solo_nearest_model_gap_in(member: GameUnit, enemy: GameUnit, fallback_in: 
 	return maxf(best - edge_slack_in, 0.0)
 
 
+## Whether the unit has at least one OVAL base among its live models (attached heroes included) — the
+## EPOCH_73_V36 switch that moves the shooting reach from the circumscribed circle to the real shape.
+func _solo_unit_has_oval(unit: GameUnit) -> bool:
+	if unit == null:
+		return false
+	var models: Array = unit.get_alive_models_with_attached() if unit.has_method("get_alive_models_with_attached") \
+		else unit.get_alive_models()
+	for m in models:
+		var mi := m as ModelInstance
+		if mi == null or mi.unit == null or mi.unit.unit_properties == null:
+			continue
+		var tough: int = int(mi.properties.get("tough", 0)) if mi.properties else 0
+		if bool(OPRArmyManager.effective_base_props(mi.unit.unit_properties, tough).get("base_is_oval", false)):
+			return true
+	return false
+
+
+## The shooting reach's DISTANCE truth at EPOCH_73_V36: the nearest base-edge gap between the models,
+## through the recorded base SHAPES (ovals included) like the core's `range_gap_in`. Below 73 and for an
+## all-round pair the circumscribed-slack read stands, so every recorded corpus replays byte-exact.
+## `own_models_only` (G4R6 F-SIGHT-OWN-GAP) reads the first side by its own models, not its joined heroes' too.
+func _solo_shoot_gap_in(a: GameUnit, b: GameUnit, fallback_in: float, own_models_only := false) -> float:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 \
+			or not (_solo_unit_has_oval(a) or _solo_unit_has_oval(b)):
+		return _solo_nearest_model_gap_in(a, b, fallback_in)
+	var a_models: Array = a.get_alive_models_with_attached() if a.has_method("get_alive_models_with_attached") \
+		and not own_models_only else a.get_alive_models()
+	var b_models: Array = b.get_alive_models_with_attached() if b.has_method("get_alive_models_with_attached") else b.get_alive_models()
+	var best := INF
+	for am in a_models:
+		var ash := SeparationChecker.shape_for_model(am as ModelInstance)
+		if ash == null:
+			continue
+		for bm in b_models:
+			var bsh := SeparationChecker.shape_for_model(bm as ModelInstance)
+			if bsh != null:
+				best = minf(best, SeparationChecker.edge_distance(ash, bsh))
+	return maxf(best, 0.0) if best != INF else _solo_nearest_model_gap_in(a, b, fallback_in)
+
+
 # === Solo combat facets (goal 003 P3 — shared pure-module math: cover / hits / wounds / regen / tough) ===
 
 ## The defender's save target after Cover (GF Advanced Rules v3.5.1 p.11): the majority of a target's models
@@ -6095,10 +6753,16 @@ func _solo_cover_defense(target: GameUnit, base_defense: int) -> int:
 ## only for the CHARGING unit — `charging`). Those extra hits resolve BEFORE Blast(X) (GF v3.5.1: Blast
 ## multiplies "after resolving other special rules"), which then scales each hit ×min(X, target models).
 ## Every multiplication is battle-logged so it is VISIBLE. Uses the shared AiCombatMath.
-func _solo_hits(faces: Array, to_hit: int, profile: Dictionary, dist_in: float, target: GameUnit = null, charging: bool = false, roller: String = "") -> int:
+func _solo_hits(faces: Array, to_hit: int, profile: Dictionary, dist_in: float, target: GameUnit = null, charging: bool = false, roller: String = "", charge_from_in: float = 0.0, blast_models: int = -1) -> int:
 	# `to_hit` is the caller's UNCLAMPED summed target (D21): Precise's flat +1 folds into that sum and the
 	# one clamp happens here, so a penalty the old per-step clamp swallowed still counts against the +1.
-	to_hit = AiCombatMath.modified_hit_target(to_hit, 1 if bool(profile.get("precise", false)) else 0)
+	# AIG-G2 (EPOCH_73_V36): a weapon-borne Imprecise is Precise's mirror, folded into the same sum.
+	var imprecise: bool = bool(profile.get("imprecise", false))
+	to_hit = AiCombatMath.modified_hit_target(to_hit, (1 if bool(profile.get("precise", false)) else 0) - (1 if imprecise else 0))
+	if bool(profile.get("precise", false)) and battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT, "Precise: +1 to hit", true)
+	if imprecise and battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT, "Imprecise: -1 to hit", true)
 	var hits: int = AiCombatMath.count_hits(faces, to_hit)
 	if bool(profile.get("relentless", false)):
 		var rel_bonus: int = AiCombatMath.relentless_bonus_hits(faces, dist_in)
@@ -6117,10 +6781,19 @@ func _solo_hits(faces: Array, to_hit: int, profile: Dictionary, dist_in: float, 
 			_solo_rule_float(target, "Relentless +%d" % rel_bonus)
 		hits += rel_bonus
 	if bool(profile.get("surge", false)):
+		var surge_alias := str(profile.get("_surge_alias", ""))
+		# The 3.6 "no distance condition" sentinel (over_in 0) loosens the SHOT leg only:
+		# a melee strike-back and a short charge keep the charge/shot gate (SHO-18b).
+		var sentinel_shot: bool = dist_in > 0.0 and not charging \
+			and float(profile.get("surge_over_in", 0.0)) < 0.0
+		var surge_alias_live: bool = surge_alias.is_empty() \
+			or sentinel_shot or (
+			_solo_alias_charge_over(charging, charge_from_in) if charging
+			else _solo_alias_family_over(dist_in))
 		# Coverage wave: Surge-family gates — within_in (Point-Blank Surge: only within 12") and the
 		# Devout-Boost upgrade (successful unmodified 5s count too when engaging from over 9").
 		var within := float(profile.get("surge_within_in", 0.0))
-		if within <= 0.0 or dist_in <= within:
+		if surge_alias_live and (within <= 0.0 or dist_in <= within):
 			# The entry's own per-six bonus (dead-parameter recount 2026-09-15,
 			# family 2): every shipped row prints 1, so the recorded
 			# +1-per-six replay is unchanged.
@@ -6132,6 +6805,19 @@ func _solo_hits(faces: Array, to_hit: int, profile: Dictionary, dist_in: float, 
 						surge_fives += 1
 			bonus += surge_fives
 			if bonus > 0 and battle_log != null:
+				if charging and not surge_alias.is_empty():
+					battle_log.log_event(BattleLog.Category.COMBAT,
+						"%s: charged from over %d\" — bonus hits on unmodified 6s" % [
+							surge_alias, int(AiCombatMath.CHARGE_LONG_RANGE_IN)], true)
+				elif not surge_alias.is_empty() and dist_in > 0.0:
+					if sentinel_shot and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+						# Rules 3.6: a plain alias pays at any range, so its line names no 9" band.
+						battle_log.log_event(BattleLog.Category.COMBAT,
+							"%s: bonus hits on unmodified 6s" % surge_alias, true)
+					else:
+						battle_log.log_event(BattleLog.Category.COMBAT,
+							"%s: shot from over %d\" — bonus hits on unmodified 6s" % [
+								surge_alias, int(AiCombatMath.LONG_RANGE_IN)], true)
 				# #193 rules-must-log: this was the LAST silent on-6 branch — a "2 hits" tray that
 				# resolves as "3 hits" reads broken, not Surge. EPOCH 38 SURGE MARK: the bridge
 				# (_solo_bridge_granted_flags) folds the marked target's once-grant into THIS
@@ -6186,11 +6872,14 @@ func _solo_hits(faces: Array, to_hit: int, profile: Dictionary, dist_in: float, 
 		# TC-023 — a Takedown resolves "as if it was a unit of [1]" (GF v3.5.1 p.14), so Blast has exactly
 		# one model to spill onto and can never multiply. Read off the profile, not the takedown flag:
 		# the flag's window is synchronous and has already closed by the time the dice are counted.
-		var models_in_target: int = 1 if bool(profile.get("takedown", false)) else _solo_combined_alive(target)
+		# C-BLAST-CAP-GROUPS (EPOCH_73_V36, lead ruling D2): a volley fires simultaneously, so a volley caller passes the
+		# models standing at ITS START (`blast_models` >= 0) and the cap ignores the casualties of earlier weapon groups.
+		var models_in_target: int = 1 if bool(profile.get("takedown", false)) else (blast_models if blast_models >= 0 else _solo_combined_alive(target))
 		var boosted: int = AiCombatMath.blast_hits(hits, blast, models_in_target)
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT,
-				blast_log_text(blast, hits, boosted, models_in_target), true)
+				blast_log_text(blast, hits, boosted, models_in_target) \
+				+ (" (cap read when the volley started)" if blast_models > _solo_combined_alive(target) else ""), true)
 			_solo_rule_float(target, "Blast ×%d → %d" % [maxi(boosted / maxi(hits, 1), 1), boosted])
 		hits = boosted
 	return hits
@@ -6309,21 +6998,93 @@ func _solo_rule_on_all_models(unit: GameUnit, rule: String) -> bool:
 		not _solo_takedown_solo.is_empty() and unit != null and unit == _solo_takedown_solo.get("unit"))
 
 
+## Rules 3.6 (ruling D-MOST): whether MOST living models of a unit carry `rule` — a strict majority, a joined hero
+## one model — with Takedown's unit of [1] collapsed as above. Below EPOCH_73_V36 it is the all-models read.
+func _solo_rule_on_most_models(unit: GameUnit, rule: String) -> bool:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return _solo_rule_on_all_models(unit, rule)
+	return AiEv.rule_on_most_models(unit, rule,
+		not _solo_takedown_solo.is_empty() and unit != null and unit == _solo_takedown_solo.get("unit"))
+
+
+## Rules 3.6 rules-must-log: (living models of the joined unit that carry `rule`, all living models), a joined hero
+## one model, for a most-models rule's battle-log line. The decision itself stays AiEv.rule_on_most_models.
+func _solo_models_with_rule(unit: GameUnit, rule: String) -> Vector2i:
+	var alive := unit.get_alive_count()
+	var counts := Vector2i(alive if unit.has_special_rule(rule) else 0, alive)
+	for h in unit.get_attached_heroes():
+		var hero := h as GameUnit
+		if hero != null and hero.get_alive_count() > 0:
+			counts += Vector2i(1 if hero.has_special_rule(rule) else 0, 1)
+	return counts
+
+
+## Row MOR-02: the Regeneration family's whole-unit read (most models from EPOCH_73_V36, AiEv.regen_family_on)
+## with the same Takedown unit-of-[1] collapse as _solo_rule_on_all_models.
+func _solo_regen_family_on(unit: GameUnit, rule: String) -> bool:
+	return AiEv.regen_family_on(unit, rule,
+		not _solo_takedown_solo.is_empty() and unit != null and unit == _solo_takedown_solo.get("unit"))
+
+
+## The Stealth-family names whose 3.6 text reads "most models" (the core's STEALTH_MOST_MODELS twin); every
+## other alias keeps the all-models read. Empyrean Spirit and Grounded Evasion ride row MOR-06.
+const SOLO_STEALTH_MOST_MODELS: Array[String] = ["Stealth", "Changebound", "Machine-Fog", "Screened", "Entrenched", "Empyrean Spirit", "Grounded Evasion"]
+
+
+func _solo_stealth_family_on(unit: GameUnit, rule: String) -> bool:
+	if rule in SOLO_STEALTH_MOST_MODELS:
+		return _solo_rule_on_most_models(unit, rule)
+	return _solo_rule_on_all_models(unit, rule)
+
+
+## Row MOR-05b: the Guarded family names whose 3.6 text reads "most models" (the core's
+## MOST_MODELS_GUARDED twin); every other alias keeps the all-models read.
+const SOLO_GUARDED_MOST_MODELS: Array[String] = ["Guarded", "Versatile Defense", "Sturdy", "Safety Gear", "Tenacious"]
+
+
+func _solo_guarded_family_on(unit: GameUnit, rule: String) -> bool:
+	if rule in SOLO_GUARDED_MOST_MODELS:
+		return _solo_rule_on_most_models(unit, rule)
+	return _solo_rule_on_all_models(unit, rule)
+
+
+## MOR-05 (rules-must-log): the log-line tail for a Fortified / Shielded family rule that only a majority of
+## the unit's models carry (a joined hero without it is the minority); "" when every model carries it.
+func _solo_most_models_note(unit: GameUnit, rule: String) -> String:
+	return "" if _solo_rule_on_all_models(unit, rule) else " (most of its models carry it)"
+
+
 ## The over-9" +1-defense rule a target projects ("" when none): Guarded (unconditional), or a
 ## Versatile Defense unit (wahl-effect wave — official text: "pick one effect: when shot or charged
 ## from over 9\" away, the unit either gets +1 to defense rolls, or enemy units get -1 to hit rolls
 ## against it"). V1 plays the +1-defense half CONSISTENTLY (documented default — it reuses the whole
 ## Guarded machinery; the -1-to-hit half is a future EV-driven switch). Registry-gated.
 func _solo_over9_defense_rule(target: GameUnit) -> String:
-	if _solo_rule_on_all_models(target, "Guarded"):
+	if _solo_guarded_family_on(target, "Guarded"):
 		return "Guarded"
-	if _solo_rule_on_all_models(target, "Versatile Defense") and RulesRegistry.unit_rule_active(target, "Versatile Defense"):
+	if _solo_guarded_family_on(target, "Versatile Defense") and RulesRegistry.unit_rule_active(target, "Versatile Defense"):
 		return "Versatile Defense"
 	# Coverage wave: DATA aliases of the Guarded family (Sturdy, …) — "shot or charged from over 9\"
-	# away → +1 to defense rolls", resolved via the generic primitive layer (all-models rules).
+	# away → +1 to defense rolls", resolved via the generic primitive layer. The names whose 3.6 text
+	# says "most models" follow the majority from EPOCH_73_V36 (MOR-05b); every other alias keeps the
+	# all-models read.
 	for e in RulesRegistry.unit_rules_of_primitive(target, "Guarded"):
 		var n := str((e as Dictionary)["name"])
-		if n != "Guarded" and _solo_rule_on_all_models(target, n):
+		if n != "Guarded" and _solo_guarded_family_on(target, n) and _solo_replacing_upgrade(target, n).is_empty():
+			return n
+	return ""
+
+
+## C-STURDY-BOOST (EPOCH_73_V36, lead ruling D1): the carried upgrade that REPLACES a Guarded-family rule — Enhanced
+## Sturdy gives +1 Defense at any range INSTEAD of Sturdy's +1 from over 9" (the core's `sturdy_boost_gates_guarded`).
+## The upgrade's own name, "" when the unit carries none (or below epoch 73, where the two stack).
+func _solo_replacing_upgrade(target: GameUnit, base: String) -> String:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return ""
+	for e in RulesRegistry.unit_rules_of_primitive(target, "Shielded"):
+		var n := str((e as Dictionary)["name"])
+		if str(((e as Dictionary).get("params", {}) as Dictionary).get("upgrades", "")) == base \
+				and _solo_rule_on_all_models(target, n):
 			return n
 	return ""
 
@@ -6363,7 +7124,39 @@ func _solo_reanimation_mapped(unit: GameUnit) -> bool:
 ## manual activation toggle, embark/disembark, the AI's peeked pick. Opening a window and cancelling
 ## it starts nothing (it used to bank a free Reanimation). Stage 2's "Activate" button calls this too.
 func begin_activation(unit: GameUnit) -> void:
+	_solo_snapshot_activation_wounds(unit)
 	await _solo_try_reanimation(unit)
+
+
+## Rules 3.6: the ACTING unit's wounds at its activation start, so the melee can count the Dangerous
+## terrain, a spell and any other wound taken before the melee as wounds TAKEN (FAB-B2: both doors).
+## The first door of an activation wins; the attack door later in the same activation must not rebase
+## it. Cleared when the activation ends or the round advances.
+func _solo_snapshot_activation_wounds(unit: GameUnit) -> void:
+	if unit == null:
+		return
+	var host := _solo_combat_unit(unit)
+	if host == null:
+		return
+	var id: int = host.get_instance_id()
+	if _solo_activation_wounds_start.has(id):
+		return
+	_solo_activation_wounds_start[id] = _solo_unit_wounds_now(host)
+
+
+## Wounds the unit lost since its activation start (Dangerous move, a spell, Hazardous earlier in the
+## activation, ...). Read BEFORE the melee strikes so only pre-melee wounds enter the tally; the
+## melee's own Hazardous ones keep their separate `_solo_hazard_self` leg.
+func _solo_activation_self_wounds(unit: GameUnit) -> int:
+	if unit == null:
+		return 0
+	var host := _solo_combat_unit(unit)
+	if host == null:
+		return 0
+	var d: Dictionary = _solo_activation_wounds_start
+	if not d.has(host.get_instance_id()):
+		return 0
+	return maxi(0, int(d[host.get_instance_id()]) - _solo_unit_wounds_now(host))
 
 
 ## The Spawn + Reanimation trigger behind begin_activation (the only production caller). Rolls the
@@ -6965,8 +7758,8 @@ func _solo_reanimation_spot_ok(pos: Vector3, r: float, model: ModelInstance, anc
 	return true
 
 
-## Mend (army-book, grill round 2 cut A — official text: "Once per activation, before attacking, pick
-## one friendly model within 3\" with Tough, and remove D3 wounds from it."): the AI heals the WOUNDED
+## Mend (army-book, grill round 2 cut A — rule Mend: once per activation, before attacking, the
+## bearer heals D3 wounds on one friendly Tough model within 3"): the AI heals the WOUNDED
 ## Tough model (wounds_max > 1 — Tough(1) regiment pools are excluded by the rule's wording) with the
 ## most wounds lost within 3" of the bearer's unit, hero tiebreak; one visible tray die is the D3
 ## (1-2→1, 3-4→2, 5-6→3); the heal runs through the same wound-marker + MP seams the damage paths use.
@@ -7024,9 +7817,9 @@ func _solo_apply_mend(unit: GameUnit) -> void:
 			unit.get_name(), healed, ("" if healed == 1 else "s"), int(face[0]), patient.wounds_current, patient.wounds_max], ai_side)
 
 
-## Breath Attack (army-book, grill round 2 cut A — official text: "Once per activation, before
-## attacking, roll one die. On a 2+ one enemy unit within 6\" in line of sight takes 1 hit with
-## Blast(3) and AP(1)."): one breath per AI unit activation (documented simplification, however many
+## Breath Attack (army-book, grill round 2 cut A — rule Breath Attack: once per activation, before
+## attacking, roll one die; on a 2+ one enemy unit within 6" in line of sight takes 1 hit with
+## Blast(3) and AP(1)): one breath per AI unit activation (documented simplification, however many
 ## bearers). The AI picks the enemy in range + LOS worth the most expected wounds — Blast(3) counts
 ## min(3, models) hits, saved at the Shielded/Armor Defense with AP(1); Blast ignores Cover, and the
 ## 6" range can never trip Guarded's over-9 gate. Resolves through the normal save + wound-landing
@@ -7101,12 +7894,12 @@ func _solo_apply_breath_attack(unit: GameUnit) -> void:
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "Breath Attack: %s breathes on %s — %d hit%s (Blast(%d), AP(%d))" % [
 			unit.get_name(), btarget.get_name(), bhits, ("" if bhits == 1 else "s"), blast_x, b_ap], ai_side)
-	var bprofile: Dictionary = {"name": "Breath Attack", "ap": b_ap, "deadly": 0, "blast": blast_x, "rules": []}
+	var bprofile: Dictionary = {"name": "Breath Attack", "ap": b_ap, "deadly": 0, "blast": blast_x, "rules": [], "_impact_pool": true}
 	var w: int = await _solo_resolve_saves(unit, btarget, "Breath Attack", [], bhits,
 		_solo_defense_vs(btarget), bprofile, not _solo_is_ai_unit(btarget), false)
 	if w > 0:
 		await _solo_land_wounds(btarget, w, 0)
-	await _solo_shooting_morale(btarget, alive_before, _roller_label(btarget), wounds_before)
+	await _solo_shooting_morale(btarget, alive_before, _roller_label(btarget), wounds_before, "Breath Attack")
 	_solo_consume_once_mods(unit, btarget, false)   # F4: once-mods spent by this exchange
 
 
@@ -7171,6 +7964,32 @@ func _solo_unpredictable_rule(striker: GameUnit, melee: bool, target: GameUnit =
 	return ""
 
 
+## AIG-G2 R5 (EPOCH_73_V36): a joined hero who carries Unpredictable (Shooter) himself rolls ONE die for his own guns when
+## his host rolled none (`host_rule` empty): the line names the book rule and the hero. A host that rolled keeps covering the
+## whole unit (one die per volley). Returns {hero instance id: {"ap", "hit"}} for the members that rolled.
+func _solo_hero_unpredictable(attacker: GameUnit, host_rule: String, members: Array, target: GameUnit, ai: bool) -> Dictionary:
+	var out := {}
+	if not host_rule.is_empty() or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return out
+	for m in members:
+		var hero := m as GameUnit
+		if hero == null or hero == attacker or out.has(hero.get_instance_id()):
+			continue
+		var rule := _solo_unpredictable_rule(hero, false, target)
+		if rule.is_empty():
+			continue
+		var face: Array = await _solo_tray_roll(1, AiCombatMath.BEST_HIT_TARGET,
+			("AI (%s)" % hero.get_name()) if ai else _roller_label(hero))
+		if face.is_empty():
+			continue
+		var eff: Dictionary = AiCombatMath.unpredictable_fighter_effect(int(face[0]))
+		out[hero.get_instance_id()] = {"ap": int(eff["ap"]), "hit": int(eff["hit"])}
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT, ("%s: %s's volley rolls %d → %s" if ai else "%s: %s rolls %d → %s") % [
+				rule, hero.get_name(), int(face[0]), ("AP(+1)" if int(eff["ap"]) > 0 else "+1 to hit")], true)
+	return out
+
+
 ## The groups of _solo_defense_parts, folded in this order (one sum, clamped once at the save).
 const DEF_PART_SHIELDED := "shielded"
 const DEF_PART_MARKER := "marker"
@@ -7211,8 +8030,8 @@ func _solo_defense_parts(target: GameUnit, source: String) -> Array:
 	# Shielded — "+1 to defense rolls against hits that are not from spells": the clause IS the scope.
 	var sh_name := ""
 	var sh_bonus := 0
-	if _solo_rule_on_all_models(target, "Shielded"):
-		sh_name = "Shielded"
+	if AiEv.rule_on_defence_family(target, "Shielded", _solo_takedown_solo.get("unit") == target):
+		sh_name = "Shielded" + _solo_most_models_note(target, "Shielded")
 		sh_bonus = AiCombatMath.SHIELDED_DEFENSE_BONUS
 	else:
 		# Coverage wave: Shielded-family DATA aliases (Grounded Reinforcement — terrain-conditional
@@ -7250,6 +8069,24 @@ func _solo_defense_parts(target: GameUnit, source: String) -> Array:
 	return parts
 
 
+## Rules 3.6 (SHO-14) — Pierce ignores every POSITIVE Defense modifier: rebuild from Armor plus the
+## NEGATIVE parts, so Cover, Shielded, the over-9" family and growth markers drop out.
+func _solo_pierce_defense(target: GameUnit, melee: bool, ignored: PackedStringArray) -> int:
+	var stripped: int = _solo_armored_defense(target)
+	var source := AiCombatMath.HIT_SOURCE_MELEE if melee else AiCombatMath.HIT_SOURCE_SHOOTING
+	for p in _solo_defense_parts(target, source):
+		if not bool((p as Dictionary)["applies"]):
+			continue
+		var bonus := int((p as Dictionary)["bonus"])
+		if bonus > 0:
+			ignored.append("%s +%d" % [str((p as Dictionary)["name"]), bonus])
+		elif bonus < 0:
+			stripped -= bonus
+	if not melee and _solo_majority_in_cover(target):
+		ignored.append("Cover +1")
+	return stripped
+
+
 ## rules-must-log for NML-932: the ATTACK save steps name every Defense contribution they folded in,
 ## each with ITS OWN rule's name — the same single truth (_solo_defense_parts) the arithmetic reads.
 ##
@@ -7272,6 +8109,13 @@ func _solo_log_defense_parts(target: GameUnit, source: String, defense: int, ai:
 			continue
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s is %s: %+d Defense (saves on %d+)" % [
 			target.get_name(), str(pd["name"]), bonus, AiCombatMath.shown_target(defense)], ai)
+	# C-STURDY-BOOST rules-must-log: an upgrade that replaces the unit's Sturdy says so (epoch 73+).
+	for ge in RulesRegistry.unit_rules_of_primitive(target, "Guarded"):
+		var base := str((ge as Dictionary)["name"])
+		var upgrade := _solo_replacing_upgrade(target, base)
+		if base != "Guarded" and not upgrade.is_empty() and _solo_guarded_family_on(target, base):
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s: replaces %s — +1 Defense at any range, no extra +1 from over 9\"" % [
+				upgrade, base], ai)
 
 
 ## rules-must-log for NML-104: the spell save step NAMES both halves. What DOES apply gets a line —
@@ -7330,18 +8174,48 @@ func _solo_armor_rating(target: GameUnit) -> int:
 	return _solo_unit_rating(target, "Armor")
 
 
+## G4-T2 (EPOCH_73_V36, lead ruling O2): which member of a joined chain currently holds its models —
+## the unit itself while it has alive models, else the first alive attached hero, else null. Below 73
+## the old host read stands so every recorded corpus replays byte-exact.
+func _solo_defense_holder(unit: GameUnit) -> GameUnit:
+	if unit == null:
+		return null
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return unit
+	if unit.get_alive_count() > 0:
+		return unit
+	for hero in unit.get_attached_heroes():
+		if hero is GameUnit and (hero as GameUnit).get_alive_count() > 0:
+			return hero
+	return null
+
+
+## The unit a Defense-side battle-log line is signed with: the chain member holding the models (G4-T2),
+## else the unit itself. Below EPOCH_73_V36 that is always the unit.
+func _solo_defense_signer(unit: GameUnit) -> GameUnit:
+	var holder: GameUnit = _solo_defense_holder(unit)
+	return holder if holder != null else unit
+
+
 ## The unit's Defense after Armor(X) ("counts as having Defense X+", best-of — AiCombatMath.armored_defense,
-## the same math the EV context uses). Equals get_defense() for unarmored units.
+## the same math the EV context uses). Equals get_defense() for unarmored units. Reads the chain member
+## that actually holds the models (G4-T2): a dead host with a living hero saves on the hero's Defense.
 func _solo_armored_defense(target: GameUnit) -> int:
-	return AiCombatMath.armored_defense(target.get_defense(), _solo_armor_rating(target))
+	var holder: GameUnit = _solo_defense_holder(target)
+	if holder == null:
+		return 0
+	return AiCombatMath.armored_defense(holder.get_defense(), _solo_armor_rating(holder))
 
 
 ## Battle-log Armor(X) when it actually improves the working Defense (visible rule application, wave 5).
 func _solo_log_armor(target: GameUnit) -> void:
-	var armored: int = _solo_armored_defense(target)
-	if armored != target.get_defense() and battle_log != null:
+	var holder: GameUnit = _solo_defense_holder(target)
+	if holder == null:
+		return
+	var armored: int = _solo_armored_defense(holder)
+	if armored != holder.get_defense() and battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s has Armor(%d): counts as Defense %d+" % [
-			target.get_name(), _solo_armor_rating(target), armored], true)
+			holder.get_name(), _solo_armor_rating(holder), armored], true)
 
 
 ## Compose two to-hit-modifier note fragments ("Stealth -1" + "Indirect moved -1") into one log note.
@@ -7400,7 +8274,8 @@ func _solo_terrain_sampler() -> Callable:
 ## Aura"). Defaulted false, so the shooting and preview call sites are unchanged.
 func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: float, melee: bool,
 		charging: bool = false) -> Dictionary:
-	var evasive: bool = _solo_rule_on_all_models(target, "Evasive")
+	var own := 0   # SHO-08: the part of "mod" from the attacker's OWN rules (Unstoppable keeps it at 73)
+	var evasive: bool = _solo_rule_on_most_models(target, "Evasive")
 	if not evasive:
 		# Coverage wave (resolver audit): Evasive DATA aliases (Changebound Boost & kin — "enemies
 		# attacking them ALWAYS get -1", the ungated upgrade of the Stealth-family bases).
@@ -7414,22 +8289,23 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 	# attacking them always get -1 to hit") — it REPLACES the base's over-9" Stealth alias
 	# (one -1 at any range), it does not add a second one.
 	var empyrean_boost: bool = _solo_rule_on_all_models(target, "Empyrean Spirit") \
-			and _solo_rule_on_all_models(target, "Empyrean Spirit Boost")
+			and _solo_rule_on_all_models(target, "Enhanced Empyrean Spirit")
 	var evasive_note := "Evasive -1"
 	if empyrean_boost:
 		# Rules-must-log: the applied rule names itself once — never the stood-down base next to it.
-		evasive_note = "Empyrean Spirit Boost: -1 to hit (base Evasive stood down)"
+		evasive_note = "Enhanced Empyrean Spirit: -1 to hit (base Evasive stood down)"
 	# Coverage wave: the Stealth-family DATA alias that applies to THIS attack — Changebound /
 	# Machine-Fog ("shot or charged from over 9\"" → applies_charged), Grounded Stealth (terrain-
 	# conditional; D-STEALTH: the per-model within-1\" predicate, the cover-cell approximation
 	# dropped). At most one alias fires (rule effects of one
 	# family don't stack with Stealth's own -1 — best single penalty).
 	var alias_pen := 0
+	var alias_gate := 0.0
 	var alias_name := ""
 	for e in RulesRegistry.unit_rules_of_primitive(target, "Stealth"):
 		var ed := e as Dictionary
 		var n := str(ed["name"])
-		if n == "Stealth" or not _solo_rule_on_all_models(target, n):
+		if n == "Stealth" or not _solo_stealth_family_on(target, n):
 			continue
 		# The stand-down: the Boost's unconditional Evasive replaces the base's own conditional
 		# alias — the two never stack (the core's named gate skips the same name, unit.rs:2199-2201).
@@ -7444,24 +8320,42 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 				and int(target.unit_properties.get("moved_round", -1)) == opr_army_manager.current_round:
 			continue
 		var gate := float(p2.get("over_in", 0.0))
-		var charged_ok := bool(p2.get("applies_charged", false)) and melee and dist_in > gate
+		# D-GATE6 (rules 3.6): the charge leg reads the shared 6" charge gate; `over_in` stays the shot's.
+		var charge_gate := gate
+		if gate > 0.0 and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+			charge_gate = AiCombatMath.CHARGE_LONG_RANGE_IN
+		var charged_ok := bool(p2.get("applies_charged", false)) and melee and dist_in > charge_gate
 		var shot_ok := not melee and (gate <= 0.0 or dist_in > gate)
 		if shot_ok or charged_ok:
 			alias_pen = maxi(alias_pen, int(p2.get("hit_penalty", 0)))
+			alias_gate = gate
 			alias_name = n
 	if melee:
-		var melee_evasion: bool = _solo_rule_on_all_models(target, "Melee Evasion")
+		var melee_evasion: bool = _solo_rule_on_most_models(target, "Melee Evasion")
+		var dodge_name := ""
 		if not melee_evasion:
 			for me_e in RulesRegistry.unit_rules_of_primitive(target, "Melee Evasion"):
 				var me_n := str((me_e as Dictionary)["name"])
-				if me_n != "Melee Evasion" and _solo_rule_on_all_models(target, me_n):
+				if me_n == "Melee Evasion":
+					continue
+				# MEL-13 (rules 3.6 Dodge, EPOCH_73_V36): the most-models form; its -1 holds only while the unit
+				# is not Fatigued (the plain flag, like the core's strike_phase). Below 73 the entry stays inert.
+				if bool(((me_e as Dictionary).get("params", {}) as Dictionary).get("most_models", false)):
+					if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and AiEv.rule_on_most_models(target, me_n):
+						dodge_name = me_n
+				elif _solo_rule_on_all_models(target, me_n):
 					melee_evasion = true
 					break
-		var mm: int = AiCombatMath.melee_hit_modifier(evasive, melee_evasion)
-		var base_note: String = ("Melee Evasion -1" if melee_evasion and not evasive else evasive_note) if mm != 0 else ""
+		var dodge_on: bool = not melee_evasion and not dodge_name.is_empty() and not target.is_fatigued
+		var mm: int = AiCombatMath.melee_hit_modifier(evasive, melee_evasion or dodge_on)
+		var base_note := ""
+		if mm != 0:
+			base_note = evasive_note if evasive else ("%s -1" % dodge_name if dodge_on else "Melee Evasion -1")
 		if alias_pen > 0 and mm == 0:
 			mm = -alias_pen
 			base_note = "%s -%d" % [alias_name, alias_pen]
+		if mm == 0 and not dodge_name.is_empty() and not melee_evasion:
+			base_note = "%s: no effect, %s is Fatigued" % [dodge_name, target.get_name()]
 		# Coverage wave: all-attacks Shot Modifiers (Grounded Precision) reach melee too.
 		# Dead-aura wave: so do the MELEE-scoped ones. "Good Fighter" / "Precision Fighter Aura" grant
 		# "+1 to hit in melee" (melee_only) and "Precision Charge Aura" grants it on a charge (when:
@@ -7469,6 +8363,10 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 		# melee they are printed for, while the shooting branch below applied them to every shot.
 		if shooter_member != null:
 			for e in RulesRegistry.unit_rules_of_primitive(shooter_member, "Shot Modifier"):
+				if AiEv.precision_base_stands_down(shooter_member, str((e as Dictionary)["name"])):
+					continue
+				if SoloController.shot_feat_spent(shooter_member, e as Dictionary):
+					continue   # G4-R3 X1a: the once-per-game Feat latch is spent
 				var sp3: Dictionary = (e as Dictionary).get("params", {})
 				var charge_only3 := str(sp3.get("when", "")) == "charge"
 				if not (bool(sp3.get("all_attacks", false)) or bool(sp3.get("melee_only", false)) \
@@ -7477,6 +8375,7 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 				if float(sp3.get("terrain_within_in", 0.0)) > 0.0 and not _solo_majority_in_cover(shooter_member):
 					continue
 				mm += int(sp3.get("hit_bonus", 0))
+				own += int(sp3.get("hit_bonus", 0))
 				base_note = _solo_join_note(base_note, "%s %+d" % [str((e as Dictionary)["name"]), int(sp3.get("hit_bonus", 0))])
 		var sm := _solo_spell_hit_mod(shooter_member, true)
 		var vt := _solo_spell_hit_mod_vs(target, true)
@@ -7488,11 +8387,25 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 		if int(inst_m.get("mod", 0)) != 0:
 			mm += int(inst_m["mod"])
 			base_note = _solo_join_note(base_note, str(inst_m.get("note", "")))
-		return {"mod": mm + int(sm.get("mod", 0)) + int(vt.get("mod", 0)),
+		var ips_m := _solo_ips_melee_mod(shooter_member)
+		if int(ips_m.get("mod", 0)) != 0:
+			mm += int(ips_m["mod"])
+			base_note = _solo_join_note(base_note, str(ips_m.get("note", "")))
+		return {"mod": mm + int(sm.get("mod", 0)) + int(vt.get("mod", 0)), "own": own,
 			"note": _solo_join_note(_solo_join_note(base_note, str(sm.get("note", ""))), str(vt.get("note", "")))}
 	var attacker_artillery: bool = shooter_member != null and shooter_member.has_special_rule("Artillery")
-	var stealth: bool = _solo_rule_on_all_models(target, "Stealth")
+	var stealth: bool = _solo_stealth_family_on(target, "Stealth")
 	var target_artillery: bool = target.has_special_rule("Artillery")
+	# SHO-06 (rules 3.6): the target-side penalty is -1 past 12", only while most models carry the
+	# rule and the unit has NOT moved this round. Below 73 the old over-9" -2 reading stays.
+	var target_art_v36: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
+	var target_art_over: float = AiCombatMath.LONG_RANGE_IN
+	var target_art_most := true
+	var target_art_moved := false
+	if target_artillery and target_art_v36:
+		target_art_over = float(RulesRegistry.unit_param(target, "Artillery", "target_over_in", 12.0))
+		target_art_most = _solo_rule_on_most_models(target, "Artillery")
+		target_art_moved = int(target.unit_properties.get("moved_round", -1)) == opr_army_manager.current_round
 	# The Artillery magnitudes are the entries' params (dead-parameter fold, twin of #1006): the
 	# fallback is the recorded constant, so a real-book replay is byte-identical.
 	var art_shooter_bonus: int = AiCombatMath.ARTILLERY_SHOOTER_HIT_BONUS
@@ -7500,11 +8413,41 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 	if attacker_artillery:
 		art_shooter_bonus = int(RulesRegistry.unit_param(shooter_member, "Artillery", "shooter_hit_bonus", AiCombatMath.ARTILLERY_SHOOTER_HIT_BONUS))
 	if target_artillery:
-		art_target_pen = int(RulesRegistry.unit_param(target, "Artillery", "target_hit_penalty", AiCombatMath.ARTILLERY_TARGET_HIT_PENALTY))
-	var mod: int = AiCombatMath.shooting_hit_modifier(dist_in, attacker_artillery, stealth, target_artillery, evasive, art_shooter_bonus, art_target_pen)
+		if target_art_v36:
+			art_target_pen = int(RulesRegistry.unit_param(target, "Artillery", "target_hit_penalty_v36", 1))
+		else:
+			art_target_pen = int(RulesRegistry.unit_param(target, "Artillery", "target_hit_penalty", AiCombatMath.ARTILLERY_TARGET_HIT_PENALTY))
 	var notes: PackedStringArray = []
 	var over_nine: bool = dist_in > AiCombatMath.LONG_RANGE_IN
-	if attacker_artillery and over_nine:
+	# Rules 3.6 (EPOCH_73_V36): the SHOOTER's +1 needs a Hold and a target past `shooter_over_in`
+	# (the entry's own keys, read through RulesRegistry like Indirect's `los_needs_hold`). Below 73
+	# both stamp off, so the older over-9" reading stays byte-exact.
+	var art_gate_over := 0.0
+	var art_gate_hold := false
+	var art_gate_ok := true
+	var art_held := false
+	if attacker_artillery:
+		art_held = _solo_unit_held(shooter_member)
+		if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+			art_gate_over = float(RulesRegistry.unit_param(shooter_member, "Artillery", "shooter_over_in", 0.0))
+			art_gate_hold = bool(RulesRegistry.unit_param(shooter_member, "Artillery", "shooter_requires_hold", false))
+			art_gate_ok = (not art_gate_hold or art_held) \
+				and (art_gate_over <= 0.0 or dist_in > art_gate_over)
+	var target_art_applies: bool = target_artillery and over_nine
+	if target_art_v36:
+		target_art_applies = target_artillery and target_art_most and not target_art_moved and dist_in > target_art_over
+	var mod: int = AiCombatMath.shooting_hit_modifier(dist_in, attacker_artillery, stealth, target_art_applies, evasive,
+		art_shooter_bonus if art_gate_ok else 0, art_target_pen)
+	if attacker_artillery and over_nine and (art_gate_hold or art_gate_over > 0.0):
+		if art_gate_ok:
+			own += art_shooter_bonus   # SHO-08: the Artillery +1 is an own-rules part
+			notes.append("Artillery +%d (Held, target over %d\")" % [art_shooter_bonus, int(art_gate_over)])
+		elif art_gate_hold and not art_held:
+			notes.append("Artillery: no +%d (shooter did not Hold)" % art_shooter_bonus)
+		else:
+			notes.append("Artillery: no +%d (target within %d\")" % [art_shooter_bonus, int(art_gate_over)])
+	elif attacker_artillery and over_nine:
+		own += art_shooter_bonus
 		notes.append("Artillery +%d" % art_shooter_bonus)
 	elif attacker_artillery:
 		# #224 (transparency wave stage 1 — rules-must-log covers NON-application too): the
@@ -7512,16 +8455,35 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 		# read the silent short-range case as a missing rule.
 		notes.append("Artillery: no +%d (target within 9\")" % art_shooter_bonus)
 	if stealth and over_nine:
-		notes.append("Stealth -1")
+		# Rules-must-log (D-MOST): name the majority read when a member lacks Stealth.
+		notes.append("Stealth -1" if _solo_rule_on_all_models(target, "Stealth") else "Stealth -1 (most models carry it)")
 	elif stealth:
 		notes.append("Stealth: no -1 (within 9\")")   # #224 sweep: name the non-application
 	if alias_pen > 0 and not (stealth and over_nine):
 		mod -= alias_pen
-		notes.append("%s -%d" % [alias_name, alias_pen])
-	if target_artillery and over_nine:
-		notes.append("Artillery target -%d" % art_target_pen)
-	elif target_artillery:
-		notes.append("Artillery target: no -%d (within 9\")" % art_target_pen)   # #224 sweep
+		if alias_gate > 0.0 and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+			notes.append("%s -%d over %d\"" % [alias_name, alias_pen, int(alias_gate)])
+		else:
+			notes.append("%s -%d" % [alias_name, alias_pen])
+	if target_artillery:
+		if target_art_v36:
+			if target_art_applies:
+				notes.append("Artillery target -%d over %d\" (unmoved)" % [art_target_pen, int(target_art_over)])
+			elif target_art_moved:
+				notes.append("Artillery target: no -%d (moved this round)" % art_target_pen)
+			elif not target_art_most:
+				notes.append("Artillery target: no -%d (most models lack it)" % art_target_pen)
+			else:
+				notes.append("Artillery target: no -%d (within %d\")" % [art_target_pen, int(target_art_over)])
+		elif over_nine:
+			notes.append("Artillery target -%d" % art_target_pen)
+		else:
+			notes.append("Artillery target: no -%d (within 9\")" % art_target_pen)   # #224 sweep
+	# Rules 3.6 (EPOCH_73_V36): a shot at an Aircraft is also -N to hit (AiEv reads the same number).
+	var air_pen := AiEv.aircraft_hit_penalty(target)
+	if air_pen > 0:
+		mod -= air_pen
+		notes.append("Aircraft -%d" % air_pen)
 	if evasive:
 		notes.append(evasive_note)
 	# Coverage wave — growth markers (Precision Growth): +1 to hit per two markers.
@@ -7529,11 +8491,14 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 		var gab := _solo_growth_attack_bonus(shooter_member)
 		if int(gab.get("hit", 0)) != 0:
 			mod += int(gab["hit"])
+			own += int(gab["hit"])
 			notes.append("Growth %+d" % int(gab["hit"]))
 	# Coverage wave: attacker-side Shot-Modifier family (Good Shot +1 / Bad Shot -1 / Targeting
 	# Visor +1 over 9" / Grounded Precision terrain-conditional) — data-driven via the layer.
 	if shooter_member != null:
 		for e in RulesRegistry.unit_rules_of_primitive(shooter_member, "Shot Modifier"):
+			if SoloController.shot_feat_spent(shooter_member, e as Dictionary):
+				continue   # G4-R3 X1a: the once-per-game Feat latch is spent
 			var sp2: Dictionary = (e as Dictionary).get("params", {})
 			# Dead-aura wave: a melee-scoped or charge-scoped hit bonus is not a shooting bonus. Both
 			# already ship in the skirmish books ("Precision Fighter Aura" melee_only, "Precision Charge
@@ -7551,6 +8516,7 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 			var hb := int(sp2.get("hit_bonus", 0))
 			if hb != 0:
 				mod += hb
+				own += hb
 				notes.append("%s %+d" % [str((e as Dictionary)["name"]), hb])
 	var sm := _solo_spell_hit_mod(shooter_member, false)
 	if int(sm.get("mod", 0)) != 0:
@@ -7566,7 +8532,19 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 	if int(inst2.get("mod", 0)) != 0:
 		mod += int(inst2["mod"])
 		notes.append(str(inst2.get("note", "")))
-	return {"mod": mod + int(sm.get("mod", 0)) + int(vt.get("mod", 0)), "note": ", ".join(notes)}
+	return {"mod": mod + int(sm.get("mod", 0)) + int(vt.get("mod", 0)), "own": own, "note": ", ".join(notes)}
+
+
+## SHO-08, EPOCH_73_V36: Unstoppable ignores only the minus from OTHER sources, the bearer's own rules'
+## modifiers (`own`; 0 below 73 = one clamp over the whole sum) still apply. Returns [mod, log line or ""].
+func _solo_unstoppable_fold(mod: int, own: int) -> Array:
+	own = own if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else 0
+	var rest := mod - own
+	if own >= 0:
+		return [own, "Unstoppable: negative to-hit modifiers ignored"] if rest < 0 else [mod, ""]
+	if rest >= 0:
+		return [mod, "Unstoppable: own rules' %d to hit kept" % own]
+	return [own, "Unstoppable: %d to hit from other sources ignored, own rules' %d kept" % [rest, own]]
 
 
 ## Vengeance (resolver wave A — "friendly units get +X to hit rolls when attacking that unit,
@@ -7610,6 +8588,19 @@ func _solo_instinctive_mod(shooter_member: GameUnit, target: GameUnit) -> Dictio
 		if MoveIntent.distance_inches(from, solo_controller.unit_centre(eu)) < td - 0.5:
 			return {}   # a closer valid target exists — no bonus for this attack
 	return {"mod": bonus, "note": "%s +%d (closest target)" % [n, bonus]}
+
+
+## Infiltrating Precision Strike (rules 3.6, EPOCH_73_V36; gf elven_jesters): +1 to hit in melee on the round the
+## carrier arrived — the arrival stamp an Ambush/Infiltrate arrival writes equals the current round. The core's
+## twin is sim.rs `strike_phase`; a fatigued striker never reaches the note (its to-hit is a flat 6). {} = no bonus.
+func _solo_ips_melee_mod(striker: GameUnit) -> Dictionary:
+	if striker == null or opr_army_manager == null or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return {}
+	if not striker.has_special_rule("Infiltrating Precision Strike"):
+		return {}
+	if int(striker.unit_properties.get("ambush_arrived_round", -1)) != opr_army_manager.current_round:
+		return {}
+	return {"mod": 1, "note": "Infiltrating Precision Strike: +1 to hit in melee this round"}
 
 
 ## Retreating Strike (resolver wave A — "once per round, when this unit ends its move within 3\"
@@ -7727,7 +8718,59 @@ func _solo_has_counter(unit: GameUnit) -> bool:
 ## Alive models of a unit (incl. attached heroes) that fight with Counter — the shared
 ## SoloController.counter_models_of walk (one truth between the dice resolution and the EV metric).
 func _solo_counter_models(unit: GameUnit) -> int:
+	if unit == null or AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		return 0
 	return SoloController.counter_models_of(unit)
+
+
+## Rules 3.6 (`EPOCH_73_V36`): a Counter unit that strikes back but not first gets its line — Fatigued
+## (a Shaken strike-back counts as Fatigued) or the optional decline. A fresh striker keeps the
+## existing "Counter: X strikes first" line at its phase.
+func _solo_log_counter_first_decision(unit: GameUnit, counter_first: bool) -> void:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 or counter_first or battle_log == null:
+		return
+	if not _solo_has_counter(unit):
+		return
+	if unit.is_fatigued or unit.is_shaken:
+		_log_rule_event(BattleLog.Category.COMBAT, "Counter: %s is Fatigued - no strike-first" % unit.get_name(), true)
+	else:
+		_log_rule_event(BattleLog.Category.COMBAT, "Counter: %s declines to strike first" % unit.get_name(), true)
+
+
+## Rules 3.6 (`EPOCH_73_V36`) — the single Brace(X) rating of a unit (incl. attached heroes) whose
+## weapons carry Brace: X Impact dice off a unit charging it, ONCE per unit, however many models
+## carry it. 0 below 73 or without a carrier. AI-G2: a UNIT rule the map resolves to the Brace primitive
+## ("Brace in Melee") counts like a Brace weapon; `_solo_brace_rule` is the book name of the rule that gave the cut.
+var _solo_brace_rule := "Brace"
+func _solo_brace_models(unit: GameUnit) -> int:
+	_solo_brace_rule = "Brace"
+	if unit == null or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return 0
+	var members: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		members = members + unit.get_attached_heroes()
+	var best := 0
+	for m in members:
+		var member := m as GameUnit
+		if member == null:
+			continue
+		var alive: int = member.get_alive_count()
+		if alive <= 0:
+			continue
+		var weapons: Array = []
+		if member.source_type == "opr" and member.source_data is OPRApiClient.OPRUnit:
+			weapons = (member.source_data as OPRApiClient.OPRUnit).weapons
+		for w in weapons:
+			if w is Object and AiShooting._has_rule(w, "Brace"):
+				if maxi(AiShooting._rating_of(w, "Brace"), 1) > best:
+					_solo_brace_rule = "Brace"
+				best = maxi(best, maxi(AiShooting._rating_of(w, "Brace"), 1))
+				break
+		var unit_rule: Dictionary = AiEv.brace_unit_rule(member)
+		if int(unit_rule.get("x", 0)) > best:
+			best = int(unit_rule["x"])
+			_solo_brace_rule = str(unit_rule["rule"])
+	return best
 
 
 ## Resolve one side's melee strikes against `defender` and LAND the wounds (Regeneration-bucketed): the
@@ -7738,6 +8781,11 @@ func _solo_counter_models(unit: GameUnit) -> int:
 ## Fatigue (unmodified-6-only) overrides all to-hit modifiers. Returns wounds caused (melee-winner tally).
 var _solo_retaliate_credit := 0   # Retaliate wounds of the LAST strike phase — the defender's tally credit
 var _solo_last_save_ones := 0   # resolver wave A: unmodified Defense 1s of the LAST save batch (Bloodthirsty Fighter)
+var _solo_hazard_self := {}   # unit instance id -> Hazardous self-wounds since the current melee began (rules 3.6 tally)
+var _solo_regen_ignored := 0   # MEL-10r: wounds Regeneration cancelled since the current melee began (rules 3.6 tally)
+var _solo_activation_wounds_start := {}   # unit instance id -> wounds at ITS activation start (rules 3.6 taken tally)
+var _solo_scourge_wounds := 0   # SHO-15a: the volley's Scourge phantom wounds, read once by _solo_shooting_morale
+var _solo_melee_scourge := {}   # unit instance id -> Scourge phantom wounds taken in the current melee (SHO-15b tally)
 
 
 ## Collect (and reset) the retaliation wounds of the last strike phase — the caller adds them to
@@ -7748,21 +8796,186 @@ func _solo_take_retaliate_credit() -> int:
 	return c
 
 
+## D-GATE6 (rules 3.6): the distance the melee hit modifier's charge leg (Screened family) reads. From
+## EPOCH_73_V36 a charge hands its pre-charge gap through; below it the melee read stays 0.0 (never fired).
+func _solo_charge_leg_dist_in(charging: bool, charge_from_in: float) -> float:
+	if charging and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		return charge_from_in
+	return 0.0
+
+
+## SHO-17 (rules 3.6): the Guarded family's charge-leg gate — 6" from EPOCH_73_V36, over 9" below.
+func _solo_guarded_charge_gate() -> float:
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		return AiCombatMath.CHARGE_LONG_RANGE_IN
+	return AiCombatMath.LONG_RANGE_IN
+
+
+## SHO-18 (rules 3.6): the alias families fire only from a shot over 9". A melee strike-back
+## (dist 0 or less at 73) pays nothing; below 73 the unconditional read stays.
+func _solo_alias_family_over(dist_in: float) -> bool:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return true
+	if dist_in <= 0.0:
+		return false
+	return dist_in > AiCombatMath.LONG_RANGE_IN
+
+
+## SHO-18 (rules 3.6): the alias families fire on a charge only from over 6"; a strike-back pays nothing.
+func _solo_alias_charge_over(charging: bool, charge_from_in: float) -> bool:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return true
+	if not charging:
+		return false
+	return charge_from_in > AiCombatMath.CHARGE_LONG_RANGE_IN
+
+
+## SHO-19 / SHO-19b (rules 3.6): the Versatile Expert pick and an Enhanced Watchborn carrier or
+## token skip the distance gate from EPOCH_73_V36; the base spellings keep the 9"/6" bands.
+func _solo_versatile_no_gate(unit: GameUnit) -> bool:
+	if unit == null or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return false
+	for n in ["Versatile Expert"]:
+		if AiEv.has_exact_rule(unit, n):
+			return true
+	if AiEv.has_exact_rule(unit, "Enhanced Watchborn"):
+		return true
+	return AiSpell.granted_rules_of(unit, null, true).has("Enhanced Watchborn") \
+		or AiSpell.granted_rules_of(unit, null, false).has("Enhanced Watchborn")
+
+
+## SHO-19: one shared gate for the Versatile pick -- 9" shooting, 6" charging at 73, and no
+## gate at all for the Expert and Enhanced Watchborn spellings.
+func _solo_versatile_over(unit: GameUnit, dist_in: float, charging: bool, charge_from_in: float) -> bool:
+	if _solo_versatile_no_gate(unit):
+		return true
+	if charging:
+		var gate: float = AiCombatMath.CHARGE_LONG_RANGE_IN \
+			if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else AiCombatMath.LONG_RANGE_IN
+		return charge_from_in > gate
+	return dist_in > AiCombatMath.LONG_RANGE_IN
+
+
+## The pick line names the BOOK rule the unit carries (Versatile Expert / Watchborn), not the primitive.
+func _solo_log_versatile_pick(member: GameUnit, ap_mode: bool) -> void:
+	battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s picks %s for this activation" % [RulesRegistry.primitive_book_name(member, "Versatile Attack"), member.get_name(), "AP(+1)" if ap_mode else "+1 to hit"], true)
+
+
+## SHO-19: Havocbound/Piercing Warrior's charge AP needs over 6" at EPOCH_73_V36; below it the
+## old unconditional charge leg stays. Both map rows spell the gate as ranged_over_or_charge.
+func _solo_havoc_charge_ap(base: String, params: Dictionary, bonus: int,
+		charging: bool, melee: bool) -> int:
+	if bonus <= 0 or not charging or not melee:
+		return bonus
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return bonus
+	if base != "Havocbound" and base != "Piercing Warrior":
+		return bonus
+	var cond := str(params.get("condition", ""))
+	var gate := str(params.get("gate", ""))
+	if cond == "on_charge" or cond == "ranged_over_or_charge" or gate == "ranged_over_or_charge":
+		if _solo_alias_charge_in <= 0.0:
+			return bonus
+		return bonus if _solo_alias_charge_in > AiCombatMath.CHARGE_LONG_RANGE_IN else 0
+	return bonus
+
+
+## The Surge-family DATA alias a member carries for this facet ("" = the weapon's own Surge only).
+func _solo_surge_alias_name(member: GameUnit, profile_range: int) -> String:
+	for r in member.get_special_rules():
+		if str(r).strip_edges() == "Ferocious":
+			return "Ferocious"
+	for e in RulesRegistry.unit_rules_of_primitive(member, "Surge"):
+		var ed := e as Dictionary
+		var n := str(ed.get("name", ""))
+		var ep: Dictionary = ed.get("params", {})
+		if n.is_empty() or n in ["Surge", "Ferocious", "Surge Mark", "Great Sergeant"]:
+			continue
+		if not str(ep.get("upgrades", "")).is_empty() or ep.get("extra_attack", false) == true:
+			continue
+		if AiEv.facet_applies(ep, profile_range):
+			return n
+	return ""
+
+
+func _solo_stamp_alias_markers(member: GameUnit, profiles: Array) -> void:
+	for sp in profiles:
+		var salias := _solo_surge_alias_name(member, int((sp as Dictionary).get("range", 0)))
+		if not salias.is_empty(): (sp as Dictionary)["_surge_alias"] = salias
+
+
+## Rules 3.6 (EPOCH_73_V36) — the defender's Parry dice: X per living carrier model, counting the
+## attached heroes. 0 below the wave. Shared by the strike's event and MEL-07d's follow-up event.
+func _solo_melee_parry_dice(defender: GameUnit) -> int:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return 0
+	var m_parry := 0
+	for m in [defender] + (defender.get_attached_heroes() if defender.has_method("get_attached_heroes") else []):
+		var rating: int = _solo_unit_rating(m, "Parry") if RulesRegistry.unit_rule_active(m, "Parry") else 0
+		if rating <= 0 and m.source_data is OPRApiClient.OPRUnit:
+			for w in (m.source_data as OPRApiClient.OPRUnit).weapons:
+				if int(w.range_value) <= 0: rating = maxi(rating, AiShooting._rating_of(w, "Parry"))
+		m_parry += rating * maxi((m as GameUnit).get_alive_count(), 0)
+	return m_parry
+
+
+## One Parry event's dice: roll `n`, name the cancelled count in the log, return it.
+func _solo_parry_roll(n: int, defender: GameUnit) -> int:
+	var faces: Array = await _solo_tray_roll(n, AiCombatMath.UNMODIFIED_SIX, _roller_label(defender), "parry", "%s Parry: %d dice (6+)" % [defender.get_name(), n])
+	var k: int = AiCombatMath.count_hits(faces, AiCombatMath.UNMODIFIED_SIX)
+	if battle_log != null: battle_log.log_event(BattleLog.Category.COMBAT, "Parry: %s rolls %d dice and cancels %d strike hits" % [defender.get_name(), n, k], true)
+	return k
+
+
+## Rules 3.6 (EPOCH_73_V36) — one Parry event per strike: roll min(X * carrier models,
+## hits) dice after every hit roll, then each 6+ cancels the highest-worth hit (AP plus
+## the on-6 bonus). Only counts shrink; pass 2 keeps its own order.
+func _solo_parry_strike(pending: Array, defender: GameUnit, parry_dice: int, fixed_ap: int, charging: bool) -> Array:
+	var n := mini(parry_dice, pending.reduce(func(acc, p): return acc + int((p as Array)[7]), 0))
+	var cuts: Array = []
+	for i in range(pending.size()): cuts.append([0, 0])
+	if n <= 0: return cuts
+	var k: int = await _solo_parry_roll(n, defender)
+	var regen := _solo_regen_target(defender)
+	var dctx := {"defense": _solo_defense_vs(defender, AiCombatMath.HIT_SOURCE_MELEE), "tough": _solo_unit_tough(defender), "regeneration": regen > 0, "regen_target": regen}
+	var cats: Array = []
+	for i in range(pending.size()):
+		var pen := pending[i] as Array
+		var hits := int(pen[7])
+		var sixes: int = mini(AiCombatMath.unmodified_sixes(pen[13] as Array), hits)
+		var prof: Dictionary = _solo_thrust_profile(pen[1] as Dictionary, charging).duplicate()
+		prof["ap"] = int(prof.get("ap", 0)) + fixed_ap + int(pen[9])
+		cats.append([AiCombatMath.hit_ev(prof, true, dctx), i, sixes, true])
+		cats.append([AiCombatMath.hit_ev(prof, false, dctx), i, hits - sixes, false])
+	cats.sort_custom(func(a, b): return float(a[0]) > float(b[0]))
+	for c in cats:
+		var at: int = int((c as Array)[1])
+		var cut: int = mini(k, int((c as Array)[2]))
+		if cut <= 0: continue
+		cuts[at] = [cuts[at][0] + cut, cuts[at][1] + (cut if bool((c as Array)[3]) else 0)]
+		k -= cut
+		if k <= 0: break
+	return cuts
+
+
 func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: bool, filter: int, charge_from_in: float = 0.0) -> int:
 	var human_defends: bool = not _solo_is_ai_unit(defender)
 	_solo_log_armor(defender)   # Armor(X) "counts as Defense X+" (wave 5) — folded into _solo_defense_vs
 	var defense: int = _solo_defense_vs(defender, AiCombatMath.HIT_SOURCE_MELEE)
 	_solo_log_defense_parts(defender, AiCombatMath.HIT_SOURCE_MELEE, defense, true)   # NML-932: each part by name
-	# Guarded / Versatile Defense's def-half: charged from over 9" away → +1 Defense for this melee's
-	# saves. Fires where the charge distance is KNOWN (AI charges pass their pre-charge gap); the
-	# human's manual charge distance is untracked (charge_from_in stays 0), the Versatile precedent.
+	# Guarded / Versatile Defense's def-half: charged from over the gate away → +1 Defense for this
+	# melee's saves (SHO-17: the shared 6" charge gate from EPOCH_73_V36, the old over-9" below it).
+	# Fires where the charge distance is KNOWN (AI charges pass their pre-charge gap); the human's
+	# manual charge distance is untracked (charge_from_in stays 0), the Versatile precedent.
 	var m_over9 := _solo_over9_defense_rule(defender)
-	if charging and not m_over9.is_empty() and charge_from_in > AiCombatMath.LONG_RANGE_IN:
+	var m_gate: float = _solo_guarded_charge_gate()
+	if charging and not m_over9.is_empty() and charge_from_in > m_gate:
 		defense = AiCombatMath.guarded_defense(defense, true)
 		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.COMBAT, "%s (%s): charged from over 9\" — +1 Defense (saves on %d+)" % [
-				defender.get_name(), m_over9, AiCombatMath.shown_target(defense)], true)
-	var mod_info: Dictionary = _solo_hit_mod_info(striker, defender, 0.0, true, charging)
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s (%s): charged from over %d\" — +1 Defense (saves on %d+)%s" % [
+				defender.get_name(), m_over9, int(m_gate), AiCombatMath.shown_target(defense),
+				_solo_most_models_note(defender, m_over9)], true)
+	var mod_info: Dictionary = _solo_hit_mod_info(striker, defender, _solo_charge_leg_dist_in(charging, charge_from_in), true, charging)
 	# Wave-4 Unpredictable Fighter (Mummified, melee-only) and the generic Unpredictable ("when
 	# attacking" — the same die, shooting AND melee): ONE die per melee for the whole unit —
 	# 1-3 → AP(+1) on its melee weapons, 4-6 → +1 to hit (fatigue's unmodified-6-only overrides the +1).
@@ -7782,6 +8995,9 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 	var caused := 0
 	var regenable := 0
 	var regen_proof := 0
+	# MEL-10r (`EPOCH_73_V36`): the melee tally counts wounds TAKEN — Regeneration-cancelled wounds
+	# do not count, so each landing swaps the pre-Regeneration count for what actually landed.
+	var v36_tally: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
 	var struck_any := false   # did ANY weapon profile actually roll? (finding 8: surface a silent no-strike)
 	# Resolver wave A — Reckless Piercing's round stamps add AP to every strike of this phase;
 	# Deathstrike/Self-Destruct need the per-member alive counts BEFORE this phase's casualties.
@@ -7804,6 +9020,19 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 			var rx: int = _solo_unit_rating(rv, "Ravage")
 			if rx <= 0 or not RulesRegistry.unit_rule_active(rv, "Ravage"):
 				continue
+			# MEL-11 (rules 3.6): once per round, never while Fatigued (a Shaken strike-back counts; the
+			# host's state covers its joined heroes, the core's `strike_phase` gate). Round stamp per member.
+			if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+				var rv_skip := ""
+				if rv.is_fatigued or rv.is_shaken or striker.is_fatigued or striker.is_shaken:
+					rv_skip = "is Fatigued - no Ravage"
+				elif int(rv.unit_properties.get("ravage_round", -1)) == opr_army_manager.current_round:
+					rv_skip = "already used it this round"
+				if not rv_skip.is_empty():
+					if battle_log != null:
+						battle_log.log_event(BattleLog.Category.COMBAT, "Ravage: %s %s" % [rv.get_name(), rv_skip], true)
+					continue
+				rv.unit_properties["ravage_round"] = opr_army_manager.current_round
 			var rv_dice: int = rx * rv.get_alive_count()
 			var rv_owner: String = _roller_label(rv)
 			var rv_faces: Array = await _solo_tray_roll(rv_dice, AiCombatMath.RAVAGE_WOUND_TARGET, rv_owner, "ravage")
@@ -7814,7 +9043,45 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 			if rv_wounds > 0:
 				struck_any = true
 				caused += rv_wounds   # pre-Regeneration, same basis as the weapon strikes' tally
-				await _solo_land_wounds(defender, rv_wounds, 0)
+				var rv_landed: int = await _solo_land_wounds(defender, rv_wounds, 0, false, -1.0,
+					charge_from_in if charging else 0.0)
+				if v36_tally:
+					_solo_regen_ignored += rv_wounds - rv_landed
+					caused += rv_landed - rv_wounds
+	# MEL-12 (rules 3.6): Regenerative Strength pays its banked tokens in DIRECT wounds — one die per
+	# token, each 4+ a wound — instead of extra attacks. On the unit's turn to strike, once per round,
+	# never while Fatigued; the Counter-only pre-phase leaves the roll to the strike-back that follows.
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and filter != SoloStrike.COUNTER_ONLY:
+		var gs_members: Array = [striker]
+		if striker.has_method("get_attached_heroes"):
+			gs_members = gs_members + striker.get_attached_heroes()
+		for gm in gs_members:
+			var gu := gm as GameUnit
+			if gu == null or gu.get_alive_count() <= 0:
+				continue
+			if not RulesRegistry.unit_rule_active(gu, "Regenerative Strength"):
+				continue
+			var gs_tokens: int = _solo_growth_markers(gu, "Regenerative Strength")
+			if gs_tokens <= 0:
+				continue
+			var gs_skip := "is Fatigued - no token dice" if gu.is_fatigued or gu.is_shaken or striker.is_fatigued or striker.is_shaken else "already rolled its dice this round" if int(gu.unit_properties.get("regenerative_strength_round", -1)) == opr_army_manager.current_round else ""
+			if not gs_skip.is_empty():
+				if battle_log != null: battle_log.log_event(BattleLog.Category.COMBAT, "Regenerative Strength: %s %s" % [gu.get_name(), gs_skip], true)
+				continue
+			gu.unit_properties["regenerative_strength_round"] = opr_army_manager.current_round
+			var gs_owner: String = _roller_label(gu)
+			var gs_faces: Array = await _solo_tray_roll(gs_tokens, 4, gs_owner, "attack")
+			var gs_wounds: int = gs_faces.filter(func(f): return int(f) >= 4).size()
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.COMBAT, "Regenerative Strength: %s rolls %d dice, %d wound%s" % [
+					gu.get_name(), gs_tokens, gs_wounds, ("" if gs_wounds == 1 else "s")], true)
+			if gs_wounds > 0:
+				struck_any = true
+				caused += gs_wounds
+				var gs_landed: int = await _solo_land_wounds(defender, gs_wounds, 0)
+				if v36_tally:
+					_solo_regen_ignored += gs_wounds - gs_landed
+					caused += gs_landed - gs_wounds
 	# Resolver wave A — Takedown Strike: the once-per-game extra attack joins the striker's own
 	# turn (never the Counter-only pre-phase; strike-back counts — "its turn to attack in melee").
 	# NML-241/NML-937/NML-940: the Retaliate tally is measured PER CHAIN MEMBER, so the wound pools are
@@ -7822,17 +9089,34 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 	# per-model landing), the pooled wounds land right after it; the diff is "what THIS member took".
 	var pools_before: Array = _solo_wound_pools(defender)
 	var m_groups: Array = _solo_attack_groups(striker, 0.0, true, defender)
+	_solo_log_crossing_strike_melee(striker)
 	if filter != SoloStrike.COUNTER_ONLY and not m_groups.is_empty():
 		m_groups = m_groups + _solo_takedown_bonus_groups(striker, true)
+	# EPOCH_73_V36 — one strike is ONE hits event (the core's `resolve_melee_leg` chunk loop): pass 1 rolls
+	# every group's every profile to its hit count, pass 2 then runs each profile's saves, landing and
+	# Bloodthirsty extras in the same order. Below the gate each chunk is one profile: today's interleaved
+	# order. Items are [group, profile or null, first of its group] so the Shaken line keeps its place.
+	var m_items: Array = []
 	for grp in m_groups:
-		var group := grp as Dictionary
-		var base_quality: int = int(group.get("quality", 4))
-		var fatigued: bool = bool(group.get("fatigued", false))
-		if bool(group.get("shaken", false)) and battle_log != null:
-			battle_log.log_event(BattleLog.Category.COMBAT,
-				"Shaken: %s strikes back counting as fatigued (6+)" % str(group.get("name", "?")), true)
-		for p in group.get("profiles", []):
-			var profile := _solo_bridge_granted_flags(group.get("member"), p as Dictionary, defender)
+		var g_profiles: Array = (grp as Dictionary).get("profiles", [])
+		for gi in maxi(g_profiles.size(), 1):
+			m_items.append([grp, g_profiles[gi] if gi < g_profiles.size() else null, gi == 0])
+	var m_chunk: int = maxi(m_items.size(), 1) if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else 1
+	for m_from in range(0, m_items.size(), m_chunk):
+		var m_pending: Array = []
+		for item in m_items.slice(m_from, m_from + m_chunk):
+			var group := item[0] as Dictionary
+			var base_quality: int = int(group.get("quality", 4))
+			var fatigued: bool = bool(group.get("fatigued", false))
+			# Row MEL-09 (EPOCH_73_V36): a fatigued striker (a Shaken strike-back counts as one) still hits
+			# on its sixes, but they fire no rule — the core's `trig` switch. Save dice stay untouched.
+			var mute_sixes: bool = fatigued and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
+			if bool(item[2]) and bool(group.get("shaken", false)) and battle_log != null:
+				battle_log.log_event(BattleLog.Category.COMBAT,
+					"Shaken: %s strikes back counting as fatigued (6+)" % str(group.get("name", "?")), true)
+			if item[1] == null:
+				continue
+			var profile := _solo_bridge_granted_flags(group.get("member"), item[1] as Dictionary, defender)
 			if int(profile.get("attacks", 0)) <= 0:
 				continue
 			if filter == SoloStrike.COUNTER_ONLY and not bool(profile.get("counter", false)):
@@ -7854,7 +9138,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 				td_pick = await _solo_takedown_pick(striker, defender, str(profile.get("name", "?")), true)
 				if not td_pick.is_empty():
 					td_ctx = _solo_takedown_context(striker, td_pick, 0.0, true,
-						charging and charge_from_in > AiCombatMath.LONG_RANGE_IN)
+						charging and charge_from_in > _solo_guarded_charge_gate())
 					p_mod = td_ctx["mod"] as Dictionary
 					p_defense = int(td_ctx["defense"])
 			var strike_unit: GameUnit = defender if td_pick.is_empty() else (td_pick["unit"] as GameUnit)
@@ -7878,8 +9162,10 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 			var name_unstop: bool = not weapon_unstop \
 				and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_35_UNSTOPPABLE_MELEE \
 				and AiEv.has_exact_rule(striker, "Unstoppable in Melee")
-			if (weapon_unstop or name_unstop) and m_mod < 0:
-				m_mod = 0
+			# SHO-08 (EPOCH_73_V36): the striker's own rules' part stays outside the clamp.
+			var m_own: int = int(p_mod.get("own", 0)) + uf_hit if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else 0
+			if (weapon_unstop or name_unstop) and m_mod - m_own < 0:
+				m_mod = m_own
 				if battle_log != null:
 					battle_log.log_event(BattleLog.Category.COMBAT,
 						"Unstoppable in Melee: negative to-hit modifiers ignored"
@@ -7897,7 +9183,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 			# EPOCH_38_WATCHBORN_LATCH: the charge REUSES the activation's latched pick (an earlier
 			# volley decided it); an un-latched charge is the first eligible attack and decides.
 			var v_ap := 0
-			if bool(profile.get("versatile_attack", false)) and charging and charge_from_in > AiCombatMath.LONG_RANGE_IN:
+			if bool(profile.get("versatile_attack", false)) and _solo_versatile_over(striker, 0.0, charging, charge_from_in):
 				var vm: Dictionary = _solo_versatile_latch_read(striker)
 				var fresh: bool = vm.is_empty()
 				if fresh:
@@ -7908,8 +9194,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 					to_hit = AiCombatMath.modified_hit_target(to_hit_raw, 0)
 				v_ap = int(vm.get("ap", 0))
 				if battle_log != null and fresh:
-					battle_log.log_event(BattleLog.Category.COMBAT, "Versatile Attack: %s picks %s for this activation" % [
-						striker.get_name(), "AP(+1)" if v_ap > 0 else "+1 to hit"], true)
+					_solo_log_versatile_pick(striker, v_ap > 0)
 			if not fatigued:
 				_solo_log_hit_mod(p_mod, strike_unit, to_hit)
 			var roll_owner: String = _roller_label(group.get("member"))
@@ -7917,13 +9202,58 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 				"Melee: %s → %s (%d+)" % [str(profile.get("name", "?")), defender.get_name(), to_hit])
 			if bool(profile.get("limited", false)):
 				solo_controller.mark_limited_used(group.get("member"), profile)   # once per game (wave 5)
+				if battle_log != null:   # MEL-02 rules-must-log: the melee spend names itself
+					battle_log.log_event(BattleLog.Category.COMBAT,
+						"%s (Limited) is used up in melee" % str(profile.get("name", "?")), true)
 			await _solo_hazardous_self_wounds(striker, profile, faces)   # resolver wave A: natural 1s wound the striker
-			var hits: int = await _solo_hits(faces, to_hit_raw, profile, 0.0, defender, charging, _roller_label(striker))
+			# MEL-09: the hit-six rules read `hit_profile` (bonus hits) and `six_faces` (AP on 6s).
+			var hit_profile: Dictionary = profile
+			var six_faces: Array = [] if mute_sixes else faces
+			if mute_sixes:
+				hit_profile = profile.duplicate()
+				for six_rule in ["relentless", "surge", "surge_attack", "furious"]:
+					hit_profile[six_rule] = false
+				hit_profile["sergeant_attacks"] = 0
+				var n6: int = AiCombatMath.unmodified_sixes(faces)
+				if n6 > 0 and battle_log != null:
+					battle_log.log_event(BattleLog.Category.COMBAT,
+						"Fatigued: %s — %d unmodified 6%s hit but trigger no special rules" % [
+						str(group.get("name", "?")), n6, ("" if n6 == 1 else "s")], true)
+			var hits: int = await _solo_hits(faces, to_hit_raw, hit_profile, 0.0, defender, charging, _roller_label(striker), charge_from_in if charging else 0.0)
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s strikes with %s at %s — %d hit%s" % [
 					str(group.get("name", "?")), str(profile.get("name", "?")), defender.get_name(), hits, ("" if hits == 1 else "s")], true)
+				if int(profile.get("printed_range", 0)) > 0:   # MEL-01 (D-ASSAULT): the ranged weapon's melee copy
+					battle_log.log_event(BattleLog.Category.COMBAT, "Assault: %s also strikes in melee" % str(profile.get("name", "?")), true)
 			if hits <= 0:
 				continue
+			m_pending.append([group, profile, td_pick, td_ctx, p_defense, strike_unit, faces, hits, m_takedown,
+				v_ap, to_hit, to_hit_raw, roll_owner, six_faces, hit_profile, mute_sixes])
+		# MEL-07c — Parry reads `m_pending` here: every hit rolled, no save yet.
+		var m_parry: int = _solo_melee_parry_dice(defender)
+		if m_parry > 0:
+			var cuts: Array = await _solo_parry_strike(m_pending, defender, m_parry, uf_ap + extra_ap, charging)
+			for i in range(m_pending.size()):
+				var pen := m_pending[i] as Array
+				pen[7] = int(pen[7]) - int(cuts[i][0])
+				for j in range(int(cuts[i][1])): (pen[13] as Array).erase(AiCombatMath.UNMODIFIED_SIX)
+		for pend in m_pending:
+			var group := pend[0] as Dictionary
+			var profile := pend[1] as Dictionary
+			var td_pick: Dictionary = pend[2]
+			var td_ctx: Dictionary = pend[3]
+			var p_defense: int = pend[4]
+			var strike_unit: GameUnit = pend[5]
+			var faces: Array = pend[6]
+			var hits: int = pend[7]
+			var m_takedown: bool = pend[8]
+			var v_ap: int = pend[9]
+			var to_hit: int = pend[10]
+			var to_hit_raw: int = pend[11]
+			var roll_owner: String = pend[12]
+			var six_faces: Array = pend[13]
+			var hit_profile: Dictionary = pend[14]
+			var mute_sixes: bool = pend[15]
 			var eff: Dictionary = _solo_thrust_profile(profile, charging)   # AP(+1) on charge
 			if uf_ap > 0 or v_ap > 0 or extra_ap > 0:   # Unpredictable Fighter / Versatile / Reckless AP (never mutate source)
 				eff = eff.duplicate()
@@ -7934,13 +9264,14 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 				_solo_log_takedown_context(str(profile.get("name", "?")), td_pick, td_ctx, to_hit, p_defense, true)
 			# dist_in stays -1.0 (melee: the range-gated conditional AP legs stay off, as before) — it is
 			# spelled out only so the Takedown pick can ride the trailing `solo` argument.
-			var w: int = await _solo_resolve_saves(group.get("member"), strike_unit, str(profile.get("name", "?")), faces, hits, p_defense, eff, human_defends, true, not (m_deadly or m_takedown), charging, -1.0, td_pick)
+			_solo_alias_charge_in = charge_from_in if charging else 0.0
+			var w: int = await _solo_resolve_saves(group.get("member"), strike_unit, str(profile.get("name", "?")), six_faces, hits, p_defense, eff, human_defends, true, not (m_deadly or m_takedown), charging, -1.0, td_pick)
 			if m_takedown and w > 0 and not td_pick.is_empty():
 				# Takedown Strike (resolver wave A): the wounds go to the model picked BEFORE the roll
 				# (TC-023), multiplied by the profile's Deadly.
 				var td_w: int = w * maxi(int(eff.get("deadly", 0)), 1)
 				var td_dealt: int
-				if _solo_ignores_regen(group.get("member"), eff):
+				if _solo_ignores_regen(group.get("member"), eff, defender):
 					td_dealt = await _solo_land_takedown_wounds(defender, str(profile.get("name", "?")), td_pick, 0, td_w)
 				else:
 					td_dealt = await _solo_land_takedown_wounds(defender, str(profile.get("name", "?")), td_pick, td_w, 0)
@@ -7949,20 +9280,20 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 				# Deadly (GF v3.5.1 p.14, no carry-over): each unsaved wound ×X on one model; the DEALT
 				# wounds feed the melee wound-comparison so the multiply still decides who wins.
 				var dealt: int
-				if _solo_ignores_regen(group.get("member"), eff):
+				if _solo_ignores_regen(group.get("member"), eff, defender):
 					dealt = await _solo_land_deadly_wounds(defender, str(profile.get("name", "?")), int(eff.get("deadly", 0)), 0, w)
 				else:
 					dealt = await _solo_land_deadly_wounds(defender, str(profile.get("name", "?")), int(eff.get("deadly", 0)), w, 0)
 				caused += dealt
 			else:
 				caused += w
-				if _solo_ignores_regen(group.get("member"), eff):
+				if _solo_ignores_regen(group.get("member"), eff, defender):
 					regen_proof += w
 				else:
 					regenable += w
-			# Bloodthirsty Fighter (resolver wave A — "for each unmodified 1 that enemies roll when
-			# blocking hits from this model's weapons in melee, this model may roll +1 attack with
-			# that weapon; doesn't apply to newly generated attacks"): consume this batch's 1s once.
+			# Bloodthirsty Fighter (resolver wave A — rule Bloodthirsty Fighter: for each unmodified 1
+			# an enemy rolls blocking hits from this model's melee weapons, the model may roll one extra
+			# attack with that weapon; newly generated attacks do not count): consume this batch's 1s once.
 			var bt_ones := _solo_last_save_ones
 			_solo_last_save_ones = 0
 			if bt_ones > 0 and hits > 0:
@@ -7984,21 +9315,30 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 							bt_name, bt_ones, ("" if bt_ones == 1 else "s"), str(group.get("name", "?")),
 							bt_n, ("" if bt_n == 1 else "s"), str(profile.get("name", "?"))], true)
 					var bt_faces: Array = await _solo_tray_roll(bt_n, to_hit, roll_owner)
-					var bt_hits: int = await _solo_hits(bt_faces, to_hit_raw, profile, 0.0, defender, charging, _roller_label(striker))
+					var bt_hits: int = await _solo_hits(bt_faces, to_hit_raw, hit_profile, 0.0, defender, charging, _roller_label(striker), charge_from_in if charging else 0.0)
+					# MEL-07d — the follow-up is its own strike: one more Parry event, same dice count.
+					if m_parry > 0 and bt_hits > 0:
+						bt_hits -= await _solo_parry_roll(mini(m_parry, bt_hits), defender)
 					if bt_hits > 0:
 						# Extra attacks resolve pooled (no Deadly/Takedown special-casing — the aof
 						# bearers carry plain weapons) and NEVER chain (counter reset right after).
-						var bt_w: int = await _solo_resolve_saves(group.get("member"), defender, str(profile.get("name", "?")), bt_faces, bt_hits, defense, eff, human_defends, true, true, charging)
+						_solo_alias_charge_in = charge_from_in if charging else 0.0
+						var bt_w: int = await _solo_resolve_saves(group.get("member"), defender, str(profile.get("name", "?")), [] if mute_sixes else bt_faces, bt_hits, defense, eff, human_defends, true, true, charging)
 						_solo_last_save_ones = 0
 						caused += bt_w
-						if _solo_ignores_regen(group.get("member"), eff):
+						if _solo_ignores_regen(group.get("member"), eff, defender):
 							regen_proof += bt_w
 						else:
 							regenable += bt_w
 	if regenable + regen_proof > 0:
-		await _solo_land_wounds(defender, regenable, regen_proof)
-	# Retaliate(X) — wave 7, re-proven against the v3.5.3 army-book wording (NML-937): "When this
-	# model takes a wound in melee, the attacker takes X hits PER WOUND TAKEN". v3.5.2 fired the
+		# MOR-17a: a charge hands its pre-charge gap; a strike-back rides 0.0 (it did the charging).
+		var m_landed: int = await _solo_land_wounds(defender, regenable, regen_proof, false, -1.0,
+			charge_from_in if charging else 0.0)
+		if v36_tally:
+			_solo_regen_ignored += regenable + regen_proof - m_landed
+			caused += m_landed - (regenable + regen_proof)
+	# Retaliate(X) — wave 7, re-proven against the v3.5.3 army-book wording (NML-937): rule Retaliate(X)
+	# (when this model takes a wound in melee, the attacker takes X hits per wound taken). v3.5.2 fired the
 	# trigger once per wound event; v3.5.3 states the scale explicitly, and the registry carries it
 	# as the `hits_per_wound` knob ("X" = the rule's own rating) — read by _solo_retaliate_hits.
 	# Hits resolve AFTER the wounds landed (post-Regeneration, Deadly and Takedown included = wounds
@@ -8014,7 +9354,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 				battle_log.log_event(BattleLog.Category.COMBAT,
 					"Retaliate: %s lashes back — %d hit%s (%s)" % [
 					defender.get_name(), rhits, ("" if rhits == 1 else "s"), str(rt.get("detail", ""))], true)
-			var rprofile: Dictionary = {"name": "Retaliate", "ap": 0, "deadly": 0, "rules": []}
+			var rprofile: Dictionary = {"name": "Retaliate", "ap": 0, "deadly": 0, "rules": [], "_impact_pool": true}
 			var rw: int = await _solo_resolve_saves(defender, striker, "Retaliate", [], rhits,
 				_solo_defense_vs(striker, AiCombatMath.HIT_SOURCE_MELEE), rprofile, not _solo_is_ai_unit(striker), true)
 			if rw > 0:
@@ -8029,10 +9369,12 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 	# the Counter-only / non-Counter sub-phases legitimately roll nothing when the unit lacks those weapons.
 	if not struck_any and filter == SoloStrike.ALL and battle_log != null:
 		_log_rule_event(BattleLog.Category.COMBAT,
-			"%s has no melee weapons in reach — no strikes (GF/AoF v3.5.1 p.9)" % striker.get_name(),
+			"%s has no melee weapons in reach — no strikes (%s)" % [striker.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(striker))],
 			_solo_is_ai_unit(striker))
 	if struck_any:
 		_solo_consume_once_mods(striker, defender, true)   # F4: once-mods spent by this strike phase
+		if filter != SoloStrike.COUNTER_ONLY:   # the Counter-first split's second phase still carries the Feat
+			_solo_spend_shot_feats(striker)
 	return caused
 
 
@@ -8094,14 +9436,33 @@ func _solo_charge_impact(charger: GameUnit, defender: GameUnit, human_defends: b
 		return 0
 	var models: int = charger.get_alive_count()
 	var counter_models: int = _solo_counter_models(defender)
-	var heavy_cut: int = mini(counter_models, hx * models)
+	var brace_cut: int = _solo_brace_models(defender)
+	if brace_cut > 0:
+		if defender.is_fatigued:
+			brace_cut = 0
+			if battle_log != null:
+				_log_rule_event(BattleLog.Category.COMBAT, "%s: no effect, %s is Fatigued" % [
+					_solo_brace_rule, defender.get_name()], true)
+		elif battle_log != null:
+			_log_rule_event(BattleLog.Category.COMBAT, "%s: %s takes %d Impact dice off %s" % [
+				_solo_brace_rule, defender.get_name(), brace_cut, charger.get_name()], true)
+	var cut_models: int = counter_models + brace_cut
+	var heavy_cut: int = mini(cut_models, hx * models)
 	var heavy_dice: int = hx * models - heavy_cut
-	var dice: int = AiCombatMath.impact_total_dice(x, models, counter_models - heavy_cut)
+	var dice: int = AiCombatMath.impact_total_dice(x, models, cut_models - heavy_cut)
 	if counter_models > 0 and battle_log != null and (x + hx) * models > 0:
 		_log_rule_event(BattleLog.Category.COMBAT, "Counter: -%d Impact dice (%s)" % [
 			counter_models, charger.get_name()], true)
+	var impact_rule := _solo_over9_defense_rule(defender)
+	var impact_gate: float = _solo_guarded_charge_gate()
+	var impact_bonus: bool = not impact_rule.is_empty() and charge_from_in > impact_gate
 	var impact_defense: int = AiCombatMath.guarded_defense(_solo_defense_vs(defender, AiCombatMath.HIT_SOURCE_MELEE),
-		not _solo_over9_defense_rule(defender).is_empty() and charge_from_in > AiCombatMath.LONG_RANGE_IN)
+		impact_bonus)
+	# SHO-17 (rules 3.6) — rules-must-log: the gate names the rule and its band (73+ only).
+	if impact_bonus and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and battle_log != null:
+		_log_rule_event(BattleLog.Category.COMBAT, "%s (%s): charged from over %d\" — +1 Defense on Impact (saves on %d+)%s" % [
+			defender.get_name(), impact_rule, int(impact_gate), AiCombatMath.shown_target(impact_defense),
+			_solo_most_models_note(defender, impact_rule)], true)
 	var caused: int = 0
 	for pool in [{"label": "Impact", "rating": x, "dice": dice, "ap": 0},
 			{"label": "Heavy Impact", "rating": hx, "dice": heavy_dice, "ap": heavy_ap}]:
@@ -8118,14 +9479,22 @@ func _solo_charge_impact(charger: GameUnit, defender: GameUnit, human_defends: b
 				("e" if int(p["dice"]) == 1 else "ce"), hits, ("" if hits == 1 else "s")], true)
 		if hits <= 0:
 			continue
-		var profile: Dictionary = {"name": str(p["label"]), "ap": int(p["ap"]), "deadly": 0, "rules": []}
+		# "_impact_pool": a hit from no weapon (Impact, Trap, Breath, Retaliate, Deathstrike, Self-Destruct) -- the causing
+		# unit's weapon-scoped unit rules (see _solo_resolve_saves) never reach it.
+		var profile: Dictionary = {"name": str(p["label"]), "ap": int(p["ap"]), "deadly": 0, "rules": [], "_impact_pool": true}
 		var w: int = await _solo_resolve_saves(charger, defender, str(p["label"]), [], hits, impact_defense, profile, human_defends, true)
 		if w > 0:
-			if _solo_ignores_regen(charger, profile):
-				await _solo_land_wounds(defender, 0, w)
+			var imp_landed: int
+			if _solo_ignores_regen(charger, profile, defender):
+				imp_landed = await _solo_land_wounds(defender, 0, w, false, -1.0, charge_from_in)
 			else:
-				await _solo_land_wounds(defender, w, 0)
-			caused += w
+				imp_landed = await _solo_land_wounds(defender, w, 0, false, -1.0, charge_from_in)
+			if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+				# MEL-10r: an Impact wound Regeneration cancels is not TAKEN.
+				_solo_regen_ignored += w - imp_landed
+				caused += imp_landed
+			else:
+				caused += w
 	return caused
 
 
@@ -8207,16 +9576,43 @@ func _solo_resolve_saves(striker: GameUnit, defender: GameUnit, weapon_name: Str
 	if hits <= 0:
 		return 0
 	_vfx_saves_made = 0   # VFX #1: the save batches below add the saves they made
+	# SHO-18: the melee charge gap for the alias gate rides the synchronous seam (the Takedown shape).
+	var alias_charge: float = _solo_alias_charge_in if (melee and charging) else 0.0
+	# Rules 3.6 (SHO-14): a Pierce save ignores the target's POSITIVE Defense modifiers.
+	if AiCombatMath.pierce_ignores(profile):
+		var pierce_names: PackedStringArray = []
+		base_defense = _solo_pierce_defense(defender, melee, pierce_names)
+		if battle_log != null and not pierce_names.is_empty():
+			battle_log.log_event(BattleLog.Category.COMBAT, "Pierce: %s ignores %s" % [
+				weapon_name, ", ".join(pierce_names)], true)
 	# Base AP plus any conditional AP (Shatter/Tear/Melee Slayer/Disintegrate; range-gated Slayer/
 	# Piercing Hunter need `dist_in` — -1 = unknown, their ranged leg then stays off, conservative)
 	# this weapon gets against THIS defender — registry-driven, system-scoped.
-	var cond_parts: Array = _solo_conditional_ap_parts(profile, striker, defender, charging, dist_in, melee)
+	# A marked profile ("_impact_pool": Impact, Trap, Breath, Retaliate, Deathstrike, Self-Destruct) is a hit from no
+	# weapon: it gets no conditional AP, no Bane re-roll and no Piercing Mark grant from the causing unit's own
+	# rules, as in the core. Its fixed AP (Breath, Heavy Impact) stays.
+	var no_weapon: bool = bool(profile.get("_impact_pool", false))
+	var cond_parts: Array = [] if no_weapon \
+		else _solo_conditional_ap_parts(profile, striker, defender, charging, dist_in, melee)
 	var cond_ap := 0
 	for cp in cond_parts:
-		cond_ap += int((cp as Dictionary)["bonus"])
+		var cp_name := str((cp as Dictionary)["name"])
+		var cp_bonus := int((cp as Dictionary)["bonus"])
+		cond_ap += cp_bonus
 		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.COMBAT, "%s: AP(+%d) against %s" % [
-				str((cp as Dictionary)["name"]), int((cp as Dictionary)["bonus"]), defender.get_name()], true)
+			var why := str((cp as Dictionary).get("why", ""))
+			# Rules 3.6 (SHO-20): the Slayer line says why the AP fired (a Hold or the charge),
+			# and says so when a moved shooter's shot was switched off.
+			if cp_name == "Slayer" and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+				if cp_bonus > 0:
+					var who := "it charged" if melee else "%s held" % striker.get_name()
+					battle_log.log_event(BattleLog.Category.COMBAT, "Slayer: AP(+%d) because %s" % [cp_bonus, who], true)
+				else:
+					battle_log.log_event(BattleLog.Category.COMBAT, "Slayer: no AP, %s moved" % striker.get_name(), true)
+			else:
+				battle_log.log_event(BattleLog.Category.COMBAT, "%s: AP(+%d) against %s%s" % [
+					cp_name, cp_bonus, defender.get_name(),
+					"" if why.is_empty() else " (%s)" % why], true)
 	# EPOCH 23 INERT MARKS (MARK_FAMILY_SWEEP_2026-09-14): the Piercing
 	# Fighting/Shooting Mark's attackers-side grant — the mark's once-record on
 	# THIS defender (beneficiary "attackers", the entry's own scope) names
@@ -8225,7 +9621,7 @@ func _solo_resolve_saves(striker: GameUnit, defender: GameUnit, weapon_name: Str
 	# before _solo_apply_vs_marks, so an impact batch sees no record — the same
 	# order the core's tray_vs_marks seam keeps (after Impact, before strikes).
 	var pierce_grant_ap := 0
-	for rd in AiSpell.mods_for(_solo_mods_of_chain(defender), "grant_vs", melee):
+	for rd in ([] if no_weapon else AiSpell.mods_for(_solo_mods_of_chain(defender), "grant_vs", melee)):
 		if str((rd as Dictionary).get("beneficiary", "")) != "attackers":
 			continue
 		var grant_rule := str((rd as Dictionary).get("grants_rule", ""))
@@ -8236,19 +9632,32 @@ func _solo_resolve_saves(striker: GameUnit, defender: GameUnit, weapon_name: Str
 			"Piercing Mark: friendly attackers get AP(+%d) against %s (once)" % [
 				pierce_grant_ap, defender.get_name()], true)
 	var ap: int = int(profile.get("ap", 0)) + cond_ap + pierce_grant_ap
+	# AIG-G2-L4 — rules-must-log: the Growth-marker AP that _solo_attack_groups folded into the
+	# profile (Piercing Growth) names the rule that supplied it, at the save step where the number
+	# reaches the dice. The mark rides the profile, so a build path that never added it stays silent.
+	var growth_ap_named: Dictionary = profile.get("_growth_ap", {})
+	if battle_log != null and int(growth_ap_named.get("bonus", 0)) > 0 \
+			and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s adds AP(+%d) from its growth markers" % [
+			str(growth_ap_named.get("name", "")), striker.get_name(), int(growth_ap_named["bonus"])], true)
 	# Rending (GF/AoF v3.5.1 p.14) AND the army-book Destructive (wave 4) BOTH upgrade the unmodified-6-to-
 	# hit hits to AP(+4); they share AiCombatMath.rending_ap_hits (one math). The only difference is
 	# downstream: Rending bypasses Regeneration (via _solo_ignores_regen), Destructive does not.
-	var on6_bonus: int = _solo_on6_ap_bonus(profile, striker)
+	var on6_entry: Dictionary = _solo_on6_ap_bonus(profile, striker)
+	var on6_bonus: int = int(on6_entry.get("bonus", 0))
 	var ap4_label := ""
 	if bool(profile.get("rending", false)):
 		ap4_label = "Rending"
 	elif bool(profile.get("destructive", false)):
 		ap4_label = "Destructive"
 	elif on6_bonus > 0:
-		ap4_label = "Crack"
+		ap4_label = str(on6_entry.get("name", "Crack"))
 	var ap4_hits: int = AiCombatMath.rending_ap_hits(to_hit_faces, hits) if on6_bonus > 0 else 0
-	var bane: bool = _solo_striker_has_bane(striker, profile, melee)
+	# SHO-10: a re-roll entry's optional target condition opens (or shuts) the whole Bane window;
+	# every shipped entry is unconditional, so the old read stands.
+	var bane: bool = not no_weapon and _solo_striker_has_bane(striker, profile, melee) and AiEv.bane_applies(profile,
+		_solo_unit_tough(defender), int(defender.unit_properties.get("defense", 4)), dist_in, melee,
+		_solo_target_state(defender))
 	var total := 0
 	# AP-on-6 sub-volley first; a Blast-multiplied hit-count can only shrink the count via the cap.
 	if ap4_hits > 0:
@@ -8256,10 +9665,24 @@ func _solo_resolve_saves(striker: GameUnit, defender: GameUnit, weapon_name: Str
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s: %d hit%s on a 6 → AP(+%d)" % [
 				ap4_label, ap4_hits, ("" if ap4_hits == 1 else "s"), on6_bonus], true)
 		total += await _solo_save_batch(striker, defender, "%s (%s)" % [weapon_name, ap4_label], ap4_hits,
-			base_defense, ap + on6_bonus, profile, human_defends, bane, apply_deadly, dist_in > AiCombatMath.LONG_RANGE_IN, solo)
+			base_defense, ap + on6_bonus, profile, human_defends, bane, apply_deadly, dist_in > AiCombatMath.LONG_RANGE_IN, solo, dist_in, alias_charge)
 	var normal: int = hits - ap4_hits
+	# Row MOR-12 (EPOCH_73_V36, stamped only from 73 by AiEv.stamp_sergeant): the Sergeant bearer's
+	# share of the plain hits (its attacks over the profile's, rounded; the EV metric's same fraction)
+	# saves as its own batch at AP(+sergeant_ap) instead of the 3.5 extra hits on 6s.
+	var sgt_ap := int(profile.get("sergeant_ap", 0))
+	var sgt_hits: int = mini(normal, roundi(float(normal) * float(profile.get("sergeant_ap_attacks", 0))
+		/ float(maxi(int(profile.get("attacks", 1)), 1)))) if sgt_ap > 0 else 0
+	if sgt_hits > 0:
+		var sgt_rule := str(profile.get("sergeant_rule", "Sergeant"))
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s strikes %d hit%s with AP(+%d)" % [
+				sgt_rule, striker.get_name(), sgt_hits, ("" if sgt_hits == 1 else "s"), sgt_ap], true)
+		total += await _solo_save_batch(striker, defender, "%s (%s)" % [weapon_name, sgt_rule], sgt_hits,
+			base_defense, ap + sgt_ap, profile, human_defends, bane, apply_deadly, dist_in > AiCombatMath.LONG_RANGE_IN, solo, dist_in, alias_charge)
+		normal -= sgt_hits
 	if normal > 0:
-		total += await _solo_save_batch(striker, defender, weapon_name, normal, base_defense, ap, profile, human_defends, bane, apply_deadly, dist_in > AiCombatMath.LONG_RANGE_IN, solo)
+		total += await _solo_save_batch(striker, defender, weapon_name, normal, base_defense, ap, profile, human_defends, bane, apply_deadly, dist_in > AiCombatMath.LONG_RANGE_IN, solo, dist_in, alias_charge)
 	_vfx_hit_strip(defender, hits, _vfx_saves_made)
 	return total
 
@@ -8270,9 +9693,17 @@ func _solo_resolve_saves(striker: GameUnit, defender: GameUnit, weapon_name: Str
 ## human (their dice), else the AI auto-rolls its saves.
 func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String, count: int,
 		base_defense: int, ap: int, profile: Dictionary, human_defends: bool, bane: bool,
-		apply_deadly: bool = true, over9: bool = false, solo: Dictionary = {}) -> int:
+		apply_deadly: bool = true, over9: bool = false, solo: Dictionary = {},
+		dist_in: float = -1.0, charge_from_in: float = 0.0, bane_from: int = 6) -> int:
 	if count <= 0:
 		return 0
+	var shred_alias_live: bool = true
+	# R-1 (A2): a scoped form of Shred is the rule Shred itself - only an alias of ANOTHER name is distance-gated.
+	if typeof(profile.get("_shred_alias")) == TYPE_STRING and str(profile["_shred_alias"]) != "" \
+			and _solo_shred_group_key(str(profile["_shred_alias"])) != "Shred":
+		shred_alias_live = (
+			_solo_alias_charge_over(true, charge_from_in) if charge_from_in > 0.0
+			else _solo_alias_family_over(dist_in))
 	# TC-023 — the Fortified family is an ALL-MODELS unit trigger, and a Takedown save is a unit of [1]'s
 	# (GF v3.5.1 p.14): the picked model's own unit answers alone, so a sniped trooper keeps the Fortified
 	# his squad carries even under a non-Fortified attached hero (and never borrows a hero's). `solo` is {}
@@ -8284,7 +9715,7 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 	# so a "Fortified Growth" carrier answered TRUE here and collected the flat reduction on top of
 	# its own marker one. The base rule needs its EXACT name; the alias loop below keeps naming the
 	# family members it means.
-	if AiEv.has_exact_rule(defender, "Fortified") and _solo_rule_on_all_models(defender, "Fortified"):
+	if AiEv.has_exact_rule(defender, "Fortified") and AiEv.rule_on_defence_family(defender, "Fortified", _solo_takedown_solo.get("unit") == defender):
 		# Sweep F row `Fortified Aura` (epoch 55): the aofs/gff aura entry's
 		# `lost_if_bearer_killed` is READ — a fallen bearer stands the
 		# granted AP(-1) down (rules-must-log), a living one keeps it.
@@ -8296,15 +9727,20 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 			# Maintainer live-test finding: the silent reduction read as "rule not working" — say it
 			# whenever it actually changes the save target.
 			if ap < ap_before and battle_log != null:
-				battle_log.log_event(BattleLog.Category.COMBAT, "Fortified: %s takes the hits at AP(%d) instead of AP(%d) — saves on %d+" % [
-					defender.get_name(), ap, ap_before, base_defense + ap], true)
+				battle_log.log_event(BattleLog.Category.COMBAT, "Fortified: %s takes the hits at AP(%d) instead of AP(%d) — saves on %d+%s" % [
+					defender.get_name(), ap, ap_before, base_defense + ap, _solo_most_models_note(defender, "Fortified")], true)
 				_solo_rule_float(defender, "Fortified AP(%d)" % ap, Color(0.55, 0.85, 1.0))
 		else:
 			_solo_fortified_aura_loss_log(defender, dead_aura)
 	else:
 		# Coverage wave: Fortified-family DATA aliases (Guardian, Primeborn — the over-9"-gated
 		# form: "shot or charged from over 9\" away → hits count as AP(-1), min AP(0)").
-		for e in RulesRegistry.unit_rules_of_primitive(defender, "Fortified"):
+		# AI-G2 R7 (EPOCH_73_V36): an enhanced form's larger cut REPLACES its base's, so entries with a cut above 1 are
+		# tried first (stable partition) and the first whose gate passes still wins. Below 73 every cut reads 1: unchanged.
+		var fort_entries: Array = RulesRegistry.unit_rules_of_primitive(defender, "Fortified")
+		fort_entries = fort_entries.filter(func(x): return AiCombatMath.fortified_entry_cut(x) > 1) \
+			+ fort_entries.filter(func(x): return AiCombatMath.fortified_entry_cut(x) <= 1)
+		for e in fort_entries:
 			var ed := e as Dictionary
 			var n := str(ed["name"])
 			if n == "Fortified":
@@ -8312,7 +9748,7 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 			var gate_in := float((ed.get("params", {}) as Dictionary).get("over_in", 0.0))
 			if gate_in > 0.0 and not over9:
 				continue
-			if not _solo_rule_on_all_models(defender, n):
+			if not AiEv.rule_on_defence_family(defender, n, _solo_takedown_solo.get("unit") == defender):
 				continue
 			# Sweep F row `Fortified Aura` (epoch 55): the walk's aofs/gff
 			# members ("Guardian Boost" granted from "Guardian Boost Aura")
@@ -8325,10 +9761,10 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 				_solo_fortified_aura_loss_log(defender, dead_aura)
 				continue
 			var apb := ap
-			ap = AiCombatMath.fortified_ap(ap, true)
+			ap = AiCombatMath.fortified_ap(ap, true, AiCombatMath.fortified_entry_cut(ed))
 			if ap < apb and battle_log != null:
-				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s takes the hits at AP(%d) instead of AP(%d) — saves on %d+" % [
-					n, defender.get_name(), ap, apb, base_defense + ap], true)
+				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s takes the hits at AP(%d) instead of AP(%d) — saves on %d+%s" % [
+					n, defender.get_name(), ap, apb, base_defense + ap, _solo_most_models_note(defender, n)], true)
 				_solo_rule_float(defender, "%s AP(%d)" % [n, ap], Color(0.55, 0.85, 1.0))
 			break
 	# NML-937 — Fortified Growth: the growth family's own AP reduction ("enemy AP counts as -1 per
@@ -8371,22 +9807,46 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 		# Widened re-roll window (wave 4: Bestial/Mischievous Boost — reroll_save_low past over_in,
 		# shooting only): the window's successful 5s+ re-roll beside the base 6s leg; low 6 = no boost.
 		var win: Dictionary = AiEv.bane_boost_window(striker, over9)
-		var bane_low: int = int(win.get("low", AiCombatMath.UNMODIFIED_SIX))
+		# AI-G2: a weapon alias's own window (Reap), stamped on the profile; over_in <= 0 = no distance condition.
+		if win.is_empty() and int(profile.get("bane_low", 0)) > 1 and (over9 or float(profile.get("bane_over_in", 0.0)) <= 0.0):
+			win = {"low": int(profile["bane_low"]), "over_in": float(profile.get("bane_over_in", 0.0)), "rule": str(profile.get("bane_alias", ""))}
+		var bane_low: int = mini(int(win.get("low", AiCombatMath.UNMODIFIED_SIX)), bane_from)
+		# SHO-10: the words naming the target condition that opened the window ("" = unconditional).
+		var bane_spec: Dictionary = profile.get("bane_condition", {})
+		var bane_why := "" if bane_spec.is_empty() else AiCombatMath.conditional_ap_why(bane_spec)
 		var sixes: int = AiCombatMath.bane_reroll_count_from(save_faces, base_defense + ap, bane_low)
 		if sixes > 0:
 			if battle_log != null:
 				var bane_name := _solo_bane_facet_name(striker, int(profile.get("range", 0)))
-				if win.is_empty():
+				if bane_name.is_empty():
+					bane_name = str(profile.get("bane_alias", ""))   # AI-G2: the weapon alias's book name
+				if bane_name.is_empty() and _solo_profile_lacerate_only(profile):
+					bane_name = "Lacerate"
+				if win.is_empty() and bane_from >= AiCombatMath.UNMODIFIED_SIX:
 					battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s re-rolls %d unmodified Defense 6%s" % [
 						bane_name if not bane_name.is_empty() else "Bane", defender.get_name(), sixes, ("" if sixes == 1 else "s")], true)
 				else:
-					battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s re-rolls %d unmodified Defense roll%s of %d+" % [
-						str(win["rule"]), defender.get_name(), sixes, ("" if sixes == 1 else "s"), bane_low], true)
+					var bane_rule := str(win["rule"]) if not win.is_empty() \
+						else (bane_name if not bane_name.is_empty() else "Bane")
+					battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s re-rolls %d unmodified Defense roll%s of %d+%s" % [
+						bane_rule, defender.get_name(), sixes, ("" if sixes == 1 else "s"), bane_low,
+						("" if bane_why.is_empty() else " (%s)" % bane_why)], true)
 			reroll = await _owner_roll(defender, sixes, base_defense + ap, "defense",
 				"Defense re-roll (Bane) vs %s" % weapon_name, {"what": "Bane re-roll vs %s" % weapon_name})
 		blocks = AiCombatMath.blocks_with_bane_from(save_faces, reroll, base_defense, ap, bane_low)
 	else:
 		blocks = AiCombatMath.count_blocks(save_faces, base_defense, ap)
+	# SHO-15a/15b Scourge: a SHOT's unmodified 1s become phantom wounds for the morale trigger; a MELEE
+	# strike's 1s count in the defender's melee-winner tally. Nothing is removed either way.
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
+			and (profile.get("rules", []) as Array).has("Scourge"):
+		var phantom := AiCombatMath.shred_bonus_wounds(save_faces, reroll) \
+			* int(RulesRegistry.unit_param(striker, "Scourge", "phantom_wounds_per_save_one", 2))
+		if int(profile.get("range", 0)) > 0:
+			_solo_scourge_wounds += phantom
+		else:
+			var sid: int = defender.get_instance_id()
+			_solo_melee_scourge[sid] = int(_solo_melee_scourge.get(sid, 0)) + phantom
 	# Shred (wave 5, army-book weapon rule): every unmodified Defense 1 deals +1 wound — counted on the
 	# FINAL faces (after Bane's re-rolls), NOT Deadly-multiplied (save-step wounds, documented reading).
 	# Destroyer Boost (the Shred UPGRADE family — the table twin of the core's upgrades-gated stamp,
@@ -8395,22 +9855,29 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 	# window widens to the entry's `save_fail_max` (`extra_wound_save_low` is the Warbound spelling —
 	# the core's `.max()` twin). Shooting only: the melee resolve passes over9=false, so melee never
 	# widens (the core's no-pre-charge-gap shape).
+	# R-1 (A2): a weapon's own Shred beside a unit-level rule of ANOTHER name is a second rule: it pays its own
+	# part (unmodified 1s, never alias-gated) after the alias part below. Scoped forms of Shred stay one rule.
+	var own_apart: bool = bool(profile.get("_shred_own", false)) \
+			and typeof(profile.get("_shred_alias")) == TYPE_STRING \
+			and _solo_shred_group_key(str(profile["_shred_alias"])) != "Shred"
 	var shred_extra := 0
-	if bool(profile.get("shred", false)):
+	if shred_alias_live and profile.get("shred", false) == true:
 		var boost_rule := ""
 		var boost_low := 1
 		var boost_over_in := 0.0
-		if over9:
-			for e in RulesRegistry.unit_rules_of_primitive(striker, "Shred"):
-				var ed := e as Dictionary
-				var ep: Dictionary = ed.get("params", {})
-				var low := maxi(int(ep.get("save_fail_max", 0)), int(ep.get("extra_wound_save_low", 0)))
-				var base := str(ep.get("upgrades", ""))
-				if low <= 1 or base.is_empty() or not AiEv.has_exact_rule(striker, base):
-					continue
-				boost_low = low
-				boost_rule = str(ed.get("name", ""))
-				boost_over_in = float(ep.get("over_in", 9.0))
+		for e in RulesRegistry.unit_rules_of_primitive(striker, "Shred"):
+			var ed := e as Dictionary
+			var ep: Dictionary = ed.get("params", {})
+			var low := maxi(int(ep.get("save_fail_max", 0)), int(ep.get("extra_wound_save_low", 0)))
+			var base := str(ep.get("upgrades", ""))
+			if low <= 1 or base.is_empty() or not AiEv.has_exact_rule(striker, base):
+				continue
+			var gate := AiEv.over_in_gate(ep)
+			if gate > 0.0 and not over9:
+				continue
+			boost_low = low
+			boost_rule = str(ed.get("name", ""))
+			boost_over_in = gate
 		if boost_low > 1:
 			shred_extra = AiCombatMath.shred_bonus_wounds(save_faces, reroll, boost_low, base_defense + ap)
 		else:
@@ -8420,12 +9887,20 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 			if shred_name.is_empty():
 				shred_name = "Shred"
 			if boost_low > 1:
-				battle_log.log_event(BattleLog.Category.COMBAT, "%s: Shred on failed saves of 1-%d (over %s\") — %d extra wound%s" % [
-					boost_rule, boost_low, str(boost_over_in).trim_suffix(".0"), shred_extra, ("" if shred_extra == 1 else "s")], true)
+				var gate_note := "" if boost_over_in < 0.0 else " (over %s\")" % str(boost_over_in).trim_suffix(".0")
+				battle_log.log_event(BattleLog.Category.COMBAT, "%s: Shred on failed saves of 1-%d%s — %d extra wound%s" % [
+					boost_rule, boost_low, gate_note, shred_extra, ("" if shred_extra == 1 else "s")], true)
 			else:
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %d Defense roll%s of 1 → +%d wound%s" % [
 					shred_name, shred_extra, ("" if shred_extra == 1 else "s"), shred_extra, ("" if shred_extra == 1 else "s")], true)
 			_solo_rule_float(defender, "%s +%d" % [(boost_rule if boost_low > 1 else shred_name), shred_extra], Color(1.0, 0.5, 0.4))
+	if own_apart:
+		var own := AiCombatMath.shred_bonus_wounds(save_faces, reroll)
+		if own > 0 and battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT, "Shred: %d Defense roll%s of 1 → +%d wound%s" % [
+				own, ("" if own == 1 else "s"), own, ("" if own == 1 else "s")], true)
+			_solo_rule_float(defender, "Shred +%d" % own, Color(1.0, 0.5, 0.4))
+		shred_extra += own
 	var unsaved := maxi(0, count - blocks)
 	_vfx_saves_made += blocks
 	# apply_deadly=false (Bug: Deadly no-carry-over): return the RAW unsaved count so the caller can
@@ -8441,6 +9916,9 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 ## Shooting" only when shooting. Aura variants ("... Aura") grant Bane to OTHER units, so a striker's own
 ## aura rule never fires here. Reads the weapon's rules AND the striker unit's own special rules.
 func _solo_striker_has_bane(striker: GameUnit, profile: Dictionary, melee: bool) -> bool:
+	# AI-G2: a weapon alias (Smash, Reap, Decimate) the stamp resolved through the map; its gate is bane_applies'.
+	if not str(profile.get("bane_alias", "")).is_empty():
+		return true
 	var sources: Array = (profile.get("rules", []) as Array).duplicate()
 	if striker != null:
 		sources.append_array(striker.get_special_rules())
@@ -8448,9 +9926,9 @@ func _solo_striker_has_bane(striker: GameUnit, profile: Dictionary, melee: bool)
 		var s := str(r).strip_edges()
 		if s.ends_with("Aura"):
 			continue
-		# Lacerate (AoF Advanced v3.5.1) is a straight data-alias of plain Bane — identical wording
-		# ("when attacking the target must re-roll unmodified Defense results of 6"), no melee/shooting
-		# qualifier — so any non-Aura Lacerate always applies. See special-rules-coverage-plan.
+		# Lacerate (army-book rule, GF and AoF) shares Bane's Defense-6 re-roll, with no melee/shooting
+		# qualifier — so any non-Aura Lacerate always applies here. It does NOT share Bane's
+		# Regeneration bypass (A1, play test 29.10.2026; _solo_ignores_regen).
 		if s.begins_with("Lacerate"):
 			return true
 		if not s.begins_with("Bane"):
@@ -8480,20 +9958,29 @@ func _solo_bane_facet_name(striker: GameUnit, profile_range: int) -> String:
 	return ""
 
 
-## The target's Regeneration / medic (GF Advanced Rules v3.5.1: "When a unit where all models have this
-## rule takes wounds, roll one die for each. On a 5+ it is ignored."; the Battle Brothers "Medical
+## The target's Regeneration / medic (GF Advanced Rules v3.5.1, rule Regeneration: a wound on the unit
+## rolls one die per wound taken, and each 5+ ignores it; the Battle Brothers "Medical
 ## Training" item grants Regeneration Aura): roll one REAL tray die per incoming wound, each 5+ ignores
 ## it. AP never affects this roll (AP only modifies Defense rolls). The battle log always states the
 ## outcome ("rolls N regeneration dice — M ignored"), so a 0-ignore roll is still visible. Returns the
 ## wounds that actually land; units without the rule take full wounds (no roll).
 ## `solo` is the Takedown pick (TC-023) whose unit-of-[1] view decides WHICH rule the roll comes from —
 ## {} for every other wound in the game, which leaves the lookup exactly as it was.
-func _solo_apply_regeneration(target: GameUnit, wounds: int, from_spell: bool = false, solo: Dictionary = {}) -> int:
+## `bypassed`: wounds of the same hit that ignore Regeneration — logged when the unit had a roll to skip.
+func _solo_apply_regeneration(target: GameUnit, wounds: int, from_spell: bool = false, solo: Dictionary = {},
+		bypassed: int = 0, shot_in: float = -1.0, charged_in: float = -1.0, log_gate: bool = true) -> int:
+	# R-1: from the rules 3.6 epoch a direct caller meets the per-name rolls too (no production caller bypasses here any more).
+	if bypassed == 0 and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		return await _solo_ignore_wounds(target, wounds, 0, from_spell, solo, shot_in, charged_in, log_gate)
 	# PURELY SYNCHRONOUS window: _solo_regen_pick only reads rules, and the flag is down again before the
 	# tray below awaits (a leaked flag would rewrite the next unrelated unit's ignore roll).
 	_solo_takedown_solo = solo
-	var pick := _solo_regen_pick(target, from_spell)
+	var pick := _solo_regen_pick(target, from_spell, shot_in, charged_in)
 	_solo_takedown_solo = {}
+	# Rules-must-log (MOR-17a): the distance gate's verdict, once per resolution that rolled.
+	var gate_msg := str(pick.get("gate", ""))
+	if not gate_msg.is_empty() and wounds > 0 and battle_log != null and log_gate:
+		battle_log.log_event(BattleLog.Category.COMBAT, gate_msg, true)
 	var regen_target: int = int(pick.get("target", 0))
 	# Rules-must-log: the regen trace names the verdict (the Grounded
 	# Protection family's within-1" condition — fired or refused). Logged
@@ -8501,20 +9988,33 @@ func _solo_apply_regeneration(target: GameUnit, wounds: int, from_spell: bool = 
 	var trace := str(pick.get("trace", ""))
 	if not trace.is_empty() and battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s — %s" % [target.get_name(), trace], true)
+	# A1 rules-must-log: the skip is never silent (Bane / Rending / Unstoppable / ... — never Lacerate).
+	if bypassed > 0 and regen_target > 0 and battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT, "%s: %d wound%s ignore Regeneration — no %s roll" % [
+			target.get_name(), bypassed, ("" if bypassed == 1 else "s"), str(pick.get("name", "regeneration"))], true)
 	if wounds <= 0 or regen_target <= 0:
 		return maxi(wounds, 0)
-	var faces: Array = await _owner_roll(target, wounds, regen_target, "regeneration",
-		"Regeneration (%d+ ignores a wound)" % regen_target, {"what": "regeneration dice"})
+	return await _solo_roll_ignore_group(target, wounds, regen_target, str(pick.get("name", "regeneration")),
+		"Regeneration (%d+ ignores a wound)" % regen_target, "regeneration dice")
+
+
+## One wound-ignore roll for one rule: one REAL tray die per wound, each at or above `ign_target` ignores
+## it; the battle log always names the rule and the outcome. Returns the wounds that still land. The body
+## of `_solo_apply_regeneration`'s roll, shared by the per-name groups (R-1).
+func _solo_roll_ignore_group(target: GameUnit, wounds: int, ign_target: int, rule_name: String,
+		purpose: String, what: String) -> int:
+	if wounds <= 0 or ign_target <= 0:
+		return wounds
+	var faces: Array = await _owner_roll(target, wounds, ign_target, "regeneration", purpose, {"what": what})
 	var ignored := 0
 	for f in faces:
-		if int(f) >= regen_target:
+		if int(f) >= ign_target:
 			ignored += 1
 	if battle_log != null:
 		# Rules-must-log: the line names the ACTUAL family rule — aliases (Plaguebound, Knightborn,
 		# Protected, …) included, not just the three named forms.
-		var rule_name: String = str(pick.get("name", "regeneration"))
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s rolls %d %s di%s (%d+) — %d wound%s ignored" % [
-			target.get_name(), wounds, rule_name, ("e" if wounds == 1 else "ce"), regen_target, ignored, ("" if ignored == 1 else "s")], true)
+			target.get_name(), wounds, rule_name, ("e" if wounds == 1 else "ce"), ign_target, ignored, ("" if ignored == 1 else "s")], true)
 		if ignored > 0:
 			_solo_rule_float(target, "%s: %d ignored" % [rule_name.capitalize(), ignored], Color(0.5, 1.0, 0.6))
 	return maxi(wounds - ignored, 0)
@@ -8523,8 +10023,8 @@ func _solo_apply_regeneration(target: GameUnit, wounds: int, from_spell: bool = 
 ## The wound-ignore ROLL TARGET for a unit's Regeneration-family rule, or 0 when it has none:
 ##   • Regeneration / Medical Training (Regeneration Aura) — ignore each wound on a 5+ (GF v3.5.1),
 ##     triggered by ANY bearing model (incl. a per-model medic item);
-##   • Self-Repair (wave-4 army-book rule, Robot Legions — official Army Forge text: "When a unit where
-##     all models have this rule takes wounds, roll one die for each. On a 6+ it is ignored.") — 6+, and
+##   • Self-Repair (wave-4 army-book rule, Robot Legions — rule Self-Repair: when a unit where all
+##     models have it takes wounds, roll one die per wound and each 6+ ignores it) — 6+, and
 ##     ALL models must carry it.
 ## Regeneration wins when both are present (the lower, more generous target). One truth with AiEv.ctx_for.
 ## Wave 5: the 5+/6+ targets are DATA (RulesRegistry ignore_target for the unit's system/faction; the
@@ -8533,28 +10033,80 @@ func _solo_regen_target(target: GameUnit, from_spell: bool = false) -> int:
 	return int(_solo_regen_pick(target, from_spell).get("target", 0))
 
 
+## R-1: the GROUP a wound-ignore rule belongs to. Forms of ONE rule (an Enhanced / Boost / Aura / Buff form, or
+## an entry that upgrades another) share a key and make one roll; differently named rules keep their own key
+## and each make their own roll. Regeneration, its Aura / Buff forms and Medical Training are one group.
+static func _solo_ignore_group_key(rule_name: String, params: Dictionary) -> String:
+	var upgraded := str(params.get("upgrades", ""))
+	if not upgraded.is_empty():
+		return upgraded
+	var lower := rule_name.to_lower()
+	if lower.begins_with("regeneration") or lower == "medical training":
+		return "Regeneration"
+	if lower == "self-repair":
+		return "Self-Repair"
+	if lower == "resistance":
+		return "Resistance"
+	var key := rule_name
+	if key.begins_with("Enhanced "):
+		key = key.substr("Enhanced ".length())
+	var stripped := true
+	while stripped:
+		stripped = false
+		for suffix: String in [" Aura", " Buff", " Boost"]:
+			if key.ends_with(suffix):
+				key = key.substr(0, key.length() - suffix.length())
+				stripped = true
+	return key
+
+
+## R-1: record one wound-ignore rule in the pick's per-group table - the group keeps its most generous target
+## (the lowest number) and the name / gate flag of the entry that holds it.
+func _solo_ignore_group_put(groups: Dictionary, key: String, rule_name: String, tgt: int, gated: bool) -> void:
+	if groups.has(key) and int((groups[key] as Dictionary)["target"]) <= tgt:
+		return
+	groups[key] = {"group": key, "name": rule_name, "target": tgt, "gated": gated}
+
+
 ## The winning Regeneration-family pick — {target: int (0 = none), name: String} — shared by the
 ## roll and its log line (rules-must-log: the line names the ACTUAL rule, aliases included).
-func _solo_regen_pick(target: GameUnit, from_spell: bool = false) -> Dictionary:
+## `shot_in` / `charged_in` are the DISTANCES of the resolution being resolved (edge to edge, the same
+## reads the charge/shoot gates use); -1.0 = the distance is unknown and the old reading stands.
+func _solo_regen_pick(target: GameUnit, from_spell: bool = false, shot_in: float = -1.0,
+		charged_in: float = -1.0) -> Dictionary:
+	# G4R5 R9 (EPOCH_73_V36, lead ruling D1): a chain whose host models are all dead IS its living hero now - its own
+	# ignore-wounds rules (Protection Feat) count, and "most models carry it" is decided over the living chain models.
+	var holder: GameUnit = _solo_defense_holder(target)
+	if holder != null:
+		target = holder
 	var best := 0   # the most generous (lowest) ignore target the unit fields; 0 = none
 	var best_name := ""
+	var groups := {}   # R-1: the same rules told apart by NAME - one entry per group, see _solo_ignore_group_key
 	if _solo_has_regeneration(target):
 		best = int(RulesRegistry.unit_param(target, "Regeneration", "ignore_target", 5))
 		best_name = "regeneration"
-	if _solo_rule_on_all_models(target, "Self-Repair"):
+		_solo_ignore_group_put(groups, "Regeneration", "regeneration", best, false)
+	if _solo_regen_family_on(target, "Self-Repair"):
 		var sr := int(RulesRegistry.unit_param(target, "Self-Repair", "ignore_target", 6))
+		_solo_ignore_group_put(groups, "Self-Repair", "self-repair", sr, false)
 		if best == 0 or sr < best:
 			best = sr
 			best_name = "self-repair"
 	# Resistance (wave-5): Regeneration family that ignores normal wounds on 6+, but SPELL wounds on a
 	# far more generous 2+ (official text). from_spell picks the threshold; the min keeps the most
-	# generous rule binding when a unit somehow fields several.
-	if _solo_rule_on_all_models(target, "Resistance"):
-		var key := "ignore_target_spell" if from_spell else "ignore_target"
-		var rs := int(RulesRegistry.unit_param(target, "Resistance", key, 2 if from_spell else 6))
-		if best == 0 or rs < best:
-			best = rs
-			best_name = "resistance"
+	# generous rule binding when a unit somehow fields several. MOR-07 (rules 3.6): "Spell Resistance"
+	# reaches the same primitive and both names take the most-models read from EPOCH_73_V36.
+	for res_rule: String in ["Resistance", "Spell Resistance"]:
+		if res_rule == "Spell Resistance" and AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+			continue
+		if _solo_rule_on_most_models(target, res_rule):
+			var key := "ignore_target_spell" if from_spell else "ignore_target"
+			var rs := int(RulesRegistry.unit_param(target, res_rule, key, 2 if from_spell else 6))
+			_solo_ignore_group_put(groups, _solo_ignore_group_key(res_rule, {}),
+				"resistance" if res_rule == "Resistance" else res_rule, rs, false)
+			if best == 0 or rs < best:
+				best = rs
+				best_name = "resistance" if res_rule == "Resistance" else res_rule
 	# Coverage wave (2026-07-23): DATA aliases of the family (Plaguebound/Protected 6+, Knightborn
 	# 6+/4+ vs spells, …) via the generic primitive layer — all_models entries require the whole
 	# unit to carry the rule, exactly like Self-Repair. Grounded Protection's condition (sweep F
@@ -8562,31 +10114,103 @@ func _solo_regen_pick(target: GameUnit, from_spell: bool = false) -> Dictionary:
 	# read its Shielded twin answers (main.gd:5588) — and the verdict is traced (rules-must-log).
 	var best_terr := 0.0
 	var open_refused := ""
+	var gate_refused := ""   # MOR-17a: a gated name whose distance shut its 6+ (rules-must-log)
+	var gate_msg := ""       # MOR-17a: the gate's verdict line, logged where the roll happens
+	var gate_any := ""       # R-1: the same verdict for a gated rule that rolls in its own group
 	for e in RulesRegistry.unit_rules_of_primitive(target, "Regeneration"):
 		var ed := e as Dictionary
 		var n := str(ed["name"])
 		if n == "Regeneration" or n == "Self-Repair" or n == "Resistance":
 			continue   # the named forms above stay the one truth
 		var params: Dictionary = ed.get("params", {})
-		if bool(params.get("all_models", false)) and not _solo_rule_on_all_models(target, n):
+		if bool(params.get("all_models", false)) and not _solo_regen_family_on(target, n):
 			continue
 		var terr_in := float(params.get("terrain_within_in", 0.0))
 		if terr_in > 0.0 and not _solo_majority_in_cover(target):
 			if open_refused.is_empty():
 				open_refused = n
 			continue
+		var gated: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
+			and (n == "Warding" or n == "Knightborn" or n == "Angelic Blessing")
 		var key2 := "ignore_target_spell" if from_spell else "ignore_target"
-		var tgt := int(params.get(key2, params.get("ignore_target", 0)))
+		var tgt := 0
+		var gate_in := 0.0
+		if gated and from_spell:
+			# rules 3.6 (MOR-17a): the shared rule ignores spell wounds on 2+ at 73.
+			tgt = int(params.get("ignore_target_spell_v36", 2))
+		elif gated:
+			# rules 3.6 (MOR-17a): the 6+ only from range — shot from over 9", charged from over 6".
+			# Inside it this entry folds NOTHING (the rest of the family keeps rolling).
+			var charge_leg: bool = charged_in >= 0.0
+			gate_in = float(params.get("ignore_over_in_charge" if charge_leg else "ignore_over_in",
+				6.0 if charge_leg else 9.0))
+			var d: float = charged_in if charge_leg else shot_in
+			if gate_in > 0.0 and d >= 0.0 and d <= gate_in:
+				gate_refused = n
+				continue
+			tgt = int(params.get(key2, params.get("ignore_target", 0)))
+		else:
+			tgt = int(params.get(key2, params.get("ignore_target", 0)))
+		var gate_line := ""
+		if tgt > 0 and gated and not from_spell and (shot_in >= 0.0 or charged_in >= 0.0):
+			gate_line = "Warding: %s ignores wounds on 6+ (%s from over %din)" % [
+				target.get_name(), "charged" if charged_in >= 0.0 else "shot", int(gate_in)]
+		if tgt > 0:
+			_solo_ignore_group_put(groups, _solo_ignore_group_key(n, params), n, tgt, gated)
+			if not gate_line.is_empty():
+				gate_any = gate_line
 		if tgt > 0 and (best == 0 or tgt < best):
 			best = tgt
 			best_name = n
 			best_terr = terr_in
+			if not gate_line.is_empty():
+				gate_msg = gate_line
 	var trace := ""
+	var best_rule: String = {"regeneration": "Regeneration", "self-repair": "Self-Repair"}.get(best_name, best_name)
 	if best_name != "" and best_terr > 0.0:
 		trace = "%s: within %d\" of terrain -> Regeneration %d+" % [best_name, int(best_terr), best]
 	elif open_refused != "":
 		trace = "%s: in the open -> no Regeneration" % open_refused
-	return {"target": best, "name": best_name, "trace": trace}
+	elif best_name != "" and _solo_regen_family_on(target, best_rule) and not _solo_rule_on_all_models(target, best_rule):
+		# Rules-must-log (row MOR-02): the most-models read kept the roll although not every model carries it.
+		trace = "%s: most models carry it, so a joined hero without it does not switch it off" % best_rule
+	var refusal := ""
+	if not gate_refused.is_empty():
+		refusal = "Warding: no 6+ ignore, %s was %s from within %din" % [
+			target.get_name(), "charged" if charged_in >= 0.0 else "shot",
+			int(float(RulesRegistry.unit_param(target, gate_refused, "ignore_over_in_charge" if charged_in >= 0.0 else "ignore_over_in",
+				6.0 if charged_in >= 0.0 else 9.0)))]
+	if best_name != "Warding" and best_name != "Knightborn" and best_name != "Angelic Blessing":
+		gate_msg = ""   # another family rule bound the roll — the gate changed nothing
+	if best == 0 and not gate_refused.is_empty():
+		gate_msg = refusal
+	var group_list: Array = []
+	for group_key: String in groups:
+		var entry: Dictionary = (groups[group_key] as Dictionary).duplicate()
+		entry["regen"] = group_key == "Regeneration"
+		group_list.append(entry)
+	# Deterministic order (the host rolls them in this order): Regeneration first, then the most generous
+	# target, then the group name.
+	group_list.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if bool(a["regen"]) != bool(b["regen"]):
+			return bool(a["regen"])
+		if int(a["target"]) != int(b["target"]):
+			return int(a["target"]) < int(b["target"])
+		return str(a["group"]) < str(b["group"]))
+	# R-1: the gate verdict of a gated rule that rolls (or was refused) in its OWN group, even when another
+	# rule is the overall best and the top-level gate line above stays empty.
+	var group_gate := ""
+	var gate_binds := false
+	var refused_has_group := false
+	for g: Dictionary in group_list:
+		gate_binds = gate_binds or bool(g["gated"])
+		refused_has_group = refused_has_group or str(g["group"]) == _solo_ignore_group_key(gate_refused, {})
+	if gate_binds:
+		group_gate = gate_any
+	elif not refused_has_group:
+		group_gate = refusal
+	return {"target": best, "name": best_name, "trace": trace, "gate": gate_msg, "groups": group_list,
+		"group_gate": group_gate}
 
 
 ## Banner's morale-test bonus for a unit — gap 18a: the body now lives in
@@ -8596,13 +10220,69 @@ func _solo_morale_bonus(unit: GameUnit) -> int:
 
 
 ## Apply a resolved wound pair to the defender: Regeneration rolls only against the regen-able bucket
-## (Bane / Rending / Lacerate / Unstoppable wounds bypass it — GF Advanced Rules v3.5.1: those rules
-## "ignore Regeneration"), then everything lands through the normal wound machinery. Returns landed wounds.
-func _solo_land_wounds(target: GameUnit, regenable: int, regen_proof: int, from_spell: bool = false) -> int:
-	var landed: int = maxi(regen_proof, 0) + await _solo_apply_regeneration(target, regenable, from_spell)
+## (Bane / Rending / Unstoppable wounds bypass it — GF Advanced Rules v3.5.1: those rules "ignore
+## Regeneration"; Lacerate does not), then everything lands through the normal wound machinery. Returns landed wounds.
+func _solo_land_wounds(target: GameUnit, regenable: int, regen_proof: int, from_spell: bool = false,
+		shot_in: float = -1.0, charged_in: float = -1.0) -> int:
+	# DAT-17a: from EPOCH 73 the grant is spent by wounds COMING IN, before the Regeneration roll —
+	# an all-ignored exchange still spends it, a zero-incoming exchange does not. Below 73 the landing
+	# adds no mark; only _solo_apply_wounds marks there (the old unconditional spend stays in charge).
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and regenable + regen_proof > 0:
+		_solo_mark_regen_grant_used(target)
+	var landed: int = await _solo_ignore_wounds(target, regenable, regen_proof, from_spell, {}, shot_in, charged_in)
 	if landed > 0:
 		await _solo_apply_wounds(target, landed)
 	return landed
+
+
+## R-1: every wound-ignore rule of the target is told apart by NAME. A bypass (Bane / Rending / ...) skips only the
+## roll of the rule named Regeneration; every other named rule still rolls against those wounds. Two differently
+## named rules each roll, one after the other, on the wounds still standing; forms of one rule are one roll (the
+## pick's groups). Returns ALL wounds that land, the bypassed ones included. Below the rules 3.6 epoch this is
+## exactly today's fold: the bypassed wounds land and the one folded roll covers the regenable ones.
+func _solo_ignore_wounds(target: GameUnit, regenable: int, bypassed: int, from_spell: bool = false,
+		solo: Dictionary = {}, shot_in: float = -1.0, charged_in: float = -1.0, log_gate: bool = true) -> int:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return maxi(bypassed, 0) + await _solo_apply_regeneration(target, regenable, from_spell, solo, bypassed, shot_in, charged_in, log_gate)
+	# PURELY SYNCHRONOUS window (see _solo_takedown_solo): the flag is down again before the first tray await.
+	_solo_takedown_solo = solo
+	var pick := _solo_regen_pick(target, from_spell, shot_in, charged_in)
+	_solo_takedown_solo = {}
+	var pool: int = maxi(regenable, 0)
+	var bypass: int = maxi(bypassed, 0)
+	# Rules-must-log (MOR-17a): the distance gate's verdict, once per resolution, for a gated rule that rolls in its
+	# own group as well as for a refusal.
+	var group_gate := str(pick.get("group_gate", ""))
+	if not group_gate.is_empty() and pool + bypass > 0 and battle_log != null and log_gate:
+		battle_log.log_event(BattleLog.Category.COMBAT, group_gate, true)
+	var trace := str(pick.get("trace", ""))
+	if not trace.is_empty() and battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT, "%s — %s" % [target.get_name(), trace], true)
+	var display_of := {"regeneration": "Regeneration", "self-repair": "Self-Repair", "resistance": "Resistance"}
+	var groups: Array = pick.get("groups", [])
+	var others: Array = []
+	for g: Dictionary in groups:
+		if not bool(g["regen"]):
+			others.append(str(display_of.get(str(g["name"]), str(g["name"]))))
+	var joined := false   # the bypassed wounds have joined the pool (a non-Regeneration group rolls them)
+	for g: Dictionary in groups:
+		var g_name := str(g["name"])
+		var g_target := int(g["target"])
+		if bool(g["regen"]):
+			# A1 rules-must-log: the skip is never silent.
+			if bypass > 0 and battle_log != null:
+				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %d wound%s ignore Regeneration — no %s roll" % [
+					target.get_name(), bypass, ("" if bypass == 1 else "s"), g_name], true)
+		elif not joined:
+			joined = true
+			if bypass > 0:
+				if battle_log != null:
+					battle_log.log_event(BattleLog.Category.COMBAT, "%s: %d wound%s ignore only Regeneration — %s still rolls" % [
+						target.get_name(), bypass, ("" if bypass == 1 else "s"), " and ".join(others)], true)
+				pool += bypass
+		pool = await _solo_roll_ignore_group(target, pool, g_target, g_name,
+			"%s (%d+ ignores a wound)" % [display_of.get(g_name, g_name), g_target], "%s dice" % g_name)
+	return pool if joined else pool + bypass
 
 
 ## Deadly(X) landing (GF v3.5.1 p.13, no carry-over): each unsaved wound deals X to ONE model, capped at what
@@ -8610,11 +10290,15 @@ func _solo_land_wounds(target: GameUnit, regenable: int, regen_proof: int, from_
 ## automatic — SoloController.deadly_pick), a joined hero last; when a FRESH model is about to be hit the
 ## DEFENDER picks: a human defender clicks the model through the same prompt as for normal wounds (#172), the
 ## AI defender / batch / MP take the defender-optimal casualty order.
-## Regeneration rolls on the RAW unsaved wounds first (before the ×X), then the survivors multiply. Returns
-## the wounds actually dealt (the melee comparison + summary).
+## A4 (maintainer rulings 29.10.2026: "pro Wunde einen Reparaturwurf", "Drei Wuerfe muessen gelingen"): each
+## unsaved wound is assigned and multiplied FIRST, the Regeneration family rolls all X wounds (even past what
+## the model has left), and only the survivors land, capped at the model — the Takedown landing's order.
+## `from_spell`: a damage spell's Deadly wounds (Resistance and its kin roll at their spell threshold).
+## Returns the wounds actually dealt (the melee comparison + summary).
 func _solo_land_deadly_wounds(target: GameUnit, weapon_name: String, deadly_x: int,
-		regenable_unsaved: int, regen_proof_unsaved: int) -> int:
-	var surviving: int = maxi(regen_proof_unsaved, 0) + await _solo_apply_regeneration(target, regenable_unsaved)
+		regenable_unsaved: int, regen_proof_unsaved: int, from_spell: bool = false, shot_in: float = -1.0) -> int:
+	var proof: int = maxi(regen_proof_unsaved, 0)
+	var surviving: int = proof + maxi(regenable_unsaved, 0)   # unsaved Deadly wounds, before ×X
 	if surviving <= 0:
 		return 0
 	var pid: int = int(target.unit_properties.get("player_id", 1))
@@ -8632,30 +10316,44 @@ func _solo_land_deadly_wounds(target: GameUnit, weapon_name: String, deadly_x: i
 	var on_died := func(m: ModelInstance) -> void:
 		died_models.append(m)
 	# D17: per wound — forced onto a wounded Tough model, else the defender picks a fresh one (a human clicks it).
-	var acc := {"dealt": 0, "forced": 0}
+	# A4: the click only CHOOSES the model; the roll and the ×X land below, for the clicked or the auto pick.
+	var acc := {"dealt": 0, "forced": 0, "victim": null}
 	var take := func(_pu: GameUnit, mi: ModelInstance) -> void:
-		acc["dealt"] += SoloController.apply_deadly_hit(mi, deadly_x, on_changed, on_died)
+		acc["victim"] = mi
 	var auto_rest := false   # a right-click / the strip button = "auto-allocate the rest" of this volley
-	for _w in range(surviving):
+	# C-WARDING-DEADLY (EPOCH_73_V36, lead ruling D3): the shot's distance reaches the Regeneration family, so the
+	# Warding / Knightborn 6+ gate shuts on Deadly wounds from within 9" too; its verdict is logged once.
+	var gate_in: float = shot_in if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else -1.0
+	var gate_logged := false
+	for w_i in range(surviving):
 		var pick: Dictionary = SoloController.deadly_pick(target)
 		if pick.is_empty():
 			break   # everything in the joined chain is dead — the remaining Deadly wounds are wasted
+		acc["victim"] = null
 		if bool(pick["forced"]):
 			acc["forced"] += 1
 		elif not auto_rest and _solo_wound_choice_matters(target, 1):
 			var left: int = await _solo_prompt_wound_allocation(target, 1, pid, take, "Deadly(%d): " % deadly_x)
-			if left == 0:
-				continue   # the defender clicked the model — the hit is already applied
-			auto_rest = true
-		take.call(pick["unit"], (pick["unit"] as GameUnit).models[int(pick["index"])])
+			if left != 0:
+				auto_rest = true
+		var victim := acc["victim"] as ModelInstance
+		if victim == null:
+			victim = (pick["unit"] as GameUnit).models[int(pick["index"])]
+		var mult: int = maxi(1, deadly_x)   # apply_deadly_hit caps what survives at the model
+		# One logged die per multiplied wound; a bypassed wound (A1) logs its skip and meets every other named rule.
+		mult = await _solo_ignore_wounds(target, mult if w_i >= proof else 0, 0 if w_i >= proof else mult,
+			from_spell, {}, gate_in, -1.0, not gate_logged)
+		gate_logged = true
+		if mult > 0:
+			acc["dealt"] += SoloController.apply_deadly_hit(victim, mult, on_changed, on_died)
 	var dealt: int = int(acc["dealt"])
 	if battle_log != null and dealt > 0:
 		battle_log.log_event(BattleLog.Category.COMBAT, "Deadly(%d): %d unsaved ×%d, no carry-over → %d wound%s dealt (%s)" % [
 			deadly_x, surviving, deadly_x, dealt, ("" if dealt == 1 else "s"), weapon_name], true)
 		_solo_rule_float(target, "Deadly(%d) → %d" % [deadly_x, dealt], Color(1.0, 0.5, 0.4))
 		if int(acc["forced"]) > 0:
-			battle_log.log_event(BattleLog.Category.COMBAT, "Deadly(%d): %d wound%s finish the already-wounded Tough model first (GF v3.5.1 p.15)" % [
-				deadly_x, int(acc["forced"]), ("" if int(acc["forced"]) == 1 else "s")], true)
+			battle_log.log_event(BattleLog.Category.COMBAT, "Deadly(%d): %d wound%s finish the already-wounded Tough model first (%s)" % [
+				deadly_x, int(acc["forced"]), ("" if int(acc["forced"]) == 1 else "s"), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(target))], true)
 	# A joined hero's casualties are parked through the hero's OWN unit (its unit_id), like the normal wound path.
 	var died_by_owner := {}   # GameUnit -> Array[ModelInstance]
 	for m in died_models:
@@ -8779,7 +10477,7 @@ func _solo_land_takedown_wounds(target: GameUnit, weapon_name: String, pick: Dic
 		return 0
 	# TC-023: the ignore roll is the PICKED MODEL's unit-of-[1] roll — a Regeneration/medic hero joined to a
 	# plain squad no longer covers the sniped trooper (and the hero's own roll still stands when HE is hit).
-	var landed: int = maxi(regen_proof, 0) + await _solo_apply_regeneration(owner, regenable, false, pick)
+	var landed: int = await _solo_ignore_wounds(owner, regenable, regen_proof, false, pick)
 	if landed <= 0:
 		return 0
 	var pid: int = int(owner.unit_properties.get("player_id", target.unit_properties.get("player_id", 1)))
@@ -8862,6 +10560,15 @@ func _solo_model_label(unit: GameUnit, idx: int) -> String:
 	return "trooper"
 
 
+## Rules 3.6: the TARGET-STATE facts the shared condition test reads, on the same basis the core's
+## `Ctx` stamps (SHO-10's bane window and the conditional-AP leg price the same target). One truth
+## for every caller; `near_terrain` is the deterministic sampler's verdict.
+func _solo_target_state(defender: GameUnit) -> Dictionary:
+	return {"above_half_strength": not _solo_below_half_strength(defender),
+		"shaken_or_fatigued": defender.is_shaken or defender.is_fatigued,
+		"near_terrain": _solo_stealth_alias_in_terrain(defender, 1.0, _solo_terrain_sampler())}
+
+
 ## Whether wounds from this attacker+profile bypass the defender's Regeneration (GF Advanced Rules
 ## v3.5.1: Bane, Rending and Unstoppable "ignore Regeneration"; Lacerate is the AoF sibling).
 ## Conditional-AP weapon rules (Shatter/Tear/Melee Slayer/Disintegrate): the extra AP this weapon gets
@@ -8888,8 +10595,15 @@ func _solo_conditional_ap_parts(profile: Dictionary, striker: GameUnit, defender
 	var faction := RulesRegistry.faction_of_unit(striker)
 	var d_tough := _solo_unit_tough(defender)
 	var d_defense := int(defender.unit_properties.get("defense", 4))
+	# Rules 3.6 hook: the weapon range over_half_range measures against (the core's CondApTarget twin).
+	# SHO-20: the striker's Hold state rides the same view -- the 3.6 Slayer gate reads it.
+	var held := _solo_unit_held(striker)
+	var v36 := AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
+	var cx := {"weapon_range_in": float(profile.get("range", 0)), "held": held}
+	cx.merge(_solo_target_state(defender))
 	var parts: Array = []
 	var seen := {}
+	var moved_logged := false
 	# The "always" family (Havocbound Boost, GF/AoF 3.5.3: "always gets AP(+1) ... instead of only
 	# when ..."): the table twin of the sim's epoch-6 named arm (core/nml-core/src/unit.rs:5444-5515;
 	# the "always" fold combat.rs:402-407). The Boost REPLACES its base's two conditional legs --
@@ -8911,9 +10625,13 @@ func _solo_conditional_ap_parts(profile: Dictionary, striker: GameUnit, defender
 		# "or gate": a GATE-ONLY spec (Ranged Slayer) carries its range leg in "gate" with no
 		# "condition" — the EV stamp (AiEv.stamp_conditional_ap) accepts the same shape.
 		if params.has("condition") or params.has("gate"):
-			var b := AiCombatMath.conditional_ap_bonus(params, d_tough, d_defense, charging, dist_in, melee)
+			var b := AiCombatMath.conditional_ap_bonus(params, d_tough, d_defense, charging, dist_in, melee, cx)
+			b = _solo_havoc_charge_ap(base, params, b, charging, melee)
 			if b > 0:
-				parts.append({"name": base, "bonus": b})
+				parts.append(_solo_cond_ap_part(base, b, params))
+			elif v36 and not moved_logged and _solo_slayer_moved(params, d_tough, charging, melee, held):
+				parts.append({"name": base, "bonus": 0})
+				moved_logged = true
 	# MODEL-level family members (Slayer / Piercing Hunter: "when this model shoots…") sit on the UNIT,
 	# not the weapon — apply them once per profile too (deduped against the weapon's own rules).
 	for r in striker.get_special_rules():
@@ -8933,9 +10651,25 @@ func _solo_conditional_ap_parts(profile: Dictionary, striker: GameUnit, defender
 		if replaced.has(base):
 			continue   # its conditional legs are replaced -- the always leg above pays instead
 		if params.has("condition") or params.has("gate"):
-			var b := AiCombatMath.conditional_ap_bonus(params, d_tough, d_defense, charging, dist_in, melee)
+			var b := AiCombatMath.conditional_ap_bonus(params, d_tough, d_defense, charging, dist_in, melee, cx)
+			b = _solo_havoc_charge_ap(base, params, b, charging, melee)
 			if b > 0:
-				parts.append({"name": base, "bonus": b})
+				parts.append(_solo_cond_ap_part(base, b, params))
+			elif v36 and not moved_logged and _solo_slayer_moved(params, d_tough, charging, melee, held):
+				parts.append({"name": base, "bonus": 0})
+				moved_logged = true
+	# T-1 (EPOCH_73_V36): the Piercing Feat, the Precision Feat's twin - a once-per-game AP bonus on every attack of
+	# the bearer's first attacking exchange (core sim.rs volley + strike seams). The latch is the Precision Feat's
+	# (SoloController.shot_feat_*), closed by _solo_spend_shot_feats. Synthetic hit sources (Trap, Retaliate,
+	# Deathstrike, Breath) carry no `attacks` and are not the bearer's attacks.
+	if v36 and int(profile.get("attacks", 0)) > 0:
+		for fe in RulesRegistry.unit_rules_of_primitive(striker, "Piercing Assault"):
+			var fed := fe as Dictionary
+			var fp: Dictionary = fed.get("params", {})
+			if int(fp.get("uses_per_game", 0)) <= 0 or SoloController.shot_feat_spent(striker, fed):
+				continue
+			if int(fp.get("ap_bonus", 0)) > 0:
+				parts.append({"name": str(fed["name"]), "bonus": int(fp["ap_bonus"])})
 	# GH #325 — spell-granted conditional-AP rules (the defender's attackers-side token, e.g. Veil
 	# of Madness → Slayer) take the SAME registry-driven path: the lookup fires only where the
 	# striker's book actually fields the rule, deduped against the loops above.
@@ -8946,10 +10680,37 @@ func _solo_conditional_ap_parts(profile: Dictionary, striker: GameUnit, defender
 		seen[gname] = true
 		var gparams: Dictionary = RulesRegistry.lookup(system, faction, gname).get("params", {})
 		if gparams.has("condition") or gparams.has("gate"):
-			var gbonus := AiCombatMath.conditional_ap_bonus(gparams, d_tough, d_defense, charging, dist_in, melee)
+			var gbonus := AiCombatMath.conditional_ap_bonus(gparams, d_tough, d_defense, charging, dist_in, melee, cx)
+			gbonus = _solo_havoc_charge_ap(gname, gparams, gbonus, charging, melee)
 			if gbonus > 0:
-				parts.append({"name": gname, "bonus": gbonus})
+				parts.append(_solo_cond_ap_part(gname, gbonus, gparams))
+			elif v36 and not moved_logged and _solo_slayer_moved(gparams, d_tough, charging, melee, held):
+				parts.append({"name": gname, "bonus": 0})
+				moved_logged = true
 	return parts
+
+
+## Rules 3.6 (SHO-20): at epoch 73 a moved shooter's shot has no 9" leg left, so it gets no AP at any
+## distance; the battle log says why it was switched off. Melee and the charge leg never reach this.
+func _solo_slayer_moved(params: Dictionary, target_tough: int, charging: bool, melee: bool,
+		held: bool) -> bool:
+	if melee or charging or held:
+		return false
+	if str(params.get("gate", "")) != "ranged_over_or_charge":
+		return false
+	if str(params.get("condition", "")) != "vs_tough_ge" or target_tough < int(params.get("threshold", 0)):
+		return false
+	return true
+
+
+## One conditional-AP part {name, bonus}; a rules 3.6 condition adds its words ("why") so the battle-log
+## line names what fired. Older spellings keep the two-key shape.
+func _solo_cond_ap_part(rule_name: String, bonus: int, params: Dictionary) -> Dictionary:
+	var part := {"name": rule_name, "bonus": bonus}
+	var why := AiCombatMath.conditional_ap_why(params)
+	if not why.is_empty():
+		part["why"] = why
+	return part
 
 
 ## Whether the unit carries `rule` as its BASE name -- the table twin of the sim's has_exact_rule
@@ -8966,17 +10727,23 @@ func _unit_carries_base_rule(unit: GameUnit, rule: String) -> bool:
 
 ## The on-6-to-hit AP bonus a weapon grants (the hits that roll an unmodified 6 save at a worse AP).
 ## Rending / Destructive use the fixed +4 (byte-identical fallback); the army-book Crack is a per-weapon
-## value (+2) from the registry, system-scoped. 0 when the weapon has no on-6 AP rule.
-func _solo_on6_ap_bonus(profile: Dictionary, striker: GameUnit) -> int:
-	if bool(profile.get("rending", false)) or bool(profile.get("destructive", false)):
-		return AiCombatMath.RENDING_AP_BONUS
+## value (+2) from the registry, system-scoped. 0 when the weapon has no on-6 AP rule. FAB-C20: the
+## applied entry's name rides along so the battle log can name Fracture/Shatter instead of "Crack".
+func _solo_on6_ap_bonus(profile: Dictionary, striker: GameUnit) -> Dictionary:
+	if bool(profile.get("rending", false)):
+		return {"bonus": AiCombatMath.RENDING_AP_BONUS, "name": "Rending"}
+	if bool(profile.get("destructive", false)):
+		return {"bonus": AiCombatMath.RENDING_AP_BONUS, "name": "Destructive"}
 	var system := RulesRegistry.system_of_unit(striker)
 	var faction := RulesRegistry.faction_of_unit(striker)
 	for r in profile.get("rules", []):
-		var on6: int = int(RulesRegistry.lookup(system, faction, RulesRegistry.base_rule_name(str(r))).get("params", {}).get("on6_ap", 0))
+		var base := RulesRegistry.base_rule_name(str(r))
+		var entry := RulesRegistry.lookup(system, faction, base)
+		var on6: int = int(entry.get("params", {}).get("on6_ap", 0))
 		if on6 > 0:
-			return on6
-	return 0
+			var applied := str(entry.get("name", base)).strip_edges()
+			return {"bonus": on6, "name": applied if not applied.is_empty() else "Crack"}
+	return {"bonus": 0, "name": ""}
 
 
 ## Whether any unit-level rule of the Shred family applies to a profile of this reach (0 = melee).
@@ -8987,6 +10754,22 @@ func _solo_shred_facet_applies(member: GameUnit, profile_range: int) -> bool:
 	return not _solo_shred_facet_name(member, profile_range).is_empty()
 
 
+## R-1 (A2): the base name of a Shred form. "Enhanced X", "X Aura" / "X Buff" / "X Boost" and the scoped
+## "X in Melee" / "X when Shooting" are forms of X (lead ruling D2): one rule, never two rolls.
+static func _solo_shred_group_key(rule_name: String) -> String:
+	var n := rule_name.strip_edges()
+	if n.begins_with("Enhanced "):
+		n = n.substr(9)
+	var trimmed := true
+	while trimmed:
+		trimmed = false
+		for suffix in [" Aura", " Buff", " Boost", " in Melee", " when Shooting"]:
+			if n.ends_with(suffix):
+				n = n.left(n.length() - suffix.length())
+				trimmed = true
+	return n
+
+
 func _solo_shred_facet_name(member: GameUnit, profile_range: int) -> String:
 	for e in RulesRegistry.unit_rules_of_primitive(member, "Shred"):
 		if AiEv.facet_applies((e as Dictionary).get("params", {}), profile_range):
@@ -8994,18 +10777,51 @@ func _solo_shred_facet_name(member: GameUnit, profile_range: int) -> String:
 	return ""
 
 
-func _solo_ignores_regen(attacker: GameUnit, profile: Dictionary) -> bool:
+## A1: the profile prints Lacerate and no Bane — AiShooting folds Lacerate into the `bane` flag for its
+## Defense-6 re-roll, but only Bane also ignores Regeneration.
+func _solo_profile_lacerate_only(profile: Dictionary) -> bool:
+	var lacerate := false
+	for r in profile.get("rules", []):
+		var s := str(r).strip_edges()
+		if s.begins_with("Bane"):
+			return false
+		lacerate = lacerate or s.begins_with("Lacerate")
+	return lacerate
+
+
+## DAT-16b — rules-must-log: a Regeneration bypass names itself only when the hit target really has a roll
+## of the rule named Regeneration to skip (a `regen` group of the pick, `_solo_regen_pick`). Below rules 3.6
+## the old line stays byte-identical for replay; a direct caller without a target keeps the old line.
+func _solo_regen_bypass_named(target: GameUnit) -> bool:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 or target == null:
+		return true
+	# R-1: a bypass skips only the roll of the rule named Regeneration, so only a target that carries a rule of
+	# that group can be told "Regeneration ignored" (Self-Repair, Protected, ... still roll and are not skipped).
+	for g: Dictionary in _solo_regen_pick(target).get("groups", []):
+		if bool(g.get("regen", false)):
+			return true
+	return false
+
+
+func _solo_ignores_regen(attacker: GameUnit, profile: Dictionary, target: GameUnit = null) -> bool:
+	if bool(profile.get("_impact_pool", false)):
+		return false   # a hit from no weapon: the causing unit's unit-level bypass rules are its weapons' (as in the core)
 	var system := RulesRegistry.system_of_unit(attacker)
 	var faction := RulesRegistry.faction_of_unit(attacker)
 	for r in profile.get("rules", []):
 		var s := str(r).strip_edges()
-		if s.begins_with("Bane") or s.begins_with("Rending") or s.begins_with("Lacerate"):
+		if s.begins_with("Bane") or s.begins_with("Rending"):
 			return true
+		# A1 (play test 29.10.2026): the army-book Lacerate (all 14 GF/AoF books, 3.5.3) only re-rolls
+		# unmodified Defense 6s; unlike Bane (p.13) it never ignores Regeneration. The mechanics maps file
+		# the name under the regen-bypass primitive, so its entry must not answer below either.
+		if s.begins_with("Lacerate"):
+			continue
 		# S1-06: the weapon's own printed Unstoppable ("Ignores Regeneration", GF/AoF v3.5.1 p.15). The
 		# EXACT name (the read that stamps profile.unstoppable): the scoped names stay the registry
 		# facet's below, and the plain entry carries no bypass_regen param.
 		if GameUnit.rule_name_matches(s, "Unstoppable"):
-			if attacker != null and battle_log != null:
+			if attacker != null and battle_log != null and _solo_regen_bypass_named(target):
 				_log_rule_event(BattleLog.Category.COMBAT, "Unstoppable: Regeneration ignored", _solo_is_ai_unit(attacker))
 			return true
 		# Registry-driven Regeneration bypass (e.g. Disintegrate "Ignores Regeneration"), system-scoped;
@@ -9017,6 +10833,10 @@ func _solo_ignores_regen(attacker: GameUnit, profile: Dictionary) -> bool:
 		if bool(bp.get("bypass_regen", false)):
 			if not AiEv.facet_applies(bp, int(profile.get("range", 0))):
 				continue
+			# AI-08a — rules-must-log: the map-read bypass names the weapon's rule (Anti-Regen et al.).
+			if attacker != null and _solo_regen_bypass_named(target):
+				_log_rule_event(BattleLog.Category.COMBAT, "%s: Regeneration ignored" % RulesRegistry.base_rule_name(s),
+					_solo_is_ai_unit(attacker))
 			return true
 	# Coverage wave: unit-level bypass aliases via the primitive layer ("Ignores Regeneration in
 	# Melee" sits on the MODEL, not the weapon) — melee_only and shooting_only respected per profile.
@@ -9029,6 +10849,14 @@ func _solo_ignores_regen(attacker: GameUnit, profile: Dictionary) -> bool:
 			if bool(p2.get("bypass_regen", false)):
 				if not AiEv.facet_applies(p2, int(profile.get("range", 0))):
 					continue
+				# AIG-G2-L4 — rules-must-log: the MODEL-level Regeneration bypass ("Unstoppable when
+				# Shooting" and its melee twin, printed or aura-granted) names itself here; the weapon
+				# arm above already names its rule, this arm used to answer in silence.
+				if battle_log != null and target != null \
+						and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
+						and _solo_regen_bypass_named(target):
+					_log_rule_event(BattleLog.Category.COMBAT, "%s: Regeneration ignored" % str(ed["name"]),
+						_solo_is_ai_unit(attacker))
 				return true
 		# Wave-4 family: "Rending in Melee" (entry bypass_regen + melee_only) sits on the MODEL too
 		# (direct or aura-granted). The Lacerate loop above never consulted them, so the entry's
@@ -9055,8 +10883,9 @@ func _solo_ignores_regen(attacker: GameUnit, profile: Dictionary) -> bool:
 				continue
 			var pb: Dictionary = edb.get("params", {})
 			if bool(pb.get("bypass_regen", false)) and int(profile.get("range", 0)) <= 0:
-				_log_rule_event(BattleLog.Category.COMBAT,
-					"%s: Regeneration ignored" % str(edb["name"]), _solo_is_ai_unit(attacker))
+				if _solo_regen_bypass_named(target):
+					_log_rule_event(BattleLog.Category.COMBAT,
+						"%s: Regeneration ignored" % str(edb["name"]), _solo_is_ai_unit(attacker))
 				return true
 	# EXACT name (the Ferocious lesson): has_special_rule matches by PREFIX, so the plain-Unstoppable
 	# fallback also answered for "Unstoppable in Melee" / "Unstoppable when Shooting" — which is how
@@ -9071,14 +10900,21 @@ func _solo_ignores_regen(attacker: GameUnit, profile: Dictionary) -> bool:
 	# sequence (_solo_consume_once_mods), never twice.
 	var from_mark := str(profile.get("_unstoppable_from_spell", ""))
 	if not from_mark.is_empty() and attacker != null:
-		if battle_log != null:
+		if battle_log != null and _solo_regen_bypass_named(target):
 			_log_rule_event(BattleLog.Category.COMBAT,
 				"%s: %s — Regeneration is ignored (once)" % [from_mark, attacker.get_name()],
 				_solo_is_ai_unit(attacker))
 		return true
 	for flag in ["rending", "unstoppable", "bane"]:
 		if bool(profile.get(flag, false)):
-			if battle_log != null:
+			if flag == "bane" and (_solo_profile_lacerate_only(profile) \
+					or (not str(profile.get("bane_alias", "")).is_empty() and not bool(profile.get("bypass_regen", false)))
+					# G4R5 R14 (EPOCH_73_V36): nor a UNIT alias's (Scrapper) - its stamp writes bypass_regen = false and no
+					# bane_alias; an ABSENT key is a printed Bane and keeps bypassing.
+					or (AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and profile.has("bypass_regen") \
+						and not bool(profile["bypass_regen"]))):
+				continue   # A1: the flag is the printed Lacerate's re-roll, not a Bane grant; AI-G2: nor a weapon alias's
+			if battle_log != null and _solo_regen_bypass_named(target):
 				_log_rule_event(BattleLog.Category.COMBAT,
 					"%s (granted): Regeneration ignored" % flag.capitalize(),
 					attacker != null and _solo_is_ai_unit(attacker))
@@ -9152,6 +10988,10 @@ func _solo_has_regeneration(unit: GameUnit) -> bool:
 	# medic hero joined to a plain squad nor a bearer standing next to the victim may hand him an ignore roll
 	# a unit of [1] never earns; the unit's own rules still apply, because they ARE the picked model's.
 	var solo: bool = not _solo_takedown_solo.is_empty() and unit != null and unit == _solo_takedown_solo.get("unit")
+	# Row MOR-02 (D-MOST): from EPOCH_73_V36 plain Regeneration counts most models; Medical Training keeps any bearer.
+	var v36 := AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
+	if v36 and _solo_regen_family_on(unit, "Regeneration"):
+		return true
 	var members: Array = [unit]
 	if not solo and unit.has_method("get_attached_heroes"):
 		members = members + unit.get_attached_heroes()
@@ -9160,13 +11000,13 @@ func _solo_has_regeneration(unit: GameUnit) -> bool:
 		if member == null:
 			continue
 		for r in member.get_special_rules():
-			if _solo_is_regen_rule(str(r)):
+			if _solo_is_regen_rule(str(r)) and not (v36 and GameUnit.rule_name_matches(str(r), "Regeneration")):
 				return true
 		for model in member.get_alive_models():
 			var mi := model as ModelInstance
 			if solo and mi != _solo_takedown_solo.get("model"):
 				continue   # a unit of [1] holds exactly the picked model — no other bearer is in it
-			if mi != null and (mi.has_special_rule("Regeneration") or mi.has_special_rule("Medical Training")):
+			if mi != null and ((not v36 and mi.has_special_rule("Regeneration")) or mi.has_special_rule("Medical Training")):
 				return true
 	return false
 
@@ -9184,6 +11024,12 @@ func _solo_majority_in_cover(unit: GameUnit) -> bool:
 	# hero in the open whose squad stands in woods used to collect a +1 Defense he never earned.
 	if not _solo_takedown_solo.is_empty() and unit != null and unit == _solo_takedown_solo.get("unit"):
 		return _solo_model_in_cover(_solo_takedown_solo.get("model") as ModelInstance)
+	# G4R2 F-T-COVER (EPOCH_73_V36, sibling of G4-T2): a joined unit whose host models are all dead stands
+	# on its living hero's square — the hero is the unit now. Below 73 the holder is the unit itself, so
+	# the dead host keeps reading "not in cover".
+	var holder: GameUnit = _solo_defense_holder(unit)
+	if holder != null and holder != unit:
+		return _solo_majority_in_cover(holder)
 	if terrain_overlay == null or not terrain_overlay.has_method("get_terrain_at_world_position"):
 		return false
 	var models: Array = unit.get_alive_models()
@@ -9228,6 +11074,14 @@ static func roller_label_for(unit_name: String, is_ai: bool, ai_designated: bool
 	return slot_label
 
 
+## The tray header for a scripted roll that passes no purpose (community #170: never a bare tray).
+## Pure, so it is testable without a scene. "You" is a pronoun, not a name, so it takes the plain
+## verb ("You roll (4+)"); every other label is a name and keeps "<label> rolls (N+)".
+static func roll_purpose_fallback(owner: String, success_target: int) -> String:
+	var verb := "roll" if owner == "You" else "rolls"
+	return "%s %s (%d+)" % [owner, verb, success_target]
+
+
 ## Battle-log / tray-roll label for a unit (rules plan 2.5). An AI unit is "AI (unit)" as before; a
 ## human unit is "You" while an AI slot is designated (solo vs NACHTMAHR, byte-identical); otherwise
 ## (hotseat, or a human-vs-human room) the unit is named by its player slot — the session's display
@@ -9258,8 +11112,10 @@ func _run_ai_dangerous(unit: GameUnit, model_count: int) -> void:
 	if unit == null or dice_roller_control == null or model_count <= 0:
 		return
 	if battle_log != null:
-		_log_rule_event(BattleLog.Category.COMBAT,
-			"%s takes %d Dangerous terrain test dice" % [unit.get_name(), model_count], true)
+		# UX-20 (EPOCH_73_V36, rules 3.6): the dice are ONE test of the whole joined unit.
+		var line: String = "%s takes one Dangerous terrain test for the whole unit (%d dice)" \
+			if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else "%s takes %d Dangerous terrain test dice"
+		_log_rule_event(BattleLog.Category.COMBAT, line % [unit.get_name(), model_count], true)
 	# A1 (NML-202): a player-driven auto intent can land here too (execute_intent's dangerous-terrain
 	# tap doesn't know which side moved) — the tray label must say "You"/the co-op owner, not "AI".
 	var faces: Array = await _solo_tray_roll(model_count, 6, _roller_label(unit), "dangerous",
@@ -9322,7 +11178,7 @@ func _on_transport_spill_dangerous(_transport: GameUnit, spilled: Array) -> void
 			continue
 		if battle_log != null:
 			_log_rule_event(BattleLog.Category.COMBAT,
-				"%s takes its Dangerous Terrain test after the wreck (GF v3.5.1 Transport / p.12)" % unit.get_name(), true)
+				"%s takes its Dangerous Terrain test after the wreck (%s)" % [unit.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))], true)
 		await _run_ai_dangerous(unit, int((p as Array)[1]))
 
 
@@ -9349,7 +11205,7 @@ func _solo_tray_roll(count: int, success_target: int, owner: String, roll_kind: 
 	# Community #170: the tray names WHAT is being rolled. High-value sites pass a specific
 	# purpose; the fallback synthesizes an honest generic one so no roll shows a bare tray.
 	if purpose.is_empty():
-		purpose = "%s rolls (%d+)" % [owner, success_target]
+		purpose = roll_purpose_fallback(owner, success_target)
 	_next_roll_purpose = purpose
 	_set_roll_purpose(purpose)
 	# #162: any scripted tray roll (solo flow) commits the table — take-backs expire.
@@ -9397,10 +11253,14 @@ func _solo_tray_roll(count: int, success_target: int, owner: String, roll_kind: 
 		# NML-1073 M5 D1-B1: sibling file, default OFF (env NML_DICE_DUMP) — stamps the ACTIVATION
 		# ordinal the "dice" decision record above never carries (a live decisions.json must stay
 		# byte-identical whether this seam is on or off, so it is not added there).
-		AiDiceRecorder.record({"act": solo_controller.move_act_seq(), "seq": _solo_dice_seq,
+		var dice_rec := {"act": solo_controller.move_act_seq(), "seq": _solo_dice_seq,
 			"round": solo_controller._current_round(), "player": solo_controller.ai_slot,
 			"roll_kind": roll_kind, "owner": owner, "target": success_target, "count": count,
-			"faces": faces})
+			"faces": faces}
+		if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+			# AI-G4 H1a: the replay gates cut the cast and spell legs (the core rolls no cast die), keep the rest.
+			dice_rec["leg"] = "dangerous" if roll_kind == "dangerous" else _solo_leg
+		AiDiceRecorder.record(dice_rec)
 	_dice_count = prev_count
 	_update_dice_set(prev_count)
 	_success_target = prev_target
@@ -9668,8 +11528,10 @@ func _solo_clear_auto_fan() -> void:
 func _solo_log_save_threshold(defender: GameUnit, defense: int, ap: int) -> void:
 	if battle_log == null:
 		return
+	var holder: GameUnit = _solo_defense_holder(defender)
+	var named: GameUnit = holder if holder != null else defender
 	battle_log.log_event(BattleLog.Category.COMBAT, "%s saves on %s" % [
-		defender.get_name(), save_threshold_text(defense, ap)], true)
+		named.get_name(), save_threshold_text(defense, ap)], true)
 
 
 ## The save-threshold text. A bare "7+" reads as impossible on a d6 (community #173) —
@@ -9765,7 +11627,10 @@ func _solo_focus_on_unit(unit: GameUnit) -> void:
 ## Attack attribution: pulse rings under the shooter (amber) and the target (red), an attack line
 ## between them, and a toast naming both. Returns the created nodes; free via _solo_clear_announce.
 func _solo_show_attack_announce(shooter: GameUnit, target: GameUnit, verb: String) -> Array:
-	_solo_clear_announce(_solo_live_announce)   # a stray set from an aborted path never survives
+	# One live set per side: a stray set of THIS side's from an aborted path never survives, while the other side's
+	# set belongs to a resolver that is still running (a human cast is a detached coroutine).
+	var human := not _solo_is_ai_unit(shooter)
+	_solo_clear_announce(_solo_live_announce_human if human else _solo_live_announce)
 	var nodes: Array = []
 	if solo_controller == null:
 		return nodes
@@ -9792,7 +11657,10 @@ func _solo_show_attack_announce(shooter: GameUnit, target: GameUnit, verb: Strin
 	_solo_show_explain("%s %s %s" % [shooter.get_name(), verb, target.get_name()])
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s %s %s" % [shooter.get_name(), verb, target.get_name()], true)
-	_solo_live_announce = nodes   # sweep target if the caller's cleanup never runs
+	if human:
+		_solo_live_announce_human = nodes   # sweep target if the caller's cleanup never runs
+	else:
+		_solo_live_announce = nodes
 	return nodes
 
 
@@ -9821,9 +11689,12 @@ func _solo_spawn_pulse_ring(at: Vector3, color: Color) -> MeshInstance3D:
 
 func _solo_clear_announce(nodes: Array) -> void:
 	for n in nodes:
-		if n is Node and is_instance_valid(n):
+		if is_instance_valid(n) and n is Node:   # validity first: `is` on a freed instance raises
 			(n as Node).queue_free()
-	_solo_live_announce = []   # whichever set was just freed, nothing is left to sweep
+	if is_same(nodes, _solo_live_announce):   # only the set just freed leaves its sweep list
+		_solo_live_announce = []
+	if is_same(nodes, _solo_live_announce_human):
+		_solo_live_announce_human = []
 
 
 ## Maintainer UX (31.07.): a PICKED cast target wears a SOLID cyan ring — visually distinct
@@ -9996,6 +11867,13 @@ func _solo_present_move_start(move_paths: Array) -> void:
 ## NML-208: mandatory melee moves must visibly glide — a teleport read as "nothing
 ## happened") forces the glide even for sub-inch arcs; regular activation moves snap
 ## into place when even the longest model arc stays under PACE_SNAP_MAX_IN (NML-224).
+## Maintainer play test 29.10.2026 ("in Richtung ihrer Bewegung drehen"): a gliding model turns its +Z front
+## (ObjectManager.facing_rotation_to) to each leg within the leg's first SOLO_GLIDE_TURN_M, and once the unit
+## has glided every turned model turns back to the yaw the executed move left it (the state: the AI's enemy
+## facing, else unchanged). Presentation only — nothing is broadcast, logged or rolled, and an oval's yaw (its
+## footprint) ends exactly as the executor left it. A regiment tray keeps its facing (an AoF:R pivot rule).
+var solo_glide_faces_travel := true   # false = the old glide (sideways/backwards)
+const SOLO_GLIDE_TURN_M := 0.0254
 func _solo_animate_move(move_paths: Array, allow_snap: bool = true) -> void:
 	# Entrenched-family bookkeeping: any executed move stamps the unit's moved_round (the
 	# stationary gate reads it; pile-in/consolidation count as moving per the rule's wording).
@@ -10041,6 +11919,7 @@ func _solo_animate_move(move_paths: Array, allow_snap: bool = true) -> void:
 	# move_paths is already ordered nearest-to-destination first, so the lead models visibly vacate the choke
 	# and the rest FLOW after them (the maintainer's explicit staging). Each model's glide completes before the
 	# next begins; not-yet-moved models wait at their route start (snapped above). Fast-AI compresses `speed`.
+	var end_yaws := {}   # node -> the yaw the executed move left it (restored after the glide)
 	for entry in move_paths:
 		var model := (entry as Dictionary).get("model") as ModelInstance
 		var path: Array = (entry as Dictionary).get("path", [])
@@ -10050,6 +11929,11 @@ func _solo_animate_move(move_paths: Array, allow_snap: bool = true) -> void:
 		var y := node.global_position.y
 		var tw: Tween = null
 		var total := 0.0
+		var yaw := node.rotation.y
+		var turn: bool = solo_glide_faces_travel and not snap and not (solo_controller != null
+			and model.unit is GameUnit and solo_controller._is_regiment(model.unit as GameUnit))
+		if turn:
+			end_yaws[node] = yaw
 		if not snap:
 			tw = node.create_tween()
 			for i in range(1, path.size()):
@@ -10060,6 +11944,9 @@ func _solo_animate_move(move_paths: Array, allow_snap: bool = true) -> void:
 					continue
 				var dur := leg / speed
 				tw.tween_property(node, "global_position", Vector3(b.x, y, b.z), dur)
+				if turn:   # shortest way round to the leg's heading, in parallel with the leg's start
+					yaw += angle_difference(yaw, ObjectManager.facing_rotation_to(a.x, a.z, b.x, b.z))
+					tw.parallel().tween_property(node, "rotation:y", yaw, minf(dur, SOLO_GLIDE_TURN_M / speed))
 				total += dur
 		if total > 0.0:
 			await get_tree().create_timer(total).timeout
@@ -10068,6 +11955,7 @@ func _solo_animate_move(move_paths: Array, allow_snap: bool = true) -> void:
 		# Snap onto the exact final (the tween end) so state and visuals agree to the millimetre.
 		var fin := path.back() as Vector3
 		node.global_position = Vector3(fin.x, node.global_position.y, fin.z)
+	await _solo_glide_turn_back(end_yaws, SOLO_GLIDE_TURN_M / speed)
 	# The corridors fade now that the whole unit has flowed through (persisted corridors faded here, not on spawn).
 	for body in corridors:
 		_solo_fade_corridor(body as MeshInstance3D)
@@ -10089,6 +11977,26 @@ func _solo_animate_move(move_paths: Array, allow_snap: bool = true) -> void:
 			"radius_m": float((entry as Dictionary).get("radius_m", 0.0125))})
 	if not chalk_moves.is_empty():
 		_on_trails_dropped(chalk_moves)
+
+
+## The glide's closing turn: every turned model swings back (headless batch: at once), then gets the exact
+## yaw float the executed move left it — the state, to the bit.
+func _solo_glide_turn_back(end_yaws: Dictionary, secs: float) -> void:
+	var tweens: Array = []
+	for node in end_yaws:
+		if is_instance_valid(node) and not _solo_batch:
+			var n := node as Node3D
+			tweens.append(n.create_tween())
+			(tweens.back() as Tween).tween_property(n, "rotation:y",
+				n.rotation.y + angle_difference(n.rotation.y, float(end_yaws[node])), secs)
+	if not tweens.is_empty():
+		await get_tree().create_timer(secs).timeout
+	for t in tweens:
+		if (t as Tween).is_valid():
+			(t as Tween).kill()
+	for node in end_yaws:
+		if is_instance_valid(node):
+			(node as Node3D).rotation.y = float(end_yaws[node])
 
 
 ## Height offsets keeping the corridor visuals just above the table without z-fighting (metres).
@@ -10231,7 +12139,8 @@ func _solo_spawn_move_label(path: Array, arc_m: float, budget_in: float) -> void
 ## only counts as modeled where its system's books actually field a mapped primitive. The list below is
 ## used when the maps are absent (tests/dev trees without assets).
 const SOLO_MODELED_RULES: Array = ["AP", "Tough", "Deadly", "Takedown", "Relentless", "Blast", "Reliable",
-	"Regeneration", "Medical Training", "Bane", "Rending", "Lacerate", "Unstoppable", "Hero", "Fast", "Slow",
+	"Regeneration", "Medical Training", "Bane", "Rending", "Lacerate", "Unstoppable", "Hero", "Unique Hero",
+	"Fast", "Slow",
 	"Ambush", "Scout", "Strider", "Flying", "Fatigue",
 	# Wave-2 combat special rules (GF/AoF Advanced Rules v3.5.1): "Fear" prefix-covers both Fearless (morale
 	# re-roll) and Fear(X) (melee-winner bonus).
@@ -10284,6 +12193,7 @@ const SOLO_MODELED_RULES: Array = ["AP", "Tough", "Deadly", "Takedown", "Relentl
 const SOLO_DECISION_RULES: Array = ["AP", "Deadly", "Takedown", "Relentless", "Artillery", "Immobile",
 	"Counter", "Fast", "Slow", "Strider", "Flying", "Ambush", "Scout", "Tough", "Blast", "Reliable",
 	"Rending", "Bane", "Stealth", "Evasive", "Shielded", "Fear", "Furious", "Impact", "Thrust", "Hero",
+	"Unique Hero",   # rules 3.6 named heroes: a Hero for every purpose
 	# Wave-4: Destructive/Self-Repair shape the EV, Royal Legion the shoot decision + move bands.
 	"Destructive", "Self-Repair", "Royal Legion",
 	# Wave-5: all seven steer decisions — Indirect (hold overlay + LOS-free targeting), Musician (move
@@ -10429,13 +12339,16 @@ static func _solo_rules_without_items(rules: Array, item_grants: Variant) -> Arr
 	var present := {}
 	for r in rules:
 		present[RulesRegistry.base_rule_name(str(r))] = true
+	var grants := {}   # keyed by the stripped name: an AI-list item name may carry a trailing space ("Psy-Witch ")
+	for k in (item_grants as Dictionary):
+		grants[RulesRegistry.base_rule_name(str(k))] = (item_grants as Dictionary)[k]
 	var out: Array = []
 	for r in rules:
 		var base := RulesRegistry.base_rule_name(str(r))
-		if not (item_grants as Dictionary).has(base):
+		if not grants.has(base):
 			out.append(r)
 			continue
-		for g in (item_grants as Dictionary)[base]:
+		for g in grants[base]:
 			if not present.has(RulesRegistry.base_rule_name(str(g))):
 				present[RulesRegistry.base_rule_name(str(g))] = true
 				out.append(g)
@@ -10475,6 +12388,14 @@ func _run_ai_melee(report: Dictionary) -> void:
 	var target: GameUnit = report.get("target")
 	if unit == null or target == null or dice_roller_control == null:
 		return
+	# G4-T9: the pre-melee activation wounds (Dangerous move, a spell, ...) are read HERE, before Counter, Impact
+	# and the strikes, like `_run_human_melee`; read after them the strike-back wounds would count twice.
+	var pre_melee_self_wounds: int = _solo_activation_self_wounds(unit)
+	# G4-R3 T1: the TARGET's pre-melee wounds (a spell between the move and the strikes), read here from the baseline
+	# the move stored — not from its activation counter, which would book the fight's own wounds a second time.
+	var pre_melee_target_wounds: int = 0
+	if report.has("target_wounds_start"):
+		pre_melee_target_wounds = maxi(0, int(report["target_wounds_start"]) - _solo_unit_wounds_now(_solo_combat_unit(target)))
 	_solo_stage_begin("%s charges %s" % [unit.get_name(), target.get_name()])
 	# The charge must actually reach combat, measured base-to-base (field-test finding 5): the planner ends
 	# the charge at/near base contact, so the gap between the nearest models — not the unit centres — is the
@@ -10486,8 +12407,8 @@ func _run_ai_melee(report: Dictionary) -> void:
 			if is_inf(gap_in):
 				var info := solo_controller.nearest_melee_pair_info(unit, target, false)
 				if info["gap_in"] <= SoloController.MELEE_ENGAGE_IN:
-					msg = "%s's charge falls short — %.1f\" above, melee reaches %.0f\" up (GF p.9)" \
-						% [unit.get_name(), info["height_in"], SoloController.MELEE_VERTICAL_IN]
+					msg = "%s's charge falls short — %.1f\" above, melee reaches %.0f\" up (%s)" \
+						% [unit.get_name(), info["height_in"], SoloController.melee_vertical_in(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))]
 			_log_rule_event(BattleLog.Category.COMBAT, msg, true)
 		# Stage seam: an early exit still closes its phase boundary — the falls-short line gets
 		# its own card instead of bleeding into the next activation.
@@ -10499,13 +12420,13 @@ func _run_ai_melee(report: Dictionary) -> void:
 	if snapped_ai < 0.0:
 		if battle_log != null:
 			_log_rule_event(BattleLog.Category.COMBAT,
-				"%s's charge falls short (%.1f\" gap, move budget spent) — GF v3.5.1 p.8 'as close as possible'" % [unit.get_name(), -snapped_ai], true)
+				"%s's charge falls short (%.1f\" gap, move budget spent) — %s 'as close as possible'" % [unit.get_name(), -snapped_ai, OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))], true)
 		await _solo_stage_phase("Charge")
 		_solo_stage_end()
 		return
 	if snapped_ai > 0.05 and battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT,
-			"%s charges into base contact (+%.1f\") — GF/AoF v3.5.1 p.8" % [unit.get_name(), snapped_ai], true)
+			"%s charges into base contact (+%.1f\") — %s" % [unit.get_name(), snapped_ai, OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))], true)
 	# PILE-IN (GF v3.5.1 p.9, live-test Bug 18 + NML-208): once the chargers stand, every defender
 	# model without base contact MUST move up to 3" into contact — mandatory, so automated for both
 	# sides, VISIBLY (the models glide; a teleport read as "nothing happened" in the live test).
@@ -10515,19 +12436,22 @@ func _run_ai_melee(report: Dictionary) -> void:
 		await _solo_animate_move(pile_moves, false)   # NML-208: pile-in always glides
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT,
-				"%s: %d model%s pile in up to 3\" (GF v3.5.1 p.9)" % [target.get_name(), pile_moves.size(), ("" if pile_moves.size() == 1 else "s")], true)
+				"%s: %d model%s pile in up to 3\" (%s)" % [target.get_name(), pile_moves.size(), ("" if pile_moves.size() == 1 else "s"), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(target))], true)
 	elif _solo_combined_alive(target) > 1 and battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT,
-			"%s: all models already in base contact — no pile-in needed (GF v3.5.1 p.9)" % target.get_name(), true)
+			"%s: all models already in base contact — no pile-in needed (%s)" % [target.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(target))], true)
 	var ai_caused := 0
 	var human_caused := 0
+	_solo_hazard_self.clear()
+	_solo_regen_ignored = 0
+	_solo_melee_scourge.clear()
 	var target_models_before: int = _solo_combined_alive(target)
 	# ANNOUNCE: who charges whom — highlights + line + toast, held before the first strike.
 	var announce := _solo_show_attack_announce(unit, target, "charges")
 	await _solo_stage_phase("Charge", SoloController.Pace.ANNOUNCE)
 	# — Counter (GF/AoF v3.5.1 p.13: "Strikes first with this weapon when charged"): the human defender's
-	#   Counter weapons resolve BEFORE the charger's attacks (incl. Impact — Counter's Impact reduction
-	#   presumes the counter-attack precedes it; the PDF pins no finer order). One strike-back choice
+	#   Counter weapons resolve BEFORE the charger's attacks; up to epoch 72 also before Impact, from rules 3.6
+	#   after it (the Impact cut by Counter models is counted first either way). One strike-back choice
 	#   covers the whole melee: Counter weapons now, remaining weapons in the normal slot, or neither. —
 	# Native both-AI (AI ARENA): when the DEFENDER is AI, it ALWAYS strikes back (Solo & Co-Op v3.5.0 p.57:
 	# "the AI always strikes back") and auto-rolls its saves — no human ConfirmationDialog. The human defender
@@ -10537,9 +12461,21 @@ func _run_ai_melee(report: Dictionary) -> void:
 	# The strike-first half of the Counter gate is the entry's param (dead-parameter fold, twin of
 	# #1006, core `strikes_first.unwrap_or(true)`); the recorded true replays byte-identically.
 	var counter_first: bool = _solo_has_counter(target) and SoloController.counter_strikes_first(target)
+	_solo_log_counter_first_decision(target, counter_first)
+	# Rules 3.6 (core twin `tray_charge`): Impact rolls before either side strikes, so its block and card
+	# move ahead of Counter and of the strike-back prompt; a defender wiped by Impact gets neither.
+	var impact_first: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
+	if impact_first:
+		ai_caused += await _solo_charge_impact(unit, target, not defender_is_ai, float(report.get("charge_from_in", 0.0)))
+		await _solo_stage_phase("Impact")
 	if counter_first and _solo_combined_alive(target) > 0:
 		strike_back = 1 if defender_is_ai or await _solo_confirm_strike_back(target, unit, true) else 0
+		if strike_back == 0 and battle_log != null:
+			_log_rule_event(BattleLog.Category.COMBAT, "Counter: %s declines to strike first" % target.get_name(), not defender_is_ai)
 		if strike_back == 1:
+			if impact_first and battle_log != null:
+				battle_log.log_event(BattleLog.Category.COMBAT,
+					"Counter: %s strikes first, after the Impact dice (%s)" % [target.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(target))], true)
 			human_caused += await _solo_melee_strike_phase(target, unit, false, SoloStrike.COUNTER_ONLY)
 			ai_caused += _solo_take_retaliate_credit()
 	# Stage seam: the boundary sits OUTSIDE the Counter branches, so a declined (or absent)
@@ -10548,16 +12484,18 @@ func _run_ai_melee(report: Dictionary) -> void:
 	# — Impact(X) auto-hits fire BEFORE the normal strikes (GF/AoF v3.5.1 p.13; reduced by Counter models);
 	#   applied + tallied inside. The charger may already be wiped by Counter — nothing left to roll then.
 	#   human_defends is derived (false when the AI defends → saves auto-roll on the tray). —
-	if _solo_combined_alive(unit) > 0:
+	if not impact_first and _solo_combined_alive(unit) > 0:
 		ai_caused += await _solo_charge_impact(unit, target, not defender_is_ai, float(report.get("charge_from_in", 0.0)))
-	await _solo_stage_phase("Impact")
+	if not impact_first:
+		await _solo_stage_phase("Impact")
 	# Resolver wave A — vs-target Marks: the charger's pre-attack pick lands on this melee's defender.
-	_solo_apply_vs_marks(unit, target, 0.0)
+	await _solo_apply_vs_marks(unit, target, 0.0)
 	# Unwieldy (resolver wave A — "strikes last when charging"): the CHARGER's strikes swap behind
 	# the defender's strike-back; Counter and Impact keep their slots.
 	var charger_last: bool = _solo_unit_has_unwieldy(unit, target)
 	if charger_last and battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "Unwieldy: %s strikes last on the charge" % unit.get_name(), true)
+	_solo_log_unwieldy_mixed(unit, charger_last)
 	for phase_slot in range(2):
 		if (phase_slot == 0) != charger_last:
 			# — AI strikes (unit + attached heroes; only models within 2" strike; Deadly multiplies wounds). The AI
@@ -10574,11 +12512,16 @@ func _run_ai_melee(report: Dictionary) -> void:
 				if strike_back == -1:
 					# B14 (test game 2): a defender with NO melee weapons cannot strike back — GF v3.5.1 has
 					# no CCW fallback. No dialog, no phantom fatigue; the rule gets its log line instead.
-					if _solo_attack_groups(target, 0.0, true, unit).is_empty():
+					# MEL-02b: from epoch 73 a defender whose every melee profile is a spent Limited weapon
+					# is in the same spot (the per-profile filter empties the group, not the group list).
+					var block := _solo_strike_back_block(target, unit)
+					if block != "":
 						strike_back = 0
 						if battle_log != null:
-							_log_rule_event(BattleLog.Category.COMBAT,
-								"%s has no melee weapons — cannot strike back (GF v3.5.1)" % target.get_name(), defender_is_ai)
+							var line := "%s has no melee weapons — cannot strike back (%s)" % [target.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(target))]
+							if block == "spent":
+								line = "%s's melee weapons are all spent (Limited) — cannot strike back (%s)" % [target.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(target))]
+							_log_rule_event(BattleLog.Category.COMBAT, line, defender_is_ai)
 					else:
 						strike_back = 1 if defender_is_ai or await _solo_confirm_strike_back(target, unit, false) else 0
 				if strike_back == 1:
@@ -10593,13 +12536,19 @@ func _run_ai_melee(report: Dictionary) -> void:
 	await _solo_self_destruct_post_melee(target, unit)
 	# — Morale: a destroyed side loses first; otherwise the lower wound score loses (tie = nobody). Fear(X) (GF/AoF
 	#   v3.5.1 p.13) counts as +X dealt wounds for THIS comparison only (never changes wounds applied) —
-	var ai_score: int = AiCombatMath.fear_adjusted_wounds(ai_caused, _solo_unit_rating(unit, "Fear"))
-	var human_score: int = AiCombatMath.fear_adjusted_wounds(human_caused, _solo_unit_rating(target, "Fear"))
+	var self_taken: int = maxi(pre_melee_self_wounds, int(report.get("dangerous_wounds_taken", 0)))
+	var scores: Array = _solo_melee_scores(unit, ai_caused, target, human_caused, self_taken, pre_melee_target_wounds)
+	var ai_score: int = scores[0]
+	var human_score: int = scores[1]
 	var loser: GameUnit = _solo_melee_loser(unit, ai_score, target, human_score)
 	_solo_log_melee_result(unit, ai_caused, ai_score, target, human_caused, human_score)
 	await _solo_stage_phase("Melee result")
 	if loser != null and _solo_combined_alive(loser) > 0:
-		await _solo_morale_test(loser, _roller_label(loser), true)
+		if loser == target:
+			await _solo_morale_test(loser, _roller_label(loser), true, "", -1.0,
+				float(report.get("charge_from_in", -1.0)))
+		else:
+			await _solo_morale_test(loser, _roller_label(loser), true, OWN_CHARGE_CAUSE, -1.0, -1.0)
 	await _solo_stage_phase("Morale")
 	# — Consolidation (GF v3.5.1 p.9, after morale): neither destroyed → the CHARGER (the AI here) moves
 	#   back 1"; one side destroyed → the survivor consolidates up to 3" (round 7, finding 4) —
@@ -10611,6 +12560,37 @@ func _run_ai_melee(report: Dictionary) -> void:
 		target_models_before - _solo_combined_alive(target),
 		("" if target_models_before - _solo_combined_alive(target) == 1 else "s")])
 	_solo_stage_end()
+
+
+## Rules 3.6 (EPOCH_73_V36): the loser TOOK more wounds in the activation, so each side scores what its ENEMY took:
+## wounds dealt + the Fear it bears + the enemy's pre-melee activation wounds (`a_self` / `b_self`: what the
+## unit lost before the strikes — Dangerous, a spell, Hazardous) plus the melee's own Hazardous tally.
+## Lower loses, as before; below 73 only dealt + Fear count. Returns [a_score, b_score].
+## FAB-B7 - a joined chain's Fear(X): the host's rating plus every LIVING attached hero's,
+## from `EPOCH_73_V36` (below it the host-only read stands). Twin: `sim::chain_fear`.
+func _solo_chain_fear(unit: GameUnit) -> int:
+	var f: int = _solo_unit_rating(unit, "Fear")
+	if unit == null or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return f
+	if unit.has_method("get_attached_heroes"):
+		for h in unit.get_attached_heroes():
+			var hero := h as GameUnit
+			if hero != null and hero.get_alive_count() > 0:
+				f += _solo_unit_rating(hero, "Fear")
+	return f
+
+
+func _solo_melee_scores(a: GameUnit, a_caused: int, b: GameUnit, b_caused: int,
+		a_self: int = 0, b_self: int = 0) -> Array:
+	var a_score: int = AiCombatMath.fear_adjusted_wounds(a_caused, _solo_chain_fear(a))
+	var b_score: int = AiCombatMath.fear_adjusted_wounds(b_caused, _solo_chain_fear(b))
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		a_score += b_self + int(_solo_hazard_self.get(b.get_instance_id(), 0))
+		b_score += a_self + int(_solo_hazard_self.get(a.get_instance_id(), 0))
+		# SHO-15b Scourge: the phantom wounds a side TOOK lift the enemy's tally, next to the self-wounds.
+		a_score += int(_solo_melee_scourge.get(b.get_instance_id(), 0))
+		b_score += int(_solo_melee_scourge.get(a.get_instance_id(), 0))
+	return [a_score, b_score]
 
 
 ## Rules-must-log (pacing grill 31.07.): the melee comparison itself was SILENT — the tallies were
@@ -10641,9 +12621,43 @@ func _solo_log_melee_result(a: GameUnit, a_caused: int, a_score: int,
 		verdict = "%s loses the melee" % loser.get_name()
 	elif _solo_combined_alive(a) <= 0 and _solo_combined_alive(b) <= 0:
 		verdict = "both destroyed — no morale test"
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		# Rules 3.6: the comparison is wounds TAKEN, and a side took what its enemy's score holds.
+		# MEL-10r: say so only when Regeneration actually cancelled a wound that would have counted.
+		var regen_note := ""
+		if _solo_regen_ignored > 0:
+			regen_note = " (%d wound%s cancelled by Regeneration %s not count)" % [
+				_solo_regen_ignored, ("" if _solo_regen_ignored == 1 else "s"),
+				("do" if _solo_regen_ignored != 1 else "does")]
+		battle_log.log_event(BattleLog.Category.COMBAT, "Melee result: %s took %s, %s took %s — %s%s" % [
+			a.get_name(), _solo_taken_tally(b_caused, b_score, _solo_chain_fear(b)),
+			b.get_name(), _solo_taken_tally(a_caused, a_score, _solo_chain_fear(a)), verdict, regen_note], true)
+		# SHO-15b Scourge: name the phantom wounds each side took and whether they decided the melee.
+		var a_ph := int(_solo_melee_scourge.get(a.get_instance_id(), 0))
+		var b_ph := int(_solo_melee_scourge.get(b.get_instance_id(), 0))
+		if a_ph > 0 or b_ph > 0:
+			var loser_without: GameUnit = _solo_melee_loser(a, a_score - b_ph, b, b_score - a_ph)
+			for pair in [[a_ph, a], [b_ph, b]]:
+				var n: int = int(pair[0])
+				var u: GameUnit = pair[1] as GameUnit
+				if n > 0:
+					var decides: bool = loser == u and loser_without != u
+					battle_log.log_event(BattleLog.Category.COMBAT, "Scourge: %d phantom wounds count for %s in the melee result — %s" % [
+						n, u.get_name(), "they decide it" if decides else "they do not decide it"], true)
+		return
 	battle_log.log_event(BattleLog.Category.COMBAT, "Melee result: %s dealt %s, %s dealt %s — %s" % [
 		a.get_name(), _solo_melee_tally(a_caused, a_score),
 		b.get_name(), _solo_melee_tally(b_caused, b_score), verdict], true)
+
+
+## Rules 3.6: "4", or "4 (Fear: 1, self-inflicted: 2)" for what sits on top of the `struck` wounds the enemy dealt.
+func _solo_taken_tally(struck: int, taken: int, enemy_fear: int) -> String:
+	var extra: Array = []
+	if enemy_fear > 0:
+		extra.append("Fear: %d" % enemy_fear)
+	if taken - struck - enemy_fear > 0:
+		extra.append("self-inflicted: %d" % (taken - struck - enemy_fear))
+	return str(taken) if extra.is_empty() else "%d (%s)" % [taken, ", ".join(extra)]
 
 
 ## "3" — or "3 (Fear: 4)" where Fear(X) lifted the tally for the comparison only.
@@ -10683,17 +12697,17 @@ func _solo_consolidate_melee(charger: GameUnit, defender: GameUnit, auto: bool =
 			# impossible). Non-exclusive: the board stays interactive while the dialog stands.
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT,
-					"Consolidation: move %s back 1\" (the charger separates — GF v3.5.1 p.9)" % charger.get_name(), true)
+					"Consolidation: move %s back 1\" (the charger separates — %s)" % [charger.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(charger))], true)
 			await _solo_board_prompt(
-				"Pull back 1\": drag %s back from the melee (GF v3.5.1 p.9) — the game waits." % charger.get_name(),
+				"Pull back 1\": drag %s back from the melee (%s) — the game waits." % [charger.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(charger))],
 				"✓ Pulled back")
 			return
 		var dang: int = solo_controller.separate_from_melee(charger, solo_controller.unit_centre(defender))
 		solo_controller.record_decision({"kind": "separate", "unit": charger.get_name(),
-			"rule": "GF v3.5.1 p.9 consolidation: the charger moves back 1\" when neither unit was destroyed",
+			"rule": "%s consolidation: the charger moves back 1\" when neither unit was destroyed" % OPRApiClient.rules_cite(RulesRegistry.system_of_unit(charger)),
 			"candidates": [], "chosen": "", "why": "mandatory separation", "data": {"back_in": 1.0}})
 		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.COMBAT, "%s moves back 1\" (consolidation — GF v3.5.1 p.9)" % charger.get_name(), true)
+			battle_log.log_event(BattleLog.Category.COMBAT, "Consolidation: %s moves back 1\" (the charger separates — %s)" % [charger.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(charger))], true)
 		await _solo_animate_move(solo_controller.last_move_paths, false)   # NML-208: always glides
 		if dang > 0:
 			await _run_ai_dangerous(charger, dang)
@@ -10710,10 +12724,10 @@ func _solo_consolidate_melee(charger: GameUnit, defender: GameUnit, auto: bool =
 			# applied rule logs). A missing line here stalled the Game School S-06 consolidation step.
 			if solo_controller.last_move_paths.is_empty():
 				battle_log.log_event(BattleLog.Category.COMBAT,
-					"%s holds its ground (consolidation — GF v3.5.1 p.9)" % survivor.get_name(), true)
+					"Consolidation: %s holds its ground (enemy destroyed, no room to move — %s)" % [survivor.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(survivor))], true)
 			else:
 				battle_log.log_event(BattleLog.Category.COMBAT,
-					"%s consolidates up to 3\" (enemy destroyed — GF v3.5.1 p.9)" % survivor.get_name(), true)
+					"%s consolidates up to 3\" (enemy destroyed — %s)" % [survivor.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(survivor))], true)
 		if not solo_controller.last_move_paths.is_empty():
 			await _solo_animate_move(solo_controller.last_move_paths, false)   # NML-208: always glides
 		if dang2 > 0:
@@ -10725,9 +12739,9 @@ func _solo_consolidate_melee(charger: GameUnit, defender: GameUnit, auto: bool =
 	# player drags his models up to 3" while it is open, then confirms; only then does the game go on.
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT,
-			"Consolidation: %s may move up to 3\" (enemy destroyed — GF v3.5.1 p.9)" % survivor.get_name(), false)
+			"Consolidation: %s may move up to 3\" (enemy destroyed — %s)" % [survivor.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(survivor))], false)
 	await _solo_board_prompt(
-		"Consolidate: %s destroyed the enemy — you may drag it up to 3\" (GF v3.5.1 p.9)." % survivor.get_name(),
+		"Consolidate: %s destroyed the enemy — you may drag it up to 3\" (%s)." % [survivor.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(survivor))],
 		"✓ Done consolidating")
 
 
@@ -10736,13 +12750,17 @@ func _solo_consolidate_melee(charger: GameUnit, defender: GameUnit, auto: bool =
 ## OPR rule gap (goal 003 P1): a unit that takes CASUALTIES FROM SHOOTING and is now at half strength or
 ## less must test morale — this trigger was missing entirely (morale only ran after melee). Compares the
 ## unit's own alive count before vs after the volley; `owner` attributes the tray roll (the AI rolls for
-## its own units, "You" for the human's). No-op if the unit was wiped or took no casualties.
+## its own units, "You" for the human's). No-op if the unit was wiped or took no wounds (A2: wounds on a
+## surviving Tough model of a unit at half or less DO test — p.10).
 ## NML-966: the multi-model trigger now counts the COMBINED chain (unit + attached heroes), the same
 ## basis `_solo_below_half_strength` already used for the outcome — wounds clicked onto a joined hero
 ## used to be invisible here because the trigger counted the unit's own models only.
-func _solo_shooting_morale(unit: GameUnit, alive_before: int, owner: String, wounds_before: int = -1) -> void:
+func _solo_shooting_morale(unit: GameUnit, alive_before: int, owner: String, wounds_before: int = -1,
+		cause: String = "", over_in: float = -1.0, charge_from_in: float = -1.0) -> void:
 	if unit == null:
 		return
+	var phantom := _solo_scourge_wounds   # SHO-15a: read once, never carried to the next trigger
+	_solo_scourge_wounds = 0
 	# Single-model units measure morale in TOUGH WOUNDS, not models (GF v3.5.1 p.10: "...half or less
 	# of its starting size or tough value (for units with a single model)" — maintainer 2026-07-22:
 	# a wounded Tough single model never tested because only model DEATH triggered).
@@ -10752,12 +12770,52 @@ func _solo_shooting_morale(unit: GameUnit, alive_before: int, owner: String, wou
 				and AiCombatMath.at_or_below_half(wounds_now, _solo_unit_wounds_start(unit)):
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT,
-					"%s is at half its tough value (%d/%d) — morale test (GF v3.5.1 p.10)" % [
-					unit.get_name(), wounds_now, _solo_unit_wounds_start(unit)], true)
-			await _solo_morale_test(unit, owner)
+					"%s is at half its tough value (%d/%d) — morale test (%s)" % [
+					unit.get_name(), wounds_now, _solo_unit_wounds_start(unit), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))], true)
+			_solo_scourge_decides(unit, phantom, false)
+			await _solo_morale_test(unit, owner, false, cause, over_in, charge_from_in)
+		elif _solo_scourge_decides(unit, phantom, true):
+			await _solo_morale_test(unit, owner, false, cause, over_in, charge_from_in)
 		return
-	if AiCombatMath.should_test_shooting_morale(alive_before, SoloController.combined_alive(unit), SoloController.combined_total(unit)):
-		await _solo_morale_test(unit, owner)
+	var alive_now: int = SoloController.combined_alive(unit)
+	var total: int = SoloController.combined_total(unit)
+	if AiCombatMath.should_test_shooting_morale(alive_before, alive_now, total):
+		_solo_scourge_decides(unit, phantom, false)
+		await _solo_morale_test(unit, owner, false, cause, over_in, charge_from_in)
+	elif alive_now > 0 and wounds_before >= 0 and _solo_unit_wounds_now(unit) < wounds_before \
+			and AiCombatMath.at_or_below_half(alive_now, total):
+		# A2 (play test 29.10.2026): p.10 triggers on WOUNDS that leave the unit at half or less, not only
+		# on a lost model (p.14: the last hero tests "whenever it takes wounds") — Tough models that survive.
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT,
+				"%s takes wounds at half strength or less (%d/%d models) — morale test (%s)" % [
+				unit.get_name(), alive_now, total, OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))], true)
+		_solo_scourge_decides(unit, phantom, false)
+		await _solo_morale_test(unit, owner, false, cause, over_in, charge_from_in)
+	elif _solo_scourge_decides(unit, phantom, true):
+		await _solo_morale_test(unit, owner, false, cause, over_in, charge_from_in)
+
+
+## SHO-15a Scourge: the volley's phantom wounds read as landed in the table's casualty order (nothing is
+## removed); `may_decide` false = the real wounds already called the test. One rules-must-log line per volley.
+func _solo_scourge_decides(unit: GameUnit, phantom: int, may_decide: bool) -> bool:
+	if phantom <= 0 or unit.get_alive_count() <= 0:
+		return false
+	var left := phantom
+	var lost := 0
+	for i in SoloController.chain_casualty_order(unit, phantom):
+		var m := unit.models[int(i)] as ModelInstance
+		if m == null or not m.is_alive or left < m.wounds_current:
+			break
+		left -= m.wounds_current
+		lost += 1
+	var total := SoloController.combined_total(unit)
+	var tips := may_decide and (AiCombatMath.at_or_below_half(_solo_unit_wounds_now(unit) - phantom,
+		_solo_unit_wounds_start(unit)) if total == 1 else AiCombatMath.at_or_below_half(SoloController.combined_alive(unit) - lost, total))
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT, "Scourge: %d phantom wounds count against %s — %s" % [
+			phantom, unit.get_name(), "they decide its morale test" if tips else "they do not decide its morale test"], true)
+	return tips
 
 
 ## Combined CURRENT wounds of a unit's alive models incl. joined heroes (the p.10 tough-value scale).
@@ -10824,10 +12882,44 @@ func _solo_morale_quality(unit: GameUnit) -> int:
 		if (not host_alive and best_hero == null) or hero.get_quality() < best_quality:
 			best_quality = hero.get_quality()
 			best_hero = hero
+	# Rules 3.6 hero aura (epoch 73); its line stands in for the joined-Hero line when it wins.
+	var aura: Dictionary = _solo_aura_hero_for_morale(unit, best_quality)
+	if not aura.is_empty():
+		best_quality = int(aura["quality"])
+		best_hero = null
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s (Tough 9+) lends its Quality to %s's morale test (Q%d+)" % [
+				(aura["hero"] as GameUnit).get_name(), unit.get_name(), best_quality], true)
 	if best_hero != null and battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "Hero %s tests on behalf of %s (Q%d+)" % [
 			best_hero.get_name(), unit.get_name(), best_quality], true)
 	return best_quality
+
+
+const HERO_AURA_TOUGH := 9
+const HERO_AURA_REACH_IN := 6.0
+
+## Rules 3.6 hero aura (epoch 73): the friendly Hero with the best Quality, if it beats `own_quality`, that
+## lends `unit` its morale test: alive, not Shaken, in play, Tough(9)+, within 6" base edge to base edge
+## (`nearest_melee_gap_in`, the Spell Conduit measure). Such a Hero cannot be joined, so it is its own unit.
+## {} when no Hero helps, else {"hero": GameUnit, "quality": int}.
+func _solo_aura_hero_for_morale(unit: GameUnit, own_quality: int) -> Dictionary:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 or opr_army_manager == null or solo_controller == null:
+		return {}
+	var best: Dictionary = {}
+	for u in opr_army_manager.get_game_units_for_player(int(unit.unit_properties.get("player_id", 0))):
+		var hero := u as GameUnit
+		if hero == null or hero == unit or hero.get_alive_count() <= 0 or hero.is_shaken \
+				or SoloController.unit_in_reserve(hero) or unit.get_attached_heroes().has(hero):
+			continue
+		if not hero.is_hero() or AiEv.unit_rating(hero, "Tough") < HERO_AURA_TOUGH:
+			continue
+		var quality: int = hero.get_quality()
+		if quality >= int(best.get("quality", own_quality)):
+			continue
+		if solo_controller.nearest_melee_gap_in(unit, hero) <= HERO_AURA_REACH_IN:
+			best = {"hero": hero, "quality": quality}
+	return best
 
 
 func _solo_ask_hero_morale_once(unit: GameUnit) -> void:
@@ -10839,6 +12931,9 @@ func _solo_ask_hero_morale_once(unit: GameUnit) -> void:
 		if hero != null and hero.get_alive_count() > 0:
 			has_hero = true
 			break
+	# Rules 3.6 hero aura: the same once-per-unit choice covers a Tough(9)+ Hero close by ("Use unit" = off).
+	if not has_hero and not _solo_aura_hero_for_morale(unit, unit.get_quality()).is_empty():
+		has_hero = true
 	if not has_hero:
 		return
 	if _solo_batch:
@@ -10848,7 +12943,9 @@ func _solo_ask_hero_morale_once(unit: GameUnit) -> void:
 		"Let a living Hero test morale for %s from now on?" % unit.get_name(), "Use Hero", "Use unit", true)
 
 
-func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false) -> bool:
+## `cause` names the rule that forced the test; "" = shooting or melee (Rules 3.6 Banner, MOR-08).
+func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false, cause: String = "",
+		over_in: float = -1.0, charge_from_in: float = -1.0) -> bool:
 	await _solo_ask_hero_morale_once(unit)
 	var below_half := _solo_below_half_strength(unit)   # single models: tough-wounds scale (p.10)
 	var result: int
@@ -10859,26 +12956,66 @@ func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false) -> bo
 		result = AiCombatMath.morale_result_shaken(below_half and melee)
 		if battle_log != null:
 			_log_rule_event(BattleLog.Category.COMBAT,
-				"%s is already Shaken — automatically fails morale (GF/AoF v3.5.1 p.10)" % unit.get_name(), true)
+				"%s is already Shaken — automatically fails morale (%s)" % [unit.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))], true)
 	else:
 		# Banner (wave 5, system-scoped params via RulesRegistry: +1 to morale test rolls; the GFF/AoFS
 		# picked-units variant still covers the bearer's own unit) lowers the roll target, clamped to
 		# [2,6] (a natural 1 always fails). Without Banner this is the plain Quality target.
 		var morale_bonus: int = _solo_morale_bonus(unit)
+		var own_charge: bool = cause == OWN_CHARGE_CAUSE
+		# Rules 3.6 Banner: the Banner family's +1 only helps a test that shooting or melee caused. Any
+		# other cause takes the Banner share back out; the Morale(X) rating and spell tokens stay.
+		if own_charge and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+			# MOR-09b: the test came from the unit's own charge, so it was neither shot at
+			# nor charged — only the Valiant-family share drops; plain Banner stays.
+			var own_banner_share: int = morale_bonus - SoloController.morale_rating_of(unit)
+			var own_valiant_share: int = mini(SoloController.valiant_bonus_of(unit), own_banner_share)
+			if own_valiant_share > 0:
+				morale_bonus -= own_valiant_share
+				_log_rule_event(BattleLog.Category.COMBAT,
+					"Banner: %s gets no +%d — it charged, it was not charged (Valiant needs a shot or a charge)" % [
+						unit.get_name(), own_valiant_share], true)
+		elif cause != "" and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+			var banner_share: int = morale_bonus - SoloController.morale_rating_of(unit)
+			if banner_share > 0:
+				morale_bonus -= banner_share
+				_log_rule_event(BattleLog.Category.COMBAT, "Banner: %s gets no +%d against %s (only shooting or melee)" % [
+					unit.get_name(), banner_share, cause], true)
+		elif AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+			# MOR-09 Valiant: inside the band only the Valiant-family share drops; a plain Banner
+			# keeps its +1. A negative distance means the caller cannot know it — keep the 3.5 read.
+			var band: float = AiCombatMath.CHARGE_LONG_RANGE_IN if melee else AiCombatMath.LONG_RANGE_IN
+			var forcing: float = charge_from_in if melee else over_in
+			if forcing >= 0.0 and forcing <= band:
+				var valiant_share: int = mini(SoloController.valiant_bonus_of(unit),
+					morale_bonus - SoloController.morale_rating_of(unit))
+				if valiant_share > 0:
+					morale_bonus -= valiant_share
+					_log_rule_event(BattleLog.Category.COMBAT, "Banner: %s gets no +%d from a %s %d\" or under (Valiant counts only beyond the gate)" % [
+						unit.get_name(), valiant_share, "charge from" if melee else "shot at", int(band)], true)
 		# NML-006 morale_mod: active spell tokens ("+1/-1 to morale test rolls", once) join the
 		# Banner bonus in the [2,6]-clamped target; spent right after the test die (rules-must-log).
 		var spell_morale := 0
 		var morale_notes: PackedStringArray = []
+		var great_banner_skipped := 0
+		var skip_great_banner: bool = cause != "" and not own_charge and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
 		for mrd in AiSpell.mods_for(_solo_mods_of_chain(unit), "morale", melee):
+			if skip_great_banner and str((mrd as Dictionary).get("spell", "")) == "Great Banner":
+				great_banner_skipped += int((mrd as Dictionary).get("morale_mod", 0))
+				continue
 			spell_morale += int((mrd as Dictionary).get("morale_mod", 0))
 			morale_notes.append("%s %+d" % [str((mrd as Dictionary).get("spell", "")),
 				int((mrd as Dictionary).get("morale_mod", 0))])
+		if great_banner_skipped != 0:
+			_log_rule_event(BattleLog.Category.COMBAT, "Great Banner: %s gets no +%d against %s (only shooting or melee)" % [
+				unit.get_name(), great_banner_skipped, cause], true)
 		var test_target: int = AiCombatMath.morale_target(_solo_morale_quality(unit), morale_bonus + spell_morale)
 		if morale_bonus > 0 and battle_log != null:
 			var rating := SoloController.morale_rating_of(unit)
-			var source := "Morale(%d)" % rating if rating > 0 else "Banner"
+			var family_name := str(SoloController.morale_bonus_named_of(unit).get("name", "Banner"))
+			var source := "Morale(%d)" % rating if rating > 0 else family_name
 			if rating > 0 and morale_bonus > rating:
-				source += " + Banner"
+				source += " + " + family_name
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s gets +%d to morale test rolls (passes on %d+)" % [
 				source, unit.get_name(), morale_bonus, test_target], true)
 		if spell_morale != 0 and battle_log != null:
@@ -10886,14 +13023,19 @@ func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false) -> bo
 				", ".join(morale_notes), spell_morale, unit.get_name(), test_target], true)
 		var faces: Array = await _owner_roll(unit, 1, test_target, "morale",
 			"Morale test: %s (%d+)" % [unit.get_name(), test_target], {"what": "morale test", "label": owner})
-		_solo_spend_once_kind(unit, ["morale"])   # NML-006: spent by this test
+		_solo_spend_once_kind(unit, ["morale"], "Great Banner" if skip_great_banner else "")   # NML-006: spent by this test
 		if faces.is_empty():
 			return true
 		result = AiCombatMath.morale_result(int(faces[0]), test_target, below_half and melee)
 	# Fearless (GF/AoF Advanced Rules v3.5.1 p.13): a unit where all models have this rule rolls a recovery
 	# die once after a FAILED morale test; on a 4+ it counts as passed instead. Rolled visibly on the real
 	# tray. The 4+ is DATA where the mechanics map carries it (RulesRegistry; constant fallback — byte-identical seam).
-	if result != AiCombatMath.Morale.PASSED and AiEv.rule_on_all_models(unit, "Fearless"):
+	# Rules 3.6 (EPOCH_73_V36): most models are enough; a mixed unit's log names the count.
+	if result != AiCombatMath.Morale.PASSED and _solo_rule_on_most_models(unit, "Fearless"):
+		var fearless_models := _solo_models_with_rule(unit, "Fearless")
+		if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and fearless_models.x < fearless_models.y and battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT, "Fearless: %d of %d models of %s have it — most do, so the whole unit counts" % [
+				fearless_models.x, fearless_models.y, unit.get_name()], true)
 		var recover_target: int = int(RulesRegistry.unit_param(unit, "Fearless", "recover_target", AiCombatMath.FEARLESS_RECOVER_TARGET))
 		var recovery_die: Array = await _owner_roll(unit, 1, recover_target, "fearless",
 			"Morale recovery die — Fearless (%d+)" % recover_target, {"what": "Fearless recovery die", "label": owner})
@@ -10903,9 +13045,9 @@ func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false) -> bo
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s is Fearless — recovery die (4+) holds" % unit.get_name(), true)
 		elif battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s is Fearless — recovery die (4+) fails" % unit.get_name(), true)
-	# No Retreat (quick-win batch; official text: a failed morale test that causes Shaken/Rout "counts
-	# as passed instead. Then, roll as many dice as the number of wounds it would take to fully destroy
-	# it, and for each result of 1-3 the unit takes one wound, which can't be ignored."): the pass is
+	# No Retreat (quick-win batch; rule No Retreat: a failed morale test that would cause Shaken/Rout
+	# counts as passed instead. Then roll one die per wound needed to destroy the unit; each 1-3 deals
+	# one wound, which can't be ignored.): the pass is
 	# paid in self-wounds rolled visibly on the real tray (a 4+ is "safe", so the tray highlights the
 	# harmless faces); the wounds land via _solo_apply_wounds DIRECTLY — Regeneration/Resistance never
 	# roll ("can't be ignored"). Checked AFTER Fearless (the free rescue first, the paid one only if
@@ -11014,8 +13156,8 @@ func _solo_confirm_cast_first(unit: GameUnit) -> bool:
 		return false
 	_solo_cast_asked[unit.get_instance_id()] = rnd
 	var cast_first: bool = await _solo_ask("Cast window",
-		"%s can still cast (%d token%s left).\nSpells must be cast BEFORE attacking (GF v3.5.1) — after this attack the window is gone." % [
-		member.get_name(), member.casts_current, ("" if member.casts_current == 1 else "s")],
+		"%s can still cast (%d token%s left).\nSpells must be cast BEFORE attacking (%s) — after this attack the window is gone." % [
+		member.get_name(), member.casts_current, ("" if member.casts_current == 1 else "s"), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))],
 		"Cast first", "Attack without casting")
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL,
@@ -11131,7 +13273,7 @@ func solo_begin_targeting(unit: GameUnit, melee: bool) -> void:
 	if unit.is_activated:
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.GENERAL,
-				"%s has already activated this round — one activation per unit (GF v3.5.1)" % unit.get_name())
+				"%s has already activated this round — one activation per unit (%s)" % [unit.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))])
 		return
 	# No activation door here (D23): opening the window commits nothing — _run_human_attack begins it.
 	# Cast-window guard (maintainer decision "Vorfrage" 2026-07-23): spells go BEFORE the attack
@@ -11149,6 +13291,7 @@ func solo_begin_targeting(unit: GameUnit, melee: bool) -> void:
 	# human that moment is declaring the attack. Round-stamped inside, so the second door
 	# (_on_solo_human_activated, for a unit that never attacks) cannot apply it twice.
 	await _solo_apply_utility_buffs(unit)
+	await _solo_apply_precision_tag(unit)
 	_solo_target_mode = {"unit": unit, "melee": melee}
 	if not melee and range_ring_controller != null and range_ring_controller.has_method("show_spell_preview"):
 		var weapons: Array = _solo_all_weapons(unit)
@@ -11157,6 +13300,25 @@ func solo_begin_targeting(unit: GameUnit, melee: bool) -> void:
 			range_ring_controller.show_spell_preview(_solo_unit_nodes(unit), rng_in)
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL, "%s: pick a target (%s) — right-click cancels" % [unit.get_name(), ("melee" if melee else "shooting")])
+
+
+## Rules 3.6 Cumbersome (SHO-16): the unit carries the rule in a game at the 3.6 epoch — it may only Hold or Advance
+## and never shoots after it moved. Core twin: sim.rs `resolve_with` (the moved-volley stand-down).
+static func cumbersome_active(unit: GameUnit) -> bool:
+	return AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and RulesRegistry.unit_rule_active(unit, "Cumbersome")
+
+
+## Why `verb` is closed to a Cumbersome unit, or "" when it is open: Rush and Charge are out; an Advance still moves,
+## its shot stays shut (_solo_open_shot_pick).
+static func cumbersome_refusal(unit: GameUnit, verb: int) -> String:
+	if (verb == AiDecision.Action.RUSH or verb == AiDecision.Action.CHARGE) and cumbersome_active(unit):
+		return "Cumbersome: %s may only Hold or Advance" % unit.get_name()
+	return ""
+
+
+## The shot a Cumbersome unit does not get after moving: one battle-log line, the core's own words (sim.rs).
+func _log_cumbersome_no_shot(unit: GameUnit) -> void:
+	_log_rule_event(BattleLog.Category.COMBAT, "Cumbersome: %s moved, so it cannot shoot this activation" % unit.get_name(), true)
 
 
 ## A1 (NML-202, automodus PR 2) — the player's engine-executed activation entry (radial Charge /
@@ -11170,7 +13332,12 @@ func solo_begin_auto(unit: GameUnit, verb: int) -> void:
 	if unit.is_activated:
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.GENERAL,
-				"%s has already activated this round — one activation per unit (GF v3.5.1)" % unit.get_name())
+				"%s has already activated this round — one activation per unit (%s)" % [unit.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))])
+		return
+	var cumbersome_why := cumbersome_refusal(unit, verb)
+	if cumbersome_why != "":
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.GENERAL, cumbersome_why)
 		return
 	if await _solo_confirm_cast_first(unit):
 		solo_begin_cast(unit)
@@ -11179,6 +13346,7 @@ func solo_begin_auto(unit: GameUnit, verb: int) -> void:
 	if _hotseat_verb_refused(unit):
 		return
 	await _solo_apply_utility_buffs(unit)
+	await _solo_apply_precision_tag(unit)
 	_solo_target_mode = {"unit": unit, "auto_verb": verb}
 	var bands: Dictionary = SoloController.move_bands_for_unit(unit, solo_controller.movement_range)
 	var band: float
@@ -11198,8 +13366,9 @@ func solo_begin_auto(unit: GameUnit, verb: int) -> void:
 	var valid: Array = []
 	var dimmed: Dictionary = {}   # Automodus 1.8c (OD 6): refused engine enemies -> the reason their hover names
 	var first_reason := ""
-	# Automodus 1.8b (OD 5): Rush goes to a FREE table point — no lit enemies, only the unit's own refusal.
-	var to_point := verb == AiDecision.Action.RUSH
+	# Automodus 1.8b/1.8f (OD 5, OD 13): Rush and Advance go to a FREE table point — no lit enemies, only the unit's
+	# own refusal (the Advance's shot is picked after the move).
+	var to_point := verb == AiDecision.Action.RUSH or verb == AiDecision.Action.ADVANCE
 	if to_point:
 		var here: Vector3 = solo_controller.unit_centre(unit)
 		first_reason = str(solo_controller.player_intent(unit, verb, null, here).get("refused", ""))
@@ -11222,14 +13391,7 @@ func solo_begin_auto(unit: GameUnit, verb: int) -> void:
 				unit.get_name(), verb_label, first_reason if first_reason != "" else "no enemy on the table"])
 		return
 	var suggested: GameUnit = null if to_point else solo_controller.suggest_target(unit, verb)
-	var rings: Array = []
-	for cu in valid:
-		# Automodus 1.8 (OD 11): the suggested target's ring is brighter and larger than the other lit ones.
-		var ring := _solo_spawn_pulse_ring(solo_controller.unit_centre(cu),
-			Color(1.0, 0.9, 0.5) if cu == suggested else Color(1.0, 0.7, 0.2))
-		if cu == suggested:
-			(ring.mesh as TorusMesh).outer_radius = 0.075
-		rings.append(ring)
+	var rings: Array = valid.map(func(cu: GameUnit) -> Node: return _solo_lit_ring(cu, suggested))
 	_solo_target_mode["auto_valid"] = valid
 	_solo_target_mode["auto_label"] = verb_label
 	_solo_target_mode["cast_rings"] = rings   # freed by _solo_end_targeting
@@ -11242,7 +13404,8 @@ func solo_begin_auto(unit: GameUnit, verb: int) -> void:
 	if band > 0 and range_ring_controller != null and range_ring_controller.has_method("show_spell_preview"):
 		range_ring_controller.show_spell_preview(_solo_unit_nodes(unit), band)
 	if to_point and battle_log != null:
-		battle_log.log_event(BattleLog.Category.GENERAL, "%s: hover the table to see where your models end, click to rush there; right-click or Esc cancels" % unit.get_name())
+		battle_log.log_event(BattleLog.Category.GENERAL, "%s: hover the table to see where your models end, click to %s there; right-click or Esc cancels" % [
+			unit.get_name(), "rush" if verb == AiDecision.Action.RUSH else "advance"])
 	elif battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL,
 			"%s: %d target(s) lit for %s — hover one to see where your models land, click it to go; right-click or Esc cancels" % [
@@ -11315,7 +13478,7 @@ func _run_player_intent(unit: GameUnit, verb: int, target: GameUnit, point: Vari
 	if verb == AiDecision.Action.CHARGE:
 		var gap_in: float = solo_controller.nearest_melee_gap_in(unit, target)
 		if gap_in <= SoloController.MELEE_ENGAGE_IN:
-			await _run_human_attack(unit, target, true, true)   # snap, pile-in, melee, activation, AI reply
+			await _run_human_attack(unit, target, true, true, float(report.get("charge_from_in", -1.0)))   # snap, pile-in, melee, activation, AI reply
 			return
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT,
@@ -11323,8 +13486,9 @@ func _run_player_intent(unit: GameUnit, verb: int, target: GameUnit, point: Vari
 		await _solo_complete_human_attack(unit)
 	elif bool(report.get("can_shoot", false)):
 		await _run_human_attack(unit, target, false, true)
-	# Automodus 1.8d: a point Rush has no target, so a Quick Shot unit picks its shot now; the pick completes.
-	elif point == null or verb != AiDecision.Action.RUSH or not _solo_open_quick_shot(unit):
+	# Automodus 1.8d/1.8f: a point move has no target, so the unit picks its shot now (after an Advance always,
+	# after a Rush with Quick Shot); the pick completes the activation.
+	elif point == null or not _solo_open_shot_pick(unit, verb):
 		await _solo_complete_human_attack(unit)   # the no-shot reason is already a rule note
 
 
@@ -11391,7 +13555,7 @@ func solo_begin_cast(unit: GameUnit) -> void:
 	if unit.is_activated:
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.GENERAL,
-				"%s has already activated this round — one activation per unit (GF v3.5.1)" % unit.get_name())
+				"%s has already activated this round — one activation per unit (%s)" % [unit.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))])
 		return
 	_ensure_solo_controller()
 	if _hotseat_verb_refused(unit):
@@ -11435,7 +13599,11 @@ func solo_begin_cast(unit: GameUnit) -> void:
 	_solo_log_ebr_spell_exclusion(unit, str(entry.get("name", "?")), float(entry.get("range_in", 0)), cands)
 	if cands.is_empty():
 		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.GENERAL, "%s: no legal target for %s in %s\" + line of sight" % [
+			var sight_required: bool = bool(entry.get("needs_los", false)) \
+					or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36
+			var reason := "in %s\" + line of sight" if sight_required else "in %s\""
+			var msg := "%s: no legal target for %s " + reason
+			battle_log.log_event(BattleLog.Category.GENERAL, msg % [
 				unit.get_name(), str(entry.get("name", "?")), str(entry.get("range_in", 0))])
 		return
 	# NML-206 (maintainer live test: "ich konnte keine legitimen Ziele auswählen" — the promised
@@ -11509,7 +13677,8 @@ func _run_human_cast(unit: GameUnit, member: GameUnit, entry: Dictionary, picked
 			AiSpell.CAST_BASE_TARGET, 0, pool, "boost")
 		if boost > 0:
 			var payers: PackedStringArray = []
-			for d in SoloController._draw_aura_tokens(helpers, boost):
+			var draws: Array = SoloController._draw_aura_tokens(helpers, boost)
+			for d in draws:
 				var dd := d as Dictionary
 				var payer := dd["unit"] as GameUnit
 				for i in range(int(dd["tokens"])):
@@ -11517,12 +13686,13 @@ func _run_human_cast(unit: GameUnit, member: GameUnit, entry: Dictionary, picked
 				if network_manager != null and network_manager.has_method("broadcast_unit_casts"):
 					network_manager.broadcast_unit_casts(payer)
 				payers.append("%s ×%d" % [payer.get_name(), int(dd["tokens"])])
-			_log_rule_event(BattleLog.Category.COMBAT, "Boost: %s spend%s %d token%s — the cast roll improves to %d+" % [
+			_log_rule_event(BattleLog.Category.COMBAT, "Boost: %s spend%s %d token%s — the cast roll improves to %d+%s" % [
 				", ".join(payers), ("s" if payers.size() == 1 else ""), boost, ("" if boost == 1 else "s"),
-				AiSpell.cast_target(boost, 0, AiSpell.CAST_BASE_TARGET)])
+				AiSpell.cast_target(boost, 0, AiSpell.CAST_BASE_TARGET), _solo_aura_pool_note()])
+			_solo_log_accumulator_lends(draws, member.get_name())
 	elif _solo_side_has_caster_tokens(own_slot):
-		_log_rule_event(BattleLog.Category.COMBAT, "%s: no caster of P%d within %d\" and line of sight — no boost" % [
-			spell_name, own_slot, int(AiSpell.AURA_RANGE_IN)], true)
+		_log_rule_event(BattleLog.Category.COMBAT, "%s: no caster of P%d %s — no boost" % [
+			spell_name, own_slot, _solo_aura_reach_words()], true)
 	# AI COUNTER-INTERFERENCE (decided default: shown AFTER the player commits — rules-sequential,
 	# no leak): the AI's 18"-LoS pool spends per the marginal calculus, value-proxied by the cost.
 	var interference := 0
@@ -11545,7 +13715,8 @@ func _run_human_cast(unit: GameUnit, member: GameUnit, entry: Dictionary, picked
 	for h in ai_helpers:
 		ai_pool += int((h as Dictionary)["tokens"])
 	if ai_pool > 0:
-		interference = AiSpell.plan_interference(float(threshold), ai_pool, boost)
+		var caster_target := solo_controller.caster_cast_target(member)
+		interference = AiSpell.plan_interference(float(threshold), ai_pool, boost, caster_target)
 		if interference > 0:
 			for d in SoloController._draw_aura_tokens(ai_helpers, interference):
 				var dd := d as Dictionary
@@ -11554,9 +13725,9 @@ func _run_human_cast(unit: GameUnit, member: GameUnit, entry: Dictionary, picked
 					payer.spend_caster_points(1)
 			if battle_log != null:
 				_log_rule_event(BattleLog.Category.COMBAT,
-					"NACHTMAHR interferes with %d token%s — your cast roll worsens to %d+" % [
+					"NACHTMAHR interferes with %d token%s — your cast roll worsens to %d+%s" % [
 					interference, ("" if interference == 1 else "s"),
-					AiSpell.cast_target(boost, interference, AiSpell.CAST_BASE_TARGET)], true)
+					AiSpell.cast_target(boost, interference, caster_target), _solo_aura_pool_note()], true)
 	_solo_refresh_caster_markers()
 	await _solo_resolve_one_cast({"caster": member, "caster_unit": unit, "spell": entry,
 		"name": spell_name, "targets": targets, "boost": boost, "interference": interference,
@@ -11590,6 +13761,12 @@ func _solo_end_targeting() -> void:
 func _solo_targeting_input(event: InputEvent) -> bool:
 	if _solo_target_mode.is_empty():
 		return false
+	# Automodus 1.8f: in the shot pick after a point Advance, Enter shoots the pre-marked suggestion.
+	var key := event as InputEventKey
+	if key != null and key.pressed and not key.echo and key.keycode in [KEY_ENTER, KEY_KP_ENTER] \
+			and _solo_target_mode.get("auto_suggested") != null:
+		await _solo_auto_click(_solo_target_mode["auto_suggested"])
+		return true
 	match SoloController.targeting_route(event):
 		SoloController.TargetingRoute.CANCEL:
 			# Declared split (maintainer UX 31.07.): right-click/ESC at the GO stage cancels
@@ -11625,11 +13802,12 @@ func _solo_targeting_input(event: InputEvent) -> bool:
 				_solo_end_targeting()
 				_solo_coordinate_decline(cb)
 				return true
-			# Automodus 1.8d: no Quick Shot after the point Rush — the activation still ends (the AI is owed its reply).
-			if _solo_target_mode.has("auto_quick_shot"):
+			# Automodus 1.8d/1.8f: no shot after the point move — the activation still ends (the AI is owed its reply).
+			if _solo_target_mode.has("auto_shot"):
 				var qs: GameUnit = _solo_target_mode.get("unit")
+				var qs_label := str(_solo_target_mode.get("auto_label", ""))
 				_solo_end_targeting()
-				_log_rule_event(BattleLog.Category.COMBAT, "Quick Shot: %s holds its fire" % qs.get_name(), true)
+				_log_rule_event(BattleLog.Category.COMBAT, "%s: %s holds its fire" % [qs_label, qs.get_name()], true)
 				_solo_complete_human_attack(qs)
 				return true
 			_solo_end_targeting()
@@ -11664,14 +13842,10 @@ func _solo_targeting_input(event: InputEvent) -> bool:
 				if target != null:
 					_solo_cast_click(target)
 				return true
-			if _solo_target_mode.has("auto_point"):   # Automodus 1.8b: the click rushes to the table point
-				var goal: Variant = _solo_auto_point_at(mb.position)
-				# 1.8e: a click inside the unit's own footprint is no Rush - nothing happens, the mode stays open.
-				if goal != null and target != attacker and not _solo_on_own_base(attacker, goal):
-					_solo_end_targeting()
-					await _run_player_intent(attacker, AiDecision.Action.RUSH, null, goal)
+			if _solo_target_mode.has("auto_point"):   # Automodus 1.8b/1.8f: the click moves to the table point
+				await _solo_auto_point_click(_solo_auto_point_at(mb.position), target)
 				return true
-			if _solo_target_mode.has("auto_verb") or _solo_target_mode.has("auto_quick_shot"):
+			if _solo_target_mode.has("auto_verb") or _solo_target_mode.has("auto_shot"):
 				if target != null:
 					await _solo_auto_click(target)
 				return true
@@ -11719,6 +13893,18 @@ func _solo_auto_point_at(screen_pos: Vector2) -> Variant:
 	return Vector3(snappedf((hit as Vector3).x, cell), (hit as Vector3).y, snappedf((hit as Vector3).z, cell))
 
 
+## Automodus steps 1.8b/1.8f (factored for headless tests and the two-instance harness): a click on the table point
+## `goal` runs the mode's verb (Rush or Advance) there. 1.8e: a click inside the unit's own footprint (`on_unit` is
+## what the pick ray hit) is no move — nothing happens, the mode stays open.
+func _solo_auto_point_click(goal: Variant, on_unit: GameUnit = null) -> void:
+	var unit: GameUnit = _solo_target_mode.get("unit")
+	if goal == null or on_unit == unit or _solo_on_own_base(unit, goal):
+		return
+	var verb: int = int(_solo_target_mode.get("auto_verb", AiDecision.Action.RUSH))
+	_solo_end_targeting()
+	await _run_player_intent(unit, verb, null, goal)
+
+
 ## Automodus step 1.8e: TRACK only notes the hovered cell and when the cursor reached it (the last ghosts stay
 ## while it moves); _solo_auto_point_dwell, every frame, plans the cell once the cursor rested on it.
 func _solo_hover_auto_point(point: Variant) -> void:
@@ -11745,7 +13931,7 @@ func _solo_on_own_base(unit: GameUnit, point: Vector3) -> bool:
 	return false
 
 
-## Automodus step 1.8b: the Rush ghosts for a table point (clamped to the Rush reach along the engine path),
+## Automodus steps 1.8b/1.8f: the Rush/Advance ghosts for a table point (clamped to the reach along the engine path),
 ## one planner run per grid cell (cached in auto_previews), rebuilt only when the hovered cell changes.
 func _solo_show_auto_point(point: Variant) -> void:
 	if landing_preview == null or point == _solo_target_mode.get("auto_hovered"):
@@ -11753,7 +13939,8 @@ func _solo_show_auto_point(point: Variant) -> void:
 	_solo_target_mode["auto_hovered"] = point
 	var cache: Dictionary = _solo_target_mode.get("auto_previews", {})
 	if point != null and not cache.has(point):
-		cache[point] = _solo_preview_for(_solo_target_mode.get("unit"), AiDecision.Action.RUSH, null, point)
+		cache[point] = _solo_preview_for(_solo_target_mode.get("unit"),
+			int(_solo_target_mode.get("auto_verb", AiDecision.Action.RUSH)), null, point)
 	var preview: Dictionary = cache.get(point, {}) if point != null else {}
 	if preview.has("landing"):
 		landing_preview.show_preview(preview["landing"], preview.get("lines", []))
@@ -11766,44 +13953,65 @@ func _solo_show_auto_point(point: Variant) -> void:
 ## included, which used to take the suggestion) says why, and the mode stays open.
 func _solo_auto_click(target: GameUnit) -> void:
 	var unit: GameUnit = _solo_target_mode.get("unit")
-	var quick_shot: bool = _solo_target_mode.has("auto_quick_shot")   # Automodus 1.8d: the shot after a point Rush
+	var shot_after: int = int(_solo_target_mode.get("auto_shot", -1))   # Automodus 1.8d/1.8f: the shot after a point move
 	var verb: int = int(_solo_target_mode.get("auto_verb", AiDecision.Action.RUSH))
 	if not (_solo_target_mode.get("auto_valid", []) as Array).has(target):
 		var why := "not an enemy unit"
 		if _engine_enemy(unit, target):
-			why = "not in range and sight" if quick_shot \
+			why = "not in range and sight" if shot_after >= 0 \
 				else str(solo_controller.player_intent(unit, verb, target).get("refused", "not one of the lit targets"))
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.GENERAL, "Auto: %s is not a valid target for %s (%s)" % [
 				target.get_name(), str(_solo_target_mode.get("auto_label", "")), why])
 		return
 	_solo_end_targeting()
-	if quick_shot:
-		_log_rule_event(BattleLog.Category.COMBAT, "Quick Shot: shoots after its Rush action", true)
+	if shot_after >= 0:
+		if shot_after == AiDecision.Action.RUSH:
+			_log_rule_event(BattleLog.Category.COMBAT, "Quick Shot: shoots after its Rush action", true)
 		await _run_human_attack(unit, target, false, true)   # the volley, then the activation and the AI's reply
 		return
 	await _run_player_intent(unit, verb, target)
 
 
-## Automodus step 1.8d (#1828): after a point Rush a Quick Shot unit ("may shoot after Rush") picks its shot from
-## where it now stands: the engine enemies its volley reaches (range + sight, _solo_volley_sighted) light up with the
-## 1.6 ring and the pick waits for a click (right-click/Esc = no shot). False = no Quick Shot, or nothing to light.
-func _solo_open_quick_shot(unit: GameUnit) -> bool:
+## Automodus steps 1.8d/1.8f (#1828): after a point move the unit picks its shot from where it now stands — after an
+## Advance always (OD 13), after a Rush only with Quick Shot ("may shoot after Rush"). The engine enemies its volley
+## reaches (range + sight, _solo_volley_sighted) light up with the 1.6 ring, the Advance's suggestion (suggest_target)
+## wears the highlighted one, and the pick waits for a click (Enter = the suggestion; right-click/Esc = no shot).
+## False = no shot to pick (no Quick Shot, or nothing to light).
+func _solo_open_shot_pick(unit: GameUnit, verb: int) -> bool:
+	if cumbersome_active(unit):   # rules 3.6: it moved, so it does not shoot
+		_log_cumbersome_no_shot(unit)
+		return false
+	var quick := verb == AiDecision.Action.RUSH
 	# The test player_intent uses (solo_controller.gd), with no target yet: the rule active, or spell-granted.
-	if not ((unit.has_special_rule("Quick Shot") and RulesRegistry.unit_rule_active(unit, "Quick Shot")) \
+	if quick and not ((unit.has_special_rule("Quick Shot") and RulesRegistry.unit_rule_active(unit, "Quick Shot")) \
 			or AiSpell.granted_rules_of(unit, null).has("Quick Shot")):
 		return false
+	var label := "Quick Shot" if quick else "Advance & Shoot"
 	var lit: Array = drag_line_targets(unit).filter(func(e: GameUnit) -> bool: return _solo_volley_sighted(unit, e) > 0)
 	if lit.is_empty():
-		_log_rule_event(BattleLog.Category.COMBAT, "Quick Shot: no enemy in range and sight", true)
+		_log_rule_event(BattleLog.Category.COMBAT, "%s: no enemy in range and sight" % label, true)
 		return false
-	_solo_target_mode = {"unit": unit, "auto_quick_shot": true, "auto_valid": lit, "auto_label": "Quick Shot",
-		"cast_rings": lit.map(func(e: GameUnit) -> Node:   # freed by _solo_end_targeting
-			return _solo_spawn_pulse_ring(solo_controller.unit_centre(e), Color(1.0, 0.7, 0.2)))}
+	var suggested: GameUnit = null if quick else solo_controller.suggest_target(unit, verb)
+	suggested = suggested if lit.has(suggested) else null   # 1.8c: a suggestion that is not lit is not named
+	_solo_target_mode = {"unit": unit, "auto_shot": verb, "auto_valid": lit, "auto_label": label,
+		"auto_suggested": suggested, "cast_rings": lit.map(func(e: GameUnit) -> Node:   # freed by _solo_end_targeting
+			return _solo_lit_ring(e, suggested))}
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL,
-			"%s: Quick Shot — click a lit enemy to shoot, right-click or Esc for no shot" % unit.get_name())
+			"%s: %s — click a lit enemy to shoot, right-click or Esc for no shot" % [unit.get_name(), label])
+		if suggested != null:
+			battle_log.log_event(BattleLog.Category.GENERAL, "Suggested: %s — Enter shoots it" % suggested.get_name())
 	return true
+
+
+## Automodus 1.6/1.8 (OD 11): a lit target's amber ring; the suggested target's is brighter and larger.
+func _solo_lit_ring(cu: GameUnit, suggested: GameUnit) -> Node:
+	var ring := _solo_spawn_pulse_ring(solo_controller.unit_centre(cu),
+		Color(1.0, 0.9, 0.5) if cu == suggested else Color(1.0, 0.7, 0.2))
+	if cu == suggested:
+		(ring.mesh as TorusMesh).outer_radius = 0.075
+	return ring
 
 
 ## Cast-mode click (#227, factored for headless tests): toggle-pick for multi-target spells.
@@ -12116,8 +14324,8 @@ func _solo_validate_target(attacker: GameUnit, target: GameUnit, melee: bool) ->
 		if is_inf(gap):
 			var info := solo_controller.nearest_melee_pair_info(attacker, target, false)
 			if info["gap_in"] <= SoloController.MELEE_ENGAGE_IN:
-				return "%.1f\" above — melee reaches %.0f\" up (GF p.9)" \
-					% [info["height_in"], SoloController.MELEE_VERTICAL_IN]
+				return "%.1f\" above — melee reaches %.0f\" up (%s)" \
+					% [info["height_in"], SoloController.melee_vertical_in(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(attacker))]
 			gap = info["gap_in"]
 		return "not in melee range (%.1f\" — move into base contact)" % gap
 	# B11 (test game 2): the refusal message measures base-EDGE to base-edge between the NEAREST
@@ -12140,7 +14348,7 @@ func _solo_validate_target(attacker: GameUnit, target: GameUnit, melee: bool) ->
 	# The weapon-indirect term is the entry's ignores_los param (dead-parameter fold, twin of
 	# #1006); spell/mark grants stay unconditional — they are not weapon Indirect.
 	var indirect: bool = (SoloController.has_indirect_ranged(_solo_all_weapons(attacker)) \
-		and SoloController.indirect_ignores_los(attacker)) \
+		and SoloController.indirect_ignores_los(attacker, _solo_unit_held(attacker))) \
 		or SoloController.granted_indirect_of(attacker) \
 		or _solo_target_grants_indirect(target)   # wave 6 — the Indirect Mark's once-grant on the target
 	if rng_in <= 0 or _solo_sighted_count(attacker, target, rng_in, indirect) <= 0:
@@ -12155,7 +14363,9 @@ func _solo_validate_target(attacker: GameUnit, target: GameUnit, melee: bool) ->
 					causes.append(str(shroud["name"]))
 				why = " — %s" % ", ".join(causes)
 			return "out of range (%.1f\" edge to edge > %d\"%s)" % [dist, rng_in, why]
-		return "no model has line of sight" + _solo_los_refusal_detail(attacker, target)
+		var hold_note: String = " (Indirect needs Hold: the unit moved this round)" if SoloController.has_indirect_ranged(_solo_all_weapons(attacker)) \
+			and not SoloController.indirect_ignores_los(attacker, _solo_unit_held(attacker)) else ""
+		return "no model has line of sight" + hold_note + _solo_los_refusal_detail(attacker, target)
 	return ""
 
 
@@ -12203,7 +14413,7 @@ func _solo_los_refusal_detail(shooter: GameUnit, target: GameUnit) -> String:
 		if bu != null:
 			var own: bool = int(bu.unit_properties.get("player_id", 0)) == int(shooter.unit_properties.get("player_id", 0))
 			return " — nearest lane blocked by %s%s" % [bu.get_name(),
-				" (your own unit: only the shooter's OWN unit is see-through — GF v3.5.1 p.5)" if own else ""]
+				" (your own unit: only the shooter's OWN unit is see-through — %s)" % OPRApiClient.rules_cite(RulesRegistry.system_of_unit(shooter)) if own else ""]
 	return ""
 
 
@@ -12401,7 +14611,7 @@ func _solo_hover_sighted_count(attacker: GameUnit, hovered: GameUnit) -> int:
 	var rng_in: int = AiArchetype.max_range_inches(_solo_all_weapons(attacker))
 	return _solo_sighted_count(attacker, hovered, rng_in,
 		SoloController.has_indirect_ranged(_solo_all_weapons(attacker)) \
-			and SoloController.indirect_ignores_los(attacker))
+			and SoloController.indirect_ignores_los(attacker, _solo_unit_held(attacker)))
 
 
 ## Resolve the player's declared attack — the mirror of the AI flow: your groups (unit + heroes, own
@@ -12495,7 +14705,7 @@ func _solo_offer_split_fire(attacker: GameUnit, target_a: GameUnit) -> Dictionar
 ## ([] = "All at <target>"). Apart from the guards above so the prompt is drivable headless.
 func _solo_ask_split_fire(target_a: GameUnit, names: Array) -> Array:
 	var card := PromptCard.new("Split fire?",
-		"Up to two targets (GF v3.5.1 p.8). Checked weapons fire at a SECOND target:",
+		"Up to two targets (%s). Checked weapons fire at a SECOND target:" % OPRApiClient.rules_cite(RulesRegistry.system_of_unit(target_a)),
 		"Pick 2nd target", "All at %s" % target_a.get_name())
 	var checks: Array = []
 	for n in names:
@@ -12513,20 +14723,42 @@ func _solo_ask_split_fire(target_a: GameUnit, names: Array) -> Array:
 	return picked
 
 
-func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool, auto: bool = false) -> void:
+## FAB-B4 (rules 3.6): where each model of the charger (host plus joined heroes) stood before this round's hand
+## drag, from the movement ledger. A manual charge is only legal once the drag brought it into reach, so the
+## figure the 3.6 charge gates need exists only there. No entry = it did not move = its current spot is right.
+func _human_charge_starts(attacker: GameUnit) -> Dictionary:
+	var starts := {}
+	if move_trails == null or opr_army_manager == null:
+		return starts
+	var chain: Array = [attacker]
+	chain.append_array(attacker.get_attached_heroes())
+	for gu in chain:
+		starts.merge(move_trails.ledger.round_starts_for_unit((gu as GameUnit).unit_id, opr_army_manager.current_round))
+	return starts
+
+
+func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool, auto: bool = false, charge_from_in: float = -1.0) -> void:
 	if attacker == null or target == null or dice_roller_control == null:
 		return
 	await begin_activation(attacker)   # D23: the resolving attack is the committed action
 	_solo_log_unmodeled_rules(attacker)
 	_solo_log_unmodeled_rules(target)
 	if melee:
+		# FAB-B4 (rules 3.6, core twin `tray_charge`): the charge gates read the PRE-charge edge gap, taken BEFORE
+		# the snap and pile-in close it. An Auto charge already moved and hands its own figure in (`charge_from_in`
+		# >= 0); a hand charge is measured from where the ledger says its models stood before the drag. Below
+		# EPOCH_73_V36 a human charge reads 0" as it always did.
+		var charge_gap := 0.0
+		if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+			charge_gap = charge_from_in if charge_from_in >= 0.0 \
+				else solo_controller.charge_from_in(attacker, target, 0.0, _human_charge_starts(attacker))
 		# CHARGE SNAP (field-test finding 5): before the strikes, snap the charging unit into clean base
 		# contact — its nearest model touches the enemy and the rest ride forward in coherency (GF/AoF
 		# v3.5.1 p.8). A small nudge (validation already required ≤ MELEE_ENGAGE_IN); logged + broadcast.
 		var snapped: float = solo_controller.snap_charge(attacker, target)
 		if snapped > 0.05 and battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT,
-				"%s charges into base contact (+%.1f\") — the unit follows in coherency (GF/AoF v3.5.1 p.8)" % [attacker.get_name(), snapped], true)
+				"%s charges into base contact (+%.1f\") — the unit follows in coherency (%s)" % [attacker.get_name(), snapped, OPRApiClient.rules_cite(RulesRegistry.system_of_unit(attacker))], true)
 		# PILE-IN (GF v3.5.1 p.9, live-test Bug 18 + NML-208): the defender here is the AI's unit — its
 		# mandatory 3" pile-in is automated and now GLIDES visibly (teleport read as "nothing happened").
 		var pile_moves: Array = solo_controller.pile_in(target, attacker)
@@ -12534,11 +14766,11 @@ func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool, auto: 
 			await _solo_animate_move(pile_moves, false)   # NML-208: pile-in always glides
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT,
-					"%s: %d model%s pile in up to 3\" (GF v3.5.1 p.9)" % [target.get_name(), pile_moves.size(), ("" if pile_moves.size() == 1 else "s")], true)
+				"%s: %d model%s pile in up to 3\" (%s)" % [target.get_name(), pile_moves.size(), ("" if pile_moves.size() == 1 else "s"), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(target))], true)
 		elif _solo_combined_alive(target) > 1 and battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT,
-				"%s: all models already in base contact — no pile-in needed (GF v3.5.1 p.9)" % target.get_name(), true)
-		await _run_human_melee(attacker, target, auto)
+			"%s: all models already in base contact — no pile-in needed (%s)" % [target.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(target))], true)
+		await _run_human_melee(attacker, target, auto, charge_gap)
 		# Hit & Run (cut C): "being in melee" covers the DEFENDER too — the AI's charged unit may take
 		# its once-per-round 3" step after the melee resolves (the human's own bearers move manually —
 		# on a two-human table the defender is one, #1719).
@@ -12546,8 +14778,11 @@ func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool, auto: 
 		if target != null and not target.is_destroyed() and _solo_is_ai_unit(target) \
 				and solo_controller.hit_and_run_move(target, false):
 			if battle_log != null:
-				battle_log.log_event(BattleLog.Category.MOVEMENT, "Hit & Run: %s steps up to 3\" out of the melee" % target.get_name(), true)
+				battle_log.log_event(BattleLog.Category.MOVEMENT, "%s: %s steps up to 3\" out of the melee" % [solo_controller._hit_and_run_pick(target, false), target.get_name()], true)
 			await _solo_retreating_strike(target)   # resolver wave A: the post-melee step may lash out
+		elif target != null and not target.is_destroyed() and _solo_is_ai_unit(target) and battle_log != null \
+				and not solo_controller.last_hit_and_run_note.is_empty():   # UX-19: only some models carry it
+			battle_log.log_event(BattleLog.Category.MOVEMENT, solo_controller.last_hit_and_run_note, true)
 	else:
 		await _run_human_shooting(attacker, target)
 	# X1 (test game 2, double-shoot exploit): a resolved attack IS the unit's activation — it completes
@@ -12556,6 +14791,10 @@ func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool, auto: 
 	# toggle path does the full job (GameUnit.activate marks host + heroes, marker, MP broadcast, log,
 	# alternation reply via unit_activated). A pre-toggled unit falls through to the normal pump so a
 	# mis-click fix never queues a second AI answer.
+	if not melee and attacker != null:
+		# Fable A6/F6: the shooting leg is what makes the later drag illegal — stamp it here,
+		# where the table already knows this attack was a volley.
+		attacker.unit_properties["shot_round"] = opr_army_manager.current_round
 	human_attack_resolved.emit(attacker, melee)
 	await _solo_complete_human_attack(attacker)
 
@@ -12782,10 +15021,12 @@ func _run_human_attack_split(attacker: GameUnit, target_a: GameUnit, target_b: G
 	_solo_log_unmodeled_rules(target_b)
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT,
-			"Split fire: %s fires at %s and %s (declared before rolling — GF v3.5.1 p.8)" % [
-			attacker.get_name(), target_a.get_name(), target_b.get_name()], false)
+			"Split fire: %s fires at %s and %s (declared before rolling — %s)" % [
+			attacker.get_name(), target_a.get_name(), target_b.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(attacker))], false)
 	await _run_human_shooting(attacker, target_a, b_names, true)
 	await _run_human_shooting(attacker, target_b, b_names, false)
+	if attacker != null:
+		attacker.unit_properties["shot_round"] = opr_army_manager.current_round
 	human_attack_resolved.emit(attacker, false)
 	await _solo_complete_human_attack(attacker)
 
@@ -12842,7 +15083,7 @@ func _solo_log_reach_shrink(attacker: GameUnit, target: GameUnit) -> void:
 	var shrouded := not shroud.is_empty()
 	if aircraft:
 		battle_log.log_event(BattleLog.Category.COMBAT,
-			"%s is an Aircraft: weapon ranges count -12\" against it (GF v3.5.1)" % target.get_name(), true)
+			"%s is an Aircraft: weapon ranges count -12\" against it (%s)" % [target.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(target))], true)
 	if shrouded:
 		battle_log.log_event(BattleLog.Category.COMBAT,
 			"%s has %s: weapon ranges -%s\" (min %s\") against it" % [target.get_name(),
@@ -12859,7 +15100,7 @@ func _solo_log_reach_shrink(attacker: GameUnit, target: GameUnit) -> void:
 				or not (member.source_data is OPRApiClient.OPRUnit):
 			continue
 		# Profiles that WOULD reach at the printed range — the ones the shrink then takes away.
-		var gap: float = _solo_nearest_model_gap_in(member, target, INF)
+		var gap: float = _solo_shoot_gap_in(member, target, INF)
 		for p in AiShooting.profiles_in_range((member.source_data as OPRApiClient.OPRUnit).weapons, gap):
 			var printed := float((p as Dictionary).get("range", 0))
 			if SoloController.effective_shoot_reach_in(printed, target) >= gap:
@@ -12902,16 +15143,32 @@ func _solo_log_range_bonus(attacker: GameUnit, target: GameUnit) -> void:
 			# player's own book prints, never the primitive we happen to file it under.
 			var rule_name := "Royal Legion"
 			if not member.has_special_rule("Royal Legion"):
-				for e in RulesRegistry.unit_rules_of_primitive(member, "Royal Legion"):
-					var alias := str((e as Dictionary).get("name", ""))
-					if not alias.is_empty() and alias != "Royal Legion":
-						rule_name = alias
-						break
+				if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+					var alias := ""
+					var aura_alias := ""
+					for e in RulesRegistry.unit_rules_of_primitive(member, "Royal Legion"):
+						var n := str((e as Dictionary).get("name", ""))
+						if n.is_empty() or n == "Royal Legion":
+							continue
+						if alias.is_empty():
+							alias = n
+						if aura_alias.is_empty() and n.ends_with("Aura"):
+							aura_alias = n
+					if not aura_alias.is_empty():
+						alias = aura_alias
+					if not alias.is_empty():
+						rule_name = _solo_range_bonus_book_name(member, alias)
+				else:
+					for e in RulesRegistry.unit_rules_of_primitive(member, "Royal Legion"):
+						var legacy := str((e as Dictionary).get("name", ""))
+						if not legacy.is_empty() and legacy != "Royal Legion":
+							rule_name = legacy
+							break
 			causes.append("%s +%d\"" % [rule_name, bonus_in - spell_in])
 		if spell_in > 0:
 			causes.append("spell +%d\"" % spell_in)
 		# Profiles that reach ONLY because of the bonus: out of reach at the printed range, in reach with it.
-		var gap: float = _solo_nearest_model_gap_in(member, target, INF)
+		var gap: float = _solo_shoot_gap_in(member, target, INF)
 		var lifted: PackedStringArray = []
 		for p in AiShooting.profiles_in_range((member.source_data as OPRApiClient.OPRUnit).weapons,
 				maxf(gap - float(bonus_in), 0.0)):
@@ -12928,6 +15185,18 @@ func _solo_log_range_bonus(attacker: GameUnit, target: GameUnit) -> void:
 		battle_log.log_event(BattleLog.Category.COMBAT,
 			"%s: %s shooting range — %s reaches %s past its printed range" % [
 			member.get_name(), " + ".join(causes), ", ".join(lifted), target.get_name()], true)
+
+
+## The range log names the BOOK rule the unit carries. When an Aura Channel expands into a base rule,
+## the base is what `grants`, but the table prints the aura's own name — walk the channel to it.
+func _solo_range_bonus_book_name(member: GameUnit, alias: String) -> String:
+	for e in RulesRegistry.unit_rules_of_primitive(member, "Aura Channel"):
+		var row := e as Dictionary
+		var name := str(row.get("name", ""))
+		var grants := str((row.get("params", {}) as Dictionary).get("grants", ""))
+		if not name.is_empty() and (name == alias or grants == alias):
+			return name
+	return alias
 
 
 ## Automodus step 2.3b (OD 7): the enemy units a manual drag of `unit` may draw a shooting line to (no sight
@@ -12964,12 +15233,17 @@ func _solo_volley_sighted(attacker: GameUnit, target: GameUnit, pairs_out = null
 ## Indirect Mark — the sight test goes, the range gate stays.
 func _solo_volley_indirect(attacker: GameUnit, target: GameUnit) -> bool:
 	return (SoloController.has_indirect_ranged(_solo_all_weapons(attacker)) \
-		and SoloController.indirect_ignores_los(attacker)) \
+		and SoloController.indirect_ignores_los(attacker, _solo_unit_held(attacker))) \
 		or _solo_target_grants_indirect(target)   # wave 6 — the Indirect Mark's once-grant
 
 
 func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Array = [], skip_named: bool = false) -> void:
 	if SoloController.combined_alive(attacker) <= 0 or SoloController.combined_alive(target) <= 0:
+		return
+	# Rules 3.6 Cumbersome: moved this round (the same moved_round stamp the drop writes) = no volley.
+	if cumbersome_active(attacker) and opr_army_manager != null \
+			and int(attacker.unit_properties.get("moved_round", -1)) == opr_army_manager.current_round:
+		_log_cumbersome_no_shot(attacker)
 		return
 	_solo_stage_begin("%s fires at %s" % [attacker.get_name(), target.get_name()])
 	# B11: ONE measuring truth — the shot distance (feeding the >9" Versatile/Guarded gates and the
@@ -12984,6 +15258,8 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 	_solo_log_range_bonus(attacker, target)
 	var target_alive_before: int = SoloController.combined_alive(target)   # NML-966: combined for the morale trigger
 	var target_wounds_before: int = _solo_unit_wounds_now(target)
+	# C-BLAST-CAP-GROUPS (EPOCH_73_V36): the models standing at the volley's start cap every Blast of it; -1 = live read.
+	var blast_models_start: int = _solo_combined_alive(target) if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else -1
 	var regenable := 0
 	var regen_proof := 0
 	# Armor(X) (wave 5) sets the working Defense, then every Defense contribution of the parts seam
@@ -12999,12 +15275,13 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 	if not h_over9.is_empty() and dist > AiCombatMath.LONG_RANGE_IN:
 		shielded_def = AiCombatMath.guarded_defense(shielded_def, true)
 		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.COMBAT, "%s (%s): shot from over 9\" — +1 Defense (saves on %d+)" % [
-				target.get_name(), h_over9, AiCombatMath.shown_target(shielded_def)], true)
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s (%s): shot from over 9\" — +1 Defense (saves on %d+)%s" % [
+				target.get_name(), h_over9, AiCombatMath.shown_target(shielded_def),
+				_solo_most_models_note(target, h_over9)], true)
 	var covered_def: int = _solo_cover_defense(target, shielded_def)
 	# Resolver wave A parity: your volley places vs-target Marks, SPENDS Piercing-Tag markers and
 	# honours the Reckless-Piercing AP stamps — the AI path had these seams, yours silently didn't.
-	_solo_apply_vs_marks(attacker, target, dist)
+	await _solo_apply_vs_marks(attacker, target, dist)
 	var extra_ap := _solo_spend_piercing_tag(target) + _solo_reckless_ap(attacker, target)
 	# Per-model shooting transparency (GF v3.5.1 p.8): tell the player how many models actually fire.
 	if battle_log != null:
@@ -13014,13 +15291,23 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 		# #182 — rules-must-log: when the volley is only legal BECAUSE of Indirect, say so
 		# (the old line read "0/N with line of sight" over a perfectly legal barrage).
 		if log_indirect and _solo_sighted_count(attacker, target, rng_in) <= 0:
-			battle_log.log_event(BattleLog.Category.COMBAT,
-				"Indirect: %s targets %s without line of sight (GF v3.5.1)" % [
-				attacker.get_name(), target.get_name()], true)
+			# Rules 3.6 (SHO-03): name the rule that lifted the Hold need (Quick Throw) when the
+			# volley is blind without a Hold; a held or plain bearer keeps the plain line.
+			var lift_rule: String = "" if _solo_unit_held(attacker) \
+				else SoloController.indirect_lift_rule(attacker, "los_needs_hold")
+			if lift_rule.is_empty():
+				battle_log.log_event(BattleLog.Category.COMBAT,
+					"Indirect: %s targets %s without line of sight (%s)" % [
+					attacker.get_name(), target.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(attacker))], true)
+			else:
+				battle_log.log_event(BattleLog.Category.COMBAT,
+					"%s: %s targets %s without line of sight — no Hold needed" % [
+					lift_rule, attacker.get_name(), target.get_name()], true)
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s: %d/%d model%s with line of sight + range" % [
 			attacker.get_name(), _solo_volley_sighted(attacker, target), total, ("" if total == 1 else "s")], true)
 	var fired_any := false   # round 7, finding 5: a volley that rolls NOTHING must say so, never end silently
 	var cover_logged := false   # I4: log Cover once, only when a shot's save really used it
+	var indirect_cover_logged := false   # Rules 3.6 (SHO-01b): name a moved Indirect shooter's kept cover once
 	# Maintainer 31.07.: the attacker CHOOSES how many markers to remove (caster-points style).
 	var spot_hit: int = await _solo_offer_spot_markers(attacker, target)
 	var tag_hit: int = _solo_consume_tag_markers(target)   # Precision Tag: the spot pool's +1-per-removal twin
@@ -13046,13 +15333,22 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 	var h_groups: Array = _solo_attack_groups(attacker, dist, false, target)
 	if not h_groups.is_empty():
 		h_groups = h_groups + _solo_takedown_bonus_groups(attacker, false)
+	var arrival_logged := {}   # G4R5 F-AMBUSH-ARRIVAL-AP: the book rule is named once per member
+	var hero_upr: Dictionary = await _solo_hero_unpredictable(attacker, upr_name,   # AIG-G2 R5: a joined hero's own die
+		h_groups.map(func(g: Variant) -> Variant: return (g as Dictionary).get("member")), target, false)
 	for grp in h_groups:
 		var group := grp as Dictionary
+		var m_upr: Dictionary = hero_upr.get((group.get("member") as GameUnit).get_instance_id(), {})   # own die, else the unit's
+		var m_hit: int = int(m_upr.get("hit", upr_hit))
+		var m_ap: int = int(m_upr.get("ap", upr_ap))
 		var base_quality: int = int(group.get("quality", 4))
 		var mod_info: Dictionary = _solo_hit_mod_info(group.get("member"), target, dist, false)
 		for p in group.get("profiles", []):
 			var profile := _solo_bridge_granted_flags(group.get("member"), p as Dictionary, target)
 			if int(profile.get("attacks", 0)) <= 0:
+				# G4R6 F-SIGHT-OWN-GAP: name the book rule once, in the split-fire half that would have rolled it.
+				if profile.has("_own_gap_refused") and (split_names.is_empty() or split_names.has(str(profile.get("name", ""))) != skip_named):
+					_solo_log_own_gap_refusal(group.get("member"), target, str(profile.get("name", "?")))
 				continue
 			# #226 SPLIT FIRE (GF v3.5.1 p.8): with a split declared, this volley only rolls
 			# its half — skip_named=true fires everything NOT in the set (target A), false
@@ -13084,12 +15380,18 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 			# stamp the Entrenched gate reads — one truth for "moved this round".
 			var h_moved: bool = opr_army_manager != null \
 				and int(attacker.unit_properties.get("moved_round", -1)) == opr_army_manager.current_round
-			if h_moved and (bool(profile.get("indirect", false)) or h_granted_indirect) \
-					and not bool(RulesRegistry.best_primitive_param(group.get("member"), "Indirect", "no_moved_penalty", false)):
-				var ind_mod: int = AiCombatMath.indirect_hit_modifier(true,
-					int(RulesRegistry.unit_param(group.get("member"), "Indirect", "moved_hit_penalty", AiCombatMath.INDIRECT_MOVED_HIT_PENALTY)))
-				p_mod = {"mod": int(p_mod.get("mod", 0)) + ind_mod,
-					"note": _solo_join_note(str(p_mod.get("note", "")), "Indirect moved %d" % ind_mod)}
+			var h_own: int = int(p_mod.get("own", 0)) + m_hit   # SHO-08: own rules' part (Unstoppable)
+			if h_moved and (bool(profile.get("indirect", false)) or h_granted_indirect):
+				if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+					# Rules 3.6 (SHO-02): the penalty is gone; the hit-info names the non-application.
+					p_mod = {"mod": int(p_mod.get("mod", 0)),
+						"note": _solo_join_note(str(p_mod.get("note", "")), "Indirect: no moved penalty")}
+				elif not bool(RulesRegistry.best_primitive_param(group.get("member"), "Indirect", "no_moved_penalty", false)):
+					var ind_mod: int = AiCombatMath.indirect_hit_modifier(true,
+						int(RulesRegistry.unit_param(group.get("member"), "Indirect", "moved_hit_penalty", AiCombatMath.INDIRECT_MOVED_HIT_PENALTY)))
+					h_own += ind_mod
+					p_mod = {"mod": int(p_mod.get("mod", 0)) + ind_mod,
+						"note": _solo_join_note(str(p_mod.get("note", "")), "Indirect moved %d" % ind_mod)}
 			# Reliable sets the Quality (2+), THEN the roll modifiers apply (GF v3.5.1 p.14: "Reliable only
 			# changes the Quality value, so the roll can still be modified").
 			# NML-970: the human volley folds its Spot spend into the note the same way.
@@ -13099,24 +15401,27 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 			if tag_hit != 0:
 				p_mod = {"mod": int(p_mod.get("mod", 0)) + tag_hit,
 					"note": _solo_join_note(str(p_mod.get("note", "")), "Tagged +%d" % tag_hit)}
-			var h_mod: int = int(p_mod.get("mod", 0)) + upr_hit
-			if bool(profile.get("unstoppable", false)) and h_mod < 0:
-				h_mod = 0   # Unstoppable (GF v3.5.1 p.15): ignores all negative modifiers to this weapon
-				if battle_log != null:
-					battle_log.log_event(BattleLog.Category.COMBAT, "Unstoppable: negative to-hit modifiers ignored", true)
-					_solo_rule_float(target, "Unstoppable: no penalties")
+			var h_mod: int = int(p_mod.get("mod", 0)) + m_hit
+			if bool(profile.get("unstoppable", false)):
+				var h_uf: Array = _solo_unstoppable_fold(h_mod, h_own)   # Unstoppable: other sources' minus ignored
+				if battle_log != null and str(h_uf[1]) != "":
+					battle_log.log_event(BattleLog.Category.COMBAT, str(h_uf[1]), true)
+					if int(h_uf[0]) != h_mod:
+						_solo_rule_float(target, "Unstoppable: no penalties")
+				h_mod = int(h_uf[0])
 			var to_hit_raw: int = AiCombatMath.reliable_quality(base_quality, bool(profile.get("reliable", false))) - h_mod
 			var to_hit: int = AiCombatMath.modified_hit_target(to_hit_raw, 0)
-			if upr_ap + extra_ap > 0:
+			var arrival_ap := _solo_ambush_arrival_ap(group.get("member") as GameUnit, arrival_logged)   # G4R5 F-AMBUSH-ARRIVAL-AP
+			if m_ap + extra_ap + arrival_ap > 0:
 				profile = profile.duplicate()
-				profile["ap"] = int(profile.get("ap", 0)) + upr_ap + extra_ap   # Unpredictable + Tag/Reckless AP
+				profile["ap"] = int(profile.get("ap", 0)) + m_ap + extra_ap + arrival_ap   # Unpredictable + Tag/Reckless/Ambush-arrival AP
 			# Versatile Attack applies to the HUMAN's volley too (xhigh review find: the profiles are stamped
 			# and every other modeled rule auto-applies here, but this path never read the flag — the player's
 			# own Versatile units were cheated of their buff). Bug 13 (field test): the mode is the PLAYER's
 			# choice — the EV pick only pre-labels the recommended button. EPOCH_38_WATCHBORN_LATCH:
 			# asked ONCE per activation (the first eligible volley) on the unit's latch, not per weapon
 			# per volley — every later volley/charge of this activation reuses the answer.
-			if bool(profile.get("versatile_attack", false)) and dist > AiCombatMath.LONG_RANGE_IN:
+			if bool(profile.get("versatile_attack", false)) and _solo_versatile_over(attacker, dist, false, 0.0):
 				var pname := str(profile.get("name", "?"))
 				var vm: Dictionary = _solo_versatile_latch_read(attacker)
 				var fresh: bool = vm.is_empty()
@@ -13130,8 +15435,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 					profile = profile.duplicate()
 					profile["ap"] = int(profile.get("ap", 0)) + int(vm.get("ap", 0))
 				if battle_log != null and fresh:
-					battle_log.log_event(BattleLog.Category.COMBAT, "Versatile Attack: %s picks %s for this activation" % [
-						attacker.get_name(), "AP(+1)" if int(vm.get("ap", 0)) > 0 else "+1 to hit"], true)
+					_solo_log_versatile_pick(attacker, int(vm.get("ap", 0)) > 0)
 			_solo_log_hit_mod(p_mod, target, to_hit)
 			_vfx_player_volley(group.get("member"), target, profile, bool(profile.get("indirect", false))
 				or h_granted_indirect or _solo_target_grants_indirect(target))
@@ -13140,7 +15444,8 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 			if bool(profile.get("limited", false)):
 				solo_controller.mark_limited_used(group.get("member"), profile)   # once per game (wave 5)
 			await _solo_hazardous_self_wounds(attacker, profile, faces)   # resolver wave A: natural 1s wound the firer
-			var hits: int = await _solo_hits(faces, to_hit_raw, profile, dist, target, false, _roller_label(attacker))
+			var hits: int = await _solo_hits(faces, to_hit_raw, profile, dist, target, false, _roller_label(attacker),
+				0.0, blast_models_start)
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s fires %s at %s — %d hit%s" % [
 					str(group.get("name", "?")), str(profile.get("name", "?")), target.get_name(), hits, ("" if hits == 1 else "s")])
@@ -13149,12 +15454,27 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 				await _solo_stage_phase(str(profile.get("name", "weapon")))
 				continue
 			# Blast (GF v3.5.1) and Indirect (wave 5) ignore cover — saves at the Shielded (uncovered) Defense.
-			var save_def: int = shot_base if (int(profile.get("blast", 0)) > 1 or bool(profile.get("indirect", false)) or bool(profile.get("ignores_cover", false))) else shot_cover
+			var save_def: int = shot_base if SoloController.shot_ignores_cover(profile, attacker, _solo_unit_held(attacker)) else shot_cover
+			if not indirect_cover_logged and bool(profile.get("indirect", false)) \
+					and not SoloController.indirect_ignores_cover(attacker, _solo_unit_held(attacker)) \
+					and battle_log != null and AiCombatMath.shot_uses_cover(save_def, shot_cover, shot_base):
+				indirect_cover_logged = true   # the rule applied: the target keeps its terrain cover
+				battle_log.log_event(BattleLog.Category.COMBAT, "Indirect: %s — %s's cover counts (only sight-blocker cover is ignored)" % [
+					attacker.get_name(), target.get_name()], true)
 			if td_ctx.is_empty() and not cover_logged and battle_log != null \
 					and AiCombatMath.shot_uses_cover(save_def, shot_cover, shot_base):
 				cover_logged = true   # I4: only claim Cover when the roll truly saved at the covered value
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s is in cover: +1 Defense (saves on %d+)" % [
-					target.get_name(), AiCombatMath.shown_target(save_def)], true)
+					_solo_defense_signer(target).get_name(), AiCombatMath.shown_target(save_def)], true)
+			# DAT-16b — rules-must-log: the HUMAN volley names the map-read rule that skips cover,
+			# the AI-08a block's twin (the human path used to skip cover without a word). The line is
+			# epoch-gated so that below 73 the human path stays byte-exact.
+			elif td_ctx.is_empty() and battle_log != null and shot_cover < shot_base \
+					and int(profile.get("blast", 0)) <= 1 \
+					and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
+					and not str(profile.get("cover_rule", "")).is_empty():
+				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s — %s's cover save is skipped" % [
+					str(profile["cover_rule"]), str(group.get("name", "?")), target.get_name()], true)
 			# B5 (test game 2): the HUMAN volley now mirrors the AI's per-model landing — Takedown
 			# wounds go to the model the PLAYER picks (click), Deadly lands ×X on one model with no
 			# carry-over. Both previously pooled into the defender-optimal removal, so the player's
@@ -13167,16 +15487,16 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 			if is_takedown and w > 0 and not td_pick.is_empty():
 				# Resolver wave A: Deadly multiplies on the picked model (see the AI branch).
 				var td_w: int = w * maxi(int(profile.get("deadly", 0)), 1)
-				if _solo_ignores_regen(group.get("member"), profile):
+				if _solo_ignores_regen(group.get("member"), profile, target):
 					await _solo_land_takedown_wounds(target, str(profile.get("name", "?")), td_pick, 0, td_w)
 				else:
 					await _solo_land_takedown_wounds(target, str(profile.get("name", "?")), td_pick, td_w, 0)
 			elif is_deadly and w > 0:
-				if _solo_ignores_regen(group.get("member"), profile):
-					await _solo_land_deadly_wounds(target, str(profile.get("name", "?")), int(profile.get("deadly", 0)), 0, w)
+				if _solo_ignores_regen(group.get("member"), profile, target):
+					await _solo_land_deadly_wounds(target, str(profile.get("name", "?")), int(profile.get("deadly", 0)), 0, w, false, dist)
 				else:
-					await _solo_land_deadly_wounds(target, str(profile.get("name", "?")), int(profile.get("deadly", 0)), w, 0)
-			elif _solo_ignores_regen(group.get("member"), profile):
+					await _solo_land_deadly_wounds(target, str(profile.get("name", "?")), int(profile.get("deadly", 0)), w, 0, false, dist)
+			elif _solo_ignores_regen(group.get("member"), profile, target):
 				regen_proof += w
 			else:
 				regenable += w
@@ -13186,26 +15506,31 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 	if not fired_any and battle_log != null:
 		_log_rule_event(BattleLog.Category.COMBAT,
 			"%s has no weapon in range of %s — no shots" % [attacker.get_name(), target.get_name()], true)
-	await _solo_land_wounds(target, regenable, regen_proof)
+	await _solo_land_wounds(target, regenable, regen_proof, false, dist)
 	if _solo_combined_alive(target) <= 0:
 		_solo_growth_on_kill(attacker)   # Defensive Frenzy: your volley kill counts too (symmetry)
 		_solo_vengeance_on_destroyed(target, attacker)
 	await _solo_stage_phase("Result")
 	# The target tests morale if the volley dropped it to half strength or less (goal 003 P1). Its roll
 	# carries its owner's label — "AI (X)" only for an AI seat; a two-human table names the player (#1719).
-	await _solo_shooting_morale(target, target_alive_before, _roller_label(target), target_wounds_before)
+	await _solo_shooting_morale(target, target_alive_before, _roller_label(target), target_wounds_before, "", dist, -1.0)
 	await _solo_stage_phase("Morale")
 	_solo_stage_end()
 	_solo_consume_once_mods(attacker, target, false)   # F4: once-mods spent by this exchange
+	_solo_spend_shot_feats(attacker)
 
 
 ## The player's melee charge (goal 001 P8): the AI defender's Counter weapons strike FIRST (it must always
 ## strike back — solo rules p.57 — so no prompt), Impact (Counter-reduced), your strikes (charging:
 ## Furious/Thrust; the AI's Evasive/Shielded apply), the AI's remaining strike-back, then the Fear-adjusted
 ## melee-winner morale (GF/AoF v3.5.1 p.13).
-func _run_human_melee(attacker: GameUnit, target: GameUnit, auto: bool = false) -> void:
+func _run_human_melee(attacker: GameUnit, target: GameUnit, auto: bool = false, charge_from_in: float = 0.0) -> void:
 	var human_caused := 0
 	var ai_caused := 0
+	var self_taken: int = _solo_activation_self_wounds(attacker)   # MEL-10h: pre-melee wounds count as TAKEN at 3.6
+	_solo_hazard_self.clear()
+	_solo_regen_ignored = 0
+	_solo_melee_scourge.clear()
 	_solo_stage_begin("%s charges %s" % [attacker.get_name(), target.get_name()])
 	# Rules-must-log: your charge never named itself in the log (only the AI's announce did), so the
 	# melee opened mid-strike. One declaration line — and the stage's Charge card has its content.
@@ -13214,12 +15539,18 @@ func _run_human_melee(attacker: GameUnit, target: GameUnit, auto: bool = false) 
 			attacker.get_name(), target.get_name()], true)
 	await _solo_stage_phase("Charge")
 	# — Counter (GF/AoF v3.5.1 p.13 "Strikes first with this weapon when charged"): before your attacks,
-	#   including Impact (Counter's Impact reduction presumes the counter-strike precedes it); the
-	#   strike-first half is the entry's param (dead-parameter fold, twin of #1006)
+	#   up to epoch 72 also before Impact, from rules 3.6 after it (the Impact cut is counted first either
+	#   way); the strike-first half is the entry's param (dead-parameter fold, twin of #1006)
 	var ai_counter: bool = _solo_has_counter(target) and SoloController.counter_strikes_first(target)
-	if ai_counter:
+	_solo_log_counter_first_decision(target, ai_counter)
+	var impact_first: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
+	if impact_first:   # rules 3.6 (core twin `tray_charge`): Impact rolls before either side strikes
+		human_caused += await _solo_charge_impact(attacker, target, not _solo_is_ai_unit(target), charge_from_in)
+		await _solo_stage_phase("Impact")
+	if ai_counter and _solo_combined_alive(target) > 0:
 		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.COMBAT, "Counter: %s strikes first" % target.get_name(), true)
+			battle_log.log_event(BattleLog.Category.COMBAT, ("Counter: %s strikes first, after the Impact dice (%s)"
+				if impact_first else "Counter: %s strikes first (%s)") % [target.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(target))], true)
 		ai_caused += await _solo_melee_strike_phase(target, attacker, false, SoloStrike.COUNTER_ONLY)
 		human_caused += _solo_take_retaliate_credit()
 	# Stage seam: the boundary sits OUTSIDE the branch — no Counter simply means an empty phase,
@@ -13227,32 +15558,44 @@ func _run_human_melee(attacker: GameUnit, target: GameUnit, auto: bool = false) 
 	await _solo_stage_phase("Counter")
 	# — Impact(X) auto-hits on your charge (GF/AoF v3.5.1 p.13; reduced by the AI's Counter models). The
 	#   counter-strike may already have wiped your unit — nothing left to roll then. —
-	if _solo_combined_alive(attacker) > 0:
-		human_caused += await _solo_charge_impact(attacker, target, not _solo_is_ai_unit(target))
-	await _solo_stage_phase("Impact")
+	if not impact_first and _solo_combined_alive(attacker) > 0:
+		human_caused += await _solo_charge_impact(attacker, target, not _solo_is_ai_unit(target), charge_from_in)
+	if not impact_first:
+		await _solo_stage_phase("Impact")
 	# Resolver wave A — vs-target Marks: your charger's pre-attack pick lands on the defender.
-	_solo_apply_vs_marks(attacker, target, 0.0)
+	await _solo_apply_vs_marks(attacker, target, 0.0)
 	# Unwieldy (resolver wave A): a charging Unwieldy unit strikes LAST — the AI's strike-back
 	# resolves first; Counter and Impact keep their slots.
 	var h_charger_last: bool = _solo_unit_has_unwieldy(attacker, target)
 	if h_charger_last and battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "Unwieldy: %s strikes last on the charge" % attacker.get_name(), true)
+	_solo_log_unwieldy_mixed(attacker, h_charger_last)
 	var ai_struck: bool = ai_counter
 	for phase_slot in range(2):
 		if (phase_slot == 0) != h_charger_last:
 			# — Your strikes (unit + attached heroes; only models within 2" strike; charging bonuses apply) —
 			if _solo_combined_alive(attacker) > 0 and _solo_combined_alive(target) > 0:
-				human_caused += await _solo_melee_strike_phase(attacker, target, true, SoloStrike.ALL)
+				human_caused += await _solo_melee_strike_phase(attacker, target, true, SoloStrike.ALL, charge_from_in)
 				ai_caused += _solo_take_retaliate_credit()
 				_solo_set_fatigued(attacker)
 			await _solo_stage_phase("%s strikes" % attacker.get_name())
 		else:
 			# — The AI's strike-back with its remaining (non-Counter) weapons — mandatory (solo rules p.57) —
 			if _solo_combined_alive(target) > 0 and _solo_combined_alive(attacker) > 0:
-				ai_caused += await _solo_melee_strike_phase(target, attacker, false,
-					SoloStrike.NON_COUNTER if ai_counter else SoloStrike.ALL)
-				human_caused += _solo_take_retaliate_credit()
-				ai_struck = true
+				# MEL-02b (rules 3.6, EPOCH_73_V36): a defender whose every melee profile is a spent
+				# Limited weapon gets no strike-back and no fatigue, exactly like B14's no-weapon case.
+				var block := _solo_strike_back_block(target, attacker)
+				if block == "spent":
+					if battle_log != null:
+						_log_rule_event(BattleLog.Category.COMBAT,
+							"%s's melee weapons are all spent (Limited) — cannot strike back (%s)" % [target.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(target))], true)
+				else:
+					ai_caused += await _solo_melee_strike_phase(target, attacker, false,
+						SoloStrike.NON_COUNTER if ai_counter else SoloStrike.ALL)
+					human_caused += _solo_take_retaliate_credit()
+					# FAB-B4 (rules 3.6): from epoch 73 a defender with no melee weapon at all is not tired by the
+					# empty slot (the phase logged "no melee weapons in reach"); the core and the AI path never tire it.
+					ai_struck = block != "none" or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36
 			await _solo_stage_phase("%s strikes back" % target.get_name())
 	if ai_struck and _solo_combined_alive(target) > 0:
 		_solo_set_fatigued(target)
@@ -13261,13 +15604,19 @@ func _run_human_melee(attacker: GameUnit, target: GameUnit, auto: bool = false) 
 	await _solo_self_destruct_post_melee(target, attacker)
 	# — Morale: a destroyed side loses first; otherwise the lower wound score loses. Fear(X) (GF/AoF v3.5.1 p.13) adds
 	#   +X to the bearer's tally for THIS comparison only. —
-	var human_score: int = AiCombatMath.fear_adjusted_wounds(human_caused, _solo_unit_rating(attacker, "Fear"))
-	var ai_score: int = AiCombatMath.fear_adjusted_wounds(ai_caused, _solo_unit_rating(target, "Fear"))
+	# G4-R3 T1: the AI target's activation counter is stale once it has acted this round; the human charge has no
+	# target baseline, so its pre-melee target wounds are 0 (the strikes' own wounds must not count twice).
+	var scores: Array = _solo_melee_scores(attacker, human_caused, target, ai_caused, self_taken, 0)
+	var human_score: int = scores[0]
+	var ai_score: int = scores[1]
 	var loser: GameUnit = _solo_melee_loser(attacker, human_score, target, ai_score)
 	_solo_log_melee_result(attacker, human_caused, human_score, target, ai_caused, ai_score)
 	await _solo_stage_phase("Melee result")
 	if loser != null and _solo_combined_alive(loser) > 0:
-		await _solo_morale_test(loser, _roller_label(loser), true)   # "Names, not You" (rules plan 2.5)
+		if loser == attacker:   # MOR-09b: the charger lost its own melee — twin of _run_ai_melee
+			await _solo_morale_test(loser, _roller_label(loser), true, OWN_CHARGE_CAUSE, -1.0, -1.0)
+		else:
+			await _solo_morale_test(loser, _roller_label(loser), true, "", -1.0, charge_from_in)   # "Names, not You" (rules plan 2.5)
 	await _solo_stage_phase("Morale")
 	# — Consolidation (GF v3.5.1 p.9, round 7 finding 4): neither destroyed → the human charger's 1"
 	#   back-step is surfaced as a reminder; one side destroyed → the survivor consolidates up to 3"
@@ -13308,6 +15657,7 @@ func _solo_set_fatigued(unit: GameUnit) -> void:
 func _on_solo_round_advanced(_round_number: int) -> void:
 	_solo_expire_spell_tokens()   # v3.5.1: spell effects end with the round — clear the placed tokens
 	_solo_reset_all_fatigue()
+	_solo_activation_wounds_start.clear()   # MEL-10h: a new round starts every activation snapshot fresh
 	if solo_ai_slots.is_empty():
 		return
 	# Battleborn recovery + Ambush arrivals + the human reserve prompt are the ROUND-START sequence, now driven
@@ -13460,13 +15810,15 @@ func _reinforcement_arrive_one(original: GameUnit, round_number: int) -> void:
 	var radii: Array = []
 	for i in range(profile_unit.size):
 		radii.append(_reinforcement_model_radius(original, i))
+	var band_m: float = SoloController.reinforcement_edge_m(original)
+	var zone_text: String = SoloController.reinforcement_zone_text(band_m)
 	var spots: Array = await _reinforcement_pick_spots(original, radii, ai)
 	if spots.is_empty():
 		# No legal spot anywhere in the strip — keep the promise for a later round rather than
 		# swallowing it, and say why nothing happened.
 		if battle_log != null:
 			_log_rule_event(BattleLog.Category.GENERAL,
-				"Reinforcement: %s cannot return this round — no free spot within 12\" of any table edge" % original.get_name(), ai)
+				"Reinforcement: %s cannot return this round — no free spot %s" % [original.get_name(), zone_text], ai)
 		return
 
 	var forfeited: int = maxi(profile_unit.size - spots.size(), 0)
@@ -13501,12 +15853,12 @@ func _reinforcement_arrive_one(original: GameUnit, round_number: int) -> void:
 
 	if battle_log != null:
 		_log_rule_event(BattleLog.Category.GENERAL,
-			"Reinforcement: %s returns with %d model(s) within 12\" of a table edge — it cannot seize or contest objectives this round" % [
-				copy.get_name(), copy.models.size()], ai)
+			"Reinforcement: %s returns with %d model(s) %s — it cannot seize or contest objectives this round" % [
+				copy.get_name(), copy.models.size(), zone_text], ai)
 		if forfeited > 0:
 			_log_rule_event(BattleLog.Category.GENERAL,
-				"Reinforcement: only %d of %d models fit inside the 12\" edge strip — %d forfeited" % [
-					spots.size(), src.size, forfeited], ai)
+				"Reinforcement: only %d of %d models fit %s — %d forfeited" % [
+					spots.size(), src.size, zone_text, forfeited], ai)
 		_log_rule_event(BattleLog.Category.GENERAL,
 			"Reinforcement: the returning %s does not have Reinforcement — the rule does not apply to the new copy" % copy.get_name(), ai)
 	if solo_controller != null and _solo_alternation_active():
@@ -13530,7 +15882,7 @@ func _reinforcement_pick_spots(original: GameUnit, radii: Array, ai: bool) -> Ar
 	var trect: Rect2 = _table_rect()
 	if trect.size == Vector2.ZERO:
 		return []
-	var margin_m: float = SoloController.REINFORCEMENT_EDGE_IN * 0.0254
+	var margin_m: float = SoloController.reinforcement_edge_m(original)
 	var blockers: Array = _reinforcement_blockers(original)
 	var prefer: Vector3 = _reinforcement_prefer_point(original, trect)
 	var step_m: float = OPRArmyManager.INCHES_TO_METERS
@@ -13541,17 +15893,21 @@ func _reinforcement_pick_spots(original: GameUnit, radii: Array, ai: bool) -> Ar
 
 
 ## Every standing base that a returning model may not overlap. The original's own parked casualties
-## are excluded: they sit on the army tray, not on the table.
+## are excluded: they sit on the army tray, not on the table. From rules epoch 73 an ENEMY base blocks
+## out to the 9" ring (Reinforcement 3.6); `original == null` (another caller) keeps plain bases.
 func _reinforcement_blockers(original: GameUnit) -> Array:
 	var blockers: Array = []
 	for g in opr_army_manager.get_all_game_units():
 		var gu := g as GameUnit
 		if gu == null or gu == original or SoloController.unit_in_reserve(gu):
 			continue
+		var ring: float = 0.0
+		if original != null and int(gu.unit_properties.get("player_id", 0)) != int(original.unit_properties.get("player_id", 0)):
+			ring = SoloController.reinforcement_enemy_ring_m()
 		for m in gu.get_alive_models():
 			var mi := m as ModelInstance
 			if mi.node != null and is_instance_valid(mi.node) and not bool(mi.node.get_meta("embarked", false)):
-				blockers.append({"p": mi.node.global_position, "r": SoloController.model_base_radius_m(mi)})
+				blockers.append({"p": mi.node.global_position, "r": SoloController.model_base_radius_m(mi) + ring})
 	return blockers
 
 
@@ -13588,7 +15944,8 @@ func _reinforcement_human_ghost(original: GameUnit, radii: Array, trect: Rect2, 
 			state["done"] = true)
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL,
-			"Reinforcement: place %s within 12\" of any table edge — R rotates, Esc drops it at the first legal spot" % original.get_name(), false)
+			"Reinforcement: place %s %s — R rotates, Esc drops it at the first legal spot" % [
+				original.get_name(), SoloController.reinforcement_zone_text(margin_m)], false)
 	while not state["done"] and is_inside_tree():
 		await get_tree().process_frame
 	if chosen.is_empty():
@@ -13644,13 +16001,13 @@ func _solo_battleborn_recovery() -> void:
 ## plain-rule check; Steadfast is gated the wave-5 way (fires only where the unit's book fields it).
 ## Coverage wave: DATA aliases (Honor Code, …) resolve through the generic primitive layer.
 func _solo_round_start_recovery_rule(gu: GameUnit) -> String:
-	if _solo_rule_on_all_models(gu, "Battleborn"):
+	if _solo_rule_on_most_models(gu, "Battleborn"):
 		return "Battleborn"
-	if _solo_rule_on_all_models(gu, "Steadfast") and RulesRegistry.unit_rule_active(gu, "Steadfast"):
+	if _solo_rule_on_most_models(gu, "Steadfast") and RulesRegistry.unit_rule_active(gu, "Steadfast"):
 		return "Steadfast"
 	for e in RulesRegistry.unit_rules_of_primitive(gu, "Battleborn"):
 		var n := str((e as Dictionary)["name"])
-		if n != "Battleborn" and n != "Steadfast" and _solo_rule_on_all_models(gu, n):
+		if n != "Battleborn" and n != "Steadfast" and _solo_rule_on_most_models(gu, n):
 			return n
 	return ""
 
@@ -13698,8 +16055,7 @@ func _solo_alternate_ambush_arrivals(round_number: int) -> void:
 				_solo_focus_on_unit(unit)
 				_solo_show_explain("%s ambushes in from reserve" % unit.get_name())
 				if battle_log != null:
-					_log_rule_event(BattleLog.Category.GENERAL,
-						"AI Ambush: %s arrives — near an objective, >9\" from your units, clear of all standing bases" % unit.get_name(), true)
+					_log_rule_event(BattleLog.Category.GENERAL, _solo_ambush_arrival_text(unit), true)
 					_solo_log_ambush_variant_lines(unit, round_number, true)
 				await _solo_pace_attention()
 		elif not ai_turn and not human_pool.is_empty():
@@ -13722,6 +16078,15 @@ func _solo_alternate_ambush_arrivals(round_number: int) -> void:
 		_log_rule_event(BattleLog.Category.GENERAL,
 			"%d of your Ambush unit(s) stay in reserve — you'll be asked again next round." % held_h, false)
 	_solo_flush_dev()
+
+
+## The AI Ambush arrival line states the unit's REAL ring — the SAME number the placement used
+## (3" for Infiltrate, 9" for plain Ambush, alias rings included), never a fixed one.
+func _solo_ambush_arrival_text(unit: GameUnit) -> String:
+	var label := "Infiltrate" if unit.has_special_rule(SoloController.RULE_INFILTRATE) \
+		or SoloController._carries_infiltrate_alias(unit) else "Ambush"
+	var ring_in: int = roundi(solo_controller._reserve_min_enemy_dist_m(unit) / SoloController.INCHES_TO_METERS)
+	return "AI %s: %s arrives — near an objective, >%d\" from your units, clear of all standing bases" % [label, unit.get_name(), ring_in]
 
 
 ## The variant lines an arrival owes (rules-must-log — a rule that silently does nothing reads exactly
@@ -13881,7 +16246,7 @@ func _solo_ambush_human_turn(round_number: int, pool: Array) -> Array:
 			_solo_set_unit_visible(gu, true)
 			if battle_log != null:
 				_log_rule_event(BattleLog.Category.GENERAL,
-					"You deploy %s from Ambush reserve (>9\" from enemies) — it may act this round, no seizing (GF v3.5.1 p.13)" % gu.get_name(), false)
+					"You deploy %s from Ambush reserve (>9\" from enemies) — it may act this round, no seizing (%s)" % [gu.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(gu))], false)
 			solo_controller.last_arrival_note = ""   # the human placed by hand — only the checks below speak
 			_solo_log_ambush_variant_lines(gu, round_number, false)
 			_solo_warn_ambush_proximity(gu)
@@ -13992,8 +16357,8 @@ func _solo_warn_ambush_proximity(gu: GameUnit) -> void:
 		beacon_note = " — Ambush Beacon not used: %s is %.1f\" away (the waiver needs %d\" or less)" % [
 			str(near["name"]), float(near["dist_in"]), int(round(float(near["radius_in"])))]
 	_log_rule_event(BattleLog.Category.GENERAL,
-		"⚠ %s stands %.1f\" from an enemy — Ambush arrivals must be >9\" away (GF v3.5.1 p.13); nudge it out (or house-rule it)%s" % [
-			gu.get_name(), worst, beacon_note], false)
+		"⚠ %s stands %.1f\" from an enemy — Ambush arrivals must be >9\" away (%s); nudge it out (or house-rule it)%s" % [
+			gu.get_name(), worst, OPRApiClient.rules_cite(RulesRegistry.system_of_unit(gu)), beacon_note], false)
 
 
 ## The friendly beacon covering `gu` ({} when none): ANY alive model of the unit inside a beacon
@@ -14064,6 +16429,7 @@ func _solo_reset_all_fatigue() -> void:
 func _solo_apply_wounds(target: GameUnit, wounds: int, pips: bool = true) -> void:
 	if wounds <= 0 or opr_army_manager == null:
 		return
+	_solo_mark_regen_grant_used(target)
 	if opr_army_manager.regiments.has(target.unit_id):
 		var reg = opr_army_manager.regiments[target.unit_id]
 		if reg != null:
@@ -14210,8 +16576,8 @@ func _solo_prompt_wound_allocation(target: GameUnit, wounds: int, pid: int, appl
 		if not SoloController.wound_pick_eligible(target, pu):
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT,
-					"%s is part of %s — its own models take wounds first (GF v3.5.1 p.14)" % [
-					pu.get_name(), target.get_name()], false)
+					"%s is part of %s — its own models take wounds first (%s)" % [
+					pu.get_name(), target.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(target))], false)
 			continue
 		left -= 1
 		if apply_pick.is_valid():
@@ -14263,8 +16629,8 @@ func _solo_hero_carries_on(target: GameUnit) -> void:
 				radial_menu_controller._update_fatigued_markers(hu)
 		if (hu.is_shaken or hu.is_fatigued) and battle_log != null:
 			_log_rule_event(BattleLog.Category.COMBAT,
-				"%s fights on alone — carries the unit's %s (GF v3.5.1 p.14)" % [hu.get_name(),
-				("Shaken + Fatigue" if hu.is_shaken and hu.is_fatigued else ("Shaken" if hu.is_shaken else "Fatigue"))], true)
+				"%s fights on alone — carries the unit's %s (%s)" % [hu.get_name(),
+				("Shaken + Fatigue" if hu.is_shaken and hu.is_fatigued else ("Shaken" if hu.is_shaken else "Fatigue")), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(hu))], true)
 
 
 ## Apply up to `wounds` to a unit's models back-rank-first (Tough absorbs before dying); returns the
@@ -14788,17 +17154,21 @@ func _delete_selected_objects() -> void:
 	object_manager.deselect_all()
 
 
-## Replace the HUD shortcuts label's first line with "Niemandsland v<config/version>", so the
-## displayed version is derived from the single source of truth and never needs a manual edit.
+## Replace the HUD shortcuts label's first line with "Niemandsland v<config/version> · rules <major.minor>",
+## so the displayed versions are derived from their single sources and never need a manual edit: the game
+## from the project config, the rules from the maps' `_meta.core_version`. An unreadable map keeps today's line.
 func _apply_version_to_info_label() -> void:
 	var info := get_node_or_null("UI/HUD/InfoLabel") as Label
 	if info == null:
 		return
 	var version := str(ProjectSettings.get_setting("application/config/version", "?"))
+	var rules := OPRApiClient._major_minor(OPRApiClient.rules_core_version("gf"))
 	var lines := info.text.split("\n")
 	if lines.is_empty():
 		return
 	lines[0] = "Niemandsland v%s" % version
+	if not rules.is_empty():
+		lines[0] += " · rules %s" % rules
 	info.text = "\n".join(lines)
 
 
@@ -15596,7 +17966,7 @@ func _build_success_controls() -> void:
 	_modifier_value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_modifier_value_label.custom_minimum_size = Vector2(MODIFIER_VALUE_MIN_WIDTH, 0)
 	_modifier_value_label.tooltip_text = "Applied to every die. Natural 6 always succeeds," \
-		+ " natural 1 always fails (OPR Core Rules v3.5.1)."
+		+ " natural 1 always fails (OPR Core Rules %s)." % OPRApiClient.rules_cite(_solo_rules_system())
 	var stepper := HouseStyle.stepper([-1, 1], _modifier_value_label, _on_modifier_delta_pressed, "Modifier", true)
 	var modifier_row := HouseStyle.field_row("Modifier", stepper)
 	modifier_row.name = "ModifierRow"
@@ -15611,7 +17981,7 @@ func _build_reroll_row() -> void:
 		[DiceRules.RerollMode.FAILURES, "Fails", "Re-roll every die that failed the success target"],
 		[DiceRules.RerollMode.ONES, "1s", "Re-roll all natural 1s"],
 		[DiceRules.RerollMode.SIXES, "6s",
-			"Re-roll all natural 6s (OPR \"Bane\", v3.5.1: the target must re-roll unmodified Defense rolls of 6)"],
+			"Re-roll all natural 6s (OPR \"Bane\", %s: the target must re-roll unmodified Defense rolls of 6)" % OPRApiClient.rules_cite(_solo_rules_system())],
 		[DiceRules.RerollMode.ALL, "All", "Re-roll every die"],
 	]
 	var texts: Array = []
@@ -15905,12 +18275,21 @@ func _on_battle_log_dead(node, dead: bool) -> void:
 	var total: int = SoloController.combined_total(gu)
 	if dead:
 		if alive == 0:
-			battle_log.on_unit_destroyed(gu.get_name())
+			# A volley parks its casualties one by one with the whole unit already dead: write the line once.
+			if not bool(gu.get_meta("destroyed_line_written", false)):
+				gu.set_meta("destroyed_line_written", true)
+				battle_log.on_unit_destroyed(gu.get_name())
 			_solo_drop_carried(gu, "destroyed")
 			_solo_recycle_if_due(gu)
 		else:
-			battle_log.log_event(BattleLog.Category.COMBAT, "%s loses a model (%d/%d)" % [gu.get_name(), alive, total])
+			gu.set_meta("destroyed_line_written", false)
+			if _volley_losses != null:   # a volley is parking: the funnel writes ONE line when it is done
+				var held: Array = _volley_losses.get(gu, [0, 0, 0])
+				_volley_losses[gu] = [int(held[0]) + 1, alive, total]
+			else:
+				_solo_log_unit_loss(gu, 1, alive, total)
 	else:
+		gu.set_meta("destroyed_line_written", false)
 		battle_log.on_unit_revived(gu.get_name())
 
 
@@ -15946,7 +18325,7 @@ func _on_battle_log_dropped(moves: Array) -> void:
 			continue
 		if not per_unit.has(unit_name):
 			per_unit[unit_name] = {"count": 0, "max_in": 0.0, "climb_in": 0.0,
-				"alive": _battle_log_unit_alive(node), "whole": false}
+				"alive": _battle_log_unit_alive(node), "whole": false, "node": node}
 		var e: Dictionary = per_unit[unit_name]
 		e["count"] = int(e["count"]) + 1
 		# Movement distance = the ACTUAL traveled arc (the ledger's measured net path),
@@ -15968,8 +18347,19 @@ func _on_battle_log_dropped(moves: Array) -> void:
 		# a sandbox aid (D5a, no hard stop without Strict), so the drop's own line flags it.
 		if float(e["climb_in"]) > MoveLedger.CLIMB_MAX_IN:
 			_log_rule_event(BattleLog.Category.MOVEMENT,
-				"%s climbs %.1f\" — over 3\", impassable (GF p.11)" % [unit_name, float(e["climb_in"])])
+				"%s climbs %.1f\" — over 3\", impassable (%s)" % [unit_name, float(e["climb_in"]), OPRApiClient.rules_cite(_solo_rules_system())])
 	_log_move_summaries(summaries)
+	# Rules-must-log (DAT-16a): a move-band rule (Agile, Scurry, Highborn, …) widened this move's
+	# reach silently. ONE line per moved unit, naming the unit's own rules that did it.
+	for unit_name in per_unit:
+		var moved_gu := UnitUtils.get_game_unit((per_unit[unit_name] as Dictionary).get("node") as Node3D)
+		if moved_gu == null:
+			continue
+		var widened := MovementRangeController.move_band_rule_names_for_props(moved_gu.unit_properties)
+		if widened.is_empty():
+			continue
+		battle_log.log_event(BattleLog.Category.MOVEMENT,
+			"%s: move bands widened by %s" % [unit_name, ", ".join(widened)])
 	# The move STREAM is unreliable + continuous (drag), so the other side cannot know when a drop
 	# happened — ship the finished per-unit summary reliably; every peer logs identical lines
 	# (release-test finding C3: only own movements were logged).
@@ -16066,7 +18456,7 @@ func _log_move_summaries(summaries: Array) -> void:
 		if bool(e.get("whole", false)) or count >= alive or alive <= 1:
 			battle_log.on_unit_moved(unit_name, max_in, false, climb_in)
 		else:
-			var suffix := " incl. %.1f\" climb — GF p.11" % climb_in if climb_in > 0.05 else ""
+			var suffix := " incl. %.1f\" climb — %s" % [climb_in, OPRApiClient.rules_cite(_solo_rules_system())] if climb_in > 0.05 else ""
 			battle_log.log_event(BattleLog.Category.MOVEMENT,
 				"%s: %d of %d models move %.0f\"%s" % [unit_name, count, alive, max_in, suffix])
 
@@ -16821,7 +19211,9 @@ func _on_version_rejected(host_version: String, my_version: String) -> void:
 	push_warning("[Network] Version mismatch — host=%s, us=%s. Disconnecting." % [host_version, my_version])
 	network_manager.disconnect_game()
 	_update_network_ui(false, false)
-	GameMenu.set_status(network_status_label, "Version mismatch: host %s, you %s — update to match" % [host_version, my_version], HouseStyle.TONE_DANGER)
+	var text := "Version mismatch: host %s, you %s — update to match" % [host_version, my_version]
+	GameMenu.set_status(network_status_label, text, HouseStyle.TONE_DANGER)
+	_solo_show_toast(text, REFUSAL_TOAST_HIDE_S)
 
 
 func _on_player_left(peer_id: int) -> void:
@@ -17776,6 +20168,7 @@ func _solo_rebind_carried_after_load() -> void:
 ## Load failed callback
 func _on_load_failed(error: String) -> void:
 	push_error("Load failed: %s" % error)
+	_solo_show_toast(error, REFUSAL_TOAST_HIDE_S)
 
 
 ## Load a battle from a path passed via the startup menu
@@ -18188,7 +20581,19 @@ func _open_ai_opponent_dialog() -> void:
 
 ## The AI Opponent question over an already loaded manifest. `loader(file, slot)` runs on OK
 ## (default: _load_ai_opponent_list) so the dialog can be driven without the network.
+## Only the lists of the system the human army plays are offered (an entry without "system" is "gf");
+## with no human army yet every list is offered, suffixed " (GF)" / " (AoF)" when the manifest mixes both.
 func _show_ai_opponent_dialog(manifest: Dictionary, loader: Callable = Callable()) -> void:
+	var human_army = opr_army_manager.armies.get(solo_controller.human_slot if solo_controller != null else 1) if opr_army_manager != null else null
+	var played := "" if human_army == null else ("aof" if RulesRegistry.normalize_system(human_army.game_system_abbrev).begins_with("aof") else "gf")
+	var system_of := {}
+	for fk in manifest:
+		system_of[fk] = str((manifest[fk] as Dictionary).get("system", "gf"))
+	var fac_keys: Array = manifest.keys().filter(func(fk) -> bool: return played.is_empty() or system_of[fk] == played)
+	if fac_keys.is_empty():
+		_solo_show_toast("No AI lists for this game system yet — import any list with the AI checkbox instead")
+		return
+	var mixed: bool = played.is_empty() and system_of.values().has("gf") and system_of.values().has("aof")
 	var parts := HouseStyle.overlay_sheet("AI Opponent", SOLO_DIALOG_MIN_WIDTH)
 	var layer := CanvasLayer.new()
 	layer.name = "AiOpponentLayer"
@@ -18197,11 +20602,11 @@ func _show_ai_opponent_dialog(manifest: Dictionary, loader: Callable = Callable(
 	box.add_child(HouseStyle.label("NACHTMAHR builds its own list.", HouseStyle.BODY))
 	var fac_opt := OptionButton.new()
 	fac_opt.theme_type_variation = HouseStyle.BUTTON
-	var fac_keys: Array = manifest.keys()
 	fac_keys.sort()
 	for i in fac_keys.size():
 		var fk: String = fac_keys[i]
-		fac_opt.add_item(str((manifest[fk] as Dictionary).get("name", fk)), i)
+		var fac_name := str((manifest[fk] as Dictionary).get("name", fk))
+		fac_opt.add_item(fac_name + ((" (AoF)" if system_of[fk] == "aof" else " (GF)") if mixed else ""), i)
 	box.add_child(HouseStyle.field_row("Faction:", fac_opt))
 
 	var pts_opt := OptionButton.new()
@@ -19313,7 +21718,7 @@ func _refresh_solo_panel() -> void:
 	solo_panel_box.add_child(points_advice)
 	var deploy_btn := Button.new()
 	deploy_btn.text = "Start Deployment"
-	deploy_btn.tooltip_text = "GF v3.5.1: roll-off, the winner picks a table edge and deploys first; then alternate one unit each (hand-over by click), then the Scout phase. The roll-off winner takes round 1's first turn."
+	deploy_btn.tooltip_text = "%s: roll-off, the winner picks a table edge and deploys first; then alternate one unit each (hand-over by click), then the Scout phase. The roll-off winner takes round 1's first turn." % OPRApiClient.rules_cite(_solo_rules_system())
 	deploy_btn.focus_mode = Control.FOCUS_NONE
 	deploy_btn.pressed.connect(_on_solo_deploy_pressed)
 	# Maintainer MP test: the guided deployment is a solo-game flow — in a multiplayer room
@@ -19713,9 +22118,9 @@ func _set_aside_offtable_ambush() -> void:
 	for slot in by_slot:
 		var set_aside: Array = by_slot[slot]
 		battle_log.log_event(BattleLog.Category.GENERAL,
-			"%s %d Ambush unit(s) in reserve on %s tray (%s) — placement alternates from round 2 (GF/AoF p.13)." % [
+			"%s %d Ambush unit(s) in reserve on %s tray (%s) — placement alternates from round 2 (%s)." % [
 				"You hold" if seated else "%s holds" % _solo_player_label(slot), set_aside.size(),
-				"your" if seated else "its", _tray_names(set_aside, 99)], false)
+				"your" if seated else "its", _tray_names(set_aside, 99), OPRApiClient.rules_cite(_solo_rules_system())], false)
 
 
 ## The deployment gate (maintainer 2026-07-27: "Ich konnte das Deployment einfach umgehen. Ich habe die
@@ -19753,8 +22158,8 @@ func _deployment_gate_refuses_start() -> bool:
 		left.size(), _tray_names(left), hint])
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL,
-			"Start refused — %d unit(s) still on the tray: %s. Deploy them first (GF/AoF v3.5.1)." % [
-				left.size(), _tray_names(left, 99)], false)
+			"Start refused — %d unit(s) still on the tray: %s. Deploy them first (%s)." % [
+				left.size(), _tray_names(left, 99), OPRApiClient.rules_cite(_solo_rules_system())], false)
 	return true
 
 
@@ -19779,6 +22184,8 @@ func _on_start_game_pressed() -> void:
 func _on_game_phase_changed(phase: int) -> void:
 	_sync_move_trails_deployment()
 	_update_game_phase_ui()
+	if phase == OPRArmyManager.GamePhase.PLAYING:
+		_log_aura_grants()   # AIG-G2: the import expansion's silent grants surface at battle start
 	_solo_grade_logged = ""   # every phase change opens a new game's grade line
 	_solo_log_grade()
 	# Step 2.9: a hotseat Automatic table has no AI-seat handoff to print the rule inventory at, so print
@@ -19791,6 +22198,26 @@ func _on_game_phase_changed(phase: int) -> void:
 	if phase == OPRArmyManager.GamePhase.PLAYING and solo_ai_slots.is_empty() \
 			and (network_manager == null or not network_manager.is_multiplayer_active()):
 		_hotseat_rapid_ambush_round_one()
+
+## AIG-G2: one battle-log line per granted aura effect, in deployment order.
+func _log_aura_grants() -> void:
+	if battle_log == null or opr_army_manager == null: return
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36: return
+	var pids: Array = opr_army_manager.armies.keys()
+	pids.sort()
+	for pid in pids:
+		var army = opr_army_manager.armies[pid]
+		for unit in (army.units if army != null else []):
+			var gu: GameUnit = opr_army_manager.unit_to_game_unit.get(unit)
+			if gu == null or not is_instance_valid(gu) or opr_army_manager.game_units.get(gu.unit_id) != gu: continue
+			var to: GameUnit = gu.get_attached_to() if gu.is_attached() else gu
+			if to == null: continue
+			for r in gu.get_special_rules():
+				var aura := str(r).strip_edges()
+				var effect := AiEv.aura_granted_rule(gu, aura)
+				if not effect.is_empty() and to.has_special_rule(effect):
+					battle_log.log_event(BattleLog.Category.GENERAL,
+						"%s: %s grants %s to %s" % [aura, gu.get_name(), effect, to.get_name()])
 
 
 ## #1719: the round-1 Rapid Ambush step on a local table without an AI seat ("may be deployed at the
@@ -19947,6 +22374,7 @@ func _on_units_dropped(moves: Array) -> void:
 		if unit != null:
 			unit.unit_properties["moved_round"] = opr_army_manager.current_round
 			await _resolve_skirmish_drop(mv, unit)
+	await _solo_human_strafing(moves)
 
 
 ## Human drops use the same surface truth, tray, casualties and activation flow as combat.
@@ -19958,7 +22386,7 @@ func _resolve_skirmish_drop(mv: Dictionary, unit: GameUnit) -> void:
 	if model == null or not model.is_alive:
 		return
 	for drop in JumpRules.drops(mv.get("path", PackedVector2Array()), object_manager._surface_fn(), mv.get("from_raw", node.position).y):
-		var page := "GFF p.14" if unit.unit_properties.game_system == "gff" else "AoFS p.15"
+		var page := OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))
 		if JumpRules.drop_kind(drop.dy_in) == JumpRules.DropKind.IMPASSABLE:
 			_log_rule_event(BattleLog.Category.MOVEMENT, "%s: drop over 6\", impassable (%s)" % [unit.get_name(), page])
 			return
@@ -20710,6 +23138,7 @@ func _on_remote_unit_deleted(game_unit: GameUnit) -> void:
 ## thing the log may never be. The acting client writes its own line when the rule fires; this is
 ## the other side of the table being told.
 func _on_remote_unit_created(game_unit: GameUnit, origin: String) -> void:
+	_solo_stamp_rule_unit_arrival(game_unit, origin)
 	if battle_log == null or game_unit == null:
 		return
 	var reason: String = {
@@ -20751,7 +23180,7 @@ var _solo_ebr_relays: Dictionary = {}
 ## SoloController.spell_candidates), and enemy-side marks/debuffs are not "friendly units", so both
 ## stay at their own printed range.
 func _solo_utility_targets(bearer: GameUnit, kind: String, range_in: float, needs_los: bool,
-		max_targets: int = 1) -> Array:
+		max_targets: int = 1, prefer_model_debuff: bool = false) -> Array:
 	_solo_ebr_relays = {}
 	if opr_army_manager == null or bearer == null:
 		return []
@@ -20796,6 +23225,8 @@ func _solo_utility_targets(bearer: GameUnit, kind: String, range_in: float, need
 		if needs_los and not _solo_has_los(bearer, gu):
 			continue
 		var v := float(gu.get_alive_count()) + float(_solo_unit_tough(gu))
+		if prefer_model_debuff and (gu.get_alive_count() == 1 or not gu.get_attached_heroes().is_empty()):
+			v += 100.0
 		scored.append({"unit": gu, "value": v, "relay_gap": relayed_gap})
 	scored.sort_custom(func(a, b): return float(a["value"]) > float(b["value"]))
 	var out: Array = []
@@ -20939,8 +23370,9 @@ func _solo_apply_utility_buffs(unit: GameUnit) -> void:
 			var n := str(ed["name"])
 			var sp: Dictionary = ed.get("params", {})
 			# Resolver wave A: vs-target Marks ("... Mark") are ENEMY-side picks consumed at the
-			# attack seam (_solo_apply_vs_marks) — not friendly buffs; skip them here.
-			if bool(sp.get("vs_target", false)):
+			# attack seam (_solo_apply_vs_marks); MOR-16b's Spell Drain is the same seam at
+			# epoch 73+, not a friendly buff. Below 73 the row stays on this friendly path.
+			if bool(sp.get("vs_target", false)) or (AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and int(sp.get("spell_token_drain", 0)) > 0):
 				continue
 			var range_in := float(sp.get("range_in", 12.0))
 			# Re-Position Artillery: a friendly Artillery model may immediately move up to 9".
@@ -20966,10 +23398,14 @@ func _solo_apply_utility_buffs(unit: GameUnit) -> void:
 								"%s: %s re-positions %s up to %.0f\" (no firing lane)" % [n, member.get_name(), arty.get_name(), moved], true)
 				continue
 			var kind := str(sp.get("target", "friendly"))
+			# Rules 3.6 Speed Debuff (MOR-19): one enemy MODEL is picked, so prefer
+			# a single-model unit or one whose joined hero keeps the Slow on the unit.
+			var speed_debuff: bool = kind == "enemy" and str(sp.get("grants_rule", "")) == "Slow" \
+				and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
 			# Skirmish books print this family as "pick up to 4"; GF/AoF print "pick one" — data,
 			# not code (params.max_targets, defaulting to the one-target wording).
 			var picks := _solo_utility_targets(member, kind, range_in,
-				bool(sp.get("needs_los", false)), int(sp.get("max_targets", 1)))
+				bool(sp.get("needs_los", false)), int(sp.get("max_targets", 1)), speed_debuff)
 			var relays: Dictionary = _solo_ebr_relays.duplicate()
 			# The negative half of the transparency deal, BEFORE the empty-pick exit: a friendly
 			# carrier that stayed out of reach because the relay clause did not hold is named too.
@@ -20986,6 +23422,17 @@ func _solo_apply_utility_buffs(unit: GameUnit) -> void:
 			var ai_side := _solo_is_ai_unit(unit)
 			for t in picks:
 				var tgt := t as GameUnit
+				# Speed Debuff: an ordinary model of a multi-model unit is no legal
+				# pick; a single-model unit or a joined hero keeps the Slow grant.
+				if speed_debuff:
+					var blocked: bool = tgt.get_alive_count() > 1 and tgt.get_attached_heroes().is_empty()
+					if battle_log != null:
+						_log_rule_event(BattleLog.Category.COMBAT, "Speed Debuff: %s picks %s — %s" % [
+							member.get_name(), tgt.get_name(),
+							"no effect (ordinary model of a multi-model unit)" if blocked \
+								else "Slow on the whole unit (single model or joined hero)"], ai_side)
+					if blocked:
+						continue
 				# #846 Great Musician: the family's move-only knob (`move_mod`) rides the same
 				# advance_in/rush_in record fields every "speed" spell read already consumes, so the
 				# +1" lands on Advance/Rush (and Charge off Rush) with no new record key or core seam.
@@ -21095,6 +23542,33 @@ func _solo_bridge_granted_flags(unit: GameUnit, profile: Dictionary, target: Gam
 					out = profile.duplicate()
 				out["unstoppable"] = true
 				break
+	# A granted Thrust (own-store record, e.g. "Thrust in Melee") arms the charge bonus like the
+	# weapon's own flag — the same live-record walk and scope split as the Unstoppable leg above. The
+	# charge readers (to-hit +1, AP +1, the battle-log line) only look at the profile flag, so the
+	# bridge is the only place a unit-level grant can reach them. Attackers-side records stay out.
+	for m in _solo_joined_chain(unit):
+		var gu := m as GameUnit
+		if gu == null or bool(out.get("thrust", false)):
+			break
+		for rd in gu.unit_properties.get(SOLO_SPELL_RECORDS_KEY, []):
+			var rec := rd as Dictionary
+			if str(rec.get("beneficiary", "")) == "attackers":
+				continue
+			var scope := str(rec.get("scope", ""))
+			if (scope == "shooting" and not bridge_shooting) \
+					or (scope == "melee" and bridge_shooting):
+				continue
+			var grant_base := RulesRegistry.base_rule_name(str(rec.get("grants_rule", "")))
+			var grant_cut := grant_base.find(" when ")
+			if grant_cut < 0:
+				grant_cut = grant_base.find(" in ")
+			if grant_cut >= 0:
+				grant_base = grant_base.substr(0, grant_cut)
+			if grant_base == "Thrust":
+				if out == profile:
+					out = profile.duplicate()
+				out["thrust"] = true
+				break
 	if target != null and _solo_spell_mods.has(target.get_instance_id()):
 		var records := _solo_spell_mods[target.get_instance_id()] as Array
 		for rule_name in AiSpell.attacker_grants_from_target(records):
@@ -21148,6 +23622,8 @@ func _solo_takedown_bonus_groups(unit: GameUnit, melee: bool) -> Array:
 ## Hazardous self-wound half (resolver wave A): every unmodified 1 rolled to hit with a Hazardous
 ## weapon wounds the FIRER's unit ("this model's unit takes one wound on unmodified rolls of 1 to
 ## hit"). Direct wounds — no save, same as Dangerous terrain; fires at all three hit-roll seams.
+## Rules 3.6 (EPOCH_73_V36): the wound lands on the BEARER model instead, X wounds when the weapon
+## also has Blast(X) or Deadly(X) (_solo_hazardous_bearer_wounds).
 func _solo_hazardous_self_wounds(owner_unit: GameUnit, profile: Dictionary, faces: Array) -> void:
 	if owner_unit == null or not bool(profile.get("hazardous", false)):
 		return
@@ -21157,11 +23633,90 @@ func _solo_hazardous_self_wounds(owner_unit: GameUnit, profile: Dictionary, face
 			ones += 1
 	if ones <= 0:
 		return
+	var hz_id: int = owner_unit.get_instance_id()
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		# MEL-10: the tally counts the wounds really taken (each 1 wounds X with Blast/Deadly, as the bearer path does).
+		_solo_hazard_self[hz_id] = int(_solo_hazard_self.get(hz_id, 0)) + ones * maxi(maxi(int(profile.get("blast", 0)), int(profile.get("deadly", 0))), 1)
+		await _solo_hazardous_bearer_wounds(owner_unit, profile, ones)
+		return
+	_solo_hazard_self[hz_id] = int(_solo_hazard_self.get(hz_id, 0)) + ones
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT,
 			"Hazardous: %s rolls %d unmodified 1%s to hit — takes %d wound%s" % [
 			owner_unit.get_name(), ones, ("" if ones == 1 else "s"), ones, ("" if ones == 1 else "s")], true)
 	await _solo_apply_wounds(owner_unit, ones)
+
+
+## Rules 3.6 Hazardous (EPOCH_73_V36): each unmodified 1 wounds the BEARER model — a joined hero his own, a
+## firing model of a Tough unit itself — for X wounds when the weapon also has Blast(X) or Deadly(X) (the
+## larger of the two if it has both), capped at the model like Deadly (no carry-over). When the bearer falls,
+## the next 1 goes to the next living bearer. With no bearer on record (pooled regiment, older save) the
+## unit takes the X-scaled wounds, as before.
+func _solo_hazardous_bearer_wounds(owner_unit: GameUnit, profile: Dictionary, ones: int) -> void:
+	var x: int = maxi(maxi(int(profile.get("blast", 0)), int(profile.get("deadly", 0))), 1)
+	var weapon: String = str(profile.get("name", "?"))
+	var pooled: bool = opr_army_manager != null and opr_army_manager.regiments.has(owner_unit.unit_id)
+	var pid: int = int(owner_unit.unit_properties.get("player_id", 1))
+	var on_changed := func(m: ModelInstance) -> void:
+		if radial_menu_controller != null:
+			radial_menu_controller._update_wound_marker(m)
+		if network_manager != null and network_manager.has_method("broadcast_model_wounds"):
+			network_manager.broadcast_model_wounds(m)
+	for _i in range(ones):
+		var bearer: ModelInstance = null if pooled else _solo_hazardous_bearer(owner_unit, weapon)
+		if bearer == null:
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.COMBAT, "Hazardous: %s has no bearer on record — the unit takes %d wound%s (%s)" % [
+					owner_unit.get_name(), x, ("" if x == 1 else "s"), weapon], true)
+			await _solo_apply_wounds(owner_unit, x)
+			continue
+		var bearer_unit: GameUnit = (bearer.unit as GameUnit) if bearer.unit != null else owner_unit
+		var died_models: Array[ModelInstance] = []
+		var dealt: int = SoloController.apply_deadly_hit(bearer, x, on_changed, func(m: ModelInstance) -> void: died_models.append(m))
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT, "Hazardous: %s model %d takes %d wound%s (%s%s)" % [
+				bearer_unit.get_name(), bearer.model_index + 1, dealt, ("" if dealt == 1 else "s"),
+				("Blast/Deadly %d, " % x if x > 1 else ""), weapon], true)
+		if not died_models.is_empty():
+			await _solo_remove_dead_models(bearer_unit, died_models, pid)
+	_solo_hero_carries_on(owner_unit)
+
+
+## The first living model of the firing unit's joined chain whose pinned loadout carries `weapon`, or null.
+func _solo_hazardous_bearer(owner_unit: GameUnit, weapon: String) -> ModelInstance:
+	for cu in _solo_joined_chain(owner_unit):
+		for m in (cu as GameUnit).models:
+			var mi := m as ModelInstance
+			if mi == null or not mi.is_alive:
+				continue
+			for w in mi.get_weapons():
+				var w_name: String = str((w as Dictionary).get("name", "")) if w is Dictionary else (str(w.name) if "name" in w else "")
+				if w_name == weapon:
+					return mi
+	return null
+
+
+## AIG-G2 (rules 3.6, EPOCH_73_V36): do "all", "some" or "none" of a living unit's own melee weapons carry
+## `rule_name`? The strike order is per unit, so only "all" moves it (the core's `unwieldy`/`unwieldy_mixed`).
+func _solo_melee_weapon_cover(unit: GameUnit, rule_name: String) -> String:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 or unit == null or unit.get_alive_count() <= 0:
+		return "none"
+	if unit.source_type != "opr" or not unit.source_data is OPRApiClient.OPRUnit:
+		return "none"
+	var total := 0
+	var carrying := 0
+	for w in (unit.source_data as OPRApiClient.OPRUnit).weapons:
+		if w is Object and AiShooting._field_i(w, "range_value", 0) <= 0 and AiShooting._field_i(w, "count", 1) > 0:
+			total += 1
+			carrying += 1 if AiShooting._has_rule(w, rule_name) else 0
+	return "none" if carrying == 0 else ("all" if carrying == total else "some")
+
+
+## AIG-G2: a mixed Unwieldy loadout keeps the normal strike order and says why (once per charge).
+func _solo_log_unwieldy_mixed(unit: GameUnit, charger_last: bool) -> void:
+	if not charger_last and battle_log != null and _solo_melee_weapon_cover(unit, "Unwieldy") == "some":
+		battle_log.log_event(BattleLog.Category.COMBAT,
+			"Unwieldy: %s has it on some weapons only - normal strike order (per-weapon order not modelled)" % unit.get_name(), true)
 
 
 ## Unwieldy (resolver wave A — "strikes last when charging"): any chain member carrying the rule
@@ -21172,6 +23727,8 @@ func _solo_unit_has_unwieldy(unit: GameUnit, defender: GameUnit = null) -> bool:
 	for m in _solo_joined_chain(unit):
 		if not RulesRegistry.unit_rules_of_primitive(m as GameUnit, "Unwieldy").is_empty():
 			return true
+	if _solo_melee_weapon_cover(unit, "Unwieldy") == "all":
+		return true
 	# GH #325 — a charger granted Unwieldy by the defender's attackers-side token strikes last
 	# exactly like a printed carrier (melee-scoped read).
 	return AiSpell.granted_rules_of(unit, defender, false).has("Unwieldy")
@@ -21212,7 +23769,7 @@ func _solo_deathstrike_hits(defender: GameUnit, striker: GameUnit, alive_before:
 		battle_log.log_event(BattleLog.Category.COMBAT,
 			"%s: %s's dying models lash out — %s takes %d hit%s" % [
 			rule_name, defender.get_name(), striker.get_name(), total_hits, ("" if total_hits == 1 else "s")], true)
-	var dprofile: Dictionary = {"name": rule_name, "ap": 0, "deadly": 0, "rules": []}
+	var dprofile: Dictionary = {"name": rule_name, "ap": 0, "deadly": 0, "rules": [], "_impact_pool": true}
 	var dw: int = await _solo_resolve_saves(defender, striker, rule_name, [], total_hits,
 		_solo_defense_vs(striker, AiCombatMath.HIT_SOURCE_MELEE), dprofile, not _solo_is_ai_unit(striker), true)
 	if dw > 0:
@@ -21241,7 +23798,7 @@ func _solo_self_destruct_post_melee(unit: GameUnit, enemy: GameUnit) -> void:
 					n, member.get_name(), enemy.get_name(), hits, ("" if hits == 1 else "s")], true)
 			await _solo_apply_wounds(member, 9999)   # "it is immediately killed" — all surviving carriers
 			if _solo_combined_alive(enemy) > 0:
-				var sprofile: Dictionary = {"name": n, "ap": 0, "deadly": 0, "rules": []}
+				var sprofile: Dictionary = {"name": n, "ap": 0, "deadly": 0, "rules": [], "_impact_pool": true}
 				var sw: int = await _solo_resolve_saves(member, enemy, n, [], hits,
 					_solo_defense_vs(enemy, AiCombatMath.HIT_SOURCE_MELEE), sprofile, not _solo_is_ai_unit(enemy), true)
 				if sw > 0:
@@ -21264,14 +23821,17 @@ func _solo_apply_vs_marks(attacker: GameUnit, target: GameUnit, dist_in: float) 
 		var member := m as GameUnit
 		if member.get_alive_count() == 0:
 			continue
+		if int(member.unit_properties.get("vs_mark_round", -1)) == opr_army_manager.current_round:
+			continue   # once per activation — at most one activation per round (Second Wind aside)
+		if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+			if await _solo_apply_spell_drain(member, target, dist_in):
+				continue
 		for e in RulesRegistry.unit_rules_of_primitive(member, "Utility Buff"):
 			var ed := e as Dictionary
 			var sp: Dictionary = ed.get("params", {})
 			if not bool(sp.get("vs_target", false)):
 				continue
 			var n := str(ed["name"])
-			if int(member.unit_properties.get("vs_mark_round", -1)) == opr_army_manager.current_round:
-				continue   # once per activation — at most one activation per round (Second Wind aside)
 			if dist_in > float(sp.get("range_in", 18.0)):
 				continue
 			# NML-936 (v3.5.3 audit): the printed rule picks its enemy "within 18\" IN LINE OF SIGHT",
@@ -21303,6 +23863,66 @@ func _solo_apply_vs_marks(attacker: GameUnit, target: GameUnit, dist_in: float) 
 			# bearer only while it acts against this enemy. The once-consumption spends it after.
 			_solo_record_spell_mod(target, n, {"grants_rule": grant, "scope": str(sp.get("scope", "")), "beneficiary": "attackers",
 				"duration": "once", "no_live_grant": true})
+
+
+## MOR-16b: the table half of Spell Drain. The bearer's one enemy pick is the
+## committed target at this seam; it takes the REAL table Morale test, and on a
+## failure spends the entry's token count from the target chain's caster pool
+## (floor 0). The once-per-activation latch, the 18" reach and the line-of-sight
+## test are the Mark's (the core twin is MOR-16a).
+func _solo_apply_spell_drain(member: GameUnit, target: GameUnit, dist_in: float) -> bool:
+	for e in RulesRegistry.unit_rules_of_primitive(member, "Utility Buff"):
+		var ed := e as Dictionary
+		var sp: Dictionary = ed.get("params", {})
+		var drain := int(sp.get("spell_token_drain", 0))
+		if drain <= 0:
+			continue
+		if dist_in > float(sp.get("range_in", 18.0)):
+			continue
+		if bool(sp.get("needs_los", true)) and not _solo_has_los(member, target):
+			if battle_log != null:
+				_log_rule_event(BattleLog.Category.COMBAT,
+					"%s: %s has no target in sight — %s is not drained and the rule is not applied" % [
+						str(ed["name"]), member.get_name(), target.get_name()], _solo_is_ai_unit(member))
+			continue
+		# FAB-B3: the latch and the Morale test are the rule's for ANY target;
+		# only the TOKEN loss below needs a caster member of the target chain
+		# (the unit itself or its joined caster hero).
+		member.unit_properties["vs_mark_round"] = opr_army_manager.current_round
+		var passed := await _solo_morale_test(target, _roller_label(target), false, "Spell Drain")
+		if passed:
+			if battle_log != null:
+				_log_rule_event(BattleLog.Category.COMBAT,
+					"%s drains %s: Morale test passed, no spell tokens lost" % [
+						member.get_name(), target.get_name()], _solo_is_ai_unit(member))
+			return true
+		for cm in _solo_joined_chain(target):
+			(cm as GameUnit).is_shaken = true
+		var caster := RadialMenu._caster_member_of(target)
+		if caster == null:
+			if battle_log != null:
+				_log_rule_event(BattleLog.Category.COMBAT,
+					"%s drains %s: Morale test failed, no spell tokens to lose" % [
+						member.get_name(), target.get_name()], _solo_is_ai_unit(member))
+			return true
+		var before := caster.casts_current
+		var after := maxi(0, before - drain)
+		caster.set_caster_points(after)
+		if network_manager != null and network_manager.has_method("broadcast_unit_casts"):
+			network_manager.broadcast_unit_casts(caster)
+		_solo_refresh_caster_markers()
+		if battle_log != null:
+			_log_rule_event(BattleLog.Category.COMBAT,
+				"%s drains %s: Morale test failed, -%d spell tokens (%d -> %d) — Shaken" % [
+					member.get_name(), caster.get_name(), drain, before, after], _solo_is_ai_unit(member))
+		return true
+	return false
+
+
+## Rules 3.6 (SHO-01a): a human unit's Hold = not moved this round (the table stores no Hold action).
+func _solo_unit_held(unit: GameUnit) -> bool:
+	return opr_army_manager == null or unit == null \
+		or int(unit.unit_properties.get("moved_round", -1)) != opr_army_manager.current_round
 
 
 ## Indirect Mark (wave 6) — the mark-family consumer (the #936 twin of the Piercing-Mark grant
@@ -21382,6 +24002,21 @@ func _solo_reckless_ap(attacker: GameUnit, target: GameUnit) -> int:
 	return bonus
 
 
+## G4R5 F-AMBUSH-ARRIVAL-AP (EPOCH_73_V36): "Ambushing Piercing Shot" — the SHOOTING member's weapons get AP(+1) in the
+## round it arrived from Ambush (the core's `ctx_live` `ambush_arrival_ap`: the member's own rule, its own arrival stamp
+## == this round). Melee never calls this. `logged` names the book rule once per member per volley.
+func _solo_ambush_arrival_ap(member: GameUnit, logged: Dictionary) -> int:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 or opr_army_manager == null or member == null:
+		return 0
+	if int(member.unit_properties.get("ambush_arrived_round", -1)) != opr_army_manager.current_round \
+			or not SoloController.unit_carries_rule(member, "Ambushing Piercing Shot"):
+		return 0
+	if battle_log != null and not logged.has(member):
+		battle_log.log_event(BattleLog.Category.COMBAT, "Ambushing Piercing Shot: %s shoots with AP(+1) in its arrival round" % member.get_name(), true)
+	logged[member] = true
+	return 1
+
+
 ## Mind Control ("pick one enemy within 18\" in LOS, it takes a morale test; if failed you may move
 ## it up to 6\" in a straight line"): the AI pulls the holder OFF the marker it defends — denial by
 ## displacement. The target takes the shared morale test; the shift is the shared forced straight move.
@@ -21391,6 +24026,7 @@ func _solo_apply_mind_control(unit: GameUnit) -> void:
 	var members: Array = [unit]
 	if unit.has_method("get_attached_heroes"):
 		members = members + unit.get_attached_heroes()
+	var round_now: int = opr_army_manager.current_round if opr_army_manager != null else -1
 	for m in members:
 		var member := m as GameUnit
 		if member == null or member.get_alive_count() == 0:
@@ -21402,7 +24038,7 @@ func _solo_apply_mind_control(unit: GameUnit) -> void:
 			var tgt := _solo_utility_target(member, "enemy", float(sp.get("range_in", 18.0)), bool(sp.get("needs_los", true)))
 			if tgt == null:
 				continue
-			var passed: bool = await _solo_morale_test(tgt, _roller_label(tgt))
+			var passed: bool = await _solo_morale_test(tgt, _roller_label(tgt), false, n)
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s forces a morale test on %s — %s" % [
 					n, member.get_name(), tgt.get_name(), ("passed" if passed else "FAILED")], true)
@@ -21419,6 +24055,14 @@ func _solo_apply_mind_control(unit: GameUnit) -> void:
 					_log_rule_event(BattleLog.Category.COMBAT,
 						"%s: %s is FATIGUED (melee hits only on unmodified 6s)" % [n, tgt.get_name()], true)
 				continue
+			# MOR-18, rules 3.6: a unit is MOVED by Mind Control only once per round — the test
+			# above still ran and its Shaken stands, the displacement is skipped.
+			if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
+				and int(tgt.unit_properties.get("mind_control_moved_round", -1)) == round_now:
+				if battle_log != null:
+					battle_log.log_event(BattleLog.Category.MOVEMENT,
+						"%s: %s was already moved by Mind Control this round — it stays put" % [n, tgt.get_name()], true)
+				continue
 			# Displace away from the marker the target is nearest to (denial), else away from us.
 			var c := solo_controller.unit_centre(tgt)
 			var away := Vector2(c.x - solo_controller.unit_centre(member).x, c.z - solo_controller.unit_centre(member).z)
@@ -21426,6 +24070,8 @@ func _solo_apply_mind_control(unit: GameUnit) -> void:
 			if obj != SoloController.NO_OBJECTIVE:
 				away = Vector2(c.x - obj.x, c.z - obj.z)
 			var moved := solo_controller.forced_straight_move(tgt, away, float(sp.get("move_in", 6.0)))
+			if moved > 0.0 and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+				tgt.unit_properties["mind_control_moved_round"] = round_now
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.MOVEMENT,
 					"%s: %s fails the morale test — Shaken, moved %.0f\" in a straight line (away from the marker)" % [n, tgt.get_name(), moved], true)
@@ -21474,11 +24120,33 @@ func _solo_apply_piercing_tag(unit: GameUnit) -> void:
 					continue
 			else:
 				member.unit_properties["piercing_tag_used"] = true
-			tgt.unit_properties["piercing_tag_markers"] = int(tgt.unit_properties.get("piercing_tag_markers", 0)) + markers
-			# D42 (a), EPOCH_67_MARKERS_BURSTS: which name placed the marker, so the spend
-			# half (_solo_spend_piercing_tag) knows whether the pool stands (Piercing
-			# Target, no removal clause) or spends whole (the rest of the family).
-			tgt.unit_properties["piercing_tag_source"] = n
+			# Rules 3.6 (EPOCH_73_V36): Tags stack X tokens or spread one each; Targets put ONE token on each of
+			# up to X units and give a flat +1 (the 3.5 reading scaled with the token count).
+			var v36: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
+			var v36_tag: bool = n == "Piercing Tag" and v36
+			var v36_target: bool = n == "Piercing Target" and v36
+			var picks: Array = _solo_utility_targets(member, "enemy", float(sp.get("range_in", 24.0)), bool(sp.get("needs_los", true)), markers) if (v36_tag or v36_target) else []
+			var spread: bool = picks.size() >= 2
+			if not spread:
+				picks = [tgt]
+			for p in picks:
+				var pu := p as GameUnit
+				pu.unit_properties["piercing_tag_markers"] = int(pu.unit_properties.get("piercing_tag_markers", 0)) + (1 if (spread or v36_target) else markers)
+				# D42 (a), EPOCH_67_MARKERS_BURSTS: which name placed the marker, so the spend
+				# half (_solo_spend_piercing_tag) knows whether the pool stands (Piercing
+				# Target, no removal clause) or spends whole (the rest of the family).
+				pu.unit_properties["piercing_tag_source"] = n
+			if v36_target:
+				var names := picks.map(func(p): return (p as GameUnit).get_name())
+				_log_rule_event(BattleLog.Category.COMBAT,
+					"%s: %s places 1 token on each of %s — a friendly attack gets +1 AP" % [n, member.get_name(), ", ".join(names)], true)
+				continue
+			if v36_tag:
+				var placed := "1 token each, spread over %d units" % picks.size() if spread \
+					else "%d token%s, stacked on %s" % [markers, ("" if markers == 1 else "s"), tgt.get_name()]
+				_log_rule_event(BattleLog.Category.COMBAT,
+					"%s: %s places %s — a friendly attack may spend one token for +1 AP" % [n, member.get_name(), placed], true)
+				continue
 			if battle_log != null:
 				_log_rule_event(BattleLog.Category.COMBAT,
 					"%s: %s places %d marker%s on %s — friendly attackers may spend them for +AP" % [
@@ -21489,6 +24157,7 @@ func _solo_apply_piercing_tag(unit: GameUnit) -> void:
 ## at once — markers are a shared resource and the first big volley is the best use). Returns bonus.
 ## D42 (a): "Piercing Target" (army-book v3.5.3, no removal clause) STANDS while the target lives —
 ## the pool is read but never zeroed; the rest of the family still spends whole on first use.
+## Rules 3.6 (EPOCH_73_V36): every attack spends exactly ONE token for +1 AP, a stack or a spread alike.
 func _solo_spend_piercing_tag(target: GameUnit) -> int:
 	if target == null:
 		return 0
@@ -21496,10 +24165,17 @@ func _solo_spend_piercing_tag(target: GameUnit) -> int:
 	if markers <= 0:
 		return 0
 	if str(target.unit_properties.get("piercing_tag_source", "")) == "Piercing Target":
+		var v36: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
+		var flat: int = 1 if v36 else markers
 		if battle_log != null:
 			_log_rule_event(BattleLog.Category.COMBAT,
-				"Piercing Target: +AP(%d) stands while %s lives" % [markers, target.get_name()], true)
-		return markers
+				"Piercing Target: +AP(%d) stands while %s lives%s" % [flat, target.get_name(), " (+1 (Target))" if v36 else ""], true)
+		return flat
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:   # rules 3.6: ONE token per attack, +1
+		target.unit_properties["piercing_tag_markers"] = markers - 1
+		_log_rule_event(BattleLog.Category.COMBAT,
+			"Piercing Tag: one token spent — +1 AP on this volley (%d left)" % (markers - 1), true)
+		return 1
 	target.unit_properties["piercing_tag_markers"] = 0
 	if battle_log != null:
 		_log_rule_event(BattleLog.Category.COMBAT,
@@ -21507,13 +24183,75 @@ func _solo_spend_piercing_tag(target: GameUnit) -> int:
 	return markers
 
 
+## The unit's "Utility Buff" entries that carry one display name. SHO-22b: every shipped map entry stamps
+## Precision Tag (and its Spotter/Target siblings) with the "Utility Buff" primitive, so the old
+## `unit_rules_of_primitive(member, "Precision Tag")` found nothing — this walks the same list the core
+## builds in `core/nml-core/src/unit.rs::utility_buffs_of`.
+func _solo_utility_buff_entries_named(member: GameUnit, rule_name: String) -> Array:
+	var out: Array = []
+	for e in RulesRegistry.unit_rules_of_primitive(member, "Utility Buff"):
+		var ed := e as Dictionary
+		if str(ed.get("name", "")) == rule_name:
+			out.append(ed)
+	return out
+
+
+## UX-SHO22b-PICK test seam: empty in play. A test assigns a Callable to answer the Precision Tag pick
+## without opening the house card.
+var _solo_ask_precision_tag_pick: Callable = Callable()
+## The Precision Tag pick, split out: AI keeps today's policy; a HUMAN bearer from EPOCH_73_V36 picks
+## target and stack-vs-spread itself; below 73 the single auto target stays.
+func _solo_precision_tag_choice(member: GameUnit, legal: Array, markers: int) -> Dictionary:
+	if legal.is_empty():
+		return {}
+	var auto: Dictionary = {"target": legal[0], "spread": legal.size() >= 2}
+	if _solo_is_ai_unit(member) or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return auto
+	var picked: Dictionary
+	if _solo_ask_precision_tag_pick.is_valid():
+		picked = await _solo_ask_precision_tag_pick.call(member, legal, markers)
+	elif ProjectSettings.get_setting("niemandsland/harness_mode", false):
+		return auto   # a headless harness has no clicker — the safe default is today's pick
+	else:
+		picked = await _solo_precision_tag_pick_dialog(member, legal, markers)
+	if picked.is_empty() or not (picked.get("target") is GameUnit):
+		return auto
+	return {"target": picked["target"], "spread": bool(picked.get("spread", false)) and legal.size() >= 2}
+
+
+## The house card: one line per legal enemy, then — when a spread is legal — stack vs spread.
+func _solo_precision_tag_pick_dialog(member: GameUnit, legal: Array, markers: int) -> Dictionary:
+	var card := PromptCard.new("Precision Tag",
+		"%s may tag one enemy in range. Pick the target:" % member.get_name(), "", "Let the AI pick")
+	for t in legal:
+		var gu := t as GameUnit
+		var line := HouseStyle.action_line(gu.get_name())
+		line.pressed.connect(func() -> void: card.resolve(gu))
+		card.rows.add_child(line)
+	add_child(card)
+	var target: Variant = await card.answer({})
+	if not (target is GameUnit):
+		return {}
+	var picked := target as GameUnit
+	var spread := false
+	if markers >= 2 and legal.size() >= 2:
+		spread = await _solo_ask("Precision Tag",
+			"%d tokens: stack all on %s, or spread one on each of up to %d units?" % [
+				markers, picked.get_name(), markers], "Spread 1 each", "Stack on %s" % picked.get_name())
+	return {"target": picked, "spread": spread}
+
+
 ## Precision Tag (PRECISION_TEXT_2026-09-15 §4 — "Once per game, during this model's activation, pick one
 ## enemy unit within 24\" and in line of sight of it, and place X markers on it. When attacking, friendly
 ## units may remove markers from their target before rolling to hit to get +Y to hit rolls, where Y is the
-## number of removed markers."): the AI tags the TOUGHEST enemy (the _solo_apply_piercing_tag shape); the
-## next friendly volley spends every marker for +1 to hit each (see _solo_consume_tag_markers).
+## number of removed markers."): the bearer tags the TOUGHEST enemy (the _solo_apply_piercing_tag shape);
+## the next friendly volley spends every marker for +1 to hit each (see _solo_consume_tag_markers).
+## SHO-22b: reads the shipped "Utility Buff" entries (`_solo_utility_buff_entries_named`) and runs for both
+## sides — the core's `tray_precision_markers` places it at every epoch, so this is a table bug fix with NO
+## epoch gate. Rules 3.6 (EPOCH_73_V36) mirror SHO-22: X tokens stacked on one unit, or one token on each
+## of up to X units.
 func _solo_apply_precision_tag(unit: GameUnit) -> void:
-	if solo_controller == null or unit == null or not _solo_is_ai_unit(unit):
+	if opr_army_manager == null or unit == null:
 		return
 	var members: Array = [unit]
 	if unit.has_method("get_attached_heroes"):
@@ -21524,23 +24262,52 @@ func _solo_apply_precision_tag(unit: GameUnit) -> void:
 			continue
 		if bool(member.unit_properties.get("precision_tag_used", false)):
 			continue
-		for e in RulesRegistry.unit_rules_of_primitive(member, "Precision Tag"):
+		for e in _solo_utility_buff_entries_named(member, "Precision Tag"):
 			var ed := e as Dictionary
 			if bool(member.unit_properties.get("precision_tag_used", false)):
 				break
 			var sp: Dictionary = ed.get("params", {})
-			var tgt := _solo_utility_target(member, "enemy", float(sp.get("range_in", 24.0)), bool(sp.get("needs_los", true)))
+			var range_in := float(sp.get("range_in", 24.0))
+			var needs_los := bool(sp.get("needs_los", true))
+			var tgt := _solo_utility_target(member, "enemy", range_in, needs_los)
 			if tgt == null:
 				continue
 			member.unit_properties["precision_tag_used"] = true
-			var markers: int = maxi(int(ed.get("rating", 0)), 1)
-			tgt.unit_properties["tag_markers"] = int(tgt.unit_properties.get("tag_markers", 0)) + markers
-			_sync_unit_property(tgt, "tag_markers", int(tgt.unit_properties["tag_markers"]))   # NML-927: the count rides the wire
+			var rating: int = int(ed.get("rating", 0))
+			var markers: int = maxi(rating if rating > 0 else int(sp.get("markers", 1)), 1)
+			var v36_tag: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
+			var legal: Array = _solo_utility_targets(member, "enemy", range_in, needs_los, markers) if v36_tag else []
+			if legal.is_empty():
+				legal = [tgt]
+			var choice: Dictionary = await _solo_precision_tag_choice(member, legal, markers)
+			var chosen: GameUnit = choice.get("target", tgt) as GameUnit
+			var spread: bool = bool(choice.get("spread", false))
+			var picks: Array = [chosen]
+			if spread:
+				for lp in legal:
+					if picks.size() >= markers:
+						break
+					if lp != chosen:
+						picks.append(lp)
+			var per: int = 1 if spread else markers
+			for p in picks:
+				var pu := p as GameUnit
+				pu.unit_properties["tag_markers"] = int(pu.unit_properties.get("tag_markers", 0)) + per
+				_sync_unit_property(pu, "tag_markers", int(pu.unit_properties["tag_markers"]))   # NML-927: the count rides the wire
+			if v36_tag:
+				var placed := "1 token each, spread over %d units" % picks.size() if spread \
+					else "%d token%s, stacked on %s" % [markers, ("" if markers == 1 else "s"), chosen.get_name()]
+				if battle_log != null:
+					_log_rule_event(BattleLog.Category.COMBAT,
+						"Precision Tag: %s places %s — a friendly attack may spend one token for +1 to hit" % [
+						member.get_name(), placed], true)
+				_solo_rule_float(chosen, "Tagged +%d!" % per)
+				continue
 			if battle_log != null:
 				_log_rule_event(BattleLog.Category.COMBAT,
-					"Precision Tag: %s places %d marker%s on %s — friendly attackers may remove them for +1 to hit each" % [
-					member.get_name(), markers, ("" if markers == 1 else "s"), tgt.get_name()], true)
-			_solo_rule_float(tgt, "Tagged +%d!" % markers)
+					"Precision Tag: %s places %d marker%s on %s — friendly attackers may remove markers for +1 to hit each" % [
+					member.get_name(), markers, ("" if markers == 1 else "s"), chosen.get_name()], true)
+			_solo_rule_float(chosen, "Tagged +%d!" % markers)
 
 
 ## Precision Target (PRECISION_TEXT_2026-09-15 §5 — "Once per game, during this model's activation, pick one
@@ -21561,7 +24328,7 @@ func _solo_apply_precision_target(unit: GameUnit) -> void:
 			continue
 		if bool(member.unit_properties.get("precision_target_used", false)):
 			continue
-		for e in RulesRegistry.unit_rules_of_primitive(member, "Precision Target"):
+		for e in _solo_utility_buff_entries_named(member, "Precision Target"):
 			var ed := e as Dictionary
 			if bool(member.unit_properties.get("precision_target_used", false)):
 				break
@@ -21571,27 +24338,44 @@ func _solo_apply_precision_target(unit: GameUnit) -> void:
 				continue
 			member.unit_properties["precision_target_used"] = true
 			var markers: int = maxi(int(ed.get("rating", 0)), 1)
-			_solo_record_spell_mod(tgt, "Precision Target", {
-				"modifier": {"hit_mod": markers},
-				"beneficiary": "attackers",
-				"duration": "game"})
-			_solo_rule_float(tgt, "Targeted +%d!" % markers)
+			# Rules 3.6 (EPOCH_73_V36): Targets put ONE token on each of up to X units and give a flat +1
+			# (the 3.5 reading stacked all markers on one pick); below 73 the old stack stays byte-exact.
+			var v36: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
+			var picks: Array = _solo_utility_targets(member, "enemy", float(sp.get("range_in", 18.0)),
+				bool(sp.get("needs_los", true)), markers) if v36 else [tgt]
+			if picks.is_empty():
+				picks = [tgt]
+			for p in picks:
+				var pu := p as GameUnit
+				_solo_record_spell_mod(pu, "Precision Target", {
+					"modifier": {"hit_mod": 1 if v36 else markers},
+					"beneficiary": "attackers",
+					"duration": "game"})
+				_solo_rule_float(pu, "Targeted +%d!" % (1 if v36 else markers))
+			if v36:
+				var names := picks.map(func(p): return (p as GameUnit).get_name())
+				_log_rule_event(BattleLog.Category.COMBAT,
+					"Precision Target: %s places 1 token on each of %s — a friendly attack gets +1 to hit" % [member.get_name(), ", ".join(names)], true)
 
 
 ## Spend every Precision-Tag marker on the target for +X to hit on THIS volley (the AI spends all at once —
 ## the spot pool's own headless policy, main.gd:10113). Returns the bonus.
+## Rules 3.6 (EPOCH_73_V36): every attack spends exactly ONE token for +1 to hit.
 func _solo_consume_tag_markers(target: GameUnit) -> int:
 	if target == null:
 		return 0
 	var tm := int(target.unit_properties.get("tag_markers", 0))
 	if tm <= 0:
 		return 0
-	_sync_unit_property(target, "tag_markers", null)
+	var v36: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36   # rules 3.6: ONE token per attack, +1
+	var spent: int = 1 if v36 else tm
+	_sync_unit_property(target, "tag_markers", (tm - spent) if tm > spent else null)
 	if battle_log != null:
 		_log_rule_event(BattleLog.Category.COMBAT,
-			"Precision Tag: %d marker%s removed — +%d to hit this volley" % [tm, ("" if tm == 1 else "s"), tm], true)
-	_solo_rule_float(target, "Markers spent +%d" % tm)
-	return tm
+			("Precision Tag: one token spent — +1 to hit this volley (%d left)" % (tm - 1)) if v36 \
+			else "Precision Tag: %d marker%s removed — +%d to hit this volley" % [tm, ("" if tm == 1 else "s"), tm], true)
+	_solo_rule_float(target, "Markers spent +%d" % spent)
+	return spent
 
 
 ## Coverage wave — Crossing Attack(X) ("once per activation, when this model moves through enemy
@@ -21677,8 +24461,10 @@ func _solo_growth_round_start() -> void:
 		var gu := u as GameUnit
 		if gu == null or gu.get_alive_count() == 0 or SoloController.unit_in_reserve(gu):
 			continue
-		if gu.has_method("is_attached") and gu.is_attached():
+		# AIG-G2 R2 (EPOCH_73_V36): a living joined hero ticks the marker of his OWN rule; below 73 attached units skip.
+		if gu.has_method("is_attached") and gu.is_attached() and AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
 			continue
+		var host_shaken: bool = gu.is_attached() and (gu.get_attached_to() as GameUnit).is_shaken
 		for e in RulesRegistry.unit_rules_of_primitive(gu, "Growth Markers"):
 			var ed := e as Dictionary
 			var sp: Dictionary = ed.get("params", {})
@@ -21691,7 +24477,7 @@ func _solo_growth_round_start() -> void:
 			# v3.5.3: Shaken BLOCKS the round's marker, it no longer removes the ones already earned —
 			# so the skip sits here (per carrier, after the state is read) and says so, instead of
 			# skipping the unit wholesale in silence (rules-must-log: a blocked tick is a rule at work).
-			if gu.is_shaken:
+			if gu.is_shaken or host_shaken:
 				if battle_log != null:
 					_log_rule_event(BattleLog.Category.GENERAL, "%s: %s is Shaken — no marker this round (keeps %d/%d)" % [
 						n, gu.get_name(), cur, cap], _solo_is_ai_unit(gu))
@@ -21706,24 +24492,30 @@ func _solo_growth_round_start() -> void:
 					n, gu.get_name(), cur, cap], _solo_is_ai_unit(gu))
 
 
-## On-kill accrual (Defensive Frenzy: "place one marker when it fully destroys an enemy unit").
+## On-kill accrual (Defensive Frenzy: "place one marker when it fully destroys an enemy unit"). AIG-G2 R2
+## (EPOCH_73_V36): the chain's kill also credits each living joined hero who carries the rule himself.
 func _solo_growth_on_kill(attacker: GameUnit) -> void:
 	if attacker == null:
 		return
-	for e in RulesRegistry.unit_rules_of_primitive(attacker, "Growth Markers"):
-		var ed := e as Dictionary
-		var sp: Dictionary = ed.get("params", {})
-		if not bool(sp.get("on_kill", false)):
-			continue
-		var n := str(ed["name"])
-		var key := "growth_%s" % n.to_snake_case()
-		var cur := int(attacker.unit_properties.get(key, 0))
-		var cap := int(sp.get("max_markers", 2))
-		if cur < cap:
-			attacker.unit_properties[key] = cur + 1
-			if battle_log != null:
-				_log_rule_event(BattleLog.Category.COMBAT, "%s: %s gains a marker for the kill (%d/%d)" % [
-					n, attacker.get_name(), cur + 1, cap], _solo_is_ai_unit(attacker))
+	var members: Array = [attacker]
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		members.append_array(attacker.get_attached_heroes().filter(func(h: Variant) -> bool: return (h as GameUnit).get_alive_count() > 0))
+	for m in members:
+		var who := m as GameUnit
+		for e in RulesRegistry.unit_rules_of_primitive(who, "Growth Markers"):
+			var ed := e as Dictionary
+			var sp: Dictionary = ed.get("params", {})
+			if not bool(sp.get("on_kill", false)):
+				continue
+			var n := str(ed["name"])
+			var key := "growth_%s" % n.to_snake_case()
+			var cur := int(who.unit_properties.get(key, 0))
+			var cap := int(sp.get("max_markers", 2))
+			if cur < cap:
+				who.unit_properties[key] = cur + 1
+				if battle_log != null:
+					_log_rule_event(BattleLog.Category.COMBAT, "%s: %s gains a marker for the kill (%d/%d)" % [
+						n, who.get_name(), cur + 1, cap], _solo_is_ai_unit(who))
 
 
 ## Defense bonuses from growth markers (Defensive Frenzy: +1 Defense per marker), one entry per rule
@@ -21754,15 +24546,22 @@ static func _growth_facet_bonus(params: Dictionary, facet: String, markers: int)
 
 
 ## Attack-side growth bonuses: {"ap": int, "hit": int} (Piercing/Precision Growth per two markers,
-## Piercing/Precision Frenzy per marker).
+## Piercing/Precision Frenzy per marker). `ap_names` / `hit_names` carry the rule names that actually
+## contributed, so the batch that reads the numbers can name the rule it applied (AIG-G2-L4).
 func _solo_growth_attack_bonus(unit: GameUnit) -> Dictionary:
-	var out := {"ap": 0, "hit": 0}
+	var out := {"ap": 0, "hit": 0, "ap_names": [], "hit_names": []}
 	for e in RulesRegistry.unit_rules_of_primitive(unit, "Growth Markers"):
 		var ed := e as Dictionary
 		var sp: Dictionary = ed.get("params", {})
 		var markers: int = _solo_growth_markers(unit, str(ed["name"]))
-		out["ap"] += _growth_facet_bonus(sp, "ap", markers)
-		out["hit"] += _growth_facet_bonus(sp, "hit", markers)
+		var ap_bonus: int = _growth_facet_bonus(sp, "ap", markers)
+		var hit_bonus: int = _growth_facet_bonus(sp, "hit", markers)
+		out["ap"] += ap_bonus
+		out["hit"] += hit_bonus
+		if ap_bonus > 0:
+			(out["ap_names"] as Array).append(str(ed["name"]))
+		if hit_bonus > 0:
+			(out["hit_names"] as Array).append(str(ed["name"]))
 	return out
 
 
@@ -21889,7 +24688,7 @@ func _solo_apply_storm_attack(unit: GameUnit) -> void:
 				else:
 					await _solo_land_wounds(tgt, w, 0)
 				# Post-shooting morale, the Breath Attack twin's tail (main.gd:5423).
-				await _solo_shooting_morale(tgt, alive_before, _roller_label(tgt), wounds_before)
+				await _solo_shooting_morale(tgt, alive_before, _roller_label(tgt), wounds_before, n)
 				if _solo_combined_alive(tgt) <= 0:
 					targets_in_reach.erase(tgt)
 					if targets_in_reach.is_empty():
@@ -21967,13 +24766,18 @@ func _solo_apply_surprise_attack(unit: GameUnit) -> void:
 		var w: int = await _solo_save_batch(bu, tgt, "Surprise Attack", hits,
 			_solo_defense_vs(tgt), ap, profile, not _solo_is_ai_unit(tgt), false, true, false)
 		await _solo_land_wounds(tgt, w, 0)
-		await _solo_shooting_morale(tgt, alive_before, _roller_label(tgt), wounds_before)
+		await _solo_shooting_morale(tgt, alive_before, _roller_label(tgt), wounds_before, "Surprise Attack")
 
 
 ## Teleport / Ethereal (design #816, PR 1 — table side): the BEFORE-ATTACK reposition beat, run
 ## after the move/charge resolves and before shooting/melee, in the same once-per-activation
 ## before-attacking slot the Storm Attack beat uses. AI side only (the human keeps the manual
-## drag). Clears the activation latch (reset semantics — it refills every activation), asks the
+## drag). The band penalty is keyed to the activation that took the placement: a take stamps
+## `teleport_activation` with the live activation serial, and the band pass prices the -6"/-6"
+## only while that stamp still equals the serial — pure reads, so previews and the move agree.
+## The once-per-activation latch keeps its old activation-start clear here, so the next
+## activation may place again; below epoch 73 the band pass ignores the stamp and the penalty
+## stays permanently folded. Asks the
 ## controller's EV-margin policy, and on a take: writes the record the act recorder folds
 ## (used-flag + landing centroid), glides the RIGID formation to the new centroid (house rule:
 ## nothing teleports-invisibly), and logs ONE line naming rule, band cap and landing centroid.
@@ -21995,6 +24799,7 @@ func _solo_apply_teleport(unit: GameUnit, report: Dictionary) -> void:
 	var to: Vector2 = dec.get("to", Vector2.ZERO)
 	var cap_in := SoloController.teleport_cap_in(rule, rush)
 	unit.unit_properties["teleport_used_this_activation"] = true
+	unit.unit_properties["teleport_activation"] = AiActRecorder.activation_serial
 	unit.unit_properties["teleport_to"] = to
 	var models: Array = solo_controller._moving_models(unit)
 	var centre: Vector3 = solo_controller.unit_centre(unit)
@@ -22098,8 +24903,19 @@ func _solo_create_rule_unit(carrier: GameUnit, anchor: ModelInstance, raw: Strin
 		pid, positions, origin)
 	if created == null:
 		return false
+	_solo_stamp_rule_unit_arrival(created, origin)
 	_log_rule_event(BattleLog.Category.GENERAL, "%s: %s places %s [%d]" % [rule, carrier.get_name(), unit_name, count], _solo_is_ai_unit(carrier))
 	return true
+
+
+## Rules 3.6 (row UX-16): a unit Spawn places or Split creates can neither seize nor contest an objective in
+## the round it arrives. It carries the SAME round stamp an Ambush arrival does, so _solo_auto_seize,
+## BattleSim and the core's can_hold_marker read one field; rules 3.5 (below EPOCH_73_V36) had no such limit.
+## `origin_round` rides in the MP unit payload, so the remote side stamps the same round.
+func _solo_stamp_rule_unit_arrival(unit: GameUnit, origin: String) -> void:
+	if unit == null or not (origin in ["spawn", "split"]) or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return
+	unit.unit_properties["ambush_arrived_round"] = int(unit.unit_properties.get("origin_round", -1))
 
 
 ## Spawn PR 1/2 (design docs/plans/SPAWN_DESIGN_2026-09-08.md §3.1): AiActRecorder's
@@ -22198,15 +25014,35 @@ func _solo_rule_unit_ghost(shape: Array, zone: Dictionary, blockers: Array, boun
 
 
 
+func _solo_log_unit_loss(gu: GameUnit, casualties: int, alive: int, total: int) -> void:
+	battle_log.log_event(BattleLog.Category.COMBAT, "%s loses %s (%d/%d)" % [
+		gu.get_name(), "a model" if casualties == 1 else "%d models" % casualties, alive, total])
+
+
+func _solo_flush_volley_losses() -> void:
+	var held: Dictionary = _volley_losses
+	_volley_losses = null
+	for gu in held:
+		_solo_log_unit_loss(gu as GameUnit, int(held[gu][0]), int(held[gu][1]), int(held[gu][2]))
+
+
 func _solo_remove_dead_models(unit: GameUnit, died_models: Array[ModelInstance], pid: int) -> void:
+	var opens_volley: bool = _volley_losses == null
+	if opens_volley:
+		_volley_losses = {}
 	for model in died_models:
 		var combined := _solo_combat_unit(unit)
 		if model == died_models.back() and _solo_combined_alive(combined) == 0:
+			if opens_volley:   # a Split placement can wait on a click: no line may stay held meanwhile
+				_solo_flush_volley_losses()
+				opens_volley = false
 			await _solo_split_from_last_model(combined, model)
 		if model.node != null and is_instance_valid(model.node):
 			opr_army_manager.set_loose_model_dead(model.node, pid, true, unit.unit_id)
 		if network_manager != null and network_manager.has_method("broadcast_model_wounds"):
 			network_manager.broadcast_model_wounds(model)
+	if opens_volley:
+		_solo_flush_volley_losses()
 
 
 func _solo_split_rules(unit: GameUnit) -> Dictionary:

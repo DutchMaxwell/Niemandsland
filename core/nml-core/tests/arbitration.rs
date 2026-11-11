@@ -265,7 +265,7 @@ fn diff(act: &Act, want: &PickRec, got: &Pick) -> Vec<(&'static str, String)> {
 /// One full sweep with `bend` applied. `PlanBend::default()` is the gate;
 /// anything else is a red proof.
 fn sweep(c: &ActCorpus, bend: PlanBend) -> Report {
-    let statics = build_act_statics(c, REPO);
+    let statics = build_act_statics(c, &common::pinned_spells_root(REPO));
     let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, hero_last: c.knobs.hero_last, path: c.knobs.seam_path,
         hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing,
         movement: c.knobs.movement, move_rigid: c.knobs.move_rigid, no_engage_fold: !c.knobs.engage_fold, los_model: c.knobs.los_model, dangerous_end_morale: c.knobs.dangerous_end_morale, consolidate: c.knobs.consolidate, ..Seams::default() };
@@ -427,7 +427,7 @@ fn red_proof_stochastic_wound_rounding_is_load_bearing() {
 #[test]
 fn a_close_top_two_without_a_signature_declines() {
     let c = corpus();
-    let statics = build_act_statics(&c, REPO);
+    let statics = build_act_statics(&c, &common::pinned_spells_root(REPO));
     let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, hero_last: c.knobs.hero_last, path: c.knobs.seam_path,
         hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing,
         movement: c.knobs.movement, move_rigid: c.knobs.move_rigid, no_engage_fold: !c.knobs.engage_fold, los_model: c.knobs.los_model, dangerous_end_morale: c.knobs.dangerous_end_morale, consolidate: c.knobs.consolidate, ..Seams::default() };

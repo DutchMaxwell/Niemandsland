@@ -28,6 +28,7 @@ pretends to automate it).
 Usage:
     python3 tools/spells_mechanics_export.py                 # default paths
     python3 tools/spells_mechanics_export.py --registry PATH --cache PATH
+    python3 tools/spells_mechanics_export.py --armyforge DIR # DIR/<system>/<slug>__<uid>.json
     python3 tools/spells_mechanics_export.py --check         # verify outputs
 """
 
@@ -56,22 +57,31 @@ ASSIGN_RE = re.compile(
 
 DAMAGE_RE = re.compile(r'\btakes?\s+(\d+)\s+hits?\b(?:\s+with\s+([^.]+?))?(?:\s+each)?(?:\.|$)')
 
-# "which gets/get <Rule Name> (in melee|when shooting|when attacking|when
-# charging)? (against)? once (next time the effect would apply)"
+# 3.6 books may say a grant or range bonus applies "on its/their weapons"; the
+# qualifier is dropped so the rule NAME stays the bare name the EV layer knows.
+ON_WEAPONS = r'(?:\s+on\s+(?:its|their)\s+weapons)?'
+
+# "which gets/get <Rule Name> (on its weapons)? (in melee|when shooting|when
+# attacking|when charging)? (against)? once (next time the effect would apply)"
 GRANT_RE = re.compile(
     r'\bwhich\s+(?:friendly\s+units\s+)?gets?\s+'
-    r'([A-Z][A-Za-z0-9\'’ &-]*?)'
+    r'([A-Z][A-Za-z0-9\'’ &-]*?)' + ON_WEAPONS +
     r'(?:\s+(in melee|when shooting|when attacking|when charging))?'
     r'(?:\s+against)?\s+once\b')
 
+# The roll name is case-insensitive: 3.6 capitalises Defense / Morale Test.
 MODIFIER_RE = re.compile(
     r'\bwhich\s+(?:friendly\s+units\s+)?gets?\s+'
-    r'([+-]\d+)\s+to\s+(hit|defense|morale test|casting)\s+rolls\b'
+    r'([+-]\d+)\s+to\s+((?i:hit|defense|morale test|casting))\s+rolls\b'
     r'(?:\s+(in melee|when shooting|when attacking|when charging))?'
     r'(?:\s+against)?\s+once\b')
 
 RANGE_MOD_RE = re.compile(
-    r'\bwhich\s+(?:friendly\s+units\s+)?gets?\s+([+-]\d+)[”"]\s+range\s+when\s+shooting\b')
+    r'\bwhich\s+(?:friendly\s+units\s+)?gets?\s+([+-]\d+)[”"]\s+range' + ON_WEAPONS +
+    r'\s+when\s+shooting\b')
+
+# Ruling D-SPELL-LOS: a spell needs line of sight only when its own text says so.
+LOS_RE = re.compile(r'\bin\s+line\s+of\s+sight\b', re.IGNORECASE)
 
 SPEED_MOD_RE = re.compile(
     r'\bwhich\s+moves?\s+([+-]\d+)[”"]\s+when\s+using\s+Advance\s+actions\s+'
@@ -101,6 +111,7 @@ WEAPON_RULE_RE = re.compile(r"^[A-Z][A-Za-z'’ -]{0,30}(\(\+?\d+\))?$")
 #   "<X> Boost" upgrade rules (Primal Boost, Devout Boost, Changebound Boost, ...)
 #     — they only fire when the bearer already has the base rule, and their facets
 #     (surge_attack_low, surge_low) are read solely by the dice path in main.gd;
+#     rules 3.6 names this family "Enhanced <X>";
 #   action-economy rules (Quick Shot, Rapid Rush, Teleport, Flying, Steadfast)
 #     — positioning / morale value, no term in profile_ev.
 EV_GRANT_BASES = ("Bane", "Shred", "Furious", "Relentless", "Rending", "Surge", "Indirect")
@@ -112,14 +123,14 @@ def ev_grant(name: str) -> bool:
     Shooting"). "<X> Boost" (upgrade) and "<X> Aura" (grants to OTHERS) are
     different effects than their base name suggests and never qualify."""
     n = name.strip()
-    if not n or n.endswith(" Boost") or n.endswith(" Aura"):
+    if not n or n.endswith(" Boost") or n.startswith("Enhanced ") or n.endswith(" Aura"):
         return False
     return any(n == b or n.startswith(b + " in ") or n.startswith(b + " when ")
                for b in EV_GRANT_BASES)
 
 # --- hygiene ---------------------------------------------------------------
 
-ALLOWED_SPELL_KEYS = {"name", "threshold", "range_in", "target", "effect", "mechanic", "status"}
+ALLOWED_SPELL_KEYS = {"name", "threshold", "range_in", "needs_los", "target", "effect", "mechanic", "status"}
 ALLOWED_TARGET_KEYS = {"side", "count", "kind"}
 ALLOWED_EFFECT_KEYS = {"kind", "hits", "weapon_rules", "grants_rule", "scope",
                        "duration", "modifier", "beneficiary"}
@@ -187,7 +198,7 @@ def classify(text: str) -> dict | None:
 
     mm = MODIFIER_RE.search(rest)
     if mm:
-        modifier = {MOD_KEYS[mm.group(2)]: int(mm.group(1))}
+        modifier = {MOD_KEYS[mm.group(2).lower()]: int(mm.group(1))}
         effect = {"kind": ("buff" if side == "friendly" else "debuff"),
                   "modifier": modifier, "duration": "once"}
         if mm.group(3):
@@ -264,11 +275,14 @@ def spell_entry(sp: dict) -> dict:
                   AI never selects it."""
     name = str(sp.get("name", "")).strip()
     entry = {"name": name, "threshold": int(sp.get("threshold", 0))}
-    parsed = classify(str(sp.get("effect", "")))
+    text = str(sp.get("effect", ""))
+    parsed = classify(text)
     if parsed is None:
         entry["status"] = "unmodeled"
         return entry
     entry["range_in"] = parsed["range_in"]
+    if LOS_RE.search(text):  # only when true: texts without the clause export byte-identical
+        entry["needs_los"] = True
     entry["target"] = parsed["target"]
     entry["effect"] = parsed["effect"]
     mech = mechanic_for(parsed["effect"])
@@ -324,11 +338,14 @@ def hygiene_check(system_map: dict) -> None:
 
 # --- per-system build --------------------------------------------------------
 
-def build_system_map(registry: str, cache: str, system: str) -> tuple[dict, dict]:
-    sys_dir = os.path.join(registry, system)
+def build_system_map(registry: str, cache: str, system: str,
+                     armyforge: str | None = None) -> tuple[dict, dict]:
+    # --armyforge: DIR/<system>/<slug>__<uid>.json are the army books themselves
+    # ("_" files are shared data); each is read as its own registry record.
+    sys_dir = os.path.join(armyforge or registry, system)
     faction_files = sorted(
         f for f in glob.glob(os.path.join(sys_dir, "*.json"))
-        if not os.path.basename(f).startswith("core_"))
+        if not os.path.basename(f).startswith("_" if armyforge else "core_"))
     if not faction_files:
         raise SystemExit("registry incomplete for system %r under %s" % (system, sys_dir))
 
@@ -336,14 +353,17 @@ def build_system_map(registry: str, cache: str, system: str) -> tuple[dict, dict
     stats = {"factions": 0, "spells": 0, "modeled": 0, "castable": 0, "unmodeled": 0, "missing_books": 0}
     for ff in faction_files:
         reg = load_json(ff)
+        if armyforge:
+            reg = {"faction": os.path.basename(ff).split("__")[0], "book_uid": reg.get("uid", ""),
+                   "book_version": reg.get("versionString", ""), "spells": reg.get("spells")}
         slug = reg.get("faction", os.path.splitext(os.path.basename(ff))[0])
         uid = str(reg.get("book_uid", ""))
         gs_id = int(reg.get("game_system_id", 0))
         cache_file = os.path.join(cache, "book-%s-gs%d.json" % (uid, gs_id))
-        if not uid or not os.path.exists(cache_file):
+        if not armyforge and (not uid or not os.path.exists(cache_file)):
             stats["missing_books"] += 1
             continue
-        book = load_json(cache_file)
+        book = reg if armyforge else load_json(cache_file)
         spells = book.get("spells") or []
         if not spells:
             continue
@@ -382,20 +402,27 @@ def main() -> int:
                         help="output directory (default: <repo>/assets/solo)")
     parser.add_argument("--check", action="store_true",
                         help="verify the committed maps match the sources (no writes)")
+    parser.add_argument("--armyforge", default=None, metavar="DIR",
+                        help="read Army Forge book JSONs from DIR/<system>/*.json instead of "
+                             "--registry + --cache")
     args = parser.parse_args()
     cache = args.cache or default_cache_path(args.registry)
 
-    if not os.path.isdir(args.registry):
+    if args.armyforge:
+        if not os.path.isdir(args.armyforge):
+            print("army forge directory not found: %s" % args.armyforge)
+            return 2
+    elif not os.path.isdir(args.registry):
         print("registry not found: %s (this generator needs the maintainer's local registry)" % args.registry)
         return 2
-    if not os.path.isdir(cache):
+    elif not os.path.isdir(cache):
         print("army-book cache not found: %s (run the registry sync tool first)" % cache)
         return 2
 
     os.makedirs(args.out, exist_ok=True)
     stale = []
     for system in SYSTEMS:
-        system_map, stats = build_system_map(args.registry, cache, system)
+        system_map, stats = build_system_map(args.registry, cache, system, args.armyforge)
         out_path = os.path.join(args.out, "spells_mechanics_%s.json" % system)
         payload = json.dumps(system_map, indent=1, ensure_ascii=False, sort_keys=False) + "\n"
         if args.check:

@@ -13,6 +13,7 @@ func _unit(id: String, pid: int, z_in: float, rules: Array = []) -> GameUnit:
 	model.unit = unit
 	model.is_alive = true
 	model.wounds_max = 3
+	model.wounds_current = 3
 	model.node = auto_free(Node3D.new())
 	add_child(model.node)
 	model.node.global_position = Vector3(0, 0, z_in * IN2M)

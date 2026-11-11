@@ -24,9 +24,10 @@
 //!   1. CONTAINER BOXES. `terrain_overlay._build_los_volumes` (:1183-1186) uses
 //!      the exact 6"x3" OBB a placed container recorded in `_blocker_obbs`
 //!      (:2841), and DROPS the container's painted cells that the OBB covers
-//!      (:1238-1241). The OBB comes from the placed-object list, which no act
-//!      line carries; only the 3"-quantised cells survive into `terrain.cells`.
-//!      This port therefore builds containers from those cells, solid, at the
+//!      (:1238-1241). From `EPOCH_73_V36` the act header's `terrain.containers`
+//!      carries that OBB and `zones_of_at` does the same. Older recordings carry
+//!      only the 3"-quantised cells in `terrain.cells`, so this port builds
+//!      containers from those cells, solid, at the
 //!      same 2.5" height. Measured on `~/selfplay_out/qbe_ref`: keeping them
 //!      agrees with the recorded per-shot `sighted` on 9 more shots than dropping
 //!      them, and never on fewer.
@@ -36,8 +37,9 @@
 //!      separation_checker.gd:137-140). For a ROUND base the two are the same
 //!      number (`radius = effective_mm / 2`), so `base_mm = r * 2000` is exact;
 //!      for an OVAL base the circumscribed radius over-states the mean the
-//!      height table wants, and this port therefore over-states an oval model's
-//!      height.
+//!      height table wants, and below `EPOCH_73_V36` this port therefore
+//!      over-states an oval model's height. From it `model_height_at` takes the
+//!      mean axis off the header's `base_w_mm` / `base_d_mm` (AI-G4 C-SIGHT).
 //!   3. WEAPON BEARERS. `SoloController.alive_bearers_of` (:7720-7739) reads the
 //!      per-MODEL loadout, which the capture does not carry — see
 //!      `sim::sighted_profiles_of` for the approximation and its measured cost.
@@ -48,7 +50,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crate::acts::{rule_on, CURRENT_RULES_EPOCH, EPOCH_66_DISTANCE_TRUTH};
+use crate::acts::{rule_on, CURRENT_RULES_EPOCH, EPOCH_66_DISTANCE_TRUTH, EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36};
 use crate::state::State;
 use crate::terrain::{self, Terrain};
 
@@ -64,7 +66,7 @@ const Y_EPS_M: f64 = 1e-6;
 pub const AIRCRAFT_TARGET_RANGE_PENALTY_IN: f64 = 12.0;
 /// `main.SOLO_LOS_DEFAULT_BASE_MM` :4237 — the floor `_solo_unit_los_height_m`
 /// starts from, so a unit is never shorter than 32 mm infantry.
-const DEFAULT_BASE_MM: f64 = 32.0;
+pub(crate) const DEFAULT_BASE_MM: f64 = 32.0;
 /// `VolumetricLos.BASE_HEIGHT_TABLE` — (base mm, model height in inches).
 const BASE_HEIGHT_TABLE: [[f64; 2]; 6] =
     [[25.0, 1.0], [32.0, 1.25], [40.0, 1.5], [50.0, 2.0], [60.0, 3.0], [100.0, 4.0]];
@@ -78,6 +80,12 @@ fn volume_height_in(kind: i32) -> f64 {
         terrain::CONTAINER => 2.5,
         _ => 0.0,
     }
+}
+
+/// From `EPOCH_73_V36` a ruin still gives cover but is no sight volume: a line may pass through it. A forest and a
+/// container keep their volumes, and every earlier epoch reads the board as before.
+fn ruin_is_open(kind: i32, rules_epoch: u32) -> bool {
+    kind == terrain::RUINS && rule_on(rules_epoch, EPOCH_73_V36)
 }
 
 /// `VolumetricLos.height_in_for_base_mm` — linear between rows, clamped outside.
@@ -100,6 +108,17 @@ pub fn height_in_for_base_mm(base_mm: f64) -> f64 {
 #[inline]
 pub fn model_height_m(radius_m: f64) -> f64 {
     height_in_for_base_mm(radius_m * 2000.0) * IN2M
+}
+
+/// A model's height for the game at `rules_epoch`. From `EPOCH_73_V36` an OVAL base feeds the MEAN of its two axes
+/// into the height table, as `_solo_model_base_mm` does: the half-axes come off the profile's `base_w_mm` /
+/// `base_d_mm`, the recorded radius carrying the model's Tough scale. A round base reads `radius * 2000` as before.
+fn model_height_at(state: &State, unit: usize, radius_m: f64, rules_epoch: u32) -> f64 {
+    if !rule_on(rules_epoch, EPOCH_73_V36) {
+        return model_height_m(radius_m);
+    }
+    let (sx, sz) = state.base_shape(unit).semis(radius_m);
+    height_in_for_base_mm((sx + sz) * 1000.0) * IN2M
 }
 
 /// One model as `VolumetricLos` sees it: a base circle extruded from where it
@@ -453,15 +472,32 @@ pub fn sighted_models(
 /// (`TerrainOverlay._terrain_zones` :1307-1325 flood-fills 4-connected cells of
 /// EQUAL type, and the see-in/out rule keys on the whole zone, so a merged one
 /// would let a model see out of a FOREIGN wood). DANGEROUS is open ground and
-/// never appears (`terrain_blocks_los` :1130-1133).
+/// never appears (`terrain_blocks_los` :1130-1133). The pre-3.6 reading, for
+/// callers that cannot know an epoch (the sight unit tests); a game asks `zones_of_at`.
 pub fn zones_of(t: &Terrain) -> Vec<Zone> {
+    zones_of_at(t, EPOCH_72_PLAYTEST_RULES)
+}
+
+/// `zones_of` as the game at `rules_epoch` reads the board: from `EPOCH_73_V36` a ruin is no volume.
+pub fn zones_of_at(t: &Terrain, rules_epoch: u32) -> Vec<Zone> {
     if !t.is_valid() {
         return Vec::new();
     }
+    // F-CONT (rules 3.6, `EPOCH_73_V36`): a placed container is its exact box, and the painted container cells whose
+    // centre the box covers drop out (`TerrainOverlay._zone_volumes`, the NML-965 double-block trap).
+    let boxes: &[terrain::ContainerObb] = if rule_on(rules_epoch, EPOCH_73_V36) { t.containers() } else { &[] };
+    let (sin, cos) = t.grid_yaw().sin_cos();
+    let under_box = |k: (i64, i64)| {
+        let (lx, lz) = ((k.0 as f64 + 0.5) * t.cell_m(), (k.1 as f64 + 0.5) * t.cell_m());
+        let p = [lx * cos - lz * sin, lx * sin + lz * cos];
+        boxes.iter().any(|b| BoxFoot { c: b.c, he: b.he, yaw: b.yaw, y0: 0.0 }.holds_point(p))
+    };
+    let half = t.half_grid_cells();
     let cells: HashMap<(i64, i64), i32> = t
         .painted_cells()
-        .filter(|&(_, k)| volume_height_in(k) > 0.0)
-        .map(|(c, k)| ((c.0 - t.half_grid_cells(), c.1 - t.half_grid_cells()), k))
+        .filter(|&(_, k)| volume_height_in(k) > 0.0 && !ruin_is_open(k, rules_epoch))
+        .map(|(c, k)| ((c.0 - half, c.1 - half), k))
+        .filter(|&(c, k)| !(k == terrain::CONTAINER && under_box(c)))
         .collect();
     let (mut seen, mut out) = (HashSet::new(), Vec::new());
     for (&start, &kind) in cells.iter() {
@@ -486,18 +522,38 @@ pub fn zones_of(t: &Terrain) -> Vec<Zone> {
             foot: None,
         });
     }
+    let roof = volume_height_in(terrain::CONTAINER) * IN2M;
+    out.extend(boxes.iter().map(|b| Zone::shelf_box(b.c, b.he, b.yaw, 0.0, roof, true)));
     out
+}
+
+/// `VolumetricLos.surface_y_at` (:211) over the board's solid volumes - the height a model standing at the flat world
+/// point `p` stands on: the roof of the container holding it (a placed box, or a painted container cell no box covers,
+/// the same two the zones above keep), else the table at 0. Metres. G4R5 R3: the table settles every moved model here.
+pub fn surface_y_m(t: &Terrain, p: [f64; 2], rules_epoch: u32) -> f64 {
+    let boxes: &[terrain::ContainerObb] = if rule_on(rules_epoch, EPOCH_73_V36) { t.containers() } else { &[] };
+    let covered = |q: [f64; 2]| boxes.iter().any(|b| BoxFoot { c: b.c, he: b.he, yaw: b.yaw, y0: 0.0 }.holds_point(q));
+    let (sin, cos) = t.grid_yaw().sin_cos();
+    let k = cell_of(p, t.grid_yaw(), t.cell_m());
+    let (lx, lz) = ((k.0 as f64 + 0.5) * t.cell_m(), (k.1 as f64 + 0.5) * t.cell_m());
+    let painted = t.type_at([p[0] as f32, 0.0, p[1] as f32]) == terrain::CONTAINER && !covered([lx * cos - lz * sin, lx * sin + lz * cos]);
+    if covered(p) || painted { volume_height_in(terrain::CONTAINER) * IN2M } else { 0.0 }
 }
 
 /// `zones_of`, plus with `shelf` (the dormant `Seams::shelf_sight`) every freely
 /// placed shelf piece of the header as its own upright box of its type's height —
 /// `TerrainOverlay._sandbox_volumes` (:1283-1300). The header records no floor
 /// slabs (act_recorder.gd keeps c/he/yaw/type), so a multi-storey free ruin's
-/// upper floors are not here.
+/// upper floors are not here. The pre-3.6 reading; a game asks `zones_of_with_at`.
 pub fn zones_of_with(t: &Terrain, shelf: bool) -> Vec<Zone> {
-    let mut out = zones_of(t);
+    zones_of_with_at(t, shelf, EPOCH_72_PLAYTEST_RULES)
+}
+
+/// `zones_of_with` as the game at `rules_epoch` reads the board (a free ruin follows the painted one).
+pub fn zones_of_with_at(t: &Terrain, shelf: bool, rules_epoch: u32) -> Vec<Zone> {
+    let mut out = zones_of_at(t, rules_epoch);
     if shelf && t.is_valid() {
-        for s in t.sandbox().iter().filter(|s| volume_height_in(s.kind) > 0.0) {
+        for s in t.sandbox().iter().filter(|s| volume_height_in(s.kind) > 0.0 && !ruin_is_open(s.kind, rules_epoch)) {
             let solid = !(s.kind == terrain::FOREST || s.kind == terrain::RUINS);
             out.push(Zone::shelf_box(s.c, s.he, s.yaw, 0.0, volume_height_in(s.kind) * IN2M, solid));
         }
@@ -513,11 +569,11 @@ pub fn unit_radius_m(state: &State, i: usize) -> f64 {
 
 /// The TALLEST alive model of a unit and its attached heroes, in metres —
 /// `main._solo_unit_los_height_m` :4262-4275, floored at 32 mm infantry.
-pub fn unit_height_m(state: &State, i: usize) -> f64 {
+pub fn unit_height_m(state: &State, i: usize, rules_epoch: u32) -> f64 {
     let mut h = height_in_for_base_mm(DEFAULT_BASE_MM) * IN2M;
     for &m in std::iter::once(&i).chain(state.attached[i].iter()) {
         for &r in &state.radii[m] {
-            h = h.max(model_height_m(r));
+            h = h.max(model_height_at(state, m, r, rules_epoch));
         }
     }
     h
@@ -529,6 +585,11 @@ pub fn unit_height_m(state: &State, i: usize) -> f64 {
 /// see the target); a unit still in Ambush reserve is off-table and blocks
 /// nothing (`dormant`).
 pub fn blockers_of(state: &State, from: usize, to: usize, rules_epoch: u32) -> Vec<Blocker> {
+    blockers_of_at(state, from, to, rules_epoch, rules_epoch)
+}
+
+/// `blockers_of`, with the epoch the blocker HEIGHTS follow (`model_height_at`) apart from the one the rest reads.
+fn blockers_of_at(state: &State, from: usize, to: usize, rules_epoch: u32, height_epoch: u32) -> Vec<Blocker> {
     let mut excluded = HashSet::new();
     for &u in &[from, to] {
         excluded.insert(u);
@@ -550,7 +611,7 @@ pub fn blockers_of(state: &State, from: usize, to: usize, rules_epoch: u32) -> V
         for (k, p) in state.positions[i].iter().enumerate() {
             let r = state.radii[i].get(k).copied().unwrap_or(0.016);
             out.push(Blocker {
-                cyl: Cyl { c: [p[0], p[2]], r, y0: p[1], y1: p[1] + model_height_m(r) },
+                cyl: Cyl { c: [p[0], p[2]], r, y0: p[1], y1: p[1] + model_height_at(state, i, r, height_epoch) },
                 unit: i,
                 aircraft: state.aircraft[i],
             });
@@ -577,13 +638,14 @@ pub fn sighted_count(
     reach_in: f64,
     indirect: bool,
     horizontal_sort: bool,
+    rules_epoch: u32,
 ) -> i64 {
     let mut targets: Vec<[f64; 3]> = Vec::new();
     for &t in std::iter::once(&target).chain(state.attached[target].iter()) {
         targets.extend(state.positions[t].iter().copied());
     }
     let (from_r, to_r) = (unit_radius_m(state, member), unit_radius_m(state, target));
-    let (from_h, to_h) = (unit_height_m(state, member), unit_height_m(state, target));
+    let (from_h, to_h) = (unit_height_m(state, member, rules_epoch), unit_height_m(state, target, rules_epoch));
     let to_air = state.aircraft[target];
     let range_m = reach_in * IN2M + from_r + to_r;
     sighted_models(&state.positions[member], &targets, range_m, horizontal_sort, |sp, tp| {
@@ -605,11 +667,12 @@ pub const UNBOUNDED_RANGE_IN: f64 = 9999.0;
 /// `SoloController._has_los` (:6121-6128) as main.gd:2338 wires it:
 /// `_solo_sighted_count(shooter, target, SOLO_LOS_UNBOUNDED_RANGE_IN) > 0` —
 /// ANY alive model of `i` with a sight line to ANY alive model of `j`, terrain
-/// volumes and every other unit's bases included, the range half switched off.
-pub fn unit_sees(state: &State, zones: &[Zone], i: usize, j: usize) -> bool {
-    let blockers = blockers_of(state, i, j, CURRENT_RULES_EPOCH);
+/// volumes and every other unit's bases included, the range half switched off. Only the model HEIGHTS follow
+/// `rules_epoch` (an oval base reads its mean axis from `EPOCH_73_V36`); the rest still reads `CURRENT_RULES_EPOCH`.
+pub fn unit_sees(state: &State, zones: &[Zone], i: usize, j: usize, rules_epoch: u32) -> bool {
+    let blockers = blockers_of_at(state, i, j, CURRENT_RULES_EPOCH, rules_epoch);
     sighted_count(state, zones, &blockers, i, j, UNBOUNDED_RANGE_IN, false,
-        rule_on(CURRENT_RULES_EPOCH, EPOCH_66_DISTANCE_TRUTH)) > 0
+        rule_on(CURRENT_RULES_EPOCH, EPOCH_66_DISTANCE_TRUTH), rules_epoch) > 0
 }
 
 /// `BattleSim.capture`'s sight sweep (battle_sim.gd:1563-1576) as one row-major
@@ -619,17 +682,22 @@ pub fn unit_sees(state: &State, zones: &[Zone], i: usize, j: usize) -> bool {
 /// GDScript writes `matrix[ok]` only where `other["player"] != su["player"]`,
 /// and `BattleSim.sees` reads an unlisted key as `true`. A dormant unit
 /// neither sees nor is seen there either (its whole row is `{}`), and `true`
-/// is what both readers already answer for one.
+/// is what both readers already answer for one. The pre-3.6 reading; a game asks `sight_matrix_at`.
 pub fn sight_matrix(state: &State, terrain: &Terrain) -> Vec<bool> {
+    sight_matrix_at(state, terrain, EPOCH_72_PLAYTEST_RULES)
+}
+
+/// `sight_matrix` as the game at `rules_epoch` reads the board (`zones_of_at`).
+pub fn sight_matrix_at(state: &State, terrain: &Terrain, rules_epoch: u32) -> Vec<bool> {
     let n = state.units();
-    let zones = zones_of(terrain);
+    let zones = zones_of_at(terrain, rules_epoch);
     let mut m = vec![true; n * n];
     for i in 0..n {
         for j in 0..n {
             if state.player[i] == state.player[j] || state.dormant[i] || state.dormant[j] {
                 continue;
             }
-            m[i * n + j] = unit_sees(state, &zones, i, j);
+            m[i * n + j] = unit_sees(state, &zones, i, j, rules_epoch);
         }
     }
     m
@@ -766,6 +834,7 @@ mod tests {
             cells: cells.iter().map(|&(x, z, k)| [x as f64, z as f64, k as f64]).collect(),
             sandbox,
             pieces: vec![],
+            containers: Vec::new(),
             walls: vec![],
             cell_params: CellParams {
                 table_size_feet: [6.0, 4.0],
@@ -911,5 +980,30 @@ mod tests {
         assert!(zones_of_with(&t, false).is_empty());
         assert!(has_los(&west, &east, false, &zones_of_with(&t, false), &[]));
         assert!(!has_los(&west, &east, false, &zones_of_with(&t, true), &[]));
+    }
+
+    /// Rules 3.6: a ruin gives cover but no longer hides a model behind it, so it is no sight volume at epoch 73;
+    /// a forest and a container keep theirs, and every earlier epoch reads the board as before.
+    #[test]
+    fn a_ruin_is_a_sight_volume_at_epoch_72_and_not_at_epoch_73() {
+        let t = board(&[(15, 15, terrain::RUINS), (20, 20, terrain::FOREST), (10, 10, terrain::CONTAINER)]);
+        assert_eq!(zones_of_at(&t, crate::acts::EPOCH_72_PLAYTEST_RULES).len(), 3);
+        let z73 = zones_of_at(&t, crate::acts::EPOCH_73_V36);
+        assert_eq!(z73.len(), 2, "the forest and the container stay");
+        assert!(z73.iter().all(|v| (v.y1 - 6.0 * M).abs() > 1e-9), "no 6\" ruin volume is left");
+    }
+
+    /// A freely placed ruin follows the same rule (the shelf seam ON).
+    #[test]
+    fn a_free_ruin_piece_is_a_sight_volume_at_epoch_72_and_not_at_epoch_73() {
+        let piece = Obb { c: [0.0, 0.0], he: [3.0 * M, 1.5 * M], yaw: 0.0, kind: terrain::RUINS };
+        let t = board_with(&[], vec![piece]);
+        let (west, east) = (cyl(-8.0, 0.0, 32.0), cyl(8.0, 0.0, 32.0));
+        let z72 = zones_of_with_at(&t, true, crate::acts::EPOCH_72_PLAYTEST_RULES);
+        assert_eq!(z72.len(), 1);
+        assert!(!has_los(&west, &east, false, &z72, &[]));
+        let z73 = zones_of_with_at(&t, true, crate::acts::EPOCH_73_V36);
+        assert!(z73.is_empty(), "the free ruin is no sight volume at 73");
+        assert!(has_los(&west, &east, false, &z73, &[]));
     }
 }

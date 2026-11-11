@@ -126,15 +126,20 @@
     }
 
     // ------------------------------------------------ Angelic Blessing --------
-    // The registry's 6+/spells-4+ legs at the CURRENT epoch (the merged
-    // Angelic Blessing test pins them at the same read; this sibling adds
-    // the no-rule control beside it).
+    // The registry's 6+/spells-2+ legs at the CURRENT epoch (MOR-17a moved the
+    // spell leg of the shared Warding rule to its own key; below 73 it stays 4).
     #[test]
-    fn an_angelic_blessing_carrier_ignores_on_6_and_spells_on_4_at_current_epoch() {
+    fn an_angelic_blessing_carrier_ignores_on_6_and_spells_on_2_at_current_epoch() {
         let e = crate::acts::CURRENT_RULES_EPOCH;
         let us = carrier("aof", "kingdom_of_angels", &["Angelic Blessing"], e);
         assert_eq!(us.ctx.regen_target, 6, "the entry's ignore_target");
-        assert_eq!(us.ctx.regen_target_spell, 4, "the entry's ignore_target_spell");
+        assert_eq!(us.ctx.regen_target_spell, 2, "the entry's ignore_target_spell_v36");
+        assert_eq!(
+            carrier("aof", "kingdom_of_angels", &["Angelic Blessing"], crate::acts::EPOCH_72_PLAYTEST_RULES)
+                .ctx.regen_target_spell,
+            4,
+            "below 73 the recorded ignore_target_spell"
+        );
         assert!(us.ctx.regeneration);
         let none = carrier("aof", "kingdom_of_angels", &["Fearless"], e);
         assert_eq!(none.ctx.regen_target, 0, "no Regeneration-family member, no legs");
@@ -156,12 +161,12 @@
     // The aura hands "Bestial Boost" to the carrier; the Boost's own widened
     // window (reroll_save_low 5, over 9") rides the Bane save seam past 9".
     #[test]
-    fn a_bestial_boost_aura_widens_the_bane_window_to_5_over_nine_inches() {
+    fn an_enhanced_bestial_aura_widens_the_bane_window_to_5_over_nine_inches() {
         let e = crate::acts::CURRENT_RULES_EPOCH;
-        let us = carrier("aof", "beastmen", &["Bestial Boost Aura", "Bestial"], e);
+        let us = carrier("aof", "beastmen", &["Enhanced Bestial Aura", "Bestial"], e);
         assert_eq!(us.shoot[0].bane_low, 5, "the granted Boost's reroll_save_low");
         assert_eq!(us.shoot[0].bane_over_in, 9.0, "the Boost's own over-in gate");
-        assert_eq!(us.shoot[0].bane_rule, "Bestial Boost", "rules-must-log name");
+        assert_eq!(us.shoot[0].bane_rule, "Enhanced Bestial", "rules-must-log name");
         let bare = carrier("aof", "beastmen", &["Bestial"], e);
         assert_eq!(bare.shoot[0].bane_low, 0, "the base Bestial keeps the 6s-only window");
         let on = bane_volley(&us, 12.0);
@@ -179,21 +184,21 @@
     #[test]
     fn a_bounding_aura_places_d3_plus_one() {
         let e = crate::acts::CURRENT_RULES_EPOCH;
-        let us = aura_us("gf", "wormhole_daemons_of_change", "Bounding Aura", e);
+        let us = aura_us("gf", "daemons_of_change", "Bounding Aura", e);
         assert_eq!(us.bounding, Some(1.0), "the granted entry's place_d3_plus");
         let place = us.bounding_place.expect("the aura carrier places with Bounding");
         assert_eq!(place.name, "Bounding", "the granted base's own name");
         assert_eq!((place.dice, place.plus), (1, 1.0), "one die, D3+1");
-        assert_eq!(aura_us("gf", "wormhole_daemons_of_change", "Fearless", e).bounding, None);
+        assert_eq!(aura_us("gf", "daemons_of_change", "Fearless", e).bounding, None);
     }
 
     // ------------------------------------------------ Buccaneer Boost Aura ---
     // The aura hands "Buccaneer Boost" (Shot Modifier hit_bonus 1, no
     // over_in) to the carrier: flat +1 to hit at EVERY range, shooting only.
     #[test]
-    fn a_buccaneer_boost_aura_adds_a_flat_plus_one_to_shooting_only() {
+    fn an_enhanced_buccaneer_aura_adds_a_flat_plus_one_to_shooting_only() {
         let e = crate::acts::CURRENT_RULES_EPOCH;
-        let us = aura_us("aof", "sky_city_dwarves", "Buccaneer Boost Aura", e);
+        let us = aura_us("aof", "sky_city_dwarves", "Enhanced Buccaneer Aura", e);
         assert_eq!(us.shoot[0].hit_bonus, 1, "the granted Boost's flat hit_bonus");
         assert_eq!(us.shoot[0].hit_bonus_over9, 0, "no over_in on the Boost");
         assert_eq!(us.melee[0].hit_bonus, 0, "the Shot Modifier never reaches melee");
@@ -234,14 +239,14 @@
     // save 1 for one extra wound; with the base Destroyer the window widens
     // to failed 2s.
     #[test]
-    fn a_destroyer_boost_aura_shreds_one_extra_wound_per_save_one_and_widens_with_the_base() {
+    fn an_enhanced_destroyer_aura_shreds_one_extra_wound_per_save_one_and_widens_with_the_base() {
         let e = crate::acts::CURRENT_RULES_EPOCH;
-        let bare = carrier("aof", "ogres", &["Destroyer Boost Aura"], e);
+        let bare = carrier("aof", "ogres", &["Enhanced Destroyer Aura"], e);
         assert!(bare.shoot[0].shred_alias, "the granted Boost is a Shred carrier");
         assert_eq!(bare.shoot[0].shred_ones_wound_bonus, 1, "the entry's extra_wound_per_save_one");
-        assert_eq!(bare.shoot[0].shred_ones_rule, "Destroyer Boost", "the rule names itself");
+        assert_eq!(bare.shoot[0].shred_ones_rule, "Enhanced Destroyer", "the rule names itself");
         assert_eq!(bare.shoot[0].shred_low, 1, "the bare Boost keeps its own 1s window");
-        let full = carrier("aof", "ogres", &["Destroyer Boost Aura", "Destroyer"], e);
+        let full = carrier("aof", "ogres", &["Enhanced Destroyer Aura", "Destroyer"], e);
         assert_eq!(full.shoot[0].shred_low, 2, "the granted Boost's save_fail_max window");
         assert_eq!(full.shoot[0].shred_ones_wound_bonus, 1);
     }
@@ -251,19 +256,19 @@
     // the base: the Boost's printed unconditional -1 to hit (Evasive), with
     // the base entry's conditional alias standing down so the two never stack.
     #[test]
-    fn an_empyrean_spirit_boost_aura_makes_the_minus_one_unconditional() {
+    fn an_enhanced_empyrean_spirit_aura_makes_the_minus_one_unconditional() {
         let e = crate::acts::CURRENT_RULES_EPOCH;
         let us = carrier(
             "aof", "ghostly_undead",
-            &["Empyrean Spirit Boost Aura", "Empyrean Spirit"], e,
+            &["Enhanced Empyrean Spirit Aura", "Empyrean Spirit"], e,
         );
         assert!(us.ctx.evasive, "the Boost folds into evasive");
-        assert_eq!(us.ctx.evasive_alias_name, "Empyrean Spirit Boost", "the fold names the rule");
+        assert_eq!(us.ctx.evasive_alias_name, "Enhanced Empyrean Spirit", "the fold names the rule");
         assert_eq!(us.ctx.stealth_alias_penalty, 0, "the base's conditional alias stands down");
         let shot = incoming_volley(&us, 6.0);
         assert_eq!(shot.rolls[0].target, 5, "always -1: Quality 4+ -> 5+");
         assert!(
-            shot.log.iter().any(|l| l.contains("Empyrean Spirit Boost")),
+            shot.log.iter().any(|l| l.contains("Enhanced Empyrean Spirit")),
             "rules-must-log"
         );
     }
@@ -296,7 +301,7 @@
     #[test]
     fn a_grounded_reinforcement_aura_shields_its_unit_terrain_pending() {
         let e = crate::acts::CURRENT_RULES_EPOCH;
-        let us = aura_us("aof", "volcanic_dwarves", "Grounded Reinforcement Aura", e);
+        let us = aura_us("aof", "volcanic_dwarves", "Grounded Defense Aura", e);
         assert_eq!(us.ctx.shielded_alias, ShieldedAlias::GroundedReinforcement);
         assert!(!us.ctx.shielded, "the within-1in condition is the point: held aside");
         assert_eq!(
@@ -327,14 +332,14 @@
     #[test]
     fn a_hit_and_run_fighter_aura_grants_the_fighter_half_at_current_epoch() {
         let e = crate::acts::CURRENT_RULES_EPOCH;
-        let us = aura_us("gf", "wormhole_daemons_of_lust", "Hit & Run Fighter Aura", e);
+        let us = aura_us("gf", "daemons_of_lust", "Hit & Run Fighter Aura", e);
         assert!(us.hit_and_run_fighter_active, "the granted Fighter's own flag");
         assert!(
-            !aura_us("gf", "wormhole_daemons_of_lust", "Hit & Run Fighter Aura", 5)
+            !aura_us("gf", "daemons_of_lust", "Hit & Run Fighter Aura", 5)
                 .hit_and_run_fighter_active,
             "epoch 5: the gate is off"
         );
-        assert!(!aura_us("gf", "wormhole_daemons_of_lust", "Fearless", e).hit_and_run_fighter_active);
+        assert!(!aura_us("gf", "daemons_of_lust", "Fearless", e).hit_and_run_fighter_active);
     }
 
     // ------------------------------------------ Increased Shooting Range Aura
@@ -353,12 +358,13 @@
     }
 
     // ------------------------------------------ Indirect when Shooting Aura --
-    // The aura hands "Indirect when Shooting" to the carrier: the volley
+    // The aura hands "Indirect when Shooting" to the carrier: at 72 the volley
     // folds -1 after a move (the granted base's moved_hit_penalty), with the
-    // wave-3 alias marker naming the rule in the volley log.
+    // wave-3 alias marker naming the rule in the volley log. Rules 3.6 drops
+    // the stamp from 73 (the twin lives in v36_shoot_rows/sho_02.rs).
     #[test]
-    fn an_indirect_when_shooting_aura_stamps_the_moved_penalty_at_minus_one() {
-        let e = crate::acts::CURRENT_RULES_EPOCH;
+    fn an_indirect_when_shooting_aura_stamps_the_moved_penalty_at_minus_one_at_epoch_72() {
+        let e = crate::acts::EPOCH_72_PLAYTEST_RULES;
         let us = aura_us("gf", "wormhole_daemons_of_change", "Indirect when Shooting Aura", e);
         assert!(us.shoot[0].indirect, "the granted base stamps the indirect flag");
         assert!(us.shoot[0].indirect_alias, "the wave-3 alias marker rides the flag");

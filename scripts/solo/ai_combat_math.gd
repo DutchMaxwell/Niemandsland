@@ -59,6 +59,10 @@ const BEST_HIT_TARGET: int = 2
 ## Relentless p.14, Stealth p.14, Artillery p.13 — each reads "over 9\" away", so exactly 9" is NOT over).
 const LONG_RANGE_IN: float = 9.0
 
+## D-GATE6 (rules 3.6, EPOCH_73_V36): the over-6" gate of a CHARGE, measured before any model moves, closest
+## model to closest model. Shooting keeps LONG_RANGE_IN. Twin of combat.rs CHARGE_LONG_RANGE_IN.
+const CHARGE_LONG_RANGE_IN: float = 6.0
+
 ## Stealth to-hit penalty (GF/AoF Advanced Rules v3.5.1, p.14): "When units where all models have this rule
 ## are shot from over 9\" away, enemy units get -1 to hit rolls."
 const STEALTH_HIT_PENALTY: int = 1
@@ -164,6 +168,16 @@ static func expected_wounds(attacks: int, quality: int, defense: int, armor_pier
 	return float(attacks) * p_hit * p_through
 
 
+## Rules 3.6 (EPOCH_73_V36) — expected wounds ONE already-rolled hit deals: the save fails
+## at that hit's AP, then Deadly's Tough-capped multiply and the Regeneration keep. Used only
+## to rank Parry's cancellations. block_chance lives in AiEv (one truth, never copied).
+static func hit_ev(profile: Dictionary, hit_is_a_six: bool, defender: Dictionary) -> float:
+	var ap: int = int(profile.get("ap", 0)) + (maxi(int(profile.get("on6_ap", 0)), RENDING_AP_BONUS if (bool(profile.get("rending", false)) or bool(profile.get("destructive", false))) else 0) if hit_is_a_six else 0)
+	var deadly: float = float(deadly_multiplier(int(profile.get("deadly", 0)), maxi(int(defender.get("tough", 1)), 1))) if int(profile.get("deadly", 0)) > 0 else 1.0
+	var keep: float = 1.0 - success_chance(int(defender.get("regen_target", AiEv.REGENERATION_TARGET))) if (bool(defender.get("regeneration", false)) and not (bool(profile.get("bypass_regen", false)) or bool(profile.get("rending", false)) or bool(profile.get("unstoppable", false)))) else 1.0
+	return (1.0 - AiEv.block_chance(int(defender.get("defense", 4)), fortified_ap(ap, bool(defender.get("fortified", false))), bool(profile.get("bane", false)))) * deadly * keep
+
+
 ## Extra hits Relentless adds (GF Advanced Rules v3.5.1, p.14): "When this model shoots at enemies over 9"
 ## away, unmodified results of 6 to hit deal 1 extra hit." So each unmodified 6 among the to-hit faces adds
 ## one hit — but only when the shot is over 9". Returns 0 at 9" or closer. (Shooting only; not melee.)
@@ -258,6 +272,13 @@ static func melee_hit_modifier(target_evasive: bool, target_melee_evasion: bool 
 	return -EVASIVE_HIT_PENALTY if (target_evasive or target_melee_evasion) else 0
 
 
+## Rules 3.6 (SHO-14/SHO-14e) — a Pierce weapon's saves ignore the target's POSITIVE Defense
+## modifiers from `EPOCH_73_V36`. ONE truth for the resolver (`main.gd`) and the AI estimate.
+static func pierce_ignores(profile: Dictionary) -> bool:
+	return AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
+		and (profile.get("rules", []) as Array).has("Pierce")
+
+
 ## The defender's Defense value after Shielded (army-book rule: +1 to Defense rolls = a save target one
 ## better), floored at 2+ (a natural 1 always fails a Defense roll too — core p.1 "Modifiers").
 static func shielded_defense(defense: int, is_shielded: bool) -> int:
@@ -281,8 +302,16 @@ static func shot_uses_cover(save_def: int, shot_cover: int, shot_base: int) -> b
 ## Fortified (army-book: "units where all models have this rule take hits that count as having AP(-1),
 ## to a min. of AP(0)"): the defender-side reduction of an incoming hit's AP. Applied per-hit to the
 ## FINAL AP (base + conditional + on-6) so the min-0 clamp is correct for each hit.
-static func fortified_ap(ap: int, is_fortified: bool) -> int:
-	return maxi(0, ap - 1) if is_fortified else ap
+static func fortified_ap(ap: int, is_fortified: bool, cut: int = 1) -> int:
+	return maxi(0, ap - cut) if is_fortified else ap
+
+
+## AI-G2 R7: the AP cut one Fortified-family registry entry carries (Enhanced Warden: 2). An enhanced form's cut REPLACES
+## its base's, it never stacks. Flat 1 below EPOCH_73_V36 (byte-identical). Core twin: unit.rs `fortified_alias_of`.
+static func fortified_entry_cut(entry: Dictionary) -> int:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return 1
+	return maxi(1, int((entry.get("params", {}) as Dictionary).get("incoming_ap_reduction", 1)))
 
 
 ## Guarded (army-book rule — official text: "When units where all models have this rule are shot or
@@ -348,11 +377,13 @@ static func no_retreat_wounds(faces: Array, wound_max: int = NO_RETREAT_SELF_WOU
 	return n
 
 
-## Fear(X) adjusted wound total for the who-won-melee check ONLY (GF/AoF Advanced Rules v3.5.1, p.13: "This
-## model counts as having dealt +X wounds when checking who won melee."). Never changes the wounds actually
-## applied — only the winner comparison. Returns caused + X (X floored at 0).
-static func fear_adjusted_wounds(caused: int, fear_x: int) -> int:
-	return maxi(caused, 0) + maxi(fear_x, 0)
+## Fear(X) adjusted wound total for the who-won-melee check ONLY (GF/AoF Advanced Rules v3.5.1, p.13, rule
+## Fear(X): the melee-winner comparison credits the model with X extra wounds). Rules 3.6 reads the same
+## tally as wounds TAKEN, so the caller passes the enemy's taken total and the Fear that rides it (the
+## unit's own Fear for the unit's foe). Never changes the wounds actually applied — only the winner comparison.
+## Returns wounds + X (both terms floored at 0).
+static func fear_adjusted_wounds(wounds: int, fear_x: int) -> int:
+	return maxi(wounds, 0) + maxi(fear_x, 0)
 
 
 ## Number of unmodified Defense 6s in a save roll — the dice Bane forces the defender to re-roll (GF/AoF
@@ -442,6 +473,20 @@ static func deadly_multiplier(deadly_x: int, target_tough: int) -> int:
 	return clampi(deadly_x, 1, cap)
 
 
+## A4 (maintainer ruling 29.10.2026: "Drei Wuerfe muessen gelingen"): the expected wounds ONE unsaved Deadly(X)
+## wound deals to a model of `target_tough` against the Regeneration family — all X wounds are rolled, each kept
+## with chance `keep`, and only the survivors are capped at the model: E[min(Binomial(X, keep), cap)].
+static func deadly_regen_dealt(deadly_x: int, target_tough: int, keep: float) -> float:
+	var x: int = maxi(deadly_x, 1)
+	var cap: int = maxi(target_tough, 1)
+	var ev := 0.0
+	var ways := 1.0   # C(x, k)
+	for k in range(x + 1):
+		ev += ways * pow(keep, k) * pow(1.0 - keep, x - k) * float(mini(k, cap))
+		ways = ways * float(x - k) / float(k + 1)
+	return ev
+
+
 ## Conditional AP — the extra AP a TARGET-PROPERTY weapon rule grants against THIS target, or 0 when the
 ## condition is not met. One helper serves every such rule; the rule's registry params drive it entirely:
 ##   ap_bonus    — the AP increase when the condition holds
@@ -451,8 +496,11 @@ static func deadly_multiplier(deadly_x: int, target_tough: int) -> int:
 ##   charge_only — the bonus applies only when the bearer is charging (Melee Slayer)
 ## Examples (official AoF/GF text): Shatter {2, vs_tough_ge, 3}, Tear {4, vs_tough_ge, 9},
 ## Melee Slayer {2, vs_tough_ge, 3, charge_only}, Disintegrate {2, vs_armor, 3}.
+## Rules 3.6 hook (twin of core/nml-core/src/combat.rs conditional_ap_bonus_vs): "over_half_range" (shooting
+## from beyond half the weapon's range) and "def_5_6" (target Defense 5+ or 6+). `target` is the twin of the
+## core's CondApTarget: {"weapon_range_in"}; later 3.6 target conditions add their keys there.
 static func conditional_ap_bonus(params: Dictionary, target_tough: int, target_defense: int, is_charging: bool,
-		dist_in: float = -1.0, melee: bool = false) -> int:
+		dist_in: float = -1.0, melee: bool = false, target: Dictionary = {}) -> int:
 	var bonus: int = int(params.get("ap_bonus", 0))
 	if bonus <= 0:
 		return 0
@@ -460,43 +508,91 @@ static func conditional_ap_bonus(params: Dictionary, target_tough: int, target_d
 		return 0
 	var over_in: float = float(params.get("over_in", LONG_RANGE_IN))
 	var within_in: float = float(params.get("within_in", 0.0))
+	var gate := str(params.get("gate", ""))
+	# Rules 3.6 (SHO-20): from EPOCH_73_V36 the Slayer family's shooting gate asks for a HOLD
+	# instead of the over-9" gap. The stored map keeps the old spelling; this reader translates it
+	# on both legs (table and EV), and a caller without the Hold state (the EV) simply gets none.
+	if gate == "ranged_over_or_charge" and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		gate = "hold_or_charge"
 	# Gate-only spec (Ranged Slayer, gf/dao_union 3.5.3): the mechanics map carries the whole range
 	# leg in "gate" ("ranged_over") with NO target-property "condition". The gate IS the condition
 	# then — mirroring the core's named arm (core/nml-core/src/combat.rs:370) — so the match below
 	# fires instead of falling through to 0.
 	var condition := str(params.get("condition", ""))
-	if condition.is_empty() and str(params.get("gate", "")) == "ranged_over":
+	if condition.is_empty() and gate == "ranged_over":
 		condition = "ranged_over"
 	# Gate "ranged_over_or_charge" (Slayer: "shoots at enemies over 9\" away, or when it charges"):
 	# an ADDITIONAL situational gate on top of the target-property condition. dist_in < 0 = unknown
 	# (a caller without range context) — conservative: the ranged leg never fires blind.
-	if str(params.get("gate", "")) == "ranged_over_or_charge":
+	if gate == "ranged_over_or_charge":
 		if not (is_charging or (not melee and dist_in > over_in)):
 			return 0
-	var threshold: int = int(params.get("threshold", 0))
-	match condition:
-		"vs_tough_ge":
-			return bonus if target_tough >= threshold else 0
-		"vs_armor":
-			return bonus if target_defense <= threshold else 0
-		"in_melee":
-			return bonus if melee else 0
-		"ranged":
-			return bonus if not melee else 0
-		"ranged_over_or_charge":
-			return bonus if is_charging or (not melee and dist_in > over_in) else 0
-		"on_charge":
-			# Charge-gated, no target property (Piercing Assault: "AP(+1) when charging").
-			return bonus if is_charging else 0
-		"ranged_over":
-			# Range-gated, no target property (Piercing Hunter: "shoots at enemies over 9\": AP(+1)").
-			return bonus if (not melee and dist_in > over_in) else 0
-		"ranged_within":
-			# Point-Blank Piercing: "shooting enemies within 12\"" — the cap is INCLUSIVE and an
-			# unknown distance (< 0) stays shut, mirroring core/nml-core/src/combat.rs:389 exactly.
-			return bonus if (not melee and within_in > 0.0 and dist_in >= 0.0 and dist_in <= within_in) else 0
-		_:
+	# Gate "hold_or_charge" (the same rule from EPOCH_73_V36): the shot needs a Hold, the charge
+	# leg is unchanged. `target["held"]` is the firing unit's own Hold state.
+	if gate == "hold_or_charge":
+		if not (is_charging or (not melee and bool(target.get("held", false)))):
 			return 0
+	return bonus if cond_met(condition, params, target_tough, target_defense, is_charging,
+		dist_in, melee, target) else 0
+
+
+## The ONE target-condition test both 3.6 legs share: the conditional-AP match above and the save
+## re-roll window (main.gd's Bane leg). Twin of core/nml-core/src/combat.rs cond_met. `condition` is
+## the translated spec spelling; `params` carries threshold/over_in/within_in; `target` is the
+## CondApTarget view (weapon_range_in for over_half_range, held for the Slayer gate).
+static func cond_met(condition: String, params: Dictionary, target_tough: int, target_defense: int,
+		is_charging: bool, dist_in: float = -1.0, melee: bool = false, target: Dictionary = {}) -> bool:
+	var over_in: float = float(params.get("over_in", LONG_RANGE_IN))
+	var within_in: float = float(params.get("within_in", 0.0))
+	match condition:
+		"always":
+			return true
+		"vs_tough_ge":
+			return target_tough >= int(params.get("threshold", 0))
+		"vs_armor":
+			return target_defense <= int(params.get("threshold", 0))
+		"in_melee":
+			return melee
+		"ranged":
+			return not melee
+		"ranged_over_or_charge":
+			return is_charging or (not melee and dist_in > over_in)
+		"hold_or_charge":
+			return is_charging or (not melee and bool(target.get("held", false)))
+		"on_charge":
+			return is_charging
+		"ranged_over":
+			return not melee and dist_in > over_in
+		"ranged_within":
+			return not melee and within_in > 0.0 and dist_in >= 0.0 and dist_in <= within_in
+		"over_half_range":
+			return not melee and float(target.get("weapon_range_in", 0.0)) > 0.0 and dist_in >= 0.0 and dist_in > float(target.get("weapon_range_in", 0.0)) / 2.0
+		"def_5_6":
+			return target_defense >= 5
+		"above_half_strength":
+			return bool(target.get("above_half_strength", false))
+		"shaken_or_fatigued":
+			return bool(target.get("shaken_or_fatigued", false))
+		"near_terrain":
+			return bool(target.get("near_terrain", false))
+	return false
+
+
+## Rules-must-log: the words naming a rules 3.6 condition that fired, "" for every older spelling (their log
+## lines stay byte-identical). Twin of combat.rs cond_ap_why.
+static func conditional_ap_why(params: Dictionary) -> String:
+	match str(params.get("condition", "")):
+		"over_half_range":
+			return "target beyond half the weapon's range"
+		"def_5_6":
+			return "target defends on 5+ or 6+"
+		"above_half_strength":
+			return "target is above half strength"
+		"shaken_or_fatigued":
+			return "target is Shaken or Fatigued"
+		"near_terrain":
+			return "target stands within 1\" of terrain"
+	return ""
 
 
 ## Deadly(X) per-model resolution (GF v3.5.1 p.14, wording verified — the rule-true replacement for the
@@ -578,9 +674,13 @@ static func morale_target(quality: int, morale_bonus: int) -> int:
 
 
 ## Indirect's to-hit ROLL modifier for a shooting attack (wave 5, core v3.5.1: "-1 to hit rolls when
-## shooting after moving"). 0 when the shooter held. `penalty` is the data-derived knob (RulesRegistry
-## "Indirect".moved_hit_penalty; fallback INDIRECT_MOVED_HIT_PENALTY).
+## shooting after moving"). 0 when the shooter held, and 0 from EPOCH_73_V36 on (rules 3.6, SHO-02).
+## `penalty` is the data-derived knob (RulesRegistry "Indirect".moved_hit_penalty; fallback
+## INDIRECT_MOVED_HIT_PENALTY).
 static func indirect_hit_modifier(moved: bool, penalty: int = INDIRECT_MOVED_HIT_PENALTY) -> int:
+	# Rules 3.6 (SHO-02): from EPOCH_73_V36 a moved Indirect shooter hits at base quality.
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		return 0
 	return -maxi(penalty, 0) if moved else 0
 
 

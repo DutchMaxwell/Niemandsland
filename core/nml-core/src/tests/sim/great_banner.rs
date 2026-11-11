@@ -73,7 +73,7 @@ use crate::rules::Registries;
         let mut mshot = ShootResult::default();
         tray_morale(
             &mut next, &statics, 0, false, Seams { rules_epoch: crate::acts::CURRENT_RULES_EPOCH, ..Default::default() },
-            &mut tray, &mut mshot,
+            &mut tray, &mut mshot, None, None,
         );
         assert_eq!(mshot.rolls[0].target, 3, "Quality 4+ tested at 3+ under the +1");
         assert!(next.buffs[0].is_empty(), "the test die spends the once-record");

@@ -1,5 +1,5 @@
 extends GdUnitTestSuite
-## Rules-automation plan step 1.2, revised by step 2.10 (konrad ruling): the table-setup chooser no
+## Rules-automation plan step 1.2, revised by step 2.10 (lead ruling): the table-setup chooser no
 ## longer shows a "Rules" row — the player's switch is the in-game rules chip/toggle. What remains here
 ## is the pick the chooser hands on (default + online lock) and the RulesAutomation table-setup wiring.
 

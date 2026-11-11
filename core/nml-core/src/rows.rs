@@ -40,7 +40,7 @@ use crate::rules::has_special_rule;
 use crate::score::{can_hold_marker, control_gap_in, presence, Incoming};
 use crate::sim::{melee_threat_at_epoch, reply_threat_at_epoch, CONTACT_IN};
 use crate::state::{Profile, State};
-use crate::unit::{melee_profiles, profiles_in_range, Ctx, UnitStatic};
+use crate::unit::{melee_profiles_at, profiles_in_range, Ctx, UnitStatic};
 use crate::{IN2M, OBJECTIVE_CONTROL_IN};
 
 /// `BattleSim.EV_REF_DIST_IN` battle_sim.gd:75 — the reference distance the
@@ -65,6 +65,10 @@ pub const RULE_VOCAB_VERSION: i64 = 9;
 /// (m3_ref_v2/v3/v4, m3_oracle/_v2/_v3/_v4, m4_corpus_v2, qa_ref, qb*_ref,
 /// golden_planner*) is one of those, and every one of them is version 2.
 pub const LEGACY_VOCAB_VERSION: i64 = 2;
+
+/// AI-01a — the first reading that honours the file's top-level `alias` block
+/// (rules 3.6 renames); older readings ignore it, so legacy replays stay identical.
+pub const ALIAS_SINCE_VOCAB: i64 = 9;
 
 /// `AiEv.NEUTRAL_DEFENDER` ai_ev.gd:37 — `{"defense": 4, "tough": 1,
 /// "models": 5}`. Every other key is absent, and GDScript's `.get(k, default)`
@@ -125,6 +129,11 @@ pub struct RowVocab {
     weapon: HashMap<String, i64>,
     spell: HashMap<String, i64>,
     unit2: HashMap<String, i64>,
+    /// AI-01a — `alias.unit` / `.weapon` / `.spell`: a slotless name -> the names whose
+    /// slots it reaches in its own band. Empty below `ALIAS_SINCE_VOCAB`.
+    alias_unit: HashMap<String, Vec<String>>,
+    alias_weapon: HashMap<String, Vec<String>>,
+    alias_spell: HashMap<String, Vec<String>>,
 }
 
 impl RowVocab {
@@ -211,6 +220,11 @@ impl RowVocab {
         // read off the committed (uncut) spell array length, the same for
         // every `want`.
         let spell_len = v.get("spell").and_then(|x| x.as_array()).map_or(0, |a| a.len()) as i64;
+        // A malformed band reads as empty: its names then stay loud in `unknown`.
+        let alias = |band: &str| -> HashMap<String, Vec<String>> {
+            let block = v.get("alias").and_then(|a| a.get(band)).filter(|_| want >= ALIAS_SINCE_VOCAB);
+            block.and_then(|b| serde_json::from_value(b.clone()).ok()).unwrap_or_default()
+        };
         RowVocab {
             loaded: true,
             version: want,
@@ -219,6 +233,9 @@ impl RowVocab {
             weapon: list("weapon", 200),
             spell: list("spell", 300),
             unit2: list("unit2", 300 + spell_len),
+            alias_unit: alias("unit"),
+            alias_weapon: alias("weapon"),
+            alias_spell: alias("spell"),
         }
     }
 
@@ -270,10 +287,33 @@ pub fn unit_sev_mev(p: &Profile, us: &UnitStatic, def: &Ctx) -> (f64, f64) {
     let keep: Vec<usize> = (0..shoot.len()).collect();
     let s_attacks: Vec<i64> = shoot.iter().map(|s| s.attacks).collect();
     let sev = snappedf(shoot_ev(&shoot, &keep, &s_attacks, &att, def, EV_REF_DIST_IN), 0.01);
-    let mel = melee_profiles(&p.weapons);
+    let mel = melee_profiles_at(&p.weapons, us.rules_epoch);
     let m_attacks: Vec<i64> = mel.iter().map(|s| s.attacks).collect();
-    let mev = snappedf(melee_ev(&mel, &m_attacks, &att, def, true), 0.01);
+    // A reference row against the neutral defender: no charge, so no gap (the table's `board_rows` hands none).
+    let mev = snappedf(melee_ev(&mel, &m_attacks, &att, def, true, 0.0), 0.01);
     (sev, mev)
+}
+
+/// AI-01a — fold one rule name into `vals` at `v` through one band: its own
+/// slot on a direct hit (which always wins), else every slotted target of its
+/// alias, each keeping the max like a direct hit. False = no slot at all, and
+/// the caller collects the ORIGINAL name as unknown.
+fn fold_band(
+    vals: &mut BTreeMap<i64, i64>,
+    name: &str,
+    v: i64,
+    look: impl Fn(&str) -> Option<i64>,
+    alias: &HashMap<String, Vec<String>>,
+) -> bool {
+    let direct = look(name);
+    let targets = if direct.is_some() { None } else { alias.get(name) };
+    let mut hit = false;
+    for slot in direct.into_iter().chain(targets.into_iter().flatten().filter_map(|t| look(t))) {
+        let e = vals.entry(slot).or_insert(0);
+        *e = (*e).max(v);
+        hit = true;
+    }
+    hit
 }
 
 /// The row encoder: the vocabulary plus the loud `unknown_rules` collector
@@ -328,15 +368,10 @@ impl RowEncoder {
             if name.is_empty() {
                 continue;
             }
-            match self.vocab.unit.get(&name).or_else(|| self.vocab.unit2.get(&name)) {
-                Some(&slot) => {
-                    let v = if rating > 0 { rating } else { 1 };
-                    let e = vals.entry(slot).or_insert(0);
-                    *e = (*e).max(v);
-                }
-                None => {
-                    self.unknown.insert(name);
-                }
+            let v = if rating > 0 { rating } else { 1 };
+            let look = |n: &str| self.vocab.unit.get(n).or_else(|| self.vocab.unit2.get(n)).copied();
+            if !fold_band(&mut vals, &name, v, look, &self.vocab.alias_unit) {
+                self.unknown.insert(name);
             }
         }
         // Weapon rules, over EVERY weapon of the unit (melee and Strafing too —
@@ -347,14 +382,9 @@ impl RowEncoder {
                 if name.is_empty() {
                     continue;
                 }
-                match self.vocab.weapon.get(&name) {
-                    Some(&slot) => {
-                        let e = vals.entry(slot).or_insert(0);
-                        *e = (*e).max(rating.max(1));
-                    }
-                    None => {
-                        self.unknown.insert(name);
-                    }
+                let look = |n: &str| self.vocab.weapon.get(n).copied();
+                if !fold_band(&mut vals, &name, rating.max(1), look, &self.vocab.alias_weapon) {
+                    self.unknown.insert(name);
                 }
             }
         }
@@ -365,14 +395,9 @@ impl RowEncoder {
                 if name.is_empty() {
                     continue;
                 }
-                match self.vocab.spell.get(name) {
-                    Some(&slot) => {
-                        let e = vals.entry(slot).or_insert(0);
-                        *e = (*e).max(sp.threshold.max(1));
-                    }
-                    None => {
-                        self.unknown.insert(format!("spell:{name}"));
-                    }
+                let look = |n: &str| self.vocab.spell.get(n).copied();
+                if !fold_band(&mut vals, name, sp.threshold.max(1), look, &self.vocab.alias_spell) {
+                    self.unknown.insert(format!("spell:{name}"));
                 }
             }
         }
@@ -666,7 +691,7 @@ pub fn features(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::acts::read_act_header;
+    use crate::acts::{read_act_header, EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36};
     use crate::io::state_from_json;
     use crate::rules::Registries;
     use crate::state::ProfileCache;
@@ -1032,6 +1057,95 @@ mod tests {
         assert!(enc.unknown.is_empty(), "{:?}", enc.unknown);
     }
 
+    /// AI-01a — a hand-made vocabulary with an `alias` block (the committed
+    /// file carries none yet), read at `want`. Every list is whole at v8 too,
+    /// so the two readings differ ONLY in whether the alias block applies.
+    fn alias_encoder(want: i64) -> RowEncoder {
+        let v = serde_json::json!({
+            "version": RULE_VOCAB_VERSION,
+            "unit": ["Hero", "Unique", "Tough"], "weapon": ["Ignores Cover"],
+            "spell": ["Weapon Booster"], "unit2": [],
+            "legacy_lengths": {"8": {"unit": 3, "weapon": 1, "spell": 1, "unit2": 0}},
+            "alias": {
+                "unit": {"Unique Hero": ["Unique", "Hero"], "Renamed Tough": ["Tough"],
+                         "Lost Name": ["Not Slotted"]},
+                "weapon": {"Anti-Cover": ["Ignores Cover"], "Cross Band": ["Hero"]},
+                "spell": {"Adrenal Booster": ["Weapon Booster"]},
+            },
+        });
+        RowEncoder { vocab: RowVocab::from_value(&v, want), unknown: BTreeSet::new(), source_qd: None }
+    }
+
+    /// One caster with the given unit rules, one rifle with the given weapon
+    /// rules and a spell book of the given names (threshold 2 each).
+    fn alias_unit(rules: &[&str], weapon_rules: &[&str], spells: &[&str]) -> (Profile, UnitStatic) {
+        let p: Profile = serde_json::from_value(serde_json::json!({
+            "unit_id": "p1_0_a", "name": "A", "special_rules": rules,
+            "weapons": [{"name": "Rifle", "range": 24, "attacks": 1, "count": 1, "rules": weapon_rules}],
+        }))
+        .expect("profile");
+        let spells = spells
+            .iter()
+            .map(|n| crate::rules::Spell { name: n.to_string(), threshold: 2, ..Default::default() })
+            .collect();
+        (p, UnitStatic { is_caster: true, spells, ..Default::default() })
+    }
+
+    fn names(xs: &[&str]) -> BTreeSet<String> {
+        xs.iter().map(|s| s.to_string()).collect()
+    }
+
+    /// AI-01a RED-GREEN — a rules-3.6 renamed unit rule, weapon rule and spell
+    /// reach EXACTLY the slots their 3.5 names have (a rename that split one
+    /// name into two lands on both; a rating rides along), so the net reads
+    /// the 3.6 profile like the 3.5 one and nothing is collected as unknown.
+    #[test]
+    fn a_renamed_rule_reaches_its_old_slots_through_the_alias_block() {
+        let (new_p, new_us) = alias_unit(&["Unique Hero", "Renamed Tough(3)"], &["Anti-Cover"], &["Adrenal Booster"]);
+        let (old_p, old_us) = alias_unit(&["Unique", "Hero", "Tough(3)"], &["Ignores Cover"], &["Weapon Booster"]);
+        let mut enc = alias_encoder(RULE_VOCAB_VERSION);
+        let old_pairs = enc.rule_pairs(&old_p, &old_us);
+        assert_eq!(old_pairs, vec![0, 1, 1, 1, 2, 3, 200, 1, 300, 2], "Hero, Unique, Tough(3), Ignores Cover, the spell");
+        assert_eq!(enc.rule_pairs(&new_p, &new_us), old_pairs, "the 3.6 names read like the 3.5 ones");
+        assert!(enc.unknown.is_empty(), "{:?}", enc.unknown);
+    }
+
+    /// AI-01a — the v8 reading (every corpus recorded before the alias block)
+    /// stays byte-identical: the 3.5 names slot as before, the 3.6 names miss
+    /// and are collected loudly, exactly as today.
+    #[test]
+    fn a_legacy_reading_ignores_the_alias_block() {
+        let (new_p, new_us) = alias_unit(&["Unique Hero"], &["Anti-Cover"], &["Adrenal Booster"]);
+        let (old_p, old_us) = alias_unit(&["Unique", "Hero"], &["Ignores Cover"], &["Weapon Booster"]);
+        let mut enc = alias_encoder(8);
+        assert!(enc.vocab.loaded, "{:?}", enc.vocab.error);
+        assert_eq!(enc.rule_pairs(&old_p, &old_us), vec![0, 1, 1, 1, 200, 1, 300, 2]);
+        assert!(enc.rule_pairs(&new_p, &new_us).is_empty());
+        assert_eq!(enc.unknown, names(&["Anti-Cover", "Unique Hero", "spell:Adrenal Booster"]));
+    }
+
+    /// AI-01a — an alias resolves inside its OWN band only, and one whose
+    /// targets all have no slot there keeps the ORIGINAL name in unknown.
+    #[test]
+    fn an_alias_with_no_slotted_target_keeps_the_original_name_unknown() {
+        let (p, us) = alias_unit(&["Lost Name"], &["Cross Band"], &[]);
+        let mut enc = alias_encoder(RULE_VOCAB_VERSION);
+        assert!(enc.rule_pairs(&p, &us).is_empty(), "Hero is a unit slot, not a weapon one");
+        assert_eq!(enc.unknown, names(&["Cross Band", "Lost Name"]));
+    }
+
+    /// AI-01b - the committed vocabulary reads a renamed unit rule and weapon rule on the old slots.
+    #[test]
+    fn the_committed_vocab_reads_unique_hero_and_anti_cover_on_their_old_slots() {
+        let (new_p, new_us) = alias_unit(&["Unique Hero"], &["Anti-Cover"], &[]);
+        let (old_p, old_us) = alias_unit(&["Unique", "Hero"], &["Ignores Cover"], &[]);
+        let mut enc = RowEncoder::for_version(&repo_root(), RULE_VOCAB_VERSION);
+        let old_pairs = enc.rule_pairs(&old_p, &old_us);
+        assert!(enc.unknown.is_empty(), "{:?}", enc.unknown);
+        assert_eq!(enc.rule_pairs(&new_p, &new_us), old_pairs, "the new names read like the old ones");
+        assert!(enc.unknown.is_empty(), "{:?}", enc.unknown);
+    }
+
     /// unit2 (v7, the encoder-slot gap follow-up #786) — the 12 names the
     /// census measures as `core_ported` but still slotless after v6, appended
     /// at 989-1000 (the v6 band's 763-988 + 226) in the DOCUMENTED order of
@@ -1336,6 +1450,56 @@ mod tests {
         let head = read_act_header(HEADER).expect("header");
         assert_eq!(head.knobs.rule_vocab_version, LEGACY_VOCAB_VERSION);
         assert_eq!(vocab_version_of_header(HEADER), head.knobs.rule_vocab_version);
+    }
+
+    const ASSAULT_ONLY: &str = r#"{"kind":"header","knobs":{},"profiles":{
+      "gunner":{"unit_id":"gunner","name":"Gunner","quality":4,"defense":4,"tough":1,
+        "wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,
+        "game_system":"gf","faction_folder":"robot_legions",
+        "special_rules":[],"item_grants":[],"attached_hero_rules":[],
+        "move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Assault Rifle","range":12,"attacks":2,"count":1,"ap":1,
+          "rules":["Assault","AP(1)"]}]}}}"#;
+
+    fn assault_mev(epoch: u32) -> f64 {
+        let header = read_act_header(ASSAULT_ONLY).expect("header");
+        let p = header.profiles.get("gunner").expect("gunner");
+        let mut reg = Registries::new(&repo_root());
+        let us = UnitStatic::build_for(&mut reg, p, epoch);
+        unit_sev_mev(p, &us, &neutral_defender()).1
+    }
+
+    fn plain_mev(epoch: u32) -> f64 {
+        let header = read_act_header(HEADER).expect("header");
+        let p = header.profiles.get("p1_0_a").expect("p1_0_a");
+        let mut reg = Registries::new(&repo_root());
+        let us = UnitStatic::build_for(&mut reg, p, epoch);
+        unit_sev_mev(p, &us, &neutral_defender()).1
+    }
+
+    /// AI-09 — the net's melee input ("mev") must price an Assault weapon's
+    /// melee copy from rules 3.6 on, exactly like the table's
+    /// `AiShooting.melee_profiles`. At 72 a ranged weapon never strikes, so a
+    /// unit armed only with one prices at its bare-hands value: 0.
+    #[test]
+    fn an_assault_weapon_prices_as_bare_hands_in_the_net_at_epoch_72() {
+        assert_eq!(assault_mev(EPOCH_72_PLAYTEST_RULES), 0.0, "72: no melee profile, bare hands");
+    }
+
+    /// The same unit at 73: the Assault copy (2 attacks, AP 1) strikes, so the
+    /// net's mev is larger — 0.67. On main this read the epoch-free list and
+    /// stayed at 0 while the table already counted the copy.
+    #[test]
+    fn an_assault_weapon_prices_its_melee_copy_in_the_net_at_epoch_73() {
+        assert_eq!(assault_mev(EPOCH_73_V36), 0.67, "73: the Assault copy's melee EV");
+    }
+
+    /// A unit with no Assault weapon keeps today's number at 73 — the epoch
+    /// gate must not move anything else.
+    #[test]
+    fn a_unit_without_assault_keeps_its_net_mev_at_epoch_73() {
+        assert_eq!(plain_mev(EPOCH_72_PLAYTEST_RULES), 0.5, "today's number");
+        assert_eq!(plain_mev(EPOCH_73_V36), 0.5, "unchanged at 73");
     }
 
     #[test]

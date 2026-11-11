@@ -119,9 +119,10 @@ use super::*;
     /// hero's Counter weapon strikes first and cuts the charger's Impact dice although the host
     /// carries none. With `Seams::tray_exact` the core does both, unflagged; without it the old
     /// host-only read stands and `counter_strikes_first` names the gap. A CHARGER's own Counter
-    /// weapon strikes in its normal slot and is never flagged.
+    /// weapon strikes in its normal slot and is never flagged. Pinned to epoch 72: from rules 3.6
+    /// Impact rolls first (the epoch-73 leg lives in `v36_melee_rows/mel_03.rs`).
     #[test]
-    fn a_joined_heros_counter_strikes_first_and_cuts_impact_with_tray_exact() {
+    fn a_joined_heros_counter_strikes_first_and_cuts_impact_with_tray_exact_at_epoch_72() {
         let profile: Profile = serde_json::from_str(r#"{"unit_id":"u","name":"u"}"#).unwrap();
         let unit = |name: &str, models: i64, impact: i64, counter: bool| UnitStatic {
             ctx: Ctx { quality: 4, defense: 4, tough: 1, models, impact, counter_models: counter as i64, ..Default::default() },
@@ -144,7 +145,7 @@ use super::*;
             (st.wounds[0], Rc::make_mut(&mut st.radii)[0]) = (vec![1; 5], vec![IN2M; 5]);
             (st.positions[1], st.wounds[1], Rc::make_mut(&mut st.radii)[1]) = (vec![[0.0, 0.0, 0.0]; 3], vec![1; 3], vec![IN2M; 3]);
             (st.positions[2], st.wounds[2], Rc::make_mut(&mut st.radii)[2]) = (vec![[0.0, 0.0, 0.0]], vec![1], vec![IN2M]);
-            let seams = Seams { rules_epoch: crate::acts::CURRENT_RULES_EPOCH, tray_exact, ..Default::default() };
+            let seams = Seams { rules_epoch: crate::acts::EPOCH_72_PLAYTEST_RULES, tray_exact, ..Default::default() };
             let (mut tray, mut shot) = (Tray::seeded(27), ShootResult::default());
             tray_charge(&statics, &mut st, 0, 1, seams, &mut tray, &mut shot, 0.0, Cover::Recorded(None));
             shot

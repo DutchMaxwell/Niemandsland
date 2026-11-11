@@ -92,6 +92,8 @@ pub struct FlowOpts<'a> {
     /// at` the way it prices the cell.
     pub dangerous_debuff: bool,
     pub difficult_debuff: bool,
+    /// rules 3.6 (`EPOCH_73_V36`) — ruin ground is Unstable for a leg over 6", priced by `mv::cost`.
+    pub unstable_danger: bool,
     /// `opts["charge_allowance"]` (:1039) — absent means the straight delta length.
     pub charge_allowance: Option<f64>,
     /// `opts["charge_goal"]` (:1096) — BOTH this and `allow_contact` arm the charge branch.
@@ -115,6 +117,7 @@ impl<'a> FlowOpts<'a> {
             board_y_in: call.opts.board_y_in,
             dangerous_debuff: call.opts.dangerous_debuff,
             difficult_debuff: call.opts.difficult_debuff,
+            unstable_danger: call.opts.unstable_danger,
             charge_allowance: call.opts.charge_allowance,
             charge_goal: call.opts.charge_goal,
             charge_tgt_bases: &call.opts.charge_tgt_bases,
@@ -345,6 +348,7 @@ pub fn plan_sequential_flow(
                 avoid_fine: empty_cells(),
                 dangerous_debuff: opts.dangerous_debuff,
                 difficult_debuff: opts.difficult_debuff,
+                unstable_danger: opts.unstable_danger,
             };
             let coi = ThetaOpts { step: cstep, reach_closest: true };
             let (croute, pops) = theta_star_traced_bent(
@@ -389,6 +393,7 @@ pub fn plan_sequential_flow(
             avoid_fine: empty_cells(),
             dangerous_debuff: opts.dangerous_debuff,
             difficult_debuff: opts.difficult_debuff,
+            unstable_danger: opts.unstable_danger,
         };
         let oi = ThetaOpts { step, reach_closest: false };
         let (route, pops) =
@@ -455,6 +460,7 @@ pub fn plan_sequential_flow(
         avoid_fine: empty_cells(),
         dangerous_debuff: opts.dangerous_debuff,
         difficult_debuff: opts.difficult_debuff,
+        unstable_danger: opts.unstable_danger,
     };
     if !allow_contact
         && n >= 2
@@ -581,6 +587,7 @@ pub fn pull_into_placed(
         avoid_fine: empty_cells(),
         dangerous_debuff: false,
         difficult_debuff: false,
+        unstable_danger: false,
     };
     let target = result[near_i];
     let mut cur = pos;

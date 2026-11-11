@@ -27,6 +27,8 @@ use nml_core::{act_statics, full_playout_bent, load_acts, plan_with_rollout, rea
 
 const ACTS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/acts_25.jsonl");
 const WIDE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/acts_wide_25.jsonl");
+mod common;
+
 const REPO: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../..");
 
 /// Act `ai`'s search config (the corpus knobs, tail caps zeroed: the tree
@@ -72,7 +74,7 @@ struct Seen { n: usize, crossed: usize, game_end: usize, passed: usize, bad: Opt
 /// pass (epoch >= 7) fires on a corpus that recorded none.
 fn sweep(path: &str, carriers: bool) -> Seen {
     let c = load_acts(path).unwrap_or_else(|e| panic!("{e}"));
-    let per_act = act_statics(&c, REPO);
+    let per_act = act_statics(&c, &common::pinned_spells_root(REPO));
     let mut sc = Scratch::default();
     let mut seen = Seen { n: 0, crossed: 0, game_end: 0, passed: 0, bad: None };
     for (ai, act) in c.acts.iter().enumerate() {
@@ -135,7 +137,7 @@ fn verdict(winner: &str, player: i64) -> f64 {
 #[test]
 fn the_blend_leaf_is_the_one_ply_value_and_a_game_end_the_referee() {
     let c = load(ACTS);
-    let per_act = act_statics(&c, REPO);
+    let per_act = act_statics(&c, &common::pinned_spells_root(REPO));
     let (mut n, mut sc, mut rng) = (0usize, Scratch::default(), GodotRng::new(0));
     for (ai, act) in c.acts.iter().enumerate() {
         let (p, seat) = (act.player, act.statics.opener_seat);
@@ -172,7 +174,7 @@ fn the_blend_leaf_is_the_one_ply_value_and_a_game_end_the_referee() {
 #[test]
 fn the_side_that_ran_dry_first_opens_the_next_round() {
     let c = load(ACTS);
-    let per_act = act_statics(&c, REPO);
+    let per_act = act_statics(&c, &common::pinned_spells_root(REPO));
     let (mut checked, mut p2_opens) = (0usize, 0usize);
     for (ai, act) in c.acts.iter().enumerate().filter(|(_, a)| a.state.round < a.state.rounds_total) {
         let mut knobs = c.knobs;
@@ -201,7 +203,7 @@ fn the_terminal_leaf_one_activation_from_the_end_is_the_playout_verdict() {
     let mut seen = [0usize; 3];
     for path in [ACTS, WIDE] {
         let c = load(path);
-        let per_act = act_statics(&c, REPO);
+        let per_act = act_statics(&c, &common::pinned_spells_root(REPO));
         let mut sc = Scratch::default();
         for (ai, act) in c.acts.iter().enumerate().filter(|(_, a)| a.state.round >= a.state.rounds_total) {
             let p = act.player;
@@ -235,7 +237,7 @@ fn the_terminal_leaf_one_activation_from_the_end_is_the_playout_verdict() {
 fn a_terminal_playout_stays_inside_the_arbitration_guard() {
     for path in [ACTS, WIDE] {
         let c = load(path);
-        let per_act = act_statics(&c, REPO);
+        let per_act = act_statics(&c, &common::pinned_spells_root(REPO));
         let (mut n, mut worst, mut sc) = (0usize, 0usize, Scratch::default());
         for (ai, act) in c.acts.iter().enumerate() {
             let cap = act.state.units() * 2 + 4;
@@ -268,7 +270,7 @@ fn chance_edges_are_reproducible_and_decline_unported() {
     let (mut n, mut moved, mut spread, mut declined) = (0usize, 0usize, 0usize, BTreeMap::new());
     for path in [ACTS, WIDE] {
         let c = load(path);
-        let per_act = act_statics(&c, REPO);
+        let per_act = act_statics(&c, &common::pinned_spells_root(REPO));
         let mut sc = Scratch::default();
         for (ai, act) in c.acts.iter().enumerate() {
             let base = 740_000_000 + 1_000 * ai as i64;
@@ -314,7 +316,7 @@ fn tray_playouts_roll_the_leaf_stream_and_decline_unported() {
     let (mut n, mut moved, mut declined) = (0usize, 0usize, BTreeMap::new());
     for path in [ACTS, WIDE] {
         let c = load(path);
-        let per_act = act_statics(&c, REPO);
+        let per_act = act_statics(&c, &common::pinned_spells_root(REPO));
         let mut sc = Scratch::default();
         for (ai, act) in c.acts.iter().enumerate() {
             let base = 740_000_000 + 1_000 * ai as i64;
@@ -347,7 +349,7 @@ fn tray_playouts_roll_the_leaf_stream_and_decline_unported() {
 #[test]
 fn root_children_follow_the_one_ply_order() {
     let c = load(ACTS);
-    let per_act = act_statics(&c, REPO);
+    let per_act = act_statics(&c, &common::pinned_spells_root(REPO));
     let (mut n, mut sc) = (0usize, Scratch::default());
     for (ai, act) in c.acts.iter().enumerate() {
         let Ok(pick) = plan_with_rollout(&act.state, &c.terrain, &per_act[ai], &c.knobs, &act.statics, act.player)
@@ -377,7 +379,7 @@ fn deeper_children_follow_an_independent_rank_and_widen() {
     let (mut n, mut sc) = (0usize, Scratch::default());
     for path in [ACTS, WIDE] {
         let c = load(path);
-        let per_act = act_statics(&c, REPO);
+        let per_act = act_statics(&c, &common::pinned_spells_root(REPO));
         for (ai, act) in c.acts.iter().enumerate() {
             let p = act.player;
             with_roll(&c, ai, &per_act[ai], |roll| {
@@ -455,7 +457,7 @@ fn budget_one_picks_the_hands_top_row() {
     let mut sc = Scratch::default();
     for path in [ACTS, WIDE] {
         let c = load(path);
-        let per_act = act_statics(&c, REPO);
+        let per_act = act_statics(&c, &common::pinned_spells_root(REPO));
         for (ai, act) in c.acts.iter().enumerate() {
             let (best, trace, order) = with_roll(&c, ai, &per_act[ai], |roll| {
                 search(roll, &act.state, act.player, TreeLeaf::Blend, 1, 8, &mut sc)
@@ -476,7 +478,7 @@ fn last_activation_picks_the_referee_argmax_at_any_batch() {
     let (mut n, mut varied, mut sc) = (0usize, 0usize, Scratch::default());
     for path in [ACTS, WIDE] {
         let c = load(path);
-        let per_act = act_statics(&c, REPO);
+        let per_act = act_statics(&c, &common::pinned_spells_root(REPO));
         for (ai, st) in last_activations(&c) {
             let p = c.acts[ai].player;
             with_roll(&c, ai, &per_act[ai], |roll| {
@@ -512,7 +514,7 @@ fn last_activation_picks_the_referee_argmax_at_any_batch() {
 fn the_trace_counts_batches_frontier_and_terminal() {
     let (mut n, mut ends, mut sc) = (0usize, 0usize, Scratch::default());
     let c = load(WIDE);
-    let per_act = act_statics(&c, REPO);
+    let per_act = act_statics(&c, &common::pinned_spells_root(REPO));
     for (ai, st) in last_activations(&c) {
         let p = c.acts[ai].player;
         with_roll(&c, ai, &per_act[ai], |roll| {
@@ -532,7 +534,7 @@ fn the_trace_counts_batches_frontier_and_terminal() {
 fn the_same_search_twice_is_identical() {
     let (mut deep, mut sc) = (0usize, Scratch::default());
     let c = load(ACTS);
-    let per_act = act_statics(&c, REPO);
+    let per_act = act_statics(&c, &common::pinned_spells_root(REPO));
     for (ai, act) in c.acts.iter().enumerate() {
         with_roll(&c, ai, &per_act[ai], |roll| for leaf in [TreeLeaf::Blend, TreeLeaf::Terminal] {
             let width = menu(roll, &act.state, act.player, &mut sc).len();
@@ -575,7 +577,7 @@ fn select_takes_the_movers_side() {
 #[test]
 fn the_tree_knob_parts_the_pick_and_stamps_it() {
     let c = load(ACTS);
-    let per_act = act_statics(&c, REPO);
+    let per_act = act_statics(&c, &common::pinned_spells_root(REPO));
     let mut knobs = c.knobs;
     (knobs.search_mode, knobs.tree_budget) = (SearchMode::Tree, 64);
     let (mut n, mut moved) = (0usize, 0usize);
@@ -606,7 +608,7 @@ fn the_tree_knob_parts_the_pick_and_stamps_it() {
 #[test]
 fn the_deadline_stops_early_and_the_stamped_count_replays() {
     let c = load(WIDE);
-    let per_act = act_statics(&c, REPO);
+    let per_act = act_statics(&c, &common::pinned_spells_root(REPO));
     let mut knobs = c.knobs;
     (knobs.search_mode, knobs.tree_budget, knobs.tree_wall_ms) = (SearchMode::Tree, 128, 1);
     let (mut hit, mut sc) = (0usize, Scratch::default());
@@ -657,7 +659,7 @@ fn a_recorded_tree_count_reads_back() {
 #[test]
 fn the_widening_rate_caps_open_children() {
     let c = load(ACTS);
-    let per_act = act_statics(&c, REPO);
+    let per_act = act_statics(&c, &common::pinned_spells_root(REPO));
     let (mut narrowed, mut sc) = (0usize, Scratch::default());
     for (ai, act) in c.acts.iter().enumerate() {
         with_roll(&c, ai, &per_act[ai], |roll| {
@@ -682,7 +684,7 @@ fn the_widening_rate_caps_open_children() {
 #[test]
 fn the_game_end_boundary_carries_no_reply_threat() {
     let c = load(ACTS);
-    let per_act = act_statics(&c, REPO);
+    let per_act = act_statics(&c, &common::pinned_spells_root(REPO));
     let (mut differs, mut checked) = (0usize, 0usize);
     for (ai, act) in c.acts.iter().enumerate() {
         let mut end = act.state.clone();
@@ -732,7 +734,7 @@ fn puct_follows_the_prior_where_uct_is_blind() {
 #[test]
 fn tree_puct_off_is_identical_and_on_moves_the_visits_to_the_prior() {
     let c = load(ACTS);
-    let per_act = act_statics(&c, REPO);
+    let per_act = act_statics(&c, &common::pinned_spells_root(REPO));
     let mut off = c.knobs;
     (off.search_mode, off.tree_budget) = (SearchMode::Tree, 96);
     let mut on = off;
@@ -809,7 +811,7 @@ fn opponent_model_tree_leaf_is_the_edges_own_activation() {
     let (mut edges, mut tail_differs, mut same_leaf, mut coord) = (0usize, 0usize, 0usize, 0usize);
     for path in [ACTS, WIDE] {
         let c = load(path);
-        let per_act = act_statics(&c, REPO);
+        let per_act = act_statics(&c, &common::pinned_spells_root(REPO));
         for (ai, act) in c.acts.iter().enumerate() {
             let (p, seat) = (act.player, act.statics.opener_seat);
             for on in [false, true] {
@@ -898,7 +900,7 @@ fn tree_stats(p: &nml_core::Pick) -> String {
 #[test]
 fn opponent_model_reply_family_runs_no_nested_search_in_the_tree() {
     let c = load(ACTS);
-    let per_act = act_statics(&c, REPO);
+    let per_act = act_statics(&c, &common::pinned_spells_root(REPO));
     let mut tree = c.knobs;
     (tree.search_mode, tree.tree_budget, tree.tree_wall_ms, tree.deadline_us) = (SearchMode::Tree, 64, 0, 0);
     let (mut acts, mut tree_calls, mut nested) = (0usize, 0usize, 0usize);
@@ -947,7 +949,7 @@ fn opponent_model_knobs_leave_the_tree_bit_identical() {
     let (mut n, mut deep) = (0usize, 0usize);
     for (path, leaves) in [(ACTS, &[TreeLeaf::Blend, TreeLeaf::Terminal][..]), (WIDE, &[TreeLeaf::Blend][..])] {
         let c = load(path);
-        let per_act = act_statics(&c, REPO);
+        let per_act = act_statics(&c, &common::pinned_spells_root(REPO));
         for (ai, act) in c.acts.iter().enumerate() {
             for &leaf in leaves {
                 let mut tree = |k: &nml_core::Knobs| with_knobs(&c, ai, &per_act[ai], k, |roll| {
@@ -1017,7 +1019,7 @@ fn off_sweep(k: impl Fn(&nml_core::Knobs) -> nml_core::Knobs) -> (Vec<String>, u
                                        t.deadline_hit, t.root);
     for (path, leaves) in [(ACTS, &[TreeLeaf::Blend, TreeLeaf::Terminal][..]), (WIDE, &[TreeLeaf::Blend][..])] {
         let c = load(path);
-        let (per_act, tag) = (act_statics(&c, REPO), path.rsplit('/').next().unwrap());
+        let (per_act, tag) = (act_statics(&c, &common::pinned_spells_root(REPO)), path.rsplit('/').next().unwrap());
         for (ai, act) in c.acts.iter().enumerate() {
             let (p, seat) = (act.player, act.statics.opener_seat);
             for &leaf in leaves {
@@ -1037,7 +1039,7 @@ fn off_sweep(k: impl Fn(&nml_core::Knobs) -> nml_core::Knobs) -> (Vec<String>, u
         }
     }
     let c = load(ACTS);
-    let per_act = act_statics(&c, REPO);
+    let per_act = act_statics(&c, &common::pinned_spells_root(REPO));
     let mut tree = k(&c.knobs);
     (tree.search_mode, tree.tree_budget, tree.tree_wall_ms, tree.deadline_us) = (SearchMode::Tree, 64, 0, 0);
     for (ai, act) in c.acts.iter().enumerate() {
@@ -1151,7 +1153,7 @@ fn tree_opponent_own_leaf_selects_the_opponents_own_argmax() {
     let (mut checked, mut split, mut nodes, mut sc) = (0usize, 0usize, 0usize, Scratch::default());
     for path in [ACTS, WIDE] {
         let c = load(path);
-        let per_act = act_statics(&c, REPO);
+        let per_act = act_statics(&c, &common::pinned_spells_root(REPO));
         for (ai, act) in c.acts.iter().enumerate() {
             let (p, seat) = (act.player, act.statics.opener_seat);
             for on in [false, true] {
@@ -1217,7 +1219,7 @@ fn tree_opponent_own_leaf_orders_the_opponents_children_by_its_own_leaf() {
     let (mut checked, mut reordered, mut built, mut sc) = (0usize, 0usize, 0usize, Scratch::default());
     for path in [ACTS, WIDE] {
         let c = load(path);
-        let per_act = act_statics(&c, REPO);
+        let per_act = act_statics(&c, &common::pinned_spells_root(REPO));
         for (ai, act) in c.acts.iter().enumerate() {
             let (p, seat) = (act.player, act.statics.opener_seat);
             let log = HookLog { root_seat: seat, calls: Default::default() };
@@ -1288,7 +1290,7 @@ fn tree_opponent_own_leaf_orders_the_opponents_children_by_its_own_leaf() {
 #[test]
 fn tree_opponent_own_leaf_asks_the_opponents_seat_only_when_on() {
     let c = load(ACTS);
-    let per_act = act_statics(&c, REPO);
+    let per_act = act_statics(&c, &common::pinned_spells_root(REPO));
     for budget in [64, 128] {
         let mut tree = c.knobs;
         (tree.search_mode, tree.tree_budget, tree.tree_wall_ms, tree.deadline_us) = (SearchMode::Tree, budget, 0, 0);

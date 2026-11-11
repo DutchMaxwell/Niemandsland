@@ -447,6 +447,7 @@ impl ReachIndex {
             avoid_fine: &call.opts.avoid_fine,
             dangerous_debuff: call.opts.dangerous_debuff,
             difficult_debuff: call.opts.difficult_debuff,
+            unstable_danger: call.opts.unstable_danger,
         };
         // movement_planner.gd:1050 — Traversal (`zones_rest_only`) means the
         // move itself ignores every disc; only the RESTING place must be clear.

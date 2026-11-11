@@ -42,6 +42,16 @@ const HAVOC_SLUGS := {
 	"manticore": "manticore",
 	"shortbow": "bow",
 	"wings": "wings",
+	# Rules 3.6 names for the same bakes.
+	"master great weapon": "great",
+	"master halberd": "halberd",
+	"master lance": "lance",
+	"havoc chariot": "chariot",
+	"great beast chariot": "beastchariot",
+	"javelins": "javelin",
+	"barbed javelins": "javelin",
+	"rapid shortbow": "bow",
+	"doom-fire bombard": "doomfire",
 }
 
 
@@ -96,3 +106,21 @@ func test_havoc_label_section_maps_the_planned_keys() -> void:
 			.is_equal([case[0] + "#great"])
 	for label in HAVOC_SLUGS:
 		assert_str(lib.variant_slug([label], "havoc_warriors")).is_equal(HAVOC_SLUGS[label])
+
+
+# --- Rules 3.6: the Masters' weapons are "Master X" and two mounts were renamed ---------------------
+
+func test_rules_3_6_master_weapons_resolve_the_live_great_keys() -> void:
+	var manager := _manager(KEYS)
+	var lib := _library()
+	for unit_name in ["Havoc Master", "Chosen Havoc Master"]:
+		var army := _army([_unit(unit_name, "Master Great Weapon")])
+		assert_str(army.faction_folder).is_equal("havoc_warriors")
+		assert_array(manager._unit_model_variant_names(army.units[0], "havoc_warriors")) \
+			.is_equal([unit_name + "#great"])
+	# Weapon and renamed mount compose the same slugs as their 3.5 names.
+	assert_str(lib.variant_slug(["Master Halberd", "Havoc Chariot"], "havoc_warriors")) \
+		.is_equal(lib.variant_slug(["Heavy Halberd", "Chariot"], "havoc_warriors"))
+	assert_str(lib.variant_slug(["Master Lance", "Great Beast Chariot"], "havoc_warriors")).is_equal("beastchariot+lance")
+	# Scoped: another faction does not learn the Havoc names.
+	assert_str(lib.variant_slug(["Master Great Weapon", "Havoc Chariot"], "beastmen")).is_equal("")
