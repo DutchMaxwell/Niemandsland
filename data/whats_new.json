@@ -18,38 +18,38 @@
   "cards": [
     {
       "id": "factions",
-      "image": "res://assets/whats_new/factions.webp",
+      "image": "",
       "capture": "1920x1080 PNG, no UI or cursor. On a grassland table in daylight, place five Saurian infantry on the left and five Vampiric Undead infantry on the right, with one larger miniature behind each group. Frame both groups from a 35-degree elevated three-quarter view; keep all bases visible and the outer 10 percent clear. Use fully loaded textured models, no selection outlines.",
-      "en": {"title": "Two new armies", "body": "Bring Saurians and Vampiric Undead to your table. Discover new miniatures for both armies."},
-      "de": {"title": "Zwei neue Armeen", "body": "Bringe Saurier und Vampir-Untote auf deinen Spieltisch. Entdecke neue Miniaturen für beide Armeen."}
+      "en": {"title": "Rules 3.6 at your table", "body": "Grimdark Future and Age of Fantasy now play OnePageRules rules 3.6. Army Forge lists built with the 3.6 books import as they are."},
+      "de": {"title": "Regeln 3.6 auf deinem Tisch", "body": "Grimdark Future und Age of Fantasy spielen jetzt nach den OnePageRules-Regeln 3.6. Army-Forge-Listen aus den 3.6-Büchern werden unverändert importiert."}
     },
     {
       "id": "borderland",
-      "image": "res://assets/whats_new/borderland.webp",
+      "image": "",
       "capture": "1920x1080 PNG, no UI or cursor. Apply the Ruined Borderland table theme with its default 6x4-foot table, grassland biome and Sunset mood. Wait for all terrain to load, then frame the entire table from a 50-degree elevated corner view with both longhouses, paired ruins, woods and paths visible. Leave 5 percent margin around the table frame; place no armies.",
-      "en": {"title": "A battlefield in one click", "body": "Choose Ruined Borderland to prepare a complete table in one click. Ruins, woods and paths set the scene for your next battle."},
-      "de": {"title": "Ein Schlachtfeld mit einem Klick", "body": "Wähle Ruined Borderland, um mit einem Klick einen vollständigen Spieltisch vorzubereiten. Ruinen, Wälder und Wege bilden die Kulisse für deine nächste Schlacht."}
+      "en": {"title": "Your older lists still load", "body": "A list built with a 3.5 book still imports, with a short notice. Firefight, Skirmish and Regiments stay on rules 3.5.1 for now."},
+      "de": {"title": "Deine älteren Listen laden weiter", "body": "Eine Liste aus einem 3.5-Buch wird weiterhin importiert, mit einem kurzen Hinweis. Firefight, Skirmish und Regiments bleiben vorerst bei den Regeln 3.5.1."}
     },
     {
       "id": "effects",
-      "image": "res://assets/whats_new/effects.webp",
+      "image": "",
       "capture": "1920x1080 PNG split into equal left/right halves from actual gameplay, no UI or cursor. Left: capture a melee impact between two infantry units with Settings > Gore set to Normal, one visible hit and casualty. Right: capture a caster's spell effect at peak brightness with caster and target both in frame. Use matching grassland daylight and a 35-degree elevated camera; keep effects inside each half with 10 percent safe margins. Also verify Gore Off replaces blood with dust; do not include that verification shot in the card.",
-      "en": {"title": "Feel every clash and spell", "body": "Combat and spells now have richer visual effects. Choose your preferred Gore setting, or turn blood effects off."},
-      "de": {"title": "Erlebe jeden Kampf und Zauber", "body": "Kämpfe und Zauber haben jetzt ausdrucksstärkere visuelle Effekte. Wähle deine bevorzugte Bluteinstellung oder schalte Bluteffekte aus."}
+      "en": {"title": "Special rules follow the new books", "body": "Renamed and reworded special rules resolve on their own in the 3.6 books. Dice, saves, spells and the battle log received many fixes."},
+      "de": {"title": "Sonderregeln folgen den neuen Büchern", "body": "Umbenannte und neu formulierte Sonderregeln werden in den 3.6-Büchern automatisch abgewickelt. Würfe, Schutzwürfe, Zauber und das Kampfprotokoll haben viele Korrekturen erhalten."}
     },
     {
       "id": "graphics",
-      "image": "res://assets/whats_new/graphics.webp",
+      "image": "",
       "capture": "1920x1080 PNG split into equal left/right halves, no UI or cursor. Use the same empty 4x4-foot table and fixed 40-degree elevated corner camera in daylight: grassland on the left, arid desert on the right. Include the near corner and both adjoining table-frame edges in each half, with the biome surface filling the rest. Wait for textures to finish loading; keep exposure and camera identical.",
-      "en": {"title": "A fresh look for your table", "body": "Biome colours give each battlefield a more distinct look. The updated table frame adds a finishing touch."},
-      "de": {"title": "Ein neuer Look für deinen Spieltisch", "body": "Die Farben der Landschaften geben jedem Schlachtfeld einen eigenen Charakter. Der überarbeitete Tischrahmen rundet das Bild ab."}
+      "en": {"title": "Your armies keep their miniatures", "body": "Armies renamed in the 3.6 books keep their 3D models and their rules. Tutorial and Game School armies use the 3.6 lists."},
+      "de": {"title": "Deine Armeen behalten ihre Miniaturen", "body": "Armeen, die in den 3.6-Büchern umbenannt wurden, behalten ihre 3D-Modelle und ihre Regeln. Die Armeen im Tutorial und in der Spielschule nutzen die 3.6-Listen."}
     },
     {
       "id": "opponent",
-      "image": "res://assets/whats_new/opponent.webp",
+      "image": "",
       "capture": "1920x1080 PNG from a solo battle against NACHTMAHR on Ruined Borderland. At the start of the opponent's activation, frame an objective with the opponent's approaching unit and a player's defending unit in a 45-degree elevated view. Keep the real turn indicator and objective marker visible, close all other panels, and move the cursor off the board. Capture an actual played position, with no debug overlays or fabricated tactical arrows.",
-      "en": {"title": "A stronger solo opponent", "body": "NACHTMAHR is now a tougher opponent in solo battles. Prepare your army and put your tactics to the test."},
-      "de": {"title": "Ein stärkerer Gegner im Solospiel", "body": "NACHTMAHR ist jetzt ein stärkerer Gegner in Soloschlachten. Stelle deine Armee auf und erprobe deine Taktik."}
+      "en": {"title": "NACHTMAHR plays 3.6 too", "body": "Your solo opponent NACHTMAHR follows the 3.6 rules as well. The Game School teaches them step by step."},
+      "de": {"title": "NACHTMAHR spielt ebenfalls 3.6", "body": "Dein Sologegner NACHTMAHR folgt ebenfalls den Regeln 3.6. Die Spielschule bringt sie dir Schritt für Schritt bei."}
     }
   ]
 }

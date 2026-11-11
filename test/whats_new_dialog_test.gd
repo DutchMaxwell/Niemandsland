@@ -50,7 +50,8 @@ func test_cards_use_house_style_and_can_switch_to_german() -> void:
 	assert_int(dialog._cards.get_child_count()).is_equal(5)
 	for card: PanelContainer in dialog._cards.get_children():
 		assert_str(card.theme_type_variation).is_equal(HouseStyle.CARD)
-		assert_int(card.get_child(0).get_child_count()).is_equal(3)
+		# Title and body only: the 0.3.15 cards carry no picture.
+		assert_int(card.get_child(0).get_child_count()).is_equal(2)
 	dialog._locale = "en"
 	dialog._language_button.pressed.emit()
 	assert_str(dialog.title).is_equal("Neu in %s" % _version)
@@ -58,5 +59,5 @@ func test_cards_use_house_style_and_can_switch_to_german() -> void:
 	assert_str(dialog.get_ok_button().text).is_equal("Schließen")
 	dialog.open(false, true)
 	assert_str(dialog.get_ok_button().text).is_equal("Zurück zum Spieltisch")
-	assert_str(dialog._cards.get_child(0).get_child(0).get_child(0).text).is_equal("Zwei neue Armeen")
+	assert_str(dialog._cards.get_child(0).get_child(0).get_child(0).text).is_equal("Regeln 3.6 auf deinem Tisch")
 
