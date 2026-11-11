@@ -483,7 +483,14 @@ jobs:
           if grep -iE "GDExtension|SCRIPT ERROR|Parse Error" /tmp/exported_run.log; then
             echo "::error::the exported build reported an extension/script/parse error"; exit 1
           fi
-          echo "OK: exported build started with no GDExtension/script/parse errors"
+          # The core must really load, not just ship: godot-rust's init line and the boot line of
+          # update_checker.gd (CoreLoadNotice.boot_line) both have to be there.
+          for LINE in "Initialize godot-rust" "core: NmlCore loaded"; do
+            grep -qF "$LINE" /tmp/exported_run.log || {
+              grep -F "core: NmlCore" /tmp/exported_run.log || true
+              echo "::error::the exported build never printed '$LINE' - the core did not load"; exit 1; }
+          done
+          echo "OK: exported build started, loaded NmlCore, no GDExtension/script/parse errors"
 
       # Best-effort: a failed artifact upload (e.g. the account's Actions artifact-storage
       # quota is full) must not red-fail the export job. Releases use the self-contained
@@ -680,6 +687,9 @@ jobs:
           if ! grep -q "Initialize godot-rust" build/logs/exported_run.log; then
             echo "::error::the exported build never loaded the extension (no godot-rust init line)"; exit 1
           fi
+          if ! grep -qF "core: NmlCore loaded" build/logs/exported_run.log; then
+            echo "::error::the exported build never printed 'core: NmlCore loaded' - the core did not load"; exit 1
+          fi
           echo "OK: exported build started, loaded the extension, no GDExtension/script/parse errors"
 
       # THE PROOF: the arm64 slice, natively. Exit code 0, NmlCore present, the packed net accepted, one real
@@ -871,6 +881,18 @@ jobs:
             rm dist/macos/$EXPORT_NAME.zip
             (cd dist/macos/bundle && zip -qry "../$EXPORT_NAME.zip" .)
           fi
+
+      # export-linux never runs on a tag, so the release smokes its own Linux build: it must boot and
+      # load NmlCore (the same two lines export-linux requires).
+      - name: Smoke-run the Linux release build - NmlCore loads
+        run: |
+          timeout 30 dist/linux/$EXPORT_NAME.x86_64 --headless > /tmp/release_run.log 2>&1 || true
+          for LINE in "Initialize godot-rust" "core: NmlCore loaded"; do
+            grep -qF "$LINE" /tmp/release_run.log || {
+              grep -F "core: NmlCore" /tmp/release_run.log || true
+              echo "::error::the Linux release build never printed '$LINE' - the core did not load"; exit 1; }
+          done
+          echo "OK: the Linux release build loaded NmlCore"
 
       - name: Guard - no debug symbols in the release tree
         run: |
