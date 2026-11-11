@@ -1556,11 +1556,15 @@ pub fn resolve_volley_leg(
         let normal = hits - ap4;
         // SHO-18 (rules 3.6): a Shred ALIAS fires only from a shot over 9".
         let shred_alias_fires = shred_alias_dice
-            && (!p.alias_gate || mod_dist_in > LONG_RANGE_IN);
+            && (!p.alias_gate || p.shred_any_distance || mod_dist_in > LONG_RANGE_IN);
         if p.alias_gate && p.shred_alias && shred_alias_fires && p.shred_ones_wound_bonus > 0 {
             let name: &str = if p.shred_ones_rule.is_empty() { "Shred" } else { p.shred_ones_rule.as_str() };
-            out.log.push(format!("{}: shot from over {:.0}in — unmodified 1s take +1 wound",
-                name, LONG_RANGE_IN));
+            if p.shred_any_distance {
+                out.log.push(format!("{}: unmodified 1s take +1 wound at any distance", name));
+            } else {
+                out.log.push(format!("{}: shot from over {:.0}in — unmodified 1s take +1 wound",
+                    name, LONG_RANGE_IN));
+            }
         }
         // Rules 3.6 row MOR-12c: the bearer's share of the plain hits saves as
         // its own batch at AP(+sergeant_ap), the table's band (`main.gd:8372-8387`).
@@ -2430,11 +2434,16 @@ pub fn resolve_melee_leg_wipe(
             // volley leg's twin (main.gd:8372-8387).
             // SHO-18 (rules 3.6): a Shred ALIAS pays only on a charge over 6"; a strike-back pays nothing.
             let shred_alias_fires = shred_alias_dice
-                && (!p.alias_gate || charge_from_in > crate::combat::CHARGE_LONG_RANGE_IN);
+                && (!p.alias_gate || (p.shred_any_distance && charging)
+                    || charge_from_in > crate::combat::CHARGE_LONG_RANGE_IN);
             if p.shred_alias && p.alias_gate && shred_alias_fires && p.shred_ones_wound_bonus > 0 {
                 let name: &str = if p.shred_ones_rule.is_empty() { "Shred" } else { p.shred_ones_rule.as_str() };
-                out.log.push(format!("{}: charged from over {:.0}in — unmodified 1s take +1 wound",
-                    name, crate::combat::CHARGE_LONG_RANGE_IN));
+                if p.shred_any_distance {
+                    out.log.push(format!("{}: charge — unmodified 1s take +1 wound at any distance", name));
+                } else {
+                    out.log.push(format!("{}: charged from over {:.0}in — unmodified 1s take +1 wound",
+                        name, crate::combat::CHARGE_LONG_RANGE_IN));
+                }
             }
             // AI-G2: the melee half of the volley's Bane-condition gate (the table's `bane_applies`, melee = true).
             out.bane_gated = !p.bane_condition.is_empty() && !cond_met(&CondAp { condition: p.bane_condition.clone(), threshold: p.bane_threshold, ..Default::default() }, &CondApTarget::of(def, p.range as f64), false, 0.0, true);
