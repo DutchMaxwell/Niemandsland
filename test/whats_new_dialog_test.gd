@@ -58,5 +58,5 @@ func test_cards_use_house_style_and_can_switch_to_german() -> void:
 	assert_str(dialog.get_ok_button().text).is_equal("Schließen")
 	dialog.open(false, true)
 	assert_str(dialog.get_ok_button().text).is_equal("Zurück zum Spieltisch")
-	assert_str(dialog._cards.get_child(0).get_child(0).get_child(0).text).is_equal("Zwei neue Armeen")
+	assert_str(dialog._cards.get_child(0).get_child(0).get_child(0).text).is_equal("Regeln 3.6 auf deinem Tisch")
 
