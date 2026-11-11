@@ -1,9 +1,10 @@
 extends GdUnitTestSuite
 ## Rules 3.6, fix PF-b: the Enhanced forms of the Shred alias family (Enhanced Warbound, Enhanced Destroyer, Enhanced
 ## Infected; War Disciples, Ogres and Infected Colonies 3.6.0 books) deal the extra wound on unmodified Defense 1s
-## "always" - at any distance and on any attack - instead of only on a shot at a target over 9" away or a charge from
-## over 6". They no longer widen the window to 1-2 (that was the 3.5 Boost). The base forms keep the distance
-## condition (controls). From EPOCH_73_V36; epoch 72 replays the 3.5 Boost (1-2, only over 9").
+## "always" - at any distance, on a shot and on a charge - instead of only on a shot at a target over 9" away or a
+## charge from over 6". A strike-back is not a charge, so it stays unpaid. They no longer widen the window to 1-2
+## (that was the 3.5 Boost). The base forms keep the distance condition (controls). From EPOCH_73_V36; epoch 72
+## replays the 3.5 Boost (1-2, only over 9").
 ## Real _solo_attack_groups profile build + real _solo_save_batch on a fixed tray face (the SHO-18c probe).
 
 class Probe extends "res://scripts/main.gd":
@@ -128,10 +129,11 @@ func test_pfb_enhanced_warbound_shreds_a_four_inch_charge() -> void:
 		.override_failure_message("PF-b: Enhanced Warbound on a 4\" charge dealt no extra wound on a 1").is_equal(2)
 
 
-## PF-b (3): "always" includes a strike-back (no charge, no distance).
-func test_pfb_enhanced_warbound_shreds_a_strike_back() -> void:
+## PF-b (3): a strike-back is not a charge - the Enhanced form does not lift the condition there (no charge, no
+## distance), so the unmodified 1 deals the ordinary single wound, like the base form.
+func test_pfb_enhanced_warbound_does_not_shred_a_strike_back() -> void:
 	assert_int(await _strike_back(["Warbound", "Enhanced Warbound"], 1)) \
-		.override_failure_message("PF-b: Enhanced Warbound dealt no extra wound on a strike-back 1").is_equal(2)
+		.override_failure_message("PF-b: Enhanced Warbound shredded on a strike-back 1 (a strike-back is not a charge)").is_equal(1)
 
 
 ## PF-b (4): the window is unmodified 1s - a failed save of 2 deals exactly 1 wound at any distance.

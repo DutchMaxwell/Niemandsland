@@ -9698,12 +9698,14 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 	if count <= 0:
 		return 0
 	var shred_alias_live: bool = true
-	# PF-b (EPOCH_73_V36): an Enhanced form of the alias (Enhanced Warbound / Destroyer / Infected) pays at any distance.
+	# PF-b (EPOCH_73_V36): an Enhanced form of the alias (Enhanced Warbound / Destroyer / Infected) pays at any distance
+	# on a shot and on a charge. A strike-back (no charge gap, no shot distance) is not a charge: its gate stays.
 	var shred_enhanced := _solo_shred_enhanced_name(striker)
+	var shred_enhanced_live: bool = not shred_enhanced.is_empty() and (charge_from_in > 0.0 or dist_in > 0.0)
 	# R-1 (A2): a scoped form of Shred is the rule Shred itself - only an alias of ANOTHER name is distance-gated.
 	if typeof(profile.get("_shred_alias")) == TYPE_STRING and str(profile["_shred_alias"]) != "" \
 			and _solo_shred_group_key(str(profile["_shred_alias"])) != "Shred":
-		shred_alias_live = not shred_enhanced.is_empty() or (
+		shred_alias_live = shred_enhanced_live or (
 			_solo_alias_charge_over(true, charge_from_in) if charge_from_in > 0.0
 			else _solo_alias_family_over(dist_in))
 	# TC-023 — the Fortified family is an ALL-MODELS unit trigger, and a Takedown save is a unit of [1]'s
@@ -10797,7 +10799,7 @@ func _solo_shred_facet_name(member: GameUnit, profile_range: int) -> String:
 
 ## PF-b (EPOCH_73_V36): the name of the Enhanced form of a Shred alias the striker carries together with its base
 ## (Enhanced Warbound / Destroyer / Infected), or "". The form says the base always pays, so it lifts the base's
-## distance condition on shots, charges and strike-backs alike; its window stays the base's unmodified 1s.
+## distance condition on shots and charges (not on a strike-back); its window stays the base's unmodified 1s.
 func _solo_shred_enhanced_name(striker: GameUnit) -> String:
 	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
 		return ""
