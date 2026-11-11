@@ -6158,12 +6158,13 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 			avoid_dangerous = false   # NML-1027 wave: retries must keep the accepted THROUGH regime
 			stall_through = true
 	# Distance truth (p.7): no model's polyline may exceed the granted budget — the coherency easing is
-	# best-effort and may not stretch a route past its legal length.
+	# best-effort and may not stretch a route past its legal length. A climb is movement spent (p.11).
+	var ledges_w := _ledges_world(unit)
 	var budget_m := reach * INCHES_TO_METERS
 	for i in range(mini(trails.size(), new_positions.size())):
 		var t := trails[i] as Array
-		if MovementPlanner.polyline_length(t) > budget_m + 0.0005:
-			var cut := MovementPlanner.trim_polyline(t, budget_m)
+		if _priced_len_m(t, ledges_w) > budget_m + 0.0005:
+			var cut := MovementPlanner.trim_polyline_priced(t, budget_m, ledges_w, INCHES_TO_METERS)
 			trails[i] = cut
 			if not cut.is_empty():
 				var fin := cut.back() as Vector3
@@ -6195,7 +6196,7 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 		# NML-230 Breach A: hand the gate per-model displacement budgets (band slack after the walked
 		# route) so its physical un-stack can never stretch a retraced trail past the band. A charge
 		# keeps the unbounded contact push (the snap owns the endpoint, pushing back off the target).
-		var gate_caps: Array = [] if allow_contact else _gate_disp_caps_m(trails, trail_radii_m, reach, ignores_difficult)
+		var gate_caps: Array = [] if allow_contact else _gate_disp_caps_m(trails, trail_radii_m, reach, ignores_difficult, ledges_w)
 		new_positions = _finalize_placement(unit, models, positions, new_positions, allow_contact, charge_target, gate_caps)
 		band_clamp_models = _gate_clamped_models.size()
 		# GATE-COLLAPSE LADDER (round 7, finding 2 — "a constraint gate truncates the whole move"): the gate
@@ -6224,14 +6225,14 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 				var b3 := r3 * INCHES_TO_METERS
 				for i in range(mini(t3.size(), p3.size())):
 					var leg3 := t3[i] as Array
-					if MovementPlanner.polyline_length(leg3) > b3 + 0.0005:
-						var cut3 := MovementPlanner.trim_polyline(leg3, b3)
+					if _priced_len_m(leg3, ledges_w) > b3 + 0.0005:
+						var cut3 := MovementPlanner.trim_polyline_priced(leg3, b3, ledges_w, INCHES_TO_METERS)
 						t3[i] = cut3
 						if not cut3.is_empty():
 							var fin3 := cut3.back() as Vector3
 							p3[i] = Vector3(fin3.x, (p3[i] as Vector3).y, fin3.z)
 				p3 = _finalize_placement(unit, models, positions, p3, allow_contact, charge_target,
-					_gate_disp_caps_m(t3, trail_radii_m, r3, ignores_difficult))
+					_gate_disp_caps_m(t3, trail_radii_m, r3, ignores_difficult, ledges_w))
 				var a3 := _achieved_m(positions, p3)
 				var c3 := _config_coherent_world(models, p3, chain_in)
 				# Lexicographic: coherent beats torn at ANY displacement; within a class more distance wins.
@@ -6319,14 +6320,14 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 					var b4 := granted_reach * INCHES_TO_METERS
 					for i in range(mini(t4.size(), p4.size())):
 						var leg4 := t4[i] as Array
-						if MovementPlanner.polyline_length(leg4) > b4 + 0.0005:
-							var cut4 := MovementPlanner.trim_polyline(leg4, b4)
+						if _priced_len_m(leg4, ledges_w) > b4 + 0.0005:
+							var cut4 := MovementPlanner.trim_polyline_priced(leg4, b4, ledges_w, INCHES_TO_METERS)
 							t4[i] = cut4
 							if not cut4.is_empty():
 								var fin4 := cut4.back() as Vector3
 								p4[i] = Vector3(fin4.x, (p4[i] as Vector3).y, fin4.z)
 					p4 = _finalize_placement(unit, models, positions, p4, allow_contact, charge_target,
-						_gate_disp_caps_m(t4, trail_radii_m, granted_reach, ignores_difficult))
+						_gate_disp_caps_m(t4, trail_radii_m, granted_reach, ignores_difficult, ledges_w))
 					var a4 := _achieved_m(positions, p4)
 					var c4 := _config_coherent_world(models, p4, chain_in)
 					# Lexicographic: a coherent sidestep beats a torn one at any distance; within a
@@ -6386,7 +6387,7 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 	# The decision-log / label arc is the PLANNED within-budget move (pre-gate route), so the move-band audit
 	# and the "X / Y" label stay truthful; the gate's physical un-stack nudge is not counted as extra distance.
 	var longest_arc_m := 0.0
-	var ledges_w := _ledges_world(unit)   # the climb is movement spent: it joins the arc (GF p.11)
+	# ledges_w (above): the climb is movement spent, so it joins the arc (GF p.11)
 	last_move_climb_in = 0.0
 	for t in trails:
 		var climb_in := _trail_climb_in(t as Array, ledges_w) if not ledges_w.is_empty() else 0.0
@@ -7930,7 +7931,8 @@ static func _xz_dist_m(a: Vector3, b: Vector3) -> float:
 ## (p.11 — the compound class: 6"-capped route + multi-inch gate pull); slack = budget − walked arc +
 ## the packed-contact epsilon (full-band movers in a deploy-packed line always need a mm-scale
 ## un-stack — the trip-band lesson: never route every packed advance into the shorten/ladder).
-func _gate_disp_caps_m(trails: Array, trail_radii_m: Array, reach_in: float, ignores_difficult: bool) -> Array:
+func _gate_disp_caps_m(trails: Array, trail_radii_m: Array, reach_in: float, ignores_difficult: bool,
+		ledges_w: Array = []) -> Array:
 	var caps: Array = []
 	for i in range(trails.size()):
 		var leg := trails[i] as Array
@@ -7938,7 +7940,7 @@ func _gate_disp_caps_m(trails: Array, trail_radii_m: Array, reach_in: float, ign
 		if not ignores_difficult \
 				and _trails_cross_difficult([leg], [float(trail_radii_m[i]) if i < trail_radii_m.size() else 0.0]):
 			budget_in = minf(budget_in, DIFFICULT_MOVE_CAP_IN)
-		var walked_in: float = MovementPlanner.polyline_length(leg) / INCHES_TO_METERS
+		var walked_in: float = _priced_len_m(leg, ledges_w) / INCHES_TO_METERS   # a climb paid is walked (p.11)
 		caps.append((maxf(0.0, budget_in - walked_in) + GATE_SLACK_EPS_IN) * INCHES_TO_METERS)
 	return caps
 
@@ -8704,6 +8706,12 @@ static func _trail_climb_in(trail: Array, ledges: Array) -> float:
 		var q: Vector3 = trail[i]
 		total += MovementPlanner.ledge_cost(Vector2(p.x, p.z), Vector2(q.x, q.z), opts)
 	return total
+
+
+## Movement a world-space trail spends (metres): its ground length plus the climb it pays over `ledges` (GF p.11).
+static func _priced_len_m(trail: Array, ledges: Array) -> float:
+	var flat := MovementPlanner.polyline_length(trail)
+	return flat if ledges.is_empty() else flat + _trail_climb_in(trail, ledges) * INCHES_TO_METERS
 
 
 ## The objective the activating unit should head for — the nearest marker this AI side does NOT control,
@@ -11011,12 +11019,13 @@ func _charge_path_probe_impl(unit: GameUnit, target: GameUnit, band_in: float) -
 			false, avoid_dangerous, trails, target, true)
 	result["effective_band_in"] = effective_band
 
-	# Match _execute_move's p.7 distance trim before the hard placement gate.
+	# Match _execute_move's p.7 distance trim (climb priced, p.11) before the hard placement gate.
 	var budget_m := effective_band * INCHES_TO_METERS
+	var ledges_w := _ledges_world(unit)
 	for i in range(mini(trails.size(), planned.size())):
 		var trail := trails[i] as Array
-		if MovementPlanner.polyline_length(trail) > budget_m + 0.0005:
-			var trimmed := MovementPlanner.trim_polyline(trail, budget_m)
+		if _priced_len_m(trail, ledges_w) > budget_m + 0.0005:
+			var trimmed := MovementPlanner.trim_polyline_priced(trail, budget_m, ledges_w, INCHES_TO_METERS)
 			trails[i] = trimmed
 			if not trimmed.is_empty():
 				var endpoint := trimmed.back() as Vector3
