@@ -121,8 +121,8 @@ What the code actually does today:
 ### Play (Windows / Linux / macOS)
 
 Download the latest build from the [**Releases**](../../releases) page, unzip and run it
-(`Niemandsland.exe` on Windows; the `.x86_64` next to its `.pck` on Linux; `Niemandsland.app` on
-macOS) — no install. The start menu shows the version; the first log line is
+(`Niemandsland.exe` on Windows, with `Niemandsland.pck` and `nml_core_godot.dll` in the same folder; the
+`.x86_64` next to its `.pck` on Linux; `Niemandsland.app` on macOS) — no install. The start menu shows the version; the first log line is
 `[Boot] Niemandsland <version> build <hash>`.
 
 > **macOS first launch:** the build is ad-hoc signed but **not notarized** (no Apple Developer

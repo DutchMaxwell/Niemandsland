@@ -40,8 +40,9 @@ Everything is best-effort: offline, rate-limited, or malformed responses emit
 
 ## Windows updates and the rules core
 
-The Windows exports carry the Rust rules core (`nml_core_godot.dll`) next to `Niemandsland.exe`.
-Both files are locked while the game runs, so `SelfUpdater` writes a small helper script that waits
+The Windows exports carry the Rust rules core (`nml_core_godot.dll`) next to `Niemandsland.exe`,
+and since `0.3.15.0` the game data as `Niemandsland.pck` beside them. The executable and the core
+file are locked while the game runs, so `SelfUpdater` writes a small helper script that waits
 for the game to exit (at most about 30 s), backs up and replaces **every** top-level file of the
 release, and restores all backups if any copy fails — never a half-swapped install
 (`SelfUpdater.windows_helper_script`, `scripts/self_updater.gd:173-208`).
@@ -55,7 +56,9 @@ running one does it copy `nml_core_godot.dll` next to the game and restart once
 written before the restart, so a start that is still without the core gives up: the tree plays and
 the game never restarts again. A failed copy, or no matching staged release, also restarts nothing. Every outcome prints exactly one log line starting with `core self-heal:`; after a successful
 heal it reads `core self-heal: NmlCore loaded after the self-heal relaunch`. Updates that start from
-`0.3.13.0` or later install every file, and the self-heal stays silent.
+`0.3.13.0` or later install every file, and the self-heal stays silent. The self-heal restores only
+the core file: an in-game update from `0.3.12.0` or older to `0.3.15.0` or newer also lacks
+`Niemandsland.pck`, so those players download the zip by hand once.
 
 ## Why the list endpoint (not `/releases/latest`)
 

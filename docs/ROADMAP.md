@@ -31,10 +31,6 @@ planned and where ideas go. For what already works see
   inches, melee reaches only 4" up/down, coherency's 3" allowance is real elevation, the player can
   pick a ruin floor) shipped; Phase B2 lets the AI movement planner climb pieces up to 3"; Phase C ports skirmish jump/fall (GFF p.14/p.55); Phase D lets the AI value elevated
   firing spots by sight gain only. _L_
-- **NACHTMAHR difficulty ladder (NML-1018) — on `main`, unreleased.** Four selectable grades
-  (Dämmerung, Zwielicht, Finsternis, Albtraum) with a picker in the solo panel; Albtraum, the default, is
-  the Erlkönig-driven opponent ([#1126](../../../pull/1126), [#1127](../../../pull/1127), 2026-09-26).
-  Ships with the next tagged release. _M_
 - **Guided tutorial — course expanded in `0.3.10.0-alpha`.** Event-gated guided play on the real table
   (coach-mark spotlight overlay; steps advance on real signals, never a "Next" button). The course now
   runs **64 steps across 11 chapters**: camera & table · selecting · moving/rotating/arranging ·
@@ -42,9 +38,9 @@ planned and where ideas go. For what already works see
   a real army import · table & casual terrain · the competitive map-layout editor · movement & trails —
   with a bundled offline board (`assets/tutorial/tutorial_board.nml`, no Army Forge dependency), the
   two-question self-assessment, and per-lesson persistence + resume/replay chapter picker
-  (`user://tutorial.cfg`). **Remaining:** it teaches the *tools*, not yet the *game* — a rules/solo track
-  (activation, shooting, melee, morale, objectives against NACHTMAHR), context first-time tips, and the
-  MP guest toast track are still open. _M_
+  (`user://tutorial.cfg`). The rules/solo track (activation, shooting, melee, morale, objectives, a spell
+  lesson and a finale against NACHTMAHR) shipped in `0.3.14.0-alpha` as new Game School chapters.
+  **Remaining:** context first-time tips and the MP guest toast track are still open. _M_
 
 ## 📋 Next (post-Alpha — Beta + alpha-feedback driven)
 
@@ -217,6 +213,33 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
 ## ✅ Recently shipped
 
 See [`CHANGELOG.md`](../CHANGELOG.md).
+
+**`0.3.15.0-alpha` (2026-11-11):** **Grimdark Future and Age of Fantasy play OnePageRules rules 3.6.**
+The game, the rules automation, the Game School and NACHTMAHR all follow it; Firefight, Skirmish and
+Regiments stay on rules 3.5.1 for now.
+**Rules**: a 3.6 Army Forge book imports silently and an older 3.5 book still imports with a warning
+([#1930](../../../pull/1930), [#1931](../../../pull/1931)); the rules version shows next to the game version ([#1999](../../../pull/1999)); the renamed and reworded special rules,
+movement and deployment, terrain (Ruins are Unstable, one Dangerous terrain test per joined unit),
+charges and melee, shooting, defence, morale and spells follow 3.6 — the CHANGELOG lists them all; a
+joined hero plays as the unit its host leaves behind, and "most models" rules read the living models;
+every rule the game applies is named in the battle log as the book names it. **NACHTMAHR**: plays rules
+3.6 from its own 3.6 pre-built lists ([#1951](../../../pull/1951)), and its damage, morale, movement and joined-hero estimates
+match what the table rolls. **Multiplayer**: an online room keeps to one rules version, and a refused
+save or join says why on screen for 15 seconds ([#1939](../../../pull/1939), [#1990](../../../pull/1990), [#2579](../../../pull/2579)). **Game School**: the lessons show the rules
+version and teach the 3.6 Dangerous terrain, rout and ruin rules ([#1938](../../../pull/1938), [#2045](../../../pull/2045)). **UI**: models turn toward
+their direction of travel while they glide, and NACHTMAHR's miniatures face the enemy after deployment
+and moves ([#1910](../../../pull/1910), [#1919](../../../pull/1919)). **Models**: weapons renamed in the 3.6 books keep their models for the Saurians,
+Mummified Undead, Havoc Masters and the Ratmen's Rat Ogres ([#1925](../../../pull/1925)–[#1928](../../../pull/1928)). **Fixes**: Lacerate no longer
+switches off Regeneration ([#1911](../../../pull/1911), [#1921](../../../pull/1921)); a volley at the other player's unit lets that player roll the saves
+([#1828](../../../pull/1828), [#1905](../../../pull/1905)); wounds that leave a unit at half strength trigger its morale test even when no model falls
+([#1912](../../../pull/1912)). **Windows**: the game data ships as its own `Niemandsland.pck` next to the executable ([#1906](../../../pull/1906)). **Still off:** Automodus (Charge / Advance & Shoot / Rush) stays switched off while its preview and
+target selection are reworked; the groundwork is merged ([known issues](KNOWN_ISSUES.md)).
+
+**`0.3.14.0-alpha` (2026-10-28):** combat effects at the table, rules automation for two human players
+(also online), four selectable solo difficulty levels — Dämmerung, Zwielicht, Finsternis and Albtraum, the
+default ([#1126](../../../pull/1126), [#1127](../../../pull/1127)) — eight more missions, a rebuilt Map
+Layout editor, a dark-panel look across the game, new graphics for every biome, a longer Game School and a
+stronger NACHTMAHR; see the CHANGELOG.
 
 **`0.3.13.1-alpha` (2026-09-25):** save/load and multiplayer fixes from a code review (a saved Solo game keeps
 its AI opponent, formed regiments survive a save, Load Game is host-only in a session); see the CHANGELOG.
