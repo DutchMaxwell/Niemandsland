@@ -6,6 +6,46 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 
 ## [Unreleased]
 
+### Changed — rules corrections
+- **A Crossing Strike volley shreds like any shooting attack.** The attack on the unit a Crossing
+  Strike bearer moved through counts as shooting, so a bearer with a unit-level Shred rule (Shred
+  when Shooting and its aliases) now deals the extra wound on unmodified Defense 1s, and the battle
+  log names the rule. (#2612)
+- **The Protection Feat rolls once per game.** The first volley that rolls it spends it and the
+  battle log says so; a later volley no longer rolls it again and the log says why. (#2613)
+- **Enhanced Warbound, Enhanced Destroyer and Enhanced Infected pay at any distance.** On a shot
+  and on a charge their unmodified 1s to block deal the extra wound whatever the distance, and they
+  no longer widen the window to 1-2 as the old 3.5 Boost did. On a strike-back they pay nothing, like
+  the base forms, which keep their distance condition. The battle log names the Enhanced form. (#2615)
+
+### Changed — NACHTMAHR (the AI opponent)
+- **NACHTMAHR pays for every climb.** A unit of several models that crossed a container could spend
+  more than its move once ground and climb were added up (an 8" Rush measured 9.6"). Every step that
+  trims or re-routes its move now counts the climb, so its units climb less often and stop short of a
+  ledge they cannot pay for. (#2608)
+- **Its reason lines cite the rules version, not a page number.** Lines that named a fixed rules
+  version and page (and "Grimdark Future" even in Firefight, Skirmish and Regiments games) now cite
+  the unit's own system and rules version. So do the charge and Hold-only refusals and the climb note
+  on a move line in the battle log, and the Caster lines say "within 18"". (#2607, #2616)
+
+### Changed — multiplayer
+- **The relay counts each player's own address.** Behind the hosting proxy the limit of 10
+  connections per address applied to all players together. The relay now reads the client address the
+  proxy states, and only when that proxy is there, so a relay reached directly cannot be told a false
+  address; it also runs as an unprivileged user. Nothing new is logged or stored. (#2603)
+- **A connection that is in no room gets a slower pace for control messages**: 20 per second
+  (create, join, list, heartbeat), then it is closed. A game client sends about one per second there,
+  so players do not notice it, and army sync and all traffic inside a room keep the general limit.
+  (#2604)
+
+### Internal
+- CI and test groundwork for running the tests against the Rust core: a new job "All required
+  checks" passes when every gating job is green or skipped, the core build action takes two inputs
+  (debug-symbols, cache-shared-key) with defaults that change no caller, and the core-reload test
+  for the fallback without the core switches the core off itself. (#2605, #2610, #2611)
+- Each fix above ships with a test that fails without it; the old Enhanced Destroyer test now pins
+  the 3.5 reading at rules epoch 72. (#2607, #2608, #2612, #2613, #2615, #2616)
+
 ## [0.3.15.0-alpha] — 2026-11-11
 
 The big change: Grimdark Future and Age of Fantasy now play OnePageRules
