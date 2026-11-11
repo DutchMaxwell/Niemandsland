@@ -203,8 +203,8 @@ invocation and the gdUnit4 test runner), see [`docs/DEVELOPMENT.md`](docs/DEVELO
 ```
 Niemandsland/
 ├── scenes/            # startup_menu.tscn (main), main.tscn, dialogs
-├── core/              # Rust rules core (Cargo workspace: nml-core, the optional
-│                      # Godot extension nml-core-godot, Python bindings nml-core-py)
+├── core/              # Rust rules core (Cargo workspace: nml-core, the Godot
+│                      # extension nml-core-godot, Python bindings nml-core-py)
 ├── scripts/           # ~200 GDScript files, incl. scripts/solo/ (see docs/ARCHITECTURE.md)
 ├── tools/             # developer and CI tools
 ├── addons/            # gdUnit4 (tests)

@@ -109,6 +109,7 @@ func _ready() -> void:
 			_settings.lighting_controller = controller)
 	_start_menu_music()
 	_maybe_check_for_updates()
+	_maybe_warn_core_missing()
 	if get_tree().current_scene == self:
 		(continue_btn if continue_btn.visible else start_battle_btn).grab_focus.call_deferred()
 	if ProjectSettings.get_setting("niemandsland/open_game_school", false):
@@ -471,6 +472,32 @@ func _maybe_check_for_updates() -> void:
 	if not UpdateChecker.update_available.is_connected(_on_update_available):
 		UpdateChecker.update_available.connect(_on_update_available)
 	UpdateChecker.check_for_updates()
+
+
+## One-core phase 1: an exported build that lost its rules core says so once per start. Warn only
+## (the game stays playable on the decision tree). Same live-scene guard as the update check, so
+## tests stay silent. _maybe_show_whats_new waits for any visible child Window, so the two never overlap.
+func _maybe_warn_core_missing() -> void:
+	if get_tree().current_scene != self:
+		return
+	if not CoreLoadNotice.should_show(OS.has_feature("template"), ClassDB.class_exists("NmlCore")):
+		return
+	if is_instance_valid(_whats_new) and _whats_new.visible:
+		await _whats_new.visibility_changed
+		await get_tree().process_frame  # Native modal ownership clears after the hide signal.
+	_show_core_missing_dialog()
+
+
+func _show_core_missing_dialog() -> AcceptDialog:
+	var dialog := AcceptDialog.new()
+	dialog.title = CoreLoadNotice.TITLE
+	dialog.dialog_text = CoreLoadNotice.TEXT
+	MenuDialog.style(dialog)
+	dialog.confirmed.connect(dialog.queue_free)
+	dialog.canceled.connect(dialog.queue_free)
+	add_child(dialog)
+	dialog.popup_centered()
+	return dialog
 
 
 func _on_update_available(latest_version: String, release_url: String, release_notes: String) -> void:

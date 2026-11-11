@@ -214,3 +214,18 @@ func test_grassland_card_hands_main_a_table_biome_id() -> void:
 	ProjectSettings.set_setting("niemandsland/pending_table_setup",previous)
 	assert_str(setup.biome).is_equal("temperate_grassland")
 	assert_bool(preload("res://scripts/table.gd").BIOMES.has(setup.biome)).is_true()
+
+func test_core_missing_dialog_shows_the_notice_and_frees_itself() -> void:
+	var dialog: AcceptDialog = _menu._show_core_missing_dialog()
+	assert_bool(dialog.get_parent() == _menu).is_true()
+	assert_bool(dialog.visible).is_true()
+	assert_str(dialog.title).is_equal(CoreLoadNotice.TITLE)
+	assert_str(dialog.dialog_text).is_equal(CoreLoadNotice.TEXT)
+	dialog.confirmed.emit()
+	assert_bool(dialog.is_queued_for_deletion()).is_true()
+
+func test_core_missing_warning_stays_silent_outside_the_live_scene() -> void:
+	var before := _menu.get_children().filter(func(n: Node) -> bool: return n is AcceptDialog).size()
+	_menu._maybe_warn_core_missing()
+	var after := _menu.get_children().filter(func(n: Node) -> bool: return n is AcceptDialog).size()
+	assert_int(after).is_equal(before)
