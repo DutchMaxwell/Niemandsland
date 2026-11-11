@@ -478,7 +478,7 @@ jobs:
       - name: Smoke-run the exported Linux build
         run: |
           set -o pipefail
-          timeout 30 build/linux/$EXPORT_NAME.x86_64 --headless > /tmp/exported_run.log 2>&1 || true
+          timeout 30 build/linux/$EXPORT_NAME.x86_64 --headless --quit-after 300 > /tmp/exported_run.log 2>&1 || true
           if grep -iE "GDExtension|SCRIPT ERROR|Parse Error" /tmp/exported_run.log; then
             echo "::error::the exported build reported an extension/script/parse error"; exit 1
           fi
@@ -678,7 +678,7 @@ jobs:
         run: |
           set -o pipefail
           APP=$(find build/macos/bundle -maxdepth 1 -name '*.app' | head -1)
-          perl -e 'alarm shift; exec @ARGV' 30 "$APP/Contents/MacOS/$EXPORT_NAME" --headless > build/logs/exported_run.log 2>&1 || true
+          perl -e 'alarm shift; exec @ARGV' 30 "$APP/Contents/MacOS/$EXPORT_NAME" --headless --quit-after 300 > build/logs/exported_run.log 2>&1 || true
           cat build/logs/exported_run.log
           if grep -iE "GDExtension|SCRIPT ERROR|Parse Error" build/logs/exported_run.log; then
             echo "::error::the exported build reported an extension/script/parse error"; exit 1
@@ -885,7 +885,7 @@ jobs:
       # load NmlCore (the same two lines export-linux requires).
       - name: Smoke-run the Linux release build - NmlCore loads
         run: |
-          timeout 30 dist/linux/$EXPORT_NAME.x86_64 --headless > /tmp/release_run.log 2>&1 || true
+          timeout 30 dist/linux/$EXPORT_NAME.x86_64 --headless --quit-after 300 > /tmp/release_run.log 2>&1 || true
           for LINE in "Initialize godot-rust" "core: NmlCore loaded"; do
             grep -qF "$LINE" /tmp/release_run.log || {
               grep -F "core: NmlCore" /tmp/release_run.log || true
