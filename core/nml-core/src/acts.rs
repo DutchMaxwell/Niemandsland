@@ -852,7 +852,15 @@ pub const EPOCH_73_V36: u32 = 73;
 /// climb (`CallOpts::climb_cost`, `MoveRules::world_ledges`). Records stamped 73 or below were recorded with the flat
 /// trims and replay byte-exact. Every call site reads THIS constant, not `74`.
 pub const EPOCH_74_CLIMB_COST: u32 = 74;
-pub const CURRENT_RULES_EPOCH: u32 = 74;
+/// The core ports of three table rules repairs that landed in `scripts/main.gd` behind `EPOCH_73_V36` (#2612 Crossing
+/// Strike volley keeps unit-level Shred, #2613 Protection Feat rolls once per game, #2615 Enhanced Shred forms pay on
+/// unmodified 1s at any distance on shots and charges, never on a strike-back). The core gates them HERE so every
+/// record stamped 74 or below, recorded while the core lacked them, replays byte-exact. Introduced inert: the three
+/// ports read this constant in their own PRs. Every call site reads THIS constant, not `75`.
+/// MIRROR HOLD: this PR stays out of `scripts/`; the table already applies all three rules from 73, so
+/// `act_recorder.gd` must stamp 75 (one line plus its `EPOCH_75_TABLE_FIXES` constant) in the same merge sitting.
+pub const EPOCH_75_TABLE_FIXES: u32 = 75;
+pub const CURRENT_RULES_EPOCH: u32 = 75;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -2168,7 +2176,8 @@ pub fn read_acts<R: BufRead>(reader: R, origin: &str) -> Result<ActCorpus, Strin
 mod tests {
     use super::{
         read_act_header, record_rules_epoch, rule_on, MeleeReach, SearchMode, TreeDice, TreeLeaf, CURRENT_RULES_EPOCH, EPOCH_3_TABLE_RULES,
-        EPOCH_4_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES, EPOCH_7_TABLE_RULES,
+        EPOCH_4_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES, EPOCH_7_TABLE_RULES, EPOCH_73_V36,
+        EPOCH_74_CLIMB_COST, EPOCH_75_TABLE_FIXES,
     };
 
     /// The CLASS FIX's one gate (external review 03.09. item 3 / F9):
@@ -2189,7 +2198,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 74, "the live epoch is EPOCH_74_CLIMB_COST");
+        assert_eq!(CURRENT_RULES_EPOCH, 75, "the live epoch is EPOCH_75_TABLE_FIXES");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -2199,12 +2208,23 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":74}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":75}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 74"
+            "a fresh play_game() now stamps the bumped epoch, 75"
         );
+    }
+
+    /// Epoch 75 (core ports of #2612/#2613/#2615): a record stamped 74 keeps every gate of the
+    /// three ports closed, a fresh record at 75 opens them, and the 3.6 wave and the climb cost stay on.
+    #[test]
+    fn epoch_75_gate_is_closed_at_epoch_74_and_open_from_75() {
+        assert!(!rule_on(EPOCH_74_CLIMB_COST, EPOCH_75_TABLE_FIXES), "a record at 74 replays without the 75 ports");
+        assert!(rule_on(EPOCH_75_TABLE_FIXES, EPOCH_75_TABLE_FIXES), "a record at 75 gets the 75 ports");
+        assert!(rule_on(EPOCH_75_TABLE_FIXES, EPOCH_74_CLIMB_COST), "75 keeps the climb cost on");
+        assert!(rule_on(EPOCH_75_TABLE_FIXES, EPOCH_73_V36), "75 keeps every 3.6 rule on");
+        assert!(rule_on(CURRENT_RULES_EPOCH, EPOCH_75_TABLE_FIXES), "a fresh play_game() stamps the 75 ports on");
     }
 
     /// The WAVE 3 GATE's own reservation (05.09.): `EPOCH_6_TABLE_RULES` must

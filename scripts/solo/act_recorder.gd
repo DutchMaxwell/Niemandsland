@@ -195,8 +195,9 @@ const EPOCH_63_MELEE_HEIGHT := 63
 ## and the 29.10.2026 play-test fixes to 72 with EPOCH_72_PLAYTEST_RULES (A1 Lacerate keeps Regeneration,
 ## A2 wounds at half strength test morale, A4 Deadly rolls all X Regeneration dice before the cap),
 ## and the rules 3.6 wave (0.3.15) to 73 with EPOCH_73_V36, the one epoch of the whole wave,
-## and the AI's paid climb (#2608 and its core port) to 74 with EPOCH_74_CLIMB_COST.
-static var rules_epoch: int = 74
+## and the AI's paid climb (#2608 and its core port) to 74 with EPOCH_74_CLIMB_COST,
+## and the core ports of three table repairs (#2612, #2613, #2615) to 75 with EPOCH_75_TABLE_FIXES.
+static var rules_epoch: int = 75
 ## The live activation identity the Ethereal placement band penalty is keyed to (MOR-19b): the
 ## Solo AI advances it once per activation, the Teleport beat stamps the unit's
 ## `teleport_activation` with it, and the band pass prices the -6"/-6" only while the two are
@@ -215,6 +216,9 @@ const EPOCH_73_V36 := 73
 ## The core's frozen `EPOCH_74_CLIMB_COST` (acts.rs): from it the trims after the AI's priced walk pay the climb (GF
 ## p.11, `SoloController.climb_cost_on`, `opts["climb_cost"]`). Records stamped 73 replay with the flat trims.
 const EPOCH_74_CLIMB_COST := 74
+## The core's frozen `EPOCH_75_TABLE_FIXES` (acts.rs): the table applies the three repairs from 73, the core from 75,
+## so a record stamped 75 is the first whose core replay carries them. Nothing in the table gates on it.
+const EPOCH_75_TABLE_FIXES := 75
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000
