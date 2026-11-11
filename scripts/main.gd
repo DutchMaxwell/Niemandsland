@@ -4566,6 +4566,10 @@ func _solo_apply_strafing(unit: GameUnit, human_trails: Array = []) -> void:
 			# (0 on Drop Bombs) does not gate this volley — the unlimited reach the Takedown bonus shot uses.
 			var reach_in: int = 9999 if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
 				else (int(prof.get("range", 0)) if prof.has("range") else 0)
+			# S6 (EPOCH_73_V36): the move-through volley is a shooting attack, so the unit-level Shred family
+			# is stamped like the ordinary volley's; a range-0 weapon (Drop Bombs) reads the facet as shooting.
+			if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+				_solo_stamp_unit_shred(prof, member, maxi(int(prof.get("range", 0)), 1))
 			shots.append({"member": member, "quality": member.get_quality(),
 				"alive": member.get_alive_count(), "max": member.models.size(),
 				"reach": reach_in, "profile": prof})
@@ -4655,15 +4659,7 @@ func _run_ai_shooting(report: Dictionary) -> void:
 			if bool(prof.get("limited", false)) and solo_controller.is_limited_used(member, prof):
 				_solo_log_limited_spent(member, prof)
 				continue
-			# R-1 (A2): remember that the weapon itself prints Shred before the unit grant folds the flag.
-			if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and bool(prof.get("shred", false)):
-				prof["_shred_own"] = true
-			if RulesRegistry.unit_rule_active(member, "Shred") \
-					or _solo_shred_facet_applies(member, base_range):
-				prof["shred"] = true
-				var shred_alias := _solo_shred_facet_name(member, base_range)
-				if not shred_alias.is_empty() and shred_alias != "Shred":
-					prof["_shred_alias"] = shred_alias
+			_solo_stamp_unit_shred(prof, member, base_range)
 			member_profiles.append(prof)
 			# `reach` (target validity + per-model sighting) includes the unit's range bonus, so a Royal
 			# Legion unit shoots targets up to +4" beyond the weapon's printed range.
@@ -9883,7 +9879,9 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 		else:
 			shred_extra = AiCombatMath.shred_bonus_wounds(save_faces, reroll)
 		if shred_extra > 0 and battle_log != null:
-			var shred_name := _solo_shred_facet_name(striker, int(profile.get("range", 0)))
+			var shred_name := str(profile.get("_shred_alias", ""))   # the stamp's own name (a range-0 Crossing Strike volley counts as shooting)
+			if shred_name.is_empty():
+				shred_name = _solo_shred_facet_name(striker, int(profile.get("range", 0)))
 			if shred_name.is_empty():
 				shred_name = "Shred"
 			if boost_low > 1:
@@ -10768,6 +10766,19 @@ static func _solo_shred_group_key(rule_name: String) -> String:
 				n = n.left(n.length() - suffix.length())
 				trimmed = true
 	return n
+
+
+## The unit-level Shred stamp of one weapon profile of `member` (the ordinary volley and the Crossing Strike
+## volley share it): R-1 (A2) remembers a weapon's own printed Shred, then a unit-level rule of the Shred family
+## marks the profile and names its alias. `facet_range` is the reach the melee/shooting gate reads (0 = melee).
+func _solo_stamp_unit_shred(prof: Dictionary, member: GameUnit, facet_range: int) -> void:
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and bool(prof.get("shred", false)):
+		prof["_shred_own"] = true
+	if RulesRegistry.unit_rule_active(member, "Shred") or _solo_shred_facet_applies(member, facet_range):
+		prof["shred"] = true
+		var shred_alias := _solo_shred_facet_name(member, facet_range)
+		if not shred_alias.is_empty() and shred_alias != "Shred":
+			prof["_shred_alias"] = shred_alias
 
 
 func _solo_shred_facet_name(member: GameUnit, profile_range: int) -> String:
