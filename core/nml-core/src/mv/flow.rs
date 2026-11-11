@@ -41,7 +41,10 @@
 
 use std::collections::VecDeque;
 
-use super::cost::{empty_cells, step_blocked, CellSet, Grid, Ledge, StepOpts, Wall, Zone, LEDGE_CLIMB_MAX_IN};
+use super::cost::{
+    empty_cells, ledge_cost, step_blocked, trim_polyline_priced, CellSet, Grid, Ledge, StepOpts, Wall, Zone,
+    LEDGE_CLIMB_MAX_IN,
+};
 use super::geom2::{
     add, distance_squared_to, distance_to, div, length, mul, polyline_length, sub, V2,
 };
@@ -485,7 +488,28 @@ pub fn plan_sequential_flow(
             }
         }
     }
+    // GF p.11: the coherency pull and the untangle re-route add legs after the priced walk; none may climb unpaid.
+    trim_unpaid_climbs(&mut out.trails, &mut out.result, &soft_ledges, allowance);
     out
+}
+
+/// `MovementPlanner._trim_unpaid_climbs` (GF p.11, a climb is movement spent): a trail that crosses a climbable ledge
+/// and costs more than `allowance` as flat length + climb is cut back by `trim_polyline_priced`, and its model's
+/// position follows the cut. Trails that climb nothing are left exactly as they are.
+pub fn trim_unpaid_climbs(trails: &mut [Vec<V2>], positions: &mut [V2], ledges: &[Ledge], allowance: f64) {
+    let soft: Vec<Ledge> = ledges.iter().copied().filter(|l| l.dy_in <= LEDGE_CLIMB_MAX_IN + EPS).collect();
+    if soft.is_empty() {
+        return;
+    }
+    for i in 0..trails.len().min(positions.len()) {
+        let climb: f64 = trails[i].windows(2).map(|w| ledge_cost(w[0], w[1], &soft)).sum();
+        if climb > 0.0 && polyline_length(&trails[i]) + climb > allowance + EPS {
+            trails[i] = trim_polyline_priced(&trails[i], allowance, &soft, 1.0);
+            if let Some(end) = trails[i].last() {
+                positions[i] = *end;
+            }
+        }
+    }
 }
 
 /// `MovementPlanner.untangle_endpoints` — movement_planner.gd:1181. Mutates

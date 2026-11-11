@@ -15,7 +15,7 @@
 use std::collections::{HashMap, HashSet};
 
 use super::geom2::{
-    distance_to, lerp, point_seg_distance, seg_seg_distance_apart, segments_cross, V2,
+    distance_to, lerp, point_seg_distance, seg_seg_distance_apart, segments_cross, trim_polyline, V2,
 };
 use super::{
     is_dangerous, is_difficult, is_unstable, CELL_IN, DANGEROUS_COST_MULT, DIFFICULT_COST_MULT,
@@ -128,6 +128,47 @@ pub fn ledge_crossings(a: V2, b: V2, ledges: &[Ledge]) -> Vec<(f64, f64)> {
 /// `MovementPlanner.ledge_cost` — the climb inches the straight leg a→b pays.
 pub fn ledge_cost(a: V2, b: V2, ledges: &[Ledge]) -> f64 {
     ledge_crossings(a, b, ledges).iter().map(|c| c.1).sum()
+}
+
+/// `MovementPlanner.trim_polyline_priced` (GF p.11: a climb is movement spent, up and down alike): each leg pays its
+/// length plus the `dy_in` of every ledge it crosses, and the polyline ends where `max_len` runs out or `LEDGE_STOP_IN`
+/// short of a ledge it can no longer pay. `ledges` share the points' frame; `climb_scale` turns `dy_in` into the points'
+/// length unit (1.0 for inches). A polyline that crosses no ledge trims exactly like `trim_polyline`.
+pub fn trim_polyline_priced(points: &[V2], max_len: f64, ledges: &[Ledge], climb_scale: f64) -> Vec<V2> {
+    if ledges.is_empty() || points.len() <= 1 || max_len <= 0.0 {
+        return trim_polyline(points, max_len);
+    }
+    let mut out = vec![points[0]];
+    let mut spent = 0.0f64;
+    for i in 1..points.len() {
+        let leg = distance_to(points[i - 1], points[i]);
+        if leg <= EPS {
+            continue;
+        }
+        let crossings = ledge_crossings(points[i - 1], points[i], ledges);
+        let climb: f64 = crossings.iter().map(|c| c.1 * climb_scale).sum();
+        if spent + leg + climb <= max_len + EPS {
+            out.push(points[i]);
+            spent += leg + climb;
+            continue;
+        }
+        let mut paid = 0.0f64;
+        let mut stop_t = (max_len - spent) / leg;
+        for &(t, dy) in &crossings {
+            let dy = dy * climb_scale;
+            if t * leg + paid + dy > max_len - spent + EPS {
+                stop_t = ((max_len - spent - paid) / leg).min(t - LEDGE_STOP_IN * climb_scale / leg);
+                break;
+            }
+            paid += dy;
+            stop_t = (max_len - spent - paid) / leg;
+        }
+        if stop_t > EPS {
+            out.push(lerp(points[i - 1], points[i], stop_t.min(1.0)));
+        }
+        break;
+    }
+    out
 }
 
 /// The subset of `opts` the step/cost layer reads. Everything else in the
