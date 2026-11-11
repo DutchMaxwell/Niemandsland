@@ -7072,11 +7072,11 @@ static func is_traversal(unit: GameUnit) -> bool:
 	return unit != null and RulesRegistry.unit_rule_active(unit, "Traversal")
 
 
-## Flying (GF/AoF Core Rules 3.6.0 p.2) may move through units: from EPOCH_73_V36 the AI's route ignores
+## Flying (GF/AoF Core Rules 3.6.0 p.2) may move through units: from EPOCH_75_TABLE_FIXES the AI's route ignores
 ## other units' spacing zones like Traversal (the rest position keeps the 1" spacing). Below it, replays
 ## keep the old walker routing.
 static func flies_through_units(unit: GameUnit) -> bool:
-	return unit != null and unit.has_special_rule("Flying") and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
+	return unit != null and unit.has_special_rule("Flying") and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_75_TABLE_FIXES
 
 
 ## Range penalty (inches) a shooter suffers when targeting `target` — the Aircraft rule reduces every

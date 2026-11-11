@@ -1,7 +1,7 @@
 extends GdUnitTestSuite
 ## Flying (GF/AoF Core Rules 3.6.0 p.2): the unit may move through other units. The AI planner used to
 ## route a Flying unit around every other unit's spacing zone like a walker, so a wall of bases in its
-## lane stopped it short. From EPOCH_73_V36 the zones only bind where it ends (like Traversal).
+## lane stopped it short. From EPOCH_75_TABLE_FIXES the zones only bind where it ends (like Traversal).
 
 const IN_M := 0.0254
 
@@ -62,5 +62,5 @@ func test_control_a_walker_stays_behind_the_wall() -> void:
 
 
 func test_at_epoch_72_a_flying_unit_stays_behind_the_wall() -> void:
-	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36 - 1
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_75_TABLE_FIXES - 1
 	assert_float(_plan_end_x(["Flying"])).is_less(2.0)
