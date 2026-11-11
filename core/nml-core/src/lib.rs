@@ -38,6 +38,7 @@ pub mod score;
 pub mod sight;
 pub mod sim;
 pub mod spell;
+pub mod step;
 pub mod state;
 pub mod terrain;
 pub mod tokens;
