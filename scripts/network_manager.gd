@@ -98,6 +98,12 @@ const SYNCABLE_UNIT_PROPERTIES: PackedStringArray = [
 	"spell_range_mod",  # int — the NET spell shooting-range delta every volley/plan site reads.
 	"speed_feat_used_speed_feat",       # D22 (NML-984): a spent once-per-game Speed Feat (bool) —
 	"speed_feat_used_speed_feat_aura",  # the other table's wheel must not offer it again.
+	# MP1: the other once-per-game latches (bool), one exact key per registry rule that carries
+	# `uses_per_game` - SoloController.shot_feat_flag / main._solo_ignore_feat_flag build them from
+	# the rule name, so a NEW once-per-game rule of these primitives needs its key added here.
+	"shot_feat_used_precision_feat",     # Shot Modifier (AoF: Ghostly / Ossified Undead)
+	"shot_feat_used_piercing_feat",      # Piercing Assault (AoF: Ogres)
+	"ignore_feat_used_protection_feat",  # Regeneration family (Saurians, Robot Legions, ...)
 ]
 
 var peer: ENetMultiplayerPeer = null

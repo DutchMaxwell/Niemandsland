@@ -45,6 +45,13 @@ LINK_CUT_S = 10.0
 LINK_CUT_WAIT_S = 40.0
 ## 29(b): how long the guest's link stays dead after the host is already back.
 REJOIN_RACE_GUEST_DELAY_S = 12.0
+## MP1: the once-per-game Feat bearers of the feat-marks fixture -> the latch each one carries.
+FEAT_MARKS = {
+    "mp2_pierce_h": "shot_feat_used_piercing_feat",
+    "mp2_pierce_g": "shot_feat_used_piercing_feat",
+    "mp2_prot_h": "ignore_feat_used_protection_feat",
+    "mp2_prot_g": "ignore_feat_used_protection_feat",
+}
 
 
 class HarnessFailure(RuntimeError):
@@ -309,6 +316,7 @@ class Run:
         self.rejoin_race = False  # 29(b): both links are cut at once, the host returns first
         self.guest_owed_cut = False  # #1882: the host waits on the guest, then cuts its own link
         self.guest_answers_during_cut = False  # #1882 part 2: the answer is given while the host is away
+        self.feat_marks = False  # MP1: once-per-game Feat latches reach both tables and survive a guest rejoin
         self.proxy: StallProxy | None = None
         self.proxies: dict[str, StallProxy] = {}
         self.seq = {"host": 0, "guest": 0}
@@ -402,6 +410,8 @@ class Run:
             cmd += ["--code", room]
         if self.rules_online:
             cmd += ["--rules-online"]
+        if self.feat_marks:
+            cmd += ["--feat-marks"]
         if self.leave:
             cmd += ["--leave"]
         client = Client(role, cmd, env, self.run_dir)
@@ -541,6 +551,9 @@ class Run:
             return
         if self.guest_owed_cut:
             self.guest_owed_cut_scenario()
+            return
+        if self.feat_marks:
+            self.feat_marks_scenario()
             return
         self.command_both("setup")
         states = self.wait_condition(
@@ -1059,6 +1072,50 @@ class Run:
         print(f"[mp2] PASS rejoin-race: guest seated on slot 2 after {elapsed:.1f}s, "
               f"events host {events['host']} guest {events['guest']}")
 
+    def _feat_marks_missing(self, states: dict[str, dict]) -> list[str]:
+        """Every (peer, bearer) whose once-per-game latch is not spent on that peer's table."""
+        return [f"{role}:{unit}" for role in ("host", "guest") for unit, flag in FEAT_MARKS.items()
+                if self._unit(states, role, unit).get("feat_marks", {}).get(flag) is not True]
+
+    def feat_marks_scenario(self) -> None:
+        """MP1: a once-per-game Feat spent on one table is spent on BOTH, and a guest rejoin keeps a
+        guest-side spend (the rejoin rebuilds the guest from the host's copy). Each side spends its own
+        Piercing Feat through the production spend and resolves wounds on the other side's Protection
+        Feat bearer (the owner rolls over the relay)."""
+        self.command_both("setup")
+        states = self.wait_condition(
+            "feat fixture on both peers", lambda s: all(v.get("fixture_ready") for v in s.values()))
+        if len(self._feat_marks_missing(states)) != 2 * len(FEAT_MARKS):
+            raise HarnessFailure("a latch is spent before any spend: " + repr(states["host"].get("units")))
+        self.command("host", "spend_shot_feat", {"unit": "mp2_pierce_h"})
+        self.command("guest", "spend_shot_feat", {"unit": "mp2_pierce_g"})
+        for role, unit in (("host", "mp2_prot_g"), ("guest", "mp2_prot_h")):
+            self.command(role, "protect_roll", {"unit": unit, "wounds": 3})
+            self.wait_condition(f"{role} resolved {unit}'s ignore roll",
+                                lambda s, r=role, u=unit: u in s[r].get("protect_done", {}), timeout=60)
+        states = self.wait_condition(
+            "every spent latch on both tables", lambda s: not self._feat_marks_missing(s), timeout=20,
+            diagnostic=lambda s: "not spent on: " + repr(self._feat_marks_missing(s)))
+        self.checkpoint("feat-marks-live", states)
+        room = states["host"]["room"]
+        self.command("guest", "close_window")
+        old = self.clients["guest"]
+        old.proc.wait(timeout=15)
+        for suffix in (".state.json", ".ack.json", ".command.json"):
+            (self.run_dir / f"guest{suffix}").unlink(missing_ok=True)
+        old.close_log()
+        self.seq["guest"] = 0
+        self._start_client("guest", self.relay_url, str(room))
+        states = self.wait_condition(
+            "the rejoined guest holds every spent latch",
+            lambda s: s["guest"].get("session_ready") and s["host"].get("occupied_slots") == [1, 2]
+            and all(u in s["guest"].get("units", {}) for u in FEAT_MARKS) and not self._feat_marks_missing(s),
+            timeout=90,
+            diagnostic=lambda s: "not spent on: " + repr(self._feat_marks_missing(s)))
+        # The marks are the claim (the predicate above); the rebuilt synthetic fixture's second model has no
+        # live node on the guest, so the whole-unit compare is off here.
+        self.checkpoint("feat-marks-after-guest-rejoin", states, compare_units=False)
+
     def _start_question_scenario(self) -> None:
         """Bug 6c: the host is asked ONCE whether to play with rules automation when the second player
         sits down. Yes -> the guest gets the confirm card -> both Automatic; Not now -> both Manual and
@@ -1331,6 +1388,11 @@ def parse_args() -> argparse.Namespace:
              "take the guest's stored answer instead of waiting out the 120 s owner bound.",
     )
     parser.add_argument(
+        "--feat-marks-only",
+        action="store_true",
+        help="Run only MP1: once-per-game Feat latches on both tables and across a guest rejoin.",
+    )
+    parser.add_argument(
         "--rejoin-race",
         action="store_true",
         help="Run only 29(b): both links are cut at once, the host returns first, the guest must stay seated.",
@@ -1359,7 +1421,7 @@ def main() -> int:
     def run_once(run_dir: Path, rules_online: bool, ref: list[dict] | None, leave: str = "",
                  silence: str = "", outage: bool = False, link_cut: bool = False,
                  rejoin_race: bool = False, guest_owed_cut: bool = False,
-                 guest_answers_during_cut: bool = False) -> list[dict]:
+                 guest_answers_during_cut: bool = False, feat_marks: bool = False) -> list[dict]:
         run_dir.mkdir(parents=True, exist_ok=False)
         run = Run(args, run_dir)
         run.rules_online = rules_online
@@ -1370,6 +1432,7 @@ def main() -> int:
         run.rejoin_race = rejoin_race
         run.guest_owed_cut = guest_owed_cut
         run.guest_answers_during_cut = guest_answers_during_cut
+        run.feat_marks = feat_marks
         try:
             print(f"[mp2] run {run_dir.name}: {run_dir}")
             run.start()
@@ -1391,6 +1454,10 @@ def main() -> int:
         if args.link_cut_only:
             run_once(root / "link-cut-01", False, None, link_cut=True)
             print("[mp2] RESULT PASS: link cut")
+            return 0
+        if args.feat_marks_only:
+            run_once(root / "feat-marks-01", False, None, feat_marks=True)
+            print("[mp2] RESULT PASS: feat marks")
             return 0
         if args.rejoin_race:
             run_once(root / "rejoin-race-01", False, None, rejoin_race=True)
@@ -1430,6 +1497,7 @@ def main() -> int:
         for role in ("host", "guest"):
             run_once(root / f"silence-{role}", False, None, silence=role)
         run_once(root / "silence-host-outage", False, None, silence="host", outage=True)
+        run_once(root / "feat-marks-01", False, None, feat_marks=True)
         if args.include_link_cut:
             run_once(root / "link-cut-01", False, None, link_cut=True)
         if args.guest_owed_cut:

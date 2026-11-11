@@ -5925,7 +5925,8 @@ func _solo_spend_shot_feats(attacker: GameUnit) -> void:
 			if int((ed.get("params", {}) as Dictionary).get("uses_per_game", 0)) <= 0 \
 					or SoloController.shot_feat_spent(member, ed):
 				continue
-			member.unit_properties[SoloController.shot_feat_flag(str(ed["name"]))] = true
+			# MP1: the latch travels (allow-listed in NetworkManager), so the other table cannot spend it again.
+			_sync_unit_property(member, SoloController.shot_feat_flag(str(ed["name"])), true)
 			_log_rule_event(BattleLog.Category.COMBAT, "%s: %s spends its once-per-game feat on this attack" % [
 				str(ed["name"]), member.get_name()], _solo_is_ai_unit(member))
 
@@ -10027,7 +10028,8 @@ func _solo_roll_ignore_group(target: GameUnit, wounds: int, ign_target: int, rul
 	if not once_rule.is_empty():
 		# PF-a (EPOCH_73_V36): a once-per-game ignore rule (Protection Feat) is spent by its first roll; the flag
 		# lives on the bearer's props, like the other once-per-game latches.
-		_solo_defense_signer(target).unit_properties[_solo_ignore_feat_flag(once_rule)] = true
+		# MP1: synced like the Speed Feat latch, so a rejoin's host state keeps a guest-side spend.
+		_sync_unit_property(_solo_defense_signer(target), _solo_ignore_feat_flag(once_rule), true)
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s spends its once-per-game ignore roll" % [
 				once_rule, _solo_defense_signer(target).get_name()], true)

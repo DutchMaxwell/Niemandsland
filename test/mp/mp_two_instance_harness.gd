@@ -25,6 +25,14 @@ const GUEST_CASTER_UNIT := "mp2_guestcaster"
 const INTERFERENCE_SPELL := "Harness Hex"
 ## 3.5: the guest's Advance & Shoot gun (P2 Alpha, three models).
 const AUTO_WEAPON := "Harness Rifle"
+## MP1 (--feat-marks): once-per-game Feat bearers, one per side per latch family. Real registry rows.
+const FEAT_SPECS := [
+	["mp2_pierce_h", 1, "Pierce Host", Vector3(-0.30, 0.0, -0.20), "aof", "ogres", "Piercing Feat"],
+	["mp2_pierce_g", 2, "Pierce Guest", Vector3(0.30, 0.0, -0.20), "aof", "ogres", "Piercing Feat"],
+	["mp2_prot_h", 1, "Shield Host", Vector3(-0.30, 0.0, 0.20), "gf", "robot_legions", "Protection Feat"],
+	["mp2_prot_g", 2, "Shield Guest", Vector3(0.30, 0.0, 0.20), "gf", "robot_legions", "Protection Feat"],
+]
+const FEAT_FLAG_PREFIXES := ["shot_feat_used_", "ignore_feat_used_", "speed_feat_used_"]
 
 var _args: Dictionary = {}
 var _main: Node = null
@@ -56,6 +64,7 @@ var _link_events: Array = []      # step 23: relay rejoin signals in order ({"t_
 var _auto_preview: Array = []     # 3.5: the guest's previewed landing, one [x, y, z] per model
 var _auto_verb_done := false      # 3.5: the guest's clicked verb ran to its end
 var _auto_goal := Vector3.ZERO     # 1.8f: the table point the guest's Advance aims at
+var _protect_done: Dictionary = {}  # MP1: unit id -> wounds left after its once-per-game ignore roll
 var _tray_rolls: Array = []       # 3.5: every roll this tray showed, "local: <purpose>" / "remote: <purpose>"
 
 
@@ -274,6 +283,17 @@ func _run_command(seq: int, action: String, payload: Dictionary) -> void:
 			_run_auto_verb_click()
 	elif action == "confirm_save":
 		ok = _confirm_save_prompt()
+	elif action == "spend_shot_feat":
+		# MP1: the production spend every shooting / melee resolver calls for the attacker's chain.
+		ok = _unit(str(payload.get("unit", ""))) != null
+		if ok:
+			_main._solo_spend_shot_feats(_unit(str(payload.get("unit", ""))))
+	elif action == "protect_roll":
+		# MP1: the production wound-ignore entry on a Protection Feat bearer; the owner roll may cross
+		# the relay, so this is fire-and-forget and the result lands in `protect_done`.
+		ok = _unit(str(payload.get("unit", ""))) != null
+		if ok:
+			_run_protect_roll(_unit(str(payload.get("unit", ""))), int(payload.get("wounds", 3)))
 	elif action == "vfx_burst":
 		# Combat effects in co-op: the resolving peer emits one cue of every kind through the production
 		# path (_vfx_emit); each peer must draw each exactly once (headless draws nothing, but counts).
@@ -356,7 +376,20 @@ func _setup_fixture() -> bool:
 		[GUEST_CASTER_UNIT, 2, "Guest Witch", Vector3(0.02, 0.0, -0.05)],
 	]
 	var net_id := 9100
-	if not _args.has("rules-online"):
+	if _args.has("feat-marks"):
+		net_id = 9300
+		for spec in FEAT_SPECS:
+			var bearer := _spawn_unit(str(spec[0]), int(spec[1]), str(spec[2]), spec[3], net_id, 2)
+			if bearer == null:
+				return false
+			net_id += 2
+			bearer.unit_properties["game_system"] = str(spec[4])
+			bearer.unit_properties["faction_folder"] = str(spec[5])
+			bearer.unit_properties["special_rules"] = [str(spec[6])]
+			for m in bearer.models:   # production OPR models are in this group; the rejoin rebuild keys on it
+				(m as ModelInstance).node.add_to_group("opr_unit")
+			_main.opr_army_manager.game_units[bearer.unit_id] = bearer
+	elif not _args.has("rules-online"):
 		for spec in specs:
 			var unit := _spawn_unit(str(spec[0]), int(spec[1]), str(spec[2]), spec[3], net_id)
 			net_id += 1
@@ -533,6 +566,12 @@ func _run_remote_save_attack() -> void:
 	_remote_save_wounds = wounds
 
 
+## MP1: one Protection Feat ignore roll on `unit` (the resolver's side; the owner rolls its own dice).
+func _run_protect_roll(unit: GameUnit, wounds: int) -> void:
+	var left: int = await _main._solo_ignore_wounds(unit, wounds, 0)
+	_protect_done[unit.unit_id] = left
+
+
 ## #1882: host resolves a cast whose interference belongs to the GUEST (a "spell" owner request).
 func _run_remote_interference() -> void:
 	_main._ensure_solo_controller()   # geometry for the caster auras (no AI seat is designated)
@@ -659,6 +698,7 @@ func _snapshot() -> Dictionary:
 		"auto_preview": _auto_preview.duplicate(true),
 		"auto_verb_done": _auto_verb_done,
 		"tray_rolls": _tray_rolls.duplicate(),
+		"protect_done": _protect_done.duplicate(),
 		"rolled_lines": [],
 	}
 	if _main != null and _main.get("object_manager") != null:
@@ -682,7 +722,8 @@ func _snapshot() -> Dictionary:
 		state.occupied_slots = slots
 		for peer_id in nm.peer_to_slot:
 			state.peers[str(peer_id)] = int(nm.peer_to_slot[peer_id])
-	if _fixture_ready:
+	# MP1: a rejoined feat-marks guest never runs setup; its units come from the host's full state.
+	if _fixture_ready or _args.has("feat-marks"):
 		var ai_slots: Array = []
 		for slot in _main.solo_ai_slots:
 			ai_slots.append(int(slot))
@@ -720,6 +761,7 @@ func _snapshot() -> Dictionary:
 				"markers": markers,
 				"spell_records": records.size(),
 				"spell_move_mod": unit.unit_properties.get("spell_move_mod", null),
+				"feat_marks": _feat_marks(unit.unit_properties),
 				"transport": transport.unit_id if transport != null else "",
 				"positions": unit.models.map(func(m: ModelInstance) -> Array: return _rounded(m.node.global_position) \
 					if m.is_alive and is_instance_valid(m.node) else []),
@@ -732,6 +774,16 @@ func _snapshot() -> Dictionary:
 		for i in range(maxi(0, entries.size() - 8), entries.size()):
 			state.battle_log_tail.append(str((entries[i] as Dictionary).get("text", "")))
 	return state
+
+
+## MP1: the once-per-game latches a unit holds (flag -> value), the keys the feat-marks scenario reads.
+static func _feat_marks(props: Dictionary) -> Dictionary:
+	var out := {}
+	for k in props.keys():
+		for prefix in FEAT_FLAG_PREFIXES:
+			if str(k).begins_with(prefix):
+				out[str(k)] = props[k]
+	return out
 
 
 func _write_state() -> void:
