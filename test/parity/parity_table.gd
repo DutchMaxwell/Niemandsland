@@ -3,7 +3,7 @@ extends RefCounted
 ## (schema nml-scenario-v1, inches), runs one AI volley per seed through main's real _solo_resolve_ai_volley and
 ## writes one JSONL record per seed: {"seed","epoch","def_alive","rolls":[{kind,count,target,faces,owner}]}.
 ## The faces are the ones the table's own dice recorder (NML_DICE_DUMP) wrote for that seed.
-## (run() follows in the next PR of the stack.)
+## `override` replaces table-side rules only (red test): {"weapon_rules": [...]}.
 ## Pattern: tools/table_scenario_sweep.gd, test/v36/g4r3_extra_attack_signer_test.gd.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
@@ -61,3 +61,43 @@ static func _read_dice(dump_dir: String) -> Array:
 			"faces": faces, "owner": str(r["owner"])})
 	DirAccess.remove_absolute(path)
 	return rolls
+
+
+## Runs `seeds` seeds of scenario `sc` on the booted `main`; writes the JSONL to `out_path`. Await it.
+static func run(main: Node, sc: Dictionary, seeds: int, out_path: String, dump_dir: String,
+		override: Dictionary = {}) -> void:
+	AiActRecorder.rules_epoch = int(sc["epoch"])
+	DirAccess.make_dir_recursive_absolute(dump_dir)
+	OS.set_environment("NML_DICE_DUMP", dump_dir)
+	AiDiceRecorder._checked = false
+	AiDiceRecorder._stream = null
+	AiDiceRecorder._count = 0
+	var weapon: Dictionary = (sc["weapon"] as Dictionary).duplicate()
+	if override.has("weapon_rules"):
+		weapon["rules"] = override["weapon_rules"]
+	var dist_in := INF
+	for a in _positions(sc["attacker"]):
+		for b in _positions(sc["defender"]):
+			dist_in = minf(dist_in, (a as Vector3).distance_to(b) / INCH)
+	var out := FileAccess.open(out_path, FileAccess.WRITE)
+	for s in seeds:
+		var att := _make_unit(main, sc["attacker"], weapon)
+		var dfn := _make_unit(main, sc["defender"], {})
+		var wobj: OPRApiClient.OPRWeapon = (att.source_data as OPRApiClient.OPRUnit).weapons[0]
+		var shots: Array = []
+		for p in AiEv.stamp_sergeant(AiShooting.profiles_in_range([wobj], dist_in), att):
+			shots.append({"member": att, "quality": int(sc["attacker"]["quality"]), "alive": att.get_alive_count(),
+				"max": att.models.size(), "reach": float(weapon["range_in"]), "profile": p})
+		main.seed_tray_rng(s)
+		await main._solo_resolve_ai_volley(att, dfn, shots)
+		AiDiceRecorder.close()
+		out.store_line(JSON.stringify({"seed": s, "epoch": AiActRecorder.rules_epoch,
+			"def_alive": dfn.get_alive_count(), "rolls": _read_dice(dump_dir)}, "", true, true))
+		for u in [att, dfn]:
+			main.opr_army_manager.game_units.erase((u as GameUnit).unit_id)
+			for m in (u as GameUnit).models:
+				var nd: Node = (m as ModelInstance).node
+				if nd != null and is_instance_valid(nd):
+					nd.free()
+		await main.get_tree().process_frame
+	out.close()

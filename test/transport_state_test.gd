@@ -17,6 +17,19 @@ func test_spaces_follow_the_book_example() -> void:
 	assert_int(TransportState.spaces_of(true, 7)).is_equal(TransportState.UNTRANSPORTABLE)
 
 
+func test_a_non_hero_above_tough_three_is_not_carried() -> void:
+	# Rules 3.6 (GF Beginner's Guide v3.6.0 p.15): a transport takes Heroes up to Tough(6) and non-Heroes
+	# up to Tough(3) only, so a non-Hero with Tough(4) or Tough(5) has no seat.
+	assert_int(TransportState.spaces_of(false, 4)).is_equal(TransportState.UNTRANSPORTABLE)
+	assert_int(TransportState.spaces_of(false, 5)).is_equal(TransportState.UNTRANSPORTABLE)
+	# CONTROL (passes with and without the change): the same Tough on a Hero still takes one seat,
+	# and a non-Hero up to Tough(3) keeps its three.
+	assert_int(TransportState.spaces_of(true, 4)).is_equal(1)
+	assert_int(TransportState.spaces_of(true, 5)).is_equal(1)
+	assert_int(TransportState.spaces_of(false, 2)).is_equal(3)
+	assert_int(TransportState.spaces_of(false, 3)).is_equal(3)
+
+
 func test_book_example_unit_occupies_11_spaces() -> void:
 	var unit: Array = []
 	for i in range(10):

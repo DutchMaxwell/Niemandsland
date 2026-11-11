@@ -614,7 +614,7 @@ func test_bane_boost_window_reads_the_enhanced_scrapper_entry() -> void:
 	assert_dict(AiEv.bane_boost_window(_scrapper_carrier(["Enhanced Scrapper"]), true)).is_empty()
 
 
-# === MEL-07e: the AI's melee and Impact EV see a Parry unit's cancels ===
+# === MEL-07e: the AI's melee EV sees a Parry unit's cancels; its Impact EV does not (Impact is not parried) ===
 
 func test_melee_ev_into_a_parry_unit_drops_to_the_expected_value() -> void:
 	# 10 attacks at 4+ = 5 expected hits; 5 Parry dice cancel min(5, 5)/6 = 5/6 hit; the Defense 4+
@@ -633,9 +633,10 @@ func test_melee_ev_into_a_parry_unit_drops_to_the_expected_value() -> void:
 	AiActRecorder.rules_epoch = epoch0
 
 
-func test_impact_ev_into_a_parry_unit_drops_to_the_expected_value() -> void:
-	# Impact(6) hits on 2+ = 5 expected hits; 5 Parry dice cancel 5/6 hit; the Defense 4+ save
-	# halves it, so the Impact EV drops 2.5 -> 2.0833 like the melee leg.
+func test_impact_ev_ignores_a_parry_defender() -> void:
+	# Maintainer ruling on rules 3.6: Impact hits are not parried (Parry reduces ordinary melee hits only),
+	# so the Impact EV into a Parry unit is the no-Parry value: Impact(6) hits on 2+ = 5 hits, the
+	# Defense 4+ save halves them to 2.5 wounds.
 	var epoch0: int = AiActRecorder.rules_epoch
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
 	var att := {"quality": 4, "impact": 6, "models": 1}
@@ -645,8 +646,13 @@ func test_impact_ev_into_a_parry_unit_drops_to_the_expected_value() -> void:
 		.override_failure_message("the no-Parry baseline is 2.5") \
 		.is_equal_approx(2.5, 0.0001)
 	assert_float(AiEv.impact_ev(att, parry)) \
-		.override_failure_message("Parry must take the expected 5/12 wound off the Impact EV") \
-		.is_equal_approx(25.0 / 12.0, 0.0001)
+		.override_failure_message("Parry must not take anything off the Impact EV") \
+		.is_equal_approx(2.5, 0.0001)
+	# The Heavy Impact pool is Impact too: same answer with and without Parry.
+	var heavy := {"quality": 4, "heavy_impact": 6, "models": 1}
+	assert_float(AiEv.impact_ev(heavy, parry)) \
+		.override_failure_message("Parry must not take anything off the Heavy Impact EV") \
+		.is_equal_approx(AiEv.impact_ev(heavy, plain), 0.0001)
 	AiActRecorder.rules_epoch = epoch0
 
 
