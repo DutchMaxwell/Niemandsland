@@ -36,7 +36,7 @@ static func _make_unit(main: Node, u: Dictionary, weapon: Dictionary) -> GameUni
 		w.name = str(weapon["name"])
 		w.range_value = int(weapon["range_in"])
 		w.attacks = int(weapon["attacks"])
-		w.count = int(weapon["count"])
+		w.count = int(weapon["count"]) + 1
 		w.special_rules.assign(weapon["rules"])
 		var src := OPRApiClient.OPRUnit.new()
 		src.weapons.assign([w])
