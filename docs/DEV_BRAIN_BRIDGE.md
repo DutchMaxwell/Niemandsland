@@ -109,6 +109,8 @@ It is not an authentication boundary against other local processes.
 - `NML_BRAIN_URL` unset/empty: no developer client, probe or network call; the
   shipped brain, when loaded, still records its own decision line. Existing
   Rust/GDScript routing is unchanged.
+- Precedence in debug builds: an `NML_BRAIN_ONNX` file, else a working
+  `NML_BRAIN_URL`, else the shipped brain. Release builds refuse the URL.
 - `NML_BRAIN_W`: finite positive weight, default 1 when armed. Unset the URL
   to disable the bridge. Invalid configuration declines explicitly.
 - `NML_BRAIN_TIMEOUT_MS`: whole HTTP exchange deadline, default 200 ms,

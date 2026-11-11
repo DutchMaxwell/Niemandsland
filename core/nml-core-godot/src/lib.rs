@@ -404,8 +404,12 @@ impl NmlCore {
         }
         #[cfg(feature = "onnx-tract")]
         {
-            // Precedence: the developer's NML_BRAIN_ONNX file, else the shipped bytes.
+            // Precedence: the developer's NML_BRAIN_ONNX file, else a WORKING developer
+            // NML_BRAIN_URL (debug builds only; brain.rs refuses it in release builds), else
+            // the shipped bytes. A refused or unreachable URL keeps the shipped brain.
+            let dev_url = matches!(self.brain, Some(Ok(_)));
             self.onnx = onnx_brain_from_env().or_else(|| {
+                if dev_url { return None; }
                 self.onnx_shipped.as_ref().map(|(bytes, sha)| {
                     onnx::load(bytes, sha.as_deref()).map_err(|u| format!("{u:?}"))
                         .map(|b| { let s = b.sha256().to_string(); (b, s) })
@@ -874,8 +878,8 @@ impl NmlCore {
         knobs.route_root = knobs.route_root || route_root_seat(player);
         #[cfg(feature = "onnx-tract")]
         if let Some(loaded) = self.onnx.as_ref() {
-            // ONNX precedence: the in-process brain answers the leaves; the HTTP
-            // brain (if any) is not consulted on this activation.
+            // ONNX precedence: an in-process brain is loaded only when no working
+            // developer URL displaced the shipped bytes (set_game_header); it answers the leaves.
             let (brain, _sha) = loaded.as_ref().map_err(Clone::clone)?;
             let (pick, run) = plan_with_onnx(&cap.state, &h.terrain, &unit_statics, &knobs, &act,
                 player, Some(sig), &root, brain).map_err(|u| format!("{u:?}"))?;
