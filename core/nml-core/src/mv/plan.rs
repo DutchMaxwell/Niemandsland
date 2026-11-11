@@ -162,8 +162,10 @@ pub fn unified(
     // :910 — the solver's own move is drawn onto every trail.
     append_trail_finals(&mut trails, &planned);
     // GF p.11: the solver's final leg may not climb a ledge the move has no movement left to pay for.
-    let allowance = flow_opts.charge_allowance.unwrap_or_else(|| length(delta));
-    trim_unpaid_climbs(&mut trails, &mut planned, flow_opts.ledges, allowance);
+    if flow_opts.climb_cost {
+        let allowance = flow_opts.charge_allowance.unwrap_or_else(|| length(delta));
+        trim_unpaid_climbs(&mut trails, &mut planned, flow_opts.ledges, allowance);
+    }
     // :913 — NML-230 Breach B, LAST: the p.11 6" per-polyline cap, so a
     // solver-adjusted route that newly enters difficult can never keep the band.
     let cap_in = if difficult_cap_in > 0.0 {

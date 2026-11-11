@@ -6,7 +6,6 @@ use crate::acts::{rule_on, CURRENT_RULES_EPOCH, EPOCH_72_PLAYTEST_RULES, EPOCH_7
 #[test]
 fn the_rules_3_6_wave_is_the_live_epoch_73() {
     assert_eq!(EPOCH_73_V36, 73, "the rules 3.6 wave's one frozen epoch");
-    assert_eq!(CURRENT_RULES_EPOCH, EPOCH_73_V36, "the live epoch is EPOCH_73_V36");
     assert!(rule_on(CURRENT_RULES_EPOCH, EPOCH_73_V36), "a fresh record gets the 3.6 gates");
 }
 

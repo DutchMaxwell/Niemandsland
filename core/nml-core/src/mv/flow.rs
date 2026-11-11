@@ -107,6 +107,8 @@ pub struct FlowOpts<'a> {
     pub charge_slots: &'a [V2],
     /// `opts["ledges"]` (heights B2) — climbable edges; those over 3" are folded into the walls.
     pub ledges: &'a [Ledge],
+    /// `opts["climb_cost"]` (`EPOCH_74_CLIMB_COST`) — the legs added after the priced walk pay their climb.
+    pub climb_cost: bool,
 }
 
 impl<'a> FlowOpts<'a> {
@@ -126,6 +128,7 @@ impl<'a> FlowOpts<'a> {
             charge_tgt_bases: &call.opts.charge_tgt_bases,
             charge_slots: &call.opts.charge_slots,
             ledges: &call.opts.ledges,
+            climb_cost: call.opts.climb_cost,
         }
     }
 }
@@ -489,7 +492,9 @@ pub fn plan_sequential_flow(
         }
     }
     // GF p.11: the coherency pull and the untangle re-route add legs after the priced walk; none may climb unpaid.
-    trim_unpaid_climbs(&mut out.trails, &mut out.result, &soft_ledges, allowance);
+    if opts.climb_cost {
+        trim_unpaid_climbs(&mut out.trails, &mut out.result, &soft_ledges, allowance);
+    }
     out
 }
 

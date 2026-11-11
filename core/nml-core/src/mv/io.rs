@@ -204,6 +204,9 @@ pub struct CallOpts {
     /// `opts["ledges"]` (heights B2) — climbable edges, recorded as `[ax, ay, bx, by, dy_in]` rows
     /// (`MoveRecorder.ledge_rows`); absent = none, so every earlier corpus replays byte-identically.
     pub ledges: Vec<Ledge>,
+    /// `opts["climb_cost"]` (`EPOCH_74_CLIMB_COST`) — the trims after the priced walk pay the climb too (GF p.11).
+    /// Absent in every earlier corpus, so old calls default false and replay byte-exact.
+    pub climb_cost: bool,
 }
 
 #[derive(Deserialize)]
@@ -248,6 +251,8 @@ struct PlainOpts {
     charge_slots: Vec<[f64; 2]>,
     #[serde(default)]
     ledges: Vec<[f64; 5]>,
+    #[serde(default)]
+    climb_cost: bool,
 }
 
 /// One `MoveRecorder.trace_model` entry — move_recorder.gd:198. A model's
@@ -484,6 +489,7 @@ fn call_of(pc: PlainCall, header: &MoveHeader, path: &str, ln: usize) -> Result<
         charge_tgt_bases,
         charge_slots: o.charge_slots.into_iter().map(v2).collect(),
         ledges: o.ledges.iter().map(|r| Ledge { a: v2([r[0], r[1]]), b: v2([r[2], r[3]]), dy_in: r[4] }).collect(),
+        climb_cost: o.climb_cost,
     };
     let trace = Trace {
         flow: pc

@@ -1008,6 +1008,8 @@ static func _plan_unit_step_unified(model_pos: Array, delta: Vector2, walls: Arr
 ## allowance as flat length + climb is cut back by trim_polyline_priced, and its model's position follows the cut.
 ## Trails that climb nothing are left exactly as they are. Mutates `trails` and `positions`.
 static func _trim_unpaid_climbs(trails: Array, positions: Array, opts: Dictionary, allowance: float) -> void:
+	if not bool(opts.get("climb_cost", false)):   # EPOCH_74_CLIMB_COST: absent in every earlier record
+		return
 	var ledges: Array = (opts.get("ledges", []) as Array).filter(
 		func(l): return float(l["dy_in"]) <= LEDGE_CLIMB_MAX_IN + EPS)
 	if ledges.is_empty() or trails == null:

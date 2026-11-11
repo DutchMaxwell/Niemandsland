@@ -93,7 +93,7 @@ func test_the_3_6_names_are_modeled_tokens() -> void:
 ## rules map, so the granted upgrade works when the spell lands. No spell grants a 3.5 name.
 func test_a_spell_granting_a_renamed_upgrade_resolves_its_3_6_name_at_epoch_73() -> void:
 	SpellsRegistry.reset_cache()
-	assert_int(AiActRecorder.rules_epoch).is_equal(73)
+	assert_int(AiActRecorder.rules_epoch).is_greater_equal(AiActRecorder.EPOCH_73_V36)
 	var picks := [["gf", "blessed_sisters", "Litanies of War", "Enhanced Devout"],
 		["aof", "vampiric_undead", "Vigorous Return", "Enhanced Cursed Undead"]]
 	for pick: Array in picks:

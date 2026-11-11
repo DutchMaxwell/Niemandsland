@@ -129,11 +129,15 @@ func _worst_cost_in(solo: SoloController, ledges: Array) -> Array:
 	return [worst, climbed, nearest]
 
 
-func test_multi_model_rush_over_a_container_pays_every_climb_within_the_band() -> void:
-	# Three unit shapes and approaches that each sent a model over a ledge it had no movement left for.
-	for c in [[5, Vector2(-2.88, -7.55), Vector2(2.51, 2.60)],
-			[5, Vector2(-4.61, -4.69), Vector2(2.12, 0.79)],
-			[3, Vector2(2.98, 4.77), Vector2(0.92, -2.04)]]:
+## Three unit shapes and approaches that each sent a model over a ledge it had no movement left for.
+const OVER_THE_BOX := [[5, Vector2(-2.88, -7.55), Vector2(2.51, 2.60)],
+	[5, Vector2(-4.61, -4.69), Vector2(2.12, 0.79)],
+	[3, Vector2(2.98, 4.77), Vector2(0.92, -2.04)]]
+
+
+func test_at_epoch_74_multi_model_rush_over_a_container_pays_every_climb_within_the_band() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_74_CLIMB_COST
+	for c in OVER_THE_BOX:
 		var r := _rush_over_box(int(c[0]), c[1], c[2])
 		var cost := _worst_cost_in(r[0], r[1])
 		# The scenario must still press the unit against the container (a model on it, or at its edge).
@@ -143,7 +147,20 @@ func test_multi_model_rush_over_a_container_pays_every_climb_within_the_band() -
 			% [str(c), cost[0]]).is_less_equal(RUSH_IN + 0.02)
 
 
+## The old leg: a record stamped EPOCH_73_V36 was made with the flat trims after the priced walk, so the same
+## Rushes still replay it - at least one model climbs past the 8" band, exactly as before #2608.
+func test_at_epoch_73_the_trims_after_the_walk_stay_flat() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	var worst := 0.0
+	for c in OVER_THE_BOX:
+		var r := _rush_over_box(int(c[0]), c[1], c[2])
+		worst = maxf(worst, float(_worst_cost_in(r[0], r[1])[0]))
+	assert_float(worst).override_failure_message("at epoch 73 every route kept the band: the climb cost leaked below its gate") \
+		.is_greater(RUSH_IN + 0.02)
+
+
 func test_control_rush_beside_the_container_climbs_nothing_and_keeps_the_full_band() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_74_CLIMB_COST
 	var r := _rush_over_box(5, Vector2(-14.0, 6.0), Vector2(4.0, 6.0))
 	var cost := _worst_cost_in(r[0], r[1])
 	assert_float(cost[1]).is_equal(0.0)
