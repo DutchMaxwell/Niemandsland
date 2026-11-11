@@ -196,3 +196,27 @@ func test_player_advance_does_not_retarget_to_another_enemy() -> void:
 	for n in report.get("rule_notes", []):
 		notes += str((n as Dictionary)["text"]) + "\n"
 	assert_str(notes).contains("no shot")
+
+
+## F6 leftovers: the two refusal texts a player reads without any toggle cite the rules version through
+## the helper (rules_cite), never a bare page number that goes stale when the rules move.
+func test_default_visible_refusals_cite_the_rules_version_not_a_page() -> void:
+	var attacker := _unit(2, "Runner", [Vector3.ZERO])
+	var target := _unit(1, "Foe", [Vector3(10 * IN2M, 0, 0)])
+	var turret := _unit(2, "Turret", [Vector3(0, 0, 30 * IN2M)])
+	turret.unit_properties["special_rules"] = ["Immobile"]
+	var solo := _controller([attacker, target, turret])
+	# A forest cell sits across the 10" charge corridor: over the 6" difficult cap, so the charge is refused.
+	solo.terrain_type_at = func(p: Vector3) -> int:
+		return TerrainRules.TerrainType.FOREST if p.x > 1.0 * IN2M else TerrainRules.TerrainType.NONE
+	var cap_why := solo.charge_illegal_why(attacker, target, 12.0)
+	var hold_why := str(solo.player_intent(turret, AiDecision.Action.RUSH, target).get("refused", ""))
+	var cite := OPRApiClient.rules_cite(RulesRegistry.system_of_unit(attacker))
+	var stale := PackedStringArray()
+	if cap_why != "difficult cap (%s)" % cite:
+		stale.append("difficult cap: %s" % cap_why)
+	if hold_why != "may only use Hold actions (%s)" % cite:
+		stale.append("hold only: %s" % hold_why)
+	assert_array(stale) \
+		.override_failure_message("refusal text does not cite '%s' through rules_cite: %s" % [cite, "; ".join(stale)]) \
+		.is_empty()

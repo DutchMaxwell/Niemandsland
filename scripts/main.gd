@@ -18454,7 +18454,7 @@ func _log_move_summaries(summaries: Array) -> void:
 		var max_in: float = float(e.get("max_in", 0.0))
 		var climb_in: float = float(e.get("climb_in", 0.0))
 		if bool(e.get("whole", false)) or count >= alive or alive <= 1:
-			battle_log.on_unit_moved(unit_name, max_in, false, climb_in)
+			battle_log.on_unit_moved(unit_name, max_in, false, climb_in, OPRApiClient.rules_cite(_solo_rules_system()))
 		else:
 			var suffix := " incl. %.1f\" climb — %s" % [climb_in, OPRApiClient.rules_cite(_solo_rules_system())] if climb_in > 0.05 else ""
 			battle_log.log_event(BattleLog.Category.MOVEMENT,

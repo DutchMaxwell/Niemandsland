@@ -1738,7 +1738,7 @@ func charge_illegal_why(unit: GameUnit, tgt: GameUnit, band_in: float) -> String
 	if gap > band:
 		return "out of charge band (%.1f\" > %.1f\")" % [gap, band]
 	if _charge_capped_by_difficult(unit, unit_centre(unit), unit_centre(tgt), gap):
-		return "difficult cap (p.11)"
+		return "difficult cap (%s)" % OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))
 	var probe := charge_path_probe(unit, tgt, band)
 	if not bool(probe.get("reachable", true)):
 		return "corridor cannot reach contact within %.1f\"" % float(probe["effective_band_in"])
@@ -2128,7 +2128,7 @@ func _act(unit: GameUnit) -> Dictionary:
 	var charge_capped := _charge_capped_by_difficult(unit, centre, tcentre, charge_gap)
 	if charge_capped and charge_gap <= charge_band:
 		record_decision({"kind": "mission", "unit": unit.get_name(),
-			"rule": "Difficult cap (p.11): every charge corridor crosses difficult terrain and the gap exceeds 6\" — the charge cannot reach, the tree fights on without it",
+			"rule": "Difficult cap (%s): every charge corridor crosses difficult terrain and the gap exceeds 6\" — the charge cannot reach, the tree fights on without it" % OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit)),
 			"candidates": [], "chosen": "charge unavailable (difficult cap)", "why": "difficult-capped charge",
 			"data": {"gap_in": charge_gap, "cap_in": DIFFICULT_MOVE_CAP_IN}})
 	# #183: deterministic charges get one real-corridor proof before the tree may
@@ -2162,7 +2162,7 @@ func _act(unit: GameUnit) -> Dictionary:
 			_rule_note(report, "%s: no charge on %s — every corridor crosses DANGEROUS ground and the expected toll (%.1f wounds) eats the charge's value (EV %.1f)" % [
 				unit.get_name(), target_unit.get_name(), float(toll["toll"]), float(toll["cev"])], true)
 			record_decision({"kind": "mission", "unit": unit.get_name(),
-				"rule": "#316 dangerous toll: forced minefield crossing prices in (p.12: one die per wound, 1s wound) — toll >= charge EV refuses the charge",
+				"rule": "#316 dangerous toll: forced minefield crossing prices in (%s: one die per wound, 1s wound) — toll >= charge EV refuses the charge" % OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit)),
 				"candidates": [], "chosen": "charge unavailable (dangerous toll)",
 				"why": "dangerous-toll charge refusal",
 				"data": {"toll_ev": snappedf(float(toll["toll"]), 0.01), "charge_ev": snappedf(float(toll["cev"]), 0.01)}})
@@ -2816,7 +2816,7 @@ func player_intent(unit: GameUnit, verb: int, target: GameUnit, point: Variant =
 	if unit.is_shaken:
 		return {"refused": "Shaken — spends its activation idle (%s)" % OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))}
 	if forces_hold(unit.get_special_rules()) and hold_only_param(unit) and verb != AiDecision.Action.HOLD:
-		return {"refused": "may only use Hold actions (p.13)"}
+		return {"refused": "may only use Hold actions (%s)" % OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))}
 	if cumbersome_active(unit) and verb != AiDecision.Action.HOLD and verb != AiDecision.Action.ADVANCE:
 		return {"refused": "Cumbersome: may only Hold or Advance (rules 3.6)"}
 	if is_aircraft(unit) or _is_regiment(unit) or army_manager.transport_of(unit) != null:
@@ -5342,7 +5342,7 @@ func _plan_member_cast(unit: GameUnit, member: GameUnit, hold_out: Array = []) -
 	var boost_pool := 0
 	var boost_why := "no boost: this difficulty never spends helper tokens"
 	if spend_boosts:
-		boost_why = "no boost: no payable token in 18\" LoS"
+		boost_why = "no boost: no payable token within 18\""
 	if spend_boosts and not helpers.is_empty():
 		for h in helpers:
 			boost_pool += int((h as Dictionary)["tokens"])
@@ -5390,7 +5390,7 @@ func _plan_member_cast(unit: GameUnit, member: GameUnit, hold_out: Array = []) -
 	for t in chosen_targets:
 		target_names.append(((t as Dictionary)["unit"] as GameUnit).get_name())
 	record_decision({"kind": "cast", "unit": member.get_name(),
-		"rule": "Solo v3.5.0 'Caster' (D3+X, cycle-to-valid) + Caster(X) %s (4+, boost/interference 18\" LoS)" % OPRApiClient.rules_cite(RulesRegistry.system_of_unit(member)),
+		"rule": "Solo v3.5.0 'Caster' (D3+X, cycle-to-valid) + Caster(X) %s (4+, boost/interference within 18\")" % OPRApiClient.rules_cite(RulesRegistry.system_of_unit(member)),
 		"candidates": candidates_rec, "chosen": str(chosen.get("name", "?")),
 		"why": ("ev-best pick" if ev_best_pick else ("skip 0-EV" if skip_zero_ev and chosen_ev > 0.0 else "official D3+X cycle")),
 		"data": {"d3": d3, "caster_x": caster_x, "targets": ", ".join(PackedStringArray(target_names)),
@@ -11985,7 +11985,7 @@ func _repair_deploy_coherency(blocked_normal: Callable, blocked_flying: Callable
 				unit_moved = true
 				_broadcast_positions(unit)
 				record_decision({"kind": "deploy", "unit": unit.get_name(),
-					"rule": "Deploy coherency repair: stragglers re-placed into chain range of the unit's largest group (p.7 — a unit never starts torn)",
+					"rule": "Deploy coherency repair: stragglers re-placed into chain range of the unit's largest group (%s — a unit never starts torn)" % OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit)),
 					"candidates": [], "chosen": "straggler re-placed", "why": "deploy left a model out of coherency",
 					"data": {"pass": _pass, "slot": int(unit.unit_properties.get("player_id", 0))}})
 			else:
@@ -12161,7 +12161,7 @@ func _repair_once_toward_forward(unit: GameUnit, blocked: Callable, base_r: floa
 	if moved:
 		_broadcast_positions(unit)
 		record_decision({"kind": "deploy", "unit": unit.get_name(),
-			"rule": "Deploy coherency repair: stragglers re-placed into chain range of the unit's largest group (p.7 — a unit never starts torn)",
+			"rule": "Deploy coherency repair: stragglers re-placed into chain range of the unit's largest group (%s — a unit never starts torn)" % OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit)),
 			"candidates": [], "chosen": "straggler re-placed", "why": "deploy left a model out of coherency",
 			"data": {"attempt": 2, "slot": int(unit.unit_properties.get("player_id", 0))}})
 
