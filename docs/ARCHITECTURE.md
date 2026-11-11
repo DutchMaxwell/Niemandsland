@@ -300,5 +300,5 @@ GPU, recent log files) and scrubs room codes, file paths and player names before
 
 ## Tests
 
-gdUnit4 suites in `test/`; Python tests in `relay/` and in `core/nml-core-py/tests/python/` (88 pytest files, run by CI: `PYTHONPATH=core/nml-core-py/python python3 -m pytest core/nml-core-py/tests/python -q -x --timeout 900`); the Rust workspace tests run in `.github/workflows/rust.yml`.
+gdUnit4 suites in `test/`; Python tests in `relay/` and in `core/nml-core-py/tests/python/` (153 pytest files, run by CI: `PYTHONPATH=core/nml-core-py/python python3 -m pytest core/nml-core-py/tests/python -q -x --timeout 900`); the Rust workspace tests run in `.github/workflows/rust.yml`.
 Runner commands in [`DEVELOPMENT.md`](DEVELOPMENT.md).

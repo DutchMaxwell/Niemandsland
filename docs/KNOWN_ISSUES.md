@@ -83,6 +83,11 @@ not there yet and what to watch for. The full done / in-progress / planned break
   (`nml_core_godot.dll`) from the downloaded update next to the game and restarts once by itself.
   If the diagnostics report (below) still names the decision tree after that, download the 0.3.13.0
   Windows zip and unzip it over your game folder. Updates from 0.3.13.0 onward install every file.
+- **Windows: from 0.3.12.0 or older, download the 0.3.15.0 zip by hand once.** Since 0.3.15.0 the game
+  data ships as `Niemandsland.pck` next to `Niemandsland.exe`, and the in-game updater of 0.3.12.0 and
+  older replaces only the executable. Unzip the Windows zip over your game folder; keep
+  `Niemandsland.pck` and `nml_core_godot.dll` beside the executable. From 0.3.13.0 on, the in-game
+  update installs every file.
 
 ## Smaller things to know
 
