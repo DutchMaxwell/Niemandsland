@@ -9469,7 +9469,7 @@ func _solo_charge_impact(charger: GameUnit, defender: GameUnit, human_defends: b
 	var dice: int = AiCombatMath.impact_total_dice(x, models, cut_models - heavy_cut)
 	if hero_imp.x > 0:   # joined hero's own dice join the pool before Counter/Brace cut (the log shows the total)
 		dice = maxi(0, AiCombatMath.impact_total_dice(x, models, 0) + hero_imp.x - (cut_models - heavy_cut))
-	if counter_models > 0 and battle_log != null and (x + hx) * models > 0:
+	if counter_models > 0 and battle_log != null and (x + hx) * models + hero_imp.x > 0:
 		_log_rule_event(BattleLog.Category.COMBAT, "Counter: -%d Impact dice (%s)" % [
 			counter_models, charger.get_name()], true)
 	var impact_rule := _solo_over9_defense_rule(defender)
