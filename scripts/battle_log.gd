@@ -168,10 +168,12 @@ func on_unit_activated(unit_name: String, owner: String, ai: bool = false, detai
 	log_event(Category.GENERAL, "%s activated (%s)" % [unit_name, owner], ai, detail)
 
 
-func on_unit_moved(unit_name: String, distance_inches: float, ai: bool = false, climb_in: float = 0.0) -> void:
+func on_unit_moved(unit_name: String, distance_inches: float, ai: bool = false, climb_in: float = 0.0,
+		climb_cite: String = "") -> void:
 	var verb := "advances" if ai else "moves"
 	# GF p.11: name the climb inline when the move spent any (D5a is a separate warning).
-	var suffix := " incl. %.1f\" climb — GF p.11" % climb_in if climb_in > 0.05 else ""
+	var cite := " — %s" % climb_cite if not climb_cite.is_empty() else ""
+	var suffix := " incl. %.1f\" climb%s" % [climb_in, cite] if climb_in > 0.05 else ""
 	log_event(Category.MOVEMENT, "%s %s %.0f\"%s" % [unit_name, verb, distance_inches, suffix], ai)
 
 
