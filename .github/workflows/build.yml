@@ -569,7 +569,7 @@ jobs:
   # The only job that STARTS the Windows build (one-core P1, step 14, decision D4): the exported .exe
   # boots headless on a real Windows runner and must print update_checker.gd's boot line
   # `core: NmlCore loaded`. Advisory: not in all-required's needs. A GUI-subsystem .exe has no
-  # captured stdout, so Godot writes the log to a file (--log-file).
+  # reliably captured stdout, so the step reads --log-file AND the redirected stdout/stderr.
   windows-load-proof:
     name: Windows load proof
     runs-on: windows-latest
@@ -584,17 +584,29 @@ jobs:
           name: windows-build
           path: build/windows
 
+      # Run 1 of this step wrote no log at all: a killed .exe leaves no proof, so ask it to quit by itself
+      # (--quit-after), and capture all three channels (--log-file, stdout, stderr) plus the exit code and
+      # the folder listing, so a red run explains itself.
       - name: Boot the exported .exe - NmlCore loads
         shell: pwsh
         run: |
-          $log = Join-Path $env:RUNNER_TEMP 'win.log'
-          $p = Start-Process -FilePath "build\windows\$env:EXPORT_NAME.exe" -ArgumentList '--headless', '--log-file', "`"$log`"" -PassThru
-          if (-not $p.WaitForExit(30000)) { Stop-Process -Id $p.Id -Force }
-          if (-not (Test-Path $log) -or (Get-Item $log).Length -eq 0) {
-            Write-Output "::error::the exported .exe wrote no log to $log (--log-file)"; exit 1 }
-          Get-Content $log
-          if (-not (Select-String -Path $log -SimpleMatch 'core: NmlCore loaded' -Quiet)) {
-            Write-Output "::error::the Windows build never printed 'core: NmlCore loaded' - the core did not load"; exit 1 }
+          $dir = Join-Path $PWD 'build\windows'
+          $exe = Join-Path $dir "$env:EXPORT_NAME.exe"
+          $out = @{ log = Join-Path $env:RUNNER_TEMP 'win.log'; stdout = Join-Path $env:RUNNER_TEMP 'win.stdout.txt'; stderr = Join-Path $env:RUNNER_TEMP 'win.stderr.txt' }
+          Get-ChildItem $dir | Format-Table Name, Length | Out-String | Write-Output
+          $p = Start-Process -FilePath $exe -WorkingDirectory $dir -PassThru -RedirectStandardOutput $out.stdout -RedirectStandardError $out.stderr `
+            -ArgumentList '--headless', '--quit-after', '300', '--log-file', "`"$($out.log)`""
+          $null = $p.Handle   # keeps ExitCode readable after WaitForExit
+          $quit = $p.WaitForExit(30000)
+          if (-not $quit) { Write-Output '::warning::the .exe was still running after 30 s, killing it'; Stop-Process -Id $p.Id -Force }
+          else { Write-Output ('exit code: {0} (0x{1:X8})' -f $p.ExitCode, $p.ExitCode) }
+          $found = $false
+          foreach ($k in 'log', 'stdout', 'stderr') {
+            $f = $out[$k]; $size = if (Test-Path $f) { (Get-Item $f).Length } else { -1 }
+            Write-Output "::group::$k ($f) size=$size"; if ($size -gt 0) { Get-Content $f }; Write-Output '::endgroup::'
+            if ($size -gt 0 -and (Select-String -Path $f -SimpleMatch 'core: NmlCore loaded' -Quiet)) { $found = $true }
+          }
+          if (-not $found) { Write-Output "::error::no output channel carried 'core: NmlCore loaded' - the core did not load, or the .exe never started"; exit 1 }
           Write-Output "OK: the Windows build loaded NmlCore"
 
   # macOS core + proof (maintainer decision, board D40, 26.09.2026). tract-linalg assembles hand-written
