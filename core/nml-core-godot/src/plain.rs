@@ -29,7 +29,7 @@ use nml_core::{
 /// writes, minus the two this port does not model (see `DROPPED`). Bit `i` of a
 /// capture mask says "the plain form carried key `i`", so `plain_of` writes back
 /// exactly the key set that came in — `state_to_plain` is `if su.has(k)` too.
-pub const UNIT_KEYS: [&str; 20] = [
+pub const UNIT_KEYS: [&str; 21] = [
     "alive",
     "wounds",
     "radii",
@@ -54,6 +54,9 @@ pub const UNIT_KEYS: [&str; 20] = [
     // Wave 3 S4-U3: `state_to_plain` writes `bands` (battle_sim.gd:1837); the
     // node corpus predates it, so the bit keeps its round trip absent there.
     "bands",
+    // Parity step 6: the per-model `kits` the table's capture writes (battle_sim.gd `_model_kit`).
+    // Appended last (bit 20), so a corpus without them still round-trips without the key.
+    "kits",
 ];
 
 /// Keys of `_UNIT_DYNAMIC` this SEAM does not read. Reported by
@@ -188,6 +191,17 @@ fn ddict(d: &VarDictionary, k: &str) -> VarDictionary {
 
 fn strings(a: &VarArray) -> Vec<String> {
     a.iter_shared().map(|v| text(&v)).collect()
+}
+
+/// A unit's `kits` array as (weapon names, equipment, wounds_max) per model; absent = empty.
+fn raw_kits(u: &VarDictionary) -> Vec<nml_core::io::RawKit> {
+    darr(u, "kits")
+        .iter_shared()
+        .map(|k| {
+            let d = k.try_to::<VarDictionary>().unwrap_or_default();
+            (strings(&darr(&d, "weapons")), dint(&d, "equipment", 0) as u16, dint(&d, "wounds_max", 0))
+        })
+        .collect()
 }
 
 fn vec3(v: &Variant) -> [f64; 3] {
@@ -550,9 +564,10 @@ pub fn build_state(
         st.positions.push(darr(&u, "positions").iter_shared().map(|v| vec3(&v)).collect());
         st.wounds.push(darr(&u, "wounds").iter_shared().map(|v| int(&v)).collect());
         Rc::make_mut(&mut st.radii).push(darr(&u, "radii").iter_shared().map(|v| num(&v)).collect());
-        // Tray-exact S1: the table's capture does not write `kits` yet (S2) — none carried.
-        st.kits.push(Rc::new(Vec::new()));
-        st.kit_names.push(Rc::new(Vec::new()));
+        // Tray-exact S2: the capture writes `kits` (aligned with positions); same refusal as io.rs.
+        let (kits, kit_names) = nml_core::io::carry_kits(st.kits.len(), raw_kits(&u), st.positions[st.kits.len()].len());
+        st.kits.push(Rc::new(kits));
+        st.kit_names.push(Rc::new(kit_names));
         st.mods.push(mods_of(&ddict(&u, "mods")));
         st.mods_base.push(Rc::new(mods_of(&ddict(&u, "mods_base"))));
         attached_keys.push(strings(&darr(&u, "attached")));
@@ -776,6 +791,21 @@ pub fn plain_of(cap: &Captured) -> VarDictionary {
         }
         if has("earliest_arrival_round") {
             u.set("earliest_arrival_round", st.earliest_arrival_round[i]);
+        }
+        if has("kits") {
+            let mut a = VarArray::new();
+            for (w, e, m) in nml_core::io::kits_back(&st.kits[i], &st.kit_names[i]) {
+                let mut k = VarDictionary::new();
+                let mut ws = VarArray::new();
+                for n in &w {
+                    ws.push(&GString::from(n.as_str()).to_variant());
+                }
+                k.set("weapons", &ws);
+                k.set("equipment", e as i64);
+                k.set("wounds_max", m);
+                a.push(&k.to_variant());
+            }
+            u.set("kits", &a);
         }
         if has("attached") {
             let mut a = VarArray::new();
@@ -1232,4 +1262,42 @@ pub fn plain_of_derived(state: &State, root: &Captured) -> VarDictionary {
         has_los: root.has_los,
         dropped: Vec::new(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use nml_core::acts::read_act_header;
+    use nml_core::io::{carry_kits, kits_back};
+    use nml_core::state::ProfileCache;
+
+    const HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{"p1_0_a":{"unit_id":"p1_0_a","name":"A",
+      "quality":4,"defense":3,"tough":1,"wounds_max":[1,1,1],"model_count":3,"caster_value":0,"base_radius":0.016,
+      "game_system":"gf","faction_folder":"robot_legions","special_rules":[],"item_grants":[],
+      "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[]}}}"#;
+    const PLAIN: &str = r#"{"round":1,"rounds_total":4,"scoring":"end","units":{"p1_0_a":{"player":1,"alive":3,
+      "wounds":[1,1,1],"radii":[0.016,0.016,0.016],"positions":[[0.0,0.0,0.0],[0.05,0.0,0.0],[0.5,0.0,0.0]]}}}"#;
+
+    /// The seam's kits (as the table writes them) reach the core: names interned, written
+    /// back unchanged, and `casualty_order` is `Some` (red on main: the seam pushed none).
+    #[test]
+    fn the_seams_kits_reach_the_core_round_trip_and_enable_casualty_order() {
+        let mut cache = ProfileCache::new(read_act_header(HEADER).unwrap().profiles);
+        let mut st = nml_core::io::state_from_json(PLAIN, &mut cache, &mut None).unwrap();
+        assert!(nml_core::casualty::casualty_order(&st, 0).is_none());
+        let raw: Vec<_> = (0..3u16)
+            .map(|i| (vec!["Rifle".to_string(), if i == 0 { "Sniper" } else { "Rifle" }.to_string()], i % 2, 1))
+            .collect();
+        let (kits, names) = carry_kits(0, raw.clone(), 3);
+        assert_eq!(kits_back(&kits, &names), raw);
+        st.kits[0] = std::rc::Rc::new(kits);
+        st.kit_names[0] = std::rc::Rc::new(names);
+        assert!(nml_core::casualty::casualty_order(&st, 0).is_some());
+    }
+
+    /// A kits list that does not cover the models is refused; an absent one stays empty (old corpora).
+    #[test]
+    fn a_misaligned_or_absent_kits_list_carries_none() {
+        assert!(carry_kits(0, vec![(vec!["Rifle".into()], 0, 1); 2], 3).0.is_empty());
+        assert!(carry_kits(0, Vec::new(), 3).0.is_empty());
+    }
 }
