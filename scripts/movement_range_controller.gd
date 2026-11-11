@@ -288,6 +288,23 @@ func bands_for_model(model_node: Node3D) -> Dictionary:
 	return _activation_bands(model_node, props)
 
 
+## The bands the HUMAN sees and is capped to: bands_for_model plus Musician's +1" on every move band
+## (army data 3.6 _common.json: the model and its unit move +1" on move actions). Kept out of
+## bands_for_model itself because the AI adds the same +1" on top of that call (musician_move_bonus_in).
+func ui_bands_for_model(model_node: Node3D) -> Dictionary:
+	return _with_musician(bands_for_model(model_node), _game_unit_of(model_node))
+
+
+static func _with_musician(bands: Dictionary, unit: GameUnit) -> Dictionary:
+	var bonus := int(SoloController.musician_move_bonus_in(unit))
+	if bonus <= 0:
+		return bands
+	var out := bands.duplicate()
+	for k in ["advance", "rush", "charge"]:
+		out[k] = int(bands.get(k, 0)) + bonus
+	return out
+
+
 ## Outer radius (metres) of a band = base edge radius + the band distance.
 func band_radius_for_props(props: Dictionary, band_inches: int) -> float:
 	return base_radius_for_props(props) + float(band_inches) * INCHES_TO_METERS
@@ -382,7 +399,7 @@ func _terrain_sampler() -> Callable:
 
 func _build_indicator(model_node: Node3D) -> void:
 	var props := _props_of(model_node)
-	var bands := _activation_bands(model_node, props)
+	var bands := _with_musician(_activation_bands(model_node, props), _game_unit_of(model_node))
 	var base_color := color_for_props(props)
 
 	var root := Node3D.new()

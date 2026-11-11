@@ -63,6 +63,14 @@ On this machine the physical display may be in use — do not seize `:0` without
 
 **GDScript (gdUnit4)** — suites live in `test/`:
 
+Build the Rust core first (needs a Rust toolchain), then re-import, before running gdUnit:
+
+```bash
+cargo build --release --features onnx-tract --manifest-path core/nml-core-godot/Cargo.toml
+bash core/install_gdextension.sh
+godot --headless --import
+```
+
 ```bash
 # all suites
 flatpak run --filesystem=home org.godotengine.Godot --headless --path "$PWD" \
