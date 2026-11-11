@@ -810,6 +810,14 @@ func set_movement_cap(mode: int) -> void:
 ## model's Advance/Rush allowance from the movement-range controller (Fast/Slow/Swift/aura-aware).
 ## An AMBUSH-RESERVE unit is never capped (maintainer field find): dragging it from the tray onto
 ## the table is DEPLOYMENT, not a move — the cap forced placement in stuttered capped drags.
+## The human's bands (Musician included) when the controller offers them; a plain bands_for_model
+## controller (test stubs) keeps working.
+func _human_bands(node: Node3D) -> Dictionary:
+	if movement_range_controller.has_method("ui_bands_for_model"):
+		return movement_range_controller.ui_bands_for_model(node)
+	return movement_range_controller.bands_for_model(node)
+
+
 func _compute_movement_cap_meters() -> float:
 	if _movement_cap == MovementCap.OFF or movement_range_controller == null:
 		return 0.0
@@ -818,7 +826,7 @@ func _compute_movement_cap_meters() -> float:
 		return 0.0
 	if _is_reserve_placement(models[0]):
 		return 0.0
-	var bands: Dictionary = movement_range_controller.bands_for_model(models[0])
+	var bands: Dictionary = _human_bands(models[0])
 	var inches: int = _cap_band_inches(bands)
 	return float(inches) / METERS_TO_INCHES
 
@@ -838,7 +846,7 @@ func _compute_strict_cap_meters() -> float:
 	var node := _cap_anchor_model_node()
 	if node == null or _is_reserve_placement(node):
 		return 0.0
-	var bands: Dictionary = movement_range_controller.bands_for_model(node)
+	var bands: Dictionary = _human_bands(node)
 	var inches: int = _cap_band_inches(bands)
 	if inches <= 0:
 		return 0.0
