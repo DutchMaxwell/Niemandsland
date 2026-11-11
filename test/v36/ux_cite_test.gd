@@ -156,6 +156,40 @@ func test_solo_marker_line_carries_no_version_citation() -> void:
 		"a Solo & Co-Op line still carries a core version citation:\n%s" % "\n".join(bad)).is_empty()
 
 
+## F6: the Solo controller's decision labels cite the CORE rules through the same helper as main.gd
+## (system from the unit, version from the map, no page). The Solo & Co-Op booklet is another book with
+## no 3.6 edition, so its "Solo v3.5.0 ..." labels stay literal: only a hardcoded CORE system or core
+## version is flagged here (a bare page reference without a version is a separate, wider sweep).
+func test_solo_controller_core_citations_use_the_helper() -> void:
+	var path := "res://scripts/solo/solo_controller.gd"
+	var core_re := RegEx.create_from_string("(v3\\.5\\.1|core v3|GF/AoF|\\b(GF|AoF|AoFS|GFF) v3\\.)")
+	var file := FileAccess.open(path, FileAccess.READ)
+	assert_object(file).override_failure_message("cannot read %s" % path).is_not_null()
+	if file == null:
+		return
+	var bad: Array[String] = []
+	var checked := 0
+	var helper_sites := 0
+	var line_no := 0
+	while not file.eof_reached():
+		var code := _code_without_comment(file.get_line())
+		line_no += 1
+		if code.contains("rules_cite(\""):
+			bad.append("%s:%d -> hardcoded system: %s" % [path, line_no, code.strip_edges()])
+		if code.contains("OPRApiClient.rules_cite(RulesRegistry.system_of_unit("):
+			helper_sites += 1
+		for lit in _literals(code):
+			checked += 1
+			if core_re.search(lit) != null:
+				bad.append("%s:%d -> %s" % [path, line_no, lit])
+	file.close()
+	assert_int(checked).override_failure_message("the Solo controller scan saw no string literal").is_greater(0)
+	assert_int(helper_sites).override_failure_message(
+		"expected the 12 core-citing decision labels to call the helper, found %d line(s)" % helper_sites).is_greater_equal(12)
+	assert_array(bad).override_failure_message(
+		"Solo controller label(s) still hardcode a CORE rules citation:\n%s" % "\n".join(bad)).is_empty()
+
+
 func test_rules_cite_uses_the_rule_maps_version() -> void:
 	for c in SYSTEM_LABELS:
 		var system: String = c[0]

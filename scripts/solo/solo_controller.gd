@@ -2379,7 +2379,7 @@ func _act(unit: GameUnit) -> Dictionary:
 			solver_used = false
 			var held_by := hold_only_rule(unit.get_special_rules())
 			action_why = "%s hold-only (re-gated over the adopted plan)" % held_by
-			_rule_note(report, "%s: the adopted plan wanted to MOVE an %s unit — re-gated to Hold (GF v3.5.1 p.13/p.57)" % [unit.get_name(), held_by], true)
+			_rule_note(report, "%s: the adopted plan wanted to MOVE an %s unit — re-gated to Hold (%s)" % [unit.get_name(), held_by, OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))], true)
 		# Rules 3.6 (SHO-16) Cumbersome: the adopted plan obeys the same Hold-or-plain-Advance limit,
 		# and its advance carries no volley. The move survives, the illegal leg dies loudly.
 		if cumbersome_active(unit) and action != AiDecision.Action.HOLD:
@@ -2564,7 +2564,7 @@ func _act(unit: GameUnit) -> Dictionary:
 		report["shoot"] = do_shoot
 		action_why = "rush demoted: capped to the advance distance"
 		record_decision({"kind": "action", "unit": unit.get_name(),
-			"rule": "GF v3.5.1 p.7: a rush capped to the advance distance forfeits the shot for nothing — chose advances (demoted)",
+			"rule": "%s: a rush capped to the advance distance forfeits the shot for nothing — chose advances (demoted)" % OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit)),
 			"candidates": [], "chosen": "advances (demoted)",
 			"why": "rush capped to advance distance",
 			"data": {"budget_in": DIFFICULT_MOVE_CAP_IN, "advance_in": advance,
@@ -2814,7 +2814,7 @@ func preview_intent(intent: Dictionary, probe := Callable()) -> Dictionary:
 ## the plan's step 5 field list, but PR 3's Quick-Shot-after-Rush test needs it wired here to fire).
 func player_intent(unit: GameUnit, verb: int, target: GameUnit, point: Variant = null) -> Dictionary:
 	if unit.is_shaken:
-		return {"refused": "Shaken — spends its activation idle (GF v3.5.1 p.10)"}
+		return {"refused": "Shaken — spends its activation idle (%s)" % OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))}
 	if forces_hold(unit.get_special_rules()) and hold_only_param(unit) and verb != AiDecision.Action.HOLD:
 		return {"refused": "may only use Hold actions (p.13)"}
 	if cumbersome_active(unit) and verb != AiDecision.Action.HOLD and verb != AiDecision.Action.ADVANCE:
@@ -2970,7 +2970,7 @@ func _act_regroup(unit: GameUnit, report: Dictionary) -> Dictionary:
 	var chain_in: float = CoherencyChecker.SKIRMISH_CHAIN_DISTANCE_INCHES \
 		if CoherencyChecker.is_skirmish_system(unit) else CoherencyChecker.MAX_CHAIN_DISTANCE_INCHES
 	record_decision({"kind": "action", "unit": unit.get_name(),
-		"rule": "GF v3.5.1 p.7: a unit out of coherency at activation start MUST act to regroup — gather the stragglers before anything else",
+		"rule": "%s: a unit out of coherency at activation start MUST act to regroup — gather the stragglers before anything else" % OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit)),
 		"candidates": [], "chosen": "regroup", "why": "torn at activation start (casualties)",
 		"data": {"models": models.size(), "now_coherent": _config_coherent_world(models, gathered, chain_in)}})
 	# Post-move shooting: an Advance may fire — open the gate against whatever is now reachable.
@@ -2993,7 +2993,7 @@ func _act_aircraft(unit: GameUnit, report: Dictionary) -> Dictionary:
 	var pick := _aircraft_heading(unit, centre, move_in, weapons)
 	var dir2: Vector2 = pick.get("dir", Vector2(0, 1))
 	record_decision({"kind": "action", "unit": unit.get_name(),
-		"rule": "GF v3.5.1 Aircraft: straight Advance-only, mandatory length, ignores units/terrain, no seizing, uncharged",
+		"rule": "%s Aircraft: straight Advance-only, mandatory length, ignores units/terrain, no seizing, uncharged" % OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit)),
 		"candidates": [], "chosen": "flies a strafing run",
 		"why": str(pick.get("why", "best strafing lane")),
 		"data": {"move_in": move_in, "heading_deg": rad_to_deg(dir2.angle()),
@@ -3127,7 +3127,7 @@ func _aircraft_move(unit: GameUnit, dir: Vector2, move_in: float) -> void:
 	for k in _move_extra:
 		rec_data[k] = _move_extra[k]
 	record_decision({"kind": "move", "unit": unit.get_name(),
-		"rule": "GF v3.5.1 Aircraft: mandatory straight move, ignores all units and terrain while moving and stopping",
+		"rule": "%s Aircraft: mandatory straight move, ignores all units and terrain while moving and stopping" % OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit)),
 		"candidates": [], "chosen": "", "why": "aircraft lane", "data": rec_data})
 
 
@@ -5390,7 +5390,7 @@ func _plan_member_cast(unit: GameUnit, member: GameUnit, hold_out: Array = []) -
 	for t in chosen_targets:
 		target_names.append(((t as Dictionary)["unit"] as GameUnit).get_name())
 	record_decision({"kind": "cast", "unit": member.get_name(),
-		"rule": "Solo v3.5.0 'Caster' (D3+X, cycle-to-valid) + Caster(X) v3.5.1 (4+, boost/interference 18\" LoS)",
+		"rule": "Solo v3.5.0 'Caster' (D3+X, cycle-to-valid) + Caster(X) %s (4+, boost/interference 18\" LoS)" % OPRApiClient.rules_cite(RulesRegistry.system_of_unit(member)),
 		"candidates": candidates_rec, "chosen": str(chosen.get("name", "?")),
 		"why": ("ev-best pick" if ev_best_pick else ("skip 0-EV" if skip_zero_ev and chosen_ev > 0.0 else "official D3+X cycle")),
 		"data": {"d3": d3, "caster_x": caster_x, "targets": ", ".join(PackedStringArray(target_names)),
@@ -5852,7 +5852,7 @@ func consolidate_after_melee_win(unit: GameUnit) -> int:
 	human_slot = prev_human
 	face_nearest_enemy(unit)
 	record_decision({"kind": "consolidate", "unit": unit.get_name(),
-		"rule": "GF v3.5.1 p.9 consolidation: enemy destroyed in melee — the survivor may move up to 3\"",
+		"rule": "%s consolidation: enemy destroyed in melee — the survivor may move up to 3\"" % OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit)),
 		"candidates": [], "chosen": why, "why": "melee winner consolidation",
 		"data": {"band_in": CONSOLIDATION_WIN_IN}})
 	return dang
@@ -6483,11 +6483,11 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 		# this move — ONE line, only when the clamp actually bit; residual overlap/coherency debt (if
 		# any) was settled through the shorten/ladder, never as free distance.
 		record_decision({"kind": "move", "unit": unit.get_name(),
-			"rule": "GF v3.5.1 p.7 distance truth: placement-gate nudge clamped to band slack (NML-230)",
+			"rule": "%s distance truth: placement-gate nudge clamped to band slack (NML-230)" % OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit)),
 			"candidates": [], "chosen": "", "why": "band clamp",
 			"data": {"models": band_clamp_models, "budget_in": reach}})
 	record_decision({"kind": "move", "unit": unit.get_name(),
-		"rule": "GF v3.5.1 p.7 move bands; p.11 difficult 6\" cap; p.57 move around difficult",
+		"rule": "%s move bands, difficult 6\" cap; Solo v3.5.0 move around difficult" % OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit)),
 		"candidates": [], "chosen": "", "why": why,
 		"data": move_data})
 	return dang
@@ -9640,7 +9640,7 @@ func mark_limited_used(unit: GameUnit, profile: Dictionary) -> void:
 			spent.append(wname)
 		unit.unit_properties["limited_used"] = spent
 	record_decision({"kind": "action", "unit": unit.get_name() if unit != null else "?",
-		"rule": "Limited (core v3.5.1): may only be used once per game",
+		"rule": "Limited (%s): may only be used once per game" % OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit)),
 		"candidates": [], "chosen": str(profile.get("name", "?")), "why": "limited weapon expended",
 		"data": {"weapon": str(profile.get("name", "?"))}})
 
@@ -13269,7 +13269,7 @@ func _try_place_reserve_unit(unit: GameUnit, arrival_zone: Rect2, occupied: Arra
 		last_arrival_note = "Ambush Beacon: not used — %s landed %.1f\" from %s (the waiver needs %d\" or less)" % [
 			unit.get_name(), float(near["dist_in"]), str(near["name"]), int(round(float(near["radius_in"])))]
 	record_decision({"kind": "deploy", "unit": unit.get_name(),
-		"rule": "GF/AoF v3.5.1 p.13 Ambush (Infiltrate = 3\"): arrive start of a round after the first, >%d\" from enemies" % min_in,
+		"rule": "%s Ambush (Infiltrate = 3\"): arrive start of a round after the first, >%d\" from enemies" % [OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit)), min_in],
 		"candidates": [], "chosen": "", "why": "ambush/infiltrate arrival (does not consume its activation)",
 		"data": {"round": round_no, "x_m": spot.x, "z_m": spot.y, "min_enemy_in": min_in}})
 	return true
