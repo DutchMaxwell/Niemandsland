@@ -37,9 +37,9 @@ env:
   NML_SKIP_REMOTE_MANIFEST: "1"
 
 jobs:
-  # Fast lane: a PR that only touches core/**, tools/*.py (root tools) or docs/** cannot
-  # affect the Godot test/export jobs — core/nml-core-godot's own build is already covered
-  # by rust.yml. Runs on every trigger (cheap) so its output is always available; the
+  # Fast lane: a PR that only touches tools/*.py (root tools) or docs/** cannot affect the
+  # Godot test/export jobs. A core/** change is NOT fast lane: the test shards load the core
+  # (one-core P1, step 6), so a Rust change can break them. Runs on every trigger (cheap) so its output is always available; the
   # gated jobs below fall back to running whenever the event isn't a pull_request, so
   # push/tag/workflow_dispatch (the main-branch and release path) always run in full.
   changes:
@@ -67,10 +67,9 @@ jobs:
         with:
           predicate-quantifier: 'every'
           # Negation-only filter: with `every`, a changed file matches when it falls
-          # outside ALL of core/**, tools/*.py and docs/** (i.e. NOT core-only).
+          # outside BOTH tools/*.py and docs/**. (The name is historic: core/** left the fast lane.)
           filters: |
             not_core_only:
-              - '!core/**'
               - '!tools/*.py'
               - '!docs/**'
       # The macOS core job (export-macos) is the only macos-* runner leg, so a pull request runs it
@@ -479,11 +478,18 @@ jobs:
       - name: Smoke-run the exported Linux build
         run: |
           set -o pipefail
-          timeout 30 build/linux/$EXPORT_NAME.x86_64 --headless > /tmp/exported_run.log 2>&1 || true
+          timeout 30 build/linux/$EXPORT_NAME.x86_64 --headless --quit-after 300 > /tmp/exported_run.log 2>&1 || true
           if grep -iE "GDExtension|SCRIPT ERROR|Parse Error" /tmp/exported_run.log; then
             echo "::error::the exported build reported an extension/script/parse error"; exit 1
           fi
-          echo "OK: exported build started with no GDExtension/script/parse errors"
+          # The core must really load, not just ship: godot-rust's init line and the boot line of
+          # update_checker.gd (CoreLoadNotice.boot_line) both have to be there.
+          for LINE in "Initialize godot-rust" "core: NmlCore loaded"; do
+            grep -qF "$LINE" /tmp/exported_run.log || {
+              grep -F "core: NmlCore" /tmp/exported_run.log || true
+              echo "::error::the exported build never printed '$LINE' - the core did not load"; exit 1; }
+          done
+          echo "OK: exported build started, loaded NmlCore, no GDExtension/script/parse errors"
 
       # Best-effort: a failed artifact upload (e.g. the account's Actions artifact-storage
       # quota is full) must not red-fail the export job. Releases use the self-contained
@@ -672,13 +678,16 @@ jobs:
         run: |
           set -o pipefail
           APP=$(find build/macos/bundle -maxdepth 1 -name '*.app' | head -1)
-          perl -e 'alarm shift; exec @ARGV' 30 "$APP/Contents/MacOS/$EXPORT_NAME" --headless > build/logs/exported_run.log 2>&1 || true
+          perl -e 'alarm shift; exec @ARGV' 30 "$APP/Contents/MacOS/$EXPORT_NAME" --headless --quit-after 300 > build/logs/exported_run.log 2>&1 || true
           cat build/logs/exported_run.log
           if grep -iE "GDExtension|SCRIPT ERROR|Parse Error" build/logs/exported_run.log; then
             echo "::error::the exported build reported an extension/script/parse error"; exit 1
           fi
           if ! grep -q "Initialize godot-rust" build/logs/exported_run.log; then
             echo "::error::the exported build never loaded the extension (no godot-rust init line)"; exit 1
+          fi
+          if ! grep -qF "core: NmlCore loaded" build/logs/exported_run.log; then
+            echo "::error::the exported build never printed 'core: NmlCore loaded' - the core did not load"; exit 1
           fi
           echo "OK: exported build started, loaded the extension, no GDExtension/script/parse errors"
 
@@ -836,6 +845,18 @@ jobs:
           # The export-macos job's zip: universal core dylib in Contents/Frameworks, ad-hoc signed
           # (dylib first, then the .app) and run on a macos-15 runner before it was uploaded.
           cp "dist/macos-core/$EXPORT_NAME.zip" "dist/macos/$EXPORT_NAME.zip"
+
+      # export-linux never runs on a tag, so the release smokes its own Linux build: it must boot and
+      # load NmlCore (the same two lines export-linux requires).
+      - name: Smoke-run the Linux release build - NmlCore loads
+        run: |
+          timeout 30 dist/linux/$EXPORT_NAME.x86_64 --headless --quit-after 300 > /tmp/release_run.log 2>&1 || true
+          for LINE in "Initialize godot-rust" "core: NmlCore loaded"; do
+            grep -qF "$LINE" /tmp/release_run.log || {
+              grep -F "core: NmlCore" /tmp/release_run.log || true
+              echo "::error::the Linux release build never printed '$LINE' - the core did not load"; exit 1; }
+          done
+          echo "OK: the Linux release build loaded NmlCore"
 
       - name: Guard - no debug symbols in the release tree
         run: |

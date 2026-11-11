@@ -70,9 +70,7 @@ func _pick(sc: SoloController) -> GameUnit:
 	return sc._planner_pick_unit(pool)
 
 
-func test_fake_brain_is_in_decisions_and_killed_server_declines(
-		do_skip := not ClassDB.class_exists("NmlCore"),
-		skip_reason := "Build/install NmlCore to exercise the developer brain bridge") -> void:
+func test_fake_brain_is_in_decisions_and_killed_server_declines() -> void:
 	var port_file := "user://brain_port_%d.txt" % Time.get_ticks_usec()
 	_server_pid = OS.create_process("python3", [ProjectSettings.globalize_path(
 		"res://test/e2e/brain_fixture.py"), ProjectSettings.globalize_path(port_file)])
@@ -113,17 +111,13 @@ func test_unset_url_follows_the_shipped_brain_else_the_tree() -> void:
 	_main._solo_difficulty_grades = {}
 	_main._solo_apply_difficulty()
 	var shipped := sc.shipped_brain_ready()
-	if not ClassDB.class_exists("NmlCore"):
-		assert_bool(shipped).is_false()
 	assert_bool(sc.difficulty_by_slot[2].planner).is_equal(shipped)
 	assert_bool(sc.difficulty_by_slot.has(1)).is_false()
 	assert_bool(sc.auto_interference).is_false()
 	await Boot.settle(get_tree())
 
 
-func test_unset_url_keeps_decisions_identical(
-		do_skip := not ClassDB.class_exists("NmlCore"),
-		skip_reason := "Build/install NmlCore to exercise the developer brain bridge") -> void:
+func test_unset_url_keeps_decisions_identical() -> void:
 	var sc := _controller()
 	assert_object(_pick(sc)).is_not_null()
 	var expected := _without_batch_us(sc.decision_log)
