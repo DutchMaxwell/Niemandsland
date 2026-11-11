@@ -37,9 +37,9 @@ env:
   NML_SKIP_REMOTE_MANIFEST: "1"
 
 jobs:
-  # Fast lane: a PR that only touches core/**, tools/*.py (root tools) or docs/** cannot
-  # affect the Godot test/export jobs — core/nml-core-godot's own build is already covered
-  # by rust.yml. Runs on every trigger (cheap) so its output is always available; the
+  # Fast lane: a PR that only touches tools/*.py (root tools) or docs/** cannot affect the
+  # Godot test/export jobs. A core/** change is NOT fast lane: the test shards load the core
+  # (one-core P1, step 6), so a Rust change can break them. Runs on every trigger (cheap) so its output is always available; the
   # gated jobs below fall back to running whenever the event isn't a pull_request, so
   # push/tag/workflow_dispatch (the main-branch and release path) always run in full.
   changes:
@@ -67,10 +67,9 @@ jobs:
         with:
           predicate-quantifier: 'every'
           # Negation-only filter: with `every`, a changed file matches when it falls
-          # outside ALL of core/**, tools/*.py and docs/** (i.e. NOT core-only).
+          # outside BOTH tools/*.py and docs/**. (The name is historic: core/** left the fast lane.)
           filters: |
             not_core_only:
-              - '!core/**'
               - '!tools/*.py'
               - '!docs/**'
       # The macOS core job (export-macos) is the only macos-* runner leg, so a pull request runs it
