@@ -137,6 +137,9 @@ jobs:
           name: nml-core-linux-test
           path: core/target/release
 
+      - name: Install the core extension manifest
+        run: touch core/target/.gdignore && bash core/install_gdextension.sh && test -f core/nml_core.gdextension
+
       - name: Setup Godot
         uses: ./.github/actions/setup-godot
         with:
