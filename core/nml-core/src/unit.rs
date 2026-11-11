@@ -874,6 +874,10 @@ pub struct ShootProfile {
     /// widened window counts only past this centre distance, exactly 9" not
     /// "over" — same strict gate as every other over-9" read in this port.
     pub shred_over_in: f64,
+    /// Epoch 75 (`EPOCH_75_TABLE_FIXES`): an "Enhanced X" Shred entry carried with its base
+    /// pays the alias on unmodified 1s at any distance on a shot and on a charge (never a
+    /// strike-back) and never widens the window. Set by arm 6b; read by dice.rs.
+    pub shred_any_distance: bool,
     /// Wave 4 (`rules-wave4-boostbases`) — the Bane Boost's widened save
     /// re-roll window ("Mischievous Boost"'s own `reroll_save_low`, stamped
     /// by `build_for`'s epoch-6 arm only when the model also carries the
@@ -3890,6 +3894,13 @@ fn stamp(
             || hit.upgrades.is_empty()
             || !has_exact_rule(&p.special_rules, &hit.upgrades)
         {
+            continue;
+        }
+        // Epoch 75: the Enhanced form is "always", not the 3.5 Boost window.
+        if rule_on(rules_epoch, crate::acts::EPOCH_75_TABLE_FIXES) && hit.name.starts_with("Enhanced ") {
+            for sp in shoot.iter_mut().filter(|sp| sp.shred_alias) {
+                sp.shred_any_distance = true;
+            }
             continue;
         }
         for sp in shoot.iter_mut() {
