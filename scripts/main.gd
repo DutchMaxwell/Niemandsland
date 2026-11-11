@@ -9415,6 +9415,21 @@ func _solo_confirm_strike_back(defender: GameUnit, charger: GameUnit, counter_fi
 	return strike
 
 
+## Rules 3.6 (`EPOCH_73_V36`): a LIVING joined hero rolls its own Impact(X) per alive model on top of
+## the host's dice (the rule belongs to the model). Returns Vector2i(extra dice, highest hero rating).
+func _solo_hero_impact(charger: GameUnit) -> Vector2i:
+	var out := Vector2i.ZERO
+	if charger == null or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 \
+			or not charger.has_method("get_attached_heroes"):
+		return out
+	for h in charger.get_attached_heroes():
+		var hero := h as GameUnit
+		var hr: int = _solo_unit_rating(hero, "Impact")
+		if hero != null and hr > 0 and hero.get_alive_count() > 0:
+			out += Vector2i(hr * hero.get_alive_count(), hr)
+	return out
+
+
 ## Impact(X) auto-hits on a charge (GF/AoF v3.5.1 p.13: "Roll X dice when attacking after charging, unless
 ## fatigued. For each 2+ the target takes one hit."). Impact is a per-model rule, so `charger` rolls X per
 ## alive model, MINUS one roll per defender model with Counter (p.13 Counter); the hits carry no AP/Deadly
@@ -9427,13 +9442,14 @@ func _solo_charge_impact(charger: GameUnit, defender: GameUnit, human_defends: b
 	if charger == null or defender == null:
 		return 0
 	var x: int = _solo_unit_rating(charger, "Impact")
+	var hero_imp: Vector2i = _solo_hero_impact(charger)
 	# Heavy Impact (autonomous wave 2026-07-19 — "Counts as having Impact(X) with hits that have
 	# AP(1)."): a SECOND impact pool whose hits save at AP(1). unit_rating's "<name>(" prefix keeps
 	# the two ratings apart. Counter's roll denial strips the HEAVY dice first (defender-optimal,
 	# the codebase's removal convention).
 	var hx: int = _solo_unit_rating(charger, "Heavy Impact")
 	var heavy_ap: int = int(RulesRegistry.unit_param(charger, "Heavy Impact", "ap", 1))
-	if (x <= 0 and hx <= 0) or charger.is_fatigued:
+	if (x <= 0 and hx <= 0 and hero_imp.x <= 0) or charger.is_fatigued:
 		return 0
 	var models: int = charger.get_alive_count()
 	var counter_models: int = _solo_counter_models(defender)
@@ -9451,6 +9467,8 @@ func _solo_charge_impact(charger: GameUnit, defender: GameUnit, human_defends: b
 	var heavy_cut: int = mini(cut_models, hx * models)
 	var heavy_dice: int = hx * models - heavy_cut
 	var dice: int = AiCombatMath.impact_total_dice(x, models, cut_models - heavy_cut)
+	if hero_imp.x > 0:   # joined hero's own dice join the pool before Counter/Brace cut (the log shows the total)
+		dice = maxi(0, AiCombatMath.impact_total_dice(x, models, 0) + hero_imp.x - (cut_models - heavy_cut))
 	if counter_models > 0 and battle_log != null and (x + hx) * models > 0:
 		_log_rule_event(BattleLog.Category.COMBAT, "Counter: -%d Impact dice (%s)" % [
 			counter_models, charger.get_name()], true)
@@ -9465,7 +9483,7 @@ func _solo_charge_impact(charger: GameUnit, defender: GameUnit, human_defends: b
 			defender.get_name(), impact_rule, int(impact_gate), AiCombatMath.shown_target(impact_defense),
 			_solo_most_models_note(defender, impact_rule)], true)
 	var caused: int = 0
-	for pool in [{"label": "Impact", "rating": x, "dice": dice, "ap": 0},
+	for pool in [{"label": "Impact", "rating": maxi(x, hero_imp.y), "dice": dice, "ap": 0},
 			{"label": "Heavy Impact", "rating": hx, "dice": heavy_dice, "ap": heavy_ap}]:
 		var p := pool as Dictionary
 		if int(p["dice"]) <= 0 or _solo_combined_alive(defender) <= 0:
