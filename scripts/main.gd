@@ -13050,6 +13050,16 @@ func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false, cause
 						unit.get_name(), own_valiant_share], true)
 		elif cause != "" and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
 			var banner_share: int = morale_bonus - SoloController.morale_rating_of(unit)
+			# Bravery Aura (army data 3.6) has no shooting/melee qualifier: its share survives any cause.
+			var bravery_share := 0
+			for bm in [unit] + unit.get_attached_heroes():
+				var bmember := bm as GameUnit
+				if bmember == null or bmember.get_alive_count() == 0:
+					continue
+				for be in RulesRegistry.unit_rules_of_primitive(bmember, "Banner"):
+					if str((be as Dictionary)["name"]) == "Bravery Aura":
+						bravery_share = maxi(bravery_share, int(((be as Dictionary).get("params", {}) as Dictionary).get("morale_bonus", 0)))
+			banner_share -= mini(bravery_share, banner_share)
 			if banner_share > 0:
 				morale_bonus -= banner_share
 				_log_rule_event(BattleLog.Category.COMBAT, "Banner: %s gets no +%d against %s (only shooting or melee)" % [
