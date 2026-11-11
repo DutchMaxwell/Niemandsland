@@ -5010,8 +5010,12 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 				if boost_low <= 1 or boost_base.is_empty() or not AiEv.has_exact_rule(member, boost_base):
 					continue
 				warbound_logged = true
-				battle_log.log_event(BattleLog.Category.COMBAT, "%s: failed saves of 1-%d count as wounds on %s" % [
-					str((e as Dictionary).get("name", "")), boost_low, target.get_name()], true)
+				if _solo_shred_boost_widens(str((e as Dictionary).get("name", ""))):
+					battle_log.log_event(BattleLog.Category.COMBAT, "%s: failed saves of 1-%d count as wounds on %s" % [
+						str((e as Dictionary).get("name", "")), boost_low, target.get_name()], true)
+				else:   # PF-b: an Enhanced form keeps the window at 1s and drops the distance condition
+					battle_log.log_event(BattleLog.Category.COMBAT, "%s: unmodified 1s to block deal an extra wound at any distance on %s" % [
+						str((e as Dictionary).get("name", "")), target.get_name()], true)
 				break
 		if m_ap > 0:
 			profile = profile.duplicate()
@@ -9694,10 +9698,14 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 	if count <= 0:
 		return 0
 	var shred_alias_live: bool = true
+	# PF-b (EPOCH_73_V36): an Enhanced form of the alias (Enhanced Warbound / Destroyer / Infected) pays at any distance
+	# on a shot and on a charge. A strike-back (no charge gap, no shot distance) is not a charge: its gate stays.
+	var shred_enhanced := _solo_shred_enhanced_name(striker)
+	var shred_enhanced_live: bool = not shred_enhanced.is_empty() and (charge_from_in > 0.0 or dist_in > 0.0)
 	# R-1 (A2): a scoped form of Shred is the rule Shred itself - only an alias of ANOTHER name is distance-gated.
 	if typeof(profile.get("_shred_alias")) == TYPE_STRING and str(profile["_shred_alias"]) != "" \
 			and _solo_shred_group_key(str(profile["_shred_alias"])) != "Shred":
-		shred_alias_live = (
+		shred_alias_live = shred_enhanced_live or (
 			_solo_alias_charge_over(true, charge_from_in) if charge_from_in > 0.0
 			else _solo_alias_family_over(dist_in))
 	# TC-023 — the Fortified family is an ALL-MODELS unit trigger, and a Takedown save is a unit of [1]'s
@@ -9866,7 +9874,8 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 			var ep: Dictionary = ed.get("params", {})
 			var low := maxi(int(ep.get("save_fail_max", 0)), int(ep.get("extra_wound_save_low", 0)))
 			var base := str(ep.get("upgrades", ""))
-			if low <= 1 or base.is_empty() or not AiEv.has_exact_rule(striker, base):
+			if low <= 1 or base.is_empty() or not AiEv.has_exact_rule(striker, base) \
+					or not _solo_shred_boost_widens(str(ed.get("name", ""))):
 				continue
 			var gate := AiEv.over_in_gate(ep)
 			if gate > 0.0 and not over9:
@@ -9890,7 +9899,7 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 					boost_rule, boost_low, gate_note, shred_extra, ("" if shred_extra == 1 else "s")], true)
 			else:
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %d Defense roll%s of 1 → +%d wound%s" % [
-					shred_name, shred_extra, ("" if shred_extra == 1 else "s"), shred_extra, ("" if shred_extra == 1 else "s")], true)
+					(shred_name if shred_enhanced.is_empty() else shred_enhanced), shred_extra, ("" if shred_extra == 1 else "s"), shred_extra, ("" if shred_extra == 1 else "s")], true)
 			_solo_rule_float(defender, "%s +%d" % [(boost_rule if boost_low > 1 else shred_name), shred_extra], Color(1.0, 0.5, 0.4))
 	if own_apart:
 		var own := AiCombatMath.shred_bonus_wounds(save_faces, reroll)
@@ -10815,6 +10824,25 @@ func _solo_shred_facet_name(member: GameUnit, profile_range: int) -> String:
 		if AiEv.facet_applies((e as Dictionary).get("params", {}), profile_range):
 			return str((e as Dictionary).get("name", "Shred"))
 	return ""
+
+
+## PF-b (EPOCH_73_V36): the name of the Enhanced form of a Shred alias the striker carries together with its base
+## (Enhanced Warbound / Destroyer / Infected), or "". The form says the base always pays, so it lifts the base's
+## distance condition on shots and charges (not on a strike-back); its window stays the base's unmodified 1s.
+func _solo_shred_enhanced_name(striker: GameUnit) -> String:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		return ""
+	for e in RulesRegistry.unit_rules_of_primitive(striker, "Shred"):
+		var ed := e as Dictionary
+		var base := str((ed.get("params", {}) as Dictionary).get("upgrades", ""))
+		if str(ed.get("name", "")).begins_with("Enhanced ") and not base.is_empty() and AiEv.has_exact_rule(striker, base):
+			return str(ed["name"])
+	return ""
+
+
+## PF-b: the 1-2 window belongs to the 3.5 Boost forms; from EPOCH_73_V36 an "Enhanced" form never widens it.
+static func _solo_shred_boost_widens(rule_name: String) -> bool:
+	return AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 or not rule_name.begins_with("Enhanced ")
 
 
 ## A1: the profile prints Lacerate and no Bane — AiShooting folds Lacerate into the `bane` flag for its
