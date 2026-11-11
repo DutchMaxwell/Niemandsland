@@ -173,6 +173,9 @@ jobs:
           name: nml-core-linux-test
           path: core/target/release
 
+      - name: Install the core extension manifest
+        run: touch core/target/.gdignore && bash core/install_gdextension.sh && test -f core/nml_core.gdextension
+
       - name: Setup Python (same minor as the nml_core wheel)
         uses: actions/setup-python@v5
         with:
@@ -229,6 +232,20 @@ jobs:
 
       - name: Import project (generates .godot/, compile-check)
         run: godot --headless --editor --quit --path .
+
+      # The shards must run with NmlCore loaded: fail here, before gdUnit, when the class is absent.
+      - name: Gate - NmlCore loads in the test lane
+        run: |
+          godot --headless --path . -s res://tools/core_dormant_check.gd 2>&1 | tee /tmp/core_load.log
+          python3 - <<'PY'
+          import json, sys
+          lines = [l for l in open("/tmp/core_load.log") if "NML_DORMANT_CHECK " in l]
+          data = json.loads(lines[0].split("NML_DORMANT_CHECK ", 1)[1]) if lines else {}
+          if data.get("class_present") is not True:
+              print("::error::NmlCore did not load in the test lane")
+              sys.exit(1)
+          print("OK: NmlCore loaded in the test lane (class_present True)")
+          PY
 
       # Each shard builds its own deterministic slice of the suite: sort every
       # *_test.gd under test/ (recursive, LC_ALL=C), then let tools/shard_assign.py split them into
