@@ -814,11 +814,11 @@ func _compute_movement_cap_meters() -> float:
 	if _movement_cap == MovementCap.OFF or movement_range_controller == null:
 		return 0.0
 	var models := _selected_model_nodes()
-	if models.is_empty() or not movement_range_controller.has_method("bands_for_model"):
+	if models.is_empty() or not movement_range_controller.has_method("ui_bands_for_model"):
 		return 0.0
 	if _is_reserve_placement(models[0]):
 		return 0.0
-	var bands: Dictionary = movement_range_controller.bands_for_model(models[0])
+	var bands: Dictionary = movement_range_controller.ui_bands_for_model(models[0])
 	var inches: int = _cap_band_inches(bands)
 	return float(inches) / METERS_TO_INCHES
 
@@ -833,12 +833,12 @@ func _compute_movement_cap_meters() -> float:
 func _compute_strict_cap_meters() -> float:
 	if not _strict_movement_enforced() or movement_range_controller == null:
 		return 0.0
-	if not movement_range_controller.has_method("bands_for_model"):
+	if not movement_range_controller.has_method("ui_bands_for_model"):
 		return 0.0
 	var node := _cap_anchor_model_node()
 	if node == null or _is_reserve_placement(node):
 		return 0.0
-	var bands: Dictionary = movement_range_controller.bands_for_model(node)
+	var bands: Dictionary = movement_range_controller.ui_bands_for_model(node)
 	var inches: int = _cap_band_inches(bands)
 	if inches <= 0:
 		return 0.0
