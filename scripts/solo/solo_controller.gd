@@ -2717,6 +2717,8 @@ func execute_intent(intent: Dictionary, report: Dictionary) -> Dictionary:
 		_rule_note(report, "Traversal: moves through friendly and enemy units", true)   # invisible move-through — travels
 		_rule_note(report, "Traversal: terrain is NOT ignored (unlike Flying)", false)   # local clarification — no travel
 		_rule_note(report, "Traversal: may not end inside another unit — end stays clear", false)   # local clarification — no travel
+	if flies_through_units(unit) and bool(report["moved"]):
+		_rule_note(report, "Flying: moves through friendly and enemy units", true)   # invisible move-through — travels
 	# Rules 3.6 (EPOCH_73_V36): Artillery is no longer held to Hold actions — a moved gun says why it could.
 	if bool(report["moved"]) and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
 			and unit.has_special_rule("Artillery"):
@@ -3629,8 +3631,8 @@ func charge_dangerous_toll(unit: GameUnit, target_unit: GameUnit, from: Vector3,
 ## clear of every OTHER unit's model bases (point-distance only, no planning). True = worth the sweep;
 ## false = the unit is walled in, accept the stub. Own-unit models are ignored (they move WITH it).
 func _has_lateral_room(unit: GameUnit, models: Array, positions: Array, reach_in: float) -> bool:
-	if is_traversal(unit):
-		return true   # Traversal moves through other units' bases — the sweep is never boxed in by them
+	if is_traversal(unit) or flies_through_units(unit):
+		return true   # Traversal / Flying move through other units' bases — the sweep is never boxed in by them
 	var anchor := MoveIntent.anchor_of(positions)
 	var probe: float = reach_in * 0.5 * INCHES_TO_METERS
 	var own_r := _move_base_radius_m(models)
@@ -7053,6 +7055,13 @@ static func is_traversal(unit: GameUnit) -> bool:
 	return unit != null and RulesRegistry.unit_rule_active(unit, "Traversal")
 
 
+## Flying (GF/AoF Core Rules 3.6.0 p.2) may move through units: from EPOCH_73_V36 the AI's route ignores
+## other units' spacing zones like Traversal (the rest position keeps the 1" spacing). Below it, replays
+## keep the old walker routing.
+static func flies_through_units(unit: GameUnit) -> bool:
+	return unit != null and unit.has_special_rule("Flying") and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
+
+
 ## Range penalty (inches) a shooter suffers when targeting `target` — the Aircraft rule reduces every
 ## enemy's range against it (system-scoped data; 0 for anything that is not an aircraft).
 static func target_range_penalty_in(target: GameUnit) -> float:
@@ -7783,8 +7792,8 @@ func _plan_positions(unit: GameUnit, models: Array, positions: Array, delta: Vec
 			"r": float(zd["r"]) / INCHES_TO_METERS})
 	if not zones_in.is_empty():
 		opts["zones"] = zones_in
-	if is_traversal(unit):
-		opts["zones_rest_only"] = true   # Traversal: unit-spacing zones stop blocking the ROUTE; rest legality stays strict
+	if is_traversal(unit) or flies_through_units(unit):
+		opts["zones_rest_only"] = true   # Traversal / Flying: unit-spacing zones stop blocking the ROUTE; rest legality stays strict
 	var sampled := _terrain_grid_in(board_in, off, avoid_difficult, avoid_dangerous, board_y_in)
 	opts["avoid_cells"] = sampled["avoid"]
 	if avoid_difficult or avoid_dangerous:
