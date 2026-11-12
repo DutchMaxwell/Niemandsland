@@ -24,7 +24,7 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   as Spell Drain, no longer loses the +1 from Bravery Aura. The rest of the Banner bonus is still
   stripped, and the battle log says so. (#2633)
 - **A Musician unit's move rings and strict cap include its +1".** The rings and the strict
-  dry-brush cap now show 7" and 13" for a Musician unit, where they showed 6" and 12". (#2635)
+  movement cap now show 7" and 13" for a Musician unit, where they showed 6" and 12". (#2635)
 - **Parry dice count only the models that carry a Parry weapon.** When Parry comes from a weapon, a
   unit rolls its Parry dice for the models that carry that weapon, not for every model in the unit.
   (#2642)
@@ -83,7 +83,7 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   the 3.5 reading at rules epoch 72. (#2607, #2608, #2612, #2613, #2615, #2616)
 - CI for the Rust core (one-core phase 1): the test lane builds and loads the core, and its 12 core
   test cases run instead of skipping (#2614, #2624). Core-only PRs run the test shards (#2625).
-  Exported builds, the Windows build and the release fail unless the core loads, and a release zip
+  Exported builds and the release fail unless the core loads, an advisory job boots the Windows build, and a release zip
   guard checks that the core is in the zip (#2627, #2628, #2630, #2618). The docs call the core
   required (#2626).
 - Test harness: the two-instance multiplayer test binds every model after a guest rejoin, so the
