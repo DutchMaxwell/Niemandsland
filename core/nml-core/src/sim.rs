@@ -9263,6 +9263,47 @@ fn land_cover(statics: &[UnitStatic], next: &mut State, si: usize, t: &Terrain, 
     }
 }
 
+/// P3 step 13 - the parts of one activation's move band. `total` sums them in exactly the order the real move
+/// always did (a float sum depends on its order), so the move and the allowance spend one number, bit for bit.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct BandParts {
+    pub base: f64, pub bounding: f64, pub vr: f64, pub gs: f64,
+    pub feat: f64, pub buff: f64, pub grant: f64, pub rapid_mark: f64,
+}
+
+impl BandParts {
+    pub(crate) fn total(&self) -> f64 {
+        self.base + self.bounding + self.vr + self.gs + self.feat + self.buff + self.grant + self.rapid_mark
+    }
+}
+
+/// The eight band reads of `resolve_with` (its comments name each rule), in its order. Pure: the Speed Feat latch
+/// stamp and every log line stay with the caller. `trace` is `solo_move_grant_delta_in`'s last argument.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn band_parts(
+    statics: &[UnitStatic], state: &State, next: &State, si: usize, kind: i64, ci: Option<usize>,
+    bounding_in: f64, cover: Cover, seams: Seams, trace: bool,
+) -> BandParts {
+    let vr_on = seams.versatile_reach || rule_on(seams.rules_epoch, 1);
+    let vr = versatile_reach_charge_in(statics, next, si, kind, ci, bounding_in, vr_on, seams.rules_epoch);
+    let gs = grounded_speed_bonus_in(statics, state, si, cover, seams.rules_epoch, kind);
+    let feat = speed_feat_band_in(statics, next, si, kind, seams.rules_epoch);
+    let buff = live_move_bonus_in(next, statics, si, seams.rules_epoch);
+    let grant = solo_move_grant_delta_in(statics, next, si, kind, seams.rules_epoch, seams.bands_prefolded, trace);
+    let rapid_mark = rapid_charge_mark_bonus_in(statics, next, si, ci, kind, seams.rules_epoch);
+    let b = &next.bands[si];
+    let base = match kind {
+        ADVANCE => b.advance,
+        RUSH => b.rush,
+        // CHARGE reads the table's distinct `charge` band from `EPOCH_10_CHARGE_BAND` on (solo_controller.gd:1647);
+        // below it the pre-port reading stays `rush`, so existing corpora replay byte-exact.
+        CHARGE if rule_on(seams.rules_epoch, EPOCH_10_CHARGE_BAND) => b.charge.unwrap_or(b.rush),
+        CHARGE => b.rush,
+        _ => 0.0,
+    };
+    BandParts { base, bounding: bounding_in, vr, gs, feat, buff, grant, rapid_mark }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn resolve_with(
     statics: &[UnitStatic],
@@ -9349,15 +9390,9 @@ fn resolve_with(
     // (external review 03.09. item 3 / F9, `acts::rule_on`): a pre-epoch
     // record with the boolean legacy-OFF (or absent) stays unaffected;
     // `rules_epoch >= 1` turns this rule on regardless of the boolean.
-    let vr_in = versatile_reach_charge_in(
-        statics, &next, si, kind, ci, bounding_in,
-        seams.versatile_reach || rule_on(seams.rules_epoch, 1),
-        seams.rules_epoch,
-    );
     // Grounded Speed (epoch 7) — the LIVE per-activation read: the majority
     // condition sees the activation-START positions (`state`), never the
     // landing (`next` after the move below).
-    let gs_in = grounded_speed_bonus_in(statics, state, si, cover, seams.rules_epoch, kind);
     // FEAT PR 1 — Speed Feat, the once-per-game latch's first reader: the
     // table's move pass spends it at `rounds_left <= 2` (solo_controller.gd:
     // 1704-1726) and rides +advance/+rush on this one activation's bands, so
@@ -9367,19 +9402,15 @@ fn resolve_with(
     // epoch 7 grants the bonus and stamps the latch; a later act sees the
     // folded name and never grants again. Below `EPOCH_7_TABLE_RULES` the
     // read is inert — an older record keeps every replay byte-identical.
-    let feat_in = speed_feat_band_in(statics, &next, si, kind, seams.rules_epoch);
     // The Great Musician port: the LIVE move-knob read, folded AFTER the
     // `match kind` so ADVANCE, RUSH and CHARGE all receive it — which is what
     // `move_bands_for_props` does (rush += spell; charge = rush + charge_extra,
     // movement_range_controller.gd:168-170).
-    let buff_in = live_move_bonus_in(&next, statics, si, seams.rules_epoch);
     // EPOCH_19 — the granted SOLO move family, folded for real at the spend
     // (see `solo_move_grant_delta_in`): the same live read the census loop
     // below only logs below the gate.
-    let grant_in = solo_move_grant_delta_in(
-        statics, &next, si, kind, seams.rules_epoch, seams.bands_prefolded, true,
-    );
-    let rapid_mark_in = rapid_charge_mark_bonus_in(statics, &next, si, ci, kind, seams.rules_epoch);
+    let parts = band_parts(statics, state, &next, si, kind, ci, bounding_in, cover, seams, true);
+    let (gs_in, feat_in, rapid_mark_in) = (parts.gs, parts.feat, parts.rapid_mark);
     if feat_in != 0.0 {
         Rc::make_mut(&mut next.feats_used)[si].push(
             statics[pi_s]
@@ -9390,25 +9421,7 @@ fn resolve_with(
                 .clone(),
         );
     }
-    let band_in = match kind {
-        ADVANCE => next.bands[si].advance,
-        RUSH => next.bands[si].rush,
-        // CHARGE reads the table's distinct `charge` band from
-        // `EPOCH_10_CHARGE_BAND` on (solo_controller.gd:1647); below it the
-        // pre-port reading stays `rush`, so existing corpora replay byte-exact.
-        CHARGE => if rule_on(seams.rules_epoch, EPOCH_10_CHARGE_BAND) {
-            next.bands[si].charge.unwrap_or(next.bands[si].rush)
-        } else {
-            next.bands[si].rush
-        },
-        _ => 0.0,
-    } + bounding_in
-        + vr_in
-        + gs_in
-        + feat_in
-        + buff_in
-        + grant_in
-        + rapid_mark_in;
+    let band_in = parts.total();
     // Rules 3.6 (G4-H7): a charge on a unit with no living model, host and joined heroes, is void - the table logs
     // "the charge falls short" and moves nothing, so there is no move, no Dangerous test and no fight.
     let charge_void = kind == CHARGE
