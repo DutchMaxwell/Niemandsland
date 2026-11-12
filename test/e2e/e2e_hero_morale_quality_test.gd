@@ -50,7 +50,7 @@ func test_living_hero_tests_for_dead_host_on_quality_three() -> void:
 	_main.seed_tray_rng(7)
 	await _main._solo_morale_test(host, "AI (Squad)")
 	assert_str(_log_text()).contains("Hero Captain tests on behalf of Squad (Q3+)")
-	assert_str(_log_text()).contains("1 hit (3+)")
+	assert_str(_log_text()).contains("passed (3+)")
 
 
 func test_better_living_hero_tests_for_living_host_on_quality_three() -> void:
@@ -58,7 +58,7 @@ func test_better_living_hero_tests_for_living_host_on_quality_three() -> void:
 	_main.seed_tray_rng(7)
 	await _main._solo_morale_test(host, "AI (Squad)")
 	assert_str(_log_text()).contains("Hero Captain tests on behalf of Squad (Q3+)")
-	assert_str(_log_text()).contains("1 hit (3+)")
+	assert_str(_log_text()).contains("passed (3+)")
 
 
 func test_dead_hero_cannot_supply_quality_to_living_host() -> void:
@@ -68,4 +68,4 @@ func test_dead_hero_cannot_supply_quality_to_living_host() -> void:
 	_main.seed_tray_rng(7)
 	await _main._solo_morale_test(host, "AI (Squad)")
 	assert_str(_log_text()).not_contains("Hero Captain tests on behalf")
-	assert_str(_log_text()).contains("1 hit (5+)")
+	assert_str(_log_text()).contains("passed (5+)")

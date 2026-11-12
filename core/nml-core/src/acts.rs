@@ -860,7 +860,13 @@ pub const EPOCH_74_CLIMB_COST: u32 = 74;
 /// MIRROR HOLD: this PR stays out of `scripts/`; the table already applies all three rules from 73, so
 /// `act_recorder.gd` must stamp 75 (one line plus its `EPOCH_75_TABLE_FIXES` constant) in the same merge sitting.
 pub const EPOCH_75_TABLE_FIXES: u32 = 75;
-pub const CURRENT_RULES_EPOCH: u32 = 75;
+/// Move fixes (maintainer decision E (a), 12.11.): three AI defects in one epoch. E1 core: the Great Musician +1" is
+/// spent by the buffed unit's next move (`resolve_with`). E2 table: the AI spends its once-per-game Speed Feat only on
+/// an activation that moves (`solo_controller.gd _act`). E3 table: Grounded Speed asks the majority of the unit, not its
+/// first model (`move_bands_for_unit`). Records stamped 75 or below replay byte-exact. Every call site reads THIS
+/// constant, not `76`. The recorder mirror (`act_recorder.gd`) stamps 76 in the same change.
+pub const EPOCH_76_MOVE_FIXES: u32 = 76;
+pub const CURRENT_RULES_EPOCH: u32 = 76;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -2177,7 +2183,7 @@ mod tests {
     use super::{
         read_act_header, record_rules_epoch, rule_on, MeleeReach, SearchMode, TreeDice, TreeLeaf, CURRENT_RULES_EPOCH, EPOCH_3_TABLE_RULES,
         EPOCH_4_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES, EPOCH_7_TABLE_RULES, EPOCH_73_V36,
-        EPOCH_74_CLIMB_COST, EPOCH_75_TABLE_FIXES,
+        EPOCH_74_CLIMB_COST, EPOCH_75_TABLE_FIXES, EPOCH_76_MOVE_FIXES,
     };
 
     /// The CLASS FIX's one gate (external review 03.09. item 3 / F9):
@@ -2198,7 +2204,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 75, "the live epoch is EPOCH_75_TABLE_FIXES");
+        assert_eq!(CURRENT_RULES_EPOCH, 76, "the live epoch is EPOCH_76_MOVE_FIXES");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -2208,11 +2214,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":75}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":76}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 75"
+            "a fresh play_game() now stamps the bumped epoch, 76"
         );
     }
 
@@ -2225,6 +2231,18 @@ mod tests {
         assert!(rule_on(EPOCH_75_TABLE_FIXES, EPOCH_74_CLIMB_COST), "75 keeps the climb cost on");
         assert!(rule_on(EPOCH_75_TABLE_FIXES, EPOCH_73_V36), "75 keeps every 3.6 rule on");
         assert!(rule_on(CURRENT_RULES_EPOCH, EPOCH_75_TABLE_FIXES), "a fresh play_game() stamps the 75 ports on");
+    }
+
+    /// Epoch 76 (move fixes E1-E3): a record stamped 75 keeps every move-fix gate closed, a fresh record at 76 opens
+    /// them, and 76 keeps the 75 ports, the climb cost and the 3.6 wave on.
+    #[test]
+    fn epoch_76_gate_is_closed_at_epoch_75_and_open_from_76() {
+        assert!(!rule_on(EPOCH_75_TABLE_FIXES, EPOCH_76_MOVE_FIXES), "a record at 75 replays without the move fixes");
+        assert!(rule_on(EPOCH_76_MOVE_FIXES, EPOCH_76_MOVE_FIXES), "a record at 76 gets the move fixes");
+        assert!(rule_on(EPOCH_76_MOVE_FIXES, EPOCH_75_TABLE_FIXES), "76 keeps the 75 ports on");
+        assert!(rule_on(EPOCH_76_MOVE_FIXES, EPOCH_74_CLIMB_COST), "76 keeps the climb cost on");
+        assert!(rule_on(EPOCH_76_MOVE_FIXES, EPOCH_73_V36), "76 keeps every 3.6 rule on");
+        assert!(rule_on(CURRENT_RULES_EPOCH, EPOCH_76_MOVE_FIXES), "a fresh play_game() stamps the move fixes on");
     }
 
     /// The WAVE 3 GATE's own reservation (05.09.): `EPOCH_6_TABLE_RULES` must
