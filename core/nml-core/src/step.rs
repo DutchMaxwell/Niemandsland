@@ -70,7 +70,7 @@ mod tests {
         let att = Ctx { quality: 4, ..Default::default() };
         let def = Ctx { defense: 4, models: 10, tough: 1, ..Default::default() };
         for seed in 0..1000i64 {
-            let run = |t: &mut Tray| resolve_shooting_with_tray(&[prof.clone()], &[0], &[10], &att, &def, 12.0, t);
+            let run = |t: &mut Tray| resolve_shooting_with_tray(std::slice::from_ref(&prof), &[0], &[10], &att, &def, 12.0, t);
             let want = run(&mut Tray::seeded(seed));
             let mut dice = Tray::seeded(seed);
             let mut faces: Vec<Vec<u8>> = Vec::new();
@@ -99,7 +99,7 @@ mod tests {
         let def = Ctx { defense: 4, models: 10, tough: 1, ..Default::default() };
         let run = |t: &mut Tray| {
             t.roll(1);
-            resolve_shooting_with_tray(&[prof.clone()], &[0], &[10], &att, &def, 12.0, t)
+            resolve_shooting_with_tray(std::slice::from_ref(&prof), &[0], &[10], &att, &def, 12.0, t)
         };
         let mut faces: Vec<Vec<u8>> = Vec::new();
         for _ in 0..4 {
