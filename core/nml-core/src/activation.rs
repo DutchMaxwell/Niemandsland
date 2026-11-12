@@ -8,7 +8,7 @@ use crate::io::{Action, Seams};
 use crate::landing::Landing;
 use crate::logline::{Category, LogLine};
 use crate::rng::GodotRng;
-use crate::sim::{resolve_stochastic_tray_on_board, ADVANCE, CHARGE, HOLD, REPOSITION, RUSH};
+use crate::sim::{band_parts, resolve_stochastic_tray_on_board, Cover, ADVANCE, CHARGE, HOLD, REPOSITION, RUSH};
 use crate::state::State;
 use crate::step::{step_with, Step};
 use crate::terrain::Terrain;
@@ -104,11 +104,63 @@ pub fn effective_kind(declared: i64, start: &[[f64; 3]], placed: Option<&[[f64; 
     }
 }
 
+/// What a unit may move this activation per declared mode, in inches: the parts the real move
+/// spends (`sim::band_parts`), one number for both. `widened_by` = the rules whose part is non-zero.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Allowance { pub advance: f64, pub rush: f64, pub charge: f64, pub widened_by: Vec<String> }
+
+/// The unit's `Allowance` at its activation start in `state`; Bounding is 0.0 here (gap G2).
+pub fn allowance(statics: &[UnitStatic], state: &State, si: usize, seams: Seams, terrain: &Terrain) -> Allowance {
+    let parts = [ADVANCE, RUSH, CHARGE].map(|k| band_parts(statics, state, state, si, k, None, 0.0, Cover::Board(terrain), seams, false));
+    let grants: Vec<&str> = ["Fast", "Rapid Advance", "Rapid Rush", "Slow"].into_iter().filter(|g| crate::mods::granted(state, si, g)).collect();
+    let names: [&[&str]; 7] = [&["Bounding"], &["Versatile Reach"], &["Grounded Speed"], &["Speed Feat"], &["Great Musician"], &grants, &["Rapid Charge"]];
+    let on = |i: usize| parts.iter().any(|p| [p.bounding, p.vr, p.gs, p.feat, p.buff, p.grant, p.rapid_mark][i] != 0.0);
+    let widened_by = (0..7).filter(|&i| on(i)).flat_map(|i| names[i].iter().map(|n| n.to_string())).collect();
+    Allowance { advance: parts[0].total(), rush: parts[1].total(), charge: parts[2].total(), widened_by }
+}
+
+/// One drop: the declared mode and each model's position (`state.positions` order). Literals: `..Default::default()`.
+#[derive(Debug, Clone, Default)]
+pub struct Drop { pub mode: i64, pub placed: Vec<[f64; 3]> }
+
+/// `check_move`'s answer: accepted (with the overrun line when not enforced) or refused.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Check { Ok { lines: Vec<LogLine> }, Refused { reason: String } }
+
+/// The move check of one drop against the unit's start in `state`: (1) a declared mode, (2) one
+/// position per model, (3) every model's horizontal straight line within the mode's allowance
+/// (+0.01" float noise). An overrun is refused with the O3 sentence when `enforce`, else accepted
+/// with that sentence as one log line.
+pub fn check_move(statics: &[UnitStatic], state: &State, si: usize, seams: Seams, terrain: &Terrain, drop: &Drop, enforce: bool) -> Check {
+    let (mode, m) = match drop.mode {
+        ADVANCE => ("Advance", 0),
+        RUSH => ("Rush", 1),
+        CHARGE => ("Charge", 2),
+        _ => return Check::Refused { reason: "movement mode not declared".to_string() },
+    };
+    let start = &state.positions[si];
+    if drop.placed.len() != start.len() {
+        return Check::Refused { reason: "placement does not match the unit's models".to_string() };
+    }
+    let x = start.iter().zip(&drop.placed).map(|(a, b)| (a[0] - b[0]).hypot(a[2] - b[2]) / INCHES_TO_METERS).fold(0.0, f64::max);
+    let a = allowance(statics, state, si, seams, terrain);
+    let y = [a.advance, a.rush, a.charge][m];
+    if x <= y + 0.01 {
+        return Check::Ok { lines: Vec::new() };
+    }
+    let text = format!("{}: a model moved {x:.1}\" - the {mode} allowance is {y:.1}\".", statics[state.roster.profile[si]].name);
+    if enforce {
+        return Check::Refused { reason: text };
+    }
+    let detail = (!a.widened_by.is_empty()).then(|| a.widened_by.join(", "));
+    Check::Ok { lines: vec![LogLine { rule: "move_overrun", category: Category::Movement, side: state.player[si], text, detail }] }
+}
+
 /// One activation through the step API: the order rules, then the declared
-/// action (not moving = Hold) on the supplied faces and the LAST placement.
+/// action (not moving = Hold) on the supplied faces and the LAST placement (`check_move` first).
 /// A new entry: the AI's resolver path is untouched. `NeedRoll.index` is the
 /// roll's, not the transcript's; a refusal of the whole transcript is at `t.len()`.
-pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrain: &Terrain, seams: Seams, t: &[Input]) -> ActStep {
+pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrain: &Terrain, seams: Seams, t: &[Input], enforce: bool) -> ActStep {
     let at = state.roster.index.get(unit).copied();
     let name = at.map_or(unit, |i| statics[state.roster.profile[i]].name.as_str());
     if let Err((index, reason)) = order_check(name, t) {
@@ -137,6 +189,16 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
     if kind == RUSH && shoot.is_some() {
         return ActStep::Refused { index: at_intent, reason: format!("{name} rushed this activation - it cannot shoot.") };
     }
+    // Not HOLD: a mode was declared and the last placement moved (or does not match the models).
+    let mut moved = Vec::new();
+    if let (true, Some(p), Some(pi), Some(si)) = (kind != HOLD, &placed, t.iter().rposition(|x| matches!(x, Input::Placed(_))), at) {
+        #[allow(clippy::needless_update)] // the plan's literal form: steps 56 and 78 add fields to `Drop`
+        let drop = Drop { mode: declared, placed: p.clone(), ..Default::default() };
+        match check_move(statics, state, si, seams, terrain, &drop, enforce) {
+            Check::Refused { reason } => return ActStep::Refused { index: pi, reason },
+            Check::Ok { lines } => moved = lines,
+        }
+    }
     let action = Action { kind, unit: unit.to_string(), dest: None, shoot, charge: None, patient: false, split: None, traced: None, teleport: None };
     let faces: Vec<Vec<u8>> = t.iter().filter_map(|x| if let Input::Faces(f) = x { Some(f.clone()) } else { None }).collect();
     // The spike's non-tray seed: a plain activation never draws from it.
@@ -147,9 +209,9 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
         resolve_stochastic_tray_on_board(statics, state, &action, terrain, seams, &mut GodotRng::new(0), tray)
     };
     match step_with(&faces, resolve, |r| r.as_ref().map_or(&[][..], |(_, s)| s.rolls.as_slice())) {
-        Step::NeedRoll { index, faces, kind, count, target, owner, lines, landings } => ActStep::NeedRoll { index, faces, kind, count, target, owner, lines, landings },
+        Step::NeedRoll { index, faces, kind, count, target, owner, lines, landings } => ActStep::NeedRoll { index, faces, kind, count, target, owner, lines: [moved, lines].concat(), landings },
         Step::Refused { reason, .. } => ActStep::Refused { index: t.len(), reason },
-        Step::Done(Ok((state, _)), lines, landings) => ActStep::Done { state, lines, landings },
+        Step::Done(Ok((state, _)), lines, landings) => ActStep::Done { state, lines: [moved, lines].concat(), landings },
         Step::Done(Err(u), ..) => ActStep::Refused { index: t.len(), reason: format!("{u:?}") },
     }
 }
@@ -309,7 +371,7 @@ mod tests {
         let (mut dice, mut rolls) = (Tray::seeded(seed), Vec::new());
         dice.set_zero_draws(true); // exactly the faces asked for: the feed already applied the epoch
         loop {
-            match step_activation(statics, st, "a", &Terrain::default(), seams(), &t) {
+            match step_activation(statics, st, "a", &Terrain::default(), seams(), &t, true) {
                 ActStep::NeedRoll { faces, kind, count, target, owner, .. } => {
                     let f = dice.roll(faces);
                     rolls.push(Roll { kind, count, target, faces: f.clone(), owner });
@@ -345,7 +407,7 @@ mod tests {
         let (st, statics) = volley_line();
         let moved: Vec<[f64; 3]> = st.positions[0].iter().map(|p| [p[0] + 3.0 * INCHES_TO_METERS, p[1], p[2]]).collect();
         let t = [Begin, Placed(moved), intent(RUSH, Some("b"))];
-        match step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t) {
+        match step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t, true) {
             ActStep::Refused { index, reason } => assert_eq!((index, reason.as_str()), (2, "a rushed this activation - it cannot shoot.")),
             other => panic!("expected the O3 refusal, got {other:?}"),
         }
@@ -366,7 +428,7 @@ mod tests {
     #[test]
     fn open_until_the_intent() {
         let (st, statics) = volley_line();
-        let ask = |t: &[Input]| step_activation(&statics, &st, "a", &Terrain::default(), seams(), t);
+        let ask = |t: &[Input]| step_activation(&statics, &st, "a", &Terrain::default(), seams(), t, true);
         assert!(matches!(ask(&[Begin]), ActStep::Open));
         assert!(matches!(ask(&[intent(HOLD, None)]), ActStep::Refused { index: 0, .. }));
     }
@@ -386,7 +448,7 @@ mod tests {
         let (st, statics) = volley_line();
         let moved: Vec<[f64; 3]> = st.positions[0].iter().map(|p| [p[0] + 3.0 * INCHES_TO_METERS, p[1], p[2]]).collect();
         let before = st.clone();
-        let ask = |t: &[Input]| step_activation(&statics, &st, "a", &Terrain::default(), seams(), t);
+        let ask = |t: &[Input]| step_activation(&statics, &st, "a", &Terrain::default(), seams(), t, true);
         for t in [
             vec![Begin, Cancel],
             vec![Begin, Placed(moved.clone()), Cancel],
@@ -397,7 +459,7 @@ mod tests {
             assert_eq!(lines, vec![cancel_line("a", 0)], "{t:?}");
         }
         // the other seat's unit: its own name and player slot on the line
-        let ActStep::Cancelled { lines } = step_activation(&statics, &st, "b", &Terrain::default(), seams(), &[Begin, Cancel]) else { panic!("b") };
+        let ActStep::Cancelled { lines } = step_activation(&statics, &st, "b", &Terrain::default(), seams(), &[Begin, Cancel], true) else { panic!("b") };
         assert_eq!(lines, vec![cancel_line("b", 1)]);
         assert_eq!(st, before, "the caller's state is untouched");
     }
@@ -407,7 +469,7 @@ mod tests {
     fn a_cancel_after_the_first_die_is_refused() {
         let (st, statics) = volley_line();
         let t = [Begin, intent(HOLD, Some("b")), Faces(vec![5, 5, 5, 5]), Cancel];
-        match step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t) {
+        match step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t, true) {
             ActStep::Refused { index, reason } => assert_eq!((index, reason.as_str()), (3, "cancel is not possible after the first die")),
             other => panic!("expected rule 4, got {other:?}"),
         }
@@ -461,5 +523,115 @@ mod tests {
         assert_eq!((d[0].removed.len(), d[0].moved, d[0].unknown), (0, true, true));
         assert!(one(&|s| s.moved_round[3] += 1)[0].moved);
         assert!(one(&|s| s.shaken[2] = true)[0].shaken);
+    }
+
+    // ---- step 14: allowance and move check ----
+
+    use crate::state::{Bands, Roster};
+    use std::rc::Rc;
+
+    /// `four_unit_line` with its roster indexed; every unit reads the one static "Squad". Unit "a"
+    /// is one model at the origin.
+    fn squad_line() -> (State, Vec<UnitStatic>) {
+        let mut st = crate::sim::tests::four_unit_line();
+        let keys = st.roster.keys.clone();
+        st.roster = Rc::new(Roster { index: keys.iter().cloned().zip(0..).collect(), keys, profile: vec![0; 4] });
+        (st, vec![UnitStatic { name: "Squad".into(), ..Default::default() }])
+    }
+
+    /// Unit "a"'s one model dropped `d` inches east of its start.
+    fn east(d: f64) -> Vec<[f64; 3]> {
+        vec![[d * INCHES_TO_METERS, 0.0, 0.0]]
+    }
+
+    #[allow(clippy::needless_update)] // the plan's literal form: later steps add fields to `Drop`
+    fn check(st: &State, statics: &[UnitStatic], mode: i64, placed: Vec<[f64; 3]>, enforce: bool) -> Check {
+        check_move(statics, st, 0, seams(), &Terrain::default(), &Drop { mode, placed, ..Default::default() }, enforce)
+    }
+
+    fn refusal(reason: &str) -> Check {
+        Check::Refused { reason: reason.to_string() }
+    }
+
+    const OK: Check = Check::Ok { lines: Vec::new() };
+
+    #[test]
+    fn a_plain_unit_s_allowance_is_its_printed_band() {
+        let (st, statics) = squad_line();
+        let want = Allowance { advance: 6.0, rush: 12.0, charge: 12.0, widened_by: vec![] };
+        assert_eq!(allowance(&statics, &st, 0, seams(), &Terrain::default()), want);
+    }
+
+    /// Each model's horizontal straight line against the declared mode's allowance, refused with
+    /// the O3 sentence when enforced (RED: drop the distance check -> 6.2" Advance and 12.2" Rush Ok).
+    #[test]
+    fn an_enforced_move_past_the_allowance_is_refused() {
+        let (st, statics) = squad_line();
+        let go = |mode, placed| check(&st, &statics, mode, placed, true);
+        assert_eq!(go(ADVANCE, east(5.9)), OK);
+        assert_eq!(go(ADVANCE, east(6.009)), OK, "inside the 0.01\" float noise");
+        assert_eq!(go(ADVANCE, east(6.2)), refusal("Squad: a model moved 6.2\" - the Advance allowance is 6.0\"."));
+        assert_eq!(go(RUSH, east(6.2)), OK);
+        assert_eq!(go(RUSH, east(12.2)), refusal("Squad: a model moved 12.2\" - the Rush allowance is 12.0\"."));
+        assert_eq!(go(CHARGE, east(12.2)), refusal("Squad: a model moved 12.2\" - the Charge allowance is 12.0\"."));
+        assert_eq!(go(ADVANCE, vec![[0.0, 9.0 * INCHES_TO_METERS, 0.0]]), OK, "height is not horizontal");
+        assert_eq!(go(HOLD, east(1.0)), refusal("movement mode not declared"));
+        assert_eq!(go(ADVANCE, vec![]), refusal("placement does not match the unit's models"));
+    }
+
+    /// Enforce off: the drop stands and exactly one line names the overrun (O3 verbatim).
+    #[test]
+    fn an_overrun_without_enforce_is_accepted_with_one_line() {
+        let (st, statics) = squad_line();
+        let text = "Squad: a model moved 6.2\" - the Advance allowance is 6.0\".".to_string();
+        let line = LogLine { rule: "move_overrun", category: Category::Movement, side: 0, text, detail: None };
+        assert_eq!(check(&st, &statics, ADVANCE, east(6.2), false), Check::Ok { lines: vec![line] });
+    }
+
+    /// Fast rides the printed band (8"/16", step 13's fixture), so it names no rule.
+    #[test]
+    fn a_fast_unit_moves_its_wider_band() {
+        let (mut st, statics) = squad_line();
+        st.bands[0] = Bands { advance: 8.0, rush: 16.0, charge: None };
+        let want = Allowance { advance: 8.0, rush: 16.0, charge: 16.0, widened_by: vec![] };
+        assert_eq!(allowance(&statics, &st, 0, seams(), &Terrain::default()), want);
+        assert_eq!(check(&st, &statics, ADVANCE, east(7.9), true), OK);
+    }
+
+    /// A live Great Musician row (the `ev_move_grants.rs` row with `move_mod` 1) is +1" over the
+    /// printed band, and the overrun line names it (RED: read `live_bands_of` -> a buff row is no
+    /// grant, the no-grants shortcut answers the printed 6").
+    #[test]
+    fn a_great_musician_row_widens_the_allowance() {
+        let (mut st, statics) = squad_line();
+        st.buffs[0].push(crate::mods::LiveMod { hit_mod: 0, casting_mod: 0, morale_mod: 0, ap_mod: 0, def_mod: 0, defense_mod: 0,
+            move_mod: 1, grants_rule: Rc::from(""), scope: Rc::from(""), attackers: false, once: false, name: Rc::from("Great Musician") });
+        let a = allowance(&statics, &st, 0, seams(), &Terrain::default());
+        assert_eq!((a.advance, a.rush, &a.widened_by[..]), (7.0, 13.0, &["Great Musician".to_string()][..]));
+        assert_eq!(check(&st, &statics, ADVANCE, east(6.9), true), OK);
+        let Check::Ok { lines } = check(&st, &statics, ADVANCE, east(7.2), false) else { panic!("enforce off accepts") };
+        assert_eq!(lines.len(), 1);
+        assert_eq!((lines[0].text.as_str(), lines[0].detail.as_deref()), ("Squad: a model moved 7.2\" - the Advance allowance is 7.0\".", Some("Great Musician")));
+    }
+
+    /// The activation checks its last placement: an enforced overrun is refused at that `Placed`
+    /// (RED: skip the check in `step_activation` -> the moving shot resolves on to the resolver's
+    /// `Refused { index: 3, "MovedShootLos" }`, this fixture carries no LOS). Without a shot, enforce
+    /// off resolves with the overrun line first, and a move inside the band is the same either way.
+    #[test]
+    fn step_activation_checks_the_last_placement() {
+        let (st, statics) = squad_line();
+        let ask = |d: f64, shoot, enforce| step_activation(&statics, &st, "a", &Terrain::default(), seams(), &[Begin, Placed(east(d)), intent(ADVANCE, shoot)], enforce);
+        match ask(6.2, Some("b"), true) {
+            ActStep::Refused { index, reason } => assert_eq!((index, reason.as_str()), (1, "Squad: a model moved 6.2\" - the Advance allowance is 6.0\".")),
+            other => panic!("expected the overrun refusal, got {other:?}"),
+        }
+        let r = ask(6.2, None, false);
+        let ActStep::Done { lines, .. } = r else { panic!("enforce off resolves: {r:?}") };
+        assert_eq!(lines.iter().filter(|l| l.rule == "move_overrun").count(), 1);
+        assert_eq!(lines[0].rule, "move_overrun");
+        let (ActStep::Done { state: a, lines: la, .. }, ActStep::Done { state: b, lines: lb, .. }) = (ask(5.9, None, true), ask(5.9, None, false)) else { panic!("5.9\" resolves") };
+        assert!(la.iter().all(|l| l.rule != "move_overrun"));
+        assert_eq!((a, la), (b, lb));
     }
 }

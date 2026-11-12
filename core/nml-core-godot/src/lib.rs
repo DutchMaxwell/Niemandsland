@@ -350,11 +350,10 @@ impl NmlCore {
     /// One-core P3: one step of `unit`'s activation on handle `h`, over the table's ordered `transcript`
     /// (`{"t":"begin"|"cancel"}`, `{"t":"intent","kind","shoot"}`, `{"t":"faces","faces":[int]}`,
     /// `{"t":"placed","positions":[Vector3]}`). Returns `{"step": "need_roll"|"open"|"refused"|"done"|"cancelled", ..}`;
-    /// on `done` a new slot holds the state (`"handle"`). `enforce` is accepted so the signature is final: the core
-    /// gets its overrun check in step 14 and ignores it until then.
+    /// on `done` a new slot holds the state (`"handle"`). `enforce` = "Enforce Movement Limit": an overrun of the
+    /// unit's allowance is refused when on, accepted with one log line naming it when off.
     #[func]
     fn step_activation(&mut self, h: i64, unit: GString, transcript: VarArray, enforce: bool) -> VarDictionary {
-        let _ = enforce;
         let Some(i) = self.index(h) else { return actcall::refused(0, "unknown handle") };
         let t = match actcall::inputs_of(&transcript) {
             Ok(t) => t,
@@ -365,7 +364,7 @@ impl NmlCore {
         let terrain = self.header.as_ref().map(|hd| &hd.terrain).unwrap_or(&absent);
         let slot = self.slab[i].as_ref().unwrap();
         let statics = Rc::clone(&slot.statics);
-        let (mut out, next) = actcall::run(&statics, &slot.cap.state, &unit.to_string(), terrain, seams, &t);
+        let (mut out, next) = actcall::run(&statics, &slot.cap.state, &unit.to_string(), terrain, seams, &t, enforce);
         if let Some(state) = next {
             let cap = Captured { state, extras: slot.cap.extras.clone(), mask: slot.cap.mask.clone(), has_los: slot.cap.has_los, dropped: Vec::new() };
             out.set("handle", self.push(Slot { cap, statics }));
