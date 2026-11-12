@@ -6,7 +6,7 @@ use crate::dice::Tray;
 use crate::gate::INCHES_TO_METERS;
 use crate::io::{Action, Seams};
 use crate::landing::Landing;
-use crate::logline::LogLine;
+use crate::logline::{Category, LogLine};
 use crate::rng::GodotRng;
 use crate::sim::{resolve_stochastic_tray_on_board, ADVANCE, CHARGE, HOLD, REPOSITION, RUSH};
 use crate::state::State;
@@ -42,6 +42,8 @@ pub enum ActStep {
     Open,
     /// Input `index` breaks an order rule; `reason` is the sentence the player sees.
     Refused { index: usize, reason: String },
+    /// The activation was cancelled before its first die; the state is untouched
+    /// and the table puts the models back. `lines` is the one cancel sentence.
     Cancelled { lines: Vec<LogLine> },
     Done { state: State, lines: Vec<LogLine>, landings: Vec<Landing> },
 }
@@ -112,8 +114,12 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
     if let Err((index, reason)) = order_check(name, t) {
         return ActStep::Refused { index, reason };
     }
+    // Before any resolver runs: no die is drawn and no state is resolved. A `Placed` in the
+    // transcript is simply dropped (the table puts the models back).
     if t.last() == Some(&Input::Cancel) {
-        return ActStep::Refused { index: t.len() - 1, reason: "not on the step path yet".to_string() };
+        let side = at.map_or(0, |i| state.player[i]);
+        let text = format!("{name} cancelled its activation - back at its start.");
+        return ActStep::Cancelled { lines: vec![LogLine { rule: "activation_cancel", category: Category::Movement, side, text, detail: None }] };
     }
     let declared = t.iter().enumerate().find_map(|(i, x)| match x {
         Input::Intent { kind, shoot } => Some((i, *kind, shoot.clone())),
@@ -358,12 +364,53 @@ mod tests {
     }
 
     #[test]
-    fn open_until_the_intent_and_cancel_waits_for_step_12() {
+    fn open_until_the_intent() {
         let (st, statics) = volley_line();
         let ask = |t: &[Input]| step_activation(&statics, &st, "a", &Terrain::default(), seams(), t);
         assert!(matches!(ask(&[Begin]), ActStep::Open));
-        assert!(matches!(ask(&[Begin, Cancel]), ActStep::Refused { index: 1, .. }));
         assert!(matches!(ask(&[intent(HOLD, None)]), ActStep::Refused { index: 0, .. }));
+    }
+
+    // ---- step 12: cancel ----
+
+    /// The one cancel sentence (O15 (3)); `side` is the unit's player slot.
+    fn cancel_line(name: &str, side: i64) -> LogLine {
+        LogLine { rule: "activation_cancel", category: Category::Movement, side, text: format!("{name} cancelled its activation - back at its start."), detail: None }
+    }
+
+    /// A cancel before the first die ends the activation with exactly that line and leaves the
+    /// state alone, with or without a drag or an intent in front of it (RED: cancel arm deleted ->
+    /// `Refused`; cancel arm behind the resolver -> `Open`, `NeedRoll` or the O3 refusal instead).
+    #[test]
+    fn a_cancel_before_the_first_die_is_cancelled() {
+        let (st, statics) = volley_line();
+        let moved: Vec<[f64; 3]> = st.positions[0].iter().map(|p| [p[0] + 3.0 * INCHES_TO_METERS, p[1], p[2]]).collect();
+        let before = st.clone();
+        let ask = |t: &[Input]| step_activation(&statics, &st, "a", &Terrain::default(), seams(), t);
+        for t in [
+            vec![Begin, Cancel],
+            vec![Begin, Placed(moved.clone()), Cancel],
+            vec![Begin, intent(HOLD, Some("b")), Cancel],
+            vec![Begin, Placed(moved), intent(RUSH, Some("b")), Cancel], // the O3 refusal never shows: nothing was resolved
+        ] {
+            let ActStep::Cancelled { lines } = ask(&t) else { panic!("{t:?}") };
+            assert_eq!(lines, vec![cancel_line("a", 0)], "{t:?}");
+        }
+        // the other seat's unit: its own name and player slot on the line
+        let ActStep::Cancelled { lines } = step_activation(&statics, &st, "b", &Terrain::default(), seams(), &[Begin, Cancel]) else { panic!("b") };
+        assert_eq!(lines, vec![cancel_line("b", 1)]);
+        assert_eq!(st, before, "the caller's state is untouched");
+    }
+
+    /// After the first die a cancel stays refused with rule 4's sentence.
+    #[test]
+    fn a_cancel_after_the_first_die_is_refused() {
+        let (st, statics) = volley_line();
+        let t = [Begin, intent(HOLD, Some("b")), Faces(vec![5, 5, 5, 5]), Cancel];
+        match step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t) {
+            ActStep::Refused { index, reason } => assert_eq!((index, reason.as_str()), (3, "cancel is not possible after the first die")),
+            other => panic!("expected rule 4, got {other:?}"),
+        }
     }
     /// The delta of a plain Hold+shoot names exactly the models that died: as many as the target
     /// lost, and every survivor is an untouched start position (RED: `removed = 0..n_dead`).
