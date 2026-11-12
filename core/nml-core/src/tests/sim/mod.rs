@@ -1708,6 +1708,7 @@
 mod aircraft;
 mod ap_def_record;
 mod ap_def_reads;
+mod band_parts;
 mod breath_attack;
 mod breath_score;
 mod buff_consumption_bridge;
