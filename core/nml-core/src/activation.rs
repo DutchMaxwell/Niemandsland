@@ -148,6 +148,49 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
     }
 }
 
+/// What one activation did to one unit: the table's final cross-check of the
+/// per-step landings (which carry the per-model news). `shaken` and `alive`
+/// are the unit's values AFTER; `unknown` marks a unit that both moved and
+/// lost models (not reachable on the plain path; the driver refuses it).
+#[derive(Debug, Clone, PartialEq)]
+pub struct UnitDelta {
+    pub key: String,
+    /// Indices into `before.positions[u]` (capture order) of the models that are gone.
+    pub removed: Vec<usize>,
+    pub shaken: bool,
+    pub alive: i64,
+    pub moved: bool,
+    pub unknown: bool,
+}
+
+/// Every unit whose alive, shaken, positions or moved_round changed. `removed`
+/// holds the positions of `before` that no longer appear in `after`, by exact
+/// f64 equality: removal shifts slots but never edits a survivor.
+pub fn delta_of(before: &State, after: &State) -> Vec<UnitDelta> {
+    let mut out = Vec::new();
+    for (u, key) in before.roster.keys.iter().enumerate() {
+        let (b, a) = (&before.positions[u], &after.positions[u]);
+        let (mut removed, mut j) = (Vec::new(), 0);
+        for (i, p) in b.iter().enumerate() {
+            if a.get(j) == Some(p) {
+                j += 1;
+            } else {
+                removed.push(i);
+            }
+        }
+        // `a` is not `b` minus some entries: a survivor was edited, i.e. a model moved.
+        let moved = j < a.len() || before.moved_round.get(u) != after.moved_round.get(u);
+        let unknown = moved && a.len() < b.len();
+        if j < a.len() || unknown {
+            removed.clear();
+        }
+        if b != a || before.alive[u] != after.alive[u] || before.shaken[u] != after.shaken[u] || moved {
+            out.push(UnitDelta { key: key.clone(), removed, shaken: after.shaken[u], alive: after.alive[u], moved, unknown });
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -321,5 +364,55 @@ mod tests {
         assert!(matches!(ask(&[Begin]), ActStep::Open));
         assert!(matches!(ask(&[Begin, Cancel]), ActStep::Refused { index: 1, .. }));
         assert!(matches!(ask(&[intent(HOLD, None)]), ActStep::Refused { index: 0, .. }));
+    }
+    /// The delta of a plain Hold+shoot names exactly the models that died: as many as the target
+    /// lost, and every survivor is an untouched start position (RED: `removed = 0..n_dead`).
+    #[test]
+    fn the_delta_names_the_models_that_died_and_nothing_else() {
+        let (st, statics) = volley_line();
+        let (mut hit, mut first_alive) = (0, 0);
+        for seed in 0..200i64 {
+            let (got, _) = drive(&statics, &st, vec![Begin, intent(HOLD, Some("b"))], seed);
+            let ActStep::Done { state, .. } = got else { panic!("seed {seed}: {got:?}") };
+            let d = delta_of(&st, &state);
+            assert!(d.iter().all(|x| x.key == "b"), "seed {seed}: only the target changes: {d:?}");
+            let lost = st.alive[2] - state.alive[2];
+            let Some(b) = d.first() else {
+                assert_eq!((lost, state.shaken[2]), (0, false), "seed {seed}: a changed target must have a delta");
+                continue;
+            };
+            assert_eq!((b.removed.len() as i64, b.alive, b.shaken, b.moved, b.unknown), (lost, state.alive[2], state.shaken[2], false, false), "seed {seed}");
+            for (i, p) in st.positions[2].iter().enumerate() {
+                assert_eq!(b.removed.contains(&i), !state.positions[2].contains(p), "seed {seed}: slot {i}");
+            }
+            assert!(state.positions[2].iter().all(|p| st.positions[2].contains(p)), "seed {seed}: a survivor moved");
+            (hit, first_alive) = (hit + (lost > 0) as i32, first_alive + (lost > 0 && b.removed[0] > 0) as i32);
+        }
+        assert!(hit > 0, "fixture must kill");
+        println!("delta fixture: {hit} seeds lost a model, {first_alive} of them not slot 0 first");
+    }
+    /// The seeded fixture kills slot 0 first on every seed, so slot order proves little there: pin
+    /// the other cases by hand (RED: `removed = 0..n_dead` fails the slot-1 case).
+    #[test]
+    fn the_delta_tells_a_removal_from_a_move() {
+        let (st, _) = volley_line();
+        let one = |f: &dyn Fn(&mut State)| {
+            let mut after = st.clone();
+            f(&mut after);
+            delta_of(&st, &after)
+        };
+        let shift = |p: &mut [f64; 3]| p[0] += 3.0 * INCHES_TO_METERS;
+        assert_eq!(one(&|_| {}), vec![]);
+        for dead in 0..2 {
+            let d = one(&|s| (s.positions[2].remove(dead), s.alive[2] -= 1).1);
+            assert_eq!(d.len(), 1);
+            assert_eq!((d[0].key.as_str(), &d[0].removed[..], d[0].alive, d[0].moved, d[0].unknown), ("b", &[dead][..], 1, false, false));
+        }
+        let d = one(&|s| s.positions[0].iter_mut().for_each(shift));
+        assert_eq!((d[0].key.as_str(), d[0].removed.len(), d[0].moved, d[0].unknown), ("a", 0, true, false));
+        let d = one(&|s| (shift(&mut s.positions[2][0]), s.positions[2].remove(1), s.alive[2] -= 1).0);
+        assert_eq!((d[0].removed.len(), d[0].moved, d[0].unknown), (0, true, true));
+        assert!(one(&|s| s.moved_round[3] += 1)[0].moved);
+        assert!(one(&|s| s.shaken[2] = true)[0].shaken);
     }
 }
