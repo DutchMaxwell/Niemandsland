@@ -157,8 +157,8 @@ static func is_any(t: int) -> bool:
 
 
 ## The class ids base_in_terrain_id answers — the id-rail precedent (PathCheck below) keeps
-## a class check Callable-free in static contexts.
-enum TerrainClass { ANY }
+## a class check Callable-free in static contexts. DIFFICULT = is_difficult (the drag's 6" cap).
+enum TerrainClass { ANY, DIFFICULT }
 
 
 ## base_in_terrain with the class picked by ID instead of a class-check Callable: the same
@@ -186,6 +186,8 @@ static func _class_matches(class_id: int, t: int) -> bool:
 	match class_id:
 		TerrainClass.ANY:
 			return is_any(t)
+		TerrainClass.DIFFICULT:
+			return is_difficult(t)
 		_:
 			return false
 
