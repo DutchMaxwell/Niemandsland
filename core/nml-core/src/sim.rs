@@ -35,6 +35,7 @@ use crate::acts::{
     EPOCH_61_PRECISION_MARKERS, EPOCH_62_CASTING_MOD, EPOCH_65_MELEE_TRUTH,
     EPOCH_66_DISTANCE_TRUTH, EPOCH_67_MARKERS_BURSTS, EPOCH_68_MODIFIER_SUM,
     EPOCH_71_RAPID_CHARGE_MARK, EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36, EPOCH_75_TABLE_FIXES,
+    EPOCH_76_MOVE_FIXES,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::landing::{LandedModel, Landing};
@@ -8571,6 +8572,19 @@ fn live_move_bonus_in(state: &State, statics: &[UnitStatic], i: usize, rules_epo
         &statics[state.roster.profile[i]].name, "move", |r| r.move_mod) as f64
 }
 
+/// E1 (`EPOCH_76_MOVE_FIXES`) — the buffed unit's NEXT move uses the Great Musician +1" up: every `once` speed row on
+/// the unit and its host (the chain `live_move_bonus_in` reads) goes, as the table spends it after an executed move
+/// (main.gd `_solo_spend_once_kind(unit, ["speed"])`). Rules-must-log: one trace line per spent row.
+fn spend_move_rows(statics: &[UnitStatic], next: &mut State, si: usize) {
+    let unit = &statics[next.roster.profile[si]].name;
+    for u in [Some(si), next.attached_to[si]].into_iter().flatten() {
+        for r in next.buffs[u].iter().filter(|r| r.once && r.move_mod != 0) {
+            trace_rule("utility-buff", &r.name, &format!("on {unit} is consumed by this move (applies once)"));
+        }
+    }
+    mods::spend_once(next, si, &[mods::Role::Speed], false);
+}
+
 thread_local! {
     /// The once-per-game latch of the `bands_prefolded` trace line: printed
     /// on the FIRST move act the replay-aware arm turns off, never again.
@@ -9718,6 +9732,11 @@ fn resolve_with(
                 land_cover(statics, &mut next, si, t, seams, dice.as_mut().map(|d| &mut *d.1));
             }
         }
+    }
+    // E1 (`EPOCH_76_MOVE_FIXES`): the move that ran spends the Great Musician +1" (the band above already rode it).
+    // Below 76 the row stays and rides every later move, the frozen replay reading.
+    if moved && rule_on(seams.rules_epoch, EPOCH_76_MOVE_FIXES) {
+        spend_move_rows(statics, &mut next, si);
     }
     // --- DANGEROUS TERRAIN (main.gd:1039-1047 -> `_run_ai_dangerous` :7026) ---
     // The table rolls this after EVERY executed move — advance, rush and charge

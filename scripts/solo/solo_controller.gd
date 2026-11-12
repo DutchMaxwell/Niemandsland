@@ -1979,6 +1979,9 @@ func _act(unit: GameUnit) -> Dictionary:
 	# Coverage wave: Speed Feat family — once per GAME, +2\"/+2\" on one move (registry aliases of
 	# Quick carrying uses_per_game). NACHTMAHR spends it in the last two rounds' first move (the
 	# endgame push, where an extra 2\" buys arrivals), logged + recorded; the flag pins the once.
+	# E2 (EPOCH_76_MOVE_FIXES): the bonus still rides the planning bands, but the spend waits for the
+	# settled action (_settle_speed_feat) — a later re-gate may still turn this activation into a Hold.
+	var feats_pending: Array = []
 	for e in RulesRegistry.unit_rules_of_primitive(unit, "Quick"):
 		var edq := e as Dictionary
 		var spq: Dictionary = edq.get("params", {})
@@ -1989,18 +1992,16 @@ func _act(unit: GameUnit) -> Dictionary:
 			continue
 		if _rounds_left() > 2:
 			continue
-		unit.unit_properties[flag] = true
 		var adv_b := float(spq.get("advance_mod", 2))
 		var rush_b := float(spq.get("rush_mod", 2))
 		advance += adv_b
 		rush += rush_b
 		charge_reach += rush_b
-		record_decision({"kind": "move", "unit": unit.get_name(),
-			"rule": "%s: once per game +%.0f\" Advance / +%.0f\" Rush-Charge — spent on the endgame push" % [
-				str(edq["name"]), adv_b, rush_b],
-			"candidates": [], "chosen": "use now", "why": "once-per-game speed feat (endgame)",
-			"data": {"advance_bonus": adv_b, "rush_bonus": rush_b}})
-		_rule_note(report, "%s: %s spends its once-per-game move bonus (+%.0f\"/+%.0f\")" % [str(edq["name"]), unit.get_name(), adv_b, rush_b], true)   # once-per-game spend — travels
+		var taken := {"name": str(edq["name"]), "advance": adv_b, "rush": rush_b}
+		if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_76_MOVE_FIXES:
+			feats_pending.append(taken)
+		else:
+			_spend_speed_feat(unit, report, taken)
 	# Teleport (cut C — "once per activation, before attacking, place this model within 3\" of its
 	# position on Advance/Charge actions, or within 6\" on Rush actions"): this is a
 	# separate before-attack reposition, never extra movement in the action band.
@@ -2595,6 +2596,9 @@ func _act(unit: GameUnit) -> Dictionary:
 			and shoot_range > 0 and enemy_dist <= float(shoot_range)
 		_menu_probe(unit, action, goal, target_unit, do_shoot,
 			(rush if action == AiDecision.Action.RUSH else advance), kite)
+	# E2 (EPOCH_76_MOVE_FIXES): every re-gate above has spoken — only a move spends the Speed Feat.
+	for taken in feats_pending:
+		_settle_speed_feat(unit, action, report, taken)
 	# TR (NML-1009): the clone's imitation row is settled by the SAME point —
 	# every re-gate above has spoken and nothing has moved yet, so the row can
 	# carry the action the body is about to play instead of the one it wanted.
@@ -4845,6 +4849,27 @@ func _teacher_row(state: Dictionary, key: String, cands: Array, idx: int,
 ## the nearest menu entry of the EXECUTED kind; with none, -1 — the miss class
 ## the trainer already drops, which is honest where inventing a label is not.
 var _pending_teacher_row: Dictionary = {}
+## E2 (EPOCH_76_MOVE_FIXES): the once-per-game Speed Feat is spent only when the settled action moves the unit
+## (ADVANCE, RUSH or CHARGE), as the core grants and stamps it (sim.rs speed_feat_band_in). A Hold keeps it.
+func _settle_speed_feat(unit: GameUnit, action: int, report: Dictionary, taken: Dictionary) -> void:
+	if action in [AiDecision.Action.ADVANCE, AiDecision.Action.RUSH, AiDecision.Action.CHARGE]:
+		_spend_speed_feat(unit, report, taken)
+
+
+## The Speed Feat spend: the once flag, the decision record and the travelling log line.
+func _spend_speed_feat(unit: GameUnit, report: Dictionary, taken: Dictionary) -> void:
+	var feat_name := str(taken["name"])
+	var adv_b := float(taken["advance"])
+	var rush_b := float(taken["rush"])
+	unit.unit_properties["speed_feat_used_%s" % feat_name.to_snake_case()] = true
+	record_decision({"kind": "move", "unit": unit.get_name(),
+		"rule": "%s: once per game +%.0f\" Advance / +%.0f\" Rush-Charge — spent on the endgame push" % [
+			feat_name, adv_b, rush_b],
+		"candidates": [], "chosen": "use now", "why": "once-per-game speed feat (endgame)",
+		"data": {"advance_bonus": adv_b, "rush_bonus": rush_b}})
+	_rule_note(report, "%s: %s spends its once-per-game move bonus (+%.0f\"/+%.0f\")" % [feat_name, unit.get_name(), adv_b, rush_b], true)   # once-per-game spend — travels
+
+
 func _flush_teacher_row(action: int) -> void:
 	if _pending_teacher_row.is_empty():
 		return
@@ -6833,10 +6858,21 @@ static func move_bands_for_unit(unit: GameUnit, mrc: MovementRangeController) ->
 	if unit == null:
 		return {"advance": 6, "rush": 12, "charge": 12}
 	if mrc != null:
+		# E3 (EPOCH_76_MOVE_FIXES): a terrain-gated band rule (Grounded Speed) asks the MAJORITY of the unit — every
+		# alive model's activation-start spot and base, the board the core reads (sim.rs grounded_speed_bonus_in over
+		# state.positions/radii). Below 76 the first alive model decides alone (the frozen replay reading).
+		var majority := AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_76_MOVE_FIXES
+		var nodes: Array = []
+		var radii: Array = []
 		for m in unit.get_alive_models():
 			var node := (m as ModelInstance).node
 			if node != null and is_instance_valid(node):
-				return mrc.bands_for_model(node)
+				if not majority:
+					return mrc.bands_for_model(node)
+				nodes.append(node)
+				radii.append(model_base_radius_m(m as ModelInstance))
+		if not nodes.is_empty():
+			return mrc.bands_for_unit_board(nodes, radii)
 	return MovementRangeController.move_bands_for_props(unit.unit_properties)
 
 
