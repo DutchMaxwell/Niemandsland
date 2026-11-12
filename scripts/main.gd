@@ -1666,6 +1666,7 @@ func _on_solo_human_activated(gu: GameUnit) -> void:
 			# Step 2.7a: the hotseat Mend door (Automatic only) — a human bearer heals on its own tray.
 			if _solo_hotseat_automatic():
 				await _solo_apply_mend(gu)
+			_solo_spend_moved_speed_once(gu)   # MOVE_GAPS D4: before the buff, so a new one survives
 			await _solo_apply_utility_buffs(gu)
 			# SHO-22b: the Precision Tag PLACEMENT is a once-per-game enemy pick ("during this model's
 			# activation"), auto-resolved for the human like the AI path does it (~line 1239).
@@ -1696,6 +1697,7 @@ func _on_solo_human_activated(gu: GameUnit) -> void:
 	# Wave 4 side fix, second door: a unit that never declared an attack still gets its
 	# once-per-activation Utility Buff (round-stamped, so a unit that already bought it at the
 	# attack door is untouched).
+	_solo_spend_moved_speed_once(gu)   # MOVE_GAPS D4: before the buff, so a new one survives
 	await _solo_apply_utility_buffs(gu)
 	await _solo_apply_precision_tag(gu)
 	# Step 2.7a: the human Mend door (solo vs NACHTMAHR) — a human bearer heals a wounded Tough ally
@@ -1721,6 +1723,16 @@ func _on_solo_human_activated(gu: GameUnit) -> void:
 	if _solo_try_coordinate_human(gu):
 		return   # the open offer owns the flow; its pick/decline finishes the activation
 	await _solo_finish_human_activation(gu)
+
+
+## MOVE_GAPS D4 (maintainer, 12.11.): a human unit that moved this round has used up its "+X once"
+## speed mods (Great Musician's +1"), as the AI's executed move spends its own (the twin after
+## _solo_animate_move). Runs before the Utility Buff door, so a buff the bearer hands out now for a
+## later move survives; round-long records (the human's Speed Feat) are not "once" and stay.
+func _solo_spend_moved_speed_once(gu: GameUnit) -> void:
+	if gu != null and opr_army_manager != null \
+			and int(gu.unit_properties.get("moved_round", -1)) == opr_army_manager.current_round:
+		_solo_spend_once_kind(gu, ["speed"])
 
 
 ## The tail of a human activation: the AI's owed reply and the alternation pump. Split out because
