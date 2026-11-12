@@ -21,6 +21,7 @@ mod sho_17e;
 mod sho_18;
 mod sho_18b;
 mod sho_18e;
+mod enh_shred;
 mod sho_19;
 mod sho_19b;
 mod sho_20;
