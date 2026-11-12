@@ -80,6 +80,16 @@ func test_a_scurry_move_names_scurry_in_the_battle_log() -> void:
 		.contains("move bands widened by Scurry")
 
 
+## Wolf Brothers' Wolfborn (up to D3" on activation): the human's rings and strict cap carry the best
+## roll, so the move names the rule that widened them.
+func test_a_wolfborn_move_names_wolfborn_in_the_battle_log() -> void:
+	var u := _carrier(1, "Wolf Pack", "wolf_brothers", ["Wolfborn"])
+	_drop(u)
+	assert_str(_log_text()) \
+		.override_failure_message("Wolfborn widened the rings and cap and NO log line names it") \
+		.contains("move bands widened by Wolfborn")
+
+
 ## No move-band rule: the move keeps its plain summary and invents no rule line.
 func test_a_plain_move_stays_quiet() -> void:
 	var u := _carrier(1, "Watchers", "human_defense_force", ["Fearless"])
