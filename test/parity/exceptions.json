@@ -1,8 +1,4 @@
 [
  {"id": "EXC-1", "scenario": "enhanced_warbound_6in", "lane": "shoot", "since": "2026-11-11", "pr": 2615, "owner_lane": "coreports",
-  "reason": "Table changed, core not yet: an Enhanced form (Warbound/Destroyer/Infected) pays the Shred extra wound on unmodified Defense 1s at any distance; the core still applies the 9 inch gate to it."},
- {"id": "EXC-2", "scenario": null, "lane": "shoot", "since": "2026-11-11", "pr": 2613, "owner_lane": "coreports",
-  "reason": "not reachable by the shoot lane runner: Protection Feat is once per game, so the difference needs two volleys at the same unit per seed and the runner fires one volley at fresh units."},
- {"id": "EXC-3", "scenario": null, "lane": "shoot", "since": "2026-11-11", "pr": 2612, "owner_lane": "coreports",
-  "reason": "not reachable by the shoot lane runner: Crossing Strike is the move-through volley (_solo_apply_strafing), not the plain volley the runner calls."}
+  "reason": "Intended epoch history, not a defect: the table pays the Enhanced Shred extra wound (Warbound/Destroyer/Infected, unmodified Defense 1s, any distance) from epoch 73, the core gates its port at 75 (EPOCH_75_TABLE_FIXES, #2654) so records stamped 73 and 74 replay byte-exact. The same units at epoch 75 are identical on every seed (scenario enhanced_warbound_6in_e75); the epoch-73 scenario stays as the tripwire for the gate."}
 ]

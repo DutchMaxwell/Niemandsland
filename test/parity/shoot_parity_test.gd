@@ -6,6 +6,7 @@ extends GdUnitTestSuite
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const ParityTable := preload("res://test/parity/parity_table.gd")
 const SEEDS := 200
+const EXCEPTION_CEILING := 1   # the exception list only shrinks: lower this when an entry is retired, never raise it
 const _TMP := "user://parity_shoot_tmp"
 
 var _runner: GdUnitSceneRunner
@@ -119,14 +120,73 @@ func test_warbound_control_matches_the_core(do_skip := not ClassDB.class_exists(
 @warning_ignore('unused_parameter')
 func test_exc1_enhanced_warbound_is_the_listed_difference(do_skip := not ClassDB.class_exists("NmlCore"),
 		skip_reason := "NmlCore extension not loaded") -> void:
-	# PF-b (#2615): the table pays the Shred extra wound at 6", the core not yet. Green only with EXC-1 listed.
+	# PF-b (#2615), epoch history: the table pays the Shred extra wound at 6" from epoch 73, the core gates its port at
+	# 75 (EPOCH_75_TABLE_FIXES, so records stamped 73 and 74 replay byte-exact). Green only with EXC-1 listed.
 	var r := await _gate("enhanced_warbound_6in")
 	assert_int(int(r["rc"])).override_failure_message(str(r["problems"]) + str(r["first_mismatches"])).is_equal(0)
+
+
+@warning_ignore('unused_parameter')
+func test_enhanced_warbound_matches_the_core_at_75(do_skip := not ClassDB.class_exists("NmlCore"),
+		skip_reason := "NmlCore extension not loaded") -> void:
+	# The same units at epoch 75 (#2654): both sides pay the extra wound at 6", no exception applies.
+	var r := await _gate("enhanced_warbound_6in_e75")
+	assert_int(int(r["rc"])).override_failure_message(str(r["problems"]) + str(r["first_mismatches"])).is_equal(0)
+	assert_int(int(r["identical"])).is_equal(SEEDS)
+
+
+## How many of a record's rolls had this target (the Feat rolls on 5+, the volleys on 4+).
+func _rolls_at(rec: Dictionary, target: int) -> int:
+	return (rec["rolls"] as Array).filter(func(x) -> bool: return int((x as Dictionary)["target"]) == target).size()
+
+
+@warning_ignore('unused_parameter')
+func test_protection_feat_is_once_per_game_on_both_sides_at_75(do_skip := not ClassDB.class_exists("NmlCore"),
+		skip_reason := "NmlCore extension not loaded") -> void:
+	# #2613 / #2652: two volleys at one Protection Feat unit, the Feat dice roll in the first only.
+	var r := await _gate("protection_feat_twice_e75")
+	assert_int(int(r["rc"])).override_failure_message(str(r["problems"]) + str(r["first_mismatches"])).is_equal(0)
+	assert_int(int(r["identical"])).is_equal(SEEDS)
+
+
+@warning_ignore('unused_parameter')
+func test_red_protection_feat_table_at_72_is_caught(do_skip := not ClassDB.class_exists("NmlCore"),
+		skip_reason := "NmlCore extension not loaded") -> void:
+	# Table side at epoch 72 (no once-per-game latch, it rolls the Feat in both volleys), core at 75: must be red, and
+	# the difference is the extra Feat roll.
+	var r := await _gate("protection_feat_twice_e75", {"epoch": 72})
+	assert_int(int(r["rc"])).is_equal(1)
+	assert_int((r["mismatching_seeds"] as Array).size()).is_greater_equal(1)
+	var m := (r["first_mismatches"] as Array)[0] as Dictionary
+	assert_int(_rolls_at(m["table"], 5)).is_greater(_rolls_at(m["core"], 5))
+
+
+@warning_ignore('unused_parameter')
+func test_crossing_strike_volley_shreds_on_both_sides_at_75(do_skip := not ClassDB.class_exists("NmlCore"),
+		skip_reason := "NmlCore extension not loaded") -> void:
+	# #2612 / #2653: the move-through volley takes the unit-level Shred stamp like any shooting attack.
+	var r := await _gate("crossing_strike_shred_e75")
+	assert_int(int(r["rc"])).override_failure_message(str(r["problems"]) + str(r["first_mismatches"])).is_equal(0)
+	assert_int(int(r["identical"])).is_equal(SEEDS)
+
+
+@warning_ignore('unused_parameter')
+func test_red_crossing_strike_table_without_shred_is_caught(do_skip := not ClassDB.class_exists("NmlCore"),
+		skip_reason := "NmlCore extension not loaded") -> void:
+	# Table side only: the attacker loses its unit-level Shred (the stamp #2612 added to the move-through volley); the
+	# core keeps it. Must be red, and the table (no extra wounds) never has fewer survivors than the core.
+	var r := await _gate("crossing_strike_shred_e75", {"attacker_rules": []})
+	assert_int(int(r["rc"])).is_equal(1)
+	assert_int((r["mismatching_seeds"] as Array).size()).is_greater_equal(1)
+	var m := (r["first_mismatches"] as Array)[0] as Dictionary
+	assert_int(int(m["table"]["def_alive"])).is_greater_equal(int(m["core"]["def_alive"]))
 
 
 func test_exceptions_file_is_well_formed() -> void:
 	var list = JSON.parse_string(FileAccess.get_file_as_string("res://test/parity/exceptions.json"))
 	assert_bool(list is Array).is_true()
+	assert_int((list as Array).size()).override_failure_message(
+		"the exception list only shrinks: %d entries, ceiling %d" % [(list as Array).size(), EXCEPTION_CEILING]).is_less_equal(EXCEPTION_CEILING)
 	var ids := {}
 	for e in list:
 		for k in ["id", "lane", "since", "pr", "owner_lane", "reason"]:
