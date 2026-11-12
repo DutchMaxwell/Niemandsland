@@ -3,7 +3,7 @@ use super::*;
     // ---- One-core P3 step 7: a plain volley records its landing at its checkpoint ----
 
     /// `four_unit_line` with "a" firing 4 shots at Quality 2+ into "b": two Tough(3) models.
-    fn volley_line() -> (State, Vec<UnitStatic>) {
+    pub(crate) fn volley_line() -> (State, Vec<UnitStatic>) {
         let mut st = four_unit_line();
         let r = &*st.roster;
         let index = r.keys.iter().enumerate().map(|(i, k)| (k.clone(), i)).collect();

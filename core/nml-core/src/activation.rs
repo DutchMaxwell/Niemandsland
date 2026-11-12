@@ -1,12 +1,18 @@
 //! One-core P3: one activation as the ordered inputs the table sends, the
-//! answers the core gives, and the order rules on the inputs. Nothing
-//! resolves an activation yet.
+//! answers the core gives, the order rules on the inputs, and
+//! `step_activation`, which resolves the activation through the step API.
 
+use crate::dice::Tray;
 use crate::gate::INCHES_TO_METERS;
+use crate::io::{Action, Seams};
 use crate::landing::Landing;
 use crate::logline::LogLine;
-use crate::sim::{ADVANCE, CHARGE, HOLD, REPOSITION, RUSH};
+use crate::rng::GodotRng;
+use crate::sim::{resolve_stochastic_tray_on_board, ADVANCE, CHARGE, HOLD, REPOSITION, RUSH};
 use crate::state::State;
+use crate::step::{step_with, Step};
+use crate::terrain::Terrain;
+use crate::unit::UnitStatic;
 
 /// One thing the table tells the core during an activation, in order.
 #[derive(Debug, Clone, PartialEq)]
@@ -93,6 +99,52 @@ pub fn effective_kind(declared: i64, start: &[[f64; 3]], placed: Option<&[[f64; 
         HOLD
     } else {
         declared
+    }
+}
+
+/// One activation through the step API: the order rules, then the declared
+/// action (not moving = Hold) on the supplied faces and the LAST placement.
+/// A new entry: the AI's resolver path is untouched. `NeedRoll.index` is the
+/// roll's, not the transcript's; a refusal of the whole transcript is at `t.len()`.
+pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrain: &Terrain, seams: Seams, t: &[Input]) -> ActStep {
+    let at = state.roster.index.get(unit).copied();
+    let name = at.map_or(unit, |i| statics[state.roster.profile[i]].name.as_str());
+    if let Err((index, reason)) = order_check(name, t) {
+        return ActStep::Refused { index, reason };
+    }
+    if t.last() == Some(&Input::Cancel) {
+        return ActStep::Refused { index: t.len() - 1, reason: "not on the step path yet".to_string() };
+    }
+    let declared = t.iter().enumerate().find_map(|(i, x)| match x {
+        Input::Intent { kind, shoot } => Some((i, *kind, shoot.clone())),
+        _ => None,
+    });
+    let Some((at_intent, declared, shoot)) = declared else {
+        return ActStep::Open;
+    };
+    let placed = t.iter().rev().find_map(|x| match x {
+        Input::Placed(p) => Some(p.clone()),
+        _ => None,
+    });
+    let start = at.map_or(&[][..], |i| state.positions[i].as_slice());
+    let kind = effective_kind(declared, start, placed.as_deref());
+    if kind == RUSH && shoot.is_some() {
+        return ActStep::Refused { index: at_intent, reason: format!("{name} rushed this activation - it cannot shoot.") };
+    }
+    let action = Action { kind, unit: unit.to_string(), dest: None, shoot, charge: None, patient: false, split: None, traced: None, teleport: None };
+    let faces: Vec<Vec<u8>> = t.iter().filter_map(|x| if let Input::Faces(f) = x { Some(f.clone()) } else { None }).collect();
+    // The spike's non-tray seed: a plain activation never draws from it.
+    let resolve = |tray: &mut Tray| {
+        if let Some(p) = placed {
+            tray.place(p);
+        }
+        resolve_stochastic_tray_on_board(statics, state, &action, terrain, seams, &mut GodotRng::new(0), tray)
+    };
+    match step_with(&faces, resolve, |r| r.as_ref().map_or(&[][..], |(_, s)| s.rolls.as_slice())) {
+        Step::NeedRoll { index, faces, kind, count, target, owner, lines, landings } => ActStep::NeedRoll { index, faces, kind, count, target, owner, lines, landings },
+        Step::Refused { reason, .. } => ActStep::Refused { index: t.len(), reason },
+        Step::Done(Ok((state, _)), lines, landings) => ActStep::Done { state, lines, landings },
+        Step::Done(Err(u), ..) => ActStep::Refused { index: t.len(), reason: format!("{u:?}") },
     }
 }
 
@@ -191,5 +243,83 @@ mod tests {
         assert_eq!(effective_kind(HOLD, &start, Some(&shifted(0.5, 0.0))), HOLD);
         assert_eq!(effective_kind(CHARGE, &start, None), CHARGE);
         assert_eq!(effective_kind(ADVANCE, &start, Some(&start[..1])), ADVANCE, "a short placement is not proven still");
+    }
+
+    // ---- step 11: a whole activation through the step API ----
+
+    use crate::dice::Roll;
+    use crate::sim::tests::volley_landings::volley_line;
+
+    fn seams() -> Seams {
+        Seams { rules_epoch: crate::acts::CURRENT_RULES_EPOCH, tray_exact: true, ..Seams::default() }
+    }
+
+    /// The step-1 driver loop: roll each `NeedRoll` from the seeded tray `seed`
+    /// and append it; returns the last answer and the roll records it asked for.
+    fn drive(statics: &[UnitStatic], st: &State, mut t: Vec<Input>, seed: i64) -> (ActStep, Vec<Roll>) {
+        let (mut dice, mut rolls) = (Tray::seeded(seed), Vec::new());
+        dice.set_zero_draws(true); // exactly the faces asked for: the feed already applied the epoch
+        loop {
+            match step_activation(statics, st, "a", &Terrain::default(), seams(), &t) {
+                ActStep::NeedRoll { faces, kind, count, target, owner, .. } => {
+                    let f = dice.roll(faces);
+                    rolls.push(Roll { kind, count, target, faces: f.clone(), owner });
+                    t.push(Faces(f));
+                }
+                other => return (other, rolls),
+            }
+        }
+    }
+
+    /// The stepped activation equals one straight seeded run, state and roll records alike; the
+    /// straight run's non-tray stream differs (seed vs 0), so a draw from it would show here too.
+    #[test]
+    fn a_stepped_activation_equals_the_seeded_run() {
+        let (st, statics) = volley_line();
+        let (mut killed, mut shaken) = (0, 0);
+        for seed in 0..200i64 {
+            let action = Action { kind: HOLD, unit: "a".into(), dest: None, shoot: Some("b".into()), charge: None, patient: false, split: None, traced: None, teleport: None };
+            let (want, shot) = resolve_stochastic_tray_on_board(&statics, &st, &action, &Terrain::default(), seams(), &mut GodotRng::new(seed), &mut Tray::seeded(seed)).unwrap();
+            let (got, rolls) = drive(&statics, &st, vec![Begin, intent(HOLD, Some("b"))], seed);
+            let ActStep::Done { state, .. } = got else { panic!("seed {seed}: {got:?}") };
+            assert_eq!((&state.alive, &state.shaken), (&want.alive, &want.shaken), "seed {seed}");
+            assert_eq!(rolls, shot.rolls, "seed {seed}");
+            assert_eq!(state, want, "seed {seed}");
+            (killed, shaken) = (killed + (want.alive[2] < st.alive[2]) as i32, shaken + want.shaken[2] as i32);
+        }
+        assert!(killed > 0 && shaken > 0, "fixture must kill and shake: {killed} {shaken}");
+    }
+
+    /// O3: a unit that moved as a Rush cannot shoot (RED: drop the Rush check).
+    #[test]
+    fn a_rush_cannot_shoot() {
+        let (st, statics) = volley_line();
+        let moved: Vec<[f64; 3]> = st.positions[0].iter().map(|p| [p[0] + 3.0 * INCHES_TO_METERS, p[1], p[2]]).collect();
+        let t = [Begin, Placed(moved), intent(RUSH, Some("b"))];
+        match step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t) {
+            ActStep::Refused { index, reason } => assert_eq!((index, reason.as_str()), (2, "a rushed this activation - it cannot shoot.")),
+            other => panic!("expected the O3 refusal, got {other:?}"),
+        }
+    }
+
+    /// Not moving is Hold: a Rush with no placement resolves as the Hold run, die for die.
+    #[test]
+    fn a_rush_that_never_moved_is_the_hold_run() {
+        let (st, statics) = volley_line();
+        for seed in 0..20i64 {
+            let (hold, hold_rolls) = drive(&statics, &st, vec![Begin, intent(HOLD, Some("b"))], seed);
+            let (rush, rush_rolls) = drive(&statics, &st, vec![Begin, intent(RUSH, Some("b"))], seed);
+            let (ActStep::Done { state: h, .. }, ActStep::Done { state: r, .. }) = (&hold, &rush) else { panic!("seed {seed}: {hold:?} {rush:?}") };
+            assert_eq!((h, &hold_rolls), (r, &rush_rolls), "seed {seed}");
+        }
+    }
+
+    #[test]
+    fn open_until_the_intent_and_cancel_waits_for_step_12() {
+        let (st, statics) = volley_line();
+        let ask = |t: &[Input]| step_activation(&statics, &st, "a", &Terrain::default(), seams(), t);
+        assert!(matches!(ask(&[Begin]), ActStep::Open));
+        assert!(matches!(ask(&[Begin, Cancel]), ActStep::Refused { index: 1, .. }));
+        assert!(matches!(ask(&[intent(HOLD, None)]), ActStep::Refused { index: 0, .. }));
     }
 }
