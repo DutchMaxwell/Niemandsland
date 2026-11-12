@@ -6885,6 +6885,37 @@ static func musician_move_bonus_in(unit: GameUnit) -> float:
 	return float(RulesRegistry.unit_param(unit, "Musician", "move_bonus_in", AiCombatMath.MUSICIAN_MOVE_BONUS_IN))
 
 
+## The Bounding family's carried rule names (Bounding, Wolfborn, Wave-Step, Rapid Blink ...), [] without one.
+static func bounding_rule_names(unit: GameUnit) -> Array:
+	var out: Array = []
+	if unit == null:
+		return out
+	if RulesRegistry.unit_rule_active(unit, "Bounding"):
+		out.append("Bounding")
+		return out
+	for e in RulesRegistry.unit_rules_of_primitive(unit, "Bounding"):
+		out.append(str((e as Dictionary).get("name", "")))
+	return out
+
+
+## The WORST (largest) roll of the Bounding family's on-activation move: 3" per D3 plus the flat inches,
+## the same figure as the Bounding leg of `max_activation_advance_bonus_in`. Only the HUMAN's move rings
+## and strict cap read it (the player rolls the D3 by hand, so the table shows the best roll); the AI
+## rolls its own seeded D3 in `_act` and never reads this.
+static func bounding_worst_reach_in(unit: GameUnit) -> float:
+	if unit == null:
+		return 0.0
+	if RulesRegistry.unit_rule_active(unit, "Bounding"):
+		return float(bounding_dice_count(RulesRegistry.lookup(RulesRegistry.system_of_unit(unit),
+			RulesRegistry.faction_of_unit(unit), "Bounding").get("params", {}))) * 3.0 \
+			+ float(RulesRegistry.unit_param(unit, "Bounding", "place_d3_plus", 1))
+	var best := 0.0
+	for e in RulesRegistry.unit_rules_of_primitive(unit, "Bounding"):
+		var sp: Dictionary = (e as Dictionary).get("params", {})
+		best = maxf(best, float(bounding_dice_count(sp)) * 3.0 + float(sp.get("place_d3_plus", 0)))
+	return best
+
+
 ## Rules 3.6: the Bravery rule's two spellings (see `morale_bonus_of`).
 const BRAVERY_FAMILY: Array = ["Bravery Aura", "Bravery"]
 

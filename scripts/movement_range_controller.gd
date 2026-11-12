@@ -289,10 +289,28 @@ func bands_for_model(model_node: Node3D) -> Dictionary:
 
 
 ## The bands the HUMAN sees and is capped to: bands_for_model plus Musician's +1" on every move band
-## (army data 3.6 _common.json: the model and its unit move +1" on move actions). Kept out of
-## bands_for_model itself because the AI adds the same +1" on top of that call (musician_move_bonus_in).
+## (army data 3.6 _common.json: the model and its unit move +1" on move actions) and the Bounding
+## family's best D3 roll (Wolfborn: the unit may move up to D3" on activation). Kept out of
+## bands_for_model itself because the AI adds the same inches on top of that call (musician_move_bonus_in,
+## its own seeded Bounding roll in _act).
 func ui_bands_for_model(model_node: Node3D) -> Dictionary:
-	return _with_musician(bands_for_model(model_node), _game_unit_of(model_node))
+	return _with_human_move_rules(bands_for_model(model_node), _game_unit_of(model_node))
+
+
+static func _with_human_move_rules(bands: Dictionary, unit: GameUnit) -> Dictionary:
+	return _with_bounding(_with_musician(bands, unit), unit)
+
+
+## The Bounding family's best roll on every band: the player rolls the D3 by hand, so the ring and the
+## strict cap show the largest reach (the AI's own reach gates price the same worst case).
+static func _with_bounding(bands: Dictionary, unit: GameUnit) -> Dictionary:
+	var reach := int(SoloController.bounding_worst_reach_in(unit))
+	if reach <= 0:
+		return bands
+	var out := bands.duplicate()
+	for k in ["advance", "rush", "charge"]:
+		out[k] = int(bands.get(k, 0)) + reach
+	return out
 
 
 static func _with_musician(bands: Dictionary, unit: GameUnit) -> Dictionary:
@@ -399,7 +417,7 @@ func _terrain_sampler() -> Callable:
 
 func _build_indicator(model_node: Node3D) -> void:
 	var props := _props_of(model_node)
-	var bands := _with_musician(_activation_bands(model_node, props), _game_unit_of(model_node))
+	var bands := _with_human_move_rules(_activation_bands(model_node, props), _game_unit_of(model_node))
 	var base_color := color_for_props(props)
 
 	var root := Node3D.new()
