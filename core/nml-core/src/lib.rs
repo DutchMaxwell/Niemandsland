@@ -6,6 +6,7 @@
 //! Every ported function names its GDScript origin as `file:line`.
 
 pub mod acts;
+pub mod activation;
 pub mod arbitration;
 pub mod cast_move_ev;
 pub mod casualty;
