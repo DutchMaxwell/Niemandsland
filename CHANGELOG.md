@@ -34,7 +34,7 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 - **A Great Musician's +1" is used up by the unit's next move.** When a player's unit that moved
   ends its activation, a one-time move bonus such as Great Musician's +1" is spent and its move rings
   shrink back. Before, the bonus never ran out on the player's side. A Speed Feat bonus still lasts
-  the whole round.
+  the whole round. (#2694)
 - **A transport refuses non-Heroes with Tough(4) or Tough(5).** Under rules 3.6 a transport takes
   non-Heroes only up to Tough(3). A Tough(4) or Tough(5) non-Hero is now refused; Heroes are
   unchanged. (#2655)
