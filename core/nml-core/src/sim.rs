@@ -6429,6 +6429,13 @@ fn drop_banner_for_cause(
     let us = &statics[state.roster.profile[i]];
     let banner = ((state.morale_bonus[i] - us.ctx.morale_rating).max(0) - banner_gone(statics, state, i, seams)).max(0);
     if let Some(cause) = cause {
+        // `EPOCH_75_TABLE_FIXES` (main.gd's cause branch): Bravery Aura has no shooting/melee
+        // qualifier, so its share stays on a test any other rule forced; only the rest comes out.
+        let kept = if rule_on(seams.rules_epoch, EPOCH_75_TABLE_FIXES) { us.ctx.bravery_bonus.min(banner).max(0) } else { 0 };
+        if kept > 0 {
+            shot.log.push(format!("[Bravery Aura] {}: keeps +{kept} against {cause} (no shooting/melee qualifier)", us.name));
+        }
+        let banner = banner - kept;
         if banner > 0 {
             ctx.morale_bonus -= banner;
             shot.log.push(format!("[Banner] {}: no +{} against {} (only shooting or melee)", us.name, banner, cause));

@@ -20,7 +20,7 @@
 
 use serde::Deserialize;
 
-use crate::acts::{rule_on, CURRENT_RULES_EPOCH, EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36};
+use crate::acts::{rule_on, CURRENT_RULES_EPOCH, EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36, EPOCH_75_TABLE_FIXES};
 use crate::combat::{charge_estimate_gap_in, melee_ev, profile_ev, shoot_ev, SIX_P};
 use crate::geom::{self, V3};
 use crate::sim::{
@@ -608,7 +608,14 @@ pub(crate) fn charge_score(
     dealt *= (1.0 - counter_first / pool).clamp(0.0, 1.0);
     let taken = melee_ev(theirs, their_attacks, them, us, false, 0.0);
     let mut risk_weight = if us.fearless { 0.5 } else { 1.0 };
-    risk_weight *= (1.0 - us.morale_bonus as f64 * SIX_P).max(0.0);
+    // `EPOCH_75_TABLE_FIXES` (`AiEv.charge_score`): the estimate's family share includes the Valiant
+    // part, which drops inside the 6" charge band; a negative distance is unknown and keeps it.
+    let mut morale_bonus = us.morale_bonus;
+    if rule_on(rules_epoch, EPOCH_75_TABLE_FIXES) && charge_from_in >= 0.0
+        && crate::unit::valiant_inside_band(true, None, Some(charge_from_in)) {
+        morale_bonus -= us.valiant_bonus.min(morale_bonus);
+    }
+    risk_weight *= (1.0 - morale_bonus as f64 * SIX_P).max(0.0);
     dealt - taken * risk_weight
 }
 
