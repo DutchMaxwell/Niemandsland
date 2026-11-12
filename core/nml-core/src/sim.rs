@@ -9473,7 +9473,12 @@ fn resolve_with(
     let mut hold = false;
     // Rules 3.6 Aircraft (`EPOCH_73_V36`): the straight run replaces the band move, no planner/spacing/Dangerous test (:3080).
     let mut flew = false;
-    if matches!(kind, ADVANCE | RUSH) && next.aircraft[si] && rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) {
+    // One-core P3: a supplied tray may carry the player's own per-model end positions for an
+    // ADVANCE/RUSH; they replace every move arm below. Seeded trays never carry one (inert).
+    let placed: Option<Vec<[f64; 3]>> = dice.as_ref().and_then(|d| d.0.placed().map(|p| p.to_vec()))
+        .filter(|p| p.len() == next.positions[si].len())
+        .filter(|_| matches!(kind, ADVANCE | RUSH));
+    if placed.is_none() && matches!(kind, ADVANCE | RUSH) && next.aircraft[si] && rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) {
         if let Some(d) = if let Cover::Board(t) = cover { aircraft_delta(statics, &next, si, t, seams.shelf_sight, seams.rules_epoch) } else { None } {
             let chain = std::iter::once(si).chain(next.attached[si].iter().copied().filter(|_| seams.hero_attach));
             for u in chain.collect::<Vec<_>>() {
@@ -9488,7 +9493,7 @@ fn resolve_with(
             if let Some((_, shot)) = dice.as_mut() { shot.log.push(line); }
         }
     }
-    if seams.movement && !seams.plain_only && kind == CHARGE && band_in > 0.0 {
+    if placed.is_none() && seams.movement && !seams.plain_only && kind == CHARGE && band_in > 0.0 {
         if let (Cover::Board(t), Some(ti)) = (cover, ci) {
             landing = (crate::mv::step::MoveRules { rules_epoch: seams.rules_epoch }).charge_move(
                 &next,
@@ -9513,7 +9518,7 @@ fn resolve_with(
     // longer a translation. `--red-move-rigid` (`move_rigid`) forces the old
     // arm back for the gate's RED. `None` = the port declines and the rigid
     // translation still stands.
-    if seams.movement && !seams.move_rigid && kind != CHARGE && band_in > 0.0 && !flew {
+    if placed.is_none() && seams.movement && !seams.move_rigid && kind != CHARGE && band_in > 0.0 && !flew {
         if let (Cover::Board(t), Some(dest)) = (cover, action.dest) {
             let (dest, band) =
                 s10_dest_arms(statics, &next, si, kind, dest, band_in, &mut hold);
@@ -9564,7 +9569,7 @@ fn resolve_with(
                 land_cover(statics, &mut next, si, t, seams, dice.as_mut().map(|d| &mut *d.1));
             }
         }
-    } else if band_in > 0.0
+    } else if placed.is_none() && band_in > 0.0
         && !hold
         && !flew
         && action.dest.is_some()
@@ -9668,6 +9673,17 @@ fn resolve_with(
                 if t.is_valid() {
                     land_cover(statics, &mut next, si, t, seams, dice.as_mut().map(|d| &mut *d.1));
                 }
+            }
+        }
+    }
+    // One-core P3: a supplied placement IS the move — every model lands where the player put it.
+    if let Some(p) = placed {
+        next.positions[si] = p;
+        moved = true;
+        next.moved_round[si] = next.round;
+        if let Cover::Board(t) = cover {
+            if t.is_valid() {
+                land_cover(statics, &mut next, si, t, seams, dice.as_mut().map(|d| &mut *d.1));
             }
         }
     }
