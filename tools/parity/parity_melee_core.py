@@ -3,8 +3,10 @@
 
 Reads a neutral scenario (schema nml-scenario-v1, kind "melee", inches): the attacker starts at x_in and charges to
 charge.dest_x_in (base contact); both sides carry one melee weapon (range 0). Builds the core's header/state with the
-per-model `kits` the tree's own recorder writes (without them the core removes casualties in array order), runs one
-CHARGE per seed through Core.resolve_with_tray(state, action, Rng(0), Tray(seed)) and writes one JSONL record per seed:
+per-model `kits` the tree's own recorder writes: the first `count` models of a side carry its weapon, like
+EquipmentDistributor equips a real unit (kits with empty weapons mean "no living bearer" = no strike-back dice; without
+kits the core removes casualties in array order). Runs one CHARGE per seed through
+Core.resolve_with_tray(state, action, Rng(0), Tray(seed)) and writes one JSONL record per seed:
 {"seed", "epoch", "def_alive", "rolls": [{kind, count, target, faces, owner}]}. Same CLI as parity_core.py.
 
 usage: parity_melee_core.py <scenario.json> --repo <root> --out <out.jsonl> [--seeds N]
@@ -33,9 +35,9 @@ def build(sc):
                     game_system=u["game_system"], faction_folder=u["faction_folder"], special_rules=u["rules"],
                     item_grants=[], attached_hero_rules=[], move_bands=BANDS, weapons=[wpn])
 
-    def unit(u, x):
+    def unit(u, x, w):
         n = u["models"]
-        kits = [{"weapons": [], "equipment": 0, "wounds_max": u["tough"]} for _ in range(n)]
+        kits = [{"weapons": [w["name"]] if k < w["count"] else [], "equipment": 0, "wounds_max": u["tough"]} for k in range(n)]
         return dict(player=u["player"], alive=n, wounds=[u["tough"]] * n, radii=[rad] * n, positions=pos(u, x),
                     kits=kits, in_cover=False, shaken=False, fatigued=False, activated=False, casts=0,
                     morale_bonus=0, aircraft=False, dormant=False, ambush_arrived_round=-1,
@@ -45,8 +47,8 @@ def build(sc):
     dest = [round(sum(p[i] for p in post) / len(post), 6) for i in range(3)]
     header = {"profiles": {att["key"]: profile(att, sc["weapon"]), dfn["key"]: profile(dfn, sc["defender_weapon"])},
               "knobs": {"rules_epoch": sc["epoch"]}}
-    state = dict(round=1, rounds_total=4, scoring="end", units={att["key"]: unit(att, att["x_in"]),
-                                                                  dfn["key"]: unit(dfn, dfn["x_in"])})
+    state = dict(round=1, rounds_total=4, scoring="end", units={att["key"]: unit(att, att["x_in"], sc["weapon"]),
+                                                                  dfn["key"]: unit(dfn, dfn["x_in"], sc["defender_weapon"])})
     return header, state, {"kind": nml_core.CHARGE, "unit": att["key"], "charge": dfn["key"], "dest": dest}
 
 
