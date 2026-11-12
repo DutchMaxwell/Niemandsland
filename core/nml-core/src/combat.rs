@@ -614,11 +614,16 @@ pub fn cond_ap_why(condition: &str) -> &'static str {
 /// Rules 3.6 (`EPOCH_73_V36`) — the expected hits a Parry(X) defender takes off a strike:
 /// `min(X * living carrier models, expected hits) / 6`, each die cancelling a hit on 6+.
 /// 0 below the wave and for a unit without Parry (both feed the same `Ctx` stamps).
+/// `EPOCH_75_TABLE_FIXES` (table `AiEv._parry_cancels`): a Parry WEAPON counts only its carriers, so the dice cap at
+/// `Ctx::parry_carrier_dice` — X * min(carriers, living models) for one weapon, `sim::parry_dice_total`'s count.
 fn parry_cancels(def: &Ctx, hits: f64) -> f64 {
     if !def.v36_rules || def.parry_dice <= 0 {
         return 0.0;
     }
-    let dice = (def.parry_dice * def.models.max(0)) as f64;
+    let mut dice = (def.parry_dice * def.models.max(0)) as f64;
+    if def.parry_carrier_dice > 0 {
+        dice = dice.min(def.parry_carrier_dice as f64);
+    }
     dice.min(hits) / 6.0
 }
 
