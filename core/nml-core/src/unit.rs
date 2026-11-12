@@ -127,6 +127,9 @@ pub struct Ctx {
     /// MOR-09 Valiant: the Valiant-family share of `morale_bonus`, stamp-only;
     /// the band gate removes exactly this part (0 for a plain Banner unit).
     pub valiant_bonus: i64,
+    /// `EPOCH_75_TABLE_FIXES`: the "Bravery Aura" share of `morale_bonus`, stamp-only; it has no
+    /// shooting/melee qualifier, so a test any other rule forced keeps it (main.gd's cause branch).
+    pub bravery_bonus: i64,
     pub tough: i64,
     pub models: i64,
     /// Rules 3.6 (SHO-09s): the target still has MORE THAN half its models left (a single-model
@@ -2627,6 +2630,30 @@ fn banner_bonus_of(reg: &mut Registries, p: &Profile, rules: &[String], rules_ep
 /// entries (Banner + Bravery Aura = +2); the aura and the bare base the expansion stamps share a best-of.
 const BRAVERY_FAMILY: [&str; 2] = ["Bravery Aura", "Bravery"];
 
+/// The two Banner-family best-ofs `(rest, Bravery)` across host AND joined heroes (the table walks
+/// every member into one rest best-of and one Bravery best-of); the capture stamp ADDS them.
+fn banner_family_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (i64, i64) {
+    let (mut rest, mut bravery) = banner_bonus_of(reg, p, &p.special_rules, rules_epoch);
+    for hero in &p.attached_hero_rules {
+        let (r, b) = banner_bonus_of(reg, p, hero, rules_epoch);
+        (rest, bravery) = (rest.max(r), bravery.max(b));
+    }
+    (rest, bravery)
+}
+
+/// `EPOCH_75_TABLE_FIXES` — main.gd's cause branch: the best "Bravery Aura" entry (Banner
+/// primitive) over host and joined heroes, read by its exact name only (the bare base is not read).
+fn bravery_aura_share(reg: &mut Registries, p: &Profile) -> i64 {
+    let map = reg.rules_for(&p.game_system);
+    let entry = match map.lookup(&p.faction_folder, "Bravery Aura") {
+        Some(e) if e.primitive.as_deref() == Some("Banner") => e.param_i("morale_bonus", 0),
+        _ => return 0,
+    };
+    let carried = has_special_rule(&p.special_rules, "Bravery Aura")
+        || p.attached_hero_rules.iter().any(|h| has_special_rule(h, "Bravery Aura"));
+    if carried { entry } else { 0 }
+}
+
 /// MOR-09 Valiant — Banner-primitive family names behind the distance gate.
 /// The two 3.5 spellings have no most-models clause.
 const VALIANT_FAMILY: [&str; 3] = ["Valiant", "Hold the Line", "Hive Bond"];
@@ -2871,11 +2898,7 @@ pub fn capture_reads_for_epoch(
     let trace73 = rule_on(rules_epoch, EPOCH_73_V36) && crate::mv::plain_memo::trace_rules_on();
     // `EPOCH_75_TABLE_FIXES`: the Bravery family is its own best-of across host AND heroes (the
     // table walks every member's entries into one rest best-of and one Bravery best-of), then ADDS.
-    let (mut morale_bonus, mut bravery) = banner_bonus_of(reg, p, &p.special_rules, rules_epoch);
-    for hero in &p.attached_hero_rules {
-        let (rest, brave) = banner_bonus_of(reg, p, hero, rules_epoch);
-        (morale_bonus, bravery) = (morale_bonus.max(rest), bravery.max(brave));
-    }
+    let (mut morale_bonus, bravery) = banner_family_of(reg, p, rules_epoch);
     let named = if morale_bonus > 0 && bravery > 0 { "Banner + Bravery Aura" } else { "Banner" };
     morale_bonus += bravery;
     trace_stamp(trace73 && morale_bonus != 0, "banner-stamp", "Banner",
@@ -3225,6 +3248,16 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     } else {
         0
     };
+    // `EPOCH_75_TABLE_FIXES`: the estimate reads the whole Banner-family share (rating excluded),
+    // `AiEv.ctx_for`'s own read from 73 (`morale_bonus_of - morale_rating_of`); 74 and below keep Banner-only.
+    let fixes75 = rule_on(rules_epoch, EPOCH_75_TABLE_FIXES);
+    let morale_bonus = if fixes75 {
+        let (rest, bravery) = banner_family_of(reg, p, rules_epoch);
+        rest + bravery
+    } else {
+        morale_bonus
+    };
+    let bravery_bonus = if fixes75 { bravery_aura_share(reg, p) } else { 0 };
     // EPOCH_39_MORALE_RATING — the split the rules-must-log line reads. The
     // EV `morale_bonus` above keeps the table's own Banner-only reading
     // (ai_ev.gd:142-143); the ROLLED test adds the rating through the
@@ -3476,6 +3509,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         morale_bonus,
         morale_rating,
         valiant_bonus,
+        bravery_bonus,
         tough: unit_rating(&p.special_rules, "Tough").max(1),
         models: 1, // placeholder; `_ctx_of` always writes the snapshot's alive
         above_half_strength: false,
