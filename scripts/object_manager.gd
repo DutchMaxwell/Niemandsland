@@ -1409,7 +1409,7 @@ func _stop_dragging() -> void:
 	if landing_preview != null:
 		landing_preview.clear()
 	# Step 2.T2b (Q7): on a hotseat Automatic table an off-turn drag snaps back on release — no trail,
-	# undo, wound, marker or activation change (corrections go through Manual). Emits nothing.
+	# undo, wound, marker or activation change (corrections go through Manual). Only the restore batch goes out.
 	if _is_dragging and not _selected_objects.is_empty() and _snapback_off_turn_drag():
 		_reset_drag_state()
 		return
@@ -1546,15 +1546,23 @@ func _snapback_off_turn_drag() -> bool:
 		snap = bool(main.call("attacked_unit_drag_refused", gu, _drag_distance_in()))
 	if not snap:
 		return false
+	var restore_batch: Array = []
 	for obj in _selected_objects:
 		if not is_instance_valid(obj) or not _drag_start_positions.has(obj):
 			continue
 		obj.global_position = _drag_start_positions[obj]
 		obj.rotation.y = float(_drag_start_rotations.get(obj, obj.rotation.y))
+		if obj.has_meta("network_id"):
+			restore_batch.append(int(obj.get_meta("network_id")))
+			restore_batch.append(obj.global_position.x)
+			restore_batch.append(obj.global_position.y)
+			restore_batch.append(obj.global_position.z)
 		if obj.has_meta("drag_lift"):
 			obj.remove_meta("drag_lift")
 		if obj is RigidBody3D:
 			obj.freeze = false
+	if not restore_batch.is_empty() and _network_manager and _network_manager.is_multiplayer_active():
+		_network_manager.broadcast_move_batch(restore_batch)
 	return true
 
 
