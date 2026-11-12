@@ -2,9 +2,10 @@
 //! answers the core gives, and the order rules on the inputs. Nothing
 //! resolves an activation yet.
 
+use crate::gate::INCHES_TO_METERS;
 use crate::landing::Landing;
 use crate::logline::LogLine;
-use crate::sim::{CHARGE, REPOSITION};
+use crate::sim::{ADVANCE, CHARGE, HOLD, REPOSITION, RUSH};
 use crate::state::State;
 
 /// One thing the table tells the core during an activation, in order.
@@ -77,10 +78,27 @@ pub fn begin_check(open_elsewhere: Option<&str>) -> Result<(), String> {
     }
 }
 
+/// The table's own drop floor in inches (`main.gd` `_on_units_dropped`, the
+/// `<= 0.1` skip): a model that moved no more than this did not move.
+pub const DROP_FLOOR_IN: f64 = 0.1;
+
+/// Not moving is Hold: the core reads the declaration from the selector, never
+/// from distance. ADVANCE or RUSH with no placement, or with every model within
+/// `DROP_FLOOR_IN` (horizontal, the table's measure) of its start, is HOLD;
+/// every other case is `declared`. A placement that does not match the unit's
+/// models is not proven still, so it stays `declared` for the move check.
+pub fn effective_kind(declared: i64, start: &[[f64; 3]], placed: Option<&[[f64; 3]]>) -> i64 {
+    let still = |p: &[[f64; 3]]| p.len() == start.len() && p.iter().zip(start).all(|(a, b)| (a[0] - b[0]).hypot(a[2] - b[2]) / INCHES_TO_METERS <= DROP_FLOOR_IN);
+    if (declared == ADVANCE || declared == RUSH) && placed.is_none_or(still) {
+        HOLD
+    } else {
+        declared
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sim::{ADVANCE, HOLD};
     use Input::{Begin, Cancel, Faces, Placed};
 
     fn intent(kind: i64, shoot: Option<&str>) -> Input {
@@ -149,5 +167,29 @@ mod tests {
     fn begin_names_the_open_activation() {
         assert_eq!(begin_check(Some("A")), Err("Finish A's activation first.".to_string()));
         assert_eq!(begin_check(None), Ok(()));
+    }
+
+    /// Two models at the origin and 1 m east, the second one moved `dx` inches east and `dy` up.
+    fn shifted(dx: f64, dy: f64) -> Vec<[f64; 3]> {
+        vec![[0.0, 0.0, 0.0], [1.0 + dx * INCHES_TO_METERS, dy * INCHES_TO_METERS, 0.0]]
+    }
+
+    #[test]
+    fn not_moving_is_hold() {
+        let start = shifted(0.0, 0.0);
+        assert_eq!(effective_kind(ADVANCE, &start, None), HOLD);
+        assert_eq!(effective_kind(ADVANCE, &start, Some(&shifted(0.05, 0.0))), HOLD, "inside the 0.1\" floor");
+        assert_eq!(effective_kind(ADVANCE, &start, Some(&shifted(0.0, 3.0))), HOLD, "height is not horizontal");
+        assert_eq!(effective_kind(ADVANCE, &start, Some(&shifted(0.5, 0.0))), ADVANCE);
+        assert_eq!(effective_kind(RUSH, &start, Some(&shifted(0.5, 0.0))), RUSH);
+        assert_eq!(effective_kind(RUSH, &start, None), HOLD);
+    }
+
+    #[test]
+    fn only_advance_and_rush_fall_back_to_hold() {
+        let start = shifted(0.0, 0.0);
+        assert_eq!(effective_kind(HOLD, &start, Some(&shifted(0.5, 0.0))), HOLD);
+        assert_eq!(effective_kind(CHARGE, &start, None), CHARGE);
+        assert_eq!(effective_kind(ADVANCE, &start, Some(&start[..1])), ADVANCE, "a short placement is not proven still");
     }
 }
