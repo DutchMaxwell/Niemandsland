@@ -240,7 +240,7 @@
     // to failed 2s.
     #[test]
     fn an_enhanced_destroyer_aura_shreds_one_extra_wound_per_save_one_and_widens_with_the_base() {
-        let e = crate::acts::CURRENT_RULES_EPOCH;
+        let e = crate::acts::EPOCH_74_CLIMB_COST; // the 3.5 window; epoch 75 reads "always" (enh_shred.rs)
         let bare = carrier("aof", "ogres", &["Enhanced Destroyer Aura"], e);
         assert!(bare.shoot[0].shred_alias, "the granted Boost is a Shred carrier");
         assert_eq!(bare.shoot[0].shred_ones_wound_bonus, 1, "the entry's extra_wound_per_save_one");
@@ -249,6 +249,8 @@
         let full = carrier("aof", "ogres", &["Enhanced Destroyer Aura", "Destroyer"], e);
         assert_eq!(full.shoot[0].shred_low, 2, "the granted Boost's save_fail_max window");
         assert_eq!(full.shoot[0].shred_ones_wound_bonus, 1);
+        let now = carrier("aof", "ogres", &["Enhanced Destroyer Aura", "Destroyer"], crate::acts::EPOCH_75_TABLE_FIXES);
+        assert!((now.shoot[0].shred_low, now.shoot[0].shred_any_distance) == (1, true), "75: no window, any distance");
     }
 
     // ------------------------------------------ Empyrean Spirit Boost Aura ---

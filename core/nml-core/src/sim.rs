@@ -34,7 +34,7 @@ use crate::acts::{
     EPOCH_51_CASTER_INTERFERENCE, EPOCH_52_UTILITY_SPELLS, EPOCH_56_GROUNDED_PROTECTION,
     EPOCH_61_PRECISION_MARKERS, EPOCH_62_CASTING_MOD, EPOCH_65_MELEE_TRUTH,
     EPOCH_66_DISTANCE_TRUTH, EPOCH_67_MARKERS_BURSTS, EPOCH_68_MODIFIER_SUM,
-    EPOCH_71_RAPID_CHARGE_MARK, EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36,
+    EPOCH_71_RAPID_CHARGE_MARK, EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36, EPOCH_75_TABLE_FIXES,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
@@ -1801,6 +1801,22 @@ fn ebr_relay_has_hero(
 fn spend_exchange(state: &mut State, att: usize, def: usize, melee: bool) {
     mods::spend_once(state, att, &[mods::Role::AttackerOwn, mods::Role::Ap, mods::Role::Grant], melee);
     mods::spend_once(state, def, &[mods::Role::VsTarget, mods::Role::Defense, mods::Role::Grant, mods::Role::GrantVs], melee);
+}
+
+const PROTECTION_FEAT: &str = "Protection Feat";
+
+/// #2613 (EPOCH_75_TABLE_FIXES) — the once-per-game Protection Feat is spent by its first REAL ignore roll: a
+/// wound reached the roll and the Feat's 5+ is the target that binds (a better plain Regeneration rolls alone).
+pub(crate) fn spend_protection_feat(statics: &[UnitStatic], state: &mut State, def: usize, def_incoming: bool, rules_epoch: u32) {
+    let c = &statics[state.roster.profile[def]].ctx;
+    if !rule_on(rules_epoch, EPOCH_75_TABLE_FIXES) || !def_incoming || c.regen_feat <= 0
+        || state.feats_used[def].iter().any(|n| n == PROTECTION_FEAT)
+        || (c.regen_target > 0 && c.regen_target < c.regen_feat)
+    {
+        return;
+    }
+    Rc::make_mut(&mut state.feats_used)[def].push(PROTECTION_FEAT.to_string());
+    trace_rule("protection-feat", &statics[state.roster.profile[def]].name, "spends its once-per-game ignore roll");
 }
 
 /// DAT-17a — the exchange spend with the Regeneration grant's epoch gate.
@@ -4058,6 +4074,18 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
             trace_rule("grounded-protection", unit, "in the open -> no Regeneration (the fold holds)");
         }
     }
+    // #2613 (EPOCH_75_TABLE_FIXES): Protection Feat is once per game — its held-aside target folds only
+    // while the bearer's `feats_used` latch is open (`spend_protection_feat` closes it).
+    if rule_on(rules_epoch, EPOCH_75_TABLE_FIXES) && c.regen_feat > 0 {
+        let unit = &statics[state.roster.profile[i]].name;
+        if state.feats_used[i].iter().any(|n| n == PROTECTION_FEAT) {
+            trace_rule("protection-feat", unit, "already used it this game -> no ignore roll");
+        } else {
+            c.regeneration = true;
+            c.regen_target = fold_min(c.regen_target, c.regen_feat);
+            c.regen_target_spell = fold_min(c.regen_target_spell, c.regen_feat);
+        }
+    }
     // WAVE 3 — the Fortified family's live-grant leg, gated on the FROZEN
     // `EPOCH_6_TABLE_RULES`: the three Boost names' uniform printed shape
     // (AP(-1), no distance gate) folds as one flag-width stamp, the
@@ -6102,6 +6130,7 @@ fn strike_phase(
     }
     let att_wounded = att_incoming > 0;
     spend_exchange_wounded(next, si, ti, true, att_wounded, def_incoming, seams.rules_epoch); // main.gd:6152, per strike phase
+    spend_protection_feat(statics, next, ti, def_incoming, seams.rules_epoch);
     (caused, retaliated, hazard_self, scourge_taken)
 }
 
@@ -6216,7 +6245,9 @@ fn impact_phase(
     let pools = crate::dice::impact_pools(&ctx_of_melee(us, next, si, rules_epoch), &cut_by);
     // Rules 3.6 (`EPOCH_73_V36`) — Parry(X): each living carrier model (host
     // and joined heroes) contributes X dice against this Impact event.
-    let parry_dice: i64 = if rule_on(rules_epoch, EPOCH_73_V36) {
+    // `EPOCH_75_TABLE_FIXES` (maintainer ruling): Impact hits are never parried,
+    // so no Parry die is drawn; a record stamped 74 or below replays its draw.
+    let parry_dice: i64 = if rule_on(rules_epoch, EPOCH_73_V36) && !rule_on(rules_epoch, EPOCH_75_TABLE_FIXES) {
         parry_dice_total(statics, next, ti)
     } else {
         0
@@ -10369,6 +10400,7 @@ fn resolve_with(
                             // once-mods BEFORE the post-volley morale test.
     let att_wounded = att_incoming > 0;
                             spend_exchange_wounded(&mut next, si, g.ti, false, att_wounded, def_incoming, seams.rules_epoch);
+                            spend_protection_feat(statics, &mut next, g.ti, def_incoming, seams.rules_epoch);
                             // D1-B5b: the volley's morale test is the NEXT
                             // thing on the table's tray (main.gd:8248-8251),
                             // per group — inside the per-group

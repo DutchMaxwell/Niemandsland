@@ -593,6 +593,30 @@ func test_bands_for_model_resolves_unit_via_parent_meta() -> void:
 	assert_int(b["rush"]).is_equal(16)
 
 
+func _bands_of_unit_with(rules: Array) -> Dictionary:
+	var gu := GameUnit.new()
+	gu.unit_properties = {"special_rules": rules, "player_id": 1, "name": "M", "quality": 4, "defense": 4}
+	var node: Node3D = auto_free(Node3D.new())
+	add_child(node)
+	node.set_meta("game_unit", gu)
+	return _controller().ui_bands_for_model(node)
+
+
+func test_musician_unit_human_bands_get_plus_one_inch() -> void:
+	# army data 3.6 (_common.json): Musician = +1" on move actions; rings and the strict cap read these.
+	var b := _bands_of_unit_with(["Musician"])
+	assert_int(b["advance"]).is_equal(7)
+	assert_int(b["rush"]).is_equal(13)
+	assert_int(b["charge"]).is_equal(13)
+	# control: no Musician stays 6/12; Fast stacks with Musician (8+1 / 16+1)
+	var plain := _bands_of_unit_with([])
+	assert_int(plain["advance"]).is_equal(6)
+	assert_int(plain["rush"]).is_equal(12)
+	var fm := _bands_of_unit_with(["Fast", "Musician"])
+	assert_int(fm["advance"]).is_equal(9)
+	assert_int(fm["rush"]).is_equal(17)
+
+
 func test_reach_hunt_keeps_rush_and_charge_bands_distinct() -> void:
 	var covered := 0
 	for system in RulesRegistry.SYSTEMS:
