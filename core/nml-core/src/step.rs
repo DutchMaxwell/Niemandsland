@@ -8,6 +8,7 @@
 //! re-running from the start is exact — no resolver had to change.
 
 use crate::dice::{Roll, ShootResult, Tray};
+use crate::landing::Landing;
 use crate::logline::LogLine;
 
 /// What the core needs next for one exchange.
@@ -17,7 +18,9 @@ pub enum Step<T> {
     /// rules count; `faces` can differ below `EPOCH_67_MARKERS_BURSTS`).
     /// `lines` are only those said before the starved draw: after it the
     /// replay runs on filler 1s, so a later line would tell a false story.
-    NeedRoll { index: usize, faces: usize, kind: &'static str, count: i64, target: i64, owner: String, lines: Vec<LogLine> },
+    /// `landings` follow the same rule and are cumulative: each `NeedRoll`
+    /// repeats the earlier ones, the table skips what it has landed.
+    NeedRoll { index: usize, faces: usize, kind: &'static str, count: i64, target: i64, owner: String, lines: Vec<LogLine>, landings: Vec<Landing> },
     /// The core will not answer for this exchange: the draws and the records
     /// disagree (some draw pushed no record, so a feed index no longer names its
     /// roll), or a supplied group had the wrong number of faces. `draws` and
@@ -26,8 +29,9 @@ pub enum Step<T> {
     /// comes after the guard has passed, so there they are equal.
     /// Refused rather than a wrong `NeedRoll`.
     Refused { draws: usize, records: usize, reason: String },
-    /// The exchange is resolved on exactly the supplied faces; every line said.
-    Done(T, Vec<LogLine>),
+    /// The exchange is resolved on exactly the supplied faces; every line said
+    /// and every landing made.
+    Done(T, Vec<LogLine>, Vec<Landing>),
 }
 
 /// Run `resolve` on the supplied faces; `rolls` reads the roll records off its
@@ -50,11 +54,12 @@ pub fn step_with<T>(
         return Step::Refused { draws: feed.draws(), records, reason };
     }
     match feed.starved_at {
-        None => Step::Done(out, tray.all_lines()),
+        None => Step::Done(out, tray.all_lines(), tray.all_landings()),
         Some((index, faces)) => match rolls(&out).get(index) {
             Some(r) => {
                 let lines = tray.lines_upto(index);
-                Step::NeedRoll { index, faces, kind: r.kind, count: r.count, target: r.target, owner: r.owner.clone(), lines }
+                let landings = tray.landings_upto(index);
+                Step::NeedRoll { index, faces, kind: r.kind, count: r.count, target: r.target, owner: r.owner.clone(), lines, landings }
             }
             None => {
                 let reason = format!("roll {index}: no roll record for this draw");
@@ -90,7 +95,7 @@ mod tests {
             let got = loop {
                 match shoot_step(&faces, run) {
                     Step::NeedRoll { faces: n, .. } => faces.push(dice.roll(n)),
-                    Step::Done(r, _) => break r,
+                    Step::Done(r, _, _) => break r,
                     Step::Refused { reason, .. } => panic!("seed {seed}: {reason}"),
                 }
             };
@@ -165,7 +170,29 @@ mod tests {
             other => panic!("expected NeedRoll for roll 0, got {other:?}"),
         }
         match step_with(&[vec![5]], run, |r| r.as_slice()) {
-            Step::Done(_, lines) => assert_eq!(lines, vec![line("A"), line("B")]),
+            Step::Done(_, lines, _) => assert_eq!(lines, vec![line("A"), line("B")]),
+            other => panic!("expected Done, got {other:?}"),
+        }
+    }
+
+    /// A landing made after the starved draw is not true yet: `NeedRoll` must
+    /// not carry it; once the roll is supplied, `Done` carries every landing.
+    #[test]
+    fn need_roll_carries_only_landings_before_the_starve() {
+        use crate::landing::LandedModel;
+        let landing = |unit: usize| Landing { unit, models: vec![LandedModel { at: [1.0, 0.0, 2.0], wounds_left: 0, dead: true }] };
+        let run = |t: &mut Tray| {
+            t.land(|| landing(0));
+            let faces = t.roll(1);
+            t.land(|| landing(1));
+            vec![Roll { kind: "attack", count: 1, target: 4, faces, owner: "Rifle".into() }]
+        };
+        match step_with(&[], run, |r| r.as_slice()) {
+            Step::NeedRoll { index: 0, landings, .. } => assert_eq!(landings, vec![landing(0)]),
+            other => panic!("expected NeedRoll for roll 0, got {other:?}"),
+        }
+        match step_with(&[vec![5]], run, |r| r.as_slice()) {
+            Step::Done(_, _, landings) => assert_eq!(landings, vec![landing(0), landing(1)]),
             other => panic!("expected Done, got {other:?}"),
         }
     }
