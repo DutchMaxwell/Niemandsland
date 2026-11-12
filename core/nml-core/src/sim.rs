@@ -1348,6 +1348,7 @@ pub(crate) fn tray_strafing(
     let ut = &statics[next.roster.profile[target]];
     let mut def = with_modifier_sum(with_cond_ap_state(ctx_live(ctx_of(ut, next, target), statics, next, target, false, seams.rules_epoch), statics, next, target, seams), seams.rules_epoch);
     stamp_blast_models(&mut def, next, target, seams);
+    def.side = next.player[target]; // One-core P3 step 25: the save line's seat
     // D-STEALTH — the strafe volley reads the defender's live context the
     // same way the table's `_solo_resolve_ai_volley` does (main.gd:3007), so
     // the def build carries the same terrain gate.
@@ -10165,6 +10166,7 @@ fn resolve_with(
                             let ut_g = &statics[next.roster.profile[g.ti]];
                             let mut def = with_modifier_sum(with_cond_ap_state(ctx_live(ctx_of(ut_g, &next, g.ti), statics, &next, g.ti, false, seams.rules_epoch), statics, &next, g.ti, seams), seams.rules_epoch);
                             stamp_blast_models(&mut def, &next, g.ti, seams);
+                            def.side = next.player[g.ti]; // One-core P3 step 25: the save line's seat
                             // D-STEALTH — the def build's terrain gate: the alias
                             // applies only while the TARGET stands within 1" of
                             // terrain (per model, the majority fold).
@@ -10449,6 +10451,34 @@ fn resolve_with(
                             }
                             if seams.tray_exact {
                                 land_pool_wounds(&mut next, g.ti, w, true, seams, &mut shot.log);
+                            }
+                            // One-core P3 step 25: at the landing's stamp, `_solo_apply_wounds`'s lines (main.gd:16582-16600):
+                            // the wounds that landed on the chain, then per member the models it lost (main.gd:18376-18395, :25123).
+                            if let Some(ch) = chain_before.as_ref() {
+                                let size = |u: usize| statics[next.roster.profile[u]].model_count;
+                                let (alive, total) = ch.iter().fold((0, 0), |(a, t), (u, ..)| (a + next.alive[*u], t + size(*u)));
+                                let took: i64 = ch.iter().map(|(u, _, w)| w.iter().sum::<i64>() - next.wounds[*u].iter().sum::<i64>()).sum();
+                                // NML-1091: a unit that IS one multi-wound model counts that model's wounds instead.
+                                let (n, of, unit) = match ut_g.wounds_max.first() {
+                                    Some(&m) if total == 1 && m > 1 => (next.wounds[g.ti].first().copied().unwrap_or(0).max(0), m, " wounds"),
+                                    _ => (alive, total, ""),
+                                };
+                                if took > 0 {
+                                    tray.say(|| LogLine { rule: "shoot", category: Category::Combat, side: next.player[g.ti],
+                                        text: format!("{} takes {took} wound{} ({n}/{of}{unit})", ut_g.name, if took == 1 { "" } else { "s" }), detail: None });
+                                }
+                                for (u, at, _) in ch {
+                                    let lost = at.len() as i64 - next.positions[*u].len() as i64;
+                                    let (a, t) = if *u == g.ti { (alive, total) } else { (next.alive[*u], size(*u)) };
+                                    let name = &statics[next.roster.profile[*u]].name;
+                                    let text = match (lost, a) {
+                                        (..=0, _) => continue,
+                                        (_, 0) => format!("{name} destroyed"),
+                                        (1, _) => format!("{name} loses a model ({a}/{t})"),
+                                        _ => format!("{name} loses {lost} models ({a}/{t})"),
+                                    };
+                                    tray.say(|| LogLine { rule: "shoot", category: Category::Combat, side: next.player[*u], text, detail: None });
+                                }
                             }
                             // One-core P3 step 7: one landing per changed chain member, stamped BEFORE
                             // the group's morale test below draws.
