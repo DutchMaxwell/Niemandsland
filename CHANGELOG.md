@@ -17,6 +17,28 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   and on a charge their unmodified 1s to block deal the extra wound whatever the distance, and they
   no longer widen the window to 1-2 as the old 3.5 Boost did. On a strike-back they pay nothing, like
   the base forms, which keep their distance condition. The battle log names the Enhanced form. (#2615)
+- **A hero joined to a unit rolls its own Impact dice on a charge.** Impact(X) belongs to the model,
+  so a hero that has joined a unit now rolls its dice when the unit charges, as the unit's own
+  models do. Before, only the host unit's models rolled. (#2632)
+- **Bravery Aura keeps its +1 on a morale test that a spell forces.** A test caused by a spell, such
+  as Spell Drain, no longer loses the +1 from Bravery Aura. The rest of the Banner bonus is still
+  stripped, and the battle log says so. (#2633)
+- **A Musician unit's move rings and strict cap include its +1".** The rings and the strict
+  movement cap now show 7" and 13" for a Musician unit, where they showed 6" and 12". (#2635)
+- **Parry dice count only the models that carry a Parry weapon.** When Parry comes from a weapon, a
+  unit rolls its Parry dice for the models that carry that weapon, not for every model in the unit.
+  (#2642)
+- **Versatile Expert does not pick its bonus when striking back.** In the enemy's activation the
+  Expert no longer picks AP(+1) or +1 to hit, and the pick does not leak into the unit's own next
+  activation. (#2643)
+- **A transport refuses non-Heroes with Tough(4) or Tough(5).** Under rules 3.6 a transport takes
+  non-Heroes only up to Tough(3). A Tough(4) or Tough(5) non-Hero is now refused; Heroes are
+  unchanged. (#2655)
+- **A Banner and a Bravery Aura on the same unit add up to +2 on morale tests.** Before, only the
+  better of the two counted. This is the maintainer's ruling for rules 3.6. (#2656)
+- **Parry does not reduce Impact hits in the AI's estimate.** Impact hits are not parried under
+  rules 3.6. The AI's charge estimate counted an expected Parry cancel and no longer does. The table
+  already worked this way. (#2657)
 
 ### Changed — NACHTMAHR (the AI opponent)
 - **NACHTMAHR pays for every climb.** A unit of several models that crossed a container could spend
@@ -27,6 +49,12 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   version and page (and "Grimdark Future" even in Firefight, Skirmish and Regiments games) now cite
   the unit's own system and rules version. So do the charge and Hold-only refusals and the climb note
   on a move line in the battle log, and the Caster lines say "within 18"". (#2607, #2616)
+- **NACHTMAHR moves a Flying unit through other units.** Under rules 3.6 a Flying unit may move
+  through units. The AI planner had blocked it at every other unit, friend or foe. Terrain was
+  already right. (#2639)
+- **NACHTMAHR's look-ahead takes casualties in the table's order.** In-game the core got no
+  per-model kit data, so the look-ahead removed casualties in list order. It now gets each model's
+  kit, so its choice matches the table. (#2648)
 
 ### Changed — multiplayer
 - **The relay counts each player's own address.** Behind the hosting proxy the limit of 10
@@ -37,6 +65,14 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   (create, join, list, heartbeat), then it is closed. A game client sends about one per second there,
   so players do not notice it, and army sync and all traffic inside a room keep the general limit.
   (#2604)
+- **Once-per-game feat spends reach both tables and survive a guest rejoin.** Piercing, Precision
+  and Protection Feat marks were kept only on the table that spent them, so a guest who rejoined
+  could spend the feat again. The mark now syncs and stays. (#2621)
+
+### Changed — startup
+- **A rules core that fails to load is reported at start.** Every start writes a line to the log
+  saying whether the Rust rules core loaded. An exported build whose core did not load also shows a
+  "Rules core missing" warning dialog that asks the player to reinstall the game. (#2619, #2623)
 
 ### Internal
 - CI and test groundwork for running the tests against the Rust core: a new job "All required
@@ -45,6 +81,21 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   for the fallback without the core switches the core off itself. (#2605, #2610, #2611)
 - Each fix above ships with a test that fails without it; the old Enhanced Destroyer test now pins
   the 3.5 reading at rules epoch 72. (#2607, #2608, #2612, #2613, #2615, #2616)
+- CI for the Rust core (one-core phase 1): the test lane builds and loads the core, and its 12 core
+  test cases run instead of skipping (#2614, #2624). Core-only PRs run the test shards (#2625).
+  Exported builds and the release fail unless the core loads, an advisory job boots the Windows build, and a release zip
+  guard checks that the core is in the zip (#2627, #2628, #2630, #2618). The docs call the core
+  required (#2626).
+- Test harness: the two-instance multiplayer test binds every model after a guest rejoin, so the
+  feat-mark check compares whole units again (#2622).
+- Table-vs-core parity gate (test tooling): the shoot and melee lanes run the table and the Rust
+  core on the same seeds and fail on any difference that is not on a dated exception list. That list
+  may only shrink (#2631, #2634, #2636, #2637, #2638, #2640, #2641, #2649, #2650, #2651).
+- One-core spikes (groundwork, no player effect): the dice tray can serve faces handed in from
+  outside, and a step API runs the tray resolvers on those faces (#2644, #2645).
+- Rust core ports of the rules fixes above, gated on the new rules epoch 75 (#2629): Protection
+  Feat, Crossing Strike, Enhanced Shred, Impact, Banner and Bravery Aura, Bravery on a spell-forced
+  test, and Parry weapons (#2652, #2653, #2654, #2658, #2659, #2661, #2662).
 
 ## [0.3.15.0-alpha] — 2026-11-11
 
