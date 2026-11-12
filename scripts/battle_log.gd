@@ -184,6 +184,7 @@ func on_dice_rolled(count: int, hits: int, target: int, player: String = "", fac
 	# faces (e.g. Solo-AI summaries) fall back to the count-only lines; no-target rolls log too.
 	# `kind` (live-test Bug 16): DEFENSE rolls read "… defends: … → N block(s)" so a save can never be
 	# mistaken for an attack line ("0 hits (7+)" used to be a SAVE at 7+); attacks keep the hit wording.
+	# `kind` "morale": the test is pass-or-fail, so its line says "passed"/"failed", never "hit(s)".
 	var defense := kind == "defense"
 	var noun := "block" if defense else "hit"
 	# "You" is the solo human's roller label: it takes the plain verb ("You defend"), a named roller "defends".
@@ -197,7 +198,9 @@ func on_dice_rolled(count: int, hits: int, target: int, player: String = "", fac
 		for f in sorted_faces:
 			parts.append(str(int(f)))
 		var faces_str := " ".join(parts)
-		if target > 0:
+		if target > 0 and kind == "morale":
+			log_event(Category.COMBAT, "%s%s → %s (%d+)" % [prefix, faces_str, "passed" if hits > 0 else "failed", target])
+		elif target > 0:
 			var plural := "" if hits == 1 else "s"
 			log_event(Category.COMBAT, "%s%s → %d %s%s (%d+)" % [prefix, faces_str, hits, noun, plural, target])
 		elif prefix.is_empty():
