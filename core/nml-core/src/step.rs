@@ -15,11 +15,14 @@ pub enum Step<T> {
     /// Roll `faces` dice and call again with them appended (`count` is the
     /// rules count; `faces` can differ below `EPOCH_67_MARKERS_BURSTS`).
     NeedRoll { index: usize, faces: usize, kind: &'static str, count: i64, target: i64, owner: String },
-    /// A supplied group had the wrong number of faces.
-    BadFaces { index: usize, wanted: usize, got: usize },
-    /// Tray draws and roll records disagree: some draw pushed no record, so a
-    /// feed index no longer names its roll. Refused rather than a wrong `NeedRoll`.
-    Refused { draws: usize, records: usize, reason: &'static str },
+    /// The core will not answer for this exchange: the draws and the records
+    /// disagree (some draw pushed no record, so a feed index no longer names its
+    /// roll), or a supplied group had the wrong number of faces. `draws` and
+    /// `records` are the tray's draw count and the result's record count. They
+    /// differ only for the guard's own refusal; a size or missing-record refusal
+    /// comes after the guard has passed, so there they are equal.
+    /// Refused rather than a wrong `NeedRoll`.
+    Refused { draws: usize, records: usize, reason: String },
     /// The exchange is resolved on exactly the supplied faces.
     Done(T),
 }
@@ -36,17 +39,21 @@ pub fn step_with<T>(
     let feed = tray.feed().expect("supplied tray");
     let records = rolls(&out).len();
     if feed.draws() != records {
-        let reason = "tray draws and roll records disagree: a resolver drew dice without a roll record";
+        let reason = "tray draws and roll records disagree: a resolver drew dice without a roll record".to_string();
         return Step::Refused { draws: feed.draws(), records, reason };
     }
     if let Some((index, wanted, got)) = feed.mismatch {
-        return Step::BadFaces { index, wanted, got };
+        let reason = format!("roll {index}: wanted {wanted} faces, got {got}");
+        return Step::Refused { draws: feed.draws(), records, reason };
     }
     match feed.starved_at {
         None => Step::Done(out),
         Some((index, faces)) => match rolls(&out).get(index) {
             Some(r) => Step::NeedRoll { index, faces, kind: r.kind, count: r.count, target: r.target, owner: r.owner.clone() },
-            None => Step::BadFaces { index, wanted: 0, got: 0 },
+            None => {
+                let reason = format!("roll {index}: no roll record for this draw");
+                Step::Refused { draws: feed.draws(), records, reason }
+            }
         },
     }
 }
@@ -78,7 +85,6 @@ mod tests {
                 match shoot_step(&faces, run) {
                     Step::NeedRoll { faces: n, .. } => faces.push(dice.roll(n)),
                     Step::Done(r) => break r,
-                    Step::BadFaces { index, wanted, got } => panic!("seed {seed}: roll {index} wanted {wanted} got {got}"),
                     Step::Refused { reason, .. } => panic!("seed {seed}: {reason}"),
                 }
             };
@@ -113,5 +119,26 @@ mod tests {
             }
         }
         panic!("a silent draw was never refused");
+    }
+
+    /// A supplied group of the wrong size is a `Refused` that names the roll,
+    /// the faces it wanted and the faces it got; draws and records still agree.
+    #[test]
+    fn wrong_face_count_is_refused_with_its_reason() {
+        let prof = ShootProfile { name: "Rifle".into(), attacks: 1, count: 1, range: 24, ap: 1, ..Default::default() };
+        let att = Ctx { quality: 4, ..Default::default() };
+        let def = Ctx { defense: 4, models: 10, tough: 1, ..Default::default() };
+        let run = |t: &mut Tray| resolve_shooting_with_tray(std::slice::from_ref(&prof), &[0], &[10], &att, &def, 12.0, t);
+        let n = match shoot_step(&[], run) {
+            Step::NeedRoll { index: 0, faces, .. } => faces,
+            other => panic!("expected NeedRoll for roll 0, got {other:?}"),
+        };
+        match shoot_step(&[vec![3; n + 1]], run) {
+            Step::Refused { draws, records, reason } => {
+                assert_eq!(reason, format!("roll 0: wanted {n} faces, got {}", n + 1));
+                assert_eq!(draws, records);
+            }
+            other => panic!("expected Refused, got {other:?}"),
+        }
     }
 }
