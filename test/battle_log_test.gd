@@ -47,6 +47,21 @@ func test_defense_roll_line_agrees_with_its_roller() -> void:
 	assert_str(str(log_node.entries()[2]["text"])).is_equal("You: 4 1 → 1 hit (3+)")
 
 
+func test_morale_roll_line_says_passed_or_failed() -> void:
+	# A morale test is pass-or-fail: its dice line never counts "hits". Hit and save lines stay as they were.
+	var log_node: BattleLog = auto_free(BattleLog.new())
+	log_node.on_dice_rolled(1, 1, 4, "AI (Def)", [6], "morale")
+	assert_str(str(log_node.entries()[0]["text"])).is_equal("AI (Def): 6 → passed (4+)")
+	log_node.on_dice_rolled(1, 0, 4, "AI (Def)", [3], "morale")
+	assert_str(str(log_node.entries()[1]["text"])).is_equal("AI (Def): 3 → failed (4+)")
+	log_node.on_dice_rolled(1, 0, 2, "You", [1], "morale")
+	assert_str(str(log_node.entries()[2]["text"])).is_equal("You: 1 → failed (2+)")
+	log_node.on_dice_rolled(1, 1, 4, "AI (Def)", [6])
+	assert_str(str(log_node.entries()[3]["text"])).is_equal("AI (Def): 6 → 1 hit (4+)")
+	log_node.on_dice_rolled(1, 0, 4, "AI (Def)", [3], "defense")
+	assert_str(str(log_node.entries()[4]["text"])).is_equal("AI (Def) defends: 3 → 0 blocks (4+)")
+
+
 func test_ring_buffer_caps_and_drops_oldest() -> void:
 	var log_node: BattleLog = auto_free(BattleLog.new())
 	for i in range(BattleLog.CAP + 50):

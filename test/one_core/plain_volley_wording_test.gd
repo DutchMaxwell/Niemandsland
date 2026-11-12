@@ -22,7 +22,7 @@ const PINNED := {
 		"COMBAT|AI (Def) defends: 5 4 2 2 2 2 1 → 2 blocks (4+)",
 		"COMBAT|Def takes 5 wounds (5/10)",
 		"COMBAT|Def loses 5 models (5/10)",
-		"COMBAT|AI (Def): 3 → 0 hits (4+)",
+		"COMBAT|AI (Def): 3 → failed (4+)",
 		"COMBAT|Def fails morale — Shaken",
 	],
 	57: [   # no save holds, the morale test passes
@@ -33,7 +33,7 @@ const PINNED := {
 		"COMBAT|AI (Def) defends: 3 2 2 2 1 1 1 → 0 blocks (4+)",
 		"COMBAT|Def takes 7 wounds (3/10)",
 		"COMBAT|Def loses 7 models (3/10)",
-		"COMBAT|AI (Def): 6 → 1 hit (4+)",
+		"COMBAT|AI (Def): 6 → passed (4+)",
 		"COMBAT|Def passes morale",
 	],
 	49: [   # the singular forms: one hit, one wound, a model
