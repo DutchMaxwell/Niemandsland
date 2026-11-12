@@ -37,6 +37,7 @@ use crate::acts::{
     EPOCH_71_RAPID_CHARGE_MARK, EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36, EPOCH_75_TABLE_FIXES,
 };
 use crate::io::{Action, Seams, SplitShot};
+use crate::landing::{LandedModel, Landing};
 use crate::dice::{Morale, ShootResult, Tray};
 use crate::mods;
 use crate::mission::{drop_carried, sync_carried_positions};
@@ -502,6 +503,22 @@ fn land_pool_wounds(state: &mut State, ti: usize, w: i64, exact: bool, seams: Se
         left -= taken;
         log.push(format!("Hero: {taken} wound{} beyond the unit's models go on to {}", if taken == 1 { "" } else { "s" }, state.key(h)));
     }
+}
+
+/// One-core P3 step 7 — what a landing did to unit `u` against its snapshot `at`/`wounds`: every
+/// model whose wounds fell, and every model that vanished (matched by its exact position before; a
+/// landing never moves a survivor). `None` when nothing changed.
+fn landing_of(state: &State, u: usize, at: &[[f64; 3]], wounds: &[i64]) -> Option<Landing> {
+    let mut now: Vec<Option<([f64; 3], i64)>> =
+        state.positions[u].iter().copied().zip(state.wounds[u].iter().copied()).map(Some).collect();
+    let models: Vec<LandedModel> = at.iter().zip(wounds).filter_map(|(p, &w)| {
+        match now.iter_mut().find(|m| m.is_some_and(|(q, _)| q == *p)).and_then(Option::take) {
+            Some((_, n)) if n >= w => None,
+            Some((_, n)) => Some(LandedModel { at: *p, wounds_left: n, dead: false }),
+            None => Some(LandedModel { at: *p, wounds_left: 0, dead: true }),
+        }
+    }).collect();
+    (!models.is_empty()).then_some(Landing { unit: u, models })
 }
 
 /// The table AI's Takedown pick (`attacker_pick_target`): the host's most valuable living model,
@@ -10387,6 +10404,11 @@ fn resolve_with(
                             let w = shot.absorb(r);
                             let members: Vec<usize> = parts.iter().map(|(mi, _, _)| *mi).collect();
                             let att_incoming = land_hazardous_self(statics, &mut next, &members, seams, shot);
+                            // One-core P3 step 7: the target chain (host, then its joined heroes) before
+                            // the landing. Only a supplied tray takes it: a seeded one clones nothing.
+                            let chain_before = tray.feed().is_some().then(|| std::iter::once(g.ti)
+                                .chain(next.attached[g.ti].iter().copied())
+                                .map(|u| (u, next.positions[u].clone(), next.wounds[u].clone())).collect::<Vec<_>>());
                             if !seams.tray_exact {
                                 land_pool_wounds(&mut next, g.ti, w, false, seams, &mut shot.log);
                             }
@@ -10405,6 +10427,13 @@ fn resolve_with(
                             }
                             if seams.tray_exact {
                                 land_pool_wounds(&mut next, g.ti, w, true, seams, &mut shot.log);
+                            }
+                            // One-core P3 step 7: one landing per changed chain member, stamped BEFORE
+                            // the group's morale test below draws.
+                            for (u, at, wounds) in chain_before.into_iter().flatten() {
+                                if let Some(l) = landing_of(&next, u, &at, &wounds) {
+                                    tray.land(|| l);
+                                }
                             }
                             // rules-wave3-growthmark (epoch 6) — the
                             // ignore-wound marker AFTER the landing.
