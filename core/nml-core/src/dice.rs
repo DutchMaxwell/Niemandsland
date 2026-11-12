@@ -36,6 +36,7 @@ use crate::combat::{
     IMPACT_HIT_TARGET, LONG_RANGE_IN, NO_RETREAT_SELF_WOUND_MAX, RAVAGE_WOUND_TARGET,
     RENDING_AP_BONUS, THRUST_AP_BONUS, UNMODIFIED_SIX,
 };
+use crate::logline::LogLine;
 use crate::rng::GodotRng;
 use crate::unit::{CondAp, Ctx, ShieldedAlias, ShootProfile};
 
@@ -57,6 +58,8 @@ pub struct Tray {
     /// the RECORD's own `seams.rules_epoch` — never baked into construction,
     /// since one long-lived `Tray` replays acts stamped at different epochs.
     zero_draws: bool,
+    /// One-core P3: `say` lines, each stamped with the feed's draws so far.
+    lines: Vec<(usize, LogLine)>,
 }
 
 impl Tray {
@@ -66,13 +69,13 @@ impl Tray {
     /// engine and what `GodotRng::new` mirrors; a negative seed must land on
     /// the same stream on both sides.
     pub fn seeded(seed: i64) -> Tray {
-        Tray { rng: GodotRng::new(seed), feed: None, zero_draws: false }
+        Tray { rng: GodotRng::new(seed), feed: None, zero_draws: false, lines: Vec::new() }
     }
 
     /// A tray that continues a generator already in flight — how a replay
     /// reaches a recorded position in the stream.
     pub fn from_rng(rng: GodotRng) -> Tray {
-        Tray { rng, feed: None, zero_draws: false }
+        Tray { rng, feed: None, zero_draws: false, lines: Vec::new() }
     }
 
     /// Re-seeds in place, as a second `seed_tray_rng` call would.
@@ -107,12 +110,31 @@ impl Tray {
     /// first ran dry (`starved_at`) — the step API turns that into `NeedRoll`.
     pub fn supplied(groups: Vec<Vec<u8>>) -> Tray {
         let feed = Feed { groups, next: 0, starved_at: None, mismatch: None };
-        Tray { rng: GodotRng::new(0), feed: Some(feed), zero_draws: false }
+        Tray { rng: GodotRng::new(0), feed: Some(feed), zero_draws: false, lines: Vec::new() }
     }
 
     /// The supplied feed, if this tray has one.
     pub fn feed(&self) -> Option<&Feed> {
         self.feed.as_ref()
+    }
+
+    /// One-core P3: a supplied tray keeps the line, stamped with the draws so
+    /// far; a seeded tray never calls `f` (training cost unchanged).
+    pub fn say(&mut self, f: impl FnOnce() -> LogLine) {
+        if let Some(feed) = self.feed.as_ref() {
+            self.lines.push((feed.next, f()));
+        }
+    }
+
+    /// The lines said before draw `draw` was taken (stamp <= `draw`): what a
+    /// step that starved at roll `draw` may show; later lines read 1s.
+    pub fn lines_upto(&self, draw: usize) -> Vec<LogLine> {
+        self.lines.iter().filter(|(at, _)| *at <= draw).map(|(_, l)| l.clone()).collect()
+    }
+
+    /// Every line said on this tray, in order.
+    pub fn all_lines(&self) -> Vec<LogLine> {
+        self.lines.iter().map(|(_, l)| l.clone()).collect()
     }
 
     /// `rng.state` — the cheap replay checkpoint GATE R already compares.

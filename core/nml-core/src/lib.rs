@@ -20,6 +20,7 @@ pub mod geom;
 pub mod grid;
 pub mod grid_order;
 pub mod io;
+pub mod logline;
 pub mod menu;
 pub mod mission;
 pub mod mods;

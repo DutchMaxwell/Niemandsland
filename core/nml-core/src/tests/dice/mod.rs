@@ -440,6 +440,7 @@ mod surge_extra_attack;
 mod surge_gates;
 mod surge_low_gate;
 mod surge_param;
+mod tray_lines;
 mod unpredictable_shooter;
 mod unstoppable_melee;
 mod v36_data;
