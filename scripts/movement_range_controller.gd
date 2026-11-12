@@ -288,6 +288,25 @@ func bands_for_model(model_node: Node3D) -> Dictionary:
 	return _activation_bands(model_node, props)
 
 
+## E3 (EPOCH_76_MOVE_FIXES): the AI's bands for a whole unit — `nodes` are its alive models (activation start: the AI
+## reads its bands before it moves), `radii` their bases. The terrain-gated verdict (Grounded Speed) then asks the
+## majority of the unit, as the core does; the props come from the first node. The human's rings keep the one-node
+## board of bands_for_model.
+func bands_for_unit_board(nodes: Array, radii: Array) -> Dictionary:
+	var props := _props_of(nodes[0])
+	if props.is_empty():
+		push_warning("bands_for_unit_board: no GameUnit resolved for '%s' — bare 6\"/12\" OPR bands in effect" % nodes[0].name)
+	var sample := _terrain_sampler()
+	if sample.is_valid():
+		var positions: Array = []
+		for n in nodes:
+			positions.append((n as Node3D).global_position)
+		props["activation_board"] = {"positions": positions, "radii": radii, "terrain_at": sample}
+	var bands := move_bands_for_props(props)
+	_flush_band_trace(props)
+	return bands
+
+
 ## The bands the HUMAN sees and is capped to: bands_for_model plus Musician's +1" on every move band
 ## (army data 3.6 _common.json: the model and its unit move +1" on move actions) and the Bounding
 ## family's best D3 roll (Wolfborn: the unit may move up to D3" on activation). Kept out of

@@ -6858,10 +6858,21 @@ static func move_bands_for_unit(unit: GameUnit, mrc: MovementRangeController) ->
 	if unit == null:
 		return {"advance": 6, "rush": 12, "charge": 12}
 	if mrc != null:
+		# E3 (EPOCH_76_MOVE_FIXES): a terrain-gated band rule (Grounded Speed) asks the MAJORITY of the unit — every
+		# alive model's activation-start spot and base, the board the core reads (sim.rs grounded_speed_bonus_in over
+		# state.positions/radii). Below 76 the first alive model decides alone (the frozen replay reading).
+		var majority := AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_76_MOVE_FIXES
+		var nodes: Array = []
+		var radii: Array = []
 		for m in unit.get_alive_models():
 			var node := (m as ModelInstance).node
 			if node != null and is_instance_valid(node):
-				return mrc.bands_for_model(node)
+				if not majority:
+					return mrc.bands_for_model(node)
+				nodes.append(node)
+				radii.append(model_base_radius_m(m as ModelInstance))
+		if not nodes.is_empty():
+			return mrc.bands_for_unit_board(nodes, radii)
 	return MovementRangeController.move_bands_for_props(unit.unit_properties)
 
 
