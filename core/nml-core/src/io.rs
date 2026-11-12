@@ -16,7 +16,7 @@ use std::rc::Rc;
 use serde::de::{MapAccess, Visitor};
 use serde::{Deserialize, Deserializer};
 
-use crate::acts::{rule_on, EPOCH_67_MARKERS_BURSTS, EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU};
+use crate::acts::{rule_on, EPOCH_67_MARKERS_BURSTS, EPOCH_75_TABLE_FIXES, EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU};
 use crate::mods::LiveMod;
 use crate::rules::spawn_target_rule;
 use crate::state::{
@@ -38,6 +38,46 @@ pub(crate) struct PlainKit {
 /// positions (a GDScript-simulated node after casualties — that sim never touches kits). Such a
 /// list is refused (none carried) and logged on stderr, the 1st hit and every power of two after.
 pub(crate) static KIT_MISMATCHES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// A unit's kits with the same refusal as the loader: a list that does not cover exactly
+/// `n_models` is dropped (none carried), counted in `KIT_MISMATCHES` and logged.
+fn carry_plain_kits(ui: usize, plain: Vec<PlainKit>, n_models: usize) -> (Vec<Kit>, Vec<String>) {
+    let (mut kits, names) = intern_kits(plain);
+    if !kits.is_empty() && kits.len() != n_models {
+        let n = KIT_MISMATCHES.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+        if n.is_power_of_two() {
+            eprintln!("[core-kits] unit #{ui}: {} kits for {n_models} models - none carried (hit #{n})", kits.len());
+        }
+        kits.clear();
+    }
+    (kits, names)
+}
+
+/// One model's kit as (weapon names, equipment, wounds_max) - the Godot seam's `kits` entry.
+pub type RawKit = (Vec<String>, u16, i64);
+
+/// `EPOCH_75_TABLE_FIXES`: the Godot seam hands the table's per-model kits to the core. A game recorded at 74 or below
+/// was played while the seam carried none (casualties in slot order), so it replays through the seam without them.
+/// Only the seam is gated: the JSON loader has always read `kits`. Also the key-mask gate for `plain_of`'s `kits` write-back.
+pub fn seam_reads_kits(rules_epoch: u32) -> bool {
+    rule_on(rules_epoch, EPOCH_75_TABLE_FIXES)
+}
+
+/// The Godot seam's reader of a unit's `kits`: same interning and mismatch refusal as the loader; none below epoch 75.
+pub fn carry_kits(ui: usize, raw: Vec<RawKit>, n_models: usize, rules_epoch: u32) -> (Vec<Kit>, Vec<String>) {
+    if !seam_reads_kits(rules_epoch) {
+        return (Vec::new(), Vec::new());
+    }
+    let plain = raw.into_iter().map(|(weapons, equipment, wounds_max)| PlainKit { weapons, equipment, wounds_max }).collect();
+    carry_plain_kits(ui, plain, n_models)
+}
+
+/// The inverse of `carry_kits`, for the seam's `plain_of` (names resolved from the unit table).
+pub fn kits_back(kits: &[Kit], names: &[String]) -> Vec<RawKit> {
+    kits.iter()
+        .map(|k| (k.weapons.iter().map(|&w| names.get(w as usize).cloned().unwrap_or_default()).collect(), k.equipment, k.wounds_max))
+        .collect()
+}
 
 /// The unit's kits with weapon names interned to unit-local ids, plus the name table.
 pub(crate) fn intern_kits(plain: Vec<PlainKit>) -> (Vec<Kit>, Vec<String>) {
@@ -1125,15 +1165,7 @@ pub(crate) fn state_of(
         st.positions.push(u.positions);
         st.wounds.push(u.wounds);
         Rc::make_mut(&mut st.radii).push(u.radii);
-        let (mut kits, kit_names) = intern_kits(u.kits);
-        if !kits.is_empty() && kits.len() != st.positions[ui].len() {
-            let n = KIT_MISMATCHES.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-            if n.is_power_of_two() {
-                eprintln!("[core-kits] unit #{ui}: {} kits for {} models - none carried (hit #{n})",
-                          kits.len(), st.positions[ui].len());
-            }
-            kits.clear();
-        }
+        let (kits, kit_names) = carry_plain_kits(ui, u.kits, st.positions[ui].len());
         st.kits.push(Rc::new(kits));
         st.kit_names.push(Rc::new(kit_names));
         st.mods.push(u.mods);
