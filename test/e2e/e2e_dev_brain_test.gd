@@ -7,12 +7,14 @@ var _roots: Array
 var _server_pid := -1
 var _env := {}
 var _core_env := -1
+var _planner_statics: Array = []
 
 
 func before_test() -> void:
 	for key in ["NML_CORE", "NML_BRAIN_URL", "NML_BRAIN_W", "NML_BRAIN_TIMEOUT_MS"]:
 		_env[key] = OS.get_environment(key)
 	_core_env = BattleSim._core_env
+	_planner_statics = _planner_statics_now()
 	OS.set_environment("NML_CORE", "1")
 	OS.set_environment("NML_BRAIN_URL", "")
 	OS.set_environment("NML_BRAIN_W", "1")
@@ -32,7 +34,36 @@ func after_test() -> void:
 	for key in _env:
 		OS.set_environment(key, _env[key])
 	BattleSim._core_env = _core_env
+	_restore_planner_statics(_planner_statics)
 	Boot.free_stray_root_nodes(get_tree(), _roots)
+
+
+## `_planner_pick_unit` stamps the planner's per-preset STATICS (SoloController._apply_aifix and friends, here the
+## planner_v0 grade) and they outlive the test: a later suite in the same process (v36/ai_06 in a CI shard) then reads
+## the aifix morale and reply laws. The values are saved before the test and put back after it.
+func _planner_statics_now() -> Array:
+	return [AiPlanner.opener_by_finish, AiPlanner.no_end_threat, AiPlanner.brain_knobs, AiPlanner.leaf_opener,
+		AiPlanner.brain_breadth, AiPlanner.points_strength, AiPlanner.table_fidelity, AiPlanner.playout_search,
+		BattleSim.morale_by_probability, BattleSim.reply_v2, BattleSim.reply_skip_activated, BattleSim.reply_hold_gate,
+		BattleSim.hero_fold, AiMissionEval.fit_mode, AiMissionEval.eval_variant]
+
+
+func _restore_planner_statics(v: Array) -> void:
+	AiPlanner.opener_by_finish = v[0]
+	AiPlanner.no_end_threat = v[1]
+	AiPlanner.brain_knobs = v[2]
+	AiPlanner.leaf_opener = v[3]
+	AiPlanner.brain_breadth = v[4]
+	AiPlanner.points_strength = v[5]
+	AiPlanner.table_fidelity = v[6]
+	AiPlanner.playout_search = v[7]
+	BattleSim.morale_by_probability = v[8]
+	BattleSim.reply_v2 = v[9]
+	BattleSim.reply_skip_activated = v[10]
+	BattleSim.reply_hold_gate = v[11]
+	BattleSim.hero_fold = v[12]
+	AiMissionEval.fit_mode = v[13]
+	AiMissionEval.eval_variant = v[14]
 
 
 func _controller() -> SoloController:
