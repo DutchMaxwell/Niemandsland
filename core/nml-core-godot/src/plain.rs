@@ -55,9 +55,22 @@ pub const UNIT_KEYS: [&str; 21] = [
     // node corpus predates it, so the bit keeps its round trip absent there.
     "bands",
     // Parity step 6: the per-model `kits` the table's capture writes (battle_sim.gd `_model_kit`).
-    // Appended last (bit 20), so a corpus without them still round-trips without the key.
+    // Appended last (bit 20), so a corpus without them still round-trips without the key. Set only
+    // from epoch 75 (`seam_reads_kits`); below it the seam carries none and writes none back.
     "kits",
 ];
+
+/// A unit's capture mask: bit `i` = `UNIT_KEYS[i]` is in the plain form. `kits` below epoch 75 stays out, so
+/// `plain_of` writes none back (the shape a record had before the seam carried them).
+fn unit_mask(has_key: impl Fn(&str) -> bool, rules_epoch: u32) -> u32 {
+    let mut m = 0u32;
+    for (i, k) in UNIT_KEYS.iter().enumerate() {
+        if has_key(k) && (*k != "kits" || nml_core::io::seam_reads_kits(rules_epoch)) {
+            m |= 1 << i;
+        }
+    }
+    m
+}
 
 /// Keys of `_UNIT_DYNAMIC` this SEAM does not read. Reported by
 /// `NmlCore.dropped_keys()` rather than silently swallowed. (`State` itself has
@@ -528,13 +541,7 @@ pub fn build_state(
             .get(key.as_str())
             .and_then(|v| v.try_to::<VarDictionary>().ok())
             .ok_or_else(|| format!("unit {key} vanished between roster and state"))?;
-        let mut m = 0u32;
-        for (i, k) in UNIT_KEYS.iter().enumerate() {
-            if u.contains_key(*k) {
-                m |= 1 << i;
-            }
-        }
-        mask.push(m);
+        mask.push(unit_mask(|k| u.contains_key(k), rules_epoch));
         for k in DROPPED {
             if u.contains_key(k) && !dropped.iter().any(|d| d == k) {
                 dropped.push(k.to_string());
@@ -565,7 +572,8 @@ pub fn build_state(
         st.wounds.push(darr(&u, "wounds").iter_shared().map(|v| int(&v)).collect());
         Rc::make_mut(&mut st.radii).push(darr(&u, "radii").iter_shared().map(|v| num(&v)).collect());
         // Tray-exact S2: the capture writes `kits` (aligned with positions); same refusal as io.rs.
-        let (kits, kit_names) = nml_core::io::carry_kits(st.kits.len(), raw_kits(&u), st.positions[st.kits.len()].len());
+        // From epoch 75 only (`seam_reads_kits`): an older record replays without them, as it was played.
+        let (kits, kit_names) = nml_core::io::carry_kits(st.kits.len(), raw_kits(&u), st.positions[st.kits.len()].len(), rules_epoch);
         st.kits.push(Rc::new(kits));
         st.kit_names.push(Rc::new(kit_names));
         st.mods.push(mods_of(&ddict(&u, "mods")));
@@ -1266,9 +1274,9 @@ pub fn plain_of_derived(state: &State, root: &Captured) -> VarDictionary {
 
 #[cfg(test)]
 mod tests {
-    use nml_core::acts::read_act_header;
-    use nml_core::io::{carry_kits, kits_back};
-    use nml_core::state::ProfileCache;
+    use nml_core::acts::{read_act_header, EPOCH_74_CLIMB_COST, EPOCH_75_TABLE_FIXES};
+    use nml_core::io::{carry_kits, kits_back, seam_reads_kits, RawKit};
+    use nml_core::state::{ProfileCache, State};
 
     const HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{"p1_0_a":{"unit_id":"p1_0_a","name":"A",
       "quality":4,"defense":3,"tough":1,"wounds_max":[1,1,1],"model_count":3,"caster_value":0,"base_radius":0.016,
@@ -1277,27 +1285,66 @@ mod tests {
     const PLAIN: &str = r#"{"round":1,"rounds_total":4,"scoring":"end","units":{"p1_0_a":{"player":1,"alive":3,
       "wounds":[1,1,1],"radii":[0.016,0.016,0.016],"positions":[[0.0,0.0,0.0],[0.05,0.0,0.0],[0.5,0.0,0.0]]}}}"#;
 
+    /// Slot 0 carries the rare Sniper and two equipment items (the unit's most valuable model).
+    fn raw() -> Vec<RawKit> {
+        (0..3u16)
+            .map(|i| (vec!["Rifle".to_string(), if i == 0 { "Sniper" } else { "Rifle" }.to_string()], if i == 0 { 2 } else { 0 }, 1))
+            .collect()
+    }
+
+    fn state_with_kits(rules_epoch: u32) -> State {
+        let mut cache = ProfileCache::new(read_act_header(HEADER).unwrap().profiles);
+        let mut st = nml_core::io::state_from_json(PLAIN, &mut cache, &mut None).unwrap();
+        let (kits, names) = carry_kits(0, raw(), 3, rules_epoch);
+        st.kits[0] = std::rc::Rc::new(kits);
+        st.kit_names[0] = std::rc::Rc::new(names);
+        st
+    }
+
     /// The seam's kits (as the table writes them) reach the core: names interned, written
     /// back unchanged, and `casualty_order` is `Some` (red on main: the seam pushed none).
     #[test]
-    fn the_seams_kits_reach_the_core_round_trip_and_enable_casualty_order() {
-        let mut cache = ProfileCache::new(read_act_header(HEADER).unwrap().profiles);
-        let mut st = nml_core::io::state_from_json(PLAIN, &mut cache, &mut None).unwrap();
-        assert!(nml_core::casualty::casualty_order(&st, 0).is_none());
-        let raw: Vec<_> = (0..3u16)
-            .map(|i| (vec!["Rifle".to_string(), if i == 0 { "Sniper" } else { "Rifle" }.to_string()], i % 2, 1))
-            .collect();
-        let (kits, names) = carry_kits(0, raw.clone(), 3);
-        assert_eq!(kits_back(&kits, &names), raw);
-        st.kits[0] = std::rc::Rc::new(kits);
-        st.kit_names[0] = std::rc::Rc::new(names);
+    fn the_seams_kits_reach_the_core_from_epoch_75() {
+        assert!(seam_reads_kits(EPOCH_75_TABLE_FIXES));
+        let (kits, names) = carry_kits(0, raw(), 3, EPOCH_75_TABLE_FIXES);
+        assert_eq!(kits_back(&kits, &names), raw());
+        let st = state_with_kits(EPOCH_75_TABLE_FIXES);
         assert!(nml_core::casualty::casualty_order(&st, 0).is_some());
+        // The most valuable model (slot 0) soaks last: one wound lands on the far, plain slot 2.
+        let mut st = st;
+        nml_core::sim::land_wounds_with(&mut st, 0, 1, true);
+        assert_eq!(st.positions[0], vec![[0.0, 0.0, 0.0], [0.05, 0.0, 0.0]]);
+    }
+
+    /// A record stamped 74 replays as it was played: no kits through the seam, casualties in slot order,
+    /// and no `kits` key written back (the mask gate is the same `seam_reads_kits`). Epoch 0 = no header.
+    #[test]
+    fn the_seams_kits_are_not_carried_at_epoch_74() {
+        assert!(!seam_reads_kits(EPOCH_74_CLIMB_COST) && !seam_reads_kits(0));
+        let (kits, names) = carry_kits(0, raw(), 3, EPOCH_74_CLIMB_COST);
+        assert!(kits.is_empty() && names.is_empty());
+        let mut st = state_with_kits(EPOCH_74_CLIMB_COST);
+        assert!(nml_core::casualty::casualty_order(&st, 0).is_none());
+        nml_core::sim::land_wounds_with(&mut st, 0, 1, true);
+        assert_eq!(st.positions[0], vec![[0.05, 0.0, 0.0], [0.5, 0.0, 0.0]]);
+    }
+
+    /// The capture mask carries the `kits` bit (the last) from epoch 75 and not below it; no other bit moves.
+    #[test]
+    fn the_capture_mask_has_the_kits_bit_from_epoch_75_only() {
+        let all = (1u32 << super::UNIT_KEYS.len()) - 1;
+        let kits_bit = 1u32 << (super::UNIT_KEYS.len() - 1);
+        assert_eq!(super::UNIT_KEYS[super::UNIT_KEYS.len() - 1], "kits");
+        assert_eq!(super::unit_mask(|_| true, EPOCH_75_TABLE_FIXES), all);
+        assert_eq!(super::unit_mask(|_| true, EPOCH_74_CLIMB_COST), all & !kits_bit);
+        assert_eq!(super::unit_mask(|k| k == "kits", EPOCH_74_CLIMB_COST), 0);
     }
 
     /// A kits list that does not cover the models is refused; an absent one stays empty (old corpora).
     #[test]
     fn a_misaligned_or_absent_kits_list_carries_none() {
-        assert!(carry_kits(0, vec![(vec!["Rifle".into()], 0, 1); 2], 3).0.is_empty());
-        assert!(carry_kits(0, Vec::new(), 3).0.is_empty());
+        let two = vec![(vec!["Rifle".to_string()], 0, 1); 2];
+        assert!(carry_kits(0, two, 3, EPOCH_75_TABLE_FIXES).0.is_empty());
+        assert!(carry_kits(0, Vec::new(), 3, EPOCH_75_TABLE_FIXES).0.is_empty());
     }
 }

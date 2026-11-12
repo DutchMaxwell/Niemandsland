@@ -16,7 +16,7 @@ use std::rc::Rc;
 use serde::de::{MapAccess, Visitor};
 use serde::{Deserialize, Deserializer};
 
-use crate::acts::{rule_on, EPOCH_67_MARKERS_BURSTS, EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU};
+use crate::acts::{rule_on, EPOCH_67_MARKERS_BURSTS, EPOCH_75_TABLE_FIXES, EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU};
 use crate::mods::LiveMod;
 use crate::rules::spawn_target_rule;
 use crate::state::{
@@ -56,8 +56,18 @@ fn carry_plain_kits(ui: usize, plain: Vec<PlainKit>, n_models: usize) -> (Vec<Ki
 /// One model's kit as (weapon names, equipment, wounds_max) - the Godot seam's `kits` entry.
 pub type RawKit = (Vec<String>, u16, i64);
 
-/// The Godot seam's reader of a unit's `kits`: same interning and mismatch refusal as the loader.
-pub fn carry_kits(ui: usize, raw: Vec<RawKit>, n_models: usize) -> (Vec<Kit>, Vec<String>) {
+/// `EPOCH_75_TABLE_FIXES`: the Godot seam hands the table's per-model kits to the core. A game recorded at 74 or below
+/// was played while the seam carried none (casualties in slot order), so it replays through the seam without them.
+/// Only the seam is gated: the JSON loader has always read `kits`. Also the key-mask gate for `plain_of`'s `kits` write-back.
+pub fn seam_reads_kits(rules_epoch: u32) -> bool {
+    rule_on(rules_epoch, EPOCH_75_TABLE_FIXES)
+}
+
+/// The Godot seam's reader of a unit's `kits`: same interning and mismatch refusal as the loader; none below epoch 75.
+pub fn carry_kits(ui: usize, raw: Vec<RawKit>, n_models: usize, rules_epoch: u32) -> (Vec<Kit>, Vec<String>) {
+    if !seam_reads_kits(rules_epoch) {
+        return (Vec::new(), Vec::new());
+    }
     let plain = raw.into_iter().map(|(weapons, equipment, wounds_max)| PlainKit { weapons, equipment, wounds_max }).collect();
     carry_plain_kits(ui, plain, n_models)
 }
