@@ -133,6 +133,11 @@ pub struct Feed {
 }
 
 impl Feed {
+    /// Rolls drawn so far (served, mismatched or starved alike).
+    pub fn draws(&self) -> usize {
+        self.next
+    }
+
     fn take(&mut self, n: usize) -> Vec<u8> {
         let i = self.next;
         self.next += 1;
