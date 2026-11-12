@@ -3,7 +3,7 @@
 //! Impact saves. The heavy pool (AP) is cancelled first, then the plain one; the dice never exceed the
 //! hits taken. Epoch 72 keeps today's behaviour (no Parry dice at all).
 use super::super::*;
-use crate::acts::{EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36};
+use crate::acts::{EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36, EPOCH_74_CLIMB_COST, EPOCH_75_TABLE_FIXES};
 use crate::combat::IMPACT_HIT_TARGET;
 use crate::dice::Roll;
 use crate::rules::Registries;
@@ -119,4 +119,23 @@ fn parry_dice_never_exceed_the_hits_taken() {
     let (shot, _) = charge(EPOCH_73_V36, 1, 2, &["Parry(1)"], None);
     assert_eq!((shot.rolls[0].count, shot.rolls[0].faces.clone()), (1, vec![6]), "one Impact die, one hit");
     assert_eq!(parry_roll(&shot).count, 1, "one hit caps two Parry dice at one");
+}
+
+/// Maintainer ruling (`EPOCH_75_TABLE_FIXES`): Impact hits are never parried. The same charge as the
+/// epoch-73 example draws no Parry die; all four Impact hits go straight to the saves.
+#[test]
+fn impact_hits_are_not_parried_from_epoch_75() {
+    let (shot, _) = charge(EPOCH_75_TABLE_FIXES, 4, 2, &["Parry(1)"], Some(&["Parry(1)"]));
+    let kinds: Vec<&str> = shot.rolls.iter().map(|r| r.kind).collect();
+    assert_eq!(kinds, ["attack", "defense"], "{:?}", shot.rolls);
+    assert_eq!(shot.rolls[1].count, 4, "every Impact hit reaches the saves");
+    assert!(shot.log.iter().all(|l| !l.starts_with("Parry:")), "{:?}", shot.log);
+}
+
+/// A record stamped 74 replays the old draw: the Parry die is still rolled against the Impact hits.
+#[test]
+fn epoch_74_still_parries_impact_hits() {
+    let (shot, _) = charge(EPOCH_74_CLIMB_COST, 4, 2, &["Parry(1)"], None);
+    let kinds: Vec<&str> = shot.rolls.iter().map(|r| r.kind).collect();
+    assert_eq!(kinds, ["attack", "parry", "defense"], "{:?}", shot.rolls);
 }

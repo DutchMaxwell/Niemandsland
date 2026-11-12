@@ -850,9 +850,14 @@ use super::*;
     fn protection_feat_ignores_on_5_epoch_gated() {
         let header = read_act_header(REGEN_FAMILY_HEADER).expect("header");
         assert_eq!(
-            regen_pair_at(&header, "protection_feat", CURRENT_RULES_EPOCH),
+            regen_pair_at(&header, "protection_feat", crate::acts::EPOCH_75_TABLE_FIXES - 1),
             (5, 5),
-            "uses_per_game is the table's own unread param, mirrored"
+            "below 75 uses_per_game is unread, the 5+ folds flat"
+        );
+        assert_eq!(
+            regen_pair_at(&header, "protection_feat", CURRENT_RULES_EPOCH),
+            (0, 0),
+            "from 75 the once-per-game 5+ is held aside for the live latch"
         );
         assert_eq!(regen_pair_at(&header, "protection_feat", 0), (0, 0), "epoch 0 replays legacy");
     }

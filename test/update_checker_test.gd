@@ -7,6 +7,14 @@ extends GdUnitTestSuite
 const UpdateCheckerScript := preload("res://scripts/update_checker.gd")
 
 
+## Collects every message Godot logs (print included) while it is registered with OS.add_logger.
+class LineLogger extends Logger:
+	var lines: PackedStringArray = PackedStringArray()
+
+	func _log_message(message: String, _error: bool) -> void:
+		lines.append(message.strip_edges())
+
+
 func _make_checker() -> Node:
 	var checker: Node = auto_free(UpdateCheckerScript.new())
 	add_child(checker)
@@ -177,3 +185,14 @@ func test_compares_the_fourth_build_field() -> void:
 	assert_int(UpdateCheckerScript.compare_versions("0.3.7-alpha", "0.3.7.0-alpha")).is_equal(0)
 	# The 0.3.7 jump is detectable even by a plain 3-field comparison (first three fields rose).
 	assert_bool(UpdateCheckerScript.is_newer("0.3.7-alpha", "0.3.6.0-alpha")).is_true()
+
+
+# ===== Boot line =====
+
+func test_ready_prints_the_core_boot_line() -> void:
+	var logger := LineLogger.new()
+	OS.add_logger(logger)
+	_make_checker()
+	OS.remove_logger(logger)
+	var expected := CoreLoadNotice.boot_line(ClassDB.class_exists("NmlCore"))
+	assert_bool(logger.lines.has(expected)).is_true()

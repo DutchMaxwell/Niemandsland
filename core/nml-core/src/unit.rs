@@ -33,7 +33,7 @@ use crate::acts::{
     EPOCH_50_SURGE_LOW, EPOCH_54_DEFENSE_RATING, EPOCH_55_FORTIFIED_AURA,
     EPOCH_56_GROUNDED_PROTECTION, EPOCH_58_PRECISION_DEBUFF, EPOCH_60_GROUNDED_STEALTH,
     EPOCH_61_PRECISION_MARKERS, EPOCH_65_MELEE_TRUTH, EPOCH_66_DISTANCE_TRUTH,
-    EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36,
+    EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36, EPOCH_75_TABLE_FIXES,
 };
 use crate::combat::{
     armored_defense, BANNER_MORALE_BONUS, LONG_RANGE_IN, REGENERATION_TARGET, RESISTANCE_TARGET,
@@ -127,6 +127,9 @@ pub struct Ctx {
     /// MOR-09 Valiant: the Valiant-family share of `morale_bonus`, stamp-only;
     /// the band gate removes exactly this part (0 for a plain Banner unit).
     pub valiant_bonus: i64,
+    /// `EPOCH_75_TABLE_FIXES`: the "Bravery Aura" share of `morale_bonus`, stamp-only; it has no
+    /// shooting/melee qualifier, so a test any other rule forced keeps it (main.gd's cause branch).
+    pub bravery_bonus: i64,
     pub tough: i64,
     pub models: i64,
     /// Rules 3.6 (SHO-09s): the target still has MORE THAN half its models left (a single-model
@@ -371,6 +374,9 @@ pub struct Ctx {
     /// The pending kind's SPELL-wound twin (the entry's `ignore_target_spell`,
     /// defaulting to its `ignore_target` like every alias fold).
     pub regen_pending_spell: i64,
+    /// `EPOCH_75_TABLE_FIXES` (#2613) — a once-per-game Regeneration entry (`uses_per_game > 0`, Protection Feat)
+    /// held ASIDE: `sim::ctx_live` folds it only while the bearer's `feats_used` latch is open. 0 = none.
+    pub regen_feat: i64,
     /// MOR-17a (rules 3.6, `EPOCH_73_V36`) — Warding / Knightborn / Angelic
     /// Blessing ignore a non-spell wound on a 6+ ONLY when the unit was shot
     /// from over this many inches. 0.0 = ungated (the old entry, every unit
@@ -871,6 +877,10 @@ pub struct ShootProfile {
     /// widened window counts only past this centre distance, exactly 9" not
     /// "over" — same strict gate as every other over-9" read in this port.
     pub shred_over_in: f64,
+    /// Epoch 75 (`EPOCH_75_TABLE_FIXES`): an "Enhanced X" Shred entry carried with its base
+    /// pays the alias on unmodified 1s at any distance on a shot and on a charge (never a
+    /// strike-back) and never widens the window. Set by arm 6b; read by dice.rs.
+    pub shred_any_distance: bool,
     /// Wave 4 (`rules-wave4-boostbases`) — the Bane Boost's widened save
     /// re-roll window ("Mischievous Boost"'s own `reroll_save_low`, stamped
     /// by `build_for`'s epoch-6 arm only when the model also carries the
@@ -1124,6 +1134,10 @@ pub struct UnitStatic {
     /// Rules 3.6 (`EPOCH_73_V36`) — the book name of the Brace this unit carries ("Brace", "Brace in Melee");
     /// the charge's rules-must-log line names it. "" = no Brace.
     pub brace_rule: String,
+    /// `EPOCH_75_TABLE_FIXES` (table #2642) — `(X, carriers)` per melee weapon carrying `Parry(X)`:
+    /// a Parry WEAPON brings X dice per model that carries it (`count`, capped at the living models),
+    /// not per model of the unit. Empty below 75 and when the unit rule supplies Parry (every model).
+    pub parry_weapons: Vec<(i64, i64)>,
     /// Merged + stamped RANGED profiles, unfiltered (range > 0, any distance).
     pub shoot: Vec<ShootProfile>,
     /// Merged + stamped MELEE profiles (range 0) — `AiShooting.melee_profiles`
@@ -2577,8 +2591,12 @@ pub fn valiant_inside_band(melee: bool, over_in: Option<f64>, charge_from_in: Op
 /// the named "Banner" (when the map fields it) and every DATA ALIAS whose entry
 /// resolves to the Banner primitive. From `EPOCH_73_V36` "Valiant" needs a
 /// strict model majority; below 73 it reads like any Banner alias.
-fn banner_bonus_of(reg: &mut Registries, p: &Profile, rules: &[String], rules_epoch: u32) -> i64 {
+/// Returns `(best of the rest, Bravery family best)`; the second is 0 below
+/// `EPOCH_75_TABLE_FIXES`, where Bravery folds into the one best-of.
+fn banner_bonus_of(reg: &mut Registries, p: &Profile, rules: &[String], rules_epoch: u32) -> (i64, i64) {
     let mut best = 0;
+    let mut bravery = 0;
+    let split = rule_on(rules_epoch, EPOCH_75_TABLE_FIXES);
     let map = reg.rules_for(&p.game_system);
     if has_special_rule(rules, "Banner") && (map.empty || map.has_primitive(&p.faction_folder, "Banner")) {
         best = best.max(match map.lookup(&p.faction_folder, "Banner") {
@@ -2600,11 +2618,44 @@ fn banner_bonus_of(reg: &mut Registries, p: &Profile, rules: &[String], rules_ep
         seen.push(n.clone());
         if let Some(e) = map.lookup(&p.faction_folder, &n) {
             if e.primitive.as_deref() == Some("Banner") {
-                best = best.max(e.param_i("morale_bonus", 0));
+                if split && BRAVERY_FAMILY.contains(&n.as_str()) {
+                    bravery = bravery.max(e.param_i("morale_bonus", 0));
+                } else {
+                    best = best.max(e.param_i("morale_bonus", 0));
+                }
             }
         }
     }
-    best
+    (best, bravery)
+}
+
+/// Maintainer ruling (`EPOCH_75_TABLE_FIXES`, the table's `SoloController.BRAVERY_FAMILY`): the
+/// Bravery rule's two spellings are ONE own source that ADDS to the best of the other Banner-family
+/// entries (Banner + Bravery Aura = +2); the aura and the bare base the expansion stamps share a best-of.
+const BRAVERY_FAMILY: [&str; 2] = ["Bravery Aura", "Bravery"];
+
+/// The two Banner-family best-ofs `(rest, Bravery)` across host AND joined heroes (the table walks
+/// every member into one rest best-of and one Bravery best-of); the capture stamp ADDS them.
+fn banner_family_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (i64, i64) {
+    let (mut rest, mut bravery) = banner_bonus_of(reg, p, &p.special_rules, rules_epoch);
+    for hero in &p.attached_hero_rules {
+        let (r, b) = banner_bonus_of(reg, p, hero, rules_epoch);
+        (rest, bravery) = (rest.max(r), bravery.max(b));
+    }
+    (rest, bravery)
+}
+
+/// `EPOCH_75_TABLE_FIXES` — main.gd's cause branch: the best "Bravery Aura" entry (Banner
+/// primitive) over host and joined heroes, read by its exact name only (the bare base is not read).
+fn bravery_aura_share(reg: &mut Registries, p: &Profile) -> i64 {
+    let map = reg.rules_for(&p.game_system);
+    let entry = match map.lookup(&p.faction_folder, "Bravery Aura") {
+        Some(e) if e.primitive.as_deref() == Some("Banner") => e.param_i("morale_bonus", 0),
+        _ => return 0,
+    };
+    let carried = has_special_rule(&p.special_rules, "Bravery Aura")
+        || p.attached_hero_rules.iter().any(|h| has_special_rule(h, "Bravery Aura"));
+    if carried { entry } else { 0 }
 }
 
 /// MOR-09 Valiant — Banner-primitive family names behind the distance gate.
@@ -2849,12 +2900,13 @@ pub fn capture_reads_for_epoch(
     apply_aura_channel(reg, &mut p, rules_epoch);
     let p = &p;
     let trace73 = rule_on(rules_epoch, EPOCH_73_V36) && crate::mv::plain_memo::trace_rules_on();
-    let mut morale_bonus = banner_bonus_of(reg, p, &p.special_rules, rules_epoch);
-    for hero in &p.attached_hero_rules {
-        morale_bonus = morale_bonus.max(banner_bonus_of(reg, p, hero, rules_epoch));
-    }
+    // `EPOCH_75_TABLE_FIXES`: the Bravery family is its own best-of across host AND heroes (the
+    // table walks every member's entries into one rest best-of and one Bravery best-of), then ADDS.
+    let (mut morale_bonus, bravery) = banner_family_of(reg, p, rules_epoch);
+    let named = if morale_bonus > 0 && bravery > 0 { "Banner + Bravery Aura" } else { "Banner" };
+    morale_bonus += bravery;
     trace_stamp(trace73 && morale_bonus != 0, "banner-stamp", "Banner",
-        &format!("{}: Banner stamped +{} morale", p.name, morale_bonus));
+        &format!("{}: {named} stamped +{} morale", p.name, morale_bonus));
     // EPOCH_39_MORALE_RATING — the rating joins the SAME stamp, the table's
     // own shape: `morale_bonus_of` ADDS the two best-ofs (solo_controller.gd:5638).
     morale_bonus += morale_rating_stamp(reg, p, rules_epoch);
@@ -2900,7 +2952,7 @@ pub fn capture_reads_for_epoch(
 /// recorded flat fold replays and the tail stays zeros.
 fn regen_targets(
     reg: &mut Registries, p: &Profile, rules_epoch: u32, trace73: bool,
-) -> (i64, i64, i64, i64, f64, f64) {
+) -> (i64, i64, i64, i64, f64, f64, i64) {
     let regen = if rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
         regen_family_on(p, "Regeneration", rules_epoch)
     } else {
@@ -2922,6 +2974,7 @@ fn regen_targets(
         0
     };
     let mut picked = (base, base, 0i64, 0i64);
+    let mut feat = 0i64;
     // MOR-17a (rules 3.6): the names that share Warding's distance gate.
     // `other_min` is the best target NO gated name supplies; `warding` the
     // gated name's own reading. The gate is stamped only when the gated
@@ -3039,6 +3092,13 @@ fn regen_targets(
             // tuple's pending tail) for `sim::ctx_live`'s per-save-moment
             // resolution on the snapshot's `in_cover` — the Shielded family's
             // terrain-pending shape. Below 52 the flat fold replays unchanged.
+            // #2613 (EPOCH_75_TABLE_FIXES): a once-per-game entry is held aside for the live latch.
+            if rule_on(rules_epoch, crate::acts::EPOCH_75_TABLE_FIXES) && e.param_i("uses_per_game", 0) > 0 {
+                if normal > 0 && (feat == 0 || normal < feat) {
+                    feat = normal;
+                }
+                continue;
+            }
             if rule_on(rules_epoch, EPOCH_56_GROUNDED_PROTECTION)
                 && e.param_f("terrain_within_in", 0.0) > 0.0
             {
@@ -3081,7 +3141,7 @@ fn regen_targets(
             }
         }
     }
-    (picked.0, picked.1, picked.2, picked.3, gates.0, gates.1)
+    (picked.0, picked.1, picked.2, picked.3, gates.0, gates.1, feat)
 }
 
 /// The SHOOTING leg's three die params (`ap_bonus`/`hit_bonus`/`low_roll_max`)
@@ -3174,6 +3234,19 @@ fn brace_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Option<(Stri
     Some((hit.name, x.max(1)))
 }
 
+/// `UnitStatic::parry_weapons` (`EPOCH_75_TABLE_FIXES`, main.gd `_solo_melee_parry_dice`): one entry
+/// per melee weapon with a `Parry(X)` rating, its `count` floored at 1; none when the unit rule rates.
+fn parry_weapons_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Vec<(i64, i64)> {
+    if !rule_on(rules_epoch, EPOCH_75_TABLE_FIXES)
+        || (unit_rule_active(reg, p, "Parry") && unit_rating(&p.special_rules, "Parry") > 0) {
+        return Vec::new();
+    }
+    p.weapons.iter().filter(|w| w.range <= 0.0)
+        .map(|w| (weapon_rating(w, "Parry"), w.count.max(1)))
+        .filter(|&(x, _)| x > 0)
+        .collect()
+}
+
 /// `AiEv.ctx_for` ai_ev.gd:135-165. `models` stays at the live-unit reading;
 /// `BattleSim._ctx_of` overwrites it with the snapshot's `alive` on every call.
 fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
@@ -3192,6 +3265,16 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     } else {
         0
     };
+    // `EPOCH_75_TABLE_FIXES`: the estimate reads the whole Banner-family share (rating excluded),
+    // `AiEv.ctx_for`'s own read from 73 (`morale_bonus_of - morale_rating_of`); 74 and below keep Banner-only.
+    let fixes75 = rule_on(rules_epoch, EPOCH_75_TABLE_FIXES);
+    let morale_bonus = if fixes75 {
+        let (rest, bravery) = banner_family_of(reg, p, rules_epoch);
+        rest + bravery
+    } else {
+        morale_bonus
+    };
+    let bravery_bonus = if fixes75 { bravery_aura_share(reg, p) } else { 0 };
     // EPOCH_39_MORALE_RATING — the split the rules-must-log line reads. The
     // EV `morale_bonus` above keeps the table's own Banner-only reading
     // (ai_ev.gd:142-143); the ROLLED test adds the rating through the
@@ -3443,6 +3526,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         morale_bonus,
         morale_rating,
         valiant_bonus,
+        bravery_bonus,
         tough: unit_rating(&p.special_rules, "Tough").max(1),
         models: 1, // placeholder; `_ctx_of` always writes the snapshot's alive
         above_half_strength: false,
@@ -3599,6 +3683,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         regen_target_spell: regen_targets.1,
         regen_pending: regen_targets.2,
         regen_pending_spell: regen_targets.3,
+        regen_feat: regen_targets.6,
         regen_gate_over_in: regen_targets.4,
         regen_gate_charge_in: regen_targets.5,
         fatigued: false,
@@ -3878,6 +3963,13 @@ fn stamp(
             || hit.upgrades.is_empty()
             || !has_exact_rule(&p.special_rules, &hit.upgrades)
         {
+            continue;
+        }
+        // Epoch 75: the Enhanced form is "always", not the 3.5 Boost window.
+        if rule_on(rules_epoch, crate::acts::EPOCH_75_TABLE_FIXES) && hit.name.starts_with("Enhanced ") {
+            for sp in shoot.iter_mut().filter(|sp| sp.shred_alias) {
+                sp.shred_any_distance = true;
+            }
             continue;
         }
         for sp in shoot.iter_mut() {
@@ -6936,7 +7028,19 @@ impl UnitStatic {
         // UNGATED and UNSTAMPED: the table builds it raw off the weapons
         // (`AiShooting.strafing_profiles`, main.gd:2976-2985) and the
         // once-per-activation volley reads it exactly as built.
-        let strafe_shoot = strafing_profiles(&p.weapons);
+        let mut strafe_shoot = strafing_profiles(&p.weapons);
+        // S6 (#2612, EPOCH_75_TABLE_FIXES): the volley is a shooting attack, so the unit-level
+        // Shred family is stamped like `stamp` step 6 does; a range-0 weapon reads reach max(range, 1).
+        if rule_on(rules_epoch, crate::acts::EPOCH_75_TABLE_FIXES) {
+            let plain_shred = unit_rule_active(reg, p, "Shred");
+            let mut hits = rules_of_primitive(reg, p, "Shred");
+            hits.retain(|h| !wave3_alias(&h.name) || rule_on(rules_epoch, EPOCH_6_TABLE_RULES));
+            for sp in strafe_shoot.iter_mut() {
+                if plain_shred || hits.iter().any(|h| facet_applies(h.melee_only, h.shooting_only, sp.range.max(1))) {
+                    sp.shred_alias = true;
+                }
+            }
+        }
         // The same stamping runs on the melee array (`_profiles_of(su, true)`
         // battle_sim.gd:719-720 takes the identical path); a rule the port
         // cannot model is reported ONCE, not once per array.
@@ -7424,6 +7528,7 @@ impl UnitStatic {
             ctx: ctx_for(reg, p, rules_epoch),
             name: p.name.clone(),
             brace_rule: brace_of(reg, p, rules_epoch).map(|b| b.0).unwrap_or_default(),
+            parry_weapons: parry_weapons_of(reg, p, rules_epoch),
             fortified_alias_name: fa.alias_name,
             fortified_boost_name: fa.boost_name,
             hold_only,
