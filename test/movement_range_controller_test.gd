@@ -617,6 +617,52 @@ func test_musician_unit_human_bands_get_plus_one_inch() -> void:
 	assert_int(fm["rush"]).is_equal(17)
 
 
+## A unit of a real book: its faction section decides which Bounding-family names resolve.
+func _ui_bands_of_book_unit(faction: String, rules: Array) -> Dictionary:
+	var gu := GameUnit.new()
+	gu.unit_properties = {"special_rules": rules, "player_id": 1, "name": "W", "quality": 4, "defense": 4,
+		"game_system": "gf", "faction_folder": faction}
+	var node: Node3D = auto_free(Node3D.new())
+	add_child(node)
+	node.set_meta("game_unit", gu)
+	return _controller().ui_bands_for_model(node)
+
+
+func test_wolfborn_unit_human_bands_include_the_best_d3_roll() -> void:
+	# army data 3.6 (wolf_brothers): on activation the unit may move up to D3". The player rolls it by
+	# hand, so the human's rings and strict cap show the best roll (+3") on every band.
+	var b := _ui_bands_of_book_unit("wolf_brothers", ["Wolfborn"])
+	assert_int(b["advance"]).is_equal(9)
+	assert_int(b["rush"]).is_equal(15)
+	assert_int(b["charge"]).is_equal(15)
+	# Enhanced Wolfborn moves 2D3" instead: best roll +6" (the larger family member wins, no stacking)
+	var e := _ui_bands_of_book_unit("wolf_brothers", ["Wolfborn", "Enhanced Wolfborn"])
+	assert_int(e["advance"]).is_equal(12)
+	assert_int(e["rush"]).is_equal(18)
+	# stacks with Fast (8+3 / 16+3)
+	var f := _ui_bands_of_book_unit("wolf_brothers", ["Fast", "Wolfborn"])
+	assert_int(f["advance"]).is_equal(11)
+	assert_int(f["rush"]).is_equal(19)
+
+
+func test_wolfborn_widening_stays_out_of_the_ai_bands_and_the_wrong_book() -> void:
+	# controls: the AI adds its own seeded roll on top of bands_for_model, so that call must stay plain;
+	# the same rule name in a book that does not field it does nothing; no rule stays 6/12.
+	var gu := GameUnit.new()
+	gu.unit_properties = {"special_rules": ["Wolfborn"], "player_id": 1, "name": "W", "quality": 4,
+		"defense": 4, "game_system": "gf", "faction_folder": "wolf_brothers"}
+	var node: Node3D = auto_free(Node3D.new())
+	add_child(node)
+	node.set_meta("game_unit", gu)
+	var plain := _controller().bands_for_model(node)
+	assert_int(plain["advance"]).is_equal(6)
+	assert_int(plain["rush"]).is_equal(12)
+	var wrong := _ui_bands_of_book_unit("eternal_dynasty", ["Wolfborn"])
+	assert_int(wrong["advance"]).is_equal(6)
+	assert_int(wrong["rush"]).is_equal(12)
+	assert_int(_ui_bands_of_book_unit("wolf_brothers", [])["advance"]).is_equal(6)
+
+
 func test_reach_hunt_keeps_rush_and_charge_bands_distinct() -> void:
 	var covered := 0
 	for system in RulesRegistry.SYSTEMS:
