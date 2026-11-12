@@ -37,7 +37,7 @@ use crate::combat::{
     RENDING_AP_BONUS, THRUST_AP_BONUS, UNMODIFIED_SIX,
 };
 use crate::landing::Landing;
-use crate::logline::LogLine;
+use crate::logline::{Category, LogLine};
 use crate::rng::GodotRng;
 use crate::unit::{CondAp, Ctx, ShieldedAlias, ShootProfile};
 
@@ -1477,6 +1477,10 @@ pub fn resolve_volley_leg(
             }
             hits = boosted;
         }
+        // One-core P3 step 24: the table's line after `_solo_hits` (main.gd:5056-5057), a miss included.
+        tray.say(|| LogLine { rule: "shoot", category: Category::Combat, side: att.side,
+            text: format!("{} fires {} at {def_owner} — {hits} hit{}", sh.owner, p.name, if hits == 1 { "" } else { "s" }),
+            detail: None });
         if hits <= 0 {
             continue; // :3210 — no hits, no save batch
         }

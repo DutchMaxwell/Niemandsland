@@ -39,6 +39,7 @@ use crate::acts::{
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::landing::{LandedModel, Landing};
+use crate::logline::{Category, LogLine};
 use crate::dice::{Morale, ShootResult, Tray};
 use crate::mods;
 use crate::mission::{drop_carried, sync_carried_positions};
@@ -1374,6 +1375,7 @@ pub(crate) fn tray_strafing(
         let mut att = ctx_live_vs(ctx_of(um, next, b), statics, next, b, target, false, seams.rules_epoch);
         att.moved_this_round = true;
         att.strafe_volley = !reach_gate;
+        att.side = next.player[b];
         Some((b, keep, attacks, att))
     }).collect();
     let shooters: Vec<crate::dice::Shooter> = parts.iter()
@@ -10321,6 +10323,7 @@ fn resolve_with(
                                 att.moved_this_round = moved;
                                 att.held = kind == HOLD;
                                 att.member_gap_in = hero_own_gap.then_some(dm);
+                                att.side = next.player[mi];
                                 att.granted_reach_in = granted_reach(um, &next, mi).0;
                                 parts.push((mi, msc, att));
                             }
@@ -10380,6 +10383,12 @@ fn resolve_with(
                                         att.versatile_latched = vl;
                                     }
                                 }
+                            }
+                            // One-core P3 step 24: the table's announce (`_solo_show_attack_announce`, main.gd:11752), said
+                            // before the volley's first die; a group with no weapon in range never reaches it (main.gd:4693).
+                            if tray.feed().is_some() && parts.iter().any(|(_, m, _)| !m.keep.is_empty()) {
+                                tray.say(|| LogLine { rule: "shoot", category: Category::Combat, side: next.player[si],
+                                    text: format!("{} fires at {}", statics[pi_s].name, ut_g.name), detail: None });
                             }
                             // CLASS FIX (external review 03.09. item 3 / F9,
                             // `acts::rule_on`) — same gate as `strike_phase`'s
