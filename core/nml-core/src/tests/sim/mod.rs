@@ -1782,6 +1782,7 @@ mod piercing_tag;
 mod place_d3;
 mod placed_move;
 pub(crate) mod volley_landings;
+mod hit_lines;
 mod precision_debuff;
 mod plain_moves;
 mod port_container_ledges;
