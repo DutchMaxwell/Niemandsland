@@ -81,3 +81,40 @@ func test_parry_dice_all_carriers() -> void:
 	var d := _unit(1, "Parrier", 0.0, 3, [_weapon("Sword", 0, 1, ["Parry(2)"], 3)], [])
 	assert_int(_main._solo_melee_parry_dice(d)).is_equal(6)
 
+
+## The AI estimate's Parry dice: `AiEv._parry_cancels` against more hits than any roll here can cancel, times 6.
+func _estimate_dice(d: GameUnit) -> int:
+	return roundi(AiEv._parry_cancels(AiEv.ctx_for(d), 100.0) * 6.0)
+
+
+func _keep_alive(d: GameUnit, alive: int) -> void:
+	for i in range(d.models.size()):
+		(d.models[i] as ModelInstance).is_alive = i < alive
+
+
+# EPOCH_75_TABLE_FIXES: the AI estimate counts the dice path's Parry dice (carriers only), also after losses.
+func test_the_estimate_counts_only_the_carriers_from_epoch_75() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_75_TABLE_FIXES
+	var one := _unit(1, "One", 0.0, 5, [_weapon("Sword", 0, 1, ["Parry(1)"], 1), _weapon("Hand", 0, 1, [], 4)], [])
+	assert_int(_estimate_dice(one)).override_failure_message("1 of 5 carries Parry(1): estimate %d dice, want 1"
+		% _estimate_dice(one)).is_equal(1)
+	var cases := [one,
+		_unit(1, "Two", 0.0, 5, [_weapon("Sword", 0, 1, ["Parry(2)"], 2), _weapon("Hand", 0, 1, [], 3)], []),
+		_unit(1, "All", 0.0, 5, [_weapon("Sword", 0, 1, ["Parry(1)"], 5)], []),
+		_unit(1, "Rule", 0.0, 5, [_weapon("Hand", 0, 1, [], 5)], ["Parry(1)"])]
+	for d in cases:
+		for alive in [5, 2, 1]:
+			_keep_alive(d, alive)
+			var want: int = _main._solo_melee_parry_dice(d)
+			assert_int(_estimate_dice(d)).override_failure_message("%s with %d alive: estimate %d dice, dice path %d"
+				% [d.unit_id, alive, _estimate_dice(d), want]).is_equal(want)
+
+
+# Records stamped 74 replay the old estimate: X dice per LIVING model, carrier or not.
+func test_the_estimate_is_unchanged_below_epoch_75() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_74_CLIMB_COST
+	var one := _unit(1, "One", 0.0, 5, [_weapon("Sword", 0, 1, ["Parry(1)"], 1), _weapon("Hand", 0, 1, [], 4)], [])
+	assert_int(_estimate_dice(one)).is_equal(5)
+	_keep_alive(one, 2)
+	assert_int(_estimate_dice(one)).is_equal(2)
+	assert_int(int(AiEv.ctx_for(one).get("parry_carrier_dice", 0))).is_equal(0)
