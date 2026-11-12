@@ -171,8 +171,9 @@
     "wings": "wings",
     "godly spear": "spear"
   },
-  "_comment_havoc_warriors": "Havoc Warriors (AoF, uid PGxKcq4R571OtwqD, v3.5.3) go-live: Model Forge's gain -> part-slug vocabulary, consulted ONLY for faction folder 'havoc_warriors'. The bakes name the two-hand weapon 'great' (Great Weapon and Heavy Great Weapon share that slug), keep halberd / lance without the shared 'heavy' prefix, and do not slug the default Heavy Hand Weapon at all, so every plain Warriors / Chosen / Master key stays on the base model. Sergeant is a head-socket plume, never the shared crest. Derived from all 212 book forms against BUILD_MANIFEST_havoc.json. The rules 3.6 names (Master Great Weapon / Halberd / Lance, Havoc Chariot, Great Beast Chariot, Javelins, Barbed Javelins, Rapid Shortbow, Doom-Fire Bombard) point at the same bakes as their 3.5 names.",
+  "_comment_havoc_warriors": "Havoc Warriors (AoF, uid PGxKcq4R571OtwqD, v3.5.3) go-live: Model Forge's gain -> part-slug vocabulary, consulted ONLY for faction folder 'havoc_warriors'. The bakes name the two-hand weapon 'great' (Great Weapon and Heavy Great Weapon share that slug), keep halberd / lance without the shared 'heavy' prefix, and do not slug the default Heavy Hand Weapon at all, so every plain Warriors / Chosen / Master key stays on the base model. Sergeant is a head-socket plume, never the shared crest. Musician (horn) and Banner (banner) are listed here too, so the Havoc bake names never follow a change of the shared slugs. Derived from all 212 book forms against BUILD_MANIFEST_havoc.json. The rules 3.6 names (Master Great Weapon / Halberd / Lance, Havoc Chariot, Great Beast Chariot, Javelins, Barbed Javelins, Rapid Shortbow, Doom-Fire Bombard) point at the same bakes as their 3.5 names.",
   "_faction_havoc_warriors": {
+    "banner": "banner",
     "barbed javelin": "javelin",
     "barbed javelin crew": "javelins",
     "barbed javelins": "javelin",
@@ -203,6 +204,7 @@
     "master great weapon": "great",
     "master halberd": "halberd",
     "master lance": "lance",
+    "musician": "horn",
     "rapid shortbow": "bow",
     "sergeant": "plume",
     "shortbow": "bow",

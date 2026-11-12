@@ -124,3 +124,44 @@ func test_rules_3_6_master_weapons_resolve_the_live_great_keys() -> void:
 	assert_str(lib.variant_slug(["Master Lance", "Great Beast Chariot"], "havoc_warriors")).is_equal("beastchariot+lance")
 	# Scoped: another faction does not learn the Havoc names.
 	assert_str(lib.variant_slug(["Master Great Weapon", "Havoc Chariot"], "beastmen")).is_equal("")
+
+
+# --- Command models: the Musician / Banner slugs belong to the Havoc section itself ------------------
+
+func _command(role: String) -> Dictionary:
+	return {"upgrade": {"uid": "E1", "label": "Upgrade up to three models with one", "variant": "upgrade",
+			"model": true, "affects": {"type": "up to", "value": 3}, "select": {"type": "exactly", "value": 1},
+			"targets": [], "isCommandGroup": true},
+		"option": {"label": role, "gains": [{"type": "ArmyBookRule", "name": role, "count": 1}]}}
+
+
+func _chosen_warriors() -> OPRApiClient.OPRArmy:
+	return _army([{"armyId": HAVOC_ARMY, "name": "Chosen Warriors", "size": 5, "bases": {"round": "32"},
+		"loadout": [{"type": "ArmyBookWeapon", "name": "Heavy Hand Weapon", "attacks": 2, "count": 5}],
+		"selectedUpgrades": [_command("Sergeant"), _command("Banner"), _command("Musician")]}])
+
+
+## RED before the section carries its own entries: the shared "musician" / "banner" slugs are changed
+## here, and the Havoc bake names (`#horn`, `#banner`) must not follow them.
+func test_havoc_musician_and_banner_do_not_follow_the_shared_vocabulary() -> void:
+	var lib := _library()
+	lib._label_slug["musician"] = "drum"
+	lib._label_slug["banner"] = "standard"
+	assert_str(lib.variant_slug(["Musician"], "havoc_warriors")).is_equal("horn")
+	assert_str(lib.variant_slug(["Banner"], "havoc_warriors")).is_equal("banner")
+	# Scoped: another faction still follows the shared vocabulary.
+	assert_str(lib.variant_slug(["Musician"], "ratmen")).is_equal("drum")
+
+
+## While the horn / banner bakes are missing from the manifest, those two models stay on the base model
+## (no variant name, no error); once the keys ship, the same units resolve `#banner` and `#horn`.
+func test_command_models_fall_back_to_base_until_their_bakes_ship() -> void:
+	var army := _chosen_warriors()
+	assert_str(army.faction_folder).is_equal("havoc_warriors")
+	var before := _manager(["havoc_warriors/chosen warriors", "havoc_warriors/chosen warriors#plume"])
+	assert_array(before._unit_model_variant_names(army.units[0], "havoc_warriors")) \
+		.is_equal(["Chosen Warriors#plume", "", "", "", ""])
+	var shipped := _manager(["havoc_warriors/chosen warriors", "havoc_warriors/chosen warriors#plume",
+		"havoc_warriors/chosen warriors#banner", "havoc_warriors/chosen warriors#horn"])
+	assert_array(shipped._unit_model_variant_names(army.units[0], "havoc_warriors")) \
+		.is_equal(["Chosen Warriors#plume", "Chosen Warriors#banner", "Chosen Warriors#horn", "", ""])
