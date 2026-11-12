@@ -36,6 +36,7 @@ use crate::combat::{
     IMPACT_HIT_TARGET, LONG_RANGE_IN, NO_RETREAT_SELF_WOUND_MAX, RAVAGE_WOUND_TARGET,
     RENDING_AP_BONUS, THRUST_AP_BONUS, UNMODIFIED_SIX,
 };
+use crate::landing::Landing;
 use crate::logline::LogLine;
 use crate::rng::GodotRng;
 use crate::unit::{CondAp, Ctx, ShieldedAlias, ShootProfile};
@@ -60,6 +61,8 @@ pub struct Tray {
     zero_draws: bool,
     /// One-core P3: `say` lines, each stamped with the feed's draws so far.
     lines: Vec<(usize, LogLine)>,
+    /// One-core P3: `land` landings, each stamped with the feed's draws so far.
+    landings: Vec<(usize, Landing)>,
 }
 
 impl Tray {
@@ -69,13 +72,13 @@ impl Tray {
     /// engine and what `GodotRng::new` mirrors; a negative seed must land on
     /// the same stream on both sides.
     pub fn seeded(seed: i64) -> Tray {
-        Tray { rng: GodotRng::new(seed), feed: None, zero_draws: false, lines: Vec::new() }
+        Tray { rng: GodotRng::new(seed), feed: None, zero_draws: false, lines: Vec::new(), landings: Vec::new() }
     }
 
     /// A tray that continues a generator already in flight — how a replay
     /// reaches a recorded position in the stream.
     pub fn from_rng(rng: GodotRng) -> Tray {
-        Tray { rng, feed: None, zero_draws: false, lines: Vec::new() }
+        Tray { rng, feed: None, zero_draws: false, lines: Vec::new(), landings: Vec::new() }
     }
 
     /// Re-seeds in place, as a second `seed_tray_rng` call would.
@@ -110,7 +113,7 @@ impl Tray {
     /// first ran dry (`starved_at`) — the step API turns that into `NeedRoll`.
     pub fn supplied(groups: Vec<Vec<u8>>) -> Tray {
         let feed = Feed { groups, next: 0, starved_at: None, mismatch: None, placed: None };
-        Tray { rng: GodotRng::new(0), feed: Some(feed), zero_draws: false, lines: Vec::new() }
+        Tray { rng: GodotRng::new(0), feed: Some(feed), zero_draws: false, lines: Vec::new(), landings: Vec::new() }
     }
 
     /// The supplied feed, if this tray has one.
@@ -148,6 +151,24 @@ impl Tray {
     /// Every line said on this tray, in order.
     pub fn all_lines(&self) -> Vec<LogLine> {
         self.lines.iter().map(|(_, l)| l.clone()).collect()
+    }
+
+    /// One-core P3: a supplied tray keeps the landing, stamped with the draws
+    /// so far; a seeded tray never calls `f` (training cost unchanged).
+    pub fn land(&mut self, f: impl FnOnce() -> Landing) {
+        if let Some(feed) = self.feed.as_ref() {
+            self.landings.push((feed.next, f()));
+        }
+    }
+
+    /// The landings made before draw `draw` was taken (stamp <= `draw`).
+    pub fn landings_upto(&self, draw: usize) -> Vec<Landing> {
+        self.landings.iter().filter(|(at, _)| *at <= draw).map(|(_, l)| l.clone()).collect()
+    }
+
+    /// Every landing made on this tray, in order.
+    pub fn all_landings(&self) -> Vec<Landing> {
+        self.landings.iter().map(|(_, l)| l.clone()).collect()
     }
 
     /// `rng.state` — the cheap replay checkpoint GATE R already compares.
