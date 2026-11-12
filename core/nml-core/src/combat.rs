@@ -5,7 +5,7 @@
 //! :497-505 and the melee branch of `profile_ev` :330-350) arrived with M1-3;
 //! `resolve()` reaches it only on a CHARGE (battle_sim.gd:631-646).
 
-use crate::acts::{rule_on, EPOCH_73_V36};
+use crate::acts::{rule_on, EPOCH_73_V36, EPOCH_75_TABLE_FIXES};
 use crate::unit::{CondAp, Ctx, ShootProfile};
 
 /// `AiEv.SIX_P` ai_ev.gd:27 — P(one specific d6 face).
@@ -1018,7 +1018,9 @@ pub fn impact_ev(att: &Ctx, def: &Ctx) -> f64 {
     // saves, the HEAVY pool first (the dice path's `parry_cancel` order, "most dangerous first").
     let mut plain_hits = dice as f64 * p_hit;
     let mut heavy_hits = heavy_dice as f64 * p_hit;
-    let cancels = parry_cancels(def, plain_hits + heavy_hits);
+    // `EPOCH_75_TABLE_FIXES` (maintainer ruling): Impact hits are never parried, so the cancel is gone
+    // from 75 on (the record's epoch rides the defender's stamp; hand-built contexts read 0 = old).
+    let cancels = if rule_on(def.rules_epoch, EPOCH_75_TABLE_FIXES) { 0.0 } else { parry_cancels(def, plain_hits + heavy_hits) };
     let heavy_cut = cancels.min(heavy_hits);
     heavy_hits -= heavy_cut;
     plain_hits -= (cancels - heavy_cut).min(plain_hits);

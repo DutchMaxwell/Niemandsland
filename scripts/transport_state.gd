@@ -13,9 +13,9 @@ extends RefCounted
 ##   - Hero, Tough ≤ 6            → 1 space
 ##   - Hero, Tough > 6            → untransportable
 ##   - non-Hero, no Tough         → 1 space (a "regular model")
-##   - non-Hero, Tough 2..5       → 3 spaces (the book names Tough(3); 2..5 read "up to Tough(3)"-class,
-##                                  matching Army Forge data where such profiles are always Tough(3))
-##   - non-Hero, Tough ≥ 6        → untransportable
+##   - non-Hero, Tough 2..3       → 3 spaces (Tough(2) reads as "up to Tough(3)")
+##   - non-Hero, Tough ≥ 4        → untransportable (rules 3.6, GF Beginner's Guide p.15: the rule lets
+##                                  a transport take non-Heroes with up to Tough(3) only)
 ##
 ## Everything here is static + side-effect free: callers describe models as plain Dictionaries
 ## {"hero": bool, "tough": int} so the math is unit-testable without scene plumbing. The live
@@ -29,7 +29,7 @@ static func spaces_of(hero: bool, tough: int) -> int:
 	var t := maxi(tough, 0)
 	if hero:
 		return 1 if t <= 6 else UNTRANSPORTABLE
-	if t >= 6:
+	if t > 3:
 		return UNTRANSPORTABLE
 	if t >= 2:
 		return 3

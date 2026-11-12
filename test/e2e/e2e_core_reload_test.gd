@@ -90,8 +90,7 @@ func test_reload_keeps_the_chosen_preset(timeout := 120000) -> void:
 		assert_bool(ClassDB.class_exists("NmlCore")).is_equal(sc2.shipped_brain_sha != "")
 
 
-func test_reload_rebuilds_the_core_node_and_header(timeout := 120000,
-		do_skip := not ClassDB.class_exists("NmlCore"), skip_reason := "needs the NmlCore extension") -> void:
+func test_reload_rebuilds_the_core_node_and_header(timeout := 120000) -> void:
 	var sc := _arm()   # a game in progress: controller A, its core already warm
 	_reload([])
 	# The explicit grade takes _solo_apply_difficulty's early return (main.gd:1847-1851): nothing asks

@@ -4,7 +4,7 @@
 //! order the dice path uses is approximated by the heavy-first split in `impact_ev`). Epoch 72 keeps
 //! today's value.
 use super::super::*;
-use crate::acts::{EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36};
+use crate::acts::{EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36, EPOCH_74_CLIMB_COST, EPOCH_75_TABLE_FIXES};
 use crate::combat::{impact_ev, melee_ev};
 use crate::rules::Registries;
 
@@ -94,4 +94,29 @@ fn the_melee_ev_into_a_parry_unit_is_unchanged_at_epoch_72() {
         (parry_ev - plain_ev).abs() < 1e-12,
         "epoch 72 must keep today's value: {parry_ev} vs {plain_ev}"
     );
+}
+
+/// Maintainer ruling (`EPOCH_75_TABLE_FIXES`): Impact hits are never parried, so the Impact and Heavy
+/// Impact EV into a Parry unit is the no-Parry value; the melee EV keeps its cancels.
+#[test]
+fn the_impact_ev_ignores_parry_from_epoch_75() {
+    let defender = parry_unit(5, &["Parry(1)"], EPOCH_75_TABLE_FIXES);
+    let def_parry = live_ctx(&defender, 5);
+    let def_plain = Ctx { parry_dice: 0, ..def_parry };
+    for att in [Ctx { impact: 6, models: 1, ..Default::default() }, Ctx { heavy_impact: 6, models: 1, ..Default::default() }] {
+        let (with_parry, without) = (impact_ev(&att, &def_parry), impact_ev(&att, &def_plain));
+        assert!((with_parry - without).abs() < 1e-12, "Parry must not touch the Impact EV: {with_parry} vs {without}");
+    }
+    let striker = Ctx { quality: 4, models: 1, ..Default::default() };
+    let melee = melee_ev(&[blade(10)], &[10], &striker, &def_parry, false, 0.0);
+    assert!((melee - 25.0 / 12.0).abs() < 1e-9, "the strike is still parried at 75: {melee}");
+}
+
+/// A record stamped 74 keeps the expected Parry cancel on the Impact EV (byte-exact replay).
+#[test]
+fn the_impact_ev_still_parries_at_epoch_74() {
+    let def_parry = live_ctx(&parry_unit(5, &["Parry(1)"], EPOCH_74_CLIMB_COST), 5);
+    let att = Ctx { impact: 6, models: 1, ..Default::default() };
+    let with_parry = impact_ev(&att, &def_parry);
+    assert!((with_parry - 25.0 / 12.0).abs() < 1e-9, "epoch 74 keeps the old cancel: {with_parry}");
 }
