@@ -389,12 +389,31 @@ static func _parry_dice(unit: GameUnit) -> int:
 	return best
 
 
+## `EPOCH_75_TABLE_FIXES` — the dice a unit's Parry WEAPONS bring at full strength: X per model that carries
+## each one (its `count`, floored at 1), the dice path's read (main.gd `_solo_melee_parry_dice`, #2642).
+## 0 below 75 and when the unit rule supplies Parry (every model has it; `_parry_dice` x models stays exact).
+static func _parry_carrier_dice(unit: GameUnit) -> int:
+	if unit == null or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_75_TABLE_FIXES \
+			or (RulesRegistry.unit_rule_active(unit, "Parry") and unit_rating(unit, "Parry") > 0) \
+			or not (unit.source_type == "opr" and unit.source_data is OPRApiClient.OPRUnit):
+		return 0
+	var dice := 0
+	for w in (unit.source_data as OPRApiClient.OPRUnit).weapons:
+		if w is Object and AiShooting._field_i(w, "range_value", 0) <= 0:
+			dice += AiShooting._rating_of(w, "Parry") * maxi(AiShooting._field_i(w, "count", 1), 1)
+	return dice
+
+
 ## Rules 3.6 (`EPOCH_73_V36`) — the expected hits a Parry(X) defender cancels from a strike:
 ## `min(X * living models, expected hits) / 6`. 0 below the wave and without Parry.
+## From `EPOCH_75_TABLE_FIXES` a Parry WEAPON counts only its carriers: the dice cap at `parry_carrier_dice`,
+## so X * min(carriers, living models) for one weapon, the dice path's count.
 static func _parry_cancels(def_ctx: Dictionary, hits: float) -> float:
 	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
 		return 0.0
 	var dice := float(int(def_ctx.get("parry_dice", 0))) * float(maxi(int(def_ctx.get("models", 1)), 1))
+	if int(def_ctx.get("parry_carrier_dice", 0)) > 0:
+		dice = minf(dice, float(int(def_ctx["parry_carrier_dice"])))
 	if dice <= 0.0:
 		return 0.0
 	return minf(dice, hits) / 6.0
@@ -475,6 +494,7 @@ static func ctx_for(unit: GameUnit, in_cover: bool = false, counter_models: int 
 		"brace_models": _brace_cut(unit),
 		"brace_impact_per_model": 1,
 		"parry_dice": _parry_dice(unit),
+		"parry_carrier_dice": _parry_carrier_dice(unit),
 		"regeneration": _regen_target(unit) > 0,
 		"regen_target": _regen_target(unit),
 		"regen_target_spell": _regen_target(unit, true),
