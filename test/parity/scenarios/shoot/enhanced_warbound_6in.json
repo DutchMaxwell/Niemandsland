@@ -1,0 +1,11 @@
+{
+ "schema": "nml-scenario-v1",
+ "name": "enhanced_warbound_6in",
+ "note": "Warbound + Enhanced Warbound attacker, defender at 6 in: the table pays the Shred extra wound on unmodified 1s at any distance (PF-b), the core keeps the 9 in gate.",
+ "epoch": 73,
+ "kind": "shoot",
+ "seeds": 200,
+ "attacker": {"key": "att", "player": 1, "name": "Att", "models": 10, "quality": 4, "defense": 4, "tough": 1, "x_in": 0.0, "z_step_in": 1.2, "base_radius_in": 0.63, "game_system": "gf", "faction_folder": "war_disciples", "rules": ["Warbound", "Enhanced Warbound"]},
+ "defender": {"key": "def", "player": 2, "name": "Def", "models": 10, "quality": 4, "defense": 4, "tough": 1, "x_in": 6.0, "z_step_in": 1.2, "base_radius_in": 0.63, "game_system": "gf", "faction_folder": "war_disciples", "rules": []},
+ "weapon": {"name": "Rifle", "range_in": 24, "attacks": 1, "count": 10, "rules": []}
+}
