@@ -1,7 +1,7 @@
 {
  "schema": "nml-scenario-v1",
  "name": "melee_parry_carriers_e75",
- "note": "Melee charge as melee_plain, but 3 of the 8 defenders carry a Parry(1) weapon and the attackers strike 8 times each, so the defender dies in every seed (no strike-back, no morale roll: with survivors a weapon count below the model count strikes back differently in the two engines, outside this rule). From epoch 75 the core rolls 3 Parry dice (carriers), not 8 (every model), like the table (#2642, #2662).",
+ "note": "Melee charge as melee_plain, but 3 of the 8 defenders carry a Parry(1) weapon and the attackers strike 8 times each, so the defender dies in every seed (no strike-back, no morale roll: the strike-back of a partly armed unit has its own scenario, melee_strike_back_bearers_e75). From epoch 75 the core rolls 3 Parry dice (carriers), not 8 (every model), like the table (#2642, #2662).",
  "epoch": 75,
  "kind": "melee",
  "seeds": 200,
