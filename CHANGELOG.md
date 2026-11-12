@@ -39,6 +39,9 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 - **Parry does not reduce Impact hits in the AI's estimate.** Impact hits are not parried under
   rules 3.6. The AI's charge estimate counted an expected Parry cancel and no longer does. The table
   already worked this way. (#2657)
+- **The morale test's dice line says passed or failed instead of hits.** The line used to read like a
+  hit roll ("6 → 1 hit (4+)") and now reads "6 → passed (4+)" or "3 → failed (4+)". Hit and save lines
+  are unchanged.
 
 ### Changed — NACHTMAHR (the AI opponent)
 - **NACHTMAHR pays for every climb.** A unit of several models that crossed a container could spend

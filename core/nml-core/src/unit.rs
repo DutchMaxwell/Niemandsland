@@ -110,6 +110,8 @@ pub struct Ctx {
     /// G4R3 F-HERO-RANGE (`EPOCH_73_V36`): a joined hero's own nearest gap to the volley target, set at the
     /// volley seam; the resolver's range test reads it in place of the volley distance. `None` = the volley's own.
     pub member_gap_in: Option<f64>,
+    /// One-core P3 step 24: the shooter's seat (`State.player`), stamped at the volley seam for the lines it says.
+    pub side: i64,
     /// AIG-G2 R3 (`EPOCH_73_V36`): a Crossing Strike move-through volley; the resolver's printed-range gate is off.
     pub strafe_volley: bool,
     /// G4R4 C-GRANTED-RANGE (`EPOCH_73_V36`): the best reach a live spell grant adds to this member's ranged weapons,
@@ -3524,6 +3526,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         &format!("{}: Evasive stamped, -1 to hit", p.name));
     Ctx {
         member_gap_in: None,
+        side: 0,
         granted_reach_in: 0.0,
         quality: p.quality,
         defense: armored_defense(p.defense, armor),
