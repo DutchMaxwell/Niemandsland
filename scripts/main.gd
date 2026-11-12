@@ -18459,6 +18459,9 @@ func _on_battle_log_dropped(moves: Array) -> void:
 		if moved_gu == null:
 			continue
 		var widened := MovementRangeController.move_band_rule_names_for_props(moved_gu.unit_properties)
+		for bounding_name in SoloController.bounding_rule_names(moved_gu):   # the human's rings carry its best roll
+			if not widened.has(bounding_name):
+				widened.append(bounding_name)
 		if widened.is_empty():
 			continue
 		battle_log.log_event(BattleLog.Category.MOVEMENT,

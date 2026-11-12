@@ -663,6 +663,16 @@ func test_wolfborn_widening_stays_out_of_the_ai_bands_and_the_wrong_book() -> vo
 	assert_int(_ui_bands_of_book_unit("wolf_brothers", [])["advance"]).is_equal(6)
 
 
+func test_human_bounding_reach_is_the_ai_worst_case_for_the_same_unit() -> void:
+	# one truth with the AI's reach gate (max_activation_advance_bonus_in): never a second reading
+	var gu := GameUnit.new()
+	gu.unit_properties = {"special_rules": ["Wolfborn"], "player_id": 1, "name": "W", "quality": 4,
+		"defense": 4, "game_system": "gf", "faction_folder": "wolf_brothers"}
+	assert_float(SoloController.bounding_worst_reach_in(gu)).is_equal(3.0)
+	assert_float(SoloController.max_activation_advance_bonus_in(gu)).is_equal(3.0)
+	assert_array(SoloController.bounding_rule_names(gu)).is_equal(["Wolfborn"])
+
+
 func test_reach_hunt_keeps_rush_and_charge_bands_distinct() -> void:
 	var covered := 0
 	for system in RulesRegistry.SYSTEMS:
