@@ -30,10 +30,10 @@ use crate::logline::Category;
                 &mut GodotRng::new(0), &mut tray).unwrap();
             let texts = |ls: Vec<LogLine>| ls.into_iter().map(|l| l.text).collect::<Vec<_>>();
             let want = vec!["Att fires at Def".to_string(), format!("Att fires Rifle at Def — {said}")];
-            assert_eq!(texts(tray.all_lines()), want, "{hit_faces:?}");
+            assert_eq!(texts(tray.all_lines())[..2], want, "{hit_faces:?}"); // the save lines after them: save_lines.rs
             assert_eq!(texts(tray.lines_upto(0)), want[..1], "{hit_faces:?}: the announce comes before the hit die");
-            assert_eq!(texts(tray.lines_upto(1)), want, "{hit_faces:?}: the hit line comes before the save dice");
-            assert!(tray.all_lines().iter().all(|l| (l.rule, l.category, l.side, l.detail.is_none())
+            assert_eq!(texts(tray.lines_upto(1))[..2], want, "{hit_faces:?}: the hit line comes before the save dice");
+            assert!(tray.all_lines()[..2].iter().all(|l| (l.rule, l.category, l.side, l.detail.is_none())
                 == ("shoot", Category::Combat, 1, true)), "{:?}", tray.all_lines());
         }
     }

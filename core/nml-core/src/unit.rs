@@ -110,7 +110,7 @@ pub struct Ctx {
     /// G4R3 F-HERO-RANGE (`EPOCH_73_V36`): a joined hero's own nearest gap to the volley target, set at the
     /// volley seam; the resolver's range test reads it in place of the volley distance. `None` = the volley's own.
     pub member_gap_in: Option<f64>,
-    /// One-core P3 step 24: the shooter's seat (`State.player`), stamped at the volley seam for the lines it says.
+    /// One-core P3 steps 24-25: this unit's seat (`State.player`), stamped at the volley seams for the lines it says.
     pub side: i64,
     /// AIG-G2 R3 (`EPOCH_73_V36`): a Crossing Strike move-through volley; the resolver's printed-range gate is off.
     pub strafe_volley: bool,
