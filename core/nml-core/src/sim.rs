@@ -6591,6 +6591,13 @@ pub(crate) fn tray_morale_for(
     });
     let self_wounds = shot.absorb(r);
     land_wounds_with(state, i, self_wounds, seams.tray_exact);
+    // One-core P3 step 26: the table's outcome line after the last morale die (`_solo_morale_test`'s match,
+    // main.gd:13170-13184); its dice line stays the tray's. Every cause reaches that one match on the table.
+    tray.say(|| LogLine { rule: "morale", category: Category::Combat, side: state.player[i], text: match outcome {
+        Morale::Passed => format!("{} passes morale", us.name),
+        Morale::Shaken => format!("{} fails morale — Shaken", us.name),
+        Morale::Routed => format!("{} fails morale at half strength — ROUTS", us.name),
+    }, detail: None });
     match outcome {
         Morale::Passed => {}
         Morale::Shaken => {

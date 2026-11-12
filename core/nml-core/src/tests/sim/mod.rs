@@ -1784,6 +1784,7 @@ mod placed_move;
 pub(crate) mod volley_landings;
 mod hit_lines;
 mod save_lines;
+mod morale_lines;
 mod precision_debuff;
 mod plain_moves;
 mod port_container_ledges;
