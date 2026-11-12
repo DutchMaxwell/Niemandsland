@@ -63,10 +63,10 @@ fn landings_of(state: &State, landings: &[Landing]) -> VarArray {
 }
 
 /// One step. `Some(state)` only on `done`. `refused` carries the input's index and the sentence.
-pub fn run(statics: &[UnitStatic], state: &State, unit: &str, terrain: &Terrain, seams: Seams, t: &[Input]) -> (VarDictionary, Option<State>) {
+pub fn run(statics: &[UnitStatic], state: &State, unit: &str, terrain: &Terrain, seams: Seams, t: &[Input], enforce: bool) -> (VarDictionary, Option<State>) {
     let mut out = VarDictionary::new();
     let mut next = None;
-    match step_activation(statics, state, unit, terrain, seams, t) {
+    match step_activation(statics, state, unit, terrain, seams, t, enforce) {
         ActStep::NeedRoll { index, faces, kind, count, target, owner, lines, landings } => {
             out.set("step", "need_roll");
             out.set("index", index as i64);
