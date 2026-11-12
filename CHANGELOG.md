@@ -42,6 +42,10 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 - **The morale test's dice line says passed or failed instead of hits.** The line used to read like a
   hit roll ("6 → 1 hit (4+)") and now reads "6 → passed (4+)" or "3 → failed (4+)". Hit and save lines
   are unchanged.
+- **The strict movement cap drops to 6" once a move touches Difficult terrain.** With Enforce
+  Movement Limit on, a drag whose path touches Difficult terrain stops at 6" for the rest of that
+  drag, and the distance readout says "Difficult terrain: 6" cap". Strider and Flying units are not
+  capped. Before, the drag line only turned orange.
 
 ### Changed — NACHTMAHR (the AI opponent)
 - **NACHTMAHR pays for every climb.** A unit of several models that crossed a container could spend
