@@ -1131,6 +1131,10 @@ pub struct UnitStatic {
     /// Rules 3.6 (`EPOCH_73_V36`) — the book name of the Brace this unit carries ("Brace", "Brace in Melee");
     /// the charge's rules-must-log line names it. "" = no Brace.
     pub brace_rule: String,
+    /// `EPOCH_75_TABLE_FIXES` (table #2642) — `(X, carriers)` per melee weapon carrying `Parry(X)`:
+    /// a Parry WEAPON brings X dice per model that carries it (`count`, capped at the living models),
+    /// not per model of the unit. Empty below 75 and when the unit rule supplies Parry (every model).
+    pub parry_weapons: Vec<(i64, i64)>,
     /// Merged + stamped RANGED profiles, unfiltered (range > 0, any distance).
     pub shoot: Vec<ShootProfile>,
     /// Merged + stamped MELEE profiles (range 0) — `AiShooting.melee_profiles`
@@ -3205,6 +3209,19 @@ fn brace_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Option<(Stri
     let hit = rules_of_primitive(reg, p, "Brace").into_iter().next()?;
     let x = unit_param_i(reg, p, &hit.name, "rating", 0).max(unit_rating(&p.special_rules, &hit.name));
     Some((hit.name, x.max(1)))
+}
+
+/// `UnitStatic::parry_weapons` (`EPOCH_75_TABLE_FIXES`, main.gd `_solo_melee_parry_dice`): one entry
+/// per melee weapon with a `Parry(X)` rating, its `count` floored at 1; none when the unit rule rates.
+fn parry_weapons_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Vec<(i64, i64)> {
+    if !rule_on(rules_epoch, EPOCH_75_TABLE_FIXES)
+        || (unit_rule_active(reg, p, "Parry") && unit_rating(&p.special_rules, "Parry") > 0) {
+        return Vec::new();
+    }
+    p.weapons.iter().filter(|w| w.range <= 0.0)
+        .map(|w| (weapon_rating(w, "Parry"), w.count.max(1)))
+        .filter(|&(x, _)| x > 0)
+        .collect()
 }
 
 /// `AiEv.ctx_for` ai_ev.gd:135-165. `models` stays at the live-unit reading;
@@ -7477,6 +7494,7 @@ impl UnitStatic {
             ctx: ctx_for(reg, p, rules_epoch),
             name: p.name.clone(),
             brace_rule: brace_of(reg, p, rules_epoch).map(|b| b.0).unwrap_or_default(),
+            parry_weapons: parry_weapons_of(reg, p, rules_epoch),
             fortified_alias_name: fa.alias_name,
             fortified_boost_name: fa.boost_name,
             hold_only,

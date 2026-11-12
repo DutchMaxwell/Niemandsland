@@ -6183,11 +6183,20 @@ fn impact_with_parry(
 /// `Ctx::parry_dice` (the table's `[defender] + get_attached_heroes()` walk,
 /// main.gd:8647-8653). The Impact event and the strike Parry read this same
 /// sum, so both sides count the same models.
+/// `EPOCH_75_TABLE_FIXES` (table #2642): a Parry WEAPON counts only the models
+/// that carry it (`UnitStatic::parry_weapons`, empty below 75 and for the rule form).
 fn parry_dice_total(statics: &[UnitStatic], state: &State, ti: usize) -> i64 {
     std::iter::once(ti)
         .chain(state.attached[ti].iter().copied())
         .filter(|&m| state.alive[m] > 0)
-        .map(|m| statics[state.roster.profile[m]].ctx.parry_dice * state.alive[m])
+        .map(|m| {
+            let us = &statics[state.roster.profile[m]];
+            if us.parry_weapons.is_empty() {
+                us.ctx.parry_dice * state.alive[m]
+            } else {
+                us.parry_weapons.iter().map(|&(x, carriers)| x * carriers.min(state.alive[m])).sum()
+            }
+        })
         .sum()
 }
 
