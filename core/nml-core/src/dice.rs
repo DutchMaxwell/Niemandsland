@@ -535,6 +535,19 @@ pub(crate) fn pierce_ignores(p: &ShootProfile, epoch_ctx: &Ctx) -> bool {
     rule_on(epoch_ctx.rules_epoch, EPOCH_73_V36) && p.rules.iter().any(|r| r.trim() == "Pierce")
 }
 
+/// One-core P3 step 25: `save_threshold_text` (main.gd:11634) — Defense `d` worsened by AP `a`; a natural 6
+/// always saves, so past 6 the text says so instead of the raw sum.
+fn save_threshold_text(d: i64, a: i64) -> String {
+    let shown = d.clamp(BEST_HIT_TARGET, 6);
+    if a > 0 && d + a > 6 {
+        format!("6 only (Def {shown}+, AP {a} — a natural 6 always saves)")
+    } else if a > 0 {
+        format!("{}+ (Def {shown}+, AP {a})", (d + a).clamp(BEST_HIT_TARGET, 6))
+    } else {
+        format!("{shown}+")
+    }
+}
+
 /// `main._solo_save_batch` :6385-6483 — ONE batch for the whole defender (not
 /// per model), Fortified first, then the dice, then Bane's re-roll of the
 /// unmodified 6s, then Shred — the pool's Deadly shape is the
@@ -623,6 +636,14 @@ fn save_batch(
             (eff_ap + def.growth_fortify_ap).max(0),
         )
     };
+    // One-core P3 step 25: the table's threshold line before the save dice (`_solo_log_save_threshold`,
+    // main.gd:9823), from the stat and the AP `target` was built from (only modifier_sum clamps the sum).
+    tray.say(|| {
+        let a = (eff_ap + def.growth_fortify_ap).max(0);
+        let d = if def.modifier_sum { defense - growth_def + defense_mod } else { target - a };
+        LogLine { rule: "save", category: Category::Combat, side: def.side,
+            text: format!("{def_owner} saves on {}", save_threshold_text(d, a)), detail: None }
+    });
     let faces = tray.roll(count as usize);
     out.rolls.push(Roll {
         kind: "defense",

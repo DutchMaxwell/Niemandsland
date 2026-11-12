@@ -188,6 +188,11 @@ var _drag_probe_top_y: float = SURFACE_PROBE_TOP_Y
 ## (Casual, deployment, or a non-model drag). Resolved at drag start and re-resolved live if the
 ## action selector is switched mid-drag; the painted ARC hard-stops here.
 var _strict_cap_meters: float = 0.0
+## MOVE_GAPS D2 (maintainer, 12.11.): set once a dragged model's path touched Difficult terrain;
+## the strict cap then stays at DIFFICULT_CAP_IN for the rest of this drag.
+var _drag_hit_difficult: bool = false
+const DIFFICULT_CAP_IN := 6.0
+const DIFFICULT_CAP_REASON := "Difficult terrain: 6\" cap"
 
 # Movement cap: an opt-in limit so a dragged model/unit can't move further than its Advance or
 # Rush/Charge allowance. OFF = free drag (sandbox default). Set from the HUD "Movement" area.
@@ -1385,6 +1390,7 @@ func _start_dragging(screen_pos: Vector2) -> void:
 
 	# Resolve the STRICT "dry brush" arc cap once: the anchor model's MAX legal band
 	# (Rush/Charge). 0 unless Strict is enforced AND play has begun AND this is a model drag.
+	_drag_hit_difficult = false
 	_strict_cap_meters = _compute_strict_cap_meters()
 
 	# Remember where on the table the cursor grabbed, so the unit keeps that grab offset
@@ -2623,6 +2629,16 @@ func _update_drag(screen_pos: Vector2) -> void:
 				climb_reason = MoveLedger.climb_blocks(climb, remaining_in, true)
 				if not climb_reason.is_empty():
 					head = from_pt
+				# MOVE_GAPS D2: the first touch of Difficult terrain shrinks the cap to 6" for the
+				# rest of the drag. Only this frame's new leg is tested: every older leg was tested
+				# when it was painted, and retrace only erases.
+				var difficult_m := DIFFICULT_CAP_IN / METERS_TO_INCHES
+				if not _drag_hit_difficult and _strict_cap_meters > difficult_m:
+					_drag_hit_difficult = _leg_touches_difficult(from_pt, head)
+				if _drag_hit_difficult and _strict_cap_meters > difficult_m:
+					_strict_cap_meters = difficult_m
+					committed = MoveLedger.truncate_to_length(MoveLedger.with_final(committed, head), difficult_m)
+					head = committed[committed.size() - 1]
 			# Commit the (capped) head forward once it has advanced a sample step.
 			if committed.is_empty():
 				committed = PackedVector2Array([head])
@@ -2697,8 +2713,11 @@ func _update_drag(screen_pos: Vector2) -> void:
 		# "X.X/Y.Y″" and a colour once the budget is spent.
 		if _strict_cap_meters > 0.0:
 			var cap_in := _strict_cap_meters * METERS_TO_INCHES
+			var reason := climb_reason
+			if _drag_hit_difficult:
+				reason += ("; " if not reason.is_empty() else "") + DIFFICULT_CAP_REASON
 			movement_capped.emit(consumed_inches, cap_in,
-					consumed_inches >= cap_in - 0.05 or not climb_reason.is_empty(), climb_reason)
+					consumed_inches >= cap_in - 0.05 or not climb_reason.is_empty(), reason)
 
 		# Throttled live update for coherency feedback while dragging
 		_coherency_update_timer += get_process_delta_time()
@@ -2709,6 +2728,39 @@ func _update_drag(screen_pos: Vector2) -> void:
 			if move_trails != null and have_path:
 				move_trails.update_live(_drag_path_points, head)
 			_show_landing_ghosts()
+
+
+## MOVE_GAPS D2: does a dragged piece's base touch Difficult terrain on the anchor's leg a -> b,
+## shifted by the piece's start offset and sampled every half cell (the drag tint's sampler)?
+## Pieces without a base (terrain, dice) and units with Strider or Flying never count.
+func _leg_touches_difficult(a: Vector2, b: Vector2) -> bool:
+	if terrain_overlay == null or not terrain_overlay.has_method("get_terrain_at_world_position"):
+		return false
+	var sample := Callable(terrain_overlay, "get_terrain_at_world_position")
+	var steps := maxi(1, ceili(a.distance_to(b) * METERS_TO_INCHES / (TerrainRules.CELL_IN * 0.5)))
+	for obj in _drag_start_positions:
+		if not is_instance_valid(obj) or _ignores_difficult(obj):
+			continue
+		var radius := _trail_radius_for(obj)
+		if radius <= 0.0:
+			continue
+		var start: Vector3 = _drag_start_positions[obj]
+		var off := Vector2(start.x - _drag_anchor_position.x, start.z - _drag_anchor_position.z)
+		for i in range(steps + 1):
+			var p := a.lerp(b, float(i) / float(steps)) + off
+			if TerrainRules.base_in_terrain_id(Vector3(p.x, 0.0, p.y), radius, sample,
+					TerrainRules.TerrainClass.DIFFICULT):
+				return true
+	return false
+
+
+## Strider and Flying units ignore Difficult terrain; a regiment tray asks its members' unit.
+func _ignores_difficult(obj: Node3D) -> bool:
+	var gu = obj.get_meta("game_unit", null)
+	for child in obj.get_children():
+		if gu == null and child.has_meta("game_unit"):
+			gu = child.get_meta("game_unit")
+	return gu is GameUnit and ((gu as GameUnit).has_special_rule("Strider") or (gu as GameUnit).has_special_rule("Flying"))
 
 
 ## Start measuring distance from a point on the table
