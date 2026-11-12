@@ -165,3 +165,38 @@ use super::*;
         let off = great_musician_bearer(11);
         assert_eq!(off.utility_buffs[0].move_mod, 0, "below the gate the knob stays 0");
     }
+
+    // ------------------- epoch 76 (E1): the +1" is spent by the buffed unit's next move ---
+
+    /// Two ADVANCEs in a row by the buffed friend, both aimed far past the band; returns the inches each one travelled.
+    fn two_advances(rules_epoch: u32) -> (f64, f64, usize) {
+        let (st, statics) = great_musician_line(rules_epoch);
+        let after_pick = run_hold(&st, &statics, "a", rules_epoch);
+        assert_eq!(after_pick.buffs[2].len(), 1, "the pick lands the move row on the friend");
+        let (first, _) = run_move(&after_pick, &statics, &advance_of("b", 40.0), rules_epoch);
+        let (second, _) = run_move(&first, &statics, &advance_of("b", 40.0), rules_epoch);
+        let x0 = after_pick.positions[2][0][0];
+        let (x1, x2) = (first.positions[2][0][0], second.positions[2][0][0]);
+        ((x1 - x0) / IN2M, (x2 - x1) / IN2M, first.buffs[2].len())
+    }
+
+    /// RED before E1: the core never spent the row, so the second ADVANCE rode the +1" again. From
+    /// `EPOCH_76_MOVE_FIXES` the first move travels band + 1", the second the bare band.
+    #[test]
+    fn great_musician_is_spent_by_the_next_move_from_epoch_76() {
+        let (base_band, move_mod) = (6.0, 1.0);
+        let (first, second, rows_left) = two_advances(crate::acts::EPOCH_76_MOVE_FIXES);
+        assert!((first - (base_band + move_mod)).abs() < 1e-6, "the next move rides +1\": {first}");
+        assert!((second - base_band).abs() < 1e-6, "the move after it is back at the band: {second}");
+        assert_eq!(rows_left, 0, "the move spent the row");
+    }
+
+    /// The below-76 leg: a record stamped 75 keeps the row, so both moves ride +1" (the replay reading).
+    #[test]
+    fn at_epoch_75_the_great_musician_rides_every_later_move() {
+        let (base_band, move_mod) = (6.0, 1.0);
+        let (first, second, rows_left) = two_advances(crate::acts::EPOCH_76_MOVE_FIXES - 1);
+        assert!((first - (base_band + move_mod)).abs() < 1e-6, "75: the next move rides +1\": {first}");
+        assert!((second - (base_band + move_mod)).abs() < 1e-6, "75: the later move rides +1\" too: {second}");
+        assert_eq!(rows_left, 1, "75: the row stays");
+    }
