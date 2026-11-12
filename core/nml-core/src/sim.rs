@@ -9775,9 +9775,20 @@ fn resolve_with(
                     // BEFORE these wounds land.
                     let alive_before = morale_alive(&next, si, seams);
                     let wounds_before = morale_wounds_left(&next, si, seams);
+                    // One-core P3 step 59: the unit chain (host, then its joined heroes) before the wounds land, as
+                    // the volley's step 7. Only a supplied tray takes it: a seeded one clones nothing.
+                    let chain_before = tray.feed().is_some().then(|| std::iter::once(si)
+                        .chain(next.attached[si].iter().copied())
+                        .map(|u| (u, next.positions[u].clone(), next.wounds[u].clone())).collect::<Vec<_>>());
                     // R3-X2a (`EPOCH_73_V36`, lead ruling 2): the surplus wounds the host's models cannot soak go on to the
                     // joined hero (heroes last); below 73 `land_pool_wounds` drops them as before.
                     land_pool_wounds(&mut next, si, w, seams.tray_exact, seams, &mut shot.log);
+                    // One-core P3 step 59: one landing per changed chain member, stamped right after the test's draw.
+                    for (u, at, wounds) in chain_before.into_iter().flatten() {
+                        if let Some(l) = landing_of(&next, u, &at, &wounds) {
+                            tray.land(|| l);
+                        }
+                    }
                     // main.gd:1096-1098 — a NON-charge activation tests morale for
                     // these wounds at its very END ("units in melee don't take
                     // morale tests from wounds at the end of an activation").
