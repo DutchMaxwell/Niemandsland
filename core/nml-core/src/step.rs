@@ -8,13 +8,16 @@
 //! re-running from the start is exact — no resolver had to change.
 
 use crate::dice::{Roll, ShootResult, Tray};
+use crate::logline::LogLine;
 
 /// What the core needs next for one exchange.
 #[derive(Debug)]
 pub enum Step<T> {
     /// Roll `faces` dice and call again with them appended (`count` is the
     /// rules count; `faces` can differ below `EPOCH_67_MARKERS_BURSTS`).
-    NeedRoll { index: usize, faces: usize, kind: &'static str, count: i64, target: i64, owner: String },
+    /// `lines` are only those said before the starved draw: after it the
+    /// replay runs on filler 1s, so a later line would tell a false story.
+    NeedRoll { index: usize, faces: usize, kind: &'static str, count: i64, target: i64, owner: String, lines: Vec<LogLine> },
     /// The core will not answer for this exchange: the draws and the records
     /// disagree (some draw pushed no record, so a feed index no longer names its
     /// roll), or a supplied group had the wrong number of faces. `draws` and
@@ -23,8 +26,8 @@ pub enum Step<T> {
     /// comes after the guard has passed, so there they are equal.
     /// Refused rather than a wrong `NeedRoll`.
     Refused { draws: usize, records: usize, reason: String },
-    /// The exchange is resolved on exactly the supplied faces.
-    Done(T),
+    /// The exchange is resolved on exactly the supplied faces; every line said.
+    Done(T, Vec<LogLine>),
 }
 
 /// Run `resolve` on the supplied faces; `rolls` reads the roll records off its
@@ -47,9 +50,12 @@ pub fn step_with<T>(
         return Step::Refused { draws: feed.draws(), records, reason };
     }
     match feed.starved_at {
-        None => Step::Done(out),
+        None => Step::Done(out, tray.all_lines()),
         Some((index, faces)) => match rolls(&out).get(index) {
-            Some(r) => Step::NeedRoll { index, faces, kind: r.kind, count: r.count, target: r.target, owner: r.owner.clone() },
+            Some(r) => {
+                let lines = tray.lines_upto(index);
+                Step::NeedRoll { index, faces, kind: r.kind, count: r.count, target: r.target, owner: r.owner.clone(), lines }
+            }
             None => {
                 let reason = format!("roll {index}: no roll record for this draw");
                 Step::Refused { draws: feed.draws(), records, reason }
@@ -84,7 +90,7 @@ mod tests {
             let got = loop {
                 match shoot_step(&faces, run) {
                     Step::NeedRoll { faces: n, .. } => faces.push(dice.roll(n)),
-                    Step::Done(r) => break r,
+                    Step::Done(r, _) => break r,
                     Step::Refused { reason, .. } => panic!("seed {seed}: {reason}"),
                 }
             };
@@ -139,6 +145,28 @@ mod tests {
                 assert_eq!(draws, records);
             }
             other => panic!("expected Refused, got {other:?}"),
+        }
+    }
+
+    /// A line said after the starved draw read a filler 1: `NeedRoll` must not
+    /// carry it; once the roll is supplied, `Done` carries every line.
+    #[test]
+    fn need_roll_carries_only_lines_before_the_starve() {
+        use crate::logline::Category;
+        let line = |text: &str| LogLine { rule: "test", category: Category::Combat, side: 0, text: text.into(), detail: None };
+        let run = |t: &mut Tray| {
+            t.say(|| line("A"));
+            let faces = t.roll(1);
+            t.say(|| line("B"));
+            vec![Roll { kind: "attack", count: 1, target: 4, faces, owner: "Rifle".into() }]
+        };
+        match step_with(&[], run, |r| r.as_slice()) {
+            Step::NeedRoll { index: 0, lines, .. } => assert_eq!(lines, vec![line("A")]),
+            other => panic!("expected NeedRoll for roll 0, got {other:?}"),
+        }
+        match step_with(&[vec![5]], run, |r| r.as_slice()) {
+            Step::Done(_, lines) => assert_eq!(lines, vec![line("A"), line("B")]),
+            other => panic!("expected Done, got {other:?}"),
         }
     }
 }
