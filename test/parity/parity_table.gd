@@ -3,7 +3,10 @@ extends RefCounted
 ## (schema nml-scenario-v1, inches), runs one AI volley per seed through main's real _solo_resolve_ai_volley and
 ## writes one JSONL record per seed: {"seed","epoch","def_alive","rolls":[{kind,count,target,faces,owner}]}.
 ## The faces are the ones the table's own dice recorder (NML_DICE_DUMP) wrote for that seed.
-## `override` replaces table-side rules only (red test): {"weapon_rules": [...]}.
+## `override` replaces table-side rules only (red test): {"weapon_rules": [...], "attacker_rules": [...], "epoch": n}.
+## A scenario may carry "volleys" (n volleys at the SAME defender per seed, one tray stream: a once-per-game latch spends
+## in the first) or "strafe": {"dest_x_in": x} (the attacker moves x_in -> dest_x_in through the defender, then the
+## move-through volley).
 ## Pattern: tools/table_scenario_sweep.gd, test/v36/g4r3_extra_attack_signer_test.gd.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
@@ -66,7 +69,7 @@ static func _read_dice(dump_dir: String) -> Array:
 ## Runs `seeds` seeds of scenario `sc` on the booted `main`; writes the JSONL to `out_path`. Await it.
 static func run(main: Node, sc: Dictionary, seeds: int, out_path: String, dump_dir: String,
 		override: Dictionary = {}) -> void:
-	AiActRecorder.rules_epoch = int(sc["epoch"])
+	AiActRecorder.rules_epoch = int(override.get("epoch", sc["epoch"]))
 	DirAccess.make_dir_recursive_absolute(dump_dir)
 	OS.set_environment("NML_DICE_DUMP", dump_dir)
 	AiDiceRecorder._checked = false
@@ -81,18 +84,34 @@ static func run(main: Node, sc: Dictionary, seeds: int, out_path: String, dump_d
 			dist_in = minf(dist_in, (a as Vector3).distance_to(b) / INCH)
 	var out := FileAccess.open(out_path, FileAccess.WRITE)
 	for s in seeds:
-		var att := _make_unit(main, sc["attacker"], weapon)
+		var shooter: Dictionary = sc["attacker"].duplicate()
+		if override.has("attacker_rules"):
+			shooter["rules"] = override["attacker_rules"]
+		if sc.has("strafe"):
+			shooter["x_in"] = float(sc["strafe"]["dest_x_in"])   # the table's strafe volley starts after the move
+		var att := _make_unit(main, shooter, weapon)
 		var dfn := _make_unit(main, sc["defender"], {})
-		var wobj: OPRApiClient.OPRWeapon = (att.source_data as OPRApiClient.OPRUnit).weapons[0]
-		var shots: Array = []
-		var plist: Array = AiShooting.profiles_in_range([wobj], dist_in)
-		for p in plist:   # the game's own order (_run_ai_shooting): unit-level Shred stamp, then the sergeant stamp
-			main._solo_stamp_unit_shred(p, att, int(weapon["range_in"]))
-		for p in AiEv.stamp_sergeant(plist, att):
-			shots.append({"member": att, "quality": int(sc["attacker"]["quality"]), "alive": att.get_alive_count(),
-				"max": att.models.size(), "reach": float(weapon["range_in"]), "profile": p})
 		main.seed_tray_rng(s)
-		await main._solo_resolve_ai_volley(att, dfn, shots)
+		if sc.has("strafe"):
+			var legs: Array = []
+			for i in int(sc["attacker"]["models"]):
+				var z := float(sc["attacker"]["z_step_in"]) * INCH * i
+				legs.append({"path": [Vector3(float(sc["attacker"]["x_in"]) * INCH, 0.0, z),
+					Vector3(float(sc["strafe"]["dest_x_in"]) * INCH, 0.0, z)]})
+			main.solo_controller.last_move_paths = legs
+			main.solo_controller.ai_slot = int(sc["attacker"]["player"])
+			main.solo_controller.human_slot = int(sc["defender"]["player"])
+			await main._solo_apply_strafing(att)
+		for _v in (0 if sc.has("strafe") else int(sc.get("volleys", 1))):
+			var wobj: OPRApiClient.OPRWeapon = (att.source_data as OPRApiClient.OPRUnit).weapons[0]
+			var shots: Array = []
+			var plist: Array = AiShooting.profiles_in_range([wobj], dist_in)
+			for p in plist:   # the game's own order (_run_ai_shooting): unit-level Shred stamp, then the sergeant stamp
+				main._solo_stamp_unit_shred(p, att, int(weapon["range_in"]))
+			for p in AiEv.stamp_sergeant(plist, att):
+				shots.append({"member": att, "quality": int(sc["attacker"]["quality"]), "alive": att.get_alive_count(),
+					"max": att.models.size(), "reach": float(weapon["range_in"]), "profile": p})
+			await main._solo_resolve_ai_volley(att, dfn, shots)
 		AiDiceRecorder.close()
 		out.store_line(JSON.stringify({"seed": s, "epoch": AiActRecorder.rules_epoch,
 			"def_alive": dfn.get_alive_count(), "rolls": _read_dice(dump_dir)}, "", true, true))

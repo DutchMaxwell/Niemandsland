@@ -3,7 +3,8 @@ extends RefCounted
 ## (base contact) and the defender (units, weapons and the dice reader come from parity_table.gd), runs main's real
 ## _run_ai_melee (charge, strikes, strike-back, morale) and writes one JSONL record per seed:
 ## {"seed","epoch","def_alive","rolls":[{kind,count,target,faces,owner}]}. Both seats are AI-owned (a human seat would
-## wait for a save click). `override` replaces table-side rules only (red test): {"weapon_rules": [...]}.
+## wait for a save click). `override` replaces table-side rules only (red test): {"weapon_rules": [...],
+## "defender_weapon": {field: value}}.
 ## Pattern: tools/table_scenario_sweep.gd, test/v36/mel_03_test.gd.
 
 const ParityTable := preload("res://test/parity/parity_table.gd")
@@ -16,7 +17,9 @@ static func _units(main: Node, sc: Dictionary, override: Dictionary) -> Array:
 		weapon["rules"] = override["weapon_rules"]
 	var post: Dictionary = (sc["attacker"] as Dictionary).duplicate()
 	post["x_in"] = float(sc["charge"]["dest_x_in"])   # the table's melee path starts after the move
-	var out: Array = [ParityTable._make_unit(main, post, weapon), ParityTable._make_unit(main, sc["defender"], sc["defender_weapon"])]
+	var def_weapon: Dictionary = (sc["defender_weapon"] as Dictionary).duplicate()
+	def_weapon.merge(override.get("defender_weapon", {}), true)
+	var out: Array = [ParityTable._make_unit(main, post, weapon), ParityTable._make_unit(main, sc["defender"], def_weapon)]
 	for i in 2:
 		var side: Dictionary = sc["attacker"] if i == 0 else sc["defender"]
 		(out[i] as GameUnit).unit_properties["base_size_round"] = roundi(float(side["base_radius_in"]) * 50.8)

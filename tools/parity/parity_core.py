@@ -4,9 +4,13 @@
 Reads a neutral scenario (schema nml-scenario-v1, lengths in inches), builds the core's header/state/action from it,
 runs one shooting activation per seed through Core.resolve_with_tray(state, action, Rng(0), Tray(seed)) and writes one
 JSONL record per seed: {"seed", "epoch", "def_alive", "rolls": [{kind, count, target, faces, owner}]}.
+Optional scenario keys: "volleys": n runs n activations at the same defender per seed (one Tray, the state carried
+through, so a once-per-game latch spends in the first); "strafe": {"dest_x_in": x} replaces the volley by a RUSH of the
+attacker to x through the defender (the move-through volley fires inside that act); "allow_unported": [names] lists
+core markers this scenario accepts (named per scenario, printed, never a default).
 
 usage: parity_core.py <scenario.json> --repo <root> --out <out.jsonl> [--seeds N]
-exit: 0 ok; 3 core rules_epoch != scenario epoch; 4 the core reported unported rule branches.
+exit: 0 ok; 3 core rules_epoch != scenario epoch; 4 the core reported unported rule branches the scenario does not allow.
 """
 import argparse
 import json
@@ -42,6 +46,10 @@ def build(sc):
               "knobs": {"rules_epoch": sc["epoch"]}}
     state = dict(round=1, rounds_total=4, scoring="end", units={att["key"]: unit(att), dfn["key"]: unit(dfn)})
     action = {"kind": nml_core.HOLD, "unit": att["key"], "shoot": dfn["key"]}
+    if "strafe" in sc:
+        go = dict(att, x_in=sc["strafe"]["dest_x_in"])
+        dest = [round(sum(p[i] for p in pos(go)) / go["models"], 6) for i in range(3)]
+        action = {"kind": nml_core.RUSH, "unit": att["key"], "dest": dest}
     return header, state, action
 
 
@@ -63,14 +71,18 @@ def main():
     unported = set()
     with open(a.out, "w") as out:
         for s in range(a.seeds if a.seeds is not None else sc["seeds"]):
-            new, rep = core.resolve_with_tray(core.state_of(state), action, nml_core.Rng(0), nml_core.Tray(s))
-            unported.update(rep["unported"])
-            rolls = [{k: (list(r[k]) if k == "faces" else r[k]) for k in ("kind", "count", "target", "faces", "owner")}
-                     for r in rep["rolls"]]
+            new, tray, rolls = core.state_of(state), nml_core.Tray(s), []
+            for _ in range(sc.get("volleys", 1)):
+                new, rep = core.resolve_with_tray(new, action, nml_core.Rng(0), tray)
+                unported.update(rep["unported"])
+                rolls += [{k: (list(r[k]) if k == "faces" else r[k]) for k in ("kind", "count", "target", "faces", "owner")}
+                          for r in rep["rolls"]]
             out.write(json.dumps({"seed": s, "epoch": epoch, "rolls": rolls,
                                   "def_alive": new.plain()["units"][sc["defender"]["key"]]["alive"]}) + "\n")
-    print("UNPORTED: %s" % sorted(unported), file=sys.stderr) if unported else None
-    return 4 if unported else 0
+    open_marks = unported - set(sc.get("allow_unported", []))
+    print("UNPORTED: %s (allowed by the scenario: %s)" % (sorted(open_marks), sorted(unported - open_marks)),
+          file=sys.stderr) if unported else None
+    return 4 if open_marks else 0
 
 
 if __name__ == "__main__":
