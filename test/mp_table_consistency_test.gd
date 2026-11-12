@@ -3,6 +3,7 @@ extends GdUnitTestSuite
 ##  1. A guest's Load Game must not wipe the host's table (the clear used to be broadcast to everyone).
 ##  2. An ESC-cancelled drag must put the object back on every peer, not only on the one that dragged.
 ##  3. Radial Delete on terrain / generic objects must be the undoable, networked delete the Delete key runs.
+##  4. A refused drag (off-turn / already attacked) snaps back on release and must put every model back on the other table too.
 
 const ObjectManagerScript = preload("res://scripts/object_manager.gd")
 
@@ -188,3 +189,79 @@ func test_radial_delete_generic_object_is_undoable_and_synced() -> void:
 	assert_bool(obj.visible).is_false()
 	assert_bool(um.can_undo()).is_true()
 	assert_array(net.visibility).is_equal([[55, false]])
+
+
+# ===== 4. refused drag snaps back =====
+
+## Stands in for /root/Main: answers the two refusal questions the snap-back asks.
+class MainStub extends Node:
+	var off_turn: bool = false
+	var attacked: bool = false
+
+	func hotseat_off_turn_drag(_unit: GameUnit) -> bool:
+		return off_turn
+
+	func attacked_unit_drag_refused(_unit: GameUnit, _distance_in: float = 0.0) -> bool:
+		return attacked
+
+
+## A two-model unit mid-drag: both bodies were streamed to the peers ~3.6" away from where they started.
+func _refused_drag(net: NetStub, off_turn: bool, attacked: bool) -> Dictionary:
+	var main_stub: MainStub = MainStub.new()
+	main_stub.name = "Main"
+	main_stub.off_turn = off_turn
+	main_stub.attacked = attacked
+	get_tree().root.add_child(main_stub)
+	var om: Node3D = auto_free(ObjectManagerScript.new())
+	add_child(om)
+	om._network_manager = net
+	var a: Node3D = om.spawn_miniature(Vector3(0.10, 0.0, 0.20), false, 7)
+	var b: Node3D = om.spawn_miniature(Vector3(0.20, 0.0, 0.20), false, 8)
+	var starts := {a: a.global_position, b: b.global_position}
+	a.set_meta("game_unit", GameUnit.new())
+	om._selected_objects.append(a)
+	om._selected_objects.append(b)
+	om._drag_start_positions = starts.duplicate()
+	om._drag_anchor_object = a
+	om._is_dragging = true
+	for obj in starts:
+		obj.global_position = starts[obj] + Vector3(0.09, 0.05, 0.0)
+	om._stop_dragging()
+	get_tree().root.remove_child(main_stub)
+	main_stub.free()
+	return {"a": a, "b": b, "starts": starts}
+
+
+func _assert_snapback_told_the_peer(net: NetStub, d: Dictionary) -> void:
+	var a: Node3D = d["a"]
+	var b: Node3D = d["b"]
+	assert_vector(a.global_position).is_equal(d["starts"][a])
+	assert_int(net.move_batches.size()) \
+		.override_failure_message("snap-back restored the models locally but told nobody: the other table keeps the streamed drag positions") \
+		.is_equal(1)
+	if net.move_batches.is_empty():
+		return
+	var batch: Array = net.move_batches[0]
+	assert_int(batch.size()).is_equal(8)
+	for i in 2:
+		var obj: Node3D = [a, b][i]
+		assert_int(int(batch[i * 4])).is_equal(int(obj.get_meta("network_id")))
+		assert_vector(Vector3(batch[i * 4 + 1], batch[i * 4 + 2], batch[i * 4 + 3])).is_equal(d["starts"][obj])
+
+
+func test_off_turn_snapback_puts_every_model_back_on_the_other_table() -> void:
+	var net: NetStub = auto_free(NetStub.new())
+	_assert_snapback_told_the_peer(net, _refused_drag(net, true, false))
+
+
+func test_attacked_unit_snapback_puts_every_model_back_on_the_other_table() -> void:
+	var net: NetStub = auto_free(NetStub.new())
+	_assert_snapback_told_the_peer(net, _refused_drag(net, false, true))
+
+
+func test_snapback_offline_broadcasts_nothing() -> void:
+	var net: NetStub = auto_free(NetStub.new())
+	net.active = false
+	var d := _refused_drag(net, true, false)
+	assert_vector(d["a"].global_position).is_equal(d["starts"][d["a"]])
+	assert_array(net.move_batches).is_empty()
