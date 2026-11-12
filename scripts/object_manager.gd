@@ -843,6 +843,7 @@ func _compute_movement_cap_meters() -> float:
 ## band, RUSH/CHARGE -> the Rush/Charge band (Fast/Slow/Swift/aura-aware — the same bands the
 ## movement system computes). With no action selected yet (OFF) it falls back to the MAX legal
 ## move (Rush/Charge). Purely the MOVEMENT path/ruler — shooting and every other action untouched.
+## A group drag takes the smallest band of its dragged models (MOVE_GAPS D1).
 func _compute_strict_cap_meters() -> float:
 	if not _strict_movement_enforced() or movement_range_controller == null:
 		return 0.0
@@ -853,6 +854,12 @@ func _compute_strict_cap_meters() -> float:
 		return 0.0
 	var bands: Dictionary = _human_bands(node)
 	var inches: int = _cap_band_inches(bands)
+	# MOVE_GAPS D1 (maintainer, 12.11.): a group drag is capped by its SLOWEST model, so a joined
+	# hero slower than its host (or a host slower than its hero) never moves past its own band.
+	for obj in _drag_start_positions:
+		if obj != node and is_instance_valid(obj) and obj.is_in_group("miniature") \
+				and UnitUtils.get_game_unit(obj) != null:
+			inches = mini(inches, _cap_band_inches(_human_bands(obj)))
 	if inches <= 0:
 		return 0.0
 	return float(inches) / METERS_TO_INCHES

@@ -314,6 +314,49 @@ func test_strict_cap_meters_resolves_per_selected_action() -> void:
 	GraphicsSettings.enforce_movement_limit = was
 
 
+## Per-model bands keyed by the model node: a host model moves 8" on an Advance, a joined hero 6".
+class _PerModelBandStub extends Node:
+	var by_node: Dictionary = {}
+	func bands_for_model(node) -> Dictionary:
+		return by_node.get(node, {"advance": 6, "rush": 12})
+
+
+## Starts a REAL drag (_start_dragging fills _drag_start_positions, then resolves the strict cap)
+## of host + hero, or of the host alone, with the HOST as anchor; returns the strict cap in inches.
+func _advance_cap_inches(with_hero: bool) -> float:
+	var was := GraphicsSettings.enforce_movement_limit
+	GraphicsSettings.enforce_movement_limit = true
+	var stub: _PerModelBandStub = auto_free(_PerModelBandStub.new())
+	add_child(stub)
+	_om.movement_range_controller = stub
+	_om.set_movement_cap(ObjectManager.MovementCap.ADVANCE)
+	var host := _unit_node({})
+	host.add_to_group("miniature")
+	stub.by_node[host] = {"advance": 8, "rush": 16}
+	_om._selected_objects.append(host)
+	if with_hero:
+		var hero := _unit_node({"is_hero": true})
+		hero.add_to_group("miniature")
+		stub.by_node[hero] = {"advance": 6, "rush": 12}
+		_om._selected_objects.append(hero)
+	_om._start_dragging(Vector2.ZERO)
+	var cap_in: float = float(_om._strict_cap_meters) / _CAP_INCH
+	GraphicsSettings.enforce_movement_limit = was
+	return cap_in
+
+
+## MOVE_GAPS D1 (P3 step 72): a group drag is capped by its slowest model, not by the anchor alone.
+func test_strict_cap_of_a_group_drag_is_its_slowest_model() -> void:
+	var cap_in := _advance_cap_inches(true)
+	assert_float(cap_in).override_failure_message(
+			"host (8\") + joined hero (6\") dragged by the host: cap %.2f\", expected the hero's 6\"" % cap_in) \
+		.is_equal_approx(6.0, 0.01)
+
+
+func test_strict_cap_of_the_host_alone_is_its_own_band() -> void:
+	assert_float(_advance_cap_inches(false)).is_equal_approx(8.0, 0.01)
+
+
 # =====================================================================================
 # NML-972 (elevation program, Phase A / W4.20) — the ruler's LOS verdict reads real heights.
 # =====================================================================================

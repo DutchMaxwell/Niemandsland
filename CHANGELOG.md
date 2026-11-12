@@ -25,12 +25,19 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   stripped, and the battle log says so. (#2633)
 - **A Musician unit's move rings and strict cap include its +1".** The rings and the strict
   movement cap now show 7" and 13" for a Musician unit, where they showed 6" and 12". (#2635)
+- **A group drag is capped by its slowest model.** With Enforce Movement Limit on, dragging a unit
+  together with a joined hero (or any group of models) stops at the shortest move of the dragged
+  models. Before, the model you grabbed set the cap for all of them. (#2693)
 - **Parry dice count only the models that carry a Parry weapon.** When Parry comes from a weapon, a
   unit rolls its Parry dice for the models that carry that weapon, not for every model in the unit.
   (#2642)
 - **Versatile Expert does not pick its bonus when striking back.** In the enemy's activation the
   Expert no longer picks AP(+1) or +1 to hit, and the pick does not leak into the unit's own next
   activation. (#2643)
+- **A Great Musician's +1" is used up by the unit's next move.** When a player's unit that moved
+  ends its activation, a one-time move bonus such as Great Musician's +1" is spent and its move rings
+  shrink back. Before, the bonus never ran out on the player's side. A Speed Feat bonus still lasts
+  the whole round. (#2694)
 - **A transport refuses non-Heroes with Tough(4) or Tough(5).** Under rules 3.6 a transport takes
   non-Heroes only up to Tough(3). A Tough(4) or Tough(5) non-Hero is now refused; Heroes are
   unchanged. (#2655)
