@@ -349,6 +349,10 @@ pub struct Ctx {
     /// the joined heroes too. `None` = not stamped (the hand-built dice
     /// fixtures), which keeps the old `parry_dice * models` read.
     pub parry_dice_total: Option<i64>,
+    /// `EPOCH_75_TABLE_FIXES` (table `AiEv._parry_carrier_dice`) — the dice the unit's Parry WEAPONS bring at full
+    /// strength, X per model that carries each (`UnitStatic::parry_weapons`). `combat::parry_cancels` caps the
+    /// estimate's `parry_dice * models` with it. 0 below 75 and for the unit-rule form (every model has Parry).
+    pub parry_carrier_dice: i64,
     /// Rules 3.6 (`EPOCH_73_V36`) — the models a Blast(X) multiplies onto: the host's living models PLUS
     /// its living joined heroes (the table's `_solo_combined_alive`), stamped by `sim::stamp_blast_models`
     /// on the shot's defender context. `models` stays the host's own count for every other reader.
@@ -3677,6 +3681,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         brace_impact_per_model: brace.map(|b| b.1),
         parry_dice,
         parry_dice_total: None,
+        parry_carrier_dice: parry_weapons_of(reg, p, rules_epoch).iter().map(|&(x, carriers)| x * carriers).sum(),
         blast_models: None,
         regeneration: regen_targets.0 > 0,
         regen_target: regen_targets.0,
