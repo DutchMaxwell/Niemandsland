@@ -23937,7 +23937,7 @@ func _solo_takedown_bonus_groups(unit: GameUnit, melee: bool) -> Array:
 			var flag := "takedown_bonus_used_%s" % n
 			if bool(member.unit_properties.get(flag, false)):
 				continue
-			member.unit_properties[flag] = true
+			_sync_unit_property(member, flag, true)   # MP (online co-op): the AI answers each human on that human's machine, so the latch rides the wire
 			if battle_log != null:
 				_log_rule_event(BattleLog.Category.COMBAT,
 					"%s: %s makes one extra attack at Quality %d+ with AP(%d), Deadly(3), Takedown (once per game)" % [
@@ -24450,7 +24450,7 @@ func _solo_apply_piercing_tag(unit: GameUnit) -> void:
 							"%s: %s misses the mark on %s (needed %d+)" % [n, member.get_name(), tgt.get_name(), place_roll], true)
 					continue
 			else:
-				member.unit_properties["piercing_tag_used"] = true
+				_sync_unit_property(member, "piercing_tag_used", true)   # MP (online co-op): the AI answers each human on that human's machine, so the latch rides the wire
 			# Rules 3.6 (EPOCH_73_V36): Tags stack X tokens or spread one each; Targets put ONE token on each of
 			# up to X units and give a flat +1 (the 3.5 reading scaled with the token count).
 			var v36: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
@@ -24603,7 +24603,7 @@ func _solo_apply_precision_tag(unit: GameUnit) -> void:
 			var tgt := _solo_utility_target(member, "enemy", range_in, needs_los)
 			if tgt == null:
 				continue
-			member.unit_properties["precision_tag_used"] = true
+			_sync_unit_property(member, "precision_tag_used", true)   # MP (online co-op): the AI answers each human on that human's machine, so the latch rides the wire
 			var rating: int = int(ed.get("rating", 0))
 			var markers: int = maxi(rating if rating > 0 else int(sp.get("markers", 1)), 1)
 			var v36_tag: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
@@ -24668,7 +24668,7 @@ func _solo_apply_precision_target(unit: GameUnit) -> void:
 			var tgt := _solo_utility_target(member, "enemy", float(sp.get("range_in", 18.0)), bool(sp.get("needs_los", true)))
 			if tgt == null:
 				continue
-			member.unit_properties["precision_target_used"] = true
+			_sync_unit_property(member, "precision_target_used", true)   # MP (online co-op): the AI answers each human on that human's machine, so the latch rides the wire
 			var markers: int = maxi(int(ed.get("rating", 0)), 1)
 			# Rules 3.6 (EPOCH_73_V36): Targets put ONE token on each of up to X units and give a flat +1
 			# (the 3.5 reading stacked all markers on one pick); below 73 the old stack stays byte-exact.
@@ -24970,7 +24970,7 @@ func _solo_apply_storm_attack(unit: GameUnit) -> void:
 					targets_in_reach.append(hu)
 			if targets_in_reach.is_empty():
 				continue
-			bu.unit_properties[flag] = true
+			_sync_unit_property(bu, flag, true)   # MP (online co-op): the AI answers each human on that human's machine, so the latch rides the wire
 			var dice := int(sp.get("dice", 3))
 			var trigger := int(sp.get("trigger_target", 2))
 			# The trigger dice: the AI keeps its own tray call byte-identical; a human rolls on its OWN tray.
@@ -25066,7 +25066,7 @@ func _solo_apply_surprise_attack(unit: GameUnit) -> void:
 		var bu := b as GameUnit
 		if not solo_controller.surprise_attack_bearer_ready(bu):
 			continue
-		bu.unit_properties["surprise_attack_used"] = true
+		_sync_unit_property(bu, "surprise_attack_used", true)   # MP (online co-op): the AI answers each human on that human's machine, so the latch rides the wire
 		var range_in := float(RulesRegistry.unit_param(bu, "Surprise Attack", "range_in", 6.0))
 		var trigger := int(RulesRegistry.unit_param(bu, "Surprise Attack", "trigger_target", 2))
 		var ap := int(RulesRegistry.unit_param(bu, "Surprise Attack", "ap", 1))
