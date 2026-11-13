@@ -306,6 +306,8 @@ func _validate_rpc_ready(context: String = "") -> bool:
 ## not be moved, and the Solo field test could not move the AI's player-2 units) and is_server() granted
 ## a phantom host slot.
 func is_multiplayer_active() -> bool:
+	if multiplayer == null:   # outside the tree (a quit frees the children before main's _exit_tree): no session
+		return false
 	var mp = multiplayer.multiplayer_peer
 	if mp == null or mp is OfflineMultiplayerPeer:
 		return false
