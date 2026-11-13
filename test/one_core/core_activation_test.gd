@@ -245,8 +245,9 @@ func test_drive_lands_each_step_as_the_core_resolved_it() -> void:
 		var throws: Array = []   # [kind, the target's alive count] at each throw
 		var on_throw := func(kind: String, _index: int) -> void: throws.append([kind, foe.get_alive_count()])
 		var t: Array = [{"t": "begin"}, {"t": "intent", "kind": AiDecision.Action.HOLD, "shoot": foe.unit_id}]
-		var r: Dictionary = await CoreActivation.drive(_main, CoreActivation.capture(_main), units[0], t, true, on_throw)
+		var r: Dictionary = await CoreActivation.drive(_main, CoreActivation.capture(_main), units[0], t, true, on_throw, true)
 		var cu: Dictionary = _main.solo_controller._core_node_ready().plain_of(int(r["handle"]))["units"][foe.unit_id]
+		_main.solo_controller._core_node_ready().release(int(r["handle"]))
 		var table: Array = foe.get_alive_models().map(func(m: ModelInstance) -> Vector3: return m.node.global_position)
 		var core: Array = (cu["positions"] as Array).map(func(p: Array) -> Vector3: return Vector3(p[0], p[1], p[2]))
 		if table != core or foe.is_shaken != bool(cu["shaken"]):
@@ -617,3 +618,47 @@ func test_a_mirror_match_sends_the_targets_saves_to_the_targets_owner(timeout :=
 ## A target renamed after the game header: its live name no longer equals the core's, so the name matched nobody.
 func test_a_target_renamed_mid_game_still_rolls_its_own_saves(timeout := 120000) -> void:
 	_assert_the_guest_rolls(await _roll_requests("Riflemen", "Rangers", "Scouts"), "e2e_p2_Rangers")
+
+
+## ---- R4: the done handle and the session store follow the game ----
+
+## (review A4) The driver releases the state handle of its `done` answer once the table landed it; a caller that keeps it
+## (to read the state) gets it and releases it itself.
+func test_drive_releases_the_done_handle_unless_the_caller_keeps_it() -> void:
+	var units := _volley_units()
+	var foe: GameUnit = units[1]
+	var core: Object = _main.solo_controller._core_node_ready()
+	var shoot := func() -> Array: return [{"t": "begin"}, {"t": "intent", "kind": AiDecision.Action.HOLD, "shoot": foe.unit_id}]
+	var h := CoreActivation.capture(_main)
+	var live: int = core.live_handles()
+	var r: Dictionary = await CoreActivation.drive(_main, h, units[0], shoot.call(), true)
+	assert_str(str(r["step"])).is_equal("done")
+	assert_int(core.live_handles()).override_failure_message("the done handle leaked: %s" % r).is_equal(live)
+	assert_bool(r.has("handle")).is_false()
+	var h2 := CoreActivation.capture(_main)
+	var kept: Dictionary = await CoreActivation.drive(_main, h2, units[0], shoot.call(), true, Callable(), true)
+	assert_int(core.live_handles()).override_failure_message("the kept handle is the caller's").is_equal(live + 2)
+	assert_dict(core.plain_of(int(kept["handle"]))).is_not_empty()
+	core.release(int(kept["handle"]))
+
+
+## (review B1 part 1) The session store is static: the table leaving the tree (quit to menu, before a new game) closes
+## every open activation, so the next game never says "Finish Rifles's activation first.".
+func test_a_table_that_leaves_the_tree_closes_every_open_activation() -> void:
+	var u := _human("Rifles")
+	assert_bool(CoreActivation.open_session(_main, u)).is_true()
+	var parent := _main.get_parent()
+	parent.remove_child(_main)
+	var left_open := CoreActivation.session_open(u.unit_id)
+	parent.add_child(_main)
+	assert_bool(left_open).override_failure_message("the session outlived its table").is_false()
+
+
+## A save load closes every open activation too, and the next capture sends the loaded game's header.
+func test_a_save_load_closes_every_open_activation_and_resends_the_header() -> void:
+	var u := _human("Rifles")
+	assert_bool(CoreActivation.open_session(_main, u)).is_true()
+	assert_bool(_main.solo_controller._core_header_done).is_true()
+	_main.save_manager.load_completed.emit(0)
+	assert_bool(CoreActivation.session_open(u.unit_id)).override_failure_message("a session survived the load").is_false()
+	assert_bool(_main.solo_controller._core_header_done).override_failure_message("the old game's header stays").is_false()
