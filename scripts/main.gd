@@ -24616,8 +24616,9 @@ func _solo_apply_precision_tag(unit: GameUnit) -> void:
 			var per: int = 1 if spread else markers
 			for p in picks:
 				var pu := p as GameUnit
-				pu.unit_properties["tag_markers"] = int(pu.unit_properties.get("tag_markers", 0)) + per
-				_sync_unit_property(pu, "tag_markers", int(pu.unit_properties["tag_markers"]))   # NML-927: the count rides the wire
+				# NML-927: the count rides the wire. The seam writes AND broadcasts, but only when the value
+				# CHANGES - pre-writing the key here made it see "unchanged" and the other table never heard.
+				_sync_unit_property(pu, "tag_markers", int(pu.unit_properties.get("tag_markers", 0)) + per)
 			if v36_tag:
 				var placed := "1 token each, spread over %d units" % picks.size() if spread \
 					else "%d token%s, stacked on %s" % [markers, ("" if markers == 1 else "s"), chosen.get_name()]

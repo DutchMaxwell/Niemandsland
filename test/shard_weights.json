@@ -275,6 +275,7 @@
 "test/e2e/e2e_mp_log_channel_test.gd": 129.9,
 "test/e2e/e2e_mp_los_line_test.gd": 16.1,
 "test/e2e/e2e_mp_plain_room_utility_buffs_test.gd": 24.0,
+"test/e2e/e2e_mp_precision_tag_wire_test.gd": 6.0,
 "test/e2e/e2e_mp_reanimation_position_test.gd": 11.0,
 "test/e2e/e2e_mp_rejoin_embarked_test.gd": 12.7,
 "test/e2e/e2e_mp_remote_intent_flag_test.gd": 7.3,
