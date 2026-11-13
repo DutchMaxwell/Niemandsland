@@ -181,7 +181,7 @@ mod tests {
     #[test]
     fn need_roll_carries_only_landings_before_the_starve() {
         use crate::landing::LandedModel;
-        let landing = |unit: usize| Landing { unit, models: vec![LandedModel { at: [1.0, 0.0, 2.0], wounds_left: 0, dead: true }] };
+        let landing = |unit: usize| Landing { unit, models: vec![LandedModel { at: [1.0, 0.0, 2.0], wounds_left: 0, dead: true }], loss_line: false };
         let run = |t: &mut Tray| {
             t.land(|| landing(0));
             let faces = t.roll(1);

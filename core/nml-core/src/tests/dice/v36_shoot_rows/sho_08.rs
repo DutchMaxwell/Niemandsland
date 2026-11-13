@@ -35,7 +35,7 @@ mod sho_08_unstoppable_own_minus {
     fn volley(u: &UnitStatic, att: &Ctx, def: &Ctx) -> (Vec<i64>, Vec<String>) {
         let one = [Shooter { profiles: &u.shoot, keep: &[0], attacks: &[10], att, owner: "Gunners" }];
         let mut tray = Tray::seeded(7);
-        let r = resolve_volley_leg(&one, def, "Target", 12.0, 12.0, true, true, true, true, true, false, &|_| false, &mut tray);
+        let r = resolve_volley_leg(&one, def, "Target", 12.0, 12.0, true, true, true, true, true, false, &|_| false, &|_, _| None, &mut tray);
         (r.rolls.iter().filter(|x| x.kind == "attack").map(|x| x.target).collect(), r.log)
     }
 

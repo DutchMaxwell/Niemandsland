@@ -3,8 +3,8 @@ extends GdUnitTestSuite
 ## Advance 4" + shoot on an open or a terrain board - resolved by the core through CoreActivation.drive on the table's
 ## own tray equals the table's own AI path (_run_ai_shooting) seed for seed: the models with sight (the table's count vs
 ## the core's hit dice), the surviving models, Shaken, the tray RNG after. In the core run the dead leave right after the
-## saves (O4 b, read at the morale throw) and the removals the steps landed equal the binding's delta. The battle-log
-## lines of both runs are compared and PRINTED as a diff summary, not asserted (step 27).
+## saves (O4 b, read at the morale throw) and the removals the steps landed equal the binding's delta. Step 27: both
+## runs add the same battle-log lines, (category, text) in the same order.
 ## Real: the main scene, NmlCore, the table's volley, move and sight code. Constructed: a plain 10 vs 5 at 12", both
 ## seats AI (no save prompt waits). NML_ONE_CORE_SEEDS overrides the 200 seeds (1000 locally).
 
@@ -149,8 +149,10 @@ func _gate(advance: bool, board: bool) -> void:
 		float(core_us) / maxi(steps, 1), max_us,
 		int((_main.solo_controller as SoloController)._core_node_ready().live_handles())])
 	if not line_diffs.is_empty():
-		print("ONE_CORE_ACTIVATION first line diff (not asserted until step 27): ", line_diffs[0])
+		print("ONE_CORE_ACTIVATION first line diff: ", line_diffs[0])
 	assert_array(bad).override_failure_message("core vs table:\n" + "\n".join(bad.slice(0, 10))).is_empty()
+	assert_array(line_diffs).override_failure_message("battle-log lines differ in %d seeds, first:\n%s" % [
+		line_diffs.size(), "" if line_diffs.is_empty() else line_diffs[0]]).is_empty()
 
 
 func test_hold_and_shoot_equals_the_table(timeout := 900000) -> void:

@@ -20,7 +20,7 @@ use super::*;
         let fire = |blast: i64, exact: bool| {
             let gun = [ShootProfile { takedown: true, blast, ..rifle(6) }];
             let r = resolve_volley_leg(&[Shooter { profiles: &gun, keep: &[0], attacks: &[6], att: &att, owner: "a" }],
-                &def, "b", 12.0, 12.0, true, true, true, true, true, exact, &|_| false, &mut Tray::seeded(3));
+                &def, "b", 12.0, 12.0, true, true, true, true, true, exact, &|_| false, &|_, _| None, &mut Tray::seeded(3));
             saves(&r)
         };
         let (exact, old) = (fire(3, true), fire(3, false));
@@ -42,7 +42,7 @@ use super::*;
         let fire = |guns: &[ShootProfile], exact: bool, own: &dyn Fn(&[i64]) -> bool| {
             let (keep, attacks): (Vec<usize>, Vec<i64>) = (0..guns.len()).map(|i| (i, 6)).unzip();
             resolve_volley_leg(&[Shooter { profiles: guns, keep: &keep, attacks: &attacks, att: &att, owner: "a" }],
-                &def, "b", 12.0, 12.0, true, true, true, true, true, exact, own, &mut Tray::seeded(3))
+                &def, "b", 12.0, 12.0, true, true, true, true, true, exact, own, &|_, _| None, &mut Tray::seeded(3))
         };
         let one = [rifle("Rifle")];
         let r = fire(&one, true, &|_| false);
