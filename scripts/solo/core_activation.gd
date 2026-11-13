@@ -355,7 +355,7 @@ static func _journal_props(main) -> Dictionary:
 		var row := {}
 		for k in JOURNAL_KEYS:
 			if u.unit_properties.has(k):
-				row[k] = u.unit_properties[k]
+				row[k] = _copy(u.unit_properties[k])
 		out[u.get_instance_id()] = row
 	return out
 
@@ -380,15 +380,21 @@ static func undo_journal(main, gu: GameUnit) -> void:
 			if had == u.unit_properties.has(k) and (not had or u.unit_properties[k] == was[k]):
 				continue
 			if _NET.SYNCABLE_UNIT_PROPERTIES.has(k):
-				main._sync_unit_property(u, k, was[k] if had else null)
+				main._sync_unit_property(u, k, _copy(was[k]) if had else null)
 			elif had:
-				u.unit_properties[k] = was[k]
+				u.unit_properties[k] = _copy(was[k])
 			else:
 				u.unit_properties.erase(k)
 			if not rules.has(JOURNAL_KEYS[k]) and (k != "utility_buff_round" or _carries_buff(u)):
 				rules.append(JOURNAL_KEYS[k])
 	for rule in rules:
 		main._log_rule_event(BattleLog.Category.GENERAL, "%s: %s is unspent again." % [gu.get_name(), rule])
+
+
+## Step 37: a journaled Array or Dictionary is its own deep copy, at the Start and at every restore, so an in-place
+## change of the live value never reaches the journal (every JOURNAL_KEYS value is a bool or an int on main today).
+static func _copy(v: Variant) -> Variant:
+	return v.duplicate(true) if v is Array or v is Dictionary else v
 
 
 ## Step 37: whether `u` or a hero joined to it carries a rule of the Utility Buff family (its stamp's line).

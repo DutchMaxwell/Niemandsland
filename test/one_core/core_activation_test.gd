@@ -476,6 +476,13 @@ func test_the_journal_unspends_the_one_time_spends_on_every_unit() -> void:
 		.map(func(f: Dictionary) -> Array: return f["a"])
 	assert_array(props).contains_exactly_in_any_order([[u.unit_id, "speed_feat_used_speed_feat", null],
 		[enemy.unit_id, "tag_markers", null]])
+	# The receiving table still holds the spends; the recorded frames, handed to its real handler, erase them there.
+	u.unit_properties["speed_feat_used_speed_feat"] = true
+	enemy.unit_properties["tag_markers"] = 2
+	for a in props:
+		net.sync_unit_property(a[0], a[1], a[2])
+	assert_bool(u.unit_properties.has("speed_feat_used_speed_feat") or enemy.unit_properties.has("tag_markers")) \
+		.override_failure_message("the receiver kept a spend").is_false()
 	_end_session()   # the recording transport is not in the tree: free it inside the case (no orphan)
 
 
@@ -489,6 +496,21 @@ func test_a_stamp_without_a_buff_rule_comes_back_without_a_line() -> void:
 	CoreActivation.undo_journal(_main, u)
 	assert_int(int(u.unit_properties.get("utility_buff_round", -1))).is_equal(0)
 	assert_array(_unspent_lines()).is_empty()
+
+
+## Step 37: a journaled container changed IN PLACE after the Start comes back as it was at the Start, and a restored
+## value is a fresh copy (a second in-place change and undo go back again). Every JOURNAL_KEYS value is a bool or an int
+## on main today; the core capture reads the wire-listed ones as int/bool (act_recorder `_ledger_of`), so only the
+## table-local stamp can carry a container at the Start: it guards the first container value.
+func test_a_container_changed_in_place_comes_back_as_it_was() -> void:
+	var u := _human("Rifles")
+	u.unit_properties["utility_buff_round"] = [1]
+	assert_bool(CoreActivation.open_session(_main, u)).is_true()
+	for pass_no in 2:
+		(u.unit_properties["utility_buff_round"] as Array).append(2 + pass_no)
+		CoreActivation.undo_journal(_main, u)
+		assert_array(u.unit_properties["utility_buff_round"]).override_failure_message("undo %d: %s" % [pass_no + 1,
+			u.unit_properties["utility_buff_round"]]).is_equal([1])
 
 
 ## Step 29: the REAL NetworkManager with only its transport swapped out; it records every wire frame (pattern:
