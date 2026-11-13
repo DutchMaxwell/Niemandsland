@@ -116,10 +116,9 @@ func test_the_ai_body_shoots_plain_volleys_through_the_core(timeout := 900000) -
 
 
 ## In an agreed Automatic room with an AI seat (a recording stub for the wire), every AI activation the core resolved
-## sends exactly one `activation_check` for its unit, and one the core did not resolve sends none. Lane H's step 51 adds
-## the `CoreActivation.announce` call to `run_ai`; until then this case is skipped (RED without that call).
-func test_each_core_ai_activation_in_a_room_sends_one_check(timeout := 300000, do_skip := true,
-		skip_reason := "step 51 adds CoreActivation.announce to run_ai; unskip this case then") -> void:
+## sends exactly one `activation_check` for its unit, and one the core did not resolve sends none (the call: lane H's
+## step 51, `CoreActivation.announce` in `run_ai`; RED without it).
+func test_each_core_ai_activation_in_a_room_sends_one_check(timeout := 300000) -> void:
 	var net: WireNet = auto_free(WireNet.new())
 	net.is_host = true
 	net.army_manager = _main.opr_army_manager

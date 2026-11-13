@@ -167,6 +167,7 @@ static func run_ai(main, unit: GameUnit, report: Dictionary, target: GameUnit, h
 	var r: Dictionary = await drive(main, h, unit, t, true, Callable(), false, Callable() if shots.is_empty() else beat)
 	if str(r["step"]) == "done":
 		ai_runs += 1
+		announce(main, unit, target)   # step 50/51: the table that ran the AI activation announces its digest check
 		return true
 	ai_refusals += 1
 	push_error("CoreActivation.run_ai: %s - the core answered %s: %s" % [unit.get_name(), r["step"], r.get("reason", "")])
@@ -529,3 +530,59 @@ static func announce(main, actor: GameUnit, target: GameUnit = null) -> void:
 	_announced[actor.unit_id] = round_no
 	nm.send_command("activation_check", {"unit": actor.unit_id, "units": ids, "round": round_no, "digest": digest(touched),
 		"rows": rows(touched), "retry": 0}, 0)
+
+
+## Step 51: the checks that matched this table (read by the gates).
+static var checks_ok := 0
+
+
+## Step 51 (N6 b): another table's `activation_check`. Ignored with the flag off (a mixed room keeps playing as it is) and
+## for another round. When our rows of the named units equal theirs - the hash, or else the rows with every position
+## within 1 mm (two tables a hair either side of a half millimetre round apart) - it is silent (`checks_ok`). Else one
+## `activation_mismatch` with OUR rows goes back to the sender alone (the winner pushes only what differs, step 52); this
+## table changes nothing (O13 (b): the table that ran the activation wins). A unit unknown here is a mismatch.
+static func on_check(main, payload: Dictionary, from_peer: int) -> void:
+	if not applies(main) or int(payload.get("round", -1)) != int(main.opr_army_manager.current_round):
+		return
+	var ids: Array = payload.get("units", [])
+	var units: Array = []
+	for id in ids:
+		var gu: GameUnit = main.opr_army_manager.get_game_unit_by_id(str(id))
+		if gu != null:
+			units.append(gu)
+	var ours := digest(units)
+	if units.size() == ids.size() and (ours == str(payload.get("digest", "")) or rows_match(rows(units), payload.get("rows"))):
+		checks_ok += 1
+		return
+	main.network_manager.send_command("activation_mismatch", {"unit": payload.get("unit", ""), "units": ids,
+		"round": payload["round"], "theirs": payload.get("digest", ""), "ours": ours, "rows": rows(units),
+		"retry": int(payload.get("retry", 0))}, from_peer)
+
+
+## Step 51: two `rows` lists are the same result when everything but the positions is equal and each living model's X and
+## Z differ by at most 1 mm.
+static func rows_match(ours: Array, theirs: Variant) -> bool:
+	if not theirs is Array or (theirs as Array).size() != ours.size():
+		return false
+	for i in ours.size():
+		var a: Array = ours[i]
+		var b: Variant = theirs[i]
+		if not b is Array or (b as Array).size() != 4 or a.slice(0, 3) != (b as Array).slice(0, 3) \
+				or not b[3] is Array or (b[3] as Array).size() != (a[3] as Array).size():
+			return false
+		for j in (a[3] as Array).size():
+			if not same_model(a[3][j], b[3][j]):
+				return false
+	return true
+
+
+## Step 51: two model rows agree - index, wounds and alive equal, and a living model's X and Z within 1 mm.
+static func same_model(a: Array, b: Variant) -> bool:
+	return b is Array and (b as Array).size() == 4 and a.slice(0, 3) == (b as Array).slice(0, 3) and near(a[3], b[3])
+
+
+## Step 51: two positions in whole millimetres within 1 mm per axis; both null (dead) agree too.
+static func near(a: Variant, b: Variant) -> bool:
+	if a == null or b == null:
+		return a == null and b == null
+	return b is Array and (b as Array).size() == 2 and absi(int(a[0]) - int(b[0])) <= 1 and absi(int(a[1]) - int(b[1])) <= 1

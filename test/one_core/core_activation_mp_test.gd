@@ -215,3 +215,106 @@ func test_the_target_joins_the_check_and_is_cleared_at_end_start_and_reset() -> 
 	CoreActivation.reset_all(_main)
 	assert_object(CoreActivation.last_target).override_failure_message("reset_all kept the target").is_null()
 	assert_dict(CoreActivation._announced).override_failure_message("reset_all kept the announcements").is_empty()
+
+
+## Step 51 (the AI call site, lead 13.11.): an AI activation the core resolved (`run_ai`, step 42) announces one check in a
+## room with an AI seat - the shooter and its target - and none in solo (no session).
+func test_an_ai_volley_through_the_core_announces_one_check_in_a_room_and_none_in_solo() -> void:
+	for room in [true, false]:
+		_room(room, RulesAutomation.Level.AUTOMATIC, {2: true})
+		_main._solo_auto_saves = true
+		var ai := _plain(2, "Bots%s" % room, 0.0)
+		var foe := _plain(1, "Rifles%s" % room, 10.0)
+		_main.seed_tray_rng(7)
+		var took: bool = await CoreActivation.run_ai(_main, ai, {"action": AiDecision.Action.HOLD}, foe,
+			CoreActivation.capture(_main))
+		var checks := _frames("activation_check").map(func(f: Dictionary) -> Array: return [f["p"]["unit"], f["p"]["units"]])
+		assert_bool(took).override_failure_message("room %s: the core path was not taken" % room).is_true()
+		assert_array(checks).override_failure_message("room %s: %s" % [room, checks]) \
+			.is_equal([[ai.unit_id, [ai.unit_id, foe.unit_id]]] if room else [])
+		CoreActivation.reset_all(_main)
+		ai.models.map(func(m: ModelInstance) -> void: m.node.queue_free())
+		foe.models.map(func(m: ModelInstance) -> void: m.node.queue_free())
+		_main.opr_army_manager.game_units.erase(ai.unit_id)
+		_main.opr_army_manager.game_units.erase(foe.unit_id)
+
+
+## ---- Step 51: the receiver ----
+
+const SENDER_PEER := 7
+
+
+## This table's units as the other table's check names them, the check built from them as they stand now.
+func _check_of(units: Array, round_no := 1, retry := 0) -> Dictionary:
+	return {"unit": (units[0] as GameUnit).unit_id, "units": units.map(func(gu: GameUnit) -> String: return gu.unit_id),
+		"round": round_no, "digest": CoreActivation.digest(units), "rows": CoreActivation.rows(units), "retry": retry}
+
+
+func _receive(check: Dictionary) -> void:
+	_main._on_network_command("activation_check", check, SENDER_PEER)
+
+
+func test_a_matching_check_is_silent() -> void:
+	_room()
+	var units := [_plain(2, "Guards", 18.0), _plain(1, "Rifles", 0.0)]
+	var ok_before := CoreActivation.checks_ok
+	_receive(_check_of(units))
+	assert_array(_net.wire).is_empty()
+	assert_int(CoreActivation.checks_ok).is_equal(ok_before + 1)
+
+
+## A wound only this table lost: one notice, to the sender alone, with both digests; nothing here changes.
+func test_a_planted_wound_sends_one_mismatch_to_the_sender() -> void:
+	_room()
+	var units := [_plain(2, "Guards", 18.0)]
+	var check := _check_of(units)
+	var m: ModelInstance = (units[0] as GameUnit).models[1]
+	m.wounds_current = 0
+	_receive(check)
+	var notes := _frames("activation_mismatch")
+	assert_array(_names()).override_failure_message("%s" % [_names()]).contains_exactly(["activation_mismatch"])
+	if notes.is_empty():
+		return
+	assert_int(int(notes[0]["to"])).is_equal(SENDER_PEER)
+	assert_dict(notes[0]["p"]).is_equal({"unit": check["unit"], "units": check["units"], "round": 1,
+		"theirs": check["digest"], "ours": CoreActivation.digest(units), "rows": CoreActivation.rows(units), "retry": 0})
+	assert_int(m.wounds_current).override_failure_message("the receiver touched its own state").is_equal(0)
+
+
+## The lead's rounding case: X at 100.4999 mm on one table and 100.5001 mm on the other rounds to 100 and 101, so the
+## hashes differ; the rows agree within 1 mm and the check stays silent. A 2 mm difference is a mismatch.
+func test_a_rounding_split_is_silent_and_two_millimetres_are_not() -> void:
+	_room()
+	var units := [_plain(2, "Guards", 18.0)]
+	var n: Node3D = (units[0] as GameUnit).models[0].node
+	n.global_position.x = 0.1004999
+	var check := _check_of(units)
+	n.global_position.x = 0.1005001
+	assert_str(CoreActivation.digest(units)).override_failure_message("precondition: the hashes differ") \
+		.is_not_equal(str(check["digest"]))
+	_receive(check)
+	assert_array(_net.wire).override_failure_message("rounding split: %s" % [_names()]).is_empty()
+	n.global_position.x = 0.1025
+	_receive(check)
+	assert_array(_names()).override_failure_message("2 mm: %s" % [_names()]).contains_exactly(["activation_mismatch"])
+
+
+## Another round, the flag off: ignored. A unit this table does not know: a mismatch.
+func test_another_round_and_the_flag_off_are_ignored_and_an_unknown_unit_is_a_mismatch() -> void:
+	_room()
+	var units := [_plain(2, "Guards", 18.0)]
+	var check := _check_of(units)
+	(units[0] as GameUnit).models[0].wounds_current = 0
+	var later := check.duplicate(true)
+	later["round"] = 2
+	_receive(later)
+	CoreActivation._env = 0
+	_receive(check)
+	assert_array(_net.wire).override_failure_message("%s" % [_names()]).is_empty()
+	CoreActivation._env = 1
+	var ghost := check.duplicate(true)
+	ghost["units"] = ["no_such_unit"]
+	ghost["digest"] = CoreActivation.digest([])
+	ghost["rows"] = []
+	_receive(ghost)
+	assert_array(_names()).contains_exactly(["activation_mismatch"])
