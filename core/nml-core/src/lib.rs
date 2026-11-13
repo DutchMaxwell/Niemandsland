@@ -34,6 +34,7 @@ pub mod playout;
 pub mod playout_memo;
 pub mod rng;
 pub mod rollout;
+pub mod round;
 pub mod rows;
 pub mod rules;
 pub mod safe_memo;
