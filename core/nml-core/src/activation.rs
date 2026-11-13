@@ -133,9 +133,10 @@ pub enum Check { Ok { lines: Vec<LogLine> }, Refused { reason: String } }
 
 /// The move check of one drop against the unit's start in `state`: (1) a declared mode, (2) one
 /// position per model, (3) every model's walked path (its trail when it has 2+ points, which must
-/// run from its start to its placed position within 0.01", plus every climb its legs pay, else its
-/// horizontal straight line) within the mode's allowance (+0.01" float noise), at most 6" for every model once any
-/// model's trail crosses Difficult terrain or the unit carries the Difficult debuff (not for Flying or Strider). An
+/// run from its start to its placed position within 0.01"; else the straight segment from start to end once the model
+/// moved more than `DROP_FLOOR_IN`), plus every climb its legs pay, within the mode's allowance (+0.01" float noise), at
+/// most 6" for every model once any model's path crosses Difficult terrain or the unit carries the Difficult debuff (not
+/// for Flying or Strider). An
 /// overrun is refused with the O3 sentence when `enforce`, else accepted with that sentence as one log line.
 pub fn check_move(statics: &[UnitStatic], state: &State, si: usize, seams: Seams, terrain: &Terrain, drop: &Drop, enforce: bool) -> Check {
     let (mode, m) = match drop.mode {
@@ -153,16 +154,21 @@ pub fn check_move(statics: &[UnitStatic], state: &State, si: usize, seams: Seams
     let flying = state.profile(si).special_rules.iter().any(|r| r == "Flying");
     let ledges = crate::mv::step::world_ledges_of(terrain, flying, seams.rules_epoch);
     let mut x = 0.0f64;
+    // Each model's path: its trail, else (R3: no chord bypass) the straight segment [start, end] once it moved past the
+    // drop floor, so its climbs and its Difficult crossing count all the same; a model that stayed has none.
+    let mut paths: Vec<Vec<[f64; 2]>> = Vec::with_capacity(start.len());
     for (i, (a, b)) in start.iter().zip(&drop.placed).enumerate() {
         let (a, b) = ([a[0], a[2]], [b[0], b[2]]);
-        let walked = match drop.trails.get(i).filter(|t| t.len() >= 2) {
+        let path = match drop.trails.get(i).filter(|t| t.len() >= 2) {
             Some(t) if inch(t[0], a) > 0.01 || inch(t[t.len() - 1], b) > 0.01 => {
                 return Check::Refused { reason: "trail does not match the placed model".to_string() };
             }
-            Some(t) => crate::mv::step::trail_walk_in(t, &ledges).0,
-            None => inch(a, b),
+            Some(t) => t.clone(),
+            None if inch(a, b) > DROP_FLOOR_IN => vec![a, b],
+            None => Vec::new(),
         };
-        x = x.max(walked);
+        x = x.max(if path.is_empty() { inch(a, b) } else { crate::mv::step::trail_walk_in(&path, &ledges).0 });
+        paths.push(path);
     }
     // GF p.11: Difficult terrain caps the WHOLE unit; Flying and Strider ignore it (read as `mv::step` reads them).
     let strider = state.profile(si).special_rules.iter().any(|r| r == "Strider");
@@ -171,7 +177,7 @@ pub fn check_move(statics: &[UnitStatic], state: &State, si: usize, seams: Seams
         leg_crosses(&leg, *r, terrain, is_difficult)
     };
     let difficult = !(flying || strider)
-        && (drop.trails.iter().zip(&state.radii[si]).any(|(t, r)| crosses(t, r)) || terrain_debuff_folds(statics, state, si).0);
+        && (paths.iter().zip(&state.radii[si]).any(|(t, r)| crosses(t, r)) || terrain_debuff_folds(statics, state, si).0);
     let a = allowance(statics, state, si, seams, terrain);
     let full = [a.advance, a.rush, a.charge][m];
     let capped = difficult && full > DIFFICULT_MOVE_CAP_IN;
@@ -838,5 +844,21 @@ mod tests {
         }
         let want = [("attack", "a"), ("attack", "a"), ("defense", "b"), ("morale", "b"), ("morale", "a")];
         assert_eq!(asked, want.map(|(k, o)| (k, o.to_string())));
+    }
+
+    /// R3: a model that moved without a 2+ point trail is checked as its straight segment [start, end]: a trail-less
+    /// (or one-point) 4" drop onto the container pays the 2.5" climb (6.5" > the 6" Advance), and a trail-less 8" Rush
+    /// across the forest strip is capped at 6" (RED: the bare chord, 4.0" and no crossing -> both accepted). Open ground
+    /// and a model that stayed are unchanged.
+    #[test]
+    fn a_trailless_drop_is_checked_along_its_straight_line() {
+        let (st, statics) = squad_line();
+        let go = |t: &Terrain, mode, placed, trails| check_move(&statics, &st, 0, seams(), t, &Drop { mode, placed, trails }, true);
+        let climb = refusal("Squad: a model moved 6.5\" - the Advance allowance is 6.0\".");
+        assert_eq!(go(&container_board(), ADVANCE, east(4.0), vec![]), climb);
+        assert_eq!(go(&container_board(), ADVANCE, east(4.0), vec![trail(&[[0.0, 0.0]])]), climb, "one point is no trail");
+        assert_eq!(go(&forest_bar_board(), RUSH, east(8.0), vec![]), refusal("Squad: a model moved 8.0\" - the Rush allowance is 6.0\"."));
+        assert_eq!(go(&Terrain::default(), ADVANCE, east(5.9), vec![]), OK, "open ground: the straight line");
+        assert_eq!(go(&forest_bar_board(), RUSH, east(0.05), vec![]), OK, "a model that stayed crosses nothing");
     }
 }

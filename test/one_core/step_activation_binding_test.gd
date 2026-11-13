@@ -427,3 +427,36 @@ func _first_answer_to_a_shot_at(x: float) -> String:
 	AiPlanner.table_fidelity = was
 	var r: Dictionary = core.step_activation(h, "a", [{"t": "begin"}, {"t": "intent", "kind": AiDecision.Action.HOLD, "shoot": "b"}], true)
 	return "%s %s" % [r.get("step"), r.get("kind", "")]
+
+
+## ---- R3: a drop without walked paths is checked along its straight line ----
+
+## The header's board: `type` cells at column 16 (x 3..6"), rows `rows` (3" each, row 15 starts at z 0); `walls` in inches.
+func _board(type: int, rows: Array, walls: Array = []) -> Dictionary:
+	var cells := {}
+	for j in rows:
+		cells[Vector2i(16, j)] = type
+	var to_m := func(w: Array) -> Array: return [[w[0] * IN2M, w[1] * IN2M], [w[2] * IN2M, w[3] * IN2M]]
+	return {"cells": cells, "walls": walls.map(to_m)}
+
+
+## The binding's check of "a" (one model at the origin, no trails sent) moved `x` inches east in `mode` on `board`.
+func _trailless_check(board: Dictionary, mode: int, x: float) -> Dictionary:
+	var core: Object = ClassDB.instantiate("NmlCore")
+	var h := _stamped_handle(core, [0.0], [30.0], board)
+	return core.check_move(h, "a", {"mode": mode, "positions": PackedVector3Array([Vector3(x * IN2M, 0, 0)])}, true)
+
+
+## A Rush across a forest strip (x 3..6") is capped at 6"; an Advance onto a container (x 3..6", walled) pays its 2.5"
+## climb. Both were accepted on their bare 8" / 4" chord. Controls: the same drops on open ground.
+func test_a_drop_without_trails_pays_the_terrain_on_its_straight_line() -> void:
+	var forest := _board(TerrainRules.TerrainType.FOREST, [14, 15])
+	var rush := _trailless_check(forest, 2, 8.0)
+	assert_str(str(rush.get("reason", ""))).override_failure_message("forest Rush: %s" % rush) \
+		.is_equal("a: a model moved 8.0\" - the Rush allowance is 6.0\".")
+	var box := _board(TerrainRules.TerrainType.CONTAINER, range(9, 21), [[3, -18, 6, -18], [6, -18, 6, 18], [6, 18, 3, 18], [3, 18, 3, -18]])
+	var climb := _trailless_check(box, 1, 4.0)
+	assert_str(str(climb.get("reason", ""))).override_failure_message("container Advance: %s" % climb) \
+		.is_equal("a: a model moved 6.5\" - the Advance allowance is 6.0\".")
+	assert_bool(_trailless_check({}, 2, 8.0)["ok"]).is_true()
+	assert_bool(_trailless_check({}, 1, 4.0)["ok"]).is_true()
