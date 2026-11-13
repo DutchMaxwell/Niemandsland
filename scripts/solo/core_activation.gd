@@ -111,12 +111,44 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 		var label: String = "AI (%s)" % owner if main._solo_is_ai_unit(roller) else main._roller_label(roller)
 		if on_throw.is_valid():
 			on_throw.call(str(r["kind"]), int(r["index"]))
+		if str(r["kind"]) == "defense" and roller != unit and not main._solo_is_ai_unit(roller) \
+				and main._solo_i_own_unit(roller):   # step 42 (O21): a local defender sees its saves coming, as on the table
+			await main._solo_ask_saves(unit, roller, _shot_weapon(unit, lines), int(r["faces"]), int(r["target"]), 0)
 		var faces: Array = await main._owner_roll(roller, int(r["faces"]), int(r["target"]), str(r["kind"]), "",
 			{"label": label, "what": "%s dice" % r["kind"]})
 		transcript.append({"t": "faces", "faces": faces})
 	push_error("CoreActivation.drive: %s still needs dice after %d steps" % [unit.get_name(), MAX_STEPS])
 	r.merge({"steps": MAX_STEPS, "core_us": core_us, "max_us": max_us}, true)
 	return r
+
+
+## Step 42 (O21): the weapon named by the core's last shot line ("<shooter> fires <weapon> at <target> — <n> hits",
+## dice.rs) among `unit`'s own weapons, for the save card; "" when no line names one.
+static func _shot_weapon(unit: GameUnit, lines: Array) -> String:
+	var src := unit.source_data as OPRApiClient.OPRUnit
+	for i in range(lines.size() - 1, -1, -1):
+		for w in src.weapons if src != null else []:
+			if str((lines[i] as Dictionary)["text"]).contains(" fires %s at " % w.name):
+				return w.name
+	return ""
+
+
+## Step 42: the AI's volley through the core - Hold or Advance, the unit and its one target (the table's own pick) plain,
+## no Dangerous test this activation (the table rolled it already; the core would roll it again). `h` is the board
+## before the move (the AI body captured it and releases it). True = the core resolved the volley. A refusal is a
+## defect: reported, and the table shoots instead - unless a die was already thrown (never resolve a volley twice).
+static func run_ai(main, unit: GameUnit, report: Dictionary, target: GameUnit, h: int) -> bool:
+	var kind := int(report.get("action", -1))
+	if h == 0 or not (kind in [AiDecision.Action.HOLD, AiDecision.Action.ADVANCE]) or not is_plain(unit) \
+			or not is_plain(target) or int(report.get("dangerous_dice", report.get("dangerous_models", 0))) > 0:
+		return false
+	var at: Array = unit.get_alive_models().map(func(m: ModelInstance) -> Vector3: return m.node.global_position)
+	var t: Array = [{"t": "begin"}, {"t": "placed", "positions": at}, {"t": "intent", "kind": kind, "shoot": target.unit_id}]
+	var r: Dictionary = await drive(main, h, unit, t, true)
+	if str(r["step"]) == "done":
+		return true
+	push_error("CoreActivation.run_ai: %s - the core answered %s: %s" % [unit.get_name(), r["step"], r.get("reason", "")])
+	return t.any(func(e: Dictionary) -> bool: return str(e["t"]) == "faces")
 
 
 ## The unit a roll belongs to: the core names it by roster key (`owner_key`: two units may share a display name, and a
