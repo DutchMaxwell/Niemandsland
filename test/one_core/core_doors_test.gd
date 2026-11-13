@@ -241,3 +241,95 @@ func test_speed_feat_needs_the_start() -> void:
 	CoreActivation.open_session(_main, u)
 	_main.solo_spend_speed_feat(u)
 	assert_bool(bool(u.unit_properties.get(SPEED_FLAG, false))).override_failure_message("no spend after the Start").is_true()
+
+
+## ---- step 65b: the regiment re-rank doors (the radial's frontage entry, the B key) ----
+
+## A formed regiment block of six models at frontage 5 for this table's unit `uname` (regiment_frontage_cycle_test's
+## fixture on the real army manager).
+func _regiment(uname: String, x: float) -> RegimentTray:
+	var at: Array = []
+	for i in 6:
+		at.append(Vector3(x + 0.03 * i, 0, 0))
+	var gu := E2EBoot.make_unit(_main, 1, uname, at)
+	var src := OPRApiClient.OPRUnit.new()
+	src.weapons.append(OPRApiClient.OPRWeapon.new())
+	gu.source_data = src
+	_main.opr_army_manager.game_units[gu.unit_id] = gu
+	var members := RegimentTray.collect_members(gu)
+	var tray := RegimentTray.new()
+	_main.add_child(tray)
+	tray.form(members.nodes, members.footprints, 5)
+	tray.set_meta("regiment", Regiment.new(gu, tray, 5))
+	gu.unit_properties["frontage"] = 5
+	_main.opr_army_manager.regiments[gu.unit_id] = tray.get_meta("regiment")
+	return tray
+
+
+## The B key on the selection `trays` (main's own key handler; B is never an echo).
+func _press_b(trays: Array) -> void:
+	_main.object_manager._selected_objects.assign(trays)
+	var ev := InputEventKey.new()
+	ev.keycode = KEY_B
+	ev.pressed = true
+	_main._unhandled_key_input(ev)
+
+
+## Step 65b (O14 (1b)): a block that was not started is not re-ranked by either door - frontage 5 stays, one
+## "Activate <Unit> first." per press, also when two refused blocks are selected; after the Start both doors re-rank.
+func test_the_rerank_doors_need_the_start() -> void:
+	var tray := _regiment("Spears", 0.0)
+	var other := _regiment("Pikes", 0.5)
+	await _act("regiment_frontage", {"regiment_tray": tray})
+	assert_int(tray.frontage).override_failure_message("re-ranked from the radial without a Start").is_equal(5)
+	_press_b([tray, other])
+	assert_int(tray.frontage + other.frontage).override_failure_message("re-ranked by B without a Start").is_equal(10)
+	assert_int(_lines("Activate Spears first.")).override_failure_message("one line per press").is_equal(2)
+	assert_int(_lines("Activate Pikes first.")).is_equal(0)
+	assert_bool(CoreActivation.open_session(_main, (tray.get_meta("regiment") as Regiment).game_unit)).is_true()
+	await _act("regiment_frontage", {"regiment_tray": tray})
+	assert_int(tray.frontage).override_failure_message("no radial re-rank after the Start").is_equal(4)
+	_press_b([tray, other])
+	assert_int(tray.frontage).override_failure_message("no B re-rank after the Start").is_equal(3)
+	assert_int(other.frontage).override_failure_message("B re-ranked a block that was not started").is_equal(5)
+	assert_int(_lines("Activate Pikes first.") + _lines("Finish Spears's activation first.")) \
+		.override_failure_message("a refusal line although a block re-ranked").is_equal(0)
+
+
+## Step 65b: flag off, both doors re-rank as today and say nothing.
+func test_with_the_flag_off_the_rerank_doors_work_as_today() -> void:
+	CoreActivation._env = 0
+	var tray := _regiment("Spears", 0.0)
+	await _act("regiment_frontage", {"regiment_tray": tray})
+	_press_b([tray])
+	assert_int(tray.frontage).is_equal(3)
+	assert_int(_lines("Activate Spears first.")).is_equal(0)
+
+
+## Screen point whose y=0 table-plane ray hit is (wx, wz).
+func _screen(wx: float, wz: float) -> Vector2:
+	return _main.get_viewport().get_camera_3d().unproject_position(Vector3(wx, 0.0, wz))
+
+
+## A real drag of `tray` by 0.1 m along x (ObjectManager's own start/update/stop); the block's moved distance.
+func _drag_block(tray: RegimentTray) -> float:
+	var om: Node3D = _main.object_manager
+	om._selected_objects.assign([tray])
+	var from: Vector3 = tray.global_position
+	om._start_dragging(_screen(from.x, from.z))
+	om._update_drag(_screen(from.x + 0.1, from.z))
+	await _runner.simulate_frames(1)
+	om._stop_dragging()
+	await _runner.simulate_frames(2)
+	return tray.global_position.distance_to(from)
+
+
+## Step 65b (step 30's gap): a block is dragged as its tray, which carries no "game_unit" meta; the drag gate finds the
+## unit through the tray's Regiment, so a block that was not started does not move and says why; after the Start it
+## does.
+func test_a_block_that_was_not_started_cannot_be_dragged() -> void:
+	var tray := _regiment("Spears", 0.0)
+	assert_float(await _drag_block(tray)).override_failure_message("dragged without a Start").is_less(0.001)
+	assert_int(_lines("Activate Spears first.")).is_equal(1)
+	assert_bool(CoreActivation.open_session(_main, (tray.get_meta("regiment") as Regiment).game_unit)).is_true()
+	assert_float(await _drag_block(tray)).override_failure_message("no drag after the Start").is_greater(0.05)

@@ -3576,6 +3576,23 @@ func core_overlay_restore(gu: GameUnit, at_start: Dictionary) -> void:
 			gu.unit_properties[k] = was.duplicate(true) if was is Array or was is Dictionary else was
 
 
+## One-core P3 step 65b (O14 (1b)): the regiment re-rank doors (the radial's frontage entry, the B key) re-form a block,
+## so like the formation tools (step 65) they need the unit's open activation: `objs` without the trays of every unit
+## `core_drag_blocked` holds back; when no tray is left, the first refused unit says why once (toast and log line).
+func core_rerank_gate(objs: Array) -> Array:
+	var out: Array = []
+	var refused: GameUnit = null
+	for obj in objs:
+		var reg: Regiment = obj.get_meta("regiment") if obj is RegimentTray and obj.has_meta("regiment") else null
+		if reg != null and reg.game_unit != null and core_drag_blocked(reg.game_unit):
+			refused = reg.game_unit if refused == null else refused
+		else:
+			out.append(obj)
+	if refused != null and not out.any(func(o: Variant) -> bool: return o is RegimentTray):
+		core_drag_refused(refused)
+	return out
+
+
 ## One-core P3 step 50 (N6 b): the tail of the activation door (radial `_toggle_activation`, after the activation fact
 ## went out, so both ride one ordered stream): an End of a core unit in a room announces its digest check, with the
 ## target its shot noted (step 38). The note is cleared on every pass. Flag off, hotseat, Manual room: nothing is sent.
@@ -17427,7 +17444,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		# selected RegimentTray blocks are affected; loose models are ignored.
 		elif event.keycode == KEY_B and not event.shift_pressed and not event.ctrl_pressed:
 			if opr_army_manager:
-				opr_army_manager.cycle_selected_regiment_frontage(object_manager.get_selected_objects())
+				opr_army_manager.cycle_selected_regiment_frontage(core_rerank_gate(object_manager.get_selected_objects()))
 			get_viewport().set_input_as_handled()
 		# Rotate selected group around first object (Shift+R) - continuous rotation
 		elif event.keycode == KEY_R and event.shift_pressed:

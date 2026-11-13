@@ -1252,7 +1252,11 @@ func _regiment_frontage(context: Dictionary) -> void:
 	var tray = context.get("regiment_tray", null)
 	if tray == null or not is_instance_valid(tray) or not army_manager:
 		return
-	army_manager.cycle_selected_regiment_frontage([tray])
+	var main_node := get_node_or_null("/root/Main")
+	var trays: Array = [tray]
+	if main_node != null and main_node.has_method("core_rerank_gate"):
+		trays = main_node.call("core_rerank_gate", trays)   # one-core P3 step 65b: not re-ranked without a Start
+	army_manager.cycle_selected_regiment_frontage(trays)
 
 
 ## Updates or creates a wound marker (red disc with border) next to a model.
