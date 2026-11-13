@@ -83,6 +83,7 @@ const MOVE_BROADCAST_INTERVAL: float = 0.05  # ~20 Hz
 # Undo capture: rotation.y per object snapshotted at the start of a rotate
 # gesture; committed as one RotateAction when the gesture ends.
 var _rotation_capture: Dictionary = {}
+var _rotation_capture_pos: Dictionary = {}   # one-core P3 step 65a: position per object at the gesture start
 # Minimum change before a gesture is recorded as undoable (avoids no-op entries).
 const MOVE_UNDO_EPSILON_M: float = 0.001  # 1 mm
 const ROTATION_UNDO_EPSILON_RAD: float = 0.0001  # ~0.006 degrees
@@ -2276,9 +2277,11 @@ func _rotate_loose_to_cursor(delta: float) -> void:
 ## Snapshots rotation.y of the current selection at the start of a rotate gesture.
 func begin_rotation_capture() -> void:
 	_rotation_capture.clear()
+	_rotation_capture_pos.clear()
 	for obj in _selected_objects:
 		if is_instance_valid(obj):
 			_rotation_capture[obj] = obj.rotation.y
+			_rotation_capture_pos[obj] = obj.global_position
 	# Reset the cumulative-rotation counter; the label itself is shown only while a
 	# continuous rotate is in progress (update_rotation_label), not for one-shot snaps.
 	_rotation_accumulated_deg = 0.0
@@ -2303,6 +2306,8 @@ func set_rotation_label(degrees: float) -> void:
 ## Commits a rotate gesture as one undoable RotateAction. No-op if nothing rotated.
 func commit_rotation_capture() -> void:
 	_hide_rotation_label()
+	_formation_drop(_rotation_capture_pos.keys(), _rotation_capture_pos.values())   # a group turn moves models
+	_rotation_capture_pos.clear()
 	if undo_manager == null or _rotation_capture.is_empty():
 		_rotation_capture.clear()
 		return
@@ -4703,6 +4708,7 @@ func arrange_selected_in_rows(num_rows: int) -> void:
 
 	_reform_no_gain_clamp(objects, before_reform)
 	_broadcast_arrange_positions(objects)
+	_formation_drop(objects, before_reform)
 	arrangement_applied.emit("rows")
 
 
@@ -4763,6 +4769,7 @@ func arrange_selected_arrow() -> void:
 
 	_reform_no_gain_clamp(objects, before_reform)
 	_broadcast_arrange_positions(objects)
+	_formation_drop(objects, before_reform)
 	arrangement_applied.emit("arrow")
 
 
@@ -4847,6 +4854,36 @@ func _reform_no_gain_clamp(objects: Array[Node3D], old_positions: Array) -> void
 			main_node._log_rule_event(log_node.Category.MOVEMENT, reform_line, false)
 		else:
 			log_node.log_event(log_node.Category.MOVEMENT, reform_line, false)
+
+
+## One-core P3 step 65a (O1/O2): a re-form (rows, arrow) or a group turn moves models, so each model it moved of a unit
+## whose core activation is open (flag on) gets the drop a drag gets: selection_dropped with a straight trail from where
+## the tool found it (chalk, ledger, take-back, moved_round, log line), which step 32's reset and the allowance check
+## read. Every other unit, and every unit with the flag off, leaves no drop, as today. `from[i]` = `objects[i]` before.
+func _formation_drop(objects: Array, from: Array) -> void:
+	var main := get_node_or_null("/root/Main")
+	if not CoreActivation.enabled() or main == null or not main.has_method("core_drag_blocked"):
+		return
+	var drop_id: int = Time.get_ticks_msec()
+	var moves: Array = []
+	for i in objects.size():
+		if not is_instance_valid(objects[i]):
+			continue
+		var obj: Node3D = objects[i]
+		var gu := _drag_unit_of(obj)
+		if gu == null or not CoreActivation.is_lifecycle_unit(main, gu) or bool(main.call("core_drag_blocked", gu)):
+			continue
+		var a := Vector2((from[i] as Vector3).x, (from[i] as Vector3).z)
+		var b := Vector2(obj.global_position.x, obj.global_position.z)
+		var inches: float = a.distance_to(b) * METERS_TO_INCHES
+		if inches <= 0.1:
+			continue
+		var path := PackedVector2Array([a, b])
+		moves.append({"node": obj, "from": Vector3(a.x, 0.0, a.y), "to": Vector3(b.x, 0.0, b.y), "inches": inches,
+				"path": path, "arc_in": MoveLedger.length_inches(path), "climb_in": _climb_report(path, obj)["climb_in"],
+				"radius_m": _trail_radius_for(obj), "drop_id": drop_id, "from_raw": from[i], "from_rot": obj.rotation.y})
+	if not moves.is_empty():
+		selection_dropped.emit(moves)
 
 
 ## Smallest base-edge gap (metres) from a point-model of radius `own_r` to any foe entry.
