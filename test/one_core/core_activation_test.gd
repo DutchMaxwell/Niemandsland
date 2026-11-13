@@ -524,7 +524,7 @@ func _orc(uname: String, models: int, x_in: float, rules: Array) -> GameUnit:
 
 ## Step 67 (O14 (1b), R8): the journal puts back the spell records two real spends wrote - the orc Speed Feat's record on
 ## the acting unit and its Piercing Assault Buff's record on the FRIENDLY Boyz - with their stamps, one record frame per
-## changed unit, the save mirror and the buff's granted-rule overlay (in place); one line per rule not named yet. A
+## changed unit, the save mirror and the buff's granted-rule overlay (in place); one line per spend. A
 ## TRIPWIRE_SKIP key is never reported; a key no door journals is reported once and left as it is.
 func test_the_journal_puts_back_every_units_spell_records() -> void:
 	var boss := _orc("Boss", 1, 0.0, ["Speed Feat", "Piercing Assault Buff"])
@@ -550,7 +550,7 @@ func test_the_journal_puts_back_every_units_spell_records() -> void:
 		.map(func(f: Dictionary) -> Array: return f["a"])
 	assert_array(frames).contains_exactly_in_any_order([[boss.unit_id, []], [boyz.unit_id, []]])
 	assert_array(_unspent_lines()).is_equal(["Boss: Piercing Assault Buff is unspent again.",
-		"Boss: Speed Feat is unspent again.", "Boss: Utility Buff is unspent again."])
+		"Boss: Speed Feat is unspent again."])   # one line per spend: the buff's record line, not the stamp's
 	assert_int(CoreActivation.tripwire_hits).override_failure_message("the skip key or a restored key").is_equal(0)
 	boyz.unit_properties["x_test"] = 1
 	CoreActivation.undo_journal(_main, boss)

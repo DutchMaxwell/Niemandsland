@@ -508,6 +508,8 @@ static func undo_journal(main, gu: GameUnit) -> void:
 				u.unit_properties[k] = _copy(w)
 	if records_changed:
 		main._solo_mirror_spell_state()   # the save mirror (spell_records) follows the records
+	if rules.has("Utility Buff") and _carries_buff(gu, rules):
+		rules.erase("Utility Buff")   # one line per spend: the record's line names the buff that was spent
 	for u: GameUnit in units:
 		var at_start: Dictionary = all[u.get_instance_id()]
 		var keys := at_start.duplicate()
@@ -528,11 +530,13 @@ static func _copy(v: Variant) -> Variant:
 	return v.duplicate(true) if v is Array or v is Dictionary else v
 
 
-## Step 37: whether `u` or a hero joined to it carries a rule of the Utility Buff family (its stamp's line).
-static func _carries_buff(u: GameUnit) -> bool:
+## Step 37: whether `u` or a hero joined to it carries a rule of the Utility Buff family (its stamp's line); step 67:
+## with `named`, only a rule of one of those names (a record the Cancel removed names the buff that was spent).
+static func _carries_buff(u: GameUnit, named: Array = []) -> bool:
 	for m in [u] + u.get_attached_heroes():
-		if m is GameUnit and not RulesRegistry.unit_rules_of_primitive(m, "Utility Buff").is_empty():
-			return true
+		for e in RulesRegistry.unit_rules_of_primitive(m, "Utility Buff") if m is GameUnit else []:
+			if named.is_empty() or named.has(str(e["name"])):
+				return true
 	return false
 
 
