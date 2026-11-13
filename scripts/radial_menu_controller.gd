@@ -587,6 +587,10 @@ func _toggle_activation(context: Dictionary) -> void:
 	# Broadcast activation change to remote peers
 	if network_manager:
 		network_manager.broadcast_unit_activation(game_unit)
+	# One-core P3 step 50: the digest check of an ended core activation follows the activation fact (flag on, rooms only).
+	var main_tail := get_node_or_null("/root/Main")
+	if main_tail != null and main_tail.has_method("core_activation_ended"):
+		main_tail.call("core_activation_ended", game_unit)
 
 
 ## Step 2.T2a-ext: the manual Shaken/Fatigued toggles obey the same off-turn gate as Activate. On a
@@ -1248,7 +1252,11 @@ func _regiment_frontage(context: Dictionary) -> void:
 	var tray = context.get("regiment_tray", null)
 	if tray == null or not is_instance_valid(tray) or not army_manager:
 		return
-	army_manager.cycle_selected_regiment_frontage([tray])
+	var main_node := get_node_or_null("/root/Main")
+	var trays: Array = [tray]
+	if main_node != null and main_node.has_method("core_rerank_gate"):
+		trays = main_node.call("core_rerank_gate", trays)   # one-core P3 step 65b: not re-ranked without a Start
+	army_manager.cycle_selected_regiment_frontage(trays)
 
 
 ## Updates or creates a wound marker (red disc with border) next to a model.
