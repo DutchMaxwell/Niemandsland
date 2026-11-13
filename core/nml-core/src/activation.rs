@@ -7,6 +7,7 @@ use crate::gate::INCHES_TO_METERS;
 use crate::io::{Action, Seams};
 use crate::landing::Landing;
 use crate::logline::{Category, LogLine};
+use crate::mv::cost::ledge_cost;
 use crate::rng::GodotRng;
 use crate::sim::{band_parts, resolve_stochastic_tray_on_board, Cover, ADVANCE, CHARGE, HOLD, REPOSITION, RUSH};
 use crate::state::State;
@@ -130,8 +131,8 @@ pub enum Check { Ok { lines: Vec<LogLine> }, Refused { reason: String } }
 
 /// The move check of one drop against the unit's start in `state`: (1) a declared mode, (2) one
 /// position per model, (3) every model's walked path (its trail when it has 2+ points, which must
-/// run from its start to its placed position within 0.01", else its horizontal straight line)
-/// within the mode's allowance (+0.01" float noise). An overrun is refused with the O3 sentence
+/// run from its start to its placed position within 0.01", plus every climb its legs pay, else its
+/// horizontal straight line) within the mode's allowance (+0.01" float noise). An overrun is refused with the O3 sentence
 /// when `enforce`, else accepted with that sentence as one log line.
 pub fn check_move(statics: &[UnitStatic], state: &State, si: usize, seams: Seams, terrain: &Terrain, drop: &Drop, enforce: bool) -> Check {
     let (mode, m) = match drop.mode {
@@ -145,6 +146,10 @@ pub fn check_move(statics: &[UnitStatic], state: &State, si: usize, seams: Seams
         return Check::Refused { reason: "placement does not match the unit's models".to_string() };
     }
     let inch = |p: [f64; 2], q: [f64; 2]| (p[0] - q[0]).hypot(p[1] - q[1]) / INCHES_TO_METERS;
+    // The climbs the AI's move pays (GF p.11), in the trail's world frame: none for Flying or below epoch 74.
+    let flying = state.profile(si).special_rules.iter().any(|r| r == "Flying");
+    let ledges = crate::mv::step::world_ledges_of(terrain, flying, seams.rules_epoch);
+    let climb = |p: [f64; 2], q: [f64; 2]| ledge_cost([p[0] as f32, p[1] as f32], [q[0] as f32, q[1] as f32], &ledges);
     let mut x = 0.0f64;
     for (i, (a, b)) in start.iter().zip(&drop.placed).enumerate() {
         let (a, b) = ([a[0], a[2]], [b[0], b[2]]);
@@ -152,7 +157,7 @@ pub fn check_move(statics: &[UnitStatic], state: &State, si: usize, seams: Seams
             Some(t) if inch(t[0], a) > 0.01 || inch(t[t.len() - 1], b) > 0.01 => {
                 return Check::Refused { reason: "trail does not match the placed model".to_string() };
             }
-            Some(t) => t.windows(2).map(|w| inch(w[0], w[1])).sum(),
+            Some(t) => t.windows(2).map(|w| inch(w[0], w[1]) + climb(w[0], w[1])).sum(),
             None => inch(a, b),
         };
         x = x.max(walked);
@@ -649,6 +654,41 @@ mod tests {
         let mismatch = refusal("trail does not match the placed model");
         assert_eq!(go(east(5.0), vec![trail(&[[0.0, 1.0], [5.0, 0.0]])]), mismatch, "starts 1\" off the start");
         assert_eq!(go(east(5.0), vec![trail(&[[0.0, 0.0], [4.0, 0.0]])]), mismatch, "ends 1\" short of the placement");
+    }
+
+    /// `mv::step`'s climb board: one long container, x 3..6", z -18..18", on a 6x4 ft table; its two
+    /// long edges are 2.5" climbs from epoch 73, priced from epoch 74.
+    fn container_board() -> Terrain {
+        use crate::terrain::{CellParams, Obb, PlainTerrain};
+        let e = |ax: f64, az: f64, bx: f64, bz: f64| [[ax * INCHES_TO_METERS, az * INCHES_TO_METERS], [bx * INCHES_TO_METERS, bz * INCHES_TO_METERS]];
+        Terrain::build(&PlainTerrain {
+            cells: (9..=20).map(|j| [16.0, j as f64, crate::terrain::CONTAINER as f64]).collect(),
+            sandbox: Vec::<Obb>::new(),
+            pieces: Vec::new(),
+            containers: Vec::new(),
+            walls: vec![e(3.0, -18.0, 6.0, -18.0), e(6.0, -18.0, 6.0, 18.0), e(6.0, 18.0, 3.0, 18.0), e(3.0, 18.0, 3.0, -18.0)],
+            cell_params: CellParams { table_size_feet: [6.0, 4.0], grid_rotation_degrees: 0.0, grid_size_inches: 3.0, inches_to_meters: INCHES_TO_METERS },
+        })
+    }
+
+    /// A trail that walks 4.0" east from the origin climbs onto the container over one edge: 4.0 +
+    /// 2.5 = 6.5" (RED: skip the climb sum -> 4.0", Advance Ok; ignore Flying -> the Flying case
+    /// refused). Epoch 73 has the ledge but does not price it, as for the AI.
+    #[test]
+    fn check_pays_the_climb() {
+        let (mut st, statics) = squad_line();
+        let t = container_board();
+        let go = |st: &State, mode, epoch| {
+            let drop = Drop { mode, placed: east(4.0), trails: vec![trail(&[[0.0, 0.0], [4.0, 0.0]])] };
+            check_move(&statics, st, 0, Seams { rules_epoch: epoch, ..seams() }, &t, &drop, true)
+        };
+        assert_eq!(go(&st, ADVANCE, 75), refusal("Squad: a model moved 6.5\" - the Advance allowance is 6.0\"."));
+        assert_eq!(go(&st, RUSH, 75), OK);
+        assert_eq!(go(&st, ADVANCE, 73), OK, "epoch 73: the ledge is not priced");
+        let mut p = st.profiles.list[0].clone();
+        p.special_rules.push("Flying".into());
+        st.profiles = Rc::new(crate::state::Profiles { list: vec![p], index: Default::default() });
+        assert_eq!(go(&st, ADVANCE, 75), OK, "Flying climbs nothing");
     }
 
     /// The activation checks its last placement: an enforced overrun is refused at that `Placed`
