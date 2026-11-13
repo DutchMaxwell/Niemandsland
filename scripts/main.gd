@@ -4888,7 +4888,8 @@ func _run_ai_shooting(report: Dictionary) -> void:
 	var moved: bool = bool(report.get("moved", false))
 	# One-core P3 step 42 (flag on): the volley at the table's ONE pick resolves in the core when both units are plain.
 	if _solo_core_ai_h != 0 and order.size() == 1:
-		if await CoreActivation.run_ai(self, unit, report, groups[order[0]]["target"], _solo_core_ai_h):
+		if await CoreActivation.run_ai(self, unit, report, groups[order[0]]["target"], _solo_core_ai_h,
+				groups[order[0]]["shots"]):
 			return
 	for id in order:
 		var g := groups[id] as Dictionary
@@ -5312,10 +5313,8 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 	_solo_clear_announce(announce)
 	_solo_clear_auto_fan()   # Bug 17: the volley is resolved — the fan leaves with the announce
 	# OUTCOME: one readable summary line, held on screen (toast + battle log).
-	await _solo_show_outcome("%s: %d hit%s → %d wound%s land — %s loses %d model%s" % [
-		target.get_name(), total_hits, ("" if total_hits == 1 else "s"),
-		landed + landed_extra, ("" if landed + landed_extra == 1 else "s"), target.get_name(),
-		models_before - _solo_combined_alive(target), ("" if models_before - _solo_combined_alive(target) == 1 else "s")])
+	await _solo_show_outcome(_solo_volley_outcome(target, total_hits, landed + landed_extra,
+		models_before - _solo_combined_alive(target)))
 	await _solo_stage_phase("Result")
 	# NML-966 gap B: Deadly/Takedown wounds bypass the regen pool and never reached `landed` —
 	# a Deadly-only volley silently skipped the half-strength morale test. landed_extra counts them in.
@@ -5325,6 +5324,12 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 	_solo_stage_end()
 	_solo_consume_once_mods(attacker, target, false)   # F4: once-mods spent by this exchange
 	_solo_spend_shot_feats(attacker)
+
+
+## The AI volley's outcome toast; one-core P3 step 42b: the core path shows it too.
+func _solo_volley_outcome(target: GameUnit, hits: int, wounds: int, lost: int) -> String:
+	return "%s: %d hit%s → %d wound%s land — %s loses %d model%s" % [target.get_name(), hits, ("" if hits == 1 else "s"),
+		wounds, ("" if wounds == 1 else "s"), target.get_name(), lost, ("" if lost == 1 else "s")]
 
 
 ## VFX #2: one tracer per firing model along the eye-to-eye segment the LOS rule tested (same heights as
@@ -11917,7 +11922,7 @@ func _solo_focus_on_unit(unit: GameUnit) -> void:
 
 ## Attack attribution: pulse rings under the shooter (amber) and the target (red), an attack line
 ## between them, and a toast naming both. Returns the created nodes; free via _solo_clear_announce.
-func _solo_show_attack_announce(shooter: GameUnit, target: GameUnit, verb: String) -> Array:
+func _solo_show_attack_announce(shooter: GameUnit, target: GameUnit, verb: String, log_line := true) -> Array:
 	# One live set per side: a stray set of THIS side's from an aborted path never survives, while the other side's
 	# set belongs to a resolver that is still running (a human cast is a detached coroutine).
 	var human := not _solo_is_ai_unit(shooter)
@@ -11946,7 +11951,7 @@ func _solo_show_attack_announce(shooter: GameUnit, target: GameUnit, verb: Strin
 	add_child(line)
 	nodes.append(line)
 	_solo_show_explain("%s %s %s" % [shooter.get_name(), verb, target.get_name()])
-	if battle_log != null:
+	if battle_log != null and log_line:   # one-core P3 step 42b: on the core path the core says this line
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s %s %s" % [shooter.get_name(), verb, target.get_name()], true)
 	if human:
 		_solo_live_announce_human = nodes   # sweep target if the caller's cleanup never runs
@@ -20526,6 +20531,8 @@ func _on_network_command(type: String, payload: Variant, _from_peer: int) -> voi
 		_rpc_request_roll(payload, _from_peer)
 	elif type == "roll_result" and payload is Dictionary:
 		_rpc_roll_result(int(payload.get("req", 0)), payload.get("faces", []))
+	elif type == "activation_check" and payload is Dictionary:
+		CoreActivation.on_check(self, payload, _from_peer)   # one-core P3 step 51 (N6 b)
 	elif type == "vfx_cue" and payload is Dictionary:
 		_vfx_draw(payload, _from_peer)
 	elif type == "session_ended":
@@ -24455,11 +24462,13 @@ func _solo_apply_piercing_tag(unit: GameUnit) -> void:
 				picks = [tgt]
 			for p in picks:
 				var pu := p as GameUnit
-				pu.unit_properties["piercing_tag_markers"] = int(pu.unit_properties.get("piercing_tag_markers", 0)) + (1 if (spread or v36_target) else markers)
+				# MP (online co-op): the AI answers each human on that human's machine, so the pool and its source
+				# ride the wire (_sync_unit_property writes AND broadcasts) - the other table spends from the same pool.
+				_sync_unit_property(pu, "piercing_tag_markers", int(pu.unit_properties.get("piercing_tag_markers", 0)) + (1 if (spread or v36_target) else markers))
 				# D42 (a), EPOCH_67_MARKERS_BURSTS: which name placed the marker, so the spend
 				# half (_solo_spend_piercing_tag) knows whether the pool stands (Piercing
 				# Target, no removal clause) or spends whole (the rest of the family).
-				pu.unit_properties["piercing_tag_source"] = n
+				_sync_unit_property(pu, "piercing_tag_source", n)
 			if v36_target:
 				var names := picks.map(func(p): return (p as GameUnit).get_name())
 				_log_rule_event(BattleLog.Category.COMBAT,
@@ -24496,11 +24505,11 @@ func _solo_spend_piercing_tag(target: GameUnit) -> int:
 				"Piercing Target: +AP(%d) stands while %s lives%s" % [flat, target.get_name(), " (+1 (Target))" if v36 else ""], true)
 		return flat
 	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:   # rules 3.6: ONE token per attack, +1
-		target.unit_properties["piercing_tag_markers"] = markers - 1
+		_sync_unit_property(target, "piercing_tag_markers", markers - 1)
 		_log_rule_event(BattleLog.Category.COMBAT,
 			"Piercing Tag: one token spent — +1 AP on this volley (%d left)" % (markers - 1), true)
 		return 1
-	target.unit_properties["piercing_tag_markers"] = 0
+	_sync_unit_property(target, "piercing_tag_markers", 0)
 	if battle_log != null:
 		_log_rule_event(BattleLog.Category.COMBAT,
 			"Piercing Tag: %d marker%s spent — +AP(%d) on this volley" % [markers, ("" if markers == 1 else "s"), markers], true)
@@ -24616,8 +24625,9 @@ func _solo_apply_precision_tag(unit: GameUnit) -> void:
 			var per: int = 1 if spread else markers
 			for p in picks:
 				var pu := p as GameUnit
-				pu.unit_properties["tag_markers"] = int(pu.unit_properties.get("tag_markers", 0)) + per
-				_sync_unit_property(pu, "tag_markers", int(pu.unit_properties["tag_markers"]))   # NML-927: the count rides the wire
+				# NML-927: the count rides the wire. The seam writes AND broadcasts, but only when the value
+				# CHANGES - pre-writing the key here made it see "unchanged" and the other table never heard.
+				_sync_unit_property(pu, "tag_markers", int(pu.unit_properties.get("tag_markers", 0)) + per)
 			if v36_tag:
 				var placed := "1 token each, spread over %d units" % picks.size() if spread \
 					else "%d token%s, stacked on %s" % [markers, ("" if markers == 1 else "s"), chosen.get_name()]

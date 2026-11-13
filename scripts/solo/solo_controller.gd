@@ -4873,7 +4873,13 @@ func _spend_speed_feat(unit: GameUnit, report: Dictionary, taken: Dictionary) ->
 	var feat_name := str(taken["name"])
 	var adv_b := float(taken["advance"])
 	var rush_b := float(taken["rush"])
-	unit.unit_properties["speed_feat_used_%s" % feat_name.to_snake_case()] = true
+	var flag := speed_feat_flag(feat_name)
+	unit.unit_properties[flag] = true
+	# MP (online co-op): the AI answers each human on that human's machine, so the closed latch has to reach the
+	# other table or its AI spends the once-per-game feat again (the human spend in main.gd syncs the same key).
+	if _preview_depth == 0 and network_manager != null and network_manager.has_method("broadcast_unit_property") \
+			and network_manager.is_multiplayer_active():
+		network_manager.broadcast_unit_property(unit, flag, true)
 	record_decision({"kind": "move", "unit": unit.get_name(),
 		"rule": "%s: once per game +%.0f\" Advance / +%.0f\" Rush-Charge — spent on the endgame push" % [
 			feat_name, adv_b, rush_b],
