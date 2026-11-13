@@ -360,3 +360,70 @@ func test_step_activation_lets_a_unit_that_advanced_shoot() -> void:
 		{"t": "intent", "kind": AiDecision.Action.ADVANCE, "shoot": "b"}]
 	var r: Dictionary = core.step_activation(h, "a", t, true)
 	assert_str("%s %s" % [r.get("step"), r.get("kind")]).override_failure_message(str(r)).is_equal("need_roll attack")
+
+
+## ---- R1: the step path reads every rule switch of the game header, not only its epoch ----
+## The binding took the epoch (and `tray_exact`) off the header and every other switch from `seams_now()`, where they are
+## all off. These cases send a REAL stamped header (`AiActRecorder._header_line`, what `CoreActivation.capture` sends).
+
+## A core with a stamped header over "a" (models at `a_xs`, one 24" Rifle each) and "b" (models at `b_xs`), x in inches;
+## `board` = a school world for the header's terrain ({} = no terrain). The handle on the captured state.
+func _stamped_handle(core: Object, a_xs: Array, b_xs: Array, board: Dictionary = {}) -> int:
+	var at := func(x: float) -> Vector3: return Vector3(x * IN2M, 0, 0)
+	var a := _unit(1, a_xs.map(at), "a")
+	var b := _unit(2, b_xs.map(at), "b")
+	for u in [a, b]:
+		(u as GameUnit).unit_properties["game_system"] = "gf"
+		(u as GameUnit).unit_properties["faction_folder"] = "robot_legions"
+	var w := OPRApiClient.OPRWeapon.new()
+	w.name = "Rifle"
+	w.range_value = 24
+	w.attacks = 1
+	w.count = a_xs.size()
+	a.source_type = "opr"
+	a.source_data = OPRApiClient.OPRUnit.new()
+	(a.source_data as OPRApiClient.OPRUnit).weapons.append(w)
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {"a": a, "b": b}
+	var state := BattleSim.capture(army, func() -> Array: return [], func(_i: int) -> int: return 0, 1, 4)
+	assert_bool(core.set_game_header(AiActRecorder._header_line(state, Callable(), board))).override_failure_message(
+		"set_game_header: " + str(core.last_error())).is_true()
+	return core.capture_plain(BattleSim.state_to_plain(state))
+
+
+## `dangerous_end_morale` (stamped true on every header): "a" (two one-wound models) ends its Advance in Dangerous terrain
+## (x 3..6", z -3..3") and one model dies to the test - half strength - so the activation ends with the morale test.
+func test_a_dangerous_loss_to_half_strength_rolls_the_morale_test_the_header_asks_for() -> void:
+	var core: Object = ClassDB.instantiate("NmlCore")
+	var lava := TerrainRules.TerrainType.DANGEROUS
+	var h := _stamped_handle(core, [1.0, 2.0], [30.0], {"cells": {Vector2i(16, 14): lava, Vector2i(16, 15): lava}})
+	var t: Array = [{"t": "begin"}, {"t": "placed", "positions": [Vector3(4.0 * IN2M, 0, 0), Vector3(5.0 * IN2M, 0, 0)]},
+		{"t": "intent", "kind": AiDecision.Action.ADVANCE}]
+	var asked: Array = []   # the dice of every roll the core asked for, in order
+	var r: Dictionary = core.step_activation(h, "a", t, true)
+	while r["step"] == "need_roll" and asked.size() < 4:
+		asked.append(int(r["faces"]))
+		t.append({"t": "faces", "faces": [1, 6] if asked.size() == 1 else [6]})   # one model dies, the morale test passes
+		r = core.step_activation(h, "a", t, true)
+	assert_str(r["step"]).override_failure_message(str(r)).is_equal("done")
+	assert_array(asked).override_failure_message("the Dangerous test (2 dice), then the morale test (1 die), got %s" % [asked]) \
+		.is_equal([2, 1])
+
+
+## `range_by_base_edge` (stamped with table fidelity on, `AiPlanner.table_fidelity_stamp`): "b" stands 24.3" from "a" centre
+## to centre and under 24" base edge to base edge, so the 24" Rifle reaches it and the volley asks for its attack die.
+## Control: at 25.5" the base edges are over 24" apart and nothing is fired.
+func test_a_target_in_range_by_its_base_edge_is_shot_when_the_header_says_so() -> void:
+	assert_str(_first_answer_to_a_shot_at(24.3)).is_equal("need_roll attack")
+	assert_str(_first_answer_to_a_shot_at(25.5)).is_equal("done ")
+
+
+## "a" holds and shoots "b" standing `x` inches away, under a header stamped with table fidelity on; "<step> <kind>".
+func _first_answer_to_a_shot_at(x: float) -> String:
+	var was: bool = AiPlanner.table_fidelity
+	AiPlanner.table_fidelity = true
+	var core: Object = ClassDB.instantiate("NmlCore")
+	var h := _stamped_handle(core, [0.0], [x])
+	AiPlanner.table_fidelity = was
+	var r: Dictionary = core.step_activation(h, "a", [{"t": "begin"}, {"t": "intent", "kind": AiDecision.Action.HOLD, "shoot": "b"}], true)
+	return "%s %s" % [r.get("step"), r.get("kind", "")]
