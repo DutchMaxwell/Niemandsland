@@ -662,3 +662,73 @@ func test_a_save_load_closes_every_open_activation_and_resends_the_header() -> v
 	_main.save_manager.load_completed.emit(0)
 	assert_bool(CoreActivation.session_open(u.unit_id)).override_failure_message("a session survived the load").is_false()
 	assert_bool(_main.solo_controller._core_header_done).override_failure_message("the old game's header stays").is_false()
+
+
+## ---- step 65a: a re-form or a group turn inside an open activation leaves the drop a drag leaves ----
+
+func _select(objs: Array) -> void:
+	_main.object_manager._selected_objects.clear()
+	for o in objs:
+		_main.object_manager._selected_objects.append(o)
+
+
+## Step 65a (O1/O2): a re-form in one row inside an open activation writes one ledger drop per moved model - a straight
+## trail from where the tool found the model to where it put it - and stamps the unit as moved this round.
+func test_a_formation_inside_an_activation_writes_a_ledger_drop_per_model() -> void:
+	var u := _human("Rifles")
+	CoreActivation.open_session(_main, u)
+	var before: Array = [_xz(_node(u, 0).global_position), _xz(_node(u, 1).global_position)]
+	_select([_node(u, 0), _node(u, 1)])
+	_main.object_manager.arrange_selected_in_rows(1)
+	var got: Array[Dictionary] = _main.move_trails.ledger.entries_for_unit(u.unit_id)
+	assert_array(got.map(func(e: Dictionary) -> int: return int(e["model"]))).override_failure_message("ledger: %s" % [got]) \
+		.contains_exactly_in_any_order([901, 902])
+	for e in got:
+		var i: int = int(e["model"]) - 901
+		var pts: PackedVector2Array = e["points"]
+		assert_int(pts.size()).is_equal(2)
+		assert_float(pts[0].distance_to(before[i])).override_failure_message("trail start %d" % i).is_less(0.0001)
+		assert_float(pts[1].distance_to(_xz(_node(u, i).global_position))).override_failure_message("trail end %d" % i) \
+			.is_less(0.0001)
+	assert_int(int(u.unit_properties.get("moved_round", -1))).override_failure_message("not stamped moved").is_equal(1)
+
+
+## Step 65a: a group turn (Shift+R: begin, turn, commit) inside an open activation writes a drop for the model it moved
+## (the pivot only turns in place) and sends that trail to the other table.
+func test_a_group_turn_inside_an_activation_writes_a_ledger_drop_and_sends_it() -> void:
+	var u := _human("Rifles")
+	CoreActivation.open_session(_main, u)
+	var net := _recording_net()
+	_select([_node(u, 0), _node(u, 1)])
+	var om: Node3D = _main.object_manager
+	om.begin_rotation_capture()
+	om.rotate_selected_group(90.0)
+	om.commit_rotation_capture()
+	var got: Array[Dictionary] = _main.move_trails.ledger.entries_for_unit(u.unit_id)
+	assert_array(got.map(func(e: Dictionary) -> int: return int(e["model"]))).override_failure_message("ledger: %s" % [got]) \
+		.is_equal([902])
+	assert_int(net.sent.filter(func(f: Dictionary) -> bool: return f["m"] == "sync_move_trails").size()) \
+		.override_failure_message("trail not sent: %s" % [net.sent]).is_equal(1)
+	_end_session()   # the recording transport is not in the tree: free it inside the case (no orphan)
+
+
+## Step 65a: no drop without an open activation (flag on), for a unit that is not a lifecycle unit (a table without an AI
+## seat), and with the flag off - each tool leaves the ledger as today.
+func test_a_formation_without_an_open_activation_leaves_no_drop() -> void:
+	var u := _human("Rifles")
+	var drops: Array = [0]
+	_main.object_manager.selection_dropped.connect(func(_m: Array) -> void: drops[0] += 1)
+	_select([_node(u, 0), _node(u, 1)])
+	_main.object_manager.arrange_selected_in_rows(1)
+	assert_int(drops[0]).override_failure_message("a drop without a session").is_equal(0)
+	_main.solo_ai_slots = {}
+	_main.object_manager.arrange_selected_in_rows(2)
+	assert_int(drops[0]).override_failure_message("a drop for a unit that is not a lifecycle unit").is_equal(0)
+	_main.solo_ai_slots = {2: true}
+	CoreActivation._env = 0
+	_main.object_manager.arrange_selected_arrow()
+	_main.object_manager.begin_rotation_capture()
+	_main.object_manager.rotate_selected_group(90.0)
+	_main.object_manager.commit_rotation_capture()
+	assert_int(drops[0]).override_failure_message("a drop with the flag off").is_equal(0)
+	assert_array(_main.move_trails.ledger.entries_for_unit(u.unit_id)).is_empty()
