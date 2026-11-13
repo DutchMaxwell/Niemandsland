@@ -372,6 +372,27 @@ impl NmlCore {
         out
     }
 
+    /// One-core P3: `unit`'s move allowance on handle `h` at its activation start, `{"advance", "rush", "charge"}` in
+    /// inches and `"widened_by"` (the rules that add to the printed band). Empty, with `last_error()` set, for an
+    /// unknown handle or unit. A `done` step_activation answer also carries `"delta"` (what changed, per unit).
+    #[func]
+    fn move_allowance(&mut self, h: i64, unit: GString) -> VarDictionary {
+        self.last_error.clear();
+        let Some(i) = self.index(h) else {
+            self.last_error = "unknown handle".to_string();
+            return VarDictionary::new();
+        };
+        let seams = self.seams_now();
+        let absent = Terrain::absent();
+        let terrain = self.header.as_ref().map(|hd| &hd.terrain).unwrap_or(&absent);
+        let slot = self.slab[i].as_ref().unwrap();
+        let out = actcall::allowance_of(&slot.statics, &slot.cap.state, &unit.to_string(), terrain, seams);
+        if out.is_empty() {
+            self.last_error = "unknown unit".to_string();
+        }
+        out
+    }
+
     /// `AiMissionEval.score(state, player[, reply_threat])` ai_mission_eval.gd:344.
     /// `rich` = the leaf that prices the reply threat first (ai_planner.gd:508-510).
     #[func]
