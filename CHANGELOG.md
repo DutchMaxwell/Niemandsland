@@ -93,6 +93,9 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   shape (for example a broken table, unit list or model position) is refused before anything is
   cleared, with a message that the file is damaged. Before, the table was cleared first, also for
   every guest when the host loaded, and the load then failed halfway.
+- **An autosave no longer catches a half-loaded table.** While a save file loads, the periodic
+  autosave waits until every piece is back on the table. Before, an autosave that fell during a
+  long load could write the half-rebuilt table into one of the recovery slots.
 
 ### Internal
 - CI and test groundwork for running the tests against the Rust core: a new job "All required
