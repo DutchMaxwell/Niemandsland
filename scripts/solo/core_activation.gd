@@ -46,7 +46,9 @@ static func on_move_path(main, gu: GameUnit) -> bool:
 	return is_core_unit(main, gu)
 
 
-## A core handle for the board as it stands (BattleSim.capture, plain form, gate reads); 0 on failure.
+## A core handle for the board as it stands (BattleSim.capture, plain form, gate reads); 0 on failure. The first
+## capture of a game sends the game header, exactly as the AI's `_core_plan` does (one header per game, shared with it),
+## so every step runs at the game's rules epoch, not at epoch 0.
 static func capture(main) -> int:
 	var sc: SoloController = main.solo_controller
 	var core: Object = sc._core_node_ready() if sc != null else null
@@ -55,6 +57,11 @@ static func capture(main) -> int:
 	var round_no: int = main.opr_army_manager.current_round
 	var state := BattleSim.capture(main.opr_army_manager, sc.objectives_provider, sc.objective_owner_of, round_no,
 		maxi(sc.game_rounds, round_no), sc.majority_in_cover, sc._has_los, sc.terrain_type_at, int(sc.ai_slot))
+	if not sc._core_header_done:
+		if not bool(core.set_game_header(AiActRecorder._header_line(state, sc.terrain_type_at))):
+			return 0
+		sc._core_header_done = true
+		sc._core_statics_builds = int(core.statics_builds())   # the header's build is #1, as in _core_plan
 	var plain := BattleSim.state_to_plain(state)
 	AiActRecorder._stamp_gate_reads(state, plain)
 	return int(core.capture_plain(plain))
