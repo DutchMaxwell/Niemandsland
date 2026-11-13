@@ -8,11 +8,12 @@ use crate::io::{Action, Seams};
 use crate::landing::Landing;
 use crate::logline::{Category, LogLine};
 use crate::mv::cost::ledge_cost;
+use crate::mv::step::{leg_crosses, DIFFICULT_MOVE_CAP_IN};
 use crate::rng::GodotRng;
-use crate::sim::{band_parts, resolve_stochastic_tray_on_board, Cover, ADVANCE, CHARGE, HOLD, REPOSITION, RUSH};
+use crate::sim::{band_parts, resolve_stochastic_tray_on_board, terrain_debuff_folds, Cover, ADVANCE, CHARGE, HOLD, REPOSITION, RUSH};
 use crate::state::State;
 use crate::step::{step_with, Step};
-use crate::terrain::Terrain;
+use crate::terrain::{is_difficult, Terrain};
 use crate::unit::UnitStatic;
 
 /// One thing the table tells the core during an activation, in order.
@@ -132,8 +133,9 @@ pub enum Check { Ok { lines: Vec<LogLine> }, Refused { reason: String } }
 /// The move check of one drop against the unit's start in `state`: (1) a declared mode, (2) one
 /// position per model, (3) every model's walked path (its trail when it has 2+ points, which must
 /// run from its start to its placed position within 0.01", plus every climb its legs pay, else its
-/// horizontal straight line) within the mode's allowance (+0.01" float noise). An overrun is refused with the O3 sentence
-/// when `enforce`, else accepted with that sentence as one log line.
+/// horizontal straight line) within the mode's allowance (+0.01" float noise), at most 6" for every model once any
+/// model's trail crosses Difficult terrain or the unit carries the Difficult debuff (not for Flying or Strider). An
+/// overrun is refused with the O3 sentence when `enforce`, else accepted with that sentence as one log line.
 pub fn check_move(statics: &[UnitStatic], state: &State, si: usize, seams: Seams, terrain: &Terrain, drop: &Drop, enforce: bool) -> Check {
     let (mode, m) = match drop.mode {
         ADVANCE => ("Advance", 0),
@@ -162,8 +164,18 @@ pub fn check_move(statics: &[UnitStatic], state: &State, si: usize, seams: Seams
         };
         x = x.max(walked);
     }
+    // GF p.11: Difficult terrain caps the WHOLE unit; Flying and Strider ignore it (read as `mv::step` reads them).
+    let strider = state.profile(si).special_rules.iter().any(|r| r == "Strider");
+    let crosses = |t: &Vec<[f64; 2]>, r: &f64| {
+        let leg: Vec<[f32; 2]> = t.iter().map(|p| terrain.to_inch([p[0] as f32, 0.0, p[1] as f32])).collect();
+        leg_crosses(&leg, *r, terrain, is_difficult)
+    };
+    let difficult = !(flying || strider)
+        && (drop.trails.iter().zip(&state.radii[si]).any(|(t, r)| crosses(t, r)) || terrain_debuff_folds(statics, state, si).0);
     let a = allowance(statics, state, si, seams, terrain);
-    let y = [a.advance, a.rush, a.charge][m];
+    let full = [a.advance, a.rush, a.charge][m];
+    let capped = difficult && full > DIFFICULT_MOVE_CAP_IN;
+    let y = if capped { DIFFICULT_MOVE_CAP_IN } else { full };
     if x <= y + 0.01 {
         return Check::Ok { lines: Vec::new() };
     }
@@ -171,7 +183,7 @@ pub fn check_move(statics: &[UnitStatic], state: &State, si: usize, seams: Seams
     if enforce {
         return Check::Refused { reason: text };
     }
-    let detail = (!a.widened_by.is_empty()).then(|| a.widened_by.join(", "));
+    let detail = if capped { Some("Difficult terrain".to_string()) } else { (!a.widened_by.is_empty()).then(|| a.widened_by.join(", ")) };
     Check::Ok { lines: vec![LogLine { rule: "move_overrun", category: Category::Movement, side: state.player[si], text, detail }] }
 }
 
@@ -689,6 +701,44 @@ mod tests {
         p.special_rules.push("Flying".into());
         st.profiles = Rc::new(crate::state::Profiles { list: vec![p], index: Default::default() });
         assert_eq!(go(&st, ADVANCE, 75), OK, "Flying climbs nothing");
+    }
+
+    /// `sim::tests::forest_bar_board`: a 72" x 48" board with Difficult forest at x 3..6", z -3..3".
+    fn forest_bar_board() -> Terrain {
+        use crate::terrain::{CellParams, PlainTerrain, FOREST};
+        let cells = vec![[16.0, 14.0, FOREST as f64], [16.0, 15.0, FOREST as f64]];
+        let cell_params = CellParams { table_size_feet: [6.0, 4.0], grid_rotation_degrees: 0.0, grid_size_inches: 3.0, inches_to_meters: INCHES_TO_METERS };
+        Terrain::build(&PlainTerrain { cells, sandbox: vec![], pieces: vec![], containers: Vec::new(), walls: vec![], cell_params })
+    }
+
+    /// RUSH: model A's trail clips the forest, so EVERY model is capped at 6" and B's 8" in the open
+    /// is refused (RED: cap only the model whose trail crosses -> B's 8" passes; drop the Strider
+    /// exemption -> the Strider case refused). A trail that stops short of the forest caps nothing.
+    #[test]
+    fn check_difficult_caps_every_model() {
+        let (mut st, statics) = squad_line();
+        st.positions[0] = vec![[0.0; 3], [0.0, 0.0, 6.0 * INCHES_TO_METERS]];
+        Rc::make_mut(&mut st.radii)[0] = vec![INCHES_TO_METERS; 2];
+        let t = forest_bar_board();
+        let go = |st: &State, a: f64, b: f64, enforce| {
+            let placed = vec![[a * INCHES_TO_METERS, 0.0, 0.0], [b * INCHES_TO_METERS, 0.0, 6.0 * INCHES_TO_METERS]];
+            let trails = vec![trail(&[[0.0, 0.0], [a, 0.0]]), trail(&[[0.0, 6.0], [b, 6.0]])];
+            check_move(&statics, st, 0, seams(), &t, &Drop { mode: RUSH, placed, trails }, enforce)
+        };
+        let over = "Squad: a model moved 8.0\" - the Rush allowance is 6.0\".";
+        assert_eq!(go(&st, 5.0, 8.0, true), refusal(over));
+        assert_eq!(go(&st, 5.9, 5.9, true), OK);
+        assert_eq!(go(&st, 1.5, 8.0, true), OK, "A stops short of the forest: no cap");
+        let Check::Ok { lines } = go(&st, 5.0, 8.0, false) else { panic!("enforce off accepts") };
+        assert_eq!((lines.len(), lines[0].text.as_str(), lines[0].detail.as_deref()), (1, over, Some("Difficult terrain")));
+        let mut debuffed = st.clone();
+        debuffed.buffs[0].push(crate::mods::LiveMod { hit_mod: 0, casting_mod: 0, morale_mod: 0, ap_mod: 0, def_mod: 0, defense_mod: 0,
+            move_mod: 0, grants_rule: Rc::from("Difficult Terrain"), scope: Rc::from(""), attackers: false, once: false, name: Rc::from("Debuff") });
+        assert_eq!(go(&debuffed, 1.5, 8.0, true), refusal(over), "the carried debuff caps without forest");
+        let mut p = st.profiles.list[0].clone();
+        p.special_rules.push("Strider".into());
+        st.profiles = Rc::new(crate::state::Profiles { list: vec![p], index: Default::default() });
+        assert_eq!(go(&st, 5.0, 8.0, true), OK, "Strider ignores Difficult");
     }
 
     /// The activation checks its last placement: an enforced overrun is refused at that `Placed`
