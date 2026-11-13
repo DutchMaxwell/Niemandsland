@@ -38,8 +38,9 @@ pub enum Input {
 #[allow(clippy::large_enum_variant)]
 pub enum ActStep {
     /// Roll `faces` dice and send them as the next `Faces`; `lines` and
-    /// `landings` are only those before the starved draw.
-    NeedRoll { index: usize, faces: usize, kind: &'static str, count: i64, target: i64, owner: String, lines: Vec<LogLine>, landings: Vec<Landing> },
+    /// `landings` are only those before the starved draw. `owner` is the rolling unit's name (a label), `owner_key`
+    /// its roster key (who rolls; "" when the core cannot tell, see `owner_key_of`).
+    NeedRoll { index: usize, faces: usize, kind: &'static str, count: i64, target: i64, owner: String, owner_key: String, lines: Vec<LogLine>, landings: Vec<Landing> },
     /// The activation is open and waits for the next input.
     Open,
     /// Input `index` breaks an order rule; `reason` is the sentence the player sees.
@@ -232,17 +233,46 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
     let action = Action { kind, unit: unit.to_string(), dest: None, shoot, charge: None, patient: false, split: None, traced: None, teleport: None };
     let faces: Vec<Vec<u8>> = t.iter().filter_map(|x| if let Input::Faces(f) = x { Some(f.clone()) } else { None }).collect();
     // The spike's non-tray seed: a plain activation never draws from it.
-    let resolve = |tray: &mut Tray| {
-        if let Some((p, trails)) = placed {
-            tray.place(p, trails);
-        }
-        resolve_stochastic_tray_on_board(statics, state, &action, terrain, seams, &mut GodotRng::new(0), tray)
+    let run = |statics: &[UnitStatic]| {
+        let resolve = |tray: &mut Tray| {
+            if let Some((p, trails)) = placed.clone() {
+                tray.place(p, trails);
+            }
+            resolve_stochastic_tray_on_board(statics, state, &action, terrain, seams, &mut GodotRng::new(0), tray)
+        };
+        step_with(&faces, resolve, |r| r.as_ref().map_or(&[][..], |(_, s)| s.rolls.as_slice()))
     };
-    match step_with(&faces, resolve, |r| r.as_ref().map_or(&[][..], |(_, s)| s.rolls.as_slice())) {
-        Step::NeedRoll { index, faces, kind, count, target, owner, lines, landings } => ActStep::NeedRoll { index, faces, kind, count, target, owner, lines: [moved, lines].concat(), landings },
+    match run(statics) {
+        Step::NeedRoll { index, faces, kind, count, target, owner, lines, landings } => {
+            let owner_key = owner_key_of(statics, state, &owner, |keyed| match run(keyed) {
+                Step::NeedRoll { index: i, kind: k, count: c, target: g, owner, .. } if (i, k, c, g) == (index, kind, count, target) => Some(owner),
+                _ => None,
+            });
+            ActStep::NeedRoll { index, faces, kind, count, target, owner, owner_key, lines: [moved, lines].concat(), landings }
+        }
         Step::Refused { reason, .. } => ActStep::Refused { index: t.len(), reason },
         Step::Done(Ok((state, _)), lines, landings) => ActStep::Done { state, lines: [moved, lines].concat(), landings },
         Step::Done(Err(u), ..) => ActStep::Refused { index: t.len(), reason: format!("{u:?}") },
+    }
+}
+
+/// The roster key of the unit whose name a roll's `owner` is: the one unit carrying that name, else (two units share
+/// it, as in a mirror match) the owner of the same roll when `replay` runs the activation again with every unit named
+/// by its own key. A name decides no rule on this path, so the replay draws the same rolls; one that asks for a
+/// different roll, or a name no unit carries, gives "" (the core cannot tell). Never by the roll's kind: a unit can
+/// owe a defence or morale die for its own move (Dangerous terrain).
+fn owner_key_of(statics: &[UnitStatic], state: &State, owner: &str, replay: impl FnOnce(&[UnitStatic]) -> Option<String>) -> String {
+    let named: Vec<usize> = (0..state.units()).filter(|&u| statics[state.roster.profile[u]].name == owner).collect();
+    match named[..] {
+        [] => String::new(),
+        [u] => state.roster.keys[u].clone(),
+        _ => {
+            let mut keyed = statics.to_vec();
+            for (u, key) in state.roster.keys.iter().enumerate() {
+                keyed[state.roster.profile[u]].name = key.clone();
+            }
+            replay(&keyed).filter(|k| named.iter().any(|&u| state.roster.keys[u] == *k)).unwrap_or_default()
+        }
     }
 }
 
@@ -780,5 +810,33 @@ mod tests {
         let (ActStep::Done { state: a, lines: la, .. }, ActStep::Done { state: b, lines: lb, .. }) = (ask(5.9, None, true), ask(5.9, None, false)) else { panic!("5.9\" resolves") };
         assert!(la.iter().all(|l| l.rule != "move_overrun"));
         assert_eq!((a, la), (b, lb));
+    }
+
+    /// R2: "a" and "b" both named "Riflemen" (a mirror match). "a" stands in Dangerous terrain (x 3..6") with two
+    /// one-wound models, holds and shoots "b"; its test kills one, so after "b"'s saves and morale the activation ends
+    /// with "a"'s OWN morale test. Every roll names its unit by roster key (RED: the first unit carrying the name ->
+    /// "a" owns "b"'s dice; morale and saves by kind to the target -> "b" owns "a"'s last die; no replay -> "").
+    #[test]
+    fn every_roll_names_its_unit_by_key_when_two_units_share_a_name() {
+        use crate::terrain::{CellParams, PlainTerrain, DANGEROUS};
+        let (mut st, mut statics) = volley_line();
+        (statics[0].name, statics[2].name) = ("Riflemen".into(), "Riflemen".into());
+        st.positions[0] = vec![[4.0 * INCHES_TO_METERS, 0.0, 0.0], [5.0 * INCHES_TO_METERS, 0.0, 0.0]];
+        (st.wounds[0], st.alive[0]) = (vec![1, 1], 2);
+        Rc::make_mut(&mut st.radii)[0] = vec![INCHES_TO_METERS / 2.0; 2];
+        let cells = vec![[16.0, 14.0, DANGEROUS as f64], [16.0, 15.0, DANGEROUS as f64]];
+        let cell_params = CellParams { table_size_feet: [6.0, 4.0], grid_rotation_degrees: 0.0, grid_size_inches: 3.0, inches_to_meters: INCHES_TO_METERS };
+        let board = Terrain::build(&PlainTerrain { cells, sandbox: vec![], pieces: vec![], containers: Vec::new(), walls: vec![], cell_params });
+        let seams = Seams { dangerous_end_morale: true, ..seams() };
+        let (mut t, mut asked) = (vec![Begin, intent(HOLD, Some("b"))], Vec::new());
+        while let ActStep::NeedRoll { faces, kind, owner, owner_key, .. } = step_activation(&statics, &st, "a", &board, seams, &t, true) {
+            assert_eq!(owner, "Riflemen", "the label stays the name");
+            asked.push((kind, owner_key));
+            // the Dangerous test kills one of "a", every hit lands, every save fails, both morale tests pass
+            t.push(Faces(match asked.len() { 1 => vec![1, 6], 3 => vec![1; faces], _ => vec![6; faces] }));
+            assert!(asked.len() < 8, "{asked:?}");
+        }
+        let want = [("attack", "a"), ("attack", "a"), ("defense", "b"), ("morale", "b"), ("morale", "a")];
+        assert_eq!(asked, want.map(|(k, o)| (k, o.to_string())));
     }
 }
