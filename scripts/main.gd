@@ -2582,9 +2582,13 @@ func _solo_book_mission_vp(final: bool) -> void:
 
 
 func _solo_end_round() -> void:
-	_solo_auto_seize()
-	_solo_book_mission_vp(opr_army_manager.current_round >= _solo_total_rounds())
+	var core_h := _solo_core_round_end()   # one-core P3 step 47: 0 = the table books the round end
+	if core_h == 0:
+		_solo_auto_seize()
+		_solo_book_mission_vp(opr_army_manager.current_round >= _solo_total_rounds())
 	if opr_army_manager.current_round >= _solo_total_rounds():
+		if core_h != 0:
+			solo_controller._core_node_ready().release(core_h)
 		if not _solo_game_finished:
 			_solo_game_finished = true
 			_solo_show_game_summary()
@@ -2593,7 +2597,8 @@ func _solo_end_round() -> void:
 	_refresh_round_visuals()
 	if network_manager != null:
 		network_manager.broadcast_round_advance()
-	if battle_log != null:
+	var core_opener := _solo_core_round_begin(core_h)   # step 47: logs "Round %d begins"; 0 = the table picks
+	if battle_log != null and core_opener == 0:
 		battle_log.log_event(BattleLog.Category.GENERAL, "Round %d begins" % opr_army_manager.current_round, true)
 	# ROUND-START sequence, AWAITED here so it completes BEFORE the new round's first activation (GF/AoF v3.5.1
 	# p.13): Battleborn Shaken-recovery, then Ambush reserve arrivals (AI) + the human's reserve deployment
@@ -2609,13 +2614,80 @@ func _solo_end_round() -> void:
 	# across the boundary and STACK onto the opener's grant, so the AI activated twice back-to-back when it
 	# opened. The pending count is derived fresh from the opener decision — never incremented — so the opener
 	# grants exactly one AI activation (GF/AoF v3.5.1 "Rounds, Turns & Activations": one-for-one alternation).
-	var ai_opens: bool = SoloController.ai_opens_next_round(_solo_ai_took_last_activation, human_has, ai_has)
+	var ai_opens: bool = SoloController.ai_opens_next_round(_solo_ai_took_last_activation, human_has, ai_has) \
+		if core_opener == 0 else core_opener == solo_controller.ai_slot
 	_solo_pending_replies = SoloController.pending_replies_at_round_start(ai_opens)
 	_solo_replied_ids.clear()   # a new round: every unit's activation owes the AI one fresh reply (finding 5)
 	if ai_opens:
 		# The AI opens this round with one activation; the pump's tail then drains an empty human side.
 		await _solo_pump()
 	# Otherwise the human opens — the pump waits for the human's own activation (the alternation resumes there).
+
+
+## One-core P3 step 47 (N3 b): a plain mission's round end from the core under the flag - the seize, its lines (the
+## arrival lock reasons included) and the round VP, written through the seams `_solo_auto_seize` and
+## `_solo_book_mission_vp` use. Returns the handle of the state after it (the round begin starts there), or 0 = the table
+## books the round end itself: the flag is off, the mission has markers (O7), the table is empty, or the core did not
+## answer.
+func _solo_core_round_end() -> int:
+	if not CoreActivation.applies(self) or not SoloController.mission_markers.is_empty() or terrain_overlay == null \
+			or opr_army_manager.get_all_game_units().is_empty():
+		return 0
+	var placed_by := {}
+	for u in opr_army_manager.get_all_game_units():
+		var origin := str(u.unit_properties.get("origin", ""))
+		if origin in ["spawn", "split"]:
+			placed_by[u.unit_id] = origin.capitalize()
+	var words := {"labels": {1: _solo_player_label(1), 2: _solo_player_label(2)}, "placed_by": placed_by,
+		"cite": OPRApiClient.rules_cite(_solo_rules_system())}
+	var h := CoreActivation.capture(self)
+	var core: Object = solo_controller._core_node_ready() if h != 0 else null
+	var r: Dictionary = core.round_end(h, words) if core != null else {}
+	if core != null:
+		core.release(h)
+	if not r.has("handle"):
+		push_error("one core: the round end was refused (%s) - the table books it" % r)
+		return 0
+	var owners: Array = r["owners"]
+	for i in range(owners.size()):
+		var owner := int(owners[i])
+		if owner == terrain_overlay.get_objective_owner(i):
+			continue
+		terrain_overlay.set_objective_owner(i, owner)
+		solo_controller.record_decision({"kind": "seize", "unit": "objective %d" % (i + 1),
+			"rule": "Solo & Co-Op: a marker is held by the ONE side with non-Shaken models within 3\"",
+			"candidates": [], "chosen": ("neutral (contested)" if owner == 0 else _solo_player_label(owner)),
+			"why": "round-end seize", "data": {"index": i, "owner": owner, "round": opr_army_manager.current_round}})
+		if network_manager != null:
+			network_manager.broadcast_objective_owner(i, owner)
+	if SoloController.mission_scoring == "round_vp":
+		SoloController.mission_vp.assign(r["vp"])
+		SoloController.mission_vp_memo = r["vp_memo"]
+	for line in r["lines"]:
+		if str(line["rule"]) == "mission_vp":
+			printerr("[MISSION] " + str(line["text"]))
+		if battle_log != null:
+			battle_log.log_event(int(line["category"]), str(line["text"]), true)
+	return int(r["handle"])
+
+
+## One-core P3 step 47 (N3 b): the round begin from the core on the round end's handle `h` (released here): its
+## "Round %d begins" line, logged here, and the opener - the side that finished first (it did NOT take the last
+## activation) unless it has no unit left. 0 = the table logs the line and picks the opener: no core round end, or a
+## unit waits in reserve (its arrival at the round start counts for the opener; arrivals stay table code, O7).
+func _solo_core_round_begin(h: int) -> int:
+	if h == 0:
+		return 0
+	var core: Object = solo_controller._core_node_ready()
+	var r: Dictionary = {}
+	if not opr_army_manager.get_all_game_units().any(func(u: GameUnit) -> bool: return SoloController.unit_in_reserve(u)):
+		r = core.round_begin(h, solo_controller.human_slot if _solo_ai_took_last_activation else solo_controller.ai_slot)
+		core.release(int(r.get("handle", 0)))
+	core.release(h)
+	for line in r.get("lines", []):
+		if battle_log != null:
+			battle_log.log_event(int(line["category"]), str(line["text"]), true)
+	return int(r.get("opener", 0))
 
 
 ## Objective control at round end (goal 003 P2, official rule): every marker with exactly ONE side's
