@@ -47,4 +47,5 @@ static func capture(parent: Node, path: String) -> Dictionary:
 		for node in nodes:
 			node.free()
 	client.free()
-	return {"lists": rows.size(), "units": total_units, "sha256": JSON.stringify(rows).sha256_text()}
+	# "rows" (per roster: units with rules and aura_granted) lets a small fixture assert readable lines beside the hash.
+	return {"lists": rows.size(), "units": total_units, "sha256": JSON.stringify(rows).sha256_text(), "rows": rows}

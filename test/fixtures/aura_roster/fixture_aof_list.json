@@ -1,0 +1,19 @@
+{
+  "id": "aura-fixture-aof",
+  "name": "Aura fixture AoF",
+  "gameSystem": "aof",
+  "units": [
+    {
+      "id": "fx_aof_warden", "selectionId": "fx-aof-warden", "joinToUnit": "fx-aof-guard",
+      "name": "Fixture Warden", "size": 1, "cost": 70, "quality": 3, "defense": 4,
+      "specialRules": ["Hero", "Steadfast Aura", "Ravage Aura"],
+      "weapons": [], "loadout": []
+    },
+    {
+      "id": "fx_aof_guard", "selectionId": "fx-aof-guard",
+      "name": "Fixture Guard", "size": 3, "cost": 90, "quality": 4, "defense": 3,
+      "specialRules": ["Fearless"],
+      "weapons": [], "loadout": []
+    }
+  ]
+}
