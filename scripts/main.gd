@@ -11790,6 +11790,11 @@ func _rpc_request_roll(rq: Dictionary, from_peer: int) -> void:
 		if member != null and caster_unit != null and solo_controller != null:
 			faces = [await _solo_prompt_interference(member, caster_unit, str(ask["spell"]), int(rq.get("target", AiSpell.CAST_BASE_TARGET)),
 				int(ask.get("boost", 0)), str(ask.get("targets", "")), unit_owner_slot(unit.unit_properties))]
+	elif ask.has("reinforce"):
+		# The copy of OUR unit that another machine's round-start beat brings back: OUR player places it.
+		faces = []
+		for p in await _reinforcement_pick_spots(unit, ask["reinforce"], false):
+			faces.append_array([(p as Vector3).x, (p as Vector3).y, (p as Vector3).z])
 	elif ask.has("weapon"):
 		var attacker := GameUnit.new()
 		attacker.unit_properties = {"name": str(ask.get("striker", ""))}
@@ -16227,7 +16232,7 @@ func _reinforcement_arrive_one(original: GameUnit, round_number: int) -> void:
 	_sync_unit_property(original, "reinforcement_spent", true)
 	# "Can't seize or contest objectives on the round they deploy" — the SAME stamp an Ambush arrival
 	# uses, so _solo_auto_seize's existing lock covers this rule for free.
-	copy.unit_properties["ambush_arrived_round"] = round_number
+	_sync_unit_property(copy, "ambush_arrived_round", round_number)   # MP: the creation payload carries no arrival stamp for this origin
 
 	if battle_log != null:
 		_log_rule_event(BattleLog.Category.GENERAL,
@@ -16255,7 +16260,9 @@ func _reinforcement_model_radius(original: GameUnit, index: int) -> float:
 
 ## Where the copy lands. The AI (and every headless run) takes the deterministic automatic search;
 ## a human gets the placement ghost over the 12" edge strip and may cancel out of it back onto that
-## same automatic spot — the copy always arrives, the player only chooses where.
+## same automatic spot — the copy always arrives, the player only chooses where. The OWNER places it: the
+## round-start beat runs on the machine that closed the round, which may be the other human's, so the ghost
+## opens on the owner's machine (the owner-request seam) and only the chosen spots travel back.
 func _reinforcement_pick_spots(original: GameUnit, radii: Array, ai: bool) -> Array:
 	var trect: Rect2 = _table_rect()
 	if trect.size == Vector2.ZERO:
@@ -16265,9 +16272,33 @@ func _reinforcement_pick_spots(original: GameUnit, radii: Array, ai: bool) -> Ar
 	var prefer: Vector3 = _reinforcement_prefer_point(original, trect)
 	var step_m: float = OPRArmyManager.INCHES_TO_METERS
 	var auto_spots: Array = SoloController.reinforcement_spots(radii, trect, margin_m, blockers, prefer, step_m)
-	if ai or DisplayServer.get_name() == "headless" or auto_spots.is_empty():
+	if ai or auto_spots.is_empty():
+		return auto_spots
+	if not _solo_i_own_unit(original):
+		return await _reinforcement_owner_spots(original, radii, auto_spots)
+	if DisplayServer.get_name() == "headless":
 		return auto_spots
 	return await _reinforcement_human_ghost(original, radii, trect, margin_m, blockers, auto_spots)
+
+
+## Another human's copy: ask its owner's machine to place it (`ask["reinforce"]` = the base radii; the answer is the
+## spots, three floats each). A vacant seat or no answer within the seam's bound lands it on the automatic spots.
+func _reinforcement_owner_spots(original: GameUnit, radii: Array, auto_spots: Array) -> Array:
+	var owner_peer := _solo_peer_for_slot(unit_owner_slot(original.unit_properties))
+	if owner_peer == 0:
+		return auto_spots
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL, "Waiting for %s — places the returning %s" % [
+			_solo_owner_name(original), original.get_name()], true)
+	var reply: Dictionary = await _owner_request(owner_peer, {"unit": original.unit_id, "kind": "place", "count": 0,
+		"target": 0, "purpose": "Reinforcement placement", "ask": {"reinforce": radii}})
+	var faces: Array = reply.get("faces", [])
+	if not bool(reply.get("done", false)) or faces.is_empty() or faces.size() % 3 != 0:
+		return auto_spots
+	var spots: Array = []
+	for i in range(0, faces.size(), 3):
+		spots.append(Vector3(float(faces[i]), float(faces[i + 1]), float(faces[i + 2])))
+	return spots
 
 
 ## Every standing base that a returning model may not overlap. The original's own parked casualties
@@ -16619,8 +16650,8 @@ func _solo_ambush_human_turn(round_number: int, pool: Array) -> Array:
 		for g in placed:
 			var gu := g as GameUnit
 			gu.unit_properties["ambush_reserve"] = false
-			gu.unit_properties["ambush_arrived_round"] = opr_army_manager.current_round
-			gu.unit_properties.erase("ambush_return_round")   # a Re-Deployment return date is spent
+			_sync_unit_property(gu, "ambush_arrived_round", opr_army_manager.current_round)   # MP: the table that ends the round reads the seize lock
+			_sync_unit_property(gu, "ambush_return_round", null)   # a Re-Deployment return date is spent
 			_solo_set_unit_visible(gu, true)
 			if battle_log != null:
 				_log_rule_event(BattleLog.Category.GENERAL,

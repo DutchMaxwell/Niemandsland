@@ -13440,8 +13440,11 @@ func _finish_reserve_arrival(unit: GameUnit, spot: Vector2, occupied: Array, rad
 	_place_unit_at(unit, spot)
 	occupied.append({"pos": spot, "radius": radius})
 	unit.unit_properties["ambush_reserve"] = false
-	unit.unit_properties["ambush_arrived_round"] = round_no
-	unit.unit_properties.erase("ambush_return_round")
+	# MP (online co-op): the table that ends the round, or runs the unit's next attack, is not always the one that closed the
+	# last round, so the arrival stamp (the seize lock, Infiltrating / Ambushing bonuses) and the spent return date ride the wire.
+	_sync_unit_latch(unit, "ambush_arrived_round", round_no)
+	if unit.unit_properties.has("ambush_return_round"):
+		_sync_unit_latch(unit, "ambush_return_round", null)
 	unit.unit_properties.erase("mission_reserve")   # D8a: on the table now, an ordinary unit
 
 
