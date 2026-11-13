@@ -1120,6 +1120,9 @@ func sync_model_wounds(unit_id: String, model_index: int, wounds: int, is_alive:
 	if game_unit:
 		var model = game_unit.get_model(model_index)
 		if model:
+			# Read BEFORE the overwrite below: was this model dead (flag) or parked on the tray (meta)?
+			var was_dead: bool = not model.is_alive \
+					or (model.node != null and is_instance_valid(model.node) and bool(model.node.get_meta("deleted", false)))
 			model.wounds_current = wounds
 			model.is_alive = is_alive
 
@@ -1135,7 +1138,11 @@ func sync_model_wounds(unit_id: String, model_index: int, wounds: int, is_alive:
 					# both sides show the identical desaturated casualty (T2 MP sync).
 					var pid: int = int(game_unit.unit_properties.get("player_id", 1))
 					# unit_id groups the peer's dead block; dead_slot pins the exact host slot (G2).
-					army_manager.set_loose_model_dead(model.node, pid, not is_alive, unit_id, dead_slot)
+					# An alive -> alive frame is a plain wound change (a Tough model losing a wound): there is
+					# nothing to park or return, and set_loose_model_dead(false) would make the battle log
+					# announce "returns to the battle" for a model that never left.
+					if not is_alive or was_dead:
+						army_manager.set_loose_model_dead(model.node, pid, not is_alive, unit_id, dead_slot)
 
 			remote_wounds_updated.emit(model)
 
