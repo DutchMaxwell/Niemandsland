@@ -365,8 +365,10 @@ var _solo_pending_replies: int:
 	get: return int(_rule_state().get("pending_replies", 0))
 	set(value): _rule_state()["pending_replies"] = value
 
-## unit_id -> true for units whose activation already earned the AI's reply THIS round
-## (finding 5: re-toggling an activation marker must never grant a second answer).
+## unit_id -> the round whose activation earned the AI's reply (finding 5: re-toggling an activation marker must never
+## grant a second answer). The ROUND is stored, not a flag cleared at a round start: only the machine that closes a round
+## runs `_solo_end_round`, so in an online co-op room the other machine's marks would outlive their round.
+## A boolean `true` (a save from before this change) still reads as "this round".
 ## NML-949: keyed by unit_id, NOT instance_id — instance ids are meaningless after a load.
 var _solo_replied_ids: Dictionary:
 	get:
@@ -1667,6 +1669,12 @@ func _solo_drop_open_pick_of(gu: GameUnit) -> void:
 			"%s is activated — the open target pick is dropped" % host.get_name())
 
 
+## Whether `unit_id`'s activation already earned the AI's reply in the CURRENT round (see `_solo_replied_ids`).
+func _solo_replied_this_round(unit_id: String) -> bool:
+	var mark: Variant = _solo_replied_ids.get(unit_id)
+	return bool(mark) if mark is bool else (mark is int or mark is float) and int(mark) == opr_army_manager.current_round
+
+
 func _on_solo_human_activated(gu: GameUnit) -> void:
 	# The first solo activation IS the game start (see _solo_ensure_playing_phase), so it faces the same
 	# deployment gate as the Start-Game button — otherwise activating a unit is a second, button-free way
@@ -1701,10 +1709,10 @@ func _on_solo_human_activated(gu: GameUnit) -> void:
 	# un-marking and re-marking a unit (a mis-click fix, or re-marking after an attack) re-emitted
 	# unit_activated and queued the AI a SECOND answer for the same activation — the alternation then ran
 	# ahead of the human ("unrecognized activations"). The pump still runs so the state machine drains.
-	if _solo_replied_ids.has(gu.unit_id):
+	if _solo_replied_this_round(gu.unit_id):
 		await _solo_pump()
 		return
-	_solo_replied_ids[gu.unit_id] = true
+	_solo_replied_ids[gu.unit_id] = opr_army_manager.current_round
 	# Coordinate: an open hand-off the player walked away from (they activated somebody ELSE) is
 	# forfeited here rather than left to stall the AI's owed reply.
 	_solo_coordinate_release_if_bypassed(gu)
