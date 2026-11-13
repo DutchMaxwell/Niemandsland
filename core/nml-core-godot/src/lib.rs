@@ -1108,14 +1108,16 @@ impl NmlCore {
         self.seams.unwrap()
     }
 
-    /// `seams_now` with the HEADER's rules epoch (0 without a header — `capture_plain`'s reading): what `resolve` and
-    /// `step_activation` hand the core, so every epoch-gated rule runs at the epoch the game plays at (`plan_inner` reads it
-    /// off the header knobs too). `seams_now` itself carries no epoch. `tray_exact` follows the epoch exactly as
-    /// `plan::seams_of` derives it (the table's casualty order from `EPOCH_70_TRAY_EXACT`).
+    /// The seams the planner plays this game with: `plan::seams_of` over the HEADER's knobs, with the path seam OR-ed in
+    /// exactly as `plan_inner` does — the rules epoch, `tray_exact`, and every rule switch the table stamps
+    /// (`dangerous_end_morale`, `range_by_base_edge`, `sighting`, `hero_attach`, `bands_prefolded`, ...). Without a header
+    /// `seams_now()` (epoch 0, `capture_plain`'s reading). What `resolve` hands the core, and `seams_for_step`'s base.
     fn seams_at_header_epoch(&mut self) -> Seams {
-        let rules_epoch = self.header.as_ref().map(|h| h.knobs.rules_epoch).unwrap_or(0);
-        let tray_exact = nml_core::acts::rule_on(rules_epoch, nml_core::acts::EPOCH_70_TRAY_EXACT);
-        Seams { rules_epoch, tray_exact, ..self.seams_now() }
+        let path = self.seams_now().path;
+        match self.header.as_ref() {
+            Some(h) => Seams { path: h.knobs.seam_path || path, ..nml_core::plan::seams_of(&h.knobs) },
+            None => self.seams_now(),
+        }
     }
 
     /// The table's activation step path (`step_activation`, `check_move`, `move_allowance`): the header epoch's seams
