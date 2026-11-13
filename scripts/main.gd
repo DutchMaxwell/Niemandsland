@@ -394,6 +394,7 @@ const AI_LISTS_CACHE_DIR := "user://ai_lists_cache_v36" # offline replay of fetc
 var _solo_fast: bool = false                 # fast-forward: shrink pacing holds + skip move animation
 var _solo_auto_saves: bool = false           # A3 (NML-202): skip _solo_prompt_saves' dialog, roll straight to the tray
 var _solo_batch: bool = false                # headless sweeps: instant (non-physics) dice + zero pacing holds (implies fast)
+var _solo_core_ai_h: int = 0                 # one-core P3 step 42: the AI activation's board before its move (0 = none)
 var _solo_relic_drop_queue: Array = []
 var _solo_relic_drop_active: Dictionary = {}
 # One loss line per volley and unit: while a volley parks its casualties (one signal each, all with the same
@@ -1110,6 +1111,9 @@ func _solo_activation_unit_gone(unit: GameUnit) -> bool:
 ## destroyed-mid-activation returns included), always with the board in its settled end state.
 func _solo_activate_one_ai() -> GameUnit:
 	var done: GameUnit = await _solo_activate_one_ai_body()
+	if _solo_core_ai_h != 0:   # one-core P3 step 42: the body's capture, released on every path of the body
+		solo_controller._core_node_ready().release(_solo_core_ai_h)
+		_solo_core_ai_h = 0
 	if done != null and solo_activation_done.is_valid():
 		await solo_activation_done.call(done)
 	return done
@@ -1131,7 +1135,11 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	# resolve them on the real tray, THEN let the decision tree plan — so a restored model is on the
 	# table while the move is planned instead of being left behind at the unit's start position. The
 	# peek caches its draw, so the seeded unit selection stays byte-identical to a run without it.
-	await begin_activation(solo_controller.peek_next_ai_unit())
+	var peek: GameUnit = solo_controller.peek_next_ai_unit()
+	await begin_activation(peek)
+	# One-core P3 step 42 (flag on): a plain unit's board BEFORE its move, for the core's volley (_run_ai_shooting).
+	_solo_core_ai_h = CoreActivation.capture(self) \
+		if peek != null and CoreActivation.applies(self) and CoreActivation.is_plain(peek) else 0
 	var act_t0 := Time.get_ticks_usec()
 	var unit: GameUnit = solo_controller.activate_next_ai_unit()
 	# S4 wait-time instrument (NML_ACT_WALL=1): the decision call a player waits for, on the
@@ -4795,6 +4803,10 @@ func _run_ai_shooting(report: Dictionary) -> void:
 	# Indirect (wave 5): "-1 to hit rolls when shooting after moving" — the activation's action says
 	# whether this unit moved before firing (HOLD = it did not).
 	var moved: bool = bool(report.get("moved", false))
+	# One-core P3 step 42 (flag on): the volley at the table's ONE pick resolves in the core when both units are plain.
+	if _solo_core_ai_h != 0 and order.size() == 1:
+		if await CoreActivation.run_ai(self, unit, report, groups[order[0]]["target"], _solo_core_ai_h):
+			return
 	for id in order:
 		var g := groups[id] as Dictionary
 		await _solo_resolve_ai_volley(unit, g["target"], g["shots"], moved)
@@ -11667,6 +11679,18 @@ func _solo_prompt_saves(attacker: GameUnit, target: GameUnit, weapon_name: Strin
 	# Rules plan 2.5: name WHOSE saves these are — "You" in solo (byte-identical), the defending
 	# player's slot label in hotseat ("P2 (Bravo) — incoming fire!").
 	var defender_lbl: String = _roller_label(target)
+	await _solo_ask_saves(attacker, target, weapon_name, hits, defense, ap)
+	# The battle log states the MODIFIED threshold (GF v3.5.1 AP(X): "targets get -X to Defense rolls"),
+	# so the AP arithmetic is auditable after the fact (maintainer field-test finding).
+	_solo_log_save_threshold(target, defense, ap)
+	return await _solo_tray_roll(hits, defense + ap, defender_lbl, "defense",
+		"Defense save vs %s" % weapon_name)
+
+
+## The "Incoming fire!" card before a human's saves (none once saves auto-roll). One-core P3 step 42 (O21): the core
+## path's driver asks it too, before a local defender's save dice.
+func _solo_ask_saves(attacker: GameUnit, target: GameUnit, weapon_name: String, hits: int, defense: int, ap: int) -> void:
+	var defender_lbl: String = _roller_label(target)
 	if not _solo_auto_saves:
 		var ap_note: String = (" (AP %d → save on %d+)" % [ap, AiCombatMath.save_target(defense, ap)]) if ap > 0 else " (save on %d+)" % AiCombatMath.shown_target(defense)
 		# Saves are not optional — one clear action, no cancel button. UI audit 2026-07-24: ESC used to
@@ -11676,11 +11700,6 @@ func _solo_prompt_saves(attacker: GameUnit, target: GameUnit, weapon_name: Strin
 		await _solo_ask(prompt_title, "%s hits %s %d time%s with %s.\nRoll your defense saves%s." % [
 			attacker.get_name(), target.get_name(), hits, ("" if hits == 1 else "s"), weapon_name, ap_note],
 			"Roll %d save%s" % [hits, ("" if hits == 1 else "s")], "")
-	# The battle log states the MODIFIED threshold (GF v3.5.1 AP(X): "targets get -X to Defense rolls"),
-	# so the AP arithmetic is auditable after the fact (maintainer field-test finding).
-	_solo_log_save_threshold(target, defense, ap)
-	return await _solo_tray_roll(hits, defense + ap, defender_lbl, "defense",
-		"Defense save vs %s" % weapon_name)
 
 
 ## The unit's summed sight+range fan (the same one F toggles) — shared by the F-toggle and the
