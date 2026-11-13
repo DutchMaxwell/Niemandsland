@@ -268,7 +268,7 @@
 "test/e2e/e2e_model_download_inventory_test.gd": 13.1,
 "test/e2e/e2e_mor_15b_mirror_test.gd": 2.3,
 "test/e2e/e2e_morale_rule_test.gd": 6.9,
-"test/e2e/e2e_mp_ai_door_latch_wire_test.gd": 21.0,
+"test/e2e/e2e_mp_ai_door_latch_wire_test.gd": 23.0,
 "test/e2e/e2e_mp_auto_verbs_test.gd": 16.6,
 "test/e2e/e2e_mp_fatigue_clear_test.gd": 6.0,
 "test/e2e/e2e_mp_growth_markers_test.gd": 5.4,

@@ -249,7 +249,58 @@ func test_takedown_bonus_latch_rides_the_wire_and_holds_on_the_other_table(timeo
 		.is_empty()
 
 
-# === 3. Counter-proofs ===========================================================================
+# === 3. A look-ahead never speaks =================================================================
+
+## `_sync_unit_property` writes AND broadcasts, and nothing but `_mp_applying_remote_state` suppresses it, so none of
+## the six doors may run inside a preview. They cannot: every caller is a real resolution (the AI activation body,
+## the human activation, the AI volley, the melee strike phase, the human shot, the Automodus verbs' commit step),
+## and the only look-ahead main has, `_solo_preview_for` -> `preview_intent`, executes on the controller under
+## `_preview_depth` with a probe that only measures sight lines. This is the runtime proof: units carrying every one
+## of these rules stand on the table, the preview runs for an advance and a charge on a live session, and not one
+## unit-property frame leaves - while a REAL door run in the same test does send one (the recording is live).
+func test_a_landing_preview_sends_no_latch_frame(timeout := 120000) -> void:
+	var fast0: bool = MovementPlanner.fast_planner
+	var guard0: Variant = MovementPlanner.fast_planner_guard
+	MovementPlanner.fast_planner = false   # deterministic precise planner (as e2e_auto_preview_test.gd)
+	MovementPlanner.fast_planner_guard = MovementPlanner.FAST_PLANNER_GUARD
+	_main._solo_fast = true
+	_bearer("Marksman", "Piercing Tag(2)", "alien_hives", Vector3(-30.0 * INCH, 0, 4.0 * INCH))
+	_bearer("Sniper", "Precision Tag(2)", "jackals", Vector3(-30.0 * INCH, 0, 8.0 * INCH))
+	_bearer("Spotter", "Precision Target", "blessed_sisters", Vector3(-30.0 * INCH, 0, 12.0 * INCH))
+	_bearer("Skulker", "Surprise Attack", "jackals", Vector3(-30.0 * INCH, 0, -4.0 * INCH))
+	var sergeant := _bearer("Sergeant", "Takedown Strike", "alien_hives", Vector3(-30.0 * INCH, 0, -8.0 * INCH))
+	_bearer("Stormer", "Storm of War", "daemons_of_war", Vector3(-30.0 * INCH, 0, -12.0 * INCH))
+	var shooter := E2EBoot.make_unit(_main, 1, "Riflemen", [Vector3.ZERO, Vector3(0, 0, 1.5 * INCH), Vector3(0, 0, -1.5 * INCH)])
+	var opr := OPRApiClient.OPRUnit.new()
+	var rifle := OPRApiClient.OPRWeapon.new()
+	rifle.name = "Rifle"
+	rifle.range_value = 12
+	rifle.attacks = 1
+	opr.weapons = [rifle]
+	shooter.source_type = "opr"
+	shooter.source_data = opr
+	_reg(shooter)
+	var enemy := _foe("Foe", Vector3(16.0 * INCH, 0, 0), 1)
+	enemy.is_activated = true
+
+	var advance: Dictionary = _main._solo_preview_for(shooter, AiDecision.Action.ADVANCE, enemy)
+	_main._solo_preview_for(shooter, AiDecision.Action.CHARGE, enemy)
+
+	assert_int((advance.get("landing", []) as Array).size()) \
+		.override_failure_message("fixture check: the preview must really have run (landing ghosts)") \
+		.is_greater(0)
+	assert_array(_frames()) \
+		.override_failure_message("a look-ahead sent hidden state to the other table: %s" % str(_frames())) \
+		.is_empty()
+	# CONTROL: the same recording does see a real door.
+	_main._solo_takedown_bonus_groups(sergeant, true)
+	assert_array(_values("takedown_bonus_used_Takedown Strike")).is_equal([true])
+
+	MovementPlanner.fast_planner = fast0
+	MovementPlanner.fast_planner_guard = guard0
+
+
+# === 4. Counter-proofs ===========================================================================
 
 ## Offline the whole thing must stay silent and still latch.
 func test_a_solo_game_latches_without_a_frame(timeout := 120000) -> void:
