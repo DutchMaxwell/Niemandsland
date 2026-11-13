@@ -1367,3 +1367,103 @@ func test_an_open_activation_without_a_core_is_reported_and_the_drop_stands() ->
 	assert_bool(got[0] == false).override_failure_message("the drop was %s" % [got[0]]).is_true()
 	assert_int(_log_lines("Rifles: a model moved 13.0\" - the Advance allowance is 6.0\".").size()).is_equal(0)
 	GraphicsSettings.enforce_movement_limit = was
+
+
+## ---- Step 66 (MOVE_GAPS 5): the drop re-check sends the activation's walked paths ----
+
+## One real drag of every model of `u` by (dx, dz) inches: ObjectManager's own pickup, cursor move and drop.
+func _drag_by(u: GameUnit, dx_in: float, dz_in: float) -> void:
+	var om: Node3D = _main.object_manager
+	om._selected_objects.assign(u.get_alive_models().map(func(m: ModelInstance) -> Node3D: return m.node))
+	var from: Vector3 = _node(u, 0).global_position
+	om._start_dragging(_screen(from.x, from.z))
+	om._update_drag(_screen(from.x + dx_in * 0.0254, from.z + dz_in * 0.0254))
+	await _runner.simulate_frames(1)
+	om._stop_dragging()
+	await _runner.simulate_frames(2)
+
+
+func _lines_of(text_part: String) -> Array:
+	return _main.battle_log.entries().filter(func(e: Dictionary) -> bool: return str(e["text"]).contains(text_part))
+
+
+## Two drops of 4" (east, then north), each inside the 6" Advance allowance: the walk adds up to 8.0". The second drop is
+## refused in the core's words (one line), the models snap back to where the FIRST drop ended, and nothing of the refused
+## drag is recorded. Its chord from the activation's start (5.66") would have passed.
+func test_the_second_drop_is_checked_on_the_whole_walk_not_its_chord() -> void:
+	var was: bool = GraphicsSettings.enforce_movement_limit
+	GraphicsSettings.enforce_movement_limit = true
+	var u := _human("Rifles")
+	assert_bool(CoreActivation.open_session(_main, u)).is_true()
+	var home := _xz(_node(u, 0).global_position)
+	await _drag_by(u, 4.0, 0.0)
+	var first := _xz(_node(u, 0).global_position)
+	assert_float(first.distance_to(home + Vector2(4.0 * 0.0254, 0.0))).override_failure_message("drop 1: %s" % [_lines_of("")]) \
+		.is_less(0.01)   # a real cursor: the screen's pixels round the 4" to a few millimetres
+	assert_int(_main.move_trails.ledger.entries_for_unit(u.unit_id).size()).is_equal(2)
+	await _drag_by(u, 0.0, 4.0)
+	var refusals: Array = _lines_of("Rifles: a model moved ").filter(func(e: Dictionary) -> bool:
+		return str(e["text"]).ends_with(" - the Advance allowance is 6.0\"."))   # 8" +- the cursor's pixels
+	assert_int(refusals.size()).override_failure_message("the 8\" walk was not refused: %s" % [_lines_of("Rifles")]).is_equal(1)
+	assert_float(_xz(_node(u, 0).global_position).distance_to(first)).override_failure_message("not back at the first drop") \
+		.is_less(0.001)
+	assert_int(_main.move_trails.ledger.entries_for_unit(u.unit_id).size()).override_failure_message("a refused drag recorded") \
+		.is_equal(2)
+	GraphicsSettings.enforce_movement_limit = was
+
+
+## One straight drop of 5.9" inside the allowance passes; the session's one placement carries every model's path.
+func test_one_straight_drop_inside_the_allowance_is_accepted_with_its_paths() -> void:
+	var was: bool = GraphicsSettings.enforce_movement_limit
+	GraphicsSettings.enforce_movement_limit = true
+	var u := _human("Rifles")
+	assert_bool(CoreActivation.open_session(_main, u)).is_true()
+	var home := _xz(_node(u, 0).global_position)
+	await _drag_by(u, 5.9, 0.0)
+	assert_float(_xz(_node(u, 0).global_position).distance_to(home)).override_failure_message("the 5.9\" drop was refused") \
+		.is_greater(0.14)
+	var placed: Array = (CoreActivation._sessions[u.unit_id]["transcript"] as Array).filter(func(e: Dictionary) -> bool:
+		return str(e["t"]) == "placed")
+	assert_int(placed.size()).is_equal(1)
+	var trails: Array = placed[0]["trails"]
+	assert_int(trails.size()).is_equal(2)
+	for t: PackedVector2Array in trails:
+		assert_int(t.size()).override_failure_message("a model without its path: %s" % [trails]).is_greater_equal(2)
+	var path: PackedVector2Array = trails[0]
+	assert_bool(not path.is_empty() and path[0].distance_to(home) < 0.0001).override_failure_message("path start: %s" % [path]).is_true()
+	GraphicsSettings.enforce_movement_limit = was
+
+
+## A walk that predates the Start is not this activation's: 10" out and back to the start, written to the ledger BEFORE the
+## Start, adds nothing to the first drop of 1".
+func test_a_walk_before_the_start_is_not_counted() -> void:
+	var was: bool = GraphicsSettings.enforce_movement_limit
+	GraphicsSettings.enforce_movement_limit = true
+	var u := _human("Rifles")
+	for i in 2:
+		var at := _xz(_node(u, i).global_position)
+		_main.move_trails.ledger.record(1, u.unit_id, u.get_name(), 901 + i,
+			PackedVector2Array([at, at + Vector2(5.0 * 0.0254, 0.0), at]), 1)
+	assert_bool(CoreActivation.open_session(_main, u)).is_true()
+	var home := _xz(_node(u, 0).global_position)
+	await _drag_by(u, 1.0, 0.0)
+	assert_float(_xz(_node(u, 0).global_position).distance_to(home)).override_failure_message("a walk before the Start was counted: %s" \
+		% [_lines_of("Rifles")]).is_greater(0.02)
+	GraphicsSettings.enforce_movement_limit = was
+
+
+## A path the ledger cannot vouch for is not sent: the models were moved 1" by something the ledger never saw (the path of
+## the next drag starts 1" from where the core captured them), so the drop is checked by its chord and passes - not
+## refused for a trail that does not match.
+func test_a_path_that_breaks_from_the_capture_is_checked_by_its_chord() -> void:
+	var was: bool = GraphicsSettings.enforce_movement_limit
+	GraphicsSettings.enforce_movement_limit = true
+	var u := _human("Rifles")
+	assert_bool(CoreActivation.open_session(_main, u)).is_true()
+	var home := _xz(_node(u, 0).global_position)
+	_shift(u, 1.0)
+	await _drag_by(u, 2.0, 0.0)
+	assert_float(_xz(_node(u, 0).global_position).distance_to(home)).override_failure_message("refused: %s" % [_lines_of("Rifles")]) \
+		.is_greater(0.07)
+	assert_int(_lines_of("trail does not match").size()).is_equal(0)
+	GraphicsSettings.enforce_movement_limit = was
