@@ -184,6 +184,7 @@ func _volley_units() -> Array:
 	_main.solo_ai_slots = {2: true}
 	_main._ensure_solo_controller()
 	_main._solo_batch = true
+	_main._solo_auto_saves = true   # step 42 (O21): the human's saves roll without the card, so no case waits for a click
 	var side := {"quality": 4, "defense": 4, "tough": 1, "z_step_in": 1.2, "game_system": "gf",
 		"faction_folder": "robot_legions", "rules": []}
 	var att := ParityTable._make_unit(_main, side.merged({"player": 2, "name": "Att", "models": 10, "x_in": 0.0}),
@@ -272,6 +273,42 @@ func test_a_landed_wound_shows_on_the_wound_marker() -> void:
 	await CoreActivation.land_step(_main, foe, landing, CoreActivation._start_models(_main), {})
 	assert_int(m.wounds_current).is_equal(1)
 	assert_object(m.node.get_node_or_null("WoundMarker")).override_failure_message("no wound marker").is_not_null()
+
+
+## Step 42 (O21): the AI's volley at this table's human unit shows the table's "Incoming fire!" card before the save dice
+## (the text names the shooter, the target, the hits and the weapon); answering it lets the volley finish. RED without the
+## card in the driver: the volley runs through, no card.
+func test_a_local_defender_sees_the_incoming_fire_card_before_its_saves(timeout := 60000) -> void:
+	var units := _volley_units()
+	_main._solo_auto_saves = false
+	_main.seed_tray_rng(7)
+	var t: Array = [{"t": "begin"}, {"t": "intent", "kind": AiDecision.Action.HOLD, "shoot": units[1].unit_id}]
+	var out := {}
+	var run := func() -> void: out["r"] = await CoreActivation.drive(_main, CoreActivation.capture(_main), units[0], t, true)
+	run.call()
+	var card: PromptCard = null
+	for _i in 300:
+		for c in _main.get_children():
+			card = c if c is PromptCard else card
+		if card != null or out.has("r"):
+			break
+		await get_tree().process_frame
+	assert_object(card).override_failure_message("no save card; the volley ran through: %s" % [out]).is_not_null()
+	if card == null:
+		return
+	var thrown := t.filter(func(e: Dictionary) -> bool: return str(e["t"]) == "faces").size()
+	var texts: Array = card.find_children("*", "Label", true, false).map(func(l: Label) -> String: return l.text)
+	assert_str(card.title).is_equal("Incoming fire!")
+	assert_int(thrown).override_failure_message("throws before the card (the hit dice only)").is_equal(1)
+	assert_bool(texts.any(func(x: String) -> bool: return x.begins_with("Att hits Def ") \
+		and x.ends_with(" with Rifle.\nRoll your defense saves (save on 4+)."))) \
+		.override_failure_message("card text: %s" % [texts]).is_true()
+	card.resolve(true)
+	for _i in 300:
+		if out.has("r"):
+			break
+		await get_tree().process_frame
+	assert_str(str(out.get("r", {}).get("step", "still waiting"))).is_equal("done")
 
 
 ## Step 27: a landing whose loss line the core said (a volley's) removes its dead with no second line from the table's
