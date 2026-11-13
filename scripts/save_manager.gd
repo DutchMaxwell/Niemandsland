@@ -391,8 +391,19 @@ func restore_state(state: Dictionary) -> Error:
 	return err
 
 
-## Load game state from file
+## Load game state from file. The clear-and-rebuild runs under the restore lock like every other restore path, so
+## the periodic autosave never snapshots a half-rebuilt table. _load_game releases the lock before load_completed;
+## when it stops on a runtime error mid-restore this wrapper releases it instead, because a stranded lock would
+## keep every later restore (and the autosave) waiting for good.
 func load_game(path: String) -> Error:
+	var held: Array = []   # the lock generation while _load_game holds it
+	var err: Error = await _load_game(path, held)
+	if not held.is_empty():
+		end_restore(held.pop_back())
+	return err
+
+
+func _load_game(path: String, held: Array) -> Error:
 	# The host owns the shared table: every peer mirrors the host's state (_rpc_sync_game_state is authority-only)
 	# and only a host re-syncs after a load. A guest load used to broadcast a table clear to everyone and then
 	# rebuild only its own screen, wiping the host's table. Offline and host loads are untouched.
@@ -446,6 +457,12 @@ func load_game(path: String) -> Error:
 	if not payload_error.is_empty():
 		load_failed.emit(payload_error)
 		return ERR_INVALID_DATA
+	# From the clear to the last rebuild step the load holds the restore lock: the autosave gate reads it, and a
+	# running restore (an army arriving from a peer) finishes before this load clears the table. A refused file
+	# returned above and never takes it. A connection drop may supersede the lock (reset_restore_lock); a host's
+	# own file load still finishes, because nobody else rebuilds a host's table, and end_restore then leaves the
+	# lock to whoever holds it now.
+	held.append(await begin_restore())
 
 	# Clear current state
 	if object_manager:
@@ -507,6 +524,7 @@ func load_game(path: String) -> Error:
 
 	# Restore token/marker visualizations for all loaded game units
 	_restore_markers_after_load()
+	end_restore(held.pop_back())   # before load_completed: its handlers (the host's re-sync) may save or restore
 
 	print("Game loaded from: %s (%d objects, %d game units)" % [path, loaded_count, game_units_loaded])
 	load_completed.emit(loaded_count)
