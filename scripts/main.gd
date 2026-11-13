@@ -1833,6 +1833,14 @@ func solo_begin_pass(unit: GameUnit) -> void:
 	var u: GameUnit = _solo_combat_unit(unit)   # a joined hero passes with its host unit
 	if u == null or _solo_is_ai_unit(u):
 		return
+	# One-core P3 step 64 (O14 (1b)): the turn never passes while an activation is open - the O5 sentence names it. Pass
+	# itself is not an activation, so it needs no session of its own.
+	var busy := CoreActivation.open_unit_name(self, null) if CoreActivation.applies(self) else ""
+	if busy != "":
+		var why := str(solo_controller._core_node_ready().check_begin(busy).get("reason", ""))
+		_log_rule_event(BattleLog.Category.GENERAL, why)
+		_show_toast(why)
+		return
 	if _hotseat_verb_refused(u):
 		return
 	if _deployment_gate_refuses_start():
@@ -1872,6 +1880,8 @@ func solo_spend_speed_feat(unit: GameUnit) -> void:
 	if unit.is_activated:
 		_log_rule_event(BattleLog.Category.MOVEMENT,
 			"%s: %s has already activated this round — the feat stays unspent" % [n, unit.get_name()])
+		return
+	if core_door_refused(unit):   # one-core P3 step 64: the feat is spent INSIDE an activation (steps 37, 67 journal it)
 		return
 	var sp: Dictionary = (feats[0] as Dictionary).get("params", {})
 	var adv := int(sp.get("advance_mod", 2))
