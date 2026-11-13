@@ -444,6 +444,37 @@ pub(crate) fn world_ledges_of(t: &Terrain, flying: bool, rules_epoch: u32) -> Ve
     }).collect()
 }
 
+/// A world trail's (XZ metres) walked inches: ground plus every climb its legs pay (GF p.11), and the climb alone.
+pub(crate) fn trail_walk_in(trail: &[[f64; 2]], ledges_w: &[Ledge]) -> (f64, f64) {
+    let climb = |w: &[[f64; 2]]| ledge_cost([w[0][0] as f32, w[0][1] as f32], [w[1][0] as f32, w[1][1] as f32], ledges_w);
+    let walked = trail.windows(2).map(|w| (w[0][0] - w[1][0]).hypot(w[0][1] - w[1][1]) / IN2M + climb(w)).sum();
+    (walked, trail.windows(2).map(climb).sum())
+}
+
+/// One-core P3: the landing of a move the player placed, from its walked paths (`trails`: world XZ metres, the
+/// unit's own models in order; `state` already holds the placed ends), so the Dangerous test reads the routes.
+pub(crate) fn placed_landing(state: &State, si: usize, t: &Terrain, trails: &[Vec<[f64; 2]>], budget_in: f64, hero_attach: bool, rules_epoch: u32) -> Landing {
+    let flying = state.profile(si).special_rules.iter().any(|r| r == "Flying");
+    let ledges_w = world_ledges_of(t, flying, rules_epoch);
+    let movers: Vec<Mover> = movers_of(state, si).into_iter().filter(|m| hero_attach || m.unit == si).collect();
+    let none = Vec::new();
+    let trail = |i: usize| trails.get(i).filter(|_| movers[i].unit == si).unwrap_or(&none);
+    let walks: Vec<(f64, f64)> = (0..movers.len()).map(|i| trail_walk_in(trail(i), &ledges_w)).collect();
+    let inch: Vec<Vec<V2>> = (0..movers.len()).map(|i| trail(i).iter().map(|p| t.to_inch([p[0] as f32, 0.0, p[1] as f32])).collect()).collect();
+    Landing {
+        sidestep_spent: false,
+        shorten_covered: false,
+        end: movers.iter().map(|m| pos_of(state, *m)).collect(),
+        budget_in,
+        arc_in: walks.iter().map(|w| w.0).fold(0.0, f64::max),
+        climb_in: walks.iter().map(|w| w.1).fold(0.0, f64::max),
+        dangerous: inch.iter().zip(&movers).map(|(leg, m)| !flying && leg_crosses(leg, radius_of(state, *m), t, terrain::is_dangerous)).collect(),
+        trails: inch,
+        movers,
+        call: None,
+    }
+}
+
 impl Move<'_> {
     /// STANDALONE_SWEEP_A_2026-09-14, row `Difficult Terrain Debuff` — the
     /// FROZEN `EPOCH_27_TERRAIN_DEBUFF`: the granted "Difficult Terrain" the

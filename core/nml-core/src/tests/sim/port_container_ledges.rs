@@ -102,3 +102,17 @@ use super::*;
         assert!(shot.log.iter().any(|l| l.contains("Terrain") && l.contains("climbs") && l.contains("+5.0")),
             "log: {:?} (RED on main)", shot.log);
     }
+
+    /// One-core P3 step 61: a placed move whose walked path climbs onto the container names the Terrain rule
+    /// with the climb it paid, as the port's own move does (RED: drop the line -> no "climbs onto terrain").
+    #[test]
+    fn a_placed_climb_names_the_terrain_rule() {
+        let (st, statics) = climber(0.0);
+        let mut tray = Tray::supplied(vec![]);
+        tray.place(vec![[4.0 * IN2M, 0.0, 0.0]], vec![vec![[0.0, 0.0], [4.0 * IN2M, 0.0]]]);
+        let seams = Seams { rules_epoch: crate::acts::CURRENT_RULES_EPOCH, ..Seams::default() };
+        let (_, shot) = resolve_stochastic_tray_on_board(&statics, &st, &advance_to(20.0), &container_board(true, false), seams,
+            &mut crate::rng::GodotRng::new(0), &mut tray).unwrap();
+        assert!(shot.log.iter().any(|l| l == "Terrain: a climbs onto terrain (+2.5\" of its move)"), "{:?}", shot.log);
+    }
+

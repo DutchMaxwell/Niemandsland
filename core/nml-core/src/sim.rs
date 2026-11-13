@@ -9732,9 +9732,19 @@ fn resolve_with(
     }
     // One-core P3: a supplied placement IS the move — every model lands where the player put it.
     if let Some(p) = placed {
+        // One-core P3 step 61: the walked paths the tray carries become the move's landing, so the Dangerous test
+        // below reads each model's route, not only its end (`dangerous_dice`'s end-only arm); a climb names its rule.
+        let trails = dice.as_ref().and_then(|d| d.0.placed_trails()).filter(|t| !t.is_empty()).map(|t| t.to_vec());
         next.positions[si] = p;
         moved = true;
         next.moved_round[si] = next.round;
+        if let (Some(trails), Cover::Board(t)) = (trails, cover) {
+            let land = crate::mv::step::placed_landing(&next, si, t, &trails, band_in, seams.hero_attach, seams.rules_epoch);
+            if let (true, Some((_, shot))) = (land.climb_in > 0.0, dice.as_mut()) {
+                shot.log.push(format!("Terrain: {} climbs onto terrain (+{:.1}\" of its move)", statics[pi_s].name, land.climb_in));
+            }
+            landing = Some(land);
+        }
         if let Cover::Board(t) = cover {
             if t.is_valid() {
                 land_cover(statics, &mut next, si, t, seams, dice.as_mut().map(|d| &mut *d.1));

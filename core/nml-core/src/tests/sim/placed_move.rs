@@ -43,3 +43,29 @@ use super::*;
         seeded.place(vec![[0.1, 0.0, 0.05], [0.6, 0.0, 0.0]], trails);
         assert_eq!(seeded.placed_trails(), None);
     }
+
+    /// One-core P3 step 61: a placed move tests Dangerous terrain on its WALKED path. Unit "a"'s model A walks
+    /// 4" east into `dangerous_bar_board`'s cells (x 3..9", z -3..3"), 5" north and back west, and ends in the
+    /// open; B walks 1" in the open. With the trails the unit takes one test of its 2 dice (rules 3.6: the whole
+    /// unit); without them the end-only reading sees open ground and nothing is rolled (RED: do not set
+    /// `landing` -> zero records).
+    #[test]
+    fn a_placed_move_rolls_dangerous_terrain_from_its_walked_path() {
+        let (mut st, statics) = buff_line();
+        st.positions[0] = vec![[0.0, 0.0, 0.0], [-2.0 * IN2M, 0.0, 0.0]];
+        let placed = vec![[0.0, 0.0, 5.0 * IN2M], [-2.0 * IN2M, 0.0, -IN2M]];
+        let w = |p: &[[f64; 2]]| p.iter().map(|q| [q[0] * IN2M, q[1] * IN2M]).collect::<Vec<_>>();
+        let trails = vec![w(&[[0.0, 0.0], [4.0, 0.0], [4.0, 5.0], [0.0, 5.0]]), w(&[[-2.0, 0.0], [-2.0, -1.0]])];
+        let seams = Seams { rules_epoch: crate::acts::CURRENT_RULES_EPOCH, tray_exact: true, ..Seams::default() };
+        let run = |trails: Vec<Vec<[f64; 2]>>| {
+            let mut tray = Tray::supplied(vec![vec![6, 6]]);
+            tray.place(placed.clone(), trails);
+            resolve_stochastic_tray_on_board(&statics, &st, &advance_to(20.0), &dangerous_bar_board(), seams, &mut GodotRng::new(0), &mut tray).unwrap()
+        };
+        let dangerous = |shot: &ShootResult| shot.rolls.iter().filter(|r| r.target == DANGEROUS_TARGET).map(|r| r.count).collect::<Vec<_>>();
+        let (after, shot) = run(trails);
+        assert_eq!(after.positions[0], placed, "fixture: the placement is the move");
+        assert_eq!(dangerous(&shot), vec![2], "one test for the whole unit: {:?}", shot.rolls);
+        assert_eq!(dangerous(&run(Vec::new()).1), Vec::<i64>::new(), "no trails: the ends are in the open");
+    }
+

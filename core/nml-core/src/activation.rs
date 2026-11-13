@@ -7,7 +7,6 @@ use crate::gate::INCHES_TO_METERS;
 use crate::io::{Action, Seams};
 use crate::landing::Landing;
 use crate::logline::{Category, LogLine};
-use crate::mv::cost::ledge_cost;
 use crate::mv::step::{leg_crosses, DIFFICULT_MOVE_CAP_IN};
 use crate::rng::GodotRng;
 use crate::sim::{band_parts, resolve_stochastic_tray_on_board, terrain_debuff_folds, Cover, ADVANCE, CHARGE, HOLD, REPOSITION, RUSH};
@@ -152,7 +151,6 @@ pub fn check_move(statics: &[UnitStatic], state: &State, si: usize, seams: Seams
     // The climbs the AI's move pays (GF p.11), in the trail's world frame: none for Flying or below epoch 74.
     let flying = state.profile(si).special_rules.iter().any(|r| r == "Flying");
     let ledges = crate::mv::step::world_ledges_of(terrain, flying, seams.rules_epoch);
-    let climb = |p: [f64; 2], q: [f64; 2]| ledge_cost([p[0] as f32, p[1] as f32], [q[0] as f32, q[1] as f32], &ledges);
     let mut x = 0.0f64;
     for (i, (a, b)) in start.iter().zip(&drop.placed).enumerate() {
         let (a, b) = ([a[0], a[2]], [b[0], b[2]]);
@@ -160,7 +158,7 @@ pub fn check_move(statics: &[UnitStatic], state: &State, si: usize, seams: Seams
             Some(t) if inch(t[0], a) > 0.01 || inch(t[t.len() - 1], b) > 0.01 => {
                 return Check::Refused { reason: "trail does not match the placed model".to_string() };
             }
-            Some(t) => t.windows(2).map(|w| inch(w[0], w[1]) + climb(w[0], w[1])).sum(),
+            Some(t) => crate::mv::step::trail_walk_in(t, &ledges).0,
             None => inch(a, b),
         };
         x = x.max(walked);
