@@ -16227,7 +16227,7 @@ func _reinforcement_arrive_one(original: GameUnit, round_number: int) -> void:
 	_sync_unit_property(original, "reinforcement_spent", true)
 	# "Can't seize or contest objectives on the round they deploy" — the SAME stamp an Ambush arrival
 	# uses, so _solo_auto_seize's existing lock covers this rule for free.
-	copy.unit_properties["ambush_arrived_round"] = round_number
+	_sync_unit_property(copy, "ambush_arrived_round", round_number)   # MP: the creation payload carries no arrival stamp for this origin
 
 	if battle_log != null:
 		_log_rule_event(BattleLog.Category.GENERAL,
@@ -16619,8 +16619,8 @@ func _solo_ambush_human_turn(round_number: int, pool: Array) -> Array:
 		for g in placed:
 			var gu := g as GameUnit
 			gu.unit_properties["ambush_reserve"] = false
-			gu.unit_properties["ambush_arrived_round"] = opr_army_manager.current_round
-			gu.unit_properties.erase("ambush_return_round")   # a Re-Deployment return date is spent
+			_sync_unit_property(gu, "ambush_arrived_round", opr_army_manager.current_round)   # MP: the table that ends the round reads the seize lock
+			_sync_unit_property(gu, "ambush_return_round", null)   # a Re-Deployment return date is spent
 			_solo_set_unit_visible(gu, true)
 			if battle_log != null:
 				_log_rule_event(BattleLog.Category.GENERAL,
