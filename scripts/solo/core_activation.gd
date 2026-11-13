@@ -395,6 +395,7 @@ static func reset_all(main) -> void:
 		close_session(main, id)
 	_announced.clear()
 	last_target = null
+	_fixes_due.clear()
 	if main != null and is_instance_valid(main.solo_controller):
 		main.solo_controller._core_header_done = false
 
@@ -559,6 +560,8 @@ static func on_check(main, payload: Dictionary, from_peer: int) -> void:
 		main._log_rule_event(BattleLog.Category.GENERAL, "%s: the tables still disagree - nothing more was changed."
 			% (gu0.get_name() if gu0 != null else str(payload.get("unit", ""))))
 		return
+	for id in ids:   # step 52: the Activated corrections this notice may bring back (sender, unit, round), each once
+		_fixes_due["%d|%s|%d" % [from_peer, id, int(payload["round"])]] = true
 	main.network_manager.send_command("activation_mismatch", {"unit": payload.get("unit", ""), "units": ids,
 		"round": payload["round"], "theirs": payload.get("digest", ""), "ours": ours, "rows": rows(units),
 		"retry": int(payload.get("retry", 0))}, from_peer)
@@ -637,7 +640,7 @@ static func on_mismatch(main, payload: Dictionary, from_peer: int) -> void:
 			nm.broadcast_unit_marker(gu, "ShakenMarker", gu.is_shaken)
 		if their[1] != gu.is_activated:
 			nm.send_command("correct_unit_activated", {"unit": gu.unit_id, "activated": gu.is_activated,
-				"activation_round": gu.activation_round}, from_peer)
+				"activation_round": gu.activation_round, "round": int(payload["round"])}, from_peer)
 	if not moves.is_empty():
 		nm.broadcast_move_batch(moves)
 		nm.broadcast_rotation_batch(turns)
@@ -659,11 +662,17 @@ static func _model_row(models: Variant, index: int) -> Array:
 	return []
 
 
+## Step 52: the Activated corrections this table asked for, "<peer>|<unit_id>|<round>" -> true, consumed on use.
+static var _fixes_due: Dictionary = {}
+
+
 ## Step 52 (O10): the winner's activation flag of one unit, applied as a CORRECTION - set directly, the turn token
-## untouched, no activation line, nothing re-broadcast; never counted as a new activation.
-static func on_correct_activated(main, payload: Dictionary) -> void:
+## untouched, no activation line, nothing re-broadcast; never counted as a new activation. Only one this table asked for:
+## from the peer it sent the mismatch to, for a unit of that mismatch, in its round, once.
+static func on_correct_activated(main, payload: Dictionary, from_peer: int) -> void:
 	var gu: GameUnit = main.opr_army_manager.get_game_unit_by_id(str(payload.get("unit", "")))
-	if not applies(main) or gu == null:
+	var key := "%d|%s|%d" % [from_peer, payload.get("unit", ""), int(payload.get("round", -1))]
+	if not applies(main) or gu == null or not _fixes_due.erase(key):
 		return
 	gu.is_activated = bool(payload.get("activated", gu.is_activated))
 	gu.activation_round = int(payload.get("activation_round", gu.activation_round))

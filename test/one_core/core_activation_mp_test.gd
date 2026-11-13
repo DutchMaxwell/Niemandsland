@@ -381,7 +381,7 @@ func test_the_winner_pushes_a_moved_model_shaken_and_the_activation_flag_as_a_co
 	if _names().size() != 6:
 		return
 	assert_dict(_net.wire[1]).is_equal({"t": "correct_unit_activated", "to": SENDER_PEER,
-		"p": {"unit": u.unit_id, "activated": true, "activation_round": u.activation_round}})
+		"p": {"unit": u.unit_id, "activated": true, "activation_round": u.activation_round, "round": 1}})
 	var p := n.global_position
 	assert_array(_net.wire[2]["p"]["a"][0]).is_equal([n.get_meta("network_id"), p.x, p.y, p.z])
 
@@ -396,9 +396,9 @@ func test_the_activation_correction_is_never_a_new_activation() -> void:
 	var u := _plain(1, "Rifles", 0.0)
 	_plain(2, "Guards", 18.0)
 	_main._apply_turn_token(2)
+	_ask_for_a_correction(u)
 	var lines: int = _main.battle_log.entries().size()
-	_main._on_network_command("correct_unit_activated", {"unit": u.unit_id, "activated": true, "activation_round": 1},
-		SENDER_PEER)
+	_fix(u, SENDER_PEER)
 	await _runner.simulate_frames(2)
 	assert_bool(u.is_activated).is_true()
 	assert_int(_main._hotseat_side_on_turn()).is_equal(2)
@@ -426,3 +426,38 @@ func test_a_failed_re_check_writes_the_still_disagree_line_and_sends_no_notice()
 	assert_array(_names()).override_failure_message("%s" % [_names()]).contains_exactly(["sync_log_event"])
 	assert_int(_main.battle_log.entries().filter(func(e: Dictionary) -> bool:
 		return str(e["text"]) == "Guards: the tables still disagree - nothing more was changed.").size()).is_equal(1)
+
+
+## This table reports a difference on `u` to SENDER_PEER (round 1): the one Activated correction it will then accept.
+func _ask_for_a_correction(u: GameUnit) -> void:
+	var check := _check_of([u])
+	var m: ModelInstance = u.models[0]
+	m.wounds_current = 0
+	_receive(check)
+	m.wounds_current = 1
+	_net.wire.clear()
+
+
+func _fix(u: GameUnit, peer: int) -> void:
+	_main._on_network_command("correct_unit_activated", {"unit": u.unit_id, "activated": true, "activation_round": 1,
+		"round": 1}, peer)
+
+
+## A correction nobody asked for is ignored - none sent at all, from another peer, for a unit outside the mismatch, or a
+## second time - so a modified client cannot flip Activated on a unit at will; the one this table asked for applies.
+func test_an_unsolicited_activation_correction_is_ignored() -> void:
+	_room()
+	var u := _plain(1, "Rifles", 0.0)
+	var other := _plain(1, "Reserves", 6.0)
+	_fix(u, SENDER_PEER)
+	assert_bool(u.is_activated).override_failure_message("a correction nobody asked for applied").is_false()
+	_ask_for_a_correction(u)
+	_fix(u, SENDER_PEER + 1)
+	_fix(other, SENDER_PEER)
+	assert_bool(u.is_activated or other.is_activated).override_failure_message("a correction outside the mismatch") \
+		.is_false()
+	_fix(u, SENDER_PEER)
+	assert_bool(u.is_activated).override_failure_message("the correction this table asked for").is_true()
+	u.is_activated = false
+	_fix(u, SENDER_PEER)
+	assert_bool(u.is_activated).override_failure_message("one correction applied twice").is_false()
