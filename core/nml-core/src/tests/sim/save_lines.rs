@@ -7,7 +7,7 @@ use crate::logline::Category;
     /// The step-23 plain volley: `Att` fires a 10-attack `Rifle` at Quality 2+ into `Def`, ten 1-wound models
     /// at Defense 4+, no joined hero; Def sits on seat 1, so its lines' side is read, not defaulted. `models` = 1 with
     /// `wounds` 3 makes Def one Tough(3) model instead.
-    fn att_def(models: usize, wounds: i64) -> (State, Vec<UnitStatic>) {
+    pub(super) fn att_def(models: usize, wounds: i64) -> (State, Vec<UnitStatic>) {
         let (mut st, mut statics) = volley_line();
         st.player = vec![0, 0, 1, 1];
         (st.attached, st.attached_to) = (Rc::new(vec![vec![]; 4]), Rc::new(vec![None; 4])); // a plain unit: no joined hero
@@ -46,7 +46,7 @@ use crate::logline::Category;
             let texts = |ls: Vec<LogLine>| ls.into_iter().map(|l| l.text).collect::<Vec<_>>();
             let mut want = vec!["Att fires at Def".to_string(), format!("Att fires Rifle at Def — {hits} hit{}", if hits == 1 { "" } else { "s" }), "Def saves on 4+".into()];
             want.extend(said.iter().map(|s| s.to_string()));
-            assert_eq!(texts(tray.all_lines()), want, "{models} models, {hits} hits");
+            assert_eq!(texts(tray.all_lines())[..want.len()], want, "{models} models, {hits} hits"); // morale: morale_lines.rs
             assert_eq!(texts(tray.lines_upto(1)), want[..3], "{hits} hits: the threshold comes before the save dice");
             assert_eq!(tray.landings_upto(1).len(), 0, "{hits} hits: nothing lands before the save dice");
             assert_eq!(texts(tray.lines_upto(2)), want, "{hits} hits: the casualty lines share the landing's stamp");
