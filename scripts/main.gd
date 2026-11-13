@@ -5121,15 +5121,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 			attacks = guns * per_copy
 			if attacks <= 0:
 				volley_report = {"attacks": 0, "silent": "its bearers already fire another entry of it"}
-		AiShotRecorder.record({"act": solo_controller.move_act_seq(), "round": solo_controller._current_round(),
-			"player": solo_controller.ai_slot, "shooter": attacker.get_name(), "member": member.get_name(),
-			"weapon": str(profile.get("name", "?")), "target": target.get_name(),
-			"target_id": str(target.unit_id),
-			"alive": member.get_alive_count(), "sighted": sighted, "bearers": shot_bearers,
-			"max_models": shot_max_models, "attacks": attacks,
-			"reach_in": float(shot_range_in) + (_solo_unit_base_radius_m(member) + _solo_unit_base_radius_m(target)) \
-				/ MoveIntent.INCHES_TO_METERS,
-			"indirect": bool(profile.get("indirect", false))})
+		_solo_record_shot(attacker, member, target, profile, sighted, shot_bearers, shot_max_models, attacks, shot_range_in)
 		if attacks <= 0:
 			# NML-1035: a neutralized weapon says WHY it stays silent — a volley of
 			# only-silent weapons used to read as "unit never activated".
@@ -5324,6 +5316,21 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 	_solo_stage_end()
 	_solo_consume_once_mods(attacker, target, false)   # F4: once-mods spent by this exchange
 	_solo_spend_shot_feats(attacker)
+
+
+## NML-1073 M5 D6a-B6: one AI shot's table facts for the env-gated shot dump (AiShotRecorder); one-core P3 step 42c:
+## the core path records its shots through here too.
+func _solo_record_shot(attacker: GameUnit, member: GameUnit, target: GameUnit, profile: Dictionary, sighted: int,
+		bearers: int, max_models: int, attacks: int, range_in: int) -> void:
+	AiShotRecorder.record({"act": solo_controller.move_act_seq(), "round": solo_controller._current_round(),
+		"player": solo_controller.ai_slot, "shooter": attacker.get_name(), "member": member.get_name(),
+		"weapon": str(profile.get("name", "?")), "target": target.get_name(),
+		"target_id": str(target.unit_id),
+		"alive": member.get_alive_count(), "sighted": sighted, "bearers": bearers,
+		"max_models": max_models, "attacks": attacks,
+		"reach_in": float(range_in) + (_solo_unit_base_radius_m(member) + _solo_unit_base_radius_m(target)) \
+			/ MoveIntent.INCHES_TO_METERS,
+		"indirect": bool(profile.get("indirect", false))})
 
 
 ## The AI volley's outcome toast; one-core P3 step 42b: the core path shows it too.

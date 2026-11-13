@@ -769,6 +769,18 @@ func test_drive_releases_the_done_handle_unless_the_caller_keeps_it() -> void:
 	core.release(int(kept["handle"]))
 
 
+## Step 42c: the AI body's board capture dies with the game - `reset_all` releases it and zeroes the slot, so a load or a
+## new game mid-activation can neither leak it nor later release a handle the core has handed out again.
+func test_reset_all_releases_the_ai_bodys_capture() -> void:
+	_volley_units()
+	var core: Object = _main.solo_controller._core_node_ready()
+	_main._solo_core_ai_h = CoreActivation.capture(_main)
+	var live: int = core.live_handles()
+	CoreActivation.reset_all(_main)
+	assert_int(_main._solo_core_ai_h).is_equal(0)
+	assert_int(core.live_handles()).override_failure_message("the capture outlived the game").is_equal(live - 1)
+
+
 ## (review B1 part 1) The session store is static: the table leaving the tree (quit to menu, before a new game) closes
 ## every open activation, so the next game never says "Finish Rifles's activation first.".
 func test_a_table_that_leaves_the_tree_closes_every_open_activation() -> void:
