@@ -445,6 +445,74 @@ func test_reset_all_closes_every_session() -> void:
 	assert_dict(_main.solo_controller._core_node_ready().move_allowance(h, a.unit_id)).is_empty()
 
 
+func _unspent_lines() -> Array:
+	var out: Array = _main.battle_log.entries().map(func(e: Dictionary) -> String: return str(e["text"])) \
+		.filter(func(t: String) -> bool: return t.ends_with(" is unspent again."))
+	out.sort()
+	return out
+
+
+## Step 37 (O9, O15 (4)): the journal puts back what a Cancel-reachable spend wrote, on the acting unit AND on another
+## unit - a wire-listed key through the wire (null = erased), a table-local stamp by a direct write - with one line per
+## rule naming the acting unit; a key that did not change sends nothing and says nothing. Step 35's Cancel calls it.
+func test_the_journal_unspends_the_one_time_spends_on_every_unit() -> void:
+	var u := _human("Rifles", ["Swift Buff"])
+	var enemy := _unit(2, "Raiders")
+	u.unit_properties["speed_feat_used_speed_feat_aura"] = true   # spent before the Start: it stays spent
+	var net := _recording_net()
+	assert_bool(CoreActivation.open_session(_main, u)).is_true()
+	_main._sync_unit_property(u, "speed_feat_used_speed_feat", true)
+	_main._sync_unit_property(enemy, "tag_markers", 2)
+	u.unit_properties["utility_buff_round"] = 1
+	net.sent.clear()
+	CoreActivation.undo_journal(_main, u)
+	for k in ["speed_feat_used_speed_feat", "utility_buff_round"]:
+		assert_bool(u.unit_properties.has(k)).override_failure_message("%s stays" % k).is_false()
+	assert_bool(enemy.unit_properties.has("tag_markers")).override_failure_message("the enemy's tags stay").is_false()
+	assert_bool(u.unit_properties.get("speed_feat_used_speed_feat_aura", false)).is_true()
+	assert_array(_unspent_lines()).is_equal(["Rifles: Precision Tag is unspent again.",
+		"Rifles: Speed Feat is unspent again.", "Rifles: Utility Buff is unspent again."])
+	var props: Array = net.sent.filter(func(f: Dictionary) -> bool: return f["m"] == "sync_unit_property") \
+		.map(func(f: Dictionary) -> Array: return f["a"])
+	assert_array(props).contains_exactly_in_any_order([[u.unit_id, "speed_feat_used_speed_feat", null],
+		[enemy.unit_id, "tag_markers", null]])
+	# The receiving table still holds the spends; the recorded frames, handed to its real handler, erase them there.
+	u.unit_properties["speed_feat_used_speed_feat"] = true
+	enemy.unit_properties["tag_markers"] = 2
+	for a in props:
+		net.sync_unit_property(a[0], a[1], a[2])
+	assert_bool(u.unit_properties.has("speed_feat_used_speed_feat") or enemy.unit_properties.has("tag_markers")) \
+		.override_failure_message("the receiver kept a spend").is_false()
+	_end_session()   # the recording transport is not in the tree: free it inside the case (no orphan)
+
+
+## Step 37: every human unit that opens a Shoot pick gets the Utility Buff stamp, rule or not; a unit without the rule
+## gets its old stamp back and no line (it spent no rule).
+func test_a_stamp_without_a_buff_rule_comes_back_without_a_line() -> void:
+	var u := _human("Rifles")
+	u.unit_properties["utility_buff_round"] = 0
+	assert_bool(CoreActivation.open_session(_main, u)).is_true()
+	u.unit_properties["utility_buff_round"] = 1
+	CoreActivation.undo_journal(_main, u)
+	assert_int(int(u.unit_properties.get("utility_buff_round", -1))).is_equal(0)
+	assert_array(_unspent_lines()).is_empty()
+
+
+## Step 37: a journaled container changed IN PLACE after the Start comes back as it was at the Start, and a restored
+## value is a fresh copy (a second in-place change and undo go back again). Every JOURNAL_KEYS value is a bool or an int
+## on main today; the core capture reads the wire-listed ones as int/bool (act_recorder `_ledger_of`), so only the
+## table-local stamp can carry a container at the Start: it guards the first container value.
+func test_a_container_changed_in_place_comes_back_as_it_was() -> void:
+	var u := _human("Rifles")
+	u.unit_properties["utility_buff_round"] = [1]
+	assert_bool(CoreActivation.open_session(_main, u)).is_true()
+	for pass_no in 2:
+		(u.unit_properties["utility_buff_round"] as Array).append(2 + pass_no)
+		CoreActivation.undo_journal(_main, u)
+		assert_array(u.unit_properties["utility_buff_round"]).override_failure_message("undo %d: %s" % [pass_no + 1,
+			u.unit_properties["utility_buff_round"]]).is_equal([1])
+
+
 ## Step 29: the REAL NetworkManager with only its transport swapped out; it records every wire frame (pattern:
 ## e2e_mp_log_channel_test's FakeNet). Seat 1 is this table's.
 class FakeNet extends "res://scripts/network_manager.gd":

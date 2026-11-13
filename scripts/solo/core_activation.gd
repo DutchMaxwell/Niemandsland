@@ -275,7 +275,7 @@ static func open_session(main, gu: GameUnit) -> bool:
 			start_pos.append(Vector3((was as Vector2).x, p.y, (was as Vector2).y) if was is Vector2 else p)
 			start_rot.append(m.node.rotation.y)
 	var s := {"handle": h, "transcript": [{"t": "begin"}], "start_models": _start_models(main), "start_pos": start_pos,
-		"start_rot": start_rot, "dice": false, "journal": {}}
+		"start_rot": start_rot, "dice": false, "journal": {"props": _journal_props(main)}}
 	if gu.unit_properties.has("moved_round"):
 		s["moved_round_before"] = gu.unit_properties["moved_round"]
 	_sessions[gu.unit_id] = s
@@ -332,6 +332,77 @@ static func reset_all(main) -> void:
 	last_target = null
 	if main != null and is_instance_valid(main.solo_controller):
 		main.solo_controller._core_header_done = false
+
+
+## Step 37 (O9, O15 (4)): the unit properties a Cancel-reachable one-time spend writes, each with the rule its line names.
+## The Speed Feat latches are SoloController.speed_feat_flag(<feat name>) of the two once-per-game Quick rules; the
+## Utility Buff stamp and the Precision Tag latch are table-local; `tag_markers` sits on the TAGGED enemy and travels.
+const JOURNAL_KEYS := {
+	"speed_feat_used_speed_feat": "Speed Feat",
+	"speed_feat_used_speed_feat_aura": "Speed Feat Aura",
+	"utility_buff_round": "Utility Buff",
+	"precision_tag_used": "Precision Tag",
+	"tag_markers": "Precision Tag",
+}
+const _NET := preload("res://scripts/network_manager.gd")
+
+
+## Step 37: JOURNAL_KEYS of EVERY game unit on the table (a spend can write on another unit), instance_id -> {key: value};
+## a key the unit does not carry stays out of its row.
+static func _journal_props(main) -> Dictionary:
+	var out := {}
+	for u in main.opr_army_manager.get_all_game_units():
+		var row := {}
+		for k in JOURNAL_KEYS:
+			if u.unit_properties.has(k):
+				row[k] = _copy(u.unit_properties[k])
+		out[u.get_instance_id()] = row
+	return out
+
+
+## Step 37 (Cancel, step 35): every JOURNAL_KEYS value that changed on ANY unit since `gu`'s Start is put back (erased
+## when the unit did not carry it) - a wire-listed key through main._sync_unit_property (it reaches the other table), a
+## table-local one by a direct write, as its spender wrote it - and one "<Unit>: <Rule> is unspent again." line per rule
+## names the ACTING unit. The Utility Buff stamp is written on every human unit that opens a Shoot or Fight pick, rule or
+## not (main._solo_apply_utility_buffs), so it names its rule only when the unit or a joined hero carries one.
+## Nothing without a session.
+static func undo_journal(main, gu: GameUnit) -> void:
+	if gu == null or not _sessions.has(gu.unit_id):
+		return
+	var props: Dictionary = (_sessions[gu.unit_id]["journal"] as Dictionary).get("props", {})
+	var rules: Array = []
+	for u in main.opr_army_manager.get_all_game_units():
+		if not props.has(u.get_instance_id()):
+			continue
+		var was: Dictionary = props[u.get_instance_id()]
+		for k in JOURNAL_KEYS:
+			var had := was.has(k)
+			if had == u.unit_properties.has(k) and (not had or u.unit_properties[k] == was[k]):
+				continue
+			if _NET.SYNCABLE_UNIT_PROPERTIES.has(k):
+				main._sync_unit_property(u, k, _copy(was[k]) if had else null)
+			elif had:
+				u.unit_properties[k] = _copy(was[k])
+			else:
+				u.unit_properties.erase(k)
+			if not rules.has(JOURNAL_KEYS[k]) and (k != "utility_buff_round" or _carries_buff(u)):
+				rules.append(JOURNAL_KEYS[k])
+	for rule in rules:
+		main._log_rule_event(BattleLog.Category.GENERAL, "%s: %s is unspent again." % [gu.get_name(), rule])
+
+
+## Step 37: a journaled Array or Dictionary is its own deep copy, at the Start and at every restore, so an in-place
+## change of the live value never reaches the journal (every JOURNAL_KEYS value is a bool or an int on main today).
+static func _copy(v: Variant) -> Variant:
+	return v.duplicate(true) if v is Array or v is Dictionary else v
+
+
+## Step 37: whether `u` or a hero joined to it carries a rule of the Utility Buff family (its stamp's line).
+static func _carries_buff(u: GameUnit) -> bool:
+	for m in [u] + u.get_attached_heroes():
+		if m is GameUnit and not RulesRegistry.unit_rules_of_primitive(m, "Utility Buff").is_empty():
+			return true
+	return false
 
 
 ## Step 49 (N6 b): the units an activation touched - the actor and its joined chain (the host it joined, its attached
