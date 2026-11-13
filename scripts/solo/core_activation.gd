@@ -494,6 +494,20 @@ static func reset_to_start(main, gu: GameUnit, line: String) -> void:
 		main._log_rule_event(BattleLog.Category.MOVEMENT, line)
 
 
+## Step 33: whether a model of `gu` moved this activation: more than the table's drop floor (0.1") from its start, or an
+## entry of this round in the unit's ledger.
+static func has_moved(main, gu: GameUnit) -> bool:
+	var round_no: int = main.opr_army_manager.current_round
+	for e in main.move_trails.ledger.entries_for_unit(gu.unit_id):
+		if int(e.get("round", -1)) == round_no:
+			return true
+	for row in start_rows(gu):
+		var p: Vector3 = (row[0] as Node3D).global_position
+		if Vector2(p.x, p.z).distance_to(Vector2((row[1] as Vector3).x, (row[1] as Vector3).z)) * 39.3701 > 0.1:
+			return true
+	return false
+
+
 ## Step 32: the living models of `gu`'s activation (a joined hero's too) with where it started them,
 ## [[node, position, facing], ...]; `start_own` holds those models in the order of start_pos, set at the Start.
 static func start_rows(gu: GameUnit) -> Array:
