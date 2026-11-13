@@ -81,6 +81,7 @@ func _plain(pid: int, uname: String, x_in: float, rules: Array = []) -> GameUnit
 		{"name": "Rifle", "range_in": 24, "attacks": 1, "count": 2, "rules": []})
 	for i in u.models.size():
 		(u.models[i] as ModelInstance).model_index = i
+		(u.models[i] as ModelInstance).node.set_meta("network_id", 900 + 10 * pid + _main.opr_army_manager.game_units.size() * 2 + i)
 	return u
 
 
@@ -318,3 +319,145 @@ func test_another_round_and_the_flag_off_are_ignored_and_an_unknown_unit_is_a_mi
 	ghost["rows"] = []
 	_receive(ghost)
 	assert_array(_names()).contains_exactly(["activation_mismatch"])
+
+
+## ---- Step 52: the correction ----
+
+## The table that ran `u`'s activation (Start, End: it announced it); the wire is empty afterwards.
+func _announced_activation() -> GameUnit:
+	_room()
+	var u := _plain(1, "Rifles", 0.0)
+	_plain(2, "Guards", 18.0)
+	await _start_and_end(u)
+	_net.wire.clear()
+	return u
+
+
+## The reporter's notice: its rows are `units` as they stand after `change`; `undo` restores this table's own state.
+func _notice(units: Array, change: Callable, undo: Callable) -> Dictionary:
+	change.call()
+	var their_rows := CoreActivation.rows(units)
+	undo.call()
+	return {"unit": (units[0] as GameUnit).unit_id, "units": units.map(func(gu: GameUnit) -> String: return gu.unit_id),
+		"round": 1, "theirs": "x", "ours": "y", "rows": their_rows, "retry": 0}
+
+
+## A wound the reporter lacks: ONE wound frame (that model, this table's wounds), the O15 (5) line, ONE re-check (retry 1)
+## to the reporter alone - and nothing for what agrees (an alive wound frame re-parks a model on the receiver).
+func test_the_winner_pushes_only_the_wound_that_differs_and_checks_once_more() -> void:
+	var u: GameUnit = await _announced_activation()
+	var m: ModelInstance = u.models[1]
+	_main._on_network_command("activation_mismatch", _notice([u], func() -> void: m.wounds_current = 0,
+		func() -> void: m.wounds_current = 1), SENDER_PEER)
+	assert_array(_names()).override_failure_message("%s" % [_names()]) \
+		.contains_exactly(["sync_model_wounds", "sync_log_event", "activation_check"])
+	if _names().size() != 3:
+		return
+	assert_array((_net.wire[0]["p"]["a"] as Array).slice(0, 4)).is_equal([u.unit_id, 1, 1, true])
+	var line := "Rifles: the tables disagreed after its activation - the state of %s was applied." % _main._solo_player_label(1)
+	assert_str(str(_net.wire[1]["p"]["a"][1])).is_equal(line)
+	assert_dict(_net.wire[2]).is_equal({"t": "activation_check", "to": SENDER_PEER, "p": {"unit": u.unit_id,
+		"units": [u.unit_id], "round": 1, "digest": CoreActivation.digest([u]), "rows": CoreActivation.rows([u]), "retry": 1}})
+
+
+## A model 3 mm off, Shaken and the activation flag differ: the Shaken marker, the flag as a CORRECTION (never the
+## activation fact), and one move and one rotation batch holding that model alone.
+func test_the_winner_pushes_a_moved_model_shaken_and_the_activation_flag_as_a_correction() -> void:
+	var u: GameUnit = await _announced_activation()
+	var n: Node3D = u.models[0].node
+	var x := n.global_position.x
+	var off := func() -> void:
+		n.global_position.x = x + 0.003
+		u.is_shaken = true
+		u.is_activated = false
+	var back := func() -> void:
+		n.global_position.x = x
+		u.is_shaken = false
+		u.is_activated = true
+	_main._on_network_command("activation_mismatch", _notice([u], off, back), SENDER_PEER)
+	assert_array(_names()).override_failure_message("%s" % [_names()]).contains_exactly(["sync_unit_marker",
+		"correct_unit_activated", "move_objects_batch_networked", "rotate_objects_batch_networked", "sync_log_event",
+		"activation_check"])
+	if _names().size() != 6:
+		return
+	assert_dict(_net.wire[1]).is_equal({"t": "correct_unit_activated", "to": SENDER_PEER,
+		"p": {"unit": u.unit_id, "activated": true, "activation_round": u.activation_round, "round": 1}})
+	var p := n.global_position
+	assert_array(_net.wire[2]["p"]["a"][0]).is_equal([n.get_meta("network_id"), p.x, p.y, p.z])
+
+
+## The correction sets the flag off turn too: the token stays, no activation line, nothing goes back on the wire. This
+## table is the host and its activation-fact handler is wired as main wires its own network manager, so a correction that
+## went through the fact path would be refused off turn and undone here.
+func test_the_activation_correction_is_never_a_new_activation() -> void:
+	_room()
+	_net.is_host = true
+	_net.remote_activation_updated.connect(_main._on_remote_activation_updated)
+	var u := _plain(1, "Rifles", 0.0)
+	_plain(2, "Guards", 18.0)
+	_main._apply_turn_token(2)
+	_ask_for_a_correction(u)
+	var lines: int = _main.battle_log.entries().size()
+	_fix(u, SENDER_PEER)
+	await _runner.simulate_frames(2)
+	assert_bool(u.is_activated).is_true()
+	assert_int(_main._hotseat_side_on_turn()).is_equal(2)
+	assert_array(_net.wire).override_failure_message("%s" % [_names()]).is_empty()
+	assert_int(_main.battle_log.entries().size()).override_failure_message("a line was written").is_equal(lines)
+
+
+## A table that did not run that activation does nothing on the notice: it waits for the push.
+func test_a_table_that_did_not_announce_does_not_push() -> void:
+	var u: GameUnit = await _announced_activation()
+	var m: ModelInstance = u.models[1]
+	CoreActivation._announced.clear()
+	_main._on_network_command("activation_mismatch", _notice([u], func() -> void: m.wounds_current = 0,
+		func() -> void: m.wounds_current = 1), SENDER_PEER)
+	assert_array(_net.wire).override_failure_message("%s" % [_names()]).is_empty()
+
+
+## The re-check after the push still differs: one line, and no notice - never a loop.
+func test_a_failed_re_check_writes_the_still_disagree_line_and_sends_no_notice() -> void:
+	_room()
+	var units := [_plain(2, "Guards", 18.0)]
+	var check := _check_of(units, 1, 1)
+	(units[0] as GameUnit).models[0].wounds_current = 0
+	_receive(check)
+	assert_array(_names()).override_failure_message("%s" % [_names()]).contains_exactly(["sync_log_event"])
+	assert_int(_main.battle_log.entries().filter(func(e: Dictionary) -> bool:
+		return str(e["text"]) == "Guards: the tables still disagree - nothing more was changed.").size()).is_equal(1)
+
+
+## This table reports a difference on `u` to SENDER_PEER (round 1): the one Activated correction it will then accept.
+func _ask_for_a_correction(u: GameUnit) -> void:
+	var check := _check_of([u])
+	var m: ModelInstance = u.models[0]
+	m.wounds_current = 0
+	_receive(check)
+	m.wounds_current = 1
+	_net.wire.clear()
+
+
+func _fix(u: GameUnit, peer: int) -> void:
+	_main._on_network_command("correct_unit_activated", {"unit": u.unit_id, "activated": true, "activation_round": 1,
+		"round": 1}, peer)
+
+
+## A correction nobody asked for is ignored - none sent at all, from another peer, for a unit outside the mismatch, or a
+## second time - so a modified client cannot flip Activated on a unit at will; the one this table asked for applies.
+func test_an_unsolicited_activation_correction_is_ignored() -> void:
+	_room()
+	var u := _plain(1, "Rifles", 0.0)
+	var other := _plain(1, "Reserves", 6.0)
+	_fix(u, SENDER_PEER)
+	assert_bool(u.is_activated).override_failure_message("a correction nobody asked for applied").is_false()
+	_ask_for_a_correction(u)
+	_fix(u, SENDER_PEER + 1)
+	_fix(other, SENDER_PEER)
+	assert_bool(u.is_activated or other.is_activated).override_failure_message("a correction outside the mismatch") \
+		.is_false()
+	_fix(u, SENDER_PEER)
+	assert_bool(u.is_activated).override_failure_message("the correction this table asked for").is_true()
+	u.is_activated = false
+	_fix(u, SENDER_PEER)
+	assert_bool(u.is_activated).override_failure_message("one correction applied twice").is_false()
