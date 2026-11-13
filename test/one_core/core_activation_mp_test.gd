@@ -461,3 +461,97 @@ func test_an_unsolicited_activation_correction_is_ignored() -> void:
 	u.is_activated = false
 	_fix(u, SENDER_PEER)
 	assert_bool(u.is_activated).override_failure_message("one correction applied twice").is_false()
+
+
+## ---- Step 52c: the last activation of a round ----
+
+## The round's last activation: its fact ended the round here (advance_round) before its check came. The check is still
+## compared - against the result of the round it names - and silent when that result agrees.
+func test_the_rounds_last_check_is_compared_after_this_table_advanced() -> void:
+	_room()
+	var u := _plain(2, "Guards", 18.0)
+	u.is_activated = true
+	var check := _check_of([u])
+	var ok_before := CoreActivation.checks_ok
+	_main.opr_army_manager.advance_round()
+	_receive(check)
+	assert_array(_net.wire).override_failure_message("%s" % [_names()]).is_empty()
+	assert_int(CoreActivation.checks_ok).override_failure_message("the round's last check was not compared") \
+		.is_equal(ok_before + 1)
+
+
+## The same with a wound this table lost before the round ended: one notice, carrying the ended round's rows.
+func test_a_late_check_that_differs_reports_the_ended_rounds_rows() -> void:
+	_room()
+	var u := _plain(2, "Guards", 18.0)
+	u.is_activated = true
+	var check := _check_of([u])
+	u.models[1].wounds_current = 0
+	var ended := CoreActivation.rows([u])
+	_main.opr_army_manager.advance_round()
+	_receive(check)
+	var notes := _frames("activation_mismatch")
+	assert_array(_names()).override_failure_message("%s" % [_names()]).contains_exactly(["activation_mismatch"])
+	if notes.size() == 1:
+		assert_array(notes[0]["p"]["rows"]).is_equal(ended)
+
+
+## A check two rounds old cannot be compared: no frame, and it is counted (and warned), never dropped silently.
+func test_a_check_of_an_older_round_is_counted_as_dropped() -> void:
+	_room()
+	var u := _plain(2, "Guards", 18.0)
+	var check := _check_of([u])
+	_main.opr_army_manager.advance_round()
+	_main.opr_army_manager.advance_round()
+	var dropped := CoreActivation.checks_dropped
+	_receive(check)
+	assert_array(_net.wire).override_failure_message("%s" % [_names()]).is_empty()
+	assert_int(CoreActivation.checks_dropped).is_equal(dropped + 1)
+
+
+## The HOST makes the round's last activation: its End ends the round inside the activation door (hotseat_record_activation
+## awaits the round end), so the round advance goes out first, then the activation fact, then the check - of the NEW round
+## and of the refreshed state, which the guest compares after applying that advance (same ordered stream).
+func test_the_hosts_last_activation_of_a_round_is_announced_after_the_round_advance() -> void:
+	_room()
+	_net.is_host = true
+	var u := _plain(1, "Rifles", 0.0)
+	var g := _plain(2, "Guards", 18.0)
+	g.is_activated = true
+	g.activation_round = 1
+	await _start_and_end(u)
+	await _runner.simulate_frames(5)
+	assert_int(_main.opr_army_manager.current_round).override_failure_message("precondition: the End ended round 1") \
+		.is_equal(2)
+	var order := _names().filter(func(n: String) -> bool:
+		return n in ["sync_round_advance", "sync_unit_activation", "activation_check"])
+	assert_array(order).override_failure_message("%s" % [_names()]) \
+		.contains_exactly(["sync_round_advance", "sync_unit_activation", "activation_check"])
+	var checks := _frames("activation_check")
+	if checks.size() == 1:
+		assert_int(int(checks[0]["p"]["round"])).is_equal(2)
+		assert_str(str(checks[0]["p"]["digest"])).is_equal(CoreActivation.digest([u]))
+
+
+## The guest's side of that: it applied the host's round advance (it came first on the stream), so the check of the new
+## round is compared as a current check - counted as matched, never as dropped.
+func test_a_check_of_the_new_round_after_the_advance_is_compared_not_dropped() -> void:
+	_room()
+	var h := _plain(1, "Rifles", 0.0)
+	_main.opr_army_manager.advance_round()
+	var ok_before := CoreActivation.checks_ok
+	var dropped := CoreActivation.checks_dropped
+	_receive(_check_of([h], 2))
+	assert_int(CoreActivation.checks_ok).is_equal(ok_before + 1)
+	assert_int(CoreActivation.checks_dropped).is_equal(dropped)
+
+
+## The round-end snapshot is taken only where checks run: a room. Solo (an AI seat, no session) and hotseat take none.
+func test_the_round_end_snapshot_is_taken_in_a_room_only() -> void:
+	for room in [false, true]:
+		_room(room, RulesAutomation.Level.AUTOMATIC, {2: true} if not room else {})
+		_plain(1, "Rifles%s" % room, 0.0)
+		CoreActivation.reset_all(_main)
+		_main.opr_army_manager.advance_round()
+		assert_int(CoreActivation._ended_round).override_failure_message("room %s" % room) \
+			.is_equal(_main.opr_army_manager.current_round - 1 if room else -1)

@@ -406,6 +406,8 @@ static func reset_all(main) -> void:
 	_announced.clear()
 	last_target = null
 	_fixes_due.clear()
+	_ended_round = -1   # step 52c
+	_ended_rows.clear()
 	if main != null and is_instance_valid(main.solo_controller):
 		main.solo_controller._core_header_done = false
 		if int(main._solo_core_ai_h) != 0:   # step 42c: the AI body's capture dies with the game too
@@ -627,7 +629,14 @@ static var checks_ok := 0
 ## `activation_mismatch` with OUR rows goes back to the sender alone (the winner pushes only what differs, step 52); this
 ## table changes nothing (O13 (b): the table that ran the activation wins). A unit unknown here is a mismatch.
 static func on_check(main, payload: Dictionary, from_peer: int) -> void:
-	if not applies(main) or int(payload.get("round", -1)) != int(main.opr_army_manager.current_round):
+	if not applies(main):
+		return
+	var round_no := int(payload.get("round", -1))
+	var late: bool = round_no != int(main.opr_army_manager.current_round)
+	if late and round_no != _ended_round:   # step 52c: never a silent drop
+		checks_dropped += 1
+		push_warning("CoreActivation.on_check: the check of %s for round %d came at round %d - not compared"
+			% [payload.get("unit", ""), round_no, main.opr_army_manager.current_round])
 		return
 	var ids: Array = payload.get("units", [])
 	var units: Array = []
@@ -635,8 +644,14 @@ static func on_check(main, payload: Dictionary, from_peer: int) -> void:
 		var gu: GameUnit = main.opr_army_manager.get_game_unit_by_id(str(id))
 		if gu != null:
 			units.append(gu)
-	var ours := digest(units)
-	if units.size() == ids.size() and (ours == str(payload.get("digest", "")) or rows_match(rows(units), payload.get("rows"))):
+	var mine: Array = rows(units)
+	if late:   # step 52c: this table ended round `round_no` before the check came - compare that round's result
+		var by_id := ids.duplicate()
+		by_id.sort()
+		mine = by_id.map(func(id: Variant) -> Variant: return _ended_rows.get(str(id))).filter(func(r: Variant) -> bool:
+			return r != null)
+	var ours := JSON.stringify(mine).sha256_text()
+	if mine.size() == ids.size() and (ours == str(payload.get("digest", "")) or rows_match(mine, payload.get("rows"))):
 		checks_ok += 1
 		return
 	if int(payload.get("retry", 0)) >= 1:   # step 52: the re-check after a push still differs - one line, no notice
@@ -647,7 +662,7 @@ static func on_check(main, payload: Dictionary, from_peer: int) -> void:
 	for id in ids:   # step 52: the Activated corrections this notice may bring back (sender, unit, round), each once
 		_fixes_due["%d|%s|%d" % [from_peer, id, int(payload["round"])]] = true
 	main.network_manager.send_command("activation_mismatch", {"unit": payload.get("unit", ""), "units": ids,
-		"round": payload["round"], "theirs": payload.get("digest", ""), "ours": ours, "rows": rows(units),
+		"round": payload["round"], "theirs": payload.get("digest", ""), "ours": ours, "rows": mine,
 		"retry": int(payload.get("retry", 0))}, from_peer)
 
 
@@ -761,3 +776,23 @@ static func on_correct_activated(main, payload: Dictionary, from_peer: int) -> v
 	gu.is_activated = bool(payload.get("activated", gu.is_activated))
 	gu.activation_round = int(payload.get("activation_round", gu.activation_round))
 	main.radial_menu_controller._update_activated_markers(gu)
+
+
+## Step 52c: every unit's rows as round `_ended_round` ended - taken by `OPRArmyManager.advance_round` before it refreshes
+## the units - so the check of a round's LAST activation, whose activation fact ends the round on the receiving table
+## before the check is handled, is still compared against that round's result. Only where checks run (flag on, a room
+## where the engine resolves, a live session): solo and hotseat pay nothing.
+static var _ended_round := -1
+static var _ended_rows: Dictionary = {}
+## Step 52c: the checks this table could not compare (another round than the current or the one that just ended).
+static var checks_dropped := 0
+
+
+static func note_round_end(army) -> void:
+	var main: Node = army.get_node_or_null("/root/Main") if enabled() and army is Node else null
+	if main == null or not applies(main) or main.network_manager == null or not main.network_manager.is_multiplayer_active():
+		return
+	_ended_round = int(army.current_round)
+	_ended_rows.clear()
+	for gu in army.game_units.values():
+		_ended_rows[(gu as GameUnit).unit_id] = rows([gu])[0]

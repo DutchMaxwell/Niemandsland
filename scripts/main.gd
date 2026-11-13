@@ -3605,10 +3605,10 @@ func core_rerank_gate(objs: Array) -> Array:
 ## One-core P3 step 50 (N6 b): the tail of the activation door (radial `_toggle_activation`, after the activation fact
 ## went out, so both ride one ordered stream): an End of a core unit in a room announces its digest check, with the
 ## target its shot noted (step 38). The note is cleared on every pass. Flag off, hotseat, Manual room: nothing is sent.
-func core_activation_ended(gu: GameUnit) -> void:
+func core_activation_ended(gu: GameUnit, ended: bool) -> void:
 	var target: GameUnit = CoreActivation.last_target
 	CoreActivation.last_target = null
-	if gu != null and gu.is_activated and CoreActivation.applies(self):
+	if gu != null and ended and CoreActivation.applies(self):   # step 52c: `ended`, as a round end may have refreshed the flag
 		CoreActivation.announce(self, gu, target)
 
 

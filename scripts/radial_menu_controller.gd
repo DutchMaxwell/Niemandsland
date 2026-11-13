@@ -553,6 +553,7 @@ func _toggle_activation(context: Dictionary) -> void:
 	if not game_unit:
 		return
 
+	var ended := false   # one-core P3 step 52c: this press ended an activation (a round end below refreshes the flag)
 	if game_unit.is_activated:
 		# Same asymmetry the deployment gate's undo had: activate() also marks every attached hero, so
 		# clearing only the host's flag left a joined hero spent after the player un-toggled.
@@ -577,6 +578,7 @@ func _toggle_activation(context: Dictionary) -> void:
 		# activation-triggered rules get their shot before the unit counts as spent.
 		await _solo_activation_rules(game_unit)
 		game_unit.activate(1)
+		ended = true
 		if main_node != null and main_node.has_method("hotseat_record_activation"):
 			# 2.6b: awaiting the door lets a round end (and its round-start recovery roll) finish
 			# before the activation is closed out.
@@ -590,7 +592,7 @@ func _toggle_activation(context: Dictionary) -> void:
 	# One-core P3 step 50: the digest check of an ended core activation follows the activation fact (flag on, rooms only).
 	var main_tail := get_node_or_null("/root/Main")
 	if main_tail != null and main_tail.has_method("core_activation_ended"):
-		main_tail.call("core_activation_ended", game_unit)
+		main_tail.call("core_activation_ended", game_unit, ended)
 
 
 ## Step 2.T2a-ext: the manual Shaken/Fatigued toggles obey the same off-turn gate as Activate. On a
