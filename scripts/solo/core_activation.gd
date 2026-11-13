@@ -73,11 +73,13 @@ const MAX_STEPS := 64
 
 ## One activation through the core: ask, print the lines not printed yet, land, throw on the owner's tray, ask again.
 ## `transcript` gains one faces entry per throw; `on_throw(kind, index)` runs before each throw (a test seam).
+## `beat(event, answer, faces)` (step 42b, the table's presentation) is awaited before each throw ("throw"), after it
+## ("thrown", with its faces) and at the last answer (its step name).
 ## Returns the core's last answer plus "steps" (calls), "core_us" (their total time) and "max_us" (the slowest).
 ## A `done` answer's state handle is released once the table landed it (R4); `keep_handle` hands it to the caller instead,
 ## who releases it.
 static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
-		on_throw: Callable = Callable(), keep_handle := false) -> Dictionary:
+		on_throw: Callable = Callable(), keep_handle := false, beat: Callable = Callable()) -> Dictionary:
 	var core: Object = (main.solo_controller as SoloController)._core_node_ready()
 	var enforce: bool = main.object_manager._strict_movement_enforced()
 	var printed := 0
@@ -104,6 +106,8 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 				core.release(int(r.get("handle", 0)))
 				r.erase("handle")
 		if str(r["step"]) != "need_roll":
+			if beat.is_valid():
+				await beat.call(str(r["step"]), r, [])
 			r.merge({"steps": step + 1, "core_us": core_us, "max_us": max_us}, true)
 			return r
 		var owner := str(r["owner"])
@@ -111,12 +115,16 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 		var label: String = "AI (%s)" % owner if main._solo_is_ai_unit(roller) else main._roller_label(roller)
 		if on_throw.is_valid():
 			on_throw.call(str(r["kind"]), int(r["index"]))
+		if beat.is_valid():
+			await beat.call("throw", r, [])
 		if str(r["kind"]) == "defense" and roller != unit and not main._solo_is_ai_unit(roller) \
 				and main._solo_i_own_unit(roller):   # step 42 (O21): a local defender sees its saves coming, as on the table
 			await main._solo_ask_saves(unit, roller, _shot_weapon(unit, lines), int(r["faces"]), int(r["target"]), 0)
 		var faces: Array = await main._owner_roll(roller, int(r["faces"]), int(r["target"]), str(r["kind"]), "",
 			{"label": label, "what": "%s dice" % r["kind"]})
 		transcript.append({"t": "faces", "faces": faces})
+		if beat.is_valid():
+			await beat.call("thrown", r, faces)
 	push_error("CoreActivation.drive: %s still needs dice after %d steps" % [unit.get_name(), MAX_STEPS])
 	r.merge({"steps": MAX_STEPS, "core_us": core_us, "max_us": max_us}, true)
 	return r
@@ -133,22 +141,96 @@ static func _shot_weapon(unit: GameUnit, lines: Array) -> String:
 	return ""
 
 
+## Step 43: the AI volleys the core resolved and the ones it refused (the AI smoke resets and reads them).
+static var ai_runs := 0
+static var ai_refusals := 0
+
+
 ## Step 42: the AI's volley through the core - Hold or Advance, the unit and its one target (the table's own pick) plain,
 ## no Dangerous test this activation (the table rolled it already; the core would roll it again). `h` is the board
 ## before the move (the AI body captured it and releases it). True = the core resolved the volley. A refusal is a
 ## defect: reported, and the table shoots instead - unless a die was already thrown (never resolve a volley twice).
-static func run_ai(main, unit: GameUnit, report: Dictionary, target: GameUnit, h: int) -> bool:
+static func run_ai(main, unit: GameUnit, report: Dictionary, target: GameUnit, h: int, shots: Array = []) -> bool:
 	var kind := int(report.get("action", -1))
 	if h == 0 or not (kind in [AiDecision.Action.HOLD, AiDecision.Action.ADVANCE]) or not is_plain(unit) \
 			or not is_plain(target) or int(report.get("dangerous_dice", report.get("dangerous_models", 0))) > 0:
 		return false
 	var at: Array = unit.get_alive_models().map(func(m: ModelInstance) -> Vector3: return m.node.global_position)
-	var t: Array = [{"t": "begin"}, {"t": "placed", "positions": at}, {"t": "intent", "kind": kind, "shoot": target.unit_id}]
-	var r: Dictionary = await drive(main, h, unit, t, true)
+	# Step 42c: each model's walked route (the planner's, world XZ) rides along, so the core's move check measures the
+	# route, not the chord (R3); a model that did not move sends none.
+	var routes := {}
+	for p in main.solo_controller.last_move_paths:
+		routes[p["model"]] = (p["path"] as Array).map(func(v: Vector3) -> Vector2: return Vector2(v.x, v.z))
+	var trails: Array = unit.get_alive_models().map(func(m: ModelInstance) -> Array: return routes.get(m, []))
+	var t: Array = [{"t": "begin"}, {"t": "placed", "positions": at, "trails": trails},
+		{"t": "intent", "kind": kind, "shoot": target.unit_id}]
+	# Step 42b: the table's presentation of the volley (_present); its stage opens before the core's first line.
+	var st := {"n": 0, "open": false, "result": false, "hits": 0, "landed": 0, "announce": [],
+		"before": main._solo_combined_alive(target), "moved": bool(report.get("moved", false))}
+	var beat := func(ev: String, a: Dictionary, faces: Array) -> void:
+		await _present(main, unit, target, shots, st, ev, a, faces)
+	if not shots.is_empty():
+		main._solo_stage_begin("%s fires at %s" % [unit.get_name(), target.get_name()])
+	var r: Dictionary = await drive(main, h, unit, t, true, Callable(), false, Callable() if shots.is_empty() else beat)
 	if str(r["step"]) == "done":
+		ai_runs += 1
+		announce(main, unit, target)   # step 50/51: the table that ran the AI activation announces its digest check
 		return true
+	ai_refusals += 1
 	push_error("CoreActivation.run_ai: %s - the core answered %s: %s" % [unit.get_name(), r["step"], r.get("reason", "")])
 	return t.any(func(e: Dictionary) -> bool: return str(e["t"]) == "faces")
+
+
+## Step 42b: the table's show around an AI volley (_solo_resolve_ai_volley's calls in its order) on the core's steps:
+## at the first hit roll the announce (the core says its line), the fan and the Declaration beat; a tracer before each
+## hit roll (`shots` in the table's order); a weapon's hit strip and beat after its saves, or at the next hit roll or
+## the end if it missed; before the morale roll or at the end the outcome toast and the Result beat; the Morale beat.
+## A refusal only closes.
+static func _present(main, unit: GameUnit, target: GameUnit, shots: Array, st: Dictionary, ev: String, a: Dictionary,
+		faces: Array) -> void:
+	var kind := str(a.get("kind", ""))
+	var n: int = st["n"]
+	var prev := str((shots[clampi(n - 1, 0, shots.size() - 1)]["profile"] as Dictionary).get("name", "weapon"))
+	if ev == "throw" and kind == "attack":
+		if n == 0:
+			st["announce"] = main._solo_show_attack_announce(unit, target, "fires at", false)
+			main._solo_show_fan_for_unit(unit)
+			await main._solo_stage_phase("Declaration", SoloController.Pace.ANNOUNCE)
+		elif st["open"]:
+			await main._solo_stage_phase(prev)
+		var shot: Dictionary = shots[mini(n, shots.size() - 1)]
+		var d: Dictionary = main._solo_shot_eligibility(shot["member"], shot["profile"], shot, target, false, st["moved"])
+		var pairs: Array = d["pairs"]
+		main._solo_record_shot(unit, shot["member"], target, shot["profile"], int(d["sighted"]), int(d["bearers"]),   # 42c
+			int(shot["max"]), int((d["report"] as Dictionary)["attacks"]),
+			int(SoloController.effective_shoot_reach_in(float(shot["reach"]), target)))
+		main._vfx_volley(shot["member"], target, shot["profile"],
+			pairs.slice(0, int(d["bearers"]) if int(d["bearers"]) >= 0 else pairs.size()), false)
+		st.merge({"n": n + 1, "open": true}, true)
+	elif ev == "thrown" and kind == "defense":
+		var saves := AiCombatMath.count_blocks(faces, int(a["target"]), 0)
+		st.merge({"hits": st["hits"] + faces.size(), "landed": st["landed"] + faces.size() - saves, "open": false}, true)
+		main._vfx_hit_strip(target, faces.size(), saves)
+		await main._solo_stage_phase(prev)
+	elif ev == "done" or (ev == "throw" and kind == "morale"):
+		if st["open"]:
+			st["open"] = false
+			await main._solo_stage_phase(prev)
+		if not st["result"]:
+			st["result"] = true
+			main._solo_clear_announce(st["announce"])
+			main._solo_clear_auto_fan()
+			await main._solo_show_outcome(main._solo_volley_outcome(target, st["hits"], st["landed"],
+				int(st["before"]) - main._solo_combined_alive(target)))
+			await main._solo_stage_phase("Result")
+		if ev == "done" and int(st["landed"]) > 0:
+			await main._solo_stage_phase("Morale")
+		if ev == "done":
+			main._solo_stage_end()
+	elif ev != "throw" and ev != "thrown":
+		main._solo_clear_announce(st["announce"])
+		main._solo_clear_auto_fan()
+		main._solo_stage_end()
 
 
 ## The unit a roll belongs to: the core names it by roster key (`owner_key`: two units may share a display name, and a
@@ -268,7 +350,7 @@ static func open_session(main, gu: GameUnit) -> bool:
 			start_pos.append(Vector3((was as Vector2).x, p.y, (was as Vector2).y) if was is Vector2 else p)
 			start_rot.append(m.node.rotation.y)
 	var s := {"handle": h, "transcript": [{"t": "begin"}], "start_models": _start_models(main), "start_pos": start_pos,
-		"start_rot": start_rot, "dice": false, "journal": {}}
+		"start_rot": start_rot, "dice": false, "journal": _journal_records(main).merged({"props": _journal_props(main)})}
 	if gu.unit_properties.has("moved_round"):
 		s["moved_round_before"] = gu.unit_properties["moved_round"]
 	_sessions[gu.unit_id] = s
@@ -325,6 +407,140 @@ static func reset_all(main) -> void:
 	last_target = null
 	if main != null and is_instance_valid(main.solo_controller):
 		main.solo_controller._core_header_done = false
+		if int(main._solo_core_ai_h) != 0:   # step 42c: the AI body's capture dies with the game too
+			var core: Object = main.solo_controller._core_node_ready()
+			if core != null:
+				core.release(int(main._solo_core_ai_h))
+		main._solo_core_ai_h = 0
+
+
+## Step 37 (O9, O15 (4)): the unit properties a Cancel-reachable one-time spend writes, each with the rule its line names.
+## The Speed Feat latches are SoloController.speed_feat_flag(<feat name>) of the two once-per-game Quick rules; the
+## Utility Buff stamp and the Precision Tag latch are table-local; `tag_markers` sits on the TAGGED enemy and travels.
+const JOURNAL_KEYS := {
+	"speed_feat_used_speed_feat": "Speed Feat",
+	"speed_feat_used_speed_feat_aura": "Speed Feat Aura",
+	"utility_buff_round": "Utility Buff",
+	"precision_tag_used": "Precision Tag",
+	"tag_markers": "Precision Tag",
+}
+const _NET := preload("res://scripts/network_manager.gd")
+## Step 67 (R8): the unit_properties keys the tripwire never reports, each with why. Every other key is a gameplay key.
+const TRIPWIRE_SKIP := {
+	"moved_round": "the reset (step 32) restores it",
+	"bounding_roll": "kept for the round, journal-exempt (step 83, O17 (b))",
+	"display_suffix": "UI only: the ' (2)' disambiguator of the card and the node names",
+}
+## Step 67: how many unit properties a Cancel found changed by a door the journal misses (tests and gates read it).
+static var tripwire_hits := 0
+
+
+## Step 37: JOURNAL_KEYS of EVERY game unit on the table (a spend can write on another unit), instance_id -> {key: value};
+## a key the unit does not carry stays out of its row.
+static func _journal_props(main) -> Dictionary:
+	var out := {}
+	for u in main.opr_army_manager.get_all_game_units():
+		var row := {}
+		for k in JOURNAL_KEYS:
+			if u.unit_properties.has(k):
+				row[k] = _copy(u.unit_properties[k])
+		out[u.get_instance_id()] = row
+	return out
+
+
+## Step 67: every unit's spell records (a deep copy of main._solo_spell_mods; a unit without records stays out) and a
+## deep copy of every unit's unit_properties (the tripwire's reference).
+static func _journal_records(main) -> Dictionary:
+	var mods := {}
+	var all := {}
+	for u in main.opr_army_manager.get_all_game_units():
+		if main._solo_spell_mods.has(u.get_instance_id()):
+			mods[u.get_instance_id()] = (main._solo_spell_mods[u.get_instance_id()] as Array).duplicate(true)
+		all[u.get_instance_id()] = u.unit_properties.duplicate(true)
+	return {"mods": mods, "all": all}
+
+
+## Step 37 (Cancel, step 35): every JOURNAL_KEYS value that changed on ANY unit since `gu`'s Start is put back (erased
+## when the unit did not carry it) - a wire-listed key through main._sync_unit_property (it reaches the other table), a
+## table-local one by a direct write, as its spender wrote it - and one "<Unit>: <Rule> is unspent again." line per rule
+## names the ACTING unit. The Utility Buff stamp is written on every human unit that opens a Shoot or Fight pick, rule or
+## not (main._solo_apply_utility_buffs), so it names its rule only when the unit or a joined hero carries one.
+## Step 67: then every unit's spell records as they were (stamps, wire and the save mirror follow; one line per removed
+## record name not named yet) and its granted-rule overlay, in place. Last the tripwire: any OTHER key that differs from
+## the Start (TRIPWIRE_SKIP aside) is reported (push_error, tripwire_hits) and left as it is. Nothing without a session.
+static func undo_journal(main, gu: GameUnit) -> void:
+	if gu == null or not _sessions.has(gu.unit_id):
+		return
+	var props: Dictionary = (_sessions[gu.unit_id]["journal"] as Dictionary).get("props", {})
+	var rules: Array = []
+	for u in main.opr_army_manager.get_all_game_units():
+		if not props.has(u.get_instance_id()):
+			continue
+		var was: Dictionary = props[u.get_instance_id()]
+		for k in JOURNAL_KEYS:
+			var had := was.has(k)
+			if had == u.unit_properties.has(k) and (not had or u.unit_properties[k] == was[k]):
+				continue
+			if _NET.SYNCABLE_UNIT_PROPERTIES.has(k):
+				main._sync_unit_property(u, k, _copy(was[k]) if had else null)
+			elif had:
+				u.unit_properties[k] = _copy(was[k])
+			else:
+				u.unit_properties.erase(k)
+			if not rules.has(JOURNAL_KEYS[k]) and (k != "utility_buff_round" or _carries_buff(u)):
+				rules.append(JOURNAL_KEYS[k])
+	var mods: Dictionary = _sessions[gu.unit_id]["journal"].get("mods", {})
+	var all: Dictionary = _sessions[gu.unit_id]["journal"].get("all", {})
+	var units: Array = main.opr_army_manager.get_all_game_units().filter(func(u: GameUnit) -> bool:
+		return all.has(u.get_instance_id()))
+	var records_changed := false
+	for u: GameUnit in units:
+		var now: Array = main._solo_spell_mods.get(u.get_instance_id(), [])
+		var was: Array = mods.get(u.get_instance_id(), [])
+		if now != was:
+			for rec in now:
+				if not was.has(rec) and not rules.has(str(rec["spell"])):
+					rules.append(str(rec["spell"]))
+			if was.is_empty():
+				main._solo_spell_mods.erase(u.get_instance_id())
+			else:
+				main._solo_spell_mods[u.get_instance_id()] = was.duplicate(true)
+			main._solo_refresh_spell_stamps(u)
+			main._broadcast_spell_mods(u)
+			records_changed = true
+		main.core_overlay_restore(u, all[u.get_instance_id()])   # the granted-rule overlay, in place (main.gd)
+	if records_changed:
+		main._solo_mirror_spell_state()   # the save mirror (spell_records) follows the records
+	if rules.has("Utility Buff") and _carries_buff(gu, rules):
+		rules.erase("Utility Buff")   # one line per spend: the record's line names the buff that was spent
+	for u: GameUnit in units:
+		var at_start: Dictionary = all[u.get_instance_id()]
+		var keys := at_start.duplicate()
+		keys.merge(u.unit_properties)
+		for k in keys:
+			var n: Variant = u.unit_properties.get(k)
+			if TRIPWIRE_SKIP.has(k) or (typeof(n) == typeof(at_start.get(k)) and n == at_start.get(k)):
+				continue
+			push_error("cancel: %s.%s changed by an unjournaled door" % [u.get_name(), k])
+			tripwire_hits += 1
+	for rule in rules:
+		main._log_rule_event(BattleLog.Category.GENERAL, "%s: %s is unspent again." % [gu.get_name(), rule])
+
+
+## Step 37: a journaled Array or Dictionary is its own deep copy, at the Start and at every restore, so an in-place
+## change of the live value never reaches the journal (every JOURNAL_KEYS value is a bool or an int on main today).
+static func _copy(v: Variant) -> Variant:
+	return v.duplicate(true) if v is Array or v is Dictionary else v
+
+
+## Step 37: whether `u` or a hero joined to it carries a rule of the Utility Buff family (its stamp's line); step 67:
+## with `named`, only a rule of one of those names (a record the Cancel removed names the buff that was spent).
+static func _carries_buff(u: GameUnit, named: Array = []) -> bool:
+	for m in [u] + u.get_attached_heroes():
+		for e in RulesRegistry.unit_rules_of_primitive(m, "Utility Buff") if m is GameUnit else []:
+			if named.is_empty() or named.has(str(e["name"])):
+				return true
+	return false
 
 
 ## Step 49 (N6 b): the units an activation touched - the actor and its joined chain (the host it joined, its attached
@@ -387,3 +603,59 @@ static func announce(main, actor: GameUnit, target: GameUnit = null) -> void:
 	_announced[actor.unit_id] = round_no
 	nm.send_command("activation_check", {"unit": actor.unit_id, "units": ids, "round": round_no, "digest": digest(touched),
 		"rows": rows(touched), "retry": 0}, 0)
+
+
+## Step 51: the checks that matched this table (read by the gates).
+static var checks_ok := 0
+
+
+## Step 51 (N6 b): another table's `activation_check`. Ignored with the flag off (a mixed room keeps playing as it is) and
+## for another round. When our rows of the named units equal theirs - the hash, or else the rows with every position
+## within 1 mm (two tables a hair either side of a half millimetre round apart) - it is silent (`checks_ok`). Else one
+## `activation_mismatch` with OUR rows goes back to the sender alone (the winner pushes only what differs, step 52); this
+## table changes nothing (O13 (b): the table that ran the activation wins). A unit unknown here is a mismatch.
+static func on_check(main, payload: Dictionary, from_peer: int) -> void:
+	if not applies(main) or int(payload.get("round", -1)) != int(main.opr_army_manager.current_round):
+		return
+	var ids: Array = payload.get("units", [])
+	var units: Array = []
+	for id in ids:
+		var gu: GameUnit = main.opr_army_manager.get_game_unit_by_id(str(id))
+		if gu != null:
+			units.append(gu)
+	var ours := digest(units)
+	if units.size() == ids.size() and (ours == str(payload.get("digest", "")) or rows_match(rows(units), payload.get("rows"))):
+		checks_ok += 1
+		return
+	main.network_manager.send_command("activation_mismatch", {"unit": payload.get("unit", ""), "units": ids,
+		"round": payload["round"], "theirs": payload.get("digest", ""), "ours": ours, "rows": rows(units),
+		"retry": int(payload.get("retry", 0))}, from_peer)
+
+
+## Step 51: two `rows` lists are the same result when everything but the positions is equal and each living model's X and
+## Z differ by at most 1 mm.
+static func rows_match(ours: Array, theirs: Variant) -> bool:
+	if not theirs is Array or (theirs as Array).size() != ours.size():
+		return false
+	for i in ours.size():
+		var a: Array = ours[i]
+		var b: Variant = theirs[i]
+		if not b is Array or (b as Array).size() != 4 or a.slice(0, 3) != (b as Array).slice(0, 3) \
+				or not b[3] is Array or (b[3] as Array).size() != (a[3] as Array).size():
+			return false
+		for j in (a[3] as Array).size():
+			if not same_model(a[3][j], b[3][j]):
+				return false
+	return true
+
+
+## Step 51: two model rows agree - index, wounds and alive equal, and a living model's X and Z within 1 mm.
+static func same_model(a: Array, b: Variant) -> bool:
+	return b is Array and (b as Array).size() == 4 and a.slice(0, 3) == (b as Array).slice(0, 3) and near(a[3], b[3])
+
+
+## Step 51: two positions in whole millimetres within 1 mm per axis; both null (dead) agree too.
+static func near(a: Variant, b: Variant) -> bool:
+	if a == null or b == null:
+		return a == null and b == null
+	return b is Array and (b as Array).size() == 2 and absi(int(a[0]) - int(b[0])) <= 1 and absi(int(a[1]) - int(b[1])) <= 1

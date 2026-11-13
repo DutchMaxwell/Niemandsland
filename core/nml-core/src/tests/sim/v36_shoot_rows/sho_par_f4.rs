@@ -155,3 +155,78 @@ fn ev_folded_leg_keeps_the_bearers_last_count_at_epoch_72() {
     let (st, statics) = squad();
     assert_eq!(ev(st, &statics, EPOCH_72_PLAYTEST_RULES, true), vec![3, 4, 1]);
 }
+
+// 42d — a unit whose models carry NO per-model loadout (every living kit names no weapon: a hand-built unit, an older
+// save) is what the table's `alive_bearers_of` answers -1 for, and `scaled_attacks_report` keeps the unit's ratio. The
+// core read the four empty kits as zero bearers, so the pistol went silent on every layer below. Pistol: 3 x 4 / 5 = 2.
+
+fn no_loadout(st: &mut State) {
+    st.kits[0] = Rc::new((0..4).map(|_| Kit { weapons: Vec::new(), equipment: 0, wounds_max: 1 }).collect());
+}
+
+#[test]
+fn tray_without_any_loadout_keeps_the_tables_ratio_at_epoch_73() {
+    let (mut st, statics) = squad();
+    no_loadout(&mut st);
+    assert_eq!(tray(&st, &statics, EPOCH_73_V36), vec![2, 4], "the table's -1: 3 x 4/5 rounded, not zero bearers");
+}
+
+/// The seeded sim (the AI's own resolve and self-play's).
+#[test]
+fn full_volley_without_any_loadout_rolls_the_tables_ratio_at_epoch_73() {
+    let (mut st, statics) = squad();
+    no_loadout(&mut st);
+    for sighting in [false, true] {
+        assert_eq!(volley_dice(&st, &statics, EPOCH_73_V36, sighting), 6, "sighting={sighting}: 2 pistol + 4 rifle dice");
+    }
+}
+
+/// The planner's expected values.
+#[test]
+fn ev_without_any_loadout_keeps_the_tables_ratio_at_epoch_73() {
+    let (mut st, statics) = squad();
+    no_loadout(&mut st);
+    assert_eq!(ev(st, &statics, EPOCH_73_V36, false), vec![2, 4]);
+}
+
+/// The step resolver (the flag-on table path): every attack roll it asks for, and the lines of its `Done`.
+fn step_path(st: &State, statics: &[UnitStatic]) -> (Vec<usize>, Vec<crate::logline::LogLine>) {
+    use crate::activation::{step_activation, ActStep, Input};
+    let seams = Seams { rules_epoch: EPOCH_73_V36, casualties_bearers_last: true, sighting: true, ..Seams::default() };
+    let terrain = crate::terrain::Terrain::default();
+    let mut t = vec![Input::Begin, Input::Intent { kind: HOLD, shoot: Some("b".into()) }];
+    let mut attack_dice = Vec::new();
+    loop {
+        match step_activation(statics, st, "a", &terrain, seams, &t, true) {
+            ActStep::NeedRoll { kind, faces, .. } => {
+                if kind == "attack" {
+                    attack_dice.push(faces);
+                }
+                t.push(Input::Faces(vec![6; faces]));
+            }
+            ActStep::Done { lines, .. } => return (attack_dice, lines),
+            _ => panic!("the step path refused: {attack_dice:?}"),
+        }
+        assert!(t.len() < 16, "the step path keeps asking: {attack_dice:?}");
+    }
+}
+
+/// The step resolver asks for the same dice: the pistol's 2, then the rifle's 4.
+#[test]
+fn step_path_without_any_loadout_asks_for_the_tables_ratio_at_epoch_73() {
+    let (mut st, statics) = squad();
+    no_loadout(&mut st);
+    assert_eq!(step_path(&st, &statics).0, vec![2, 4]);
+}
+
+/// A weapon its models see that no living model carries fires nothing and says so, in the table's words (main.gd
+/// NML-1035, `scaled_attacks_report`'s reason); the core used to drop it without a line.
+#[test]
+fn step_path_names_the_weapon_no_living_model_carries() {
+    let (mut st, statics) = squad();
+    st.kits[0] = Rc::new((0..4).map(|_| Kit { weapons: vec![1], equipment: 0, wounds_max: 1 }).collect());
+    let (dice, lines) = step_path(&st, &statics);
+    assert_eq!(dice, vec![4], "the rifle only");
+    let texts: Vec<&str> = lines.iter().map(|l| l.text.as_str()).collect();
+    assert!(texts.contains(&"Brothers: Pistol silent — no living bearers"), "{texts:?}");
+}

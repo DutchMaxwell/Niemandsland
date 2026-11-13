@@ -4903,6 +4903,9 @@ pub struct Scratch {
     /// seeded path allocates nothing new.
     pub sighted: Vec<i64>,
     pub say_sight: bool,
+    /// Step 42d: per profile index (with `sighted`), why a weapon its models see would fire nothing - the table's
+    /// silent line (`scaled_attacks_report`'s "no living bearers" / "no attacks").
+    pub silent: Vec<&'static str>,
 }
 
 /// `BattleSim._profiles_of(su, false, d)` battle_sim.gd:714-749 fused with the
@@ -5040,9 +5043,13 @@ pub fn melee_profiles_of(us: &UnitStatic, alive: i64, sc: &mut Scratch) {
 /// MEL-PAR-F5 — the table's `SoloController.alive_bearers_of`: how many entries naming `weapon_name` the
 /// LIVING models' kits of `unit` hold (duplicates count, like the table's array). None when the state carries
 /// no kits aligned one per living model (no record key, a hand-built fixture, `kits_drop`): the caller keeps
-/// its pro-rata path. Shared with the shooting twin.
+/// its pro-rata path. Shared with the shooting twin. 42d: Some(-1), the table's own -1, when no living kit names
+/// any weapon - the unit carries no per-model loadout, and the table keeps the unit's ratio (not zero bearers).
 pub(crate) fn living_bearers(state: &State, unit: usize, weapon_name: &str) -> Option<i64> {
     let kits = state.kits.get(unit).filter(|k| !k.is_empty() && k.len() as i64 == state.alive[unit])?;
+    if kits.iter().all(|k| k.weapons.is_empty()) {
+        return Some(-1);
+    }
     let names = state.kit_names.get(unit)?;
     let named = |w: &&u16| names.get(**w as usize).is_some_and(|n| n == weapon_name);
     Some(kits.iter().flat_map(|k| k.weapons.iter()).filter(named).count() as i64)
@@ -5125,7 +5132,7 @@ fn melee_bearer_attacks(p: &ShootProfile, model_count: i64, state: &State, unit:
     if !rule_on(rules_epoch, crate::acts::EPOCH_73_V36) || p.extra_attack_q > 0 || copies >= model_count {
         return None;
     }
-    living_bearers(state, unit, &p.name).map(|b| (p.attacks / copies).max(0) * b.min(count))
+    living_bearers(state, unit, &p.name).filter(|&b| b >= 0).map(|b| (p.attacks / copies).max(0) * b.min(count))
 }
 
 /// `melee_bearer_attacks` over a `melee_profiles_of` fill (`sc.attacks` still index-parallel to `us.melee`).
@@ -5427,7 +5434,7 @@ fn sight_reach_in(range_in: f64, def_aircraft: bool, def: &Ctx) -> f64 {
 /// "no living bearers" branch.
 fn bearer_scaled_attacks(p: &ShootProfile, alive: i64, model_count: i64, sighted: i64, living: Option<i64>) -> i64 {
     let copies = p.count.max(1);
-    if copies < model_count {
+    if copies < model_count && living != Some(-1) {   // 42d: -1 = no per-model loadout, the table's ratio below
         let bearers = living.unwrap_or_else(|| copies.min(alive));
         return (p.attacks / copies).max(0) * bearers.min(sighted);
     }
@@ -5453,8 +5460,10 @@ fn sighted_profiles_of(
     sc.keep.clear();
     sc.attacks.clear();
     sc.sighted.clear();
+    sc.silent.clear();
     if sc.say_sight {
         sc.sighted.resize(us.shoot.len(), state.alive[mi]);
+        sc.silent.resize(us.shoot.len(), "");
     }
     let blockers = sight::blockers_of(state, mi, ti, sc.rules_epoch);
     let def = &statics[state.roster.profile[ti]].ctx;
@@ -5506,10 +5515,14 @@ fn sighted_profiles_of(
             trace_rule("volley", "Increased Shooting Range Mark",
                 &format!("{} gains +{mark_range:.0}\" reach on {}", statics[state.roster.profile[mi]].name, statics[state.roster.profile[ti]].name));
         }
+        let living = if p.extra_attack_q > 0 { None } else { shot_bearers(p, us.model_count, state, mi, sc.rules_epoch) };
+        if let Some(why) = sc.silent.get_mut(i) {
+            *why = if living == Some(0) { "no living bearers" } else { "no attacks" };
+        }
         sc.attacks.push(if p.extra_attack_q > 0 {
             p.attacks
         } else {
-            bearer_scaled_attacks(p, state.alive[mi], us.model_count, seen, shot_bearers(p, us.model_count, state, mi, sc.rules_epoch))
+            bearer_scaled_attacks(p, state.alive[mi], us.model_count, seen, living)
         });
     }
 }
@@ -10455,7 +10468,8 @@ fn resolve_with(
                                 rule_on(seams.rules_epoch, EPOCH_14_DEADLY_LANDING),
                                 seams.tray_exact,
                                 &|gr: &[i64]| takedown_pick_cover_after(&next, g.ti, cover, def.in_cover, gr),
-                                &|i, pi| parts.get(i).and_then(|(mi, msc, _)| msc.sighted.get(pi).map(|&n| (n, next.alive[*mi]))),
+                                &|i, pi| parts.get(i).and_then(|(mi, msc, _)| msc.sighted.get(pi)
+                                    .map(|&n| (n, next.alive[*mi], msc.silent.get(pi).copied().unwrap_or("")))),
                                 tray,
                             );
                             // WAVE 3, rules-must-log — the arm lowered a

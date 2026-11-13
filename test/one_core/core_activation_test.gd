@@ -445,6 +445,120 @@ func test_reset_all_closes_every_session() -> void:
 	assert_dict(_main.solo_controller._core_node_ready().move_allowance(h, a.unit_id)).is_empty()
 
 
+func _unspent_lines() -> Array:
+	var out: Array = _main.battle_log.entries().map(func(e: Dictionary) -> String: return str(e["text"])) \
+		.filter(func(t: String) -> bool: return t.ends_with(" is unspent again."))
+	out.sort()
+	return out
+
+
+## Step 37 (O9, O15 (4)): the journal puts back what a Cancel-reachable spend wrote, on the acting unit AND on another
+## unit - a wire-listed key through the wire (null = erased), a table-local stamp by a direct write - with one line per
+## rule naming the acting unit; a key that did not change sends nothing and says nothing. Step 35's Cancel calls it.
+func test_the_journal_unspends_the_one_time_spends_on_every_unit() -> void:
+	var u := _human("Rifles", ["Swift Buff"])
+	var enemy := _unit(2, "Raiders")
+	u.unit_properties["speed_feat_used_speed_feat_aura"] = true   # spent before the Start: it stays spent
+	var net := _recording_net()
+	assert_bool(CoreActivation.open_session(_main, u)).is_true()
+	_main._sync_unit_property(u, "speed_feat_used_speed_feat", true)
+	_main._sync_unit_property(enemy, "tag_markers", 2)
+	u.unit_properties["utility_buff_round"] = 1
+	net.sent.clear()
+	CoreActivation.undo_journal(_main, u)
+	for k in ["speed_feat_used_speed_feat", "utility_buff_round"]:
+		assert_bool(u.unit_properties.has(k)).override_failure_message("%s stays" % k).is_false()
+	assert_bool(enemy.unit_properties.has("tag_markers")).override_failure_message("the enemy's tags stay").is_false()
+	assert_bool(u.unit_properties.get("speed_feat_used_speed_feat_aura", false)).is_true()
+	assert_array(_unspent_lines()).is_equal(["Rifles: Precision Tag is unspent again.",
+		"Rifles: Speed Feat is unspent again.", "Rifles: Utility Buff is unspent again."])
+	var props: Array = net.sent.filter(func(f: Dictionary) -> bool: return f["m"] == "sync_unit_property") \
+		.map(func(f: Dictionary) -> Array: return f["a"])
+	assert_array(props).contains_exactly_in_any_order([[u.unit_id, "speed_feat_used_speed_feat", null],
+		[enemy.unit_id, "tag_markers", null]])
+	# The receiving table still holds the spends; the recorded frames, handed to its real handler, erase them there.
+	u.unit_properties["speed_feat_used_speed_feat"] = true
+	enemy.unit_properties["tag_markers"] = 2
+	for a in props:
+		net.sync_unit_property(a[0], a[1], a[2])
+	assert_bool(u.unit_properties.has("speed_feat_used_speed_feat") or enemy.unit_properties.has("tag_markers")) \
+		.override_failure_message("the receiver kept a spend").is_false()
+	_end_session()   # the recording transport is not in the tree: free it inside the case (no orphan)
+
+
+## Step 37: every human unit that opens a Shoot pick gets the Utility Buff stamp, rule or not; a unit without the rule
+## gets its old stamp back and no line (it spent no rule).
+func test_a_stamp_without_a_buff_rule_comes_back_without_a_line() -> void:
+	var u := _human("Rifles")
+	u.unit_properties["utility_buff_round"] = 0
+	assert_bool(CoreActivation.open_session(_main, u)).is_true()
+	u.unit_properties["utility_buff_round"] = 1
+	CoreActivation.undo_journal(_main, u)
+	assert_int(int(u.unit_properties.get("utility_buff_round", -1))).is_equal(0)
+	assert_array(_unspent_lines()).is_empty()
+
+
+## Step 37: a journaled container changed IN PLACE after the Start comes back as it was at the Start, and a restored
+## value is a fresh copy (a second in-place change and undo go back again). Every JOURNAL_KEYS value is a bool or an int
+## on main today; the core capture reads the wire-listed ones as int/bool (act_recorder `_ledger_of`), so only the
+## table-local stamp can carry a container at the Start: it guards the first container value.
+func test_a_container_changed_in_place_comes_back_as_it_was() -> void:
+	var u := _human("Rifles")
+	u.unit_properties["utility_buff_round"] = [1]
+	assert_bool(CoreActivation.open_session(_main, u)).is_true()
+	for pass_no in 2:
+		(u.unit_properties["utility_buff_round"] as Array).append(2 + pass_no)
+		CoreActivation.undo_journal(_main, u)
+		assert_array(u.unit_properties["utility_buff_round"]).override_failure_message("undo %d: %s" % [pass_no + 1,
+			u.unit_properties["utility_buff_round"]]).is_equal([1])
+
+
+## Step 67: an AoF orc unit of this table (O14 (1b)) at `x_in`; a friendly buff picks the unit with the most models.
+func _orc(uname: String, models: int, x_in: float, rules: Array) -> GameUnit:
+	_main.solo_ai_slots = {2: true}
+	_main._ensure_solo_controller()
+	return ParityTable._make_unit(_main, {"player": 1, "name": uname, "models": models, "x_in": x_in, "z_step_in": 1.2,
+		"quality": 4, "defense": 4, "tough": 1, "game_system": "aof", "faction_folder": "orcs", "rules": rules},
+		{"name": "Bow", "range_in": 24, "attacks": 1, "count": models, "rules": []})
+
+
+## Step 67 (O14 (1b), R8): the journal puts back the spell records two real spends wrote - the orc Speed Feat's record on
+## the acting unit and its Piercing Assault Buff's record on the FRIENDLY Boyz - with their stamps, one record frame per
+## changed unit, the save mirror and the buff's granted-rule overlay (in place); one line per spend. A
+## TRIPWIRE_SKIP key is never reported; a key no door journals is reported once and left as it is.
+func test_the_journal_puts_back_every_units_spell_records() -> void:
+	var boss := _orc("Boss", 1, 0.0, ["Speed Feat", "Piercing Assault Buff"])
+	var boyz := _orc("Boyz", 5, 3.0, [])
+	var boyz_rules: Array = boyz.unit_properties["special_rules"]
+	var net := _recording_net()
+	CoreActivation.tripwire_hits = 0
+	assert_bool(CoreActivation.open_session(_main, boss)).is_true()
+	_main.solo_spend_speed_feat(boss)
+	_main._solo_apply_utility_buffs(boss)
+	assert_bool(boss.unit_properties.has("spell_move_mod") and boyz_rules.has("Piercing Assault (spell)")) \
+		.override_failure_message("fixture: %s / %s" % [boss.unit_properties, boyz_rules]).is_true()
+	boss.unit_properties["display_suffix"] = " (2)"
+	net.sent.clear()
+	CoreActivation.undo_journal(_main, boss)
+	for u: GameUnit in [boss, boyz]:
+		assert_array(_main._solo_spell_mods.get(u.get_instance_id(), [])) \
+			.override_failure_message("%s keeps its records" % u.get_name()).is_empty()
+	assert_bool(boss.unit_properties.has("spell_move_mod")).override_failure_message("the feat's stamp").is_false()
+	assert_array(boyz_rules).not_contains(["Piercing Assault (spell)"])
+	assert_bool(is_same(boyz.unit_properties["special_rules"], boyz_rules)).override_failure_message("not in place").is_true()
+	var frames: Array = net.sent.filter(func(f: Dictionary) -> bool: return f["m"] == "sync_spell_mods") \
+		.map(func(f: Dictionary) -> Array: return f["a"])
+	assert_array(frames).contains_exactly_in_any_order([[boss.unit_id, []], [boyz.unit_id, []]])
+	assert_array(_unspent_lines()).is_equal(["Boss: Piercing Assault Buff is unspent again.",
+		"Boss: Speed Feat is unspent again."])   # one line per spend: the buff's record line, not the stamp's
+	assert_int(CoreActivation.tripwire_hits).override_failure_message("the skip key or a restored key").is_equal(0)
+	boyz.unit_properties["x_test"] = 1
+	CoreActivation.undo_journal(_main, boss)
+	assert_int(CoreActivation.tripwire_hits).is_equal(1)
+	assert_int(int(boyz.unit_properties.get("x_test", 0))).override_failure_message("the tripwire guessed").is_equal(1)
+	_end_session()   # the recording transport is not in the tree: free it inside the case (no orphan)
+
+
 ## Step 29: the REAL NetworkManager with only its transport swapped out; it records every wire frame (pattern:
 ## e2e_mp_log_channel_test's FakeNet). Seat 1 is this table's.
 class FakeNet extends "res://scripts/network_manager.gd":
@@ -699,6 +813,18 @@ func test_drive_releases_the_done_handle_unless_the_caller_keeps_it() -> void:
 	assert_int(core.live_handles()).override_failure_message("the kept handle is the caller's").is_equal(live + 2)
 	assert_dict(core.plain_of(int(kept["handle"]))).is_not_empty()
 	core.release(int(kept["handle"]))
+
+
+## Step 42c: the AI body's board capture dies with the game - `reset_all` releases it and zeroes the slot, so a load or a
+## new game mid-activation can neither leak it nor later release a handle the core has handed out again.
+func test_reset_all_releases_the_ai_bodys_capture() -> void:
+	_volley_units()
+	var core: Object = _main.solo_controller._core_node_ready()
+	_main._solo_core_ai_h = CoreActivation.capture(_main)
+	var live: int = core.live_handles()
+	CoreActivation.reset_all(_main)
+	assert_int(_main._solo_core_ai_h).is_equal(0)
+	assert_int(core.live_handles()).override_failure_message("the capture outlived the game").is_equal(live - 1)
 
 
 ## (review B1 part 1) The session store is static: the table leaving the tree (quit to menu, before a new game) closes

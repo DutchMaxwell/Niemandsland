@@ -1,12 +1,13 @@
 extends GdUnitTestSuite
 ## One-core P3 steps 22 + 22b (the spike gate #2647, reworked): one AI activation of a plain unit - Hold + shoot, or
 ## Advance 4" + shoot on an open or a terrain board - resolved by the core through CoreActivation.drive on the table's
-## own tray equals the table's own AI path (_run_ai_shooting) seed for seed: the models with sight (the table's count vs
+## own tray equals the table's own AI path (_run_ai_shooting) seed for seed: the attacks (the table's scaled count vs
 ## the core's hit dice), the surviving models, Shaken, the tray RNG after. In the core run the dead leave right after the
 ## saves (O4 b, read at the morale throw) and the removals the steps landed equal the binding's delta. Step 27: both
 ## runs add the same battle-log lines, (category, text) in the same order.
-## Real: the main scene, NmlCore, the table's volley, move and sight code. Constructed: a plain 10 vs 5 at 12", both
-## seats AI (no save prompt waits). NML_ONE_CORE_SEEDS overrides the 200 seeds (1000 locally).
+## Real: the main scene, NmlCore, the table's volley, move and sight code. Constructed: plain shooters vs 5 at 12" (the
+## seed picks the shooters' shape, SHAPES: weapon copies vs models, the dead, a per-model loadout or none, step 42d),
+## both seats AI (no save prompt waits). NML_ONE_CORE_SEEDS overrides the 200 seeds (1000 locally).
 
 const INCH := 0.0254
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
@@ -32,6 +33,7 @@ func before_test() -> void:
 	_main.opr_army_manager.current_round = 1
 	_main._solo_batch = true   # tray faces from the seeded tray RNG, no physics settle
 	_main._solo_fast = true    # the Advance glide at fast pace
+	_main._autosave_controller.set_lesson_paused(true)   # a long run's periodic autosave would add its own log line
 
 
 func after_test() -> void:
@@ -57,10 +59,38 @@ func _terrain_board() -> void:
 	o._los_volumes_dirty = true
 
 
+## Step 42d: seed `s`'s shooters - [models, copies of their one Rifle (A1 each), models already dead]; every second
+## pass of the list the models carry their own loadout (the last `copies` the Rifle, the rest a CCW), so the table counts
+## the living bearers - [5, 3, 3] has none left; without a loadout it keeps the unit's ratio. Seed 0 is the original 10.
+const SHAPES := [[10, 10, 0], [5, 1, 0], [5, 3, 0], [5, 5, 0], [5, 7, 0], [5, 3, 1], [5, 3, 3]]
+
+
+func _shape(s: int) -> Dictionary:
+	var sh: Array = SHAPES[s % SHAPES.size()]
+	return {"models": sh[0], "copies": sh[1], "dead": sh[2], "loadout": s % (2 * SHAPES.size()) >= SHAPES.size()}
+
+
+## Gives `att` the shape's loadout and its dead (the last models; their bases leave every sight line).
+func _kit_out(att: GameUnit, sh: Dictionary) -> void:
+	for i in att.models.size():
+		var m: ModelInstance = att.models[i]
+		if sh["loadout"]:
+			m.properties["weapons"] = [{"name": "Rifle" if i >= att.models.size() - int(sh["copies"]) else "CCW",
+				"attacks": 1}]
+		if i >= att.models.size() - int(sh["dead"]):
+			m.is_alive = false
+			m.wounds_current = 0
+			m.node.global_position.x -= 30.0 * INCH
+
+
 ## One seed, one run, on fresh units. Returns what the comparison reads, plus the core's answer in a core run.
 func _run(s: int, advance: bool, board: bool, core_run: bool) -> Dictionary:
-	var att: GameUnit = ParityTable._make_unit(_main, SIDE.merged({"player": 1, "name": "Att", "models": 10, "x_in": 0.0}),
-		RIFLE)
+	var sh := _shape(s)
+	# One name (roster key) per shape: the binding keeps the statics it built for a set of unit keys, so a shape that
+	# reused seed 0's key would be resolved with seed 0's profile.
+	var att: GameUnit = ParityTable._make_unit(_main, SIDE.merged({"player": 1, "name": "Att%d" % (s % SHAPES.size()),
+		"models": sh["models"], "x_in": 0.0}), RIFLE.merged({"count": sh["copies"]}, true))
+	_kit_out(att, sh)
 	var foe: GameUnit = ParityTable._make_unit(_main, SIDE.merged({"player": 2, "name": "Def", "models": 5, "x_in": 12.0}),
 		{})
 	for m in att.models + foe.models if board else []:   # the board's lanes: shooters 0.4", targets 1.6" up the table
@@ -82,18 +112,23 @@ func _run(s: int, advance: bool, board: bool, core_run: bool) -> Dictionary:
 				(p["model"] as ModelInstance).node.global_position = p["path"][1]
 		var kind := AiDecision.Action.ADVANCE if advance else AiDecision.Action.HOLD
 		t.append({"t": "intent", "kind": kind, "shoot": foe.unit_id})
-		# The table's own count of models with range and sight (main._solo_shot_eligibility), from the same spots.
+		# The table's own count of models with range and sight (main._solo_shot_eligibility), from the same spots, and
+		# the attacks it scales from them (42d: copies and living bearers, SoloController.scaled_attacks_report).
 		var sighted: int = _main._solo_sighted_count(att, foe, RIFLE["range_in"], false, null, false, null, true)
+		var prof: Dictionary = AiShooting.profiles_in_range((att.source_data as OPRApiClient.OPRUnit).weapons,
+			float(RIFLE["range_in"]))[0]
+		var want := int(SoloController.scaled_attacks_report(att, prof, sighted, att.models.size())["attacks"])
 		var before := foe.get_alive_models()
 		var throws: Array = []
 		var on_throw := func(k: String, _i: int) -> void: throws.append([k, foe.get_alive_count()])
 		out = await CoreActivation.drive(_main, h, att, t, true, on_throw)
 		out["bad"] = [] if str(out["step"]) == "done" else ["core answered %s" % out]
-		var dice := 0   # one attack per model: the core's hit dice are the models it lets shoot
+		var dice := 0   # the core's hit dice
 		for e in t.filter(func(e: Dictionary) -> bool: return str(e["t"]) == "faces").slice(0, 1):
 			dice = (e["faces"] as Array).size()
-		if dice != sighted:
-			out["bad"].append("sight: the table lets %d models shoot, the core throws %d dice" % [sighted, dice])
+		if dice != want:
+			out["bad"].append("attacks: the table fires %d (%d models in sight), the core throws %d dice" % [want, sighted,
+				dice])
 		var core: Object = (_main.solo_controller as SoloController)._core_node_ready()
 		core.release(h)   # the test frees its own handles (the capture and the done state)
 		core.release(int(out.get("handle", 0)))
