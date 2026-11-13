@@ -3426,6 +3426,23 @@ func core_activation_start(gu: GameUnit) -> bool:
 	_log_rule_event(BattleLog.Category.GENERAL, "%s begins its activation." % gu.get_name())
 	return true
 
+
+## One-core P3 step 30 (O9, O14 (1b)): a lifecycle unit whose activation is not open cannot be dragged. A joined hero
+## activates with its host (GameUnit.activate), so the host's session opens the pair, and the hero's own as well.
+func core_drag_blocked(gu: GameUnit) -> bool:
+	return CoreActivation.is_lifecycle_unit(self, gu) and not CoreActivation.session_open(gu.unit_id) \
+		and not CoreActivation.session_open(_solo_combat_unit(gu).unit_id)
+
+
+## Step 30: why `gu` did not move - another unit's open activation (the core's O5 sentence) or its own missing Start
+## (O15 (1)); a toast and a log line, which reaches the other table.
+func core_drag_refused(gu: GameUnit) -> void:
+	var core: Object = solo_controller._core_node_ready() if solo_controller != null else null
+	var verdict: Dictionary = core.check_begin(CoreActivation.open_unit_name(self, gu)) if core != null else {}
+	var text: String = str(verdict["reason"]) if not bool(verdict.get("ok", true)) else "Activate %s first." % gu.get_name()
+	_log_rule_event(BattleLog.Category.MOVEMENT, text)
+	_show_toast(text)
+
 ## (Re)build the SoloController for the currently designated AI slot (setup wires TurnManager once).
 func _ensure_solo_controller() -> void:
 	# #196 belt-and-braces: in multiplayer the controller exists only for an EXPLICITLY
