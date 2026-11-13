@@ -181,7 +181,9 @@ static func land_step(main, _gu: GameUnit, landings: Array, start_models: Array,
 				if main.network_manager != null and main.network_manager.has_method("broadcast_model_wounds"):
 					main.network_manager.broadcast_model_wounds(m)
 		if not died.is_empty():
+			main._core_said_losses = bool(entry.get("loss_line", false))   # step 27: the core said this loss line
 			await main._solo_remove_dead_models(lgu, died, int(lgu.unit_properties.get("player_id", 1)))
+			main._core_said_losses = false
 
 
 ## The activation's final delta (binding step 17): Shaken onto the table; a unit that moved AND lost models is

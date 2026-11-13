@@ -274,6 +274,28 @@ func test_a_landed_wound_shows_on_the_wound_marker() -> void:
 	assert_object(m.node.get_node_or_null("WoundMarker")).override_failure_message("no wound marker").is_not_null()
 
 
+## Step 27: a landing whose loss line the core said (a volley's) removes its dead with no second line from the table's
+## removal funnel; a landing the core said nothing about (a Dangerous test's) keeps the funnel's line.
+func test_the_funnel_says_only_the_losses_the_core_did_not_say() -> void:
+	var said := {}
+	for core_said in [true, false]:
+		var foe := ParityTable._make_unit(_main, {"player": 1, "name": "Foe%s" % core_said, "models": 3, "x_in": 12.0,
+			"z_step_in": 1.2, "quality": 4, "defense": 4, "tough": 1, "game_system": "gf",
+			"faction_folder": "robot_legions", "rules": []}, {})
+		var lines: Array = []
+		var on_entry := func(e: Dictionary) -> void: lines.append(str(e["text"]))
+		_main.battle_log.entry_added.connect(on_entry)
+		var m: ModelInstance = foe.models[0]
+		var landing := [{"unit": foe.unit_id, "loss_line": core_said,
+			"models": [{"at": m.node.global_position, "wounds_left": 0, "dead": true}]}]
+		await CoreActivation.land_step(_main, foe, landing, CoreActivation._start_models(_main), {})
+		_main.battle_log.entry_added.disconnect(on_entry)
+		assert_bool(m.is_alive).override_failure_message("the landing did not kill the model").is_false()
+		said[core_said] = lines
+	assert_array(said[true]).override_failure_message("the core said it: %s" % [said[true]]).is_empty()
+	assert_array(said[false]).contains_exactly(["Foefalse loses a model (2/3)"])
+
+
 ## Step 28 fixture: a human unit of two models on an AI-seat table; each node carries its network id and its
 ## ModelInstance, as spawned models do (the move ledger keys its models by the id, the trail radius reads the model).
 func _human(uname: String, rules: Array = []) -> GameUnit:

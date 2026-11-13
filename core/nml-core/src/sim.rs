@@ -520,7 +520,7 @@ fn landing_of(state: &State, u: usize, at: &[[f64; 3]], wounds: &[i64]) -> Optio
             None => Some(LandedModel { at: *p, wounds_left: 0, dead: true }),
         }
     }).collect();
-    (!models.is_empty()).then_some(Landing { unit: u, models })
+    (!models.is_empty()).then_some(Landing { unit: u, models, loss_line: false })
 }
 
 /// The table AI's Takedown pick (`attacker_pick_target`): the host's most valuable living model,
@@ -1395,6 +1395,7 @@ pub(crate) fn tray_strafing(
         rule_on(seams.rules_epoch, EPOCH_14_DEADLY_LANDING),
         seams.tray_exact,
         &|gr: &[i64]| takedown_pick_cover_after(next, target, cover, def.in_cover, gr),
+        &|_, _| None,
         tray,
     );
     // The volley tail, the shoot branch's own shape: spent Limited marks,
@@ -4897,6 +4898,11 @@ pub struct Scratch {
     /// G4-C8a: the models that strike, set by `melee_parts` so `strike_phase` logs the count
     /// without measuring twice. Read only off a `melee_parts` product.
     pub strikers: i64,
+    /// One-core P3 step 27: per profile index, the member's models with range and sight (`sighted_profiles_of`) for
+    /// the hit line's "(n/m models sighted)" part. Filled only when `say_sight` is set (a tray with a feed), so the
+    /// seeded path allocates nothing new.
+    pub sighted: Vec<i64>,
+    pub say_sight: bool,
 }
 
 /// `BattleSim._profiles_of(su, false, d)` battle_sim.gd:714-749 fused with the
@@ -5446,6 +5452,10 @@ fn sighted_profiles_of(
 ) {
     sc.keep.clear();
     sc.attacks.clear();
+    sc.sighted.clear();
+    if sc.say_sight {
+        sc.sighted.resize(us.shoot.len(), state.alive[mi]);
+    }
     let blockers = sight::blockers_of(state, mi, ti, sc.rules_epoch);
     let def = &statics[state.roster.profile[ti]].ctx;
     // WAVE 3 MARK CONSUMERS (`acts::rule_on`, frozen at `EPOCH_6_TABLE_RULES`):
@@ -5476,6 +5486,9 @@ fn sighted_profiles_of(
         let seen = sight::sighted_count(state, zones, &blockers, mi, ti, reach,
             (p.indirect && p.indirect_ignores_los.unwrap_or(true) && !lost) || mark_indirect,
             rule_on(sc.rules_epoch, EPOCH_66_DISTANCE_TRUTH), sc.rules_epoch);
+        if let Some(n) = sc.sighted.get_mut(i) {
+            *n = seen;
+        }
         if lost && !mark_indirect {
             trace_rule("volley", "Indirect",
                 &format!("{} did not Hold: {} needs line of sight", statics[state.roster.profile[mi]].name, p.name));
@@ -10239,6 +10252,7 @@ fn resolve_with(
                                 let mut msc = Scratch::default();
                                 msc.rules_epoch = seams.rules_epoch;
                                 msc.bearers_last = seams.casualties_bearers_last;
+                                msc.say_sight = tray.feed().is_some(); // step 27: the hit line's sight part
                                 // G4R3 F-HERO-RANGE (EPOCH_73_V36): range is per MODEL — a joined hero's weapons
                                 // are gated by the hero's own nearest gap (the host's `g.d` below 73 and for the host).
                                 let hero_own_gap = mi != si && rule_on(seams.rules_epoch, EPOCH_73_V36);
@@ -10441,6 +10455,7 @@ fn resolve_with(
                                 rule_on(seams.rules_epoch, EPOCH_14_DEADLY_LANDING),
                                 seams.tray_exact,
                                 &|gr: &[i64]| takedown_pick_cover_after(&next, g.ti, cover, def.in_cover, gr),
+                                &|i, pi| parts.get(i).and_then(|(mi, msc, _)| msc.sighted.get(pi).map(|&n| (n, next.alive[*mi]))),
                                 tray,
                             );
                             // WAVE 3, rules-must-log — the arm lowered a
@@ -10528,10 +10543,10 @@ fn resolve_with(
                                 }
                             }
                             // One-core P3 step 7: one landing per changed chain member, stamped BEFORE
-                            // the group's morale test below draws.
+                            // the group's morale test below draws. Step 27: its loss line was said just above.
                             for (u, at, wounds) in chain_before.into_iter().flatten() {
                                 if let Some(l) = landing_of(&next, u, &at, &wounds) {
-                                    tray.land(|| l);
+                                    tray.land(|| Landing { loss_line: true, ..l });
                                 }
                             }
                             // rules-wave3-growthmark (epoch 6) — the

@@ -13,7 +13,7 @@ fn a_later_weapon_rolls_its_declared_dice_after_a_deadly_wipe() {
         ShootProfile { name: "Flamer".into(), range: 6, ..rifle(3) },
     ];
     let r = resolve_volley_leg(&[Shooter { profiles: &guns, keep: &[0, 1], attacks: &[4, 3], att: &att, owner: "a" }],
-        &def, "b", 4.0, 4.0, true, true, true, true, true, true, &|_| false, &mut Tray::seeded(7));
+        &def, "b", 4.0, 4.0, true, true, true, true, true, true, &|_| false, &|_, _| None, &mut Tray::seeded(7));
     let attacks: Vec<i64> = r.rolls.iter().filter(|x| x.kind == "attack").map(|x| x.count).collect();
     assert!(r.deadly_tally >= 1, "fixture: the missile wipes the one-model target first");
     assert_eq!(attacks, vec![4, 3], "the flamer keeps its declared dice after the wipe");
