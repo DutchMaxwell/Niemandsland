@@ -112,7 +112,7 @@ impl Tray {
     /// instead of drawing. Past the last group it serves 1s and records where it
     /// first ran dry (`starved_at`) — the step API turns that into `NeedRoll`.
     pub fn supplied(groups: Vec<Vec<u8>>) -> Tray {
-        let feed = Feed { groups, next: 0, starved_at: None, mismatch: None, placed: None };
+        let feed = Feed { groups, next: 0, starved_at: None, mismatch: None, placed: None, placed_trails: None };
         Tray { rng: GodotRng::new(0), feed: Some(feed), zero_draws: false, lines: Vec::new(), landings: Vec::new() }
     }
 
@@ -122,11 +122,18 @@ impl Tray {
     }
 
     /// One-core P3: the player's own per-model end positions for this step's
-    /// ADVANCE/RUSH. Only a supplied tray keeps them; a seeded tray ignores the call.
-    pub fn place(&mut self, p: Vec<[f64; 3]>) {
+    /// ADVANCE/RUSH and each model's walked path (world XZ metres, may be empty).
+    /// Only a supplied tray keeps them; a seeded tray ignores the call.
+    pub fn place(&mut self, p: Vec<[f64; 3]>, trails: Vec<Vec<[f64; 2]>>) {
         if let Some(feed) = self.feed.as_mut() {
             feed.placed = Some(p);
+            feed.placed_trails = Some(trails);
         }
+    }
+
+    /// The supplied placement's walked paths, if any (`None` on every seeded tray).
+    pub fn placed_trails(&self) -> Option<&[Vec<[f64; 2]>]> {
+        self.feed.as_ref().and_then(|f| f.placed_trails.as_deref())
     }
 
     /// The supplied placement, if any (`None` on every seeded tray).
@@ -188,6 +195,8 @@ pub struct Feed {
     pub mismatch: Option<(usize, usize, usize)>,
     /// One-core P3: supplied per-model end positions (`Tray::place`); `None` = the move port decides.
     placed: Option<Vec<[f64; 3]>>,
+    /// One-core P3: the supplied placement's per-model walked paths (`Tray::place`).
+    placed_trails: Option<Vec<Vec<[f64; 2]>>>,
 }
 
 impl Feed {
