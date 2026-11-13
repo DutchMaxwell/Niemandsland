@@ -80,3 +80,67 @@ func test_an_unknown_handle_is_refused() -> void:
 	var r: Dictionary = _core.step_activation(9999, "a", [{"t": "begin"}], false)
 	assert_str(r["step"]).is_equal("refused")
 	assert_str(r["reason"]).is_equal("unknown handle")
+
+
+## ---- the header's rules epoch reaches `resolve` and `step_activation` ----
+## `seams_now()` carried no epoch, so every epoch-gated rule was OFF inside both calls (plan_inner read the header's).
+## Probe rule: Speed Feat (epoch 7) - in the endgame its bearer's once-per-game bonus is +2" Advance. Here "a" (orc_marauders,
+## round 4 of 4) has a 6" Advance band, so 8" with the epoch and 6" without it.
+
+## A fresh core with a game header stamped `epoch`, and a handle on "a" (a Speed Feat bearer, 3 models) and "b" (30" away).
+func _headed_handle(core: Object, epoch: int) -> int:
+	var a := _unit(1, [Vector3.ZERO, Vector3(1.0 * IN2M, 0, 0), Vector3(2.0 * IN2M, 0, 0)], "a")
+	var b := _unit(2, [Vector3(30.0 * IN2M, 0, 0), Vector3(31.0 * IN2M, 0, 0), Vector3(32.0 * IN2M, 0, 0)], "b")
+	for u in [a, b]:   # the header's rules registry needs a system (e2e_core_ledger_seam_test.gd `_unit`)
+		(u as GameUnit).unit_properties["game_system"] = "gf"
+		(u as GameUnit).unit_properties["faction_folder"] = "orc_marauders"
+	a.unit_properties["special_rules"] = ["Speed Feat"]
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {"a": a, "b": b}
+	var state := BattleSim.capture(army, func() -> Array: return [], func(_i: int) -> int: return 0, 4, 4)
+	var head: Dictionary = AiActRecorder._header_line(state, Callable())
+	(head["knobs"] as Dictionary)["rules_epoch"] = epoch
+	assert_bool(core.set_game_header(head)).override_failure_message("set_game_header: " + str(core.last_error())).is_true()
+	var h: int = core.capture_plain(BattleSim.state_to_plain(state))
+	assert_int(h).override_failure_message("capture_plain: " + str(core.last_error())).is_not_equal(0)
+	return h
+
+
+## "a"'s centre x (inches) after `resolve` sent it to x = 11" (its start centre is 1"): the Advance band clamps it.
+func _centre_x_after_advance(epoch: int) -> float:
+	var core: Object = ClassDB.instantiate("NmlCore")
+	var h := _headed_handle(core, epoch)
+	var h2: int = core.resolve(h, {"kind": AiDecision.Action.ADVANCE, "unit": "a", "dest": Vector3(11.0 * IN2M, 0, 0)})
+	assert_int(h2).override_failure_message("resolve: " + str(core.last_error())).is_not_equal(0)
+	var sum := 0.0
+	var positions: Array = core.plain_of(h2)["units"]["a"]["positions"]
+	for p in positions:
+		sum += float((p as Array)[0])
+	return sum / positions.size() / IN2M
+
+
+func test_resolve_reads_the_headers_rules_epoch() -> void:
+	assert_float(_centre_x_after_advance(76)).override_failure_message(
+		"epoch 76: Speed Feat widens the Advance band to 8\" (centre 1\" -> 9\")").is_equal_approx(9.0, 0.05)
+	assert_float(_centre_x_after_advance(6)).override_failure_message(
+		"epoch 6: no Speed Feat, the 6\" Advance band (centre 1\" -> 7\")").is_equal_approx(7.0, 0.05)
+
+
+## One Advance whose three models all go `inches` east, enforcing the movement limit; the core's answer.
+func _advance(epoch: int, inches: float) -> Dictionary:
+	var core: Object = ClassDB.instantiate("NmlCore")
+	var h := _headed_handle(core, epoch)
+	var placed: Array = []
+	for i in 3:
+		placed.append(Vector3((float(i) + inches) * IN2M, 0, 0))
+	var t: Array = [{"t": "begin"}, {"t": "placed", "positions": placed}, {"t": "intent", "kind": AiDecision.Action.ADVANCE}]
+	return core.step_activation(h, "a", t, true)
+
+
+func test_step_activation_reads_the_headers_rules_epoch() -> void:
+	var r := _advance(76, 7.0)
+	assert_str(str(r.get("reason", ""))).override_failure_message(
+		"epoch 76: Speed Feat makes 7\" a legal Advance, got " + str(r)).not_contains("allowance")
+	# Controls: past the feat's 8" it is refused with the widened band named, and below epoch 7 the 6" band refuses 7".
+	assert_str(str(_advance(76, 9.0).get("reason", ""))).contains("the Advance allowance is 8.0")
+	assert_str(str(_advance(6, 7.0).get("reason", ""))).contains("the Advance allowance is 6.0")

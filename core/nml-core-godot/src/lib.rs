@@ -310,7 +310,7 @@ impl NmlCore {
     fn resolve(&mut self, h: i64, action: VarDictionary) -> i64 {
         self.last_error.clear();
         let Some(i) = self.index(h) else { return 0 };
-        let seams = self.seams_now();
+        let seams = self.seams_at_header_epoch();
         let act = action_of(&action);
         let cover = action.get("cover_dest").map(|v| plain::flag(&v));
         let cast_los: Option<Vec<bool>> = action
@@ -359,7 +359,7 @@ impl NmlCore {
             Ok(t) => t,
             Err(at) => return actcall::refused(at, &format!("input {at} is not understood")),
         };
-        let seams = self.seams_now();
+        let seams = self.seams_at_header_epoch();
         let absent = Terrain::absent();
         let terrain = self.header.as_ref().map(|hd| &hd.terrain).unwrap_or(&absent);
         let slot = self.slab[i].as_ref().unwrap();
@@ -1064,6 +1064,14 @@ impl NmlCore {
             });
         }
         self.seams.unwrap()
+    }
+
+    /// `seams_now` with the HEADER's rules epoch (0 without a header — `capture_plain`'s reading): what `resolve` and
+    /// `step_activation` hand the core, so every epoch-gated rule runs at the epoch the game plays at (`plan_inner` reads it
+    /// off the header knobs too). `seams_now` itself carries no epoch.
+    fn seams_at_header_epoch(&mut self) -> Seams {
+        let rules_epoch = self.header.as_ref().map(|h| h.knobs.rules_epoch).unwrap_or(0);
+        Seams { rules_epoch, ..self.seams_now() }
     }
 
     fn root(&mut self) -> String {
