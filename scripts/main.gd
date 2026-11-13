@@ -20589,6 +20589,10 @@ func _on_network_command(type: String, payload: Variant, _from_peer: int) -> voi
 		_rpc_roll_result(int(payload.get("req", 0)), payload.get("faces", []))
 	elif type == "activation_check" and payload is Dictionary:
 		CoreActivation.on_check(self, payload, _from_peer)   # one-core P3 step 51 (N6 b)
+	elif type == "activation_mismatch" and payload is Dictionary:
+		CoreActivation.on_mismatch(self, payload, _from_peer)   # one-core P3 step 52 (O13 (b))
+	elif type == "correct_unit_activated" and payload is Dictionary:
+		CoreActivation.on_correct_activated(self, payload, _from_peer)   # step 52: a correction, never a new activation
 	elif type == "vfx_cue" and payload is Dictionary:
 		_vfx_draw(payload, _from_peer)
 	elif type == "session_ended":
