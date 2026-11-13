@@ -3,7 +3,7 @@
 //! rules; the answer comes out as a plain dictionary (lines and landings included).
 use crate::plain;
 use godot::prelude::*;
-use nml_core::activation::{step_activation, ActStep, Input};
+use nml_core::activation::{allowance, delta_of, step_activation, ActStep, Input};
 use nml_core::io::Seams;
 use nml_core::landing::Landing;
 use nml_core::logline::LogLine;
@@ -62,6 +62,42 @@ fn landings_of(state: &State, landings: &[Landing]) -> VarArray {
     out
 }
 
+fn delta_array(before: &State, after: &State) -> VarArray {
+    let mut out = VarArray::new();
+    for u in delta_of(before, after) {
+        let mut removed = VarArray::new();
+        for i in &u.removed {
+            removed.push(&(*i as i64).to_variant());
+        }
+        let mut d = VarDictionary::new();
+        d.set("unit", u.key.as_str());
+        d.set("removed", &removed);
+        d.set("shaken", u.shaken);
+        d.set("alive", u.alive);
+        d.set("moved", u.moved);
+        d.set("unknown", u.unknown);
+        out.push(&d.to_variant());
+    }
+    out
+}
+
+/// `NmlCore.move_allowance`: the unit's move allowance in inches per mode at its activation start, and the rules
+/// that widen it. Empty for a unit the roster does not know.
+pub fn allowance_of(statics: &[UnitStatic], state: &State, unit: &str, terrain: &Terrain, seams: Seams) -> VarDictionary {
+    let mut d = VarDictionary::new();
+    let Some(&si) = state.roster.index.get(unit) else { return d };
+    let a = allowance(statics, state, si, seams, terrain);
+    let mut by = VarArray::new();
+    for n in &a.widened_by {
+        by.push(&n.as_str().to_variant());
+    }
+    d.set("advance", a.advance);
+    d.set("rush", a.rush);
+    d.set("charge", a.charge);
+    d.set("widened_by", &by);
+    d
+}
+
 /// One step. `Some(state)` only on `done`. `refused` carries the input's index and the sentence.
 pub fn run(statics: &[UnitStatic], state: &State, unit: &str, terrain: &Terrain, seams: Seams, t: &[Input], enforce: bool) -> (VarDictionary, Option<State>) {
     let mut out = VarDictionary::new();
@@ -88,6 +124,7 @@ pub fn run(statics: &[UnitStatic], state: &State, unit: &str, terrain: &Terrain,
             out.set("step", "done");
             out.set("lines", &lines_of(&lines));
             out.set("landings", &landings_of(state, &landings));
+            out.set("delta", &delta_array(state, &s));
             next = Some(s);
         }
     }

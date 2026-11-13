@@ -9,6 +9,7 @@ const IN2M := 0.0254
 
 var _core: Object
 var _h := 0
+var _plain: Dictionary
 
 
 func before_test() -> void:
@@ -18,10 +19,10 @@ func before_test() -> void:
 	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
 	army.game_units = {"a": a, "b": b}
 	var state := BattleSim.capture(army, func() -> Array: return [], func(_i: int) -> int: return 0, 1, 4)
-	var plain := BattleSim.state_to_plain(state)
-	(plain["units"]["a"]["profile"] as Dictionary)["weapons"] = [
+	_plain = BattleSim.state_to_plain(state)
+	(_plain["units"]["a"]["profile"] as Dictionary)["weapons"] = [
 		{"name": "Rifle", "range": 24.0, "attacks": 6, "count": 3, "ap": 0, "rules": []}]
-	_h = _core.capture_plain(plain)
+	_h = _core.capture_plain(_plain)
 
 
 ## battle_sim_capture_test.gd:10-24 (copy, don't import); the nodes sit in the tree so global_position reads.
@@ -67,6 +68,14 @@ func test_a_hold_and_shoot_activation_runs_to_done_and_reports_the_landing() -> 
 	assert_int(xs.size()).is_equal(3)
 	for i in 3:
 		assert_float(xs[i]).is_equal_approx((10.0 + i) * IN2M, 0.0001)
+	# The done answer carries the delta: only "b" changed - its three models are gone, nobody moved.
+	var delta: Array = r["delta"]
+	assert_int(delta.size()).is_equal(1)
+	assert_str(delta[0]["unit"]).is_equal("b")
+	assert_int(int(delta[0]["alive"])).is_equal(0)
+	var removed: Array = (delta[0]["removed"] as Array).duplicate()
+	removed.sort()
+	assert_array(removed).is_equal([0, 1, 2])
 
 
 func test_an_input_the_core_does_not_know_is_refused_with_its_index() -> void:
@@ -80,6 +89,72 @@ func test_an_unknown_handle_is_refused() -> void:
 	var r: Dictionary = _core.step_activation(9999, "a", [{"t": "begin"}], false)
 	assert_str(r["step"]).is_equal("refused")
 	assert_str(r["reason"]).is_equal("unknown handle")
+
+
+## Rolls a started activation to its end: `faces_for(roll_no, step)` answers every need_roll (roll_no counts from 0).
+func _drive(t: Array, faces_for: Callable) -> Dictionary:
+	var r: Dictionary = _core.step_activation(_h, "a", t, false)
+	var n := 0
+	while r["step"] == "need_roll" and n < 20:
+		t.append({"t": "faces", "faces": faces_for.call(n, r)})
+		n += 1
+		r = _core.step_activation(_h, "a", t, false)
+	return r
+
+
+func test_the_delta_reports_casualties_and_shaken_of_a_partial_volley() -> void:
+	# Roll 0 = attacks (all hit), roll 1 = saves (the first two fail), roll 2 = the morale test (fails).
+	var faces_for := func(n: int, r: Dictionary) -> Array:
+		var f: Array = []
+		for i in int(r["faces"]):
+			f.append(6 if n == 0 else (1 if n == 2 or i < 2 else 6))
+		return f
+	var r := _drive([{"t": "begin"}, {"t": "intent", "kind": 0, "shoot": "b"}], faces_for)
+	assert_str(r["step"]).is_equal("done")
+	var delta: Array = r["delta"]
+	assert_int(delta.size()).is_equal(1)
+	assert_str(delta[0]["unit"]).is_equal("b")
+	assert_int(int(delta[0]["alive"])).is_equal(1)
+	assert_int((delta[0]["removed"] as Array).size()).is_equal(2)
+	assert_bool(delta[0]["shaken"]).is_true()
+	assert_bool(delta[0]["moved"]).is_false()
+	assert_bool(delta[0]["unknown"]).is_false()
+
+
+func test_the_delta_marks_a_unit_that_moved() -> void:
+	var to := [Vector3(3.0 * IN2M, 0, 0), Vector3(4.0 * IN2M, 0, 0), Vector3(5.0 * IN2M, 0, 0)]
+	var r := _drive([{"t": "begin"}, {"t": "intent", "kind": 1, "shoot": ""}, {"t": "placed", "positions": to}], func(_n: int, _r: Dictionary) -> Array: return [])
+	assert_str(r["step"]).is_equal("done")
+	var delta: Array = r["delta"]
+	assert_int(delta.size()).is_equal(1)
+	assert_str(delta[0]["unit"]).is_equal("a")
+	assert_bool(delta[0]["moved"]).is_true()
+	assert_bool(delta[0]["unknown"]).is_false()
+	assert_int(int(delta[0]["alive"])).is_equal(3)
+	assert_array(delta[0]["removed"]).is_empty()
+
+
+func test_the_move_allowance_of_a_unit_is_its_own_band_and_names_no_rule_for_a_plain_one() -> void:
+	# A band that is not the default 6/12 (a constant answer or an Advance/Rush swap shows).
+	var p := _plain.duplicate(true)
+	(p["units"]["a"]["bands"] as Dictionary)["advance"] = 5.0
+	(p["units"]["a"]["bands"] as Dictionary)["rush"] = 11.0
+	var a: Dictionary = _core.move_allowance(_core.capture_plain(p), "a")
+	assert_float(a["advance"]).is_equal(5.0)
+	assert_float(a["rush"]).is_equal(11.0)
+	assert_float(a["charge"]).is_equal(11.0)
+	assert_array(a["widened_by"]).is_empty()
+	# And the default unit: 6 / 12.
+	var d: Dictionary = _core.move_allowance(_h, "a")
+	assert_float(d["advance"]).is_equal(6.0)
+	assert_float(d["rush"]).is_equal(12.0)
+
+
+func test_the_move_allowance_of_an_unknown_unit_or_handle_is_empty_with_a_reason() -> void:
+	assert_dict(_core.move_allowance(_h, "zzz")).is_empty()
+	assert_str(_core.last_error()).is_equal("unknown unit")
+	assert_dict(_core.move_allowance(9999, "a")).is_empty()
+	assert_str(_core.last_error()).is_equal("unknown handle")
 
 
 ## ---- the header's rules epoch reaches `resolve` and `step_activation` ----
@@ -144,3 +219,16 @@ func test_step_activation_reads_the_headers_rules_epoch() -> void:
 	# Controls: past the feat's 8" it is refused with the widened band named, and below epoch 7 the 6" band refuses 7".
 	assert_str(str(_advance(76, 9.0).get("reason", ""))).contains("the Advance allowance is 8.0")
 	assert_str(str(_advance(6, 7.0).get("reason", ""))).contains("the Advance allowance is 6.0")
+
+
+## `move_allowance` reads the header's rules epoch as well (it handed the core `seams_now()`, epoch 0): the Speed Feat bearer
+## "a" (round 4 of 4) has 8" Advance at epoch 76 and names the feat, and the plain 6" below epoch 7.
+func test_move_allowance_reads_the_headers_rules_epoch() -> void:
+	var core: Object = ClassDB.instantiate("NmlCore")
+	var a: Dictionary = core.move_allowance(_headed_handle(core, 76), "a")
+	assert_float(a["advance"]).override_failure_message("epoch 76: Speed Feat widens the Advance band to 8.0, got " + str(a)).is_equal(8.0)
+	assert_array(a["widened_by"]).is_equal(["Speed Feat"])
+	var old: Object = ClassDB.instantiate("NmlCore")
+	var b: Dictionary = old.move_allowance(_headed_handle(old, 6), "a")
+	assert_float(b["advance"]).is_equal(6.0)
+	assert_array(b["widened_by"]).is_empty()
