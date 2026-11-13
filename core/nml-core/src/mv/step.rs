@@ -36,7 +36,7 @@ use super::io::{CallOpts, MoveCall};
 /// `SoloController.BOUNDS_MARGIN_M` :16 — models stay a hair inside the edge.
 const BOUNDS_MARGIN_M: f64 = 0.02;
 /// `SoloController.DIFFICULT_MOVE_CAP_IN` :67 — GF/AoF v3.5.1 p.11.
-const DIFFICULT_MOVE_CAP_IN: f64 = 6.0;
+pub(crate) const DIFFICULT_MOVE_CAP_IN: f64 = 6.0;
 /// `SoloController.UNIT_SPACING_IN` :74.
 const UNIT_SPACING_IN: f64 = 1.0;
 /// `SeparationChecker.DEFAULT_BASE_RADIUS_M` separation_checker.gd:81.
