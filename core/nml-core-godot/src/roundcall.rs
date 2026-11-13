@@ -7,14 +7,19 @@ use nml_core::mission::vp_of;
 use nml_core::round::RoundWords;
 use nml_core::state::State;
 
-/// `{"labels": {player id: label}, "cite": String, "placed_by": {unit key: rule}}`; an absent key reads empty.
-pub fn words_of(d: &VarDictionary) -> RoundWords {
-    let pairs = |k: &str| plain::sub_dict(d, k).iter_shared().collect::<Vec<_>>();
-    RoundWords {
-        labels: pairs("labels").iter().map(|(k, v)| (plain::int(k), plain::text(v))).collect(),
-        cite: d.get("cite").map(|v| plain::text(&v)).unwrap_or_default(),
-        placed_by: pairs("placed_by").iter().map(|(k, v)| (plain::text(k), plain::text(v))).collect(),
+/// `{"labels": {player id: label}, "cite": String, "placed_by": {unit key: rule}}`. An absent key reads empty; a key of
+/// another shape is refused (`Err`), never read as empty.
+pub fn words_of(d: &VarDictionary) -> Result<RoundWords, &'static str> {
+    let dict = |k: &str| d.get(k).map_or(Ok(VarDictionary::new()), |v| v.try_to::<VarDictionary>().map_err(|_| "words: labels and placed_by must be dictionaries"));
+    let text = |v: &Variant| v.try_to::<GString>().map(|s| s.to_string()).map_err(|_| "words: the cite, labels, unit keys and rules must be strings");
+    let mut w = RoundWords { cite: d.get("cite").map_or(Ok(String::new()), |v| text(&v))?, ..RoundWords::default() };
+    for (k, v) in dict("labels")?.iter_shared() {
+        w.labels.push((k.try_to::<i64>().map_err(|_| "words: a label's key must be a player id")?, text(&v)?));
     }
+    for (k, v) in dict("placed_by")?.iter_shared() {
+        w.placed_by.push((text(&k)?, text(&v)?));
+    }
+    Ok(w)
 }
 
 /// The round end's answer: every objective's owner, the VP ledger (`[0, 0]` without one) and its memo, the lines.

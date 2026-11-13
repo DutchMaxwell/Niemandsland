@@ -418,12 +418,12 @@ impl NmlCore {
     /// One-core P3 (N3 b): the round end of a plain mission on handle `h` (`nml_core::round::end_round`). `words` =
     /// `{"labels": {player id: label}, "cite": String, "placed_by": {unit key: rule}}`. Returns `{"owners": [int],
     /// "vp": [int, int], "vp_memo", "lines": [..], "handle"}` (the state after the seize, on a NEW handle), or
-    /// `{"refused": reason}` (also in `last_error()`) for an unknown handle or a mission with markers (O7).
+    /// `{"refused": reason}` (also in `last_error()`) for an unknown handle, a `words` of another shape or a mission with
+    /// markers (O7).
     #[func]
     fn round_end(&mut self, h: i64, words: VarDictionary) -> VarDictionary {
-        let Some(i) = self.index(h) else { return roundcall::refused("unknown handle") };
-        let (mut cap, statics) = self.copy_of(i);
-        match nml_core::round::end_round(&mut cap.state, &roundcall::words_of(&words)) {
+        let Some((mut cap, statics)) = self.copy_of(h) else { return roundcall::refused("unknown handle") };
+        match roundcall::words_of(&words).and_then(|w| nml_core::round::end_round(&mut cap.state, &w)) {
             Ok(lines) => {
                 let mut out = roundcall::end_of(&cap.state, &lines);
                 out.set("handle", self.push(Slot { cap, statics }));
@@ -441,8 +441,7 @@ impl NmlCore {
     /// (the next round's state, on a NEW handle), or `{"refused": reason}` for an unknown handle.
     #[func]
     fn round_begin(&mut self, h: i64, finished_first: i64) -> VarDictionary {
-        let Some(i) = self.index(h) else { return roundcall::refused("unknown handle") };
-        let (mut cap, statics) = self.copy_of(i);
+        let Some((mut cap, statics)) = self.copy_of(h) else { return roundcall::refused("unknown handle") };
         let (opener, lines) = nml_core::round::begin_round(&statics, &mut cap.state, (finished_first != 0).then_some(finished_first));
         let mut out = roundcall::begin_of(opener, &lines);
         out.set("handle", self.push(Slot { cap, statics }));
@@ -1212,12 +1211,13 @@ impl NmlCore {
         }
     }
 
-    /// A deep copy of slot `i`'s state for a call that writes a NEW handle (the profile table and the LOS matrix stay
-    /// shared), as `clone` makes it.
-    fn copy_of(&self, i: usize) -> (Captured, Rc<Vec<UnitStatic>>) {
-        let slot = self.slab[i].as_ref().unwrap();
+    /// A deep copy of handle `h`'s state for a call that writes a NEW handle (the profile table and the LOS matrix stay
+    /// shared), as `clone` makes it. `None` (and `last_error()`) for a handle that is not live: `index` checks the slot.
+    fn copy_of(&mut self, h: i64) -> Option<(Captured, Rc<Vec<UnitStatic>>)> {
+        let i = self.index(h)?;
+        let slot = self.slab[i].as_ref()?;
         let cap = Captured { state: slot.cap.state.clone(), extras: slot.cap.extras.clone(), mask: slot.cap.mask.clone(), has_los: slot.cap.has_los, dropped: Vec::new() };
-        (cap, Rc::clone(&slot.statics))
+        Some((cap, Rc::clone(&slot.statics)))
     }
 
     fn index(&mut self, h: i64) -> Option<usize> {
