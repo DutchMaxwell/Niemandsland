@@ -20526,6 +20526,8 @@ func _on_network_command(type: String, payload: Variant, _from_peer: int) -> voi
 		_rpc_request_roll(payload, _from_peer)
 	elif type == "roll_result" and payload is Dictionary:
 		_rpc_roll_result(int(payload.get("req", 0)), payload.get("faces", []))
+	elif type == "activation_check" and payload is Dictionary:
+		CoreActivation.on_check(self, payload, _from_peer)   # one-core P3 step 51 (N6 b)
 	elif type == "vfx_cue" and payload is Dictionary:
 		_vfx_draw(payload, _from_peer)
 	elif type == "session_ended":
