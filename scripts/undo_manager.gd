@@ -267,6 +267,9 @@ class MoveTakebackAction extends UndoableAction:
 				_moved_unit.unit_properties["moved_round"] = _previous_moved_round
 			else:
 				_moved_unit.unit_properties.erase("moved_round")
+			# MP: the other table's copy still says the unit moved (null = erase)
+			if _net != null and _net.has_method("broadcast_unit_property"):
+				_net.broadcast_unit_property(_moved_unit, "moved_round", _previous_moved_round if _had_moved_round else null)
 		for i in _models.size():
 			var obj: Node3D = _models[i]
 			if not is_instance_valid(obj):
