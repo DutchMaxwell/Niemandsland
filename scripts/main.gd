@@ -8860,7 +8860,7 @@ func _solo_vengeance_on_destroyed(dead: GameUnit, destroyer: GameUnit) -> void:
 	if markers <= 0:
 		return
 	var host := _solo_joined_chain(destroyer)[0] as GameUnit
-	host.unit_properties["vengeance_markers"] = int(host.unit_properties.get("vengeance_markers", 0)) + markers
+	_sync_unit_property(host, "vengeance_markers", int(host.unit_properties.get("vengeance_markers", 0)) + markers)   # MP: read by whoever attacks it next
 	if battle_log != null:
 		_log_rule_event(BattleLog.Category.COMBAT,
 			"%s: %s falls — %d Vengeance marker%s on %s (its enemies get +1 to hit per marker)" % [
@@ -9238,7 +9238,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 					if battle_log != null:
 						battle_log.log_event(BattleLog.Category.COMBAT, "Ravage: %s %s" % [rv.get_name(), rv_skip], true)
 					continue
-				rv.unit_properties["ravage_round"] = opr_army_manager.current_round
+				_sync_unit_property(rv, "ravage_round", opr_army_manager.current_round)   # MP: a strike-back on the other table is once per round too
 			var rv_dice: int = rx * rv.get_alive_count()
 			var rv_owner: String = _roller_label(rv)
 			var rv_faces: Array = await _solo_tray_roll(rv_dice, AiCombatMath.RAVAGE_WOUND_TARGET, rv_owner, "ravage")
@@ -9274,7 +9274,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 			if not gs_skip.is_empty():
 				if battle_log != null: battle_log.log_event(BattleLog.Category.COMBAT, "Regenerative Strength: %s %s" % [gu.get_name(), gs_skip], true)
 				continue
-			gu.unit_properties["regenerative_strength_round"] = opr_army_manager.current_round
+			_sync_unit_property(gu, "regenerative_strength_round", opr_army_manager.current_round)   # MP: same once-per-round latch
 			var gs_owner: String = _roller_label(gu)
 			var gs_faces: Array = await _solo_tray_roll(gs_tokens, 4, gs_owner, "attack")
 			var gs_wounds: int = gs_faces.filter(func(f): return int(f) >= 4).size()
@@ -12184,7 +12184,7 @@ func _solo_animate_move(move_paths: Array, allow_snap: bool = true) -> void:
 		for mv0 in move_paths:
 			var mi0 := (mv0 as Dictionary).get("model") as ModelInstance
 			if mi0 != null and mi0.unit is GameUnit:
-				(mi0.unit as GameUnit).unit_properties["moved_round"] = opr_army_manager.current_round
+				_sync_unit_property(mi0.unit as GameUnit, "moved_round", opr_army_manager.current_round)   # MP: the other table reads a target's stamp
 	if move_paths.is_empty():
 		return
 	var speed: float = SoloController.PACE_MOVE_SPEED_M_S / (SoloController.PACE_FAST_SCALE if _solo_fast else 1.0)
@@ -22710,7 +22710,7 @@ func _on_units_dropped(moves: Array) -> void:
 			continue
 		var unit := UnitUtils.get_game_unit((mv as Dictionary).get("node") as Node3D)
 		if unit != null:
-			unit.unit_properties["moved_round"] = opr_army_manager.current_round
+			_sync_unit_property(unit, "moved_round", opr_army_manager.current_round)   # MP: the other table's AI shoots at a unit that moved
 			await _resolve_skirmish_drop(mv, unit)
 	await _solo_human_strafing(moves)
 
@@ -24307,13 +24307,13 @@ func _solo_apply_reckless_piercing(unit: GameUnit) -> void:
 		var face: int = int(faces[0]) if not faces.is_empty() else 1
 		if face >= tgt_v:
 			for cm in _solo_joined_chain(unit):
-				(cm as GameUnit).unit_properties["reckless_ap_round"] = opr_army_manager.current_round
+				_sync_unit_property(cm as GameUnit, "reckless_ap_round", opr_army_manager.current_round)   # MP: attacks on the other table read the stamps
 			if battle_log != null:
 				_log_rule_event(BattleLog.Category.COMBAT,
 					"%s: %s rolls %d — weapons get AP(+1) until the end of the round" % [n, unit.get_name(), face], true)
 		else:
 			for cm in _solo_joined_chain(unit):
-				(cm as GameUnit).unit_properties["reckless_backfire_round"] = opr_army_manager.current_round
+				_sync_unit_property(cm as GameUnit, "reckless_backfire_round", opr_army_manager.current_round)
 			if battle_log != null:
 				_log_rule_event(BattleLog.Category.COMBAT,
 					"%s: %s rolls a 1 — enemies get AP(+1) against it until the end of the round" % [n, unit.get_name()], true)
@@ -24409,7 +24409,7 @@ func _solo_apply_mind_control(unit: GameUnit) -> void:
 				away = Vector2(c.x - obj.x, c.z - obj.z)
 			var moved := solo_controller.forced_straight_move(tgt, away, float(sp.get("move_in", 6.0)))
 			if moved > 0.0 and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
-				tgt.unit_properties["mind_control_moved_round"] = round_now
+				_sync_unit_property(tgt, "mind_control_moved_round", round_now)   # MP: a second bearer answered on the other table must see it
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.MOVEMENT,
 					"%s: %s fails the morale test — Shaken, moved %.0f\" in a straight line (away from the marker)" % [n, tgt.get_name(), moved], true)
@@ -24853,7 +24853,7 @@ func _solo_growth_on_kill(attacker: GameUnit) -> void:
 			var cur := int(who.unit_properties.get(key, 0))
 			var cap := int(sp.get("max_markers", 2))
 			if cur < cap:
-				who.unit_properties[key] = cur + 1
+				_sync_unit_property(who, key, cur + 1)   # MP: the per-round tick runs on both tables, the kill only where it resolves
 				if battle_log != null:
 					_log_rule_event(BattleLog.Category.COMBAT, "%s: %s gains a marker for the kill (%d/%d)" % [
 						n, who.get_name(), cur + 1, cap], _solo_is_ai_unit(who))

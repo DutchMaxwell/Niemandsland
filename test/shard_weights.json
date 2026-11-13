@@ -282,6 +282,7 @@
 "test/e2e/e2e_mp_reanimation_position_test.gd": 11.0,
 "test/e2e/e2e_mp_rejoin_embarked_test.gd": 12.7,
 "test/e2e/e2e_mp_remote_intent_flag_test.gd": 7.3,
+"test/e2e/e2e_mp_round_stamp_wire_test.gd": 38.0,
 "test/e2e/e2e_mp_slot_guard_test.gd": 24.2,
 "test/e2e/e2e_mp_spell_token_expiry_test.gd": 6.0,
 "test/e2e/e2e_mp_transport_activation_economy_test.gd": 9.6,
