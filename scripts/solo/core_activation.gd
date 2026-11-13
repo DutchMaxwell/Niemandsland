@@ -73,11 +73,13 @@ const MAX_STEPS := 64
 
 ## One activation through the core: ask, print the lines not printed yet, land, throw on the owner's tray, ask again.
 ## `transcript` gains one faces entry per throw; `on_throw(kind, index)` runs before each throw (a test seam).
+## `beat(event, answer, faces)` (step 42b, the table's presentation) is awaited before each throw ("throw"), after it
+## ("thrown", with its faces) and at the last answer (its step name).
 ## Returns the core's last answer plus "steps" (calls), "core_us" (their total time) and "max_us" (the slowest).
 ## A `done` answer's state handle is released once the table landed it (R4); `keep_handle` hands it to the caller instead,
 ## who releases it.
 static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
-		on_throw: Callable = Callable(), keep_handle := false) -> Dictionary:
+		on_throw: Callable = Callable(), keep_handle := false, beat: Callable = Callable()) -> Dictionary:
 	var core: Object = (main.solo_controller as SoloController)._core_node_ready()
 	var enforce: bool = main.object_manager._strict_movement_enforced()
 	var printed := 0
@@ -104,6 +106,8 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 				core.release(int(r.get("handle", 0)))
 				r.erase("handle")
 		if str(r["step"]) != "need_roll":
+			if beat.is_valid():
+				await beat.call(str(r["step"]), r, [])
 			r.merge({"steps": step + 1, "core_us": core_us, "max_us": max_us}, true)
 			return r
 		var owner := str(r["owner"])
@@ -111,12 +115,16 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 		var label: String = "AI (%s)" % owner if main._solo_is_ai_unit(roller) else main._roller_label(roller)
 		if on_throw.is_valid():
 			on_throw.call(str(r["kind"]), int(r["index"]))
+		if beat.is_valid():
+			await beat.call("throw", r, [])
 		if str(r["kind"]) == "defense" and roller != unit and not main._solo_is_ai_unit(roller) \
 				and main._solo_i_own_unit(roller):   # step 42 (O21): a local defender sees its saves coming, as on the table
 			await main._solo_ask_saves(unit, roller, _shot_weapon(unit, lines), int(r["faces"]), int(r["target"]), 0)
 		var faces: Array = await main._owner_roll(roller, int(r["faces"]), int(r["target"]), str(r["kind"]), "",
 			{"label": label, "what": "%s dice" % r["kind"]})
 		transcript.append({"t": "faces", "faces": faces})
+		if beat.is_valid():
+			await beat.call("thrown", r, faces)
 	push_error("CoreActivation.drive: %s still needs dice after %d steps" % [unit.get_name(), MAX_STEPS])
 	r.merge({"steps": MAX_STEPS, "core_us": core_us, "max_us": max_us}, true)
 	return r
@@ -142,20 +150,76 @@ static var ai_refusals := 0
 ## no Dangerous test this activation (the table rolled it already; the core would roll it again). `h` is the board
 ## before the move (the AI body captured it and releases it). True = the core resolved the volley. A refusal is a
 ## defect: reported, and the table shoots instead - unless a die was already thrown (never resolve a volley twice).
-static func run_ai(main, unit: GameUnit, report: Dictionary, target: GameUnit, h: int) -> bool:
+static func run_ai(main, unit: GameUnit, report: Dictionary, target: GameUnit, h: int, shots: Array = []) -> bool:
 	var kind := int(report.get("action", -1))
 	if h == 0 or not (kind in [AiDecision.Action.HOLD, AiDecision.Action.ADVANCE]) or not is_plain(unit) \
 			or not is_plain(target) or int(report.get("dangerous_dice", report.get("dangerous_models", 0))) > 0:
 		return false
 	var at: Array = unit.get_alive_models().map(func(m: ModelInstance) -> Vector3: return m.node.global_position)
 	var t: Array = [{"t": "begin"}, {"t": "placed", "positions": at}, {"t": "intent", "kind": kind, "shoot": target.unit_id}]
-	var r: Dictionary = await drive(main, h, unit, t, true)
+	# Step 42b: the table's presentation of the volley (_present); its stage opens before the core's first line.
+	var st := {"n": 0, "open": false, "result": false, "hits": 0, "landed": 0, "announce": [],
+		"before": main._solo_combined_alive(target), "moved": bool(report.get("moved", false))}
+	var beat := func(ev: String, a: Dictionary, faces: Array) -> void:
+		await _present(main, unit, target, shots, st, ev, a, faces)
+	if not shots.is_empty():
+		main._solo_stage_begin("%s fires at %s" % [unit.get_name(), target.get_name()])
+	var r: Dictionary = await drive(main, h, unit, t, true, Callable(), false, Callable() if shots.is_empty() else beat)
 	if str(r["step"]) == "done":
 		ai_runs += 1
 		return true
 	ai_refusals += 1
 	push_error("CoreActivation.run_ai: %s - the core answered %s: %s" % [unit.get_name(), r["step"], r.get("reason", "")])
 	return t.any(func(e: Dictionary) -> bool: return str(e["t"]) == "faces")
+
+
+## Step 42b: the table's show around an AI volley (_solo_resolve_ai_volley's calls in its order) on the core's steps:
+## at the first hit roll the announce (the core says its line), the fan and the Declaration beat; a tracer before each
+## hit roll (`shots` in the table's order); a weapon's hit strip and beat after its saves, or at the next hit roll or
+## the end if it missed; before the morale roll or at the end the outcome toast and the Result beat; the Morale beat.
+## A refusal only closes.
+static func _present(main, unit: GameUnit, target: GameUnit, shots: Array, st: Dictionary, ev: String, a: Dictionary,
+		faces: Array) -> void:
+	var kind := str(a.get("kind", ""))
+	var n: int = st["n"]
+	var prev := str((shots[clampi(n - 1, 0, shots.size() - 1)]["profile"] as Dictionary).get("name", "weapon"))
+	if ev == "throw" and kind == "attack":
+		if n == 0:
+			st["announce"] = main._solo_show_attack_announce(unit, target, "fires at", false)
+			main._solo_show_fan_for_unit(unit)
+			await main._solo_stage_phase("Declaration", SoloController.Pace.ANNOUNCE)
+		elif st["open"]:
+			await main._solo_stage_phase(prev)
+		var shot: Dictionary = shots[mini(n, shots.size() - 1)]
+		var d: Dictionary = main._solo_shot_eligibility(shot["member"], shot["profile"], shot, target, false, st["moved"])
+		var pairs: Array = d["pairs"]
+		main._vfx_volley(shot["member"], target, shot["profile"],
+			pairs.slice(0, int(d["bearers"]) if int(d["bearers"]) >= 0 else pairs.size()), false)
+		st.merge({"n": n + 1, "open": true}, true)
+	elif ev == "thrown" and kind == "defense":
+		var saves := AiCombatMath.count_blocks(faces, int(a["target"]), 0)
+		st.merge({"hits": st["hits"] + faces.size(), "landed": st["landed"] + faces.size() - saves, "open": false}, true)
+		main._vfx_hit_strip(target, faces.size(), saves)
+		await main._solo_stage_phase(prev)
+	elif ev == "done" or (ev == "throw" and kind == "morale"):
+		if st["open"]:
+			st["open"] = false
+			await main._solo_stage_phase(prev)
+		if not st["result"]:
+			st["result"] = true
+			main._solo_clear_announce(st["announce"])
+			main._solo_clear_auto_fan()
+			await main._solo_show_outcome(main._solo_volley_outcome(target, st["hits"], st["landed"],
+				int(st["before"]) - main._solo_combined_alive(target)))
+			await main._solo_stage_phase("Result")
+		if ev == "done" and int(st["landed"]) > 0:
+			await main._solo_stage_phase("Morale")
+		if ev == "done":
+			main._solo_stage_end()
+	elif ev != "throw" and ev != "thrown":
+		main._solo_clear_announce(st["announce"])
+		main._solo_clear_auto_fan()
+		main._solo_stage_end()
 
 
 ## The unit a roll belongs to: the core names it by roster key (`owner_key`: two units may share a display name, and a

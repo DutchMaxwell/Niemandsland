@@ -4888,7 +4888,8 @@ func _run_ai_shooting(report: Dictionary) -> void:
 	var moved: bool = bool(report.get("moved", false))
 	# One-core P3 step 42 (flag on): the volley at the table's ONE pick resolves in the core when both units are plain.
 	if _solo_core_ai_h != 0 and order.size() == 1:
-		if await CoreActivation.run_ai(self, unit, report, groups[order[0]]["target"], _solo_core_ai_h):
+		if await CoreActivation.run_ai(self, unit, report, groups[order[0]]["target"], _solo_core_ai_h,
+				groups[order[0]]["shots"]):
 			return
 	for id in order:
 		var g := groups[id] as Dictionary
@@ -5312,10 +5313,8 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 	_solo_clear_announce(announce)
 	_solo_clear_auto_fan()   # Bug 17: the volley is resolved — the fan leaves with the announce
 	# OUTCOME: one readable summary line, held on screen (toast + battle log).
-	await _solo_show_outcome("%s: %d hit%s → %d wound%s land — %s loses %d model%s" % [
-		target.get_name(), total_hits, ("" if total_hits == 1 else "s"),
-		landed + landed_extra, ("" if landed + landed_extra == 1 else "s"), target.get_name(),
-		models_before - _solo_combined_alive(target), ("" if models_before - _solo_combined_alive(target) == 1 else "s")])
+	await _solo_show_outcome(_solo_volley_outcome(target, total_hits, landed + landed_extra,
+		models_before - _solo_combined_alive(target)))
 	await _solo_stage_phase("Result")
 	# NML-966 gap B: Deadly/Takedown wounds bypass the regen pool and never reached `landed` —
 	# a Deadly-only volley silently skipped the half-strength morale test. landed_extra counts them in.
@@ -5325,6 +5324,12 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 	_solo_stage_end()
 	_solo_consume_once_mods(attacker, target, false)   # F4: once-mods spent by this exchange
 	_solo_spend_shot_feats(attacker)
+
+
+## The AI volley's outcome toast; one-core P3 step 42b: the core path shows it too.
+func _solo_volley_outcome(target: GameUnit, hits: int, wounds: int, lost: int) -> String:
+	return "%s: %d hit%s → %d wound%s land — %s loses %d model%s" % [target.get_name(), hits, ("" if hits == 1 else "s"),
+		wounds, ("" if wounds == 1 else "s"), target.get_name(), lost, ("" if lost == 1 else "s")]
 
 
 ## VFX #2: one tracer per firing model along the eye-to-eye segment the LOS rule tested (same heights as
@@ -11917,7 +11922,7 @@ func _solo_focus_on_unit(unit: GameUnit) -> void:
 
 ## Attack attribution: pulse rings under the shooter (amber) and the target (red), an attack line
 ## between them, and a toast naming both. Returns the created nodes; free via _solo_clear_announce.
-func _solo_show_attack_announce(shooter: GameUnit, target: GameUnit, verb: String) -> Array:
+func _solo_show_attack_announce(shooter: GameUnit, target: GameUnit, verb: String, log_line := true) -> Array:
 	# One live set per side: a stray set of THIS side's from an aborted path never survives, while the other side's
 	# set belongs to a resolver that is still running (a human cast is a detached coroutine).
 	var human := not _solo_is_ai_unit(shooter)
@@ -11946,7 +11951,7 @@ func _solo_show_attack_announce(shooter: GameUnit, target: GameUnit, verb: Strin
 	add_child(line)
 	nodes.append(line)
 	_solo_show_explain("%s %s %s" % [shooter.get_name(), verb, target.get_name()])
-	if battle_log != null:
+	if battle_log != null and log_line:   # one-core P3 step 42b: on the core path the core says this line
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s %s %s" % [shooter.get_name(), verb, target.get_name()], true)
 	if human:
 		_solo_live_announce_human = nodes   # sweep target if the caller's cleanup never runs
