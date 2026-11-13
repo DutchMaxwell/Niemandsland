@@ -1,0 +1,31 @@
+{
+  "id": "aura-fixture-gf",
+  "name": "Aura fixture GF",
+  "gameSystem": "gf",
+  "units": [
+    {
+      "id": "fx_gf_captain", "selectionId": "fx-gf-captain", "joinToUnit": "fx-gf-squad",
+      "name": "Fixture Captain", "size": 1, "cost": 60, "quality": 3, "defense": 4,
+      "specialRules": ["Hero", "Ravage Aura", "Anti-Cover Aura", "Nonesuch Aura"],
+      "weapons": [], "loadout": []
+    },
+    {
+      "id": "fx_gf_squad", "selectionId": "fx-gf-squad",
+      "name": "Fixture Squad", "size": 5, "cost": 80, "quality": 4, "defense": 4,
+      "specialRules": ["Fearless", "Anti-Cover"],
+      "weapons": [], "loadout": []
+    },
+    {
+      "id": "fx_gf_scout", "selectionId": "fx-gf-scout",
+      "name": "Fixture Scout", "size": 1, "cost": 40, "quality": 4, "defense": 5,
+      "specialRules": ["Hero", "Counter in Melee Aura"],
+      "weapons": [], "loadout": []
+    },
+    {
+      "id": "fx_gf_plain", "selectionId": "fx-gf-plain",
+      "name": "Fixture Bystanders", "size": 3, "cost": 30, "quality": 5, "defense": 5,
+      "specialRules": [],
+      "weapons": [], "loadout": []
+    }
+  ]
+}
