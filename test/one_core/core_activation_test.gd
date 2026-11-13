@@ -485,3 +485,65 @@ func test_with_the_flag_off_activate_activates_as_today() -> void:
 	assert_bool(u.is_activated).is_true()
 	assert_bool(CoreActivation.session_open(u.unit_id)).is_false()
 	await _runner.simulate_frames(10)
+
+
+## Step 30: a real drag start of `objs` (the object_manager_test pattern); the objects it lifted. A started drag is
+## cancelled again, so the models stand where they stood.
+func _lifted(objs: Array) -> Array:
+	var om: Node3D = _main.object_manager
+	om._selected_objects.clear()
+	for o in objs:
+		om._selected_objects.append(o)
+	om._start_dragging(Vector2.ZERO)
+	var lifted: Array = om._drag_start_positions.keys() if om._is_dragging else []
+	om._cancel_drag()
+	return lifted
+
+
+func _drag_starts(objs: Array) -> bool:
+	return not _lifted(objs).is_empty()
+
+
+func _node(u: GameUnit, i: int = 0) -> Node3D:
+	return (u.models[i] as ModelInstance).node
+
+
+## Step 30 (O9, O15 (1)): a lifecycle unit that was not started cannot be dragged: nothing lifts, one toast and one log
+## line; after the Start the same drag lifts.
+func test_a_unit_that_was_not_started_cannot_be_dragged() -> void:
+	var u := _human("Rifles")
+	var at := _node(u).global_position
+	assert_bool(_drag_starts([_node(u)])).override_failure_message("dragged without a Start").is_false()
+	assert_vector(_node(u).global_position).is_equal(at)
+	assert_int(_log_lines("Activate Rifles first.").size()).is_equal(1)
+	assert_int(_toasts("Activate Rifles first.").size()).is_equal(1)
+	CoreActivation.open_session(_main, u)
+	assert_bool(_drag_starts([_node(u)])).override_failure_message("no drag after the Start").is_true()
+
+
+## Step 30 (O5): with A's activation open, a model of B says the O5 sentence.
+func test_a_drag_while_another_activation_is_open_names_it() -> void:
+	var a := _human("Alpha")
+	var b := _human("Bravo")
+	CoreActivation.open_session(_main, a)
+	assert_bool(_drag_starts([_node(b)])).is_false()
+	assert_int(_log_lines("Finish Alpha's activation first.").size()).is_equal(1)
+
+
+## Step 30 (O14 (1b)): a "Furious" unit is blocked the same way; terrain is never blocked; a joined hero moves with its
+## started host; with the flag off every unit drags.
+func test_the_drag_gate_covers_every_lifecycle_unit_and_nothing_else() -> void:
+	var furious := _human("Berserkers", ["Furious"])
+	assert_bool(_drag_starts([_node(furious)])).override_failure_message("Furious dragged").is_false()
+	var terrain: Node3D = _main.object_manager.spawn_terrain(Vector3(1.0, 0.0, 1.0), false)
+	assert_bool(_drag_starts([terrain])).override_failure_message("terrain refused").is_true()
+	var host := _human("Rifles")
+	var hero := _human("Captain")
+	hero.unit_properties["attached_to"] = host
+	host.unit_properties["attached_heroes"] = [hero]
+	CoreActivation.open_session(_main, host)
+	assert_array(_lifted([_node(host), _node(hero)])).override_failure_message("hero left behind") \
+		.contains_exactly_in_any_order([_node(host), _node(hero)])
+	CoreActivation.reset_all(_main)
+	CoreActivation._env = 0
+	assert_bool(_drag_starts([_node(furious)])).override_failure_message("flag off").is_true()
