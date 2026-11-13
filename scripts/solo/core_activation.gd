@@ -240,6 +240,9 @@ static func open_session(main, gu: GameUnit) -> bool:
 	if gu.unit_properties.has("moved_round"):
 		s["moved_round_before"] = gu.unit_properties["moved_round"]
 	_sessions[gu.unit_id] = s
+	if on_move_path(main, gu):   # step 31 (O1/O2): every activation of a move-path unit starts on Advance
+		main.object_manager.set_movement_cap(ObjectManager.MovementCap.ADVANCE)
+	main._update_movement_cap_display()
 	return true
 
 
@@ -280,6 +283,22 @@ static func close_session(main, unit_id: String) -> void:
 	if core != null:
 		core.release(int(_sessions[unit_id]["handle"]))
 	_sessions.erase(unit_id)
+	if main != null:
+		main._refresh_movement_cap_row()   # step 31: an ended unit shows Off again
+
+
+## Step 31: the declared movement mode for the core, read from the selector and never from distance: Advance 1, Rush 2,
+## Charge 3 (the core's kinds, sim.rs). Anything else is a defect: reported, and 0 means no core call.
+static func declared_mode(main) -> int:
+	match int(main.object_manager._movement_cap):
+		ObjectManager.MovementCap.ADVANCE:
+			return 1
+		ObjectManager.MovementCap.RUSH:
+			return 2
+		ObjectManager.MovementCap.CHARGE:
+			return 3
+	push_error("declared_mode: the movement selector is %d - not Advance, Rush or Charge" % int(main.object_manager._movement_cap))
+	return 0
 
 
 ## Closes every open session, and the next capture sends the game header again (a loaded game's units are not the
