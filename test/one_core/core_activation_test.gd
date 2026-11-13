@@ -1263,3 +1263,22 @@ func test_a_drop_without_an_open_activation_is_as_today() -> void:
 	assert_int(_log_lines(over).size()).is_equal(0)
 	assert_int(_toasts(over).size()).is_equal(0)
 	GraphicsSettings.enforce_movement_limit = was
+
+
+## An open activation without its core is a defect, never a silent pass: reported (push_error) and the drop stands
+## unchecked - no refusal line, no toast.
+func test_an_open_activation_without_a_core_is_reported_and_the_drop_stands() -> void:
+	var was: bool = GraphicsSettings.enforce_movement_limit
+	GraphicsSettings.enforce_movement_limit = true
+	var u := _human("Rifles")
+	assert_bool(CoreActivation.open_session(_main, u)).is_true()
+	var sc: SoloController = _main.solo_controller
+	_main.solo_controller = null   # the core lives on the controller
+	_shift(u, 13.0)
+	var got := [null]
+	await assert_error(func() -> void: got[0] = _main.attacked_unit_drag_refused(u, 13.0)) \
+		.is_push_error("drop_refused: no core for Rifles's open activation - the drop is not checked")
+	_main.solo_controller = sc
+	assert_bool(got[0] == false).override_failure_message("the drop was %s" % [got[0]]).is_true()
+	assert_int(_log_lines("Rifles: a model moved 13.0\" - the Advance allowance is 6.0\".").size()).is_equal(0)
+	GraphicsSettings.enforce_movement_limit = was

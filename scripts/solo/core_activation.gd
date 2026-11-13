@@ -406,11 +406,17 @@ static func close_session(main, unit_id: String) -> void:
 ## stands now, at the declared mode, Enforce Movement Limit as set. Ok: this placement replaces the session's one and the
 ## core's lines are written (with Enforce off, the escape hatch's overrun line); false. Refused: the reason is logged
 ## (it reaches the other table) and toasted; true - the caller snaps the drag back and broadcasts the restore.
+## Two defects are reported with push_error and the drop STANDS unchecked (a refusal would trap the unit with no way to
+## move it): a selector that is not Advance, Rush or Charge (declared_mode), and an open session without its core.
 static func drop_refused(main, gu: GameUnit) -> bool:
 	var mode := declared_mode(main)
-	var core: Object = (main.solo_controller as SoloController)._core_node_ready()
-	if mode == 0 or core == null:
+	if mode == 0:
 		return false   # declared_mode reported the defect
+	var sc: SoloController = main.solo_controller
+	var core: Object = sc._core_node_ready() if sc != null else null
+	if core == null:
+		push_error("drop_refused: no core for %s's open activation - the drop is not checked" % gu.get_name())
+		return false
 	var s: Dictionary = _sessions[gu.unit_id]
 	var at: Array = gu.get_alive_models().map(func(m: ModelInstance) -> Vector3: return m.node.global_position)
 	var r: Dictionary = core.check_move(int(s["handle"]), gu.unit_id, {"mode": mode, "positions": PackedVector3Array(at)},
