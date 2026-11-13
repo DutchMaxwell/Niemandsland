@@ -4868,18 +4868,27 @@ func _settle_speed_feat(unit: GameUnit, action: int, report: Dictionary, taken: 
 		_spend_speed_feat(unit, report, taken)
 
 
+## MP (online co-op): the AI answers each human on that human's machine, so a latch the controller writes has to
+## reach the other table or its AI repeats a once-per-game rule. Writes `value` (null erases) and sends it; silent
+## offline and under a preview. The key must be on NetworkManager's allow-list.
+func _sync_unit_latch(unit: GameUnit, key: String, value: Variant) -> void:
+	if unit == null:
+		return
+	if value == null:
+		unit.unit_properties.erase(key)
+	else:
+		unit.unit_properties[key] = value
+	if _preview_depth == 0 and network_manager != null and network_manager.has_method("broadcast_unit_property") \
+			and network_manager.is_multiplayer_active():
+		network_manager.broadcast_unit_property(unit, key, value)
+
+
 ## The Speed Feat spend: the once flag, the decision record and the travelling log line.
 func _spend_speed_feat(unit: GameUnit, report: Dictionary, taken: Dictionary) -> void:
 	var feat_name := str(taken["name"])
 	var adv_b := float(taken["advance"])
 	var rush_b := float(taken["rush"])
-	var flag := speed_feat_flag(feat_name)
-	unit.unit_properties[flag] = true
-	# MP (online co-op): the AI answers each human on that human's machine, so the closed latch has to reach the
-	# other table or its AI spends the once-per-game feat again (the human spend in main.gd syncs the same key).
-	if _preview_depth == 0 and network_manager != null and network_manager.has_method("broadcast_unit_property") \
-			and network_manager.is_multiplayer_active():
-		network_manager.broadcast_unit_property(unit, flag, true)
+	_sync_unit_latch(unit, speed_feat_flag(feat_name), true)
 	record_decision({"kind": "move", "unit": unit.get_name(),
 		"rule": "%s: once per game +%.0f\" Advance / +%.0f\" Rush-Charge — spent on the endgame push" % [
 			feat_name, adv_b, rush_b],
@@ -9763,8 +9772,7 @@ func mark_limited_used(unit: GameUnit, profile: Dictionary) -> void:
 		var spent: Array = unit.unit_properties.get("limited_used", [])
 		var wname := str(profile.get("name", "?"))
 		if not spent.has(wname):
-			spent.append(wname)
-		unit.unit_properties["limited_used"] = spent
+			_sync_unit_latch(unit, "limited_used", spent + [wname])   # a NEW array: the sent value must not alias the stored one
 	record_decision({"kind": "action", "unit": unit.get_name() if unit != null else "?",
 		"rule": "Limited (%s): may only be used once per game" % OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit)),
 		"candidates": [], "chosen": str(profile.get("name", "?")), "why": "limited weapon expended",
@@ -10089,8 +10097,9 @@ static func delayed_action_worth(gu: GameUnit) -> float:
 ## the carrier that passes, null when the AI activates instead.
 func delayed_action_pass_choice() -> Dictionary:
 	var own_pool := eligible_ai_units()
-	var opp_pool := eligible_units_for(human_slot)
-	var out := {"unit": null, "why": "", "opponent_left": opp_pool.size(), "own_left": own_pool.size()}
+	var opp_pool := eligible_units_for(human_slot)   # on the table: the threats
+	var opp_left := units_left_for(human_slot)       # the count: passengers still owe an activation too
+	var out := {"unit": null, "why": "", "opponent_left": opp_left, "own_left": own_pool.size()}
 	if army_manager == null:
 		return out
 	var round_no := _current_round()
@@ -10105,12 +10114,12 @@ func delayed_action_pass_choice() -> Dictionary:
 		return out
 	# Guard (a): strictly more. own_pool always holds at least the carrier, so own_left >= 1 here —
 	# the AI can never pass away the last activation it owes (there is no carrier when own_left is 0).
-	if not delayed_action_surplus(opp_pool.size(), own_pool.size()):
+	if not delayed_action_surplus(opp_left, own_pool.size()):
 		out["why"] = "the opponent does not have more units left to activate"
 		record_decision({"kind": "pick", "unit": (carriers[0] as GameUnit).get_name(),
 			"rule": "Delayed Action: once per round, if your opponent has more units left to activate than you, this unit may pass its turn instead of activating",
 			"candidates": [], "chosen": "activates normally", "why": "condition not met — no surplus",
-			"data": {"opponent_left": opp_pool.size(), "own_left": own_pool.size()}})
+			"data": {"opponent_left": opp_left, "own_left": own_pool.size()}})
 		return out
 	# The prize: our most valuable un-activated unit — the one a pass is meant to protect.
 	var prize: GameUnit = null
@@ -10136,7 +10145,7 @@ func delayed_action_pass_choice() -> Dictionary:
 		record_decision({"kind": "pick", "unit": (carriers[0] as GameUnit).get_name(),
 			"rule": "Delayed Action: pass only when the delay buys something — otherwise the tempo is thrown away",
 			"candidates": [], "chosen": "activates normally", "why": "no threat to wait out",
-			"data": {"opponent_left": opp_pool.size(), "own_left": own_pool.size(),
+			"data": {"opponent_left": opp_left, "own_left": own_pool.size(),
 				"prize": prize.get_name() if prize != null else "?"}})
 		return out
 	# The threatened unit delays itself when it carries the rule; otherwise the first carrier does.
@@ -10149,7 +10158,7 @@ func delayed_action_pass_choice() -> Dictionary:
 	record_decision({"kind": "pick", "unit": passer.get_name(),
 		"rule": "Delayed Action: once per round, if your opponent has more units left to activate than you, this unit may pass its turn instead of activating (may still be activated later)",
 		"candidates": [], "chosen": "passes the turn", "why": "waits out a threat that has yet to commit",
-		"data": {"opponent_left": opp_pool.size(), "own_left": own_pool.size(),
+		"data": {"opponent_left": opp_left, "own_left": own_pool.size(),
 			"prize": prize.get_name(), "threat": threat.get_name(), "gap_in": snappedf(threat_gap, 0.1)}})
 	return out
 
@@ -13225,10 +13234,10 @@ func ambush_redeploy_ai_decision(gu: GameUnit) -> Dictionary:
 func ambush_redeploy_withdraw(gu: GameUnit, round_no: int) -> int:
 	if not can_ambush_redeploy(gu):
 		return 0
-	gu.unit_properties["ambush_redeploy_used"] = true
+	_sync_unit_latch(gu, "ambush_redeploy_used", true)
 	gu.unit_properties["ambush_reserve"] = true
 	var due: int = round_no + 1
-	gu.unit_properties["ambush_return_round"] = due
+	_sync_unit_latch(gu, "ambush_return_round", due)
 	gu.unit_properties.erase("ambush_arrived_round")   # a fresh arrival re-stamps the objective lock
 	if int(gu.unit_properties.get("player_id", 0)) == ai_slot and not ambush_reserve.has(gu):
 		ambush_reserve.append(gu)   # the AI's paced arrival list is its own truth (human side: the flag)
@@ -13877,7 +13886,7 @@ func second_wind_candidate() -> GameUnit:
 func spend_second_wind(unit: GameUnit) -> String:
 	var round_no := _second_wind_round_no()
 	_second_wind_round_uses[str(round_no)] = int(_second_wind_round_uses.get(str(round_no), 0)) + 1
-	unit.unit_properties["second_wind_used"] = true
+	_sync_unit_latch(unit, "second_wind_used", true)
 	unit.is_activated = false
 	unit.is_fatigued = false   # "stops being fatigued when activated for the second time"
 	for e in RulesRegistry.unit_rules_of_primitive(unit, "Second Wind"):

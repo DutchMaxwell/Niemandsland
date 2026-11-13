@@ -93,6 +93,14 @@ func _log_text() -> String:
 	return text
 
 
+func _count(needle: String) -> int:
+	var n := 0
+	for e in _main.battle_log.entries():
+		if str((e as Dictionary)["text"]).contains(needle):
+			n += 1
+	return n
+
+
 func _round() -> int:
 	return _main.opr_army_manager.current_round
 
@@ -189,6 +197,88 @@ func test_the_ais_embarked_squad_still_activates_and_closes_the_round(timeout :=
 	await _human_activates(human)
 	assert_array(Array(_ai_acted)).override_failure_message("the AI's squad did not activate: %s" % [_ai_acted]).is_equal(["Riders"])
 	assert_int(_round()).override_failure_message("the round did not close after the last activation").is_equal(2)
+	await E2EBoot.settle(get_tree())
+
+
+# === Delayed Action counts the squad aboard as a unit left to activate ===================================
+
+## A Delayed Action carrier (the rule is a once-per-round pass "if your opponent has more units left to activate than
+## you"); the cost makes the AI's carrier the prize a pass is meant to protect.
+func _carrier(pid: int, unit_name: String, at: Vector3) -> GameUnit:
+	var u := _register(pid, unit_name, at)
+	u.unit_properties["special_rules"] = ["Delayed Action"]
+	u.unit_properties["cost"] = 240
+	return u
+
+
+## CONTROL, declared first: the human's squad stands on the table. The carrier, the squad and the AI's two units:
+## 2 against 2, so the pass is refused (the rule needs the opponent to have MORE).
+func test_control_a_squad_on_the_table_counts_for_the_humans_pass(timeout := 120000) -> void:
+	_solo_on()
+	var carrier := _carrier(1, "Wachtturm", HUMAN_LINE + Vector3(0.0, 0.0, 0.30))
+	var tc := _truck_with_cargo(1, HUMAN_LINE, false)
+	tc[0].activate(_round())
+	_row(2, "Nachtzehrer", 2, AI_LINE)
+	assert_int(_eligible(1)).is_equal(2)
+	await _main.solo_begin_pass(carrier)
+	assert_str(_log_text()).contains("Wachtturm may not pass — your opponent has 2 units left to activate, you have 2")
+	assert_int(_ai_acted.size()).is_equal(0)
+	await E2EBoot.settle(get_tree())
+
+
+## The squad is INSIDE the truck: it is still a unit the human has left to activate, so the count is the same 2 against
+## 2 and the pass is refused. The table counted the pool (the carrier alone, 1 against 2) and let the pass through.
+func test_delayed_action_counts_the_squad_aboard_on_the_humans_side(timeout := 120000) -> void:
+	_solo_on()
+	var carrier := _carrier(1, "Wachtturm", HUMAN_LINE + Vector3(0.0, 0.0, 0.30))
+	var tc := _truck_with_cargo(1, HUMAN_LINE)
+	tc[0].activate(_round())
+	_row(2, "Nachtzehrer", 2, AI_LINE)
+	await _main.solo_begin_pass(carrier)
+	assert_int(_count("passes the turn")) \
+		.override_failure_message("the pass went through with the squad still aboard, counting 1 unit against the AI's 2:\n%s" % _log_text()) \
+		.is_equal(0)
+	assert_str(_log_text()).contains("Wachtturm may not pass — your opponent has 2 units left to activate, you have 2")
+	assert_int(_ai_acted.size()).is_equal(0)
+	await E2EBoot.settle(get_tree())
+
+
+## The AI's side of the same count. The human has two units on the table and a squad aboard (3 left), the AI has two
+## (its carrier and one more), the human's Jaeger stands inside the carrier's reach: the AI may pass. The table read the
+## human's count from the pool (2 against 2) and the AI activated instead. `embarked` false = the control table.
+func _delayed_ai_table(embarked: bool) -> GameUnit:
+	var guard := _carrier(2, "Waechter", AI_LINE)
+	_row(2, "Nachtzehrer", 1, AI_LINE + Vector3(0.0, 0.0, 0.3))
+	_register(1, "Jaeger", AI_LINE + Vector3(0.15, 0.0, 0.0))
+	_row(1, "Grenzer", 1, HUMAN_LINE)
+	var tc := _truck_with_cargo(1, HUMAN_LINE + Vector3(0.0, 0.0, -0.3), embarked)
+	tc[0].activate(_round())
+	return guard
+
+
+func test_control_the_ai_passes_when_the_squad_stands_on_the_table(timeout := 120000) -> void:
+	_solo_on()
+	var guard := _delayed_ai_table(false)
+	assert_int(_eligible(1)).is_equal(3)
+	_main._solo_pending_replies = 1
+	await _main._solo_pump()
+	assert_str(_log_text()).contains("Delayed Action: Waechter passes the turn — the opponent has 3 units left to activate, you have 2")
+	assert_int(_ai_acted.size()).is_equal(0)
+	assert_bool(guard.is_activated).is_false()
+	await E2EBoot.settle(get_tree())
+
+
+func test_delayed_action_counts_the_squad_aboard_on_the_ais_side(timeout := 120000) -> void:
+	_solo_on()
+	var guard := _delayed_ai_table(true)
+	assert_int(_eligible(1)).is_equal(2)
+	_main._solo_pending_replies = 1
+	await _main._solo_pump()
+	assert_str(_log_text()) \
+		.override_failure_message("the AI did not pass although the human has 3 units left to its 2 (the squad aboard counts):\n%s" % _log_text()) \
+		.contains("Delayed Action: Waechter passes the turn — the opponent has 3 units left to activate, you have 2")
+	assert_int(_ai_acted.size()).is_equal(0)
+	assert_bool(guard.is_activated).is_false()
 	await E2EBoot.settle(get_tree())
 
 
