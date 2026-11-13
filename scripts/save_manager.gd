@@ -364,17 +364,35 @@ func save_game(path: String) -> Error:
 func save_state_to_file(state: Dictionary, path: String) -> Error:
 	var json_string = JSON.stringify(state, "\t")  # Pretty print with tabs
 
-	var file = FileAccess.open(path, FileAccess.WRITE)
+	# Write a temp sibling, read it back, and only a complete copy replaces the destination. The old in-place write
+	# checked nothing after the open, so a write that failed later (disk full, quota) left a truncated file where
+	# the previous save had been and still reported OK. A failed write now keeps the previous save and says so.
+	# The read-back is the real check: a failure in the final flush only shows on disk, not in a return value.
+	var tmp_path := path + ".tmp"
+	var file = FileAccess.open(tmp_path, FileAccess.WRITE)
 	if not file:
 		var error = FileAccess.get_open_error()
-		push_error("Failed to open save file: %s (error %d)" % [path, error])
+		push_error("Failed to open save file: %s (error %d)" % [tmp_path, error])
 		return error
 
-	file.store_string(json_string)
+	var stored := _store_text(file, json_string)
 	file.close()
+	var err := OK if stored and FileAccess.get_file_as_string(tmp_path) == json_string else ERR_FILE_CANT_WRITE
+	if err == OK:
+		err = DirAccess.rename_absolute(ProjectSettings.globalize_path(tmp_path), ProjectSettings.globalize_path(path))
+	if err != OK:
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(tmp_path))
+		push_error("Failed to write save file: %s (error %d); the previous file is kept" % [path, err])
+		return err
 
 	print("Game saved to: %s (%d objects)" % [path, state.get("objects", []).size()])
 	return OK
+
+
+## The one write of a save's text into its opened temp file. A test overrides it to inject a failed or short write
+## after a successful open; save_state_to_file trusts the read-back, not this return value alone.
+func _store_text(file: FileAccess, text: String) -> bool:
+	return file.store_string(text)
 
 
 ## Restore a captured in-memory snapshot onto the table through the REAL load path: write it to a
