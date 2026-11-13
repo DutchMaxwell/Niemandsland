@@ -282,6 +282,7 @@
 "test/e2e/e2e_mp_plain_room_utility_buffs_test.gd": 24.0,
 "test/e2e/e2e_mp_precision_tag_wire_test.gd": 6.0,
 "test/e2e/e2e_mp_reanimation_position_test.gd": 11.0,
+"test/e2e/e2e_mp_reinforcement_owner_places_test.gd": 19.0,
 "test/e2e/e2e_mp_rejoin_embarked_test.gd": 12.7,
 "test/e2e/e2e_mp_remote_intent_flag_test.gd": 7.3,
 "test/e2e/e2e_mp_replied_ids_round_test.gd": 12.0,
