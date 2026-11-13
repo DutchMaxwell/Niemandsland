@@ -418,6 +418,32 @@ struct Move<'a> {
     allow_contact: bool,
 }
 
+/// `_plan_positions` :7645-7648 — the walls the solve sees and the container edges it climbs instead (heights B2,
+/// GF p.11). From `EPOCH_73_V36` a container's edges leave the walls and are priced as ledges: a leg over one pays
+/// its height, a model never ends mid-climb. Flying ignores walls and climbs alike (:6157).
+pub(crate) fn walls_and_ledges_of(t: &Terrain, flying: bool, rules_epoch: u32) -> (Vec<Wall>, Vec<Ledge>) {
+    if flying {
+        return (Vec::new(), Vec::new());
+    }
+    if !rule_on(rules_epoch, EPOCH_73_V36) {
+        return (t.walls_in().to_vec(), Vec::new());
+    }
+    let (walls, edges) = t.walls_and_ledges();
+    (walls, edges.iter().map(|e| Ledge { a: e[0], b: e[1], dy_in: terrain::CONTAINER_HEIGHT_IN }).collect())
+}
+
+/// `_ledges_world` — the climbs in the table's world frame (metres), for the trims, the gate slack and the core's
+/// move check. Empty below `EPOCH_74_CLIMB_COST` and for a Flying unit, so every flat trim stays byte-identical.
+pub(crate) fn world_ledges_of(t: &Terrain, flying: bool, rules_epoch: u32) -> Vec<Ledge> {
+    if !rule_on(rules_epoch, EPOCH_74_CLIMB_COST) {
+        return Vec::new();
+    }
+    let board = t.board_in();
+    walls_and_ledges_of(t, flying, rules_epoch).1.iter().map(|l| Ledge {
+        a: super::gate::to_world_f32(l.a, board), b: super::gate::to_world_f32(l.b, board), dy_in: l.dy_in,
+    }).collect()
+}
+
 impl Move<'_> {
     /// STANDALONE_SWEEP_A_2026-09-14, row `Difficult Terrain Debuff` — the
     /// FROZEN `EPOCH_27_TERRAIN_DEBUFF`: the granted "Difficult Terrain" the
@@ -442,30 +468,14 @@ impl Move<'_> {
         )
     }
 
-/// `_plan_positions` :7645-7648 — the walls the solve sees and the container edges it climbs instead (heights B2,
-/// GF p.11). From `EPOCH_73_V36` a container's edges leave the walls and are priced as ledges: a leg over one pays
-/// its height, a model never ends mid-climb. Flying ignores walls and climbs alike (:6157).
+/// `walls_and_ledges_of` for this move.
 fn walls_and_ledges(&self) -> (Vec<Wall>, Vec<Ledge>) {
-    if self.flying {
-        return (Vec::new(), Vec::new());
-    }
-    if !rule_on(self.rules_epoch, EPOCH_73_V36) {
-        return (self.t.walls_in().to_vec(), Vec::new());
-    }
-    let (walls, edges) = self.t.walls_and_ledges();
-    (walls, edges.iter().map(|e| Ledge { a: e[0], b: e[1], dy_in: terrain::CONTAINER_HEIGHT_IN }).collect())
+    walls_and_ledges_of(self.t, self.flying, self.rules_epoch)
 }
 
-/// `_ledges_world` — the climbs in the table's world frame (metres), for the trims and the gate slack. Empty below
-/// `EPOCH_74_CLIMB_COST` and for a Flying unit, so every flat trim stays byte-identical.
+/// `world_ledges_of` for this move.
 fn world_ledges(&self) -> Vec<Ledge> {
-    if !rule_on(self.rules_epoch, EPOCH_74_CLIMB_COST) {
-        return Vec::new();
-    }
-    let board = self.t.board_in();
-    self.walls_and_ledges().1.iter().map(|l| Ledge {
-        a: super::gate::to_world_f32(l.a, board), b: super::gate::to_world_f32(l.b, board), dy_in: l.dy_in,
-    }).collect()
+    world_ledges_of(self.t, self.flying, self.rules_epoch)
 }
 
 /// `_priced_len_m` — a world trail's ground length plus the climb it pays (GF p.11), in metres.
