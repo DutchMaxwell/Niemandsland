@@ -191,3 +191,53 @@ func test_the_resolving_doors_refuse_without_a_start() -> void:
 	assert_bool(_main._solo_activation_wounds_start.has(u.get_instance_id())) \
 		.override_failure_message("begin_activation ran").is_false()
 	assert_int(_lines("Marshal: not enough tokens for Bolt")).override_failure_message("the cast spent").is_equal(0)
+
+
+## ---- step 64: Pass and Speed Feat, the spends that are not activations ----
+
+const SPEED_FLAG := "speed_feat_used_speed_feat"
+
+
+## A human Delayed Action carrier, a second human unit and three AI units: the pass is legal (3 > 2).
+func _pass_board() -> Array:
+	_main._solo_batch = true   # no dialogs in a headless pump
+	var carrier := _unit("Wachtturm", Vector3(-0.3, 0, 0.2), ["Delayed Action"])
+	var other := _unit("Alpha", Vector3(-0.3, 0, 0.4))
+	for i in 3:
+		_unit("Raider%d" % (i + 1), Vector3(0.3, 0, -0.2 - 0.12 * i), [], 2)
+	return [carrier, other]
+
+
+func _passed(carrier: GameUnit) -> bool:
+	return SoloController.delayed_action_used_this_round(carrier, _main.opr_army_manager.current_round)
+
+
+func test_pass_while_another_activation_is_open_names_it() -> void:
+	var b := _pass_board()
+	CoreActivation.open_session(_main, b[1])
+	await _main.solo_begin_pass(b[0])
+	assert_int(_lines("Finish Alpha's activation first.")).is_equal(1)
+	assert_bool(_passed(b[0])).override_failure_message("the pass was stamped").is_false()
+	assert_int(_main.battle_log.entries().filter(func(e: Dictionary) -> bool: return str(e["text"]).contains("passes the turn")).size()) \
+		.override_failure_message("the turn passed").is_equal(0)
+
+
+func test_pass_with_no_activation_open_works_as_today() -> void:
+	var b := _pass_board()
+	await _main.solo_begin_pass(b[0])
+	assert_bool(_passed(b[0])).override_failure_message("the pass was refused").is_true()
+	assert_int(_lines("Activate Wachtturm first.")).is_equal(0)
+	await E2EBoot.settle(get_tree())
+
+
+## The registry's AoF orc "Speed Feat" (Quick, once per game), as e2e_speed_feat_radial_test reads it.
+func test_speed_feat_needs_the_start() -> void:
+	var u := _unit("Boyz", Vector3.ZERO, ["Speed Feat"])
+	u.unit_properties["game_system"] = "aof"
+	u.unit_properties["faction_folder"] = "orcs"
+	_main.solo_spend_speed_feat(u)
+	assert_int(_lines("Activate Boyz first.")).is_equal(1)
+	assert_bool(bool(u.unit_properties.get(SPEED_FLAG, false))).override_failure_message("the feat was spent").is_false()
+	CoreActivation.open_session(_main, u)
+	_main.solo_spend_speed_feat(u)
+	assert_bool(bool(u.unit_properties.get(SPEED_FLAG, false))).override_failure_message("no spend after the Start").is_true()
