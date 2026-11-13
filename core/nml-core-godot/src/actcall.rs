@@ -19,7 +19,14 @@ fn input_of(v: &Variant) -> Option<Input> {
         "cancel" => Input::Cancel,
         "intent" => Input::Intent { kind: plain::int(&field("kind")?), shoot: field("shoot").map(|s| plain::text(&s)).filter(|s| !s.is_empty()) },
         "faces" => Input::Faces(plain::any_array(&field("faces")?).iter_shared().map(|f| plain::int(&f).clamp(0, 6) as u8).collect()),
-        "placed" => Input::Placed(plain::any_array(&field("positions")?).iter_shared().map(|p| p.try_to::<Vector3>().ok().map(|p| [p.x as f64, p.y as f64, p.z as f64])).collect::<Option<Vec<_>>>()?),
+        "placed" => Input::Placed {
+            at: plain::any_array(&field("positions")?).iter_shared().map(|p| p.try_to::<Vector3>().ok().map(|p| [p.x as f64, p.y as f64, p.z as f64])).collect::<Option<Vec<_>>>()?,
+            // Optional: per model its walked path (Vector2 = world XZ metres); absent = none.
+            trails: match field("trails") {
+                None => Vec::new(),
+                Some(t) => plain::any_array(&t).iter_shared().map(|m| plain::any_array(&m).iter_shared().map(|p| p.try_to::<Vector2>().ok().map(|p| [p.x as f64, p.y as f64])).collect::<Option<Vec<_>>>()).collect::<Option<Vec<_>>>()?,
+            },
+        },
         _ => return None,
     })
 }

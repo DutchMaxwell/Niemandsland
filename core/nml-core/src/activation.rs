@@ -25,8 +25,9 @@ pub enum Input {
     Intent { kind: i64, shoot: Option<String> },
     /// One thrown face group, in the order the core asked for them.
     Faces(Vec<u8>),
-    /// The unit's model positions after a drag.
-    Placed(Vec<[f64; 3]>),
+    /// The unit's model positions after a drag (`at`) and each model's walked path this
+    /// activation (world XZ metres, in the order of `at`; empty = none).
+    Placed { at: Vec<[f64; 3]>, trails: Vec<Vec<[f64; 2]>> },
     /// "Cancel", allowed until the first die of the activation.
     Cancel,
 }
@@ -62,7 +63,7 @@ pub fn order_check(name: &str, t: &[Input]) -> Result<(), (usize, String)> {
             Input::Cancel if rolled => Some("cancel is not possible after the first die".to_string()),
             Input::Faces(_) if !declared => Some("faces before the action was declared".to_string()),
             Input::Intent { .. } if declared => Some("one action per activation".to_string()),
-            Input::Placed(_) if shot => Some(format!("{name} has already shot this round — it cannot move now")),
+            Input::Placed { .. } if shot => Some(format!("{name} has already shot this round — it cannot move now")),
             Input::Intent { kind, .. } if *kind == CHARGE || *kind == REPOSITION => Some("not on the step path yet".to_string()),
             _ => None,
         };
@@ -212,18 +213,19 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
         return ActStep::Open;
     };
     let placed = t.iter().rev().find_map(|x| match x {
-        Input::Placed(p) => Some(p.clone()),
+        Input::Placed { at, trails } => Some((at.clone(), trails.clone())),
         _ => None,
     });
     let start = at.map_or(&[][..], |i| state.positions[i].as_slice());
-    let kind = effective_kind(declared, start, placed.as_deref());
+    let kind = effective_kind(declared, start, placed.as_ref().map(|(p, _)| p.as_slice()));
     if kind == RUSH && shoot.is_some() {
         return ActStep::Refused { index: at_intent, reason: format!("{name} rushed this activation - it cannot shoot.") };
     }
     // Not HOLD: a mode was declared and the last placement moved (or does not match the models).
     let mut moved = Vec::new();
-    if let (true, Some(p), Some(pi), Some(si)) = (kind != HOLD, &placed, t.iter().rposition(|x| matches!(x, Input::Placed(_))), at) {
-        let drop = Drop { mode: declared, placed: p.clone(), ..Default::default() };
+    if let (true, Some((p, trails)), Some(pi), Some(si)) = (kind != HOLD, &placed, t.iter().rposition(|x| matches!(x, Input::Placed { .. })), at) {
+        #[allow(clippy::needless_update)] // the plan's literal form: step 78 adds `from` to `Drop`
+        let drop = Drop { mode: declared, placed: p.clone(), trails: trails.clone(), ..Default::default() };
         match check_move(statics, state, si, seams, terrain, &drop, enforce) {
             Check::Refused { reason } => return ActStep::Refused { index: pi, reason },
             Check::Ok { lines } => moved = lines,
@@ -233,8 +235,8 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
     let faces: Vec<Vec<u8>> = t.iter().filter_map(|x| if let Input::Faces(f) = x { Some(f.clone()) } else { None }).collect();
     // The spike's non-tray seed: a plain activation never draws from it.
     let resolve = |tray: &mut Tray| {
-        if let Some(p) = placed {
-            tray.place(p);
+        if let Some((p, trails)) = placed {
+            tray.place(p, trails);
         }
         resolve_stochastic_tray_on_board(statics, state, &action, terrain, seams, &mut GodotRng::new(0), tray)
     };
@@ -292,7 +294,12 @@ pub fn delta_of(before: &State, after: &State) -> Vec<UnitDelta> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use Input::{Begin, Cancel, Faces, Placed};
+    use Input::{Begin, Cancel, Faces};
+
+    /// A `Placed` without walked paths.
+    fn placed(at: Vec<[f64; 3]>) -> Input {
+        Input::Placed { at, trails: Vec::new() }
+    }
 
     fn intent(kind: i64, shoot: Option<&str>) -> Input {
         Input::Intent { kind, shoot: shoot.map(String::from) }
@@ -309,12 +316,12 @@ mod tests {
 
     #[test]
     fn rule2_a_second_begin_is_refused() {
-        refused(&[Begin, Placed(vec![]), Begin], 2, "the activation is already started");
+        refused(&[Begin, placed(vec![]), Begin], 2, "the activation is already started");
     }
 
     #[test]
     fn rule3_nothing_after_a_cancel() {
-        refused(&[Begin, Cancel, Placed(vec![])], 2, "the activation is over");
+        refused(&[Begin, Cancel, placed(vec![])], 2, "the activation is over");
     }
 
     #[test]
@@ -324,7 +331,7 @@ mod tests {
 
     #[test]
     fn rule5_faces_need_a_declared_action() {
-        refused(&[Begin, Placed(vec![]), Faces(vec![4])], 2, "faces before the action was declared");
+        refused(&[Begin, placed(vec![]), Faces(vec![4])], 2, "faces before the action was declared");
     }
 
     #[test]
@@ -334,26 +341,26 @@ mod tests {
 
     #[test]
     fn rule7_no_move_after_the_unit_shot() {
-        let t = [Begin, intent(ADVANCE, Some("Rifles")), Faces(vec![5]), Placed(vec![[0.0; 3]])];
+        let t = [Begin, intent(ADVANCE, Some("Rifles")), Faces(vec![5]), placed(vec![[0.0; 3]])];
         refused(&t, 3, "Squad has already shot this round — it cannot move now");
-        assert_eq!(order_check("Squad", &[Begin, intent(ADVANCE, None), Placed(vec![])]), Ok(()));
+        assert_eq!(order_check("Squad", &[Begin, intent(ADVANCE, None), placed(vec![])]), Ok(()));
     }
 
     #[test]
     fn rule8_charge_and_reposition_are_not_on_the_step_path() {
         refused(&[Begin, intent(CHARGE, None)], 1, "not on the step path yet");
-        refused(&[Begin, Placed(vec![]), intent(REPOSITION, None)], 2, "not on the step path yet");
+        refused(&[Begin, placed(vec![]), intent(REPOSITION, None)], 2, "not on the step path yet");
     }
 
     #[test]
     fn moves_before_the_shooting_intent_are_fine() {
-        let t = [Begin, Placed(vec![[1.0, 0.0, 0.0]]), Placed(vec![[2.0, 0.0, 0.0]]), intent(ADVANCE, Some("Rifles"))];
+        let t = [Begin, placed(vec![[1.0, 0.0, 0.0]]), placed(vec![[2.0, 0.0, 0.0]]), intent(ADVANCE, Some("Rifles"))];
         assert_eq!(order_check("Squad", &t), Ok(()));
     }
 
     #[test]
     fn cancel_after_a_move_is_fine() {
-        assert_eq!(order_check("Squad", &[Begin, Placed(vec![[1.0, 0.0, 0.0]]), Cancel]), Ok(()));
+        assert_eq!(order_check("Squad", &[Begin, placed(vec![[1.0, 0.0, 0.0]]), Cancel]), Ok(()));
     }
 
     #[test]
@@ -436,7 +443,7 @@ mod tests {
     fn a_rush_cannot_shoot() {
         let (st, statics) = volley_line();
         let moved: Vec<[f64; 3]> = st.positions[0].iter().map(|p| [p[0] + 3.0 * INCHES_TO_METERS, p[1], p[2]]).collect();
-        let t = [Begin, Placed(moved), intent(RUSH, Some("b"))];
+        let t = [Begin, placed(moved), intent(RUSH, Some("b"))];
         match step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t, true) {
             ActStep::Refused { index, reason } => assert_eq!((index, reason.as_str()), (2, "a rushed this activation - it cannot shoot.")),
             other => panic!("expected the O3 refusal, got {other:?}"),
@@ -481,9 +488,9 @@ mod tests {
         let ask = |t: &[Input]| step_activation(&statics, &st, "a", &Terrain::default(), seams(), t, true);
         for t in [
             vec![Begin, Cancel],
-            vec![Begin, Placed(moved.clone()), Cancel],
+            vec![Begin, placed(moved.clone()), Cancel],
             vec![Begin, intent(HOLD, Some("b")), Cancel],
-            vec![Begin, Placed(moved), intent(RUSH, Some("b")), Cancel], // the O3 refusal never shows: nothing was resolved
+            vec![Begin, placed(moved), intent(RUSH, Some("b")), Cancel], // the O3 refusal never shows: nothing was resolved
         ] {
             let ActStep::Cancelled { lines } = ask(&t) else { panic!("{t:?}") };
             assert_eq!(lines, vec![cancel_line("a", 0)], "{t:?}");
@@ -741,6 +748,18 @@ mod tests {
         assert_eq!(go(&st, 5.0, 8.0, true), OK, "Strider ignores Difficult");
     }
 
+    /// The last `Placed`'s walked paths reach the move check: a 4"+4" walk (chord 5.66") is refused
+    /// at that `Placed` (RED: build the check's `Drop` without them -> the chord passes, `Done`).
+    #[test]
+    fn step_activation_checks_the_last_placement_s_trails() {
+        let (st, statics) = squad_line();
+        let walk = Input::Placed { at: vec![[4.0 * INCHES_TO_METERS, 0.0, 4.0 * INCHES_TO_METERS]], trails: vec![trail(&[[0.0, 0.0], [4.0, 0.0], [4.0, 4.0]])] };
+        match step_activation(&statics, &st, "a", &Terrain::default(), seams(), &[Begin, walk, intent(ADVANCE, None)], true) {
+            ActStep::Refused { index, reason } => assert_eq!((index, reason.as_str()), (1, "Squad: a model moved 8.0\" - the Advance allowance is 6.0\".")),
+            other => panic!("expected the walked-path refusal, got {other:?}"),
+        }
+    }
+
     /// The activation checks its last placement: an enforced overrun is refused at that `Placed`
     /// (RED: skip the check in `step_activation` -> the moving shot resolves on to the resolver's
     /// `Refused { index: 3, "MovedShootLos" }`, this fixture carries no LOS). Without a shot, enforce
@@ -748,7 +767,7 @@ mod tests {
     #[test]
     fn step_activation_checks_the_last_placement() {
         let (st, statics) = squad_line();
-        let ask = |d: f64, shoot, enforce| step_activation(&statics, &st, "a", &Terrain::default(), seams(), &[Begin, Placed(east(d)), intent(ADVANCE, shoot)], enforce);
+        let ask = |d: f64, shoot, enforce| step_activation(&statics, &st, "a", &Terrain::default(), seams(), &[Begin, placed(east(d)), intent(ADVANCE, shoot)], enforce);
         match ask(6.2, Some("b"), true) {
             ActStep::Refused { index, reason } => assert_eq!((index, reason.as_str()), (1, "Squad: a model moved 6.2\" - the Advance allowance is 6.0\".")),
             other => panic!("expected the overrun refusal, got {other:?}"),
