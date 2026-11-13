@@ -156,7 +156,14 @@ static func run_ai(main, unit: GameUnit, report: Dictionary, target: GameUnit, h
 			or not is_plain(target) or int(report.get("dangerous_dice", report.get("dangerous_models", 0))) > 0:
 		return false
 	var at: Array = unit.get_alive_models().map(func(m: ModelInstance) -> Vector3: return m.node.global_position)
-	var t: Array = [{"t": "begin"}, {"t": "placed", "positions": at}, {"t": "intent", "kind": kind, "shoot": target.unit_id}]
+	# Step 42c: each model's walked route (the planner's, world XZ) rides along, so the core's move check measures the
+	# route, not the chord (R3); a model that did not move sends none.
+	var routes := {}
+	for p in main.solo_controller.last_move_paths:
+		routes[p["model"]] = (p["path"] as Array).map(func(v: Vector3) -> Vector2: return Vector2(v.x, v.z))
+	var trails: Array = unit.get_alive_models().map(func(m: ModelInstance) -> Array: return routes.get(m, []))
+	var t: Array = [{"t": "begin"}, {"t": "placed", "positions": at, "trails": trails},
+		{"t": "intent", "kind": kind, "shoot": target.unit_id}]
 	# Step 42b: the table's presentation of the volley (_present); its stage opens before the core's first line.
 	var st := {"n": 0, "open": false, "result": false, "hits": 0, "landed": 0, "announce": [],
 		"before": main._solo_combined_alive(target), "moved": bool(report.get("moved", false))}
@@ -193,6 +200,9 @@ static func _present(main, unit: GameUnit, target: GameUnit, shots: Array, st: D
 		var shot: Dictionary = shots[mini(n, shots.size() - 1)]
 		var d: Dictionary = main._solo_shot_eligibility(shot["member"], shot["profile"], shot, target, false, st["moved"])
 		var pairs: Array = d["pairs"]
+		main._solo_record_shot(unit, shot["member"], target, shot["profile"], int(d["sighted"]), int(d["bearers"]),   # 42c
+			int(shot["max"]), int((d["report"] as Dictionary)["attacks"]),
+			int(SoloController.effective_shoot_reach_in(float(shot["reach"]), target)))
 		main._vfx_volley(shot["member"], target, shot["profile"],
 			pairs.slice(0, int(d["bearers"]) if int(d["bearers"]) >= 0 else pairs.size()), false)
 		st.merge({"n": n + 1, "open": true}, true)
@@ -396,6 +406,11 @@ static func reset_all(main) -> void:
 	last_target = null
 	if main != null and is_instance_valid(main.solo_controller):
 		main.solo_controller._core_header_done = false
+		if int(main._solo_core_ai_h) != 0:   # step 42c: the AI body's capture dies with the game too
+			var core: Object = main.solo_controller._core_node_ready()
+			if core != null:
+				core.release(int(main._solo_core_ai_h))
+		main._solo_core_ai_h = 0
 
 
 ## Step 37 (O9, O15 (4)): the unit properties a Cancel-reachable one-time spend writes, each with the rule its line names.
