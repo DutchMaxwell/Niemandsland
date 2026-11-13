@@ -368,7 +368,7 @@ func test_step_activation_lets_a_unit_that_advanced_shoot() -> void:
 
 ## A core with a stamped header over "a" (models at `a_xs`, one 24" Rifle each) and "b" (models at `b_xs`), x in inches;
 ## `board` = a school world for the header's terrain ({} = no terrain). The handle on the captured state.
-func _stamped_handle(core: Object, a_xs: Array, b_xs: Array, board: Dictionary = {}) -> int:
+func _stamped_handle(core: Object, a_xs: Array, b_xs: Array, board: Dictionary = {}, copies := -1) -> int:
 	var at := func(x: float) -> Vector3: return Vector3(x * IN2M, 0, 0)
 	var a := _unit(1, a_xs.map(at), "a")
 	var b := _unit(2, b_xs.map(at), "b")
@@ -379,7 +379,7 @@ func _stamped_handle(core: Object, a_xs: Array, b_xs: Array, board: Dictionary =
 	w.name = "Rifle"
 	w.range_value = 24
 	w.attacks = 1
-	w.count = a_xs.size()
+	w.count = a_xs.size() if copies < 0 else copies
 	a.source_type = "opr"
 	a.source_data = OPRApiClient.OPRUnit.new()
 	(a.source_data as OPRApiClient.OPRUnit).weapons.append(w)
@@ -460,3 +460,16 @@ func test_a_drop_without_trails_pays_the_terrain_on_its_straight_line() -> void:
 		.is_equal("a: a model moved 6.5\" - the Advance allowance is 6.0\".")
 	assert_bool(_trailless_check({}, 2, 8.0)["ok"]).is_true()
 	assert_bool(_trailless_check({}, 1, 4.0)["ok"]).is_true()
+
+
+## 42d: "a" (five models, captured with no per-model loadout - the table's `alive_bearers_of` -1) carries `copies` Rifle
+## copies (A1 each); "b" stands 12" away. The table fires the unit's ratio, round(copies x 5 / 5); the core read the five
+## empty kits as zero bearers and fired nothing (one copy: "done", no roll). 7 copies of 5 keeps the plain ratio too.
+func test_a_weapon_with_fewer_copies_than_models_and_no_loadout_fires_its_ratio() -> void:
+	for copies in [1, 3, 5, 7]:
+		var core: Object = ClassDB.instantiate("NmlCore")
+		var h := _stamped_handle(core, [0.0, 0.5, 1.0, 1.5, 2.0], [12.0], {}, copies)
+		var r: Dictionary = core.step_activation(h, "a", [{"t": "begin"}, {"t": "intent", "kind": AiDecision.Action.HOLD,
+			"shoot": "b"}], true)
+		assert_str("%s %s %s" % [r.get("step"), r.get("kind", ""), r.get("faces", "")]) \
+			.override_failure_message("%d copies: %s" % [copies, r]).is_equal("need_roll attack %d" % copies)
