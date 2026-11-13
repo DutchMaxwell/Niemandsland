@@ -35,7 +35,7 @@ mod sho_07_aircraft_hit {
         let p = [rifle(unstoppable)];
         let one = [Shooter { profiles: &p, keep: &[0], attacks: &[10], att: &att, owner: "Gunner" }];
         let mut tray = Tray::seeded(7);
-        let r = resolve_volley_leg(&one, def, "Flyer", 12.0, 12.0, true, true, true, true, true, false, &|_| false, &mut tray);
+        let r = resolve_volley_leg(&one, def, "Flyer", 12.0, 12.0, true, true, true, true, true, false, &|_| false, &|_, _| None, &mut tray);
         let targets = r.rolls.iter().filter(|x| x.kind == "attack").map(|x| x.target).collect();
         (targets, r.log)
     }

@@ -102,7 +102,7 @@ use super::*;
         let run = |def: &Ctx| -> ShootResult {
             let one = [Shooter { profiles: &p, keep: &[0], attacks: &[4], att: &att, owner: "" }];
             let mut tray = Tray::seeded(27);
-            resolve_volley_leg(&one, def, "", 12.0, 12.0, true, true, true, true, true, false, &|_| false, &mut tray)
+            resolve_volley_leg(&one, def, "", 12.0, 12.0, true, true, true, true, true, false, &|_| false, &|_, _| None, &mut tray)
         };
         let regen = |r: &ShootResult| -> Vec<i64> { r.rolls.iter().filter(|x| x.target == 5).map(|x| x.count).collect() };
         let old = run(&Ctx { defense: 6, ..regen_def(false) });

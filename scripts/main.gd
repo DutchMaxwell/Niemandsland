@@ -400,6 +400,9 @@ var _solo_relic_drop_active: Dictionary = {}
 # final count) _on_battle_log_dead only counts them here (GameUnit -> [casualties, alive, total]) and the outermost
 # _solo_remove_dead_models writes the lines when it is done. null = no volley open, lines go out at once.
 var _volley_losses = null
+## One-core P3 step 27: true while the core driver removes models whose loss line the core already said
+## (CoreActivation.land_step); _on_battle_log_dead then writes no "loses" / "destroyed" line of its own.
+var _core_said_losses := false
 var _solo_relic_drop_gen := 0
 var _solo_vip_pick: Dictionary = {}   # D14.4: the human VIP defender's one click {spot}
 var _solo_secret_pick: Dictionary = {}   # D12a-2: the human defender's two clicks {relic, trap} (marker indexes)
@@ -18500,12 +18503,15 @@ func _on_battle_log_dead(node, dead: bool) -> void:
 			# A volley parks its casualties one by one with the whole unit already dead: write the line once.
 			if not bool(gu.get_meta("destroyed_line_written", false)):
 				gu.set_meta("destroyed_line_written", true)
-				battle_log.on_unit_destroyed(gu.get_name())
+				if not _core_said_losses:
+					battle_log.on_unit_destroyed(gu.get_name())
 			_solo_drop_carried(gu, "destroyed")
 			_solo_recycle_if_due(gu)
 		else:
 			gu.set_meta("destroyed_line_written", false)
-			if _volley_losses != null:   # a volley is parking: the funnel writes ONE line when it is done
+			if _core_said_losses:
+				pass   # the core already said this loss line
+			elif _volley_losses != null:   # a volley is parking: the funnel writes ONE line when it is done
 				var held: Array = _volley_losses.get(gu, [0, 0, 0])
 				_volley_losses[gu] = [int(held[0]) + 1, alive, total]
 			else:
