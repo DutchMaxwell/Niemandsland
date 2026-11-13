@@ -303,3 +303,60 @@ func test_a_unit_may_not_begin_while_another_is_open() -> void:
 	var r: Dictionary = _core.check_begin("Blades")
 	assert_bool(r["ok"]).is_false()
 	assert_str(str(r.get("reason", ""))).is_equal("Finish Blades's activation first.")
+
+
+## ---- the step path runs with the table's casualty order and the moving shot (step 17b) ----
+## "a" (3 models, a 24" Rifle) and "b" (5 models in a 1" line whose slot 0 stands in the MIDDLE) under a game header
+## of `epoch`. Slot order kills slot 0 first; the table's order (`tray_exact` from epoch 70) kills an outer model.
+func _volley_handle(core: Object, epoch: int) -> int:
+	var a := _unit(1, [Vector3.ZERO, Vector3(1.0 * IN2M, 0, 0), Vector3(2.0 * IN2M, 0, 0)], "a")
+	var b := _unit(2, [14.0, 12.0, 13.0, 15.0, 16.0].map(func(x: float) -> Vector3: return Vector3(x * IN2M, 0, 0)), "b")
+	for u in [a, b]:
+		(u as GameUnit).unit_properties["game_system"] = "gf"
+		(u as GameUnit).unit_properties["faction_folder"] = "robot_legions"
+	var w := OPRApiClient.OPRWeapon.new()
+	w.name = "Rifle"
+	w.range_value = 24
+	w.attacks = 1
+	w.count = 3
+	a.source_type = "opr"
+	a.source_data = OPRApiClient.OPRUnit.new()
+	(a.source_data as OPRApiClient.OPRUnit).weapons.append(w)
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {"a": a, "b": b}
+	var state := BattleSim.capture(army, func() -> Array: return [], func(_i: int) -> int: return 0, 1, 4)
+	var head: Dictionary = AiActRecorder._header_line(state, Callable())
+	(head["knobs"] as Dictionary)["rules_epoch"] = epoch
+	assert_bool(core.set_game_header(head)).override_failure_message("set_game_header: " + str(core.last_error())).is_true()
+	return core.capture_plain(BattleSim.state_to_plain(state))
+
+
+## One hit, one failed save: which slot of "b" the core removed.
+func _one_kill_removes(epoch: int) -> Array:
+	var core: Object = ClassDB.instantiate("NmlCore")
+	var h := _volley_handle(core, epoch)
+	var t: Array = [{"t": "begin"}, {"t": "intent", "kind": AiDecision.Action.HOLD, "shoot": "b"}]
+	var r: Dictionary = core.step_activation(h, "a", t, false)
+	while r["step"] == "need_roll" and t.size() < 8:
+		t.append({"t": "faces", "faces": range(int(r["faces"])).map(func(i: int) -> int:
+			return 6 if r["kind"] == "attack" and i == 0 else 1)})
+		r = core.step_activation(h, "a", t, false)
+	assert_str(r["step"]).override_failure_message(str(r)).is_equal("done")
+	return r["delta"][0]["removed"]
+
+
+func test_step_activation_removes_casualties_in_the_tables_order_from_the_tray_exact_epoch() -> void:
+	assert_array(_one_kill_removes(76)).override_failure_message("epoch 76: an outer model goes first").is_equal([1])
+	assert_array(_one_kill_removes(69)).override_failure_message("epoch 69: slot order").is_equal([0])
+
+
+func test_step_activation_lets_a_unit_that_advanced_shoot() -> void:
+	var core: Object = ClassDB.instantiate("NmlCore")
+	var h := _volley_handle(core, 76)
+	var placed: Array = []
+	for i in 3:
+		placed.append(Vector3((float(i) + 4.0) * IN2M, 0, 0))
+	var t: Array = [{"t": "begin"}, {"t": "placed", "positions": placed},
+		{"t": "intent", "kind": AiDecision.Action.ADVANCE, "shoot": "b"}]
+	var r: Dictionary = core.step_activation(h, "a", t, true)
+	assert_str("%s %s" % [r.get("step"), r.get("kind")]).override_failure_message(str(r)).is_equal("need_roll attack")

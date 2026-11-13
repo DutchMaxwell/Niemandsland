@@ -359,7 +359,7 @@ impl NmlCore {
             Ok(t) => t,
             Err(at) => return actcall::refused(at, &format!("input {at} is not understood")),
         };
-        let seams = self.seams_at_header_epoch();
+        let seams = self.seams_for_step();
         let absent = Terrain::absent();
         let terrain = self.header.as_ref().map(|hd| &hd.terrain).unwrap_or(&absent);
         let slot = self.slab[i].as_ref().unwrap();
@@ -382,7 +382,7 @@ impl NmlCore {
             self.last_error = "unknown handle".to_string();
             return VarDictionary::new();
         };
-        let seams = self.seams_at_header_epoch();
+        let seams = self.seams_for_step();
         let absent = Terrain::absent();
         let terrain = self.header.as_ref().map(|hd| &hd.terrain).unwrap_or(&absent);
         let slot = self.slab[i].as_ref().unwrap();
@@ -400,7 +400,7 @@ impl NmlCore {
     #[func]
     fn check_move(&mut self, h: i64, unit: GString, drop: VarDictionary, enforce: bool) -> VarDictionary {
         let Some(i) = self.index(h) else { return actcall::not_ok("unknown handle") };
-        let seams = self.seams_at_header_epoch();
+        let seams = self.seams_for_step();
         let absent = Terrain::absent();
         let terrain = self.header.as_ref().map(|hd| &hd.terrain).unwrap_or(&absent);
         let slot = self.slab[i].as_ref().unwrap();
@@ -1110,10 +1110,18 @@ impl NmlCore {
 
     /// `seams_now` with the HEADER's rules epoch (0 without a header — `capture_plain`'s reading): what `resolve` and
     /// `step_activation` hand the core, so every epoch-gated rule runs at the epoch the game plays at (`plan_inner` reads it
-    /// off the header knobs too). `seams_now` itself carries no epoch.
+    /// off the header knobs too). `seams_now` itself carries no epoch. `tray_exact` follows the epoch exactly as
+    /// `plan::seams_of` derives it (the table's casualty order from `EPOCH_70_TRAY_EXACT`).
     fn seams_at_header_epoch(&mut self) -> Seams {
         let rules_epoch = self.header.as_ref().map(|h| h.knobs.rules_epoch).unwrap_or(0);
-        Seams { rules_epoch, ..self.seams_now() }
+        let tray_exact = nml_core::acts::rule_on(rules_epoch, nml_core::acts::EPOCH_70_TRAY_EXACT);
+        Seams { rules_epoch, tray_exact, ..self.seams_now() }
+    }
+
+    /// The table's activation step path (`step_activation`, `check_move`, `move_allowance`): the header epoch's seams
+    /// with the moving shot ON — at the table a unit that advanced may still shoot. `resolve` keeps the planner's reading.
+    fn seams_for_step(&mut self) -> Seams {
+        Seams { moved_shoot: true, ..self.seams_at_header_epoch() }
     }
 
     fn root(&mut self) -> String {
