@@ -353,7 +353,8 @@ static func open_session(main, gu: GameUnit) -> bool:
 			start_own.append(m)
 	var s := {"handle": h, "transcript": [{"t": "begin"}], "start_models": _start_models(main), "start_pos": start_pos,
 		"start_rot": start_rot, "start_own": start_own, "dice": false,
-		"journal": _journal_records(main).merged({"props": _journal_props(main)}), "moved_before": {}}
+		"journal": _journal_records(main).merged({"props": _journal_props(main)}), "moved_before": {},
+		"ledger_mark": main.move_trails.ledger.entries.size() if main.move_trails != null else 0}
 	if gu.unit_properties.has("moved_round"):
 		s["moved_round_before"] = gu.unit_properties["moved_round"]
 	for u in [gu] + gu.get_attached_heroes():   # step 32: each moved_round before the Start (null = none), for the reset
@@ -424,17 +425,55 @@ static func drop_refused(main, gu: GameUnit) -> bool:
 		return false
 	var s: Dictionary = _sessions[gu.unit_id]
 	var at: Array = gu.get_alive_models().map(func(m: ModelInstance) -> Vector3: return m.node.global_position)
-	var r: Dictionary = core.check_move(int(s["handle"]), gu.unit_id, {"mode": mode, "positions": PackedVector3Array(at)},
-		main.object_manager._strict_movement_enforced())
+	var trails := session_trails(main, gu, main.object_manager.drag_paths())   # step 66 (MOVE_GAPS 5)
+	var r: Dictionary = core.check_move(int(s["handle"]), gu.unit_id,
+		{"mode": mode, "positions": PackedVector3Array(at), "trails": trails}, main.object_manager._strict_movement_enforced())
 	if not bool(r.get("ok", false)):
 		main._log_rule_event(BattleLog.Category.MOVEMENT, str(r.get("reason", "")))
 		main._show_toast(str(r.get("reason", "")))
 		return true
 	s["transcript"] = (s["transcript"] as Array).filter(func(e: Dictionary) -> bool: return str(e["t"]) != "placed") \
-		+ [{"t": "placed", "positions": at}]
+		+ [{"t": "placed", "positions": at, "trails": trails}]
 	for line in r.get("lines", []):
 		main._log_rule_event(BattleLog.Category.MOVEMENT, str(line["text"]), false, str(line["detail"]))
 	return false
+
+
+## Step 66 (MOVE_GAPS 5): per alive model of `gu` (get_alive_models() order) the path it walked this activation, as the
+## core's drop check takes it: this unit's ledger entries since its session opened (drop order, each join point once) and
+## then the drag in flight (`now`: model id -> path, ObjectManager.drag_paths(); a refused drop is never recorded). A model
+## that did not walk, or whose path does not run unbroken from where the core captured it to where it stands (the ledger
+## and the board disagree: a take-back, a move the ledger never saw), gets [] and is checked by its chord, as before.
+static func session_trails(main, gu: GameUnit, now: Dictionary) -> Array:
+	var s: Dictionary = _sessions[gu.unit_id]
+	var entries: Array = main.move_trails.ledger.entries if main.move_trails != null else []
+	var walked := {}   # model id -> its paths in drop order
+	for i in range(mini(int(s["ledger_mark"]), entries.size()), entries.size()):
+		if str(entries[i]["unit"]) == gu.unit_id:
+			(walked.get_or_add(int(entries[i]["model"]), []) as Array).append(entries[i]["points"])
+	var begun := {}   # model -> where the core captured it
+	for e in s["start_models"]:
+		begun[e["model"]] = Vector2((e["at"] as Vector3).x, (e["at"] as Vector3).z)
+	var out: Array = []
+	for m in gu.get_alive_models():
+		var id := int(m.node.get_meta("network_id", 0))
+		var paths: Array = walked.get(id, [])
+		if now.has(id):
+			paths.append(now[id])
+		out.append(_unbroken(paths, begun.get(m, Vector2.INF), Vector2(m.node.global_position.x, m.node.global_position.z)))
+	return out
+
+
+## `paths` joined end to start (each join point once) when the first starts at `start`, each starts where the one before
+## ended and the last ends at `end`, all within the core's 0.01" trail tolerance; else an empty path.
+static func _unbroken(paths: Array, start: Vector2, end: Vector2) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	var tol := 0.01 / ObjectManager.METERS_TO_INCHES
+	for p: PackedVector2Array in paths:
+		if p.size() < 2 or (out[out.size() - 1] if not out.is_empty() else start).distance_to(p[0]) > tol:
+			return PackedVector2Array()
+		out.append_array(p if out.is_empty() else p.slice(1))
+	return out if not out.is_empty() and out[out.size() - 1].distance_to(end) <= tol else PackedVector2Array()
 
 
 ## Step 31: the declared movement mode for the core, read from the selector and never from distance: Advance 1, Rush 2,
