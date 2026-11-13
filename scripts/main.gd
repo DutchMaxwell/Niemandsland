@@ -3459,6 +3459,15 @@ func core_door_refused(gu: GameUnit) -> bool:
 	core_drag_refused(gu)
 	return true
 
+
+## Step 63: the resolving doors behind a window repeat the window's gate. A refusal there means a window let the unit
+## through: a defect, so it is refused AND reported (push_error), never silent.
+func _core_door_defect(gu: GameUnit, door: String) -> bool:
+	if not core_door_refused(gu):
+		return false
+	push_error("%s: %s has no open activation - a window door let it through" % [door, gu.get_name()])
+	return true
+
 ## (Re)build the SoloController for the currently designated AI slot (setup wires TurnManager once).
 func _ensure_solo_controller() -> void:
 	# #196 belt-and-braces: in multiplayer the controller exists only for an EXPLICITLY
@@ -13452,6 +13461,8 @@ func solo_begin_targeting(unit: GameUnit, melee: bool) -> void:
 			battle_log.log_event(BattleLog.Category.GENERAL,
 				"%s has already activated this round — one activation per unit (%s)" % [unit.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))])
 		return
+	if core_door_refused(unit):   # one-core P3 step 63: before any spend of the window (Utility Buff, Precision Tag)
+		return
 	# No activation door here (D23): opening the window commits nothing — _run_human_attack begins it.
 	# Cast-window guard (maintainer decision "Vorfrage" 2026-07-23): spells go BEFORE the attack
 	# ("at any point before attacking" — GF v3.5.1 Caster(X)) and the attack COMPLETES the
@@ -13510,6 +13521,8 @@ func solo_begin_auto(unit: GameUnit, verb: int) -> void:
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.GENERAL,
 				"%s has already activated this round — one activation per unit (%s)" % [unit.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))])
+		return
+	if core_door_refused(unit):   # one-core P3 step 63
 		return
 	var cumbersome_why := cumbersome_refusal(unit, verb)
 	if cumbersome_why != "":
@@ -13601,6 +13614,8 @@ func solo_begin_auto(unit: GameUnit, verb: int) -> void:
 ## before-attacking beats; execute_intent's source == "player" branch already skips the spell plan and
 ## the overkill ledger for the same reason).
 func _run_player_intent(unit: GameUnit, verb: int, target: GameUnit, point: Variant = null) -> void:
+	if _core_door_defect(unit, "_run_player_intent"):
+		return
 	var ghosted: int = solo_controller._moving_models(unit).size()
 	await begin_activation(unit)
 	# Automodus 1.8 (OD 8): models begin_activation brings back (Reanimation) were not in the preview —
@@ -13734,6 +13749,8 @@ func solo_begin_cast(unit: GameUnit) -> void:
 			battle_log.log_event(BattleLog.Category.GENERAL,
 				"%s has already activated this round — one activation per unit (%s)" % [unit.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))])
 		return
+	if core_door_refused(unit):   # one-core P3 step 63
+		return
 	_ensure_solo_controller()
 	if _hotseat_verb_refused(unit):
 		return
@@ -13821,6 +13838,8 @@ func _solo_cast_sides(unit: GameUnit) -> Dictionary:
 
 ## Execute the picked human cast (async; fired from the targeting click).
 func _run_human_cast(unit: GameUnit, member: GameUnit, entry: Dictionary, picked_targets) -> void:
+	if _core_door_defect(unit, "_run_human_cast"):
+		return
 	# #227: `picked_targets` is the PLAYER's pick list (Array) — legacy single-unit calls pass one.
 	var picked: Array = picked_targets if picked_targets is Array else [picked_targets]
 	var spell_name := str(entry.get("name", "?"))
@@ -14917,6 +14936,8 @@ func _human_charge_starts(attacker: GameUnit) -> Dictionary:
 func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool, auto: bool = false, charge_from_in: float = -1.0) -> void:
 	if attacker == null or target == null or dice_roller_control == null:
 		return
+	if _core_door_defect(attacker, "_run_human_attack"):
+		return
 	await begin_activation(attacker)   # D23: the resolving attack is the committed action
 	_solo_log_unmodeled_rules(attacker)
 	_solo_log_unmodeled_rules(target)
@@ -15098,6 +15119,8 @@ func solo_begin_spot(unit: GameUnit) -> void:
 	if solo_controller == null or opr_army_manager == null:
 		return
 	unit = _solo_combat_unit(unit)   # NML-967: a joined hero's spot belongs to its host unit
+	if core_door_refused(unit):   # one-core P3 step 63
+		return
 	if int(unit.unit_properties.get("spotted_round", -1)) == opr_army_manager.current_round:
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.GENERAL,
@@ -15191,6 +15214,8 @@ func _solo_complete_human_attack(attacker: GameUnit) -> void:
 ## #226 — the declared split resolves both pre-committed volleys, then completes ONCE.
 func _run_human_attack_split(attacker: GameUnit, target_a: GameUnit, target_b: GameUnit, b_names: Array) -> void:
 	if attacker == null or target_a == null or target_b == null:
+		return
+	if _core_door_defect(attacker, "_run_human_attack_split"):
 		return
 	await begin_activation(attacker)   # D23: the pressed Fire! is the committed action
 	_solo_log_unmodeled_rules(attacker)
