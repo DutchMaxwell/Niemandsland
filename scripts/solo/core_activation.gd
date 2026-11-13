@@ -554,6 +554,11 @@ static func on_check(main, payload: Dictionary, from_peer: int) -> void:
 	if units.size() == ids.size() and (ours == str(payload.get("digest", "")) or rows_match(rows(units), payload.get("rows"))):
 		checks_ok += 1
 		return
+	if int(payload.get("retry", 0)) >= 1:   # step 52: the re-check after a push still differs - one line, no notice
+		var gu0: GameUnit = main.opr_army_manager.get_game_unit_by_id(str(payload.get("unit", "")))
+		main._log_rule_event(BattleLog.Category.GENERAL, "%s: the tables still disagree - nothing more was changed."
+			% (gu0.get_name() if gu0 != null else str(payload.get("unit", ""))))
+		return
 	main.network_manager.send_command("activation_mismatch", {"unit": payload.get("unit", ""), "units": ids,
 		"round": payload["round"], "theirs": payload.get("digest", ""), "ours": ours, "rows": rows(units),
 		"retry": int(payload.get("retry", 0))}, from_peer)
@@ -586,3 +591,80 @@ static func near(a: Variant, b: Variant) -> bool:
 	if a == null or b == null:
 		return a == null and b == null
 	return b is Array and (b as Array).size() == 2 and absi(int(a[0]) - int(b[0])) <= 1 and absi(int(a[1]) - int(b[1])) <= 1
+
+
+## Step 52 (O13 (b)): whether THIS table's state wins a mismatch on `unit_id`'s activation of round `round_no` - true iff
+## this table ran and announced it (only a unit's owner moves it or rolls for it; an out-of-turn activation is undone
+## before any check goes out).
+static func wins(_main, unit_id: String, round_no: int) -> bool:
+	return int(_announced.get(unit_id, -1)) == round_no
+
+
+## Step 52 (O10, O13 (b)): another table reported a mismatch on an activation THIS table ran, with its rows. Push exactly
+## what differs through today's paths - a wound frame per model whose wounds or life differ, one move and one rotation
+## batch of the living models more than 1 mm off, the Shaken marker when it differs, and the activation flag as a
+## correction (never the activation fact, which the room's turn gate would take for a new activation) - then the
+## O15 (5) line and ONE re-check (retry 1) to the reporter. A table that does not win does nothing: it waits for the push.
+static func on_mismatch(main, payload: Dictionary, from_peer: int) -> void:
+	var actor: GameUnit = main.opr_army_manager.get_game_unit_by_id(str(payload.get("unit", "")))
+	if not applies(main) or actor == null or int(payload.get("retry", 0)) != 0 \
+			or not wins(main, actor.unit_id, int(payload.get("round", -1))):
+		return
+	var nm = main.network_manager
+	var theirs := {}
+	for r in (payload.get("rows") if payload.get("rows") is Array else []):
+		if r is Array and (r as Array).size() == 4:
+			theirs[str(r[0])] = r
+	var units: Array = []
+	var moves: Array = []
+	var turns: Array = []
+	for id in payload.get("units", []):
+		var gu: GameUnit = main.opr_army_manager.get_game_unit_by_id(str(id))
+		if gu == null:
+			continue
+		units.append(gu)
+		var their: Array = theirs.get(gu.unit_id, [gu.unit_id, null, null, []])
+		for mr: Array in rows([gu])[0][3]:
+			var m: ModelInstance = gu.get_model(int(mr[0]))
+			var tr := _model_row(their[3], int(mr[0]))
+			if tr.is_empty() or mr.slice(1, 3) != tr.slice(1, 3):
+				nm.broadcast_model_wounds(m)
+			if mr[3] != null and not near(mr[3], null if tr.is_empty() else tr[3]) and m.node.has_meta("network_id"):
+				moves.append_array([int(m.node.get_meta("network_id")), m.node.global_position.x,
+					m.node.global_position.y, m.node.global_position.z])
+				turns.append_array([int(m.node.get_meta("network_id")), m.node.rotation.y])
+		if their[2] != gu.is_shaken:
+			nm.broadcast_unit_marker(gu, "ShakenMarker", gu.is_shaken)
+		if their[1] != gu.is_activated:
+			nm.send_command("correct_unit_activated", {"unit": gu.unit_id, "activated": gu.is_activated,
+				"activation_round": gu.activation_round}, from_peer)
+	if not moves.is_empty():
+		nm.broadcast_move_batch(moves)
+		nm.broadcast_rotation_batch(turns)
+	var slot: int = int(actor.unit_properties.get("player_id", 1))
+	var peer: int = main._solo_peer_for_slot(slot)
+	var who: String = main._peer_display_name(peer) if peer != 0 and nm.player_names.has(peer) else main._solo_player_label(slot)
+	main._log_rule_event(BattleLog.Category.GENERAL,
+		"%s: the tables disagreed after its activation - the state of %s was applied." % [actor.get_name(), who])
+	nm.send_command("activation_check", {"unit": actor.unit_id, "units": units.map(func(gu: GameUnit) -> String:
+		return gu.unit_id), "round": int(main.opr_army_manager.current_round), "digest": digest(units),
+		"rows": rows(units), "retry": 1}, from_peer)
+
+
+## Step 52: the row of model `index` in a reported list of model rows, or [] when the reporter has none.
+static func _model_row(models: Variant, index: int) -> Array:
+	for x in (models if models is Array else []):
+		if x is Array and (x as Array).size() == 4 and int(x[0]) == index:
+			return x
+	return []
+
+
+## Step 52 (O10): the winner's activation flag of one unit, applied as a CORRECTION - set directly, the turn token
+## untouched, no activation line, nothing re-broadcast; never counted as a new activation.
+static func on_correct_activated(main, payload: Dictionary) -> void:
+	var gu: GameUnit = main.opr_army_manager.get_game_unit_by_id(str(payload.get("unit", "")))
+	if not applies(main) or gu == null:
+		return
+	gu.is_activated = bool(payload.get("activated", gu.is_activated))
+	gu.activation_round = int(payload.get("activation_round", gu.activation_round))
+	main.radial_menu_controller._update_activated_markers(gu)
