@@ -3470,6 +3470,16 @@ func core_door_refused(gu: GameUnit) -> bool:
 	return true
 
 
+## One-core P3 step 50 (N6 b): the tail of the activation door (radial `_toggle_activation`, after the activation fact
+## went out, so both ride one ordered stream): an End of a core unit in a room announces its digest check, with the
+## target its shot noted (step 38). The note is cleared on every pass. Flag off, hotseat, Manual room: nothing is sent.
+func core_activation_ended(gu: GameUnit) -> void:
+	var target: GameUnit = CoreActivation.last_target
+	CoreActivation.last_target = null
+	if gu != null and gu.is_activated and CoreActivation.applies(self):
+		CoreActivation.announce(self, gu, target)
+
+
 ## Step 63: the resolving doors behind a window repeat the window's gate. A refusal there means a window let the unit
 ## through: a defect, so it is refused AND reported (push_error), never silent.
 func _core_door_defect(gu: GameUnit, door: String) -> bool:

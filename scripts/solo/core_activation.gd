@@ -238,6 +238,7 @@ static func open_session(main, gu: GameUnit) -> bool:
 	if gu.unit_properties.has("moved_round"):
 		s["moved_round_before"] = gu.unit_properties["moved_round"]
 	_sessions[gu.unit_id] = s
+	last_target = null   # step 50: a new activation never inherits the target of a cancelled one
 	return true
 
 
@@ -286,6 +287,8 @@ static func close_session(main, unit_id: String) -> void:
 static func reset_all(main) -> void:
 	for id in _sessions.keys():
 		close_session(main, id)
+	_announced.clear()
+	last_target = null
 	if main != null and is_instance_valid(main.solo_controller):
 		main.solo_controller._core_header_done = false
 
@@ -300,14 +303,14 @@ static func touched_units(main, actor: GameUnit, target: GameUnit = null) -> Arr
 	return out
 
 
-## Step 49 (N6 b): one hash of an activation's RESULT on `units`, equal on both tables when they agree. Per unit (sorted
-## by unit_id): id, Activated, Shaken, and per model (sorted by model_index): wounds, alive and - for a LIVING model only -
+## Step 49 (N6 b): the RESULT of an activation on `units`, equal on both tables when they agree. Per unit (sorted by
+## unit_id): id, Activated, Shaken, and per model (sorted by model_index): wounds, alive and - for a LIVING model only -
 ## its X and Z in whole millimetres (positions travel as exact floats). Not in it: the height (each table probes its own
 ## surface), the facing (it travels apart) and a dead model's parking slot (it travels with the wound frame).
-static func digest(units: Array) -> String:
+static func rows(units: Array) -> Array:
 	var by_id := units.duplicate()
 	by_id.sort_custom(func(a: GameUnit, b: GameUnit) -> bool: return a.unit_id < b.unit_id)
-	var rows: Array = []
+	var out: Array = []
 	for gu: GameUnit in by_id:
 		var models: Array = gu.models.duplicate()
 		models.sort_custom(func(a: ModelInstance, b: ModelInstance) -> bool: return a.model_index < b.model_index)
@@ -317,5 +320,36 @@ static func digest(units: Array) -> String:
 			if m.is_alive and m.node != null and is_instance_valid(m.node):
 				at = [roundi(m.node.global_position.x * 1000.0), roundi(m.node.global_position.z * 1000.0)]
 			ms.append([m.model_index, m.wounds_current, m.is_alive, at])
-		rows.append([gu.unit_id, gu.is_activated, gu.is_shaken, ms])
-	return JSON.stringify(rows).sha256_text()
+		out.append([gu.unit_id, gu.is_activated, gu.is_shaken, ms])
+	return out
+
+
+## Step 49 (N6 b): one hash of `rows(units)`.
+static func digest(units: Array) -> String:
+	return JSON.stringify(rows(units)).sha256_text()
+
+
+## Step 50 (N6 b): the target of the shot of the activation that is ending - set by `human_shoot` (step 38), read and
+## cleared by main's `core_activation_ended`, cleared at every Start and by `reset_all` too, so a cancelled or abandoned
+## activation never hands its target on. Null = an End without an action (the actor side only).
+static var last_target: GameUnit = null
+## Step 50: unit_id -> the round in which THIS table ran and announced that unit's activation (step 52 reads it).
+static var _announced: Dictionary = {}
+
+
+## Step 50 (N6 b): after an activation of a core unit, or of a plain AI unit this table runs (step 42), in a room: one
+## `activation_check` to every other table with the touched units, their digest and their rows (the rows let the
+## receiver tell a sub-millimetre rounding split from a real difference, step 51). Nothing with the flag off, outside a
+## room (solo, hotseat), in a Manual room, or for any other unit.
+static func announce(main, actor: GameUnit, target: GameUnit = null) -> void:
+	var nm = main.network_manager
+	if actor == null or not applies(main) or nm == null or not nm.is_multiplayer_active():
+		return
+	if not is_core_unit(main, actor) and not (main._solo_is_ai_unit(actor) and is_plain(actor)):
+		return
+	var round_no: int = main.opr_army_manager.current_round
+	var touched := touched_units(main, actor, target)
+	var ids: Array = touched.map(func(gu: GameUnit) -> String: return gu.unit_id)
+	_announced[actor.unit_id] = round_no
+	nm.send_command("activation_check", {"unit": actor.unit_id, "units": ids, "round": round_no, "digest": digest(touched),
+		"rows": rows(touched), "retry": 0}, 0)
