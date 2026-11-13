@@ -232,3 +232,74 @@ func test_move_allowance_reads_the_headers_rules_epoch() -> void:
 	var b: Dictionary = old.move_allowance(_headed_handle(old, 6), "a")
 	assert_float(b["advance"]).is_equal(6.0)
 	assert_array(b["widened_by"]).is_empty()
+
+
+## ---- step 18: `check_move` and `check_begin` ----
+
+## A drop of "a" (models at x = 0", 1", 2"): every model goes `dx` inches east; `trails` as given (per model).
+func _drop(mode: int, dx: float, trails: Array = []) -> Dictionary:
+	var placed := PackedVector3Array()
+	for i in 3:
+		placed.append(Vector3((float(i) + dx) * IN2M, 0, 0))
+	return {"mode": mode, "positions": placed, "trails": trails}
+
+
+func test_an_enforced_drop_past_the_band_is_refused_with_the_sentence() -> void:
+	var r: Dictionary = _core.check_move(_h, "a", _drop(1, 13.0), true)
+	assert_bool(r["ok"]).is_false()
+	assert_str(str(r.get("reason", ""))).is_equal("a: a model moved 13.0\" - the Advance allowance is 6.0\".")
+	var inside: Dictionary = _core.check_move(_h, "a", _drop(1, 5.0), true)
+	assert_bool(inside["ok"]).is_true()
+	assert_array(inside.get("lines", [1])).is_empty()
+	# The mode number picks the band: 11" is a legal Rush (12") and an illegal Advance (6").
+	assert_bool(_core.check_move(_h, "a", _drop(2, 11.0), true)["ok"]).is_true()
+	assert_bool(_core.check_move(_h, "a", _drop(1, 11.0), true)["ok"]).is_false()
+	assert_str(str(_core.check_move(_h, "a", _drop(3, 13.0), true).get("reason", ""))).contains("the Charge allowance is 12.0")
+
+
+func test_an_overrun_with_enforce_off_is_accepted_with_one_line() -> void:
+	var r: Dictionary = _core.check_move(_h, "a", _drop(1, 13.0), false)
+	assert_bool(r["ok"]).is_true()
+	var lines: Array = r.get("lines", [])
+	assert_int(lines.size()).is_equal(1)
+	assert_str(lines[0]["rule"]).is_equal("move_overrun")
+	assert_str(lines[0]["text"]).is_equal("a: a model moved 13.0\" - the Advance allowance is 6.0\".")
+
+
+## Model 0 walks 5" east, then 2" along z: 7" walked, chord 5.39" - inside the 6" band by its chord, outside by its walk.
+func test_the_walked_path_of_a_trail_is_measured_not_its_chord() -> void:
+	var placed := PackedVector3Array([Vector3(5.0 * IN2M, 0, 2.0 * IN2M), Vector3(1.0 * IN2M, 0, 0), Vector3(2.0 * IN2M, 0, 0)])
+	var trail := PackedVector2Array([Vector2(0, 0), Vector2(5.0 * IN2M, 0), Vector2(5.0 * IN2M, 2.0 * IN2M)])
+	var with_trail := {"mode": 1, "positions": placed, "trails": [trail, PackedVector2Array(), PackedVector2Array()]}
+	var r: Dictionary = _core.check_move(_h, "a", with_trail, true)
+	assert_bool(r["ok"]).is_false()
+	assert_str(str(r.get("reason", ""))).is_equal("a: a model moved 7.0\" - the Advance allowance is 6.0\".")
+	assert_bool(_core.check_move(_h, "a", {"mode": 1, "positions": placed}, true)["ok"]).is_true()
+	# A trail that does not end at the placed model is refused as such.
+	var off := PackedVector2Array([Vector2(0, 0), Vector2(5.0 * IN2M, 0), Vector2(5.0 * IN2M, 3.0 * IN2M)])
+	var bad: Dictionary = _core.check_move(_h, "a", {"mode": 1, "positions": placed, "trails": [off]}, true)
+	assert_str(str(bad.get("reason", ""))).is_equal("trail does not match the placed model")
+
+
+func test_a_drop_that_is_not_understood_is_refused_with_a_reason() -> void:
+	assert_str(str(_core.check_move(9999, "a", _drop(1, 1.0), true).get("reason", ""))).is_equal("unknown handle")
+	assert_str(str(_core.check_move(_h, "zzz", _drop(1, 1.0), true).get("reason", ""))).is_equal("unknown unit")
+	assert_str(str(_core.check_move(_h, "a", {"mode": 1, "positions": [1, 2, 3]}, true).get("reason", ""))).is_equal("positions are not all Vector3")
+	assert_str(str(_core.check_move(_h, "a", {"mode": 1, "positions": _drop(1, 1.0)["positions"], "trails": [[1]]}, true).get("reason", ""))).is_equal("trails are not all Vector2")
+	assert_str(str(_core.check_move(_h, "a", _drop(0, 1.0), true).get("reason", ""))).is_equal("movement mode not declared")
+	assert_str(str(_core.check_move(_h, "a", {"mode": 1, "positions": PackedVector3Array([Vector3.ZERO])}, true).get("reason", ""))).is_equal("placement does not match the unit's models")
+
+
+## `check_move` reads the header's rules epoch: 7" is a legal Advance for the Speed Feat bearer "a" at epoch 76, not at epoch 6.
+func test_check_move_reads_the_headers_rules_epoch() -> void:
+	var core: Object = ClassDB.instantiate("NmlCore")
+	assert_bool(core.check_move(_headed_handle(core, 76), "a", _drop(1, 7.0), true)["ok"]).override_failure_message("epoch 76: Advance 8\"").is_true()
+	var old: Object = ClassDB.instantiate("NmlCore")
+	assert_str(old.check_move(_headed_handle(old, 6), "a", _drop(1, 7.0), true).get("reason", "")).contains("the Advance allowance is 6.0")
+
+
+func test_a_unit_may_not_begin_while_another_is_open() -> void:
+	assert_bool(_core.check_begin("")["ok"]).is_true()
+	var r: Dictionary = _core.check_begin("Blades")
+	assert_bool(r["ok"]).is_false()
+	assert_str(str(r.get("reason", ""))).is_equal("Finish Blades's activation first.")

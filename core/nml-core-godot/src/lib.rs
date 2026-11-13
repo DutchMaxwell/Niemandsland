@@ -393,6 +393,27 @@ impl NmlCore {
         out
     }
 
+    /// One-core P3: the move check of one drop of `unit` on handle `h`. `drop` = `{"mode": int (1 Advance, 2 Rush, 3 Charge),
+    /// "positions": PackedVector3Array, "trails": Array of PackedVector2Array (per model, world XZ metres; absent = none)}`.
+    /// Returns `{"ok": true, "lines": [..]}` or `{"ok": false, "reason"}`; an overrun is refused when `enforce`, else accepted
+    /// with one line. A dictionary, not more parameters: later steps add keys without changing the signature.
+    #[func]
+    fn check_move(&mut self, h: i64, unit: GString, drop: VarDictionary, enforce: bool) -> VarDictionary {
+        let Some(i) = self.index(h) else { return actcall::not_ok("unknown handle") };
+        let seams = self.seams_at_header_epoch();
+        let absent = Terrain::absent();
+        let terrain = self.header.as_ref().map(|hd| &hd.terrain).unwrap_or(&absent);
+        let slot = self.slab[i].as_ref().unwrap();
+        actcall::check_of(&slot.statics, &slot.cap.state, &unit.to_string(), terrain, seams, &drop, enforce)
+    }
+
+    /// One-core P3 (O5): may a unit begin its activation? `open_name` = the unit whose activation is open ("" = nobody).
+    /// `{"ok": true}` or `{"ok": false, "reason"}`. Stateless: no handle, so a drag of a not-activated unit can ask it.
+    #[func]
+    fn check_begin(&self, open_name: GString) -> VarDictionary {
+        actcall::begin_of(&open_name.to_string())
+    }
+
     /// `AiMissionEval.score(state, player[, reply_threat])` ai_mission_eval.gd:344.
     /// `rich` = the leaf that prices the reply threat first (ai_planner.gd:508-510).
     #[func]
