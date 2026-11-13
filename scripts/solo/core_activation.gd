@@ -343,16 +343,21 @@ static func open_session(main, gu: GameUnit) -> bool:
 		starts = main.move_trails.ledger.round_starts_for_unit(gu.unit_id, round_no)
 	var start_pos: Array[Vector3] = []
 	var start_rot: Array[float] = []
-	for m in gu.get_alive_models():
+	var start_own: Array = []   # step 32: the models start_pos / start_rot belong to, in the same order
+	for m in gu.get_alive_models_with_attached():   # a joined hero moves with its host (step 30), so it starts with it
 		if m.node != null and is_instance_valid(m.node):
 			var p: Vector3 = m.node.global_position
 			var was: Variant = starts.get(int(m.node.get_meta("network_id", 0)))
 			start_pos.append(Vector3((was as Vector2).x, p.y, (was as Vector2).y) if was is Vector2 else p)
 			start_rot.append(m.node.rotation.y)
+			start_own.append(m)
 	var s := {"handle": h, "transcript": [{"t": "begin"}], "start_models": _start_models(main), "start_pos": start_pos,
-		"start_rot": start_rot, "dice": false, "journal": _journal_records(main).merged({"props": _journal_props(main)})}
+		"start_rot": start_rot, "start_own": start_own, "dice": false,
+		"journal": _journal_records(main).merged({"props": _journal_props(main)}), "moved_before": {}}
 	if gu.unit_properties.has("moved_round"):
 		s["moved_round_before"] = gu.unit_properties["moved_round"]
+	for u in [gu] + gu.get_attached_heroes():   # step 32: each moved_round before the Start (null = none), for the reset
+		s["moved_before"][u.unit_id] = u.unit_properties.get("moved_round")
 	_sessions[gu.unit_id] = s
 	last_target = null   # step 50: a new activation never inherits the target of a cancelled one
 	if on_move_path(main, gu):   # step 31 (O1/O2): every activation of a move-path unit starts on Advance
@@ -414,6 +419,61 @@ static func declared_mode(main) -> int:
 			return 3
 	push_error("declared_mode: the movement selector is %d - not Advance, Rush or Charge" % int(main.object_manager._movement_cap))
 	return 0
+
+
+## One-core P3 step 32 (the snap-back answer): `gu` back where its open activation started. Every model that is still
+## alive goes to the session's start position and facing through the existing take-back, built once per drop of this
+## round in the unit's ledger (drags and step 65a's formation drops alike; the models ride the first, so each moves and
+## turns once on the wire) and run, never pushed: it broadcasts the move and the rotation, erases that drop's chalk and
+## ledger entries and sends their undo. Then moved_round is what it was before the Start, no Ctrl+Z can take back a reset
+## move, the transcript loses its placed inputs, and a non-empty `line` is ONE rule line (log + broadcast). The caller
+## never runs it during a drag (O11 a); a unit without a session is a no-op.
+static func reset_to_start(main, gu: GameUnit, line: String) -> void:
+	if gu == null or not _sessions.has(gu.unit_id):
+		return
+	var s: Dictionary = _sessions[gu.unit_id]
+	var nodes: Array[Node3D] = []
+	var at: Array[Vector3] = []
+	var rot: Array[float] = []
+	for row in start_rows(gu):
+		nodes.append(row[0])
+		at.append(row[1])
+		rot.append(row[2])
+	var round_no: int = main.opr_army_manager.current_round
+	var units: Array = [gu] + gu.get_attached_heroes()   # a joined hero's models record their drops under its own key
+	var drops: Array = []   # [unit, drop id] of this round
+	for u in units:
+		for e in main.move_trails.ledger.entries_for_unit(u.unit_id):
+			var d := [u, int(e.get("drop_id", -1))]
+			if int(e.get("round", -1)) == round_no and not drops.has(d):
+				drops.append(d)
+	if drops.is_empty():
+		drops.append([gu, -1])   # nothing in the ledger: the models still go back (no drop has id -1: ids are msec stamps)
+	var peer: int = main.network_manager.get_my_peer_id() if main.network_manager != null else 0
+	var none: Array[Node3D] = []
+	for d in drops:
+		var u: GameUnit = d[0]
+		var owner := int(u.unit_properties.get("player_id", 0))
+		UndoManager.MoveTakebackAction.new(nodes if d == drops[0] else none, at, rot, owner, u.unit_id, u.get_name(),
+			int(d[1]), main.move_trails, main.network_manager, null, peer, null).undo()
+	for u in units:   # the stamp the other table reads (Entrenched, Artillery) goes back through the sync seam
+		main._sync_unit_property(u, "moved_round", (s["moved_before"] as Dictionary).get(u.unit_id))
+		main.undo_manager.expire_move_takebacks(u.unit_id)
+	s["transcript"] = (s["transcript"] as Array).filter(func(t: Dictionary) -> bool: return str(t.get("t", "")) != "placed")
+	if not line.is_empty():
+		main._log_rule_event(BattleLog.Category.MOVEMENT, line)
+
+
+## Step 32: the living models of `gu`'s activation (a joined hero's too) with where it started them,
+## [[node, position, facing], ...]; `start_own` holds those models in the order of start_pos, set at the Start.
+static func start_rows(gu: GameUnit) -> Array:
+	var s: Dictionary = _sessions[gu.unit_id]
+	var out: Array = []
+	for i in (s["start_own"] as Array).size():
+		var m: ModelInstance = s["start_own"][i]
+		if m.is_alive and m.node != null and is_instance_valid(m.node):
+			out.append([m.node, s["start_pos"][i], float(s["start_rot"][i])])
+	return out
 
 
 ## Closes every open session, and the next capture sends the game header again (a loaded game's units are not the
