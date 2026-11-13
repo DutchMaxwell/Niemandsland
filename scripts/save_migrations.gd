@@ -83,6 +83,11 @@ static func payload_error(state: Dictionary) -> String:
 	for key in ["objects", "game_units"]:
 		if not state[key] is Array:
 			return _damaged("its \"%s\" section is not a list" % key)
+	# The loader reads this with int(): a present counter that is not a number aborts the restore AFTER the
+	# table was rebuilt, while load_game still returns OK.
+	var counter: Variant = state.get("object_counter", 0)
+	if not (counter is float or counter is int):
+		return _damaged("its object counter is not a number")
 	for obj: Variant in state["objects"]:
 		if obj is Dictionary and not _has_vec3_pose(obj):
 			return _damaged("an object has a broken position or rotation")
@@ -106,17 +111,18 @@ static func _damaged(why: String) -> String:
 	return "This save file is damaged (%s), so it was not loaded. The table was left as it was." % why
 
 
-## A position / rotation the loader can read: absent, or a list whose first three entries are numbers (a
-## shorter list reads as the origin).
+## A position / rotation the loader can read: absent, or a list whose first three entries are numbers. A
+## present list with fewer than three entries is damage too (the loader would read it as the origin).
 static func _has_vec3_pose(entry: Dictionary) -> bool:
 	for key in ["position", "rotation"]:
-		var v: Variant = entry.get(key, [])
-		if not v is Array:
+		if not entry.has(key):
+			continue
+		var v: Variant = entry[key]
+		if not (v is Array and (v as Array).size() >= 3):
 			return false
-		if (v as Array).size() >= 3:
-			for i in 3:
-				if not (v[i] is float or v[i] is int):
-					return false
+		for i in 3:
+			if not (v[i] is float or v[i] is int):
+				return false
 	return true
 
 

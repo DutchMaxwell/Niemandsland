@@ -92,14 +92,16 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 - **A damaged save file no longer wipes the table.** Loading a file whose sections have the wrong
   shape (for example a broken table, unit list or model position) is refused before anything is
   cleared, with a message that the file is damaged. Before, the table was cleared first, also for
-  every guest when the host loaded, and the load then failed halfway.
+  every guest when the host loaded, and the load then failed halfway. A file whose object counter is
+  not a number, or whose position or rotation list has fewer than three entries, is refused the same
+  way. (#2712, #2721)
 - **An autosave no longer catches a half-loaded table.** While a save file loads, the periodic
   autosave waits until every piece is back on the table. Before, an autosave that fell during a
-  long load could write the half-rebuilt table into one of the recovery slots.
+  long load could write the half-rebuilt table into one of the recovery slots. (#2716)
 - **A save that cannot be written completely keeps the previous file.** A save is now written
   next to its file, checked, and only then put in place. If the disk is full or the write fails,
   the save reports the failure, there is no "saved" message, and the previous save stays as it was.
-  Before, a failed write could leave a cut-off file and still report success.
+  Before, a failed write could leave a cut-off file and still report success. (#2718)
 
 ### Internal
 - CI and test groundwork for running the tests against the Rust core: a new job "All required
