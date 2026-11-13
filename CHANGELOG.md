@@ -96,6 +96,10 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 - **An autosave no longer catches a half-loaded table.** While a save file loads, the periodic
   autosave waits until every piece is back on the table. Before, an autosave that fell during a
   long load could write the half-rebuilt table into one of the recovery slots.
+- **A save that cannot be written completely keeps the previous file.** A save is now written
+  next to its file, checked, and only then put in place. If the disk is full or the write fails,
+  the save reports the failure, there is no "saved" message, and the previous save stays as it was.
+  Before, a failed write could leave a cut-off file and still report success.
 
 ### Internal
 - CI and test groundwork for running the tests against the Rust core: a new job "All required
