@@ -64,6 +64,7 @@ fn landings_of(state: &State, landings: &[Landing]) -> VarArray {
         let mut d = VarDictionary::new();
         d.set("unit", state.roster.keys[l.unit].as_str());
         d.set("models", &models);
+        d.set("loss_line", l.loss_line);
         out.push(&d.to_variant());
     }
     out

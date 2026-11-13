@@ -2,7 +2,7 @@ use super::*;
 use crate::landing::{LandedModel, Landing};
 
     fn landing(unit: usize) -> Landing {
-        Landing { unit, models: vec![LandedModel { at: [unit as f64, 0.0, 0.0], wounds_left: 1, dead: false }] }
+        Landing { unit, models: vec![LandedModel { at: [unit as f64, 0.0, 0.0], wounds_left: 1, dead: false }], loss_line: false }
     }
 
     /// A seeded tray (training, self-play) keeps no landing and never builds one.

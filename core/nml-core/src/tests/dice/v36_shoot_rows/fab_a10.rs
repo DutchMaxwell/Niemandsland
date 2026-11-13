@@ -39,7 +39,7 @@ mod fab_a10_slayer_moved_every_distance {
         let mut tray = Tray::seeded(7);
         resolve_volley_leg(
             &one, &tough_target(), "Target", dist_in, dist_in, true, true, true, true, true, false,
-            &|_| false, &mut tray,
+            &|_| false, &|_, _| None, &mut tray,
         )
     }
 

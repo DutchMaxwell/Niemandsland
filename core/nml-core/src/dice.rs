@@ -950,7 +950,7 @@ pub fn resolve_volley_with_tray(
     shred_boost_dice: bool,
     tray: &mut Tray,
 ) -> ShootResult {
-    resolve_volley_leg(shooters, def, def_owner, dist_in, mod_dist_in, cond_ap_dice, surge_gates, shred_alias_dice, shred_boost_dice, false, false, &|_| false, tray)
+    resolve_volley_leg(shooters, def, def_owner, dist_in, mod_dist_in, cond_ap_dice, surge_gates, shred_alias_dice, shred_boost_dice, false, false, &|_| false, &|_, _| None, tray)
 }
 
 /// The table's resolve-first rank of a shot (`_solo_shot_priority`): Takedown, then Deadly, then the rest.
@@ -979,6 +979,9 @@ pub fn resolve_volley_leg(
     deadly_per_model: bool,
     takedown_exact: bool,
     takedown_cover: &dyn Fn(&[i64]) -> bool,
+    // One-core P3 step 27: (shooter index, profile index) -> (models with range and sight, models alive), the hit
+    // line's "(n/m models sighted)" part; asked only when that line is said (a tray with a feed).
+    sighted: &dyn Fn(usize, usize) -> Option<(i64, i64)>,
     tray: &mut Tray,
 ) -> ShootResult {
     let mut out = ShootResult::default();
@@ -1522,10 +1525,15 @@ pub fn resolve_volley_leg(
             }
             hits = boosted;
         }
-        // One-core P3 step 24: the table's line after `_solo_hits` (main.gd:5056-5057), a miss included.
-        tray.say(|| LogLine { rule: "shoot", category: Category::Combat, side: att.side,
-            text: format!("{} fires {} at {def_owner} — {hits} hit{}", sh.owner, p.name, if hits == 1 { "" } else { "s" }),
-            detail: None });
+        // One-core P3 step 24: the table's line after `_solo_hits` (main.gd:5056-5057), a miss included; step 27: with
+        // the table's sight part when not every model of the member sees the target (main.gd:5129).
+        tray.say(|| {
+            let note = shooters.iter().position(|s| std::ptr::eq(s, sh)).and_then(|i| sighted(i, pi))
+                .filter(|&(n, m)| n < m).map_or(String::new(), |(n, m)| format!(" ({n}/{m} models sighted)"));
+            LogLine { rule: "shoot", category: Category::Combat, side: att.side,
+                text: format!("{} fires {} at {def_owner}{note} — {hits} hit{}", sh.owner, p.name, if hits == 1 { "" } else { "s" }),
+                detail: None }
+        });
         if hits <= 0 {
             continue; // :3210 — no hits, no save batch
         }
