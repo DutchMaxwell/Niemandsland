@@ -8,8 +8,20 @@ use serde_json::{json, Value};
 use crate::logline::{Category, LogLine};
 use crate::mission::{playout_seize, vp_of, vp_score_end, vp_score_round};
 use crate::rollout::cross_round;
+use crate::score::control_gap_in;
 use crate::state::State;
 use crate::unit::UnitStatic;
+use crate::{CONTROL_EPS, OBJECTIVE_CONTROL_IN};
+
+/// What the table words a round end with that the State does not hold: each side's label (`_solo_player_label`), the
+/// rules cite of the seize-lock reason (`OPRApiClient.rules_cite`), and per roster key the rule that placed a unit this
+/// round ("Spawn" / "Split", the unit's `origin`); a unit that arrived this round and is not listed came from Ambush.
+#[derive(Default)]
+pub struct RoundWords {
+    pub labels: Vec<(i64, String)>,
+    pub cite: String,
+    pub placed_by: Vec<(String, String)>,
+}
 
 /// `_solo_player_label` (main.gd): the label the table gave `pid`, else "P<n>".
 fn label_of(labels: &[(i64, String)], pid: i64) -> String {
@@ -20,29 +32,55 @@ fn general(rule: &'static str, text: String) -> LogLine {
     LogLine { rule, category: Category::General, side: 0, text, detail: None }
 }
 
+/// `_solo_auto_seize`'s `locked_near` for objective `i`: each unit that arrived this round, is neither Shaken nor an
+/// Aircraft and has a base edge within 3" of it says why it cannot seize or contest, joined by "; " ("" = none).
+fn lock_reasons(state: &State, i: usize, words: &RoundWords) -> String {
+    let op = state.objectives[i].pos;
+    let mut out: Vec<String> = Vec::new();
+    for k in 0..state.units() {
+        if state.alive[k] <= 0 || state.shaken[k] || state.aircraft[k] || state.ambush_arrived_round[k] != state.round
+            || control_gap_in(state, k, op) > OBJECTIVE_CONTROL_IN + CONTROL_EPS
+        {
+            continue;
+        }
+        let (name, cite) = (&state.profile(k).name, &words.cite);
+        out.push(match words.placed_by.iter().find(|(key, _)| key == state.key(k)) {
+            Some((_, rule)) => format!("{name} was placed by {rule} this round and cannot seize or contest ({cite})"),
+            None => format!("{name} arrived from Ambush this round and cannot seize or contest ({cite})"),
+        });
+    }
+    out.join("; ")
+}
+
 /// The table's round end, `_solo_auto_seize` + `_solo_book_mission_vp` (main.gd), for a plain mission: the seize of
 /// `imagined_round_end` from the final positions (its carry and destroy steps need markers), one line per objective
-/// whose owner changed, then the round's VP when the mission scores per round - with the game-end bonus after the
+/// whose owner changed (with the lock reason of a unit near it that arrived this round), one line per other objective
+/// with such a unit, then the round's VP when the mission scores per round - with the game-end bonus after the
 /// last round, as `_solo_book_mission_vp(final)` books it. Writes the owners into `state.objectives` and the ledger
 /// into `state.vp` / `state.vp_memo`. `Err` = refused, nothing written: a mission with markers is not ported (O7).
-pub fn end_round(state: &mut State, labels: &[(i64, String)]) -> Result<Vec<LogLine>, &'static str> {
+pub fn end_round(state: &mut State, words: &RoundWords) -> Result<Vec<LogLine>, &'static str> {
     if !state.markers_meta.is_empty() {
         return Err("unported: mission markers");
     }
     let before: Vec<i64> = state.objectives.iter().map(|o| o.owner).collect();
     let mut owners = before.clone();
     playout_seize(state, &mut owners);
+    let near: Vec<String> = (0..owners.len()).map(|i| lock_reasons(state, i, words)).collect();
     let mut lines = Vec::new();
     for (i, (&was, &now)) in before.iter().zip(&owners).enumerate() {
         if now == was {
             continue;
         }
+        let why = if near[i].is_empty() { String::new() } else { format!(" — {}", near[i]) };
         let text = if now == 0 {
-            format!("Objective {} contested — goes neutral", i + 1)
+            format!("Objective {} contested — goes neutral{why}", i + 1)
         } else {
-            format!("Objective {} seized by {}", i + 1, label_of(labels, now))
+            format!("Objective {} seized by {}{why}", i + 1, label_of(&words.labels, now))
         };
         lines.push(general("objective_seize", text));
+    }
+    for (i, why) in near.iter().enumerate().filter(|(i, why)| !why.is_empty() && before[*i] == owners[*i]) {
+        lines.push(general("objective_seize", format!("Objective {}: {why}", i + 1)));
     }
     if &*state.scoring == "round_vp" {
         let mut vp = vp_of(state.vp.as_deref());
@@ -76,7 +114,7 @@ pub fn begin_round(statics: &[UnitStatic], state: &mut State, finished_first: Op
 
 #[cfg(test)]
 mod tests {
-    use super::{begin_round, end_round};
+    use super::{begin_round, end_round, RoundWords};
     use crate::state::{Marker, Objective, State};
     use crate::unit::UnitStatic;
     use crate::IN2M;
@@ -95,8 +133,8 @@ mod tests {
     }
 
     fn run(st: &mut State) -> (Vec<i64>, Vec<String>) {
-        let labels = [(1, "P1 (Alpha)".to_string()), (2, "P2 (Beta)".to_string())];
-        let lines = end_round(st, &labels).expect("a plain mission is ported");
+        let words = RoundWords { labels: vec![(1, "P1 (Alpha)".into()), (2, "P2 (Beta)".into())], ..RoundWords::default() };
+        let lines = end_round(st, &words).expect("a plain mission is ported");
         (st.objectives.iter().map(|o| o.owner).collect(), lines.into_iter().map(|l| l.text).collect())
     }
 
@@ -117,8 +155,28 @@ mod tests {
         assert_eq!(text, ["Objective 1 seized by P1 (Alpha)", "Objective 2 contested — goes neutral", "Mission VP after round 4: P1 4 — P2 3"]);
         let mut st = board(2, 30.0, 0);
         st.markers_meta.push(serde_json::from_str::<Marker>("{}").unwrap());
-        assert_eq!(end_round(&mut st, &[]), Err("unported: mission markers"));
+        assert_eq!(end_round(&mut st, &RoundWords::default()), Err("unported: mission markers"));
         assert_eq!((st.objectives[0].owner, st.vp.as_deref()), (0, Some(&json!([2, 3]))));
+    }
+
+    /// A unit that arrived this round cannot seize or contest, and the lines say why: ah (placed by Spawn) stands near
+    /// both objectives, bh (from Ambush) near objective 2. Objective 1 goes to a, its line carries ah's reason;
+    /// objective 2 keeps its owner (nobody else near) and gets a line of its own naming both, in capture order. A Shaken
+    /// arrival is not named, as on the table.
+    #[test]
+    fn a_unit_that_arrived_this_round_is_named_in_the_seize_lines() {
+        let words = RoundWords { labels: vec![(1, "P1 (Alpha)".into())], cite: "GF 3.5".into(), placed_by: vec![("ah".into(), "Spawn".into())] };
+        let spawn = "u was placed by Spawn this round and cannot seize or contest (GF 3.5)";
+        let ambush = "; u arrived from Ambush this round and cannot seize or contest (GF 3.5)";
+        for (bh_shaken, tail) in [(false, ambush), (true, "")] {
+            let mut st = board(2, 5.5, 2);
+            (st.scoring, st.objectives[0].pos, st.ambush_arrived_round) = (Rc::from(""), [IN2M, 0.0, 0.0], vec![-1, 2, -1, 2]);
+            st.shaken[3] = bh_shaken;
+            let lines = end_round(&mut st, &words).expect("a plain mission is ported");
+            assert_eq!(st.objectives.iter().map(|o| o.owner).collect::<Vec<_>>(), [1, 2]);
+            let want = [format!("Objective 1 seized by P1 (Alpha) — {spawn}"), format!("Objective 2: {spawn}{tail}")];
+            assert_eq!(lines.into_iter().map(|l| l.text).collect::<Vec<_>>(), want);
+        }
     }
 
     /// Round 2 ends with every unit activated; side 2 finished first and opens round 3, every unit is fresh. With side
