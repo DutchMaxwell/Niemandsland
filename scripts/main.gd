@@ -1816,7 +1816,8 @@ func _solo_ai_delayed_action_pass(advance_replies: bool = true) -> bool:
 	var passer: GameUnit = choice.get("unit") as GameUnit
 	if passer == null:
 		return false
-	SoloController.delayed_action_stamp(passer, opr_army_manager.current_round)
+	# MP (online co-op): the AI's next owed reply may be answered on the other human's machine, so the stamp rides the wire
+	_sync_unit_property(passer, SoloController.DELAYED_ACTION_STAMP, opr_army_manager.current_round)
 	if advance_replies:
 		_solo_pass_turn(solo_controller.ai_slot)
 	if battle_log != null:
@@ -3574,6 +3575,23 @@ func core_overlay_restore(gu: GameUnit, at_start: Dictionary) -> void:
 			gu.unit_properties.erase(k)
 		else:
 			gu.unit_properties[k] = was.duplicate(true) if was is Array or was is Dictionary else was
+
+
+## One-core P3 step 65b (O14 (1b)): the regiment re-rank doors (the radial's frontage entry, the B key) re-form a block,
+## so like the formation tools (step 65) they need the unit's open activation: `objs` without the trays of every unit
+## `core_drag_blocked` holds back; when no tray is left, the first refused unit says why once (toast and log line).
+func core_rerank_gate(objs: Array) -> Array:
+	var out: Array = []
+	var refused: GameUnit = null
+	for obj in objs:
+		var reg: Regiment = obj.get_meta("regiment") if obj is RegimentTray and obj.has_meta("regiment") else null
+		if reg != null and reg.game_unit != null and core_drag_blocked(reg.game_unit):
+			refused = reg.game_unit if refused == null else refused
+		else:
+			out.append(obj)
+	if refused != null and not out.any(func(o: Variant) -> bool: return o is RegimentTray):
+		core_drag_refused(refused)
+	return out
 
 
 ## One-core P3 step 50 (N6 b): the tail of the activation door (radial `_toggle_activation`, after the activation fact
@@ -16098,7 +16116,8 @@ func _reinforcement_sacrifice(unit: GameUnit) -> void:
 		radial_menu_controller._update_fatigued_markers(unit)
 
 	var due: int = SoloController.reinforcement_arrival_round(round_no)
-	unit.unit_properties["reinforcement_due_round"] = due
+	# MP: the closing machine brings the copy back, and it is not always the sacrificer's machine, so the promise rides the wire
+	_sync_unit_property(unit, "reinforcement_due_round", due)
 	if battle_log != null:
 		# Which of the rule's two triggers fired is named, so the log reads as a decision, not an event.
 		var trigger: String = " while Shaken" if was_shaken else " (it was already destroyed)"
@@ -16146,7 +16165,7 @@ func _reinforcement_arrive_one(original: GameUnit, round_number: int) -> void:
 	var src: OPRApiClient.OPRUnit = original.source_data as OPRApiClient.OPRUnit
 	if src == null:
 		# Nothing to copy from (a hand-built or legacy unit). Say so instead of failing mutely.
-		original.unit_properties.erase("reinforcement_due_round")
+		_sync_unit_property(original, "reinforcement_due_round", null)
 		if battle_log != null:
 			_log_rule_event(BattleLog.Category.GENERAL,
 				"Reinforcement: %s cannot return — its army profile is not available" % original.get_name(), ai)
@@ -16196,8 +16215,8 @@ func _reinforcement_arrive_one(original: GameUnit, round_number: int) -> void:
 
 	# The promise is kept — and it is kept ONCE. The original keeps a visible spent stamp; the copy
 	# simply no longer carries the rule.
-	original.unit_properties.erase("reinforcement_due_round")
-	original.unit_properties["reinforcement_spent"] = true
+	_sync_unit_property(original, "reinforcement_due_round", null)   # MP: the kept promise must not be kept again on the other table
+	_sync_unit_property(original, "reinforcement_spent", true)
 	# "Can't seize or contest objectives on the round they deploy" — the SAME stamp an Ambush arrival
 	# uses, so _solo_auto_seize's existing lock covers this rule for free.
 	copy.unit_properties["ambush_arrived_round"] = round_number
@@ -17427,7 +17446,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		# selected RegimentTray blocks are affected; loose models are ignored.
 		elif event.keycode == KEY_B and not event.shift_pressed and not event.ctrl_pressed:
 			if opr_army_manager:
-				opr_army_manager.cycle_selected_regiment_frontage(object_manager.get_selected_objects())
+				opr_army_manager.cycle_selected_regiment_frontage(core_rerank_gate(object_manager.get_selected_objects()))
 			get_viewport().set_input_as_handled()
 		# Rotate selected group around first object (Shift+R) - continuous rotation
 		elif event.keycode == KEY_R and event.shift_pressed:

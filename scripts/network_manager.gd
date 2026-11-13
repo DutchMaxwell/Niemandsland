@@ -107,6 +107,10 @@ const SYNCABLE_UNIT_PROPERTIES: PackedStringArray = [
 	"vengeance_markers",            # Vengeance markers on the destroyer (int): +1 to hit per marker for whoever attacks it
 	"spell_move_mod",   # {advance, rush} — the NET spell movement delta the move bands read.
 	"spell_range_mod",  # int — the NET spell shooting-range delta every volley/plan site reads.
+	# Latch sweep F2b: the table that runs the NEXT answer / the next round start may not be the one that wrote these.
+	"delayed_action_round",     # the round an AI Delayed Action carrier passed in (int; once per round)
+	"reinforcement_due_round",  # the round a sacrificed unit's copy is due (int; null = kept)
+	"reinforcement_spent",      # Reinforcement used, once per game (bool)
 	"speed_feat_used_speed_feat",       # D22 (NML-984): a spent once-per-game Speed Feat (bool) —
 	"speed_feat_used_speed_feat_aura",  # the other table's wheel must not offer it again.
 	# MP1: the other once-per-game latches (bool), one exact key per registry rule that carries

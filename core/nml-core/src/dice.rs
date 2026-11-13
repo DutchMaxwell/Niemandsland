@@ -980,8 +980,9 @@ pub fn resolve_volley_leg(
     takedown_exact: bool,
     takedown_cover: &dyn Fn(&[i64]) -> bool,
     // One-core P3 step 27: (shooter index, profile index) -> (models with range and sight, models alive), the hit
-    // line's "(n/m models sighted)" part; asked only when that line is said (a tray with a feed).
-    sighted: &dyn Fn(usize, usize) -> Option<(i64, i64)>,
+    // line's "(n/m models sighted)" part; asked only when that line is said (a tray with a feed). Step 42d: and why the
+    // weapon would stay silent (the table's reason).
+    sighted: &dyn Fn(usize, usize) -> Option<(i64, i64, &'static str)>,
     tray: &mut Tray,
 ) -> ShootResult {
     let mut out = ShootResult::default();
@@ -1149,7 +1150,14 @@ pub fn resolve_volley_leg(
         }
         let n = sh.attacks[k];
         if n <= 0 {
-            continue; // main.gd:3163 — a silent weapon leaves before any die
+            // main.gd:3163 — a silent weapon leaves before any die; step 42d: one its models see says why, as the table
+            // does (NML-1035). A weapon no model sees is not in the table's shot list at all.
+            let seen = shooters.iter().position(|s| std::ptr::eq(s, sh)).and_then(|i| sighted(i, pi));
+            if let Some((_, _, why)) = seen.filter(|s| s.0 > 0) {
+                tray.say(|| LogLine { rule: "shoot", category: Category::Combat, side: att.side,
+                    text: format!("{}: {} silent — {why}", sh.owner, p.name), detail: None });
+            }
+            continue;
         }
         // G4R4 C-GRANTED-BANE (`EPOCH_73_V36`): a live "Bane when Shooting" grant makes this ranged weapon a Bane
         // weapon for the volley (the table's `_solo_striker_has_bane`); the re-roll's log line names the book rule.
@@ -1529,7 +1537,7 @@ pub fn resolve_volley_leg(
         // the table's sight part when not every model of the member sees the target (main.gd:5129).
         tray.say(|| {
             let note = shooters.iter().position(|s| std::ptr::eq(s, sh)).and_then(|i| sighted(i, pi))
-                .filter(|&(n, m)| n < m).map_or(String::new(), |(n, m)| format!(" ({n}/{m} models sighted)"));
+                .filter(|&(n, m, _)| n < m).map_or(String::new(), |(n, m, _)| format!(" ({n}/{m} models sighted)"));
             LogLine { rule: "shoot", category: Category::Combat, side: att.side,
                 text: format!("{} fires {} at {def_owner}{note} — {hits} hit{}", sh.owner, p.name, if hits == 1 { "" } else { "s" }),
                 detail: None }

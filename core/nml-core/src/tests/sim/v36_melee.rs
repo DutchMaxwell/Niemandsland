@@ -84,6 +84,22 @@ mod mel_par_f5 {
         assert_eq!(living_bearers(&st, 0, "CCW"), None, "a state that carries no kits at all");
     }
 
+    /// 42d: no living kit names any weapon - the unit carries no per-model loadout, the table's `alive_bearers_of` -1.
+    #[test]
+    fn living_bearers_answers_the_tables_minus_one_without_any_loadout() {
+        let (mut st, _) = sisters(3);
+        st.kits[0] = Rc::new(vec![Kit { weapons: Vec::new(), equipment: 0, wounds_max: 1 }; 3]);
+        assert_eq!(living_bearers(&st, 0, "CCW"), Some(-1));
+    }
+
+    /// 42d: without a loadout the table's melee keeps the ratio (`_solo_attack_groups`), it does not strike with nothing.
+    #[test]
+    fn melee_strike_without_any_loadout_keeps_pro_rata_at_epoch_73() {
+        let (mut st, statics) = sisters(3);
+        st.kits[0] = Rc::new(vec![Kit { weapons: Vec::new(), equipment: 0, wounds_max: 1 }; 3]);
+        assert_eq!(strike(&st, &statics, EPOCH_73_V36, false), vec![2, 1], "4x3/5 and 1x3/5 rounded, as at 72");
+    }
+
     #[test]
     fn melee_strike_counts_living_bearers_at_epoch_73() {
         let (st, statics) = sisters(3);
