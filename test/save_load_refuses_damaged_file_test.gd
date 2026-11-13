@@ -110,6 +110,17 @@ func test_an_object_position_of_words_is_refused_before_the_clear() -> void:
 		(s["objects"][1] as Dictionary)["position"] = ["x", "y", "z"])
 
 
+func test_an_object_position_with_too_few_entries_is_refused_before_the_clear() -> void:
+	await _assert_refused_and_untouched("position = two numbers", func(s: Dictionary) -> void:
+		(s["objects"][0] as Dictionary)["position"] = [0.1, 0.2])
+
+
+func test_an_object_counter_that_is_not_a_number_is_refused_before_the_clear() -> void:
+	# int(null) aborts the restore AFTER the table was rebuilt, and load_game still returned OK.
+	await _assert_refused_and_untouched("object_counter = null", func(s: Dictionary) -> void:
+		s["object_counter"] = null)
+
+
 func test_a_unit_whose_model_positions_are_a_record_is_refused_before_the_clear() -> void:
 	await _assert_refused_and_untouched("model_positions = {}", func(s: Dictionary) -> void:
 		(s["game_units"] as Array).append({"unit_id": "u1", "models": [], "model_positions": {"0": [0, 0, 0]}}))
