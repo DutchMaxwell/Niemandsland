@@ -93,6 +93,7 @@ const SLOT_RESERVED_PEER: int = 0
 ## is a deliberate act — it says "this number is rules-relevant, invisible, and both tables need it".
 const SYNCABLE_UNIT_PROPERTIES: PackedStringArray = [
 	"spot_markers",     # Precision Spotter marks (int). The token on the table is a plain boolean.
+	"ambush_arrived_round",  # the round a unit arrived from Ambush / Reinforcement (int): the seize lock and the arrival bonuses read it
 	"tag_markers",      # Precision Tag marks (int) — the Spotter pool's once-per-game sister.
 	"piercing_tag_markers",  # Piercing Tag / Target pool (int) — the AI answers each human on that human's machine (co-op).
 	"piercing_tag_source",   # which rule placed it (String): Piercing Target's pool stands, every other tag spends.
