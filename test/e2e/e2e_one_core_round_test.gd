@@ -151,6 +151,43 @@ func test_the_core_opener_equals_ai_opens_next_round(timeout := 240000) -> void:
 	await E2EBoot.settle(get_tree())
 
 
+## Step 48b: a side whose only unit left to activate is a passenger. The core counts it (a passenger leaves its
+## transport with a move action of its own, GF Core Rules v3.6.0 p.2), and so does the table's alternation
+## (SoloController.units_left_for). The round start puts the transport back in the table's pool, so the opener the
+## table names (the real order of _solo_end_round: advance the round, then read the pools) is the core's for both last
+## activations. Layout 7 with the human side replaced by a truck that has acted and its squad aboard.
+func test_the_core_opener_equals_the_tables_when_a_sides_only_unit_is_embarked(timeout := 240000) -> void:
+	CoreActivation._env = 1
+	var sc: SoloController = _main.solo_controller
+	var army: OPRArmyManager = _main.opr_army_manager
+	for took_last in [true, false]:
+		_layout(7)
+		for id in army.game_units.keys():   # the human side is the truck and its squad only
+			var plain: GameUnit = army.game_units[id]
+			if int(plain.unit_properties.get("player_id", 0)) == sc.human_slot:
+				for m in plain.models:
+					(m as ModelInstance).node.queue_free()
+				army.game_units.erase(id)
+		var truck: GameUnit = ParityTable._make_unit(_main, SIDE.merged({"player": 1, "name": "Truck", "x_in": -14.0,
+			"models": 1, "rules": ["Transport(6)"]}, true), RIFLE)
+		var riders: GameUnit = ParityTable._make_unit(_main, SIDE.merged({"player": 1, "name": "Riders", "x_in": -12.0}), RIFLE)
+		var why := "took_last %s" % took_last
+		assert_bool(army.set_unit_embarked(riders, truck, true)).override_failure_message("fixture: %s - %s" % [why, army.can_embark(riders, truck)]).is_true()
+		truck.activate(army.current_round)
+		assert_int(sc.eligible_units_for(sc.human_slot).size()).override_failure_message("fixture: the pool must be empty, " + why).is_equal(0)
+		assert_int(sc.units_left_for(sc.human_slot)).override_failure_message("fixture: the squad aboard is the side's last unit, " + why).is_equal(1)
+		_main._solo_ai_took_last_activation = took_last
+		var h: int = _main._solo_core_round_end()
+		assert_int(h).override_failure_message("the core refused the round end: " + why).is_not_equal(0)
+		army.advance_round()
+		var want := SoloController.ai_opens_next_round(took_last, not sc.eligible_units_for(sc.human_slot).is_empty(),
+			not sc.eligible_ai_units().is_empty())
+		var opener: int = _main._solo_core_round_begin(h)
+		assert_int(opener).override_failure_message("the core did not name an opener: " + why).is_not_equal(0)
+		assert_int(opener).override_failure_message(why).is_equal(sc.ai_slot if want else sc.human_slot)
+	await E2EBoot.settle(get_tree())
+
+
 func test_markers_and_an_empty_table_are_booked_by_the_table(timeout := 240000) -> void:
 	(_main.solo_controller as SoloController)._core_node_ready()   # its one-time warnings stay outside the asserts
 	for fallback in ["markers", "empty"]:

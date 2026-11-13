@@ -1852,7 +1852,7 @@ func solo_begin_pass(unit: GameUnit) -> void:
 	if not _solo_alternation_ready(u):
 		return
 	var round_no: int = opr_army_manager.current_round
-	var own_left: int = solo_controller.eligible_units_for(solo_controller.human_slot).size()
+	var own_left: int = solo_controller.units_left_for(solo_controller.human_slot)   # passengers aboard still owe an activation
 	var opponent_left: int = solo_controller.eligible_units_for(solo_controller.ai_slot).size()
 	var refusal: String = SoloController.delayed_action_refusal(
 		SoloController.delayed_action_member_of(u) != null, u.is_activated,
