@@ -112,7 +112,7 @@ impl Tray {
     /// instead of drawing. Past the last group it serves 1s and records where it
     /// first ran dry (`starved_at`) — the step API turns that into `NeedRoll`.
     pub fn supplied(groups: Vec<Vec<u8>>) -> Tray {
-        let feed = Feed { groups, next: 0, starved_at: None, mismatch: None, placed: None, placed_trails: None };
+        let feed = Feed { groups, next: 0, starved_at: None, mismatch: None, placed: None, placed_trails: None, kinds: Vec::new() };
         Tray { rng: GodotRng::new(0), feed: Some(feed), zero_draws: false, lines: Vec::new(), landings: Vec::new() }
     }
 
@@ -134,6 +134,14 @@ impl Tray {
     /// The supplied placement's walked paths, if any (`None` on every seeded tray).
     pub fn placed_trails(&self) -> Option<&[Vec<[f64; 2]>]> {
         self.feed.as_ref().and_then(|f| f.placed_trails.as_deref())
+    }
+
+    /// One-core P3: the table's own `roll_kind` for the NEXT draw where its roll record keeps the replay gates'
+    /// "attack" (the morale die): a supplied tray keeps it for `NeedRoll`; a seeded tray ignores the call.
+    pub fn name_next(&mut self, kind: &'static str) {
+        if let Some(feed) = self.feed.as_mut() {
+            feed.kinds.push((feed.next, kind));
+        }
     }
 
     /// The supplied placement, if any (`None` on every seeded tray).
@@ -197,12 +205,19 @@ pub struct Feed {
     placed: Option<Vec<[f64; 3]>>,
     /// One-core P3: the supplied placement's per-model walked paths (`Tray::place`).
     placed_trails: Option<Vec<Vec<[f64; 2]>>>,
+    /// One-core P3: (draw, the table's kind) from `Tray::name_next`.
+    kinds: Vec<(usize, &'static str)>,
 }
 
 impl Feed {
     /// Rolls drawn so far (served, mismatched or starved alike).
     pub fn draws(&self) -> usize {
         self.next
+    }
+
+    /// The table's kind `Tray::name_next` gave draw `index`, if any.
+    pub fn kind_of(&self, index: usize) -> Option<&'static str> {
+        self.kinds.iter().find(|(at, _)| *at == index).map(|(_, k)| *k)
     }
 
     fn take(&mut self, n: usize) -> Vec<u8> {
@@ -3029,6 +3044,7 @@ pub fn resolve_morale_with_tray(
         failed // `morale_result_shaken` :558 — no Quality roll, and no draw.
     } else {
         let target = morale_target(unit.quality, unit.morale_bonus);
+        tray.name_next("morale"); // the table's kind (main.gd `_solo_morale_test`): its dice line says passed/failed
         let faces = tray.roll(1);
         let passed = faces_to_hits(&faces, target as u8) > 0;
         out.rolls.push(Roll { kind: "attack", count: 1, target, faces, owner: owner.into() });

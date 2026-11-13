@@ -59,7 +59,8 @@ pub fn step_with<T>(
             Some(r) => {
                 let lines = tray.lines_upto(index);
                 let landings = tray.landings_upto(index);
-                Step::NeedRoll { index, faces, kind: r.kind, count: r.count, target: r.target, owner: r.owner.clone(), lines, landings }
+                let kind = feed.kind_of(index).unwrap_or(r.kind);
+                Step::NeedRoll { index, faces, kind, count: r.count, target: r.target, owner: r.owner.clone(), lines, landings }
             }
             None => {
                 let reason = format!("roll {index}: no roll record for this draw");
@@ -193,6 +194,22 @@ mod tests {
         }
         match step_with(&[vec![5]], run, |r| r.as_slice()) {
             Step::Done(_, _, landings) => assert_eq!(landings, vec![landing(0), landing(1)]),
+            other => panic!("expected Done, got {other:?}"),
+        }
+    }
+
+    /// One-core P3: the morale die is asked for with the table's kind, "morale" (the table's dice line then says
+    /// passed/failed), while its roll record keeps the replay gates' "attack".
+    #[test]
+    fn the_morale_die_is_asked_for_as_a_morale_roll() {
+        let unit = Ctx { quality: 4, ..Default::default() };
+        let run = |t: &mut Tray| crate::dice::resolve_morale_with_tray(&unit, "Def", false, false, false, 1, t).1;
+        match shoot_step(&[], run) {
+            Step::NeedRoll { kind, faces, .. } => assert_eq!((kind, faces), ("morale", 1)),
+            other => panic!("expected NeedRoll, got {other:?}"),
+        }
+        match shoot_step(&[vec![3]], run) {
+            Step::Done(out, _, _) => assert_eq!(out.rolls[0].kind, "attack"),
             other => panic!("expected Done, got {other:?}"),
         }
     }
