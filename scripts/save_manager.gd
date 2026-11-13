@@ -439,6 +439,13 @@ func load_game(path: String) -> Error:
 	if not rules_error.is_empty():
 		load_failed.emit(rules_error)
 		return ERR_INVALID_DATA
+	# A damaged section (missing, or of the wrong shape) is refused here as well, BEFORE the clear below: past
+	# that line the old table is gone (on a host: for every guest too), and a restore step that chokes on the
+	# section would leave the player with an empty table and no battle.
+	var payload_error := SaveMigrations.payload_error(state)
+	if not payload_error.is_empty():
+		load_failed.emit(payload_error)
+		return ERR_INVALID_DATA
 
 	# Clear current state
 	if object_manager:

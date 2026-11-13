@@ -69,6 +69,57 @@ static func rules_version_error(state: Dictionary, build_rules: String) -> Strin
 	return ""
 
 
+## Whether `state` (a migrated save) has the section shapes the loader's typed restore steps need. load_game asks
+## BEFORE it clears the table: a damaged or wrongly generated file is refused with the current battle still
+## standing, instead of clearing it (on a host: for every guest) and then failing halfway through the rebuild.
+## Returns "" when it may load, else the plain-words reason it cannot.
+static func payload_error(state: Dictionary) -> String:
+	for key in ["table", "objects", "game_units"]:
+		if not state.has(key):
+			return _damaged("it has no \"%s\" section" % key)
+	for key in ["table", "game_state", "army_names", "rule_descriptions", "player_spells"]:
+		if state.has(key) and not state[key] is Dictionary:
+			return _damaged("its \"%s\" section is not a record" % key)
+	for key in ["objects", "game_units"]:
+		if not state[key] is Array:
+			return _damaged("its \"%s\" section is not a list" % key)
+	for obj: Variant in state["objects"]:
+		if obj is Dictionary and not _has_vec3_pose(obj):
+			return _damaged("an object has a broken position or rotation")
+	for unit: Variant in state["game_units"]:
+		if not unit is Dictionary:
+			continue
+		var regiment: Variant = unit.get("regiment")
+		if not (unit.get("models", []) is Array and unit.get("unit_properties", {}) is Dictionary
+				and unit.get("model_positions", []) is Array and (regiment == null or regiment is Dictionary)):
+			return _damaged("a unit has a broken model list")
+		for model: Variant in unit.get("models", []):
+			if not model is Dictionary:
+				return _damaged("a unit has a broken model list")
+		for pose: Variant in unit.get("model_positions", []):
+			if pose != null and not (pose is Dictionary and _has_vec3_pose(pose)):
+				return _damaged("a model has a broken position or rotation")
+	return ""
+
+
+static func _damaged(why: String) -> String:
+	return "This save file is damaged (%s), so it was not loaded. The table was left as it was." % why
+
+
+## A position / rotation the loader can read: absent, or a list whose first three entries are numbers (a
+## shorter list reads as the origin).
+static func _has_vec3_pose(entry: Dictionary) -> bool:
+	for key in ["position", "rotation"]:
+		var v: Variant = entry.get(key, [])
+		if not v is Array:
+			return false
+		if (v as Array).size() >= 3:
+			for i in 3:
+				if not (v[i] is float or v[i] is int):
+					return false
+	return true
+
+
 # === Steps (each lifts exactly one version) ===
 
 ## 1.4 → 1.5: sandbox terrain objects were ADDED in 1.5 — a 1.4 save simply has none. Nothing to

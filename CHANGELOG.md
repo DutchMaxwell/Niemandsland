@@ -88,6 +88,12 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   saying whether the Rust rules core loaded. An exported build whose core did not load also shows a
   "Rules core missing" warning dialog that asks the player to reinstall the game. (#2619, #2623)
 
+### Changed — saves
+- **A damaged save file no longer wipes the table.** Loading a file whose sections have the wrong
+  shape (for example a broken table, unit list or model position) is refused before anything is
+  cleared, with a message that the file is damaged. Before, the table was cleared first, also for
+  every guest when the host loaded, and the load then failed halfway.
+
 ### Internal
 - CI and test groundwork for running the tests against the Rust core: a new job "All required
   checks" passes when every gating job is green or skipped, the core build action takes two inputs
