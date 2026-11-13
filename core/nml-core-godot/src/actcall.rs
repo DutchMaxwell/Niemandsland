@@ -36,7 +36,7 @@ pub fn inputs_of(t: &VarArray) -> Result<Vec<Input>, usize> {
     t.iter_shared().enumerate().map(|(i, v)| input_of(&v).ok_or(i)).collect()
 }
 
-fn lines_of(lines: &[LogLine]) -> VarArray {
+pub(crate) fn lines_of(lines: &[LogLine]) -> VarArray {
     let mut out = VarArray::new();
     for l in lines {
         let mut d = VarDictionary::new();

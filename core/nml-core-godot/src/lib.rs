@@ -37,6 +37,7 @@ use nml_core::{
 mod actcall;
 mod mvcall;
 mod positioncall;
+mod roundcall;
 mod plain;
 mod brain_transport;
 mod brain;
@@ -412,6 +413,40 @@ impl NmlCore {
     #[func]
     fn check_begin(&self, open_name: GString) -> VarDictionary {
         actcall::begin_of(&open_name.to_string())
+    }
+
+    /// One-core P3 (N3 b): the round end of a plain mission on handle `h` (`nml_core::round::end_round`). `words` =
+    /// `{"labels": {player id: label}, "cite": String, "placed_by": {unit key: rule}}`. Returns `{"owners": [int],
+    /// "vp": [int, int], "vp_memo", "lines": [..], "handle"}` (the state after the seize, on a NEW handle), or
+    /// `{"refused": reason}` (also in `last_error()`) for an unknown handle or a mission with markers (O7).
+    #[func]
+    fn round_end(&mut self, h: i64, words: VarDictionary) -> VarDictionary {
+        let Some(i) = self.index(h) else { return roundcall::refused("unknown handle") };
+        let (mut cap, statics) = self.copy_of(i);
+        match nml_core::round::end_round(&mut cap.state, &roundcall::words_of(&words)) {
+            Ok(lines) => {
+                let mut out = roundcall::end_of(&cap.state, &lines);
+                out.set("handle", self.push(Slot { cap, statics }));
+                out
+            }
+            Err(reason) => {
+                self.last_error = reason.to_string();
+                roundcall::refused(reason)
+            }
+        }
+    }
+
+    /// One-core P3 (N3 b): the round begin on handle `h` (`nml_core::round::begin_round`). `finished_first` = the side
+    /// that finished activating first last round, 0 = none (the head count). Returns `{"opener", "lines": [..], "handle"}`
+    /// (the next round's state, on a NEW handle), or `{"refused": reason}` for an unknown handle.
+    #[func]
+    fn round_begin(&mut self, h: i64, finished_first: i64) -> VarDictionary {
+        let Some(i) = self.index(h) else { return roundcall::refused("unknown handle") };
+        let (mut cap, statics) = self.copy_of(i);
+        let (opener, lines) = nml_core::round::begin_round(&statics, &mut cap.state, (finished_first != 0).then_some(finished_first));
+        let mut out = roundcall::begin_of(opener, &lines);
+        out.set("handle", self.push(Slot { cap, statics }));
+        out
     }
 
     /// `AiMissionEval.score(state, player[, reply_threat])` ai_mission_eval.gd:344.
@@ -1175,6 +1210,14 @@ impl NmlCore {
                 self.slab.len() as i64
             }
         }
+    }
+
+    /// A deep copy of slot `i`'s state for a call that writes a NEW handle (the profile table and the LOS matrix stay
+    /// shared), as `clone` makes it.
+    fn copy_of(&self, i: usize) -> (Captured, Rc<Vec<UnitStatic>>) {
+        let slot = self.slab[i].as_ref().unwrap();
+        let cap = Captured { state: slot.cap.state.clone(), extras: slot.cap.extras.clone(), mask: slot.cap.mask.clone(), has_los: slot.cap.has_los, dropped: Vec::new() };
+        (cap, Rc::clone(&slot.statics))
     }
 
     fn index(&mut self, h: i64) -> Option<usize> {

@@ -697,7 +697,7 @@ fn mods_out(m: &Mods) -> VarDictionary {
 /// The inverse of `mvcall::flat` for the JSON blobs `State` keeps (`vp`,
 /// `vp_flavour`, `vp_memo`): an integer stays an `int`, every other number a
 /// `float`, arrays and objects recurse.
-fn variant_of(v: &serde_json::Value) -> Variant {
+pub(crate) fn variant_of(v: &serde_json::Value) -> Variant {
     use serde_json::Value;
     match v {
         Value::Null => Variant::nil(),
