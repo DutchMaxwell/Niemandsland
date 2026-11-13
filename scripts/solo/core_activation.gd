@@ -102,7 +102,7 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 			r.merge({"steps": step + 1, "core_us": core_us, "max_us": max_us}, true)
 			return r
 		var owner := str(r["owner"])
-		var roller := _roller_of(main, unit, transcript, owner)
+		var roller := _roller_of(main, unit, transcript, owner, str(r.get("owner_key", "")))
 		var label: String = "AI (%s)" % owner if main._solo_is_ai_unit(roller) else main._roller_label(roller)
 		if on_throw.is_valid():
 			on_throw.call(str(r["kind"]), int(r["index"]))
@@ -114,8 +114,13 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 	return r
 
 
-## The unit a roll's `owner` names: the actor or the target of its shot (by name), else the actor.
-static func _roller_of(main, unit: GameUnit, transcript: Array, owner: String) -> GameUnit:
+## The unit a roll belongs to: the core names it by roster key (`owner_key`: two units may share a display name, and a
+## unit may be renamed mid-game). Only when the core could not tell: the actor or the target of its shot by `owner`
+## (the name), else the actor.
+static func _roller_of(main, unit: GameUnit, transcript: Array, owner: String, owner_key: String = "") -> GameUnit:
+	var keyed = main.opr_army_manager.game_units.get(owner_key)
+	if keyed is GameUnit:
+		return keyed
 	if unit.get_name() == owner:
 		return unit
 	for e in transcript:

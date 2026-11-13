@@ -162,7 +162,7 @@ pub fn run(statics: &[UnitStatic], state: &State, unit: &str, terrain: &Terrain,
     let mut out = VarDictionary::new();
     let mut next = None;
     match step_activation(statics, state, unit, terrain, seams, t, enforce) {
-        ActStep::NeedRoll { index, faces, kind, count, target, owner, lines, landings } => {
+        ActStep::NeedRoll { index, faces, kind, count, target, owner, owner_key, lines, landings } => {
             out.set("step", "need_roll");
             out.set("index", index as i64);
             out.set("faces", faces as i64);
@@ -170,6 +170,7 @@ pub fn run(statics: &[UnitStatic], state: &State, unit: &str, terrain: &Terrain,
             out.set("count", count);
             out.set("target", target);
             out.set("owner", owner.as_str());
+            out.set("owner_key", owner_key.as_str());
             out.set("lines", &lines_of(&lines));
             out.set("landings", &landings_of(state, &landings));
         }
