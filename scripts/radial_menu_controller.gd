@@ -360,8 +360,8 @@ func _on_action_selected(action_id: String, context: Dictionary) -> void:
 		var cargo_list: Array = context.get("cargo_units", [])
 		var ci := int(action_id.trim_prefix("unload_cargo_"))
 		if ci >= 0 and ci < cargo_list.size():
-			await _solo_activation_rules(cargo_list[ci] as GameUnit)
-			_begin_disembark_ghost(cargo_list[ci] as GameUnit)
+			if await _solo_activation_rules(cargo_list[ci] as GameUnit):   # the CARGO's activation (step 62)
+				_begin_disembark_ghost(cargo_list[ci] as GameUnit)
 		return
 
 	# Embark entries are per-TRANSPORT ("embark_<index>") — with several reachable transports
@@ -371,8 +371,8 @@ func _on_action_selected(action_id: String, context: Dictionary) -> void:
 		var ei := int(action_id.trim_prefix("embark_"))
 		if ei >= 0 and ei < embark_list.size():
 			context["embark_target"] = embark_list[ei]
-			await _solo_activation_rules(_get_game_unit_from_context(context))
-			_embark_unit(context)
+			if await _solo_activation_rules(_get_game_unit_from_context(context)):
+				_embark_unit(context)
 		return
 
 	match action_id:
@@ -425,8 +425,8 @@ func _on_action_selected(action_id: String, context: Dictionary) -> void:
 		"revive_selected":
 			_revive_selected_dead(context)
 		"disembark":
-			await _solo_activation_rules(context.get("disembark_unit") as GameUnit)
-			_disembark_unit(context.get("disembark_unit") as GameUnit)
+			if await _solo_activation_rules(context.get("disembark_unit") as GameUnit):
+				_disembark_unit(context.get("disembark_unit") as GameUnit)
 		"stay_embarked":
 			_stay_embarked(context.get("disembark_unit") as GameUnit)
 		"delete_unit":
@@ -685,13 +685,17 @@ func _solo_auto_available(game_unit: GameUnit) -> bool:
 ## activation without going through main's own combat entries — the manual activation toggle and the
 ## transport embark/disembark actions — announce the activation here first, through main's ONE door
 ## (begin_activation, D23), so whichever door opens first completes its rule choices before movement
-## or activation proceeds.
-func _solo_activation_rules(unit: GameUnit) -> void:
+## or activation proceeds. One-core P3 step 62: false when main refuses the door first (a lifecycle unit whose
+## activation is not open, O14 (1b)); the caller stops and nothing is spent.
+func _solo_activation_rules(unit: GameUnit) -> bool:
 	if unit == null:
-		return
+		return true
 	var main_node := get_node_or_null("/root/Main")
+	if main_node != null and main_node.has_method("core_door_refused") and main_node.call("core_door_refused", unit):
+		return false
 	if main_node != null and main_node.has_method("begin_activation"):
 		await main_node.call("begin_activation", unit)
+	return true
 
 
 func _solo_begin_targeting(context: Dictionary, melee: bool) -> void:
@@ -2798,6 +2802,9 @@ func _stay_embarked(unit: GameUnit) -> void:
 	if unit == null or army_manager == null or army_manager.transport_of(unit) == null:
 		return
 	if not _transport_activation_open(unit, "stay aboard"):
+		return
+	var main_node := get_node_or_null("/root/Main")   # one-core P3 step 62: staying aboard spends the activation
+	if main_node != null and main_node.has_method("core_door_refused") and main_node.call("core_door_refused", unit):
 		return
 	if _activation_economy_on():
 		_consume_transport_activation(unit, "stay aboard")

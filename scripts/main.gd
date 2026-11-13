@@ -3443,6 +3443,16 @@ func core_drag_refused(gu: GameUnit) -> void:
 	_log_rule_event(BattleLog.Category.MOVEMENT, text)
 	_show_toast(text)
 
+
+## One-core P3 step 62 (O14 (1b)): a door that runs inside an activation (the transport doors here) is refused, with step
+## 30's toast and log line, for a lifecycle unit whose activation is not open: the O5 sentence while another unit's is
+## open, else "Activate <Unit> first." (O15 (1)). True = refused; false (go on) for every other unit and with the flag off.
+func core_door_refused(gu: GameUnit) -> bool:
+	if not core_drag_blocked(gu):
+		return false
+	core_drag_refused(gu)
+	return true
+
 ## (Re)build the SoloController for the currently designated AI slot (setup wires TurnManager once).
 func _ensure_solo_controller() -> void:
 	# #196 belt-and-braces: in multiplayer the controller exists only for an EXPLICITLY
