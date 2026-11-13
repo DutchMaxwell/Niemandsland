@@ -72,6 +72,7 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 	var core: Object = (main.solo_controller as SoloController)._core_node_ready()
 	var enforce: bool = main.object_manager._strict_movement_enforced()
 	var printed := 0
+	var start_models := _start_models(main)
 	var landed := {}
 	var core_us := 0
 	var max_us := 0
@@ -87,7 +88,9 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 			var line: Dictionary = lines[i]
 			main._log_rule_event(int(line["category"]), str(line["text"]), ai, str(line["detail"]))
 		printed = maxi(printed, lines.size())
-		land_step(main, unit, r.get("landings", []), [], landed)
+		await land_step(main, unit, r.get("landings", []), start_models, landed)
+		if str(r["step"]) == "done":
+			await land_delta(main, r.get("delta", []), start_models, landed)
 		if str(r["step"]) != "need_roll":
 			r.merge({"steps": step + 1, "core_us": core_us, "max_us": max_us}, true)
 			return r
@@ -116,6 +119,69 @@ static func _roller_of(main, unit: GameUnit, transcript: Array, owner: String) -
 	return unit
 
 
-## Lands one step's landings on the table (O4 b). Empty until step 21.
-static func land_step(_main, _gu: GameUnit, _landings: Array, _start_models: Array, _done: Dictionary) -> void:
-	pass
+## Every living model on the table and its position at the activation start, in get_alive_models() order.
+static func _start_models(main) -> Array:
+	var out: Array = []
+	for gu in main.opr_army_manager.game_units.values():
+		for m in (gu as GameUnit).get_alive_models():
+			if m.node != null and is_instance_valid(m.node):
+				out.append({"model": m, "at": m.node.global_position})
+	return out
+
+
+## The start model of `gu` whose captured position equals `at` exactly; null when none does.
+static func _model_at(start_models: Array, gu: GameUnit, at: Vector3) -> ModelInstance:
+	for e in start_models:
+		var m: ModelInstance = e["model"]
+		if m.unit == gu and e["at"] == at:
+			return m
+	return null
+
+
+## Lands one step's landings on the table (O4 b): a wound shows at once on the wound marker, the dead leave right
+## after the saves. Every need_roll repeats the earlier landings; `done` skips what this activation already landed.
+static func land_step(main, _gu: GameUnit, landings: Array, start_models: Array, done: Dictionary) -> void:
+	for entry in landings:
+		var lgu: GameUnit = main.opr_army_manager.game_units.get(str(entry["unit"]))
+		var died: Array[ModelInstance] = []
+		for lm in entry["models"]:
+			var m: ModelInstance = _model_at(start_models, lgu, lm["at"]) if lgu != null else null
+			if m == null:
+				push_error("CoreActivation.land_step: no model of %s at %s" % [entry["unit"], lm["at"]])
+				continue
+			if done.has(m):
+				continue
+			done[m] = true
+			var before := m.wounds_current
+			if bool(lm["dead"]):
+				m.apply_damage(before)
+				main._vfx_pip(ResultPips.Kind.KILL, m, 1)
+				died.append(m)
+			elif int(lm["wounds_left"]) < before:
+				m.wounds_current = int(lm["wounds_left"])
+				main._vfx_pip(ResultPips.Kind.WOUND, m, before - m.wounds_current)
+				main.radial_menu_controller._update_wound_marker(m)
+				if main.network_manager != null and main.network_manager.has_method("broadcast_model_wounds"):
+					main.network_manager.broadcast_model_wounds(m)
+		if not died.is_empty():
+			await main._solo_remove_dead_models(lgu, died, int(lgu.unit_properties.get("player_id", 1)))
+
+
+## The activation's final delta (binding step 17): Shaken onto the table; a unit that moved AND lost models is
+## accepted only when its losses already landed per step, else nothing lands and done["unknown"] is set.
+static func land_delta(main, delta: Array, start_models: Array, done: Dictionary) -> void:
+	for d in delta:
+		var gu: GameUnit = main.opr_army_manager.game_units.get(str(d["unit"]))
+		if gu == null:
+			continue
+		if bool(d["unknown"]):
+			var start_alive := start_models.filter(func(e) -> bool: return (e["model"] as ModelInstance).unit == gu)
+			var landed_dead := start_alive.filter(func(e) -> bool: return done.has(e["model"]) \
+				and not (e["model"] as ModelInstance).is_alive)
+			if landed_dead.size() != start_alive.size() - int(d["alive"]):
+				push_error("CoreActivation.land_delta: %s moved and lost models the steps did not land" % gu.get_name())
+				done["unknown"] = true
+				return
+		if bool(d["shaken"]) != gu.is_shaken:
+			main.radial_menu_controller.card_toggle_shaken(gu)
+			main._solo_mirror_shaken(gu)

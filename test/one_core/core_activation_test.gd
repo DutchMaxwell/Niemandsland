@@ -201,3 +201,52 @@ func test_drive_runs_a_plain_hold_and_shoot_activation_to_done() -> void:
 	assert_str(str(r["step"])).override_failure_message("the core's answer: %s" % r).is_equal("done")
 	assert_int(int(r["steps"])).is_greater_equal(2)
 	assert_int(_main._tray_rng.state).override_failure_message("the tray threw no die").is_not_equal(rng_before)
+
+
+## Step 21: the fixture's units off the table again (the next seed rebuilds them).
+func _clear(units: Array) -> void:
+	for u in units:
+		_main.opr_army_manager.game_units.erase((u as GameUnit).unit_id)
+		for m in (u as GameUnit).models:
+			if (m as ModelInstance).node != null and is_instance_valid((m as ModelInstance).node):
+				(m as ModelInstance).node.free()
+
+
+## Step 21 (O4 b): the per-step landings leave the table where the core is - which models died (survivor positions
+## in capture order), Shaken - and the dead are gone before the morale die is thrown.
+func test_drive_lands_each_step_as_the_core_resolved_it() -> void:
+	var bad: Array = []
+	var morale_throws := 0
+	for s in 50:
+		var units := _volley_units()
+		var foe: GameUnit = units[1]
+		_main.seed_tray_rng(s)
+		var throws: Array = []   # [kind, the target's alive count] at each throw
+		var on_throw := func(kind: String, _index: int) -> void: throws.append([kind, foe.get_alive_count()])
+		var t: Array = [{"t": "begin"}, {"t": "intent", "kind": AiDecision.Action.HOLD, "shoot": foe.unit_id}]
+		var r: Dictionary = await CoreActivation.drive(_main, CoreActivation.capture(_main), units[0], t, true, on_throw)
+		var cu: Dictionary = _main.solo_controller._core_node_ready().plain_of(int(r["handle"]))["units"][foe.unit_id]
+		var table: Array = foe.get_alive_models().map(func(m: ModelInstance) -> Vector3: return m.node.global_position)
+		var core: Array = (cu["positions"] as Array).map(func(p: Array) -> Vector3: return Vector3(p[0], p[1], p[2]))
+		if table != core or foe.is_shaken != bool(cu["shaken"]):
+			bad.append("seed %d: table %s shaken %s | core %s shaken %s" % [s, table, foe.is_shaken, core, cu["shaken"]])
+		var saved := false
+		for th in throws:   # every throw after the save throw (the morale test) sees the final survivors
+			if saved and int(th[1]) != foe.get_alive_count():
+				bad.append("seed %d: %d alive at the morale throw, %d after" % [s, th[1], foe.get_alive_count()])
+			morale_throws += 1 if saved else 0
+			saved = saved or str(th[0]) == "defense"
+		_clear(units)
+	assert_int(morale_throws).override_failure_message("no seed threw a morale die").is_greater(0)
+	assert_array(bad).override_failure_message("\n".join(bad.slice(0, 10))).is_empty()
+
+
+## Step 21: a wound that does not kill shows on the existing red wound marker at once.
+func test_a_landed_wound_shows_on_the_wound_marker() -> void:
+	var foe := ParityTable._make_unit(_main, {"player": 1, "name": "Ogres", "models": 3, "x_in": 12.0, "z_step_in": 1.2,
+		"quality": 4, "defense": 4, "tough": 3, "game_system": "gf", "faction_folder": "robot_legions", "rules": []}, {})
+	var m: ModelInstance = foe.models[1]
+	var landing := [{"unit": foe.unit_id, "models": [{"at": m.node.global_position, "wounds_left": 1, "dead": false}]}]
+	await CoreActivation.land_step(_main, foe, landing, CoreActivation._start_models(_main), {})
+	assert_int(m.wounds_current).is_equal(1)
+	assert_object(m.node.get_node_or_null("WoundMarker")).override_failure_message("no wound marker").is_not_null()
