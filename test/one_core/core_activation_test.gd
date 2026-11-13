@@ -1,9 +1,11 @@
 extends GdUnitTestSuite
 ## One-core P3 step 19: the table skeleton `CoreActivation` and its three predicates (lifecycle, core, move-path).
+## Step 20: the driver loop `CoreActivation.drive` on the batch tray.
 ## Real: the main scene, its network manager class (transport swapped out, the e2e_mp_auto_verbs_test pattern),
 ## the NmlCore extension. Constructed: bare units from E2EBoot.make_unit with an OPRUnit profile of one weapon.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
+const ParityTable := preload("res://test/parity/parity_table.gd")
 
 var _runner: GdUnitSceneRunner
 var _main: Node
@@ -174,3 +176,28 @@ func test_capture_returns_a_live_core_handle_and_zero_without_a_controller() -> 
 	assert_int(CoreActivation.capture(_main)).override_failure_message("no controller").is_equal(0)
 	_main._ensure_solo_controller()
 	assert_int(CoreActivation.capture(_main)).override_failure_message("with a controller").is_not_equal(0)
+
+
+## Step 20 fixture: 10 AI riflemen (Rifle 24", A1) vs 5 human models 12" away; batch tray, so no save prompt.
+func _volley_units() -> Array:
+	_main.solo_ai_slots = {2: true}
+	_main._ensure_solo_controller()
+	_main._solo_batch = true
+	var side := {"quality": 4, "defense": 4, "tough": 1, "z_step_in": 1.2, "game_system": "gf",
+		"faction_folder": "robot_legions", "rules": []}
+	var att := ParityTable._make_unit(_main, side.merged({"player": 2, "name": "Att", "models": 10, "x_in": 0.0}),
+		{"name": "Rifle", "range_in": 24, "attacks": 1, "count": 10, "rules": []})
+	var foe := ParityTable._make_unit(_main, side.merged({"player": 1, "name": "Def", "models": 5, "x_in": 12.0}), {})
+	return [att, foe]
+
+
+func test_drive_runs_a_plain_hold_and_shoot_activation_to_done() -> void:
+	var units := _volley_units()
+	var foe: GameUnit = units[1]
+	_main.seed_tray_rng(7)
+	var rng_before: int = _main._tray_rng.state
+	var t: Array = [{"t": "begin"}, {"t": "intent", "kind": AiDecision.Action.HOLD, "shoot": foe.unit_id}]
+	var r: Dictionary = await CoreActivation.drive(_main, CoreActivation.capture(_main), units[0], t, true)
+	assert_str(str(r["step"])).override_failure_message("the core's answer: %s" % r).is_equal("done")
+	assert_int(int(r["steps"])).is_greater_equal(2)
+	assert_int(_main._tray_rng.state).override_failure_message("the tray threw no die").is_not_equal(rng_before)

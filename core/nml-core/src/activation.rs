@@ -119,18 +119,20 @@ pub fn allowance(statics: &[UnitStatic], state: &State, si: usize, seams: Seams,
     Allowance { advance: parts[0].total(), rush: parts[1].total(), charge: parts[2].total(), widened_by }
 }
 
-/// One drop: the declared mode and each model's position (`state.positions` order). Literals: `..Default::default()`.
+/// One drop: the declared mode, each model's position (`state.positions` order) and each model's
+/// walked path this activation (world XZ metres, same order; empty = none). Literals: `..Default::default()`.
 #[derive(Debug, Clone, Default)]
-pub struct Drop { pub mode: i64, pub placed: Vec<[f64; 3]> }
+pub struct Drop { pub mode: i64, pub placed: Vec<[f64; 3]>, pub trails: Vec<Vec<[f64; 2]>> }
 
 /// `check_move`'s answer: accepted (with the overrun line when not enforced) or refused.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Check { Ok { lines: Vec<LogLine> }, Refused { reason: String } }
 
 /// The move check of one drop against the unit's start in `state`: (1) a declared mode, (2) one
-/// position per model, (3) every model's horizontal straight line within the mode's allowance
-/// (+0.01" float noise). An overrun is refused with the O3 sentence when `enforce`, else accepted
-/// with that sentence as one log line.
+/// position per model, (3) every model's walked path (its trail when it has 2+ points, which must
+/// run from its start to its placed position within 0.01", else its horizontal straight line)
+/// within the mode's allowance (+0.01" float noise). An overrun is refused with the O3 sentence
+/// when `enforce`, else accepted with that sentence as one log line.
 pub fn check_move(statics: &[UnitStatic], state: &State, si: usize, seams: Seams, terrain: &Terrain, drop: &Drop, enforce: bool) -> Check {
     let (mode, m) = match drop.mode {
         ADVANCE => ("Advance", 0),
@@ -142,7 +144,19 @@ pub fn check_move(statics: &[UnitStatic], state: &State, si: usize, seams: Seams
     if drop.placed.len() != start.len() {
         return Check::Refused { reason: "placement does not match the unit's models".to_string() };
     }
-    let x = start.iter().zip(&drop.placed).map(|(a, b)| (a[0] - b[0]).hypot(a[2] - b[2]) / INCHES_TO_METERS).fold(0.0, f64::max);
+    let inch = |p: [f64; 2], q: [f64; 2]| (p[0] - q[0]).hypot(p[1] - q[1]) / INCHES_TO_METERS;
+    let mut x = 0.0f64;
+    for (i, (a, b)) in start.iter().zip(&drop.placed).enumerate() {
+        let (a, b) = ([a[0], a[2]], [b[0], b[2]]);
+        let walked = match drop.trails.get(i).filter(|t| t.len() >= 2) {
+            Some(t) if inch(t[0], a) > 0.01 || inch(t[t.len() - 1], b) > 0.01 => {
+                return Check::Refused { reason: "trail does not match the placed model".to_string() };
+            }
+            Some(t) => t.windows(2).map(|w| inch(w[0], w[1])).sum(),
+            None => inch(a, b),
+        };
+        x = x.max(walked);
+    }
     let a = allowance(statics, state, si, seams, terrain);
     let y = [a.advance, a.rush, a.charge][m];
     if x <= y + 0.01 {
@@ -192,7 +206,6 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
     // Not HOLD: a mode was declared and the last placement moved (or does not match the models).
     let mut moved = Vec::new();
     if let (true, Some(p), Some(pi), Some(si)) = (kind != HOLD, &placed, t.iter().rposition(|x| matches!(x, Input::Placed(_))), at) {
-        #[allow(clippy::needless_update)] // the plan's literal form: steps 56 and 78 add fields to `Drop`
         let drop = Drop { mode: declared, placed: p.clone(), ..Default::default() };
         match check_move(statics, state, si, seams, terrain, &drop, enforce) {
             Check::Refused { reason } => return ActStep::Refused { index: pi, reason },
@@ -544,7 +557,6 @@ mod tests {
         vec![[d * INCHES_TO_METERS, 0.0, 0.0]]
     }
 
-    #[allow(clippy::needless_update)] // the plan's literal form: later steps add fields to `Drop`
     fn check(st: &State, statics: &[UnitStatic], mode: i64, placed: Vec<[f64; 3]>, enforce: bool) -> Check {
         check_move(statics, st, 0, seams(), &Terrain::default(), &Drop { mode, placed, ..Default::default() }, enforce)
     }
@@ -612,6 +624,31 @@ mod tests {
         let Check::Ok { lines } = check(&st, &statics, ADVANCE, east(7.2), false) else { panic!("enforce off accepts") };
         assert_eq!(lines.len(), 1);
         assert_eq!((lines[0].text.as_str(), lines[0].detail.as_deref()), ("Squad: a model moved 7.2\" - the Advance allowance is 7.0\".", Some("Great Musician")));
+    }
+
+    /// A trail in world XZ metres from inch points.
+    fn trail(points: &[[f64; 2]]) -> Vec<[f64; 2]> {
+        points.iter().map(|p| [p[0] * INCHES_TO_METERS, p[1] * INCHES_TO_METERS]).collect()
+    }
+
+    /// With a trail of 2+ points the check measures the walked path, which must run from the
+    /// model's start to its placed position (RED: measure the chord when a trail exists -> the
+    /// 4"+4" walk, chord 5.66", turns Ok; skip the start check -> the 1"-off trail, 5.1" long, Ok).
+    #[test]
+    fn the_check_measures_the_walked_path() {
+        let (st, statics) = squad_line();
+        let go = |placed: Vec<[f64; 3]>, trails: Vec<Vec<[f64; 2]>>| {
+            check_move(&statics, &st, 0, seams(), &Terrain::default(), &Drop { mode: ADVANCE, placed, trails }, true)
+        };
+        let corner = vec![[4.0 * INCHES_TO_METERS, 0.0, 4.0 * INCHES_TO_METERS]];
+        assert_eq!(go(corner.clone(), vec![trail(&[[0.0, 0.0], [4.0, 0.0], [4.0, 4.0]])]), refusal("Squad: a model moved 8.0\" - the Advance allowance is 6.0\"."));
+        assert_eq!(go(corner.clone(), vec![]), OK, "no trail: the chord, 5.66\"");
+        assert_eq!(go(corner, vec![trail(&[[4.0, 4.0]])]), OK, "one point is no path: the chord");
+        assert_eq!(go(east(5.9), vec![trail(&[[0.0, 0.0], [5.9, 0.0]])]), OK);
+        assert_eq!(go(east(6.2), vec![]), refusal("Squad: a model moved 6.2\" - the Advance allowance is 6.0\"."));
+        let mismatch = refusal("trail does not match the placed model");
+        assert_eq!(go(east(5.0), vec![trail(&[[0.0, 1.0], [5.0, 0.0]])]), mismatch, "starts 1\" off the start");
+        assert_eq!(go(east(5.0), vec![trail(&[[0.0, 0.0], [4.0, 0.0]])]), mismatch, "ends 1\" short of the placement");
     }
 
     /// The activation checks its last placement: an enforced overrun is refused at that `Placed`

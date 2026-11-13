@@ -6591,6 +6591,13 @@ pub(crate) fn tray_morale_for(
     });
     let self_wounds = shot.absorb(r);
     land_wounds_with(state, i, self_wounds, seams.tray_exact);
+    // One-core P3 step 26: the table's outcome line after the last morale die (`_solo_morale_test`'s match,
+    // main.gd:13170-13184); its dice line stays the tray's. Every cause reaches that one match on the table.
+    tray.say(|| LogLine { rule: "morale", category: Category::Combat, side: state.player[i], text: match outcome {
+        Morale::Passed => format!("{} passes morale", us.name),
+        Morale::Shaken => format!("{} fails morale — Shaken", us.name),
+        Morale::Routed => format!("{} fails morale at half strength — ROUTS", us.name),
+    }, detail: None });
     match outcome {
         Morale::Passed => {}
         Morale::Shaken => {
@@ -9775,9 +9782,20 @@ fn resolve_with(
                     // BEFORE these wounds land.
                     let alive_before = morale_alive(&next, si, seams);
                     let wounds_before = morale_wounds_left(&next, si, seams);
+                    // One-core P3 step 59: the unit chain (host, then its joined heroes) before the wounds land, as
+                    // the volley's step 7. Only a supplied tray takes it: a seeded one clones nothing.
+                    let chain_before = tray.feed().is_some().then(|| std::iter::once(si)
+                        .chain(next.attached[si].iter().copied())
+                        .map(|u| (u, next.positions[u].clone(), next.wounds[u].clone())).collect::<Vec<_>>());
                     // R3-X2a (`EPOCH_73_V36`, lead ruling 2): the surplus wounds the host's models cannot soak go on to the
                     // joined hero (heroes last); below 73 `land_pool_wounds` drops them as before.
                     land_pool_wounds(&mut next, si, w, seams.tray_exact, seams, &mut shot.log);
+                    // One-core P3 step 59: one landing per changed chain member, stamped right after the test's draw.
+                    for (u, at, wounds) in chain_before.into_iter().flatten() {
+                        if let Some(l) = landing_of(&next, u, &at, &wounds) {
+                            tray.land(|| l);
+                        }
+                    }
                     // main.gd:1096-1098 — a NON-charge activation tests morale for
                     // these wounds at its very END ("units in melee don't take
                     // morale tests from wounds at the end of an activation").
