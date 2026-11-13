@@ -1029,6 +1029,80 @@ func test_a_formation_without_an_open_activation_leaves_no_drop() -> void:
 	assert_array(_main.move_trails.ledger.entries_for_unit(u.unit_id)).is_empty()
 
 
+## ---- step 31: the selector without Off, Advance at every activation (O1/O2, O18 (a)) ----
+
+## A real selection change (selection_changed fires) of exactly `objs`.
+func _pick(objs: Array) -> void:
+	_main.object_manager._deselect_all()
+	for o in objs:
+		_main.object_manager._add_to_selection(o)
+
+
+func _cap() -> int:
+	return int(_main.object_manager._movement_cap)
+
+
+func _off_shown() -> bool:
+	return (_main._movement_cap_buttons[ObjectManager.MovementCap.OFF] as Button).visible
+
+
+## Step 31: selecting a plain human unit hides Off and turns an Off selector into Advance, a Rush stays Rush; a "Furious"
+## unit (a lifecycle unit off the move path, O18 (a)) shows Off and keeps an Off selector; an activated plain unit shows Off.
+func test_a_move_path_unit_hides_off_and_an_off_selector_becomes_advance() -> void:
+	var u := _human("Rifles")
+	var f := _human("Berserkers", ["Furious"])
+	_main.object_manager.set_movement_cap(ObjectManager.MovementCap.OFF)
+	_pick([_node(u, 0), _node(u, 1)])
+	assert_bool(_off_shown()).override_failure_message("Off shown for a move-path unit").is_false()
+	assert_int(_cap()).override_failure_message("the selector stayed Off").is_equal(ObjectManager.MovementCap.ADVANCE)
+	_main.object_manager.set_movement_cap(ObjectManager.MovementCap.OFF)
+	_pick([_node(f, 0), _node(f, 1)])
+	assert_bool(_off_shown()).override_failure_message("Off hidden for a Furious unit").is_true()
+	assert_int(_cap()).override_failure_message("a Furious unit's Off was changed").is_equal(ObjectManager.MovementCap.OFF)
+	_main.object_manager.set_movement_cap(ObjectManager.MovementCap.RUSH)
+	_pick([_node(u, 0)])
+	assert_int(_cap()).override_failure_message("Rush did not stay").is_equal(ObjectManager.MovementCap.RUSH)
+	u.is_activated = true
+	_pick([_node(u, 0)])
+	assert_bool(_off_shown()).override_failure_message("Off hidden for an activated unit").is_true()
+
+
+## Step 31: the Start of a move-path unit sets Advance (a Furious unit's Start keeps the selector); its End shows Off again.
+func test_the_start_sets_advance_and_the_end_shows_off_again() -> void:
+	var u := _human("Rifles")
+	var f := _human("Berserkers", ["Furious"])
+	_main.object_manager.set_movement_cap(ObjectManager.MovementCap.RUSH)
+	CoreActivation.open_session(_main, f)
+	assert_int(_cap()).override_failure_message("a Furious Start changed the selector").is_equal(ObjectManager.MovementCap.RUSH)
+	CoreActivation.close_session(_main, f.unit_id)
+	_pick([_node(u, 0)])
+	CoreActivation.open_session(_main, u)
+	assert_int(_cap()).override_failure_message("the Start kept Rush").is_equal(ObjectManager.MovementCap.ADVANCE)
+	assert_bool(_off_shown()).is_false()
+	u.is_activated = true
+	CoreActivation.close_session(_main, u.unit_id)
+	assert_bool(_off_shown()).override_failure_message("Off hidden after the End").is_true()
+
+
+## Step 31: the core reads the declaration from the selector: Advance 1, Rush 2, Charge 3 (sim.rs).
+func test_declared_mode_is_the_cores_kind() -> void:
+	var got: Array = []
+	for mode in [ObjectManager.MovementCap.ADVANCE, ObjectManager.MovementCap.RUSH, ObjectManager.MovementCap.CHARGE]:
+		_main.object_manager.set_movement_cap(mode)
+		got.append(CoreActivation.declared_mode(_main))
+	assert_array(got).is_equal([1, 2, 3])
+
+
+## Step 31: with the flag off the row is today's: Off shown, an Off selector stays Off for a plain human unit.
+func test_with_the_flag_off_the_selector_row_is_as_today() -> void:
+	var u := _human("Rifles")
+	CoreActivation._env = 0
+	_main.object_manager.set_movement_cap(ObjectManager.MovementCap.OFF)
+	_pick([_node(u, 0), _node(u, 1)])
+	assert_bool(_off_shown()).is_true()
+	assert_int(_cap()).is_equal(ObjectManager.MovementCap.OFF)
+
+
 ## ---- step 65: the formation tools and the group rotation pass the drag gate ----
 
 ## Every model's position and facing: a re-form moves them, a group turn moves and turns them.

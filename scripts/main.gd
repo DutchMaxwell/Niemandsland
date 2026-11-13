@@ -145,6 +145,7 @@ var _dice_preset_buttons: Array[Button] = []
 var _dice_count_value_label: Label = null
 var _current_roll_column: VBoxContainer = null
 var _movement_cap_buttons: Dictionary = {}  # MovementCap mode -> Button (the "Movement" cap row)
+var _refreshing_cap_row := false   # one-core P3 step 31: the row refresh is not re-entrant
 
 # Success evaluation + rerolls (display-only aids; the rules live in DiceRules).
 var _success_target: int = DiceRules.TARGET_NONE
@@ -568,6 +569,7 @@ func _ready() -> void:
 	# Proactive during drag: nearby foreign units fade their wall in (~3"); violations pulse.
 	object_manager.drag_updated.connect(_check_separation_for_selected_units.bind(true))
 	object_manager.selection_changed.connect(_on_selection_changed_update_card)
+	object_manager.selection_changed.connect(_refresh_movement_cap_row)
 	object_manager.selection_changed.connect(_on_selection_changed_for_separation)
 
 	# Hide distance label initially
@@ -18267,6 +18269,27 @@ func _update_movement_cap_display() -> void:
 	var active: int = object_manager.get("_movement_cap") if object_manager else ObjectManager.MovementCap.OFF
 	for mode in _movement_cap_buttons:
 		HouseStyle.set_selected(_movement_cap_buttons[mode] as Button, mode == active)
+	_refresh_movement_cap_row()
+
+
+## One-core P3 step 31 (O1/O2, O18 (a)): one selected move-path unit that is not activated has no Off on its selector, and
+## an Off selector becomes Advance (a Rush or Charge picked after the Start stays). Every other selection, and the flag
+## off: Off shown, nothing changed (today's row). Runs on every selection change, from the display update and from
+## CoreActivation's open and close (the row cannot decide at build time: the AI seat exists only after _ready). The display
+## update it calls calls it back: the guard stops that re-entry, so the pair can never recurse.
+func _refresh_movement_cap_row(_selected: Array = []) -> void:
+	var off = _movement_cap_buttons.get(ObjectManager.MovementCap.OFF)   # untyped: a freed button at quit
+	if _refreshing_cap_row or off == null or not is_instance_valid(off) or object_manager == null:
+		return
+	_refreshing_cap_row = true
+	var units := UnitUtils.get_unique_units(object_manager.get_selected_objects())
+	var on_path: bool = units.size() == 1 and not (units[0] as GameUnit).is_activated \
+		and CoreActivation.on_move_path(self, units[0])
+	(off as Button).visible = not on_path
+	if on_path and object_manager._movement_cap == ObjectManager.MovementCap.OFF:
+		object_manager.set_movement_cap(ObjectManager.MovementCap.ADVANCE)
+		_update_movement_cap_display()
+	_refreshing_cap_row = false
 
 
 ## Builds the dice-count card (the mockup's counter): the −10 … +10 steps around the big
