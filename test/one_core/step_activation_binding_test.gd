@@ -368,7 +368,7 @@ func test_step_activation_lets_a_unit_that_advanced_shoot() -> void:
 
 ## A core with a stamped header over "a" (models at `a_xs`, one 24" Rifle each) and "b" (models at `b_xs`), x in inches;
 ## `board` = a school world for the header's terrain ({} = no terrain). The handle on the captured state.
-func _stamped_handle(core: Object, a_xs: Array, b_xs: Array, board: Dictionary = {}, copies := -1) -> int:
+func _stamped_handle(core: Object, a_xs: Array, b_xs: Array, board: Dictionary = {}, copies := -1, b_rules := []) -> int:
 	var at := func(x: float) -> Vector3: return Vector3(x * IN2M, 0, 0)
 	var a := _unit(1, a_xs.map(at), "a")
 	var b := _unit(2, b_xs.map(at), "b")
@@ -380,6 +380,7 @@ func _stamped_handle(core: Object, a_xs: Array, b_xs: Array, board: Dictionary =
 	w.range_value = 24
 	w.attacks = 1
 	w.count = a_xs.size() if copies < 0 else copies
+	b.unit_properties["special_rules"] = b_rules
 	a.source_type = "opr"
 	a.source_data = OPRApiClient.OPRUnit.new()
 	(a.source_data as OPRApiClient.OPRUnit).weapons.append(w)
@@ -473,3 +474,36 @@ func test_a_weapon_with_fewer_copies_than_models_and_no_loadout_fires_its_ratio(
 			"shoot": "b"}], true)
 		assert_str("%s %s %s" % [r.get("step"), r.get("kind", ""), r.get("faces", "")]) \
 			.override_failure_message("%d copies: %s" % [copies, r]).is_equal("need_roll attack %d" % copies)
+
+
+## 42e: the binding kept the statics it built for a set of unit keys, whatever those units' profiles became. A spell grant
+## appends a " (spell)" rule to a unit and its revoke takes it away again (main.gd `_solo_apply_grant` /
+## `_solo_revoke_grant`); the unit keeps its key, so the next capture must read the profile of that moment. "a" holds and
+## shoots "b" 12" away: with a granted Stealth its hit dice need 5+, without it 4+ - grant, revoke, grant on ONE core.
+func test_a_capture_reads_the_profile_a_spell_grant_changed_under_the_same_key() -> void:
+	var core: Object = ClassDB.instantiate("NmlCore")
+	var to_hit := func(rules: Array) -> int:
+		var h := _stamped_handle(core, [0.0], [12.0], {}, -1, rules)
+		var r: Dictionary = core.step_activation(h, "a", [{"t": "begin"}, {"t": "intent", "kind": AiDecision.Action.HOLD,
+			"shoot": "b"}], true)
+		return int(r.get("target", 0))
+	var got: Array = [to_hit.call(["Stealth (spell)"]), to_hit.call([]), to_hit.call(["Stealth (spell)"])]
+	assert_array(got).override_failure_message("to-hit with, without, with the granted Stealth: %s" % [got]) \
+		.is_equal([5, 4, 5])
+
+
+## 42e: the kept closure is also tied to the header's rules epoch - statics built before a header (epoch 0) are not
+## reused under it. Probe rule as in core_activation_test: Speed Feat (epoch 7) gives its bearer an 8" Advance in the
+## last round, the printed 6" at epoch 0.
+func test_a_capture_after_the_header_rebuilds_the_statics_at_its_epoch() -> void:
+	var core: Object = ClassDB.instantiate("NmlCore")
+	var a := _unit(1, [Vector3.ZERO], "a")
+	a.unit_properties.merge({"special_rules": ["Speed Feat"], "game_system": "gf", "faction_folder": "orc_marauders"}, true)
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {"a": a, "b": _unit(2, [Vector3(30.0 * IN2M, 0, 0)], "b")}
+	var state := BattleSim.capture(army, func() -> Array: return [], func(_i: int) -> int: return 0, 4, 4)
+	var plain := BattleSim.state_to_plain(state)
+	var before := float((core.move_allowance(core.capture_plain(plain), "a") as Dictionary).get("advance", 0.0))
+	assert_bool(core.set_game_header(AiActRecorder._header_line(state, Callable(), {}))).is_true()
+	var after := float((core.move_allowance(core.capture_plain(plain), "a") as Dictionary).get("advance", 0.0))
+	assert_array([before, after]).override_failure_message("no header, then the game's header").is_equal([6.0, 8.0])

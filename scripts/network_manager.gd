@@ -96,8 +96,21 @@ const SYNCABLE_UNIT_PROPERTIES: PackedStringArray = [
 	"tag_markers",      # Precision Tag marks (int) — the Spotter pool's once-per-game sister.
 	"piercing_tag_markers",  # Piercing Tag / Target pool (int) — the AI answers each human on that human's machine (co-op).
 	"piercing_tag_source",   # which rule placed it (String): Piercing Target's pool stands, every other tag spends.
+	# Latch sweep F3: stamps a rule on one table writes and an attack resolved on the OTHER table reads (the AI answers each
+	# human on that human's machine, so a unit is attacked and defended on either).
+	"moved_round",                  # the round the unit last moved (int): Entrenched / Artillery read the TARGET's stamp
+	"ravage_round",                 # the round Ravage last rolled (int; once per round)
+	"regenerative_strength_round",  # the round its token dice last rolled (int; once per round)
+	"reckless_ap_round",            # Reckless Piercing: the round the bearer's weapons carry AP(+1) (int)
+	"reckless_backfire_round",      # Reckless Piercing: the round enemies carry AP(+1) against it (int)
+	"mind_control_moved_round",     # the round Mind Control last moved this unit (int; once per round)
+	"vengeance_markers",            # Vengeance markers on the destroyer (int): +1 to hit per marker for whoever attacks it
 	"spell_move_mod",   # {advance, rush} — the NET spell movement delta the move bands read.
 	"spell_range_mod",  # int — the NET spell shooting-range delta every volley/plan site reads.
+	# Latch sweep F2b: the table that runs the NEXT answer / the next round start may not be the one that wrote these.
+	"delayed_action_round",     # the round an AI Delayed Action carrier passed in (int; once per round)
+	"reinforcement_due_round",  # the round a sacrificed unit's copy is due (int; null = kept)
+	"reinforcement_spent",      # Reinforcement used, once per game (bool)
 	"speed_feat_used_speed_feat",       # D22 (NML-984): a spent once-per-game Speed Feat (bool) —
 	"speed_feat_used_speed_feat_aura",  # the other table's wheel must not offer it again.
 	# MP1: the other once-per-game latches (bool), one exact key per registry rule that carries
@@ -121,10 +134,11 @@ const SYNCABLE_UNIT_PROPERTIES: PackedStringArray = [
 ]
 
 ## Latches whose key is BUILT from a rule name (one per rule), so no fixed list can name them all. Only these
-## two name families; anything else still has to be listed above.
+## name families; anything else still has to be listed above.
 const SYNCABLE_UNIT_PROPERTY_PREFIXES: PackedStringArray = [
 	"storm_used_",           # Storm Attack family: storm_used_<snake_case rule>
 	"takedown_bonus_used_",  # Takedown Shot / Strike bonus group: takedown_bonus_used_<rule name>
+	"growth_",               # Growth Markers: growth_<snake_case rule>, the on-kill accrual (the round tick runs on both tables)
 ]
 
 

@@ -366,8 +366,10 @@ var _solo_pending_replies: int:
 	get: return int(_rule_state().get("pending_replies", 0))
 	set(value): _rule_state()["pending_replies"] = value
 
-## unit_id -> true for units whose activation already earned the AI's reply THIS round
-## (finding 5: re-toggling an activation marker must never grant a second answer).
+## unit_id -> the round whose activation earned the AI's reply (finding 5: re-toggling an activation marker must never
+## grant a second answer). The ROUND is stored, not a flag cleared at a round start: only the machine that closes a round
+## runs `_solo_end_round`, so in an online co-op room the other machine's marks would outlive their round.
+## A boolean `true` (a save from before this change) still reads as "this round".
 ## NML-949: keyed by unit_id, NOT instance_id — instance ids are meaningless after a load.
 var _solo_replied_ids: Dictionary:
 	get:
@@ -1669,6 +1671,12 @@ func _solo_drop_open_pick_of(gu: GameUnit) -> void:
 			"%s is activated — the open target pick is dropped" % host.get_name())
 
 
+## Whether `unit_id`'s activation already earned the AI's reply in the CURRENT round (see `_solo_replied_ids`).
+func _solo_replied_this_round(unit_id: String) -> bool:
+	var mark: Variant = _solo_replied_ids.get(unit_id)
+	return bool(mark) if mark is bool else (mark is int or mark is float) and int(mark) == opr_army_manager.current_round
+
+
 func _on_solo_human_activated(gu: GameUnit) -> void:
 	# The first solo activation IS the game start (see _solo_ensure_playing_phase), so it faces the same
 	# deployment gate as the Start-Game button — otherwise activating a unit is a second, button-free way
@@ -1703,10 +1711,10 @@ func _on_solo_human_activated(gu: GameUnit) -> void:
 	# un-marking and re-marking a unit (a mis-click fix, or re-marking after an attack) re-emitted
 	# unit_activated and queued the AI a SECOND answer for the same activation — the alternation then ran
 	# ahead of the human ("unrecognized activations"). The pump still runs so the state machine drains.
-	if _solo_replied_ids.has(gu.unit_id):
+	if _solo_replied_this_round(gu.unit_id):
 		await _solo_pump()
 		return
-	_solo_replied_ids[gu.unit_id] = true
+	_solo_replied_ids[gu.unit_id] = opr_army_manager.current_round
 	# Coordinate: an open hand-off the player walked away from (they activated somebody ELSE) is
 	# forfeited here rather than left to stall the AI's owed reply.
 	_solo_coordinate_release_if_bypassed(gu)
@@ -1818,7 +1826,8 @@ func _solo_ai_delayed_action_pass(advance_replies: bool = true) -> bool:
 	var passer: GameUnit = choice.get("unit") as GameUnit
 	if passer == null:
 		return false
-	SoloController.delayed_action_stamp(passer, opr_army_manager.current_round)
+	# MP (online co-op): the AI's next owed reply may be answered on the other human's machine, so the stamp rides the wire
+	_sync_unit_property(passer, SoloController.DELAYED_ACTION_STAMP, opr_army_manager.current_round)
 	if advance_replies:
 		_solo_pass_turn(solo_controller.ai_slot)
 	if battle_log != null:
@@ -8901,7 +8910,7 @@ func _solo_vengeance_on_destroyed(dead: GameUnit, destroyer: GameUnit) -> void:
 	if markers <= 0:
 		return
 	var host := _solo_joined_chain(destroyer)[0] as GameUnit
-	host.unit_properties["vengeance_markers"] = int(host.unit_properties.get("vengeance_markers", 0)) + markers
+	_sync_unit_property(host, "vengeance_markers", int(host.unit_properties.get("vengeance_markers", 0)) + markers)   # MP: read by whoever attacks it next
 	if battle_log != null:
 		_log_rule_event(BattleLog.Category.COMBAT,
 			"%s: %s falls — %d Vengeance marker%s on %s (its enemies get +1 to hit per marker)" % [
@@ -9279,7 +9288,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 					if battle_log != null:
 						battle_log.log_event(BattleLog.Category.COMBAT, "Ravage: %s %s" % [rv.get_name(), rv_skip], true)
 					continue
-				rv.unit_properties["ravage_round"] = opr_army_manager.current_round
+				_sync_unit_property(rv, "ravage_round", opr_army_manager.current_round)   # MP: a strike-back on the other table is once per round too
 			var rv_dice: int = rx * rv.get_alive_count()
 			var rv_owner: String = _roller_label(rv)
 			var rv_faces: Array = await _solo_tray_roll(rv_dice, AiCombatMath.RAVAGE_WOUND_TARGET, rv_owner, "ravage")
@@ -9315,7 +9324,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 			if not gs_skip.is_empty():
 				if battle_log != null: battle_log.log_event(BattleLog.Category.COMBAT, "Regenerative Strength: %s %s" % [gu.get_name(), gs_skip], true)
 				continue
-			gu.unit_properties["regenerative_strength_round"] = opr_army_manager.current_round
+			_sync_unit_property(gu, "regenerative_strength_round", opr_army_manager.current_round)   # MP: same once-per-round latch
 			var gs_owner: String = _roller_label(gu)
 			var gs_faces: Array = await _solo_tray_roll(gs_tokens, 4, gs_owner, "attack")
 			var gs_wounds: int = gs_faces.filter(func(f): return int(f) >= 4).size()
@@ -12225,7 +12234,7 @@ func _solo_animate_move(move_paths: Array, allow_snap: bool = true) -> void:
 		for mv0 in move_paths:
 			var mi0 := (mv0 as Dictionary).get("model") as ModelInstance
 			if mi0 != null and mi0.unit is GameUnit:
-				(mi0.unit as GameUnit).unit_properties["moved_round"] = opr_army_manager.current_round
+				_sync_unit_property(mi0.unit as GameUnit, "moved_round", opr_army_manager.current_round)   # MP: the other table reads a target's stamp
 	if move_paths.is_empty():
 		return
 	var speed: float = SoloController.PACE_MOVE_SPEED_M_S / (SoloController.PACE_FAST_SCALE if _solo_fast else 1.0)
@@ -16117,7 +16126,8 @@ func _reinforcement_sacrifice(unit: GameUnit) -> void:
 		radial_menu_controller._update_fatigued_markers(unit)
 
 	var due: int = SoloController.reinforcement_arrival_round(round_no)
-	unit.unit_properties["reinforcement_due_round"] = due
+	# MP: the closing machine brings the copy back, and it is not always the sacrificer's machine, so the promise rides the wire
+	_sync_unit_property(unit, "reinforcement_due_round", due)
 	if battle_log != null:
 		# Which of the rule's two triggers fired is named, so the log reads as a decision, not an event.
 		var trigger: String = " while Shaken" if was_shaken else " (it was already destroyed)"
@@ -16165,7 +16175,7 @@ func _reinforcement_arrive_one(original: GameUnit, round_number: int) -> void:
 	var src: OPRApiClient.OPRUnit = original.source_data as OPRApiClient.OPRUnit
 	if src == null:
 		# Nothing to copy from (a hand-built or legacy unit). Say so instead of failing mutely.
-		original.unit_properties.erase("reinforcement_due_round")
+		_sync_unit_property(original, "reinforcement_due_round", null)
 		if battle_log != null:
 			_log_rule_event(BattleLog.Category.GENERAL,
 				"Reinforcement: %s cannot return — its army profile is not available" % original.get_name(), ai)
@@ -16215,8 +16225,8 @@ func _reinforcement_arrive_one(original: GameUnit, round_number: int) -> void:
 
 	# The promise is kept — and it is kept ONCE. The original keeps a visible spent stamp; the copy
 	# simply no longer carries the rule.
-	original.unit_properties.erase("reinforcement_due_round")
-	original.unit_properties["reinforcement_spent"] = true
+	_sync_unit_property(original, "reinforcement_due_round", null)   # MP: the kept promise must not be kept again on the other table
+	_sync_unit_property(original, "reinforcement_spent", true)
 	# "Can't seize or contest objectives on the round they deploy" — the SAME stamp an Ambush arrival
 	# uses, so _solo_auto_seize's existing lock covers this rule for free.
 	copy.unit_properties["ambush_arrived_round"] = round_number
@@ -20602,6 +20612,10 @@ func _on_network_command(type: String, payload: Variant, _from_peer: int) -> voi
 		_rpc_roll_result(int(payload.get("req", 0)), payload.get("faces", []))
 	elif type == "activation_check" and payload is Dictionary:
 		CoreActivation.on_check(self, payload, _from_peer)   # one-core P3 step 51 (N6 b)
+	elif type == "activation_mismatch" and payload is Dictionary:
+		CoreActivation.on_mismatch(self, payload, _from_peer)   # one-core P3 step 52 (O13 (b))
+	elif type == "correct_unit_activated" and payload is Dictionary:
+		CoreActivation.on_correct_activated(self, payload, _from_peer)   # step 52: a correction, never a new activation
 	elif type == "vfx_cue" and payload is Dictionary:
 		_vfx_draw(payload, _from_peer)
 	elif type == "session_ended":
@@ -22772,7 +22786,7 @@ func _on_units_dropped(moves: Array) -> void:
 			continue
 		var unit := UnitUtils.get_game_unit((mv as Dictionary).get("node") as Node3D)
 		if unit != null:
-			unit.unit_properties["moved_round"] = opr_army_manager.current_round
+			_sync_unit_property(unit, "moved_round", opr_army_manager.current_round)   # MP: the other table's AI shoots at a unit that moved
 			await _resolve_skirmish_drop(mv, unit)
 	await _solo_human_strafing(moves)
 
@@ -24369,13 +24383,13 @@ func _solo_apply_reckless_piercing(unit: GameUnit) -> void:
 		var face: int = int(faces[0]) if not faces.is_empty() else 1
 		if face >= tgt_v:
 			for cm in _solo_joined_chain(unit):
-				(cm as GameUnit).unit_properties["reckless_ap_round"] = opr_army_manager.current_round
+				_sync_unit_property(cm as GameUnit, "reckless_ap_round", opr_army_manager.current_round)   # MP: attacks on the other table read the stamps
 			if battle_log != null:
 				_log_rule_event(BattleLog.Category.COMBAT,
 					"%s: %s rolls %d — weapons get AP(+1) until the end of the round" % [n, unit.get_name(), face], true)
 		else:
 			for cm in _solo_joined_chain(unit):
-				(cm as GameUnit).unit_properties["reckless_backfire_round"] = opr_army_manager.current_round
+				_sync_unit_property(cm as GameUnit, "reckless_backfire_round", opr_army_manager.current_round)
 			if battle_log != null:
 				_log_rule_event(BattleLog.Category.COMBAT,
 					"%s: %s rolls a 1 — enemies get AP(+1) against it until the end of the round" % [n, unit.get_name()], true)
@@ -24471,7 +24485,7 @@ func _solo_apply_mind_control(unit: GameUnit) -> void:
 				away = Vector2(c.x - obj.x, c.z - obj.z)
 			var moved := solo_controller.forced_straight_move(tgt, away, float(sp.get("move_in", 6.0)))
 			if moved > 0.0 and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
-				tgt.unit_properties["mind_control_moved_round"] = round_now
+				_sync_unit_property(tgt, "mind_control_moved_round", round_now)   # MP: a second bearer answered on the other table must see it
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.MOVEMENT,
 					"%s: %s fails the morale test — Shaken, moved %.0f\" in a straight line (away from the marker)" % [n, tgt.get_name(), moved], true)
@@ -24915,7 +24929,7 @@ func _solo_growth_on_kill(attacker: GameUnit) -> void:
 			var cur := int(who.unit_properties.get(key, 0))
 			var cap := int(sp.get("max_markers", 2))
 			if cur < cap:
-				who.unit_properties[key] = cur + 1
+				_sync_unit_property(who, key, cur + 1)   # MP: the per-round tick runs on both tables, the kill only where it resolves
 				if battle_log != null:
 					_log_rule_event(BattleLog.Category.COMBAT, "%s: %s gains a marker for the kill (%d/%d)" % [
 						n, who.get_name(), cur + 1, cap], _solo_is_ai_unit(who))

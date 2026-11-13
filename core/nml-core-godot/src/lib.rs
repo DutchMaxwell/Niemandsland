@@ -127,6 +127,8 @@ struct RosterCache {
     profiles: Option<Rc<Profiles>>,
     roster: Option<Rc<Roster>>,
     statics: Option<Rc<Vec<UnitStatic>>>,
+    /// The header epoch the statics were built at (step 42e).
+    epoch: u32,
 }
 
 /// The per-GAME closure the SEARCH needs on top of a single state — the exact
@@ -1179,19 +1181,23 @@ impl NmlCore {
     /// Builds (or reuses) the profile table, roster and static closure for the
     /// roster this plain state carries.
     fn ensure_closure(&mut self, plain: &VarDictionary, keys: &[String]) -> Result<(), String> {
-        if self.cache.statics.is_some() && self.cache.keys == keys {
+        // Step 42e: the closure is kept only while the units' profiles (and the header epoch) are the ones it was built
+        // from. A unit keeps its key when a spell grant adds or revokes a rule, a joined hero falls or a Caster Group loses
+        // models - but its profile changes, and the next capture must read that one.
+        let (profiles, roster) = plain::build_roster(plain)?;
+        let epoch = self.header.as_ref().map(|h| h.knobs.rules_epoch).unwrap_or(0);
+        if self.cache.statics.is_some() && self.cache.keys == keys && self.cache.epoch == epoch
+            && self.cache.profiles.as_ref().is_some_and(|p| p.list == profiles.list) {
             return Ok(());
         }
-        let (profiles, roster) = plain::build_roster(plain)?;
         let root = self.root();
         if self.reg.is_none() {
             self.reg = Some(Registries::new(&root));
         }
         let reg = self.reg.as_mut().unwrap();
-        let rules_epoch = self.header.as_ref().map(|h| h.knobs.rules_epoch).unwrap_or(0);
-        let statics: Vec<UnitStatic> =
-            profiles.list.iter().map(|p| UnitStatic::build_for(reg, p, rules_epoch)).collect();
+        let statics: Vec<UnitStatic> = profiles.list.iter().map(|p| UnitStatic::build_for(reg, p, epoch)).collect();
         self.cache.keys = keys.to_vec();
+        self.cache.epoch = epoch;
         self.cache.profiles = Some(Rc::new(profiles));
         self.cache.roster = Some(Rc::new(roster));
         self.cache.statics = Some(Rc::new(statics));
