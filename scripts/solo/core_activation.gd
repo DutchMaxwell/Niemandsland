@@ -410,9 +410,6 @@ const JOURNAL_KEYS := {
 	"tag_markers": "Precision Tag",
 }
 const _NET := preload("res://scripts/network_manager.gd")
-## Step 67: the keys a buff record's granted-rule overlay writes (main._solo_apply_grant appends to `special_rules` IN
-## PLACE); Cancel puts them back with the records, in place, never through the tripwire.
-const OVERLAY_KEYS := ["special_rules", "rule_descriptions"]
 ## Step 67 (R8): the unit_properties keys the tripwire never reports, each with why. Every other key is a gameplay key.
 const TRIPWIRE_SKIP := {
 	"moved_round": "the reset (step 32) restores it",
@@ -496,17 +493,7 @@ static func undo_journal(main, gu: GameUnit) -> void:
 			main._solo_refresh_spell_stamps(u)
 			main._broadcast_spell_mods(u)
 			records_changed = true
-		for k in OVERLAY_KEYS:
-			var n: Variant = u.unit_properties.get(k)
-			var w: Variant = all[u.get_instance_id()].get(k)
-			if typeof(n) == typeof(w) and n == w:
-				continue
-			if n is Array and w is Array:
-				(n as Array).assign(w)   # in place: _solo_apply_grant appended to this very array
-			elif w == null:
-				u.unit_properties.erase(k)
-			else:
-				u.unit_properties[k] = _copy(w)
+		main.core_overlay_restore(u, all[u.get_instance_id()])   # the granted-rule overlay, in place (main.gd)
 	if records_changed:
 		main._solo_mirror_spell_state()   # the save mirror (spell_records) follows the records
 	if rules.has("Utility Buff") and _carries_buff(gu, rules):
