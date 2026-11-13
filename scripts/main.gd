@@ -365,8 +365,10 @@ var _solo_pending_replies: int:
 	get: return int(_rule_state().get("pending_replies", 0))
 	set(value): _rule_state()["pending_replies"] = value
 
-## unit_id -> true for units whose activation already earned the AI's reply THIS round
-## (finding 5: re-toggling an activation marker must never grant a second answer).
+## unit_id -> the round whose activation earned the AI's reply (finding 5: re-toggling an activation marker must never
+## grant a second answer). The ROUND is stored, not a flag cleared at a round start: only the machine that closes a round
+## runs `_solo_end_round`, so in an online co-op room the other machine's marks would outlive their round.
+## A boolean `true` (a save from before this change) still reads as "this round".
 ## NML-949: keyed by unit_id, NOT instance_id — instance ids are meaningless after a load.
 var _solo_replied_ids: Dictionary:
 	get:
@@ -1667,6 +1669,12 @@ func _solo_drop_open_pick_of(gu: GameUnit) -> void:
 			"%s is activated — the open target pick is dropped" % host.get_name())
 
 
+## Whether `unit_id`'s activation already earned the AI's reply in the CURRENT round (see `_solo_replied_ids`).
+func _solo_replied_this_round(unit_id: String) -> bool:
+	var mark: Variant = _solo_replied_ids.get(unit_id)
+	return bool(mark) if mark is bool else (mark is int or mark is float) and int(mark) == opr_army_manager.current_round
+
+
 func _on_solo_human_activated(gu: GameUnit) -> void:
 	# The first solo activation IS the game start (see _solo_ensure_playing_phase), so it faces the same
 	# deployment gate as the Start-Game button — otherwise activating a unit is a second, button-free way
@@ -1701,10 +1709,10 @@ func _on_solo_human_activated(gu: GameUnit) -> void:
 	# un-marking and re-marking a unit (a mis-click fix, or re-marking after an attack) re-emitted
 	# unit_activated and queued the AI a SECOND answer for the same activation — the alternation then ran
 	# ahead of the human ("unrecognized activations"). The pump still runs so the state machine drains.
-	if _solo_replied_ids.has(gu.unit_id):
+	if _solo_replied_this_round(gu.unit_id):
 		await _solo_pump()
 		return
-	_solo_replied_ids[gu.unit_id] = true
+	_solo_replied_ids[gu.unit_id] = opr_army_manager.current_round
 	# Coordinate: an open hand-off the player walked away from (they activated somebody ELSE) is
 	# forfeited here rather than left to stall the AI's owed reply.
 	_solo_coordinate_release_if_bypassed(gu)
@@ -1816,7 +1824,8 @@ func _solo_ai_delayed_action_pass(advance_replies: bool = true) -> bool:
 	var passer: GameUnit = choice.get("unit") as GameUnit
 	if passer == null:
 		return false
-	SoloController.delayed_action_stamp(passer, opr_army_manager.current_round)
+	# MP (online co-op): the AI's next owed reply may be answered on the other human's machine, so the stamp rides the wire
+	_sync_unit_property(passer, SoloController.DELAYED_ACTION_STAMP, opr_army_manager.current_round)
 	if advance_replies:
 		_solo_pass_turn(solo_controller.ai_slot)
 	if battle_log != null:
@@ -16115,7 +16124,8 @@ func _reinforcement_sacrifice(unit: GameUnit) -> void:
 		radial_menu_controller._update_fatigued_markers(unit)
 
 	var due: int = SoloController.reinforcement_arrival_round(round_no)
-	unit.unit_properties["reinforcement_due_round"] = due
+	# MP: the closing machine brings the copy back, and it is not always the sacrificer's machine, so the promise rides the wire
+	_sync_unit_property(unit, "reinforcement_due_round", due)
 	if battle_log != null:
 		# Which of the rule's two triggers fired is named, so the log reads as a decision, not an event.
 		var trigger: String = " while Shaken" if was_shaken else " (it was already destroyed)"
@@ -16163,7 +16173,7 @@ func _reinforcement_arrive_one(original: GameUnit, round_number: int) -> void:
 	var src: OPRApiClient.OPRUnit = original.source_data as OPRApiClient.OPRUnit
 	if src == null:
 		# Nothing to copy from (a hand-built or legacy unit). Say so instead of failing mutely.
-		original.unit_properties.erase("reinforcement_due_round")
+		_sync_unit_property(original, "reinforcement_due_round", null)
 		if battle_log != null:
 			_log_rule_event(BattleLog.Category.GENERAL,
 				"Reinforcement: %s cannot return — its army profile is not available" % original.get_name(), ai)
@@ -16213,8 +16223,8 @@ func _reinforcement_arrive_one(original: GameUnit, round_number: int) -> void:
 
 	# The promise is kept — and it is kept ONCE. The original keeps a visible spent stamp; the copy
 	# simply no longer carries the rule.
-	original.unit_properties.erase("reinforcement_due_round")
-	original.unit_properties["reinforcement_spent"] = true
+	_sync_unit_property(original, "reinforcement_due_round", null)   # MP: the kept promise must not be kept again on the other table
+	_sync_unit_property(original, "reinforcement_spent", true)
 	# "Can't seize or contest objectives on the round they deploy" — the SAME stamp an Ambush arrival
 	# uses, so _solo_auto_seize's existing lock covers this rule for free.
 	copy.unit_properties["ambush_arrived_round"] = round_number
