@@ -1027,3 +1027,66 @@ func test_a_formation_without_an_open_activation_leaves_no_drop() -> void:
 	_main.object_manager.commit_rotation_capture()
 	assert_int(drops[0]).override_failure_message("a drop with the flag off").is_equal(0)
 	assert_array(_main.move_trails.ledger.entries_for_unit(u.unit_id)).is_empty()
+
+
+## ---- step 65: the formation tools and the group rotation pass the drag gate ----
+
+## Every model's position and facing: a re-form moves them, a group turn moves and turns them.
+func _poses(u: GameUnit) -> Array:
+	return u.models.map(func(m: ModelInstance) -> Array: return [m.node.global_position, m.node.rotation.y])
+
+
+## The real Shift+R gesture: begin, `frames` turns of 45 degrees, commit.
+func _group_turn(frames: int) -> void:
+	_main.object_manager.begin_rotation_capture()
+	for _i in frames:
+		_main.object_manager.rotate_selected_group(45.0)
+	_main.object_manager.commit_rotation_capture()
+
+
+## Step 65 (O14 (1b)): a unit that was not started is neither re-formed (rows, arrow) nor turned as a group: nothing
+## moves, one "Activate <Unit> first." line per tool. After the Start each tool works as today.
+func test_the_formation_tools_need_the_start() -> void:
+	var u := _human("Rifles")
+	var at := _poses(u)
+	_select([_node(u, 0), _node(u, 1)])
+	_main.object_manager.arrange_selected_in_rows(2)
+	assert_array(_poses(u)).override_failure_message("re-formed in rows without a Start").is_equal(at)
+	_main.object_manager.arrange_selected_arrow()
+	assert_array(_poses(u)).override_failure_message("re-formed as an arrow without a Start").is_equal(at)
+	_group_turn(2)   # a held Shift+R turns every frame: one refusal line per gesture, not per frame
+	assert_array(_poses(u)).override_failure_message("turned as a group without a Start").is_equal(at)
+	assert_int(_log_lines("Activate Rifles first.").size()).is_equal(3)
+	CoreActivation.open_session(_main, u)
+	_group_turn(1)
+	assert_array(_poses(u)).override_failure_message("no group turn after the Start").is_not_equal(at)
+
+
+## Step 65 with 65a: after the Start a re-form passes the gate and leaves its ledger drop (step 32's reset reads it).
+func test_a_formation_inside_an_activation_writes_a_ledger_drop() -> void:
+	var u := _human("Rifles")
+	CoreActivation.open_session(_main, u)
+	var at := _poses(u)
+	_select([_node(u, 0), _node(u, 1)])
+	_main.object_manager.arrange_selected_in_rows(2)
+	assert_array(_poses(u)).override_failure_message("not re-formed after the Start").is_not_equal(at)
+	assert_array(_main.move_trails.ledger.entries_for_unit(u.unit_id)).override_failure_message("no ledger drop").is_not_empty()
+
+
+## Step 65 (the drag gate's step-30 rule): a mixed selection under a held Shift+R - one started unit, one not - turns the
+## started unit and leaves the other where it stands, with NO refusal line on any frame - neither "Activate <Unit> first."
+## nor the O5 sentence (the gate says why only when it refuses the whole selection, as a mixed drag does).
+func test_a_mixed_group_turn_turns_the_started_unit_and_says_nothing() -> void:
+	var a := _human("Alpha")
+	var b := _human("Bravo")
+	_node(b, 0).global_position.x += 0.3
+	_node(b, 1).global_position.x += 0.3
+	CoreActivation.open_session(_main, a)
+	var at_a: Array = _poses(a)
+	var at_b: Array = _poses(b)
+	_select([_node(a, 0), _node(a, 1), _node(b, 0), _node(b, 1)])
+	_group_turn(2)
+	assert_array(_poses(a)).override_failure_message("the started unit did not turn").is_not_equal(at_a)
+	assert_array(_poses(b)).override_failure_message("the unit that was not started turned").is_equal(at_b)
+	var refusals: Array = _main.battle_log.entries().filter(func(e: Dictionary) -> bool: return str(e["text"]).ends_with(" first."))
+	assert_array(refusals).override_failure_message("a refusal line for a mixed turn: %s" % [refusals]).is_empty()

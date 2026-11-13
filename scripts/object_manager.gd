@@ -84,6 +84,7 @@ const MOVE_BROADCAST_INTERVAL: float = 0.05  # ~20 Hz
 # gesture; committed as one RotateAction when the gesture ends.
 var _rotation_capture: Dictionary = {}
 var _rotation_capture_pos: Dictionary = {}   # one-core P3 step 65a: position per object at the gesture start
+var _group_turn_refused := false   # one-core P3 step 65: a refused group turn says why once per gesture
 # Minimum change before a gesture is recorded as undoable (avoids no-op entries).
 const MOVE_UNDO_EPSILON_M: float = 0.001  # 1 mm
 const ROTATION_UNDO_EPSILON_RAD: float = 0.0001  # ~0.006 degrees
@@ -2280,6 +2281,7 @@ func _rotate_loose_to_cursor(delta: float) -> void:
 func begin_rotation_capture() -> void:
 	_rotation_capture.clear()
 	_rotation_capture_pos.clear()
+	_group_turn_refused = false
 	for obj in _selected_objects:
 		if is_instance_valid(obj):
 			_rotation_capture[obj] = obj.rotation.y
@@ -4675,6 +4677,9 @@ func arrange_selected_in_rows(num_rows: int) -> void:
 	var objects: Array[Node3D] = _movable_selection()  # own-only in MP; all live in single-player
 	if objects.size() < 2:
 		return
+	objects = _drag_gate(objects)   # one-core P3 step 65 (O14 (1b)): a unit that was not started is not re-formed
+	if objects.size() < 2:
+		return
 
 	# #192: remember the pre-reform positions — the no-gain clamp measures against them.
 	var before_reform: Array = []
@@ -4718,6 +4723,9 @@ func arrange_selected_in_rows(num_rows: int) -> void:
 ## Arrange selected objects in an arrow/wedge, centred on the unit's current centre (Shift+A)
 func arrange_selected_arrow() -> void:
 	var objects: Array[Node3D] = _movable_selection()  # own-only in MP; all live in single-player
+	if objects.size() < 2:
+		return
+	objects = _drag_gate(objects)   # one-core P3 step 65 (O14 (1b)): a unit that was not started is not re-formed
 	if objects.size() < 2:
 		return
 
@@ -5244,6 +5252,13 @@ func _set_object_dimmed(obj: Node3D, dimmed: bool) -> void:
 func rotate_selected_group(angle_degrees: float) -> void:
 	# Only OWN (or unowned) objects rotate; another player's selected models stay put.
 	var movable := _movable_selection()
+	if movable.size() >= 2:   # one-core P3 step 65: a group turn moves models; one model's own turn only faces it
+		if _group_turn_refused:
+			return   # held Shift+R calls this every frame: the refusal's toast and line come once per gesture
+		movable = _drag_gate(movable)
+		if movable.is_empty():
+			_group_turn_refused = true
+			return
 	if movable.size() < 2:
 		# Single object or no movable selection - just rotate the object itself
 		if movable.size() == 1:
