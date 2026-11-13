@@ -1,5 +1,5 @@
-//! One-core P3 (N3 b): the round end of a plain game in the table's wording. Plain missions only (O7): a mission
-//! with markers (relics, destructible or secret markers) stays table code until its family moves.
+//! One-core P3 (N3 b): the round end and the round begin of a plain game in the table's wording. Plain missions only
+//! (O7): a mission with markers (relics, destructible or secret markers) stays table code until its family moves.
 
 use std::rc::Rc;
 
@@ -7,7 +7,9 @@ use serde_json::{json, Value};
 
 use crate::logline::{Category, LogLine};
 use crate::mission::{playout_seize, vp_of, vp_score_end, vp_score_round};
+use crate::rollout::cross_round;
 use crate::state::State;
+use crate::unit::UnitStatic;
 
 /// `_solo_player_label` (main.gd): the label the table gave `pid`, else "P<n>".
 fn label_of(labels: &[(i64, String)], pid: i64) -> String {
@@ -58,10 +60,25 @@ pub fn end_round(state: &mut State, labels: &[(i64, String)]) -> Result<Vec<LogL
     Ok(lines)
 }
 
+/// The table's round begin (`_solo_end_round` after `advance_round()`, main.gd): `cross_round` - the next round, every
+/// unit refreshed, the opener - and "Round %d begins". `finished_first` = the side that finished activating first last
+/// round (it did NOT take the last activation): it opens, unless it has no unit left on the table and the other side
+/// has one (`ai_opens_next_round`, GF and AoF). With no unit on either side it stays the opener (the table names the
+/// human side there; nothing can activate in that round). `None` = `cross_round`'s head count.
+pub fn begin_round(statics: &[UnitStatic], state: &mut State, finished_first: Option<i64>) -> (i64, Vec<LogLine>) {
+    let mut opener = cross_round(statics, state, finished_first);
+    let has = |side: i64| (0..state.units()).any(|k| state.player[k] == side && state.alive[k] > 0 && !state.dormant[k]);
+    if finished_first.is_some() && !has(opener) && has(3 - opener) {
+        opener = 3 - opener;
+    }
+    (opener, vec![general("round_begin", format!("Round {} begins", state.round))])
+}
+
 #[cfg(test)]
 mod tests {
-    use super::end_round;
+    use super::{begin_round, end_round};
     use crate::state::{Marker, Objective, State};
+    use crate::unit::UnitStatic;
     use crate::IN2M;
     use serde_json::json;
     use std::rc::Rc;
@@ -102,5 +119,22 @@ mod tests {
         st.markers_meta.push(serde_json::from_str::<Marker>("{}").unwrap());
         assert_eq!(end_round(&mut st, &[]), Err("unported: mission markers"));
         assert_eq!((st.objectives[0].owner, st.vp.as_deref()), (0, Some(&json!([2, 3]))));
+    }
+
+    /// Round 2 ends with every unit activated; side 2 finished first and opens round 3, every unit is fresh. With side
+    /// 1's units all dead, side 1 finishing first still hands the opening to side 2, the side with units left.
+    #[test]
+    fn the_side_that_finished_first_opens_the_next_round_unless_it_has_no_unit_left() {
+        let statics = [UnitStatic::default()];
+        let mut st = board(2, 30.0, 0);
+        st.activated = vec![true; 4];
+        let (opener, lines) = begin_round(&statics, &mut st, Some(2));
+        assert_eq!((opener, st.round, st.activated.clone()), (2, 3, vec![false; 4]));
+        assert_eq!(lines.into_iter().map(|l| l.text).collect::<Vec<_>>(), ["Round 3 begins"]);
+        let mut st = board(2, 30.0, 0);
+        st.alive = vec![0, 0, 1, 1];
+        assert_eq!(begin_round(&statics, &mut st, Some(1)).0, 2);
+        st.alive = vec![1, 1, 1, 1];
+        assert_eq!(begin_round(&statics, &mut st, Some(1)).0, 1);
     }
 }
