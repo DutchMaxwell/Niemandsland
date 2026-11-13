@@ -173,6 +173,8 @@ func test_a_reset_puts_the_unit_back_and_erases_every_drop() -> void:
 	assert_array(_sorted(_sent(net, "sync_move_trails_undo").map(func(a: Array) -> int: return int(a[2])))) \
 		.override_failure_message("trails undo: %s" % [net.sent]).is_equal(_sorted(drops))
 	assert_array(_sent(net, "sync_log_event").filter(func(a: Array) -> bool: return a[1] == LINE)).has_size(1)
+	assert_array(_sent(net, "sync_unit_property").filter(func(a: Array) -> bool: return a[1] == "moved_round")) \
+		.override_failure_message("moved_round not sent: %s" % [net.sent]).is_equal([[u.unit_id, "moved_round", 0]])
 	_end_net()
 	assert_str(_main.undo_manager.undo_for(peer)).override_failure_message("Ctrl+Z after a reset").is_equal("")
 
@@ -194,3 +196,33 @@ func test_a_reset_undoes_a_formation_drop_and_an_empty_line_writes_nothing() -> 
 	assert_array(_chalk(u)).is_empty()
 	assert_bool(u.unit_properties.has("moved_round")).override_failure_message("moved_round stays").is_false()
 	assert_int(_main.battle_log.entries().size()).override_failure_message("a line for an empty line").is_equal(lines)
+
+
+## Step 32 (lead review): a joined hero moves with its started host, so the reset puts both back - every model of the
+## pair at its exact start, the hero's own drops (recorded under its key) erased, and its moved_round given back too.
+func test_a_reset_puts_a_joined_hero_back_with_its_host() -> void:
+	var host := _rifles()
+	var hero := ParityTable._make_unit(_main, {"player": 1, "name": "Captain", "models": 1, "x_in": -2.0, "z_step_in": 1.2,
+		"quality": 4, "defense": 4, "tough": 1, "game_system": "gf", "faction_folder": "robot_legions", "rules": []},
+		{"name": "Pistol", "range_in": 12, "attacks": 1, "count": 1, "rules": []})
+	(hero.models[0] as ModelInstance).node.set_meta("network_id", 951)
+	(hero.models[0] as ModelInstance).node.set_meta("model_instance", hero.models[0])
+	hero.unit_properties["attached_to"] = host
+	host.unit_properties["attached_heroes"] = [hero]
+	var at := _poses(host) + _poses(hero)
+	assert_bool(CoreActivation.open_session(_main, host)).is_true()
+	var om: Node3D = _main.object_manager
+	var a: Node3D = (host.models[0] as ModelInstance).node
+	_select(_nodes(host) + _nodes(hero))
+	om._start_dragging(_screen(a.global_position.x, a.global_position.z))
+	om._update_drag(_screen(a.global_position.x + 2.0 * 0.0254, a.global_position.z))
+	await _runner.simulate_frames(1)
+	om._stop_dragging()
+	await _runner.simulate_frames(3)
+	await get_tree().create_timer(0.3).timeout
+	assert_array(_poses(hero)).override_failure_message("the hero did not move").is_not_equal(at.slice(3))
+	assert_array(_main.move_trails.ledger.entries_for_unit(hero.unit_id)).override_failure_message("no hero drop").is_not_empty()
+	CoreActivation.reset_to_start(_main, host, "")
+	assert_array(_poses(host) + _poses(hero)).override_failure_message("the pair is not back at its start").is_equal(at)
+	assert_array(_main.move_trails.ledger.entries_for_unit(hero.unit_id)).override_failure_message("hero ledger left").is_empty()
+	assert_bool(hero.unit_properties.has("moved_round")).override_failure_message("the hero stays moved").is_false()
