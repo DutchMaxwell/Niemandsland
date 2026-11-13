@@ -3403,6 +3403,29 @@ func attacked_unit_drag_refused(unit: GameUnit, distance_in := 0.0) -> bool:
 func core_bands(gu: GameUnit) -> Dictionary:
 	return CoreActivation.bands(self, gu)
 
+
+## One-core P3 step 29 (O9, O14 (1b)): "Activate" STARTS the activation of a lifecycle unit - the lock first (O5), then
+## the session, then the one line that is the start's multiplayer sync (O15 (2); no "open" state exists on the wire).
+## The unit stays NOT activated and begin_activation does not run (D23: the first committed door still fires it).
+## True = handled; false = the old path runs (not a lifecycle unit, already activated, or its session is open).
+func core_activation_start(gu: GameUnit) -> bool:
+	if not CoreActivation.is_lifecycle_unit(self, gu) or gu.is_activated or CoreActivation.session_open(gu.unit_id):
+		return false
+	var core: Object = solo_controller._core_node_ready() if solo_controller != null else null
+	if core == null:
+		push_error("core_activation_start: no core for %s" % gu.get_name())
+		return false
+	var verdict: Dictionary = core.check_begin(CoreActivation.open_unit_name(self, gu))
+	if not bool(verdict.get("ok", false)):
+		_log_rule_event(BattleLog.Category.MOVEMENT, str(verdict.get("reason", "")))
+		_show_toast(str(verdict.get("reason", "")))
+		return true
+	if not CoreActivation.open_session(self, gu):
+		push_error("core_activation_start: no session for %s (the capture failed)" % gu.get_name())
+		return false
+	_log_rule_event(BattleLog.Category.GENERAL, "%s begins its activation." % gu.get_name())
+	return true
+
 ## (Re)build the SoloController for the currently designated AI slot (setup wires TurnManager once).
 func _ensure_solo_controller() -> void:
 	# #196 belt-and-braces: in multiplayer the controller exists only for an EXPLICITLY

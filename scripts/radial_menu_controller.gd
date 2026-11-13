@@ -568,6 +568,11 @@ func _toggle_activation(context: Dictionary) -> void:
 			if refusal != "":
 				main_node.call("hotseat_log_refusal", refusal)
 				return
+		# One-core P3 step 29 (O9): with the flag on, "Activate" STARTS a lifecycle unit's activation and nothing else
+		# happens here (true = handled); with a session open it answers false, so this same branch ENDS the activation.
+		if main_node != null and main_node.has_method("core_activation_start") \
+				and main_node.call("core_activation_start", game_unit):
+			return
 		# The manual toggle is the catch-all activation door (free dragging has none) — the
 		# activation-triggered rules get their shot before the unit counts as spent.
 		await _solo_activation_rules(game_unit)
