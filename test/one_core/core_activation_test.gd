@@ -1164,3 +1164,102 @@ func test_a_mixed_group_turn_turns_the_started_unit_and_says_nothing() -> void:
 	assert_array(_poses(b)).override_failure_message("the unit that was not started turned").is_equal(at_b)
 	var refusals: Array = _main.battle_log.entries().filter(func(e: Dictionary) -> bool: return str(e["text"]).ends_with(" first."))
 	assert_array(refusals).override_failure_message("a refusal line for a mixed turn: %s" % [refusals]).is_empty()
+
+
+## ---- Step 34 (N2 b): the core re-checks the drop, and the escape hatch ----
+
+## `u`'s alive models `x_in` inches east of where they stand: a drop as the table hands it over (Enforce is read there).
+func _shift(u: GameUnit, x_in: float) -> void:
+	for m in u.get_alive_models():
+		(m as ModelInstance).node.global_position.x += x_in * 0.0254
+
+
+func _placed(u: GameUnit) -> Array:
+	return (CoreActivation._sessions[u.unit_id]["transcript"] as Array).filter(func(e: Dictionary) -> bool:
+		return str(e["t"]) == "placed")
+
+
+## Enforce on: a 13" Advance drop is refused in the core's words (one log line, one toast); a 5" one passes and is the
+## session's one placement. Enforce off, the escape hatch: the 13" drop passes with exactly one overrun line in the O3
+## words, Advance and Rush alike.
+func test_the_core_rechecks_a_drop_at_the_declared_mode() -> void:
+	var was: bool = GraphicsSettings.enforce_movement_limit
+	var u := _human("Rifles")
+	assert_bool(CoreActivation.open_session(_main, u)).is_true()
+	var home: Array = u.get_alive_models().map(func(m: ModelInstance) -> Vector3: return m.node.global_position)
+	var back := func() -> void:
+		for i in home.size():
+			(u.get_alive_models()[i] as ModelInstance).node.global_position = home[i]
+	GraphicsSettings.enforce_movement_limit = true
+	var over := "Rifles: a model moved 13.0\" - the Advance allowance is 6.0\"."
+	_shift(u, 13.0)
+	assert_bool(_main.attacked_unit_drag_refused(u, 13.0)).override_failure_message("13\" Advance accepted").is_true()
+	assert_int(_log_lines(over).size()).is_equal(1)
+	assert_int(_toasts(over).size()).is_equal(1)
+	back.call()
+	_shift(u, 5.0)
+	assert_bool(_main.attacked_unit_drag_refused(u, 5.0)).override_failure_message("5\" Advance refused").is_false()
+	assert_int(_placed(u).size()).override_failure_message("the session's placement").is_equal(1)
+	GraphicsSettings.enforce_movement_limit = false
+	for mode in [[ObjectManager.MovementCap.ADVANCE, over],
+			[ObjectManager.MovementCap.RUSH, "Rifles: a model moved 13.0\" - the Rush allowance is 12.0\"."]]:
+		_main.object_manager.set_movement_cap(mode[0])
+		back.call()
+		_shift(u, 13.0)
+		var lines_before := _log_lines(mode[1]).size()
+		assert_bool(_main.attacked_unit_drag_refused(u, 13.0)).override_failure_message("the hatch refused").is_false()
+		assert_int(_log_lines(mode[1]).size() - lines_before).override_failure_message(mode[1]).is_equal(1)
+	GraphicsSettings.enforce_movement_limit = was
+
+
+## A refused drop snaps back through the drag's own restore: the other table gets one move batch with the drag's start
+## positions (#2665's broadcast; this step adds none) and the refusal's log event.
+func test_a_refused_drop_snaps_back_and_tells_the_other_table() -> void:
+	var was: bool = GraphicsSettings.enforce_movement_limit
+	GraphicsSettings.enforce_movement_limit = true
+	var u := _human("Rifles")
+	assert_bool(CoreActivation.open_session(_main, u)).is_true()
+	var net := _recording_net()
+	var om: Node3D = _main.object_manager
+	var om_net: Node = om._network_manager
+	om._network_manager = net   # the restore broadcast is the object manager's own
+	var start: Array = []
+	om._selected_objects.clear()
+	for m in u.get_alive_models():
+		var n: Node3D = (m as ModelInstance).node
+		om._selected_objects.append(n)
+		om._drag_start_positions[n] = n.global_position
+		om._drag_start_rotations[n] = n.rotation.y
+		start.append_array([int(n.get_meta("network_id")), n.global_position.x, n.global_position.y, n.global_position.z])
+	om._drag_anchor_object = om._selected_objects[0]
+	_shift(u, 13.0)
+	assert_bool(om._snapback_off_turn_drag()).override_failure_message("the refused drop stayed").is_true()
+	var batches: Array = net.sent.filter(func(f: Dictionary) -> bool: return f["m"] == "move_objects_batch_networked")
+	var logs: Array = net.sent.filter(func(f: Dictionary) -> bool: return f["m"] == "sync_log_event")
+	assert_array(batches.map(func(f: Dictionary) -> Array: return f["a"][0])).is_equal([start])
+	assert_array(logs.map(func(f: Dictionary) -> String: return str(f["a"][1]))) \
+		.is_equal(["Rifles: a model moved 13.0\" - the Advance allowance is 6.0\"."])
+	om._network_manager = om_net
+	_end_session()   # the recording transport is not in the tree: free it inside the case (no orphan)
+	om._drag_start_positions.clear()
+	om._drag_start_rotations.clear()
+	om._selected_objects.clear()
+	GraphicsSettings.enforce_movement_limit = was
+
+
+## Flag off, and flag on without a Start: the drop is exactly as today - no core call, no line, no toast, no session.
+func test_a_drop_without_an_open_activation_is_as_today() -> void:
+	var was: bool = GraphicsSettings.enforce_movement_limit
+	GraphicsSettings.enforce_movement_limit = true
+	var u := _human("Rifles")
+	var over := "Rifles: a model moved 13.0\" - the Advance allowance is 6.0\"."
+	_main.object_manager.set_movement_cap(ObjectManager.MovementCap.ADVANCE)   # a declared mode: only the Start is missing
+	_shift(u, 13.0)
+	assert_bool(_main.attacked_unit_drag_refused(u, 13.0)).override_failure_message("flag on, not started").is_false()
+	CoreActivation._env = 0
+	assert_bool(CoreActivation.open_session(_main, u)).override_failure_message("a session with the flag off").is_false()
+	assert_bool(_main.attacked_unit_drag_refused(u, 13.0)).override_failure_message("flag off").is_false()
+	assert_bool(CoreActivation.session_open(u.unit_id)).is_false()
+	assert_int(_log_lines(over).size()).is_equal(0)
+	assert_int(_toasts(over).size()).is_equal(0)
+	GraphicsSettings.enforce_movement_limit = was
