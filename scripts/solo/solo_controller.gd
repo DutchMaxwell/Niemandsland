@@ -919,6 +919,18 @@ func human_cargo_pending() -> Array:
 	return out
 
 
+## How many units a side can still activate, as the ALTERNATION counts them: the eligible pool, plus the human's
+## passengers (they are not in the pool - nothing may auto-activate them - but a unit leaves its transport with any
+## move action of its own, so an embarked unit can still activate: GF Core Rules v3.6.0 p.2, Transport). The AI's own
+## cargo is already in the pool (#230). Counting only the pool made the AI play out its whole army in a row (and open
+## the next round) while a passenger of the human was still owed its activation.
+func units_left_for(slot: int) -> int:
+	var n := eligible_units_for(slot).size()
+	if slot == human_slot:
+		n += human_cargo_pending().size()
+	return n
+
+
 ## The official unit pick: Shaken last; then D6 → 2 table sections split along the AI's deployment edge
 ## (west/east half by centre X), rotating to the other section when the rolled one has no eligible unit;
 ## then a random eligible unit in that section (seeded _rng → reproducible), with the section's Counter
