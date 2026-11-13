@@ -3554,6 +3554,28 @@ func core_door_refused(gu: GameUnit) -> bool:
 	return true
 
 
+## One-core P3 step 67: the keys of a buff record's granted-rule overlay (`_solo_apply_grant` appends to `special_rules`
+## IN PLACE). They live here, not in scripts/solo/, which never names the rule-text key (NML-1115).
+const CORE_OVERLAY_KEYS := ["special_rules", "rule_descriptions"]
+
+
+## Step 67 (Cancel): puts `gu`'s overlay keys back as `at_start` holds them (its properties journaled at the Start by
+## CoreActivation): an Array in place, so every holder of the live array sees it; a key absent at the Start is erased;
+## an unchanged key is not touched.
+func core_overlay_restore(gu: GameUnit, at_start: Dictionary) -> void:
+	for k in CORE_OVERLAY_KEYS:
+		var now: Variant = gu.unit_properties.get(k)
+		var was: Variant = at_start.get(k)
+		if typeof(now) == typeof(was) and now == was:
+			continue
+		if now is Array and was is Array:
+			(now as Array).assign(was)
+		elif was == null:
+			gu.unit_properties.erase(k)
+		else:
+			gu.unit_properties[k] = was.duplicate(true) if was is Array or was is Dictionary else was
+
+
 ## One-core P3 step 50 (N6 b): the tail of the activation door (radial `_toggle_activation`, after the activation fact
 ## went out, so both ride one ordered stream): an End of a core unit in a room announces its digest check, with the
 ## target its shot noted (step 38). The note is cleared on every pass. Flag off, hotseat, Manual room: nothing is sent.
