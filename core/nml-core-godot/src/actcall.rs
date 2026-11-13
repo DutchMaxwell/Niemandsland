@@ -3,7 +3,7 @@
 //! rules; the answer comes out as a plain dictionary (lines and landings included).
 use crate::plain;
 use godot::prelude::*;
-use nml_core::activation::{allowance, delta_of, step_activation, ActStep, Input};
+use nml_core::activation::{allowance, begin_check, check_move, delta_of, step_activation, ActStep, Check, Drop, Input};
 use nml_core::io::Seams;
 use nml_core::landing::Landing;
 use nml_core::logline::LogLine;
@@ -96,6 +96,58 @@ pub fn allowance_of(statics: &[UnitStatic], state: &State, unit: &str, terrain: 
     d.set("charge", a.charge);
     d.set("widened_by", &by);
     d
+}
+
+/// `{"ok": false, "reason"}`: a refusal that is not the core's own (unknown handle or unit, a drop that is not understood).
+pub fn not_ok(reason: &str) -> VarDictionary {
+    let mut d = VarDictionary::new();
+    d.set("ok", false);
+    d.set("reason", reason);
+    d
+}
+
+/// A drop off the table's dictionary: `mode` (int), `positions` (Vector3 per model) and `trails` (per model its path as Vector2,
+/// x = world X, y = world Z, metres; absent or an empty entry = no trail).
+fn drop_of(d: &VarDictionary) -> Result<Drop, &'static str> {
+    let list = |k: &str| d.get(k).map(|v| plain::any_array(&v)).unwrap_or_default();
+    let placed = list("positions").iter_shared().map(|p| p.try_to::<Vector3>().ok().map(|p| [p.x as f64, p.y as f64, p.z as f64])).collect::<Option<Vec<_>>>();
+    let trail = |t: Variant| plain::any_array(&t).iter_shared().map(|p| p.try_to::<Vector2>().ok().map(|p| [p.x as f64, p.y as f64])).collect::<Option<Vec<_>>>();
+    let trails = list("trails").iter_shared().map(trail).collect::<Option<Vec<_>>>();
+    match (placed, trails) {
+        (Some(placed), Some(trails)) => Ok(Drop { mode: d.get("mode").map_or(0, |m| plain::int(&m)), placed, trails }),
+        (None, _) => Err("positions are not all Vector3"),
+        _ => Err("trails are not all Vector2"),
+    }
+}
+
+/// `NmlCore.check_move`: `{"ok": true, "lines"}` or `{"ok": false, "reason"}` for one drop of `unit` (its start is `state`).
+pub fn check_of(statics: &[UnitStatic], state: &State, unit: &str, terrain: &Terrain, seams: Seams, drop: &VarDictionary, enforce: bool) -> VarDictionary {
+    let Some(&si) = state.roster.index.get(unit) else { return not_ok("unknown unit") };
+    let drop = match drop_of(drop) {
+        Ok(d) => d,
+        Err(why) => return not_ok(why),
+    };
+    match check_move(statics, state, si, seams, terrain, &drop, enforce) {
+        Check::Ok { lines } => {
+            let mut d = VarDictionary::new();
+            d.set("ok", true);
+            d.set("lines", &lines_of(&lines));
+            d
+        }
+        Check::Refused { reason } => not_ok(&reason),
+    }
+}
+
+/// `NmlCore.check_begin`: `{"ok": true}`, or `{"ok": false, "reason"}` while another unit's activation is open (`open_name` != "").
+pub fn begin_of(open_name: &str) -> VarDictionary {
+    match begin_check((!open_name.is_empty()).then_some(open_name)) {
+        Ok(()) => {
+            let mut d = VarDictionary::new();
+            d.set("ok", true);
+            d
+        }
+        Err(reason) => not_ok(&reason),
+    }
 }
 
 /// One step. `Some(state)` only on `done`. `refused` carries the input's index and the sentence.
