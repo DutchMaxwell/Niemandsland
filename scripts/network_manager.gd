@@ -94,6 +94,8 @@ const SLOT_RESERVED_PEER: int = 0
 const SYNCABLE_UNIT_PROPERTIES: PackedStringArray = [
 	"spot_markers",     # Precision Spotter marks (int). The token on the table is a plain boolean.
 	"tag_markers",      # Precision Tag marks (int) — the Spotter pool's once-per-game sister.
+	"piercing_tag_markers",  # Piercing Tag / Target pool (int) — the AI answers each human on that human's machine (co-op).
+	"piercing_tag_source",   # which rule placed it (String): Piercing Target's pool stands, every other tag spends.
 	"spell_move_mod",   # {advance, rush} — the NET spell movement delta the move bands read.
 	"spell_range_mod",  # int — the NET spell shooting-range delta every volley/plan site reads.
 	"speed_feat_used_speed_feat",       # D22 (NML-984): a spent once-per-game Speed Feat (bool) —
