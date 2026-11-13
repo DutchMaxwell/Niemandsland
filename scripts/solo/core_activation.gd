@@ -397,6 +397,64 @@ static func close_session(main, unit_id: String) -> void:
 	_sessions.erase(unit_id)
 
 
+## One-core P3 step 32 (the snap-back answer): `gu` back where its open activation started. Every model that is still
+## alive goes to the session's start position and facing through the existing take-back, built once per drop of this
+## round in the unit's ledger (drags and step 65a's formation drops alike; the models ride the first, so each moves and
+## turns once on the wire) and run, never pushed: it broadcasts the move and the rotation, erases that drop's chalk and
+## ledger entries and sends their undo. Then moved_round is what it was before the Start, no Ctrl+Z can take back a reset
+## move, the transcript loses its placed inputs, and a non-empty `line` is ONE rule line (log + broadcast). The caller
+## never runs it during a drag (O11 a); a unit without a session is a no-op.
+static func reset_to_start(main, gu: GameUnit, line: String) -> void:
+	if gu == null or not _sessions.has(gu.unit_id):
+		return
+	var s: Dictionary = _sessions[gu.unit_id]
+	var nodes: Array[Node3D] = []
+	var at: Array[Vector3] = []
+	var rot: Array[float] = []
+	for row in start_rows(gu):
+		nodes.append(row[0])
+		at.append(row[1])
+		rot.append(row[2])
+	var round_no: int = main.opr_army_manager.current_round
+	var drops: Array = []
+	for e in main.move_trails.ledger.entries_for_unit(gu.unit_id):
+		if int(e.get("round", -1)) == round_no and not drops.has(int(e.get("drop_id", -1))):
+			drops.append(int(e.get("drop_id", -1)))
+	if drops.is_empty():
+		drops.append(-1)   # nothing in the ledger: the models still go back (no drop has id -1: ids are msec stamps)
+	var owner := int(gu.unit_properties.get("player_id", 0))
+	var peer: int = main.network_manager.get_my_peer_id() if main.network_manager != null else 0
+	var none: Array[Node3D] = []
+	for d in drops:
+		var first: bool = d == drops[0]
+		UndoManager.MoveTakebackAction.new(nodes if first else none, at, rot, owner, gu.unit_id, gu.get_name(), d,
+			main.move_trails, main.network_manager, null, peer, null).undo()
+	if s.has("moved_round_before"):
+		gu.unit_properties["moved_round"] = s["moved_round_before"]
+	else:
+		gu.unit_properties.erase("moved_round")
+	main.undo_manager.expire_move_takebacks(gu.unit_id)
+	s["transcript"] = (s["transcript"] as Array).filter(func(t: Dictionary) -> bool: return str(t.get("t", "")) != "placed")
+	if not line.is_empty():
+		main._log_rule_event(BattleLog.Category.MOVEMENT, line)
+
+
+## Step 32: `gu`'s living models with where its open activation started them, [[node, position, facing], ...];
+## start_models holds the unit's models in the order of start_pos (get_alive_models() at the Start).
+static func start_rows(gu: GameUnit) -> Array:
+	var s: Dictionary = _sessions[gu.unit_id]
+	var out: Array = []
+	var i := 0
+	for e in s["start_models"]:
+		var m: ModelInstance = e["model"]
+		if m.unit != gu:
+			continue
+		if m.is_alive and m.node != null and is_instance_valid(m.node):
+			out.append([m.node, s["start_pos"][i], float(s["start_rot"][i])])
+		i += 1
+	return out
+
+
 ## Closes every open session, and the next capture sends the game header again (a loaded game's units are not the
 ## header's). The store is static, so the game's lifecycle calls this: main's `_exit_tree` (quit to menu, which a new game
 ## follows) and its save load.
