@@ -99,6 +99,33 @@ func _start_and_end(u: GameUnit) -> void:
 	await _main.radial_menu_controller.card_toggle_activation(u)
 
 
+## ---- Step 29 fix: an agreed online room has no solo controller before its first Activate ----
+
+## The room as the agreement leaves it (`_apply_rules_automatic_agreed`: Automatic, no AI seat) - and nobody builds the
+## solo controller (the other cases' `_room` does, as an attack or a round end would). The first Activate must still
+## open a live session, and the unit's drag must lift.
+func test_the_first_activate_in_an_agreed_room_opens_a_session_and_the_drag_lifts() -> void:
+	_net = auto_free(WireNet.new())
+	_net.army_manager = _main.opr_army_manager
+	_main.network_manager = _net
+	_main.radial_menu_controller.network_manager = _net
+	_main._apply_rules_automatic_agreed()
+	_main._apply_turn_token(1)
+	var u := _plain(1, "Rifles", 0.0)
+	_plain(2, "Guards", 18.0)
+	assert_object(_main.solo_controller).override_failure_message("precondition: no controller yet").is_null()
+	await _main.radial_menu_controller.card_start_activation(u)
+	assert_bool(CoreActivation.session_open(u.unit_id)).override_failure_message("no session; activated %s" % u.is_activated) \
+		.is_true()
+	var om: Node3D = _main.object_manager
+	om._selected_objects.clear()
+	om._selected_objects.append(u.models[0].node)
+	om._start_dragging(Vector2.ZERO)
+	var lifted: bool = om._is_dragging and not om._drag_start_positions.is_empty()
+	om._cancel_drag()
+	assert_bool(lifted).override_failure_message("the started unit's drag was refused").is_true()
+
+
 ## ---- Step 50: the sender ----
 
 func test_an_ended_core_activation_in_a_room_sends_one_check_after_the_activation_fact() -> void:

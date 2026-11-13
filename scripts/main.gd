@@ -3510,6 +3510,7 @@ func core_bands(gu: GameUnit) -> Dictionary:
 func core_activation_start(gu: GameUnit) -> bool:
 	if not CoreActivation.is_lifecycle_unit(self, gu) or gu.is_activated or CoreActivation.session_open(gu.unit_id):
 		return false
+	_ensure_solo_controller()   # an agreed online room (no AI seat) has none until its first attack or round end
 	var core: Object = solo_controller._core_node_ready() if solo_controller != null else null
 	if core == null:
 		push_error("core_activation_start: no core for %s" % gu.get_name())
