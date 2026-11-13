@@ -10097,8 +10097,9 @@ static func delayed_action_worth(gu: GameUnit) -> float:
 ## the carrier that passes, null when the AI activates instead.
 func delayed_action_pass_choice() -> Dictionary:
 	var own_pool := eligible_ai_units()
-	var opp_pool := eligible_units_for(human_slot)
-	var out := {"unit": null, "why": "", "opponent_left": opp_pool.size(), "own_left": own_pool.size()}
+	var opp_pool := eligible_units_for(human_slot)   # on the table: the threats
+	var opp_left := units_left_for(human_slot)       # the count: passengers still owe an activation too
+	var out := {"unit": null, "why": "", "opponent_left": opp_left, "own_left": own_pool.size()}
 	if army_manager == null:
 		return out
 	var round_no := _current_round()
@@ -10113,12 +10114,12 @@ func delayed_action_pass_choice() -> Dictionary:
 		return out
 	# Guard (a): strictly more. own_pool always holds at least the carrier, so own_left >= 1 here —
 	# the AI can never pass away the last activation it owes (there is no carrier when own_left is 0).
-	if not delayed_action_surplus(opp_pool.size(), own_pool.size()):
+	if not delayed_action_surplus(opp_left, own_pool.size()):
 		out["why"] = "the opponent does not have more units left to activate"
 		record_decision({"kind": "pick", "unit": (carriers[0] as GameUnit).get_name(),
 			"rule": "Delayed Action: once per round, if your opponent has more units left to activate than you, this unit may pass its turn instead of activating",
 			"candidates": [], "chosen": "activates normally", "why": "condition not met — no surplus",
-			"data": {"opponent_left": opp_pool.size(), "own_left": own_pool.size()}})
+			"data": {"opponent_left": opp_left, "own_left": own_pool.size()}})
 		return out
 	# The prize: our most valuable un-activated unit — the one a pass is meant to protect.
 	var prize: GameUnit = null
@@ -10144,7 +10145,7 @@ func delayed_action_pass_choice() -> Dictionary:
 		record_decision({"kind": "pick", "unit": (carriers[0] as GameUnit).get_name(),
 			"rule": "Delayed Action: pass only when the delay buys something — otherwise the tempo is thrown away",
 			"candidates": [], "chosen": "activates normally", "why": "no threat to wait out",
-			"data": {"opponent_left": opp_pool.size(), "own_left": own_pool.size(),
+			"data": {"opponent_left": opp_left, "own_left": own_pool.size(),
 				"prize": prize.get_name() if prize != null else "?"}})
 		return out
 	# The threatened unit delays itself when it carries the rule; otherwise the first carrier does.
@@ -10157,7 +10158,7 @@ func delayed_action_pass_choice() -> Dictionary:
 	record_decision({"kind": "pick", "unit": passer.get_name(),
 		"rule": "Delayed Action: once per round, if your opponent has more units left to activate than you, this unit may pass its turn instead of activating (may still be activated later)",
 		"candidates": [], "chosen": "passes the turn", "why": "waits out a threat that has yet to commit",
-		"data": {"opponent_left": opp_pool.size(), "own_left": own_pool.size(),
+		"data": {"opponent_left": opp_left, "own_left": own_pool.size(),
 			"prize": prize.get_name(), "threat": threat.get_name(), "gap_in": snappedf(threat_gap, 0.1)}})
 	return out
 

@@ -106,6 +106,12 @@ const SYNCABLE_UNIT_PROPERTIES: PackedStringArray = [
 	"shot_feat_used_precision_feat",     # Shot Modifier (AoF: Ghostly / Ossified Undead)
 	"shot_feat_used_piercing_feat",      # Piercing Assault (AoF: Ogres)
 	"ignore_feat_used_protection_feat",  # Regeneration family (Saurians, Robot Legions, ...)
+	# The AI's once-per-game door latches (bool): the AI answers each human on that human's machine (online co-op),
+	# so the machine that answers the NEXT activation must see them spent.
+	"piercing_tag_used",
+	"precision_tag_used",
+	"precision_target_used",
+	"surprise_attack_used",
 	# The AI's controller-side latches: the AI answers each human on that human's machine (online co-op), so the
 	# machine that answers an AI unit's NEXT activation / the next round start must see what was spent.
 	"second_wind_used",     # Second Wind, once per game (bool)
@@ -113,6 +119,23 @@ const SYNCABLE_UNIT_PROPERTIES: PackedStringArray = [
 	"ambush_redeploy_used", # Ambush Re-Deployment, once per game (bool)
 	"ambush_return_round",  # the round a re-deployed unit is due back in (int; null = spent)
 ]
+
+## Latches whose key is BUILT from a rule name (one per rule), so no fixed list can name them all. Only these
+## two name families; anything else still has to be listed above.
+const SYNCABLE_UNIT_PROPERTY_PREFIXES: PackedStringArray = [
+	"storm_used_",           # Storm Attack family: storm_used_<snake_case rule>
+	"takedown_bonus_used_",  # Takedown Shot / Strike bonus group: takedown_bonus_used_<rule name>
+]
+
+
+## Whether `key` may cross the wire as a hidden unit property (both directions are gated on this).
+static func is_syncable_unit_property(key: String) -> bool:
+	if SYNCABLE_UNIT_PROPERTIES.has(key):
+		return true
+	for prefix in SYNCABLE_UNIT_PROPERTY_PREFIXES:
+		if key.begins_with(prefix):
+			return true
+	return false
 
 var peer: ENetMultiplayerPeer = null
 var is_host: bool = false
@@ -1268,7 +1291,7 @@ func sync_unit_visible(unit_id: String, is_visible: bool, in_reserve: bool) -> v
 ## halves that DO need a refresh (the "Spotted" token) travel on the marker channel already.
 @rpc("any_peer", "call_remote", "reliable")
 func sync_unit_property(unit_id: String, key: String, value: Variant) -> void:
-	if not army_manager or not SYNCABLE_UNIT_PROPERTIES.has(key):
+	if not army_manager or not is_syncable_unit_property(key):
 		return
 
 	var game_unit = army_manager.get_game_unit_by_id(unit_id)
@@ -1498,7 +1521,7 @@ func broadcast_unit_visible(game_unit: GameUnit, is_visible: bool) -> void:
 func broadcast_unit_property(game_unit: GameUnit, key: String, value: Variant) -> void:
 	if not is_multiplayer_active() or game_unit == null:
 		return
-	if not SYNCABLE_UNIT_PROPERTIES.has(key):
+	if not is_syncable_unit_property(key):
 		push_warning("[Net] refusing to broadcast unlisted unit property '%s'" % key)
 		return
 	_remote_call("sync_unit_property", [game_unit.unit_id, key, value], 0)
