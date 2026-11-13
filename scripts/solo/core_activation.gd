@@ -450,7 +450,7 @@ static func _journal_props(main) -> Dictionary:
 
 
 ## Step 67: every unit's spell records (a deep copy of main._solo_spell_mods; a unit without records stays out) and a
-## deep copy of every unit's unit_properties (the tripwire's reference).
+## deep copy of every unit's unit_properties (the tripwire's reference). Step 67b: every regiment block's width.
 static func _journal_records(main) -> Dictionary:
 	var mods := {}
 	var all := {}
@@ -458,7 +458,12 @@ static func _journal_records(main) -> Dictionary:
 		if main._solo_spell_mods.has(u.get_instance_id()):
 			mods[u.get_instance_id()] = (main._solo_spell_mods[u.get_instance_id()] as Array).duplicate(true)
 		all[u.get_instance_id()] = u.unit_properties.duplicate(true)
-	return {"mods": mods, "all": all}
+	var widths := {}
+	for id in main.opr_army_manager.regiments:
+		var reg: Regiment = main.opr_army_manager.regiments[id]
+		if reg != null and reg.tray is RegimentTray and is_instance_valid(reg.tray):
+			widths[id] = (reg.tray as RegimentTray).frontage
+	return {"mods": mods, "all": all, "widths": widths}
 
 
 ## Step 37 (Cancel, step 35): every JOURNAL_KEYS value that changed on ANY unit since `gu`'s Start is put back (erased
@@ -512,6 +517,12 @@ static func undo_journal(main, gu: GameUnit) -> void:
 		main.core_overlay_restore(u, all[u.get_instance_id()])   # the granted-rule overlay, in place (main.gd)
 	if records_changed:
 		main._solo_mirror_spell_state()   # the save mirror (spell_records) follows the records
+	var widths: Dictionary = _sessions[gu.unit_id]["journal"].get("widths", {})
+	for id in widths:   # step 67b: a re-rank is undone as its own undo does it (layout, Regiment, key, the wire)
+		var reg: Regiment = main.opr_army_manager.regiments.get(id)
+		if reg != null and is_instance_valid(reg.tray) and (reg.tray as RegimentTray).frontage != int(widths[id]):
+			UndoManager.FrontageAction.new(reg.tray, reg.game_unit, int(widths[id]), (reg.tray as RegimentTray).frontage,
+				main.network_manager).undo()
 	if rules.has("Utility Buff") and _carries_buff(gu, rules):
 		rules.erase("Utility Buff")   # one line per spend: the record's line names the buff that was spent
 	for u: GameUnit in units:

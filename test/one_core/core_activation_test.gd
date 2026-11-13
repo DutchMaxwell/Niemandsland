@@ -559,6 +559,38 @@ func test_the_journal_puts_back_every_units_spell_records() -> void:
 	_end_session()   # the recording transport is not in the tree: free it inside the case (no orphan)
 
 
+## Step 67b: a re-rank inside an open activation is undone by the journal everywhere - the block's layout, the tray, the
+## Regiment companion, the unit's key and the other table (one sync_regiment_frontage frame back to the start width) -
+## and the tripwire stays quiet. Fixture: regiment_frontage_cycle_test's formed block, on the real army manager.
+func test_the_journal_undoes_a_rerank() -> void:
+	var gu := _orc("Spears", 6, 0.0, [])
+	var tray := RegimentTray.new()
+	_main.add_child(tray)
+	var members := RegimentTray.collect_members(gu)
+	tray.form(members.nodes, members.footprints, 5)
+	var reg := Regiment.new(gu, tray, 5)
+	tray.set_meta("regiment", reg)
+	gu.unit_properties["frontage"] = 5
+	_main.opr_army_manager.regiments[gu.unit_id] = reg
+	var layout: Array = gu.models.map(func(m: ModelInstance) -> Vector3: return m.node.global_position)
+	var net := _recording_net()
+	CoreActivation.tripwire_hits = 0
+	assert_bool(CoreActivation.open_session(_main, gu)).is_true()
+	_main.opr_army_manager.cycle_selected_regiment_frontage([tray])
+	assert_int(tray.frontage).override_failure_message("fixture: no re-rank").is_equal(4)
+	net.sent.clear()
+	CoreActivation.undo_journal(_main, gu)
+	assert_array([tray.frontage, reg.frontage, int(gu.unit_properties["frontage"])]).is_equal([5, 5, 5])
+	for i in gu.models.size():
+		assert_bool((gu.models[i] as ModelInstance).node.global_position.is_equal_approx(layout[i])) \
+			.override_failure_message("model %d not back in its rank" % i).is_true()
+	var frames: Array = net.sent.filter(func(f: Dictionary) -> bool: return f["m"] == "sync_regiment_frontage") \
+		.map(func(f: Dictionary) -> Array: return f["a"])
+	assert_array(frames).is_equal([[gu.unit_id, 5]])
+	assert_int(CoreActivation.tripwire_hits).is_equal(0)
+	_end_session()   # the recording transport is not in the tree: free it inside the case (no orphan)
+
+
 ## Step 29: the REAL NetworkManager with only its transport swapped out; it records every wire frame (pattern:
 ## e2e_mp_log_channel_test's FakeNet). Seat 1 is this table's.
 class FakeNet extends "res://scripts/network_manager.gd":
