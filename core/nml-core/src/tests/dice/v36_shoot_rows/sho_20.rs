@@ -41,7 +41,7 @@ mod sho_20_slayer_hold {
         let mut tray = Tray::seeded(7);
         resolve_volley_leg(
             &one, &tough_target(), "Target", 12.0, 12.0, true, true, true, true, true, false,
-            &|_| false, &mut tray,
+            &|_| false, &|_, _| None, &mut tray,
         )
     }
 

@@ -37,3 +37,53 @@ use crate::logline::Category;
                 == ("shoot", Category::Combat, 1, true)), "{:?}", tray.all_lines());
         }
     }
+
+    /// The lines one HOLD volley of "a" at "b" says on supplied faces.
+    fn said(st: &State, statics: &[UnitStatic], sighting: bool, faces: Vec<Vec<u8>>) -> Vec<LogLine> {
+        // Per-model sight reads each unit's own base (`State::profile`): one profile per roster slot.
+        let mut st = st.clone();
+        st.profiles = Rc::new(Profiles { list: vec![st.profiles.list[0].clone(); 4], index: HashMap::new() });
+        let seams = Seams { rules_epoch: crate::acts::CURRENT_RULES_EPOCH, tray_exact: true, sighting, ..Seams::default() };
+        let action = Action {
+            kind: HOLD, unit: "a".into(), dest: None, shoot: Some("b".into()), charge: None,
+            patient: false, split: None, traced: None, teleport: None,
+        };
+        let mut tray = Tray::supplied(faces);
+        resolve_stochastic_tray_on_board(statics, &st, &action, &Terrain::default(), seams, &mut GodotRng::new(0), &mut tray)
+            .unwrap();
+        tray.all_lines()
+    }
+
+    /// Step 27, Q17 (answered 13.11.: the announce line for every side): the core says "<A> fires at <B>" whichever
+    /// seat shoots; the table's AI path says it today, its human path does not. RED: say it for seat 1 only.
+    #[test]
+    fn the_announce_is_said_for_every_seat() {
+        for seat in [0i64, 1] {
+            let (mut st, statics) = att_def();
+            st.player = vec![seat, seat, 1 - seat, 1 - seat];
+            let lines = said(&st, &statics, true, vec![vec![6, 6, 6, 1], vec![1; 3]]);
+            assert_eq!((lines[0].text.as_str(), lines[0].side), ("Att fires at Def", seat), "seat {seat}: {lines:?}");
+        }
+    }
+
+    /// Step 27: with per-model sight (the step path's `sighting`, step 22b) a member whose models do not all have range
+    /// and sight says the table's "(n/m models sighted)" part (main.gd:5129); all four in range, or the whole-unit
+    /// reading, say none. RED: drop the part.
+    #[test]
+    fn a_partly_sighted_volley_says_how_many_models_see() {
+        for (back_in, sighting, dice, want) in [
+            (30.0, true, 2, "Att fires Rifle at Def (2/4 models sighted) — 2 hits"),
+            (0.0, true, 4, "Att fires Rifle at Def — 4 hits"),
+            (30.0, false, 4, "Att fires Rifle at Def — 4 hits"),
+        ] {
+            let (mut st, mut statics) = att_def();
+            // Four shooters; the last two `back_in` behind the line (30" puts them out of the Rifle's 24").
+            st.positions[0] = vec![[0.0, 0.0, 0.0], [0.0, 0.0, IN2M], [-back_in * IN2M, 0.0, 2.0 * IN2M],
+                [-back_in * IN2M, 0.0, 3.0 * IN2M]];
+            (st.alive[0], st.wounds[0]) = (4, vec![1; 4]);
+            Rc::make_mut(&mut st.radii)[0] = vec![IN2M; 4];
+            (statics[0].model_count, statics[0].shoot[0].count) = (4, 4); // one Rifle per model, four attacks in all
+            let lines = said(&st, &statics, sighting, vec![vec![6; dice], vec![1; dice]]);
+            assert_eq!(lines[1].text, want, "{back_in}\" back, sighting {sighting}: {lines:?}");
+        }
+    }

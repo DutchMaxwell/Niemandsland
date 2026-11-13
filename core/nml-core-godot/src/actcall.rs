@@ -36,7 +36,7 @@ pub fn inputs_of(t: &VarArray) -> Result<Vec<Input>, usize> {
     t.iter_shared().enumerate().map(|(i, v)| input_of(&v).ok_or(i)).collect()
 }
 
-fn lines_of(lines: &[LogLine]) -> VarArray {
+pub(crate) fn lines_of(lines: &[LogLine]) -> VarArray {
     let mut out = VarArray::new();
     for l in lines {
         let mut d = VarDictionary::new();
@@ -64,6 +64,7 @@ fn landings_of(state: &State, landings: &[Landing]) -> VarArray {
         let mut d = VarDictionary::new();
         d.set("unit", state.roster.keys[l.unit].as_str());
         d.set("models", &models);
+        d.set("loss_line", l.loss_line);
         out.push(&d.to_variant());
     }
     out

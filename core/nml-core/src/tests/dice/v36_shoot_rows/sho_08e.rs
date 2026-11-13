@@ -61,7 +61,7 @@ mod sho_08e_unstoppable_own_minus_in_ev {
         let spell_two = Ctx { quality: 4, models: 5, hit_mod: 2, rules_epoch: EPOCH_73_V36, ..Default::default() };
         let one = [Shooter { profiles: std::slice::from_ref(&p), keep: &[0], attacks: &[10], att: &spell_two, owner: "Gunners" }];
         let mut tray = Tray::seeded(7);
-        let out = resolve_volley_leg(&one, &stealthy(), "Target", 12.0, 12.0, true, true, true, true, true, false, &|_| false, &mut tray);
+        let out = resolve_volley_leg(&one, &stealthy(), "Target", 12.0, 12.0, true, true, true, true, true, false, &|_| false, &|_, _| None, &mut tray);
         let resolved = out.rolls.iter().find(|r| r.kind == "attack").expect("an attack die").target;
         assert_eq!(resolved, 3, "the resolver clamps the combined non-own sum (+2 -1 = +1)");
         let net_one = Ctx { hit_mod: 1, ..spell_two };

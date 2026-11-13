@@ -47,4 +47,6 @@ use super::*;
         assert_eq!(hurt.wounds_left, after.wounds[2][j], "{all:?} vs {:?}", after.wounds[2]);
         // (c) the morale roll's checkpoint already holds the volley's landing.
         assert!(tray.landings_upto(m).iter().any(|l| l.unit == 2), "{:?}", tray.all_landings());
+        // (d) step 27: the core said each landing's loss line, so the table's removal funnel must not.
+        assert!(all.iter().all(|l| l.loss_line), "{all:?}");
     }

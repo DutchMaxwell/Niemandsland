@@ -213,7 +213,9 @@ static func land_step(main, _gu: GameUnit, landings: Array, start_models: Array,
 				if main.network_manager != null and main.network_manager.has_method("broadcast_model_wounds"):
 					main.network_manager.broadcast_model_wounds(m)
 		if not died.is_empty():
+			main._core_said_losses = bool(entry.get("loss_line", false))   # step 27: the core said this loss line
 			await main._solo_remove_dead_models(lgu, died, int(lgu.unit_properties.get("player_id", 1)))
+			main._core_said_losses = false
 
 
 ## The activation's final delta (binding step 17): Shaken onto the table; a unit that moved AND lost models is
@@ -320,3 +322,34 @@ static func reset_all(main) -> void:
 		close_session(main, id)
 	if main != null and is_instance_valid(main.solo_controller):
 		main.solo_controller._core_header_done = false
+
+
+## Step 49 (N6 b): the units an activation touched - the actor and its joined chain (the host it joined, its attached
+## heroes), then the target's chain; a null target = the actor side only. Each unit once.
+static func touched_units(main, actor: GameUnit, target: GameUnit = null) -> Array:
+	var out: Array = main._solo_joined_chain(actor)
+	for gu in main._solo_joined_chain(target):
+		if not out.has(gu):
+			out.append(gu)
+	return out
+
+
+## Step 49 (N6 b): one hash of an activation's RESULT on `units`, equal on both tables when they agree. Per unit (sorted
+## by unit_id): id, Activated, Shaken, and per model (sorted by model_index): wounds, alive and - for a LIVING model only -
+## its X and Z in whole millimetres (positions travel as exact floats). Not in it: the height (each table probes its own
+## surface), the facing (it travels apart) and a dead model's parking slot (it travels with the wound frame).
+static func digest(units: Array) -> String:
+	var by_id := units.duplicate()
+	by_id.sort_custom(func(a: GameUnit, b: GameUnit) -> bool: return a.unit_id < b.unit_id)
+	var rows: Array = []
+	for gu: GameUnit in by_id:
+		var models: Array = gu.models.duplicate()
+		models.sort_custom(func(a: ModelInstance, b: ModelInstance) -> bool: return a.model_index < b.model_index)
+		var ms: Array = []
+		for m: ModelInstance in models:
+			var at: Variant = null
+			if m.is_alive and m.node != null and is_instance_valid(m.node):
+				at = [roundi(m.node.global_position.x * 1000.0), roundi(m.node.global_position.z * 1000.0)]
+			ms.append([m.model_index, m.wounds_current, m.is_alive, at])
+		rows.append([gu.unit_id, gu.is_activated, gu.is_shaken, ms])
+	return JSON.stringify(rows).sha256_text()

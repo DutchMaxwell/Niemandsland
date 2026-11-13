@@ -311,6 +311,28 @@ func test_a_local_defender_sees_the_incoming_fire_card_before_its_saves(timeout 
 	assert_str(str(out.get("r", {}).get("step", "still waiting"))).is_equal("done")
 
 
+## Step 27: a landing whose loss line the core said (a volley's) removes its dead with no second line from the table's
+## removal funnel; a landing the core said nothing about (a Dangerous test's) keeps the funnel's line.
+func test_the_funnel_says_only_the_losses_the_core_did_not_say() -> void:
+	var said := {}
+	for core_said in [true, false]:
+		var foe := ParityTable._make_unit(_main, {"player": 1, "name": "Foe%s" % core_said, "models": 3, "x_in": 12.0,
+			"z_step_in": 1.2, "quality": 4, "defense": 4, "tough": 1, "game_system": "gf",
+			"faction_folder": "robot_legions", "rules": []}, {})
+		var lines: Array = []
+		var on_entry := func(e: Dictionary) -> void: lines.append(str(e["text"]))
+		_main.battle_log.entry_added.connect(on_entry)
+		var m: ModelInstance = foe.models[0]
+		var landing := [{"unit": foe.unit_id, "loss_line": core_said,
+			"models": [{"at": m.node.global_position, "wounds_left": 0, "dead": true}]}]
+		await CoreActivation.land_step(_main, foe, landing, CoreActivation._start_models(_main), {})
+		_main.battle_log.entry_added.disconnect(on_entry)
+		assert_bool(m.is_alive).override_failure_message("the landing did not kill the model").is_false()
+		said[core_said] = lines
+	assert_array(said[true]).override_failure_message("the core said it: %s" % [said[true]]).is_empty()
+	assert_array(said[false]).contains_exactly(["Foefalse loses a model (2/3)"])
+
+
 ## Step 28 fixture: a human unit of two models on an AI-seat table; each node carries its network id and its
 ## ModelInstance, as spawned models do (the move ledger keys its models by the id, the trail radius reads the model).
 func _human(uname: String, rules: Array = []) -> GameUnit:
@@ -699,3 +721,81 @@ func test_a_save_load_closes_every_open_activation_and_resends_the_header() -> v
 	_main.save_manager.load_completed.emit(0)
 	assert_bool(CoreActivation.session_open(u.unit_id)).override_failure_message("a session survived the load").is_false()
 	assert_bool(_main.solo_controller._core_header_done).override_failure_message("the old game's header stays").is_false()
+
+
+## ---- Step 49: the activation digest (N6 b, part 1) ----
+
+## Two units (3 + 2 models, whole-millimetre spots) under their own holder node, so each build has its own node names.
+## `swapped`: the unit list reversed and each unit's models in reverse array order under table-local node names that
+## sort against `model_index` - the shape a second table may hold the same units in.
+func _digest_units(swapped := false) -> Array:
+	var holder := Node3D.new()
+	_main.add_child(holder)
+	var out: Array = []
+	for spec in [["Rifles", 1, 3], ["Guards", 2, 2]]:
+		var n: int = spec[2]
+		var idx: Array = range(n)
+		if swapped:
+			idx.reverse()
+		var at: Array = idx.map(func(k: int) -> Vector3: return Vector3(0.1 * k, 0.0, 0.05 * int(spec[1])))
+		var u := E2EBoot.make_unit(holder, int(spec[1]), str(spec[0]), at)
+		for i in n:
+			u.models[i].model_index = idx[i]
+		out.append(u)
+	if swapped:
+		out.reverse()
+	return out
+
+
+func _model(units: Array, unit_i: int, model_index: int) -> ModelInstance:
+	for m: ModelInstance in (units[unit_i] as GameUnit).models:
+		if m.model_index == model_index:
+			return m
+	return null
+
+
+func test_the_same_board_built_twice_has_one_digest() -> void:
+	assert_str(CoreActivation.digest(_digest_units())).is_equal(CoreActivation.digest(_digest_units()))
+
+
+func test_a_wound_changes_the_digest() -> void:
+	var a := _digest_units()
+	var b := _digest_units()
+	_model(b, 0, 1).wounds_current = 0
+	assert_str(CoreActivation.digest(b)).override_failure_message("a lost wound is not in the digest") \
+		.is_not_equal(CoreActivation.digest(a))
+
+
+func test_a_two_millimetre_move_changes_the_digest_and_a_sub_millimetre_one_does_not() -> void:
+	var a := _digest_units()
+	var b := _digest_units()
+	_model(b, 1, 0).node.global_position.x += 0.0004
+	assert_str(CoreActivation.digest(b)).override_failure_message("0.4 mm is float noise").is_equal(CoreActivation.digest(a))
+	_model(b, 1, 0).node.global_position.x += 0.0016
+	assert_str(CoreActivation.digest(b)).override_failure_message("a 2 mm move is not in the digest") \
+		.is_not_equal(CoreActivation.digest(a))
+
+
+func test_a_dead_models_parking_spot_is_not_in_the_digest() -> void:
+	var a := _digest_units()
+	var b := _digest_units()
+	for units in [a, b]:
+		_model(units, 0, 2).is_alive = false
+		_model(units, 0, 2).wounds_current = 0
+	_model(b, 0, 2).node.global_position += Vector3(3.0, 0.0, 3.0)
+	assert_str(CoreActivation.digest(b)).is_equal(CoreActivation.digest(a))
+
+
+func test_the_unit_and_model_order_of_a_table_is_not_in_the_digest() -> void:
+	assert_str(CoreActivation.digest(_digest_units(true))).override_failure_message("the order leaked into the digest") \
+		.is_equal(CoreActivation.digest(_digest_units()))
+
+
+func test_touched_units_are_both_joined_chains_and_a_null_target_is_the_actor_side() -> void:
+	var actor := _unit(1, "Rifles")
+	var hero := _unit(1, "Captain")
+	hero.unit_properties["attached_to"] = actor
+	actor.unit_properties["attached_heroes"] = [hero]
+	var foe := _unit(2, "Guards")
+	assert_array(CoreActivation.touched_units(_main, actor, foe)).contains_exactly([actor, hero, foe])
+	assert_array(CoreActivation.touched_units(_main, hero)).contains_exactly([hero, actor])
