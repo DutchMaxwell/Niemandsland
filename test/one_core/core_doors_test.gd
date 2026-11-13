@@ -27,6 +27,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	RulesRegistry.reset_cache()
 	CoreActivation.reset_all(_main)
 	CoreActivation._env = -1
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
@@ -34,8 +35,8 @@ func after_test() -> void:
 	_runner = null
 
 
-func _unit(uname: String, at: Vector3, rules: Array = []) -> GameUnit:
-	var u := E2EBoot.make_unit(_main, 1, uname, [at])
+func _unit(uname: String, at: Vector3, rules: Array = [], pid: int = 1) -> GameUnit:
+	var u := E2EBoot.make_unit(_main, pid, uname, [at])
 	u.unit_properties["special_rules"] = rules
 	var src := OPRApiClient.OPRUnit.new()
 	var w := OPRApiClient.OPRWeapon.new()
@@ -105,3 +106,88 @@ func test_with_the_flag_off_disembark_needs_no_start() -> void:
 	var tc := _truck_and_cargo(true)
 	await _act("disembark", {"disembark_unit": tc[1]})
 	assert_object(_main.opr_army_manager.transport_of(tc[1])).is_null()
+
+
+## ---- step 63: attack, cast, spot and the auto verbs ----
+
+const INCH := 0.0254
+
+
+## A human Utility Buff bearer (the Defense Buff entry of e2e_defense_buff_record_test) beside a friend it could buff,
+## 12" from an enemy it could spot.
+func _buffer() -> GameUnit:
+	RulesRegistry.reset_cache()
+	RulesRegistry._cache["aof"] = {"factions": {"human_empire": {
+		"Defense Buff": {"primitive": "Utility Buff", "rated": false, "book_version": "3.5.3",
+			"params": {"def_mod": 1, "target": "friendly", "max_targets": 1, "range_in": 12, "once": true}},
+	}}, "common": {}}
+	var u := _unit("Marshal", Vector3.ZERO, ["Defense Buff"])
+	var friend := _unit("Line Infantry", Vector3(6.0 * INCH, 0, 0))
+	for g in [u, friend]:
+		g.unit_properties["game_system"] = "aof"
+		g.unit_properties["faction_folder"] = "human_empire"
+	_unit("Raiders", Vector3(12.0 * INCH, 0, 0), [], 2)
+	return u
+
+
+func _spot_lines() -> int:
+	return _main.battle_log.entries().filter(func(e: Dictionary) -> bool: return str(e["text"]).contains("to spot")).size()
+
+
+## Shoot opens nothing and spends nothing (the Utility Buff stamp) before the Start; after it, the pick opens.
+func test_shoot_without_a_start_spends_nothing() -> void:
+	var u := _buffer()
+	await _main.solo_begin_targeting(u, false)
+	assert_int(_lines("Activate Marshal first.")).is_equal(1)
+	assert_bool(_main._solo_target_mode.is_empty()).override_failure_message("a pick opened").is_true()
+	assert_bool(u.unit_properties.has("utility_buff_round")).override_failure_message("the buff was spent").is_false()
+	CoreActivation.open_session(_main, u)
+	await _main.solo_begin_targeting(u, false)
+	assert_object(_main._solo_target_mode.get("unit")).override_failure_message("no pick after the Start").is_same(u)
+
+
+## Cast, Spot and the auto verbs say the same sentence before the Start; after it, Cast and Spot open as today.
+func test_cast_spot_and_auto_without_a_start_are_refused() -> void:
+	var u := _buffer()
+	await _main.solo_begin_cast(u)
+	await _main.solo_begin_spot(u)
+	await _main.solo_begin_auto(u, AiDecision.Action.ADVANCE)
+	assert_int(_lines("Activate Marshal first.")).is_equal(3)
+	assert_int(_lines("Marshal has no caster with spell tokens")).override_failure_message("the cast door ran").is_equal(0)
+	assert_int(_spot_lines()).override_failure_message("the spot door ran").is_equal(0)
+	assert_bool(_main._solo_target_mode.is_empty()).override_failure_message("a mode opened").is_true()
+	CoreActivation.open_session(_main, u)
+	await _main.solo_begin_cast(u)
+	await _main.solo_begin_spot(u)
+	assert_int(_lines("Marshal has no caster with spell tokens")).is_equal(1)
+	assert_int(_spot_lines()).is_equal(1)
+	assert_int(_lines("Activate Marshal first.")).is_equal(3)
+
+
+func test_with_the_flag_off_the_windows_open_without_a_start() -> void:
+	CoreActivation._env = 0
+	var u := _buffer()
+	await _main.solo_begin_cast(u)
+	await _main.solo_begin_spot(u)
+	_main._solo_end_targeting()
+	await _main.solo_begin_targeting(u, false)
+	assert_int(_lines("Marshal has no caster with spell tokens")).is_equal(1)
+	assert_int(_spot_lines()).is_equal(1)
+	assert_object(_main._solo_target_mode.get("unit")).is_same(u)
+
+
+## The resolving doors behind the windows repeat the gate (a refusal there is a defect, reported by push_error): called
+## without a Start, none of them runs its committed door - no activation-wounds snapshot (begin_activation), no spend.
+## Not awaited: refused, each returns at once; a missing gate must not hang the run on the dice it would roll.
+func test_the_resolving_doors_refuse_without_a_start() -> void:
+	var u := _unit("Marshal", Vector3.ZERO)
+	var foe := _unit("Raiders", Vector3(12.0 * INCH, 0, 0), [], 2)
+	var foe2 := _unit("Scouts", Vector3(14.0 * INCH, 0, 0), [], 2)
+	_main._run_human_attack(u, foe, false)
+	_main._run_human_attack_split(u, foe, foe2, [])
+	_main._run_player_intent(u, AiDecision.Action.ADVANCE, null, Vector3(0.1, 0, 0))
+	_main._run_human_cast(u, u, {"name": "Bolt", "threshold": 1}, [foe])
+	assert_int(_lines("Activate Marshal first.")).is_equal(4)
+	assert_bool(_main._solo_activation_wounds_start.has(u.get_instance_id())) \
+		.override_failure_message("begin_activation ran").is_false()
+	assert_int(_lines("Marshal: not enough tokens for Bolt")).override_failure_message("the cast spent").is_equal(0)
