@@ -1929,7 +1929,7 @@ func _solo_pump() -> void:
 	var tail_count := 0
 	while true:
 		var step: int = SoloController.alternation_next(_solo_pending_replies,
-			solo_controller.eligible_units_for(solo_controller.human_slot).size(),
+			solo_controller.units_left_for(solo_controller.human_slot),
 			solo_controller.eligible_ai_units().size())
 		if step == SoloController.AltStep.REPLY:
 			# Delayed Action (Pass Turn): the AI may answer a human turn with a PASS instead of an
