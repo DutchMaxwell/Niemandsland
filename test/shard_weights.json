@@ -661,6 +661,7 @@
 "test/solo_grounded_speed_majority_test.gd": 0.1,
 "test/solo_immobile_hold_test.gd": 0.1,
 "test/solo_intent_preview_test.gd": 1.4,
+"test/solo_latch_wire_test.gd": 0.1,
 "test/solo_leaf_opener_test.gd": 0.4,
 "test/solo_mission_reserve_test.gd": 0.2,
 "test/solo_mission_save_test.gd": 0.1,

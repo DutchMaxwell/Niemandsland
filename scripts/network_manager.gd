@@ -106,6 +106,12 @@ const SYNCABLE_UNIT_PROPERTIES: PackedStringArray = [
 	"shot_feat_used_precision_feat",     # Shot Modifier (AoF: Ghostly / Ossified Undead)
 	"shot_feat_used_piercing_feat",      # Piercing Assault (AoF: Ogres)
 	"ignore_feat_used_protection_feat",  # Regeneration family (Saurians, Robot Legions, ...)
+	# The AI's controller-side latches: the AI answers each human on that human's machine (online co-op), so the
+	# machine that answers an AI unit's NEXT activation / the next round start must see what was spent.
+	"second_wind_used",     # Second Wind, once per game (bool)
+	"limited_used",         # names of the Limited weapons already fired (Array of String)
+	"ambush_redeploy_used", # Ambush Re-Deployment, once per game (bool)
+	"ambush_return_round",  # the round a re-deployed unit is due back in (int; null = spent)
 ]
 
 var peer: ENetMultiplayerPeer = null
