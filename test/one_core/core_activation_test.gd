@@ -1164,3 +1164,88 @@ func test_a_mixed_group_turn_turns_the_started_unit_and_says_nothing() -> void:
 	assert_array(_poses(b)).override_failure_message("the unit that was not started turned").is_equal(at_b)
 	var refusals: Array = _main.battle_log.entries().filter(func(e: Dictionary) -> bool: return str(e["text"]).ends_with(" first."))
 	assert_array(refusals).override_failure_message("a refusal line for a mixed turn: %s" % [refusals]).is_empty()
+
+
+## ---- step 33: selector switch -> confirmation -> reset (the snap-back answer; O11 (a), O12) ----
+
+const SWITCH_TEXT := "Changing the movement mode puts Rifles back where it started this activation. Continue?"
+
+
+## The open in-viewport question (`_solo_ask`'s card), or null.
+func _card() -> PromptCard:
+	for c in _main.get_children():
+		if c is PromptCard and not (c as Node).is_queued_for_deletion():
+			return c
+	return null
+
+
+## A real drag of the whole unit `dx_in` inches along +x, landed (the 0.2 s drop tween done).
+func _drag_unit(u: GameUnit, dx_in: float) -> void:
+	var om: Node3D = _main.object_manager
+	var a: Node3D = _node(u, 0)
+	_pick([_node(u, 0), _node(u, 1)])
+	om._start_dragging(_screen(a.global_position.x, a.global_position.z))
+	om._update_drag(_screen(a.global_position.x + dx_in * 0.0254, a.global_position.z))
+	await _runner.simulate_frames(1)
+	om._stop_dragging()
+	await _runner.simulate_frames(3)
+	await get_tree().create_timer(0.3).timeout
+
+
+## Presses `mode` on the selector; when the card asks, checks its strings and answers it ("Reset and switch" or "Keep").
+## True when a card asked.
+func _switch(mode: int, answer: String) -> bool:
+	_main._on_movement_cap_pressed(mode)   # not awaited: it waits on the card
+	await _runner.simulate_frames(2)
+	var card := _card()
+	if card == null:
+		return false
+	var labels := card.find_children("*", "Label", true, false).map(func(l: Label) -> String: return l.text)
+	assert_str(card.title).is_equal("Change movement mode?")
+	assert_array(labels).contains([SWITCH_TEXT])
+	assert_str(card.ok_button.text).is_equal("Reset and switch")
+	assert_str(card.cancel_button.text).is_equal("Keep")
+	(card.ok_button if answer == "Reset and switch" else card.cancel_button).pressed.emit()
+	await _runner.simulate_frames(3)
+	return true
+
+
+## Step 33: after a 4" Advance move, Rush asks first; Keep leaves the models and the selector; "Reset and switch" puts the
+## unit back with the O3 line and selects Rush; after a Rush move, Advance asks the same (the other direction).
+func test_a_switch_after_a_move_asks_and_resets_in_both_directions() -> void:
+	var u := _human("Rifles")
+	var at := _poses(u)
+	CoreActivation.open_session(_main, u)
+	await _drag_unit(u, 4.0)
+	var moved := _poses(u)
+	assert_array(moved).override_failure_message("the drag did not move").is_not_equal(at)
+	assert_bool(await _switch(ObjectManager.MovementCap.RUSH, "Keep")).override_failure_message("no card").is_true()
+	assert_array(_poses(u)).override_failure_message("Keep moved the unit").is_equal(moved)
+	assert_int(_cap()).override_failure_message("Keep switched").is_equal(ObjectManager.MovementCap.ADVANCE)
+	assert_bool(await _switch(ObjectManager.MovementCap.RUSH, "Reset and switch")).is_true()
+	assert_array(_poses(u)).override_failure_message("not back at the start").is_equal(at)
+	assert_int(_cap()).is_equal(ObjectManager.MovementCap.RUSH)
+	assert_int(_log_lines("Rifles is back at its start - movement mode is now Rush.").size()).is_equal(1)
+	await _drag_unit(u, 4.0)
+	assert_bool(await _switch(ObjectManager.MovementCap.ADVANCE, "Reset and switch")) \
+		.override_failure_message("no card from Rush back to Advance").is_true()
+	assert_array(_poses(u)).override_failure_message("not back at the start (Rush -> Advance)").is_equal(at)
+	assert_int(_cap()).is_equal(ObjectManager.MovementCap.ADVANCE)
+	assert_int(_log_lines("Rifles is back at its start - movement mode is now Advance.").size()).is_equal(1)
+
+
+## Step 33: nothing moved -> a plain switch, no card and no line; a press during a drag is ignored (O11 (a)).
+func test_a_switch_before_any_move_is_plain_and_a_press_during_a_drag_is_ignored() -> void:
+	var u := _human("Rifles")
+	CoreActivation.open_session(_main, u)
+	_pick([_node(u, 0), _node(u, 1)])
+	assert_bool(await _switch(ObjectManager.MovementCap.RUSH, "")).override_failure_message("a card before any move").is_false()
+	assert_int(_cap()).is_equal(ObjectManager.MovementCap.RUSH)
+	await _drag_unit(u, 4.0)
+	_main.object_manager._is_dragging = true   # no frame runs while it is set: the press alone is under test
+	_main._on_movement_cap_pressed(ObjectManager.MovementCap.ADVANCE)
+	var asked := _card() != null   # a card is added before its answer is awaited
+	_main.object_manager._is_dragging = false
+	assert_bool(asked).override_failure_message("a card during a drag").is_false()
+	assert_int(_cap()).override_failure_message("a press during a drag switched").is_equal(ObjectManager.MovementCap.RUSH)
+	assert_array(_main.battle_log.entries().filter(func(e: Dictionary) -> bool: return str(e["text"]).contains("back at its start"))).is_empty()

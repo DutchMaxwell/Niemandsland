@@ -18258,10 +18258,36 @@ func _build_movement_cap_row() -> void:
 
 
 func _on_movement_cap_pressed(mode: int) -> void:
+	var gu := _core_mode_switch_unit(mode)
+	if gu != null and object_manager._is_dragging:
+		_update_movement_cap_display()   # one-core P3 step 33, O11 (a): a press during a drag is ignored
+		return
+	if gu != null and CoreActivation.has_moved(self, gu):   # step 33: a switch after a model moved resets, after a yes
+		var ok: bool = await _solo_ask("Change movement mode?",
+			"Changing the movement mode puts %s back where it started this activation. Continue?" % gu.get_name(),
+			"Reset and switch", "Keep")
+		if not ok:
+			_update_movement_cap_display()
+			return
+		CoreActivation.reset_to_start(self, gu, "%s is back at its start - movement mode is now %s." % [gu.get_name(),
+			{ObjectManager.MovementCap.ADVANCE: "Advance", ObjectManager.MovementCap.RUSH: "Rush",
+			ObjectManager.MovementCap.CHARGE: "Charge"}[mode]])
 	if object_manager and object_manager.has_method("set_movement_cap"):
 		object_manager.set_movement_cap(mode)
 	_update_movement_cap_display()
 	dice_controls_changed.emit(&"movecap", mode)
+
+
+## One-core P3 step 33: the one selected move-path unit (O18 (a)) whose activation is open, when `mode` is another of
+## Advance / Rush / Charge than the selector holds; else null (today's plain switch).
+func _core_mode_switch_unit(mode: int) -> GameUnit:
+	if object_manager == null or mode == object_manager._movement_cap or mode == ObjectManager.MovementCap.OFF:
+		return null
+	var units := UnitUtils.get_unique_units(object_manager.get_selected_objects())
+	if units.size() != 1 or not CoreActivation.session_open(units[0].unit_id) \
+			or not CoreActivation.on_move_path(self, units[0]):
+		return null
+	return units[0]
 
 
 ## Highlight the active movement-cap button.
