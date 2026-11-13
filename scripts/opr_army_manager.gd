@@ -2348,6 +2348,7 @@ static func attach_joined_heroes_of(units: Array, by_unit: Dictionary) -> void:
 ## every unit may activate again and casters gain their per-round points (capped).
 ## The players, not the app, decide when to call this.
 func advance_round() -> void:
+	CoreActivation.note_round_end(self)   # one-core P3 step 52c: the ending round's result for a late digest check (flag on)
 	current_round += 1
 	for game_unit in game_units.values():
 		if game_unit:
