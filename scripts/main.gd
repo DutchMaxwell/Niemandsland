@@ -20538,6 +20538,8 @@ func _on_network_command(type: String, payload: Variant, _from_peer: int) -> voi
 		_rpc_request_roll(payload, _from_peer)
 	elif type == "roll_result" and payload is Dictionary:
 		_rpc_roll_result(int(payload.get("req", 0)), payload.get("faces", []))
+	elif type == "activation_check" and payload is Dictionary:
+		CoreActivation.on_check(self, payload, _from_peer)   # one-core P3 step 51 (N6 b)
 	elif type == "vfx_cue" and payload is Dictionary:
 		_vfx_draw(payload, _from_peer)
 	elif type == "session_ended":
@@ -24628,8 +24630,9 @@ func _solo_apply_precision_tag(unit: GameUnit) -> void:
 			var per: int = 1 if spread else markers
 			for p in picks:
 				var pu := p as GameUnit
-				pu.unit_properties["tag_markers"] = int(pu.unit_properties.get("tag_markers", 0)) + per
-				_sync_unit_property(pu, "tag_markers", int(pu.unit_properties["tag_markers"]))   # NML-927: the count rides the wire
+				# NML-927: the count rides the wire. The seam writes AND broadcasts, but only when the value
+				# CHANGES - pre-writing the key here made it see "unchanged" and the other table never heard.
+				_sync_unit_property(pu, "tag_markers", int(pu.unit_properties.get("tag_markers", 0)) + per)
 			if v36_tag:
 				var placed := "1 token each, spread over %d units" % picks.size() if spread \
 					else "%d token%s, stacked on %s" % [markers, ("" if markers == 1 else "s"), chosen.get_name()]
