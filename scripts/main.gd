@@ -3491,6 +3491,11 @@ func attacked_unit_drag_refused(unit: GameUnit, distance_in := 0.0) -> bool:
 	if unit == null or opr_army_manager == null \
 			or opr_army_manager.game_phase != OPRArmyManager.GamePhase.PLAYING:
 		return false
+	# One-core P3 step 34 (N2 b): a move-path unit's drop inside its open activation is re-checked by the core at the
+	# declared mode. A unit that already shot this round keeps the shot lock below.
+	if int(unit.unit_properties.get("shot_round", -1)) != opr_army_manager.current_round \
+			and CoreActivation.session_open(unit.unit_id) and CoreActivation.on_move_path(self, unit):
+		return CoreActivation.drop_refused(self, unit)
 	# Lead 09:16: narrow to a unit that SHOT this activation and did not fight — a melee
 	# survivor's containment/back-step drag must stay legal (`shot_round` is stamped by the
 	# shooting leg only, so a melee-only activation never has it).

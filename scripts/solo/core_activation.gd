@@ -407,6 +407,36 @@ static func close_session(main, unit_id: String) -> void:
 		main._refresh_movement_cap_row()   # step 31: an ended unit shows Off again
 
 
+## Step 34 (N2 b): the core re-checks a drop of `gu` (a move-path unit with an open session) - every alive model where it
+## stands now, at the declared mode, Enforce Movement Limit as set. Ok: this placement replaces the session's one and the
+## core's lines are written (with Enforce off, the escape hatch's overrun line); false. Refused: the reason is logged
+## (it reaches the other table) and toasted; true - the caller snaps the drag back and broadcasts the restore.
+## Two defects are reported with push_error and the drop STANDS unchecked (a refusal would trap the unit with no way to
+## move it): a selector that is not Advance, Rush or Charge (declared_mode), and an open session without its core.
+static func drop_refused(main, gu: GameUnit) -> bool:
+	var mode := declared_mode(main)
+	if mode == 0:
+		return false   # declared_mode reported the defect
+	var sc: SoloController = main.solo_controller
+	var core: Object = sc._core_node_ready() if sc != null else null
+	if core == null:
+		push_error("drop_refused: no core for %s's open activation - the drop is not checked" % gu.get_name())
+		return false
+	var s: Dictionary = _sessions[gu.unit_id]
+	var at: Array = gu.get_alive_models().map(func(m: ModelInstance) -> Vector3: return m.node.global_position)
+	var r: Dictionary = core.check_move(int(s["handle"]), gu.unit_id, {"mode": mode, "positions": PackedVector3Array(at)},
+		main.object_manager._strict_movement_enforced())
+	if not bool(r.get("ok", false)):
+		main._log_rule_event(BattleLog.Category.MOVEMENT, str(r.get("reason", "")))
+		main._show_toast(str(r.get("reason", "")))
+		return true
+	s["transcript"] = (s["transcript"] as Array).filter(func(e: Dictionary) -> bool: return str(e["t"]) != "placed") \
+		+ [{"t": "placed", "positions": at}]
+	for line in r.get("lines", []):
+		main._log_rule_event(BattleLog.Category.MOVEMENT, str(line["text"]), false, str(line["detail"]))
+	return false
+
+
 ## Step 31: the declared movement mode for the core, read from the selector and never from distance: Advance 1, Rush 2,
 ## Charge 3 (the core's kinds, sim.rs). Anything else is a defect: reported, and 0 means no core call.
 static func declared_mode(main) -> int:
