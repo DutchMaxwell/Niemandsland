@@ -816,8 +816,14 @@ func set_movement_cap(mode: int) -> void:
 ## An AMBUSH-RESERVE unit is never capped (maintainer field find): dragging it from the tray onto
 ## the table is DEPLOYMENT, not a move — the cap forced placement in stuttered capped drags.
 ## The human's bands (Musician included) when the controller offers them; a plain bands_for_model
-## controller (test stubs) keeps working.
+## controller (test stubs) keeps working. One-core P3 step 28: the core's bands come first for a unit whose
+## activation is open on the core move path (main's core_bands; empty for every other unit and with the flag off).
 func _human_bands(node: Node3D) -> Dictionary:
+	var main := get_node_or_null("/root/Main")
+	if main != null and main.has_method("core_bands"):
+		var core: Dictionary = main.call("core_bands", _drag_unit_of(node))
+		if not core.is_empty():
+			return core
 	if movement_range_controller.has_method("ui_bands_for_model"):
 		return movement_range_controller.ui_bands_for_model(node)
 	return movement_range_controller.bands_for_model(node)

@@ -192,3 +192,85 @@ static func land_delta(main, delta: Array, start_models: Array, done: Dictionary
 		if bool(d["shaken"]) != gu.is_shaken:
 			main.radial_menu_controller.card_toggle_shaken(gu)
 			main._solo_mirror_shaken(gu)
+
+
+## Step 28: the open activations, unit_id -> {handle, transcript, start_models, start_pos, start_rot, moved_round_before
+## (absent when the unit had no stamp), dice, journal}. A session opens at the Start door (step 29) for EVERY lifecycle
+## unit and closes at its End or Cancel (steps 35, 36).
+static var _sessions: Dictionary = {}
+
+
+## Opens `gu`'s session: a core capture of the board as it stands, plus the unit's start snapshot in get_alive_models()
+## order - each model's position and facing exactly as ObjectManager._start_dragging stores them (before the lift).
+## R6: a unit that already moved this round (an MP rejoin brings it back moved but not activated) starts where the move
+## ledger says the round began for it (XZ; the height stays the model's own), so a new Start cannot launder that move.
+## False, and nothing changes, when `gu` is not a lifecycle unit, already has a session, or the capture failed.
+static func open_session(main, gu: GameUnit) -> bool:
+	if not is_lifecycle_unit(main, gu) or _sessions.has(gu.unit_id):
+		return false
+	var h := capture(main)
+	if h == 0:
+		return false
+	var round_no: int = main.opr_army_manager.current_round
+	var starts: Dictionary = {}
+	if int(gu.unit_properties.get("moved_round", -1)) == round_no and main.move_trails != null:
+		starts = main.move_trails.ledger.round_starts_for_unit(gu.unit_id, round_no)
+	var start_pos: Array[Vector3] = []
+	var start_rot: Array[float] = []
+	for m in gu.get_alive_models():
+		if m.node != null and is_instance_valid(m.node):
+			var p: Vector3 = m.node.global_position
+			var was: Variant = starts.get(int(m.node.get_meta("network_id", 0)))
+			start_pos.append(Vector3((was as Vector2).x, p.y, (was as Vector2).y) if was is Vector2 else p)
+			start_rot.append(m.node.rotation.y)
+	var s := {"handle": h, "transcript": [{"t": "begin"}], "start_models": _start_models(main), "start_pos": start_pos,
+		"start_rot": start_rot, "dice": false, "journal": {}}
+	if gu.unit_properties.has("moved_round"):
+		s["moved_round_before"] = gu.unit_properties["moved_round"]
+	_sessions[gu.unit_id] = s
+	return true
+
+
+## The core's move bands of `gu` ({advance, rush, charge} inches, from its session's capture) when `gu` has a session
+## and is on the move path; else {}: every other unit keeps the table's bands.
+static func bands(main, gu: GameUnit) -> Dictionary:
+	if gu == null or not _sessions.has(gu.unit_id) or not on_move_path(main, gu):
+		return {}
+	var sc: SoloController = main.solo_controller
+	var core: Object = sc._core_node_ready() if sc != null else null
+	var a: Dictionary = core.move_allowance(int(_sessions[gu.unit_id]["handle"]), gu.unit_id) if core != null else {}
+	if a.is_empty():
+		return {}
+	return {"advance": a["advance"], "rush": a["rush"], "charge": a["charge"]}
+
+
+## Whether `unit_id`'s activation is open (Started and not yet ended or cancelled).
+static func session_open(unit_id: String) -> bool:
+	return _sessions.has(unit_id)
+
+
+## The name of ANOTHER unit whose session is open ("" when none; `except` null = any unit): check_begin's input.
+static func open_unit_name(main, except: GameUnit) -> String:
+	for id in _sessions:
+		var gu = main.opr_army_manager.game_units.get(id)
+		if gu is GameUnit and (except == null or id != except.unit_id):
+			return (gu as GameUnit).get_name()
+	return ""
+
+
+## Releases the session's core handle and forgets the session; a unit without one is a no-op. `main` null (the scene is
+## gone) only forgets it.
+static func close_session(main, unit_id: String) -> void:
+	if not _sessions.has(unit_id):
+		return
+	var sc: SoloController = main.solo_controller if main != null else null
+	var core: Object = sc._core_node_ready() if sc != null else null
+	if core != null:
+		core.release(int(_sessions[unit_id]["handle"]))
+	_sessions.erase(unit_id)
+
+
+## Closes every open session. The store is static, so the game's lifecycle (quit to menu, new game, save load) calls this.
+static func reset_all(main) -> void:
+	for id in _sessions.keys():
+		close_session(main, id)

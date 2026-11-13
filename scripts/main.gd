@@ -3397,6 +3397,12 @@ func attacked_unit_drag_refused(unit: GameUnit, distance_in := 0.0) -> bool:
 	_show_toast(text)
 	return true
 
+
+## One-core P3 step 28: the core's move bands for an open activation of a move-path unit ({} = the table's bands).
+## ObjectManager._human_bands asks this first.
+func core_bands(gu: GameUnit) -> Dictionary:
+	return CoreActivation.bands(self, gu)
+
 ## (Re)build the SoloController for the currently designated AI slot (setup wires TurnManager once).
 func _ensure_solo_controller() -> void:
 	# #196 belt-and-braces: in multiplayer the controller exists only for an EXPLICITLY
