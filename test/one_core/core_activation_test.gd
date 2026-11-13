@@ -547,3 +547,73 @@ func test_the_drag_gate_covers_every_lifecycle_unit_and_nothing_else() -> void:
 	CoreActivation.reset_all(_main)
 	CoreActivation._env = 0
 	assert_bool(_drag_starts([_node(furious)])).override_failure_message("flag off").is_true()
+
+
+## ---- R2: a roll goes to the unit the core names by roster key, never by display name ----
+
+const GUEST_PEER := 42
+
+
+## A recording transport: this table is slot 1, the guest peer holds slot 2; every command is kept, none is sent.
+func _recording_session() -> void:
+	var src := GDScript.new()
+	src.source_code = "extends \"res://scripts/network_manager.gd\"\nvar sent: Array = []\n" \
+		+ "func is_multiplayer_active() -> bool:\n\treturn true\n" \
+		+ "func get_my_player_slot() -> int:\n\treturn 1\n" \
+		+ "func send_command(type: String, payload: Variant = {}, target_peer: int = 0) -> bool:\n" \
+		+ "\tsent.append([type, payload, target_peer])\n\treturn true\n" \
+		+ "func broadcast_log_event(_category: int, _text: String, _ai: bool = false, _detail: String = \"\") -> void:\n" \
+		+ "\tpass\n"
+	assert_int(src.reload()).is_equal(OK)
+	_net = src.new()
+	_net.army_manager = _main.opr_army_manager
+	_net.peer_to_slot = {1: 1, GUEST_PEER: 2}
+	_net.player_names = {GUEST_PEER: "Guest"}
+	_main.network_manager = _net
+
+
+## Slot 1's `att_name` (10 rifles) holds and shoots slot 2's `def_name` (5 models, the guest's) 12" away through the
+## driver; `rename` (when not "") renames the target after the capture. Returns the roll requests sent, [payload, peer].
+func _roll_requests(att_name: String, def_name: String, rename: String) -> Array:
+	_recording_session()
+	_main.opr_army_manager.rules_automation = RulesAutomation.Level.AUTOMATIC   # an agreed Automatic online room (O10)
+	_main._ensure_solo_controller()
+	_main._solo_batch = true
+	_main._owner_roll_timeout_s = 0.2   # the guest never answers: each request is auto-rolled after this
+	var side := {"quality": 4, "defense": 4, "tough": 1, "z_step_in": 1.2, "game_system": "gf",
+		"faction_folder": "robot_legions", "rules": []}
+	var att := ParityTable._make_unit(_main, side.merged({"player": 1, "name": att_name, "models": 10, "x_in": 0.0}),
+		{"name": "Rifle", "range_in": 24, "attacks": 1, "count": 10, "rules": []})
+	var foe := ParityTable._make_unit(_main, side.merged({"player": 2, "name": def_name, "models": 5, "x_in": 12.0}), {})
+	var h := CoreActivation.capture(_main)
+	if rename != "":
+		foe.unit_properties["custom_name"] = rename
+	_main.seed_tray_rng(3)
+	var t: Array = [{"t": "begin"}, {"t": "intent", "kind": AiDecision.Action.HOLD, "shoot": foe.unit_id}]
+	var r: Dictionary = await CoreActivation.drive(_main, h, att, t, false)
+	assert_str(str(r["step"])).override_failure_message("the core's answer: %s" % r).is_equal("done")
+	var out: Array = []
+	for s in _net.sent:
+		if str(s[0]) == "request_roll":
+			out.append([s[1], s[2]])
+	_end_session()
+	return out
+
+
+## Every request went to the guest for its unit `uid`, the first for the saves.
+func _assert_the_guest_rolls(asks: Array, uid: String) -> void:
+	assert_int(asks.size()).override_failure_message("the target's owner rolls its saves: %s" % [asks]).is_greater(0)
+	assert_str(str(asks[0][0]["kind"]) if not asks.is_empty() else "").is_equal("defense")
+	for a in asks:
+		assert_int(int(a[1])).is_equal(GUEST_PEER)
+		assert_str(str(a[0]["unit"])).is_equal(uid)
+
+
+## Mirror match: both units are "Riflemen"; the name matched the shooter first, so slot 1 rolled slot 2's saves.
+func test_a_mirror_match_sends_the_targets_saves_to_the_targets_owner(timeout := 120000) -> void:
+	_assert_the_guest_rolls(await _roll_requests("Riflemen", "Riflemen", ""), "e2e_p2_Riflemen")
+
+
+## A target renamed after the game header: its live name no longer equals the core's, so the name matched nobody.
+func test_a_target_renamed_mid_game_still_rolls_its_own_saves(timeout := 120000) -> void:
+	_assert_the_guest_rolls(await _roll_requests("Riflemen", "Rangers", "Scouts"), "e2e_p2_Rangers")
