@@ -133,6 +133,11 @@ static func _shot_weapon(unit: GameUnit, lines: Array) -> String:
 	return ""
 
 
+## Step 43: the AI volleys the core resolved and the ones it refused (the AI smoke resets and reads them).
+static var ai_runs := 0
+static var ai_refusals := 0
+
+
 ## Step 42: the AI's volley through the core - Hold or Advance, the unit and its one target (the table's own pick) plain,
 ## no Dangerous test this activation (the table rolled it already; the core would roll it again). `h` is the board
 ## before the move (the AI body captured it and releases it). True = the core resolved the volley. A refusal is a
@@ -146,7 +151,9 @@ static func run_ai(main, unit: GameUnit, report: Dictionary, target: GameUnit, h
 	var t: Array = [{"t": "begin"}, {"t": "placed", "positions": at}, {"t": "intent", "kind": kind, "shoot": target.unit_id}]
 	var r: Dictionary = await drive(main, h, unit, t, true)
 	if str(r["step"]) == "done":
+		ai_runs += 1
 		return true
+	ai_refusals += 1
 	push_error("CoreActivation.run_ai: %s - the core answered %s: %s" % [unit.get_name(), r["step"], r.get("reason", "")])
 	return t.any(func(e: Dictionary) -> bool: return str(e["t"]) == "faces")
 
