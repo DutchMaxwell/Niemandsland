@@ -24466,11 +24466,13 @@ func _solo_apply_piercing_tag(unit: GameUnit) -> void:
 				picks = [tgt]
 			for p in picks:
 				var pu := p as GameUnit
-				pu.unit_properties["piercing_tag_markers"] = int(pu.unit_properties.get("piercing_tag_markers", 0)) + (1 if (spread or v36_target) else markers)
+				# MP (online co-op): the AI answers each human on that human's machine, so the pool and its source
+				# ride the wire (_sync_unit_property writes AND broadcasts) - the other table spends from the same pool.
+				_sync_unit_property(pu, "piercing_tag_markers", int(pu.unit_properties.get("piercing_tag_markers", 0)) + (1 if (spread or v36_target) else markers))
 				# D42 (a), EPOCH_67_MARKERS_BURSTS: which name placed the marker, so the spend
 				# half (_solo_spend_piercing_tag) knows whether the pool stands (Piercing
 				# Target, no removal clause) or spends whole (the rest of the family).
-				pu.unit_properties["piercing_tag_source"] = n
+				_sync_unit_property(pu, "piercing_tag_source", n)
 			if v36_target:
 				var names := picks.map(func(p): return (p as GameUnit).get_name())
 				_log_rule_event(BattleLog.Category.COMBAT,
@@ -24507,11 +24509,11 @@ func _solo_spend_piercing_tag(target: GameUnit) -> int:
 				"Piercing Target: +AP(%d) stands while %s lives%s" % [flat, target.get_name(), " (+1 (Target))" if v36 else ""], true)
 		return flat
 	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:   # rules 3.6: ONE token per attack, +1
-		target.unit_properties["piercing_tag_markers"] = markers - 1
+		_sync_unit_property(target, "piercing_tag_markers", markers - 1)
 		_log_rule_event(BattleLog.Category.COMBAT,
 			"Piercing Tag: one token spent — +1 AP on this volley (%d left)" % (markers - 1), true)
 		return 1
-	target.unit_properties["piercing_tag_markers"] = 0
+	_sync_unit_property(target, "piercing_tag_markers", 0)
 	if battle_log != null:
 		_log_rule_event(BattleLog.Category.COMBAT,
 			"Piercing Tag: %d marker%s spent — +AP(%d) on this volley" % [markers, ("" if markers == 1 else "s"), markers], true)
