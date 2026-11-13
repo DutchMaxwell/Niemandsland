@@ -28,6 +28,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	CoreActivation.reset_all(_main)   # the session store is static: no case leaks an open activation into the next
 	CoreActivation._env = -1
 	_end_session()
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
@@ -270,3 +271,115 @@ func test_a_landed_wound_shows_on_the_wound_marker() -> void:
 	await CoreActivation.land_step(_main, foe, landing, CoreActivation._start_models(_main), {})
 	assert_int(m.wounds_current).is_equal(1)
 	assert_object(m.node.get_node_or_null("WoundMarker")).override_failure_message("no wound marker").is_not_null()
+
+
+## Step 28 fixture: a human unit of two models on an AI-seat table; each node carries its network id and its
+## ModelInstance, as spawned models do (the move ledger keys its models by the id, the trail radius reads the model).
+func _human(uname: String, rules: Array = []) -> GameUnit:
+	_main.solo_ai_slots = {2: true}
+	_main._ensure_solo_controller()
+	var u := ParityTable._make_unit(_main, {"player": 1, "name": uname, "models": 2, "x_in": 0.0, "z_step_in": 1.2,
+		"quality": 4, "defense": 4, "tough": 1, "game_system": "gf", "faction_folder": "robot_legions", "rules": rules},
+		{"name": "Rifle", "range_in": 24, "attacks": 1, "count": 2, "rules": []})
+	for i in u.models.size():
+		(u.models[i] as ModelInstance).node.set_meta("network_id", 901 + i)
+		(u.models[i] as ModelInstance).node.set_meta("model_instance", u.models[i])
+	return u
+
+
+func _xz(p: Vector3) -> Vector2:
+	return Vector2(p.x, p.z)
+
+
+## Screen point whose y=0 table-plane ray hit is (wx, wz) (e2e_retrace_hand_band_test's helper).
+func _screen(wx: float, wz: float) -> Vector2:
+	return _main.get_viewport().get_camera_3d().unproject_position(Vector3(wx, 0.0, wz))
+
+
+## Step 28: a plain unit's open activation drags on the core's bands, and for a plain unit they are the table's.
+func test_an_open_plain_unit_drags_on_the_core_bands() -> void:
+	var u := _human("Rifles")
+	var node: Node3D = (u.models[0] as ModelInstance).node
+	assert_bool(CoreActivation.open_session(_main, u)).is_true()
+	assert_dict(CoreActivation.bands(_main, u)).override_failure_message("no core bands").is_not_empty()
+	var got: Dictionary = _main.object_manager._human_bands(node)
+	var table: Dictionary = _main.object_manager.movement_range_controller.bands_for_model(node)
+	for k in ["advance", "rush", "charge"]:
+		assert_float(float(got.get(k, -1))).override_failure_message("%s: %s" % [k, got]) \
+			.is_equal({"advance": 6.0, "rush": 12.0, "charge": 12.0}[k])
+		assert_float(float(got[k])).override_failure_message("%s vs the table: %s" % [k, table]).is_equal(float(table[k]))
+
+
+## Step 28: the start snapshot is where the move ledger puts the activation's start after the first drop (XZ); a second
+## open keeps the first snapshot.
+func test_the_snapshot_is_the_ledger_start_and_a_second_open_keeps_it() -> void:
+	var u := _human("Rifles")
+	var a: Node3D = (u.models[0] as ModelInstance).node
+	var b: Node3D = (u.models[1] as ModelInstance).node
+	assert_bool(CoreActivation.open_session(_main, u)).is_true()
+	var om: Node3D = _main.object_manager
+	om._selected_objects.append_array([a, b])
+	om._start_dragging(_screen(a.global_position.x, a.global_position.z))
+	om._update_drag(_screen(a.global_position.x + 2.0 * 0.0254, a.global_position.z))
+	await _runner.simulate_frames(1)
+	om._stop_dragging()
+	await _runner.simulate_frames(2)
+	var s: Dictionary = CoreActivation._sessions[u.unit_id]
+	var starts: Dictionary = _main.move_trails.ledger.round_starts_for_unit(u.unit_id, 1)
+	assert_int(starts.size()).override_failure_message("ledger starts: %s" % starts).is_equal(2)
+	for i in 2:
+		assert_float(_xz(s["start_pos"][i]).distance_to(starts.get(901 + i, Vector2.INF))).is_less(0.0001)
+	assert_float(_xz(a.global_position).distance_to(_xz(s["start_pos"][0]))).override_failure_message("no drag") \
+		.is_greater(0.02)
+	var pos_before: Array = (s["start_pos"] as Array).duplicate()
+	var rot_before: Array = (s["start_rot"] as Array).duplicate()
+	a.rotation.y += 1.0
+	assert_bool(CoreActivation.open_session(_main, u)).override_failure_message("a second open").is_false()
+	assert_array(CoreActivation._sessions[u.unit_id]["start_pos"]).is_equal(pos_before)
+	assert_array(CoreActivation._sessions[u.unit_id]["start_rot"]).is_equal(rot_before)
+
+
+## Step 28 (O14 (1b)): a unit with a non-movement rule opens a session too, but keeps the table's bands.
+func test_a_furious_unit_opens_a_session_without_core_bands() -> void:
+	var u := _human("Berserkers", ["Furious"])
+	assert_bool(CoreActivation.open_session(_main, u)).is_true()
+	assert_bool(CoreActivation.session_open(u.unit_id)).is_true()
+	assert_dict(CoreActivation.bands(_main, u)).is_empty()
+
+
+func test_no_session_opens_with_the_flag_off() -> void:
+	var u := _human("Rifles")
+	CoreActivation._env = 0
+	assert_bool(CoreActivation.open_session(_main, u)).is_false()
+	assert_bool(CoreActivation.session_open(u.unit_id)).is_false()
+
+
+## R6: a unit that comes back moved but not activated (an MP rejoin) starts where the ledger says its round began, not
+## where it stands, so a new Start cannot launder the move.
+func test_a_unit_that_moved_this_round_starts_at_its_ledger_start() -> void:
+	var u := _human("Rifles")
+	var from: Array = []
+	for i in 2:
+		var n: Node3D = (u.models[i] as ModelInstance).node
+		from.append(_xz(n.global_position))
+		var to: Vector2 = from[i] + Vector2(5.0 * 0.0254, 0.0)
+		_main.move_trails.ledger.record(1, u.unit_id, u.get_name(), 901 + i, PackedVector2Array([from[i], to]), 1)
+		n.global_position = Vector3(to.x, n.global_position.y, to.y)
+	u.unit_properties["moved_round"] = 1
+	assert_bool(CoreActivation.open_session(_main, u)).is_true()
+	var got: Array = (CoreActivation._sessions[u.unit_id]["start_pos"] as Array).map(_xz)
+	assert_array(got).is_equal(from)
+
+
+## R4 hand-off: reset_all closes every session and releases its core handle (the game lifecycle calls it).
+func test_reset_all_closes_every_session() -> void:
+	var a := _human("Alpha")
+	var b := _human("Bravo")
+	CoreActivation.open_session(_main, a)
+	CoreActivation.open_session(_main, b)
+	assert_str(CoreActivation.open_unit_name(_main, b)).is_equal("Alpha")
+	var h := int(CoreActivation._sessions[a.unit_id]["handle"])
+	CoreActivation.reset_all(_main)
+	assert_bool(CoreActivation.session_open(a.unit_id) or CoreActivation.session_open(b.unit_id)).is_false()
+	assert_str(CoreActivation.open_unit_name(_main, null)).is_empty()
+	assert_dict(_main.solo_controller._core_node_ready().move_allowance(h, a.unit_id)).is_empty()
