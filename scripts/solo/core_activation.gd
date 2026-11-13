@@ -275,7 +275,7 @@ static func open_session(main, gu: GameUnit) -> bool:
 			start_pos.append(Vector3((was as Vector2).x, p.y, (was as Vector2).y) if was is Vector2 else p)
 			start_rot.append(m.node.rotation.y)
 	var s := {"handle": h, "transcript": [{"t": "begin"}], "start_models": _start_models(main), "start_pos": start_pos,
-		"start_rot": start_rot, "dice": false, "journal": {"props": _journal_props(main)}}
+		"start_rot": start_rot, "dice": false, "journal": _journal_records(main).merged({"props": _journal_props(main)})}
 	if gu.unit_properties.has("moved_round"):
 		s["moved_round_before"] = gu.unit_properties["moved_round"]
 	_sessions[gu.unit_id] = s
@@ -345,6 +345,17 @@ const JOURNAL_KEYS := {
 	"tag_markers": "Precision Tag",
 }
 const _NET := preload("res://scripts/network_manager.gd")
+## Step 67: the keys a buff record's granted-rule overlay writes (main._solo_apply_grant appends to `special_rules` IN
+## PLACE); Cancel puts them back with the records, in place, never through the tripwire.
+const OVERLAY_KEYS := ["special_rules", "rule_descriptions"]
+## Step 67 (R8): the unit_properties keys the tripwire never reports, each with why. Every other key is a gameplay key.
+const TRIPWIRE_SKIP := {
+	"moved_round": "the reset (step 32) restores it",
+	"bounding_roll": "kept for the round, journal-exempt (step 83, O17 (b))",
+	"display_suffix": "UI only: the ' (2)' disambiguator of the card and the node names",
+}
+## Step 67: how many unit properties a Cancel found changed by a door the journal misses (tests and gates read it).
+static var tripwire_hits := 0
 
 
 ## Step 37: JOURNAL_KEYS of EVERY game unit on the table (a spend can write on another unit), instance_id -> {key: value};
@@ -360,12 +371,26 @@ static func _journal_props(main) -> Dictionary:
 	return out
 
 
+## Step 67: every unit's spell records (a deep copy of main._solo_spell_mods; a unit without records stays out) and a
+## deep copy of every unit's unit_properties (the tripwire's reference).
+static func _journal_records(main) -> Dictionary:
+	var mods := {}
+	var all := {}
+	for u in main.opr_army_manager.get_all_game_units():
+		if main._solo_spell_mods.has(u.get_instance_id()):
+			mods[u.get_instance_id()] = (main._solo_spell_mods[u.get_instance_id()] as Array).duplicate(true)
+		all[u.get_instance_id()] = u.unit_properties.duplicate(true)
+	return {"mods": mods, "all": all}
+
+
 ## Step 37 (Cancel, step 35): every JOURNAL_KEYS value that changed on ANY unit since `gu`'s Start is put back (erased
 ## when the unit did not carry it) - a wire-listed key through main._sync_unit_property (it reaches the other table), a
 ## table-local one by a direct write, as its spender wrote it - and one "<Unit>: <Rule> is unspent again." line per rule
 ## names the ACTING unit. The Utility Buff stamp is written on every human unit that opens a Shoot or Fight pick, rule or
 ## not (main._solo_apply_utility_buffs), so it names its rule only when the unit or a joined hero carries one.
-## Nothing without a session.
+## Step 67: then every unit's spell records as they were (stamps, wire and the save mirror follow; one line per removed
+## record name not named yet) and its granted-rule overlay, in place. Last the tripwire: any OTHER key that differs from
+## the Start (TRIPWIRE_SKIP aside) is reported (push_error, tripwire_hits) and left as it is. Nothing without a session.
 static func undo_journal(main, gu: GameUnit) -> void:
 	if gu == null or not _sessions.has(gu.unit_id):
 		return
@@ -387,6 +412,48 @@ static func undo_journal(main, gu: GameUnit) -> void:
 				u.unit_properties.erase(k)
 			if not rules.has(JOURNAL_KEYS[k]) and (k != "utility_buff_round" or _carries_buff(u)):
 				rules.append(JOURNAL_KEYS[k])
+	var mods: Dictionary = _sessions[gu.unit_id]["journal"].get("mods", {})
+	var all: Dictionary = _sessions[gu.unit_id]["journal"].get("all", {})
+	var units: Array = main.opr_army_manager.get_all_game_units().filter(func(u: GameUnit) -> bool:
+		return all.has(u.get_instance_id()))
+	var records_changed := false
+	for u: GameUnit in units:
+		var now: Array = main._solo_spell_mods.get(u.get_instance_id(), [])
+		var was: Array = mods.get(u.get_instance_id(), [])
+		if now != was:
+			for rec in now:
+				if not was.has(rec) and not rules.has(str(rec["spell"])):
+					rules.append(str(rec["spell"]))
+			if was.is_empty():
+				main._solo_spell_mods.erase(u.get_instance_id())
+			else:
+				main._solo_spell_mods[u.get_instance_id()] = was.duplicate(true)
+			main._solo_refresh_spell_stamps(u)
+			main._broadcast_spell_mods(u)
+			records_changed = true
+		for k in OVERLAY_KEYS:
+			var n: Variant = u.unit_properties.get(k)
+			var w: Variant = all[u.get_instance_id()].get(k)
+			if typeof(n) == typeof(w) and n == w:
+				continue
+			if n is Array and w is Array:
+				(n as Array).assign(w)   # in place: _solo_apply_grant appended to this very array
+			elif w == null:
+				u.unit_properties.erase(k)
+			else:
+				u.unit_properties[k] = _copy(w)
+	if records_changed:
+		main._solo_mirror_spell_state()   # the save mirror (spell_records) follows the records
+	for u: GameUnit in units:
+		var at_start: Dictionary = all[u.get_instance_id()]
+		var keys := at_start.duplicate()
+		keys.merge(u.unit_properties)
+		for k in keys:
+			var n: Variant = u.unit_properties.get(k)
+			if TRIPWIRE_SKIP.has(k) or (typeof(n) == typeof(at_start.get(k)) and n == at_start.get(k)):
+				continue
+			push_error("cancel: %s.%s changed by an unjournaled door" % [u.get_name(), k])
+			tripwire_hits += 1
 	for rule in rules:
 		main._log_rule_event(BattleLog.Category.GENERAL, "%s: %s is unspent again." % [gu.get_name(), rule])
 
