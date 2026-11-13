@@ -913,3 +913,22 @@ func test_a_formation_inside_an_activation_writes_a_ledger_drop() -> void:
 	_main.object_manager.arrange_selected_in_rows(2)
 	assert_array(_poses(u)).override_failure_message("not re-formed after the Start").is_not_equal(at)
 	assert_array(_main.move_trails.ledger.entries_for_unit(u.unit_id)).override_failure_message("no ledger drop").is_not_empty()
+
+
+## Step 65 (the drag gate's step-30 rule): a mixed selection under a held Shift+R - one started unit, one not - turns the
+## started unit and leaves the other where it stands, with NO refusal line on any frame - neither "Activate <Unit> first."
+## nor the O5 sentence (the gate says why only when it refuses the whole selection, as a mixed drag does).
+func test_a_mixed_group_turn_turns_the_started_unit_and_says_nothing() -> void:
+	var a := _human("Alpha")
+	var b := _human("Bravo")
+	_node(b, 0).global_position.x += 0.3
+	_node(b, 1).global_position.x += 0.3
+	CoreActivation.open_session(_main, a)
+	var at_a: Array = _poses(a)
+	var at_b: Array = _poses(b)
+	_select([_node(a, 0), _node(a, 1), _node(b, 0), _node(b, 1)])
+	_group_turn(2)
+	assert_array(_poses(a)).override_failure_message("the started unit did not turn").is_not_equal(at_a)
+	assert_array(_poses(b)).override_failure_message("the unit that was not started turned").is_equal(at_b)
+	var refusals: Array = _main.battle_log.entries().filter(func(e: Dictionary) -> bool: return str(e["text"]).ends_with(" first."))
+	assert_array(refusals).override_failure_message("a refusal line for a mixed turn: %s" % [refusals]).is_empty()
