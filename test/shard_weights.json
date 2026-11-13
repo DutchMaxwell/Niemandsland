@@ -293,6 +293,7 @@
 "test/e2e/e2e_non_weapon_hits_test.gd": 32.2,
 "test/e2e/e2e_normal_wound_log_order_test.gd": 9.6,
 "test/e2e/e2e_one_core_activation_test.gd": 12.0,
+"test/e2e/e2e_one_core_round_test.gd": 12.5,
 "test/e2e/e2e_orphan_teardown_test.gd": 15.5,
 "test/e2e/e2e_owned_marker_side_test.gd": 6.0,
 "test/e2e/e2e_owner_roll_all_kinds_test.gd": 18.1,
