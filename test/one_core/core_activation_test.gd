@@ -203,6 +203,26 @@ func test_drive_runs_a_plain_hold_and_shoot_activation_to_done() -> void:
 	assert_int(_main._tray_rng.state).override_failure_message("the tray threw no die").is_not_equal(rng_before)
 
 
+## Step 19b: the first capture sends the game header (once per game, shared with the AI's search), so the core reads
+## the game's rules epoch. Probe rule (step_activation_binding_test's): Speed Feat (epoch 7) gives its bearer an 8"
+## Advance in the last round; at epoch 0 (no header) the core reads the printed 6".
+func test_capture_sends_the_game_header_so_the_core_reads_the_game_epoch() -> void:
+	_main.solo_ai_slots = {2: true}
+	_main._ensure_solo_controller()
+	var sc: SoloController = _main.solo_controller
+	sc.game_rounds = 4
+	_main.opr_army_manager.current_round = 4
+	var u := ParityTable._make_unit(_main, {"player": 1, "name": "Boyz", "models": 3, "x_in": 0.0, "z_step_in": 1.2,
+		"quality": 4, "defense": 4, "tough": 1, "game_system": "gf", "faction_folder": "orc_marauders",
+		"rules": ["Speed Feat"]}, {})
+	assert_bool(sc._core_header_done).is_false()
+	var h := CoreActivation.capture(_main)
+	assert_bool(sc._core_header_done).override_failure_message("no game header sent").is_true()
+	var a: Dictionary = sc._core_node_ready().move_allowance(h, u.unit_id)
+	assert_float(float(a.get("advance", 0.0))).override_failure_message("Speed Feat at the game epoch: %s" % a) \
+		.is_equal(8.0)
+
+
 ## Step 21: the fixture's units off the table again (the next seed rebuilds them).
 func _clear(units: Array) -> void:
 	for u in units:
