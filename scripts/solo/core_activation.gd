@@ -74,8 +74,10 @@ const MAX_STEPS := 64
 ## One activation through the core: ask, print the lines not printed yet, land, throw on the owner's tray, ask again.
 ## `transcript` gains one faces entry per throw; `on_throw(kind, index)` runs before each throw (a test seam).
 ## Returns the core's last answer plus "steps" (calls), "core_us" (their total time) and "max_us" (the slowest).
+## A `done` answer's state handle is released once the table landed it (R4); `keep_handle` hands it to the caller instead,
+## who releases it.
 static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
-		on_throw: Callable = Callable()) -> Dictionary:
+		on_throw: Callable = Callable(), keep_handle := false) -> Dictionary:
 	var core: Object = (main.solo_controller as SoloController)._core_node_ready()
 	var enforce: bool = main.object_manager._strict_movement_enforced()
 	var printed := 0
@@ -98,6 +100,9 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 		await land_step(main, unit, r.get("landings", []), start_models, landed)
 		if str(r["step"]) == "done":
 			await land_delta(main, r.get("delta", []), start_models, landed)
+			if not keep_handle:
+				core.release(int(r.get("handle", 0)))
+				r.erase("handle")
 		if str(r["step"]) != "need_roll":
 			r.merge({"steps": step + 1, "core_us": core_us, "max_us": max_us}, true)
 			return r
@@ -275,7 +280,11 @@ static func close_session(main, unit_id: String) -> void:
 	_sessions.erase(unit_id)
 
 
-## Closes every open session. The store is static, so the game's lifecycle (quit to menu, new game, save load) calls this.
+## Closes every open session, and the next capture sends the game header again (a loaded game's units are not the
+## header's). The store is static, so the game's lifecycle calls this: main's `_exit_tree` (quit to menu, which a new game
+## follows) and its save load.
 static func reset_all(main) -> void:
 	for id in _sessions.keys():
 		close_session(main, id)
+	if main != null and is_instance_valid(main.solo_controller):
+		main.solo_controller._core_header_done = false

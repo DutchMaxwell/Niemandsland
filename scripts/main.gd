@@ -508,6 +508,12 @@ const IMPORT_AWAIT_TIMEOUT_SEC: float = 75.0
 var _import_await_guard := ImportAwaitGuard.new()
 
 
+## One-core P3 R4: the open activations live in CoreActivation's static store, which outlives this scene; the table
+## that leaves the tree (quit to menu, before any new game) closes them.
+func _exit_tree() -> void:
+	CoreActivation.reset_all(self)
+
+
 func _ready() -> void:
 	# NML-1076 (M0-0c): normal play randomizes the tray's own RNG once at startup; the arena
 	# overrides this via seed_tray_rng() after deployment for a reproducible dice stream.
@@ -20300,6 +20306,7 @@ func _on_save_completed(path: String) -> void:
 func _on_load_completed(object_count: int) -> void:
 	print("Game loaded: %d objects" % object_count)
 	_solo_rebind_carried_after_load()
+	CoreActivation.reset_all(self)   # R4: a loaded game has no open activation and sends its own game header
 	_update_round_button()  # restored round may differ from 1
 	# A loaded battle spawns no army_spawned signal, so the unit strip was only ever built on a fresh
 	# spawn and stayed empty after a save-load (UI handoff finding 4). Rebuild it from the restored units.
