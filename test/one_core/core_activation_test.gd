@@ -383,3 +383,105 @@ func test_reset_all_closes_every_session() -> void:
 	assert_bool(CoreActivation.session_open(a.unit_id) or CoreActivation.session_open(b.unit_id)).is_false()
 	assert_str(CoreActivation.open_unit_name(_main, null)).is_empty()
 	assert_dict(_main.solo_controller._core_node_ready().move_allowance(h, a.unit_id)).is_empty()
+
+
+## Step 29: the REAL NetworkManager with only its transport swapped out; it records every wire frame (pattern:
+## e2e_mp_log_channel_test's FakeNet). Seat 1 is this table's.
+class FakeNet extends "res://scripts/network_manager.gd":
+	var sent: Array = []
+	func is_multiplayer_active() -> bool:
+		return true
+	func _validate_rpc_ready(_context: String = "") -> bool:
+		return true
+	func _remote_call(method: String, args: Array, _target_peer: int = 0) -> void:
+		sent.append({"m": method, "a": args})
+	func slot_has_human_peer(_slot: int) -> bool:
+		return false
+	func get_my_peer_id() -> int:
+		return 1
+	func get_my_player_slot() -> int:
+		return 1
+
+
+func _recording_net() -> FakeNet:
+	var net := FakeNet.new()
+	net.army_manager = _main.opr_army_manager
+	_net = net
+	_main.network_manager = net
+	return net
+
+
+func _log_lines(text: String) -> Array:
+	return _main.battle_log.entries().filter(func(e: Dictionary) -> bool: return str(e["text"]) == text)
+
+
+func _toasts(text: String) -> Array:
+	return _main.find_children("*", "Label", true, false).filter(func(l: Label) -> bool: return l.text == text)
+
+
+## Step 29 (O9, O14 (1b), O15 (2)): every door that starts-and-ends in one press today - the card's Activate, the
+## Activated chip, the radial toggle - STARTS the activation of a lifecycle unit, a "Furious" one too: a session, the unit
+## not activated, no unit_activated, one log line, and that line is the start's only wire frame.
+func test_activate_starts_the_activation_through_every_door() -> void:
+	var rmc: Node = _main.radial_menu_controller
+	var doors := {
+		"card": func(u: GameUnit) -> void: await rmc.card_start_activation(u),
+		"chip": func(u: GameUnit) -> void: await rmc.card_toggle_activation(u),
+		"radial": func(u: GameUnit) -> void: await rmc._on_action_selected("toggle_activate", {"game_unit": u}),
+	}
+	var activated: Array = []
+	rmc.unit_activated.connect(func(gu: GameUnit) -> void: activated.append(gu.get_name()))
+	var bad: Array = []
+	for door in doors:
+		var u := _human("Berserkers_%s" % door, ["Furious"])
+		var net := _recording_net()
+		await (doors[door] as Callable).call(u)
+		var sentence := "%s begins its activation." % u.get_name()
+		if not CoreActivation.session_open(u.unit_id) or u.is_activated:
+			bad.append("%s: session %s, activated %s" % [door, CoreActivation.session_open(u.unit_id), u.is_activated])
+		if _log_lines(sentence).size() != 1:
+			bad.append("%s: %d log lines" % [door, _log_lines(sentence).size()])
+		var frames: Array = net.sent.map(func(f: Dictionary) -> String: return "%s %s" % [f["m"], f["a"][1]])
+		if frames != ["sync_log_event %s" % sentence]:
+			bad.append("%s: frames %s" % [door, frames])
+		CoreActivation.reset_all(_main)   # the next door's unit is not locked by this one
+		_end_session()
+	assert_array(activated).override_failure_message("unit_activated: %s" % [activated]).is_empty()
+	assert_array(bad).override_failure_message("\n".join(bad)).is_empty()
+
+
+## Step 29 (O5): while A's activation is open, Activate on B says the O5 sentence (toast and log line), opens nothing.
+func test_activate_while_another_activation_is_open_names_it() -> void:
+	var a := _human("Alpha")
+	var b := _human("Bravo")
+	await _main.radial_menu_controller.card_start_activation(a)
+	await _main.radial_menu_controller.card_start_activation(b)
+	assert_bool(CoreActivation.session_open(b.unit_id) or b.is_activated).is_false()
+	assert_int(_log_lines("Finish Alpha's activation first.").size()).is_equal(1)
+	assert_int(_toasts("Finish Alpha's activation first.").size()).is_equal(1)
+
+
+## Step 29: the room's turn gate stays in front of the Start door - an agreed room with the token on the other side.
+func test_activate_off_turn_in_an_agreed_room_starts_nothing() -> void:
+	_main.opr_army_manager.rules_automation = RulesAutomation.Level.AUTOMATIC
+	_recording_net()
+	_main._ensure_solo_controller()
+	var u := _unit(1, "Rifles", ["Furious"])
+	assert_bool(CoreActivation.is_lifecycle_unit(_main, u)).override_failure_message("precondition").is_true()
+	_main._apply_turn_token(2)
+	await _main.radial_menu_controller.card_start_activation(u)
+	assert_int(_log_lines("It is P2's turn").size()).is_equal(1)
+	assert_bool(CoreActivation.session_open(u.unit_id) or u.is_activated).is_false()
+	_end_session()
+
+
+## Step 29: with the flag off the door activates as today. A second human unit keeps the round open, and the frames let
+## the AI's owed reply finish before the table is freed.
+func test_with_the_flag_off_activate_activates_as_today() -> void:
+	var u := _human("Rifles")
+	_human("Reserves")
+	CoreActivation._env = 0
+	await _main.radial_menu_controller.card_start_activation(u)
+	assert_bool(u.is_activated).is_true()
+	assert_bool(CoreActivation.session_open(u.unit_id)).is_false()
+	await _runner.simulate_frames(10)
