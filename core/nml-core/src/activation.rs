@@ -424,18 +424,21 @@ mod tests {
     #[test]
     fn a_stepped_activation_equals_the_seeded_run() {
         let (st, statics) = volley_line();
-        let (mut killed, mut shaken) = (0, 0);
+        let (mut killed, mut shaken, mut morale) = (0, 0, 0);
         for seed in 0..200i64 {
             let action = Action { kind: HOLD, unit: "a".into(), dest: None, shoot: Some("b".into()), charge: None, patient: false, split: None, traced: None, teleport: None };
             let (want, shot) = resolve_stochastic_tray_on_board(&statics, &st, &action, &Terrain::default(), seams(), &mut GodotRng::new(seed), &mut Tray::seeded(seed)).unwrap();
             let (got, rolls) = drive(&statics, &st, vec![Begin, intent(HOLD, Some("b"))], seed);
             let ActStep::Done { state, .. } = got else { panic!("seed {seed}: {got:?}") };
             assert_eq!((&state.alive, &state.shaken), (&want.alive, &want.shaken), "seed {seed}");
-            assert_eq!(rolls, shot.rolls, "seed {seed}");
+            // The step asks for the morale die as "morale" (the table's kind); its record keeps the replay's "attack".
+            morale += rolls.iter().filter(|r| r.kind == "morale").count();
+            let fold = |r: Roll| Roll { kind: if r.kind == "morale" { "attack" } else { r.kind }, ..r };
+            assert_eq!(rolls.into_iter().map(fold).collect::<Vec<_>>(), shot.rolls, "seed {seed}");
             assert_eq!(state, want, "seed {seed}");
             (killed, shaken) = (killed + (want.alive[2] < st.alive[2]) as i32, shaken + want.shaken[2] as i32);
         }
-        assert!(killed > 0 && shaken > 0, "fixture must kill and shake: {killed} {shaken}");
+        assert!(killed > 0 && shaken > 0 && morale > 0, "fixture must kill, shake and test morale: {killed} {shaken} {morale}");
     }
 
     /// O3: a unit that moved as a Rush cannot shoot (RED: drop the Rush check).
