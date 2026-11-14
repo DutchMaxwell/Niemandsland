@@ -92,7 +92,15 @@ static func build_presented(data: Dictionary, on_action: Callable = Callable(), 
 		if bool(data.get("woundable", false)):
 			strip.add_child(_status_chip("✚ Wounds", false, HouseStyle.TONE_WARN, compact, on_action, "wounds"))
 	col.add_child(strip)
-	if not compact and bool(data.get("can_activate", false)):
+	if not compact and bool(data.get("activation_open", false)):   # one-core P3 step 36: End, and Cancel until the first die
+		var done := HouseStyle.button("End activation", HouseStyle.PRIMARY)
+		done.pressed.connect(func() -> void: on_action.call("end_activation"))
+		col.add_child(done)
+		if bool(data.get("can_cancel", false)):
+			var back := HouseStyle.button("Cancel")
+			back.pressed.connect(func() -> void: on_action.call("cancel_activation"))
+			col.add_child(back)
+	elif not compact and bool(data.get("can_activate", false)):
 		var go := HouseStyle.button("Activate", HouseStyle.PRIMARY)
 		go.pressed.connect(func() -> void: on_action.call("start_activation"))
 		col.add_child(go)

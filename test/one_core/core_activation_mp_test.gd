@@ -588,3 +588,95 @@ func test_closing_an_open_activation_after_the_network_manager_left_the_tree_for
 	parent.add_child(_real_net)
 	assert_bool(CoreActivation.session_open(u.unit_id)).override_failure_message("the session stayed open").is_false()
 	assert_bool(CoreActivation._announced.is_empty()).override_failure_message("reset_all stopped early").is_true()
+
+
+## ---- Step 36: the unit card's "End activation" and "Cancel" follow the session (O9, O14 (1b)) ----
+
+## The activation buttons the presented card shows, sorted.
+func _card_buttons() -> Array:
+	var out: Array = []
+	for n: Node in _main.unit_dock.find_children("*", "Button", true, false):
+		var b := n as Button
+		if b.is_visible_in_tree() and b.text in ["Activate", "End activation", "Cancel"]:
+			out.append(b.text)
+	out.sort()
+	return out
+
+
+func _press(label: String) -> void:
+	for n: Node in _main.unit_dock.find_children("*", "Button", true, false):
+		if (n as Button).text == label and (n as Button).is_visible_in_tree():
+			(n as Button).pressed.emit()
+			return
+	assert_bool(false).override_failure_message("no %s button on the card: %s" % [label, _card_buttons()]).is_true()
+
+
+func _present(u: GameUnit) -> void:
+	_main.unit_dock.present_unit(u)
+	await E2EBoot.settle(get_tree())
+
+
+func _off_shown() -> bool:
+	return (_main._movement_cap_buttons[ObjectManager.MovementCap.OFF] as Button).visible
+
+
+## Step 36: no session -> "Activate" only; the Start -> "End activation" and "Cancel"; the first die -> "End activation"
+## only; pressing it marks the unit Activated through the one door, closes the session and the selector row shows Off again.
+func test_the_card_follows_the_session_and_end_activation_ends_it() -> void:
+	_room()
+	var u := _plain(1, "Rifles", 0.0)
+	_plain(2, "Guards", 18.0)
+	await _present(u)
+	assert_array(_card_buttons()).is_equal(["Activate"])
+	await _main.radial_menu_controller.card_start_activation(u)
+	_main.object_manager._deselect_all()
+	_main.object_manager._add_to_selection((u.models[0] as ModelInstance).node)
+	await _runner.simulate_frames(2)
+	assert_array(_card_buttons()).is_equal(["Cancel", "End activation"])
+	assert_bool(_off_shown()).override_failure_message("Off shown during the activation").is_false()
+	CoreActivation.note_die(_main)
+	await _runner.simulate_frames(2)
+	assert_array(_card_buttons()).override_failure_message("a Cancel after the first die").is_equal(["End activation"])
+	_press("End activation")
+	await _runner.simulate_frames(6)
+	assert_bool(u.is_activated).override_failure_message("End did not activate").is_true()
+	assert_bool(CoreActivation.session_open(u.unit_id)).override_failure_message("the session stays open").is_false()
+	assert_bool(_off_shown()).override_failure_message("Off still hidden after the End").is_true()
+	assert_array(_card_buttons()).is_empty()
+
+
+## Step 36: "Cancel" takes the unit back (step 35) - not activated, session closed, the card offers "Activate" again; a round
+## advance (a remote one here) and the radial/chip door's End close an open session too.
+func test_cancel_and_the_other_ways_to_end_an_activation_close_the_session() -> void:
+	_room()
+	var u := _plain(1, "Rifles", 0.0)
+	var v := _plain(1, "Scouts", 6.0)
+	_plain(2, "Guards", 18.0)
+	await _present(u)
+	await _main.radial_menu_controller.card_start_activation(u)
+	await _runner.simulate_frames(2)
+	_press("Cancel")
+	await _runner.simulate_frames(3)
+	assert_bool(u.is_activated).override_failure_message("a cancel activated the unit").is_false()
+	assert_bool(CoreActivation.session_open(u.unit_id)).override_failure_message("a cancel left the session").is_false()
+	assert_array(_card_buttons()).is_equal(["Activate"])
+	await _main.radial_menu_controller.card_start_activation(v)
+	_main._on_remote_round_advanced()
+	assert_bool(CoreActivation.session_open(v.unit_id)).override_failure_message("a round advance left the session").is_false()
+	await _start_and_end(u)   # the door a resolved shot or charge ends through (card_toggle_activation)
+	assert_bool(CoreActivation.session_open(u.unit_id)).override_failure_message("the toggle door left the session").is_false()
+
+
+## Step 36: a dock outside the tree (the quit order) is not redrawn: closing a session there is quiet.
+func test_closing_a_session_with_the_dock_outside_the_tree_is_quiet() -> void:
+	_room()
+	var u := _plain(1, "Rifles", 0.0)
+	_plain(2, "Guards", 18.0)
+	await _present(u)
+	await _main.radial_menu_controller.card_start_activation(u)
+	var dock: Node = _main.unit_dock
+	var holder: Node = dock.get_parent()
+	holder.remove_child(dock)
+	CoreActivation.close_session(_main, u.unit_id)
+	holder.add_child(dock)
+	assert_bool(CoreActivation.session_open(u.unit_id)).is_false()
