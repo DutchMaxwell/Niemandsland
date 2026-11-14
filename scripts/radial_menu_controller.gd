@@ -574,6 +574,10 @@ func _toggle_activation(context: Dictionary) -> void:
 		if main_node != null and main_node.has_method("core_activation_start") \
 				and main_node.call("core_activation_start", game_unit):
 			return
+		# One-core P3 step 69b: EVERY door that ends a core unit's activation (the card's End, the "Activated" chip, the radial
+		# toggle) asks the core first - the walked path's Dangerous test; true = the core refused, the activation stays open.
+		if main_node != null and main_node.has_method("core_activation_end") and await main_node.call("core_activation_end", game_unit):
+			return
 		# The manual toggle is the catch-all activation door (free dragging has none) — the
 		# activation-triggered rules get their shot before the unit counts as spent.
 		await _solo_activation_rules(game_unit)
@@ -1060,12 +1064,8 @@ func card_start_activation(unit: GameUnit) -> void:
 
 ## One-core P3 step 36: the card's "End activation" - the one door that ends an activation (a unit already spent is left).
 func card_end_activation(unit: GameUnit) -> void:
-	if unit == null or unit.is_activated:
-		return
-	var main_node := get_node_or_null("/root/Main")
-	if main_node != null and main_node.has_method("core_activation_end") and await main_node.call("core_activation_end", unit):
-		return   # one-core P3 step 69: the core refused (the player saw why) and the activation stays open
-	await _toggle_activation({"game_unit": unit})
+	if unit != null and not unit.is_activated:
+		await _toggle_activation({"game_unit": unit})   # step 69b: the door asks the core (CoreActivation.end) itself
 
 
 ## One-core P3 step 36: the card's "Cancel" - the table takes the unit back to its start (main.core_activation_cancel).

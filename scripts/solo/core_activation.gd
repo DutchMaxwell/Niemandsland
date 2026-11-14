@@ -551,7 +551,7 @@ static func drop_refused(main, gu: GameUnit) -> bool:
 		push_error("drop_refused: no core for %s's open activation - the drop is not checked" % gu.get_name())
 		return false
 	var s: Dictionary = _sessions[gu.unit_id]
-	var at: Array = gu.get_alive_models().map(func(m: ModelInstance) -> Vector3: return m.node.global_position)
+	var at: Array = gu.get_alive_models().map(func(m: ModelInstance) -> Vector3: return main.object_manager.resting_position(m.node))   # step 69b: no drag lift
 	var trails := session_trails(main, gu, main.object_manager.drag_paths())   # step 66 (MOVE_GAPS 5)
 	var r: Dictionary = core.check_move(int(s["handle"]), gu.unit_id,
 		{"mode": mode, "positions": PackedVector3Array(at), "trails": trails}, main.object_manager._strict_movement_enforced())
