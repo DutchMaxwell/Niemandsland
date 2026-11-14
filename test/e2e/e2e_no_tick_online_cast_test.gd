@@ -21,6 +21,7 @@ var _epoch0: int
 
 
 func before_test() -> void:
+	CoreActivation._env = 0   # table path: the doors run without Activate (kill-switch flow); the lifecycle is test/e2e/e2e_one_core_*
 	_epoch0 = AiActRecorder.rules_epoch
 	E2EBoot.arm_harness_mode()
 	_root_before = E2EBoot.root_children(get_tree())
@@ -34,6 +35,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	CoreActivation._env = -1
 	AiActRecorder.rules_epoch = _epoch0   # statics leak across gdUnit tests: restore
 	_end_session()
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)

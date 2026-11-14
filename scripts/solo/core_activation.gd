@@ -1,15 +1,17 @@
 class_name CoreActivation
 extends RefCounted
-## One-core P3 step 19: the table's skeleton for core-resolved activations. INERT: nothing calls this until
-## NML_ONE_CORE_ACTIVATION=1 (default OFF), and every later door asks one of the three predicates first.
+## One-core P3 step 19: the table's skeleton for core-resolved activations. Every door asks one of the three
+## predicates first. Since the 0.3.16 release the flag is ON by default; NML_ONE_CORE_ACTIVATION=0 (or "off") is the
+## kill switch that restores the old table path.
 
 static var _env := -1
 
 
-## The flag, read once (the BattleSim.core_enabled pattern).
+## The flag, read once (the BattleSim.spacing_enabled pattern): ON unless the kill switch says "0" or "off".
 static func enabled() -> bool:
 	if _env < 0:
-		_env = 1 if OS.get_environment("NML_ONE_CORE_ACTIVATION") == "1" else 0
+		var raw := OS.get_environment("NML_ONE_CORE_ACTIVATION").to_lower()
+		_env = 0 if (raw == "0" or raw == "off") else 1
 	return _env == 1
 
 

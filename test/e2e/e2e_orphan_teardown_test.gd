@@ -33,6 +33,7 @@ var _orphans_before: Array
 
 
 func before_test() -> void:
+	CoreActivation._env = 0   # table path: the doors run without Activate (kill-switch flow); the lifecycle is test/e2e/e2e_one_core_*
 	E2EBoot.arm_harness_mode()
 	_root_before = E2EBoot.root_children(get_tree())
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
@@ -45,6 +46,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	CoreActivation._env = -1
 	# Asserted BEFORE the teardown sweep, and deliberately not left to gdUnit: its orphan report is a
 	# warning that only surfaces as a non-zero exit code, while this must fail loudly and by name.
 	assert_int(_new_orphans()) \

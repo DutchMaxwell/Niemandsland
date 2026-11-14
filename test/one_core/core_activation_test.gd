@@ -71,9 +71,39 @@ func _unit(pid: int, uname: String, unit_rules: Array = [], weapon_rules: Array 
 	return u
 
 
-func test_enabled_is_false_by_default() -> void:
+## One-core release (0.3.16): the flag is ON unless the kill switch NML_ONE_CORE_ACTIVATION is "0" or "off".
+func _enabled_with_env(raw: String) -> bool:
+	var saved := OS.get_environment("NML_ONE_CORE_ACTIVATION")
+	OS.set_environment("NML_ONE_CORE_ACTIVATION", raw)
 	CoreActivation._env = -1
-	assert_bool(CoreActivation.enabled()).is_false()
+	var on := CoreActivation.enabled()
+	OS.set_environment("NML_ONE_CORE_ACTIVATION", saved)
+	CoreActivation._env = -1
+	return on
+
+
+func test_enabled_is_true_by_default() -> void:
+	assert_bool(_enabled_with_env("")).override_failure_message("the one-core flag must be ON when the variable is unset").is_true()
+
+
+func test_the_kill_switch_turns_the_one_core_path_off() -> void:
+	assert_bool(_enabled_with_env("0")).override_failure_message("NML_ONE_CORE_ACTIVATION=0 must restore the old path").is_false()
+	assert_bool(_enabled_with_env("off")).is_false()
+
+
+func test_an_explicit_one_keeps_the_flag_on() -> void:
+	assert_bool(_enabled_with_env("1")).is_true()
+
+
+func test_the_kill_switch_takes_the_old_path_at_every_door() -> void:
+	var gu := _unit(1, "Rifles")
+	_main.solo_ai_slots = {2: true}
+	assert_bool(CoreActivation.is_lifecycle_unit(_main, gu)).is_true()
+	CoreActivation._env = 0   # what NML_ONE_CORE_ACTIVATION=0 resolves to
+	assert_bool(CoreActivation.applies(_main)).is_false()
+	assert_bool(CoreActivation.is_lifecycle_unit(_main, gu)).is_false()
+	assert_bool(CoreActivation.is_core_unit(_main, gu)).is_false()
+	assert_bool(CoreActivation.on_move_path(_main, gu)).is_false()
 
 
 func test_a_bare_unit_with_one_plain_weapon_is_plain() -> void:

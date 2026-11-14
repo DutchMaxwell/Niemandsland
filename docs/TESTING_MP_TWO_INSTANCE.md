@@ -23,7 +23,8 @@ The default run covers:
   digest check is silent, also for the round's last activation (the guest's, which ends round 1 on
   the host). Then a desync planted on the host is reported, the guest pushes only what differs, and
   the re-check matches. One command: `python3 test/mp/run_two_instance.py --one-core-only --repeat 1
-  --run-dir reports/mp-one-core`.
+  --run-dir reports/mp-one-core`. Every other scenario runs with `NML_ONE_CORE_ACTIVATION=0` (the old
+  flow, no Activate press) although the game's default is the one-core flow since 0.3.16.
 
 The driver compares both peers after every step. A timeout, process crash,
 English or German GDScript parser/runtime error, wrong expected value, or peer
