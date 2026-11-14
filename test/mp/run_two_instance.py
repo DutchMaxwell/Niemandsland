@@ -390,9 +390,8 @@ class Run:
         self.xdg_dirs.append(xdg)
         env = os.environ.copy()
         env["XDG_DATA_HOME"] = str(xdg)
-        # The one-core flow is the game's default since 0.3.16: the legacy scenarios pin the old flow (the kill
-        # switch) because they press no Activate; the one-core scenario runs the new default explicitly.
-        env["NML_ONE_CORE_ACTIVATION"] = "1" if self.one_core else "0"
+        if self.one_core:
+            env["NML_ONE_CORE_ACTIVATION"] = "1"
         cmd = shlex.split(self.args.godot) + [
             "--headless",
             "--path",

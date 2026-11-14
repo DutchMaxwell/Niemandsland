@@ -18,7 +18,6 @@ var _root_before: Array
 
 
 func before_test() -> void:
-	CoreActivation._env = 0   # table path: the doors run without Activate (kill-switch flow); the lifecycle is test/e2e/e2e_one_core_*
 	E2EBoot.arm_harness_mode()
 	_root_before = E2EBoot.root_children(get_tree())
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
@@ -31,7 +30,6 @@ func before_test() -> void:
 
 
 func after_test() -> void:
-	CoreActivation._env = -1
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 	_main = null
 	_runner = null
@@ -102,6 +100,7 @@ func _cast_with_one_boost(seer: GameUnit, target: GameUnit) -> String:
 	var start: int = _main.battle_log.entries().size()
 	var done := [false]
 	(func() -> void:
+		await E2EBoot.start_activation(_main, seer)   # the explicit activation a player opens first
 		await _main._run_human_cast(seer, seer, {"name": "Bolt", "threshold": 1}, [target])
 		done[0] = true).call()
 	await _wait(func() -> bool: return done[0] or _boost_card() != null)

@@ -13,7 +13,7 @@ var _pump: Timer
 
 
 func before_test() -> void:
-	CoreActivation._env = 0   # table path: the doors run without Activate (kill-switch flow); the lifecycle is test/e2e/e2e_one_core_*
+	CoreActivation._env = 0   # the engine verbs are hidden from players (main.PLAYER_AUTO_VERBS_ENABLED = false): the Automodus rework must define their Activate door
 	E2EBoot.arm_harness_mode()
 	_root_before = E2EBoot.root_children(get_tree())
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)

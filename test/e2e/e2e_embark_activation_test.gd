@@ -16,7 +16,6 @@ var _root_before: Array
 
 
 func before_test() -> void:
-	CoreActivation._env = 0   # table path: the doors run without Activate (kill-switch flow); the lifecycle is test/e2e/e2e_one_core_*
 	E2EBoot.arm_harness_mode()
 	_root_before = E2EBoot.root_children(get_tree())
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
@@ -25,7 +24,6 @@ func before_test() -> void:
 
 
 func after_test() -> void:
-	CoreActivation._env = -1
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 	_main = null
 	_runner = null
@@ -116,6 +114,7 @@ func test_headless_unload_dispatch_bypasses_the_ghost(timeout := 120000) -> void
 	_solo_playing_on()
 	var tc := _truck_and_cargo()
 	_main.opr_army_manager.set_unit_embarked(tc[1], tc[0], true)
+	await E2EBoot.start_activation(_main, tc[1])   # the explicit activation a player opens first (the cargo's own)
 	_main.radial_menu_controller._on_action_selected("unload_cargo_0", {"cargo_units": [tc[1]]})
 	assert_object(_main.opr_army_manager.transport_of(tc[1])) \
 		.override_failure_message("#210 — the headless unload dispatch did not place the unit (ghost hang?)") \
@@ -141,6 +140,7 @@ func test_two_reachable_transports_offer_a_choice(timeout := 120000) -> void:
 		.override_failure_message("expected BOTH reachable transports on offer, items: %s" % str(labels)) \
 		.is_equal(2)
 	# Click the SECOND entry: the cargo must end up in Truck B, not the first hit.
+	await E2EBoot.start_activation(_main, tc[1])   # the explicit activation a player opens first
 	rmc._on_action_selected("embark_1", ctx)
 	assert_object(_main.opr_army_manager.transport_of(tc[1])).is_equal(ctx["embark_targets"][1])
 

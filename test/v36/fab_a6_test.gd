@@ -20,7 +20,6 @@ var _root_before: Array
 
 
 func before_test() -> void:
-	CoreActivation._env = 0   # table path: the doors run without Activate (kill-switch flow); the lifecycle is test/e2e/e2e_one_core_*
 	_epoch0 = AiActRecorder.rules_epoch
 	RulesRegistry.reset_cache()
 	E2EBoot.arm_harness_mode()
@@ -34,7 +33,6 @@ func before_test() -> void:
 
 
 func after_test() -> void:
-	CoreActivation._env = -1
 	AiActRecorder.rules_epoch = _epoch0
 	RulesRegistry.reset_cache()
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
@@ -105,6 +103,7 @@ func test_a_shooting_artillery_unit_cannot_then_advance(timeout := 240000) -> vo
 	var gun := _gun(Vector3.ZERO, "Gun")
 	var foe := _foe(Vector3(17.0 * INCH, 0, 0))   # edge gap well past the 12" Hold gate
 	var from: Vector3 = (gun.models[0] as ModelInstance).node.global_position
+	await E2EBoot.start_activation(_main, gun)   # the explicit activation a player opens first
 	await _main._run_human_attack(gun, foe, false)   # the real shooting activation
 	await E2EBoot.settle(get_tree())
 	var log_after_shot := _log_text()
@@ -158,6 +157,7 @@ func test_a_human_hit_and_run_shooter_makes_its_one_post_shot_step(timeout := 24
 	gun.unit_properties["faction_folder"] = "custodian_brothers"
 	RulesRegistry.reset_cache()
 	var foe := _foe(Vector3(17.0 * INCH, 0, 0))
+	await E2EBoot.start_activation(_main, gun)   # the explicit activation a player opens first
 	await _main._run_human_attack(gun, foe, false)
 	await E2EBoot.settle(get_tree())
 	var node: Node3D = (gun.models[0] as ModelInstance).node
@@ -186,6 +186,7 @@ func test_a_human_hit_and_run_step_longer_than_three_inches_is_refused(timeout :
 	gun.unit_properties["faction_folder"] = "custodian_brothers"
 	RulesRegistry.reset_cache()
 	var foe := _foe(Vector3(17.0 * INCH, 0, 0))
+	await E2EBoot.start_activation(_main, gun)   # the explicit activation a player opens first
 	await _main._run_human_attack(gun, foe, false)
 	await E2EBoot.settle(get_tree())
 	var node: Node3D = (gun.models[0] as ModelInstance).node

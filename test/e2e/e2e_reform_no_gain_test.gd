@@ -13,7 +13,6 @@ var _root_before: Array
 
 
 func before_test() -> void:
-	CoreActivation._env = 0   # table path: the doors run without Activate (kill-switch flow); the lifecycle is test/e2e/e2e_one_core_*
 	E2EBoot.arm_harness_mode()
 	_root_before = E2EBoot.root_children(get_tree())
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
@@ -22,7 +21,6 @@ func before_test() -> void:
 
 
 func after_test() -> void:
-	CoreActivation._env = -1
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 	_main = null
 	_runner = null
@@ -53,6 +51,7 @@ func test_solo_reform_never_gains_ground(timeout := 120000) -> void:
 	var uf := _spread_unit_vs_foe()
 	var rear := ((uf[0] as GameUnit).models[0] as ModelInstance).node as Node3D
 	var gap_before := _gap_to_foe(rear, uf[1])
+	await E2EBoot.start_activation(_main, uf[0])   # the explicit activation a player opens first (the formation tools are gated)
 	_main.object_manager.arrange_selected_in_rows(1)
 	assert_float(_gap_to_foe(rear, uf[1])) \
 		.override_failure_message("#192 — the reform pulled the rear model %.3f m closer to the enemy: free inches" % (gap_before - _gap_to_foe(rear, uf[1]))) \

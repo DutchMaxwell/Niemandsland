@@ -13,7 +13,6 @@ var _root_before: Array
 
 
 func before_test() -> void:
-	CoreActivation._env = 0   # table path: the doors run without Activate (kill-switch flow); the lifecycle is test/e2e/e2e_one_core_*
 	E2EBoot.arm_harness_mode()
 	_root_before = E2EBoot.root_children(get_tree())
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
@@ -25,7 +24,6 @@ func before_test() -> void:
 
 
 func after_test() -> void:
-	CoreActivation._env = -1
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 	_main = null
 	_runner = null
@@ -53,6 +51,7 @@ func test_shooting_attack_emits_resolved_signal_once(timeout := 240000) -> void:
 	var calls: Array = []
 	_main.human_attack_resolved.connect(func(attacker: GameUnit, melee: bool) -> void:
 		calls.append({"attacker": attacker, "melee": melee}))
+	assert_bool(await E2EBoot.start_activation(_main, shooter)).override_failure_message("no open activation for the shooter").is_true()
 	await _main._run_human_attack(shooter, foe, false)
 	assert_int(calls.size()).is_equal(1)
 	assert_bool(bool(calls[0]["melee"])) \

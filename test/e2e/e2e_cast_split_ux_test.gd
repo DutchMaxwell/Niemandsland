@@ -13,7 +13,6 @@ var _root_before: Array
 
 
 func before_test() -> void:
-	CoreActivation._env = 0   # table path: the doors run without Activate (kill-switch flow); the lifecycle is test/e2e/e2e_one_core_*
 	E2EBoot.arm_harness_mode()
 	_root_before = E2EBoot.root_children(get_tree())
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
@@ -25,7 +24,6 @@ func before_test() -> void:
 
 
 func after_test() -> void:
-	CoreActivation._env = -1
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 	_main = null
 	_runner = null
@@ -117,6 +115,7 @@ func test_second_pick_declares_and_fire_button_resolves(timeout := 240000) -> vo
 	var shooter := _armed(1, "Tank", Vector3.ZERO, ["Rifle", "Cannon"])
 	var foe_a := _armed(2, "FoeA", Vector3(8.0 * INCH, 0, 0), [])
 	var foe_b := _armed(2, "FoeB", Vector3(0, 0, 8.0 * INCH), [])
+	await E2EBoot.start_activation(_main, shooter)   # the explicit activation a player opens first
 	_split_mode(shooter, foe_a)
 	_main._solo_split_declare_second(foe_b)
 	assert_bool(_main._solo_target_mode.has("split_second")) \
@@ -151,6 +150,7 @@ func test_cancel_at_go_stage_leaves_the_unit_free() -> void:
 	var shooter := _armed(1, "Tank", Vector3.ZERO, ["Rifle", "Cannon"])
 	var foe_a := _armed(2, "FoeA", Vector3(8.0 * INCH, 0, 0), [])
 	var foe_b := _armed(2, "FoeB", Vector3(0, 0, 8.0 * INCH), [])
+	await E2EBoot.start_activation(_main, shooter)   # the explicit activation a player opens first
 	_split_mode(shooter, foe_a)
 	_main._solo_split_declare_second(foe_b)
 	_main._solo_split_abort()

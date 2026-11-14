@@ -15,7 +15,6 @@ var _epoch0: int
 
 
 func before_test() -> void:
-	CoreActivation._env = 0   # table path: the doors run without Activate (kill-switch flow); the lifecycle is test/e2e/e2e_one_core_*
 	_epoch0 = AiActRecorder.rules_epoch
 	E2EBoot.arm_harness_mode()
 	_root_before = E2EBoot.root_children(get_tree())
@@ -30,7 +29,6 @@ func before_test() -> void:
 
 
 func after_test() -> void:
-	CoreActivation._env = -1
 	AiActRecorder.rules_epoch = _epoch0   # statics leak across gdUnit tests — restore
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 	_main = null
@@ -75,6 +73,7 @@ func _log_text() -> String:
 func _charge(charger: GameUnit, target: GameUnit, epoch: int) -> String:
 	AiActRecorder.rules_epoch = epoch
 	_main.seed_tray_rng(7)
+	await E2EBoot.start_activation(_main, charger)   # the explicit activation a player opens first
 	await _main._run_human_attack(charger, target, true, true)
 	var text := _log_text()
 	await E2EBoot.settle(get_tree())
@@ -162,6 +161,7 @@ func _dragged_warding_charge(epoch: int, from_in: float) -> String:
 	assert_str(_main._solo_validate_target(charger, target, true)) \
 		.override_failure_message("the dragged charger must be a legal manual pick").is_equal("")
 	_main.seed_tray_rng(7)
+	await E2EBoot.start_activation(_main, charger)   # the explicit activation a player opens first
 	await _main._solo_split_or_attack(charger, target, true)
 	var text := _log_text()
 	await E2EBoot.settle(get_tree())
