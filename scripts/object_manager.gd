@@ -1558,7 +1558,7 @@ func _drag_gate(objs: Array[Node3D]) -> Array[Node3D]:
 		var gu := _drag_unit_of(obj)
 		if gu == null and obj is RegimentTray and obj.has_meta("regiment"):   # step 65b: a block moves as its tray
 			gu = (obj.get_meta("regiment") as Regiment).game_unit
-		if gu != null and bool(main.call("core_drag_blocked", gu)):
+		if gu != null and bool(main.call("core_drag_blocked", gu, true)):
 			refused = gu if refused == null else refused
 		else:
 			out.append(obj)

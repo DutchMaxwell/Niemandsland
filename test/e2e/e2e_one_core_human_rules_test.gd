@@ -11,6 +11,7 @@ extends GdUnitTestSuite
 ## spare unit of the shooter's side so the round does not turn after a volley.
 
 const INCH := 0.0254
+const ACTIVATED := "Rifles has already been activated this round."   # maintainer answer 14.11. (step 40b), verbatim
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const ParityTable := preload("res://test/parity/parity_table.gd")
 const SIDE := {"quality": 4, "defense": 4, "tough": 1, "z_step_in": 1.2, "game_system": "gf",
@@ -50,6 +51,7 @@ var _net: FakeNet
 var _att: GameUnit
 var _foe: GameUnit
 var _spare: GameUnit
+var _enforce_before := true
 
 
 func before_test() -> void:
@@ -69,6 +71,8 @@ func before_test() -> void:
 	_main._solo_fast = true
 	_main._autosave_controller.set_lesson_paused(true)
 	CoreActivation._env = 1
+	_enforce_before = GraphicsSettings.enforce_movement_limit
+	GraphicsSettings.enforce_movement_limit = true
 	_att = ParityTable._make_unit(_main, SIDE.merged({"player": 1, "name": "Rifles", "models": 10, "x_in": 0.0}),
 		{"name": "Rifle", "range_in": 24, "attacks": 1, "count": 10, "rules": []})
 	for i in _att.models.size():
@@ -89,6 +93,7 @@ func before_test() -> void:
 func after_test() -> void:
 	CoreActivation.reset_all(_main)
 	CoreActivation._env = -1
+	GraphicsSettings.enforce_movement_limit = _enforce_before
 	_main.network_manager = _real_net
 	_main.object_manager._network_manager = _real_om_net
 	_net.free()
@@ -166,9 +171,9 @@ func test_a_unit_that_shot_cannot_be_dragged_and_snaps_back() -> void:
 
 
 ## (a) After a real core volley the activation is over and the unit stays where it is: a drag moves nothing and says why
-## exactly once. FINDING (the sentence): it is the step-30 gate's "Activate <Unit> first." (the unit has no open session),
-## not the table's "has already shot this round" above; this case pins only that nothing moves and one line is written.
-func test_after_a_volley_a_drag_moves_nothing_and_says_so_once() -> void:
+## exactly once, in the maintainer's sentence for a unit that already activated (step 40b; the step-30 gate's "Activate
+## <Unit> first." misled, and the table's "has already shot this round" above is only reachable with an open activation).
+func test_after_a_volley_a_drag_moves_nothing_and_says_it_already_activated() -> void:
 	assert_bool(_main.core_activation_start(_att)).is_true()
 	_main.seed_tray_rng(3)
 	await _main._run_human_attack(_att, _foe, false)
@@ -180,6 +185,29 @@ func test_after_a_volley_a_drag_moves_nothing_and_says_so_once() -> void:
 	var said: Array = _main.battle_log.entries().slice(before).filter(func(e: Dictionary) -> bool:
 		return int(e["category"]) == BattleLog.Category.MOVEMENT)
 	assert_int(said.size()).override_failure_message("lines after the drag: %s" % [said]).is_equal(1)
+	assert_str(str(said[0]["text"])).is_equal(ACTIVATED)
+	assert_int(_toasts(ACTIVATED)).is_equal(1)
+
+
+## (a) The escape hatch ("Enforce Movement Limit" off) frees the drag of a unit that already activated; the lock stays on
+## for a unit that was never started and on every door (the hatch is for the drag, O1/O2). Enforce on: the unit that
+## activated without a shot is locked with the sentence and one line; off: it moves and says nothing.
+func test_the_escape_hatch_frees_the_drag_of_an_activated_unit_only() -> void:
+	_att.activate(1)   # activated, no session, no shot
+	var at := _poses()
+	await _drag(4.0)
+	assert_array(_poses()).override_failure_message("an activated unit moved with the limit enforced").is_equal(at)
+	assert_int(_lines(ACTIVATED)).is_equal(1)
+	GraphicsSettings.enforce_movement_limit = false
+	await _drag(4.0)
+	assert_array(_poses()).override_failure_message("the escape hatch did not free the drag").is_not_equal(at)
+	assert_int(_lines(ACTIVATED)).override_failure_message("a freed drag said no").is_equal(1)
+	assert_bool(_main.core_door_refused(_att)).override_failure_message("the hatch freed a door").is_true()
+	_att.deactivate()   # never started and not activated: still "Activate <Unit> first."
+	var moved := _poses()
+	await _drag(4.0)
+	assert_array(_poses()).override_failure_message("a unit that was never started moved").is_equal(moved)
+	assert_int(_lines("Activate Rifles first.")).is_equal(1)
 
 
 ## (b) Rush declared and 9" moved, then the shot: the core's O3 sentence once (log and toast), no die thrown, the unit
