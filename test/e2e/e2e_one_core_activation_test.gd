@@ -132,7 +132,9 @@ func _run(s: int, advance: bool, board: bool, core_run: bool) -> Dictionary:
 		m.node.global_position.z += (0.4 if m.unit == att else 1.6) * INCH
 	var paths: Array = []
 	for m in att.get_alive_models() if advance else []:   # every shooter 4" toward the foe, same in both runs
-		paths.append({"model": m, "path": [m.node.global_position, m.node.global_position + Vector3(4.0 * INCH, 0, 0)]})
+		var to: Vector3 = m.node.global_position + Vector3(4.0 * INCH, 0, 0)
+		to.y = _main.terrain_overlay.surface_y_at(Vector2(to.x, to.z)) if board else 0.0   # stands on a roof or a floor
+		paths.append({"model": m, "path": [m.node.global_position, to]})
 	var lines: Array = []
 	var on_entry := func(e: Dictionary) -> void: lines.append("%d|%s" % [int(e["category"]), str(e["text"])])
 	_main.battle_log.entry_added.connect(on_entry)
@@ -181,6 +183,8 @@ func _run(s: int, advance: bool, board: bool, core_run: bool) -> Dictionary:
 			out["bad"].append("landed removals %s, delta removed %s" % [landed, removed])
 	else:
 		await _main._solo_animate_move(paths)
+		for p in paths:   # the real table settles a moved model on the surface it ends on (a roof, a floor)
+			((p["model"] as ModelInstance).node as Node3D).global_position.y = (p["path"][1] as Vector3).y
 		await _main._run_ai_shooting({"unit": att, "moved": advance})
 	_main.battle_log.entry_added.disconnect(on_entry)
 	var survivors: Array = foe.get_alive_models().map(func(m: ModelInstance) -> Vector3: return m.node.global_position)
@@ -303,3 +307,35 @@ func test_the_ai_plan_refreshes_the_board_too() -> void:
 		_main.opr_army_manager.game_units.erase((u as GameUnit).unit_id)
 		for m in (u as GameUnit).models:
 			(m as ModelInstance).node.free()
+
+
+## Step 22c (3): free pieces of other kinds, spawned as a player's drag leaves them. The core takes the placed positions
+## as given (its y included), so these cases guard the path where the TABLE settles a moved model on the surface it ends
+## on (`surface_y_at`: a roof) and the core reads the same height; `_run` settles the shooters so.
+func _spawn(prop_id: String, kind: int, at_in: Vector2, yaw_deg: float) -> Node3D:
+	var piece: Node3D = _main.object_manager.spawn_sandbox_terrain(prop_id, kind, Vector3(at_in.x, 0.0, at_in.y) * INCH,
+		false, 7400 + kind)
+	piece.rotation.y = deg_to_rad(yaw_deg)
+	await _runner.simulate_frames(2)
+	return piece
+
+
+## The standing height the table gives the shooters' end spot (x 4", z 2.8"), in inches.
+func _stand_in(z_in := 2.8) -> float:
+	return float(_main.terrain_overlay.surface_y_at(Vector2(4.0, z_in) * INCH)) / INCH
+
+
+## A free blocker on the ground: sight past it equals the table (the pose blinds shooter 0).
+func test_advance_on_a_board_with_a_free_blocker_equals_the_table() -> void:
+	_painted_board()
+	await _spawn("blocker_6x3", ObjectManager.SandboxPropKind.BLOCKER, Vector2(8.0, -1.0), 15.0)
+	assert_int(int(_main.terrain_overlay._sandbox_shapes()[0]["type"])).is_equal(TerrainRules.TerrainType.CONTAINER)
+	await _gate(true, true, "free_blocker", 28)
+
+
+## Shooters 1 and 2 end their Advance (x 4", z 1.6" and 2.8") on the roof of a free blocker (x 1..7", z 0.7..3.7").
+func test_advance_onto_the_roof_of_a_free_blocker_equals_the_table() -> void:
+	_painted_board()
+	await _spawn("blocker_6x3", ObjectManager.SandboxPropKind.BLOCKER, Vector2(4.0, 2.2), 0.0)
+	assert_float(_stand_in()).is_equal_approx(2.5, 0.01)   # the roof: the shooters really are lifted
+	await _gate(true, true, "free_roof", 28)
