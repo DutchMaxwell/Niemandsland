@@ -533,6 +533,7 @@
 "test/one_core/core_reset_test.gd": 4.7,
 "test/one_core/plain_volley_wording_test.gd": 3.0,
 "test/one_core/round_binding_test.gd": 0.1,
+"test/one_core/state_delta_inventory_test.gd": 0.1,
 "test/one_core/step_activation_binding_test.gd": 0.4,
 "test/opr_api_client_test.gd": 0.3,
 "test/opr_army_manager_test.gd": 0.9,
