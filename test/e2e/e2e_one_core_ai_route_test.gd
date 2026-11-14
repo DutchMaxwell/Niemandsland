@@ -78,6 +78,8 @@ func test_a_route_around_a_container_is_accepted_and_its_chord_refused() -> void
 	var board := {"cells": {Vector2i(16, 15): TerrainRules.TerrainType.CONTAINER}, "walls": walls}
 	assert_bool(sc._core_node_ready().set_game_header(AiActRecorder._header_line(state, Callable(), board))).is_true()
 	sc._core_header_done = true
+	# The core deliberately holds a board other than the table's overlay; a capture must not refresh it (step 22c).
+	sc._core_terrain_sig = hash(AiActRecorder._terrain_line(sc.terrain_type_at))
 	var chord := await _advance(att, def, [])   # first: a refusal throws no die, so the walked case shoots the same board
 	var walked := await _advance(att, def, [_at(2.0, 1.4), _at(2.8, -0.2), _at(5.4, -2.0)])
 	assert_array(walked).override_failure_message("the route around the corner: %s" % [walked]).is_equal([true, 0])
