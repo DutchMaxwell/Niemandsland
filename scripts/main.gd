@@ -11551,6 +11551,7 @@ func seed_tray_rng(seed_value: int) -> void:
 ## then restore the player's previous tray settings.
 func _solo_tray_roll(count: int, success_target: int, owner: String, roll_kind: String = "attack",
 		purpose: String = "") -> Array:
+	CoreActivation.note_die(self)   # one-core P3 step 35: a batch roll may not emit roll_started; idempotent
 	_solo_tray_busy = true   # NML-954: the ONE tray is exclusive — see _on_transport_spill_dangerous
 	_next_roll_kind = roll_kind   # Bug 16: the dice-log line words saves as "defends … blocks"
 	# Community #170: the tray names WHAT is being rolled. High-value sites pass a specific
@@ -18161,6 +18162,8 @@ func _on_quick_roll_button_pressed() -> void:
 
 
 func _on_roller_started() -> void:
+	if not _is_showing_remote_roll:
+		CoreActivation.note_die(self)   # one-core P3 step 35: the first die of this table's own roll ends every Cancel
 	# Every roll shows its dice: an AI, scripted or remote roll unfolds a collapsed dice window,
 	# exactly as the always-open panel showed them before (house-style pass, 23.09.).
 	if _dice_collapsed:
@@ -18281,6 +18284,11 @@ func _on_movement_cap_pressed(mode: int) -> void:
 		object_manager.set_movement_cap(mode)
 	_update_movement_cap_display()
 	dice_controls_changed.emit(&"movecap", mode)
+
+
+## One-core P3 step 35: the Cancel of `gu`'s open activation (the card's button, step 36).
+func core_activation_cancel(gu: GameUnit) -> void:
+	CoreActivation.cancel(self, gu)
 
 
 ## One-core P3 step 33: the one selected move-path unit (O18 (a)) whose activation is open, when `mode` is another of
