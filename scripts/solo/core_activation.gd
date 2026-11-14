@@ -312,11 +312,14 @@ static func _start_models(main) -> Array:
 	return out
 
 
-## The start model of `gu` whose captured position equals `at` exactly; null when none does.
+## The start model of `gu` that stands at `at` on the table (XZ, within a millimetre); null when none does. The height is
+## not compared: a placed position carries the drag's lift (the drop is checked before the models settle), the model's own
+## node is back on the table.
 static func _model_at(start_models: Array, gu: GameUnit, at: Vector3) -> ModelInstance:
 	for e in start_models:
 		var m: ModelInstance = e["model"]
-		if m.unit == gu and e["at"] == at:
+		var p: Vector3 = e["at"]
+		if m.unit == gu and Vector2(p.x, p.z).distance_to(Vector2(at.x, at.z)) < 0.001:
 			return m
 	return null
 
@@ -657,6 +660,41 @@ static func human_shoot(main, attacker: GameUnit, target: GameUnit, on_throw: Ca
 	return true
 
 
+## Step 69: the units whose End is running through the core (unit_id -> true).
+static var _ending: Dictionary = {}
+
+
+## Step 69 (D3 yes): the card's End of a core unit's activation goes through the core first, so a move that ends without a
+## shot tests Dangerous terrain along its walked path too (steps 59-61). The declared intent has no target (the core turns it
+## into Hold when nothing moved); the session's transcript is not touched. False = not taken, the door ends the activation:
+## not a core unit, no session, a shot already went through the core (its run held the move's tests), or no declaration
+## (declared_mode reported it), or the selector says Charge (no charge is on the core's step path yet: it would refuse and
+## trap the unit open); also `done`, whose throws have landed. True = the activation stays open: the core refused
+## (the reason is logged and toasted, the player sees why), or answered otherwise (a defect, reported), or this End is
+## already running (a second press while the dice roll).
+static func end(main, gu: GameUnit, on_throw: Callable = Callable()) -> bool:
+	if not is_core_unit(main, gu) or not _sessions.has(gu.unit_id) or last_target != null:
+		return false
+	if _ending.has(gu.unit_id):
+		return true
+	var mode := declared_mode(main)
+	if mode == 0 or mode == 3:
+		return false   # declared_mode reported the defect, or a Charge: the old door ends it
+	var t: Array = (_sessions[gu.unit_id]["transcript"] as Array).duplicate()
+	t.append({"t": "intent", "kind": mode, "shoot": ""})
+	_ending[gu.unit_id] = true
+	var r: Dictionary = await drive(main, int(_sessions[gu.unit_id]["handle"]), gu, t, false, on_throw)
+	_ending.erase(gu.unit_id)
+	if str(r["step"]) == "done":
+		return false
+	if str(r["step"]) == "refused" and int(r["index"]) < t.size():
+		main._log_rule_event(BattleLog.Category.MOVEMENT, str(r["reason"]))
+		main._show_toast(str(r["reason"]))
+	else:
+		push_error("end: the core answered %s for the End of %s" % [r, gu.get_name()])
+	return true
+
+
 ## One-core P3 step 32 (the snap-back answer): `gu` back where its open activation started. Every model that is still
 ## alive goes to the session's start position and facing through the existing take-back, built once per drop of this
 ## round in the unit's ledger (drags and step 65a's formation drops alike; the models ride the first, so each moves and
@@ -733,6 +771,7 @@ static func reset_all(main) -> void:
 	for id in _sessions.keys():
 		close_session(main, id)
 	_announced.clear()
+	_ending.clear()   # step 69
 	last_target = null
 	_fixes_due.clear()
 	_ended_round = -1   # step 52c

@@ -18304,6 +18304,11 @@ func _on_movement_cap_pressed(mode: int) -> void:
 	dice_controls_changed.emit(&"movecap", mode)
 
 
+## One-core P3 step 69: the card's End goes through the core first; true = the activation stays open (CoreActivation.end).
+func core_activation_end(gu: GameUnit) -> bool:
+	return await CoreActivation.end(self, gu)
+
+
 ## One-core P3 step 35: the Cancel of `gu`'s open activation (the card's button, step 36).
 func core_activation_cancel(gu: GameUnit) -> void:
 	CoreActivation.cancel(self, gu)

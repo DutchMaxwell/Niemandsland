@@ -680,3 +680,176 @@ func test_closing_a_session_with_the_dock_outside_the_tree_is_quiet() -> void:
 	CoreActivation.close_session(_main, u.unit_id)
 	holder.add_child(dock)
 	assert_bool(CoreActivation.session_open(u.unit_id)).is_false()
+
+
+## ---- Step 69 (D3 yes): the card's End goes through the core, so a move without a shot tests Dangerous terrain ----
+
+const IN2M := 0.0254
+
+
+## A four-model squad of `pid` at `x_in`, one rifle each: one casualty of four ends no morale test.
+func _squad(pid: int, uname: String, x_in: float) -> GameUnit:
+	var u := ParityTable._make_unit(_main, {"player": pid, "name": uname, "models": 4, "x_in": x_in, "z_step_in": 1.2,
+		"quality": 4, "defense": 4, "tough": 1, "game_system": "gf", "faction_folder": "robot_legions", "rules": []},
+		{"name": "Rifle", "range_in": 24, "attacks": 1, "count": 4, "rules": []})
+	for i in u.models.size():
+		(u.models[i] as ModelInstance).model_index = i
+		(u.models[i] as ModelInstance).node.set_meta("network_id", 900 + 10 * pid + i)
+		(u.models[i] as ModelInstance).node.set_meta("model_instance", u.models[i])   # the move ledger and its chalk read it
+	return u
+
+
+## Dangerous terrain from x 3" to 6" (one painted column of the table's own overlay, rows covering the squad's width): the
+## overlay is what the core's board is read from.
+func _hazard() -> void:
+	var o = _main.terrain_overlay
+	for z in [-4.5, -1.5, 1.5, 4.5, 7.5]:
+		o.grid_cells[o.world_to_cell(Vector3(4.5, 0.0, z) * IN2M)] = o.TerrainType.DANGEROUS
+
+
+## One real drag of every model of `u` `dx_in` inches east, landed (one drop: the Start's activation checks it and records its path).
+func _drag_east(u: GameUnit, dx_in: float) -> void:
+	var om: Node3D = _main.object_manager
+	var a: Node3D = (u.models[0] as ModelInstance).node
+	om._selected_objects.clear()
+	for m in u.models:
+		om._selected_objects.append((m as ModelInstance).node)
+	var cam: Camera3D = _main.get_viewport().get_camera_3d()
+	var at := Vector3(a.global_position.x, 0.0, a.global_position.z)   # the table-plane point the pick ray hits
+	om._start_dragging(cam.unproject_position(at))
+	om._update_drag(cam.unproject_position(at + Vector3(dx_in * IN2M, 0.0, 0.0)))
+	await _runner.simulate_frames(1)
+	om._stop_dragging()
+	await _runner.simulate_frames(3)
+	await get_tree().create_timer(0.3).timeout
+
+
+## A seed whose first four dice hold exactly one 1: the squad's Dangerous test costs it one model.
+func _one_casualty_seed() -> int:
+	for s in 200:
+		var r := RandomNumberGenerator.new()
+		r.seed = s
+		var ones := 0
+		for _i in 4:
+			ones += 1 if r.randi_range(1, 6) == 1 else 0
+		if ones == 1:
+			return s
+	return -1
+
+
+## Dice rolls (tray `roll_started`) from now on, counted in `[0]`.
+func _count_rolls() -> Array:
+	var n := [0]
+	_main.dice_roller_control.roll_started.connect(func() -> void: n[0] += 1)
+	return n
+
+
+## Two drops (5" into the strip, then 4" out into the open) under Rush, then End on the card: exactly one roll (the Dangerous
+## test of the walked path, not of where the unit stands), its casualty landed, the unit Activated, the session closed.
+func test_the_card_end_tests_dangerous_terrain_on_the_walked_path() -> void:
+	_room()
+	_hazard()
+	var u := _squad(1, "Rifles", 0.0)
+	_plain(2, "Guards", 18.0)
+	await _main.radial_menu_controller.card_start_activation(u)
+	_main.object_manager.set_movement_cap(ObjectManager.MovementCap.RUSH)
+	await _drag_east(u, 5.0)
+	await _drag_east(u, 4.0)
+	assert_float((u.models[0] as ModelInstance).node.global_position.x / IN2M).override_failure_message("the drags did not run").is_equal_approx(9.0, 0.1)
+	var seed_found := _one_casualty_seed()
+	assert_int(seed_found).is_greater(-1)
+	_main.seed_tray_rng(seed_found)
+	var rolls := _count_rolls()
+	await _main.radial_menu_controller.card_end_activation(u)
+	assert_int(rolls[0]).override_failure_message("rolls at the End").is_equal(1)
+	assert_int(u.get_alive_count()).override_failure_message("the casualty did not land").is_equal(3)
+	assert_bool(u.is_activated).is_true()
+	assert_bool(CoreActivation.session_open(u.unit_id)).is_false()
+
+
+## No move: nothing is tested, nothing rolls.
+func test_the_card_end_rolls_nothing_without_a_move() -> void:
+	_room()
+	_hazard()
+	var u := _squad(1, "Rifles", 0.0)
+	_plain(2, "Guards", 40.0)
+	await _main.radial_menu_controller.card_start_activation(u)
+	var rolls := _count_rolls()
+	await _main.radial_menu_controller.card_end_activation(u)
+	assert_int(rolls[0]).override_failure_message("rolls at a still End").is_equal(0)
+	assert_bool(u.is_activated).is_true()
+
+
+## A shot that already went through the core (`last_target`) held the walked path's Dangerous test in its own run: the End
+## after it - over the same hazard - does not test it twice.
+func test_the_card_end_after_a_shot_does_not_test_the_path_twice() -> void:
+	_room()
+	_hazard()
+	var u := _squad(1, "Rifles", 0.0)
+	var foe := _plain(2, "Guards", 40.0)
+	await _main.radial_menu_controller.card_start_activation(u)
+	_main.object_manager.set_movement_cap(ObjectManager.MovementCap.RUSH)
+	await _drag_east(u, 5.0)
+	await _drag_east(u, 4.0)
+	CoreActivation.last_target = foe
+	var rolls := _count_rolls()
+	await _main.radial_menu_controller.card_end_activation(u)
+	assert_int(rolls[0]).override_failure_message("rolls at the End after a shot").is_equal(0)
+	assert_bool(u.is_activated).is_true()
+	assert_int(u.get_alive_count()).is_equal(4)
+
+
+## A second press while the End's dice are still rolling is swallowed: the core is asked once.
+func test_a_second_end_press_during_the_dice_is_swallowed() -> void:
+	_room()
+	_hazard()
+	var u := _squad(1, "Rifles", 0.0)
+	_plain(2, "Guards", 18.0)
+	await _main.radial_menu_controller.card_start_activation(u)
+	_main.object_manager.set_movement_cap(ObjectManager.MovementCap.RUSH)
+	await _drag_east(u, 5.0)
+	await _drag_east(u, 4.0)
+	var second := [null]
+	var again := Callable(CoreActivation, &"end")   # a coroutine: called by hand, it answers at once when it is swallowed
+	var on_throw := func(_kind: String, _index: int) -> void: second[0] = again.call(_main, u)
+	assert_bool(await CoreActivation.end(_main, u, on_throw)).override_failure_message("the first End did not finish").is_false()
+	assert_bool(second[0] == true).override_failure_message("the second press was not swallowed: %s" % [second]).is_true()
+
+
+
+## A Charge declaration has no place on the core's step path yet (it would refuse "not on the step path yet" and trap the
+## unit open): the End is not taken and ends the activation as before.
+func test_the_card_end_of_a_charge_declaration_ends_as_before() -> void:
+	_room()
+	var u := _squad(1, "Rifles", 0.0)
+	_plain(2, "Guards", 18.0)
+	await _main.radial_menu_controller.card_start_activation(u)
+	_main.object_manager.set_movement_cap(ObjectManager.MovementCap.CHARGE)
+	await _drag_east(u, 5.0)
+	await _main.radial_menu_controller.card_end_activation(u)
+	assert_bool(u.is_activated).override_failure_message("the Charge End was refused").is_true()
+	assert_bool(CoreActivation.session_open(u.unit_id)).is_false()
+	assert_array(_main.battle_log.entries().filter(func(e: Dictionary) -> bool: return str(e["text"]).contains("step path"))).is_empty()
+
+
+## The core can refuse an End (here a placed move over the Advance allowance, which the drop door never lets through: the
+## transcript is edited by hand): its reason is logged once, the activation stays open and the unit is not activated.
+func test_a_refusal_of_the_core_leaves_the_activation_open_and_says_why() -> void:
+	var was: bool = GraphicsSettings.enforce_movement_limit
+	GraphicsSettings.enforce_movement_limit = true
+	_room()
+	var u := _squad(1, "Rifles", 0.0)
+	_plain(2, "Guards", 18.0)
+	await _main.radial_menu_controller.card_start_activation(u)
+	_main.object_manager.set_movement_cap(ObjectManager.MovementCap.ADVANCE)
+	await _drag_east(u, 4.0)
+	var placed: Dictionary = CoreActivation._sessions[u.unit_id]["transcript"][1]
+	placed["positions"] = (placed["positions"] as Array).map(func(p: Vector3) -> Vector3: return p + Vector3(5.0 * IN2M, 0.0, 0.0))
+	placed["trails"] = [[], [], [], []]
+	await _main.radial_menu_controller.card_end_activation(u)
+	GraphicsSettings.enforce_movement_limit = was
+	var refusal := "Rifles: a model moved 9.0\" - the Advance allowance is 6.0\"."
+	assert_int(_main.battle_log.entries().filter(func(e: Dictionary) -> bool: return str(e["text"]) == refusal).size()) \
+		.override_failure_message("the refusal line: %s" % [_main.battle_log.entries().slice(-3)]).is_equal(1)
+	assert_bool(u.is_activated).override_failure_message("a refused End activated the unit").is_false()
+	assert_bool(CoreActivation.session_open(u.unit_id)).override_failure_message("a refused End closed the session").is_true()
