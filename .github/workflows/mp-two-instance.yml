@@ -30,15 +30,52 @@ env:
   GODOT_VERSION: "4.6"
 
 jobs:
+  # The peers must run WITH the core: since 0.3.16 the one-core activation flow is the default, and
+  # CoreActivation.applies() is false without NmlCore, so a core-less run would silently test the old flow only
+  # (the first CI run of the flag flip failed on exactly that gap). Same build as the gdUnit lane's.
+  core-linux:
+    name: Build core for the MP job
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.draft) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build core extension (NmlCore)
+        uses: ./.github/actions/build-core-extension
+        with:
+          target: linux
+          debug-symbols: "false"
+          cache-shared-key: export-linux
+
+      - name: Upload the core library for the MP job
+        uses: actions/upload-artifact@v4
+        with:
+          name: nml-core-linux-mp
+          path: core/target/release/libnml_core_godot.so
+          retention-days: 1
+          if-no-files-found: error
+
   mp-two-instance:
     name: Two-instance multiplayer regressions
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    needs: core-linux
     # Draft PRs skip this advisory suite; it runs once the PR is marked ready (30.10., runner queue).
     if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.draft) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Download the core library (Build core for the MP job)
+        uses: actions/download-artifact@v4
+        with:
+          name: nml-core-linux-mp
+          path: core/target/release
+
+      - name: Install the core extension manifest
+        run: touch core/target/.gdignore && bash core/install_gdextension.sh && test -f core/nml_core.gdextension
 
       - name: Setup Godot
         uses: ./.github/actions/setup-godot
@@ -58,8 +95,24 @@ jobs:
       - name: Import project (generates .godot/, compile-check)
         run: godot --headless --editor --quit --path .
 
+      # The peers must have NmlCore: fail here, before the long run, when the class is absent.
+      - name: Gate - NmlCore loads in the MP job
+        run: |
+          godot --headless --path . -s res://tools/core_dormant_check.gd 2>&1 | tee /tmp/core_load.log
+          python3 - <<'PY'
+          import json, sys
+          lines = [l for l in open("/tmp/core_load.log") if "NML_DORMANT_CHECK " in l]
+          data = json.loads(lines[0].split("NML_DORMANT_CHECK ", 1)[1]) if lines else {}
+          if data.get("class_present") is not True:
+              print("::error::NmlCore did not load in the MP job")
+              sys.exit(1)
+          print("OK: NmlCore loaded in the MP job (class_present True)")
+          PY
+
+      # --include-one-core: the default-ON activation flow in an agreed Automatic room (digest check, planted desync, correction).
+      # --require-core: the run also fails when a peer log does not say "core: NmlCore loaded".
       - name: Run two-instance multiplayer regressions
-        run: python test/mp/run_two_instance.py --godot godot --include-rules-online --include-link-cut --run-dir reports/mp-two-instance
+        run: python test/mp/run_two_instance.py --godot godot --include-rules-online --include-link-cut --include-one-core --require-core --run-dir reports/mp-two-instance
 
       - name: Upload multiplayer artifacts
         if: always()

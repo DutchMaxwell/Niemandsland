@@ -37,6 +37,12 @@ class DriverHelpersTest(unittest.TestCase):
         self.assertEqual(view[0]["host"]["battle_log_tail"], ["Room code: <room>"])
         self.assertEqual(raw, untouched)
 
+    def test_core_loaded_needs_the_mark_and_no_missing_mark(self):
+        self.assertTrue(driver.core_loaded(["x", "core: NmlCore loaded", "y"]))
+        self.assertFalse(driver.core_loaded(["x", "y"]))
+        self.assertFalse(driver.core_loaded(["core: NmlCore NOT loaded - the decision tree plays; reinstall the game"]))
+        self.assertFalse(driver.core_loaded(["core: NmlCore loaded", "core: NmlCore NOT loaded - again"]))
+
     def test_free_port_returns_a_bindable_local_port(self):
         port = driver.free_port()
         self.assertGreater(port, 0)

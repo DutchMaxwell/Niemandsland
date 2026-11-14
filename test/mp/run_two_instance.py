@@ -28,6 +28,10 @@ SCRIPT_ERROR_RE = re.compile(
     re.IGNORECASE,
 )
 STALL_RE = re.compile(r"\[Relay\] main loop stalled ([0-9.]+)\s*s")
+# The game prints one of these at start-up. Without NmlCore the one-core flow is inert (CoreActivation.applies() is
+# false) and a green run proves nothing about it: --require-core fails the run when a peer did not load the core.
+CORE_LOADED_MARK = "core: NmlCore loaded"
+CORE_MISSING_MARK = "NmlCore NOT loaded"
 # #675 item 4: the guest's headless scene load blocks its main loop 10.5-10.8 s on EVERY green
 # run, so a 5 s hard limit would be permanently red. The assertion enforces the measured baseline
 # with headroom instead: 15 s sits ~40% above the worst measured stall and at half the relay's
@@ -125,6 +129,11 @@ def wait_for_port(port: int, timeout: float = 15.0) -> None:
         except OSError:
             time.sleep(0.05)
     raise HarnessFailure(f"relay did not listen on 127.0.0.1:{port} within {timeout:.0f}s")
+
+
+def core_loaded(lines: list[str]) -> bool:
+    """True when a peer log says NmlCore loaded and never says it did not."""
+    return any(CORE_LOADED_MARK in line for line in lines) and not any(CORE_MISSING_MARK in line for line in lines)
 
 
 def worst_stall_s(lines: list[str]) -> float:
@@ -1325,6 +1334,10 @@ class Run:
             fatal = client.fatal_log_line()
             if fatal and self.shutdown_failure is None:
                 self.shutdown_failure = f"{client.role}: script error in log: {fatal}"
+            if getattr(self.args, "require_core", False) and not core_loaded(client.lines) and self.shutdown_failure is None:
+                self.shutdown_failure = (
+                    f"{client.role}: NmlCore did not load (--require-core): the one-core flow is inert without it"
+                )
             stall = worst_stall_s(client.lines)
             if stall > STALL_LIMIT_S and self.shutdown_failure is None:
                 self.shutdown_failure = (
@@ -1442,6 +1455,11 @@ def parse_args() -> argparse.Namespace:
         "--include-one-core",
         action="store_true",
         help="Also run the one-core P3 step 54 scenario (NML_ONE_CORE_ACTIVATION=1 on both peers, agreed Automatic room).",
+    )
+    parser.add_argument(
+        "--require-core",
+        action="store_true",
+        help="Fail the run when a peer log does not say NmlCore loaded (CI: the core library must be installed).",
     )
     parser.add_argument(
         "--rejoin-race",

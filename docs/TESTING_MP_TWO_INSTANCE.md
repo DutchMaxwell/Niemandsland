@@ -17,7 +17,7 @@ The default run covers:
   Automodus 3.5, the guest previews Advance & Shoot, clicks and runs it on its own machine; every
   model lands within 1 mm of that preview on both peers, and the host rolls its own saves against
   the volley (the guest's tray rolls none).
-- with `--include-one-core` (local only; CI's flag set is unchanged) or alone with `--one-core-only`:
+- with `--include-one-core` (CI runs it too, with the core installed) or alone with `--one-core-only`:
   one core P3 step 54, `NML_ONE_CORE_ACTIVATION=1` on both peers in an agreed Automatic room. Each
   plain activation runs through the production doors (Activate, a drag, End) and the other table's
   digest check is silent, also for the round's last activation (the guest's, which ends round 1 on
@@ -120,7 +120,12 @@ arrived.
 `.github/workflows/mp-two-instance.yml` runs the suite as its own advisory
 workflow job on every push to main and pull request (it is deliberately NOT on
 the required-checks list — a runner hiccup in a real-peer test must not block
-merges). The job installs Godot via the repo's setup-godot action and the relay
+merges). A first job builds the core library (NmlCore, the same build as the gdUnit
+lane's); the suite job downloads it and installs its manifest, because without NmlCore
+the one-core activation flow (the default since 0.3.16) is inert and the peers would only
+test the old flow. A gate step fails the job when the class does not load, and
+`--require-core` fails the run when a peer log lacks `core: NmlCore loaded`. The suite job
+installs Godot via the repo's setup-godot action and the relay
 requirements, imports the project once (`godot --headless --editor --quit`,
 without which a fresh checkout fails with `Parse Error: Identifier "UiMotion"
 not declared`), then runs:
@@ -130,6 +135,7 @@ not declared`), then runs:
   run: |
     python test/mp/run_two_instance.py \
       --godot godot \
+      --include-rules-online --include-link-cut --include-one-core --require-core \
       --run-dir reports/mp-two-instance
 ```
 
