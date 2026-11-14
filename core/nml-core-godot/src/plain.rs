@@ -19,7 +19,7 @@ use godot::builtin::VariantType;
 
 use nml_core::io::{fold_ledger, los_positions, PlainLedger};
 use nml_core::state::{Bands, MoveBands, Roster};
-use nml_core::terrain::{CellParams, ContainerObb, Obb, PlainTerrain};
+use nml_core::terrain::{CellParams, ContainerObb, Obb, PlainTerrain, Slab};
 use nml_core::{
     Knobs, Marker, MeleeReach, Mods, Objective, Profile, ProfileDyn, Profiles, SearchMode, Sighting, State,
     TreeDice, TreeLeaf, Weapon,
@@ -963,6 +963,12 @@ pub fn terrain_of(d: &VarDictionary) -> PlainTerrain {
             he: pair(&darr(&s, "he")),
             yaw: dnum(&s, "yaw", 0.0),
             kind: dint(&s, "type", 0) as i32,
+            slabs: darr(&s, "slabs")
+                .iter_shared()
+                .filter_map(|v| v.try_to::<VarDictionary>().ok())
+                .map(|b| Slab { c: pair(&darr(&b, "c")), he: pair(&darr(&b, "he")), yaw: dnum(&b, "yaw", 0.0),
+                    y0: dnum(&b, "y0", 0.0), y1: dnum(&b, "y1", 0.0) })
+                .collect(),
         })
         .collect();
     // NML-1073 M5 D5-2a — the overlay's wall segments, world metres.

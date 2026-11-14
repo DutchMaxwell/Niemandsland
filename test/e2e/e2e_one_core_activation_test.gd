@@ -339,3 +339,17 @@ func test_advance_onto_the_roof_of_a_free_blocker_equals_the_table() -> void:
 	await _spawn("blocker_6x3", ObjectManager.SandboxPropKind.BLOCKER, Vector2(4.0, 2.2), 0.0)
 	assert_float(_stand_in()).is_equal_approx(2.5, 0.01)   # the roof: the shooters really are lifted
 	await _gate(true, true, "free_roof", 28)
+
+
+## Shooters 2 and 3 end their Advance (x 4", z 2.8" and 4.0") on the third floor (6") of a free three-storey ruin: from
+## 6" up they see over the painted forest, from 3" or the ground they do not.
+func test_advance_onto_the_floor_of_a_free_ruin_equals_the_table() -> void:
+	_painted_board()
+	var ruin := await _spawn("ruin_large_3f", ObjectManager.SandboxPropKind.RUIN, Vector2(0.0, 0.0), 0.0)
+	var slabs: Array = ruin.call("floor_slabs_world")
+	var slab: Dictionary = slabs[3]   # the third floor's arm along the ruin's z axis
+	ruin.global_position += Vector3(4.0 * INCH - (slab["c"] as Vector2).x, 0.0, 3.4 * INCH - (slab["c"] as Vector2).y)
+	await _runner.simulate_frames(2)
+	assert_float(_stand_in(2.8)).is_equal_approx(6.0, 0.01)   # the floor slab: the shooters really are lifted
+	assert_float(_stand_in(4.0)).is_equal_approx(6.0, 0.01)
+	await _gate(true, true, "free_floor", 28)

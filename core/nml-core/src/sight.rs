@@ -542,9 +542,9 @@ pub fn surface_y_m(t: &Terrain, p: [f64; 2], rules_epoch: u32) -> f64 {
 
 /// `zones_of`, plus with `shelf` (the dormant `Seams::shelf_sight`) every freely
 /// placed shelf piece of the header as its own upright box of its type's height —
-/// `TerrainOverlay._sandbox_volumes` (:1283-1300). The header records no floor
-/// slabs (act_recorder.gd keeps c/he/yaw/type), so a multi-storey free ruin's
-/// upper floors are not here. The pre-3.6 reading; a game asks `zones_of_with_at`.
+/// `TerrainOverlay._sandbox_volumes` (:1283-1300), and a multi-storey free
+/// ruin's floor slabs (the header's `slabs`, step 22c) as thin solid boxes. The
+/// pre-3.6 reading; a game asks `zones_of_with_at`.
 pub fn zones_of_with(t: &Terrain, shelf: bool) -> Vec<Zone> {
     zones_of_with_at(t, shelf, EPOCH_72_PLAYTEST_RULES)
 }
@@ -556,6 +556,10 @@ pub fn zones_of_with_at(t: &Terrain, shelf: bool, rules_epoch: u32) -> Vec<Zone>
         for s in t.sandbox().iter().filter(|s| volume_height_in(s.kind) > 0.0 && !ruin_is_open(s.kind, rules_epoch)) {
             let solid = !(s.kind == terrain::FOREST || s.kind == terrain::RUINS);
             out.push(Zone::shelf_box(s.c, s.he, s.yaw, 0.0, volume_height_in(s.kind) * IN2M, solid));
+        }
+        // A multi-storey free ruin's floor slabs: thin solid boxes that stay when the hull goes (`_sandbox_volumes` :1288-1294).
+        for sl in t.sandbox().iter().flat_map(|s| s.slabs.iter()) {
+            out.push(Zone::shelf_box(sl.c, sl.he, sl.yaw, sl.y0, sl.y1, true));
         }
     }
     out
@@ -974,7 +978,7 @@ mod tests {
     /// painted-cells-only reading, so every corpus and rollout is unchanged.
     #[test]
     fn the_shelf_seam_adds_free_pieces_and_off_changes_nothing() {
-        let piece = Obb { c: [0.0, 0.0], he: [3.0 * M, 1.5 * M], yaw: 0.0, kind: terrain::CONTAINER };
+        let piece = Obb { c: [0.0, 0.0], he: [3.0 * M, 1.5 * M], yaw: 0.0, kind: terrain::CONTAINER, slabs: vec![] };
         let t = board_with(&[], vec![piece]);
         let (west, east) = (cyl(-8.0, 0.0, 32.0), cyl(8.0, 0.0, 32.0));
         assert!(zones_of_with(&t, false).is_empty());
@@ -996,7 +1000,7 @@ mod tests {
     /// A freely placed ruin follows the same rule (the shelf seam ON).
     #[test]
     fn a_free_ruin_piece_is_a_sight_volume_at_epoch_72_and_not_at_epoch_73() {
-        let piece = Obb { c: [0.0, 0.0], he: [3.0 * M, 1.5 * M], yaw: 0.0, kind: terrain::RUINS };
+        let piece = Obb { c: [0.0, 0.0], he: [3.0 * M, 1.5 * M], yaw: 0.0, kind: terrain::RUINS, slabs: vec![] };
         let t = board_with(&[], vec![piece]);
         let (west, east) = (cyl(-8.0, 0.0, 32.0), cyl(8.0, 0.0, 32.0));
         let z72 = zones_of_with_at(&t, true, crate::acts::EPOCH_72_PLAYTEST_RULES);

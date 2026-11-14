@@ -83,6 +83,20 @@ pub struct Obb {
     pub yaw: f64,
     #[serde(rename = "type")]
     pub kind: i32,
+    /// The walkable floor slabs of a multi-storey free ruin (`TerrainOverlay._sandbox_volumes`): absent from every
+    /// header before step 22c, and from every piece without upper floors.
+    #[serde(default)]
+    pub slabs: Vec<Slab>,
+}
+
+/// One floor slab of a free ruin - a thin SOLID box from `y0` to `y1` (metres), `yaw` as in `Obb`.
+#[derive(Debug, Clone, Deserialize)]
+pub struct Slab {
+    pub c: [f64; 2],
+    pub he: [f64; 2],
+    pub yaw: f64,
+    pub y0: f64,
+    pub y1: f64,
 }
 
 /// F-CONT (rules 3.6, `EPOCH_73_V36`) — one placed container's exact 6"x3" box, `TerrainOverlay._blocker_obbs`
@@ -494,6 +508,7 @@ impl Terrain {
                 he: [q[3] * 0.5 * crate::IN2M, q[4] * 0.5 * crate::IN2M],
                 yaw: q[5].to_radians(),
                 kind: q[0] as i32,
+                slabs: Vec::new(),
             })
             .collect();
         if bank.is_empty() && p.sandbox.is_empty() {
@@ -592,6 +607,7 @@ fn pieces_from_cells(cells: &crate::fasthash::FastMap<(i64, i64), i32>, cell_m: 
                 he: [w as f64 * 0.5 * cell_m, h as f64 * 0.5 * cell_m],
                 yaw: rot_rad,
                 kind,
+                slabs: Vec::new(),
             }
         })
         .collect()

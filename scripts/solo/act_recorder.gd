@@ -729,8 +729,16 @@ static func _terrain_line(terrain_cb: Callable, school_world: Dictionary = {}) -
 		var sd := s as Dictionary
 		var c: Vector2 = sd["c"]
 		var he: Vector2 = sd["he"]
-		sandbox.append({"c": [c.x, c.y], "he": [he.x, he.y],
-			"yaw": float(sd["yaw"]), "type": int(sd["type"])})
+		var piece := {"c": [c.x, c.y], "he": [he.x, he.y], "yaw": float(sd["yaw"]), "type": int(sd["type"])}
+		var slabs: Array = []   # a multi-storey free ruin's floor slabs (step 22c); no key when it has none
+		for sl in sd.get("slabs", []):
+			var sc: Vector2 = sl["c"]
+			var sh: Vector2 = sl["he"]
+			slabs.append({"c": [sc.x, sc.y], "he": [sh.x, sh.y], "yaw": float(sl["yaw"]), "y0": float(sl["y0"]),
+				"y1": float(sl["y1"])})
+		if not slabs.is_empty():
+			piece["slabs"] = slabs
+		sandbox.append(piece)
 	# NML-1073 M5 D5-2a: world-space wall segments, metres, [[ax,ay],[bx,by]] per
 	# segment — flattened with MoveRecorder._flatten (reused, not mirrored: that
 	# helper is already reachable cross-class, the same way move_recorder.gd
