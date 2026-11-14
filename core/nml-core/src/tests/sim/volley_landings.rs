@@ -49,4 +49,36 @@ use super::*;
         assert!(tray.landings_upto(m).iter().any(|l| l.unit == 2), "{:?}", tray.all_landings());
         // (d) step 27: the core said each landing's loss line, so the table's removal funnel must not.
         assert!(all.iter().all(|l| l.loss_line), "{all:?}");
+        // (e) P4.0-1: each model names its capture slot - the index of its start position in "b"'s captured list.
+        assert!(models.iter().all(|m| st.positions[2][m.slot] == m.at), "{all:?} vs {:?}", st.positions[2]);
+    }
+
+    /// P4.0-1: a model's slot is its index at the CAPTURE, not in the list a later landing sees. "b" has four models; one
+    /// landing removes model 1 and wounds model 3, then a second on the same tray removes the model now standing second
+    /// in the shrunken list, which is capture slot 2. RED: number a landing's models by their snapshot index (drop `gone`)
+    /// and the second landing names slot 1, the model the first landing already killed; count a wounded model among the
+    /// dead slots and it names slot 3's neighbour wrongly.
+    #[test]
+    fn a_later_landing_names_capture_slots_not_the_shrunken_list() {
+        let (mut st, _) = volley_line();
+        st.positions[2] = (0..4).map(|i| [12.0 * IN2M, 0.0, 2.5 * i as f64 * IN2M]).collect();
+        st.wounds[2] = vec![1, 1, 1, 2];
+        let mut tray = Tray::supplied(vec![]);
+        let snap = |st: &State| (st.positions[2].clone(), st.wounds[2].clone());
+        let (at, wounds) = snap(&st);
+        st.positions[2].remove(1);
+        st.wounds[2].remove(1);
+        st.wounds[2][2] = 1; // capture slot 3 is wounded: 2 -> 1
+        let first = landing_of(&st, 2, &at, &wounds, &tray.dead_slots(2)).expect("a landing");
+        assert_eq!(first.models.iter().map(|m| (m.slot, m.dead)).collect::<Vec<_>>(), vec![(1, true), (3, false)]);
+        tray.land(|| first);
+        assert_eq!(tray.dead_slots(2), vec![1], "a wounded survivor is not a dead slot");
+        assert!(tray.dead_slots(3).is_empty(), "another unit's landings are not this unit's");
+        let (at, wounds) = snap(&st);
+        st.positions[2].remove(1); // list is now [slot 0, slot 2, slot 3]: slot 2 sits second
+        st.wounds[2].remove(1);
+        let second = landing_of(&st, 2, &at, &wounds, &tray.dead_slots(2)).expect("a landing");
+        assert_eq!(second.models.iter().map(|m| (m.slot, m.at == at[1])).collect::<Vec<_>>(), vec![(2, true)]);
+        tray.land(|| second);
+        assert_eq!(tray.dead_slots(2), vec![1, 2]);
     }

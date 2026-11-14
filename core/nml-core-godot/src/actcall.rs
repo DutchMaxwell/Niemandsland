@@ -57,6 +57,7 @@ fn landings_of(state: &State, landings: &[Landing]) -> VarArray {
         for m in &l.models {
             let mut d = VarDictionary::new();
             d.set("at", Vector3::new(m.at[0] as f32, m.at[1] as f32, m.at[2] as f32));
+            d.set("slot", m.slot as i64);
             d.set("wounds_left", m.wounds_left);
             d.set("dead", m.dead);
             models.push(&d.to_variant());

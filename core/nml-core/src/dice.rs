@@ -181,6 +181,13 @@ impl Tray {
         self.landings.iter().filter(|(at, _)| *at <= draw).map(|(_, l)| l.clone()).collect()
     }
 
+    /// P4.0-1: the capture-order slots of `unit`'s models the landings so far removed (a supplied tray only: a seeded
+    /// one keeps no landing, so this is empty and allocates nothing). `landing_of` skips them to name a model's slot.
+    pub fn dead_slots(&self, unit: usize) -> Vec<usize> {
+        let dead = self.landings.iter().filter(|(_, l)| l.unit == unit).flat_map(|(_, l)| &l.models).filter(|m| m.dead);
+        dead.map(|m| m.slot).collect()
+    }
+
     /// Every landing made on this tray, in order.
     pub fn all_landings(&self) -> Vec<Landing> {
         self.landings.iter().map(|(_, l)| l.clone()).collect()

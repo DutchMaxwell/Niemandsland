@@ -509,15 +509,17 @@ fn land_pool_wounds(state: &mut State, ti: usize, w: i64, exact: bool, seams: Se
 
 /// One-core P3 step 7 — what a landing did to unit `u` against its snapshot `at`/`wounds`: every
 /// model whose wounds fell, and every model that vanished (matched by its exact position before; a
-/// landing never moves a survivor). `None` when nothing changed.
-fn landing_of(state: &State, u: usize, at: &[[f64; 3]], wounds: &[i64]) -> Option<Landing> {
+/// landing never moves a survivor). `None` when nothing changed. P4.0-1: each model carries its capture-order
+/// `slot`: the snapshot's i-th model is the i-th slot not in `gone` (the slots earlier landings on `u` removed).
+fn landing_of(state: &State, u: usize, at: &[[f64; 3]], wounds: &[i64], gone: &[usize]) -> Option<Landing> {
     let mut now: Vec<Option<([f64; 3], i64)>> =
         state.positions[u].iter().copied().zip(state.wounds[u].iter().copied()).map(Some).collect();
-    let models: Vec<LandedModel> = at.iter().zip(wounds).filter_map(|(p, &w)| {
+    let slots = (0..).filter(|s| !gone.contains(s));
+    let models: Vec<LandedModel> = at.iter().zip(wounds).zip(slots).filter_map(|((p, &w), slot)| {
         match now.iter_mut().find(|m| m.is_some_and(|(q, _)| q == *p)).and_then(Option::take) {
             Some((_, n)) if n >= w => None,
-            Some((_, n)) => Some(LandedModel { at: *p, wounds_left: n, dead: false }),
-            None => Some(LandedModel { at: *p, wounds_left: 0, dead: true }),
+            Some((_, n)) => Some(LandedModel { at: *p, slot, wounds_left: n, dead: false }),
+            None => Some(LandedModel { at: *p, slot, wounds_left: 0, dead: true }),
         }
     }).collect();
     (!models.is_empty()).then_some(Landing { unit: u, models, loss_line: false })
@@ -9828,7 +9830,7 @@ fn resolve_with(
                     land_pool_wounds(&mut next, si, w, seams.tray_exact, seams, &mut shot.log);
                     // One-core P3 step 59: one landing per changed chain member, stamped right after the test's draw.
                     for (u, at, wounds) in chain_before.into_iter().flatten() {
-                        if let Some(l) = landing_of(&next, u, &at, &wounds) {
+                        if let Some(l) = landing_of(&next, u, &at, &wounds, &tray.dead_slots(u)) {
                             tray.land(|| l);
                         }
                     }
@@ -10559,7 +10561,7 @@ fn resolve_with(
                             // One-core P3 step 7: one landing per changed chain member, stamped BEFORE
                             // the group's morale test below draws. Step 27: its loss line was said just above.
                             for (u, at, wounds) in chain_before.into_iter().flatten() {
-                                if let Some(l) = landing_of(&next, u, &at, &wounds) {
+                                if let Some(l) = landing_of(&next, u, &at, &wounds, &tray.dead_slots(u)) {
                                     tray.land(|| Landing { loss_line: true, ..l });
                                 }
                             }
