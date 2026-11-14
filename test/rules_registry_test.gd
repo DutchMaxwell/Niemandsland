@@ -266,15 +266,30 @@ func test_aura_expansion_on_the_public_fixture_is_unchanged() -> void:
 	# The joined hero's auras reach the host and the hero himself; a rated aura keeps its rating; an unmodelled
 	# one falls back to the stripped name; a rule the host owns already is not listed as granted.
 	var squad: Dictionary = units["fixture_gf_list.json/fx-gf-squad"]
-	assert_array(squad["rules"]).contains_exactly_in_any_order(["Anti-Cover", "Fearless", "Nonesuch", "Ravage(+1)"])
-	assert_array(squad["aura_granted"]).contains_exactly_in_any_order(["Nonesuch", "Ravage(+1)"])
+	var got_rules: Array = []
+	got_rules.assign(squad["rules"])
+	got_rules.sort()
+	assert_array(got_rules).is_equal(["Anti-Cover", "Fearless", "Nonesuch", "Ravage(+1)"])
+	var got_squad_aura: Array = []
+	got_squad_aura.assign(squad["aura_granted"])
+	got_squad_aura.sort()
+	assert_array(got_squad_aura).is_equal(["Nonesuch", "Ravage(+1)"])
 	var captain: Dictionary = units["fixture_gf_list.json/fx-gf-captain"]
-	assert_array(captain["aura_granted"]).contains_exactly_in_any_order(["Anti-Cover", "Nonesuch", "Ravage(+1)"])
+	var got_captain_aura: Array = []
+	got_captain_aura.assign(captain["aura_granted"])
+	got_captain_aura.sort()
+	assert_array(got_captain_aura).is_equal(["Anti-Cover", "Nonesuch", "Ravage(+1)"])
 	# A lone hero grants only himself; a unit with no aura carrier gains nothing.
-	assert_array(units["fixture_gf_list.json/fx-gf-scout"]["aura_granted"]).contains_exactly_in_any_order(["Counter in Melee"])
+	var got_scout_aura: Array = []
+	got_scout_aura.assign(units["fixture_gf_list.json/fx-gf-scout"]["aura_granted"])
+	got_scout_aura.sort()
+	assert_array(got_scout_aura).is_equal(["Counter in Melee"])
 	assert_array(units["fixture_gf_list.json/fx-gf-plain"]["aura_granted"]).is_empty()
 	# The second system: its own roster, its own grants.
-	assert_array(units["fixture_aof_list.json/fx-aof-guard"]["aura_granted"]).contains_exactly_in_any_order(["Ravage(+1)", "Steadfast"])
+	var got_guard_aura: Array = []
+	got_guard_aura.assign(units["fixture_aof_list.json/fx-aof-guard"]["aura_granted"])
+	got_guard_aura.sort()
+	assert_array(got_guard_aura).is_equal(["Ravage(+1)", "Steadfast"])
 	var sha := str(report.get("sha256", ""))
 	assert_str(sha).override_failure_message("fixture expanded rules drifted (now %s) - re-pin only after reading the rows" % sha).is_equal(AURA_FIXTURE_BASELINE[2])
 
