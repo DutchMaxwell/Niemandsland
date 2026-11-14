@@ -1467,3 +1467,173 @@ func test_a_path_that_breaks_from_the_capture_is_checked_by_its_chord() -> void:
 		.is_greater(0.07)
 	assert_int(_lines_of("trail does not match").size()).is_equal(0)
 	GraphicsSettings.enforce_movement_limit = was
+
+
+## ---- Step 38 (O15 (1)): the human attack door ----
+
+## Slot 1's "Rifles" (10 models, Rifle 24" A1, a human's) and slot 2's "Def" (5 models, the AI's) 12" away; batch tray.
+func _shot_units() -> Array:
+	_main.solo_ai_slots = {2: true}
+	_main._ensure_solo_controller()
+	_main._solo_batch = true
+	_main._solo_auto_saves = true
+	var side := {"quality": 4, "defense": 4, "tough": 1, "z_step_in": 1.2, "game_system": "gf",
+		"faction_folder": "robot_legions", "rules": []}
+	var att := ParityTable._make_unit(_main, side.merged({"player": 1, "name": "Rifles", "models": 10, "x_in": 0.0}),
+		{"name": "Rifle", "range_in": 24, "attacks": 1, "count": 10, "rules": []})
+	var foe := ParityTable._make_unit(_main, side.merged({"player": 2, "name": "Def", "models": 5, "x_in": 12.0}),
+		{"name": "Rifle", "range_in": 24, "attacks": 1, "count": 5, "rules": []})   # a plain target needs a profile
+	for i in att.models.size():
+		(att.models[i] as ModelInstance).node.set_meta("network_id", 901 + i)
+		(att.models[i] as ModelInstance).node.set_meta("model_instance", att.models[i])
+	return [att, foe]
+
+
+## The shooter's Start with `mode` declared, and `moved_in` inches of move (0 = none) through the drop door.
+func _started(att: GameUnit, mode: int, moved_in: float) -> void:
+	assert_bool(CoreActivation.open_session(_main, att)).is_true()
+	_main.object_manager.set_movement_cap(mode)
+	if moved_in > 0.0:
+		_shift(att, moved_in)
+		assert_bool(_main.attacked_unit_drag_refused(att, moved_in)).override_failure_message("the move was refused").is_false()
+
+
+## One shot through `human_shoot` on a fresh fixture: the door's answer, the target's survivors, the dice thrown, whether
+## the tray's rng moved, the session, `last_target`.
+func _volley(seed_value: int, mode: int, moved_in: float, started := true) -> Dictionary:
+	var units := _shot_units()
+	var att: GameUnit = units[0]
+	var foe: GameUnit = units[1]
+	CoreActivation.last_target = null
+	if started:
+		_started(att, mode, moved_in)
+	_main.seed_tray_rng(seed_value)
+	var rng_before: int = _main._tray_rng.state
+	var throws := [0]
+	var taken: bool = await CoreActivation.human_shoot(_main, att, foe, func(_k: String, _i: int) -> void: throws[0] += 1)
+	var out := {"taken": taken, "alive": foe.get_alive_count(), "throws": throws[0],
+		"rolled": _main._tray_rng.state != rng_before, "session": CoreActivation.session_open(att.unit_id),
+		"target": CoreActivation.last_target == foe}
+	CoreActivation.close_session(_main, att.unit_id)
+	_clear(units)
+	return out
+
+
+## Advance declared and 4" moved, shoot: the volley is the core's - taken, dice thrown, the target loses models over a
+## few seeds, `last_target` noted (step 50). The session stays open: the door's toggle ends the activation (see below).
+func test_a_human_shot_goes_through_the_core_and_notes_its_target(timeout := 240000) -> void:
+	var lost := 0
+	for s in 6:
+		var v: Dictionary = await _volley(s, ObjectManager.MovementCap.ADVANCE, 4.0)
+		assert_bool(bool(v["taken"])).override_failure_message("seed %d: %s" % [s, v]).is_true()
+		assert_int(int(v["throws"])).override_failure_message("seed %d: %s" % [s, v]).is_greater(0)
+		assert_bool(bool(v["session"])).override_failure_message("seed %d: the session closed before the toggle" % s).is_true()
+		assert_bool(bool(v["target"])).override_failure_message("seed %d: last_target" % s).is_true()
+		lost += 5 - int(v["alive"])
+	assert_int(lost).override_failure_message("no seed hurt the target").is_greater(0)
+
+
+## Nothing moved: the declared Advance is a Hold for the core, so the volley is step 11's Hold volley for the same seed.
+func test_a_shot_without_a_move_equals_the_hold_volley_of_the_same_seed(timeout := 240000) -> void:
+	for s in 6:
+		var v: Dictionary = await _volley(s, ObjectManager.MovementCap.ADVANCE, 0.0)
+		var units := _shot_units()
+		var h := CoreActivation.capture(_main)
+		_main.seed_tray_rng(s)
+		var throws := [0]
+		var t: Array = [{"t": "begin"}, {"t": "intent", "kind": AiDecision.Action.HOLD, "shoot": (units[1] as GameUnit).unit_id}]
+		await CoreActivation.drive(_main, h, units[0], t, false, func(_k: String, _i: int) -> void: throws[0] += 1)
+		assert_int(int(v["alive"])).override_failure_message("seed %d: alive" % s).is_equal((units[1] as GameUnit).get_alive_count())
+		assert_int(int(v["throws"])).override_failure_message("seed %d: throws" % s).is_equal(throws[0])
+		_clear(units)
+
+
+## Rush declared and 9" moved: the core refuses the shot in the O3 words (one line, one toast), nothing is thrown, the
+## target is untouched and the session stays open.
+func test_a_rushed_shot_is_refused_with_the_o3_sentence_and_nothing_rolls(timeout := 120000) -> void:
+	var v: Dictionary = await _volley(3, ObjectManager.MovementCap.RUSH, 9.0)
+	var sentence := "Rifles rushed this activation - it cannot shoot."
+	assert_bool(bool(v["taken"])).is_true()
+	assert_int(int(v["throws"])).override_failure_message("dice were thrown: %s" % v).is_equal(0)
+	assert_bool(bool(v["rolled"])).override_failure_message("the tray's rng moved").is_false()
+	assert_int(int(v["alive"])).is_equal(5)
+	assert_bool(bool(v["session"])).override_failure_message("the session closed").is_true()
+	assert_bool(bool(v["target"])).override_failure_message("last_target set by a refused shot").is_false()
+	assert_int(_log_lines(sentence).size()).is_equal(1)
+	assert_int(_toasts(sentence).size()).is_equal(1)
+
+
+## A shot without a Start: "Activate <Unit> first." (O15 (1)), nothing rolls.
+func test_a_shot_without_an_open_activation_is_refused(timeout := 120000) -> void:
+	var v: Dictionary = await _volley(3, ObjectManager.MovementCap.ADVANCE, 0.0, false)
+	assert_bool(bool(v["taken"])).is_true()
+	assert_int(int(v["throws"])).is_equal(0)
+	assert_bool(bool(v["rolled"])).override_failure_message("the tray's rng moved").is_false()
+	assert_int(int(v["alive"])).is_equal(5)
+	assert_int(_log_lines("Activate Rifles first.").size()).is_equal(1)
+	assert_int(_toasts("Activate Rifles first.").size()).is_equal(1)
+
+
+## Not the core's: a Charge selector, a target with a special rule, the flag off - the old path runs (false).
+func test_a_charge_a_special_target_and_the_flag_off_leave_the_shot_to_the_old_path() -> void:
+	var units := _shot_units()
+	var att: GameUnit = units[0]
+	var foe: GameUnit = units[1]
+	_started(att, ObjectManager.MovementCap.CHARGE, 0.0)
+	assert_bool(await CoreActivation.human_shoot(_main, att, foe)).override_failure_message("a Charge").is_false()
+	_main.object_manager.set_movement_cap(ObjectManager.MovementCap.ADVANCE)
+	foe.unit_properties["special_rules"] = ["Furious"]
+	assert_bool(await CoreActivation.human_shoot(_main, att, foe)).override_failure_message("a special target").is_false()
+	foe.unit_properties["special_rules"] = []
+	CoreActivation._env = 0
+	assert_bool(await CoreActivation.human_shoot(_main, att, foe)).override_failure_message("the flag off").is_false()
+	assert_int(_log_lines("Activate Rifles first.").size()).is_equal(0)
+	assert_bool(CoreActivation.session_open(att.unit_id)).is_true()
+
+
+## The window door: a core volley ends the activation as every attack does (the table's `shot_round`, the unit activated),
+## and only then is the session gone - closed before, the toggle would start a new activation instead of ending this one.
+func test_the_attack_door_completes_a_core_volley_and_not_a_refused_one(timeout := 240000) -> void:
+	var units := _shot_units()
+	var att: GameUnit = units[0]
+	var ended := {}   # the table moves on after the shot (the AI answers, the round may turn): count the activations' ends
+	_main.radial_menu_controller.unit_activated.connect(func(u: GameUnit) -> void: ended[u.unit_id] = int(ended.get(u.unit_id, 0)) + 1)
+	_started(att, ObjectManager.MovementCap.ADVANCE, 4.0)
+	_main.seed_tray_rng(3)
+	await _main._run_human_attack(att, units[1], false)
+	assert_int(int(att.unit_properties.get("shot_round", -1))).override_failure_message("the volley did not complete").is_equal(1)
+	assert_int(int(ended.get(att.unit_id, 0))).override_failure_message("the volley did not end the activation once").is_equal(1)
+	assert_bool(CoreActivation.session_open(att.unit_id)).override_failure_message("the session outlived the activation").is_false()
+	_clear(units)
+	# A refused shot is no shot: the activation stays open and uncompleted (no shot_round, not activated).
+	units = _shot_units()
+	att = units[0]
+	_started(att, ObjectManager.MovementCap.RUSH, 9.0)
+	await _main._run_human_attack(att, units[1], false)
+	assert_bool(att.unit_properties.has("shot_round")).override_failure_message("a refused shot was stamped as a shot").is_false()
+	assert_int(int(ended.get(att.unit_id, 0))).override_failure_message("a refused shot ended the activation").is_equal(1)
+	assert_bool(CoreActivation.session_open(att.unit_id)).is_true()
+	assert_int(_log_lines("Rifles rushed this activation - it cannot shoot.").size()).is_equal(1)
+
+
+## A refusal leaves the session's transcript as it was: after the Rush refusal the player picks Advance, and the core
+## answers THIS intent (the 9" move is over the Advance allowance), not a second intent in one transcript.
+func test_a_refused_shot_leaves_the_sessions_transcript_as_it_was(timeout := 120000) -> void:
+	var was: bool = GraphicsSettings.enforce_movement_limit
+	GraphicsSettings.enforce_movement_limit = true
+	var units := _shot_units()
+	var att: GameUnit = units[0]
+	_started(att, ObjectManager.MovementCap.RUSH, 9.0)
+	var rushed := "Rifles rushed this activation - it cannot shoot."
+	var over := "Rifles: a model moved 9.0\" - the Advance allowance is 6.0\"."
+	assert_bool(await CoreActivation.human_shoot(_main, att, units[1])).is_true()
+	assert_int(_log_lines(rushed).size()).override_failure_message("the Rush shot was not refused").is_equal(1)
+	_main.object_manager.set_movement_cap(ObjectManager.MovementCap.ADVANCE)
+	assert_bool(await CoreActivation.human_shoot(_main, att, units[1])).is_true()
+	assert_int(_log_lines(over).size()).override_failure_message("the second try was not answered as its own intent: %s" \
+		% [_main.battle_log.entries().slice(-3)]).is_equal(1)
+	assert_int(_log_lines(rushed).size()).is_equal(1)
+	assert_bool(CoreActivation.last_target == null).is_true()
+	CoreActivation.close_session(_main, att.unit_id)
+	_clear(units)
+	GraphicsSettings.enforce_movement_limit = was

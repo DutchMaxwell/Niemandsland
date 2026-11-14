@@ -490,6 +490,42 @@ static func declared_mode(main) -> int:
 	return 0
 
 
+## Step 38 (O15 (1)): the human attack door. False = not taken, the old path runs: `attacker` is not a core unit, the
+## target is not plain, the selector says Charge (a melee action) or is no declaration (declared_mode reports it). True =
+## taken. No open activation: "Activate <Unit> first.", nothing rolls. Else the declared intent (the selector's mode,
+## never the distance; the core turns it into Hold when nothing moved) and the shot go through the core with the
+## session's transcript; the session's own transcript is not touched, so a refusal can be tried again. `done`: the steps
+## have landed and `last_target` is noted for step 50; the session stays open until the door ENDS the activation (the
+## toggle that completes a shot ends it only while the session is open - with none, "Activate" would start a new one),
+## and the door closes it after. `refused` below the transcript's size (an order rule, the O3 Rush sentence): logged and
+## toasted, nothing was shot, the session stays open (the caller returns then). `refused` at the transcript's size is the
+## core's own defect: reported, nothing toasted, the session stays open.
+static func human_shoot(main, attacker: GameUnit, target: GameUnit, on_throw: Callable = Callable()) -> bool:
+	if not is_core_unit(main, attacker) or not is_plain(target) \
+			or int(main.object_manager._movement_cap) == ObjectManager.MovementCap.CHARGE:
+		return false
+	if main.core_door_refused(attacker):
+		return true
+	var mode := declared_mode(main)
+	var s: Dictionary = _sessions.get(attacker.unit_id, {})
+	if mode == 0:
+		return false   # declared_mode reported the defect
+	if s.is_empty():
+		push_error("human_shoot: %s has no session after the door let it through" % attacker.get_name())
+		return true
+	var t: Array = (s["transcript"] as Array).duplicate()
+	t.append({"t": "intent", "kind": mode, "shoot": target.unit_id})
+	var r: Dictionary = await drive(main, int(s["handle"]), attacker, t, false, on_throw)
+	if str(r["step"]) == "done":
+		last_target = target
+	elif str(r["step"]) == "refused" and int(r["index"]) < t.size():
+		main._log_rule_event(BattleLog.Category.MOVEMENT, str(r["reason"]))
+		main._show_toast(str(r["reason"]))
+	else:
+		push_error("human_shoot: the core answered %s for %s's shot" % [r, attacker.get_name()])
+	return true
+
+
 ## One-core P3 step 32 (the snap-back answer): `gu` back where its open activation started. Every model that is still
 ## alive goes to the session's start position and facing through the existing take-back, built once per drop of this
 ## round in the unit's ledger (drags and step 65a's formation drops alike; the models ride the first, so each moves and

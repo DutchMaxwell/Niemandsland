@@ -15168,8 +15168,10 @@ func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool, auto: 
 		elif target != null and not target.is_destroyed() and _solo_is_ai_unit(target) and battle_log != null \
 				and not solo_controller.last_hit_and_run_note.is_empty():   # UX-19: only some models carry it
 			battle_log.log_event(BattleLog.Category.MOVEMENT, solo_controller.last_hit_and_run_note, true)
-	else:
+	elif not await CoreActivation.human_shoot(self, attacker, target):   # step 38 (O15 (1)): a core unit's volley
 		await _run_human_shooting(attacker, target)
+	elif CoreActivation.last_target != target:
+		return   # the core refused the shot (it notes the target of a shot it resolved): nothing was shot, the activation stays open
 	# X1 (test game 2, double-shoot exploit): a resolved attack IS the unit's activation — it completes
 	# for SURVIVORS and wiped units alike. The old rule auto-completed only wiped attackers (finding 5);
 	# a surviving shooter stayed un-activated and the radial happily offered a second volley. The card
@@ -15182,6 +15184,8 @@ func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool, auto: 
 		attacker.unit_properties["shot_round"] = opr_army_manager.current_round
 	human_attack_resolved.emit(attacker, melee)
 	await _solo_complete_human_attack(attacker)
+	if not melee:
+		CoreActivation.close_session(self, attacker.unit_id)   # step 38: the toggle above ended a core volley's activation
 
 
 ## NML-216 wave B — Precision Spotter (army book): "Once per activation, pick one enemy
