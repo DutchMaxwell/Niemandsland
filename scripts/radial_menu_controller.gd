@@ -360,7 +360,7 @@ func _on_action_selected(action_id: String, context: Dictionary) -> void:
 		var cargo_list: Array = context.get("cargo_units", [])
 		var ci := int(action_id.trim_prefix("unload_cargo_"))
 		if ci >= 0 and ci < cargo_list.size():
-			if await _solo_activation_rules(cargo_list[ci] as GameUnit):   # the CARGO's activation (step 62)
+			if await _solo_activation_rules(cargo_list[ci] as GameUnit, "unload"):   # the CARGO's activation (step 62)
 				_begin_disembark_ghost(cargo_list[ci] as GameUnit)
 		return
 
@@ -425,7 +425,7 @@ func _on_action_selected(action_id: String, context: Dictionary) -> void:
 		"revive_selected":
 			_revive_selected_dead(context)
 		"disembark":
-			if await _solo_activation_rules(context.get("disembark_unit") as GameUnit):
+			if await _solo_activation_rules(context.get("disembark_unit") as GameUnit, "disembark"):
 				_disembark_unit(context.get("disembark_unit") as GameUnit)
 		"stay_embarked":
 			_stay_embarked(context.get("disembark_unit") as GameUnit)
@@ -692,13 +692,17 @@ func _solo_auto_available(game_unit: GameUnit) -> bool:
 ## transport embark/disembark actions — announce the activation here first, through main's ONE door
 ## (begin_activation, D23), so whichever door opens first completes its rule choices before movement
 ## or activation proceeds. One-core P3 step 62: false when main refuses the door first (a lifecycle unit whose
-## activation is not open, O14 (1b)); the caller stops and nothing is spent.
-func _solo_activation_rules(unit: GameUnit) -> bool:
+## activation is not open, O14 (1b)); the caller stops and nothing is spent. Step 68 (O16): a non-empty `commit` (the
+## doors that take a unit out of its transport) commits the unit's open activation BEFORE begin_activation runs, so what
+## runs inside it (Spawn, Reanimation) is past Cancel too.
+func _solo_activation_rules(unit: GameUnit, commit := "") -> bool:
 	if unit == null:
 		return true
 	var main_node := get_node_or_null("/root/Main")
 	if main_node != null and main_node.has_method("core_door_refused") and main_node.call("core_door_refused", unit):
 		return false
+	if commit != "":
+		CoreActivation.note_commit(main_node, unit, commit)   # one-core P3 step 68 (O16): the unit leaves its transport - Cancel is gone
 	if main_node != null and main_node.has_method("begin_activation"):
 		await main_node.call("begin_activation", unit)
 	return true
