@@ -24,6 +24,7 @@ use super::*;
         let dead: Vec<_> = all[0].models.iter().filter(|m| m.dead).collect();
         assert_eq!(dead.len(), 1, "{all:?}");
         assert!(start.contains(&dead[0].at), "the dead model sits where it started: {all:?} vs {start:?}");
+        assert_eq!(start[dead[0].slot], dead[0].at, "P4.0-1: its slot is its capture index: {all:?} vs {start:?}");
         // Step 27: the core says no loss line for a Dangerous test, so the table's removal funnel still says it.
         assert!(!all[0].loss_line, "{all:?}");
     }

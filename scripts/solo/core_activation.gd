@@ -347,11 +347,22 @@ static func _model_at(start_models: Array, gu: GameUnit, at: Vector3) -> ModelIn
 	return null
 
 
+## P4.0-1: `gu`'s start models in capture order. The core names a model by its slot, the index it had in its unit's list of
+## living models when the board was captured (BattleSim.capture: get_alive_models() order, the order `_start_models` keeps).
+static func _models_by_slot(start_models: Array, gu: GameUnit) -> Array:
+	return start_models.filter(func(e: Dictionary) -> bool: return (e["model"] as ModelInstance).unit == gu) \
+		.map(func(e: Dictionary) -> ModelInstance: return e["model"])
+
+
 ## Lands one step's landings on the table (O4 b): a wound shows at once on the wound marker, the dead leave right
 ## after the saves. Every need_roll repeats the earlier landings; `done` skips what this activation already landed.
+## P4.0-1: each landed model also carries the core's `(unit, slot)`. For now the position still decides which model it is
+## (the 1 mm XZ match, as before: a table that lost a model after the capture shifts its slot list, the position stays
+## right); the slot is the cross-check, and a landing whose slot names another model is a push_error, never silent.
 static func land_step(main, _gu: GameUnit, landings: Array, start_models: Array, done: Dictionary) -> void:
 	for entry in landings:
 		var lgu: GameUnit = main.opr_army_manager.game_units.get(str(entry["unit"]))
+		var by_slot: Array = _models_by_slot(start_models, lgu) if lgu != null else []
 		var died: Array[ModelInstance] = []
 		for lm in entry["models"]:
 			var m: ModelInstance = _model_at(start_models, lgu, lm["at"]) if lgu != null else null
@@ -360,6 +371,9 @@ static func land_step(main, _gu: GameUnit, landings: Array, start_models: Array,
 				continue
 			if done.has(m):
 				continue
+			var slot := int(lm["slot"])
+			if (by_slot[slot] if slot >= 0 and slot < by_slot.size() else null) != m:
+				push_error("CoreActivation.land_step: slot %d of %s is not the model at %s" % [slot, entry["unit"], lm["at"]])
 			done[m] = true
 			var before := m.wounds_current
 			if bool(lm["dead"]):
