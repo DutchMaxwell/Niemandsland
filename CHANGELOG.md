@@ -110,7 +110,7 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 - **Online co-op: Piercing tags and the AI's Speed Feat now count on both machines.**
 - **Online co-op: the AI no longer repeats a once-per-game ability on the second machine.**
   Surprise Attack, Second Wind, Limited weapons, Ambush redeployment and similar abilities now
-  count on one machine only.
+  are now remembered on both machines.
 - **Online: a Reinforcement copy now returns exactly once.** Before, it could be missing or come
   back twice.
 - **Online: a returning Reinforcement copy is placed by its owner.**
