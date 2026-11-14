@@ -17,6 +17,13 @@ The default run covers:
   Automodus 3.5, the guest previews Advance & Shoot, clicks and runs it on its own machine; every
   model lands within 1 mm of that preview on both peers, and the host rolls its own saves against
   the volley (the guest's tray rolls none).
+- with `--include-one-core` (local only; CI's flag set is unchanged) or alone with `--one-core-only`:
+  one core P3 step 54, `NML_ONE_CORE_ACTIVATION=1` on both peers in an agreed Automatic room. Each
+  plain activation runs through the production doors (Activate, a drag, End) and the other table's
+  digest check is silent, also for the round's last activation (the guest's, which ends round 1 on
+  the host). Then a desync planted on the host is reported, the guest pushes only what differs, and
+  the re-check matches. One command: `python3 test/mp/run_two_instance.py --one-core-only --repeat 1
+  --run-dir reports/mp-one-core`.
 
 The driver compares both peers after every step. A timeout, process crash,
 English or German GDScript parser/runtime error, wrong expected value, or peer
