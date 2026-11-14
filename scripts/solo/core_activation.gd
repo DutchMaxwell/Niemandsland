@@ -337,7 +337,7 @@ static func _start_models(main) -> Array:
 
 ## The start model of `gu` that stands at `at` on the table (XZ, within a millimetre); null when none does. The height is
 ## not compared: a placed position carries the drag's lift (the drop is checked before the models settle), the model's own
-## node is back on the table.
+## node is back on the table. P4.0-1: no longer the landing's key - `land_step` cross-checks the core's slot with it.
 static func _model_at(start_models: Array, gu: GameUnit, at: Vector3) -> ModelInstance:
 	for e in start_models:
 		var m: ModelInstance = e["model"]
@@ -347,19 +347,32 @@ static func _model_at(start_models: Array, gu: GameUnit, at: Vector3) -> ModelIn
 	return null
 
 
+## P4.0-1: `gu`'s start models in capture order. The core names a model by its slot, the index it had in its unit's list of
+## living models when the board was captured (BattleSim.capture: get_alive_models() order, the order `_start_models` keeps).
+static func _models_by_slot(start_models: Array, gu: GameUnit) -> Array:
+	return start_models.filter(func(e: Dictionary) -> bool: return (e["model"] as ModelInstance).unit == gu) \
+		.map(func(e: Dictionary) -> ModelInstance: return e["model"])
+
+
 ## Lands one step's landings on the table (O4 b): a wound shows at once on the wound marker, the dead leave right
 ## after the saves. Every need_roll repeats the earlier landings; `done` skips what this activation already landed.
+## P4.0-1: a model is the core's `(unit, slot)`, not the position it stood at; the 1 mm position match only checks that
+## the slot names the model the core meant (push_error when they disagree).
 static func land_step(main, _gu: GameUnit, landings: Array, start_models: Array, done: Dictionary) -> void:
 	for entry in landings:
 		var lgu: GameUnit = main.opr_army_manager.game_units.get(str(entry["unit"]))
+		var by_slot: Array = _models_by_slot(start_models, lgu) if lgu != null else []
 		var died: Array[ModelInstance] = []
 		for lm in entry["models"]:
-			var m: ModelInstance = _model_at(start_models, lgu, lm["at"]) if lgu != null else null
+			var slot := int(lm["slot"])
+			var m: ModelInstance = by_slot[slot] if slot >= 0 and slot < by_slot.size() else null
 			if m == null:
-				push_error("CoreActivation.land_step: no model of %s at %s" % [entry["unit"], lm["at"]])
+				push_error("CoreActivation.land_step: no model of %s in slot %d" % [entry["unit"], slot])
 				continue
 			if done.has(m):
 				continue
+			if _model_at(start_models, lgu, lm["at"]) != m:
+				push_error("CoreActivation.land_step: slot %d of %s is not the model at %s" % [slot, entry["unit"], lm["at"]])
 			done[m] = true
 			var before := m.wounds_current
 			if bool(lm["dead"]):

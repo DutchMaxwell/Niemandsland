@@ -57,17 +57,17 @@ func test_a_hold_and_shoot_activation_runs_to_done_and_reports_the_landing() -> 
 	assert_int(rolls).is_greater(0)
 	# The new handle holds the state after the volley: all three models of "b" are gone.
 	assert_int(int(_core.plain_of(int(r["handle"]))["units"]["b"]["alive"])).is_equal(0)
-	# The landing names the unit and keeps each model's start position (x in inches 10, 11, 12; metres here).
+	# The landing names the unit and each model by its capture-order slot (P4.0-1), and keeps its start position
+	# (x in inches 10, 11, 12 for slots 0, 1, 2; metres here).
 	var landing: Dictionary = (r["landings"] as Array)[0]
 	assert_str(landing["unit"]).is_equal("b")
-	var xs: Array = []
+	var xs := {}   # slot -> x
 	for m in landing["models"]:
-		xs.append((m["at"] as Vector3).x)
+		xs[int(m["slot"])] = (m["at"] as Vector3).x
 		assert_bool(m["dead"]).is_true()
-	xs.sort()
-	assert_int(xs.size()).is_equal(3)
+	assert_array(xs.keys()).contains_exactly_in_any_order([0, 1, 2])
 	for i in 3:
-		assert_float(xs[i]).is_equal_approx((10.0 + i) * IN2M, 0.0001)
+		assert_float(float(xs.get(i, -1.0))).is_equal_approx((10.0 + i) * IN2M, 0.0001)
 	# The done answer carries the delta: only "b" changed - its three models are gone, nobody moved.
 	var delta: Array = r["delta"]
 	assert_int(delta.size()).is_equal(1)
