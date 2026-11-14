@@ -460,6 +460,43 @@ static func close_session(main, unit_id: String) -> void:
 		main._refresh_movement_cap_row()   # step 31: an ended unit shows Off again
 
 
+## Step 35 (O9): the first die of a roll THIS table throws commits every open activation: from then on its Cancel is gone.
+## Idempotent. (Step 36 adds the card refresh through `main`.)
+static func note_die(_main) -> void:
+	for id in _sessions:
+		(_sessions[id] as Dictionary)["dice"] = true
+
+
+## Step 35: whether `unit_id`'s activation can still be cancelled: open, and no die thrown since the Start.
+static func can_cancel(unit_id: String) -> bool:
+	return _sessions.has(unit_id) and not bool((_sessions[unit_id] as Dictionary)["dice"])
+
+
+## Step 35 (O9, O15 (3)): Cancel. The core says its sentence (its answer must be `cancelled`: a refusal is a defect, reported,
+## and nothing is undone), then the table puts the unit back (step 32: positions, chalk, ledger, moved_round, take-backs,
+## and for the other table the move, rotation and trails-undo frames), gives back what a one-time effect spent (step 37) and
+## closes the session. The unit is NOT activated by a cancel: no unit_deactivated, no activation broadcast, no AI reply.
+static func cancel(main, gu: GameUnit) -> void:
+	if gu == null or not can_cancel(gu.unit_id):
+		return
+	var sc: SoloController = main.solo_controller
+	var core: Object = sc._core_node_ready() if sc != null else null
+	if core == null:
+		push_error("cancel: no core for %s's open activation" % gu.get_name())
+		return
+	var s: Dictionary = _sessions[gu.unit_id]
+	var r: Dictionary = core.step_activation(int(s["handle"]), gu.unit_id, (s["transcript"] as Array) + [{"t": "cancel"}],
+		main.object_manager._strict_movement_enforced())
+	if str(r.get("step", "")) != "cancelled":
+		push_error("cancel: the core answered %s to the Cancel of %s" % [r, gu.get_name()])
+		return
+	for line in r.get("lines", []):
+		main._log_rule_event(int(line["category"]), str(line["text"]), false, str(line["detail"]))
+	reset_to_start(main, gu, "")
+	undo_journal(main, gu)
+	close_session(main, gu.unit_id)
+
+
 ## Step 34 (N2 b): the core re-checks a drop of `gu` (a move-path unit with an open session) - every alive model where it
 ## stands now, at the declared mode, Enforce Movement Limit as set. Ok: this placement replaces the session's one and the
 ## core's lines are written (with Enforce off, the escape hatch's overrun line); false. Refused: the reason is logged
