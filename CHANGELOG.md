@@ -83,6 +83,12 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   and Protection Feat marks were kept only on the table that spent them, so a guest who rejoined
   could spend the feat again. The mark now syncs and stays. (#2621)
 
+### Changed — Game School
+- **The movement, shooting, melee, morale, terrain and spell chapters teach the explicit activation.**
+  Each lesson now has you press Activate on the unit's card, set the Movement row, drag, shoot, fight
+  or cast, and press End activation where the action does not end it. Chapter 4 also shows Cancel.
+  A lesson only moves on once the activation is really open.
+
 ### Changed — startup
 - **A rules core that fails to load is reported at start.** Every start writes a line to the log
   saying whether the Rust rules core loaded. An exported build whose core did not load also shows a

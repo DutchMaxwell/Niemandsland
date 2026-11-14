@@ -55,14 +55,23 @@ const _S03_STEPS := [
 const _S04_STEPS := [
 	{"id": "bands", "text": "Select Alpha Squad and press M: the rings show Advance 6\" and Rush 12\".",
 		"rule": "p.7", "all": [{"check": "flag", "args": {"key": "bands"}}]},
-	{"id": "advance_alpha", "text": "Advance: drag Alpha Squad up to 6\", then right-click it and choose Activate.",
-		"rule": "", "all": [
+	{"id": "activate_alpha", "text": "Activate: a unit must be activated before it can move. Select Alpha Squad and press Activate on its card.",
+		"rule": "p.7", "all": [{"check": "tag_flag", "args": {"key": "open", "tag": "alpha", "value": true}}]},
+	{"id": "advance_alpha", "text": "Advance: press Advance in the Movement row, then drag Alpha Squad up to 6\".",
+		"rule": "p.7", "all": [
+			{"check": "value_is", "args": {"key": "move_mode", "value": 1}},
+			{"check": "unit_moved", "args": {"tag": "alpha", "inches": 1.0}}]},
+	{"id": "cancel_alpha", "text": "Changed your mind? Press Cancel on the card: until you roll a die, the unit goes back to where it started.",
+		"rule": "", "all": [{"check": "counter_grew", "args": {"key": "log:cancel"}}]},
+	{"id": "end_alpha", "text": "Activate Alpha Squad again, drag it up to 6\" (Advance) and press End activation: now the unit has acted.",
+		"rule": "p.7", "all": [
 			{"check": "unit_moved", "args": {"tag": "alpha", "inches": 1.0}},
 			{"check": "tag_flag", "args": {"key": "activated", "tag": "alpha", "value": true}}]},
 	{"id": "ai_turn", "text": "Now NACHTMAHR activates one unit — turns alternate, one unit each.",
 		"rule": "p.7", "all": [{"check": "tag_flag", "args": {"key": "activated", "tag": "target", "value": true}}]},
-	{"id": "rush_bravo", "text": "Rush: drag Bravo Squad more than 6\" (up to 12\") and activate it. A rushing unit may not shoot.",
+	{"id": "rush_bravo", "text": "Rush: activate Bravo Squad, press Rush in the Movement row, drag it more than 6\" (up to 12\") and press End activation. A rushing unit may not shoot.",
 		"rule": "", "all": [
+			{"check": "value_is", "args": {"key": "move_mode", "value": 2}},
 			{"check": "unit_moved", "args": {"tag": "bravo", "inches": 6.5}},
 			{"check": "at_least", "args": {"key": "round", "n": 2}}]},
 	{"id": "next_round", "text": "Every unit has acted, so the round ends by itself: round 2 begins and all units may act again.",
@@ -73,19 +82,25 @@ const _S04_STEPS := [
 const _S05_STEPS := [
 	{"id": "card", "text": "Right-click Alpha Squad and open its card: the Heavy Rifle shoots 18\".",
 		"rule": "p.5", "all": [{"check": "flag", "args": {"key": "card_presented"}}]},
-	{"id": "shoot", "text": "Right-click Alpha Squad, choose Shoot, click the nearer Warriors squad: the Heavy Rifle reaches 18\".",
+	{"id": "activate_alpha", "text": "Shooting is part of an activation: press Activate on Alpha Squad's card.",
+		"rule": "p.7", "all": [{"check": "tag_flag", "args": {"key": "open", "tag": "alpha", "value": true}}]},
+	{"id": "shoot", "text": "Right-click Alpha Squad, choose Shoot, click the nearer Warriors squad: the Heavy Rifle reaches 18\". The volley ends the activation.",
 		"rule": "p.5", "all": [{"check": "counter_grew", "args": {"key": "shoot:alpha"}}]},
 	{"id": "read_log", "text": "Read the log: hits roll against Quality, the enemy blocks with Defense.",
 		"rule": "p.8", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
-	{"id": "blocked", "text": "Try to shoot the Guardians squad behind the building: it stands in range, but the building blocks the line of sight — no line of sight, no shot.",
+	{"id": "blocked", "text": "Activate Alpha Squad again and try to shoot the Guardians squad behind the building: it stands in range, but the building blocks the line of sight — no line of sight, no shot.",
 		"rule": "p.5", "all": [{"check": "counter_grew", "args": {"key": "log:nolos"}}]},
 ]
 
 
 const _S06_STEPS := [
-	{"id": "charge", "text": "Move Alpha Squad into base contact with the enemy squad (within 1\").",
-		"rule": "p.9", "all": [{"check": "gap_at_most", "args": {"tag": "target", "inches": 1.0}}]},
-	{"id": "fight", "text": "Right-click Alpha Squad, choose Fight, click the enemy squad.",
+	{"id": "activate_alpha", "text": "A charge is part of an activation: select Alpha Squad and press Activate on its card.",
+		"rule": "p.7", "all": [{"check": "tag_flag", "args": {"key": "open", "tag": "alpha", "value": true}}]},
+	{"id": "charge", "text": "Charge: press Charge in the Movement row, then drag Alpha Squad into base contact with the enemy squad (within 1\").",
+		"rule": "p.9", "all": [
+			{"check": "value_is", "args": {"key": "move_mode", "value": 3}},
+			{"check": "gap_at_most", "args": {"tag": "target", "inches": 1.0}}]},
+	{"id": "fight", "text": "Right-click Alpha Squad, choose Fight, click the enemy squad. The fight ends the activation.",
 		"rule": "", "all": [{"check": "counter_grew", "args": {"key": "melee:alpha"}}]},
 	{"id": "pile_in", "text": "The charged squad piles in up to 3\" — read the log, then press Continue.",
 		"rule": "p.9", "all": [
@@ -103,13 +118,17 @@ const _S06_STEPS := [
 
 
 const _S08_STEPS := [
-	{"id": "move_forest", "text": "Move Alpha Squad into the forest ahead. Forests are difficult terrain: no model moves more than 6\".",
-		"rule": "p.12", "all": [{"check": "tag_terrain_is", "args": {"tag": "alpha", "type": 2}}]},
+	{"id": "activate_alpha", "text": "Moving is part of an activation: select Alpha Squad and press Activate on its card.",
+		"rule": "p.7", "all": [{"check": "tag_flag", "args": {"key": "open", "tag": "alpha", "value": true}}]},
+	{"id": "move_forest", "text": "Advance: press Advance in the Movement row, then drag Alpha Squad into the forest ahead. Forests are difficult terrain: no model moves more than 6\".",
+		"rule": "p.12", "all": [
+			{"check": "value_is", "args": {"key": "move_mode", "value": 1}},
+			{"check": "tag_terrain_is", "args": {"tag": "alpha", "type": 2}}]},
 	{"id": "difficult", "text": "Drag a model past 6\" through the forest: difficult terrain hard-caps the move at 6\".",
 		"rule": "p.12", "all": [{"check": "counter_grew", "args": {"key": "move_capped"}}]},
 	{"id": "cover", "text": "The enemy stands inside a forest: most of it is in cover, so it gets +1 to its Defense rolls against shooting, then press Continue.",
 		"rule": "p.12", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
-	{"id": "shoot_cover", "text": "Shoot the enemy in cover and watch the +1 in the log.",
+	{"id": "shoot_cover", "text": "Alpha Squad's activation is still open, so shoot the enemy in cover and watch the +1 in the log.",
 		"rule": "p.12", "all": [{"check": "counter_grew", "args": {"key": "shoot:alpha"}}]},
 	{"id": "dangerous", "text": "Dangerous terrain is a hazard on the table: the whole unit takes one test, rolling one die per wound it has left, and a 1 wounds it. Read the rule, then press Continue.",
 		"rule": "p.12", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
@@ -125,12 +144,12 @@ const _S07_STEPS := [
 		"rule": "p.10", "all": [
 			{"check": "tag_flag", "args": {"tag": "tough", "key": "card_presented", "value": true}},
 			{"check": "counter_grew", "args": {"key": "continue"}}]},
-	{"id": "recover", "text": "Activate Charlie Squad (right-click, then Activate). It idles and recovers — if the S token stays, remove it from the same menu (Shaken) — then press Continue.",
+	{"id": "recover", "text": "Select Charlie Squad, press Activate and then End activation: it idles and recovers — if the S token stays, remove it from the right-click menu (Shaken) — then press Continue.",
 		"rule": "p.10", "all": [
 			{"check": "tag_flag", "args": {"tag": "shaken", "key": "activated", "value": true}},
 			{"check": "tag_flag", "args": {"tag": "shaken", "key": "shaken", "value": false}},
 			{"check": "counter_grew", "args": {"key": "continue"}}]},
-	{"id": "morale_test", "text": "The enemy squad is at half strength. Shoot it with Alpha Squad: at the end of the activation it takes a morale test.",
+	{"id": "morale_test", "text": "The enemy squad is at half strength. Activate Alpha Squad and shoot it: at the end of the activation it takes a morale test.",
 		"rule": "p.10", "all": [{"check": "counter_grew", "args": {"key": "shoot:alpha"}}]},
 	{"id": "outcome", "text": "Read the log: a failed shooting morale test leaves the unit Shaken — only a melee failure can Rout it, then press Continue.",
 		"rule": "p.10", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
@@ -152,8 +171,12 @@ const _S09_STEPS := [
 const _SSPELL_STEPS := [
 	{"id": "preview", "text": "Open the Archivist's card and hover a spell: a ring shows its range.",
 		"rule": "p.13", "all": [{"check": "flag", "args": {"key": "spell_preview"}}]},
+	{"id": "activate_archivist", "text": "Casting is part of an activation: press Activate on the Archivist's card.",
+		"rule": "p.7", "all": [{"check": "tag_flag", "args": {"key": "open", "tag": "alpha", "value": true}}]},
 	{"id": "cast", "text": "Right-click the Archivist, choose Cast, then pick the spell and a squad.",
 		"rule": "p.13", "all": [{"check": "counter_grew", "args": {"key": "cast:alpha"}}]},
+	{"id": "end_archivist", "text": "A cast does not end the activation by itself: press End activation on the Archivist's card.",
+		"rule": "p.7", "all": [{"check": "counter_grew", "args": {"key": "activated:alpha"}}]},
 	{"id": "tokens", "text": "Explained, nothing to do here: casters gain a token every round and spend one to cast, and a spell succeeds on a 4+. Read it, then press Continue.",
 		"rule": "p.13", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
 ]
