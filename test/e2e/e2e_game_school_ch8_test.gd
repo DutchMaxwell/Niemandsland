@@ -8,6 +8,7 @@ extends GdUnitTestSuite
 ## hand-emitted signals — that is what this walk is here to pin.
 
 const Boot := preload("res://test/e2e/e2e_boot.gd")
+const Flow := preload("res://test/e2e/school_flow.gd")
 const INCH := 0.0254
 const TEST_CFG := "user://test_game_school_ch8.cfg"
 const FLAGS := ["niemandsland/scenario_mode", "niemandsland/scenario_path",
@@ -21,6 +22,7 @@ var _lesson: LessonRunner
 
 
 func before_test() -> void:
+	CoreActivation._env = 1   # the explicit activation (the lesson teaches it)
 	_root_before = Boot.root_children(get_tree())
 	for flag in FLAGS:
 		_saved[flag] = ProjectSettings.get_setting(flag)
@@ -40,6 +42,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	CoreActivation._env = -1
 	for flag in FLAGS:
 		ProjectSettings.set_setting(flag, _saved[flag])
 	if FileAccess.file_exists(TEST_CFG):
@@ -63,19 +66,6 @@ func _alive_nodes(unit: GameUnit) -> Array[Node3D]:
 		if mi != null and mi.is_alive and is_instance_valid(mi.node):
 			out.append(mi.node)
 	return out
-
-
-func _move_unit_to(unit: GameUnit, spot: Vector3) -> void:
-	var nodes := _alive_nodes(unit)
-	if nodes.is_empty():
-		return
-	var centre := Vector3.ZERO
-	for node in nodes:
-		centre += node.global_position
-	var delta := spot - centre / nodes.size()
-	delta.y = 0.0
-	for node in nodes:
-		node.global_position += delta
 
 
 func _wait_index(target: int) -> bool:
@@ -180,7 +170,7 @@ func _log_text() -> String:
 	return texts
 
 
-func test_s08_six_steps_complete(timeout := 120000) -> void:
+func test_s08_seven_steps_complete(timeout := 120000) -> void:
 	assert_int(_lesson.current_index()).is_equal(0)
 
 	var alpha := _find("alpha")
@@ -188,8 +178,13 @@ func test_s08_six_steps_complete(timeout := 120000) -> void:
 	var target := _find("target")
 	assert_object(target).is_not_null()
 
-	_move_unit_to(alpha, Vector3(0.0, 0.0, 7.5 * INCH))
-	assert_bool(await _wait_index(1)) \
+	# Activate on the card, Advance in the Movement row, then a real drag into the forest.
+	Flow.select(_main, alpha)
+	assert_bool(Flow.press(_main, "Activate")).override_failure_message("no Activate button on Alpha's card").is_true()
+	assert_bool(await _wait_index(1)).override_failure_message("index=%d" % _lesson.current_index()).is_true()   # activation open
+	Flow.set_mode(_main, ObjectManager.MovementCap.ADVANCE)
+	await Flow.drag(_main, get_tree(), alpha, 0.0, -6.0)
+	assert_bool(await _wait_index(2)) \
 		.override_failure_message("step 0: Alpha must stand in the forest (index=%d terrain=%d)" % [
 			_lesson.current_index(),
 			_main.terrain_overlay.get_terrain_at_world_position(_alive_nodes(alpha)[0].global_position)]) \
@@ -199,11 +194,11 @@ func test_s08_six_steps_complete(timeout := 120000) -> void:
 	# ObjectManager._update_drag fires movement_capped off its own (capped) measurement. The hand
 	# pushes well past the cap and corrects back, so Alpha keeps its lane.
 	await _drag_unit(alpha, [Vector2(0, -3), Vector2(0, -8), Vector2(0, -14), Vector2(0, -7), Vector2.ZERO])
-	assert_bool(await _wait_index(2)).is_true()   # the cap was experienced
+	assert_bool(await _wait_index(3)).is_true()   # the cap was experienced
 
 	var card := _main.get_node("UI/LessonCard") as LessonCard
 	card.continue_pressed.emit()
-	assert_bool(await _wait_index(3)).is_true()   # cover read
+	assert_bool(await _wait_index(4)).is_true()   # cover read
 
 	# Shoot through the radial's own "solo_shoot" id, then a real targeting click on the enemy.
 	_press("solo_shoot", alpha)
@@ -211,7 +206,7 @@ func test_s08_six_steps_complete(timeout := 120000) -> void:
 	var target_pt := _pick_point(target)
 	assert_vector(target_pt).override_failure_message("fixture: no clickable enemy point found").is_not_equal(Vector2.INF)
 	await _click_target(target_pt)
-	assert_bool(await _wait_index(4)).is_true()   # the volley fired and logged the cover bonus
+	assert_bool(await _wait_index(5)).is_true()   # the volley fired and logged the cover bonus
 	assert_bool(_log_text().to_lower().contains("cover")) \
 		.override_failure_message("no cover line in the battle log:\n%s" % _log_text()) \
 		.is_true()
@@ -219,7 +214,7 @@ func test_s08_six_steps_complete(timeout := 120000) -> void:
 	# Dangerous ground is a read-and-Continue step in 0.3.14 (the player's Rush verb is hidden until the
 	# 0.3.15 preview rework), so the card is dismissed instead of a commanded Rush.
 	card.continue_pressed.emit()
-	assert_bool(await _wait_index(5)).is_true()
+	assert_bool(await _wait_index(6)).is_true()
 
 	card.continue_pressed.emit()
 	var progress := SpielschuleProgress.new(TEST_CFG)

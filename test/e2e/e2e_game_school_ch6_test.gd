@@ -4,6 +4,7 @@ extends GdUnitTestSuite
 ## — the five steps complete the chapter, and an idle boot stays on step 0 and uncompleted.
 
 const Boot := preload("res://test/e2e/e2e_boot.gd")
+const Flow := preload("res://test/e2e/school_flow.gd")
 const INCH := 0.0254
 const TEST_CFG := "user://test_game_school_ch6.cfg"
 const FLAGS := ["niemandsland/scenario_mode", "niemandsland/scenario_path",
@@ -18,6 +19,7 @@ var _pump: Timer
 
 
 func before_test() -> void:
+	CoreActivation._env = 1   # the explicit activation (the lesson teaches it)
 	_root_before = Boot.root_children(get_tree())
 	for flag in FLAGS:
 		_saved[flag] = ProjectSettings.get_setting(flag)
@@ -38,6 +40,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	CoreActivation._env = -1
 	for flag in FLAGS:
 		ProjectSettings.set_setting(flag, _saved[flag])
 	if FileAccess.file_exists(TEST_CFG):
@@ -88,24 +91,6 @@ func _unit_centre_in(unit: GameUnit) -> Vector2:
 	return sum / float(n) / INCH if n > 0 else Vector2.ZERO
 
 
-func _move_unit_to(unit: GameUnit, spot: Vector3) -> void:
-	var nodes: Array[Node3D] = []
-	var centre := Vector3.ZERO
-	for model in unit.models:
-		var mi := model as ModelInstance
-		if mi != null and not mi.is_alive:
-			continue   # parked casualties sit on the dead tray, far from the fight
-		if is_instance_valid(model.node):
-			nodes.append(model.node)
-			centre += model.node.global_position
-	if nodes.is_empty():
-		return
-	var delta := spot - centre / nodes.size()
-	delta.y = 0.0
-	for node in nodes:
-		node.global_position += delta
-
-
 func _wait_index(target: int) -> bool:
 	var deadline := Time.get_ticks_msec() + 4000
 	while Time.get_ticks_msec() < deadline:
@@ -141,26 +126,32 @@ func _consolidation_lines() -> int:
 	return n
 
 
-func test_s06_five_steps_complete(timeout := 60000) -> void:
+func test_s06_six_steps_complete(timeout := 60000) -> void:
 	assert_int(_lesson.current_index()).is_equal(0)
 	var alpha := _find("alpha")
 	assert_object(alpha).is_not_null()
 	var target := _find("target")
 	assert_object(target).is_not_null()
 
-	var spot := Vector3(_unit_centre_in(target).x * INCH, 0.0, _unit_centre_in(target).y * INCH + 2.0 * INCH)
-	_move_unit_to(alpha, spot)
-	assert_bool(await _wait_index(1)).is_true()   # charge reached contact
+	# Activate on the card, Charge in the Movement row, then a real drag into base contact.
+	Flow.select(_main, alpha)
+	assert_bool(Flow.press(_main, "Activate")).override_failure_message("no Activate button on Alpha's card").is_true()
+	assert_bool(await _wait_index(1)).override_failure_message("index=%d" % _lesson.current_index()).is_true()   # activation open
+	Flow.set_mode(_main, ObjectManager.MovementCap.CHARGE)
+	var toward := _unit_centre_in(target) - _unit_centre_in(alpha)
+	await Flow.drag(_main, get_tree(), alpha, toward.x, toward.y + 2.0)
+	assert_bool(await _wait_index(2)).override_failure_message("charge reached contact: index=%d gap=%s" % [
+		_lesson.current_index(), str(_lesson._facts.snapshot().tags.get("alpha", {}).get("enemy_gap_in"))]).is_true()   # charge reached contact
 
 	await _main._run_human_attack(alpha, target, true)
 
 	# The whole melee resolves inside that one call: pile-in, strike-back and consolidation all
 	# happened, so the last three steps (each "then press Continue") need three Continue presses.
 	# Each press waits (bounded) for the runner to leave the step, so no two land back-to-back.
-	assert_bool(await _wait_index(2)).is_true()   # the fight resolved, pile-in step is current
-	assert_bool(await _continue_and_wait(2)).is_true()   # pile-in read
-	assert_bool(await _continue_and_wait(3)).is_true()   # strike-back read
-	assert_bool(await _continue_and_wait(4)).is_true()   # the last read; the chapter completes
+	assert_bool(await _wait_index(3)).is_true()   # the fight resolved, pile-in step is current
+	assert_bool(await _continue_and_wait(3)).is_true()   # pile-in read
+	assert_bool(await _continue_and_wait(4)).is_true()   # strike-back read
+	assert_bool(await _continue_and_wait(5)).is_true()   # the last read; the chapter completes
 
 	var progress := SpielschuleProgress.new(TEST_CFG)
 	var deadline := Time.get_ticks_msec() + 8000

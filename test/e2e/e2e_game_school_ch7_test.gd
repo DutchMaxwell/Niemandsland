@@ -4,6 +4,7 @@ extends GdUnitTestSuite
 ## outcome is read — the four steps complete the chapter, and an idle boot stays on step 0.
 
 const Boot := preload("res://test/e2e/e2e_boot.gd")
+const Flow := preload("res://test/e2e/school_flow.gd")
 const TEST_CFG := "user://test_game_school_ch7.cfg"
 const FLAGS := ["niemandsland/scenario_mode", "niemandsland/scenario_path",
 	"niemandsland/scenario_chapter", "niemandsland/pending_load_path"]
@@ -16,6 +17,7 @@ var _lesson: LessonRunner
 
 
 func before_test() -> void:
+	CoreActivation._env = 1   # the explicit activation (the lesson teaches it)
 	_root_before = Boot.root_children(get_tree())
 	for flag in FLAGS:
 		_saved[flag] = ProjectSettings.get_setting(flag)
@@ -34,6 +36,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	CoreActivation._env = -1
 	for flag in FLAGS:
 		ProjectSettings.set_setting(flag, _saved[flag])
 	if FileAccess.file_exists(TEST_CFG):
@@ -87,7 +90,11 @@ func test_s07_four_steps_complete(timeout := 60000) -> void:
 	card.continue_pressed.emit()
 	assert_bool(await _wait_index(2)).is_true()   # read the half-strength Tough model card
 
-	_main.radial_menu_controller.card_toggle_activation(shaken)
+	# Charlie is Shaken: Activate, then End activation (it idles); the S token is removed from the menu.
+	Flow.select(_main, shaken)
+	assert_bool(Flow.press(_main, "Activate")).override_failure_message("no Activate button on Charlie's card").is_true()
+	assert_bool(Flow.press(_main, "End activation")).override_failure_message("no End activation button").is_true()
+	assert_bool(shaken.is_activated).is_true()
 	if shaken.is_shaken:
 		_main.radial_menu_controller.card_toggle_shaken(shaken)
 	card.continue_pressed.emit()
@@ -95,6 +102,8 @@ func test_s07_four_steps_complete(timeout := 60000) -> void:
 
 	var alpha := _find("alpha")
 	assert_object(alpha).is_not_null()
+	Flow.select(_main, alpha)
+	assert_bool(Flow.press(_main, "Activate")).override_failure_message("no Activate button on Alpha's card").is_true()
 	await _main._run_human_attack(alpha, target, false)
 	assert_bool(await _wait_index(4)).is_true()   # the volley forced the morale test
 
