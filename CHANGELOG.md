@@ -103,6 +103,22 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   the save reports the failure, there is no "saved" message, and the previous save stays as it was.
   Before, a failed write could leave a cut-off file and still report success. (#2718)
 
+### Fixed
+- **Online: wounding a Tough model no longer logs a false return to the battle on the other
+  table.**
+- **Online: a Precision Tag now shows up on the other table when it is placed.**
+- **Online co-op: Piercing tags and the AI's Speed Feat now count on both machines.**
+- **Online co-op: the AI no longer repeats a once-per-game ability on the second machine.**
+  Surprise Attack, Second Wind, Limited weapons, Ambush redeployment and similar abilities now
+  are now remembered on both machines.
+- **Online: a Reinforcement copy now returns exactly once.** Before, it could be missing or come
+  back twice.
+- **Online: a returning Reinforcement copy is placed by its owner.**
+- **Online co-op: the AI keeps answering after round one on both machines.**
+- **Solo: a squad inside its transport keeps its turn.** The AI no longer takes all its
+  activations in a row.
+- **Solo: Delayed Action counts a squad inside a transport as a unit still to activate.**
+
 ### Internal
 - CI and test groundwork for running the tests against the Rust core: a new job "All required
   checks" passes when every gating job is green or skipped, the core build action takes two inputs
