@@ -306,6 +306,7 @@
 "test/e2e/e2e_one_core_ai_body_test.gd": 217.2,
 "test/e2e/e2e_one_core_ai_presentation_test.gd": 2.3,
 "test/e2e/e2e_one_core_ai_route_test.gd": 4.6,
+"test/e2e/e2e_one_core_human_lifecycle_test.gd": 9.5,
 "test/e2e/e2e_one_core_human_presentation_test.gd": 4.6,
 "test/e2e/e2e_one_core_human_rules_test.gd": 7.0,
 "test/e2e/e2e_one_core_human_test.gd": 30.0,

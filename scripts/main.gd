@@ -3545,17 +3545,24 @@ func core_activation_start(gu: GameUnit) -> bool:
 
 ## One-core P3 step 30 (O9, O14 (1b)): a lifecycle unit whose activation is not open cannot be dragged. A joined hero
 ## activates with its host (GameUnit.activate), so the host's session opens the pair, and the hero's own as well.
-func core_drag_blocked(gu: GameUnit) -> bool:
-	return CoreActivation.is_lifecycle_unit(self, gu) and not CoreActivation.session_open(gu.unit_id) \
-		and not CoreActivation.session_open(_solo_combat_unit(gu).unit_id)
+## Step 40b: `for_drag` (the drag machine's gate) lets a unit that already activated through while "Enforce Movement Limit"
+## is off - the escape hatch of O1/O2; the doors keep the lock.
+func core_drag_blocked(gu: GameUnit, for_drag := false) -> bool:
+	if not CoreActivation.is_lifecycle_unit(self, gu) or CoreActivation.session_open(gu.unit_id) \
+			or CoreActivation.session_open(_solo_combat_unit(gu).unit_id):
+		return false
+	return not (for_drag and gu.is_activated and not GraphicsSettings.enforce_movement_limit)
 
 
 ## Step 30: why `gu` did not move - another unit's open activation (the core's O5 sentence) or its own missing Start
-## (O15 (1)); a toast and a log line, which reaches the other table.
+## (O15 (1)), or (40b, maintainer answer 14.11.) its activation already spent; a toast and a log line, which reaches the
+## other table.
 func core_drag_refused(gu: GameUnit) -> void:
-	var core: Object = solo_controller._core_node_ready() if solo_controller != null else null
-	var verdict: Dictionary = core.check_begin(CoreActivation.open_unit_name(self, gu)) if core != null else {}
-	var text: String = str(verdict["reason"]) if not bool(verdict.get("ok", true)) else "Activate %s first." % gu.get_name()
+	var text := "%s has already been activated this round." % gu.get_name()   # step 40b: it cannot start again, so no "Activate first"
+	if not gu.is_activated:
+		var core: Object = solo_controller._core_node_ready() if solo_controller != null else null
+		var verdict: Dictionary = core.check_begin(CoreActivation.open_unit_name(self, gu)) if core != null else {}
+		text = str(verdict["reason"]) if not bool(verdict.get("ok", true)) else "Activate %s first." % gu.get_name()
 	_log_rule_event(BattleLog.Category.MOVEMENT, text)
 	_show_toast(text)
 
@@ -16103,6 +16110,11 @@ func solo_begin_reinforcement(unit: GameUnit) -> void:
 				"Reinforcement: not now — %s" % reason, ai)
 		_show_toast("Reinforcement: %s" % reason)
 		return
+	if CoreActivation.is_lifecycle_unit(self, unit):   # one-core P3 step 68 (O16): the sacrifice commits the unit's activation
+		if CoreActivation.open_unit_name(self, unit) != "":
+			core_drag_refused(unit)   # another unit's activation is open: the O5 sentence, and nothing dies
+			return
+		CoreActivation.note_commit(self, unit, "reinforcement")
 	await _reinforcement_sacrifice(unit)
 
 

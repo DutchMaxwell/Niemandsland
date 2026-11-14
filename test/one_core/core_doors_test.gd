@@ -333,3 +333,70 @@ func test_a_block_that_was_not_started_cannot_be_dragged() -> void:
 	assert_int(_lines("Activate Spears first.")).is_equal(1)
 	assert_bool(CoreActivation.open_session(_main, (tray.get_meta("regiment") as Regiment).game_unit)).is_true()
 	assert_float(await _drag_block(tray)).override_failure_message("no drag after the Start").is_greater(0.05)
+
+
+## ---- step 68 (O16): the effects that add, remove or re-host a unit commit the activation like a die ----
+
+## The activation buttons the presented card shows, sorted.
+func _card_buttons() -> Array:
+	var out: Array = []
+	for n: Node in _main.unit_dock.find_children("*", "Button", true, false):
+		var b := n as Button
+		if b.is_visible_in_tree() and b.text in ["Activate", "End activation", "Cancel"]:
+			out.append(b.text)
+	out.sort()
+	return out
+
+
+## The Reinforcement sacrifice has no undo, so it closes Cancel for the unit (its card keeps only "End activation"); with
+## ANOTHER unit's activation open it is refused with the O5 sentence and nothing dies.
+func test_the_reinforcement_sacrifice_commits_the_activation_and_waits_for_a_free_table() -> void:
+	_main._solo_batch = true
+	var rats := _unit("Rats", Vector3.ZERO, ["Reinforcement"])
+	rats.is_shaken = true
+	var alpha := _unit("Alpha", Vector3(1.0, 0, 0))
+	assert_bool(CoreActivation.open_session(_main, alpha)).is_true()
+	await _main.solo_begin_reinforcement(rats)
+	assert_int(_lines("Finish Alpha's activation first.")).is_equal(1)
+	assert_int(rats.get_alive_count()).override_failure_message("the sacrifice ran with another unit open").is_equal(1)
+	CoreActivation.close_session(_main, alpha.unit_id)
+	assert_bool(CoreActivation.open_session(_main, rats)).is_true()
+	_main.unit_dock.present_unit(rats)
+	await E2EBoot.settle(get_tree())
+	assert_array(_card_buttons()).is_equal(["Cancel", "End activation"])
+	await _main.solo_begin_reinforcement(rats)
+	await E2EBoot.settle(get_tree())
+	assert_int(rats.get_alive_count()).override_failure_message("no sacrifice").is_equal(0)
+	assert_bool(CoreActivation.can_cancel(rats.unit_id)).override_failure_message("Cancel stays after the sacrifice").is_false()
+	assert_array(_card_buttons()).is_equal(["End activation"])
+
+
+## Disembark and Unload take the unit out of its transport (no un-disembark exists): either closes the unit's own Cancel,
+## before begin_activation runs, and keeps the reason.
+func test_disembark_and_unload_commit_the_activation() -> void:
+	var tc := _truck_and_cargo(true)
+	assert_bool(CoreActivation.open_session(_main, tc[1])).is_true()
+	assert_bool(CoreActivation.can_cancel((tc[1] as GameUnit).unit_id)).is_true()
+	await _act("disembark", {"disembark_unit": tc[1]})
+	assert_bool(CoreActivation.can_cancel((tc[1] as GameUnit).unit_id)).override_failure_message("Cancel stays after Disembark").is_false()
+	assert_str(str(CoreActivation._sessions[(tc[1] as GameUnit).unit_id].get("committed", ""))).is_equal("disembark")
+	CoreActivation.reset_all(_main)
+	var tu := _truck_and_cargo(true)
+	assert_bool(CoreActivation.open_session(_main, tu[1])).is_true()
+	await _act("unload_cargo_0", {"cargo_units": [tu[1]], "game_unit": tu[0]})
+	assert_bool(CoreActivation.can_cancel((tu[1] as GameUnit).unit_id)).override_failure_message("Cancel stays after Unload").is_false()
+	assert_str(str(CoreActivation._sessions[(tu[1] as GameUnit).unit_id].get("committed", ""))).is_equal("unload")
+
+
+## A commit closes THAT unit's Cancel only (two sessions are set up by hand: the lock never lets the doors meet two), and
+## committing twice changes nothing.
+func test_a_commit_closes_only_its_own_units_cancel() -> void:
+	var a := _unit("Alpha", Vector3.ZERO)
+	var b := _unit("Bravo", Vector3(1.0, 0, 0))
+	assert_bool(CoreActivation.open_session(_main, a)).is_true()
+	assert_bool(CoreActivation.open_session(_main, b)).is_true()
+	CoreActivation.note_commit(_main, a, "reinforcement")
+	CoreActivation.note_commit(_main, a, "disembark")
+	assert_bool(CoreActivation.can_cancel(a.unit_id)).is_false()
+	assert_bool(CoreActivation.can_cancel(b.unit_id)).override_failure_message("another unit's Cancel went too").is_true()
+	assert_str(str(CoreActivation._sessions[a.unit_id]["committed"])).is_equal("reinforcement")
