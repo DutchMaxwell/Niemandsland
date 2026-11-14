@@ -2054,7 +2054,7 @@ fn control_morale_passed(
     let mut ctx = live_morale_ctx(statics, next, ti, false, seams, shot);
     drop_banner_for_cause(statics, next, ti, false, true, Some(source.rule), None, None, seams, &mut ctx, shot);
     let (outcome, rolled) = crate::dice::resolve_morale_with_tray(
-        &ctx, source.owner, false, false, next.shaken[ti], wounds_left(next, ti), tray,
+        &ctx, source.owner, None, false, false, next.shaken[ti], wounds_left(next, ti), tray,
     );
     mods::spend_once_except(next, ti, &[mods::Role::Morale], false, |r| {
         rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) && &*r.name == "Great Banner"
@@ -3615,6 +3615,7 @@ fn scourge_morale_trigger(
 #[inline]
 pub fn ctx_of(us: &UnitStatic, state: &State, i: usize) -> Ctx {
     let mut c = us.ctx;
+    c.unit = Some(i);
     c.models = state.alive[i];
     // Audit 2026-09-13 §2.2 — the Impact cut counts the ALIVE Counter
     // bearers (`counter_models_of`'s `mini(bearers, alive)`): the static
@@ -6594,6 +6595,7 @@ pub(crate) fn tray_morale_for(
     let (outcome, r) = crate::dice::resolve_morale_with_tray(
         &ctx,
         &us.name,
+        Some(i),
         melee,
         below_half(state, statics, us, i, seams),
         shaken,
@@ -9098,6 +9100,7 @@ fn consolidate_after_melee(next: &mut State, statics: &[UnitStatic], cover: Cove
         next.moved_round[winner] = next.round;
         if let (true, Some((tray, shot))) = (n > 0, dice) {
             shot.log.push(format!("Dangerous terrain: {name} takes one test for the whole unit ({n} dice)"));
+            tray.owner_next(Some(winner));
             let faces = tray.roll(n as usize);
             let w = dangerous_wounds(&faces);
             shot.rolls.push(crate::dice::Roll { kind: "attack", count: n, target: DANGEROUS_TARGET, faces, owner: name });

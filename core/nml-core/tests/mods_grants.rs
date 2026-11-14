@@ -263,7 +263,7 @@ fn a_live_no_retreat_grant_pays_a_failed_test_in_self_wounds() {
     statics[0].ctx.quality = 5; // the morale target under test
     let plain = live_ctx(&st, &statics, 0, true);
     assert!(!plain.no_retreat, "the bare profile carries no No Retreat");
-    let without = resolve_morale_with_tray(&plain, "u", true, true, false, 2, &mut Tray::seeded(3));
+    let without = resolve_morale_with_tray(&plain, "u", None, true, true, false, 2, &mut Tray::seeded(3));
     assert_eq!(without.0, nml_core::dice::Morale::Routed, "quality 5 below half routes on this seed (face 1)");
     assert_eq!(without.1.wounds, 0, "no No Retreat, no self-wounds");
 
@@ -275,7 +275,7 @@ fn a_live_no_retreat_grant_pays_a_failed_test_in_self_wounds() {
         "the grant is visible to the ledger read the morale seam folds"
     );
     let (result, out) =
-        resolve_morale_with_tray(&buffed, "u", true, true, false, 2, &mut Tray::seeded(3));
+        resolve_morale_with_tray(&buffed, "u", None, true, true, false, 2, &mut Tray::seeded(3));
     assert_eq!(result, nml_core::dice::Morale::Passed, "No Retreat stands instead");
     assert!(out.wounds > 0, "and pays for it in self-wounds on this seed");
 }

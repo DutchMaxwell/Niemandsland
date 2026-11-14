@@ -8,7 +8,7 @@ use super::*;
     fn a_morale_test_is_one_die_and_fearless_rolls_a_recovery_die() {
         let unit = Ctx { quality: 6, fearless: true, ..Default::default() };
         let mut tray = Tray::seeded(11);
-        let (_, out) = resolve_morale_with_tray(&unit, "Unit", true, false, false, 4, &mut tray);
+        let (_, out) = resolve_morale_with_tray(&unit, "Unit", None, true, false, false, 4, &mut tray);
         assert_eq!(out.rolls[0].count, 1);
         assert_eq!(out.rolls[0].target, 6, "Quality 6+, no Banner");
         let failed = faces_to_hits(&out.rolls[0].faces, 6) == 0;
@@ -24,7 +24,7 @@ use super::*;
     fn an_already_shaken_unit_fails_morale_without_drawing_a_die() {
         let unit = Ctx { quality: 4, ..Default::default() };
         let mut tray = Tray::seeded(5);
-        let (res, out) = resolve_morale_with_tray(&unit, "Unit", true, true, true, 3, &mut tray);
+        let (res, out) = resolve_morale_with_tray(&unit, "Unit", None, true, true, true, 3, &mut tray);
         assert!(out.rolls.is_empty(), "no Quality roll for a Shaken unit");
         assert_eq!(res, Morale::Routed, "Shaken + at half + melee = Rout");
         assert_eq!(tray.state_i64(), Tray::seeded(5).state_i64(), "and not one draw spent");
@@ -35,8 +35,8 @@ use super::*;
     #[test]
     fn only_a_melee_test_can_rout() {
         let unit = Ctx { quality: 4, ..Default::default() };
-        let melee = resolve_morale_with_tray(&unit, "U", true, true, true, 2, &mut Tray::seeded(1));
-        let shot = resolve_morale_with_tray(&unit, "U", false, true, true, 2, &mut Tray::seeded(1));
+        let melee = resolve_morale_with_tray(&unit, "U", None, true, true, true, 2, &mut Tray::seeded(1));
+        let shot = resolve_morale_with_tray(&unit, "U", None, false, true, true, 2, &mut Tray::seeded(1));
         assert_eq!(melee.0, Morale::Routed);
         assert_eq!(shot.0, Morale::Shaken);
     }
@@ -48,7 +48,7 @@ use super::*;
     fn no_retreat_pays_a_failed_test_in_self_wounds() {
         let unit = Ctx { quality: 6, no_retreat: true, ..Default::default() };
         let mut tray = Tray::seeded(2);
-        let (res, out) = resolve_morale_with_tray(&unit, "Unit", true, true, true, 5, &mut tray);
+        let (res, out) = resolve_morale_with_tray(&unit, "Unit", None, true, true, true, 5, &mut tray);
         assert_eq!(res, Morale::Passed, "No Retreat counts as passed");
         assert_eq!(out.rolls.len(), 1, "Shaken drew no test die; only the self-wound roll");
         assert_eq!(out.rolls[0].count, 5, "one die per wound needed to destroy it");

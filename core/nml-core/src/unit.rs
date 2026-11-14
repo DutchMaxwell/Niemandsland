@@ -112,6 +112,9 @@ pub struct Ctx {
     pub member_gap_in: Option<f64>,
     /// One-core P3 steps 24-25: this unit's seat (`State.player`), stamped at the volley seams for the lines it says.
     pub side: i64,
+    /// One-core P4 step 4.0-9: the roster index `ctx_of` built this context for; `None` on a bare template. A supplied
+    /// tray keeps it beside the roll it stamps, so `step_activation` names a roll's owner key without replaying.
+    pub unit: Option<usize>,
     /// AIG-G2 R3 (`EPOCH_73_V36`): a Crossing Strike move-through volley; the resolver's printed-range gate is off.
     pub strafe_volley: bool,
     /// G4R4 C-GRANTED-RANGE (`EPOCH_73_V36`): the best reach a live spell grant adds to this member's ranged weapons,
@@ -3527,6 +3530,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     Ctx {
         member_gap_in: None,
         side: 0,
+        unit: None,
         granted_reach_in: 0.0,
         quality: p.quality,
         defense: armored_defense(p.defense, armor),

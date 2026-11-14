@@ -249,8 +249,8 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
         step_with(&faces, resolve, |r| r.as_ref().map_or(&[][..], |(_, s)| s.rolls.as_slice()))
     };
     match run(statics) {
-        Step::NeedRoll { index, faces, kind, count, target, owner, lines, landings } => {
-            let owner_key = owner_key_of(statics, state, &owner, |keyed| match run(keyed) {
+        Step::NeedRoll { index, faces, kind, count, target, owner, owner_unit, lines, landings } => {
+            let owner_key = owner_key_of(statics, state, &owner, owner_unit, |keyed| match run(keyed) {
                 Step::NeedRoll { index: i, kind: k, count: c, target: g, owner, .. } if (i, k, c, g) == (index, kind, count, target) => Some(owner),
                 _ => None,
             });
@@ -262,12 +262,15 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
     }
 }
 
-/// The roster key of the unit whose name a roll's `owner` is: the one unit carrying that name, else (two units share
-/// it, as in a mirror match) the owner of the same roll when `replay` runs the activation again with every unit named
-/// by its own key. A name decides no rule on this path, so the replay draws the same rolls; one that asks for a
-/// different roll, or a name no unit carries, gives "" (the core cannot tell). Never by the roll's kind: a unit can
-/// owe a defence or morale die for its own move (Dangerous terrain).
-fn owner_key_of(statics: &[UnitStatic], state: &State, owner: &str, replay: impl FnOnce(&[UnitStatic]) -> Option<String>) -> String {
+/// The roster key of the unit whose name a roll's `owner` is: the unit the supplied tray stamped for this draw (4.0-9),
+/// else the one unit carrying that name, else (two units share it, as in a mirror match) the owner of the same roll when
+/// `replay` runs the activation again with every unit named by its own key. A name decides no rule on this path, so the
+/// replay draws the same rolls; one that asks for a different roll, or a name no unit carries, gives "" (the core cannot
+/// tell). Never by the roll's kind: a unit can owe a defence or morale die for its own move (Dangerous terrain).
+fn owner_key_of(statics: &[UnitStatic], state: &State, owner: &str, owner_unit: Option<usize>, replay: impl FnOnce(&[UnitStatic]) -> Option<String>) -> String {
+    if let Some(u) = owner_unit.filter(|&u| u < state.units() && statics[state.roster.profile[u]].name == owner) {
+        return state.roster.keys[u].clone();
+    }
     let named: Vec<usize> = (0..state.units()).filter(|&u| statics[state.roster.profile[u]].name == owner).collect();
     match named[..] {
         [] => String::new(),
@@ -843,6 +846,27 @@ mod tests {
             assert!(asked.len() < 8, "{asked:?}");
         }
         let want = [("attack", "a"), ("attack", "a"), ("defense", "b"), ("morale", "b"), ("morale", "a")];
+        assert_eq!(asked, want.map(|(k, o)| (k, o.to_string())));
+    }
+
+    /// P4.0-9: the same duplicate name without the Dangerous detour. Two units are both "Riflemen"; "a" holds and
+    /// shoots "b". Every asked roll names its owner by roster key per step: the attack die is the shooter's ("a"), the
+    /// saves and the morale die the target's ("b"). The step answers from the draw's stamped unit, never a second
+    /// resolve — the keys pin both readings. (RED: name-only owner gives "a" for the saves; first named unit too.)
+    #[test]
+    fn a_duplicate_name_keeps_the_attack_with_the_shooter_and_the_saves_with_the_target() {
+        let (st, mut statics) = volley_line();
+        (statics[0].name, statics[2].name) = ("Riflemen".into(), "Riflemen".into());
+        let (mut t, mut asked) = (vec![Begin, intent(HOLD, Some("b"))], Vec::new());
+        while let ActStep::NeedRoll { faces, kind, owner, owner_key, .. } =
+            step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t, true)
+        {
+            assert_eq!(owner, "Riflemen", "the label stays the name");
+            asked.push((kind, owner_key));
+            t.push(Faces(match kind { "attack" => vec![6; faces], "defense" => vec![1; faces], _ => vec![6; faces] }));
+            assert!(asked.len() < 8, "{asked:?}");
+        }
+        let want = [("attack", "a"), ("defense", "b"), ("morale", "b")];
         assert_eq!(asked, want.map(|(k, o)| (k, o.to_string())));
     }
 

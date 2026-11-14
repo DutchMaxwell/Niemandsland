@@ -20,7 +20,7 @@ pub enum Step<T> {
     /// replay runs on filler 1s, so a later line would tell a false story.
     /// `landings` follow the same rule and are cumulative: each `NeedRoll`
     /// repeats the earlier ones, the table skips what it has landed.
-    NeedRoll { index: usize, faces: usize, kind: &'static str, count: i64, target: i64, owner: String, lines: Vec<LogLine>, landings: Vec<Landing> },
+    NeedRoll { index: usize, faces: usize, kind: &'static str, count: i64, target: i64, owner: String, owner_unit: Option<usize>, lines: Vec<LogLine>, landings: Vec<Landing> },
     /// The core will not answer for this exchange: the draws and the records
     /// disagree (some draw pushed no record, so a feed index no longer names its
     /// roll), or a supplied group had the wrong number of faces. `draws` and
@@ -60,7 +60,7 @@ pub fn step_with<T>(
                 let lines = tray.lines_upto(index);
                 let landings = tray.landings_upto(index);
                 let kind = feed.kind_of(index).unwrap_or(r.kind);
-                Step::NeedRoll { index, faces, kind, count: r.count, target: r.target, owner: r.owner.clone(), lines, landings }
+                Step::NeedRoll { index, faces, kind, count: r.count, target: r.target, owner: r.owner.clone(), owner_unit: feed.owner_of(index), lines, landings }
             }
             None => {
                 let reason = format!("roll {index}: no roll record for this draw");
@@ -203,7 +203,7 @@ mod tests {
     #[test]
     fn the_morale_die_is_asked_for_as_a_morale_roll() {
         let unit = Ctx { quality: 4, ..Default::default() };
-        let run = |t: &mut Tray| crate::dice::resolve_morale_with_tray(&unit, "Def", false, false, false, 1, t).1;
+        let run = |t: &mut Tray| crate::dice::resolve_morale_with_tray(&unit, "Def", None, false, false, false, 1, t).1;
         match shoot_step(&[], run) {
             Step::NeedRoll { kind, faces, .. } => assert_eq!((kind, faces), ("morale", 1)),
             other => panic!("expected NeedRoll, got {other:?}"),
