@@ -157,10 +157,15 @@ const _S07_STEPS := [
 
 
 const _S09_STEPS := [
-	{"id": "left_marker", "text": "Move Alpha Squad within 3\" of the left marker.",
-		"rule": "p.6", "all": [{"check": "obj_within", "args": {"tag": "alpha", "index": 0, "inches": 3.0}}]},
-	{"id": "right_marker", "text": "Move Bravo Squad within 3\" of the right marker — the enemy stands there too.",
-		"rule": "p.6", "all": [{"check": "obj_within", "args": {"tag": "bravo", "index": 2, "inches": 3.0}}]},
+	{"id": "left_marker", "text": "Activate Alpha Squad, press Rush in the Movement row, drag it within 3\" of the left marker and press End activation.",
+		"rule": "p.6", "all": [
+			{"check": "value_is", "args": {"key": "move_mode", "value": 2}},
+			{"check": "obj_within", "args": {"tag": "alpha", "index": 0, "inches": 3.0}},
+			{"check": "tag_flag", "args": {"key": "activated", "tag": "alpha", "value": true}}]},
+	{"id": "right_marker", "text": "Do the same with Bravo Squad on the right marker — the enemy stands there too. The last End activation of the round ends the round by itself.",
+		"rule": "p.6", "all": [
+			{"check": "obj_within", "args": {"tag": "bravo", "index": 2, "inches": 3.0}},
+			{"check": "at_least", "args": {"key": "round", "n": 2}}]},
 	{"id": "seize", "text": "The round ended: the left marker is seized because only your side is within 3\" — the right marker stays contested while both sides are near it, then press Continue.",
 		"rule": "p.6", "all": [{"check": "counter_grew", "args": {"key": "continue"}}]},
 	{"id": "outcome", "text": "A marker is seized when only one side is within 3\" at the end of a round. After 4 rounds, the side holding more markers wins, then press Continue.",
