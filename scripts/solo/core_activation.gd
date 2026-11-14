@@ -58,10 +58,14 @@ static func capture(main) -> int:
 	var state := BattleSim.capture(main.opr_army_manager, sc.objectives_provider, sc.objective_owner_of, round_no,
 		maxi(sc.game_rounds, round_no), sc.majority_in_cover, sc._has_los, sc.terrain_type_at, int(sc.ai_slot))
 	if not sc._core_header_done:
-		if not bool(core.set_game_header(AiActRecorder._header_line(state, sc.terrain_type_at))):
+		var head := AiActRecorder._header_line(state, sc.terrain_type_at)
+		if not bool(core.set_game_header(head)):
 			return 0
 		sc._core_header_done = true
+		sc._core_terrain_sig = hash(head["terrain"])
 		sc._core_statics_builds = int(core.statics_builds())   # the header's build is #1, as in _core_plan
+	else:
+		sc._core_refresh_terrain()
 	var plain := BattleSim.state_to_plain(state)
 	AiActRecorder._stamp_gate_reads(state, plain)
 	return int(core.capture_plain(plain))

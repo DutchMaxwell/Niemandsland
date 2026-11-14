@@ -75,8 +75,13 @@ func _painted_board() -> void:
 ## Centre and yaw are chosen so the piece overlaps no other piece and its rotation decides the sight: at +45 degrees it
 ## blinds shooter 1 (shooters 0 and 2 keep a line, shooter 0's through the see-through ruin cell, so every shape keeps a
 ## model in sight); a core that read -45 degrees would blind shooter 0 instead.
-func _sandbox_board() -> void:
+func _sandbox_board() -> Node3D:
 	_painted_board()
+	return await _spawn_piece()
+
+
+## The real forest of the sandbox board (see `_sandbox_board`), spawned now.
+func _spawn_piece() -> Node3D:
 	var piece: Node3D = _main.object_manager.spawn_sandbox_terrain("forest_small", ObjectManager.SandboxPropKind.FOREST,
 		Vector3(SANDBOX_AT.x, 0.0, SANDBOX_AT.y) * INCH, false, 7301)
 	piece.rotation.y = deg_to_rad(SANDBOX_YAW)
@@ -86,6 +91,7 @@ func _sandbox_board() -> void:
 	assert_int(int(shapes[0]["type"])).is_equal(TerrainRules.TerrainType.FOREST)
 	assert_vector(shapes[0]["he"]).is_equal_approx(Vector2(3.0, 2.0) * INCH, Vector2(1e-6, 1e-6))
 	assert_float(float(shapes[0]["yaw"])).is_equal_approx(deg_to_rad(SANDBOX_YAW), 1e-5)
+	return piece
 
 
 ## Step 42d: seed `s`'s shooters - [models, copies of their one Rifle (A1 each), models already dead]; every second
@@ -187,8 +193,9 @@ func _run(s: int, advance: bool, board: bool, core_run: bool) -> Dictionary:
 	return out
 
 
-func _gate(advance: bool, board: bool, label := "") -> void:
+func _gate(advance: bool, board: bool, label := "", fewer := 0) -> void:
 	var seeds := int(OS.get_environment("NML_ONE_CORE_SEEDS")) if OS.has_environment("NML_ONE_CORE_SEEDS") else 200
+	seeds = mini(seeds, fewer) if fewer > 0 else seeds
 	var bad: Array = []
 	var line_diffs: Array = []
 	var steps := 0
@@ -235,3 +242,64 @@ func test_advance_on_a_terrain_board_equals_the_table(timeout := 900000) -> void
 func test_advance_on_a_board_with_a_3d_sandbox_piece_equals_the_table(timeout := 900000) -> void:
 	await _sandbox_board()
 	await _gate(true, true, "sandbox")
+
+
+## Step 22c (1): the game header - the board the core reads - goes out with the first capture; the table reads its
+## pieces live. Seed 0's core run is that first capture, then the player changes the table. 28 seeds = 4 of each shape.
+func _header_sent() -> void:
+	await _run(0, true, true, true)
+
+
+## How many free pieces the core holds now (the header's, or the last refresh's).
+func _held_pieces() -> int:
+	return int(((_main.solo_controller as SoloController)._core_node_ready().header_digest())["sandbox_pieces"])
+
+
+func test_a_piece_rotated_after_the_first_capture_equals_the_table(timeout := 900000) -> void:
+	var piece := await _sandbox_board()
+	await _header_sent()
+	piece.rotation.y = deg_to_rad(-SANDBOX_YAW)   # the pose that blinds shooter 0 instead of shooter 1
+	await _runner.simulate_frames(2)
+	await _gate(true, true, "sandbox_rotated", 28)
+	assert_int(_held_pieces()).is_equal(1)
+
+
+func test_a_piece_deleted_after_the_first_capture_equals_the_table(timeout := 900000) -> void:
+	var piece := await _sandbox_board()
+	await _header_sent()
+	piece.set_meta("deleted", true)   # what Delete does: hidden and undoable, no longer a rule
+	piece.visible = false
+	await _runner.simulate_frames(2)
+	await _gate(true, true, "sandbox_deleted", 28)
+	assert_int(_held_pieces()).is_equal(0)
+
+
+func test_a_piece_added_after_the_first_capture_equals_the_table(timeout := 900000) -> void:
+	_painted_board()
+	await _header_sent()
+	await _spawn_piece()
+	await _gate(true, true, "sandbox_added", 28)
+	assert_int(_held_pieces()).is_equal(1)
+
+
+## The AI's own plan (`_core_plan`) hands the core the changed board too, not only a step capture. The unit pair is bare
+## (nothing is planned from it): the call reaches the refresh before it plans.
+func test_the_ai_plan_refreshes_the_board_too() -> void:
+	var piece := await _sandbox_board()
+	await _header_sent()
+	piece.set_meta("deleted", true)
+	piece.visible = false
+	await _runner.simulate_frames(2)
+	var att := ParityTable._make_unit(_main, SIDE.merged({"player": 1, "name": "Att0", "models": 5, "x_in": 0.0}),
+		RIFLE.merged({"count": 5}, true))
+	var foe := ParityTable._make_unit(_main, SIDE.merged({"player": 2, "name": "Def", "models": 5, "x_in": 12.0}), {})
+	var sc := _main.solo_controller as SoloController
+	var state := BattleSim.capture(_main.opr_army_manager, sc.objectives_provider, sc.objective_owner_of, 1, 4,
+		sc.majority_in_cover, sc._has_los, sc.terrain_type_at, int(sc.ai_slot))
+	assert_int(_held_pieces()).is_equal(1)   # the header's board, before the plan
+	sc._core_plan(state, 1)
+	assert_int(_held_pieces()).is_equal(0)
+	for u in [att, foe]:
+		_main.opr_army_manager.game_units.erase((u as GameUnit).unit_id)
+		for m in (u as GameUnit).models:
+			(m as ModelInstance).node.free()

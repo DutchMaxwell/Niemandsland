@@ -3951,6 +3951,7 @@ func _planner_pick_unit(pool: Array) -> GameUnit:
 ## are one shape, not two.
 var _core_node: Object = null
 var _core_header_done := false
+var _core_terrain_sig := 0                # hash of the table board last handed to the core (the header's, or a refresh)
 var _core_declines := {}                  # reason -> already warned (once per game)
 var _core_calls := 0
 var _core_us_total := 0
@@ -4134,6 +4135,16 @@ func shipped_brain_ready() -> bool:
 	return _core_node_ready() != null and not shipped_brain_sha.is_empty()
 
 
+## Step 22c: the core reads the board it was handed (the game header, sent once); the table reads its terrain live - a
+## free piece dragged, rotated, added or deleted, a container placed. Hands the core the board again when it differs from
+## the one it holds. Called at every capture after the header (the AI's `_core_plan` and `CoreActivation.capture`).
+func _core_refresh_terrain() -> void:
+	var line: Variant = AiActRecorder._terrain_line(terrain_type_at)
+	var sig := hash(line)
+	if line != null and sig != _core_terrain_sig and bool(_core_node.set_terrain(line)):
+		_core_terrain_sig = sig
+
+
 ## Asks the Rust core for THIS activation. {} = declined (or the node could not
 ## be built) and the caller runs the GDScript search — R1: the seam is never
 ## load-bearing. Only ever entered when BattleSim.core_enabled() is true.
@@ -4148,11 +4159,14 @@ func _core_plan(state: Dictionary, me: int) -> Dictionary:
 			_core_warn_once(str(_core_node.last_error()))
 			return {}
 		_core_header_done = true
+		_core_terrain_sig = hash(head["terrain"])
 		# The header's own closure IS build #1; start the counter there so the
 		# line below only ever announces a REAL mid-game rebuild.
 		_core_statics_builds = int(_core_node.statics_builds())
 		if OS.get_environment("NML_CORE_SELFCHECK") == "1":
 			_core_header_report(head)
+	else:
+		_core_refresh_terrain()
 	var plain: Dictionary = BattleSim.state_to_plain(state, false)
 	AiActRecorder._stamp_gate_reads(state, plain)   # M2-0d per-unit charge-gate reads
 	var statics := {"opener_seat": AiPlanner.opener_seat,

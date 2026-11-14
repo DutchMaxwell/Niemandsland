@@ -613,6 +613,20 @@ impl NmlCore {
         true
     }
 
+    /// The board changed since the header (a free piece dragged, rotated, added or deleted, a container placed, a cell
+    /// painted): the header's `"terrain"` section again, `AiActRecorder._terrain_line`, replacing ONLY the terrain. The
+    /// board mints a new uid, so every memo keyed on it rebuilds. false (reason in `last_error()`) without a header.
+    #[func]
+    fn set_terrain(&mut self, terrain: VarDictionary) -> bool {
+        self.last_error.clear();
+        let Some(h) = self.header.as_mut() else {
+            self.last_error = "set_game_header has not been called".to_string();
+            return false;
+        };
+        h.terrain = Terrain::build(&plain::terrain_of(&terrain));
+        true
+    }
+
     /// NML-1073 M2-5 — the SEARCH seam, half two: ONE activation.
     ///
     /// `AiPlanner.plan_with_rollout(state, player)` (ai_planner.gd:118-275) over
@@ -669,6 +683,7 @@ impl NmlCore {
         d.set("header", true);
         d.set("profiles", h.profiles.list.len() as i64);
         d.set("terrain_valid", h.terrain.is_valid());
+        d.set("sandbox_pieces", h.terrain.sandbox_pieces() as i64);
         let mut rules = 0i64;
         let mut weapons = 0i64;
         let mut wrules = 0i64;
