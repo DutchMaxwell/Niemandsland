@@ -172,3 +172,11 @@ static func place_unit_at(u: GameUnit, pos: Vector3) -> void:
 			continue
 		mi.node.global_position = pos + Vector3(0.03 * i, 0.0, 0.0)
 		i += 1
+
+
+## One-core release: the explicit activation a player opens with the card's Activate before any door (shoot, fight, cast,
+## spot, drag, unload). True when the activation is open afterwards.
+static func start_activation(main: Node, unit: GameUnit) -> bool:
+	if not CoreActivation.session_open(unit.unit_id):   # the card's button on an open activation would END it
+		await main.radial_menu_controller.card_start_activation(unit)
+	return CoreActivation.session_open(unit.unit_id)

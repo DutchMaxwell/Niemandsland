@@ -51,6 +51,7 @@ func test_shooting_attack_emits_resolved_signal_once(timeout := 240000) -> void:
 	var calls: Array = []
 	_main.human_attack_resolved.connect(func(attacker: GameUnit, melee: bool) -> void:
 		calls.append({"attacker": attacker, "melee": melee}))
+	assert_bool(await E2EBoot.start_activation(_main, shooter)).override_failure_message("no open activation for the shooter").is_true()
 	await _main._run_human_attack(shooter, foe, false)
 	assert_int(calls.size()).is_equal(1)
 	assert_bool(bool(calls[0]["melee"])) \

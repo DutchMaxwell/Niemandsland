@@ -223,8 +223,10 @@ func _my_bots(unit_name: String, rules: Array = ["Reanimation"]) -> GameUnit:
 func test_opening_a_window_and_cancelling_rolls_no_reanimation() -> void:
 	var u := _my_bots("Mine", ["Reanimation", "Precision Spotter"])
 	_reg(E2EBoot.make_unit(_main, 2, "Foe", [Vector3(10.0 * INCH, 0, 0)]))
+	await E2EBoot.start_activation(_main, u)   # the explicit activation a player opens first (the Start door rolls nothing)
 	await _main.solo_begin_targeting(u, false)   # Shoot: the targeting window opens ...
 	_main._solo_end_targeting()                  # ... and the right-click cancels it
+	await E2EBoot.start_activation(_main, u)   # the explicit activation a player opens first (the Start door rolls nothing)
 	await _main.solo_begin_spot(u)               # Spot: the pick window opens ...
 	_main._solo_end_targeting()                  # ... and is cancelled too
 	assert_int(_count("Reanimation: Mine rolls")) \
@@ -237,6 +239,7 @@ func test_opening_a_window_and_cancelling_rolls_no_reanimation() -> void:
 func test_the_committed_spot_pick_begins_the_activation_once() -> void:
 	var u := _my_bots("Mine", ["Reanimation", "Precision Spotter"])
 	var foe := _reg(E2EBoot.make_unit(_main, 2, "Foe", [Vector3(10.0 * INCH, 0, 0)]))
+	await E2EBoot.start_activation(_main, u)   # the explicit activation a player opens first (the Start door rolls nothing)
 	await _main.solo_begin_spot(u)
 	assert_int(_count("Reanimation: Mine rolls")).override_failure_message("the open window rolled already").is_equal(0)
 	assert_bool((_main._solo_target_mode.get("spot_valid", []) as Array).has(foe)).is_true()
@@ -271,6 +274,7 @@ func test_a_committed_attack_begins_the_activation_before_it_shoots() -> void:
 	u.source_data = src
 	var foe := _reg(E2EBoot.make_unit(_main, 2, "Foe", [Vector3(10.0 * INCH, 0, 0)]))
 	foe.activate(1)   # NACHTMAHR has nothing left to answer with — the reply turn is not this case
+	await E2EBoot.start_activation(_main, u)   # the explicit activation a player opens first (the Start door rolls nothing)
 	await _main.solo_begin_targeting(u, false)
 	assert_int(_count("Reanimation: Mine rolls")).override_failure_message("the open window rolled already").is_equal(0)
 	_main._solo_end_targeting()   # the target click ends the targeting mode, then attacks
@@ -287,6 +291,7 @@ func test_a_cast_refused_for_tokens_begins_nothing() -> void:
 	var u := _my_bots("Mine")
 	var foe := _reg(E2EBoot.make_unit(_main, 2, "Foe", [Vector3(10.0 * INCH, 0, 0)]))
 	u.casts_current = 0
+	await E2EBoot.start_activation(_main, u)   # the explicit activation a player opens first (the Start door rolls nothing)
 	await _main._run_human_cast(u, u, {"name": "Bolt", "threshold": 2}, [foe])
 	assert_str(_log_text()).contains("Mine: not enough tokens for Bolt")
 	assert_int(_count("Reanimation: Mine rolls")) \

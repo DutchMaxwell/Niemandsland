@@ -63,6 +63,7 @@ func _cast_with_sweep_mid_flight(seer: GameUnit, target: GameUnit) -> Dictionary
 
 
 func _run_cast(seer: GameUnit, target: GameUnit, seen: Dictionary) -> void:
+	await E2EBoot.start_activation(_main, seer)   # the explicit activation a player opens first
 	await _main._run_human_cast(seer, seer, {"name": "Bolt", "threshold": 1}, [target])
 	seen["done"] = true
 

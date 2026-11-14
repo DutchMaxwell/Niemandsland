@@ -73,6 +73,7 @@ func _log_text() -> String:
 func _charge(charger: GameUnit, target: GameUnit, epoch: int) -> String:
 	AiActRecorder.rules_epoch = epoch
 	_main.seed_tray_rng(7)
+	await E2EBoot.start_activation(_main, charger)   # the explicit activation a player opens first
 	await _main._run_human_attack(charger, target, true, true)
 	var text := _log_text()
 	await E2EBoot.settle(get_tree())
@@ -160,6 +161,7 @@ func _dragged_warding_charge(epoch: int, from_in: float) -> String:
 	assert_str(_main._solo_validate_target(charger, target, true)) \
 		.override_failure_message("the dragged charger must be a legal manual pick").is_equal("")
 	_main.seed_tray_rng(7)
+	await E2EBoot.start_activation(_main, charger)   # the explicit activation a player opens first
 	await _main._solo_split_or_attack(charger, target, true)
 	var text := _log_text()
 	await E2EBoot.settle(get_tree())

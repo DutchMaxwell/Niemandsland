@@ -91,6 +91,7 @@ func test_a_finished_activation_leaves_no_detached_status_token(timeout := 24000
 	var foe_a := _armed(2, "FoeA", Vector3(8.0 * INCH, 0, 0), [], 4, 6)
 	var foe_b := _armed(2, "FoeB", Vector3(0, 0, 8.0 * INCH), [], 4, 6)
 
+	await E2EBoot.start_activation(_main, shooter)   # the explicit activation a player opens first
 	await _main._run_human_attack_split(shooter, foe_a, foe_b, ["Cannon"])
 
 	# The fixture only pins the flake while it really does wipe the table — a volley that stopped

@@ -116,6 +116,7 @@ func _solid_piece_at(o: Node3D, centre: Vector3) -> void:
 ## menu-open path filled — "game_unit" is the key _get_game_unit_from_context reads
 ## (radial_menu_controller.gd:656). Same seam e2e_embark_activation_test.gd:117/142 drives.
 func _press_spot(unit: GameUnit) -> void:
+	await E2EBoot.start_activation(_main, unit)   # the explicit activation a player opens first
 	_main.radial_menu_controller._on_action_selected("solo_spot", {"game_unit": unit})
 
 
@@ -125,7 +126,7 @@ func test_spot_dispatch_arms_and_picks_in_reach(timeout := 120000) -> void:
 	var pair := _spotter_and_target()
 	var spotter: GameUnit = pair[0]
 	var target: GameUnit = pair[1]
-	_press_spot(spotter)
+	await _press_spot(spotter)
 	assert_bool(_main._solo_target_mode.has("spot")) \
 		.override_failure_message("control fixture: the wheel's Spot must arm the pick mode on an OPEN table (log:\n%s)" % _log_text()) \
 		.is_true()
@@ -164,7 +165,7 @@ func test_spot_dispatch_arms_when_shooting_truth_sees_the_target(timeout := 1200
 		.override_failure_message("precondition: the shooting gate must accept this exact pair") \
 		.is_equal("")
 
-	_press_spot(spotter)
+	await _press_spot(spotter)
 	assert_bool(_main._solo_target_mode.has("spot")) \
 		.override_failure_message(("NML-967 — the wheel's Spot armed NOTHING, so no target can be selected. " +
 			"The candidate scan (main.gd:9185) gates on _solo_has_los, a UNIT-CENTRE terrain line, while " +
@@ -240,7 +241,7 @@ func test_a_spotter_on_a_container_spots_over_it_and_the_36_inch_reach_stays_fla
 		.override_failure_message("G3 — the spot reach must stay a FLAT measurement: %.3f\" from the roof vs %.3f\" from the table" % [gap_up, gap_flat]) \
 		.is_equal_approx(gap_flat, 0.001)
 
-	_press_spot(spotter)
+	await _press_spot(spotter)
 	assert_bool(_main._solo_target_mode.has("spot")) \
 		.override_failure_message(("NML-972 — a spotter standing ON the container found no target beyond it: " +
 			"the spot scan runs the per-model shooting truth, which W3.11 put on VolumetricLos. Log:\n%s") % _log_text()) \
@@ -279,6 +280,7 @@ func test_spot_dispatch_rolls_one_die_per_spotter_model() -> void:
 	var spotter := _armed_unit(1, "Eyes", [SPOTTER_LEFT, SPOTTER_RIGHT, Vector3(0.0, 0.0, 0.0)], 36)
 	spotter.unit_properties["special_rules"] = ["Precision Spotter"]
 	var target := _armed_unit(2, "Marked", [TARGET_POS], 36)
+	await E2EBoot.start_activation(_main, spotter)   # the explicit activation a player opens first
 	_main.solo_begin_spot(spotter)
 	assert_bool(_main._solo_target_mode.has("spot")) \
 		.override_failure_message("fixture: the wheel's Spot must arm on an open table (log:\n%s)" % _log_text()) \

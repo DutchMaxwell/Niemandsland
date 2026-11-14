@@ -54,6 +54,7 @@ func test_begin_spot_marks_candidates_within_36_and_click_stamps_the_round() -> 
 	var spotter := _spotter(Vector3.ZERO)
 	var near := _reg(E2EBoot.make_unit(_main, 2, "Near", [Vector3(20.0 * INCH, 0, 0)]))
 	var far := _reg(E2EBoot.make_unit(_main, 2, "Far", [Vector3(45.0 * INCH, 0, 0)]))
+	await E2EBoot.start_activation(_main, spotter)   # the explicit activation a player opens first
 	_main.solo_begin_spot(spotter)
 	var valid: Array = _main._solo_target_mode.get("spot_valid", [])
 	assert_bool(valid.has(near)) \
@@ -69,6 +70,7 @@ func test_begin_spot_marks_candidates_within_36_and_click_stamps_the_round() -> 
 		.is_equal(_main.opr_army_manager.current_round)
 	assert_bool(_main._solo_target_mode.is_empty()).is_true()
 	# Re-open in the same round: refused with the named gate.
+	await E2EBoot.start_activation(_main, spotter)   # the explicit activation a player opens first
 	_main.solo_begin_spot(spotter)
 	assert_bool(_main._solo_target_mode.is_empty()).is_true()
 	assert_str(_log_text()).contains("already spotted this round")

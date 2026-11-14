@@ -208,7 +208,7 @@ func _did(id: String, u: GameUnit, lines: String) -> bool:
 		"reinforce":
 			return lines.contains("Reinforcement")
 		"toggle_activate":
-			return u.is_activated
+			return u.is_activated or CoreActivation.session_open(u.unit_id)   # one-core release: the wedge STARTS the activation
 		"toggle_fatigued":
 			return u.is_fatigued
 		"toggle_shaken":
@@ -247,6 +247,9 @@ func _reset(u: GameUnit) -> void:
 		_rmc()._revive_unit_models(u)
 	if u.is_activated:
 		u.deactivate()
+	for opened in [u] + _main.opr_army_manager.cargo_units(u):   # the activations the clicks opened
+		if CoreActivation.session_open((opened as GameUnit).unit_id):
+			CoreActivation.close_session(_main, (opened as GameUnit).unit_id)
 	if _main.opr_army_manager.transport_of(u) != null:
 		_main.opr_army_manager.set_unit_embarked(u, null, false)
 	u.is_fatigued = false
@@ -270,6 +273,15 @@ func _walk(u: GameUnit, ids: Array) -> Array:
 	await _runner.simulate_frames(2)
 	for id in ids:
 		await _open(u)
+		# Every entry but the Activate wedge is a door of an OPEN activation: an Unload asks the CARGO's own (the
+		# transport stays closed) and a Pass needs none and is refused while any is open.
+		var openers: Array = [u]
+		if id == "unload_cargo_0":
+			openers = _main.opr_army_manager.cargo_units(u)
+		elif id == "toggle_activate" or id == "solo_pass":
+			openers = []
+		for opener in openers:
+			await E2EBoot.start_activation(_main, opener)
 		var before := _log_count()
 		if not await _pick(id):
 			misses.append("%s: '%s' not reached by a click (picked %s)" % [u.get_name(), id, _picked])
