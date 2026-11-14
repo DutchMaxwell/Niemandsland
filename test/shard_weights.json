@@ -310,6 +310,8 @@
 "test/e2e/e2e_one_core_human_presentation_test.gd": 4.6,
 "test/e2e/e2e_one_core_human_rules_test.gd": 7.0,
 "test/e2e/e2e_one_core_human_test.gd": 30.0,
+"test/e2e/e2e_one_core_lifecycle_doors_test.gd": 12.6,
+"test/e2e/e2e_one_core_lifecycle_rules_test.gd": 11.7,
 "test/e2e/e2e_one_core_room_lifecycle_test.gd": 5.7,
 "test/e2e/e2e_one_core_round_test.gd": 15.0,
 "test/e2e/e2e_orphan_teardown_test.gd": 15.5,
