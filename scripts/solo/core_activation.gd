@@ -233,6 +233,58 @@ static func _present(main, unit: GameUnit, target: GameUnit, shots: Array, st: D
 		main._solo_stage_end()
 
 
+## Step 38b: the weapons of a human volley in the table's order (`_run_human_shooting`: the attack groups, each profile
+## that fires), as `_present_human` shows them: {member, profile}.
+static func _human_shots(main, unit: GameUnit, target: GameUnit) -> Array:
+	var sc: SoloController = main.solo_controller
+	var dist: float = sc.nearest_melee_gap_in(unit, target)
+	if dist == INF:
+		dist = MoveIntent.distance_inches(sc.unit_centre(unit), sc.unit_centre(target))
+	var out: Array = []
+	for g in main._solo_attack_groups(unit, dist, false, target):
+		for p in (g as Dictionary).get("profiles", []):
+			if int((p as Dictionary).get("attacks", 0)) > 0:
+				out.append({"member": g["member"], "profile": main._solo_bridge_granted_flags(g["member"], p, target)})
+	return out
+
+
+## Step 38b: what `_run_human_shooting` shows around a volley, on the core's steps: the Declaration beat at the first hit
+## roll; a tracer before each hit roll; a weapon's hit strip and beat after its saves, or at the next hit roll or the end
+## if it missed; the Result beat before the morale roll or at the end; the Morale beat and the close. The table's human
+## volley shows no announce card and no outcome toast (those are the AI's), so neither does this. A refusal only closes.
+static func _present_human(main, unit: GameUnit, target: GameUnit, shots: Array, st: Dictionary, ev: String, a: Dictionary,
+		faces: Array) -> void:
+	var kind := str(a.get("kind", ""))
+	var n: int = st["n"]
+	var prev := str((shots[clampi(n - 1, 0, shots.size() - 1)]["profile"] as Dictionary).get("name", "weapon"))
+	if ev == "throw" and kind == "attack":
+		if n == 0:
+			await main._solo_stage_phase("Declaration")
+		elif st["open"]:
+			await main._solo_stage_phase(prev)
+		var shot: Dictionary = shots[mini(n, shots.size() - 1)]
+		var profile: Dictionary = shot["profile"]
+		main._vfx_player_volley(shot["member"], target, profile, bool(profile.get("indirect", false))
+			or SoloController.granted_indirect_of(unit) or main._solo_target_grants_indirect(target))
+		st.merge({"n": n + 1, "open": true}, true)
+	elif ev == "thrown" and kind == "defense":
+		st["open"] = false
+		main._vfx_hit_strip(target, faces.size(), AiCombatMath.count_blocks(faces, int(a["target"]), 0))
+		await main._solo_stage_phase(prev)
+	elif ev == "done" or (ev == "throw" and kind == "morale"):
+		if st["open"]:
+			st["open"] = false
+			await main._solo_stage_phase(prev)
+		if not st["result"]:
+			st["result"] = true
+			await main._solo_stage_phase("Result")
+		if ev == "done":
+			await main._solo_stage_phase("Morale")
+			main._solo_stage_end()
+	elif ev != "throw" and ev != "thrown":
+		main._solo_stage_end()
+
+
 ## The unit a roll belongs to: the core names it by roster key (`owner_key`: two units may share a display name, and a
 ## unit may be renamed mid-game). Only when the core could not tell: the actor or the target of its shot by `owner`
 ## (the name), else the actor.
@@ -515,7 +567,14 @@ static func human_shoot(main, attacker: GameUnit, target: GameUnit, on_throw: Ca
 		return true
 	var t: Array = (s["transcript"] as Array).duplicate()
 	t.append({"t": "intent", "kind": mode, "shoot": target.unit_id})
-	var r: Dictionary = await drive(main, int(s["handle"]), attacker, t, false, on_throw)
+	# Step 38b: the table's presentation of a human volley (_present_human); its stage opens before the core's first line.
+	var shots := _human_shots(main, attacker, target)
+	var st := {"n": 0, "open": false, "result": false}
+	var beat := func(ev: String, a: Dictionary, faces: Array) -> void:
+		await _present_human(main, attacker, target, shots, st, ev, a, faces)
+	if not shots.is_empty():
+		main._solo_stage_begin("%s fires at %s" % [attacker.get_name(), target.get_name()])
+	var r: Dictionary = await drive(main, int(s["handle"]), attacker, t, false, on_throw, false, Callable() if shots.is_empty() else beat)
 	if str(r["step"]) == "done":
 		last_target = target
 	elif str(r["step"]) == "refused" and int(r["index"]) < t.size():
