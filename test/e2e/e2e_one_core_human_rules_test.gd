@@ -24,8 +24,12 @@ class FakeNet extends "res://scripts/network_manager.gd":
 		return true
 	func _validate_rpc_ready(_context: String = "") -> bool:
 		return true
+	## Presence traffic (cursor ~15 Hz, camera 5 Hz) is not game state: not written down, so a "no frames" case does not
+	## depend on how long a frame takes on the machine (CI sends one every slow frame).
+	const PRESENCE := ["sync_cursor_position", "sync_camera_direction", "sync_camera_position"]
 	func _remote_call(method: String, args: Array, _target_peer: int = 0) -> void:
-		sent.append({"m": method, "a": args})
+		if not PRESENCE.has(method):
+			sent.append({"m": method, "a": args})
 	func send_command(type: String, payload: Variant = {}, _target_peer: int = 0) -> bool:
 		sent.append({"m": type, "a": [payload]})
 		return true
@@ -213,6 +217,7 @@ func test_a_mode_switch_after_a_move_keeps_or_resets_with_the_other_table_told()
 	assert_int(starts.size()).is_equal(10)
 	var line := "Rifles is back at its start - movement mode is now Rush."
 	_net.sent.clear()
+	_main._broadcast_presence(0.3)   # one cursor and one camera frame, as a slow CI frame sends every frame
 	assert_bool(await _switch(ObjectManager.MovementCap.RUSH, "Keep")).override_failure_message("no card").is_true()
 	assert_array(_poses()).override_failure_message("Keep moved the unit").is_equal(moved)
 	assert_int(int(_main.object_manager._movement_cap)).is_equal(ObjectManager.MovementCap.ADVANCE)
