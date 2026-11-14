@@ -555,3 +555,36 @@ func test_the_round_end_snapshot_is_taken_in_a_room_only() -> void:
 		_main.opr_army_manager.advance_round()
 		assert_int(CoreActivation._ended_round).override_failure_message("room %s" % room) \
 			.is_equal(_main.opr_army_manager.current_round - 1 if room else -1)
+
+
+## ---- Quit with an open activation: the network manager has left the tree before main's `_exit_tree` ----
+
+## Measured on a real quit (two-instance run): main is still in the tree and not queued, its network manager child is
+## already out of it, so `multiplayer` is null. No tree is no session - not a script error.
+func test_the_real_network_manager_outside_the_tree_reports_no_session() -> void:
+	var nm = auto_free(preload("res://scripts/network_manager.gd").new())
+	var active = nm.is_multiplayer_active()
+	assert_bool(active is bool and not active).override_failure_message("outside the tree it said: %s" % [active]).is_true()
+
+
+## The quit order itself: a session open, the real network manager out of the tree, then main's `_exit_tree` work. The
+## refresh inside `close_session` asks `applies`, which asks the network manager; without the guard that dies on the null
+## `multiplayer` and `reset_all` stops before it forgets the rest.
+func test_closing_an_open_activation_after_the_network_manager_left_the_tree_forgets_everything() -> void:
+	_room()
+	var u := _plain(1, "Rifles", 0.0)
+	_plain(2, "Guards", 18.0)
+	await _main.radial_menu_controller.card_start_activation(u)
+	assert_bool(CoreActivation.session_open(u.unit_id)).override_failure_message("precondition: a session").is_true()
+	var om: Node3D = _main.object_manager
+	om._selected_objects.clear()
+	om._selected_objects.append(u.models[0].node)   # one selected unit that is not activated: the refresh reaches `applies`
+	var parent := _real_net.get_parent()
+	assert_object(parent).override_failure_message("precondition: the real network manager is a child").is_not_null()
+	_main.network_manager = _real_net
+	parent.remove_child(_real_net)
+	CoreActivation._announced["probe"] = 1   # one of the things `reset_all` forgets after it closed the sessions
+	CoreActivation.reset_all(_main)
+	parent.add_child(_real_net)
+	assert_bool(CoreActivation.session_open(u.unit_id)).override_failure_message("the session stayed open").is_false()
+	assert_bool(CoreActivation._announced.is_empty()).override_failure_message("reset_all stopped early").is_true()
