@@ -688,13 +688,13 @@ const IN2M := 0.0254
 
 
 ## A four-model squad of `pid` at `x_in`, one rifle each: one casualty of four ends no morale test.
-func _squad(pid: int, uname: String, x_in: float) -> GameUnit:
+func _squad(pid: int, uname: String, x_in: float, id_base := 0) -> GameUnit:
 	var u := ParityTable._make_unit(_main, {"player": pid, "name": uname, "models": 4, "x_in": x_in, "z_step_in": 1.2,
 		"quality": 4, "defense": 4, "tough": 1, "game_system": "gf", "faction_folder": "robot_legions", "rules": []},
 		{"name": "Rifle", "range_in": 24, "attacks": 1, "count": 4, "rules": []})
 	for i in u.models.size():
 		(u.models[i] as ModelInstance).model_index = i
-		(u.models[i] as ModelInstance).node.set_meta("network_id", 900 + 10 * pid + i)
+		(u.models[i] as ModelInstance).node.set_meta("network_id", 900 + 10 * pid + i + id_base)
 		(u.models[i] as ModelInstance).node.set_meta("model_instance", u.models[i])   # the move ledger and its chalk read it
 	return u
 
@@ -853,3 +853,69 @@ func test_a_refusal_of_the_core_leaves_the_activation_open_and_says_why() -> voi
 		.override_failure_message("the refusal line: %s" % [_main.battle_log.entries().slice(-3)]).is_equal(1)
 	assert_bool(u.is_activated).override_failure_message("a refused End activated the unit").is_false()
 	assert_bool(CoreActivation.session_open(u.unit_id)).override_failure_message("a refused End closed the session").is_true()
+
+
+## ---- Step 69b: every End door asks the core; the drag lift never reaches the core ----
+
+## The radial menu's End and the "Activated" chip's End end a moved squad through the core like the card's: one roll (the
+## Dangerous test of the walked path), the casualty gone from the table, the unit Activated.
+func test_the_radial_and_the_chip_end_test_dangerous_terrain_too() -> void:
+	_room()
+	_hazard()
+	_plain(2, "Guards", 18.0)
+	var doors := {
+		"radial": func(u: GameUnit) -> void: await _main.radial_menu_controller._on_action_selected("toggle_activate", {"game_unit": u}),
+		"chip": func(u: GameUnit) -> void: await _main.radial_menu_controller.card_toggle_activation(u),
+	}
+	var bad: Array = []
+	var base := 0
+	for door in doors:
+		base += 100
+		var u := _squad(1, "Rifles-%s" % door, 0.0, base)
+		await _main.radial_menu_controller.card_start_activation(u)
+		_main.object_manager.set_movement_cap(ObjectManager.MovementCap.RUSH)
+		await _drag_east(u, 5.0)
+		await _drag_east(u, 4.0)
+		_main.seed_tray_rng(_one_casualty_seed())
+		var rolls := _count_rolls()
+		await (doors[door] as Callable).call(u)
+		if rolls[0] != 1 or u.get_alive_count() != 3 or not u.is_activated:
+			bad.append("%s: %d rolls, %d alive, activated %s" % [door, rolls[0], u.get_alive_count(), u.is_activated])
+	assert_array(bad).is_empty()
+
+
+## A 6" x 1" container box 2.5" east of the squad's start (its z span covers both models), a target 12" east.
+func _container_board() -> Array:
+	_room()
+	_main.terrain_overlay._blocker_obbs.append({"c": Vector2(3.0, 0.6) * IN2M, "he": Vector2(0.5, 3.0) * IN2M, "yaw": 0.0})
+	return [_plain(1, "Rifles", 0.0), _plain(2, "Guards", 12.0)]
+
+
+## The placement the drop door hands the core stands on the ground (the node's own height after the drop, not the drag's 2"
+## lift), so a unit that stepped 1" east behind a container the table's sight blocks cannot shoot over it. Control (own
+## case, no container): the same step and shot fire.
+func test_the_drag_lift_never_reaches_the_core_and_sight_is_unchanged() -> void:
+	var b := _container_board()
+	var u: GameUnit = b[0]
+	await _main.radial_menu_controller.card_start_activation(u)
+	_main.object_manager.set_movement_cap(ObjectManager.MovementCap.ADVANCE)
+	await _drag_east(u, 1.0)
+	var placed: Array = CoreActivation._sessions[u.unit_id]["transcript"][1]["positions"]
+	for i in placed.size():
+		assert_float((placed[i] as Vector3).y).override_failure_message("placed y of model %d: %s" % [i, placed[i]]) \
+			.is_equal_approx((u.models[i] as ModelInstance).node.global_position.y, 0.0001)
+	var rolls := _count_rolls()
+	assert_bool(await CoreActivation.human_shoot(_main, u, b[1])).is_true()
+	assert_int(rolls[0]).override_failure_message("a unit shot over a container the table's sight blocks").is_equal(0)
+
+
+func test_the_same_step_without_the_container_fires() -> void:
+	_room()
+	var u := _plain(1, "Rifles", 0.0)
+	var foe := _plain(2, "Guards", 12.0)
+	await _main.radial_menu_controller.card_start_activation(u)
+	_main.object_manager.set_movement_cap(ObjectManager.MovementCap.ADVANCE)
+	await _drag_east(u, 1.0)
+	var rolls := _count_rolls()
+	assert_bool(await CoreActivation.human_shoot(_main, u, foe)).is_true()
+	assert_int(rolls[0]).override_failure_message("no shot without the container").is_greater(0)

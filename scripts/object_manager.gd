@@ -1627,6 +1627,15 @@ func drag_paths() -> Dictionary:
 	return out
 
 
+## One-core P3 step 69b: where `obj` rests once the drop in flight lets go of it - the lift taken off (a rigid body drops
+## by it) or the surface under its base (a static one), exactly as the drop's own lowering computes it. The core is told
+## these ground positions, never the lifted ones: a model 2" high sees over a container the table's sight blocks.
+func resting_position(obj: Node3D) -> Vector3:
+	var y: float = obj.global_position.y - drag_lift_height if obj is RigidBody3D \
+		else _surface_y_under(obj.global_position, _dragged_body_rids(), _drag_probe_top_y)
+	return Vector3(obj.global_position.x, y, obj.global_position.z)
+
+
 ## Longest base offset of this drag in inches (the Hit & Run step's 3" limit reads it).
 func _drag_distance_in() -> float:
 	var longest := 0.0
