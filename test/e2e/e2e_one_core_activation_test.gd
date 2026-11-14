@@ -5,6 +5,7 @@ extends GdUnitTestSuite
 ## the core's hit dice), the surviving models, Shaken, the tray RNG after. In the core run the dead leave right after the
 ## saves (O4 b, read at the morale throw) and the removals the steps landed equal the binding's delta. Step 27: both
 ## runs add the same battle-log lines, (category, text) in the same order.
+## Step 22c adds the terrain board once more with its free forest as a real 3D sandbox piece (ObjectManager, rotated).
 ## Real: the main scene, NmlCore, the table's volley, move and sight code. Constructed: plain shooters vs 5 at 12" (the
 ## seed picks the shooters' shape, SHAPES: weapon copies vs models, the dead, a per-model loadout or none, step 42d),
 ## both seats AI (no save prompt waits). NML_ONE_CORE_SEEDS overrides the 200 seeds (1000 locally).
@@ -15,6 +16,8 @@ const ParityTable := preload("res://test/parity/parity_table.gd")
 const SIDE := {"quality": 4, "defense": 4, "tough": 1, "z_step_in": 1.2, "game_system": "gf",
 	"faction_folder": "robot_legions", "rules": []}
 const RIFLE := {"name": "Rifle", "range_in": 24, "attacks": 1, "count": 10, "rules": []}
+const SANDBOX_AT := Vector2(8.5, -1.0)   # the free forest's centre on the sandbox board, inches
+const SANDBOX_YAW := 45.0                # its rotation about the table's up axis, degrees
 
 var _runner: GdUnitSceneRunner
 var _main: Node
@@ -47,16 +50,42 @@ func after_test() -> void:
 ## sight lines of its own shooters after the Advance (eye lines clear of every edge by >= 0.3"). `_run` shifts the
 ## units into the board's lanes.
 func _terrain_board() -> void:
+	_painted_board()
+	var o = _main.terrain_overlay
+	var shelf := {"type": int(o.TerrainType.FOREST), "c": Vector2(5.5, 3.5) * INCH, "he": Vector2(0.5, 1.5) * INCH,
+		"yaw": 0.0}
+	o.sandbox_shapes_provider = func() -> Array: return [shelf]
+	o._los_volumes_dirty = true
+
+
+## The painted part of the board: a forest cell, a ruin cell and the map-layout container with its two painted cells.
+func _painted_board() -> void:
 	var o = _main.terrain_overlay
 	o.grid_cells[o.world_to_cell(Vector3(7.5, 0, 4.5) * INCH)] = o.TerrainType.FOREST
 	o.grid_cells[o.world_to_cell(Vector3(7.5, 0, 1.5) * INCH)] = o.TerrainType.RUINS
 	o._blocker_obbs.append({"c": Vector2(8.0, 6.8) * INCH, "he": Vector2(3.0, 1.5) * INCH, "yaw": 0.0})
 	for x in [7.5, 10.5]:
 		o.grid_cells[o.world_to_cell(Vector3(x, 0, 7.5) * INCH)] = o.TerrainType.CONTAINER
-	var shelf := {"type": int(o.TerrainType.FOREST), "c": Vector2(5.5, 3.5) * INCH, "he": Vector2(0.5, 1.5) * INCH,
-		"yaw": 0.0}
-	o.sandbox_shapes_provider = func() -> Array: return [shelf]
 	o._los_volumes_dirty = true
+
+
+## Step 22c (plan item B2): the painted board above, but the free piece is a REAL 3D sandbox forest, spawned and rotated
+## the way a player's drag does it (`ObjectManager.spawn_sandbox_terrain`); the overlay reads it through main's own
+## `_sandbox_terrain_shapes` (node footprint, kind, position, yaw) and the core through the game header's `sandbox` list.
+## Centre and yaw are chosen so the piece overlaps no other piece and its rotation decides the sight: at +45 degrees it
+## blinds shooter 1 (shooters 0 and 2 keep a line, shooter 0's through the see-through ruin cell, so every shape keeps a
+## model in sight); a core that read -45 degrees would blind shooter 0 instead.
+func _sandbox_board() -> void:
+	_painted_board()
+	var piece: Node3D = _main.object_manager.spawn_sandbox_terrain("forest_small", ObjectManager.SandboxPropKind.FOREST,
+		Vector3(SANDBOX_AT.x, 0.0, SANDBOX_AT.y) * INCH, false, 7301)
+	piece.rotation.y = deg_to_rad(SANDBOX_YAW)
+	await _runner.simulate_frames(2)
+	var shapes: Array = _main.terrain_overlay._sandbox_shapes()   # what both the table's volumes and the header read
+	assert_int(shapes.size()).is_equal(1)
+	assert_int(int(shapes[0]["type"])).is_equal(TerrainRules.TerrainType.FOREST)
+	assert_vector(shapes[0]["he"]).is_equal_approx(Vector2(3.0, 2.0) * INCH, Vector2(1e-6, 1e-6))
+	assert_float(float(shapes[0]["yaw"])).is_equal_approx(deg_to_rad(SANDBOX_YAW), 1e-5)
 
 
 ## Step 42d: seed `s`'s shooters - [models, copies of their one Rifle (A1 each), models already dead]; every second
@@ -158,7 +187,7 @@ func _run(s: int, advance: bool, board: bool, core_run: bool) -> Dictionary:
 	return out
 
 
-func _gate(advance: bool, board: bool) -> void:
+func _gate(advance: bool, board: bool, label := "") -> void:
 	var seeds := int(OS.get_environment("NML_ONE_CORE_SEEDS")) if OS.has_environment("NML_ONE_CORE_SEEDS") else 200
 	var bad: Array = []
 	var line_diffs: Array = []
@@ -179,9 +208,9 @@ func _gate(advance: bool, board: bool) -> void:
 		if table["lines"] != core["lines"]:
 			line_diffs.append("seed %d\n table %s\n core  %s" % [s, "\n       ".join(table["lines"]),
 				"\n       ".join(core["lines"])])
+	var case_name := label if not label.is_empty() else "terrain" if board else "advance" if advance else "hold"
 	print("ONE_CORE_ACTIVATION case=%s seeds=%d mismatches=%d line_diffs=%d mean_us=%.1f max_us=%d handles=%d" % [
-		"terrain" if board else "advance" if advance else "hold", seeds, bad.size(), line_diffs.size(),
-		float(core_us) / maxi(steps, 1), max_us,
+		case_name, seeds, bad.size(), line_diffs.size(), float(core_us) / maxi(steps, 1), max_us,
 		int((_main.solo_controller as SoloController)._core_node_ready().live_handles())])
 	if not line_diffs.is_empty():
 		print("ONE_CORE_ACTIVATION first line diff: ", line_diffs[0])
@@ -201,3 +230,8 @@ func test_advance_and_shoot_equals_the_table(timeout := 900000) -> void:
 func test_advance_on_a_terrain_board_equals_the_table(timeout := 900000) -> void:
 	_terrain_board()
 	await _gate(true, true)
+
+
+func test_advance_on_a_board_with_a_3d_sandbox_piece_equals_the_table(timeout := 900000) -> void:
+	await _sandbox_board()
+	await _gate(true, true, "sandbox")
