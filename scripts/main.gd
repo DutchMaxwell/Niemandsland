@@ -17764,6 +17764,7 @@ func _do_next_round() -> void:
 		move_trails.on_round_advance()
 	if undo_manager != null:
 		undo_manager.expire_move_takebacks()   # #162: round advance ends every activation
+	CoreActivation.close_all(self)   # one-core P3 step 36: the open one-core activations end with the round
 	if network_manager:
 		network_manager.broadcast_round_advance()
 	# 3.4a: in an Automatic online room the host runs the round-start Shaken recovery for both sides.
@@ -17788,6 +17789,7 @@ func _on_remote_round_advanced() -> void:
 		move_trails.on_round_advance()
 	if undo_manager != null:
 		undo_manager.expire_move_takebacks()   # #162: round advance ends every activation
+	CoreActivation.close_all(self)   # one-core P3 step 36: the open one-core activations end with the round
 
 
 ## Refreshes everything advance_round() affects: the button label plus the
@@ -18652,6 +18654,7 @@ func _setup_battle_log() -> void:
 		radial_menu_controller.unit_activated.connect(func(gu) -> void: _log_battle_activation(gu, false))
 		# Solo P2 alternating activation: the human's radial activation triggers ONE AI answer (goal 003 P2).
 		radial_menu_controller.unit_activated.connect(_on_solo_human_activated)
+		radial_menu_controller.unit_activated.connect(func(gu) -> void: CoreActivation.close_session(self, gu.unit_id))   # one-core P3 step 36
 
 
 ## Opt-in game record (PR B1): build the in-memory collector and tap the same central seams as the
