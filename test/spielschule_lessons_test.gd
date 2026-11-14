@@ -69,18 +69,18 @@ func test_s03_ai_mode_is_none() -> void:
 	assert_str(SpielschuleLessons.ai_mode("S-03")).is_equal("none")
 
 
-func test_s04_has_five_steps_and_holds_the_ai() -> void:
-	assert_array(SpielschuleLessons.steps_for("S-04")).has_size(5)
+func test_s04_has_eight_steps_and_holds_the_ai() -> void:
+	assert_array(SpielschuleLessons.steps_for("S-04")).has_size(8)
 	assert_str(SpielschuleLessons.ai_mode("S-04")).is_equal("hold")
 
 
-func test_s05_has_four_steps_and_holds_the_ai() -> void:
-	assert_array(SpielschuleLessons.steps_for("S-05")).has_size(4)
+func test_s05_has_five_steps_and_holds_the_ai() -> void:
+	assert_array(SpielschuleLessons.steps_for("S-05")).has_size(5)
 	assert_str(SpielschuleLessons.ai_mode("S-05")).is_equal("hold")
 
 
-func test_s06_has_five_steps_and_holds_the_ai() -> void:
-	assert_array(SpielschuleLessons.steps_for("S-06")).has_size(5)
+func test_s06_has_six_steps_and_holds_the_ai() -> void:
+	assert_array(SpielschuleLessons.steps_for("S-06")).has_size(6)
 	assert_str(SpielschuleLessons.ai_mode("S-06")).is_equal("hold")
 
 
@@ -89,8 +89,8 @@ func test_s07_has_five_steps_and_holds_the_ai() -> void:
 	assert_str(SpielschuleLessons.ai_mode("S-07")).is_equal("hold")
 
 
-func test_s08_has_six_steps_and_holds_the_ai() -> void:
-	assert_array(SpielschuleLessons.steps_for("S-08")).has_size(6)
+func test_s08_has_seven_steps_and_holds_the_ai() -> void:
+	assert_array(SpielschuleLessons.steps_for("S-08")).has_size(7)
 	assert_str(SpielschuleLessons.ai_mode("S-08")).is_equal("hold")
 
 
@@ -99,8 +99,8 @@ func test_s09_has_four_steps_and_holds_the_ai() -> void:
 	assert_str(SpielschuleLessons.ai_mode("S-09")).is_equal("hold")
 
 
-func test_s_spell_has_three_steps_and_holds_the_ai() -> void:
-	assert_array(SpielschuleLessons.steps_for("S-SPELL")).has_size(3)
+func test_s_spell_has_five_steps_and_holds_the_ai() -> void:
+	assert_array(SpielschuleLessons.steps_for("S-SPELL")).has_size(5)
 	assert_str(SpielschuleLessons.ai_mode("S-SPELL")).is_equal("hold")
 
 

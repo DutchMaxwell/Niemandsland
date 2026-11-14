@@ -9,6 +9,7 @@ extends GdUnitTestSuite
 ## the validator or _run_human_attack, which does not validate at all.
 
 const Boot := preload("res://test/e2e/e2e_boot.gd")
+const Flow := preload("res://test/e2e/school_flow.gd")
 const TEST_CFG := "user://test_game_school_ch5.cfg"
 const FLAGS := ["niemandsland/scenario_mode", "niemandsland/scenario_path",
 	"niemandsland/scenario_chapter", "niemandsland/pending_load_path"]
@@ -21,6 +22,7 @@ var _lesson: LessonRunner
 
 
 func before_test() -> void:
+	CoreActivation._env = 1   # the explicit activation (the lesson teaches it)
 	_root_before = Boot.root_children(get_tree())
 	for flag in FLAGS:
 		_saved[flag] = ProjectSettings.get_setting(flag)
@@ -40,6 +42,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	CoreActivation._env = -1
 	for flag in FLAGS:
 		ProjectSettings.set_setting(flag, _saved[flag])
 	if FileAccess.file_exists(TEST_CFG):
@@ -134,13 +137,15 @@ func _wait_armed(key: String) -> bool:
 	return false
 
 
-func test_s05_four_steps_complete(timeout := 120000) -> void:
+func test_s05_five_steps_complete(timeout := 120000) -> void:
 	assert_int(_lesson.current_index()).is_equal(0)
 	var alpha := _find("alpha")
 	assert_object(alpha).is_not_null()
 
 	_main.unit_dock.present_unit(alpha)
 	assert_bool(await _wait_index(1)).is_true()   # card presented
+	assert_bool(Flow.press(_main, "Activate")).override_failure_message("no Activate button on Alpha's card").is_true()
+	assert_bool(await _wait_index(2)).override_failure_message("index=%d" % _lesson.current_index()).is_true()   # activation open
 
 	var far := _find("far")
 	assert_object(far).is_not_null()
@@ -162,24 +167,26 @@ func test_s05_four_steps_complete(timeout := 120000) -> void:
 	assert_int(_counter("shoot:alpha")) \
 		.override_failure_message("a refused far pick must not count as a shot") \
 		.is_equal(before)
-	assert_int(_lesson.current_index()).is_equal(1)   # the refused far shot advanced nothing
+	assert_int(_lesson.current_index()).is_equal(2)   # the refused far shot advanced nothing
 
 	# The right pick stays in the armed window (a refusal swallows the click) — this one fires.
 	var target_pt := _pick_point(target)
 	assert_vector(target_pt).override_failure_message("fixture: no clickable near-squad point").is_not_equal(Vector2.INF)
 	await _click_target(target_pt)
-	assert_bool(await _wait_index(2)).is_true()   # shot resolved
+	assert_bool(await _wait_index(3)).is_true()   # shot resolved
 	assert_int(_counter("shoot:alpha")).is_greater(before)
 
 	# The read_log step is still active at index 2, so press Continue to reach the blocked step.
 	(_main.get_node("UI/LessonCard") as LessonCard).continue_pressed.emit()
-	assert_bool(await _wait_index(3)).is_true()   # read_log done, blocked step active
+	assert_bool(await _wait_index(4)).is_true()   # read_log done, blocked step active
 
 	# Step "blocked": Alpha is free again after the AI's automatic reply turns the round; arm Shoot and
 	# click the Guardians behind the building — the real gate refuses for want of line of sight.
 	assert_bool(await _wait_free(alpha)) \
 		.override_failure_message("Alpha stays activated — the round never advanced, so the blocked attempt cannot be made") \
 		.is_true()
+	Flow.select(_main, alpha)
+	assert_bool(Flow.press(_main, "Activate")).override_failure_message("no Activate button for the second activation").is_true()
 	_press("solo_shoot", alpha)
 	assert_bool(await _wait_armed("unit")).is_true()
 	var shot_before := _counter("shoot:alpha")

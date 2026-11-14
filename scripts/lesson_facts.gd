@@ -44,6 +44,11 @@ func setup(refs: Dictionary) -> void:
 	if _main != null and _main.has_signal("human_attack_resolved"):
 		if not _main.human_attack_resolved.is_connected(_on_human_attack_resolved):
 			_main.human_attack_resolved.connect(_on_human_attack_resolved)
+	# The End of an activation is an event, not a state: the round can turn (and reset the flag) before the next poll.
+	if _main != null and "radial_menu_controller" in _main and _main.radial_menu_controller != null \
+			and _main.radial_menu_controller.has_signal("unit_activated"):
+		if not _main.radial_menu_controller.unit_activated.is_connected(_on_unit_activated):
+			_main.radial_menu_controller.unit_activated.connect(_on_unit_activated)
 	if _main != null and _main.has_signal("human_cast_resolved"):
 		if not _main.human_cast_resolved.is_connected(_on_human_cast_resolved):
 			_main.human_cast_resolved.connect(_on_human_cast_resolved)
@@ -55,9 +60,11 @@ func snapshot() -> Dictionary:
 		"layout_pieces": 0, "deploy_type": 0, "menu_open": false,
 		"units_p1": 0, "p1_all_in_zone": false, "phase": 0,
 		"bands": false, "round": 0, "card_presented": false, "spell_preview": false,
-		"game_finished": false, "verdict": ""}
+		"game_finished": false, "verdict": "", "move_mode": 0}
 	if _range_rings != null and _range_rings.has_method("has_spell_preview"):
 		facts.spell_preview = bool(_range_rings.has_spell_preview())
+	if _object_manager != null and "_movement_cap" in _object_manager:
+		facts.move_mode = int(_object_manager._movement_cap)   # ObjectManager.MovementCap: 0 Off, 1 Advance, 2 Rush, 3 Charge
 	if _main != null and "_solo_game_finished" in _main:
 		facts.game_finished = bool(_main._solo_game_finished)
 	if _main != null and _main.has_method("_solo_lesson_verdict"):
@@ -120,7 +127,7 @@ func snapshot() -> Dictionary:
 				positioned += 1
 			facts.tags[tag] = {"selected_whole": whole,
 				"centroid_in": sum / float(positioned) / METRES_PER_INCH if positioned > 0 else Vector2.ZERO,
-				"alive": alive.size(), "activated": unit.is_activated,
+				"alive": alive.size(), "activated": unit.is_activated, "open": CoreActivation.session_open(unit.unit_id),
 				"shaken": unit.is_shaken, "fatigued": unit.is_fatigued,
 				"card_presented": _is_card_presented(unit),
 				"terrain": _terrain_mode(alive),
@@ -146,6 +153,10 @@ func _on_human_attack_resolved(attacker: GameUnit, melee: bool) -> void:
 	_bump_tag("melee" if melee else "shoot", attacker)
 
 
+func _on_unit_activated(unit: GameUnit) -> void:
+	_bump_tag("activated", unit)
+
+
 func _on_human_cast_resolved(unit: GameUnit) -> void:
 	_bump_tag("cast", unit)
 
@@ -161,6 +172,9 @@ func _on_battle_log_entry(entry: Dictionary) -> void:
 		bump("log:pile_in")
 	if low.contains("consolidat"):
 		bump("log:consolidate")
+	# The explicit activation's Cancel writes "<unit name> cancelled its activation - back at its start.".
+	if low.contains("cancelled its activation"):
+		bump("log:cancel")
 	# Dangerous-terrain test line ("<name> takes N Dangerous terrain test dice", rolled before the dice
 	# so it fires on the ROLL being made, whatever it shows) — I2 dice-safe gate.
 	if low.contains("dangerous terrain"):

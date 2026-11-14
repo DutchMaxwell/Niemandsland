@@ -110,3 +110,79 @@ func test_the_core_path_writes_the_tables_shot_row() -> void:
 	assert_int(rows.size()).override_failure_message("rows: %s" % [rows]).is_equal(2)
 	if rows.size() == 2:
 		assert_str(rows[1]).override_failure_message("table %s\ncore  %s" % rows).is_equal(rows[0])
+
+
+## Five Rifles plus a Sniper (listed first or second) whose single bearer is dead: the Sniper fires nothing. [att, def].
+func _sniper_squads(sniper_first: bool) -> Array:
+	var att := ParityTable._make_unit(_main, SIDE.merged({"player": 2, "name": "Att", "models": 5, "x_in": 0.0}),
+		RIFLE.merged({"count": 5}, true))
+	var sniper := OPRApiClient.OPRWeapon.new()
+	sniper.name = "Sniper"
+	sniper.range_value = 24
+	sniper.attacks = 2
+	sniper.count = 1
+	(att.source_data as OPRApiClient.OPRUnit).weapons.insert(0 if sniper_first else 1, sniper)
+	for i in att.models.size():
+		(att.models[i] as ModelInstance).properties["weapons"] = [{"name": "Rifle", "attacks": 1}] \
+			+ ([{"name": "Sniper", "attacks": 2}] if i == 4 else [])
+	(att.models[4] as ModelInstance).apply_damage(1)
+	var def := ParityTable._make_unit(_main, SIDE.merged({"player": 1, "name": "Def", "models": 5, "x_in": 12.0}),
+		RIFLE.merged({"count": 5}, true))
+	return [att, def]
+
+
+func _free_units(units: Array) -> void:
+	for u in units:
+		_main.opr_army_manager.game_units.erase((u as GameUnit).unit_id)
+		for m in (u as GameUnit).models:
+			(m as ModelInstance).node.free()
+
+
+## The rows one AI volley writes (env-gated shot dump), in the order written: the table writes the Sniper's row (attacks 0)
+## before it moves on.
+func _volley_rows(core: bool, sniper_first: bool) -> Array:
+	var path := OS.get_user_data_dir().path_join("one_core_42c2_shots.jsonl")
+	AiShotRecorder._checked = true
+	AiShotRecorder._stream = FileAccess.open(path, FileAccess.WRITE)
+	AiShotRecorder._count = 0
+	var units := _sniper_squads(sniper_first)
+	_main.seed_tray_rng(3)
+	_main._solo_core_ai_h = CoreActivation.capture(_main) if core else 0
+	var runs := CoreActivation.ai_runs
+	await _main._run_ai_shooting({"unit": units[0], "moved": false, "action": AiDecision.Action.HOLD})
+	assert_int(CoreActivation.ai_runs - runs).override_failure_message("the core resolved the volley: %s" % core) \
+		.is_equal(1 if core else 0)
+	CoreActivation.reset_all(_main)
+	_free_units(units)
+	AiShotRecorder.close()
+	var rows: Array = FileAccess.get_file_as_string(path).split("\n", false)
+	DirAccess.remove_absolute(path)
+	return rows
+
+
+## A weapon that fires nothing (here: its only bearer is dead) still writes its row on the core path, and each row names
+## its own weapon, whichever weapon comes first. RED: the core path records inside the attack throw, so the silent
+## Sniper writes no row (Sniper second), or the first throw (the Rifle's) records the Sniper's row (Sniper first).
+## RED too: a row only for the shots that roll -> the Sniper's row is missing.
+func test_the_core_path_writes_a_row_for_a_weapon_that_fires_nothing() -> void:
+	for sniper_first in [false, true]:
+		var table := await _volley_rows(false, sniper_first)
+		var core := await _volley_rows(true, sniper_first)
+		assert_int(table.size()).override_failure_message("table rows: %s" % [table]).is_equal(2)
+		assert_array(core).override_failure_message("sniper_first=%s\ntable %s\ncore  %s" % [sniper_first, table, core]) \
+			.is_equal(table)
+
+
+## The hit rolls (tracer, hit strip, phase title) follow the weapons that roll: a silent weapon is not one of them, so the
+## n-th hit roll is never the silent weapon's. RED: every shot returned -> the Sniper leads when it is listed first.
+func test_the_shots_that_roll_leave_out_a_weapon_that_fires_nothing() -> void:
+	for sniper_first in [false, true]:
+		var units := _sniper_squads(sniper_first)
+		var shots: Array = []
+		for w in (units[0].source_data as OPRApiClient.OPRUnit).weapons:
+			shots.append({"member": units[0], "quality": 4, "alive": 4, "max": 5, "reach": float(w.range_value),
+				"profile": AiShooting.profiles_in_range([w], float(w.range_value))[0]})
+		var rolling: Array = CoreActivation._record_shots(_main, units[0], units[1], shots, false)
+		assert_array(rolling.map(func(s: Dictionary) -> String: return str(s["profile"]["name"]))) \
+			.override_failure_message("sniper_first=%s" % sniper_first).is_equal(["Rifle"])
+		_free_units(units)

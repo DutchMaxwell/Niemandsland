@@ -504,8 +504,11 @@ func test_the_journal_unspends_the_one_time_spends_on_every_unit() -> void:
 		"Rifles: Speed Feat is unspent again.", "Rifles: Utility Buff is unspent again."])
 	var props: Array = net.sent.filter(func(f: Dictionary) -> bool: return f["m"] == "sync_unit_property") \
 		.map(func(f: Dictionary) -> Array: return f["a"])
-	assert_array(props).contains_exactly_in_any_order([[u.unit_id, "speed_feat_used_speed_feat", null],
-		[enemy.unit_id, "tag_markers", null]])
+	var got: Array = props.duplicate()
+	got.sort_custom(func(a: Variant, b: Variant) -> bool: return JSON.stringify(a) < JSON.stringify(b))
+	var want: Array = [[u.unit_id, "speed_feat_used_speed_feat", null], [enemy.unit_id, "tag_markers", null]]
+	want.sort_custom(func(a: Variant, b: Variant) -> bool: return JSON.stringify(a) < JSON.stringify(b))
+	assert_array(got).is_equal(want)
 	# The receiving table still holds the spends; the recorded frames, handed to its real handler, erase them there.
 	u.unit_properties["speed_feat_used_speed_feat"] = true
 	enemy.unit_properties["tag_markers"] = 2
@@ -578,7 +581,11 @@ func test_the_journal_puts_back_every_units_spell_records() -> void:
 	assert_bool(is_same(boyz.unit_properties["special_rules"], boyz_rules)).override_failure_message("not in place").is_true()
 	var frames: Array = net.sent.filter(func(f: Dictionary) -> bool: return f["m"] == "sync_spell_mods") \
 		.map(func(f: Dictionary) -> Array: return f["a"])
-	assert_array(frames).contains_exactly_in_any_order([[boss.unit_id, []], [boyz.unit_id, []]])
+	var got: Array = frames.duplicate()
+	got.sort_custom(func(a: Variant, b: Variant) -> bool: return JSON.stringify(a) < JSON.stringify(b))
+	var want: Array = [[boss.unit_id, []], [boyz.unit_id, []]]
+	want.sort_custom(func(a: Variant, b: Variant) -> bool: return JSON.stringify(a) < JSON.stringify(b))
+	assert_array(got).is_equal(want)
 	assert_array(_unspent_lines()).is_equal(["Boss: Piercing Assault Buff is unspent again.",
 		"Boss: Speed Feat is unspent again."])   # one line per spend: the buff's record line, not the stamp's
 	assert_int(CoreActivation.tripwire_hits).override_failure_message("the skip key or a restored key").is_equal(0)
@@ -1006,8 +1013,9 @@ func test_a_formation_inside_an_activation_writes_a_ledger_drop_per_model() -> v
 	_select([_node(u, 0), _node(u, 1)])
 	_main.object_manager.arrange_selected_in_rows(1)
 	var got: Array[Dictionary] = _main.move_trails.ledger.entries_for_unit(u.unit_id)
-	assert_array(got.map(func(e: Dictionary) -> int: return int(e["model"]))).override_failure_message("ledger: %s" % [got]) \
-		.contains_exactly_in_any_order([901, 902])
+	var models: Array = got.map(func(e: Dictionary) -> int: return int(e["model"]))
+	models.sort()
+	assert_array(models).override_failure_message("ledger: %s" % [got]).is_equal([901, 902])
 	for e in got:
 		var i: int = int(e["model"]) - 901
 		var pts: PackedVector2Array = e["points"]

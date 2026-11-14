@@ -4,6 +4,7 @@ extends GdUnitTestSuite
 ## the token outcome — the three steps complete the chapter, and an idle boot stays on step 0.
 
 const Boot := preload("res://test/e2e/e2e_boot.gd")
+const Flow := preload("res://test/e2e/school_flow.gd")
 const TEST_CFG := "user://test_game_school_spell.cfg"
 const FLAGS := ["niemandsland/scenario_mode", "niemandsland/scenario_path",
 	"niemandsland/scenario_chapter", "niemandsland/pending_load_path"]
@@ -16,6 +17,7 @@ var _lesson: LessonRunner
 
 
 func before_test() -> void:
+	CoreActivation._env = 1   # the explicit activation (the lesson teaches it)
 	_root_before = Boot.root_children(get_tree())
 	for flag in FLAGS:
 		_saved[flag] = ProjectSettings.get_setting(flag)
@@ -35,6 +37,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	CoreActivation._env = -1
 	for flag in FLAGS:
 		ProjectSettings.set_setting(flag, _saved[flag])
 	if FileAccess.file_exists(TEST_CFG):
@@ -72,7 +75,7 @@ func _find_spell_link() -> Button:
 	return null
 
 
-func test_s_spell_three_steps_complete(timeout := 120000) -> void:
+func test_s_spell_five_steps_complete(timeout := 120000) -> void:
 	assert_int(_lesson.current_index()).is_equal(0)
 	var alpha := _find("alpha")
 	var target := _find("target")
@@ -97,6 +100,9 @@ func test_s_spell_three_steps_complete(timeout := 120000) -> void:
 	# cannot be answered headless, and this lesson teaches the base cast, not boosting.
 	# Rules 3.6 re-export: the Archivist's one-token enemy spell (Psychic Terror) reaches 6 inches, the squad
 	# stands about 15 inches away, so the test spends the lesson's own two tokens on a two-token spell.
+	Flow.select(_main, alpha)
+	assert_bool(Flow.press(_main, "Activate")).override_failure_message("no Activate button on the Archivist's card").is_true()
+	assert_bool(await _wait_index(2)).override_failure_message("index=%d" % _lesson.current_index()).is_true()   # activation open
 	alpha.casts_current = 2
 	var entry: Dictionary = {}
 	for sp in SpellsRegistry.spells_for_unit(alpha):
@@ -111,7 +117,9 @@ func test_s_spell_three_steps_complete(timeout := 120000) -> void:
 	assert_bool(entry.is_empty()).override_failure_message(
 		"the Archivist has no affordable enemy spell on the target squad").is_false()
 	await _main._run_human_cast(alpha, alpha, entry, [target])
-	assert_bool(await _wait_index(2)).is_true()   # the spell resolved
+	assert_bool(await _wait_index(3)).is_true()   # the spell resolved; the activation stays open
+	assert_bool(Flow.press(_main, "End activation")).override_failure_message("no End activation button after the cast").is_true()
+	assert_bool(await _wait_index(4)).override_failure_message("index=%d" % _lesson.current_index()).is_true()   # the Archivist has acted
 
 	(_main.get_node("UI/LessonCard") as LessonCard).continue_pressed.emit()
 	var progress := SpielschuleProgress.new(TEST_CFG)

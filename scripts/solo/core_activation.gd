@@ -187,14 +187,34 @@ static func run_ai(main, unit: GameUnit, report: Dictionary, target: GameUnit, h
 	return t.any(func(e: Dictionary) -> bool: return str(e["t"]) == "faces")
 
 
+## Step 42c-2: the table's shot rows of one AI volley (`_solo_resolve_ai_volley` writes one per shot, in `shots` order,
+## before it skips a weapon with no attacks), and the shots that roll (attacks > 0, same order: the order of the core's
+## hit rolls; all of them when none rolls, so the show only closes). A silent weapon has no hit roll to hang its row on,
+## so `_present` writes them all at the first hit roll, or at the end when none rolls.
+static func _record_shots(main, unit: GameUnit, target: GameUnit, shots: Array, moved: bool) -> Array:
+	var rolling: Array = []
+	for shot in shots:
+		var d: Dictionary = main._solo_shot_eligibility(shot["member"], shot["profile"], shot, target, false, moved)
+		var attacks := int((d["report"] as Dictionary)["attacks"])
+		main._solo_record_shot(unit, shot["member"], target, shot["profile"], int(d["sighted"]), int(d["bearers"]),
+			int(shot["max"]), attacks, int(SoloController.effective_shoot_reach_in(float(shot["reach"]), target)))
+		if attacks > 0:
+			rolling.append(shot)
+	return rolling if not rolling.is_empty() else shots
+
+
 ## Step 42b: the table's show around an AI volley (_solo_resolve_ai_volley's calls in its order) on the core's steps:
 ## at the first hit roll the announce (the core says its line), the fan and the Declaration beat; a tracer before each
-## hit roll (`shots` in the table's order); a weapon's hit strip and beat after its saves, or at the next hit roll or
-## the end if it missed; before the morale roll or at the end the outcome toast and the Result beat; the Morale beat.
-## A refusal only closes.
+## hit roll (`shots`: the shots that roll, in the table's order); a weapon's hit strip and beat after its saves, or at
+## the next hit roll or the end if it missed; before the morale roll or at the end the outcome toast and the Result beat;
+## the Morale beat. A refusal only closes.
 static func _present(main, unit: GameUnit, target: GameUnit, shots: Array, st: Dictionary, ev: String, a: Dictionary,
 		faces: Array) -> void:
 	var kind := str(a.get("kind", ""))
+	# Step 42c-2: the rows at the first hit roll, or at the end; never at a refusal (the table then writes them).
+	if not st.has("rolling") and (ev == "done" or (ev == "throw" and kind == "attack")):
+		st["rolling"] = _record_shots(main, unit, target, shots, st["moved"])
+	shots = st.get("rolling", shots)
 	var n: int = st["n"]
 	var prev := str((shots[clampi(n - 1, 0, shots.size() - 1)]["profile"] as Dictionary).get("name", "weapon"))
 	if ev == "throw" and kind == "attack":
@@ -207,9 +227,6 @@ static func _present(main, unit: GameUnit, target: GameUnit, shots: Array, st: D
 		var shot: Dictionary = shots[mini(n, shots.size() - 1)]
 		var d: Dictionary = main._solo_shot_eligibility(shot["member"], shot["profile"], shot, target, false, st["moved"])
 		var pairs: Array = d["pairs"]
-		main._solo_record_shot(unit, shot["member"], target, shot["profile"], int(d["sighted"]), int(d["bearers"]),   # 42c
-			int(shot["max"]), int((d["report"] as Dictionary)["attacks"]),
-			int(SoloController.effective_shoot_reach_in(float(shot["reach"]), target)))
 		main._vfx_volley(shot["member"], target, shot["profile"],
 			pairs.slice(0, int(d["bearers"]) if int(d["bearers"]) >= 0 else pairs.size()), false)
 		st.merge({"n": n + 1, "open": true}, true)
