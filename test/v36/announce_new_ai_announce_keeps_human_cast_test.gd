@@ -67,6 +67,7 @@ func _cast_with_ai_announce_mid_flight(seer: GameUnit, ai_shooter: GameUnit) -> 
 
 
 func _run_cast(seer: GameUnit, target: GameUnit, seen: Dictionary) -> void:
+	await E2EBoot.start_activation(_main, seer)   # the explicit activation a player opens first
 	await _main._run_human_cast(seer, seer, {"name": "Bolt", "threshold": 1}, [target])
 	seen["ai_alive_after_cast"] = (seen["ai"] as Array).all(_alive) and not (seen["ai"] as Array).is_empty()
 	seen["done"] = true

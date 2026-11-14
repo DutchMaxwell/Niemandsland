@@ -142,6 +142,7 @@ func _open_window(melee: bool) -> Dictionary:
 	_armed(1, "Reserves", Vector3(50.0 * INCH, 0, 0), melee)
 	_armed(2, "Watchers", Vector3(-50.0 * INCH, 0, 0), melee)
 	await _runner.simulate_frames(1)   # the pick is a raycast: let physics register the fresh body
+	await E2EBoot.start_activation(_main, attacker)   # the explicit activation a player opens first
 	await _main.solo_begin_targeting(attacker, melee)
 	return {"attacker": attacker, "foe": foe}
 
@@ -149,7 +150,7 @@ func _open_window(melee: bool) -> Dictionary:
 ## What the unit card's "Activate" button does (unit_dock.gd "start_activation"), then let the
 ## activation's coroutines (the AI's answer included) settle.
 func _activate_like_the_card(unit: GameUnit) -> void:
-	await _main.radial_menu_controller.card_start_activation(unit)
+	await _main.radial_menu_controller.card_end_activation(unit)   # one-core release: the card's End activation ends the open one
 	await _runner.simulate_frames(4)
 	await E2EBoot.settle(get_tree())
 
@@ -167,7 +168,10 @@ func _attack_line_logged(attacker: GameUnit, melee: bool) -> bool:
 	var text := _log_text()
 	if melee:
 		return text.find("%s charges Foe into melee" % attacker.get_name()) != -1
-	return text.find("%s: " % attacker.get_name()) != -1 and text.find("with line of sight + range") != -1
+	# The table prints the sight count; a plain human unit's volley goes through the core (one-core release), whose
+	# declaration beat reads "<unit> fires at <target>" instead (by design, plan note 14.11).
+	return (text.find("%s: " % attacker.get_name()) != -1 and text.find("with line of sight + range") != -1) \
+		or text.find("%s fires at " % attacker.get_name()) != -1
 
 
 ## Drive one scenario. `activate_first` is the hypothesis (activate by the card between the window
@@ -295,7 +299,8 @@ func _open_coordinate_offer() -> GameUnit:
 	_main._solo_batch = false
 	_main._solo_ai_busy = true
 	_main._solo_pending_replies = 0
-	await _main.radial_menu_controller.card_toggle_activation(bearer)
+	await E2EBoot.start_activation(_main, bearer)   # the explicit activation a player opens first ...
+	await _main.radial_menu_controller.card_end_activation(bearer)   # ... and the End that offers the hand-off
 	var deadline := Time.get_ticks_msec() + 5000
 	while not _main._solo_target_mode.has("coordinate") and Time.get_ticks_msec() < deadline:
 		await get_tree().process_frame
@@ -306,7 +311,8 @@ func _open_coordinate_offer() -> GameUnit:
 func _toggle_off_and_on(bearer: GameUnit) -> void:
 	await _main.radial_menu_controller.card_toggle_activation(bearer)
 	assert_bool(bearer.is_activated).override_failure_message("fixture: the toggle did not un-mark the bearer").is_false()
-	await _main.radial_menu_controller.card_toggle_activation(bearer)
+	await E2EBoot.start_activation(_main, bearer)   # re-marking = Activate again + End activation
+	await _main.radial_menu_controller.card_end_activation(bearer)
 	assert_bool(bearer.is_activated).override_failure_message("fixture: the toggle did not re-mark the bearer").is_true()
 	await _runner.simulate_frames(4)
 

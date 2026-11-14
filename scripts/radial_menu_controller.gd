@@ -299,7 +299,7 @@ func open_menu(screen_position: Vector2, selected_objects: Array) -> void:
 
 		if is_full_unit and not is_single_model_unit:
 			# Multi-model unit fully selected - show unit menu
-			items = RadialMenu.create_unit_menu(game_unit, _solo_combat_available(game_unit), _solo_auto_available(game_unit))
+			items = RadialMenu.create_unit_menu(game_unit, _solo_combat_available(game_unit), _solo_auto_available(game_unit), _undo_offered(game_unit))
 			_append_transport_items(game_unit, context, items)
 		elif model_instance:
 			# Single model or partial selection - show model menu (includes wounds)
@@ -311,7 +311,7 @@ func open_menu(screen_position: Vector2, selected_objects: Array) -> void:
 			if game_unit != null and _solo_combat_available(game_unit):
 				# Pass the unit so the Cast entry appears here too (maintainer 2026-07-22: a LONE
 				# caster hero always lands in this model-menu path — Cast was unreachable).
-				var solo_items := RadialMenu.solo_combat_items(game_unit, _solo_auto_available(game_unit))
+				var solo_items := RadialMenu.solo_combat_items(game_unit, _solo_auto_available(game_unit), _undo_offered(game_unit))
 				for si in range(solo_items.size()):
 					items.insert(si, solo_items[si])
 			# Reinforcement reaches the model-menu path too: a DESTROYED carrier has no full-unit
@@ -680,6 +680,13 @@ func _solo_combat_available(game_unit: GameUnit) -> bool:
 	if main_node == null or game_unit == null:
 		return false
 	return bool(main_node.call("solo_combat_available", game_unit)) if main_node.has_method("solo_combat_available") else false
+
+
+## One-core release: the unit's activation has the explicit Cancel (it is a lifecycle unit of this table), so its
+## Speed Feat tooltip may say the spend can be undone until the first die. False with the kill switch on.
+func _undo_offered(game_unit: GameUnit) -> bool:
+	var main_node := get_node_or_null("/root/Main")
+	return main_node != null and game_unit != null and CoreActivation.is_lifecycle_unit(main_node, game_unit)
 
 
 ## A1 (NML-202): the engine-executed verbs (Charge / Advance & Shoot / Rush) gate — same eligibility

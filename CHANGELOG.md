@@ -70,6 +70,17 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   per-model kit data, so the look-ahead removed casualties in list order. It now gets each model's
   kit, so its choice matches the table. (#2648)
 
+### Changed — activations
+- **Activations are explicit, and a move is checked by the rules engine.** Against the AI, and in an
+  online room set to Automatic, a unit of yours is activated with the card's Activate button before it
+  can be dragged, shoot, cast or spend its Speed Feat. Cancel takes the activation back until the
+  first die is rolled (the Speed Feat tooltip now says so), and End ends it. The Movement selector
+  (Advance, Rush or Charge) is always on and the drag stops at its limit; the final positions are
+  re-checked and an illegal move is refused with the reason. Online, both tables compare their state
+  after each activation and correct a difference by themselves. Hotseat tables and Manual rooms play
+  as before. Setting the environment variable `NML_ONE_CORE_ACTIVATION=0` before starting the game
+  brings the old flow back.
+
 ### Changed — multiplayer
 - **The relay counts each player's own address.** Behind the hosting proxy the limit of 10
   connections per address applied to all players together. The relay now reads the client address the

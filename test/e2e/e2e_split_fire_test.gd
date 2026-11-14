@@ -105,6 +105,7 @@ func test_declared_split_fires_each_group_at_its_target(timeout := 240000) -> vo
 	var shooter := _armed(1, "Tank", Vector3.ZERO, ["Rifle", "Cannon"])
 	var foe_a := _armed(2, "FoeA", Vector3(8.0 * INCH, 0, 0), [])
 	var foe_b := _armed(2, "FoeB", Vector3(0, 0, 8.0 * INCH), [])
+	await E2EBoot.start_activation(_main, shooter)   # the explicit activation a player opens first
 	await _main._run_human_attack_split(shooter, foe_a, foe_b, ["Cannon"])
 	var text := ""
 	for e in _main.battle_log.entries():

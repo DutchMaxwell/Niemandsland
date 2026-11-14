@@ -123,6 +123,7 @@ func test_an_online_cast_asks_the_remote_opponent(timeout := 120000) -> void:
 	var start: int = _main.battle_log.entries().size()
 	var done := [false]
 	(func() -> void:
+		await E2EBoot.start_activation(_main, seer)   # the explicit activation a player opens first
 		await _main._run_human_cast(seer, seer, {"name": "Bolt", "threshold": 2}, [units[1]])
 		done[0] = true).call()
 	await _wait(func() -> bool: return done[0] or not _sent("request_roll").is_empty())
@@ -166,6 +167,7 @@ func test_an_online_cast_at_a_vacant_seat_resolves_without_interference(timeout 
 	var start: int = _main.battle_log.entries().size()
 	var done := [false]
 	(func() -> void:
+		await E2EBoot.start_activation(_main, units[0])   # the explicit activation a player opens first
 		await _main._run_human_cast(units[0], units[0], {"name": "Bolt", "threshold": 2}, [units[1]])
 		done[0] = true).call()
 	await _wait(func() -> bool: return done[0])
@@ -190,6 +192,7 @@ func test_an_online_cast_with_the_sight_line_blocked_logs_why_nobody_interferes_
 	var start: int = _main.battle_log.entries().size()
 	var done := [false]
 	(func() -> void:
+		await E2EBoot.start_activation(_main, units[0])   # the explicit activation a player opens first
 		await _main._run_human_cast(units[0], units[0], {"name": "Bolt", "threshold": 2}, [units[1]])
 		done[0] = true).call()
 	await _wait(func() -> bool: return done[0])
@@ -214,6 +217,7 @@ func test_an_online_cast_asks_the_hidden_remote_caster_at_epoch_73(timeout := 12
 	var start: int = _main.battle_log.entries().size()
 	var done := [false]
 	(func() -> void:
+		await E2EBoot.start_activation(_main, units[0])   # the explicit activation a player opens first
 		await _main._run_human_cast(units[0], units[0], {"name": "Bolt", "threshold": 2}, [units[1]])
 		done[0] = true).call()
 	await _wait(func() -> bool: return done[0] or not _sent("request_roll").is_empty())
@@ -256,6 +260,7 @@ func test_control_a_lone_caster_without_tokens_logs_no_boost_line(timeout := 120
 	var start: int = _main.battle_log.entries().size()
 	var done := [false]
 	(func() -> void:
+		await E2EBoot.start_activation(_main, seer)   # the explicit activation a player opens first
 		await _main._run_human_cast(seer, seer, {"name": "Bolt", "threshold": 2}, [foe])
 		done[0] = true).call()
 	await _wait(func() -> bool: return done[0])
@@ -284,6 +289,7 @@ func test_a_cast_with_the_friendly_caster_out_of_sight_logs_why_nobody_boosts_at
 	var start: int = _main.battle_log.entries().size()
 	var done := [false]
 	(func() -> void:
+		await E2EBoot.start_activation(_main, seer)   # the explicit activation a player opens first
 		await _main._run_human_cast(seer, seer, {"name": "Bolt", "threshold": 2}, [foe])
 		done[0] = true).call()
 	await _wait(func() -> bool: return done[0])
@@ -309,6 +315,7 @@ func test_the_no_boost_line_names_the_reach_without_sight_at_epoch_73(timeout :=
 	var start: int = _main.battle_log.entries().size()
 	var done := [false]
 	(func() -> void:
+		await E2EBoot.start_activation(_main, seer)   # the explicit activation a player opens first
 		await _main._run_human_cast(seer, seer, {"name": "Bolt", "threshold": 2}, [foe])
 		done[0] = true).call()
 	await _wait(func() -> bool: return done[0])

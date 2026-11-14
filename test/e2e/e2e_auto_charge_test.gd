@@ -13,6 +13,7 @@ var _pump: Timer
 
 
 func before_test() -> void:
+	CoreActivation._env = 0   # the engine verbs are hidden from players (main.PLAYER_AUTO_VERBS_ENABLED = false): the Automodus rework must define their Activate door
 	E2EBoot.arm_harness_mode()
 	_root_before = E2EBoot.root_children(get_tree())
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
@@ -26,6 +27,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	CoreActivation._env = -1
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 	_main = null
 	_runner = null

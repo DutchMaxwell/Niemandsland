@@ -100,6 +100,7 @@ func _cast_with_one_boost(seer: GameUnit, target: GameUnit) -> String:
 	var start: int = _main.battle_log.entries().size()
 	var done := [false]
 	(func() -> void:
+		await E2EBoot.start_activation(_main, seer)   # the explicit activation a player opens first
 		await _main._run_human_cast(seer, seer, {"name": "Bolt", "threshold": 1}, [target])
 		done[0] = true).call()
 	await _wait(func() -> bool: return done[0] or _boost_card() != null)

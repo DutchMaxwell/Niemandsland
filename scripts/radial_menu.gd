@@ -609,7 +609,9 @@ static func create_model_menu(model: ModelInstance) -> Array[RadialMenuItem]:
 ## Creates menu items for a full unit selection.
 ## Solo (goal 001 P8): declare an attack on the AI — enters targeting mode (line of sight shown), then
 ## the whole exchange resolves with real tray dice, mirroring the AI's own combat flow.
-static func solo_combat_items(game_unit: GameUnit = null, auto_ok: bool = false) -> Array[RadialMenuItem]:
+## `undo_ok`: this unit's activation has the explicit Cancel (the one-core lifecycle), so the Speed Feat spend can be
+## taken back until the first die is rolled; false keeps the old words ("Cannot be undone").
+static func solo_combat_items(game_unit: GameUnit = null, auto_ok: bool = false, undo_ok: bool = false) -> Array[RadialMenuItem]:
 	var out: Array[RadialMenuItem] = []
 	out.append(RadialMenuItem.new("solo_shoot", "Shoot", "»", true, "Shoot at an enemy unit — pick a target with line of sight"))
 	out.append(RadialMenuItem.new("solo_fight", "Fight", "⚔", true, "Strike an enemy unit in melee contact"))
@@ -638,7 +640,8 @@ static func solo_combat_items(game_unit: GameUnit = null, auto_ok: bool = false)
 	# D22 (NML-984): the once-per-game Speed Feat is the player's to spend — one click, this activation.
 	if game_unit != null and not SoloController.unspent_speed_feats(game_unit).is_empty():
 		out.append(RadialMenuItem.new("solo_speed_feat", "Speed Feat (once per game)", "SF", true,
-			"Speed Feat: spend the once-per-game move bonus for this activation — Advance and Rush/Charge grow at once. Cannot be undone."))
+			"Speed Feat: spend the once-per-game move bonus for this activation — Advance and Rush/Charge grow at once. "
+			+ ("Can be undone until the first die is rolled." if undo_ok else "Cannot be undone.")))
 	# Delayed Action (wave 5) — the "Pass Turn" primitive. Offered on every carrier, NEVER hidden when
 	# the condition happens to fail: an entry that vanishes reads like a missing rule, so an illegal
 	# pass is refused in the battle log with the measured counts instead (#224 transparency doctrine).
@@ -689,11 +692,11 @@ static func reinforcement_items(game_unit: GameUnit) -> Array[RadialMenuItem]:
 	return out
 
 
-static func create_unit_menu(game_unit: GameUnit, solo_combat: bool = false, auto_ok: bool = false) -> Array[RadialMenuItem]:
+static func create_unit_menu(game_unit: GameUnit, solo_combat: bool = false, auto_ok: bool = false, undo_ok: bool = false) -> Array[RadialMenuItem]:
 	var items: Array[RadialMenuItem] = []
 
 	if solo_combat:
-		items.append_array(solo_combat_items(game_unit, auto_ok))
+		items.append_array(solo_combat_items(game_unit, auto_ok, undo_ok))
 	items.append_array(reinforcement_items(game_unit))
 
 	var activate_icon = "-" if game_unit.is_activated else "+"

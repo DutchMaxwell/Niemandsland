@@ -193,7 +193,7 @@ func _ticks(n: int, dz := 0.0) -> void:
 
 ## Solo table (slot 2 = AI): a 3-model unit with 12" rifles; enemy A 15" ahead (11" after a 4" drag, out of
 ## reach before it), enemy B 26" ahead (22" after it). Returns the mover's model nodes.
-func _solo_lines_table() -> Array[Node3D]:
+func _solo_lines_table() -> Array[Node3D]:   # awaited: the mover's activation is open (the explicit activation a player starts first)
 	_main.solo_ai_slots = {2: true}
 	_main.get_node("OPRArmyManager").call("set_game_phase", OPRArmyManager.GamePhase.PLAYING)
 	var om: Object = _main.object_manager
@@ -205,12 +205,13 @@ func _solo_lines_table() -> Array[Node3D]:
 	_armed([om.call("spawn_miniature", Vector3(0.05, 0.0, 26 * INCH), false)], "am23_foe_b", 2)
 	assert_int(_main._solo_volley_sighted(mover, foe_a)) \
 		.override_failure_message("A must be out of reach before the drag, else this test proves nothing").is_equal(0)
+	await E2EBoot.start_activation(_main, mover)
 	return models
 
 
 ## OD 7: while the drag runs, exactly ONE line (for A, from the landing); the drop and Esc clear it.
 func test_drag_shows_one_line_per_enemy_in_range() -> void:
-	var models := _solo_lines_table()
+	var models := await _solo_lines_table()
 	var om: Object = _main.object_manager
 	_drag_by(models, 4 * INCH)
 	_ticks(4)   # both enemies checked
@@ -228,7 +229,7 @@ func test_drag_shows_one_line_per_enemy_in_range() -> void:
 
 ## Lines only for ONE unit's models: a joined hero is part of its host (GF p.14); another unit makes it mixed.
 func test_lines_only_for_one_units_drag() -> void:
-	var models := _solo_lines_table()
+	var models := await _solo_lines_table()
 	var om: Object = _main.object_manager
 	var mover: GameUnit = models[0].get_meta("game_unit")
 	var hero_node: Node3D = om.call("spawn_miniature", Vector3(0.15, 0.0, 0.0), false)
@@ -251,7 +252,7 @@ func test_lines_only_for_one_units_drag() -> void:
 ## Frame-time gate: a tick draws the ghosts OR checks ONE enemy unit, taking turns, and the round-robin reaches
 ## every enemy in range: A, then B (out of range), then C and D (both in range) - one line more per lines-tick.
 func test_round_robin_reaches_every_enemy_in_range() -> void:
-	var models := _solo_lines_table()
+	var models := await _solo_lines_table()
 	var om: Object = _main.object_manager
 	_armed([om.call("spawn_miniature", Vector3(-0.08, 0.0, 15 * INCH), false)], "am23_foe_c", 2)
 	_armed([om.call("spawn_miniature", Vector3(0.18, 0.0, 15 * INCH), false)], "am23_foe_d", 2)
@@ -267,7 +268,7 @@ func test_round_robin_reaches_every_enemy_in_range() -> void:
 ## Frame-time gate: a move under 0.25" keeps the landing (no ghost recompute, the line verdicts stay); a
 ## larger one recomputes the ghosts and drops the old landing's lines.
 func test_a_small_move_keeps_the_landing() -> void:
-	var models := _solo_lines_table()
+	var models := await _solo_lines_table()
 	_drag_by(models, 4 * INCH)
 	_ticks(1)   # lines-tick: A
 	assert_int(_main.landing_preview.line_count()).is_equal(1)
