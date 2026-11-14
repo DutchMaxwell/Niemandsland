@@ -487,6 +487,21 @@ static func close_all(main) -> void:
 		close_session(main, id)
 
 
+## Step 68 (O16): an effect that adds, removes or re-hosts a unit (the Reinforcement sacrifice, Disembark, Unload) commits THAT
+## unit's open activation like a die: its Cancel is gone (the card follows), nothing is undone, `committed` keeps the first
+## reason. Idempotent; a unit without a session is a no-op.
+static func note_commit(main, gu: GameUnit, why: String) -> void:
+	if gu == null or not _sessions.has(gu.unit_id):
+		return
+	var s: Dictionary = _sessions[gu.unit_id]
+	var open: bool = not bool(s["dice"])
+	s["dice"] = true
+	if not s.has("committed"):
+		s["committed"] = why
+	if open:
+		_refresh_card(main)
+
+
 ## Step 35: whether `unit_id`'s activation can still be cancelled: open, and no die thrown since the Start.
 static func can_cancel(unit_id: String) -> bool:
 	return _sessions.has(unit_id) and not bool((_sessions[unit_id] as Dictionary)["dice"])

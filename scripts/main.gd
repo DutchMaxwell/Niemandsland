@@ -16103,6 +16103,11 @@ func solo_begin_reinforcement(unit: GameUnit) -> void:
 				"Reinforcement: not now — %s" % reason, ai)
 		_show_toast("Reinforcement: %s" % reason)
 		return
+	if CoreActivation.is_lifecycle_unit(self, unit):   # one-core P3 step 68 (O16): the sacrifice commits the unit's activation
+		if CoreActivation.open_unit_name(self, unit) != "":
+			core_drag_refused(unit)   # another unit's activation is open: the O5 sentence, and nothing dies
+			return
+		CoreActivation.note_commit(self, unit, "reinforcement")
 	await _reinforcement_sacrifice(unit)
 
 
