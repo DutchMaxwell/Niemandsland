@@ -1610,6 +1610,23 @@ func _snapback_off_turn_drag() -> bool:
 	return true
 
 
+## One-core P3 step 66: the drag in flight, per dragged model (network id) that moved more than the 0.1" floor, the path
+## its drop will record: the anchor's simplified path shifted to the model's base, its position now appended.
+## `_stop_dragging` builds the same `moves` entries after the drop door has run; a refused drop never records them.
+func drag_paths() -> Dictionary:
+	var out := {}
+	var base_path: PackedVector2Array = MoveLedger.simplify(_drag_path_points)
+	for obj in _selected_objects:
+		if not is_instance_valid(obj) or not _drag_start_positions.has(obj) or not obj.has_meta("network_id"):
+			continue
+		var start: Vector3 = _drag_start_positions[obj]
+		if Vector2(obj.global_position.x - start.x, obj.global_position.z - start.z).length() * METERS_TO_INCHES > 0.1:
+			var offset := Vector2(start.x - _drag_anchor_position.x, start.z - _drag_anchor_position.z)
+			out[int(obj.get_meta("network_id"))] = MoveLedger.with_final(MoveLedger.translated(base_path, offset),
+					Vector2(obj.global_position.x, obj.global_position.z))
+	return out
+
+
 ## Longest base offset of this drag in inches (the Hit & Run step's 3" limit reads it).
 func _drag_distance_in() -> float:
 	var longest := 0.0
