@@ -1369,6 +1369,97 @@ func test_an_open_activation_without_a_core_is_reported_and_the_drop_stands() ->
 	GraphicsSettings.enforce_movement_limit = was
 
 
+## ---- step 35: Cancel and the first-die latch (O9, O14 (1b), O15 (3)) ----
+
+const CANCEL_LINE := "Rifles cancelled its activation - back at its start."
+
+
+func _frames(net: FakeNet, method: String) -> Array:
+	return net.sent.filter(func(f: Dictionary) -> bool: return f["m"] == method).map(func(f: Dictionary) -> Array: return f["a"])
+
+
+func _sorted_col(frames: Array, col: int) -> Array:
+	var out: Array = frames.map(func(a: Array) -> int: return int(a[col]))
+	out.sort()
+	return out
+
+
+## Step 35: after two drags (two drop ids) a Cancel puts every model back, erases the chalk and the ledger, gives
+## moved_round back, does NOT activate the unit and closes the session; the core's sentence is the only log line; the other
+## table gets one move and one rotation per model, one trails-undo per drop id, that one log event, and no activation frame.
+func test_a_cancel_puts_the_unit_back_and_says_only_the_cores_sentence() -> void:
+	var u := _human("Rifles")
+	u.unit_properties["moved_round"] = 0   # moved last round: the cancel must give back 0, not erase it
+	var at := _poses(u)
+	assert_bool(CoreActivation.open_session(_main, u)).is_true()
+	await _drag_unit(u, 2.0)
+	await _drag_unit(u, 2.0)
+	var drops: Array = []
+	for e in _main.move_trails.ledger.entries_for_unit(u.unit_id):
+		if not drops.has(int(e["drop_id"])):
+			drops.append(int(e["drop_id"]))
+	drops.sort()
+	assert_int(drops.size()).override_failure_message("drops: %s" % [drops]).is_equal(2)
+	assert_array(_poses(u)).override_failure_message("the drags did not move").is_not_equal(at)
+	var lines_before: int = _main.battle_log.entries().size()
+	var net := _recording_net()
+	CoreActivation.cancel(_main, u)
+	assert_array(_poses(u)).override_failure_message("not back at the start").is_equal(at)
+	assert_array(_main.move_trails.ledger.entries_for_unit(u.unit_id)).override_failure_message("ledger left").is_empty()
+	assert_array(_main.move_trails._trails.filter(func(r: Dictionary) -> bool: return str(r["unit"]) == u.unit_id)) \
+		.override_failure_message("chalk left").is_empty()
+	assert_int(int(u.unit_properties.get("moved_round", -1))).override_failure_message("moved_round").is_equal(0)
+	assert_bool(u.is_activated).override_failure_message("a cancel activated the unit").is_false()
+	assert_bool(CoreActivation.session_open(u.unit_id)).override_failure_message("the session stays open").is_false()
+	assert_int(_main.battle_log.entries().size() - lines_before).override_failure_message("lines: %s" % [_main.battle_log.entries()]).is_equal(1)
+	assert_array(_log_lines(CANCEL_LINE)).has_size(1)
+	assert_array(_sorted_col(_frames(net, "move_object_networked"), 0)).override_failure_message("moves: %s" % [net.sent]).is_equal([901, 902])
+	assert_array(_sorted_col(_frames(net, "rotate_object_networked"), 0)).override_failure_message("rotations: %s" % [net.sent]).is_equal([901, 902])
+	assert_array(_sorted_col(_frames(net, "sync_move_trails_undo"), 2)).override_failure_message("trails undo: %s" % [net.sent]).is_equal(drops)
+	assert_array(_frames(net, "sync_log_event").filter(func(a: Array) -> bool: return a[1] == CANCEL_LINE)).has_size(1)
+	assert_array(_frames(net, "sync_unit_activation")).override_failure_message("an activation frame: %s" % [net.sent]).is_empty()
+	_end_session()
+
+
+## Step 35 (step 37's journal): a Cancel also gives back a one-time effect the activation spent, with its line.
+func test_a_cancel_gives_back_a_spent_one_time_effect() -> void:
+	var u := _human("Rifles")
+	assert_bool(CoreActivation.open_session(_main, u)).is_true()
+	_main._sync_unit_property(u, "speed_feat_used_speed_feat", true)
+	CoreActivation.cancel(_main, u)
+	assert_bool(u.unit_properties.has("speed_feat_used_speed_feat")).override_failure_message("the latch stays").is_false()
+	assert_array(_unspent_lines()).is_equal(["Rifles: Speed Feat is unspent again."])
+	assert_array(_log_lines(CANCEL_LINE)).has_size(1)
+
+
+## Step 35 (O9): the first die of a roll this table throws takes the Cancel away - a real roll_started, and a scripted tray
+## roll even while the other table's dice are still showing (roll_started then reads as remote) - but a roll the OTHER table
+## threw (_is_showing_remote_roll) does not; a Cancel after the latch changes nothing.
+func test_the_first_die_takes_the_cancel_away_but_a_remote_roll_does_not() -> void:
+	var u := _human("Rifles")
+	assert_bool(CoreActivation.open_session(_main, u)).is_true()
+	assert_bool(CoreActivation.can_cancel(u.unit_id)).is_true()
+	_main._is_showing_remote_roll = true   # show_faces sets it before roll_started fires
+	_main.dice_roller_control.roll_started.emit()
+	_main._is_showing_remote_roll = false
+	assert_bool(CoreActivation.can_cancel(u.unit_id)).override_failure_message("a remote roll took the Cancel away").is_true()
+	_main._solo_batch = true
+	_main._is_showing_remote_roll = true   # the other table's dice are still on the tray: the hook in roll_started skips
+	await _main._solo_tray_roll(1, 4, "You")
+	assert_bool(CoreActivation.can_cancel(u.unit_id)).override_failure_message("a tray roll left the Cancel").is_false()
+	await _drag_unit(u, 2.0)
+	var moved := _poses(u)
+	var lines: int = _main.battle_log.entries().size()
+	CoreActivation.cancel(_main, u)
+	assert_array(_poses(u)).override_failure_message("a late cancel moved the unit").is_equal(moved)
+	assert_bool(CoreActivation.session_open(u.unit_id)).override_failure_message("a late cancel closed the session").is_true()
+	assert_int(_main.battle_log.entries().size()).override_failure_message("a late cancel wrote a line").is_equal(lines)
+	var v := _human("Bravo")
+	assert_bool(CoreActivation.open_session(_main, v)).is_true()
+	_main.dice_roller_control.roll_started.emit()
+	assert_bool(CoreActivation.can_cancel(v.unit_id)).override_failure_message("roll_started left the Cancel").is_false()
+
+
 ## ---- Step 66 (MOVE_GAPS 5): the drop re-check sends the activation's walked paths ----
 
 ## One real drag of every model of `u` by (dx, dz) inches: ObjectManager's own pickup, cursor move and drop.
