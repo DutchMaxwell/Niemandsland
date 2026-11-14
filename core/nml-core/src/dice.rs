@@ -112,7 +112,7 @@ impl Tray {
     /// instead of drawing. Past the last group it serves 1s and records where it
     /// first ran dry (`starved_at`) — the step API turns that into `NeedRoll`.
     pub fn supplied(groups: Vec<Vec<u8>>) -> Tray {
-        let feed = Feed { groups, next: 0, starved_at: None, mismatch: None, placed: None, placed_trails: None, kinds: Vec::new() };
+        let feed = Feed { groups, next: 0, starved_at: None, mismatch: None, placed: None, placed_trails: None, kinds: Vec::new(), owners: Vec::new() };
         Tray { rng: GodotRng::new(0), feed: Some(feed), zero_draws: false, lines: Vec::new(), landings: Vec::new() }
     }
 
@@ -141,6 +141,14 @@ impl Tray {
     pub fn name_next(&mut self, kind: &'static str) {
         if let Some(feed) = self.feed.as_mut() {
             feed.kinds.push((feed.next, kind));
+        }
+    }
+
+    /// One-core P4 step 4.0-9: the unit a resolver is about to draw for, stamped for the next draw. A supplied tray keeps
+    /// it for `NeedRoll`'s `owner_key` (no second resolve); a seeded tray ignores the call.
+    pub fn owner_next(&mut self, unit: Option<usize>) {
+        if let Some(feed) = self.feed.as_mut() {
+            feed.owners.push((feed.next, unit));
         }
     }
 
@@ -207,6 +215,8 @@ pub struct Feed {
     placed_trails: Option<Vec<Vec<[f64; 2]>>>,
     /// One-core P3: (draw, the table's kind) from `Tray::name_next`.
     kinds: Vec<(usize, &'static str)>,
+    /// One-core P4 step 4.0-9: (draw, the drawing unit) from `Tray::owner_next`.
+    owners: Vec<(usize, Option<usize>)>,
 }
 
 impl Feed {
@@ -218,6 +228,11 @@ impl Feed {
     /// The table's kind `Tray::name_next` gave draw `index`, if any.
     pub fn kind_of(&self, index: usize) -> Option<&'static str> {
         self.kinds.iter().find(|(at, _)| *at == index).map(|(_, k)| *k)
+    }
+
+    /// The unit `Tray::owner_next` stamped for draw `index`, if any.
+    pub fn owner_of(&self, index: usize) -> Option<usize> {
+        self.owners.iter().find(|(at, _)| *at == index).and_then(|(_, u)| *u)
     }
 
     fn take(&mut self, n: usize) -> Vec<u8> {
@@ -668,6 +683,7 @@ fn save_batch(
         LogLine { rule: "save", category: Category::Combat, side: def.side,
             text: format!("{def_owner} saves on {}", save_threshold_text(d, a)), detail: None }
     });
+    tray.owner_next(def.unit);
     let faces = tray.roll(count as usize);
     out.rolls.push(Roll {
         kind: "defense",
@@ -685,6 +701,7 @@ fn save_batch(
     if bane {
         let n = faces.iter().filter(|&&f| f == 6 || (f as i64 >= bane_from && f as i64 >= target)).count() as i64;
         if n > 0 {
+            tray.owner_next(def.unit);
             reroll = tray.roll(n as usize);
             out.rolls.push(Roll {
                 kind: "defense",
@@ -999,6 +1016,7 @@ pub fn resolve_volley_leg(
     let mut hero_upr: Vec<(usize, i64, i64)> = Vec::new(); // (shooter index, ap, hit): a joined hero's own die
     if shooters.first().is_some_and(|sh| sh.att.unpredictable_shooting) {
         let att0 = shooters[0].att;
+        tray.owner_next(att0.unit);
         let faces = tray.roll(1);
         if (faces[0] as i64) <= att0.unpredictable_low_roll_max {
             upr_ap = att0.unpredictable_ap_bonus;
@@ -1016,6 +1034,7 @@ pub fn resolve_volley_leg(
         // AIG-G2 R5 (EPOCH_73_V36): the host rolled none, so each joined hero who carries the rule himself rolls ONE
         // die for his OWN profiles, before any weapon fires. Table twin: `_solo_hero_unpredictable`.
         for (i, sh) in shooters.iter().enumerate().skip(1).filter(|(_, sh)| sh.att.unpredictable_shooting) {
+            tray.owner_next(sh.att.unit);
             let faces = tray.roll(1);
             let low = (faces[0] as i64) <= sh.att.unpredictable_low_roll_max;
             hero_upr.push((i, if low { sh.att.unpredictable_ap_bonus } else { 0 }, if low { 0 } else { sh.att.unpredictable_hit_bonus }));
@@ -1406,6 +1425,7 @@ pub fn resolve_volley_leg(
         // plain `to_hit` (main.gd:3200) and `_solo_hits` applies the +1 when it
         // COUNTS (:4405-4406) — so the die count is scored one better while the
         // RECORDED target stays raw, which is what `dice.jsonl` carries.
+        tray.owner_next(sh.att.unit);
         let faces = tray.roll(n as usize);
         out.rolls.push(Roll {
             kind: "attack",
@@ -1921,6 +1941,7 @@ pub(crate) fn regen_batch(
     if w <= 0 || !def.regeneration || def.regen_target <= 0 {
         return w.max(0);
     }
+    tray.owner_next(def.unit);
     let faces = tray.roll(w as usize);
     let ignored = faces.iter().filter(|&&f| f as i64 >= def.regen_target).count() as i64;
     rolls.push(Roll {
@@ -2124,6 +2145,7 @@ fn parry_event(def: &Ctx, def_owner: &str, hits: i64, gated: bool, tray: &mut Tr
     let dice = def.parry_dice_total.unwrap_or(def.parry_dice * def.models);
     let n = if gated { dice.min(hits) } else { 0 };
     if n <= 0 { return 0; }
+    tray.owner_next(def.unit);
     let faces = tray.roll(n as usize);
     let k = faces.iter().filter(|&&f| f >= 6).count() as i64;
     out.rolls.push(Roll { kind: "parry", count: n, target: 6, faces, owner: def_owner.into() });
@@ -2292,6 +2314,7 @@ pub fn resolve_melee_leg_wipe(
     let mut uf_ap = 0;
     let mut uf_hit = 0;
     if strikers.first().is_some_and(|sh| sh.att.unpredictable) {
+        tray.owner_next(strikers[0].att.unit);
         let faces = tray.roll(1);
         if faces[0] <= 3 {
             uf_ap = 1;
@@ -2315,6 +2338,7 @@ pub fn resolve_melee_leg_wipe(
         if n <= 0 {
             continue;
         }
+        tray.owner_next(sh.att.unit);
         let faces = tray.roll(n as usize);
         let w = faces.iter().filter(|&&f| f as i64 >= RAVAGE_WOUND_TARGET).count() as i64;
         out.rolls.push(Roll {
@@ -2336,6 +2360,7 @@ pub fn resolve_melee_leg_wipe(
         if n <= 0 {
             continue;
         }
+        tray.owner_next(sh.att.unit);
         let faces = tray.roll(n as usize);
         let w = faces.iter().filter(|&&f| f as i64 >= 4).count() as i64;
         out.rolls.push(Roll { kind: "attack", count: n, target: 4, faces, owner: sh.owner.into() });
@@ -2430,6 +2455,7 @@ pub fn resolve_melee_leg_wipe(
                 }
                 versatile_ap = sh.att.versatile_pick_ap;
             }
+            tray.owner_next(sh.att.unit);
             let faces = tray.roll(n as usize);
             out.rolls.push(Roll {
                 kind: "attack",
@@ -2661,6 +2687,7 @@ pub fn resolve_melee_leg_wipe(
                         "{}: {} blocked 1{} — {} rolls {} extra attack{}",
                         p.bloodthirsty_rule, bt_ones, if bt_ones == 1 { "" } else { "s" },
                         sh.owner, bt_extra, if bt_extra == 1 { "" } else { "s" }));
+                    tray.owner_next(sh.att.unit);
                     let bt_faces = tray.roll(bt_extra as usize);
                     out.rolls.push(Roll {
                         kind: "attack",
@@ -3045,9 +3072,11 @@ pub enum Morale {
 ///
 /// NOT PORTED: the spell morale tokens that join the Banner bonus in the target
 /// (:8348-8355) — this port carries no spell-token ledger.
+#[allow(clippy::too_many_arguments)] // the step's own owner stamp is one optional seat, beside the seven resolver inputs
 pub fn resolve_morale_with_tray(
     unit: &Ctx,
     owner: &str,
+    owner_unit: Option<usize>,
     melee: bool,
     below_half: bool,
     shaken: bool,
@@ -3061,6 +3090,7 @@ pub fn resolve_morale_with_tray(
     } else {
         let target = morale_target(unit.quality, unit.morale_bonus);
         tray.name_next("morale"); // the table's kind (main.gd `_solo_morale_test`): its dice line says passed/failed
+        tray.owner_next(owner_unit);
         let faces = tray.roll(1);
         let passed = faces_to_hits(&faces, target as u8) > 0;
         out.rolls.push(Roll { kind: "attack", count: 1, target, faces, owner: owner.into() });
@@ -3071,6 +3101,7 @@ pub fn resolve_morale_with_tray(
         }
     };
     if result != Morale::Passed && unit.fearless {
+        tray.owner_next(owner_unit);
         let faces = tray.roll(1);
         let passed = faces_to_hits(&faces, FEARLESS_RECOVER_TARGET as u8) > 0;
         out.rolls.push(Roll {
@@ -3088,6 +3119,7 @@ pub fn resolve_morale_with_tray(
         // `maxi(1, wounds_to_destroy)` :8364 — the zero-die rule applies here
         // too, and the recorded target is the SAFE face, `MAX + 1`.
         let n = wounds_to_destroy.max(1);
+        tray.owner_next(owner_unit);
         let faces = tray.roll(n as usize);
         out.wounds =
             faces.iter().filter(|&&f| (f as i64) <= NO_RETREAT_SELF_WOUND_MAX).count() as i64;

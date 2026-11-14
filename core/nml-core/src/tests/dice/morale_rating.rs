@@ -75,12 +75,12 @@ use crate::unit::capture_reads_for_epoch;
         };
         let ctx38 = Ctx { quality: 4, morale_bonus: stamp(38), ..Default::default() };
         let (out38, r38) =
-            resolve_morale_with_tray(&ctx38, "Carrier", false, false, false, 1, &mut Tray::seeded(8));
+            resolve_morale_with_tray(&ctx38, "Carrier", None, false, false, false, 1, &mut Tray::seeded(8));
         assert_eq!(r38.rolls[0].target, 4, "38: the plain Quality 4+ target");
         assert_eq!(out38, Morale::Shaken, "the die shows 3 — one under the target");
         let ctx39 = Ctx { quality: 4, morale_bonus: stamp(39), ..Default::default() };
         let (out39, r39) =
-            resolve_morale_with_tray(&ctx39, "Carrier", false, false, false, 1, &mut Tray::seeded(8));
+            resolve_morale_with_tray(&ctx39, "Carrier", None, false, false, false, 1, &mut Tray::seeded(8));
         assert_eq!(r39.rolls[0].target, 2, "39: Quality 4 - 2 = the 2+ target");
         assert_eq!(out39, Morale::Passed, "the same die 3 now passes");
     }
