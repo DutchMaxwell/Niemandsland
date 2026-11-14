@@ -562,9 +562,11 @@ func _leave_to_menu() -> bool:
 ## previews it through the point path (the 1.8b/1.8f ghosts) and keeps the landing.
 func _auto_verb_preview() -> bool:
 	var unit := _unit(P2A_UNIT)
-	# One-core release: the engine verb is a door of an OPEN activation, which the player opens with the card's Activate
-	# (the verb itself is hidden from players today; this scenario pins its sync, not its menu).
-	if not CoreActivation.session_open(unit.unit_id):
+	# One-core release: with the explicit activation in force the engine verb is a door of an OPEN activation, which the
+	# player opens with the card's Activate (the verb itself is hidden from players today; this scenario pins its sync,
+	# not its menu). Only then: where the flow does not apply (no NmlCore in CI's MP job, hotseat, Manual) the card's
+	# button would SPEND the unit under the old flow and the verb would be refused as already activated.
+	if CoreActivation.applies(_main) and not CoreActivation.session_open(unit.unit_id):
 		await _main.radial_menu_controller.card_start_activation(unit)
 	await _main.solo_begin_auto(unit, AiDecision.Action.ADVANCE)
 	if not _main._solo_target_mode.has("auto_point"):
