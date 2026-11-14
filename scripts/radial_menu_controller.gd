@@ -1054,6 +1054,19 @@ func card_start_activation(unit: GameUnit) -> void:
 		await _toggle_activation({"game_unit": unit})
 
 
+## One-core P3 step 36: the card's "End activation" - the one door that ends an activation (a unit already spent is left).
+func card_end_activation(unit: GameUnit) -> void:
+	if unit != null and not unit.is_activated:
+		await _toggle_activation({"game_unit": unit})
+
+
+## One-core P3 step 36: the card's "Cancel" - the table takes the unit back to its start (main.core_activation_cancel).
+func card_cancel_activation(unit: GameUnit) -> void:
+	var main_node := get_node_or_null("/root/Main")
+	if unit != null and main_node != null and main_node.has_method("core_activation_cancel"):
+		main_node.call("core_activation_cancel", unit)
+
+
 func card_toggle_fatigued(unit: GameUnit, manual: bool = false) -> void:
 	if unit != null:
 		_toggle_fatigued({"game_unit": unit}, manual)

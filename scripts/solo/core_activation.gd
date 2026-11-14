@@ -416,6 +416,7 @@ static func open_session(main, gu: GameUnit) -> bool:
 	if on_move_path(main, gu):   # step 31 (O1/O2): every activation of a move-path unit starts on Advance
 		main.object_manager.set_movement_cap(ObjectManager.MovementCap.ADVANCE)
 	main._update_movement_cap_display()
+	_refresh_card(main)
 	return true
 
 
@@ -458,13 +459,32 @@ static func close_session(main, unit_id: String) -> void:
 	_sessions.erase(unit_id)
 	if main != null:
 		main._refresh_movement_cap_row()   # step 31: an ended unit shows Off again
+	_refresh_card(main)
 
 
 ## Step 35 (O9): the first die of a roll THIS table throws commits every open activation: from then on its Cancel is gone.
-## Idempotent. (Step 36 adds the card refresh through `main`.)
-static func note_die(_main) -> void:
+## Idempotent; the card follows (its Cancel button goes) only when a session was still cancellable.
+static func note_die(main) -> void:
+	var changed := false
 	for id in _sessions:
-		(_sessions[id] as Dictionary)["dice"] = true
+		if not bool((_sessions[id] as Dictionary)["dice"]):
+			(_sessions[id] as Dictionary)["dice"] = true
+			changed = true
+	if changed:
+		_refresh_card(main)
+
+
+## Step 36: the presented unit card follows the sessions (its End / Cancel buttons); a table without a dock (a scene being
+## freed) has nothing to refresh.
+static func _refresh_card(main) -> void:
+	if main != null and main.unit_dock != null:
+		main.unit_dock.refresh_presented()
+
+
+## Step 36: round advance ends every activation, so every open session closes.
+static func close_all(main) -> void:
+	for id in _sessions.keys():
+		close_session(main, id)
 
 
 ## Step 35: whether `unit_id`'s activation can still be cancelled: open, and no die thrown since the Start.
