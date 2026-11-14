@@ -736,8 +736,8 @@ mod tests {
         Terrain::build(&PlainTerrain {
             cells: vec![],
             sandbox: vec![
-                Obb { c: [8.0 * IN2M, 0.0], he: [2.0 * IN2M, 2.0 * IN2M], yaw: 0.0, kind: FOREST },
-                Obb { c: [-8.0 * IN2M, 3.0 * IN2M], he: [1.5 * IN2M, 1.5 * IN2M], yaw: 0.0, kind: DANGEROUS },
+                Obb { c: [8.0 * IN2M, 0.0], he: [2.0 * IN2M, 2.0 * IN2M], yaw: 0.0, kind: FOREST, slabs: vec![] },
+                Obb { c: [-8.0 * IN2M, 3.0 * IN2M], he: [1.5 * IN2M, 1.5 * IN2M], yaw: 0.0, kind: DANGEROUS, slabs: vec![] },
             ],
             pieces: vec![],
             containers: Vec::new(),
