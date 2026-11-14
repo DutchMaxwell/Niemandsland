@@ -33,6 +33,9 @@ const FEAT_SPECS := [
 	["mp2_prot_g", 2, "Shield Guest", Vector3(0.30, 0.0, 0.20), "gf", "robot_legions", "Protection Feat"],
 ]
 const FEAT_FLAG_PREFIXES := ["shot_feat_used_", "ignore_feat_used_", "speed_feat_used_"]
+## One-core P3 step 54 (--one-core): plain units (two models, one plain rifle) for the activation digest check.
+## One unit a side: the guest's activation is the LAST of round 1, so the host ends the round on its activation fact.
+const OC_SPECS := [["mp2_oc_h1", 1, "Core Host", Vector3(-0.30, 0.0, 0.10)], ["mp2_oc_g1", 2, "Core Guest", Vector3(0.30, 0.0, 0.10)]]
 
 var _args: Dictionary = {}
 var _main: Node = null
@@ -66,6 +69,7 @@ var _auto_verb_done := false      # 3.5: the guest's clicked verb ran to its end
 var _auto_goal := Vector3.ZERO     # 1.8f: the table point the guest's Advance aims at
 var _protect_done: Dictionary = {}  # MP1: unit id -> wounds left after its once-per-game ignore roll
 var _tray_rolls: Array = []       # 3.5: every roll this tray showed, "local: <purpose>" / "remote: <purpose>"
+var _oc_received: Dictionary = {}   # step 54: digest-check command types this table received, type -> count
 
 
 func _ready() -> void:
@@ -134,6 +138,10 @@ func _wire_signals() -> void:
 	lobby.host_rejoined.connect(func() -> void: _link_events.append(
 		{"t_ms": Time.get_ticks_msec(), "e": "host_rejoined", "arg": ""}))
 	var nm = _main.get("network_manager")
+	if nm != null and _args.has("one-core"):
+		nm.command_received.connect(func(type: String, _payload: Variant, _from: int) -> void:
+			if type.begins_with("activation_"):
+				_oc_received[type] = int(_oc_received.get(type, 0)) + 1)
 	if nm != null and _expect_link_cut:
 		nm.command_received.connect(func(type: String, _payload: Variant, from_peer: int) -> void:
 			_log("command %s from %d" % [type, from_peer]))
@@ -315,6 +323,19 @@ func _run_command(seq: int, action: String, payload: Dictionary) -> void:
 		_main._hotseat_turn = null
 	elif action == "activate":
 		await _activate(str(payload.get("unit", "")), int(payload.get("slot", 0)))
+	elif action == "one_core_activate_move_end":
+		ok = await _one_core_activate_move_end(_unit(str(payload.get("unit", ""))))
+	elif action == "plant_desync":
+		# Step 54: the host's copy of the guest unit loses a model's wound and gains a wrong Activated flag, nothing on the
+		# wire (round 2: nobody has activated yet).
+		ok = _require_role("host", action)
+		if ok:
+			_unit("mp2_oc_g1").models[1].wounds_current = 0
+			_unit("mp2_oc_g1").is_activated = true
+	elif action == "resend_check":
+		ok = _require_role("guest", action)   # step 54: the guest announces its activation again
+		if ok:
+			CoreActivation.announce(_main, _unit("mp2_oc_g1"))
 	elif action == "leave_to_menu":
 		ok = await _leave_to_menu()
 	elif action == "snapshot":
@@ -389,6 +410,21 @@ func _setup_fixture() -> bool:
 			for m in bearer.models:   # production OPR models are in this group; the rejoin rebuild keys on it
 				(m as ModelInstance).node.add_to_group("opr_unit")
 			_main.opr_army_manager.game_units[bearer.unit_id] = bearer
+	elif _args.has("one-core"):
+		for spec in OC_SPECS:
+			var plain := _spawn_unit(str(spec[0]), int(spec[1]), str(spec[2]), spec[3], net_id, 2)
+			if plain == null:
+				return false
+			net_id += 2
+			var rifle := OPRApiClient.OPRWeapon.new()
+			rifle.name = "Core Rifle"
+			rifle.range_value = 24
+			rifle.attacks = 1
+			plain.source_type = "opr"
+			plain.source_data = OPRApiClient.OPRUnit.new()
+			(plain.source_data as OPRApiClient.OPRUnit).weapons.assign([rifle])
+			plain.unit_properties.merge({"game_system": "gf", "faction_folder": "robot_legions"}, true)
+			_main.opr_army_manager.game_units[plain.unit_id] = plain
 	elif not _args.has("rules-online"):
 		for spec in specs:
 			var unit := _spawn_unit(str(spec[0]), int(spec[1]), str(spec[2]), spec[3], net_id)
@@ -647,6 +683,32 @@ func _activate(unit_id: String, slot: int) -> void:
 	_main.network_manager.broadcast_unit_activation(unit)
 
 
+## Step 54: the production doors of one core activation - Activate (the Start), both models dragged 2" along x through
+## the ObjectManager (select, pick up, drag, drop), Activate again (the End, which announces the digest check).
+func _one_core_activate_move_end(unit: GameUnit) -> bool:
+	if unit == null:
+		return false
+	await _main.radial_menu_controller.card_start_activation(unit)
+	if not CoreActivation.session_open(unit.unit_id):
+		_failure = "no open activation after Activate: %s" % _main.battle_log.entries().back()
+		return false
+	var om = _main.object_manager
+	var camera: Camera3D = _main.get_viewport().get_camera_3d()
+	var from: Vector3 = unit.models[0].node.global_position
+	om._selected_objects.assign(unit.models.map(func(m: ModelInstance) -> Node3D: return m.node))
+	await get_tree().physics_frame
+	om._start_dragging(camera.unproject_position(from))
+	om._update_drag(camera.unproject_position(from + Vector3(0.0508, 0.0, 0.0)))
+	await get_tree().physics_frame
+	om._stop_dragging()
+	await get_tree().physics_frame
+	if unit.models[0].node.global_position.distance_to(from) < 0.02:
+		_failure = "the drag did not move %s" % unit.unit_id
+		return false
+	await _main.radial_menu_controller.card_start_activation(unit)
+	return unit.is_activated
+
+
 func opr_round() -> int:
 	return int(_main.opr_army_manager.current_round) if _main != null else 1
 
@@ -701,6 +763,7 @@ func _snapshot() -> Dictionary:
 		"tray_rolls": _tray_rolls.duplicate(),
 		"protect_done": _protect_done.duplicate(),
 		"rolled_lines": [],
+		"one_core": {"received": _oc_received.duplicate(), "checks_ok": CoreActivation.checks_ok},
 	}
 	if _main != null and _main.get("object_manager") != null:
 		for child in _main.object_manager.get_children():
@@ -767,6 +830,9 @@ func _snapshot() -> Dictionary:
 				"positions": unit.models.map(func(m: ModelInstance) -> Array: return _rounded(m.node.global_position) \
 					if m.is_alive and is_instance_valid(m.node) else []),
 			}
+			if _args.has("one-core"):   # step 54: the wounds and the activation digest of every unit, compared per checkpoint
+				state.units[str(unit_id)]["wounds"] = unit.models.map(func(m: ModelInstance) -> int: return m.wounds_current)
+				state.units[str(unit_id)]["digest"] = CoreActivation.digest([unit])
 	if _main != null and _main.get("battle_log") != null:
 		var entries: Array = _main.battle_log.entries()
 		for e in entries:   # 3.5: "<owner> rolled their ..." lines anywhere in the log, not only the tail

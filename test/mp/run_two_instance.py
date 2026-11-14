@@ -317,6 +317,7 @@ class Run:
         self.guest_owed_cut = False  # #1882: the host waits on the guest, then cuts its own link
         self.guest_answers_during_cut = False  # #1882 part 2: the answer is given while the host is away
         self.feat_marks = False  # MP1: once-per-game Feat latches reach both tables and survive a guest rejoin
+        self.one_core = False  # one-core P3 step 54: the activation digest check, its mismatch and the correction
         self.proxy: StallProxy | None = None
         self.proxies: dict[str, StallProxy] = {}
         self.seq = {"host": 0, "guest": 0}
@@ -389,6 +390,8 @@ class Run:
         self.xdg_dirs.append(xdg)
         env = os.environ.copy()
         env["XDG_DATA_HOME"] = str(xdg)
+        if self.one_core:
+            env["NML_ONE_CORE_ACTIVATION"] = "1"
         cmd = shlex.split(self.args.godot) + [
             "--headless",
             "--path",
@@ -412,6 +415,8 @@ class Run:
             cmd += ["--rules-online"]
         if self.feat_marks:
             cmd += ["--feat-marks"]
+        if self.one_core:
+            cmd += ["--one-core"]
         if self.leave:
             cmd += ["--leave"]
         client = Client(role, cmd, env, self.run_dir)
@@ -554,6 +559,9 @@ class Run:
             return
         if self.feat_marks:
             self.feat_marks_scenario()
+            return
+        if self.one_core:
+            self._one_core_scenario()
             return
         self.command_both("setup")
         states = self.wait_condition(
@@ -1262,6 +1270,41 @@ class Run:
             raise HarnessFailure(f"auto verb: models vs the guest's preview {preview}: offsets {offsets} (limit 1 mm)")
         print(f"[mp2] auto verb: every model within {max(offsets) * 1000:.3f} mm of the guest's preview")
 
+    def _one_core_scenario(self) -> None:
+        """One-core P3 step 54 (NML_ONE_CORE_ACTIVATION=1 on both peers, agreed Automatic room): each plain activation runs
+        through the production doors (Activate, a drag, End) and the other table's digest check is silent - also for the
+        LAST activation of the round, whose fact ends the round on the host before its check arrives. Then a desync planted
+        on the host is reported, the guest (who ran the activation) pushes only what differs, the re-check matches."""
+        self.command_both("setup")
+        self.wait_condition("fixture on both peers", lambda s: all(v.get("fixture_ready") for v in s.values()))
+        self.command_both("set_automatic")
+        self.checkpoint("one-core-automatic", self.wait_condition(
+            "agreed Automatic room, P1 opens", lambda s: all(v.get("rules") == 1 and v.get("turn") == 1 for v in s.values())))
+        oc = lambda s, role, key: s[role]["one_core"].get(key, 0) if key == "checks_ok" \
+            else s[role]["one_core"]["received"].get(key, 0)
+        diag = lambda s: "one_core=%r round=%r" % ({r: s[r].get("one_core") for r in s}, {r: s[r].get("round") for r in s})
+        self.command("host", "one_core_activate_move_end", {"unit": "mp2_oc_h1"})
+        self.checkpoint("one-core-host-end", self.wait_condition(
+            "the host's activation reached the guest, its check matched there",
+            lambda s: self.require_unit_value(s, "mp2_oc_h1", "activated", True) and oc(s, "guest", "checks_ok") == 1
+            and all(v.get("turn") == 2 for v in s.values()), diagnostic=diag))
+        self.command("guest", "one_core_activate_move_end", {"unit": "mp2_oc_g1"})
+        self.checkpoint("one-core-round-end", self.wait_condition(
+            "the round's last activation ended round 1 on the host, and its check was still compared there",
+            lambda s: all(v.get("round") == 2 for v in s.values()) and oc(s, "host", "checks_ok") == 1, diagnostic=diag))
+        if any(oc(self.checkpoints[-1], r, "activation_mismatch") for r in ("host", "guest")):
+            raise HarnessFailure(f"one-core: a mismatch on equal tables: {self.checkpoints[-1]['host']['one_core']}")
+        turn = self.checkpoints[-1]["host"].get("turn")
+        self.command("host", "plant_desync")
+        self.command("guest", "resend_check")
+        line = "Core Guest: the tables disagreed after its activation - the state of "
+        self.checkpoint("one-core-corrected", self.wait_condition(
+            "the host reported, the guest pushed, the re-check matched",
+            lambda s: oc(s, "guest", "activation_mismatch") == 1 and oc(s, "host", "checks_ok") == 2
+            and self.require_unit_value(s, "mp2_oc_g1", "activated", False) and all(v.get("turn") == turn for v in s.values())
+            and all(any(t.startswith(line) for t in v.get("battle_log_tail", [])) for v in s.values()),
+            diagnostic=lambda s: diag(s) + " host_g1=%r" % self._unit(s, "host", "mp2_oc_g1")))
+
     def stop(self) -> None:
         for role in ("host", "guest"):
             if role in self.clients and self.clients[role].proc.poll() is None:
@@ -1391,6 +1434,16 @@ def parse_args() -> argparse.Namespace:
         help="Run only MP1: once-per-game Feat latches on both tables and across a guest rejoin.",
     )
     parser.add_argument(
+        "--one-core-only",
+        action="store_true",
+        help="Run only one-core P3 step 54: the activation digest check, a planted desync and its correction.",
+    )
+    parser.add_argument(
+        "--include-one-core",
+        action="store_true",
+        help="Also run the one-core P3 step 54 scenario (NML_ONE_CORE_ACTIVATION=1 on both peers, agreed Automatic room).",
+    )
+    parser.add_argument(
         "--rejoin-race",
         action="store_true",
         help="Run only 29(b): both links are cut at once, the host returns first, the guest must stay seated.",
@@ -1419,7 +1472,8 @@ def main() -> int:
     def run_once(run_dir: Path, rules_online: bool, ref: list[dict] | None, leave: str = "",
                  silence: str = "", outage: bool = False, link_cut: bool = False,
                  rejoin_race: bool = False, guest_owed_cut: bool = False,
-                 guest_answers_during_cut: bool = False, feat_marks: bool = False) -> list[dict]:
+                 guest_answers_during_cut: bool = False, feat_marks: bool = False,
+                 one_core: bool = False) -> list[dict]:
         run_dir.mkdir(parents=True, exist_ok=False)
         run = Run(args, run_dir)
         run.rules_online = rules_online
@@ -1431,6 +1485,7 @@ def main() -> int:
         run.guest_owed_cut = guest_owed_cut
         run.guest_answers_during_cut = guest_answers_during_cut
         run.feat_marks = feat_marks
+        run.one_core = one_core
         try:
             print(f"[mp2] run {run_dir.name}: {run_dir}")
             run.start()
@@ -1456,6 +1511,10 @@ def main() -> int:
         if args.feat_marks_only:
             run_once(root / "feat-marks-01", False, None, feat_marks=True)
             print("[mp2] RESULT PASS: feat marks")
+            return 0
+        if args.one_core_only:
+            run_once(root / "one-core-01", False, None, one_core=True)
+            print("[mp2] RESULT PASS: one core")
             return 0
         if args.rejoin_race:
             run_once(root / "rejoin-race-01", False, None, rejoin_race=True)
@@ -1496,6 +1555,8 @@ def main() -> int:
             run_once(root / f"silence-{role}", False, None, silence=role)
         run_once(root / "silence-host-outage", False, None, silence="host", outage=True)
         run_once(root / "feat-marks-01", False, None, feat_marks=True)
+        if args.include_one_core:
+            run_once(root / "one-core-01", False, None, one_core=True)
         if args.include_link_cut:
             run_once(root / "link-cut-01", False, None, link_cut=True)
         if args.guest_owed_cut:
@@ -1507,6 +1568,7 @@ def main() -> int:
             "runs": args.repeat, "identical": True, "seed": args.seed,
             "rules_online": bool(args.include_rules_online),
             "link_cut": bool(args.include_link_cut),
+            "one_core": bool(args.include_one_core),
             "elapsed_seconds": round(elapsed, 3), "snapshots": reference,
         })
         print(f"[mp2] RESULT PASS: {args.repeat} identical run(s), {elapsed:.1f}s")
