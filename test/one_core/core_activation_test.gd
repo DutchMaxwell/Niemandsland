@@ -299,10 +299,105 @@ func test_a_landed_wound_shows_on_the_wound_marker() -> void:
 	var foe := ParityTable._make_unit(_main, {"player": 1, "name": "Ogres", "models": 3, "x_in": 12.0, "z_step_in": 1.2,
 		"quality": 4, "defense": 4, "tough": 3, "game_system": "gf", "faction_folder": "robot_legions", "rules": []}, {})
 	var m: ModelInstance = foe.models[1]
-	var landing := [{"unit": foe.unit_id, "models": [{"at": m.node.global_position, "wounds_left": 1, "dead": false}]}]
+	var landing := [{"unit": foe.unit_id, "models": [{"at": m.node.global_position, "slot": 1, "wounds_left": 1, "dead": false}]}]
 	await CoreActivation.land_step(_main, foe, landing, CoreActivation._start_models(_main), {})
 	assert_int(m.wounds_current).is_equal(1)
 	assert_object(m.node.get_node_or_null("WoundMarker")).override_failure_message("no wound marker").is_not_null()
+
+
+## P4.0-1: a landed model carries the core's slot, and the position still decides which model it is (the old rule: no
+## player-visible change). A landing whose slot and position disagree wounds the model at the position and reports the
+## disagreement. RED when the slot decides: model 2 takes the wound, model 0 none.
+func test_a_landing_whose_slot_and_position_disagree_lands_by_position_and_reports_it() -> void:
+	var foe := ParityTable._make_unit(_main, {"player": 1, "name": "Slots", "models": 3, "x_in": 12.0, "z_step_in": 1.2,
+		"quality": 4, "defense": 4, "tough": 3, "game_system": "gf", "faction_folder": "robot_legions", "rules": []}, {})
+	var start := CoreActivation._start_models(_main)
+	var at: Vector3 = (foe.models[0] as ModelInstance).node.global_position
+	var landing := [{"unit": foe.unit_id, "models": [{"at": at, "slot": 2, "wounds_left": 1, "dead": false}]}]
+	await assert_error(func() -> void: await CoreActivation.land_step(_main, foe, landing, start, {})) \
+		.is_push_error("CoreActivation.land_step: slot 2 of %s is not the model at %s" % [foe.unit_id, at])
+	assert_int((foe.models[0] as ModelInstance).wounds_current).override_failure_message("the position's model").is_equal(1)
+	assert_int((foe.models[2] as ModelInstance).wounds_current).override_failure_message("the slot's model").is_equal(3)
+
+
+## P4.0-1, the corner where the slot list shifts: the table lost model 0 AFTER the core captured the board (a manual
+## removal), so its start list is [model 1, model 2] while the core still numbers 0, 1, 2. The core's landing on its
+## model 1 says slot 1 - the table's list puts model 2 there. The model at the position (model 1) is wounded, as
+## before this step; the disagreement is reported. RED when the slot decides: model 2 takes the wound.
+func test_a_model_removed_after_the_capture_still_lands_on_the_right_model_and_the_shift_is_reported() -> void:
+	var foe := ParityTable._make_unit(_main, {"player": 1, "name": "Shifted", "models": 3, "x_in": 12.0, "z_step_in": 1.2,
+		"quality": 4, "defense": 4, "tough": 3, "game_system": "gf", "faction_folder": "robot_legions", "rules": []}, {})
+	(foe.models[0] as ModelInstance).is_alive = false   # removed after the capture
+	var start := CoreActivation._start_models(_main)
+	var at: Vector3 = (foe.models[1] as ModelInstance).node.global_position
+	var landing := [{"unit": foe.unit_id, "models": [{"at": at, "slot": 1, "wounds_left": 1, "dead": false}]}]
+	await assert_error(func() -> void: await CoreActivation.land_step(_main, foe, landing, start, {})) \
+		.is_push_error("CoreActivation.land_step: slot 1 of %s is not the model at %s" % [foe.unit_id, at])
+	assert_int((foe.models[1] as ModelInstance).wounds_current).override_failure_message("the model at the position").is_equal(1)
+	assert_int((foe.models[2] as ModelInstance).wounds_current).override_failure_message("the model the slot names").is_equal(3)
+
+
+## P4.0-1: a slot and a position that agree say nothing; a position no start model stands at is reported and lands nothing.
+func test_an_agreeing_slot_is_silent_and_an_unknown_position_lands_nothing() -> void:
+	var foe := ParityTable._make_unit(_main, {"player": 1, "name": "Quiet", "models": 3, "x_in": 12.0, "z_step_in": 1.2,
+		"quality": 4, "defense": 4, "tough": 3, "game_system": "gf", "faction_folder": "robot_legions", "rules": []}, {})
+	var start := CoreActivation._start_models(_main)
+	var at: Vector3 = (foe.models[1] as ModelInstance).node.global_position
+	var good := [{"unit": foe.unit_id, "models": [{"at": at, "slot": 1, "wounds_left": 2, "dead": false}]}]
+	await assert_error(func() -> void: await CoreActivation.land_step(_main, foe, good, start, {})).is_success()
+	assert_int((foe.models[1] as ModelInstance).wounds_current).is_equal(2)
+	var far := at + Vector3(5.0, 0.0, 0.0)
+	var bad := [{"unit": foe.unit_id, "models": [{"at": far, "slot": 1, "wounds_left": 1, "dead": false}]}]
+	await assert_error(func() -> void: await CoreActivation.land_step(_main, foe, bad, start, {})) \
+		.is_push_error("CoreActivation.land_step: no model of %s at %s" % [foe.unit_id, far])
+	assert_int((foe.models[1] as ModelInstance).wounds_current).is_equal(2)
+
+
+## P4.0-2 (the hazard lane V proved at function level): two landings on ONE model in one list, and the next need_roll's
+## repeat of that list. The table remembers a landing by (event index, unit, slot), so the second landing lands, a repeat
+## lands nothing twice, and a third landing at the end lands alone. RED on `done[model]`: the second landing is skipped
+## and the model keeps 2 wounds where the core says 1 (a killing landing after a wounding one is skipped the same way).
+func test_two_landings_on_one_model_both_land_and_a_repeat_lands_nothing_twice() -> void:
+	var foe := ParityTable._make_unit(_main, {"player": 1, "name": "Twice", "models": 3, "x_in": 12.0, "z_step_in": 1.2,
+		"quality": 4, "defense": 4, "tough": 3, "game_system": "gf", "faction_folder": "robot_legions", "rules": []}, {})
+	var other := ParityTable._make_unit(_main, {"player": 1, "name": "Other", "models": 3, "x_in": 20.0, "z_step_in": 1.2,
+		"quality": 4, "defense": 4, "tough": 3, "game_system": "gf", "faction_folder": "robot_legions", "rules": []}, {})
+	var start := CoreActivation._start_models(_main)
+	var m: ModelInstance = foe.models[1]
+	var land := func(u: GameUnit, left: int, dead: bool) -> Dictionary:
+		return {"unit": u.unit_id, "models": [{"at": (u.models[1] as ModelInstance).node.global_position, "slot": 1,
+			"wounds_left": left, "dead": dead}]}
+	var list: Array = [land.call(foe, 2, false), land.call(foe, 1, false), land.call(other, 2, false)]
+	var done := {}
+	await CoreActivation.land_step(_main, foe, list, start, done)
+	assert_int(m.wounds_current).override_failure_message("both landings on the model").is_equal(1)
+	assert_int((other.models[1] as ModelInstance).wounds_current).override_failure_message("same slot, other unit").is_equal(2)
+	m.wounds_current = 3   # the next need_roll repeats the list: a landing landed again would show
+	await CoreActivation.land_step(_main, foe, list, start, done)
+	assert_int(m.wounds_current).override_failure_message("the repeat landed again").is_equal(3)
+	list.append(land.call(foe, 0, true))
+	await CoreActivation.land_step(_main, foe, list, start, done)
+	assert_bool(m.is_alive).override_failure_message("the landing after the repeat").is_false()
+
+
+## P4.0-2: `land_delta` still knows which models the steps landed. A unit that moved AND lost a model is accepted when
+## a landing killed it, and refused (reported, `done["unknown"]`) when none did. RED when `land_delta` still asks
+## `done.has(model)` of a `done` that is keyed by landing: it never finds the model and refuses the accepted case.
+func test_land_delta_knows_the_models_the_landings_landed() -> void:
+	var foe := ParityTable._make_unit(_main, {"player": 1, "name": "Moved", "models": 3, "x_in": 12.0, "z_step_in": 1.2,
+		"quality": 4, "defense": 4, "tough": 1, "game_system": "gf", "faction_folder": "robot_legions", "rules": []}, {})
+	var start := CoreActivation._start_models(_main)
+	var landing := [{"unit": foe.unit_id, "models": [{"at": (foe.models[0] as ModelInstance).node.global_position,
+		"slot": 0, "wounds_left": 0, "dead": true}]}]
+	var done := {}
+	await CoreActivation.land_step(_main, foe, landing, start, done)
+	var delta := [{"unit": foe.unit_id, "unknown": true, "alive": 2, "shaken": false, "moved": true, "removed": []}]
+	await assert_error(func() -> void: CoreActivation.land_delta(_main, delta, start, done)).is_success()
+	assert_bool(done.has("unknown")).override_failure_message("a landed loss was refused").is_false()
+	var bare := {}
+	await assert_error(func() -> void: CoreActivation.land_delta(_main, delta, start, bare)) \
+		.is_push_error("CoreActivation.land_delta: %s moved and lost models the steps did not land" % foe.get_name())
+	assert_bool(bare.has("unknown")).override_failure_message("an unlanded loss was accepted").is_true()
 
 
 ## Step 42 (O21): the AI's volley at this table's human unit shows the table's "Incoming fire!" card before the save dice
@@ -354,7 +449,7 @@ func test_the_funnel_says_only_the_losses_the_core_did_not_say() -> void:
 		_main.battle_log.entry_added.connect(on_entry)
 		var m: ModelInstance = foe.models[0]
 		var landing := [{"unit": foe.unit_id, "loss_line": core_said,
-			"models": [{"at": m.node.global_position, "wounds_left": 0, "dead": true}]}]
+			"models": [{"at": m.node.global_position, "slot": 0, "wounds_left": 0, "dead": true}]}]
 		await CoreActivation.land_step(_main, foe, landing, CoreActivation._start_models(_main), {})
 		_main.battle_log.entry_added.disconnect(on_entry)
 		assert_bool(m.is_alive).override_failure_message("the landing did not kill the model").is_false()

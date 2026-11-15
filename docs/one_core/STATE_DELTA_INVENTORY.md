@@ -136,8 +136,8 @@ and the `buffs` spend (`sim.rs:10594`).
   rule/feat/marker branch a plain unit never enters.
 - **(b) Lost on the core path.** The plain activation changes the field (or the table's spend for it
   never runs) and neither the delta, the landings nor the MP rows carry it back, so the value goes
-  stale until the table resets it. One red case per (b) field lives in
-  `test/one_core/state_delta_lost_test.gd`, skipped on purpose (`"P4.0-4 defect, red on purpose"`).
+  stale until the table resets it. The cases for the (b) fields live in
+  `test/one_core/state_delta_lost_test.gd`; they were red on purpose until the fixes below.
 - **(c) Core-internal only.** The only core writer is the AI rollout/search (`rollout.rs`), not the
   live `sim::resolve`; the table's own value is never touched by a core activation.
 
@@ -145,7 +145,7 @@ and the `buffs` spend (`sim.rs:10594`).
 |---|---|---|
 | (a) | `fatigued` | `sim.rs:2108,3292` (Second Wind branch); `battle_sim.gd:2124`; the table's own fatigue toggle is the writer |
 | (a) | `casts` | `sim.rs:1925-1928` (Vengeance branch); `battle_sim.gd:2126`; table cast path writes it |
-| (b) | `buffs` | core spends at `sim.rs:10594` (`spend_exchange_wounded`), but the live capture never sends the ledger (`plain.rs:493`), and the table's `_solo_spend_once_mods` (`main.gd:6161`) never runs on the core path; read `main.gd:447` |
+| (b), fixed | `buffs` | core spends at `sim.rs:10594` (`spend_exchange_wounded`), but the live capture never sends the ledger (`plain.rs:493`), and the table's `_solo_spend_once_mods` (`main.gd:6161`) never ran on the core path; read `main.gd:447`. Fixed by #2803 (the volley's once buffs; the table's own spend after a `done` activation); the once morale buff fixed by #2804 (spent right after the morale die) |
 | (a) | `vs_mark_round` | `sim.rs:1911,1964` (Vengeance branch); `main.gd:24332`; table writer runs |
 | (a) | `hit_and_run_round` | `sim.rs:3171,3197` (Hit-and-Run branch); `solo_controller.gd:12793`; table writer runs |
 | (a) | `moved_round` | `sim.rs:9770` writes it on the P3 placed move, but `_on_units_dropped` (`main.gd:22883`) and `_solo_animate_move` (`main.gd:12255`) set the table's copy on the same move; the delta's `moved` (`activation.rs:316`) is only a guard and `land_delta` (`core_activation.gd:383`) ignores it; read `main.gd:1761` |
@@ -180,6 +180,6 @@ and the `buffs` spend (`sim.rs:10594`).
 | (a) | `spot_round` | `sim.rs:2619` (Spotter branch); `main.gd:15222`; table writer runs |
 | (a) | `precision_used` | `sim.rs:2653` (Precision branch); `main.gd:24773`; table writer runs |
 
-Counts: **33 (a), 1 (b), 2 (c)**. The single (b) is the live buff ledger: the core's `spend_once`
+Counts: **33 (a), 1 (b), 2 (c)**; the (b) is fixed by #2803 (volley) and #2804 (morale). The single (b) was the live buff ledger: the core's `spend_once`
 is the one plain-path write whose result no surface carries, because the capture never sends the
 ledger (`plain.rs:493`) and the table's own spend is skipped on the core path.
