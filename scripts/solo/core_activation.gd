@@ -570,6 +570,22 @@ static func land_delta(main, delta: Array, start_models: Array, done: Dictionary
 		_land_ledger(main, gu, d)
 		_land_stamps(main, gu, d)
 		_land_pools(main, gu, d)
+		_land_versatile_mode(main, gu, d)
+
+
+## P4.0-4g: the latched Versatile pick the delta now carries (inventory class (a)). The table holds it as the
+## Dictionary `versatile_pick` (`{"hit_mod": int, "ap": int}`), the shape the old path's own writer stores, so the
+## core's int mode maps onto it. A difference is a core/table split (reported); mode 0 means "no pick", nothing lands.
+static func _land_versatile_mode(main, gu: GameUnit, d: Dictionary) -> void:
+	var mode := int(d.get("versatile_pick_mode", 0))
+	if mode == 0:
+		return
+	var vm := {"hit_mod": 1, "ap": 0} if mode == 1 else {"hit_mod": 0, "ap": 1}
+	var was: Dictionary = gu.unit_properties.get("versatile_pick", {})
+	if was == vm:
+		return
+	push_error("CoreActivation.land_delta: %s.versatile_pick differs (table %s, core %s)" % [gu.get_name(), str(was), str(vm)])
+	main._sync_unit_property(gu, "versatile_pick", vm)
 
 
 ## P4.0-4e: the `State` field names whose table property is spelled differently (every other stamp is 1:1).
