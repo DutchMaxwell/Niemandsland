@@ -3,17 +3,18 @@ extends RefCounted
 ##
 ## WHY THIS EXISTS. The plan deletes table code family by family (decision D1: no field window, golden fixtures
 ## before each deletion). This harness captures what the table does TODAY for a small scenario grid — the volley
-## family (plain, AP, Blast, cover, Deadly) and the melee family (plain, AP, Impact, Furious, Counter) — and stores
-## the final unit state plus every battle-log line the exchange wrote, together with the provenance that makes the
-## recording meaningful (rules epoch, git sha, registry sha256). `compare()` runs the same grid again and names
-## every difference, so a deletion that changes the table's result before its replacement is in place turns the
-## companion suite red.
+## family (plain, AP, Blast, cover, Deadly), the melee family (plain, AP, Impact, Furious, Counter) and the morale
+## family (pass, Shaken, Rout, a spent once-buff) — and stores the final unit state plus every battle-log line the
+## exchange wrote, together with the provenance that makes the recording meaningful (rules epoch, git sha, registry
+## sha256). `compare()` runs the same grid again and names every difference, so a deletion that changes the table's
+## result before its replacement is in place turns the companion suite red.
 ##
 ## It runs the TABLE path only: the caller clears NML_ONE_CORE_ACTIVATION, and nothing here opens a core session;
-## the volley goes through main._solo_resolve_ai_volley and the melee through main._run_ai_melee exactly as the
-## parity gate drives them. No gameplay code is touched — this file and its CLI/ suite are test/tool code.
+## the volley goes through main._solo_resolve_ai_volley, the melee through main._run_ai_melee and the morale test
+## through main._solo_morale_test exactly as the game drives them. No gameplay code is touched — this file and its
+## CLI/ suite are test/tool code.
 ##
-## The grid is deliberately small and seeded: 5 scenarios x 4 seeds per family. Determinism comes from
+## The grid is deliberately small and seeded: 4-5 scenarios x 4 seeds per family. Determinism comes from
 ## main.seed_tray_rng() (the same seam the parity gate uses) and from `_solo_batch` (instant dice, zero pacing holds).
 
 const ParityTable := preload("res://test/parity/parity_table.gd")
@@ -24,6 +25,8 @@ const FAMILY := "shooting_volley"
 const FIXTURE_PATH := "res://test/fixtures/one_core/golden_shoot_volley.json"
 const MELEE_FAMILY := "melee"
 const MELEE_FIXTURE_PATH := "res://test/fixtures/one_core/golden_melee.json"
+const MORALE_FAMILY := "morale"
+const MORALE_FIXTURE_PATH := "res://test/fixtures/one_core/golden_morale.json"
 ## Four seeds per scenario: in the volley grid they cover a morale failure (0), a save-less volley (17), the
 ## singular forms (49) and a volley with no hit (225); the melee grid records whatever they roll.
 const SEEDS: Array[int] = [0, 17, 49, 225]
@@ -51,6 +54,11 @@ const MELEE_DEFENDER := {"key": "def", "player": 2, "name": "Def", "models": 8, 
 const BLADE := {"name": "Blade", "range_in": 0, "attacks": 1, "count": 10, "rules": []}
 const DEF_BLADE := {"name": "Blade", "range_in": 0, "attacks": 1, "count": 8, "rules": []}
 const CHARGE := {"dest_x_in": 6.74}
+
+## The morale grid: one AI-owned unit (player 2, so no save prompt), 10 models, no weapon needed.
+const MORALE_UNIT := {"player": 2, "name": "Mor", "models": 10, "quality": 2, "defense": 4, "tough": 1,
+	"x_in": 0.0, "z_step_in": 1.2, "base_radius_in": 0.63, "game_system": "gf",
+	"faction_folder": "robot_legions", "rules": []}
 
 
 ## The shooting grid: five shapes. `cover` paints forest under the defender (z_step 0.1" keeps the ten models
@@ -93,6 +101,23 @@ static func melee_scenarios() -> Array:
 	]
 
 
+## The morale grid: the four outcomes the plan names (pass, Shaken, Rout, a spent once-buff) through the table's
+## real _solo_morale_test. `dead` marks models lost before the test (the at-or-below-half gate); `once_mod` places
+## a one-use morale-buff record on the unit.
+static func morale_scenarios() -> Array:
+	return [
+		{"name": "pass", "note": "full strength, Q2+: every seed rolls the pass",
+			"unit": _with(MORALE_UNIT, {"quality": 2}), "melee": false, "seeds": [0, 17, 34, 36]},
+		{"name": "shake", "note": "full strength, Q6+: every seed fails and turns the unit Shaken",
+			"unit": _with(MORALE_UNIT, {"quality": 6}), "melee": false, "seeds": [8, 17, 49, 225]},
+		{"name": "rout", "note": "4 of 10 models left and a melee test: every seed fails and Routs",
+			"unit": _with(MORALE_UNIT, {"quality": 6}), "melee": true, "dead": 6, "seeds": [8, 17, 49, 225]},
+		{"name": "once", "note": "a one-use +1 morale buff turns a 4 into a pass and is then spent",
+			"unit": _with(MORALE_UNIT, {"quality": 5}), "melee": false, "once_mod": "Great Banner",
+			"seeds": [1, 4, 13, 20]},
+	]
+
+
 static func _weapon(rules: Array) -> Dictionary:
 	return _with(RIFLE, {"rules": rules})
 
@@ -122,6 +147,8 @@ static func configure(main: Node) -> bool:
 static func capture(main: Node, family: String = FAMILY) -> Dictionary:
 	if family == MELEE_FAMILY:
 		return await capture_melee(main)
+	if family == MORALE_FAMILY:
+		return await capture_morale(main)
 	var out := {"schema": SCHEMA, "family": FAMILY, "provenance": provenance(), "cases": []}
 	for sc in scenarios():
 		for seed in SEEDS:
@@ -141,6 +168,14 @@ static func capture_melee(main: Node) -> Dictionary:
 			out["cases"].append(await _run_melee_case(main, sc, seed))
 	main.solo_ai_slots = slots
 	main.set("_solo_fast", fast)
+	return out
+
+
+static func capture_morale(main: Node) -> Dictionary:
+	var out := {"schema": SCHEMA, "family": MORALE_FAMILY, "provenance": provenance(), "cases": []}
+	for sc in morale_scenarios():
+		for seed in sc["seeds"]:
+			out["cases"].append(await _run_morale_case(main, sc, int(seed)))
 	return out
 
 
@@ -215,6 +250,37 @@ static func _run_melee_case(main: Node, sc: Dictionary, seed: int) -> Dictionary
 	return rec
 
 
+## One morale scenario x seed on one AI-owned unit: optionally lose models and/or place the one-use buff, seed the
+## real tray, run the table's real morale test, and record the outcome lines and the unit's final state.
+static func _run_morale_case(main: Node, sc: Dictionary, seed: int) -> Dictionary:
+	var unit := ParityTable._make_unit(main, sc["unit"], {})
+	_kill_models(unit, int(sc.get("dead", 0)))
+	var spell := str(sc.get("once_mod", ""))
+	if spell != "":
+		main._solo_spell_mods[unit.get_instance_id()] = [{"spell": spell, "morale_mod": 1, "duration": "once"}]
+	main.seed_tray_rng(seed)
+	var lines: Array = []
+	var tap := func(e: Dictionary) -> void:
+		lines.append("%s|%s" % [BattleLog.Category.keys()[int(e["category"])], str(e["text"])])
+	main.battle_log.entry_added.connect(tap)
+	await main._solo_morale_test(unit, "AI (%s)" % unit.get_name(), bool(sc.get("melee", false)), "")
+	main.battle_log.entry_added.disconnect(tap)
+	main._solo_spell_mods.erase(unit.get_instance_id())
+	var rec := {"scenario": str(sc["name"]), "seed": seed, "epoch": AiActRecorder.rules_epoch,
+		"lines": lines, "final": _final([unit])}
+	_free_units(main, [unit])
+	await main.get_tree().process_frame
+	return rec
+
+
+## Marks `n` models of the unit dead (from the back); the model count on the unit stays the starting size, which is
+## what the at-or-below-half gate reads.
+static func _kill_models(unit: GameUnit, n: int) -> void:
+	for i in range(n):
+		if i < unit.models.size():
+			(unit.models[unit.models.size() - 1 - i] as ModelInstance).is_alive = false
+
+
 ## What "final state" means for the witness: models left, wounds left on them, and whether the unit is Shaken.
 static func _final(units: Array) -> Array:
 	var out: Array = []
@@ -272,7 +338,11 @@ static func _free_units(main: Node, units: Array) -> void:
 
 ## The committed fixture of one family (the shooting family stays the default for the older callers).
 static func fixture_path(family: String = FAMILY) -> String:
-	return MELEE_FIXTURE_PATH if family == MELEE_FAMILY else FIXTURE_PATH
+	if family == MELEE_FAMILY:
+		return MELEE_FIXTURE_PATH
+	if family == MORALE_FAMILY:
+		return MORALE_FIXTURE_PATH
+	return FIXTURE_PATH
 
 
 ## The fixture on disk ({} when it is missing — the caller reports that as a difference).
