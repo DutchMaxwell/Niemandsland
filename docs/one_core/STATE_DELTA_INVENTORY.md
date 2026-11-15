@@ -49,13 +49,13 @@ same commit as the struct change.
 | `alive` | battle_sim.gd:2110 | guard (`removed`/`alive`) | per model `is_alive` | no |
 | `activated` | battle_sim.gd:2125 | no | yes | no (the table sets it) |
 | `shaken` | battle_sim.gd:2123 | yes (`land_delta`) | yes | no |
-| `fatigued` | battle_sim.gd:2124 | no | no | **YES** |
+| `fatigued` | battle_sim.gd:2124 | yes (`land_delta`, P4.0-4d) | no | no (delta) |
 | `in_cover` | battle_sim.gd:2112 | no | no | no (capture input) |
 | `aircraft` | battle_sim.gd:2106 | no | no | no (structural input) |
 | `dormant` | battle_sim.gd:2130 | no | no | no (round-start state) |
 | `dormant_models` | battle_sim.gd:2131 | no | no | no (arrival input) |
 | `dormant_wounds` | battle_sim.gd:2132 | no | no | no (arrival input) |
-| `casts` | battle_sim.gd:2126 | no | no | **YES** |
+| `casts` | battle_sim.gd:2126 | yes (`land_delta`, P4.0-4d) | no | no (delta) |
 | `morale_bonus` | battle_sim.gd:2115 | no | no | no (capture input) |
 | `ambush_arrived_round` | battle_sim.gd:2107 | no | no | no (round state) |
 | `earliest_arrival_round` | battle_sim.gd:2133 | no | no | no (capture input) |
@@ -113,14 +113,14 @@ same commit as the struct change.
 
 ## Summary
 
-- 79 `State` fields; **36 gap rows**.
+- 79 `State` fields; **34 gap rows** (P4.0-4d landed `fatigued` and `casts` in the delta, -2).
 - No gap among the board facts an activation moves: model wounds, deaths and positions ride the
   per-step landings, `shaken` rides `delta_of`, `activated` and `shaken` ride the MP rows.
-- Every gap is a per-activation ledger or latch the dice path reads again later: fatigue, casts, the
-  live buff ledger, the once-per-round/per-game stamps, and both marker pools (`spot_markers`,
-  `tag_markers`, `piercing_tag_markers`). The delta stops at `shaken`, and the MP rows compare only
-  activation, Shaken and per-model wounds/life/XZ — so a table and the core can disagree on any of
-  these without a local or MP signal.
+- Every gap is a per-activation ledger or latch the dice path reads again later: the live buff
+  ledger, the once-per-round/per-game stamps, and both marker pools (`spot_markers`,
+  `tag_markers`, `piercing_tag_markers`). The delta stops at `shaken` plus the ledger, and the MP
+  rows compare only activation, Shaken and per-model wounds/life/XZ — so a table and the core can
+  disagree on any of these without a local or MP signal.
 
 ## Classification (One core P4.0-4a)
 

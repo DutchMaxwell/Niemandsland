@@ -400,6 +400,43 @@ func test_land_delta_knows_the_models_the_landings_landed() -> void:
 	assert_bool(bare.has("unknown")).override_failure_message("an unlanded loss was accepted").is_true()
 
 
+## P4.0-4d: the delta's ledger (fatigue, spell tokens) lands on the table exactly as the old path's own write does, and
+## a split is reported. RED when `land_delta` ignores the two keys: the flag stays false, the tokens 3, no error.
+func test_land_delta_lands_the_ledger_and_reports_a_split() -> void:
+	var u := _unit(1, "Rifles")
+	u.set_caster_points(3)
+	var row := {"unit": u.unit_id, "unknown": false, "alive": 1, "shaken": false, "moved": false, "removed": []}
+	await assert_error(func() -> void: CoreActivation.land_delta(_main, [row.merged({"fatigued": true, "casts": 3})], [], {})) \
+		.is_push_error("CoreActivation.land_delta: %s fatigue differs (table false, core true)" % u.get_name())
+	assert_bool(u.is_fatigued).override_failure_message("the fatigue landed").is_true()
+	await assert_error(func() -> void: CoreActivation.land_delta(_main, [row.merged({"fatigued": true, "casts": 1})], [], {})) \
+		.is_push_error("CoreActivation.land_delta: %s casts differ (table 3, core 1)" % u.get_name())
+	assert_int(u.casts_current).override_failure_message("the tokens landed").is_equal(1)
+
+
+## P4.0-4d: a core-resolved volley carries the ledger of the unit it moved (the row exists as before); RED when the
+## binding drops `fatigued`/`casts` from the delta, and the landing leaves the table's own values alone.
+func test_a_core_volley_delta_carries_the_ledger() -> void:
+	var units := _volley_units()
+	var att: GameUnit = units[0]
+	att.is_fatigued = true
+	att.set_caster_points(2)
+	_main.seed_tray_rng(7)
+	var at: Array = att.get_alive_models() \
+		.map(func(m: ModelInstance) -> Vector3: return m.node.global_position + Vector3(2.0 * 0.0254, 0.0, 0.0))
+	var t: Array = [{"t": "begin"}, {"t": "placed", "positions": at},
+		{"t": "intent", "kind": AiDecision.Action.ADVANCE, "shoot": units[1].unit_id}]
+	var r: Dictionary = await CoreActivation.drive(_main, CoreActivation.capture(_main), att, t, true)
+	assert_str(str(r["step"])).is_equal("done")
+	var row := {}
+	for e in r.get("delta", []):
+		row = e if str(e["unit"]) == att.unit_id else row
+	assert_bool(row.get("fatigued", false)).override_failure_message("the delta row: %s" % [r.get("delta", [])]).is_true()
+	assert_int(int(row.get("casts", -1))).is_equal(2)
+	assert_bool(att.is_fatigued).override_failure_message("the table's own fatigue survived the landing").is_true()
+	assert_int(att.casts_current).override_failure_message("the table's own tokens survived the landing").is_equal(2)
+
+
 ## Step 42 (O21): the AI's volley at this table's human unit shows the table's "Incoming fire!" card before the save dice
 ## (the text names the shooter, the target, the hits and the weapon); answering it lets the volley finish. RED without the
 ## card in the driver: the volley runs through, no card.
