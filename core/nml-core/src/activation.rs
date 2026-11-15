@@ -303,6 +303,27 @@ pub struct UnitDelta {
     /// tokens. A plain activation changes neither; carrying them makes a table/core split visible.
     pub fatigued: bool,
     pub casts: i64,
+    /// P4.0-4e: the per-unit once-per-round stamps AFTER (inventory class (a)), keyed by the `State`
+    /// field name; `land_delta` maps the two names the table spells differently.
+    pub stamps: Vec<(&'static str, i64)>,
+}
+
+/// P4.0-4e: every round stamp the inventory marks table-owned, in `State` declaration order, AFTER.
+fn stamps_of(s: &State, u: usize) -> Vec<(&'static str, i64)> {
+    vec![
+        ("vs_mark_round", s.vs_mark_round[u]),
+        ("hit_and_run_round", s.hit_and_run_round[u]),
+        ("moved_round", s.moved_round[u]),
+        ("reckless_rolled_round", s.reckless_rolled_round[u]),
+        ("reckless_ap_round", s.reckless_ap_round[u]),
+        ("reckless_backfire_round", s.reckless_backfire_round[u]),
+        ("versatile_pick_round", s.versatile_pick_round[u]),
+        ("retreating_strike_round", s.retreating_strike_round[u]),
+        ("mind_control_moved_round", s.mind_control_moved_round[u]),
+        ("growth_strike_round", s.growth_strike_round[u]),
+        ("spot_round", s.spot_round[u]),
+        ("piercing_spot_round", s.piercing_spot_round[u]),
+    ]
 }
 
 /// Every unit whose alive, shaken, positions or moved_round changed. `removed`
@@ -326,8 +347,9 @@ pub fn delta_of(before: &State, after: &State) -> Vec<UnitDelta> {
         if j < a.len() || unknown {
             removed.clear();
         }
+        let stamps_changed = stamps_of(before, u) != stamps_of(after, u);
         if b != a || before.alive[u] != after.alive[u] || before.shaken[u] != after.shaken[u] || moved
-            || before.fatigued[u] != after.fatigued[u] || before.casts[u] != after.casts[u]
+            || before.fatigued[u] != after.fatigued[u] || before.casts[u] != after.casts[u] || stamps_changed
         {
             out.push(UnitDelta {
                 key: key.clone(),
@@ -338,6 +360,7 @@ pub fn delta_of(before: &State, after: &State) -> Vec<UnitDelta> {
                 unknown,
                 fatigued: after.fatigued[u],
                 casts: after.casts[u],
+                stamps: stamps_of(after, u),
             });
         }
     }
@@ -674,6 +697,22 @@ mod tests {
         assert_eq!(d.len(), 1);
         assert_eq!((d[0].key.as_str(), d[0].fatigued, d[0].casts), ("b", true, 3));
         assert_eq!((d[0].shaken, d[0].moved, d[0].removed.len()), (false, false, 0), "no board news");
+    }
+    /// P4.0-4e: a unit whose only change is a round stamp gets a row carrying all twelve, AFTER; a core-resolved
+    /// volley's rows carry them too (RED: drop the stamp term -> no row; drop a pair -> the count is 11).
+    #[test]
+    fn the_delta_carries_the_round_stamps() {
+        let (st, statics) = volley_line();
+        let mut after = st.clone();
+        after.spot_round[2] = 4;
+        let d = delta_of(&st, &after);
+        assert_eq!(d.len(), 1);
+        assert_eq!(d[0].stamps.len(), 12);
+        assert!(d[0].stamps.contains(&("spot_round", 4)));
+        assert!(d[0].stamps.contains(&("moved_round", st.moved_round[2])));
+        let (got, _) = drive(&statics, &st, vec![Begin, intent(HOLD, Some("b"))], 7);
+        let ActStep::Done { state, .. } = got else { panic!("seed 7: {got:?}") };
+        assert!(delta_of(&st, &state).iter().all(|x| x.stamps.len() == 12), "a core row carries the stamps");
     }
 
     // ---- step 14: allowance and move check ----

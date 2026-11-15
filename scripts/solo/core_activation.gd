@@ -516,6 +516,24 @@ static func land_delta(main, delta: Array, start_models: Array, done: Dictionary
 			main.radial_menu_controller.card_toggle_shaken(gu)
 			main._solo_mirror_shaken(gu)
 		_land_ledger(main, gu, d)
+		_land_stamps(main, gu, d)
+
+
+## P4.0-4e: the `State` field names whose table property is spelled differently (every other stamp is 1:1).
+const STAMP_KEYS := {"spot_round": "spotted_round", "growth_strike_round": "regenerative_strength_round"}
+
+
+## P4.0-4e: the per-unit once-per-round stamps the delta now carries (inventory class (a)). The table's own writer
+## owns each on this path, so a difference is a core/table split (reported) and the core's value lands, as `shaken` does.
+static func _land_stamps(main, gu: GameUnit, d: Dictionary) -> void:
+	for key in d.get("stamps", {}):
+		var prop := str(STAMP_KEYS.get(key, key))
+		var value := int(d["stamps"][key])
+		var was := int(gu.unit_properties.get(prop, -1))
+		if value == was:
+			continue
+		push_error("CoreActivation.land_delta: %s.%s differs (table %d, core %d)" % [gu.get_name(), prop, was, value])
+		main._sync_unit_property(gu, prop, value)
 
 
 ## P4.0-4d: the table-owned per-activation ledger the delta now carries (inventory class (a)): the fatigue flag and the

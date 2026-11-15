@@ -437,6 +437,20 @@ func test_a_core_volley_delta_carries_the_ledger() -> void:
 	assert_int(att.casts_current).override_failure_message("the table's own tokens survived the landing").is_equal(2)
 
 
+## P4.0-4e: the delta's round stamps land under the table's own property names (`spot_round` is the table's
+## `spotted_round`), and a split is reported. RED when the landing is dropped or the unmapped name is written.
+func test_land_delta_lands_the_round_stamps_under_the_tables_names() -> void:
+	var u := _unit(1, "Rifles")
+	u.unit_properties["moved_round"] = 2
+	var row := {"unit": u.unit_id, "unknown": false, "alive": 1, "shaken": false, "moved": true, "removed": [],
+		"fatigued": false, "casts": 0, "stamps": {"spot_round": 4, "moved_round": 2}}
+	await assert_error(func() -> void: CoreActivation.land_delta(_main, [row], [], {})).is_push_error(
+		"CoreActivation.land_delta: %s.spotted_round differs (table -1, core 4)" % u.get_name())
+	assert_int(int(u.unit_properties.get("spotted_round", -1))).override_failure_message("the mapped name").is_equal(4)
+	assert_int(int(u.unit_properties.get("moved_round", -1))).override_failure_message("the 1:1 name").is_equal(2)
+	assert_bool(u.unit_properties.has("spot_round")).override_failure_message("no unmapped key").is_false()
+
+
 ## Step 42 (O21): the AI's volley at this table's human unit shows the table's "Incoming fire!" card before the save dice
 ## (the text names the shooter, the target, the hits and the weapon); answering it lets the volley finish. RED without the
 ## card in the driver: the volley runs through, no card.
