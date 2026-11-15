@@ -80,12 +80,12 @@ use super::*;
         (st.wounds[0], Rc::make_mut(&mut st.radii)[0], st.alive[0]) = (vec![2, 1, 1], vec![0.016; 3], 3);
         let k = |w: u16, x: i64| crate::state::Kit { weapons: vec![w], equipment: 0, wounds_max: x };
         st.kits = vec![Rc::new(vec![k(1, 2), k(0, 1), k(0, 1)])];
-        let at = |groups: &[i64]| takedown_pick_cover_after(&st, 0, Cover::Board(&board), false, groups);
+        let at = |groups: &[i64]| takedown_pick_cover_after(&st, 0, Cover::Board(&board), false, groups, None);
         assert!(at(&[]), "the first pick, the launcher, stands in the forest");
         assert!(!at(&[2]), "killed: the next pick stands in the open");
         assert!(!at(&[1]), "wounded: the pick moves on as well");
         assert!(at(&[0]), "a group that landed nothing changes nothing");
-        assert!(takedown_pick_cover_after(&st, 0, Cover::Recorded(None), true, &[2]), "no board: the unit flag");
+        assert!(takedown_pick_cover_after(&st, 0, Cover::Recorded(None), true, &[2], None), "no board: the unit flag");
     }
 
     /// EPOCH_70_TRAY_EXACT, the tray-exact series' one bump: `seams_of` (the planner, in-game too)

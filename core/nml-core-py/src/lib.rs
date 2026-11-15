@@ -810,6 +810,8 @@ impl Core {
             // header with `"books"` is a table recording whose bands are
             // pre-folded; see `Knobs::bands_prefolded`.
             bands_prefolded: self.knobs.bands_prefolded,
+            // P4.0-5 — an answer, never a rule switch: the trainer supplies no choice.
+            takedown_pick: None,
         }
     }
 
