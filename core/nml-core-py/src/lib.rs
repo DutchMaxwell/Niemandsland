@@ -84,6 +84,8 @@ use nmlcore::{
 
 create_exception!(nml_core, Unsupported, PyRuntimeError);
 
+mod stepcall;
+
 // ------------------------------------------------------------ marshalling ---
 
 /// One Python object as JSON text, in INSERTION order (see the module header).
@@ -1737,6 +1739,20 @@ impl Core {
             "log": shot.log.iter().map(|s| Value::String(s.clone())).collect::<Vec<Value>>(),
         });
         Ok((PyState::derived(next), to_py(py, &report)?))
+    }
+
+    /// One-core P4.0-11: one step of `unit`'s activation on the table's step seams (marshalling in `stepcall`).
+    /// The Godot binding's answer dict; on `done` the new state rides `"state"` where the binding carries a `"handle"`.
+    #[pyo3(signature = (state, unit, transcript, enforce))]
+    fn step_activation(
+        &mut self,
+        py: Python<'_>,
+        state: PyRef<'_, PyState>,
+        unit: &str,
+        transcript: &Bound<'_, PyAny>,
+        enforce: bool,
+    ) -> PyResult<Py<PyAny>> {
+        stepcall::answer(self, py, &state, unit, transcript, enforce)
     }
 
     /// `AiMissionEval.score` with the reply threat — the RICH leaf

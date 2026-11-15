@@ -1,0 +1,209 @@
+{
+  "calls": [
+    {
+      "answer": {
+        "count": 5,
+        "faces": 5,
+        "index": 0,
+        "kind": "attack",
+        "landings": [],
+        "lines": [
+          {
+            "category": 1,
+            "detail": "",
+            "rule": "shoot",
+            "side": 2,
+            "text": "Pathfinders fires at Hive Swarms"
+          }
+        ],
+        "owner": "Pathfinders",
+        "owner_key": "1793356002.9857_2392302156",
+        "step": "need_roll",
+        "target": 4
+      },
+      "transcript": [
+        {
+          "t": "begin"
+        },
+        {
+          "kind": 0,
+          "shoot": "1793355998.29986_2537673570",
+          "t": "intent"
+        }
+      ]
+    },
+    {
+      "answer": {
+        "count": 5,
+        "faces": 5,
+        "index": 1,
+        "kind": "defense",
+        "landings": [],
+        "lines": [
+          {
+            "category": 1,
+            "detail": "",
+            "rule": "shoot",
+            "side": 2,
+            "text": "Pathfinders fires at Hive Swarms"
+          },
+          {
+            "category": 1,
+            "detail": "",
+            "rule": "shoot",
+            "side": 2,
+            "text": "Pathfinders fires Heavy Rifle at Hive Swarms — 5 hits"
+          },
+          {
+            "category": 1,
+            "detail": "",
+            "rule": "save",
+            "side": 1,
+            "text": "Hive Swarms saves on 6 only (Def 6+, AP 1 — a natural 6 always saves)"
+          }
+        ],
+        "owner": "Hive Swarms",
+        "owner_key": "1793355998.29986_2537673570",
+        "step": "need_roll",
+        "target": 6
+      },
+      "transcript": [
+        {
+          "t": "begin"
+        },
+        {
+          "kind": 0,
+          "shoot": "1793355998.29986_2537673570",
+          "t": "intent"
+        },
+        {
+          "faces": [
+            6,
+            6,
+            6,
+            6,
+            6
+          ],
+          "t": "faces"
+        }
+      ]
+    },
+    {
+      "answer": {
+        "delta": [
+          {
+            "alive": 2,
+            "moved": false,
+            "removed": [
+              0
+            ],
+            "shaken": false,
+            "unit": "1793355998.29986_2537673570",
+            "unknown": false
+          }
+        ],
+        "landings": [
+          {
+            "loss_line": true,
+            "models": [
+              {
+                "at": [
+                  -0.270793080329895,
+                  0.0,
+                  -0.10872817039489746
+                ],
+                "dead": true,
+                "slot": 0,
+                "wounds_left": 0
+              },
+              {
+                "at": [
+                  -0.23322439193725586,
+                  0.0,
+                  -0.08772671222686768
+                ],
+                "dead": false,
+                "slot": 1,
+                "wounds_left": 1
+              }
+            ],
+            "unit": "1793355998.29986_2537673570"
+          }
+        ],
+        "lines": [
+          {
+            "category": 1,
+            "detail": "",
+            "rule": "shoot",
+            "side": 2,
+            "text": "Pathfinders fires at Hive Swarms"
+          },
+          {
+            "category": 1,
+            "detail": "",
+            "rule": "shoot",
+            "side": 2,
+            "text": "Pathfinders fires Heavy Rifle at Hive Swarms — 5 hits"
+          },
+          {
+            "category": 1,
+            "detail": "",
+            "rule": "save",
+            "side": 1,
+            "text": "Hive Swarms saves on 6 only (Def 6+, AP 1 — a natural 6 always saves)"
+          },
+          {
+            "category": 1,
+            "detail": "",
+            "rule": "shoot",
+            "side": 1,
+            "text": "Hive Swarms takes 5 wounds (3/4)"
+          },
+          {
+            "category": 1,
+            "detail": "",
+            "rule": "shoot",
+            "side": 1,
+            "text": "Hive Swarms loses a model (3/4)"
+          }
+        ],
+        "step": "done"
+      },
+      "transcript": [
+        {
+          "t": "begin"
+        },
+        {
+          "kind": 0,
+          "shoot": "1793355998.29986_2537673570",
+          "t": "intent"
+        },
+        {
+          "faces": [
+            6,
+            6,
+            6,
+            6,
+            6
+          ],
+          "t": "faces"
+        },
+        {
+          "faces": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ],
+          "t": "faces"
+        }
+      ]
+    }
+  ],
+  "enforce": false,
+  "note": "Recorded from nml_core::activation::step_activation on the Godot binding's step seams (moving shot on, table sight); the answer shape is actcall::run's. The committed recorded fixture supplies the header and the state; this transcript and its supplied faces are the record.",
+  "source": "fixtures/sho_par_f3/act15.json",
+  "target": "1793355998.29986_2537673570",
+  "unit": "1793356002.9857_2392302156"
+}
