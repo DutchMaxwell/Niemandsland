@@ -353,6 +353,53 @@ func test_an_agreeing_slot_is_silent_and_an_unknown_position_lands_nothing() -> 
 	assert_int((foe.models[1] as ModelInstance).wounds_current).is_equal(2)
 
 
+## P4.0-2 (the hazard lane V proved at function level): two landings on ONE model in one list, and the next need_roll's
+## repeat of that list. The table remembers a landing by (event index, unit, slot), so the second landing lands, a repeat
+## lands nothing twice, and a third landing at the end lands alone. RED on `done[model]`: the second landing is skipped
+## and the model keeps 2 wounds where the core says 1 (a killing landing after a wounding one is skipped the same way).
+func test_two_landings_on_one_model_both_land_and_a_repeat_lands_nothing_twice() -> void:
+	var foe := ParityTable._make_unit(_main, {"player": 1, "name": "Twice", "models": 3, "x_in": 12.0, "z_step_in": 1.2,
+		"quality": 4, "defense": 4, "tough": 3, "game_system": "gf", "faction_folder": "robot_legions", "rules": []}, {})
+	var other := ParityTable._make_unit(_main, {"player": 1, "name": "Other", "models": 3, "x_in": 20.0, "z_step_in": 1.2,
+		"quality": 4, "defense": 4, "tough": 3, "game_system": "gf", "faction_folder": "robot_legions", "rules": []}, {})
+	var start := CoreActivation._start_models(_main)
+	var m: ModelInstance = foe.models[1]
+	var land := func(u: GameUnit, left: int, dead: bool) -> Dictionary:
+		return {"unit": u.unit_id, "models": [{"at": (u.models[1] as ModelInstance).node.global_position, "slot": 1,
+			"wounds_left": left, "dead": dead}]}
+	var list: Array = [land.call(foe, 2, false), land.call(foe, 1, false), land.call(other, 2, false)]
+	var done := {}
+	await CoreActivation.land_step(_main, foe, list, start, done)
+	assert_int(m.wounds_current).override_failure_message("both landings on the model").is_equal(1)
+	assert_int((other.models[1] as ModelInstance).wounds_current).override_failure_message("same slot, other unit").is_equal(2)
+	m.wounds_current = 3   # the next need_roll repeats the list: a landing landed again would show
+	await CoreActivation.land_step(_main, foe, list, start, done)
+	assert_int(m.wounds_current).override_failure_message("the repeat landed again").is_equal(3)
+	list.append(land.call(foe, 0, true))
+	await CoreActivation.land_step(_main, foe, list, start, done)
+	assert_bool(m.is_alive).override_failure_message("the landing after the repeat").is_false()
+
+
+## P4.0-2: `land_delta` still knows which models the steps landed. A unit that moved AND lost a model is accepted when
+## a landing killed it, and refused (reported, `done["unknown"]`) when none did. RED when `land_delta` still asks
+## `done.has(model)` of a `done` that is keyed by landing: it never finds the model and refuses the accepted case.
+func test_land_delta_knows_the_models_the_landings_landed() -> void:
+	var foe := ParityTable._make_unit(_main, {"player": 1, "name": "Moved", "models": 3, "x_in": 12.0, "z_step_in": 1.2,
+		"quality": 4, "defense": 4, "tough": 1, "game_system": "gf", "faction_folder": "robot_legions", "rules": []}, {})
+	var start := CoreActivation._start_models(_main)
+	var landing := [{"unit": foe.unit_id, "models": [{"at": (foe.models[0] as ModelInstance).node.global_position,
+		"slot": 0, "wounds_left": 0, "dead": true}]}]
+	var done := {}
+	await CoreActivation.land_step(_main, foe, landing, start, done)
+	var delta := [{"unit": foe.unit_id, "unknown": true, "alive": 2, "shaken": false, "moved": true, "removed": []}]
+	await assert_error(func() -> void: CoreActivation.land_delta(_main, delta, start, done)).is_success()
+	assert_bool(done.has("unknown")).override_failure_message("a landed loss was refused").is_false()
+	var bare := {}
+	await assert_error(func() -> void: CoreActivation.land_delta(_main, delta, start, bare)) \
+		.is_push_error("CoreActivation.land_delta: %s moved and lost models the steps did not land" % foe.get_name())
+	assert_bool(bare.has("unknown")).override_failure_message("an unlanded loss was accepted").is_true()
+
+
 ## Step 42 (O21): the AI's volley at this table's human unit shows the table's "Incoming fire!" card before the save dice
 ## (the text names the shooter, the target, the hits and the weapon); answering it lets the volley finish. RED without the
 ## card in the driver: the volley runs through, no card.

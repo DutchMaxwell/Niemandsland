@@ -355,12 +355,16 @@ static func _models_by_slot(start_models: Array, gu: GameUnit) -> Array:
 
 
 ## Lands one step's landings on the table (O4 b): a wound shows at once on the wound marker, the dead leave right
-## after the saves. Every need_roll repeats the earlier landings; `done` skips what this activation already landed.
+## after the saves. Every need_roll repeats the earlier landings (the list only ever grows at its end); `done` skips what
+## this activation already landed.
+## P4.0-2: what is remembered is the landing, `(event index, unit, slot)` -> the model it landed on, not the model: a model
+## wounded by one landing and wounded or killed by a later one takes both.
 ## P4.0-1: each landed model also carries the core's `(unit, slot)`. For now the position still decides which model it is
 ## (the 1 mm XZ match, as before: a table that lost a model after the capture shifts its slot list, the position stays
 ## right); the slot is the cross-check, and a landing whose slot names another model is a push_error, never silent.
 static func land_step(main, _gu: GameUnit, landings: Array, start_models: Array, done: Dictionary) -> void:
-	for entry in landings:
+	for event in landings.size():
+		var entry: Dictionary = landings[event]
 		var lgu: GameUnit = main.opr_army_manager.game_units.get(str(entry["unit"]))
 		var by_slot: Array = _models_by_slot(start_models, lgu) if lgu != null else []
 		var died: Array[ModelInstance] = []
@@ -369,12 +373,13 @@ static func land_step(main, _gu: GameUnit, landings: Array, start_models: Array,
 			if m == null:
 				push_error("CoreActivation.land_step: no model of %s at %s" % [entry["unit"], lm["at"]])
 				continue
-			if done.has(m):
-				continue
 			var slot := int(lm["slot"])
+			var landed_key := "%d:%s:%d" % [event, entry["unit"], slot]
+			if done.has(landed_key):
+				continue
 			if (by_slot[slot] if slot >= 0 and slot < by_slot.size() else null) != m:
 				push_error("CoreActivation.land_step: slot %d of %s is not the model at %s" % [slot, entry["unit"], lm["at"]])
-			done[m] = true
+			done[landed_key] = m
 			var before := m.wounds_current
 			if bool(lm["dead"]):
 				m.apply_damage(before)
@@ -401,7 +406,8 @@ static func land_delta(main, delta: Array, start_models: Array, done: Dictionary
 			continue
 		if bool(d["unknown"]):
 			var start_alive := start_models.filter(func(e) -> bool: return (e["model"] as ModelInstance).unit == gu)
-			var landed_dead := start_alive.filter(func(e) -> bool: return done.has(e["model"]) \
+			var landed := done.values()   # P4.0-2: the models some landing of this activation touched
+			var landed_dead := start_alive.filter(func(e) -> bool: return landed.has(e["model"]) \
 				and not (e["model"] as ModelInstance).is_alive)
 			if landed_dead.size() != start_alive.size() - int(d["alive"]):
 				push_error("CoreActivation.land_delta: %s moved and lost models the steps did not land" % gu.get_name())
