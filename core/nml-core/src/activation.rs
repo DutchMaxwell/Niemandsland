@@ -30,6 +30,10 @@ pub enum Input {
     Placed { at: Vec<[f64; 3]>, trails: Vec<Vec<[f64; 2]>> },
     /// "Cancel", allowed until the first die of the activation.
     Cancel,
+    /// P4.0-5: one answer to a `NeedChoice`, by the choice's stable `id` and an option id. An EMPTY
+    /// `option` asks the core what it is waiting for: the next answer is `ActStep::NeedChoice`.
+    /// A transcript without a `Choice` keeps the core's automatic pick (the default policy).
+    Choice { id: String, option: String },
 }
 
 /// The core's answer to the inputs so far. `Done` and `Cancelled` are the
@@ -44,6 +48,10 @@ pub enum ActStep {
     NeedRoll { index: usize, faces: usize, kind: &'static str, count: i64, target: i64, owner: String, owner_key: String, lines: Vec<LogLine>, landings: Vec<Landing> },
     /// The activation is open and waits for the next input.
     Open,
+    /// P4.0-5: the core needs one answer before it can resolve (`option: ""` asked). `id` and every
+    /// option are stable ids (a target unit key and `slot:<n>` model slots), `owner` is the roster
+    /// key of the unit whose side answers. Answer with `Input::Choice { id, option }`.
+    NeedChoice { id: String, options: Vec<String>, owner: String },
     /// Input `index` breaks an order rule; `reason` is the sentence the player sees.
     Refused { index: usize, reason: String },
     /// The activation was cancelled before its first die; the state is untouched
@@ -63,6 +71,7 @@ pub fn order_check(name: &str, t: &[Input]) -> Result<(), (usize, String)> {
             _ if over => Some("the activation is over".to_string()),
             Input::Cancel if rolled => Some("cancel is not possible after the first die".to_string()),
             Input::Faces(_) if !declared => Some("faces before the action was declared".to_string()),
+            Input::Choice { .. } if !declared => Some("the choice was answered before the action was declared".to_string()),
             Input::Intent { .. } if declared => Some("one action per activation".to_string()),
             Input::Placed { .. } if shot => Some(format!("{name} has already shot this round — it cannot move now")),
             Input::Intent { kind, .. } if *kind == CHARGE || *kind == REPOSITION => Some("not on the step path yet".to_string()),
