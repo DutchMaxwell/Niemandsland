@@ -106,3 +106,56 @@ func test_an_end_without_a_shot_spends_nothing() -> void:
 	_record(att, {"modifier": {"hit_mod": 1}, "scope": "shooting", "duration": "once"})
 	await _activate(att, units[1], false)
 	assert_array(_records(att)).override_failure_message("no exchange happened, so nothing is spent").has_size(1)
+
+
+## Seeds the morale cases try: with the fixture's 10 shooters and 5 targets, a volley leaves the target at half strength
+## or less (a morale die) on about one seed in three, and never reaches one on the rest.
+const MORALE_SEEDS := 24
+
+
+## One core volley of a fresh fixture at `seed_n`, the target carrying a once morale buff (and Shaken when `shaken`).
+## Returns whether the core asked for a morale die, and whether the target's once buff is still recorded afterwards.
+func _morale_run(seed_n: int, shaken := false) -> Dictionary:
+	var units := _volley_units()
+	var foe: GameUnit = units[1]
+	_record(foe, {"modifier": {"morale_mod": 1}, "scope": "", "duration": "once"})
+	foe.is_shaken = shaken
+	var asked := [false]
+	_main.seed_tray_rng(seed_n)
+	var t: Array = [{"t": "begin"}, {"t": "intent", "kind": AiDecision.Action.HOLD, "shoot": foe.unit_id}]
+	var r: Dictionary = await CoreActivation.drive(_main, CoreActivation.capture(_main), units[0], t, true,
+		func(kind: String, _i: int) -> void: asked[0] = asked[0] or kind == "morale")
+	assert_str(str(r["step"])).override_failure_message("seed %d, the core's answer: %s" % [seed_n, r]).is_equal("done")
+	var kept := not _records(foe).is_empty()
+	for u in units:   # the next seed starts on a bare table
+		_main.opr_army_manager.game_units.erase((u as GameUnit).unit_id)
+		for m in (u as GameUnit).models:
+			(m as ModelInstance).node.free()
+	_main._solo_spell_mods.clear()
+	_main._solo_mirror_spell_state()
+	return {"asked": asked[0], "kept": kept}
+
+
+## The table spends a once morale buff right after the morale die (`_solo_morale_test`); the core path must too, and only
+## when a die was thrown. Both halves are counted, so a seed set that never reaches a morale test fails instead of passing.
+func test_a_once_morale_buff_is_spent_by_the_morale_test_the_core_runs() -> void:
+	var tested := 0
+	var untested := 0
+	var wrong: Array = []
+	for seed_n in range(1, MORALE_SEEDS + 1):
+		var run: Dictionary = await _morale_run(seed_n)
+		tested += int(run["asked"])
+		untested += int(not run["asked"])
+		if run["asked"] == run["kept"]:   # a die thrown spends it, no die leaves it
+			wrong.append("seed %d: morale die %s, once buff %s" % [seed_n, run["asked"], "kept" if run["kept"] else "spent"])
+	assert_array(wrong).override_failure_message("the once morale buff follows the morale die:\n" + "\n".join(wrong)).is_empty()
+	assert_bool(tested > 0 and untested > 0).override_failure_message(
+		"the seeds must reach a morale test AND miss one (%d, %d)" % [tested, untested]).is_true()
+
+
+## A Shaken unit fails a further morale test without a die: nothing is thrown, so the once buff stays.
+func test_a_shaken_target_keeps_its_once_morale_buff() -> void:
+	for seed_n in [1, 7, 10]:
+		var run: Dictionary = await _morale_run(seed_n, true)
+		assert_bool(run["asked"]).override_failure_message("seed %d: a Shaken unit rolls no morale die" % seed_n).is_false()
+		assert_bool(run["kept"]).override_failure_message("seed %d: no die, no spend" % seed_n).is_true()

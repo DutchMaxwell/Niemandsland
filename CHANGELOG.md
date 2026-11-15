@@ -135,6 +135,11 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 - **Solo: a squad inside its transport keeps its turn.** The AI no longer takes all its
   activations in a row.
 - **Solo: Delayed Action counts a squad inside a transport as a unit still to activate.**
+- **A buff that applies "once" is used up by the shot or the morale test it was meant for.** Against
+  the AI and in an online room set to Automatic, a spell effect that gives +1 for one attack, or +1
+  to one morale test, stayed on its unit after the shot or the morale test the rules engine
+  resolved, so the next one used it again. It is now spent right after, and the battle log says so.
+  (#2803, #2804)
 
 ### Internal
 - CI and test groundwork for running the tests against the Rust core: a new job "All required
