@@ -148,6 +148,8 @@ static func pending_choice(main, unit: GameUnit, transcript: Array) -> String:
 		return ""
 	for i in range(transcript.size() - 1, -1, -1):
 		var e: Dictionary = transcript[i]
+		if str(e.get("t", "")) == "choice":
+			return ""   # already asked in this transcript: never a second probe
 		if str(e.get("t", "")) != "intent":
 			continue
 		var target = main.opr_army_manager.game_units.get(str(e.get("shoot", "")))
@@ -181,6 +183,8 @@ static func choice_purpose(id: String) -> String:
 ## Returns the core's last answer plus "steps" (calls), "core_us" (their total time) and "max_us" (the slowest).
 ## A `done` answer's state handle is released once the table landed it (R4); `keep_handle` hands it to the caller instead,
 ## who releases it.
+## P4.0-6: a choice whose switch is ON is probed once; a `need_choice` answer asks its OWNER (local, or over the
+## owner-request path), and only an answer the core offered is appended; no answer leaves the core's automatic pick.
 static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 		on_throw: Callable = Callable(), keep_handle := false, beat: Callable = Callable()) -> Dictionary:
 	var core: Object = (main.solo_controller as SoloController)._core_node_ready()
@@ -191,12 +195,25 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 	var core_us := 0
 	var max_us := 0
 	var r: Dictionary = {}
+	var choice := pending_choice(main, unit, transcript)
 	for step in MAX_STEPS:
+		var inputs := transcript
+		if not choice.is_empty():
+			inputs = transcript.duplicate()
+			inputs.append({"t": "choice", "id": choice, "option": ""})
 		var t0 := Time.get_ticks_usec()
-		r = core.step_activation(h, unit.unit_id, transcript, enforce)
+		r = core.step_activation(h, unit.unit_id, inputs, enforce)
 		var us := Time.get_ticks_usec() - t0
 		core_us += us
 		max_us = maxi(max_us, us)
+		if str(r["step"]) == "need_choice":
+			var options: Array = r.get("options", [])
+			var owner := _roller_of(main, unit, transcript, str(r["owner"]))
+			var option: String = await main._owner_choice(owner, str(r["id"]), options, choice_purpose(str(r["id"])))
+			choice = ""   # asked once: the answer follows, or the core's automatic pick stands
+			if options.has(option):
+				transcript.append({"t": "choice", "id": str(r["id"]), "option": option})
+			continue
 		var lines: Array = r.get("lines", [])
 		for i in range(printed, lines.size()):
 			var line: Dictionary = lines[i]
