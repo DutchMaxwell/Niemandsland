@@ -131,6 +131,11 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 		var faces: Array = await main._owner_roll(roller, int(r["faces"]), int(r["target"]), str(r["kind"]), "",
 			{"label": label, "what": "%s dice" % r["kind"]})
 		transcript.append({"t": "faces", "faces": faces})
+		if str(r["kind"]) == "morale":
+			# P4.0-4c: the table spends a once morale buff right after the morale die (`_solo_morale_test`), for the unit
+			# that rolled; the core spent its own copy of the ledger, which the capture never sends. A volley's test has no
+			# other cause, so no buff is kept back. A Shaken unit rolls no die, so this is never reached for it.
+			main._solo_spend_once_kind(roller, ["morale"])
 		if beat.is_valid():
 			await beat.call("thrown", r, faces)
 	push_error("CoreActivation.drive: %s still needs dice after %d steps" % [unit.get_name(), MAX_STEPS])
