@@ -121,3 +121,65 @@ same commit as the struct change.
   `tag_markers`, `piercing_tag_markers`). The delta stops at `shaken`, and the MP rows compare only
   activation, Shaken and per-model wounds/life/XZ — so a table and the core can disagree on any of
   these without a local or MP signal.
+
+## Classification (One core P4.0-4a)
+
+Every gap row above is assigned one class by following the core's write and the table's own writer.
+A live activation on the core path is *plain*: `is_plain` (`scripts/solo/core_activation.gd`) demands
+no `special_rules`, no weapon `special_rules` and no attached hero, so the rule/feat/marker branches
+below are unreachable — the core only *reads* those fields. The core's own plain writes are
+`moved_round` (`sim.rs:9770`, the P3 supplied-placement move), `activated`, model `wounds`/`positions`
+and the `buffs` spend (`sim.rs:10594`).
+
+- **(a) Table-owned on the core path.** The core's plain activation does not write the field and the
+  table's own writer still runs, so the value cannot go stale. The cited core writer sits in a
+  rule/feat/marker branch a plain unit never enters.
+- **(b) Lost on the core path.** The plain activation changes the field (or the table's spend for it
+  never runs) and neither the delta, the landings nor the MP rows carry it back, so the value goes
+  stale until the table resets it. The cases for the (b) fields live in
+  `test/one_core/state_delta_lost_test.gd`; they were red on purpose until the fixes below.
+- **(c) Core-internal only.** The only core writer is the AI rollout/search (`rollout.rs`), not the
+  live `sim::resolve`; the table's own value is never touched by a core activation.
+
+| Class | Field | Evidence (core writer; table reader) |
+|---|---|---|
+| (a) | `fatigued` | `sim.rs:2108,3292` (Second Wind branch); `battle_sim.gd:2124`; the table's own fatigue toggle is the writer |
+| (a) | `casts` | `sim.rs:1925-1928` (Vengeance branch); `battle_sim.gd:2126`; table cast path writes it |
+| (b), fixed | `buffs` | core spends at `sim.rs:10594` (`spend_exchange_wounded`), but the live capture never sends the ledger (`plain.rs:493`), and the table's `_solo_spend_once_mods` (`main.gd:6161`) never ran on the core path; read `main.gd:447`. Fixed by #2803 (the volley's once buffs; the table's own spend after a `done` activation); the once morale buff fixed by #2804 (spent right after the morale die) |
+| (a) | `vs_mark_round` | `sim.rs:1911,1964` (Vengeance branch); `main.gd:24332`; table writer runs |
+| (a) | `hit_and_run_round` | `sim.rs:3171,3197` (Hit-and-Run branch); `solo_controller.gd:12793`; table writer runs |
+| (a) | `moved_round` | `sim.rs:9770` writes it on the P3 placed move, but `_on_units_dropped` (`main.gd:22883`) and `_solo_animate_move` (`main.gd:12255`) set the table's copy on the same move; the delta's `moved` (`activation.rs:316`) is only a guard and `land_delta` (`core_activation.gd:383`) ignores it; read `main.gd:1761` |
+| (c) | `delayed_action_round` | only `rollout.rs:404` (AI search); table reads `solo_controller.gd:9994` and writes it itself |
+| (c) | `coordinate_via_round` | only `rollout.rs:319` (AI search); table reads `game_unit.gd:333` and writes it at `:351` |
+| (a) | `reckless_rolled_round` | `sim.rs:2341` (Reckless branch); `main.gd:24471`; table writer runs |
+| (a) | `reckless_ap_round` | `sim.rs:2353` (Reckless branch); `main.gd:24502`; table writer runs |
+| (a) | `reckless_backfire_round` | `sim.rs:2354` (Reckless branch); `main.gd:24507`; table writer runs |
+| (a) | `versatile_pick_round` | `sim.rs:8220` (Versatile branch); `main.gd:15462`; table writer runs |
+| (a) | `versatile_pick_mode` | `sim.rs:8221` (Versatile branch); `main.gd:15471`; table writer runs |
+| (a) | `retreating_strike_round` | `sim.rs:3081` (Retreating Strike branch); `main.gd:8888`; table writer runs |
+| (a) | `mind_control_moved_round` | `sim.rs:2175` (Mind Control branch, `EPOCH_73_V36`); `main.gd:24569`; table writer runs |
+| (a) | `growth_markers` | `sim.rs:4253,4268` (Growth branch); `main.gd:24962`; table writer runs |
+| (a) | `growth_round` | `sim.rs:4251` (Growth branch), plus the fold at `io.rs:1308` (no ledger key on the wire); `main.gd:24968`; table writer runs |
+| (a) | `growth_strike_round` | `sim.rs:5901` (Growth strike); `main.gd:9335`; table writer runs |
+| (a) | `vengeance_markers` | `io.rs:1278` folds the ledger, read at `sim.rs:3822`; `main.gd:8827`; table writer runs |
+| (a) | `second_wind_used` | `sim.rs:3290` (Second Wind branch); `solo_controller.gd:13886`; table writer runs |
+| (a) | `surprise_attack_used` | `sim.rs:1121` (Surprise Attack branch); `main.gd:25248`; table writer runs |
+| (a) | `reinforcement_used` | `deployment.rs:3631` (reinforcement step), fold `io.rs:1264`; `main.gd:16256`; never an activation |
+| (a) | `second_wind_round` | `sim.rs:3286` (Second Wind branch); `solo_controller.gd:13833`; table writer runs |
+| (a) | `second_wind_uses` | `sim.rs:3289` (Second Wind branch); `solo_controller.gd:13833`; table writer runs |
+| (a) | `limited_used` | `sim.rs:1405,6060` (`mark_spent_limited`, limited-weapon branch); `solo_controller.gd:9772`; table writer runs |
+| (a) | `piercing_tag_used` | `sim.rs:2449` (Piercing tag branch); `main.gd:24614`; table writer runs |
+| (a) | `piercing_tag_markers` | `sim.rs:2455,2464,2514` (Piercing tag branch); `main.gd:24674`; table writer runs |
+| (a) | `piercing_tag_persistent` | `sim.rs:2456,2475`, fold `io.rs:1288`; `main.gd:24677`; table writer runs |
+| (a) | `piercing_spot_round` | `sim.rs:2436` (Piercing Spot branch); `main.gd:24612`; table writer runs |
+| (a) | `storm_used` | `sim.rs:1449` (Storm branch); `main.gd:25124`; table writer runs |
+| (a) | `feats_used` | `sim.rs:1840,5852,5936,9468` (feat branches); `solo_controller.gd:2002`; table writer runs |
+| (a) | `teleport_used` | `sim.rs:2221` (Teleport branch); `main.gd:25312`; table writer runs |
+| (a) | `spot_markers` | `sim.rs:2638,2742` (Spotter branch); `main.gd:15256`; table writer runs |
+| (a) | `tag_markers` | `sim.rs:2675,2753` (Tagger branch); `main.gd:15714`; table writer runs |
+| (a) | `spot_round` | `sim.rs:2619` (Spotter branch); `main.gd:15222`; table writer runs |
+| (a) | `precision_used` | `sim.rs:2653` (Precision branch); `main.gd:24773`; table writer runs |
+
+Counts: **33 (a), 1 (b), 2 (c)**; the (b) is fixed by #2803 (volley) and #2804 (morale). The single (b) was the live buff ledger: the core's `spend_once`
+is the one plain-path write whose result no surface carries, because the capture never sends the
+ledger (`plain.rs:493`) and the table's own spend is skipped on the core path.
