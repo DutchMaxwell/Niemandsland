@@ -315,6 +315,19 @@ pub struct UnitDelta {
     /// P4.0-4e: the per-unit once-per-round stamps AFTER (inventory class (a)), keyed by the `State`
     /// field name; `land_delta` maps the two names the table spells differently.
     pub stamps: Vec<(&'static str, i64)>,
+    /// P4.0-4f: the per-unit marker pools AFTER (inventory class (a)), keyed by the table's own
+    /// property name (every name is 1:1; absent on the table reads 0).
+    pub pools: Vec<(&'static str, i64)>,
+}
+
+/// P4.0-4f: the marker pools the inventory marks table-owned, in `State` declaration order, AFTER.
+fn pools_of(s: &State, u: usize) -> Vec<(&'static str, i64)> {
+    vec![
+        ("spot_markers", s.spot_markers[u]),
+        ("tag_markers", s.tag_markers[u]),
+        ("piercing_tag_markers", s.piercing_tag_markers[u]),
+        ("vengeance_markers", s.vengeance_markers[u]),
+    ]
 }
 
 /// P4.0-4e: every round stamp the inventory marks table-owned, in `State` declaration order, AFTER.
@@ -357,8 +370,10 @@ pub fn delta_of(before: &State, after: &State) -> Vec<UnitDelta> {
             removed.clear();
         }
         let stamps_changed = stamps_of(before, u) != stamps_of(after, u);
+        let pools_changed = pools_of(before, u) != pools_of(after, u);
         if b != a || before.alive[u] != after.alive[u] || before.shaken[u] != after.shaken[u] || moved
-            || before.fatigued[u] != after.fatigued[u] || before.casts[u] != after.casts[u] || stamps_changed
+            || before.fatigued[u] != after.fatigued[u] || before.casts[u] != after.casts[u]
+            || stamps_changed || pools_changed
         {
             out.push(UnitDelta {
                 key: key.clone(),
@@ -370,6 +385,7 @@ pub fn delta_of(before: &State, after: &State) -> Vec<UnitDelta> {
                 fatigued: after.fatigued[u],
                 casts: after.casts[u],
                 stamps: stamps_of(after, u),
+                pools: pools_of(after, u),
             });
         }
     }
@@ -722,6 +738,21 @@ mod tests {
         let (got, _) = drive(&statics, &st, vec![Begin, intent(HOLD, Some("b"))], 7);
         let ActStep::Done { state, .. } = got else { panic!("seed 7: {got:?}") };
         assert!(delta_of(&st, &state).iter().all(|x| x.stamps.len() == 12), "a core row carries the stamps");
+    }
+    /// P4.0-4f: a unit whose only change is a marker pool gets a row carrying all four, AFTER; a core-resolved
+    /// volley's rows carry them too (RED: drop the pool term -> no row; drop a pair -> the count is 3).
+    #[test]
+    fn the_delta_carries_the_marker_pools() {
+        let (st, statics) = volley_line();
+        let mut after = st.clone();
+        after.tag_markers[2] = 2;
+        let d = delta_of(&st, &after);
+        assert_eq!(d.len(), 1);
+        assert_eq!(d[0].pools.len(), 4);
+        assert!(d[0].pools.contains(&("tag_markers", 2)));
+        let (got, _) = drive(&statics, &st, vec![Begin, intent(HOLD, Some("b"))], 7);
+        let ActStep::Done { state, .. } = got else { panic!("seed 7: {got:?}") };
+        assert!(delta_of(&st, &state).iter().all(|x| x.pools.len() == 4), "a core row carries the pools");
     }
 
     // ---- step 14: allowance and move check ----

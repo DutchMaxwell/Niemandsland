@@ -115,6 +115,11 @@ fn delta_array(before: &State, after: &State) -> VarArray {
             stamps.set(*key, *value);
         }
         d.set("stamps", &stamps.to_variant());
+        let mut pools = VarDictionary::new();
+        for (key, value) in &u.pools {
+            pools.set(*key, *value);
+        }
+        d.set("pools", &pools.to_variant());
         out.push(&d.to_variant());
     }
     out
