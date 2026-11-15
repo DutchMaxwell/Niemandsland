@@ -536,9 +536,10 @@ fn takedown_pick(state: &State, ti: usize) -> usize {
 /// inline, so this replays `land_takedown_groups` on a scratch copy of the target's slots: a killed
 /// pick is gone, a wounded one ranks first for removal and so never last for the sniper. A recorded
 /// node carries no board, so it keeps the unit's flag.
-fn takedown_pick_cover_after(state: &State, ti: usize, cover: Cover, unit_flag: bool, groups: &[i64]) -> bool {
+fn takedown_pick_cover_after(state: &State, ti: usize, cover: Cover, unit_flag: bool, groups: &[i64], picked: Option<usize>) -> bool {
     let Cover::Board(t) = cover else { return unit_flag };
     let (mut pos, mut wounds) = (state.positions[ti].clone(), state.wounds[ti].clone());
+    let mut picked = picked;
     let mut kits: Vec<crate::state::Kit> = state.kits.get(ti).map(|k| k.to_vec()).unwrap_or_default();
     let pick = |kits: &[crate::state::Kit], pos: &[[f64; 3]], wounds: &[i64]| -> usize {
         if !kits.is_empty() && kits.len() == pos.len() {
@@ -551,7 +552,8 @@ fn takedown_pick_cover_after(state: &State, ti: usize, cover: Cover, unit_flag: 
         if pos.is_empty() || wounds.len() != pos.len() {
             return unit_flag;
         }
-        let p = pick(&kits, &pos, &wounds);
+        // P4.0-5: the step API's answer names the first group's model; later groups keep the auto pick.
+        let p = picked.take().filter(|&p| p < pos.len()).unwrap_or_else(|| pick(&kits, &pos, &wounds));
         wounds[p] -= g.min(wounds[p]);
         if wounds[p] <= 0 {
             pos.remove(p);
@@ -564,7 +566,7 @@ fn takedown_pick_cover_after(state: &State, ti: usize, cover: Cover, unit_flag: 
     if pos.is_empty() || wounds.len() != pos.len() {
         return unit_flag;
     }
-    let p = pos[pick(&kits, &pos, &wounds)];
+    let p = pos[picked.take().filter(|&p| p < pos.len()).unwrap_or_else(|| pick(&kits, &pos, &wounds))];
     crate::terrain::gives_cover(t.type_at([p[0] as f32, p[1] as f32, p[2] as f32]))
 }
 
@@ -573,13 +575,18 @@ fn takedown_pick_cover_after(state: &State, ti: usize, cover: Cover, unit_flag: 
 /// living model (`casualty_order(..).last()`; the table's AI never snipes a joined hero), and the
 /// overkill is lost (a unit of [1] has nowhere to spill). Without kits the pick is the core's own
 /// inverse slot order, the last living slot. Each landing names itself (rules-must-log).
-fn land_takedown_groups(state: &mut State, ti: usize, shot: &mut ShootResult) {
+/// P4.0-5: `pick` is the step API's answer for the FIRST group (a slot at the choice, `None` = auto).
+fn land_takedown_groups(state: &mut State, ti: usize, shot: &mut ShootResult, pick: Option<usize>) {
+    let mut pick = pick;
     for w in std::mem::take(&mut shot.takedown_groups) {
         let n = state.wounds[ti].len();
         if w <= 0 || n == 0 {
             continue;
         }
-        let pick = takedown_pick(state, ti);
+        // One-core P4.0-5: the step API's answer names the first group's model by its slot; a slot the
+        // group has already removed (or a caller that supplied no choice) falls back to the automatic pick.
+        let chosen = pick.take().filter(|&p| state.wounds[ti].get(p).is_some_and(|&x| x > 0));
+        let pick = chosen.unwrap_or_else(|| takedown_pick(state, ti));
         let take = w.min(state.wounds[ti][pick]);
         state.wounds[ti][pick] -= take;
         let killed = state.wounds[ti][pick] <= 0;
@@ -1396,7 +1403,7 @@ pub(crate) fn tray_strafing(
         shred_boost_active(seams.rules_epoch),
         rule_on(seams.rules_epoch, EPOCH_14_DEADLY_LANDING),
         seams.tray_exact,
-        &|gr: &[i64]| takedown_pick_cover_after(next, target, cover, def.in_cover, gr),
+        &|gr: &[i64]| takedown_pick_cover_after(next, target, cover, def.in_cover, gr, seams.takedown_pick),
         &|_, _| None,
         tray,
     );
@@ -1413,7 +1420,7 @@ pub(crate) fn tray_strafing(
     if !seams.tray_exact {
         land_pool_wounds(next, target, w, false, seams, &mut shot.log);
     }
-    land_takedown_groups(next, target, shot);
+    land_takedown_groups(next, target, shot, seams.takedown_pick);
     for &(post, dx) in std::mem::take(&mut shot.deadly_groups).iter() {
         let dl = land_deadly_wounds(next, target, post, dx, seams);
         shot.log.push(format!("Deadly({dx}): {post} unsaved ×{dx}, no carry-over → {dl} wounds dealt"));
@@ -6104,7 +6111,7 @@ fn strike_phase(
     // LANDED, overkill included (`caused += td_dealt`, main.gd:7284), and the
     // table's order holds: Takedown, Deadly, then the pool.
     let mut dealt: i64 = shot.takedown_groups.iter().sum();
-    land_takedown_groups(next, ti, shot);
+    land_takedown_groups(next, ti, shot, seams.takedown_pick);
     for &(post, dx) in std::mem::take(&mut shot.deadly_groups).iter() {
         let d = land_deadly_wounds(next, ti, post, dx, seams);
         dealt += d;
@@ -10472,7 +10479,7 @@ fn resolve_with(
                                 // `EPOCH_14_DEADLY_LANDING`, pool multiply below.
                                 rule_on(seams.rules_epoch, EPOCH_14_DEADLY_LANDING),
                                 seams.tray_exact,
-                                &|gr: &[i64]| takedown_pick_cover_after(&next, g.ti, cover, def.in_cover, gr),
+                                &|gr: &[i64]| takedown_pick_cover_after(&next, g.ti, cover, def.in_cover, gr, seams.takedown_pick),
                                 &|i, pi| parts.get(i).and_then(|(mi, msc, _)| msc.sighted.get(pi)
                                     .map(|&n| (n, next.alive[*mi], msc.silent.get(pi).copied().unwrap_or("")))),
                                 tray,
@@ -10519,7 +10526,7 @@ fn resolve_with(
                             }
                             // Tray-exact S7: the table lands Takedown and Deadly INLINE per weapon
                             // (Takedown first, main.gd:4054-4067) and the pool at the volley's end.
-                            land_takedown_groups(&mut next, g.ti, shot);
+                            land_takedown_groups(&mut next, g.ti, shot, seams.takedown_pick);
                             // Audit 2026-09-13 §2.1 — Deadly lands PER MODEL
                             // with no carry-over (the table's
                             // `apply_deadly_wounds`, solo_controller.gd:8333):
