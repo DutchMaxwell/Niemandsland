@@ -1118,6 +1118,7 @@ func _solo_activate_one_ai() -> GameUnit:
 	if _solo_core_ai_h != 0:   # one-core P3 step 42: the body's capture, released on every path of the body
 		solo_controller._core_node_ready().release(_solo_core_ai_h)
 		_solo_core_ai_h = 0
+	save_manager.note_activation_end()   # P4.0-7 (D5): a save after the AI activation is an ordinary one
 	if done != null and solo_activation_done.is_valid():
 		await solo_activation_done.call(done)
 	return done
@@ -1144,6 +1145,11 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	# One-core P3 step 42 (flag on): a plain unit's board BEFORE its move, for the core's volley (_run_ai_shooting).
 	_solo_core_ai_h = CoreActivation.capture(self) \
 		if peek != null and CoreActivation.applies(self) and CoreActivation.is_plain(peek) else 0
+	# P4.0-7 (D5): the AI's activation-start snapshot for a save taken mid-volley (the body's end clears it).
+	if _solo_core_ai_h != 0:
+		save_manager.note_activation_start(peek.get_name())
+	else:
+		save_manager.note_activation_end()
 	var act_t0 := Time.get_ticks_usec()
 	var unit: GameUnit = solo_controller.activate_next_ai_unit()
 	# S4 wait-time instrument (NML_ACT_WALL=1): the decision call a player waits for, on the
@@ -20628,6 +20634,11 @@ func _on_load_completed(object_count: int) -> void:
 	print("Game loaded: %d objects" % object_count)
 	_solo_rebind_carried_after_load()
 	CoreActivation.reset_all(self)   # R4: a loaded game has no open activation and sends its own game header
+	# P4.0-7 (D5): a save taken mid-activation restores the activation start; say so in ONE line, then spend the marker.
+	var restart := str(save_manager.core_restart)
+	save_manager.core_restart = ""
+	if not restart.is_empty():
+		_log_rule_event(BattleLog.Category.GENERAL, "%s: the activation restarts from its start." % restart)
 	_update_round_button()  # restored round may differ from 1
 	# A loaded battle spawns no army_spawned signal, so the unit strip was only ever built on a fresh
 	# spawn and stayed empty after a save-load (UI handoff finding 4). Rebuild it from the restored units.

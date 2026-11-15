@@ -482,6 +482,8 @@ static func open_session(main, gu: GameUnit) -> bool:
 	for u in [gu] + gu.get_attached_heroes():   # step 32: each moved_round before the Start (null = none), for the reset
 		s["moved_before"][u.unit_id] = u.unit_properties.get("moved_round")
 	_sessions[gu.unit_id] = s
+	if main.save_manager != null:
+		main.save_manager.note_activation_start(gu.get_name())   # P4.0-7 (D5): what a mid-step save stores
 	last_target = null   # step 50: a new activation never inherits the target of a cancelled one
 	if on_move_path(main, gu):   # step 31 (O1/O2): every activation of a move-path unit starts on Advance
 		main.object_manager.set_movement_cap(ObjectManager.MovementCap.ADVANCE)
@@ -527,6 +529,8 @@ static func close_session(main, unit_id: String) -> void:
 	if core != null:
 		core.release(int(_sessions[unit_id]["handle"]))
 	_sessions.erase(unit_id)
+	if main != null and main.save_manager != null:
+		main.save_manager.note_activation_end()   # P4.0-7 (D5): an ended activation saves as the table stands
 	if main != null:
 		main._refresh_movement_cap_row()   # step 31: an ended unit shows Off again
 	_refresh_card(main)
@@ -837,6 +841,8 @@ static func start_rows(gu: GameUnit) -> Array:
 static func reset_all(main) -> void:
 	for id in _sessions.keys():
 		close_session(main, id)
+	if main != null and main.save_manager != null:
+		main.save_manager.note_activation_end()   # P4.0-7 (D5): a reset (a load) ends the activation on the save side too
 	_announced.clear()
 	_ending.clear()   # step 69
 	last_target = null
