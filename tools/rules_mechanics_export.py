@@ -182,11 +182,18 @@ PRIMITIVE_PARAMS = {
     "Royal Legion": {"range_bonus_in": 4, "charge_mod": 2},
     # --- Wave 5 ---
     "Shred": {"extra_wound_per_save_one": 1},
-    "Indirect": {"moved_hit_penalty": 1, "ignores_cover": True, "ignores_los": True, "hold_and_shoot": True},
+    "Indirect": {"moved_hit_penalty": 1, "ignores_cover": True, "ignores_los": True, "hold_and_shoot": True,
+                 "los_needs_hold": True, "cover_needs_hold": True},
     "Limited": {"uses_per_game": 1},
     "Banner": {"morale_bonus": 1, "scope": "unit"},
     "Musician": {"move_bonus_in": 1, "scope": "unit"},
-    "Sergeant": {"bonus_hits_per_six": 1, "model_level": True},
+    "Sergeant": {"ap_bonus": 1, "model_level": True},
+    # Rules 3.6 shared core rows (same encoding in every system's book).
+    "Assault": {"melee_copy": True},
+    "Brace": {"rating": "X"},
+    "Parry": {"rating": "X"},
+    "Spell Amplifier": {"casting_mod": 1},
+    "Cumbersome": {},
     "Armor": {"rating": "X", "defense_value": "X", "best_of": True},
     # --- Wave-5 conditional-AP family (2026-07-18, grill "primitive families first") ---
     # Target-property AP rules: each its own primitive NAME but ALL read by the one generic
@@ -230,15 +237,15 @@ PRIMITIVE_PARAMS = {
 
 # Per-(system, rule) parameter overrides — the SYSTEM-SCOPED divergences.
 # GFF and AoFS (the skirmish-scale games) rewrite Banner/Musician to a
-# "bearer + up to 3 friendly units picked before the game" scope; the full
+# "bearer + up to 2 friendly units picked before the game" scope; the full
 # games grant the bearer's own unit. The picked-units facet is data here so
 # the loader can surface it; the solo automation applies the bearer scope and
 # flags the pick as manual (see docs/SOLO_AI_RULES_COVERAGE.md).
 SYSTEM_PARAM_OVERRIDES = {
-    ("gff", "Banner"): {"morale_bonus": 1, "scope": "picked", "picked_units": 3},
-    ("aofs", "Banner"): {"morale_bonus": 1, "scope": "picked", "picked_units": 3},
-    ("gff", "Musician"): {"move_bonus_in": 1, "scope": "picked", "picked_units": 3},
-    ("aofs", "Musician"): {"move_bonus_in": 1, "scope": "picked", "picked_units": 3},
+    ("gff", "Banner"): {"morale_bonus": 1, "scope": "picked", "picked_units": 2},
+    ("aofs", "Banner"): {"morale_bonus": 1, "scope": "picked", "picked_units": 2},
+    ("gff", "Musician"): {"move_bonus_in": 1, "scope": "picked", "picked_units": 2},
+    ("aofs", "Musician"): {"move_bonus_in": 1, "scope": "picked", "picked_units": 2},
 }
 
 # Wave-5 rule -> primitive mapping. The registry still marks these rules
@@ -247,6 +254,12 @@ SYSTEM_PARAM_OVERRIDES = {
 # re-runs with the wave-5 vocabulary. Names must match registry rule names.
 WAVE5_PRIMITIVES = {
     "Shred": "Shred",
+    "Assault": "Assault",
+    "Brace": "Brace",
+    "Parry": "Parry",
+    "Spell Amplifier": "Spell Amplifier",
+    "Cumbersome": "Cumbersome",
+    "Unique Hero": "Hero",
     "Indirect": "Indirect",
     "Limited": "Limited",
     "Banner": "Banner",
