@@ -21,6 +21,28 @@ static func applies(main) -> bool:
 		and (not main.solo_ai_slots.is_empty() or main._online_turn_room())
 
 
+## P4.0-6: the per-choice switch. A choice id's prefix (`takedown_model:<shooter>:<target>`) names its
+## switch; a switch is ON only for `NML_ONE_CORE_CHOICE_<PREFIX>` = "1"/"on", so OFF is the default and the
+## core's automatic pick resolves exactly as before this step. Tests set the entry per kind.
+const CHOICE_KINDS := ["takedown_model"]
+static var _choice_on: Dictionary = {}
+
+
+static func choice_enabled(id: String) -> bool:
+	var kind := id.get_slice(":", 0)
+	if not _choice_on.has(kind):
+		var raw := OS.get_environment("NML_ONE_CORE_CHOICE_%s" % kind.to_upper()).to_lower()
+		_choice_on[kind] = raw == "1" or raw == "on"
+	return bool(_choice_on[kind])
+
+
+static func any_choice_enabled() -> bool:
+	for kind in CHOICE_KINDS:
+		if choice_enabled(str(kind)):
+			return true
+	return false
+
+
 ## No unit rule, no attachment, no weapon rule: the volley the core resolves exactly as the table does.
 static func is_plain(gu: GameUnit) -> bool:
 	if not (gu.unit_properties.get("special_rules", []) as Array).is_empty() \
@@ -115,6 +137,41 @@ const CAP_ADVANCE := 1
 const CAP_RUSH := 2
 const CAP_CHARGE := 3
 const METERS_TO_INCHES := 39.3701
+
+
+## P4.0-6: the choice the step API will open for this activation, as its stable id, or "". Only a choice
+## whose switch is ON is built, and only when the table can see what the core's `takedown_choice` sees (a
+## Takedown shooting profile on the actor, 2+ living models on the shot's target): the probe can never ask
+## for a choice the core would not open. An empty answer means "no probe", i.e. the automatic pick.
+static func pending_choice(main, unit: GameUnit, transcript: Array) -> String:
+	if not any_choice_enabled():
+		return ""
+	for i in range(transcript.size() - 1, -1, -1):
+		var e: Dictionary = transcript[i]
+		if str(e.get("t", "")) != "intent":
+			continue
+		var target = main.opr_army_manager.game_units.get(str(e.get("shoot", "")))
+		if not target is GameUnit or not choice_enabled("takedown_model") \
+				or (target as GameUnit).get_alive_models().size() < 2 or not _takedown_weapon(unit):
+			return ""
+		return "takedown_model:%s:%s" % [unit.unit_id, (target as GameUnit).unit_id]
+	return ""
+
+
+## Whether `unit` carries a Takedown shooting profile — the core's `ShootProfile.takedown` is stamped from
+## the same weapon entries (`weapon_has(w, "Takedown")`).
+static func _takedown_weapon(unit: GameUnit) -> bool:
+	var src := unit.source_data as OPRApiClient.OPRUnit
+	for w in src.weapons if src != null else []:
+		for r in (w as OPRApiClient.OPRWeapon).special_rules:
+			if GameUnit.rule_name_matches(str(r), "Takedown"):
+				return true
+	return false
+
+
+## The sentence the fallback line and the owner's request use for a choice id.
+static func choice_purpose(id: String) -> String:
+	return "Takedown model pick" if id.get_slice(":", 0) == "takedown_model" else "choice"
 
 
 ## One activation through the core: ask, print the lines not printed yet, land, throw on the owner's tray, ask again.
