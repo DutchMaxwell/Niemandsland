@@ -11416,8 +11416,12 @@ func _charge_path_probe_impl(unit: GameUnit, target: GameUnit, band_in: float) -
 			return result
 	var best_residual_in := INF
 	var best_model := -1
+	var residuals: Array = []   # #183: per model, for the shared pick (INF = no shape)
+	var arcs: Array = []
 	for i in range(mini(models.size(), mini(finalized.size(), trails.size()))):
 		var mover_shape := SeparationChecker.shape_for_model(models[i] as ModelInstance)
+		residuals.append(INF)
+		arcs.append(MovementPlanner.polyline_length(trails[i] as Array) / INCHES_TO_METERS)
 		if mover_shape == null:
 			continue
 		var start: Vector3 = positions[i]
@@ -11427,7 +11431,8 @@ func _charge_path_probe_impl(unit: GameUnit, target: GameUnit, band_in: float) -
 		for target_shape in target_shapes:
 			residual_in = minf(residual_in,
 				SeparationChecker.edge_distance(mover_shape, target_shape as SeparationChecker.BaseShape))
-		if charge_snap_fits_unit_budget(residual_in, longest_arc_in, effective_band):
+		residuals[i] = residual_in
+		if not charge_cap_on() and charge_snap_fits_unit_budget(residual_in, longest_arc_in, effective_band):
 			result["contact_model"] = i
 			result["residual_in"] = residual_in
 			return result
@@ -11435,6 +11440,12 @@ func _charge_path_probe_impl(unit: GameUnit, target: GameUnit, band_in: float) -
 			best_residual_in = residual_in
 			best_model = i
 
+	var pick := charge_snap_pick(residuals, arcs, effective_band) if charge_cap_on() \
+		and longest_arc_in <= effective_band + SeparationChecker.BASE_CONTACT_EPSILON_INCHES else -1
+	if pick >= 0:   # #183: the closing model's OWN leftover pays its snap
+		result["contact_model"] = pick
+		result["residual_in"] = residuals[pick]
+		return result
 	# Why it was refused: the clause values of the model that came closest (-1 = no model shape).
 	result["residual_in"] = best_residual_in if best_model >= 0 else -1.0
 	result["residual_model"] = best_model

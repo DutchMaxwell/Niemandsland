@@ -1501,12 +1501,14 @@ fn charge_landing(self, state: &State, t: &Terrain, si: usize, ci: usize,
     if rule_on(self.rules_epoch, EPOCH_8_PLANNER_MENU) {
         let to = movers_of(state, ci);
         let mut closest = f64::INFINITY;
+        let mut res = vec![f64::INFINITY; land.movers.len()];
         for (i, m) in land.movers.iter().enumerate() {
             let p = land.end[i];
             let (rc, sc) = (radius_of(state, *m), state.base_shape(m.unit));
             for e in &to {
                 let gap = geom::pair_gap_m(p, rc, sc, pos_of(state, *e),
                     radius_of(state, *e), state.base_shape(e.unit)) / IN2M;
+                res[i] = res[i].min(gap);
                 if gap < closest { closest = gap; }
             }
         }
@@ -1519,6 +1521,12 @@ fn charge_landing(self, state: &State, t: &Terrain, si: usize, ci: usize,
         // formation must fit the band it was granted (a trailing model can walk further than the cap).
         short |= rule_on(self.rules_epoch, EPOCH_73_V36)
             && land.arc_in > land.budget_in + crate::sim::BASE_CONTACT_EPSILON_IN;
+        // #183 (`EPOCH_77_CHARGE_CAP`, table twin `charge_snap_pick`): clause 1 stays; the closing model's OWN leftover
+        // pays its snap (GF 3.6 p.9), not the unit's shared remainder.
+        if rule_on(self.rules_epoch, EPOCH_77_CHARGE_CAP) {
+            short = land.arc_in > land.budget_in + crate::sim::BASE_CONTACT_EPSILON_IN
+                || snap_pick(&res, &land.arcs(), land.budget_in).is_none();
+        }
         // #183 (`EPOCH_77_CHARGE_CAP`, table twin `_charge_path_probe_impl`): a charge has no ladder to settle debts, so
         // an end the arc cap slid back onto another base is not declared. Coherency is not asked (log-only default).
         short |= land.charge_cut && !super::gate::overlap_free(&land.movers.iter()
