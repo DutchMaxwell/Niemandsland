@@ -24,6 +24,9 @@ extends RefCounted
 ##   "current_round": int,
 ##   "max_per_marker": int = 1,   # anti-congestion: one committed runner per marker …
 ##   "contest_cap": int = 2,      # … except enemy-held markers, which may take a pair (majority win)
+##   "pinned": [{"key": String, "name": String, "why": String}],  # units that cannot WALK this round
+##                                # (Shaken, hold-only, the Indirect/Relentless hold overlay): never a runner,
+##                                # they fight where they stand and the plan line names why
 ## }
 
 ## Lone-runner guard (wave6): a seize task for a unit that is the ONLY own unit near its target
@@ -56,8 +59,12 @@ static func solve(p: Dictionary) -> Dictionary:
 	var max_per: int = maxi(int(p.get("max_per_marker", 1)), 1)
 	var contest_cap: int = maxi(int(p.get("contest_cap", 2)), max_per)
 	var enemy_reserves: int = int(p.get("enemy_reserves", 0))
+	var pinned: Array = p.get("pinned", [])
 	var tasks := {}
-	if units.is_empty():
+	for pn in pinned:
+		var pd0 := pn as Dictionary
+		tasks[str(pd0.get("key", ""))] = {"kind": "fight", "held_back": "cannot walk: %s" % str(pd0.get("why", ""))}
+	if units.is_empty() and pinned.is_empty():
 		return {"tasks": tasks, "log": ""}
 
 	# Every feasible (unit, marker) pair with its NET value.
@@ -186,6 +193,10 @@ static func solve(p: Dictionary) -> Dictionary:
 				"DENY " if bool(t.get("deny", false)) else "", int(t["marker"]), int(t["arrive_round"])])
 		elif t.has("held_back"):
 			parts.append("%s held back (%s)" % [str(ud.get("name", key3)), str(t["held_back"])])
+	for pn2 in pinned:   # pinned units are no candidates (not in `units`); they still name themselves in the line
+		var pd2 := pn2 as Dictionary
+		parts.append("%s held back (%s)" % [str(pd2.get("name", pd2.get("key", ""))),
+			str((tasks.get(str(pd2.get("key", "")), {}) as Dictionary).get("held_back", ""))])
 	var log_line := ("NACHTMAHR plan R%d: everyone fights — no feasible marker trip" % int(p.get("current_round", 1))) \
 		if parts.is_empty() else "NACHTMAHR plan R%d: %s — everyone else fights" % [
 		int(p.get("current_round", 1)), ", ".join(parts)]

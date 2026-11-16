@@ -234,3 +234,16 @@ func test_lone_runner_guard_off_is_byte_identical() -> void:
 	AiRoundPlanner.lone_runner_guard = true
 	assert_str(str((sol["tasks"]["A"] as Dictionary).get("kind"))).is_equal("seize")
 	assert_bool(str(sol["log"]).contains("held back")).is_false()
+
+
+func test_pinned_units_are_never_runners_and_name_themselves_in_the_plan_line() -> void:
+	var stuck := [{"key": "Stuck", "name": "Stuck Gun", "why": "Shaken"}]
+	var sol := AiRoundPlanner.solve({"units": [_u("Walker", 30)], "markers": [_m(0, 10)],
+		"pinned": stuck, "rounds_left": 4, "current_round": 1})
+	assert_str(str((sol["tasks"].get("Stuck", {}) as Dictionary).get("kind"))).is_equal("fight")
+	assert_str(str((sol["tasks"].get("Walker", {}) as Dictionary).get("kind"))).is_equal("seize")
+	assert_str(str(sol["log"])).contains("Stuck Gun held back (cannot walk: Shaken)")
+	# Nothing else to plan: the pinned unit still gets its task and its line.
+	var alone := AiRoundPlanner.solve({"units": [], "markers": [_m(0, 10)], "pinned": stuck,
+		"rounds_left": 4, "current_round": 1})
+	assert_str(str(alone["log"])).contains("Stuck Gun")

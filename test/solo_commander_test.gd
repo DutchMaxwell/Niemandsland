@@ -261,3 +261,57 @@ func test_persistence_tier_machinery_separates_knob_values() -> void:
 	assert_int(hi.persistence_tier()).is_equal(2)
 	assert_int(SoloDifficulty.for_grade("nachtmahr").persistence_tier()).is_equal(2)
 	assert_float(SoloDifficulty.for_grade("nachtmahr").to_dict().get("persistence", -1.0)).is_equal(1.0)
+
+
+# === Round planner: a unit that cannot walk gets no marker trip (16.11. play-test, finding 2) ===
+
+func _pin_board(gun_rules: Array, enemy_in: float) -> Array:
+	# `Gun` stands 14" from the only marker (ONE march: the planner's best runner on paper); `Runner` is
+	# 34" off (three marches, still feasible). The enemy stands `enemy_in` inches from the gun.
+	var gun := _unit(2, [Vector3.ZERO], [], "Gun")
+	_arm(gun, [{"name": "Mortar", "range": 36, "attacks": 1, "rules": gun_rules}])
+	var runner := _unit(2, [Vector3(0, 0, -20.0 * IN2M)], [], "Runner")
+	var enemy := _unit(1, [Vector3(enemy_in * IN2M, 0, 0)], [], "Grunts")
+	var sc := _controller([gun, runner, enemy])
+	_wire_objectives(sc, [Vector3(0, 0, 14.0 * IN2M)])
+	sc.game_rounds = 4
+	sc.round_provider = func() -> int: return 1
+	sc.set_difficulty(2, SoloDifficulty.for_grade("nachtmahr", 7))
+	return [sc, gun]
+
+
+func _plan_line(sc: SoloController) -> String:
+	for rec in sc.drain_decisions():
+		if str((rec as Dictionary).get("kind", "")) == "plan":
+			return str((rec as Dictionary).get("chosen", ""))
+	return ""
+
+
+func test_indirect_gun_with_an_enemy_in_range_gets_no_marker_trip() -> void:
+	# The Indirect hold-and-shoot overlay re-forces HOLD after plan enforcement, so the gun never walks:
+	# the plan must hand the slot to the unit that can, and say why in the "AI [plan]" record.
+	var sc: SoloController = _pin_board(["Indirect"], 20.0)[0]
+	var tasks := sc._plan_for_round()
+	assert_str(str((tasks["Gun"] as Dictionary).get("kind", ""))).is_equal("fight")
+	assert_str(str((tasks["Runner"] as Dictionary).get("kind", ""))).is_equal("seize")
+	assert_str(_plan_line(sc)).contains("Gun held back (cannot walk: Indirect hold-and-shoot overlay)")
+
+
+func test_shaken_unit_gets_no_marker_trip() -> void:
+	# A Shaken unit spends its activation idle (it recovers), so it cannot be a runner this round.
+	var board := _pin_board([], 20.0)
+	var sc: SoloController = board[0]
+	(board[1] as GameUnit).is_shaken = true
+	var tasks := sc._plan_for_round()
+	assert_str(str((tasks["Gun"] as Dictionary).get("kind", ""))).is_equal("fight")
+	assert_str(str((tasks["Runner"] as Dictionary).get("kind", ""))).is_equal("seize")
+	assert_str(_plan_line(sc)).contains("Gun held back (cannot walk: Shaken)")
+
+
+func test_a_gun_that_can_walk_keeps_its_marker_trip() -> void:
+	# Control: no enemy in the Indirect gun's reach, or a plain rifle with a target — nothing pins it.
+	for cfg in [[["Indirect"], 50.0], [[], 20.0]]:
+		var sc: SoloController = _pin_board(cfg[0], cfg[1])[0]
+		var tasks := sc._plan_for_round()
+		assert_str(str((tasks["Gun"] as Dictionary).get("kind", ""))).is_equal("seize")
+		assert_str(_plan_line(sc)).not_contains("cannot walk")

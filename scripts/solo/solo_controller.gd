@@ -8944,6 +8944,24 @@ func _nearest_uncontrolled_objective(from: Vector3, activating_unit: GameUnit = 
 	return best
 
 
+## Why a unit cannot WALK this round ("" = it can). A marker trip planned for it is a promise nobody keeps
+## and burns the marker's runner slot: a Shaken unit idles (activate_next_ai_unit), Immobile may only Hold, and
+## a Relentless / Indirect gun with an enemy in range is re-forced to HOLD after plan enforcement (the
+## hold_and_shoot_rule overlay in _act, read here at round start against the nearest enemy).
+func _plan_pin_reason(unit: GameUnit) -> String:
+	if unit.is_shaken:
+		return "Shaken"
+	var rules := unit.get_special_rules()
+	if forces_hold(rules) and hold_only_param(unit):
+		return "%s, hold-only" % hold_only_rule(rules)
+	var foe := _nearest_enemy_of(unit)
+	if foe == null:
+		return ""
+	var in_range := MoveIntent.distance_inches(unit_centre(unit), unit_centre(foe)) <= float(_gate_reach_in(unit))
+	var overlay := hold_and_shoot_rule(_unit_weapons(unit), in_range, unit)
+	return "" if overlay.is_empty() else "%s hold-and-shoot overlay" % overlay
+
+
 ## NML-210 — per-(round, side) plan cache: the global assignment is built ONCE per round per acting
 ## side and re-read by every activation (the seize branch above re-validates arrivals live).
 var _round_plans := {}
@@ -8970,11 +8988,16 @@ func _plan_for_round() -> Dictionary:
 					"enemy_owned": enemy_holds,
 					"enemy_near": _units_controlling(mpos, human_slot, null)})
 	var units_in: Array = []
+	var pinned: Array = []   # units that cannot walk this round: no trip, no runner slot (finding 2, 16.11. play-test)
 	for g in army_manager.get_game_units_for_player(ai_slot):
 		var gu := g as GameUnit
 		if gu == null or gu.is_destroyed() or unit_in_reserve(gu):
 			continue
 		if gu.has_method("is_attached") and gu.is_attached():
+			continue
+		var pin_why := _plan_pin_reason(gu)
+		if pin_why != "":
+			pinned.append({"key": gu.unit_id, "name": gu.get_name(), "why": pin_why})
 			continue
 		# NML-1038: markers whose corridor is forced through difficult ground get a
 		# capped FIRST leg in the planner's arrival math (p.11) — data, not a callable,
@@ -8999,7 +9022,7 @@ func _plan_for_round() -> Dictionary:
 			enemy_reserves += 1
 	var sol := AiRoundPlanner.solve({"units": units_in, "markers": markers_in,
 		"rounds_left": maxi(total_rounds - rnd + 1, 1), "current_round": rnd,
-		"enemy_reserves": enemy_reserves})
+		"enemy_reserves": enemy_reserves, "pinned": pinned})
 	_round_plans[ai_slot] = {"round": rnd, "tasks": sol.get("tasks", {})}
 	# E2 (test game 1): the plan record fires EVERY round — an all-fight round logs its own line
 	# ("everyone fights"), so a silent round never reads like a dead planner again.
