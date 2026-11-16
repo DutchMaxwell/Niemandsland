@@ -188,6 +188,8 @@ static var ai_refusals := 0
 ## P4.D-3 census: volleys the TABLE resolved instead of the core, door -> reason -> count ("_all" = the door's table
 ## calls). Counting only: no RNG, no log line, nothing the game reads.
 static var legacy := {}
+## The same volleys by their whole reason SET (door -> "reason|reason" sorted -> volleys): what allowing groups would unlock.
+static var legacy_sets := {}
 
 
 ## "Tough(3)" -> "Tough", "Fear (spell)" -> "Fear" (a rule entry is a string or a {"name": ...} dictionary).
@@ -233,6 +235,12 @@ static func note_legacy(main, door: String, unit: GameUnit, targets: Array, extr
 			seen[r] = true
 			d[r] = int(d.get(r, 0)) + 1
 	legacy[door] = d
+	var reasons: Array = seen.keys()
+	reasons.sort()
+	var key := "|".join(PackedStringArray(reasons))
+	var sets: Dictionary = legacy_sets.get(door, {})
+	sets[key] = int(sets.get(key, 0)) + 1
+	legacy_sets[door] = sets
 
 
 ## NML_TABLE_CENSUS=<path>: a both-AI game writes the census when it ends (the core's own AI volleys ride along).
@@ -240,7 +248,7 @@ static func dump_legacy() -> void:
 	var path := OS.get_environment("NML_TABLE_CENSUS")
 	var f := FileAccess.open(path, FileAccess.WRITE) if path != "" else null
 	if f != null:
-		f.store_string(JSON.stringify({"legacy": legacy, "core_ai_runs": ai_runs, "core_ai_refusals": ai_refusals}))
+		f.store_string(JSON.stringify({"legacy": legacy, "legacy_sets": legacy_sets, "core_ai_runs": ai_runs, "core_ai_refusals": ai_refusals}))
 
 
 ## Step 42: the AI's volley through the core - Hold or Advance, the unit and its one target (the table's own pick) plain,

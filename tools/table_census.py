@@ -10,9 +10,10 @@ report ends with `TABLE LINES LEFT: N`, committed as test/one_core/table_census.
   python3 tools/table_census.py            print the report
   python3 tools/table_census.py --write    rewrite the committed report
   python3 tools/table_census.py --runtime census.json   print the report + the soak's table share of AI volleys
-  python3 tools/table_census.py --check    exit 1 if the report is stale, or if a prod caller
-                                           appears that allowed_callers does not list ("file:function"
-                                           or "@group"). A listed caller that is gone is fine on purpose.
+  python3 tools/table_census.py --check    exit 1 if the report is stale (lines and prod callers; test-caller counts
+                                           are reported but not compared) or if a prod caller appears that
+                                           allowed_callers does not list ("file:function" or "@group"). A listed
+                                           caller that is gone is fine on purpose.
 """
 import argparse
 import bisect
@@ -107,15 +108,47 @@ def render(rows):
     return "\n".join(out + [f"TABLE LINES LEFT: {total}"]) + "\n"
 
 
+def prod_only(text):
+    """The report without its test-caller column: a test added or removed must not turn --check red."""
+    return "".join(" ".join(p[:-1] if len(p) == 5 else p) + "\n" for p in (ln.split() for ln in text.splitlines()))
+
+
+def group_of(reason):
+    """The rule group a reason belongs to, shooter or target side: "weapon_rule:AP" / "target_weapon_rule:AP" -> "AP"."""
+    reason = reason.removeprefix("target_")
+    return reason.partition(":")[2] if ":" in reason else reason
+
+
 def runtime_report(path):
-    """The soak's census.json (tools/table_census_soak.sh): the share of AI volleys the table resolved, top 15 reasons."""
+    """The soak's census.json (tools/table_census_soak.sh): the share of AI volleys the table resolved, the top 15
+    reasons and reason sets, and what allowing GROUPS would unlock. A volley is unlocked once every reason it has belongs
+    to an allowed group (`no_handle` only follows from the others and is left out). Real volleys carry many groups, so
+    "one group alone" is mostly 0; the last block allows the most common groups first and shows the cumulative share."""
     data = json.loads(path.read_text())
     legacy = data.get("legacy", {}).get("ai_volley", {})
     total = int(data.get("ai_volleys", legacy.get("_all", 0) + data.get("core_ai_runs", 0)))
-    pct = lambda n: 100.0 * n / total if total else 0.0
-    top = sorted(((r, n) for r, n in legacy.items() if r != "_all"), key=lambda kv: (-kv[1], kv[0]))[:15]
-    return "\n".join([f"RUNTIME AI VOLLEYS ON TABLE: {pct(legacy.get('_all', 0)):.1f} %"]
-                     + [f"  {pct(n):5.1f} %  {n:6d}  {r}" for r, n in top]) + "\n"
+    row = lambda n, label: f"  {100.0 * n / total if total else 0.0:5.1f} %  {n:6d}  {label}"
+    best = lambda counts, k=15: sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[:k]
+    sets = {tuple(k.split("|")): n for k, n in data.get("legacy_sets", {}).get("ai_volley", {}).items()}
+    need = {k: {group_of(r) for r in k if r != "no_handle"} for k in sets}   # reason set -> the groups it needs
+    out = [f"RUNTIME AI VOLLEYS ON TABLE: {100.0 * legacy.get('_all', 0) / total if total else 0.0:.1f} %"]
+    out += [row(n, r) for r, n in best({r: n for r, n in legacy.items() if r != "_all"})]
+    if sets:
+        alone, freq, widths = {}, {}, {}
+        for k, n in sets.items():
+            widths[len(need[k])] = widths.get(len(need[k]), 0) + n
+            for g in need[k]:
+                freq[g] = freq.get(g, 0) + n
+                alone[g] = alone.get(g, 0) + (n if len(need[k]) == 1 else 0)
+        order = [g for g, _ in best(freq, len(freq))]
+        out += ["UNLOCKED IF THIS GROUP ALONE WERE ALLOWED:"] + [row(n, g) for g, n in best(alone) if n]
+        out += ["VOLLEYS BY NUMBER OF GROUPS THEY NEED:"] + [row(n, f"{w} group(s)") for w, n in sorted(widths.items())]
+        out += ["MOST COMMON GROUPS ALLOWED FIRST (cumulative unlocked):"]
+        for i in sorted({*range(1, 16), 20, 30, 40, 50} & set(range(1, len(order) + 1))):
+            out.append(row(sum(n for k, n in sets.items() if need[k] <= set(order[:i])), f"+ {order[i - 1]} (group {i})"))
+        out += ["TOP REASON SETS (no_handle left out):"]
+        out += [row(n, " + ".join(r for r in k if r != "no_handle") or "(no_handle only)") for k, n in best(sets)]
+    return "\n".join(out) + "\n"
 
 
 def main(argv=None):
@@ -137,12 +170,16 @@ def main(argv=None):
         txt_path.write_text(text)
     elif args.check:
         old = txt_path.read_text() if txt_path.exists() else ""
-        if old != text:
+        stale = prod_only(old) != prod_only(text)   # lines and prod callers only; test counts are reported, never gated
+        if stale:
             print("::error::table census counter is stale - run: python3 tools/table_census.py --write")
-            sys.stdout.writelines(difflib.unified_diff(old.splitlines(1), text.splitlines(1), "committed", "current"))
+            sys.stdout.writelines(difflib.unified_diff(prod_only(old).splitlines(1), prod_only(text).splitlines(1),
+                                                       "committed", "current"))
+        elif old != text:
+            print("::notice::only test-caller counts moved; `python3 tools/table_census.py --write` refreshes them")
         for callee, caller in bad:
             print(f"::error::new caller of {callee}: {caller} (not in allowed_callers of tools/table_census.json)")
-        return int(old != text or bool(bad))
+        return int(stale or bool(bad))
     else:
         sys.stdout.write(text + (runtime_report(args.runtime) if args.runtime else ""))
     return 0
