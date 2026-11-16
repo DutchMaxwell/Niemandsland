@@ -104,7 +104,7 @@ same commit as the struct change.
 | `piercing_tag_persistent` | main.gd:24677 | no | no | **YES** |
 | `piercing_spot_round` | main.gd:24612 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
 | `storm_used` | main.gd:25124 | no | no | **YES** |
-| `feats_used` | solo_controller.gd:2002 | no | no | **YES** |
+| `feats_used` | solo_controller.gd:2002 | Protection Feat family only (`land_delta`, P4.D-38a) | Protection Feat family only (door capture, P4.D-38a) | **YES** (every other feat family: reported, `land_delta` push_error) |
 | `teleport_used` | main.gd:25312 | no | no | **YES** |
 | `spot_markers` | main.gd:15256 | yes (`land_delta`, P4.0-4f) | no | no (delta) |
 | `tag_markers` | main.gd:15714 | yes (`land_delta`, P4.0-4f) | no | no (delta) |
