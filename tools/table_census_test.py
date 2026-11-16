@@ -163,3 +163,52 @@ def test_runtime_census_says_so_when_no_volley_needs_a_single_group(tmp_path):
                                   "legacy_sets": {"ai_volley": {"no_handle|weapon_rule:AP|weapon_rule:Blast": 3}}}))
     out = run(root, "--runtime", str(census)).stdout
     assert "UNLOCKED IF THIS GROUP ALONE WERE ALLOWED:\n  (none: no volley needs fewer than 2 groups)\n" in out
+
+
+TAGGED = {**MANIFEST, "tag_vocabulary": "erlkoenig tree dead",
+          "planner_tags": {"scripts/a.gd": {"erlkoenig": "old_a", "tree": "old_b door"}}}
+
+
+def tagged(root, manifest=TAGGED):
+    (root / "tools/table_census.json").write_text(json.dumps(manifest))
+    return root
+
+
+def test_planner_tags_print_functions_and_code_lines_per_tag_above_an_unchanged_counter(tmp_path):
+    out = run(tagged(repo(tmp_path))).stdout.splitlines()
+    # old_a: 4 lines to the next declaration, minus the blank and the column-0 comment before old_b = 2 code lines
+    assert out[-4:] == ["planner_tag erlkoenig 1 2", "planner_tag tree 2 5", "planner_tag TOTAL 3 7", "TABLE LINES LEFT: 20"]
+
+
+def test_check_is_red_on_an_untagged_planner_function_and_green_once_tagged(tmp_path):
+    root = tagged(repo(tmp_path))
+    committed(root)
+    assert run(root, "--check").returncode == 0
+    with (root / "scripts/a.gd").open("a") as f:
+        f.write("\nfunc fresh() -> void:\n\tpass\n")
+    res = run(root, "--check")
+    assert res.returncode == 1 and "scripts/a.gd:fresh has no planner tag" in res.stdout
+    assert run(root, "--write").returncode == 1          # the counter is never committed with an untagged function
+    tagged(root, {**TAGGED, "planner_tags": {"scripts/a.gd": {"erlkoenig": "old_a fresh", "tree": "old_b door"}}})
+    assert run(root, "--write").returncode == 0 and run(root, "--check").returncode == 0
+
+
+def test_check_is_red_on_a_double_tag_and_on_an_unknown_tag(tmp_path):
+    root = repo(tmp_path)
+    twice = {**TAGGED, "planner_tags": {"scripts/a.gd": {"erlkoenig": "old_a door", "tree": "old_a old_b door"}}}
+    res = run(tagged(root, twice), "--check")
+    assert res.returncode == 1 and "scripts/a.gd:old_a carries two planner tags" in res.stdout
+    typo = {**TAGGED, "planner_tags": {"scripts/a.gd": {"erlkonig": "old_a old_b door"}}}
+    res = run(tagged(root, typo), "--check")
+    assert res.returncode == 1 and "unknown planner tag 'erlkonig'" in res.stdout
+
+
+def test_a_stale_tag_line_is_red_and_a_tagged_function_that_is_gone_is_an_error(tmp_path):
+    root = tagged(repo(tmp_path))
+    txt = committed(root)
+    txt.write_text(txt.read_text().replace("planner_tag tree 2 5", "planner_tag tree 2 4"))
+    res = run(root, "--check")
+    assert res.returncode == 1 and "counter is stale" in res.stdout
+    gone = {**TAGGED, "planner_tags": {"scripts/a.gd": {"tree": "old_a old_b door vanished"}}}
+    res = run(tagged(root, gone))
+    assert res.returncode != 0 and "scripts/a.gd:vanished not found" in res.stderr

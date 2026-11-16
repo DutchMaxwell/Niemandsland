@@ -5,13 +5,15 @@ tools/table_census.json maps groups to "file:function" ids (a whole file when th
 no ':'). Per id: lines (function = its column-0 `func` up to the next top-level
 declaration; whole file = its line count) and callers: `name(` call sites (plus
 Callable/call("name") references) in scripts/ + tools/ (prod) and test/ (test). The
-report ends with `TABLE LINES LEFT: N`, committed as test/one_core/table_census.txt.
+report ends with `TABLE LINES LEFT: N`, committed as test/one_core/table_census.txt. The manifest's planner_tags
+list EVERY column-0 function of the planner files under exactly one tag of tag_vocabulary; the report prints the
+function count and code lines per tag (no trailing blank/comment lines) just above the counter, which is unchanged.
 
   python3 tools/table_census.py            print the report
   python3 tools/table_census.py --write    rewrite the committed report
   python3 tools/table_census.py --runtime census.json   print the report + the soak's table share of AI volleys
   python3 tools/table_census.py --check    exit 1 if the report is stale (lines and prod callers; test-caller counts
-                                           are reported but not compared) or if a prod caller appears that
+                                           are reported but not compared), if a planner function has no tag, or if a prod caller appears that
                                            allowed_callers does not list ("file:function" or "@group"). A listed
                                            caller that is gone is fine on purpose.
 """
@@ -53,6 +55,14 @@ class Source:
         if start is None:
             return None
         return next((i for i in range(start + 1, len(self.lines)) if TOP.match(self.lines[i])), len(self.lines)) - start
+
+    def code_span(self, name):
+        """span without the blank and column-0 comment lines before the next declaration (they belong to that one)."""
+        start = next(i for i, n in self.funcs if n == name)
+        end = start + self.span(name)
+        while end - 1 > start and (not self.lines[end - 1].strip() or self.lines[end - 1].startswith("#")):
+            end -= 1
+        return end - start
 
     def enclosing(self, i):
         k = bisect.bisect_right([s for s, _ in self.funcs], i) - 1
@@ -98,13 +108,38 @@ def census(root, manifest):
     return rows, sorted(bad)
 
 
-def render(rows):
+def planner_tags(root, manifest):
+    """Return (rows, problems). rows: tag -> [functions, lines]. A column-0 function of a planner_tags file with no tag,
+    two tags or a tag outside tag_vocabulary is a problem; a tagged name that is gone is an error, like in groups."""
+    vocab, rows, bad = set(manifest.get("tag_vocabulary", "").split()), {}, []
+    for file, tags in sorted(manifest.get("planner_tags", {}).items()):
+        src, seen = Source(root / file, file), {}
+        for tag, names in sorted(tags.items()):
+            if tag not in vocab:
+                bad.append(f"{file} uses the unknown planner tag {tag!r} (tag_vocabulary)")
+            for name in names.split():
+                if src.span(name) is None:
+                    raise SystemExit(f"table census: {file}:{name} not found (a deleted function leaves the manifest in the same diff)")
+                if name in seen:
+                    bad.append(f"{file}:{name} carries two planner tags ({seen[name]}, {tag})")
+                seen[name] = tag
+                row = rows.setdefault(tag, [0, 0])
+                row[0], row[1] = row[0] + 1, row[1] + src.code_span(name)
+        bad += [f"{file}:{n} has no planner tag (add it to planner_tags in tools/table_census.json)" for _, n in src.funcs if n not in seen]
+    return rows, bad
+
+
+def render(rows, tags=None):
     out, total = [], 0
     for group in sorted({r[0] for r in rows}):
         mine = [r for r in rows if r[0] == group]
         out += [" ".join(map(str, r)) for r in mine]
         out.append(f"{group} TOTAL " + " ".join(str(sum(r[k] for r in mine)) for k in (2, 3, 4)))
         total += sum(r[2] for r in mine)
+    for tag, (n, lines) in sorted((tags or {}).items()):
+        out.append(f"planner_tag {tag} {n} {lines}")
+    if tags:
+        out.append(f"planner_tag TOTAL {sum(n for n, _ in tags.values())} {sum(ln for _, ln in tags.values())}")
     return "\n".join(out + [f"TABLE LINES LEFT: {total}"]) + "\n"
 
 
@@ -165,8 +200,14 @@ def main(argv=None):
     if args.runtime and (args.write or args.check):
         ap.error("--runtime only extends the printed report (it is not deterministic, never committed)")
     txt_path = args.txt or args.root / "test/one_core/table_census.txt"
-    rows, bad = census(args.root, json.loads((args.manifest or args.root / "tools/table_census.json").read_text()))
-    text = render(rows)
+    manifest = json.loads((args.manifest or args.root / "tools/table_census.json").read_text())
+    rows, bad = census(args.root, manifest)
+    tags, untagged = planner_tags(args.root, manifest)
+    text = render(rows, tags)
+    for problem in untagged:
+        print(f"::error::{problem}")
+    if untagged and (args.write or args.check):
+        return 1
     if args.write:
         txt_path.write_text(text)
     elif args.check:

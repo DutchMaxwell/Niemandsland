@@ -6,7 +6,8 @@
     "test/parity/parity_table.gd:114 calls _solo_resolve_ai_volley directly; test/parity/parity_table_melee.gd:66 calls _run_ai_melee (P4.D-38 moves both parity harnesses).",
     "_solo_volley_outcome has a prod caller outside main.gd: scripts/solo/core_activation.gd:_present (the core path shows the same toast).",
     "A listed caller that disappears is fine on purpose; only an unlisted NEW prod caller turns --check red. To allow one, add 'file:function' to allowed_callers of the callee in the same diff as a plan step that says so.",
-    "Whole-file entries (planner groups) are not gated; P4.D-60 adds their callers and tags."
+    "Whole-file entries (planner groups) are not gated and keep the counter; planner_tags tags every column-0 function of the 7 planner files; a new planner function must get a tag in the same diff.",
+    "Tags: erlkoenig = needed by the Rust search hand-off (_core_plan: capture, state_to_plain, AiPlanner statics, act recorder); live_helper = live game logic that is not search (mission scoring); table_live = still called by a main.gd function that survives the table deletion; tree = decision tree / AiPosition; gd_search = the GDScript search (reached on a core decline or in debug/test defaults; includes its profiling marks); table_dead = dies with the table deletion; tools_only / test_only = no prod caller; dead = no caller."
   ],
   "groups": {
     "ai_volley": ["scripts/main.gd:_solo_resolve_ai_volley", "scripts/main.gd:_solo_volley_outcome"],
@@ -41,5 +42,49 @@
     "scripts/main.gd:_solo_shooting_morale": ["@human_shoot", "scripts/main.gd:_solo_activate_one_ai_body", "scripts/main.gd:_solo_apply_breath_attack", "scripts/main.gd:_solo_apply_storm_attack", "scripts/main.gd:_solo_apply_surprise_attack", "@ai_volley", "scripts/main.gd:_solo_resolve_spell_damage"],
     "scripts/main.gd:_solo_takedown_pick": ["@human_shoot", "@melee_charge", "@ai_volley"],
     "scripts/main.gd:_solo_volley_outcome": ["@ai_volley", "scripts/solo/core_activation.gd:_present"]
+  },
+  "tag_vocabulary": "erlkoenig live_helper table_live tree gd_search table_dead tools_only test_only dead",
+  "planner_tags": {
+    "scripts/solo/ai_combat_math.gd": {
+      "gd_search": "fear_adjusted_wounds should_test_shooting_morale",
+      "live_helper": "success_chance",
+      "table_dead": "bane_reroll_count_from blocks_with_bane_from count_hits fortified_entry_cut furious_bonus_hits hit_ev hit_mod_worth_logging impact_hits indirect_hit_modifier ravage_wounds relentless_bonus_hits rending_ap_hits sergeant_bonus_hits shot_uses_cover shred_bonus_wounds surge_bonus_hits unpredictable_fighter_effect",
+      "table_live": "_ints armored_defense at_or_below_half battleborn_recovers blast_hits cond_met conditional_ap_bonus conditional_ap_why count_blocks covered_defense deadly_multiplier deadly_regen_dealt fortified_ap guarded_defense melee_hit_modifier modified_hit_target morale_result morale_result_shaken morale_target no_retreat_wounds pierce_ignores reliable_quality save_target shielded_defense shooting_hit_modifier shown_target thrust_to_hit unmodified_sixes wounds",
+      "test_only": "bane_reroll_count blocks_with_bane deadly_wounds_dealt expected_wounds fearless_recovers",
+      "tree": "impact_total_dice shrouded_reach"
+    },
+    "scripts/solo/ai_ev.gd": {
+      "erlkoenig": "most_models_family_on most_models_of rule_on_all_models rule_on_most_models unit_rating",
+      "live_helper": "aura_granted_rule aura_granted_rules",
+      "table_dead": "bane_boost_window precision_base_stands_down",
+      "table_live": "_alias_gate_fires _below_half_live _brace_cut _fortified_over_in _parry_cancels _parry_carrier_dice _parry_dice _regen_target _stamp_map_cover_regen _stamp_weapon_bane_alias aircraft_hit_penalty bane_applies block_chance brace_unit_rule ctx_for facet_applies guarded_family_on has_exact_rule lacerate_only melee_evasion_on over_in_gate profile_ev regen_family_on rule_on_defence_family stamp_conditional_ap stamp_sergeant takedown_rule_for_profile versatile_best_mode",
+      "tree": "block_chance_from charge_score classify impact_ev melee_ev ravage_ev shoot_ev"
+    },
+    "scripts/solo/ai_planner.gd": {
+      "dead": "_holder_or_unactivated",
+      "erlkoenig": "_advance_label _centre _describe _enemy_keys _intent _menu_holders_on _name_of _nearest_enemy _tail_cap_for brain_breadth_stamp brain_knob_stamp close_margin depth_discount horizon imagined_round_end_enabled intent_line leaf_opener_stamp menu_advance_k_on menu_wide_on playout_rich playout_rush_k_on points_knob_stamp seat_mode set_search_budget table_fidelity_stamp top_k_default tree_knobs",
+      "gd_search": "_advance_shoots _below_half _best_charge _best_shoot _blend_score _can_activate _can_shoot_at _clamp_to_band _cross_round _end_threat _gap_m _imagined_round_end _marker_holder _node_dump_stream _order_mode _other_player _plain_candidates _playout_pick _playout_round_tail _playout_sig _policy_candidates _policy_step _policy_step_net _record_node _reorder_within_unit _round_start_refresh _safe_advance _second_wave _unactivated candidates candidates_wide doctrine_pick full_playout menu_covers menu_covers_in plan plan_with_rollout rollout_boundaries take_last_leaf",
+      "test_only": "full_playout_seeded rollout",
+      "tools_only": "close close_node_dump"
+    },
+    "scripts/solo/ai_position.gd": {
+      "tree": "_band_pick _candidate_points _covered_shot_exists _evaluate _positive_loc_exists _seize_in _threatened _why _worth_overriding solve"
+    },
+    "scripts/solo/ai_spell.gd": {
+      "live_helper": "cast_success_chance cast_target",
+      "table_live": "_granted_rules_into _rating attacker_grant_source attacker_grants_from_target bane_window bridge_flag_for effective_ap granted_rules_of mods_for plan_interference spell_facets",
+      "tree": "_side_ev boost_value_of grant_facet official_pick_order plan_boost spell_amplifier_mod spell_damage_ev spell_modifier_delta"
+    },
+    "scripts/solo/battle_sim.gd": {
+      "erlkoenig": "_attached_hero_rules _centre_of _granted_rules _model_kit _plain_vec3 _plain_vec3s _stamp_hero_aura _unit_profile _vec3_of _vec3s_of capture cast_phase_enabled core_enabled core_wanted dist_in edge_gap_in hero_fold_enabled mask_secret_for spacing_enabled state_from_plain state_to_plain unit_profile_dyn",
+      "gd_search": "_append_attached_models _append_attached_positions _apply_cast_effect _apply_expected_wounds _below_half _best_spell_target _cast_origins _cast_phase _cast_token_pool _ctx_of _draw_cast_tokens _engage_gap_in _expected_melee_morale _expected_remaining _expected_shooting_morale _fill_vocab _fold_dist_in _fold_hero_profiles _held_for _load_vocab _los_clear _morale_dither _morale_fails_expected _parse_rule _pick_cast _plan_cast_tokens _profiles_of _rule_pairs _scourge_phantom_ev _spacing_fraction _spell_damage_ev_of _spell_ev_from _unit_group _wounds_left apply_carry_step board_rows can_hold_marker clone_state control_gap_in melee_threat playout_seize prof_mark prof_t0 profile_enabled reply_threat resolve resolve_stochastic sees spell_ev_of",
+      "live_helper": "apply_destroy_step escort_winner extract_winner marker_point_in mission_winner role_winner sabotage_winner vp_end_bonus vp_round_add vp_score_end vp_score_round",
+      "test_only": "drop_carried",
+      "tools_only": "_corridor_forced_through_plain _crosses_difficult_plain _melee_shroud_charge_in_plain _plain_centre board_row_indices charge_illegal_plain profile_reset reset_round_mods"
+    },
+    "scripts/solo/solo_sim.gd": {
+      "test_only": "_resolve_shooting",
+      "tools_only": "_activate _apply_regeneration _apply_wounds _collect_rules _dangerous_test _deadly _decision_label _deploy _effective_attacks _effective_melee_attacks _forces_hold_and_shoot _formation _gather_rule_names _has_regeneration _has_unactivated _is_hero _is_modeled_rule _log_unmodeled_rules _merge_weapon_types _model_centroid _morale _morale_due _move _next_unactivated _pick_overlay_target _pick_target _planner_move _resolve_melee _resolve_shooting_split _resolve_volley _roll _seg_dist _seize_objectives _side_models _snapshot _spacing_limit _strike _striking_models _target_descriptor _terrain_cells_json _terrain_move _trace_activation _trace_morale _trace_regen _trace_roll _trace_terrain _union_rules _unit_has_rule _walls_json _weapon_rule_strings alive_models default_objectives default_terrain default_walls is_alive make_unit roster simulate_game terrain_has_los terrain_los_volumes units_from_opr_json"
+    }
   }
 }
