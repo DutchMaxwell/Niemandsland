@@ -79,3 +79,35 @@ fn crossing_attack_rolls_through_crossed_enemies_at_epoch_7() {
         "each 6+ is one direct wound on the crossed enemy"
     );
 }
+
+/// One-core P4.D-37: on a SUPPLIED tray (the step API's) the crossing wounds reach the table as a landing, as the
+/// volley's own two casualty lines, and as the table's own rule sentence; a SEEDED tray (training) keeps none and says none. RED: drop the
+/// `land_chain_report` call after the crossing wounds -> no landing, no line.
+#[test]
+fn a_supplied_tray_hands_the_crossing_wounds_to_the_table_as_a_landing() {
+    let corpus = read_acts(Cursor::new(CORPUS), "inline").unwrap_or_else(|e| panic!("corpus parse failed: {e}"));
+    let statics = nml_core::build_act_statics(&corpus, REPO);
+    let act = &corpus.acts[0];
+    let action = Action { teleport: None, kind: ADVANCE, unit: "mover".into(), dest: None, shoot: None, charge: None,
+        patient: false, split: None, traced: None };
+    let seams = Seams { rules_epoch: 7, ..Default::default() };
+    // Crossing Attack(2) through one model: two dice, both 6s, so both wounds land on the 2-wound victim: it dies.
+    let mut tray = Tray::supplied(vec![vec![6, 6]]);
+    tray.place(vec![[0.1, 0.0, 0.0]], vec![vec![[0.0, 0.0], [0.1, 0.0]]]);
+    let (next, _) = resolve_stochastic_tray_on_board(&statics, &act.state, &action, &corpus.terrain, seams,
+        &mut GodotRng::new(0), &mut tray).expect("the activation resolves");
+    assert_eq!(next.alive[1], 0, "the victim died");
+    let landings = tray.all_landings();
+    assert_eq!(landings.len(), 1, "one landing: {landings:?}");
+    assert_eq!((landings[0].unit, landings[0].loss_line), (1, true));
+    assert_eq!((landings[0].models[0].slot, landings[0].models[0].dead), (0, true));
+    let said: Vec<String> = tray.all_lines().into_iter().map(|l| l.text).collect();
+    assert!(said.contains(&"Victim takes 2 wounds (0/2 wounds)".to_string()), "{said:?}");
+    assert!(said.contains(&"Victim destroyed".to_string()), "{said:?}");
+    assert!(said.contains(&"Crossing Attack: 1 model of Mover cross Victim — 2 of 2 dice wound (no save)".to_string()), "{said:?}");
+    let mut seeded = Tray::seeded(5);
+    let action = Action { dest: Some([1.0, 0.0, 0.0]), ..action };
+    resolve_stochastic_tray_on_board(&statics, &act.state, &action, &corpus.terrain, seams, &mut GodotRng::new(1), &mut seeded)
+        .expect("a seeded activation resolves");
+    assert!(seeded.all_landings().is_empty() && seeded.all_lines().is_empty(), "a seeded tray keeps nothing");
+}

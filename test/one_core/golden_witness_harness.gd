@@ -54,6 +54,11 @@ const RUNNER_AI_DANGEROUS := "ai_dangerous"
 const MIXED_FAMILY := "mixed_kit"
 const MIXED_FIXTURE_PATH := "res://test/fixtures/one_core/golden_mixed_kit.json"
 const RUNNER_AI_INTO_HUMAN := "ai_into_human"
+## P4.D-37: the move-through attacks of an AI activation (Strafing, Crossing Attack) after an executed move, resolved by the
+## table's own `_solo_apply_strafing` / `_solo_apply_crossing_attack`, then (`rifle`) the activation's volley. Runner "ai_move_through".
+const MOVE_THROUGH_FAMILY := "move_through"
+const MOVE_THROUGH_FIXTURE_PATH := "res://test/fixtures/one_core/golden_move_through.json"
+const RUNNER_AI_MOVE_THROUGH := "ai_move_through"
 ## Rolls of the volley before the wounds land: the to-hit batch and the defender's save batch. The click prompt needs
 ## _solo_batch false, the batch tray needs it true, so the flag drops after this many rolls and returns with the
 ## first pick (the pattern of test/e2e/e2e_volley_morale_test.gd).
@@ -211,6 +216,23 @@ static func dangerous_scenarios() -> Array:
 	]
 
 
+## The move-through grid: 20 defenders on a line (nudged so no casualty tie rests on a float's last bit), the bearer (10 models)
+## moves `dest_in` inches along x through them: a Rush with a Crossing Strike gun, an Advance with that gun and a Rifle, and a
+## Crossing Attack(2) bearer.
+static func move_through_scenarios() -> Array:
+	var att := _with(ATTACKER, {"player": 2})
+	var foe := _with(DEFENDER, {"player": 1, "models": 20})
+	var gun := _with(RIFLE, {"name": "Strafe Gun", "attacks": 2, "rules": ["Crossing Strike"]})
+	return [
+		{"name": "strafing_rush", "runner": RUNNER_AI_MOVE_THROUGH, "note": "Rush 11\" through the line: only the strafe fires",
+			"weapon": gun, "attacker": att, "defender": _with(foe, {"x_in": 8.0}), "dest_in": 11.0},
+		{"name": "strafing_advance", "runner": RUNNER_AI_MOVE_THROUGH, "note": "Advance 6\" through the line: the strafe, then the Rifle volley",
+			"weapon": gun, "rifle": true, "attacker": att, "defender": _with(foe, {"x_in": 3.0}), "dest_in": 6.0},
+		{"name": "crossing_attack", "runner": RUNNER_AI_MOVE_THROUGH, "note": "Crossing Attack(2) bearer, Rush 11\" through the line",
+			"weapon": RIFLE, "attacker": _with(att, {"rules": ["Crossing Attack(2)"]}), "defender": _with(foe, {"x_in": 8.0}), "dest_in": 11.0},
+	]
+
+
 ## The prompt grid: 20 Rifle shots (2 attacks per model) at a human 10-model defender, so a volley lands several wounds.
 ## `mixed`: five Rifle bearers and five "Plasma Stub" bearers (two loadouts, every model Tough 1); `tough`: one loadout,
 ## every model Tough(3). Each shape is answered two ways: `auto` (right-click at once) and `click` (the owner clicks
@@ -269,6 +291,8 @@ static func capture(main: Node, family: String = FAMILY) -> Dictionary:
 		return await capture_grid(main, DANGEROUS_FAMILY, dangerous_scenarios())
 	if family == MIXED_FAMILY:
 		return await capture_grid(main, MIXED_FAMILY, mixed_scenarios())
+	if family == MOVE_THROUGH_FAMILY:
+		return await capture_grid(main, MOVE_THROUGH_FAMILY, move_through_scenarios())
 	var out := {"schema": SCHEMA, "family": FAMILY, "provenance": provenance(), "cases": []}
 	for sc in scenarios():
 		for seed in SEEDS:
@@ -336,6 +360,8 @@ static func _run_case(main: Node, sc: Dictionary, seed: int) -> Dictionary:
 			return await _run_dangerous_case(main, sc, seed)
 		RUNNER_AI_INTO_HUMAN:
 			return await _run_into_human_case(main, sc, seed)
+		RUNNER_AI_MOVE_THROUGH:
+			return await _run_move_through_case(main, sc, seed)
 	return {"scenario": str(sc["name"]), "seed": seed, "error": "unknown runner %s" % runner}
 
 
@@ -463,6 +489,52 @@ static func _run_dangerous_case(main: Node, sc: Dictionary, seed: int) -> Dictio
 	if not lines.any(func(l: Variant) -> bool: return str(l).contains("Dangerous terrain test")):
 		rec = {"scenario": str(sc["name"]), "seed": seed, "error": "no Dangerous line was logged (dice %d)" % dice}
 	_unpaint_cover(main, painted)
+	_free_units(main, [att, dfn])
+	await main.get_tree().process_frame
+	return rec
+
+
+## One move-through scenario x seed: the bearer's models walk along x to `dest_in` (the planner's own `last_move_paths` shape),
+## then the body's order: Strafing, Crossing Attack, and (`rifle`) the activation's volley. The case errors when nothing was
+## crossed (no move-through line was logged).
+static func _run_move_through_case(main: Node, sc: Dictionary, seed: int) -> Dictionary:
+	var att := ParityTable._make_unit(main, sc["attacker"], (sc["weapon"] as Dictionary).duplicate(true))
+	var dfn := ParityTable._make_unit(main, sc["defender"], _with(RIFLE, {"count": 20}))
+	if bool(sc.get("rifle", false)):
+		var w := OPRApiClient.OPRWeapon.new()
+		w.name = "Rifle"
+		w.range_value = 24
+		w.attacks = 1
+		w.count = 10
+		(att.source_data as OPRApiClient.OPRUnit).weapons.append(w)
+	for i in dfn.models.size():
+		(dfn.models[i] as ModelInstance).node.global_position.z += float((i * 7) % 5) * 0.0001
+	var seats: Dictionary = (main.solo_ai_slots as Dictionary).duplicate()
+	main.solo_ai_slots = {1: true, 2: true}   # both seats AI: a human defender would wait for a save click
+	main.solo_controller.ai_slot = 2
+	main.solo_controller.human_slot = 1
+	var legs: Array = []
+	for m in att.get_alive_models():
+		var from: Vector3 = (m as ModelInstance).node.global_position
+		var to := Vector3(float(sc["dest_in"]) * 0.0254, from.y, from.z)
+		legs.append({"model": m, "path": [from, to]})
+		(m as ModelInstance).node.global_position = to
+	main.solo_controller.last_move_paths = legs
+	att.unit_properties["moved_round"] = 1
+	main.seed_tray_rng(seed)
+	var lines: Array = []
+	var tap := _line_tap(lines)
+	main.battle_log.entry_added.connect(tap)
+	await main._solo_apply_strafing(att)
+	await main._solo_apply_crossing_attack(att)
+	if bool(sc.get("rifle", false)):
+		await main._run_ai_shooting({"unit": att, "moved": true, "action": AiDecision.Action.ADVANCE})
+	main.battle_log.entry_added.disconnect(tap)
+	main.solo_ai_slots = seats
+	var rec := {"scenario": str(sc["name"]), "seed": seed, "epoch": AiActRecorder.rules_epoch,
+		"lines": lines, "final": _final([att, dfn]), "rng": _rng_state(main)}
+	if not lines.any(func(l: Variant) -> bool: return str(l).contains("passes over") or str(l).contains("Crossing Attack")):
+		rec = {"scenario": str(sc["name"]), "seed": seed, "error": "no move-through line was logged"}
 	_free_units(main, [att, dfn])
 	await main.get_tree().process_frame
 	return rec
@@ -734,6 +806,8 @@ static func fixture_path(family: String = FAMILY) -> String:
 		return DANGEROUS_FIXTURE_PATH
 	if family == MIXED_FAMILY:
 		return MIXED_FIXTURE_PATH
+	if family == MOVE_THROUGH_FAMILY:
+		return MOVE_THROUGH_FIXTURE_PATH
 	return FIXTURE_PATH
 
 

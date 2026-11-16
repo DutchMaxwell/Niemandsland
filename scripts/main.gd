@@ -1270,7 +1270,8 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	# One core P4.D-19: a plain Hold/Advance's Dangerous test (and the end morale from its wounds) is the core's: the ONE
 	# core call (`_run_ai_shooting`, or the attack block below for a unit that cannot shoot) pays it. The table rolls it
 	# here only when the core does not take the activation, or later, in front of its own volley, when the core refuses.
-	var core_dangerous: bool = dangerous_dice > 0 and CoreActivation.takes_ai_activation(self, unit, report)
+	var core_takes: bool = CoreActivation.takes_ai_activation(self, unit, report)
+	var core_dangerous: bool = dangerous_dice > 0 and core_takes
 	if core_dangerous:
 		report["core_dangerous"] = dangerous_dice
 	elif dangerous_dice > 0:
@@ -1311,14 +1312,19 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	# bearer picks one and attacks it with this weapon as if shooting; the weapon has no other use):
 	# the trigger fires on the EXECUTED trails — independent of the
 	# normal shoot decision (the weapon is excluded from every regular volley).
-	await _solo_apply_strafing(unit)
-	await _solo_apply_crossing_attack(unit)
+	# One core P4.D-37: a bearer the core takes leaves both to the core's one call (its pre-attack slots, from the trails it is
+	# handed); the table resolves them only when that call is not made or refused (`_solo_pay_dangerous`).
+	if core_takes and CoreActivation.moves_through(unit) and not solo_controller.last_move_paths.is_empty():
+		report["core_through"] = true
+	else:
+		await _solo_apply_strafing(unit)
+		await _solo_apply_crossing_attack(unit)
 	var hnr_attacked: bool = bool(report.get("can_shoot", false)) \
 		or int(report.get("action", 0)) == AiDecision.Action.CHARGE
 	var _prof_atk_t0 := BattleSim.prof_t0()   # NML-1072: live shoot/melee resolution
 	if bool(report.get("can_shoot", false)):
 		await _run_ai_shooting(report)
-	elif report.has("core_dangerous"):   # P4.D-19: a unit that cannot shoot still owes its test: the core call, no volley
+	elif report.has("core_dangerous") or report.has("core_through"):   # P4.D-19/37: a unit that cannot shoot still owes its test / its move-through attacks: the core call, no volley
 		await _solo_ai_core_call(unit, report, null, [])
 	elif int(report.get("action", 0)) == AiDecision.Action.CHARGE:
 		await _run_ai_melee(report)
@@ -4869,7 +4875,7 @@ func _solo_apply_strafing(unit: GameUnit, human_trails: Array = []) -> void:
 		battle_log.log_event(BattleLog.Category.COMBAT,
 			"%s: %s passes over %s — attacks it as if shooting (once per activation)" % [
 			rule_name, unit.get_name(), target.get_name()], true)
-	CoreActivation.note_legacy(self, "ai_strafe", unit, [target])
+	CoreActivation.note_legacy(self, "ai_strafe", unit, [target], "move_through")   # P4.D-37: the slice takes the bearer now; this is the table's own strike (human drop, refused call)
 	await _solo_resolve_ai_volley(unit, target, shots, true)
 
 
@@ -4994,6 +5000,8 @@ func _run_ai_shooting(report: Dictionary) -> void:
 	CoreActivation.note_legacy(self, "ai_volley", unit, order.map(func(id) -> GameUnit: return groups[id]["target"]), ",".join(why))
 	for id in order:
 		var g := groups[id] as Dictionary
+		if _solo_combined_alive(g["target"]) == 0:   # combined: a host with no model left still stands while its joined hero lives
+			continue   # P4.D-37: the move-through attacks the table paid just now (a refused core call) took its last model
 		await _solo_resolve_ai_volley(unit, g["target"], g["shots"], moved)
 
 
@@ -5013,23 +5021,27 @@ func _solo_log_no_volley(unit: GameUnit, report: Dictionary, why: String) -> voi
 ## the core took the activation. Anything else (no board, a refused call) leaves the table to resolve the volley, and
 ## pays an owed test first, on the table, so a refusal costs nothing but the old order.
 func _solo_ai_core_call(unit: GameUnit, report: Dictionary, target: GameUnit, shots: Array) -> bool:
-	var owed := report.has("core_dangerous")
+	var owed := report.has("core_dangerous") or report.has("core_through")
 	if _solo_core_ai_h != 0 and (target != null or owed) \
 			and await CoreActivation.run_ai(self, unit, report, target, _solo_core_ai_h, shots, owed):
-		if owed:
-			report.erase("core_dangerous")
+		if report.erase("core_dangerous"):
 			report["core_took_dangerous"] = true
+		report.erase("core_through")
 		return true
 	await _solo_pay_dangerous(unit, report)
 	return false
 
 
-## One core P4.D-19: the table rolls the Dangerous test the body left to the core (no core call is made, or it refused).
+## One core P4.D-19/37: the table pays what the body left to the core (no core call is made, or it refused): the Dangerous
+## test, then the move-through attacks (Strafing, Crossing Attack).
 func _solo_pay_dangerous(unit: GameUnit, report: Dictionary) -> void:
 	var dice := int(report.get("core_dangerous", 0))
 	report.erase("core_dangerous")
 	if dice > 0:
 		await _run_ai_dangerous(unit, dice)
+	if report.erase("core_through") and not _solo_activation_unit_gone(unit):
+		await _solo_apply_strafing(unit)
+		await _solo_apply_crossing_attack(unit)
 
 
 ## Limited (once per game): a volley leaves out a weapon that already fired — the log names the book rule.

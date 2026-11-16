@@ -152,7 +152,7 @@ func test_the_shipped_allowlist_is_well_formed() -> void:
 	for g in data["groups"]:
 		var grp: Dictionary = data["groups"][g]
 		assert_array((grp.get("primitives", []) as Array)).override_failure_message("%s: no primitives" % g).is_not_empty()
-		assert_str(str(grp.get("step", ""))).override_failure_message("%s: no step" % g).begins_with("P4.D-")
+		assert_str(str(grp.get("step", ""))).override_failure_message("%s: no step" % g).starts_with("P4.D-")
 		assert_bool(FileAccess.file_exists(str(grp.get("golden", "")))).override_failure_message("%s: golden %s missing" % [g, grp.get("golden")]).is_true()
 		assert_bool(FileAccess.file_exists("res://test/parity/scenarios/shoot/%s.json" % grp.get("parity", ""))).override_failure_message(
 			"%s: parity scenario %s missing" % [g, grp.get("parity")]).is_true()
