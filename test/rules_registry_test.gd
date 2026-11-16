@@ -348,10 +348,10 @@ func test_system_scoping_banner_and_musician_params_diverge() -> void:
 	for s in ["gff", "aofs"]:
 		assert_str(str(RulesRegistry.param(str(s), "", "Banner", "scope", ""))).is_equal("picked")
 		assert_str(str(RulesRegistry.param(str(s), "", "Musician", "scope", ""))).is_equal("picked")
-	# gff is ported to the 3.6 two-pick scope; aofs follows in its own data row.
-	assert_int(int(RulesRegistry.param("gff", "", "Banner", "picked_units", 0))).is_equal(2)
-	assert_int(int(RulesRegistry.param("gff", "", "Musician", "picked_units", 0))).is_equal(2)
-	assert_int(int(RulesRegistry.param("aofs", "", "Banner", "picked_units", 0))).is_equal(3)
+	# gff and aofs are both ported to the 3.6 two-pick scope (3.5 said three).
+	for s in ["gff", "aofs"]:
+		assert_int(int(RulesRegistry.param(str(s), "", "Banner", "picked_units", 0))).is_equal(2)
+		assert_int(int(RulesRegistry.param(str(s), "", "Musician", "picked_units", 0))).is_equal(2)
 	# The bonus itself is identical everywhere (+1) — only the scope diverges.
 	for s in RulesRegistry.SYSTEMS:
 		assert_int(int(RulesRegistry.param(str(s), "", "Banner", "morale_bonus", 0))).is_equal(1)
