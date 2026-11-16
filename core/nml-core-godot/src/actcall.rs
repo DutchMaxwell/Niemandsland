@@ -106,6 +106,8 @@ fn delta_array(before: &State, after: &State) -> VarArray {
         d.set("alive", u.alive);
         d.set("moved", u.moved);
         d.set("unknown", u.unknown);
+        d.set("fatigued", u.fatigued);
+        d.set("casts", u.casts);
         out.push(&d.to_variant());
     }
     out

@@ -299,6 +299,10 @@ pub struct UnitDelta {
     pub alive: i64,
     pub moved: bool,
     pub unknown: bool,
+    /// P4.0-4d: the table-owned per-activation ledger AFTER — the fatigue flag and the unspent spell
+    /// tokens. A plain activation changes neither; carrying them makes a table/core split visible.
+    pub fatigued: bool,
+    pub casts: i64,
 }
 
 /// Every unit whose alive, shaken, positions or moved_round changed. `removed`
@@ -322,8 +326,19 @@ pub fn delta_of(before: &State, after: &State) -> Vec<UnitDelta> {
         if j < a.len() || unknown {
             removed.clear();
         }
-        if b != a || before.alive[u] != after.alive[u] || before.shaken[u] != after.shaken[u] || moved {
-            out.push(UnitDelta { key: key.clone(), removed, shaken: after.shaken[u], alive: after.alive[u], moved, unknown });
+        if b != a || before.alive[u] != after.alive[u] || before.shaken[u] != after.shaken[u] || moved
+            || before.fatigued[u] != after.fatigued[u] || before.casts[u] != after.casts[u]
+        {
+            out.push(UnitDelta {
+                key: key.clone(),
+                removed,
+                shaken: after.shaken[u],
+                alive: after.alive[u],
+                moved,
+                unknown,
+                fatigued: after.fatigued[u],
+                casts: after.casts[u],
+            });
         }
     }
     out
@@ -640,6 +655,25 @@ mod tests {
         assert_eq!((d[0].removed.len(), d[0].moved, d[0].unknown), (0, true, true));
         assert!(one(&|s| s.moved_round[3] += 1)[0].moved);
         assert!(one(&|s| s.shaken[2] = true)[0].shaken);
+    }
+    /// P4.0-4d: a unit whose ONLY change is the table-owned ledger (fatigue, casts) still gets a row, and
+    /// the row carries both values AFTER (RED: drop the ledger term -> no row; drop a field -> the default).
+    #[test]
+    fn the_delta_carries_the_ledger_a_plain_activation_cannot_change() {
+        let (st, _) = volley_line();
+        let one = |f: &dyn Fn(&mut State)| {
+            let mut after = st.clone();
+            f(&mut after);
+            delta_of(&st, &after)
+        };
+        assert_eq!(one(&|_| {}), vec![], "no change, no row");
+        let d = one(&|s| {
+            s.fatigued[2] = true;
+            s.casts[2] = 3;
+        });
+        assert_eq!(d.len(), 1);
+        assert_eq!((d[0].key.as_str(), d[0].fatigued, d[0].casts), ("b", true, 3));
+        assert_eq!((d[0].shaken, d[0].moved, d[0].removed.len()), (false, false, 0), "no board news");
     }
 
     // ---- step 14: allowance and move check ----

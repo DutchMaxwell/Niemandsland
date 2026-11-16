@@ -515,6 +515,24 @@ static func land_delta(main, delta: Array, start_models: Array, done: Dictionary
 		if bool(d["shaken"]) != gu.is_shaken:
 			main.radial_menu_controller.card_toggle_shaken(gu)
 			main._solo_mirror_shaken(gu)
+		_land_ledger(main, gu, d)
+
+
+## P4.0-4d: the table-owned per-activation ledger the delta now carries (inventory class (a)): the fatigue flag and the
+## unspent spell tokens. A plain activation changes neither and the table's own writer owns both, so a difference is a
+## core/table split (reported); the core's value lands either way, as `shaken` does.
+static func _land_ledger(main, gu: GameUnit, d: Dictionary) -> void:
+	if d.has("fatigued") and bool(d["fatigued"]) != gu.is_fatigued:
+		push_error("CoreActivation.land_delta: %s fatigue differs (table %s, core %s)" % [
+			gu.get_name(), gu.is_fatigued, bool(d["fatigued"])])
+		if main.radial_menu_controller != null:
+			main.radial_menu_controller.card_toggle_fatigued(gu)
+	if d.has("casts") and int(d["casts"]) != gu.casts_current:
+		push_error("CoreActivation.land_delta: %s casts differ (table %d, core %d)" % [
+			gu.get_name(), gu.casts_current, int(d["casts"])])
+		gu.set_caster_points(int(d["casts"]))
+		if main.network_manager != null and main.network_manager.has_method("broadcast_unit_casts"):
+			main.network_manager.broadcast_unit_casts(gu)
 
 
 ## Step 28: the open activations, unit_id -> {handle, transcript, start_models, start_pos, start_rot, moved_round_before
