@@ -105,3 +105,18 @@ func test_a_step_over_3in_logs_an_impassable_warning() -> void:
 	for e in log_node.entries():
 		texts.append(str(e["text"]))
 	assert_array(texts).contains(["Own Unit climbs 6.0\" — over 3\", impassable (%s)" % OPRApiClient.rules_cite(RulesRegistry.DEFAULT_SYSTEM)])
+
+
+func test_placement_drop_logs_no_climb_verdict() -> void:
+	# Deployment places models, it does not move them: a drop that carries climb data (the
+	# ledger still measures the drag for the trail and the ruler) must not write the GF
+	# "impassable" verdict into the battle log. No start_game(): the fixture is in deployment.
+	var f := _fixture()
+	var main := f["main"] as Node3D
+	var log_node: BattleLog = auto_free(BattleLog.new())
+	main.battle_log = log_node
+	assert_bool((f["army"] as OPRArmyManager).is_deployment_phase()).is_true()
+	main._on_battle_log_dropped([{"node": f["model"], "inches": 6.0, "arc_in": 6.0, "climb_in": 5.0}])
+	for e in log_node.entries():
+		assert_str(str(e["text"])).not_contains("impassable")
+		assert_str(str(e["text"])).not_contains("climbs")

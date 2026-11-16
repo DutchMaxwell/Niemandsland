@@ -18863,7 +18863,8 @@ func _on_battle_log_dropped(moves: Array) -> void:
 			"max_in": float(e["max_in"]), "climb_in": float(e["climb_in"]), "whole": bool(e["whole"])})
 		# GF p.11: a step over 3" is impassable under mass-battle rules — the drag itself is
 		# a sandbox aid (D5a, no hard stop without Strict), so the drop's own line flags it.
-		if float(e["climb_in"]) > MoveLedger.CLIMB_MAX_IN:
+		# Not in DEPLOYMENT: placing a model over terrain is not a move, so no climb rule applies.
+		if not _is_placement_phase() and float(e["climb_in"]) > MoveLedger.CLIMB_MAX_IN:
 			_log_rule_event(BattleLog.Category.MOVEMENT,
 				"%s climbs %.1f\" — over 3\", impassable (%s)" % [unit_name, float(e["climb_in"]), OPRApiClient.rules_cite(_solo_rules_system())])
 	_log_move_summaries(summaries)
@@ -18952,6 +18953,12 @@ func _print_rule_notes(report: Dictionary) -> void:
 			battle_log.log_event(BattleLog.Category.COMBAT, str(note), true)
 
 
+## A drag during DEPLOYMENT places models, it does not move them: no movement line, no climb verdict.
+func _is_placement_phase() -> bool:
+	return opr_army_manager != null and opr_army_manager.has_method("is_deployment_phase") \
+			and opr_army_manager.is_deployment_phase()
+
+
 ## Write per-unit movement summaries into the battle log — same lines for local and remote movers.
 func _log_move_summaries(summaries: Array) -> void:
 	if battle_log == null:
@@ -18960,8 +18967,7 @@ func _log_move_summaries(summaries: Array) -> void:
 	# table wrote "Saurian Warriors moves 57\"" into the battle log). During DEPLOYMENT the ledger
 	# still measures the drag — the trail and the ruler want that — but the log must not report a
 	# 57-inch march that never happened.
-	if opr_army_manager != null and opr_army_manager.has_method("is_deployment_phase") \
-			and opr_army_manager.is_deployment_phase():
+	if _is_placement_phase():
 		return
 	for entry in summaries:
 		var e: Dictionary = entry as Dictionary
