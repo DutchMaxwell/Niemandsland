@@ -796,6 +796,13 @@ pub struct Seams {
     /// predates the key.
     #[serde(default)]
     pub bands_prefolded: bool,
+    /// One-core P4.0-5 — an ANSWER, not a rule switch, in the style of `dangerous_replay`: the model slot
+    /// (in the target unit's capture order) that takes the FIRST Takedown group of this one exchange,
+    /// supplied through the step API's `Input::Choice` (`takedown_model:<target>`). `None` (the `Default`,
+    /// and every caller that supplies no choice) keeps `sim::takedown_pick`'s automatic pick, so every
+    /// replayed transcript resolves exactly as before.
+    #[serde(default)]
+    pub takedown_pick: Option<usize>,
 }
 
 impl Seams {
