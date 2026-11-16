@@ -49,6 +49,7 @@ jobs:
     outputs:
       not_core_only: ${{ steps.filter.outputs.not_core_only }}
       macos_relevant: ${{ steps.macos_filter.outputs.macos_relevant }}
+      rust_relevant: ${{ steps.rust_filter.outputs.rust_relevant }}
       shard_count: ${{ steps.shards.outputs.shard_count }}
       shards: ${{ steps.shards.outputs.shards }}
     steps:
@@ -87,6 +88,23 @@ jobs:
               - 'tools/assert_ship_probe.py'
               - 'scripts/solo/**'
               - 'assets/solo/brains/**'
+      # The Rust workspace checks (rust-gate below) run for a pull request only when it touches a path
+      # they read. This list MUST equal rust.yml's push `paths:` list; tools/ci_rust_paths_test.py fails
+      # the PR when the two drift apart.
+      - uses: dorny/paths-filter@v3
+        id: rust_filter
+        with:
+          filters: |
+            rust_relevant:
+              - 'core/**'
+              - 'rust-toolchain.toml'
+              - '.github/workflows/rust.yml'
+              - 'tools/**'
+              - 'assets/solo/**'
+              - 'assets/model_manifest.json'
+              - 'data/**'
+              - 'test/fixtures/**'
+              - 'farm/patches/preserve-core-identity.patch'
 
   # Builds the Rust core once per run for the test shards, which load it (one-core P1, step 5).
   # Shares the export-linux rust cache entry instead of adding a second ~1 GB one; no debug-symbol
@@ -347,11 +365,13 @@ jobs:
       # test/shard_weights.json): the balance check (max shard within 15 % of the mean) and the
       # real-tree coverage check. rust.yml runs it too, but only when its path filter matches;
       # weights and suite files change on most GDScript PRs, so the guard lives here, on every PR.
-      - name: Shard assignment tests (balance and real-tree coverage)
+      # tools/ci_rust_paths_test.py rides along: a PR that edits only a workflow's path list does not
+      # match rust.yml's own filter, so the rust-gate wiring is guarded here too.
+      - name: Shard assignment tests (balance and real-tree coverage) and rust-gate wiring
         run: |
           set -euo pipefail
           python3 -m pip install --quiet pytest
-          python3 -m pytest tools/shard_assign_test.py -q
+          python3 -m pytest tools/shard_assign_test.py tools/ci_rust_paths_test.py -q
 
   relay-tests:
     name: Relay tests
@@ -375,12 +395,13 @@ jobs:
   # The one name branch protection requires (besides `hygiene`). It is green when every job it needs
   # is `success`, or `skipped` (the docs/tools fast lane skips the test shards). It runs with
   # `if: always()` so a failed or cancelled need shows up as a red check instead of a missing one.
-  # Add every new gating job to `needs` below.
+  # Add every new gating job to `needs` below. rust-gate is in `needs` because a check from another
+  # workflow cannot be required by name here: a PR with red core tests was mergeable while this was green.
   all-required:
     name: All required checks
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: [changes, core-linux, core-py-linux, test, shards-coverage, relay-tests]
+    needs: [changes, core-linux, core-py-linux, test, shards-coverage, relay-tests, rust-gate]
     if: always()
     steps:
       - name: Every required job is green or skipped
@@ -796,13 +817,16 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-  # Tag-only invocation of rust.yml's own job (as a reusable workflow) so the
-  # release below can `needs` it — cross-workflow `needs` doesn't exist, and
-  # rust.yml has no tag trigger of its own (tags don't touch main/PR). Every
-  # non-tag push/PR is still covered by rust.yml running directly.
+  # rust.yml's jobs, called as a reusable workflow so that `all-required` and the release below can
+  # `needs` them — cross-workflow `needs` doesn't exist, and a separate rust.yml run is invisible to
+  # all-required, the one name branch protection requires. Runs on a tag push, and on a pull request
+  # that touches a path rust.yml reads (changes.rust_relevant: a PR that does not touch core skips
+  # this job, which all-required counts as green). rust.yml no longer has a pull_request trigger of
+  # its own, so each PR still gets exactly one Rust run; pushes to main keep rust.yml's own trigger.
   rust-gate:
-    name: Rust workspace checks (release gate)
-    if: startsWith(github.ref, 'refs/tags/v')
+    name: Rust workspace checks
+    needs: changes
+    if: ${{ startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'pull_request' && needs.changes.outputs.rust_relevant == 'true') }}
     uses: ./.github/workflows/rust.yml
 
   # Tag-gated: pushing a "v*" tag (e.g. v0.3.7-alpha) builds both platforms and
