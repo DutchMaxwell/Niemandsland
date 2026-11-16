@@ -365,6 +365,7 @@ pub fn seams_of(knobs: &Knobs) -> Seams {
         versatile_reach: knobs.versatile_reach,
         rules_epoch: knobs.rules_epoch,
         bands_prefolded: knobs.bands_prefolded,
+        takedown_pick: None,
     }
 }
 

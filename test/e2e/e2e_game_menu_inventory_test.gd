@@ -51,6 +51,7 @@ var _peer_before: MultiplayerPeer
 
 
 func before_test() -> void:
+	CoreActivation.offer_override = 1   # M-3: this suite tests the offered solo / Automatic flow, not the core
 	E2EBoot.arm_harness_mode()
 	_root_before = E2EBoot.root_children(get_tree())
 	_peer_before = get_tree().get_multiplayer().multiplayer_peer
@@ -62,6 +63,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	CoreActivation.offer_override = -1
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 	# Disconnect (network_manager.disconnect_game) sets the TREE's peer to null — the whole test process
 	# shares it, so every later suite logged "No multiplayer peer is assigned" and the card suite's AI

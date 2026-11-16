@@ -198,8 +198,8 @@ const EPOCH_63_MELEE_HEIGHT := 63
 ## and the AI's paid climb (#2608 and its core port) to 74 with EPOCH_74_CLIMB_COST,
 ## and the core ports of three table repairs (#2612, #2613, #2615) to 75 with EPOCH_75_TABLE_FIXES,
 ## and the move fixes (Great Musician spent, Speed Feat only on a move, Grounded Speed by majority) to 76
-## with EPOCH_76_MOVE_FIXES.
-static var rules_epoch: int = 76
+## with EPOCH_76_MOVE_FIXES, and the #183 charge cap to 77 with EPOCH_77_CHARGE_CAP.
+static var rules_epoch: int = 77
 ## The live activation identity the Ethereal placement band penalty is keyed to (MOR-19b): the
 ## Solo AI advances it once per activation, the Teleport beat stamps the unit's
 ## `teleport_activation` with it, and the band pass prices the -6"/-6" only while the two are
@@ -226,6 +226,10 @@ const EPOCH_75_TABLE_FIXES := 75
 ## (`SoloController.move_bands_for_unit`); the core spends the Great Musician +1" with the buffed unit's next move.
 ## Records stamped 75 or below replay with the old readings.
 const EPOCH_76_MOVE_FIXES := 76
+## The core's frozen `EPOCH_77_CHARGE_CAP` (acts.rs, #183): from it no charging model's retraced trail outruns its
+## 12" (or 6" difficult) band (`SoloController.charge_cap_on`), in the execution and in the declaration probe.
+## Records stamped 76 or below replay the uncapped charge trails.
+const EPOCH_77_CHARGE_CAP := 77
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000

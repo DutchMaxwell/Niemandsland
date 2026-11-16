@@ -1,0 +1,4452 @@
+{
+ "cases": [
+  {
+   "epoch": 77,
+   "extra": {
+    "picks_fed": "1",
+    "prompt_opened": "1"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 4,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       false,
+       0
+      ],
+      [
+       2,
+       false,
+       0
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       false,
+       0
+      ],
+      [
+       8,
+       false,
+       0
+      ],
+      [
+       9,
+       false,
+       0
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 4
+    }
+   ],
+   "lines": [
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 6 6 6 6 6 6 5 4 4 4 3 3 2 2 2 2 2 1 1 1 → 10 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 10 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|You defend: 5 4 4 4 3 2 2 1 1 1 → 4 blocks (4+)",
+    "COMBAT|Def: allocate 6 wounds — CLICK a model per wound; right-click auto-allocates the rest",
+    "COMBAT|Def takes 6 wounds (4/10)",
+    "COMBAT|Def loses 6 models (4/10)",
+    "COMBAT|You: 6 → passed (4+)",
+    "COMBAT|Def passes morale"
+   ],
+   "rng": "2270723802124754111",
+   "scenario": "mixed_auto",
+   "seed": 0
+  },
+  {
+   "epoch": 77,
+   "extra": {
+    "picks_fed": "1",
+    "prompt_opened": "1"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 8,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       false,
+       0
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 8
+    }
+   ],
+   "lines": [
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 6 6 6 5 5 4 4 4 3 3 3 3 2 2 2 1 1 1 1 1 → 8 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 8 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|You defend: 6 6 5 4 4 4 3 1 → 6 blocks (4+)",
+    "COMBAT|Def: allocate 2 wounds — CLICK a model per wound; right-click auto-allocates the rest",
+    "COMBAT|Def takes 2 wounds (8/10)",
+    "COMBAT|Def loses 2 models (8/10)"
+   ],
+   "rng": "4719997630113927563",
+   "scenario": "mixed_auto",
+   "seed": 17
+  },
+  {
+   "epoch": 77,
+   "extra": {
+    "picks_fed": "1",
+    "prompt_opened": "1"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 7,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       false,
+       0
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       false,
+       0
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 7
+    }
+   ],
+   "lines": [
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 6 5 5 4 3 3 3 2 2 2 2 2 2 2 1 1 1 1 1 1 → 4 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 4 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|You defend: 5 2 2 1 → 1 block (4+)",
+    "COMBAT|Def: allocate 3 wounds — CLICK a model per wound; right-click auto-allocates the rest",
+    "COMBAT|Def takes 3 wounds (7/10)",
+    "COMBAT|Def loses 3 models (7/10)"
+   ],
+   "rng": "-3520036892484174521",
+   "scenario": "mixed_auto",
+   "seed": 49
+  },
+  {
+   "epoch": 77,
+   "extra": {
+    "picks_fed": "1",
+    "prompt_opened": "1"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 8,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       false,
+       0
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 8
+    }
+   ],
+   "lines": [
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 6 6 5 5 4 4 4 3 3 3 3 3 2 2 2 1 1 1 1 1 → 7 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 7 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|You defend: 6 6 5 5 4 2 1 → 5 blocks (4+)",
+    "COMBAT|Def: allocate 2 wounds — CLICK a model per wound; right-click auto-allocates the rest",
+    "COMBAT|Def takes 2 wounds (8/10)",
+    "COMBAT|Def loses 2 models (8/10)"
+   ],
+   "rng": "-4534581452550845972",
+   "scenario": "mixed_auto",
+   "seed": 225
+  },
+  {
+   "epoch": 77,
+   "extra": {
+    "picks_fed": "1",
+    "prompt_opened": "1"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 5,
+     "shaken": true,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       false,
+       0
+      ],
+      [
+       2,
+       false,
+       0
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       false,
+       0
+      ],
+      [
+       9,
+       false,
+       0
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 5
+    }
+   ],
+   "lines": [
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 6 6 6 6 6 5 5 4 4 4 4 4 3 3 3 3 2 1 1 1 → 12 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 12 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|You defend: 6 5 5 5 5 4 4 3 1 1 1 1 → 7 blocks (4+)",
+    "COMBAT|Def: allocate 5 wounds — CLICK a model per wound; right-click auto-allocates the rest",
+    "COMBAT|Def takes 5 wounds (5/10)",
+    "COMBAT|Def loses 5 models (5/10)",
+    "COMBAT|You: 3 → failed (4+)",
+    "COMBAT|Def fails morale — Shaken"
+   ],
+   "rng": "5249088221260300708",
+   "scenario": "mixed_auto",
+   "seed": 3
+  },
+  {
+   "epoch": 77,
+   "extra": {
+    "picks_fed": "1",
+    "prompt_opened": "1"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 4,
+     "shaken": true,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       false,
+       0
+      ],
+      [
+       2,
+       false,
+       0
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       false,
+       0
+      ],
+      [
+       8,
+       false,
+       0
+      ],
+      [
+       9,
+       false,
+       0
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 4
+    }
+   ],
+   "lines": [
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 6 6 6 6 6 6 5 5 5 4 4 2 2 2 2 2 1 1 1 1 → 11 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 11 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|You defend: 6 5 4 4 4 3 3 3 2 1 1 → 5 blocks (4+)",
+    "COMBAT|Def: allocate 6 wounds — CLICK a model per wound; right-click auto-allocates the rest",
+    "COMBAT|Def takes 6 wounds (4/10)",
+    "COMBAT|Def loses 6 models (4/10)",
+    "COMBAT|You: 3 → failed (4+)",
+    "COMBAT|Def fails morale — Shaken"
+   ],
+   "rng": "8252612705590652141",
+   "scenario": "mixed_auto",
+   "seed": 7
+  },
+  {
+   "epoch": 77,
+   "extra": {
+    "picks_fed": "1",
+    "prompt_opened": "1"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 7,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       false,
+       0
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       false,
+       0
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 7
+    }
+   ],
+   "lines": [
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 6 6 5 5 5 3 3 3 3 3 2 2 2 2 2 2 1 1 1 1 → 5 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 5 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|You defend: 5 5 2 2 2 → 2 blocks (4+)",
+    "COMBAT|Def: allocate 3 wounds — CLICK a model per wound; right-click auto-allocates the rest",
+    "COMBAT|Def takes 3 wounds (7/10)",
+    "COMBAT|Def loses 3 models (7/10)"
+   ],
+   "rng": "-1678770671210158815",
+   "scenario": "mixed_auto",
+   "seed": 512
+  },
+  {
+   "epoch": 77,
+   "extra": {
+    "picks_fed": "1",
+    "prompt_opened": "1"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 4,
+     "shaken": true,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       false,
+       0
+      ],
+      [
+       2,
+       false,
+       0
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       false,
+       0
+      ],
+      [
+       8,
+       false,
+       0
+      ],
+      [
+       9,
+       false,
+       0
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 4
+    }
+   ],
+   "lines": [
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 6 6 5 5 5 5 5 5 4 4 4 4 4 3 3 3 3 3 2 1 → 13 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 13 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|You defend: 6 6 6 6 5 5 4 3 3 2 2 1 1 → 7 blocks (4+)",
+    "COMBAT|Def: allocate 6 wounds — CLICK a model per wound; right-click auto-allocates the rest",
+    "COMBAT|Def takes 6 wounds (4/10)",
+    "COMBAT|Def loses 6 models (4/10)",
+    "COMBAT|You: 1 → failed (4+)",
+    "COMBAT|Def fails morale — Shaken"
+   ],
+   "rng": "-3220698304584135769",
+   "scenario": "mixed_auto",
+   "seed": 999
+  },
+  {
+   "epoch": 77,
+   "extra": {
+    "picks_fed": "3",
+    "prompt_opened": "1"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 4,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       false,
+       0
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       0
+      ],
+      [
+       5,
+       false,
+       0
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       false,
+       0
+      ],
+      [
+       9,
+       false,
+       0
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 4
+    }
+   ],
+   "lines": [
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 6 6 6 6 6 6 5 4 4 4 3 3 2 2 2 2 2 1 1 1 → 10 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 10 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|You defend: 5 4 4 4 3 2 2 1 1 1 → 4 blocks (4+)",
+    "COMBAT|Def: allocate 6 wounds — CLICK a model per wound; right-click auto-allocates the rest",
+    "COMBAT|Def loses a model (9/10)",
+    "COMBAT|Def loses a model (8/10)",
+    "COMBAT|Def takes 6 wounds (4/10)",
+    "COMBAT|Def loses 4 models (4/10)",
+    "COMBAT|You: 6 → passed (4+)",
+    "COMBAT|Def passes morale"
+   ],
+   "rng": "2270723802124754111",
+   "scenario": "mixed_click",
+   "seed": 0
+  },
+  {
+   "epoch": 77,
+   "extra": {
+    "picks_fed": "2",
+    "prompt_opened": "1"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 8,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       0
+      ],
+      [
+       5,
+       false,
+       0
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 8
+    }
+   ],
+   "lines": [
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 6 6 6 5 5 4 4 4 3 3 3 3 2 2 2 1 1 1 1 1 → 8 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 8 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|You defend: 6 6 5 4 4 4 3 1 → 6 blocks (4+)",
+    "COMBAT|Def: allocate 2 wounds — CLICK a model per wound; right-click auto-allocates the rest",
+    "COMBAT|Def loses a model (9/10)",
+    "COMBAT|Def loses a model (8/10)",
+    "COMBAT|Def takes 2 wounds (8/10)"
+   ],
+   "rng": "4719997630113927563",
+   "scenario": "mixed_click",
+   "seed": 17
+  },
+  {
+   "epoch": 77,
+   "extra": {
+    "picks_fed": "3",
+    "prompt_opened": "1"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 7,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       0
+      ],
+      [
+       5,
+       false,
+       0
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 7
+    }
+   ],
+   "lines": [
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 6 5 5 4 3 3 3 2 2 2 2 2 2 2 1 1 1 1 1 1 → 4 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 4 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|You defend: 5 2 2 1 → 1 block (4+)",
+    "COMBAT|Def: allocate 3 wounds — CLICK a model per wound; right-click auto-allocates the rest",
+    "COMBAT|Def loses a model (9/10)",
+    "COMBAT|Def loses a model (8/10)",
+    "COMBAT|Def takes 3 wounds (7/10)",
+    "COMBAT|Def loses a model (7/10)"
+   ],
+   "rng": "-3520036892484174521",
+   "scenario": "mixed_click",
+   "seed": 49
+  },
+  {
+   "epoch": 77,
+   "extra": {
+    "picks_fed": "2",
+    "prompt_opened": "1"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 8,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       0
+      ],
+      [
+       5,
+       false,
+       0
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 8
+    }
+   ],
+   "lines": [
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 6 6 5 5 4 4 4 3 3 3 3 3 2 2 2 1 1 1 1 1 → 7 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 7 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|You defend: 6 6 5 5 4 2 1 → 5 blocks (4+)",
+    "COMBAT|Def: allocate 2 wounds — CLICK a model per wound; right-click auto-allocates the rest",
+    "COMBAT|Def loses a model (9/10)",
+    "COMBAT|Def loses a model (8/10)",
+    "COMBAT|Def takes 2 wounds (8/10)"
+   ],
+   "rng": "-4534581452550845972",
+   "scenario": "mixed_click",
+   "seed": 225
+  },
+  {
+   "epoch": 77,
+   "extra": {
+    "picks_fed": "3",
+    "prompt_opened": "1"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 5,
+     "shaken": true,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       false,
+       0
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       0
+      ],
+      [
+       5,
+       false,
+       0
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       false,
+       0
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 5
+    }
+   ],
+   "lines": [
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 6 6 6 6 6 5 5 4 4 4 4 4 3 3 3 3 2 1 1 1 → 12 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 12 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|You defend: 6 5 5 5 5 4 4 3 1 1 1 1 → 7 blocks (4+)",
+    "COMBAT|Def: allocate 5 wounds — CLICK a model per wound; right-click auto-allocates the rest",
+    "COMBAT|Def loses a model (9/10)",
+    "COMBAT|Def loses a model (8/10)",
+    "COMBAT|Def takes 5 wounds (5/10)",
+    "COMBAT|Def loses 3 models (5/10)",
+    "COMBAT|You: 3 → failed (4+)",
+    "COMBAT|Def fails morale — Shaken"
+   ],
+   "rng": "5249088221260300708",
+   "scenario": "mixed_click",
+   "seed": 3
+  },
+  {
+   "epoch": 77,
+   "extra": {
+    "picks_fed": "3",
+    "prompt_opened": "1"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 4,
+     "shaken": true,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       false,
+       0
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       0
+      ],
+      [
+       5,
+       false,
+       0
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       false,
+       0
+      ],
+      [
+       9,
+       false,
+       0
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 4
+    }
+   ],
+   "lines": [
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 6 6 6 6 6 6 5 5 5 4 4 2 2 2 2 2 1 1 1 1 → 11 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 11 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|You defend: 6 5 4 4 4 3 3 3 2 1 1 → 5 blocks (4+)",
+    "COMBAT|Def: allocate 6 wounds — CLICK a model per wound; right-click auto-allocates the rest",
+    "COMBAT|Def loses a model (9/10)",
+    "COMBAT|Def loses a model (8/10)",
+    "COMBAT|Def takes 6 wounds (4/10)",
+    "COMBAT|Def loses 4 models (4/10)",
+    "COMBAT|You: 3 → failed (4+)",
+    "COMBAT|Def fails morale — Shaken"
+   ],
+   "rng": "8252612705590652141",
+   "scenario": "mixed_click",
+   "seed": 7
+  },
+  {
+   "epoch": 77,
+   "extra": {
+    "picks_fed": "3",
+    "prompt_opened": "1"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 7,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       0
+      ],
+      [
+       5,
+       false,
+       0
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 7
+    }
+   ],
+   "lines": [
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 6 6 5 5 5 3 3 3 3 3 2 2 2 2 2 2 1 1 1 1 → 5 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 5 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|You defend: 5 5 2 2 2 → 2 blocks (4+)",
+    "COMBAT|Def: allocate 3 wounds — CLICK a model per wound; right-click auto-allocates the rest",
+    "COMBAT|Def loses a model (9/10)",
+    "COMBAT|Def loses a model (8/10)",
+    "COMBAT|Def takes 3 wounds (7/10)",
+    "COMBAT|Def loses a model (7/10)"
+   ],
+   "rng": "-1678770671210158815",
+   "scenario": "mixed_click",
+   "seed": 512
+  },
+  {
+   "epoch": 77,
+   "extra": {
+    "picks_fed": "3",
+    "prompt_opened": "1"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 4,
+     "shaken": true,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       false,
+       0
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       0
+      ],
+      [
+       5,
+       false,
+       0
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       false,
+       0
+      ],
+      [
+       9,
+       false,
+       0
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 4
+    }
+   ],
+   "lines": [
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 6 6 5 5 5 5 5 5 4 4 4 4 4 3 3 3 3 3 2 1 → 13 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 13 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|You defend: 6 6 6 6 5 5 4 3 3 2 2 1 1 → 7 blocks (4+)",
+    "COMBAT|Def: allocate 6 wounds — CLICK a model per wound; right-click auto-allocates the rest",
+    "COMBAT|Def loses a model (9/10)",
+    "COMBAT|Def loses a model (8/10)",
+    "COMBAT|Def takes 6 wounds (4/10)",
+    "COMBAT|Def loses 4 models (4/10)",
+    "COMBAT|You: 1 → failed (4+)",
+    "COMBAT|Def fails morale — Shaken"
+   ],
+   "rng": "-3220698304584135769",
+   "scenario": "mixed_click",
+   "seed": 999
+  },
+  {
+   "epoch": 77,
+   "extra": {
+    "picks_fed": "1",
+    "prompt_opened": "1"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 8,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       3
+      ],
+      [
+       2,
+       true,
+       3
+      ],
+      [
+       3,
+       true,
+       3
+      ],
+      [
+       4,
+       true,
+       3
+      ],
+      [
+       5,
+       true,
+       3
+      ],
+      [
+       6,
+       true,
+       3
+      ],
+      [
+       7,
+       true,
+       3
+      ],
+      [
+       8,
+       true,
+       3
+      ],
+      [
+       9,
+       false,
+       0
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 24
+    }
+   ],
+   "lines": [
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 6 6 6 6 6 6 5 4 4 4 3 3 2 2 2 2 2 1 1 1 → 10 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 10 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|You defend: 5 4 4 4 3 2 2 1 1 1 → 4 blocks (4+)",
+    "COMBAT|Def: allocate 6 wounds — CLICK a model per wound; right-click auto-allocates the rest",
+    "COMBAT|Def takes 6 wounds (8/10)",
+    "COMBAT|Def loses 2 models (8/10)"
+   ],
+   "rng": "5950512504043230880",
+   "scenario": "tough_auto",
+   "seed": 0
+  },
+  {
+   "epoch": 77,
+   "extra": {
+    "picks_fed": "1",
+    "prompt_opened": "1"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       3
+      ],
+      [
+       2,
+       true,
+       3
+      ],
+      [
+       3,
+       true,
+       3
+      ],
+      [
+       4,
+       true,
+       3
+      ],
+      [
+       5,
+       true,
+       3
+      ],
+      [
+       6,
+       true,
+       3
+      ],
+      [
+       7,
+       true,
+       3
+      ],
+      [
+       8,
+       true,
+       3
+      ],
+      [
+       9,
+       true,
+       3
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 28
+    }
+   ],
+   "lines": [
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 6 6 6 5 5 4 4 4 3 3 3 3 2 2 2 1 1 1 1 1 → 8 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 8 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|You defend: 6 6 5 4 4 4 3 1 → 6 blocks (4+)",
+    "COMBAT|Def: allocate 2 wounds — CLICK a model per wound; right-click auto-allocates the rest",
+    "COMBAT|Def takes 2 wounds (10/10)"
+   ],
+   "rng": "4719997630113927563",
+   "scenario": "tough_auto",
+   "seed": 17
+  },
+  {
+   "epoch": 77,
+   "extra": {
+    "picks_fed": "1",
+    "prompt_opened": "1"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 9,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       3
+      ],
+      [
+       2,
+       true,
+       3
+      ],
+      [
+       3,
+       true,
+       3
+      ],
+      [
+       4,
+       true,
+       3
+      ],
+      [
+       5,
+       true,
+       3
+      ],
+      [
+       6,
+       true,
+       3
+      ],
+      [
+       7,
+       true,
+       3
+      ],
+      [
+       8,
+       true,
+       3
+      ],
+      [
+       9,
+       true,
+       3
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 27
+    }
+   ],
+   "lines": [
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 6 5 5 4 3 3 3 2 2 2 2 2 2 2 1 1 1 1 1 1 → 4 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 4 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|You defend: 5 2 2 1 → 1 block (4+)",
+    "COMBAT|Def: allocate 3 wounds — CLICK a model per wound; right-click auto-allocates the rest",
+    "COMBAT|Def takes 3 wounds (9/10)",
+    "COMBAT|Def loses a model (9/10)"
+   ],
+   "rng": "-3520036892484174521",
+   "scenario": "tough_auto",
+   "seed": 49
+  },
+  {
+   "epoch": 77,
+   "extra": {
+    "picks_fed": "1",
+    "prompt_opened": "1"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       3
+      ],
+      [
+       2,
+       true,
+       3
+      ],
+      [
+       3,
+       true,
+       3
+      ],
+      [
+       4,
+       true,
+       3
+      ],
+      [
+       5,
+       true,
+       3
+      ],
+      [
+       6,
+       true,
+       3
+      ],
+      [
+       7,
+       true,
+       3
+      ],
+      [
+       8,
+       true,
+       3
+      ],
+      [
+       9,
+       true,
+       3
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 28
+    }
+   ],
+   "lines": [
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 6 6 5 5 4 4 4 3 3 3 3 3 2 2 2 1 1 1 1 1 → 7 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 7 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|You defend: 6 6 5 5 4 2 1 → 5 blocks (4+)",
+    "COMBAT|Def: allocate 2 wounds — CLICK a model per wound; right-click auto-allocates the rest",
+    "COMBAT|Def takes 2 wounds (10/10)"
+   ],
+   "rng": "-4534581452550845972",
+   "scenario": "tough_auto",
+   "seed": 225
+  },
+  {
+   "epoch": 77,
+   "extra": {
+    "picks_fed": "1",
+    "prompt_opened": "1"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 9,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       3
+      ],
+      [
+       2,
+       true,
+       3
+      ],
+      [
+       3,
+       true,
+       3
+      ],
+      [
+       4,
+       true,
+       3
+      ],
+      [
+       5,
+       true,
+       3
+      ],
+      [
+       6,
+       true,
+       3
+      ],
+      [
+       7,
+       true,
+       3
+      ],
+      [
+       8,
+       true,
+       3
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 25
+    }
+   ],
+   "lines": [
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 6 6 6 6 6 5 5 4 4 4 4 4 3 3 3 3 2 1 1 1 → 12 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 12 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|You defend: 6 5 5 5 5 4 4 3 1 1 1 1 → 7 blocks (4+)",
+    "COMBAT|Def: allocate 5 wounds — CLICK a model per wound; right-click auto-allocates the rest",
+    "COMBAT|Def takes 5 wounds (9/10)",
+    "COMBAT|Def loses a model (9/10)"
+   ],
+   "rng": "-3611216774697818567",
+   "scenario": "tough_auto",
+   "seed": 3
+  },
+  {
+   "epoch": 77,
+   "extra": {
+    "picks_fed": "1",
+    "prompt_opened": "1"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 8,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       3
+      ],
+      [
+       2,
+       true,
+       3
+      ],
+      [
+       3,
+       true,
+       3
+      ],
+      [
+       4,
+       true,
+       3
+      ],
+      [
+       5,
+       true,
+       3
+      ],
+      [
+       6,
+       true,
+       3
+      ],
+      [
+       7,
+       true,
+       3
+      ],
+      [
+       8,
+       true,
+       3
+      ],
+      [
+       9,
+       false,
+       0
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 24
+    }
+   ],
+   "lines": [
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 6 6 6 6 6 6 5 5 5 4 4 2 2 2 2 2 1 1 1 1 → 11 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 11 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|You defend: 6 5 4 4 4 3 3 3 2 1 1 → 5 blocks (4+)",
+    "COMBAT|Def: allocate 6 wounds — CLICK a model per wound; right-click auto-allocates the rest",
+    "COMBAT|Def takes 6 wounds (8/10)",
+    "COMBAT|Def loses 2 models (8/10)"
+   ],
+   "rng": "4286281015298061382",
+   "scenario": "tough_auto",
+   "seed": 7
+  },
+  {
+   "epoch": 77,
+   "extra": {
+    "picks_fed": "1",
+    "prompt_opened": "1"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 9,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       3
+      ],
+      [
+       2,
+       true,
+       3
+      ],
+      [
+       3,
+       true,
+       3
+      ],
+      [
+       4,
+       true,
+       3
+      ],
+      [
+       5,
+       true,
+       3
+      ],
+      [
+       6,
+       true,
+       3
+      ],
+      [
+       7,
+       true,
+       3
+      ],
+      [
+       8,
+       true,
+       3
+      ],
+      [
+       9,
+       true,
+       3
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 27
+    }
+   ],
+   "lines": [
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 6 6 5 5 5 3 3 3 3 3 2 2 2 2 2 2 1 1 1 1 → 5 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 5 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|You defend: 5 5 2 2 2 → 2 blocks (4+)",
+    "COMBAT|Def: allocate 3 wounds — CLICK a model per wound; right-click auto-allocates the rest",
+    "COMBAT|Def takes 3 wounds (9/10)",
+    "COMBAT|Def loses a model (9/10)"
+   ],
+   "rng": "-1678770671210158815",
+   "scenario": "tough_auto",
+   "seed": 512
+  },
+  {
+   "epoch": 77,
+   "extra": {
+    "picks_fed": "1",
+    "prompt_opened": "1"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 8,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       3
+      ],
+      [
+       2,
+       true,
+       3
+      ],
+      [
+       3,
+       true,
+       3
+      ],
+      [
+       4,
+       true,
+       3
+      ],
+      [
+       5,
+       true,
+       3
+      ],
+      [
+       6,
+       true,
+       3
+      ],
+      [
+       7,
+       true,
+       3
+      ],
+      [
+       8,
+       true,
+       3
+      ],
+      [
+       9,
+       false,
+       0
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 24
+    }
+   ],
+   "lines": [
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 6 6 5 5 5 5 5 5 4 4 4 4 4 3 3 3 3 3 2 1 → 13 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 13 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|You defend: 6 6 6 6 5 5 4 3 3 2 2 1 1 → 7 blocks (4+)",
+    "COMBAT|Def: allocate 6 wounds — CLICK a model per wound; right-click auto-allocates the rest",
+    "COMBAT|Def takes 6 wounds (8/10)",
+    "COMBAT|Def loses 2 models (8/10)"
+   ],
+   "rng": "657957722406801960",
+   "scenario": "tough_auto",
+   "seed": 999
+  },
+  {
+   "epoch": 77,
+   "extra": {
+    "picks_fed": "3",
+    "prompt_opened": "1"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 8,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       3
+      ],
+      [
+       1,
+       true,
+       3
+      ],
+      [
+       2,
+       true,
+       3
+      ],
+      [
+       3,
+       true,
+       3
+      ],
+      [
+       4,
+       false,
+       0
+      ],
+      [
+       5,
+       false,
+       0
+      ],
+      [
+       6,
+       true,
+       3
+      ],
+      [
+       7,
+       true,
+       3
+      ],
+      [
+       8,
+       true,
+       3
+      ],
+      [
+       9,
+       true,
+       3
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 24
+    }
+   ],
+   "lines": [
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 6 6 6 6 6 6 5 4 4 4 3 3 2 2 2 2 2 1 1 1 → 10 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 10 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|You defend: 5 4 4 4 3 2 2 1 1 1 → 4 blocks (4+)",
+    "COMBAT|Def: allocate 6 wounds — CLICK a model per wound; right-click auto-allocates the rest",
+    "COMBAT|Def takes 6 wounds (8/10)",
+    "COMBAT|Def loses 2 models (8/10)"
+   ],
+   "rng": "5950512504043230880",
+   "scenario": "tough_click",
+   "seed": 0
+  },
+  {
+   "epoch": 77,
+   "extra": {
+    "picks_fed": "2",
+    "prompt_opened": "1"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       3
+      ],
+      [
+       1,
+       true,
+       3
+      ],
+      [
+       2,
+       true,
+       3
+      ],
+      [
+       3,
+       true,
+       3
+      ],
+      [
+       4,
+       true,
+       2
+      ],
+      [
+       5,
+       true,
+       2
+      ],
+      [
+       6,
+       true,
+       3
+      ],
+      [
+       7,
+       true,
+       3
+      ],
+      [
+       8,
+       true,
+       3
+      ],
+      [
+       9,
+       true,
+       3
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 28
+    }
+   ],
+   "lines": [
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 6 6 6 5 5 4 4 4 3 3 3 3 2 2 2 1 1 1 1 1 → 8 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 8 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|You defend: 6 6 5 4 4 4 3 1 → 6 blocks (4+)",
+    "COMBAT|Def: allocate 2 wounds — CLICK a model per wound; right-click auto-allocates the rest",
+    "COMBAT|Def takes 2 wounds (10/10)"
+   ],
+   "rng": "4719997630113927563",
+   "scenario": "tough_click",
+   "seed": 17
+  },
+  {
+   "epoch": 77,
+   "extra": {
+    "picks_fed": "3",
+    "prompt_opened": "1"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       3
+      ],
+      [
+       1,
+       true,
+       3
+      ],
+      [
+       2,
+       true,
+       3
+      ],
+      [
+       3,
+       true,
+       3
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       2
+      ],
+      [
+       6,
+       true,
+       3
+      ],
+      [
+       7,
+       true,
+       3
+      ],
+      [
+       8,
+       true,
+       3
+      ],
+      [
+       9,
+       true,
+       3
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 27
+    }
+   ],
+   "lines": [
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 6 5 5 4 3 3 3 2 2 2 2 2 2 2 1 1 1 1 1 1 → 4 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 4 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|You defend: 5 2 2 1 → 1 block (4+)",
+    "COMBAT|Def: allocate 3 wounds — CLICK a model per wound; right-click auto-allocates the rest",
+    "COMBAT|Def takes 3 wounds (10/10)"
+   ],
+   "rng": "-3520036892484174521",
+   "scenario": "tough_click",
+   "seed": 49
+  },
+  {
+   "epoch": 77,
+   "extra": {
+    "picks_fed": "2",
+    "prompt_opened": "1"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       3
+      ],
+      [
+       1,
+       true,
+       3
+      ],
+      [
+       2,
+       true,
+       3
+      ],
+      [
+       3,
+       true,
+       3
+      ],
+      [
+       4,
+       true,
+       2
+      ],
+      [
+       5,
+       true,
+       2
+      ],
+      [
+       6,
+       true,
+       3
+      ],
+      [
+       7,
+       true,
+       3
+      ],
+      [
+       8,
+       true,
+       3
+      ],
+      [
+       9,
+       true,
+       3
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 28
+    }
+   ],
+   "lines": [
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 6 6 5 5 4 4 4 3 3 3 3 3 2 2 2 1 1 1 1 1 → 7 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 7 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|You defend: 6 6 5 5 4 2 1 → 5 blocks (4+)",
+    "COMBAT|Def: allocate 2 wounds — CLICK a model per wound; right-click auto-allocates the rest",
+    "COMBAT|Def takes 2 wounds (10/10)"
+   ],
+   "rng": "-4534581452550845972",
+   "scenario": "tough_click",
+   "seed": 225
+  },
+  {
+   "epoch": 77,
+   "extra": {
+    "picks_fed": "3",
+    "prompt_opened": "1"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 9,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       3
+      ],
+      [
+       1,
+       true,
+       3
+      ],
+      [
+       2,
+       true,
+       3
+      ],
+      [
+       3,
+       true,
+       3
+      ],
+      [
+       4,
+       false,
+       0
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       3
+      ],
+      [
+       7,
+       true,
+       3
+      ],
+      [
+       8,
+       true,
+       3
+      ],
+      [
+       9,
+       true,
+       3
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 25
+    }
+   ],
+   "lines": [
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 6 6 6 6 6 5 5 4 4 4 4 4 3 3 3 3 2 1 1 1 → 12 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 12 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|You defend: 6 5 5 5 5 4 4 3 1 1 1 1 → 7 blocks (4+)",
+    "COMBAT|Def: allocate 5 wounds — CLICK a model per wound; right-click auto-allocates the rest",
+    "COMBAT|Def takes 5 wounds (9/10)",
+    "COMBAT|Def loses a model (9/10)"
+   ],
+   "rng": "-3611216774697818567",
+   "scenario": "tough_click",
+   "seed": 3
+  },
+  {
+   "epoch": 77,
+   "extra": {
+    "picks_fed": "3",
+    "prompt_opened": "1"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 8,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       3
+      ],
+      [
+       1,
+       true,
+       3
+      ],
+      [
+       2,
+       true,
+       3
+      ],
+      [
+       3,
+       true,
+       3
+      ],
+      [
+       4,
+       false,
+       0
+      ],
+      [
+       5,
+       false,
+       0
+      ],
+      [
+       6,
+       true,
+       3
+      ],
+      [
+       7,
+       true,
+       3
+      ],
+      [
+       8,
+       true,
+       3
+      ],
+      [
+       9,
+       true,
+       3
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 24
+    }
+   ],
+   "lines": [
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 6 6 6 6 6 6 5 5 5 4 4 2 2 2 2 2 1 1 1 1 → 11 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 11 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|You defend: 6 5 4 4 4 3 3 3 2 1 1 → 5 blocks (4+)",
+    "COMBAT|Def: allocate 6 wounds — CLICK a model per wound; right-click auto-allocates the rest",
+    "COMBAT|Def takes 6 wounds (8/10)",
+    "COMBAT|Def loses 2 models (8/10)"
+   ],
+   "rng": "4286281015298061382",
+   "scenario": "tough_click",
+   "seed": 7
+  },
+  {
+   "epoch": 77,
+   "extra": {
+    "picks_fed": "3",
+    "prompt_opened": "1"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       3
+      ],
+      [
+       1,
+       true,
+       3
+      ],
+      [
+       2,
+       true,
+       3
+      ],
+      [
+       3,
+       true,
+       3
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       2
+      ],
+      [
+       6,
+       true,
+       3
+      ],
+      [
+       7,
+       true,
+       3
+      ],
+      [
+       8,
+       true,
+       3
+      ],
+      [
+       9,
+       true,
+       3
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 27
+    }
+   ],
+   "lines": [
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 6 6 5 5 5 3 3 3 3 3 2 2 2 2 2 2 1 1 1 1 → 5 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 5 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|You defend: 5 5 2 2 2 → 2 blocks (4+)",
+    "COMBAT|Def: allocate 3 wounds — CLICK a model per wound; right-click auto-allocates the rest",
+    "COMBAT|Def takes 3 wounds (10/10)"
+   ],
+   "rng": "-1678770671210158815",
+   "scenario": "tough_click",
+   "seed": 512
+  },
+  {
+   "epoch": 77,
+   "extra": {
+    "picks_fed": "3",
+    "prompt_opened": "1"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 8,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       3
+      ],
+      [
+       1,
+       true,
+       3
+      ],
+      [
+       2,
+       true,
+       3
+      ],
+      [
+       3,
+       true,
+       3
+      ],
+      [
+       4,
+       false,
+       0
+      ],
+      [
+       5,
+       false,
+       0
+      ],
+      [
+       6,
+       true,
+       3
+      ],
+      [
+       7,
+       true,
+       3
+      ],
+      [
+       8,
+       true,
+       3
+      ],
+      [
+       9,
+       true,
+       3
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 24
+    }
+   ],
+   "lines": [
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 6 6 5 5 5 5 5 5 4 4 4 4 4 3 3 3 3 3 2 1 → 13 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 13 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|You defend: 6 6 6 6 5 5 4 3 3 2 2 1 1 → 7 blocks (4+)",
+    "COMBAT|Def: allocate 6 wounds — CLICK a model per wound; right-click auto-allocates the rest",
+    "COMBAT|Def takes 6 wounds (8/10)",
+    "COMBAT|Def loses 2 models (8/10)"
+   ],
+   "rng": "657957722406801960",
+   "scenario": "tough_click",
+   "seed": 999
+  }
+ ],
+ "family": "mixed_kit",
+ "provenance": {
+  "epoch": 77,
+  "git_sha": "04e6eee1b885eabe6513c907f9ac80240041d3db",
+  "registry_sha256": "425decb0652c95d5718359a87107f2f3738e3287e9d67a13369b0a00a3f0df0e",
+  "registry_system": "gf"
+ },
+ "schema": "nml-golden-witness-v2"
+}

@@ -1,0 +1,762 @@
+{
+ "cases": [
+  {
+   "epoch": 77,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 0,
+     "shaken": false,
+     "unit": "Def",
+     "wounds": 0
+    }
+   ],
+   "lines": [
+    "COMBAT|Def: 3 models pile in up to 3\" (GF 3.6)",
+    "COMBAT|Att charges Def",
+    "COMBAT|AI (Att): 6 6 6 6 6 4 4 3 1 1 → 7 hits (4+)",
+    "COMBAT|Att strikes with Blade at Def — 7 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 5 4 2 2 2 2 1 → 2 blocks (4+)",
+    "COMBAT|Def takes 5 wounds (3/8)",
+    "COMBAT|Def loses 5 models (3/8)",
+    "COMBAT|AI (Def): 6 3 2 → 1 hit (4+)",
+    "COMBAT|Def strikes with Blade at Att — 1 hit",
+    "COMBAT|Att saves on 4+",
+    "COMBAT|AI (Att) defends: 4 → 1 block (4+)",
+    "COMBAT|Melee result: Att took 0, Def took 5 — Def loses the melee",
+    "COMBAT|AI (Def): 1 → failed (4+)",
+    "COMBAT|Def fails morale at half strength — ROUTS",
+    "COMBAT|Def takes 3 wounds (0/8)",
+    "COMBAT|Def destroyed",
+    "COMBAT|Consolidation: Att holds its ground (enemy destroyed, no room to move — GF 3.6)"
+   ],
+   "scenario": "plain",
+   "seed": 0
+  },
+  {
+   "epoch": 77,
+   "final": [
+    {
+     "alive": 8,
+     "shaken": false,
+     "unit": "Att",
+     "wounds": 8
+    },
+    {
+     "alive": 7,
+     "shaken": false,
+     "unit": "Def",
+     "wounds": 7
+    }
+   ],
+   "lines": [
+    "COMBAT|Def: 3 models pile in up to 3\" (GF 3.6)",
+    "COMBAT|Att charges Def",
+    "COMBAT|AI (Att): 6 5 4 3 2 2 1 1 1 1 → 3 hits (4+)",
+    "COMBAT|Att strikes with Blade at Def — 3 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 6 4 2 → 2 blocks (4+)",
+    "COMBAT|Def takes 1 wound (7/8)",
+    "COMBAT|Def loses a model (7/8)",
+    "COMBAT|AI (Def): 6 5 4 3 3 3 1 → 3 hits (4+)",
+    "COMBAT|Def strikes with Blade at Att — 3 hits",
+    "COMBAT|Att saves on 4+",
+    "COMBAT|AI (Att) defends: 5 3 1 → 1 block (4+)",
+    "COMBAT|Att takes 2 wounds (8/10)",
+    "COMBAT|Att loses 2 models (8/10)",
+    "COMBAT|Melee result: Att took 2, Def took 1 — Att loses the melee",
+    "COMBAT|AI (Att): 4 → passed (4+)",
+    "COMBAT|Att passes morale",
+    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+   ],
+   "scenario": "plain",
+   "seed": 17
+  },
+  {
+   "epoch": 77,
+   "final": [
+    {
+     "alive": 7,
+     "shaken": true,
+     "unit": "Att",
+     "wounds": 7
+    },
+    {
+     "alive": 7,
+     "shaken": false,
+     "unit": "Def",
+     "wounds": 7
+    }
+   ],
+   "lines": [
+    "COMBAT|Def: 3 models pile in up to 3\" (GF 3.6)",
+    "COMBAT|Att charges Def",
+    "COMBAT|AI (Att): 5 3 3 3 2 2 2 1 1 1 → 1 hit (4+)",
+    "COMBAT|Att strikes with Blade at Def — 1 hit",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 1 → 0 blocks (4+)",
+    "COMBAT|Def takes 1 wound (7/8)",
+    "COMBAT|Def loses a model (7/8)",
+    "COMBAT|AI (Def): 6 5 4 2 2 2 1 → 3 hits (4+)",
+    "COMBAT|Def strikes with Blade at Att — 3 hits",
+    "COMBAT|Att saves on 4+",
+    "COMBAT|AI (Att) defends: 2 2 1 → 0 blocks (4+)",
+    "COMBAT|Att takes 3 wounds (7/10)",
+    "COMBAT|Att loses 3 models (7/10)",
+    "COMBAT|Melee result: Att took 3, Def took 1 — Att loses the melee",
+    "COMBAT|AI (Att): 1 → failed (4+)",
+    "COMBAT|Att fails morale — Shaken",
+    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+   ],
+   "scenario": "plain",
+   "seed": 49
+  },
+  {
+   "epoch": 77,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 8,
+     "shaken": false,
+     "unit": "Def",
+     "wounds": 8
+    }
+   ],
+   "lines": [
+    "COMBAT|Def: 3 models pile in up to 3\" (GF 3.6)",
+    "COMBAT|Att charges Def",
+    "COMBAT|AI (Att): 3 3 3 3 3 2 2 1 1 1 → 0 hits (4+)",
+    "COMBAT|Att strikes with Blade at Def — 0 hits",
+    "COMBAT|AI (Def): 6 5 4 4 4 2 1 1 → 5 hits (4+)",
+    "COMBAT|Def strikes with Blade at Att — 5 hits",
+    "COMBAT|Att saves on 4+",
+    "COMBAT|AI (Att) defends: 6 6 5 5 4 → 5 blocks (4+)",
+    "COMBAT|Melee result: Att took 0, Def took 0 — a draw — no morale test",
+    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+   ],
+   "scenario": "plain",
+   "seed": 225
+  },
+  {
+   "epoch": 77,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 2,
+     "shaken": false,
+     "unit": "Def",
+     "wounds": 2
+    }
+   ],
+   "lines": [
+    "COMBAT|Def: 3 models pile in up to 3\" (GF 3.6)",
+    "COMBAT|Att charges Def",
+    "COMBAT|AI (Att): 6 6 6 6 6 4 4 3 1 1 → 7 hits (4+)",
+    "COMBAT|Att strikes with Blade at Def — 7 hits",
+    "COMBAT|Def saves on 5+ (Def 4+, AP 1)",
+    "COMBAT|AI (Def) defends: 5 4 2 2 2 2 1 → 1 block (5+)",
+    "COMBAT|Def takes 6 wounds (2/8)",
+    "COMBAT|Def loses 6 models (2/8)",
+    "COMBAT|AI (Def): 3 2 → 0 hits (4+)",
+    "COMBAT|Def strikes with Blade at Att — 0 hits",
+    "COMBAT|Melee result: Att took 0, Def took 6 — Def loses the melee",
+    "COMBAT|AI (Def): 6 → passed (4+)",
+    "COMBAT|Def passes morale",
+    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+   ],
+   "scenario": "ap",
+   "seed": 0
+  },
+  {
+   "epoch": 77,
+   "final": [
+    {
+     "alive": 7,
+     "shaken": false,
+     "unit": "Att",
+     "wounds": 7
+    },
+    {
+     "alive": 6,
+     "shaken": false,
+     "unit": "Def",
+     "wounds": 6
+    }
+   ],
+   "lines": [
+    "COMBAT|Def: 3 models pile in up to 3\" (GF 3.6)",
+    "COMBAT|Att charges Def",
+    "COMBAT|AI (Att): 6 5 4 3 2 2 1 1 1 1 → 3 hits (4+)",
+    "COMBAT|Att strikes with Blade at Def — 3 hits",
+    "COMBAT|Def saves on 5+ (Def 4+, AP 1)",
+    "COMBAT|AI (Def) defends: 6 4 2 → 1 block (5+)",
+    "COMBAT|Def takes 2 wounds (6/8)",
+    "COMBAT|Def loses 2 models (6/8)",
+    "COMBAT|AI (Def): 6 5 4 3 3 1 → 3 hits (4+)",
+    "COMBAT|Def strikes with Blade at Att — 3 hits",
+    "COMBAT|Att saves on 4+",
+    "COMBAT|AI (Att) defends: 3 3 1 → 0 blocks (4+)",
+    "COMBAT|Att takes 3 wounds (7/10)",
+    "COMBAT|Att loses 3 models (7/10)",
+    "COMBAT|Melee result: Att took 3, Def took 2 — Att loses the melee",
+    "COMBAT|AI (Att): 5 → passed (4+)",
+    "COMBAT|Att passes morale",
+    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+   ],
+   "scenario": "ap",
+   "seed": 17
+  },
+  {
+   "epoch": 77,
+   "final": [
+    {
+     "alive": 7,
+     "shaken": true,
+     "unit": "Att",
+     "wounds": 7
+    },
+    {
+     "alive": 7,
+     "shaken": false,
+     "unit": "Def",
+     "wounds": 7
+    }
+   ],
+   "lines": [
+    "COMBAT|Def: 3 models pile in up to 3\" (GF 3.6)",
+    "COMBAT|Att charges Def",
+    "COMBAT|AI (Att): 5 3 3 3 2 2 2 1 1 1 → 1 hit (4+)",
+    "COMBAT|Att strikes with Blade at Def — 1 hit",
+    "COMBAT|Def saves on 5+ (Def 4+, AP 1)",
+    "COMBAT|AI (Def) defends: 1 → 0 blocks (5+)",
+    "COMBAT|Def takes 1 wound (7/8)",
+    "COMBAT|Def loses a model (7/8)",
+    "COMBAT|AI (Def): 6 5 4 2 2 2 1 → 3 hits (4+)",
+    "COMBAT|Def strikes with Blade at Att — 3 hits",
+    "COMBAT|Att saves on 4+",
+    "COMBAT|AI (Att) defends: 2 2 1 → 0 blocks (4+)",
+    "COMBAT|Att takes 3 wounds (7/10)",
+    "COMBAT|Att loses 3 models (7/10)",
+    "COMBAT|Melee result: Att took 3, Def took 1 — Att loses the melee",
+    "COMBAT|AI (Att): 1 → failed (4+)",
+    "COMBAT|Att fails morale — Shaken",
+    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+   ],
+   "scenario": "ap",
+   "seed": 49
+  },
+  {
+   "epoch": 77,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 8,
+     "shaken": false,
+     "unit": "Def",
+     "wounds": 8
+    }
+   ],
+   "lines": [
+    "COMBAT|Def: 3 models pile in up to 3\" (GF 3.6)",
+    "COMBAT|Att charges Def",
+    "COMBAT|AI (Att): 3 3 3 3 3 2 2 1 1 1 → 0 hits (4+)",
+    "COMBAT|Att strikes with Blade at Def — 0 hits",
+    "COMBAT|AI (Def): 6 5 4 4 4 2 1 1 → 5 hits (4+)",
+    "COMBAT|Def strikes with Blade at Att — 5 hits",
+    "COMBAT|Att saves on 4+",
+    "COMBAT|AI (Att) defends: 6 6 5 5 4 → 5 blocks (4+)",
+    "COMBAT|Melee result: Att took 0, Def took 0 — a draw — no morale test",
+    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+   ],
+   "scenario": "ap",
+   "seed": 225
+  },
+  {
+   "epoch": 77,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 0,
+     "shaken": false,
+     "unit": "Def",
+     "wounds": 0
+    }
+   ],
+   "lines": [
+    "COMBAT|Def: 3 models pile in up to 3\" (GF 3.6)",
+    "COMBAT|Att charges Def",
+    "COMBAT|AI (Att): 6 6 6 6 6 4 4 3 1 1 → 8 hits (2+)",
+    "COMBAT|Att: Impact(1) rolls 10 dice → 8 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 5 4 3 2 2 2 2 1 → 2 blocks (4+)",
+    "COMBAT|Def takes 6 wounds (2/8)",
+    "COMBAT|Def loses 6 models (2/8)",
+    "COMBAT|Att: 8 of 10 models are within 3\" and strike",
+    "COMBAT|AI (Att): 6 5 4 4 4 2 2 1 → 5 hits (4+)",
+    "COMBAT|Att strikes with Blade at Def — 5 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 6 3 2 1 1 → 1 block (4+)",
+    "COMBAT|Def takes 2 wounds (0/8)",
+    "COMBAT|Def destroyed",
+    "COMBAT|Melee result: Att took 0, Def took 10 — Def loses the melee",
+    "COMBAT|Consolidation: Att holds its ground (enemy destroyed, no room to move — GF 3.6)"
+   ],
+   "scenario": "impact",
+   "seed": 0
+  },
+  {
+   "epoch": 77,
+   "final": [
+    {
+     "alive": 9,
+     "shaken": false,
+     "unit": "Att",
+     "wounds": 9
+    },
+    {
+     "alive": 3,
+     "shaken": false,
+     "unit": "Def",
+     "wounds": 3
+    }
+   ],
+   "lines": [
+    "COMBAT|Def: 3 models pile in up to 3\" (GF 3.6)",
+    "COMBAT|Att charges Def",
+    "COMBAT|AI (Att): 6 5 4 3 2 2 1 1 1 1 → 6 hits (2+)",
+    "COMBAT|Att: Impact(1) rolls 10 dice → 6 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 6 6 4 4 2 1 → 4 blocks (4+)",
+    "COMBAT|Def takes 2 wounds (6/8)",
+    "COMBAT|Def loses 2 models (6/8)",
+    "COMBAT|AI (Att): 5 5 4 4 4 3 3 3 3 1 → 5 hits (4+)",
+    "COMBAT|Att strikes with Blade at Def — 5 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 6 6 3 3 1 → 2 blocks (4+)",
+    "COMBAT|Def takes 3 wounds (3/8)",
+    "COMBAT|Def loses 3 models (3/8)",
+    "COMBAT|AI (Def): 5 4 1 → 2 hits (4+)",
+    "COMBAT|Def strikes with Blade at Att — 2 hits",
+    "COMBAT|Att saves on 4+",
+    "COMBAT|AI (Att) defends: 5 1 → 1 block (4+)",
+    "COMBAT|Att takes 1 wound (9/10)",
+    "COMBAT|Att loses a model (9/10)",
+    "COMBAT|Melee result: Att took 1, Def took 5 — Def loses the melee",
+    "COMBAT|AI (Def): 6 → passed (4+)",
+    "COMBAT|Def passes morale",
+    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+   ],
+   "scenario": "impact",
+   "seed": 17
+  },
+  {
+   "epoch": 77,
+   "final": [
+    {
+     "alive": 9,
+     "shaken": false,
+     "unit": "Att",
+     "wounds": 9
+    },
+    {
+     "alive": 2,
+     "shaken": false,
+     "unit": "Def",
+     "wounds": 2
+    }
+   ],
+   "lines": [
+    "COMBAT|Def: 3 models pile in up to 3\" (GF 3.6)",
+    "COMBAT|Att charges Def",
+    "COMBAT|AI (Att): 5 3 3 3 2 2 2 1 1 1 → 7 hits (2+)",
+    "COMBAT|Att: Impact(1) rolls 10 dice → 7 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 5 4 2 2 2 1 1 → 2 blocks (4+)",
+    "COMBAT|Def takes 5 wounds (3/8)",
+    "COMBAT|Def loses 5 models (3/8)",
+    "COMBAT|Att: 9 of 10 models are within 3\" and strike",
+    "COMBAT|AI (Att): 6 5 5 2 2 2 1 1 1 → 3 hits (4+)",
+    "COMBAT|Att strikes with Blade at Def — 3 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 5 4 2 → 2 blocks (4+)",
+    "COMBAT|Def takes 1 wound (2/8)",
+    "COMBAT|Def loses a model (2/8)",
+    "COMBAT|AI (Def): 6 2 → 1 hit (4+)",
+    "COMBAT|Def strikes with Blade at Att — 1 hit",
+    "COMBAT|Att saves on 4+",
+    "COMBAT|AI (Att) defends: 3 → 0 blocks (4+)",
+    "COMBAT|Att takes 1 wound (9/10)",
+    "COMBAT|Att loses a model (9/10)",
+    "COMBAT|Melee result: Att took 1, Def took 6 — Def loses the melee",
+    "COMBAT|AI (Def): 6 → passed (4+)",
+    "COMBAT|Def passes morale",
+    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+   ],
+   "scenario": "impact",
+   "seed": 49
+  },
+  {
+   "epoch": 77,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 0,
+     "shaken": false,
+     "unit": "Def",
+     "wounds": 0
+    }
+   ],
+   "lines": [
+    "COMBAT|Def: 3 models pile in up to 3\" (GF 3.6)",
+    "COMBAT|Att charges Def",
+    "COMBAT|AI (Att): 3 3 3 3 3 2 2 1 1 1 → 7 hits (2+)",
+    "COMBAT|Att: Impact(1) rolls 10 dice → 7 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 6 5 4 4 2 1 1 → 4 blocks (4+)",
+    "COMBAT|Def takes 3 wounds (5/8)",
+    "COMBAT|Def loses 3 models (5/8)",
+    "COMBAT|AI (Att): 6 6 6 5 5 5 4 4 2 1 → 8 hits (4+)",
+    "COMBAT|Att strikes with Blade at Def — 8 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 5 5 4 3 2 2 2 1 → 3 blocks (4+)",
+    "COMBAT|Def takes 5 wounds (0/8)",
+    "COMBAT|Def destroyed",
+    "COMBAT|Melee result: Att took 0, Def took 8 — Def loses the melee",
+    "COMBAT|Consolidation: Att holds its ground (enemy destroyed, no room to move — GF 3.6)"
+   ],
+   "scenario": "impact",
+   "seed": 225
+  },
+  {
+   "epoch": 77,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 0,
+     "shaken": false,
+     "unit": "Def",
+     "wounds": 0
+    }
+   ],
+   "lines": [
+    "COMBAT|Def: 3 models pile in up to 3\" (GF 3.6)",
+    "COMBAT|Att charges Def",
+    "COMBAT|AI (Att): 6 6 6 6 6 4 4 3 1 1 → 7 hits (4+)",
+    "COMBAT|Furious: +5 hits on the charge (unmodified 6s)",
+    "COMBAT|Att strikes with Blade at Def — 12 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 6 5 4 4 3 2 2 2 2 2 1 1 → 4 blocks (4+)",
+    "COMBAT|Def takes 8 wounds (0/8)",
+    "COMBAT|Def destroyed",
+    "COMBAT|Melee result: Att took 0, Def took 8 — Def loses the melee",
+    "COMBAT|Consolidation: Att holds its ground (enemy destroyed, no room to move — GF 3.6)"
+   ],
+   "scenario": "furious",
+   "seed": 0
+  },
+  {
+   "epoch": 77,
+   "final": [
+    {
+     "alive": 9,
+     "shaken": false,
+     "unit": "Att",
+     "wounds": 9
+    },
+    {
+     "alive": 7,
+     "shaken": false,
+     "unit": "Def",
+     "wounds": 7
+    }
+   ],
+   "lines": [
+    "COMBAT|Def: 3 models pile in up to 3\" (GF 3.6)",
+    "COMBAT|Att charges Def",
+    "COMBAT|AI (Att): 6 5 4 3 2 2 1 1 1 1 → 3 hits (4+)",
+    "COMBAT|Furious: +1 hit on the charge (unmodified 6s)",
+    "COMBAT|Att strikes with Blade at Def — 4 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 6 4 4 2 → 3 blocks (4+)",
+    "COMBAT|Def takes 1 wound (7/8)",
+    "COMBAT|Def loses a model (7/8)",
+    "COMBAT|AI (Def): 6 5 3 3 3 1 1 → 2 hits (4+)",
+    "COMBAT|Def strikes with Blade at Att — 2 hits",
+    "COMBAT|Att saves on 4+",
+    "COMBAT|AI (Att) defends: 5 3 → 1 block (4+)",
+    "COMBAT|Att takes 1 wound (9/10)",
+    "COMBAT|Att loses a model (9/10)",
+    "COMBAT|Melee result: Att took 1, Def took 1 — a draw — no morale test",
+    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+   ],
+   "scenario": "furious",
+   "seed": 17
+  },
+  {
+   "epoch": 77,
+   "final": [
+    {
+     "alive": 7,
+     "shaken": true,
+     "unit": "Att",
+     "wounds": 7
+    },
+    {
+     "alive": 7,
+     "shaken": false,
+     "unit": "Def",
+     "wounds": 7
+    }
+   ],
+   "lines": [
+    "COMBAT|Def: 3 models pile in up to 3\" (GF 3.6)",
+    "COMBAT|Att charges Def",
+    "COMBAT|AI (Att): 5 3 3 3 2 2 2 1 1 1 → 1 hit (4+)",
+    "COMBAT|Att strikes with Blade at Def — 1 hit",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 1 → 0 blocks (4+)",
+    "COMBAT|Def takes 1 wound (7/8)",
+    "COMBAT|Def loses a model (7/8)",
+    "COMBAT|AI (Def): 6 5 4 2 2 2 1 → 3 hits (4+)",
+    "COMBAT|Def strikes with Blade at Att — 3 hits",
+    "COMBAT|Att saves on 4+",
+    "COMBAT|AI (Att) defends: 2 2 1 → 0 blocks (4+)",
+    "COMBAT|Att takes 3 wounds (7/10)",
+    "COMBAT|Att loses 3 models (7/10)",
+    "COMBAT|Melee result: Att took 3, Def took 1 — Att loses the melee",
+    "COMBAT|AI (Att): 1 → failed (4+)",
+    "COMBAT|Att fails morale — Shaken",
+    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+   ],
+   "scenario": "furious",
+   "seed": 49
+  },
+  {
+   "epoch": 77,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 8,
+     "shaken": false,
+     "unit": "Def",
+     "wounds": 8
+    }
+   ],
+   "lines": [
+    "COMBAT|Def: 3 models pile in up to 3\" (GF 3.6)",
+    "COMBAT|Att charges Def",
+    "COMBAT|AI (Att): 3 3 3 3 3 2 2 1 1 1 → 0 hits (4+)",
+    "COMBAT|Att strikes with Blade at Def — 0 hits",
+    "COMBAT|AI (Def): 6 5 4 4 4 2 1 1 → 5 hits (4+)",
+    "COMBAT|Def strikes with Blade at Att — 5 hits",
+    "COMBAT|Att saves on 4+",
+    "COMBAT|AI (Att) defends: 6 6 5 5 4 → 5 blocks (4+)",
+    "COMBAT|Melee result: Att took 0, Def took 0 — a draw — no morale test",
+    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+   ],
+   "scenario": "furious",
+   "seed": 225
+  },
+  {
+   "epoch": 77,
+   "final": [
+    {
+     "alive": 8,
+     "shaken": true,
+     "unit": "Att",
+     "wounds": 8
+    },
+    {
+     "alive": 7,
+     "shaken": false,
+     "unit": "Def",
+     "wounds": 7
+    }
+   ],
+   "lines": [
+    "COMBAT|Def: 3 models pile in up to 3\" (GF 3.6)",
+    "COMBAT|Att charges Def",
+    "COMBAT|Counter: Def strikes first, after the Impact dice (GF 3.6)",
+    "COMBAT|AI (Def): 6 6 6 4 4 3 1 1 → 5 hits (4+)",
+    "COMBAT|Def strikes with Blade at Att — 5 hits",
+    "COMBAT|Att saves on 4+",
+    "COMBAT|AI (Att) defends: 6 6 4 2 2 → 3 blocks (4+)",
+    "COMBAT|Att takes 2 wounds (8/10)",
+    "COMBAT|Att loses 2 models (8/10)",
+    "COMBAT|AI (Att): 6 5 4 3 2 2 2 1 → 3 hits (4+)",
+    "COMBAT|Att strikes with Blade at Def — 3 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 5 4 1 → 2 blocks (4+)",
+    "COMBAT|Def takes 1 wound (7/8)",
+    "COMBAT|Def loses a model (7/8)",
+    "COMBAT|Melee result: Att took 2, Def took 1 — Att loses the melee",
+    "COMBAT|AI (Att): 2 → failed (4+)",
+    "COMBAT|Att fails morale — Shaken",
+    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+   ],
+   "scenario": "counter",
+   "seed": 0
+  },
+  {
+   "epoch": 77,
+   "final": [
+    {
+     "alive": 9,
+     "shaken": false,
+     "unit": "Att",
+     "wounds": 9
+    },
+    {
+     "alive": 5,
+     "shaken": false,
+     "unit": "Def",
+     "wounds": 5
+    }
+   ],
+   "lines": [
+    "COMBAT|Def: 3 models pile in up to 3\" (GF 3.6)",
+    "COMBAT|Att charges Def",
+    "COMBAT|Counter: Def strikes first, after the Impact dice (GF 3.6)",
+    "COMBAT|AI (Def): 5 4 3 2 2 1 1 1 → 2 hits (4+)",
+    "COMBAT|Def strikes with Blade at Att — 2 hits",
+    "COMBAT|Att saves on 4+",
+    "COMBAT|AI (Att) defends: 6 1 → 1 block (4+)",
+    "COMBAT|Att takes 1 wound (9/10)",
+    "COMBAT|Att loses a model (9/10)",
+    "COMBAT|AI (Att): 6 6 5 4 4 3 3 2 1 → 5 hits (4+)",
+    "COMBAT|Att strikes with Blade at Def — 5 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 5 4 3 3 1 → 2 blocks (4+)",
+    "COMBAT|Def takes 3 wounds (5/8)",
+    "COMBAT|Def loses 3 models (5/8)",
+    "COMBAT|Melee result: Att took 1, Def took 3 — Def loses the melee",
+    "COMBAT|AI (Def): 4 → passed (4+)",
+    "COMBAT|Def passes morale",
+    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+   ],
+   "scenario": "counter",
+   "seed": 17
+  },
+  {
+   "epoch": 77,
+   "final": [
+    {
+     "alive": 9,
+     "shaken": false,
+     "unit": "Att",
+     "wounds": 9
+    },
+    {
+     "alive": 5,
+     "shaken": true,
+     "unit": "Def",
+     "wounds": 5
+    }
+   ],
+   "lines": [
+    "COMBAT|Def: 3 models pile in up to 3\" (GF 3.6)",
+    "COMBAT|Att charges Def",
+    "COMBAT|Counter: Def strikes first, after the Impact dice (GF 3.6)",
+    "COMBAT|AI (Def): 5 3 3 2 2 1 1 1 → 1 hit (4+)",
+    "COMBAT|Def strikes with Blade at Att — 1 hit",
+    "COMBAT|Att saves on 4+",
+    "COMBAT|AI (Att) defends: 2 → 0 blocks (4+)",
+    "COMBAT|Att takes 1 wound (9/10)",
+    "COMBAT|Att loses a model (9/10)",
+    "COMBAT|AI (Att): 6 5 4 3 2 2 2 1 1 → 3 hits (4+)",
+    "COMBAT|Att strikes with Blade at Def — 3 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 2 2 1 → 0 blocks (4+)",
+    "COMBAT|Def takes 3 wounds (5/8)",
+    "COMBAT|Def loses 3 models (5/8)",
+    "COMBAT|Melee result: Att took 1, Def took 3 — Def loses the melee",
+    "COMBAT|AI (Def): 1 → failed (4+)",
+    "COMBAT|Def fails morale — Shaken",
+    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+   ],
+   "scenario": "counter",
+   "seed": 49
+  },
+  {
+   "epoch": 77,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 8,
+     "shaken": false,
+     "unit": "Def",
+     "wounds": 8
+    }
+   ],
+   "lines": [
+    "COMBAT|Def: 3 models pile in up to 3\" (GF 3.6)",
+    "COMBAT|Att charges Def",
+    "COMBAT|Counter: Def strikes first, after the Impact dice (GF 3.6)",
+    "COMBAT|AI (Def): 3 3 3 3 3 2 1 1 → 0 hits (4+)",
+    "COMBAT|Def strikes with Blade at Att — 0 hits",
+    "COMBAT|AI (Att): 6 5 4 4 4 2 2 1 1 1 → 5 hits (4+)",
+    "COMBAT|Att strikes with Blade at Def — 5 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 6 6 5 5 4 → 5 blocks (4+)",
+    "COMBAT|Melee result: Att took 0, Def took 0 — a draw — no morale test",
+    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+   ],
+   "scenario": "counter",
+   "seed": 225
+  }
+ ],
+ "family": "melee",
+ "provenance": {
+  "epoch": 77,
+  "git_sha": "04e6eee1b885eabe6513c907f9ac80240041d3db",
+  "registry_sha256": "425decb0652c95d5718359a87107f2f3738e3287e9d67a13369b0a00a3f0df0e",
+  "registry_system": "gf"
+ },
+ "schema": "nml-golden-witness-v1"
+}

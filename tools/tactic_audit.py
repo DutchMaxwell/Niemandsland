@@ -121,7 +121,7 @@ def audit(cap):
     r["d7_no_shot_los"] = sum(1 for s in no_shot if "line of sight" in s)
 
     # D9 off-board (#215): units that settled with model CENTRES outside the table. The harnesses
-    # (tools/offboard_audit.gd, called from arena_match + solo_selfplay) emit one line per offending
+    # (tools/offboard_audit.gd, called from arena_match) emit one line per offending
     # unit; the format is pinned there and in tools/test_tactic_audit.py. This detector is a HARD
     # zero: a legal board state can never produce it, so any count > 0 is a planner bug, and the fix
     # for #215 must drive it to 0 on the same seed batch.

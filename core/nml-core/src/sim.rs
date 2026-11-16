@@ -459,12 +459,17 @@ pub fn land_wounds(state: &mut State, ti: usize, left: i64) {
 /// table's `apply_wounds_to_models` — `chain_casualty_order(unit, wounds)` computed ONCE, each model
 /// soaking wounds until it dies, the next one after it. Without kits, or without `exact`, slot 0
 /// goes first exactly as before.
-pub fn land_wounds_with(state: &mut State, ti: usize, mut left: i64, exact: bool) -> i64 {
-    let mut order = if exact {
+pub fn land_wounds_with(state: &mut State, ti: usize, left: i64, exact: bool) -> i64 {
+    let order = if exact {
         crate::casualty::chain_casualty_order(state, ti, Some(left.max(0) as usize)).unwrap_or_default()
     } else {
         Vec::new()
     };
+    land_wounds_in_order(state, ti, left, order)
+}
+
+/// `land_wounds_with`'s landing loop over an explicit removal `order` (empty = slot 0 first).
+fn land_wounds_in_order(state: &mut State, ti: usize, mut left: i64, mut order: Vec<usize>) -> i64 {
     while left > 0 && !state.wounds[ti].is_empty() {
         let s = order.first().copied().unwrap_or(0);
         let take = left.min(state.wounds[ti][s]);
@@ -486,6 +491,81 @@ pub fn land_wounds_with(state: &mut State, ti: usize, mut left: i64, exact: bool
         }
     }
     state.alive[ti] = state.positions[ti].len() as i64;
+    left
+}
+
+/// One-core P4.D-20/21 — the owner's answer to a target group's wound-allocation choice, as the group's landings consume
+/// it: ordered capture slots, first the Deadly wounds' picks, then the pool's. `at` = the models' positions when the
+/// choice opened (a landing never moves a survivor), so a slot's model is found again after any inline landing.
+struct AllocPicks {
+    picks: std::vec::IntoIter<usize>,
+    slots: Vec<usize>,
+    at: Vec<[f64; 3]>,
+    used: usize,
+}
+
+impl AllocPicks {
+    /// The current index of the next picked model that still stands (a pick on a dead model is skipped, as a click on one is).
+    fn next(&mut self, state: &State, ti: usize) -> Option<usize> {
+        let found = self.picks.find_map(|s| {
+            let i = self.slots.iter().position(|x| *x == s)?;
+            state.positions[ti].iter().position(|p| *p == self.at[i])
+        });
+        self.used += found.is_some() as usize;
+        found
+    }
+}
+
+/// One-core P4.D-20/21 — group `gi`'s wound-allocation choice (`_solo_wound_choice_matters`, main.gd:16939, over the host's
+/// own models), opened where the group's landing starts: `deadly` Deadly wounds and `w` pool wounds land on `ti`, which has 2+
+/// living models and a mixed loadout or a Tough model, and either a Deadly wound or a pool smaller than its wounds is
+/// there to place. `None` = automatic: no choice named by the transcript (every seeded tray), or nothing to choose.
+/// Slots are capture slots: `tray.dead_slots` skips the models earlier landings removed.
+fn open_alloc(state: &State, si: usize, ti: usize, gi: usize, (w, deadly): (i64, i64), tray: &mut Tray) -> Option<AllocPicks> {
+    tray.feed()?;
+    let kits = state.kits.get(ti).filter(|k| k.len() == state.wounds[ti].len())?;
+    let matters = kits.iter().any(|x| x.wounds_max > 1 || (&x.weapons, x.equipment) != (&kits[0].weapons, kits[0].equipment));
+    let alive = state.wounds[ti].len();
+    if !matters || alive < 2 || !(deadly > 0 || (w > 0 && w < state.wounds[ti].iter().sum::<i64>())) {
+        return None;
+    }
+    let dead = tray.dead_slots(ti);
+    let slots: Vec<usize> = (0..).filter(|s| !dead.contains(s)).take(alive).collect();
+    let id = format!("wound_alloc:{}:{}:{gi}", state.key(si), state.key(ti));
+    let picks = tray.wound_alloc(&id, slots.clone(), state.key(ti))?;
+    Some(AllocPicks { picks: picks.into_iter(), slots, at: state.positions[ti].clone(), used: 0 })
+}
+
+/// P4.D-21 — `land_deadly_wounds` for the wounds the owner places (`SoloController.deadly_pick`, main.gd:10661, D17): a
+/// wound goes to the next pick and deals X capped at that model; a wound the auto pick FORCES onto an already-wounded Tough
+/// model, or one with no pick left, lands by `land_deadly_wounds`. Returns the wounds dealt.
+fn land_deadly_picked(state: &mut State, ti: usize, unsaved: i64, x: i64, seams: Seams, alloc: &mut AllocPicks) -> i64 {
+    let mut dealt = 0;
+    for _ in 0..unsaved.max(0) {
+        let lead = crate::casualty::chain_casualty_order(state, ti, Some(1)).and_then(|o| o.first().copied());
+        let forced = lead.is_some_and(|j| state.kits[ti].get(j).is_some_and(|k| k.wounds_max > 1 && state.wounds[ti][j] < k.wounds_max));
+        dealt += match if forced { None } else { alloc.next(state, ti) } {
+            Some(i) => {
+                let take = x.max(1).min(state.wounds[ti][i]);
+                land_wounds_in_order(state, ti, take, vec![i]);
+                take
+            }
+            None => land_deadly_wounds(state, ti, 1, x, seams),
+        };
+    }
+    dealt
+}
+
+/// P4.D-20 — the pool's `w` wounds, one per remaining pick (landed first); the caller lands the rest by `casualty_order`
+/// and gets the count left. Says the group's one allocation line.
+fn land_pool_picked(state: &mut State, ti: usize, w: i64, alloc: &mut AllocPicks, tray: &mut Tray) -> i64 {
+    let mut left = w;
+    while left > 0 {
+        let Some(i) = alloc.next(state, ti) else { break };
+        left -= 1 - land_wounds_in_order(state, ti, 1, vec![i]);
+    }
+    tray.say(|| LogLine { rule: "wound_alloc", category: Category::Combat, side: state.player[ti],
+        text: format!("{}: the owner allocates {} wound{}", state.key(ti), alloc.used, if alloc.used == 1 { "" } else { "s" }), detail: None });
     left
 }
 
@@ -536,9 +616,10 @@ fn takedown_pick(state: &State, ti: usize) -> usize {
 /// inline, so this replays `land_takedown_groups` on a scratch copy of the target's slots: a killed
 /// pick is gone, a wounded one ranks first for removal and so never last for the sniper. A recorded
 /// node carries no board, so it keeps the unit's flag.
-fn takedown_pick_cover_after(state: &State, ti: usize, cover: Cover, unit_flag: bool, groups: &[i64]) -> bool {
+fn takedown_pick_cover_after(state: &State, ti: usize, cover: Cover, unit_flag: bool, groups: &[i64], picked: Option<usize>) -> bool {
     let Cover::Board(t) = cover else { return unit_flag };
     let (mut pos, mut wounds) = (state.positions[ti].clone(), state.wounds[ti].clone());
+    let mut picked = picked;
     let mut kits: Vec<crate::state::Kit> = state.kits.get(ti).map(|k| k.to_vec()).unwrap_or_default();
     let pick = |kits: &[crate::state::Kit], pos: &[[f64; 3]], wounds: &[i64]| -> usize {
         if !kits.is_empty() && kits.len() == pos.len() {
@@ -551,7 +632,8 @@ fn takedown_pick_cover_after(state: &State, ti: usize, cover: Cover, unit_flag: 
         if pos.is_empty() || wounds.len() != pos.len() {
             return unit_flag;
         }
-        let p = pick(&kits, &pos, &wounds);
+        // P4.0-5: the step API's answer names the first group's model; later groups keep the auto pick.
+        let p = picked.take().filter(|&p| p < pos.len()).unwrap_or_else(|| pick(&kits, &pos, &wounds));
         wounds[p] -= g.min(wounds[p]);
         if wounds[p] <= 0 {
             pos.remove(p);
@@ -564,7 +646,7 @@ fn takedown_pick_cover_after(state: &State, ti: usize, cover: Cover, unit_flag: 
     if pos.is_empty() || wounds.len() != pos.len() {
         return unit_flag;
     }
-    let p = pos[pick(&kits, &pos, &wounds)];
+    let p = pos[picked.take().filter(|&p| p < pos.len()).unwrap_or_else(|| pick(&kits, &pos, &wounds))];
     crate::terrain::gives_cover(t.type_at([p[0] as f32, p[1] as f32, p[2] as f32]))
 }
 
@@ -573,13 +655,18 @@ fn takedown_pick_cover_after(state: &State, ti: usize, cover: Cover, unit_flag: 
 /// living model (`casualty_order(..).last()`; the table's AI never snipes a joined hero), and the
 /// overkill is lost (a unit of [1] has nowhere to spill). Without kits the pick is the core's own
 /// inverse slot order, the last living slot. Each landing names itself (rules-must-log).
-fn land_takedown_groups(state: &mut State, ti: usize, shot: &mut ShootResult) {
+/// P4.0-5: `pick` is the step API's answer for the FIRST group (a slot at the choice, `None` = auto).
+fn land_takedown_groups(state: &mut State, ti: usize, shot: &mut ShootResult, pick: Option<usize>) {
+    let mut pick = pick;
     for w in std::mem::take(&mut shot.takedown_groups) {
         let n = state.wounds[ti].len();
         if w <= 0 || n == 0 {
             continue;
         }
-        let pick = takedown_pick(state, ti);
+        // One-core P4.0-5: the step API's answer names the first group's model by its slot; a slot the
+        // group has already removed (or a caller that supplied no choice) falls back to the automatic pick.
+        let chosen = pick.take().filter(|&p| state.wounds[ti].get(p).is_some_and(|&x| x > 0));
+        let pick = chosen.unwrap_or_else(|| takedown_pick(state, ti));
         let take = w.min(state.wounds[ti][pick]);
         state.wounds[ti][pick] -= take;
         let killed = state.wounds[ti][pick] <= 0;
@@ -1396,7 +1483,7 @@ pub(crate) fn tray_strafing(
         shred_boost_active(seams.rules_epoch),
         rule_on(seams.rules_epoch, EPOCH_14_DEADLY_LANDING),
         seams.tray_exact,
-        &|gr: &[i64]| takedown_pick_cover_after(next, target, cover, def.in_cover, gr),
+        &|gr: &[i64]| takedown_pick_cover_after(next, target, cover, def.in_cover, gr, seams.takedown_pick),
         &|_, _| None,
         tray,
     );
@@ -1413,7 +1500,7 @@ pub(crate) fn tray_strafing(
     if !seams.tray_exact {
         land_pool_wounds(next, target, w, false, seams, &mut shot.log);
     }
-    land_takedown_groups(next, target, shot);
+    land_takedown_groups(next, target, shot, seams.takedown_pick);
     for &(post, dx) in std::mem::take(&mut shot.deadly_groups).iter() {
         let dl = land_deadly_wounds(next, target, post, dx, seams);
         shot.log.push(format!("Deadly({dx}): {post} unsaved ×{dx}, no carry-over → {dl} wounds dealt"));
@@ -6104,7 +6191,7 @@ fn strike_phase(
     // LANDED, overkill included (`caused += td_dealt`, main.gd:7284), and the
     // table's order holds: Takedown, Deadly, then the pool.
     let mut dealt: i64 = shot.takedown_groups.iter().sum();
-    land_takedown_groups(next, ti, shot);
+    land_takedown_groups(next, ti, shot, seams.takedown_pick);
     for &(post, dx) in std::mem::take(&mut shot.deadly_groups).iter() {
         let d = land_deadly_wounds(next, ti, post, dx, seams);
         dealt += d;
@@ -10207,7 +10294,7 @@ fn resolve_with(
                             weapons: None,
                         }];
                         let gs: &[SplitGroup] = plan.as_deref().unwrap_or(&pooled);
-                        for g in gs {
+                        for (gi, g) in gs.iter().enumerate() {
                             // main.gd:3042 — the Mark is picked and recorded
                             // BEFORE this group's profiles and contexts are
                             // read (:3082), so the grant reaches this volley.
@@ -10472,7 +10559,7 @@ fn resolve_with(
                                 // `EPOCH_14_DEADLY_LANDING`, pool multiply below.
                                 rule_on(seams.rules_epoch, EPOCH_14_DEADLY_LANDING),
                                 seams.tray_exact,
-                                &|gr: &[i64]| takedown_pick_cover_after(&next, g.ti, cover, def.in_cover, gr),
+                                &|gr: &[i64]| takedown_pick_cover_after(&next, g.ti, cover, def.in_cover, gr, seams.takedown_pick),
                                 &|i, pi| parts.get(i).and_then(|(mi, msc, _)| msc.sighted.get(pi)
                                     .map(|&n| (n, next.alive[*mi], msc.silent.get(pi).copied().unwrap_or("")))),
                                 tray,
@@ -10517,21 +10604,28 @@ fn resolve_with(
                             if !seams.tray_exact {
                                 land_pool_wounds(&mut next, g.ti, w, false, seams, &mut shot.log);
                             }
+                            // P4.D-21: the owner's allocation opens before any inline landing of this group moves the slots.
+                            let deadly: i64 = shot.deadly_groups.iter().map(|d| d.0).sum();
+                            let mut alloc = if seams.tray_exact { open_alloc(&next, si, g.ti, gi, (w, deadly), tray) } else { None };
                             // Tray-exact S7: the table lands Takedown and Deadly INLINE per weapon
                             // (Takedown first, main.gd:4054-4067) and the pool at the volley's end.
-                            land_takedown_groups(&mut next, g.ti, shot);
+                            land_takedown_groups(&mut next, g.ti, shot, seams.takedown_pick);
                             // Audit 2026-09-13 §2.1 — Deadly lands PER MODEL
                             // with no carry-over (the table's
                             // `apply_deadly_wounds`, solo_controller.gd:8333):
                             // each unsaved wound ×X on the model with the most
                             // remaining wounds, capped there, surplus wasted.
                             for &(post, dx) in std::mem::take(&mut shot.deadly_groups).iter() {
-                                let d = land_deadly_wounds(&mut next, g.ti, post, dx, seams);
+                                let d = match alloc.as_mut() {
+                                    Some(a) => land_deadly_picked(&mut next, g.ti, post, dx, seams, a),
+                                    None => land_deadly_wounds(&mut next, g.ti, post, dx, seams),
+                                };
                                 shot.log.push(format!(
                                     "Deadly({dx}): {post} unsaved ×{dx}, no carry-over → {d} wounds dealt"));
                             }
                             if seams.tray_exact {
-                                land_pool_wounds(&mut next, g.ti, w, true, seams, &mut shot.log);
+                                let left = alloc.as_mut().map_or(w, |a| land_pool_picked(&mut next, g.ti, w, a, tray));
+                                land_pool_wounds(&mut next, g.ti, left, true, seams, &mut shot.log);
                             }
                             // One-core P3 step 25: at the landing's stamp, `_solo_apply_wounds`'s lines (main.gd:16582-16600):
                             // the wounds that landed on the chain, then per member the models it lost (main.gd:18376-18395, :25123).

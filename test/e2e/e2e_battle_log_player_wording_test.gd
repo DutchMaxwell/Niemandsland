@@ -151,8 +151,8 @@ func test_the_export_and_its_records_appendix_show_plain_player_text() -> void:
 	_assert_player_text("the export's decision-records appendix", Array(appendix.split("\n")))
 
 
-## The developer lane keeps every field: the raw records are untouched and the harness renderer
-## (tools/solo_selfplay.gd) still prints hash, timings and feature vectors.
+## The developer lane keeps every field: the raw records are untouched, so a developer renderer can still
+## print hash, timings and feature vectors.
 func test_the_developer_renderer_keeps_the_raw_fields() -> void:
 	var recs := _records()
 	assert_str(SoloController.render_decision(recs[0])).contains(HASH)

@@ -1,7 +1,7 @@
 extends RefCounted
 ## Off-board audit — the measurement seam for issue #215 (AI paths that leave the table).
 ##
-## Both AI harnesses (tools/solo_selfplay.gd, tools/arena_match.gd) run this over the REAL model
+## The AI harness (tools/arena_match.gd) runs this over the REAL model
 ## positions after a unit settled and emit ONE parseable battle-log line per offending unit. The
 ## line is the machine-readable contract consumed by tools/tactic_audit.py (detector d9), so the
 ## A/B measurement track can put a number on the defect instead of arguing about it:

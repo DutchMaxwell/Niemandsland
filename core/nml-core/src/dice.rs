@@ -112,7 +112,7 @@ impl Tray {
     /// instead of drawing. Past the last group it serves 1s and records where it
     /// first ran dry (`starved_at`) — the step API turns that into `NeedRoll`.
     pub fn supplied(groups: Vec<Vec<u8>>) -> Tray {
-        let feed = Feed { groups, next: 0, starved_at: None, mismatch: None, placed: None, placed_trails: None, kinds: Vec::new(), owners: Vec::new() };
+        let feed = Feed { groups, next: 0, starved_at: None, mismatch: None, placed: None, placed_trails: None, kinds: Vec::new(), owners: Vec::new(), wound_choices: Vec::new() };
         Tray { rng: GodotRng::new(0), feed: Some(feed), zero_draws: false, lines: Vec::new(), landings: Vec::new() }
     }
 
@@ -150,6 +150,25 @@ impl Tray {
         if let Some(feed) = self.feed.as_mut() {
             feed.owners.push((feed.next, unit));
         }
+    }
+
+    /// One-core P4.D-20: the transcript names a wound-allocation choice `id` (answered when `answer` is `Some`); one per
+    /// target group. A supplied tray keeps it; a seeded tray ignores the call, so every seeded path lands automatically as before.
+    pub fn offer_wound_alloc(&mut self, id: String, answer: Option<Vec<usize>>) {
+        if let Some(feed) = self.feed.as_mut() {
+            feed.wound_choices.push(WoundChoice { id, answer, reached: None, bad: None });
+        }
+    }
+
+    /// One-core P4.D-20: a group's pool landing reaches choice `id` with the target's living capture slots `options`.
+    /// `Some(slots)` = the owner's valid answer, to land first; `None` = automatic (nothing offered for this id, an
+    /// unanswered ask, or an answer with a slot outside `options`, kept as `bad`). The step API reads `reached`.
+    pub fn wound_alloc(&mut self, id: &str, options: Vec<usize>, owner: &str) -> Option<Vec<usize>> {
+        let feed = self.feed.as_mut()?;
+        let c = feed.wound_choices.iter_mut().find(|c| c.id == id)?;
+        c.reached = Some((feed.next, options.clone(), owner.to_string()));
+        c.bad = c.answer.as_ref().and_then(|a| a.iter().find(|s| !options.contains(s)).copied());
+        c.answer.clone().filter(|_| c.bad.is_none())
     }
 
     /// The supplied placement, if any (`None` on every seeded tray).
@@ -224,6 +243,19 @@ pub struct Feed {
     kinds: Vec<(usize, &'static str)>,
     /// One-core P4 step 4.0-9: (draw, the drawing unit) from `Tray::owner_next`.
     owners: Vec<(usize, Option<usize>)>,
+    /// One-core P4.D-20/21: the transcript's wound-allocation choices, one per id (`Tray::offer_wound_alloc`).
+    pub wound_choices: Vec<WoundChoice>,
+}
+
+/// One-core P4.D-20: the step API's wound-allocation choice as the volley's landing sees it. `answer` = the
+/// owner's ordered capture slots (`None` = only asked). `reached` = (draws so far, options, owner) once a group's
+/// landing came to it; `bad` = the first answered slot that is no option.
+#[derive(Debug, Clone)]
+pub struct WoundChoice {
+    pub id: String,
+    pub answer: Option<Vec<usize>>,
+    pub reached: Option<(usize, Vec<usize>, String)>,
+    pub bad: Option<usize>,
 }
 
 impl Feed {

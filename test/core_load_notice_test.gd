@@ -10,7 +10,7 @@ func test_boot_line_when_the_core_loaded() -> void:
 
 func test_boot_line_when_the_core_is_missing() -> void:
 	assert_str(CoreLoadNotice.boot_line(false)).is_equal(
-		"core: NmlCore NOT loaded - the decision tree plays; reinstall the game")
+		"core: NmlCore NOT loaded - solo and Automatic play are off; reinstall the game")
 
 
 func test_should_show_only_on_an_exported_build_without_the_core() -> void:
