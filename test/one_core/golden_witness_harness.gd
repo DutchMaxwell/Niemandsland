@@ -48,6 +48,18 @@ const RUNNER_AI_SHOOTING := "ai_shooting"
 const DANGEROUS_FAMILY := "dangerous"
 const DANGEROUS_FIXTURE_PATH := "res://test/fixtures/one_core/golden_dangerous.json"
 const RUNNER_AI_DANGEROUS := "ai_dangerous"
+## The AI's volley into a HUMAN unit whose owner has a wound-allocation choice (a Tough model, or two loadouts): the #172
+## prompt opens, and the case either answers it with a right-click (auto) or clicks model slots first. Runner
+## "ai_into_human"; the volley awaits the human's save card and the click prompt, so a Timer pump answers both.
+const MIXED_FAMILY := "mixed_kit"
+const MIXED_FIXTURE_PATH := "res://test/fixtures/one_core/golden_mixed_kit.json"
+const RUNNER_AI_INTO_HUMAN := "ai_into_human"
+## Rolls of the volley before the wounds land: the to-hit batch and the defender's save batch. The click prompt needs
+## _solo_batch false, the batch tray needs it true, so the flag drops after this many rolls and returns with the
+## first pick (the pattern of test/e2e/e2e_volley_morale_test.gd).
+const ROLLS_BEFORE_WOUNDS := 2
+## Seeds whose volley lands at least two wounds on the defender (seed 101 lands none, so no prompt would open).
+const PROMPT_SEEDS: Array[int] = [0, 17, 49, 225, 3, 7, 512, 999]
 const RUNNER_HUMAN_SPLIT := "human_split"
 ## Eight seeds for the door grids: the four of the volley grid plus four more, so a rare shape (no hit, all saved,
 ## a wipe) is more likely to be recorded than guessed.
@@ -199,6 +211,25 @@ static func dangerous_scenarios() -> Array:
 	]
 
 
+## The prompt grid: 20 Rifle shots (2 attacks per model) at a human 10-model defender, so a volley lands several wounds.
+## `mixed`: five Rifle bearers and five "Plasma Stub" bearers (two loadouts, every model Tough 1); `tough`: one loadout,
+## every model Tough(3). Each shape is answered two ways: `auto` (right-click at once) and `click` (the owner clicks
+## the model slots in "clicks" one wound each, then right-clicks the rest). The table's own casualty pick takes the
+## edge models first (slots 0, 9, 1, ...), so the clicks go to middle slots: a click run cannot equal an auto run.
+static func mixed_scenarios() -> Array:
+	var att := _with(ATTACKER, {"player": 2})
+	var rifle := _with(RIFLE, {"attacks": 2})
+	var human := _with(DEFENDER, {"player": 1})
+	var out: Array = []
+	for shape in [["mixed", human], ["tough", _with(human, {"tough": 3})]]:
+		for variant in [["auto", []], ["click", [4, 5]]]:
+			out.append({"name": "%s_%s" % [shape[0], variant[0]], "runner": RUNNER_AI_INTO_HUMAN,
+				"note": "%s defender, the owner answers the #172 prompt: %s" % [shape[0], variant[0]],
+				"weapon": rifle, "attacker": att, "defender": shape[1], "shape": shape[0],
+				"clicks": variant[1], "seeds": PROMPT_SEEDS})
+	return out
+
+
 static func _weapon(rules: Array) -> Dictionary:
 	return _with(RIFLE, {"rules": rules})
 
@@ -236,6 +267,8 @@ static func capture(main: Node, family: String = FAMILY) -> Dictionary:
 		return await capture_grid(main, SPLIT_FAMILY, split_scenarios())
 	if family == DANGEROUS_FAMILY:
 		return await capture_grid(main, DANGEROUS_FAMILY, dangerous_scenarios())
+	if family == MIXED_FAMILY:
+		return await capture_grid(main, MIXED_FAMILY, mixed_scenarios())
 	var out := {"schema": SCHEMA, "family": FAMILY, "provenance": provenance(), "cases": []}
 	for sc in scenarios():
 		for seed in SEEDS:
@@ -301,6 +334,8 @@ static func _run_case(main: Node, sc: Dictionary, seed: int) -> Dictionary:
 			return await _run_split_case(main, sc, seed)
 		RUNNER_AI_DANGEROUS:
 			return await _run_dangerous_case(main, sc, seed)
+		RUNNER_AI_INTO_HUMAN:
+			return await _run_into_human_case(main, sc, seed)
 	return {"scenario": str(sc["name"]), "seed": seed, "error": "unknown runner %s" % runner}
 
 
@@ -428,6 +463,76 @@ static func _run_dangerous_case(main: Node, sc: Dictionary, seed: int) -> Dictio
 	if not lines.any(func(l: Variant) -> bool: return str(l).contains("Dangerous terrain test")):
 		rec = {"scenario": str(sc["name"]), "seed": seed, "error": "no Dangerous line was logged (dice %d)" % dice}
 	_unpaint_cover(main, painted)
+	_free_units(main, [att, dfn])
+	await main.get_tree().process_frame
+	return rec
+
+
+## One prompt scenario x seed: the AI attacker's volley through main._solo_resolve_ai_volley at the human defender, with
+## a Timer pump standing in for the player: it presses OK on the "Incoming fire!" save card and answers the wound-
+## allocation prompt (clicks first, then a right-click for the rest). The case errors if the prompt never opened.
+static func _run_into_human_case(main: Node, sc: Dictionary, seed: int) -> Dictionary:
+	var weapon: Dictionary = (sc["weapon"] as Dictionary).duplicate(true)
+	var att := ParityTable._make_unit(main, sc["attacker"], weapon)
+	var dfn := ParityTable._make_unit(main, sc["defender"], {})
+	for i in dfn.models.size():
+		var m := dfn.models[i] as ModelInstance
+		m.model_index = i
+		var kit := "Rifle" if (str(sc["shape"]) == "tough" or i < dfn.models.size() / 2) else "Plasma Stub"
+		m.properties["weapons"] = [{"name": kit}]
+	main.seed_tray_rng(seed)
+	var dist_in := float((sc["defender"] as Dictionary)["x_in"]) - float((sc["attacker"] as Dictionary)["x_in"])
+	var wobj: OPRApiClient.OPRWeapon = (att.source_data as OPRApiClient.OPRUnit).weapons[0]
+	var shots: Array = []
+	for p in AiEv.stamp_sergeant(AiShooting.profiles_in_range([wobj], dist_in), att):
+		shots.append({"member": att, "quality": int((sc["attacker"] as Dictionary)["quality"]),
+			"alive": att.get_alive_count(), "max": att.models.size(), "reach": float(weapon["range_in"]),
+			"profile": p})
+	var st := {"rolls": 0, "ticks": 0, "opened": 0, "fed": 0, "clicks": (sc["clicks"] as Array).duplicate()}
+	var on_roll := func(_total: int) -> void:
+		st["rolls"] += 1
+		if st["rolls"] == ROLLS_BEFORE_WOUNDS:
+			main._solo_batch = false
+	var pump := Timer.new()
+	pump.wait_time = 0.02
+	var on_tick := func() -> void:
+		for c in main.get_children():
+			var card := c as PromptCard
+			if card != null and card.title == "Incoming fire!":
+				card.ok_button.pressed.emit()
+		var prompt: Dictionary = main._solo_model_pick
+		if prompt.is_empty():
+			return
+		var outcome: Array = prompt["outcome"]
+		st["opened"] = 1
+		if not outcome.is_empty():
+			return   # the previous pick has not been applied yet - one at a time
+		st["ticks"] += 1
+		if st["ticks"] > 250 or (st["clicks"] as Array).is_empty():
+			outcome.append({})   # right-click: the rest goes to the auto path (also the deadlock guard)
+		else:
+			outcome.append({"unit": dfn, "index": int((st["clicks"] as Array).pop_front())})
+		st["fed"] += 1
+		if int(st["fed"]) == 1:
+			main._solo_batch = true   # the morale die after the landing needs the batch tray again
+	pump.timeout.connect(on_tick)
+	main.add_child(pump)
+	pump.start()
+	main.dice_roller_control.roll_finnished.connect(on_roll)
+	var lines: Array = []
+	var tap := _line_tap(lines)
+	main.battle_log.entry_added.connect(tap)
+	await main._solo_resolve_ai_volley(att, dfn, shots)
+	main.battle_log.entry_added.disconnect(tap)
+	main.dice_roller_control.roll_finnished.disconnect(on_roll)
+	pump.queue_free()
+	main._solo_batch = true
+	var rec := {"scenario": str(sc["name"]), "seed": seed, "epoch": AiActRecorder.rules_epoch,
+		"lines": lines, "final": _final([att, dfn]), "rng": _rng_state(main),
+		"extra": {"prompt_opened": str(st["opened"]), "picks_fed": str(st["fed"])}}
+	if int(st["opened"]) == 0:
+		rec = {"scenario": str(sc["name"]), "seed": seed,
+			"error": "the wound-allocation prompt never opened (rolls %d)" % int(st["rolls"])}
 	_free_units(main, [att, dfn])
 	await main.get_tree().process_frame
 	return rec
@@ -621,6 +726,8 @@ static func fixture_path(family: String = FAMILY) -> String:
 		return SPLIT_FIXTURE_PATH
 	if family == DANGEROUS_FAMILY:
 		return DANGEROUS_FIXTURE_PATH
+	if family == MIXED_FAMILY:
+		return MIXED_FIXTURE_PATH
 	return FIXTURE_PATH
 
 
