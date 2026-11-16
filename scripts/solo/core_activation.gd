@@ -33,6 +33,28 @@ static func applies(main) -> bool:
 		and (not main.solo_ai_slots.is_empty() or main._online_turn_room())
 
 
+## P4.0-6: the per-choice switch. A choice id's prefix (`takedown_model:<shooter>:<target>`) names its
+## switch; a switch is ON only for `NML_ONE_CORE_CHOICE_<PREFIX>` = "1"/"on", so OFF is the default and the
+## core's automatic pick resolves exactly as before this step. Tests set the entry per kind.
+const CHOICE_KINDS := ["takedown_model"]
+static var _choice_on: Dictionary = {}
+
+
+static func choice_enabled(id: String) -> bool:
+	var kind := id.get_slice(":", 0)
+	if not _choice_on.has(kind):
+		var raw := OS.get_environment("NML_ONE_CORE_CHOICE_%s" % kind.to_upper()).to_lower()
+		_choice_on[kind] = raw == "1" or raw == "on"
+	return bool(_choice_on[kind])
+
+
+static func any_choice_enabled() -> bool:
+	for kind in CHOICE_KINDS:
+		if choice_enabled(str(kind)):
+			return true
+	return false
+
+
 ## No unit rule, no attachment, no weapon rule: the volley the core resolves exactly as the table does.
 static func is_plain(gu: GameUnit) -> bool:
 	if not (gu.unit_properties.get("special_rules", []) as Array).is_empty() \
@@ -127,6 +149,41 @@ const CAP_ADVANCE := 1
 const CAP_RUSH := 2
 const CAP_CHARGE := 3
 const METERS_TO_INCHES := 39.3701
+
+
+## P4.0-6: the choice the step API will open for this activation, as its stable id, or "". Only a choice
+## whose switch is ON is built, and only when the table can see what the core's `takedown_choice` sees (a
+## Takedown shooting profile on the actor, 2+ living models on the shot's target): the probe can never ask
+## for a choice the core would not open. An empty answer means "no probe", i.e. the automatic pick.
+static func pending_choice(main, unit: GameUnit, transcript: Array) -> String:
+	if not any_choice_enabled():
+		return ""
+	for i in range(transcript.size() - 1, -1, -1):
+		var e: Dictionary = transcript[i]
+		if str(e.get("t", "")) != "intent":
+			continue
+		var target = main.opr_army_manager.game_units.get(str(e.get("shoot", "")))
+		if not target is GameUnit or not choice_enabled("takedown_model") \
+				or (target as GameUnit).get_alive_models().size() < 2 or not _takedown_weapon(unit):
+			return ""
+		return "takedown_model:%s:%s" % [unit.unit_id, (target as GameUnit).unit_id]
+	return ""
+
+
+## Whether `unit` carries a Takedown shooting profile — the core's `ShootProfile.takedown` is stamped from
+## the same weapon entries (`weapon_has(w, "Takedown")`).
+static func _takedown_weapon(unit: GameUnit) -> bool:
+	var src := unit.source_data as OPRApiClient.OPRUnit
+	for w in src.weapons if src != null else []:
+		for r in (w as OPRApiClient.OPRWeapon).special_rules:
+			if GameUnit.rule_name_matches(str(r), "Takedown"):
+				return true
+	return false
+
+
+## The sentence the fallback line and the owner's request use for a choice id.
+static func choice_purpose(id: String) -> String:
+	return "Takedown model pick" if id.get_slice(":", 0) == "takedown_model" else "choice"
 
 
 ## One activation through the core: ask, print the lines not printed yet, land, throw on the owner's tray, ask again.
@@ -582,6 +639,22 @@ static func land_delta(main, delta: Array, start_models: Array, done: Dictionary
 		_land_ledger(main, gu, d)
 		_land_stamps(main, gu, d)
 		_land_pools(main, gu, d)
+		_land_versatile_mode(main, gu, d)
+
+
+## P4.0-4g: the latched Versatile pick the delta now carries (inventory class (a)). The table holds it as the
+## Dictionary `versatile_pick` (`{"hit_mod": int, "ap": int}`), the shape the old path's own writer stores, so the
+## core's int mode maps onto it. A difference is a core/table split (reported); mode 0 means "no pick", nothing lands.
+static func _land_versatile_mode(main, gu: GameUnit, d: Dictionary) -> void:
+	var mode := int(d.get("versatile_pick_mode", 0))
+	if mode == 0:
+		return
+	var vm := {"hit_mod": 1, "ap": 0} if mode == 1 else {"hit_mod": 0, "ap": 1}
+	var was: Dictionary = gu.unit_properties.get("versatile_pick", {})
+	if was == vm:
+		return
+	push_error("CoreActivation.land_delta: %s.versatile_pick differs (table %s, core %s)" % [gu.get_name(), str(was), str(vm)])
+	main._sync_unit_property(gu, "versatile_pick", vm)
 
 
 ## P4.0-4e: the `State` field names whose table property is spelled differently (every other stamp is 1:1).
@@ -670,6 +743,8 @@ static func open_session(main, gu: GameUnit) -> bool:
 	for u in [gu] + gu.get_attached_heroes():   # step 32: each moved_round before the Start (null = none), for the reset
 		s["moved_before"][u.unit_id] = u.unit_properties.get("moved_round")
 	_sessions[gu.unit_id] = s
+	if main.save_manager != null:
+		main.save_manager.note_activation_start(gu.get_name())   # P4.0-7 (D5): what a mid-step save stores
 	last_target = null   # step 50: a new activation never inherits the target of a cancelled one
 	if on_move_path(main, gu):   # step 31 (O1/O2): every activation of a move-path unit starts on Advance
 		main.object_manager.set_movement_cap(CAP_ADVANCE)
@@ -715,6 +790,8 @@ static func close_session(main, unit_id: String) -> void:
 	if core != null:
 		core.release(int(_sessions[unit_id]["handle"]))
 	_sessions.erase(unit_id)
+	if main != null and main.save_manager != null:
+		main.save_manager.note_activation_end()   # P4.0-7 (D5): an ended activation saves as the table stands
 	if main != null:
 		main._refresh_movement_cap_row()   # step 31: an ended unit shows Off again
 	_refresh_card(main)
@@ -1031,6 +1108,8 @@ static func start_rows(gu: GameUnit) -> Array:
 static func reset_all(main) -> void:
 	for id in _sessions.keys():
 		close_session(main, id)
+	if main != null and main.save_manager != null:
+		main.save_manager.note_activation_end()   # P4.0-7 (D5): a reset (a load) ends the activation on the save side too
 	_announced.clear()
 	_ending.clear()   # step 69
 	last_target = null

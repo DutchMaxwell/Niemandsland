@@ -463,6 +463,29 @@ func test_land_delta_lands_the_marker_pools() -> void:
 	assert_bool(u.unit_properties.has("spot_markers")).override_failure_message("an equal pool wrote nothing").is_false()
 
 
+## P4.0-4g: a core-resolved Versatile activation lands the pick on the table exactly as the old path holds it —
+## the `versatile_pick` Dictionary `{"hit_mod", "ap"}` the table's own latch writer stores — so the old path's
+## reader returns the core's pick and the round stamp gates it. RED when the delta drops `versatile_pick_mode`:
+## the core picks, the table never gets the key, the reader returns {}.
+func test_a_core_versatile_activation_lands_the_pick_the_old_path_reads() -> void:
+	var units := _volley_units()
+	var att: GameUnit = units[0]
+	att.unit_properties["special_rules"].append("Versatile Attack")
+	_main.seed_tray_rng(7)
+	var t: Array = [{"t": "begin"}, {"t": "intent", "kind": AiDecision.Action.HOLD, "shoot": units[1].unit_id}]
+	var r: Dictionary = await CoreActivation.drive(_main, CoreActivation.capture(_main), att, t, true)
+	assert_str(str(r["step"])).is_equal("done")
+	var row := {}
+	for e in r.get("delta", []):
+		row = e if str(e["unit"]) == att.unit_id else row
+	var mode := int(row.get("versatile_pick_mode", 0))
+	assert_int(mode).override_failure_message("the core picked a mode: %s" % [r.get("delta", [])]).is_greater(0)
+	var want := {"hit_mod": 1, "ap": 0} if mode == 1 else {"hit_mod": 0, "ap": 1}
+	assert_dict(att.unit_properties.get("versatile_pick", {})).override_failure_message("the table's key/shape").is_equal(want)
+	assert_dict(_main._solo_versatile_latch_read(att)).override_failure_message("the old path's reader").is_equal(want)
+	assert_int(int(att.unit_properties.get("versatile_pick_round", -1))).is_equal(1)
+
+
 ## Step 42 (O21): the AI's volley at this table's human unit shows the table's "Incoming fire!" card before the save dice
 ## (the text names the shooter, the target, the hits and the weapon); answering it lets the volley finish. RED without the
 ## card in the driver: the volley runs through, no card.

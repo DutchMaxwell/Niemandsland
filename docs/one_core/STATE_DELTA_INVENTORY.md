@@ -86,7 +86,7 @@ same commit as the struct change.
 | `reckless_ap_round` | main.gd:24502 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
 | `reckless_backfire_round` | main.gd:24507 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
 | `versatile_pick_round` | main.gd:15462 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
-| `versatile_pick_mode` | main.gd:15471 | no | no | **YES** |
+| `versatile_pick_mode` | main.gd:15471 | yes (`land_delta`, P4.0-4g) | no | no (delta) |
 | `retreating_strike_round` | main.gd:8888 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
 | `mind_control_moved_round` | main.gd:24569 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
 | `growth_markers` | main.gd:24962 | no | no | **YES** |
@@ -113,17 +113,17 @@ same commit as the struct change.
 
 ## Summary
 
-- 79 `State` fields; **18 gap rows** (P4.0-4d landed `fatigued` and `casts`; P4.0-4e the twelve round
-  stamps; P4.0-4f the four marker pools, -18).
+- 79 `State` fields; **17 gap rows** (P4.0-4d landed `fatigued` and `casts`; P4.0-4e the twelve round
+  stamps; P4.0-4f the four marker pools; P4.0-4g `versatile_pick_mode`, -19).
 - No gap among the board facts an activation moves: model wounds, deaths and positions ride the
   per-step landings, `shaken` rides `delta_of`, `activated` and `shaken` ride the MP rows.
 - Every remaining gap is a once-per-game latch the dice path reads again later: the live buff ledger
   and the once-per-game flags (`second_wind_used`, the Limited / Storm / feat / Precision name lists,
   `piercing_tag_used`, `surprise_attack_used`, `reinforcement_used`, `teleport_used`,
-  `piercing_tag_persistent`), plus `growth_markers` / `growth_round` (per-rule keys) and
-  `versatile_pick_mode` (a Dictionary on the table). The delta stops at `shaken`, the ledger, the
-  round stamps and the pools, and the MP rows compare only activation, Shaken and per-model
-  wounds/life/XZ — so a table and the core can disagree on any of these without a local or MP signal.
+  `piercing_tag_persistent`), plus `growth_markers` / `growth_round` (per-rule keys). The delta stops
+  at `shaken`, the ledger, the round stamps, the pools and the Versatile pick, and the MP rows compare
+  only activation, Shaken and per-model wounds/life/XZ — so a table and the core can disagree on any of
+  these without a local or MP signal.
 
 ## Classification (One core P4.0-4a)
 
@@ -158,7 +158,7 @@ and the `buffs` spend (`sim.rs:10594`).
 | (a) | `reckless_ap_round` | `sim.rs:2353` (Reckless branch); `main.gd:24502`; table writer runs |
 | (a) | `reckless_backfire_round` | `sim.rs:2354` (Reckless branch); `main.gd:24507`; table writer runs |
 | (a) | `versatile_pick_round` | `sim.rs:8220` (Versatile branch); `main.gd:15462`; table writer runs |
-| (a) | `versatile_pick_mode` | `sim.rs:8221` (Versatile branch); `main.gd:15471`; table writer runs |
+| (a) | `versatile_pick_mode` | `sim.rs:8221` (Versatile branch); `main.gd:15471`; table writer runs; P4.0-4g lands the int mode onto the table's `versatile_pick` Dictionary |
 | (a) | `retreating_strike_round` | `sim.rs:3081` (Retreating Strike branch); `main.gd:8888`; table writer runs |
 | (a) | `mind_control_moved_round` | `sim.rs:2175` (Mind Control branch, `EPOCH_73_V36`); `main.gd:24569`; table writer runs |
 | (a) | `growth_markers` | `sim.rs:4253,4268` (Growth branch); `main.gd:24962`; table writer runs |
