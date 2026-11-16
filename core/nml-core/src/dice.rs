@@ -112,7 +112,7 @@ impl Tray {
     /// instead of drawing. Past the last group it serves 1s and records where it
     /// first ran dry (`starved_at`) — the step API turns that into `NeedRoll`.
     pub fn supplied(groups: Vec<Vec<u8>>) -> Tray {
-        let feed = Feed { groups, next: 0, starved_at: None, mismatch: None, placed: None, placed_trails: None, kinds: Vec::new(), owners: Vec::new(), wound_choice: None };
+        let feed = Feed { groups, next: 0, starved_at: None, mismatch: None, placed: None, placed_trails: None, kinds: Vec::new(), owners: Vec::new(), wound_choices: Vec::new() };
         Tray { rng: GodotRng::new(0), feed: Some(feed), zero_draws: false, lines: Vec::new(), landings: Vec::new() }
     }
 
@@ -152,11 +152,11 @@ impl Tray {
         }
     }
 
-    /// One-core P4.D-20: the transcript names a wound-allocation choice `id` (answered when `answer` is `Some`). A supplied
-    /// tray keeps it; a seeded tray ignores the call, so every seeded path lands automatically as before.
+    /// One-core P4.D-20: the transcript names a wound-allocation choice `id` (answered when `answer` is `Some`); one per
+    /// target group. A supplied tray keeps it; a seeded tray ignores the call, so every seeded path lands automatically as before.
     pub fn offer_wound_alloc(&mut self, id: String, answer: Option<Vec<usize>>) {
         if let Some(feed) = self.feed.as_mut() {
-            feed.wound_choice = Some(WoundChoice { id, answer, reached: None, bad: None });
+            feed.wound_choices.push(WoundChoice { id, answer, reached: None, bad: None });
         }
     }
 
@@ -165,7 +165,7 @@ impl Tray {
     /// unanswered ask, or an answer with a slot outside `options`, kept as `bad`). The step API reads `reached`.
     pub fn wound_alloc(&mut self, id: &str, options: Vec<usize>, owner: &str) -> Option<Vec<usize>> {
         let feed = self.feed.as_mut()?;
-        let c = feed.wound_choice.as_mut().filter(|c| c.id == id)?;
+        let c = feed.wound_choices.iter_mut().find(|c| c.id == id)?;
         c.reached = Some((feed.next, options.clone(), owner.to_string()));
         c.bad = c.answer.as_ref().and_then(|a| a.iter().find(|s| !options.contains(s)).copied());
         c.answer.clone().filter(|_| c.bad.is_none())
@@ -243,8 +243,8 @@ pub struct Feed {
     kinds: Vec<(usize, &'static str)>,
     /// One-core P4 step 4.0-9: (draw, the drawing unit) from `Tray::owner_next`.
     owners: Vec<(usize, Option<usize>)>,
-    /// One-core P4.D-20: the transcript's wound-allocation choice (`Tray::offer_wound_alloc`).
-    pub wound_choice: Option<WoundChoice>,
+    /// One-core P4.D-20/21: the transcript's wound-allocation choices, one per id (`Tray::offer_wound_alloc`).
+    pub wound_choices: Vec<WoundChoice>,
 }
 
 /// One-core P4.D-20: the step API's wound-allocation choice as the volley's landing sees it. `answer` = the
