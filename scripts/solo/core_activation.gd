@@ -302,6 +302,14 @@ static func _record_shots(main, unit: GameUnit, target: GameUnit, shots: Array, 
 	return rolling if not rolling.is_empty() else shots
 
 
+## P4.D-30b1: the Piercing Tag pool of the target. The core spent its own copy (and applied the +AP), so the table's
+## pool never moved and the spend line was never written. The table's own spend, once per volley, at the volley's first
+## hit roll (a refusal never gets here, so the table's volley after it cannot spend twice): the pool, the sync and the line.
+## The AP it returns is not used: the core's volley carries it.
+static func _spend_tag(main, target: GameUnit) -> void:
+	main._solo_spend_piercing_tag(target)
+
+
 ## Step 42b: the table's show around an AI volley (_solo_resolve_ai_volley's calls in its order) on the core's steps:
 ## at the first hit roll the announce (the core says its line), the fan and the Declaration beat; a tracer before each
 ## hit roll (`shots`: the shots that roll, in the table's order); a weapon's hit strip and beat after its saves, or at
@@ -312,6 +320,7 @@ static func _present(main, unit: GameUnit, target: GameUnit, shots: Array, st: D
 	var kind := str(a.get("kind", ""))
 	# Step 42c-2: the rows at the first hit roll, or at the end; never at a refusal (the table then writes them).
 	if not st.has("rolling") and (ev == "done" or (ev == "throw" and kind == "attack")):
+		_spend_tag(main, target)
 		st["rolling"] = _record_shots(main, unit, target, shots, st["moved"])
 	shots = st.get("rolling", shots)
 	var n: int = st["n"]
@@ -377,6 +386,9 @@ static func _human_shots(main, unit: GameUnit, target: GameUnit) -> Array:
 static func _present_human(main, unit: GameUnit, target: GameUnit, shots: Array, st: Dictionary, ev: String, a: Dictionary,
 		faces: Array) -> void:
 	var kind := str(a.get("kind", ""))
+	if not st.has("tagged") and (ev == "done" or (ev == "throw" and kind == "attack")):
+		st["tagged"] = true
+		_spend_tag(main, target)
 	var n: int = st["n"]
 	var prev := str((shots[clampi(n - 1, 0, shots.size() - 1)]["profile"] as Dictionary).get("name", "weapon"))
 	if ev == "throw" and kind == "attack":
