@@ -226,6 +226,10 @@ const EPOCH_75_TABLE_FIXES := 75
 ## (`SoloController.move_bands_for_unit`); the core spends the Great Musician +1" with the buffed unit's next move.
 ## Records stamped 75 or below replay with the old readings.
 const EPOCH_76_MOVE_FIXES := 76
+## The core's frozen `EPOCH_77_CHARGE_CAP` (acts.rs, #183): from it no charging model's retraced trail outruns its
+## 12" (or 6" difficult) band (`SoloController.charge_cap_on`), in the execution and in the declaration probe.
+## Records stamped 76 or below replay the uncapped charge trails.
+const EPOCH_77_CHARGE_CAP := 77
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000
