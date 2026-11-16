@@ -100,7 +100,7 @@ func test_a_step_over_3in_logs_an_impassable_warning() -> void:
 	var log_node: BattleLog = auto_free(BattleLog.new())
 	main.battle_log = log_node
 	(f["army"] as OPRArmyManager).start_game()
-	main._on_battle_log_dropped([{"node": f["model"], "inches": 6.0, "arc_in": 6.0, "climb_in": 6.0}])
+	main._on_battle_log_dropped([{"node": f["model"], "inches": 6.0, "arc_in": 6.0, "climb_in": 6.0, "max_step_in": 6.0}])
 	var texts: Array = []
 	for e in log_node.entries():
 		texts.append(str(e["text"]))
@@ -120,3 +120,48 @@ func test_placement_drop_logs_no_climb_verdict() -> void:
 	for e in log_node.entries():
 		assert_str(str(e["text"])).not_contains("impassable")
 		assert_str(str(e["text"])).not_contains("climbs")
+
+
+func _dropped_texts(f: Dictionary, moves: Array) -> Array:
+	var main := f["main"] as Node3D
+	var log_node: BattleLog = auto_free(BattleLog.new())
+	main.battle_log = log_node
+	(f["army"] as OPRArmyManager).start_game()
+	main._on_battle_log_dropped(moves)
+	var texts: Array = []
+	for e in log_node.entries():
+		texts.append(str(e["text"]))
+	return texts
+
+
+func test_two_hops_of_a_2_5in_piece_are_not_impassable() -> void:
+	# GF 3.6 (Climbable terrain): a piece up to 3" tall may be climbed. One crossing of a 2.5"
+	# container is 2.5" up plus 2.5" down = 5.0" of climb COST, but its biggest single step is
+	# 2.5" - legal. The cost still reaches the movement line; only the verdict must stay silent.
+	var f := _fixture()
+	var texts := _dropped_texts(f, [{"node": f["model"], "inches": 6.0, "arc_in": 6.0,
+			"climb_in": 5.0, "max_step_in": 2.5}])
+	for t in texts:
+		assert_str(str(t)).not_contains("impassable")
+	assert_bool(texts.any(func(t): return str(t).contains("incl. 5.0\" climb"))).is_true()
+
+
+func test_a_single_step_over_3in_is_impassable_whatever_the_sum() -> void:
+	# Partner of the test above (proves the verdict can still fire): the same drop with a 3.5"
+	# biggest step is flagged, and the line names that step, not the 7.0" cost.
+	var f := _fixture()
+	var texts := _dropped_texts(f, [{"node": f["model"], "inches": 6.0, "arc_in": 6.0,
+			"climb_in": 7.0, "max_step_in": 3.5}])
+	assert_array(texts).contains(["Own Unit climbs 3.5\" — over 3\", impassable (%s)" % OPRApiClient.rules_cite(RulesRegistry.DEFAULT_SYSTEM)])
+
+
+func test_the_biggest_step_of_any_model_decides_not_the_longest_mover() -> void:
+	# Two models of one unit: the longer mover only hops 2.5", the shorter one climbs a 3.5" step.
+	# The verdict must see the 3.5" step even though it is not the max-arc model's.
+	var f := _fixture()
+	var second: Node3D = auto_free(Node3D.new())
+	second.set_meta("game_unit", f["unit"])
+	var texts := _dropped_texts(f, [
+		{"node": f["model"], "inches": 6.0, "arc_in": 6.0, "climb_in": 5.0, "max_step_in": 2.5},
+		{"node": second, "inches": 3.0, "arc_in": 3.0, "climb_in": 3.5, "max_step_in": 3.5}])
+	assert_array(texts).contains(["Own Unit climbs 3.5\" — over 3\", impassable (%s)" % OPRApiClient.rules_cite(RulesRegistry.DEFAULT_SYSTEM)])
