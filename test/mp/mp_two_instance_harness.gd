@@ -37,6 +37,12 @@ const FEAT_FLAG_PREFIXES := ["shot_feat_used_", "ignore_feat_used_", "speed_feat
 ## One unit a side: the guest's activation is the LAST of round 1, so the host ends the round on its activation fact.
 const OC_SPECS := [["mp2_oc_h1", 1, "Core Host", Vector3(-0.30, 0.0, 0.10)], ["mp2_oc_g1", 2, "Core Guest", Vector3(0.30, 0.0, 0.10)]]
 
+## P4.D-25 (--one-core): a host shooter (2 attacks at 2+) and a guest-owned defender (three plain models, two loadouts, a 6+
+## save): the volley's wound allocation is the guest's to answer. Spawned on both peers by `setup_wound_alloc`. The defender
+## carries no unit rule, so the core door takes it (the slice refuses Tough for now): mixed loadouts are its choice.
+const WA_SHOOTER := "mp2_wa_h"
+const WA_DEFENDER := "mp2_wa_g"
+
 var _args: Dictionary = {}
 var _main: Node = null
 var _role := "host"
@@ -70,6 +76,8 @@ var _auto_goal := Vector3.ZERO     # 1.8f: the table point the guest's Advance a
 var _protect_done: Dictionary = {}  # MP1: unit id -> wounds left after its once-per-game ignore roll
 var _tray_rolls: Array = []       # 3.5: every roll this tray showed, "local: <purpose>" / "remote: <purpose>"
 var _oc_received: Dictionary = {}   # step 54: digest-check command types this table received, type -> count
+var _wa_armed := false              # P4.D-25: the guest's batch dice are switched off once its defence roll is in
+var _wa_prompt := {"opened": 0, "clicks": 0}   # P4.D-25: the guest's wound prompt: opened, scripted clicks fed
 
 
 func _ready() -> void:
@@ -325,6 +333,14 @@ func _run_command(seq: int, action: String, payload: Dictionary) -> void:
 		await _activate(str(payload.get("unit", "")), int(payload.get("slot", 0)))
 	elif action == "one_core_activate_move_end":
 		ok = await _one_core_activate_move_end(_unit(str(payload.get("unit", ""))))
+	elif action == "setup_wound_alloc":
+		ok = _setup_wound_alloc()
+	elif action == "one_core_shoot":
+		ok = _require_role("host", action) and await _one_core_shoot(_unit(str(payload.get("unit", ""))), _unit(str(payload.get("target", ""))))
+	elif action == "answer_wound_prompt":
+		ok = _require_role("guest", action)   # the guest's real click answers the choice: fire-and-forget, the volley waits for it
+		if ok:
+			_feed_wound_clicks(payload.get("clicks", []))
 	elif action == "plant_desync":
 		# Step 54: the host's copy of the guest unit loses a model's wound and gains a wrong Activated flag, nothing on the
 		# wire (round 2: nobody has activated yet).
@@ -715,6 +731,76 @@ func _one_core_activate_move_end(unit: GameUnit) -> bool:
 	return unit.is_activated
 
 
+## P4.D-25: the shooter and the defender, spawned alike on both peers (as the fixture does). The guest's saves roll without the
+## card, and its batch dice go off once its defence roll is in: the choice that follows is answered by a click (the prompt is
+## never opened under batch), the roll before it stays the seeded batch roll.
+func _setup_wound_alloc() -> bool:
+	var specs := [[WA_SHOOTER, 1, "Wound Host", Vector3(-0.20, 0.0, 0.35), 9400, 2], [WA_DEFENDER, 2, "Wound Guest", Vector3(0.10, 0.0, 0.35), 9410, 3]]
+	for spec in specs:
+		var unit := _spawn_unit(str(spec[0]), int(spec[1]), str(spec[2]), spec[3], int(spec[4]), int(spec[5]))
+		if unit == null:
+			return false
+		var rifle := OPRApiClient.OPRWeapon.new()
+		rifle.name = "Core Rifle"
+		rifle.range_value = 24
+		rifle.attacks = 2
+		unit.source_type = "opr"
+		unit.source_data = OPRApiClient.OPRUnit.new()
+		(unit.source_data as OPRApiClient.OPRUnit).weapons.assign([rifle])
+		unit.unit_properties.merge({"game_system": "gf", "faction_folder": "robot_legions"}, true)
+		if int(spec[1]) == 1:
+			unit.unit_properties["quality"] = 2
+		else:
+			unit.unit_properties["defense"] = 6
+			for m in unit.models:
+				var mi := m as ModelInstance
+				mi.properties["weapons"] = [{"name": "Core Pistol" if mi.model_index == 2 else "Core Rifle"}]
+		_main.opr_army_manager.game_units[unit.unit_id] = unit
+		_main.radial_menu_controller.initialize_status_markers_for_unit(unit)
+	if _role == "guest":
+		_main._solo_auto_saves = true
+		_wa_armed = true
+		_main.dice_roller_control.roll_finnished.connect(func(_total: int) -> void:
+			if _wa_armed:
+				_wa_armed = false
+				_main._solo_batch = false)
+	return true
+
+
+## P4.D-25: Activate through the production door, then the production shot; the volley waits for the guest's saves and its
+## answer to the wound allocation, so it is not awaited here.
+func _one_core_shoot(shooter: GameUnit, target: GameUnit) -> bool:
+	if shooter == null or target == null:
+		return false
+	await _main.radial_menu_controller.card_start_activation(shooter)
+	if not CoreActivation.session_open(shooter.unit_id):
+		_failure = "no open activation after Activate: %s" % _main.battle_log.entries().back()
+		return false
+	_main._run_human_attack(shooter, target, false)
+	return true
+
+
+## P4.D-25: the guest's player: when the wound prompt opens, click the scripted model indices (-1 = right-click), one per
+## frame as the prompt takes them; once it closes the guest's dice are batch again.
+func _feed_wound_clicks(clicks: Array) -> void:
+	var wall := _unit(WA_DEFENDER)
+	var queue := clicks.duplicate()
+	var deadline := Time.get_ticks_msec() + 90000
+	while Time.get_ticks_msec() < deadline:
+		await get_tree().process_frame
+		if _main._solo_model_pick.is_empty():
+			if int(_wa_prompt["opened"]) > 0:
+				break
+			continue
+		_wa_prompt["opened"] = 1
+		var outcome: Array = _main._solo_model_pick["outcome"]
+		if outcome.is_empty() and not queue.is_empty():
+			var i := int(queue.pop_front())
+			outcome.append({} if i < 0 else {"unit": wall, "index": i})
+			_wa_prompt["clicks"] = int(_wa_prompt["clicks"]) + 1
+	_main._solo_batch = true
+
+
 func opr_round() -> int:
 	return int(_main.opr_army_manager.current_round) if _main != null else 1
 
@@ -769,7 +855,7 @@ func _snapshot() -> Dictionary:
 		"tray_rolls": _tray_rolls.duplicate(),
 		"protect_done": _protect_done.duplicate(),
 		"rolled_lines": [],
-		"one_core": {"received": _oc_received.duplicate(), "checks_ok": CoreActivation.checks_ok},
+		"one_core": {"received": _oc_received.duplicate(), "checks_ok": CoreActivation.checks_ok, "wound_prompt": _wa_prompt.duplicate()},
 	}
 	if _main != null and _main.get("object_manager") != null:
 		for child in _main.object_manager.get_children():

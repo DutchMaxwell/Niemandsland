@@ -401,6 +401,7 @@ class Run:
         env["XDG_DATA_HOME"] = str(xdg)
         if self.one_core:
             env["NML_ONE_CORE_ACTIVATION"] = "1"
+            env["NML_ONE_CORE_CHOICE_WOUND_ALLOC"] = "1"   # P4.D-25: the choice goes to the owner's click
         cmd = shlex.split(self.args.godot) + [
             "--headless",
             "--path",
@@ -1328,6 +1329,30 @@ class Run:
             and self.require_unit_value(s, "mp2_oc_g1", "activated", False) and all(v.get("turn") == turn for v in s.values())
             and all(any(t.startswith(line) for t in v.get("battle_log_tail", [])) for v in s.values()),
             diagnostic=lambda s: diag(s) + " host_g1=%r" % self._unit(s, "host", "mp2_oc_g1")))
+        self._wound_alloc_phase()
+
+    def _wound_alloc_phase(self) -> None:
+        """P4.D-25 (the wound-allocation choice, NML_ONE_CORE_CHOICE_WOUND_ALLOC=1 on both peers): the host shoots the guest's three
+        plain models with two loadouts. The core asks the wound allocation of the OWNER, the guest clicks the last model (the
+        prompt previews, the core lands), and both tables end with that model dead. The automatic order takes the first models
+        first: an answer routed to the host (which answers automatic) leaves the last model alive and the wait times out."""
+        self.command_both("setup_wound_alloc")
+        wall, gun = "mp2_wa_g", "mp2_wa_h"
+        self.wait_condition(
+            "the wound-allocation units on both peers",
+            lambda s: all(self._unit(s, r, wall) and self._unit(s, r, gun) for r in ("host", "guest")))
+        self.command("guest", "answer_wound_prompt", {"clicks": [2, 2, -1]})
+        self.command("host", "one_core_shoot", {"unit": gun, "target": wall})
+        wounds = lambda s, role: self._unit(s, role, wall).get("wounds", [])
+        landed = lambda s: (
+            len(wounds(s, "guest")) == 3 and wounds(s, "host") == wounds(s, "guest")
+            and wounds(s, "guest")[2] == 0
+            and s["guest"]["one_core"]["wound_prompt"]["opened"] == 1)
+        self.checkpoint("one-core-wound-alloc", self.wait_condition(
+            "the guest's clicked model took the wound, the same on both peers", landed,
+            diagnostic=lambda s: "wall wounds host=%r guest=%r prompt=%r tail=%r" % (
+                wounds(s, "host"), wounds(s, "guest"), s["guest"]["one_core"]["wound_prompt"],
+                s["host"].get("battle_log_tail", [])[-4:])))
 
     def stop(self) -> None:
         for role in ("host", "guest"):
