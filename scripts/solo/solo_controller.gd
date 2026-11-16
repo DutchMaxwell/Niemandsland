@@ -3920,21 +3920,24 @@ func _planner_pick_unit(pool: Array) -> GameUnit:
 		"target": (state["units"][victim_key] as Dictionary)["unit"] \
 			if victim_key != "" and state["units"].has(victim_key) else null,
 		"why": str(pick["intent"]), "expectation": pick["expectation"]}
+	# P4.D-65 (gate G2): the feature vector is computed only for a consumer (see _pick_features_wanted).
+	var want_features := _pick_features_wanted()
 	var pick_features: Dictionary = AiMissionEval.features(_with_reserves(state), me,
-		BattleSim.reply_threat(state, me), true)
+		BattleSim.reply_threat(state, me), true) if want_features else {}
+	var pick_data := {"kept_back": int(pick.get("waits", 0)),
+		# Distillation v2: the planner's OWN win estimate for THIS position
+		# (expectation.before) — the per-position teacher value the round-
+		# coarse planner_calib join cannot provide.
+		"value": float((pick.get("expectation", {}) as Dictionary).get("before", -1.0))}
+	if want_features:
+		# E1 (eval-tuning wave): the position's raw feature vector — the
+		# arena logs the first per (side, round) as offline-fit input.
+		# Feature wave: stamp off-table reserves so the deploy state is a
+		# visible signal (the rollout itself never changes it).
+		pick_data["features"] = pick_features
 	record_decision({"kind": "planner", "unit": chosen.get_name(),
 		"rule": "PLANNER_V0 unit pick (NML-995): the round is played out for the best openers; the strongest end-of-round position activates first",
-		"candidates": [], "chosen": "activates next", "why": str(pick["intent"]),
-		"data": {"kept_back": int(pick.get("waits", 0)),
-			# Distillation v2: the planner's OWN win estimate for THIS position
-			# (expectation.before) — the per-position teacher value the round-
-			# coarse planner_calib join cannot provide.
-			"value": float((pick.get("expectation", {}) as Dictionary).get("before", -1.0)),
-			# E1 (eval-tuning wave): the position's raw feature vector — the
-			# arena logs the first per (side, round) as offline-fit input.
-			# Feature wave: stamp off-table reserves so the deploy state is a
-			# visible signal (the rollout itself never changes it).
-			"features": pick_features}})
+		"candidates": [], "chosen": "activates next", "why": str(pick["intent"]), "data": pick_data})
 	# NML-1114: env NML_ROLLOUT_TRACE=<path> dumps the per-unit fold behind
 	# presence_*/tail_* for THIS pick (the pair that diverged in the 28.08. Gate C
 	# capture). Unset = a cached env check and an immediate return, no disk.
@@ -3949,7 +3952,7 @@ func _planner_pick_unit(pool: Array) -> GameUnit:
 	# above; the GDScript search parks its own in a script static. Whichever
 	# search ran, the record below is computed from the SAME live leaf state.
 	var leaf: Dictionary = seam_leaf if not seam_leaf.is_empty() else AiPlanner.take_last_leaf()
-	if not leaf.is_empty():
+	if want_features and not leaf.is_empty():
 		record_decision({"kind": "planner", "unit": chosen.get_name(),
 			"rule": "leaf row: winning candidate's horizon-end position (training data)",
 			"candidates": [], "chosen": "", "why": "leaf",
@@ -4609,6 +4612,13 @@ func _core_warn_once(reason: String) -> void:
 	_core_declines[reason] = true
 	push_warning("[CORE] the Rust search declined this activation (%s) — "
 		% reason + "the GDScript search decides it (NML-1073 R1).")
+
+
+## P4.D-65 (gate G2): the per-pick position features (AiMissionEval.features + BattleSim.reply_threat) feed only the
+## harness capture (`decision_sink`: the arena's position rows) and NML_ROLLOUT_TRACE. The player's log strips them
+## (render_decision_for_player) and the shipped game attaches neither, so it never computes them.
+func _pick_features_wanted() -> bool:
+	return decision_sink.is_valid() or AiRolloutTrace.active()
 
 
 ## Feature wave: annotate a captured state with per-side off-table reserve
