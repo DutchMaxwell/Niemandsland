@@ -342,16 +342,22 @@ static func dump_legacy() -> void:
 ## no Dangerous test this activation (the table rolled it already; the core would roll it again). `h` is the board
 ## before the move (the AI body captured it and releases it). True = the core resolved the volley. A refusal is a
 ## defect: reported, and the table shoots instead - unless a die was already thrown (never resolve a volley twice).
-static func run_ai(main, unit: GameUnit, report: Dictionary, target: GameUnit, h: int, shots: Array = []) -> bool:
+## P4.D-18: `owns_dangerous` = the caller rolled no Dangerous test and leaves it to the core (the activation's test and
+## the end-of-activation morale from its wounds ride this call). Only then may `target` be null (a unit that cannot shoot
+## or has no target: the activation has no shot). Default false = the table's own roll stays authoritative: a report that
+## names Dangerous dice is refused, as before.
+static func run_ai(main, unit: GameUnit, report: Dictionary, target: GameUnit, h: int, shots: Array = [],
+		owns_dangerous := false) -> bool:
 	var kind := int(report.get("action", -1))
-	if h == 0 or not (kind in [AiDecision.Action.HOLD, AiDecision.Action.ADVANCE]) or not is_plain(unit) \
-			or not is_plain_target(target) or int(report.get("dangerous_dice", report.get("dangerous_models", 0))) > 0:
+	var table_rolled := not owns_dangerous and int(report.get("dangerous_dice", report.get("dangerous_models", 0))) > 0
+	if h == 0 or not (kind in [AiDecision.Action.HOLD, AiDecision.Action.ADVANCE]) or not is_plain(unit) or table_rolled \
+			or (target == null and not owns_dangerous) or (target != null and not is_plain_target(target)):
 		return false
 	# #172 interim: the core lands its own casualty order, so a human owner who has a wound-allocation choice (a Tough
 	# model, or mixed loadouts among the alive models) would never be asked. That volley stays on the table, which
 	# prompts. The real wound count is unknown before the roll: one wound keeps the Tough and loadout checks. Goes away
 	# once the core asks the allocation as a NeedChoice.
-	if main._solo_wound_choice_matters(target, 1):
+	if target != null and main._solo_wound_choice_matters(target, 1):
 		main._log_rule_event(BattleLog.Category.COMBAT, "%s: %s's owner chooses the casualties - the table resolves this volley" % [
 			unit.get_name(), target.get_name()], true)
 		return false
@@ -362,16 +368,19 @@ static func run_ai(main, unit: GameUnit, report: Dictionary, target: GameUnit, h
 	for p in main.solo_controller.last_move_paths:
 		routes[p["model"]] = (p["path"] as Array).map(func(v: Vector3) -> Vector2: return Vector2(v.x, v.z))
 	var trails: Array = unit.get_alive_models().map(func(m: ModelInstance) -> Array: return routes.get(m, []))
-	var t: Array = [{"t": "begin"}, {"t": "placed", "positions": at, "trails": trails},
-		{"t": "intent", "kind": kind, "shoot": target.unit_id}]
+	var intent := {"t": "intent", "kind": kind}
+	if target != null:
+		intent["shoot"] = target.unit_id
+	var t: Array = [{"t": "begin"}, {"t": "placed", "positions": at, "trails": trails}, intent]
 	# Step 42b: the table's presentation of the volley (_present); its stage opens before the core's first line.
 	var st := {"n": 0, "open": false, "result": false, "hits": 0, "landed": 0, "announce": [],
-		"before": main._solo_combined_alive(target), "moved": bool(report.get("moved", false))}
+		"before": main._solo_combined_alive(target) if target != null else 0, "moved": bool(report.get("moved", false))}
+	var shows := target != null and not shots.is_empty()   # a shotless activation has no volley to stage
 	var beat := func(ev: String, a: Dictionary, faces: Array) -> void:
 		await _present(main, unit, target, shots, st, ev, a, faces)
-	if not shots.is_empty():
+	if shows:
 		main._solo_stage_begin("%s fires at %s" % [unit.get_name(), target.get_name()])
-	var r: Dictionary = await drive(main, h, unit, t, true, Callable(), false, Callable() if shots.is_empty() else beat)
+	var r: Dictionary = await drive(main, h, unit, t, true, Callable(), false, beat if shows else Callable())
 	if str(r["step"]) == "done":
 		ai_runs += 1
 		announce(main, unit, target)   # step 50/51: the table that ran the AI activation announces its digest check
