@@ -6183,6 +6183,10 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 	# itself is dangerous, going around is impossible, so the model routes in and takes its dangerous test.
 	var goal_in_danger: bool = not flying and _targets_in_dangerous(positions, goal, reach, own_r_m)
 	var avoid_dangerous: bool = not flying and not goal_in_danger
+	# Rules 3.6 ruins: the delta _plan_positions judges, to NAME the regime in the move record.
+	var delta0 := _clamp_delta_to_bounds(positions, MoveIntent.plan_unit_move(positions, goal, reach))
+	var unstable_long := _long_unstable_move(unit, delta0)
+	var goal_in_unstable := unstable_long and _rigid_targets_unstable(positions, delta0, own_r_m)
 	var stall_through := false   # the stall escalation's through-plan was accepted (logged as the dangerous_why cause)
 	var trails: Array = []
 	var trail_radii_m: Array = []
@@ -6519,6 +6523,9 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 		achieved_arc_m = maxf(achieved_arc_m, MovementPlanner.polyline_length(t as Array) + climb_in * INCHES_TO_METERS)
 	var centroid_m := _achieved_m(positions, new_positions)
 	var why := "difficult cap" if reach < inches else ("around difficult" if avoid else "direct")
+	var unstable_avoid := unstable_long and avoid_dangerous and not goal_in_unstable   # the avoid held for the accepted route
+	if unstable_avoid and why in ["direct", "around difficult"]:
+		why = ("around difficult + " if avoid else "around ") + "unstable ruins (move over 6\")"
 	if gate_shortened:
 		why = "gate-legal shorten"   # the collapse ladder chose a shorter move with a LEGAL end state
 	if boxed_repositioned:
@@ -6529,11 +6536,15 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 		"achieved_in": achieved_arc_m / INCHES_TO_METERS, "centroid_in": centroid_m / INCHES_TO_METERS,
 		"dangerous_models": dang,
 		"goal_gap_in": MoveIntent.distance_inches(MoveIntent.anchor_of(positions), goal)}
+	if unstable_avoid:
+		move_data["unstable_avoid"] = true
 	if dang > 0:
 		# rules-must-log: WHY avoidance was off or did not hold (playtest 14.10., the R2 cause was unreadable).
 		var why_parts: Array = []
 		if goal_in_danger:
 			why_parts.append("goal inside DANGEROUS ground")
+		if goal_in_unstable:
+			why_parts.append("goal inside an Unstable ruin")
 		if stall_through:
 			why_parts.append("stall through-plan (toll %.1f, cap %.1f)" % [float(dang_dice) / 6.0, maxf(1.0, 0.1 * float(_unit_wounds_now(models)))])
 		if stood_n > 0:
@@ -6645,8 +6656,7 @@ func _targets_in_dangerous(positions: Array, goal: Vector3, reach_in: float, rad
 	return false
 
 
-## Rules 3.6 (EPOCH_73_V36): is this rigid move "over 6 inches" for a unit that does not fly? Same epsilon as the
-## real trigger (`_dangerous_trail_flags`): a base-exact 6" Advance is only float32 noise from 6.0 and must not count.
+## Rules 3.6: is the rigid move over 6" for a non-Flying unit? Same epsilon as `_dangerous_trail_flags` (float32 noise).
 func _long_unstable_move(unit: GameUnit, delta: Vector3) -> bool:
 	return AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and not unit.has_special_rule("Flying") \
 		and Vector2(delta.x, delta.z).length() > MovementPlanner.UNSTABLE_MOVE_IN * INCHES_TO_METERS + 1e-6
@@ -7940,9 +7950,8 @@ func _plan_positions(unit: GameUnit, models: Array, positions: Array, delta: Vec
 		opts["zones"] = zones_in
 	if is_traversal(unit) or flies_through_units(unit):
 		opts["zones_rest_only"] = true   # Traversal / Flying: unit-spacing zones stop blocking the ROUTE; rest legality stays strict
-	# Rules 3.6 UNSTABLE ruins (EPOCH_73_V36): a move over 6" through a ruin takes the Dangerous test, so
-	# route around it like Dangerous/Difficult when a clear path exists (play-test: the Great Beast crossed
-	# twice "despite avoidance"). Flying ignores it; a destination inside a ruin stays reachable.
+	# Rules 3.6 ruins: a move over 6" through one takes the Dangerous test, so route around it like Dangerous
+	# ground; a destination inside a ruin stays reachable and the stall escalation can lift it (avoid_dangerous).
 	var avoid_unstable := avoid_dangerous and _long_unstable_move(unit, delta) \
 		and not _rigid_targets_unstable(positions, delta, own_r_m)
 	var sampled := _terrain_grid_in(board_in, off, avoid_difficult, avoid_dangerous, board_y_in, avoid_unstable)

@@ -73,17 +73,15 @@ func test_stall_through_plan_is_named() -> void:
 	assert_str(_why()).contains("stall through-plan (toll")
 
 
-func _move_data() -> Dictionary:
+func _move_rec() -> Dictionary:
 	for i in range(_solo.decision_log.size() - 1, -1, -1):
 		var rec := _solo.decision_log[i] as Dictionary
 		if str(rec.get("kind", "")) == "move" and str(rec.get("why", "")) != "band clamp":
-			return rec.get("data", {}) as Dictionary
+			return rec
 	return {}
 
 
-## Rules 3.6 (EPOCH_73_V36): a model whose own move is over 6" and whose route enters a ruin takes the
-## Dangerous test. The ruin must be ROUTED AROUND (like Dangerous/Difficult) when a clear path exists —
-## a soft cost alone still crossed it in the play-test ("route crossed despite avoidance").
+## Rules 3.6: a move over 6" through a ruin takes the Dangerous test, so the ruin is routed around when a detour exists.
 func test_long_move_routes_around_unstable_ruins() -> void:
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
 	_solo.terrain_type_at = func(p: Vector3) -> int:
@@ -93,29 +91,29 @@ func test_long_move_routes_around_unstable_ruins() -> void:
 			else TerrainRules.TerrainType.NONE
 	var u := _unit("Great Beast", 1)
 	_solo._execute_move(u, Vector3(0, 0, 12.0 * IN2M), 12.0, false)
-	var data := _move_data()
+	var data := _move_rec().get("data", {}) as Dictionary
 	assert_int(int(data.get("dangerous_models", -1))) \
 		.override_failure_message("the long move crossed the unstable ruin instead of routing around it") \
 		.is_equal(0)
 	assert_float(float(data.get("achieved_in", 0.0))) \
 		.override_failure_message("routing around the ruin stalled the move (%.2f\" of 12)" % float(data.get("achieved_in", 0.0))) \
 		.is_greater(10.0)
+	# rules-must-log: the applied avoid is named in the move record.
+	assert_bool(bool(data.get("unstable_avoid", false))).is_true()
+	assert_str(str(_move_rec().get("why", ""))).contains("unstable ruins")
 
 
-## The ruin avoid is a preference, not a wall: a ruin that spans the whole lane has no detour, so the stall
-## escalation (through-plan + toll gate) must lift it and the unit still moves (it used to stall at the edge).
+## The avoid is a preference, not a wall: with no detour the stall escalation lifts it and the unit still moves.
 func test_a_ruin_across_the_whole_lane_does_not_stall_the_move() -> void:
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
 	_set_strip(3.0, 5.0, TerrainRules.TerrainType.RUINS)
 	_solo._execute_move(_unit("Pair", 2, 2.0), Vector3(0, 0, 14.0 * IN2M), 12.0, false)
-	assert_float(float(_move_data().get("achieved_in", 0.0))) \
+	assert_float(float((_move_rec().get("data", {}) as Dictionary).get("achieved_in", 0.0))) \
 		.override_failure_message("a ruin across the lane stalled the move: the through-plan could not lift the avoid") \
 		.is_greater(10.0)
 
 
-## "Over 6 inches" gets the real trigger's epsilon (`_dangerous_trail_flags`): a base-exact 6" Advance is only
-## float32 noise away from 6.0 and must not hard-avoid the ruin (a full-width ruin makes the avoid visible: it
-## holds the model at the ruin edge, while no hard avoid lets it cross and land beyond the far edge, z > 5).
+## A base-exact 6" Advance (float32 noise) must not hard-avoid: a full-width ruin holds an avoiding model at its edge.
 func test_an_exact_six_inch_advance_does_not_avoid_the_ruin() -> void:
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
 	_set_strip(3.0, 5.0, TerrainRules.TerrainType.RUINS)
@@ -126,3 +124,11 @@ func test_an_exact_six_inch_advance_does_not_avoid_the_ruin() -> void:
 	assert_float((out[0] as Vector3).z / IN2M) \
 		.override_failure_message("a 6\" Advance was held at the ruin edge: the over-6\" test has no epsilon") \
 		.is_greater(5.0)
+
+
+## A goal inside the ruin lifts the avoid on purpose; the record must say so, not "despite avoidance".
+func test_a_goal_inside_a_ruin_is_named() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	_set_strip(8.0, 12.0, TerrainRules.TerrainType.RUINS)
+	_solo._execute_move(_unit("Beast", 1), Vector3(0, 0, 10.0 * IN2M), 12.0, false)
+	assert_str(_why()).contains("goal inside an Unstable ruin")
