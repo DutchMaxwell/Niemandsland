@@ -2274,6 +2274,7 @@ func _solo_run_both_ai_game(first_opener: int = 1) -> void:
 		if solo_round_done.is_valid():
 			await solo_round_done.call(round_no)   # harness: the board round_no ENDED on, nothing else acting
 	_solo_ai_busy = false
+	CoreActivation.dump_legacy()   # P4.D-3: NML_TABLE_CENSUS=<path> writes the table-volley census
 
 
 ## One both-AI round: alternate one activation per side (OPR one-for-one), starting with `opener`, until both
@@ -4850,6 +4851,7 @@ func _solo_apply_strafing(unit: GameUnit, human_trails: Array = []) -> void:
 		battle_log.log_event(BattleLog.Category.COMBAT,
 			"%s: %s passes over %s — attacks it as if shooting (once per activation)" % [
 			rule_name, unit.get_name(), target.get_name()], true)
+	CoreActivation.note_legacy(self, "ai_strafe", unit, [target])
 	await _solo_resolve_ai_volley(unit, target, shots, true)
 
 
@@ -4953,6 +4955,14 @@ func _run_ai_shooting(report: Dictionary) -> void:
 		if await CoreActivation.run_ai(self, unit, report, groups[order[0]]["target"], _solo_core_ai_h,
 				groups[order[0]]["shots"]):
 			return
+	var why: PackedStringArray = []   # P4.D-3 census: why this volley stays on the table beyond the units' own rules
+	if _solo_core_ai_h == 0:
+		why.append("no_handle")
+	if order.size() > 1:
+		why.append("split")
+	if int(report.get("dangerous_dice", report.get("dangerous_models", 0))) > 0:
+		why.append("dangerous")
+	CoreActivation.note_legacy(self, "ai_volley", unit, order.map(func(id) -> GameUnit: return groups[id]["target"]), ",".join(why))
 	for id in order:
 		var g := groups[id] as Dictionary
 		await _solo_resolve_ai_volley(unit, g["target"], g["shots"], moved)
@@ -14486,6 +14496,7 @@ func _solo_split_commit() -> void:
 	_solo_end_targeting()
 	if attacker == null or a == null or b == null:
 		return
+	CoreActivation.note_legacy(self, "human_split", attacker, [a, b])
 	await _run_human_attack_split(attacker, a, b, sb)
 
 
@@ -15179,6 +15190,7 @@ func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool, auto: 
 				and not solo_controller.last_hit_and_run_note.is_empty():   # UX-19: only some models carry it
 			battle_log.log_event(BattleLog.Category.MOVEMENT, solo_controller.last_hit_and_run_note, true)
 	elif not await CoreActivation.human_shoot(self, attacker, target):   # step 38 (O15 (1)): a core unit's volley
+		CoreActivation.note_legacy(self, "human_shoot", attacker, [target])
 		await _run_human_shooting(attacker, target)
 	elif CoreActivation.last_target != target:
 		return   # the core refused the shot (it notes the target of a shot it resolved): nothing was shot, the activation stays open
