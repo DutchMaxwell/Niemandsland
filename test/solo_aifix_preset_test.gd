@@ -36,6 +36,7 @@ func test_a_hand_pick_stamps_the_bundle_and_variant_4() -> void:
 
 
 func test_a_preset_without_aifix_stamps_nothing_and_keeps_variant_3() -> void:
+	BattleSim._core_env = 0   # P4.D-66: pinned to the GDScript AI; with the core up the shipped brain and the Rust search decide
 	var solo: SoloController = auto_free(SoloController.new())
 	var diff := SoloDifficulty.for_grade("planner_v0")
 	diff.aifix = false

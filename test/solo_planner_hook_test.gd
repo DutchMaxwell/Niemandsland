@@ -259,6 +259,7 @@ func test_tree_paths_stay_planner_free() -> void:
 ## intents — a 1-ply re-plan can never produce it). A mismatched unit falls
 ## back to the re-plan without the suffix.
 func test_rollout_intent_is_executed_not_rederived() -> void:
+	BattleSim._core_env = 0   # P4.D-66: pinned to the GDScript AI; with the core up the shipped brain and the Rust search decide
 	var gunner := _unit(1, [Vector3.ZERO, Vector3(1.0 * IN2M, 0, 0), Vector3(2.0 * IN2M, 0, 0)], "Gunner")
 	(gunner.source_data as OPRApiClient.OPRUnit).weapons[0].range_value = 36
 	(gunner.source_data as OPRApiClient.OPRUnit).weapons[0].attacks = 12
