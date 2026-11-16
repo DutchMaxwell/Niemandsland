@@ -4931,11 +4931,17 @@ func _run_ai_shooting(report: Dictionary) -> void:
 	# Target validity is PER MODEL (GF v3.5.1 p.8): the shot's MEMBER needs a model with range+LOS.
 	var groups: Dictionary = {}   # target unit_id -> {"target": GameUnit, "shots": Array}
 	var order: Array = []
+	var unshootable: Dictionary = {}   # P4.D-13c: target unit_id -> true, one line each
 	for shot in shots:
 		var overlay: int = AiTargeting.weapon_overlay((shot["profile"] as Dictionary).get("rules", []))
 		var tgt: GameUnit = _solo_pick_overlay_target(shot["member"], overlay, float(shot["reach"]), shot["profile"] as Dictionary,
 			not bool(report.get("moved", false)))
 		if tgt == null:
+			continue
+		if unshootable.has(tgt.unit_id):
+			continue
+		if not groups.has(tgt.unit_id) and CoreActivation.refuses_statlineless(self, unit, tgt):
+			unshootable[tgt.unit_id] = true   # no Quality/Defense: not a valid target; the line is written, the shot is not
 			continue
 		if not groups.has(tgt.unit_id):
 			groups[tgt.unit_id] = {"target": tgt, "shots": []}
@@ -4945,7 +4951,8 @@ func _run_ai_shooting(report: Dictionary) -> void:
 		# NML-1035: every weapon lost its target (out of range / no LOS) — without a
 		# line the whole activation is invisible (a HOLD with no tree target writes
 		# no movement line either).
-		_solo_log_no_volley(unit, report, "no target in range or sight")
+		if unshootable.is_empty():
+			_solo_log_no_volley(unit, report, "no target in range or sight")
 		return
 	# Indirect (wave 5): "-1 to hit rolls when shooting after moving" — the activation's action says
 	# whether this unit moved before firing (HOLD = it did not).
@@ -15192,7 +15199,7 @@ func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool, auto: 
 		elif target != null and not target.is_destroyed() and _solo_is_ai_unit(target) and battle_log != null \
 				and not solo_controller.last_hit_and_run_note.is_empty():   # UX-19: only some models carry it
 			battle_log.log_event(BattleLog.Category.MOVEMENT, solo_controller.last_hit_and_run_note, true)
-	elif not await CoreActivation.human_shoot(self, attacker, target):   # step 38 (O15 (1)): a core unit's volley
+	elif not await CoreActivation.human_shoot(self, attacker, target, Callable(), auto):   # step 38 (O15 (1)): a core unit's volley
 		CoreActivation.note_legacy(self, "human_shoot", attacker, [target])
 		await _run_human_shooting(attacker, target)
 	elif CoreActivation.last_target != target:

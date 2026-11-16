@@ -152,6 +152,10 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 - **The casting-modifier line states both numbers.** A caster with Spell Amplifier +1 used to be
   logged as "base target is 3+", which read as if the +1 had been ignored (the base is 4+). The line
   now reads "casts on 3+ (base 4+)". The roll itself did not change.
+- **Solo: a unit loaded from an old save is shot at by the rules engine like any other.** A unit
+  saved before the army-list profile was stored (or a hand-written one) kept the old, slower path
+  when it was the target of a volley. A unit with no Quality or Defense at all is not a valid target
+  there: the battle log says so and nobody shoots it. (#2867)
 
 ### Internal
 - CI and test groundwork for running the tests against the Rust core: a new job "All required
