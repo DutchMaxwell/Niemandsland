@@ -94,3 +94,27 @@ def test_a_manifest_entry_without_its_function_is_an_error(tmp_path):
     (root / "tools/table_census.json").write_text(json.dumps({"groups": {"grp": ["scripts/a.gd:gone"]}}))
     res = run(root)
     assert res.returncode != 0 and "scripts/a.gd:gone not found" in res.stderr
+
+
+def test_runtime_census_appends_the_share_and_the_top_reasons(tmp_path):
+    root = repo(tmp_path)
+    census = tmp_path / "census.json"
+    census.write_text(json.dumps({"ai_volleys": 40, "legacy": {"ai_volley": {
+        "_all": 30, "split": 12, "weapon_rule:Blast": 9, "unit_rule:Tough": 3, "no_handle": 3}}}))
+    out = run(root, "--runtime", str(census)).stdout.splitlines()
+    assert out[-5:] == ["RUNTIME AI VOLLEYS ON TABLE: 75.0 %",
+                        "   30.0 %      12  split",
+                        "   22.5 %       9  weapon_rule:Blast",
+                        "    7.5 %       3  no_handle",       # ties by name
+                        "    7.5 %       3  unit_rule:Tough"]
+    assert out[-6].startswith("TABLE LINES LEFT")           # appended to the printed report, not replacing it
+
+
+def test_runtime_census_never_reaches_the_committed_report(tmp_path):
+    root = repo(tmp_path)
+    census = tmp_path / "census.json"
+    census.write_text(json.dumps({"ai_volleys": 1, "legacy": {"ai_volley": {"_all": 1}}}))
+    assert run(root, "--write", "--runtime", str(census)).returncode == 2
+    assert run(root, "--check", "--runtime", str(census)).returncode == 2
+    committed(root)
+    assert "RUNTIME" not in (root / "test/one_core/table_census.txt").read_text()
