@@ -303,6 +303,13 @@ static func _dangerous_mismatch(unit: GameUnit, dice: int, why: String) -> void:
 		unit.get_name(), dice, why])
 
 
+## P4.D-19: does the AI body hand this activation to the core? A board was captured for it before its move, the tray
+## exists, the action is a Hold or an Advance, and the unit is plain. True = the activation's Dangerous test and the end
+## morale from its wounds are the core's: the body rolls neither (see `run_ai`'s `owns_dangerous`).
+static func takes_ai_activation(main, unit: GameUnit, report: Dictionary) -> bool:
+	return main._solo_core_ai_h != 0 and main.dice_roller_control != null and is_plain(unit) \
+		and int(report.get("action", -1)) in [AiDecision.Action.HOLD, AiDecision.Action.ADVANCE]
+
 
 ## P4.D-3 census: volleys the TABLE resolved instead of the core, door -> reason -> count ("_all" = the door's table
 ## calls). Counting only: no RNG, no log line, nothing the game reads.
@@ -321,7 +328,7 @@ static func why_not(main, unit: GameUnit, target: GameUnit) -> Array:
 	return out
 
 
-## One table volley, counted once per reason. `extra` = comma-joined door facts ("split", "dangerous", "no_handle").
+## One table volley, counted once per reason. `extra` = comma-joined door facts ("split", "no_handle").
 static func note_legacy(main, door: String, unit: GameUnit, targets: Array, extra: String = "") -> void:
 	var why: Array = why_not(main, unit, null)
 	for t in targets:

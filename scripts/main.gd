@@ -1267,7 +1267,13 @@ func _solo_activate_one_ai_body() -> GameUnit:
 			and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
 		report["target_wounds_start"] = _solo_unit_wounds_now(_solo_combat_unit(target))
 	_solo_act_flags = _solo_unit_flags() if not (report.get("casts", []) as Array).is_empty() else {}   # H-DANG-CUT: before the test
-	if dangerous_dice > 0:
+	# One core P4.D-19: a plain Hold/Advance's Dangerous test (and the end morale from its wounds) is the core's: the ONE
+	# core call (`_run_ai_shooting`, or the attack block below for a unit that cannot shoot) pays it. The table rolls it
+	# here only when the core does not take the activation, or later, in front of its own volley, when the core refuses.
+	var core_dangerous: bool = dangerous_dice > 0 and CoreActivation.takes_ai_activation(self, unit, report)
+	if core_dangerous:
+		report["core_dangerous"] = dangerous_dice
+	elif dangerous_dice > 0:
 		await _run_ai_dangerous(unit, dangerous_dice)
 	report["dangerous_wounds_taken"] = wounds_before_dangerous - _solo_unit_wounds_now(unit)   # rules 3.6 melee tally
 	if _solo_activation_unit_gone(unit):
@@ -1312,9 +1318,15 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	var _prof_atk_t0 := BattleSim.prof_t0()   # NML-1072: live shoot/melee resolution
 	if bool(report.get("can_shoot", false)):
 		await _run_ai_shooting(report)
+	elif report.has("core_dangerous"):   # P4.D-19: a unit that cannot shoot still owes its test: the core call, no volley
+		await _solo_ai_core_call(unit, report, null, [])
 	elif int(report.get("action", 0)) == AiDecision.Action.CHARGE:
 		await _run_ai_melee(report)
 	BattleSim.prof_mark("attack", _prof_atk_t0)
+	if core_dangerous:
+		report["dangerous_wounds_taken"] = wounds_before_dangerous - _solo_unit_wounds_now(unit)
+		if _solo_activation_unit_gone(unit):   # the test took the last model: the old body stopped right after it
+			return unit
 	# Hit & Run (grill round 2 cut C; Shooter/Fighter halves 2026-07-19): after shooting or being in
 	# melee — the once-per-round 3" step, EV-scored in the controller. The trigger says which half
 	# qualifies (shoot vs charge).
@@ -1331,7 +1343,7 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	# 7): tested only NOW, AFTER the unit has acted, so dangerous damage never stops it shooting. A CHARGE
 	# resolves through the melee comparison instead ("units in melee don't take morale tests from wounds at
 	# the end of an activation"), so it is excluded here. It fires on wounds that leave the unit at ≤half.
-	if dangerous_models > 0 and not unit.is_destroyed() \
+	if dangerous_models > 0 and not unit.is_destroyed() and not bool(report.get("core_took_dangerous", false)) \
 			and int(report.get("action", 0)) != AiDecision.Action.CHARGE:
 		await _solo_shooting_morale(unit, alive_before_dangerous, _roller_label(unit), wounds_before_dangerous,
 			"Dangerous terrain")
@@ -4929,6 +4941,7 @@ func _run_ai_shooting(report: Dictionary) -> void:
 		AiEv.stamp_conditional_ap(member_profiles, member)   # value Shatter/Tear/Melee Slayer/Disintegrate AP
 	if shots.is_empty():
 		_solo_log_no_volley(unit, report, "no ready ranged weapon")
+		await _solo_ai_core_call(unit, report, null, [])   # P4.D-19: no volley, but the Dangerous test may still be owed
 		return
 	if bool(report.get("moved", false)) and battle_log != null and SoloController.has_indirect_ranged(_solo_all_weapons(unit)) \
 			and SoloController.indirect_ignores_los(unit) and not SoloController.indirect_ignores_los(unit, false):
@@ -4959,22 +4972,25 @@ func _run_ai_shooting(report: Dictionary) -> void:
 		# no movement line either).
 		if unshootable.is_empty():
 			_solo_log_no_volley(unit, report, "no target in range or sight")
+		await _solo_ai_core_call(unit, report, null, [])   # P4.D-19: ditto
 		return
 	# Indirect (wave 5): "-1 to hit rolls when shooting after moving" — the activation's action says
 	# whether this unit moved before firing (HOLD = it did not).
 	var moved: bool = bool(report.get("moved", false))
 	# One-core P3 step 42 (flag on): the volley at the table's ONE pick resolves in the core when both units are plain.
-	if _solo_core_ai_h != 0 and order.size() == 1:
-		if await CoreActivation.run_ai(self, unit, report, groups[order[0]]["target"], _solo_core_ai_h,
-				groups[order[0]]["shots"]):
+	# P4.D-19: that one call also takes the activation's Dangerous test when the body left it to the core.
+	if order.size() == 1:
+		if await _solo_ai_core_call(unit, report, groups[order[0]]["target"], groups[order[0]]["shots"]):
 			return
+	else:
+		await _solo_pay_dangerous(unit, report)   # a split volley is the table's: its test comes first, as in the body
+	if _solo_activation_unit_gone(unit):   # the test just paid took the last model: no volley
+		return
 	var why: PackedStringArray = []   # P4.D-3 census: why this volley stays on the table beyond the units' own rules
 	if _solo_core_ai_h == 0:
 		why.append("no_handle")
 	if order.size() > 1:
 		why.append("split")
-	if int(report.get("dangerous_dice", report.get("dangerous_models", 0))) > 0:
-		why.append("dangerous")
 	CoreActivation.note_legacy(self, "ai_volley", unit, order.map(func(id) -> GameUnit: return groups[id]["target"]), ",".join(why))
 	for id in order:
 		var g := groups[id] as Dictionary
@@ -4990,6 +5006,30 @@ func _solo_log_no_volley(unit: GameUnit, report: Dictionary, why: String) -> voi
 		if int(report.get("action", 0)) == AiDecision.Action.HOLD else ""
 	battle_log.log_event(BattleLog.Category.COMBAT, "%s: no volley — %s%s" % [
 		unit.get_name(), why, hold_note], true)
+
+
+## One core P4.D-19: the core's one call for this AI activation: the volley at `target` (null = none), and the Dangerous
+## test the body left to the core (`report["core_dangerous"]` = its dice, an end morale from its wounds included). True =
+## the core took the activation. Anything else (no board, a refused call) leaves the table to resolve the volley, and
+## pays an owed test first, on the table, so a refusal costs nothing but the old order.
+func _solo_ai_core_call(unit: GameUnit, report: Dictionary, target: GameUnit, shots: Array) -> bool:
+	var owed := report.has("core_dangerous")
+	if _solo_core_ai_h != 0 and (target != null or owed) \
+			and await CoreActivation.run_ai(self, unit, report, target, _solo_core_ai_h, shots, owed):
+		if owed:
+			report.erase("core_dangerous")
+			report["core_took_dangerous"] = true
+		return true
+	await _solo_pay_dangerous(unit, report)
+	return false
+
+
+## One core P4.D-19: the table rolls the Dangerous test the body left to the core (no core call is made, or it refused).
+func _solo_pay_dangerous(unit: GameUnit, report: Dictionary) -> void:
+	var dice := int(report.get("core_dangerous", 0))
+	report.erase("core_dangerous")
+	if dice > 0:
+		await _run_ai_dangerous(unit, dice)
 
 
 ## Limited (once per game): a volley leaves out a weapon that already fired — the log names the book rule.
