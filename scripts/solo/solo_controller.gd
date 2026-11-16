@@ -6246,6 +6246,14 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 			if not cut.is_empty():
 				var fin := cut.back() as Vector3
 				new_positions[i] = Vector3(fin.x, (new_positions[i] as Vector3).y, fin.z)
+	# Flying (GF 3.6): may move through units and terrain, but a base may not END on impassable ground
+	# (a container, a wall line). Cut each flier's OWN route back to its first rest-legal spot BEFORE the
+	# gate, so the gate sees legal ends and keeps the formation instead of shortening it whole.
+	if flying and not allow_contact:
+		var fly_cut := _cut_fliers_to_rest_legal(models, new_positions, trails)
+		if fly_cut > 0:   # rules-must-log: the cut models say which book rule held them
+			board_clamp_notes.append("%s: %d model%s stop short of a container or wall (Flying: may move through terrain, but may not end a move on it)"
+				% [unit.get_name(), fly_cut, "" if fly_cut == 1 else "s"])
 	# Nothing actually moved (clamped to zero) → keep the old early-out (no state write, no broadcast).
 	var moved := false
 	for i in range(mini(positions.size(), new_positions.size())):
@@ -8741,6 +8749,24 @@ func _retrace_wall_true(unit: GameUnit, route: Array, start: Vector3, gated: Vec
 			var end := cut.back() as Vector3
 			return [cut, Vector3(end.x, gated.y, end.z), true]
 	return [trail, gated, false]
+
+
+## Flying: cut every model whose end rests on forbidden ground back along its OWN route to the first
+## rest-legal spot (`_rest_legal_cut`, the gate's own predicate). Mutates both arrays; returns the models cut.
+func _cut_fliers_to_rest_legal(models: Array, new_positions: Array, trails: Array) -> int:
+	var cut_n := 0
+	for i in range(mini(trails.size(), new_positions.size())):
+		var r := model_base_radius_m(models[i] as ModelInstance)
+		if not _world_forbidden(new_positions[i] as Vector3, r):
+			continue
+		var cut := _rest_legal_cut(trails[i] as Array, r)
+		if cut.is_empty():
+			continue
+		trails[i] = cut
+		var end := cut.back() as Vector3
+		new_positions[i] = Vector3(end.x, (new_positions[i] as Vector3).y, end.z)
+		cut_n += 1
+	return cut_n
 
 
 ## AIG-L6b (EPOCH_73_V36): walk a route back from its end to the first point a base of `radius_m` may rest on - 1 cm
