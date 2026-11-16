@@ -92,7 +92,7 @@ static func is_lifecycle_unit(main, gu: GameUnit) -> bool:
 
 ## (2) A lifecycle unit whose shot, End and digest resolve in the core.
 static func is_core_unit(main, gu: GameUnit) -> bool:
-	return is_lifecycle_unit(main, gu) and is_plain(gu)
+	return is_lifecycle_unit(main, gu) and is_plain(gu) and not moves_through(gu)
 
 
 ## (3) Equal to (2) for now; step 82 widens it by movement rule.
@@ -340,12 +340,29 @@ static func _dangerous_mismatch(unit: GameUnit, dice: int, why: String) -> void:
 		unit.get_name(), dice, why])
 
 
+## P4.D-37: the activation_level group (core_slice_allow.json): a unit whose rules fire when it moves through an enemy
+## (a Strafing weapon, Crossing Attack). The core's activation resolves them from the trails it is handed, in its
+## pre-attack slots; the human door still resolves them on the table (`_solo_human_strafing`), so it never takes such a unit.
+const MOVE_THROUGH := ["Strafing", "Crossing Attack"]
+
+
+static func moves_through(gu: GameUnit) -> bool:
+	return CoreSlice.carries(gu, MOVE_THROUGH)
+
+
+## The actions the AI door takes: a Hold or an Advance; a Rush only for a unit that moves through (it cannot shoot, but its
+## move-through attacks fire after the move).
+static func takes_action(unit: GameUnit, kind: int) -> bool:
+	return kind in [AiDecision.Action.HOLD, AiDecision.Action.ADVANCE] \
+		or (kind == AiDecision.Action.RUSH and moves_through(unit))
+
+
 ## P4.D-19: does the AI body hand this activation to the core? A board was captured for it before its move, the tray
-## exists, the action is a Hold or an Advance, and the unit is plain. True = the activation's Dangerous test and the end
-## morale from its wounds are the core's: the body rolls neither (see `run_ai`'s `owns_dangerous`).
+## exists, the action is one the door takes (`takes_action`), and the unit is plain. True = the activation's Dangerous test
+## and the end morale from its wounds are the core's: the body rolls neither (see `run_ai`'s `owns_dangerous`).
 static func takes_ai_activation(main, unit: GameUnit, report: Dictionary) -> bool:
 	return main._solo_core_ai_h != 0 and main.dice_roller_control != null and is_plain(unit) \
-		and int(report.get("action", -1)) in [AiDecision.Action.HOLD, AiDecision.Action.ADVANCE]
+		and takes_action(unit, int(report.get("action", -1)))
 
 
 ## P4.D-3 census: volleys the TABLE resolved instead of the core, door -> reason -> count ("_all" = the door's table
@@ -397,7 +414,7 @@ static func dump_legacy() -> void:
 		f.store_string(JSON.stringify({"legacy": legacy, "legacy_sets": legacy_sets, "core_ai_runs": ai_runs, "core_ai_refusals": ai_refusals}))
 
 
-## Step 42: the AI's volley through the core - Hold or Advance, the unit and its one target (the table's own pick) plain,
+## Step 42: the AI's volley through the core - Hold or Advance (P4.D-37: a Rush too, for a unit that moves through), the unit and its one target (the table's own pick) plain,
 ## no Dangerous test this activation (the table rolled it already; the core would roll it again). `h` is the board
 ## before the move (the AI body captured it and releases it). True = the core resolved the volley. A refusal is a
 ## defect: reported, and the table shoots instead - unless a die was already thrown (never resolve a volley twice).
@@ -410,7 +427,7 @@ static func run_ai(main, unit: GameUnit, report: Dictionary, target: GameUnit, h
 	var kind := int(report.get("action", -1))
 	var reported := int(report.get("dangerous_dice", report.get("dangerous_models", 0)))
 	var table_rolled := not owns_dangerous and reported > 0
-	if h == 0 or not (kind in [AiDecision.Action.HOLD, AiDecision.Action.ADVANCE]) or not is_plain(unit) or table_rolled \
+	if h == 0 or not takes_action(unit, kind) or not is_plain(unit) or table_rolled \
 			or (target == null and not owns_dangerous) or (target != null and not is_plain_target(target)):
 		return false
 	# #172 interim: the core lands its own casualty order, so a human owner who has a wound-allocation choice (a Tough

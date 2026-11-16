@@ -202,6 +202,8 @@ func test_the_strafe_door_counts_a_table_volley() -> void:
 	AiActRecorder.rules_epoch = epoch_before
 	var d: Dictionary = CoreActivation.legacy.get("ai_strafe", {})
 	assert_int(d.get("_all", 0)).override_failure_message("the strafe volley was not counted: %s" % [CoreActivation.legacy]).is_equal(1)
-	assert_int(d.get("weapon_rule:Crossing Strike", 0)).is_equal(1)
+	# P4.D-37: Strafing is in the slice (activation_level), so the weapon is no reason; the strike the table makes anyway is named.
+	assert_int(d.get("move_through", 0)).is_equal(1)
+	assert_int(d.get("weapon_rule:Crossing Strike", 0)).is_equal(0)
 	assert_int(dfn.models.size()).is_equal(10)
 	await E2EBoot.settle(get_tree())

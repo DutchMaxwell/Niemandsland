@@ -82,3 +82,14 @@ static func refusals(gu: GameUnit, as_target := false) -> Array:
 
 static func takes(gu: GameUnit, as_target := false) -> bool:
 	return refusals(gu, as_target).is_empty()
+
+
+## P4.D-37: `gu` carries a unit or weapon rule whose registry primitive is one of `primitives` (the slice's own lookup).
+static func carries(gu: GameUnit, primitives: Array) -> bool:
+	var labels: Array = gu.get_special_rules().map(rule_label)
+	if gu.source_data is OPRApiClient.OPRUnit:
+		for w in (gu.source_data as OPRApiClient.OPRUnit).weapons:
+			labels.append_array(w.special_rules.map(rule_label))
+	var system := RulesRegistry.system_of_unit(gu)
+	var faction := RulesRegistry.faction_of_unit(gu)
+	return labels.any(func(l) -> bool: return primitives.has(RulesRegistry.lookup(system, faction, l).get("primitive")))

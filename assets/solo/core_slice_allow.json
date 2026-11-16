@@ -2,5 +2,12 @@
   "schema": "nml-core-slice-v1",
   "door": "shoot",
   "mode": "allow",
-  "groups": {}
+  "groups": {
+    "activation_level": {
+      "primitives": ["Strafing", "Crossing Attack"],
+      "step": "P4.D-37",
+      "golden": "res://test/fixtures/one_core/golden_move_through.json",
+      "parity": "crossing_strike_shred_e75"
+    }
+  }
 }

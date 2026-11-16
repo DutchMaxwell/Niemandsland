@@ -1322,6 +1322,53 @@ fn crossing_models_against(next: &State, legs: &[([f64; 2], [f64; 2])], ti: usiz
     legs.iter().filter(|&&leg| legs_cross_unit(next, std::slice::from_ref(&leg), ti)).count().max(1) as i64
 }
 
+/// A chain's members before a landing: (unit, positions, wounds).
+type ChainBefore = Vec<(usize, Vec<[f64; 3]>, Vec<i64>)>;
+
+/// One-core P4.D-37: `ti`'s chain (host, then its joined heroes) before a landing. Only a supplied tray takes it (a seeded
+/// one clones nothing); `land_chain_report` reads it after the landing.
+fn chain_snapshot(next: &State, ti: usize, tray: &Tray) -> Option<ChainBefore> {
+    tray.feed().is_some().then(|| std::iter::once(ti).chain(next.attached[ti].iter().copied())
+        .map(|u| (u, next.positions[u].clone(), next.wounds[u].clone())).collect())
+}
+
+/// One-core P3 steps 7/25/27, shared by the volley and the move-through attacks: at the landing's stamp `_solo_apply_wounds`'s
+/// lines (main.gd:16582-16600): the wounds that landed on the chain, then per member the models it lost (main.gd:18376-18395,
+/// :25123); then one landing per changed member, its loss line said here. A seeded tray (`None`) says and records nothing.
+fn land_chain_report(statics: &[UnitStatic], next: &State, tray: &mut Tray, ti: usize, before: Option<ChainBefore>) {
+    let Some(ch) = before else { return };
+    let ut = &statics[next.roster.profile[ti]];
+    let size = |u: usize| statics[next.roster.profile[u]].model_count;
+    let (alive, total) = ch.iter().fold((0, 0), |(a, t), (u, ..)| (a + next.alive[*u], t + size(*u)));
+    let took: i64 = ch.iter().map(|(u, _, w)| w.iter().sum::<i64>() - next.wounds[*u].iter().sum::<i64>()).sum();
+    // NML-1091: a unit that IS one multi-wound model counts that model's wounds instead.
+    let (n, of, unit) = match ut.wounds_max.first() {
+        Some(&m) if total == 1 && m > 1 => (next.wounds[ti].first().copied().unwrap_or(0).max(0), m, " wounds"),
+        _ => (alive, total, ""),
+    };
+    if took > 0 {
+        tray.say(|| LogLine { rule: "shoot", category: Category::Combat, side: next.player[ti],
+            text: format!("{} takes {took} wound{} ({n}/{of}{unit})", ut.name, if took == 1 { "" } else { "s" }), detail: None });
+    }
+    for (u, at, _) in &ch {
+        let lost = at.len() as i64 - next.positions[*u].len() as i64;
+        let (a, t) = if *u == ti { (alive, total) } else { (next.alive[*u], size(*u)) };
+        let name = &statics[next.roster.profile[*u]].name;
+        let text = match (lost, a) {
+            (..=0, _) => continue,
+            (_, 0) => format!("{name} destroyed"),
+            (1, _) => format!("{name} loses a model ({a}/{t})"),
+            _ => format!("{name} loses {lost} models ({a}/{t})"),
+        };
+        tray.say(|| LogLine { rule: "shoot", category: Category::Combat, side: next.player[*u], text, detail: None });
+    }
+    for (u, at, wounds) in ch {
+        if let Some(l) = landing_of(next, u, &at, &wounds, &tray.dead_slots(u)) {
+            tray.land(|| Landing { loss_line: true, ..l });
+        }
+    }
+}
+
 pub(crate) fn tray_crossing_attack(
     statics: &[UnitStatic], state: &State, next: &mut State, si: usize, seams: Seams,
     tray: &mut Tray, shot: &mut ShootResult,
@@ -1366,8 +1413,14 @@ pub(crate) fn tray_crossing_attack(
         shot.log.push(format!(
             "Crossing Attack: {owner} crosses {tname} — {wounds} of {n} dice wound"
         ));
+        // P4.D-37: the step API shows the table's own sentence (`_solo_apply_crossing_attack`).
+        tray.say(|| LogLine { rule: "crossing_attack", category: Category::Combat, side: next.player[b], detail: None,
+            text: format!("Crossing Attack: {crossing_models} model{} of {owner} cross {tname} — {wounds} of {n} dice wound (no save)",
+                if crossing_models == 1 { "" } else { "s" }) });
         if wounds > 0 {
+            let before = chain_snapshot(next, target, tray);   // P4.D-37: the landing the step API hands the table
             land_wounds_with(next, target, wounds, seams.tray_exact);
+            land_chain_report(statics, next, tray, target, before);
         }
     }
 }
@@ -1428,8 +1481,10 @@ pub(crate) fn tray_strafing(
     // The line names the rule the weapon carries: Crossing Strike (3.6) or Strafing (3.5).
     let rule = crate::unit::strafing_rule_name(bearers.iter().filter(|&&b| next.alive[b] > 0)
         .flat_map(|&b| statics[next.roster.profile[b]].strafe_shoot.iter()));
-    shot.log.push(format!("{rule}: {} passes over {tname} — attacks it as if shooting (once per activation)",
-        statics[next.roster.profile[si]].name));
+    let said = format!("{rule}: {} passes over {tname} — attacks it as if shooting (once per activation)",
+        statics[next.roster.profile[si]].name);
+    shot.log.push(said.clone());
+    tray.say(|| LogLine { rule: "strafing", category: Category::Combat, side: next.player[si], text: said, detail: None });   // P4.D-37: the step API shows it
     // ONE shooting exchange, ONLY the Strafing profiles, through the shared
     // volley resolver — main.gd:3007's `_solo_resolve_ai_volley(unit, target,
     // shots, true)`: the activation's modifier distance, the
@@ -1497,6 +1552,7 @@ pub(crate) fn tray_strafing(
     let w = shot.absorb(r);
     let members: Vec<usize> = parts.iter().map(|(b, _, _, _)| *b).collect();
     land_hazardous_self(statics, next, &members, seams, shot);
+    let before = chain_snapshot(next, target, tray);   // P4.D-37: the landing the step API hands the table
     if !seams.tray_exact {
         land_pool_wounds(next, target, w, false, seams, &mut shot.log);
     }
@@ -1508,6 +1564,7 @@ pub(crate) fn tray_strafing(
     if seams.tray_exact {
         land_pool_wounds(next, target, w, true, seams, &mut shot.log); // the table's order: Takedown, Deadly, then the pool
     }
+    land_chain_report(statics, next, tray, target, before);
     if scourge_morale_trigger(next, statics, seams, ut, target, alive_before, wounds_before, phantom, &mut shot.log) {
         tray_morale(next, statics, target, false, seams, tray, shot, Some(d), None);
     }
@@ -10598,9 +10655,7 @@ fn resolve_with(
                             let att_incoming = land_hazardous_self(statics, &mut next, &members, seams, shot);
                             // One-core P3 step 7: the target chain (host, then its joined heroes) before
                             // the landing. Only a supplied tray takes it: a seeded one clones nothing.
-                            let chain_before = tray.feed().is_some().then(|| std::iter::once(g.ti)
-                                .chain(next.attached[g.ti].iter().copied())
-                                .map(|u| (u, next.positions[u].clone(), next.wounds[u].clone())).collect::<Vec<_>>());
+                            let chain_before = chain_snapshot(&next, g.ti, tray);
                             if !seams.tray_exact {
                                 land_pool_wounds(&mut next, g.ti, w, false, seams, &mut shot.log);
                             }
@@ -10627,41 +10682,8 @@ fn resolve_with(
                                 let left = alloc.as_mut().map_or(w, |a| land_pool_picked(&mut next, g.ti, w, a, tray));
                                 land_pool_wounds(&mut next, g.ti, left, true, seams, &mut shot.log);
                             }
-                            // One-core P3 step 25: at the landing's stamp, `_solo_apply_wounds`'s lines (main.gd:16582-16600):
-                            // the wounds that landed on the chain, then per member the models it lost (main.gd:18376-18395, :25123).
-                            if let Some(ch) = chain_before.as_ref() {
-                                let size = |u: usize| statics[next.roster.profile[u]].model_count;
-                                let (alive, total) = ch.iter().fold((0, 0), |(a, t), (u, ..)| (a + next.alive[*u], t + size(*u)));
-                                let took: i64 = ch.iter().map(|(u, _, w)| w.iter().sum::<i64>() - next.wounds[*u].iter().sum::<i64>()).sum();
-                                // NML-1091: a unit that IS one multi-wound model counts that model's wounds instead.
-                                let (n, of, unit) = match ut_g.wounds_max.first() {
-                                    Some(&m) if total == 1 && m > 1 => (next.wounds[g.ti].first().copied().unwrap_or(0).max(0), m, " wounds"),
-                                    _ => (alive, total, ""),
-                                };
-                                if took > 0 {
-                                    tray.say(|| LogLine { rule: "shoot", category: Category::Combat, side: next.player[g.ti],
-                                        text: format!("{} takes {took} wound{} ({n}/{of}{unit})", ut_g.name, if took == 1 { "" } else { "s" }), detail: None });
-                                }
-                                for (u, at, _) in ch {
-                                    let lost = at.len() as i64 - next.positions[*u].len() as i64;
-                                    let (a, t) = if *u == g.ti { (alive, total) } else { (next.alive[*u], size(*u)) };
-                                    let name = &statics[next.roster.profile[*u]].name;
-                                    let text = match (lost, a) {
-                                        (..=0, _) => continue,
-                                        (_, 0) => format!("{name} destroyed"),
-                                        (1, _) => format!("{name} loses a model ({a}/{t})"),
-                                        _ => format!("{name} loses {lost} models ({a}/{t})"),
-                                    };
-                                    tray.say(|| LogLine { rule: "shoot", category: Category::Combat, side: next.player[*u], text, detail: None });
-                                }
-                            }
-                            // One-core P3 step 7: one landing per changed chain member, stamped BEFORE
-                            // the group's morale test below draws. Step 27: its loss line was said just above.
-                            for (u, at, wounds) in chain_before.into_iter().flatten() {
-                                if let Some(l) = landing_of(&next, u, &at, &wounds, &tray.dead_slots(u)) {
-                                    tray.land(|| Landing { loss_line: true, ..l });
-                                }
-                            }
+                            // One-core P3 steps 7/25/27: the landing's lines and its landings, stamped BEFORE the group's morale test below draws.
+                            land_chain_report(statics, &next, tray, g.ti, chain_before);
                             // rules-wave3-growthmark (epoch 6) — the
                             // ignore-wound marker AFTER the landing.
                             if rule_on(seams.rules_epoch, EPOCH_6_TABLE_RULES) {

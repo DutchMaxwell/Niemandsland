@@ -299,3 +299,26 @@ func test_a_mixed_kit_case_errors_when_no_prompt_opens() -> void:
 	sc["shape"] = "tough"   # planted fault: one shared loadout and Tough 1 - nothing to choose, no prompt
 	var rec: Dictionary = await Harness._run_case(_main, sc, 0)
 	assert_str(str(rec.get("error", ""))).contains("never opened")
+
+
+func test_the_move_through_fixture_matches_the_old_table_path() -> void:
+	var path := Harness.fixture_path(Harness.MOVE_THROUGH_FAMILY)
+	var want := Harness.load_fixture(path)
+	assert_bool(want.is_empty()).override_failure_message(
+		"fixture missing: %s - capture it with --family move_through" % path).is_false()
+	var got: Dictionary = await Harness.capture(_main, Harness.MOVE_THROUGH_FAMILY)
+	var problems := Harness.compare(want, got)
+	assert_array(problems).override_failure_message(
+		"the old table path no longer matches its move-through golden witness (%s):\n%s" % [
+			Harness.describe_provenance(want, got), "\n".join(problems)]).is_empty()
+
+
+func test_a_planted_move_through_fixture_line_is_reported() -> void:
+	var want := Harness.load_fixture(Harness.fixture_path(Harness.MOVE_THROUGH_FAMILY))
+	assert_bool(want.is_empty()).override_failure_message("move-through fixture missing").is_false()
+	var got: Dictionary = await Harness.capture(_main, Harness.MOVE_THROUGH_FAMILY)
+	want["cases"][0]["lines"][0] = "%s (planted)" % str(want["cases"][0]["lines"][0])
+	var problems := Harness.compare(want, got)
+	assert_int(problems.size()).override_failure_message(
+		"a changed move-through fixture line went unnoticed - the witness cannot fail").is_equal(1)
+	assert_str("\n".join(problems)).contains("planted")
