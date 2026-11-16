@@ -31,6 +31,13 @@ class FakeNet extends Node:
 		sent.append({"kind": "wounds", "index": model.model_index, "alive": model.is_alive})
 	func broadcast_move(object_id: int, pos: Vector3) -> void:
 		sent.append({"kind": "move", "id": object_id, "pos": pos})
+	# main._broadcast_presence calls these whenever a frame runs long (a core build's first frames do): nothing to record.
+	func broadcast_cursor_position(_pos: Vector3) -> void:
+		pass
+	func broadcast_camera_direction(_yaw: float, _pitch: float, _zoom: float) -> void:
+		pass
+	func broadcast_camera_position(_pos: Vector3) -> void:
+		pass
 
 var _runner: GdUnitSceneRunner
 var _main: Node

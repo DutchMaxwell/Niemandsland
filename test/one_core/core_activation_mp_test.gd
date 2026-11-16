@@ -85,6 +85,15 @@ func _plain(pid: int, uname: String, x_in: float, rules: Array = []) -> GameUnit
 	return u
 
 
+const PRESENCE := ["sync_cursor_position", "sync_camera_direction", "sync_camera_position"]
+
+
+## The wire without the cursor / camera presence frames: main._broadcast_presence sends them whenever a frame runs long
+## (a core build's first frames do), they are no part of an activation exchange.
+func _quiet_wire() -> Array:
+	return _net.wire.filter(func(f: Dictionary) -> bool: return not (str(f["t"]) == "rpc" and PRESENCE.has(str(f["p"]["m"]))))
+
+
 ## The wire's frame names in send order (a former @rpc call by its handler name).
 func _names() -> Array:
 	return _net.wire.map(func(f: Dictionary) -> String: return str(f["p"]["m"]) if str(f["t"]) == "rpc" else str(f["t"]))
@@ -260,7 +269,7 @@ func test_a_matching_check_is_silent() -> void:
 	var units := [_plain(2, "Guards", 18.0), _plain(1, "Rifles", 0.0)]
 	var ok_before := CoreActivation.checks_ok
 	_receive(_check_of(units))
-	assert_array(_net.wire).is_empty()
+	assert_array(_quiet_wire()).is_empty()
 	assert_int(CoreActivation.checks_ok).is_equal(ok_before + 1)
 
 
@@ -294,7 +303,7 @@ func test_a_rounding_split_is_silent_and_two_millimetres_are_not() -> void:
 	assert_str(CoreActivation.digest(units)).override_failure_message("precondition: the hashes differ") \
 		.is_not_equal(str(check["digest"]))
 	_receive(check)
-	assert_array(_net.wire).override_failure_message("rounding split: %s" % [_names()]).is_empty()
+	assert_array(_quiet_wire()).override_failure_message("rounding split: %s" % [_names()]).is_empty()
 	n.global_position.x = 0.1025
 	_receive(check)
 	assert_array(_names()).override_failure_message("2 mm: %s" % [_names()]).contains_exactly(["activation_mismatch"])
@@ -311,7 +320,7 @@ func test_another_round_and_the_flag_off_are_ignored_and_an_unknown_unit_is_a_mi
 	_receive(later)
 	CoreActivation._env = 0
 	_receive(check)
-	assert_array(_net.wire).override_failure_message("%s" % [_names()]).is_empty()
+	assert_array(_quiet_wire()).override_failure_message("%s" % [_names()]).is_empty()
 	CoreActivation._env = 1
 	var ghost := check.duplicate(true)
 	ghost["units"] = ["no_such_unit"]
@@ -402,7 +411,7 @@ func test_the_activation_correction_is_never_a_new_activation() -> void:
 	await _runner.simulate_frames(2)
 	assert_bool(u.is_activated).is_true()
 	assert_int(_main._hotseat_side_on_turn()).is_equal(2)
-	assert_array(_net.wire).override_failure_message("%s" % [_names()]).is_empty()
+	assert_array(_quiet_wire()).override_failure_message("%s" % [_names()]).is_empty()
 	assert_int(_main.battle_log.entries().size()).override_failure_message("a line was written").is_equal(lines)
 
 
@@ -413,7 +422,7 @@ func test_a_table_that_did_not_announce_does_not_push() -> void:
 	CoreActivation._announced.clear()
 	_main._on_network_command("activation_mismatch", _notice([u], func() -> void: m.wounds_current = 0,
 		func() -> void: m.wounds_current = 1), SENDER_PEER)
-	assert_array(_net.wire).override_failure_message("%s" % [_names()]).is_empty()
+	assert_array(_quiet_wire()).override_failure_message("%s" % [_names()]).is_empty()
 
 
 ## The re-check after the push still differs: one line, and no notice - never a loop.
@@ -475,7 +484,7 @@ func test_the_rounds_last_check_is_compared_after_this_table_advanced() -> void:
 	var ok_before := CoreActivation.checks_ok
 	_main.opr_army_manager.advance_round()
 	_receive(check)
-	assert_array(_net.wire).override_failure_message("%s" % [_names()]).is_empty()
+	assert_array(_quiet_wire()).override_failure_message("%s" % [_names()]).is_empty()
 	assert_int(CoreActivation.checks_ok).override_failure_message("the round's last check was not compared") \
 		.is_equal(ok_before + 1)
 
@@ -505,7 +514,7 @@ func test_a_check_of_an_older_round_is_counted_as_dropped() -> void:
 	_main.opr_army_manager.advance_round()
 	var dropped := CoreActivation.checks_dropped
 	_receive(check)
-	assert_array(_net.wire).override_failure_message("%s" % [_names()]).is_empty()
+	assert_array(_quiet_wire()).override_failure_message("%s" % [_names()]).is_empty()
 	assert_int(CoreActivation.checks_dropped).is_equal(dropped + 1)
 
 
