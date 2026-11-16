@@ -1,0 +1,2414 @@
+{
+ "cases": [
+  {
+   "epoch": 76,
+   "extra": {
+    "shot_round": "<none>"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 4,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "DefA",
+     "wounds": 4
+    },
+    {
+     "alive": 3,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       0
+      ]
+     ],
+     "unit": "DefB",
+     "wounds": 3
+    }
+   ],
+   "lines": [
+    "COMBAT|Att fires at DefA",
+    "COMBAT|AI (Att): 6 4 4 3 1 → 3 hits (4+)",
+    "COMBAT|Att fires Rifle at DefA — 3 hits",
+    "COMBAT|DefA saves on 4+",
+    "COMBAT|AI (DefA) defends: 6 6 1 → 2 blocks (4+)",
+    "COMBAT|DefA takes 1 wound (4/5)",
+    "COMBAT|DefA loses a model (4/5)",
+    "COMBAT|Att fires at DefB",
+    "COMBAT|AI (Att): 6 6 4 2 2 → 3 hits (4+)",
+    "COMBAT|Att fires Pistol at DefB (7/10 models sighted) — 3 hits",
+    "COMBAT|DefB saves on 4+",
+    "COMBAT|AI (DefB) defends: 5 2 2 → 1 block (4+)",
+    "COMBAT|DefB takes 2 wounds (3/5)",
+    "COMBAT|DefB loses 2 models (3/5)"
+   ],
+   "rng": "7438143122385300322",
+   "scenario": "ai_split",
+   "seed": 0
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "shot_round": "<none>"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 4,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "DefA",
+     "wounds": 4
+    },
+    {
+     "alive": 4,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "DefB",
+     "wounds": 4
+    }
+   ],
+   "lines": [
+    "COMBAT|Att fires at DefA",
+    "COMBAT|AI (Att): 4 3 2 2 1 → 1 hit (4+)",
+    "COMBAT|Att fires Rifle at DefA — 1 hit",
+    "COMBAT|DefA saves on 4+",
+    "COMBAT|AI (DefA) defends: 1 → 0 blocks (4+)",
+    "COMBAT|DefA takes 1 wound (4/5)",
+    "COMBAT|DefA loses a model (4/5)",
+    "COMBAT|Att fires at DefB",
+    "COMBAT|AI (Att): 6 6 5 1 1 → 3 hits (4+)",
+    "COMBAT|Att fires Pistol at DefB (7/10 models sighted) — 3 hits",
+    "COMBAT|DefB saves on 4+",
+    "COMBAT|AI (DefB) defends: 4 4 2 → 2 blocks (4+)",
+    "COMBAT|DefB takes 1 wound (4/5)",
+    "COMBAT|DefB loses a model (4/5)"
+   ],
+   "rng": "91090413724407685",
+   "scenario": "ai_split",
+   "seed": 17
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "shot_round": "<none>"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 5,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "DefA",
+     "wounds": 5
+    },
+    {
+     "alive": 4,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "DefB",
+     "wounds": 4
+    }
+   ],
+   "lines": [
+    "COMBAT|Att fires at DefA",
+    "COMBAT|AI (Att): 3 3 2 1 1 → 0 hits (4+)",
+    "COMBAT|Att fires Rifle at DefA — 0 hits",
+    "COMBAT|Att fires at DefB",
+    "COMBAT|AI (Att): 5 3 2 2 1 → 1 hit (4+)",
+    "COMBAT|Att fires Pistol at DefB (7/10 models sighted) — 1 hit",
+    "COMBAT|DefB saves on 4+",
+    "COMBAT|AI (DefB) defends: 1 → 0 blocks (4+)",
+    "COMBAT|DefB takes 1 wound (4/5)",
+    "COMBAT|DefB loses a model (4/5)"
+   ],
+   "rng": "2949453841632409580",
+   "scenario": "ai_split",
+   "seed": 49
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "shot_round": "<none>"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 5,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "DefA",
+     "wounds": 5
+    },
+    {
+     "alive": 5,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "DefB",
+     "wounds": 5
+    }
+   ],
+   "lines": [
+    "COMBAT|Att fires at DefA",
+    "COMBAT|AI (Att): 3 3 3 3 2 → 0 hits (4+)",
+    "COMBAT|Att fires Rifle at DefA — 0 hits",
+    "COMBAT|Att fires at DefB",
+    "COMBAT|AI (Att): 3 2 1 1 1 → 0 hits (4+)",
+    "COMBAT|Att fires Pistol at DefB (7/10 models sighted) — 0 hits"
+   ],
+   "rng": "-7951138476389152495",
+   "scenario": "ai_split",
+   "seed": 225
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "shot_round": "<none>"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 3,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       0
+      ]
+     ],
+     "unit": "DefA",
+     "wounds": 3
+    },
+    {
+     "alive": 4,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "DefB",
+     "wounds": 4
+    }
+   ],
+   "lines": [
+    "COMBAT|Att fires at DefA",
+    "COMBAT|AI (Att): 6 4 4 1 1 → 3 hits (4+)",
+    "COMBAT|Att fires Rifle at DefA — 3 hits",
+    "COMBAT|DefA saves on 4+",
+    "COMBAT|AI (DefA) defends: 4 3 1 → 1 block (4+)",
+    "COMBAT|DefA takes 2 wounds (3/5)",
+    "COMBAT|DefA loses 2 models (3/5)",
+    "COMBAT|Att fires at DefB",
+    "COMBAT|AI (Att): 6 5 5 4 2 → 4 hits (4+)",
+    "COMBAT|Att fires Pistol at DefB (7/10 models sighted) — 4 hits",
+    "COMBAT|DefB saves on 4+",
+    "COMBAT|AI (DefB) defends: 6 6 4 3 → 3 blocks (4+)",
+    "COMBAT|DefB takes 1 wound (4/5)",
+    "COMBAT|DefB loses a model (4/5)"
+   ],
+   "rng": "4969043072426689364",
+   "scenario": "ai_split",
+   "seed": 3
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "shot_round": "<none>"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 4,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "DefA",
+     "wounds": 4
+    },
+    {
+     "alive": 5,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "DefB",
+     "wounds": 5
+    }
+   ],
+   "lines": [
+    "COMBAT|Att fires at DefA",
+    "COMBAT|AI (Att): 6 6 5 5 3 → 4 hits (4+)",
+    "COMBAT|Att fires Rifle at DefA — 4 hits",
+    "COMBAT|DefA saves on 4+",
+    "COMBAT|AI (DefA) defends: 5 5 4 1 → 3 blocks (4+)",
+    "COMBAT|DefA takes 1 wound (4/5)",
+    "COMBAT|DefA loses a model (4/5)",
+    "COMBAT|Att fires at DefB",
+    "COMBAT|AI (Att): 4 2 1 1 1 → 1 hit (4+)",
+    "COMBAT|Att fires Pistol at DefB (7/10 models sighted) — 1 hit",
+    "COMBAT|DefB saves on 4+",
+    "COMBAT|AI (DefB) defends: 5 → 1 block (4+)"
+   ],
+   "rng": "6327237527599058260",
+   "scenario": "ai_split",
+   "seed": 101
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "shot_round": "<none>"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 5,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "DefA",
+     "wounds": 5
+    },
+    {
+     "alive": 4,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "DefB",
+     "wounds": 4
+    }
+   ],
+   "lines": [
+    "COMBAT|Att fires at DefA",
+    "COMBAT|AI (Att): 5 2 2 2 2 → 1 hit (4+)",
+    "COMBAT|Att fires Rifle at DefA — 1 hit",
+    "COMBAT|DefA saves on 4+",
+    "COMBAT|AI (DefA) defends: 5 → 1 block (4+)",
+    "COMBAT|Att fires at DefB",
+    "COMBAT|AI (Att): 5 3 2 1 1 → 1 hit (4+)",
+    "COMBAT|Att fires Pistol at DefB (7/10 models sighted) — 1 hit",
+    "COMBAT|DefB saves on 4+",
+    "COMBAT|AI (DefB) defends: 3 → 0 blocks (4+)",
+    "COMBAT|DefB takes 1 wound (4/5)",
+    "COMBAT|DefB loses a model (4/5)"
+   ],
+   "rng": "-425697857805687026",
+   "scenario": "ai_split",
+   "seed": 512
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "shot_round": "<none>"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 2,
+     "shaken": true,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       false,
+       0
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       0
+      ]
+     ],
+     "unit": "DefA",
+     "wounds": 2
+    },
+    {
+     "alive": 5,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "DefB",
+     "wounds": 5
+    }
+   ],
+   "lines": [
+    "COMBAT|Att fires at DefA",
+    "COMBAT|AI (Att): 6 5 5 4 4 → 5 hits (4+)",
+    "COMBAT|Att fires Rifle at DefA — 5 hits",
+    "COMBAT|DefA saves on 4+",
+    "COMBAT|AI (DefA) defends: 5 4 3 3 2 → 2 blocks (4+)",
+    "COMBAT|DefA takes 3 wounds (2/5)",
+    "COMBAT|DefA loses 3 models (2/5)",
+    "COMBAT|AI (DefA): 1 → failed (4+)",
+    "COMBAT|DefA fails morale — Shaken",
+    "COMBAT|Att fires at DefB",
+    "COMBAT|AI (Att): 5 5 4 3 3 → 3 hits (4+)",
+    "COMBAT|Att fires Pistol at DefB (7/10 models sighted) — 3 hits",
+    "COMBAT|DefB saves on 4+",
+    "COMBAT|AI (DefB) defends: 6 5 4 → 3 blocks (4+)"
+   ],
+   "rng": "-7106780807132110806",
+   "scenario": "ai_split",
+   "seed": 999
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "shot_round": "1"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 4,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "DefA",
+     "wounds": 4
+    },
+    {
+     "alive": 3,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       0
+      ]
+     ],
+     "unit": "DefB",
+     "wounds": 3
+    }
+   ],
+   "lines": [
+    "COMBAT|Split fire: Att fires at DefA and DefB (declared before rolling — GF 3.6)",
+    "COMBAT|Att: 10/10 models with line of sight + range",
+    "COMBAT|You: 6 4 4 3 1 → 3 hits (4+)",
+    "COMBAT|Att fires Rifle at DefA — 3 hits",
+    "COMBAT|DefA saves on 4+",
+    "COMBAT|AI (DefA) defends: 6 6 1 → 2 blocks (4+)",
+    "COMBAT|DefA takes 1 wound (4/5)",
+    "COMBAT|DefA loses a model (4/5)",
+    "COMBAT|Att: 10/10 models with line of sight + range",
+    "COMBAT|You: 6 6 4 2 2 → 3 hits (4+)",
+    "COMBAT|Att fires Pistol at DefB — 3 hits",
+    "COMBAT|DefB saves on 4+",
+    "COMBAT|AI (DefB) defends: 5 2 2 → 1 block (4+)",
+    "COMBAT|DefB takes 2 wounds (3/5)",
+    "COMBAT|DefB loses 2 models (3/5)",
+    "GENERAL|Att activated (you)",
+    "GENERAL|NACHTMAHR — Albtraum (decision tree — Erlkönig did not load)",
+    "MOVEMENT|DefA rushes (→ Att)"
+   ],
+   "rng": "7438143122385300322",
+   "scenario": "human_split",
+   "seed": 0
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "shot_round": "1"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 4,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "DefA",
+     "wounds": 4
+    },
+    {
+     "alive": 4,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "DefB",
+     "wounds": 4
+    }
+   ],
+   "lines": [
+    "COMBAT|Split fire: Att fires at DefA and DefB (declared before rolling — GF 3.6)",
+    "COMBAT|Att: 10/10 models with line of sight + range",
+    "COMBAT|You: 4 3 2 2 1 → 1 hit (4+)",
+    "COMBAT|Att fires Rifle at DefA — 1 hit",
+    "COMBAT|DefA saves on 4+",
+    "COMBAT|AI (DefA) defends: 1 → 0 blocks (4+)",
+    "COMBAT|DefA takes 1 wound (4/5)",
+    "COMBAT|DefA loses a model (4/5)",
+    "COMBAT|Att: 10/10 models with line of sight + range",
+    "COMBAT|You: 6 6 5 1 1 → 3 hits (4+)",
+    "COMBAT|Att fires Pistol at DefB — 3 hits",
+    "COMBAT|DefB saves on 4+",
+    "COMBAT|AI (DefB) defends: 4 4 2 → 2 blocks (4+)",
+    "COMBAT|DefB takes 1 wound (4/5)",
+    "COMBAT|DefB loses a model (4/5)",
+    "GENERAL|Att activated (you)"
+   ],
+   "rng": "91090413724407685",
+   "scenario": "human_split",
+   "seed": 17
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "shot_round": "1"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 5,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "DefA",
+     "wounds": 5
+    },
+    {
+     "alive": 4,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "DefB",
+     "wounds": 4
+    }
+   ],
+   "lines": [
+    "COMBAT|Split fire: Att fires at DefA and DefB (declared before rolling — GF 3.6)",
+    "COMBAT|Att: 10/10 models with line of sight + range",
+    "COMBAT|You: 3 3 2 1 1 → 0 hits (4+)",
+    "COMBAT|Att fires Rifle at DefA — 0 hits",
+    "COMBAT|Att: 10/10 models with line of sight + range",
+    "COMBAT|You: 5 3 2 2 1 → 1 hit (4+)",
+    "COMBAT|Att fires Pistol at DefB — 1 hit",
+    "COMBAT|DefB saves on 4+",
+    "COMBAT|AI (DefB) defends: 1 → 0 blocks (4+)",
+    "COMBAT|DefB takes 1 wound (4/5)",
+    "COMBAT|DefB loses a model (4/5)",
+    "GENERAL|Att activated (you)"
+   ],
+   "rng": "2949453841632409580",
+   "scenario": "human_split",
+   "seed": 49
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "shot_round": "1"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 5,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "DefA",
+     "wounds": 5
+    },
+    {
+     "alive": 5,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "DefB",
+     "wounds": 5
+    }
+   ],
+   "lines": [
+    "COMBAT|Split fire: Att fires at DefA and DefB (declared before rolling — GF 3.6)",
+    "COMBAT|Att: 10/10 models with line of sight + range",
+    "COMBAT|You: 3 3 3 3 2 → 0 hits (4+)",
+    "COMBAT|Att fires Rifle at DefA — 0 hits",
+    "COMBAT|Att: 10/10 models with line of sight + range",
+    "COMBAT|You: 3 2 1 1 1 → 0 hits (4+)",
+    "COMBAT|Att fires Pistol at DefB — 0 hits",
+    "GENERAL|Att activated (you)"
+   ],
+   "rng": "-7951138476389152495",
+   "scenario": "human_split",
+   "seed": 225
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "shot_round": "1"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 3,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       0
+      ]
+     ],
+     "unit": "DefA",
+     "wounds": 3
+    },
+    {
+     "alive": 4,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "DefB",
+     "wounds": 4
+    }
+   ],
+   "lines": [
+    "COMBAT|Split fire: Att fires at DefA and DefB (declared before rolling — GF 3.6)",
+    "COMBAT|Att: 10/10 models with line of sight + range",
+    "COMBAT|You: 6 4 4 1 1 → 3 hits (4+)",
+    "COMBAT|Att fires Rifle at DefA — 3 hits",
+    "COMBAT|DefA saves on 4+",
+    "COMBAT|AI (DefA) defends: 4 3 1 → 1 block (4+)",
+    "COMBAT|DefA takes 2 wounds (3/5)",
+    "COMBAT|DefA loses 2 models (3/5)",
+    "COMBAT|Att: 10/10 models with line of sight + range",
+    "COMBAT|You: 6 5 5 4 2 → 4 hits (4+)",
+    "COMBAT|Att fires Pistol at DefB — 4 hits",
+    "COMBAT|DefB saves on 4+",
+    "COMBAT|AI (DefB) defends: 6 6 4 3 → 3 blocks (4+)",
+    "COMBAT|DefB takes 1 wound (4/5)",
+    "COMBAT|DefB loses a model (4/5)",
+    "GENERAL|Att activated (you)"
+   ],
+   "rng": "4969043072426689364",
+   "scenario": "human_split",
+   "seed": 3
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "shot_round": "1"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 4,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "DefA",
+     "wounds": 4
+    },
+    {
+     "alive": 5,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "DefB",
+     "wounds": 5
+    }
+   ],
+   "lines": [
+    "COMBAT|Split fire: Att fires at DefA and DefB (declared before rolling — GF 3.6)",
+    "COMBAT|Att: 10/10 models with line of sight + range",
+    "COMBAT|You: 6 6 5 5 3 → 4 hits (4+)",
+    "COMBAT|Att fires Rifle at DefA — 4 hits",
+    "COMBAT|DefA saves on 4+",
+    "COMBAT|AI (DefA) defends: 5 5 4 1 → 3 blocks (4+)",
+    "COMBAT|DefA takes 1 wound (4/5)",
+    "COMBAT|DefA loses a model (4/5)",
+    "COMBAT|Att: 10/10 models with line of sight + range",
+    "COMBAT|You: 4 2 1 1 1 → 1 hit (4+)",
+    "COMBAT|Att fires Pistol at DefB — 1 hit",
+    "COMBAT|DefB saves on 4+",
+    "COMBAT|AI (DefB) defends: 5 → 1 block (4+)",
+    "GENERAL|Att activated (you)"
+   ],
+   "rng": "6327237527599058260",
+   "scenario": "human_split",
+   "seed": 101
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "shot_round": "1"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 5,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "DefA",
+     "wounds": 5
+    },
+    {
+     "alive": 4,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "DefB",
+     "wounds": 4
+    }
+   ],
+   "lines": [
+    "COMBAT|Split fire: Att fires at DefA and DefB (declared before rolling — GF 3.6)",
+    "COMBAT|Att: 10/10 models with line of sight + range",
+    "COMBAT|You: 5 2 2 2 2 → 1 hit (4+)",
+    "COMBAT|Att fires Rifle at DefA — 1 hit",
+    "COMBAT|DefA saves on 4+",
+    "COMBAT|AI (DefA) defends: 5 → 1 block (4+)",
+    "COMBAT|Att: 10/10 models with line of sight + range",
+    "COMBAT|You: 5 3 2 1 1 → 1 hit (4+)",
+    "COMBAT|Att fires Pistol at DefB — 1 hit",
+    "COMBAT|DefB saves on 4+",
+    "COMBAT|AI (DefB) defends: 3 → 0 blocks (4+)",
+    "COMBAT|DefB takes 1 wound (4/5)",
+    "COMBAT|DefB loses a model (4/5)",
+    "GENERAL|Att activated (you)"
+   ],
+   "rng": "-425697857805687026",
+   "scenario": "human_split",
+   "seed": 512
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "shot_round": "1"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 2,
+     "shaken": true,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       false,
+       0
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       0
+      ]
+     ],
+     "unit": "DefA",
+     "wounds": 2
+    },
+    {
+     "alive": 5,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "DefB",
+     "wounds": 5
+    }
+   ],
+   "lines": [
+    "COMBAT|Split fire: Att fires at DefA and DefB (declared before rolling — GF 3.6)",
+    "COMBAT|Att: 10/10 models with line of sight + range",
+    "COMBAT|You: 6 5 5 4 4 → 5 hits (4+)",
+    "COMBAT|Att fires Rifle at DefA — 5 hits",
+    "COMBAT|DefA saves on 4+",
+    "COMBAT|AI (DefA) defends: 5 4 3 3 2 → 2 blocks (4+)",
+    "COMBAT|DefA takes 3 wounds (2/5)",
+    "COMBAT|DefA loses 3 models (2/5)",
+    "COMBAT|AI (DefA): 1 → failed (4+)",
+    "COMBAT|DefA fails morale — Shaken",
+    "COMBAT|Att: 10/10 models with line of sight + range",
+    "COMBAT|You: 5 5 4 3 3 → 3 hits (4+)",
+    "COMBAT|Att fires Pistol at DefB — 3 hits",
+    "COMBAT|DefB saves on 4+",
+    "COMBAT|AI (DefB) defends: 6 5 4 → 3 blocks (4+)",
+    "GENERAL|Att activated (you)"
+   ],
+   "rng": "-7106780807132110806",
+   "scenario": "human_split",
+   "seed": 999
+  }
+ ],
+ "family": "split",
+ "provenance": {
+  "epoch": 76,
+  "git_sha": "ea68cc7aa107eb9b86e2df68403a6561b1bc0eb3",
+  "registry_sha256": "425decb0652c95d5718359a87107f2f3738e3287e9d67a13369b0a00a3f0df0e",
+  "registry_system": "gf"
+ },
+ "schema": "nml-golden-witness-v2"
+}
