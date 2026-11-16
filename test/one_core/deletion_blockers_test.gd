@@ -9,7 +9,6 @@ extends GdUnitTestSuite
 
 const ACTIVATION := "res://scripts/solo/core_activation.gd"
 const MAIN := "res://scripts/main.gd"
-const SELFPLAY := "res://tools/solo_selfplay.gd"
 const PARITY_SHOOT := "res://test/parity/parity_table.gd"
 const PARITY_MELEE := "res://test/parity/parity_table_melee.gd"
 
@@ -20,10 +19,9 @@ const BLOCKERS: Array[Dictionary] = [
 		"header": "static func enabled() -> bool:", "needles": ["NML_ONE_CORE_ACTIVATION"]},
 	{"name": "NmlCore-less build (applies needs the class)", "retire": "P4.D-41 (P4.D-40 made the core mandatory at the doors)", "file": ACTIVATION,
 		"header": "static func applies(main) -> bool:", "needles": ["ClassDB.class_exists(\"NmlCore\")"]},
-	{"name": "non-OPR clause of is_plain", "retire": "the P4.D-13 follow-up, before P4.D-41", "file": ACTIVATION,
+	{"name": "non-OPR clause of is_plain (the attacker side; the target side went with P4.D-13b)",
+		"retire": "the P4.D-13 follow-up, before P4.D-41", "file": ACTIVATION,
 		"header": "static func is_plain(gu: GameUnit) -> bool:", "needles": ["not gu.source_data is OPRApiClient.OPRUnit"]},
-	{"name": "tools/solo_selfplay.gd drives the table", "retire": "P4.D-39", "file": SELFPLAY, "header": "",
-		"needles": ["main._run_ai_shooting(", "main._run_ai_dangerous(", "main._solo_shooting_morale("]},
 	{"name": "parity_table.gd calls the AI volley resolver", "retire": "P4.D-38", "file": PARITY_SHOOT, "header": "",
 		"needles": ["main._solo_resolve_ai_volley("]},
 	{"name": "parity_table_melee.gd drives the melee resolver", "retire": "P4.D-49", "file": PARITY_MELEE, "header": "",
@@ -77,7 +75,7 @@ func test_every_deletion_blocker_still_holds() -> void:
 
 
 func test_the_list_is_not_empty_and_names_a_step_per_row() -> void:
-	assert_int(BLOCKERS.size()).is_greater_equal(8)
+	assert_int(BLOCKERS.size()).is_greater_equal(7)
 	for b in BLOCKERS:
 		assert_str(String(b["retire"])).override_failure_message("%s names no step" % b["name"]).contains("P4.D-")
 
@@ -97,3 +95,14 @@ func test_the_checker_names_a_blocker_whose_fact_is_gone() -> void:
 	# and the whole table is green on the untouched sources
 	for b in BLOCKERS:
 		assert_str(_check(b, _source(b["file"]))).is_empty()
+
+
+## P4.D-13b retired the TARGET side of the non-OPR clause: both core doors ask `is_plain_target`, never `is_plain`, about
+## the target. RED: put `is_plain(target)` back into either door.
+func test_the_target_side_of_the_non_opr_clause_is_gone() -> void:
+	var src := _source(ACTIVATION)
+	for header in ["static func run_ai(", "static func human_shoot("]:
+		var body := _span(src, header)
+		assert_str(body).override_failure_message("%s not found" % header).is_not_empty()
+		assert_bool(body.contains("is_plain(target)")).override_failure_message("%s asks is_plain(target) again" % header).is_false()
+		assert_bool(body.contains("is_plain_target(target)")).override_failure_message("%s lost is_plain_target(target)" % header).is_true()

@@ -451,6 +451,18 @@ func test_land_delta_lands_the_round_stamps_under_the_tables_names() -> void:
 	assert_bool(u.unit_properties.has("spot_round")).override_failure_message("no unmapped key").is_false()
 
 
+## P4.0-4f: the delta's marker pools land on the table under their own property names, and a split is reported.
+## RED when the landing is dropped: the pool stays 0.
+func test_land_delta_lands_the_marker_pools() -> void:
+	var u := _unit(1, "Rifles")
+	var row := {"unit": u.unit_id, "unknown": false, "alive": 1, "shaken": false, "moved": false, "removed": [],
+		"fatigued": false, "casts": 0, "stamps": {}, "pools": {"tag_markers": 2, "spot_markers": 0}}
+	await assert_error(func() -> void: CoreActivation.land_delta(_main, [row], [], {})).is_push_error(
+		"CoreActivation.land_delta: %s.tag_markers differs (table 0, core 2)" % u.get_name())
+	assert_int(int(u.unit_properties.get("tag_markers", 0))).override_failure_message("the pool landed").is_equal(2)
+	assert_bool(u.unit_properties.has("spot_markers")).override_failure_message("an equal pool wrote nothing").is_false()
+
+
 ## Step 42 (O21): the AI's volley at this table's human unit shows the table's "Incoming fire!" card before the save dice
 ## (the text names the shooter, the target, the hits and the weapon); answering it lets the volley finish. RED without the
 ## card in the driver: the volley runs through, no card.

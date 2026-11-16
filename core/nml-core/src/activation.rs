@@ -203,6 +203,23 @@ pub fn check_move(statics: &[UnitStatic], state: &State, si: usize, seams: Seams
     Check::Ok { lines: vec![LogLine { rule: "move_overrun", category: Category::Movement, side: state.player[si], text, detail }] }
 }
 
+/// P4.0-5: the one choice the step API offers so far — the Takedown model pick (`sim::takedown_pick`'s
+/// automatic answer). `Some((id, options, owner))` when the activation shoots a Takedown weapon at a
+/// target with 2+ living models: `id` = `takedown_model:<shooter key>:<target key>`, `options` = the
+/// target's living capture slots as `slot:<n>`, `owner` = the shooter's roster key (its side answers,
+/// as on the table). `None` otherwise, so every other transcript sees no choice at all.
+fn takedown_choice(statics: &[UnitStatic], state: &State, si: usize, shoot: Option<&str>) -> Option<(String, Vec<String>, String)> {
+    let target = shoot?;
+    let ti = *state.roster.index.get(target)?;
+    let living: Vec<usize> = (0..state.wounds[ti].len()).filter(|&i| state.wounds[ti][i] > 0).collect();
+    if living.len() < 2 || !statics[state.roster.profile[si]].shoot.iter().any(|p| p.takedown) {
+        return None;
+    }
+    let owner = state.roster.keys[si].clone();
+    let id = format!("takedown_model:{owner}:{target}");
+    Some((id, living.iter().map(|i| format!("slot:{i}")).collect(), owner))
+}
+
 /// One activation through the step API: the order rules, then the declared
 /// action (not moving = Hold) on the supplied faces and the LAST placement (`check_move` first).
 /// A new entry: the AI's resolver path is untouched. `NeedRoll.index` is the
@@ -235,6 +252,27 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
     let kind = effective_kind(declared, start, placed.as_ref().map(|(p, _)| p.as_slice()));
     if kind == RUSH && shoot.is_some() {
         return ActStep::Refused { index: at_intent, reason: format!("{name} rushed this activation - it cannot shoot.") };
+    }
+    // P4.0-5: the last `Choice` in the transcript answers (or asks) the open choice; without one the
+    // core's automatic pick stands and nothing below changes.
+    let mut seams = seams;
+    if let Some((i, id, option)) = t.iter().enumerate().rev().find_map(|(i, x)| match x {
+        Input::Choice { id, option } => Some((i, id, option)),
+        _ => None,
+    }) {
+        let Some((want, options, owner)) = at.and_then(|si| takedown_choice(statics, state, si, shoot.as_deref())) else {
+            return ActStep::Refused { index: i, reason: format!("no choice is open in this activation (got {id})") };
+        };
+        if *id != want {
+            return ActStep::Refused { index: i, reason: format!("the open choice is {want}, not {id}") };
+        }
+        if option.is_empty() {
+            return ActStep::NeedChoice { id: want, options, owner };
+        }
+        let Some(slot) = option.strip_prefix("slot:").and_then(|n| n.parse::<usize>().ok()).filter(|_| options.iter().any(|o| o == option)) else {
+            return ActStep::Refused { index: i, reason: format!("{option} is not an option of {want} (options: {})", options.join(", ")) };
+        };
+        seams = Seams { takedown_pick: Some(slot), ..seams };
     }
     // Not HOLD: a mode was declared and the last placement moved (or does not match the models).
     let mut moved = Vec::new();
@@ -315,6 +353,19 @@ pub struct UnitDelta {
     /// P4.0-4e: the per-unit once-per-round stamps AFTER (inventory class (a)), keyed by the `State`
     /// field name; `land_delta` maps the two names the table spells differently.
     pub stamps: Vec<(&'static str, i64)>,
+    /// P4.0-4f: the per-unit marker pools AFTER (inventory class (a)), keyed by the table's own
+    /// property name (every name is 1:1; absent on the table reads 0).
+    pub pools: Vec<(&'static str, i64)>,
+}
+
+/// P4.0-4f: the marker pools the inventory marks table-owned, in `State` declaration order, AFTER.
+fn pools_of(s: &State, u: usize) -> Vec<(&'static str, i64)> {
+    vec![
+        ("spot_markers", s.spot_markers[u]),
+        ("tag_markers", s.tag_markers[u]),
+        ("piercing_tag_markers", s.piercing_tag_markers[u]),
+        ("vengeance_markers", s.vengeance_markers[u]),
+    ]
 }
 
 /// P4.0-4e: every round stamp the inventory marks table-owned, in `State` declaration order, AFTER.
@@ -357,8 +408,10 @@ pub fn delta_of(before: &State, after: &State) -> Vec<UnitDelta> {
             removed.clear();
         }
         let stamps_changed = stamps_of(before, u) != stamps_of(after, u);
+        let pools_changed = pools_of(before, u) != pools_of(after, u);
         if b != a || before.alive[u] != after.alive[u] || before.shaken[u] != after.shaken[u] || moved
-            || before.fatigued[u] != after.fatigued[u] || before.casts[u] != after.casts[u] || stamps_changed
+            || before.fatigued[u] != after.fatigued[u] || before.casts[u] != after.casts[u]
+            || stamps_changed || pools_changed
         {
             out.push(UnitDelta {
                 key: key.clone(),
@@ -370,6 +423,7 @@ pub fn delta_of(before: &State, after: &State) -> Vec<UnitDelta> {
                 fatigued: after.fatigued[u],
                 casts: after.casts[u],
                 stamps: stamps_of(after, u),
+                pools: pools_of(after, u),
             });
         }
     }
@@ -482,6 +536,7 @@ mod tests {
 
     use crate::dice::Roll;
     use crate::sim::tests::volley_landings::volley_line;
+    use crate::unit::ShootProfile;
 
     fn seams() -> Seams {
         Seams { rules_epoch: crate::acts::CURRENT_RULES_EPOCH, tray_exact: true, ..Seams::default() }
@@ -565,10 +620,77 @@ mod tests {
         assert!(both > 0 && pooled_differs > 0, "fixture must hurt both targets and differ from the pooled run: {both} {pooled_differs}");
     }
 
+    // ---- P4.0-5: NeedChoice in the step API ----
+
+    /// `volley_line` with "a" carrying one Takedown sniper shot into "b" (two Tough(3) models).
+    fn takedown_line() -> (State, Vec<UnitStatic>) {
+        let (st, mut statics) = volley_line();
+        statics[0].shoot = vec![ShootProfile { name: "sniper".into(), takedown: true, attacks: 1, count: 1, range: 24, ..Default::default() }];
+        (st, statics)
+    }
+
+    /// The fixture's choice id: stable (the shooter's and the target's roster keys).
+    const TAKEDOWN_ID: &str = "takedown_model:a:b";
+
+    /// One choice point: without a `Choice` the automatic pick stands (the last living slot); with
+    /// `Input::Choice` answered, the OTHER model takes the Takedown wound. RED: drop the answer ->
+    /// both runs equal; accept any slot -> the default's model is named again.
+    #[test]
+    fn a_takedown_choice_answered_explicitly_differs_from_the_default() {
+        let (st, statics) = takedown_line();
+        for seed in 0..200i64 {
+            let (auto, _) = drive(&statics, &st, vec![Begin, intent(HOLD, Some("b"))], seed);
+            let answer = [Begin, intent(HOLD, Some("b")), Input::Choice { id: TAKEDOWN_ID.into(), option: "slot:0".into() }];
+            let (explicit, _) = drive(&statics, &st, answer.to_vec(), seed);
+            let (ActStep::Done { state: a, .. }, ActStep::Done { state: e, .. }) = (&auto, &explicit) else { continue };
+            if a.wounds[2] == e.wounds[2] {
+                continue; // no Takedown group landed on this seed
+            }
+            assert_eq!(a.wounds[2], vec![3, 2], "seed {seed}: the automatic pick is the last living slot");
+            assert_eq!(e.wounds[2], vec![2, 3], "seed {seed}: the answer names slot 0");
+            assert_eq!(a.alive[2], e.alive[2], "seed {seed}: the group is nonlethal, only the pick differs");
+            return;
+        }
+        panic!("no seed in 0..200 landed a Takedown group");
+    }
+
+    /// The empty option asks the open choice: stable id, every living slot as an option, the answering
+    /// unit's key as `owner`.
+    #[test]
+    fn an_empty_option_asks_the_choice_with_its_stable_id_and_slots() {
+        let (st, statics) = takedown_line();
+        let t = [Begin, intent(HOLD, Some("b")), Input::Choice { id: TAKEDOWN_ID.into(), option: String::new() }];
+        match step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t, true) {
+            ActStep::NeedChoice { id, options, owner } => {
+                assert_eq!((id.as_str(), owner.as_str()), (TAKEDOWN_ID, "a"));
+                assert_eq!(options, vec!["slot:0".to_string(), "slot:1".to_string()]);
+            }
+            other => panic!("expected NeedChoice, got {other:?}"),
+        }
+    }
+
+    /// A wrong id and a wrong option are refusals at the choice's input, never a silent acceptance
+    /// (RED: drop the option check -> a bogus `slot:9` resolves as the automatic pick).
+    #[test]
+    fn a_wrong_choice_id_or_option_is_refused() {
+        let (st, statics) = takedown_line();
+        let ask = |id: &str, option: &str| {
+            let t = [Begin, intent(HOLD, Some("b")), Input::Choice { id: id.into(), option: option.into() }];
+            step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t, true)
+        };
+        match ask("takedown_model:a:zzz", "slot:0") {
+            ActStep::Refused { index: 2, reason } => assert!(reason.contains(TAKEDOWN_ID), "{reason}"),
+            other => panic!("a wrong id must be refused, got {other:?}"),
+        }
+        match ask(TAKEDOWN_ID, "slot:9") {
+            ActStep::Refused { index: 2, reason } => assert!(reason.contains("slot:9"), "{reason}"),
+            other => panic!("a wrong option must be refused, got {other:?}"),
+        }
+    }
+
     /// O3: a unit that moved as a Rush cannot shoot (RED: drop the Rush check).
     #[test]
-    fn a_rush_cannot_shoot() {
-        let (st, statics) = volley_line();
+    fn a_rush_cannot_shoot() {        let (st, statics) = volley_line();
         let moved: Vec<[f64; 3]> = st.positions[0].iter().map(|p| [p[0] + 3.0 * INCHES_TO_METERS, p[1], p[2]]).collect();
         let t = [Begin, placed(moved), intent(RUSH, Some("b"))];
         match step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t, true) {
@@ -722,6 +844,21 @@ mod tests {
         let (got, _) = drive(&statics, &st, vec![Begin, intent(HOLD, Some("b"))], 7);
         let ActStep::Done { state, .. } = got else { panic!("seed 7: {got:?}") };
         assert!(delta_of(&st, &state).iter().all(|x| x.stamps.len() == 12), "a core row carries the stamps");
+    }
+    /// P4.0-4f: a unit whose only change is a marker pool gets a row carrying all four, AFTER; a core-resolved
+    /// volley's rows carry them too (RED: drop the pool term -> no row; drop a pair -> the count is 3).
+    #[test]
+    fn the_delta_carries_the_marker_pools() {
+        let (st, statics) = volley_line();
+        let mut after = st.clone();
+        after.tag_markers[2] = 2;
+        let d = delta_of(&st, &after);
+        assert_eq!(d.len(), 1);
+        assert_eq!(d[0].pools.len(), 4);
+        assert!(d[0].pools.contains(&("tag_markers", 2)));
+        let (got, _) = drive(&statics, &st, vec![Begin, intent(HOLD, Some("b"))], 7);
+        let ActStep::Done { state, .. } = got else { panic!("seed 7: {got:?}") };
+        assert!(delta_of(&st, &state).iter().all(|x| x.pools.len() == 4), "a core row carries the pools");
     }
 
     // ---- step 14: allowance and move check ----

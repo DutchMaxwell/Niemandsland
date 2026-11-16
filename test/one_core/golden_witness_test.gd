@@ -148,3 +148,33 @@ func test_a_planted_morale_fixture_line_is_reported() -> void:
 	assert_int(problems.size()).override_failure_message(
 		"a changed morale fixture line went unnoticed — the witness cannot fail").is_equal(1)
 	assert_str(str(problems[0])).contains("planted")
+
+
+func test_the_human_door_fixture_matches_the_old_table_path() -> void:
+	var path := Harness.fixture_path(Harness.HUMAN_FAMILY)
+	var want := Harness.load_fixture(path)
+	assert_bool(want.is_empty()).override_failure_message(
+		"fixture missing: %s — capture it with --family human_shoot" % path).is_false()
+	var got: Dictionary = await Harness.capture(_main, Harness.HUMAN_FAMILY)
+	var problems := Harness.compare(want, got)
+	assert_array(problems).override_failure_message(
+		"the old table path no longer matches its human-door golden witness (%s):\n%s" % [
+			Harness.describe_provenance(want, got), "\n".join(problems)]).is_empty()
+
+
+func test_a_planted_human_door_fixture_line_is_reported() -> void:
+	var want := Harness.load_fixture(Harness.fixture_path(Harness.HUMAN_FAMILY))
+	assert_bool(want.is_empty()).override_failure_message("human-door fixture missing").is_false()
+	var got: Dictionary = await Harness.capture(_main, Harness.HUMAN_FAMILY)
+	want["cases"][0]["lines"][0] = "%s (planted)" % str(want["cases"][0]["lines"][0])
+	var problems := Harness.compare(want, got)
+	assert_int(problems.size()).override_failure_message(
+		"a changed human-door fixture line went unnoticed — the witness cannot fail").is_equal(1)
+	assert_str("\n".join(problems)).contains("planted")
+
+
+func test_the_partial_range_guard_errors_when_every_model_fires() -> void:
+	var far: Dictionary = (Harness.human_scenarios()[1] as Dictionary).duplicate(true)
+	far["defender"]["x_in"] = 8.0   # planted fault: at 8" every model of the column is in range
+	var rec: Dictionary = await Harness._run_case(_main, far, 0)
+	assert_str(str(rec.get("error", ""))).contains("not partial")

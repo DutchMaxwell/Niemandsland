@@ -10,7 +10,7 @@ extends GdUnitTestSuite
 ##
 ## The meter now reads report["can_shoot"]: the single post-move gate BOTH brains flow through
 ## (range + line of sight from the settled position, plus the Bug-27/28 retarget), and the exact
-## predicate the drivers fire on — main._solo_activate_one_ai and tools/solo_selfplay both do
+## predicate the drivers fire on — main._solo_activate_one_ai and the arena harness both do
 ## `if can_shoot: _run_ai_shooting(report)`. These pin the meter to that gate.
 
 const IN2M := 0.0254

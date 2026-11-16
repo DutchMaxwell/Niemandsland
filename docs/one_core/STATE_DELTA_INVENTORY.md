@@ -92,7 +92,7 @@ same commit as the struct change.
 | `growth_markers` | main.gd:24962 | no | no | **YES** |
 | `growth_round` | main.gd:24968 | no | no | **YES** |
 | `growth_strike_round` | main.gd:9335 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
-| `vengeance_markers` | main.gd:8827 | no | no | **YES** |
+| `vengeance_markers` | main.gd:8827 | yes (`land_delta`, P4.0-4f) | no | no (delta) |
 | `second_wind_used` | solo_controller.gd:13886 | no | no | **YES** |
 | `surprise_attack_used` | main.gd:25248 | no | no | **YES** |
 | `reinforcement_used` | main.gd:16256 | no | no | **YES** |
@@ -100,28 +100,30 @@ same commit as the struct change.
 | `second_wind_uses` | solo_controller.gd:13833 | no | no | **YES** |
 | `limited_used` | solo_controller.gd:9772 | no | no | **YES** |
 | `piercing_tag_used` | main.gd:24614 | no | no | **YES** |
-| `piercing_tag_markers` | main.gd:24674 | no | no | **YES** |
+| `piercing_tag_markers` | main.gd:24674 | yes (`land_delta`, P4.0-4f) | no | no (delta) |
 | `piercing_tag_persistent` | main.gd:24677 | no | no | **YES** |
 | `piercing_spot_round` | main.gd:24612 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
 | `storm_used` | main.gd:25124 | no | no | **YES** |
 | `feats_used` | solo_controller.gd:2002 | no | no | **YES** |
 | `teleport_used` | main.gd:25312 | no | no | **YES** |
-| `spot_markers` | main.gd:15256 | no | no | **YES** |
-| `tag_markers` | main.gd:15714 | no | no | **YES** |
+| `spot_markers` | main.gd:15256 | yes (`land_delta`, P4.0-4f) | no | no (delta) |
+| `tag_markers` | main.gd:15714 | yes (`land_delta`, P4.0-4f) | no | no (delta) |
 | `spot_round` | main.gd:15222 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
 | `precision_used` | main.gd:24773 | no | no | **YES** |
 
 ## Summary
 
-- 79 `State` fields; **22 gap rows** (P4.0-4d landed `fatigued` and `casts`; P4.0-4e landed the twelve
-  round stamps the table owns, -14).
+- 79 `State` fields; **18 gap rows** (P4.0-4d landed `fatigued` and `casts`; P4.0-4e the twelve round
+  stamps; P4.0-4f the four marker pools, -18).
 - No gap among the board facts an activation moves: model wounds, deaths and positions ride the
   per-step landings, `shaken` rides `delta_of`, `activated` and `shaken` ride the MP rows.
-- Every gap is a once-per-game latch or a marker pool the dice path reads again later: the live buff
-  ledger, the once-per-game flags, and both marker pools (`spot_markers`, `tag_markers`,
-  `piercing_tag_markers`). The delta stops at `shaken`, the ledger and the round stamps, and the MP
-  rows compare only activation, Shaken and per-model wounds/life/XZ — so a table and the core can
-  disagree on any of these without a local or MP signal.
+- Every remaining gap is a once-per-game latch the dice path reads again later: the live buff ledger
+  and the once-per-game flags (`second_wind_used`, the Limited / Storm / feat / Precision name lists,
+  `piercing_tag_used`, `surprise_attack_used`, `reinforcement_used`, `teleport_used`,
+  `piercing_tag_persistent`), plus `growth_markers` / `growth_round` (per-rule keys) and
+  `versatile_pick_mode` (a Dictionary on the table). The delta stops at `shaken`, the ledger, the
+  round stamps and the pools, and the MP rows compare only activation, Shaken and per-model
+  wounds/life/XZ — so a table and the core can disagree on any of these without a local or MP signal.
 
 ## Classification (One core P4.0-4a)
 

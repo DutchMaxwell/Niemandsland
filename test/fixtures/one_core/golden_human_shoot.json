@@ -1,0 +1,2130 @@
+{
+ "cases": [
+  {
+   "epoch": 76,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 5,
+     "shaken": true,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       false,
+       0
+      ],
+      [
+       2,
+       false,
+       0
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       false,
+       0
+      ],
+      [
+       9,
+       false,
+       0
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 5
+    }
+   ],
+   "lines": [
+    "COMBAT|Att: 10/10 models with line of sight + range",
+    "COMBAT|You: 6 6 6 6 6 4 4 3 1 1 → 7 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 7 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 5 4 2 2 2 2 1 → 2 blocks (4+)",
+    "COMBAT|Def takes 5 wounds (5/10)",
+    "COMBAT|Def loses 5 models (5/10)",
+    "COMBAT|AI (Def): 3 → failed (4+)",
+    "COMBAT|Def fails morale — Shaken"
+   ],
+   "rng": "5199619729904717764",
+   "scenario": "human_hold",
+   "seed": 0
+  },
+  {
+   "epoch": 76,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 9,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 9
+    }
+   ],
+   "lines": [
+    "COMBAT|Att: 10/10 models with line of sight + range",
+    "COMBAT|You: 6 5 4 3 2 2 1 1 1 1 → 3 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 3 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 6 4 2 → 2 blocks (4+)",
+    "COMBAT|Def takes 1 wound (9/10)",
+    "COMBAT|Def loses a model (9/10)"
+   ],
+   "rng": "4084995624680351806",
+   "scenario": "human_hold",
+   "seed": 17
+  },
+  {
+   "epoch": 76,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 9,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 9
+    }
+   ],
+   "lines": [
+    "COMBAT|Att: 10/10 models with line of sight + range",
+    "COMBAT|You: 5 3 3 3 2 2 2 1 1 1 → 1 hit (4+)",
+    "COMBAT|Att fires Rifle at Def — 1 hit",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 1 → 0 blocks (4+)",
+    "COMBAT|Def takes 1 wound (9/10)",
+    "COMBAT|Def loses a model (9/10)"
+   ],
+   "rng": "2949453841632409580",
+   "scenario": "human_hold",
+   "seed": 49
+  },
+  {
+   "epoch": 76,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 10
+    }
+   ],
+   "lines": [
+    "COMBAT|Att: 10/10 models with line of sight + range",
+    "COMBAT|You: 3 3 3 3 3 2 2 1 1 1 → 0 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 0 hits"
+   ],
+   "rng": "-7951138476389152495",
+   "scenario": "human_hold",
+   "seed": 225
+  },
+  {
+   "epoch": 76,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 10
+    }
+   ],
+   "lines": [
+    "COMBAT|Att: 10/10 models with line of sight + range",
+    "COMBAT|You: 6 5 4 4 4 3 2 1 1 1 → 5 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 5 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 6 6 5 4 4 → 5 blocks (4+)"
+   ],
+   "rng": "4161693934760966258",
+   "scenario": "human_hold",
+   "seed": 3
+  },
+  {
+   "epoch": 76,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 7,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       false,
+       0
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       false,
+       0
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 7
+    }
+   ],
+   "lines": [
+    "COMBAT|Att: 10/10 models with line of sight + range",
+    "COMBAT|You: 6 6 5 5 5 5 4 3 1 1 → 7 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 7 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 6 5 4 4 2 1 1 → 4 blocks (4+)",
+    "COMBAT|Def takes 3 wounds (7/10)",
+    "COMBAT|Def loses 3 models (7/10)"
+   ],
+   "rng": "-3347774296757616890",
+   "scenario": "human_hold",
+   "seed": 101
+  },
+  {
+   "epoch": 76,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 7,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       false,
+       0
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       false,
+       0
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 7
+    }
+   ],
+   "lines": [
+    "COMBAT|Att: 10/10 models with line of sight + range",
+    "COMBAT|You: 5 5 5 2 2 2 2 2 1 1 → 3 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 3 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 3 3 3 → 0 blocks (4+)",
+    "COMBAT|Def takes 3 wounds (7/10)",
+    "COMBAT|Def loses 3 models (7/10)"
+   ],
+   "rng": "-105294874484043243",
+   "scenario": "human_hold",
+   "seed": 512
+  },
+  {
+   "epoch": 76,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 7,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       false,
+       0
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       false,
+       0
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 7
+    }
+   ],
+   "lines": [
+    "COMBAT|Att: 10/10 models with line of sight + range",
+    "COMBAT|You: 6 5 5 5 4 4 4 3 3 2 → 7 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 7 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 5 5 4 4 3 3 1 → 4 blocks (4+)",
+    "COMBAT|Def takes 3 wounds (7/10)",
+    "COMBAT|Def loses 3 models (7/10)"
+   ],
+   "rng": "5900387049534520024",
+   "scenario": "human_hold",
+   "seed": 999
+  },
+  {
+   "epoch": 76,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 10
+    }
+   ],
+   "lines": [
+    "COMBAT|Att: 6/10 models with line of sight + range",
+    "COMBAT|You: 6 4 4 3 1 1 → 3 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 3 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 6 6 6 → 3 blocks (4+)"
+   ],
+   "rng": "-5745577292707840111",
+   "scenario": "human_far",
+   "seed": 0
+  },
+  {
+   "epoch": 76,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 9,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 9
+    }
+   ],
+   "lines": [
+    "COMBAT|Att: 6/10 models with line of sight + range",
+    "COMBAT|You: 4 3 2 2 1 1 → 1 hit (4+)",
+    "COMBAT|Att fires Rifle at Def — 1 hit",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 1 → 0 blocks (4+)",
+    "COMBAT|Def takes 1 wound (9/10)",
+    "COMBAT|Def loses a model (9/10)"
+   ],
+   "rng": "6257067436470635224",
+   "scenario": "human_far",
+   "seed": 17
+  },
+  {
+   "epoch": 76,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 9,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 9
+    }
+   ],
+   "lines": [
+    "COMBAT|Att: 6/10 models with line of sight + range",
+    "COMBAT|You: 5 3 3 2 1 1 → 1 hit (4+)",
+    "COMBAT|Att fires Rifle at Def — 1 hit",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 1 → 0 blocks (4+)",
+    "COMBAT|Def takes 1 wound (9/10)",
+    "COMBAT|Def loses a model (9/10)"
+   ],
+   "rng": "761351971841421048",
+   "scenario": "human_far",
+   "seed": 49
+  },
+  {
+   "epoch": 76,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 10
+    }
+   ],
+   "lines": [
+    "COMBAT|Att: 6/10 models with line of sight + range",
+    "COMBAT|You: 3 3 3 3 2 1 → 0 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 0 hits"
+   ],
+   "rng": "2790574143187176653",
+   "scenario": "human_far",
+   "seed": 225
+  },
+  {
+   "epoch": 76,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 7,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       false,
+       0
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       false,
+       0
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 7
+    }
+   ],
+   "lines": [
+    "COMBAT|Att: 6/10 models with line of sight + range",
+    "COMBAT|You: 6 4 4 4 1 1 → 4 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 4 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 5 3 2 1 → 1 block (4+)",
+    "COMBAT|Def takes 3 wounds (7/10)",
+    "COMBAT|Def loses 3 models (7/10)"
+   ],
+   "rng": "-7338765877582358565",
+   "scenario": "human_far",
+   "seed": 3
+  },
+  {
+   "epoch": 76,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 7,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       false,
+       0
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       false,
+       0
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 7
+    }
+   ],
+   "lines": [
+    "COMBAT|Att: 6/10 models with line of sight + range",
+    "COMBAT|You: 6 6 5 5 4 3 → 5 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 5 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 5 5 1 1 1 → 2 blocks (4+)",
+    "COMBAT|Def takes 3 wounds (7/10)",
+    "COMBAT|Def loses 3 models (7/10)"
+   ],
+   "rng": "539391467723548128",
+   "scenario": "human_far",
+   "seed": 101
+  },
+  {
+   "epoch": 76,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 8,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       false,
+       0
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 8
+    }
+   ],
+   "lines": [
+    "COMBAT|Att: 6/10 models with line of sight + range",
+    "COMBAT|You: 5 5 2 2 2 2 → 2 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 2 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 2 1 → 0 blocks (4+)",
+    "COMBAT|Def takes 2 wounds (8/10)",
+    "COMBAT|Def loses 2 models (8/10)"
+   ],
+   "rng": "5768051303250309626",
+   "scenario": "human_far",
+   "seed": 512
+  },
+  {
+   "epoch": 76,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 7,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       false,
+       0
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       false,
+       0
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 7
+    }
+   ],
+   "lines": [
+    "COMBAT|Att: 6/10 models with line of sight + range",
+    "COMBAT|You: 6 5 5 4 4 2 → 5 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 5 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 5 4 3 3 1 → 2 blocks (4+)",
+    "COMBAT|Def takes 3 wounds (7/10)",
+    "COMBAT|Def loses 3 models (7/10)"
+   ],
+   "rng": "3617348035362892738",
+   "scenario": "human_far",
+   "seed": 999
+  }
+ ],
+ "family": "human_shoot",
+ "provenance": {
+  "epoch": 76,
+  "git_sha": "dd906405283d3fd83886fa7654969cbbab9e2ccd",
+  "registry_sha256": "425decb0652c95d5718359a87107f2f3738e3287e9d67a13369b0a00a3f0df0e",
+  "registry_system": "gf"
+ },
+ "schema": "nml-golden-witness-v2"
+}
