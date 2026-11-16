@@ -2274,6 +2274,7 @@ func _solo_run_both_ai_game(first_opener: int = 1) -> void:
 		if solo_round_done.is_valid():
 			await solo_round_done.call(round_no)   # harness: the board round_no ENDED on, nothing else acting
 	_solo_ai_busy = false
+	CoreActivation.dump_legacy()   # P4.D-3: NML_TABLE_CENSUS=<path> writes the table-volley census
 
 
 ## One both-AI round: alternate one activation per side (OPR one-for-one), starting with `opener`, until both
@@ -4850,6 +4851,7 @@ func _solo_apply_strafing(unit: GameUnit, human_trails: Array = []) -> void:
 		battle_log.log_event(BattleLog.Category.COMBAT,
 			"%s: %s passes over %s — attacks it as if shooting (once per activation)" % [
 			rule_name, unit.get_name(), target.get_name()], true)
+	CoreActivation.note_legacy(self, "ai_strafe", unit, [target])
 	await _solo_resolve_ai_volley(unit, target, shots, true)
 
 
@@ -4953,6 +4955,14 @@ func _run_ai_shooting(report: Dictionary) -> void:
 		if await CoreActivation.run_ai(self, unit, report, groups[order[0]]["target"], _solo_core_ai_h,
 				groups[order[0]]["shots"]):
 			return
+	var why: PackedStringArray = []   # P4.D-3 census: why this volley stays on the table beyond the units' own rules
+	if _solo_core_ai_h == 0:
+		why.append("no_handle")
+	if order.size() > 1:
+		why.append("split")
+	if int(report.get("dangerous_dice", report.get("dangerous_models", 0))) > 0:
+		why.append("dangerous")
+	CoreActivation.note_legacy(self, "ai_volley", unit, order.map(func(id) -> GameUnit: return groups[id]["target"]), ",".join(why))
 	for id in order:
 		var g := groups[id] as Dictionary
 		await _solo_resolve_ai_volley(unit, g["target"], g["shots"], moved)
@@ -14489,6 +14499,7 @@ func _solo_split_commit() -> void:
 	_solo_end_targeting()
 	if attacker == null or a == null or b == null:
 		return
+	CoreActivation.note_legacy(self, "human_split", attacker, [a, b])
 	await _run_human_attack_split(attacker, a, b, sb)
 
 
@@ -15182,6 +15193,7 @@ func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool, auto: 
 				and not solo_controller.last_hit_and_run_note.is_empty():   # UX-19: only some models carry it
 			battle_log.log_event(BattleLog.Category.MOVEMENT, solo_controller.last_hit_and_run_note, true)
 	elif not await CoreActivation.human_shoot(self, attacker, target):   # step 38 (O15 (1)): a core unit's volley
+		CoreActivation.note_legacy(self, "human_shoot", attacker, [target])
 		await _run_human_shooting(attacker, target)
 	elif CoreActivation.last_target != target:
 		return   # the core refused the shot (it notes the target of a shot it resolved): nothing was shot, the activation stays open
@@ -18833,7 +18845,7 @@ func _on_battle_log_regiment_wounds(unit_name: String, delta: int, remaining: in
 func _on_battle_log_dropped(moves: Array) -> void:
 	if battle_log == null:
 		return
-	var per_unit := {}   # unit name -> {count, max_in, climb_in, alive, whole}
+	var per_unit := {}   # unit name -> {count, max_in, climb_in, step_in, alive, whole}
 	for mv in moves:
 		var node: Node3D = mv.get("node")
 		var unit_name := _battle_log_unit_name(node)
@@ -18846,7 +18858,7 @@ func _on_battle_log_dropped(moves: Array) -> void:
 		if res_gu != null and SoloController.unit_in_reserve(res_gu):
 			continue
 		if not per_unit.has(unit_name):
-			per_unit[unit_name] = {"count": 0, "max_in": 0.0, "climb_in": 0.0,
+			per_unit[unit_name] = {"count": 0, "max_in": 0.0, "climb_in": 0.0, "step_in": 0.0,
 				"alive": _battle_log_unit_alive(node), "whole": false, "node": node}
 		var e: Dictionary = per_unit[unit_name]
 		e["count"] = int(e["count"]) + 1
@@ -18858,6 +18870,9 @@ func _on_battle_log_dropped(moves: Array) -> void:
 		if mv_in >= float(e["max_in"]):
 			e["max_in"] = mv_in
 			e["climb_in"] = float(mv.get("climb_in", 0.0))
+		# The impassable verdict is about the biggest SINGLE step of any model of the unit, not the
+		# climb cost (the sum of every step up and down) — so it does not follow the max-arc pairing.
+		e["step_in"] = maxf(float(e["step_in"]), float(mv.get("max_step_in", 0.0)))
 		if node is RegimentTray:
 			e["whole"] = true
 	var summaries: Array = []
@@ -18865,11 +18880,13 @@ func _on_battle_log_dropped(moves: Array) -> void:
 		var e: Dictionary = per_unit[unit_name]
 		summaries.append({"unit": unit_name, "count": int(e["count"]), "alive": int(e["alive"]),
 			"max_in": float(e["max_in"]), "climb_in": float(e["climb_in"]), "whole": bool(e["whole"])})
-		# GF p.11: a step over 3" is impassable under mass-battle rules — the drag itself is
-		# a sandbox aid (D5a, no hard stop without Strict), so the drop's own line flags it.
-		if float(e["climb_in"]) > MoveLedger.CLIMB_MAX_IN:
+		# GF 3.6 (Climbable terrain): a terrain piece over 3" tall is impassable, one up to 3" may be
+		# climbed — so the verdict reads the biggest single step, never the summed climb cost. The
+		# drag itself is a sandbox aid (D5a, no hard stop without Strict), so the drop's own line
+		# flags it. Not in DEPLOYMENT: placing a model over terrain is not a move.
+		if not _is_placement_phase() and float(e["step_in"]) > MoveLedger.CLIMB_MAX_IN:
 			_log_rule_event(BattleLog.Category.MOVEMENT,
-				"%s climbs %.1f\" — over 3\", impassable (%s)" % [unit_name, float(e["climb_in"]), OPRApiClient.rules_cite(_solo_rules_system())])
+				"%s climbs %.1f\" — over 3\", impassable (%s)" % [unit_name, float(e["step_in"]), OPRApiClient.rules_cite(_solo_rules_system())])
 	_log_move_summaries(summaries)
 	# Rules-must-log (DAT-16a): a move-band rule (Agile, Scurry, Highborn, …) widened this move's
 	# reach silently. ONE line per moved unit, naming the unit's own rules that did it.
@@ -18956,6 +18973,12 @@ func _print_rule_notes(report: Dictionary) -> void:
 			battle_log.log_event(BattleLog.Category.COMBAT, str(note), true)
 
 
+## A drag during DEPLOYMENT places models, it does not move them: no movement line, no climb verdict.
+func _is_placement_phase() -> bool:
+	return opr_army_manager != null and opr_army_manager.has_method("is_deployment_phase") \
+			and opr_army_manager.is_deployment_phase()
+
+
 ## Write per-unit movement summaries into the battle log — same lines for local and remote movers.
 func _log_move_summaries(summaries: Array) -> void:
 	if battle_log == null:
@@ -18964,8 +18987,7 @@ func _log_move_summaries(summaries: Array) -> void:
 	# table wrote "Saurian Warriors moves 57\"" into the battle log). During DEPLOYMENT the ledger
 	# still measures the drag — the trail and the ruler want that — but the log must not report a
 	# 57-inch march that never happened.
-	if opr_army_manager != null and opr_army_manager.has_method("is_deployment_phase") \
-			and opr_army_manager.is_deployment_phase():
+	if _is_placement_phase():
 		return
 	for entry in summaries:
 		var e: Dictionary = entry as Dictionary

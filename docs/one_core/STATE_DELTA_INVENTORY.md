@@ -49,13 +49,13 @@ same commit as the struct change.
 | `alive` | battle_sim.gd:2110 | guard (`removed`/`alive`) | per model `is_alive` | no |
 | `activated` | battle_sim.gd:2125 | no | yes | no (the table sets it) |
 | `shaken` | battle_sim.gd:2123 | yes (`land_delta`) | yes | no |
-| `fatigued` | battle_sim.gd:2124 | no | no | **YES** |
+| `fatigued` | battle_sim.gd:2124 | yes (`land_delta`, P4.0-4d) | no | no (delta) |
 | `in_cover` | battle_sim.gd:2112 | no | no | no (capture input) |
 | `aircraft` | battle_sim.gd:2106 | no | no | no (structural input) |
 | `dormant` | battle_sim.gd:2130 | no | no | no (round-start state) |
 | `dormant_models` | battle_sim.gd:2131 | no | no | no (arrival input) |
 | `dormant_wounds` | battle_sim.gd:2132 | no | no | no (arrival input) |
-| `casts` | battle_sim.gd:2126 | no | no | **YES** |
+| `casts` | battle_sim.gd:2126 | yes (`land_delta`, P4.0-4d) | no | no (delta) |
 | `morale_bonus` | battle_sim.gd:2115 | no | no | no (capture input) |
 | `ambush_arrived_round` | battle_sim.gd:2107 | no | no | no (round state) |
 | `earliest_arrival_round` | battle_sim.gd:2133 | no | no | no (capture input) |
@@ -77,21 +77,21 @@ same commit as the struct change.
 | `charge_no_difficult` | act_recorder.gd:846 | no | no | no (capture input) |
 | `charge_probe_r` | act_recorder.gd:845 | no | no | no (capture input) |
 | `buffs` | main.gd:447 | no | no | **YES** |
-| `vs_mark_round` | main.gd:24332 | no | no | **YES** |
-| `hit_and_run_round` | solo_controller.gd:12793 | no | no | **YES** |
-| `moved_round` | main.gd:1761 | `moved` bool (guard only) | X/Z only | **YES** (round value lost) |
+| `vs_mark_round` | main.gd:24332 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
+| `hit_and_run_round` | solo_controller.gd:12793 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
+| `moved_round` | main.gd:1761 | yes (`land_delta`, P4.0-4e) | X/Z only | no (delta) |
 | `delayed_action_round` | solo_controller.gd:9994 | no | no | **YES** |
 | `coordinate_via_round` | game_unit.gd:333 | no | no | **YES** |
-| `reckless_rolled_round` | main.gd:24471 | no | no | **YES** |
-| `reckless_ap_round` | main.gd:24502 | no | no | **YES** |
-| `reckless_backfire_round` | main.gd:24507 | no | no | **YES** |
-| `versatile_pick_round` | main.gd:15462 | no | no | **YES** |
+| `reckless_rolled_round` | main.gd:24471 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
+| `reckless_ap_round` | main.gd:24502 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
+| `reckless_backfire_round` | main.gd:24507 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
+| `versatile_pick_round` | main.gd:15462 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
 | `versatile_pick_mode` | main.gd:15471 | no | no | **YES** |
-| `retreating_strike_round` | main.gd:8888 | no | no | **YES** |
-| `mind_control_moved_round` | main.gd:24569 | no | no | **YES** |
+| `retreating_strike_round` | main.gd:8888 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
+| `mind_control_moved_round` | main.gd:24569 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
 | `growth_markers` | main.gd:24962 | no | no | **YES** |
 | `growth_round` | main.gd:24968 | no | no | **YES** |
-| `growth_strike_round` | main.gd:9335 | no | no | **YES** |
+| `growth_strike_round` | main.gd:9335 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
 | `vengeance_markers` | main.gd:8827 | no | no | **YES** |
 | `second_wind_used` | solo_controller.gd:13886 | no | no | **YES** |
 | `surprise_attack_used` | main.gd:25248 | no | no | **YES** |
@@ -102,25 +102,26 @@ same commit as the struct change.
 | `piercing_tag_used` | main.gd:24614 | no | no | **YES** |
 | `piercing_tag_markers` | main.gd:24674 | no | no | **YES** |
 | `piercing_tag_persistent` | main.gd:24677 | no | no | **YES** |
-| `piercing_spot_round` | main.gd:24612 | no | no | **YES** |
+| `piercing_spot_round` | main.gd:24612 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
 | `storm_used` | main.gd:25124 | no | no | **YES** |
 | `feats_used` | solo_controller.gd:2002 | no | no | **YES** |
 | `teleport_used` | main.gd:25312 | no | no | **YES** |
 | `spot_markers` | main.gd:15256 | no | no | **YES** |
 | `tag_markers` | main.gd:15714 | no | no | **YES** |
-| `spot_round` | main.gd:15222 | no | no | **YES** |
+| `spot_round` | main.gd:15222 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
 | `precision_used` | main.gd:24773 | no | no | **YES** |
 
 ## Summary
 
-- 79 `State` fields; **36 gap rows**.
+- 79 `State` fields; **22 gap rows** (P4.0-4d landed `fatigued` and `casts`; P4.0-4e landed the twelve
+  round stamps the table owns, -14).
 - No gap among the board facts an activation moves: model wounds, deaths and positions ride the
   per-step landings, `shaken` rides `delta_of`, `activated` and `shaken` ride the MP rows.
-- Every gap is a per-activation ledger or latch the dice path reads again later: fatigue, casts, the
-  live buff ledger, the once-per-round/per-game stamps, and both marker pools (`spot_markers`,
-  `tag_markers`, `piercing_tag_markers`). The delta stops at `shaken`, and the MP rows compare only
-  activation, Shaken and per-model wounds/life/XZ — so a table and the core can disagree on any of
-  these without a local or MP signal.
+- Every gap is a once-per-game latch or a marker pool the dice path reads again later: the live buff
+  ledger, the once-per-game flags, and both marker pools (`spot_markers`, `tag_markers`,
+  `piercing_tag_markers`). The delta stops at `shaken`, the ledger and the round stamps, and the MP
+  rows compare only activation, Shaken and per-model wounds/life/XZ — so a table and the core can
+  disagree on any of these without a local or MP signal.
 
 ## Classification (One core P4.0-4a)
 
@@ -148,7 +149,7 @@ and the `buffs` spend (`sim.rs:10594`).
 | (b), fixed | `buffs` | core spends at `sim.rs:10594` (`spend_exchange_wounded`), but the live capture never sends the ledger (`plain.rs:493`), and the table's `_solo_spend_once_mods` (`main.gd:6161`) never ran on the core path; read `main.gd:447`. Fixed by #2803 (the volley's once buffs; the table's own spend after a `done` activation); the once morale buff fixed by #2804 (spent right after the morale die) |
 | (a) | `vs_mark_round` | `sim.rs:1911,1964` (Vengeance branch); `main.gd:24332`; table writer runs |
 | (a) | `hit_and_run_round` | `sim.rs:3171,3197` (Hit-and-Run branch); `solo_controller.gd:12793`; table writer runs |
-| (a) | `moved_round` | `sim.rs:9770` writes it on the P3 placed move, but `_on_units_dropped` (`main.gd:22883`) and `_solo_animate_move` (`main.gd:12255`) set the table's copy on the same move; the delta's `moved` (`activation.rs:316`) is only a guard and `land_delta` (`core_activation.gd:383`) ignores it; read `main.gd:1761` |
+| (a) | `moved_round` | `sim.rs:9770` writes it on the P3 placed move, but `_on_units_dropped` (`main.gd:22883`) and `_solo_animate_move` (`main.gd:12255`) set the table's copy on the same move; the delta's `moved` is a guard, P4.0-4e lands the round stamp; read `main.gd:1761` |
 | (c) | `delayed_action_round` | only `rollout.rs:404` (AI search); table reads `solo_controller.gd:9994` and writes it itself |
 | (c) | `coordinate_via_round` | only `rollout.rs:319` (AI search); table reads `game_unit.gd:333` and writes it at `:351` |
 | (a) | `reckless_rolled_round` | `sim.rs:2341` (Reckless branch); `main.gd:24471`; table writer runs |

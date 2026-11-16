@@ -197,6 +197,72 @@ static var ai_runs := 0
 static var ai_refusals := 0
 
 
+## P4.D-3 census: volleys the TABLE resolved instead of the core, door -> reason -> count ("_all" = the door's table
+## calls). Counting only: no RNG, no log line, nothing the game reads.
+static var legacy := {}
+## The same volleys by their whole reason SET (door -> "reason|reason" sorted -> volleys): what allowing groups would unlock.
+static var legacy_sets := {}
+
+
+## "Tough(3)" -> "Tough", "Fear (spell)" -> "Fear" (a rule entry is a string or a {"name": ...} dictionary).
+static func _rule_label(r) -> String:
+	return (str((r as Dictionary).get("name", "")) if r is Dictionary else str(r)).get_slice("(", 0).strip_edges()
+
+
+## The refusals of one unit as the table sees them (what `is_plain` says no to).
+static func _refusals(gu: GameUnit) -> Array:
+	var out: Array = (gu.get_special_rules() as Array).map(func(r) -> String: return "unit_rule:" + _rule_label(r))
+	if gu.has_attached_heroes() or gu.is_attached():
+		out.append("attached")
+	if not gu.source_data is OPRApiClient.OPRUnit:
+		return out + ["non_opr"]
+	for w in (gu.source_data as OPRApiClient.OPRUnit).weapons:
+		out.append_array(w.special_rules.map(func(r) -> String: return "weapon_rule:" + _rule_label(r)))
+	return out
+
+
+## Why the core door refuses this shooter (and target): "no_core", "attached", "non_opr", "unit_rule:<name>",
+## "weapon_rule:<name>" for the shooter; the target's carry a "target_" prefix ("target_rule:<name>" = its unit rules).
+static func why_not(main, unit: GameUnit, target: GameUnit) -> Array:
+	var out: Array = [] if applies(main) else ["no_core"]
+	out.append_array(_refusals(unit) if unit != null else [])
+	for r in (_refusals(target) if target != null else []):
+		out.append("target_rule:" + r.trim_prefix("unit_rule:") if r.begins_with("unit_rule:") else "target_" + r)
+	return out
+
+
+## One table volley, counted once per reason. `extra` = comma-joined door facts ("split", "dangerous", "no_handle").
+static func note_legacy(main, door: String, unit: GameUnit, targets: Array, extra: String = "") -> void:
+	var why: Array = why_not(main, unit, null)
+	for t in targets:
+		for r in why_not(main, null, t as GameUnit):
+			if not why.has(r):
+				why.append(r)
+	why.append_array(Array(extra.split(",", false)))
+	var d: Dictionary = legacy.get(door, {})
+	d["_all"] = int(d.get("_all", 0)) + 1
+	var seen := {}
+	for r in (why if not why.is_empty() else ["other"]):
+		if not seen.has(r):
+			seen[r] = true
+			d[r] = int(d.get(r, 0)) + 1
+	legacy[door] = d
+	var reasons: Array = seen.keys()
+	reasons.sort()
+	var key := "|".join(PackedStringArray(reasons))
+	var sets: Dictionary = legacy_sets.get(door, {})
+	sets[key] = int(sets.get(key, 0)) + 1
+	legacy_sets[door] = sets
+
+
+## NML_TABLE_CENSUS=<path>: a both-AI game writes the census when it ends (the core's own AI volleys ride along).
+static func dump_legacy() -> void:
+	var path := OS.get_environment("NML_TABLE_CENSUS")
+	var f := FileAccess.open(path, FileAccess.WRITE) if path != "" else null
+	if f != null:
+		f.store_string(JSON.stringify({"legacy": legacy, "legacy_sets": legacy_sets, "core_ai_runs": ai_runs, "core_ai_refusals": ai_refusals}))
+
+
 ## Step 42: the AI's volley through the core - Hold or Advance, the unit and its one target (the table's own pick) plain,
 ## no Dangerous test this activation (the table rolled it already; the core would roll it again). `h` is the board
 ## before the move (the AI body captured it and releases it). True = the core resolved the volley. A refusal is a
@@ -205,6 +271,14 @@ static func run_ai(main, unit: GameUnit, report: Dictionary, target: GameUnit, h
 	var kind := int(report.get("action", -1))
 	if h == 0 or not (kind in [AiDecision.Action.HOLD, AiDecision.Action.ADVANCE]) or not is_plain(unit) \
 			or not is_plain(target) or int(report.get("dangerous_dice", report.get("dangerous_models", 0))) > 0:
+		return false
+	# #172 interim: the core lands its own casualty order, so a human owner who has a wound-allocation choice (a Tough
+	# model, or mixed loadouts among the alive models) would never be asked. That volley stays on the table, which
+	# prompts. The real wound count is unknown before the roll: one wound keeps the Tough and loadout checks. Goes away
+	# once the core asks the allocation as a NeedChoice.
+	if main._solo_wound_choice_matters(target, 1):
+		main._log_rule_event(BattleLog.Category.COMBAT, "%s: %s's owner chooses the casualties - the table resolves this volley" % [
+			unit.get_name(), target.get_name()], true)
 		return false
 	var at: Array = unit.get_alive_models().map(func(m: ModelInstance) -> Vector3: return m.node.global_position)
 	# Step 42c: each model's walked route (the planner's, world XZ) rides along, so the core's move check measures the
@@ -461,6 +535,42 @@ static func land_delta(main, delta: Array, start_models: Array, done: Dictionary
 		if bool(d["shaken"]) != gu.is_shaken:
 			main.radial_menu_controller.card_toggle_shaken(gu)
 			main._solo_mirror_shaken(gu)
+		_land_ledger(main, gu, d)
+		_land_stamps(main, gu, d)
+
+
+## P4.0-4e: the `State` field names whose table property is spelled differently (every other stamp is 1:1).
+const STAMP_KEYS := {"spot_round": "spotted_round", "growth_strike_round": "regenerative_strength_round"}
+
+
+## P4.0-4e: the per-unit once-per-round stamps the delta now carries (inventory class (a)). The table's own writer
+## owns each on this path, so a difference is a core/table split (reported) and the core's value lands, as `shaken` does.
+static func _land_stamps(main, gu: GameUnit, d: Dictionary) -> void:
+	for key in d.get("stamps", {}):
+		var prop := str(STAMP_KEYS.get(key, key))
+		var value := int(d["stamps"][key])
+		var was := int(gu.unit_properties.get(prop, -1))
+		if value == was:
+			continue
+		push_error("CoreActivation.land_delta: %s.%s differs (table %d, core %d)" % [gu.get_name(), prop, was, value])
+		main._sync_unit_property(gu, prop, value)
+
+
+## P4.0-4d: the table-owned per-activation ledger the delta now carries (inventory class (a)): the fatigue flag and the
+## unspent spell tokens. A plain activation changes neither and the table's own writer owns both, so a difference is a
+## core/table split (reported); the core's value lands either way, as `shaken` does.
+static func _land_ledger(main, gu: GameUnit, d: Dictionary) -> void:
+	if d.has("fatigued") and bool(d["fatigued"]) != gu.is_fatigued:
+		push_error("CoreActivation.land_delta: %s fatigue differs (table %s, core %s)" % [
+			gu.get_name(), gu.is_fatigued, bool(d["fatigued"])])
+		if main.radial_menu_controller != null:
+			main.radial_menu_controller.card_toggle_fatigued(gu)
+	if d.has("casts") and int(d["casts"]) != gu.casts_current:
+		push_error("CoreActivation.land_delta: %s casts differ (table %d, core %d)" % [
+			gu.get_name(), gu.casts_current, int(d["casts"])])
+		gu.set_caster_points(int(d["casts"]))
+		if main.network_manager != null and main.network_manager.has_method("broadcast_unit_casts"):
+			main.network_manager.broadcast_unit_casts(gu)
 
 
 ## Step 28: the open activations, unit_id -> {handle, transcript, start_models, start_pos, start_rot, moved_round_before

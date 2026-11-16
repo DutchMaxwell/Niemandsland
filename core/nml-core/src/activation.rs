@@ -4,7 +4,7 @@
 
 use crate::dice::Tray;
 use crate::gate::INCHES_TO_METERS;
-use crate::io::{Action, Seams};
+use crate::io::{Action, Seams, SplitShot};
 use crate::landing::Landing;
 use crate::logline::{Category, LogLine};
 use crate::mv::step::{leg_crosses, DIFFICULT_MOVE_CAP_IN};
@@ -20,8 +20,9 @@ use crate::unit::UnitStatic;
 pub enum Input {
     /// "Activate" on the unit's card starts the activation.
     Begin,
-    /// The declared action (`sim::HOLD` ..); `shoot` is `Some` when it shoots.
-    Intent { kind: i64, shoot: Option<String> },
+    /// The declared action (`sim::HOLD` ..); `shoot` is `Some` when it shoots. `split` is split fire's aim,
+    /// per (member, weapon) the target key it fires at; `None` (or empty) = the one `shoot` target.
+    Intent { kind: i64, shoot: Option<String>, split: Option<Vec<SplitShot>> },
     /// One thrown face group, in the order the core asked for them.
     Faces(Vec<u8>),
     /// The unit's model positions after a drag (`at`) and each model's walked path this
@@ -29,6 +30,10 @@ pub enum Input {
     Placed { at: Vec<[f64; 3]>, trails: Vec<Vec<[f64; 2]>> },
     /// "Cancel", allowed until the first die of the activation.
     Cancel,
+    /// P4.0-5: one answer to a `NeedChoice`, by the choice's stable `id` and an option id. An EMPTY
+    /// `option` asks the core what it is waiting for: the next answer is `ActStep::NeedChoice`.
+    /// A transcript without a `Choice` keeps the core's automatic pick (the default policy).
+    Choice { id: String, option: String },
 }
 
 /// The core's answer to the inputs so far. `Done` and `Cancelled` are the
@@ -43,6 +48,10 @@ pub enum ActStep {
     NeedRoll { index: usize, faces: usize, kind: &'static str, count: i64, target: i64, owner: String, owner_key: String, lines: Vec<LogLine>, landings: Vec<Landing> },
     /// The activation is open and waits for the next input.
     Open,
+    /// P4.0-5: the core needs one answer before it can resolve (`option: ""` asked). `id` and every
+    /// option are stable ids (a target unit key and `slot:<n>` model slots), `owner` is the roster
+    /// key of the unit whose side answers. Answer with `Input::Choice { id, option }`.
+    NeedChoice { id: String, options: Vec<String>, owner: String },
     /// Input `index` breaks an order rule; `reason` is the sentence the player sees.
     Refused { index: usize, reason: String },
     /// The activation was cancelled before its first die; the state is untouched
@@ -62,6 +71,7 @@ pub fn order_check(name: &str, t: &[Input]) -> Result<(), (usize, String)> {
             _ if over => Some("the activation is over".to_string()),
             Input::Cancel if rolled => Some("cancel is not possible after the first die".to_string()),
             Input::Faces(_) if !declared => Some("faces before the action was declared".to_string()),
+            Input::Choice { .. } if !declared => Some("the choice was answered before the action was declared".to_string()),
             Input::Intent { .. } if declared => Some("one action per activation".to_string()),
             Input::Placed { .. } if shot => Some(format!("{name} has already shot this round — it cannot move now")),
             Input::Intent { kind, .. } if *kind == CHARGE || *kind == REPOSITION => Some("not on the step path yet".to_string()),
@@ -211,10 +221,10 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
         return ActStep::Cancelled { lines: vec![LogLine { rule: "activation_cancel", category: Category::Movement, side, text, detail: None }] };
     }
     let declared = t.iter().enumerate().find_map(|(i, x)| match x {
-        Input::Intent { kind, shoot } => Some((i, *kind, shoot.clone())),
+        Input::Intent { kind, shoot, split } => Some((i, *kind, shoot.clone(), split.clone())),
         _ => None,
     });
-    let Some((at_intent, declared, shoot)) = declared else {
+    let Some((at_intent, declared, shoot, split)) = declared else {
         return ActStep::Open;
     };
     let placed = t.iter().rev().find_map(|x| match x {
@@ -236,7 +246,7 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
             Check::Ok { lines } => moved = lines,
         }
     }
-    let action = Action { kind, unit: unit.to_string(), dest: None, shoot, charge: None, patient: false, split: None, traced: None, teleport: None };
+    let action = Action { kind, unit: unit.to_string(), dest: None, shoot, charge: None, patient: false, split, traced: None, teleport: None };
     let faces: Vec<Vec<u8>> = t.iter().filter_map(|x| if let Input::Faces(f) = x { Some(f.clone()) } else { None }).collect();
     // The spike's non-tray seed: a plain activation never draws from it.
     let run = |statics: &[UnitStatic]| {
@@ -298,6 +308,31 @@ pub struct UnitDelta {
     pub alive: i64,
     pub moved: bool,
     pub unknown: bool,
+    /// P4.0-4d: the table-owned per-activation ledger AFTER — the fatigue flag and the unspent spell
+    /// tokens. A plain activation changes neither; carrying them makes a table/core split visible.
+    pub fatigued: bool,
+    pub casts: i64,
+    /// P4.0-4e: the per-unit once-per-round stamps AFTER (inventory class (a)), keyed by the `State`
+    /// field name; `land_delta` maps the two names the table spells differently.
+    pub stamps: Vec<(&'static str, i64)>,
+}
+
+/// P4.0-4e: every round stamp the inventory marks table-owned, in `State` declaration order, AFTER.
+fn stamps_of(s: &State, u: usize) -> Vec<(&'static str, i64)> {
+    vec![
+        ("vs_mark_round", s.vs_mark_round[u]),
+        ("hit_and_run_round", s.hit_and_run_round[u]),
+        ("moved_round", s.moved_round[u]),
+        ("reckless_rolled_round", s.reckless_rolled_round[u]),
+        ("reckless_ap_round", s.reckless_ap_round[u]),
+        ("reckless_backfire_round", s.reckless_backfire_round[u]),
+        ("versatile_pick_round", s.versatile_pick_round[u]),
+        ("retreating_strike_round", s.retreating_strike_round[u]),
+        ("mind_control_moved_round", s.mind_control_moved_round[u]),
+        ("growth_strike_round", s.growth_strike_round[u]),
+        ("spot_round", s.spot_round[u]),
+        ("piercing_spot_round", s.piercing_spot_round[u]),
+    ]
 }
 
 /// Every unit whose alive, shaken, positions or moved_round changed. `removed`
@@ -321,8 +356,21 @@ pub fn delta_of(before: &State, after: &State) -> Vec<UnitDelta> {
         if j < a.len() || unknown {
             removed.clear();
         }
-        if b != a || before.alive[u] != after.alive[u] || before.shaken[u] != after.shaken[u] || moved {
-            out.push(UnitDelta { key: key.clone(), removed, shaken: after.shaken[u], alive: after.alive[u], moved, unknown });
+        let stamps_changed = stamps_of(before, u) != stamps_of(after, u);
+        if b != a || before.alive[u] != after.alive[u] || before.shaken[u] != after.shaken[u] || moved
+            || before.fatigued[u] != after.fatigued[u] || before.casts[u] != after.casts[u] || stamps_changed
+        {
+            out.push(UnitDelta {
+                key: key.clone(),
+                removed,
+                shaken: after.shaken[u],
+                alive: after.alive[u],
+                moved,
+                unknown,
+                fatigued: after.fatigued[u],
+                casts: after.casts[u],
+                stamps: stamps_of(after, u),
+            });
         }
     }
     out
@@ -339,7 +387,7 @@ mod tests {
     }
 
     fn intent(kind: i64, shoot: Option<&str>) -> Input {
-        Input::Intent { kind, shoot: shoot.map(String::from) }
+        Input::Intent { kind, shoot: shoot.map(String::from), split: None }
     }
 
     fn refused(t: &[Input], index: usize, reason: &str) {
@@ -478,6 +526,45 @@ mod tests {
         assert!(killed > 0 && shaken > 0 && morale > 0, "fixture must kill, shake and test morale: {killed} {shaken} {morale}");
     }
 
+    /// `volley_line` with split fire's second target: "bh" stands alone (not attached) 10" north of "a", which
+    /// now carries a second weapon; the rifle's aim is "b", the pistol's is "bh".
+    fn split_line() -> (State, Vec<UnitStatic>, Vec<SplitShot>) {
+        let (mut st, mut statics) = volley_line();
+        st.attached = std::rc::Rc::new(vec![Vec::new(); 4]);
+        st.attached_to = std::rc::Rc::new(vec![None; 4]);
+        st.positions[3] = vec![[0.0, 0.0, 10.0 * INCHES_TO_METERS]];
+        statics[0].shoot.push(crate::unit::ShootProfile { name: "pistol".into(), attacks: 4, count: 1, range: 24, ..Default::default() });
+        (statics[3].model_count, statics[3].wounds_max, statics[3].ctx.defense) = (1, vec![1], 4);
+        let aim = |weapon: &str, target: &str| SplitShot { member: "a".into(), weapon: weapon.into(), target: target.into() };
+        (st, statics, vec![aim("rifle", "b"), aim("pistol", "bh")])
+    }
+
+    /// Split fire on the step API: an intent that carries `split` equals one straight seeded run with the
+    /// same `Action.split`, state, roll records and lines alike, over 200 seeds. RED: carry `split: None` into the
+    /// action (both targets are then pooled on "b", "bh" is never fired at and the rolls differ).
+    #[test]
+    fn a_split_fire_intent_equals_the_seeded_run_with_the_same_aim() {
+        let (st, statics, aim) = split_line();
+        let (mut both, mut pooled_differs) = (0, 0);
+        for seed in 0..200i64 {
+            let split = |split: Option<Vec<SplitShot>>| Action { kind: HOLD, unit: "a".into(), dest: None, shoot: Some("b".into()), charge: None, patient: false, split, traced: None, teleport: None };
+            let (want, shot) = resolve_stochastic_tray_on_board(&statics, &st, &split(Some(aim.clone())), &Terrain::default(), seams(), &mut GodotRng::new(seed), &mut Tray::seeded(seed)).unwrap();
+            let (got, rolls) = drive(&statics, &st, vec![Begin, Input::Intent { kind: HOLD, shoot: Some("b".into()), split: Some(aim.clone()) }], seed);
+            let ActStep::Done { state, lines, .. } = got else { panic!("seed {seed}: {got:?}") };
+            let fold = |r: Roll| Roll { kind: if r.kind == "morale" { "attack" } else { r.kind }, ..r };
+            assert_eq!(rolls.into_iter().map(fold).collect::<Vec<_>>(), shot.rolls, "seed {seed}");
+            assert_eq!(state, want, "seed {seed}");
+            // The step's own lines name each aimed target's volley, in the aim's group order.
+            let said: Vec<&str> = lines.iter().map(|l| l.text.as_str()).filter(|t| t.starts_with("a fires at ")).collect();
+            assert_eq!(said, ["a fires at b", "a fires at bh"], "seed {seed}");
+            // The aim bites: both targets lose something here, and the pooled run (no aim) is another run.
+            both += (want.wounds[2] != st.wounds[2] && want.alive[3] < st.alive[3]) as i32;
+            let pooled = resolve_stochastic_tray_on_board(&statics, &st, &split(None), &Terrain::default(), seams(), &mut GodotRng::new(seed), &mut Tray::seeded(seed)).unwrap().0;
+            pooled_differs += (pooled != want) as i32;
+        }
+        assert!(both > 0 && pooled_differs > 0, "fixture must hurt both targets and differ from the pooled run: {both} {pooled_differs}");
+    }
+
     /// O3: a unit that moved as a Rush cannot shoot (RED: drop the Rush check).
     #[test]
     fn a_rush_cannot_shoot() {
@@ -600,6 +687,41 @@ mod tests {
         assert_eq!((d[0].removed.len(), d[0].moved, d[0].unknown), (0, true, true));
         assert!(one(&|s| s.moved_round[3] += 1)[0].moved);
         assert!(one(&|s| s.shaken[2] = true)[0].shaken);
+    }
+    /// P4.0-4d: a unit whose ONLY change is the table-owned ledger (fatigue, casts) still gets a row, and
+    /// the row carries both values AFTER (RED: drop the ledger term -> no row; drop a field -> the default).
+    #[test]
+    fn the_delta_carries_the_ledger_a_plain_activation_cannot_change() {
+        let (st, _) = volley_line();
+        let one = |f: &dyn Fn(&mut State)| {
+            let mut after = st.clone();
+            f(&mut after);
+            delta_of(&st, &after)
+        };
+        assert_eq!(one(&|_| {}), vec![], "no change, no row");
+        let d = one(&|s| {
+            s.fatigued[2] = true;
+            s.casts[2] = 3;
+        });
+        assert_eq!(d.len(), 1);
+        assert_eq!((d[0].key.as_str(), d[0].fatigued, d[0].casts), ("b", true, 3));
+        assert_eq!((d[0].shaken, d[0].moved, d[0].removed.len()), (false, false, 0), "no board news");
+    }
+    /// P4.0-4e: a unit whose only change is a round stamp gets a row carrying all twelve, AFTER; a core-resolved
+    /// volley's rows carry them too (RED: drop the stamp term -> no row; drop a pair -> the count is 11).
+    #[test]
+    fn the_delta_carries_the_round_stamps() {
+        let (st, statics) = volley_line();
+        let mut after = st.clone();
+        after.spot_round[2] = 4;
+        let d = delta_of(&st, &after);
+        assert_eq!(d.len(), 1);
+        assert_eq!(d[0].stamps.len(), 12);
+        assert!(d[0].stamps.contains(&("spot_round", 4)));
+        assert!(d[0].stamps.contains(&("moved_round", st.moved_round[2])));
+        let (got, _) = drive(&statics, &st, vec![Begin, intent(HOLD, Some("b"))], 7);
+        let ActStep::Done { state, .. } = got else { panic!("seed 7: {got:?}") };
+        assert!(delta_of(&st, &state).iter().all(|x| x.stamps.len() == 12), "a core row carries the stamps");
     }
 
     // ---- step 14: allowance and move check ----
