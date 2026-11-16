@@ -1,26 +1,31 @@
 extends RefCounted
-## P4.0-10 — golden witness for ONE family (shooting volley) on the OLD table path.
+## P4.0-10 — golden witness for the table's combat families on the OLD table path.
 ##
 ## WHY THIS EXISTS. The plan deletes table code family by family (decision D1: no field window, golden fixtures
 ## before each deletion). This harness captures what the table does TODAY for a small scenario grid — the volley
-## family with a plain weapon and with AP, Blast, a target in cover and Deadly — and stores the final unit state
-## plus every battle-log line the volley wrote, together with the provenance that makes the recording meaningful
-## (rules epoch, git sha, registry sha256). `compare()` runs the same grid again and names every difference, so a
-## deletion that changes the table's result before its replacement is in place turns the companion suite red.
+## family (plain, AP, Blast, cover, Deadly) and the melee family (plain, AP, Impact, Furious, Counter) — and stores
+## the final unit state plus every battle-log line the exchange wrote, together with the provenance that makes the
+## recording meaningful (rules epoch, git sha, registry sha256). `compare()` runs the same grid again and names
+## every difference, so a deletion that changes the table's result before its replacement is in place turns the
+## companion suite red.
 ##
 ## It runs the TABLE path only: the caller clears NML_ONE_CORE_ACTIVATION, and nothing here opens a core session;
-## the volley goes through main._solo_resolve_ai_volley exactly as the parity gate and the wording suite drive it.
-## No gameplay code is touched — this file and its CLI/ suite are test/tool code.
+## the volley goes through main._solo_resolve_ai_volley and the melee through main._run_ai_melee exactly as the
+## parity gate drives them. No gameplay code is touched — this file and its CLI/ suite are test/tool code.
 ##
-## The grid is deliberately small and seeded: 5 scenarios x 4 seeds. Determinism comes from main.seed_tray_rng()
-## (the same seam the parity gate uses) and from `_solo_batch` (instant dice, zero pacing holds).
+## The grid is deliberately small and seeded: 5 scenarios x 4 seeds per family. Determinism comes from
+## main.seed_tray_rng() (the same seam the parity gate uses) and from `_solo_batch` (instant dice, zero pacing holds).
 
 const ParityTable := preload("res://test/parity/parity_table.gd")
+const ParityMelee := preload("res://test/parity/parity_table_melee.gd")
 
 const SCHEMA := "nml-golden-witness-v1"
 const FAMILY := "shooting_volley"
 const FIXTURE_PATH := "res://test/fixtures/one_core/golden_shoot_volley.json"
-## Seeds cover a morale failure (0), a save-less volley (17), the singular forms (49) and a volley with no hit (225).
+const MELEE_FAMILY := "melee"
+const MELEE_FIXTURE_PATH := "res://test/fixtures/one_core/golden_melee.json"
+## Four seeds per scenario: in the volley grid they cover a morale failure (0), a save-less volley (17), the
+## singular forms (49) and a volley with no hit (225); the melee grid records whatever they roll.
 const SEEDS: Array[int] = [0, 17, 49, 225]
 ## The registry system every scenario below imports under; its mechanics map hash is part of the provenance.
 const REGISTRY_SYSTEM := "gf"
@@ -35,9 +40,21 @@ const DEFENDER := {"player": 2, "name": "Def", "models": 10, "quality": 4, "defe
 	"faction_folder": "robot_legions", "rules": []}
 const RIFLE := {"name": "Rifle", "range_in": 24, "attacks": 1, "count": 10, "rules": []}
 
+## The melee grid keeps the parity gate's board: the attacker stands at its post-move position (base contact,
+## 6.74" against 8.0"), the defender spreads 1.3" so no centroid ties; both units strike with one attack per model.
+const MELEE_ATTACKER := {"key": "att", "player": 1, "name": "Att", "models": 10, "quality": 4, "defense": 4,
+	"tough": 1, "x_in": 0.0, "z_step_in": 1.2, "base_radius_in": 0.63, "game_system": "gf",
+	"faction_folder": "robot_legions", "rules": []}
+const MELEE_DEFENDER := {"key": "def", "player": 2, "name": "Def", "models": 8, "quality": 4, "defense": 4,
+	"tough": 1, "x_in": 8.0, "z_step_in": 1.3, "base_radius_in": 0.63, "game_system": "gf",
+	"faction_folder": "robot_legions", "rules": []}
+const BLADE := {"name": "Blade", "range_in": 0, "attacks": 1, "count": 10, "rules": []}
+const DEF_BLADE := {"name": "Blade", "range_in": 0, "attacks": 1, "count": 8, "rules": []}
+const CHARGE := {"dest_x_in": 6.74}
 
-## The scenario grid: one family, five shapes. `cover` paints forest under the defender (z_step 0.1" keeps the ten
-## models inside the painted block); `weapon.rules` are the table's own weapon-rule names.
+
+## The shooting grid: five shapes. `cover` paints forest under the defender (z_step 0.1" keeps the ten models
+## inside the painted block); `weapon.rules` are the table's own weapon-rule names.
 static func scenarios() -> Array:
 	return [
 		{"name": "plain", "note": "no weapon rule, no cover", "weapon": RIFLE,
@@ -52,6 +69,27 @@ static func scenarios() -> Array:
 		{"name": "deadly", "note": "Deadly(3) vs Tough(3): each unsaved wound kills one model",
 			"weapon": _weapon(["Deadly(3)"]), "attacker": ATTACKER,
 			"defender": _with(DEFENDER, {"tough": 3})},
+	]
+
+
+## The melee grid: the same charge, five shapes of the charge/strike/strike-back/morale path.
+static func melee_scenarios() -> Array:
+	return [
+		{"name": "plain", "note": "no rule: both sides strike with one attack per model",
+			"attacker": MELEE_ATTACKER, "defender": MELEE_DEFENDER, "charge": CHARGE,
+			"weapon": BLADE, "defender_weapon": DEF_BLADE},
+		{"name": "ap", "note": "AP(1) on the attacker's blade worsens the defender's save",
+			"attacker": MELEE_ATTACKER, "defender": MELEE_DEFENDER, "charge": CHARGE,
+			"weapon": _with(BLADE, {"rules": ["AP(1)"]}), "defender_weapon": DEF_BLADE},
+		{"name": "impact", "note": "Impact(1) auto-hits before the strikes (rules 3.6 slot)",
+			"attacker": _with(MELEE_ATTACKER, {"rules": ["Impact(1)"]}), "defender": MELEE_DEFENDER,
+			"charge": CHARGE, "weapon": BLADE, "defender_weapon": DEF_BLADE},
+		{"name": "furious", "note": "Furious: each unmodified 6 in melee adds a hit on the charge",
+			"attacker": _with(MELEE_ATTACKER, {"rules": ["Furious"]}), "defender": MELEE_DEFENDER,
+			"charge": CHARGE, "weapon": BLADE, "defender_weapon": DEF_BLADE},
+		{"name": "counter", "note": "Counter on the defender's blade strikes first when charged",
+			"attacker": MELEE_ATTACKER, "defender": MELEE_DEFENDER, "charge": CHARGE,
+			"weapon": BLADE, "defender_weapon": _with(DEF_BLADE, {"rules": ["Counter"]})},
 	]
 
 
@@ -79,13 +117,30 @@ static func configure(main: Node) -> bool:
 	return true
 
 
-## Runs the whole grid on `main` (already booted, PLAYING, solo_controller ready) and returns the fixture shape.
-## Await it: every volley awaits the table's own presentation seams.
-static func capture(main: Node) -> Dictionary:
+## Runs one family's whole grid on `main` (already booted, PLAYING, solo_controller ready) and returns the fixture
+## shape. Await it: every exchange awaits the table's own presentation seams.
+static func capture(main: Node, family: String = FAMILY) -> Dictionary:
+	if family == MELEE_FAMILY:
+		return await capture_melee(main)
 	var out := {"schema": SCHEMA, "family": FAMILY, "provenance": provenance(), "cases": []}
 	for sc in scenarios():
 		for seed in SEEDS:
 			out["cases"].append(await _run_case(main, sc, seed))
+	return out
+
+
+static func capture_melee(main: Node) -> Dictionary:
+	var fast: bool = main.get("_solo_fast")
+	var slots: Dictionary = (main.solo_ai_slots as Dictionary).duplicate()
+	main.set("_solo_fast", true)   # the parity gate's fast-forward: no glide tweens
+	# Both seats AI, like the parity gate: a human seat would wait for a save click on the strike-back.
+	main.solo_ai_slots = {1: true, 2: true}
+	var out := {"schema": SCHEMA, "family": MELEE_FAMILY, "provenance": provenance(), "cases": []}
+	for sc in melee_scenarios():
+		for seed in SEEDS:
+			out["cases"].append(await _run_melee_case(main, sc, seed))
+	main.solo_ai_slots = slots
+	main.set("_solo_fast", fast)
 	return out
 
 
@@ -135,6 +190,26 @@ static func _run_case(main: Node, sc: Dictionary, seed: int) -> Dictionary:
 	var rec := {"scenario": str(sc["name"]), "seed": seed, "epoch": AiActRecorder.rules_epoch,
 		"lines": lines, "final": _final([att, dfn])}
 	_unpaint_cover(main, painted)
+	_free_units(main, [att, dfn])
+	await main.get_tree().process_frame
+	return rec
+
+
+## One melee scenario x seed: build the two units in base contact (the parity gate's own board and per-model
+## loadout), seed the real tray, run the table's real charge/strike/strike-back/morale resolver, and record it.
+static func _run_melee_case(main: Node, sc: Dictionary, seed: int) -> Dictionary:
+	var pair: Array = ParityMelee._units(main, sc, {})
+	var att := pair[0] as GameUnit
+	var dfn := pair[1] as GameUnit
+	main.seed_tray_rng(seed)
+	var lines: Array = []
+	var tap := func(e: Dictionary) -> void:
+		lines.append("%s|%s" % [BattleLog.Category.keys()[int(e["category"])], str(e["text"])])
+	main.battle_log.entry_added.connect(tap)
+	await main._run_ai_melee({"unit": att, "target": dfn, "charge_from_in": ParityMelee._charge_from_in(sc)})
+	main.battle_log.entry_added.disconnect(tap)
+	var rec := {"scenario": str(sc["name"]), "seed": seed, "epoch": AiActRecorder.rules_epoch,
+		"lines": lines, "final": _final([att, dfn])}
 	_free_units(main, [att, dfn])
 	await main.get_tree().process_frame
 	return rec
@@ -195,6 +270,11 @@ static func _free_units(main: Node, units: Array) -> void:
 				nd.free()
 
 
+## The committed fixture of one family (the shooting family stays the default for the older callers).
+static func fixture_path(family: String = FAMILY) -> String:
+	return MELEE_FIXTURE_PATH if family == MELEE_FAMILY else FIXTURE_PATH
+
+
 ## The fixture on disk ({} when it is missing — the caller reports that as a difference).
 static func load_fixture(path: String = FIXTURE_PATH) -> Dictionary:
 	if not FileAccess.file_exists(path):
@@ -221,6 +301,9 @@ static func compare(expected: Dictionary, got: Dictionary) -> Array:
 	var problems: Array = []
 	if str(expected.get("schema", "")) != SCHEMA:
 		problems.append("fixture: schema %s, want %s" % [str(expected.get("schema", "<none>")), SCHEMA])
+	if str(expected.get("family", "")) != str(got.get("family", "")):
+		problems.append("fixture: family %s, want %s" % [
+			str(expected.get("family", "<none>")), str(got.get("family", "<none>"))])
 	var ep: Dictionary = expected.get("provenance", {})
 	var gp: Dictionary = got.get("provenance", {})
 	if int(ep.get("epoch", -1)) != int(gp.get("epoch", -1)):

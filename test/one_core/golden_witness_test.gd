@@ -1,10 +1,10 @@
 extends GdUnitTestSuite
 ## P4.0-10 — the golden witness must notice when the OLD table path changes.
 ##
-## CI half of test/one_core/golden_witness.gd: boots the real main.tscn with the one-core kill switch OFF and compares the
-## shooting-volley grid against test/fixtures/one_core/golden_shoot_volley.json. The second test plants one changed
-## line in a copy of the fixture and asserts the comparator reports it — the fixture set can fail, it is not a
-## snapshot that would accept anything.
+## CI half of test/one_core/golden_witness.gd: boots the real main.tscn with the one-core kill switch OFF and compares
+## the shooting-volley and melee grids against their committed fixtures. Each family also plants one changed line in
+## a copy of its fixture and asserts the comparator reports it — the fixture set can fail, it is not a snapshot that
+## would accept anything.
 ##
 ## Regenerate the fixture ONLY after an intended, owned table change: --capture (see the CLI header), then review
 ## the diff line by line. A red here means the table's volley result moved without its replacement being recorded.
@@ -62,4 +62,27 @@ func test_a_planted_fixture_change_is_reported() -> void:
 	var problems := Harness.compare(want, got)
 	assert_int(problems.size()).override_failure_message(
 		"a changed fixture line went unnoticed — the witness cannot fail").is_equal(1)
+	assert_str(str(problems[0])).contains("planted")
+
+
+func test_the_melee_fixture_matches_the_old_table_path() -> void:
+	var path := Harness.fixture_path(Harness.MELEE_FAMILY)
+	var want := Harness.load_fixture(path)
+	assert_bool(want.is_empty()).override_failure_message(
+		"fixture missing: %s — capture it with --family melee" % path).is_false()
+	var got: Dictionary = await Harness.capture(_main, Harness.MELEE_FAMILY)
+	var problems := Harness.compare(want, got)
+	assert_array(problems).override_failure_message(
+		"the old table path no longer matches its melee golden witness (%s):\n%s" % [
+			Harness.describe_provenance(want, got), "\n".join(problems)]).is_empty()
+
+
+func test_a_planted_melee_fixture_line_is_reported() -> void:
+	var want := Harness.load_fixture(Harness.fixture_path(Harness.MELEE_FAMILY))
+	assert_bool(want.is_empty()).override_failure_message("melee fixture missing").is_false()
+	var got: Dictionary = await Harness.capture(_main, Harness.MELEE_FAMILY)
+	want["cases"][0]["lines"][0] = "%s (planted)" % str(want["cases"][0]["lines"][0])
+	var problems := Harness.compare(want, got)
+	assert_int(problems.size()).override_failure_message(
+		"a changed melee fixture line went unnoticed — the witness cannot fail").is_equal(1)
 	assert_str(str(problems[0])).contains("planted")
