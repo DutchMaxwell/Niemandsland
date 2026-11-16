@@ -470,7 +470,7 @@ func test_land_delta_lands_the_marker_pools() -> void:
 func test_a_core_versatile_activation_lands_the_pick_the_old_path_reads() -> void:
 	var units := _volley_units()
 	var att: GameUnit = units[0]
-	att.source_data.weapons[0].special_rules.assign(["Versatile Attack"])
+	att.unit_properties["special_rules"].append("Versatile Attack")
 	_main.seed_tray_rng(7)
 	var t: Array = [{"t": "begin"}, {"t": "intent", "kind": AiDecision.Action.HOLD, "shoot": units[1].unit_id}]
 	var r: Dictionary = await CoreActivation.drive(_main, CoreActivation.capture(_main), att, t, true)
