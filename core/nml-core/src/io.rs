@@ -502,7 +502,7 @@ pub struct TracedRoll {
 
 /// One entry of `Action::split` — the table's own record of one shot
 /// (shots.jsonl's `member`/`weapon`/`target`, the target mapped to a key).
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct SplitShot {
     pub member: String,
     pub weapon: String,
