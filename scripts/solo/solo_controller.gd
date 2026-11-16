@@ -2482,7 +2482,11 @@ func _act(unit: GameUnit) -> Dictionary:
 			"candidates": [], "chosen": "%s instead" % fallback_name,
 			"why": str(charge_probe.get("reason", "charge corridor falls short")),
 			"data": {"gap_in": charge_gap, "band_in": charge_band,
-				"effective_band_in": float(charge_probe.get("effective_band_in", charge_band))}})
+				"effective_band_in": float(charge_probe.get("effective_band_in", charge_band)),
+				"arc_in": float(charge_probe.get("arc_in", -1.0)),
+				"remaining_in": float(charge_probe.get("remaining_in", -1.0)),
+				"residual_in": float(charge_probe.get("residual_in", -1.0)),
+				"failed_clauses": str(charge_probe.get("failed_clauses", ""))}})
 	var action_data := {"arch": archetype, "role": archetype_role_label(archetype),
 		"objective": bool(ctx["objective"]), "in_way": bool(ctx["in_way"]),
 		"enemy_in_charge": bool(ctx["enemy_in_charge"]), "shoot_after_advance": bool(ctx["shoot_after_advance"]),
@@ -11197,10 +11201,22 @@ func charge_path_probe(unit: GameUnit, target: GameUnit, band_in: float) -> Dict
 
 static func charge_snap_fits_unit_budget(residual_in: float, longest_arc_in: float,
 		band_in: float) -> bool:
+	return charge_snap_failed_clauses(residual_in, longest_arc_in, band_in).is_empty()
+
+
+## The three clauses of charge_snap_fits_unit_budget, by name, for the ones that fail
+## (empty = fits). A rejected declaration logs this so the record says WHY.
+static func charge_snap_failed_clauses(residual_in: float, longest_arc_in: float,
+		band_in: float) -> PackedStringArray:
 	var remaining_in := maxf(0.0, band_in - longest_arc_in)
-	return longest_arc_in <= band_in + SeparationChecker.BASE_CONTACT_EPSILON_INCHES \
-		and residual_in <= MELEE_ENGAGE_IN \
-		and residual_in <= remaining_in + SeparationChecker.BASE_CONTACT_EPSILON_INCHES
+	var failed := PackedStringArray()
+	if longest_arc_in > band_in + SeparationChecker.BASE_CONTACT_EPSILON_INCHES:
+		failed.append("arc_over_band")
+	if residual_in > MELEE_ENGAGE_IN:
+		failed.append("residual_over_engage")
+	if residual_in > remaining_in + SeparationChecker.BASE_CONTACT_EPSILON_INCHES:
+		failed.append("residual_over_remaining")
+	return failed
 
 
 func _charge_path_probe_impl(unit: GameUnit, target: GameUnit, band_in: float) -> Dictionary:
@@ -11291,6 +11307,8 @@ func _charge_path_probe_impl(unit: GameUnit, target: GameUnit, band_in: float) -
 	var remaining_in := maxf(0.0, effective_band - longest_arc_in)
 	result["arc_in"] = longest_arc_in
 	result["remaining_in"] = remaining_in
+	var best_residual_in := INF
+	var best_model := -1
 	for i in range(mini(models.size(), mini(finalized.size(), trails.size()))):
 		var mover_shape := SeparationChecker.shape_for_model(models[i] as ModelInstance)
 		if mover_shape == null:
@@ -11306,7 +11324,15 @@ func _charge_path_probe_impl(unit: GameUnit, target: GameUnit, band_in: float) -
 			result["contact_model"] = i
 			result["residual_in"] = residual_in
 			return result
+		if residual_in < best_residual_in:
+			best_residual_in = residual_in
+			best_model = i
 
+	# Why it was refused: the clause values of the model that came closest (-1 = no model shape).
+	result["residual_in"] = best_residual_in if best_model >= 0 else -1.0
+	result["residual_model"] = best_model
+	result["failed_clauses"] = "no_model_shape" if best_model < 0 else ",".join(
+		charge_snap_failed_clauses(best_residual_in, longest_arc_in, effective_band))
 	result["reachable"] = false
 	result["reason"] = "executable corridor cannot reach base contact within %.1f\"" % effective_band
 	return result

@@ -197,3 +197,36 @@ func test_blocked_corridor_does_not_claim_a_shooting_tree_charge_refusal() -> vo
 	assert_bool(bool(report.get("can_shoot", false))).is_true()
 	assert_str(_texts(report)).not_contains("rejected")
 	assert_array(_corridor_records(solo)).is_empty()
+
+
+func test_rejected_charge_record_says_which_clause_refused() -> void:
+	# A refusal must name WHY: the measured arc/remaining/residual and the failed clause(s),
+	# not only gap and band (the play-test Hounds refusal could not be attributed).
+	var attacker := _unit(2, "Melee", [Vector3.ZERO])
+	_arm(attacker, [{"name": "CCW", "range": 0, "attacks": 2}])
+	var target := _unit(1, "Target", [Vector3(0.28, 0, 0)])
+	var solo := _controller([attacker, target], FULL_HEIGHT_WALL)
+	solo._act(attacker)
+	var records := _corridor_records(solo)
+	assert_int(records.size()).is_equal(1)
+	var data: Dictionary = (records[0] as Dictionary)["data"]
+	for key in ["arc_in", "remaining_in", "residual_in", "failed_clauses"]:
+		assert_bool(data.has(key)).is_true()
+	assert_float(float(data.get("arc_in", -1.0))).is_greater_equal(0.0)
+	assert_float(float(data.get("residual_in", -1.0))).is_greater(0.0)
+	var failed := str(data.get("failed_clauses", "")).split(",")
+	assert_array(failed).is_not_empty()
+	for name in failed:
+		assert_array(["arc_over_band", "residual_over_engage", "residual_over_remaining"]).contains([name])
+
+
+func test_failed_clause_names_match_the_budget_predicate() -> void:
+	# Seed 71720 shape: contact is reachable but the unit's longest route spent the band.
+	assert_array(SoloController.charge_snap_failed_clauses(0.9, 12.0, 12.0)) \
+		.contains_exactly(["residual_over_remaining"])
+	# #2436 shape: a model already touching, another route outruns the band.
+	assert_array(SoloController.charge_snap_failed_clauses(0.0, 7.55, 6.0)).contains_exactly(["arc_over_band"])
+	# Far from contact: engage and remaining both refuse.
+	assert_array(SoloController.charge_snap_failed_clauses(3.0, 10.0, 12.0)) \
+		.contains_exactly(["residual_over_engage", "residual_over_remaining"])
+	assert_array(SoloController.charge_snap_failed_clauses(0.9, 10.8, 12.0)).is_empty()
