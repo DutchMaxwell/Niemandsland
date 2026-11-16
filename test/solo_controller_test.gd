@@ -3091,6 +3091,37 @@ func test_gate_stays_quiet_when_the_plan_is_already_on_the_board() -> void:
 	assert_int(solo.board_clamp_notes.size()).is_equal(0)   # no news, no line
 
 
+# === Stalkers coherency hold (playtest 1116): the wall clamp's partial revert ===
+
+## Two of three models plan to end inside a container behind a wall (rest-forbidden). The gate's terrain push
+## brings them back across the wall to the near side, coherent with the third - and the strict wall clamp then
+## reverted both to their full-plan endpoints, tearing the chain again (the collapse ladder holds the unit:
+## "coherency debt unresolved at all reaches"). The partial revert keeps the pushed endpoints, so the unit moves.
+func test_wall_clamp_partial_revert_keeps_a_coherent_gate_result() -> void:
+	auto_free(_table_stub(TableSizeDialog.FEET_6X4))
+	var ai := _unit(2, [Vector3(-0.02, 0, -0.06), Vector3(-0.02, 0, -0.02), Vector3(-0.02, 0, 0.02)])
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {ai.unit_id: ai}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	solo.terrain_type_at = func(p: Vector3) -> int:
+		return int(TerrainRules.TerrainType.CONTAINER) if p.x >= 0.10 else int(TerrainRules.TerrainType.NONE)
+	var walls: Array = [[Vector2(0.10, -5.0), Vector2(0.10, 5.0)]]
+	solo.walls_provider = func() -> Array: return walls
+	var models: Array = ai.get_alive_models()
+	var start: Array = [Vector3(-0.02, 0, -0.06), Vector3(-0.02, 0, -0.02), Vector3(-0.02, 0, 0.02)]
+	var planned: Array = [Vector3(0.20, 0, -0.06), Vector3(0.20, 0, -0.02), Vector3(0.07, 0, 0.02)]
+	var chain: float = CoherencyChecker.MAX_CHAIN_DISTANCE_INCHES
+	assert_bool(solo._config_coherent_world(models, planned, chain)).is_false()   # the plan itself is torn
+	var gated: Array = solo._finalize_placement(ai, models, start, planned, false, null, [])
+	assert_bool(solo._config_coherent_world(models, gated, chain)).is_true()
+	assert_float(SoloController._xz_dist_m(gated[0] as Vector3, start[0] as Vector3)).is_greater(0.01)   # it moved
+	for p in gated:
+		assert_float((p as Vector3).x).is_less(0.10)   # every model stays on the start side of the wall
+
+
 # === Wave 4 — Extended Buff Range + Coordinate ===================================================
 
 ## Stamp a unit as belonging to a book that actually fields the wave-4 rules, so the SYSTEM-SCOPED
