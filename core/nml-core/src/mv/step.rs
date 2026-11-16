@@ -1887,6 +1887,26 @@ pub(crate) mod tests {
         assert_ne!(dangerous_wounds(&[6, 6, 6]), 3, "counting 6s is the RED reading");
     }
 
+    /// #183 twin parity: the same deterministic grid the table's `solo_charge_band_cap_test.gd` sums over
+    /// `charge_snap_pick` gives the same checksum here (`(pick + 2) * running index`, -1 = none).
+    #[test]
+    fn snap_pick_grid_checksum_matches_the_table() {
+        let (mut sum, mut k) = (0i64, 0i64);
+        for band in [3.0f64, 6.0, 12.0] {
+            for ra in 0..13 { for rb in 0..13 { for aa in 0..14 { for ab in 0..14 {
+                k += 1;
+                let pick = snap_pick(&[ra as f64 * 0.1, rb as f64 * 0.1],
+                    &[aa as f64 * band / 12.0, ab as f64 * band / 12.0], band).map_or(-1, |p| p as i64);
+                sum += (pick + 2) * k;
+            } } } }
+        }
+        assert_eq!(sum, PICK_GRID_CHECKSUM, "the table pins the same number");
+        // The closing model's OWN budget: model 1 is nearer but spent its band, model 0 affords its 0.8".
+        assert_eq!(snap_pick(&[0.8, 0.3], &[1.5, 11.9], 12.0), Some(0));
+        assert_eq!(snap_pick(&[1.2, 0.3], &[1.5, 11.9], 12.0), None);
+    }
+    const PICK_GRID_CHECKSUM: i64 = 11_715_374_026;
+
     /// `_retrace_to` :6912 is the whole arc measure, so it gets its own red-green.
     /// GREEN: a route that walks 3" of arc to displace 1" is republished trimmed
     /// to that 1" plus ONE hop to the endpoint — strictly shorter than the route,
