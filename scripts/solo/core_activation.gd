@@ -569,6 +569,7 @@ static func land_delta(main, delta: Array, start_models: Array, done: Dictionary
 			main._solo_mirror_shaken(gu)
 		_land_ledger(main, gu, d)
 		_land_stamps(main, gu, d)
+		_land_pools(main, gu, d)
 
 
 ## P4.0-4e: the `State` field names whose table property is spelled differently (every other stamp is 1:1).
@@ -586,6 +587,18 @@ static func _land_stamps(main, gu: GameUnit, d: Dictionary) -> void:
 			continue
 		push_error("CoreActivation.land_delta: %s.%s differs (table %d, core %d)" % [gu.get_name(), prop, was, value])
 		main._sync_unit_property(gu, prop, value)
+
+
+## P4.0-4f: the marker pools the delta now carries (inventory class (a)). Every name is the table's own property
+## name and an absent pool reads 0, so a difference is a core/table split (reported) and the core's count lands.
+static func _land_pools(main, gu: GameUnit, d: Dictionary) -> void:
+	for key in d.get("pools", {}):
+		var value := int(d["pools"][key])
+		var was := int(gu.unit_properties.get(key, 0))
+		if value == was:
+			continue
+		push_error("CoreActivation.land_delta: %s.%s differs (table %d, core %d)" % [gu.get_name(), key, was, value])
+		main._sync_unit_property(gu, key, value)
 
 
 ## P4.0-4d: the table-owned per-activation ledger the delta now carries (inventory class (a)): the fatigue flag and the
