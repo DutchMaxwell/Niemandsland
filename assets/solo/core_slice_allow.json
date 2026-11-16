@@ -1,0 +1,6 @@
+{
+  "schema": "nml-core-slice-v1",
+  "door": "shoot",
+  "mode": "allow",
+  "groups": {}
+}
