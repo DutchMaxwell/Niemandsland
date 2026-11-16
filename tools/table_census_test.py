@@ -154,3 +154,12 @@ def test_runtime_census_reports_what_one_group_alone_would_unlock(tmp_path):
                         "   15.0 %       6  target_weapon_rule:AP + weapon_rule:AP",
                         "   10.0 %       4  weapon_rule:AP + weapon_rule:Blast"]
     assert len(sets) == 5
+
+
+def test_runtime_census_says_so_when_no_volley_needs_a_single_group(tmp_path):
+    root = repo(tmp_path)
+    census = tmp_path / "census.json"
+    census.write_text(json.dumps({"ai_volleys": 3, "legacy": {"ai_volley": {"_all": 3}},
+                                  "legacy_sets": {"ai_volley": {"no_handle|weapon_rule:AP|weapon_rule:Blast": 3}}}))
+    out = run(root, "--runtime", str(census)).stdout
+    assert "UNLOCKED IF THIS GROUP ALONE WERE ALLOWED:\n  (none: no volley needs fewer than 2 groups)\n" in out

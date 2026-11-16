@@ -141,7 +141,8 @@ def runtime_report(path):
                 freq[g] = freq.get(g, 0) + n
                 alone[g] = alone.get(g, 0) + (n if len(need[k]) == 1 else 0)
         order = [g for g, _ in best(freq, len(freq))]
-        out += ["UNLOCKED IF THIS GROUP ALONE WERE ALLOWED:"] + [row(n, g) for g, n in best(alone) if n]
+        ones = [row(n, g) for g, n in best(alone) if n]
+        out += ["UNLOCKED IF THIS GROUP ALONE WERE ALLOWED:"] + (ones or [f"  (none: no volley needs fewer than {min(widths)} groups)"])
         out += ["VOLLEYS BY NUMBER OF GROUPS THEY NEED:"] + [row(n, f"{w} group(s)") for w, n in sorted(widths.items())]
         out += ["MOST COMMON GROUPS ALLOWED FIRST (cumulative unlocked):"]
         for i in sorted({*range(1, 16), 20, 30, 40, 50} & set(range(1, len(order) + 1))):
