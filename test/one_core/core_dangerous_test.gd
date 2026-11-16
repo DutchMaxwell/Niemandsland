@@ -67,10 +67,42 @@ static func _tie_blind(final: Array) -> Array:
 	return out
 
 
+## The shots of the attacker's one weapon at a target `gap_in` away, as `_run_ai_shooting` builds them (the staged door).
+func _shots(att: GameUnit, weapon: Dictionary, gap_in: float) -> Array:
+	var wobj: OPRApiClient.OPRWeapon = (att.source_data as OPRApiClient.OPRUnit).weapons[0]
+	var plist: Array = AiShooting.profiles_in_range([wobj], gap_in)
+	for p in plist:
+		_main._solo_stamp_unit_shred(p, att, int(weapon["range_in"]))
+	var out: Array = []
+	for p in AiEv.stamp_sergeant(plist, att):
+		out.append({"member": att, "quality": att.get_quality(), "alive": att.get_alive_count(), "max": att.models.size(),
+			"reach": float(weapon["range_in"]), "profile": p})
+	return out
+
+
+## What a case's full log wrote of the Dangerous test: the sentences, the test's tray rolls (the attacker's "(6+)" lines),
+## the wound sentence, and where the volley's own "fires at" announce stands relative to them (-1 = none written).
+static func _tally(lines: Array) -> Dictionary:
+	var out := {"tests": 0, "dice": 0, "wounds": 0, "announce_after": -1}
+	var last := -1
+	for i in lines.size():
+		var t := str(lines[i])
+		out["tests"] += 1 if t.contains("Dangerous terrain test") else 0
+		out["dice"] += 1 if t.begins_with("COMBAT|AI (Att)") and t.ends_with("(6+)") else 0
+		out["wounds"] += 1 if t.contains("from dangerous terrain") else 0
+		if t.contains("Dangerous terrain test") or (t.begins_with("COMBAT|AI (Att)") and t.ends_with("(6+)")) \
+				or t.contains("from dangerous terrain"):
+			last = i
+		if t == "COMBAT|Att fires at Def":
+			out["announce_after"] = i - last
+	return out
+
+
 ## One golden shape x seed through the core: the golden's units and painted block, the AI body's call (an Advance that
 ## moved) with `owns_dangerous`. The target is null when the shape has no volley (the unit cannot shoot, or the defender
-## is out of range: the body's `_run_ai_shooting` decides that).
-func _core_case(sc: Dictionary, seed: int) -> Dictionary:
+## is out of range: the body's `_run_ai_shooting` decides that). `staged`: the call as the body makes it - the table's
+## dice count in the report and the volley's shots, so the door writes the Dangerous sentences and stages the volley.
+func _core_case(sc: Dictionary, seed: int, staged := false) -> Dictionary:
 	var att := ParityTable._make_unit(_main, sc["attacker"], (sc["weapon"] as Dictionary).duplicate(true))
 	# The golden's defender has no weapon (a generic unit, never plain); the core door needs a plain target, so it gets
 	# the attacker's rifle: a defender's own weapons play no part in the exchange.
@@ -86,12 +118,17 @@ func _core_case(sc: Dictionary, seed: int) -> Dictionary:
 	var tap: Callable = Harness._line_tap(lines)
 	_main.battle_log.entry_added.connect(tap)
 	var report := {"action": AiDecision.Action.ADVANCE, "moved": true}
-	var took: bool = await CoreActivation.run_ai(_main, att, report, dfn if shoots else null, h, [], true)
+	var alive_before := att.get_alive_count()
+	var shots: Array = []
+	if staged:
+		report["dangerous_dice"] = dice
+		shots = _shots(att, sc["weapon"], gap_in) if shoots else []
+	var took: bool = await CoreActivation.run_ai(_main, att, report, dfn if shoots else null, h, shots, true)
 	_main.battle_log.entry_added.disconnect(tap)
 	_main.solo_controller._core_node_ready().release(h)
 	var rec := {"scenario": str(sc["name"]), "seed": seed, "epoch": AiActRecorder.rules_epoch,
 		"lines": _verdict_lines(lines), "final": _tie_blind(Harness._final([att, dfn])), "rng": Harness._rng_state(_main),
-		"extra": {"dice": str(dice)}}
+		"extra": {"dice": str(dice)}, "tally": _tally(lines), "lost": alive_before - att.get_alive_count()}
 	if not took:
 		rec = {"scenario": str(sc["name"]), "seed": seed, "error": "the core refused the activation"}
 	Harness._unpaint_cover(_main, painted)
@@ -109,12 +146,12 @@ func _want() -> Dictionary:
 	return want
 
 
-func _core_grid() -> Dictionary:
+func _core_grid(staged := false) -> Dictionary:
 	var out := {"schema": Harness.SCHEMA, "family": Harness.DANGEROUS_FAMILY, "provenance": Harness.provenance(),
 		"cases": []}
 	for sc in Harness.dangerous_scenarios():
 		for seed in sc.get("seeds", Harness.SEEDS):
-			out["cases"].append(await _core_case(sc, int(seed)))
+			out["cases"].append(await _core_case(sc, int(seed), staged))
 	return out
 
 
@@ -207,3 +244,58 @@ func test_a_unit_wiped_by_its_own_test_fires_nothing() -> void:
 		gone += 1 if bool(core["gone"]) else 0
 		stands += 0 if bool(core["gone"]) else 1
 	assert_bool(gone >= 3 and stands >= 3).override_failure_message("gone %d, stands %d" % [gone, stands]).is_true()
+
+
+## The call as the body makes it (the table's dice count in the report, the volley's shots): the door stages the volley and
+## writes the Dangerous sentences the core does not print - the test sentence once before the roll, the wound sentence once
+## right after it when the test wounded the unit - and the volley's own announce comes after them, not at the test's throw.
+## State, tray rng, dice and morale lines still equal the golden's. RED: the staged volley taking the test's throw for its
+## first hit roll (announce too early, no wound sentence), or no sentence at all.
+func test_the_staged_door_writes_the_dangerous_sentences_once_and_equals_the_golden() -> void:
+	var want := _want()
+	var got := await _core_grid(true)
+	var problems := Harness.compare(want, got)
+	assert_array(problems).override_failure_message("the staged core door differs from the old table:\n%s" % [
+		"\n".join(problems.slice(0, 12))]).is_empty()
+	for c in got["cases"]:
+		var tally: Dictionary = c["tally"]
+		var why := "%s seed %s: %s, lost %s" % [c["scenario"], c["seed"], tally, c["lost"]]
+		assert_int(int(tally["tests"])).override_failure_message("test sentences: " + why).is_equal(1)
+		assert_int(int(tally["dice"])).override_failure_message("test dice: " + why).is_equal(1)
+		assert_int(int(tally["wounds"])).override_failure_message("wound sentences: " + why).is_equal(1 if int(c["lost"]) > 0 else 0)
+		if int(tally["announce_after"]) != -1:
+			assert_int(int(tally["announce_after"])).override_failure_message("the announce stands too early: " + why).is_greater(0)
+	assert_int(CoreActivation.dangerous_mismatches).is_equal(0)
+
+
+## The table reported a test the core did not roll (it counts the unit's models standing in or crossing Dangerous
+## ground; the core reads the same board): counted, reported, no sentence written for a test nobody rolled.
+## (1) The unit stands in no Dangerous cell, no target: the core throws no die at all. (2) No Dangerous cell, a target:
+## the first throw is the volley's hit roll. (3) It stands in the block but the report names two dice too many: the first
+## throw is the test, of another size.
+func test_a_test_the_core_did_not_roll_is_counted_not_written() -> void:
+	var sc: Dictionary = Harness.dangerous_scenarios()[0]
+	for variant in [[false, false], [false, true], [true, true]]:
+		var painted_block: bool = variant[0]
+		var att := ParityTable._make_unit(_main, sc["attacker"], (sc["weapon"] as Dictionary).duplicate(true))
+		var dfn := ParityTable._make_unit(_main, sc["defender"], (sc["weapon"] as Dictionary).merged({"count": 5}, true))
+		var painted: Dictionary = Harness._paint_cover(_main, att, _main.terrain_overlay.TerrainType.DANGEROUS) if painted_block else {}
+		var dice := OPRArmyManager.dangerous_dice_for(att) if painted_block else 5
+		_main.seed_tray_rng(3)
+		var h := CoreActivation.capture(_main)
+		var lines: Array = []
+		var tap: Callable = Harness._line_tap(lines)
+		_main.battle_log.entry_added.connect(tap)
+		var before := CoreActivation.dangerous_mismatches
+		var report := {"action": AiDecision.Action.ADVANCE, "moved": true, "dangerous_dice": dice + (2 if painted_block else 0)}
+		var took: bool = await CoreActivation.run_ai(_main, att, report, dfn if variant[1] else null, h, [], true)
+		_main.battle_log.entry_added.disconnect(tap)
+		_main.solo_controller._core_node_ready().release(h)
+		assert_bool(took).override_failure_message("the core did not take the activation").is_true()
+		assert_int(CoreActivation.dangerous_mismatches - before).override_failure_message(
+			"variant %s: the disagreement was not counted" % [variant]).is_equal(1)
+		assert_int(int(_tally(lines)["tests"])).override_failure_message("a sentence for a test nobody rolled").is_equal(0)
+		CoreActivation.dangerous_mismatches = before
+		Harness._unpaint_cover(_main, painted)
+		Harness._free_units(_main, [att, dfn])
+		await _main.get_tree().process_frame

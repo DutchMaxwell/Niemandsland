@@ -288,6 +288,21 @@ static func _shot_weapon(unit: GameUnit, lines: Array) -> String:
 static var ai_runs := 0
 static var ai_refusals := 0
 
+## The success target the tray stamps on a Dangerous test's roll (`sim.rs` DANGEROUS_TARGET): a 1 wounds, never a 6.
+const DANGEROUS_TARGET := 6
+
+
+## P4.D-19: the core and the table disagree about the Dangerous test of an activation the core took (the table's report
+## names dice the core did not roll): a defect, counted here and reported. The test is not repaired after the fact.
+static var dangerous_mismatches := 0
+
+
+static func _dangerous_mismatch(unit: GameUnit, dice: int, why: String) -> void:
+	dangerous_mismatches += 1
+	push_error("CoreActivation.run_ai: %s - the table reported a Dangerous test of %d dice, the core did not roll it: %s" % [
+		unit.get_name(), dice, why])
+
+
 
 ## P4.D-3 census: volleys the TABLE resolved instead of the core, door -> reason -> count ("_all" = the door's table
 ## calls). Counting only: no RNG, no log line, nothing the game reads.
@@ -349,7 +364,8 @@ static func dump_legacy() -> void:
 static func run_ai(main, unit: GameUnit, report: Dictionary, target: GameUnit, h: int, shots: Array = [],
 		owns_dangerous := false) -> bool:
 	var kind := int(report.get("action", -1))
-	var table_rolled := not owns_dangerous and int(report.get("dangerous_dice", report.get("dangerous_models", 0))) > 0
+	var reported := int(report.get("dangerous_dice", report.get("dangerous_models", 0)))
+	var table_rolled := not owns_dangerous and reported > 0
 	if h == 0 or not (kind in [AiDecision.Action.HOLD, AiDecision.Action.ADVANCE]) or not is_plain(unit) or table_rolled \
 			or (target == null and not owns_dangerous) or (target != null and not is_plain_target(target)):
 		return false
@@ -373,15 +389,37 @@ static func run_ai(main, unit: GameUnit, report: Dictionary, target: GameUnit, h
 		intent["shoot"] = target.unit_id
 	var t: Array = [{"t": "begin"}, {"t": "placed", "positions": at, "trails": trails}, intent]
 	# Step 42b: the table's presentation of the volley (_present); its stage opens before the core's first line.
-	var st := {"n": 0, "open": false, "result": false, "hits": 0, "landed": 0, "announce": [],
+	# P4.D-19: the core prints no sentence for the Dangerous test (its first throw): the table's own two stand in for it, in
+	# the table's words and places - the test line before the roll, the wound line right after it - and the staged volley
+	# does not take that throw for its first hit roll. `reported` is the table's dice count; a first throw of another
+	# size or target means the core did not roll the test the table reported (a defect, reported; it then shows as a hit roll).
+	var dice := reported if owns_dangerous else 0
+	var st := {"n": 0, "open": false, "result": false, "hits": 0, "landed": 0, "announce": [], "first": dice > 0, "test": false,
 		"before": main._solo_combined_alive(target) if target != null else 0, "moved": bool(report.get("moved", false))}
 	var shows := target != null and not shots.is_empty()   # a shotless activation has no volley to stage
 	var beat := func(ev: String, a: Dictionary, faces: Array) -> void:
-		await _present(main, unit, target, shots, st, ev, a, faces)
+		if ev == "throw" and st["first"]:
+			st["first"] = false
+			st["test"] = int(a["count"]) == dice and int(a["target"]) == DANGEROUS_TARGET
+			if st["test"]:
+				main._solo_log_dangerous_test(unit, dice)
+			else:
+				_dangerous_mismatch(unit, dice, "its first throw is %s dice at %s+" % [a["count"], a["target"]])
+		if st["test"] and (ev == "throw" or ev == "thrown"):
+			if ev == "thrown":
+				st["test"] = false
+				var wounds := faces.filter(func(f: Variant) -> bool: return int(f) == 1).size()
+				if wounds > 0:
+					main._solo_log_dangerous_wounds(unit, wounds)
+			return
+		if shows:
+			await _present(main, unit, target, shots, st, ev, a, faces)
 	if shows:
 		main._solo_stage_begin("%s fires at %s" % [unit.get_name(), target.get_name()])
-	var r: Dictionary = await drive(main, h, unit, t, true, Callable(), false, beat if shows else Callable())
+	var r: Dictionary = await drive(main, h, unit, t, true, Callable(), false, beat if shows or dice > 0 else Callable())
 	if str(r["step"]) == "done":
+		if st["first"] and dice > 0:
+			_dangerous_mismatch(unit, dice, "it threw no die")
 		ai_runs += 1
 		announce(main, unit, target)   # step 50/51: the table that ran the AI activation announces its digest check
 		return true
