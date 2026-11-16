@@ -236,6 +236,11 @@ jobs:
       - name: Gate - NmlCore loads in the test lane
         run: |
           godot --headless --path . -s res://tools/core_dormant_check.gd 2>&1 | tee /tmp/core_load.log
+          # `-s` runs before the autoloads exist: a script chain that names GraphicsSettings (or any autoload) bare dies
+          # here with "Compile Error: Identifier not found" - and tools/arena_match.gd (every A/B and the box fleet) with it.
+          if grep -a "Compile Error" /tmp/core_load.log; then
+            echo "::error::a -s tool script failed to compile (an autoload named bare in a script its chain reaches?)"; exit 1
+          fi
           python3 - <<'PY'
           import json, sys
           lines = [l for l in open("/tmp/core_load.log") if "NML_DORMANT_CHECK " in l]
