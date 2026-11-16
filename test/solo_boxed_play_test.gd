@@ -144,3 +144,48 @@ func test_a_boxed_unit_never_ends_its_activation_on_the_spot() -> void:
 	assert_float(moved / IN2M) \
 		.override_failure_message("the boxed unit walked %.2f\" — it stood still through its whole activation" % (moved / IN2M)) \
 		.is_greater(1.0)
+
+
+## Flying flies OVER terrain (p.13). The placement gate used to shorten a Flying move whose endpoint
+## rested on a container footprint back to the footprint's near edge — the play-test's 1.2"/1.7" of an
+## 11-12" band. The same board must still stop a GROUND unit (the rest rule is not weakened for it).
+func _container_strip_board(flying: bool) -> Array:
+	var mover := _unit(2, [Vector3.ZERO, Vector3(0, 0, 1.2 * IN2M)], "Mover")
+	if flying:
+		mover.unit_properties["special_rules"] = ["Flying"]
+	var sc := _controller([mover])
+	sc.terrain_type_at = func(p: Vector3) -> int:
+		var z_in := p.z / IN2M
+		return TerrainRules.TerrainType.CONTAINER if z_in >= 1.5 and z_in <= 18.0 \
+			else TerrainRules.TerrainType.NONE
+	return [sc, mover]
+
+
+func _moved_z_in(u: GameUnit) -> float:
+	var z := 0.0
+	for m in u.get_alive_models():
+		z = maxf(z, (m as ModelInstance).node.global_position.z / IN2M)
+	return z
+
+
+func test_a_flying_unit_flies_over_a_container_instead_of_stalling() -> void:
+	var board := _container_strip_board(true)
+	var sc: SoloController = board[0]
+	var mover: GameUnit = board[1]
+	sc._execute_move(mover, Vector3(0, 0, 13.0 * IN2M), 12.0, false)
+	var rec := _move_record(sc)
+	var data := rec.get("data", {}) as Dictionary
+	assert_float(float(data.get("achieved_in", 0.0))) \
+		.override_failure_message("the flying unit advanced only %.2f\" of its 12\" band at the terrain edge" % float(data.get("achieved_in", 0.0))) \
+		.is_greater(10.0)
+	assert_float(_moved_z_in(mover)).is_greater(10.0)
+
+
+func test_a_ground_unit_still_stops_at_the_container_edge() -> void:
+	var board := _container_strip_board(false)
+	var sc: SoloController = board[0]
+	var mover: GameUnit = board[1]
+	sc._execute_move(mover, Vector3(0, 0, 13.0 * IN2M), 12.0, false)
+	assert_float(_moved_z_in(mover)) \
+		.override_failure_message("a ground unit ended inside/over the container footprint") \
+		.is_less(3.0)
