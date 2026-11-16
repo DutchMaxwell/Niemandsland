@@ -912,7 +912,7 @@ func _ready() -> void:
 	save_manager.terrain_overlay = terrain_overlay
 	save_manager.radial_menu_controller = radial_menu_controller
 	save_manager.ai_slots_getter = func() -> Array: return ai_slots_sync_payload(solo_ai_slots)
-	save_manager.ai_slots_setter = _rpc_sync_ai_slots   # the same adopt + roster + grade + panel refresh a late joiner runs
+	save_manager.ai_slots_setter = _adopt_saved_ai_slots   # the same adopt + roster + grade + panel refresh a late joiner runs
 	save_manager.solo_mission_id_getter = func() -> String: return _solo_mission_id
 	save_manager.solo_mission_id_setter = func(mission_id: String) -> void: _solo_mission_id = mission_id
 
@@ -1065,7 +1065,7 @@ func _run_solo_ai_turn() -> void:
 	# advertise it. Ungated it was the worst of them: _solo_ensure_playing_phase() below deploys the AI's
 	# remainder and flips to PLAYING, and then the whole AI side runs at once against a human army that
 	# may still be standing on its tray.
-	if _deployment_gate_refuses_start():
+	if _engine_refused_without_core() or _deployment_gate_refuses_start():
 		return
 	_solo_ensure_playing_phase()
 	if opr_army_manager == null or movement_range_controller == null:
@@ -1118,6 +1118,7 @@ func _solo_activate_one_ai() -> GameUnit:
 	if _solo_core_ai_h != 0:   # one-core P3 step 42: the body's capture, released on every path of the body
 		solo_controller._core_node_ready().release(_solo_core_ai_h)
 		_solo_core_ai_h = 0
+	save_manager.note_activation_end()   # P4.0-7 (D5): a save after the AI activation is an ordinary one
 	if done != null and solo_activation_done.is_valid():
 		await solo_activation_done.call(done)
 	return done
@@ -1144,6 +1145,11 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	# One-core P3 step 42 (flag on): a plain unit's board BEFORE its move, for the core's volley (_run_ai_shooting).
 	_solo_core_ai_h = CoreActivation.capture(self) \
 		if peek != null and CoreActivation.applies(self) and CoreActivation.is_plain(peek) else 0
+	# P4.0-7 (D5): the AI's activation-start snapshot for a save taken mid-volley (the body's end clears it).
+	if _solo_core_ai_h != 0:
+		save_manager.note_activation_start(peek.get_name())
+	else:
+		save_manager.note_activation_end()
 	var act_t0 := Time.get_ticks_usec()
 	var unit: GameUnit = solo_controller.activate_next_ai_unit()
 	# S4 wait-time instrument (NML_ACT_WALL=1): the decision call a player waits for, on the
@@ -2274,6 +2280,7 @@ func _solo_run_both_ai_game(first_opener: int = 1) -> void:
 		if solo_round_done.is_valid():
 			await solo_round_done.call(round_no)   # harness: the board round_no ENDED on, nothing else acting
 	_solo_ai_busy = false
+	CoreActivation.dump_legacy()   # P4.D-3: NML_TABLE_CENSUS=<path> writes the table-volley census
 
 
 ## One both-AI round: alternate one activation per side (OPR one-for-one), starting with `opener`, until both
@@ -4850,6 +4857,7 @@ func _solo_apply_strafing(unit: GameUnit, human_trails: Array = []) -> void:
 		battle_log.log_event(BattleLog.Category.COMBAT,
 			"%s: %s passes over %s — attacks it as if shooting (once per activation)" % [
 			rule_name, unit.get_name(), target.get_name()], true)
+	CoreActivation.note_legacy(self, "ai_strafe", unit, [target])
 	await _solo_resolve_ai_volley(unit, target, shots, true)
 
 
@@ -4929,11 +4937,17 @@ func _run_ai_shooting(report: Dictionary) -> void:
 	# Target validity is PER MODEL (GF v3.5.1 p.8): the shot's MEMBER needs a model with range+LOS.
 	var groups: Dictionary = {}   # target unit_id -> {"target": GameUnit, "shots": Array}
 	var order: Array = []
+	var unshootable: Dictionary = {}   # P4.D-13c: target unit_id -> true, one line each
 	for shot in shots:
 		var overlay: int = AiTargeting.weapon_overlay((shot["profile"] as Dictionary).get("rules", []))
 		var tgt: GameUnit = _solo_pick_overlay_target(shot["member"], overlay, float(shot["reach"]), shot["profile"] as Dictionary,
 			not bool(report.get("moved", false)))
 		if tgt == null:
+			continue
+		if unshootable.has(tgt.unit_id):
+			continue
+		if not groups.has(tgt.unit_id) and CoreActivation.refuses_statlineless(self, unit, tgt):
+			unshootable[tgt.unit_id] = true   # no Quality/Defense: not a valid target; the line is written, the shot is not
 			continue
 		if not groups.has(tgt.unit_id):
 			groups[tgt.unit_id] = {"target": tgt, "shots": []}
@@ -4943,7 +4957,8 @@ func _run_ai_shooting(report: Dictionary) -> void:
 		# NML-1035: every weapon lost its target (out of range / no LOS) — without a
 		# line the whole activation is invisible (a HOLD with no tree target writes
 		# no movement line either).
-		_solo_log_no_volley(unit, report, "no target in range or sight")
+		if unshootable.is_empty():
+			_solo_log_no_volley(unit, report, "no target in range or sight")
 		return
 	# Indirect (wave 5): "-1 to hit rolls when shooting after moving" — the activation's action says
 	# whether this unit moved before firing (HOLD = it did not).
@@ -4953,6 +4968,14 @@ func _run_ai_shooting(report: Dictionary) -> void:
 		if await CoreActivation.run_ai(self, unit, report, groups[order[0]]["target"], _solo_core_ai_h,
 				groups[order[0]]["shots"]):
 			return
+	var why: PackedStringArray = []   # P4.D-3 census: why this volley stays on the table beyond the units' own rules
+	if _solo_core_ai_h == 0:
+		why.append("no_handle")
+	if order.size() > 1:
+		why.append("split")
+	if int(report.get("dangerous_dice", report.get("dangerous_models", 0))) > 0:
+		why.append("dangerous")
+	CoreActivation.note_legacy(self, "ai_volley", unit, order.map(func(id) -> GameUnit: return groups[id]["target"]), ",".join(why))
 	for id in order:
 		var g := groups[id] as Dictionary
 		await _solo_resolve_ai_volley(unit, g["target"], g["shots"], moved)
@@ -5360,7 +5383,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		else:
 			regenable += w
 		await _solo_stage_phase(str(profile.get("name", "weapon")))
-	var landed: int = await _solo_land_wounds(target, regenable, regen_proof, false, dist_in)
+	var landed: int = await _solo_land_wounds(target, regenable, regen_proof, false, dist_in, -1.0, landed_extra)
 	if _solo_combined_alive(target) <= 0:
 		_solo_growth_on_kill(attacker)   # Defensive Frenzy: volley kill credit
 		_solo_vengeance_on_destroyed(target, attacker)
@@ -5538,10 +5561,12 @@ func _solo_resolve_one_cast(cast: Dictionary) -> void:
 	var casting_mod := int(cast_net["net"])
 	var cast_mod_notes: PackedStringArray = cast_net["notes"]
 	if casting_mod != 0:
+		var unmodified_target := base_target
 		base_target = clampi(base_target - casting_mod, 2, 6)
 		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.COMBAT, "%+d to casting rolls (%s) — %s's base target is %d+" % [
-				casting_mod, ", ".join(cast_mod_notes), caster.get_name(), base_target], true)
+			# State BOTH numbers: the modified roll and the unmodified base it started from.
+			battle_log.log_event(BattleLog.Category.COMBAT, "%+d to casting rolls (%s) — %s casts on %d+ (base %d+)" % [
+				casting_mod, ", ".join(cast_mod_notes), caster.get_name(), base_target, unmodified_target], true)
 	# ANNOUNCE (announce → resist? → roll → saves → effect): attribution highlights + one log line
 	# stating cost, boost/interference and the needed roll BEFORE any die is thrown.
 	var announce := _solo_show_attack_announce(caster_unit, targets[0], "casts %s at" % spell_name)
@@ -9263,6 +9288,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 	var caused := 0
 	var regenable := 0
 	var regen_proof := 0
+	var landed_extra := 0   # Deadly/Takedown wounds land per model BEFORE the pooled strike — counted into the "takes" line
 	# MEL-10r (`EPOCH_73_V36`): the melee tally counts wounds TAKEN — Regeneration-cancelled wounds
 	# do not count, so each landing swaps the pre-Regeneration count for what actually landed.
 	var v36_tally: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
@@ -9547,6 +9573,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 				else:
 					td_dealt = await _solo_land_takedown_wounds(defender, str(profile.get("name", "?")), td_pick, td_w, 0)
 				caused += td_dealt
+				landed_extra += td_dealt
 			elif m_deadly and w > 0:
 				# Deadly (GF v3.5.1 p.14, no carry-over): each unsaved wound ×X on one model; the DEALT
 				# wounds feed the melee wound-comparison so the multiply still decides who wins.
@@ -9556,6 +9583,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 				else:
 					dealt = await _solo_land_deadly_wounds(defender, str(profile.get("name", "?")), int(eff.get("deadly", 0)), w, 0)
 				caused += dealt
+				landed_extra += dealt
 			else:
 				caused += w
 				if _solo_ignores_regen(group.get("member"), eff, defender):
@@ -9604,7 +9632,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 	if regenable + regen_proof > 0:
 		# MOR-17a: a charge hands its pre-charge gap; a strike-back rides 0.0 (it did the charging).
 		var m_landed: int = await _solo_land_wounds(defender, regenable, regen_proof, false, -1.0,
-			charge_from_in if charging else 0.0)
+			charge_from_in if charging else 0.0, landed_extra)
 		if v36_tally:
 			_solo_regen_ignored += regenable + regen_proof - m_landed
 			caused += m_landed - (regenable + regen_proof)
@@ -10543,7 +10571,7 @@ func _solo_morale_bonus(unit: GameUnit) -> int:
 ## (Bane / Rending / Unstoppable wounds bypass it — GF Advanced Rules v3.5.1: those rules "ignore
 ## Regeneration"; Lacerate does not), then everything lands through the normal wound machinery. Returns landed wounds.
 func _solo_land_wounds(target: GameUnit, regenable: int, regen_proof: int, from_spell: bool = false,
-		shot_in: float = -1.0, charged_in: float = -1.0) -> int:
+		shot_in: float = -1.0, charged_in: float = -1.0, taken_before: int = 0) -> int:
 	# DAT-17a: from EPOCH 73 the grant is spent by wounds COMING IN, before the Regeneration roll —
 	# an all-ignored exchange still spends it, a zero-incoming exchange does not. Below 73 the landing
 	# adds no mark; only _solo_apply_wounds marks there (the old unconditional spend stays in charge).
@@ -10551,7 +10579,7 @@ func _solo_land_wounds(target: GameUnit, regenable: int, regen_proof: int, from_
 		_solo_mark_regen_grant_used(target)
 	var landed: int = await _solo_ignore_wounds(target, regenable, regen_proof, from_spell, {}, shot_in, charged_in)
 	if landed > 0:
-		await _solo_apply_wounds(target, landed)
+		await _solo_apply_wounds(target, landed, true, taken_before)
 	return landed
 
 
@@ -11774,6 +11802,54 @@ func _owner_roll_fallback(unit: GameUnit, count: int, target: int, roll_kind: St
 	return await _solo_tray_roll(count, target, "AI (%s)" % unit.get_name(), roll_kind,
 		"%s (owner absent — auto-rolled)" % purpose)
 
+## P4.0-6: the owner of a choice answers it, on the same "jeder selbst" seam as a roll. Our own unit (or
+## an AI unit, whose pick the resolving machine makes) answers here; another human's unit is asked through
+## `request_roll` with `ask.choice` and answers `roll_result` with its option id. No answer (vacant seat or
+## the timeout) leaves the core's automatic pick and says so in ONE battle-log line. The caller validates
+## the returned option against the core's options; "" always means "automatic".
+func _owner_choice(unit: GameUnit, id: String, options: Array, purpose: String) -> String:
+	if _solo_is_ai_unit(unit) or _solo_i_own_unit(unit):
+		return await _solo_choice_local(unit, id, options)
+	var owner_peer := _solo_peer_for_slot(unit_owner_slot(unit.unit_properties))
+	if owner_peer == 0 and _rejoin_handshake_pending():
+		var wait_until := Time.get_ticks_msec() + int(OWNER_REJOIN_WAIT_S * 1000.0)
+		while owner_peer == 0 and Time.get_ticks_msec() < wait_until:
+			await get_tree().create_timer(0.1).timeout
+			owner_peer = _solo_peer_for_slot(unit_owner_slot(unit.unit_properties))
+	if owner_peer != 0:
+		var reply: Dictionary = await _owner_request(owner_peer, {"unit": unit.unit_id, "kind": "choice",
+			"count": 0, "target": 0, "purpose": purpose, "ask": {"choice": {"id": id, "options": options}}})
+		if bool(reply.get("done", false)):
+			var answered: Array = reply.get("faces", [])
+			var option := str(answered[0]) if not answered.is_empty() else ""
+			if options.has(option):
+				return option
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT,
+			"%s: no answer to the %s — the automatic pick stands" % [_solo_owner_name(unit), purpose], true)
+	return ""
+
+
+## P4.0-6: the answer on the choice's OWN machine. An AI unit (or the headless batch) keeps the core's
+## automatic pick, so nothing waits. The first real choice is the Takedown model pick: the table's own
+## click prompt, handed back as one of the core's options ("" when no option fits or the pick was skipped).
+func _solo_choice_local(unit: GameUnit, id: String, options: Array) -> String:
+	if _solo_is_ai_unit(unit) or _solo_batch or id.get_slice(":", 0) != "takedown_model":
+		return ""
+	var target := opr_army_manager.get_game_unit_by_id(id.get_slice(":", 2))
+	if target == null or target.get_alive_models().size() < 2:
+		return ""
+	var pick: Dictionary = await _solo_prompt_takedown_model(target, "Takedown",
+		SoloController.attacker_pick_target(target))
+	var picked := pick.get("unit") as GameUnit
+	var idx := int(pick.get("index", -1))
+	if picked == null or idx < 0 or idx >= picked.models.size():
+		return ""
+	var slot: int = target.get_alive_models().find(picked.models[idx])
+	var option := "slot:%d" % slot
+	return option if slot >= 0 and options.has(option) else ""
+
+
 ## Owner side: a roll request arrived for OUR unit — a save batch opens our prompt, a cast our
 ## interference dialog, every other kind rolls on our tray (a real roll, same sync as a local one) —
 ## and the faces go back.
@@ -11796,7 +11872,12 @@ func _rpc_request_roll(rq: Dictionary, from_peer: int) -> void:
 		_solo_owner_open[key] = true
 	var ask: Dictionary = rq.get("ask", {})
 	var faces: Array
-	if ask.has("spell"):
+	if ask.has("choice"):
+		# P4.0-6: OUR pick for the core's choice; a skipped pick answers nothing, so the core falls back.
+		var c: Dictionary = ask["choice"]
+		var option: String = await _solo_choice_local(unit, str(c.get("id", "")), c.get("options", []))
+		faces = [option] if not option.is_empty() else []
+	elif ask.has("spell"):
 		# #1719: an online cast at our side — the interference is OUR player's choice (`_solo_remote_interference`).
 		var member := opr_army_manager.get_game_unit_by_id(str(ask.get("caster", "")))
 		var caster_unit := opr_army_manager.get_game_unit_by_id(str(ask.get("caster_unit", "")))
@@ -14484,6 +14565,7 @@ func _solo_split_commit() -> void:
 	_solo_end_targeting()
 	if attacker == null or a == null or b == null:
 		return
+	CoreActivation.note_legacy(self, "human_split", attacker, [a, b])
 	await _run_human_attack_split(attacker, a, b, sb)
 
 
@@ -15176,7 +15258,8 @@ func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool, auto: 
 		elif target != null and not target.is_destroyed() and _solo_is_ai_unit(target) and battle_log != null \
 				and not solo_controller.last_hit_and_run_note.is_empty():   # UX-19: only some models carry it
 			battle_log.log_event(BattleLog.Category.MOVEMENT, solo_controller.last_hit_and_run_note, true)
-	elif not await CoreActivation.human_shoot(self, attacker, target):   # step 38 (O15 (1)): a core unit's volley
+	elif not await CoreActivation.human_shoot(self, attacker, target, Callable(), auto):   # step 38 (O15 (1)): a core unit's volley
+		CoreActivation.note_legacy(self, "human_shoot", attacker, [target])
 		await _run_human_shooting(attacker, target)
 	elif CoreActivation.last_target != target:
 		return   # the core refused the shot (it notes the target of a shot it resolved): nothing was shot, the activation stays open
@@ -15663,6 +15746,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 	var blast_models_start: int = _solo_combined_alive(target) if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else -1
 	var regenable := 0
 	var regen_proof := 0
+	var landed_extra := 0   # Deadly/Takedown wounds land per model BEFORE the pooled volley — counted into the "takes" line
 	# Armor(X) (wave 5) sets the working Defense, then every Defense contribution of the parts seam
 	# folds in (Shielded and its data aliases, growth markers, spell tokens — each NAMED in the log,
 	# NML-932); Cover (+1 Defense majority-in-cover, GF v3.5.1 p.11) is shooting-only and ignored by
@@ -15889,14 +15973,14 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 				# Resolver wave A: Deadly multiplies on the picked model (see the AI branch).
 				var td_w: int = w * maxi(int(profile.get("deadly", 0)), 1)
 				if _solo_ignores_regen(group.get("member"), profile, target):
-					await _solo_land_takedown_wounds(target, str(profile.get("name", "?")), td_pick, 0, td_w)
+					landed_extra += await _solo_land_takedown_wounds(target, str(profile.get("name", "?")), td_pick, 0, td_w)
 				else:
-					await _solo_land_takedown_wounds(target, str(profile.get("name", "?")), td_pick, td_w, 0)
+					landed_extra += await _solo_land_takedown_wounds(target, str(profile.get("name", "?")), td_pick, td_w, 0)
 			elif is_deadly and w > 0:
 				if _solo_ignores_regen(group.get("member"), profile, target):
-					await _solo_land_deadly_wounds(target, str(profile.get("name", "?")), int(profile.get("deadly", 0)), 0, w, false, dist)
+					landed_extra += await _solo_land_deadly_wounds(target, str(profile.get("name", "?")), int(profile.get("deadly", 0)), 0, w, false, dist)
 				else:
-					await _solo_land_deadly_wounds(target, str(profile.get("name", "?")), int(profile.get("deadly", 0)), w, 0, false, dist)
+					landed_extra += await _solo_land_deadly_wounds(target, str(profile.get("name", "?")), int(profile.get("deadly", 0)), w, 0, false, dist)
 			elif _solo_ignores_regen(group.get("member"), profile, target):
 				regen_proof += w
 			else:
@@ -15907,7 +15991,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 	if not fired_any and battle_log != null:
 		_log_rule_event(BattleLog.Category.COMBAT,
 			"%s has no weapon in range of %s — no shots" % [attacker.get_name(), target.get_name()], true)
-	await _solo_land_wounds(target, regenable, regen_proof, false, dist)
+	await _solo_land_wounds(target, regenable, regen_proof, false, dist, -1.0, landed_extra)
 	if _solo_combined_alive(target) <= 0:
 		_solo_growth_on_kill(attacker)   # Defensive Frenzy: your volley kill counts too (symmetry)
 		_solo_vengeance_on_destroyed(target, attacker)
@@ -16859,7 +16943,7 @@ func _solo_reset_all_fatigue() -> void:
 ## regiments take pooled wounds; loose units lose whole models back-rank-first (defender-optimal
 ## default), Tough models absorb wounds before dying.
 ## `pips` = VFX #1 result marks over the struck models; a rout wipe passes false (a rout is no wound).
-func _solo_apply_wounds(target: GameUnit, wounds: int, pips: bool = true) -> void:
+func _solo_apply_wounds(target: GameUnit, wounds: int, pips: bool = true, taken_before: int = 0) -> void:
 	if wounds <= 0 or opr_army_manager == null:
 		return
 	_solo_mark_regen_grant_used(target)
@@ -16914,7 +16998,9 @@ func _solo_apply_wounds(target: GameUnit, wounds: int, pips: bool = true) -> voi
 		# (the old own-models total printed impossible "(4/3)" shapes once the hero soaked the spill).
 		# Log the wounds that actually LANDED, not the requested amount — the rout wipe passes an overkill
 		# figure and printed "takes 120 wounds" (Windows playtest bug 6); spill past the pool is no wound.
-		var landed: int = maxi(0, requested - maxi(remaining, 0))
+		# `taken_before` carries the wounds the SAME event already dealt through another landing (Deadly /
+		# Takedown land per model BEFORE the pooled volley), so the line counts the event's whole state change.
+		var landed: int = maxi(0, requested - maxi(remaining, 0)) + maxi(taken_before, 0)
 		# NML-1091: a unit that IS one multi-wound model has no model counter to print — "(1/1)" stood
 		# there unchanged from full health to the last wound. Its own remaining wounds are the figure
 		# the reader needs. Read off the model (wounds_max > 1 = what Tough(N) grants) rather than the
@@ -17860,6 +17946,8 @@ func _update_round_button() -> void:
 func set_rules_automation(level: int, who: String) -> bool:
 	if opr_army_manager == null or not RulesAutomation.change_allowed(level, not solo_ai_slots.is_empty(), _solo_resolution_pending()):
 		return false
+	if level == RulesAutomation.Level.AUTOMATIC and _engine_refused_without_core():
+		return false
 	if network_manager != null and network_manager.is_multiplayer_active():
 		if level == RulesAutomation.Level.AUTOMATIC:
 			return propose_rules_automation()   # plan 3.0: Automatic online needs the other player's confirm
@@ -17972,6 +18060,9 @@ func _on_rules_proposal(from_peer: int) -> void:
 		return
 	if _rules_agreement_card != null and is_instance_valid(_rules_agreement_card):
 		return
+	if _engine_refused_without_core():   # M-3: this peer cannot run Automatic - decline without asking the player
+		network_manager.send_command("decline_rules_automation", {})
+		return
 	_rules_agreement_mode = 2
 	_rules_proposal_timed_out = false
 	var card := PromptCard.new("Turn on automatic rules?",
@@ -18033,6 +18124,17 @@ func _apply_rules_automatic_agreed() -> void:
 func _log_rules_line(text: String) -> void:
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL, text)
+
+
+## M-3 (maintainer 16.11.): the rules core is mandatory for NACHTMAHR and Automatic play. A door that would seat the
+## AI or switch Automatic on asks this first: true = refused, with one battle-log line and a toast saying why.
+func _engine_refused_without_core() -> bool:
+	if CoreActivation.engine_offered():
+		return false
+	_log_rules_line(CoreLoadNotice.ENGINE_OFF_LINE)
+	if is_inside_tree():
+		_solo_show_toast(CoreLoadNotice.ENGINE_OFF_LINE, 8.0)
+	return true
 
 
 ## The one other peer's id (two-player rooms); 2 as a safe fallback.
@@ -18809,7 +18911,7 @@ func _on_battle_log_regiment_wounds(unit_name: String, delta: int, remaining: in
 func _on_battle_log_dropped(moves: Array) -> void:
 	if battle_log == null:
 		return
-	var per_unit := {}   # unit name -> {count, max_in, climb_in, alive, whole}
+	var per_unit := {}   # unit name -> {count, max_in, climb_in, step_in, alive, whole}
 	for mv in moves:
 		var node: Node3D = mv.get("node")
 		var unit_name := _battle_log_unit_name(node)
@@ -18822,7 +18924,7 @@ func _on_battle_log_dropped(moves: Array) -> void:
 		if res_gu != null and SoloController.unit_in_reserve(res_gu):
 			continue
 		if not per_unit.has(unit_name):
-			per_unit[unit_name] = {"count": 0, "max_in": 0.0, "climb_in": 0.0,
+			per_unit[unit_name] = {"count": 0, "max_in": 0.0, "climb_in": 0.0, "step_in": 0.0,
 				"alive": _battle_log_unit_alive(node), "whole": false, "node": node}
 		var e: Dictionary = per_unit[unit_name]
 		e["count"] = int(e["count"]) + 1
@@ -18834,6 +18936,9 @@ func _on_battle_log_dropped(moves: Array) -> void:
 		if mv_in >= float(e["max_in"]):
 			e["max_in"] = mv_in
 			e["climb_in"] = float(mv.get("climb_in", 0.0))
+		# The impassable verdict is about the biggest SINGLE step of any model of the unit, not the
+		# climb cost (the sum of every step up and down) — so it does not follow the max-arc pairing.
+		e["step_in"] = maxf(float(e["step_in"]), float(mv.get("max_step_in", 0.0)))
 		if node is RegimentTray:
 			e["whole"] = true
 	var summaries: Array = []
@@ -18841,11 +18946,13 @@ func _on_battle_log_dropped(moves: Array) -> void:
 		var e: Dictionary = per_unit[unit_name]
 		summaries.append({"unit": unit_name, "count": int(e["count"]), "alive": int(e["alive"]),
 			"max_in": float(e["max_in"]), "climb_in": float(e["climb_in"]), "whole": bool(e["whole"])})
-		# GF p.11: a step over 3" is impassable under mass-battle rules — the drag itself is
-		# a sandbox aid (D5a, no hard stop without Strict), so the drop's own line flags it.
-		if float(e["climb_in"]) > MoveLedger.CLIMB_MAX_IN:
+		# GF 3.6 (Climbable terrain): a terrain piece over 3" tall is impassable, one up to 3" may be
+		# climbed — so the verdict reads the biggest single step, never the summed climb cost. The
+		# drag itself is a sandbox aid (D5a, no hard stop without Strict), so the drop's own line
+		# flags it. Not in DEPLOYMENT: placing a model over terrain is not a move.
+		if not _is_placement_phase() and float(e["step_in"]) > MoveLedger.CLIMB_MAX_IN:
 			_log_rule_event(BattleLog.Category.MOVEMENT,
-				"%s climbs %.1f\" — over 3\", impassable (%s)" % [unit_name, float(e["climb_in"]), OPRApiClient.rules_cite(_solo_rules_system())])
+				"%s climbs %.1f\" — over 3\", impassable (%s)" % [unit_name, float(e["step_in"]), OPRApiClient.rules_cite(_solo_rules_system())])
 	_log_move_summaries(summaries)
 	# Rules-must-log (DAT-16a): a move-band rule (Agile, Scurry, Highborn, …) widened this move's
 	# reach silently. ONE line per moved unit, naming the unit's own rules that did it.
@@ -18932,6 +19039,12 @@ func _print_rule_notes(report: Dictionary) -> void:
 			battle_log.log_event(BattleLog.Category.COMBAT, str(note), true)
 
 
+## A drag during DEPLOYMENT places models, it does not move them: no movement line, no climb verdict.
+func _is_placement_phase() -> bool:
+	return opr_army_manager != null and opr_army_manager.has_method("is_deployment_phase") \
+			and opr_army_manager.is_deployment_phase()
+
+
 ## Write per-unit movement summaries into the battle log — same lines for local and remote movers.
 func _log_move_summaries(summaries: Array) -> void:
 	if battle_log == null:
@@ -18940,8 +19053,7 @@ func _log_move_summaries(summaries: Array) -> void:
 	# table wrote "Saurian Warriors moves 57\"" into the battle log). During DEPLOYMENT the ledger
 	# still measures the drag — the trail and the ruler want that — but the log must not report a
 	# 57-inch march that never happened.
-	if opr_army_manager != null and opr_army_manager.has_method("is_deployment_phase") \
-			and opr_army_manager.is_deployment_phase():
+	if _is_placement_phase():
 		return
 	for entry in summaries:
 		var e: Dictionary = entry as Dictionary
@@ -19669,7 +19781,7 @@ func _on_peer_version_validated(peer_id: int) -> void:
 ## Host, second player seated: is the one-time "play with rules automation?" question due? Never on a local
 ## table, with an AI seat ticked (automation is locked on there), once Automatic is on, or twice in a room.
 func _rules_start_question_due() -> bool:
-	return RulesAutomation.ui_enabled() and not _rules_start_asked and solo_ai_slots.is_empty() \
+	return RulesAutomation.ui_enabled() and not _rules_start_asked and solo_ai_slots.is_empty() and CoreActivation.engine_offered() \
 		and network_manager != null and network_manager.is_multiplayer_active() and opr_army_manager != null \
 		and opr_army_manager.rules_automation == RulesAutomation.Level.MANUAL
 
@@ -20628,6 +20740,11 @@ func _on_load_completed(object_count: int) -> void:
 	print("Game loaded: %d objects" % object_count)
 	_solo_rebind_carried_after_load()
 	CoreActivation.reset_all(self)   # R4: a loaded game has no open activation and sends its own game header
+	# P4.0-7 (D5): a save taken mid-activation restores the activation start; say so in ONE line, then spend the marker.
+	var restart := str(save_manager.core_restart)
+	save_manager.core_restart = ""
+	if not restart.is_empty():
+		_log_rule_event(BattleLog.Category.GENERAL, "%s: the activation restarts from its start." % restart)
 	_update_round_button()  # restored round may differ from 1
 	# A loaded battle spawns no army_spawned signal, so the unit strip was only ever built on a fresh
 	# spawn and stayed empty after a save-load (UI handoff finding 4). Rebuild it from the restored units.
@@ -20808,6 +20925,13 @@ func _rpc_sync_ai_slots(slots: Array) -> void:
 	_rebuild_roster()
 	_solo_sync_difficulty()
 	_refresh_solo_panel.call_deferred()
+
+
+## M-3: a save's AI seat comes back only where the core is loaded (a co-op peer adopts the host's designation untouched).
+func _adopt_saved_ai_slots(slots: Array) -> void:
+	if not slots.is_empty() and _engine_refused_without_core():
+		slots = []
+	_rpc_sync_ai_slots(slots)
 
 
 ## Called on the host when a client requests the current game state.
@@ -21080,6 +21204,8 @@ func _on_import_opr_army() -> void:
 ## repo); public builds fetch index + list from the CDN at runtime with a user:// cache for offline
 ## replay. No source at all → toast; the own-army import with the AI checkbox stays the fallback.
 func _open_ai_opponent_dialog() -> void:
+	if _engine_refused_without_core():
+		return
 	var manifest := await _load_ai_list_manifest()
 	if manifest.is_empty():
 		_solo_show_toast("No AI lists available (no connection yet?) — import any list with the AI checkbox instead")
@@ -21274,6 +21400,8 @@ func _on_opr_army_imported(army: OPRApiClient.OPRArmy, player_id: int, ai_contro
 	if ai_controlled and network_manager != null and network_manager.slot_has_human_peer(player_id):
 		ai_controlled = false
 		_solo_show_toast("P%d is a connected human player — AI designation refused" % player_id)
+	if ai_controlled and _engine_refused_without_core():
+		ai_controlled = false   # M-3: the army still imports, as a human army
 	# Solo (goal 001): remember the designation; the Solo panel + F11 read it. Re-importing the slot
 	# without the checkbox clears a stale designation.
 	var was_designated: bool = solo_ai_slots.has(player_id)
@@ -22180,7 +22308,17 @@ func _refresh_solo_panel() -> void:
 	# The difficulty ladder (grill 25.09.2026): the grade picker sits in the AI seat's row — the one slot
 	# the controller plays — and only where the AI runs (solo, or the co-op host).
 	var mp: bool = network_manager != null and network_manager.is_multiplayer_active()
+	var offered := CoreActivation.engine_offered()
+	if not offered:   # M-3: no core, no NACHTMAHR seat - say why instead of the tick (a seat a save or peer brought stays tickable off)
+		var why := Label.new()
+		why.text = CoreLoadNotice.ENGINE_OFF_LINE
+		why.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		why.theme_type_variation = HouseStyle.CAPTION
+		why.custom_minimum_size.x = 220.0   # a wrapping Label measures width 0 in a container without a floor
+		solo_panel_box.add_child(why)
 	for pid in pids:
+		if not offered and not solo_ai_slots.has(int(pid)):
+			continue
 		var cb := CheckButton.new()
 		var seat_name := _solo_army_name(int(pid))
 		cb.text = "AI plays P%d — %s" % [int(pid), seat_name if not seat_name.is_empty() else _remote_seat_label(int(pid))]
@@ -22279,6 +22417,9 @@ func _on_solo_ai_toggled(pressed: bool, player_id: int) -> void:
 	if pressed and network_manager != null and network_manager.slot_has_human_peer(player_id):
 		_solo_show_toast("P%d is a connected human player — NACHTMAHR can't take that slot" % player_id)
 		_refresh_solo_panel.call_deferred()   # snap the checkbox back to off
+		return
+	if pressed and _engine_refused_without_core():
+		_refresh_solo_panel.call_deferred()
 		return
 	if pressed:
 		solo_ai_slots[player_id] = true

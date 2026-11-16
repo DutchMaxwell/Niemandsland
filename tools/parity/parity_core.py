@@ -37,10 +37,13 @@ def build(sc):
 
     def unit(u):
         n = u["models"]
-        return dict(player=u["player"], alive=n, wounds=[u["tough"]] * n, radii=[rad(u)] * n, positions=pos(u),
-                    in_cover=False, shaken=False, fatigued=False, activated=False, casts=0, morale_bonus=0,
-                    aircraft=False, dormant=False, ambush_arrived_round=-1, earliest_arrival_round=-1,
-                    wound_frac=0.0, mods={}, mods_base={}, bands=BANDS)
+        d = dict(player=u["player"], alive=n, wounds=[u["tough"]] * n, radii=[rad(u)] * n, positions=pos(u),
+                 in_cover=False, shaken=False, fatigued=False, activated=False, casts=0, morale_bonus=0,
+                 aircraft=False, dormant=False, ambush_arrived_round=-1, earliest_arrival_round=-1,
+                 wound_frac=0.0, mods={}, mods_base={}, bands=BANDS)
+        if "ledger" in u:   # the table-owned between-activation keys (act_recorder `_ledger_of`), e.g. piercing_tag_markers
+            d["ledger"] = u["ledger"]
+        return d
 
     header = {"profiles": {att["key"]: profile(att, wpn), dfn["key"]: profile(dfn, [])},
               "knobs": {"rules_epoch": sc["epoch"]}}

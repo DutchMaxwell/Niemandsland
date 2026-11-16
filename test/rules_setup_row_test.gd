@@ -7,11 +7,13 @@ const L := RulesAutomation.Level
 
 
 func before_test() -> void:
+	CoreActivation.offer_override = 1   # M-3: this suite tests the offered solo / Automatic flow, not the core
 	RulesAutomation.ui_enabled_override = true
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(RulesAutomation.MENU_CFG))
 
 
 func after_test() -> void:
+	CoreActivation.offer_override = -1
 	RulesAutomation.ui_enabled_override = false
 	RulesAutomation.ui_disabled_override = false
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(RulesAutomation.MENU_CFG))

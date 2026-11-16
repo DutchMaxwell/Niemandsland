@@ -1,0 +1,300 @@
+{
+ "cases": [
+  {
+   "epoch": 76,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "unit": "Mor",
+     "wounds": 10
+    }
+   ],
+   "lines": [
+    "COMBAT|AI (Mor): 6 → passed (2+)",
+    "COMBAT|Mor passes morale"
+   ],
+   "scenario": "pass",
+   "seed": 0
+  },
+  {
+   "epoch": 76,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "unit": "Mor",
+     "wounds": 10
+    }
+   ],
+   "lines": [
+    "COMBAT|AI (Mor): 2 → passed (2+)",
+    "COMBAT|Mor passes morale"
+   ],
+   "scenario": "pass",
+   "seed": 17
+  },
+  {
+   "epoch": 76,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "unit": "Mor",
+     "wounds": 10
+    }
+   ],
+   "lines": [
+    "COMBAT|AI (Mor): 3 → passed (2+)",
+    "COMBAT|Mor passes morale"
+   ],
+   "scenario": "pass",
+   "seed": 34
+  },
+  {
+   "epoch": 76,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "unit": "Mor",
+     "wounds": 10
+    }
+   ],
+   "lines": [
+    "COMBAT|AI (Mor): 2 → passed (2+)",
+    "COMBAT|Mor passes morale"
+   ],
+   "scenario": "pass",
+   "seed": 36
+  },
+  {
+   "epoch": 76,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": true,
+     "unit": "Mor",
+     "wounds": 10
+    }
+   ],
+   "lines": [
+    "COMBAT|AI (Mor): 3 → failed (6+)",
+    "COMBAT|Mor fails morale — Shaken"
+   ],
+   "scenario": "shake",
+   "seed": 8
+  },
+  {
+   "epoch": 76,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": true,
+     "unit": "Mor",
+     "wounds": 10
+    }
+   ],
+   "lines": [
+    "COMBAT|AI (Mor): 2 → failed (6+)",
+    "COMBAT|Mor fails morale — Shaken"
+   ],
+   "scenario": "shake",
+   "seed": 17
+  },
+  {
+   "epoch": 76,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": true,
+     "unit": "Mor",
+     "wounds": 10
+    }
+   ],
+   "lines": [
+    "COMBAT|AI (Mor): 1 → failed (6+)",
+    "COMBAT|Mor fails morale — Shaken"
+   ],
+   "scenario": "shake",
+   "seed": 49
+  },
+  {
+   "epoch": 76,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": true,
+     "unit": "Mor",
+     "wounds": 10
+    }
+   ],
+   "lines": [
+    "COMBAT|AI (Mor): 3 → failed (6+)",
+    "COMBAT|Mor fails morale — Shaken"
+   ],
+   "scenario": "shake",
+   "seed": 225
+  },
+  {
+   "epoch": 76,
+   "final": [
+    {
+     "alive": 0,
+     "shaken": false,
+     "unit": "Mor",
+     "wounds": 6
+    }
+   ],
+   "lines": [
+    "COMBAT|AI (Mor): 3 → failed (6+)",
+    "COMBAT|Mor fails morale at half strength — ROUTS",
+    "COMBAT|Mor takes 4 wounds (0/10)",
+    "COMBAT|Mor destroyed"
+   ],
+   "scenario": "rout",
+   "seed": 8
+  },
+  {
+   "epoch": 76,
+   "final": [
+    {
+     "alive": 0,
+     "shaken": false,
+     "unit": "Mor",
+     "wounds": 6
+    }
+   ],
+   "lines": [
+    "COMBAT|AI (Mor): 2 → failed (6+)",
+    "COMBAT|Mor fails morale at half strength — ROUTS",
+    "COMBAT|Mor takes 4 wounds (0/10)",
+    "COMBAT|Mor destroyed"
+   ],
+   "scenario": "rout",
+   "seed": 17
+  },
+  {
+   "epoch": 76,
+   "final": [
+    {
+     "alive": 0,
+     "shaken": false,
+     "unit": "Mor",
+     "wounds": 6
+    }
+   ],
+   "lines": [
+    "COMBAT|AI (Mor): 1 → failed (6+)",
+    "COMBAT|Mor fails morale at half strength — ROUTS",
+    "COMBAT|Mor takes 4 wounds (0/10)",
+    "COMBAT|Mor destroyed"
+   ],
+   "scenario": "rout",
+   "seed": 49
+  },
+  {
+   "epoch": 76,
+   "final": [
+    {
+     "alive": 0,
+     "shaken": false,
+     "unit": "Mor",
+     "wounds": 6
+    }
+   ],
+   "lines": [
+    "COMBAT|AI (Mor): 3 → failed (6+)",
+    "COMBAT|Mor fails morale at half strength — ROUTS",
+    "COMBAT|Mor takes 4 wounds (0/10)",
+    "COMBAT|Mor destroyed"
+   ],
+   "scenario": "rout",
+   "seed": 225
+  },
+  {
+   "epoch": 76,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "unit": "Mor",
+     "wounds": 10
+    }
+   ],
+   "lines": [
+    "COMBAT|Great Banner +1: +1 to morale test rolls — Mor passes on 4+",
+    "COMBAT|AI (Mor): 4 → passed (4+)",
+    "COMBAT|\"Great Banner\" on Mor is consumed (applies once)",
+    "COMBAT|Mor passes morale"
+   ],
+   "scenario": "once",
+   "seed": 1
+  },
+  {
+   "epoch": 76,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "unit": "Mor",
+     "wounds": 10
+    }
+   ],
+   "lines": [
+    "COMBAT|Great Banner +1: +1 to morale test rolls — Mor passes on 4+",
+    "COMBAT|AI (Mor): 4 → passed (4+)",
+    "COMBAT|\"Great Banner\" on Mor is consumed (applies once)",
+    "COMBAT|Mor passes morale"
+   ],
+   "scenario": "once",
+   "seed": 4
+  },
+  {
+   "epoch": 76,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "unit": "Mor",
+     "wounds": 10
+    }
+   ],
+   "lines": [
+    "COMBAT|Great Banner +1: +1 to morale test rolls — Mor passes on 4+",
+    "COMBAT|AI (Mor): 4 → passed (4+)",
+    "COMBAT|\"Great Banner\" on Mor is consumed (applies once)",
+    "COMBAT|Mor passes morale"
+   ],
+   "scenario": "once",
+   "seed": 13
+  },
+  {
+   "epoch": 76,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "unit": "Mor",
+     "wounds": 10
+    }
+   ],
+   "lines": [
+    "COMBAT|Great Banner +1: +1 to morale test rolls — Mor passes on 4+",
+    "COMBAT|AI (Mor): 4 → passed (4+)",
+    "COMBAT|\"Great Banner\" on Mor is consumed (applies once)",
+    "COMBAT|Mor passes morale"
+   ],
+   "scenario": "once",
+   "seed": 20
+  }
+ ],
+ "family": "morale",
+ "provenance": {
+  "epoch": 76,
+  "git_sha": "83ef9fa8f6ba2b30eccdc294c0762d5341938ca2",
+  "registry_sha256": "425decb0652c95d5718359a87107f2f3738e3287e9d67a13369b0a00a3f0df0e",
+  "registry_system": "gf"
+ },
+ "schema": "nml-golden-witness-v1"
+}

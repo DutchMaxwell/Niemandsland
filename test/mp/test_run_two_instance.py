@@ -1,7 +1,9 @@
 import copy
 import socket
 import sys
+import tempfile
 import threading
+import time
 from pathlib import Path
 import unittest
 from unittest import mock
@@ -151,6 +153,88 @@ class StallProxyCutTest(unittest.TestCase):
         finally:
             proxy.close()
             server.close()
+
+
+class FakeProc:
+    def wait(self, timeout: float | None = None) -> int:
+        return 0
+
+
+class FakeClient:
+    """A peer whose state file shows `states[0]` until the harness first sleeps, then `states[1]`:
+    the ack was seen, the state file has not landed yet (or is mid-replace and reads as {})."""
+
+    def __init__(self, tmp: Path, role: str, before: dict, after: dict, on_sleep: list) -> None:
+        self.role = role
+        self.command_path = tmp / f"{role}.command.json"
+        self.proc = FakeProc()
+        self.lines: list[str] = []
+        self._before, self._after, self._on_sleep = before, after, on_sleep
+
+    def state(self) -> dict:
+        return self._after if self._on_sleep else self._before
+
+    def assert_alive(self) -> None:
+        return None
+
+
+class LeaveStateRaceTest(unittest.TestCase):
+    """The host acks leave_to_menu BEFORE it writes the state file that carries left_state, and that file is
+    replaced by remove + rename every 100 ms: a one-shot read right after the ack saw {} or a stale state
+    ("leave: load after leaving returned None", PR 2763, and the guest twin "guest notice after inf s")."""
+
+    GOOD = {"left": True, "load_gate": 7, "relay_connected": False, "mp_peer_relay": False}
+
+    def make_run(self, tmp: Path, host_before: dict, host_after: dict, guest: list[dict]):
+        argv = ["run_two_instance.py", "--run-dir", str(tmp)]
+        with mock.patch.object(sys, "argv", argv):
+            run = driver.Run(driver.parse_args(), tmp)
+        slept: list[bool] = []
+        replies = iter(guest)
+        host = FakeClient(tmp, "host", host_before, host_after, slept)
+        guest_client = FakeClient(tmp, "guest", {}, {}, slept)
+        guest_client.state = lambda: next(replies, {})  # type: ignore[method-assign]
+        run.clients = {"host": host, "guest": guest_client}  # type: ignore[dict-item]
+        run.command = lambda *a, **k: {"ok": True}  # type: ignore[method-assign]
+        run.scenario_deadline = None
+        return run, slept
+
+    def run_scenario(self, scenario: str, host_before: dict, host_after: dict, guest: list[dict]) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            run, slept = self.make_run(Path(raw), host_before, host_after, guest)
+
+            def fake_sleep(_seconds: float) -> None:
+                slept.append(True)
+
+            with mock.patch.object(driver.time, "sleep", fake_sleep):
+                getattr(run, scenario)()
+
+    def test_leave_waits_for_the_state_that_follows_the_ack(self):
+        noticed = [{"host_left_at": time.time() + 0.1}] * 50
+        for label, before in (("state file missing", {}), ("stale state", {"left_state": {}})):
+            with self.subTest(label):
+                self.run_scenario("leave_scenario", before, {"left_state": self.GOOD}, list(noticed))
+
+    def test_leave_still_fails_on_a_wrong_load_gate(self):
+        # The wait must not turn the check into a pass: the answer that arrives is still judged.
+        bad = dict(self.GOOD, load_gate=4)
+        with self.assertRaises(driver.HarnessFailure) as caught:
+            self.run_scenario("leave_scenario", {}, {"left_state": bad}, [{"host_left_at": time.time() + 0.1}] * 50)
+        self.assertIn("load after leaving returned 4", str(caught.exception))
+
+    def test_guest_notice_is_not_lost_to_a_second_read_of_a_missing_file(self):
+        # Once the guest's state shows host_left_at, a later read that finds the file mid-replace ({}) must
+        # not turn the notice into "inf" (never): the value that ended the wait is the one used.
+        noticed = [{"host_left_at": time.time() + 0.1}, {}, {}]
+        good = {"left_state": self.GOOD}
+        self.run_scenario("leave_scenario", good, good, list(noticed))
+        self.run_scenario("close_scenario", {}, {}, list(noticed))
+
+    def test_a_guest_that_is_never_told_still_fails(self):
+        with self.assertRaises(driver.HarnessFailure) as caught:
+            with mock.patch.object(driver.time, "monotonic", side_effect=[0.0, 0.0, 6.0, 6.0, 6.0]):
+                self.run_scenario("close_scenario", {}, {}, [{}])
+        self.assertIn("guest notice after infs", str(caught.exception))
 
 
 class LinkCutFlagTest(unittest.TestCase):

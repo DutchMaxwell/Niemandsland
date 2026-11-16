@@ -1524,9 +1524,10 @@ func _stop_dragging() -> void:
 				var offset := Vector2(start.x - _drag_anchor_position.x, start.z - _drag_anchor_position.z)
 				var path: PackedVector2Array = MoveLedger.with_final(
 						MoveLedger.translated(base_path, offset), Vector2(end.x, end.z))
+				var climb := _climb_report(path, obj)
 				moves.append({"node": obj, "from": start, "to": end, "inches": inches,
 						"path": path, "arc_in": MoveLedger.length_inches(path),
-						"climb_in": _climb_report(path, obj)["climb_in"],
+						"climb_in": climb["climb_in"], "max_step_in": climb["max_step_in"],
 						"radius_m": _trail_radius_for(obj),
 						"drop_id": drop_id,
 						"from_raw": _drag_start_positions[obj],
@@ -4915,8 +4916,10 @@ func _formation_drop(objects: Array, from: Array) -> void:
 		if inches <= 0.1:
 			continue
 		var path := PackedVector2Array([a, b])
+		var climb := _climb_report(path, obj)
 		moves.append({"node": obj, "from": Vector3(a.x, 0.0, a.y), "to": Vector3(b.x, 0.0, b.y), "inches": inches,
-				"path": path, "arc_in": MoveLedger.length_inches(path), "climb_in": _climb_report(path, obj)["climb_in"],
+				"path": path, "arc_in": MoveLedger.length_inches(path),
+				"climb_in": climb["climb_in"], "max_step_in": climb["max_step_in"],
 				"radius_m": _trail_radius_for(obj), "drop_id": drop_id, "from_raw": from[i], "from_rot": obj.rotation.y})
 	if not moves.is_empty():
 		selection_dropped.emit(moves)
