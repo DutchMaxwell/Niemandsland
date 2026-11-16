@@ -4,7 +4,7 @@
 
 use crate::dice::Tray;
 use crate::gate::INCHES_TO_METERS;
-use crate::io::{Action, Seams};
+use crate::io::{Action, Seams, SplitShot};
 use crate::landing::Landing;
 use crate::logline::{Category, LogLine};
 use crate::mv::step::{leg_crosses, DIFFICULT_MOVE_CAP_IN};
@@ -20,8 +20,9 @@ use crate::unit::UnitStatic;
 pub enum Input {
     /// "Activate" on the unit's card starts the activation.
     Begin,
-    /// The declared action (`sim::HOLD` ..); `shoot` is `Some` when it shoots.
-    Intent { kind: i64, shoot: Option<String> },
+    /// The declared action (`sim::HOLD` ..); `shoot` is `Some` when it shoots. `split` is split fire's aim,
+    /// per (member, weapon) the target key it fires at; `None` (or empty) = the one `shoot` target.
+    Intent { kind: i64, shoot: Option<String>, split: Option<Vec<SplitShot>> },
     /// One thrown face group, in the order the core asked for them.
     Faces(Vec<u8>),
     /// The unit's model positions after a drag (`at`) and each model's walked path this
@@ -211,10 +212,10 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
         return ActStep::Cancelled { lines: vec![LogLine { rule: "activation_cancel", category: Category::Movement, side, text, detail: None }] };
     }
     let declared = t.iter().enumerate().find_map(|(i, x)| match x {
-        Input::Intent { kind, shoot } => Some((i, *kind, shoot.clone())),
+        Input::Intent { kind, shoot, split } => Some((i, *kind, shoot.clone(), split.clone())),
         _ => None,
     });
-    let Some((at_intent, declared, shoot)) = declared else {
+    let Some((at_intent, declared, shoot, split)) = declared else {
         return ActStep::Open;
     };
     let placed = t.iter().rev().find_map(|x| match x {
@@ -236,7 +237,7 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
             Check::Ok { lines } => moved = lines,
         }
     }
-    let action = Action { kind, unit: unit.to_string(), dest: None, shoot, charge: None, patient: false, split: None, traced: None, teleport: None };
+    let action = Action { kind, unit: unit.to_string(), dest: None, shoot, charge: None, patient: false, split, traced: None, teleport: None };
     let faces: Vec<Vec<u8>> = t.iter().filter_map(|x| if let Input::Faces(f) = x { Some(f.clone()) } else { None }).collect();
     // The spike's non-tray seed: a plain activation never draws from it.
     let run = |statics: &[UnitStatic]| {
@@ -339,7 +340,7 @@ mod tests {
     }
 
     fn intent(kind: i64, shoot: Option<&str>) -> Input {
-        Input::Intent { kind, shoot: shoot.map(String::from) }
+        Input::Intent { kind, shoot: shoot.map(String::from), split: None }
     }
 
     fn refused(t: &[Input], index: usize, reason: &str) {
@@ -476,6 +477,45 @@ mod tests {
             (killed, shaken) = (killed + (want.alive[2] < st.alive[2]) as i32, shaken + want.shaken[2] as i32);
         }
         assert!(killed > 0 && shaken > 0 && morale > 0, "fixture must kill, shake and test morale: {killed} {shaken} {morale}");
+    }
+
+    /// `volley_line` with split fire's second target: "bh" stands alone (not attached) 10" north of "a", which
+    /// now carries a second weapon; the rifle's aim is "b", the pistol's is "bh".
+    fn split_line() -> (State, Vec<UnitStatic>, Vec<SplitShot>) {
+        let (mut st, mut statics) = volley_line();
+        st.attached = std::rc::Rc::new(vec![Vec::new(); 4]);
+        st.attached_to = std::rc::Rc::new(vec![None; 4]);
+        st.positions[3] = vec![[0.0, 0.0, 10.0 * INCHES_TO_METERS]];
+        statics[0].shoot.push(crate::unit::ShootProfile { name: "pistol".into(), attacks: 4, count: 1, range: 24, ..Default::default() });
+        (statics[3].model_count, statics[3].wounds_max, statics[3].ctx.defense) = (1, vec![1], 4);
+        let aim = |weapon: &str, target: &str| SplitShot { member: "a".into(), weapon: weapon.into(), target: target.into() };
+        (st, statics, vec![aim("rifle", "b"), aim("pistol", "bh")])
+    }
+
+    /// Split fire on the step API: an intent that carries `split` equals one straight seeded run with the
+    /// same `Action.split`, state, roll records and lines alike, over 200 seeds. RED: carry `split: None` into the
+    /// action (both targets are then pooled on "b", "bh" is never fired at and the rolls differ).
+    #[test]
+    fn a_split_fire_intent_equals_the_seeded_run_with_the_same_aim() {
+        let (st, statics, aim) = split_line();
+        let (mut both, mut pooled_differs) = (0, 0);
+        for seed in 0..200i64 {
+            let split = |split: Option<Vec<SplitShot>>| Action { kind: HOLD, unit: "a".into(), dest: None, shoot: Some("b".into()), charge: None, patient: false, split, traced: None, teleport: None };
+            let (want, shot) = resolve_stochastic_tray_on_board(&statics, &st, &split(Some(aim.clone())), &Terrain::default(), seams(), &mut GodotRng::new(seed), &mut Tray::seeded(seed)).unwrap();
+            let (got, rolls) = drive(&statics, &st, vec![Begin, Input::Intent { kind: HOLD, shoot: Some("b".into()), split: Some(aim.clone()) }], seed);
+            let ActStep::Done { state, lines, .. } = got else { panic!("seed {seed}: {got:?}") };
+            let fold = |r: Roll| Roll { kind: if r.kind == "morale" { "attack" } else { r.kind }, ..r };
+            assert_eq!(rolls.into_iter().map(fold).collect::<Vec<_>>(), shot.rolls, "seed {seed}");
+            assert_eq!(state, want, "seed {seed}");
+            // The step's own lines name each aimed target's volley, in the aim's group order.
+            let said: Vec<&str> = lines.iter().map(|l| l.text.as_str()).filter(|t| t.starts_with("a fires at ")).collect();
+            assert_eq!(said, ["a fires at b", "a fires at bh"], "seed {seed}");
+            // The aim bites: both targets lose something here, and the pooled run (no aim) is another run.
+            both += (want.wounds[2] != st.wounds[2] && want.alive[3] < st.alive[3]) as i32;
+            let pooled = resolve_stochastic_tray_on_board(&statics, &st, &split(None), &Terrain::default(), seams(), &mut GodotRng::new(seed), &mut Tray::seeded(seed)).unwrap().0;
+            pooled_differs += (pooled != want) as i32;
+        }
+        assert!(both > 0 && pooled_differs > 0, "fixture must hurt both targets and differ from the pooled run: {both} {pooled_differs}");
     }
 
     /// O3: a unit that moved as a Rush cannot shoot (RED: drop the Rush check).

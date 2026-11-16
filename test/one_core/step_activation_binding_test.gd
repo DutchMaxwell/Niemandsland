@@ -507,3 +507,55 @@ func test_a_capture_after_the_header_rebuilds_the_statics_at_its_epoch() -> void
 	assert_bool(core.set_game_header(AiActRecorder._header_line(state, Callable(), {}))).is_true()
 	var after := float((core.move_allowance(core.capture_plain(plain), "a") as Dictionary).get("advance", 0.0))
 	assert_array([before, after]).override_failure_message("no header, then the game's header").is_equal([6.0, 8.0])
+
+
+## P4.D-14: an intent's optional "split" (an array of {member, weapon, target}) is split fire's aim. "a" holds with a Rifle
+## aimed at "b" and a Pistol aimed at "c", both single-model enemies 10" away; every attack hits and every save fails.
+func _split_handle() -> int:
+	var a := _unit(1, [Vector3.ZERO, Vector3(1.0 * IN2M, 0, 0), Vector3(2.0 * IN2M, 0, 0)], "a")
+	var b := _unit(2, [Vector3(10.0 * IN2M, 0, 0)], "b")
+	var c := _unit(2, [Vector3(0, 0, 10.0 * IN2M)], "c")
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {"a": a, "b": b, "c": c}
+	var plain := BattleSim.state_to_plain(BattleSim.capture(army, func() -> Array: return [], func(_i: int) -> int: return 0, 1, 4))
+	(plain["units"]["a"]["profile"] as Dictionary)["weapons"] = [
+		{"name": "Rifle", "range": 24.0, "attacks": 2, "count": 3, "ap": 0, "rules": []},
+		{"name": "Pistol", "range": 12.0, "attacks": 2, "count": 3, "ap": 0, "rules": []}]
+	return _core.capture_plain(plain)
+
+
+## The alive counts of "b" and "c" after "a" holds and shoots with `intent` (every attack hits, every save fails).
+func _split_result(intent: Dictionary) -> Array:
+	var h := _split_handle()
+	var t: Array = [{"t": "begin"}, intent]
+	var r: Dictionary = _core.step_activation(h, "a", t, false)
+	var rolls := 0
+	while r["step"] == "need_roll" and rolls < 20:
+		rolls += 1
+		var faces: Array = []
+		for i in int(r["faces"]):
+			faces.append(6 if r["kind"] == "attack" else 1)
+		t.append({"t": "faces", "faces": faces})
+		r = _core.step_activation(h, "a", t, false)
+	assert_str(r["step"]).is_equal("done")
+	var units: Dictionary = _core.plain_of(int(r["handle"]))["units"]
+	return [int(units["b"]["alive"]), int(units["c"]["alive"])]
+
+
+func test_a_split_intent_fires_each_weapon_at_its_own_target() -> void:
+	var aim := [{"member": "a", "weapon": "Rifle", "target": "b"}, {"member": "a", "weapon": "Pistol", "target": "c"}]
+	var intent := {"t": "intent", "kind": AiDecision.Action.HOLD, "shoot": "b"}
+	# No aim, or an empty one: the volley is the one-target volley, "c" is never fired at.
+	assert_array(_split_result(intent)).is_equal([0, 1])
+	assert_array(_split_result(intent.merged({"split": []}))).is_equal([0, 1])
+	# The aim: the Pistol's dice go to "c" and the Rifle's to "b" - both fall.
+	assert_array(_split_result(intent.merged({"split": aim}))).is_equal([0, 0])
+
+
+## A split that is not an array of {member, weapon, target} text entries is not understood: refused with the input's index.
+func test_a_malformed_split_is_refused_not_dropped() -> void:
+	for bad in [[{"member": "a", "weapon": "Rifle"}], [{"member": "a", "weapon": "Rifle", "target": 7}], ["b"], "b"]:
+		var t: Array = [{"t": "begin"}, {"t": "intent", "kind": AiDecision.Action.HOLD, "shoot": "b", "split": bad}]
+		var r: Dictionary = _core.step_activation(_split_handle(), "a", t, false)
+		assert_str(r["step"]).override_failure_message("split %s" % [bad]).is_equal("refused")
+		assert_str(str(r.get("reason", ""))).override_failure_message("split %s" % [bad]).is_equal("input 1 is not understood")

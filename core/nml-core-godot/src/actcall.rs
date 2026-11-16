@@ -4,12 +4,29 @@
 use crate::plain;
 use godot::prelude::*;
 use nml_core::activation::{allowance, begin_check, check_move, delta_of, step_activation, ActStep, Check, Drop, Input};
-use nml_core::io::Seams;
+use nml_core::io::{Seams, SplitShot};
 use nml_core::landing::Landing;
 use nml_core::logline::LogLine;
 use nml_core::state::State;
 use nml_core::terrain::Terrain;
 use nml_core::unit::UnitStatic;
+
+/// An intent's optional `split`: an array of `{member, weapon, target}` text entries, absent = none. A value that is not
+/// such an array makes the whole input not understood (a refusal, never a silent drop).
+fn split_of(v: Option<Variant>) -> Option<Vec<SplitShot>> {
+    let Some(v) = v else { return Some(Vec::new()) };
+    if v.get_type() != VariantType::ARRAY {
+        return None;
+    }
+    plain::any_array(&v)
+        .iter_shared()
+        .map(|e| {
+            let d = e.try_to::<VarDictionary>().ok()?;
+            let text = |k: &str| Some(d.get(k)?.try_to::<GString>().ok()?.to_string());
+            Some(SplitShot { member: text("member")?, weapon: text("weapon")?, target: text("target")? })
+        })
+        .collect()
+}
 
 fn input_of(v: &Variant) -> Option<Input> {
     let d = v.try_to::<VarDictionary>().ok()?;
@@ -17,7 +34,11 @@ fn input_of(v: &Variant) -> Option<Input> {
     Some(match plain::text(&field("t")?).as_str() {
         "begin" => Input::Begin,
         "cancel" => Input::Cancel,
-        "intent" => Input::Intent { kind: plain::int(&field("kind")?), shoot: field("shoot").map(|s| plain::text(&s)).filter(|s| !s.is_empty()) },
+        "intent" => Input::Intent {
+            kind: plain::int(&field("kind")?),
+            shoot: field("shoot").map(|s| plain::text(&s)).filter(|s| !s.is_empty()),
+            split: Some(split_of(field("split"))?).filter(|l| !l.is_empty()),
+        },
         "faces" => Input::Faces(plain::any_array(&field("faces")?).iter_shared().map(|f| plain::int(&f).clamp(0, 6) as u8).collect()),
         "placed" => Input::Placed {
             at: plain::any_array(&field("positions")?).iter_shared().map(|p| p.try_to::<Vector3>().ok().map(|p| [p.x as f64, p.y as f64, p.z as f64])).collect::<Option<Vec<_>>>()?,
