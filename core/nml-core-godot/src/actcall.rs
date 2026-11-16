@@ -40,6 +40,8 @@ fn input_of(v: &Variant) -> Option<Input> {
             split: Some(split_of(field("split"))?).filter(|l| !l.is_empty()),
         },
         "faces" => Input::Faces(plain::any_array(&field("faces")?).iter_shared().map(|f| plain::int(&f).clamp(0, 6) as u8).collect()),
+        // P4.0-5: `{"t": "choice", "id": ..., "option": ...}`; an empty/absent `option` asks the core.
+        "choice" => Input::Choice { id: plain::text(&field("id")?), option: field("option").map(|o| plain::text(&o)).unwrap_or_default() },
         "placed" => Input::Placed {
             at: plain::any_array(&field("positions")?).iter_shared().map(|p| p.try_to::<Vector3>().ok().map(|p| [p.x as f64, p.y as f64, p.z as f64])).collect::<Option<Vec<_>>>()?,
             // Optional: per model its walked path (Vector2 = world XZ metres); absent = none.
@@ -200,6 +202,16 @@ pub fn run(statics: &[UnitStatic], state: &State, unit: &str, terrain: &Terrain,
             out.set("landings", &landings_of(state, &landings));
         }
         ActStep::Open => out.set("step", "open"),
+        ActStep::NeedChoice { id, options, owner } => {
+            out.set("step", "need_choice");
+            out.set("id", id.as_str());
+            let mut all = VarArray::new();
+            for o in &options {
+                all.push(&o.as_str().to_variant());
+            }
+            out.set("options", &all);
+            out.set("owner", owner.as_str());
+        }
         ActStep::Refused { index, reason } => out = refused(index, &reason),
         ActStep::Cancelled { lines } => {
             out.set("step", "cancelled");
