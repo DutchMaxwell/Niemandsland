@@ -43,7 +43,7 @@ fn input_of(v: &Value) -> Option<Input> {
     Some(match o.get("t")?.as_str()? {
         "begin" => Input::Begin,
         "cancel" => Input::Cancel,
-        "intent" => Input::Intent { kind: int(o.get("kind")?)?, shoot: o.get("shoot").and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_string) },
+        "intent" => Input::Intent { kind: int(o.get("kind")?)?, shoot: o.get("shoot").and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_string), split: None },
         "faces" => Input::Faces(o.get("faces")?.as_array()?.iter().map(|f| int(f).map(|n| n.clamp(0, 6) as u8)).collect::<Option<Vec<_>>>()?),
         // P4.0-5: `{"t": "choice", "id": ..., "option": ...}`; an empty/absent `option` asks the core.
         "choice" => Input::Choice { id: o.get("id")?.as_str()?.to_string(), option: o.get("option").and_then(Value::as_str).unwrap_or_default().to_string() },
