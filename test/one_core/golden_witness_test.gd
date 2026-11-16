@@ -19,6 +19,7 @@ var _saved_flag: String
 
 
 func before_test() -> void:
+	BattleSim._core_env = 0   # P4.D-66: pinned to the GDScript AI; with the core up the shipped brain and the Rust search decide
 	# The kill switch is process-wide (and CoreActivation caches it once): remember the value so every later suite
 	# runs under the setting it expects.
 	_saved_flag = OS.get_environment("NML_ONE_CORE_ACTIVATION")
@@ -34,6 +35,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	BattleSim._core_env = -1
 	OS.set_environment("NML_ONE_CORE_ACTIVATION", _saved_flag)
 	CoreActivation._env = -1
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)

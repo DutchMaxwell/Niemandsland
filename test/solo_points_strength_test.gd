@@ -63,6 +63,7 @@ func test_hand_planner_v0_stamps_strength_by_points() -> void:
 
 
 func test_env_zero_removes_the_key() -> void:
+	BattleSim._core_env = 0   # P4.D-66: pinned to the GDScript AI; with the core up the shipped brain and the Rust search decide
 	var solo: SoloController = auto_free(SoloController.new())
 	OS.set_environment("NML_POINTS", "0")
 	solo._apply_aifix(SoloDifficulty.for_grade("planner_v0"))

@@ -73,6 +73,7 @@ func test_brain_wired_planner_v0_stamps_the_three_measured_knobs() -> void:
 
 
 func test_no_brain_writes_none_of_the_three_keys() -> void:
+	BattleSim._core_env = 0   # P4.D-66: pinned to the GDScript AI; with the core up the shipped brain and the Rust search decide
 	var solo: SoloController = auto_free(SoloController.new())
 	solo._apply_aifix(SoloDifficulty.for_grade("planner_v0"))
 	_assert_absent(_knobs())

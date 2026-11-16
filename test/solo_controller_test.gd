@@ -1598,6 +1598,7 @@ func test_deploy_coherency_repair_respects_zone_and_table_edge() -> void:
 
 
 func after_test() -> void:
+	BattleSim._core_env = -1
 	# The zone switch is a STATIC - pin it back so neighbouring suites never see a flip leak.
 	SoloController.repair_in_zone = true
 
@@ -4112,6 +4113,7 @@ func test_auto_saves_after_intent_latches_on() -> void:
 
 ## D100: the hand-leaf preset arms arm 3 only without a brain; env NML_EVAL_VARIANT is the net-enabled A/B's per-run switch.
 func test_eval_variant_follows_the_preset_and_the_env_override() -> void:
+	BattleSim._core_env = 0   # P4.D-66: pinned to the GDScript AI; with the core up the shipped brain and the Rust search decide
 	var solo: SoloController = auto_free(SoloController.new())
 	OS.set_environment("NML_EVAL_VARIANT", "")
 	# aifix_all (A/B NOT_WORSE 07.10., farm/aifix/aifix_run/AB_RESULT): the hand presets now carry the bundle, and its

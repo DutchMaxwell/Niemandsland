@@ -15,6 +15,7 @@ var _epoch0: int
 
 
 func before_test() -> void:
+	BattleSim._core_env = 0   # P4.D-66: pinned to the GDScript AI; with the core up the shipped brain and the Rust search decide
 	_epoch0 = AiActRecorder.rules_epoch
 	E2EBoot.arm_harness_mode()
 	_root_before = E2EBoot.root_children(get_tree())
@@ -29,6 +30,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	BattleSim._core_env = -1
 	AiActRecorder.rules_epoch = _epoch0   # statics leak across gdUnit tests — restore
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 	_main = null
