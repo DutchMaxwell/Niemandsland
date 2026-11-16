@@ -459,12 +459,17 @@ pub fn land_wounds(state: &mut State, ti: usize, left: i64) {
 /// table's `apply_wounds_to_models` — `chain_casualty_order(unit, wounds)` computed ONCE, each model
 /// soaking wounds until it dies, the next one after it. Without kits, or without `exact`, slot 0
 /// goes first exactly as before.
-pub fn land_wounds_with(state: &mut State, ti: usize, mut left: i64, exact: bool) -> i64 {
-    let mut order = if exact {
+pub fn land_wounds_with(state: &mut State, ti: usize, left: i64, exact: bool) -> i64 {
+    let order = if exact {
         crate::casualty::chain_casualty_order(state, ti, Some(left.max(0) as usize)).unwrap_or_default()
     } else {
         Vec::new()
     };
+    land_wounds_in_order(state, ti, left, order)
+}
+
+/// `land_wounds_with`'s landing loop over an explicit removal `order` (empty = slot 0 first).
+fn land_wounds_in_order(state: &mut State, ti: usize, mut left: i64, mut order: Vec<usize>) -> i64 {
     while left > 0 && !state.wounds[ti].is_empty() {
         let s = order.first().copied().unwrap_or(0);
         let take = left.min(state.wounds[ti][s]);
@@ -486,6 +491,39 @@ pub fn land_wounds_with(state: &mut State, ti: usize, mut left: i64, exact: bool
         }
     }
     state.alive[ti] = state.positions[ti].len() as i64;
+    left
+}
+
+/// One-core P4.D-20 — the wound-allocation choice of a group's pool landing (`_solo_wound_choice_matters`, main.gd:16939,
+/// over the host's own models): `w` unsaved wounds land on `ti`, which has 2+ living models, more wounds than `w`, and a
+/// mixed loadout or a Tough model. The owner's answer (ordered capture slots, one wound each, a slot may repeat) lands
+/// first and the caller lands the rest by `casualty_order`; a supplied tray without that choice named lands automatically.
+/// Returns the wounds left for the caller. Slots are capture slots: `tray.dead_slots` skips the models earlier landings removed.
+fn land_alloc_picks(state: &mut State, si: usize, ti: usize, w: i64, tray: &mut Tray) -> i64 {
+    if tray.feed().is_none() {
+        return w; // a seeded tray: automatic, and nothing allocated
+    }
+    let kits = state.kits.get(ti).filter(|k| k.len() == state.wounds[ti].len()).cloned();
+    let matters = kits.is_some_and(|k| k.iter().any(|x| x.wounds_max > 1 || (&x.weapons, x.equipment) != (&k[0].weapons, k[0].equipment)));
+    let alive = state.wounds[ti].len();
+    if !matters || alive < 2 || w <= 0 || w >= state.wounds[ti].iter().sum::<i64>() {
+        return w;
+    }
+    let dead = tray.dead_slots(ti);
+    let slots: Vec<usize> = (0..).filter(|s| !dead.contains(s)).take(alive).collect();
+    let id = format!("wound_alloc:{}:{}:0", state.key(si), state.key(ti));
+    let Some(picks) = tray.wound_alloc(&id, slots.clone(), state.key(ti)) else { return w };
+    let (mut left, mut slots) = (w, slots);
+    for s in picks.into_iter().take(w as usize) {
+        // A slot the owner's earlier picks already removed is gone from `slots`: that pick lands nothing.
+        let Some(i) = slots.iter().position(|x| *x == s) else { continue };
+        left -= 1 - land_wounds_in_order(state, ti, 1, vec![i]);
+        if state.wounds[ti].len() < slots.len() {
+            slots.remove(i);
+        }
+    }
+    tray.say(|| LogLine { rule: "wound_alloc", category: Category::Combat, side: state.player[ti],
+        text: format!("{}: the owner allocates {} of {w} wounds", state.key(ti), w - left), detail: None });
     left
 }
 
@@ -10538,7 +10576,9 @@ fn resolve_with(
                                     "Deadly({dx}): {post} unsaved ×{dx}, no carry-over → {d} wounds dealt"));
                             }
                             if seams.tray_exact {
-                                land_pool_wounds(&mut next, g.ti, w, true, seams, &mut shot.log);
+                                // P4.D-20: the owner's allocation first, only when no earlier landing of this group moved the slots.
+                                let left = if next.alive[g.ti] == alive_before_g { land_alloc_picks(&mut next, si, g.ti, w, tray) } else { w };
+                                land_pool_wounds(&mut next, g.ti, left, true, seams, &mut shot.log);
                             }
                             // One-core P3 step 25: at the landing's stamp, `_solo_apply_wounds`'s lines (main.gd:16582-16600):
                             // the wounds that landed on the chain, then per member the models it lost (main.gd:18376-18395, :25123).
