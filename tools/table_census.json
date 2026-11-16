@@ -18,7 +18,7 @@
     "planner_shared": ["scripts/solo/ai_ev.gd", "scripts/solo/ai_combat_math.gd"]
   },
   "allowed_callers": {
-    "scripts/main.gd:_run_ai_dangerous": ["scripts/main.gd:_on_transport_spill_dangerous", "scripts/main.gd:_run_player_intent", "scripts/main.gd:_solo_activate_one_ai_body", "@melee_charge"],
+    "scripts/main.gd:_run_ai_dangerous": ["scripts/main.gd:_on_transport_spill_dangerous", "scripts/main.gd:_run_player_intent", "scripts/main.gd:_solo_activate_one_ai_body", "scripts/main.gd:_solo_pay_dangerous", "@melee_charge"],
     "scripts/main.gd:_run_ai_melee": ["scripts/main.gd:_solo_activate_one_ai_body"],
     "scripts/main.gd:_run_human_attack_split": ["scripts/main.gd:_solo_split_commit"],
     "scripts/main.gd:_run_human_melee": ["scripts/main.gd:_run_human_attack"],
