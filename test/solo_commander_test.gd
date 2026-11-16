@@ -124,6 +124,41 @@ func test_planner_promise_outbids_the_hold_on_a_cheap_reachable_marker() -> void
 	assert_bool(bool(sc_kh.last_report.get("to_objective", false)) 		or int(sc_kh.last_report.get("action", -1)) != AiDecision.Action.HOLD).is_true()
 
 
+func _runner_board(marker_in: float) -> SoloController:
+	# A shooter with a shot (enemy 10") and ONE marker `marker_in` off: the tree wants ADVANCE + shoot (6").
+	var sc: SoloController = _shooter_board(marker_in)[0]
+	sc.game_rounds = 4
+	sc.round_provider = func() -> int: return 2
+	sc.difficulty_seed = 7
+	sc.set_difficulty(2, SoloDifficulty.for_grade("nachtmahr", 7))
+	return sc
+
+
+func test_a_promised_arrival_this_round_is_rushed_not_advanced() -> void:
+	# 16.11. play-test finding 1: the plan priced 13" to the marker as ONE march ("arrives R2", Rush band 12"),
+	# but the tree advanced the shooter 6" for its shot, so every such promise stopped 4-9" short. The plan
+	# promised the arrival, so the runner gives up the volley and rushes; the "AI [plan]" record says what
+	# the tree had chosen.
+	var sc := _runner_board(13.0)
+	sc.activate_next_ai_unit()
+	assert_int(int(sc.last_report.get("action", -1))).is_equal(AiDecision.Action.RUSH)
+	assert_bool(bool(sc.last_report.get("to_objective", false))).is_true()
+	var enforced := false
+	for rec in sc.drain_decisions():
+		var r := rec as Dictionary
+		if str(r.get("why", "")) == "plan enforcement":
+			enforced = str((r.get("data", {}) as Dictionary).get("tree_chose", "")) == "advances"
+	assert_bool(enforced).is_true()
+
+
+func test_an_advance_that_keeps_the_promised_arrival_is_left_alone() -> void:
+	# Control: 20" is two marches (arrives R3). Advancing 6" now leaves 11", ONE rush: still on schedule, so the
+	# shooter keeps its volley.
+	var sc := _runner_board(20.0)
+	sc.activate_next_ai_unit()
+	assert_int(int(sc.last_report.get("action", -1))).is_equal(AiDecision.Action.ADVANCE)
+
+
 func test_zero_persistence_tier_never_holds_fire() -> void:
 	# NML-211: NONE-tier machinery (persistence 0) kept alive for the later persona rebuild.
 	var pair := _shooter_board(30.0)

@@ -2291,11 +2291,13 @@ func _act(unit: GameUnit) -> Dictionary:
 	# but a PROMISED runner off its marker must march, or the plan's feasible arrival dissolves
 	# back into the baseline's 82%-short pathology. The planner already priced the volley trade.
 	# Rule-driven holds (Relentless / Immobile) still override below; on the marker it holds fine.
-	elif diff2 != null and action == AiDecision.Action.HOLD and has_obj \
-			and str((_plan_for_round().get(unit.unit_id, {}) as Dictionary).get("kind", "")) == "seize" \
-			and obj_dist > OBJECTIVE_CONTROL_IN:
+	elif diff2 != null and has_obj and obj_dist > OBJECTIVE_CONTROL_IN \
+			and (action == AiDecision.Action.HOLD or (action == AiDecision.Action.ADVANCE \
+				and _plan_arrival_needs_rush(unit, obj_dist, advance, rush))) \
+			and str((_plan_for_round().get(unit.unit_id, {}) as Dictionary).get("kind", "")) == "seize":
 		# (No enemy_in_charge guard: a HOLD here is never a foregone charge — a charging unit's
 		# action is CHARGE, not HOLD. The planner priced the threat when it promised the arrival.)
+		var planned_from := AiDecision.action_name(action)
 		action = AiDecision.Action.RUSH
 		do_shoot = false
 		if obj_dist <= advance + OBJECTIVE_CONTROL_IN and bool(ctx["shoot_after_advance"]):
@@ -2306,7 +2308,7 @@ func _act(unit: GameUnit) -> Dictionary:
 		record_decision({"kind": "plan", "unit": unit.get_name(),
 			"rule": "Round planner (NML-210): a seize-task unit off its marker marches — the promised arrival outbids the tree's hold",
 			"candidates": [], "chosen": AiDecision.action_name(action) + " toward objective",
-			"why": "plan enforcement", "data": {"obj_dist_in": obj_dist}})
+			"why": "plan enforcement", "data": {"obj_dist_in": obj_dist, "tree_chose": planned_from}})
 	# Relentless / Indirect overlay (Solo & Co-Op AI overlays; Indirect is wave 5): a Relentless or
 	# Indirect ranged weapon with an enemy in range → Hold and shoot. The record names the trigger.
 	var hold_rule := hold_and_shoot_rule(weapons, shoot_range > 0 and enemy_dist <= float(shoot_range), unit)
@@ -8942,6 +8944,18 @@ func _nearest_uncontrolled_objective(from: Vector3, activating_unit: GameUnit = 
 			best_tier = tier
 			best_d = d
 	return best
+
+
+## NML-210: the planner prices every march with the RUSH band, but the tree turns a shooter with a shot into an
+## ADVANCE (6"). True when advancing now would break the promised arrival: the marches left (this one
+## included) are fewer than "advance now, rush after" needs. Reads the cached plan; false for a non-runner.
+func _plan_arrival_needs_rush(unit: GameUnit, obj_dist: float, advance: float, rush: float) -> bool:
+	var task: Dictionary = _plan_for_round().get(unit.unit_id, {})
+	if str(task.get("kind", "")) != "seize":
+		return false
+	var marches_left := maxi(int(task.get("arrive_round", 0)) - _current_round() + 1, 1)
+	var left_after_advance := maxf(obj_dist - OBJECTIVE_CONTROL_IN - advance, 0.0)
+	return 1 + int(ceil(left_after_advance / maxf(rush, 0.5))) > marches_left
 
 
 ## NML-210 — per-(round, side) plan cache: the global assignment is built ONCE per round per acting
