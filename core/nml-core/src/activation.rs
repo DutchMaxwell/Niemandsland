@@ -520,6 +520,7 @@ mod tests {
 
     use crate::dice::Roll;
     use crate::sim::tests::volley_landings::volley_line;
+    use crate::unit::ShootProfile;
 
     fn seams() -> Seams {
         Seams { rules_epoch: crate::acts::CURRENT_RULES_EPOCH, tray_exact: true, ..Seams::default() }
@@ -603,10 +604,77 @@ mod tests {
         assert!(both > 0 && pooled_differs > 0, "fixture must hurt both targets and differ from the pooled run: {both} {pooled_differs}");
     }
 
+    // ---- P4.0-5: NeedChoice in the step API ----
+
+    /// `volley_line` with "a" carrying one Takedown sniper shot into "b" (two Tough(3) models).
+    fn takedown_line() -> (State, Vec<UnitStatic>) {
+        let (st, mut statics) = volley_line();
+        statics[0].shoot = vec![ShootProfile { name: "sniper".into(), takedown: true, attacks: 1, count: 1, range: 24, ..Default::default() }];
+        (st, statics)
+    }
+
+    /// The fixture's choice id: stable (the shooter's and the target's roster keys).
+    const TAKEDOWN_ID: &str = "takedown_model:a:b";
+
+    /// One choice point: without a `Choice` the automatic pick stands (the last living slot); with
+    /// `Input::Choice` answered, the OTHER model takes the Takedown wound. RED: drop the answer ->
+    /// both runs equal; accept any slot -> the default's model is named again.
+    #[test]
+    fn a_takedown_choice_answered_explicitly_differs_from_the_default() {
+        let (st, statics) = takedown_line();
+        for seed in 0..200i64 {
+            let (auto, _) = drive(&statics, &st, vec![Begin, intent(HOLD, Some("b"))], seed);
+            let answer = [Begin, intent(HOLD, Some("b")), Input::Choice { id: TAKEDOWN_ID.into(), option: "slot:0".into() }];
+            let (explicit, _) = drive(&statics, &st, answer.to_vec(), seed);
+            let (ActStep::Done { state: a, .. }, ActStep::Done { state: e, .. }) = (&auto, &explicit) else { continue };
+            if a.wounds[2] == e.wounds[2] {
+                continue; // no Takedown group landed on this seed
+            }
+            assert_eq!(a.wounds[2], vec![3, 2], "seed {seed}: the automatic pick is the last living slot");
+            assert_eq!(e.wounds[2], vec![2, 3], "seed {seed}: the answer names slot 0");
+            assert_eq!(a.alive[2], e.alive[2], "seed {seed}: the group is nonlethal, only the pick differs");
+            return;
+        }
+        panic!("no seed in 0..200 landed a Takedown group");
+    }
+
+    /// The empty option asks the open choice: stable id, every living slot as an option, the answering
+    /// unit's key as `owner`.
+    #[test]
+    fn an_empty_option_asks_the_choice_with_its_stable_id_and_slots() {
+        let (st, statics) = takedown_line();
+        let t = [Begin, intent(HOLD, Some("b")), Input::Choice { id: TAKEDOWN_ID.into(), option: String::new() }];
+        match step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t, true) {
+            ActStep::NeedChoice { id, options, owner } => {
+                assert_eq!((id.as_str(), owner.as_str()), (TAKEDOWN_ID, "a"));
+                assert_eq!(options, vec!["slot:0".to_string(), "slot:1".to_string()]);
+            }
+            other => panic!("expected NeedChoice, got {other:?}"),
+        }
+    }
+
+    /// A wrong id and a wrong option are refusals at the choice's input, never a silent acceptance
+    /// (RED: drop the option check -> a bogus `slot:9` resolves as the automatic pick).
+    #[test]
+    fn a_wrong_choice_id_or_option_is_refused() {
+        let (st, statics) = takedown_line();
+        let ask = |id: &str, option: &str| {
+            let t = [Begin, intent(HOLD, Some("b")), Input::Choice { id: id.into(), option: option.into() }];
+            step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t, true)
+        };
+        match ask("takedown_model:a:zzz", "slot:0") {
+            ActStep::Refused { index: 2, reason } => assert!(reason.contains(TAKEDOWN_ID), "{reason}"),
+            other => panic!("a wrong id must be refused, got {other:?}"),
+        }
+        match ask(TAKEDOWN_ID, "slot:9") {
+            ActStep::Refused { index: 2, reason } => assert!(reason.contains("slot:9"), "{reason}"),
+            other => panic!("a wrong option must be refused, got {other:?}"),
+        }
+    }
+
     /// O3: a unit that moved as a Rush cannot shoot (RED: drop the Rush check).
     #[test]
-    fn a_rush_cannot_shoot() {
-        let (st, statics) = volley_line();
+    fn a_rush_cannot_shoot() {        let (st, statics) = volley_line();
         let moved: Vec<[f64; 3]> = st.positions[0].iter().map(|p| [p[0] + 3.0 * INCHES_TO_METERS, p[1], p[2]]).collect();
         let t = [Begin, placed(moved), intent(RUSH, Some("b"))];
         match step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t, true) {
