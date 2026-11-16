@@ -11105,6 +11105,12 @@ func charge_path_probe(unit: GameUnit, target: GameUnit, band_in: float) -> Dict
 
 static func charge_snap_fits_unit_budget(residual_in: float, longest_arc_in: float,
 		band_in: float) -> bool:
+	# #183 play-test 16.11.: a model that already ends in clean base contact needs no snap and spends
+	# no budget — the charge HAS reached contact even when a trailing model's detour filled the whole
+	# band (a 1.5" gap beside a wide formation). Only a model still short of contact must fit the
+	# snap's leftover budget, which the longest formation route bounds.
+	if residual_in <= SeparationChecker.BASE_CONTACT_EPSILON_INCHES:
+		return true
 	var remaining_in := maxf(0.0, band_in - longest_arc_in)
 	return longest_arc_in <= band_in + SeparationChecker.BASE_CONTACT_EPSILON_INCHES \
 		and residual_in <= MELEE_ENGAGE_IN \

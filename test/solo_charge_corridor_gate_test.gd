@@ -117,6 +117,33 @@ func test_clean_lane_and_in_band_detour_remain_reachable() -> void:
 		.is_less_equal(SeparationChecker.BASE_CONTACT_EPSILON_INCHES)
 
 
+func test_wide_formation_close_gap_is_chargeable_when_a_model_reaches_contact() -> void:
+	# Play-test 16.11. (#183): a 6-model line 1.4" apart, its END model 1.5" from a 3-model
+	# enemy line, with a ruin wall running parallel 1.2" off the line (the play-test's board was
+	# boxed). The nearest pair's corridor is clear and a charger ends in clean base contact, but
+	# a trailing model's detour round the wall fills the whole 12" band — the old snap-budget
+	# clause then rejected the charge for EVERY model.
+	var attacker_positions: Array = []
+	for k in range(6):
+		attacker_positions.append(Vector3(k * 1.4 * IN2M, 0.0, 0.0))
+	var target_positions: Array = []
+	for k in range(3):
+		target_positions.append((attacker_positions[5] as Vector3) \
+			+ Vector3((1.5 + 2.0 * 0.629921) * IN2M + k * 1.4 * IN2M, 0.0, 0.0))
+	var walls: Array = [[Vector2(-0.01335, 0.03048), Vector2(0.28665, 0.03048)]]
+	var attacker := _unit(2, "Hounds", attacker_positions)
+	_arm(attacker, [{"name": "CCW", "range": 0, "attacks": 2}])
+	var target := _unit(1, "Destroyer", target_positions)
+	var solo := _controller([attacker, target], walls)
+	assert_float(solo.nearest_melee_gap_in(attacker, target)).is_between(1.4, 1.6)
+	var probe := _probe(solo, attacker, target)
+	assert_bool(bool(probe["reachable"])).is_true()
+	var report := solo._act(attacker)
+	assert_int(int(report.get("action", -1))).is_equal(AiDecision.Action.CHARGE)
+	assert_float(solo.nearest_melee_gap_in(attacker, target)) \
+		.is_less_equal(SeparationChecker.BASE_CONTACT_EPSILON_INCHES)
+
+
 func test_charge_snap_uses_the_longest_formation_route_budget() -> void:
 	# Seed 71720: the nearest model had 0.9" left to snap, but another model's
 	# route had spent the full 12" unit budget. The execution correctly refused

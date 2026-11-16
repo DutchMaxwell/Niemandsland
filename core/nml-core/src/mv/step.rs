@@ -1402,14 +1402,19 @@ fn charge_landing(self, state: &State, t: &Terrain, si: usize, ci: usize,
                 if gap < closest { closest = gap; }
             }
         }
-        // `charge_snap_fits_unit_budget` :8783 — the probe demands the residual
-        // still fits the move budget the charge left over, not just the ring.
+        // `charge_snap_fits_unit_budget` :8783 — a model that already ends in clean base contact
+        // needs no snap and spends no budget: the charge HAS reached contact even when a trailing
+        // model's detour filled the whole band. Only a model still short of contact must fit the
+        // move budget the charge left over, not just the ring.
+        let in_contact = closest <= crate::sim::BASE_CONTACT_EPSILON_IN;
         let remaining = land.remaining_in();
-        short = closest > crate::sim::MELEE_ENGAGE_IN
-            || closest > remaining + crate::sim::BASE_CONTACT_EPSILON_IN;
+        short = !in_contact
+            && (closest > crate::sim::MELEE_ENGAGE_IN
+                || closest > remaining + crate::sim::BASE_CONTACT_EPSILON_IN);
         // `charge_snap_fits_unit_budget` :10807 — the probe's first clause: the LONGEST route of the
         // formation must fit the band it was granted (a trailing model can walk further than the cap).
-        short |= rule_on(self.rules_epoch, EPOCH_73_V36)
+        short |= !in_contact
+            && rule_on(self.rules_epoch, EPOCH_73_V36)
             && land.arc_in > land.budget_in + crate::sim::BASE_CONTACT_EPSILON_IN;
     }
     Some((land, short))
@@ -1805,6 +1810,25 @@ pub(crate) mod tests {
         assert!((gap - want_gap).abs() < 1e-6, "{gap} vs {want_gap}");
         assert!((gap - 8.0).abs() < 1e-4, "{gap}");
         assert!((dir[0] - 1.0).abs() < 1e-6 && dir[1].abs() < 1e-6, "{dir:?}");
+    }
+
+    /// #183 play-test 16.11. (`charge_snap_fits_unit_budget` :10807): a 6-model line 1.4" apart with
+    /// its END model 1.5" from a 3-model enemy line, a ruin wall running parallel 1.2" off the line.
+    /// The nearest pair's corridor is clear and a charger ends in clean base contact, but a trailing
+    /// model's detour round the wall fills the whole 12" band. The charge still reaches contact and
+    /// must be declared. RED: without the in-contact exemption the port says false.
+    #[test]
+    fn a_close_gap_charge_whose_contact_models_reach_is_reachable() {
+        let r = 0.016;
+        let a: Vec<V3> = (0..6).map(|k| [(k as f32) * 1.4 * IN2M as f32, 0.0, 0.0]).collect();
+        let gap_m = (1.5 + 2.0 * 0.629921) * IN2M;
+        let b: Vec<V3> = (0..3).map(|k| [
+            (a[5][0] as f64 + gap_m + k as f64 * 1.4 * IN2M) as f32, 0.0, 0.0,
+        ]).collect();
+        let state = units_state(vec![a, b], vec![vec![r; 6], vec![r; 3]], vec![vec![], vec![]]);
+        let t = board(vec![[[-0.01335, 0.03048], [0.28665, 0.03048]]]);
+        let rules = MoveRules { rules_epoch: 76 };
+        assert!(rules.charge_reaches_contact(&state, &t, 0, 1, 12.0, false));
     }
 
     /// `_clamp_delta_to_bounds` :8886 — a move that would carry a model off the
