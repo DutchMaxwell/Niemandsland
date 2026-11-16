@@ -43,6 +43,11 @@ const RUNNER_HUMAN_VOLLEY := "human_volley"
 const SPLIT_FAMILY := "split"
 const SPLIT_FIXTURE_PATH := "res://test/fixtures/one_core/golden_split.json"
 const RUNNER_AI_SHOOTING := "ai_shooting"
+## The Dangerous-terrain sequence of the AI body (main.gd _solo_activate_one_ai): the Dangerous roll, the volley if the
+## unit can shoot, the end-of-activation morale from the Dangerous wounds. Runner "ai_dangerous".
+const DANGEROUS_FAMILY := "dangerous"
+const DANGEROUS_FIXTURE_PATH := "res://test/fixtures/one_core/golden_dangerous.json"
+const RUNNER_AI_DANGEROUS := "ai_dangerous"
 const RUNNER_HUMAN_SPLIT := "human_split"
 ## Eight seeds for the door grids: the four of the volley grid plus four more, so a rare shape (no hit, all saved,
 ## a wipe) is more likely to be recorded than guessed.
@@ -175,6 +180,25 @@ static func split_scenarios() -> Array:
 	]
 
 
+## The Dangerous grid: an AI unit that advanced across Dangerous terrain (a 5x5 block painted under it). `dead` models
+## are lost beforehand (the at-or-below-half gate reads the starting size), so the Dangerous wounds can call the end
+## morale test; the volley's target stands at `x_in`; `can_shoot` false = the body skips the volley.
+static func dangerous_scenarios() -> Array:
+	var att := _with(ATTACKER, {"player": 2})
+	var foe := _with(DEFENDER, {"player": 1, "x_in": 18.0, "models": 5})
+	return [
+		{"name": "dangerous_advance", "runner": RUNNER_AI_DANGEROUS, "note": "10 models, target in range: roll, volley, no morale",
+			"weapon": RIFLE, "attacker": att, "defender": foe, "can_shoot": true, "seeds": WIDE_SEEDS},
+		{"name": "dangerous_half", "runner": RUNNER_AI_DANGEROUS, "note": "4 of 10 models left: a wound calls the end morale",
+			"weapon": RIFLE, "attacker": att, "defender": foe, "dead": 6, "can_shoot": true, "seeds": WIDE_SEEDS},
+		{"name": "dangerous_no_target", "runner": RUNNER_AI_DANGEROUS, "note": "target at 40\": no volley, Dangerous + morale only",
+			"weapon": RIFLE, "attacker": att, "defender": _with(foe, {"x_in": 40.0}), "dead": 6, "can_shoot": true,
+			"seeds": WIDE_SEEDS},
+		{"name": "dangerous_cannot_shoot", "runner": RUNNER_AI_DANGEROUS, "note": "the unit may not shoot: roll + morale only",
+			"weapon": RIFLE, "attacker": att, "defender": foe, "dead": 6, "can_shoot": false, "seeds": WIDE_SEEDS},
+	]
+
+
 static func _weapon(rules: Array) -> Dictionary:
 	return _with(RIFLE, {"rules": rules})
 
@@ -210,6 +234,8 @@ static func capture(main: Node, family: String = FAMILY) -> Dictionary:
 		return await capture_grid(main, HUMAN_FAMILY, human_scenarios())
 	if family == SPLIT_FAMILY:
 		return await capture_grid(main, SPLIT_FAMILY, split_scenarios())
+	if family == DANGEROUS_FAMILY:
+		return await capture_grid(main, DANGEROUS_FAMILY, dangerous_scenarios())
 	var out := {"schema": SCHEMA, "family": FAMILY, "provenance": provenance(), "cases": []}
 	for sc in scenarios():
 		for seed in SEEDS:
@@ -273,6 +299,8 @@ static func _run_case(main: Node, sc: Dictionary, seed: int) -> Dictionary:
 			return await _run_human_volley_case(main, sc, seed)
 		RUNNER_AI_SHOOTING, RUNNER_HUMAN_SPLIT:
 			return await _run_split_case(main, sc, seed)
+		RUNNER_AI_DANGEROUS:
+			return await _run_dangerous_case(main, sc, seed)
 	return {"scenario": str(sc["name"]), "seed": seed, "error": "unknown runner %s" % runner}
 
 
@@ -366,6 +394,41 @@ static func _run_split_case(main: Node, sc: Dictionary, seed: int) -> Dictionary
 	if _fired_at(lines).size() < 2:
 		rec = {"scenario": str(sc["name"]), "seed": seed, "error": "no split (fired at %s)" % str(_fired_at(lines))}
 	_free_units(main, [att, a, b])
+	await main.get_tree().process_frame
+	return rec
+
+
+## One Dangerous scenario x seed, in the order of the AI body: the Dangerous roll (main.gd's _run_ai_dangerous with the
+## dice the production formula gives), the volley when the unit can shoot (moved = true), then the end-of-activation
+## morale from the Dangerous wounds. The case errors if no Dangerous line was logged (the roll never happened).
+static func _run_dangerous_case(main: Node, sc: Dictionary, seed: int) -> Dictionary:
+	var att := ParityTable._make_unit(main, sc["attacker"], (sc["weapon"] as Dictionary).duplicate(true))
+	var dfn := ParityTable._make_unit(main, sc["defender"], {})
+	_kill_models(att, int(sc.get("dead", 0)))
+	var painted := _paint_cover(main, att, main.terrain_overlay.TerrainType.DANGEROUS)
+	var seats: Dictionary = (main.solo_ai_slots as Dictionary).duplicate()
+	main.solo_ai_slots = {1: true, 2: true}   # both seats AI: a human defender would wait for a save click
+	main.seed_tray_rng(seed)
+	var dice := int(sc.get("dice", OPRArmyManager.dangerous_dice_for(att)))
+	var alive_before: int = SoloController.combined_alive(att)
+	var wounds_before: int = main._solo_unit_wounds_now(att)
+	var lines: Array = []
+	var tap := _line_tap(lines)
+	main.battle_log.entry_added.connect(tap)
+	await main._run_ai_dangerous(att, dice)
+	if not att.is_destroyed():
+		if bool(sc.get("can_shoot", true)):
+			await main._run_ai_shooting({"unit": att, "moved": true})
+		if not att.is_destroyed():
+			await main._solo_shooting_morale(att, alive_before, main._roller_label(att), wounds_before, "Dangerous terrain")
+	main.battle_log.entry_added.disconnect(tap)
+	main.solo_ai_slots = seats
+	var rec := {"scenario": str(sc["name"]), "seed": seed, "epoch": AiActRecorder.rules_epoch,
+		"lines": lines, "final": _final([att, dfn]), "rng": _rng_state(main), "extra": {"dice": str(dice)}}
+	if not lines.any(func(l: Variant) -> bool: return str(l).contains("Dangerous terrain test")):
+		rec = {"scenario": str(sc["name"]), "seed": seed, "error": "no Dangerous line was logged (dice %d)" % dice}
+	_unpaint_cover(main, painted)
+	_free_units(main, [att, dfn])
 	await main.get_tree().process_frame
 	return rec
 
@@ -504,9 +567,9 @@ static func _rng_state(main: Node) -> String:
 	return str((main._tray_rng as RandomNumberGenerator).state)
 
 
-## Paints a forest block around the defender and returns the touched cells as cell -> {had, value} (0 is a valid
+## Paints a forest block (or `terrain`, a TerrainType value) around the unit and returns the touched cells as cell -> {had, value} (0 is a valid
 ## terrain value, so `had` decides whether the restore erases or writes back).
-static func _paint_cover(main: Node, unit: GameUnit) -> Dictionary:
+static func _paint_cover(main: Node, unit: GameUnit, terrain: int = -1) -> Dictionary:
 	var saved := {}
 	var alive: Array = unit.get_alive_models()
 	if alive.is_empty() or main.terrain_overlay == null:
@@ -521,7 +584,7 @@ static func _paint_cover(main: Node, unit: GameUnit) -> Dictionary:
 		for dz in range(-COVER_CELLS, COVER_CELLS + 1):
 			var key := cell + Vector2i(dx, dz)
 			saved[key] = {"had": o.grid_cells.has(key), "value": int(o.grid_cells.get(key, 0))}
-			o.grid_cells[key] = o.TerrainType.FOREST
+			o.grid_cells[key] = o.TerrainType.FOREST if terrain < 0 else terrain
 	return saved
 
 
@@ -556,6 +619,8 @@ static func fixture_path(family: String = FAMILY) -> String:
 		return HUMAN_FIXTURE_PATH
 	if family == SPLIT_FAMILY:
 		return SPLIT_FIXTURE_PATH
+	if family == DANGEROUS_FAMILY:
+		return DANGEROUS_FIXTURE_PATH
 	return FIXTURE_PATH
 
 
