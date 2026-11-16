@@ -11293,6 +11293,21 @@ static func charge_snap_failed_clauses(residual_in: float, longest_arc_in: float
 	return failed
 
 
+## #183 EPOCH_77_CHARGE_CAP (GF 3.6 p.9 "Charging MODELS must move by up to 12\""): the model that closes the charge —
+## among models whose own trail fits the band, within the engage ring, and whose OWN leftover covers its residual, the
+## one with the smallest residual; -1 when none. Shared by the declaration probe and the snap (core twin `snap_pick`).
+static func charge_snap_pick(residuals_in: Array, arcs_in: Array, band_in: float) -> int:
+	var eps := SeparationChecker.BASE_CONTACT_EPSILON_INCHES
+	var best := -1
+	for i in range(mini(residuals_in.size(), arcs_in.size())):
+		var res := float(residuals_in[i])
+		var arc := float(arcs_in[i])
+		if arc <= band_in + eps and res <= MELEE_ENGAGE_IN and res <= maxf(0.0, band_in - arc) + eps \
+				and (best < 0 or res < float(residuals_in[best])):
+			best = i
+	return best
+
+
 func _charge_path_probe_impl(unit: GameUnit, target: GameUnit, band_in: float) -> Dictionary:
 	var nearest := nearest_charge_vector(unit, target)
 	var gap_in: float = float(nearest.get("gap", INF))
@@ -11486,6 +11501,75 @@ func snap_charge(charger: GameUnit, target: GameUnit, max_snap_in: float = -1.0)
 	_apply_model_positions(models, moved)
 	face_nearest_enemy(charger, target)
 	return best_gap
+
+
+## #183 EPOCH_77_CHARGE_CAP: the snap per model. The picked model (`charge_snap_pick` over the last move's own trails)
+## closes its residual; every model whose OWN leftover covers that snap moves with it, the rest stay at their band; a
+## mover that would land on a staying or foreign base stays too (to a fixed point). Returns the snap in inches, 0 when
+## already in contact, or minus the residual when the picked model cannot move. `last_snap_stayed` = models left behind.
+var last_snap_stayed := 0
+func snap_charge_per_model(charger: GameUnit, target: GameUnit) -> float:
+	last_snap_stayed = 0
+	var models := _moving_models(charger)
+	var arc_of := {}
+	for mp in last_move_paths:
+		arc_of[(mp as Dictionary).get("model")] = MovementPlanner.polyline_length((mp as Dictionary).get("path", [])) / INCHES_TO_METERS
+	var tshapes: Array = []
+	for em in _moving_models(target):
+		var es := SeparationChecker.shape_for_model(em as ModelInstance)
+		if es != null:
+			tshapes.append(es)
+	var res: Array = []
+	var arcs: Array = []
+	var dirs: Array = []
+	for m in models:
+		var cs := SeparationChecker.shape_for_model(m as ModelInstance)
+		var best := INF
+		var dir := Vector2.ZERO
+		for es in tshapes:
+			var gap: float = INF if cs == null else SeparationChecker.edge_distance(cs, es)
+			if gap < best:
+				best = gap
+				dir = (es as SeparationChecker.BaseShape).center - cs.center
+		res.append(best)
+		arcs.append(float(arc_of.get(m, 0.0)))
+		dirs.append(dir.normalized() if dir.length() >= 0.00001 else Vector2.ZERO)
+	var pick := charge_snap_pick(res, arcs, last_move_budget_in)
+	if pick < 0 or dirs[pick] == Vector2.ZERO:
+		return -float(res.min()) if not res.is_empty() and res.min() < INF else 0.0
+	var gap: float = res[pick]
+	if gap <= SeparationChecker.BASE_CONTACT_EPSILON_INCHES:
+		return 0.0
+	var delta := Vector3((dirs[pick] as Vector2).x, 0.0, (dirs[pick] as Vector2).y) * (gap * INCHES_TO_METERS)
+	var positions := _positions_of(models)
+	var moving := {}
+	for i in range(models.size()):
+		if maxf(0.0, last_move_budget_in - float(arcs[i])) + SeparationChecker.BASE_CONTACT_EPSILON_INCHES >= gap:
+			moving[i] = true
+	var obstacles := _external_obstacle_shapes(charger)
+	var cfg: Array = []
+	for _round in range(models.size() + 1):
+		cfg = []
+		for i in range(models.size()):
+			cfg.append((positions[i] as Vector3) + delta if moving.has(i) else positions[i])
+		var shapes := _moving_shapes_at(models, cfg)
+		var drop := -1
+		for i in moving.keys():
+			for j in range(models.size()):
+				if drop < 0 and not moving.has(j) and SeparationChecker.edge_distance(shapes[i], shapes[j]) < -SeparationResolver.RESOLVE_EPSILON_INCHES:
+					drop = i
+			for o in obstacles:
+				if drop < 0 and SeparationChecker.edge_distance(shapes[i], o) < -SeparationResolver.RESOLVE_EPSILON_INCHES:
+					drop = i
+		if drop < 0:
+			break
+		if drop == pick:
+			return -gap
+		moving.erase(drop)
+	last_snap_stayed = models.size() - moving.size()
+	_apply_model_positions(models, cfg)
+	face_nearest_enemy(charger, target)
+	return gap
 
 
 ## Remaining move budget (inches) after the last executed move: the activation budget minus the

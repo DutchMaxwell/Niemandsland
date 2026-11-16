@@ -17,7 +17,7 @@ hit_save_shared TOTAL 739 64 114
 human_shoot scripts/main.gd:_run_human_attack_split 28 1 4
 human_shoot scripts/main.gd:_run_human_shooting 288 3 37
 human_shoot TOTAL 316 4 41
-melee_charge scripts/main.gd:_run_ai_melee 185 1 23
+melee_charge scripts/main.gd:_run_ai_melee 190 1 23
 melee_charge scripts/main.gd:_run_human_melee 106 1 9
 melee_charge scripts/main.gd:_solo_charge_impact 82 4 10
 melee_charge scripts/main.gd:_solo_consolidate_melee 81 2 1
@@ -25,13 +25,13 @@ melee_charge scripts/main.gd:_solo_log_melee_result 40 2 5
 melee_charge scripts/main.gd:_solo_melee_strike_phase 434 6 42
 melee_charge scripts/main.gd:_solo_parry_strike 28 1 0
 melee_charge scripts/main.gd:_solo_retreating_strike 35 2 0
-melee_charge TOTAL 991 19 90
-planner scripts/solo/ai_planner.gd 1904 8 28
+melee_charge TOTAL 996 19 90
+planner scripts/solo/ai_planner.gd 1904 8 29
 planner scripts/solo/ai_position.gd 400 1 1
 planner scripts/solo/ai_spell.gd 633 4 15
-planner scripts/solo/battle_sim.gd 2611 22 73
+planner scripts/solo/battle_sim.gd 2611 22 74
 planner scripts/solo/solo_sim.gd 1234 3 6
-planner TOTAL 6782 38 123
+planner TOTAL 6782 38 125
 planner_shared scripts/solo/ai_combat_math.gd 724 9 18
 planner_shared scripts/solo/ai_ev.gd 1331 10 70
 planner_shared TOTAL 2055 19 88
@@ -45,4 +45,4 @@ planner_tag test_only 9 54
 planner_tag tools_only 71 1028
 planner_tag tree 27 536
 planner_tag TOTAL 355 6102
-TABLE LINES LEFT: 11313
+TABLE LINES LEFT: 11318
