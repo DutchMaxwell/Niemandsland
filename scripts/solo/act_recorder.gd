@@ -200,8 +200,9 @@ const EPOCH_63_MELEE_HEIGHT := 63
 ## and the move fixes (Great Musician spent, Speed Feat only on a move, Grounded Speed by majority) to 76
 ## with EPOCH_76_MOVE_FIXES, and the #183 charge cap to 77 with EPOCH_77_CHARGE_CAP, and the core twin of the
 ## flier cut (#2827, applied by the table since its merge) to 78 with EPOCH_78_FLIER_CUT, and the core EV's
-## move stamp (FAB-A5) to 79 with EPOCH_79_EV_MOVED_ROUND.
-static var rules_epoch: int = 79
+## move stamp (FAB-A5) to 79 with EPOCH_79_EV_MOVED_ROUND, and Cumbersome in the core rollouts to 80 with
+## EPOCH_80_ROLLOUT_CUMBERSOME.
+static var rules_epoch: int = 80
 ## The live activation identity the Ethereal placement band penalty is keyed to (MOR-19b): the
 ## Solo AI advances it once per activation, the Teleport beat stamps the unit's
 ## `teleport_activation` with it, and the band pass prices the -6"/-6" only while the two are
@@ -238,6 +239,9 @@ const EPOCH_78_FLIER_CUT := 78
 ## The core's frozen `EPOCH_79_EV_MOVED_ROUND` (acts.rs): the core's sim shoot EV reads the target's move stamp, as
 ## `BattleSim._held_for` does. Nothing in the table gates on it.
 const EPOCH_79_EV_MOVED_ROUND := 79
+## The core's frozen `EPOCH_80_ROLLOUT_CUMBERSOME` (acts.rs): the core rollout menu restricts a Cumbersome unit to
+## Hold or a plain Advance, as `AiPlanner._policy_candidates` does. Nothing in the table gates on it.
+const EPOCH_80_ROLLOUT_CUMBERSOME := 80
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000
