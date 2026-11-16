@@ -70,8 +70,10 @@ func test_every_refusal_is_named() -> void:
 	var why := CoreActivation.why_not(StubMain.new(), shooter, target)
 	assert_array(why).contains(["unit_rule:Tough", "unit_rule:Fear", "weapon_rule:Blast", "weapon_rule:Deadly",
 		"target_rule:Fearless", "target_weapon_rule:Rending"])
-	var bare := GameUnit.new()   # no OPR source
-	assert_array(CoreActivation.why_not(StubMain.new(), bare, bare)).contains(["non_opr", "target_non_opr"])
+	var bare := GameUnit.new()   # no OPR source: refused as a shooter, not as a target (P4.D-13b: the core takes its profile
+	var why_bare := CoreActivation.why_not(StubMain.new(), bare, bare)   # from unit_properties)
+	assert_array(why_bare).contains(["non_opr"])
+	assert_array(why_bare).override_failure_message("a profile-less target is not a reason: %s" % [why_bare]).not_contains(["target_non_opr"])
 
 
 func test_a_weapon_rule_is_counted_once_per_volley() -> void:

@@ -32,6 +32,37 @@ static func is_plain(gu: GameUnit) -> bool:
 	return true
 
 
+## P4.D-13b: the TARGET half of `is_plain`. The core takes a target's profile from unit_properties
+## (`BattleSim._unit_profile`), so a target needs no OPR profile: a loaded save from before the profile was saved is shot
+## like any other unit. What it needs is a statline the core can hand a save to. A target that has an OPR profile keeps
+## the weapon-rule clause of `is_plain`.
+static func is_plain_target(gu: GameUnit) -> bool:
+	if not (gu.unit_properties.get("special_rules", []) as Array).is_empty() \
+			or gu.has_attached_heroes() or gu.is_attached() or not has_statline(gu):
+		return false
+	var src := gu.source_data as OPRApiClient.OPRUnit
+	for w in src.weapons if src != null else []:
+		if not w.special_rules.is_empty():
+			return false
+	return true
+
+
+## Quality and defense both in 2..6 (the rules' range). A hand-written foreign save may carry none: get_quality() and
+## get_defense() then answer 0, and there is nothing to hand the core.
+static func has_statline(gu: GameUnit) -> bool:
+	return gu.get_quality() in range(2, 7) and gu.get_defense() in range(2, 7)
+
+
+## P4.D-13c: a unit with no statline cannot be shot at a core table. True = the shot must not happen; ONE battle-log line
+## says why. False when the core door is not on (kill switch, hotseat): the table shoots as it always did.
+static func refuses_statlineless(main, attacker: GameUnit, target: GameUnit) -> bool:
+	if not applies(main) or has_statline(target):
+		return false
+	main._log_rule_event(BattleLog.Category.COMBAT, "%s cannot shoot %s: it has no Quality or Defense (a hand-written save), so it is not a valid target" % [
+		attacker.get_name(), target.get_name()], main._solo_is_ai_unit(attacker))
+	return true
+
+
 ## (1) A human unit of this table's player while the game is PLAYING: it gets the explicit activation (O14 (1b)).
 static func is_lifecycle_unit(main, gu: GameUnit) -> bool:
 	return gu != null and applies(main) and not main._solo_is_ai_unit(gu) and main._solo_i_own_unit(gu) \
@@ -195,13 +226,14 @@ static func _rule_label(r) -> String:
 	return (str((r as Dictionary).get("name", "")) if r is Dictionary else str(r)).get_slice("(", 0).strip_edges()
 
 
-## The refusals of one unit as the table sees them (what `is_plain` says no to).
-static func _refusals(gu: GameUnit) -> Array:
+## The refusals of one unit as the table sees them (what `is_plain` says no to; for a target, `is_plain_target`: no OPR
+## profile is not a reason there, P4.D-13b).
+static func _refusals(gu: GameUnit, as_target := false) -> Array:
 	var out: Array = (gu.get_special_rules() as Array).map(func(r) -> String: return "unit_rule:" + _rule_label(r))
 	if gu.has_attached_heroes() or gu.is_attached():
 		out.append("attached")
 	if not gu.source_data is OPRApiClient.OPRUnit:
-		return out + ["non_opr"]
+		return out if as_target else out + ["non_opr"]
 	for w in (gu.source_data as OPRApiClient.OPRUnit).weapons:
 		out.append_array(w.special_rules.map(func(r) -> String: return "weapon_rule:" + _rule_label(r)))
 	return out
@@ -212,7 +244,7 @@ static func _refusals(gu: GameUnit) -> Array:
 static func why_not(main, unit: GameUnit, target: GameUnit) -> Array:
 	var out: Array = [] if applies(main) else ["no_core"]
 	out.append_array(_refusals(unit) if unit != null else [])
-	for r in (_refusals(target) if target != null else []):
+	for r in (_refusals(target, true) if target != null else []):
 		out.append("target_rule:" + r.trim_prefix("unit_rule:") if r.begins_with("unit_rule:") else "target_" + r)
 	return out
 
@@ -250,7 +282,7 @@ static func dump_legacy() -> void:
 static func run_ai(main, unit: GameUnit, report: Dictionary, target: GameUnit, h: int, shots: Array = []) -> bool:
 	var kind := int(report.get("action", -1))
 	if h == 0 or not (kind in [AiDecision.Action.HOLD, AiDecision.Action.ADVANCE]) or not is_plain(unit) \
-			or not is_plain(target) or int(report.get("dangerous_dice", report.get("dangerous_models", 0))) > 0:
+			or not is_plain_target(target) or int(report.get("dangerous_dice", report.get("dangerous_models", 0))) > 0:
 		return false
 	# #172 interim: the core lands its own casualty order, so a human owner who has a wound-allocation choice (a Tough
 	# model, or mixed loadouts among the alive models) would never be asked. That volley stays on the table, which
@@ -760,7 +792,7 @@ static func declared_mode(main) -> int:
 
 
 ## Step 38 (O15 (1)): the human attack door. False = not taken, the old path runs: `attacker` is not a core unit, the
-## target is not plain, the selector says Charge (a melee action) or is no declaration (declared_mode reports it). True =
+## target is not plain (`is_plain_target`), the selector says Charge (a melee action) or is no declaration (declared_mode reports it). True =
 ## taken. No open activation: "Activate <Unit> first.", nothing rolls. Else the declared intent (the selector's mode,
 ## never the distance; the core turns it into Hold when nothing moved) and the shot go through the core with the
 ## session's transcript; the session's own transcript is not touched, so a refusal can be tried again. `done`: the steps
@@ -768,9 +800,12 @@ static func declared_mode(main) -> int:
 ## toggle that completes a shot ends it only while the session is open - with none, "Activate" would start a new one),
 ## and the door closes it after. `refused` below the transcript's size (an order rule, the O3 Rush sentence): logged and
 ## toasted, nothing was shot, the session stays open (the caller returns then). `refused` at the transcript's size is the
-## core's own defect: reported, nothing toasted, the session stays open.
+## core's own defect: reported, nothing toasted, the session stays open. P4.D-13c: a target with no statline is no valid
+## target: one line, nothing shot, the session stays open (the caller returns).
 static func human_shoot(main, attacker: GameUnit, target: GameUnit, on_throw: Callable = Callable()) -> bool:
-	if not is_core_unit(main, attacker) or not is_plain(target) \
+	if refuses_statlineless(main, attacker, target):
+		return true   # nothing was shot: `last_target` is not the target, the caller returns and the activation stays open
+	if not is_core_unit(main, attacker) or not is_plain_target(target) \
 			or int(main.object_manager._movement_cap) == CAP_CHARGE:
 		return false
 	if main.core_door_refused(attacker):
