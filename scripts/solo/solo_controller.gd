@@ -6645,6 +6645,17 @@ func _targets_in_dangerous(positions: Array, goal: Vector3, reach_in: float, rad
 	return false
 
 
+## Would the rigid move's per-model TARGETS land in UNSTABLE (ruin) ground? A destination INSIDE a ruin is
+## legal rest, so avoidance must not wall it off (same exception as `_targets_in_dangerous`).
+func _rigid_targets_unstable(positions: Array, delta: Vector3, radius_m: float) -> bool:
+	if not terrain_type_at.is_valid():
+		return false
+	for p in positions:
+		if TerrainRules.base_in_terrain((p as Vector3) + delta, radius_m, terrain_type_at, TerrainRules.is_unstable):
+			return true
+	return false
+
+
 ## EPOCH_27_TERRAIN_DEBUFF (sweep A) — the granted-terrain-debuff read over the JOINED chain
 ## (host + attached heroes), the same walk the core's `mods::granted` chain read does: a debuff
 ## cast on ANY member of the moving formation marks the whole move.
@@ -6742,7 +6753,7 @@ func _spacing_zones_world(unit: GameUnit, own_radius_m: float, charge_target: Ga
 ## {"grid": {Vector2i: TerrainType}, "avoid": {Vector2i: true}} — Impassable cells are always avoided;
 ## Difficult cells only when the route should go around them (solo overlay p.57).
 func _terrain_grid_in(board_in: float, off: Vector2, avoid_difficult: bool, avoid_dangerous: bool = false,
-		board_y_in: float = 0.0) -> Dictionary:
+		board_y_in: float = 0.0, avoid_unstable: bool = false) -> Dictionary:
 	var grid := {}
 	var avoid := {}
 	if not terrain_type_at.is_valid():
@@ -6767,7 +6778,8 @@ func _terrain_grid_in(board_in: float, off: Vector2, avoid_difficult: bool, avoi
 			# 3" cells no longer fatten a 6x3 box into a ~9x6 no-go field. Difficult/Dangerous
 			# keep cell avoidance (they are areas, not solid boxes).
 			if (avoid_difficult and TerrainRules.is_difficult(t)) \
-					or (avoid_dangerous and TerrainRules.is_dangerous(t)):
+					or (avoid_dangerous and TerrainRules.is_dangerous(t)) \
+					or (avoid_unstable and TerrainRules.is_unstable(t)):
 				avoid[cell] = true
 	return {"grid": grid, "avoid": avoid}
 
@@ -6784,7 +6796,8 @@ func _terrain_grid_in(board_in: float, off: Vector2, avoid_difficult: bool, avoi
 ## centre). Sampled over the move AABB only (the _forbid_cells_in pattern); ADDITIVE — the coarse
 ## 3" avoid set and its consumers stay untouched, this feeds the planner's fine checks.
 func _avoid_fine_cells_in(mpos: Array, mdelta: Vector2, board_in: float, off: Vector2,
-		clearance_m: float, avoid_difficult: bool, avoid_dangerous: bool, board_y_in: float = 0.0) -> Dictionary:
+		clearance_m: float, avoid_difficult: bool, avoid_dangerous: bool, board_y_in: float = 0.0,
+		avoid_unstable: bool = false) -> Dictionary:
 	var fine := {}
 	if not terrain_type_at.is_valid() or mpos.is_empty():
 		return fine
@@ -6812,7 +6825,8 @@ func _avoid_fine_cells_in(mpos: Array, mdelta: Vector2, board_in: float, off: Ve
 	var pred := func(t: int) -> bool:
 		# CONTAINER handled by the exact wall channel (container wave) — cells only for areas.
 		return (avoid_difficult and TerrainRules.is_difficult(t)) \
-			or (avoid_dangerous and TerrainRules.is_dangerous(t))
+			or (avoid_dangerous and TerrainRules.is_dangerous(t)) \
+			or (avoid_unstable and TerrainRules.is_unstable(t))
 	for cy in range(cy0, cy1 + 1):
 		for cx in range(cx0, cx1 + 1):
 			var centre_in := Vector2((float(cx) + 0.5) * cell, (float(cy) + 0.5) * cell)
@@ -7919,11 +7933,18 @@ func _plan_positions(unit: GameUnit, models: Array, positions: Array, delta: Vec
 		opts["zones"] = zones_in
 	if is_traversal(unit) or flies_through_units(unit):
 		opts["zones_rest_only"] = true   # Traversal / Flying: unit-spacing zones stop blocking the ROUTE; rest legality stays strict
-	var sampled := _terrain_grid_in(board_in, off, avoid_difficult, avoid_dangerous, board_y_in)
+	# Rules 3.6 UNSTABLE ruins (EPOCH_73_V36): a move over 6" through a ruin takes the Dangerous test, so
+	# route around it like Dangerous/Difficult when a clear path exists (play-test: the Great Beast crossed
+	# twice "despite avoidance"). Flying ignores it (p.13); a destination inside a ruin stays reachable.
+	var avoid_unstable := AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
+		and not unit.has_special_rule("Flying") \
+		and Vector2(delta.x, delta.z).length() > MovementPlanner.UNSTABLE_MOVE_IN * INCHES_TO_METERS \
+		and not _rigid_targets_unstable(positions, delta, own_r_m)
+	var sampled := _terrain_grid_in(board_in, off, avoid_difficult, avoid_dangerous, board_y_in, avoid_unstable)
 	opts["avoid_cells"] = sampled["avoid"]
-	if avoid_difficult or avoid_dangerous:
+	if avoid_difficult or avoid_dangerous or avoid_unstable:
 		# Fine, base-radius-inflated avoidance so the routed BASE EDGE clears the terrain too.
-		opts["avoid_fine"] = _avoid_fine_cells_in(mpos, mdelta, board_in, off, own_r_m, avoid_difficult, avoid_dangerous, board_y_in)
+		opts["avoid_fine"] = _avoid_fine_cells_in(mpos, mdelta, board_in, off, own_r_m, avoid_difficult, avoid_dangerous, board_y_in, avoid_unstable)
 	# Unified-solver inputs (real-game path only): the presence of "radii" selects the C-space / Theta* /
 	# funnel + unified-constraint-solver pipeline inside plan_unit_step. SoloSim never sets it, so its
 	# steer+A* path and the mirror-fairness oracle stay byte-identical. radii = per-model base radius (inches)

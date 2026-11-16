@@ -6,9 +6,11 @@ const IN2M := 0.0254
 
 var _mgr: OPRArmyManager
 var _solo: SoloController
+var _epoch0: int
 
 
 func before_test() -> void:
+	_epoch0 = AiActRecorder.rules_epoch
 	_mgr = auto_free(OPRArmyManager.new())
 	_solo = auto_free(SoloController.new())
 	add_child(_solo)
@@ -16,6 +18,10 @@ func before_test() -> void:
 	_solo.human_slot = 1
 	_solo.ai_slot = 2
 	_set_strip(3.0, 5.0)
+
+
+func after_test() -> void:
+	AiActRecorder.rules_epoch = _epoch0   # statics leak across gdUnit tests - restore
 
 
 func _set_strip(z0: float, z1: float) -> void:
@@ -66,3 +72,32 @@ func test_stall_through_plan_is_named() -> void:
 	var u := _unit("Pair", 2, 2.0)
 	_solo._execute_move(u, Vector3(0, 0, 14.0 * IN2M), 12.0, false)
 	assert_str(_why()).contains("stall through-plan (toll")
+
+
+func _move_data() -> Dictionary:
+	for i in range(_solo.decision_log.size() - 1, -1, -1):
+		var rec := _solo.decision_log[i] as Dictionary
+		if str(rec.get("kind", "")) == "move" and str(rec.get("why", "")) != "band clamp":
+			return rec.get("data", {}) as Dictionary
+	return {}
+
+
+## Rules 3.6 (EPOCH_73_V36): a model whose own move is over 6" and whose route enters a ruin takes the
+## Dangerous test. The ruin must be ROUTED AROUND (like Dangerous/Difficult) when a clear path exists —
+## a soft cost alone still crossed it in the play-test ("route crossed despite avoidance").
+func test_long_move_routes_around_unstable_ruins() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	_solo.terrain_type_at = func(p: Vector3) -> int:
+		var z_in := p.z / IN2M
+		var x_in := p.x / IN2M
+		return TerrainRules.TerrainType.RUINS if z_in >= 1.0 and z_in <= 4.0 and x_in >= -2.0 and x_in <= 2.0 \
+			else TerrainRules.TerrainType.NONE
+	var u := _unit("Great Beast", 1)
+	_solo._execute_move(u, Vector3(0, 0, 12.0 * IN2M), 12.0, false)
+	var data := _move_data()
+	assert_int(int(data.get("dangerous_models", -1))) \
+		.override_failure_message("the long move crossed the unstable ruin instead of routing around it") \
+		.is_equal(0)
+	assert_float(float(data.get("achieved_in", 0.0))) \
+		.override_failure_message("routing around the ruin stalled the move (%.2f\" of 12)" % float(data.get("achieved_in", 0.0))) \
+		.is_greater(10.0)
