@@ -22,7 +22,11 @@ The default run covers:
   plain activation runs through the production doors (Activate, a drag, End) and the other table's
   digest check is silent, also for the round's last activation (the guest's, which ends round 1 on
   the host). Then a desync planted on the host is reported, the guest pushes only what differs, and
-  the re-check matches. One command: `python3 test/mp/run_two_instance.py --one-core-only --repeat 1
+  the re-check matches. P4.D-25 adds the wound-allocation choice (`NML_ONE_CORE_CHOICE_WOUND_ALLOC=1` on both
+  peers): the host shoots the guest's three plain models with two loadouts, the core asks the wound allocation of the
+  OWNER, the guest's own click (the #172 prompt in collect mode) names the last model, and both tables end with it dead
+  and the same wounds. The automatic order would take the first models: an answer routed to the host leaves the clicked
+  model alive and the wait times out. One command: `python3 test/mp/run_two_instance.py --one-core-only --repeat 1
   --run-dir reports/mp-one-core`.
 
 The driver compares both peers after every step. A timeout, process crash,
