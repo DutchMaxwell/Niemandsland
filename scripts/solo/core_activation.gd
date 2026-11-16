@@ -185,6 +185,14 @@ static func run_ai(main, unit: GameUnit, report: Dictionary, target: GameUnit, h
 	if h == 0 or not (kind in [AiDecision.Action.HOLD, AiDecision.Action.ADVANCE]) or not is_plain(unit) \
 			or not is_plain(target) or int(report.get("dangerous_dice", report.get("dangerous_models", 0))) > 0:
 		return false
+	# #172 interim: the core lands its own casualty order, so a human owner who has a wound-allocation choice (a Tough
+	# model, or mixed loadouts among the alive models) would never be asked. That volley stays on the table, which
+	# prompts. The real wound count is unknown before the roll: one wound keeps the Tough and loadout checks. Goes away
+	# once the core asks the allocation as a NeedChoice.
+	if main._solo_wound_choice_matters(target, 1):
+		main._log_rule_event(BattleLog.Category.COMBAT, "%s: %s's owner chooses the casualties - the table resolves this volley" % [
+			unit.get_name(), target.get_name()], true)
+		return false
 	var at: Array = unit.get_alive_models().map(func(m: ModelInstance) -> Vector3: return m.node.global_position)
 	# Step 42c: each model's walked route (the planner's, world XZ) rides along, so the core's move check measures the
 	# route, not the chord (R3); a model that did not move sends none.

@@ -140,6 +140,11 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   to one morale test, stayed on its unit after the shot or the morale test the rules engine
   resolved, so the next one used it again. It is now spent right after, and the battle log says so.
   (#2803, #2804)
+- **Solo: the wound-allocation choice is back when the AI shoots a unit with mixed weapons.** Since
+  the rules engine became the default, the AI's volley at your unit landed its casualties without
+  asking you, so a squad with different weapons or a Tough model lost models you did not pick. You
+  click your own casualties again, and the battle log says when the table resolves such a volley.
+  (#172)
 
 ### Internal
 - CI and test groundwork for running the tests against the Rust core: a new job "All required
