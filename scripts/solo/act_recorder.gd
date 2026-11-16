@@ -198,8 +198,9 @@ const EPOCH_63_MELEE_HEIGHT := 63
 ## and the AI's paid climb (#2608 and its core port) to 74 with EPOCH_74_CLIMB_COST,
 ## and the core ports of three table repairs (#2612, #2613, #2615) to 75 with EPOCH_75_TABLE_FIXES,
 ## and the move fixes (Great Musician spent, Speed Feat only on a move, Grounded Speed by majority) to 76
-## with EPOCH_76_MOVE_FIXES, and the #183 charge cap to 77 with EPOCH_77_CHARGE_CAP.
-static var rules_epoch: int = 77
+## with EPOCH_76_MOVE_FIXES, and the #183 charge cap to 77 with EPOCH_77_CHARGE_CAP, and the core twin of the
+## flier cut (#2827, applied by the table since its merge) to 78 with EPOCH_78_FLIER_CUT.
+static var rules_epoch: int = 78
 ## The live activation identity the Ethereal placement band penalty is keyed to (MOR-19b): the
 ## Solo AI advances it once per activation, the Teleport beat stamps the unit's
 ## `teleport_activation` with it, and the band pass prices the -6"/-6" only while the two are
@@ -230,6 +231,9 @@ const EPOCH_76_MOVE_FIXES := 76
 ## 12" (or 6" difficult) band (`SoloController.charge_cap_on`), in the execution and in the declaration probe.
 ## Records stamped 76 or below replay the uncapped charge trails.
 const EPOCH_77_CHARGE_CAP := 77
+## The core's frozen `EPOCH_78_FLIER_CUT` (acts.rs): the core cuts a flier's end off forbidden ground on its own route,
+## as `SoloController._cut_fliers_to_rest_legal` does. Nothing in the table gates on it.
+const EPOCH_78_FLIER_CUT := 78
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000

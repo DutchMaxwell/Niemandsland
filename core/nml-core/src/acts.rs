@@ -871,7 +871,12 @@ pub const EPOCH_76_MOVE_FIXES: u32 = 76;
 /// Records stamped 76 or below replay the uncapped charge trails byte-exact. Every call site reads THIS constant, not
 /// `77`. The recorder mirror (`act_recorder.gd`) stamps 77 in the same change as `CURRENT_RULES_EPOCH`.
 pub const EPOCH_77_CHARGE_CAP: u32 = 77;
-pub const CURRENT_RULES_EPOCH: u32 = 77;
+/// Flier cut (#2827 core twin): a Flying unit's model whose end rests on forbidden ground (a container footprint, a wall
+/// line) is cut back along its own route to the first rest-legal spot before the placement gate, instead of the gate
+/// shortening the whole move. Records stamped 77 or below replay byte-exact. Every call site reads THIS constant, not
+/// `78`. The recorder mirror (`act_recorder.gd`) stamps 78 in the same change.
+pub const EPOCH_78_FLIER_CUT: u32 = 78;
+pub const CURRENT_RULES_EPOCH: u32 = 78;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -2188,7 +2193,7 @@ mod tests {
     use super::{
         read_act_header, record_rules_epoch, rule_on, MeleeReach, SearchMode, TreeDice, TreeLeaf, CURRENT_RULES_EPOCH, EPOCH_3_TABLE_RULES,
         EPOCH_4_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES, EPOCH_7_TABLE_RULES, EPOCH_73_V36,
-        EPOCH_74_CLIMB_COST, EPOCH_75_TABLE_FIXES, EPOCH_76_MOVE_FIXES, EPOCH_77_CHARGE_CAP,
+        EPOCH_74_CLIMB_COST, EPOCH_75_TABLE_FIXES, EPOCH_76_MOVE_FIXES, EPOCH_77_CHARGE_CAP, EPOCH_78_FLIER_CUT,
     };
 
     /// The CLASS FIX's one gate (external review 03.09. item 3 / F9):
@@ -2209,7 +2214,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 77, "the live epoch is EPOCH_77_CHARGE_CAP");
+        assert_eq!(CURRENT_RULES_EPOCH, 78, "the live epoch is EPOCH_78_FLIER_CUT");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -2219,11 +2224,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":77}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":78}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 77"
+            "a fresh play_game() now stamps the bumped epoch, 78"
         );
     }
 
@@ -2257,6 +2262,15 @@ mod tests {
         assert!(rule_on(EPOCH_77_CHARGE_CAP, EPOCH_77_CHARGE_CAP), "a record at 77 gets the charge cap");
         assert!(rule_on(EPOCH_77_CHARGE_CAP, EPOCH_76_MOVE_FIXES), "77 keeps the move fixes on");
         assert!(rule_on(CURRENT_RULES_EPOCH, EPOCH_77_CHARGE_CAP), "a fresh play_game() stamps the charge cap on");
+    }
+
+    /// Epoch 78 (#2827 flier cut): a record stamped 77 replays without the cut, a fresh record cuts.
+    #[test]
+    fn epoch_78_gate_is_closed_at_epoch_77_and_open_from_78() {
+        assert!(!rule_on(EPOCH_77_CHARGE_CAP, EPOCH_78_FLIER_CUT), "a record at 77 replays without the flier cut");
+        assert!(rule_on(EPOCH_78_FLIER_CUT, EPOCH_78_FLIER_CUT), "a record at 78 gets the flier cut");
+        assert!(rule_on(EPOCH_78_FLIER_CUT, EPOCH_77_CHARGE_CAP), "78 keeps the charge cap on");
+        assert!(rule_on(CURRENT_RULES_EPOCH, EPOCH_78_FLIER_CUT), "a fresh play_game() stamps the flier cut on");
     }
 
     /// The WAVE 3 GATE's own reservation (05.09.): `EPOCH_6_TABLE_RULES` must

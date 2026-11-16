@@ -26,7 +26,8 @@ use crate::geom::{self, V3};
 use crate::state::State;
 use crate::terrain::{self, Terrain};
 use crate::IN2M;
-use crate::acts::{rule_on, EPOCH_6_TABLE_RULES, EPOCH_74_CLIMB_COST, EPOCH_8_PLANNER_MENU, EPOCH_73_V36, EPOCH_77_CHARGE_CAP};
+use crate::acts::{rule_on, EPOCH_6_TABLE_RULES, EPOCH_74_CLIMB_COST, EPOCH_8_PLANNER_MENU, EPOCH_73_V36, EPOCH_77_CHARGE_CAP,
+    EPOCH_78_FLIER_CUT};
 
 use super::cost::{ledge_cost, trim_polyline_priced, CellSet, Grid, Ledge, Wall, Zone};
 use super::entry::plan_unit_step_call;
@@ -876,6 +877,22 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
         // actually traversed even when the gate nudges its resting spot.
         let r = radii_m.get(i).copied().unwrap_or(0.0);
         dangerous.push(self.crosses_dangerous(leg, r));
+    }
+    // `EPOCH_78_FLIER_CUT` (table twin `_cut_fliers_to_rest_legal`, #2827): Flying moves through terrain but may not END
+    // on it. A flier whose end rests on forbidden ground is cut back along its OWN route to the first rest-legal spot,
+    // BEFORE the gate, so the gate sees legal ends and keeps the formation instead of shortening it whole.
+    if self.flying && !self.allow_contact && rule_on(self.rules_epoch, EPOCH_78_FLIER_CUT) {
+        for (i, leg) in trails.iter_mut().enumerate().take(planned.len()) {
+            let r_in = radii_m.get(i).copied().unwrap_or(0.0) / IN2M;
+            if !super::gate::rest_forbidden([planned[i][0] as f64, planned[i][1] as f64], r_in, t) { continue; }
+            if let Some(cut) = super::gate::rest_legal_cut(leg, r_in, t) {
+                if let Some(&end) = cut.last() {
+                    let world = super::gate::to_world_f32(end, t.board_in());
+                    (planned[i], planned_world[i]) = (end, [world[0], self.pos[i][1], world[1]]);
+                }
+                *leg = cut;
+            }
+        }
     }
     // :4858-4866 — nothing actually moved: the table returns BEFORE the gate,
     // so a unit already stacked where it stands is not re-arranged for free.
@@ -2382,6 +2399,27 @@ pub(crate) mod tests {
     /// Largest edge gap between consecutive models of the row, in inches (the chain's weakest link).
     fn widest_link_in(end: &[V3]) -> f64 {
         end.windows(2).map(|w| geom::length(geom::sub(w[1], w[0])) as f64 / IN2M - 2.0).fold(f64::MIN, f64::max)
+    }
+
+    /// `EPOCH_78_FLIER_CUT` (table twin `_cut_fliers_to_rest_legal`, #2827): a lone flier whose 12" end lies inside a
+    /// container (x 3..6") stops at the last rest-legal spot of its OWN route before the box. Below 78 the old reading.
+    #[test]
+    fn a_flier_never_ends_inside_a_container() {
+        let t = container_board();
+        let mut state = units_state(vec![vec![[(-7.5 * IN2M) as f32, 0.0, 0.0]]], vec![vec![0.5 * IN2M]], vec![vec![]]);
+        Rc::get_mut(&mut state.profiles).expect("the test owns its profiles").list[0].special_rules = vec!["Flying".into()];
+        let run = |epoch: u32| -> (bool, f64) {
+            let land = MoveRules { rules_epoch: epoch }
+                .plain_move(&state, &t, 0, [(5.5 * IN2M) as f32, 0.0, 0.0], 12.0, true, true, crate::mv::FAST_PLANNER_GUARD)
+                .expect("a real board");
+            let c = t.to_inch(land.end[0]);
+            (super::super::gate::rest_forbidden([c[0] as f64, c[1] as f64], 0.5, &t), land.end[0][0] as f64 / IN2M)
+        };
+        let (old_forbidden, old_x) = run(crate::acts::EPOCH_77_CHARGE_CAP);
+        let (forbidden, x) = run(crate::acts::EPOCH_78_FLIER_CUT);
+        assert!(!forbidden, "the flier ended inside the container at x={x:.2}\"");
+        assert!((2.0..=2.6).contains(&x), "the flier stops at the last legal spot before the box, x={x:.2}\"");
+        assert!(old_forbidden || (old_x - x).abs() > 0.1, "77 keeps the old reading");
     }
 
     fn stay_put(rules_epoch: u32, state: &State, t: &Terrain) -> Landing {

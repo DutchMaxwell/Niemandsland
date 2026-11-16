@@ -338,7 +338,7 @@ fn resolve_overlaps(s: &mut WorldDisc, obs: &[WorldDisc]) -> bool {
 /// CONTAINER — a base dipping in by any amount counts), and a ruin/container
 /// WALL segment nearer than the base radius plus 2 mm. A model may stand IN a
 /// ruin, never ON its wall.
-fn rest_forbidden(c: [f64; 2], r_in: f64, t: &Terrain) -> bool {
+pub(crate) fn rest_forbidden(c: [f64; 2], r_in: f64, t: &Terrain) -> bool {
     let p: V2 = [c[0] as f32, c[1] as f32];
     if terrain::base_in_terrain(t.from_inch(p, 0.0), r_in * IN2M, t, terrain::is_forbidden_rest) {
         return true;
