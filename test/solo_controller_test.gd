@@ -3122,6 +3122,20 @@ func test_wall_clamp_partial_revert_keeps_a_coherent_gate_result() -> void:
 		assert_float((p as Vector3).x).is_less(0.10)   # every model stays on the start side of the wall
 
 
+## The tunnel guard: an endpoint is kept only when the straight start -> endpoint chord keeps clear of the wall;
+## from behind the wall the strict revert to the full plan stays.
+func test_wall_clamp_partial_revert_never_tunnels() -> void:
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.walls_provider = func() -> Array: return [[Vector2(0.10, -5.0), Vector2(0.10, 5.0)]]
+	var models: Array = _unit(2, [Vector3.ZERO]).get_alive_models()
+	var plan: Array = [Vector3(0.20, 0, 0)]
+	var kept: Array = solo._clamp_gate_walls(plan, [Vector3(0.08, 0, 0)], models, false, false, [], [Vector3(-0.02, 0, 0)])
+	assert_float((kept[0] as Vector3).x).is_equal_approx(0.08, 0.0001)
+	var tunnel: Array = solo._clamp_gate_walls(plan, [Vector3(0.08, 0, 0)], models, false, false, [], [Vector3(0.18, 0, 0)])
+	assert_float((tunnel[0] as Vector3).x).is_equal_approx(0.20, 0.0001)
+
+
 # === Wave 4 — Extended Buff Range + Coordinate ===================================================
 
 ## Stamp a unit as belonging to a book that actually fields the wave-4 rules, so the SYSTEM-SCOPED
