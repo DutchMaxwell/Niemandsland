@@ -34,6 +34,13 @@ const MELEE_FAMILY := "melee"
 const MELEE_FIXTURE_PATH := "res://test/fixtures/one_core/golden_melee.json"
 const MORALE_FAMILY := "morale"
 const MORALE_FIXTURE_PATH := "res://test/fixtures/one_core/golden_morale.json"
+## The human shooting door: the player's own volley through main._run_human_shooting (runner "human_volley").
+const HUMAN_FAMILY := "human_shoot"
+const HUMAN_FIXTURE_PATH := "res://test/fixtures/one_core/golden_human_shoot.json"
+const RUNNER_HUMAN_VOLLEY := "human_volley"
+## Eight seeds for the human door: the four of the volley grid plus four more, so a rare shape (no hit, all saved,
+## a wipe) is more likely to be recorded than guessed.
+const HUMAN_SEEDS: Array[int] = [0, 17, 49, 225, 3, 101, 512, 999]
 ## Four seeds per scenario: in the volley grid they cover a morale failure (0), a save-less volley (17), the
 ## singular forms (49) and a volley with no hit (225); the melee grid records whatever they roll.
 const SEEDS: Array[int] = [0, 17, 49, 225]
@@ -128,6 +135,20 @@ static func morale_scenarios() -> Array:
 	]
 
 
+## The human-door grid: the player (seat 1, human) fires at the AI unit (seat 2). `human_hold` is the plain volley
+## at 8" (every model in range); `human_far` stands the attacker's models back one inch each ("x_step_in") so the
+## range gate cuts the rear of the unit at 20" - the case errors if the log says every model (or none) fired.
+static func human_scenarios() -> Array:
+	return [
+		{"name": "human_hold", "runner": RUNNER_HUMAN_VOLLEY, "note": "held unit, plain Rifle volley at 8\"",
+			"weapon": RIFLE, "attacker": ATTACKER, "defender": DEFENDER, "seeds": HUMAN_SEEDS},
+		{"name": "human_far", "runner": RUNNER_HUMAN_VOLLEY, "partial": true,
+			"note": "20\" away, the rear models of the column are out of Rifle range (partial volley)",
+			"weapon": RIFLE, "attacker": _with(ATTACKER, {"x_step_in": 1.0}),
+			"defender": _with(DEFENDER, {"x_in": 20.0}), "seeds": HUMAN_SEEDS},
+	]
+
+
 static func _weapon(rules: Array) -> Dictionary:
 	return _with(RIFLE, {"rules": rules})
 
@@ -159,10 +180,21 @@ static func capture(main: Node, family: String = FAMILY) -> Dictionary:
 		return await capture_melee(main)
 	if family == MORALE_FAMILY:
 		return await capture_morale(main)
+	if family == HUMAN_FAMILY:
+		return await capture_grid(main, HUMAN_FAMILY, human_scenarios())
 	var out := {"schema": SCHEMA, "family": FAMILY, "provenance": provenance(), "cases": []}
 	for sc in scenarios():
 		for seed in SEEDS:
 			out["cases"].append(await _run_case(main, sc, seed))
+	return out
+
+
+## A runner-dispatched family: every scenario x its own seeds (default SEEDS) through _run_case.
+static func capture_grid(main: Node, family: String, scs: Array) -> Dictionary:
+	var out := {"schema": SCHEMA, "family": family, "provenance": provenance(), "cases": []}
+	for sc in scs:
+		for seed in sc.get("seeds", SEEDS):
+			out["cases"].append(await _run_case(main, sc, int(seed)))
 	return out
 
 
@@ -209,6 +241,8 @@ static func _run_case(main: Node, sc: Dictionary, seed: int) -> Dictionary:
 	match runner:
 		RUNNER_AI_VOLLEY:
 			return await _run_ai_volley_case(main, sc, seed)
+		RUNNER_HUMAN_VOLLEY:
+			return await _run_human_volley_case(main, sc, seed)
 	return {"scenario": str(sc["name"]), "seed": seed, "error": "unknown runner %s" % runner}
 
 
@@ -246,6 +280,55 @@ static func _run_ai_volley_case(main: Node, sc: Dictionary, seed: int) -> Dictio
 	_free_units(main, [att, dfn])
 	await main.get_tree().process_frame
 	return rec
+
+
+## One human-door scenario x seed: the player's attacker fires one volley at the AI defender through
+## main._run_human_shooting (the door the human's Fire! button reaches), with the real tray seeded.
+static func _run_human_volley_case(main: Node, sc: Dictionary, seed: int) -> Dictionary:
+	var weapon: Dictionary = (sc["weapon"] as Dictionary).duplicate(true)
+	var att := ParityTable._make_unit(main, sc["attacker"], weapon)
+	var dfn := ParityTable._make_unit(main, sc["defender"], {})
+	_stand_back(att, sc["attacker"])
+	main.seed_tray_rng(seed)
+	var lines: Array = []
+	var tap := _line_tap(lines)
+	main.battle_log.entry_added.connect(tap)
+	await main._run_human_shooting(att, dfn)
+	main.battle_log.entry_added.disconnect(tap)
+	var rec := {"scenario": str(sc["name"]), "seed": seed, "epoch": AiActRecorder.rules_epoch,
+		"lines": lines, "final": _final([att, dfn]), "rng": _rng_state(main)}
+	if bool(sc.get("partial", false)):
+		var fired := _models_in_range(lines)
+		if fired.size() != 2 or fired[0] <= 0 or fired[0] >= fired[1]:
+			rec = {"scenario": str(sc["name"]), "seed": seed, "error": "the volley is not partial (%s)" % str(fired)}
+	_free_units(main, [att, dfn])
+	await main.get_tree().process_frame
+	return rec
+
+
+## Stands model i of a unit "x_step_in" inches further back (-x) than model 0; a unit without the key is untouched.
+static func _stand_back(unit: GameUnit, spec: Dictionary) -> void:
+	var step := float(spec.get("x_step_in", 0.0))
+	if step == 0.0:
+		return
+	for i in unit.models.size():
+		var nd := (unit.models[i] as ModelInstance).node as Node3D
+		nd.global_position.x -= step * i * 0.0254
+
+
+## The "<unit>: N/M models with line of sight + range" line of a volley as [N, M] ([] when absent).
+static func _models_in_range(lines: Array) -> Array:
+	var rx := RegEx.create_from_string("(\\d+)/(\\d+) models? with line of sight \\+ range")
+	for l in lines:
+		var m := rx.search(str(l))
+		if m != null:
+			return [int(m.get_string(1)), int(m.get_string(2))]
+	return []
+
+
+static func _line_tap(lines: Array) -> Callable:
+	return func(e: Dictionary) -> void:
+		lines.append("%s|%s" % [BattleLog.Category.keys()[int(e["category"])], str(e["text"])])
 
 
 ## One melee scenario x seed: build the two units in base contact (the parity gate's own board and per-model
@@ -369,6 +452,8 @@ static func fixture_path(family: String = FAMILY) -> String:
 		return MELEE_FIXTURE_PATH
 	if family == MORALE_FAMILY:
 		return MORALE_FIXTURE_PATH
+	if family == HUMAN_FAMILY:
+		return HUMAN_FIXTURE_PATH
 	return FIXTURE_PATH
 
 
