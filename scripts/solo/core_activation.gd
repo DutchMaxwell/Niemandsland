@@ -185,6 +185,64 @@ static var ai_runs := 0
 static var ai_refusals := 0
 
 
+## P4.D-3 census: volleys the TABLE resolved instead of the core, door -> reason -> count ("_all" = the door's table
+## calls). Counting only: no RNG, no log line, nothing the game reads.
+static var legacy := {}
+
+
+## "Tough(3)" -> "Tough", "Fear (spell)" -> "Fear" (a rule entry is a string or a {"name": ...} dictionary).
+static func _rule_label(r) -> String:
+	return (str((r as Dictionary).get("name", "")) if r is Dictionary else str(r)).get_slice("(", 0).strip_edges()
+
+
+## The refusals of one unit as the table sees them (what `is_plain` says no to).
+static func _refusals(gu: GameUnit) -> Array:
+	var out: Array = (gu.get_special_rules() as Array).map(func(r) -> String: return "unit_rule:" + _rule_label(r))
+	if gu.has_attached_heroes() or gu.is_attached():
+		out.append("attached")
+	if not gu.source_data is OPRApiClient.OPRUnit:
+		return out + ["non_opr"]
+	for w in (gu.source_data as OPRApiClient.OPRUnit).weapons:
+		out.append_array(w.special_rules.map(func(r) -> String: return "weapon_rule:" + _rule_label(r)))
+	return out
+
+
+## Why the core door refuses this shooter (and target): "no_core", "attached", "non_opr", "unit_rule:<name>",
+## "weapon_rule:<name>" for the shooter; the target's carry a "target_" prefix ("target_rule:<name>" = its unit rules).
+static func why_not(main, unit: GameUnit, target: GameUnit) -> Array:
+	var out: Array = [] if applies(main) else ["no_core"]
+	out.append_array(_refusals(unit) if unit != null else [])
+	for r in (_refusals(target) if target != null else []):
+		out.append("target_rule:" + r.trim_prefix("unit_rule:") if r.begins_with("unit_rule:") else "target_" + r)
+	return out
+
+
+## One table volley, counted once per reason. `extra` = comma-joined door facts ("split", "dangerous", "no_handle").
+static func note_legacy(main, door: String, unit: GameUnit, targets: Array, extra: String = "") -> void:
+	var why: Array = why_not(main, unit, null)
+	for t in targets:
+		for r in why_not(main, null, t as GameUnit):
+			if not why.has(r):
+				why.append(r)
+	why.append_array(Array(extra.split(",", false)))
+	var d: Dictionary = legacy.get(door, {})
+	d["_all"] = int(d.get("_all", 0)) + 1
+	var seen := {}
+	for r in (why if not why.is_empty() else ["other"]):
+		if not seen.has(r):
+			seen[r] = true
+			d[r] = int(d.get(r, 0)) + 1
+	legacy[door] = d
+
+
+## NML_TABLE_CENSUS=<path>: a both-AI game writes the census when it ends (the core's own AI volleys ride along).
+static func dump_legacy() -> void:
+	var path := OS.get_environment("NML_TABLE_CENSUS")
+	var f := FileAccess.open(path, FileAccess.WRITE) if path != "" else null
+	if f != null:
+		f.store_string(JSON.stringify({"legacy": legacy, "core_ai_runs": ai_runs, "core_ai_refusals": ai_refusals}))
+
+
 ## Step 42: the AI's volley through the core - Hold or Advance, the unit and its one target (the table's own pick) plain,
 ## no Dangerous test this activation (the table rolled it already; the core would roll it again). `h` is the board
 ## before the move (the AI body captured it and releases it). True = the core resolved the volley. A refusal is a
