@@ -11802,6 +11802,54 @@ func _owner_roll_fallback(unit: GameUnit, count: int, target: int, roll_kind: St
 	return await _solo_tray_roll(count, target, "AI (%s)" % unit.get_name(), roll_kind,
 		"%s (owner absent — auto-rolled)" % purpose)
 
+## P4.0-6: the owner of a choice answers it, on the same "jeder selbst" seam as a roll. Our own unit (or
+## an AI unit, whose pick the resolving machine makes) answers here; another human's unit is asked through
+## `request_roll` with `ask.choice` and answers `roll_result` with its option id. No answer (vacant seat or
+## the timeout) leaves the core's automatic pick and says so in ONE battle-log line. The caller validates
+## the returned option against the core's options; "" always means "automatic".
+func _owner_choice(unit: GameUnit, id: String, options: Array, purpose: String) -> String:
+	if _solo_is_ai_unit(unit) or _solo_i_own_unit(unit):
+		return await _solo_choice_local(unit, id, options)
+	var owner_peer := _solo_peer_for_slot(unit_owner_slot(unit.unit_properties))
+	if owner_peer == 0 and _rejoin_handshake_pending():
+		var wait_until := Time.get_ticks_msec() + int(OWNER_REJOIN_WAIT_S * 1000.0)
+		while owner_peer == 0 and Time.get_ticks_msec() < wait_until:
+			await get_tree().create_timer(0.1).timeout
+			owner_peer = _solo_peer_for_slot(unit_owner_slot(unit.unit_properties))
+	if owner_peer != 0:
+		var reply: Dictionary = await _owner_request(owner_peer, {"unit": unit.unit_id, "kind": "choice",
+			"count": 0, "target": 0, "purpose": purpose, "ask": {"choice": {"id": id, "options": options}}})
+		if bool(reply.get("done", false)):
+			var answered: Array = reply.get("faces", [])
+			var option := str(answered[0]) if not answered.is_empty() else ""
+			if options.has(option):
+				return option
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT,
+			"%s: no answer to the %s — the automatic pick stands" % [_solo_owner_name(unit), purpose], true)
+	return ""
+
+
+## P4.0-6: the answer on the choice's OWN machine. An AI unit (or the headless batch) keeps the core's
+## automatic pick, so nothing waits. The first real choice is the Takedown model pick: the table's own
+## click prompt, handed back as one of the core's options ("" when no option fits or the pick was skipped).
+func _solo_choice_local(unit: GameUnit, id: String, options: Array) -> String:
+	if _solo_is_ai_unit(unit) or _solo_batch or id.get_slice(":", 0) != "takedown_model":
+		return ""
+	var target := opr_army_manager.get_game_unit_by_id(id.get_slice(":", 2))
+	if target == null or target.get_alive_models().size() < 2:
+		return ""
+	var pick: Dictionary = await _solo_prompt_takedown_model(target, "Takedown",
+		SoloController.attacker_pick_target(target))
+	var picked := pick.get("unit") as GameUnit
+	var idx := int(pick.get("index", -1))
+	if picked == null or idx < 0 or idx >= picked.models.size():
+		return ""
+	var slot: int = target.get_alive_models().find(picked.models[idx])
+	var option := "slot:%d" % slot
+	return option if slot >= 0 and options.has(option) else ""
+
+
 ## Owner side: a roll request arrived for OUR unit — a save batch opens our prompt, a cast our
 ## interference dialog, every other kind rolls on our tray (a real roll, same sync as a local one) —
 ## and the faces go back.
@@ -11824,7 +11872,12 @@ func _rpc_request_roll(rq: Dictionary, from_peer: int) -> void:
 		_solo_owner_open[key] = true
 	var ask: Dictionary = rq.get("ask", {})
 	var faces: Array
-	if ask.has("spell"):
+	if ask.has("choice"):
+		# P4.0-6: OUR pick for the core's choice; a skipped pick answers nothing, so the core falls back.
+		var c: Dictionary = ask["choice"]
+		var option: String = await _solo_choice_local(unit, str(c.get("id", "")), c.get("options", []))
+		faces = [option] if not option.is_empty() else []
+	elif ask.has("spell"):
 		# #1719: an online cast at our side — the interference is OUR player's choice (`_solo_remote_interference`).
 		var member := opr_army_manager.get_game_unit_by_id(str(ask.get("caster", "")))
 		var caster_unit := opr_army_manager.get_game_unit_by_id(str(ask.get("caster_unit", "")))
