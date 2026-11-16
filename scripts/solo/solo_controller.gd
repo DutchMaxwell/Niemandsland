@@ -3897,6 +3897,7 @@ func _planner_pick_unit(pool: Array) -> GameUnit:
 		if act_wall_enabled():
 			_ph_gd = _phase_enter()
 		pick = AiPlanner.plan_with_rollout(state, me)
+		note_plan("rollout:used" if bool(pick.get("used", false)) else "rollout:unused")
 		if act_wall_enabled():
 			_phase_mark("gdsearch", _ph_gd)
 	BattleSim.prof_mark("search", _prof_srch_t0)
@@ -4164,6 +4165,7 @@ func _core_refresh_terrain() -> void:
 ## load-bearing. Only ever entered when BattleSim.core_enabled() is true.
 func _core_plan(state: Dictionary, me: int) -> Dictionary:
 	if _core_node_ready() == null:
+		note_plan("core:no_node")
 		return {}
 	if not _core_header_done:
 		# AiActRecorder._header_line IS the contract (profiles + terrain + knobs);
@@ -4171,6 +4173,7 @@ func _core_plan(state: Dictionary, me: int) -> Dictionary:
 		var head := AiActRecorder._header_line(state, terrain_type_at)
 		if not bool(_core_node.set_game_header(head)):
 			_core_warn_once(str(_core_node.last_error()))
+			note_plan("core:header_refused")
 			return {}
 		_core_header_done = true
 		_core_terrain_sig = hash(head["terrain"])
@@ -4193,9 +4196,12 @@ func _core_plan(state: Dictionary, me: int) -> Dictionary:
 	var out: Dictionary = _core_node.plan_with_rollout(plain, me, statics, sig)
 	var dt := Time.get_ticks_usec() - t0
 	if not bool(out.get("used", false)):
-		_core_warn_once(str(out.get("unsupported", "no reason given")))
+		var why := str(out.get("unsupported", "no reason given"))
+		_core_warn_once(why)
+		note_plan("core:" + why)
 		return {}
 	_core_calls += 1
+	note_plan("core:used")
 	_core_us_total += dt
 	_core_us_max = maxi(_core_us_max, dt)
 	# NML-1073 M2-5b: the port rebuilds its per-unit closure when an activation's
@@ -4587,6 +4593,16 @@ func _move_v2_same(a: Vector2, b: Vector2) -> bool:
 
 ## One line per REASON per game — a decline is normal (the core declines what it
 ## has not ported), a decline STORM is a finding, and 200 identical lines hide it.
+## P4.D-61 (inert): who still reaches the GDScript search, counted into CoreActivation.legacy["plan_decline"] (the
+## NML_TABLE_CENSUS dump). "core:used" = `_core_plan` answered; "core:<reason>" = it declined; "rollout:used|unused" =
+## what AiPlanner.plan_with_rollout then answered (with NML_CORE=1 every rollout follows a decline); "plan1:used|unused"
+## = what the 1-ply AiPlanner.plan answered for `_solve_planner`. Counting only: no RNG, no log line, no game state.
+static func note_plan(what: String) -> void:
+	var d: Dictionary = CoreActivation.legacy.get("plan_decline", {})
+	d[what] = int(d.get(what, 0)) + 1
+	CoreActivation.legacy["plan_decline"] = d
+
+
 func _core_warn_once(reason: String) -> void:
 	if _core_declines.has(reason):
 		return
@@ -5035,6 +5051,7 @@ func _solve_planner(unit: GameUnit) -> Dictionary:
 	if act_wall_enabled():
 		_ph_gd2 = _phase_enter()
 	var pick := AiPlanner.plan(state, me)
+	note_plan("plan1:used" if bool(pick.get("used", false)) else "plan1:unused")
 	if act_wall_enabled():
 		_phase_mark("gdsearch", _ph_gd2)
 	if not bool(pick.get("used", false)) or str(pick["unit_key"]) != unit_key:
