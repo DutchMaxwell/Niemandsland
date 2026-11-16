@@ -1,4 +1,4 @@
-name: Rust (advisory)
+name: Rust
 
 on:
   # Path filter (CISPEED-RUSTPATH): the six jobs below read ONLY the paths listed here
@@ -33,21 +33,12 @@ on:
       - 'data/**'
       - 'test/fixtures/**'
       - 'farm/patches/preserve-core-identity.patch'
-  pull_request:
-    branches: [main]
-    paths:
-      - 'core/**'
-      - 'rust-toolchain.toml'
-      - '.github/workflows/rust.yml'
-      - 'tools/**'
-      - 'assets/solo/**'
-      - 'assets/model_manifest.json'
-      - 'data/**'
-      - 'test/fixtures/**'
-      - 'farm/patches/preserve-core-identity.patch'
+  # No pull_request trigger: build.yml's rust-gate job calls this workflow for a PR (workflow_call
+  # below), so that "All required checks" waits for these jobs. Its changes.rust_relevant filter
+  # repeats the paths list above; tools/ci_rust_paths_test.py keeps the two equal.
   workflow_dispatch:
-  # Reusable: build.yml calls this workflow as the release gate's Rust check on
-  # tag pushes (rust.yml itself has no tag trigger — tags don't touch main/PR).
+  # Reusable: build.yml calls this workflow from its rust-gate job, on pull requests that touch the
+  # paths above and on tag pushes (the release gate; rust.yml has no tag trigger of its own).
   workflow_call:
 
 concurrency:

@@ -20,6 +20,7 @@
   "Angelic Blessing Boost Buff",
   "Armor",
   "Artillery",
+  "Assault",
   "Bane",
   "Bane Mark",
   "Bane in Melee",
@@ -56,6 +57,7 @@
   "Courage Buff",
   "Crack",
   "Crossing Attack",
+  "Cumbersome",
   "Cursed Undead",
   "Cursed Undead Boost",
   "Cursed Undead Boost Buff",
@@ -294,6 +296,7 @@
   "Speed Feat",
   "Speed Feat Aura",
   "Spell Accumulator",
+  "Spell Amplifier",
   "Spell Conduit",
   "Steadfast",
   "Steadfast Aura",
@@ -328,6 +331,7 @@
   "Transport",
   "Traversal",
   "Unique",
+  "Unique Hero",
   "Unmovable",
   "Unpredictable",
   "Unpredictable Fighter",
@@ -501,8 +505,20 @@
    "params": {
     "shooter_hit_bonus": 1,
     "target_hit_penalty": 2,
+    "target_hit_penalty_v36": 1,
+    "target_over_in": 12.0,
     "over_in": 9.0,
+    "shooter_over_in": 12.0,
+    "shooter_requires_hold": true,
     "hold_only": true
+   }
+  },
+  "Assault": {
+   "primitive": "Assault",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "melee_copy": true
    }
   },
   "Bane": {
@@ -580,6 +596,11 @@
     "impact_reduction_per_model": 1
    }
   },
+  "Cumbersome": {
+   "primitive": "Cumbersome",
+   "rated": false,
+   "book_version": "3.6.0"
+  },
   "Deadly": {
    "primitive": "Deadly",
    "rated": false,
@@ -595,16 +616,6 @@
    "book_version": "3.5.1",
    "params": {
     "defense_bonus_from_rating": true
-   }
-  },
-  "Entrenched": {
-   "primitive": "Stealth",
-   "rated": false,
-   "book_version": "3.5.1",
-   "params": {
-    "hit_penalty": 2,
-    "over_in": 9,
-    "requires_stationary": true
    }
   },
   "Fast": {
@@ -693,7 +704,9 @@
     "moved_hit_penalty": 1,
     "ignores_cover": true,
     "ignores_los": true,
-    "hold_and_shoot": true
+    "hold_and_shoot": true,
+    "los_needs_hold": true,
+    "cover_needs_hold": true
    }
   },
   "Indirect when Shooting": {
@@ -797,8 +810,16 @@
    "rated": false,
    "book_version": "3.5.1",
    "params": {
-    "bonus_hits_per_six": 1,
+    "ap_bonus": 1,
     "model_level": true
+   }
+  },
+  "Shred": {
+   "primitive": "Shred",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "extra_wound_per_save_one": 1
    }
   },
   "Shred in Melee": {
@@ -828,6 +849,14 @@
     "rush_mod": -4
    }
   },
+  "Spell Amplifier": {
+   "primitive": "Spell Amplifier",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "casting_mod": 1
+   }
+  },
   "Stealth": {
    "primitive": "Stealth",
    "rated": false,
@@ -841,6 +870,14 @@
    "primitive": "Strider",
    "rated": false,
    "book_version": "3.5.1"
+  },
+  "Surge": {
+   "primitive": "Surge",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "bonus_hits_per_six": 1
+   }
   },
   "Takedown": {
    "primitive": "Takedown",
@@ -877,6 +914,11 @@
    "primitive": null,
    "rated": false,
    "book_version": "3.5.1"
+  },
+  "Unique Hero": {
+   "primitive": "Hero",
+   "rated": false,
+   "book_version": "3.6.0"
   },
   "Unstoppable": {
    "primitive": "Unstoppable",

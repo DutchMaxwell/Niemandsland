@@ -76,6 +76,15 @@ static func capture(main) -> int:
 ## Calls per activation before the driver gives up (a plain volley asks three to four times).
 const MAX_STEPS := 64
 
+## The movement selector's values and the metre-inch factor, mirrored from ObjectManager (MovementCap, METERS_TO_INCHES)
+## on purpose: naming the ObjectManager class here made every `-s` tool that reaches this file (arena_match,
+## core_dormant_check) compile object_manager.gd and its scene-side chain before the autoloads exist, which died with
+## "Identifier not found: GraphicsSettings". test/one_core/core_activation_object_manager_parity_test.gd pins the match.
+const CAP_ADVANCE := 1
+const CAP_RUSH := 2
+const CAP_CHARGE := 3
+const METERS_TO_INCHES := 39.3701
+
 
 ## One activation through the core: ask, print the lines not printed yet, land, throw on the owner's tray, ask again.
 ## `transcript` gains one faces entry per throw; `on_throw(kind, index)` runs before each throw (a test seam).
@@ -484,7 +493,7 @@ static func open_session(main, gu: GameUnit) -> bool:
 	_sessions[gu.unit_id] = s
 	last_target = null   # step 50: a new activation never inherits the target of a cancelled one
 	if on_move_path(main, gu):   # step 31 (O1/O2): every activation of a move-path unit starts on Advance
-		main.object_manager.set_movement_cap(ObjectManager.MovementCap.ADVANCE)
+		main.object_manager.set_movement_cap(CAP_ADVANCE)
 	main._update_movement_cap_display()
 	_refresh_card(main)
 	return true
@@ -662,7 +671,7 @@ static func session_trails(main, gu: GameUnit, now: Dictionary) -> Array:
 ## ended and the last ends at `end`, all within the core's 0.01" trail tolerance; else an empty path.
 static func _unbroken(paths: Array, start: Vector2, end: Vector2) -> PackedVector2Array:
 	var out := PackedVector2Array()
-	var tol := 0.01 / ObjectManager.METERS_TO_INCHES
+	var tol := 0.01 / METERS_TO_INCHES
 	for p: PackedVector2Array in paths:
 		if p.size() < 2 or (out[out.size() - 1] if not out.is_empty() else start).distance_to(p[0]) > tol:
 			return PackedVector2Array()
@@ -674,11 +683,11 @@ static func _unbroken(paths: Array, start: Vector2, end: Vector2) -> PackedVecto
 ## Charge 3 (the core's kinds, sim.rs). Anything else is a defect: reported, and 0 means no core call.
 static func declared_mode(main) -> int:
 	match int(main.object_manager._movement_cap):
-		ObjectManager.MovementCap.ADVANCE:
+		CAP_ADVANCE:
 			return 1
-		ObjectManager.MovementCap.RUSH:
+		CAP_RUSH:
 			return 2
-		ObjectManager.MovementCap.CHARGE:
+		CAP_CHARGE:
 			return 3
 	push_error("declared_mode: the movement selector is %d - not Advance, Rush or Charge" % int(main.object_manager._movement_cap))
 	return 0
@@ -696,7 +705,7 @@ static func declared_mode(main) -> int:
 ## core's own defect: reported, nothing toasted, the session stays open.
 static func human_shoot(main, attacker: GameUnit, target: GameUnit, on_throw: Callable = Callable()) -> bool:
 	if not is_core_unit(main, attacker) or not is_plain(target) \
-			or int(main.object_manager._movement_cap) == ObjectManager.MovementCap.CHARGE:
+			or int(main.object_manager._movement_cap) == CAP_CHARGE:
 		return false
 	if main.core_door_refused(attacker):
 		return true
