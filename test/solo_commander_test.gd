@@ -186,6 +186,48 @@ func test_ranged_hold_is_not_frozen_in_the_final_round() -> void:
 	assert_int(int(sc.last_report.get("action", -1))).is_not_equal(AiDecision.Action.HOLD)
 
 
+func _endgame_board() -> Array:
+	# The marker is 30" off: beyond two rounds of Rush, so the round planner gives the gun a "fight" task and it
+	# has NO objective. Round 3 of 4 = two rounds left = the endgame-convergence window.
+	var pair := _shooter_board(30.0)
+	var sc: SoloController = pair[0]
+	sc.game_rounds = 4
+	sc.round_provider = func() -> int: return 3
+	sc.difficulty_seed = 7
+	sc.set_difficulty(2, SoloDifficulty.for_grade("nachtmahr", 7))
+	return pair
+
+
+func _chosen_lines(sc: SoloController) -> Array:
+	var out: Array = []
+	for rec in sc.drain_decisions():
+		out.append(str((rec as Dictionary).get("chosen", "")))
+	return out
+
+
+func test_endgame_release_is_not_logged_for_a_unit_with_no_marker() -> void:
+	# 16.11. play-test finding 4: "release hold - start the marker trip" was logged for a "fight" unit that had no
+	# marker, so it started nothing. Without a marker the release does not apply and the standing hold stands.
+	var sc: SoloController = _endgame_board()[0]
+	sc.activate_next_ai_unit()
+	assert_int(int(sc.last_report.get("action", -1))).is_equal(AiDecision.Action.HOLD)
+	var lines := _chosen_lines(sc)
+	assert_array(lines).contains(["hold and shoot"])
+	assert_array(lines).not_contains(["release hold — start the marker trip"])
+
+
+func test_endgame_release_still_fires_when_a_marker_is_in_hand() -> void:
+	# Control: with a marker in the context (not seizable this move) the release drops the hold and says so.
+	var pair := _endgame_board()
+	var sc: SoloController = pair[0]
+	var gun: GameUnit = pair[1]
+	var ctx := {"objective": true, "obj_in_advance": false, "obj_in_rush": false}
+	var res := sc._commander_ranged_hold(gun, sc.nearest_human_unit(gun), sc._unit_weapons(gun),
+		AiDecision.Action.ADVANCE, AiDecision.Toward.OBJECTIVE, 24.0, 10.0, ctx, sc.active_difficulty(), 12.0)
+	assert_bool(res.is_empty()).is_true()
+	assert_array(_chosen_lines(sc)).contains(["release hold — start the marker trip"])
+
+
 # === Part A — plan persistence: the close-and-fight standing target across rounds ===
 
 func _close_board(rnd: Array) -> Array:

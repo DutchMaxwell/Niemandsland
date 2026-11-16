@@ -3544,7 +3544,10 @@ func _commander_ranged_hold(unit: GameUnit, target: GameUnit, weapons: Array, ac
 	# exactly the spare shooters 11-14" from still-neutral markers in the second-to-last round; the caller's
 	# reachability gate already proved the marker is reachable within the REMAINING rounds, and only held
 	# markers score. From the second-to-last round the trip outranks the clean shot — release the hold.
-	if diff.converges_endgame() and _rounds_left() <= 2:
+	# Only with a marker in hand: the round planner's "fight" units carry none (their objective is
+	# NO_OBJECTIVE), so a release would start no trip and the line would promise one nobody takes. They
+	# keep the standing hold below, like in every earlier round (16.11. play-test, finding 4).
+	if diff.converges_endgame() and _rounds_left() <= 2 and bool(ctx.get("objective", false)):
 		record_decision({"kind": "commander", "unit": unit.get_name(),
 			"rule": "Endgame convergence (NACHTMAHR): last two rounds — a remaining-rounds-reachable unheld marker outranks the clean shot",
 			"candidates": [], "chosen": "release hold — start the marker trip",
