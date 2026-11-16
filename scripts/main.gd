@@ -11874,7 +11874,7 @@ func _owner_choice(unit: GameUnit, id: String, options: Array, purpose: String) 
 		if bool(reply.get("done", false)):
 			var answered: Array = reply.get("faces", [])
 			var option := str(answered[0]) if not answered.is_empty() else ""
-			if options.has(option):
+			if CoreActivation.answer_fits(id, options, option):
 				return option
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT,
@@ -11964,6 +11964,8 @@ func _rpc_roll_result(req: int, faces: Array) -> void:
 	if not _solo_remote_save_waiters.has(req):
 		return
 	var waiter: Dictionary = _solo_remote_save_waiters[req]
+	if bool(waiter.get("done", false)):
+		return   # P4.D-23: the first answer is the answer; a second one (stale or replayed) never overwrites it
 	waiter["faces"] = faces
 	waiter["done"] = true
 

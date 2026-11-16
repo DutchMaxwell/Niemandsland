@@ -36,7 +36,7 @@ static func applies(main) -> bool:
 ## P4.0-6: the per-choice switch. A choice id's prefix (`takedown_model:<shooter>:<target>`) names its
 ## switch; a switch is ON only for `NML_ONE_CORE_CHOICE_<PREFIX>` = "1"/"on", so OFF is the default and the
 ## core's automatic pick resolves exactly as before this step. Tests set the entry per kind.
-const CHOICE_KINDS := ["takedown_model"]
+const CHOICE_KINDS := ["takedown_model", "wound_alloc"]
 static var _choice_on: Dictionary = {}
 
 
@@ -138,25 +138,31 @@ const CAP_CHARGE := 3
 const METERS_TO_INCHES := 39.3701
 
 
-## P4.0-6: the choice the step API will open for this activation, as its stable id, or "". Only a choice
-## whose switch is ON is built, and only when the table can see what the core's `takedown_choice` sees (a
-## Takedown shooting profile on the actor, 2+ living models on the shot's target): the probe can never ask
-## for a choice the core would not open. An empty answer means "no probe", i.e. the automatic pick.
-static func pending_choice(main, unit: GameUnit, transcript: Array) -> String:
+## P4.0-6: the choices the step API may open for this activation, as their stable ids ([] = none). Only a choice whose
+## switch is ON is built. The Takedown pick only when the table can see what the core's `takedown_choice` sees (a Takedown
+## shooting profile on the actor, 2+ living models on the shot's target): that probe can never ask for a choice the core
+## would not open. P4.D-23: the wound allocation of the volley's one group (`wound_alloc:<shooter>:<target>:0`; split
+## groups join it with their own index) is probed unseen - the core opens it only where a group's landing has a real
+## choice, and a probe nothing reached asks nothing. An empty answer means "no probe", i.e. the automatic pick.
+static func pending_choices(main, unit: GameUnit, transcript: Array) -> Array:
+	var ids: Array = []
 	if not any_choice_enabled():
-		return ""
+		return ids
 	for i in range(transcript.size() - 1, -1, -1):
 		var e: Dictionary = transcript[i]
 		if str(e.get("t", "")) == "choice":
-			return ""   # already asked in this transcript: never a second probe
+			return ids   # already asked in this transcript: never a second probe
 		if str(e.get("t", "")) != "intent":
 			continue
 		var target = main.opr_army_manager.game_units.get(str(e.get("shoot", "")))
-		if not target is GameUnit or not choice_enabled("takedown_model") \
-				or (target as GameUnit).get_alive_models().size() < 2 or not _takedown_weapon(unit):
-			return ""
-		return "takedown_model:%s:%s" % [unit.unit_id, (target as GameUnit).unit_id]
-	return ""
+		if not target is GameUnit:
+			return ids
+		if choice_enabled("takedown_model") and (target as GameUnit).get_alive_models().size() >= 2 and _takedown_weapon(unit):
+			ids.append("takedown_model:%s:%s" % [unit.unit_id, (target as GameUnit).unit_id])
+		if choice_enabled("wound_alloc"):
+			ids.append("wound_alloc:%s:%s:0" % [unit.unit_id, (target as GameUnit).unit_id])
+		return ids
+	return ids
 
 
 ## Whether `unit` carries a Takedown shooting profile — the core's `ShootProfile.takedown` is stamped from
@@ -172,7 +178,25 @@ static func _takedown_weapon(unit: GameUnit) -> bool:
 
 ## The sentence the fallback line and the owner's request use for a choice id.
 static func choice_purpose(id: String) -> String:
-	return "Takedown model pick" if id.get_slice(":", 0) == "takedown_model" else "choice"
+	match id.get_slice(":", 0):
+		"takedown_model":
+			return "Takedown model pick"
+		"wound_alloc":
+			return "wound allocation"
+	return "choice"
+
+
+## Whether an owner's answer fits the choice the core opened: one of its options, or - the wound allocation - a list of
+## them (`slot:1,slot:1,slot:0`, a slot may repeat). The one test both the owner's reply and the driver go through.
+static func answer_fits(id: String, options: Array, option: String) -> bool:
+	if option.is_empty():
+		return false
+	if id.get_slice(":", 0) != "wound_alloc":
+		return options.has(option)
+	for slot in option.split(","):
+		if not options.has(slot):
+			return false
+	return true
 
 
 ## One activation through the core: ask, print the lines not printed yet, land, throw on the owner's tray, ask again.
@@ -194,12 +218,13 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 	var core_us := 0
 	var max_us := 0
 	var r: Dictionary = {}
-	var choice := pending_choice(main, unit, transcript)
+	var probes := pending_choices(main, unit, transcript)
 	for step in MAX_STEPS:
 		var inputs := transcript
-		if not choice.is_empty():
+		if not probes.is_empty():
 			inputs = transcript.duplicate()
-			inputs.append({"t": "choice", "id": choice, "option": ""})
+			for id in probes:
+				inputs.append({"t": "choice", "id": id, "option": ""})
 		var t0 := Time.get_ticks_usec()
 		r = core.step_activation(h, unit.unit_id, inputs, enforce)
 		var us := Time.get_ticks_usec() - t0
@@ -207,10 +232,11 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 		max_us = maxi(max_us, us)
 		if str(r["step"]) == "need_choice":
 			var options: Array = r.get("options", [])
-			var owner := _roller_of(main, unit, transcript, str(r["owner"]))
+			# The choice's owner is a roster KEY (the Takedown shooter, the wounded target): never the shooter by default.
+			var owner := _roller_of(main, unit, transcript, str(r["owner"]), str(r["owner"]))
 			var option: String = await main._owner_choice(owner, str(r["id"]), options, choice_purpose(str(r["id"])))
-			choice = ""   # asked once: the answer follows, or the core's automatic pick stands
-			if options.has(option):
+			probes.erase(str(r["id"]))   # asked once: the answer follows, or the core's automatic pick stands
+			if answer_fits(str(r["id"]), options, option):
 				transcript.append({"t": "choice", "id": str(r["id"]), "option": option})
 			continue
 		var lines: Array = r.get("lines", [])
