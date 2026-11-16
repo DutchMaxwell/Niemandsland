@@ -249,3 +249,53 @@ func test_a_dangerous_case_errors_when_the_roll_never_happened() -> void:
 	sc["dice"] = 0   # planted fault: no dice, so the table logs no Dangerous line at all
 	var rec: Dictionary = await Harness._run_case(_main, sc, 0)
 	assert_str(str(rec.get("error", ""))).contains("no Dangerous line")
+
+
+func test_the_mixed_kit_fixture_matches_the_old_table_path() -> void:
+	var path := Harness.fixture_path(Harness.MIXED_FAMILY)
+	var want := Harness.load_fixture(path)
+	assert_bool(want.is_empty()).override_failure_message(
+		"fixture missing: %s — capture it with --family mixed_kit" % path).is_false()
+	var got: Dictionary = await Harness.capture(_main, Harness.MIXED_FAMILY)
+	var problems := Harness.compare(want, got)
+	assert_array(problems).override_failure_message(
+		"the old table path no longer matches its wound-prompt golden witness (%s):\n%s" % [
+			Harness.describe_provenance(want, got), "\n".join(problems)]).is_empty()
+
+
+func test_a_planted_mixed_kit_fixture_line_is_reported() -> void:
+	var want := Harness.load_fixture(Harness.fixture_path(Harness.MIXED_FAMILY))
+	assert_bool(want.is_empty()).override_failure_message("mixed-kit fixture missing").is_false()
+	var got: Dictionary = await Harness.capture(_main, Harness.MIXED_FAMILY)
+	want["cases"][0]["lines"][0] = "%s (planted)" % str(want["cases"][0]["lines"][0])
+	var problems := Harness.compare(want, got)
+	assert_int(problems.size()).override_failure_message(
+		"a changed mixed-kit fixture line went unnoticed — the witness cannot fail").is_equal(1)
+	assert_str("\n".join(problems)).contains("planted")
+
+
+## The prompt really decided something: for every seed and shape the clicked run ends on other model slots than
+## the auto run (the table's own pick takes the edge models, the clicks went to the middle). A bypassed prompt would
+## make the two runs equal.
+func test_a_clicked_run_ends_on_other_slots_than_the_auto_run() -> void:
+	var got: Dictionary = await Harness.capture(_main, Harness.MIXED_FAMILY)
+	var by := {}
+	for c in got["cases"]:
+		by["%s:%d" % [str(c["scenario"]), int(c["seed"])]] = c
+		if (c as Dictionary).has("error"):
+			fail("a prompt case errored: %s" % str(c))
+			return
+	for shape in ["mixed", "tough"]:
+		for seed in Harness.PROMPT_SEEDS:
+			var auto: Dictionary = by["%s_auto:%d" % [shape, seed]]
+			var click: Dictionary = by["%s_click:%d" % [shape, seed]]
+			assert_bool(JSON.stringify(auto["final"][1]["slots"]) != JSON.stringify(click["final"][1]["slots"])) \
+				.override_failure_message("%s seed %d: the clicked run equals the auto run - the prompt did not decide" % [
+					shape, seed]).is_true()
+
+
+func test_a_mixed_kit_case_errors_when_no_prompt_opens() -> void:
+	var sc: Dictionary = (Harness.mixed_scenarios()[1] as Dictionary).duplicate(true)
+	sc["shape"] = "tough"   # planted fault: one shared loadout and Tough 1 - nothing to choose, no prompt
+	var rec: Dictionary = await Harness._run_case(_main, sc, 0)
+	assert_str(str(rec.get("error", ""))).contains("never opened")
