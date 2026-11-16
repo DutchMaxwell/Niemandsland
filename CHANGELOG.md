@@ -109,7 +109,7 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   import, the Solo panel's AI seats, F11 and the Automatic switch each refuse with one line (battle
   log and message) instead of starting a game the table cannot resolve. A saved game with an AI seat
   or Automatic rules opens as a Manual game. Release builds ship the core, so only a build whose core
-  library is missing sees this. (#PR)
+  library is missing sees this. (#2865)
 
 ### Changed — saves
 - **A damaged save file no longer wipes the table.** Loading a file whose sections have the wrong
