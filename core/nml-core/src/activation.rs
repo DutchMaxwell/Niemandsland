@@ -220,6 +220,9 @@ fn takedown_choice(statics: &[UnitStatic], state: &State, si: usize, shoot: Opti
     Some((id, living.iter().map(|i| format!("slot:{i}")).collect(), owner))
 }
 
+/// P4.D-20: the ids of the wound-allocation choice (`wound_alloc:<shooter>:<target>:<group>`) start with this.
+const WOUND_ALLOC: &str = "wound_alloc:";
+
 /// One activation through the step API: the order rules, then the declared
 /// action (not moving = Hold) on the supplied faces and the LAST placement (`check_move` first).
 /// A new entry: the AI's resolver path is untouched. `NeedRoll.index` is the
@@ -257,7 +260,7 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
     // core's automatic pick stands and nothing below changes.
     let mut seams = seams;
     if let Some((i, id, option)) = t.iter().enumerate().rev().find_map(|(i, x)| match x {
-        Input::Choice { id, option } => Some((i, id, option)),
+        Input::Choice { id, option } if !id.starts_with(WOUND_ALLOC) => Some((i, id, option)),
         _ => None,
     }) {
         let Some((want, options, owner)) = at.and_then(|si| takedown_choice(statics, state, si, shoot.as_deref())) else {
@@ -274,6 +277,20 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
         };
         seams = Seams { takedown_pick: Some(slot), ..seams };
     }
+    // P4.D-20: the last wound-allocation `Choice`: an empty option asks (the core opens it at a group's landing, once
+    // the saves are in), `slot:<n>,..` answers; none = automatic.
+    let wound = t.iter().enumerate().rev().find_map(|(i, x)| match x {
+        Input::Choice { id, option } if id.starts_with(WOUND_ALLOC) => Some((i, id.clone(), option.clone())),
+        _ => None,
+    });
+    let mut offer = None;
+    if let Some((i, id, option)) = &wound {
+        let answer = (!option.is_empty()).then(|| option.split(',').map(|s| s.strip_prefix("slot:")?.parse::<usize>().ok()).collect::<Option<Vec<_>>>());
+        if answer == Some(None) {
+            return ActStep::Refused { index: *i, reason: format!("{option} is not a slot list (slot:<n>,..) for {id}") };
+        }
+        offer = Some((id.clone(), answer.flatten()));
+    }
     // Not HOLD: a mode was declared and the last placement moved (or does not match the models).
     let mut moved = Vec::new();
     if let (true, Some((p, trails)), Some(pi), Some(si)) = (kind != HOLD, &placed, t.iter().rposition(|x| matches!(x, Input::Placed { .. })), at) {
@@ -287,16 +304,41 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
     let action = Action { kind, unit: unit.to_string(), dest: None, shoot, charge: None, patient: false, split, traced: None, teleport: None };
     let faces: Vec<Vec<u8>> = t.iter().filter_map(|x| if let Input::Faces(f) = x { Some(f.clone()) } else { None }).collect();
     // The spike's non-tray seed: a plain activation never draws from it.
+    let reached = std::cell::RefCell::new(None);
     let run = |statics: &[UnitStatic]| {
         let resolve = |tray: &mut Tray| {
             if let Some((p, trails)) = placed.clone() {
                 tray.place(p, trails);
             }
-            resolve_stochastic_tray_on_board(statics, state, &action, terrain, seams, &mut GodotRng::new(0), tray)
+            if let Some((id, answer)) = offer.clone() {
+                tray.offer_wound_alloc(id, answer);
+            }
+            let out = resolve_stochastic_tray_on_board(statics, state, &action, terrain, seams, &mut GodotRng::new(0), tray);
+            *reached.borrow_mut() = tray.feed().and_then(|f| f.wound_choice.clone());
+            out
         };
         step_with(&faces, resolve, |r| r.as_ref().map_or(&[][..], |(_, s)| s.rolls.as_slice()))
     };
-    match run(statics) {
+    let first = run(statics);
+    // P4.D-20: a landing that came to the choice before the first starved roll (after it, it read made-up dice) is the
+    // choice's moment: a bad slot is refused, an unanswered ask is the answer. An answer no landing asked for is refused too.
+    let choice = reached.take().and_then(|c| c.reached.map(|(at, options, owner)| (at, options, owner, c.bad)));
+    let answered = offer.as_ref().is_some_and(|(_, a)| a.is_some());
+    match (&wound, choice) {
+        (Some((wi, wid, _)), Some((at, options, owner, bad))) if !matches!(first, Step::NeedRoll { index, .. } if index < at) => {
+            if let Some(s) = bad {
+                return ActStep::Refused { index: *wi, reason: format!("slot:{s} is not an option of {wid}") };
+            }
+            if !answered {
+                return ActStep::NeedChoice { id: wid.clone(), options: options.iter().map(|s| format!("slot:{s}")).collect(), owner };
+            }
+        }
+        (Some((wi, wid, _)), None) if answered && matches!(first, Step::Done(..)) => {
+            return ActStep::Refused { index: *wi, reason: format!("no wound allocation is open in this activation (got {wid})") };
+        }
+        _ => {}
+    }
+    match first {
         Step::NeedRoll { index, faces, kind, count, target, owner, owner_unit, lines, landings } => {
             let owner_key = owner_key_of(statics, state, &owner, owner_unit, |keyed| match run(keyed) {
                 Step::NeedRoll { index: i, kind: k, count: c, target: g, owner, .. } if (i, k, c, g) == (index, kind, count, target) => Some(owner),
@@ -691,6 +733,128 @@ mod tests {
             ActStep::Refused { index: 2, reason } => assert!(reason.contains("slot:9"), "{reason}"),
             other => panic!("a wrong option must be refused, got {other:?}"),
         }
+    }
+
+    // ---- P4.D-20: the wound-allocation choice ----
+
+    use crate::state::Kit;
+    const ALLOC_ID: &str = "wound_alloc:a:b:0";
+
+    /// `volley_line` with "b" a mixed-kit unit: two Tough(3) models (6 wounds) carrying different weapons; "a" fires 4 shots.
+    fn mixed_line() -> (State, Vec<UnitStatic>) {
+        let (mut st, statics) = volley_line();
+        let kit = |w: u16| Kit { weapons: vec![w], equipment: 0, wounds_max: 3 };
+        st.kits = vec![Rc::new(Vec::new()), Rc::new(Vec::new()), Rc::new(vec![kit(1), kit(2)]), Rc::new(Vec::new())];
+        (st, statics)
+    }
+
+    /// The activation to its next answer: 4 hits, every save fails (4 unsaved wounds on "b"), morale passes; `choice` is the
+    /// option of the wound-allocation `Choice` sent first (`Some("")` = only asked, `None` = no choice in the transcript).
+    fn alloc(st: &State, statics: &[UnitStatic], choice: Option<&str>) -> ActStep {
+        let mut t = vec![Begin, intent(HOLD, Some("b"))];
+        t.extend(choice.map(|o| Input::Choice { id: ALLOC_ID.into(), option: o.into() }));
+        loop {
+            match step_activation(statics, st, "a", &Terrain::default(), seams(), &t, true) {
+                ActStep::NeedRoll { faces, kind, .. } => t.push(Faces(vec![if kind == "defense" { 1 } else { 6 }; faces])),
+                other => return other,
+            }
+            assert!(t.len() < 12, "{t:?}");
+        }
+    }
+
+    /// No `Choice` in the transcript is today's landing, mixed kits or not: the stepped activation equals the seeded run.
+    #[test]
+    fn without_a_wound_allocation_choice_the_landing_is_the_automatic_one() {
+        let (st, statics) = mixed_line();
+        let action = Action { kind: HOLD, unit: "a".into(), dest: None, shoot: Some("b".into()), charge: None, patient: false, split: None, traced: None, teleport: None };
+        for seed in 0..200i64 {
+            let (want, _) = resolve_stochastic_tray_on_board(&statics, &st, &action, &Terrain::default(), seams(), &mut GodotRng::new(seed), &mut Tray::seeded(seed)).unwrap();
+            let (got, _) = drive(&statics, &st, vec![Begin, intent(HOLD, Some("b"))], seed);
+            let ActStep::Done { state, .. } = got else { panic!("seed {seed}: {got:?}") };
+            assert_eq!(state, want, "seed {seed}");
+        }
+    }
+
+    /// The ask is answered once the saves are in (the wounds are unknown before): `NeedChoice` with the stable id, the target's
+    /// living slots and the target as owner; asked before the dice, the dice come first.
+    #[test]
+    fn a_wound_allocation_ask_opens_after_the_saves() {
+        let (st, statics) = mixed_line();
+        match alloc(&st, &statics, Some("")) {
+            ActStep::NeedChoice { id, options, owner } => {
+                assert_eq!((id.as_str(), owner.as_str()), (ALLOC_ID, "b"));
+                assert_eq!(options, vec!["slot:0".to_string(), "slot:1".to_string()]);
+            }
+            other => panic!("expected NeedChoice, got {other:?}"),
+        }
+        let t = [Begin, intent(HOLD, Some("b")), Input::Choice { id: ALLOC_ID.into(), option: String::new() }];
+        let first = step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t, true);
+        assert!(matches!(first, ActStep::NeedRoll { index: 0, .. }), "{first:?}");
+    }
+
+    /// The answer lands on the named slots, in order, a slot repeating (one wound each); the automatic landing (no choice
+    /// in the transcript, today's) leaves the OTHER model standing. RED: ignore the answer -> both runs equal.
+    #[test]
+    fn an_answered_wound_allocation_lands_on_the_named_slots() {
+        let (st, statics) = mixed_line();
+        let survivor = |step: ActStep| match step {
+            ActStep::Done { state, lines, .. } => (state.positions[2].clone(), state.wounds[2].clone(), lines),
+            other => panic!("expected Done, got {other:?}"),
+        };
+        let (auto_at, auto_wounds, _) = survivor(alloc(&st, &statics, None));
+        assert_eq!((auto_at.len(), auto_wounds.iter().sum::<i64>()), (1, 2), "fixture: auto kills one model, wounds the other");
+        // Three wounds kill one model, the fourth wounds the other: kill the one the automatic order spares.
+        let against = if auto_at[0] == st.positions[2][0] { "slot:0,slot:0,slot:0,slot:1" } else { "slot:1,slot:1,slot:1,slot:0" };
+        let (at, wounds, lines) = survivor(alloc(&st, &statics, Some(against)));
+        assert_ne!(at, auto_at, "the answer, not the automatic order, decides who survives");
+        assert_eq!((at.len(), wounds), (1, vec![2]));
+        assert!(lines.iter().any(|l| l.rule == "wound_alloc" && l.text == "b: the owner allocates 4 of 4 wounds"), "{lines:?}");
+    }
+
+    /// A slot that is no option, and an answer that is no slot list, are refused at the choice's input (RED: accept any slot ->
+    /// the bogus pick lands nothing and the activation is `Done`).
+    #[test]
+    fn a_bad_wound_allocation_answer_is_refused() {
+        let (st, statics) = mixed_line();
+        for (option, said) in [("slot:5", "slot:5 is not an option of wound_alloc:a:b:0"), ("slot:0,slot:7", "slot:7 is not an option"), ("b", "is not a slot list")] {
+            match alloc(&st, &statics, Some(option)) {
+                ActStep::Refused { index: 2, reason } => assert!(reason.contains(said), "{option}: {reason}"),
+                other => panic!("{option}: expected a refusal, got {other:?}"),
+            }
+        }
+    }
+
+    /// An answer no landing asked for - the unit has no real choice here - is refused, not dropped (RED: ignore a stale answer ->
+    /// `Done`).
+    #[test]
+    fn a_wound_allocation_answer_nobody_asked_for_is_refused() {
+        let (mut st, statics) = mixed_line();
+        let plain = Kit { weapons: vec![1], equipment: 0, wounds_max: 1 };
+        st.kits[2] = Rc::new(vec![plain.clone(), plain]);
+        match alloc(&st, &statics, Some("slot:0")) {
+            ActStep::Refused { index: 2, reason } => assert!(reason.contains("no wound allocation is open"), "{reason}"),
+            other => panic!("expected a refusal, got {other:?}"),
+        }
+    }
+
+    /// No choice where nothing is chosen: one kit and no Tough, or an answer that would wipe the unit. The ask finds nothing
+    /// to open and the activation just ends.
+    #[test]
+    fn a_wound_allocation_ask_without_a_real_choice_just_resolves() {
+        let (mut st, statics) = mixed_line();
+        let plain = Kit { weapons: vec![1], equipment: 0, wounds_max: 1 };
+        st.kits[2] = Rc::new(vec![plain.clone(), plain]);
+        assert!(matches!(alloc(&st, &statics, Some("")), ActStep::Done { .. }), "one kit, no Tough");
+        let (mut st, statics) = mixed_line();
+        st.wounds[2] = vec![2, 2];
+        assert!(matches!(alloc(&st, &statics, Some("")), ActStep::Done { .. }), "4 wounds kill both models: nothing to choose");
+        let (st, statics) = mixed_line();
+        let mut t = vec![Begin, intent(HOLD, Some("b")), Input::Choice { id: ALLOC_ID.into(), option: String::new() }];
+        for faces in [vec![6; 4], vec![6; 4]] {
+            t.push(Faces(faces)); // every attack hits, every save holds: no wound to allocate
+        }
+        let end = step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t, true);
+        assert!(matches!(end, ActStep::Done { .. }), "no unsaved wound, no choice: {end:?}");
     }
 
     /// O3: a unit that moved as a Rush cannot shoot (RED: drop the Rush check).
