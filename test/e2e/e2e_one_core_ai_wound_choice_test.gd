@@ -62,6 +62,7 @@ func before_test() -> void:
 
 func after_test() -> void:
 	CoreActivation.reset_all(_main)
+	CoreActivation._choice_on = {}
 	CoreActivation._env = -1
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 	_main = null
@@ -157,3 +158,17 @@ func test_ai_volley_at_a_uniform_unit_still_goes_through_the_core(timeout := 600
 	assert_int(CoreActivation.ai_refusals).override_failure_message("the core refused").is_equal(0)
 	assert_int(_prompts).override_failure_message("a prompt where the owner has no choice").is_equal(0)
 	assert_int(_guard_lines).override_failure_message("the guard fired without a choice").is_equal(0)
+
+
+## P4.D-26: with the wound_alloc switch ON the guard is retired: the same volleys at the same mixed unit go through the core,
+## which asks the owner (the #172 prompt in collect mode) - no guard line, no table fallback.
+@warning_ignore('unused_parameter')
+func test_with_the_choice_switch_on_the_core_resolves_the_volley_and_the_owner_is_asked(timeout := 600000,
+		do_skip := not ClassDB.class_exists("NmlCore"), skip_reason := "NmlCore extension not loaded") -> void:
+	CoreActivation._choice_on = {"wound_alloc": true}
+	var lost := await _play(true)
+	assert_int(lost).override_failure_message("the volleys killed nothing: the test shows no allocation").is_greater(0)
+	assert_int(_guard_lines).override_failure_message("the retired guard still fired").is_equal(0)
+	assert_int(CoreActivation.ai_runs).override_failure_message("the core did not resolve the volleys at a unit with a choice").is_greater(0)
+	assert_int(_prompts).override_failure_message("the owner was never asked to allocate (core volleys %d)" % CoreActivation.ai_runs).is_greater(0)
+	assert_int(CoreActivation.ai_refusals).override_failure_message("the core refused (a defect)").is_equal(0)

@@ -415,9 +415,10 @@ static func run_ai(main, unit: GameUnit, report: Dictionary, target: GameUnit, h
 		return false
 	# #172 interim: the core lands its own casualty order, so a human owner who has a wound-allocation choice (a Tough
 	# model, or mixed loadouts among the alive models) would never be asked. That volley stays on the table, which
-	# prompts. The real wound count is unknown before the roll: one wound keeps the Tough and loadout checks. Goes away
-	# once the core asks the allocation as a NeedChoice.
-	if target != null and main._solo_wound_choice_matters(target, 1):
+	# prompts. The real wound count is unknown before the roll: one wound keeps the Tough and loadout checks. With the
+	# wound_alloc switch ON (P4.D-26) the core asks the allocation as a NeedChoice and the owner's prompt answers it, so the
+	# guard applies only with the switch OFF; the guard and the switch go together (P4.D-27).
+	if target != null and not choice_enabled("wound_alloc") and main._solo_wound_choice_matters(target, 1):
 		main._log_rule_event(BattleLog.Category.COMBAT, "%s: %s's owner chooses the casualties - the table resolves this volley" % [
 			unit.get_name(), target.get_name()], true)
 		return false

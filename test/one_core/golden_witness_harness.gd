@@ -522,7 +522,11 @@ static func _run_into_human_case(main: Node, sc: Dictionary, seed: int) -> Dicti
 	var lines: Array = []
 	var tap := _line_tap(lines)
 	main.battle_log.entry_added.connect(tap)
-	await main._solo_resolve_ai_volley(att, dfn, shots)
+	if str(sc.get("door", "table")) == "core":   # P4.D-26: the same volley through the core door (the AI body's `run_ai`)
+		var ran: bool = await CoreActivation.run_ai(main, att, {"action": AiDecision.Action.HOLD}, dfn, CoreActivation.capture(main), shots)
+		st["core"] = "1" if ran else "0"
+	else:
+		await main._solo_resolve_ai_volley(att, dfn, shots)
 	main.battle_log.entry_added.disconnect(tap)
 	main.dice_roller_control.roll_finnished.disconnect(on_roll)
 	pump.queue_free()
@@ -530,6 +534,8 @@ static func _run_into_human_case(main: Node, sc: Dictionary, seed: int) -> Dicti
 	var rec := {"scenario": str(sc["name"]), "seed": seed, "epoch": AiActRecorder.rules_epoch,
 		"lines": lines, "final": _final([att, dfn]), "rng": _rng_state(main),
 		"extra": {"prompt_opened": str(st["opened"]), "picks_fed": str(st["fed"])}}
+	if st.has("core"):
+		rec["core"] = str(st["core"])
 	if int(st["opened"]) == 0:
 		rec = {"scenario": str(sc["name"]), "seed": seed,
 			"error": "the wound-allocation prompt never opened (rolls %d)" % int(st["rolls"])}
