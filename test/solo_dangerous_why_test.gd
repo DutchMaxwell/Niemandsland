@@ -24,11 +24,10 @@ func after_test() -> void:
 	AiActRecorder.rules_epoch = _epoch0   # statics leak across gdUnit tests - restore
 
 
-func _set_strip(z0: float, z1: float) -> void:
+func _set_strip(z0: float, z1: float, kind: int = TerrainRules.TerrainType.DANGEROUS) -> void:
 	_solo.terrain_type_at = func(p: Vector3) -> int:
 		var z_in := p.z / IN2M
-		return TerrainRules.TerrainType.DANGEROUS if z_in >= z0 and z_in <= z1 \
-			else TerrainRules.TerrainType.NONE
+		return kind if z_in >= z0 and z_in <= z1 else TerrainRules.TerrainType.NONE
 
 
 func _unit(id: String, n: int, z_in: float = 0.0) -> GameUnit:
@@ -100,4 +99,15 @@ func test_long_move_routes_around_unstable_ruins() -> void:
 		.is_equal(0)
 	assert_float(float(data.get("achieved_in", 0.0))) \
 		.override_failure_message("routing around the ruin stalled the move (%.2f\" of 12)" % float(data.get("achieved_in", 0.0))) \
+		.is_greater(10.0)
+
+
+## The ruin avoid is a preference, not a wall: a ruin that spans the whole lane has no detour, so the stall
+## escalation (through-plan + toll gate) must lift it and the unit still moves (it used to stall at the edge).
+func test_a_ruin_across_the_whole_lane_does_not_stall_the_move() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	_set_strip(3.0, 5.0, TerrainRules.TerrainType.RUINS)
+	_solo._execute_move(_unit("Pair", 2, 2.0), Vector3(0, 0, 14.0 * IN2M), 12.0, false)
+	assert_float(float(_move_data().get("achieved_in", 0.0))) \
+		.override_failure_message("a ruin across the lane stalled the move: the through-plan could not lift the avoid") \
 		.is_greater(10.0)

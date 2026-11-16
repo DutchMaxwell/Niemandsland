@@ -7936,7 +7936,7 @@ func _plan_positions(unit: GameUnit, models: Array, positions: Array, delta: Vec
 	# Rules 3.6 UNSTABLE ruins (EPOCH_73_V36): a move over 6" through a ruin takes the Dangerous test, so
 	# route around it like Dangerous/Difficult when a clear path exists (play-test: the Great Beast crossed
 	# twice "despite avoidance"). Flying ignores it (p.13); a destination inside a ruin stays reachable.
-	var avoid_unstable := AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
+	var avoid_unstable := avoid_dangerous and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
 		and not unit.has_special_rule("Flying") \
 		and Vector2(delta.x, delta.z).length() > MovementPlanner.UNSTABLE_MOVE_IN * INCHES_TO_METERS \
 		and not _rigid_targets_unstable(positions, delta, own_r_m)
