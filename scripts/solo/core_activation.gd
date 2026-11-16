@@ -43,30 +43,17 @@ static func any_choice_enabled() -> bool:
 	return false
 
 
-## No unit rule, no attachment, no weapon rule: the volley the core resolves exactly as the table does.
+## The volley the core resolves exactly as the table does: `CoreSlice` takes the unit (today: no unit rule, no attachment,
+## no weapon rule, an OPR profile - the slice's groups widen it).
 static func is_plain(gu: GameUnit) -> bool:
-	if not (gu.unit_properties.get("special_rules", []) as Array).is_empty() \
-			or gu.has_attached_heroes() or gu.is_attached() or not gu.source_data is OPRApiClient.OPRUnit:
-		return false
-	for w in (gu.source_data as OPRApiClient.OPRUnit).weapons:
-		if not w.special_rules.is_empty():
-			return false
-	return true
+	return CoreSlice.takes(gu)
 
 
 ## P4.D-13b: the TARGET half of `is_plain`. The core takes a target's profile from unit_properties
 ## (`BattleSim._unit_profile`), so a target needs no OPR profile: a loaded save from before the profile was saved is shot
-## like any other unit. What it needs is a statline the core can hand a save to. A target that has an OPR profile keeps
-## the weapon-rule clause of `is_plain`.
+## like any other unit. What it needs is a statline the core can hand a save to.
 static func is_plain_target(gu: GameUnit) -> bool:
-	if not (gu.unit_properties.get("special_rules", []) as Array).is_empty() \
-			or gu.has_attached_heroes() or gu.is_attached() or not has_statline(gu):
-		return false
-	var src := gu.source_data as OPRApiClient.OPRUnit
-	for w in src.weapons if src != null else []:
-		if not w.special_rules.is_empty():
-			return false
-	return true
+	return has_statline(gu) and CoreSlice.takes(gu, true)
 
 
 ## Quality and defense both in 2..6 (the rules' range). A hand-written foreign save may carry none: get_quality() and
@@ -297,30 +284,12 @@ static var legacy := {}
 static var legacy_sets := {}
 
 
-## "Tough(3)" -> "Tough", "Fear (spell)" -> "Fear" (a rule entry is a string or a {"name": ...} dictionary).
-static func _rule_label(r) -> String:
-	return (str((r as Dictionary).get("name", "")) if r is Dictionary else str(r)).get_slice("(", 0).strip_edges()
-
-
-## The refusals of one unit as the table sees them (what `is_plain` says no to; for a target, `is_plain_target`: no OPR
-## profile is not a reason there, P4.D-13b).
-static func _refusals(gu: GameUnit, as_target := false) -> Array:
-	var out: Array = (gu.get_special_rules() as Array).map(func(r) -> String: return "unit_rule:" + _rule_label(r))
-	if gu.has_attached_heroes() or gu.is_attached():
-		out.append("attached")
-	if not gu.source_data is OPRApiClient.OPRUnit:
-		return out if as_target else out + ["non_opr"]
-	for w in (gu.source_data as OPRApiClient.OPRUnit).weapons:
-		out.append_array(w.special_rules.map(func(r) -> String: return "weapon_rule:" + _rule_label(r)))
-	return out
-
-
 ## Why the core door refuses this shooter (and target): "no_core", "attached", "non_opr", "unit_rule:<name>",
 ## "weapon_rule:<name>" for the shooter; the target's carry a "target_" prefix ("target_rule:<name>" = its unit rules).
 static func why_not(main, unit: GameUnit, target: GameUnit) -> Array:
 	var out: Array = [] if applies(main) else ["no_core"]
-	out.append_array(_refusals(unit) if unit != null else [])
-	for r in (_refusals(target, true) if target != null else []):
+	out.append_array(CoreSlice.refusals(unit) if unit != null else [])
+	for r in (CoreSlice.refusals(target, true) if target != null else []):
 		out.append("target_rule:" + r.trim_prefix("unit_rule:") if r.begins_with("unit_rule:") else "target_" + r)
 	return out
 
