@@ -9,6 +9,7 @@ report ends with `TABLE LINES LEFT: N`, committed as test/one_core/table_census.
 
   python3 tools/table_census.py            print the report
   python3 tools/table_census.py --write    rewrite the committed report
+  python3 tools/table_census.py --runtime census.json   print the report + the soak's table share of AI volleys
   python3 tools/table_census.py --check    exit 1 if the report is stale, or if a prod caller
                                            appears that allowed_callers does not list ("file:function"
                                            or "@group"). A listed caller that is gone is fine on purpose.
@@ -106,6 +107,17 @@ def render(rows):
     return "\n".join(out + [f"TABLE LINES LEFT: {total}"]) + "\n"
 
 
+def runtime_report(path):
+    """The soak's census.json (tools/table_census_soak.sh): the share of AI volleys the table resolved, top 15 reasons."""
+    data = json.loads(path.read_text())
+    legacy = data.get("legacy", {}).get("ai_volley", {})
+    total = int(data.get("ai_volleys", legacy.get("_all", 0) + data.get("core_ai_runs", 0)))
+    pct = lambda n: 100.0 * n / total if total else 0.0
+    top = sorted(((r, n) for r, n in legacy.items() if r != "_all"), key=lambda kv: (-kv[1], kv[0]))[:15]
+    return "\n".join([f"RUNTIME AI VOLLEYS ON TABLE: {pct(legacy.get('_all', 0)):.1f} %"]
+                     + [f"  {pct(n):5.1f} %  {n:6d}  {r}" for r, n in top]) + "\n"
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
@@ -114,7 +126,10 @@ def main(argv=None):
     mode = ap.add_mutually_exclusive_group()
     mode.add_argument("--write", action="store_true")
     mode.add_argument("--check", action="store_true")
+    ap.add_argument("--runtime", type=Path, help="soak census.json: append the runtime table share to the printed report")
     args = ap.parse_args(argv)
+    if args.runtime and (args.write or args.check):
+        ap.error("--runtime only extends the printed report (it is not deterministic, never committed)")
     txt_path = args.txt or args.root / "test/one_core/table_census.txt"
     rows, bad = census(args.root, json.loads((args.manifest or args.root / "tools/table_census.json").read_text()))
     text = render(rows)
@@ -129,7 +144,7 @@ def main(argv=None):
             print(f"::error::new caller of {callee}: {caller} (not in allowed_callers of tools/table_census.json)")
         return int(old != text or bool(bad))
     else:
-        sys.stdout.write(text)
+        sys.stdout.write(text + (runtime_report(args.runtime) if args.runtime else ""))
     return 0
 
 
