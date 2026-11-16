@@ -26,6 +26,10 @@ jobs:
             echo "::error::army_books/ must not be committed — OPR rule text is delivered at runtime (see THIRD_PARTY.md)"; exit 1; fi
       - name: "No OPR rule TEXT in a gameplay path (NML-1115)"
         run: bash tools/no_rule_text_in_gameplay.sh
+      - name: Table census counter is current
+        # P4.D-2: red on a stale test/one_core/table_census.txt (run `python3 tools/table_census.py --write`) or on a prod
+        # caller of an old table function that tools/table_census.json does not list.
+        run: python3 tools/table_census.py --check
       - name: Docs version matches the engine (truth-pass guard)
         run: |
           V=$(grep -oP 'config/version="\K[^"]+' project.godot)

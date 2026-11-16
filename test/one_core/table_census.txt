@@ -1,9 +1,9 @@
-ai_volley scripts/main.gd:_solo_resolve_ai_volley 354 2 38
+ai_volley scripts/main.gd:_solo_resolve_ai_volley 354 2 39
 ai_volley scripts/main.gd:_solo_volley_outcome 9 2 1
-ai_volley TOTAL 363 4 39
-dangerous_morale scripts/main.gd:_run_ai_dangerous 42 6 2
-dangerous_morale scripts/main.gd:_solo_shooting_morale 43 7 3
-dangerous_morale TOTAL 85 13 5
+ai_volley TOTAL 363 4 40
+dangerous_morale scripts/main.gd:_run_ai_dangerous 24 7 4
+dangerous_morale scripts/main.gd:_solo_shooting_morale 43 7 5
+dangerous_morale TOTAL 67 14 9
 hit_save_shared scripts/main.gd:_solo_apply_vs_marks 56 4 20
 hit_save_shared scripts/main.gd:_solo_hazardous_self_wounds 28 3 8
 hit_save_shared scripts/main.gd:_solo_hits 136 4 19
@@ -14,9 +14,9 @@ hit_save_shared scripts/main.gd:_solo_resolve_saves 122 10 22
 hit_save_shared scripts/main.gd:_solo_save_batch 231 7 22
 hit_save_shared scripts/main.gd:_solo_takedown_pick 34 3 1
 hit_save_shared TOTAL 739 64 114
-human_shoot scripts/main.gd:_run_human_attack_split 28 1 3
-human_shoot scripts/main.gd:_run_human_shooting 288 3 36
-human_shoot TOTAL 316 4 39
+human_shoot scripts/main.gd:_run_human_attack_split 28 1 4
+human_shoot scripts/main.gd:_run_human_shooting 288 3 37
+human_shoot TOTAL 316 4 41
 melee_charge scripts/main.gd:_run_ai_melee 185 1 23
 melee_charge scripts/main.gd:_run_human_melee 106 1 9
 melee_charge scripts/main.gd:_solo_charge_impact 82 4 10
@@ -33,6 +33,6 @@ planner scripts/solo/battle_sim.gd 2611 22 73
 planner scripts/solo/solo_sim.gd 1234 3 6
 planner TOTAL 6782 38 123
 planner_shared scripts/solo/ai_combat_math.gd 724 9 18
-planner_shared scripts/solo/ai_ev.gd 1331 10 69
-planner_shared TOTAL 2055 19 87
-TABLE LINES LEFT: 11331
+planner_shared scripts/solo/ai_ev.gd 1331 10 70
+planner_shared TOTAL 2055 19 88
+TABLE LINES LEFT: 11313
