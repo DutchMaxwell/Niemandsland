@@ -7,7 +7,7 @@
     "_solo_volley_outcome has a prod caller outside main.gd: scripts/solo/core_activation.gd:_present (the core path shows the same toast).",
     "A listed caller that disappears is fine on purpose; only an unlisted NEW prod caller turns --check red. To allow one, add 'file:function' to allowed_callers of the callee in the same diff as a plan step that says so.",
     "Whole-file entries (planner groups) are not gated and keep the counter; planner_tags tags every column-0 function of the 7 planner files; a new planner function must get a tag in the same diff.",
-    "Tags: erlkoenig = needed by the Rust search hand-off (_core_plan: capture, state_to_plain, AiPlanner statics, act recorder); live_helper = live game logic that is not search (mission scoring); table_live = still called by a main.gd function that survives the table deletion; tree = decision tree / AiPosition; gd_search = the GDScript search (reached on a core decline or in debug/test defaults; includes its profiling marks); table_dead = dies with the table deletion; tools_only / test_only = no prod caller; dead = no caller."
+    "Tags: erlkoenig = needed by the Rust search hand-off (_core_plan: capture, state_to_plain, AiPlanner statics, act recorder); live_helper = live game logic that is not search (mission scoring); table_live = still called by a main.gd function that survives the table deletion; tree = decision tree / AiPosition; gd_search = the GDScript search (reached on a core decline or in debug/test defaults; includes its profiling marks); table_dead = dies with the table deletion (a function that gd_search also calls dies with the later of the table deletion and the search deletion); tools_only / test_only = no prod caller; dead = no caller."
   ],
   "groups": {
     "ai_volley": ["scripts/main.gd:_solo_resolve_ai_volley", "scripts/main.gd:_solo_volley_outcome"],
@@ -46,9 +46,8 @@
   "tag_vocabulary": "erlkoenig live_helper table_live tree gd_search table_dead tools_only test_only dead",
   "planner_tags": {
     "scripts/solo/ai_combat_math.gd": {
-      "gd_search": "fear_adjusted_wounds should_test_shooting_morale",
       "live_helper": "success_chance",
-      "table_dead": "bane_reroll_count_from blocks_with_bane_from count_hits fortified_entry_cut furious_bonus_hits hit_ev hit_mod_worth_logging impact_hits indirect_hit_modifier ravage_wounds relentless_bonus_hits rending_ap_hits sergeant_bonus_hits shot_uses_cover shred_bonus_wounds surge_bonus_hits unpredictable_fighter_effect",
+      "table_dead": "bane_reroll_count_from blocks_with_bane_from count_hits fear_adjusted_wounds fortified_entry_cut furious_bonus_hits hit_ev hit_mod_worth_logging impact_hits indirect_hit_modifier ravage_wounds relentless_bonus_hits rending_ap_hits sergeant_bonus_hits shot_uses_cover should_test_shooting_morale shred_bonus_wounds surge_bonus_hits unpredictable_fighter_effect",
       "table_live": "_ints armored_defense at_or_below_half battleborn_recovers blast_hits cond_met conditional_ap_bonus conditional_ap_why count_blocks covered_defense deadly_multiplier deadly_regen_dealt fortified_ap guarded_defense melee_hit_modifier modified_hit_target morale_result morale_result_shaken morale_target no_retreat_wounds pierce_ignores reliable_quality save_target shielded_defense shooting_hit_modifier shown_target thrust_to_hit unmodified_sixes wounds",
       "test_only": "bane_reroll_count blocks_with_bane deadly_wounds_dealt expected_wounds fearless_recovers",
       "tree": "impact_total_dice shrouded_reach"
