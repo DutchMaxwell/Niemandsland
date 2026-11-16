@@ -6645,6 +6645,13 @@ func _targets_in_dangerous(positions: Array, goal: Vector3, reach_in: float, rad
 	return false
 
 
+## Rules 3.6 (EPOCH_73_V36): is this rigid move "over 6 inches" for a unit that does not fly? Same epsilon as the
+## real trigger (`_dangerous_trail_flags`): a base-exact 6" Advance is only float32 noise from 6.0 and must not count.
+func _long_unstable_move(unit: GameUnit, delta: Vector3) -> bool:
+	return AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and not unit.has_special_rule("Flying") \
+		and Vector2(delta.x, delta.z).length() > MovementPlanner.UNSTABLE_MOVE_IN * INCHES_TO_METERS + 1e-6
+
+
 ## Would the rigid move's per-model TARGETS land in UNSTABLE (ruin) ground? A destination INSIDE a ruin is
 ## legal rest, so avoidance must not wall it off (same exception as `_targets_in_dangerous`).
 func _rigid_targets_unstable(positions: Array, delta: Vector3, radius_m: float) -> bool:
@@ -7935,10 +7942,8 @@ func _plan_positions(unit: GameUnit, models: Array, positions: Array, delta: Vec
 		opts["zones_rest_only"] = true   # Traversal / Flying: unit-spacing zones stop blocking the ROUTE; rest legality stays strict
 	# Rules 3.6 UNSTABLE ruins (EPOCH_73_V36): a move over 6" through a ruin takes the Dangerous test, so
 	# route around it like Dangerous/Difficult when a clear path exists (play-test: the Great Beast crossed
-	# twice "despite avoidance"). Flying ignores it (p.13); a destination inside a ruin stays reachable.
-	var avoid_unstable := avoid_dangerous and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
-		and not unit.has_special_rule("Flying") \
-		and Vector2(delta.x, delta.z).length() > MovementPlanner.UNSTABLE_MOVE_IN * INCHES_TO_METERS \
+	# twice "despite avoidance"). Flying ignores it; a destination inside a ruin stays reachable.
+	var avoid_unstable := avoid_dangerous and _long_unstable_move(unit, delta) \
 		and not _rigid_targets_unstable(positions, delta, own_r_m)
 	var sampled := _terrain_grid_in(board_in, off, avoid_difficult, avoid_dangerous, board_y_in, avoid_unstable)
 	opts["avoid_cells"] = sampled["avoid"]

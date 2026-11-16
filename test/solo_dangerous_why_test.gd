@@ -111,3 +111,18 @@ func test_a_ruin_across_the_whole_lane_does_not_stall_the_move() -> void:
 	assert_float(float(_move_data().get("achieved_in", 0.0))) \
 		.override_failure_message("a ruin across the lane stalled the move: the through-plan could not lift the avoid") \
 		.is_greater(10.0)
+
+
+## "Over 6 inches" gets the real trigger's epsilon (`_dangerous_trail_flags`): a base-exact 6" Advance is only
+## float32 noise away from 6.0 and must not hard-avoid the ruin (a full-width ruin makes the avoid visible: it
+## holds the model at the ruin edge, while no hard avoid lets it cross and land beyond the far edge, z > 5).
+func test_an_exact_six_inch_advance_does_not_avoid_the_ruin() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	_set_strip(3.0, 5.0, TerrainRules.TerrainType.RUINS)
+	var u := _unit("Walker", 1)
+	var models := _solo._moving_models(u)
+	var delta := Vector3(0, 0, 6.0 * IN2M + 5e-7)   # float32 noise on an exact 6" Advance
+	var out := _solo._plan_positions(u, models, _solo._positions_of(models), delta, false, [], true, true)
+	assert_float((out[0] as Vector3).z / IN2M) \
+		.override_failure_message("a 6\" Advance was held at the ruin edge: the over-6\" test has no epsilon") \
+		.is_greater(5.0)
