@@ -20,7 +20,7 @@ const BLOCKERS: Array[Dictionary] = [
 		"header": "static func enabled() -> bool:", "needles": ["NML_ONE_CORE_ACTIVATION"]},
 	{"name": "NmlCore-less build (applies needs the class)", "retire": "P4.D-40", "file": ACTIVATION,
 		"header": "static func applies(main) -> bool:", "needles": ["ClassDB.class_exists(\"NmlCore\")"]},
-	{"name": "non-OPR clause of is_plain", "retire": "P4.D-6 (outcome of P4.D-13)", "file": ACTIVATION,
+	{"name": "non-OPR clause of is_plain", "retire": "the P4.D-13 follow-up, before P4.D-41", "file": ACTIVATION,
 		"header": "static func is_plain(gu: GameUnit) -> bool:", "needles": ["not gu.source_data is OPRApiClient.OPRUnit"]},
 	{"name": "tools/solo_selfplay.gd drives the table", "retire": "P4.D-39", "file": SELFPLAY, "header": "",
 		"needles": ["main._run_ai_shooting(", "main._run_ai_dangerous(", "main._solo_shooting_morale("]},
