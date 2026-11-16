@@ -219,3 +219,33 @@ func test_a_split_case_errors_when_only_one_target_is_fired_at() -> void:
 		var rec: Dictionary = await Harness._run_case(_main, one, 0)
 		assert_str(str(rec.get("error", ""))).override_failure_message(
 			"%s: one target only must fail the case, got %s" % [str(one["name"]), str(rec.keys())]).contains("no split")
+
+
+func test_the_dangerous_fixture_matches_the_old_table_path() -> void:
+	var path := Harness.fixture_path(Harness.DANGEROUS_FAMILY)
+	var want := Harness.load_fixture(path)
+	assert_bool(want.is_empty()).override_failure_message(
+		"fixture missing: %s — capture it with --family dangerous" % path).is_false()
+	var got: Dictionary = await Harness.capture(_main, Harness.DANGEROUS_FAMILY)
+	var problems := Harness.compare(want, got)
+	assert_array(problems).override_failure_message(
+		"the old table path no longer matches its Dangerous golden witness (%s):\n%s" % [
+			Harness.describe_provenance(want, got), "\n".join(problems)]).is_empty()
+
+
+func test_a_planted_dangerous_fixture_line_is_reported() -> void:
+	var want := Harness.load_fixture(Harness.fixture_path(Harness.DANGEROUS_FAMILY))
+	assert_bool(want.is_empty()).override_failure_message("Dangerous fixture missing").is_false()
+	var got: Dictionary = await Harness.capture(_main, Harness.DANGEROUS_FAMILY)
+	want["cases"][0]["lines"][0] = "%s (planted)" % str(want["cases"][0]["lines"][0])
+	var problems := Harness.compare(want, got)
+	assert_int(problems.size()).override_failure_message(
+		"a changed Dangerous fixture line went unnoticed — the witness cannot fail").is_equal(1)
+	assert_str("\n".join(problems)).contains("planted")
+
+
+func test_a_dangerous_case_errors_when_the_roll_never_happened() -> void:
+	var sc: Dictionary = (Harness.dangerous_scenarios()[0] as Dictionary).duplicate(true)
+	sc["dice"] = 0   # planted fault: no dice, so the table logs no Dangerous line at all
+	var rec: Dictionary = await Harness._run_case(_main, sc, 0)
+	assert_str(str(rec.get("error", ""))).contains("no Dangerous line")
